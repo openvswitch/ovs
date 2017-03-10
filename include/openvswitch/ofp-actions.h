@@ -660,6 +660,10 @@ struct ofpact_resubmit {
  * If NX_LEARN_F_SEND_FLOW_REM is set, then the learned flows will have their
  * OFPFF_SEND_FLOW_REM flag set.
  *
+ * If NX_LEARN_F_WRITE_RESULT is set, then the actions will write whether the
+ * learn operation succeded on a bit.  If the learn is successful the bit will
+ * be set, otherwise (e.g. if the limit is hit) the bit will be unset.
+ *
  * If NX_LEARN_F_DELETE_LEARNED is set, then removing this action will delete
  * all the flows from the learn action's 'table_id' that have the learn
  * action's 'cookie'.  Important points:
@@ -685,6 +689,7 @@ struct ofpact_resubmit {
 enum nx_learn_flags {
     NX_LEARN_F_SEND_FLOW_REM = 1 << 0,
     NX_LEARN_F_DELETE_LEARNED = 1 << 1,
+    NX_LEARN_F_WRITE_RESULT = 1 << 2,
 };
 
 #define NX_LEARN_N_BITS_MASK    0x3ff
@@ -748,6 +753,13 @@ struct ofpact_learn {
         ovs_be64 cookie;           /* Cookie for new flow. */
         uint16_t fin_idle_timeout; /* Idle timeout after FIN, if nonzero. */
         uint16_t fin_hard_timeout; /* Hard timeout after FIN, if nonzero. */
+        /* If the number of flows on 'table_id' with 'cookie' exceeds this,
+         * the action will not add a new flow. */
+        uint32_t limit;
+        /* Used only if 'flags' has NX_LEARN_F_WRITE_RESULT.  If the execution
+         * failed to install a new flow because 'limit' is exceeded,
+         * result_dst will be set to 0, otherwise to 1. */
+        struct mf_subfield result_dst;
     );
 
     struct ofpact_learn_spec specs[];

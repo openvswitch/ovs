@@ -10,6 +10,7 @@ Post-v2.7.0
        Log level can be changed in a usual OVS way using
        'ovs-appctl vlog' commands for 'dpdk' module. Lower bound
        still can be configured via extra arguments for DPDK EAL.
+   - The "learn" action now supports a "limit" option (see ovs-ofctl(8)).
 
 v2.7.0 - 21 Feb 2017
 ---------------------

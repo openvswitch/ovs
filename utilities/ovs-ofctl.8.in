@@ -1457,6 +1457,22 @@ the specified table with the specified cookie.
 .IP
 This flag was added in Open vSwitch 2.4.
 .
+.IP \fBlimit=\fInumber\fR
+If the number of flows in table \fBtable\fR with cookie id \fBcookie\fR exceeds
+\fInumber\fR, a new flow will not be learned by this action.  By default
+there's no limit.
+.
+.IP
+This flag was added in Open vSwitch 2.8.
+.
+.IP \fBresult_dst=\fIfield\fB[\fIbit\fB]\fR
+If learning failed (because the number of flows exceeds \fBlimit\fR),
+the action sets \fIfield\fB[\fIbit\fB]\fR to 0, otherwise it will be set to 1.
+\fIfield\fB[\fIbit\fB]\fR must be a single bit.
+.
+.IP
+This flag was added in Open vSwitch 2.8.
+.
 .IP \fIfield\fB=\fIvalue\fR
 .IQ \fIfield\fB[\fIstart\fB..\fIend\fB]=\fIsrc\fB[\fIstart\fB..\fIend\fB]\fR
 .IQ \fIfield\fB[\fIstart\fB..\fIend\fB]\fR

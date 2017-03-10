@@ -1948,6 +1948,10 @@ revalidate_ukey__(struct udpif *udpif, const struct udpif_key *ukey,
     }
     xoutp = &ctx.xout;
 
+    if (xoutp->avoid_caching) {
+        goto exit;
+    }
+
     if (xoutp->slow) {
         ofpbuf_clear(odp_actions);
         compose_slow_path(udpif, xoutp, &ctx.flow, ctx.flow.in_port.odp_port,

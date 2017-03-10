@@ -294,6 +294,8 @@ enum ofp_raw_action_type {
 
     /* NX1.0+(16): struct nx_action_learn, ... VLMFF */
     NXAST_RAW_LEARN,
+    /* NX1.0+(45): struct nx_action_learn2, ... VLMFF */
+    NXAST_RAW_LEARN2,
 
     /* NX1.0+(17): void. */
     NXAST_RAW_EXIT,
@@ -4094,7 +4096,7 @@ format_RESUBMIT(const struct ofpact_resubmit *a, struct ds *s)
     }
 }
 
-/* Action structure for NXAST_LEARN.
+/* Action structure for NXAST_LEARN and NXAST_LEARN2.
  *
  * This action adds or modifies a flow in an OpenFlow table, similar to
  * OFPT_FLOW_MOD with OFPFC_MODIFY_STRICT as 'command'.  The new flow has the
@@ -4325,6 +4327,22 @@ struct nx_action_learn {
 };
 OFP_ASSERT(sizeof(struct nx_action_learn) == 32);
 
+struct nx_action_learn2 {
+    struct nx_action_learn up;  /* The wire format includes nx_action_learn. */
+    ovs_be32 limit;             /* Maximum number of learned flows. */
+
+    /* Where to store the result. */
+    ovs_be16 result_dst_ofs;    /* Starting bit offset in destination. */
+
+    ovs_be16 pad2;              /* Must be zero. */
+    /* Followed by:
+     * - OXM/NXM header for destination field (4 or 8 bytes),
+     *   if NX_LEARN_F_WRITE_RESULT is set in 'flags'
+     * - a sequence of flow_mod_spec elements, as described above,
+     *   until the end of the action is reached. */
+};
+OFP_ASSERT(sizeof(struct nx_action_learn2) == 40);
+
 static ovs_be16
 get_be16(const void **pp)
 {
@@ -4512,6 +4530,56 @@ decode_NXAST_RAW_LEARN(const struct nx_action_learn *nal,
                               vl_mff_map, tlv_bitmap, ofpacts);
 }
 
+/* Converts 'nal' into a "struct ofpact_learn" and appends that struct to
+ * 'ofpacts'.  Returns 0 if successful, otherwise an OFPERR_*. */
+static enum ofperr
+decode_NXAST_RAW_LEARN2(const struct nx_action_learn2 *nal,
+                        enum ofp_version ofp_version OVS_UNUSED,
+                        const struct vl_mff_map *vl_mff_map,
+                        uint64_t *tlv_bitmap, struct ofpbuf *ofpacts)
+{
+    struct ofpbuf b = ofpbuf_const_initializer(nal, ntohs(nal->up.len));
+    struct ofpact_learn *learn;
+    enum ofperr error;
+
+    if (nal->pad2) {
+        return OFPERR_NXBAC_MUST_BE_ZERO;
+    }
+
+    learn = ofpact_put_LEARN(ofpacts);
+    error = decode_LEARN_common(&nal->up, learn);
+    if (error) {
+        return error;
+    }
+
+    learn->limit = ntohl(nal->limit);
+
+    if (learn->flags & ~(NX_LEARN_F_SEND_FLOW_REM |
+                         NX_LEARN_F_DELETE_LEARNED |
+                         NX_LEARN_F_WRITE_RESULT)) {
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
+
+    ofpbuf_pull(&b, sizeof *nal);
+
+    if (learn->flags & NX_LEARN_F_WRITE_RESULT) {
+        error = nx_pull_header(&b, vl_mff_map, &learn->result_dst.field, NULL);
+        if (error) {
+            return error;
+        }
+        if (!learn->result_dst.field->writable) {
+            return OFPERR_OFPBAC_BAD_SET_ARGUMENT;
+        }
+        learn->result_dst.ofs = ntohs(nal->result_dst_ofs);
+        learn->result_dst.n_bits = 1;
+    } else if (nal->result_dst_ofs) {
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
+
+    return decode_LEARN_specs(b.data, (char *) nal + ntohs(nal->up.len),
+                              vl_mff_map, tlv_bitmap, ofpacts);
+}
+
 static void
 put_be16(struct ofpbuf *b, ovs_be16 x)
 {
@@ -4545,7 +4613,19 @@ encode_LEARN(const struct ofpact_learn *learn,
     size_t start_ofs;
 
     start_ofs = out->size;
-    nal = put_NXAST_LEARN(out);
+
+    if (learn->ofpact.raw == NXAST_RAW_LEARN2
+        || learn->limit != 0
+        || learn->flags & NX_LEARN_F_WRITE_RESULT) {
+        struct nx_action_learn2 *nal2;
+
+        nal2 = put_NXAST_LEARN2(out);
+        nal2->limit = htonl(learn->limit);
+        nal2->result_dst_ofs = htons(learn->result_dst.ofs);
+        nal = &nal2->up;
+    } else {
+        nal = put_NXAST_LEARN(out);
+    }
     nal->idle_timeout = htons(learn->idle_timeout);
     nal->hard_timeout = htons(learn->hard_timeout);
     nal->fin_idle_timeout = htons(learn->fin_idle_timeout);
@@ -4554,6 +4634,10 @@ encode_LEARN(const struct ofpact_learn *learn,
     nal->cookie = learn->cookie;
     nal->flags = htons(learn->flags);
     nal->table_id = learn->table_id;
+
+    if (learn->flags & NX_LEARN_F_WRITE_RESULT) {
+        nx_put_header(out, learn->result_dst.field->id, 0, false);
+    }
 
     OFPACT_LEARN_SPEC_FOR_EACH (spec, learn) {
         put_u16(out, spec->n_bits | spec->dst_type | spec->src_type);

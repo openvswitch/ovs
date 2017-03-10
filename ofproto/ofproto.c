@@ -5080,29 +5080,63 @@ ofproto_flow_mod_learn_finish(struct ofproto_flow_mod *ofm,
  * 'keep_ref' is true, then a reference to the current rule is held, otherwise
  * it is released and 'ofm->temp_rule' is set to NULL.
  *
+ * If 'limit' != 0, insertion will fail if there are more than 'limit' rules
+ * in the same table with the same cookie.  If insertion succeeds,
+ * '*below_limit' will be set to true.  If insertion fails '*below_limit' will
+ * be set to false.
+ *
  * Caller needs to be the exclusive owner of 'ofm' as it is being manipulated
  * during the call. */
 enum ofperr
-ofproto_flow_mod_learn(struct ofproto_flow_mod *ofm, bool keep_ref)
+ofproto_flow_mod_learn(struct ofproto_flow_mod *ofm, bool keep_ref,
+                       unsigned limit, bool *below_limit)
     OVS_EXCLUDED(ofproto_mutex)
 {
     enum ofperr error = ofproto_flow_mod_learn_refresh(ofm);
     struct rule *rule = ofm->temp_rule;
+    bool limited = false;
 
     /* Do we need to insert the rule? */
     if (!error && rule->state == RULE_INITIALIZED) {
         ovs_mutex_lock(&ofproto_mutex);
-        ofm->version = rule->ofproto->tables_version + 1;
-        error = ofproto_flow_mod_learn_start(ofm);
-        if (!error) {
-            ofproto_flow_mod_learn_finish(ofm, NULL);
+
+        if (limit) {
+            struct rule_criteria criteria;
+            struct rule_collection rules;
+            struct match match;
+
+            match_init_catchall(&match);
+            rule_criteria_init(&criteria, rule->table_id, &match, 0,
+                               OVS_VERSION_MAX, rule->flow_cookie,
+                               OVS_BE64_MAX, OFPP_ANY, OFPG_ANY);
+            rule_criteria_require_rw(&criteria, false);
+            collect_rules_loose(rule->ofproto, &criteria, &rules);
+            if (rule_collection_n(&rules) >= limit) {
+                limited = true;
+            }
+            rule_collection_destroy(&rules);
+            rule_criteria_destroy(&criteria);
+        }
+
+        if (!limited) {
+            ofm->version = rule->ofproto->tables_version + 1;
+
+            error = ofproto_flow_mod_learn_start(ofm);
+            if (!error) {
+                ofproto_flow_mod_learn_finish(ofm, NULL);
+            }
+        } else {
+            ofproto_flow_mod_uninit(ofm);
         }
         ovs_mutex_unlock(&ofproto_mutex);
     }
 
-    if (!keep_ref) {
+    if (!keep_ref && !limited) {
         ofproto_rule_unref(rule);
         ofm->temp_rule = NULL;
+    }
+    if (below_limit) {
+        *below_limit = !limited;
     }
     return error;
 }

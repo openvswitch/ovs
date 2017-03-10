@@ -93,6 +93,7 @@ struct xc_entry {
         } bond;
         struct {
             struct ofproto_flow_mod *ofm;
+            unsigned limit;
         } learn;
         struct {
             struct ofproto_dpif *ofproto;

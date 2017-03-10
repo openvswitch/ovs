@@ -38,10 +38,28 @@ struct mcast_snooping;
 struct xlate_cache;
 
 struct xlate_out {
-    enum slow_path_reason slow; /* 0 if fast path may be used. */
+    /* Caching exceptions:
+     *
+     *   - If 'slow' is nonzero, the translation needs to be slow-pathed for
+     *     one reason or another.  (The particular value is only important for
+     *     explaining to an administrator why the flow is slow-pathed.)  This
+     *     makes OVS install a datapath flow with a send-to-userspace action.
+     *     Only on revalidation will the flow be replaced, if appropriate, by
+     *     one that does something else with the traffic.
+     *
+     *   - If 'avoid_caching' is true, then OVS won't install a datapath flow
+     *     at all.  If the reason to avoid caching goes away, the next upcall
+     *     will immediately install a correct datapath flow.
+     *
+     *   - Otherwise a datapath flow can be installed in the usual way.
+     *
+     * If 'avoid_caching' is true then 'slow' doesn't matter.
+     */
+    enum slow_path_reason slow;
+    bool avoid_caching;
 
-    struct recirc_refs recircs; /* Recirc action IDs on which references are
-                                 * held. */
+    /* Recirc action IDs on which references are held. */
+    struct recirc_refs recircs;
 };
 
 struct xlate_in {

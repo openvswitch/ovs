@@ -4614,16 +4614,38 @@ xlate_learn_action(struct xlate_ctx *ctx, const struct ofpact_learn *learn)
         ofpbuf_uninit(&ofpacts);
 
         if (!error) {
+            bool success = true;
             if (ctx->xin->allow_side_effects) {
-                error = ofproto_flow_mod_learn(ofm, ctx->xin->xcache != NULL);
+                error = ofproto_flow_mod_learn(ofm, ctx->xin->xcache != NULL,
+                                               learn->limit, &success);
+            } else if (learn->limit) {
+                if (!ofm->temp_rule
+                    || ofm->temp_rule->state != RULE_INSERTED) {
+                    /* The learned rule expired and there are no packets, so
+                     * we cannot learn again.  Since the translated actions
+                     * depend on the result of learning, we tell the caller
+                     * that there's no point in caching this result. */
+                    ctx->xout->avoid_caching = true;
+                }
             }
 
-            if (ctx->xin->xcache) {
+            if (learn->flags & NX_LEARN_F_WRITE_RESULT) {
+                nxm_reg_load(&learn->result_dst, success ? 1 : 0,
+                             &ctx->xin->flow, ctx->wc);
+                xlate_report_subfield(ctx, &learn->result_dst);
+            }
+
+            if (success && ctx->xin->xcache) {
                 struct xc_entry *entry;
 
                 entry = xlate_cache_add_entry(ctx->xin->xcache, XC_LEARN);
                 entry->learn.ofm = ofm;
+                entry->learn.limit = learn->limit;
                 ofm = NULL;
+            }
+
+            if (OVS_UNLIKELY(ctx->xin->trace && !success)) {
+                xlate_report(ctx, OFT_DETAIL, "Limit exceeded, learn failed");
             }
         }
 

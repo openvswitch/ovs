@@ -412,6 +412,22 @@ learn_parse__(char *orig, char *arg, struct ofpbuf *ofpacts)
             learn->flags |= NX_LEARN_F_SEND_FLOW_REM;
         } else if (!strcmp(name, "delete_learned")) {
             learn->flags |= NX_LEARN_F_DELETE_LEARNED;
+        } else if (!strcmp(name, "limit")) {
+            learn->limit = atoi(value);
+        } else if (!strcmp(name, "result_dst")) {
+            char *error;
+            learn->flags |= NX_LEARN_F_WRITE_RESULT;
+            error = mf_parse_subfield(&learn->result_dst, value);
+            if (error) {
+                return error;
+            }
+            if (!learn->result_dst.field->writable) {
+                return xasprintf("%s is read-only", value);
+            }
+            if (learn->result_dst.n_bits != 1) {
+                return xasprintf("result_dst in 'learn' action must be a "
+                                 "single bit");
+            }
         } else {
             struct ofpact_learn_spec *spec;
             char *error;
@@ -492,6 +508,14 @@ learn_format(const struct ofpact_learn *learn, struct ds *s)
     if (learn->cookie != 0) {
         ds_put_format(s, ",%scookie=%s%#"PRIx64,
                       colors.param, colors.end, ntohll(learn->cookie));
+    }
+    if (learn->limit != 0) {
+        ds_put_format(s, ",%slimit=%s%"PRIu32,
+                      colors.param, colors.end, learn->limit);
+    }
+    if (learn->flags & NX_LEARN_F_WRITE_RESULT) {
+        ds_put_format(s, ",%sresult_dst=%s", colors.param, colors.end);
+        mf_format_subfield(&learn->result_dst, s);
     }
 
     OFPACT_LEARN_SPEC_FOR_EACH (spec, learn) {

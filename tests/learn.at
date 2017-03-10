@@ -8,6 +8,8 @@ actions=learn(delete_learned)
 actions=learn(send_flow_rem,delete_learned)
 actions=learn(NXM_OF_VLAN_TCI[0..11], NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[], output:NXM_OF_IN_PORT[], load:10->NXM_NX_REG0[5..10])
 actions=learn(table=1,idle_timeout=10, hard_timeout=20, fin_idle_timeout=5, fin_hard_timeout=10, priority=10, cookie=0xfedcba9876543210, in_port=99,eth_dst=eth_src,load:in_port->reg1[16..31])
+actions=learn(limit=4096)
+actions=learn(limit=4096,result_dst=reg0[0])
 ]])
 AT_CHECK([ovs-ofctl parse-flows flows.txt], [0],
 [[usable protocols: any
@@ -18,6 +20,8 @@ OFPT_FLOW_MOD (xid=0x3): ADD actions=learn(table=1,delete_learned)
 OFPT_FLOW_MOD (xid=0x4): ADD actions=learn(table=1,send_flow_rem,delete_learned)
 OFPT_FLOW_MOD (xid=0x5): ADD actions=learn(table=1,NXM_OF_VLAN_TCI[0..11],NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[],output:NXM_OF_IN_PORT[],load:0xa->NXM_NX_REG0[5..10])
 OFPT_FLOW_MOD (xid=0x6): ADD actions=learn(table=1,idle_timeout=10,hard_timeout=20,fin_idle_timeout=5,fin_hard_timeout=10,priority=10,cookie=0xfedcba9876543210,in_port=99,NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[],load:NXM_OF_IN_PORT[]->NXM_NX_REG1[16..31])
+OFPT_FLOW_MOD (xid=0x7): ADD actions=learn(table=1,limit=4096)
+OFPT_FLOW_MOD (xid=0x8): ADD actions=learn(table=1,limit=4096,result_dst=NXM_NX_REG0[0])
 ]])
 AT_CLEANUP
 
@@ -417,6 +421,18 @@ for i in `seq 1 10`; do
     ovs-appctl time/warp 10
 done
 
+# Check that the first packet of each flow went out port 2 and the rest out
+# port 3.
+AT_CHECK(
+  [(ovs-ofctl dump-ports br0 2; ovs-ofctl dump-ports br0 3) | strip_xids], [0],
+  [OFPST_PORT reply: 1 ports
+  port  2: rx pkts=0, bytes=0, drop=?, errs=?, frame=?, over=?, crc=?
+           tx pkts=1, bytes=54, drop=?, errs=?, coll=?
+OFPST_PORT reply: 1 ports
+  port  3: rx pkts=0, bytes=0, drop=?, errs=?, frame=?, over=?, crc=?
+           tx pkts=9, bytes=486, drop=?, errs=?, coll=?
+])
+
 # Trace some packets arriving.  This is is a different flow from the previous.
 # Note that we advance time by 2 second between each packet here.
 for i in `seq 1 10`; do
@@ -624,5 +640,180 @@ AT_CHECK([ovs-ofctl del-flows br0 'table=0 reg0=2'])
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
 NXST_FLOW reply:
 ])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([learning action - limit])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+add_of_ports br0 1 2
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1 actions=learn(table=1,dl_dst=dl_src,cookie=0x1,limit=1),2
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:01,dst=50:54:00:00:00:ff),eth_type(0x1234)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:02,dst=50:54:00:00:00:ff),eth_type(0x1234)'])
+
+OVS_WAIT_UNTIL([ovs-ofctl dump-ports br0 2 | grep -o 'tx pkts=2' >/dev/null])
+
+AT_CHECK([ovs-ofctl dump-flows br0 table=1 | ofctl_strip | sort], [0], [dnl
+ cookie=0x1, table=1, dl_dst=50:54:00:00:00:01 actions=drop
+NXST_FLOW reply:
+])
+
+dnl Delete the learned flow
+AT_CHECK([ovs-ofctl del-flows br0 table=1])
+
+AT_CHECK([ovs-ofctl dump-flows br0 table=1 | ofctl_strip | sort], [0], [dnl
+NXST_FLOW reply:
+])
+
+ovs-appctl revalidator/wait
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:02,dst=50:54:00:00:00:ff),eth_type(0x1234)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:01,dst=50:54:00:00:00:ff),eth_type(0x1234)'])
+
+OVS_WAIT_UNTIL([ovs-ofctl dump-ports br0 2 | grep -o 'tx pkts=4' >/dev/null])
+
+AT_CHECK([ovs-ofctl dump-flows br0 table=1 | ofctl_strip | sort], [0], [dnl
+ cookie=0x1, table=1, dl_dst=50:54:00:00:00:02 actions=drop
+NXST_FLOW reply:
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([learning action - limit result_dst])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+add_of_ports br0 1
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1 actions=learn(table=1,dl_dst=dl_src,cookie=0x1,limit=1,result_dst=reg0[[0]]),controller
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl -P nxt_packet_in --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:01,dst=50:54:00:00:00:ff),eth_type(0x1234)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:02,dst=50:54:00:00:00:ff),eth_type(0x1234)'])
+
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 4])
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=14 reg0=0x1,in_port=1 (via action) data_len=14 (unbuffered)
+vlan_tci=0x0000,dl_src=50:54:00:00:00:01,dl_dst=50:54:00:00:00:ff,dl_type=0x1234
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=14 in_port=1 (via action) data_len=14 (unbuffered)
+vlan_tci=0x0000,dl_src=50:54:00:00:00:02,dl_dst=50:54:00:00:00:ff,dl_type=0x1234
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 table=1 | ofctl_strip | sort], [0], [dnl
+ cookie=0x1, table=1, dl_dst=50:54:00:00:00:01 actions=drop
+NXST_FLOW reply:
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([learning action - different limits])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+add_of_ports br0 1 2 3
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1 udp,actions=learn(table=11,dl_type=0x0800,nw_proto=17,udp_src=udp_dst,limit=1,result_dst=reg0[[0]]),resubmit(,1)
+table=0 in_port=2 udp,actions=learn(table=12,dl_type=0x0800,nw_proto=17,udp_src=udp_dst,limit=10,result_dst=reg0[[0]]),resubmit(,1)
+table=0 in_port=3 udp,actions=learn(table=13,dl_type=0x0800,nw_proto=17,udp_src=udp_dst,limit=20,result_dst=reg0[[0]]),resubmit(,1)
+dnl
+dnl These flows simply counts the packets that executed a successful learn action:
+dnl
+table=1 cookie=1,reg0=1,in_port=1 actions=drop
+table=1 cookie=2,reg0=1,in_port=2 actions=drop
+table=1 cookie=3,reg0=1,in_port=3 actions=drop
+dnl
+dnl These flows simply counts the packets that didn't execute a successful learn action:
+dnl
+table=1 cookie=1,reg0=0,in_port=1 actions=drop
+table=1 cookie=2,reg0=0,in_port=2 actions=drop
+table=1 cookie=3,reg0=0,in_port=3 actions=drop
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+for i in `seq 1001 1030`; do
+    ovs-appctl netdev-dummy/receive p1 "in_port(1),eth(src=50:54:00:00:00:01,dst=50:54:00:00:00:ff),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=17,tos=0,ttl=64,frag=no),udp(src=1,dst=$i)"
+    ovs-appctl netdev-dummy/receive p2 "in_port(2),eth(src=50:54:00:00:00:01,dst=50:54:00:00:00:ff),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=17,tos=0,ttl=64,frag=no),udp(src=1,dst=$i)"
+    ovs-appctl netdev-dummy/receive p3 "in_port(3),eth(src=50:54:00:00:00:01,dst=50:54:00:00:00:ff),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=17,tos=0,ttl=64,frag=no),udp(src=1,dst=$i)"
+done
+
+dnl Check successful counters:
+AT_CHECK([ovs-ofctl dump-flows br0 table=1,reg0=1 | ofctl_strip | sort], [0], [dnl
+ cookie=0x1, table=1, n_packets=1, n_bytes=42, reg0=0x1,in_port=1 actions=drop
+ cookie=0x2, table=1, n_packets=10, n_bytes=420, reg0=0x1,in_port=2 actions=drop
+ cookie=0x3, table=1, n_packets=20, n_bytes=840, reg0=0x1,in_port=3 actions=drop
+NXST_FLOW reply:
+])
+
+dnl Check failed counters:
+AT_CHECK([ovs-ofctl dump-flows br0 table=1,reg0=0 | ofctl_strip | sort], [0], [dnl
+ cookie=0x1, table=1, n_packets=29, n_bytes=1218, reg0=0,in_port=1 actions=drop
+ cookie=0x2, table=1, n_packets=20, n_bytes=840, reg0=0,in_port=2 actions=drop
+ cookie=0x3, table=1, n_packets=10, n_bytes=420, reg0=0,in_port=3 actions=drop
+NXST_FLOW reply:
+])
+
+dnl Check learned flows:
+
+AT_CHECK([ovs-ofctl dump-flows br0 table=13 | ofctl_strip | sort], [0], [dnl
+ table=13, udp,tp_src=1001 actions=drop
+ table=13, udp,tp_src=1002 actions=drop
+ table=13, udp,tp_src=1003 actions=drop
+ table=13, udp,tp_src=1004 actions=drop
+ table=13, udp,tp_src=1005 actions=drop
+ table=13, udp,tp_src=1006 actions=drop
+ table=13, udp,tp_src=1007 actions=drop
+ table=13, udp,tp_src=1008 actions=drop
+ table=13, udp,tp_src=1009 actions=drop
+ table=13, udp,tp_src=1010 actions=drop
+ table=13, udp,tp_src=1011 actions=drop
+ table=13, udp,tp_src=1012 actions=drop
+ table=13, udp,tp_src=1013 actions=drop
+ table=13, udp,tp_src=1014 actions=drop
+ table=13, udp,tp_src=1015 actions=drop
+ table=13, udp,tp_src=1016 actions=drop
+ table=13, udp,tp_src=1017 actions=drop
+ table=13, udp,tp_src=1018 actions=drop
+ table=13, udp,tp_src=1019 actions=drop
+ table=13, udp,tp_src=1020 actions=drop
+NXST_FLOW reply:
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 table=12 | ofctl_strip | sort], [0], [dnl
+ table=12, udp,tp_src=1001 actions=drop
+ table=12, udp,tp_src=1002 actions=drop
+ table=12, udp,tp_src=1003 actions=drop
+ table=12, udp,tp_src=1004 actions=drop
+ table=12, udp,tp_src=1005 actions=drop
+ table=12, udp,tp_src=1006 actions=drop
+ table=12, udp,tp_src=1007 actions=drop
+ table=12, udp,tp_src=1008 actions=drop
+ table=12, udp,tp_src=1009 actions=drop
+ table=12, udp,tp_src=1010 actions=drop
+NXST_FLOW reply:
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 table=11 | ofctl_strip | sort], [0], [dnl
+ table=11, udp,tp_src=1001 actions=drop
+NXST_FLOW reply:
+])
+
+AT_CHECK([ovs-vsctl del-br br0])
+
+ovs-appctl time/warp 500
+ovs-appctl time/warp 500
+ovs-appctl time/warp 500
+ovs-appctl time/warp 500
+
+AT_CHECK([ovs-vsctl add-br br1 -- set b br1 datapath_type=dummy])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
