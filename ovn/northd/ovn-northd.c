@@ -3820,6 +3820,23 @@ build_static_route_flow(struct hmap *lflows, struct ovn_datapath *od,
             goto free_prefix_s;
         }
         lrp_addr_s = find_lrp_member_ip(out_port, route->nexthop);
+        if (!lrp_addr_s) {
+            /* There are no IP networks configured on the router's port via
+             * which 'route->nexthop' is theoretically reachable.  But since
+             * 'out_port' has been specified, we honor it by trying to reach
+             * 'route->nexthop' via the first IP address of 'out_port'.
+             * (There are cases, e.g in GCE, where each VM gets a /32 IP
+             * address and the default gateway is still reachable from it.) */
+            if (is_ipv4) {
+                if (out_port->lrp_networks.n_ipv4_addrs) {
+                    lrp_addr_s = out_port->lrp_networks.ipv4_addrs[0].addr_s;
+                }
+            } else {
+                if (out_port->lrp_networks.n_ipv6_addrs) {
+                    lrp_addr_s = out_port->lrp_networks.ipv6_addrs[0].addr_s;
+                }
+            }
+        }
     } else {
         /* output_port is not specified, find the
          * router port matching the next hop. */

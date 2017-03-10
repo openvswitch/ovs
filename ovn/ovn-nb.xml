@@ -1339,7 +1339,10 @@
         The name of the <ref table="Logical_Router_Port"/> via which the packet
         needs to be sent out.  This is optional and when not specified,
         OVN will automatically figure this out based on the
-        <ref column="nexthop"/>.
+        <ref column="nexthop"/>.  When this is specified and there are
+        multiple IP addresses on the router port and none of them are in the
+        same subnet of <ref column="nexthop"/>, OVN chooses the first IP
+        address as the one via which the <ref column="nexthop"/> is reachable.
       </p>
     </column>
   </table>
