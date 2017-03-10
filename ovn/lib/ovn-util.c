@@ -197,7 +197,7 @@ extract_lrp_networks(const struct nbrec_logical_router_port *lrp,
 
         error = ip_parse_cidr(lrp->networks[i], &ip4, &plen);
         if (!error) {
-            if (!ip4 || plen == 32) {
+            if (!ip4) {
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
                 VLOG_WARN_RL(&rl, "bad 'networks' %s", lrp->networks[i]);
                 continue;
@@ -210,11 +210,6 @@ extract_lrp_networks(const struct nbrec_logical_router_port *lrp,
 
         error = ipv6_parse_cidr(lrp->networks[i], &ip6, &plen);
         if (!error) {
-            if (plen == 128) {
-                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-                VLOG_WARN_RL(&rl, "bad 'networks' %s", lrp->networks[i]);
-                continue;
-            }
             add_ipv6_netaddr(laddrs, ip6, plen);
         } else {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);

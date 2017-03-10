@@ -6890,3 +6890,103 @@ sort packets | cat
 OVN_CLEANUP([hv1],[hv2],[hv3])
 
 AT_CLEANUP
+
+AT_SETUP([ovn -- /32 router IP address])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# Logical network:
+# 2 LS 'foo' and 'alice' connected via router R1.
+# R1 connects to 'alice' with a /32 IP address. We use static routes and
+# nexthop to push traffic to a logical port in switch 'alice'
+
+ovn-nbctl lr-add R1
+
+ovn-nbctl ls-add foo
+ovn-nbctl ls-add alice
+
+# Connect foo to R1
+ovn-nbctl lrp-add R1 foo 00:00:00:01:02:03 192.168.1.1/24
+ovn-nbctl lsp-add foo rp-foo -- set Logical_Switch_Port rp-foo type=router \
+          options:router-port=foo addresses=\"00:00:00:01:02:03\"
+
+# Connect alice to R1.
+ovn-nbctl lrp-add R1 alice 00:00:00:01:02:04 172.16.1.1/32
+ovn-nbctl lsp-add alice rp-alice -- set Logical_Switch_Port rp-alice \
+          type=router options:router-port=alice addresses=\"00:00:00:01:02:04\"
+
+# Create logical port foo1 in foo
+ovn-nbctl lsp-add foo foo1 \
+-- lsp-set-addresses foo1 "f0:00:00:01:02:03 192.168.1.2"
+
+# Create logical port alice1 in alice
+ovn-nbctl lsp-add alice alice1 \
+-- lsp-set-addresses alice1 "f0:00:00:01:02:04 10.0.0.2"
+
+#install default route in R1 to use alice1's IP address as nexthop
+ovn-nbctl lr-route-add R1 0.0.0.0/0 10.0.0.2 alice
+
+# Create two hypervisor and create OVS ports corresponding to logical ports.
+net_add n1
+
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl -- add-port br-int hv1-vif1 -- \
+    set interface hv1-vif1 external-ids:iface-id=foo1 \
+    options:tx_pcap=hv1/vif1-tx.pcap \
+    options:rxq_pcap=hv1/vif1-rx.pcap \
+    ofport-request=1
+
+sim_add hv2
+as hv2
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.2
+ovs-vsctl -- add-port br-int hv2-vif1 -- \
+    set interface hv2-vif1 external-ids:iface-id=alice1 \
+    options:tx_pcap=hv2/vif1-tx.pcap \
+    options:rxq_pcap=hv2/vif1-rx.pcap \
+    ofport-request=1
+
+
+# Pre-populate the hypervisors' ARP tables so that we don't lose any
+# packets for ARP resolution (native tunneling doesn't queue packets
+# for ARP resolution).
+ovn_populate_arp
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
+
+ip_to_hex() {
+    printf "%02x%02x%02x%02x" "$@"
+}
+
+# Send ip packets between foo1 and alice1
+src_mac="f00000010203"
+dst_mac="000000010203"
+src_ip=`ip_to_hex 192 168 1 2`
+dst_ip=`ip_to_hex 10 0 0 2`
+packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
+
+# Send the first packet to trigger a ARP response and population of
+# mac_bindings table.
+as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
+OVS_WAIT_UNTIL([test `ovn-sbctl find mac_binding ip="10.0.0.2" | wc -l` -gt 0])
+
+# Send the second packet to reach the destination.
+as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
+
+# Packet to Expect at 'alice1'
+src_mac="000000010204"
+dst_mac="f00000010204"
+src_ip=`ip_to_hex 192 168 1 2`
+dst_ip=`ip_to_hex 10 0 0 2`
+echo "${dst_mac}${src_mac}08004500001c000000003f110100${src_ip}${dst_ip}0035111100080000" > expected
+
+OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [expected])
+
+OVN_CLEANUP([hv1],[hv2])
+
+AT_CLEANUP
