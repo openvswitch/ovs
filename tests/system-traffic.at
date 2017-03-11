@@ -1374,6 +1374,64 @@ NXST_FLOW reply:
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - ICMP related to original direction])
+AT_SKIP_IF([test $HAVE_NC = no])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+dnl Allow UDP traffic from ns0->ns1. Only allow related ICMP responses back.
+AT_DATA([flows.txt], [dnl
+priority=1000,arp,action=normal
+priority=100,ip,action=ct(table=1)
+priority=1,action=drop
+table=1,ip,action=ct(zone=34673,table=2)
+table=2,in_port=2,udp,action=ct(commit,zone=34673),1
+table=2,in_port=1,udp,action=ct(commit,zone=34673),2
+table=2,in_port=2,ct_state=+rel,icmp,action=1
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl 1. Send and UDP packet to port 53 (src=192.100.1.8,dst=192.100.2.5)
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 2 resubmit\(,0\) '00010200020400232211223308004500001c000100004011f6fac0640108c06402050035003500087b9e'])
+
+dnl 2. Send and UDP packet to port 53 (src=192.100.2.5,dst=192.100.1.8)
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 1 resubmit\(,0\) '00232211223300010200020408004500001c000100004011f6fac0640205c06401080035003500087b9e'])
+
+dnl 3. Send an ICMP port unreach reply for port 53, related to the 2nd
+dnl packet, but in the original direction of the conntrack entry created
+dnl for the 1st packet.
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 2 resubmit\(,0\) '000102000204002322112233080045000038000100003f01f7eec0640108c0640205030a80e5ffffffff4500001c000100003f11f7fac0640205c06401080035003500087b9e'])
+
+AT_CHECK([ovs-appctl revalidator/purge], [0])
+
+dnl 4. Repeat 3.
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 2 resubmit\(,0\) '000102000204002322112233080045000038000100003f01f7eec0640108c0640205030a80e5ffffffff4500001c000100003f11f7fac0640205c06401080035003500087b9e'])
+
+AT_CHECK([ovs-appctl revalidator/purge], [0])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort | grep -v drop], [0], [dnl
+ n_packets=4, n_bytes=224, priority=100,ip actions=ct(table=1)
+ priority=1000,arp actions=NORMAL
+ table=1, n_packets=4, n_bytes=224, ip actions=ct(table=2,zone=34673)
+ table=2, n_packets=1, n_bytes=42, udp,in_port=1 actions=ct(commit,zone=34673),output:2
+ table=2, n_packets=1, n_bytes=42, udp,in_port=2 actions=ct(commit,zone=34673),output:1
+ table=2, n_packets=2, n_bytes=140, ct_state=+rel,icmp,in_port=2 actions=output:1
+NXST_FLOW reply:
+])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(192.100.1.8)], [0], [dnl
+udp,orig=(src=192.100.1.8,dst=192.100.2.5,sport=<cleared>,dport=<cleared>),reply=(src=192.100.2.5,dst=192.100.1.8,sport=<cleared>,dport=<cleared>),zone=34673
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([conntrack - ICMP related 2])
 CHECK_CONNTRACK()
 OVS_TRAFFIC_VSWITCHD_START()
