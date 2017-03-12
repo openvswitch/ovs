@@ -39,7 +39,7 @@ enum OVS_PACKED_ENUM dp_packet_source {
     DPBUF_STACK,               /* Un-movable stack space or static buffer. */
     DPBUF_STUB,                /* Starts on stack, may expand into heap. */
     DPBUF_DPDK,                /* buffer data is from DPDK allocated memory.
-                                * ref to build_dp_packet() in netdev-dpdk. */
+                                * ref to dp_packet_init_dpdk() in dp-packet.c. */
 };
 
 #define DP_PACKET_CONTEXT_SIZE 64
