@@ -398,6 +398,14 @@ where:
 If ``N`` is set to 1, an insertion will be performed for every flow. If set to
 0, no insertions will be performed and the EMC will effectively be disabled.
 
+With default ``N`` set to 100, higher megaflow hits will occur initially
+as observed with pmd stats::
+
+    $ ovs-appctl dpif-netdev/pmd-stats-show
+
+For certain traffic profiles with many parallel flows, it's recommended to set
+``N`` to '0' to achieve higher forwarding performance.
+
 For more information on the EMC refer to :doc:`/intro/install/dpdk` .
 
 .. _dpdk-ovs-in-guest:
