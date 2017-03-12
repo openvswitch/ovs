@@ -4500,7 +4500,10 @@ emc_processing(struct dp_netdev_pmd_thread *pmd,
     size_t n_missed = 0, n_dropped = 0;
     struct dp_packet *packet;
     const size_t size = dp_packet_batch_size(packets_);
+    uint32_t cur_min;
     int i;
+
+    atomic_read_relaxed(&pmd->dp->emc_insert_min, &cur_min);
 
     DP_PACKET_BATCH_REFILL_FOR_EACH (i, size, packet, packets_) {
         struct dp_netdev_flow *flow;
@@ -4525,7 +4528,8 @@ emc_processing(struct dp_netdev_pmd_thread *pmd,
         key->len = 0; /* Not computed yet. */
         key->hash = dpif_netdev_packet_get_rss_hash(packet, &key->mf);
 
-        flow = emc_lookup(flow_cache, key);
+        /* If EMC is disabled skip emc_lookup */
+        flow = (cur_min == 0) ? NULL: emc_lookup(flow_cache, key);
         if (OVS_LIKELY(flow)) {
             dp_netdev_queue_batches(packet, flow, &key->mf, batches,
                                     n_batches);
