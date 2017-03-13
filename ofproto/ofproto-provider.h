@@ -422,6 +422,10 @@ struct rule {
 
     /* Must hold 'mutex' for both read/write, 'ofproto_mutex' not needed. */
     long long int modified OVS_GUARDED; /* Time of last modification. */
+
+    /* 1-bit for each present TLV in flow match / action. */
+    uint64_t match_tlv_bitmap;
+    uint64_t ofpacts_tlv_bitmap;
 };
 
 void ofproto_rule_ref(struct rule *);

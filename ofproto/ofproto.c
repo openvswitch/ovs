@@ -228,6 +228,8 @@ static enum ofperr ofproto_rule_create(struct ofproto *, struct cls_rule *,
                                        uint16_t importance,
                                        const struct ofpact *ofpacts,
                                        size_t ofpacts_len,
+                                       uint64_t match_tlv_bitmap,
+                                       uint64_t ofpacts_tlv_bitmap,
                                        struct rule **new_rule)
     OVS_NO_THREAD_SAFETY_ANALYSIS;
 
@@ -1591,7 +1593,7 @@ ofproto_destroy__(struct ofproto *ofproto)
     free(ofproto->tables);
 
     ovs_mutex_lock(&ofproto->vl_mff_map.mutex);
-    mf_vl_mff_map_clear(&ofproto->vl_mff_map);
+    mf_vl_mff_map_clear(&ofproto->vl_mff_map, true);
     ovs_mutex_unlock(&ofproto->vl_mff_map.mutex);
     cmap_destroy(&ofproto->vl_mff_map.cmap);
     ovs_mutex_destroy(&ofproto->vl_mff_map.mutex);
@@ -2824,6 +2826,8 @@ rule_destroy_cb(struct rule *rule)
         ofproto_rule_send_removed(rule);
     }
     rule->ofproto->ofproto_class->rule_destruct(rule);
+    mf_vl_mff_unref(&rule->ofproto->vl_mff_map, rule->match_tlv_bitmap);
+    mf_vl_mff_unref(&rule->ofproto->vl_mff_map, rule->ofpacts_tlv_bitmap);
     ofproto_rule_destroy__(rule);
 }
 
@@ -4736,7 +4740,9 @@ add_flow_init(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
                                     fm->new_cookie, fm->idle_timeout,
                                     fm->hard_timeout, fm->flags,
                                     fm->importance, fm->ofpacts,
-                                    fm->ofpacts_len, &ofm->temp_rule);
+                                    fm->ofpacts_len,
+                                    fm->match.flow.tunnel.metadata.present.map,
+                                    fm->ofpacts_tlv_bitmap, &ofm->temp_rule);
         if (error) {
             return error;
         }
@@ -4851,6 +4857,7 @@ ofproto_rule_create(struct ofproto *ofproto, struct cls_rule *cr,
                     uint16_t idle_timeout, uint16_t hard_timeout,
                     enum ofputil_flow_mod_flags flags, uint16_t importance,
                     const struct ofpact *ofpacts, size_t ofpacts_len,
+                    uint64_t match_tlv_bitmap, uint64_t ofpacts_tlv_bitmap,
                     struct rule **new_rule)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
@@ -4901,6 +4908,10 @@ ofproto_rule_create(struct ofproto *ofproto, struct cls_rule *cr,
     }
 
     rule->state = RULE_INITIALIZED;
+    rule->match_tlv_bitmap = match_tlv_bitmap;
+    rule->ofpacts_tlv_bitmap = ofpacts_tlv_bitmap;
+    mf_vl_mff_ref(&rule->ofproto->vl_mff_map, match_tlv_bitmap);
+    mf_vl_mff_ref(&rule->ofproto->vl_mff_map, ofpacts_tlv_bitmap);
 
     *new_rule = rule;
     return 0;
@@ -4998,6 +5009,8 @@ ofproto_flow_mod_learn_refresh(struct ofproto_flow_mod *ofm)
                                     rule->importance,
                                     rule->actions->ofpacts,
                                     rule->actions->ofpacts_len,
+                                    rule->match_tlv_bitmap,
+                                    rule->ofpacts_tlv_bitmap,
                                     &ofm->temp_rule);
         ovs_mutex_unlock(&rule->mutex);
         if (!error) {
@@ -5258,6 +5271,13 @@ modify_flows_start__(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
                 cls_rule_destroy(CONST_CAST(struct cls_rule *, &temp->cr));
                 cls_rule_clone(CONST_CAST(struct cls_rule *, &temp->cr),
                                &old_rule->cr);
+                if (temp->match_tlv_bitmap != old_rule->match_tlv_bitmap) {
+                    mf_vl_mff_unref(&temp->ofproto->vl_mff_map,
+                                    temp->match_tlv_bitmap);
+                    temp->match_tlv_bitmap = old_rule->match_tlv_bitmap;
+                    mf_vl_mff_ref(&temp->ofproto->vl_mff_map,
+                                  temp->match_tlv_bitmap);
+                }
                 *CONST_CAST(uint8_t *, &temp->table_id) = old_rule->table_id;
                 rule_collection_add(new_rules, temp);
                 first = false;
@@ -5271,6 +5291,8 @@ modify_flows_start__(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
                                             temp->importance,
                                             temp->actions->ofpacts,
                                             temp->actions->ofpacts_len,
+                                            old_rule->match_tlv_bitmap,
+                                            temp->ofpacts_tlv_bitmap,
                                             &new_rule);
                 if (!error) {
                     rule_collection_add(new_rules, new_rule);
@@ -7782,13 +7804,14 @@ handle_tlv_table_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     old_tab = ovsrcu_get_protected(struct tun_table *, &ofproto->metadata_tab);
     error = tun_metadata_table_mod(&ttm, old_tab, &new_tab);
     if (!error) {
-        ovsrcu_set(&ofproto->metadata_tab, new_tab);
-        tun_metadata_postpone_free(old_tab);
-
         ovs_mutex_lock(&ofproto->vl_mff_map.mutex);
         error = mf_vl_mff_map_mod_from_tun_metadata(&ofproto->vl_mff_map,
                                                     &ttm);
         ovs_mutex_unlock(&ofproto->vl_mff_map.mutex);
+        if (!error) {
+            ovsrcu_set(&ofproto->metadata_tab, new_tab);
+            tun_metadata_postpone_free(old_tab);
+        }
     }
 
     ofputil_uninit_tlv_table(&ttm.mappings);

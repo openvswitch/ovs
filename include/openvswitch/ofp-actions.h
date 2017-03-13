@@ -946,12 +946,14 @@ enum ofperr ofpacts_pull_openflow_actions(struct ofpbuf *openflow,
                                           unsigned int actions_len,
                                           enum ofp_version version,
                                           const struct vl_mff_map *,
+                                          uint64_t *ofpacts_tlv_bitmap,
                                           struct ofpbuf *ofpacts);
 enum ofperr
 ofpacts_pull_openflow_instructions(struct ofpbuf *openflow,
                                    unsigned int instructions_len,
                                    enum ofp_version version,
                                    const struct vl_mff_map *vl_mff_map,
+                                   uint64_t *ofpacts_tlv_bitmap,
                                    struct ofpbuf *ofpacts);
 enum ofperr ofpacts_check(struct ofpact[], size_t ofpacts_len,
                           struct flow *, ofp_port_t max_ports,

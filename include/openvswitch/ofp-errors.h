@@ -772,6 +772,10 @@ enum ofperr {
      * to be mapped is the same as one assigned to a different field. */
     OFPERR_NXTTMFC_DUP_ENTRY,
 
+    /* NX1.0-1.1(1,537), NX1.2+(38).  Attempted to delete a TLV mapping that
+     * is used by any active flow. */
+    OFPERR_NXTTMFC_INVALID_TLV_DEL,
+
 /* ## ---------- ## */
 /* ## NXT_RESUME ## */
 /* ## ---------- ## */
