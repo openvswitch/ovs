@@ -571,10 +571,11 @@ netdev_dpdk_mempool_configure(struct netdev_dpdk *dev)
 
     mp = dpdk_mp_get(dev->requested_socket_id, FRAME_LEN_TO_MTU(buf_size));
     if (!mp) {
-        VLOG_ERR("Insufficient memory to create memory pool for netdev "
-                 "%s, with MTU %d on socket %d\n",
-                 dev->up.name, dev->requested_mtu, dev->requested_socket_id);
-        return ENOMEM;
+        VLOG_ERR("Failed to create memory pool for netdev "
+                 "%s, with MTU %d on socket %d: %s\n",
+                 dev->up.name, dev->requested_mtu, dev->requested_socket_id,
+                 rte_strerror(rte_errno));
+        return rte_errno;
     } else {
         dpdk_mp_put(dev->dpdk_mp);
         dev->dpdk_mp = mp;
