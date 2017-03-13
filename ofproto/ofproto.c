@@ -1579,14 +1579,6 @@ ofproto_destroy__(struct ofproto *ofproto)
     cmap_destroy(&ofproto->groups);
 
     hmap_remove(&all_ofprotos, &ofproto->hmap_node);
-    tun_metadata_free(ovsrcu_get_protected(struct tun_table *,
-                                           &ofproto->metadata_tab));
-
-    ovs_mutex_lock(&ofproto->vl_mff_map.mutex);
-    mf_vl_mff_map_clear(&ofproto->vl_mff_map, true);
-    ovs_mutex_unlock(&ofproto->vl_mff_map.mutex);
-    cmap_destroy(&ofproto->vl_mff_map.cmap);
-    ovs_mutex_destroy(&ofproto->vl_mff_map.mutex);
 
     free(ofproto->name);
     free(ofproto->type);
@@ -1604,6 +1596,14 @@ ofproto_destroy__(struct ofproto *ofproto)
         oftable_destroy(table);
     }
     free(ofproto->tables);
+
+    ovs_mutex_lock(&ofproto->vl_mff_map.mutex);
+    mf_vl_mff_map_clear(&ofproto->vl_mff_map, true);
+    ovs_mutex_unlock(&ofproto->vl_mff_map.mutex);
+    cmap_destroy(&ofproto->vl_mff_map.cmap);
+    ovs_mutex_destroy(&ofproto->vl_mff_map.mutex);
+    tun_metadata_free(ovsrcu_get_protected(struct tun_table *,
+                                           &ofproto->metadata_tab));
 
     ovs_assert(hindex_is_empty(&ofproto->cookies));
     hindex_destroy(&ofproto->cookies);
