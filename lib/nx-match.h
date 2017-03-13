@@ -52,17 +52,18 @@ char *mf_parse_subfield(struct mf_subfield *, const char *s)
 enum ofperr nx_pull_match(struct ofpbuf *, unsigned int match_len,
                           struct match *,
                           ovs_be64 *cookie, ovs_be64 *cookie_mask,
-                          const struct tun_table *);
+                          const struct tun_table *, const struct vl_mff_map *);
 enum ofperr nx_pull_match_loose(struct ofpbuf *, unsigned int match_len,
                                 struct match *, ovs_be64 *cookie,
                                 ovs_be64 *cookie_mask,
                                 const struct tun_table *);
 enum ofperr oxm_pull_match(struct ofpbuf *, const struct tun_table *,
-                           struct match *);
+                           const struct vl_mff_map *, struct match *);
 enum ofperr oxm_pull_match_loose(struct ofpbuf *, const struct tun_table *,
                                  struct match *);
 enum ofperr oxm_decode_match(const void *, size_t, bool,
-                             const struct tun_table *, struct match *);
+                             const struct tun_table *,
+                             const struct vl_mff_map *, struct match *);
 enum ofperr oxm_pull_field_array(const void *, size_t fields_len,
                                  struct field_array *);
 

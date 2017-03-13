@@ -3568,8 +3568,9 @@ handle_nxt_resume(struct ofconn *ofconn, const struct ofp_header *oh)
     enum ofperr error;
 
     error = ofputil_decode_packet_in_private(oh, false,
-                                             ofproto_get_tun_tab(ofproto), &pin,
-                                             NULL, NULL);
+                                             ofproto_get_tun_tab(ofproto),
+                                             &ofproto->vl_mff_map, &pin, NULL,
+                                             NULL);
     if (error) {
         return error;
     }
@@ -4273,7 +4274,8 @@ handle_flow_stats_request(struct ofconn *ofconn,
     enum ofperr error;
 
     error = ofputil_decode_flow_stats_request(&fsr, request,
-                                              ofproto_get_tun_tab(ofproto));
+                                              ofproto_get_tun_tab(ofproto),
+                                              &ofproto->vl_mff_map);
     if (error) {
         return error;
     }
@@ -4438,7 +4440,8 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
     enum ofperr error;
 
     error = ofputil_decode_flow_stats_request(&request, oh,
-                                              ofproto_get_tun_tab(ofproto));
+                                              ofproto_get_tun_tab(ofproto),
+                                              &ofproto->vl_mff_map);
     if (error) {
         return error;
     }

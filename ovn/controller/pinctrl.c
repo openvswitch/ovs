@@ -665,7 +665,7 @@ process_packet_in(const struct ofp_header *msg)
 
     struct ofputil_packet_in pin;
     struct ofpbuf continuation;
-    enum ofperr error = ofputil_decode_packet_in(msg, true, NULL, &pin,
+    enum ofperr error = ofputil_decode_packet_in(msg, true, NULL, NULL, &pin,
                                                  NULL, NULL, &continuation);
 
     if (error) {

@@ -118,7 +118,7 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
     size_t total_len;
     enum ofperr error;
 
-    error = ofputil_decode_packet_in_private(oh, true, NULL,
+    error = ofputil_decode_packet_in_private(oh, true, NULL, NULL,
                                              &pin, &total_len, &buffer_id);
     if (error) {
         ofp_print_error(string, error);
@@ -1603,7 +1603,7 @@ ofp_print_flow_stats_request(struct ds *string, const struct ofp_header *oh)
     struct ofputil_flow_stats_request fsr;
     enum ofperr error;
 
-    error = ofputil_decode_flow_stats_request(&fsr, oh, NULL);
+    error = ofputil_decode_flow_stats_request(&fsr, oh, NULL, NULL);
     if (error) {
         ofp_print_error(string, error);
         return;
