@@ -135,3 +135,39 @@ necessary because the command does not ordinarily imply a particular
 OpenFlow version.  One exception is that, when \fIactions\fR includes
 an action that only OpenFlow 1.1 and later supports (such as
 \fBpush_vlan\fR), \fB\-consistent\fR is automatically enabled.
+.
+.IP "Usage examples:"
+.RS 4
+.PP
+\fBTrace an unicast ICMP echo request on ingress port 1 to destination MAC
+00:00:5E:00:53:01\fR
+.RS 4
+.nf
+ofproto/trace br in_port=1,icmp,icmp_type=8,\\
+dl_dst=00:00:5E:00:53:01
+.RE
+.fi
+.PP
+\fBTrace an unicast ICMP echo reply on ingress port 1 to destination MAC
+00:00:5E:00:53:01\fR
+.RS 4
+.nf
+ofproto/trace br in_port=1,icmp,icmp_type=0,\\
+dl_dst=00:00:5E:00:53:01
+.fi
+.RE
+.PP
+\fBTrace an ARP request on ingress port 1\fR
+.RS 4
+.nf
+ofproto/trace br in_port=1,arp,arp_op=1
+.fi
+.RE
+.PP
+\fBTrace an ARP reply on ingress port 1\fR
+.RS 4
+.nf
+ofproto/trace br in_port=1,arp,arp_op=2
+.fi
+.RE
+.RE
