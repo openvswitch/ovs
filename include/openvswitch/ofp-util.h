@@ -222,7 +222,7 @@ void ofputil_match_to_ofp10_match(const struct match *, struct ofp10_match *);
 
 /* Work with ofp11_match. */
 enum ofperr ofputil_pull_ofp11_match(struct ofpbuf *, const struct tun_table *,
-                                     struct match *,
+                                     const struct vl_mff_map *, struct match *,
                                      uint16_t *padded_match_len);
 enum ofperr ofputil_pull_ofp11_mask(struct ofpbuf *, struct match *,
                                     struct mf_bitmap *bm);
@@ -352,7 +352,7 @@ struct ofputil_flow_stats_request {
 
 enum ofperr ofputil_decode_flow_stats_request(
     struct ofputil_flow_stats_request *, const struct ofp_header *,
-    const struct tun_table *);
+    const struct tun_table *, const struct vl_mff_map *);
 struct ofpbuf *ofputil_encode_flow_stats_request(
     const struct ofputil_flow_stats_request *, enum ofputil_protocol);
 
@@ -457,6 +457,7 @@ void ofputil_packet_in_destroy(struct ofputil_packet_in *);
 
 enum ofperr ofputil_decode_packet_in(const struct ofp_header *, bool loose,
                                      const struct tun_table *,
+                                     const struct vl_mff_map *,
                                      struct ofputil_packet_in *,
                                      size_t *total_len, uint32_t *buffer_id,
                                      struct ofpbuf *continuation);
@@ -509,6 +510,7 @@ struct ofpbuf *ofputil_encode_packet_in_private(
 enum ofperr ofputil_decode_packet_in_private(
     const struct ofp_header *, bool loose,
     const struct tun_table *,
+    const struct vl_mff_map *,
     struct ofputil_packet_in_private *,
     size_t *total_len, uint32_t *buffer_id);
 
