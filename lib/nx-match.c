@@ -683,14 +683,14 @@ oxm_pull_match_loose(struct ofpbuf *b, const struct tun_table *tun_table,
  *
  * Returns 0 if successful, otherwise an OpenFlow error code.
  *
- * Encountering unknown OXM headers or missing field prerequisites are not
- * considered as error conditions.
+ * If 'loose' is true, encountering unknown OXM headers or missing field
+ * prerequisites are not considered as error conditions.
  */
 enum ofperr
-oxm_decode_match_loose(const void *oxm, size_t oxm_len,
-                       const struct tun_table *tun_table, struct match *match)
+oxm_decode_match(const void *oxm, size_t oxm_len, bool loose,
+                 const struct tun_table *tun_table, struct match *match)
 {
-    return nx_pull_raw(oxm, oxm_len, false, match, NULL, NULL, tun_table);
+    return nx_pull_raw(oxm, oxm_len, !loose, match, NULL, NULL, tun_table);
 }
 
 /* Verify an array of OXM TLVs treating value of each TLV as a mask,

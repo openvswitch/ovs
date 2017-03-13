@@ -61,8 +61,8 @@ enum ofperr oxm_pull_match(struct ofpbuf *, const struct tun_table *,
                            struct match *);
 enum ofperr oxm_pull_match_loose(struct ofpbuf *, const struct tun_table *,
                                  struct match *);
-enum ofperr oxm_decode_match_loose(const void *, size_t,
-                                   const struct tun_table *, struct match *);
+enum ofperr oxm_decode_match(const void *, size_t, bool,
+                             const struct tun_table *, struct match *);
 enum ofperr oxm_pull_field_array(const void *, size_t fields_len,
                                  struct field_array *);
 
