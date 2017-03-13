@@ -3876,7 +3876,7 @@ ofctl_parse_actions__(const char *version_s, bool instructions)
         error = (instructions
                  ? ofpacts_pull_openflow_instructions
                  : ofpacts_pull_openflow_actions)(
-                     &of_in, of_in.size, version, NULL, &ofpacts);
+                     &of_in, of_in.size, version, NULL, NULL, &ofpacts);
         if (!error && instructions) {
             /* Verify actions, enforce consistency. */
             enum ofputil_protocol protocol;

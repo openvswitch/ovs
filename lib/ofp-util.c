@@ -1726,8 +1726,11 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
         return OFPERR_OFPFMFC_BAD_COMMAND;
     }
 
+    fm->ofpacts_tlv_bitmap = 0;
     error = ofpacts_pull_openflow_instructions(&b, b.size, oh->version,
-                                               vl_mff_map, ofpacts);
+                                               vl_mff_map,
+                                               &fm->ofpacts_tlv_bitmap,
+                                               ofpacts);
     if (error) {
         return error;
     }
@@ -3013,7 +3016,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
     }
 
     if (ofpacts_pull_openflow_instructions(msg, instructions_len, oh->version,
-                                           NULL, ofpacts)) {
+                                           NULL, NULL, ofpacts)) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_FLOW reply bad instructions");
         return EINVAL;
     }
@@ -4041,7 +4044,7 @@ parse_actions_property(struct ofpbuf *property, enum ofp_version version,
     }
 
     return ofpacts_pull_openflow_actions(property, property->size,
-                                         version, NULL, ofpacts);
+                                         version, NULL, NULL, ofpacts);
 }
 
 /* This is like ofputil_decode_packet_in(), except that it decodes the
@@ -4200,7 +4203,8 @@ ofputil_decode_packet_out(struct ofputil_packet_out *po,
         }
 
         error = ofpacts_pull_openflow_actions(&b, ntohs(opo->actions_len),
-                                              oh->version, NULL, ofpacts);
+                                              oh->version, NULL, NULL,
+                                              ofpacts);
         if (error) {
             return error;
         }
@@ -4212,7 +4216,8 @@ ofputil_decode_packet_out(struct ofputil_packet_out *po,
         po->in_port = u16_to_ofp(ntohs(opo->in_port));
 
         error = ofpacts_pull_openflow_actions(&b, ntohs(opo->actions_len),
-                                              oh->version, NULL, ofpacts);
+                                              oh->version, NULL, NULL,
+                                              ofpacts);
         if (error) {
             return error;
         }
@@ -6754,7 +6759,7 @@ ofputil_decode_flow_update(struct ofputil_flow_update *update,
 
         actions_len = length - sizeof *nfuf - ROUND_UP(match_len, 8);
         error = ofpacts_pull_openflow_actions(msg, actions_len, oh->version,
-                                              NULL, ofpacts);
+                                              NULL, NULL, ofpacts);
         if (error) {
             return error;
         }
@@ -8738,7 +8743,7 @@ ofputil_pull_ofp11_buckets(struct ofpbuf *msg, size_t buckets_length,
 
         ofpbuf_init(&ofpacts, 0);
         error = ofpacts_pull_openflow_actions(msg, ob_len - sizeof *ob,
-                                              version, NULL, &ofpacts);
+                                              version, NULL, NULL, &ofpacts);
         if (error) {
             ofpbuf_uninit(&ofpacts);
             ofputil_bucket_list_destroy(buckets);
@@ -8812,7 +8817,7 @@ ofputil_pull_ofp15_buckets(struct ofpbuf *msg, size_t buckets_length,
         buckets_length -= ob_len;
 
         err = ofpacts_pull_openflow_actions(msg, actions_len, version,
-                                            NULL, &ofpacts);
+                                            NULL, NULL, &ofpacts);
         if (err) {
             goto err;
         }

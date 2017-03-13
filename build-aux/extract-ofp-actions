@@ -322,7 +322,8 @@ def extract_ofp_actions(fn, definitions):
 static enum ofperr
 ofpact_decode(const struct ofp_action_header *a, enum ofp_raw_action_type raw,
               enum ofp_version version, uint64_t arg,
-              const struct vl_mff_map *vl_mff_map, struct ofpbuf *out)
+              const struct vl_mff_map *vl_mff_map,
+              uint64_t *tlv_bitmap, struct ofpbuf *out)
 {
     switch (raw) {\
 """
@@ -343,7 +344,7 @@ ofpact_decode(const struct ofp_action_header *a, enum ofp_raw_action_type raw,
                     else:
                         arg = "arg"
                 if arg_vl_mff_map:
-                    print "        return decode_%s(%s, version, vl_mff_map, out);" % (enum, arg)
+                    print "        return decode_%s(%s, version, vl_mff_map, tlv_bitmap, out);" % (enum, arg)
                 else:
                     print "        return decode_%s(%s, version, out);" % (enum, arg)
             print
@@ -365,7 +366,7 @@ ofpact_decode(const struct ofp_action_header *a, enum ofp_raw_action_type raw,
                 else:
                     prototype += "%s, enum ofp_version, " % base_argtype
                 if arg_vl_mff_map:
-                    prototype += 'const struct vl_mff_map *, '
+                    prototype += 'const struct vl_mff_map *, uint64_t *, '
             prototype += "struct ofpbuf *);"
             print prototype
 
@@ -374,7 +375,7 @@ static enum ofperr ofpact_decode(const struct ofp_action_header *,
                                  enum ofp_raw_action_type raw,
                                  enum ofp_version version,
                                  uint64_t arg, const struct vl_mff_map *vl_mff_map,
-                                 struct ofpbuf *out);
+                                 uint64_t *tlv_bitmap, struct ofpbuf *out);
 """
 
 if __name__ == '__main__':

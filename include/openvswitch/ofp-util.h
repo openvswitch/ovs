@@ -326,6 +326,7 @@ struct ofputil_flow_mod {
     uint16_t importance;     /* Eviction precedence. */
     struct ofpact *ofpacts;  /* Series of "struct ofpact"s. */
     size_t ofpacts_len;      /* Length of ofpacts, in bytes. */
+    uint64_t ofpacts_tlv_bitmap; /* 1-bit for each present TLV in 'ofpacts'. */
 };
 
 enum ofperr ofputil_decode_flow_mod(struct ofputil_flow_mod *,

@@ -168,7 +168,8 @@ pinctrl_handle_arp(const struct flow *ip_flow, const struct match *md,
 
     reload_metadata(&ofpacts, md);
     enum ofperr error = ofpacts_pull_openflow_actions(userdata, userdata->size,
-                                                      version, NULL, &ofpacts);
+                                                      version, NULL, NULL,
+                                                      &ofpacts);
     if (error) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
         VLOG_WARN_RL(&rl, "failed to parse arp actions (%s)",
@@ -1398,7 +1399,8 @@ pinctrl_handle_nd_na(const struct flow *ip_flow, const struct match *md,
     reload_metadata(&ofpacts, md);
 
     enum ofperr error = ofpacts_pull_openflow_actions(userdata, userdata->size,
-                                                      version, NULL, &ofpacts);
+                                                      version, NULL, NULL,
+                                                      &ofpacts);
     if (error) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
         VLOG_WARN_RL(&rl, "failed to parse actions for 'na' (%s)",

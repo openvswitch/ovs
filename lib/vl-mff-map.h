@@ -29,7 +29,7 @@ struct vl_mff_map {
 };
 
 /* Variable length fields. */
-void mf_vl_mff_map_clear(struct vl_mff_map *vl_mff_map)
+enum ofperr mf_vl_mff_map_clear(struct vl_mff_map *vl_mff_map, bool)
     OVS_REQUIRES(vl_mff_map->mutex);
 enum ofperr mf_vl_mff_map_mod_from_tun_metadata(
     struct vl_mff_map *vl_mff_map, const struct ofputil_tlv_table_mod *)
@@ -37,5 +37,18 @@ enum ofperr mf_vl_mff_map_mod_from_tun_metadata(
 const struct mf_field * mf_get_vl_mff(const struct mf_field *,
                                       const struct vl_mff_map *);
 bool mf_vl_mff_invalid(const struct mf_field *, const struct vl_mff_map *);
-
+void mf_vl_mff_set_tlv_bitmap(const struct mf_field *, uint64_t *tlv_bitmap);
+void mf_vl_mff_ref(const struct vl_mff_map *, uint64_t tlv_bitmap);
+void mf_vl_mff_unref(const struct vl_mff_map *, uint64_t tlv_bitmap);
+enum ofperr mf_vl_mff_nx_pull_header(struct ofpbuf *,
+                                     const struct vl_mff_map *,
+                                     const struct mf_field **, bool *masked,
+                                     uint64_t *tlv_bitmap);
+enum ofperr mf_vl_mff_nx_pull_entry(struct ofpbuf *, const struct vl_mff_map *,
+                                    const struct mf_field **, union mf_value *,
+                                    union mf_value *, uint64_t *tlv_bitmap);
+enum ofperr mf_vl_mff_mf_from_nxm_header(uint32_t header,
+                                         const struct vl_mff_map *,
+                                         const struct mf_field **,
+                                         uint64_t *tlv_bitmap);
 #endif /* vl-mff-map.h */

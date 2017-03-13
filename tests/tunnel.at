@@ -535,7 +535,81 @@ AT_CHECK([tail -2 stdout], [0],
 Datapath actions: 2
 ])
 
-AT_CHECK([ovs-ofctl del-tlv-map br0])
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip],
+[0], [dnl
+NXST_FLOW reply:
+ tun_metadata3=0x1234567890abcdef actions=output:2
+])
+
+dnl A TLV mapping should not be removed if any active flow uses the mapping.
+AT_CHECK([ovs-ofctl del-tlv-map br0], [1], [], [dnl
+OFPT_ERROR (xid=0x4): NXTTMFC_INVALID_TLV_DEL
+NXT_TLV_TABLE_MOD (xid=0x4):
+ CLEAR
+])
+
+AT_CHECK([ovs-ofctl del-flows br0], [0])
+AT_CHECK([ovs-ofctl del-tlv-map br0], [0])
+
+dnl Flow modification
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=1,len=4}->tun_metadata0"])
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=2,len=4}->tun_metadata1"])
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=3,len=4}->tun_metadata2"])
+
+AT_CHECK([ovs-ofctl add-flow br0 "in_port=1 actions=multipath(eth_src,50,modulo_n,1,0,tun_metadata0[[0..31]])"])
+AT_CHECK([ovs-ofctl add-flow br0 "in_port=2 actions=push:tun_metadata1[[0..31]],clone(move:tun_metadata2[[0..31]]->reg0[[0..31]])"])
+
+AT_CHECK([ovs-ofctl add-flow br0 "in_port=1 actions=output:4"])
+AT_CHECK([ovs-ofctl del-tlv-map br0 "{class=0xffff,type=3,len=4}->tun_metadata0"])
+
+AT_CHECK([ovs-ofctl add-flow br0 "in_port=2 actions=push:tun_metadata2[[0..31]]"])
+AT_CHECK([ovs-ofctl del-tlv-map br0 "{class=0xffff,type=2,len=4}->tun_metadata1"])
+AT_CHECK([ovs-ofctl del-tlv-map br0 "{class=0xffff,type=3,len=4}->tun_metadata2"], [1], [], [dnl
+OFPT_ERROR (xid=0x4): NXTTMFC_INVALID_TLV_DEL
+NXT_TLV_TABLE_MOD (xid=0x4):
+ DEL mapping table:
+ class	type	length	match field
+ -----	----	------	-----------
+ 0xffff	0x3	4	tun_metadata2
+])
+
+AT_CHECK([ovs-ofctl del-flows br0], [0])
+AT_CHECK([ovs-ofctl del-tlv-map br0], [0])
+
+dnl Learn action
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=1,len=4}->tun_metadata1"])
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=2,len=4}->tun_metadata2"])
+AT_CHECK([ovs-ofctl add-flow br0 "in_port=2, eth_src=00:00:00:00:00:01 actions=learn(tun_metadata1[[0..31]]=reg1, output:NXM_OF_IN_PORT[[]])"])
+AT_CHECK([ovs-ofctl add-flow br0 "in_port=2, eth_src=00:00:00:00:00:02 actions=learn(reg1[[0..31]]=0xFF, load:reg1[[0..31]]->tun_metadata2[[0..31]])"])
+flow1="in_port(2),eth(src=00:00:00:00:00:01,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0800)"
+flow2="in_port(2),eth(src=00:00:00:00:00:02,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0800)"
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow1" -generate], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow2" -generate], [0], [stdout])
+
+dnl Delete flows with learn action
+AT_CHECK([ovs-ofctl del-flows br0 "in_port=2"])
+
+AT_CHECK([ovs-ofctl del-tlv-map br0 "{class=0xffff,type=1,len=4}->tun_metadata1"], [1], [], [dnl
+OFPT_ERROR (xid=0x4): NXTTMFC_INVALID_TLV_DEL
+NXT_TLV_TABLE_MOD (xid=0x4):
+ DEL mapping table:
+ class	type	length	match field
+ -----	----	------	-----------
+ 0xffff	0x1	4	tun_metadata1
+])
+AT_CHECK([ovs-ofctl del-flows br0 "tun_metadata1"])
+AT_CHECK([ovs-ofctl del-tlv-map br0 "{class=0xffff,type=1,len=4}->tun_metadata1"])
+
+AT_CHECK([ovs-ofctl del-tlv-map br0 "{class=0xffff,type=2,len=4}->tun_metadata2"], [1], [], [dnl
+OFPT_ERROR (xid=0x4): NXTTMFC_INVALID_TLV_DEL
+NXT_TLV_TABLE_MOD (xid=0x4):
+ DEL mapping table:
+ class	type	length	match field
+ -----	----	------	-----------
+ 0xffff	0x2	4	tun_metadata2
+])
+AT_CHECK([ovs-ofctl del-flows br0 "reg1=0xFF"])
+AT_CHECK([ovs-ofctl del-tlv-map br0], [0])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
