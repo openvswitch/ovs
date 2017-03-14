@@ -756,7 +756,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Formatting: decimal.
      * Prerequisites: CT.
      * Access: read-only.
-     * NXM: NXM_NX_CT_NW_PROTO(119) since v2.7.
+     * NXM: NXM_NX_CT_NW_PROTO(119) since v2.8.
      * OXM: none.
      */
     MFF_CT_NW_PROTO,
@@ -774,7 +774,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Formatting: IPv4.
      * Prerequisites: CTv4.
      * Access: read-only.
-     * NXM: NXM_NX_CT_NW_SRC(120) since v2.7.
+     * NXM: NXM_NX_CT_NW_SRC(120) since v2.8.
      * OXM: none.
      * Prefix lookup member: ct_nw_src.
      */
@@ -793,7 +793,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Formatting: IPv4.
      * Prerequisites: CTv4.
      * Access: read-only.
-     * NXM: NXM_NX_CT_NW_DST(121) since v2.7.
+     * NXM: NXM_NX_CT_NW_DST(121) since v2.8.
      * OXM: none.
      * Prefix lookup member: ct_nw_dst.
      */
@@ -812,7 +812,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Formatting: IPv6.
      * Prerequisites: CTv6.
      * Access: read-only.
-     * NXM: NXM_NX_CT_IPV6_SRC(122) since v2.7.
+     * NXM: NXM_NX_CT_IPV6_SRC(122) since v2.8.
      * OXM: none.
      * Prefix lookup member: ct_ipv6_src.
      */
@@ -831,7 +831,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Formatting: IPv6.
      * Prerequisites: CTv6.
      * Access: read-only.
-     * NXM: NXM_NX_CT_IPV6_DST(123) since v2.7.
+     * NXM: NXM_NX_CT_IPV6_DST(123) since v2.8.
      * OXM: none.
      * Prefix lookup member: ct_ipv6_dst.
      */
@@ -850,7 +850,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Formatting: decimal.
      * Prerequisites: CT.
      * Access: read-only.
-     * NXM: NXM_NX_CT_TP_SRC(124) since v2.7.
+     * NXM: NXM_NX_CT_TP_SRC(124) since v2.8.
      * OXM: none.
      */
     MFF_CT_TP_SRC,
@@ -868,7 +868,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Formatting: decimal.
      * Prerequisites: CT.
      * Access: read-only.
-     * NXM: NXM_NX_CT_TP_DST(125) since v2.7.
+     * NXM: NXM_NX_CT_TP_DST(125) since v2.8.
      * OXM: none.
      */
     MFF_CT_TP_DST,
