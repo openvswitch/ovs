@@ -154,7 +154,8 @@ static void flow_free(struct sw_flow *flow)
 		kfree(flow->id.unmasked_key);
 	if (flow->sf_acts)
 		ovs_nla_free_flow_actions((struct sw_flow_actions __force *)flow->sf_acts);
-	for_each_node(node)
+	/* We open code this to make sure node 0 is always considered */
+	for (node = 0; node < MAX_NUMNODES; node = next_node(node, node_possible_map))
 		if (flow->stats[node])
 			kmem_cache_free(flow_stats_cache,
 					rcu_dereference_raw(flow->stats[node]));
