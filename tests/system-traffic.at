@@ -2314,6 +2314,58 @@ tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - SNAT with ct_mark change on reply])
+CHECK_CONNTRACK()
+CHECK_CONNTRACK_NAT()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+NS_CHECK_EXEC([at_ns0], [ip link set dev p0 address 80:88:88:88:88:88])
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
+AT_DATA([flows.txt], [dnl
+in_port=1,ip,action=ct(commit,zone=1,nat(src=10.1.1.240-10.1.1.255)),2
+in_port=2,ct_state=-trk,ip,action=ct(table=0,zone=1,nat)
+dnl
+dnl Setting the mark fails if the datapath can't find the existing conntrack
+dnl entry after NAT has been reversed and the skb was lost due to an upcall.
+dnl
+in_port=2,ct_state=+trk,ct_zone=1,ip,action=ct(table=1,commit,zone=1,exec(set_field:1->ct_mark)),1
+table=1,in_port=2,ct_mark=1,ct_state=+rpl,ct_zone=1,ip,action=1
+dnl
+dnl ARP
+priority=100 arp arp_op=1 action=move:OXM_OF_ARP_TPA[[]]->NXM_NX_REG2[[]],resubmit(,8),goto_table:10
+priority=10 arp action=normal
+priority=0,action=drop
+dnl
+dnl MAC resolution table for IP in reg2, stores mac in OXM_OF_PKT_REG0
+table=8,reg2=0x0a0101f0/0xfffffff0,action=load:0x808888888888->OXM_OF_PKT_REG0[[]]
+table=8,priority=0,action=load:0->OXM_OF_PKT_REG0[[]]
+dnl ARP responder mac filled in at OXM_OF_PKT_REG0, or 0 for normal action.
+dnl TPA IP in reg2.
+dnl Swaps the fields of the ARP message to turn a query to a response.
+table=10 priority=100 arp xreg0=0 action=normal
+table=10 priority=10,arp,arp_op=1,action=load:2->OXM_OF_ARP_OP[[]],move:OXM_OF_ARP_SHA[[]]->OXM_OF_ARP_THA[[]],move:OXM_OF_PKT_REG0[[0..47]]->OXM_OF_ARP_SHA[[]],move:OXM_OF_ARP_SPA[[]]->OXM_OF_ARP_TPA[[]],move:NXM_NX_REG2[[]]->OXM_OF_ARP_SPA[[]],move:NXM_OF_ETH_SRC[[]]->NXM_OF_ETH_DST[[]],move:OXM_OF_PKT_REG0[[0..47]]->NXM_OF_ETH_SRC[[]],move:NXM_OF_IN_PORT[[]]->NXM_NX_REG3[[0..15]],load:0->NXM_OF_IN_PORT[[]],output:NXM_NX_REG3[[0..15]]
+table=10 priority=0 action=drop
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl HTTP requests from p0->p1 should work fine.
+NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+NS_CHECK_EXEC([at_ns0], [ping -c 1 10.1.1.2 | FORMAT_PING], [0], [dnl
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sed -e 's/dst=10.1.1.2[[45]][[0-9]]/dst=10.1.1.2XX/'], [0], [dnl
+icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>,type=8,code=0),reply=(src=10.1.1.2,dst=10.1.1.2XX,id=<cleared>,type=0,code=0),zone=1,mark=1
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
 
 AT_SETUP([conntrack - SNAT with port range])
 CHECK_CONNTRACK()
