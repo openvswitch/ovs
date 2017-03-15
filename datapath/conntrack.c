@@ -145,22 +145,20 @@ static size_t ovs_ct_get_labels_len(struct nf_conn_labels *cl)
 #endif
 }
 
+/* Guard against conntrack labels max size shrinking below 128 bits. */
+#if NF_CT_LABELS_MAX_SIZE < 16
+#error NF_CT_LABELS_MAX_SIZE must be at least 16 bytes
+#endif
+
 static void ovs_ct_get_labels(const struct nf_conn *ct,
 			      struct ovs_key_ct_labels *labels)
 {
 	struct nf_conn_labels *cl = ct ? nf_ct_labels_find(ct) : NULL;
 
-	if (cl) {
-		size_t len = ovs_ct_get_labels_len(cl);
-
-		if (len > OVS_CT_LABELS_LEN)
-			len = OVS_CT_LABELS_LEN;
-		else if (len < OVS_CT_LABELS_LEN)
-			memset(labels, 0, OVS_CT_LABELS_LEN);
-		memcpy(labels, cl->bits, len);
-	} else {
+	if (cl)
+		memcpy(labels, cl->bits, OVS_CT_LABELS_LEN);
+	else
 		memset(labels, 0, OVS_CT_LABELS_LEN);
-	}
 }
 
 static void __ovs_ct_update_key(struct sw_flow_key *key, u8 state,
