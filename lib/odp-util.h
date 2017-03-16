@@ -167,30 +167,40 @@ int odp_flow_from_string(const char *s,
                          const struct simap *port_names,
                          struct ofpbuf *, struct ofpbuf *);
 
+/* ODP_SUPPORT_FIELD(TYPE, FIELD_NAME, FIELD_DESCRIPTION)
+ *
+ * Each 'ODP_SUPPORT_FIELD' defines a member in 'struct odp_support',
+ * and represents support for related OVS_KEY_ATTR_* fields.
+ * They are defined as macros to keep 'dpif_show_support()' in sync
+ * as new fields are added.   */
+#define ODP_SUPPORT_FIELDS                                                   \
+    /* Maximum number of 802.1q VLAN headers to serialize in a mask. */      \
+    ODP_SUPPORT_FIELD(size_t, max_vlan_headers, "Max VLAN headers")          \
+    /* Maximum number of MPLS label stack entries to serialise in a mask. */ \
+    ODP_SUPPORT_FIELD(size_t, max_mpls_depth, "Max MPLS depth")              \
+    /* If this is true, then recirculation fields will always be             \
+     * serialised. */                                                        \
+    ODP_SUPPORT_FIELD(bool, recirc, "Recirc")                                \
+    /* If true, serialise the corresponding OVS_KEY_ATTR_CONN_* field. */    \
+    ODP_SUPPORT_FIELD(bool, ct_state, "CT state")                            \
+    ODP_SUPPORT_FIELD(bool, ct_zone, "CT zone")                              \
+    ODP_SUPPORT_FIELD(bool, ct_mark, "CT mark")                              \
+    ODP_SUPPORT_FIELD(bool, ct_label, "CT label")                            \
+                                                                             \
+    /* If true, it means that the datapath supports the NAT bits in          \
+     * 'ct_state'.  The above 'ct_state' member must be true for this        \
+     * to make sense */                                                      \
+    ODP_SUPPORT_FIELD(bool, ct_state_nat, "CT state NAT")                    \
+                                                                             \
+    /* Conntrack original direction tuple matching * supported. */           \
+    ODP_SUPPORT_FIELD(bool, ct_orig_tuple, "CT orig tuple")
+
 /* Indicates support for various fields. This defines how flows will be
  * serialised. */
 struct odp_support {
-    /* Maximum number of 802.1q VLAN headers to serialize in a mask. */
-    size_t max_vlan_headers;
-    /* Maximum number of MPLS label stack entries to serialise in a mask. */
-    size_t max_mpls_depth;
-
-    /* If this is true, then recirculation fields will always be serialised. */
-    bool recirc;
-
-    /* If true, serialise the corresponding OVS_KEY_ATTR_CONN_* field. */
-    bool ct_state;
-    bool ct_zone;
-    bool ct_mark;
-    bool ct_label;
-
-    /* If true, it means that the datapath supports the NAT bits in
-     * 'ct_state'.  The above 'ct_state' member must be true for this
-     * to make sense */
-    bool ct_state_nat;
-
-    bool ct_orig_tuple;   /* Conntrack original direction tuple matching
-                           * supported. */
+#define ODP_SUPPORT_FIELD(TYPE, NAME, TITLE) TYPE NAME;
+    ODP_SUPPORT_FIELDS
+#undef ODP_SUPPORT_FIELD
 };
 
 struct odp_flow_key_parms {

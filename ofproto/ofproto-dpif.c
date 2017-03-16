@@ -4955,13 +4955,13 @@ ofproto_unixctl_dpif_dump_dps(struct unixctl_conn *conn, int argc OVS_UNUSED,
 }
 
 static void
-show_dp_feature_b(struct ds *ds, const char *feature, bool b)
+show_dp_feature_bool(struct ds *ds, const char *feature, bool b)
 {
     ds_put_format(ds, "%s: %s\n", feature, b ? "Yes" : "No");
 }
 
 static void
-show_dp_feature_s(struct ds *ds, const char *feature, size_t s)
+show_dp_feature_size_t(struct ds *ds, const char *feature, size_t s)
 {
     ds_put_format(ds, "%s: %"PRIuSIZE"\n", feature, s);
 }
@@ -4969,21 +4969,15 @@ show_dp_feature_s(struct ds *ds, const char *feature, size_t s)
 static void
 dpif_show_support(const struct dpif_backer_support *support, struct ds *ds)
 {
-    show_dp_feature_b(ds, "Variable length userdata",
-                      support->variable_length_userdata);
-    show_dp_feature_b(ds, "Masked set action",  support->masked_set_action);
-    show_dp_feature_b(ds, "Tunnel push pop",    support->tnl_push_pop);
-    show_dp_feature_b(ds, "Ufid",               support->ufid);
-    show_dp_feature_b(ds, "Trunc action",       support->trunc);
-    show_dp_feature_b(ds, "Clone action",       support->clone);
-    show_dp_feature_s(ds, "Max MPLS depth",     support->odp.max_mpls_depth);
-    show_dp_feature_b(ds, "Recirc",             support->odp.recirc);
-    show_dp_feature_b(ds, "CT state",           support->odp.ct_state);
-    show_dp_feature_b(ds, "CT zone",            support->odp.ct_zone);
-    show_dp_feature_b(ds, "CT mark",            support->odp.ct_mark);
-    show_dp_feature_b(ds, "CT label",           support->odp.ct_label);
-    show_dp_feature_b(ds, "CT State NAT",       support->odp.ct_state_nat);
-    show_dp_feature_s(ds, "Max sample nesting", support->sample_nesting);
+#define DPIF_SUPPORT_FIELD(TYPE, NAME, TITLE) \
+    show_dp_feature_##TYPE (ds, TITLE, support->NAME);
+    DPIF_SUPPORT_FIELDS
+#undef DPIF_SUPPORT_FIELD
+
+#define ODP_SUPPORT_FIELD(TYPE, NAME, TITLE) \
+    show_dp_feature_##TYPE (ds, TITLE, support->odp.NAME );
+    ODP_SUPPORT_FIELDS
+#undef ODP_SUPPORT_FIELD
 }
 
 static void
