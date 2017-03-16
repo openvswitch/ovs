@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2016 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -236,26 +236,28 @@
 #define OVS_PREFETCH_WRITE(addr)
 #endif
 
-/* Build assertions. */
+/* Build assertions.
+ *
+ * Use BUILD_ASSERT_DECL as a declaration or a statement, or BUILD_ASSERT as
+ * part of an expression. */
 #ifdef __CHECKER__
 #define BUILD_ASSERT(EXPR) ((void) 0)
 #define BUILD_ASSERT_DECL(EXPR) extern int (*build_assert(void))[1]
-#elif !defined(__cplusplus)
-/* Build-time assertion building block. */
-#define BUILD_ASSERT__(EXPR) \
-        sizeof(struct { unsigned int build_assert_failed : (EXPR) ? 1 : -1; })
-
-/* Build-time assertion for use in a statement context. */
-#define BUILD_ASSERT(EXPR) (void) BUILD_ASSERT__(EXPR)
-
-/* Build-time assertion for use in a declaration context. */
-#define BUILD_ASSERT_DECL(EXPR) \
-        extern int (*build_assert(void))[BUILD_ASSERT__(EXPR)]
-#else /* __cplusplus */
+#elif defined(__cplusplus)
 #include <boost/static_assert.hpp>
 #define BUILD_ASSERT BOOST_STATIC_ASSERT
 #define BUILD_ASSERT_DECL BOOST_STATIC_ASSERT
-#endif /* __cplusplus */
+#elif (__GNUC__ * 256 + __GNUC_MINOR__ >= 0x403 \
+       || __has_extension(c_static_assert))
+#define BUILD_ASSERT_DECL(EXPR) _Static_assert(EXPR, #EXPR)
+#define BUILD_ASSERT(EXPR) (void) ({ _Static_assert(EXPR, #EXPR); })
+#else
+#define BUILD_ASSERT__(EXPR) \
+        sizeof(struct { unsigned int build_assert_failed : (EXPR) ? 1 : -1; })
+#define BUILD_ASSERT(EXPR) (void) BUILD_ASSERT__(EXPR)
+#define BUILD_ASSERT_DECL(EXPR) \
+        extern int (*build_assert(void))[BUILD_ASSERT__(EXPR)]
+#endif
 
 #ifdef __GNUC__
 #define BUILD_ASSERT_GCCONLY(EXPR) BUILD_ASSERT(EXPR)
