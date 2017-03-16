@@ -1,4 +1,4 @@
-EXTRA_DIST += \
+DOC_SOURCE = \
 	Documentation/group-selection-method-property.txt \
 	Documentation/_static/logo.png \
 	Documentation/_static/overview.png \
@@ -90,6 +90,8 @@ EXTRA_DIST += \
 	Documentation/internals/contributing/submitting-patches.rst \
 	Documentation/requirements.txt
 
+EXTRA_DIST += $(DOC_SOURCE)
+
 # You can set these variables from the command line.
 SPHINXOPTS =
 SPHINXBUILD = sphinx-build
@@ -106,9 +108,10 @@ sphinx_verbose_ = $(sphinx_verbose_@AM_DEFAULT_V@)
 sphinx_verbose_0 = -q
 
 if HAVE_SPHINX
-htmldocs:
-	$(AM_V_GEN)$(SPHINXBUILD) $(sphinx_verbose) -b html $(ALLSPHINXOPTS) $(SPHINXBUILDDIR)/html
-ALL_LOCAL += htmldocs
+htmldocs-check: $(DOC_SOURCE)
+	$(AM_V_GEN)$(SPHINXBUILD) $(sphinx_verbose) -b html $(ALLSPHINXOPTS) $(SPHINXBUILDDIR)/html && touch $@
+ALL_LOCAL += htmldocs-check
+CLEANFILES += htmldocs-check
 
 check-docs:
 	$(SPHINXBUILD) -b linkcheck $(ALLSPHINXOPTS) $(SPHINXBUILDDIR)/linkcheck
@@ -119,6 +122,5 @@ clean-docs:
 	rm -rf $(SPHINXBUILDDIR)/linkcheck
 CLEAN_LOCAL += clean-docs
 endif
-.PHONY: htmldocs
 .PHONY: check-docs
 .PHONY: clean-docs
