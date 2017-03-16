@@ -144,11 +144,11 @@ def if_and_for_end_with_bracket_check(line):
         """This is a rather naive counter - it won't deal with quotes"""
         balance = 0
         for letter in line:
-            if letter is '(':
+            if letter == '(':
                 balance += 1
-            elif letter is ')':
+            elif letter == ')':
                 balance -= 1
-        return balance is 0
+        return balance == 0
 
     if __regex_is_for_if_single_line_bracket.search(line) is not None:
         if not balanced_parens(line):
