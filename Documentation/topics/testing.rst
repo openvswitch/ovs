@@ -62,7 +62,7 @@ To run all the unit tests in Open vSwitch in parallel, run::
 You can run up to eight threads. This takes under a minute on a modern 4-core
 desktop system.
 
-To see a list of all the available tests, run:
+To see a list of all the available tests, run::
 
     $ make check TESTSUITEFLAGS=--list
 
@@ -105,7 +105,7 @@ using the ``check-lcov`` target::
 
 All the same options are avaiable via TESTSUITEFLAGS. For example::
 
-    $ make check-lcov TESTSUITEFLAGS=-j8 -k ovn
+    $ make check-lcov TESTSUITEFLAGS='-j8 -k ovn'
 
 .. _testing-valgrind:
 
@@ -198,7 +198,7 @@ do not get installed, so it does not help).
 To run Ryu tests, run the following command from your Open vSwitch build
 directory::
 
-    $ make check-ryu RYUDIR=<ryu-source-dir>``
+    $ make check-ryu RYUDIR=<ryu-source-dir>
 
 where ``<ryu-source-dir>`` is the absolute path to the root of the Ryu source
 distribution. The default ``<ryu-source-dir>`` is ``$srcdir/../ryu``
