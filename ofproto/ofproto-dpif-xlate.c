@@ -3265,7 +3265,6 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     struct flow *flow = &ctx->xin->flow;
     struct flow_tnl flow_tnl;
     union flow_vlan_hdr flow_vlans[FLOW_MAX_VLAN_HEADERS];
-    uint32_t flow_pkt_mark;
     uint8_t flow_nw_tos;
     odp_port_t out_port, odp_port;
     bool tnl_push_pop_send = false;
@@ -3460,7 +3459,6 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     }
 
     memcpy(flow_vlans, flow->vlans, sizeof flow_vlans);
-    flow_pkt_mark = flow->pkt_mark;
     flow_nw_tos = flow->nw_tos;
 
     if (count_skb_priorities(xport)) {
@@ -3588,7 +3586,6 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
  out:
     /* Restore flow */
     memcpy(flow->vlans, flow_vlans, sizeof flow->vlans);
-    flow->pkt_mark = flow_pkt_mark;
     flow->nw_tos = flow_nw_tos;
 }
 
