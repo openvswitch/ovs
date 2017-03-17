@@ -267,3 +267,8 @@ m4_define([OVS_CHECK_GRE],
 m4_define([OVS_CHECK_GENEVE],
     [AT_SKIP_IF([! ip link add foo type geneve help 2>&1 | grep geneve >/dev/null])
      OVS_CHECK_FIREWALL()])
+
+# OVS_CHECK_8021AD()
+m4_define([OVS_CHECK_8021AD],
+    [AT_SKIP_IF([! grep -q "VLAN header stack length probed as" ovs-vswitchd.log])
+     AT_SKIP_IF([[test `sed -n 's/.*VLAN header stack length probed as \([0-9]\+\).*/\1/p' ovs-vswitchd.log` -lt 2]])])
