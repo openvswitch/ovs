@@ -4190,8 +4190,7 @@ ofctl_check_vlan(struct ovs_cmdl_context *ctx)
 
         printf("%04"PRIx16"/%04"PRIx16",", vid, mask);
         if (vid && vlan_tci_to_pcp(nxm_match.wc.masks.vlans[0].tci)) {
-            printf("%02"PRIx8"\n",
-                   vlan_tci_to_pcp(nxm_match.flow.vlans[0].tci));
+            printf("%02d\n", vlan_tci_to_pcp(nxm_match.flow.vlans[0].tci));
         } else {
             printf("--\n");
         }

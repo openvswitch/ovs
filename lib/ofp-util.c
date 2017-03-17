@@ -7101,7 +7101,7 @@ ofputil_port_from_string(const char *s, ofp_port_t *portp)
                            name, port32);
         } else if (port32 < ofp11_to_u32(OFPP11_MAX)) {
             VLOG_WARN("port %u is outside the supported range 0 through "
-                      "%"PRIx16" or 0x%x through 0x%"PRIx32, port32,
+                      "%x or 0x%x through 0x%"PRIx32, port32,
                       UINT16_MAX, ofp11_to_u32(OFPP11_MAX), UINT32_MAX);
             return false;
         } else {

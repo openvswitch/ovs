@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013, 2014, 2015, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -106,7 +106,7 @@ print_netflow(struct ofpbuf *buf)
             break;
 
         case IPPROTO_ICMP:
-            printf(", ICMP %"PRIu16":%"PRIu16,
+            printf(", ICMP %u:%u",
                    ntohs(rec->dst_port) >> 8,
                    ntohs(rec->dst_port) & 0xff);
             if (rec->src_port != htons(0)) {

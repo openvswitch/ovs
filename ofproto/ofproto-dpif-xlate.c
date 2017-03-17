@@ -1942,7 +1942,7 @@ input_vid_is_valid(const struct xlate_ctx *ctx,
         if (vid) {
             xlate_report_error(ctx, "dropping VLAN %"PRIu16" tagged "
                                "packet received on port %s configured as VLAN "
-                               "%"PRIu16" access port", vid, in_xbundle->name,
+                               "%d access port", vid, in_xbundle->name,
                                in_xbundle->vlan);
             return false;
         }

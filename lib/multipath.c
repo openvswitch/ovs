@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013, 2014, 2016 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013, 2014, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -248,7 +248,7 @@ multipath_format(const struct ofpact_multipath *mp, struct ds *s)
         algorithm = "<unknown>";
     }
 
-    ds_put_format(s, "%smultipath(%s%s,%"PRIu16",%s,%d,%"PRIu16",",
+    ds_put_format(s, "%smultipath(%s%s,%"PRIu16",%s,%d,%"PRIu32",",
                   colors.paren, colors.end, fields, mp->basis, algorithm,
                   mp->max_link + 1, mp->arg);
     mf_format_subfield(&mp->dst, s);

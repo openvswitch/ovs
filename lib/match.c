@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1402,15 +1402,15 @@ match_format(const struct match *match, struct ds *s, int priority)
         format_eth_masked(s, "arp_tha", f->arp_tha, wc->masks.arp_tha);
     }
     if (wc->masks.nw_tos & IP_DSCP_MASK) {
-        ds_put_format(s, "%snw_tos=%s%"PRIu8",",
+        ds_put_format(s, "%snw_tos=%s%d,",
                       colors.param, colors.end, f->nw_tos & IP_DSCP_MASK);
     }
     if (wc->masks.nw_tos & IP_ECN_MASK) {
-        ds_put_format(s, "%snw_ecn=%s%"PRIu8",",
+        ds_put_format(s, "%snw_ecn=%s%d,",
                       colors.param, colors.end, f->nw_tos & IP_ECN_MASK);
     }
     if (wc->masks.nw_ttl) {
-        ds_put_format(s, "%snw_ttl=%s%"PRIu8",",
+        ds_put_format(s, "%snw_ttl=%s%d,",
                       colors.param, colors.end, f->nw_ttl);
     }
     if (wc->masks.mpls_lse[0] & htonl(MPLS_LABEL_MASK)) {

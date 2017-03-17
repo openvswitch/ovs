@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -186,7 +186,7 @@ format_generic_odp_action(struct ds *ds, const struct nlattr *a)
 {
     size_t len = nl_attr_get_size(a);
 
-    ds_put_format(ds, "action%"PRId16, nl_attr_type(a));
+    ds_put_format(ds, "action%d", nl_attr_type(a));
     if (len) {
         const uint8_t *unspec;
         unsigned int i;
@@ -318,7 +318,7 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
             if (userdata_len == sizeof cookie.sflow
                 && cookie.type == USER_ACTION_COOKIE_SFLOW) {
                 ds_put_format(ds, ",sFlow("
-                              "vid=%"PRIu16",pcp=%"PRIu8",output=%"PRIu32")",
+                              "vid=%"PRIu16",pcp=%d,output=%"PRIu32")",
                               vlan_tci_to_vid(cookie.sflow.vlan_tci),
                               vlan_tci_to_pcp(cookie.sflow.vlan_tci),
                               cookie.sflow.output);
@@ -478,7 +478,7 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
     l3 = eth + 1;
 
     /* Ethernet */
-    ds_put_format(ds, "header(size=%"PRIu8",type=%"PRIu8",eth(dst=",
+    ds_put_format(ds, "header(size=%"PRIu32",type=%"PRIu32",eth(dst=",
                   data->header_len, data->tnl_type);
     ds_put_format(ds, ETH_ADDR_FMT, ETH_ADDR_ARGS(eth->eth_dst));
     ds_put_format(ds, ",src=");
@@ -504,7 +504,7 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
         ipv6_format_addr(&ip6->ip6_src, ds);
         ds_put_format(ds, ",dst=");
         ipv6_format_addr(&ip6->ip6_dst, ds);
-        ds_put_format(ds, ",label=%i,proto=%"PRIu8",tclass=0x%"PRIx8
+        ds_put_format(ds, ",label=%i,proto=%"PRIu8",tclass=0x%"PRIx32
                           ",hlimit=%"PRIu8"),",
                       ntohl(ip6->ip6_flow) & IPV6_LABEL_MASK, ip6->ip6_nxt,
                       (ntohl(ip6->ip6_flow) >> 20) & 0xff, ip6->ip6_hlim);

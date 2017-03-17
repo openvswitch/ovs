@@ -1321,7 +1321,7 @@ decode_bundle(bool load, const struct nx_action_bundle *nab,
                && bundle->algorithm != NX_BD_ALG_ACTIVE_BACKUP) {
         VLOG_WARN_RL(&rl, "unsupported algorithm %d", (int) bundle->algorithm);
     } else if (slave_type != mf_nxm_header(MFF_IN_PORT)) {
-        VLOG_WARN_RL(&rl, "unsupported slave type %"PRIu16, slave_type);
+        VLOG_WARN_RL(&rl, "unsupported slave type %"PRIu32, slave_type);
     } else {
         error = 0;
     }
@@ -1355,7 +1355,7 @@ decode_bundle(bool load, const struct nx_action_bundle *nab,
     if (slaves_size < bundle->n_slaves * sizeof(ovs_be16)) {
         VLOG_WARN_RL(&rl, "Nicira action %s only has %"PRIuSIZE" bytes "
                      "allocated for slaves.  %"PRIuSIZE" bytes are required "
-                     "for %"PRIu16" slaves.",
+                     "for %u slaves.",
                      load ? "bundle_load" : "bundle", slaves_size,
                      bundle->n_slaves * sizeof(ovs_be16), bundle->n_slaves);
         error = OFPERR_OFPBAC_BAD_LEN;
@@ -3303,7 +3303,7 @@ decode_NXAST_RAW_DEC_TTL_CNT_IDS(const struct nx_action_cnt_ids *nac_ids,
     if (ids_size < ids->n_controllers * sizeof(ovs_be16)) {
         VLOG_WARN_RL(&rl, "Nicira action dec_ttl_cnt_ids only has %"PRIuSIZE" "
                      "bytes allocated for controller ids.  %"PRIuSIZE" bytes "
-                     "are required for %"PRIu16" controllers.",
+                     "are required for %u controllers.",
                      ids_size, ids->n_controllers * sizeof(ovs_be16),
                      ids->n_controllers);
         return OFPERR_OFPBAC_BAD_LEN;
@@ -4727,7 +4727,7 @@ encode_CONJUNCTION(const struct ofpact_conjunction *oc,
 static void
 format_CONJUNCTION(const struct ofpact_conjunction *oc, struct ds *s)
 {
-    ds_put_format(s, "%sconjunction(%s%"PRIu32",%"PRIu8"/%"PRIu8"%s)%s",
+    ds_put_format(s, "%sconjunction(%s%"PRIu32",%d/%"PRIu8"%s)%s",
                   colors.paren, colors.end,
                   oc->id, oc->clause + 1, oc->n_clauses,
                   colors.paren, colors.end);
@@ -5650,7 +5650,7 @@ parse_CT(char *arg, struct ofpbuf *ofpacts,
         } else if (!strcmp(key, "table")) {
             error = str_to_u8(value, "recirc_table", &oc->recirc_table);
             if (!error && oc->recirc_table == NX_CT_RECIRC_NONE) {
-                error = xasprintf("invalid table %#"PRIx16, oc->recirc_table);
+                error = xasprintf("invalid table %#"PRIx8, oc->recirc_table);
             }
         } else if (!strcmp(key, "zone")) {
             error = str_to_u16(value, "zone", &oc->zone_imm);

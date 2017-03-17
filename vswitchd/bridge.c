@@ -2483,7 +2483,7 @@ port_refresh_stp_status(struct port *port)
 
     /* Set Status column. */
     smap_init(&smap);
-    smap_add_format(&smap, "stp_port_id", STP_PORT_ID_FMT, status.port_id);
+    smap_add_format(&smap, "stp_port_id", "%d", status.port_id);
     smap_add(&smap, "stp_state", stp_state_name(status.state));
     smap_add_format(&smap, "stp_sec_in_state", "%u", status.sec_in_state);
     smap_add(&smap, "stp_role", stp_role_name(status.role));

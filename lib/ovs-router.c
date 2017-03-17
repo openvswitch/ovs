@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2014, 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -411,7 +411,7 @@ ovs_router_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
         if (IN6_IS_ADDR_V4MAPPED(&rt->nw_addr)) {
             plen -= 96;
         }
-        ds_put_format(&ds, "/%"PRIu16, plen);
+        ds_put_format(&ds, "/%"PRIu8, plen);
         if (rt->mark) {
             ds_put_format(&ds, " MARK %"PRIu32, rt->mark);
         }
