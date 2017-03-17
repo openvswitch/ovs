@@ -3473,3 +3473,33 @@ ovs-ofctl -O OpenFlow15 dump-group-stats br0
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_BANNER([802.1ad])
+
+AT_SETUP([802.1ad - vlan_limit])
+OVS_TRAFFIC_VSWITCHD_START([set Open_vSwitch . other_config:vlan-limit=0])
+OVS_CHECK_8021AD()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+ADD_SVLAN(p0, at_ns0, 4094, "10.255.2.1/24")
+ADD_SVLAN(p1, at_ns1, 4094, "10.255.2.2/24")
+
+ADD_CVLAN(p0.4094, at_ns0, 100, "10.2.2.1/24")
+ADD_CVLAN(p1.4094, at_ns1, 100, "10.2.2.2/24")
+
+AT_CHECK([ovs-ofctl add-flow br0 "priority=1 action=normal"])
+
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.2.2.2])
+
+dnl CVLAN traffic should match the flow and drop
+AT_CHECK([ovs-appctl revalidator/purge])
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:vlan-limit=1])
+AT_CHECK([ovs-ofctl add-flow br0 "priority=100 dl_type=0x8100 action=drop"])
+NS_CHECK_EXEC([at_ns0], [ping -q -c 1 -w 3 10.2.2.2], [1], [ignore])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
