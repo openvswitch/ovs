@@ -30,5 +30,5 @@ range from bug reports and code reviews, to signficant code or documentation
 features.
 
 Extensive guidelines are provided in the docs at
-``docs/internals/contributing``, or `online
-<https://docs.openvswitch.org/en/dev/internals/contributing>`__.
+``Documentation/internals/contributing``, or `online
+<http://docs.openvswitch.org/en/latest/internals/contributing/>`__.
