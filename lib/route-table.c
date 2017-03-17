@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013, 2014, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,10 @@
 #include "packets.h"
 #include "rtnetlink.h"
 #include "openvswitch/vlog.h"
+
+/* Linux 2.6.36 added RTA_MARK, so define it just in case we're building with
+ * old headers.  (We can't test for it with #ifdef because it's an enum.) */
+#define RTA_MARK 16
 
 VLOG_DEFINE_THIS_MODULE(route_table);
 
