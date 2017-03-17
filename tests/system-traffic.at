@@ -1524,6 +1524,59 @@ NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - IPv4 fragmentation + cvlan])
+CHECK_CONNTRACK()
+CHECK_CONNTRACK_FRAG()
+OVS_TRAFFIC_VSWITCHD_START([set Open_vSwitch . other_config:vlan-limit=0])
+OVS_CHECK_8021AD()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+ADD_SVLAN(p0, at_ns0, 4094, "10.255.2.1/24")
+ADD_SVLAN(p1, at_ns1, 4094, "10.255.2.2/24")
+
+ADD_CVLAN(p0.4094, at_ns0, 100, "10.2.2.1/24")
+ADD_CVLAN(p1.4094, at_ns1, 100, "10.2.2.2/24")
+
+dnl Sending ping through conntrack
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=100,in_port=1,icmp,action=ct(commit,zone=9),2
+priority=100,in_port=2,ct_state=-trk,icmp,action=ct(table=0,zone=9)
+priority=100,in_port=2,ct_state=+trk+est-new,icmp,action=1
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.2.2.2])
+
+dnl Ipv4 fragmentation connectivity check.
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Ipv4 fragmentation connectivity check. (outer svlan)
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.255.2.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Ipv4 larger fragmentation connectivity check.
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Ipv4 larger fragmentation connectivity check. (outer svlan)
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.255.2.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([conntrack - IPv6 fragmentation])
 CHECK_CONNTRACK()
 CHECK_CONNTRACK_FRAG()
@@ -1642,6 +1695,60 @@ NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -w 2 fc00:1::4 | FORMAT_PI
 
 dnl Ipv4 larger fragmentation connectivity check.
 NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -w 2 fc00:1::4 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - IPv6 fragmentation + cvlan])
+CHECK_CONNTRACK()
+CHECK_CONNTRACK_FRAG()
+OVS_TRAFFIC_VSWITCHD_START([set Open_vSwitch . other_config:vlan-limit=0])
+OVS_CHECK_8021AD()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "fc00::1/96")
+ADD_VETH(p1, at_ns1, br0, "fc00::2/96")
+
+ADD_SVLAN(p0, at_ns0, 4094, "fc00:ffff::3/96")
+ADD_SVLAN(p1, at_ns1, 4094, "fc00:ffff::4/96")
+
+ADD_CVLAN(p0.4094, at_ns0, 100, "fc00:1::3/96")
+ADD_CVLAN(p1.4094, at_ns1, 100, "fc00:1::4/96")
+
+dnl Sending ping through conntrack
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,in_port=1,ipv6,action=ct(commit,zone=9),2
+priority=10,in_port=2,ct_state=-trk,ipv6,action=ct(table=0,zone=9)
+priority=10,in_port=2,ct_state=+trk+est-new,ipv6,action=1
+priority=100,icmp6,icmp_type=135,action=normal
+priority=100,icmp6,icmp_type=136,action=normal
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00:1::4])
+
+dnl Ipv6 fragmentation connectivity check.
+NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -w 2 fc00:1::4 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Ipv6 fragmentation connectivity check. (outer svlan)
+NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -w 2 fc00:ffff::4 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Ipv6 larger fragmentation connectivity check.
+NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -w 2 fc00:1::4 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Ipv6 larger fragmentation connectivity check. (outer svlan)
+NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -w 2 fc00:ffff::4 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
