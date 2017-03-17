@@ -71,9 +71,7 @@ need the following software:
 
   - GCC 4.6 or later.
 
-  - Clang. Clang 3.4 and later provide useful static semantic analysis and
-    thread-safety checks. For Ubuntu, there are nightly built packages
-    available on clang's website.
+  - Clang 3.4 or later.
 
   - MSVC 2013. Refer to :doc:`windows` for additional Windows build
     instructions.
@@ -192,12 +190,14 @@ Installation Requirements
 The machine you build Open vSwitch on may not be the one you run it on. To
 simply install and run Open vSwitch you require the following software:
 
-- libc compatible with the libc used for build.
+- Shared libraries compatible with those used for the build.
 
-- libssl compatible with the libssl used for build, if OpenSSL was used
-  for the build.
-
-- On Linux, the same kernel version configured as part of the build.
+- On Linux, if you want to use the kernel-based datapath (which is the most
+  common use case), then a kernel with a compatible kernel module.  This
+  can be a kernel module built with Open vSwitch (e.g. in the previous
+  step), or the kernel module that accompanies Linux 3.3 and later.  Open
+  vSwitch features and performance can vary based on the module and the
+  kernel.  Refer to :doc:`/internals/releases` for more information.
 
 - For optional support of ingress policing on Linux, the "tc" program
   from iproute2 (part of all major distributions and available at
