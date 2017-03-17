@@ -3503,3 +3503,115 @@ NS_CHECK_EXEC([at_ns0], [ping -q -c 1 -w 3 10.2.2.2], [1], [ignore])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
+
+
+AT_SETUP([802.1ad - push/pop outer 802.1ad])
+OVS_TRAFFIC_VSWITCHD_START([set Open_vSwitch . other_config:vlan-limit=0])
+OVS_CHECK_8021AD()
+
+ADD_BR([br1])
+ADD_BR([br2])
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+AT_CHECK([ip link add ovs-p0 type veth peer name ovs-p1])
+AT_CHECK([ip link set dev ovs-p0 up])
+AT_CHECK([ip link set dev ovs-p1 up])
+AT_CHECK([ovs-vsctl add-port br0 ovs-p0])
+AT_CHECK([ovs-vsctl add-port br1 ovs-p1])
+on_exit 'ip link del ovs-p0'
+
+AT_CHECK([ip link add ovs-p2 type veth peer name ovs-p3])
+AT_CHECK([ip link set dev ovs-p2 up])
+AT_CHECK([ip link set dev ovs-p3 up])
+AT_CHECK([ovs-vsctl add-port br0 ovs-p2])
+AT_CHECK([ovs-vsctl add-port br2 ovs-p3])
+on_exit 'ip link del ovs-p2'
+
+ADD_VETH(p4, at_ns0, br1, "10.1.1.1/24")
+ADD_VETH(p5, at_ns1, br2, "10.1.1.2/24")
+ADD_CVLAN(p4, at_ns0, 100, "10.2.2.1/24")
+ADD_CVLAN(p5, at_ns1, 100, "10.2.2.2/24")
+
+AT_DATA([flows-br0.txt], [dnl
+priority=1 action=drop
+priority=100 in_port=1 action=push_vlan:0x88a8,mod_vlan_vid=4094,output:2
+priority=100 in_port=2 action=push_vlan:0x88a8,mod_vlan_vid=4094,output:1
+])
+
+AT_DATA([flows-customer-br.txt], [dnl
+priority=1 action=normal
+priority=100 in_port=1 vlan_tci=0x1000/0x1000 action=pop_vlan,normal
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows-br0.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br1 flows-customer-br.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br2 flows-customer-br.txt])
+
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.2.2.2])
+
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+
+AT_SETUP([802.1ad - push/pop outer 802.1q])
+OVS_TRAFFIC_VSWITCHD_START([set Open_vSwitch . other_config:vlan-limit=0])
+OVS_CHECK_8021AD()
+
+ADD_BR([br1])
+ADD_BR([br2])
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+AT_CHECK([ip link add ovs-p0 type veth peer name ovs-p1])
+AT_CHECK([ip link set dev ovs-p0 up])
+AT_CHECK([ip link set dev ovs-p1 up])
+AT_CHECK([ovs-vsctl add-port br0 ovs-p0])
+AT_CHECK([ovs-vsctl add-port br1 ovs-p1])
+on_exit 'ip link del ovs-p0'
+
+AT_CHECK([ip link add ovs-p2 type veth peer name ovs-p3])
+AT_CHECK([ip link set dev ovs-p2 up])
+AT_CHECK([ip link set dev ovs-p3 up])
+AT_CHECK([ovs-vsctl add-port br0 ovs-p2])
+AT_CHECK([ovs-vsctl add-port br2 ovs-p3])
+on_exit 'ip link del ovs-p2'
+
+ADD_VETH(p4, at_ns0, br1, "10.1.1.1/24")
+ADD_VETH(p5, at_ns1, br2, "10.1.1.2/24")
+ADD_CVLAN(p4, at_ns0, 100, "10.2.2.1/24")
+ADD_CVLAN(p5, at_ns1, 100, "10.2.2.2/24")
+
+AT_DATA([flows-br0.txt], [dnl
+priority=1 action=drop
+priority=100 in_port=1 action=push_vlan:0x8100,mod_vlan_vid=4094,output:2
+priority=100 in_port=2 action=push_vlan:0x8100,mod_vlan_vid=4094,output:1
+])
+
+AT_DATA([flows-customer-br.txt], [dnl
+priority=1 action=normal
+priority=100 in_port=1 vlan_tci=0x1000/0x1000 action=pop_vlan,normal
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows-br0.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br1 flows-customer-br.txt])
+AT_CHECK([ovs-ofctl --bundle add-flows br2 flows-customer-br.txt])
+
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.2.2.2])
+
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
