@@ -15,6 +15,7 @@ Post-v2.7.0
      "dot1q-tunnel" port VLAN mode.
    - OVN:
      * Make the DHCPv4 router setting optional.
+   - Add the command 'ovs-appctl stp/show' (see ovs-vswitchd(8)).
 
 v2.7.0 - 21 Feb 2017
 ---------------------
