@@ -62,13 +62,9 @@
 VLOG_DEFINE_THIS_MODULE(ovsdb_server);
 
 struct db {
-    /* Initialized in main(). */
     char *filename;
     struct ovsdb_file *file;
     struct ovsdb *db;
-
-    /* Only used by update_remote_status(). */
-    struct ovsdb_txn *txn;
 };
 
 /* SSL configuration. */
@@ -846,9 +842,10 @@ update_remote_row(const struct ovsdb_row *row, struct ovsdb_txn *txn,
 }
 
 static void
-update_remote_rows(const struct shash *all_dbs,
+update_remote_rows(const struct shash *all_dbs, const struct db *db_,
                    const char *remote_name,
-                   const struct ovsdb_jsonrpc_server *jsonrpc)
+                   const struct ovsdb_jsonrpc_server *jsonrpc,
+                   struct ovsdb_txn *txn)
 {
     const struct ovsdb_table *table, *ref_table;
     const struct ovsdb_column *column;
@@ -866,7 +863,8 @@ update_remote_rows(const struct shash *all_dbs,
         return;
     }
 
-    if (column->type.key.type != OVSDB_TYPE_UUID
+    if (db != db_
+        || column->type.key.type != OVSDB_TYPE_UUID
         || !column->type.key.u.uuid.refTable
         || column->type.value.type != OVSDB_TYPE_VOID) {
         return;
@@ -884,7 +882,7 @@ update_remote_rows(const struct shash *all_dbs,
 
             ref_row = ovsdb_table_get_row(ref_table, &datum->keys[i].uuid);
             if (ref_row) {
-                update_remote_row(ref_row, db->txn, jsonrpc);
+                update_remote_row(ref_row, txn, jsonrpc);
             }
         }
     }
@@ -895,26 +893,20 @@ update_remote_status(const struct ovsdb_jsonrpc_server *jsonrpc,
                      const struct sset *remotes,
                      struct shash *all_dbs)
 {
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-    const char *remote;
-    struct db *db;
     struct shash_node *node;
+    SHASH_FOR_EACH (node, all_dbs) {
+        struct db *db = node->data;
+        struct ovsdb_txn *txn = ovsdb_txn_create(db->db);
 
-    SHASH_FOR_EACH(node, all_dbs) {
-        db = node->data;
-        db->txn = ovsdb_txn_create(db->db);
-    }
+        /* Iterate over --remote arguments given on command line. */
+        const char *remote;
+        SSET_FOR_EACH (remote, remotes) {
+            update_remote_rows(all_dbs, db, remote, jsonrpc, txn);
+        }
 
-    /* Iterate over --remote arguments given on command line. */
-    SSET_FOR_EACH (remote, remotes) {
-        update_remote_rows(all_dbs, remote, jsonrpc);
-    }
-
-    SHASH_FOR_EACH(node, all_dbs) {
-        struct ovsdb_error *error;
-        db = node->data;
-        error = ovsdb_txn_commit(db->txn, false);
+        struct ovsdb_error *error = ovsdb_txn_commit(txn, false);
         if (error) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
             char *msg = ovsdb_error_to_string_free(error);
             VLOG_ERR_RL(&rl, "Failed to update remote status: %s", msg);
             free(msg);
