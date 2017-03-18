@@ -857,18 +857,6 @@ stp_port_no(const struct stp_port *p)
     return index;
 }
 
-/* Returns the port ID for 'p'. */
-int
-stp_port_get_id(const struct stp_port *p)
-{
-    int port_id;
-
-    ovs_mutex_lock(&mutex);
-    port_id = p->port_id;
-    ovs_mutex_unlock(&mutex);
-    return port_id;
-}
-
 /* Returns the state of port 'p'. */
 enum stp_state
 stp_port_get_state(const struct stp_port *p)
@@ -882,13 +870,12 @@ stp_port_get_state(const struct stp_port *p)
 }
 
 /* Returns the role of port 'p'. */
-enum stp_role
-stp_port_get_role(const struct stp_port *p)
+static enum stp_role
+stp_port_get_role(const struct stp_port *p) OVS_REQUIRES(mutex)
 {
     struct stp_port *root_port;
     enum stp_role role;
 
-    ovs_mutex_lock(&mutex);
     root_port = p->stp->root_port;
     if (root_port && root_port->port_id == p->port_id) {
         role = STP_ROLE_ROOT;
@@ -899,7 +886,6 @@ stp_port_get_role(const struct stp_port *p)
     } else {
         role = STP_ROLE_ALTERNATE;
     }
-    ovs_mutex_unlock(&mutex);
     return role;
 }
 
@@ -912,6 +898,17 @@ stp_port_get_counts(const struct stp_port *p,
     *tx_count = p->tx_count;
     *rx_count = p->rx_count;
     *error_count = p->error_count;
+    ovs_mutex_unlock(&mutex);
+}
+
+void
+stp_port_get_status(const struct stp_port *p,
+                    int *port_id, enum stp_state *state, enum stp_role *role)
+{
+    ovs_mutex_lock(&mutex);
+    *port_id = p->port_id;
+    *state = p->state;
+    *role = stp_port_get_role(p);
     ovs_mutex_unlock(&mutex);
 }
 

@@ -145,11 +145,11 @@ void stp_port_set_name(struct stp_port *, const char *);
 void stp_port_set_aux(struct stp_port *, void *);
 void *stp_port_get_aux(struct stp_port *);
 int stp_port_no(const struct stp_port *);
-int stp_port_get_id(const struct stp_port *);
 enum stp_state stp_port_get_state(const struct stp_port *);
-enum stp_role stp_port_get_role(const struct stp_port *);
 void stp_port_get_counts(const struct stp_port *,
                          int *tx_count, int *rx_count, int *error_count);
+void stp_port_get_status(const struct stp_port *p,
+                         int *port_id, enum stp_state *state, enum stp_role *role);
 void stp_port_enable(struct stp_port *);
 void stp_port_disable(struct stp_port *);
 void stp_port_set_priority(struct stp_port *, uint8_t new_priority);
