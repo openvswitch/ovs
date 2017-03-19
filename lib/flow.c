@@ -2222,7 +2222,9 @@ flow_push_vlan_uninit(struct flow *flow, struct flow_wildcards *wc)
 {
     if (wc) {
         int n = flow_count_vlan_headers(flow);
-        memset(wc->masks.vlans, 0xff, sizeof(union flow_vlan_hdr) * n);
+        if (n) {
+            memset(wc->masks.vlans, 0xff, sizeof(union flow_vlan_hdr) * n);
+        }
     }
     memmove(&flow->vlans[1], &flow->vlans[0],
             sizeof(union flow_vlan_hdr) * (FLOW_MAX_VLAN_HEADERS - 1));
