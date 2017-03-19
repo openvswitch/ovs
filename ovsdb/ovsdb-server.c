@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2016 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1076,8 +1076,9 @@ update_remote_status(const struct ovsdb_jsonrpc_server *jsonrpc,
         db = node->data;
         error = ovsdb_txn_commit(db->txn, false);
         if (error) {
-            VLOG_ERR_RL(&rl, "Failed to update remote status: %s",
-                        ovsdb_error_to_string(error));
+            char *msg = ovsdb_error_to_string(error);
+            VLOG_ERR_RL(&rl, "Failed to update remote status: %s", msg);
+            free(msg);
             ovsdb_error_destroy(error);
         }
     }
