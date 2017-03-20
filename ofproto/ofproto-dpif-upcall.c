@@ -1404,7 +1404,7 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
             ovs_mutex_lock(&ukey->mutex);
             if (ops[i].dop.error) {
                 transition_ukey(ukey, UKEY_EVICTED);
-            } else {
+            } else if (ukey->state < UKEY_OPERATIONAL) {
                 transition_ukey(ukey, UKEY_OPERATIONAL);
             }
             ovs_mutex_unlock(&ukey->mutex);
