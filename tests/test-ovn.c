@@ -38,6 +38,10 @@
 #include "simap.h"
 #include "util.h"
 
+#ifndef WAIT_ANY
+# define WAIT_ANY (-1) /* Any process.  */
+#endif
+
 /* --relops: Bitmap of the relational operators to test, in exhaustive test. */
 static unsigned int test_relops;
 
