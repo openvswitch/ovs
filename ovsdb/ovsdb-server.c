@@ -145,7 +145,7 @@ ovsdb_replication_init(const char *sync_from, const char *exclude,
     struct shash_node *node;
     SHASH_FOR_EACH (node, all_dbs) {
         struct db *db = node->data;
-        replication_add_local_db(db->db->schema->name, db->db);
+        replication_add_local_db(node->name, db->db);
     }
 }
 
@@ -529,21 +529,6 @@ open_db(struct server_config *config, const char *filename)
     return error;
 }
 
-static const struct db *
-find_db(const struct shash *all_dbs, const char *db_name)
-{
-    struct shash_node *node;
-
-    SHASH_FOR_EACH (node, all_dbs) {
-        struct db *db = node->data;
-        if (!strcmp(db->db->schema->name, db_name)) {
-            return db;
-        }
-    }
-
-    return NULL;
-}
-
 static char * OVS_WARN_UNUSED_RESULT
 parse_db_column__(const struct shash *all_dbs,
                   const char *name_, char *name,
@@ -574,7 +559,7 @@ parse_db_column__(const struct shash *all_dbs,
     table_name = tokens[1];
     column_name = tokens[2];
 
-    db = find_db(all_dbs, tokens[0]);
+    db = shash_find_data(all_dbs, tokens[0]);
     if (!db) {
         return xasprintf("\"%s\": no database named %s", name_, db_name);
     }
@@ -1309,15 +1294,11 @@ ovsdb_server_compact(struct unixctl_conn *conn, int argc,
 
     ds_init(&reply);
     SHASH_FOR_EACH(node, all_dbs) {
-        const char *name;
-
         db = node->data;
-        name = db->db->schema->name;
-
-        if (argc < 2 || !strcmp(argv[1], name)) {
+        if (argc < 2 || !strcmp(argv[1], node->name)) {
             struct ovsdb_error *error;
 
-            VLOG_INFO("compacting %s database by user request", name);
+            VLOG_INFO("compacting %s database by user request", node->name);
 
             error = ovsdb_file_compact(db->file);
             if (error) {
@@ -1494,8 +1475,7 @@ ovsdb_server_list_databases(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
     nodes = shash_sort(all_dbs);
     for (i = 0; i < shash_count(all_dbs); i++) {
-        struct db *db = nodes[i]->data;
-        ds_put_format(&s, "%s\n", db->db->schema->name);
+        ds_put_format(&s, "%s\n", nodes[i]->name);
     }
     free(nodes);
 
