@@ -176,6 +176,7 @@ Kenneth Duda                    kduda@arista.com
 Kentaro Ebisawa                 ebiken.g@gmail.com
 Kevin Lo                        kevlo@FreeBSD.org
 Kevin Traynor                   kevin.traynor@intel.com
+Khem Raj                        raj.khem@gmail.com
 Kmindg G                        kmindg@gmail.com
 Krishna Kondaka                 kkondaka@vmware.com
 Kyle Mestery                    mestery@mestery.com
