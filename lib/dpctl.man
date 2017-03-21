@@ -136,7 +136,43 @@ With \fB\-\-clear\fR, \fBmod\-flow\fR zeros out the flow's
 statistics.  The statistics printed if \fB\-s\fR or
 \fB\-\-statistics\fR is also specified are those from just before
 clearing the statistics.
+.IP
+NOTE:
+\fIflow\fR and \fIactions\fR do not match the syntax used with
+\fBovs\-ofctl\fR(8)'s \fBadd\-flow\fR command.
 .
+.IP
+\fBUsage Examples\fR
+.
+.RS
+.PP
+Forward ARP between ports 1 and 2 on datapath myDP:
+.IP
+ovs-dpctl add-flow myDP \\
+.
+  "in_port(1),eth(),eth_type(0x0806),arp()" 2
+.
+.IP
+ovs-dpctl add-flow myDP \\
+.
+  "in_port(2),eth(),eth_type(0x0806),arp()" 1
+.
+.PP
+Forward all IPv4 traffic between two addresses on ports 1 and 2:
+.
+.IP
+ovs-dpctl add-flow myDP \\
+.
+  "in_port(1),eth(),eth_type(0x800),\\
+   ipv4(src=172.31.110.4,dst=172.31.110.5)" 2
+.
+.IP
+ovs-dpctl add-flow myDP \\
+.
+  "in_port(2),eth(),eth_type(0x800),\\
+   ipv4(src=172.31.110.5,dst=172.31.110.4)" 1
+.
+.RE
 .TP
 .DO "[\fB\-s\fR | \fB\-\-statistics\fR]" "\*(DX\fBdel\-flow\fR" "[\fIdp\fR] \fIflow\fR"
 Deletes the flow from \fIdp\fR's flow table that matches \fIflow\fR.
