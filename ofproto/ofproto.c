@@ -5082,19 +5082,19 @@ ofproto_flow_mod_learn_finish(struct ofproto_flow_mod *ofm,
  *
  * If 'limit' != 0, insertion will fail if there are more than 'limit' rules
  * in the same table with the same cookie.  If insertion succeeds,
- * '*below_limit' will be set to true.  If insertion fails '*below_limit' will
- * be set to false.
+ * '*below_limitp' will be set to true.  If insertion fails '*below_limitp'
+ * will be set to false.
  *
  * Caller needs to be the exclusive owner of 'ofm' as it is being manipulated
  * during the call. */
 enum ofperr
 ofproto_flow_mod_learn(struct ofproto_flow_mod *ofm, bool keep_ref,
-                       unsigned limit, bool *below_limit)
+                       unsigned limit, bool *below_limitp)
     OVS_EXCLUDED(ofproto_mutex)
 {
     enum ofperr error = ofproto_flow_mod_learn_refresh(ofm);
     struct rule *rule = ofm->temp_rule;
-    bool limited = false;
+    bool below_limit = true;
 
     /* Do we need to insert the rule? */
     if (!error && rule->state == RULE_INITIALIZED) {
@@ -5112,13 +5112,13 @@ ofproto_flow_mod_learn(struct ofproto_flow_mod *ofm, bool keep_ref,
             rule_criteria_require_rw(&criteria, false);
             collect_rules_loose(rule->ofproto, &criteria, &rules);
             if (rule_collection_n(&rules) >= limit) {
-                limited = true;
+                below_limit = false;
             }
             rule_collection_destroy(&rules);
             rule_criteria_destroy(&criteria);
         }
 
-        if (!limited) {
+        if (below_limit) {
             ofm->version = rule->ofproto->tables_version + 1;
 
             error = ofproto_flow_mod_learn_start(ofm);
@@ -5130,19 +5130,19 @@ ofproto_flow_mod_learn(struct ofproto_flow_mod *ofm, bool keep_ref,
         }
         ovs_mutex_unlock(&ofproto_mutex);
 
-        if (limited) {
+        if (!below_limit) {
             static struct vlog_rate_limit learn_rl = VLOG_RATE_LIMIT_INIT(1, 5);
             VLOG_INFO_RL(&learn_rl, "Learn limit for flow %"PRIu64" reached.",
                          rule->flow_cookie);
         }
     }
 
-    if (!keep_ref && !limited) {
+    if (!keep_ref && below_limit) {
         ofproto_rule_unref(rule);
         ofm->temp_rule = NULL;
     }
-    if (below_limit) {
-        *below_limit = !limited;
+    if (below_limitp) {
+        *below_limitp = below_limit;
     }
     return error;
 }
