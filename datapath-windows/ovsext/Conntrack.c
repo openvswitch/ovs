@@ -633,6 +633,7 @@ OvsCtExecute_(PNET_BUFFER_LIST curNbl,
               OvsFlowKey *key,
               OVS_PACKET_HDR_INFO *layers,
               BOOLEAN commit,
+              BOOLEAN force,
               UINT16 zone,
               MD_MARK *mark,
               MD_LABELS *labels,
@@ -653,6 +654,13 @@ OvsCtExecute_(PNET_BUFFER_LIST curNbl,
     /* Lookup Conntrack entries for a matching entry */
     entry = OvsCtLookup(&ctx);
     BOOLEAN entryCreated = FALSE;
+
+    /* Delete entry in reverse direction if 'force' is specified */
+    if (entry && force && ctx.reply) {
+        OvsCtEntryDelete(entry);
+        entry = NULL;
+    }
+
     if (!entry) {
         /* If no matching entry was found, create one and add New state */
         entry = OvsCtEntryCreate(curNbl, key->ipKey.nwProto,
@@ -709,6 +717,7 @@ OvsExecuteConntrackAction(PNET_BUFFER_LIST curNbl,
 {
     PNL_ATTR ctAttr;
     BOOLEAN commit = FALSE;
+    BOOLEAN force = FALSE;
     UINT16 zone = 0;
     MD_MARK *mark = NULL;
     MD_LABELS *labels = NULL;
@@ -721,6 +730,7 @@ OvsExecuteConntrackAction(PNET_BUFFER_LIST curNbl,
         return status;
     }
 
+    /* XXX Convert this to NL_ATTR_FOR_EACH */
     ctAttr = NlAttrFindNested(a, OVS_CT_ATTR_ZONE);
     if (ctAttr) {
         zone = NlAttrGetU16(ctAttr);
@@ -748,9 +758,15 @@ OvsExecuteConntrackAction(PNET_BUFFER_LIST curNbl,
             return NDIS_STATUS_NOT_SUPPORTED;
         }
     }
+    ctAttr = NlAttrFindNested(a, OVS_CT_ATTR_FORCE_COMMIT);
+    if (ctAttr) {
+        force = TRUE;
+        /* Force implicitly means commit */
+        commit = TRUE;
+    }
 
-    status = OvsCtExecute_(curNbl, key, layers,
-                           commit, zone, mark, labels, helper);
+    status = OvsCtExecute_(curNbl, key, layers, commit, force,
+                           zone, mark, labels, helper);
     return status;
 }
 
