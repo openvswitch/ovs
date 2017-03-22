@@ -216,8 +216,7 @@ frozen_state_free(struct frozen_state *state)
 
 /* Allocate a unique recirculation id for the given set of flow metadata.
  * The ID space is 2^^32, so there should never be a situation in which all
- * the IDs are used up.  We loop until we find a free one.
- * hash is recomputed if it is passed in as 0. */
+ * the IDs are used up.  We loop until we find a free one. */
 static struct recirc_id_node *
 recirc_alloc_id__(const struct frozen_state *state, uint32_t hash)
 {
