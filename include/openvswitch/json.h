@@ -102,6 +102,7 @@ int64_t json_integer(const struct json *);
 
 struct json *json_deep_clone(const struct json *);
 struct json *json_clone(const struct json *);
+struct json *json_nullable_clone(const struct json *);
 void json_destroy(struct json *);
 
 size_t json_hash(const struct json *, size_t basis);

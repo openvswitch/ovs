@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2009-2012, 2014-2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -428,6 +428,12 @@ json_clone(const struct json *json_)
     struct json *json = CONST_CAST(struct json *, json_);
     json->count++;
     return json;
+}
+
+struct json *
+json_nullable_clone(const struct json *json)
+{
+    return json ? json_clone(json) : NULL;
 }
 
 static struct json *
