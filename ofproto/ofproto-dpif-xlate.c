@@ -6464,12 +6464,8 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         ctx.xout->slow |= SLOW_ACTION;
     }
 
-    /* Do netflow only for packets on initial reception, that are not sent to
-     * the controller.  We consider packets sent to the controller to be part
-     * of the control plane rather than the data plane. */
-    if (!xin->frozen_state
-        && xbridge->netflow
-        && !(xout->slow & SLOW_CONTROLLER)) {
+    /* Update NetFlow for non-frozen traffic. */
+    if (xbridge->netflow && !xin->frozen_state) {
         if (ctx.xin->resubmit_stats) {
             netflow_flow_update(xbridge->netflow, flow,
                                 ctx.nf_output_iface,
