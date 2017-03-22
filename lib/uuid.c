@@ -101,6 +101,14 @@ uuid_generate(struct uuid *uuid)
     uuid_set_bits_v4(uuid);
 }
 
+struct uuid
+uuid_random(void)
+{
+    struct uuid uuid;
+    uuid_generate(&uuid);
+    return uuid;
+}
+
 void
 uuid_set_bits_v4(struct uuid *uuid)
 {
