@@ -377,6 +377,11 @@ grep 'STP state change' | sed '
     s/.*ofproto_dpif|.*|port .*:/port <>:/
 ']])
 
+m4_define([FILTER_STP_TOPOLOGY_LISTENING], [[
+grep 'disabled to listening' | sed '
+  s/.*ofproto_dpif|.*|port .*:/port <>:/
+']])
+
 m4_define([FILTER_STP_TOPOLOGY_FORWARDING], [[
 grep 'learning to forwarding' | sed '
   s/.*ofproto_dpif|.*|port .*:/port <>:/
@@ -427,7 +432,7 @@ AT_CHECK([ovs-ofctl add-flow br1 "in_port=2 icmp actions=8"])
 ovs-appctl time/warp 3000
 ovs-appctl time/warp 3000
 
-AT_CHECK([cat ovs-vswitchd.log | FILTER_STP_TOPOLOGY], [0], [dnl
+AT_CHECK([cat ovs-vswitchd.log | FILTER_STP_TOPOLOGY_LISTENING], [0], [dnl
 port <>: STP state changed from disabled to listening
 port <>: STP state changed from disabled to listening
 ])
@@ -493,6 +498,7 @@ AT_CHECK([
 ], [0])
 
 AT_CHECK([ovs-appctl vlog/set ofproto_dpif:dbg])
+AT_CHECK([ovs-appctl vlog/set ofproto_dpif_xlate:dbg])
 
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
 AT_CHECK([ovs-ofctl add-flow br1 action=normal])
@@ -520,7 +526,7 @@ ovs-appctl time/stop
 ovs-appctl time/warp 3000
 ovs-appctl time/warp 3000
 
-AT_CHECK([cat ovs-vswitchd.log | FILTER_STP_TOPOLOGY], [0], [dnl
+AT_CHECK([cat ovs-vswitchd.log | FILTER_STP_TOPOLOGY_LISTENING], [0], [dnl
 port <>: STP state changed from disabled to listening
 port <>: STP state changed from disabled to listening
 port <>: STP state changed from disabled to listening
@@ -549,6 +555,19 @@ port <>: STP state changed from learning to forwarding
 port <>: STP state changed from learning to forwarding
 port <>: STP state changed from learning to forwarding
 ])
+
+# When topology is changed or the root brdige receives the TCN BPDU, the
+# root bridge will start the topology change timer. We should wait the
+# topology change timer to stop after 35s (max age 20 + forward delay 15).
+# After 35s, the root bridge will stop send CONF BPDU with
+# STP_CONFIG_TOPOLOGY_CHANGE flag and the topology will be stable. More
+# importantly, we should make time warp (in a second) because the hold timer
+# of stp ports will stop after 1s. So the root bridge can send quickly
+# topology change ack (other bridges may send TCN BPDU to root bridge) for
+# avoiding root brdige to flush fdb and mdb frequently.
+for i in $(seq 0 35); do
+    ovs-appctl time/warp 1000
+done
 
 # root bridge sends query packet
 # we don't want to lose that message, so send it twice
