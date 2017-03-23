@@ -331,6 +331,14 @@ if $ovn; then
     ovsdb_sb_server_args="ovnsb.db"
     ovsdb_sb_backup_server_args="ovnsb2.db"
     ovsdb_nb_server_args="ovnnb.db"
+
+    if [ "$HAVE_OPENSSL" = yes ]; then
+        OVS_PKI="run ovs-pki --dir=$sandbox/pki --log=$sandbox/ovs-pki.log"
+        $OVS_PKI -B 1024 init
+        $OVS_PKI -B 1024 req+sign ovnsb switch
+        $OVS_PKI -B 1024 req+sign ovnnb switch
+        $OVS_PKI -B 1024 req+sign ovn-controller switch
+    fi
 fi
 rungdb $gdb_ovsdb $gdb_ovsdb_ex ovsdb-server --detach --no-chdir --pidfile -vconsole:off --log-file \
     --remote=punix:"$sandbox"/db.sock $ovsdb_server_args
@@ -338,15 +346,27 @@ if $ovn; then
     rungdb $gdb_ovsdb $gdb_ovsdb_ex ovsdb-server --detach --no-chdir \
         --pidfile="$sandbox"/ovnnb_db.pid -vconsole:off \
         --log-file="$sandbox"/ovnnb_db.log \
+        --remote=db:OVN_Northbound,NB_Global,connections \
+        --private-key=db:OVN_Northbound,SSL,private_key \
+        --certificate=db:OVN_Northbound,SSL,certificate \
+        --ca-cert=db:OVN_Northbound,SSL,ca_cert \
         --remote=punix:"$sandbox"/ovnnb_db.sock $ovsdb_nb_server_args
     rungdb $gdb_ovsdb $gdb_ovsdb_ex ovsdb-server --detach --no-chdir \
         --pidfile="$sandbox"/ovnsb_db.pid -vconsole:off \
         --log-file="$sandbox"/ovnsb_db.log \
+        --remote=db:OVN_Southbound,SB_Global,connections \
+        --private-key=db:OVN_Southbound,SSL,private_key \
+        --certificate=db:OVN_Southbound,SSL,certificate \
+        --ca-cert=db:OVN_Southbound,SSL,ca_cert \
         --remote=punix:"$sandbox"/ovnsb_db.sock $ovsdb_sb_server_args
     # Start SB back up server
     rungdb $gdb_ovsdb $gdb_ovsdb_ex ovsdb-server --detach --no-chdir \
         --pidfile="$sandbox"/ovnsb_db2.pid  -vconsole:off \
         --log-file="$sandbox"/ovnsb_db2.log \
+        --remote=db:OVN_Southbound,SB_Global,connections \
+        --private-key=db:OVN_Southbound,SSL,private_key \
+        --certificate=db:OVN_Southbound,SSL,certificate \
+        --ca-cert=db:OVN_Southbound,SSL,ca_cert \
         --remote=punix:"$sandbox"/ovnsb_db2.sock \
         --unixctl="$sandbox"/sb_backup_unixctl \
         --sync-from=unix:"$sandbox"/ovnsb_db.sock $ovsdb_sb_backup_server_args
@@ -372,24 +392,34 @@ rungdb $gdb_vswitchd $gdb_vswitchd_ex ovs-vswitchd --detach --no-chdir --pidfile
     --enable-dummy=$dummy -vvconn -vnetdev_dummy
 
 if $ovn; then
-    ovs-vsctl set open . external-ids:system-id=56b18105-5706-46ef-80c4-ff20979ab068
-    ovs-vsctl set open . external-ids:hostname=sandbox
-    ovs-vsctl set open . external-ids:ovn-remote=unix:"$sandbox"/ovnsb_db.sock
-    ovs-vsctl set open . external-ids:ovn-encap-type=geneve
-    ovs-vsctl set open . external-ids:ovn-encap-ip=127.0.0.1
-
     ovn-nbctl init
     ovn-sbctl init
 
+    ovs-vsctl set open . external-ids:system-id=56b18105-5706-46ef-80c4-ff20979ab068
+    ovs-vsctl set open . external-ids:hostname=sandbox
+    ovs-vsctl set open . external-ids:ovn-encap-type=geneve
+    ovs-vsctl set open . external-ids:ovn-encap-ip=127.0.0.1
+
+    if [ "$HAVE_OPENSSL" = yes ]; then
+        ovn-nbctl set-ssl $sandbox/ovnnb-privkey.pem  $sandbox/ovnnb-cert.pem $sandbox/pki/switchca/cacert.pem
+        ovn-nbctl set-connection pssl:6641
+        ovn-sbctl set-ssl $sandbox/ovnsb-privkey.pem  $sandbox/ovnsb-cert.pem $sandbox/pki/switchca/cacert.pem
+        ovn-sbctl set-connection pssl:6642
+        ovs-vsctl set open . external-ids:ovn-remote=ssl:127.0.0.1:6642
+        OVN_CTRLR_PKI="-p $sandbox/ovn-controller-privkey.pem -c $sandbox/ovn-controller-cert.pem -C $sandbox/pki/switchca/cacert.pem"
+    else
+        ovs-vsctl set open . external-ids:ovn-remote=unix:"$sandbox"/ovnsb_db.sock
+        OVN_CTRLR_PKI=""
+    fi
     rungdb $gdb_ovn_northd $gdb_ovn_northd_ex ovn-northd --detach \
         --no-chdir --pidfile -vconsole:off --log-file \
         --ovnsb-db=unix:"$sandbox"/ovnsb_db.sock \
         --ovnnb-db=unix:"$sandbox"/ovnnb_db.sock
     rungdb $gdb_ovn_controller $gdb_ovn_controller_ex ovn-controller \
-        --detach --no-chdir --pidfile -vconsole:off --log-file
+        $OVN_CTRLR_PKI --detach --no-chdir --pidfile -vconsole:off --log-file
     rungdb $gdb_ovn_controller_vtep $gdb_ovn_controller_vtep_ex \
         ovn-controller-vtep --detach --no-chdir --pidfile -vconsole:off \
-        --log-file --ovnsb-db=unix:"$sandbox"/ovnsb_db.sock
+        $OVN_CTRLR_PKI --log-file --ovnsb-db=unix:"$sandbox"/ovnsb_db.sock
 fi
 
 cat <<EOF

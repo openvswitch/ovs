@@ -8,4 +8,5 @@ EXTRA_DIST += \
 	tutorial/t-stage4 \
 	tutorial/ovn-setup.sh
 sandbox: all
-	cd $(srcdir)/tutorial && MAKE=$(MAKE) ./ovs-sandbox -b $(abs_builddir) $(SANDBOXFLAGS)
+	cd $(srcdir)/tutorial && MAKE=$(MAKE) HAVE_OPENSSL=$(HAVE_OPENSSL) \
+		./ovs-sandbox -b $(abs_builddir) $(SANDBOXFLAGS)
