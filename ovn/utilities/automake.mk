@@ -6,14 +6,18 @@ man_MANS += \
     ovn/utilities/ovn-ctl.8 \
     ovn/utilities/ovn-nbctl.8 \
     ovn/utilities/ovn-sbctl.8 \
-    ovn/utilities/ovn-trace.8
+    ovn/utilities/ovn-trace.8 \
+    ovn/utilities/ovn-detrace.1
 
-MAN_ROOTS += ovn/utilities/ovn-sbctl.8.in
+MAN_ROOTS += \
+    ovn/utilities/ovn-sbctl.8.in \
+    ovn/utilities/ovn-detrace.1.in
 
 # Docker drivers
 bin_SCRIPTS += \
     ovn/utilities/ovn-docker-overlay-driver \
-    ovn/utilities/ovn-docker-underlay-driver
+    ovn/utilities/ovn-docker-underlay-driver \
+    ovn/utilities/ovn-detrace
 
 EXTRA_DIST += \
     ovn/utilities/ovn-ctl \
@@ -22,13 +26,16 @@ EXTRA_DIST += \
     ovn/utilities/ovn-docker-underlay-driver \
     ovn/utilities/ovn-nbctl.8.xml \
     ovn/utilities/ovn-trace.8.xml \
+    ovn/utilities/ovn-detrace.in \
     ovn/utilities/ovndb-servers.ocf
 
 CLEANFILES += \
     ovn/utilities/ovn-ctl.8 \
     ovn/utilities/ovn-nbctl.8 \
     ovn/utilities/ovn-sbctl.8 \
-    ovn/utilities/ovn-trace.8
+    ovn/utilities/ovn-trace.8 \
+    ovn/utilities/ovn-detrace.1 \
+    ovn/utilities/ovn-detrace
 
 # ovn-nbctl
 bin_PROGRAMS += ovn/utilities/ovn-nbctl

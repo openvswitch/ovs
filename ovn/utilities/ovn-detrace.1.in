@@ -1,0 +1,37 @@
+.TH ovn\-detrace 1 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
+.
+.SH NAME
+ovn\-detrace \- convert ``ovs\-appctl ofproto/trace'' output to combine
+OVN logical flow information.
+.
+.SH SYNOPSIS
+\fBovn\-detrace < \fIfile\fR
+.so lib/common-syn.man
+.
+.SH DESCRIPTION
+The \fBovn\-detrace\fR program reads \fBovs\-appctl ofproto/trace\fR output on
+stdin, looking for flow cookies, and expand each cookie with corresponding OVN
+logical flows. It expands logical flow further with the north-bound information
+e.g. the ACL that generated the logical flow, when relevant.
+.PP
+.
+.SH "OPTIONS"
+.so lib/common.man
+.
+.IP "\fB\-\-ovnsb=\fIserver\fR"
+The OVN Southbound DB remote to contact.  If the \fBOVN_SB_DB\fR
+environment variable is set, its value is used as the default.
+Otherwise, the default is \fBunix:@RUNDIR@/ovnsb_db.sock\fR, but this
+default is unlikely to be useful outside of single-machine OVN test
+environments.
+.
+.IP "\fB\-\-ovnnb=\fIserver\fR"
+The OVN Northbound DB remote to contact.  If the \fBOVN_NB_DB\fR
+environment variable is set, its value is used as the default.
+Otherwise, the default is \fBunix:@RUNDIR@/ovnnb_db.sock\fR, but this
+default is unlikely to be useful outside of single-machine OVN test
+environments.
+.
+.SH "SEE ALSO"
+.
+.BR ovs\-appctl (8), ovn\-sbctl (8), ovn-\-nbctl (8), ovn\-trace (8)
