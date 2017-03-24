@@ -1538,6 +1538,12 @@ tcp.flags = RST;
       Human-readable name for this flow's stage in the pipeline.
     </column>
 
+    <column name="external_ids" key="stage-hint" type='{"type": "uuid"}'>
+      UUID of a <ref db="OVN_Northbound"/> record that caused this logical flow
+      to be created.  Currently used only for attribute of logical flows to
+      northbound <ref db="OVN_Northbound" table="ACL"/> records.
+    </column>
+
     <column name="external_ids" key="source">
       Source file and line number of the code that added this flow to the
       pipeline.
