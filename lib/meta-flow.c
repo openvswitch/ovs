@@ -419,12 +419,6 @@ mf_are_prereqs_ok__(const struct mf_field *mf, const struct flow *flow,
         return is_ip_any(flow);
     case MFP_CT_VALID:
         return is_ct_valid(flow, mask, wc);
-    case MFP_CTV4_VALID:
-        return flow->dl_type == htons(ETH_TYPE_IP)
-            && is_ct_valid(flow, mask, wc);
-    case MFP_CTV6_VALID:
-        return flow->dl_type == htons(ETH_TYPE_IPV6)
-            && is_ct_valid(flow, mask, wc);
     case MFP_TCP:
         /* Matching !FRAG_LATER is not enforced (mask is not checked). */
         return is_tcp(flow, wc) && !(flow->nw_frag & FLOW_NW_FRAG_LATER);

@@ -1724,6 +1724,16 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
         }
     }
 
+    /* Check for mismatched conntrack original direction tuple address fields
+     * w.r.t. the IP version of the match. */
+    if (((fm->match.wc.masks.ct_nw_src || fm->match.wc.masks.ct_nw_dst)
+         && fm->match.flow.dl_type != htons(ETH_TYPE_IP))
+        || ((ipv6_addr_is_set(&fm->match.wc.masks.ct_ipv6_src)
+             || ipv6_addr_is_set(&fm->match.wc.masks.ct_ipv6_dst))
+            && fm->match.flow.dl_type != htons(ETH_TYPE_IPV6))) {
+        return OFPERR_OFPBAC_MATCH_INCONSISTENT;
+    }
+
     if (fm->command > OFPFC_DELETE_STRICT) {
         return OFPERR_OFPFMFC_BAD_COMMAND;
     }

@@ -772,7 +772,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Type: be32.
      * Maskable: bitwise.
      * Formatting: IPv4.
-     * Prerequisites: CTv4.
+     * Prerequisites: CT.
      * Access: read-only.
      * NXM: NXM_NX_CT_NW_SRC(120) since v2.8.
      * OXM: none.
@@ -791,7 +791,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Type: be32.
      * Maskable: bitwise.
      * Formatting: IPv4.
-     * Prerequisites: CTv4.
+     * Prerequisites: CT.
      * Access: read-only.
      * NXM: NXM_NX_CT_NW_DST(121) since v2.8.
      * OXM: none.
@@ -810,7 +810,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Type: be128.
      * Maskable: bitwise.
      * Formatting: IPv6.
-     * Prerequisites: CTv6.
+     * Prerequisites: CT.
      * Access: read-only.
      * NXM: NXM_NX_CT_IPV6_SRC(122) since v2.8.
      * OXM: none.
@@ -829,7 +829,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Type: be128.
      * Maskable: bitwise.
      * Formatting: IPv6.
-     * Prerequisites: CTv6.
+     * Prerequisites: CT.
      * Access: read-only.
      * NXM: NXM_NX_CT_IPV6_DST(123) since v2.8.
      * OXM: none.
@@ -1824,8 +1824,6 @@ enum OVS_PACKED_ENUM mf_prereqs {
     MFP_ICMPV4,
     MFP_ICMPV6,
     MFP_CT_VALID,               /* Implies IPv4 or IPv6. */
-    MFP_CTV4_VALID,             /* MFP_CT_VALID and IPv4. */
-    MFP_CTV6_VALID,             /* MFP_CT_VALID and IPv6. */
 
     /* L2+L3+L4 requirements. */
     MFP_ND,
