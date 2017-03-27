@@ -260,7 +260,8 @@ mirror_set(struct mbridge *mbridge, void *aux, const char *name,
         && hmapx_equals(&dsts_map, &mirror->dsts)
         && vlan_bitmap_equal(vlans, src_vlans)
         && mirror->out == out
-        && mirror->out_vlan == out_vlan)
+        && mirror->out_vlan == out_vlan
+        && mirror->snaplen == snaplen)
     {
         hmapx_destroy(&srcs_map);
         hmapx_destroy(&dsts_map);
