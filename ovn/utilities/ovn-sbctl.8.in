@@ -54,7 +54,7 @@ the global options by \fB\-\-\fR.
 .IP "\fB\-\-db=\fIserver\fR"
 The OVSDB database remote to contact.  If the \fBOVN_SB_DB\fR
 environment variable is set, its value is used as the default.
-Otherwise, the default is \fBunix:@RUNDIR@/db.sock\fR, but this
+Otherwise, the default is \fBunix:@RUNDIR@/ovnsb_db.sock\fR, but this
 default is unlikely to be useful outside of single-machine OVN test
 environments.
 .IP

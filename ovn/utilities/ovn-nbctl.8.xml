@@ -839,7 +839,7 @@
     <dd>
       The OVSDB database remote to contact.  If the <env>OVN_NB_DB</env>
       environment variable is set, its value is used as the default.
-      Otherwise, the default is <code>unix:@RUNDIR@/db.sock</code>, but this
+      Otherwise, the default is <code>unix:@RUNDIR@/ovnnb_db.sock</code>, but this
       default is unlikely to be useful outside of single-machine OVN test
       environments.
     </dd>
