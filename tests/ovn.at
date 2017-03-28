@@ -5266,7 +5266,7 @@ ovn-nbctl create Logical_Router name=lr0 options:chassis=hv1
 # Add router port to gateway router
 ovn-nbctl lrp-add lr0 lrp0 f0:00:00:00:00:01 192.168.0.1/24
 ovn-nbctl lsp-add ls0 lrp0-rp -- set Logical_Switch_Port lrp0-rp \
-    type=router options:router-port=lrp0-rp addresses='"f0:00:00:00:00:01"'
+    type=router options:router-port=lrp0 addresses='"f0:00:00:00:00:01"'
 # Add nat-address option
 ovn-nbctl lsp-set-options lrp0-rp router-port=lrp0 nat-addresses="f0:00:00:00:00:01 192.168.0.2"
 
@@ -5314,7 +5314,7 @@ ovn-nbctl create Logical_Router name=lr0 options:chassis=hv1
 # Add router port to gateway router
 ovn-nbctl lrp-add lr0 lrp0 f0:00:00:00:00:01 192.168.0.1/24
 ovn-nbctl lsp-add ls0 lrp0-rp -- set Logical_Switch_Port lrp0-rp \
-    type=router options:router-port=lrp0-rp addresses='"f0:00:00:00:00:01"'
+    type=router options:router-port=lrp0 addresses='"f0:00:00:00:00:01"'
 # Add nat-address option
 ovn-nbctl lsp-set-options lrp0-rp router-port=lrp0 nat-addresses="router"
 # Add NAT rules
