@@ -463,8 +463,8 @@ nl_ct_parse_tuple_proto(struct nlattr *nla, struct ct_dpif_tuple *tuple)
             tuple->dst_port = nl_attr_get_be16(attrs[CTA_PROTO_DST_PORT]);
         } else {
             /* Unsupported IPPROTO and no ports, leave them zeroed.
-             * We have parsed the ip_proto, so this is not a total failure. */
-            VLOG_INFO_RL(&rl, "Unsupported L4 protocol: %u.", tuple->ip_proto);
+             * We have parsed the ip_proto, so this is not a failure. */
+            VLOG_DBG_RL(&rl, "Unsupported L4 protocol: %u.", tuple->ip_proto);
         }
     } else {
         VLOG_ERR_RL(&rl, "Could not parse nested tuple protocol options. "
