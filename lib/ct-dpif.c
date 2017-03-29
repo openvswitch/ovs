@@ -202,6 +202,9 @@ ct_dpif_format_ipproto(struct ds *ds, uint16_t ipproto)
         : (ipproto == IPPROTO_TCP) ? "tcp"
         : (ipproto == IPPROTO_UDP) ? "udp"
         : (ipproto == IPPROTO_SCTP) ? "sctp"
+        : (ipproto == IPPROTO_UDPLITE) ? "udplite"
+        : (ipproto == IPPROTO_DCCP) ? "dccp"
+        : (ipproto == IPPROTO_IGMP) ? "igmp"
         : NULL;
 
     if (name) {
