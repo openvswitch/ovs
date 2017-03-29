@@ -197,7 +197,7 @@ simply install and run Open vSwitch you require the following software:
   can be a kernel module built with Open vSwitch (e.g. in the previous
   step), or the kernel module that accompanies Linux 3.3 and later.  Open
   vSwitch features and performance can vary based on the module and the
-  kernel.  Refer to :doc:`/internals/releases` for more information.
+  kernel.  Refer to :doc:`/faq/releases` for more information.
 
 - For optional support of ingress policing on Linux, the "tc" program
   from iproute2 (part of all major distributions and available at
