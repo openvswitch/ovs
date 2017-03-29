@@ -462,6 +462,15 @@ What's going on?
     messages and will send an error response if any other value of this field
     is included in a "packet-out" or a "flow mod" sent by a controller.
 
+    Packet buffers have limited usefulness in any case.  Table-miss packet-in
+    messages most commonly pass the first packet in a microflow to the OpenFlow
+    controller, which then sets up an OpenFlow flow that handles remaining
+    traffic in the microflow without further controller intervention.  In such
+    a case, the packet that initiates the microflow is in practice usually
+    small (certainly for TCP), which means that the switch sends the entire
+    packet to the controller and the buffer only saves a small number of bytes
+    in the reverse direction.
+
 Q: How does OVS divide flows among buckets in an OpenFlow "select" group?
 
     A: In Open vSwitch 2.3 and earlier, Open vSwitch used the destination
