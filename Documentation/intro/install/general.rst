@@ -29,6 +29,34 @@ This document describes how to build and install Open vSwitch on a generic
 Linux, FreeBSD, or NetBSD host. For specifics around installation on a specific
 platform, refer to one of the other installation guides listed in :doc:`index`.
 
+Obtaining Open vSwitch Sources
+------------------------------
+
+The canonical location for Open vSwitch source code is its Git
+repository, which you can clone into a directory named "ovs" with::
+
+    $ git clone https://github.com/openvswitch/ovs.git
+
+Cloning the repository leaves the "master" branch initially checked
+out.  This is the right branch for general development.  If, on the
+other hand, if you want to build a particular released version, you
+can check it out by running a command such as the following from the
+"ovs" directory::
+
+    $ git checkout v2.7.0
+
+The repository also has a branch for each release series.  For
+example, to obtain the latest fixes in the Open vSwitch 2.7.x release
+series, which might include bug fixes that have not yet been in any
+released version, you can check it out from the "ovs" directory with::
+
+    $ git checkout origin/branch-2.7
+
+If you do not want to use Git, you can also obtain tarballs for Open
+vSwitch release versions via http://openvswitch.org/download/, or
+download a ZIP file for any snapshot from the web interface at
+https://github.com/openvswitch/ovs.
+
 .. _general-build-reqs:
 
 Build Requirements
