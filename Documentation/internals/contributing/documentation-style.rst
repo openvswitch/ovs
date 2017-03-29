@@ -65,7 +65,7 @@ Many of the basic documentation guidelines match those of the
      An exception to this rule is text within code-block elements that cannot
      be wrapped and links within references.
 
-- Use spaces for indenation.
+- Use spaces for indentation.
 
 - Match indentation levels.
 
