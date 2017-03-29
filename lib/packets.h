@@ -576,6 +576,18 @@ char *ip_parse_cidr_len(const char *s, int *n, ovs_be32 *ip,
 #define IPPROTO_SCTP 132
 #endif
 
+#ifndef IPPROTO_DCCP
+#define IPPROTO_DCCP 33
+#endif
+
+#ifndef IPPROTO_IGMP
+#define IPPROTO_IGMP 2
+#endif
+
+#ifndef IPPROTO_UDPLITE
+#define IPPROTO_UDPLITE 136
+#endif
+
 /* TOS fields. */
 #define IP_ECN_NOT_ECT 0x0
 #define IP_ECN_ECT_1 0x01
