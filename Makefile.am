@@ -248,7 +248,7 @@ printf-check:
 	then \
 	  echo "See above for list of violations of the rule that"; \
 	  echo "'z', 't', 'j', 'hh' printf() type modifiers are"; \
-	  echo "forbidden.  See CodingStyle.rst for replacements."; \
+	  echo "forbidden.  See coding-style.rst for replacements."; \
 	  exit 1; \
 	fi
 .PHONY: printf-check
