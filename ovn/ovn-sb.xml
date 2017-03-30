@@ -1863,9 +1863,9 @@ tcp.flags = RST;
         <code>peer</code> values.
       </column>
 
-      <column name="options" key="nat-addresses">
-        MAC address of the <code>patch</code> port followed by a list of
-        SNAT and DNAT external IP addresses, followed by
+      <column name="nat_addresses">
+        MAC address followed by a list of SNAT and DNAT external IP
+        addresses, followed by
         <code>is_chassis_resident("<var>lport</var>")</code>, where
         <var>lport</var> is the name of a logical port on the same chassis
         where the corresponding NAT rules are applied.  This is used to
@@ -1905,6 +1905,17 @@ tcp.flags = RST;
         Example: <code>80:fa:5b:06:72:b7 158.36.44.22 158.36.44.24</code>.
         This would result in generation of gratuitous ARPs for IP addresses
         158.36.44.22 and 158.36.44.24 with a MAC address of 80:fa:5b:06:72:b7.
+        This is used in OVS versions prior to 2.8.
+      </column>
+
+      <column name="nat_addresses">
+        MAC address of the <code>l3gateway</code> port followed by a list of
+        SNAT and DNAT external IP addresses.  This is used to send gratuitous
+        ARPs for SNAT and DNAT external IP addresses via <code>localnet</code>.
+        Example: <code>80:fa:5b:06:72:b7 158.36.44.22 158.36.44.24</code>.
+        This would result in generation of gratuitous ARPs for IP addresses
+        158.36.44.22 and 158.36.44.24 with a MAC address of 80:fa:5b:06:72:b7.
+        This is used in OVS version 2.8 and later versions.
       </column>
     </group>
 

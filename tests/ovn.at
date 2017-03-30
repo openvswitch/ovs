@@ -6678,14 +6678,18 @@ ovn-nbctl lsp-add ls0 lrp0-rp -- set Logical_Switch_Port lrp0-rp \
 ovn-nbctl lrp-add lr0 lrp1 f0:00:00:00:00:02 10.0.0.1/24
 ovn-nbctl lsp-add ls1 lrp1-rp -- set Logical_Switch_Port lrp1-rp \
     type=router options:router-port=lrp1 addresses="router"
-# Add logical port for NAT rule
-ovn-nbctl lsp-add ls1 foo1
+# Add logical ports for NAT rules
+ovn-nbctl lsp-add ls1 foo1 \
+-- lsp-set-addresses foo1 "00:00:00:00:00:03 10.0.0.3"
+ovn-nbctl lsp-add ls1 foo2 \
+-- lsp-set-addresses foo2 "00:00:00:00:00:04 10.0.0.4"
 # Add nat-addresses option
 ovn-nbctl lsp-set-options lrp0-rp router-port=lrp0 nat-addresses="router"
 # Add NAT rules
 AT_CHECK([ovn-nbctl lr-nat-add lr0 snat 192.168.0.1 10.0.0.0/24])
 AT_CHECK([ovn-nbctl lr-nat-add lr0 dnat 192.168.0.2 10.0.0.2])
 AT_CHECK([ovn-nbctl lr-nat-add lr0 dnat_and_snat 192.168.0.3 10.0.0.3 foo1 f0:00:00:00:00:03])
+AT_CHECK([ovn-nbctl lr-nat-add lr0 dnat_and_snat 192.168.0.4 10.0.0.4 foo2 f0:00:00:00:00:04])
 
 net_add n1
 sim_add hv1
@@ -6702,6 +6706,12 @@ ovs-vsctl add-br br-phys
 ovn_attach n1 br-phys 192.168.0.2
 # Initially test with no bridge-mapping on hv2, expect to receive no packets
 
+sim_add hv3
+as hv3
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.3
+# Initially test with no bridge-mapping on hv3
+
 # Create a localnet port.
 AT_CHECK([ovn-nbctl lsp-add ls0 ln_port])
 AT_CHECK([ovn-nbctl lsp-set-addresses ln_port unknown])
@@ -6717,7 +6727,7 @@ sleep 2
 OVN_CHECK_PACKETS([hv1/snoopvif-tx.pcap], [packets])
 
 # Add bridge-mapping on hv2
-AT_CHECK([ovs-vsctl set Open_vSwitch . external-ids:ovn-bridge-mappings=physnet1:br-phys])
+AT_CHECK([as hv2 ovs-vsctl set Open_vSwitch . external-ids:ovn-bridge-mappings=physnet1:br-phys])
 
 # Wait for packets to be received.
 OVS_WAIT_UNTIL([test `wc -c < "hv1/snoopvif-tx.pcap"` -ge 100])
@@ -6730,8 +6740,52 @@ echo $expected > expout
 expected="fffffffffffff0000000000108060001080006040001f00000000001c0a80002000000000000c0a80002"
 echo $expected >> expout
 AT_CHECK([sort packets], [0], [expout])
-cat packets
+sort packets | cat
 
-OVN_CLEANUP([hv1],[hv2])
+# Temporarily remove nat-addresses option to avoid race conditions
+# due to GARP backoff
+ovn-nbctl lsp-set-options lrp0-rp router-port=lrp0 nat-addresses=""
+
+reset_pcap_file() {
+    local iface=$1
+    local pcap_file=$2
+    ovs-vsctl -- set Interface $iface options:tx_pcap=dummy-tx.pcap \
+options:rxq_pcap=dummy-rx.pcap
+    rm -f ${pcap_file}*.pcap
+    ovs-vsctl -- set Interface $iface options:tx_pcap=${pcap_file}-tx.pcap \
+options:rxq_pcap=${pcap_file}-rx.pcap
+}
+
+as hv1 reset_pcap_file snoopvif hv1/snoopvif
+
+# Add OVS ports for foo1 and foo2 on hv3
+ovs-vsctl -- add-port br-int hv3-vif1 -- \
+    set interface hv3-vif1 external-ids:iface-id=foo1 \
+    ofport-request=1
+ovs-vsctl -- add-port br-int hv3-vif2 -- \
+    set interface hv3-vif2 external-ids:iface-id=foo2 \
+    ofport-request=2
+
+# Add bridge-mapping on hv3
+AT_CHECK([as hv3 ovs-vsctl set Open_vSwitch . external-ids:ovn-bridge-mappings=physnet1:br-phys])
+
+# Re-add nat-addresses option
+ovn-nbctl lsp-set-options lrp0-rp router-port=lrp0 nat-addresses="router"
+
+# Wait for packets to be received.
+OVS_WAIT_UNTIL([test `wc -c < "hv1/snoopvif-tx.pcap"` -ge 250])
+trim_zeros() {
+    sed 's/\(00\)\{1,\}$//'
+}
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/snoopvif-tx.pcap | trim_zeros > packets
+expected="fffffffffffff0000000000308060001080006040001f00000000003c0a80003000000000000c0a80003"
+echo $expected >> expout
+expected="fffffffffffff0000000000408060001080006040001f00000000004c0a80004000000000000c0a80004"
+echo $expected >> expout
+AT_CHECK([sort packets], [0], [expout])
+sort packets | cat
+
+OVN_CLEANUP([hv1],[hv2],[hv3])
 
 AT_CLEANUP

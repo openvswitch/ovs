@@ -1056,21 +1056,23 @@ send_garp_update(const struct sbrec_port_binding *binding_rec,
     if (!strcmp(binding_rec->type, "l3gateway")
         || !strcmp(binding_rec->type, "patch")) {
         struct lport_addresses *laddrs = NULL;
-        laddrs = shash_find_data(nat_addresses, binding_rec->logical_port);
-        if (!laddrs) {
-            return;
-        }
-        int i;
-        for (i = 0; i < laddrs->n_ipv4_addrs; i++) {
-            char *name = xasprintf("%s-%s", binding_rec->logical_port,
-                                            laddrs->ipv4_addrs[i].addr_s);
-            garp = shash_find_data(&send_garp_data, name);
-            if (garp) {
-                garp->ofport = ofport;
-            } else {
-                add_garp(name, ofport, laddrs->ea, laddrs->ipv4_addrs[i].addr);
+        while ((laddrs = shash_find_and_delete(nat_addresses,
+                                               binding_rec->logical_port))) {
+            int i;
+            for (i = 0; i < laddrs->n_ipv4_addrs; i++) {
+                char *name = xasprintf("%s-%s", binding_rec->logical_port,
+                                                laddrs->ipv4_addrs[i].addr_s);
+                garp = shash_find_data(&send_garp_data, name);
+                if (garp) {
+                    garp->ofport = ofport;
+                } else {
+                    add_garp(name, ofport, laddrs->ea,
+                             laddrs->ipv4_addrs[i].addr);
+                }
+                free(name);
             }
-            free(name);
+            destroy_lport_addresses(laddrs);
+            free(laddrs);
         }
         return;
     }
@@ -1304,6 +1306,42 @@ extract_addresses_with_port(const char *addresses,
 }
 
 static void
+consider_nat_address(const char *nat_address,
+                     const struct sbrec_port_binding *pb,
+                     struct sset *nat_address_keys,
+                     const struct lport_index *lports,
+                     const struct sbrec_chassis *chassis,
+                     struct shash *nat_addresses)
+{
+    struct lport_addresses *laddrs = xmalloc(sizeof *laddrs);
+    char *lport = NULL;
+    if (!extract_addresses_with_port(nat_address, laddrs, &lport)
+        || (!lport && !strcmp(pb->type, "patch"))) {
+        free(laddrs);
+        if (lport) {
+            free(lport);
+        }
+        return;
+    } else if (lport) {
+        if (!pinctrl_is_chassis_resident(lports, chassis, lport)) {
+            free(laddrs);
+            free(lport);
+            return;
+        }
+        free(lport);
+    }
+
+    int i;
+    for (i = 0; i < laddrs->n_ipv4_addrs; i++) {
+        char *name = xasprintf("%s-%s", pb->logical_port,
+                                        laddrs->ipv4_addrs[i].addr_s);
+        sset_add(nat_address_keys, name);
+        free(name);
+    }
+    shash_add(nat_addresses, pb->logical_port, laddrs);
+}
+
+static void
 get_nat_addresses_and_keys(struct sset *nat_address_keys,
                            struct sset *local_l3gw_ports,
                            const struct lport_index *lports,
@@ -1317,38 +1355,24 @@ get_nat_addresses_and_keys(struct sset *nat_address_keys,
         if (!pb) {
             continue;
         }
-        const char *nat_addresses_options = smap_get(&pb->options,
-                                                     "nat-addresses");
-        if (!nat_addresses_options) {
-            continue;
-        }
 
-        struct lport_addresses *laddrs = xmalloc(sizeof *laddrs);
-        char *lport = NULL;
-        if (!extract_addresses_with_port(nat_addresses_options, laddrs, &lport)
-            || (!lport && !strcmp(pb->type, "patch"))) {
-            free(laddrs);
-            if (lport) {
-                free(lport);
+        if (pb->n_nat_addresses) {
+            for (int i = 0; i < pb->n_nat_addresses; i++) {
+                consider_nat_address(pb->nat_addresses[i], pb,
+                                     nat_address_keys, lports, chassis,
+                                     nat_addresses);
             }
-            continue;
-        } else if (lport) {
-            if (!pinctrl_is_chassis_resident(lports, chassis, lport)) {
-                free(laddrs);
-                free(lport);
-                continue;
+        } else {
+            /* Continue to support options:nat-addresses for version
+             * upgrade. */
+            const char *nat_addresses_options = smap_get(&pb->options,
+                                                         "nat-addresses");
+            if (nat_addresses_options) {
+                consider_nat_address(nat_addresses_options, pb,
+                                     nat_address_keys, lports, chassis,
+                                     nat_addresses);
             }
-            free(lport);
         }
-
-        int i;
-        for (i = 0; i < laddrs->n_ipv4_addrs; i++) {
-            char *name = xasprintf("%s-%s", pb->logical_port,
-                                            laddrs->ipv4_addrs[i].addr_s);
-            sset_add(nat_address_keys, name);
-            free(name);
-        }
-        shash_add(nat_addresses, pb->logical_port, laddrs);
     }
 }
 

@@ -1,7 +1,7 @@
 {
     "name": "OVN_Southbound",
-    "version": "1.9.0",
-    "cksum": "2240045372 9719",
+    "version": "1.10.0",
+    "cksum": "860871483 9898",
     "tables": {
         "SB_Global": {
             "columns": {
@@ -127,7 +127,10 @@
                                      "min": 0, "max": 1}},
                 "mac": {"type": {"key": "string",
                                  "min": 0,
-                                 "max": "unlimited"}}},
+                                 "max": "unlimited"}},
+                "nat_addresses": {"type": {"key": "string",
+                                           "min": 0,
+                                           "max": "unlimited"}}},
             "indexes": [["datapath", "tunnel_key"], ["logical_port"]],
             "isRoot": true},
         "MAC_Binding": {
