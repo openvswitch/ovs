@@ -109,12 +109,9 @@ struct ofproto {
     /* List of expirable flows, in all flow tables. */
     struct ovs_list expirable OVS_GUARDED_BY(ofproto_mutex);
 
-    /* Meter table.
-     * OpenFlow meters start at 1.  To avoid confusion we leave the first
-     * pointer in the array un-used, and index directly with the OpenFlow
-     * meter_id. */
+    /* Meter table.  */
     struct ofputil_meter_features meter_features;
-    struct meter **meters; /* 'meter_features.max_meter' + 1 pointers. */
+    struct hmap meters;             /* uint32_t indexed 'struct meter *'.  */
 
     /* OpenFlow connections. */
     struct connmgr *connmgr;
