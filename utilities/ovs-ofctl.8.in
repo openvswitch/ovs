@@ -393,8 +393,10 @@ or timeouts differ in \fIfile\fR.
 .IP
 With \fB\-\-readd\fR, \fBovs\-ofctl\fR adds all the flows from
 \fIfile\fR, even those that exist with the same actions, cookie, and
-timeout in \fIswitch\fR.  This resets all the flow packet and byte
-counters to 0, which can be useful for debugging.
+timeout in \fIswitch\fR.  In OpenFlow 1.0 and 1.1, re-adding a flow
+always resets the flow's packet and byte counters to 0, and in
+OpenFlow 1.2 and later, it does so only if the \fBreset_counts\fR flag
+is set.
 .
 .IP "\fBdiff\-flows \fIsource1 source2\fR"
 Reads flow entries from \fIsource1\fR and \fIsource2\fR and prints the
@@ -1817,6 +1819,31 @@ later expires or is removed.
 Forces the switch to check that the flow match does not overlap that
 of any different flow with the same priority in the same table.  (This
 check is expensive so it is best to avoid it.)
+.
+.IP "\fBreset_counts\fR"
+When this flag is specified on a flow being added to a switch, and the
+switch already has a flow with an identical match, an OpenFlow 1.2 (or
+later) switch resets the flow's packet and byte counters to 0.
+Without the flag, the packet and byte counters are preserved.
+.IP
+OpenFlow 1.0 and 1.1 switches always reset counters in this situation,
+as if \fBreset_counts\fR were always specified.
+.IP
+Open vSwitch 1.10 added support for \fBreset_counts\fR.
+.
+.IP "\fBno_packet_counts\fR"
+.IQ "\fBno_byte_counts\fR"
+Adding these flags to a flow advises an OpenFlow 1.3 (or later) switch
+that the controller does not need packet or byte counters,
+respectively, for the flow.  Some switch implementations might achieve
+higher performance or reduce resource consumption when these flags are
+used.  These flags provide no benefit to the Open vSwitch software
+switch implementation.
+.IP
+OpenFlow 1.2 and earlier do not support these flags.
+.IP
+Open vSwitch 1.10 added support for \fBno_packet_counts\fR and
+\fBno_byte_counts\fR.
 .
 .PP
 The \fBdump\-flows\fR, \fBdump\-aggregate\fR, \fBdel\-flow\fR 
