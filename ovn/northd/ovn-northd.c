@@ -1384,6 +1384,15 @@ join_logical_ports(struct northd_context *ctx,
                                      "on L3 gateway router", nbrp->name);
                         continue;
                     }
+                    if (od->l3dgw_port || od->l3redirect_port) {
+                        static struct vlog_rate_limit rl
+                            = VLOG_RATE_LIMIT_INIT(1, 1);
+                        VLOG_WARN_RL(&rl, "Bad configuration: multiple ports "
+                                     "with redirect-chassis on same logical "
+                                     "router %s", od->nbr->name);
+                        continue;
+                    }
+
                     char *redirect_name = chassis_redirect_name(nbrp->name);
                     struct ovn_port *crp = ovn_port_find(ports, redirect_name);
                     if (crp) {
@@ -1402,17 +1411,8 @@ join_logical_ports(struct northd_context *ctx,
 
                     /* Set l3dgw_port and l3redirect_port in od, for later
                      * use during flow creation. */
-                    if (od->l3dgw_port || od->l3redirect_port) {
-                        static struct vlog_rate_limit rl
-                            = VLOG_RATE_LIMIT_INIT(1, 1);
-                        VLOG_WARN_RL(&rl, "Bad configuration: multiple ports "
-                                     "with redirect-chassis on same logical "
-                                     "router %s", od->nbr->name);
-                        continue;
-                    } else {
-                        od->l3dgw_port = op;
-                        od->l3redirect_port = crp;
-                    }
+                    od->l3dgw_port = op;
+                    od->l3redirect_port = crp;
                 }
             }
         }
@@ -1536,7 +1536,21 @@ get_nat_addresses(const struct ovn_port *op)
             free(error);
             continue;
         }
-        ds_put_format(&addresses, " %s", nat->external_ip);
+
+        /* Determine whether this NAT rule satisfies the conditions for
+         * distributed NAT processing. */
+        if (op->od->l3redirect_port && !strcmp(nat->type, "dnat_and_snat")
+            && nat->logical_port && nat->external_mac) {
+            /* Distributed NAT rule. */
+            /* XXX This uses a different MAC address, so it cannot go
+             * into the same string as centralized NAT external IP
+             * addresses.  Need to change this function to return an
+             * array of strings. */
+        } else {
+            /* Centralized NAT rule, either on gateway router or distributed
+             * router. */
+            ds_put_format(&addresses, " %s", nat->external_ip);
+        }
     }
 
     /* A set to hold all load-balancer vips. */
@@ -1548,6 +1562,13 @@ get_nat_addresses(const struct ovn_port *op)
         ds_put_format(&addresses, " %s", ip_address);
     }
     sset_destroy(&all_ips);
+
+    /* Gratuitous ARP for centralized NAT rules on distributed gateway
+     * ports should be restricted to the "redirect-chassis". */
+    if (op->od->l3redirect_port) {
+        ds_put_format(&addresses, " is_chassis_resident(%s)",
+                      op->od->l3redirect_port->json_key);
+    }
 
     return ds_steal_cstr(&addresses);
 }
@@ -1642,14 +1663,17 @@ ovn_port_update_sbrec(const struct ovn_port *op,
             const char *nat_addresses = smap_get(&op->nbsp->options,
                                            "nat-addresses");
             if (nat_addresses && !strcmp(nat_addresses, "router")) {
-                if (op->peer && op->peer->nbrp) {
+                if (op->peer && op->peer->od
+                    && (chassis || op->peer->od->l3redirect_port)) {
                     char *nats = get_nat_addresses(op->peer);
                     if (nats) {
                         smap_add(&new, "nat-addresses", nats);
                         free(nats);
                     }
                 }
-            } else if (nat_addresses) {
+            /* Only accept manual specification of ethernet address
+             * followed by IPv4 addresses on type "l3gateway" ports. */
+            } else if (nat_addresses && chassis) {
                 struct lport_addresses laddrs;
                 if (!extract_lsp_addresses(nat_addresses, &laddrs)) {
                     static struct vlog_rate_limit rl =

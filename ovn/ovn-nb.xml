@@ -244,8 +244,11 @@
         <column name="options" key="nat-addresses">
           <p>
             This is used to send gratuitous ARPs for SNAT and DNAT IP
-            addresses via <code>localnet</code> and is valid for only L3
-            gateway ports.
+            addresses via the <code>localnet</code> port that is attached
+            to the same logical switch as this type <code>router</code>
+            port.  This option is specified on a logical switch port that is
+            connected to a gateway router, or a logical switch port that is
+            connected to a distributed gateway port on a logical router.
           </p>
 
           <p>
@@ -264,6 +267,13 @@
               </p>
 
               <p>
+                This form of <ref column="options" key="nat-addresses"/> is
+                valid for logical switch ports where <ref column="options"
+                key="router-port"/> is the name of a port on a gateway router,
+                or the name of a distributed gateway port.
+              </p>
+
+              <p>
                 Supported only in OVN 2.8 and later.  Earlier versions required
                 NAT addresses to be manually synchronized.
               </p>
@@ -271,10 +281,18 @@
 
             <dt><code>Ethernet address followed by one or more IPv4 addresses</code></dt>
             <dd>
-              Example: <code>80:fa:5b:06:72:b7 158.36.44.22
-              158.36.44.24</code>. This would result in generation of
-              gratuitous ARPs for IP addresses 158.36.44.22 and 158.36.44.24
-              with a MAC address of 80:fa:5b:06:72:b7.
+              <p>
+                Example: <code>80:fa:5b:06:72:b7 158.36.44.22
+                158.36.44.24</code>. This would result in generation of
+                gratuitous ARPs for IP addresses 158.36.44.22 and 158.36.44.24
+                with a MAC address of 80:fa:5b:06:72:b7.
+              </p>
+
+              <p>
+                This form of <ref column="options" key="nat-addresses"/> is
+                only valid for logical switch ports where <ref column="options"
+                key="router-port"/> is the name of a port on a gateway router.
+              </p>
             </dd>
           </dl>
         </column>
@@ -1165,6 +1183,14 @@
           logical router's MAC address is automatically programmed in the
           peer logical switch's destination lookup flow on the
           <code>redirect-chassis</code>.
+        </p>
+
+        <p>
+          When this option is specified and it is desired to generate
+          gratuitous ARPs for NAT addresses, then the peer logical switch
+          port's <ref column="options" key="nat-addresses"
+          table="Logical_Switch_Port"/> should be set to
+          <code>router</code>.
         </p>
       </column>
     </group>

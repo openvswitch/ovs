@@ -6660,3 +6660,78 @@ OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [hv2-vif1.expected])
 OVN_CLEANUP([hv1],[hv2],[hv3])
 
 AT_CLEANUP
+
+AT_SETUP([ovn -- send gratuitous arp for NAT rules on distributed router])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+# Create logical switches
+ovn-nbctl ls-add ls0
+ovn-nbctl ls-add ls1
+# Create distributed router
+ovn-nbctl create Logical_Router name=lr0
+# Add distributed gateway port to distributed router
+ovn-nbctl lrp-add lr0 lrp0 f0:00:00:00:00:01 192.168.0.1/24 \
+    -- set Logical_Router_Port lrp0 options:redirect-chassis="hv2"
+ovn-nbctl lsp-add ls0 lrp0-rp -- set Logical_Switch_Port lrp0-rp \
+    type=router options:router-port=lrp0 addresses="router"
+# Add router port to ls1
+ovn-nbctl lrp-add lr0 lrp1 f0:00:00:00:00:02 10.0.0.1/24
+ovn-nbctl lsp-add ls1 lrp1-rp -- set Logical_Switch_Port lrp1-rp \
+    type=router options:router-port=lrp1 addresses="router"
+# Add logical port for NAT rule
+ovn-nbctl lsp-add ls1 foo1
+# Add nat-addresses option
+ovn-nbctl lsp-set-options lrp0-rp router-port=lrp0 nat-addresses="router"
+# Add NAT rules
+AT_CHECK([ovn-nbctl lr-nat-add lr0 snat 192.168.0.1 10.0.0.0/24])
+AT_CHECK([ovn-nbctl lr-nat-add lr0 dnat 192.168.0.2 10.0.0.2])
+AT_CHECK([ovn-nbctl lr-nat-add lr0 dnat_and_snat 192.168.0.3 10.0.0.3 foo1 f0:00:00:00:00:03])
+
+net_add n1
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+
+AT_CHECK([ovs-vsctl set Open_vSwitch . external-ids:ovn-bridge-mappings=physnet1:br-phys])
+AT_CHECK([ovs-vsctl add-port br-phys snoopvif -- set Interface snoopvif options:tx_pcap=hv1/snoopvif-tx.pcap options:rxq_pcap=hv1/snoopvif-rx.pcap])
+
+sim_add hv2
+as hv2
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.2
+# Initially test with no bridge-mapping on hv2, expect to receive no packets
+
+# Create a localnet port.
+AT_CHECK([ovn-nbctl lsp-add ls0 ln_port])
+AT_CHECK([ovn-nbctl lsp-set-addresses ln_port unknown])
+AT_CHECK([ovn-nbctl lsp-set-type ln_port localnet])
+AT_CHECK([ovn-nbctl lsp-set-options ln_port network_name=physnet1])
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 2
+
+# Expect no packets when hv2 bridge-mapping is not present
+: > packets
+OVN_CHECK_PACKETS([hv1/snoopvif-tx.pcap], [packets])
+
+# Add bridge-mapping on hv2
+AT_CHECK([ovs-vsctl set Open_vSwitch . external-ids:ovn-bridge-mappings=physnet1:br-phys])
+
+# Wait for packets to be received.
+OVS_WAIT_UNTIL([test `wc -c < "hv1/snoopvif-tx.pcap"` -ge 100])
+trim_zeros() {
+    sed 's/\(00\)\{1,\}$//'
+}
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/snoopvif-tx.pcap | trim_zeros > packets
+expected="fffffffffffff0000000000108060001080006040001f00000000001c0a80001000000000000c0a80001"
+echo $expected > expout
+expected="fffffffffffff0000000000108060001080006040001f00000000001c0a80002000000000000c0a80002"
+echo $expected >> expout
+AT_CHECK([sort packets], [0], [expout])
+cat packets
+
+OVN_CLEANUP([hv1],[hv2])
+
+AT_CLEANUP

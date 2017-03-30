@@ -37,6 +37,7 @@
 #include "lib/dhcp.h"
 #include "ovn-controller.h"
 #include "ovn/actions.h"
+#include "ovn/lex.h"
 #include "ovn/lib/logical-fields.h"
 #include "ovn/lib/ovn-dhcp.h"
 #include "ovn/lib/ovn-util.h"
@@ -1048,8 +1049,12 @@ send_garp_update(const struct sbrec_port_binding *binding_rec,
                                              ld->localnet_port->logical_port));
 
     volatile struct garp_data *garp = NULL;
-    /* Update GARP for NAT IP if it exists. */
-    if (!strcmp(binding_rec->type, "l3gateway")) {
+    /* Update GARP for NAT IP if it exists.  Consider port bindings with type
+     * "l3gateway" for logical switch ports attached to gateway routers, and
+     * port bindings with type "patch" for logical switch ports attached to
+     * distributed gateway ports. */
+    if (!strcmp(binding_rec->type, "l3gateway")
+        || !strcmp(binding_rec->type, "patch")) {
         struct lport_addresses *laddrs = NULL;
         laddrs = shash_find_data(nat_addresses, binding_rec->logical_port);
         if (!laddrs) {
@@ -1173,6 +1178,7 @@ get_localnet_vifs_l3gwports(const struct ovsrec_bridge *br_int,
             if (!iface_rec->n_ofport) {
                 continue;
             }
+            /* Get localnet port with its ofport. */
             if (localnet) {
                 int64_t ofport = iface_rec->ofport[0];
                 if (ofport < 1 || ofport > ofp_to_u16(OFPP_MAX)) {
@@ -1181,6 +1187,7 @@ get_localnet_vifs_l3gwports(const struct ovsrec_bridge *br_int,
                 simap_put(localnet_ofports, localnet, ofport);
                 continue;
             }
+            /* Get localnet vif. */
             const char *iface_id = smap_get(&iface_rec->external_ids,
                                             "iface-id");
             if (!iface_id) {
@@ -1202,24 +1209,105 @@ get_localnet_vifs_l3gwports(const struct ovsrec_bridge *br_int,
 
     const struct local_datapath *ld;
     HMAP_FOR_EACH (ld, hmap_node, local_datapaths) {
-        if (!ld->has_local_l3gateway) {
+        if (!ld->localnet_port) {
             continue;
         }
 
+        /* Get l3gw ports.  Consider port bindings with type "l3gateway"
+         * that connect to gateway routers (if local), and consider port
+         * bindings of type "patch" since they might connect to
+         * distributed gateway ports with NAT addresses. */
         for (size_t i = 0; i < ld->ldatapath->n_lports; i++) {
             const struct sbrec_port_binding *pb = ld->ldatapath->lports[i];
-            if (!strcmp(pb->type, "l3gateway")
-                /* && it's on this chassis */) {
+            if ((ld->has_local_l3gateway && !strcmp(pb->type, "l3gateway"))
+                || !strcmp(pb->type, "patch")) {
                 sset_add(local_l3gw_ports, pb->logical_port);
             }
         }
     }
 }
 
+static bool
+pinctrl_is_chassis_resident(const struct lport_index *lports,
+                            const struct sbrec_chassis *chassis,
+                            const char *port_name)
+{
+    const struct sbrec_port_binding *pb
+        = lport_lookup_by_name(lports, port_name);
+    return pb && pb->chassis && pb->chassis == chassis;
+}
+
+/* Extracts the mac, IPv4 and IPv6 addresses, and logical port from
+ * 'addresses' which should be of the format 'MAC [IP1 IP2 ..]
+ * [is_chassis_resident("LPORT_NAME")]', where IPn should be a valid IPv4
+ * or IPv6 address, and stores them in the 'ipv4_addrs' and 'ipv6_addrs'
+ * fields of 'laddrs'.  The logical port name is stored in 'lport'.
+ *
+ * Returns true if at least 'MAC' is found in 'address', false otherwise.
+ *
+ * The caller must call destroy_lport_addresses() and free(*lport). */
+static bool
+extract_addresses_with_port(const char *addresses,
+                            struct lport_addresses *laddrs,
+                            char **lport)
+{
+    int ofs;
+    if (!extract_addresses(addresses, laddrs, &ofs)) {
+        return false;
+    } else if (ofs >= strlen(addresses)) {
+        return true;
+    }
+
+    struct lexer lexer;
+    lexer_init(&lexer, addresses + ofs);
+    lexer_get(&lexer);
+
+    if (lexer.error || lexer.token.type != LEX_T_ID
+        || !lexer_match_id(&lexer, "is_chassis_resident")) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+        VLOG_INFO_RL(&rl, "invalid syntax '%s' in address", addresses);
+        lexer_destroy(&lexer);
+        return true;
+    }
+
+    if (!lexer_match(&lexer, LEX_T_LPAREN)) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+        VLOG_INFO_RL(&rl, "Syntax error: expecting '(' after "
+                          "'is_chassis_resident' in address '%s'", addresses);
+        lexer_destroy(&lexer);
+        return false;
+    }
+
+    if (lexer.token.type != LEX_T_STRING) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+        VLOG_INFO_RL(&rl,
+                    "Syntax error: expecting quoted string after"
+                    " 'is_chassis_resident' in address '%s'", addresses);
+        lexer_destroy(&lexer);
+        return false;
+    }
+
+    *lport = xstrdup(lexer.token.s);
+
+    lexer_get(&lexer);
+    if (!lexer_match(&lexer, LEX_T_RPAREN)) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+        VLOG_INFO_RL(&rl, "Syntax error: expecting ')' after quoted string in "
+                          "'is_chassis_resident()' in address '%s'",
+                          addresses);
+        lexer_destroy(&lexer);
+        return false;
+    }
+
+    lexer_destroy(&lexer);
+    return true;
+}
+
 static void
 get_nat_addresses_and_keys(struct sset *nat_address_keys,
                            struct sset *local_l3gw_ports,
                            const struct lport_index *lports,
+                           const struct sbrec_chassis *chassis,
                            struct shash *nat_addresses)
 {
     const char *gw_port;
@@ -1236,10 +1324,23 @@ get_nat_addresses_and_keys(struct sset *nat_address_keys,
         }
 
         struct lport_addresses *laddrs = xmalloc(sizeof *laddrs);
-        if (!extract_lsp_addresses(nat_addresses_options, laddrs)) {
+        char *lport = NULL;
+        if (!extract_addresses_with_port(nat_addresses_options, laddrs, &lport)
+            || (!lport && !strcmp(pb->type, "patch"))) {
             free(laddrs);
+            if (lport) {
+                free(lport);
+            }
             continue;
+        } else if (lport) {
+            if (!pinctrl_is_chassis_resident(lports, chassis, lport)) {
+                free(laddrs);
+                free(lport);
+                continue;
+            }
+            free(lport);
         }
+
         int i;
         for (i = 0; i < laddrs->n_ipv4_addrs; i++) {
             char *name = xasprintf("%s-%s", pb->logical_port,
@@ -1275,7 +1376,7 @@ send_garp_run(const struct ovsrec_bridge *br_int,
                       &localnet_vifs, &localnet_ofports, &local_l3gw_ports);
 
     get_nat_addresses_and_keys(&nat_ip_keys, &local_l3gw_ports, lports,
-                               &nat_addresses);
+                               chassis, &nat_addresses);
     /* For deleted ports and deleted nat ips, remove from send_garp_data. */
     struct shash_node *iter, *next;
     SHASH_FOR_EACH_SAFE (iter, next, &send_garp_data) {

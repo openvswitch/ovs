@@ -1862,6 +1862,21 @@ tcp.flags = RST;
         ports must have reversed <ref column="logical_port"/> and
         <code>peer</code> values.
       </column>
+
+      <column name="options" key="nat-addresses">
+        MAC address of the <code>patch</code> port followed by a list of
+        SNAT and DNAT external IP addresses, followed by
+        <code>is_chassis_resident("<var>lport</var>")</code>, where
+        <var>lport</var> is the name of a logical port on the same chassis
+        where the corresponding NAT rules are applied.  This is used to
+        send gratuitous ARPs for SNAT and DNAT external IP addresses via
+        <code>localnet</code>, from the chassis where <var>lport</var>
+        resides.  Example: <code>80:fa:5b:06:72:b7 158.36.44.22
+        158.36.44.24 is_chassis_resident("foo1")</code>.  This would result
+        in generation of gratuitous ARPs for IP addresses 158.36.44.22 and
+        158.36.44.24 with a MAC address of 80:fa:5b:06:72:b7 from the chassis
+        where the logical port "foo1" resides.
+      </column>
     </group>
 
     <group title="L3 Gateway Options">
@@ -1883,15 +1898,14 @@ tcp.flags = RST;
         The <code>chassis</code> in which the port resides.
       </column>
 
-        <column name="options" key="nat-addresses">
-          MAC address of the <code>l3gateway</code> port followed by a list of
-          SNAT and DNAT IP addresses. This is used to send gratuitous ARPs for
-          SNAT and DNAT IP addresses via <code>localnet</code> and is valid for
-          only L3 gateway ports.  Example: <code>80:fa:5b:06:72:b7 158.36.44.22
-          158.36.44.24</code>. This would result in generation of gratuitous
-          ARPs for IP addresses 158.36.44.22 and 158.36.44.24 with a MAC
-          address of 80:fa:5b:06:72:b7.
-        </column>
+      <column name="options" key="nat-addresses">
+        MAC address of the <code>l3gateway</code> port followed by a list of
+        SNAT and DNAT external IP addresses.  This is used to send gratuitous
+        ARPs for SNAT and DNAT external IP addresses via <code>localnet</code>.
+        Example: <code>80:fa:5b:06:72:b7 158.36.44.22 158.36.44.24</code>.
+        This would result in generation of gratuitous ARPs for IP addresses
+        158.36.44.22 and 158.36.44.24 with a MAC address of 80:fa:5b:06:72:b7.
+      </column>
     </group>
 
     <group title="Localnet Options">

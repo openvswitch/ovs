@@ -54,6 +54,8 @@ struct lport_addresses {
 };
 
 bool is_dynamic_lsp_address(const char *address);
+bool extract_addresses(const char *address, struct lport_addresses *,
+                       int *ofs);
 bool extract_lsp_addresses(const char *address, struct lport_addresses *);
 bool extract_lrp_networks(const struct nbrec_logical_router_port *,
                           struct lport_addresses *);
