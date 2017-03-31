@@ -714,13 +714,22 @@ parse_partial_uuid(char *s)
     return NULL;
 }
 
+static const char *
+strip_leading_zero(const char *s)
+{
+    return s + strspn(s, "0");
+}
+
 static bool
 is_partial_uuid_match(const struct uuid *uuid, const char *match)
 {
     char uuid_s[UUID_LEN + 1];
     snprintf(uuid_s, sizeof uuid_s, UUID_FMT, UUID_ARGS(uuid));
 
-    return !strncmp(uuid_s, match, strlen(match));
+    const char *s1 = strip_leading_zero(uuid_s);
+    const char *s2 = strip_leading_zero(match);
+
+    return !strncmp(s1, s2, strlen(s2));
 }
 
 static const struct sbrec_datapath_binding *
