@@ -594,3 +594,19 @@ table_print(const struct table *table, const struct table_style *style)
         break;
     }
 }
+
+void
+table_usage(void)
+{
+    printf("\nOutput formatting options:\n"
+           "  -f, --format=FORMAT         set output formatting to FORMAT\n"
+           "                              (\"table\", \"html\", \"csv\", "
+           "or \"json\")\n"
+           "  -d, --data=FORMAT           set table cell output formatting to\n"
+           "                              FORMAT (\"string\", \"bare\", "
+           "or \"json\")\n"
+           "  --no-headings               omit table heading row\n"
+           "  --pretty                    pretty-print JSON in output\n"
+           "  --bare                      equivalent to "
+           "\"--format=list --data=bare --no-headings\"\n");
+}

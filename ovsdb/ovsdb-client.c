@@ -282,13 +282,8 @@ usage(void)
            "The default DATABASE is Open_vSwitch.\n",
            program_name, program_name, ovs_rundir());
     stream_usage("SERVER", true, true, true);
-    printf("\nOutput formatting options:\n"
-           "  -f, --format=FORMAT         set output formatting to FORMAT\n"
-           "                              (\"table\", \"html\", \"csv\", "
-           "or \"json\")\n"
-           "  --no-headings               omit table heading row\n"
-           "  --pretty                    pretty-print JSON in output\n"
-           "  --timestamp                 timestamp \"monitor\" output");
+    table_usage();
+    printf("  --timestamp                 timestamp \"monitor\" output");
     daemon_usage();
     vlog_usage();
     printf("\nOther options:\n"

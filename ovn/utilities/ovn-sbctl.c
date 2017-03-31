@@ -327,6 +327,7 @@ Options:\n\
   --oneline                   print exactly one line of output per command\n",
            program_name, program_name, ctl_get_db_cmd_usage(),
            default_sb_db());
+    table_usage();
     vlog_usage();
     printf("\
   --no-syslog             equivalent to --verbose=sbctl:syslog:warn\n");
