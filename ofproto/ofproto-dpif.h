@@ -51,6 +51,7 @@
 #include "hmapx.h"
 #include "odp-util.h"
 #include "openvswitch/ofp-util.h"
+#include "id-pool.h"
 #include "ovs-thread.h"
 #include "ofproto-provider.h"
 #include "util.h"
@@ -223,6 +224,9 @@ struct dpif_backer {
     enum revalidate_reason need_revalidate; /* Revalidate all flows. */
 
     bool recv_set_enable; /* Enables or disables receiving packets. */
+
+    /* Meter. */
+    struct id_pool *meter_ids;     /* Datapath meter allocation. */
 
     /* Version string of the datapath stored in OVSDB. */
     char *dp_version_string;
