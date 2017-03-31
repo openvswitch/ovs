@@ -55,6 +55,7 @@ $(srcdir)/rhel/openvswitch-fedora.spec: rhel/openvswitch-fedora.spec.in $(top_bu
 	$(update_rhel_spec)
 
 RPMBUILD_TOP := $(abs_top_builddir)/rpm/rpmbuild
+RPMBUILD_OPT ?= --without check
 
 # Build user-space RPMs
 rpm-fedora: dist $(srcdir)/rhel/openvswitch-fedora.spec

@@ -87,15 +87,14 @@ can be added:
 
 ::
 
-    $ make rpm-fedora RPMBUILD_OPT="--with dpdk"
+    $ make rpm-fedora RPMBUILD_OPT="--with dpdk --without check"
 
-The above commands automatically run the Open vSwitch unit tests, which can
-take several minutes.  To reduce the build time by disabling the execution of
-these tests, the ``--without check`` option can be added:
+You can also have the above commands automatically run the Open vSwitch unit
+tests.  This can take several minutes.
 
 ::
 
-    $ make rpm-fedora RPMBUILD_OPT="--without check"
+    $ make rpm-fedora RPMBUILD_OPT="--with check"
 
 Kernel OVS Tree Datapath RPM
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
