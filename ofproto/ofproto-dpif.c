@@ -1343,6 +1343,8 @@ destruct(struct ofproto *ofproto_)
     hmap_destroy(&ofproto->bundles);
     mac_learning_unref(ofproto->ml);
     mcast_snooping_unref(ofproto->ms);
+    stp_unref(ofproto->stp);
+    rstp_unref(ofproto->rstp);
 
     sset_destroy(&ofproto->ports);
     sset_destroy(&ofproto->ghost_ports);
