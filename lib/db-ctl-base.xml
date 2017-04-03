@@ -304,7 +304,7 @@
         precede or follow the <code>create</code> command.
       </p>
       <dl>
-        <dt>Caution (ovs-vsctl as exmaple)</dt>
+        <dt>Caution (ovs-vsctl as example)</dt>
         <dd>
           Records in the Open vSwitch database are significant only when they
           can be reached directly or indirectly from the <code>Open_vSwitch</code>
@@ -334,7 +334,7 @@
         Deletes all records from the <var>table</var>.
       </p>
       <dl>
-        <dt>Caution (ovs-vsctl as exmaple)</dt>
+        <dt>Caution (ovs-vsctl as example)</dt>
         <dd>
           The <code>destroy</code> command is only useful for records in the <code>QoS</code>
           or <code>Queue</code> tables.  Records in other tables are automatically
@@ -366,7 +366,7 @@
         satisfied.
       </p>
       <dl>
-        <dt>Caution (ovs-vsctl as exmaple)</dt>
+        <dt>Caution (ovs-vsctl as example)</dt>
         <dd>
           Usually <code>wait-until</code> should be placed at the beginning of a set
           of <code>ovs-vsctl</code> commands.  For example, <code>wait-until bridge br0

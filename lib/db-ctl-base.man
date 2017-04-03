@@ -205,7 +205,7 @@ invocation in contexts where a UUID is expected.  Such references may
 precede or follow the \fBcreate\fR command.
 .
 .RS
-.IP "Caution (ovs-vsctl as exmaple)"
+.IP "Caution (ovs-vsctl as example)"
 Records in the Open vSwitch database are significant only when they
 can be reached directly or indirectly from the \fBOpen_vSwitch\fR
 table.  Except for records in the \fBQoS\fR or \fBQueue\fR tables,
@@ -227,7 +227,7 @@ Deletes each specified \fIrecord\fR from \fItable\fR.  Unless
 Deletes all records from the \fItable\fR.
 .
 .RS
-.IP "Caution (ovs-vsctl as exmaple)"
+.IP "Caution (ovs-vsctl as example)"
 The \fBdestroy\fR command is only useful for records in the \fBQoS\fR
 or \fBQueue\fR tables.  Records in other tables are automatically
 deleted from the database when they become unreachable from the
@@ -253,7 +253,7 @@ such argument is given, the command waits until all of them are
 satisfied.
 .
 .RS
-.IP "Caution (ovs-vsctl as exmaple)"
+.IP "Caution (ovs-vsctl as example)"
 Usually \fBwait\-until\fR should be placed at the beginning of a set
 of \fBovs\-vsctl\fR commands.  For example, \fBwait\-until bridge br0
 \-\- get bridge br0 datapath_id\fR waits until a bridge named
