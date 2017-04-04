@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<dl>
+  <dt><code>-f</code> <var>format</var></dt>
+  <dt><code>--format=</code><var>format</var></dt>
+  <dd>
+    <p>
+      Sets the type of table formatting.  The following types of
+      <var>format</var> are available:
+      <dl>
+        <dt><code>table</code></dt>
+        <dd>
+          2-D text tables with aligned columns.
+        </dd>
+
+        <dt><code>list</code> (default)</dt>
+        <dd>
+          A list with one column per line and rows separated by a blank line.
+        </dd>
+
+        <dt><code>html</code></dt>
+        <dd>
+          HTML tables.
+        </dd>
+        <dt><code>csv</code></dt>
+        <dd>
+          Comma-separated values as defined in RFC 4180.
+        </dd>
+
+        <dt><code>json</code></dt>
+        <dd>
+          JSON format as defined in RFC 4627.  The output
+          is a sequence of JSON objects, each of which corresponds to one
+          table.  Each JSON object has the following members with the noted
+          values:
+          <dl>
+            <dt><code>caption</code></dt>
+            <dd>
+              The table's caption.  This member is omitted if the table has
+              no caption.
+            </dd>
+            <dt><code>headings</code></dt>
+            <dd>
+              An array with one element per table column.  Each array element
+              is a string giving the corresponding column's heading.
+            </dd>
+            <dt><code>data</code></dt>
+            <dd>
+              An array with one element per table row.  Each element is also
+              an array with one element per table column.  The elements of
+              this second-level array are the cells that constitute the table.
+              Cells that represent OVSDB data or data types are expressed in
+              the format described in the OVSDB specification; other cells are
+              simply expressed as text strings.
+            </dd>
+          </dl>
+        </dd>
+      </dl>
+    </p>
+  </dd>
+  <dt><code>-d</code> <var>format</var></dt>
+  <dt><code>--data=</code><var>format</var></dt>
+  <dd>
+    <p>
+      Sets the formatting for cells within output tables unless the table
+      format is set to <code>json</code>, in which case <code>json</code>
+      formatting is always used when formatting cells.  The following types
+      of <var>format</var> are available:
+
+      <dl>
+        <dt><code>string</code> (default)</dt>
+        <dd>
+          The simple format described in the <code>Database Values</code>
+          section of <code>ovs-vsctl</code>(8).
+        </dd>
+
+        <dt><code>bare</code></dt>
+        <dd>
+          The simple format with punctuation stripped off:
+          <code>[]</code> and <code>{}</code> are omitted around sets, maps,
+          and empty columns, items within sets and maps are space-separated,
+          and strings are never quoted.  This format may be easier for scripts
+          to parse.
+        </dd>
+
+        <dt><code>json</code></dt>
+        <dd>
+          The RFC 4627 JSON format as described above.
+        </dd>
+      </dl>
+    </p>
+  </dd>
+  <dt><code>--no-headings</code></dt>
+  <dd>
+    This option suppresses the heading row that otherwise appears in the
+    first row of table output.
+  </dd>
+  <dt><code>--pretty</code></dt>
+  <dd>
+    <p>
+      By default, JSON in output is printed as compactly as possible.  This
+      option causes JSON in output to be printed in a more readable
+      fashion.  Members of objects and elements of arrays are printed one
+      per line, with indentation.
+    </p>
+    <p>
+      This option does not affect JSON in tables, which is always printed
+      compactly.
+    </p>
+  </dd>
+  <dt><code>--bare</code></dt>
+  <dd>
+    Equivalent to <code>--format=list --data=bare --no-headings</code>.
+  </dd>
+</dl>

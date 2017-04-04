@@ -443,6 +443,7 @@ EXTRA_DIST += \
 	lib/db-ctl-base.xml \
 	lib/ssl.xml \
 	lib/ssl-bootstrap.xml \
+	lib/table.xml \
 	lib/vlog.xml
 
 MAN_FRAGMENTS += \
