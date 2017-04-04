@@ -46,10 +46,9 @@ ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 .IP "Output formatting options:"
 [\fB\-\-format=\fIformat\fR]
 [\fB\-\-data=\fIformat\fR]
-[\fB\-\-no-heading\fR]
+[\fB\-\-no-headings\fR]
 [\fB\-\-pretty\fR]
 [\fB\-\-bare\fR]
-[\fB\-\-no\-heading\fR]
 [\fB\-\-timestamp\fR]
 .so lib/daemon-syn.man
 .so lib/vlog-syn.man
