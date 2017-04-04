@@ -36,8 +36,10 @@ as text strings.
 .
 .IP "\fB\-d \fIformat\fR"
 .IQ "\fB\-\-data=\fIformat\fR"
-Sets the formatting for cells within output tables.  The following
-types of \fIformat\fR are available:
+Sets the formatting for cells within output tables unless the table
+format is set to \fBjson\fR, in which case \fBjson\fR formatting is
+always used when formatting cells.  The following types of \fIformat\fR
+are available:
 .RS
 .IP "\fBstring\fR (default)"
 The simple format described in the \fBDatabase Values\fR
@@ -49,13 +51,11 @@ are omitted around sets, maps, and empty columns, items within sets
 and maps are space-separated, and strings are never quoted.  This
 format may be easier for scripts to parse.
 .IP "\fBjson\fR"
-JSON.
+The RFC 4627 JSON format as described above.
 .RE
 .IP
-The \fBjson\fR output format always outputs cells in JSON format,
-ignoring this option.
 .
-.IP "\fB\-\-no\-heading\fR"
+.IP "\fB\-\-no\-headings\fR"
 This option suppresses the heading row that otherwise appears in the
 first row of table output.
 .
