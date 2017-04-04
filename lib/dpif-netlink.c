@@ -960,6 +960,7 @@ dpif_netlink_port_del__(struct dpif_netlink *dpif, odp_port_t port_no)
                      temp_dpif_port.name);
         };
     }
+    dpif_port_destroy(&temp_dpif_port);
 #endif
     error = dpif_netlink_vport_transact(&vport, NULL, NULL);
 
