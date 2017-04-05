@@ -47,6 +47,7 @@ OVS
    windows
    language-bindings
    testing
+   tracing
 
 OVN
 ---
