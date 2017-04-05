@@ -2850,8 +2850,14 @@ compose_sample_action(struct xlate_ctx *ctx,
         return 0;
     }
 
-    /* No need to generate sample action for 100% sampling rate. */
-    bool is_sample = probability < UINT32_MAX;
+    /* If the slow path meter is configured by the controller,
+     * insert a meter action before the user space action.  */
+    struct ofproto *ofproto = &ctx->xin->ofproto->up;
+    uint32_t meter_id = ofproto->slowpath_meter_id;
+
+    /* When meter action is not required, avoid generate sample action
+     * for 100% sampling rate.  */
+    bool is_sample = probability < UINT32_MAX || meter_id != UINT32_MAX;
     size_t sample_offset, actions_offset;
     if (is_sample) {
         sample_offset = nl_msg_start_nested(ctx->odp_actions,
@@ -2860,6 +2866,10 @@ compose_sample_action(struct xlate_ctx *ctx,
                        probability);
         actions_offset = nl_msg_start_nested(ctx->odp_actions,
                                              OVS_SAMPLE_ATTR_ACTIONS);
+    }
+
+    if (meter_id != UINT32_MAX) {
+        nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_METER, meter_id);
     }
 
     odp_port_t odp_port = ofp_port_to_odp_port(
