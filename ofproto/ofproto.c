@@ -568,6 +568,8 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
         memset(&ofproto->meter_features, 0, sizeof ofproto->meter_features);
     }
     hmap_init(&ofproto->meters);
+    ofproto->slowpath_meter_id = UINT32_MAX;
+    ofproto->controller_meter_id = UINT32_MAX;
 
     /* Set the initial tables version. */
     ofproto_bump_tables_version(ofproto);
@@ -6236,9 +6238,33 @@ ofproto_get_meter(const struct ofproto *ofproto, uint32_t meter_id)
     return NULL;
 }
 
+static uint32_t *
+ofproto_upcall_meter_ptr(struct ofproto *ofproto, uint32_t meter_id)
+{
+    switch(meter_id) {
+    case OFPM13_SLOWPATH:
+        return &ofproto->slowpath_meter_id;
+        break;
+    case OFPM13_CONTROLLER:
+        return &ofproto->controller_meter_id;
+        break;
+    case OFPM13_ALL:
+        OVS_NOT_REACHED();
+    default:
+        return NULL;
+    }
+}
+
 static void
 ofproto_add_meter(struct ofproto *ofproto, struct meter *meter)
 {
+    uint32_t *upcall_meter_ptr = ofproto_upcall_meter_ptr(ofproto, meter->id);
+
+    /* Cache datapath meter IDs of special meters. */
+    if (upcall_meter_ptr) {
+        *upcall_meter_ptr = meter->provider_meter_id.uint32;
+    }
+
     hmap_insert(&ofproto->meters, &meter->node, hash_int(meter->id, 0));
 }
 
@@ -6310,6 +6336,12 @@ static void
 meter_destroy(struct ofproto *ofproto, struct meter *meter)
     OVS_REQUIRES(ofproto_mutex)
 {
+    uint32_t *upcall_meter_ptr;
+    upcall_meter_ptr = ofproto_upcall_meter_ptr(ofproto, meter->id);
+    if (upcall_meter_ptr) {
+        *upcall_meter_ptr = UINT32_MAX;
+    }
+
     if (!ovs_list_is_empty(&meter->rules)) {
         struct rule_collection rules;
         struct rule *rule;
@@ -6442,12 +6474,24 @@ handle_meter_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 
     if (mm.command != OFPMC13_DELETE) {
         /* Fails also when meters are not implemented by the provider. */
-        if (meter_id == 0 || meter_id > OFPM13_MAX) {
+        if (ofproto->meter_features.max_meters == 0) {
             error = OFPERR_OFPMMFC_INVALID_METER;
             goto exit_free_bands;
-        } else if (meter_id > ofproto->meter_features.max_meters) {
-            error = OFPERR_OFPMMFC_OUT_OF_METERS;
+        }
+
+        if (meter_id == 0) {
+            error = OFPERR_OFPMMFC_INVALID_METER;
             goto exit_free_bands;
+        } else if (meter_id > OFPM13_MAX) {
+            switch(meter_id) {
+            case OFPM13_SLOWPATH:
+            case OFPM13_CONTROLLER:
+                break;
+            case OFPM13_ALL:
+            default:
+                error = OFPERR_OFPMMFC_INVALID_METER;
+                goto exit_free_bands;
+            }
         }
         if (mm.meter.n_bands > ofproto->meter_features.max_bands) {
             error = OFPERR_OFPMMFC_OUT_OF_BANDS;

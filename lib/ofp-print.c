@@ -1333,11 +1333,36 @@ ofp_print_meter_band(struct ds *s, uint16_t flags,
 }
 
 static void
+ofp_print_meter_id(struct ds *s, uint32_t meter_id, char seperator)
+{
+    if (meter_id <= OFPM13_MAX) {
+        ds_put_format(s, "meter%c%"PRIu32, seperator, meter_id);
+    } else {
+        const char *name;
+        switch (meter_id) {
+        case OFPM13_SLOWPATH:
+            name = "slowpath";
+            break;
+        case OFPM13_CONTROLLER:
+            name = "controller";
+            break;
+        case OFPM13_ALL:
+            name = "all";
+            break;
+        default:
+            name = "unknown";
+        }
+        ds_put_format(s, "meter%c%s", seperator, name);
+    }
+}
+
+static void
 ofp_print_meter_stats(struct ds *s, const struct ofputil_meter_stats *ms)
 {
     uint16_t i;
 
-    ds_put_format(s, "meter:%"PRIu32" ", ms->meter_id);
+    ofp_print_meter_id(s, ms->meter_id, ':');
+    ds_put_char(s, ' ');
     ds_put_format(s, "flow_count:%"PRIu32" ", ms->flow_count);
     ds_put_format(s, "packet_in_count:%"PRIu64" ", ms->packet_in_count);
     ds_put_format(s, "byte_in_count:%"PRIu64" ", ms->byte_in_count);
@@ -1358,7 +1383,8 @@ ofp_print_meter_config(struct ds *s, const struct ofputil_meter_config *mc)
 {
     uint16_t i;
 
-    ds_put_format(s, "meter=%"PRIu32" ", mc->meter_id);
+    ofp_print_meter_id(s, mc->meter_id, '=');
+    ds_put_char(s, ' ');
 
     ofp_print_meter_flags(s, mc->flags);
 
@@ -1412,8 +1438,9 @@ ofp_print_meter_stats_request(struct ds *s, const struct ofp_header *oh)
     uint32_t meter_id;
 
     ofputil_decode_meter_request(oh, &meter_id);
+    ds_put_char(s, ' ');
 
-    ds_put_format(s, " meter=%"PRIu32, meter_id);
+    ofp_print_meter_id(s, meter_id, '=');
 }
 
 static const char *

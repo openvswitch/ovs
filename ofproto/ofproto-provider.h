@@ -112,6 +112,10 @@ struct ofproto {
     /* Meter table.  */
     struct ofputil_meter_features meter_features;
     struct hmap meters;             /* uint32_t indexed 'struct meter *'.  */
+    uint32_t slowpath_meter_id;     /* Datapath slowpath meter.  UINT32_MAX
+                                       if not defined.  */
+    uint32_t controller_meter_id;   /* Datapath controller meter. UINT32_MAX
+                                       if not defined.  */
 
     /* OpenFlow connections. */
     struct connmgr *connmgr;
