@@ -50,6 +50,7 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 struct deferred_action {
 	struct sk_buff *skb;
 	const struct nlattr *actions;
+	int actions_len;
 
 	/* Store pkt_key clone when creating deferred action. */
 	struct sw_flow_key pkt_key;
@@ -117,8 +118,9 @@ static struct deferred_action *action_fifo_put(struct action_fifo *fifo)
 
 /* Return queue entry if fifo is not full */
 static struct deferred_action *add_deferred_actions(struct sk_buff *skb,
-						    const struct sw_flow_key *key,
-						    const struct nlattr *attr)
+				    const struct sw_flow_key *key,
+				    const struct nlattr *actions,
+				    const int actions_len)
 {
 	struct action_fifo *fifo;
 	struct deferred_action *da;
@@ -127,7 +129,8 @@ static struct deferred_action *add_deferred_actions(struct sk_buff *skb,
 	da = action_fifo_put(fifo);
 	if (da) {
 		da->skb = skb;
-		da->actions = attr;
+		da->actions = actions;
+		da->actions_len = actions_len;
 		da->pkt_key = *key;
 	}
 
@@ -950,7 +953,8 @@ static int sample(struct datapath *dp, struct sk_buff *skb,
 		/* Skip the sample action when out of memory. */
 		return 0;
 
-	if (!add_deferred_actions(skb, key, a)) {
+	if (!add_deferred_actions(skb, key, nla_data(acts_list),
+				  nla_len(acts_list))) {
 		if (net_ratelimit())
 			pr_warn("%s: deferred actions limit reached, dropping sample action\n",
 				ovs_dp_name(dp));
@@ -1107,7 +1111,7 @@ static int execute_recirc(struct datapath *dp, struct sk_buff *skb,
 		return 0;
 	}
 
-	da = add_deferred_actions(skb, key, NULL);
+	da = add_deferred_actions(skb, key, NULL, 0);
 	if (da) {
 		da->pkt_key.recirc_id = nla_get_u32(a);
 	} else {
@@ -1262,10 +1266,10 @@ static void process_deferred_actions(struct datapath *dp)
 		struct sk_buff *skb = da->skb;
 		struct sw_flow_key *key = &da->pkt_key;
 		const struct nlattr *actions = da->actions;
+		int actions_len = da->actions_len;
 
 		if (actions)
-			do_execute_actions(dp, skb, key, actions,
-					   nla_len(actions));
+			do_execute_actions(dp, skb, key, actions, actions_len);
 		else
 			ovs_dp_process_packet(skb, key);
 	} while (!action_fifo_is_empty(fifo));
