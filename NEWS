@@ -16,6 +16,8 @@ Post-v2.7.0
    - OVN:
      * Make the DHCPv4 router setting optional.
      * Gratuitous ARP for NAT addresses on a distributed logical router.
+     * Allow ovn-controller SSL configuration to be obtained from vswitchd
+       database.
    - Add the command 'ovs-appctl stp/show' (see ovs-vswitchd(8)).
 
 v2.7.0 - 21 Feb 2017

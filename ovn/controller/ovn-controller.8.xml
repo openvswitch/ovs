@@ -184,6 +184,17 @@
         <ref table="Chassis" db="OVN_Southbound"/> table in the OVN_Southbound
         database.
       </dd>
+
+      <dt><code>private_key</code>, <code>certificate</code>,
+          <code>ca_cert</code>, and <code>bootstrap_ca_cert</code>
+          from <ref table="SSL" db="Open_vSwitch"/> table</dt>
+      <dd>
+        These values provide the SSL configuration used for connecting
+        to the OVN southbound database server when an SSL connection type
+        is configured via <code>external_ids:ovn-remote</code>.  Note that
+        this SSL configuration can also be provided via command-line options,
+        the configuration in the database takes precedence if both are present.
+      </dd>
     </dl>
 
     <h1>Open vSwitch Database Usage</h1>

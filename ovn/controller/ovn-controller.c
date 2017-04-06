@@ -283,6 +283,17 @@ addr_sets_init(struct controller_ctx *ctx, struct shash *addr_sets)
     }
 }
 
+static void
+update_ssl_config(const struct ovsdb_idl *ovs_idl)
+{
+    const struct ovsrec_ssl *ssl = ovsrec_ssl_first(ovs_idl);
+
+    if (ssl) {
+        stream_ssl_set_key_and_cert(ssl->private_key, ssl->certificate);
+        stream_ssl_set_ca_cert_file(ssl->ca_cert, ssl->bootstrap_ca_cert);
+    }
+}
+
 /* Retrieves the OVN Southbound remote location from the
  * "external-ids:ovn-remote" key in 'ovs_idl' and returns a copy of it. */
 static char *
@@ -296,6 +307,7 @@ get_ovnsb_remote(struct ovsdb_idl *ovs_idl)
         if (cfg) {
             const char *remote = smap_get(&cfg->external_ids, "ovn-remote");
             if (remote) {
+                update_ssl_config(ovs_idl);
                 return xstrdup(remote);
             }
         }
@@ -529,6 +541,11 @@ main(int argc, char *argv[])
     ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_bridge_col_fail_mode);
     ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_bridge_col_other_config);
     ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_bridge_col_external_ids);
+    ovsdb_idl_add_table(ovs_idl_loop.idl, &ovsrec_table_ssl);
+    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_ssl_col_bootstrap_ca_cert);
+    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_ssl_col_ca_cert);
+    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_ssl_col_certificate);
+    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_ssl_col_private_key);
     chassis_register_ovs_idl(ovs_idl_loop.idl);
     encaps_register_ovs_idl(ovs_idl_loop.idl);
     binding_register_ovs_idl(ovs_idl_loop.idl);
@@ -578,6 +595,8 @@ main(int argc, char *argv[])
         };
 
         update_probe_interval(&ctx);
+
+        update_ssl_config(ctx.ovs_idl);
 
         /* Contains "struct local_datapath" nodes. */
         struct hmap local_datapaths = HMAP_INITIALIZER(&local_datapaths);
