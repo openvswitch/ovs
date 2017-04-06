@@ -916,7 +916,7 @@ static struct rtable *vxlan_get_route(struct vxlan_dev *vxlan,
 				      struct dst_cache *dst_cache,
 				      const struct ip_tunnel_info *info)
 {
-	bool use_cache = ip_tunnel_dst_cache_usable(skb, info);
+	bool use_cache = (dst_cache && ip_tunnel_dst_cache_usable(skb, info));
 	struct rtable *rt = NULL;
 	struct flowi4 fl4;
 
@@ -955,7 +955,7 @@ static struct dst_entry *vxlan6_get_route(struct vxlan_dev *vxlan,
 					  const struct ip_tunnel_info *info)
 {
 	struct vxlan_sock *sock6 = rcu_dereference(vxlan->vn6_sock);
-	bool use_cache = ip_tunnel_dst_cache_usable(skb, info);
+	bool use_cache = (dst_cache && ip_tunnel_dst_cache_usable(skb, info));
 	struct dst_entry *ndst;
 	struct flowi6 fl6;
 	int err;
