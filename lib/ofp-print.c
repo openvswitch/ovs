@@ -436,6 +436,11 @@ ofp_print_phy_port(struct ds *string, const struct ofputil_phy_port *port)
     ds_put_format(string, "(%s): addr:"ETH_ADDR_FMT"\n",
                   name, ETH_ADDR_ARGS(port->hw_addr));
 
+    if (!eth_addr64_is_zero(port->hw_addr64)) {
+        ds_put_format(string, "     addr64: "ETH_ADDR64_FMT"\n",
+                      ETH_ADDR64_ARGS(port->hw_addr64));
+    }
+
     ds_put_cstr(string, "     config:     ");
     ofp_print_port_config(string, port->config);
 
@@ -1011,6 +1016,10 @@ ofp_print_port_mod(struct ds *string, const struct ofp_header *oh)
     ofputil_format_port(pm.port_no, string);
     ds_put_format(string, ": addr:"ETH_ADDR_FMT"\n",
                   ETH_ADDR_ARGS(pm.hw_addr));
+    if (!eth_addr64_is_zero(pm.hw_addr64)) {
+        ds_put_format(string, "     addr64: "ETH_ADDR64_FMT"\n",
+                      ETH_ADDR64_ARGS(pm.hw_addr64));
+    }
 
     ds_put_cstr(string, "     config: ");
     ofp_print_port_config(string, pm.config);

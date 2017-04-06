@@ -2346,6 +2346,7 @@ ofport_open(struct ofproto *ofproto,
     }
     pp->port_no = ofproto_port->ofp_port;
     netdev_get_etheraddr(netdev, &pp->hw_addr);
+    pp->hw_addr64 = eth_addr64_zero;
     ovs_strlcpy(pp->name, ofproto_port->name, sizeof pp->name);
     netdev_get_flags(netdev, &flags);
     pp->config = flags & NETDEV_UP ? 0 : OFPUTIL_PC_PORT_DOWN;
@@ -2366,6 +2367,7 @@ ofport_equal(const struct ofputil_phy_port *a,
              const struct ofputil_phy_port *b)
 {
     return (eth_addr_equals(a->hw_addr, b->hw_addr)
+            && eth_addr64_equals(a->hw_addr64, b->hw_addr64)
             && a->state == b->state
             && !((a->config ^ b->config) & OFPUTIL_PC_PORT_DOWN)
             && a->curr == b->curr
@@ -2460,6 +2462,7 @@ static void
 ofport_modified(struct ofport *port, struct ofputil_phy_port *pp)
 {
     port->pp.hw_addr = pp->hw_addr;
+    port->pp.hw_addr64 = pp->hw_addr64;
     port->pp.config = ((port->pp.config & ~OFPUTIL_PC_PORT_DOWN)
                         | (pp->config & OFPUTIL_PC_PORT_DOWN));
     port->pp.state = ((port->pp.state & ~OFPUTIL_PS_LINK_DOWN)
@@ -3630,7 +3633,8 @@ port_mod_start(struct ofconn *ofconn, struct ofputil_port_mod *pm,
     if (!*port) {
         return OFPERR_OFPPMFC_BAD_PORT;
     }
-    if (!eth_addr_equals((*port)->pp.hw_addr, pm->hw_addr)) {
+    if (!eth_addr_equals((*port)->pp.hw_addr, pm->hw_addr) ||
+        !eth_addr64_equals((*port)->pp.hw_addr64, pm->hw_addr64)) {
         return OFPERR_OFPPMFC_BAD_HW_ADDR;
     }
     return 0;

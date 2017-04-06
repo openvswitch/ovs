@@ -45,7 +45,7 @@ ovs_be32 ofputil_port_to_ofp11(ofp_port_t ofp10_port);
 
 bool ofputil_port_from_string(const char *, ofp_port_t *portp);
 void ofputil_format_port(ofp_port_t port, struct ds *);
-void ofputil_port_to_string(ofp_port_t, char namebuf[OFP_MAX_PORT_NAME_LEN],
+void ofputil_port_to_string(ofp_port_t, char namebuf[OFP10_MAX_PORT_NAME_LEN],
                             size_t bufsize);
 
 /* Group numbers. */
@@ -598,11 +598,19 @@ enum ofputil_port_state {
     OFPUTIL_PS_STP_MASK    = 3 << 8  /* Bit mask for OFPPS10_STP_* values. */
 };
 
-/* Abstract ofp10_phy_port or ofp11_port. */
+/* Abstract ofp10_phy_port, ofp11_port, ofp14_port, or ofp16_port. */
 struct ofputil_phy_port {
     ofp_port_t port_no;
+
+    /* Hardware addresses.
+     *
+     * Most hardware has a normal 48-bit Ethernet address, in hw_addr.
+     * Some hardware might have a 64-bit address in hw_addr64.
+     * All-bits-0 indicates that a given address is not present. */
     struct eth_addr hw_addr;
-    char name[OFP_MAX_PORT_NAME_LEN];
+    struct eth_addr64 hw_addr64;
+
+    char name[OFP16_MAX_PORT_NAME_LEN]; /* 64 bytes in OF1.6+, 16 otherwise. */
     enum ofputil_port_config config;
     enum ofputil_port_state state;
 
@@ -682,6 +690,7 @@ struct ofpbuf *ofputil_encode_port_status(const struct ofputil_port_status *,
 struct ofputil_port_mod {
     ofp_port_t port_no;
     struct eth_addr hw_addr;
+    struct eth_addr64 hw_addr64;
     enum ofputil_port_config config;
     enum ofputil_port_config mask;
     enum netdev_features advertise;

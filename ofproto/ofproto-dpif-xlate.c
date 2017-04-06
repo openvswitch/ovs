@@ -4597,7 +4597,7 @@ xlate_output_trunc_action(struct xlate_ctx *ctx,
 {
     bool support_trunc = ctx->xbridge->support.trunc;
     struct ovs_action_trunc *trunc;
-    char name[OFP_MAX_PORT_NAME_LEN];
+    char name[OFP10_MAX_PORT_NAME_LEN];
 
     switch (port) {
     case OFPP_TABLE:

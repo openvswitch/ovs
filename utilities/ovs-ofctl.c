@@ -2162,6 +2162,7 @@ ofctl_mod_port(struct ovs_cmdl_context *ctx)
 
     pm.port_no = pp.port_no;
     pm.hw_addr = pp.hw_addr;
+    pm.hw_addr64 = pp.hw_addr64;
     pm.config = 0;
     pm.mask = 0;
     pm.advertise = 0;

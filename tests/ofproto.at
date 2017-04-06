@@ -179,6 +179,40 @@ OFPST_PORT_DESC reply (OF1.5):
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto - port-desc stats (OpenFlow 1.6)])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2 3
+AT_CHECK([ovs-ofctl -F OXM-OpenFlow16 -O OpenFlow16 -vwarn dump-ports-desc br0], [0], [stdout])
+AT_CHECK([strip_xids < stdout | sed 's/00:0./00:0x/'], [0], [dnl
+OFPST_PORT_DESC reply (OF1.6):
+ 1(p1): addr:aa:55:aa:55:00:0x
+     config:     PORT_DOWN
+     state:      LINK_DOWN
+     speed: 0 Mbps now, 0 Mbps max
+ 2(p2): addr:aa:55:aa:55:00:0x
+     config:     PORT_DOWN
+     state:      LINK_DOWN
+     speed: 0 Mbps now, 0 Mbps max
+ 3(p3): addr:aa:55:aa:55:00:0x
+     config:     PORT_DOWN
+     state:      LINK_DOWN
+     speed: 0 Mbps now, 0 Mbps max
+ LOCAL(br0): addr:aa:55:aa:55:00:0x
+     config:     PORT_DOWN
+     state:      LINK_DOWN
+     speed: 0 Mbps now, 0 Mbps max
+])
+AT_CHECK([ovs-ofctl -F OXM-OpenFlow16 -O OpenFlow16 -vwarn dump-ports-desc br0 2], [0], [stdout])
+AT_CHECK([strip_xids < stdout | sed 's/00:0./00:0x/'], [0], [dnl
+OFPST_PORT_DESC reply (OF1.6):
+ 2(p2): addr:aa:55:aa:55:00:0x
+     config:     PORT_DOWN
+     state:      LINK_DOWN
+     speed: 0 Mbps now, 0 Mbps max
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 dnl CHECK_QUEUE_STATS(label, option, format)
 m4_define([CHECK_QUEUE_STATS], [
 AT_SETUP([ofproto - queue stats - (OpenFlow $1)])
@@ -1249,6 +1283,38 @@ OFPST_PORT_DESC reply (OF1.4):
      state:      $state
      speed: 0 Mbps now, 0 Mbps max
 OFPT_GET_CONFIG_REPLY (OF1.4): frags=normal miss_send_len=0
+])
+done
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - mod-port (OpenFlow 1.6)])
+OVS_VSWITCHD_START
+for command_config_state in \
+    'up 0 0' \
+    'down PORT_DOWN LINK_DOWN' \
+    'no-receive PORT_DOWN,NO_RECV LINK_DOWN' \
+    'no-forward PORT_DOWN,NO_RECV,NO_FWD LINK_DOWN' \
+    'no-packet-in PORT_DOWN,NO_RECV,NO_FWD,NO_PACKET_IN LINK_DOWN' \
+    'forward PORT_DOWN,NO_RECV,NO_PACKET_IN LINK_DOWN' \
+    'packet-in PORT_DOWN,NO_RECV LINK_DOWN' \
+    'up NO_RECV 0' \
+    'receive 0 0'
+do
+    set $command_config_state
+    command=$[1] config=`echo $[2] | sed 's/,/ /g'` state=$[3]
+    AT_CHECK([ovs-ofctl -O OpenFlow16 -vwarn mod-port br0 br0 $command])
+    AT_CHECK([ovs-ofctl -O OpenFlow16 -vwarn show br0], [0], [stdout])
+    AT_CHECK_UNQUOTED([strip_xids < stdout], [0], [dnl
+OFPT_FEATURES_REPLY (OF1.6): dpid:fedcba9876543210
+n_tables:254, n_buffers:0
+capabilities: FLOW_STATS TABLE_STATS PORT_STATS GROUP_STATS QUEUE_STATS BUNDLES
+OFPST_PORT_DESC reply (OF1.6):
+ LOCAL(br0): addr:aa:55:aa:55:00:00
+     config:     $config
+     state:      $state
+     speed: 0 Mbps now, 0 Mbps max
+OFPT_GET_CONFIG_REPLY (OF1.6): frags=normal miss_send_len=0
 ])
 done
 OVS_VSWITCHD_STOP

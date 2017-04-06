@@ -111,7 +111,6 @@ enum ofp_version {
 #define INTEL_VENDOR_ID 0x0000AA01 /* Intel */
 
 #define OFP_MAX_TABLE_NAME_LEN 32
-#define OFP_MAX_PORT_NAME_LEN  16
 
 #define OFP_OLD_PORT  6633
 #define OFP_PORT  6653

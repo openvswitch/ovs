@@ -4845,7 +4845,7 @@ ofproto_unixctl_fdb_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
     ovs_rwlock_rdlock(&ofproto->ml->rwlock);
     LIST_FOR_EACH (e, lru_node, &ofproto->ml->lrus) {
         struct ofbundle *bundle = mac_entry_get_port(ofproto->ml, e);
-        char name[OFP_MAX_PORT_NAME_LEN];
+        char name[OFP10_MAX_PORT_NAME_LEN];
 
         ofputil_port_to_string(ofbundle_get_a_port(bundle)->up.ofp_port,
                                name, sizeof name);
@@ -4886,7 +4886,7 @@ ofproto_unixctl_mcast_snooping_show(struct unixctl_conn *conn,
     ovs_rwlock_rdlock(&ofproto->ms->rwlock);
     LIST_FOR_EACH (grp, group_node, &ofproto->ms->group_lru) {
         LIST_FOR_EACH(b, bundle_node, &grp->bundle_lru) {
-            char name[OFP_MAX_PORT_NAME_LEN];
+            char name[OFP10_MAX_PORT_NAME_LEN];
 
             bundle = b->port;
             ofputil_port_to_string(ofbundle_get_a_port(bundle)->up.ofp_port,
@@ -4900,7 +4900,7 @@ ofproto_unixctl_mcast_snooping_show(struct unixctl_conn *conn,
 
     /* ports connected to multicast routers */
     LIST_FOR_EACH(mrouter, mrouter_node, &ofproto->ms->mrouter_lru) {
-        char name[OFP_MAX_PORT_NAME_LEN];
+        char name[OFP10_MAX_PORT_NAME_LEN];
 
         bundle = mrouter->port;
         ofputil_port_to_string(ofbundle_get_a_port(bundle)->up.ofp_port,

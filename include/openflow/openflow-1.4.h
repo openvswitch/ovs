@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2014 The Board of Trustees of The Leland Stanford
+/* Copyright (c) 2008, 2014, 2017 The Board of Trustees of The Leland Stanford
 * Junior University
 * Copyright (c) 2011, 2012 Open Networking Foundation
 *
@@ -80,7 +80,7 @@ struct ofp14_port {
     uint8_t pad[2];
     struct eth_addr hw_addr;
     uint8_t pad2[2];                  /* Align to 64 bits. */
-    char name[OFP_MAX_PORT_NAME_LEN]; /* Null-terminated */
+    char name[OFP10_MAX_PORT_NAME_LEN]; /* Null-terminated */
 
     ovs_be32 config;        /* Bitmap of OFPPC_* flags. */
     ovs_be32 state;         /* Bitmap of OFPPS_* flags. */

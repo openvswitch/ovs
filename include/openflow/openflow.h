@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,5 +23,6 @@
 #include <openflow/openflow-1.3.h>
 #include <openflow/openflow-1.4.h>
 #include <openflow/openflow-1.5.h>
+#include <openflow/openflow-1.6.h>
 
 #endif /* openflow/openflow.h */
