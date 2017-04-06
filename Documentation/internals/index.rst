@@ -43,3 +43,4 @@ itself and how they might involved.
    committer-grant-revocation
    authors
    maintainers
+   documentation

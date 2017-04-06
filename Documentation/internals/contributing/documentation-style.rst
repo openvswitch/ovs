@@ -32,6 +32,12 @@ Open vSwitch. Documentation includes any documents found in ``Documentation``
 along with any ``README``, ``MAINTAINERS``, or generally ``rst`` suffixed
 documents found in the project tree.
 
+.. note::
+
+   This guide only applies to documentation for Open vSwitch v2.7. or greater.
+   Previous versions of Open vSwitch used a combination of Markdown and raw
+   plain text, and guidelines for these are not detailed here.
+
 reStructuredText vs. Sphinx
 ---------------------------
 
