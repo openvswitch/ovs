@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013, 2014, 2017 Nicira, Inc.
  * Copyright (c) 2016 Red Hat, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -276,7 +276,7 @@ tunnel_check_status_change__(struct netdev_vport *netdev)
 
     if (strcmp(netdev->egress_iface, iface)
         || netdev->carrier_status != status) {
-        ovs_strlcpy(netdev->egress_iface, iface, IFNAMSIZ);
+        ovs_strlcpy_arrays(netdev->egress_iface, iface);
         netdev->carrier_status = status;
 
         return true;

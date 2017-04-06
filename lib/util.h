@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -134,6 +134,13 @@ void free_cacheline(void *);
 
 void ovs_strlcpy(char *dst, const char *src, size_t size);
 void ovs_strzcpy(char *dst, const char *src, size_t size);
+
+/* Copy string SRC to DST, but no more bytes than the shorter of DST or SRC.
+ * DST and SRC must both be char arrays, not pointers, and with GNU C, this
+ * raises a compiler error if either DST or SRC is a pointer instead of an
+ * array. */
+#define ovs_strlcpy_arrays(DST, SRC) \
+    ovs_strlcpy(DST, SRC, MIN(ARRAY_SIZE(DST), ARRAY_SIZE(SRC)))
 
 OVS_NO_RETURN void ovs_abort(int err_no, const char *format, ...)
     OVS_PRINTF_FORMAT(2, 3);

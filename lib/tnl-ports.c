@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2014, 2015, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -492,7 +492,7 @@ tnl_port_map_run(void)
         }
 
         /* Address changed. */
-        ovs_strlcpy(dev_name, ip_dev->dev_name, sizeof dev_name);
+        ovs_strlcpy_arrays(dev_name, ip_dev->dev_name);
         delete_ipdev(ip_dev);
         insert_ipdev(dev_name);
     }

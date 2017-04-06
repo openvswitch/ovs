@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2016 Red Hat, Inc.
+/* Copyright (c) 2015, 2016, 2017 Red Hat, Inc.
  * Copyright (c) 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -898,7 +898,7 @@ pinctrl_handle_put_mac_binding(const struct flow *md,
         hmap_insert(&put_mac_bindings, &pmb->hmap_node, hash);
         pmb->dp_key = dp_key;
         pmb->port_key = port_key;
-        ovs_strlcpy(pmb->ip_s, ip_s, sizeof pmb->ip_s);
+        ovs_strlcpy_arrays(pmb->ip_s, ip_s);
     }
     pmb->timestamp = time_msec();
     pmb->mac = headers->dl_src;

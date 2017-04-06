@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 Nicira, Inc.
+ * Copyright (c) 2014, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -207,8 +207,7 @@ ovsrcu_synchronize(void)
         ovs_mutex_lock(&ovsrcu_threads_mutex);
         LIST_FOR_EACH (perthread, list_node, &ovsrcu_threads) {
             if (perthread->seqno <= target_seqno) {
-                ovs_strlcpy(stalled_thread, perthread->name,
-                            sizeof stalled_thread);
+                ovs_strlcpy_arrays(stalled_thread, perthread->name);
                 done = false;
                 break;
             }

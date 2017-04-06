@@ -4325,7 +4325,7 @@ ofputil_decode_ofp10_phy_port(struct ofputil_phy_port *pp,
 {
     pp->port_no = u16_to_ofp(ntohs(opp->port_no));
     pp->hw_addr = opp->hw_addr;
-    ovs_strlcpy(pp->name, opp->name, OFP_MAX_PORT_NAME_LEN);
+    ovs_strlcpy_arrays(pp->name, opp->name);
 
     pp->config = ntohl(opp->config) & OFPPC10_ALL;
     pp->state = ntohl(opp->state) & OFPPS10_ALL;
@@ -4352,7 +4352,7 @@ ofputil_decode_ofp11_port(struct ofputil_phy_port *pp,
         return error;
     }
     pp->hw_addr = op->hw_addr;
-    ovs_strlcpy(pp->name, op->name, OFP_MAX_PORT_NAME_LEN);
+    ovs_strlcpy_arrays(pp->name, op->name);
 
     pp->config = ntohl(op->config) & OFPPC11_ALL;
     pp->state = ntohl(op->state) & OFPPS11_ALL;
@@ -4451,7 +4451,7 @@ ofputil_encode_ofp10_phy_port(const struct ofputil_phy_port *pp,
 
     opp->port_no = htons(ofp_to_u16(pp->port_no));
     opp->hw_addr = pp->hw_addr;
-    ovs_strlcpy(opp->name, pp->name, OFP_MAX_PORT_NAME_LEN);
+    ovs_strlcpy_arrays(opp->name, pp->name);
 
     opp->config = htonl(pp->config & OFPPC10_ALL);
     opp->state = htonl(pp->state & OFPPS10_ALL);
@@ -4470,7 +4470,7 @@ ofputil_encode_ofp11_port(const struct ofputil_phy_port *pp,
 
     op->port_no = ofputil_port_to_ofp11(pp->port_no);
     op->hw_addr = pp->hw_addr;
-    ovs_strlcpy(op->name, pp->name, OFP_MAX_PORT_NAME_LEN);
+    ovs_strlcpy_arrays(op->name, pp->name);
 
     op->config = htonl(pp->config & OFPPC11_ALL);
     op->state = htonl(pp->state & OFPPS11_ALL);
@@ -5269,7 +5269,7 @@ ofputil_decode_table_features(struct ofpbuf *msg,
         return OFPERR_OFPTFFC_BAD_TABLE;
     }
 
-    ovs_strlcpy(tf->name, otf->name, OFP_MAX_TABLE_NAME_LEN);
+    ovs_strlcpy_arrays(tf->name, otf->name);
     tf->metadata_match = otf->metadata_match;
     tf->metadata_write = otf->metadata_write;
     tf->miss_config = OFPUTIL_TABLE_MISS_DEFAULT;
@@ -5480,7 +5480,7 @@ ofputil_append_table_features_reply(const struct ofputil_table_features *tf,
 
     otf = ofpbuf_put_zeros(reply, sizeof *otf);
     otf->table_id = tf->table_id;
-    ovs_strlcpy(otf->name, tf->name, sizeof otf->name);
+    ovs_strlcpy_arrays(otf->name, tf->name);
     otf->metadata_match = tf->metadata_match;
     otf->metadata_write = tf->metadata_write;
     if (version >= OFP14_VERSION) {
@@ -6257,7 +6257,7 @@ ofputil_put_ofp10_table_stats(const struct ofputil_table_stats *stats,
 
     out = ofpbuf_put_zeros(buf, sizeof *out);
     out->table_id = features->table_id;
-    ovs_strlcpy(out->name, features->name, sizeof out->name);
+    ovs_strlcpy_arrays(out->name, features->name);
     out->wildcards = mf_bitmap_to_of10(&wc);
     out->max_entries = htonl(features->max_entries);
     out->active_count = htonl(stats->active_count);
@@ -6328,7 +6328,7 @@ ofputil_put_ofp11_table_stats(const struct ofputil_table_stats *stats,
 
     out = ofpbuf_put_zeros(buf, sizeof *out);
     out->table_id = features->table_id;
-    ovs_strlcpy(out->name, features->name, sizeof out->name);
+    ovs_strlcpy_arrays(out->name, features->name);
     out->wildcards = mf_bitmap_to_of11(&wc);
     out->match = mf_bitmap_to_of11(&features->match);
     out->instructions = ovsinst_bitmap_to_openflow(
@@ -6353,7 +6353,7 @@ ofputil_put_ofp12_table_stats(const struct ofputil_table_stats *stats,
 
     out = ofpbuf_put_zeros(buf, sizeof *out);
     out->table_id = features->table_id;
-    ovs_strlcpy(out->name, features->name, sizeof out->name);
+    ovs_strlcpy_arrays(out->name, features->name);
     out->match = oxm_bitmap_from_mf_bitmap(&features->match, OFP12_VERSION);
     out->wildcards = oxm_bitmap_from_mf_bitmap(&features->wildcard,
                                              OFP12_VERSION);
@@ -6445,7 +6445,7 @@ ofputil_decode_ofp10_table_stats(struct ofpbuf *msg,
     }
 
     features->table_id = ots->table_id;
-    ovs_strlcpy(features->name, ots->name, sizeof features->name);
+    ovs_strlcpy_arrays(features->name, ots->name);
     features->max_entries = ntohl(ots->max_entries);
     features->match = features->wildcard = mf_bitmap_from_of10(ots->wildcards);
 
@@ -6470,7 +6470,7 @@ ofputil_decode_ofp11_table_stats(struct ofpbuf *msg,
     }
 
     features->table_id = ots->table_id;
-    ovs_strlcpy(features->name, ots->name, sizeof features->name);
+    ovs_strlcpy_arrays(features->name, ots->name);
     features->max_entries = ntohl(ots->max_entries);
     features->nonmiss.instructions = ovsinst_bitmap_from_openflow(
         ots->instructions, OFP11_VERSION);
@@ -6506,7 +6506,7 @@ ofputil_decode_ofp12_table_stats(struct ofpbuf *msg,
     }
 
     features->table_id = ots->table_id;
-    ovs_strlcpy(features->name, ots->name, sizeof features->name);
+    ovs_strlcpy_arrays(features->name, ots->name);
     features->metadata_match = ots->metadata_match;
     features->metadata_write = ots->metadata_write;
     features->miss_config = ofputil_decode_table_miss(ots->config,
