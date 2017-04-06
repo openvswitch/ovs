@@ -65,4 +65,9 @@
 )
 #endif
 
+/* U32_MAX was introduced in include/linux/kernel.h after version 3.14. */
+#ifndef U32_MAX
+#define U32_MAX		((u32)~0U)
+#endif
+
 #endif /* linux/kernel.h */
