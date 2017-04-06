@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2013, 2014, 2016 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2013, 2014, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -149,6 +149,14 @@ struct eth_addr {
     union {
         uint8_t ea[6];
         ovs_be16 be16[3];
+    };
+};
+
+/* Similar to struct eth_addr, for EUI-64 addresses. */
+struct eth_addr64 {
+    union {
+        uint8_t ea64[8];
+        ovs_be16 be16[4];
     };
 };
 
