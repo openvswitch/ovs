@@ -5257,6 +5257,7 @@ disable_datapath_clone(struct unixctl_conn *conn OVS_UNUSED,
     udpif_flush(ofproto->backer->udpif);
     ds_put_format(&ds, "Datapath clone action disabled for bridge %s", br);
     unixctl_command_reply(conn, ds_cstr(&ds));
+    ds_destroy(&ds);
 }
 
 static void
