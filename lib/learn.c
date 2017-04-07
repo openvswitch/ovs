@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013, 2014, 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -231,10 +231,12 @@ learn_parse_spec(const char *orig, char *name, char *value,
 {
     /* Parse destination and check prerequisites. */
     struct mf_subfield dst;
-    char *error;
 
-    error = mf_parse_subfield(&dst, name);
-    if (!error) {
+    char *error = mf_parse_subfield(&dst, name);
+    bool parse_error = error != NULL;
+    free(error);
+
+    if (!parse_error) {
         if (!mf_nxm_header(dst.field->id)) {
             return xasprintf("%s: experimenter OXM field '%s' not supported",
                              orig, name);
