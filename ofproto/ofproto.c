@@ -7873,6 +7873,8 @@ handle_tlv_table_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         if (!error) {
             ovsrcu_set(&ofproto->metadata_tab, new_tab);
             tun_metadata_postpone_free(old_tab);
+        } else {
+            tun_metadata_free(new_tab);
         }
     }
 
