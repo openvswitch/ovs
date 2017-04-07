@@ -1316,20 +1316,14 @@ consider_nat_address(const char *nat_address,
     struct lport_addresses *laddrs = xmalloc(sizeof *laddrs);
     char *lport = NULL;
     if (!extract_addresses_with_port(nat_address, laddrs, &lport)
-        || (!lport && !strcmp(pb->type, "patch"))) {
+        || (!lport && !strcmp(pb->type, "patch"))
+        || (lport && !pinctrl_is_chassis_resident(lports, chassis, lport))) {
+        destroy_lport_addresses(laddrs);
         free(laddrs);
-        if (lport) {
-            free(lport);
-        }
-        return;
-    } else if (lport) {
-        if (!pinctrl_is_chassis_resident(lports, chassis, lport)) {
-            free(laddrs);
-            free(lport);
-            return;
-        }
         free(lport);
+        return;
     }
+    free(lport);
 
     int i;
     for (i = 0; i < laddrs->n_ipv4_addrs; i++) {
