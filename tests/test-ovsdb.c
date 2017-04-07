@@ -2529,6 +2529,7 @@ do_idl_partial_update_map_column(struct ovs_cmdl_context *ctx)
     printf("%03d: After trying to delete a deleted element\n", step++);
     dump_simple2(idl, myRow, step++);
 
+    ovsdb_idl_destroy(idl);
     printf("%03d: End test\n", step);
     return;
 }
@@ -2648,6 +2649,7 @@ do_idl_partial_update_set_column(struct ovs_cmdl_context *ctx)
     ovsdb_idl_get_initial_snapshot(idl);
     printf("%03d: After add to other table + set of strong ref\n", step++);
     dump_simple3(idl, myRow, step++);
+    ovsdb_idl_destroy(idl);
     printf("%03d: End test\n", step);
     return;
 }
