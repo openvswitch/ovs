@@ -327,6 +327,7 @@ ovsdb_idl_destroy(struct ovsdb_idl *idl)
 
         for (i = 0; i < idl->class->n_tables; i++) {
             struct ovsdb_idl_table *table = &idl->tables[i];
+            ovsdb_idl_condition_destroy(&table->condition);
             shash_destroy(&table->columns);
             hmap_destroy(&table->rows);
             free(table->modes);
