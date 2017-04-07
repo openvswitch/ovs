@@ -2411,7 +2411,7 @@ nbctl_lr_nat_list(struct ctl_context *ctx)
     struct smap lr_nats = SMAP_INITIALIZER(&lr_nats);
     for (size_t i = 0; i < lr->n_nat; i++) {
         const struct nbrec_nat *nat = lr->nat[i];
-        const char *key = xasprintf("%-17.13s%s", nat->type, nat->external_ip);
+        char *key = xasprintf("%-17.13s%s", nat->type, nat->external_ip);
         if (nat->external_mac && nat->logical_port) {
             smap_add_format(&lr_nats, key, "%-22.18s%-21.17s%s",
                             nat->logical_ip, nat->external_mac,
@@ -2419,6 +2419,7 @@ nbctl_lr_nat_list(struct ctl_context *ctx)
         } else {
             smap_add_format(&lr_nats, key, "%s", nat->logical_ip);
         }
+        free(key);
     }
 
     const struct smap_node **nodes = smap_sort(&lr_nats);
