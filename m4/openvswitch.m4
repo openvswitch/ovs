@@ -357,7 +357,7 @@ else:
    AM_CONDITIONAL([HAVE_PYTHON], [test "$HAVE_PYTHON" = yes])
 
    AC_MSG_CHECKING([whether $PYTHON has six library])
-   if ! $PYTHON -c 'import six ; six.moves.range' >AS_MESSAGE_LOG_FD 2>&1; then
+   if ! $PYTHON -c 'import six ; six.moves.range' >&AS_MESSAGE_LOG_FD 2>&1; then
      AC_MSG_ERROR([Missing Python six library or version too old.])
    fi
    AC_MSG_RESULT([yes])])
