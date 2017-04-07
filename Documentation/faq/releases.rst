@@ -163,13 +163,13 @@ Q: What DPDK version does each Open vSwitch release work with?
     2.7.x        16.11.1
     ============ =======
 
-Q: I get an error like this when I configure Open vSwitch::
+Q: I get an error like this when I configure Open vSwitch:
 
-    configure: error: Linux kernel in <dir> is version <x>, but
-    version newer than <y> is not supported (please refer to the
-    FAQ for advice)
+        configure: error: Linux kernel in <dir> is version <x>, but
+        version newer than <y> is not supported (please refer to the
+        FAQ for advice)
 
-What should I do?
+    What should I do?
 
     A: You have the following options:
 
