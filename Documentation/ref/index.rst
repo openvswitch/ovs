@@ -39,6 +39,7 @@ time:
 .. toctree::
    :maxdepth: 3
 
+   ovs-test.8
    ovs-vlan-test.8
 
 The remainder are still in roff format can be found below:
