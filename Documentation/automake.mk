@@ -102,9 +102,7 @@ SPHINXSRCDIR = $(srcdir)/Documentation
 SPHINXBUILDDIR = $(builddir)/Documentation/_build
 
 # Internal variables.
-PAPEROPT_a4 = -D latex_paper_size=a4
-PAPEROPT_letter = -D latex_paper_size=letter
-ALLSPHINXOPTS = -W -n -d $(SPHINXBUILDDIR)/doctrees $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) $(SPHINXSRCDIR)
+ALLSPHINXOPTS = -W -n -d $(SPHINXBUILDDIR)/doctrees $(SPHINXOPTS) $(SPHINXSRCDIR)
 
 sphinx_verbose = $(sphinx_verbose_@AM_V@)
 sphinx_verbose_ = $(sphinx_verbose_@AM_DEFAULT_V@)
