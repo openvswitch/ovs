@@ -244,16 +244,6 @@ utilities/ovs-vlan-bug-workaround.8.in:
 lib/common.man:
 utilities/ovs-vlan-bugs.man:
 
-utilities/ovs-vlan-test.8: \
-	utilities/ovs-vlan-test.8.in \
-	lib/common-syn.man \
-	lib/common.man \
-	utilities/ovs-vlan-bugs.man
-utilities/ovs-vlan-test.8.in:
-lib/common-syn.man:
-lib/common.man:
-utilities/ovs-vlan-bugs.man:
-
 utilities/ovs-vsctl.8: \
 	utilities/ovs-vsctl.8.in \
 	lib/common.man \

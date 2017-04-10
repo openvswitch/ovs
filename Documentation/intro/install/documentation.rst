@@ -74,11 +74,11 @@ Building
 Once Sphinx installed, the documentation can be built using the provided
 Makefile targets::
 
-    $ make htmldocs-check
+    $ make docs-check
 
 .. important::
 
-   The ``htmldocs-check`` target will fail if there are any syntax errors.
+   The ``docs-check`` target will fail if there are any syntax errors.
    However, it won't catch more succint issues such as style or grammar issues.
    As a result, you should always inspect changes visually to ensure the result
    is as intended.

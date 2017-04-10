@@ -30,10 +30,18 @@ Reference Guide
 Man Pages
 ---------
 
-.. TODO(stephenfin): Investigate some way to get the manpages into rST format.
-   The most viable option seems to be writing them all in rST, converting them
-   to roff format and storing both the rST and roff formatted docs in version
-   control.
+.. TODO(stephenfin): Remove the below notice once everything is converted to
+   rST
+
+The following man pages are written in rST and converted to roff at compile
+time:
+
+.. toctree::
+   :maxdepth: 3
+
+   ovs-vlan-test.8
+
+The remainder are still in roff format can be found below:
 
 .. list-table::
 
