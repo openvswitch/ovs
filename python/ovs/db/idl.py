@@ -94,7 +94,7 @@ class Idl(object):
     IDL_S_MONITOR_REQUESTED = 1
     IDL_S_MONITOR_COND_REQUESTED = 2
 
-    def __init__(self, remote, schema):
+    def __init__(self, remote, schema, probe_interval=None):
         """Creates and returns a connection to the database named 'db_name' on
         'remote', which should be in a form acceptable to
         ovs.jsonrpc.session.open().  The connection will maintain an in-memory
@@ -112,7 +112,12 @@ class Idl(object):
         As a convenience to users, 'schema' may also be an instance of the
         SchemaHelper class.
 
-        The IDL uses and modifies 'schema' directly."""
+        The IDL uses and modifies 'schema' directly.
+
+        If "probe_interval" is zero it disables the connection keepalive
+        feature. If non-zero the value will be forced to at least 1000
+        milliseconds. If None it will just use the default value in OVS.
+        """
 
         assert isinstance(schema, SchemaHelper)
         schema = schema.get_idl_schema()
@@ -120,7 +125,8 @@ class Idl(object):
         self.tables = schema.tables
         self.readonly = schema.readonly
         self._db = schema
-        self._session = ovs.jsonrpc.Session.open(remote)
+        self._session = ovs.jsonrpc.Session.open(remote,
+            probe_interval=probe_interval)
         self._monitor_request_id = None
         self._last_seqno = None
         self.change_seqno = 0
