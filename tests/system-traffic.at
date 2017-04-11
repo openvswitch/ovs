@@ -3044,7 +3044,7 @@ dnl Non-REPLY/RELATED packets get the ACL lookup with the packet headers
 dnl in the actual packet direction in reg0 (IN=1, OUT=2).  REPLY packets
 dnl get the ACL lookup using the conntrack tuple and the inverted direction.
 dnl RELATED packets get ACL lookup using the conntrack tuple in the direction
-dnl of the master connection, as storted in ct_mark.
+dnl of the master connection, as stored in ct_label[0].
 dnl
 dnl Incoming non-related packet in the original direction (ACL IN)
 table=1 reg3=1, ip, ct_state=-rel-rpl+trk-inv action=set_field:1->reg0,resubmit(,3),goto_table:5
@@ -3056,7 +3056,7 @@ dnl Outgoing non-related reply packet (CT ACL IN)
 table=1 reg3=2, ip, ct_state=-rel+rpl+trk-inv action=set_field:1->reg0,resubmit(,3,ct),goto_table:4
 dnl
 dnl Related packet (CT ACL in the direction of the master connection.)
-table=1 ip, ct_state=+rel+trk-inv, action=move:NXM_NX_CT_MARK[[]]->NXM_NX_REG0[[]],resubmit(,3,ct),goto_table:4
+table=1 ip, ct_state=+rel+trk-inv, action=move:NXM_NX_CT_LABEL[[0]]->NXM_NX_REG0[[0]],resubmit(,3,ct),goto_table:4
 dnl Drop everything else.
 table=1 priority=0, action=drop
 dnl
@@ -3088,15 +3088,15 @@ table=5 reg2=0 priority=1000 action=drop
 dnl
 dnl Commit new incoming FTP control connections with SNAT range.  Must match on
 dnl 'tcp' when setting 'alg=ftp'.  Store the directionality of non-related
-dnl connections to ct_mark.  Store the rule ID to labels.
-table=5 priority=100 reg2=1 reg3=1 ct_state=+new-rel, tcp, tp_dst=21, action=ct(zone=NXM_NX_REG4[[0..15]],alg=ftp,commit,nat(src=$2),exec(move:NXM_NX_REG3[[0..31]]->NXM_NX_CT_MARK[[0..31]],move:NXM_NX_REG1[[0..31]]->NXM_NX_CT_LABEL[[96..127]])),goto_table:6
+dnl connections to ct_label[0]  Store the rule ID to ct_label[96..127].
+table=5 priority=100 reg2=1 reg3=1 ct_state=+new-rel, tcp, tp_dst=21, action=ct(zone=NXM_NX_REG4[[0..15]],alg=ftp,commit,nat(src=$2),exec(move:NXM_NX_REG3[[0]]->NXM_NX_CT_LABEL[[0]],move:NXM_NX_REG1[[0..31]]->NXM_NX_CT_LABEL[[96..127]])),goto_table:6
 dnl Commit other new incoming non-related IP connections with SNAT range.
-table=5 priority=10 reg2=1 reg3=1 ct_state=+new-rel, ip, action=ct(zone=NXM_NX_REG4[[0..15]],commit,nat(src=$2),exec(move:NXM_NX_REG3[[0..31]]->NXM_NX_CT_MARK[[0..31]],move:NXM_NX_REG1[[0..31]]->NXM_NX_CT_LABEL[[96..127]])),goto_table:6
+table=5 priority=10 reg2=1 reg3=1 ct_state=+new-rel, ip, action=ct(zone=NXM_NX_REG4[[0..15]],commit,nat(src=$2),exec(move:NXM_NX_REG3[[0]]->NXM_NX_CT_LABEL[[0]],move:NXM_NX_REG1[[0..31]]->NXM_NX_CT_LABEL[[96..127]])),goto_table:6
 dnl Commit non-related outgoing new IP connections with DNAT range.
 dnl (This should not get any packets in this test.)
-table=5 priority=10 reg2=1 reg3=2 ct_state=+new-rel, ip, action=ct(zone=NXM_NX_REG4[[0..15]],commit,nat(dst=$2),exec(move:NXM_NX_REG3[[0..31]]->NXM_NX_CT_MARK[[0..31]],move:NXM_NX_REG1[[0..31]]->NXM_NX_CT_LABEL[[96..127]])),goto_table:6
+table=5 priority=10 reg2=1 reg3=2 ct_state=+new-rel, ip, action=ct(zone=NXM_NX_REG4[[0..15]],commit,nat(dst=$2),exec(move:NXM_NX_REG3[[0]]->NXM_NX_CT_LABEL[[0]],move:NXM_NX_REG1[[0..31]]->NXM_NX_CT_LABEL[[96..127]])),goto_table:6
 dnl Commit new related connections in either direction, which need 'nat'
-dnl and which inherit the mark (the direction of the original direction
+dnl and which inherit the label (the direction of the original direction
 dnl master tuple) from the master connection.
 table=5 priority=10 reg2=1 ct_state=+new+rel, ip, action=ct(zone=NXM_NX_REG4[[0..15]],commit,nat,exec(move:NXM_NX_REG1[[0..31]]->NXM_NX_CT_LABEL[[96..127]])),goto_table:6
 dnl
@@ -3122,8 +3122,8 @@ table=10 priority=100 arp xreg0=0 action=normal
 table=10 priority=10,arp,arp_op=1,action=load:2->OXM_OF_ARP_OP[[]],move:OXM_OF_ARP_SHA[[]]->OXM_OF_ARP_THA[[]],move:OXM_OF_PKT_REG0[[0..47]]->OXM_OF_ARP_SHA[[]],move:OXM_OF_ARP_SPA[[]]->OXM_OF_ARP_TPA[[]],move:NXM_NX_REG2[[]]->OXM_OF_ARP_SPA[[]],move:NXM_OF_ETH_SRC[[]]->NXM_OF_ETH_DST[[]],move:OXM_OF_PKT_REG0[[0..47]]->NXM_OF_ETH_SRC[[]],move:NXM_OF_IN_PORT[[]]->NXM_NX_REG3[[0..15]],load:0->NXM_OF_IN_PORT[[]],output:NXM_NX_REG3[[0..15]]
 table=10 priority=0 action=drop
 ], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=$2,sport=<cleared>,dport=<cleared>),zone=1,mark=1,labels=0x4d2000000000000000000000000,protoinfo=(state=<cleared>),helper=ftp
-tcp,orig=(src=10.1.1.2,dst=$2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),zone=1,mark=1,labels=0x4d2000000000000000000000000,protoinfo=(state=<cleared>)
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=$2,sport=<cleared>,dport=<cleared>),zone=1,labels=0x4d2000000000000000000000001,protoinfo=(state=<cleared>),helper=ftp
+tcp,orig=(src=10.1.1.2,dst=$2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),zone=1,labels=0x4d2000000000000000000000001,protoinfo=(state=<cleared>)
 ])
 ])
 

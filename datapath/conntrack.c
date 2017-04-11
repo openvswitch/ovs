@@ -365,9 +365,12 @@ static int ovs_ct_init_labels(struct nf_conn *ct, struct sw_flow_key *key,
 	if (!cl)
 		return -ENOSPC;
 
-	/* Inherit the master's labels, if any. */
+	/* Inherit the master's labels, if any.  Must use memcpy for backport
+	 * as struct assignment only copies the length field in older
+	 * kernels.
+	 */
 	if (master_cl)
-		*cl = *master_cl;
+		memcpy(cl->bits, master_cl->bits, OVS_CT_LABELS_LEN);
 
 	if (have_mask) {
 		u32 *dst = (u32 *)cl->bits;
