@@ -1658,6 +1658,44 @@ NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=14 in_port=1 (via action) data_len
 vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,dl_type=0x1234
 ])
 
+AT_CHECK([ovs-appctl revalidator/purge])
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl -P nxt_packet_in --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+dnl Add a controller meter.
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-meter br0 'meter=controller pktps stats bands=type=drop rate=1'])
+
+dnl Advance time by 1 second.
+AT_CHECK([ovs-appctl time/warp 1000], [0], [ignore])
+
+for i in `seq 1 8`; do
+    AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x4321)'])
+done
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/.*\(packets:\)/\1/' | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
+flow-dump from non-dpdk interfaces:
+packets:7, bytes:98, used:0.001s, actions:sample(sample=100.0%,actions(meter(0),userspace(pid=0,slow_path(controller))))
+])
+
+AT_CHECK([ovs-appctl time/warp 1], [0], [ignore])
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+dnl Out of 8 packets we sent, one executes the controller action via
+dnl miss upcall. Another one got passed the rate limiter.
+dnl The rest of packets are blocked by the rate limiter.
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=14 in_port=1 (via action) data_len=14 (unbuffered)
+vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,dl_type=0x4321
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=14 in_port=1 (via action) data_len=14 (unbuffered)
+vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,dl_type=0x4321
+])
+dnl Check meter stats to make it gives the same picture;
+dnl 7 packets hit the meter, but 6 packets are dropped by band0.
+AT_CHECK([ovs-ofctl -O OpenFlow13 meter-stats br0], [0], [dnl
+OFPST_METER reply (OF1.3) (xid=0x2):
+meter:controller flow_count:0 packet_in_count:7 byte_in_count:98 duration:1.054s bands:
+0: packet_count:6 byte_count:84
+])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 

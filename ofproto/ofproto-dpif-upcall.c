@@ -1025,7 +1025,8 @@ classify_upcall(enum dpif_upcall_type type, const struct nlattr *userdata)
 static void
 compose_slow_path(struct udpif *udpif, struct xlate_out *xout,
                   const struct flow *flow, odp_port_t odp_in_port,
-                  struct ofpbuf *buf)
+                  struct ofpbuf *buf, uint32_t slowpath_meter_id,
+                  uint32_t controller_meter_id)
 {
     union user_action_cookie cookie;
     odp_port_t port;
@@ -1039,8 +1040,28 @@ compose_slow_path(struct udpif *udpif, struct xlate_out *xout,
         ? ODPP_NONE
         : odp_in_port;
     pid = dpif_port_get_pid(udpif->dpif, port, flow_hash_5tuple(flow, 0));
+
+    size_t offset;
+    size_t ac_offset;
+    uint32_t meter_id = xout->slow & SLOW_CONTROLLER ? controller_meter_id
+                                                     : slowpath_meter_id;
+
+    if (meter_id != UINT32_MAX) {
+        /* If slowpath meter is configured, generate clone(meter, userspace)
+         * action. */
+        offset = nl_msg_start_nested(buf, OVS_ACTION_ATTR_SAMPLE);
+        nl_msg_put_u32(buf, OVS_SAMPLE_ATTR_PROBABILITY, UINT32_MAX);
+        ac_offset = nl_msg_start_nested(buf, OVS_SAMPLE_ATTR_ACTIONS);
+        nl_msg_put_u32(buf, OVS_ACTION_ATTR_METER, meter_id);
+    }
+
     odp_put_userspace_action(pid, &cookie, sizeof cookie.slow_path,
                              ODPP_NONE, false, buf);
+
+    if (meter_id != UINT32_MAX) {
+        nl_msg_end_nested(buf, ac_offset);
+        nl_msg_end_nested(buf, offset);
+    }
 }
 
 /* If there is no error, the upcall must be destroyed with upcall_uninit()
@@ -1143,10 +1164,12 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
         ofpbuf_use_const(&upcall->put_actions,
                          odp_actions->data, odp_actions->size);
     } else {
+        uint32_t smid = upcall->ofproto->up.slowpath_meter_id;
+        uint32_t cmid = upcall->ofproto->up.controller_meter_id;
         /* upcall->put_actions already initialized by upcall_receive(). */
         compose_slow_path(udpif, &upcall->xout, upcall->flow,
                           upcall->flow->in_port.odp_port,
-                          &upcall->put_actions);
+                          &upcall->put_actions, smid, cmid);
     }
 
     /* This function is also called for slow-pathed flows.  As we are only
@@ -1972,9 +1995,14 @@ revalidate_ukey__(struct udpif *udpif, const struct udpif_key *ukey,
     }
 
     if (xoutp->slow) {
+        struct ofproto_dpif *ofproto;
+        ofproto = xlate_lookup_ofproto(udpif->backer, &ctx.flow, NULL);
+        uint32_t smid = ofproto->up.slowpath_meter_id;
+        uint32_t cmid = ofproto->up.controller_meter_id;
+
         ofpbuf_clear(odp_actions);
         compose_slow_path(udpif, xoutp, &ctx.flow, ctx.flow.in_port.odp_port,
-                          odp_actions);
+                          odp_actions, smid, cmid);
     }
 
     if (odp_flow_key_to_mask(ukey->mask, ukey->mask_len, &dp_mask, &ctx.flow)
