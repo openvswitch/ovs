@@ -3,6 +3,7 @@ DOC_SOURCE = \
 	Documentation/_static/logo.png \
 	Documentation/_static/overview.png \
 	Documentation/conf.py \
+	Documentation/conf.py.in \
 	Documentation/index.rst \
 	Documentation/contents.rst \
 	Documentation/intro/index.rst \
@@ -123,6 +124,15 @@ clean-docs:
 	rm -rf $(SPHINXBUILDDIR)/html
 	rm -rf $(SPHINXBUILDDIR)/linkcheck
 CLEAN_LOCAL += clean-docs
+
+ALL_LOCAL += $(srcdir)/Documentation/conf.py
+$(srcdir)/Documentation/conf.py: $(srcdir)/Documentation/conf.py.in
+	$(AM_V_GEN)($(ro_shell) && sed -e 's,[@]VERSION[@],$(VERSION),g' \
+		-e 's,[@]OVS_MAJOR[@],$(shell echo $(VERSION) | cut -f1 -d.),g' \
+		-e 's,[@]OVS_MINOR[@],$(shell echo $(VERSION) | cut -f2 -d.),g') \
+		< $(srcdir)/Documentation/$(@F).in > $(@F).tmp || exit 1; \
+	if cmp -s $(@F).tmp $@; then touch $@; rm $(@F).tmp; else mv $(@F).tmp $@; fi
+
 endif
 .PHONY: check-docs
 .PHONY: clean-docs
