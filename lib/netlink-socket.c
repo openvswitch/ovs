@@ -62,6 +62,20 @@ static int get_sock_pid_from_kernel(struct nl_sock *sock);
 static int set_sock_property(struct nl_sock *sock);
 static int nl_sock_transact(struct nl_sock *sock, const struct ofpbuf *request,
                             struct ofpbuf **replyp);
+
+/* In the case DeviceIoControl failed and GetLastError returns with
+ * ERROR_NOT_FOUND means we lost communication with the kernel device.
+ * CloseHandle will fail because the handle in 'theory' does not exist.
+ * The only remaining option is to crash and allow the service to be restarted
+ * via service manager.  This is the only way to close the handle from both
+ * userspace and kernel. */
+void
+lost_communication(DWORD last_err)
+{
+    if (last_err == ERROR_NOT_FOUND) {
+        ovs_abort(0, "lost communication with the kernel device");
+    }
+}
 #endif
 
 /* Netlink sockets. */
@@ -280,6 +294,7 @@ get_sock_pid_from_kernel(struct nl_sock *sock)
     if (!DeviceIoControl(sock->handle, OVS_IOCTL_GET_PID,
                          NULL, 0, &pid, sizeof(pid),
                          &bytes, NULL)) {
+        lost_communication(GetLastError());
         retval = EINVAL;
     } else {
         if (bytes < sizeof(pid)) {
@@ -537,11 +552,12 @@ nl_sock_send__(struct nl_sock *sock, const struct ofpbuf *msg,
         if (!DeviceIoControl(sock->handle, OVS_IOCTL_WRITE,
                              msg->data, msg->size, NULL, 0,
                              &bytes, NULL)) {
+            lost_communication(GetLastError());
             retval = -1;
             /* XXX: Map to a more appropriate error based on GetLastError(). */
             errno = EINVAL;
             VLOG_DBG_RL(&rl, "fatal driver failure in write: %s",
-                ovs_lasterror_to_string());
+                        ovs_lasterror_to_string());
         } else {
             retval = msg->size;
         }
@@ -631,6 +647,7 @@ nl_sock_recv__(struct nl_sock *sock, struct ofpbuf *buf, bool wait)
         DWORD bytes;
         if (!DeviceIoControl(sock->handle, sock->read_ioctl,
                              NULL, 0, tail, sizeof tail, &bytes, NULL)) {
+            lost_communication(GetLastError());
             VLOG_DBG_RL(&rl, "fatal driver failure in transact: %s",
                         ovs_lasterror_to_string());
             retval = -1;
@@ -881,6 +898,7 @@ nl_sock_transact_multiple__(struct nl_sock *sock,
             }
         } else if (!ret) {
             /* XXX: Map to a more appropriate error. */
+            lost_communication(GetLastError());
             error = EINVAL;
             VLOG_DBG_RL(&rl, "fatal driver failure: %s",
                 ovs_lasterror_to_string());
@@ -1278,6 +1296,7 @@ pend_io_request(struct nl_sock *sock)
         error = GetLastError();
         /* Check if the I/O got pended */
         if (error != ERROR_IO_INCOMPLETE && error != ERROR_IO_PENDING) {
+            lost_communication(error);
             VLOG_ERR("nl_sock_wait failed - %s\n", ovs_format_message(error));
             retval = EINVAL;
         }
