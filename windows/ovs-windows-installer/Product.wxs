@@ -24,7 +24,7 @@
 
     <Property Id="Description" Value="Open vSwitch Extension" />
     <Property Id="DriverID" Value="{583CC151-73EC-4A6A-8B47-578297AD7623}" />
-    <Property Id="DriverVersion" Value="6.3.9600.17298" />
+    <Property Id="DriverVersion" Value="$(var.Version)" />
     <Property Id="ExtensionType" Value="Forwarding" />
 
     <Condition Message="This application is only supported on Windows 2012 or higher.">
