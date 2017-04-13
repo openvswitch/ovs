@@ -589,6 +589,18 @@ print_lr(const struct nbrec_logical_router *lr, struct ds *s)
             ds_put_cstr(s, "]\n");
         }
     }
+
+    for (size_t i = 0; i < lr->n_nat; i++) {
+        const struct nbrec_nat *nat = lr->nat[i];
+        ds_put_format(s, "        nat "UUID_FMT"\n",
+                  UUID_ARGS(&nat->header_.uuid));
+        ds_put_cstr(s, "            external ip: ");
+        ds_put_format(s, "\"%s\"\n", nat->external_ip);
+        ds_put_cstr(s, "            logical ip: ");
+        ds_put_format(s, "\"%s\"\n", nat->logical_ip);
+        ds_put_cstr(s, "            type: ");
+        ds_put_format(s, "\"%s\"\n", nat->type);
+    }
 }
 
 static void
