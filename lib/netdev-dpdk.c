@@ -451,14 +451,12 @@ free_dpdk_buf(struct dp_packet *p)
 }
 
 static void
-ovs_rte_pktmbuf_init(struct rte_mempool *mp,
+ovs_rte_pktmbuf_init(struct rte_mempool *mp OVS_UNUSED,
                      void *opaque_arg OVS_UNUSED,
                      void *_p,
                      unsigned i OVS_UNUSED)
 {
     struct rte_mbuf *pkt = _p;
-
-    rte_pktmbuf_init(mp, opaque_arg, _p, i);
 
     dp_packet_init_dpdk((struct dp_packet *) pkt, pkt->buf_len);
 }
@@ -466,7 +464,6 @@ ovs_rte_pktmbuf_init(struct rte_mempool *mp,
 static struct dpdk_mp *
 dpdk_mp_create(int socket_id, int mtu)
 {
-    struct rte_pktmbuf_pool_private mbp_priv;
     struct dpdk_mp *dmp;
     unsigned mp_size;
     char *mp_name;
@@ -478,9 +475,6 @@ dpdk_mp_create(int socket_id, int mtu)
     dmp->socket_id = socket_id;
     dmp->mtu = mtu;
     dmp->refcount = 1;
-    mbp_priv.mbuf_data_room_size = MBUF_SIZE(mtu) - sizeof(struct dp_packet);
-    mbp_priv.mbuf_priv_size = sizeof(struct dp_packet)
-                              - sizeof(struct rte_mbuf);
     /* XXX: this is a really rough method of provisioning memory.
      * It's impossible to determine what the exact memory requirements are
      * when the number of ports and rxqs that utilize a particular mempool can
@@ -496,18 +490,24 @@ dpdk_mp_create(int socket_id, int mtu)
         mp_name = xasprintf("ovs_mp_%d_%d_%u", dmp->mtu, dmp->socket_id,
                             mp_size);
 
-        dmp->mp = rte_mempool_create(mp_name, mp_size, MBUF_SIZE(mtu),
-                                     MP_CACHE_SZ,
-                                     sizeof(struct rte_pktmbuf_pool_private),
-                                     rte_pktmbuf_pool_init, &mbp_priv,
-                                     ovs_rte_pktmbuf_init, NULL,
-                                     socket_id, 0);
+        dmp->mp = rte_pktmbuf_pool_create(mp_name, mp_size,
+                                          MP_CACHE_SZ,
+                                          sizeof (struct dp_packet)
+                                                 - sizeof (struct rte_mbuf),
+                                          MBUF_SIZE(mtu)
+                                                 - sizeof(struct dp_packet),
+                                          socket_id);
         if (dmp->mp) {
             VLOG_DBG("Allocated \"%s\" mempool with %u mbufs",
                      mp_name, mp_size);
         }
         free(mp_name);
         if (dmp->mp) {
+            /* rte_pktmbuf_pool_create has done some initialization of the
+             * rte_mbuf part of each dp_packet, while ovs_rte_pktmbuf_init
+             * initializes some OVS specific fields of dp_packet.
+             */
+            rte_mempool_obj_iter(dmp->mp, ovs_rte_pktmbuf_init, NULL);
             return dmp;
         }
     } while (rte_errno == ENOMEM && (mp_size /= 2) >= MIN_NB_MBUF);
