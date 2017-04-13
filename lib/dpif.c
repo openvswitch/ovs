@@ -1722,9 +1722,13 @@ log_execute_message(struct dpif *dpif, const struct dpif_execute *execute,
         && !execute->probe) {
         struct ds ds = DS_EMPTY_INITIALIZER;
         char *packet;
+        uint64_t stub[1024 / 8];
+        struct ofpbuf md = OFPBUF_STUB_INITIALIZER(stub);
 
         packet = ofp_packet_to_string(dp_packet_data(execute->packet),
                                       dp_packet_size(execute->packet));
+        odp_key_from_pkt_metadata(&md, &execute->packet->md);
+
         ds_put_format(&ds, "%s: %sexecute ",
                       dpif_name(dpif),
                       (subexecute ? "sub-"
@@ -1735,10 +1739,13 @@ log_execute_message(struct dpif *dpif, const struct dpif_execute *execute,
             ds_put_format(&ds, " failed (%s)", ovs_strerror(error));
         }
         ds_put_format(&ds, " on packet %s", packet);
+        ds_put_format(&ds, " with metadata ");
+        odp_flow_format(md.data, md.size, NULL, 0, NULL, &ds, true);
         ds_put_format(&ds, " mtu %d", execute->mtu);
         vlog(&this_module, error ? VLL_WARN : VLL_DBG, "%s", ds_cstr(&ds));
         ds_destroy(&ds);
         free(packet);
+        ofpbuf_uninit(&md);
     }
 }
 
