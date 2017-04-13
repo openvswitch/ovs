@@ -6,14 +6,14 @@
 # without warranty of any kind.
 
 /var/log/openvswitch/*.log {
-	daily
-	compress
-	sharedscripts
-	missingok
-	postrotate
-	# Tell Open vSwitch daemons to reopen their log files
+    daily
+    compress
+    sharedscripts
+    missingok
+    postrotate
+        # Tell Open vSwitch daemons to reopen their log files
         for pidfile in `cd /var/run/openvswitch && echo *.pid`; do
             ovs-appctl -t "${pidfile%%.pid}" vlog/reopen
         done
-	endscript
+    endscript
 }
