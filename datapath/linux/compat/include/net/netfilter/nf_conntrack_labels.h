@@ -5,12 +5,12 @@
 #include <linux/version.h>
 #include_next <net/netfilter/nf_conntrack_labels.h>
 
-#ifndef HAVE_NF_CONNLABELS_GET_TAKES_BIT
-#if IS_ENABLED(CONFIG_NF_CONNTRACK_LABELS)
-
 #ifndef NF_CT_LABELS_MAX_SIZE
 #define NF_CT_LABELS_MAX_SIZE ((XT_CONNLABEL_MAXBIT + 1) / BITS_PER_BYTE)
 #endif
+
+#ifndef HAVE_NF_CONNLABELS_GET_TAKES_BIT
+#if IS_ENABLED(CONFIG_NF_CONNTRACK_LABELS)
 
 /* XXX: This doesn't lock others out from doing the same configuration
  *	simultaneously. */
