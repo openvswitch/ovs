@@ -188,7 +188,7 @@ Ryu
 
 Ryu is an OpenFlow controller written in Python that includes an extensive
 OpenFlow testsuite. Open vSwitch includes a Makefile target to run Ryu in
-"dummy mode". See :ref:`testing-oftest` above for an explanation of dummy mode.
+"dummy mode". See `OFTest`_ above for an explanation of dummy mode.
 
 To run Ryu tests with Open vSwitch, first read and follow the instructions
 under **Testing** above. Second, obtain a copy of Ryu, install its
