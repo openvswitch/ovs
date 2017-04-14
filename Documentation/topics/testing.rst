@@ -237,8 +237,9 @@ Vagrant
   Requires Vagrant (version 1.7.0 or later) and a compatible hypervisor
 
 .. note::
-  You must **Bootstrap** and **Configure** the sources before you run the steps
-  described here.
+  You must bootstrap and configure the sources (see
+  doc:`/intro/install/general`) before you run the steps described
+  here.
 
 A Vagrantfile is provided allowing to compile and provision the source tree as
 found locally in a virtual machine using the following command::

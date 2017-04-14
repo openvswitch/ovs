@@ -365,7 +365,8 @@ Building
      see unusual warnings when you use both together, consider disabling
      ccache.
 
-2. Consider running the testsuite. Refer to **Testing** for instructions.
+2. Consider running the testsuite. Refer to :doc:`/topics/testing` for
+   instructions.
 
 3. Run ``make install`` to install the executables and manpages into the
    running system, by default under ``/usr/local``::
@@ -499,7 +500,7 @@ upgrade the database schema:
           $ ovsdb-tool convert /usr/local/etc/openvswitch/conf.db \
               vswitchd/vswitch.ovsschema
 
-4. Start the Open vSwitch daemons as described under **Starting** above.
+4. Start the Open vSwitch daemons as described under `Starting`_ above.
 
 Hot Upgrading
 -------------
