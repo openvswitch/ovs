@@ -123,6 +123,7 @@ clean-docs:
 	rm -rf $(SPHINXBUILDDIR)/doctrees
 	rm -rf $(SPHINXBUILDDIR)/html
 	rm -rf $(SPHINXBUILDDIR)/linkcheck
+	rm -f docs-check
 CLEAN_LOCAL += clean-docs
 
 ALL_LOCAL += $(srcdir)/Documentation/conf.py
