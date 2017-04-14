@@ -91,7 +91,7 @@ DOC_SOURCE = \
 	Documentation/internals/contributing/libopenvswitch-abi.rst \
 	Documentation/internals/contributing/submitting-patches.rst \
 	Documentation/requirements.txt
-
+FLAKE8_PYFILES += Documentation/conf.py
 EXTRA_DIST += $(DOC_SOURCE)
 
 # You can set these variables from the command line.
