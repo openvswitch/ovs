@@ -2226,16 +2226,17 @@ void
 flow_pop_vlan(struct flow *flow, struct flow_wildcards *wc)
 {
     int n = flow_count_vlan_headers(flow);
-    if (n == 0) {
-        return;
+    if (n > 1) {
+        if (wc) {
+            memset(&wc->masks.vlans[1], 0xff,
+                   sizeof(union flow_vlan_hdr) * (n - 1));
+        }
+        memmove(&flow->vlans[0], &flow->vlans[1],
+                sizeof(union flow_vlan_hdr) * (n - 1));
     }
-    if (wc) {
-        memset(&wc->masks.vlans[1], 0xff,
-               sizeof(union flow_vlan_hdr) * (n - 1));
+    if (n > 0) {
+        memset(&flow->vlans[n - 1], 0, sizeof(union flow_vlan_hdr));
     }
-    memmove(&flow->vlans[0], &flow->vlans[1],
-            sizeof(union flow_vlan_hdr) * (n - 1));
-    memset(&flow->vlans[n - 1], 0, sizeof(union flow_vlan_hdr));
 }
 
 void
