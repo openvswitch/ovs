@@ -1,4 +1,4 @@
-/* Copyright (c) 2016 Nicira, Inc.
+/* Copyright (c) 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,15 @@ add_subregister(const char *name,
     char *expansion = xasprintf("%s%d[%d..%d]",
                                 parent_name, parent_idx, lsb, msb);
     expr_symtab_add_subfield(symtab, name, NULL, expansion);
+    free(expansion);
+}
+
+static void
+add_ct_bit(const char *name, int index, struct shash *symtab)
+{
+    char *expansion = xasprintf("ct_state[%d]", index);
+    const char *prereqs = index == CS_TRACKED_BIT ? NULL : "ct.trk";
+    expr_symtab_add_subfield(symtab, name, prereqs, expansion);
     free(expansion);
 }
 
@@ -105,28 +114,10 @@ ovn_init_symtab(struct shash *symtab)
 
     expr_symtab_add_field(symtab, "ct_state", MFF_CT_STATE, NULL, false);
 
-    struct ct_bit {
-        const char *name;
-        int bit;
-    };
-    static const struct ct_bit bits[] = {
-        {"trk", CS_TRACKED_BIT},
-        {"new", CS_NEW_BIT},
-        {"est", CS_ESTABLISHED_BIT},
-        {"rel", CS_RELATED_BIT},
-        {"rpl", CS_REPLY_DIR_BIT},
-        {"inv", CS_INVALID_BIT},
-        {"dnat", CS_DST_NAT_BIT},
-        {"snat", CS_SRC_NAT_BIT},
-    };
-    for (const struct ct_bit *b = bits; b < &bits[ARRAY_SIZE(bits)]; b++) {
-        char *name = xasprintf("ct.%s", b->name);
-        char *expansion = xasprintf("ct_state[%d]", b->bit);
-        const char *prereqs = b->bit == CS_TRACKED_BIT ? NULL : "ct.trk";
-        expr_symtab_add_subfield(symtab, name, prereqs, expansion);
-        free(expansion);
-        free(name);
-    }
+#define CS_STATE(ENUM, INDEX, NAME) \
+    add_ct_bit("ct."NAME, CS_##ENUM##_BIT, symtab);
+    CS_STATES
+#undef CS_STATE
 
     /* Data fields. */
     expr_symtab_add_field(symtab, "eth.src", MFF_ETH_SRC, NULL, false);

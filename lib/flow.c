@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1003,22 +1003,9 @@ flow_get_metadata(const struct flow *flow, struct match *flow_metadata)
 const char *ct_state_to_string(uint32_t state)
 {
     switch (state) {
-    case CS_REPLY_DIR:
-        return "rpl";
-    case CS_TRACKED:
-        return "trk";
-    case CS_NEW:
-        return "new";
-    case CS_ESTABLISHED:
-        return "est";
-    case CS_RELATED:
-        return "rel";
-    case CS_INVALID:
-        return "inv";
-    case CS_SRC_NAT:
-        return "snat";
-    case CS_DST_NAT:
-        return "dnat";
+#define CS_STATE(ENUM, INDEX, NAME) case CS_##ENUM: return NAME;
+        CS_STATES
+#undef CS_STATE
     default:
         return NULL;
     }

@@ -3533,30 +3533,12 @@ ovs_to_odp_ct_state(uint8_t state)
 {
     uint32_t odp = 0;
 
-    if (state & CS_NEW) {
-        odp |= OVS_CS_F_NEW;
+#define CS_STATE(ENUM, INDEX, NAME)             \
+    if (state & CS_##ENUM) {                    \
+        odp |= OVS_CS_F_##ENUM;                 \
     }
-    if (state & CS_ESTABLISHED) {
-        odp |= OVS_CS_F_ESTABLISHED;
-    }
-    if (state & CS_RELATED) {
-        odp |= OVS_CS_F_RELATED;
-    }
-    if (state & CS_INVALID) {
-        odp |= OVS_CS_F_INVALID;
-    }
-    if (state & CS_REPLY_DIR) {
-        odp |= OVS_CS_F_REPLY_DIR;
-    }
-    if (state & CS_TRACKED) {
-        odp |= OVS_CS_F_TRACKED;
-    }
-    if (state & CS_SRC_NAT) {
-        odp |= OVS_CS_F_SRC_NAT;
-    }
-    if (state & CS_DST_NAT) {
-        odp |= OVS_CS_F_DST_NAT;
-    }
+    CS_STATES
+#undef CS_STATE
 
     return odp;
 }
@@ -3566,30 +3548,12 @@ odp_to_ovs_ct_state(uint32_t flags)
 {
     uint32_t state = 0;
 
-    if (flags & OVS_CS_F_NEW) {
-        state |= CS_NEW;
+#define CS_STATE(ENUM, INDEX, NAME) \
+    if (flags & OVS_CS_F_##ENUM) {  \
+        state |= CS_##ENUM;         \
     }
-    if (flags & OVS_CS_F_ESTABLISHED) {
-        state |= CS_ESTABLISHED;
-    }
-    if (flags & OVS_CS_F_RELATED) {
-        state |= CS_RELATED;
-    }
-    if (flags & OVS_CS_F_INVALID) {
-        state |= CS_INVALID;
-    }
-    if (flags & OVS_CS_F_REPLY_DIR) {
-        state |= CS_REPLY_DIR;
-    }
-    if (flags & OVS_CS_F_TRACKED) {
-        state |= CS_TRACKED;
-    }
-    if (flags & OVS_CS_F_SRC_NAT) {
-        state |= CS_SRC_NAT;
-    }
-    if (flags & OVS_CS_F_DST_NAT) {
-        state |= CS_DST_NAT;
-    }
+    CS_STATES
+#undef CS_STATE
 
     return state;
 }

@@ -794,33 +794,34 @@ struct tcp_header {
 };
 BUILD_ASSERT_DECL(TCP_HEADER_LEN == sizeof(struct tcp_header));
 
-/* Connection states */
-enum {
-    CS_NEW_BIT =         0,
-    CS_ESTABLISHED_BIT = 1,
-    CS_RELATED_BIT =     2,
-    CS_REPLY_DIR_BIT =   3,
-    CS_INVALID_BIT =     4,
-    CS_TRACKED_BIT =     5,
-    CS_SRC_NAT_BIT =     6,
-    CS_DST_NAT_BIT =     7,
-};
+/* Connection states.
+ *
+ * Names like CS_RELATED are bit values, e.g. 1 << 2.
+ * Names like CS_RELATED_BIT are bit indexes, e.g. 2. */
+#define CS_STATES                               \
+    CS_STATE(NEW,         0, "new")             \
+    CS_STATE(ESTABLISHED, 1, "est")             \
+    CS_STATE(RELATED,     2, "rel")             \
+    CS_STATE(REPLY_DIR,   3, "rpl")             \
+    CS_STATE(INVALID,     4, "inv")             \
+    CS_STATE(TRACKED,     5, "trk")             \
+    CS_STATE(SRC_NAT,     6, "snat")            \
+    CS_STATE(DST_NAT,     7, "dnat")
 
 enum {
-    CS_NEW =         (1 << CS_NEW_BIT),
-    CS_ESTABLISHED = (1 << CS_ESTABLISHED_BIT),
-    CS_RELATED =     (1 << CS_RELATED_BIT),
-    CS_REPLY_DIR =   (1 << CS_REPLY_DIR_BIT),
-    CS_INVALID =     (1 << CS_INVALID_BIT),
-    CS_TRACKED =     (1 << CS_TRACKED_BIT),
-    CS_SRC_NAT =     (1 << CS_SRC_NAT_BIT),
-    CS_DST_NAT =     (1 << CS_DST_NAT_BIT),
+#define CS_STATE(ENUM, INDEX, NAME) \
+    CS_##ENUM = 1 << INDEX, \
+    CS_##ENUM##_BIT = INDEX,
+    CS_STATES
+#undef CS_STATE
 };
 
 /* Undefined connection state bits. */
-#define CS_SUPPORTED_MASK    (CS_NEW | CS_ESTABLISHED | CS_RELATED \
-                              | CS_INVALID | CS_REPLY_DIR | CS_TRACKED \
-                              | CS_SRC_NAT | CS_DST_NAT)
+enum {
+#define CS_STATE(ENUM, INDEX, NAME) +CS_##ENUM
+    CS_SUPPORTED_MASK = CS_STATES
+#undef CS_STATE
+};
 #define CS_UNSUPPORTED_MASK  (~(uint32_t)CS_SUPPORTED_MASK)
 
 #define ARP_HRD_ETHERNET 1
