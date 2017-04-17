@@ -401,6 +401,7 @@ Ghanem Bahri                    bahri.ghanem@gmail.com
 Giuseppe de Candia              giuseppe.decandia@gmail.com
 Gordon Good                     ggood@nicira.com
 Greg Dahlman                    gdahlman@hotmail.com
+Greg Rose                       gvrose8192@gmail.com
 Gregor Schaffrath               grsch@net.t-labs.tu-berlin.de
 Gregory Smith                   gasmith@nutanix.com
 Guolin Yang                     gyang@vmware.com
