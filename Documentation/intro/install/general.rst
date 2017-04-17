@@ -423,10 +423,37 @@ Building
 Starting
 --------
 
-Before starting ovs-vswitchd itself, you need to start its configuration
-database, ovsdb-server. Each machine on which Open vSwitch is installed should
-run its own copy of ovsdb-server. Before ovsdb-server itself can be started,
-configure a database that it can use::
+On Unix-alike systems, such as BSDs and Linux, starting the Open vSwitch
+suite of daemons is a simple process.  Open vSwitch includes a shell script,
+and helpers, called ovs-ctl which automates much of the tasks for starting
+and stopping ovsdb-server, and ovs-vswitchd.  After installation, the daemons
+can be started by using the ovs-ctl utility.  This will take care to setup
+initial conditions, and start the daemons in the correct order.  The ovs-ctl
+utility is located in '$(pkgdatadir)/scripts', and defaults to
+'/usr/local/share/openvswitch/scripts'.  An example after install might be::
+
+    $ export PATH=$PATH:/usr/local/share/openvswitch/scripts
+    $ ovs-ctl start
+
+Additionally, the ovs-ctl script allows starting / stopping the daemons
+individually using specific options.  To start just the ovsdb-server::
+
+    $ export PATH=$PATH:/usr/local/share/openvswitch/scripts
+    $ ovs-ctl --no-ovs-vswitchd start
+
+Likewise, to start just the ovs-vswitchd::
+
+    $ export PATH=$PATH:/usr/local/share/openvswitch/scripts
+    $ ovs-ctl --no-ovsdb-server start
+
+Refer to ovs-ctl(8) for more information on ovs-ctl.
+
+In addition to using the automated script to start Open vSwitch, you may
+wish to manually start the various daemons. Before starting ovs-vswitchd
+itself, you need to start its configuration database, ovsdb-server. Each
+machine on which Open vSwitch is installed should run its own copy of
+ovsdb-server. Before ovsdb-server itself can be started, configure a
+database that it can use::
 
        $ mkdir -p /usr/local/etc/openvswitch
        $ ovsdb-tool create /usr/local/etc/openvswitch/conf.db \
@@ -478,6 +505,11 @@ Upgrading
 
 When you upgrade Open vSwitch from one version to another you should also
 upgrade the database schema:
+
+.. note::
+   The following manual steps may also be accomplished by using ovs-ctl to
+   stop and start the daemons after upgrade.  The ovs-ctl script will
+   automatically upgrade the schema.
 
 1. Stop the Open vSwitch daemons, e.g.::
 
