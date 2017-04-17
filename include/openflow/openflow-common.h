@@ -291,9 +291,14 @@ enum ofp_packet_in_reason {
 
 #define OFPR10_BITS                                                     \
     ((1u << OFPR_NO_MATCH) | (1u << OFPR_ACTION) | (1u << OFPR_INVALID_TTL))
+
+/* From OF1.4+, OFPR_ACTION is split into four more descriptive reasons,
+ * OFPR_APPLY_ACTION, OFPR_ACTION_SET, OFPR_GROUP, and OFPR_PACKET_OUT.
+ * OFPR_APPLY_ACTION shares the same number as OFPR_ACTION. */
+#define OFPR14_ACTION_BITS                                              \
+    ((1u << OFPR_ACTION_SET) | (1u << OFPR_GROUP) | (1u << OFPR_PACKET_OUT))
 #define OFPR14_BITS                                                     \
-    (OFPR10_BITS |                                                      \
-     (1u << OFPR_ACTION_SET) | (1u << OFPR_GROUP) | (1u << OFPR_PACKET_OUT))
+    (OFPR10_BITS | OFPR14_ACTION_BITS)
 
     /* Nonstandard reason--not exposed via OpenFlow. */
     OFPR_EXPLICIT_MISS,

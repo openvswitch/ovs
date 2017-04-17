@@ -1092,6 +1092,16 @@ ofconn_set_async_config(struct ofconn *ofconn,
         ofconn->async_cfg = xmalloc(sizeof *ofconn->async_cfg);
     }
     *ofconn->async_cfg = *ac;
+
+    if (ofputil_protocol_to_ofp_version(ofconn_get_protocol(ofconn))
+        < OFP14_VERSION) {
+        if (ofconn->async_cfg->master[OAM_PACKET_IN] & (1u << OFPR_ACTION)) {
+            ofconn->async_cfg->master[OAM_PACKET_IN] |= OFPR14_ACTION_BITS;
+        }
+        if (ofconn->async_cfg->slave[OAM_PACKET_IN] & (1u << OFPR_ACTION)) {
+            ofconn->async_cfg->slave[OAM_PACKET_IN] |= OFPR14_ACTION_BITS;
+        }
+    }
 }
 
 struct ofputil_async_cfg
