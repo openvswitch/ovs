@@ -285,6 +285,8 @@ AT_CLEANUP
 AT_SETUP([ovs-ofctl parse-flows (OpenFlow 1.2)])
 AT_DATA([flows.txt], [[
 # comment
+tcp,tp_src[5]=1,actions=flood
+tcp,tp_src[6..10]=19,actions=flood
 tcp,tp_src=123,actions=flood
 in_port=LOCAL dl_vlan=9 dl_src=00:0A:E4:25:6B:B0 actions=mod_vlan_vid:7,mod_vlan_pcp:2
 udp dl_vlan_pcp=7 idle_timeout=5 actions=strip_vlan output:0
@@ -309,6 +311,8 @@ AT_CHECK([ovs-ofctl --protocols OpenFlow12 parse-flows flows.txt
 AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0],
 [[usable protocols: NXM,OXM
 chosen protocol: OXM-OpenFlow12
+OFPT_FLOW_MOD (OF1.2): ADD tcp,tp_src=0x20/0x20 actions=FLOOD
+OFPT_FLOW_MOD (OF1.2): ADD tcp,tp_src=0x4c0/0x7c0 actions=FLOOD
 OFPT_FLOW_MOD (OF1.2): ADD tcp,tp_src=123 actions=FLOOD
 OFPT_FLOW_MOD (OF1.2): ADD in_port=LOCAL,dl_vlan=9,dl_src=00:0a:e4:25:6b:b0 actions=set_field:4103->vlan_vid,set_field:2->vlan_pcp
 OFPT_FLOW_MOD (OF1.2): ADD udp,dl_vlan_pcp=7 idle:5 actions=pop_vlan,output:0

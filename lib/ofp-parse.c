@@ -290,11 +290,11 @@ parse_subfield(const char *name, const char *str_value, struct match *match,
 
         const struct mf_field *field = sf.field;
         union mf_value value, mask;
-        unsigned int size = DIV_ROUND_UP(sf.n_bits, 8);
+        unsigned int size = field->n_bytes;
 
         mf_get(field, match, &value, &mask);
-        bitwise_copy(&val, size, 0, &value, field->n_bytes, sf.ofs, sf.n_bits);
-        bitwise_one (               &mask,  field->n_bytes, sf.ofs, sf.n_bits);
+        bitwise_copy(&val, size, 0, &value, size, sf.ofs, sf.n_bits);
+        bitwise_one (               &mask,  size, sf.ofs, sf.n_bits);
         *usable_protocols &= mf_set(field, &value, &mask, match, &error);
     }
     return error;
