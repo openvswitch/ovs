@@ -275,16 +275,6 @@ features are listed in the previous section.
 
   (required for OF1.4+)
 
-* More descriptive reasons for packet-in
-
-  Distinguish ``OFPR_APPLY_ACTION``, ``OFPR_ACTION_SET``, ``OFPR_GROUP``,
-  ``OFPR_PACKET_OUT``.  ``NO_MATCH`` was renamed to ``OFPR_TABLE_MISS``.
-  (OFPR_ACTION_SET and OFPR_GROUP are now supported)
-
-  (EXT-136)
-
-  (required for OF1.4+)
-
 * Optical port properties
 
   (EXT-154)

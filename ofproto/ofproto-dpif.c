@@ -4404,6 +4404,7 @@ packet_xlate(struct ofproto *ofproto_, struct ofproto_packet_out *opo)
     xin.allow_side_effects = false;
     xin.resubmit_stats = NULL;
     xin.xcache = &aux->xcache;
+    xin.in_packet_out = true;
 
     if (xlate_actions(&xin, &xout) != XLATE_OK) {
         error = OFPERR_OFPFMFC_UNKNOWN;   /* Error processing actions. */

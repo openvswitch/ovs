@@ -3025,7 +3025,8 @@ AT_CHECK([ovs-ofctl monitor -P standard --protocols=OpenFlow13 br0 65534 --detac
 for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=10:11:11:11:11:11,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=10),tcp_flags(0x002)'
 done
-OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+AT_CHECK([ovs-ofctl packet-out br0 'in_port=NONE, packet=505400000007101111111111080045000028000000004006f97cc0a80001c0a800020008000a0000000000000000500200002e7d0000, actions=controller'])
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 7])
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
@@ -3056,6 +3057,9 @@ OFPT_PACKET_IN (OF1.3) (xid=0x0): table_id=2 cookie=0x0 total_len=54 in_port=1 (
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
 OFPT_PACKET_IN (OF1.3) (xid=0x0): cookie=0x0 total_len=54 in_port=1 (via action) data_len=54 (unbuffered)
+tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
+dnl
+OFPT_PACKET_IN (OF1.3) (xid=0x0): total_len=54 in_port=ANY (via action) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 ])
 
@@ -3093,7 +3097,8 @@ AT_CHECK([ovs-ofctl monitor -P standard --protocols=OpenFlow14 br0 65534 --detac
 for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=10:11:11:11:11:11,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=10),tcp_flags(0x002)'
 done
-OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
+AT_CHECK([ovs-ofctl packet-out br0 'in_port=NONE, packet=505400000007101111111111080045000028000000004006f97cc0a80001c0a800020008000a0000000000000000500200002e7d0000, actions=controller'])
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 7])
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
@@ -3124,6 +3129,9 @@ OFPT_PACKET_IN (OF1.4) (xid=0x0): table_id=2 cookie=0x0 total_len=54 in_port=1 (
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
 OFPT_PACKET_IN (OF1.4) (xid=0x0): cookie=0x0 total_len=54 in_port=1 (via action_set) data_len=54 (unbuffered)
+tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
+dnl
+OFPT_PACKET_IN (OF1.4) (xid=0x0): total_len=54 in_port=ANY (via packet_out) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 ])
 

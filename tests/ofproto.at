@@ -3490,10 +3490,10 @@ check_async () {
     ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
     : > expout
 
-    # OFPT_PACKET_IN, OFPR_ACTION (controller_id=0)
+    # OFPT_PACKET_IN, OFPR_PACKET_OUT (controller_id=0)
     ovs-ofctl -O OpenFlow14 -v packet-out br0 none controller '0001020304050010203040501234'
-    if test X"$1" = X"OFPR_ACTION"; then shift;
-        echo >>expout "OFPT_PACKET_IN (OF1.4): total_len=14 in_port=ANY (via action) data_len=14 (unbuffered)
+    if test X"$1" = X"OFPR_PACKET_OUT"; then shift;
+        echo >>expout "OFPT_PACKET_IN (OF1.4): total_len=14 in_port=ANY (via packet_out) data_len=14 (unbuffered)
 vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234"
     fi
 
@@ -3661,14 +3661,14 @@ check_async 1
 
 # Set miss_send_len to 128, turning on packet-ins for our service connection.
 ovs-appctl -t ovs-ofctl ofctl/send 0509000c0123456700000080
-check_async 2 OFPR_ACTION OFPR_ACTION_SET OFPPR_ADD OFPPR_MODIFY OFPPR_DELETE OFPRR_DELETE OFPRR_GROUP_DELETE
+check_async 2 OFPR_PACKET_OUT OFPR_ACTION_SET OFPPR_ADD OFPPR_MODIFY OFPPR_DELETE OFPRR_DELETE OFPRR_GROUP_DELETE
 
 # Become slave (OF 1.4), which should disable everything except port status.
 ovs-appctl -t ovs-ofctl ofctl/send 051800180000000200000003000000000000000000000001
 check_async 3 OFPPR_ADD OFPPR_MODIFY OFPPR_DELETE
 
 # Use OF 1.4 OFPT_SET_ASYNC to enable a patchwork of asynchronous messages.
-ovs-appctl -t ovs-ofctl ofctl/send 051c0040000000020000000800000005000100080000000200020008000000020003000800000005000400080000001c00050008000000050008000800000018
+ovs-appctl -t ovs-ofctl ofctl/send 051c0040000000020000000800000005000100080000002000020008000000020003000800000005000400080000001c00050008000000050008000800000018
 check_async 4 OFPR_INVALID_TTL OFPPR_DELETE OFPRR_DELETE OFPRR_GROUP_DELETE OFPTR_VACANCY_UP
 
 # Set controller ID 123.
@@ -3680,7 +3680,7 @@ ovs-appctl -t ovs-ofctl ofctl/send 050400180000000300002320000000140000000000000
 
 # Become master (OF 1.4).
 ovs-appctl -t ovs-ofctl ofctl/send 051800180000000400000002000000000000000000000002
-check_async 6 OFPR_ACTION OFPPR_ADD OFPPR_MODIFY OFPRR_DELETE
+check_async 6 OFPR_PACKET_OUT OFPPR_ADD OFPPR_MODIFY OFPRR_DELETE
 
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 OVS_VSWITCHD_STOP

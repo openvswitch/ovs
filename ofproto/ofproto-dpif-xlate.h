@@ -155,6 +155,9 @@ struct xlate_in {
 
     /* The frozen state to be resumed, as returned by xlate_lookup(). */
     const struct frozen_state *frozen_state;
+
+    /* If true, the packet to be translated is from a packet_out msg. */
+    bool in_packet_out;
 };
 
 void xlate_ofproto_set(struct ofproto_dpif *, const char *name, struct dpif *,

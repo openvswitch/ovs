@@ -231,6 +231,8 @@ struct xlate_ctx {
     int resubmits;              /* Total number of resubmits. */
     bool in_group;              /* Currently translating ofgroup, if true. */
     bool in_action_set;         /* Currently translating action_set, if true. */
+    bool in_packet_out;         /* Currently translating a packet_out msg, if
+                                 * true. */
 
     uint8_t table_id;           /* OpenFlow table ID where flow was found. */
     ovs_be64 rule_cookie;       /* Cookie of the rule being translated. */
@@ -4535,7 +4537,8 @@ xlate_output_action(struct xlate_ctx *ctx,
         break;
     case OFPP_CONTROLLER:
         execute_controller_action(ctx, max_len,
-                                  (ctx->in_group ? OFPR_GROUP
+                                  (ctx->in_packet_out ? OFPR_PACKET_OUT
+                                   : ctx->in_group ? OFPR_GROUP
                                    : ctx->in_action_set ? OFPR_ACTION_SET
                                    : OFPR_ACTION),
                                   0, NULL, 0);
@@ -5917,6 +5920,7 @@ xlate_in_init(struct xlate_in *xin, struct ofproto_dpif *ofproto,
     xin->resubmits = 0;
     xin->wc = wc;
     xin->odp_actions = odp_actions;
+    xin->in_packet_out = false;
 
     /* Do recirc lookup. */
     xin->frozen_state = NULL;
@@ -6179,6 +6183,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .resubmits = xin->resubmits,
         .in_group = false,
         .in_action_set = false,
+        .in_packet_out = xin->in_packet_out,
 
         .table_id = 0,
         .rule_cookie = OVS_BE64_MAX,
