@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,6 +73,8 @@ void flow_unwildcard_tp_ports(const struct flow *, struct flow_wildcards *);
 void flow_get_metadata(const struct flow *, struct match *flow_metadata);
 
 const char *ct_state_to_string(uint32_t state);
+uint32_t ct_state_from_string(const char *);
+
 char *flow_to_string(const struct flow *);
 void format_flags(struct ds *ds, const char *(*bit_to_string)(uint32_t),
                   uint32_t flags, char del);

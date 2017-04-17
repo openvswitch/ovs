@@ -1000,7 +1000,8 @@ flow_get_metadata(const struct flow *flow, struct match *flow_metadata)
     }
 }
 
-const char *ct_state_to_string(uint32_t state)
+const char *
+ct_state_to_string(uint32_t state)
 {
     switch (state) {
 #define CS_STATE(ENUM, INDEX, NAME) case CS_##ENUM: return NAME;
@@ -1009,6 +1010,18 @@ const char *ct_state_to_string(uint32_t state)
     default:
         return NULL;
     }
+}
+
+uint32_t
+ct_state_from_string(const char *s)
+{
+#define CS_STATE(ENUM, INDEX, NAME) \
+    if (!strcmp(s, NAME)) {         \
+        return CS_##ENUM;           \
+    }
+    CS_STATES
+#undef CS_STATE
+    return 0;
 }
 
 char *
