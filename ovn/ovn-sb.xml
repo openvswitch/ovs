@@ -852,9 +852,16 @@
         <li><code>ct_mark</code> <code>ct_label</code></li>
         <li>
           <p>
-            <code>ct_state</code>, which has the following Boolean subfields:
+            <code>ct_state</code>, which has several Boolean subfields.  The
+            <code>ct_next</code> action initializes the following subfields:
           </p>
           <ul>
+            <li>
+              <code>ct.trk</code>: Always set to true by <code>ct_next</code>
+              to indicate that connection tracking has taken place.  All other
+              <code>ct</code> subfields have <code>ct.trk</code> as a
+              prerequisite.
+            </li>
             <li><code>ct.new</code>: True for a new flow</li>
             <li><code>ct.est</code>: True for an established flow</li>
             <li><code>ct.rel</code>: True for a related flow</li>
@@ -862,8 +869,8 @@
             <li><code>ct.inv</code>: True for a connection entry in a bad state</li>
           </ul>
           <p>
-            The above subfields of <code>ct_state</code> are initialized by
-            the <code>ct_next</code> action, described later.
+            The <code>ct_dnat</code>, <code>ct_snat</code>, and
+            <code>ct_lb</code> actions initialize the following subfields:
           </p>
           <ul>
             <li>
@@ -875,11 +882,6 @@
               address has been changed.
             </li>
           </ul>
-          <p>
-            The above subfields of <code>ct_state</code> are initialized by
-            the actions like <code>ct_dnat</code>, <code>ct_snat</code> and
-            <code>ct_lb</code> described later.
-          </p>
         </li>
       </ul>
 
