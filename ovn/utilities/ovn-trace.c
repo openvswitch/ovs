@@ -69,6 +69,11 @@ static bool minimal;
 static const char *ovs;
 static struct vconn *vconn;
 
+/* --ct: Connection tracking state to use for ct_next() actions. */
+static uint32_t *ct_states;
+static size_t n_ct_states;
+static size_t ct_state_idx;
+
 OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[]);
 static char *trace(const char *datapath, const char *flow);
@@ -156,6 +161,42 @@ default_ovs(void)
 }
 
 static void
+parse_ct_option(const char *state_s_)
+{
+    uint32_t state = CS_TRACKED;
+
+    char *state_s = xstrdup(state_s_);
+    char *save_ptr = NULL;
+    for (char *cs = strtok_r(state_s, ", ", &save_ptr); cs;
+         cs = strtok_r(NULL, ", ", &save_ptr)) {
+        uint32_t bit = ct_state_from_string(cs);
+        if (!bit) {
+            ovs_fatal(0, "%s: unknown connection tracking state flag", cs);
+        }
+        state |= bit;
+    }
+    free(state_s);
+
+    /* Check constraints listed in ovs-fields(7). */
+    if (state & CS_INVALID && state & ~(CS_TRACKED | CS_INVALID)) {
+        VLOG_WARN("%s: invalid connection state: "
+                  "when \"inv\" is set, only \"trk\" may also be set",
+                  state_s_);
+    }
+    if (state & CS_NEW && state & CS_ESTABLISHED) {
+        VLOG_WARN("%s: invalid connection state: "
+                  "\"new\" and \"est\" are mutually exclusive", state_s_);
+    }
+    if (state & CS_NEW && state & CS_REPLY_DIR) {
+        VLOG_WARN("%s: invalid connection state: "
+                  "\"new\" and \"rpy\" are mutually exclusive", state_s_);
+    }
+
+    ct_states = xrealloc(ct_states, (n_ct_states + 1) * sizeof *ct_states);
+    ct_states[n_ct_states++] = state;
+}
+
+static void
 parse_options(int argc, char *argv[])
 {
     enum {
@@ -166,6 +207,7 @@ parse_options(int argc, char *argv[])
         OPT_MINIMAL,
         OPT_ALL,
         OPT_OVS,
+        OPT_CT,
         DAEMON_OPTION_ENUMS,
         SSL_OPTION_ENUMS,
         VLOG_OPTION_ENUMS
@@ -178,6 +220,7 @@ parse_options(int argc, char *argv[])
         {"minimal", no_argument, NULL, OPT_MINIMAL},
         {"all", no_argument, NULL, OPT_ALL},
         {"ovs", optional_argument, NULL, OPT_OVS},
+        {"ct", required_argument, NULL, OPT_CT},
         {"help", no_argument, NULL, 'h'},
         {"version", no_argument, NULL, 'V'},
         DAEMON_LONG_OPTIONS,
@@ -223,6 +266,10 @@ parse_options(int argc, char *argv[])
 
         case OPT_OVS:
             ovs = optarg ? optarg : default_ovs();
+            break;
+
+        case OPT_CT:
+            parse_ct_option(optarg);
             break;
 
         case 'h':
@@ -1429,6 +1476,40 @@ execute_next(const struct ovnact_next *next,
 }
 
 static void
+execute_ct_next(const struct ovnact_ct_next *ct_next,
+                const struct ovntrace_datapath *dp, struct flow *uflow,
+                enum ovnact_pipeline pipeline, struct ovs_list *super)
+{
+    /* Figure out ct_state. */
+    uint32_t state;
+    const char *comment;
+    if (ct_state_idx < n_ct_states) {
+        state = ct_states[ct_state_idx++];
+        comment = "";
+    } else {
+        state = CS_ESTABLISHED | CS_TRACKED;
+        comment = " /* default (use --ct to customize) */";
+    }
+
+    /* Make a sub-node for attaching the next table. */
+    struct ds s = DS_EMPTY_INITIALIZER;
+    format_flags(&s, ct_state_to_string, state, '|');
+    struct ovntrace_node *node = ovntrace_node_append(
+        super, OVNTRACE_NODE_TRANSFORMATION, "ct_next(ct_state=%s%s)",
+        ds_cstr(&s), comment);
+    ds_destroy(&s);
+
+    /* Trace the actions in the next table. */
+    struct flow ct_flow = *uflow;
+    ct_flow.ct_state = state;
+    trace__(dp, &ct_flow, ct_next->ltable, pipeline, &node->subs);
+
+    /* Upon return, we will trace the actions following the ct action in the
+     * original table.  The pipeline forked, so we're using the original
+     * flow, not ct_flow. */
+}
+
+static void
 trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
               const struct ovntrace_datapath *dp, struct flow *uflow,
               uint8_t table_id, enum ovnact_pipeline pipeline,
@@ -1484,13 +1565,27 @@ trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
             break;
 
         case OVNACT_CT_NEXT:
+            execute_ct_next(ovnact_get_CT_NEXT(a), dp, uflow, pipeline, super);
+            break;
+
         case OVNACT_CT_COMMIT:
+            /* Nothing to do. */
+            break;
+
         case OVNACT_CT_DNAT:
         case OVNACT_CT_SNAT:
-        case OVNACT_CT_LB:
-        case OVNACT_CT_CLEAR:
             ovntrace_node_append(super, OVNTRACE_NODE_ERROR,
-                                 "*** ct_* actions not implemented");
+                                 "*** ct_dnat and ct_snat actions "
+                                 "not implemented");
+            break;
+
+        case OVNACT_CT_LB:
+            ovntrace_node_append(super, OVNTRACE_NODE_ERROR,
+                                 "*** ct_lb action not implemented");
+            break;
+
+        case OVNACT_CT_CLEAR:
+            flow_clear_conntrack(uflow);
             break;
 
         case OVNACT_CLONE:

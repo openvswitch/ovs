@@ -307,6 +307,64 @@
         </li>
       </ul>
     </dd>
+
+    <dt><code>--ct=<var>flags</var></code></dt>
+    <dd>
+      <p>
+        This option sets the <code>ct_state</code> flags that a
+        <code>ct_next</code> logical action will report.  The <var>flags</var>
+        must be a comma- or space-separated list of the following connection
+        tracking flags:
+      </p>
+
+      <ul>
+        <li>
+          <code>trk</code>: Include to indicate connection tracking has taken
+          place.  (This bit is set automatically even if not listed in
+          <var>flags</var>.
+        </li>
+        <li><code>new</code>: Include to indicate a new flow.</li>
+        <li><code>est</code>: Include to indicate an established flow.</li>
+        <li><code>rel</code>: Include to indicate a related flow.</li>
+        <li><code>rpl</code>: Include to indicate a reply flow.</li>
+        <li><code>inv</code>: Include to indicate a connection entry in a
+        bad state.</li>
+        <li><code>dnat</code>: Include to indicate a packet whose
+        destination IP address has been changed.</li>
+        <li><code>snat</code>: Include to indicate a packet whose source IP
+        address has been changed.</li>
+      </ul>
+
+      <p>
+        The <code>ct_next</code> action is used to implement the OVN
+        distributed firewall.  For testing, useful flag combinations include:
+      </p>
+
+      <ul>
+        <li><code>trk,new</code>: A packet in a flow in either direction
+        through a firewall that has not yet been committed (with
+        <code>ct_commit</code>).</li>
+        <li><code>trk,est</code>: A packet in an established flow going out
+        through a firewall.</li>
+        <li><code>trk,rpl</code>: A packet coming in through a firewall in
+        reply to an established flow.</li>
+        <li><code>trk,inv</code>: An invalid packet in either direction.</li>
+      </ul>
+
+      <p>
+        A packet might pass through the connection tracker twice in one trip
+        through OVN: once following egress from a VM as it passes outward
+        through a firewall, and once preceding ingress to a second VM as it
+        passes inward through a firewall.  Use multiple <code>--ct</code>
+        options to specify the flags for multiple <code>ct_next</code> actions.
+      </p>
+
+      <p>
+        When <code>--ct</code> is unspecified, or when there are fewer
+        <code>--ct</code> options than <code>ct_next</code> actions, the
+        <var>flags</var> default to <code>trk,est</code>.
+      </p>
+    </dd>
   </dl>
 
   <h2>Daemon Options</h2>
