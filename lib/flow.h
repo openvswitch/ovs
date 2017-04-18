@@ -74,6 +74,7 @@ void flow_get_metadata(const struct flow *, struct match *flow_metadata);
 
 const char *ct_state_to_string(uint32_t state);
 uint32_t ct_state_from_string(const char *);
+void flow_clear_conntrack(struct flow *);
 
 char *flow_to_string(const struct flow *);
 void format_flags(struct ds *ds, const char *(*bit_to_string)(uint32_t),

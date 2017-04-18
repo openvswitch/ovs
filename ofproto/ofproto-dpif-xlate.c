@@ -3216,23 +3216,7 @@ static void
 clear_conntrack(struct xlate_ctx *ctx)
 {
     ctx->conntracked = false;
-
-    struct flow *flow = &ctx->xin->flow;
-    flow->ct_state = 0;
-    flow->ct_zone = 0;
-    flow->ct_mark = 0;
-    flow->ct_label = OVS_U128_ZERO;
-
-    flow->ct_nw_proto = 0;
-    flow->ct_tp_src = 0;
-    flow->ct_tp_dst = 0;
-    if (flow->dl_type == htons(ETH_TYPE_IP)) {
-        flow->ct_nw_src = 0;
-        flow->ct_nw_dst = 0;
-    } if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
-        memset(&flow->ct_ipv6_src, 0, sizeof flow->ct_ipv6_src);
-        memset(&flow->ct_ipv6_dst, 0, sizeof flow->ct_ipv6_dst);
-    }
+    flow_clear_conntrack(&ctx->xin->flow);
 }
 
 static bool

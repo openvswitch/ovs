@@ -1024,6 +1024,27 @@ ct_state_from_string(const char *s)
     return 0;
 }
 
+/* Clears the fields in 'flow' associated with connection tracking. */
+void
+flow_clear_conntrack(struct flow *flow)
+{
+    flow->ct_state = 0;
+    flow->ct_zone = 0;
+    flow->ct_mark = 0;
+    flow->ct_label = OVS_U128_ZERO;
+
+    flow->ct_nw_proto = 0;
+    flow->ct_tp_src = 0;
+    flow->ct_tp_dst = 0;
+    if (flow->dl_type == htons(ETH_TYPE_IP)) {
+        flow->ct_nw_src = 0;
+        flow->ct_nw_dst = 0;
+    } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
+        memset(&flow->ct_ipv6_src, 0, sizeof flow->ct_ipv6_src);
+        memset(&flow->ct_ipv6_dst, 0, sizeof flow->ct_ipv6_dst);
+    }
+}
+
 char *
 flow_to_string(const struct flow *flow)
 {
