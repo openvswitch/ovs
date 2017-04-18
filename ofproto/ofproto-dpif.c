@@ -4178,6 +4178,14 @@ check_actions(const struct ofproto_dpif *ofproto,
             report_unsupported_ct("zone");
             return OFPERR_OFPBAC_BAD_ARGUMENT;
         }
+        /* So far the force commit feature is implemented together with the
+         * original direction tuple feature by all datapaths, so we use the
+         * support flag for the 'ct_orig_tuple' to indicate support for the
+         * force commit feature as well. */
+        if ((ct->flags & NX_CT_F_FORCE) && !support->ct_orig_tuple) {
+            report_unsupported_ct("force commit");
+            return OFPERR_OFPBAC_BAD_ARGUMENT;
+        }
 
         OFPACT_FOR_EACH(a, ct->actions, ofpact_ct_get_action_len(ct)) {
             const struct mf_field *dst = ofpact_get_mf_dst(a);
