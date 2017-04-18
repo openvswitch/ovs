@@ -90,8 +90,6 @@ linkcheck_anchors = False
 #
 if use_ovs_theme:
     html_theme = 'ovs'
-else:
-    html_theme = 'default'
 
 # Add any paths that contain custom themes here, relative to this directory.
 if use_ovs_theme:
