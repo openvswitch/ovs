@@ -4121,8 +4121,12 @@ check_mask(struct ofproto_dpif *ofproto, const struct miniflow *flow)
 
     support = &ofproto->backer->support.odp;
     ct_state = MINIFLOW_GET_U8(flow, ct_state);
+
+    /* Do not bother dissecting the flow further if the datapath supports all
+     * the features we know of. */
     if (support->ct_state && support->ct_zone && support->ct_mark
-        && support->ct_label && support->ct_state_nat) {
+        && support->ct_label && support->ct_state_nat
+        && support->ct_orig_tuple) {
         return ct_state & CS_UNSUPPORTED_MASK ? OFPERR_OFPBMC_BAD_MASK : 0;
     }
 
@@ -4136,6 +4140,17 @@ check_mask(struct ofproto_dpif *ofproto, const struct miniflow *flow)
         || (ct_zone && !support->ct_zone)
         || (ct_mark && !support->ct_mark)
         || (!ovs_u128_is_zero(ct_label) && !support->ct_label)) {
+        return OFPERR_OFPBMC_BAD_MASK;
+    }
+
+    if (!support->ct_orig_tuple &&
+        (MINIFLOW_GET_U8(flow, ct_nw_proto) ||
+         MINIFLOW_GET_U16(flow, ct_tp_src) ||
+         MINIFLOW_GET_U16(flow, ct_tp_dst) ||
+         MINIFLOW_GET_U32(flow, ct_nw_src) ||
+         MINIFLOW_GET_U32(flow, ct_nw_dst) ||
+         !ovs_u128_is_zero(MINIFLOW_GET_U128(flow, ct_ipv6_src)) ||
+         !ovs_u128_is_zero(MINIFLOW_GET_U128(flow, ct_ipv6_dst)))) {
         return OFPERR_OFPBMC_BAD_MASK;
     }
 
