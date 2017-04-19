@@ -36,7 +36,7 @@ Python
 The Python bindings are part of the `Open vSwitch package`__. You can install
 the bindings using ``pip``:
 
-.. code-block:: shell
+::
 
    $ pip install ovs
 
