@@ -20,6 +20,7 @@
 #include "precomp.h"
 #include "Flow.h"
 #include "Debug.h"
+#include "Actions.h"
 #include <stddef.h>
 
 #ifdef OVS_DBG_MOD
@@ -155,8 +156,7 @@ OvsGetTcpPayloadLength(PNET_BUFFER_LIST nbl)
 VOID OvsCleanupConntrack(VOID);
 NTSTATUS OvsInitConntrack(POVS_SWITCH_CONTEXT context);
 
-NDIS_STATUS OvsExecuteConntrackAction(PNET_BUFFER_LIST curNbl,
-                                      OVS_PACKET_HDR_INFO *layers,
+NDIS_STATUS OvsExecuteConntrackAction(OvsForwardingContext *fwdCtx,
                                       OvsFlowKey *key,
                                       const PNL_ATTR a);
 BOOLEAN OvsConntrackValidateTcpPacket(const TCPHdr *tcp);

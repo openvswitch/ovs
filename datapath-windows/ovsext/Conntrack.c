@@ -710,8 +710,7 @@ OvsCtExecute_(PNET_BUFFER_LIST curNbl,
  *---------------------------------------------------------------------------
  */
 NDIS_STATUS
-OvsExecuteConntrackAction(PNET_BUFFER_LIST curNbl,
-                          OVS_PACKET_HDR_INFO *layers,
+OvsExecuteConntrackAction(OvsForwardingContext *fwdCtx,
                           OvsFlowKey *key,
                           const PNL_ATTR a)
 {
@@ -722,6 +721,8 @@ OvsExecuteConntrackAction(PNET_BUFFER_LIST curNbl,
     MD_MARK *mark = NULL;
     MD_LABELS *labels = NULL;
     PCHAR helper = NULL;
+    PNET_BUFFER_LIST curNbl = fwdCtx->curNbl;
+    OVS_PACKET_HDR_INFO *layers = &fwdCtx->layers;
 
     NDIS_STATUS status;
 
