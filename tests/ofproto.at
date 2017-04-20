@@ -1228,15 +1228,15 @@ AT_CLEANUP
 AT_SETUP([ofproto - mod-port (OpenFlow 1.2)])
 OVS_VSWITCHD_START
 for command_config_state in \
-    'up 0 0' \
+    'up 0 LIVE' \
     'down PORT_DOWN LINK_DOWN' \
     'no-receive PORT_DOWN,NO_RECV LINK_DOWN' \
     'no-forward PORT_DOWN,NO_RECV,NO_FWD LINK_DOWN' \
     'no-packet-in PORT_DOWN,NO_RECV,NO_FWD,NO_PACKET_IN LINK_DOWN' \
     'forward PORT_DOWN,NO_RECV,NO_PACKET_IN LINK_DOWN' \
     'packet-in PORT_DOWN,NO_RECV LINK_DOWN' \
-    'up NO_RECV 0' \
-    'receive 0 0'
+    'up NO_RECV LIVE' \
+    'receive 0 LIVE'
 do
     set $command_config_state
     command=$[1] config=`echo $[2] | sed 's/,/ /g'` state=$[3]
@@ -1259,15 +1259,15 @@ AT_CLEANUP
 AT_SETUP([ofproto - mod-port (OpenFlow 1.4)])
 OVS_VSWITCHD_START
 for command_config_state in \
-    'up 0 0' \
+    'up 0 LIVE' \
     'down PORT_DOWN LINK_DOWN' \
     'no-receive PORT_DOWN,NO_RECV LINK_DOWN' \
     'no-forward PORT_DOWN,NO_RECV,NO_FWD LINK_DOWN' \
     'no-packet-in PORT_DOWN,NO_RECV,NO_FWD,NO_PACKET_IN LINK_DOWN' \
     'forward PORT_DOWN,NO_RECV,NO_PACKET_IN LINK_DOWN' \
     'packet-in PORT_DOWN,NO_RECV LINK_DOWN' \
-    'up NO_RECV 0' \
-    'receive 0 0'
+    'up NO_RECV LIVE' \
+    'receive 0 LIVE'
 do
     set $command_config_state
     command=$[1] config=`echo $[2] | sed 's/,/ /g'` state=$[3]
@@ -1291,15 +1291,15 @@ AT_CLEANUP
 AT_SETUP([ofproto - mod-port (OpenFlow 1.6)])
 OVS_VSWITCHD_START
 for command_config_state in \
-    'up 0 0' \
+    'up 0 LIVE' \
     'down PORT_DOWN LINK_DOWN' \
     'no-receive PORT_DOWN,NO_RECV LINK_DOWN' \
     'no-forward PORT_DOWN,NO_RECV,NO_FWD LINK_DOWN' \
     'no-packet-in PORT_DOWN,NO_RECV,NO_FWD,NO_PACKET_IN LINK_DOWN' \
     'forward PORT_DOWN,NO_RECV,NO_PACKET_IN LINK_DOWN' \
     'packet-in PORT_DOWN,NO_RECV LINK_DOWN' \
-    'up NO_RECV 0' \
-    'receive 0 0'
+    'up NO_RECV LIVE' \
+    'receive 0 LIVE'
 do
     set $command_config_state
     command=$[1] config=`echo $[2] | sed 's/,/ /g'` state=$[3]
@@ -3520,7 +3520,7 @@ udp,vlan_tci=0x0000,dl_src=00:26:b9:8c:b0:f9,dl_dst=00:25:83:df:b4:00,nw_src=172
      speed: 0 Mbps now, 0 Mbps max
 OFPT_PORT_STATUS (OF1.4): MOD: ${INDEX}(test): addr:aa:55:aa:55:00:0x
      config:     0
-     state:      0
+     state:      LIVE
      speed: 0 Mbps now, 0 Mbps max"
     fi
 
@@ -3529,7 +3529,7 @@ OFPT_PORT_STATUS (OF1.4): MOD: ${INDEX}(test): addr:aa:55:aa:55:00:0x
     if test X"$1" = X"OFPPR_DELETE"; then shift;
         echo >>expout "OFPT_PORT_STATUS (OF1.4): DEL: ${INDEX}(test): addr:aa:55:aa:55:00:0x
      config:     0
-     state:      0
+     state:      LIVE
      speed: 0 Mbps now, 0 Mbps max"
     fi
 
@@ -3702,7 +3702,7 @@ check_async () {
      speed: 0 Mbps now, 0 Mbps max
 OFPT_PORT_STATUS (OF1.5): MOD: 2(test): addr:aa:55:aa:55:00:0x
      config:     0
-     state:      0
+     state:      LIVE
      speed: 0 Mbps now, 0 Mbps max"
     fi
 
@@ -3711,7 +3711,7 @@ OFPT_PORT_STATUS (OF1.5): MOD: 2(test): addr:aa:55:aa:55:00:0x
     if test X"$1" = X"OFPPR_DELETE"; then shift;
         echo >>expout "OFPT_PORT_STATUS (OF1.5): DEL: ${INDEX}(test): addr:aa:55:aa:55:00:0x
      config:     0
-     state:      0
+     state:      LIVE
      speed: 0 Mbps now, 0 Mbps max"
     fi
 

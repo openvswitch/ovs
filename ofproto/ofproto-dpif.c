@@ -1894,6 +1894,16 @@ port_modified(struct ofport *port_)
         bfd_set_netdev(port->bfd, netdev);
     }
 
+    /* Set liveness, unless the link is administratively or
+     * operationally down or link monitoring false */
+    if (!(port->up.pp.config & OFPUTIL_PC_PORT_DOWN) &&
+        !(port->up.pp.state & OFPUTIL_PS_LINK_DOWN) &&
+        port->may_enable) {
+        port->up.pp.state |= OFPUTIL_PS_LIVE;
+    } else {
+        port->up.pp.state &= ~OFPUTIL_PS_LIVE;
+    }
+
     ofproto_dpif_monitor_port_update(port, port->bfd, port->cfm,
                                      port->lldp, &port->up.pp.hw_addr);
 
@@ -3456,6 +3466,19 @@ port_run(struct ofport_dpif *ofport)
 
         if (ofport->rstp_port) {
             rstp_port_set_mac_operational(ofport->rstp_port, enable);
+        }
+
+        /* Propagate liveness, unless the link is administratively or
+         * operationally down. */
+        if (!(ofport->up.pp.config & OFPUTIL_PC_PORT_DOWN) &&
+            !(ofport->up.pp.state & OFPUTIL_PS_LINK_DOWN)) {
+            enum ofputil_port_state of_state = ofport->up.pp.state;
+            if (enable) {
+                of_state |= OFPUTIL_PS_LIVE;
+            } else {
+                of_state &= ~OFPUTIL_PS_LIVE;
+            }
+            ofproto_port_set_state(&ofport->up, of_state);
         }
     }
 

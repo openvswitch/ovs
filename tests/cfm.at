@@ -319,3 +319,189 @@ CFM_CHECK_EXTENDED_FAULT([p0], [1], [recv], [0], [up], [up], [300ms])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+# test cfm liveness propagation - OF1.3.
+AT_SETUP([cfm - liveness propagation - OF1.3])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-ofctl -O OpenFlow13 -P standard monitor br0 --detach --no-chdir --pidfile])
+check_liveness () {
+    printf '\n\n--- check_liveness %d ---\n\n\n' $1
+    shift
+
+	echo >>expout "OFPT_PORT_STATUS (OF1.3): MOD: 1(p0): addr:
+     config:     0
+     state:      $1
+     speed: 0 Mbps now, 0 Mbps max"
+
+	AT_CHECK(
+      [[sed '
+s/ (xid=0x[0-9a-fA-F]*)//
+s/ *duration.*//
+s/addr:[0-9a-fA-F:]*/addr:/' < monitor.log|grep -A3 "MOD: 1(p0)"|grep -ve --]],
+      [0], [expout])
+}
+: > expout
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
+# Set miss_send_len to 128, enabling port_status messages to our service connection.
+ovs-appctl -t ovs-ofctl ofctl/send 0409000c0123456700000080
+
+#Create 2 bridges connected by patch ports and enable cfm
+AT_CHECK([ovs-vsctl add-br br1 -- \
+          set bridge br1 datapath-type=dummy \
+          other-config:hwaddr=aa:55:aa:56:00:00 -- \
+          add-port br1 p1 -- set Interface p1 type=patch \
+          options:peer=p0 -- \
+          add-port br0 p0 -- set Interface p0 type=patch \
+          options:peer=p1])
+check_liveness 1 LIVE
+
+AT_CHECK([ovs-vsctl \
+          set Interface p0 cfm_mpid=1 other_config:cfm_interval=100 other_config:cfm_extended=true -- \
+          set Interface p1 cfm_mpid=2 other_config:cfm_interval=100 other_config:cfm_extended=true])
+ovs-appctl time/stop
+# wait for a while to stablize cfm.
+ovs-appctl time/warp 10100 100
+CFM_CHECK_EXTENDED([p0], [1], [100], [up], [up], [100ms], [2], [up])
+CFM_CHECK_EXTENDED([p1], [2], [100], [up], [up], [100ms], [1], [up])
+
+# turn cfm on p1 off, should increment the cfm_flap_count on p0.
+AT_CHECK([ovs-vsctl remove interface p1 cfm_mpid 2])
+ovs-appctl time/warp 1100 100
+CFM_VSCTL_LIST_IFACE([p0], [cfm_flap_count], [cfm_flap_count      : 1])
+CFM_VSCTL_LIST_IFACE([p1], [cfm_flap_count], [cfm_flap_count      : [[]]])
+check_liveness 2 0
+
+# turn cfm on p1 on again, should increment the cfm_flap_count on p0.
+AT_CHECK([ovs-vsctl set interface p1 cfm_mpid=2])
+ovs-appctl time/warp 1100 100
+check_liveness 3 LIVE
+
+CFM_VSCTL_LIST_IFACE([p0], [cfm_flap_count], [cfm_flap_count      : 2])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+# test cfm liveness propagation - OF1.4.
+AT_SETUP([cfm - liveness propagation - OF1.4])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-ofctl -O OpenFlow14 -P standard monitor br0 --detach --no-chdir --pidfile])
+check_liveness () {
+    printf '\n\n--- check_liveness %d ---\n\n\n' $1
+    shift
+
+	echo >>expout "OFPT_PORT_STATUS (OF1.4): MOD: 1(p0): addr:
+     config:     0
+     state:      $1
+     speed: 0 Mbps now, 0 Mbps max"
+
+	AT_CHECK(
+      [[sed '
+s/ (xid=0x[0-9a-fA-F]*)//
+s/ *duration.*//
+s/addr:[0-9a-fA-F:]*/addr:/' < monitor.log|grep -A3 "MOD: 1(p0)"|grep -ve --]],
+      [0], [expout])
+}
+: > expout
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
+# Set miss_send_len to 128, enabling port_status messages to our service connection.
+ovs-appctl -t ovs-ofctl ofctl/send 0509000c0123456700000080
+
+#Create 2 bridges connected by patch ports and enable cfm
+AT_CHECK([ovs-vsctl add-br br1 -- \
+          set bridge br1 datapath-type=dummy \
+          other-config:hwaddr=aa:55:aa:56:00:00 -- \
+          add-port br1 p1 -- set Interface p1 type=patch \
+          options:peer=p0 -- \
+          add-port br0 p0 -- set Interface p0 type=patch \
+          options:peer=p1])
+check_liveness 1 LIVE
+
+AT_CHECK([ovs-vsctl \
+          set Interface p0 cfm_mpid=1 other_config:cfm_interval=100 other_config:cfm_extended=true -- \
+          set Interface p1 cfm_mpid=2 other_config:cfm_interval=100 other_config:cfm_extended=true])
+ovs-appctl time/stop
+# wait for a while to stablize cfm.
+ovs-appctl time/warp 10100 100
+CFM_CHECK_EXTENDED([p0], [1], [100], [up], [up], [100ms], [2], [up])
+CFM_CHECK_EXTENDED([p1], [2], [100], [up], [up], [100ms], [1], [up])
+
+# turn cfm on p1 off, should increment the cfm_flap_count on p0.
+AT_CHECK([ovs-vsctl remove interface p1 cfm_mpid 2])
+ovs-appctl time/warp 1100 100
+CFM_VSCTL_LIST_IFACE([p0], [cfm_flap_count], [cfm_flap_count      : 1])
+CFM_VSCTL_LIST_IFACE([p1], [cfm_flap_count], [cfm_flap_count      : [[]]])
+check_liveness 2 0
+
+# turn cfm on p1 on again, should increment the cfm_flap_count on p0.
+AT_CHECK([ovs-vsctl set interface p1 cfm_mpid=2])
+ovs-appctl time/warp 1100 100
+check_liveness 3 LIVE
+
+CFM_VSCTL_LIST_IFACE([p0], [cfm_flap_count], [cfm_flap_count      : 2])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+# test cfm liveness propagation - OF1.5.
+AT_SETUP([cfm - liveness propagation - OF1.5])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-ofctl -O OpenFlow15 -P standard monitor br0 --detach --no-chdir --pidfile])
+check_liveness () {
+    printf '\n\n--- check_liveness %d ---\n\n\n' $1
+    shift
+
+	echo >>expout "OFPT_PORT_STATUS (OF1.5): MOD: 1(p0): addr:
+     config:     0
+     state:      $1
+     speed: 0 Mbps now, 0 Mbps max"
+
+	AT_CHECK(
+      [[sed '
+s/ (xid=0x[0-9a-fA-F]*)//
+s/ *duration.*//
+s/addr:[0-9a-fA-F:]*/addr:/' < monitor.log|grep -A3 "MOD: 1(p0)"|grep -ve --]],
+      [0], [expout])
+}
+: > expout
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
+# Set miss_send_len to 128, enabling port_status messages to our service connection.
+ovs-appctl -t ovs-ofctl ofctl/send 0609000c0123456700000080
+
+#Create 2 bridges connected by patch ports and enable cfm
+AT_CHECK([ovs-vsctl add-br br1 -- \
+          set bridge br1 datapath-type=dummy \
+          other-config:hwaddr=aa:55:aa:56:00:00 -- \
+          add-port br1 p1 -- set Interface p1 type=patch \
+          options:peer=p0 -- \
+          add-port br0 p0 -- set Interface p0 type=patch \
+          options:peer=p1])
+check_liveness 1 LIVE
+
+AT_CHECK([ovs-vsctl \
+          set Interface p0 cfm_mpid=1 other_config:cfm_interval=100 other_config:cfm_extended=true -- \
+          set Interface p1 cfm_mpid=2 other_config:cfm_interval=100 other_config:cfm_extended=true])
+ovs-appctl time/stop
+# wait for a while to stablize cfm.
+ovs-appctl time/warp 10100 100
+CFM_CHECK_EXTENDED([p0], [1], [100], [up], [up], [100ms], [2], [up])
+CFM_CHECK_EXTENDED([p1], [2], [100], [up], [up], [100ms], [1], [up])
+
+# turn cfm on p1 off, should increment the cfm_flap_count on p0.
+AT_CHECK([ovs-vsctl remove interface p1 cfm_mpid 2])
+ovs-appctl time/warp 1100 100
+CFM_VSCTL_LIST_IFACE([p0], [cfm_flap_count], [cfm_flap_count      : 1])
+CFM_VSCTL_LIST_IFACE([p1], [cfm_flap_count], [cfm_flap_count      : [[]]])
+check_liveness 2 0
+
+# turn cfm on p1 on again, should increment the cfm_flap_count on p0.
+AT_CHECK([ovs-vsctl set interface p1 cfm_mpid=2])
+ovs-appctl time/warp 1100 100
+check_liveness 3 LIVE
+
+CFM_VSCTL_LIST_IFACE([p0], [cfm_flap_count], [cfm_flap_count      : 2])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP

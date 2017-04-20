@@ -2473,9 +2473,6 @@ ofport_modified(struct ofport *port, struct ofputil_phy_port *pp)
     port->pp.peer = pp->peer;
     port->pp.curr_speed = pp->curr_speed;
     port->pp.max_speed = pp->max_speed;
-
-    connmgr_send_port_status(port->ofproto->connmgr, NULL,
-                             &port->pp, OFPPR_MODIFY);
 }
 
 /* Update OpenFlow 'state' in 'port' and notify controller. */
@@ -2633,7 +2630,8 @@ update_port(struct ofproto *ofproto, const char *name)
             struct netdev *old_netdev = port->netdev;
 
             /* 'name' hasn't changed location.  Any properties changed? */
-            if (!ofport_equal(&port->pp, &pp)) {
+            bool port_changed = !ofport_equal(&port->pp, &pp);
+            if (port_changed) {
                 ofport_modified(port, &pp);
             }
 
@@ -2647,6 +2645,12 @@ update_port(struct ofproto *ofproto, const char *name)
 
             if (port->ofproto->ofproto_class->port_modified) {
                 port->ofproto->ofproto_class->port_modified(port);
+            }
+
+            /* Send status update, if any port property changed */
+            if (port_changed) {
+                connmgr_send_port_status(port->ofproto->connmgr, NULL,
+                                         &port->pp, OFPPR_MODIFY);
             }
 
             netdev_close(old_netdev);

@@ -726,3 +726,291 @@ slave p3: enabled
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+# test lacp liveness propagation - OF1.3.
+AT_SETUP([lacp - liveness propagation - OF1.3])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-ofctl -O OpenFlow13 -P standard monitor br0 --detach --no-chdir --pidfile])
+check_liveness () {
+    printf '\n\n--- check_liveness %d ---\n\n\n' $1
+    shift
+
+	echo >>expout "OFPT_PORT_STATUS (OF1.3): MOD: 1(p0): addr:
+     config:     0
+     state:      $1
+     speed: 0 Mbps now, 0 Mbps max"
+
+	AT_CHECK(
+      [[sed '
+s/ (xid=0x[0-9a-fA-F]*)//
+s/ *duration.*//
+s/addr:[0-9a-fA-F:]*/addr:/' < monitor.log|grep -A3 "MOD: 1(p0)"|grep -ve --]],
+      [0], [expout])
+}
+: > expout
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
+# Set miss_send_len to 128, enabling port_status messages to our service connection.
+ovs-appctl -t ovs-ofctl ofctl/send 0409000c0123456700000080
+
+# Create bond0 on br0 with interfaces p0 and p1
+#    and bond1 on br1 with interfaces p2 and p3
+# with p0 patched to p2 and p1 patched to p3.
+AT_CHECK([ovs-vsctl add-bond br0 bond0 p0 p1 bond_mode=balance-tcp lacp=active \
+                            other-config:lacp-time=fast \
+                            other-config:bond-rebalance-interval=0 -- \
+   set interface p0 type=patch options:peer=p2 ofport_request=1 \
+                    other-config:lacp-aggregation-key=2 -- \
+   set interface p1 type=patch options:peer=p3 ofport_request=2 \
+                    other-config:lacp-aggregation-key=2 -- \
+   add-br br1 -- \
+   set bridge br1 other-config:hwaddr=aa:66:aa:66:00:00 -- \
+   set bridge br1 datapath-type=dummy other-config:datapath-id=1234 \
+                  fail-mode=secure -- \
+   add-bond br1 bond1 p2 p3 bond_mode=balance-tcp lacp=active \
+                            other-config:lacp-time=fast \
+                            other-config:bond-rebalance-interval=0 -- \
+   set interface p2 type=patch options:peer=p0 ofport_request=3 \
+                    other-config:lacp-aggregation-key=4 -- \
+   set interface p3 type=patch options:peer=p1 ofport_request=4 \
+                    other-config:lacp-aggregation-key=4 --])
+
+AT_CHECK([ovs-appctl netdev-dummy/set-admin-state up], 0, [OK
+])
+ovs-appctl time/stop
+
+# Wait for up to 5 (simulated) seconds, until LACP negotiation finishes.
+i=0
+while :; do
+    ovs-appctl lacp/show bond0 > bond0
+    AT_CAPTURE_FILE([bond0])
+    ovs-appctl lacp/show bond1 > bond1
+    AT_CAPTURE_FILE([bond1])
+    if grep negotiated bond0 && grep negotiated bond1; then
+        if grep expired bond0 || grep expired bond1; then
+            :
+        else
+            break
+        fi
+    fi
+    i=`expr $i + 1`
+    if test $i = 50; then
+        AT_FAIL_IF([:])
+    fi
+    ovs-appctl time/warp 100
+done
+check_liveness 1 LIVE
+
+# Makes LACP state "expired" for p0 and p2.
+AT_CHECK([ovs-vsctl \
+-- add-port br0 null0 -- set int null0 type=patch options:peer=p2 -- set int p2 options:peer=null0 \
+-- add-port br1 null1 -- set int null1 type=patch options:peer=p0 -- set int p0 options:peer=null1])
+check_liveness 2 LIVE
+
+# Wait 4 more simulated seconds.  The LACP state should become "defaulted" for p0 and p2.
+ovs-appctl time/warp 4100 100
+check_liveness 3 0
+
+# Reconnect the patch link between p0 and p2 to allow traffic between the ports.
+AT_CHECK([ovs-vsctl \
+-- del-port null0 -- set int p2 options:peer=p0 \
+-- del-port null1 -- set int p0 options:peer=p2])
+
+# Wait for 30 more seconds (LACP_SLOW_TIME_TX) for the lacp to renegotiate
+ovs-appctl time/warp 30100 100
+check_liveness 3 LIVE
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+# test lacp liveness propagation - OF1.4.
+AT_SETUP([lacp - liveness propagation - OF1.4])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-ofctl -O OpenFlow14 -P standard monitor br0 --detach --no-chdir --pidfile])
+check_liveness () {
+    printf '\n\n--- check_liveness %d ---\n\n\n' $1
+    shift
+
+	echo >>expout "OFPT_PORT_STATUS (OF1.4): MOD: 1(p0): addr:
+     config:     0
+     state:      $1
+     speed: 0 Mbps now, 0 Mbps max"
+
+	AT_CHECK(
+      [[sed '
+s/ (xid=0x[0-9a-fA-F]*)//
+s/ *duration.*//
+s/addr:[0-9a-fA-F:]*/addr:/' < monitor.log|grep -A3 "MOD: 1(p0)"|grep -ve --]],
+      [0], [expout])
+}
+: > expout
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
+# Set miss_send_len to 128, enabling port_status messages to our service connection.
+ovs-appctl -t ovs-ofctl ofctl/send 0509000c0123456700000080
+
+# Create bond0 on br0 with interfaces p0 and p1
+#    and bond1 on br1 with interfaces p2 and p3
+# with p0 patched to p2 and p1 patched to p3.
+AT_CHECK([ovs-vsctl add-bond br0 bond0 p0 p1 bond_mode=balance-tcp lacp=active \
+                            other-config:lacp-time=fast \
+                            other-config:bond-rebalance-interval=0 -- \
+   set interface p0 type=patch options:peer=p2 ofport_request=1 \
+                    other-config:lacp-aggregation-key=2 -- \
+   set interface p1 type=patch options:peer=p3 ofport_request=2 \
+                    other-config:lacp-aggregation-key=2 -- \
+   add-br br1 -- \
+   set bridge br1 other-config:hwaddr=aa:66:aa:66:00:00 -- \
+   set bridge br1 datapath-type=dummy other-config:datapath-id=1234 \
+                  fail-mode=secure -- \
+   add-bond br1 bond1 p2 p3 bond_mode=balance-tcp lacp=active \
+                            other-config:lacp-time=fast \
+                            other-config:bond-rebalance-interval=0 -- \
+   set interface p2 type=patch options:peer=p0 ofport_request=3 \
+                    other-config:lacp-aggregation-key=4 -- \
+   set interface p3 type=patch options:peer=p1 ofport_request=4 \
+                    other-config:lacp-aggregation-key=4 --])
+
+AT_CHECK([ovs-appctl netdev-dummy/set-admin-state up], 0, [OK
+])
+ovs-appctl time/stop
+
+# Wait for up to 5 (simulated) seconds, until LACP negotiation finishes.
+i=0
+while :; do
+    ovs-appctl lacp/show bond0 > bond0
+    AT_CAPTURE_FILE([bond0])
+    ovs-appctl lacp/show bond1 > bond1
+    AT_CAPTURE_FILE([bond1])
+    if grep negotiated bond0 && grep negotiated bond1; then
+        if grep expired bond0 || grep expired bond1; then
+            :
+        else
+            break
+        fi
+    fi
+    i=`expr $i + 1`
+    if test $i = 50; then
+        AT_FAIL_IF([:])
+    fi
+    ovs-appctl time/warp 100
+done
+check_liveness 1 LIVE
+
+# Makes LACP state "expired" for p0 and p2.
+AT_CHECK([ovs-vsctl \
+-- add-port br0 null0 -- set int null0 type=patch options:peer=p2 -- set int p2 options:peer=null0 \
+-- add-port br1 null1 -- set int null1 type=patch options:peer=p0 -- set int p0 options:peer=null1])
+check_liveness 2 LIVE
+
+# Wait 4 more simulated seconds.  The LACP state should become "defaulted" for p0 and p2.
+ovs-appctl time/warp 4100 100
+check_liveness 3 0
+
+# Reconnect the patch link between p0 and p2 to allow traffic between the ports.
+AT_CHECK([ovs-vsctl \
+-- del-port null0 -- set int p2 options:peer=p0 \
+-- del-port null1 -- set int p0 options:peer=p2])
+
+# Wait for 30 more seconds (LACP_SLOW_TIME_TX) for the lacp to renegotiate
+ovs-appctl time/warp 30100 100
+check_liveness 3 LIVE
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+# test lacp liveness propagation - OF1.5.
+AT_SETUP([lacp - liveness propagation - OF1.5])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-ofctl -O OpenFlow15 -P standard monitor br0 --detach --no-chdir --pidfile])
+check_liveness () {
+    printf '\n\n--- check_liveness %d ---\n\n\n' $1
+    shift
+
+	echo >>expout "OFPT_PORT_STATUS (OF1.5): MOD: 1(p0): addr:
+     config:     0
+     state:      $1
+     speed: 0 Mbps now, 0 Mbps max"
+
+	AT_CHECK(
+      [[sed '
+s/ (xid=0x[0-9a-fA-F]*)//
+s/ *duration.*//
+s/addr:[0-9a-fA-F:]*/addr:/' < monitor.log|grep -A3 "MOD: 1(p0)"|grep -ve --]],
+      [0], [expout])
+}
+: > expout
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
+# Set miss_send_len to 128, enabling port_status messages to our service connection.
+ovs-appctl -t ovs-ofctl ofctl/send 0609000c0123456700000080
+
+# Create bond0 on br0 with interfaces p0 and p1
+#    and bond1 on br1 with interfaces p2 and p3
+# with p0 patched to p2 and p1 patched to p3.
+AT_CHECK([ovs-vsctl add-bond br0 bond0 p0 p1 bond_mode=balance-tcp lacp=active \
+                            other-config:lacp-time=fast \
+                            other-config:bond-rebalance-interval=0 -- \
+   set interface p0 type=patch options:peer=p2 ofport_request=1 \
+                    other-config:lacp-aggregation-key=2 -- \
+   set interface p1 type=patch options:peer=p3 ofport_request=2 \
+                    other-config:lacp-aggregation-key=2 -- \
+   add-br br1 -- \
+   set bridge br1 other-config:hwaddr=aa:66:aa:66:00:00 -- \
+   set bridge br1 datapath-type=dummy other-config:datapath-id=1234 \
+                  fail-mode=secure -- \
+   add-bond br1 bond1 p2 p3 bond_mode=balance-tcp lacp=active \
+                            other-config:lacp-time=fast \
+                            other-config:bond-rebalance-interval=0 -- \
+   set interface p2 type=patch options:peer=p0 ofport_request=3 \
+                    other-config:lacp-aggregation-key=4 -- \
+   set interface p3 type=patch options:peer=p1 ofport_request=4 \
+                    other-config:lacp-aggregation-key=4 --])
+
+AT_CHECK([ovs-appctl netdev-dummy/set-admin-state up], 0, [OK
+])
+ovs-appctl time/stop
+
+# Wait for up to 5 (simulated) seconds, until LACP negotiation finishes.
+i=0
+while :; do
+    ovs-appctl lacp/show bond0 > bond0
+    AT_CAPTURE_FILE([bond0])
+    ovs-appctl lacp/show bond1 > bond1
+    AT_CAPTURE_FILE([bond1])
+    if grep negotiated bond0 && grep negotiated bond1; then
+        if grep expired bond0 || grep expired bond1; then
+            :
+        else
+            break
+        fi
+    fi
+    i=`expr $i + 1`
+    if test $i = 50; then
+        AT_FAIL_IF([:])
+    fi
+    ovs-appctl time/warp 100
+done
+check_liveness 1 LIVE
+
+# Makes LACP state "expired" for p0 and p2.
+AT_CHECK([ovs-vsctl \
+-- add-port br0 null0 -- set int null0 type=patch options:peer=p2 -- set int p2 options:peer=null0 \
+-- add-port br1 null1 -- set int null1 type=patch options:peer=p0 -- set int p0 options:peer=null1])
+check_liveness 2 LIVE
+
+# Wait 4 more simulated seconds.  The LACP state should become "defaulted" for p0 and p2.
+ovs-appctl time/warp 4100 100
+check_liveness 3 0
+
+# Reconnect the patch link between p0 and p2 to allow traffic between the ports.
+AT_CHECK([ovs-vsctl \
+-- del-port null0 -- set int p2 options:peer=p0 \
+-- del-port null1 -- set int p0 options:peer=p2])
+
+# Wait for 30 more seconds (LACP_SLOW_TIME_TX) for the lacp to renegotiate
+ovs-appctl time/warp 30100 100
+check_liveness 3 LIVE
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
