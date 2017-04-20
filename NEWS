@@ -10,6 +10,7 @@ Post-v2.7.0
        Log level can be changed in a usual OVS way using
        'ovs-appctl vlog' commands for 'dpdk' module. Lower bound
        still can be configured via extra arguments for DPDK EAL.
+   - IPFIX now provides additional counters for totals since startup.
    - New support for multiple VLANs (802.1ad or "QinQ"), including a new
      "dot1q-tunnel" port VLAN mode.
    - In ovn-vsctl and vtep-ctl, record UUIDs in commands may now be
