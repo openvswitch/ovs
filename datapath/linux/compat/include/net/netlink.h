@@ -157,4 +157,18 @@ static inline int nla_put_be64(struct sk_buff *skb, int attrtype, __be64 value,
 }
 
 #endif
+
+#ifndef HAVE_NETLINK_EXT_ACK
+struct netlink_ext_ack;
+
+static inline int rpl_nla_parse_nested(struct nlattr *tb[], int maxtype,
+				       const struct nlattr *nla,
+				       const struct nla_policy *policy,
+				       struct netlink_ext_ack *extack)
+{
+	return nla_parse_nested(tb, maxtype, nla, policy);
+}
+#define nla_parse_nested rpl_nla_parse_nested
+#endif
+
 #endif /* net/netlink.h */

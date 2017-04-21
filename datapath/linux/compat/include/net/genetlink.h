@@ -125,15 +125,23 @@ static inline int rpl_genl_has_listeners(struct genl_family *family,
 
 #endif /* HAVE_GENL_HAS_LISTENERS */
 
-#ifndef HAVE_GENLMSG_PARSE
-static inline int genlmsg_parse(const struct nlmsghdr *nlh,
-				const struct genl_family *family,
-				struct nlattr *tb[], int maxtype,
-				const struct nla_policy *policy)
+#ifndef HAVE_NETLINK_EXT_ACK
+struct netlink_ext_ack;
+
+static inline int rpl_genlmsg_parse(const struct nlmsghdr *nlh,
+				    const struct genl_family *family,
+				    struct nlattr *tb[], int maxtype,
+				    const struct nla_policy *policy,
+				    struct netlink_ext_ack *extack)
 {
+#ifdef HAVE_GENLMSG_PARSE
+	return genlmsg_parse(nlh, family, tb, maxtype, policy);
+#else
 	return nlmsg_parse(nlh, family->hdrsize + GENL_HDRLEN, tb, maxtype,
 			   policy);
+#endif
 }
+#define genlmsg_parse rpl_genlmsg_parse
 #endif
 
 #endif /* genetlink.h */

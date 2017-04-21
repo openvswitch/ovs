@@ -663,6 +663,9 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_is_last])
   OVS_GREP_IFELSE([$KSRC/include/linux/netlink.h], [void.*netlink_set_err],
                   [OVS_DEFINE([HAVE_VOID_NETLINK_SET_ERR])])
+  OVS_FIND_PARAM_IFELSE([$KSRC/include/net/netlink.h],
+                        [nla_parse], [netlink_ext_ack],
+                        [OVS_DEFINE([HAVE_NETLINK_EXT_ACK])])
 
   OVS_GREP_IFELSE([$KSRC/include/net/sctp/checksum.h], [sctp_compute_cksum])
 
