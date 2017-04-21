@@ -4287,6 +4287,9 @@ iface_destroy__(struct iface *iface)
         struct port *port = iface->port;
         struct bridge *br = port->bridge;
 
+        VLOG_INFO("bridge %s: deleted interface %s on port %d",
+                  br->name, iface->name, iface->ofp_port);
+
         if (br->ofproto && iface->ofp_port != OFPP_NONE) {
             ofproto_port_unregister(br->ofproto, iface->ofp_port);
         }
