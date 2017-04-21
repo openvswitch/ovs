@@ -647,7 +647,9 @@ OvsCalculateUDPChecksum(PNET_BUFFER_LIST curNbl,
  * OvsApplySWChecksumOnNB --
  *
  * This function calculates and sets the required software offloads given by
- * csumInfo for a given NBL(nbl) with a single NB.
+ * csumInfo for a given NBL(nbl). If the given net buffer list 'nbl'
+ * has multiple net buffers, we assume that they are part of the same
+ * connection with the same offsets defined in 'layers'.
  *
  */
 NDIS_STATUS
@@ -661,60 +663,61 @@ OvsApplySWChecksumOnNB(POVS_PACKET_HDR_INFO layers,
     UINT32 packetLength = 0;
     ASSERT(nbl != NULL);
 
-    curNb = NET_BUFFER_LIST_FIRST_NB(nbl);
-    ASSERT(curNb->Next == NULL);
-    packetLength = NET_BUFFER_DATA_LENGTH(curNb);
-    curMdl = NET_BUFFER_CURRENT_MDL(curNb);
-    bufferStart = (PUINT8)MmGetSystemAddressForMdlSafe(curMdl,
-                                                       LowPagePriority);
-    if (!bufferStart) {
-        return NDIS_STATUS_RESOURCES;
-    }
-
-    bufferStart += NET_BUFFER_CURRENT_MDL_OFFSET(curNb);
-
-    if (layers->isIPv4) {
-        IPHdr *ip = (IPHdr *)(bufferStart + layers->l3Offset);
-
-        if (csumInfo->Transmit.IpHeaderChecksum) {
-            ip->check = 0;
-            ip->check = IPChecksum((UINT8 *)ip, 4 * ip->ihl, 0);
+    for (curNb = NET_BUFFER_LIST_FIRST_NB(nbl); curNb != NULL;
+         curNb = curNb->Next) {
+        packetLength = NET_BUFFER_DATA_LENGTH(curNb);
+        curMdl = NET_BUFFER_CURRENT_MDL(curNb);
+        bufferStart = (PUINT8)MmGetSystemAddressForMdlSafe(curMdl,
+                                                           LowPagePriority);
+        if (!bufferStart) {
+            return NDIS_STATUS_RESOURCES;
         }
 
-        if (layers->isTcp && csumInfo->Transmit.TcpChecksum) {
-            UINT16 csumLength = (UINT16)(packetLength - layers->l4Offset);
-            TCPHdr *tcp = (TCPHdr *)(bufferStart + layers->l4Offset);
-            tcp->check = IPPseudoChecksum(&ip->saddr, &ip->daddr,
-                                          IPPROTO_TCP, csumLength);
-            tcp->check = CalculateChecksumNB(curNb, csumLength,
-                                             (UINT32)(layers->l4Offset));
-        } else if (layers->isUdp && csumInfo->Transmit.UdpChecksum) {
-            UINT16 csumLength = (UINT16)(packetLength - layers->l4Offset);
-            UDPHdr *udp = (UDPHdr *)((PCHAR)ip + sizeof *ip);
-            udp->check = IPPseudoChecksum(&ip->saddr, &ip->daddr,
-                                          IPPROTO_UDP, csumLength);
-            udp->check = CalculateChecksumNB(curNb, csumLength,
-                                             (UINT32)(layers->l4Offset));
-        }
-    } else if (layers->isIPv6) {
-        IPv6Hdr *ip = (IPv6Hdr *)(bufferStart + layers->l3Offset);
+        bufferStart += NET_BUFFER_CURRENT_MDL_OFFSET(curNb);
 
-        if (layers->isTcp && csumInfo->Transmit.TcpChecksum) {
-            UINT16 csumLength = (UINT16)(packetLength - layers->l4Offset);
-            TCPHdr *tcp = (TCPHdr *)(bufferStart + layers->l4Offset);
-            tcp->check = IPv6PseudoChecksum((UINT32 *) &ip->saddr,
-                                            (UINT32 *) &ip->daddr,
-                                            IPPROTO_TCP, csumLength);
-            tcp->check = CalculateChecksumNB(curNb, csumLength,
-                                             (UINT32)(layers->l4Offset));
-        } else if (layers->isUdp && csumInfo->Transmit.UdpChecksum) {
-            UINT16 csumLength = (UINT16)(packetLength - layers->l4Offset);
-            UDPHdr *udp = (UDPHdr *)((PCHAR)ip + sizeof *ip);
-            udp->check = IPv6PseudoChecksum((UINT32 *) &ip->saddr,
-                                            (UINT32 *) &ip->daddr,
-                                            IPPROTO_UDP, csumLength);
-            udp->check = CalculateChecksumNB(curNb, csumLength,
-                                             (UINT32)(layers->l4Offset));
+        if (layers->isIPv4) {
+            IPHdr *ip = (IPHdr *)(bufferStart + layers->l3Offset);
+
+            if (csumInfo->Transmit.IpHeaderChecksum) {
+                ip->check = 0;
+                ip->check = IPChecksum((UINT8 *)ip, 4 * ip->ihl, 0);
+            }
+
+            if (layers->isTcp && csumInfo->Transmit.TcpChecksum) {
+                UINT16 csumLength = (UINT16)(packetLength - layers->l4Offset);
+                TCPHdr *tcp = (TCPHdr *)(bufferStart + layers->l4Offset);
+                tcp->check = IPPseudoChecksum(&ip->saddr, &ip->daddr,
+                                              IPPROTO_TCP, csumLength);
+                tcp->check = CalculateChecksumNB(curNb, csumLength,
+                                                 (UINT32)(layers->l4Offset));
+            } else if (layers->isUdp && csumInfo->Transmit.UdpChecksum) {
+                UINT16 csumLength = (UINT16)(packetLength - layers->l4Offset);
+                UDPHdr *udp = (UDPHdr *)((PCHAR)ip + sizeof *ip);
+                udp->check = IPPseudoChecksum(&ip->saddr, &ip->daddr,
+                                              IPPROTO_UDP, csumLength);
+                udp->check = CalculateChecksumNB(curNb, csumLength,
+                                                 (UINT32)(layers->l4Offset));
+            }
+        } else if (layers->isIPv6) {
+            IPv6Hdr *ip = (IPv6Hdr *)(bufferStart + layers->l3Offset);
+
+            if (layers->isTcp && csumInfo->Transmit.TcpChecksum) {
+                UINT16 csumLength = (UINT16)(packetLength - layers->l4Offset);
+                TCPHdr *tcp = (TCPHdr *)(bufferStart + layers->l4Offset);
+                tcp->check = IPv6PseudoChecksum((UINT32 *) &ip->saddr,
+                                                (UINT32 *) &ip->daddr,
+                                                IPPROTO_TCP, csumLength);
+                tcp->check = CalculateChecksumNB(curNb, csumLength,
+                                                 (UINT32)(layers->l4Offset));
+            } else if (layers->isUdp && csumInfo->Transmit.UdpChecksum) {
+                UINT16 csumLength = (UINT16)(packetLength - layers->l4Offset);
+                UDPHdr *udp = (UDPHdr *)((PCHAR)ip + sizeof *ip);
+                udp->check = IPv6PseudoChecksum((UINT32 *) &ip->saddr,
+                                                (UINT32 *) &ip->daddr,
+                                                IPPROTO_UDP, csumLength);
+                udp->check = CalculateChecksumNB(curNb, csumLength,
+                                                 (UINT32)(layers->l4Offset));
+            }
         }
     }
 
