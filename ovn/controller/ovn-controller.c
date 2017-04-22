@@ -639,23 +639,23 @@ main(int argc, char *argv[])
             update_ct_zones(&local_lports, &local_datapaths, &ct_zones,
                             ct_zone_bitmap, &pending_ct_zones);
             if (ctx.ovs_idl_txn) {
+                if (ofctrl_can_put()) {
+                    commit_ct_zones(br_int, &pending_ct_zones);
 
-                commit_ct_zones(br_int, &pending_ct_zones);
+                    struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
+                    lflow_run(&ctx, chassis, &lports, &mcgroups,
+                              &local_datapaths, &group_table,
+                              &addr_sets, &flow_table);
 
-                struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
-                lflow_run(&ctx, chassis, &lports, &mcgroups,
-                          &local_datapaths, &group_table,
-                          &addr_sets, &flow_table);
+                    physical_run(&ctx, mff_ovn_geneve,
+                                 br_int, chassis, &ct_zones, &lports,
+                                 &flow_table, &local_datapaths);
 
-                physical_run(&ctx, mff_ovn_geneve,
-                             br_int, chassis, &ct_zones, &lports,
-                             &flow_table, &local_datapaths);
+                    ofctrl_put(&flow_table, &pending_ct_zones,
+                               get_nb_cfg(ctx.ovnsb_idl));
 
-                ofctrl_put(&flow_table, &pending_ct_zones,
-                           get_nb_cfg(ctx.ovnsb_idl));
-
-                hmap_destroy(&flow_table);
-
+                    hmap_destroy(&flow_table);
+                }
                 if (ctx.ovnsb_idl_txn) {
                     int64_t cur_cfg = ofctrl_get_cur_cfg();
                     if (cur_cfg && cur_cfg != chassis->nb_cfg) {

@@ -34,6 +34,7 @@ struct shash;
 void ofctrl_init(struct group_table *group_table);
 enum mf_field_id ofctrl_run(const struct ovsrec_bridge *br_int,
                             struct shash *pending_ct_zones);
+bool ofctrl_can_put(void);
 void ofctrl_put(struct hmap *flow_table, struct shash *pending_ct_zones,
                 int64_t nb_cfg);
 void ofctrl_wait(void);
