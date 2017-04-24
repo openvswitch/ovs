@@ -1960,10 +1960,12 @@ other commands. The following keywords designated the allowed types:
 .IP \fBall\fR
 Execute all buckets in the group.
 .IP \fBselect\fR
-Execute one bucket in the group.
-The switch should select the bucket in such a way that should implement
-equal load sharing is achieved.  The switch may optionally select the
-bucket based on bucket weights.
+Execute one bucket in the group, balancing across the buckets
+according to their weights.  To select a bucket, for each live bucket,
+Open vSwitch hashes flow data with the bucket ID and multiplies by the
+bucket weight to obtain a ``score,'' and then selects the bucket with
+the highest score.  Use \fBselection_method\fR to control the flow
+data used for selection.
 .IP \fBindirect\fR
 Executes the one bucket in the group.
 .IP \fBff\fR
