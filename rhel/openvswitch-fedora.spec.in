@@ -553,6 +553,7 @@ fi
 %{_bindir}/ovn-nbctl
 %{_bindir}/ovn-sbctl
 %{_bindir}/ovn-trace
+%{_bindir}/ovn-detrace
 %{_datadir}/openvswitch/scripts/ovn-ctl
 %{_datadir}/openvswitch/scripts/ovndb-servers.ocf
 %{_datadir}/openvswitch/scripts/ovn-bugtool-nbctl-show
@@ -561,6 +562,7 @@ fi
 %{_mandir}/man8/ovn-ctl.8*
 %{_mandir}/man8/ovn-nbctl.8*
 %{_mandir}/man8/ovn-trace.8*
+%{_mandir}/man1/ovn-detrace.1*
 %{_mandir}/man7/ovn-architecture.7*
 %{_mandir}/man8/ovn-sbctl.8*
 %{_mandir}/man5/ovn-nb.5*
