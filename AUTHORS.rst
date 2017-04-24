@@ -215,6 +215,7 @@ Mehak Mahajan                   mmahajan@nicira.com
 Michael Arnaldi                 arnaldimichael@gmail.com
 Michal Weglicki                 michalx.weglicki@intel.com
 Mickey Spiegel                  mickeys.dev@gmail.com
+Miguel Angel Ajo                majopela@redhat.com
 Mijo Safradin                   mijo@linux.vnet.ibm.com
 Mika Vaisanen                   mika.vaisanen@gmail.com
 Minoru TAKAHASHI                takahashi.minoru7@gmail.com

@@ -288,6 +288,14 @@ which are alive, and therefore whether or not that gateway happens to be the
 leader.  If leading, the gateway forwards traffic normally, otherwise it drops
 all traffic.
 
+We should note that this method works well under the assumption that there
+are no inter-gateway connectivity failures, in such case this method would fail
+to elect a single master. The simplest example is two gateways which stop seeing
+each other but can still reach the hypervisors. Protocols like VRRP or CARP
+have the same issue. A mitigation for this type of failure mode could be
+achieved by having all network elements (hypervisors and gateways) periodically
+share their link status to other endpoints.
+
 Gateway Leadership Resignation
 ++++++++++++++++++++++++++++++
 
