@@ -5,3 +5,5 @@
 /ovn-sbctl.8
 /ovn-trace
 /ovn-trace.8
+/ovn-detrace
+/ovn-detrace.1
