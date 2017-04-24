@@ -26,6 +26,9 @@ Post-v2.7.0
        abbreviated to 4 hex digits.
    - Add the command 'ovs-appctl stp/show' (see ovs-vswitchd(8)).
    - OpenFlow:
+     * All features required by OpenFlow 1.4 are now implemented, so
+       ovs-vswitchd now enables OpenFlow 1.4 by default (in addition to
+       OpenFlow 1.0 to 1.3).
      * Increased support for OpenFlow 1.6 (draft).
      * Bundles now support hashing by just nw_src or nw_dst.
      * The "learn" action now supports a "limit" option (see ovs-ofctl(8)).

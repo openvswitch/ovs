@@ -9,7 +9,6 @@ Sets the OpenFlow protocol versions that are allowed when establishing
 an OpenFlow session.
 .
 .IP
-The following versions are considered to be ready for general use.
 These protocol versions are enabled by default:
 .
 .RS
@@ -17,9 +16,9 @@ These protocol versions are enabled by default:
 \fBOpenFlow10\fR, for OpenFlow 1.0.
 .RE
 .
-.IP
-Support for the following protocol versions is provided for testing
-and development purposes.  They are not enabled by default:
+The following protocol versions are generally supported, but for
+compatibility with older versions of Open vSwitch they are not enabled
+by default:
 .
 .RS
 .IP \(bu
@@ -30,4 +29,19 @@ and development purposes.  They are not enabled by default:
 .
 .IP \(bu
 \fBOpenFlow13\fR, for OpenFlow 1.3.
+.
+.IP \(bu
+\fBOpenFlow14\fR, for OpenFlow 1.4.
+.RE
+.
+.IP
+Support for the following protocol versions is provided for testing
+and development purposes.  They are not enabled by default:
+.
+.RS
+.IP \(bu
+\fBOpenFlow15\fR, for OpenFlow 1.5.
+.
+.IP \(bu
+\fBOpenFlow16\fR, for OpenFlow 1.6.
 .RE
