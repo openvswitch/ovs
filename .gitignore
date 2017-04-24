@@ -51,7 +51,7 @@
 /distfiles
 /dist-docs
 /flake8-check
-/htmldocs-check
+/docs-check
 /install-sh
 /libtool
 /manpage-check
