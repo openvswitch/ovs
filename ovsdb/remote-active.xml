@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<dl>
+  <dt><code>ssl:</code><var>ip</var><code>:</code><var>port</var></dt>
+  <dd>
+    The specified SSL <var>port</var> on the host at the given <var>ip</var>,
+    which must be expressed as an IP address (not a DNS name) in IPv4 or IPv6
+    address format.  If <var>ip</var> is an IPv6 address, then wrap
+    <var>ip</var> with square brackets, e.g.: <code>ssl:[::1]:6640</code>.
+    The <code>--private-key</code>, <code>--certificate</code>, and
+    <code>--ca-cert</code> options are mandatory when this form is used.
+  </dd>
+  <dt><code>tcp:</code><var>ip</var><code>:</code><var>port</var></dt>
+  <dd>
+    Connect to the given TCP <var>port</var> on <var>ip</var>, where
+    <var>ip</var> can be an IPv4 or IPv6 address.  If <var>ip</var> is an
+    IPv6 address, then wrap <var>ip</var> with square brackets, e.g.:
+    <code>tcp:[::1]:6640</code>.
+  </dd>
+  <dt><code>unix:</code><var>file</var></dt>
+  <dd>
+    <p>
+      On POSIX, connect to the Unix domain server socket named <var>file</var>.
+    </p>
+    <p>
+      On Windows, connect to a local named pipe that is represented by a file
+      created in the path <var>file</var> to mimic the behavior of a Unix
+      domain socket.
+    </p>
+  </dd>
+</dl>

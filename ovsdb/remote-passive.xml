@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<dl>
+  <dt><code>pssl:</code><var>port</var><code>:</code><var>ip</var></dt>
+  <dd>
+    Listen on the given SSL <var>port</var> for a connection.  By default,
+    connections are not bound to a particular local IP address and
+    it listens only on IPv4 (but not IPv6) addresses, but
+    specifying <var>ip</var> limits connections to those from the given
+    <var>ip</var>, either IPv4 or IPv6 address.  If <var>ip</var> is
+    an IPv6 address, then wrap <var>ip</var> with square brackets, e.g.:
+    <code>pssl:6640:[::1]</code>. The <code>--private-key</code>,
+    <code>--certificate</code>, and <code>--ca-cert</code> options are
+    mandatory when this form is used.
+  </dd>
+  <dt><code>ptcp:</code><var>port</var><code>:</code><var>ip</var></dt>
+  <dd>
+    Listen on the given TCP <var>port</var> for a connection.  By default,
+    connections are not bound to a particular local IP address and
+    it listens only on IPv4 (but not IPv6) addresses, but
+    <var>ip</var> may be specified to listen only for connections to the given
+    <var>ip</var>, either IPv4 or IPv6 address.  If <var>ip</var> is
+    an IPv6 address, then wrap <var>ip</var> with square brackets, e.g.:
+    <code>ptcp:6640:[::1]</code>.
+  </dd>
+  <dt><code>punix:</code><var>file</var></dt>
+  <dd>
+    <p>
+      On POSIX, listen on the Unix domain server socket named <var>file</var>
+      for a connection.
+    </p>
+    <p>
+      On Windows, listen on a local named pipe.  A file is created in the path
+      <var>file</var> to mimic the behavior of a Unix domain socket.
+    </p>
+  </dd>
+</dl>

@@ -48,6 +48,10 @@ MAN_FRAGMENTS += \
 	ovsdb/replication.man \
 	ovsdb/replication-syn.man
 
+EXTRA_DIST += \
+	ovsdb/remote-active.xml \
+	ovsdb/remote-passive.xml
+
 # ovsdb-tool
 bin_PROGRAMS += ovsdb/ovsdb-tool
 ovsdb_ovsdb_tool_SOURCES = ovsdb/ovsdb-tool.c
