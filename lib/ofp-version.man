@@ -27,12 +27,7 @@ by default:
 .
 .IP \(bu
 \fBOpenFlow14\fR, for OpenFlow 1.4.
-.RE
 .
-.IP
-Support for the following protocol versions is provided for testing
-and development purposes.  They are not enabled by default:
-.
-.RS
 .IP \(bu
 \fBOpenFlow15\fR, for OpenFlow 1.5.
+.RE

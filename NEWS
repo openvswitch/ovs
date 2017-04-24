@@ -6,6 +6,9 @@ Post-v2.11.0
      * Add support for vHost Post-copy Live Migration (experimental).
      * OVS validated with DPDK 18.11.1 which is recommended to be used.
    - OpenFlow:
+     * All features required by OpenFlow 1.5 are now implemented, so
+       ovs-vswitchd now enables OpenFlow 1.5 by default (in addition to
+       OpenFlow 1.0 to 1.4).
      * Removed support for OpenFlow 1.6 (draft), which ONF abandoned.
      * New action "check_pkt_larger".
      * Support for OpenFlow 1.5 "meter" action.
