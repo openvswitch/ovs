@@ -255,8 +255,9 @@
         </p>
         <p>
           The specifier is a comma-separated string, in ascending order of CPU
-          socket (ex: 1024,2048,4096,8192 would set socket 0 to preallocate
-          1024MB, socket 1 to preallocate 2048MB, etc.)
+          socket. E.g. On a four socket system 1024,0,2048 would set socket 0
+          to preallocate 1024MB, socket 1 to preallocate 0MB, socket 2 to
+          preallocate 2048MB and socket 3 (no value given) to preallocate 0MB.
         </p>
         <p>
           If not specified, the default value is 1024,0. Changing this value

@@ -221,10 +221,15 @@ listed below. Defaults will be provided for all values not explicitly set.
 
 If allocating more than one GB hugepage, you can configure the
 amount of memory used from any given NUMA nodes. For example, to use 1GB from
-NUMA node 0, run::
+NUMA node 0 and 0GB for all other NUMA nodes, run::
 
     $ ovs-vsctl --no-wait set Open_vSwitch . \
         other_config:dpdk-socket-mem="1024,0"
+
+or::
+
+    $ ovs-vsctl --no-wait set Open_vSwitch . \
+        other_config:dpdk-socket-mem="1024"
 
 Similarly, if you wish to better scale the workloads across cores, then
 multiple pmd threads can be created and pinned to CPU cores by explicity
