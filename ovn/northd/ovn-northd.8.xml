@@ -18,75 +18,46 @@
       <code>ovn-sb</code>(5)) below it.
     </p>
 
-    <h1>Configuration</h1>
+    <h1>Options</h1>
+    <dl>
+      <dt><code>--ovnnb-db=<var>database</var></code></dt>
+      <dd>
+        The OVSDB database containing the OVN Northbound Database.  If the
+        <env>OVN_NB_DB</env> environment variable is set, its value is used
+        as the default.  Otherwise, the default is
+        <code>unix:@RUNDIR@/ovnnb_db.sock</code>.
+      </dd>
+      <dt><code>--ovnsb-db=<var>database</var></code></dt>
+      <dd>
+        The OVSDB database containing the OVN Southbound Database.  If the
+        <env>OVN_SB_DB</env> environment variable is set, its value is used
+        as the default.  Otherwise, the default is
+        <code>unix:@RUNDIR@/ovnsb_db.sock</code>.
+      </dd>
+    </dl>
     <p>
-      <code>ovn-northd</code> requires a connection to the Northbound
-      and Southbound databases.  The defaults are <code>ovnnb_db.sock</code>
-      and <code>ovnsb_db.sock</code> respectively
-      in the local Open vSwitch's "run" directory.  This may be
-      overridden with the following commands:
+      <var>database</var> in the above options must take one of the following
+      forms:
     </p>
-    <ul>
-      <li>
-        <p>
-          <code>--ovnnb-db=<var>database</var></code>
-        </p>
-        <p>
-          The database containing the OVN Northbound Database.
-        </p>
-      </li>
-      <li>
-        <p>
-          <code>--ovnsb-db=<var>database</var></code>
-        </p>
-        <p>
-          The database containing the OVN Southbound Database.
-        </p>
-      </li>
-    </ul>
+    <xi:include href="ovsdb/remote-active.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
+    <xi:include href="ovsdb/remote-passive.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
+
+    <h2>Daemon Options</h2>
+    <xi:include href="lib/daemon.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
+
+    <h2>Logging Options</h2>
+    <xi:include href="lib/vlog.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
+
+    <h2>PKI Options</h2>
     <p>
-      The <var>database</var> argument must take one of the following forms:
+      PKI configuration is required in order to use SSL for the connections to
+      the Northbound and Southbound databases.
     </p>
-    <ul>
-      <li>
-        <p>
-          <code>ssl:<var>ip</var>:<var>port</var></code>
-        </p>
-        <p>
-          The specified SSL <var>port</var> on the host at the given
-          <var>ip</var>, which must be expressed as an IP address (not a DNS
-          name) in IPv4 or IPv6 address format.  If <var>ip</var> is an IPv6
-          address, then wrap <var>ip</var> with square brackets, e.g.:
-          <code>ssl:[::1]:6640</code>.  The <code>--private-key</code>,
-          <code>--certificate</code>, and <code>--ca-cert</code> options are
-          mandatory when this form is used.
-        </p>
-      </li>
-      <li>
-        <p>
-          <code>tcp:<var>ip</var>:<var>port</var></code>
-        </p>
-        <p>
-          Connect to the given TCP <var>port</var> on <var>ip</var>, where
-          <var>ip</var> can be IPv4 or IPv6 address. If <var>ip</var> is an
-          IPv6 address, then wrap <var>ip</var> with square brackets, e.g.:
-          <code>tcp:[::1]:6640</code>.
-        </p>
-      </li>
-      <li>
-        <p>
-          <code>unix:<var>file</var></code>
-        </p>
-        <p>
-          On POSIX, connect to the Unix domain server socket named
-          <var>file</var>.
-        </p>
-        <p>
-          On Windows, connect to a localhost TCP port whose value is written
-          in <var>file</var>.
-        </p>
-      </li>
-    </ul>
+    <xi:include href="lib/ssl.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
+
+    <h2>Other Options</h2>
+
+    <xi:include href="lib/common.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
 
     <h1>Runtime Management Commands</h1>
     <p>
