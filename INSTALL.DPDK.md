@@ -214,7 +214,9 @@ advanced install guide [INSTALL.DPDK-ADVANCED.md]
 
      * dpdk-socket-mem
      Comma separated list of memory to pre-allocate from hugepages on specific
-     sockets.
+     sockets. Please note when using this param for some NUMA nodes, that
+     subsequent NUMA nodes will be assigned 0 MB if they are not explicitly
+     assigned a value.
 
      * dpdk-hugepage-dir
      Directory where hugetlbfs is mounted
