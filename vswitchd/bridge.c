@@ -496,14 +496,14 @@ bridge_init(const char *remote)
 }
 
 void
-bridge_exit(void)
+bridge_exit(bool delete_datapath)
 {
     struct bridge *br, *next_br;
 
     if_notifier_destroy(ifnotifier);
     seq_destroy(ifaces_changed);
     HMAP_FOR_EACH_SAFE (br, next_br, node, &all_bridges) {
-        bridge_destroy(br, false);
+        bridge_destroy(br, delete_datapath);
     }
     ovsdb_idl_destroy(idl);
 }
