@@ -1130,6 +1130,44 @@ struct vxlanhdr {
 
 #define VXLAN_FLAGS 0x08000000  /* struct vxlanhdr.vx_flags required value. */
 
+/* Input values for PACKET_TYPE macros have to be in host byte order.
+ * The _BE postfix indicates result is in network byte order. Otherwise result
+ * is in host byte order. */
+#define PACKET_TYPE(NS, NS_TYPE) ((uint32_t) ((NS) << 16 | (NS_TYPE)))
+#define PACKET_TYPE_BE(NS, NS_TYPE) (htonl((NS) << 16 | (NS_TYPE)))
+
+/* Returns the host byte ordered namespace of 'packet type'. */
+static inline uint16_t
+pt_ns(ovs_be32 packet_type)
+{
+    return ntohl(packet_type) >> 16;
+}
+
+/* Returns the network byte ordered namespace type of 'packet type'. */
+static inline ovs_be16
+pt_ns_type_be(ovs_be32 packet_type)
+{
+    return be32_to_be16(packet_type);
+}
+
+/* Returns the host byte ordered namespace type of 'packet type'. */
+static inline uint16_t
+pt_ns_type(ovs_be32 packet_type)
+{
+    return ntohs(pt_ns_type_be(packet_type));
+}
+
+/* Well-known packet_type field values. */
+enum packet_type {
+    PT_ETH  = PACKET_TYPE(OFPHTN_ONF, 0x0000),  /* Default: Ethernet */
+    PT_IPV4 = PACKET_TYPE(OFPHTN_ETHERTYPE, ETH_TYPE_IP),
+    PT_IPV6 = PACKET_TYPE(OFPHTN_ETHERTYPE, ETH_TYPE_IPV6),
+    PT_MPLS = PACKET_TYPE(OFPHTN_ETHERTYPE, ETH_TYPE_MPLS),
+    PT_MPLS_MC = PACKET_TYPE(OFPHTN_ETHERTYPE, ETH_TYPE_MPLS_MCAST),
+    PT_UNKNOWN = PACKET_TYPE(0xffff, 0xffff),   /* Unknown packet type. */
+};
+
+
 void ipv6_format_addr(const struct in6_addr *addr, struct ds *);
 void ipv6_format_addr_bracket(const struct in6_addr *addr, struct ds *,
                               bool bracket);

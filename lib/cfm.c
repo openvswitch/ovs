@@ -760,7 +760,7 @@ cfm_process_heartbeat(struct cfm *cfm, const struct dp_packet *p)
 
     atomic_read_relaxed(&cfm->extended, &extended);
 
-    eth = dp_packet_l2(p);
+    eth = dp_packet_eth(p);
     ccm = dp_packet_at(p, (uint8_t *)dp_packet_l3(p) - (uint8_t *)dp_packet_data(p),
                     CCM_ACCEPT_LEN);
 

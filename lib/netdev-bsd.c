@@ -630,6 +630,7 @@ netdev_bsd_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch)
         mtu = ETH_PAYLOAD_MAX;
     }
 
+    /* Assume Ethernet port. No need to set packet_type. */
     packet = dp_packet_new_with_headroom(VLAN_ETH_HEADER_LEN + mtu,
                                            DP_NETDEV_HEADROOM);
     retval = (rxq->pcap_handle

@@ -191,7 +191,7 @@ udp_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
 
             csum = csum_continue(csum, udp, dp_packet_size(packet) -
                                  ((const unsigned char *)udp -
-                                  (const unsigned char *)dp_packet_l2(packet)
+                                  (const unsigned char *)dp_packet_eth(packet)
                                  ));
             if (csum_finish(csum)) {
                 return NULL;
@@ -370,7 +370,7 @@ parse_gre_header(struct dp_packet *packet,
 
         pkt_csum = csum(greh, dp_packet_size(packet) -
                               ((const unsigned char *)greh -
-                               (const unsigned char *)dp_packet_l2(packet)));
+                               (const unsigned char *)dp_packet_eth(packet)));
         if (pkt_csum) {
             return -EINVAL;
         }

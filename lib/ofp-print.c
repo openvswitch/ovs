@@ -58,7 +58,7 @@ static void ofp_print_error(struct ds *, enum ofperr);
 /* Returns a string that represents the contents of the Ethernet frame in the
  * 'len' bytes starting at 'data'.  The caller must free the returned string.*/
 char *
-ofp_packet_to_string(const void *data, size_t len)
+ofp_packet_to_string(const void *data, size_t len, ovs_be32 packet_type)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     struct dp_packet buf;
@@ -66,6 +66,7 @@ ofp_packet_to_string(const void *data, size_t len)
     size_t l4_size;
 
     dp_packet_use_const(&buf, data, len);
+    buf.packet_type = packet_type;
     flow_extract(&buf, &flow);
     flow_format(&ds, &flow);
 
@@ -94,6 +95,14 @@ ofp_packet_to_string(const void *data, size_t len)
     ds_put_char(&ds, '\n');
 
     return ds_cstr(&ds);
+}
+
+char *
+ofp_dp_packet_to_string(const struct dp_packet *packet)
+{
+    return ofp_packet_to_string(dp_packet_data(packet),
+                                dp_packet_size(packet),
+                                packet->packet_type);
 }
 
 static void
@@ -208,8 +217,10 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
     }
 
     if (verbosity > 0) {
+        /* Packet In can only carry Ethernet packets. */
         char *packet = ofp_packet_to_string(public->packet,
-                                            public->packet_len);
+                                            public->packet_len,
+                                            htonl(PT_ETH));
         ds_put_cstr(string, packet);
         free(packet);
     }
@@ -245,7 +256,9 @@ ofp_print_packet_out(struct ds *string, const struct ofp_header *oh,
     if (po.buffer_id == UINT32_MAX) {
         ds_put_format(string, " data_len=%"PRIuSIZE, po.packet_len);
         if (verbosity > 0 && po.packet_len > 0) {
-            char *packet = ofp_packet_to_string(po.packet, po.packet_len);
+            /* Packet Out can only carry Ethernet packets. */
+            char *packet = ofp_packet_to_string(po.packet, po.packet_len,
+                                                htonl(PT_ETH));
             ds_put_char(string, '\n');
             ds_put_cstr(string, packet);
             free(packet);
@@ -3760,7 +3773,14 @@ ofp_print(FILE *stream, const void *oh, size_t len, int verbosity)
 /* Dumps the contents of the Ethernet frame in the 'len' bytes starting at
  * 'data' to 'stream'. */
 void
-ofp_print_packet(FILE *stream, const void *data, size_t len)
+ofp_print_packet(FILE *stream, const void *data, size_t len,
+                 ovs_be32 packet_type)
 {
-    print_and_free(stream, ofp_packet_to_string(data, len));
+    print_and_free(stream, ofp_packet_to_string(data, len, packet_type));
+}
+
+void
+ofp_print_dp_packet(FILE *stream, const struct dp_packet *packet)
+{
+    print_and_free(stream, ofp_dp_packet_to_string(packet));
 }

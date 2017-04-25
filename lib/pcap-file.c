@@ -177,7 +177,7 @@ ovs_pcap_read(FILE *file, struct dp_packet **bufp, long long int *when)
         *when = ts_sec * 1000LL + ts_usec / 1000;
     }
 
-    /* Read packet. */
+    /* Read packet. Packet type is Ethernet */
     buf = dp_packet_new(len);
     data = dp_packet_put_uninit(buf, len);
     if (fread(data, len, 1, file) != 1) {
@@ -196,6 +196,8 @@ ovs_pcap_write(FILE *file, struct dp_packet *buf)
 {
     struct pcaprec_hdr prh;
     struct timeval tv;
+
+    ovs_assert(buf->packet_type == htonl(PT_ETH));
 
     xgettimeofday(&tv);
     prh.ts_sec = tv.tv_sec;

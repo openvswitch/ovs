@@ -2286,7 +2286,7 @@ rstp_send_bpdu_cb(struct dp_packet *pkt, void *ofport_, void *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_;
     struct ofport_dpif *ofport = ofport_;
-    struct eth_header *eth = dp_packet_l2(pkt);
+    struct eth_header *eth = dp_packet_eth(pkt);
 
     netdev_get_etheraddr(ofport->up.netdev, &eth->eth_src);
     if (eth_addr_is_zero(eth->eth_src)) {
@@ -2311,7 +2311,7 @@ send_bpdu_cb(struct dp_packet *pkt, int port_num, void *ofproto_)
         VLOG_WARN_RL(&rl, "%s: cannot send BPDU on unknown port %d",
                      ofproto->up.name, port_num);
     } else {
-        struct eth_header *eth = dp_packet_l2(pkt);
+        struct eth_header *eth = dp_packet_eth(pkt);
 
         netdev_get_etheraddr(ofport->up.netdev, &eth->eth_src);
         if (eth_addr_is_zero(eth->eth_src)) {

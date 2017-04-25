@@ -51,7 +51,7 @@ static void
 odp_eth_set_addrs(struct dp_packet *packet, const struct ovs_key_ethernet *key,
                   const struct ovs_key_ethernet *mask)
 {
-    struct eth_header *eh = dp_packet_l2(packet);
+    struct eth_header *eh = dp_packet_eth(packet);
 
     if (eh) {
         if (!mask) {

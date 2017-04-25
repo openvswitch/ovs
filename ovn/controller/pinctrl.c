@@ -143,7 +143,7 @@ pinctrl_handle_arp(const struct flow *ip_flow, const struct match *md,
     dp_packet_use_stub(&packet, packet_stub, sizeof packet_stub);
     compose_arp__(&packet);
 
-    struct eth_header *eth = dp_packet_l2(&packet);
+    struct eth_header *eth = dp_packet_eth(&packet);
     eth->eth_dst = ip_flow->dl_dst;
     eth->eth_src = ip_flow->dl_src;
 
@@ -361,7 +361,7 @@ pinctrl_handle_put_dhcp_opts(
 
     /* Log the response. */
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(20, 40);
-    const struct eth_header *l2 = dp_packet_l2(&pkt_out);
+    const struct eth_header *l2 = dp_packet_eth(&pkt_out);
     VLOG_INFO_RL(&rl, "DHCP%s "ETH_ADDR_FMT" "IP_FMT"",
                  msg_type == DHCP_MSG_OFFER ? "OFFER" : "ACK",
                  ETH_ADDR_ARGS(l2->eth_src), IP_ARGS(*offer_ip));
@@ -641,7 +641,7 @@ pinctrl_handle_put_dhcpv6_opts(
     csum = packet_csum_pseudoheader6(dp_packet_l3(&pkt_out));
     csum = csum_continue(csum, out_udp, dp_packet_size(&pkt_out) -
                          ((const unsigned char *)out_udp -
-                         (const unsigned char *)dp_packet_l2(&pkt_out)));
+                         (const unsigned char *)dp_packet_eth(&pkt_out)));
     out_udp->udp_csum = csum_finish(csum);
     if (!out_udp->udp_csum) {
         out_udp->udp_csum = htons(0xffff);

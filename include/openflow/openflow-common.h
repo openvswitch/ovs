@@ -458,4 +458,13 @@ enum ofp_table_config {
     OFPTC14_VACANCY_EVENTS        = 1 << 3, /* Enable vacancy events. */
 };
 
+/* Header and packet type name spaces. */
+enum ofp_header_type_namespaces {
+    OFPHTN_ONF = 0,             /* ONF namespace. */
+    OFPHTN_ETHERTYPE = 1,       /* ns_type is an Ethertype. */
+    OFPHTN_IP_PROTO = 2,        /* ns_type is a IP protocol number. */
+    OFPHTN_UDP_TCP_PORT = 3,    /* ns_type is a TCP or UDP port. */
+    OFPHTN_IPV4_OPTION = 4,     /* ns_type is an IPv4 option number. */
+};
+
 #endif /* openflow/openflow-common.h */

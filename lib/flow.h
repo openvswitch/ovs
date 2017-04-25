@@ -908,7 +908,7 @@ static inline void
 pkt_metadata_from_flow(struct pkt_metadata *md, const struct flow *flow)
 {
     /* Update this function whenever struct flow changes. */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 38);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 39);
 
     md->recirc_id = flow->recirc_id;
     md->dp_hash = flow->dp_hash;
@@ -952,6 +952,15 @@ pkt_metadata_from_flow(struct pkt_metadata *md, const struct flow *flow)
 
 #define FLOW_WC_GET_AND_MASK_WC(FLOW, WC, FIELD) \
     (((WC) ? WC_MASK_FIELD(WC, FIELD) : NULL), ((FLOW)->FIELD))
+
+static inline bool is_ethernet(const struct flow *flow,
+                               struct flow_wildcards *wc)
+{
+    if (wc) {
+        WC_MASK_FIELD(wc, packet_type);
+    }
+    return flow->packet_type == htonl(PT_ETH);
+}
 
 static inline bool is_vlan(const struct flow *flow,
                            struct flow_wildcards *wc)

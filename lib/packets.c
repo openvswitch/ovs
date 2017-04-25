@@ -190,6 +190,7 @@ compose_rarp(struct dp_packet *b, const struct eth_addr eth_src)
 
     dp_packet_reset_offsets(b);
     dp_packet_set_l3(b, arp);
+    b->packet_type = htonl(PT_ETH);
 }
 
 /* Insert VLAN header according to given TCI. Packet passed must be Ethernet
@@ -215,7 +216,7 @@ eth_push_vlan(struct dp_packet *packet, ovs_be16 tpid, ovs_be16 tci)
 void
 eth_pop_vlan(struct dp_packet *packet)
 {
-    struct vlan_eth_header *veh = dp_packet_l2(packet);
+    struct vlan_eth_header *veh = dp_packet_eth(packet);
 
     if (veh && dp_packet_size(packet) >= sizeof *veh
         && eth_type_vlan(veh->veth_type)) {
@@ -229,7 +230,7 @@ eth_pop_vlan(struct dp_packet *packet)
 static void
 set_ethertype(struct dp_packet *packet, ovs_be16 eth_type)
 {
-    struct eth_header *eh = dp_packet_l2(packet);
+    struct eth_header *eh = dp_packet_eth(packet);
 
     if (!eh) {
         return;
@@ -843,6 +844,7 @@ eth_compose(struct dp_packet *b, const struct eth_addr eth_dst,
     eth->eth_src = eth_src;
     eth->eth_type = htons(eth_type);
 
+    b->packet_type = htonl(PT_ETH);
     dp_packet_reset_offsets(b);
     dp_packet_set_l3(b, data);
 
@@ -1307,7 +1309,7 @@ compose_arp(struct dp_packet *b, uint16_t arp_op,
 {
     compose_arp__(b);
 
-    struct eth_header *eth = dp_packet_l2(b);
+    struct eth_header *eth = dp_packet_eth(b);
     eth->eth_dst = broadcast ? eth_addr_broadcast : arp_tha;
     eth->eth_src = arp_sha;
 
@@ -1341,6 +1343,8 @@ compose_arp__(struct dp_packet *b)
 
     dp_packet_reset_offsets(b);
     dp_packet_set_l3(b, arp);
+
+    b->packet_type = htonl(PT_ETH);
 }
 
 /* This function expects packet with ethernet header with correct

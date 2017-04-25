@@ -970,7 +970,7 @@ static bool
 conn_key_extract(struct conntrack *ct, struct dp_packet *pkt, ovs_be16 dl_type,
                  struct conn_lookup_ctx *ctx, uint16_t zone)
 {
-    const struct eth_header *l2 = dp_packet_l2(pkt);
+    const struct eth_header *l2 = dp_packet_eth(pkt);
     const struct ip_header *l3 = dp_packet_l3(pkt);
     const char *l4 = dp_packet_l4(pkt);
     const char *tail = dp_packet_tail(pkt);

@@ -55,6 +55,7 @@
 #include "unaligned.h"
 #include "util.h"
 #include "openvswitch/vlog.h"
+#include "openvswitch/flow.h"
 
 VLOG_DEFINE_THIS_MODULE(dpif_netlink);
 #ifdef _WIN32
@@ -2041,6 +2042,23 @@ parse_odp_packet(const struct dpif_netlink *dpif, struct ofpbuf *buf,
     dp_packet_set_data(&upcall->packet,
                     (char *)dp_packet_data(&upcall->packet) + sizeof(struct nlattr));
     dp_packet_set_size(&upcall->packet, nl_attr_get_size(a[OVS_PACKET_ATTR_PACKET]));
+
+    if (nl_attr_find__(upcall->key, upcall->key_len, OVS_KEY_ATTR_ETHERNET)) {
+        /* Ethernet frame */
+        upcall->packet.packet_type = htonl(PT_ETH);
+    } else {
+        /* Non-Ethernet packet. Get the Ethertype from the NL attributes */
+        ovs_be16 ethertype = 0;
+        const struct nlattr *et_nla = nl_attr_find__(upcall->key,
+                                                     upcall->key_len,
+                                                     OVS_KEY_ATTR_ETHERTYPE);
+        if (et_nla) {
+            ethertype = nl_attr_get_be16(et_nla);
+        }
+        upcall->packet.packet_type = PACKET_TYPE_BE(OFPHTN_ETHERTYPE,
+                                                    ntohs(ethertype));
+        dp_packet_set_l3(&upcall->packet, dp_packet_data(&upcall->packet));
+    }
 
     *dp_ifindex = ovs_header->dp_ifindex;
 

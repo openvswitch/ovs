@@ -22,6 +22,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include <openvswitch/types.h>
+
 struct ds;
 struct ofp10_match;
 struct ofp_flow_mod;
@@ -29,19 +31,23 @@ struct ofp_header;
 struct ofputil_flow_stats;
 struct ofputil_table_features;
 struct ofputil_table_stats;
+struct dp_packet;
 
 #ifdef  __cplusplus
 extern "C" {
 #endif
 
 void ofp_print(FILE *, const void *, size_t, int verbosity);
-void ofp_print_packet(FILE *stream, const void *data, size_t len);
+void ofp_print_packet(FILE *stream, const void *data,
+                      size_t len, ovs_be32 packet_type);
+void ofp_print_dp_packet(FILE *stream, const struct dp_packet *packet);
 
 void ofp10_match_print(struct ds *, const struct ofp10_match *, int verbosity);
 
 char *ofp_to_string(const void *, size_t, int verbosity);
 char *ofp10_match_to_string(const struct ofp10_match *, int verbosity);
-char *ofp_packet_to_string(const void *data, size_t len);
+char *ofp_packet_to_string(const void *data, size_t len, ovs_be32 packet_type);
+char *ofp_dp_packet_to_string(const struct dp_packet *packet);
 
 void ofp_print_flow_stats(struct ds *, const struct ofputil_flow_stats *);
 void ofp_print_version(const struct ofp_header *, struct ds *);

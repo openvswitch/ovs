@@ -1067,6 +1067,11 @@ netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
         const void *buffer = dp_packet_data(packet);
         size_t size = dp_packet_size(packet);
 
+        if (batch->packets[i]->packet_type != htonl(PT_ETH)) {
+            error = EPFNOSUPPORT;
+            break;
+        }
+
         size -= dp_packet_get_cutlen(packet);
 
         if (size < ETH_HEADER_LEN) {

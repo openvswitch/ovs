@@ -4374,8 +4374,7 @@ dp_netdev_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet_,
 
         ofpbuf_init(&key, 0);
         odp_flow_key_from_flow(&odp_parms, &key);
-        packet_str = ofp_packet_to_string(dp_packet_data(packet_),
-                                          dp_packet_size(packet_));
+        packet_str = ofp_dp_packet_to_string(packet_);
 
         odp_flow_key_format(key.data, key.size, &ds);
 

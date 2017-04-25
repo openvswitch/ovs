@@ -29,6 +29,7 @@
 #include "openvswitch/list.h"
 #include "packets.h"
 #include "util.h"
+#include "flow.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -46,6 +47,7 @@ enum OVS_PACKED_ENUM dp_packet_source {
 
 /* Buffer for holding packet data.  A dp_packet is automatically reallocated
  * as necessary if it grows too large for the available memory.
+ * By default the packet type is set to Ethernet (PT_ETH).
  */
 struct dp_packet {
 #ifdef DPDK_NETDEV
@@ -67,6 +69,7 @@ struct dp_packet {
     uint16_t l4_ofs;               /* Transport-level header offset,
                                       or UINT16_MAX. */
     uint32_t cutlen;               /* length in bytes to cut from the end. */
+    ovs_be32 packet_type;          /* Packet type as defined in OpenFlow */
     union {
         struct pkt_metadata md;
         uint64_t data[DP_PACKET_CONTEXT_SIZE / 8];
@@ -86,7 +89,7 @@ static inline void dp_packet_set_allocated(struct dp_packet *, uint16_t);
 
 void *dp_packet_resize_l2(struct dp_packet *, int increment);
 void *dp_packet_resize_l2_5(struct dp_packet *, int increment);
-static inline void *dp_packet_l2(const struct dp_packet *);
+static inline void *dp_packet_eth(const struct dp_packet *);
 static inline void dp_packet_reset_offsets(struct dp_packet *);
 static inline uint8_t dp_packet_l2_pad_size(const struct dp_packet *);
 static inline void dp_packet_set_l2_pad_size(struct dp_packet *, uint8_t);
@@ -262,12 +265,19 @@ dp_packet_equal(const struct dp_packet *a, const struct dp_packet *b)
            !memcmp(dp_packet_data(a), dp_packet_data(b), dp_packet_size(a));
 }
 
-/* Get the start of the Ethernet frame.  'l3_ofs' marks the end of the l2
+static inline bool
+dp_packet_is_eth(const struct dp_packet *b)
+{
+    return b->packet_type == htonl(PT_ETH);
+}
+
+/* Get the start of the Ethernet frame. 'l3_ofs' marks the end of the l2
  * headers, so return NULL if it is not set. */
 static inline void *
-dp_packet_l2(const struct dp_packet *b)
+dp_packet_eth(const struct dp_packet *b)
 {
-    return (b->l3_ofs != UINT16_MAX) ? dp_packet_data(b) : NULL;
+    return (dp_packet_is_eth(b) && b->l3_ofs != UINT16_MAX)
+            ? dp_packet_data(b) : NULL;
 }
 
 /* Resets all layer offsets.  'l3' offset must be set before 'l2' can be

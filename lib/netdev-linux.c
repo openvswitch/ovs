@@ -1133,6 +1133,7 @@ netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch)
         mtu = ETH_PAYLOAD_MAX;
     }
 
+    /* Assume Ethernet port. No need to set packet_type. */
     buffer = dp_packet_new_with_headroom(VLAN_ETH_HEADER_LEN + mtu,
                                            DP_NETDEV_HEADROOM);
     retval = (rx->is_tap
@@ -5525,7 +5526,8 @@ get_etheraddr(const char *netdev_name, struct eth_addr *ea)
         return error;
     }
     hwaddr_family = ifr.ifr_hwaddr.sa_family;
-    if (hwaddr_family != AF_UNSPEC && hwaddr_family != ARPHRD_ETHER) {
+    if (hwaddr_family != AF_UNSPEC && hwaddr_family != ARPHRD_ETHER &&
+        hwaddr_family != ARPHRD_NONE) {
         VLOG_INFO("%s device has unknown hardware address family %d",
                   netdev_name, hwaddr_family);
         return EINVAL;

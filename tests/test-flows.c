@@ -83,7 +83,7 @@ test_flows_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
             errors++;
             printf("mismatch on packet #%d (1-based).\n", n);
             printf("Packet:\n");
-            ofp_print_packet(stdout, dp_packet_data(packet), dp_packet_size(packet));
+            ofp_print_packet(stdout, dp_packet_data(packet), dp_packet_size(packet), htonl(PT_ETH));
             ovs_hex_dump(stdout, dp_packet_data(packet), dp_packet_size(packet), 0, true);
             match_print(&match);
             printf("Expected flow:\n%s\n", exp_s);
