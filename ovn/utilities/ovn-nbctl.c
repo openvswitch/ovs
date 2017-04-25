@@ -3063,6 +3063,9 @@ static const struct ctl_table_class tables[NBREC_N_TABLES] = {
 
     [NBREC_TABLE_SSL].row_ids[0]
     = {&nbrec_table_nb_global, NULL, &nbrec_nb_global_col_ssl},
+
+    [NBREC_TABLE_DNS].row_ids[0]
+    = {&nbrec_table_dns, NULL, &nbrec_dns_col_records},
 };
 
 static void

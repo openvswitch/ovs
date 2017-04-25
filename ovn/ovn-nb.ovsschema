@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
-    "version": "5.5.1",
-    "cksum": "1924970369 14236",
+    "version": "5.6.0",
+    "cksum": "1358108512 15019",
     "tables": {
         "NB_Global": {
             "columns": {
@@ -45,6 +45,11 @@
                                                   "refType": "strong"},
                                            "min": 0,
                                            "max": "unlimited"}},
+                "dns_records": {"type": {"key": {"type": "uuid",
+                                         "refTable": "DNS",
+                                         "refType": "weak"},
+                                  "min": 0,
+                                  "max": "unlimited"}},
                 "other_config": {
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}},
@@ -265,6 +270,17 @@
                                     "max": "unlimited"},
                                     "ephemeral": true}},
             "indexes": [["target"]]},
+        "DNS": {
+            "columns": {
+                "records": {"type": {"key": "string",
+                                     "value": "string",
+                                     "min": 0,
+                                     "max": "unlimited"}},
+                "external_ids": {"type": {"key": "string",
+                                 "value": "string",
+                                 "min": 0,
+                                 "max": "unlimited"}}},
+            "isRoot": true},
         "SSL": {
             "columns": {
                 "private_key": {"type": "string"},

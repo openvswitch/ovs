@@ -15,6 +15,7 @@ Post-v2.7.0
    - In ovn-vsctl and vtep-ctl, record UUIDs in commands may now be
      abbreviated to 4 hex digits.
    - OVN:
+     * New built-in DNS support.
      * IPAM for IPv4 can now exclude user-defined addresses from assignment.
      * IPAM can now assign IPv6 addresses.
      * Make the DHCPv4 router setting optional.

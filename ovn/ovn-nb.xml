@@ -134,6 +134,12 @@
       QOS marking rules that apply to packets within the logical switch.
     </column>
 
+    <column name="dns_records">
+      This column defines the DNS records to be used for resolving internal
+      DNS queries within the logical switch by the native DNS resolver.
+      Please see the <ref table="DNS"/> table.
+    </column>
+
     <group title="IP Address Assignment">
       <p>
         These options control automatic IP address management (IPAM) for ports
@@ -1474,7 +1480,7 @@
         <column name="options" key="lease_time"
                 type='{"type": "integer", "minInteger": 0, "maxInteger": 4294967295}'>
           <p>
-            The offered lease time in seconds, 
+            The offered lease time in seconds,
           </p>
 
           <p>
@@ -1966,6 +1972,24 @@
       <column name="other_config"/>
     </group>
   </table>
+  <table name="DNS" title="Native DNS resolution">
+    <p>
+      Each row in this table stores the DNS records. The
+      <ref table="Logical_Switch"/> table's <ref table="Logical_Switch"
+      column="dns_records"/> references these records.
+    </p>
+
+    <column name="records">
+      Key-value pair of DNS records with <code>DNS query name</code> as the key
+      and value as a string of IP address(es) separated by comma or space.
+
+      <p><b>Example: </b> "vm1.ovn.org" = "10.0.0.4 aef0::4"</p>
+    </column>
+
+    <column name="external_ids">
+      See <em>External IDs</em> at the beginning of this document.
+    </column>
+  </table>
   <table name="SSL">
     SSL configuration for ovn-nb database access.
 
@@ -2004,5 +2028,4 @@
       <column name="external_ids"/>
     </group>
   </table>
-
 </database>
