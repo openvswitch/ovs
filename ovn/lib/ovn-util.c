@@ -82,19 +82,9 @@ is_dynamic_lsp_address(const char *address)
                          ETH_ADDR_SCAN_ARGS(ea), &n) && address[n] == '\0'));
 }
 
-/* Extracts the mac, IPv4 and IPv6 addresses from * 'address' which
- * should be of the format "MAC [IP1 IP2 ..] .." where IPn should be a
- * valid IPv4 or IPv6 address and stores them in the 'ipv4_addrs' and
- * 'ipv6_addrs' fields of 'laddrs'.  There may be additional content in
- * 'address' after "MAC [IP1 IP2 .. ]".  The value of 'ofs' that is
- * returned indicates the offset where that additional content begins.
- *
- * Returns true if at least 'MAC' is found in 'address', false otherwise.
- *
- * The caller must call destroy_lport_addresses(). */
-bool
-extract_addresses(const char *address, struct lport_addresses *laddrs,
-                  int *ofs)
+static bool
+parse_and_store_addresses(const char *address, struct lport_addresses *laddrs,
+                          int *ofs, bool extract_eth_addr)
 {
     memset(laddrs, 0, sizeof *laddrs);
 
@@ -102,15 +92,18 @@ extract_addresses(const char *address, struct lport_addresses *laddrs,
     const char *const start = buf;
     int buf_index = 0;
     const char *buf_end = buf + strlen(address);
-    if (!ovs_scan_len(buf, &buf_index, ETH_ADDR_SCAN_FMT,
-                      ETH_ADDR_SCAN_ARGS(laddrs->ea))) {
-        laddrs->ea = eth_addr_zero;
-        *ofs = 0;
-        return false;
-    }
 
-    snprintf(laddrs->ea_s, sizeof laddrs->ea_s, ETH_ADDR_FMT,
-             ETH_ADDR_ARGS(laddrs->ea));
+    if (extract_eth_addr) {
+        if (!ovs_scan_len(buf, &buf_index, ETH_ADDR_SCAN_FMT,
+                          ETH_ADDR_SCAN_ARGS(laddrs->ea))) {
+            laddrs->ea = eth_addr_zero;
+            *ofs = 0;
+            return false;
+        }
+
+        snprintf(laddrs->ea_s, sizeof laddrs->ea_s, ETH_ADDR_FMT,
+                 ETH_ADDR_ARGS(laddrs->ea));
+    }
 
     ovs_be32 ip4;
     struct in6_addr ip6;
@@ -145,6 +138,23 @@ extract_addresses(const char *address, struct lport_addresses *laddrs,
 }
 
 /* Extracts the mac, IPv4 and IPv6 addresses from * 'address' which
+ * should be of the format "MAC [IP1 IP2 ..] .." where IPn should be a
+ * valid IPv4 or IPv6 address and stores them in the 'ipv4_addrs' and
+ * 'ipv6_addrs' fields of 'laddrs'.  There may be additional content in
+ * 'address' after "MAC [IP1 IP2 .. ]".  The value of 'ofs' that is
+ * returned indicates the offset where that additional content begins.
+ *
+ * Returns true if at least 'MAC' is found in 'address', false otherwise.
+ *
+ * The caller must call destroy_lport_addresses(). */
+bool
+extract_addresses(const char *address, struct lport_addresses *laddrs,
+                  int *ofs)
+{
+    return parse_and_store_addresses(address, laddrs, ofs, true);
+}
+
+/* Extracts the mac, IPv4 and IPv6 addresses from * 'address' which
  * should be of the format 'MAC [IP1 IP2 ..]" where IPn should be a
  * valid IPv4 or IPv6 address and stores them in the 'ipv4_addrs' and
  * 'ipv6_addrs' fields of 'laddrs'.
@@ -164,6 +174,26 @@ extract_lsp_addresses(const char *address, struct lport_addresses *laddrs)
     }
 
     return success;
+}
+
+/* Extracts the IPv4 and IPv6 addresses from * 'address' which
+ * should be of the format 'IP1 IP2 .." where IPn should be a
+ * valid IPv4 or IPv6 address and stores them in the 'ipv4_addrs' and
+ * 'ipv6_addrs' fields of 'laddrs'.
+ *
+ * Return true if at least one IP address is found in 'address',
+ * false otherwise.
+ *
+ * The caller must call destroy_lport_addresses(). */
+bool
+extract_ip_addresses(const char *address, struct lport_addresses *laddrs)
+{
+    int ofs;
+    if (parse_and_store_addresses(address, laddrs, &ofs, false)) {
+        return (laddrs->n_ipv4_addrs || laddrs->n_ipv6_addrs);
+    }
+
+    return false;
 }
 
 /* Extracts the mac, IPv4 and IPv6 addresses from the
