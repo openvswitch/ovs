@@ -1475,6 +1475,18 @@ execute_next(const struct ovnact_next *next,
     trace__(dp, uflow, next->ltable, next->pipeline, super);
 }
 
+
+static void
+execute_dns_lookup(const struct ovnact_dns_lookup *dl, struct flow *uflow,
+                   struct ovs_list *super)
+{
+    struct mf_subfield sf = expr_resolve_field(&dl->dst);
+    union mf_subvalue sv = { .u8_val = 0 };
+    mf_write_subfield_flow(&sf, &sv, uflow);
+    ovntrace_node_append(super, OVNTRACE_NODE_ERROR,
+                         "*** dns_lookup action not implemented");
+}
+
 static void
 execute_ct_next(const struct ovnact_ct_next *ct_next,
                 const struct ovntrace_datapath *dp, struct flow *uflow,
@@ -1636,6 +1648,10 @@ trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
              * happened.  If we ever add some physical knowledge to ovn-trace,
              * though, it would be easy enough to track the queue information
              * by adjusting uflow->skb_priority. */
+            break;
+
+        case OVNACT_DNS_LOOKUP:
+            execute_dns_lookup(ovnact_get_DNS_LOOKUP(a), uflow, super);
             break;
         }
 

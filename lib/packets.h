@@ -1199,4 +1199,28 @@ void compose_nd_na(struct dp_packet *, const struct eth_addr eth_src,
 uint32_t packet_csum_pseudoheader(const struct ip_header *);
 void IP_ECN_set_ce(struct dp_packet *pkt, bool is_ipv6);
 
+#define DNS_HEADER_LEN 12
+struct dns_header {
+    ovs_be16 id;
+    uint8_t lo_flag; /* QR (1), OPCODE (4), AA (1), TC (1) and RD (1) */
+    uint8_t hi_flag; /* RA (1), Z (3) and RCODE (4) */
+    ovs_be16 qdcount; /* Num of entries in the question section. */
+    ovs_be16 ancount; /* Num of resource records in the answer section. */
+
+    /* Num of name server records in the authority record section. */
+    ovs_be16 nscount;
+
+    /* Num of resource records in the additional records section. */
+    ovs_be16 arcount;
+};
+
+BUILD_ASSERT_DECL(DNS_HEADER_LEN == sizeof(struct dns_header));
+
+#define DNS_QUERY_TYPE_A        0x01
+#define DNS_QUERY_TYPE_AAAA     0x1c
+#define DNS_QUERY_TYPE_ANY      0xff
+
+#define DNS_CLASS_IN            0x01
+#define DNS_DEFAULT_RR_TTL      3600
+
 #endif /* packets.h */

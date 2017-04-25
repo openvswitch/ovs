@@ -311,7 +311,7 @@
         transmitted and received with reasonable performance. It is a hint
         to senders transmitting data to this chassis that they should use
         checksums to protect OVN metadata. <code>ovn-controller</code>
-        populates this key with the value defined in 
+        populates this key with the value defined in
         <ref table="Open_vSwitch" column="external_ids:ovn-encap-csum"/> column
         of the Open_vSwitch database's <ref table="Open_vSwitch"
         db="Open_vSwitch"/> table.  Other applications should treat this key as
@@ -1463,6 +1463,53 @@
             the connection tracker via <code>ct_lb(</code>...<code>)</code>, it
             will automatically get DNATed to the same IP address as the first
             packet in that connection.
+          </p>
+        </dd>
+
+        <dt>
+          <code><var>R</var> = dns_lookup();</code>
+        </dt>
+
+        <dd>
+          <p>
+            <b>Parameters</b>: No parameters.
+          </p>
+
+          <p>
+            <b>Result</b>: stored to a 1-bit subfield <var>R</var>.
+          </p>
+
+          <p>
+            Valid only in the ingress pipeline.
+          </p>
+
+          <p>
+            When this action is applied to a valid DNS request (a UDP packet
+            typically directed to port 53), it attempts to resolve the query
+            using the contents of the <ref table="DNS"/> table.  If it is
+            successful, it changes the packet into a DNS reply and stores 1 in
+            <var>R</var>.  If the action is applied to a non-DNS packet, an
+            invalid DNS request packet, or a valid DNS request for which the
+            <ref table="DNS"/> table does not supply an answer, it leaves the
+            packet unchanged and stores 0 in <var>R</var>.
+          </p>
+
+          <p>
+            Regardless of success, the action does not make any of the changes
+            to the flow that are necessary to direct the packet back to the
+            requester.  The logical pipeline can implement this behavior with
+            matches and actions in later tables.
+          </p>
+
+          <p>
+            <b>Example:</b>
+            <code>
+              reg0[3] = dns_lookup();
+            </code>
+          </p>
+
+          <p>
+            <b>Prerequisite:</b> <code>udp</code>
           </p>
         </dd>
       </dl>
@@ -2684,6 +2731,32 @@ tcp.flags = RST;
       Columns</code> at the beginning of this document.
 
       <column name="external_ids"/>
+    </group>
+  </table>
+  <table name="DNS" title="Native DNS resolution">
+    <p>
+      Each row in this table stores the DNS records. The OVN action
+      <code>dns_lookup</code> uses this table for DNS resolution.
+    </p>
+
+    <column name="records">
+      Key-value pair of DNS records with <code>DNS query name</code> as the key
+      and a string of IP address(es) separated by comma or space as the
+      value.
+
+      <p><b>Example: </b> "vm1.ovn.org" = "10.0.0.4 aef0::4"</p>
+    </column>
+
+    <column name="datapaths">
+      The DNS records defined in the column <ref column="records"/> will be
+      applied only to the DNS queries originating from the datapaths defined
+      in this column.
+    </column>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
     </group>
   </table>
 </database>

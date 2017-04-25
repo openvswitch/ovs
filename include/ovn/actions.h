@@ -70,7 +70,8 @@ struct simap;
     OVNACT(PUT_ND,        ovnact_put_mac_bind)      \
     OVNACT(PUT_DHCPV4_OPTS, ovnact_put_dhcp_opts)   \
     OVNACT(PUT_DHCPV6_OPTS, ovnact_put_dhcp_opts)   \
-    OVNACT(SET_QUEUE,       ovnact_set_queue)
+    OVNACT(SET_QUEUE,       ovnact_set_queue)       \
+    OVNACT(DNS_LOOKUP,      ovnact_dns_lookup)
 
 /* enum ovnact_type, with a member OVNACT_<ENUM> for each action. */
 enum OVS_PACKED_ENUM ovnact_type {
@@ -258,6 +259,12 @@ struct ovnact_set_queue {
     uint16_t queue_id;
 };
 
+/* OVNACT_DNS_LOOKUP. */
+struct ovnact_dns_lookup {
+    struct ovnact ovnact;
+    struct expr_field dst;      /* 1-bit destination field. */
+};
+
 /* Internal use by the helpers below. */
 void ovnact_init(struct ovnact *, enum ovnact_type, size_t len);
 void *ovnact_put(struct ofpbuf *, enum ovnact_type, size_t len);
@@ -385,6 +392,14 @@ enum action_opcode {
      *   - Any number of DHCPv6 options.
      */
     ACTION_OPCODE_PUT_DHCPV6_OPTS,
+
+    /* "result = dns_lookup()".
+     * Arguments follow the action_header, in this format:
+     *   - A 32-bit or 64-bit OXM header designating the result field.
+     *   - A 32-bit integer specifying a bit offset within the result field.
+     *
+     */
+    ACTION_OPCODE_DNS_LOOKUP,
 };
 
 /* Header. */

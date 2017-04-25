@@ -1708,6 +1708,55 @@ static void
 ovnact_set_queue_free(struct ovnact_set_queue *a OVS_UNUSED)
 {
 }
+
+static void
+parse_dns_lookup(struct action_context *ctx, const struct expr_field *dst,
+                 struct ovnact_dns_lookup *dl)
+{
+    lexer_get(ctx->lexer); /* Skip dns_lookup. */
+    lexer_get(ctx->lexer); /* Skip '('. */
+    if (!lexer_match(ctx->lexer, LEX_T_RPAREN)) {
+        lexer_error(ctx->lexer, "dns_lookup doesn't take any parameters");
+        return;
+    }
+    /* Validate that the destination is a 1-bit, modifiable field. */
+    char *error = expr_type_check(dst, 1, true);
+    if (error) {
+        lexer_error(ctx->lexer, "%s", error);
+        free(error);
+        return;
+    }
+    dl->dst = *dst;
+    add_prerequisite(ctx, "udp");
+}
+
+static void
+format_DNS_LOOKUP(const struct ovnact_dns_lookup *dl, struct ds *s)
+{
+    expr_field_format(&dl->dst, s);
+    ds_put_cstr(s, " = dns_lookup();");
+}
+
+static void
+encode_DNS_LOOKUP(const struct ovnact_dns_lookup *dl,
+                  const struct ovnact_encode_params *ep OVS_UNUSED,
+                  struct ofpbuf *ofpacts)
+{
+    struct mf_subfield dst = expr_resolve_field(&dl->dst);
+
+    size_t oc_offset = encode_start_controller_op(ACTION_OPCODE_DNS_LOOKUP,
+                                                  true, ofpacts);
+    nx_put_header(ofpacts, dst.field->id, OFP13_VERSION, false);
+    ovs_be32 ofs = htonl(dst.ofs);
+    ofpbuf_put(ofpacts, &ofs, sizeof ofs);
+    encode_finish_controller_op(oc_offset, ofpacts);
+}
+
+
+static void
+ovnact_dns_lookup_free(struct ovnact_dns_lookup *dl OVS_UNUSED)
+{
+}
 
 /* Parses an assignment or exchange or put_dhcp_opts action. */
 static void
@@ -1731,6 +1780,9 @@ parse_set_action(struct action_context *ctx)
                    && lexer_lookahead(ctx->lexer) == LEX_T_LPAREN) {
             parse_put_dhcp_opts(ctx, &lhs, ovnact_put_PUT_DHCPV6_OPTS(
                                     ctx->ovnacts));
+        } else if (!strcmp(ctx->lexer->token.s, "dns_lookup")
+                   && lexer_lookahead(ctx->lexer) == LEX_T_LPAREN) {
+            parse_dns_lookup(ctx, &lhs, ovnact_put_DNS_LOOKUP(ctx->ovnacts));
         } else {
             parse_assignment_action(ctx, false, &lhs);
         }

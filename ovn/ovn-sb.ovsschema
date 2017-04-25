@@ -1,7 +1,7 @@
 {
     "name": "OVN_Southbound",
-    "version": "1.10.0",
-    "cksum": "860871483 9898",
+    "version": "1.11.0",
+    "cksum": "2783500150 10696",
     "tables": {
         "SB_Global": {
             "columns": {
@@ -201,4 +201,19 @@
                                           "value": "string",
                                           "min": 0,
                                           "max": "unlimited"}}},
-            "maxRows": 1}}}
+            "maxRows": 1},
+        "DNS": {
+            "columns": {
+                "records": {"type": {"key": "string",
+                                            "value": "string",
+                                            "min": 0,
+                                            "max": "unlimited"}},
+                "datapaths": {"type": {"key": {"type": "uuid",
+                                               "refTable": "Datapath_Binding"},
+                                       "min": 1,
+                                       "max": "unlimited"}},
+                "external_ids": {"type": {"key": "string",
+                                          "value": "string",
+                                          "min": 0,
+                                          "max": "unlimited"}}},
+            "isRoot": true}}}

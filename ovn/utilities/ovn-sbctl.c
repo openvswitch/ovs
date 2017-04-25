@@ -1068,6 +1068,9 @@ static const struct ctl_table_class tables[SBREC_N_TABLES] = {
 
     [SBREC_TABLE_SSL].row_ids[0] =
     {&sbrec_table_sb_global, NULL, &sbrec_sb_global_col_ssl},
+
+    [SBREC_TABLE_DNS].row_ids[0] =
+    {&sbrec_table_dns, NULL, &sbrec_dns_col_records},
 };
 
 
