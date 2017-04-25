@@ -2,6 +2,7 @@ v2.7.1 - xx xxx xxxx
 ---------------------
    - Fedora Packaging:
      * OVN services are no longer restarted automatically after upgrade.
+   - Add --cleanup option to command 'ovs-appctl exit' (see ovs-vswitchd(8)).
 
 v2.7.0 - 21 Feb 2017
 ---------------------

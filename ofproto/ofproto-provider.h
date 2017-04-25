@@ -826,7 +826,7 @@ struct ofproto_class {
      */
     struct ofproto *(*alloc)(void);
     int (*construct)(struct ofproto *ofproto);
-    void (*destruct)(struct ofproto *ofproto);
+    void (*destruct)(struct ofproto *ofproto, bool del);
     void (*dealloc)(struct ofproto *ofproto);
 
     /* Performs any periodic activity required by 'ofproto'.  It should:

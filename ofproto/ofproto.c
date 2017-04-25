@@ -1644,7 +1644,7 @@ ofproto_destroy(struct ofproto *p, bool del)
         free(usage);
     }
 
-    p->ofproto_class->destruct(p);
+    p->ofproto_class->destruct(p, del);
 
     /* We should not postpone this because it involves deleting a listening
      * socket which we may want to reopen soon. 'connmgr' may be used by other

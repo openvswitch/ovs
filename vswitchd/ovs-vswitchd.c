@@ -60,13 +60,19 @@ static unixctl_cb_func ovs_vswitchd_exit;
 static char *parse_options(int argc, char *argv[], char **unixctl_path);
 OVS_NO_RETURN static void usage(void);
 
+struct ovs_vswitchd_exit_args {
+    bool *exiting;
+    bool *cleanup;
+};
+
 int
 main(int argc, char *argv[])
 {
     char *unixctl_path = NULL;
     struct unixctl_server *unixctl;
     char *remote;
-    bool exiting;
+    bool exiting, cleanup;
+    struct ovs_vswitchd_exit_args exit_args = {&exiting, &cleanup};
     int retval;
 
     set_program_name(argv[0]);
@@ -92,12 +98,14 @@ main(int argc, char *argv[])
     if (retval) {
         exit(EXIT_FAILURE);
     }
-    unixctl_command_register("exit", "", 0, 0, ovs_vswitchd_exit, &exiting);
+    unixctl_command_register("exit", "[--cleanup]", 0, 1,
+                             ovs_vswitchd_exit, &exit_args);
 
     bridge_init(remote);
     free(remote);
 
     exiting = false;
+    cleanup = false;
     while (!exiting) {
         memory_run();
         if (memory_should_report()) {
@@ -124,7 +132,7 @@ main(int argc, char *argv[])
             exiting = true;
         }
     }
-    bridge_exit();
+    bridge_exit(cleanup);
     unixctl_server_destroy(unixctl);
     service_stop();
 
@@ -265,10 +273,11 @@ usage(void)
 }
 
 static void
-ovs_vswitchd_exit(struct unixctl_conn *conn, int argc OVS_UNUSED,
-                  const char *argv[] OVS_UNUSED, void *exiting_)
+ovs_vswitchd_exit(struct unixctl_conn *conn, int argc,
+                  const char *argv[], void *exit_args_)
 {
-    bool *exiting = exiting_;
-    *exiting = true;
+    struct ovs_vswitchd_exit_args *exit_args = exit_args_;
+    *exit_args->exiting = true;
+    *exit_args->cleanup = argc == 2 && !strcmp(argv[1], "--cleanup");
     unixctl_command_reply(conn, NULL);
 }

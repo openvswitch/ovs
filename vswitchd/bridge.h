@@ -16,10 +16,12 @@
 #ifndef VSWITCHD_BRIDGE_H
 #define VSWITCHD_BRIDGE_H 1
 
+#include <stdbool.h>
+
 struct simap;
 
 void bridge_init(const char *remote);
-void bridge_exit(void);
+void bridge_exit(bool delete_datapath);
 
 void bridge_run(void);
 void bridge_wait(void);

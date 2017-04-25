@@ -109,8 +109,11 @@ configuration.
 described below.  The command descriptions assume an understanding of
 how to configure Open vSwitch.
 .SS "GENERAL COMMANDS"
-.IP "\fBexit\fR"
-Causes \fBovs\-vswitchd\fR to gracefully terminate.
+.IP "\fBexit\fR \fI--cleanup\fR"
+Causes \fBovs\-vswitchd\fR to gracefully terminate. If \fI--cleanup\fR
+is specified, release datapath resources configured by \fBovs\-vswitchd\fR.
+Otherwise, datapath flows and other resources remains undeleted.
+.
 .IP "\fBqos/show-types\fR \fIinterface\fR"
 Queries the interface for a list of Quality of Service types that are
 configurable via Open vSwitch for the given \fIinterface\fR.
