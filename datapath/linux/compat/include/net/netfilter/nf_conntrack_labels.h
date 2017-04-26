@@ -57,4 +57,51 @@ static inline int nf_connlabels_get(struct net *net, unsigned int bits)
 static inline void nf_connlabels_put(struct net *net) { }
 #endif /* CONFIG_NF_CONNTRACK_LABELS */
 #endif /* HAVE_NF_CONNLABELS_GET_TAKES_BIT */
+
+/* Upstream commit 5a8145f7b222 ("netfilter: labels: don't emit ct event if
+ * labels were not changed"), released in Linux 4.7, introduced a functional
+ * change to trigger conntrack event for a label change only when the labels
+ * actually changed.  There is no way we can detect this from the headers, so
+ * provide replacements that work the same for OVS (where labels size is 128
+ * bits == 16 bytes == 4 4-byte words). */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,7,0)
+static int replace_u32(u32 *address, u32 mask, u32 new)
+{
+	u32 old, tmp;
+
+	do {
+		old = *address;
+		tmp = (old & mask) ^ new;
+		if (old == tmp)
+			return 0;
+	} while (cmpxchg(address, old, tmp) != old);
+
+	return 1;
+}
+
+static int rpl_nf_connlabels_replace(struct nf_conn *ct,
+				     const u32 *data,
+				     const u32 *mask, unsigned int words32)
+{
+	struct nf_conn_labels *labels;
+	unsigned int i;
+	int changed = 0;
+	u32 *dst;
+
+	labels = nf_ct_labels_find(ct);
+	if (!labels)
+		return -ENOSPC;
+
+	dst = (u32 *) labels->bits;
+	for (i = 0; i < words32; i++)
+		changed |= replace_u32(&dst[i], mask ? ~mask[i] : 0, data[i]);
+
+	if (changed)
+		nf_conntrack_event_cache(IPCT_LABEL, ct);
+
+	return 0;
+}
+#define nf_connlabels_replace rpl_nf_connlabels_replace
+#endif
+
 #endif /* _NF_CONNTRACK_LABELS_WRAPPER_H */
