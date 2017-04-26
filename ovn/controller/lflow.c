@@ -60,7 +60,6 @@ static void consider_logical_flow(const struct lport_index *lports,
                                   const struct sbrec_logical_flow *lflow,
                                   const struct hmap *local_datapaths,
                                   struct group_table *group_table,
-                                  const struct simap *ct_zones,
                                   const struct sbrec_chassis *chassis,
                                   struct hmap *dhcp_opts,
                                   struct hmap *dhcpv6_opts,
@@ -122,7 +121,6 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
                   const struct mcgroup_index *mcgroups,
                   const struct hmap *local_datapaths,
                   struct group_table *group_table,
-                  const struct simap *ct_zones,
                   const struct sbrec_chassis *chassis,
                   const struct shash *addr_sets,
                   struct hmap *flow_table)
@@ -147,7 +145,7 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
 
     SBREC_LOGICAL_FLOW_FOR_EACH (lflow, ctx->ovnsb_idl) {
         consider_logical_flow(lports, mcgroups, lflow, local_datapaths,
-                              group_table, ct_zones, chassis,
+                              group_table, chassis,
                               &dhcp_opts, &dhcpv6_opts, &conj_id_ofs,
                               addr_sets, flow_table);
     }
@@ -162,7 +160,6 @@ consider_logical_flow(const struct lport_index *lports,
                       const struct sbrec_logical_flow *lflow,
                       const struct hmap *local_datapaths,
                       struct group_table *group_table,
-                      const struct simap *ct_zones,
                       const struct sbrec_chassis *chassis,
                       struct hmap *dhcp_opts,
                       struct hmap *dhcpv6_opts,
@@ -231,7 +228,6 @@ consider_logical_flow(const struct lport_index *lports,
         .aux = &aux,
         .is_switch = is_switch(ldp),
         .is_gateway_router = is_gateway_router(ldp, local_datapaths),
-        .ct_zones = ct_zones,
         .group_table = group_table,
 
         .pipeline = ingress ? OVNACT_P_INGRESS : OVNACT_P_EGRESS,
@@ -394,12 +390,11 @@ lflow_run(struct controller_ctx *ctx,
           const struct mcgroup_index *mcgroups,
           const struct hmap *local_datapaths,
           struct group_table *group_table,
-          const struct simap *ct_zones,
           const struct shash *addr_sets,
           struct hmap *flow_table)
 {
     add_logical_flows(ctx, lports, mcgroups, local_datapaths, group_table,
-                      ct_zones, chassis, addr_sets, flow_table);
+                      chassis, addr_sets, flow_table);
     add_neighbor_flows(ctx, lports, flow_table);
 }
 

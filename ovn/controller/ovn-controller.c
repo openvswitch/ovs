@@ -644,7 +644,7 @@ main(int argc, char *argv[])
 
                 struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
                 lflow_run(&ctx, chassis, &lports, &mcgroups,
-                          &local_datapaths, &group_table, &ct_zones,
+                          &local_datapaths, &group_table,
                           &addr_sets, &flow_table);
 
                 physical_run(&ctx, mff_ovn_geneve,
