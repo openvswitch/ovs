@@ -132,6 +132,7 @@ enum ip_conntrack_events {
     IPCT_MARK,
     IPCT_NATSEQADJ,
     IPCT_SECMARK,
+    IPCT_LABEL,
 };
 
 enum ip_conntrack_expect_events {
