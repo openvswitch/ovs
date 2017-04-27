@@ -2178,18 +2178,19 @@ cmd_set_manager(struct ctl_context *ctx)
 /* Parameter commands. */
 static const struct ctl_table_class tables[VTEPREC_N_TABLES] = {
     [VTEPREC_TABLE_LOGICAL_SWITCH].row_ids[0]
-    = {&vteprec_logical_switch_col_name, NULL},
+    = {&vteprec_logical_switch_col_name, NULL, NULL},
 
-    [VTEPREC_TABLE_MANAGER].row_ids[0] = {&vteprec_manager_col_target, NULL},
+    [VTEPREC_TABLE_MANAGER].row_ids[0]
+    = {&vteprec_manager_col_target, NULL, NULL},
 
     [VTEPREC_TABLE_PHYSICAL_PORT].row_ids[0]
-    = {&vteprec_physical_port_col_name, NULL},
+    = {&vteprec_physical_port_col_name, NULL, NULL},
 
     [VTEPREC_TABLE_PHYSICAL_SWITCH].row_ids[0]
-    = {&vteprec_physical_switch_col_name, NULL},
+    = {&vteprec_physical_switch_col_name, NULL, NULL},
 
     [VTEPREC_TABLE_LOGICAL_ROUTER].row_ids[0]
-    = {&vteprec_logical_router_col_name, NULL},
+    = {&vteprec_logical_router_col_name, NULL, NULL},
 };
 
 

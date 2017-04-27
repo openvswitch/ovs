@@ -240,7 +240,10 @@ void ctl_context_done(struct ctl_context *, struct ctl_command *);
 /* A way to identify a particular row in the database based on a user-provided
  * string.  If all fields are NULL, the struct is ignored.  Otherwise,
  * 'name_column' designates a column whose table is searched for rows that
- * match with the user string.  If a matching row is found, then:
+ * match with the user string.  If 'key' is NULL, then 'name_column' should be
+ * a string or integer-valued column; otherwise it should be a map from a
+ * string to one of those types and the value corresponding to 'key' is what is
+ * matched.  If a matching row is found, then:
  *
  *    - If 'uuid_column' is NULL, the matching row is the final row.
  *
@@ -249,6 +252,7 @@ void ctl_context_done(struct ctl_context *, struct ctl_command *);
  */
 struct ctl_row_id {
     const struct ovsdb_idl_column *name_column;
+    const char *key;
     const struct ovsdb_idl_column *uuid_column;
 };
 

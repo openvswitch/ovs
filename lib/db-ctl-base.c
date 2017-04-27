@@ -251,15 +251,26 @@ get_row_by_id(struct ctl_context *ctx,
     }
 
     const struct ovsdb_idl_row *referrer = NULL;
-    ovs_assert(id->name_column->type.value.type == OVSDB_TYPE_VOID);
 
-    enum ovsdb_atomic_type key = id->name_column->type.key.type;
-    if (key == OVSDB_TYPE_INTEGER) {
+    /* Figure out the 'key' and 'value' types for the column that we're going
+     * to look at.  One of these ('name_type') is the type of the name we're
+     * going to compare against 'record_id'.  */
+    enum ovsdb_atomic_type key, value, name_type;
+    if (!id->key) {
+        name_type = key = id->name_column->type.key.type;
+        value = OVSDB_TYPE_VOID;
+    } else {
+        key = OVSDB_TYPE_STRING;
+        name_type = value = id->name_column->type.value.type;
+    }
+
+    /* We only support integer and string names (so far). */
+    if (name_type == OVSDB_TYPE_INTEGER) {
         if (!record_id[0] || record_id[strspn(record_id, "0123456789")]) {
             return NULL;
         }
     } else {
-        ovs_assert(key == OVSDB_TYPE_STRING);
+        ovs_assert(name_type == OVSDB_TYPE_STRING);
     }
 
     const struct ovsdb_idl_class *class = ovsdb_idl_get_class(ctx->idl);
@@ -269,19 +280,34 @@ get_row_by_id(struct ctl_context *ctx,
                                                                id_table);
          row != NULL;
          row = ovsdb_idl_next_row(row)) {
-        const struct ovsdb_datum *name = ovsdb_idl_get(
-            row, id->name_column, key, OVSDB_TYPE_VOID);
-        if (name->n == 1) {
-            const union ovsdb_atom *atom = &name->keys[0];
-            if (key == OVSDB_TYPE_STRING
-                ? !strcmp(atom->string, record_id)
-                : atom->integer == strtoll(record_id, NULL, 10)) {
-                if (referrer) {
-                    ctl_fatal("multiple rows in %s match \"%s\"",
-                              id_table->name, record_id);
-                }
-                referrer = row;
+        /* Pick out the name column's data. */
+        const struct ovsdb_datum *datum = ovsdb_idl_get(
+            row, id->name_column, key, value);
+
+        /* Extract the name from the column. */
+        const union ovsdb_atom *name;
+        if (!id->key) {
+            name = datum->n == 1 ? &datum->keys[0] : NULL;
+        } else {
+            const union ovsdb_atom key
+                = { .string = CONST_CAST(char *, id->key) };
+            unsigned int i = ovsdb_datum_find_key(datum, &key,
+                                                  OVSDB_TYPE_STRING);
+            name = i == UINT_MAX ? NULL : &datum->values[i];
+        }
+        if (!name) {
+            continue;
+        }
+
+        /* If the name equals 'record_id', take it. */
+        if (name_type == OVSDB_TYPE_STRING
+            ? !strcmp(name->string, record_id)
+            : name->integer == strtoll(record_id, NULL, 10)) {
+            if (referrer) {
+                ctl_fatal("multiple rows in %s match \"%s\"",
+                          id_table->name, record_id);
             }
+            referrer = row;
         }
     }
     if (!referrer) {
