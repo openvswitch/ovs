@@ -240,6 +240,30 @@ create_symbol(struct ovsdb_symbol_table *symtab, const char *id, bool *newp)
     return symbol;
 }
 
+static bool
+record_id_equals(const union ovsdb_atom *name, enum ovsdb_atomic_type type,
+                 const char *record_id)
+{
+    if (type == OVSDB_TYPE_STRING) {
+        if (!strcmp(name->string, record_id)) {
+            return true;
+        }
+
+        struct uuid uuid;
+        size_t len = strlen(record_id);
+        if (len >= 4
+            && uuid_from_string(&uuid, name->string)
+            && !strncmp(name->string, record_id, len)) {
+            return true;
+        }
+
+        return false;
+    } else {
+        ovs_assert(type == OVSDB_TYPE_INTEGER);
+        return name->integer == strtoll(record_id, NULL, 10);
+    }
+}
+
 static const struct ovsdb_idl_row *
 get_row_by_id(struct ctl_context *ctx,
               const struct ovsdb_idl_table_class *table,
@@ -300,9 +324,7 @@ get_row_by_id(struct ctl_context *ctx,
         }
 
         /* If the name equals 'record_id', take it. */
-        if (name_type == OVSDB_TYPE_STRING
-            ? !strcmp(name->string, record_id)
-            : name->integer == strtoll(record_id, NULL, 10)) {
+        if (record_id_equals(name, name_type, record_id)) {
             if (referrer) {
                 ctl_fatal("multiple rows in %s match \"%s\"",
                           id_table->name, record_id);
