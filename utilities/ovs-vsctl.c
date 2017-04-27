@@ -2291,10 +2291,8 @@ cmd_get_aa_mapping(struct ctl_context *ctx)
 
 
 static const struct ctl_table_class tables[OVSREC_N_TABLES] = {
-    [OVSREC_TABLE_BRIDGE].row_ids = {
-        {&ovsrec_table_bridge, &ovsrec_bridge_col_name, NULL},
-        {&ovsrec_table_flow_sample_collector_set, NULL,
-         &ovsrec_flow_sample_collector_set_col_bridge}},
+    [OVSREC_TABLE_BRIDGE].row_ids[0]
+    = {&ovsrec_table_bridge, &ovsrec_bridge_col_name, NULL},
 
     [OVSREC_TABLE_CONTROLLER].row_ids[0]
     = {&ovsrec_table_bridge, &ovsrec_bridge_col_name,
@@ -2319,9 +2317,6 @@ static const struct ctl_table_class tables[OVSREC_N_TABLES] = {
     [OVSREC_TABLE_QOS].row_ids[0]
     = {&ovsrec_table_port, &ovsrec_port_col_name, &ovsrec_port_col_qos},
 
-    [OVSREC_TABLE_SSL].row_ids[0]
-    = {&ovsrec_table_open_vswitch, NULL, &ovsrec_open_vswitch_col_ssl},
-
     [OVSREC_TABLE_SFLOW].row_ids[0]
     = {&ovsrec_table_bridge, &ovsrec_bridge_col_name,
        &ovsrec_bridge_col_sflow},
@@ -2329,10 +2324,9 @@ static const struct ctl_table_class tables[OVSREC_N_TABLES] = {
     [OVSREC_TABLE_FLOW_TABLE].row_ids[0]
     = {&ovsrec_table_flow_table, &ovsrec_flow_table_col_name, NULL},
 
-    [OVSREC_TABLE_IPFIX].row_ids = {
-     {&ovsrec_table_bridge, &ovsrec_bridge_col_name, &ovsrec_bridge_col_ipfix},
-     {&ovsrec_table_flow_sample_collector_set, NULL,
-      &ovsrec_flow_sample_collector_set_col_ipfix}},
+    [OVSREC_TABLE_IPFIX].row_ids[0] =
+     {&ovsrec_table_bridge, &ovsrec_bridge_col_name,
+      &ovsrec_bridge_col_ipfix},
 
     [OVSREC_TABLE_AUTOATTACH].row_ids[0]
     = {&ovsrec_table_bridge, &ovsrec_bridge_col_name,
