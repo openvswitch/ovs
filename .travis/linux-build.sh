@@ -87,7 +87,7 @@ if [ "$DPDK" ]; then
         # Disregard cast alignment errors until DPDK is fixed
         CFLAGS="$CFLAGS -Wno-cast-align"
     fi
-    EXTRA_OPTS="$EXTRA_OPTS --with-dpdk=./dpdk-$DPDK_VER/build"
+    EXTRA_OPTS="$EXTRA_OPTS --with-dpdk=./dpdk-stable-$DPDK_VER/build"
 elif [ "$CC" != "clang" ]; then
     # DPDK headers currently trigger sparse errors
     SPARSE_FLAGS="$SPARSE_FLAGS -Wsparse-error"
