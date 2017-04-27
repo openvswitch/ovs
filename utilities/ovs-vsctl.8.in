@@ -560,10 +560,12 @@ packets on a per-flow basis using OpenFlow \fBsample\fR actions.
 Configuration for Auto Attach within a bridge.
 .PP
 Record names must be specified in full and with correct
-capitalization.  Names of tables and columns are not case-sensitive,
-and \fB\-\-\fR and \fB_\fR are treated interchangeably.  Unique
-abbreviations are acceptable, e.g. \fBnet\fR or \fBn\fR is sufficient
-to identify the \fBNetFlow\fR table.
+capitalization, except that UUIDs may be abbreviated to their first 4
+(or more) hex digits, as long as that is unique within the table.
+Names of tables and columns are not case-sensitive, and \fB\-\fR and
+\fB_\fR are treated interchangeably.  Unique abbreviations of table
+and column names are acceptable, e.g. \fBnet\fR or \fBn\fR is
+sufficient to identify the \fBNetFlow\fR table.
 .
 .so lib/db-ctl-base.man
 .SH "EXAMPLES"

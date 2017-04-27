@@ -257,6 +257,32 @@ This option is only useful if the SSL peer sends its CA certificate
 as part of the SSL certificate chain.  The SSL protocol does not
 require the controller to send the CA certificate.
 .
+.SS "Database Commands"
+.
+These commands query and modify the contents of \fBovsdb\fR tables.
+They are a slight abstraction of the \fBovsdb\fR interface and as such
+they operate at a lower level than other \fBovs\-sbctl\fR commands.
+.PP
+.ST "Identifying Tables, Records, and Columns"
+.PP
+Each of these commands has a \fItable\fR parameter to identify a table
+within the database.  Many of them also take a \fIrecord\fR parameter
+that identifies a particular record within a table.  The \fIrecord\fR
+parameter may be the UUID for a record, and many tables offer
+additional ways to identify records.  Some commands also take
+\fIcolumn\fR parameters that identify a particular field within the
+records in a table.
+.\" It would be kind to list all the tables and their supported identifiers
+.\" here.
+.PP
+Record names must be specified in full and with correct
+capitalization, except that UUIDs may be abbreviated to their first 4
+(or more) hex digits, as long as that is unique within the table.
+Names of tables and columns are not case-sensitive, and \fB\-\fR and
+\fB_\fR are treated interchangeably.  Unique abbreviations of table
+and column names are acceptable, e.g. \fBaddr\fR or \fBa\fR is
+sufficient to identify the \fBAddress_Set\fR table.
+.
 .so lib/db-ctl-base.man
 .SH "EXIT STATUS"
 .IP "0"

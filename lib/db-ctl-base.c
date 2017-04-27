@@ -300,6 +300,14 @@ get_row_by_id(struct ctl_context *ctx,
     return final;
 }
 
+static bool
+is_partial_uuid_match(const struct uuid *uuid, const char *match)
+{
+    char uuid_s[UUID_LEN + 1];
+    snprintf(uuid_s, sizeof uuid_s, UUID_FMT, UUID_ARGS(uuid));
+    return !strncmp(uuid_s, match, strlen(match));
+}
+
 static const struct ovsdb_idl_row *
 get_row(struct ctl_context *ctx,
         const struct ovsdb_idl_table_class *table, const char *record_id,
@@ -327,6 +335,26 @@ get_row(struct ctl_context *ctx,
                                 record_id);
             if (row) {
                 break;
+            }
+        }
+    }
+    if (!row
+        && record_id[uuid_is_partial_string(record_id)] == '\0'
+        && strlen(record_id) >= 4) {
+        for (const struct ovsdb_idl_row *r = ovsdb_idl_first_row(ctx->idl,
+                                                                 table);
+             r != NULL;
+             r = ovsdb_idl_next_row(r)) {
+            if (is_partial_uuid_match(&r->uuid, record_id)) {
+                if (!row) {
+                    row = r;
+                } else {
+                    ctl_fatal("%s contains 2 or more rows whose UUIDs begin "
+                              "with %s: at least "UUID_FMT" and "UUID_FMT,
+                              table->name, record_id,
+                              UUID_ARGS(&row->uuid),
+                              UUID_ARGS(&r->uuid));
+                }
             }
         }
     }

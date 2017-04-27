@@ -12,6 +12,8 @@ Post-v2.7.0
        still can be configured via extra arguments for DPDK EAL.
    - New support for multiple VLANs (802.1ad or "QinQ"), including a new
      "dot1q-tunnel" port VLAN mode.
+   - In ovn-vsctl and vtep-ctl, record UUIDs in commands may now be
+     abbreviated to 4 hex digits.
    - OVN:
      * IPAM for IPv4 can now exclude user-defined addresses from assignment.
      * IPAM can now assign IPv6 addresses.
@@ -20,6 +22,8 @@ Post-v2.7.0
      * Allow ovn-controller SSL configuration to be obtained from vswitchd
        database.
      * ovn-trace now has basic support for tracing distributed firewalls.
+     * In ovn-nbctl and ovn-sbctl, record UUIDs in commands may now be
+       abbreviated to 4 hex digits.
    - Add the command 'ovs-appctl stp/show' (see ovs-vswitchd(8)).
    - OpenFlow:
      * Increased support for OpenFlow 1.6 (draft).

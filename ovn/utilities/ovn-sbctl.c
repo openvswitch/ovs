@@ -727,6 +727,9 @@ is_partial_uuid_match(const struct uuid *uuid, const char *match)
     char uuid_s[UUID_LEN + 1];
     snprintf(uuid_s, sizeof uuid_s, UUID_FMT, UUID_ARGS(uuid));
 
+    /* We strip leading zeros because we want to accept cookie values derived
+     * from UUIDs, and cookie values are printed without leading zeros because
+     * they're just numbers. */
     const char *s1 = strip_leading_zero(uuid_s);
     const char *s2 = strip_leading_zero(match);
 
