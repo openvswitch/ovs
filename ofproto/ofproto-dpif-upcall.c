@@ -2323,8 +2323,13 @@ revalidate(struct revalidator *revalidator)
                 continue;
             }
 
-            /* The flow is now confirmed to be in the datapath. */
-            transition_ukey(ukey, UKEY_OPERATIONAL);
+            if (ukey->state <= UKEY_OPERATIONAL) {
+                /* The flow is now confirmed to be in the datapath. */
+                transition_ukey(ukey, UKEY_OPERATIONAL);
+            } else {
+                ovs_mutex_unlock(&ukey->mutex);
+                continue;
+            }
 
             if (!used) {
                 used = ukey->created;
