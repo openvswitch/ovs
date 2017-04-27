@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -798,24 +798,46 @@ ovsdb_idl_check_consistency(const struct ovsdb_idl *idl)
     ovs_assert(ok);
 }
 
-static unsigned char *
-ovsdb_idl_get_mode(struct ovsdb_idl *idl,
-                   const struct ovsdb_idl_column *column)
+const struct ovsdb_idl_class *
+ovsdb_idl_get_class(const struct ovsdb_idl *idl)
 {
-    size_t i;
+    return idl->class;
+}
 
-    ovs_assert(!idl->change_seqno);
-
-    for (i = 0; i < idl->class->n_tables; i++) {
-        const struct ovsdb_idl_table *table = &idl->tables[i];
-        const struct ovsdb_idl_table_class *tc = table->class;
-
+/* Given 'column' in some table in 'class', returns the table's class. */
+const struct ovsdb_idl_table_class *
+ovsdb_idl_table_class_from_column(const struct ovsdb_idl_class *class,
+                                  const struct ovsdb_idl_column *column)
+{
+    for (size_t i = 0; i < class->n_tables; i++) {
+        const struct ovsdb_idl_table_class *tc = &class->tables[i];
         if (column >= tc->columns && column < &tc->columns[tc->n_columns]) {
-            return &table->modes[column - tc->columns];
+            return tc;
         }
     }
 
     OVS_NOT_REACHED();
+}
+
+/* Given 'column' in some table in 'idl', returns the table. */
+static struct ovsdb_idl_table *
+ovsdb_idl_table_from_column(struct ovsdb_idl *idl,
+                            const struct ovsdb_idl_column *column)
+{
+    const struct ovsdb_idl_table_class *tc =
+        ovsdb_idl_table_class_from_column(idl->class, column);
+    return &idl->tables[tc - idl->class->tables];
+}
+
+static unsigned char *
+ovsdb_idl_get_mode(struct ovsdb_idl *idl,
+                   const struct ovsdb_idl_column *column)
+{
+    ovs_assert(!idl->change_seqno);
+
+    const struct ovsdb_idl_table *table = ovsdb_idl_table_from_column(idl,
+                                                                      column);
+    return &table->modes[column - table->class->columns];
 }
 
 static void

@@ -3045,21 +3045,18 @@ cmd_set_ssl(struct ctl_context *ctx)
 
 static const struct ctl_table_class tables[NBREC_N_TABLES] = {
     [NBREC_TABLE_LOGICAL_SWITCH].row_ids[0]
-    = {&nbrec_table_logical_switch, &nbrec_logical_switch_col_name, NULL},
+    = {&nbrec_logical_switch_col_name, NULL},
 
     [NBREC_TABLE_LOGICAL_SWITCH_PORT].row_ids[0]
-    = {&nbrec_table_logical_switch_port, &nbrec_logical_switch_port_col_name,
-       NULL},
+    = {&nbrec_logical_switch_port_col_name, NULL},
 
     [NBREC_TABLE_LOGICAL_ROUTER].row_ids[0]
-    = {&nbrec_table_logical_router, &nbrec_logical_router_col_name, NULL},
+    = {&nbrec_logical_router_col_name, NULL},
 
     [NBREC_TABLE_LOGICAL_ROUTER_PORT].row_ids[0]
-    = {&nbrec_table_logical_router_port, &nbrec_logical_router_port_col_name,
-       NULL},
+    = {&nbrec_logical_router_port_col_name, NULL},
 
-    [NBREC_TABLE_ADDRESS_SET].row_ids[0]
-    = {&nbrec_table_address_set, &nbrec_address_set_col_name, NULL},
+    [NBREC_TABLE_ADDRESS_SET].row_ids[0] = {&nbrec_address_set_col_name, NULL},
 };
 
 static void
