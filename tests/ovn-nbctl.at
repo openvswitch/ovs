@@ -56,14 +56,14 @@ AT_CHECK([ovn-nbctl ls-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
 AT_CHECK([ovn-nbctl show ls0])
 AT_CHECK([ovn-nbctl ls-add ls0])
 AT_CHECK([ovn-nbctl show ls0 | ${PERL} $srcdir/uuidfilt.pl], [0],
-  [    switch <0> (ls0)
+  [switch <0> (ls0)
 ])
 AT_CHECK([ovn-nbctl ls-add ls0], [1], [],
   [ovn-nbctl: ls0: a switch with this name already exists
 ])
 AT_CHECK([ovn-nbctl --may-exist ls-add ls0])
 AT_CHECK([ovn-nbctl show ls0 | ${PERL} $srcdir/uuidfilt.pl], [0],
-  [    switch <0> (ls0)
+  [switch <0> (ls0)
 ])
 AT_CHECK([ovn-nbctl --add-duplicate ls-add ls0])
 AT_CHECK([ovn-nbctl --may-exist --add-duplicate ls-add ls0], [1], [],
@@ -645,14 +645,14 @@ AT_CHECK([ovn-nbctl lr-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
 AT_CHECK([ovn-nbctl show lr0])
 AT_CHECK([ovn-nbctl lr-add lr0])
 AT_CHECK([ovn-nbctl show lr0 | ${PERL} $srcdir/uuidfilt.pl], [0],
-  [    router <0> (lr0)
+  [router <0> (lr0)
 ])
 AT_CHECK([ovn-nbctl lr-add lr0], [1], [],
   [ovn-nbctl: lr0: a router with this name already exists
 ])
 AT_CHECK([ovn-nbctl --may-exist lr-add lr0])
 AT_CHECK([ovn-nbctl show lr0 | ${PERL} $srcdir/uuidfilt.pl], [0],
-  [    router <0> (lr0)
+  [router <0> (lr0)
 ])
 AT_CHECK([ovn-nbctl --add-duplicate lr-add lr0])
 AT_CHECK([ovn-nbctl --may-exist --add-duplicate lr-add lr0], [1], [],
@@ -695,10 +695,10 @@ AT_CHECK([ovn-nbctl lrp-add lr0 lrp0 00:00:00:01:02:03:04 192.168.1.1/24], [1], 
 AT_CHECK([ovn-nbctl lrp-add lr0 lrp0 00:00:00:01:02:03 192.168.1.1/24])
 
 AT_CHECK([ovn-nbctl show lr0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
-    router <0> (lr0)
-        port lrp0
-            mac: "00:00:00:01:02:03"
-            networks: [["192.168.1.1/24"]]
+router <0> (lr0)
+    port lrp0
+        mac: "00:00:00:01:02:03"
+        networks: [["192.168.1.1/24"]]
 ])
 
 AT_CHECK([ovn-nbctl lrp-add lr0 lrp0 00:00:00:01:02:03 192.168.1.1/24], [1], [],

@@ -569,18 +569,18 @@ lb_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist)
 static void
 print_lr(const struct nbrec_logical_router *lr, struct ds *s)
 {
-    ds_put_format(s, "    router "UUID_FMT" (%s)\n",
+    ds_put_format(s, "router "UUID_FMT" (%s)\n",
                   UUID_ARGS(&lr->header_.uuid), lr->name);
 
     for (size_t i = 0; i < lr->n_ports; i++) {
         const struct nbrec_logical_router_port *lrp = lr->ports[i];
-        ds_put_format(s, "        port %s\n", lrp->name);
+        ds_put_format(s, "    port %s\n", lrp->name);
         if (lrp->mac) {
-            ds_put_cstr(s, "            mac: ");
+            ds_put_cstr(s, "        mac: ");
             ds_put_format(s, "\"%s\"\n", lrp->mac);
         }
         if (lrp->n_networks) {
-            ds_put_cstr(s, "            networks: [");
+            ds_put_cstr(s, "        networks: [");
             for (size_t j = 0; j < lrp->n_networks; j++) {
                 ds_put_format(s, "%s\"%s\"",
                         j == 0 ? "" : ", ",
@@ -592,13 +592,13 @@ print_lr(const struct nbrec_logical_router *lr, struct ds *s)
 
     for (size_t i = 0; i < lr->n_nat; i++) {
         const struct nbrec_nat *nat = lr->nat[i];
-        ds_put_format(s, "        nat "UUID_FMT"\n",
+        ds_put_format(s, "    nat "UUID_FMT"\n",
                   UUID_ARGS(&nat->header_.uuid));
-        ds_put_cstr(s, "            external ip: ");
+        ds_put_cstr(s, "        external ip: ");
         ds_put_format(s, "\"%s\"\n", nat->external_ip);
-        ds_put_cstr(s, "            logical ip: ");
+        ds_put_cstr(s, "        logical ip: ");
         ds_put_format(s, "\"%s\"\n", nat->logical_ip);
-        ds_put_cstr(s, "            type: ");
+        ds_put_cstr(s, "        type: ");
         ds_put_format(s, "\"%s\"\n", nat->type);
     }
 }
@@ -606,21 +606,21 @@ print_lr(const struct nbrec_logical_router *lr, struct ds *s)
 static void
 print_ls(const struct nbrec_logical_switch *ls, struct ds *s)
 {
-    ds_put_format(s, "    switch "UUID_FMT" (%s)\n",
+    ds_put_format(s, "switch "UUID_FMT" (%s)\n",
                   UUID_ARGS(&ls->header_.uuid), ls->name);
 
     for (size_t i = 0; i < ls->n_ports; i++) {
         const struct nbrec_logical_switch_port *lsp = ls->ports[i];
 
-        ds_put_format(s, "        port %s\n", lsp->name);
+        ds_put_format(s, "    port %s\n", lsp->name);
         if (lsp->parent_name) {
-            ds_put_format(s, "            parent: %s\n", lsp->parent_name);
+            ds_put_format(s, "        parent: %s\n", lsp->parent_name);
         }
         if (lsp->n_tag) {
-            ds_put_format(s, "            tag: %"PRIu64"\n", lsp->tag[0]);
+            ds_put_format(s, "        tag: %"PRIu64"\n", lsp->tag[0]);
         }
         if (lsp->n_addresses) {
-            ds_put_cstr(s, "            addresses: [");
+            ds_put_cstr(s, "        addresses: [");
             for (size_t j = 0; j < lsp->n_addresses; j++) {
                 ds_put_format(s, "%s\"%s\"",
                         j == 0 ? "" : ", ",
