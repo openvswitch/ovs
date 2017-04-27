@@ -5136,6 +5136,10 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
             case OVS_CT_ATTR_LABELS:
                 setlabel = nl_attr_get(b);
                 break;
+            case OVS_CT_ATTR_EVENTMASK:
+                /* Silently ignored, as userspace datapath does not generate
+                 * netlink events. */
+                break;
             case OVS_CT_ATTR_NAT:
             case OVS_CT_ATTR_UNSPEC:
             case __OVS_CT_ATTR_MAX:
