@@ -281,6 +281,10 @@ struct udpif_key {
     uint64_t reval_seq OVS_GUARDED;           /* Tracks udpif->reval_seq. */
     enum ukey_state state OVS_GUARDED;        /* Tracks ukey lifetime. */
 
+    /* 'state' debug information. */
+    unsigned int state_thread OVS_GUARDED;    /* Thread that transitions. */
+    const char *state_where OVS_GUARDED;      /* transition_ukey() locator. */
+
     /* Datapath flow actions as nlattrs.  Protected by RCU.  Read with
      * ukey_get_actions(), and write with ukey_set_actions(). */
     OVSRCU_TYPE(struct ofpbuf *) actions;
@@ -350,8 +354,11 @@ static void ukey_get_actions(struct udpif_key *, const struct nlattr **actions,
 static bool ukey_install__(struct udpif *, struct udpif_key *ukey)
     OVS_TRY_LOCK(true, ukey->mutex);
 static bool ukey_install(struct udpif *udpif, struct udpif_key *ukey);
-static void transition_ukey(struct udpif_key *ukey, enum ukey_state dst)
+static void transition_ukey_at(struct udpif_key *ukey, enum ukey_state dst,
+                               const char *where)
     OVS_REQUIRES(ukey->mutex);
+#define transition_ukey(UKEY, DST) \
+    transition_ukey_at(UKEY, DST, OVS_SOURCE_LOCATOR)
 static struct udpif_key *ukey_lookup(struct udpif *udpif,
                                      const ovs_u128 *ufid,
                                      const unsigned pmd_id);
@@ -1484,6 +1491,8 @@ ukey_create__(const struct nlattr *key, size_t key_len,
     ukey->dump_seq = dump_seq;
     ukey->reval_seq = reval_seq;
     ukey->state = UKEY_CREATED;
+    ukey->state_thread = ovsthread_id_self();
+    ukey->state_where = OVS_SOURCE_LOCATOR;
     ukey->created = time_msec();
     memset(&ukey->stats, 0, sizeof ukey->stats);
     ukey->stats.used = used;
@@ -1671,10 +1680,15 @@ ukey_install__(struct udpif *udpif, struct udpif_key *new_ukey)
 }
 
 static void
-transition_ukey(struct udpif_key *ukey, enum ukey_state dst)
+transition_ukey_at(struct udpif_key *ukey, enum ukey_state dst,
+                   const char *where)
     OVS_REQUIRES(ukey->mutex)
 {
-    ovs_assert(dst >= ukey->state);
+    if (dst < ukey->state) {
+        VLOG_ABORT("Invalid ukey transition %d->%d (last transitioned from "
+                   "thread %u at %s)", ukey->state, dst, ukey->state_thread,
+                   ukey->state_where);
+    }
     if (ukey->state == dst && dst == UKEY_OPERATIONAL) {
         return;
     }
@@ -1709,6 +1723,8 @@ transition_ukey(struct udpif_key *ukey, enum ukey_state dst)
                      ds_cstr(&ds), ukey->state, dst);
         ds_destroy(&ds);
     }
+    ukey->state_thread = ovsthread_id_self();
+    ukey->state_where = where;
 }
 
 static bool
@@ -2327,6 +2343,9 @@ revalidate(struct revalidator *revalidator)
                 /* The flow is now confirmed to be in the datapath. */
                 transition_ukey(ukey, UKEY_OPERATIONAL);
             } else {
+                VLOG_INFO("Unexpected ukey transition from state %d "
+                          "(last transitioned from thread %u at %s)",
+                          ukey->state, ukey->state_thread, ukey->state_where);
                 ovs_mutex_unlock(&ukey->mutex);
                 continue;
             }
