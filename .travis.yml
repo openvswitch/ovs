@@ -30,13 +30,13 @@ env:
   - BUILD_ENV="-m32" OPTS="--disable-ssl"
   - KERNEL=3.16.39 DPDK=1
   - KERNEL=3.16.39 DPDK=1 OPTS="--enable-shared"
-  - KERNEL=4.9
-  - KERNEL=4.8.14
-  - KERNEL=4.4.38
-  - KERNEL=4.1.36
-  - KERNEL=3.18.45
-  - KERNEL=3.12.68
-  - KERNEL=3.10.104
+  - KERNEL=4.10.12
+  - KERNEL=4.9.24
+  - KERNEL=4.4.63
+  - KERNEL=4.1.39
+  - KERNEL=3.18.50
+  - KERNEL=3.12.73
+  - KERNEL=3.10.105
   - TESTSUITE=1 LIBS=-ljemalloc
 
 matrix:
