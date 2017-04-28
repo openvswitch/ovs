@@ -762,7 +762,7 @@ struct ofpact_learn {
         uint16_t fin_idle_timeout; /* Idle timeout after FIN, if nonzero. */
         uint16_t fin_hard_timeout; /* Hard timeout after FIN, if nonzero. */
         /* If the number of flows on 'table_id' with 'cookie' exceeds this,
-         * the action will not add a new flow. */
+         * the action will not add a new flow. 0 indicates unlimited. */
         uint32_t limit;
         /* Used only if 'flags' has NX_LEARN_F_WRITE_RESULT.  If the execution
          * failed to install a new flow because 'limit' is exceeded,

@@ -4328,7 +4328,8 @@ OFP_ASSERT(sizeof(struct nx_action_learn) == 32);
 
 struct nx_action_learn2 {
     struct nx_action_learn up;  /* The wire format includes nx_action_learn. */
-    ovs_be32 limit;             /* Maximum number of learned flows. */
+    ovs_be32 limit;             /* Maximum number of learned flows.
+                                 * 0 indicates unlimited. */
 
     /* Where to store the result. */
     ovs_be16 result_dst_ofs;    /* Starting bit offset in destination. */
