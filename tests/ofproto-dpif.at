@@ -1690,9 +1690,9 @@ vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,dl_type=0x4321
 ])
 dnl Check meter stats to make it gives the same picture;
 dnl 7 packets hit the meter, but 6 packets are dropped by band0.
-AT_CHECK([ovs-ofctl -O OpenFlow13 meter-stats br0], [0], [dnl
+AT_CHECK([ovs-ofctl -O OpenFlow13 meter-stats br0 | strip_timers], [0], [dnl
 OFPST_METER reply (OF1.3) (xid=0x2):
-meter:controller flow_count:0 packet_in_count:7 byte_in_count:98 duration:1.054s bands:
+meter:controller flow_count:0 packet_in_count:7 byte_in_count:98 duration:0.0s bands:
 0: packet_count:6 byte_count:84
 ])
 
