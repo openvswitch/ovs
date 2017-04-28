@@ -19,6 +19,8 @@ $i\
 #ifdef _WIN32\
 #include "OvsDpInterfaceExt.h"\
 #include "OvsDpInterfaceCtExt.h"\
+#else\
+#include "linux/netfilter/nf_conntrack_common.h"\
 #endif\
 
 # Use OVS's own struct eth_addr instead of a 6-byte char array.

@@ -5351,6 +5351,12 @@ compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc)
     if (ofc->flags & NX_CT_F_COMMIT) {
         nl_msg_put_flag(ctx->odp_actions, ofc->flags & NX_CT_F_FORCE ?
                         OVS_CT_ATTR_FORCE_COMMIT : OVS_CT_ATTR_COMMIT);
+        if (ctx->xbridge->support.ct_eventmask) {
+            nl_msg_put_u32(ctx->odp_actions, OVS_CT_ATTR_EVENTMASK,
+                           1 << IPCT_NEW | 1 << IPCT_RELATED |
+                           1 << IPCT_DESTROY | 1 << IPCT_MARK |
+                           1 << IPCT_LABEL);
+        }
     }
     nl_msg_put_u16(ctx->odp_actions, OVS_CT_ATTR_ZONE, zone);
     put_ct_mark(&ctx->xin->flow, ctx->odp_actions, ctx->wc);

@@ -174,7 +174,10 @@ struct group_dpif *group_dpif_lookup(struct ofproto_dpif *,
     DPIF_SUPPORT_FIELD(bool, clone, "Clone action")                         \
                                                                             \
     /* Maximum level of nesting allowed by OVS_ACTION_ATTR_SAMPLE action. */\
-    DPIF_SUPPORT_FIELD(size_t, sample_nesting, "Sample nesting")
+    DPIF_SUPPORT_FIELD(size_t, sample_nesting, "Sample nesting")            \
+                                                                            \
+    /* OVS_CT_ATTR_EVENTMASK supported by OVS_ACTION_ATTR_CT action. */     \
+    DPIF_SUPPORT_FIELD(bool, ct_eventmask, "Conntrack eventmask")
 
 /* Stores the various features which the corresponding backer supports. */
 struct dpif_backer_support {
