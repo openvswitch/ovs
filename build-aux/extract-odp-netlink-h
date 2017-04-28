@@ -19,9 +19,24 @@ $i\
 #ifdef _WIN32\
 #include "OvsDpInterfaceExt.h"\
 #include "OvsDpInterfaceCtExt.h"\
-#else\
-#include "linux/netfilter/nf_conntrack_common.h"\
 #endif\
+\
+/* IPCT_* enums may not be defined in all platforms, so do not use them. */\
+#define OVS_CT_EVENT_NEW	(1 << 0)   /* 1 << IPCT_NEW */\
+#define OVS_CT_EVENT_RELATED	(1 << 1)   /* 1 << IPCT_RELATED */\
+#define OVS_CT_EVENT_DESTROY	(1 << 2)   /* 1 << IPCT_DESTROY */\
+#define OVS_CT_EVENT_REPLY	(1 << 3)   /* 1 << IPCT_REPLY */\
+#define OVS_CT_EVENT_ASSURED	(1 << 4)   /* 1 << IPCT_ASSURED */\
+#define OVS_CT_EVENT_PROTOINFO	(1 << 5)   /* 1 << IPCT_PROTOINFO */\
+#define OVS_CT_EVENT_HELPER	(1 << 6)   /* 1 << IPCT_HELPER */\
+#define OVS_CT_EVENT_MARK	(1 << 7)   /* 1 << IPCT_MARK */\
+#define OVS_CT_EVENT_SEQADJ	(1 << 8)   /* 1 << IPCT_SEQADJ */\
+#define OVS_CT_EVENT_SECMARK	(1 << 9)   /* 1 << IPCT_SECMARK */\
+#define OVS_CT_EVENT_LABEL	(1 << 10)  /* 1 << IPCT_LABEL */\
+\
+#define OVS_CT_EVENTMASK_DEFAULT \\\
+  (OVS_CT_EVENT_NEW | OVS_CT_EVENT_RELATED | OVS_CT_EVENT_DESTROY |\\\
+   OVS_CT_EVENT_MARK | OVS_CT_EVENT_LABEL)\
 
 # Use OVS's own struct eth_addr instead of a 6-byte char array.
 s,<linux/types\.h>,"openvswitch/types.h"\
