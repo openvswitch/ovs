@@ -160,7 +160,7 @@ to unbind logical port that is not bound has no effect.
 .
 .SS "Logical Flow Commands"
 .
-.IP "[\fB\-\-uuid\fR] \fBlflow\-list\fR [\fIlogical-datapath\fR] [\fIlflow\fR...]"
+.IP "[\fB\-\-uuid\fR] [\fB\-\-ovs\fR[\fB=\fIremote\fR]] [\fB\-\-stats\fR] \fBlflow\-list\fR [\fIlogical-datapath\fR] [\fIlflow\fR...]"
 List logical flows.  If \fIlogical-datapath\fR is specified, only list
 flows for that logical datapath.  The \fIlogical-datapath\fR may be
 given as a UUID or as a datapath name (reporting an error if multiple
@@ -177,6 +177,19 @@ flow.)
 If \fB\-\-uuid\fR is specified, the output includes the first 32 bits
 of each logical flow's UUID.  This makes it easier to find the
 OpenFlow flows that correspond to a given logical flow.
+.IP
+If \fB\-\-ovs\fR is included, \fBovn\-sbctl\fR attempts to obtain and
+display the OpenFlow flows that correspond to each OVN logical flow.
+To do so, \fBovn\-sbctl\fR connects to \fIremote\fR (by default,
+\fBunix:@RUNDIR@/br-int.mgmt\fR) over OpenFlow and retrieves the
+flows.  If \fIremote\fR is specified, it must be an active OpenFlow
+connection method described in \fBovs\-ofctl\fR(8).  Please see the
+discussion of the similar \fB\-\-ovs\fR option in \fBovn-trace\fR(8)
+for more information about the OpenFlow flow output.
+.IP
+By default, OpenFlow flow output includes only match and actions.  Add
+\fB\-\-stats\fR to include all OpenFlow information, such as packet
+and byte counters, duration, and timeouts.
 .
 .IP "[\fB\-\-uuid\fR] \fBdump\-flows\fR [\fIlogical-datapath\fR]"
 Alias for \fBlflow\-list\fB.

@@ -128,7 +128,16 @@ struct ctl_command_syntax {
     void (*postprocess)(struct ctl_context *ctx);
 
     /* A comma-separated list of supported options, e.g. "--a,--b", or the
-     * empty string if the command does not support any options. */
+     * empty string if the command does not support any options.
+     *
+     * Arguments are determined by appending special characters to option
+     * names:
+     *
+     *   - Append "=" (e.g. "--id=") for a required argument.
+     *
+     *   - Append "?" (e.g. "--ovs?") for an optional argument.
+     *
+     *   - Otherwise an option does not accept an argument. */
     const char *options;
 
     enum { RO, RW } mode;   /* Does this command modify the database? */

@@ -25,6 +25,8 @@ Post-v2.7.0
      * ovn-trace now has basic support for tracing distributed firewalls.
      * In ovn-nbctl and ovn-sbctl, record UUIDs in commands may now be
        abbreviated to 4 hex digits.
+     * "ovn-sbctl lflow-list" can now print OpenFlow flows that correspond
+       to logical flows.
    - Add the command 'ovs-appctl stp/show' (see ovs-vswitchd(8)).
    - OpenFlow:
      * All features required by OpenFlow 1.4 are now implemented, so

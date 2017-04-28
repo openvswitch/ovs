@@ -1637,11 +1637,11 @@ parse_command(int argc, char *argv[], struct shash *local_options,
         const char *s = strstr(p->options, node->name);
         int end = s ? s[strlen(node->name)] : EOF;
 
-        if (end != '=' && end != ',' && end != ' ' && end != '\0') {
+        if (!strchr("=,? ", end)) {
             ctl_fatal("'%s' command has no '%s' option",
                       argv[i], node->name);
         }
-        if ((end == '=') != (node->data != NULL)) {
+        if (end != '?' && (end == '=') != (node->data != NULL)) {
             if (end == '=') {
                 ctl_fatal("missing argument to '%s' option on '%s' "
                           "command", node->name, argv[i]);
@@ -1913,19 +1913,14 @@ ctl_add_cmd_options(struct option **options_p, size_t *n_options_p,
             s = xstrdup(p->options);
             for (name = strtok_r(s, ",", &save_ptr); name != NULL;
                  name = strtok_r(NULL, ",", &save_ptr)) {
-                char *equals;
-                int has_arg;
-
                 ovs_assert(name[0] == '-' && name[1] == '-' && name[2]);
                 name += 2;
 
-                equals = strchr(name, '=');
-                if (equals) {
-                    has_arg = required_argument;
-                    *equals = '\0';
-                } else {
-                    has_arg = no_argument;
-                }
+                size_t n = strcspn(name, "=?");
+                int has_arg = (name[n] == '\0' ? no_argument
+                               : name[n] == '=' ? required_argument
+                               : optional_argument);
+                name[n] = '\0';
 
                 o = find_option(name, *options_p, *n_options_p);
                 if (o) {

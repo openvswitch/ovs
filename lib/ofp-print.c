@@ -1659,7 +1659,7 @@ ofp_print_flow_stats_request(struct ds *string, const struct ofp_header *oh)
 }
 
 void
-ofp_print_flow_stats(struct ds *string, struct ofputil_flow_stats *fs)
+ofp_print_flow_stats(struct ds *string, const struct ofputil_flow_stats *fs)
 {
     ds_put_format(string, " %scookie=%s0x%"PRIx64", %sduration=%s",
                   colors.param, colors.end, ntohll(fs->cookie),
