@@ -68,7 +68,7 @@ port. The workflow for the calls is similar in nature to the packets, where
 higher level layers call into the lower level layers. A good representational
 diagram of this architecture is in [4]_.
 
-Windows Filtering Platform (WFP)[5]_ is a platform implemented on Hyper-V that
+Windows Filtering Platform (WFP) [5]_ is a platform implemented on Hyper-V that
 provides APIs and services for filtering packets. WFP has been utilized to
 filter on some of the packets that OVS is not equipped to handle directly. More
 details in later sections.
@@ -253,7 +253,7 @@ Netlink Message Parser
 ~~~~~~~~~~~~~~~~~~~~~~
 
 The communication between OVS userspace and OVS kernel datapath is in the form
-of Netlink messages [1]_. More details about this are provided below.  In the
+of Netlink messages [1]_, [8]_. More details about this are provided below.  In the
 kernel, a full fledged netlink message parser has been implemented along the
 lines of the netlink message parser in OVS userspace. In fact, a lot of the
 code is ported code.
@@ -407,7 +407,7 @@ As has been mentioned in earlier sections, the netlink socket and netlink
 message based DPIF provider on Linux has been ported to Windows.
 
 Most of the code is common. Some divergence is in the code to receive packets.
-The Linux implementation uses epoll() which is not natively supported on
+The Linux implementation uses epoll() [9]_ which is not natively supported on
 Windows.
 
 netdev-windows
