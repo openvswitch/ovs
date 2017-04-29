@@ -622,7 +622,12 @@ print_ls(const struct nbrec_logical_switch *ls, struct ds *s)
         if (lsp->n_tag) {
             ds_put_format(s, "        tag: %"PRIu64"\n", lsp->tag[0]);
         }
-        if (lsp->n_addresses) {
+
+        /* Print the addresses, but not if there's just a single "router"
+         * address because that's just clutter. */
+        if (lsp->n_addresses
+            && !(lsp->n_addresses == 1
+                 && !strcmp(lsp->addresses[0], "router"))) {
             ds_put_cstr(s, "        addresses: [");
             for (size_t j = 0; j < lsp->n_addresses; j++) {
                 ds_put_format(s, "%s\"%s\"",
