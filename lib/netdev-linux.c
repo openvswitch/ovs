@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -773,10 +773,28 @@ netdev_linux_alloc(void)
     return &netdev->up;
 }
 
-static void
-netdev_linux_common_construct(struct netdev_linux *netdev)
+static int
+netdev_linux_common_construct(struct netdev *netdev_)
 {
+    /* Prevent any attempt to create (or open) a network device named "default"
+     * or "all".  These device names are effectively reserved on Linux because
+     * /proc/sys/net/ipv4/conf/ always contains directories by these names.  By
+     * itself this wouldn't call for any special treatment, but in practice if
+     * a program tries to create devices with these names, it causes the kernel
+     * to fire a "new device" notification event even though creation failed,
+     * and in turn that causes OVS to wake up and try to create them again,
+     * which ends up as a 100% CPU loop. */
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    const char *name = netdev_->name;
+    if (!strcmp(name, "default") || !strcmp(name, "all")) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+        VLOG_WARN_RL(&rl, "%s: Linux forbids network device with this name",
+                     name);
+        return EINVAL;
+    }
+
     ovs_mutex_init(&netdev->mutex);
+    return 0;
 }
 
 /* Creates system and internal devices. */
@@ -784,9 +802,10 @@ static int
 netdev_linux_construct(struct netdev *netdev_)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-    int error;
-
-    netdev_linux_common_construct(netdev);
+    int error = netdev_linux_common_construct(netdev_);
+    if (error) {
+        return error;
+    }
 
     error = get_flags(&netdev->up, &netdev->ifi_flags);
     if (error == ENODEV) {
@@ -817,9 +836,11 @@ netdev_linux_construct_tap(struct netdev *netdev_)
     static const char tap_dev[] = "/dev/net/tun";
     const char *name = netdev_->name;
     struct ifreq ifr;
-    int error;
 
-    netdev_linux_common_construct(netdev);
+    int error = netdev_linux_common_construct(netdev_);
+    if (error) {
+        return error;
+    }
 
     /* Open tap device. */
     netdev->tap_fd = open(tap_dev, O_RDWR);
