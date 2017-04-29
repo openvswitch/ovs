@@ -631,6 +631,11 @@ print_ls(const struct nbrec_logical_switch *ls, struct ds *s)
             }
             ds_put_cstr(s, "]\n");
         }
+
+        const char *router_port = smap_get(&lsp->options, "router-port");
+        if (router_port) {
+            ds_put_format(s, "        router-port: %s\n", router_port);
+        }
     }
 }
 
