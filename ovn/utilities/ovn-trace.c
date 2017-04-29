@@ -346,6 +346,8 @@ struct ovntrace_datapath {
     size_t n_flows, allocated_flows;
 
     struct hmap mac_bindings;   /* Contains "struct ovntrace_mac_binding"s. */
+
+    bool has_local_l3gateway;
 };
 
 struct ovntrace_port {
@@ -570,6 +572,9 @@ read_ports(void)
                     port->peer->peer = port;
                 }
             }
+        } else if (!strcmp(sbpb->type, "l3gateway")) {
+            /* Treat all gateways as local for our purposes. */
+            dp->has_local_l3gateway = true;
         }
     }
 
@@ -1522,6 +1527,46 @@ execute_ct_next(const struct ovnact_ct_next *ct_next,
 }
 
 static void
+execute_ct_nat(const struct ovnact_ct_nat *ct_nat,
+               const struct ovntrace_datapath *dp, struct flow *uflow,
+               enum ovnact_pipeline pipeline, struct ovs_list *super)
+{
+    bool is_dst = ct_nat->ovnact.type == OVNACT_CT_DNAT;
+    if (!is_dst && dp->has_local_l3gateway && !ct_nat->ip) {
+        /* "ct_snat;" has no visible effect in a gateway router. */
+        return;
+    }
+    const char *direction = is_dst ? "dst" : "src";
+
+    /* Make a sub-node for attaching the next table,
+     * and figure out the changes if any. */
+    struct flow ct_flow = *uflow;
+    struct ds s = DS_EMPTY_INITIALIZER;
+    ds_put_format(&s, "ct_%cnat", direction[0]);
+    if (ct_nat->ip) {
+        ds_put_format(&s, "(ip4.%s="IP_FMT")", direction, IP_ARGS(ct_nat->ip));
+        ovs_be32 *ip = is_dst ? &ct_flow.nw_dst : &ct_flow.nw_src;
+        *ip = ct_nat->ip;
+
+        uint8_t state = is_dst ? CS_DST_NAT : CS_SRC_NAT;
+        ct_flow.ct_state |= state;
+    } else {
+        ds_put_format(&s, " /* assuming no un-%cnat entry, so no change */",
+                      direction[0]);
+    }
+    struct ovntrace_node *node = ovntrace_node_append(
+        super, OVNTRACE_NODE_TRANSFORMATION, "%s", ds_cstr(&s));
+    ds_destroy(&s);
+
+    /* Trace the actions in the next table. */
+    trace__(dp, &ct_flow, ct_nat->ltable, pipeline, &node->subs);
+
+    /* Upon return, we will trace the actions following the ct action in the
+     * original table.  The pipeline forked, so we're using the original
+     * flow, not ct_flow. */
+}
+
+static void
 trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
               const struct ovntrace_datapath *dp, struct flow *uflow,
               uint8_t table_id, enum ovnact_pipeline pipeline,
@@ -1585,10 +1630,11 @@ trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
             break;
 
         case OVNACT_CT_DNAT:
+            execute_ct_nat(ovnact_get_CT_DNAT(a), dp, uflow, pipeline, super);
+            break;
+
         case OVNACT_CT_SNAT:
-            ovntrace_node_append(super, OVNTRACE_NODE_ERROR,
-                                 "*** ct_dnat and ct_snat actions "
-                                 "not implemented");
+            execute_ct_nat(ovnact_get_CT_SNAT(a), dp, uflow, pipeline, super);
             break;
 
         case OVNACT_CT_LB:

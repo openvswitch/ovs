@@ -208,6 +208,64 @@
     semantic change.
   </p>
 
+  <h1>Stateful Actions</h1>
+
+  <p>
+    Some OVN logical actions use or update state that is not available in the
+    southbound database.  <code>ovn-trace</code> handles these actions as
+    described below:
+  </p>
+
+  <dl>
+    <dt><code>ct_next</code></dt>
+    <dd>
+      By default <code>ovn-trace</code> treats flows as ``tracked'' and
+      ``established.''  See the description of the <code>--ct</code> option for
+      a way to override this behavior.
+    </dd>
+
+    <dt><code>ct_dnat</code> (without an argument)</dt>
+    <dd>
+      Forks the pipeline.  In one fork, advances to the next table as if
+      <code>next;</code> were executed.  The packet is not changed, on the
+      assumption that no NAT state was available.  In the other fork, the
+      pipeline continues without change after the <code>ct_dnat</code> action.
+    </dd>
+
+    <dt><code>ct_snat</code> (without an argument)</dt>
+    <dd>
+      This action distinguishes between gateway routers and distributed
+      routers.  A gateway router is defined as a logical datapath that contains
+      an <code>l3gateway</code> port; any other logical datapath is a
+      distributed router.  On a gateway router, <code>ct_snat;</code> is
+      treated as a no-op.  On a distributed router, it is treated the same way
+      as <code>ct_dnat;</code>.
+    </dd>
+
+    <dt><code>ct_dnat(<var>ip</var>)</code></dt>
+    <dt><code>ct_snat(<var>ip</var>)</code></dt>
+    <dd>
+      Forks the pipeline.  In one fork, sets <code>ip4.dst</code> (or
+      <code>ip4.src</code>) to <var>ip</var> and <code>ct.dnat</code> (or
+      <code>ct.snat</code>) to 1 and advances to the next table as if
+      <code>next;</code> were executed.  In the other fork, the pipeline
+      continues without change after the <code>ct_dnat</code> (or
+      <code>ct_snat</code>) action.
+    </dd>
+
+    <dt><code>ct_lb</code></dt>
+    <dd>
+      Not yet implemented; currently implemented as a no-op.
+    </dd>
+
+    <dt><code>ct_commit</code></dt>
+    <dt><code>put_arp</code></dt>
+    <dt><code>put_nd</code></dt>
+    <dd>
+      These actions are treated as no-ops.
+    </dd>
+  </dl>
+
   <h1>Daemon Mode</h1>
 
   <p>
