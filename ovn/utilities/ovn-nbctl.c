@@ -613,6 +613,9 @@ print_ls(const struct nbrec_logical_switch *ls, struct ds *s)
         const struct nbrec_logical_switch_port *lsp = ls->ports[i];
 
         ds_put_format(s, "    port %s\n", lsp->name);
+        if (lsp->type[0]) {
+            ds_put_format(s, "        type: %s\n", lsp->type);
+        }
         if (lsp->parent_name) {
             ds_put_format(s, "        parent: %s\n", lsp->parent_name);
         }
