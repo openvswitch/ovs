@@ -1691,12 +1691,28 @@ tcp.flags = RST;
         the <ref db="OVN_Northbound"/> database.
       </column>
 
-      <column name="external_ids" key="name">
-        <code>ovn-northd</code> copies this from the <ref
-        table="Logical_Router" db="OVN_Northbound"/> or <ref
-        table="Logical_Switch" db="OVN_Northbound"/> table in the <ref
-        db="OVN_Northbound"/> database, when that column is nonempty.
-      </column>
+      <group title="Naming">
+        <p>
+          <code>ovn-northd</code> copies these from the name fields in the <ref
+          db="OVN_Northbound"/> database, either from <ref
+          table="Logical_Router" db="OVN_Northbound" column="name"/> and <ref
+          table="Logical_Router" db="OVN_Northbound" column="external_ids"
+          key="neutron:router_name"/> in the <ref table="Logical_Router"
+          db="OVN_Northbound"/> table or from <ref table="Logical_Switch"
+          db="OVN_Northbound" column="name"/> and <ref table="Logical_Switch"
+          db="OVN_Northbound" column="external_ids"
+          key="neutron:network_name"/> in the <ref table="Logical_Switch"
+          db="OVN_Northbound"/> table.
+        </p>
+
+        <column name="external_ids" key="name">
+          A name for the logical datapath.
+        </column>
+
+        <column name="external_ids" key="name2">
+          Another name for the logical datapath.
+        </column>
+      </group>
     </group>
 
     <group title="Common Columns">

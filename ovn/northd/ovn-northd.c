@@ -725,14 +725,20 @@ build_datapaths(struct northd_context *ctx, struct hmap *datapaths)
             sprintf(uuid_s, UUID_FMT, UUID_ARGS(&od->key));
             const char *key = od->nbs ? "logical-switch" : "logical-router";
 
-            /* Get name to set in external-ids. */
+            /* Get names to set in external-ids. */
             const char *name = od->nbs ? od->nbs->name : od->nbr->name;
+            const char *name2 = (od->nbs
+                                 ? smap_get(&od->nbs->external_ids,
+                                            "neutron:network_name")
+                                 : smap_get(&od->nbr->external_ids,
+                                            "neutron:router_name"));
 
             /* Set external-ids. */
             struct smap ids = SMAP_INITIALIZER(&ids);
             smap_add(&ids, key, uuid_s);
-            if (*name) {
-                smap_add(&ids, "name", name);
+            smap_add(&ids, "name", name);
+            if (name2 && name2[0]) {
+                smap_add(&ids, "name2", name2);
             }
             sbrec_datapath_binding_set_external_ids(od->sb, &ids);
             smap_destroy(&ids);
