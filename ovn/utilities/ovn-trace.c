@@ -338,6 +338,7 @@ struct ovntrace_datapath {
     struct uuid sb_uuid;
     struct uuid nb_uuid;
     char *name;
+    char *name2;
     uint32_t tunnel_key;
 
     struct ovs_list mcgroups;   /* Contains "struct ovntrace_mcgroup"s. */
@@ -354,6 +355,7 @@ struct ovntrace_port {
     struct ovntrace_datapath *dp;
     struct uuid uuid;
     char *name;
+    char *friendly_name;
     char *type;
     uint16_t tunnel_key;
     struct ovntrace_port *peer; /* Patch ports only. */
@@ -432,7 +434,8 @@ ovntrace_datapath_find_by_name(const char *name)
 {
     struct ovntrace_datapath *dp;
     HMAP_FOR_EACH (dp, sb_uuid_node, &datapaths) {
-        if (!strcmp(name, dp->name)) {
+        if (!strcmp(name, dp->name)
+            || (dp->name2 && !strcmp(name, dp->name2))) {
             return dp;
         }
     }
@@ -535,6 +538,8 @@ read_datapaths(void)
                     ? xstrdup(name)
                     : xasprintf(UUID_FMT, UUID_ARGS(&dp->nb_uuid)));
 
+        dp->name2 = nullable_xstrdup(smap_get(ids, "name2"));
+
         dp->tunnel_key = sbdb->tunnel_key;
 
         ovs_list_init(&dp->mcgroups);
@@ -569,6 +574,8 @@ read_ports(void)
         port->name = xstrdup(port_name);
         port->type = xstrdup(sbpb->type);
         port->tunnel_key = sbpb->tunnel_key;
+        port->friendly_name = nullable_xstrdup(smap_get(&sbpb->external_ids,
+                                                        "name"));
 
         if (!strcmp(sbpb->type, "patch")) {
             const char *peer_name = smap_get(&sbpb->options, "peer");
@@ -882,6 +889,20 @@ ovntrace_port_lookup_by_name(const char *name)
     }
 
     const struct ovntrace_port *match = NULL;
+
+    struct shash_node *node;
+    SHASH_FOR_EACH (node, &ports) {
+        const struct ovntrace_port *port = node->data;
+
+        if (port->friendly_name && !strcmp(port->friendly_name, name)) {
+            if (match) {
+                VLOG_WARN("name \"%s\" matches multiple ports", name);
+                return NULL;
+            }
+            match = port;
+        }
+    }
+
     if (uuid_is_partial_string(name) >= 4) {
         struct shash_node *node;
         SHASH_FOR_EACH (node, &ports) {
@@ -891,7 +912,7 @@ ovntrace_port_lookup_by_name(const char *name)
             if (uuid_is_partial_match(&port->uuid, name)
                 || (uuid_from_string(&name_uuid, port->name)
                     && uuid_is_partial_match(&name_uuid, name))) {
-                if (match) {
+                if (match && match != port) {
                     VLOG_WARN("name \"%s\" matches multiple ports", name);
                     return NULL;
                 }
@@ -899,6 +920,7 @@ ovntrace_port_lookup_by_name(const char *name)
             }
         }
     }
+
     return match;
 }
 
