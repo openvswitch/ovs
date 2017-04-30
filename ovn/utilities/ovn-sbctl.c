@@ -889,9 +889,17 @@ cmd_lflow_list(struct ctl_context *ctx)
         if (!prev
             || prev->logical_datapath != lflow->logical_datapath
             || strcmp(prev->pipeline, lflow->pipeline)) {
-            printf("Datapath: \"%s\" ("UUID_FMT")  Pipeline: %s\n",
-                   smap_get_def(&lflow->logical_datapath->external_ids,
-                                "name", ""),
+            printf("Datapath:");
+
+            const struct smap *ids = &lflow->logical_datapath->external_ids;
+            const char *name = smap_get(ids, "name");
+            const char *name2 = smap_get(ids, "name2");
+            if (name && name2) {
+                printf(" \"%s\" aka \"%s\"", name, name2);
+            } else if (name || name2) {
+                printf(" \"%s\"", name ? name : name2);
+            }
+            printf(" ("UUID_FMT")  Pipeline: %s\n",
                    UUID_ARGS(&lflow->logical_datapath->header_.uuid),
                    lflow->pipeline);
         }
@@ -1115,11 +1123,13 @@ static const struct ctl_table_class tables[SBREC_N_TABLES] = {
 
     [SBREC_TABLE_DATAPATH_BINDING].row_ids
      = {{&sbrec_datapath_binding_col_external_ids, "name", NULL},
+        {&sbrec_datapath_binding_col_external_ids, "name2", NULL},
         {&sbrec_datapath_binding_col_external_ids, "logical-switch", NULL},
         {&sbrec_datapath_binding_col_external_ids, "logical-router", NULL}},
 
-    [SBREC_TABLE_PORT_BINDING].row_ids[0] =
-    {&sbrec_port_binding_col_logical_port, NULL, NULL},
+    [SBREC_TABLE_PORT_BINDING].row_ids
+     = {{&sbrec_port_binding_col_logical_port, NULL, NULL},
+        {&sbrec_port_binding_col_external_ids, "name", NULL}},
 
     [SBREC_TABLE_MAC_BINDING].row_ids[0] =
     {&sbrec_mac_binding_col_logical_port, NULL, NULL},
