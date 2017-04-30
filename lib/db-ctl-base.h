@@ -260,6 +260,11 @@ struct ctl_table_class {
     struct ctl_row_id row_ids[4];
 };
 
+const struct ovsdb_idl_row *ctl_get_row(struct ctl_context *,
+                                        const struct ovsdb_idl_table_class *,
+                                        const char *record_id,
+                                        bool must_exist);
+
 void ctl_set_column(const char *table_name,
                     const struct ovsdb_idl_row *, const char *arg,
                     struct ovsdb_symbol_table *);

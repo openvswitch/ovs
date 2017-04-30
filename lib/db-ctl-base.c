@@ -351,10 +351,10 @@ get_row_by_id(struct ctl_context *ctx,
     return final;
 }
 
-static const struct ovsdb_idl_row *
-get_row(struct ctl_context *ctx,
-        const struct ovsdb_idl_table_class *table, const char *record_id,
-        bool must_exist)
+const struct ovsdb_idl_row *
+ctl_get_row(struct ctl_context *ctx,
+            const struct ovsdb_idl_table_class *table, const char *record_id,
+            bool must_exist)
 {
     const struct ovsdb_idl_row *row = NULL;
     struct uuid uuid;
@@ -837,7 +837,7 @@ cmd_get(struct ctl_context *ctx)
     }
 
     table = get_table(table_name);
-    row = get_row(ctx, table, record_id, must_exist);
+    row = ctl_get_row(ctx, table, record_id, must_exist);
     if (!row) {
         return;
     }
@@ -1065,7 +1065,7 @@ cmd_list(struct ctl_context *ctx)
     out = ctx->table = list_make_table(columns, n_columns);
     if (ctx->argc > 2) {
         for (i = 2; i < ctx->argc; i++) {
-            list_record(get_row(ctx, table, ctx->argv[i], must_exist),
+            list_record(ctl_get_row(ctx, table, ctx->argv[i], must_exist),
                         columns, n_columns, out);
         }
     } else {
@@ -1231,7 +1231,7 @@ cmd_set(struct ctl_context *ctx)
     int i;
 
     table = get_table(table_name);
-    row = get_row(ctx, table, record_id, must_exist);
+    row = ctl_get_row(ctx, table, record_id, must_exist);
     if (!row) {
         return;
     }
@@ -1271,7 +1271,7 @@ cmd_add(struct ctl_context *ctx)
 
     table = get_table(table_name);
     die_if_error(get_column(table, column_name, &column));
-    row = get_row(ctx, table, record_id, must_exist);
+    row = ctl_get_row(ctx, table, record_id, must_exist);
     if (!row) {
         return;
     }
@@ -1332,7 +1332,7 @@ cmd_remove(struct ctl_context *ctx)
 
     table = get_table(table_name);
     die_if_error(get_column(table, column_name, &column));
-    row = get_row(ctx, table, record_id, must_exist);
+    row = ctl_get_row(ctx, table, record_id, must_exist);
     if (!row) {
         return;
     }
@@ -1403,7 +1403,7 @@ cmd_clear(struct ctl_context *ctx)
     int i;
 
     table = get_table(table_name);
-    row = get_row(ctx, table, record_id, must_exist);
+    row = ctl_get_row(ctx, table, record_id, must_exist);
     if (!row) {
         return;
     }
@@ -1541,7 +1541,7 @@ cmd_destroy(struct ctl_context *ctx)
         for (i = 2; i < ctx->argc; i++) {
             const struct ovsdb_idl_row *row;
 
-            row = get_row(ctx, table, ctx->argv[i], must_exist);
+            row = ctl_get_row(ctx, table, ctx->argv[i], must_exist);
             if (row) {
                 ovsdb_idl_txn_delete(row);
             }
@@ -1575,7 +1575,7 @@ cmd_wait_until(struct ctl_context *ctx)
 
     table = get_table(table_name);
 
-    row = get_row(ctx, table, record_id, false);
+    row = ctl_get_row(ctx, table, record_id, false);
     if (!row) {
         ctx->try_again = true;
         return;

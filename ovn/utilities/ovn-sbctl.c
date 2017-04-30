@@ -736,39 +736,14 @@ is_partial_uuid_match(const struct uuid *uuid, const char *match)
     return !strncmp(s1, s2, strlen(s2));
 }
 
-static const struct sbrec_datapath_binding *
-lookup_datapath(struct ovsdb_idl *idl, const char *s)
-{
-    struct uuid uuid;
-    if (uuid_from_string(&uuid, s)) {
-        const struct sbrec_datapath_binding *datapath;
-        datapath = sbrec_datapath_binding_get_for_uuid(idl, &uuid);
-        if (datapath) {
-            return datapath;
-        }
-    }
-
-    const struct sbrec_datapath_binding *found = NULL;
-    const struct sbrec_datapath_binding *datapath;
-    SBREC_DATAPATH_BINDING_FOR_EACH (datapath, idl) {
-        const char *name = smap_get(&datapath->external_ids, "name");
-        if (name && !strcmp(name, s)) {
-            if (!found) {
-                found = datapath;
-            } else {
-                ctl_fatal("%s: multiple datapaths with this name", s);
-            }
-        }
-    }
-    return found;
-}
-
 static void
 cmd_lflow_list(struct ctl_context *ctx)
 {
     const struct sbrec_datapath_binding *datapath = NULL;
     if (ctx->argc > 1) {
-        datapath = lookup_datapath(ctx->idl, ctx->argv[1]);
+        datapath = (const struct sbrec_datapath_binding *)
+            ctl_get_row(ctx, &sbrec_table_datapath_binding,
+                        ctx->argv[1], false);
         if (datapath) {
             ctx->argc--;
             ctx->argv++;
