@@ -26,6 +26,7 @@
 #include "flow.h"
 #include "nx-match.h"
 #include "openvswitch/dynamic-string.h"
+#include "openvswitch/json.h"
 #include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofp-print.h"
 #include "openvswitch/vconn.h"
@@ -73,6 +74,11 @@ static struct vconn *vconn;
 static uint32_t *ct_states;
 static size_t n_ct_states;
 static size_t ct_state_idx;
+
+/* --friendly-names, --no-friendly-names: Whether to substitute human-friendly
+ * port and datapath names for the awkward UUIDs typically used in the actual
+ * logical flows. */
+static bool use_friendly_names = true;
 
 OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[]);
@@ -208,6 +214,8 @@ parse_options(int argc, char *argv[])
         OPT_ALL,
         OPT_OVS,
         OPT_CT,
+        OPT_FRIENDLY_NAMES,
+        OPT_NO_FRIENDLY_NAMES,
         DAEMON_OPTION_ENUMS,
         SSL_OPTION_ENUMS,
         VLOG_OPTION_ENUMS
@@ -221,6 +229,8 @@ parse_options(int argc, char *argv[])
         {"all", no_argument, NULL, OPT_ALL},
         {"ovs", optional_argument, NULL, OPT_OVS},
         {"ct", required_argument, NULL, OPT_CT},
+        {"friendly-names", no_argument, NULL, OPT_FRIENDLY_NAMES},
+        {"no-friendly-names", no_argument, NULL, OPT_NO_FRIENDLY_NAMES},
         {"help", no_argument, NULL, 'h'},
         {"version", no_argument, NULL, 'V'},
         DAEMON_LONG_OPTIONS,
@@ -272,6 +282,14 @@ parse_options(int argc, char *argv[])
             parse_ct_option(optarg);
             break;
 
+        case OPT_FRIENDLY_NAMES:
+            use_friendly_names = true;
+            break;
+
+        case OPT_NO_FRIENDLY_NAMES:
+            use_friendly_names = false;
+            break;
+
         case 'h':
             usage();
 
@@ -314,7 +332,9 @@ Output format options:\n\
   --detailed              table-by-table \"backtrace\" (default)\n\
   --summary               less detailed, more parseable\n\
   --minimal               minimum to explain externally visible behavior\n\
-  --all                   provide all forms of output\n",
+  --all                   provide all forms of output\n\
+Output style options:\n\
+  --no-friendly-names     do not substitute human friendly names for UUIDs\n",
            program_name, program_name, program_name);
     daemon_usage();
     vlog_usage();
@@ -339,6 +359,7 @@ struct ovntrace_datapath {
     struct uuid nb_uuid;
     char *name;
     char *name2;
+    char *friendly_name;
     uint32_t tunnel_key;
 
     struct ovs_list mcgroups;   /* Contains "struct ovntrace_mcgroup"s. */
@@ -355,7 +376,8 @@ struct ovntrace_port {
     struct ovntrace_datapath *dp;
     struct uuid uuid;
     char *name;
-    char *friendly_name;
+    char *name2;
+    const char *friendly_name;
     char *type;
     uint16_t tunnel_key;
     struct ovntrace_port *peer; /* Patch ports only. */
@@ -473,7 +495,7 @@ ovntrace_port_key_to_name(const struct ovntrace_datapath *dp,
                           uint16_t key)
 {
     const struct ovntrace_port *port = ovntrace_port_find_by_key(dp, key);
-    return (port ? port->name
+    return (port ? port->friendly_name
             : !key ? ""
             : "(unnamed)");
 }
@@ -518,6 +540,17 @@ ovntrace_mac_binding_find(const struct ovntrace_datapath *dp,
     return NULL;
 }
 
+/* If 's' ends with a UUID, returns a copy of it with the UUID truncated to
+ * just the first 6 characters; otherwise, returns a copy of 's'. */
+static char *
+shorten_uuid(const char *s)
+{
+    size_t len = strlen(s);
+    return (len >= UUID_LEN && uuid_is_partial_string(s + (len - UUID_LEN))
+            ? xmemdup0(s, len - (UUID_LEN - 6))
+            : xstrdup(s));
+}
+
 static void
 read_datapaths(void)
 {
@@ -539,6 +572,9 @@ read_datapaths(void)
                     : xasprintf(UUID_FMT, UUID_ARGS(&dp->nb_uuid)));
 
         dp->name2 = nullable_xstrdup(smap_get(ids, "name2"));
+        dp->friendly_name = (!use_friendly_names
+                             ? xasprintf(UUID_FMT, UUID_ARGS(&dp->nb_uuid))
+                             : shorten_uuid(dp->name2 ? dp->name2 : dp->name));
 
         dp->tunnel_key = sbdb->tunnel_key;
 
@@ -574,8 +610,11 @@ read_ports(void)
         port->name = xstrdup(port_name);
         port->type = xstrdup(sbpb->type);
         port->tunnel_key = sbpb->tunnel_key;
-        port->friendly_name = nullable_xstrdup(smap_get(&sbpb->external_ids,
-                                                        "name"));
+
+        port->name2 = nullable_xstrdup(smap_get(&sbpb->external_ids, "name"));
+        port->friendly_name = (!use_friendly_names ? xstrdup(port->name)
+                               : shorten_uuid(port->name2
+                                              ? port->name2 : port->name));
 
         if (!strcmp(sbpb->type, "patch")) {
             const char *peer_name = smap_get(&sbpb->options, "peer");
@@ -721,6 +760,40 @@ compare_flow(const void *a_, const void *b_)
     }
 }
 
+static char *
+ovntrace_make_names_friendly(const char *in)
+{
+    if (!use_friendly_names) {
+        return xstrdup(in);
+    }
+
+    struct ds out = DS_EMPTY_INITIALIZER;
+    while (*in) {
+        struct lex_token token;
+        const char *start;
+        const char *next;
+
+        next = lex_token_parse(&token, in, &start);
+        if (token.type == LEX_T_STRING) {
+            const struct ovntrace_port *port = shash_find_data(&ports,
+                                                               token.s);
+            if (port) {
+                ds_put_buffer(&out, in, start - in);
+                json_string_escape(port->friendly_name, &out);
+            } else {
+                ds_put_buffer(&out, in, next - in);
+            }
+        } else if (token.type != LEX_T_END) {
+            ds_put_buffer(&out, in, next - in);
+        } else {
+            break;
+        }
+        lex_token_destroy(&token);
+        in = next;
+    }
+    return ds_steal_cstr(&out);
+}
+
 static void
 read_flows(void)
 {
@@ -792,7 +865,7 @@ read_flows(void)
         flow->source = nullable_xstrdup(smap_get(&sblf->external_ids,
                                                  "source"));
         flow->priority = sblf->priority;
-        flow->match_s = xstrdup(sblf->match);
+        flow->match_s = ovntrace_make_names_friendly(sblf->match);
         flow->match = match;
         flow->ovnacts_len = ovnacts.size;
         flow->ovnacts = ofpbuf_steal_data(&ovnacts);
@@ -894,7 +967,7 @@ ovntrace_port_lookup_by_name(const char *name)
     SHASH_FOR_EACH (node, &ports) {
         const struct ovntrace_port *port = node->data;
 
-        if (port->friendly_name && !strcmp(port->friendly_name, name)) {
+        if (port->name2 && !strcmp(port->name2, name)) {
             if (match) {
                 VLOG_WARN("name \"%s\" matches multiple ports", name);
                 return NULL;
@@ -1194,8 +1267,9 @@ execute_load(const struct ovnact_load *load,
             ovnacts_format(&load->ovnact, OVNACT_LOAD_SIZE, &s);
             ds_chomp(&s, ';');
 
-            ovntrace_node_append(super, OVNTRACE_NODE_MODIFY, "%s",
-                                 ds_cstr(&s));
+            char *friendly = ovntrace_make_names_friendly(ds_cstr(&s));
+            ovntrace_node_append(super, OVNTRACE_NODE_MODIFY, "%s", friendly);
+            free(friendly);
 
             ds_destroy(&s);
         }
@@ -1279,7 +1353,7 @@ execute_output(const struct ovntrace_datapath *dp, struct flow *uflow,
     const struct ovntrace_port *port = ovntrace_port_find_by_key(dp, key);
     const struct ovntrace_mcgroup *mcgroup = ovntrace_mcgroup_find_by_key(dp,
                                                                           key);
-    const char *out_name = (port ? port->name
+    const char *out_name = (port ? port->friendly_name
                             : mcgroup ? mcgroup->name
                             : "(unnamed)");
     if (!port && !mcgroup) {
@@ -1298,7 +1372,7 @@ execute_output(const struct ovntrace_datapath *dp, struct flow *uflow,
             struct ovntrace_node *node = ovntrace_node_append(
                 super, OVNTRACE_NODE_PIPELINE,
                 "ingress(dp=\"%s\", inport=\"%s\")",
-                peer->dp->name, peer->name);
+                peer->dp->friendly_name, peer->friendly_name);
 
             struct flow new_uflow = *uflow;
             new_uflow.regs[MFF_LOG_INPORT - MFF_REG0] = peer->tunnel_key;
@@ -1329,14 +1403,14 @@ execute_output(const struct ovntrace_datapath *dp, struct flow *uflow,
         struct ovntrace_node *mcnode = ovntrace_node_append(
             super, OVNTRACE_NODE_PIPELINE,
             "multicast(dp=\"%s\", mcgroup=\"%s\")",
-            dp->name, mcgroup->name);
+            dp->friendly_name, mcgroup->name);
         for (size_t i = 0; i < mcgroup->n_ports; i++) {
             const struct ovntrace_port *p = mcgroup->ports[i];
 
             struct ovntrace_node *node = ovntrace_node_append(
                 &mcnode->subs, OVNTRACE_NODE_PIPELINE,
                 "egress(dp=\"%s\", inport=\"%s\", outport=\"%s\")",
-                dp->name, inport_name, p->name);
+                dp->friendly_name, inport_name, p->friendly_name);
 
             if (p->tunnel_key != in_key || allow_loopback) {
                 node->always_indent = true;
@@ -1356,10 +1430,10 @@ execute_output(const struct ovntrace_datapath *dp, struct flow *uflow,
             ovntrace_node_append(super, OVNTRACE_NODE_OUTPUT,
                                  "/* Replacing type \"%s\" outport \"%s\""
                                  " with distributed port \"%s\". */",
-                                 port->type, port->name,
-                                 port->distributed_port->name);
+                                 port->type, port->friendly_name,
+                                 port->distributed_port->friendly_name);
             port = port->distributed_port;
-            out_name = port->name;
+            out_name = port->friendly_name;
             egress_uflow.regs[MFF_LOG_OUTPORT - MFF_REG0] = port->tunnel_key;
         } else {
             ovntrace_node_append(super, OVNTRACE_NODE_ERROR,
@@ -1374,7 +1448,7 @@ execute_output(const struct ovntrace_datapath *dp, struct flow *uflow,
         struct ovntrace_node *node = ovntrace_node_append(
             super, OVNTRACE_NODE_PIPELINE,
             "egress(dp=\"%s\", inport=\"%s\", outport=\"%s\")",
-            dp->name, inport_name, out_name);
+            dp->friendly_name, inport_name, out_name);
 
         trace__(dp, &egress_uflow, 0, OVNACT_P_EGRESS, &node->subs);
     } else {
@@ -1533,7 +1607,7 @@ execute_next(const struct ovnact_next *next,
         uint16_t in_key = uflow->regs[MFF_LOG_INPORT - MFF_REG0];
         struct ovntrace_node *node = ovntrace_node_append(
             super, OVNTRACE_NODE_PIPELINE, "ingress(dp=\"%s\", inport=\"%s\")",
-            dp->name, ovntrace_port_key_to_name(dp, in_key));
+            dp->friendly_name, ovntrace_port_key_to_name(dp, in_key));
         super = &node->subs;
     }
     trace__(dp, uflow, next->ltable, next->pipeline, super);
@@ -1641,7 +1715,9 @@ trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
     OVNACT_FOR_EACH (a, ovnacts, ovnacts_len) {
         ds_clear(&s);
         ovnacts_format(a, sizeof *a * (ovnact_next(a) - a), &s);
-        ovntrace_node_append(super, OVNTRACE_NODE_ACTION, "%s", ds_cstr(&s));
+        char *friendly = ovntrace_make_names_friendly(ds_cstr(&s));
+        ovntrace_node_append(super, OVNTRACE_NODE_ACTION, "%s", friendly);
+        free(friendly);
 
         switch (a->type) {
         case OVNACT_OUTPUT:
@@ -1890,7 +1966,7 @@ trace(const char *dp_s, const char *flow_s)
         VLOG_WARN("microflow does not specify ingress port");
     }
     const struct ovntrace_port *inport = ovntrace_port_find_by_key(dp, in_key);
-    const char *inport_name = inport ? inport->name : "(unnamed)";
+    const char *inport_name = inport ? inport->friendly_name : "(unnamed)";
 
     struct ds output = DS_EMPTY_INITIALIZER;
 
@@ -1908,7 +1984,7 @@ trace(const char *dp_s, const char *flow_s)
     struct ovs_list root = OVS_LIST_INITIALIZER(&root);
     struct ovntrace_node *node = ovntrace_node_append(
         &root, OVNTRACE_NODE_PIPELINE, "ingress(dp=\"%s\", inport=\"%s\")",
-        dp->name, inport_name);
+        dp->friendly_name, inport_name);
     trace__(dp, &uflow, 0, OVNACT_P_INGRESS, &node->subs);
 
     bool multiple = (detailed + summary + minimal) > 1;

@@ -423,6 +423,21 @@
         <var>flags</var> default to <code>trk,est</code>.
       </p>
     </dd>
+
+    <dt><code>--friendly-names</code></dt>
+    <dt><code>--no-friendly-names</code></dt>
+    <dd>
+      When cloud management systems such as OpenStack are layered on top of
+      OVN, they often use long, human-unfriendly names for ports and datapaths,
+      for example, ones that include entire UUIDs.  They do usually include
+      friendlier names, but the long, hard-to-read names are the ones that
+      appear in matches and actions.  By default, or with
+      <code>--friendly-names</code>, <code>ovn-trace</code> substitutes these
+      friendlier names for the long names in its output.  Use
+      <code>--no-friendly-names</code> to disable this behavior; this option
+      might be useful, for example, if a program is going to parse
+      <code>ovn-trace</code> output.
+    </dd>
   </dl>
 
   <h2>Daemon Options</h2>
