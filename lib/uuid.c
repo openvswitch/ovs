@@ -242,6 +242,17 @@ uuid_is_partial_string(const char *s)
     return i;
 }
 
+/* Compares 'match' to the string representation of 'uuid'.  If 'match' equals
+ * or is a prefix of this string representation, returns strlen(match);
+ * otherwise, returns 0. */
+int
+uuid_is_partial_match(const struct uuid *uuid, const char *match)
+{
+    char uuid_s[UUID_LEN + 1];
+    snprintf(uuid_s, sizeof uuid_s, UUID_FMT, UUID_ARGS(uuid));
+    size_t match_len = strlen(match);
+    return !strncmp(uuid_s, match, match_len) ? match_len : 0;
+}
 
 static void
 sha1_update_int(struct sha1_ctx *sha1_ctx, uintmax_t x)
