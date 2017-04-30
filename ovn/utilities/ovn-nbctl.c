@@ -564,13 +564,24 @@ lb_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist)
     return lb;
 }
 
+static void
+print_alias(const struct smap *external_ids, const char *key, struct ds *s)
+{
+    const char *alias = smap_get(external_ids, key);
+    if (alias && alias[0]) {
+        ds_put_format(s, " (aka %s)", alias);
+    }
+}
+
 /* Given pointer to logical router, this routine prints the router
  * information.  */
 static void
 print_lr(const struct nbrec_logical_router *lr, struct ds *s)
 {
-    ds_put_format(s, "router "UUID_FMT" (%s)\n",
+    ds_put_format(s, "router "UUID_FMT" (%s)",
                   UUID_ARGS(&lr->header_.uuid), lr->name);
+    print_alias(&lr->external_ids, "neutron:router_name", s);
+    ds_put_char(s, '\n');
 
     for (size_t i = 0; i < lr->n_ports; i++) {
         const struct nbrec_logical_router_port *lrp = lr->ports[i];
@@ -606,13 +617,18 @@ print_lr(const struct nbrec_logical_router *lr, struct ds *s)
 static void
 print_ls(const struct nbrec_logical_switch *ls, struct ds *s)
 {
-    ds_put_format(s, "switch "UUID_FMT" (%s)\n",
+    ds_put_format(s, "switch "UUID_FMT" (%s)",
                   UUID_ARGS(&ls->header_.uuid), ls->name);
+    print_alias(&ls->external_ids, "neutron:network_name", s);
+    ds_put_char(s, '\n');
 
     for (size_t i = 0; i < ls->n_ports; i++) {
         const struct nbrec_logical_switch_port *lsp = ls->ports[i];
 
-        ds_put_format(s, "    port %s\n", lsp->name);
+        ds_put_format(s, "    port %s", lsp->name);
+        print_alias(&lsp->external_ids, "neutron:port_name", s);
+        ds_put_char(s, '\n');
+
         if (lsp->type[0]) {
             ds_put_format(s, "        type: %s\n", lsp->type);
         }
@@ -3057,14 +3073,18 @@ cmd_set_ssl(struct ctl_context *ctx)
 }
 
 static const struct ctl_table_class tables[NBREC_N_TABLES] = {
-    [NBREC_TABLE_LOGICAL_SWITCH].row_ids[0]
-    = {&nbrec_logical_switch_col_name, NULL, NULL},
+    [NBREC_TABLE_LOGICAL_SWITCH].row_ids
+    = {{&nbrec_logical_switch_col_name, NULL, NULL},
+       {&nbrec_logical_switch_col_external_ids, "neutron:network_name", NULL}},
 
-    [NBREC_TABLE_LOGICAL_SWITCH_PORT].row_ids[0]
-    = {&nbrec_logical_switch_port_col_name, NULL, NULL},
+    [NBREC_TABLE_LOGICAL_SWITCH_PORT].row_ids
+    = {{&nbrec_logical_switch_port_col_name, NULL, NULL},
+       {&nbrec_logical_switch_port_col_external_ids,
+        "neutron:port_name", NULL}},
 
-    [NBREC_TABLE_LOGICAL_ROUTER].row_ids[0]
-    = {&nbrec_logical_router_col_name, NULL, NULL},
+    [NBREC_TABLE_LOGICAL_ROUTER].row_ids
+    = {{&nbrec_logical_router_col_name, NULL, NULL},
+       {&nbrec_logical_router_col_external_ids, "neutron:router_name", NULL}},
 
     [NBREC_TABLE_LOGICAL_ROUTER_PORT].row_ids[0]
     = {&nbrec_logical_router_port_col_name, NULL, NULL},

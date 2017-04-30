@@ -101,15 +101,6 @@
       address <code>unknown</code>.
     </p>
 
-    <column name="name">
-      <p>
-        A name for the logical switch.  This name has no special meaning or purpose
-        other than to provide convenience for human interaction with the ovn-nb
-        database.  There is no requirement for the name to be unique.  The
-        logical switch's UUID should be used as the unique identifier.
-      </p>
-    </column>
-
     <column name="ports">
       <p>
         The logical ports connected to the logical switch.
@@ -139,6 +130,33 @@
       DNS queries within the logical switch by the native DNS resolver.
       Please see the <ref table="DNS"/> table.
     </column>
+
+    <group title="Naming">
+      <p>
+        These columns provide names for the logical switch.  From OVN's
+        perspective, these names have no special meaning or purpose other than
+        to provide convenience for human interaction with the  database.
+        There is no requirement for the name to be unique.  (For a unique
+        identifier for a logical switch, use its row UUID.)
+      </p>
+
+      <p>
+        (Originally, <ref column="name"/> was intended to serve the purpose of
+        a human-friendly name, but the Neutron integration used it to uniquely
+        identify its own switch object, in the format
+        <code>neutron-<var>uuid</var></code>.  Later on, Neutron started
+        propagating the friendly name of a switch as <ref column="external_ids"
+        key="neutron:network_name"/>.  Perhaps this can be cleaned up someday.)
+      </p>
+
+      <column name="name">
+        A name for the logical switch.
+      </column>
+
+      <column name="external_ids" key="neutron:network_name">
+        Another name for the logical switch.
+      </column>
+    </group>
 
     <group title="IP Address Assignment">
       <p>
@@ -1014,15 +1032,6 @@
       Each row represents one L3 logical router.
     </p>
 
-    <column name="name">
-      <p>
-        A name for the logical router.  This name has no special meaning or purpose
-        other than to provide convenience for human interaction with the ovn-nb
-        database.  There is no requirement for the name to be unique.  The
-        logical router's UUID should be used as the unique identifier.
-      </p>
-    </column>
-
     <column name="ports">
       The router's ports.
     </column>
@@ -1048,6 +1057,33 @@
       Load balance a virtual ipv4 address to a set of logical port ipv4
       addresses.  Load balancer rules only work on the Gateway routers.
     </column>
+
+    <group title="Naming">
+      <p>
+        These columns provide names for the logical router.  From OVN's
+        perspective, these names have no special meaning or purpose other than
+        to provide convenience for human interaction with the northbound
+        database.  There is no requirement for the name to be unique.  (For a
+        unique identifier for a logical router, use its row UUID.)
+      </p>
+
+      <p>
+        (Originally, <ref column="name"/> was intended to serve the purpose of
+        a human-friendly name, but the Neutron integration used it to uniquely
+        identify its own router object, in the format
+        <code>neutron-<var>uuid</var></code>.  Later on, Neutron started
+        propagating the friendly name of a router as <ref column="external_ids"
+        key="neutron:router_name"/>.  Perhaps this can be cleaned up someday.)
+      </p>
+
+      <column name="name">
+        A name for the logical router.
+      </column>
+
+      <column name="external_ids" key="neutron:router_name">
+        Another name for the logical router.
+      </column>
+    </group>
 
     <group title="Options">
       <p>
@@ -1174,8 +1210,8 @@
 
       <p>
         In addition to provide convenience for human interaction with the
-        ovn-nb database, this column is used as reference by its patch port in
-        <ref table="Logical_Switch_Port"/> or another logical router port in
+        northbound database, this column is used as reference by its patch port
+        in <ref table="Logical_Switch_Port"/> or another logical router port in
         <ref table="Logical_Router_Port"/>.
       </p>
     </column>
