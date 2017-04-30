@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009, 2010, 2011, 2013, 2016 Nicira, Inc.
+/* Copyright (c) 2008, 2009, 2010, 2011, 2013, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -211,21 +211,33 @@ error:
     return false;
 }
 
-/* Returns the number of characters at the beginning of 's' that are valid for
- * a UUID.  For example, the "123" at the beginning of "123xyzzy" could begin a
- * UUID, so uuid_is_partial_string() would return 3; for "xyzzy", this function
- * would return 0, since "x" can't start a UUID. */
+/* If 's' is a string representation of a UUID, or the beginning of one,
+ * returns strlen(s), otherwise 0.
+ *
+ * For example:
+ *
+ *     "123" yields 3
+ *     "xyzzy" yields 0
+ *     "123xyzzy" yields 0
+ *     "e66250bb-9531-491b-b9c3-5385cabb0080" yields 36
+ *     "e66250bb-9531-491b-b9c3-5385cabb0080xyzzy" yields 0
+ */
 int
 uuid_is_partial_string(const char *s)
 {
     static const char tmpl[UUID_LEN] = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx";
     size_t i;
     for (i = 0; i < UUID_LEN; i++) {
-        if (tmpl[i] == 'x'
-            ? hexit_value(s[i]) < 0
-            : s[i] != '-') {
-            break;
+        if (s[i] == '\0') {
+            return i;
+        } else if (tmpl[i] == 'x'
+                   ? hexit_value(s[i]) < 0
+                   : s[i] != '-') {
+            return 0;
         }
+    }
+    if (s[i] != '\0') {
+        return 0;
     }
     return i;
 }

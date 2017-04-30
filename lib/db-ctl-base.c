@@ -338,9 +338,7 @@ get_row(struct ctl_context *ctx,
             }
         }
     }
-    if (!row
-        && record_id[uuid_is_partial_string(record_id)] == '\0'
-        && strlen(record_id) >= 4) {
+    if (!row && uuid_is_partial_string(record_id) >= 4) {
         for (const struct ovsdb_idl_row *r = ovsdb_idl_first_row(ctx->idl,
                                                                  table);
              r != NULL;

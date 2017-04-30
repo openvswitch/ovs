@@ -700,14 +700,14 @@ static char *
 parse_partial_uuid(char *s)
 {
     /* Accept a full or partial UUID. */
-    if (uuid_is_partial_string(s) == strlen(s)) {
+    if (uuid_is_partial_string(s)) {
         return s;
     }
 
     /* Accept a full or partial UUID prefixed by 0x, since "ovs-ofctl
      * dump-flows" prints cookies prefixed by 0x. */
     if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X')
-        && uuid_is_partial_string(s + 2) == strlen(s + 2)) {
+        && uuid_is_partial_string(s + 2)) {
         return s + 2;
     }
 
