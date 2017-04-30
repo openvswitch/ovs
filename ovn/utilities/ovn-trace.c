@@ -886,7 +886,7 @@ ovntrace_lookup_port(const void *dp_, const char *port_name,
         return true;
     }
 
-    VLOG_WARN("%s: unknown logical port\n", port_name);
+    VLOG_WARN("%s: unknown logical port", port_name);
     return false;
 }
 
