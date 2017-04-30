@@ -598,6 +598,34 @@ init_ipam_info_for_datapath(struct ovn_datapath *od)
 }
 
 static void
+ovn_datapath_update_external_ids(struct ovn_datapath *od)
+{
+    /* Get the logical-switch or logical-router UUID to set in
+     * external-ids. */
+    char uuid_s[UUID_LEN + 1];
+    sprintf(uuid_s, UUID_FMT, UUID_ARGS(&od->key));
+    const char *key = od->nbs ? "logical-switch" : "logical-router";
+
+    /* Get names to set in external-ids. */
+    const char *name = od->nbs ? od->nbs->name : od->nbr->name;
+    const char *name2 = (od->nbs
+                         ? smap_get(&od->nbs->external_ids,
+                                    "neutron:network_name")
+                         : smap_get(&od->nbr->external_ids,
+                                    "neutron:router_name"));
+
+    /* Set external-ids. */
+    struct smap ids = SMAP_INITIALIZER(&ids);
+    smap_add(&ids, key, uuid_s);
+    smap_add(&ids, "name", name);
+    if (name2 && name2[0]) {
+        smap_add(&ids, "name2", name2);
+    }
+    sbrec_datapath_binding_set_external_ids(od->sb, &ids);
+    smap_destroy(&ids);
+}
+
+static void
 join_datapaths(struct northd_context *ctx, struct hmap *datapaths,
                struct ovs_list *sb_only, struct ovs_list *nb_only,
                struct ovs_list *both)
@@ -645,6 +673,7 @@ join_datapaths(struct northd_context *ctx, struct hmap *datapaths,
             od->nbs = nbs;
             ovs_list_remove(&od->list);
             ovs_list_push_back(both, &od->list);
+            ovn_datapath_update_external_ids(od);
         } else {
             od = ovn_datapath_create(datapaths, &nbs->header_.uuid,
                                      nbs, NULL, NULL);
@@ -667,6 +696,7 @@ join_datapaths(struct northd_context *ctx, struct hmap *datapaths,
                 od->nbr = nbr;
                 ovs_list_remove(&od->list);
                 ovs_list_push_back(both, &od->list);
+                ovn_datapath_update_external_ids(od);
             } else {
                 /* Can't happen! */
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
@@ -718,31 +748,7 @@ build_datapaths(struct northd_context *ctx, struct hmap *datapaths)
             }
 
             od->sb = sbrec_datapath_binding_insert(ctx->ovnsb_txn);
-
-            /* Get the logical-switch or logical-router UUID to set in
-             * external-ids. */
-            char uuid_s[UUID_LEN + 1];
-            sprintf(uuid_s, UUID_FMT, UUID_ARGS(&od->key));
-            const char *key = od->nbs ? "logical-switch" : "logical-router";
-
-            /* Get names to set in external-ids. */
-            const char *name = od->nbs ? od->nbs->name : od->nbr->name;
-            const char *name2 = (od->nbs
-                                 ? smap_get(&od->nbs->external_ids,
-                                            "neutron:network_name")
-                                 : smap_get(&od->nbr->external_ids,
-                                            "neutron:router_name"));
-
-            /* Set external-ids. */
-            struct smap ids = SMAP_INITIALIZER(&ids);
-            smap_add(&ids, key, uuid_s);
-            smap_add(&ids, "name", name);
-            if (name2 && name2[0]) {
-                smap_add(&ids, "name2", name2);
-            }
-            sbrec_datapath_binding_set_external_ids(od->sb, &ids);
-            smap_destroy(&ids);
-
+            ovn_datapath_update_external_ids(od);
             sbrec_datapath_binding_set_tunnel_key(od->sb, tunnel_key);
         }
         destroy_tnlids(&dp_tnlids);
