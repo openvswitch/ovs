@@ -789,7 +789,7 @@
       </column>
     </group>
 
-    <group title="Common Columns">
+    <group title="DHCP">
       <column name="dhcpv4_options">
         This column defines the DHCPv4 Options to be included by the
         <code>ovn-controller</code> when it replies to the DHCPv4 requests.
@@ -801,7 +801,9 @@
         <code>ovn-controller</code> when it replies to the DHCPv6 requests.
         Please see the <ref table="DHCP_Options"/> table.
       </column>
+    </group>
 
+    <group title="Common Columns">
       <column name="external_ids">
         See <em>External IDs</em> at the beginning of this document.
       </column>
