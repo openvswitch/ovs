@@ -821,6 +821,22 @@
       </column>
     </group>
 
+    <group title="Naming">
+      <column name="external_ids" key="neutron:port_name">
+        <p>
+          This column gives an optional human-friendly name for the port.  This
+          name has no special meaning or purpose other than to provide
+          convenience for human interaction with the northbound database.
+        </p>
+
+        <p>
+          Neutron copies this from its own port object's name.  (Neutron ports
+          do are not assigned human-friendly names by default, so it will often
+          be empty.)
+        </p>
+      </column>
+    </group>
+
     <group title="Common Columns">
       <column name="external_ids">
         See <em>External IDs</em> at the beginning of this document.

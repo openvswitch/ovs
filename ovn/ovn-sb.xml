@@ -2129,6 +2129,29 @@ tcp.flags = RST;
         </p>
       </column>
     </group>
+
+    <group title="Naming">
+      <column name="external_ids" key="name">
+        <p>
+          For a logical switch port, <code>ovn-northd</code> copies this from
+          <ref table="Logical_Switch_Port" db="OVN_Northbound"
+          column="external_ids" key="neutron:port_name"/> in the <ref
+          table="Logical_Switch_Port" db="OVN_Northbound"/> table in the
+          OVN_Northbound database, if it is a nonempty string.
+        </p>
+
+        <p>
+          For a logical switch port, <code>ovn-northd</code> does not currently
+          set this key.
+        </p>
+      </column>
+    </group>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
   </table>
 
   <table name="MAC_Binding" title="IP to MAC bindings">

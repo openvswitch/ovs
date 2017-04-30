@@ -1705,6 +1705,9 @@ ovn_port_update_sbrec(const struct ovn_port *op,
         sbrec_port_binding_set_parent_port(op->sb, NULL);
         sbrec_port_binding_set_tag(op->sb, NULL, 0);
         sbrec_port_binding_set_mac(op->sb, NULL, 0);
+
+        struct smap ids = SMAP_INITIALIZER(&ids);
+        sbrec_port_binding_set_external_ids(op->sb, &ids);
     } else {
         if (strcmp(op->nbsp->type, "router")) {
             uint32_t queue_id = smap_get_int(
@@ -1797,6 +1800,14 @@ ovn_port_update_sbrec(const struct ovn_port *op,
         sbrec_port_binding_set_tag(op->sb, op->nbsp->tag, op->nbsp->n_tag);
         sbrec_port_binding_set_mac(op->sb, (const char **) op->nbsp->addresses,
                                    op->nbsp->n_addresses);
+
+        struct smap ids = SMAP_INITIALIZER(&ids);
+        const char *name = smap_get(&op->nbsp->external_ids,
+                                    "neutron:port_name");
+        if (name && name[0]) {
+            smap_add(&ids, "name", name);
+        }
+        sbrec_port_binding_set_external_ids(op->sb, &ids);
     }
 }
 
@@ -5974,6 +5985,8 @@ main(int argc, char *argv[])
     add_column_noalert(ovnsb_idl_loop.idl,
                        &sbrec_port_binding_col_nat_addresses);
     ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_port_binding_col_chassis);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_port_binding_col_external_ids);
     ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_mac_binding);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_mac_binding_col_datapath);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_mac_binding_col_ip);
