@@ -1052,6 +1052,11 @@ cmd_set_ssl(struct ctl_context *ctx)
 static const struct ctl_table_class tables[SBREC_N_TABLES] = {
     [SBREC_TABLE_CHASSIS].row_ids[0] = {&sbrec_chassis_col_name, NULL, NULL},
 
+    [SBREC_TABLE_DATAPATH_BINDING].row_ids
+     = {{&sbrec_datapath_binding_col_external_ids, "name", NULL},
+        {&sbrec_datapath_binding_col_external_ids, "logical-switch", NULL},
+        {&sbrec_datapath_binding_col_external_ids, "logical-router", NULL}},
+
     [SBREC_TABLE_PORT_BINDING].row_ids[0] =
     {&sbrec_port_binding_col_logical_port, NULL, NULL},
 
