@@ -114,6 +114,16 @@ parent_pid () {
         ps -o ppid= -p $1
     fi
 }
+
+# Normalize the output of 'wc' to match POSIX.
+# POSIX says 'wc' should print "%d %d %d", but GNU prints "%7d %7d %7d".
+# POSIX says 'wc -l' should print "%d %s", but BSD prints "%8d".
+#
+# This fixes all of those (it will screw up filenames that contain
+# multiple sequential spaces, but that doesn't really matter).
+wc () {
+   command wc "$@" | tr -s ' ' ' ' | sed 's/^ *//'
+}
 ]
 m4_divert_pop([PREPARE_TESTS])
 
