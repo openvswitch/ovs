@@ -300,7 +300,7 @@ def ovs_checkpatch_parse(text):
         elif parse == 2:
             newfile = hunks.match(line)
             if newfile:
-                current_file = newfile.group(2)
+                current_file = newfile.group(2)[2:]
                 print_file_name = current_file
                 continue
             reset_line_number = hunk_differences.match(line)
