@@ -164,6 +164,47 @@ def pointer_whitespace_check(line):
     return __regex_ptr_declaration_missing_whitespace.search(line) is not None
 
 
+def line_length_check(line):
+    """Return TRUE if the line length is too long"""
+    if len(line) > 79:
+        return True
+    return False
+
+
+checks = [
+    {'regex': None,
+     'match_name':
+     lambda x: not any([fmt in x for fmt in line_length_blacklist]),
+     'check': lambda x: line_length_check(x),
+     'print':
+     lambda x: print_warning("Line is greater than 79-characters long", x)}
+]
+
+
+def get_file_type_checks(filename):
+    """Returns the list of checks for a file based on matching the filename
+       against regex."""
+    global checks
+    checkList = []
+    for check in checks:
+        if check['regex'] is None and check['match_name'] is None:
+            checkList.append(check)
+        if check['regex'] is not None and \
+           re.compile(check['regex']).search(filename) is not None:
+            checkList.append(check)
+        elif check['match_name'] is not None and check['match_name'](filename):
+            checkList.append(check)
+    return checkList
+
+
+def run_checks(current_file, line, lineno):
+    """Runs the various checks for the particular line.  This will take
+       filename into account."""
+    for check in get_file_type_checks(current_file):
+        if check['check'](line):
+            check['print'](lineno)
+
+
 def ovs_checkpatch_parse(text):
     global print_file_name
     lineno = 0
@@ -180,15 +221,10 @@ def ovs_checkpatch_parse(text):
                               re.I | re.M | re.S)
     is_co_author = re.compile(r'(\s*(Co-authored-by: )(.*))$',
                               re.I | re.M | re.S)
-    skip_line_length_check = False
 
     for line in text.decode().split('\n'):
         if current_file != previous_file:
             previous_file = current_file
-            if any([fmt in current_file for fmt in line_length_blacklist]):
-                skip_line_length_check = True
-            else:
-                skip_line_length_check = False
 
         lineno = lineno + 1
         if len(line) <= 0:
@@ -250,13 +286,10 @@ def ovs_checkpatch_parse(text):
                 print_line = True
                 print_warning("Line has non-spaces leading whitespace",
                               lineno)
+            run_checks(current_file, cmp_line, lineno)
             if trailing_whitespace_or_crlf(cmp_line):
                 print_line = True
                 print_warning("Line has trailing whitespace", lineno)
-            if len(cmp_line) > 79 and not skip_line_length_check:
-                print_line = True
-                print_warning("Line is greater than 79-characters long",
-                              lineno)
             if not if_and_for_whitespace_checks(cmp_line):
                 print_line = True
                 print_error("Improper whitespace around control block",
