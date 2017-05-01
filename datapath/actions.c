@@ -62,7 +62,8 @@ struct ovs_frag_data {
 	struct vport *vport;
 	struct ovs_gso_cb cb;
 	__be16 inner_protocol;
-	__u16 vlan_tci;
+	u16 network_offset;	/* valid only for MPLS */
+	u16 vlan_tci;
 	__be16 vlan_proto;
 	unsigned int l2_len;
 	u8 mac_proto;
@@ -740,6 +741,12 @@ static int ovs_vport_output(OVS_VPORT_OUTPUT_PARAMS)
 	skb_postpush_rcsum(skb, skb->data, data->l2_len);
 	skb_reset_mac_header(skb);
 
+	if (eth_p_mpls(skb->protocol)) {
+		skb->inner_network_header = skb->network_header;
+		skb_set_network_header(skb, data->network_offset);
+		skb_reset_mac_len(skb);
+	}
+
 	ovs_vport_send(vport, skb, data->mac_proto);
 	return 0;
 }
@@ -759,7 +766,7 @@ static struct dst_ops ovs_dst_ops = {
  * ovs_vport_output(), which is called once per fragmented packet.
  */
 static void prepare_frag(struct vport *vport, struct sk_buff *skb,
-			u8 mac_proto)
+			 u16 orig_network_offset, u8 mac_proto)
 {
 	unsigned int hlen = skb_network_offset(skb);
 	struct ovs_frag_data *data;
@@ -769,6 +776,7 @@ static void prepare_frag(struct vport *vport, struct sk_buff *skb,
 	data->vport = vport;
 	data->cb = *OVS_GSO_CB(skb);
 	data->inner_protocol = ovs_skb_get_inner_protocol(skb);
+	data->network_offset = orig_network_offset;
 	data->vlan_tci = skb->vlan_tci;
 	data->vlan_proto = skb->vlan_proto;
 	data->mac_proto = mac_proto;
@@ -783,6 +791,13 @@ static void ovs_fragment(struct net *net, struct vport *vport,
 			 struct sk_buff *skb, u16 mru,
 			 struct sw_flow_key *key)
 {
+	u16 orig_network_offset = 0;
+
+	if (eth_p_mpls(skb->protocol)) {
+		orig_network_offset = skb_network_offset(skb);
+		skb->network_header = skb->inner_network_header;
+	}
+
 	if (skb_network_offset(skb) > MAX_L2_LEN) {
 		OVS_NLERR(1, "L2 header too long to fragment");
 		goto err;
@@ -792,7 +807,8 @@ static void ovs_fragment(struct net *net, struct vport *vport,
 		struct dst_entry ovs_dst;
 		unsigned long orig_dst;
 
-		prepare_frag(vport, skb, ovs_key_mac_proto(key));
+		prepare_frag(vport, skb, orig_network_offset,
+                             ovs_key_mac_proto(key));
 		dst_init(&ovs_dst, &ovs_dst_ops, NULL, 1,
 			 DST_OBSOLETE_NONE, DST_NOCOUNT);
 		ovs_dst.dev = vport->dev;
@@ -811,7 +827,7 @@ static void ovs_fragment(struct net *net, struct vport *vport,
 		if (!v6ops)
 			goto err;
 
-		prepare_frag(vport, skb,
+		prepare_frag(vport, skb, orig_network_offset,
 			     ovs_key_mac_proto(key));
 		memset(&ovs_rt, 0, sizeof(ovs_rt));
 		dst_init(&ovs_rt.dst, &ovs_dst_ops, NULL, 1,
