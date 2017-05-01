@@ -177,7 +177,32 @@ checks = [
      lambda x: not any([fmt in x for fmt in line_length_blacklist]),
      'check': lambda x: line_length_check(x),
      'print':
-     lambda x: print_warning("Line is greater than 79-characters long", x)}
+     lambda x: print_warning("Line is greater than 79-characters long", x)},
+
+    {'regex': '$(?<!\.mk)',
+     'match_name': None,
+     'check': lambda x: not leading_whitespace_is_spaces(x),
+     'print':
+     lambda x: print_warning("Line has non-spaces leading whitespace", x)},
+
+    {'regex': None, 'match_name': None,
+     'check': lambda x: trailing_whitespace_or_crlf(x),
+     'print': lambda x: print_warning("Line has trailing whitespace", x)},
+
+    {'regex': '(.c|.h)(.in)?$', 'match_name': None,
+     'check': lambda x: not if_and_for_whitespace_checks(x),
+     'print': lambda x: print_error("Improper whitespace around control block",
+                                    x)},
+
+    {'regex': '(.c|.h)(.in)?$', 'match_name': None,
+     'check': lambda x: not if_and_for_end_with_bracket_check(x),
+     'print': lambda x: print_error("Inappropriate bracing around statement",
+                                    x)},
+
+    {'regex': '(.c|.h)(.in)?$', 'match_name': None,
+     'check': lambda x: pointer_whitespace_check(x),
+     'print':
+     lambda x: print_error("Inappropriate spacing in pointer declaration", x)}
 ]
 
 
@@ -285,21 +310,7 @@ def ovs_checkpatch_parse(text):
             # linux or windows coding standards
             if '/datapath' in current_file:
                 continue
-            if (not current_file.endswith('.mk') and
-                    not leading_whitespace_is_spaces(cmp_line)):
-                print_warning("Line has non-spaces leading whitespace",
-                              lineno)
             run_checks(current_file, cmp_line, lineno)
-            if trailing_whitespace_or_crlf(cmp_line):
-                print_warning("Line has trailing whitespace", lineno)
-            if not if_and_for_whitespace_checks(cmp_line):
-                print_error("Improper whitespace around control block",
-                            lineno)
-            if not if_and_for_end_with_bracket_check(cmp_line):
-                print_error("Inappropriate bracing around statement", lineno)
-            if pointer_whitespace_check(cmp_line):
-                print_error("Inappropriate spacing in pointer declaration",
-                            lineno)
     if __errors or __warnings:
         return -1
     return 0
