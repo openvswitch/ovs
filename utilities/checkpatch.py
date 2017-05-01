@@ -200,9 +200,14 @@ def get_file_type_checks(filename):
 def run_checks(current_file, line, lineno):
     """Runs the various checks for the particular line.  This will take
        filename into account."""
+    print_line = False
     for check in get_file_type_checks(current_file):
         if check['check'](line):
             check['print'](lineno)
+            print_line = True
+
+    if print_line:
+        print("\n%s\n" % line)
 
 
 def ovs_checkpatch_parse(text):
@@ -258,7 +263,6 @@ def ovs_checkpatch_parse(text):
                 m = is_co_author.match(line)
                 co_authors.append(m.group(3))
         elif parse == 2:
-            print_line = False
             newfile = hunks.match(line)
             if newfile:
                 current_file = newfile.group(2)
@@ -283,26 +287,19 @@ def ovs_checkpatch_parse(text):
                 continue
             if (not current_file.endswith('.mk') and
                     not leading_whitespace_is_spaces(cmp_line)):
-                print_line = True
                 print_warning("Line has non-spaces leading whitespace",
                               lineno)
             run_checks(current_file, cmp_line, lineno)
             if trailing_whitespace_or_crlf(cmp_line):
-                print_line = True
                 print_warning("Line has trailing whitespace", lineno)
             if not if_and_for_whitespace_checks(cmp_line):
-                print_line = True
                 print_error("Improper whitespace around control block",
                             lineno)
             if not if_and_for_end_with_bracket_check(cmp_line):
-                print_line = True
                 print_error("Inappropriate bracing around statement", lineno)
             if pointer_whitespace_check(cmp_line):
-                print_line = True
                 print_error("Inappropriate spacing in pointer declaration",
                             lineno)
-            if print_line:
-                print("\n%s\n" % line)
     if __errors or __warnings:
         return -1
     return 0
