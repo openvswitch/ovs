@@ -76,7 +76,7 @@ __regex_is_for_if_single_line_bracket = \
     re.compile(r'^ +(if|for|while) \(.*\)')
 __regex_ends_with_bracket = \
     re.compile(r'[^\s]\) {(\s+/\*[\s\Sa-zA-Z0-9\.,\?\*/+-]*)?$')
-__regex_ptr_declaration_missing_whitespace = re.compile(r'[a-zA-Z0-9]\*')
+__regex_ptr_declaration_missing_whitespace = re.compile(r'[a-zA-Z0-9]\*[^*]')
 
 skip_leading_whitespace_check = False
 skip_trailing_whitespace_check = False
