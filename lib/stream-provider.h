@@ -30,6 +30,7 @@ struct stream {
     int state;
     int error;
     char *name;
+    char *peer_id;
 };
 
 void stream_init(struct stream *, const struct stream_class *,

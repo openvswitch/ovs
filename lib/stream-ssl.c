@@ -420,6 +420,41 @@ do_ca_cert_bootstrap(struct stream *stream)
     return EPROTO;
 }
 
+static char *
+get_peer_common_name(const struct ssl_stream *sslv)
+{
+    X509 *peer_cert = SSL_get_peer_certificate(sslv->ssl);
+    if (!peer_cert) {
+        return NULL;
+    }
+
+    int cn_index = X509_NAME_get_index_by_NID(X509_get_subject_name(peer_cert),
+                                              NID_commonName, -1);
+    if (cn_index < 0) {
+        return NULL;
+    }
+
+    X509_NAME_ENTRY *cn_entry = X509_NAME_get_entry(
+        X509_get_subject_name(peer_cert), cn_index);
+    if (!cn_entry) {
+        return NULL;
+    }
+
+    ASN1_STRING *cn_data = X509_NAME_ENTRY_get_data(cn_entry);
+    if (!cn_data) {
+        return NULL;
+    }
+
+    const char *cn;
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+    /* ASN1_STRING_data() is deprecated as of OpenSSL version 1.1 */
+    cn = (const char *)ASN1_STRING_data(cn_data);
+#else
+    cn = (const char *)ASN1_STRING_get0_data(cn_data);
+ #endif
+    return xstrdup(cn);
+}
+
 static int
 ssl_connect(struct stream *stream)
 {
@@ -477,6 +512,12 @@ ssl_connect(struct stream *stream)
             VLOG_INFO("rejecting SSL connection during bootstrap race window");
             return EPROTO;
         } else {
+            char *cn = get_peer_common_name(sslv);
+
+            if (cn) {
+                stream_set_peer_id(stream, cn);
+                free(cn);
+            }
             return 0;
         }
     }

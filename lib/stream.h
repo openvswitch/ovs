@@ -53,6 +53,8 @@ void stream_wait(struct stream *, enum stream_wait_type);
 void stream_connect_wait(struct stream *);
 void stream_recv_wait(struct stream *);
 void stream_send_wait(struct stream *);
+void stream_set_peer_id(struct stream *, const char *);
+const char *stream_get_peer_id(const struct stream *);
 
 /* Passive streams: listeners for incoming stream connections. */
 int pstream_verify_name(const char *name);
