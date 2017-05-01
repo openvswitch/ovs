@@ -252,7 +252,7 @@ def ovs_checkpatch_parse(text):
     is_co_author = re.compile(r'(\s*(Co-authored-by: )(.*))$',
                               re.I | re.M | re.S)
 
-    for line in text.decode().split('\n'):
+    for line in text.decode(errors='ignore').split('\n'):
         if current_file != previous_file:
             previous_file = current_file
 
