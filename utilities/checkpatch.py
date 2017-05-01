@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (c) 2016 Red Hat, Inc.
+# Copyright (c) 2016, 2017 Red Hat, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,33 +23,41 @@ __errors = 0
 __warnings = 0
 print_file_name = None
 checking_file = False
+total_line = 0
+colors = False
 
 
-def print_file():
-    global print_file_name
-    if print_file_name:
-        print("In file %s" % print_file_name)
-        print_file_name = None
+def get_color_end():
+    global colors
+    if colors:
+        return "\033[00m"
+    return ""
 
 
-def print_error(message, lineno=None):
+def get_red_begin():
+    global colors
+    if colors:
+        return "\033[91m"
+    return ""
+
+
+def get_yellow_begin():
+    global colors
+    if colors:
+        return "\033[93m"
+    return ""
+
+
+def print_error(message):
     global __errors
-    print_file()
-    if lineno is not None:
-        print("E(%d): %s" % (lineno, message))
-    else:
-        print("E: %s" % (message))
+    print("%sERROR%s: %s" % (get_red_begin(), get_color_end(), message))
 
     __errors = __errors + 1
 
 
-def print_warning(message, lineno=None):
+def print_warning(message):
     global __warnings
-    print_file()
-    if lineno:
-        print("W(%d): %s" % (lineno, message))
-    else:
-        print("W: %s" % (message))
+    print("%sWARNING%s: %s" % (get_yellow_begin(), get_color_end(), message))
 
     __warnings = __warnings + 1
 
@@ -176,33 +184,29 @@ checks = [
      'match_name':
      lambda x: not any([fmt in x for fmt in line_length_blacklist]),
      'check': lambda x: line_length_check(x),
-     'print':
-     lambda x: print_warning("Line is greater than 79-characters long", x)},
+     'print': lambda: print_warning("Line length is >79-characters long")},
 
     {'regex': '$(?<!\.mk)',
      'match_name': None,
      'check': lambda x: not leading_whitespace_is_spaces(x),
-     'print':
-     lambda x: print_warning("Line has non-spaces leading whitespace", x)},
+     'print': lambda: print_warning("Line has non-spaces leading whitespace")},
 
     {'regex': None, 'match_name': None,
      'check': lambda x: trailing_whitespace_or_crlf(x),
-     'print': lambda x: print_warning("Line has trailing whitespace", x)},
+     'print': lambda: print_warning("Line has trailing whitespace")},
 
     {'regex': '(.c|.h)(.in)?$', 'match_name': None,
      'check': lambda x: not if_and_for_whitespace_checks(x),
-     'print': lambda x: print_error("Improper whitespace around control block",
-                                    x)},
+     'print': lambda: print_error("Improper whitespace around control block")},
 
     {'regex': '(.c|.h)(.in)?$', 'match_name': None,
      'check': lambda x: not if_and_for_end_with_bracket_check(x),
-     'print': lambda x: print_error("Inappropriate bracing around statement",
-                                    x)},
+     'print': lambda: print_error("Inappropriate bracing around statement")},
 
     {'regex': '(.c|.h)(.in)?$', 'match_name': None,
      'check': lambda x: pointer_whitespace_check(x),
      'print':
-     lambda x: print_error("Inappropriate spacing in pointer declaration", x)}
+     lambda: print_error("Inappropriate spacing in pointer declaration")}
 ]
 
 
@@ -225,18 +229,23 @@ def get_file_type_checks(filename):
 def run_checks(current_file, line, lineno):
     """Runs the various checks for the particular line.  This will take
        filename into account."""
+    global checking_file, total_line
     print_line = False
     for check in get_file_type_checks(current_file):
         if check['check'](line):
-            check['print'](lineno)
+            check['print']()
             print_line = True
 
     if print_line:
-        print("\n%s\n" % line)
+        if checking_file:
+            print("%s:%d:" % (current_file, lineno))
+        else:
+            print("#%d FILE: %s:%d:" % (total_line, current_file, lineno))
+        print("%s\n" % line)
 
 
 def ovs_checkpatch_parse(text):
-    global print_file_name
+    global print_file_name, total_line
     lineno = 0
     signatures = []
     co_authors = []
@@ -257,6 +266,7 @@ def ovs_checkpatch_parse(text):
             previous_file = current_file
 
         lineno = lineno + 1
+        total_line = total_line + 1
         if len(line) <= 0:
             continue
 
@@ -335,7 +345,7 @@ def usage():
 
 
 def ovs_checkpatch_file(filename):
-    global __warnings, __errors, checking_file
+    global __warnings, __errors, checking_file, total_line
     try:
         mail = email.message_from_file(open(filename, 'r'))
     except:
@@ -347,7 +357,10 @@ def ovs_checkpatch_file(filename):
             continue
     result = ovs_checkpatch_parse(part.get_payload(decode=True))
     if result < 0:
-        print("Warnings: %d, Errors: %d" % (__warnings, __errors))
+        print("Lines checked: %d, Warnings: %d, Errors: %d" %
+              (total_line, __warnings, __errors))
+    else:
+        print("Lines checked: %d, no obvious problems found" % (total_line))
     return result
 
 
@@ -381,6 +394,10 @@ if __name__ == '__main__':
         else:
             print("Unknown option '%s'" % o)
             sys.exit(-1)
+
+    if sys.stdout.isatty():
+        colors = True
+
     try:
         filename = args[0]
     except:
