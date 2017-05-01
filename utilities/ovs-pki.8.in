@@ -48,6 +48,8 @@ The available options are:
 .br
 [\fB\-l\fR \fIfile\fR | \fB\-\^\-log=\fIfile\fR]
 .br
+[\fB\-u\fR | \fB\-\^\-unique\fR]
+.br
 [\fB\-h\fR | \fB\-\^\-help\fR]
 .sp
 Some options do not apply to every command.
@@ -232,6 +234,13 @@ directories.  This option overrides this behavior.
 .IQ "\fB\-\^\-log=\fIfile\fR"
 Sets the log file to \fIfile\fR.  Default:
 \fB@LOGDIR@/ovs\-pki.log\fR.
+
+.IP "\fB\-u\fR"
+.IQ "\fB\-\^\-unique\fR"
+Changes the format of the certificate's Common Name (CN) field; by
+default, this field has the format "<name> id:<uuid-or-date>", this
+option causes the provided name to be treated as unique and changes
+the format of the CN field to be simply "<name>".
 
 .IP "\fB\-h\fR"
 .IQ "\fB\-\^\-help\fR"
