@@ -56,6 +56,7 @@
 #include "util.h"
 #include "unixctl.h"
 #include "perf-counter.h"
+#include "ovsdb-util.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ovsdb_server);
@@ -673,174 +674,6 @@ add_remote(struct shash *remotes, const char *target)
     return options;
 }
 
-static struct ovsdb_datum *
-get_datum(struct ovsdb_row *row, const char *column_name,
-          const enum ovsdb_atomic_type key_type,
-          const enum ovsdb_atomic_type value_type,
-          const size_t n_max)
-{
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-    const struct ovsdb_table_schema *schema = row->table->schema;
-    const struct ovsdb_column *column;
-
-    column = ovsdb_table_schema_get_column(schema, column_name);
-    if (!column) {
-        VLOG_DBG_RL(&rl, "Table `%s' has no `%s' column",
-                    schema->name, column_name);
-        return NULL;
-    }
-
-    if (column->type.key.type != key_type
-        || column->type.value.type != value_type
-        || column->type.n_max != n_max) {
-        if (!VLOG_DROP_DBG(&rl)) {
-            char *type_name = ovsdb_type_to_english(&column->type);
-            VLOG_DBG("Table `%s' column `%s' has type %s, not expected "
-                     "key type %s, value type %s, max elements %"PRIuSIZE".",
-                     schema->name, column_name, type_name,
-                     ovsdb_atomic_type_to_string(key_type),
-                     ovsdb_atomic_type_to_string(value_type),
-                     n_max);
-            free(type_name);
-        }
-        return NULL;
-    }
-
-    return &row->fields[column->index];
-}
-
-/* Read string-string key-values from a map.  Returns the value associated with
- * 'key', if found, or NULL */
-static const char *
-read_map_string_column(const struct ovsdb_row *row, const char *column_name,
-                       const char *key)
-{
-    const struct ovsdb_datum *datum;
-    union ovsdb_atom *atom_key = NULL, *atom_value = NULL;
-    size_t i;
-
-    datum = get_datum(CONST_CAST(struct ovsdb_row *, row), column_name,
-                      OVSDB_TYPE_STRING, OVSDB_TYPE_STRING, UINT_MAX);
-
-    if (!datum) {
-        return NULL;
-    }
-
-    for (i = 0; i < datum->n; i++) {
-        atom_key = &datum->keys[i];
-        if (!strcmp(atom_key->string, key)){
-            atom_value = &datum->values[i];
-            break;
-        }
-    }
-
-    return atom_value ? atom_value->string : NULL;
-}
-
-static const union ovsdb_atom *
-read_column(const struct ovsdb_row *row, const char *column_name,
-            enum ovsdb_atomic_type type)
-{
-    const struct ovsdb_datum *datum;
-
-    datum = get_datum(CONST_CAST(struct ovsdb_row *, row), column_name, type,
-                      OVSDB_TYPE_VOID, 1);
-    return datum && datum->n ? datum->keys : NULL;
-}
-
-static bool
-read_integer_column(const struct ovsdb_row *row, const char *column_name,
-                    long long int *integerp)
-{
-    const union ovsdb_atom *atom;
-
-    atom = read_column(row, column_name, OVSDB_TYPE_INTEGER);
-    *integerp = atom ? atom->integer : 0;
-    return atom != NULL;
-}
-
-static bool
-read_string_column(const struct ovsdb_row *row, const char *column_name,
-                   const char **stringp)
-{
-    const union ovsdb_atom *atom;
-
-    atom = read_column(row, column_name, OVSDB_TYPE_STRING);
-    *stringp = atom ? atom->string : NULL;
-    return atom != NULL;
-}
-
-static bool
-read_bool_column(const struct ovsdb_row *row, const char *column_name,
-                   bool *boolp)
-{
-    const union ovsdb_atom *atom;
-
-    atom = read_column(row, column_name, OVSDB_TYPE_BOOLEAN);
-    *boolp = atom ? atom->boolean : false;
-    return atom != NULL;
-}
-
-static void
-write_bool_column(struct ovsdb_row *row, const char *column_name, bool value)
-{
-    const struct ovsdb_column *column;
-    struct ovsdb_datum *datum;
-
-    column = ovsdb_table_schema_get_column(row->table->schema, column_name);
-    datum = get_datum(row, column_name, OVSDB_TYPE_BOOLEAN,
-                      OVSDB_TYPE_VOID, 1);
-    if (!datum) {
-        return;
-    }
-
-    if (datum->n != 1) {
-        ovsdb_datum_destroy(datum, &column->type);
-
-        datum->n = 1;
-        datum->keys = xmalloc(sizeof *datum->keys);
-        datum->values = NULL;
-    }
-
-    datum->keys[0].boolean = value;
-}
-
-static void
-write_string_string_column(struct ovsdb_row *row, const char *column_name,
-                           char **keys, char **values, size_t n)
-{
-    const struct ovsdb_column *column;
-    struct ovsdb_datum *datum;
-    size_t i;
-
-    column = ovsdb_table_schema_get_column(row->table->schema, column_name);
-    datum = get_datum(row, column_name, OVSDB_TYPE_STRING, OVSDB_TYPE_STRING,
-                      UINT_MAX);
-    if (!datum) {
-        for (i = 0; i < n; i++) {
-            free(keys[i]);
-            free(values[i]);
-        }
-        return;
-    }
-
-    /* Free existing data. */
-    ovsdb_datum_destroy(datum, &column->type);
-
-    /* Allocate space for new values. */
-    datum->n = n;
-    datum->keys = xmalloc(n * sizeof *datum->keys);
-    datum->values = xmalloc(n * sizeof *datum->values);
-
-    for (i = 0; i < n; ++i) {
-        datum->keys[i].string = keys[i];
-        datum->values[i].string = values[i];
-    }
-
-    /* Sort and check constraints. */
-    ovsdb_datum_sort_assert(datum, column->type.key.type);
-}
-
 /* Adds a remote and options to 'remotes', based on the Manager table row in
  * 'row'. */
 static void
@@ -852,25 +685,27 @@ add_manager_options(struct shash *remotes, const struct ovsdb_row *row)
     bool read_only;
     const char *target, *dscp_string;
 
-    if (!read_string_column(row, "target", &target) || !target) {
+    if (!ovsdb_util_read_string_column(row, "target", &target) || !target) {
         VLOG_INFO_RL(&rl, "Table `%s' has missing or invalid `target' column",
                      row->table->schema->name);
         return;
     }
 
     options = add_remote(remotes, target);
-    if (read_integer_column(row, "max_backoff", &max_backoff)) {
+    if (ovsdb_util_read_integer_column(row, "max_backoff", &max_backoff)) {
         options->max_backoff = max_backoff;
     }
-    if (read_integer_column(row, "inactivity_probe", &probe_interval)) {
+    if (ovsdb_util_read_integer_column(row, "inactivity_probe",
+                                       &probe_interval)) {
         options->probe_interval = probe_interval;
     }
-    if (read_bool_column(row, "read_only", &read_only)) {
+    if (ovsdb_util_read_bool_column(row, "read_only", &read_only)) {
         options->read_only = read_only;
     }
 
     options->dscp = DSCP_DEFAULT;
-    dscp_string = read_map_string_column(row, "other_config", "dscp");
+    dscp_string = ovsdb_util_read_map_string_column(row, "other_config",
+                                                    "dscp");
     if (dscp_string) {
         int dscp = atoi(dscp_string);
         if (dscp >= 0 && dscp <= 63) {
@@ -939,7 +774,7 @@ update_remote_row(const struct ovsdb_row *row, struct ovsdb_txn *txn,
     size_t n = 0;
 
     /* Get the "target" (protocol/host/port) spec. */
-    if (!read_string_column(row, "target", &target)) {
+    if (!ovsdb_util_read_string_column(row, "target", &target)) {
         /* Bad remote spec or incorrect schema. */
         return;
     }
@@ -947,7 +782,7 @@ update_remote_row(const struct ovsdb_row *row, struct ovsdb_txn *txn,
     ovsdb_jsonrpc_server_get_remote_status(jsonrpc, target, &status);
 
     /* Update status information columns. */
-    write_bool_column(rw_row, "is_connected", status.is_connected);
+    ovsdb_util_write_bool_column(rw_row, "is_connected", status.is_connected);
 
     if (status.state) {
         keys[n] = xstrdup("state");
@@ -986,7 +821,7 @@ update_remote_row(const struct ovsdb_row *row, struct ovsdb_txn *txn,
         keys[n] = xstrdup("bound_port");
         values[n++] = xasprintf("%"PRIu16, ntohs(status.bound_port));
     }
-    write_string_string_column(rw_row, "status", keys, values, n);
+    ovsdb_util_write_string_string_column(rw_row, "status", keys, values, n);
 
     ovsdb_jsonrpc_server_free_remote_status(&status);
 }
