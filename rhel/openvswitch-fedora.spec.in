@@ -410,36 +410,24 @@ if [ $1 -eq 0 ] ; then
 fi
 
 %postun ovn-central
-%if 0%{?systemd_postun_with_restart:1}
-    %systemd_postun_with_restart ovn-northd.service
+%if 0%{?systemd_postun:1}
+    %systemd_postun ovn-northd.service
 %else
     /bin/systemctl daemon-reload >/dev/null 2>&1 || :
-    if [ "$1" -ge "1" ] ; then
-    # Package upgrade, not uninstall
-        /bin/systemctl try-restart ovn-northd.service >/dev/null 2>&1 || :
-    fi
 %endif
 
 %postun ovn-host
-%if 0%{?systemd_postun_with_restart:1}
-    %systemd_postun_with_restart ovn-controller.service
+%if 0%{?systemd_postun:1}
+    %systemd_postun ovn-controller.service
 %else
     /bin/systemctl daemon-reload >/dev/null 2>&1 || :
-    if [ "$1" -ge "1" ] ; then
-        # Package upgrade, not uninstall
-        /bin/systemctl try-restart ovn-controller.service >/dev/null 2>&1 || :
-    fi
 %endif
 
 %postun ovn-vtep
-%if 0%{?systemd_postun_with_restart:1}
-    %systemd_postun_with_restart ovn-controller-vtep.service
+%if 0%{?systemd_postun:1}
+    %systemd_postun ovn-controller-vtep.service
 %else
     /bin/systemctl daemon-reload >/dev/null 2>&1 || :
-    if [ "$1" -ge "1" ] ; then
-        # Package upgrade, not uninstall
-        /bin/systemctl try-restart ovn-controller-vtep.service >/dev/null 2>&1 || :
-    fi
 %endif
 
 %postun selinux-policy
