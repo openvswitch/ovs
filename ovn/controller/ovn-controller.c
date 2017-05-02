@@ -64,7 +64,8 @@ static unixctl_cb_func inject_pkt;
 #define DEFAULT_BRIDGE_NAME "br-int"
 #define DEFAULT_PROBE_INTERVAL_MSEC 5000
 
-static void update_probe_interval(struct controller_ctx *);
+static void update_probe_interval(struct controller_ctx *,
+                                  const char *ovnsb_remote);
 static void parse_options(int argc, char *argv[]);
 OVS_NO_RETURN static void usage(void);
 
@@ -599,7 +600,7 @@ main(int argc, char *argv[])
             .ovnsb_idl_txn = ovsdb_idl_loop_run(&ovnsb_idl_loop),
         };
 
-        update_probe_interval(&ctx);
+        update_probe_interval(&ctx, ovnsb_remote);
 
         update_ssl_config(ctx.ovs_idl);
 
@@ -930,14 +931,21 @@ inject_pkt(struct unixctl_conn *conn, int argc OVS_UNUSED,
 /* Get the desired SB probe timer from the OVS database and configure it into
  * the SB database. */
 static void
-update_probe_interval(struct controller_ctx *ctx)
+update_probe_interval(struct controller_ctx *ctx, const char *ovnsb_remote)
 {
     const struct ovsrec_open_vswitch *cfg
         = ovsrec_open_vswitch_first(ctx->ovs_idl);
-    int interval = (cfg
-                    ? smap_get_int(&cfg->external_ids,
-                                   "ovn-remote-probe-interval",
-                                   DEFAULT_PROBE_INTERVAL_MSEC)
-                    : DEFAULT_PROBE_INTERVAL_MSEC);
+    int interval = -1;
+    if (cfg) {
+        interval = smap_get_int(&cfg->external_ids,
+                                "ovn-remote-probe-interval",
+                                -1);
+    }
+    if (interval == -1) {
+        interval = stream_or_pstream_needs_probes(ovnsb_remote)
+                   ? DEFAULT_PROBE_INTERVAL_MSEC
+                   : 0;
+    }
+
     ovsdb_idl_set_probe_interval(ctx->ovnsb_idl, interval);
 }
