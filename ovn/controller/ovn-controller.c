@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2016 Nicira, Inc.
+/* Copyright (c) 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -134,7 +134,7 @@ update_sb_monitors(struct ovsdb_idl *ovnsb_idl,
 {
     /* Monitor Port_Bindings rows for local interfaces and local datapaths.
      *
-     * Monitor Logical_Flow, MAC_Binding, and Multicast_Group tables for
+     * Monitor Logical_Flow, MAC_Binding, Multicast_Group, and DNS tables for
      * local datapaths.
      *
      * We always monitor patch ports because they allow us to see the linkages
@@ -145,6 +145,7 @@ update_sb_monitors(struct ovsdb_idl *ovnsb_idl,
     struct ovsdb_idl_condition lf = OVSDB_IDL_CONDITION_INIT(&lf);
     struct ovsdb_idl_condition mb = OVSDB_IDL_CONDITION_INIT(&mb);
     struct ovsdb_idl_condition mg = OVSDB_IDL_CONDITION_INIT(&mg);
+    struct ovsdb_idl_condition dns = OVSDB_IDL_CONDITION_INIT(&dns);
     sbrec_port_binding_add_clause_type(&pb, OVSDB_F_EQ, "patch");
     if (chassis) {
         /* This should be mostly redundant with the other clauses for port
@@ -177,22 +178,26 @@ update_sb_monitors(struct ovsdb_idl *ovnsb_idl,
     if (local_datapaths) {
         const struct local_datapath *ld;
         HMAP_FOR_EACH (ld, hmap_node, local_datapaths) {
-            const struct uuid *uuid = &ld->datapath->header_.uuid;
+            struct uuid *uuid = CONST_CAST(struct uuid *,
+                                           &ld->datapath->header_.uuid);
             sbrec_port_binding_add_clause_datapath(&pb, OVSDB_F_EQ, uuid);
             sbrec_logical_flow_add_clause_logical_datapath(&lf, OVSDB_F_EQ,
                                                            uuid);
             sbrec_mac_binding_add_clause_datapath(&mb, OVSDB_F_EQ, uuid);
             sbrec_multicast_group_add_clause_datapath(&mg, OVSDB_F_EQ, uuid);
+            sbrec_dns_add_clause_datapaths(&dns, OVSDB_F_INCLUDES, &uuid, 1);
         }
     }
     sbrec_port_binding_set_condition(ovnsb_idl, &pb);
     sbrec_logical_flow_set_condition(ovnsb_idl, &lf);
     sbrec_mac_binding_set_condition(ovnsb_idl, &mb);
     sbrec_multicast_group_set_condition(ovnsb_idl, &mg);
+    sbrec_dns_set_condition(ovnsb_idl, &dns);
     ovsdb_idl_condition_destroy(&pb);
     ovsdb_idl_condition_destroy(&lf);
     ovsdb_idl_condition_destroy(&mb);
     ovsdb_idl_condition_destroy(&mg);
+    ovsdb_idl_condition_destroy(&dns);
 }
 
 static const struct ovsrec_bridge *
