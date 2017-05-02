@@ -29,6 +29,8 @@ dummy@ovs-dummy: hit:0 missed:0
 		p2 2/2: (dummy)
 ])
 
+ovs-appctl time/stop
+
 # Send IGMPv3 query on p2 with vlan 1725
 # 5c:8a:38:55:25:52 > 01:00:5e:00:00:01, ethertype 802.1Q (0x8100), length 64: vlan 1725, p 0, ethertype IPv4,
 # 172.17.25.1 > 224.0.0.1: igmp query v3
