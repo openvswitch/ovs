@@ -859,10 +859,12 @@ static int ovs_ct_nat(struct net *net, struct sw_flow_key *key,
 	enum nf_nat_manip_type maniptype;
 	int err;
 
+#ifdef HAVE_NF_CT_IS_UNTRACKED
 	if (nf_ct_is_untracked(ct)) {
 		/* A NAT action may only be performed on tracked packets. */
 		return NF_ACCEPT;
 	}
+#endif /* HAVE_NF_CT_IS_UNTRACKED */
 
 	/* Add NAT extension if not confirmed yet. */
 	if (!nf_ct_is_confirmed(ct) && !nf_ct_nat_ext_add(ct))
