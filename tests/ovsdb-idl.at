@@ -1183,6 +1183,7 @@ m4_define([OVSDB_CHECK_IDL_NOTIFY_PY],
 # This test uses the Python IDL implementation with ssl
 m4_define([OVSDB_CHECK_IDL_NOTIFY_SSL_PY],
   [AT_SETUP([$1 - SSL])
+   AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
    AT_SKIP_IF([test $HAVE_PYTHON = no])
    $PYTHON -m OpenSSL.SSL
    SSL_PRESENT=$?
