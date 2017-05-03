@@ -257,7 +257,7 @@ struct ctl_row_id {
 };
 
 struct ctl_table_class {
-    struct ctl_row_id row_ids[2];
+    struct ctl_row_id row_ids[4];
 };
 
 void ctl_set_column(const char *table_name,

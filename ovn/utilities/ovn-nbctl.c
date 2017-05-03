@@ -3073,6 +3073,16 @@ cmd_set_ssl(struct ctl_context *ctx)
 }
 
 static const struct ctl_table_class tables[NBREC_N_TABLES] = {
+    [NBREC_TABLE_DHCP_OPTIONS].row_ids
+    = {{&nbrec_logical_switch_port_col_name, NULL,
+        &nbrec_logical_switch_port_col_dhcpv4_options},
+       {&nbrec_logical_switch_port_col_external_ids,
+        "neutron:port_name", &nbrec_logical_switch_port_col_dhcpv4_options},
+       {&nbrec_logical_switch_port_col_name, NULL,
+        &nbrec_logical_switch_port_col_dhcpv6_options},
+       {&nbrec_logical_switch_port_col_external_ids,
+        "neutron:port_name", &nbrec_logical_switch_port_col_dhcpv6_options}},
+
     [NBREC_TABLE_LOGICAL_SWITCH].row_ids
     = {{&nbrec_logical_switch_col_name, NULL, NULL},
        {&nbrec_logical_switch_col_external_ids, "neutron:network_name", NULL}},
