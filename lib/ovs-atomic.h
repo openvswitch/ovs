@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2013, 2014, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -325,6 +325,8 @@
         #include "ovs-atomic-clang.h"
     #elif HAVE_STDATOMIC_H
         #include "ovs-atomic-c11.h"
+    #elif __GNUC__ >= 5
+        #error "GCC 5+ should have <stdatomic.h>"
     #elif __GNUC__ >= 4 && __GNUC_MINOR__ >= 7
         #include "ovs-atomic-gcc4.7+.h"
     #elif __GNUC__ && defined(__x86_64__)
