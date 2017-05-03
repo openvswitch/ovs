@@ -24,6 +24,7 @@ DOC_SOURCE = \
 	Documentation/intro/install/xenserver.rst \
 	Documentation/tutorials/index.rst \
 	Documentation/tutorials/ovs-advanced.rst \
+	Documentation/tutorials/ovn-openstack.rst \
 	Documentation/tutorials/ovn-sandbox.rst \
 	Documentation/topics/index.rst \
 	Documentation/topics/bonding.rst \

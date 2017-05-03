@@ -41,3 +41,4 @@ vSwitch.
 
    ovs-advanced
    ovn-sandbox
+   ovn-openstack
