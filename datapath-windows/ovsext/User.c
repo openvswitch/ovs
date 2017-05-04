@@ -787,7 +787,7 @@ OvsCreateAndAddPackets(PVOID userData,
         if (tsoInfo.LsoV1Transmit.MSS) {
             OVS_LOG_TRACE("l4Offset %d", hdrInfo->l4Offset);
             newNbl = OvsTcpSegmentNBL(switchContext, nbl, hdrInfo,
-                    tsoInfo.LsoV1Transmit.MSS , 0);
+                                      tsoInfo.LsoV1Transmit.MSS , 0, FALSE);
             if (newNbl == NULL) {
                 return NDIS_STATUS_FAILURE;
             }

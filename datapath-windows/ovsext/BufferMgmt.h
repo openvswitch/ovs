@@ -116,7 +116,15 @@ PNET_BUFFER_LIST OvsTcpSegmentNBL(PVOID context,
                                   PNET_BUFFER_LIST nbl,
                                   POVS_PACKET_HDR_INFO hdrInfo,
                                   UINT32 MSS,
-                                  UINT32 headRoom);
+                                  UINT32 headRoom,
+                                  BOOLEAN isIpFragment);
+
+PNET_BUFFER_LIST OvsFragmentNBL(PVOID context,
+                                PNET_BUFFER_LIST nbl,
+                                POVS_PACKET_HDR_INFO hdrInfo,
+                                UINT32 MSS,
+                                UINT32 headRoom,
+                                BOOLEAN isIpFragment);
 
 PNET_BUFFER_LIST OvsAllocateNBLFromBuffer(PVOID context,
                                           PVOID buffer,

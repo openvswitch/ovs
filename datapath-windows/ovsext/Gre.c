@@ -158,7 +158,7 @@ OvsDoEncapGre(POVS_VPORT_ENTRY vport,
         if (mss) {
             OVS_LOG_TRACE("l4Offset %d", layers->l4Offset);
             *newNbl = OvsTcpSegmentNBL(switchContext, curNbl, layers,
-                                       mss, headRoom);
+                                       mss, headRoom, FALSE);
             if (*newNbl == NULL) {
                 OVS_LOG_ERROR("Unable to segment NBL");
                 return NDIS_STATUS_FAILURE;
