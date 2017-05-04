@@ -1975,12 +1975,29 @@ OvsDoExecuteActions(POVS_SWITCH_CONTEXT switchContext,
                 }
             }
 
+            PNET_BUFFER_LIST oldNbl = ovsFwdCtx.curNbl;
             status = OvsExecuteConntrackAction(&ovsFwdCtx, key,
                                                (const PNL_ATTR)a);
             if (status != NDIS_STATUS_SUCCESS) {
-                OVS_LOG_ERROR("CT Action failed");
-                dropReason = L"OVS-conntrack action failed";
+                /* Pending NBLs are consumed by Defragmentation. */
+                if (status != NDIS_STATUS_PENDING) {
+                    OVS_LOG_ERROR("CT Action failed");
+                    dropReason = L"OVS-conntrack action failed";
+                }
                 goto dropit;
+            } else if (oldNbl != ovsFwdCtx.curNbl) {
+               /*
+                * OvsIpv4Reassemble consumes the original NBL and creates a
+                * new one and assigns it to the curNbl of ovsFwdCtx.
+                */
+               OvsInitForwardingCtx(&ovsFwdCtx,
+                                    ovsFwdCtx.switchContext,
+                                    ovsFwdCtx.curNbl,
+                                    ovsFwdCtx.srcVportNo,
+                                    ovsFwdCtx.sendFlags,
+                                    NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(ovsFwdCtx.curNbl),
+                                    ovsFwdCtx.completionList,
+                                    &ovsFwdCtx.layers, FALSE);
             }
             break;
         }

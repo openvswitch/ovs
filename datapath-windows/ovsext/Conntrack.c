@@ -15,6 +15,7 @@
  */
 
 #include "Conntrack.h"
+#include "IpFragment.h"
 #include "Jhash.h"
 #include "PacketParser.h"
 #include "Event.h"
@@ -317,13 +318,20 @@ OvsCtEntryExpired(POVS_CT_ENTRY entry)
 }
 
 static __inline NDIS_STATUS
-OvsDetectCtPacket(OvsFlowKey *key)
+OvsDetectCtPacket(OvsForwardingContext *fwdCtx,
+                  OvsFlowKey *key,
+                  PNET_BUFFER_LIST *newNbl)
 {
     /* Currently we support only Unfragmented TCP packets */
     switch (ntohs(key->l2.dlType)) {
     case ETH_TYPE_IPV4:
         if (key->ipKey.nwFrag != OVS_FRAG_TYPE_NONE) {
-            return NDIS_STATUS_NOT_SUPPORTED;
+            return OvsProcessIpv4Fragment(fwdCtx->switchContext,
+                                          &fwdCtx->curNbl,
+                                          fwdCtx->completionList,
+                                          fwdCtx->fwdDetail->SourcePortId,
+                                          key->tunKey.tunnelId,
+                                          newNbl);
         }
         if (key->ipKey.nwProto == IPPROTO_TCP
             || key->ipKey.nwProto == IPPROTO_UDP
@@ -707,6 +715,7 @@ OvsCtExecute_(PNET_BUFFER_LIST curNbl,
  *---------------------------------------------------------------------------
  * OvsExecuteConntrackAction
  *     Executes Conntrack actions XXX - Add more
+ *     For the Ipv4 fragments, consume the orginal fragment NBL
  *---------------------------------------------------------------------------
  */
 NDIS_STATUS
@@ -723,10 +732,10 @@ OvsExecuteConntrackAction(OvsForwardingContext *fwdCtx,
     PCHAR helper = NULL;
     PNET_BUFFER_LIST curNbl = fwdCtx->curNbl;
     OVS_PACKET_HDR_INFO *layers = &fwdCtx->layers;
-
+    PNET_BUFFER_LIST newNbl = NULL;
     NDIS_STATUS status;
 
-    status = OvsDetectCtPacket(key);
+    status = OvsDetectCtPacket(fwdCtx, key, &newNbl);
     if (status != NDIS_STATUS_SUCCESS) {
         return status;
     }
@@ -765,9 +774,9 @@ OvsExecuteConntrackAction(OvsForwardingContext *fwdCtx,
         /* Force implicitly means commit */
         commit = TRUE;
     }
-
-    status = OvsCtExecute_(curNbl, key, layers, commit, force,
-                           zone, mark, labels, helper);
+    /* If newNbl is not allocated, use the current Nbl*/
+    status = OvsCtExecute_(newNbl != NULL ? newNbl : curNbl, key, layers,
+                           commit, force, zone, mark, labels, helper);
     return status;
 }
 
