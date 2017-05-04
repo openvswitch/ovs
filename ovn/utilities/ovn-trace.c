@@ -352,6 +352,7 @@ struct ovntrace_datapath {
 
 struct ovntrace_port {
     struct ovntrace_datapath *dp;
+    struct uuid uuid;
     char *name;
     char *type;
     uint16_t tunnel_key;
@@ -429,19 +430,25 @@ ovntrace_datapath_find_by_sb_uuid(const struct uuid *sb_uuid)
 static const struct ovntrace_datapath *
 ovntrace_datapath_find_by_name(const char *name)
 {
-    struct uuid uuid;
-    bool is_uuid = uuid_from_string(&uuid, name);
-
     struct ovntrace_datapath *dp;
     HMAP_FOR_EACH (dp, sb_uuid_node, &datapaths) {
-        if (!strcmp(name, dp->name)
-            || (is_uuid
-                && (uuid_equals(&uuid, &dp->sb_uuid) ||
-                    uuid_equals(&uuid, &dp->nb_uuid)))) {
+        if (!strcmp(name, dp->name)) {
             return dp;
         }
     }
-    return NULL;
+
+    struct ovntrace_datapath *match = NULL;
+    HMAP_FOR_EACH (dp, sb_uuid_node, &datapaths) {
+        if (uuid_is_partial_match(&dp->sb_uuid, name) >= 4 ||
+            uuid_is_partial_match(&dp->nb_uuid, name) >= 4) {
+            if (match) {
+                VLOG_WARN("name \"%s\" matches multiple datapaths", name);
+                return NULL;
+            }
+            match = dp;
+        }
+    }
+    return match;
 }
 
 static const struct ovntrace_port *
@@ -558,6 +565,7 @@ read_ports(void)
             continue;
         }
         port->dp = dp;
+        port->uuid = sbpb->header_.uuid;
         port->name = xstrdup(port_name);
         port->type = xstrdup(sbpb->type);
         port->tunnel_key = sbpb->tunnel_key;
@@ -865,6 +873,35 @@ read_db(void)
     read_mac_bindings();
 }
 
+static const struct ovntrace_port *
+ovntrace_port_lookup_by_name(const char *name)
+{
+    const struct ovntrace_port *port = shash_find_data(&ports, name);
+    if (port) {
+        return port;
+    }
+
+    const struct ovntrace_port *match = NULL;
+    if (uuid_is_partial_string(name) >= 4) {
+        struct shash_node *node;
+        SHASH_FOR_EACH (node, &ports) {
+            const struct ovntrace_port *port = node->data;
+
+            struct uuid name_uuid;
+            if (uuid_is_partial_match(&port->uuid, name)
+                || (uuid_from_string(&name_uuid, port->name)
+                    && uuid_is_partial_match(&name_uuid, name))) {
+                if (match) {
+                    VLOG_WARN("name \"%s\" matches multiple ports", name);
+                    return NULL;
+                }
+                match = port;
+            }
+        }
+    }
+    return match;
+}
+
 static bool
 ovntrace_lookup_port(const void *dp_, const char *port_name,
                      unsigned int *portp)
@@ -876,7 +913,7 @@ ovntrace_lookup_port(const void *dp_, const char *port_name,
         return true;
     }
 
-    const struct ovntrace_port *port = shash_find_data(&ports, port_name);
+    const struct ovntrace_port *port = ovntrace_port_lookup_by_name(port_name);
     if (port) {
         if (port->dp == dp) {
             *portp = port->tunnel_key;
