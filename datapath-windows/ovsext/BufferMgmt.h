@@ -58,9 +58,10 @@ typedef union _OVS_BUFFER_CONTEXT {
             UINT32 origDataLength;
             UINT32 dataOffsetDelta;
         };
+        UINT16 mru;
     };
 
-    UINT64 value[MEM_ALIGN_SIZE(16) >> 3];
+    UINT64 value[MEM_ALIGN_SIZE(32) >> 3];
 } OVS_BUFFER_CONTEXT, *POVS_BUFFER_CONTEXT;
 
 typedef struct _OVS_NBL_POOL {

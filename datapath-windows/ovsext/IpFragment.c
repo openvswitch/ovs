@@ -211,6 +211,8 @@ OvsIpv4Reassemble(POVS_SWITCH_CONTEXT switchContext,
         OvsCompleteNBL(switchContext, *curNbl, TRUE);
     }
     /* Store mru in the ovs buffer context. */
+    ctx = (POVS_BUFFER_CONTEXT)NET_BUFFER_LIST_CONTEXT_DATA_START(*newNbl);
+    ctx->mru = entry->mru;
     *curNbl = *newNbl;
     return status;
 }

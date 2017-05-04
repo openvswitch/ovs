@@ -266,6 +266,7 @@ OvsInitNBLContext(POVS_BUFFER_CONTEXT ctx,
     ctx->flags = flags;
     ctx->srcPortNo = srcPortNo;
     ctx->origDataLength = origDataLength;
+    ctx->mru = 0;
 }
 
 

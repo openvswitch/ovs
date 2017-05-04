@@ -298,7 +298,7 @@ typedef struct _OVS_PACKET_INFO {
 typedef struct OvsPacketExecute {
    uint32_t dpNo;
    uint32_t inPort;
-
+   uint16 mru;
    uint32_t packetLen;
    uint32_t actionsLen;
    PNL_MSG_HDR nlMsgHdr;
