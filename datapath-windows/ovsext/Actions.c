@@ -34,6 +34,7 @@
 #include "Vport.h"
 #include "Vxlan.h"
 #include "Geneve.h"
+#include "IpFragment.h"
 
 #ifdef OVS_DBG_MOD
 #undef OVS_DBG_MOD
@@ -140,6 +141,36 @@ OvsInitForwardingCtx(OvsForwardingContext *ovsFwdCtx,
     }
 
     return NDIS_STATUS_SUCCESS;
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * OvsDoFragmentNbl --
+ *     Utility function to Fragment nbl based on mru.
+ * --------------------------------------------------------------------------
+ */
+static __inline VOID
+OvsDoFragmentNbl(OvsForwardingContext *ovsFwdCtx, UINT16 mru)
+{
+    PNET_BUFFER_LIST fragNbl = NULL;
+    fragNbl = OvsFragmentNBL(ovsFwdCtx->switchContext,
+                             ovsFwdCtx->curNbl,
+                             &(ovsFwdCtx->layers),
+                             mru, 0, TRUE);
+
+   if (fragNbl != NULL) {
+        OvsCompleteNBL(ovsFwdCtx->switchContext, ovsFwdCtx->curNbl, TRUE);
+        OvsInitForwardingCtx(ovsFwdCtx,
+                            ovsFwdCtx->switchContext,
+                             fragNbl,
+                             ovsFwdCtx->srcVportNo,
+                             ovsFwdCtx->sendFlags,
+                             NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(fragNbl),
+                             ovsFwdCtx->completionList,
+                             &ovsFwdCtx->layers, FALSE);
+    } else {
+        OVS_LOG_INFO("Fragment NBL failed for MRU = %u", mru);
+    }
 }
 
 /*
@@ -604,6 +635,7 @@ OvsTunnelPortTx(OvsForwardingContext *ovsFwdCtx)
     UINT32 srcVportNo;
     NDIS_SWITCH_NIC_INDEX srcNicIndex;
     NDIS_SWITCH_PORT_ID srcPortId;
+    POVS_BUFFER_CONTEXT ctx;
 
     /*
      * Setup the source port to be the internal port to as to facilitate the
@@ -617,6 +649,10 @@ OvsTunnelPortTx(OvsForwardingContext *ovsFwdCtx)
         return NDIS_STATUS_FAILURE;
     }
 
+    ctx = (POVS_BUFFER_CONTEXT)NET_BUFFER_LIST_CONTEXT_DATA_START(ovsFwdCtx->curNbl);
+    if (ctx->mru != 0) {
+        OvsDoFragmentNbl(ovsFwdCtx, ctx->mru);
+    }
     OVS_FWD_INFO switchFwdInfo = { 0 };
     /* Apply the encapsulation. The encapsulation will not consume the NBL. */
     switch(ovsFwdCtx->tunnelTxNic->ovsType) {
@@ -807,6 +843,7 @@ OvsOutputForwardingCtx(OvsForwardingContext *ovsFwdCtx)
     NDIS_STATUS status = STATUS_SUCCESS;
     POVS_SWITCH_CONTEXT switchContext = ovsFwdCtx->switchContext;
     PCWSTR dropReason;
+    POVS_BUFFER_CONTEXT ctx;
 
     /*
      * Handle the case where the some of the destination ports are tunneled
@@ -829,8 +866,12 @@ OvsOutputForwardingCtx(OvsForwardingContext *ovsFwdCtx)
          * before doing encapsulation.
          */
         if (ovsFwdCtx->tunnelTxNic != NULL || ovsFwdCtx->tunnelRxNic != NULL) {
+            POVS_BUFFER_CONTEXT oldCtx, newCtx;
             nb = NET_BUFFER_LIST_FIRST_NB(ovsFwdCtx->curNbl);
-            newNbl = OvsPartialCopyNBL(ovsFwdCtx->switchContext, ovsFwdCtx->curNbl,
+            oldCtx = (POVS_BUFFER_CONTEXT)
+                NET_BUFFER_LIST_CONTEXT_DATA_START(ovsFwdCtx->curNbl);
+            newNbl = OvsPartialCopyNBL(ovsFwdCtx->switchContext,
+                                       ovsFwdCtx->curNbl,
                                        0, 0, TRUE /*copy NBL info*/);
             if (newNbl == NULL) {
                 status = NDIS_STATUS_RESOURCES;
@@ -838,6 +879,9 @@ OvsOutputForwardingCtx(OvsForwardingContext *ovsFwdCtx)
                 dropReason = L"Dropped due to failure to create NBL copy.";
                 goto dropit;
             }
+            newCtx = (POVS_BUFFER_CONTEXT)
+                NET_BUFFER_LIST_CONTEXT_DATA_START(newNbl);
+            newCtx->mru = oldCtx->mru;
         }
 
         /* It does not seem like we'll get here unless 'portsToUpdate' > 0. */
@@ -850,6 +894,11 @@ OvsOutputForwardingCtx(OvsForwardingContext *ovsFwdCtx)
             ovsActionStats.cannotGrowDest++;
             dropReason = L"Dropped due to failure to update destinations.";
             goto dropit;
+        }
+
+        ctx = (POVS_BUFFER_CONTEXT)NET_BUFFER_LIST_CONTEXT_DATA_START(ovsFwdCtx->curNbl);
+        if (ctx->mru != 0) {
+            OvsDoFragmentNbl(ovsFwdCtx, ctx->mru);
         }
 
         OvsSendNBLIngress(ovsFwdCtx->switchContext, ovsFwdCtx->curNbl,
