@@ -1167,7 +1167,7 @@ packet_set_nd(struct dp_packet *packet, const struct in6_addr *target,
               const struct eth_addr sll, const struct eth_addr tll)
 {
     struct ovs_nd_msg *ns;
-    struct ovs_nd_opt *nd_opt;
+    struct ovs_nd_lla_opt *opt;
     int bytes_remain = dp_packet_l4_size(packet);
 
     if (OVS_UNLIKELY(bytes_remain < sizeof(*ns))) {
@@ -1175,7 +1175,7 @@ packet_set_nd(struct dp_packet *packet, const struct in6_addr *target,
     }
 
     ns = dp_packet_l4(packet);
-    nd_opt = &ns->options[0];
+    opt = &ns->options[0];
     bytes_remain -= sizeof(*ns);
 
     if (memcmp(&ns->target, target, sizeof(ovs_be32[4]))) {
@@ -1183,33 +1183,31 @@ packet_set_nd(struct dp_packet *packet, const struct in6_addr *target,
                              true);
     }
 
-    while (bytes_remain >= ND_OPT_LEN && nd_opt->nd_opt_len != 0) {
-        if (nd_opt->nd_opt_type == ND_OPT_SOURCE_LINKADDR
-            && nd_opt->nd_opt_len == 1) {
-            if (!eth_addr_equals(nd_opt->nd_opt_mac, sll)) {
+    while (bytes_remain >= ND_LLA_OPT_LEN && opt->len != 0) {
+        if (opt->type == ND_OPT_SOURCE_LINKADDR && opt->len == 1) {
+            if (!eth_addr_equals(opt->mac, sll)) {
                 ovs_be16 *csum = &(ns->icmph.icmp6_cksum);
 
-                *csum = recalc_csum48(*csum, nd_opt->nd_opt_mac, sll);
-                nd_opt->nd_opt_mac = sll;
+                *csum = recalc_csum48(*csum, opt->mac, sll);
+                opt->mac = sll;
             }
 
             /* A packet can only contain one SLL or TLL option */
             break;
-        } else if (nd_opt->nd_opt_type == ND_OPT_TARGET_LINKADDR
-                   && nd_opt->nd_opt_len == 1) {
-            if (!eth_addr_equals(nd_opt->nd_opt_mac, tll)) {
+        } else if (opt->type == ND_OPT_TARGET_LINKADDR && opt->len == 1) {
+            if (!eth_addr_equals(opt->mac, tll)) {
                 ovs_be16 *csum = &(ns->icmph.icmp6_cksum);
 
-                *csum = recalc_csum48(*csum, nd_opt->nd_opt_mac, tll);
-                nd_opt->nd_opt_mac = tll;
+                *csum = recalc_csum48(*csum, opt->mac, tll);
+                opt->mac = tll;
             }
 
             /* A packet can only contain one SLL or TLL option */
             break;
         }
 
-        nd_opt += nd_opt->nd_opt_len;
-        bytes_remain -= nd_opt->nd_opt_len * ND_OPT_LEN;
+        opt += opt->len;
+        bytes_remain -= opt->len * ND_LLA_OPT_LEN;
     }
 }
 
@@ -1376,7 +1374,7 @@ compose_nd_ns(struct dp_packet *b, const struct eth_addr eth_src,
     struct in6_addr sn_addr;
     struct eth_addr eth_dst;
     struct ovs_nd_msg *ns;
-    struct ovs_nd_opt *nd_opt;
+    struct ovs_nd_lla_opt *lla_opt;
     uint32_t icmp_csum;
 
     in6_addr_solicited_node(&sn_addr, ipv6_dst);
@@ -1384,22 +1382,22 @@ compose_nd_ns(struct dp_packet *b, const struct eth_addr eth_src,
 
     eth_compose(b, eth_dst, eth_src, ETH_TYPE_IPV6, IPV6_HEADER_LEN);
     ns = compose_ipv6(b, IPPROTO_ICMPV6, ipv6_src, &sn_addr,
-                      0, 0, 255, ND_MSG_LEN + ND_OPT_LEN);
+                      0, 0, 255, ND_MSG_LEN + ND_LLA_OPT_LEN);
 
     ns->icmph.icmp6_type = ND_NEIGHBOR_SOLICIT;
     ns->icmph.icmp6_code = 0;
     put_16aligned_be32(&ns->rso_flags, htonl(0));
 
-    nd_opt = &ns->options[0];
-    nd_opt->nd_opt_type = ND_OPT_SOURCE_LINKADDR;
-    nd_opt->nd_opt_len = 1;
+    lla_opt = &ns->options[0];
+    lla_opt->type = ND_OPT_SOURCE_LINKADDR;
+    lla_opt->len = 1;
 
     packet_set_nd(b, ipv6_dst, eth_src, eth_addr_zero);
 
     ns->icmph.icmp6_cksum = 0;
     icmp_csum = packet_csum_pseudoheader6(dp_packet_l3(b));
-    ns->icmph.icmp6_cksum = csum_finish(csum_continue(icmp_csum, ns,
-                                                      ND_MSG_LEN + ND_OPT_LEN));
+    ns->icmph.icmp6_cksum = csum_finish(
+        csum_continue(icmp_csum, ns, ND_MSG_LEN + ND_LLA_OPT_LEN));
 }
 
 /* Compose an IPv6 Neighbor Discovery Neighbor Advertisement message. */
@@ -1410,27 +1408,27 @@ compose_nd_na(struct dp_packet *b,
               ovs_be32 rso_flags)
 {
     struct ovs_nd_msg *na;
-    struct ovs_nd_opt *nd_opt;
+    struct ovs_nd_lla_opt *lla_opt;
     uint32_t icmp_csum;
 
     eth_compose(b, eth_dst, eth_src, ETH_TYPE_IPV6, IPV6_HEADER_LEN);
     na = compose_ipv6(b, IPPROTO_ICMPV6, ipv6_src, ipv6_dst,
-                      0, 0, 255, ND_MSG_LEN + ND_OPT_LEN);
+                      0, 0, 255, ND_MSG_LEN + ND_LLA_OPT_LEN);
 
     na->icmph.icmp6_type = ND_NEIGHBOR_ADVERT;
     na->icmph.icmp6_code = 0;
     put_16aligned_be32(&na->rso_flags, rso_flags);
 
-    nd_opt = &na->options[0];
-    nd_opt->nd_opt_type = ND_OPT_TARGET_LINKADDR;
-    nd_opt->nd_opt_len = 1;
+    lla_opt = &na->options[0];
+    lla_opt->type = ND_OPT_TARGET_LINKADDR;
+    lla_opt->len = 1;
 
     packet_set_nd(b, ipv6_src, eth_addr_zero, eth_src);
 
     na->icmph.icmp6_cksum = 0;
     icmp_csum = packet_csum_pseudoheader6(dp_packet_l3(b));
-    na->icmph.icmp6_cksum = csum_finish(csum_continue(icmp_csum, na,
-                                                      ND_MSG_LEN + ND_OPT_LEN));
+    na->icmph.icmp6_cksum = csum_finish(csum_continue(
+        icmp_csum, na, ND_MSG_LEN + ND_LLA_OPT_LEN));
 }
 
 /* Compose an IPv6 Neighbor Discovery Router Advertisement message with
@@ -1454,7 +1452,7 @@ compose_nd_ra(struct dp_packet *b,
 
     struct ovs_ra_msg *ra = compose_ipv6(
         b, IPPROTO_ICMPV6, ipv6_src, ipv6_dst, 0, 0, 255,
-        RA_MSG_LEN + ND_OPT_LEN + mtu_opt_len);
+        RA_MSG_LEN + ND_LLA_OPT_LEN + mtu_opt_len);
     ra->icmph.icmp6_type = ND_ROUTER_ADVERT;
     ra->icmph.icmp6_code = 0;
     ra->cur_hop_limit = cur_hop_limit;
@@ -1463,13 +1461,13 @@ compose_nd_ra(struct dp_packet *b,
     ra->reachable_time = reachable_time;
     ra->retrans_timer = retrans_timer;
 
-    struct ovs_nd_opt *lla_opt = ra->options;
-    lla_opt->nd_opt_type = ND_OPT_SOURCE_LINKADDR;
-    lla_opt->nd_opt_len = 1;
-    lla_opt->nd_opt_mac = eth_src;
+    struct ovs_nd_lla_opt *lla_opt = ra->options;
+    lla_opt->type = ND_OPT_SOURCE_LINKADDR;
+    lla_opt->len = 1;
+    lla_opt->mac = eth_src;
 
     if (with_mtu) {
-        /* ovs_nd_mtu_opt has the same size with ovs_nd_opt. */
+        /* ovs_nd_mtu_opt has the same size with ovs_nd_lla_opt. */
         struct ovs_nd_mtu_opt *mtu_opt
             = (struct ovs_nd_mtu_opt *)(lla_opt + 1);
         mtu_opt->type = ND_OPT_MTU;
@@ -1481,7 +1479,7 @@ compose_nd_ra(struct dp_packet *b,
     ra->icmph.icmp6_cksum = 0;
     uint32_t icmp_csum = packet_csum_pseudoheader6(dp_packet_l3(b));
     ra->icmph.icmp6_cksum = csum_finish(csum_continue(
-        icmp_csum, ra, RA_MSG_LEN + ND_OPT_LEN + mtu_opt_len));
+        icmp_csum, ra, RA_MSG_LEN + ND_LLA_OPT_LEN + mtu_opt_len));
 }
 
 /* Append an IPv6 Neighbor Discovery Prefix Information option to a

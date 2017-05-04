@@ -895,13 +895,13 @@ uint16_t packet_csum_upperlayer6(const struct ovs_16aligned_ip6_hdr *,
 
 /* Neighbor Discovery option field.
  * ND options are always a multiple of 8 bytes in size. */
-#define ND_OPT_LEN 8
-struct ovs_nd_opt {
-    uint8_t  nd_opt_type;       /* One of ND_OPT_*. */
-    uint8_t  nd_opt_len;
-    struct eth_addr nd_opt_mac;
+#define ND_LLA_OPT_LEN 8
+struct ovs_nd_lla_opt {
+    uint8_t type;               /* One of ND_OPT_*_LINKADDR. */
+    uint8_t len;
+    struct eth_addr mac;
 };
-BUILD_ASSERT_DECL(ND_OPT_LEN == sizeof(struct ovs_nd_opt));
+BUILD_ASSERT_DECL(ND_LLA_OPT_LEN == sizeof(struct ovs_nd_lla_opt));
 
 /* Neighbor Discovery option: Prefix Information. */
 #define ND_PREFIX_OPT_LEN 32
@@ -937,7 +937,7 @@ struct ovs_nd_msg {
     struct icmp6_header icmph;
     ovs_16aligned_be32 rso_flags;
     union ovs_16aligned_in6_addr target;
-    struct ovs_nd_opt options[0];
+    struct ovs_nd_lla_opt options[0];
 };
 BUILD_ASSERT_DECL(ND_MSG_LEN == sizeof(struct ovs_nd_msg));
 
@@ -954,7 +954,7 @@ struct ovs_ra_msg {
     ovs_be16 router_lifetime;
     ovs_be32 reachable_time;
     ovs_be32 retrans_timer;
-    struct ovs_nd_opt options[0];
+    struct ovs_nd_lla_opt options[0];
 };
 BUILD_ASSERT_DECL(RA_MSG_LEN == sizeof(struct ovs_ra_msg));
 

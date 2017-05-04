@@ -415,8 +415,8 @@ parse_icmpv6(const void **datap, size_t *sizep, const struct icmp6_hdr *icmp,
     while (*sizep >= 8) {
         /* The minimum size of an option is 8 bytes, which also is
          * the size of Ethernet link-layer options. */
-        const struct ovs_nd_opt *nd_opt = *datap;
-        int opt_len = nd_opt->nd_opt_len * ND_OPT_LEN;
+        const struct ovs_nd_lla_opt *lla_opt = *datap;
+        int opt_len = lla_opt->len * ND_LLA_OPT_LEN;
 
         if (!opt_len || opt_len > *sizep) {
             return true;
@@ -425,17 +425,15 @@ parse_icmpv6(const void **datap, size_t *sizep, const struct icmp6_hdr *icmp,
         /* Store the link layer address if the appropriate option is
          * provided.  It is considered an error if the same link
          * layer option is specified twice. */
-        if (nd_opt->nd_opt_type == ND_OPT_SOURCE_LINKADDR
-            && opt_len == 8) {
+        if (lla_opt->type == ND_OPT_SOURCE_LINKADDR && opt_len == 8) {
             if (OVS_LIKELY(eth_addr_is_zero(arp_buf[0]))) {
-                arp_buf[0] = nd_opt->nd_opt_mac;
+                arp_buf[0] = lla_opt->mac;
             } else {
                 goto invalid;
             }
-        } else if (nd_opt->nd_opt_type == ND_OPT_TARGET_LINKADDR
-                   && opt_len == 8) {
+        } else if (lla_opt->type == ND_OPT_TARGET_LINKADDR && opt_len == 8) {
             if (OVS_LIKELY(eth_addr_is_zero(arp_buf[1]))) {
-                arp_buf[1] = nd_opt->nd_opt_mac;
+                arp_buf[1] = lla_opt->mac;
             } else {
                 goto invalid;
             }
@@ -2555,7 +2553,7 @@ flow_compose_l4(struct dp_packet *p, const struct flow *flow)
                 (icmp->icmp6_type == ND_NEIGHBOR_SOLICIT ||
                  icmp->icmp6_type == ND_NEIGHBOR_ADVERT)) {
                 struct in6_addr *nd_target;
-                struct ovs_nd_opt *nd_opt;
+                struct ovs_nd_lla_opt *lla_opt;
 
                 l4_len += sizeof *nd_target;
                 nd_target = dp_packet_put_zeros(p, sizeof *nd_target);
@@ -2563,17 +2561,17 @@ flow_compose_l4(struct dp_packet *p, const struct flow *flow)
 
                 if (!eth_addr_is_zero(flow->arp_sha)) {
                     l4_len += 8;
-                    nd_opt = dp_packet_put_zeros(p, 8);
-                    nd_opt->nd_opt_len = 1;
-                    nd_opt->nd_opt_type = ND_OPT_SOURCE_LINKADDR;
-                    nd_opt->nd_opt_mac = flow->arp_sha;
+                    lla_opt = dp_packet_put_zeros(p, 8);
+                    lla_opt->len = 1;
+                    lla_opt->type = ND_OPT_SOURCE_LINKADDR;
+                    lla_opt->mac = flow->arp_sha;
                 }
                 if (!eth_addr_is_zero(flow->arp_tha)) {
                     l4_len += 8;
-                    nd_opt = dp_packet_put_zeros(p, 8);
-                    nd_opt->nd_opt_len = 1;
-                    nd_opt->nd_opt_type = ND_OPT_TARGET_LINKADDR;
-                    nd_opt->nd_opt_mac = flow->arp_tha;
+                    lla_opt = dp_packet_put_zeros(p, 8);
+                    lla_opt->len = 1;
+                    lla_opt->type = ND_OPT_TARGET_LINKADDR;
+                    lla_opt->mac = flow->arp_tha;
                 }
             }
         }
