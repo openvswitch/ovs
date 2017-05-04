@@ -62,7 +62,8 @@ vSwitch? Start here.
   :doc:`Installation FAQs <faq/releases>`
 
 - **Tutorials:** :doc:`tutorials/ovs-advanced` |
-  :doc:`tutorials/ovn-sandbox`
+  :doc:`tutorials/ovn-sandbox` |
+  :doc:`tutorials/ovn-openstack`
 
 Deeper Dive
 -----------
