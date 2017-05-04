@@ -42,8 +42,9 @@
 #define OVS_DBG_STT      BIT32(22)
 #define OVS_DBG_CONTRK   BIT32(23)
 #define OVS_DBG_GENEVE   BIT32(24)
+#define OVS_DBG_IPFRAG   BIT32(25)
 
-#define OVS_DBG_LAST     24  /* Set this to the last defined module number. */
+#define OVS_DBG_LAST     25  /* Set this to the last defined module number. */
 /* Please add above OVS_DBG_LAST. */
 
 #define OVS_DBG_ERROR    DPFLTR_ERROR_LEVEL

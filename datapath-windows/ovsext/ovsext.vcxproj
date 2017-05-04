@@ -112,6 +112,7 @@
     <ClInclude Include="Flow.h" />
     <ClInclude Include="Geneve.h" />
     <ClInclude Include="Gre.h" />
+    <ClInclude Include="IpFragment.h" />
     <ClInclude Include="IpHelper.h" />
     <ClInclude Include="Jhash.h" />
     <ClInclude Include="Mpls.h" />
@@ -268,6 +269,7 @@
     <ClCompile Include="Flow.c" />
     <ClCompile Include="Geneve.c" />
     <ClCompile Include="Gre.c" />
+    <ClCompile Include="IpFragment.c" />
     <ClCompile Include="IpHelper.c" />
     <ClCompile Include="Jhash.c" />
     <ClCompile Include="Netlink/Netlink.c" />

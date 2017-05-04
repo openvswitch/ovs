@@ -32,6 +32,8 @@ EXTRA_DIST += \
 	datapath-windows/ovsext/Flow.h \
 	datapath-windows/ovsext/Gre.h \
 	datapath-windows/ovsext/Gre.c \
+	datapath-windows/ovsext/IpFragment.c \
+	datapath-windows/ovsext/IpFragment.h \
 	datapath-windows/ovsext/IpHelper.c \
 	datapath-windows/ovsext/IpHelper.h \
 	datapath-windows/ovsext/Jhash.c \

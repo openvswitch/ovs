@@ -27,6 +27,7 @@
 #include "Flow.h"
 #include "IpHelper.h"
 #include "Oid.h"
+#include "IpFragment.h"
 
 #ifdef OVS_DBG_MOD
 #undef OVS_DBG_MOD
@@ -229,6 +230,12 @@ OvsCreateSwitch(NDIS_HANDLE ndisFilterHandle,
     if (status != STATUS_SUCCESS) {
         OvsUninitSwitchContext(switchContext);
         OVS_LOG_ERROR("Exit: Failed to initialize Connection tracking");
+    }
+
+    status = OvsInitIpFragment(switchContext);
+    if (status != STATUS_SUCCESS) {
+        OvsUninitSwitchContext(switchContext);
+        OVS_LOG_ERROR("Exit: Failed to initialize Ip Fragment");
         goto create_switch_done;
     }
 
@@ -265,6 +272,8 @@ OvsExtDetach(NDIS_HANDLE filterModuleContext)
     OvsCleanupSttDefragmentation();
     OvsCleanupConntrack();
     OvsCleanupCtRelated();
+    OvsCleanupIpFragment();
+
     /* This completes the cleanup, and a new attach can be handled now. */
 
     OVS_LOG_TRACE("Exit: OvsDetach Successfully");
