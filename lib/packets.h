@@ -897,11 +897,38 @@ uint16_t packet_csum_upperlayer6(const struct ovs_16aligned_ip6_hdr *,
  * ND options are always a multiple of 8 bytes in size. */
 #define ND_OPT_LEN 8
 struct ovs_nd_opt {
-    uint8_t  nd_opt_type;      /* Values defined in icmp6.h */
-    uint8_t  nd_opt_len;       /* in units of 8 octets (the size of this struct) */
-    struct eth_addr nd_opt_mac;   /* Ethernet address in the case of SLL or TLL options */
+    uint8_t  nd_opt_type;       /* One of ND_OPT_*. */
+    uint8_t  nd_opt_len;
+    struct eth_addr nd_opt_mac;
 };
 BUILD_ASSERT_DECL(ND_OPT_LEN == sizeof(struct ovs_nd_opt));
+
+/* Neighbor Discovery option: Prefix Information. */
+#define ND_PREFIX_OPT_LEN 32
+struct ovs_nd_prefix_opt {
+    uint8_t type;               /* ND_OPT_PREFIX_INFORMATION. */
+    uint8_t len;                /* Always 4. */
+    uint8_t prefix_len;
+    uint8_t la_flags;           /* ND_PREFIX_* flags. */
+    ovs_16aligned_be32 valid_lifetime;
+    ovs_16aligned_be32 preferred_lifetime;
+    ovs_16aligned_be32 reserved;          /* Always 0. */
+    union ovs_16aligned_in6_addr prefix;
+};
+BUILD_ASSERT_DECL(ND_PREFIX_OPT_LEN == sizeof(struct ovs_nd_prefix_opt));
+
+#define ND_PREFIX_ON_LINK            0x80
+#define ND_PREFIX_AUTONOMOUS_ADDRESS 0x40
+
+/* Neighbor Discovery option: MTU. */
+#define ND_MTU_OPT_LEN 8
+struct ovs_nd_mtu_opt {
+    uint8_t  type;      /* ND_OPT_MTU */
+    uint8_t  len;       /* Always 1. */
+    ovs_be16 reserved;  /* Always 0. */
+    ovs_16aligned_be32 mtu;
+};
+BUILD_ASSERT_DECL(ND_MTU_OPT_LEN == sizeof(struct ovs_nd_mtu_opt));
 
 /* Like struct nd_msg (from ndisc.h), but whereas that struct requires 32-bit
  * alignment, this one only requires 16-bit alignment. */
@@ -914,9 +941,25 @@ struct ovs_nd_msg {
 };
 BUILD_ASSERT_DECL(ND_MSG_LEN == sizeof(struct ovs_nd_msg));
 
+/* Neighbor Discovery packet flags. */
 #define ND_RSO_ROUTER    0x80000000
 #define ND_RSO_SOLICITED 0x40000000
 #define ND_RSO_OVERRIDE  0x20000000
+
+#define RA_MSG_LEN 16
+struct ovs_ra_msg {
+    struct icmp6_header icmph;
+    uint8_t cur_hop_limit;
+    uint8_t mo_flags;  /* ND_RA_MANAGED_ADDRESS and ND_RA_OTHER_CONFIG flags. */
+    ovs_be16 router_lifetime;
+    ovs_be32 reachable_time;
+    ovs_be32 retrans_timer;
+    struct ovs_nd_opt options[0];
+};
+BUILD_ASSERT_DECL(RA_MSG_LEN == sizeof(struct ovs_ra_msg));
+
+#define ND_RA_MANAGED_ADDRESS 0x80
+#define ND_RA_OTHER_CONFIG    0x40
 
 /*
  * Use the same struct for MLD and MLD2, naming members as the defined fields in
@@ -971,6 +1014,10 @@ extern const struct in6_addr in6addr_exact;
 extern const struct in6_addr in6addr_all_hosts;
 #define IN6ADDR_ALL_HOSTS_INIT { { { 0xff,0x02,0x00,0x00,0x00,0x00,0x00,0x00, \
                                      0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x01 } } }
+
+extern const struct in6_addr in6addr_all_routers;
+#define IN6ADDR_ALL_ROUTERS_INIT { { { 0xff,0x02,0x00,0x00,0x00,0x00,0x00,0x00, \
+                                       0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02 } } }
 
 static inline bool ipv6_addr_equals(const struct in6_addr *a,
                                     const struct in6_addr *b)
@@ -1234,6 +1281,19 @@ void compose_nd_na(struct dp_packet *, const struct eth_addr eth_src,
                    const struct in6_addr *ipv6_src,
                    const struct in6_addr *ipv6_dst,
                    ovs_be32 rso_flags);
+void compose_nd_ra(struct dp_packet *,
+                   const struct eth_addr eth_src,
+                   const struct eth_addr eth_dst,
+                   const struct in6_addr *ipv6_src,
+                   const struct in6_addr *ipv6_dst,
+                   uint8_t cur_hop_limit, uint8_t mo_flags,
+                   ovs_be16 router_lt, ovs_be32 reachable_time,
+                   ovs_be32 retrans_timer, ovs_be32 mtu);
+void packet_put_ra_prefix_opt(struct dp_packet *,
+                              uint8_t plen, uint8_t la_flags,
+                              ovs_be32 valid_lifetime,
+                              ovs_be32 preferred_lifetime,
+                              const ovs_be128 router_prefix);
 uint32_t packet_csum_pseudoheader(const struct ip_header *);
 void IP_ECN_set_ce(struct dp_packet *pkt, bool is_ipv6);
 

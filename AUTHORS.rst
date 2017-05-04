@@ -325,6 +325,7 @@ Yuanhan Liu                     yuanhan.liu@linux.intel.com
 ZhengLingyun                    konghuarukhr@163.com
 Zoltán Balogh                   zoltan.balogh@ericsson.com
 Zoltan Kiss                     zoltan.kiss@citrix.com
+Zongkai LI                      zealokii@gmail.com
 Zhi Yong Wu                     zwu.kernel@gmail.com
 Zang MingJie                    zealot0630@gmail.com
 nickcooper-zhangtonghao         nickcooper-zhangtonghao@opencloud.tech

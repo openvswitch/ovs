@@ -35,6 +35,7 @@
 
 const struct in6_addr in6addr_exact = IN6ADDR_EXACT_INIT;
 const struct in6_addr in6addr_all_hosts = IN6ADDR_ALL_HOSTS_INIT;
+const struct in6_addr in6addr_all_routers = IN6ADDR_ALL_ROUTERS_INIT;
 
 struct in6_addr
 flow_tnl_dst(const struct flow_tnl *tnl)
@@ -1430,6 +1431,86 @@ compose_nd_na(struct dp_packet *b,
     icmp_csum = packet_csum_pseudoheader6(dp_packet_l3(b));
     na->icmph.icmp6_cksum = csum_finish(csum_continue(icmp_csum, na,
                                                       ND_MSG_LEN + ND_OPT_LEN));
+}
+
+/* Compose an IPv6 Neighbor Discovery Router Advertisement message with
+ * Source Link-layer Address Option and MTU Option.
+ * Caller can call packet_put_ra_prefix_opt to append Prefix Information
+ * Options to composed messags in 'b'. */
+void
+compose_nd_ra(struct dp_packet *b,
+              const struct eth_addr eth_src, const struct eth_addr eth_dst,
+              const struct in6_addr *ipv6_src, const struct in6_addr *ipv6_dst,
+              uint8_t cur_hop_limit, uint8_t mo_flags,
+              ovs_be16 router_lt, ovs_be32 reachable_time,
+              ovs_be32 retrans_timer, ovs_be32 mtu)
+{
+    /* Don't compose Router Advertisement packet with MTU Option if mtu
+     * value is 0. */
+    bool with_mtu = mtu != 0;
+    size_t mtu_opt_len = with_mtu ? ND_MTU_OPT_LEN : 0;
+
+    eth_compose(b, eth_dst, eth_src, ETH_TYPE_IPV6, IPV6_HEADER_LEN);
+
+    struct ovs_ra_msg *ra = compose_ipv6(
+        b, IPPROTO_ICMPV6, ipv6_src, ipv6_dst, 0, 0, 255,
+        RA_MSG_LEN + ND_OPT_LEN + mtu_opt_len);
+    ra->icmph.icmp6_type = ND_ROUTER_ADVERT;
+    ra->icmph.icmp6_code = 0;
+    ra->cur_hop_limit = cur_hop_limit;
+    ra->mo_flags = mo_flags;
+    ra->router_lifetime = router_lt;
+    ra->reachable_time = reachable_time;
+    ra->retrans_timer = retrans_timer;
+
+    struct ovs_nd_opt *lla_opt = ra->options;
+    lla_opt->nd_opt_type = ND_OPT_SOURCE_LINKADDR;
+    lla_opt->nd_opt_len = 1;
+    lla_opt->nd_opt_mac = eth_src;
+
+    if (with_mtu) {
+        /* ovs_nd_mtu_opt has the same size with ovs_nd_opt. */
+        struct ovs_nd_mtu_opt *mtu_opt
+            = (struct ovs_nd_mtu_opt *)(lla_opt + 1);
+        mtu_opt->type = ND_OPT_MTU;
+        mtu_opt->len = 1;
+        mtu_opt->reserved = 0;
+        put_16aligned_be32(&mtu_opt->mtu, mtu);
+    }
+
+    ra->icmph.icmp6_cksum = 0;
+    uint32_t icmp_csum = packet_csum_pseudoheader6(dp_packet_l3(b));
+    ra->icmph.icmp6_cksum = csum_finish(csum_continue(
+        icmp_csum, ra, RA_MSG_LEN + ND_OPT_LEN + mtu_opt_len));
+}
+
+/* Append an IPv6 Neighbor Discovery Prefix Information option to a
+ * Router Advertisement message. */
+void
+packet_put_ra_prefix_opt(struct dp_packet *b,
+                         uint8_t plen, uint8_t la_flags,
+                         ovs_be32 valid_lifetime, ovs_be32 preferred_lifetime,
+                         const ovs_be128 prefix)
+{
+    size_t prev_l4_size = dp_packet_l4_size(b);
+    struct ip6_hdr *nh = dp_packet_l3(b);
+    nh->ip6_plen = htons(prev_l4_size + ND_PREFIX_OPT_LEN);
+
+    struct ovs_ra_msg *ra = dp_packet_l4(b);
+    struct ovs_nd_prefix_opt *prefix_opt = dp_packet_put_uninit(b, sizeof *b);
+    prefix_opt->type = ND_OPT_PREFIX_INFORMATION;
+    prefix_opt->len = 4;
+    prefix_opt->prefix_len = plen;
+    prefix_opt->la_flags = la_flags;
+    put_16aligned_be32(&prefix_opt->valid_lifetime, valid_lifetime);
+    put_16aligned_be32(&prefix_opt->preferred_lifetime, preferred_lifetime);
+    put_16aligned_be32(&prefix_opt->reserved, 0);
+    memcpy(prefix_opt->prefix.be32, prefix.be32, sizeof(ovs_be32[4]));
+
+    ra->icmph.icmp6_cksum = 0;
+    uint32_t icmp_csum = packet_csum_pseudoheader6(dp_packet_l3(b));
+    ra->icmph.icmp6_cksum = csum_finish(csum_continue(
+        icmp_csum, ra, prev_l4_size + ND_PREFIX_OPT_LEN));
 }
 
 uint32_t
