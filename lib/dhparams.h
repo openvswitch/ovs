@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008 Nicira, Inc.
+ * Copyright (c) 2008, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #ifndef DHPARAMS_H
 #define DHPARAMS_H 1
 
+#include <inttypes.h>
 #include <openssl/dh.h>
 
 DH *get_dh1024(void);
