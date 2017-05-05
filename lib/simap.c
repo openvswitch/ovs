@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -222,7 +222,26 @@ simap_sort(const struct simap *simap)
         return nodes;
     }
 }
-
+
+/* Returns true if the two maps are equal, meaning that they have the same set
+ * of key-value pairs, otherwise false. */
+bool
+simap_equal(const struct simap *a, const struct simap *b)
+{
+    if (simap_count(a) != simap_count(b)) {
+        return false;
+    }
+
+    const struct simap_node *an;
+    SIMAP_FOR_EACH (an, a) {
+        const struct simap_node *bn = simap_find(b, an->name);
+        if (!bn || an->data != bn->data) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static size_t
 hash_name(const char *name, size_t length)
 {

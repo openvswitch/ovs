@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2016 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,6 +69,7 @@ void simap_delete(struct simap *, struct simap_node *);
 bool simap_find_and_delete(struct simap *, const char *);
 
 const struct simap_node **simap_sort(const struct simap *);
+bool simap_equal(const struct simap *, const struct simap *);
 
 #ifdef  __cplusplus
 }
