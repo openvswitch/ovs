@@ -3212,8 +3212,7 @@ udp,vlan_tci=0x0000,dl_src=00:26:b9:8c:b0:f9,dl_dst=00:25:83:df:b4:00,nw_src=172
     fi
     AT_FAIL_IF([test X"$1" != X])
 
-    ovs-appctl -t ovs-ofctl ofctl/barrier
-    echo >>expout "OFPT_BARRIER_REPLY:"
+    OVS_WAIT_UNTIL([test `wc -l < "monitor.log"` -ge `wc -l < "expout"`])
 
     AT_CHECK(
       [[sed '
@@ -3316,7 +3315,7 @@ udp,vlan_tci=0x0000,dl_src=00:26:b9:8c:b0:f9,dl_dst=00:25:83:df:b4:00,nw_src=172
     fi
     AT_FAIL_IF([test X"$1" != X])
 
-    sleep 1
+    OVS_WAIT_UNTIL([test `wc -l < "monitor.log"` -ge `wc -l < "expout"`])
 
     AT_CHECK(
       [[sed '
@@ -3435,8 +3434,7 @@ udp,vlan_tci=0x0000,dl_src=00:26:b9:8c:b0:f9,dl_dst=00:25:83:df:b4:00,nw_src=172
 
     AT_FAIL_IF([test X"$1" != X])
 
-    ovs-appctl -t ovs-ofctl ofctl/barrier
-    echo >>expout "OFPT_BARRIER_REPLY (OF1.3):"
+    OVS_WAIT_UNTIL([test `wc -l < "monitor.log"` -ge `wc -l < "expout"`])
 
     AT_CHECK(
       [[sed '
@@ -3645,8 +3643,7 @@ table_desc:-
 
     AT_FAIL_IF([test X"$1" != X])
 
-    ovs-appctl -t ovs-ofctl ofctl/barrier
-    echo >>expout "OFPT_BARRIER_REPLY (OF1.4):"
+    OVS_WAIT_UNTIL([test `wc -l < "monitor.log"` -ge `wc -l < "expout"`])
 
     AT_CHECK(
       [[sed '
@@ -3734,8 +3731,7 @@ OFPT_PORT_STATUS (OF1.5): MOD: 2(test): addr:aa:55:aa:55:00:0x
 
     AT_FAIL_IF([test X"$1" != X])
 
-    ovs-appctl -t ovs-ofctl ofctl/barrier
-    echo >>expout "OFPT_BARRIER_REPLY (OF1.5):"
+    OVS_WAIT_UNTIL([test `wc -l < "monitor.log"` -ge `wc -l < "expout"`])
 
     AT_CHECK(
       [[sed '
