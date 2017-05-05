@@ -753,6 +753,17 @@ consider_mc_group(enum mf_field_id mff_ovn_geneve,
     sset_destroy(&remote_chassis);
 }
 
+/* Replaces 'old' by 'new' (destroying 'new').  Returns true if 'old' and 'new'
+ * contained different data, false if they were the same. */
+static bool
+update_ofports(struct simap *old, struct simap *new)
+{
+    bool changed = !simap_equal(old, new);
+    simap_swap(old, new);
+    simap_destroy(new);
+    return changed;
+}
+
 void
 physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
              const struct ovsrec_bridge *br_int,
@@ -864,26 +875,8 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
     }
 
     /* Capture changed or removed openflow ports. */
-    struct simap_node *vif_name, *vif_name_next;
-    SIMAP_FOR_EACH_SAFE (vif_name, vif_name_next, &localvif_to_ofport) {
-        int newport;
-        if ((newport = simap_get(&new_localvif_to_ofport, vif_name->name))) {
-            if (newport != simap_get(&localvif_to_ofport, vif_name->name)) {
-                simap_put(&localvif_to_ofport, vif_name->name, newport);
-                physical_map_changed = true;
-            }
-        } else {
-            simap_find_and_delete(&localvif_to_ofport, vif_name->name);
-            physical_map_changed = true;
-        }
-    }
-    SIMAP_FOR_EACH (vif_name, &new_localvif_to_ofport) {
-        if (!simap_get(&localvif_to_ofport, vif_name->name)) {
-            simap_put(&localvif_to_ofport, vif_name->name,
-                      simap_get(&new_localvif_to_ofport, vif_name->name));
-            physical_map_changed = true;
-        }
-    }
+    physical_map_changed |= update_ofports(&localvif_to_ofport,
+                                           &new_localvif_to_ofport);
     if (physical_map_changed) {
         /* Reprocess logical flow table immediately. */
         poll_immediate_wake();
@@ -1041,6 +1034,5 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
 
     ofpbuf_uninit(&ofpacts);
 
-    simap_destroy(&new_localvif_to_ofport);
     simap_destroy(&new_tunnel_to_ofport);
 }
