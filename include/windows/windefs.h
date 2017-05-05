@@ -45,4 +45,6 @@ char *strsep(char **stringp, const char *delim);
 #define srandom srand
 #define random rand
 
+#define EPFNOSUPPORT WSAEPFNOSUPPORT
+
 #endif /* windefs.h */
