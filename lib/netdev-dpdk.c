@@ -1125,7 +1125,8 @@ netdev_dpdk_process_devargs(const char *devargs, char **errp)
             VLOG_INFO("Device '%s' attached to DPDK", devargs);
         } else {
             /* Attach unsuccessful */
-            VLOG_WARN_BUF(errp, "Error attaching device '%s' to DPDK", devargs);
+            VLOG_WARN_BUF(errp, "Error attaching device '%s' to DPDK",
+                          devargs);
             return -1;
         }
     }
@@ -3080,7 +3081,8 @@ egress_policer_qos_get(const struct qos_conf *conf, struct smap *details)
 }
 
 static bool
-egress_policer_qos_is_equal(const struct qos_conf *conf, const struct smap *details)
+egress_policer_qos_is_equal(const struct qos_conf *conf,
+                            const struct smap *details)
 {
     struct egress_policer *policer =
         CONTAINER_OF(conf, struct egress_policer, qos_conf);

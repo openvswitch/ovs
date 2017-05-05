@@ -340,7 +340,7 @@ struct dp_netdev_rxq {
                                           pinned. OVS_CORE_UNSPEC if the
                                           queue doesn't need to be pinned to a
                                           particular core. */
-    struct dp_netdev_pmd_thread *pmd;  /* pmd thread that will poll this queue. */
+    struct dp_netdev_pmd_thread *pmd;  /* pmd thread that polls this queue. */
 };
 
 /* A port in a netdev-based datapath. */
@@ -352,7 +352,7 @@ struct dp_netdev_port {
     struct dp_netdev_rxq *rxqs;
     unsigned n_rxq;             /* Number of elements in 'rxq' */
     bool dynamic_txqs;          /* If true XPS will be used. */
-    unsigned *txq_used;         /* Number of threads that uses each tx queue. */
+    unsigned *txq_used;         /* Number of threads that use each tx queue. */
     struct ovs_mutex txq_used_mutex;
     char *type;                 /* Port type as requested by user. */
     char *rxq_affinity_list;    /* Requested affinity of rx queues. */
@@ -4464,7 +4464,8 @@ packet_batch_per_flow_execute(struct packet_batch_per_flow *batch,
 static inline void
 dp_netdev_queue_batches(struct dp_packet *pkt,
                         struct dp_netdev_flow *flow, const struct miniflow *mf,
-                        struct packet_batch_per_flow *batches, size_t *n_batches)
+                        struct packet_batch_per_flow *batches,
+                        size_t *n_batches)
 {
     struct packet_batch_per_flow *batch = flow->batch;
 
@@ -4484,8 +4485,8 @@ dp_netdev_queue_batches(struct dp_packet *pkt,
  * The function returns the number of packets that needs to be processed in the
  * 'packets' array (they have been moved to the beginning of the vector).
  *
- * If 'md_is_valid' is false, the metadata in 'packets' is not valid and must be
- * initialized by this function using 'port_no'.
+ * If 'md_is_valid' is false, the metadata in 'packets' is not valid and must
+ * be initialized by this function using 'port_no'.
  */
 static inline size_t
 emc_processing(struct dp_netdev_pmd_thread *pmd,
@@ -4539,13 +4540,15 @@ emc_processing(struct dp_netdev_pmd_thread *pmd,
         }
     }
 
-    dp_netdev_count_packet(pmd, DP_STAT_EXACT_HIT, size - n_dropped - n_missed);
+    dp_netdev_count_packet(pmd, DP_STAT_EXACT_HIT,
+                           size - n_dropped - n_missed);
 
     return dp_packet_batch_size(packets_);
 }
 
 static inline void
-handle_packet_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet,
+handle_packet_upcall(struct dp_netdev_pmd_thread *pmd,
+                     struct dp_packet *packet,
                      const struct netdev_flow_key *key,
                      struct ofpbuf *actions, struct ofpbuf *put_actions,
                      int *lost_cnt, long long now)
@@ -4728,7 +4731,8 @@ dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
     /* Sparse or MSVC doesn't like variable length array. */
     enum { PKT_ARRAY_SIZE = NETDEV_MAX_BURST };
 #endif
-    OVS_ALIGNED_VAR(CACHE_LINE_SIZE) struct netdev_flow_key keys[PKT_ARRAY_SIZE];
+    OVS_ALIGNED_VAR(CACHE_LINE_SIZE)
+        struct netdev_flow_key keys[PKT_ARRAY_SIZE];
     struct packet_batch_per_flow batches[PKT_ARRAY_SIZE];
     long long now = time_msec();
     size_t n_batches;
@@ -4740,7 +4744,8 @@ dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
     if (!dp_packet_batch_is_empty(packets)) {
         /* Get ingress port from first packet's metadata. */
         in_port = packets->packets[0]->md.in_port.odp_port;
-        fast_path_processing(pmd, packets, keys, batches, &n_batches, in_port, now);
+        fast_path_processing(pmd, packets, keys, batches, &n_batches,
+                             in_port, now);
     }
 
     /* All the flow batches need to be reset before any call to
