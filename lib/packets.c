@@ -227,6 +227,47 @@ eth_pop_vlan(struct dp_packet *packet)
     }
 }
 
+/* Push Ethernet header onto 'packet' assuming it is layer 3 */
+void
+push_eth(struct dp_packet *packet, const struct eth_addr *dst,
+         const struct eth_addr *src)
+{
+    struct eth_header *eh;
+
+    ovs_assert(packet->packet_type != htonl(PT_ETH));
+    eh = dp_packet_resize_l2(packet, ETH_HEADER_LEN);
+    eh->eth_dst = *dst;
+    eh->eth_src = *src;
+    eh->eth_type = pt_ns_type_be(packet->packet_type);
+    packet->packet_type = htonl(PT_ETH);
+}
+
+/* Removes Ethernet header, including VLAN header, from 'packet'.
+ *
+ * Previous to calling this function, 'ofpbuf_l3(packet)' must not be NULL */
+void
+pop_eth(struct dp_packet *packet)
+{
+    char *l2_5 = dp_packet_l2_5(packet);
+    char *l3 = dp_packet_l3(packet);
+    ovs_be16 ethertype;
+    int increment;
+
+    ovs_assert(packet->packet_type == htonl(PT_ETH));
+    ovs_assert(l3 != NULL);
+
+    if (l2_5) {
+        increment = packet->l2_5_ofs;
+        ethertype = *(ALIGNED_CAST(ovs_be16 *, (l2_5 - 2)));
+    } else {
+        increment = packet->l3_ofs;
+        ethertype = *(ALIGNED_CAST(ovs_be16 *, (l3 - 2)));
+    }
+
+    dp_packet_resize_l2(packet, -increment);
+    packet->packet_type = PACKET_TYPE_BE(OFPHTN_ETHERTYPE, ntohs(ethertype));
+}
+
 /* Set ethertype of the packet. */
 static void
 set_ethertype(struct dp_packet *packet, ovs_be16 eth_type)

@@ -1078,14 +1078,41 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
             odp_put_userspace_action(pid, user_data, user_data_size,
                                      tunnel_out_port, include_actions, actions);
             res = n + n1;
+            goto out;
         } else if (s[n] == ')') {
             odp_put_userspace_action(pid, user_data, user_data_size,
                                      ODPP_NONE, include_actions, actions);
             res = n + 1;
-        } else {
-            res = -EINVAL;
+            goto out;
         }
     }
+
+    {
+        struct ovs_action_push_eth push;
+        int eth_type = 0;
+        int n1 = -1;
+
+        if (ovs_scan(&s[n], "push_eth(src="ETH_ADDR_SCAN_FMT","
+                     "dst="ETH_ADDR_SCAN_FMT",type=%i)%n",
+                     ETH_ADDR_SCAN_ARGS(push.addresses.eth_src),
+                     ETH_ADDR_SCAN_ARGS(push.addresses.eth_dst),
+                     &eth_type, &n1)) {
+
+            nl_msg_put_unspec(actions, OVS_ACTION_ATTR_PUSH_ETH,
+                              &push, sizeof push);
+
+            res = n + n1;
+            goto out;
+        }
+    }
+
+    if (!strncmp(&s[n], "pop_eth", 7)) {
+        nl_msg_put_flag(actions, OVS_ACTION_ATTR_POP_ETH);
+        res = 7;
+        goto out;
+    }
+
+    res = -EINVAL;
 out:
     ofpbuf_uninit(&buf);
     return res;
@@ -5525,6 +5552,31 @@ odp_put_userspace_action(uint32_t pid,
     nl_msg_end_nested(odp_actions, offset);
 
     return userdata_ofs;
+}
+
+void
+odp_put_pop_eth_action(struct ofpbuf *odp_actions)
+{
+    nl_msg_put_flag(odp_actions, OVS_ACTION_ATTR_POP_ETH);
+}
+
+void
+odp_put_push_eth_action(struct ofpbuf *odp_actions,
+                        const struct eth_addr *eth_src,
+                        const struct eth_addr *eth_dst)
+{
+    struct ovs_action_push_eth eth;
+
+    memset(&eth, 0, sizeof eth);
+    if (eth_src) {
+        eth.addresses.eth_src = *eth_src;
+    }
+    if (eth_dst) {
+        eth.addresses.eth_dst = *eth_dst;
+    }
+
+    nl_msg_put_unspec(odp_actions, OVS_ACTION_ATTR_PUSH_ETH,
+                      &eth, sizeof eth);
 }
 
 void

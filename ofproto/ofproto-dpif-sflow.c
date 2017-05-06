@@ -1188,13 +1188,13 @@ dpif_sflow_read_actions(const struct flow *flow,
 	    dpif_sflow_pop_mpls_lse(sflow_actions);
 	    break;
 	}
-        case OVS_ACTION_ATTR_PUSH_ETH:
-        case OVS_ACTION_ATTR_POP_ETH:
-            /* TODO: SFlow does not currently define a MAC-in-MAC
-             * encapsulation structure.  We could use an extension
-             * structure to report this.
-             */
-            break;
+	case OVS_ACTION_ATTR_PUSH_ETH:
+	case OVS_ACTION_ATTR_POP_ETH:
+	    /* TODO: SFlow does not currently define a MAC-in-MAC
+	     * encapsulation structure.  We could use an extension
+	     * structure to report this.
+	     */
+	    break;
 	case OVS_ACTION_ATTR_SAMPLE:
 	case OVS_ACTION_ATTR_CLONE:
 	case OVS_ACTION_ATTR_UNSPEC:

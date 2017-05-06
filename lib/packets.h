@@ -403,6 +403,10 @@ struct eth_header {
 });
 BUILD_ASSERT_DECL(ETH_HEADER_LEN == sizeof(struct eth_header));
 
+void push_eth(struct dp_packet *packet, const struct eth_addr *dst,
+              const struct eth_addr *src);
+void pop_eth(struct dp_packet *packet);
+
 #define LLC_DSAP_SNAP 0xaa
 #define LLC_SSAP_SNAP 0xaa
 #define LLC_CNTL_SNAP 3

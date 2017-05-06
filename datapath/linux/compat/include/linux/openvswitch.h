@@ -770,7 +770,6 @@ enum ovs_ct_attr {
 /*
  * struct ovs_action_push_eth - %OVS_ACTION_ATTR_PUSH_ETH action argument.
  * @addresses: Source and destination MAC addresses.
- * @eth_type: Ethernet type
  */
 struct ovs_action_push_eth {
 	struct ovs_key_ethernet addresses;
@@ -850,8 +849,7 @@ enum ovs_nat_attr {
  * entries in the flow key.
  * @OVS_ACTION_ATTR_PUSH_ETH: Push a new outermost Ethernet header onto the
  * packet.
- * @OVS_ACTION_ATTR_POP_ETH: Pop the outermost Ethernet header off the
- * packet.
+ * @OVS_ACTION_ATTR_POP_ETH: Pop the outermost Ethernet header off the packet.
  *
  * Only a single header can be set with a single %OVS_ACTION_ATTR_SET.  Not all
  * fields within a header are modifiable, e.g. the IPv4 protocol and fragment
