@@ -39,6 +39,9 @@ static void maybe_unlink_and_free(char *path);
 /* Default prefix of a local named pipe. */
 #define LOCAL_PREFIX "\\\\.\\pipe\\"
 
+/* Size of the allowed PSIDs for securing Named Pipe. */
+#define ALLOWED_PSIDS_SIZE 2
+
 /* This function has the purpose to remove all the slashes received in s. */
 static char *
 remove_slashes(char *s)
@@ -401,16 +404,99 @@ static HANDLE
 create_pnpipe(char *name)
 {
     SECURITY_ATTRIBUTES sa;
-    sa.nLength = sizeof(sa);
-    sa.lpSecurityDescriptor = NULL;
+    SID_IDENTIFIER_AUTHORITY sia = SECURITY_NT_AUTHORITY;
+    DWORD aclSize;
+    PSID allowedPsid[ALLOWED_PSIDS_SIZE];
+    PSID remoteAccessSid;
+    PACL acl = NULL;
+    PSECURITY_DESCRIPTOR psd = NULL;
+    HANDLE npipe;
+
+    /* Disable access over network. */
+    if (!AllocateAndInitializeSid(&sia, 1, SECURITY_NETWORK_RID,
+                                  0, 0, 0, 0, 0, 0, 0, &remoteAccessSid)) {
+        VLOG_ERR_RL(&rl, "Error creating Remote Access SID.");
+        goto handle_error;
+    }
+
+    aclSize = sizeof(ACL) + sizeof(ACCESS_DENIED_ACE) +
+              GetLengthSid(remoteAccessSid) - sizeof(DWORD);
+
+    /* Allow Windows Services to access the Named Pipe. */
+    if (!AllocateAndInitializeSid(&sia, 1, SECURITY_LOCAL_SYSTEM_RID,
+                                  0, 0, 0, 0, 0, 0, 0, &allowedPsid[0])) {
+        VLOG_ERR_RL(&rl, "Error creating Services SID.");
+        goto handle_error;
+    }
+
+    /* Allow Administrators to access the Named Pipe. */
+    if (!AllocateAndInitializeSid(&sia, 2, SECURITY_BUILTIN_DOMAIN_RID,
+                                  DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0,
+                                  &allowedPsid[1])) {
+        VLOG_ERR_RL(&rl, "Error creating Administrator SID.");
+        goto handle_error;
+    }
+
+    for (int i = 0; i < ALLOWED_PSIDS_SIZE; i++) {
+        aclSize += sizeof(ACCESS_ALLOWED_ACE) +
+                   GetLengthSid(allowedPsid[i]) -
+                   sizeof(DWORD);
+    }
+
+    acl = xmalloc(aclSize);
+    if (!InitializeAcl(acl, aclSize, ACL_REVISION)) {
+        VLOG_ERR_RL(&rl, "Error initializing ACL.");
+        goto handle_error;
+    }
+
+    /* Add denied ACL. */
+    if (!AddAccessDeniedAce(acl, ACL_REVISION,
+                            GENERIC_ALL, remoteAccessSid)) {
+        VLOG_ERR_RL(&rl, "Error adding remote access ACE.");
+        goto handle_error;
+    }
+
+    /* Add allowed ACLs. */
+    for (int i = 0; i < ALLOWED_PSIDS_SIZE; i++) {
+        if (!AddAccessAllowedAce(acl, ACL_REVISION,
+                                 GENERIC_ALL, allowedPsid[i])) {
+            VLOG_ERR_RL(&rl, "Error adding ACE.");
+            goto handle_error;
+        }
+    }
+
+    psd = xmalloc(SECURITY_DESCRIPTOR_MIN_LENGTH);
+    if (!InitializeSecurityDescriptor(psd, SECURITY_DESCRIPTOR_REVISION)) {
+        VLOG_ERR_RL(&rl, "Error initializing Security Descriptor.");
+        goto handle_error;
+    }
+
+    /* Set DACL. */
+    if (!SetSecurityDescriptorDacl(psd, TRUE, acl, FALSE)) {
+        VLOG_ERR_RL(&rl, "Error while setting DACL.");
+        goto handle_error;
+    }
+
+    sa.nLength = sizeof sa;
     sa.bInheritHandle = TRUE;
+    sa.lpSecurityDescriptor = psd;
+
     if (strlen(name) > 256) {
         VLOG_ERR_RL(&rl, "Named pipe name too long.");
-        return INVALID_HANDLE_VALUE;
+        goto handle_error;
     }
-    return CreateNamedPipe(name, PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
-                           PIPE_TYPE_MESSAGE | PIPE_READMODE_BYTE | PIPE_WAIT,
-                           64, BUFSIZE, BUFSIZE, 0, &sa);
+
+    npipe = CreateNamedPipe(name, PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
+                            PIPE_TYPE_MESSAGE | PIPE_READMODE_BYTE | PIPE_WAIT,
+                            64, BUFSIZE, BUFSIZE, 0, &sa);
+    free(acl);
+    free(psd);
+    return npipe;
+
+handle_error:
+    free(acl);
+    free(psd);
+    return INVALID_HANDLE_VALUE;
 }
 
 /* Passive named pipe connect.  This function creates a new named pipe and
