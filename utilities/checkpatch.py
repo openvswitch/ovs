@@ -277,7 +277,7 @@ def ovs_checkpatch_parse(text):
             match = hunks.match(line)
             if match:
                 parse = parse + 1
-                current_file = match.group(2)
+                current_file = match.group(2)[2:]
                 print_file_name = current_file
             continue
         elif parse == 0:
@@ -318,7 +318,7 @@ def ovs_checkpatch_parse(text):
 
             # Skip files which have /datapath in them, since they are
             # linux or windows coding standards
-            if '/datapath' in current_file:
+            if current_file.startswith('datapath'):
                 continue
             run_checks(current_file, cmp_line, lineno)
     if __errors or __warnings:
