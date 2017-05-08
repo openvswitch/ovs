@@ -923,7 +923,7 @@ important part is::
 which means that the packet is ultimately being output to OpenFlow
 port 4.  That's port ``b``, which you can confirm with::
 
-  $ sudo ovs-vsctl find interface ofport=5
+  $ sudo ovs-vsctl find interface ofport=4
   _uuid               : 840a5aca-ea8d-4c16-a11b-a94e0f408091
   admin_state         : up
   bfd                 : {}
