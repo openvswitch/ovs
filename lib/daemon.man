@@ -1,3 +1,4 @@
+.PP
 The following options are valid on POSIX based platforms.
 .TP
 \fB\-\-pidfile\fR[\fB=\fIpidfile\fR]

@@ -2361,6 +2361,7 @@ sort a flow that specifies \fBnw_src=192.168.0.0/24\fR the same as
 .IP
 These options currently affect only \fBdump\-flows\fR output.
 .
+.SS "Daemon Options"
 .ds DD \
 \fBovs\-ofctl\fR detaches only when executing the \fBmonitor\fR or \
 \fBsnoop\fR commands.
