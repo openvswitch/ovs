@@ -6257,6 +6257,15 @@ HEADER
 	dgramSeqNo=1
 	ds=127.0.0.1>2:1000
 	fsSeqNo=1
+	tunnel4_out_length=0
+	tunnel4_out_protocol=47
+	tunnel4_out_src=1.1.2.88
+	tunnel4_out_dst=1.1.2.92
+	tunnel4_out_src_port=0
+	tunnel4_out_dst_port=0
+	tunnel4_out_tcp_flags=0
+	tunnel4_out_tos=0
+	tunnel_out_vni=456
 	in_vlan=0
 	in_priority=0
 	out_vlan=0
@@ -6266,7 +6275,7 @@ HEADER
 	dropEvents=0
 	in_ifindex=2011
 	in_format=0
-	out_ifindex=2
+	out_ifindex=1
 	out_format=2
 	hdr_prot=1
 	pkt_len=46
