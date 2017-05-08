@@ -4611,7 +4611,7 @@ xlate_output_trunc_action(struct xlate_ctx *ctx,
             if (xport == NULL || xport->odp_port == ODPP_NONE) {
                 /* Since truncate happens at its following output action, if
                  * the output port is a patch port, the behavior is somehow
-                 * unpredicable. For simpilicity, disallow this case. */
+                 * unpredictable.  For simplicity, disallow this case. */
                 ofputil_port_to_string(port, name, sizeof name);
                 xlate_report_error(ctx, "output_trunc does not support "
                                    "patch port %s", name);
