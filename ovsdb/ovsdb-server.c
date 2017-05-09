@@ -288,10 +288,14 @@ main(int argc, char *argv[])
      * configuration to it.  When --monitor is used, this preserves the effects
      * of ovs-appctl commands such as ovsdb-server/add-remote (which saves the
      * new configuration) across crashes. */
-    config_tmpfile = tmpfile();
+
+    /* config_tmpfile = tmpfile();  */
+    char *tmpfile_name = xasprintf("%s/%ld.tmpfile", ovs_rundir(), (long int)getpid());
+	config_tmpfile = fopen(tmpfile_name, "wb+");
     if (!config_tmpfile) {
         ovs_fatal(errno, "failed to create temporary file");
     }
+
 
     sset_init(&db_filenames);
     if (argc > 0) {
