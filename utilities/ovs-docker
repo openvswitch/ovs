@@ -106,6 +106,14 @@ add_port () {
         exit 1
     fi
 
+    # Check if a port is already attached for the given container and interface
+    PORT=`get_port_for_container_interface "$CONTAINER" "$INTERFACE" 2>/dev/null`
+    if [ -n "$PORT" ]; then
+        echo >&2 "$UTIL: Port already attached" \
+                 "for CONTAINER=$CONTAINER and INTERFACE=$INTERFACE"
+        exit 1
+    fi
+
     if ovs_vsctl br-exists "$BRIDGE" || \
         ovs_vsctl add-br "$BRIDGE"; then :; else
         echo >&2 "$UTIL: Failed to create bridge $BRIDGE"
