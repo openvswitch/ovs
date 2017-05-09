@@ -10,7 +10,8 @@ both_modules = \
 	vport_gre \
 	vport_lisp \
 	vport_stt \
-	vport_vxlan
+	vport_vxlan \
+	vport_vhost
 # When changing the name of 'build_modules', please also update the
 # print-build-modules in Makefile.am.
 build_modules = $(both_modules)	# Modules to build
@@ -32,6 +33,7 @@ vport_vxlan_sources = vport-vxlan.c
 vport_gre_sources = vport-gre.c
 vport_lisp_sources = vport-lisp.c
 vport_stt_sources = vport-stt.c
+vport_vhost_sources = vport-vhost.c
 
 openvswitch_headers = \
 	compat.h \
@@ -43,7 +45,8 @@ openvswitch_headers = \
 	vport.h \
 	vport-internal_dev.h \
 	vport-netdev.h \
-	vport-vxlan.h
+	vport-vxlan.h \
+	vport-vhost.h
 
 openvswitch_extras = \
 	README.md

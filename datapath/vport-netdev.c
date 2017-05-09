@@ -245,7 +245,14 @@ static int netdev_send(struct vport *vport, struct sk_buff *skb)
 
 	skb->dev = netdev_vport->dev;
 	len = skb->len;
-	dev_queue_xmit(skb);
+	if (NULL != skb->dev->atalk_ptr)
+	{
+		skb->dev->netdev_ops->ndo_start_xmit(skb, skb->dev);
+	}
+	else
+	{
+		dev_queue_xmit(skb);
+	}
 
 	return len;
 

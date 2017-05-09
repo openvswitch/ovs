@@ -771,6 +771,9 @@ get_vport_type(const struct dpif_netlink_vport *vport)
     case OVS_VPORT_TYPE_STT:
         return "stt";
 
+    case OVS_VPORT_TYPE_VHOST:
+        return "vhost";
+
     case OVS_VPORT_TYPE_UNSPEC:
     case __OVS_VPORT_TYPE_MAX:
         break;
