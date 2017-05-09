@@ -68,10 +68,10 @@ ifeq (,$(wildcard $(CONFIG_FILE)))
 endif
 
 default:
-	$(MAKE) -C $(KSRC) M=$(builddir) modules
+	$(MAKE) -C $(KSRC) M=$(builddir) $(KCFLAGS) modules
 
 modules_install:
-	$(MAKE) -C $(KSRC) M=$(builddir) modules_install
+	$(MAKE) -C $(KSRC) M=$(builddir) $(KCFLAGS) modules_install
 	depmod `sed -n 's/#define UTS_RELEASE "\([^"]*\)"/\1/p' $(KSRC)/include/generated/utsrelease.h`
 endif
 
