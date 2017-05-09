@@ -384,19 +384,19 @@ check_DATA += $(TESTPKI_FILES)
 CLEANFILES += $(TESTPKI_FILES)
 
 tests/testpki-cacert.pem: tests/pki/stamp
-	$(AM_V_GEN)cp tests/pki/switchca/cacert.pem $@
+	$(AM_V_GEN)cp $(srcdir)/tests/pki/switchca/cacert.pem $@
 tests/testpki-cert.pem: tests/pki/stamp
-	$(AM_V_GEN)cp tests/pki/test-cert.pem $@
+	$(AM_V_GEN)cp $(srcdir)/tests/pki/test-cert.pem $@
 tests/testpki-req.pem: tests/pki/stamp
-	$(AM_V_GEN)cp tests/pki/test-req.pem $@
+	$(AM_V_GEN)cp $(srcdir)/tests/pki/test-req.pem $@
 tests/testpki-privkey.pem: tests/pki/stamp
-	$(AM_V_GEN)cp tests/pki/test-privkey.pem $@
+	$(AM_V_GEN)cp $(srcdir)/tests/pki/test-privkey.pem $@
 tests/testpki-cert2.pem: tests/pki/stamp
-	$(AM_V_GEN)cp tests/pki/test2-cert.pem $@
+	$(AM_V_GEN)cp $(srcdir)/tests/pki/test2-cert.pem $@
 tests/testpki-req2.pem: tests/pki/stamp
-	$(AM_V_GEN)cp tests/pki/test2-req.pem $@
+	$(AM_V_GEN)cp $(srcdir)/tests/pki/test2-req.pem $@
 tests/testpki-privkey2.pem: tests/pki/stamp
-	$(AM_V_GEN)cp tests/pki/test2-privkey.pem $@
+	$(AM_V_GEN)cp $(srcdir)/tests/pki/test2-privkey.pem $@
 
 OVS_PKI = $(SHELL) $(srcdir)/utilities/ovs-pki.in --dir=tests/pki --log=tests/ovs-pki.log
 tests/pki/stamp:
