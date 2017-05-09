@@ -924,13 +924,58 @@ pmd_info_show_rxq(struct ds *reply, struct dp_netdev_pmd_thread *pmd)
     }
 }
 
+static int
+compare_poll_thread_list(const void *a_, const void *b_)
+{
+    const struct dp_netdev_pmd_thread *a, *b;
+
+    a = *(struct dp_netdev_pmd_thread **)a_;
+    b = *(struct dp_netdev_pmd_thread **)b_;
+
+    if (a->core_id < b->core_id) {
+        return -1;
+    }
+    if (a->core_id > b->core_id) {
+        return 1;
+    }
+    return 0;
+}
+
+/* Create a sorted list of pmd's from the dp->poll_threads cmap. We can use
+ * this list, as long as we do not go to quiescent state. */
+static void
+sorted_poll_thread_list(struct dp_netdev *dp,
+                        struct dp_netdev_pmd_thread ***list,
+                        size_t *n)
+{
+    struct dp_netdev_pmd_thread *pmd;
+    struct dp_netdev_pmd_thread **pmd_list;
+    size_t k = 0, n_pmds;
+
+    n_pmds = cmap_count(&dp->poll_threads);
+    pmd_list = xcalloc(n_pmds, sizeof *pmd_list);
+
+    CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
+        if (k >= n_pmds) {
+            break;
+        }
+        pmd_list[k++] = pmd;
+    }
+
+    qsort(pmd_list, k, sizeof *pmd_list, compare_poll_thread_list);
+
+    *list = pmd_list;
+    *n = k;
+}
+
 static void
 dpif_netdev_pmd_info(struct unixctl_conn *conn, int argc, const char *argv[],
                      void *aux)
 {
     struct ds reply = DS_EMPTY_INITIALIZER;
-    struct dp_netdev_pmd_thread *pmd;
+    struct dp_netdev_pmd_thread **pmd_list;
     struct dp_netdev *dp = NULL;
+    size_t n;
     enum pmd_info_type type = *(enum pmd_info_type *) aux;
 
     ovs_mutex_lock(&dp_netdev_mutex);
@@ -949,7 +994,13 @@ dpif_netdev_pmd_info(struct unixctl_conn *conn, int argc, const char *argv[],
         return;
     }
 
-    CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
+    sorted_poll_thread_list(dp, &pmd_list, &n);
+    for (size_t i = 0; i < n; i++) {
+        struct dp_netdev_pmd_thread *pmd = pmd_list[i];
+        if (!pmd) {
+            break;
+        }
+
         if (type == PMD_INFO_SHOW_RXQ) {
             pmd_info_show_rxq(&reply, pmd);
         } else {
@@ -972,6 +1023,7 @@ dpif_netdev_pmd_info(struct unixctl_conn *conn, int argc, const char *argv[],
             }
         }
     }
+    free(pmd_list);
 
     ovs_mutex_unlock(&dp_netdev_mutex);
 
