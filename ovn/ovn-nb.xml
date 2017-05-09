@@ -1139,7 +1139,7 @@
           If set, indicates the IP address to use to force SNAT a packet
           that has already been load-balanced in the gateway router.  When
           multiple gateway routers are configured, a packet can potentially
-          enter any of the gateway router, get DNATted as part of the load-
+          enter any of the gateway routers, get DNATted as part of the load-
           balancing and eventually reach the logical switch port.
           For the return traffic to go back to the same gateway router (for
           unDNATing), the packet needs a SNAT in the first place.  This can be
