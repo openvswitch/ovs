@@ -225,3 +225,54 @@ OVS_WAIT_UNTIL([test `ovs-pcap p0.pcap | grep 50540000000a5054000000091235 | wc 
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([tunnel_push_pop - underlay bridge match])
+
+OVS_VSWITCHD_START([add-port br0 p0 -- set Interface p0 type=dummy ofport_request=1 other-config:hwaddr=aa:55:aa:55:00:00])
+AT_CHECK([ovs-vsctl add-br int-br -- set bridge int-br datapath_type=dummy], [0])
+AT_CHECK([ovs-vsctl add-port int-br t1 -- set Interface t1 type=gre \
+                       options:remote_ip=1.1.2.92 options:key=456 ofport_request=3], [0])
+
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+dummy@ovs-dummy: hit:0 missed:0
+	br0:
+		br0 65534/100: (dummy-internal)
+		p0 1/1: (dummy)
+	int-br:
+		int-br 65534/2: (dummy-internal)
+		t1 3/3: (gre: key=456, remote_ip=1.1.2.92)
+])
+
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 1.1.2.88/24], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 1.1.2.92/24 br0], [0], [OK
+])
+AT_CHECK([ovs-ofctl add-flow br0 'arp,priority=1,action=normal'])
+
+dnl Use arp reply to achieve tunnel next hop mac binding
+AT_CHECK([ovs-appctl netdev-dummy/receive br0 'recirc_id(0),in_port(100),eth(src=f8:bc:12:44:34:b6,dst=aa:55:aa:55:00:00),eth_type(0x0806),arp(sip=1.1.2.92,tip=1.1.2.88,op=2,sha=f8:bc:12:44:34:b6,tha=00:00:00:00:00:00)'])
+
+AT_CHECK([ovs-appctl tnl/neigh/show | tail -n+3 | sort], [0], [dnl
+1.1.2.92                                      f8:bc:12:44:34:b6   br0
+])
+
+AT_CHECK([ovs-ofctl add-flow br0 'ip,ip_proto=47,nw_tos=0,eth_src=aa:55:aa:55:00:00,eth_dst=f8:bc:12:44:34:b6,ip_src=1.1.2.88,ip_dst=1.1.2.92,priority=99,action=normal'])
+
+dnl Direct traffic from the integration bridge to the GRE tunnel
+AT_CHECK([ovs-ofctl add-flow int-br action=3])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth_type(0x0800),ipv4(src=1.1.3.88,dst=1.1.3.112,proto=17,tos=0,ttl=64,frag=no),udp(src=51283,dst=4789)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: tnl_push(tnl_port(3),header(size=42,type=3,eth(dst=f8:bc:12:44:34:b6,src=aa:55:aa:55:00:00,dl_type=0x0800),ipv4(src=1.1.2.88,dst=1.1.2.92,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x2000,proto=0x6558),key=0x1c8)),out_port(100))
+])
+
+dnl Verify outer L2 and L3 header flow fields can be matched in the underlay bridge
+AT_CHECK([ovs-appctl netdev-dummy/receive int-br '50540000000a5054000000091234'])
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl)
+ n_packets=1, n_bytes=42, priority=1,arp actions=NORMAL
+ n_packets=1, n_bytes=56, priority=99,ip,dl_src=aa:55:aa:55:00:00,dl_dst=f8:bc:12:44:34:b6,nw_src=1.1.2.88,nw_dst=1.1.2.92,nw_proto=47,nw_tos=0 actions=NORMAL
+NXST_FLOW reply:
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
