@@ -38,3 +38,36 @@ dummy@ovs-dummy: hit:0 missed:0
 OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
+
+dnl When multiple bridges are connected to the same controller, make
+dnl sure their status are tracked independently.
+AT_SETUP([bridge - multiple bridges share a controller])
+OVS_VSWITCHD_START(
+   [add-br br1 -- \
+    set bridge br1 other-config:hwaddr=aa:66:aa:66:00:00 -- \
+    set bridge br1 datapath-type=dummy other-config:datapath-id=1234 ])
+
+dnl Start ovs-testcontroller
+AT_CHECK([ovs-testcontroller --detach punix:controller], [0], [ignore])
+
+dnl Add the controller to both bridges, 5 seconds apart.
+AT_CHECK([ovs-vsctl set-controller br0 unix:controller])
+AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
+AT_CHECK([ovs-vsctl set-controller br1 unix:controller])
+
+dnl Wait for the controller connection to come up
+for i in `seq 0 7`
+do
+    AT_CHECK([ovs-appctl time/warp 10], [0], [ignore])
+done
+
+dnl Make sure the connection status are different
+AT_CHECK([ovs-vsctl --columns=status list controller | sort], [0], [dnl
+
+status              : {sec_since_connect="0", state=ACTIVE}
+status              : {sec_since_connect="5", state=ACTIVE}
+])
+
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+AT_CLEANUP
