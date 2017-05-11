@@ -112,11 +112,15 @@ html_static_path = ['_static']
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [
-    ('ref/ovs-test.8', 'ovs-test',
-     u'Check Linux drivers for performance, vlan and L3 tunneling problems',
-     [author], 8),
-    ('ref/ovs-vlan-test.8', 'ovs-vlan-test',
-     u'Check Linux drivers for problems with vlan traffic',
-     [author], 8)
+_man_pages = [
+    ('ovs-test.8',
+     u'Check Linux drivers for performance, vlan and L3 tunneling problems'),
+    ('ovs-vlan-test.8',
+     u'Check Linux drivers for problems with vlan traffic'),
 ]
+
+# Generate list of (path, name, description, [author, ...], section)
+man_pages = [
+    ('ref/%s' % filename, filename.split('.', 1)[0],
+     description, [author], filename.split('.', 1)[1])
+    for filename, description in _man_pages]
