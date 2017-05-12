@@ -3247,39 +3247,28 @@ xlate_flow_is_protected(const struct xlate_ctx *ctx, const struct flow *flow, co
             xport_in->xbundle->protected && xport_out->xbundle->protected);
 }
 
-static void
-compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
-                        const struct xlate_bond_recirc *xr, bool check_stp)
+static bool
+check_output_prerequisites(struct xlate_ctx *ctx,
+                           const struct xport *xport,
+                           struct flow *flow,
+                           bool check_stp)
 {
-    const struct xport *xport = get_ofp_port(ctx->xbridge, ofp_port);
     struct flow_wildcards *wc = ctx->wc;
-    struct flow *flow = &ctx->xin->flow;
-    struct flow_tnl flow_tnl;
-    union flow_vlan_hdr flow_vlans[FLOW_MAX_VLAN_HEADERS];
-    uint8_t flow_nw_tos;
-    odp_port_t out_port, odp_port;
-    bool tnl_push_pop_send = false;
-    uint8_t dscp;
-
-    /* If 'struct flow' gets additional metadata, we'll need to zero it out
-     * before traversing a patch port. */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 39);
-    memset(&flow_tnl, 0, sizeof flow_tnl);
 
     if (!xport) {
         xlate_report(ctx, OFT_WARN, "Nonexistent output port");
-        return;
+        return false;
     } else if (xport->config & OFPUTIL_PC_NO_FWD) {
         xlate_report(ctx, OFT_DETAIL, "OFPPC_NO_FWD set, skipping output");
-        return;
+        return false;
     } else if (ctx->mirror_snaplen != 0 && xport->odp_port == ODPP_NONE) {
         xlate_report(ctx, OFT_WARN,
                      "Mirror truncate to ODPP_NONE, skipping output");
-        return;
+        return false;
     } else if (xlate_flow_is_protected(ctx, flow, xport)) {
         xlate_report(ctx, OFT_WARN,
                      "Flow is between protected ports, skipping output.");
-        return;
+        return false;
     } else if (check_stp) {
         if (is_stp(&ctx->base_flow)) {
             if (!xport_stp_should_forward_bpdu(xport) &&
@@ -3293,7 +3282,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                                  "RSTP not managing BPDU in this state, "
                                  "skipping bpdu output");
                 }
-                return;
+                return false;
             }
         } else if ((xport->cfm && cfm_should_process_flow(xport->cfm, flow, wc))
                    || (xport->bfd && bfd_should_process_flow(xport->bfd, flow,
@@ -3308,8 +3297,50 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                 xlate_report(ctx, OFT_WARN,
                              "RSTP not in forwarding state, skipping output");
             }
-            return;
+            return false;
         }
+    }
+    return true;
+}
+
+static bool
+terminate_native_tunnel(struct xlate_ctx *ctx, ofp_port_t ofp_port,
+                        struct flow *flow, struct flow_wildcards *wc,
+                        odp_port_t *tnl_port)
+{
+    *tnl_port = ODPP_NONE;
+
+    /* XXX: Write better Filter for tunnel port. We can use in_port
+     * in tunnel-port flow to avoid these checks completely. */
+    if (ofp_port == OFPP_LOCAL &&
+        ovs_native_tunneling_is_on(ctx->xbridge->ofproto)) {
+        *tnl_port = tnl_port_map_lookup(flow, wc);
+    }
+
+    return *tnl_port != ODPP_NONE;
+}
+
+static void
+compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
+                        const struct xlate_bond_recirc *xr, bool check_stp)
+{
+    const struct xport *xport = get_ofp_port(ctx->xbridge, ofp_port);
+    struct flow_wildcards *wc = ctx->wc;
+    struct flow *flow = &ctx->xin->flow;
+    struct flow_tnl flow_tnl;
+    union flow_vlan_hdr flow_vlans[FLOW_MAX_VLAN_HEADERS];
+    uint8_t flow_nw_tos;
+    odp_port_t out_port, odp_port, odp_tnl_port;
+    bool is_native_tunnel = false;
+    uint8_t dscp;
+
+    /* If 'struct flow' gets additional metadata, we'll need to zero it out
+     * before traversing a patch port. */
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 39);
+    memset(&flow_tnl, 0, sizeof flow_tnl);
+
+    if (!check_output_prerequisites(ctx, xport, flow, check_stp)) {
+        return;
     }
 
     if (xport->peer) {
@@ -3490,7 +3521,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         out_port = odp_port;
         if (ovs_native_tunneling_is_on(ctx->xbridge->ofproto)) {
             xlate_report(ctx, OFT_DETAIL, "output to native tunnel");
-            tnl_push_pop_send = true;
+            is_native_tunnel = true;
         } else {
             xlate_report(ctx, OFT_DETAIL, "output to kernel tunnel");
             commit_odp_tunnel_action(flow, &ctx->base_flow, ctx->odp_actions);
@@ -3502,9 +3533,11 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     }
 
     if (out_port != ODPP_NONE) {
+        /* Commit accumulated flow updates before output. */
         xlate_commit_actions(ctx);
 
         if (xr) {
+            /* Recirculate the packet. */
             struct ovs_action_hash *act_hash;
 
             /* Hash action. */
@@ -3517,50 +3550,39 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
             /* Recirc action. */
             nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_RECIRC,
                            xr->recirc_id);
+        } else if (is_native_tunnel) {
+            /* Output to native tunnel port. */
+            build_tunnel_send(ctx, xport, flow, odp_port);
+            flow->tunnel = flow_tnl; /* Restore tunnel metadata */
+
+        } else if (terminate_native_tunnel(ctx, ofp_port, flow, wc,
+                                           &odp_tnl_port)) {
+            /* Intercept packet to be received on native tunnel port. */
+            nl_msg_put_odp_port(ctx->odp_actions, OVS_ACTION_ATTR_TUNNEL_POP,
+                                odp_tnl_port);
+
         } else {
+            /* Tunnel push-pop action is not compatible with
+             * IPFIX action. */
+            compose_ipfix_action(ctx, out_port);
 
-            if (tnl_push_pop_send) {
-                build_tunnel_send(ctx, xport, flow, odp_port);
-                flow->tunnel = flow_tnl; /* Restore tunnel metadata */
-            } else {
-                odp_port_t odp_tnl_port = ODPP_NONE;
+            /* Handle truncation of the mirrored packet. */
+            if (ctx->mirror_snaplen > 0 &&
+                    ctx->mirror_snaplen < UINT16_MAX) {
+                struct ovs_action_trunc *trunc;
 
-                /* XXX: Write better Filter for tunnel port. We can use inport
-                * int tunnel-port flow to avoid these checks completely. */
-                if (ofp_port == OFPP_LOCAL &&
-                    ovs_native_tunneling_is_on(ctx->xbridge->ofproto)) {
-
-                    odp_tnl_port = tnl_port_map_lookup(flow, wc);
-                }
-
-                if (odp_tnl_port != ODPP_NONE) {
-                    nl_msg_put_odp_port(ctx->odp_actions,
-                                        OVS_ACTION_ATTR_TUNNEL_POP,
-                                        odp_tnl_port);
-                } else {
-                    /* Tunnel push-pop action is not compatible with
-                     * IPFIX action. */
-                    compose_ipfix_action(ctx, out_port);
-
-                    /* Handle truncation of the mirrored packet. */
-                    if (ctx->mirror_snaplen > 0 &&
-                        ctx->mirror_snaplen < UINT16_MAX) {
-                        struct ovs_action_trunc *trunc;
-
-                        trunc = nl_msg_put_unspec_uninit(ctx->odp_actions,
-                                                         OVS_ACTION_ATTR_TRUNC,
-                                                         sizeof *trunc);
-                        trunc->max_len = ctx->mirror_snaplen;
-                        if (!ctx->xbridge->support.trunc) {
-                            ctx->xout->slow |= SLOW_ACTION;
-                        }
-                    }
-
-                    nl_msg_put_odp_port(ctx->odp_actions,
-                                        OVS_ACTION_ATTR_OUTPUT,
-                                        out_port);
+                trunc = nl_msg_put_unspec_uninit(ctx->odp_actions,
+                                                 OVS_ACTION_ATTR_TRUNC,
+                                                 sizeof *trunc);
+                trunc->max_len = ctx->mirror_snaplen;
+                if (!ctx->xbridge->support.trunc) {
+                    ctx->xout->slow |= SLOW_ACTION;
                 }
             }
+
+            nl_msg_put_odp_port(ctx->odp_actions,
+                                OVS_ACTION_ATTR_OUTPUT,
+                                out_port);
         }
 
         ctx->sflow_odp_port = odp_port;
