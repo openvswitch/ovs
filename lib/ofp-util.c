@@ -4204,15 +4204,18 @@ ofputil_decode_packet_out(struct ofputil_packet_out *po,
     enum ofpraw raw = ofpraw_pull_assert(&b);
 
     ofpbuf_clear(ofpacts);
+    match_init_catchall(&po->flow_metadata);
     if (raw == OFPRAW_OFPT11_PACKET_OUT) {
         enum ofperr error;
+        ofp_port_t in_port;
         const struct ofp11_packet_out *opo = ofpbuf_pull(&b, sizeof *opo);
 
         po->buffer_id = ntohl(opo->buffer_id);
-        error = ofputil_port_from_ofp11(opo->in_port, &po->in_port);
+        error = ofputil_port_from_ofp11(opo->in_port, &in_port);
         if (error) {
             return error;
         }
+        match_set_in_port(&po->flow_metadata, in_port);
 
         error = ofpacts_pull_openflow_actions(&b, ntohs(opo->actions_len),
                                               oh->version, NULL, NULL,
@@ -4225,7 +4228,7 @@ ofputil_decode_packet_out(struct ofputil_packet_out *po,
         const struct ofp10_packet_out *opo = ofpbuf_pull(&b, sizeof *opo);
 
         po->buffer_id = ntohl(opo->buffer_id);
-        po->in_port = u16_to_ofp(ntohs(opo->in_port));
+        match_set_in_port(&po->flow_metadata, u16_to_ofp(ntohs(opo->in_port)));
 
         error = ofpacts_pull_openflow_actions(&b, ntohs(opo->actions_len),
                                               oh->version, NULL, NULL,
@@ -4237,11 +4240,13 @@ ofputil_decode_packet_out(struct ofputil_packet_out *po,
         OVS_NOT_REACHED();
     }
 
-    if (ofp_to_u16(po->in_port) >= ofp_to_u16(OFPP_MAX)
-        && po->in_port != OFPP_LOCAL
-        && po->in_port != OFPP_NONE && po->in_port != OFPP_CONTROLLER) {
+    ofp_port_t in_port = po->flow_metadata.flow.in_port.ofp_port;
+    if (ofp_to_u16(in_port) >= ofp_to_u16(OFPP_MAX)
+        && in_port != OFPP_LOCAL
+        && in_port != OFPP_NONE
+        && in_port != OFPP_CONTROLLER) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "packet-out has bad input port %#"PRIx32,
-                     po->in_port);
+                     po->flow_metadata.flow.in_port.ofp_port);
         return OFPERR_OFPBRC_BAD_PORT;
     }
 
@@ -7051,7 +7056,8 @@ ofputil_encode_packet_out(const struct ofputil_packet_out *po,
 
         opo = msg->msg;
         opo->buffer_id = htonl(po->buffer_id);
-        opo->in_port = htons(ofp_to_u16(po->in_port));
+        opo->in_port =htons(ofp_to_u16(
+                                po->flow_metadata.flow.in_port.ofp_port));
         opo->actions_len = htons(msg->size - actions_ofs);
         break;
     }
@@ -7071,7 +7077,8 @@ ofputil_encode_packet_out(const struct ofputil_packet_out *po,
                                            ofp_version);
         opo = msg->msg;
         opo->buffer_id = htonl(po->buffer_id);
-        opo->in_port = ofputil_port_to_ofp11(po->in_port);
+        opo->in_port =
+            ofputil_port_to_ofp11(po->flow_metadata.flow.in_port.ofp_port);
         opo->actions_len = htons(len);
         break;
     }

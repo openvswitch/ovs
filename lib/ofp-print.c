@@ -247,8 +247,8 @@ ofp_print_packet_out(struct ds *string, const struct ofp_header *oh,
         return;
     }
 
-    ds_put_cstr(string, " in_port=");
-    ofputil_format_port(po.in_port, string);
+    ds_put_char(string, ' ');
+    match_format(&po.flow_metadata, string, OFP_DEFAULT_PRIORITY);
 
     ds_put_cstr(string, " actions=");
     ofpacts_format(po.ofpacts, po.ofpacts_len, string);

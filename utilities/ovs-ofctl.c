@@ -2078,6 +2078,7 @@ ofctl_packet_out(struct ovs_cmdl_context *ctx)
     struct ofpbuf *opo;
     char *error;
 
+    match_init_catchall(&po.flow_metadata);
     /* Use the old syntax when more than 4 arguments are given. */
     if (ctx->argc > 4) {
         struct ofpbuf ofpacts;
@@ -2091,7 +2092,8 @@ ofctl_packet_out(struct ovs_cmdl_context *ctx)
         }
 
         po.buffer_id = UINT32_MAX;
-        po.in_port = str_to_port_no(ctx->argv[1], ctx->argv[2]);
+        match_set_in_port(&po.flow_metadata,
+                          str_to_port_no(ctx->argv[1], ctx->argv[2]));
         po.ofpacts = ofpacts.data;
         po.ofpacts_len = ofpacts.size;
 

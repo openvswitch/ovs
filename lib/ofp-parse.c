@@ -621,8 +621,8 @@ parse_ofp_packet_out_str__(struct ofputil_packet_out *po, char *string,
 
     *po = (struct ofputil_packet_out) {
         .buffer_id = UINT32_MAX,
-        .in_port = OFPP_CONTROLLER,
     };
+    match_set_in_port(&po->flow_metadata, OFPP_CONTROLLER);
 
     act_str = extract_actions(string);
 
@@ -633,19 +633,21 @@ parse_ofp_packet_out_str__(struct ofputil_packet_out *po, char *string,
         }
 
         if (!strcmp(name, "in_port")) {
-            if (!ofputil_port_from_string(value, &po->in_port)) {
+            ofp_port_t in_port;
+            if (!ofputil_port_from_string(value, &in_port)) {
                 error = xasprintf("%s is not a valid OpenFlow port", value);
                 goto out;
             }
-            if (ofp_to_u16(po->in_port) > ofp_to_u16(OFPP_MAX)
-                && po->in_port != OFPP_LOCAL
-                && po->in_port != OFPP_NONE
-                && po->in_port != OFPP_CONTROLLER) {
+            if (ofp_to_u16(in_port) > ofp_to_u16(OFPP_MAX)
+                && in_port != OFPP_LOCAL
+                && in_port != OFPP_NONE
+                && in_port != OFPP_CONTROLLER) {
                 error = xasprintf(
                               "%s is not a valid OpenFlow port for PACKET_OUT",
                               value);
                 goto out;
             }
+            match_set_in_port(&po->flow_metadata, in_port);
         } else if (!strcmp(name, "packet")) {
             const char *error_msg = eth_from_hex(value, &packet);
             if (error_msg) {

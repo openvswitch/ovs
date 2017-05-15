@@ -183,10 +183,10 @@ pinctrl_handle_arp(const struct flow *ip_flow, const struct match *md,
         .packet = dp_packet_data(&packet),
         .packet_len = dp_packet_size(&packet),
         .buffer_id = UINT32_MAX,
-        .in_port = OFPP_CONTROLLER,
         .ofpacts = ofpacts.data,
         .ofpacts_len = ofpacts.size,
     };
+    match_set_in_port(&po.flow_metadata, OFPP_CONTROLLER);
     enum ofputil_protocol proto = ofputil_protocol_from_ofp_version(version);
     queue_msg(ofputil_encode_packet_out(&po, proto));
 
@@ -1391,10 +1391,10 @@ send_garp(struct garp_data *garp, long long int current_time)
         .packet = dp_packet_data(&packet),
         .packet_len = dp_packet_size(&packet),
         .buffer_id = UINT32_MAX,
-        .in_port = OFPP_CONTROLLER,
         .ofpacts = ofpacts.data,
         .ofpacts_len = ofpacts.size,
     };
+    match_set_in_port(&po.flow_metadata, OFPP_CONTROLLER);
     enum ofputil_protocol proto = ofputil_protocol_from_ofp_version(version);
     queue_msg(ofputil_encode_packet_out(&po, proto));
     dp_packet_uninit(&packet);
@@ -1790,10 +1790,10 @@ pinctrl_handle_nd_na(const struct flow *ip_flow, const struct match *md,
         .packet = dp_packet_data(&packet),
         .packet_len = dp_packet_size(&packet),
         .buffer_id = UINT32_MAX,
-        .in_port = OFPP_CONTROLLER,
         .ofpacts = ofpacts.data,
         .ofpacts_len = ofpacts.size,
     };
+    match_set_in_port(&po.flow_metadata, OFPP_CONTROLLER);
 
     queue_msg(ofputil_encode_packet_out(&po, proto));
 

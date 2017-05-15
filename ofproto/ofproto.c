@@ -3459,8 +3459,8 @@ ofproto_packet_out_init(struct ofproto *ofproto,
     enum ofperr error;
     struct match match;
 
-    if (ofp_to_u16(po->in_port) >= ofproto->max_ports
-        && ofp_to_u16(po->in_port) < ofp_to_u16(OFPP_MAX)) {
+    uint16_t in_port = ofp_to_u16(po->flow_metadata.flow.in_port.ofp_port);
+    if (in_port >= ofproto->max_ports && in_port < ofp_to_u16(OFPP_MAX)) {
         return OFPERR_OFPBRC_BAD_PORT;
     }
 
@@ -3475,7 +3475,7 @@ ofproto_packet_out_init(struct ofproto *ofproto,
     /* Store struct flow. */
     opo->flow = xmalloc(sizeof *opo->flow);
     flow_extract(opo->packet, opo->flow);
-    opo->flow->in_port.ofp_port = po->in_port;
+    opo->flow->in_port.ofp_port = po->flow_metadata.flow.in_port.ofp_port;
 
     /* Check actions like for flow mods.  We pass a 'table_id' of 0 to
      * ofproto_check_consistency(), which isn't strictly correct because these

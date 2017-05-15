@@ -570,7 +570,8 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
         po.packet = NULL;
         po.packet_len = 0;
     }
-    po.in_port = pi.flow_metadata.flow.in_port.ofp_port;
+    match_set_in_port(&po.flow_metadata,
+                      pi.flow_metadata.flow.in_port.ofp_port);
     po.ofpacts = ofpacts.data;
     po.ofpacts_len = ofpacts.size;
 

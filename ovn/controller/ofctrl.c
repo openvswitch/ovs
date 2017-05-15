@@ -1165,10 +1165,10 @@ ofctrl_inject_pkt(const struct ovsrec_bridge *br_int, const char *flow_s,
         .packet = dp_packet_data(&packet),
         .packet_len = dp_packet_size(&packet),
         .buffer_id = UINT32_MAX,
-        .in_port = uflow.in_port.ofp_port,
         .ofpacts = ofpacts.data,
         .ofpacts_len = ofpacts.size,
     };
+    match_set_in_port(&po.flow_metadata, uflow.in_port.ofp_port);
     enum ofputil_protocol proto = ofputil_protocol_from_ofp_version(version);
     queue_msg(ofputil_encode_packet_out(&po, proto));
     dp_packet_uninit(&packet);
