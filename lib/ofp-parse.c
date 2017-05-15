@@ -622,6 +622,7 @@ parse_ofp_packet_out_str__(struct ofputil_packet_out *po, char *string,
     *po = (struct ofputil_packet_out) {
         .buffer_id = UINT32_MAX,
     };
+    match_init_catchall(&po->flow_metadata);
     match_set_in_port(&po->flow_metadata, OFPP_CONTROLLER);
 
     act_str = extract_actions(string);
@@ -655,8 +656,22 @@ parse_ofp_packet_out_str__(struct ofputil_packet_out *po, char *string,
                 goto out;
             }
         } else {
-            error = xasprintf("unknown keyword %s", name);
-            goto out;
+            const struct mf_field *mf = mf_from_name(name);
+            if (!mf) {
+                error = xasprintf("unknown keyword %s", name);
+                goto out;
+            }
+
+            error = parse_field(mf, value, &po->flow_metadata,
+                                usable_protocols);
+            if (error) {
+                goto out;
+            }
+            if (!mf_is_pipeline_field(mf)) {
+                error = xasprintf("%s is not a valid pipeline field "
+                                  "for PACKET_OUT", name);
+                goto out;
+            }
         }
     }
 

@@ -1920,6 +1920,11 @@ This can be any valid OpenFlow port number, or any of the \fBLOCAL\fR,
 .
 This field is required.
 
+.IP \fIpipeline_field\fR=\fIvalue\fR
+Optionally, user can specify a list of pipeline fields for a packet-out
+message. The supported pipeline fields includes \fBtunnel fields\fR and
+\fBregister fields\fR as defined in \fBovs\-fields\fR(7).
+
 .IP \fBpacket=\fIhex-string\fR
 The actual packet to send, expressed as a string of hexadecimal bytes.
 .
