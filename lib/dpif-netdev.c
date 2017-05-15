@@ -507,9 +507,11 @@ struct tx_port {
  * I/O of all non-pmd threads.  There will be no actual thread created
  * for the instance.
  *
- * Each struct has its own flow table and classifier.  Packets received
- * from managed ports are looked up in the corresponding pmd thread's
- * flow table, and are executed with the found actions.
+ * Each struct has its own flow cache and classifier per managed ingress port.
+ * For packets received on ingress port, a look up is done on corresponding PMD
+ * thread's flow cache and in case of a miss, lookup is performed in the
+ * corresponding classifier of port.  Packets are executed with the found
+ * actions in either case.
  * */
 struct dp_netdev_pmd_thread {
     struct dp_netdev *dp;
