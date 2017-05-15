@@ -796,6 +796,27 @@ tcp,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,nw_src=192
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPT_PACKET_OUT - OF1.5])
+AT_KEYWORDS([ofp-print packet-out])
+AT_CHECK([ovs-ofctl ofp-print "\
+06 0d 00 30 11 22 33 44 ff ff ff 00 00 10 00 00 \
+00 01 00 10 80 00 00 04 00 00 00 01 00 00 00 00 \
+00 00 00 10 ff ff ff fb 05 dc 00 00 00 00 00 00 \
+"], [0], [dnl
+OFPT_PACKET_OUT (OF1.5) (xid=0x11223344): in_port=1 actions=FLOOD buffer=0xffffff00
+])
+
+dnl missing in_port
+AT_CHECK([ovs-ofctl ofp-print "\
+06 0d 00 40 11 22 33 44 ff ff ff 00 00 10 00 00 \
+00 01 00 20 80 00 04 08 00 00 00 00 00 00 00 03 \
+80 00 4C 08 00 00 00 00 00 00 00 05 00 00 00 00 \
+00 00 00 10 ff ff ff fb 05 dc 00 00 00 00 00 00 \
+"], [0], [dnl
+OFPT_PACKET_OUT (OF1.5) (xid=0x11223344): ***decode error: OFPBRC_BAD_PORT***
+])
+AT_CLEANUP
+
 # The flow is formatted with cls_rule_format() for the low-verbosity case.
 AT_SETUP([OFPT_FLOW_MOD - OF1.0 - low verbosity])
 AT_KEYWORDS([ofp-print])

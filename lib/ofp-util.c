@@ -4205,7 +4205,27 @@ ofputil_decode_packet_out(struct ofputil_packet_out *po,
 
     ofpbuf_clear(ofpacts);
     match_init_catchall(&po->flow_metadata);
-    if (raw == OFPRAW_OFPT11_PACKET_OUT) {
+    if (raw == OFPRAW_OFPT15_PACKET_OUT) {
+        enum ofperr error;
+        const struct ofp15_packet_out *opo = ofpbuf_pull(&b, sizeof *opo);
+
+        po->buffer_id = ntohl(opo->buffer_id);
+        error = oxm_pull_match_loose(&b, NULL, &po->flow_metadata);
+        if (error) {
+            return error;
+        }
+
+        if (!po->flow_metadata.wc.masks.in_port.ofp_port) {
+            return OFPERR_OFPBRC_BAD_PORT;
+        }
+
+        error = ofpacts_pull_openflow_actions(&b, ntohs(opo->actions_len),
+                                              oh->version, NULL, NULL,
+                                              ofpacts);
+        if (error) {
+            return error;
+        }
+    } else if (raw == OFPRAW_OFPT11_PACKET_OUT) {
         enum ofperr error;
         ofp_port_t in_port;
         const struct ofp11_packet_out *opo = ofpbuf_pull(&b, sizeof *opo);
@@ -7065,9 +7085,7 @@ ofputil_encode_packet_out(const struct ofputil_packet_out *po,
     case OFP11_VERSION:
     case OFP12_VERSION:
     case OFP13_VERSION:
-    case OFP14_VERSION:
-    case OFP15_VERSION:
-    case OFP16_VERSION: {
+    case OFP14_VERSION: {
         struct ofp11_packet_out *opo;
         size_t len;
 
@@ -7079,6 +7097,24 @@ ofputil_encode_packet_out(const struct ofputil_packet_out *po,
         opo->buffer_id = htonl(po->buffer_id);
         opo->in_port =
             ofputil_port_to_ofp11(po->flow_metadata.flow.in_port.ofp_port);
+        opo->actions_len = htons(len);
+        break;
+    }
+
+    case OFP15_VERSION:
+    case OFP16_VERSION: {
+        struct ofp15_packet_out *opo;
+        size_t len;
+
+        /* The final argument is just an estimate of the space required. */
+        msg = ofpraw_alloc(OFPRAW_OFPT15_PACKET_OUT, ofp_version,
+                           size + NXM_TYPICAL_LEN);
+        ofpbuf_put_zeros(msg, sizeof *opo);
+        oxm_put_match(msg, &po->flow_metadata, ofp_version);
+        len = ofpacts_put_openflow_actions(po->ofpacts, po->ofpacts_len, msg,
+                                           ofp_version);
+        opo = msg->msg;
+        opo->buffer_id = htonl(po->buffer_id);
         opo->actions_len = htons(len);
         break;
     }

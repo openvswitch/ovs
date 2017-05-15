@@ -349,14 +349,6 @@ definitive as OpenFlow 1.5 is not yet published.
 
   (required for OF1.5+ if metering is supported)
 
-* Enable setting all pipeline fields in packet-out
-
-  Prototype for OVS was done during specification.
-
-  (EXT-427)
-
-  (required for OF1.5+)
-
 * Port properties for pipeline fields
 
   Prototype for OVS was done during specification.
