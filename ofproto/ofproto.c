@@ -3556,7 +3556,8 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
 
     /* Decode message. */
     ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
-    error = ofputil_decode_packet_out(&po, oh, &ofpacts);
+    error = ofputil_decode_packet_out(&po, oh, ofproto_get_tun_tab(p),
+                                      &ofpacts);
     if (error) {
         ofpbuf_uninit(&ofpacts);
         return error;
@@ -7923,7 +7924,9 @@ handle_bundle_add(struct ofconn *ofconn, const struct ofp_header *oh)
         COVERAGE_INC(ofproto_packet_out);
 
         /* Decode message. */
-        error = ofputil_decode_packet_out(&po, badd.msg, &ofpacts);
+        error = ofputil_decode_packet_out(&po, badd.msg,
+                                          ofproto_get_tun_tab(ofproto),
+                                          &ofpacts);
         if (!error) {
             po.ofpacts = ofpbuf_steal_data(&ofpacts);   /* Move to heap. */
             error = ofproto_packet_out_init(ofproto, ofconn, &bmsg->opo, &po);

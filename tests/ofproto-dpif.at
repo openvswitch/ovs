@@ -8372,12 +8372,15 @@ AT_CLEANUP
 AT_SETUP([ofproto-dpif packet-out pipeline match field (OpenFlow 1.5)])
 OVS_VSWITCHD_START
 
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=0,len=8}->tun_metadata2"])
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=1,len=4}->tun_metadata3"])
 AT_DATA([flows.txt], [dnl
 table=0,in_port=1 actions=controller
 table=0,tun_id=3 actions=controller
 table=0,metadata=5 actions=controller
 table=0,reg0=1,reg4=2,reg8=3,reg12=5 actions=controller
 table=0,tun_src=1.1.1.1,tun_dst=2.2.2.2,tun_gbp_id=0x01,tun_gbp_flags=0x03 actions=controller
+table=0,tun_metadata3=0x11 actions=controller
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow15 add-flows br0 flows.txt])
 
@@ -8392,7 +8395,7 @@ AT_CHECK([ovs-ofctl -O OpenFlow15 packet-out br0 "in_port=2,tunnel_id=3 packet=0
 AT_CHECK([ovs-ofctl -O OpenFlow15 packet-out br0 "in_port=2,metadata=5 packet=0001020304050010203040503333 actions=table"])
 AT_CHECK([ovs-ofctl -O OpenFlow15 packet-out br0 "in_port=2,reg0=1,reg4=2,reg8=3,reg12=5 packet=0001020304050010203040503333 actions=table"])
 AT_CHECK([ovs-ofctl -O OpenFlow15 packet-out br0 "in_port=2,tun_src=1.1.1.1,tun_dst=2.2.2.2,tun_gbp_id=0x01,tun_gbp_flags=0x03 packet=0001020304050010203040503333 actions=table"])
-AT_CHECK([ovs-ofctl -O OpenFlow15 packet-out br0 "in_port=2,tun_metadata33=3 packet=0001020304050010203040503333 actions=table"])
+AT_CHECK([ovs-ofctl -O OpenFlow15 packet-out br0 "in_port=2,tun_metadata2=0x22,tun_metadata3=0x11 packet=0001020304050010203040503333 actions=table"])
 
 ovs-appctl -t ovs-ofctl ofctl/barrier
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
@@ -8407,6 +8410,8 @@ vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x3333
 OFPT_PACKET_IN (OF1.5): cookie=0x0 total_len=14 reg0=0x1,reg4=0x2,reg8=0x3,reg12=0x5,in_port=2 (via packet_out) data_len=14 (unbuffered)
 vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x3333
 OFPT_PACKET_IN (OF1.5): cookie=0x0 total_len=14 tun_src=1.1.1.1,tun_dst=2.2.2.2,tun_gbp_id=1,tun_gbp_flags=0x3,in_port=2 (via packet_out) data_len=14 (unbuffered)
+vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x3333
+OFPT_PACKET_IN (OF1.5): cookie=0x0 total_len=14 tun_metadata2=0x22,tun_metadata3=0x11,in_port=2 (via packet_out) data_len=14 (unbuffered)
 vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x3333
 OFPT_BARRIER_REPLY (OF1.5):
 ])

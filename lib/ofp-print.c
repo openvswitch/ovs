@@ -240,7 +240,7 @@ ofp_print_packet_out(struct ds *string, const struct ofp_header *oh,
     enum ofperr error;
 
     ofpbuf_init(&ofpacts, 64);
-    error = ofputil_decode_packet_out(&po, oh, &ofpacts);
+    error = ofputil_decode_packet_out(&po, oh, NULL, &ofpacts);
     if (error) {
         ofpbuf_uninit(&ofpacts);
         ofp_print_error(string, error);

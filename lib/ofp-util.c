@@ -4199,6 +4199,7 @@ ofputil_packet_in_private_destroy(struct ofputil_packet_in_private *pin)
 enum ofperr
 ofputil_decode_packet_out(struct ofputil_packet_out *po,
                           const struct ofp_header *oh,
+                          const struct tun_table *tun_table,
                           struct ofpbuf *ofpacts)
 {
     struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
@@ -4211,7 +4212,7 @@ ofputil_decode_packet_out(struct ofputil_packet_out *po,
         const struct ofp15_packet_out *opo = ofpbuf_pull(&b, sizeof *opo);
 
         po->buffer_id = ntohl(opo->buffer_id);
-        error = oxm_pull_match_loose(&b, true, NULL, &po->flow_metadata);
+        error = oxm_pull_match_loose(&b, true, tun_table, &po->flow_metadata);
         if (error) {
             return error;
         }
