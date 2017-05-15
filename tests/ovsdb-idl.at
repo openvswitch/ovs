@@ -1184,7 +1184,7 @@ m4_define([OVSDB_CHECK_IDL_NOTIFY_PY],
 m4_define([OVSDB_CHECK_IDL_NOTIFY_SSL_PY],
   [AT_SETUP([$1 - SSL])
    AT_SKIP_IF([test $HAVE_PYTHON = no])
-   $PYTHON -m OpenSSL.SSL
+   $PYTHON -c "import OpenSSL.SSL"
    SSL_PRESENT=$?
    AT_SKIP_IF([test $SSL_PRESENT != 0])
    AT_KEYWORDS([ovsdb server idl Python notify - ssl socket])

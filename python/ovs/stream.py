@@ -767,7 +767,6 @@ class SSLStream(Stream):
         ctx = SSL.Context(SSL.SSLv23_METHOD)
         ctx.set_verify(SSL.VERIFY_PEER, SSLStream.verify_cb)
         ctx.set_options(SSL.OP_NO_SSLv2 | SSL.OP_NO_SSLv3)
-        ctx.set_session_cache_mode(SSL.SESS_CACHE_OFF)
         # If the client has not set the SSL configuration files
         # exception would be raised.
         ctx.use_privatekey_file(Stream._SSL_private_key_file)
