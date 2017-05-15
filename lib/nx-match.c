@@ -510,8 +510,8 @@ nx_pull_match_entry(struct ofpbuf *b, bool allow_cookie,
  * ethertype being present, when decoding metadata only. */
 static enum ofperr
 nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
-            struct match *match, ovs_be64 *cookie, ovs_be64 *cookie_mask,
-            const struct tun_table *tun_table,
+            bool pipeline_fields_only, struct match *match, ovs_be64 *cookie,
+            ovs_be64 *cookie_mask, const struct tun_table *tun_table,
             const struct vl_mff_map *vl_mff_map)
 {
     ovs_assert((cookie != NULL) == (cookie_mask != NULL));
@@ -549,6 +549,8 @@ nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
             error = OFPERR_OFPBMC_BAD_PREREQ;
         } else if (!mf_is_all_wild(field, &match->wc)) {
             error = OFPERR_OFPBMC_DUP_FIELD;
+        } else if (pipeline_fields_only && !mf_is_pipeline_field(field)) {
+            error = OFPERR_OFPBRC_PIPELINE_FIELDS_ONLY;
         } else {
             char *err_str;
 
@@ -575,7 +577,7 @@ nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
 
 static enum ofperr
 nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
-                struct match *match,
+                bool pipeline_fields_only, struct match *match,
                 ovs_be64 *cookie, ovs_be64 *cookie_mask,
                 const struct tun_table *tun_table,
                 const struct vl_mff_map *vl_mff_map)
@@ -592,14 +594,17 @@ nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
         }
     }
 
-    return nx_pull_raw(p, match_len, strict, match, cookie, cookie_mask,
-                       tun_table, vl_mff_map);
+    return nx_pull_raw(p, match_len, strict, pipeline_fields_only, match,
+                       cookie, cookie_mask, tun_table, vl_mff_map);
 }
 
 /* Parses the nx_match formatted match description in 'b' with length
  * 'match_len'.  Stores the results in 'match'.  If 'cookie' and 'cookie_mask'
  * are valid pointers, then stores the cookie and mask in them if 'b' contains
  * a "NXM_NX_COOKIE*" match.  Otherwise, stores 0 in both.
+ * If 'pipeline_fields_only' is true, this function returns
+ * OFPERR_OFPBRC_PIPELINE_FIELDS_ONLY if there is any non pipeline fields
+ * in 'b'.
  *
  * 'vl_mff_map" is an optional parameter that is used to validate the length
  * of variable length mf_fields in 'match'. If it is not provided, the
@@ -611,11 +616,11 @@ nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
 enum ofperr
 nx_pull_match(struct ofpbuf *b, unsigned int match_len, struct match *match,
               ovs_be64 *cookie, ovs_be64 *cookie_mask,
-              const struct tun_table *tun_table,
+              bool pipeline_fields_only, const struct tun_table *tun_table,
               const struct vl_mff_map *vl_mff_map)
 {
-    return nx_pull_match__(b, match_len, true, match, cookie, cookie_mask,
-                           tun_table, vl_mff_map);
+    return nx_pull_match__(b, match_len, true, pipeline_fields_only, match,
+                           cookie, cookie_mask, tun_table, vl_mff_map);
 }
 
 /* Behaves the same as nx_pull_match(), but skips over unknown NXM headers,
@@ -623,16 +628,16 @@ nx_pull_match(struct ofpbuf *b, unsigned int match_len, struct match *match,
  * prerequisities. */
 enum ofperr
 nx_pull_match_loose(struct ofpbuf *b, unsigned int match_len,
-                    struct match *match,
-                    ovs_be64 *cookie, ovs_be64 *cookie_mask,
+                    struct match *match, ovs_be64 *cookie,
+                    ovs_be64 *cookie_mask, bool pipeline_fields_only,
                     const struct tun_table *tun_table)
 {
-    return nx_pull_match__(b, match_len, false, match, cookie, cookie_mask,
-                           tun_table, NULL);
+    return nx_pull_match__(b, match_len, false, pipeline_fields_only, match,
+                           cookie, cookie_mask, tun_table, NULL);
 }
 
 static enum ofperr
-oxm_pull_match__(struct ofpbuf *b, bool strict,
+oxm_pull_match__(struct ofpbuf *b, bool strict, bool pipeline_fields_only,
                  const struct tun_table *tun_table,
                  const struct vl_mff_map *vl_mff_map, struct match *match)
 {
@@ -662,11 +667,15 @@ oxm_pull_match__(struct ofpbuf *b, bool strict,
     }
 
     return nx_pull_raw(p + sizeof *omh, match_len - sizeof *omh,
-                       strict, match, NULL, NULL, tun_table, vl_mff_map);
+                       strict, pipeline_fields_only, match, NULL, NULL,
+                       tun_table, vl_mff_map);
 }
 
 /* Parses the oxm formatted match description preceded by a struct
  * ofp11_match_header in 'b'.  Stores the result in 'match'.
+ * If 'pipeline_fields_only' is true, this function returns
+ * OFPERR_OFPBRC_PIPELINE_FIELDS_ONLY if there is any non pipeline fields
+ * in 'b'.
  *
  * 'vl_mff_map' is an optional parameter that is used to validate the length
  * of variable length mf_fields in 'match'. If it is not provided, the
@@ -676,20 +685,23 @@ oxm_pull_match__(struct ofpbuf *b, bool strict,
  *
  * Returns 0 if successful, otherwise an OpenFlow error code. */
 enum ofperr
-oxm_pull_match(struct ofpbuf *b, const struct tun_table *tun_table,
+oxm_pull_match(struct ofpbuf *b, bool pipeline_fields_only,
+               const struct tun_table *tun_table,
                const struct vl_mff_map *vl_mff_map, struct match *match)
 {
-    return oxm_pull_match__(b, true, tun_table, vl_mff_map, match);
+    return oxm_pull_match__(b, true, pipeline_fields_only, tun_table,
+                            vl_mff_map, match);
 }
 
 /* Behaves the same as oxm_pull_match() with two exceptions.  Skips over
  * unknown OXM headers instead of failing with an error when they are
  * encountered, and does not check for field prerequisities. */
 enum ofperr
-oxm_pull_match_loose(struct ofpbuf *b, const struct tun_table *tun_table,
-                     struct match *match)
+oxm_pull_match_loose(struct ofpbuf *b, bool pipeline_fields_only,
+                     const struct tun_table *tun_table, struct match *match)
 {
-    return oxm_pull_match__(b, false, tun_table, NULL, match);
+    return oxm_pull_match__(b, false, pipeline_fields_only, tun_table, NULL,
+                            match);
 }
 
 /* Parses the OXM match description in the 'oxm_len' bytes in 'oxm'.  Stores
@@ -705,8 +717,8 @@ oxm_decode_match(const void *oxm, size_t oxm_len, bool loose,
                  const struct tun_table *tun_table,
                  const struct vl_mff_map *vl_mff_map, struct match *match)
 {
-    return nx_pull_raw(oxm, oxm_len, !loose, match, NULL, NULL, tun_table,
-                       vl_mff_map);
+    return nx_pull_raw(oxm, oxm_len, !loose, false, match, NULL, NULL,
+                       tun_table, vl_mff_map);
 }
 
 /* Verify an array of OXM TLVs treating value of each TLV as a mask,

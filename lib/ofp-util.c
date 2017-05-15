@@ -309,7 +309,7 @@ ofputil_pull_ofp11_match(struct ofpbuf *buf, const struct tun_table *tun_table,
         if (padded_match_len) {
             *padded_match_len = ROUND_UP(match_len, 8);
         }
-        return oxm_pull_match(buf, tun_table, vl_mff_map, match);
+        return oxm_pull_match(buf, false, tun_table, vl_mff_map, match);
 
     default:
         return OFPERR_OFPBMC_BAD_TYPE;
@@ -1685,7 +1685,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
             nfm = ofpbuf_pull(&b, sizeof *nfm);
             error = nx_pull_match(&b, ntohs(nfm->match_len),
                                   &fm->match, &fm->cookie, &fm->cookie_mask,
-                                  tun_table, vl_mff_map);
+                                  false, tun_table, vl_mff_map);
             if (error) {
                 return error;
             }
@@ -2324,7 +2324,7 @@ ofputil_decode_nxst_flow_request(struct ofputil_flow_stats_request *fsr,
 
     nfsr = ofpbuf_pull(b, sizeof *nfsr);
     error = nx_pull_match(b, ntohs(nfsr->match_len), &fsr->match,
-                          &fsr->cookie, &fsr->cookie_mask, tun_table,
+                          &fsr->cookie, &fsr->cookie_mask, false, tun_table,
                           vl_mff_map);
     if (error) {
         return error;
@@ -2996,7 +2996,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
                          "claims invalid length %"PRIuSIZE, match_len, length);
             return EINVAL;
         }
-        if (nx_pull_match(msg, match_len, &fs->match, NULL, NULL, NULL,
+        if (nx_pull_match(msg, match_len, &fs->match, NULL, NULL, false, NULL,
                           NULL)) {
             return EINVAL;
         }
@@ -3253,7 +3253,7 @@ ofputil_decode_flow_removed(struct ofputil_flow_removed *fr,
 
         nfr = ofpbuf_pull(&b, sizeof *nfr);
         error = nx_pull_match(&b, ntohs(nfr->match_len), &fr->match, NULL,
-                              NULL, NULL, NULL);
+                              NULL, false, NULL, NULL);
         if (error) {
             return error;
         }
@@ -3514,7 +3514,7 @@ ofputil_decode_packet_in(const struct ofp_header *oh, bool loose,
         const ovs_be64 *cookie = (raw == OFPRAW_OFPT13_PACKET_IN
                                   ? ofpbuf_pull(&b, sizeof *cookie)
                                   : NULL);
-        enum ofperr error = oxm_pull_match_loose(&b, tun_table,
+        enum ofperr error = oxm_pull_match_loose(&b, false, tun_table,
                                                  &pin->flow_metadata);
         if (error) {
             return error;
@@ -3574,7 +3574,8 @@ ofputil_decode_packet_in(const struct ofp_header *oh, bool loose,
 
         npi = ofpbuf_pull(&b, sizeof *npi);
         error = nx_pull_match_loose(&b, ntohs(npi->match_len),
-                                    &pin->flow_metadata, NULL, NULL, NULL);
+                                    &pin->flow_metadata, NULL, NULL, false,
+                                    NULL);
         if (error) {
             return error;
         }
@@ -4210,7 +4211,7 @@ ofputil_decode_packet_out(struct ofputil_packet_out *po,
         const struct ofp15_packet_out *opo = ofpbuf_pull(&b, sizeof *opo);
 
         po->buffer_id = ntohl(opo->buffer_id);
-        error = oxm_pull_match_loose(&b, NULL, &po->flow_metadata);
+        error = oxm_pull_match_loose(&b, true, NULL, &po->flow_metadata);
         if (error) {
             return error;
         }
@@ -6831,7 +6832,7 @@ ofputil_decode_flow_monitor_request(struct ofputil_flow_monitor_request *rq,
     rq->table_id = nfmr->table_id;
 
     return nx_pull_match(msg, ntohs(nfmr->match_len), &rq->match, NULL,
-                         NULL, NULL, NULL);
+                         NULL, false, NULL, NULL);
 }
 
 void
@@ -6939,8 +6940,8 @@ ofputil_decode_flow_update(struct ofputil_flow_update *update,
         update->cookie = nfuf->cookie;
         update->priority = ntohs(nfuf->priority);
 
-        error = nx_pull_match(msg, match_len, &update->match, NULL, NULL, NULL,
-                              NULL);
+        error = nx_pull_match(msg, match_len, &update->match, NULL, NULL,
+                              false, NULL, NULL);
         if (error) {
             return error;
         }

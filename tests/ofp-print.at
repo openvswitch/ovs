@@ -815,6 +815,44 @@ AT_CHECK([ovs-ofctl ofp-print "\
 "], [0], [dnl
 OFPT_PACKET_OUT (OF1.5) (xid=0x11223344): ***decode error: OFPBRC_BAD_PORT***
 ])
+
+AT_CHECK([ovs-ofctl ofp-print "\
+06 0d 00 48 11 22 33 44 ff ff ff 00 00 10 00 00 \
+00 01 00 28 80 00 00 04 00 00 00 01 80 00 04 08 \
+00 00 00 00 00 00 00 03 80 00 4C 08 00 00 00 00 \
+00 00 00 05 00 00 00 00 00 00 00 10 ff ff ff fb \
+05 dc 00 00 00 00 00 00 \
+"], [0], [dnl
+OFPT_PACKET_OUT (OF1.5) (xid=0x11223344): tun_id=0x5,metadata=0x3,in_port=1 actions=FLOOD buffer=0xffffff00
+])
+
+dnl include non pipeline field
+AT_CHECK([ovs-ofctl ofp-print "\
+06 0d 00 38 11 22 33 44 ff ff ff 00 00 10 00 00 \
+00 01 00 18 80 00 00 04 00 00 00 01 80 00 16 04 \
+11 22 33 44 00 00 00 00 00 00 00 10 ff ff ff fb \
+05 dc 00 00 00 00 00 00 \
+"], [0], [dnl
+OFPT_PACKET_OUT (OF1.5) (xid=0x11223344): ***decode error: OFPBRC_PIPELINE_FIELDS_ONLY***
+])
+
+AT_CLEANUP
+
+AT_SETUP([OFPT_PACKET_OUT - OF1.5, with packet])
+AT_KEYWORDS([ofp-print packet-out])
+AT_CHECK([ovs-ofctl ofp-print "\
+06 0d 00 74 11 22 33 44 ff ff ff ff 00 10 00 00 \
+00 01 00 18 80 00 00 04 00 00 00 01 80 00 04 08 \
+00 00 00 00 00 00 00 03 00 00 00 10 ff ff ff fb \
+05 dc 00 00 00 00 00 00 50 54 00 00 00 05 50 54 \
+00 00 00 06 08 00 45 00 00 28 00 00 40 00 40 06 \
+b9 7c c0 a8 00 02 c0 a8 00 01 00 00 2b 60 00 00 \
+00 00 6a 4f 2b 58 50 14 00 00 6d 75 00 00 00 00 \
+00 00 00 00
+"], [0], [dnl
+OFPT_PACKET_OUT (OF1.5) (xid=0x11223344): metadata=0x3,in_port=1 actions=FLOOD data_len=60
+tcp,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,nw_src=192.168.0.2,nw_dst=192.168.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=0,tp_dst=11104,tcp_flags=rst|ack tcp_csum:6d75
+])
 AT_CLEANUP
 
 # The flow is formatted with cls_rule_format() for the low-verbosity case.

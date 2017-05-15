@@ -175,6 +175,9 @@ enum ofperr {
     /* OF1.3+(1,13).  Multipart request overflowed the assigned buffer. */
     OFPERR_OFPBRC_MULTIPART_BUFFER_OVERFLOW,
 
+    /* OF1.5+(1,17).  Match fields must include only pipeline fields. */
+    OFPERR_OFPBRC_PIPELINE_FIELDS_ONLY,
+
     /* NX1.0-1.1(1,256), NX1.2+(2).  Invalid NXM flow match. */
     OFPERR_NXBRC_NXM_INVALID,
 

@@ -1553,6 +1553,96 @@ mf_is_tun_metadata(const struct mf_field *mf)
            mf->id < MFF_TUN_METADATA0 + TUN_METADATA_NUM_OPTS;
 }
 
+bool
+mf_is_pipeline_field(const struct mf_field *mf)
+{
+    switch (mf->id) {
+    case MFF_TUN_ID:
+    case MFF_TUN_SRC:
+    case MFF_TUN_DST:
+    case MFF_TUN_IPV6_SRC:
+    case MFF_TUN_IPV6_DST:
+    case MFF_TUN_FLAGS:
+    case MFF_TUN_GBP_ID:
+    case MFF_TUN_GBP_FLAGS:
+    CASE_MFF_TUN_METADATA:
+    case MFF_METADATA:
+    case MFF_IN_PORT:
+    case MFF_IN_PORT_OXM:
+    CASE_MFF_REGS:
+    CASE_MFF_XREGS:
+    CASE_MFF_XXREGS:
+        return true;
+
+    case MFF_DP_HASH:
+    case MFF_RECIRC_ID:
+    case MFF_CONJ_ID:
+    case MFF_TUN_TTL:
+    case MFF_TUN_TOS:
+    case MFF_ACTSET_OUTPUT:
+    case MFF_SKB_PRIORITY:
+    case MFF_PKT_MARK:
+    case MFF_CT_STATE:
+    case MFF_CT_ZONE:
+    case MFF_CT_MARK:
+    case MFF_CT_LABEL:
+    case MFF_CT_NW_PROTO:
+    case MFF_CT_NW_SRC:
+    case MFF_CT_NW_DST:
+    case MFF_CT_IPV6_SRC:
+    case MFF_CT_IPV6_DST:
+    case MFF_CT_TP_SRC:
+    case MFF_CT_TP_DST:
+    case MFF_ETH_SRC:
+    case MFF_ETH_DST:
+    case MFF_ETH_TYPE:
+    case MFF_VLAN_TCI:
+    case MFF_DL_VLAN:
+    case MFF_VLAN_VID:
+    case MFF_DL_VLAN_PCP:
+    case MFF_VLAN_PCP:
+    case MFF_MPLS_LABEL:
+    case MFF_MPLS_TC:
+    case MFF_MPLS_BOS:
+    case MFF_MPLS_TTL:
+    case MFF_IPV4_SRC:
+    case MFF_IPV4_DST:
+    case MFF_IPV6_SRC:
+    case MFF_IPV6_DST:
+    case MFF_IPV6_LABEL:
+    case MFF_IP_PROTO:
+    case MFF_IP_DSCP:
+    case MFF_IP_DSCP_SHIFTED:
+    case MFF_IP_ECN:
+    case MFF_IP_TTL:
+    case MFF_IP_FRAG:
+    case MFF_ARP_OP:
+    case MFF_ARP_SPA:
+    case MFF_ARP_TPA:
+    case MFF_ARP_SHA:
+    case MFF_ARP_THA:
+    case MFF_TCP_SRC:
+    case MFF_TCP_DST:
+    case MFF_TCP_FLAGS:
+    case MFF_UDP_SRC:
+    case MFF_UDP_DST:
+    case MFF_SCTP_SRC:
+    case MFF_SCTP_DST:
+    case MFF_ICMPV4_TYPE:
+    case MFF_ICMPV4_CODE:
+    case MFF_ICMPV6_TYPE:
+    case MFF_ICMPV6_CODE:
+    case MFF_ND_TARGET:
+    case MFF_ND_SLL:
+    case MFF_ND_TLL:
+        return false;
+
+    case MFF_N_IDS:
+    default:
+        OVS_NOT_REACHED();
+    }
+}
+
 /* Returns true if 'mf' has previously been set in 'flow', false if
  * it contains a non-default value.
  *
