@@ -604,7 +604,7 @@ ofctrl_recv(const struct ofp_header *oh, enum ofptype type)
  * OpenFlow 'cookie'.  The caller retains ownership of 'match' and 'actions'.
  *
  * This just assembles the desired flow table in memory.  Nothing is actually
- * sent to the switch until a later call to ofctrl_run().
+ * sent to the switch until a later call to ofctrl_put().
  *
  * The caller should initialize its own hmap to hold the flows. */
 void
