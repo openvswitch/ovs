@@ -247,7 +247,7 @@ Commands:
 Options:
   --ovn-northd-priority=NICE     set ovn-northd's niceness (default: $OVN_NORTHD_PRIORITY)
   --ovn-northd-wrapper=WRAPPER   run with a wrapper like valgrind for debugging
-  --ovn-controller-priority=NICE     set ovn-northd's niceness (default: $OVN_CONTROLLER_PRIORITY)
+  --ovn-controller-priority=NICE     set ovn-controller's niceness (default: $OVN_CONTROLLER_PRIORITY)
   --ovn-controller-wrapper=WRAPPER   run with a wrapper like valgrind for debugging
   --ovn-manage-ovsdb=yes|no        Whether or not the OVN databases should be
                                    automatically started and stopped along
