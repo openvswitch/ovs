@@ -7,6 +7,7 @@
 : ${NB_MASTER_PROTO_DEFAULT="tcp"}
 : ${SB_MASTER_PORT_DEFAULT="6642"}
 : ${SB_MASTER_PROTO_DEFAULT="tcp"}
+: ${MANAGE_NORTHD_DEFAULT="no"}
 CRM_MASTER="${HA_SBIN_DIR}/crm_master -l reboot"
 CRM_ATTR_REPL_INFO="${HA_SBIN_DIR}/crm_attribute --type crm_config --name OVN_REPL_INFO -s ovn_ovsdb_master_server"
 OVN_CTL=${OCF_RESKEY_ovn_ctl:-${OVN_CTL_DEFAULT}}
@@ -15,6 +16,7 @@ NB_MASTER_PORT=${OCF_RESKEY_nb_master_port:-${NB_MASTER_PORT_DEFAULT}}
 NB_MASTER_PROTO=${OCF_RESKEY_nb_master_protocol:-${NB_MASTER_PROTO_DEFAULT}}
 SB_MASTER_PORT=${OCF_RESKEY_sb_master_port:-${SB_MASTER_PORT_DEFAULT}}
 SB_MASTER_PROTO=${OCF_RESKEY_sb_master_protocol:-${SB_MASTER_PROTO_DEFAULT}}
+MANAGE_NORTHD=${OCF_RESKEY_manage_northd:-${MANAGE_NORTHD_DEFAULT}}
 
 # Invalid IP address is an address that can never exist in the network, as
 # mentioned in rfc-5737. The ovsdb servers connects to this IP address till
@@ -90,6 +92,15 @@ ovsdb_server_metadata() {
   <content type="string" />
   </parameter>
 
+  <parameter name="manage_northd" unique="1">
+  <longdesc lang="en">
+  If set to yes, manages ovn-northd service. ovn-northd will be started in
+  the master node.
+  </longdesc>
+  <shortdesc lang="en">manage ovn-northd service</shortdesc>
+  <content type="string" />
+  </parameter>
+
   </parameters>
 
   <actions>
@@ -122,8 +133,17 @@ ovsdb_server_notify() {
         # the right thing at startup
         ocf_log debug "ovndb_server: $host_name is the master"
         ${CRM_ATTR_REPL_INFO} -v "$host_name"
+        if [ "$MANAGE_NORTHD" = "yes" ]; then
+            # Startup ovn-northd service
+            ${OVN_CTL} --ovn-manage-ovsdb=no start_northd
+        fi
 
     else
+        if [ "$MANAGE_NORTHD" = "yes" ]; then
+            # Stop ovn-northd service. Set --ovn-manage-ovsdb=no so that
+            # ovn-ctl doesn't stop ovsdb-servers.
+            ${OVN_CTL} --ovn-manage-ovsdb=no stop_northd
+        fi
         # Synchronize with the new master
         ocf_log debug "ovndb_server: Connecting to the new master ${OCF_RESKEY_CRM_meta_notify_promote_uname}"
         ${OVN_CTL} demote_ovnnb --db-nb-sync-from-addr=${MASTER_IP} \
@@ -296,6 +316,13 @@ ovsdb_server_start() {
 }
 
 ovsdb_server_stop() {
+    if [ "$MANAGE_NORTHD" = "yes" ]; then
+        # Stop ovn-northd service in case it was running. This is required
+        # when the master is demoted. For other cases, it would be a no-op.
+        # Set --ovn-manage-ovsdb=no so that ovn-ctl doesn't stop ovsdb-servers.
+        ${OVN_CTL} --ovn-manage-ovsdb=no stop_northd
+    fi
+
     ovsdb_server_check_status
     case $? in
         $OCF_NOT_RUNNING)    return ${OCF_SUCCESS};;
