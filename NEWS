@@ -3,6 +3,8 @@ v2.7.1 - xx xxx xxxx
    - Fedora Packaging:
      * OVN services are no longer restarted automatically after upgrade.
    - Add --cleanup option to command 'ovs-appctl exit' (see ovs-vswitchd(8)).
+   - libopenvswitch-2 was renamed to libopenvswitch-2.7. Applications built
+     against libopenvswitch must be recompiled against the newer library.
 
 v2.7.0 - 21 Feb 2017
 ---------------------
