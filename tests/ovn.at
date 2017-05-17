@@ -643,41 +643,41 @@ output;
 
 # next
 next;
-    encodes as resubmit(,27)
+    encodes as resubmit(,19)
 next(11);
     formats as next;
-    encodes as resubmit(,27)
+    encodes as resubmit(,19)
 next(0);
-    encodes as resubmit(,16)
-next(15);
+    encodes as resubmit(,8)
+next(23);
     encodes as resubmit(,31)
 
 next();
     Syntax error at `)' expecting "pipeline" or "table".
 next(10;
     Syntax error at `;' expecting `)'.
-next(16);
-    "next" action cannot advance beyond table 15.
+next(24);
+    "next" action cannot advance beyond table 23.
 
 next(table=11);
     formats as next;
-    encodes as resubmit(,27)
+    encodes as resubmit(,19)
 next(pipeline=ingress);
     formats as next;
-    encodes as resubmit(,27)
+    encodes as resubmit(,19)
 next(table=11, pipeline=ingress);
     formats as next;
-    encodes as resubmit(,27)
+    encodes as resubmit(,19)
 next(pipeline=ingress, table=11);
     formats as next;
-    encodes as resubmit(,27)
+    encodes as resubmit(,19)
 
 next(pipeline=egress);
     "next" action cannot advance from ingress to egress pipeline (use "output" action instead)
 
 next(table=10);
     formats as next(10);
-    encodes as resubmit(,26)
+    encodes as resubmit(,18)
 
 # Loading a constant value.
 tcp.dst=80;
@@ -699,7 +699,7 @@ ip.ttl=4;
     has prereqs eth.type == 0x800 || eth.type == 0x86dd
 outport="eth0"; next; outport="LOCAL"; next;
     formats as outport = "eth0"; next; outport = "LOCAL"; next;
-    encodes as set_field:0x5->reg15,resubmit(,27),set_field:0xfffe->reg15,resubmit(,27)
+    encodes as set_field:0x5->reg15,resubmit(,19),set_field:0xfffe->reg15,resubmit(,19)
 
 inport[1] = 1;
     Cannot select subfield of string field inport.
@@ -780,11 +780,11 @@ ip.ttl
 
 # load balancing.
 ct_lb;
-    encodes as ct(table=27,zone=NXM_NX_REG13[0..15],nat)
+    encodes as ct(table=19,zone=NXM_NX_REG13[0..15],nat)
     has prereqs ip
 ct_lb();
     formats as ct_lb;
-    encodes as ct(table=27,zone=NXM_NX_REG13[0..15],nat)
+    encodes as ct(table=19,zone=NXM_NX_REG13[0..15],nat)
     has prereqs ip
 ct_lb(192.168.1.2:80, 192.168.1.3:80);
     encodes as group:1
@@ -803,7 +803,7 @@ ct_lb(foo);
 
 # ct_next
 ct_next;
-    encodes as ct(table=27,zone=NXM_NX_REG13[0..15])
+    encodes as ct(table=19,zone=NXM_NX_REG13[0..15])
     has prereqs ip
 
 # ct_commit
@@ -855,10 +855,10 @@ ct_commit(ct_label=18446744073709551616);
 
 # ct_dnat
 ct_dnat;
-    encodes as ct(table=27,zone=NXM_NX_REG11[0..15],nat)
+    encodes as ct(table=19,zone=NXM_NX_REG11[0..15],nat)
     has prereqs ip
 ct_dnat(192.168.1.2);
-    encodes as ct(commit,table=27,zone=NXM_NX_REG11[0..15],nat(dst=192.168.1.2))
+    encodes as ct(commit,table=19,zone=NXM_NX_REG11[0..15],nat(dst=192.168.1.2))
     has prereqs ip
 
 ct_dnat(192.168.1.2, 192.168.1.3);
@@ -872,10 +872,10 @@ ct_dnat();
 
 # ct_snat
 ct_snat;
-    encodes as ct(table=27,zone=NXM_NX_REG12[0..15],nat)
+    encodes as ct(table=19,zone=NXM_NX_REG12[0..15],nat)
     has prereqs ip
 ct_snat(192.168.1.2);
-    encodes as ct(commit,table=27,zone=NXM_NX_REG12[0..15],nat(src=192.168.1.2))
+    encodes as ct(commit,table=19,zone=NXM_NX_REG12[0..15],nat(src=192.168.1.2))
     has prereqs ip
 
 ct_snat(192.168.1.2, 192.168.1.3);
@@ -893,7 +893,7 @@ ct_clear;
 
 # clone
 clone { ip4.dst = 255.255.255.255; output; }; next;
-    encodes as clone(set_field:255.255.255.255->ip_dst,resubmit(,64)),resubmit(,27)
+    encodes as clone(set_field:255.255.255.255->ip_dst,resubmit(,64)),resubmit(,19)
     has prereqs eth.type == 0x800
 
 # arp

@@ -730,13 +730,13 @@ syntax, the ``ovs-fields``\(7) manpage explains OpenFlow matches and
   $ sudo ovn-sbctl --ovs lflow-list n1 | abbrev
   Datapath: "neutron-5b6baf" aka "n1" (a8a758)  Pipeline: ingress
     table=0 (ls_in_port_sec_l2  ), priority=100  , match=(eth.src[40]), action=(drop;)
-      table=16 metadata=0x4,dl_src=01:00:00:00:00:00/01:00:00:00:00:00 actions=drop
+      table=8 metadata=0x4,dl_src=01:00:00:00:00:00/01:00:00:00:00:00 actions=drop
     table=0 (ls_in_port_sec_l2  ), priority=100  , match=(vlan.present), action=(drop;)
-      table=16 metadata=0x4,vlan_tci=0x1000/0x1000 actions=drop
+      table=8 metadata=0x4,vlan_tci=0x1000/0x1000 actions=drop
     table=0 (ls_in_port_sec_l2  ), priority=50   , match=(inport == "820c08" && eth.src == {fa:16:3e:a9:4c:c7}), action=(next;)
-      table=16 reg14=0x1,metadata=0x4,dl_src=fa:16:3e:a9:4c:c7 actions=resubmit(,17)
+      table=8 reg14=0x1,metadata=0x4,dl_src=fa:16:3e:a9:4c:c7 actions=resubmit(,9)
     table=0 (ls_in_port_sec_l2  ), priority=50   , match=(inport == "c29d41" && eth.src == {fa:16:3e:99:7a:17}), action=(next;)
-      table=16 reg14=0x2,metadata=0x4,dl_src=fa:16:3e:99:7a:17 actions=resubmit(,17)
+      table=8 reg14=0x2,metadata=0x4,dl_src=fa:16:3e:99:7a:17 actions=resubmit(,9)
   ...
 
 Logical Tracing
@@ -838,34 +838,34 @@ destination addresses and get a physical trace::
       set_field:0xa->reg12
       set_field:0x4->metadata
       set_field:0x1->reg14
+      resubmit(,8)
+   8. reg14=0x1,metadata=0x4,dl_src=fa:16:3e:a9:4c:c7, priority 50, cookie 0x6dcc418a
+      resubmit(,9)
+   9. metadata=0x4, priority 0, cookie 0x8fe8689e
+      resubmit(,10)
+  10. metadata=0x4, priority 0, cookie 0x719549d1
+      resubmit(,11)
+  11. metadata=0x4, priority 0, cookie 0x39c99e6f
+      resubmit(,12)
+  12. metadata=0x4, priority 0, cookie 0x838152a3
+      resubmit(,13)
+  13. metadata=0x4, priority 0, cookie 0x918259e3
+      resubmit(,14)
+  14. metadata=0x4, priority 0, cookie 0xcad14db2
+      resubmit(,15)
+  15. metadata=0x4, priority 0, cookie 0x7834d912
       resubmit(,16)
-  16. reg14=0x1,metadata=0x4,dl_src=fa:16:3e:a9:4c:c7, priority 50, cookie 0x6dcc418a
+  16. metadata=0x4, priority 0, cookie 0x87745210
       resubmit(,17)
-  17. metadata=0x4, priority 0, cookie 0x8fe8689e
+  17. metadata=0x4, priority 0, cookie 0x34951929
       resubmit(,18)
-  18. metadata=0x4, priority 0, cookie 0x719549d1
+  18. metadata=0x4, priority 0, cookie 0xd7a8c9fb
       resubmit(,19)
-  19. metadata=0x4, priority 0, cookie 0x39c99e6f
+  19. metadata=0x4, priority 0, cookie 0xd02e9578
       resubmit(,20)
-  20. metadata=0x4, priority 0, cookie 0x838152a3
+  20. metadata=0x4, priority 0, cookie 0x42d35507
       resubmit(,21)
-  21. metadata=0x4, priority 0, cookie 0x918259e3
-      resubmit(,22)
-  22. metadata=0x4, priority 0, cookie 0xcad14db2
-      resubmit(,23)
-  23. metadata=0x4, priority 0, cookie 0x7834d912
-      resubmit(,24)
-  24. metadata=0x4, priority 0, cookie 0x87745210
-      resubmit(,25)
-  25. metadata=0x4, priority 0, cookie 0x34951929
-      resubmit(,26)
-  26. metadata=0x4, priority 0, cookie 0xd7a8c9fb
-      resubmit(,27)
-  27. metadata=0x4, priority 0, cookie 0xd02e9578
-      resubmit(,28)
-  28. metadata=0x4, priority 0, cookie 0x42d35507
-      resubmit(,29)
-  29. metadata=0x4,dl_dst=fa:16:3e:99:7a:17, priority 50, cookie 0x57a4c46f
+  21. metadata=0x4,dl_dst=fa:16:3e:99:7a:17, priority 50, cookie 0x57a4c46f
       set_field:0x2->reg15
       resubmit(,32)
   32. priority 0
@@ -886,24 +886,24 @@ destination addresses and get a physical trace::
       set_field:0->reg7
       set_field:0->reg8
       set_field:0->reg9
+      resubmit(,40)
+  40. metadata=0x4, priority 0, cookie 0xde9f3899
+      resubmit(,41)
+  41. metadata=0x4, priority 0, cookie 0x74074eff
+      resubmit(,42)
+  42. metadata=0x4, priority 0, cookie 0x7789c8b1
+      resubmit(,43)
+  43. metadata=0x4, priority 0, cookie 0xa6b002c0
+      resubmit(,44)
+  44. metadata=0x4, priority 0, cookie 0xaeab2b45
+      resubmit(,45)
+  45. metadata=0x4, priority 0, cookie 0x290cc4d4
+      resubmit(,46)
+  46. metadata=0x4, priority 0, cookie 0xa3223b88
+      resubmit(,47)
+  47. metadata=0x4, priority 0, cookie 0x7ac2132e
       resubmit(,48)
-  48. metadata=0x4, priority 0, cookie 0xde9f3899
-      resubmit(,49)
-  49. metadata=0x4, priority 0, cookie 0x74074eff
-      resubmit(,50)
-  50. metadata=0x4, priority 0, cookie 0x7789c8b1
-      resubmit(,51)
-  51. metadata=0x4, priority 0, cookie 0xa6b002c0
-      resubmit(,52)
-  52. metadata=0x4, priority 0, cookie 0xaeab2b45
-      resubmit(,53)
-  53. metadata=0x4, priority 0, cookie 0x290cc4d4
-      resubmit(,54)
-  54. metadata=0x4, priority 0, cookie 0xa3223b88
-      resubmit(,55)
-  55. metadata=0x4, priority 0, cookie 0x7ac2132e
-      resubmit(,56)
-  56. reg15=0x2,metadata=0x4,dl_dst=fa:16:3e:99:7a:17, priority 50, cookie 0x8aa6426d
+  48. reg15=0x2,metadata=0x4,dl_dst=fa:16:3e:99:7a:17, priority 50, cookie 0x8aa6426d
       resubmit(,64)
   64. priority 0
       resubmit(,65)
@@ -1011,19 +1011,19 @@ to ``ofproto/trace``, and it will tell us what happens::
       set_field:0xa->reg12
       set_field:0x4->metadata
       set_field:0x1->reg14
-      resubmit(,16)
-  16. reg14=0x1,metadata=0x4,dl_src=fa:16:3e:a9:4c:c7, priority 50, cookie 0x6dcc418a
-      resubmit(,17)
-  17. ip,reg14=0x1,metadata=0x4,dl_src=fa:16:3e:a9:4c:c7,nw_src=10.1.1.5, priority 90, cookie 0x343af48c
-      resubmit(,18)
-  18. metadata=0x4, priority 0, cookie 0x719549d1
-      resubmit(,19)
-  19. ip,metadata=0x4, priority 100, cookie 0x46c089e6
+      resubmit(,8)
+   8. reg14=0x1,metadata=0x4,dl_src=fa:16:3e:a9:4c:c7, priority 50, cookie 0x6dcc418a
+      resubmit(,9)
+   9. ip,reg14=0x1,metadata=0x4,dl_src=fa:16:3e:a9:4c:c7,nw_src=10.1.1.5, priority 90, cookie 0x343af48c
+      resubmit(,10)
+  10. metadata=0x4, priority 0, cookie 0x719549d1
+      resubmit(,11)
+  11. ip,metadata=0x4, priority 100, cookie 0x46c089e6
       load:0x1->NXM_NX_XXREG0[96]
-      resubmit(,20)
-  20. metadata=0x4, priority 0, cookie 0x838152a3
-      resubmit(,21)
-  21. ip,reg0=0x1/0x1,metadata=0x4, priority 100, cookie 0xd1941634
+      resubmit(,12)
+  12. metadata=0x4, priority 0, cookie 0x838152a3
+      resubmit(,13)
+  13. ip,reg0=0x1/0x1,metadata=0x4, priority 100, cookie 0xd1941634
       ct(table=22,zone=NXM_NX_REG13[0..15])
       drop
 

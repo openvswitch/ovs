@@ -789,7 +789,7 @@
         VXLAN tunnels do not transmit the logical output port field.
         Since VXLAN tunnels do not carry a logical output port field in
         the tunnel key, when a packet is received from VXLAN tunnel by
-        an OVN hypervisor, the packet is resubmitted to table 16 to
+        an OVN hypervisor, the packet is resubmitted to table 8 to
         determine the output port(s);  when the packet reaches table 32,
         these packets are resubmitted to table 33 for local delivery by
         checking a MLF_RCV_FROM_VXLAN flag, which is set when the packet
@@ -850,7 +850,7 @@
         the packet's ingress port.  Its actions annotate the packet with
         logical metadata, by setting the logical datapath field to identify the
         logical datapath that the packet is traversing and the logical input
-        port field to identify the ingress port.  Then it resubmits to table 16
+        port field to identify the ingress port.  Then it resubmits to table 8
         to enter the logical ingress pipeline.
       </p>
 
@@ -879,13 +879,13 @@
 
     <li>
       <p>
-        OpenFlow tables 16 through 31 execute the logical ingress pipeline from
+        OpenFlow tables 8 through 31 execute the logical ingress pipeline from
         the <code>Logical_Flow</code> table in the OVN Southbound database.
         These tables are expressed entirely in terms of logical concepts like
         logical ports and logical datapaths.  A big part of
         <code>ovn-controller</code>'s job is to translate them into equivalent
         OpenFlow (in particular it translates the table numbers:
-        <code>Logical_Flow</code> tables 0 through 15 become OpenFlow tables 16
+        <code>Logical_Flow</code> tables 0 through 23 become OpenFlow tables 8
         through 31).
       </p>
 
@@ -1017,7 +1017,7 @@
           based on flag MLF_RCV_FROM_VXLAN, and resubmit these packets to table
           33 for local delivery.  Packets received from VXLAN tunnels reach
           here because of a lack of logical output port field in the tunnel key
-          and thus these packets needed to be submitted to table 16 to
+          and thus these packets needed to be submitted to table 8 to
           determine the output port.
         </li>
         <li>
@@ -1055,13 +1055,13 @@
       <p>
         Table 34 matches and drops packets for which the logical input and
         output ports are the same and the MLF_ALLOW_LOOPBACK flag is not
-        set.  It resubmits other packets to table 48.
+        set.  It resubmits other packets to table 40.
       </p>
     </li>
 
     <li>
       <p>
-        OpenFlow tables 48 through 63 execute the logical egress pipeline from
+        OpenFlow tables 40 through 63 execute the logical egress pipeline from
         the <code>Logical_Flow</code> table in the OVN Southbound database.
         The egress pipeline can perform a final stage of validation before
         packet delivery.  Eventually, it may execute an <code>output</code>
@@ -1141,27 +1141,28 @@
 
     <li>
       In OVS versions 2.7 and later, the packet is cloned and resubmitted
-      directly to OpenFlow flow table 16, setting the logical ingress
-      port to the peer logical patch port, and using the peer logical
-      patch port's logical datapath (that represents the logical router).
+      directly to the first OpenFlow flow table in the ingress pipeline,
+      setting the logical ingress port to the peer logical patch port, and
+      using the peer logical patch port's logical datapath (that
+      represents the logical router).
     </li>
   </ul>
 
   <p>
     The packet re-enters the ingress pipeline in order to traverse tables
-    16 to 65 again, this time using the logical datapath representing the
+    8 to 65 again, this time using the logical datapath representing the
     logical router.  The processing continues as described in the previous
     section <code>Architectural Physical Life Cycle of a Packet</code>.
     When the packet reachs table 65, the logical egress port will once
     again be a logical patch port.  In the same manner as described above,
     this logical patch port will cause the packet to be resubmitted to
-    OpenFlow tables 16 to 65, this time using the logical datapath
+    OpenFlow tables 8 to 65, this time using the logical datapath
     representing the logical switch that the destination VM or container
     is attached to.
   </p>
 
   <p>
-    The packet traverses tables 16 to 65 a third and final time.  If the
+    The packet traverses tables 8 to 65 a third and final time.  If the
     destination VM or container resides on a remote hypervisor, then table
     32 will send the packet on a tunnel port from the sender's hypervisor
     to the remote hypervisor.  Finally table 65 will output the packet

@@ -1,7 +1,7 @@
 {
     "name": "OVN_Southbound",
-    "version": "1.12.0",
-    "cksum": "4119465100 10905",
+    "version": "1.12.1",
+    "cksum": "1914140659 10905",
     "tables": {
         "SB_Global": {
             "columns": {
@@ -63,7 +63,7 @@
                                                        "egress"]]}}},
                 "table_id": {"type": {"key": {"type": "integer",
                                               "minInteger": 0,
-                                              "maxInteger": 15}}},
+                                              "maxInteger": 23}}},
                 "priority": {"type": {"key": {"type": "integer",
                                               "minInteger": 0,
                                               "maxInteger": 65535}}},

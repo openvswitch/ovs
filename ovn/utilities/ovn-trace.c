@@ -826,7 +826,7 @@ read_flows(void)
             .pipeline = (!strcmp(sblf->pipeline, "ingress")
                          ? OVNACT_P_INGRESS
                          : OVNACT_P_EGRESS),
-            .n_tables = 16,
+            .n_tables = 24,
             .cur_ltable = sblf->table_id,
         };
         uint64_t stub[1024 / 8];

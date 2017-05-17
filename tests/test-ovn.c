@@ -1224,7 +1224,7 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
             .symtab = &symtab,
             .dhcp_opts = &dhcp_opts,
             .dhcpv6_opts = &dhcpv6_opts,
-            .n_tables = 16,
+            .n_tables = 24,
             .cur_ltable = 10,
         };
         error = ovnacts_parse_string(ds_cstr(&input), &pp, &ovnacts, &prereqs);
@@ -1245,8 +1245,8 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
                 .group_table = &group_table,
 
                 .pipeline = OVNACT_P_INGRESS,
-                .ingress_ptable = 16,
-                .egress_ptable = 48,
+                .ingress_ptable = 8,
+                .egress_ptable = 40,
                 .output_ptable = 64,
                 .mac_bind_ptable = 65,
             };

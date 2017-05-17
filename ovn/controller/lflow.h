@@ -49,17 +49,17 @@ struct uuid;
  * These are heavily documented in ovn-architecture(7), please update it if
  * you make any changes. */
 #define OFTABLE_PHY_TO_LOG            0
-#define OFTABLE_LOG_INGRESS_PIPELINE 16 /* First of LOG_PIPELINE_LEN tables. */
+#define OFTABLE_LOG_INGRESS_PIPELINE  8 /* First of LOG_PIPELINE_LEN tables. */
 #define OFTABLE_REMOTE_OUTPUT        32
 #define OFTABLE_LOCAL_OUTPUT         33
 #define OFTABLE_CHECK_LOOPBACK       34
-#define OFTABLE_LOG_EGRESS_PIPELINE  48 /* First of LOG_PIPELINE_LEN tables. */
+#define OFTABLE_LOG_EGRESS_PIPELINE  40 /* First of LOG_PIPELINE_LEN tables. */
 #define OFTABLE_SAVE_INPORT          64
 #define OFTABLE_LOG_TO_PHY           65
 #define OFTABLE_MAC_BINDING          66
 
 /* The number of tables for the ingress and egress pipelines. */
-#define LOG_PIPELINE_LEN 16
+#define LOG_PIPELINE_LEN 24
 
 void lflow_init(void);
 void lflow_run(struct controller_ctx *,
