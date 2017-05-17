@@ -610,9 +610,9 @@ AC_DEFUN([OVS_LIBTOOL_VERSIONS],
   OVS_MAJOR=`echo "$PACKAGE_VERSION" | sed -e 's/[[.]].*//'`
   OVS_MINOR=`echo "$PACKAGE_VERSION" | sed -e "s/^$OVS_MAJOR//" -e 's/^.//' -e 's/[[.]].*//'`
   OVS_MICRO=`echo "$PACKAGE_VERSION" | sed -e "s/^$OVS_MAJOR.$OVS_MINOR//" -e 's/^.//' -e 's/[[^0-9]].*//'`
-  OVS_LT_RELINFO="-release $OVS_MAJOR"
-  OVS_LT_VERINFO="-version-info $OVS_MINOR:$OVS_MICRO"
+  OVS_LT_RELINFO="-release $OVS_MAJOR.$OVS_MINOR"
+  OVS_LT_VERINFO="-version-info $LT_CURRENT:$OVS_MICRO"
   OVS_LTINFO="$OVS_LT_RELINFO $OVS_LT_VERINFO"
-  AC_MSG_RESULT([libX-$OVS_MAJOR.so.$OVS_MINOR.0.$OVS_MICRO)])
+  AC_MSG_RESULT([libX-$OVS_MAJOR.$OVS_MINOR.so.$LT_CURRENT.0.$OVS_MICRO)])
   AC_SUBST(OVS_LTINFO)
     ])

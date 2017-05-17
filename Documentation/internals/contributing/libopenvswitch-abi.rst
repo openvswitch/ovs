@@ -87,16 +87,18 @@ ABI Policy
 ----------
 
 Open vSwitch will export the ABI version at the time of release, such that the
-library name will be the major version, and the rest of the release version
-information will be conveyed with a libtool interface version.
+library name will be the major.minor version, and the rest of the release
+version information will be conveyed with a libtool interface version.
 
 The intent is for Open vSwitch to maintain an ABI stability for each minor
 revision only (so that Open vSwitch release 2.5 carries a guarantee for all
-2.5.ZZ micro-releases).  This means that any porting effort to stable branches
-must take not to disrupt the existing ABI.  Each new 'minor-level' release
-bumps the libtool 'current' version, which informs the linker of a backwards
-incompatible interface, signaling that libraries exposed by Open vSwitch 2.6
-will not maintain ABI stability with Open vSwitch 2.5.
+2.5.ZZ micro-releases). This means that any porting effort to stable branches
+must take not to disrupt the existing ABI.
+
+In the event that a bug must be fixed in a backwards-incompatible way,
+developers must bump the libtool 'current' version to inform the linker of the
+ABI breakage. This will signal that libraries exposed by the subsequent release
+will not maintain ABI stability with the previous version.
 
 Coding
 -------
