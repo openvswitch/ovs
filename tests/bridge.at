@@ -49,23 +49,30 @@ OVS_VSWITCHD_START(
 
 dnl Start ovs-testcontroller
 AT_CHECK([ovs-testcontroller --detach punix:controller], [0], [ignore])
+OVS_WAIT_UNTIL([test -e controller])
 
 dnl Add the controller to both bridges, 5 seconds apart.
 AT_CHECK([ovs-vsctl set-controller br0 unix:controller])
+AT_CHECK([ovs-vsctl set-fail-mode br0 secure])
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 AT_CHECK([ovs-vsctl set-controller br1 unix:controller])
+AT_CHECK([ovs-vsctl set-fail-mode br1 secure])
 
-dnl Wait for the controller connection to come up
-for i in `seq 0 7`
+dnl Wait for the controller connectionsi to be up
+for i in `seq 0 19`
 do
-    AT_CHECK([ovs-appctl time/warp 10], [0], [ignore])
+    if ovs-vsctl --column=is_connected list controller |grep "false"; then
+        :
+    else
+        break
+    fi
+    ovs-appctl time/warp 1100
 done
 
-dnl Make sure the connection status are different
-AT_CHECK([ovs-vsctl --columns=status list controller | sort], [0], [dnl
-
-status              : {sec_since_connect="0", state=ACTIVE}
-status              : {sec_since_connect="5", state=ACTIVE}
+dnl Make sure the connection status have two records and they are different.
+dnl (The exact output contains timing information that are machine dependent.)
+AT_CHECK([ovs-vsctl --column=status list controller | dnl
+          grep "status" | sort -u |wc -l], [0], [2
 ])
 
 OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
