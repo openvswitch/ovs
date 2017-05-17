@@ -2035,18 +2035,18 @@ OvsDoExecuteActions(POVS_SWITCH_CONTEXT switchContext,
                 }
                 goto dropit;
             } else if (oldNbl != ovsFwdCtx.curNbl) {
-               /*
-                * OvsIpv4Reassemble consumes the original NBL and creates a
-                * new one and assigns it to the curNbl of ovsFwdCtx.
-                */
-               OvsInitForwardingCtx(&ovsFwdCtx,
-                                    ovsFwdCtx.switchContext,
-                                    ovsFwdCtx.curNbl,
-                                    ovsFwdCtx.srcVportNo,
-                                    ovsFwdCtx.sendFlags,
-                                    NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(ovsFwdCtx.curNbl),
-                                    ovsFwdCtx.completionList,
-                                    &ovsFwdCtx.layers, FALSE);
+                /*
+                 * OvsIpv4Reassemble consumes the original NBL and creates a
+                 * new one and assigns it to the curNbl of ovsFwdCtx.
+                 */
+                OvsInitForwardingCtx(&ovsFwdCtx,
+                                     ovsFwdCtx.switchContext,
+                                     ovsFwdCtx.curNbl,
+                                     ovsFwdCtx.srcVportNo,
+                                     ovsFwdCtx.sendFlags,
+                                     NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(ovsFwdCtx.curNbl),
+                                     ovsFwdCtx.completionList,
+                                     &ovsFwdCtx.layers, FALSE);
             }
             break;
         }
