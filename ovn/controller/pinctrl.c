@@ -1000,7 +1000,7 @@ pinctrl_recv(const struct ofp_header *oh, enum ofptype type,
         set_switch_config(swconn, &config);
     } else if (type == OFPTYPE_PACKET_IN) {
         process_packet_in(oh, ctx);
-    } else if (type != OFPTYPE_ECHO_REPLY && type != OFPTYPE_BARRIER_REPLY) {
+    } else {
         if (VLOG_IS_DBG_ENABLED()) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
 

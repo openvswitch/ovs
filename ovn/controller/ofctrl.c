@@ -587,11 +587,7 @@ ofctrl_recv(const struct ofp_header *oh, enum ofptype type)
     } else if (type == OFPTYPE_ERROR) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
         log_openflow_rl(&rl, VLL_INFO, oh, "OpenFlow error");
-    } else if (type != OFPTYPE_ECHO_REPLY &&
-               type != OFPTYPE_BARRIER_REPLY &&
-               type != OFPTYPE_PACKET_IN &&
-               type != OFPTYPE_PORT_STATUS &&
-               type != OFPTYPE_FLOW_REMOVED) {
+    } else {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
         log_openflow_rl(&rl, VLL_DBG, oh, "OpenFlow packet ignored");
     }
