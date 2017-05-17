@@ -122,8 +122,12 @@ ovsdb_server_notify() {
         # the right thing at startup
         ocf_log debug "ovndb_server: $host_name is the master"
         ${CRM_ATTR_REPL_INFO} -v "$host_name"
+        # Startup ovn-northd service
+        ${OVN_CTL} start_northd
 
     else
+        # Stop ovn-northd service
+        ${OVN_CTL} stop_northd
         # Synchronize with the new master
         ocf_log debug "ovndb_server: Connecting to the new master ${OCF_RESKEY_CRM_meta_notify_promote_uname}"
         ${OVN_CTL} demote_ovnnb --db-nb-sync-from-addr=${MASTER_IP} \
