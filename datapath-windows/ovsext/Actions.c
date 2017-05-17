@@ -2052,6 +2052,7 @@ OvsDoExecuteActions(POVS_SWITCH_CONTEXT switchContext,
                                      NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(ovsFwdCtx.curNbl),
                                      ovsFwdCtx.completionList,
                                      &ovsFwdCtx.layers, FALSE);
+                key->ipKey.nwFrag = OVS_FRAG_TYPE_NONE;
             }
             break;
         }
