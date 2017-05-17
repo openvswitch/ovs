@@ -295,12 +295,12 @@
     <ClCompile Include="Vport.c" />
     <ClCompile Include="Vxlan.c" />
     <ResourceCompile Include="ovsext.rc">
-      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Win8 Release|x64'">%(PreprocessorDefinitions);NDIS_WDM=1;NDIS630=1;VersionWithCommas=$(Version.Replace('.',','))</PreprocessorDefinitions>
-      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|x64'">%(PreprocessorDefinitions);NDIS_WDM=1;NDIS630=1;VersionWithCommas=$(Version.Replace('.',','))</PreprocessorDefinitions>
-      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|x64'">%(PreprocessorDefinitions);NDIS_WDM=1;NDIS640=1;VersionWithCommas=$(Version.Replace('.',','))</PreprocessorDefinitions>
-      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|x64'">%(PreprocessorDefinitions);NDIS_WDM=1;NDIS640=1;VersionWithCommas=$(Version.Replace('.',','))</PreprocessorDefinitions>
-      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'">%(PreprocessorDefinitions);NDIS_WDM=1;NDIS640=1;VersionWithCommas=$(Version.Replace('.',','))</PreprocessorDefinitions>
-      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'">%(PreprocessorDefinitions);NDIS_WDM=1;NDIS640=1;VersionWithCommas=$(Version.Replace('.',','))</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Win8 Release|x64'">%(PreprocessorDefinitions);NDIS_WDM=1;NDIS630=1;VersionWithDots=$(Version);VersionWithCommas=$(Version.Replace('.',','))</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|x64'">%(PreprocessorDefinitions);NDIS_WDM=1;NDIS630=1;VersionWithDots=$(Version);VersionWithCommas=$(Version.Replace('.',','))</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|x64'">%(PreprocessorDefinitions);NDIS_WDM=1;NDIS640=1;VersionWithDots=$(Version);VersionWithCommas=$(Version.Replace('.',','))</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|x64'">%(PreprocessorDefinitions);NDIS_WDM=1;NDIS640=1;VersionWithDots=$(Version);VersionWithCommas=$(Version.Replace('.',','))</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'">%(PreprocessorDefinitions);NDIS_WDM=1;NDIS640=1;VersionWithDots=$(Version);VersionWithCommas=$(Version.Replace('.',','))</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'">%(PreprocessorDefinitions);NDIS_WDM=1;NDIS640=1;VersionWithDots=$(Version);VersionWithCommas=$(Version.Replace('.',','))</PreprocessorDefinitions>
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
