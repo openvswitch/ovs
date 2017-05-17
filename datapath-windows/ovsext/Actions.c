@@ -2032,6 +2032,11 @@ OvsDoExecuteActions(POVS_SWITCH_CONTEXT switchContext,
                 if (status != NDIS_STATUS_PENDING) {
                     OVS_LOG_ERROR("CT Action failed");
                     dropReason = L"OVS-conntrack action failed";
+                } else {
+                    /* We added a new pending NBL to be consumed later.
+                     * Report to the userspace that the action applied
+                     * successfully */
+                    status = NDIS_STATUS_SUCCESS;
                 }
                 goto dropit;
             } else if (oldNbl != ovsFwdCtx.curNbl) {
