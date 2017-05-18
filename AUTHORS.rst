@@ -243,6 +243,7 @@ Philippe Jung                   phil.jung@free.fr
 Pim van den Berg                pim@nethuis.nl
 pritesh                         pritesh.kothari@cisco.com
 Pravin B Shelar                 pshelar@nicira.com
+PrzemyslawX Szczerbik           przemyslawx.szczerbik@intel.com
 Quentin Monnet                  quentin.monnet@6wind.com
 Raju Subramanian                rsubramanian@nicira.com
 Rami Rosen                      ramirose@gmail.com
