@@ -34,6 +34,7 @@
 
 #include "bitmap.h"
 #include "dpif-provider.h"
+#include "dpif-netlink-rtnl.h"
 #include "openvswitch/dynamic-string.h"
 #include "flow.h"
 #include "fat-rwlock.h"
@@ -784,7 +785,7 @@ get_vport_type(const struct dpif_netlink_vport *vport)
     return "unknown";
 }
 
-static enum ovs_vport_type
+enum ovs_vport_type
 netdev_to_ovs_vport_type(const char *type)
 {
     if (!strcmp(type, "tap") || !strcmp(type, "system")) {
@@ -947,8 +948,34 @@ dpif_netlink_port_add_compat(struct dpif_netlink *dpif, struct netdev *netdev,
 
 }
 
+static int OVS_UNUSED
+dpif_netlink_rtnl_port_create_and_add(struct dpif_netlink *dpif,
+                                      struct netdev *netdev,
+                                      odp_port_t *port_nop)
+    OVS_REQ_WRLOCK(dpif->upcall_lock)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
+    char namebuf[NETDEV_VPORT_NAME_BUFSIZE];
+    const char *name;
+    int error;
 
+    error = dpif_netlink_rtnl_port_create(netdev);
+    if (error) {
+        if (error != EOPNOTSUPP) {
+            VLOG_INFO_RL(&rl, "Failed to create %s with rtnetlink: %s",
+                         netdev_get_name(netdev), ovs_strerror(error));
+        }
+        return error;
+    }
 
+    name = netdev_vport_get_dpif_port(netdev, namebuf, sizeof namebuf);
+    error = dpif_netlink_port_add__(dpif, name, OVS_VPORT_TYPE_NETDEV, NULL,
+                                    port_nop);
+    if (error) {
+        dpif_netlink_rtnl_port_destroy(name, netdev_get_type(netdev));
+    }
+    return error;
+}
 
 static int
 dpif_netlink_port_add(struct dpif *dpif_, struct netdev *netdev,
