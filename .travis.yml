@@ -25,17 +25,16 @@ sudo: false
 
 env:
   - OPTS="--disable-ssl"
-  - TESTSUITE=1 KERNEL=3.16.39
+  - TESTSUITE=1 KERNEL=3.16.43
   - TESTSUITE=1 OPTS="--enable-shared"
   - BUILD_ENV="-m32" OPTS="--disable-ssl"
-  - KERNEL=3.16.39 DPDK=1
-  - KERNEL=3.16.39 DPDK=1 OPTS="--enable-shared"
-  - KERNEL=4.10.12
-  - KERNEL=4.9.24
-  - KERNEL=4.4.63
+  - KERNEL=3.16.43 DPDK=1
+  - KERNEL=3.16.43 DPDK=1 OPTS="--enable-shared"
+  - KERNEL=4.11.1
+  - KERNEL=4.10.16
+  - KERNEL=4.9.28
+  - KERNEL=4.4.68
   - KERNEL=4.1.39
-  - KERNEL=3.18.50
-  - KERNEL=3.12.73
   - KERNEL=3.10.105
   - TESTSUITE=1 LIBS=-ljemalloc
 
