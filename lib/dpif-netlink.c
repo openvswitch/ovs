@@ -785,10 +785,8 @@ get_vport_type(const struct dpif_netlink_vport *vport)
 }
 
 static enum ovs_vport_type
-netdev_to_ovs_vport_type(const struct netdev *netdev)
+netdev_to_ovs_vport_type(const char *type)
 {
-    const char *type = netdev_get_type(netdev);
-
     if (!strcmp(type, "tap") || !strcmp(type, "system")) {
         return OVS_VPORT_TYPE_NETDEV;
     } else if (!strcmp(type, "internal")) {
@@ -809,19 +807,14 @@ netdev_to_ovs_vport_type(const struct netdev *netdev)
 }
 
 static int
-dpif_netlink_port_add__(struct dpif_netlink *dpif, struct netdev *netdev,
+dpif_netlink_port_add__(struct dpif_netlink *dpif, const char *name,
+                        enum ovs_vport_type type,
+                        struct ofpbuf *options,
                         odp_port_t *port_nop)
     OVS_REQ_WRLOCK(dpif->upcall_lock)
 {
-    const struct netdev_tunnel_config *tnl_cfg;
-    char namebuf[NETDEV_VPORT_NAME_BUFSIZE];
-    const char *name = netdev_vport_get_dpif_port(netdev,
-                                                  namebuf, sizeof namebuf);
-    const char *type = netdev_get_type(netdev);
     struct dpif_netlink_vport request, reply;
     struct ofpbuf *buf;
-    uint64_t options_stub[64 / 8];
-    struct ofpbuf options;
     struct nl_sock **socksp = NULL;
     uint32_t *upcall_pids;
     int error = 0;
@@ -836,61 +829,18 @@ dpif_netlink_port_add__(struct dpif_netlink *dpif, struct netdev *netdev,
     dpif_netlink_vport_init(&request);
     request.cmd = OVS_VPORT_CMD_NEW;
     request.dp_ifindex = dpif->dp_ifindex;
-    request.type = netdev_to_ovs_vport_type(netdev);
-    if (request.type == OVS_VPORT_TYPE_UNSPEC) {
-        VLOG_WARN_RL(&error_rl, "%s: cannot create port `%s' because it has "
-                     "unsupported type `%s'",
-                     dpif_name(&dpif->dpif), name, type);
-        vport_del_socksp(dpif, socksp);
-        return EINVAL;
-    }
+    request.type = type;
     request.name = name;
-
-    if (request.type == OVS_VPORT_TYPE_NETDEV) {
-#ifdef _WIN32
-        /* XXX : Map appropiate Windows handle */
-#else
-        netdev_linux_ethtool_set_flag(netdev, ETH_FLAG_LRO, "LRO", false);
-#endif
-    }
-
-#ifdef _WIN32
-    if (request.type == OVS_VPORT_TYPE_INTERNAL) {
-        if (!create_wmi_port(name)){
-            VLOG_ERR("Could not create wmi internal port with name:%s", name);
-            vport_del_socksp(dpif, socksp);
-            return EINVAL;
-        };
-    }
-#endif
-
-    tnl_cfg = netdev_get_tunnel_config(netdev);
-    if (tnl_cfg && (tnl_cfg->dst_port != 0 || tnl_cfg->exts)) {
-        ofpbuf_use_stack(&options, options_stub, sizeof options_stub);
-        if (tnl_cfg->dst_port) {
-            nl_msg_put_u16(&options, OVS_TUNNEL_ATTR_DST_PORT,
-                           ntohs(tnl_cfg->dst_port));
-        }
-        if (tnl_cfg->exts) {
-            size_t ext_ofs;
-            int i;
-
-            ext_ofs = nl_msg_start_nested(&options, OVS_TUNNEL_ATTR_EXTENSION);
-            for (i = 0; i < 32; i++) {
-                if (tnl_cfg->exts & (1 << i)) {
-                    nl_msg_put_flag(&options, i);
-                }
-            }
-            nl_msg_end_nested(&options, ext_ofs);
-        }
-        request.options = options.data;
-        request.options_len = options.size;
-    }
 
     request.port_no = *port_nop;
     upcall_pids = vport_socksp_to_pids(socksp, dpif->n_handlers);
     request.n_upcall_pids = socksp ? dpif->n_handlers : 1;
     request.upcall_pids = upcall_pids;
+
+    if (options) {
+        request.options = options->data;
+        request.options_len = options->size;
+    }
 
     error = dpif_netlink_vport_transact(&request, &reply, &buf);
     if (!error) {
@@ -931,6 +881,76 @@ exit:
 }
 
 static int
+dpif_netlink_port_add_compat(struct dpif_netlink *dpif, struct netdev *netdev,
+                             odp_port_t *port_nop)
+    OVS_REQ_WRLOCK(dpif->upcall_lock)
+{
+    const struct netdev_tunnel_config *tnl_cfg;
+    char namebuf[NETDEV_VPORT_NAME_BUFSIZE];
+    const char *type = netdev_get_type(netdev);
+    uint64_t options_stub[64 / 8];
+    enum ovs_vport_type ovs_type;
+    struct ofpbuf options;
+    const char *name;
+
+    name = netdev_vport_get_dpif_port(netdev, namebuf, sizeof namebuf);
+
+    ovs_type = netdev_to_ovs_vport_type(netdev_get_type(netdev));
+    if (ovs_type == OVS_VPORT_TYPE_UNSPEC) {
+        VLOG_WARN_RL(&error_rl, "%s: cannot create port `%s' because it has "
+                     "unsupported type `%s'",
+                     dpif_name(&dpif->dpif), name, type);
+        return EINVAL;
+    }
+
+    if (ovs_type == OVS_VPORT_TYPE_NETDEV) {
+#ifdef _WIN32
+        /* XXX : Map appropiate Windows handle */
+#else
+        netdev_linux_ethtool_set_flag(netdev, ETH_FLAG_LRO, "LRO", false);
+#endif
+    }
+
+#ifdef _WIN32
+    if (ovs_type == OVS_VPORT_TYPE_INTERNAL) {
+        if (!create_wmi_port(name)){
+            VLOG_ERR("Could not create wmi internal port with name:%s", name);
+            return EINVAL;
+        };
+    }
+#endif
+
+    tnl_cfg = netdev_get_tunnel_config(netdev);
+    if (tnl_cfg && (tnl_cfg->dst_port != 0 || tnl_cfg->exts)) {
+        ofpbuf_use_stack(&options, options_stub, sizeof options_stub);
+        if (tnl_cfg->dst_port) {
+            nl_msg_put_u16(&options, OVS_TUNNEL_ATTR_DST_PORT,
+                           ntohs(tnl_cfg->dst_port));
+        }
+        if (tnl_cfg->exts) {
+            size_t ext_ofs;
+            int i;
+
+            ext_ofs = nl_msg_start_nested(&options, OVS_TUNNEL_ATTR_EXTENSION);
+            for (i = 0; i < 32; i++) {
+                if (tnl_cfg->exts & (1 << i)) {
+                    nl_msg_put_flag(&options, i);
+                }
+            }
+            nl_msg_end_nested(&options, ext_ofs);
+        }
+        return dpif_netlink_port_add__(dpif, name, ovs_type, &options,
+                                       port_nop);
+    } else {
+        return dpif_netlink_port_add__(dpif, name, ovs_type, NULL, port_nop);
+    }
+
+}
+
+
+
+
+static int
 dpif_netlink_port_add(struct dpif *dpif_, struct netdev *netdev,
                       odp_port_t *port_nop)
 {
@@ -938,7 +958,7 @@ dpif_netlink_port_add(struct dpif *dpif_, struct netdev *netdev,
     int error;
 
     fat_rwlock_wrlock(&dpif->upcall_lock);
-    error = dpif_netlink_port_add__(dpif, netdev, port_nop);
+    error = dpif_netlink_port_add_compat(dpif, netdev, port_nop);
     fat_rwlock_unlock(&dpif->upcall_lock);
 
     return error;
