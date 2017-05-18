@@ -1239,11 +1239,11 @@ bfd_put_details(struct ds *ds, const struct bfd *bfd) OVS_REQUIRES(mutex)
     ds_put_format(ds, "\tTX Interval: Approx %lldms\n", bfd_tx_interval(bfd));
     ds_put_format(ds, "\tRX Interval: Approx %lldms\n", bfd_rx_interval(bfd));
     ds_put_format(ds, "\tDetect Time: now %+lldms\n",
-                  time_msec() - bfd->detect_time);
+                  bfd->detect_time - time_msec());
     ds_put_format(ds, "\tNext TX Time: now %+lldms\n",
-                  time_msec() - bfd->next_tx);
+                  bfd->next_tx -time_msec());
     ds_put_format(ds, "\tLast TX Time: now %+lldms\n",
-                  time_msec() - bfd->last_tx);
+                  bfd->last_tx - time_msec());
 
     ds_put_cstr(ds, "\n");
 
