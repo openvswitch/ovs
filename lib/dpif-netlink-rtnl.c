@@ -41,6 +41,13 @@ VLOG_DEFINE_THIS_MODULE(dpif_netlink_rtnl);
 #define IFLA_VXLAN_COLLECT_METADATA 25
 #endif
 
+#ifndef IFLA_GRE_MAX
+#define IFLA_GRE_MAX 0
+#endif
+#if IFLA_GRE_MAX < 18
+#define IFLA_GRE_COLLECT_METADATA 18
+#endif
+
 static const struct nl_policy rtlink_policy[] = {
     [IFLA_LINKINFO] = { .type = NL_A_NESTED },
 };
@@ -53,6 +60,9 @@ static const struct nl_policy vxlan_policy[] = {
     [IFLA_VXLAN_LEARNING] = { .type = NL_A_U8 },
     [IFLA_VXLAN_UDP_ZERO_CSUM6_RX] = { .type = NL_A_U8 },
     [IFLA_VXLAN_PORT] = { .type = NL_A_U16 },
+};
+static const struct nl_policy gre_policy[] = {
+    [IFLA_GRE_COLLECT_METADATA] = { .type = NL_A_FLAG },
 };
 
 static const char *
@@ -168,6 +178,30 @@ dpif_netlink_rtnl_vxlan_verify(const struct netdev_tunnel_config *tnl_cfg,
     return err;
 }
 
+static int
+dpif_netlink_rtnl_gre_verify(const struct netdev_tunnel_config OVS_UNUSED *tnl,
+                             const char *name, const char *kind)
+{
+    struct ofpbuf *reply;
+    int err;
+
+    err = dpif_netlink_rtnl_getlink(name, &reply);
+
+    if (!err) {
+        struct nlattr *gre[ARRAY_SIZE(gre_policy)];
+
+        err = rtnl_policy_parse(kind, reply, gre_policy, gre,
+                                ARRAY_SIZE(gre_policy));
+        if (!err) {
+            if (!nl_attr_get_flag(gre[IFLA_GRE_COLLECT_METADATA])) {
+                err = EINVAL;
+            }
+        }
+        ofpbuf_delete(reply);
+    }
+
+    return err;
+}
 
 static int
 dpif_netlink_rtnl_verify(const struct netdev_tunnel_config *tnl_cfg,
@@ -184,6 +218,7 @@ dpif_netlink_rtnl_verify(const struct netdev_tunnel_config *tnl_cfg,
     case OVS_VPORT_TYPE_VXLAN:
         return dpif_netlink_rtnl_vxlan_verify(tnl_cfg, name, kind);
     case OVS_VPORT_TYPE_GRE:
+        return dpif_netlink_rtnl_gre_verify(tnl_cfg, name, kind);
     case OVS_VPORT_TYPE_GENEVE:
     case OVS_VPORT_TYPE_NETDEV:
     case OVS_VPORT_TYPE_INTERNAL:
@@ -230,6 +265,8 @@ dpif_netlink_rtnl_create(const struct netdev_tunnel_config *tnl_cfg,
         nl_msg_put_be16(&request, IFLA_VXLAN_PORT, tnl_cfg->dst_port);
         break;
     case OVS_VPORT_TYPE_GRE:
+        nl_msg_put_flag(&request, IFLA_GRE_COLLECT_METADATA);
+        break;
     case OVS_VPORT_TYPE_GENEVE:
     case OVS_VPORT_TYPE_NETDEV:
     case OVS_VPORT_TYPE_INTERNAL:
@@ -321,8 +358,8 @@ dpif_netlink_rtnl_port_destroy(const char *name, const char *type)
 {
     switch (netdev_to_ovs_vport_type(type)) {
     case OVS_VPORT_TYPE_VXLAN:
-        return dpif_netlink_rtnl_destroy(name);
     case OVS_VPORT_TYPE_GRE:
+        return dpif_netlink_rtnl_destroy(name);
     case OVS_VPORT_TYPE_GENEVE:
     case OVS_VPORT_TYPE_NETDEV:
     case OVS_VPORT_TYPE_INTERNAL:
