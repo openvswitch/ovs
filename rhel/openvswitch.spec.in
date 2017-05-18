@@ -107,7 +107,9 @@ rm \
 (cd "$RPM_BUILD_ROOT" && rm -rf usr/%{_lib}/*.la)
 (cd "$RPM_BUILD_ROOT" && rm -rf usr/include)
 
-install -d -m 755 $RPM_BUILD_ROOT/var/lib/openvswitch
+install -d -m 0755 $RPM_BUILD_ROOT%{_rundir}/openvswitch
+install -d -m 0755 $RPM_BUILD_ROOT%{_localstatedir}/log/openvswitch
+install -d -m 0755 $RPM_BUILD_ROOT/var/lib/openvswitch
 
 copy_headers() {
     src=$1
