@@ -288,6 +288,21 @@ netdev_enumerate_types(struct sset *types)
     }
 }
 
+static const char *
+netdev_vport_type_from_name(const char *name)
+{
+    struct netdev_registered_class *rc;
+    const char *type;
+    CMAP_FOR_EACH (rc, cmap_node, &netdev_classes) {
+        const char *dpif_port = netdev_vport_class_get_dpif_port(rc->class);
+        if (dpif_port && !strncmp(name, dpif_port, strlen(dpif_port))) {
+            type = rc->class->type;
+            return type;
+        }
+    }
+    return NULL;
+}
+
 /* Check that the network device name is not the same as any of the registered
  * vport providers' dpif_port name (dpif_port is NULL if the vport provider
  * does not define it) or the datapath internal port name (e.g. ovs-system).
@@ -1811,9 +1826,14 @@ netdev_get_vports(size_t *size)
 const char *
 netdev_get_type_from_name(const char *name)
 {
-    struct netdev *dev = netdev_from_name(name);
-    const char *type = dev ? netdev_get_type(dev) : NULL;
-    netdev_close(dev);
+    struct netdev *dev;
+    const char *type;
+    type = netdev_vport_type_from_name(name);
+    if (type == NULL) {
+        dev = netdev_from_name(name);
+        type = dev ? netdev_get_type(dev) : NULL;
+        netdev_close(dev);
+    }
     return type;
 }
 
