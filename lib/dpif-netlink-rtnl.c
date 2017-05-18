@@ -419,3 +419,49 @@ dpif_netlink_rtnl_port_destroy(const char *name, const char *type)
     }
     return 0;
 }
+
+/**
+ * Probe for whether the modules are out-of-tree (openvswitch) or in-tree
+ * (upstream kernel).
+ *
+ * We probe for "ovs_geneve" via rtnetlink. As long as this returns something
+ * other than EOPNOTSUPP we know that the module in use is the out-of-tree one.
+ * This will be used to determine which netlink interface to use when creating
+ * ports; rtnetlink or compat/genetlink.
+ *
+ * See ovs_tunnels_out_of_tree
+ */
+bool
+dpif_netlink_rtnl_probe_oot_tunnels(void)
+{
+    char namebuf[NETDEV_VPORT_NAME_BUFSIZE];
+    struct netdev *netdev = NULL;
+    bool out_of_tree = false;
+    const char *name;
+    int error;
+
+    error = netdev_open("ovs-system-probe", "geneve", &netdev);
+    if (!error) {
+        const struct netdev_tunnel_config *tnl_cfg;
+
+        tnl_cfg = netdev_get_tunnel_config(netdev);
+        if (!tnl_cfg) {
+            return true;
+        }
+
+        name = netdev_vport_get_dpif_port(netdev, namebuf, sizeof namebuf);
+        error = dpif_netlink_rtnl_create(tnl_cfg, name, OVS_VPORT_TYPE_GENEVE,
+                                         "ovs_geneve",
+                                         (NLM_F_REQUEST | NLM_F_ACK
+                                          | NLM_F_CREATE));
+        if (error != EOPNOTSUPP) {
+            if (!error) {
+                dpif_netlink_rtnl_destroy(name);
+            }
+            out_of_tree = true;
+        }
+        netdev_close(netdev);
+    }
+
+    return out_of_tree;
+}

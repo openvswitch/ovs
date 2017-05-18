@@ -3,6 +3,9 @@ Post-v2.7.0
    - Tunnels:
      * Added support to set packet mark for tunnel endpoint using
        `egress_pkt_mark` OVSDB option.
+     * When using Linux kernel datapath tunnels may be created using rtnetlink.
+       This will allow us to take advantage of new tunnel features without
+       having to make changes to the vport modules.
    - EMC insertion probability is reduced to 1% and is configurable via
      the new 'other_config:emc-insert-inv-prob' option.
    - DPDK:
