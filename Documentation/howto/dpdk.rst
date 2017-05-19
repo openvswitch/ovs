@@ -342,10 +342,9 @@ Then it can be attached to OVS::
     $ ovs-vsctl add-port br0 dpdkx -- set Interface dpdkx type=dpdk \
         options:dpdk-devargs=0000:01:00.0
 
-It is also possible to detach a port from ovs, the user has to remove the
-port using the del-port command, then it can be detached using::
+Detaching will be performed while processing del-port command::
 
-    $ ovs-appctl netdev-dpdk/detach 0000:01:00.0
+    $ ovs-vsctl del-port dpdkx
 
 This feature is not supported with VFIO and does not work with some NICs.
 For more information please refer to the `DPDK Port Hotplug Framework

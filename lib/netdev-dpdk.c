@@ -360,6 +360,9 @@ struct netdev_dpdk {
     /* Device arguments for dpdk ports */
     char *devargs;
 
+    /* If true, device was attached by rte_eth_dev_attach(). */
+    bool attached;
+
     /* In dpdk_list. */
     struct ovs_list list_node OVS_GUARDED_BY(dpdk_mutex);
 
@@ -853,6 +856,7 @@ common_construct(struct netdev *netdev, unsigned int port_no,
     dev->max_packet_len = MTU_TO_FRAME_LEN(dev->mtu);
     ovsrcu_index_init(&dev->vid, -1);
     dev->vhost_reconfigured = false;
+    dev->attached = false;
 
     ovsrcu_init(&dev->qos_conf, NULL);
 
@@ -998,10 +1002,21 @@ static void
 netdev_dpdk_destruct(struct netdev *netdev)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    char devname[RTE_ETH_NAME_MAX_LEN];
 
     ovs_mutex_lock(&dpdk_mutex);
 
     rte_eth_dev_stop(dev->port_id);
+
+    if (dev->attached) {
+        rte_eth_dev_close(dev->port_id);
+        if (rte_eth_dev_detach(dev->port_id, devname) < 0) {
+            VLOG_ERR("Device '%s' can not be detached", dev->devargs);
+        } else {
+            VLOG_INFO("Device '%s' detached", devname);
+        }
+    }
+
     free(dev->devargs);
     common_destruct(dev);
 
@@ -1113,7 +1128,8 @@ netdev_dpdk_lookup_by_port_id(int port_id)
 }
 
 static int
-netdev_dpdk_process_devargs(const char *devargs, char **errp)
+netdev_dpdk_process_devargs(struct netdev_dpdk *dev,
+                            const char *devargs, char **errp)
 {
     /* Get the name up to the first comma. */
     char *name = xmemdup0(devargs, strcspn(devargs, ","));
@@ -1125,6 +1141,7 @@ netdev_dpdk_process_devargs(const char *devargs, char **errp)
         /* Device not found in DPDK, attempt to attach it */
         if (!rte_eth_dev_attach(devargs, &new_port_id)) {
             /* Attach successful */
+            dev->attached = true;
             VLOG_INFO("Device '%s' attached to DPDK", devargs);
         } else {
             /* Attach unsuccessful */
@@ -1211,7 +1228,8 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args,
          * is valid */
         if (!(dev->devargs && !strcmp(dev->devargs, new_devargs)
                && rte_eth_dev_is_valid_port(dev->port_id))) {
-            int new_port_id = netdev_dpdk_process_devargs(new_devargs, errp);
+            int new_port_id = netdev_dpdk_process_devargs(dev, new_devargs,
+                                                          errp);
             if (!rte_eth_dev_is_valid_port(new_port_id)) {
                 err = EINVAL;
             } else if (new_port_id == dev->port_id) {
@@ -2438,53 +2456,6 @@ netdev_dpdk_set_admin_state(struct unixctl_conn *conn, int argc,
     unixctl_command_reply(conn, "OK");
 }
 
-static void
-netdev_dpdk_detach(struct unixctl_conn *conn, int argc OVS_UNUSED,
-                   const char *argv[], void *aux OVS_UNUSED)
-{
-    int ret;
-    char *response;
-    uint8_t port_id;
-    char devname[RTE_ETH_NAME_MAX_LEN];
-    struct netdev_dpdk *dev;
-
-    ovs_mutex_lock(&dpdk_mutex);
-
-    if (!rte_eth_dev_count() || rte_eth_dev_get_port_by_name(argv[1],
-                                                             &port_id)) {
-        response = xasprintf("Device '%s' not found in DPDK", argv[1]);
-        goto error;
-    }
-
-    dev = netdev_dpdk_lookup_by_port_id(port_id);
-    if (dev) {
-        response = xasprintf("Device '%s' is being used by interface '%s'. "
-                             "Remove it before detaching",
-                             argv[1], netdev_get_name(&dev->up));
-        goto error;
-    }
-
-    rte_eth_dev_close(port_id);
-
-    ret = rte_eth_dev_detach(port_id, devname);
-    if (ret < 0) {
-        response = xasprintf("Device '%s' can not be detached", argv[1]);
-        goto error;
-    }
-
-    response = xasprintf("Device '%s' has been detached", argv[1]);
-
-    ovs_mutex_unlock(&dpdk_mutex);
-    unixctl_command_reply(conn, response);
-    free(response);
-    return;
-
-error:
-    ovs_mutex_unlock(&dpdk_mutex);
-    unixctl_command_reply_error(conn, response);
-    free(response);
-}
-
 /*
  * Set virtqueue flags so that we do not receive interrupts.
  */
@@ -2760,9 +2731,6 @@ netdev_dpdk_class_init(void)
         unixctl_command_register("netdev-dpdk/set-admin-state",
                                  "[netdev] up|down", 1, 2,
                                  netdev_dpdk_set_admin_state, NULL);
-        unixctl_command_register("netdev-dpdk/detach",
-                                 "pci address of device", 1, 1,
-                                 netdev_dpdk_detach, NULL);
 
         ovsthread_once_done(&once);
     }
