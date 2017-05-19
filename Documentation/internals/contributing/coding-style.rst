@@ -210,7 +210,7 @@ accept and ignore a null pointer argument. Code that calls such a function
 null-pointer check. We find that this usually makes code easier to read.
 
 Functions in ``.c`` files should not normally be marked ``inline``, because it
-does not usually help code generation and it does suppress compilers warnings
+does not usually help code generation and it does suppress compiler warnings
 about unused functions. (Functions defined in .h usually should be marked
 inline.)
 
