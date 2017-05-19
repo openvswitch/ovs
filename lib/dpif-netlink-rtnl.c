@@ -369,17 +369,16 @@ dpif_netlink_rtnl_port_create(struct netdev *netdev)
         err = dpif_netlink_rtnl_verify(tnl_cfg, type, name);
         if (!err) {
             return 0;
-        } else {
-            err = dpif_netlink_rtnl_destroy(name);
-            if (err) {
-                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-
-                VLOG_WARN_RL(&rl, "RTNL device %s exists and cannot be "
-                             "deleted: %s", name, ovs_strerror(err));
-                return err;
-            }
-            err = dpif_netlink_rtnl_create(tnl_cfg, name, type, kind, flags);
         }
+        err = dpif_netlink_rtnl_destroy(name);
+        if (err) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+            VLOG_WARN_RL(&rl, "RTNL device %s exists and cannot be "
+                         "deleted: %s", name, ovs_strerror(err));
+            return err;
+        }
+        err = dpif_netlink_rtnl_create(tnl_cfg, name, type, kind, flags);
     }
     if (err) {
         return err;
