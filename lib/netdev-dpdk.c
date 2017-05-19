@@ -1115,10 +1115,12 @@ netdev_dpdk_lookup_by_port_id(int port_id)
 static int
 netdev_dpdk_process_devargs(const char *devargs, char **errp)
 {
+    /* Get the name up to the first comma. */
+    char *name = xmemdup0(devargs, strcspn(devargs, ","));
     uint8_t new_port_id = UINT8_MAX;
 
     if (!rte_eth_dev_count()
-            || rte_eth_dev_get_port_by_name(devargs, &new_port_id)
+            || rte_eth_dev_get_port_by_name(name, &new_port_id)
             || !rte_eth_dev_is_valid_port(new_port_id)) {
         /* Device not found in DPDK, attempt to attach it */
         if (!rte_eth_dev_attach(devargs, &new_port_id)) {
@@ -1128,10 +1130,11 @@ netdev_dpdk_process_devargs(const char *devargs, char **errp)
             /* Attach unsuccessful */
             VLOG_WARN_BUF(errp, "Error attaching device '%s' to DPDK",
                           devargs);
-            return -1;
+            new_port_id = UINT8_MAX;
         }
     }
 
+    free(name);
     return new_port_id;
 }
 
