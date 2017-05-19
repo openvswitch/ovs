@@ -4192,6 +4192,63 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
     /* Logical router ingress table 1: IP Input for IPv4. */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (!op->nbrp) {
+            if (!strcmp(op->nbsp->type, "router")) {
+
+                /* This is a logical switch port that connects to a router. */
+
+                /* The peer of this switch port is the router port for which
+                 * we need to add logical flows such that it can reply
+                 * ICMP echo requests received for all the other router ports
+                 * connected to the switch in question.
+                 * This is similar to ARP Resolution in table 6. */
+
+                const char *peer_name = smap_get(&op->nbsp->options,
+                                                 "router-port");
+                if (!peer_name) {
+                    continue;
+                }
+
+                struct ovn_port *peer = ovn_port_find(ports, peer_name);
+                if (!peer || !peer->nbrp) {
+                    continue;
+                }
+
+                for (size_t i = 0; i < op->od->n_router_ports; i++) {
+                    const char *router_port_name = smap_get(
+                                        &op->od->router_ports[i]->nbsp->options,
+                                        "router-port");
+                    struct ovn_port *router_port = ovn_port_find(ports,
+                                                                 router_port_name);
+                    if (!router_port || !router_port->nbrp) {
+                        continue;
+                    }
+
+                    /* Skip the router port under consideration. */
+                    if (router_port == peer) {
+                       continue;
+                    }
+
+                    /* ICMP echo reply.  These flows reply to ICMP echo requests
+                     * received for the router's IP address. Since packets only
+                     * get here as part of the logical router datapath, the inport
+                     * (i.e. the incoming locally attached net) does not matter.
+                     * The ip.ttl also does not matter (RFC1812 section 4.2.2.9) */
+                    ds_clear(&match);
+                    ds_put_cstr(&match, "ip4.dst == ");
+                    op_put_v4_networks(&match, router_port, false);
+                    ds_put_cstr(&match, " && icmp4.type == 8 && icmp4.code == 0");
+
+                    ds_clear(&actions);
+                    ds_put_format(&actions,
+                        "ip4.dst <-> ip4.src; "
+                        "ip.ttl = 255; "
+                        "icmp4.type = 0; "
+                        "flags.loopback = 1; "
+                        "next; ");
+                    ovn_lflow_add(lflows, peer->od, S_ROUTER_IN_IP_INPUT, 90,
+                                  ds_cstr(&match), ds_cstr(&actions));
+                }
+            }
             continue;
         }
 
