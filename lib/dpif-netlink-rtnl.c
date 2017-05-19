@@ -255,7 +255,7 @@ dpif_netlink_rtnl_verify(const struct netdev_tunnel_config *tnl_cfg,
     case OVS_VPORT_TYPE_UNSPEC:
     case __OVS_VPORT_TYPE_MAX:
     default:
-        err = EOPNOTSUPP;
+        OVS_NOT_REACHED();
     }
 
     ofpbuf_delete(reply);
