@@ -1485,6 +1485,10 @@ port_configure_rstp(const struct ofproto *ofproto, struct port *port,
         port_s->port_num = 0;
     }
 
+    /* Increment the port num counter, because we only support
+     * RSTP_MAX_PORTS rstp ports. */
+    (*port_num_counter)++;
+
     config_str = smap_get(&port->cfg->other_config, "rstp-path-cost");
     if (config_str) {
         port_s->path_cost = strtoul(config_str, NULL, 10);
