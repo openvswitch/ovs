@@ -159,34 +159,23 @@ rtnl_policy_parse(const char *kind, struct ofpbuf *reply,
 
 static int
 dpif_netlink_rtnl_vxlan_verify(const struct netdev_tunnel_config *tnl_cfg,
-                               const char *name, const char *kind)
+                               const char *kind, struct ofpbuf *reply)
 {
-    struct ofpbuf *reply;
+    struct nlattr *vxlan[ARRAY_SIZE(vxlan_policy)];
     int err;
 
-    err = dpif_netlink_rtnl_getlink(name, &reply);
-
+    err = rtnl_policy_parse(kind, reply, vxlan_policy, vxlan,
+                            ARRAY_SIZE(vxlan_policy));
     if (!err) {
-        struct nlattr *vxlan[ARRAY_SIZE(vxlan_policy)];
-
-        err = rtnl_policy_parse(kind, reply, vxlan_policy, vxlan,
-                                ARRAY_SIZE(vxlan_policy));
-        if (!err) {
-            if (0 != nl_attr_get_u8(vxlan[IFLA_VXLAN_LEARNING])
-                || 1 != nl_attr_get_u8(vxlan[IFLA_VXLAN_COLLECT_METADATA])
-                || 1 != nl_attr_get_u8(vxlan[IFLA_VXLAN_UDP_ZERO_CSUM6_RX])
-                || (tnl_cfg->dst_port
-                    != nl_attr_get_be16(vxlan[IFLA_VXLAN_PORT]))) {
-                err = EINVAL;
-            }
+        if (0 != nl_attr_get_u8(vxlan[IFLA_VXLAN_LEARNING])
+            || 1 != nl_attr_get_u8(vxlan[IFLA_VXLAN_COLLECT_METADATA])
+            || 1 != nl_attr_get_u8(vxlan[IFLA_VXLAN_UDP_ZERO_CSUM6_RX])
+            || (tnl_cfg->dst_port
+                != nl_attr_get_be16(vxlan[IFLA_VXLAN_PORT]))
+            || (tnl_cfg->exts & (1 << OVS_VXLAN_EXT_GBP)
+                && !nl_attr_get_flag(vxlan[IFLA_VXLAN_GBP]))) {
+            err = EINVAL;
         }
-        if (!err) {
-            if (tnl_cfg->exts & (1 << OVS_VXLAN_EXT_GBP)
-                && !nl_attr_get_flag(vxlan[IFLA_VXLAN_GBP])) {
-                err = EINVAL;
-            }
-        }
-        ofpbuf_delete(reply);
     }
 
     return err;
@@ -194,24 +183,17 @@ dpif_netlink_rtnl_vxlan_verify(const struct netdev_tunnel_config *tnl_cfg,
 
 static int
 dpif_netlink_rtnl_gre_verify(const struct netdev_tunnel_config OVS_UNUSED *tnl,
-                             const char *name, const char *kind)
+                             const char *kind, struct ofpbuf *reply)
 {
-    struct ofpbuf *reply;
+    struct nlattr *gre[ARRAY_SIZE(gre_policy)];
     int err;
 
-    err = dpif_netlink_rtnl_getlink(name, &reply);
-
+    err = rtnl_policy_parse(kind, reply, gre_policy, gre,
+                            ARRAY_SIZE(gre_policy));
     if (!err) {
-        struct nlattr *gre[ARRAY_SIZE(gre_policy)];
-
-        err = rtnl_policy_parse(kind, reply, gre_policy, gre,
-                                ARRAY_SIZE(gre_policy));
-        if (!err) {
-            if (!nl_attr_get_flag(gre[IFLA_GRE_COLLECT_METADATA])) {
-                err = EINVAL;
-            }
+        if (!nl_attr_get_flag(gre[IFLA_GRE_COLLECT_METADATA])) {
+            err = EINVAL;
         }
-        ofpbuf_delete(reply);
     }
 
     return err;
@@ -219,27 +201,20 @@ dpif_netlink_rtnl_gre_verify(const struct netdev_tunnel_config OVS_UNUSED *tnl,
 
 static int
 dpif_netlink_rtnl_geneve_verify(const struct netdev_tunnel_config *tnl_cfg,
-                                const char *name, const char *kind)
+                                const char *kind, struct ofpbuf *reply)
 {
-    struct ofpbuf *reply;
+    struct nlattr *geneve[ARRAY_SIZE(geneve_policy)];
     int err;
 
-    err = dpif_netlink_rtnl_getlink(name, &reply);
-
+    err = rtnl_policy_parse(kind, reply, geneve_policy, geneve,
+                            ARRAY_SIZE(geneve_policy));
     if (!err) {
-        struct nlattr *geneve[ARRAY_SIZE(geneve_policy)];
-
-        err = rtnl_policy_parse(kind, reply, geneve_policy, geneve,
-                                ARRAY_SIZE(geneve_policy));
-        if (!err) {
-            if (!nl_attr_get_flag(geneve[IFLA_GENEVE_COLLECT_METADATA])
-                || 1 != nl_attr_get_u8(geneve[IFLA_GENEVE_UDP_ZERO_CSUM6_RX])
-                || (tnl_cfg->dst_port
-                    != nl_attr_get_be16(geneve[IFLA_GENEVE_PORT]))) {
-                err = EINVAL;
-            }
+        if (!nl_attr_get_flag(geneve[IFLA_GENEVE_COLLECT_METADATA])
+            || 1 != nl_attr_get_u8(geneve[IFLA_GENEVE_UDP_ZERO_CSUM6_RX])
+            || (tnl_cfg->dst_port
+                != nl_attr_get_be16(geneve[IFLA_GENEVE_PORT]))) {
+            err = EINVAL;
         }
-        ofpbuf_delete(reply);
     }
 
     return err;
@@ -249,20 +224,30 @@ static int
 dpif_netlink_rtnl_verify(const struct netdev_tunnel_config *tnl_cfg,
                          enum ovs_vport_type type, const char *name)
 {
+    struct ofpbuf *reply;
     const char *kind;
+    int err;
 
     kind = vport_type_to_kind(type);
     if (!kind) {
         return EOPNOTSUPP;
     }
 
+    err = dpif_netlink_rtnl_getlink(name, &reply);
+    if (err) {
+        return err;
+    }
+
     switch (type) {
     case OVS_VPORT_TYPE_VXLAN:
-        return dpif_netlink_rtnl_vxlan_verify(tnl_cfg, name, kind);
+        err = dpif_netlink_rtnl_vxlan_verify(tnl_cfg, kind, reply);
+        break;
     case OVS_VPORT_TYPE_GRE:
-        return dpif_netlink_rtnl_gre_verify(tnl_cfg, name, kind);
+        err = dpif_netlink_rtnl_gre_verify(tnl_cfg, kind, reply);
+        break;
     case OVS_VPORT_TYPE_GENEVE:
-        return dpif_netlink_rtnl_geneve_verify(tnl_cfg, name, kind);
+        err = dpif_netlink_rtnl_geneve_verify(tnl_cfg, kind, reply);
+        break;
     case OVS_VPORT_TYPE_NETDEV:
     case OVS_VPORT_TYPE_INTERNAL:
     case OVS_VPORT_TYPE_LISP:
@@ -270,10 +255,11 @@ dpif_netlink_rtnl_verify(const struct netdev_tunnel_config *tnl_cfg,
     case OVS_VPORT_TYPE_UNSPEC:
     case __OVS_VPORT_TYPE_MAX:
     default:
-        return EOPNOTSUPP;
+        err = EOPNOTSUPP;
     }
 
-    return 0;
+    ofpbuf_delete(reply);
+    return err;
 }
 
 static int
