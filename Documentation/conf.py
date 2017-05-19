@@ -121,6 +121,6 @@ _man_pages = [
 
 # Generate list of (path, name, description, [author, ...], section)
 man_pages = [
-    ('ref/%s' % filename, filename.split('.', 1)[0],
-     description, [author], filename.split('.', 1)[1])
-    for filename, description in _man_pages]
+    ('ref/%s' % file_name, file_name.split('.', 1)[0],
+     description, [author], file_name.split('.', 1)[1])
+    for file_name, description in _man_pages]
