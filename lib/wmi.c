@@ -406,12 +406,7 @@ delete_wmi_port(char *name)
     wchar_t internal_port_query[WMI_QUERY_COUNT] = L"SELECT * from "
         L"Msvm_EthernetPortAllocationSettingData  WHERE ElementName = \"" ;
 
-    wide_name = malloc((strlen(name) + 1) * sizeof(wchar_t));
-    if (wide_name == NULL) {
-        VLOG_WARN("Could not allocate memory for wide string");
-        retval = false;
-        goto error;
-    }
+    wide_name = xmalloc((strlen(name) + 1) * sizeof(wchar_t));
 
     if (!tranform_wide(name, wide_name)) {
         retval = false;
@@ -693,12 +688,7 @@ create_wmi_port(char *name) {
     wchar_t internal_port_query[WMI_QUERY_COUNT] = L"SELECT * FROM "
     L"Msvm_InternalEthernetPort WHERE ElementName = \"";
 
-    wide_name = malloc((strlen(name) + 1) * sizeof(wchar_t));
-    if (wide_name == NULL) {
-        VLOG_WARN("Could not allocate memory for wide string");
-        retval = false;
-        goto error;
-    }
+    wide_name = xmalloc((strlen(name) + 1) * sizeof(wchar_t));
 
     if (!tranform_wide(name, wide_name)) {
         retval = false;
