@@ -198,6 +198,7 @@ control_handler(DWORD request)
         service_status.dwCurrentState = SERVICE_STOPPED;
         service_status.dwWin32ExitCode = NO_ERROR;
         SetEvent(wevent);
+        SetServiceStatus(hstatus, &service_status);
         break;
 
     default:
