@@ -2585,7 +2585,7 @@ ofputil_pull_queue_get_config_reply10(struct ofpbuf *msg,
 
         hdr = ofpbuf_at_assert(msg, 0, sizeof *hdr);
         prop_len = ntohs(hdr->len);
-        if (prop_len < sizeof *hdr || prop_len > msg->size || prop_len % 8) {
+        if (prop_len < sizeof *hdr || prop_len > len || prop_len % 8) {
             return OFPERR_OFPBRC_BAD_LEN;
         }
 
