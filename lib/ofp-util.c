@@ -2652,7 +2652,7 @@ ofputil_pull_queue_get_config_reply(struct ofpbuf *reply,
 
         hdr = ofpbuf_at_assert(reply, 0, sizeof *hdr);
         prop_len = ntohs(hdr->len);
-        if (prop_len < sizeof *hdr || prop_len > reply->size || prop_len % 8) {
+        if (prop_len < sizeof *hdr || prop_len > len || prop_len % 8) {
             return OFPERR_OFPBRC_BAD_LEN;
         }
 
