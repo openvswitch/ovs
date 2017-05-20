@@ -526,6 +526,11 @@ pinctrl_handle_put_dhcpv6_opts(
 
     struct udp_header *in_udp = dp_packet_l4(pkt_in);
     const uint8_t *in_dhcpv6_data = dp_packet_get_udp_payload(pkt_in);
+    if (!in_udp || !in_dhcpv6_data) {
+        VLOG_WARN_RL(&rl, "truncated dhcpv6 packet");
+        goto exit;
+    }
+
     uint8_t out_dhcpv6_msg_type;
     switch(*in_dhcpv6_data) {
     case DHCPV6_MSG_TYPE_SOLICIT:
@@ -710,6 +715,10 @@ pinctrl_handle_dns_lookup(
 
     /* Extract the DNS header */
     struct dns_header const *in_dns_header = dp_packet_get_udp_payload(pkt_in);
+    if (!in_dns_header) {
+        VLOG_WARN_RL(&rl, "truncated dns packet");
+        goto exit;
+    }
 
     /* Check if it is DNS request or not */
     if (in_dns_header->lo_flag & 0x80) {
