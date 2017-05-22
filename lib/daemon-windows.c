@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 Nicira, Inc.
+ * Copyright (c) 2014, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,9 @@
 #include <stdio.h>
 #include <io.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include "dirs.h"
+#include "fatal-signal.h"
 #include "ovs-thread.h"
 #include "poll-loop.h"
 #include "openvswitch/vlog.h"
@@ -475,7 +477,7 @@ make_pidfile(void)
 
     fatal_signal_add_hook(unlink_pidfile, NULL, NULL, true);
 
-    fprintf(filep_pidfile, "%d\n", _getpid());
+    fprintf(filep_pidfile, "%ld\n", (long int) getpid());
     if (fflush(filep_pidfile) == EOF) {
         VLOG_FATAL("Failed to write into the pidfile %s", pidfile);
     }
