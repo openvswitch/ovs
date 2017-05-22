@@ -18,8 +18,11 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <direct.h>
+#include <windefs.h>
 
 #define fsync _commit
+#define getcwd _getcwd
 
 /* Standard file descriptors.  */
 #define STDIN_FILENO    0   /* Standard input.  */
@@ -32,6 +35,15 @@
 #define _SC_PAGESIZE                    0x1
 #define _SC_NPROCESSORS_ONLN            0x2
 #define _SC_PHYS_PAGES                  0x4
+
+
+static __inline pid_t getpid(void)
+{
+    /* Since _getpid: https://msdn.microsoft.com/en-us/library/t2y34y40.aspx
+     * uses GetCurrentProcessId behind the scenes it is safe to assume no
+     * casting is required */
+    return GetCurrentProcessId();
+}
 
 __inline int GetNumLogicalProcessors(void)
 {
