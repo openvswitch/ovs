@@ -275,7 +275,18 @@ ovsdb_server_start() {
         rc=$?
         case $rc in
             $OCF_SUCCESS)        return $rc;;
-            $OCF_RUNNING_MASTER) return $rc;;
+            $OCF_RUNNING_MASTER)
+                # When a slave node is promoted as master, the action would be
+                # STOP -> START -> PROMOTE.
+                # When the start action is called, it is possible for the
+                # ovsdb-server's to be started as active. This could happen
+                # if the node owns the $MASTER_IP. At this point, pacemaker
+                # has not promoted this node yet. So return OCF_SUCCESS.
+                # Let pacemaker promote it in subsequent actions.
+                # As per the OCF guidelines, only monitor action should return
+                # OCF_RUNNING_MASTER.
+                # http://www.linux-ha.org/doc/dev-guides/_literal_ocf_running_master_literal_8.html
+                return $OCF_SUCCESS;;
             $OCF_ERR_GENERIC)    return $rc;;
             # Otherwise loop, waiting for the service to start, until
             # the cluster times the operation out
@@ -288,7 +299,6 @@ ovsdb_server_stop() {
     ovsdb_server_check_status
     case $? in
         $OCF_NOT_RUNNING)    return ${OCF_SUCCESS};;
-        $OCF_RUNNING_MASTER) return ${OCF_RUNNING_MASTER};;
     esac
 
     ${OVN_CTL} stop_ovsdb
