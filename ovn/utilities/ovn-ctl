@@ -188,15 +188,15 @@ start_northd () {
     if [ ! -e $ovn_northd_db_conf_file ]; then
         if test X"$OVN_MANAGE_OVSDB" = Xyes; then
             start_ovsdb
-        fi
 
-        if ! pidfile_is_running $DB_NB_PID; then
-            log_failure_msg "OVN Northbound DB is not running"
-            exit
-        fi
-        if ! pidfile_is_running $DB_SB_PID; then
-            log_failure_msg "OVN Southbound DB is not running"
-            exit
+            if ! pidfile_is_running $DB_NB_PID; then
+                log_failure_msg "OVN Northbound DB is not running"
+                exit
+            fi
+            if ! pidfile_is_running $DB_SB_PID; then
+                log_failure_msg "OVN Southbound DB is not running"
+                exit
+            fi
         fi
         ovn_northd_params="--ovnnb-db=unix:$DB_NB_SOCK --ovnsb-db=unix:$DB_SB_SOCK"
     else
