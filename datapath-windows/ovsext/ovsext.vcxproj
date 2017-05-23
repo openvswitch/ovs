@@ -25,6 +25,14 @@
       <Configuration>Win8 Release</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
+    <ProjectConfiguration Include="Win8.1Analyze|x64">
+      <Configuration>Win8.1Analyze</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Win8Analyze|x64">
+      <Configuration>Win8Analyze</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="PropertySheets">
     <DriverType>WDM</DriverType>
@@ -46,6 +54,11 @@
     <UseDebugLibraries>True</UseDebugLibraries>
     <PlatformToolset>WindowsKernelModeDriver8.1</PlatformToolset>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1Analyze|x64'" Label="Configuration">
+    <TargetVersion>WindowsV6.3</TargetVersion>
+    <UseDebugLibraries>True</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver8.1</PlatformToolset>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'" Label="Configuration">
     <TargetVersion>
     </TargetVersion>
@@ -54,6 +67,11 @@
     <DriverTargetPlatform>Desktop</DriverTargetPlatform>
   </PropertyGroup>
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|x64'">
+    <TargetVersion>Win8</TargetVersion>
+    <UseDebugLibraries>True</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver8.1</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8Analyze|x64'" Label="Configuration">
     <TargetVersion>Win8</TargetVersion>
     <UseDebugLibraries>True</UseDebugLibraries>
     <PlatformToolset>WindowsKernelModeDriver8.1</PlatformToolset>
@@ -91,7 +109,13 @@
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" />
   </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Win8Analyze|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" />
+  </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1Analyze|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'" Label="PropertySheets">
@@ -147,6 +171,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'">
     <Inf2CatUseLocalTime>true</Inf2CatUseLocalTime>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1Analyze|x64'">
+    <RunCodeAnalysis>true</RunCodeAnalysis>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8Analyze|x64'">
+    <RunCodeAnalysis>true</RunCodeAnalysis>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win8 Release|x64'">
     <ClCompile>
       <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS630=1</PreprocessorDefinitions>
@@ -191,7 +221,29 @@
       <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS630=1</PreprocessorDefinitions>
     </ResourceCompile>
   </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win8Analyze|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS630=1</PreprocessorDefinitions>
+    </ClCompile>
+    <Midl>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS630=1</PreprocessorDefinitions>
+    </Midl>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS630=1</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS640=1</PreprocessorDefinitions>
+    </ClCompile>
+    <Midl>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS640=1</PreprocessorDefinitions>
+    </Midl>
+    <ResourceCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS640=1</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1Analyze|x64'">
     <ClCompile>
       <PreprocessorDefinitions>%(PreprocessorDefinitions);NDIS_WDM=1;NDIS640=1</PreprocessorDefinitions>
     </ClCompile>
@@ -223,23 +275,31 @@
       <ExceptionHandling>
       </ExceptionHandling>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|x64'">$(IntDir);%(AdditionalIncludeDirectories);..\..</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Win8Analyze|x64'">$(IntDir);%(AdditionalIncludeDirectories);..\..</AdditionalIncludeDirectories>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|x64'">$(IntDir);%(AdditionalIncludeDirectories);..\..</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Win8.1Analyze|x64'">$(IntDir);%(AdditionalIncludeDirectories);..\..</AdditionalIncludeDirectories>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'">$(IntDir);%(AdditionalIncludeDirectories);..\..</AdditionalIncludeDirectories>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Win8 Release|x64'">$(IntDir);%(AdditionalIncludeDirectories);..\..</AdditionalIncludeDirectories>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|x64'">$(IntDir);%(AdditionalIncludeDirectories);..\..</AdditionalIncludeDirectories>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'">$(IntDir);%(AdditionalIncludeDirectories);..\..</AdditionalIncludeDirectories>
       <MultiProcessorCompilation Condition="'$(Configuration)|$(Platform)'=='Win8 Release|x64'">true</MultiProcessorCompilation>
       <MultiProcessorCompilation Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|x64'">true</MultiProcessorCompilation>
+      <MultiProcessorCompilation Condition="'$(Configuration)|$(Platform)'=='Win8Analyze|x64'">true</MultiProcessorCompilation>
       <MultiProcessorCompilation Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|x64'">true</MultiProcessorCompilation>
+      <MultiProcessorCompilation Condition="'$(Configuration)|$(Platform)'=='Win8.1Analyze|x64'">true</MultiProcessorCompilation>
       <MultiProcessorCompilation Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'">true</MultiProcessorCompilation>
       <MultiProcessorCompilation Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|x64'">true</MultiProcessorCompilation>
       <MultiProcessorCompilation Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'">true</MultiProcessorCompilation>
+      <EnablePREfast Condition="'$(Configuration)|$(Platform)'=='Win8.1Analyze|x64'">true</EnablePREfast>
+      <EnablePREfast Condition="'$(Configuration)|$(Platform)'=='Win8Analyze|x64'">true</EnablePREfast>
     </ClCompile>
     <Inf>
       <TimeStamp Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|x64'">$(Version)</TimeStamp>
+      <TimeStamp Condition="'$(Configuration)|$(Platform)'=='Win8Analyze|x64'">$(Version)</TimeStamp>
     </Inf>
     <Inf>
       <TimeStamp Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|x64'">$(Version)</TimeStamp>
+      <TimeStamp Condition="'$(Configuration)|$(Platform)'=='Win8.1Analyze|x64'">$(Version)</TimeStamp>
     </Inf>
     <Inf>
       <TimeStamp Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'">$(Version)</TimeStamp>
@@ -297,8 +357,10 @@
     <ResourceCompile Include="ovsext.rc">
       <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Win8 Release|x64'">%(PreprocessorDefinitions);NDIS_WDM=1;NDIS630=1;VersionWithDots=$(Version);VersionWithCommas=$(Version.Replace('.',','))</PreprocessorDefinitions>
       <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|x64'">%(PreprocessorDefinitions);NDIS_WDM=1;NDIS630=1;VersionWithDots=$(Version);VersionWithCommas=$(Version.Replace('.',','))</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Win8Analyze|x64'">%(PreprocessorDefinitions);NDIS_WDM=1;NDIS630=1;VersionWithDots=$(Version);VersionWithCommas=$(Version.Replace('.',','))</PreprocessorDefinitions>
       <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|x64'">%(PreprocessorDefinitions);NDIS_WDM=1;NDIS640=1;VersionWithDots=$(Version);VersionWithCommas=$(Version.Replace('.',','))</PreprocessorDefinitions>
       <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|x64'">%(PreprocessorDefinitions);NDIS_WDM=1;NDIS640=1;VersionWithDots=$(Version);VersionWithCommas=$(Version.Replace('.',','))</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Win8.1Analyze|x64'">%(PreprocessorDefinitions);NDIS_WDM=1;NDIS640=1;VersionWithDots=$(Version);VersionWithCommas=$(Version.Replace('.',','))</PreprocessorDefinitions>
       <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'">%(PreprocessorDefinitions);NDIS_WDM=1;NDIS640=1;VersionWithDots=$(Version);VersionWithCommas=$(Version.Replace('.',','))</PreprocessorDefinitions>
       <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'">%(PreprocessorDefinitions);NDIS_WDM=1;NDIS640=1;VersionWithDots=$(Version);VersionWithCommas=$(Version.Replace('.',','))</PreprocessorDefinitions>
     </ResourceCompile>
