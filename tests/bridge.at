@@ -48,7 +48,8 @@ OVS_VSWITCHD_START(
     set bridge br1 datapath-type=dummy other-config:datapath-id=1234 ])
 
 dnl Start ovs-testcontroller
-AT_CHECK([ovs-testcontroller --detach punix:controller], [0], [ignore])
+AT_CHECK([ovs-testcontroller --detach punix:controller --pidfile], [0], [ignore])
+on_exit 'kill `cat ovs-testcontroller.pid`'
 OVS_WAIT_UNTIL([test -e controller])
 
 dnl Add the controller to both bridges, 5 seconds apart.
