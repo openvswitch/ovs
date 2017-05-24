@@ -16,6 +16,7 @@ test -x /usr/bin/ovn-northd  || exit 0
 test -x /usr/share/openvswitch/scripts/ovn-ctl || exit 0
 
 _SYSTEMCTL_SKIP_REDIRECT=yes
+SYSTEMCTL_SKIP_REDIRECT=yes
 
 . /usr/share/openvswitch/scripts/ovs-lib
 if [ -e /etc/default/ovn-central ]; then
