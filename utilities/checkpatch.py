@@ -210,6 +210,38 @@ checks = [
 ]
 
 
+def regex_function_factory(func_name):
+    regex = re.compile('[^x]%s\([^)]*\)' % func_name)
+    return lambda x: regex.search(x) is not None
+
+
+def regex_error_factory(description):
+    return lambda: print_error(description)
+
+
+std_functions = [
+        ('malloc', 'Use xmalloc() in place of malloc()'),
+        ('calloc', 'Use xcalloc() in place of calloc()'),
+        ('realloc', 'Use xrealloc() in place of realloc()'),
+        ('strdup', 'Use xstrdup() in place of strdup()'),
+        ('asprintf', 'Use xasprintf() in place of asprintf()'),
+        ('vasprintf', 'Use xvasprintf() in place of vasprintf()'),
+        ('strcpy', 'Use ovs_strlcpy() in place of strcpy()'),
+        ('strlcpy', 'Use ovs_strlcpy() in place of strlcpy()'),
+        ('strncpy', 'Use ovs_strzcpy() in place of strncpy()'),
+        ('strerror', 'Use ovs_strerror() in place of strerror()'),
+        ('sleep', 'Use xsleep() in place of sleep()'),
+        ('abort', 'Use ovs_abort() in place of abort()'),
+        ('error', 'Use ovs_error() in place of error()'),
+]
+checks += [
+    {'regex': '(.c|.h)(.in)?$',
+     'match_name': None,
+     'check': regex_function_factory(function_name),
+     'print': regex_error_factory(description)}
+    for (function_name, description) in std_functions]
+
+
 def get_file_type_checks(filename):
     """Returns the list of checks for a file based on matching the filename
        against regex."""
