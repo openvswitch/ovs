@@ -38,14 +38,21 @@ pidfile_is_running () {
     test -e "$pidfile" && pid=`cat "$pidfile"` && pid_exists "$pid"
 } >/dev/null 2>&1
 
-stop_ovsdb () {
+stop_nb_ovsdb() {
     if pidfile_is_running $DB_NB_PID; then
         ovs-appctl -t $rundir/ovnnb_db.ctl exit
     fi
+}
 
+stop_sb_ovsdb() {
     if pidfile_is_running $DB_SB_PID; then
         ovs-appctl -t $rundir/ovnsb_db.ctl exit
     fi
+}
+
+stop_ovsdb () {
+    stop_nb_ovsdb
+    stop_sb_ovsdb
 }
 
 demote_ovnnb() {
@@ -86,7 +93,7 @@ promote_ovnsb() {
     ovs-appctl -t $rundir/ovnsb_db.ctl ovsdb-server/disconnect-active-ovsdb-server
 }
 
-start_ovsdb () {
+start_nb_ovsdb() {
     # Check and eventually start ovsdb-server for Northbound DB
     if ! pidfile_is_running $DB_NB_PID; then
         upgrade_db "$DB_NB_FILE" "$DB_NB_SCHEMA" 1>/dev/null 2>/dev/null
@@ -117,7 +124,9 @@ start_ovsdb () {
         $@ $DB_NB_FILE
         ovn-nbctl init
     fi
+}
 
+start_sb_ovsdb() {
     # Check and eventually start ovsdb-server for Southbound DB
     if ! pidfile_is_running $DB_SB_PID; then
         upgrade_db "$DB_SB_FILE" "$DB_SB_SCHEMA" 1>/dev/null 2>/dev/null
@@ -148,6 +157,11 @@ start_ovsdb () {
         $@ $DB_SB_FILE
         ovn-sbctl init
     fi
+}
+
+start_ovsdb () {
+    start_nb_ovsdb
+    start_sb_ovsdb
 }
 
 sync_status() {
@@ -299,6 +313,16 @@ restart_ovsdb () {
     start_ovsdb
 }
 
+restart_nb_ovsdb () {
+    stop_nb_ovsdb
+    start_nb_ovsdb
+}
+
+restart_sb_ovsdb () {
+    stop_sb_ovsdb
+    start_sb_ovsdb
+}
+
 ## ---- ##
 ## main ##
 ## ---- ##
@@ -380,14 +404,20 @@ startup scripts.  System administrators should not normally invoke it directly.
 Commands:
   start_northd                start ovn-northd
   start_ovsdb                 start ovn related ovsdb-server processes
+  start_nb_ovsdb              start ovn northbound db ovsdb-server process
+  start_sb_ovsdb              start ovn southbound db ovsdb-server process
   start_controller            start ovn-controller
   start_controller_vtep       start ovn-controller-vtep
   stop_northd                 stop ovn-northd
   stop_ovsdb                  stop ovn related ovsdb-server processes
+  stop_nb_ovsdb               stop ovn northbound db ovsdb-server process
+  stop_sb_ovsdb               stop ovn southbound db ovsdb-server process
   stop_controller             stop ovn-controller
   stop_controller_vtep        stop ovn-controller-vtep
   restart_northd              restart ovn-northd
   restart_ovsdb               restart ovn related ovsdb-server processes
+  restart_nb_ovsdb            restart ovn northbound db ovsdb-server process
+  restart_sb_ovsdb            restart ovn southbound db ovsdb-server process
   restart_controller          restart ovn-controller
   restart_controller_vtep     restart ovn-controller-vtep
 
@@ -493,6 +523,12 @@ case $command in
     start_ovsdb)
         start_ovsdb
         ;;
+    start_nb_ovsdb)
+        start_nb_ovsdb
+        ;;
+    start_sb_ovsdb)
+        start_sb_ovsdb
+        ;;
     start_controller)
         start_controller
         ;;
@@ -504,6 +540,12 @@ case $command in
         ;;
     stop_ovsdb)
        stop_ovsdb
+        ;;
+    stop_nb_ovsdb)
+       stop_nb_ovsdb
+        ;;
+    stop_sb_ovsdb)
+       stop_sb_ovsdb
         ;;
     stop_controller)
         stop_controller
@@ -519,6 +561,12 @@ case $command in
         ;;
     restart_ovsdb)
         restart_ovsdb
+        ;;
+    restart_nb_ovsdb)
+        restart_nb_ovsdb
+        ;;
+    restart_sb_ovsdb)
+        restart_sb_ovsdb
         ;;
     restart_controller)
         restart_controller
