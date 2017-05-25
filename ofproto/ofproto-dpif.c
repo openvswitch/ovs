@@ -1316,7 +1316,7 @@ check_ct_eventmask(struct dpif_backer *backer)
     return !error;
 }
 
-#define CHECK_FEATURE__(NAME, SUPPORT, FIELD, VALUE)                        \
+#define CHECK_FEATURE__(NAME, SUPPORT, FIELD, VALUE, ETHTYPE)               \
 static bool                                                                 \
 check_##NAME(struct dpif_backer *backer)                                    \
 {                                                                           \
@@ -1333,6 +1333,7 @@ check_##NAME(struct dpif_backer *backer)                                    \
                                                                             \
     memset(&flow, 0, sizeof flow);                                          \
     flow.FIELD = VALUE;                                                     \
+    flow.dl_type = htons(ETHTYPE);                                          \
                                                                             \
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);                         \
     odp_flow_key_from_flow(&odp_parms, &key);                               \
@@ -1347,14 +1348,16 @@ check_##NAME(struct dpif_backer *backer)                                    \
                                                                             \
     return enable;                                                          \
 }
-#define CHECK_FEATURE(FIELD) CHECK_FEATURE__(FIELD, FIELD, FIELD, 1)
+#define CHECK_FEATURE(FIELD) CHECK_FEATURE__(FIELD, FIELD, FIELD, 1, \
+                                             ETH_TYPE_IP)
 
 CHECK_FEATURE(ct_state)
 CHECK_FEATURE(ct_zone)
 CHECK_FEATURE(ct_mark)
-CHECK_FEATURE__(ct_label, ct_label, ct_label.u64.lo, 1)
-CHECK_FEATURE__(ct_state_nat, ct_state, ct_state, CS_TRACKED|CS_SRC_NAT)
-CHECK_FEATURE__(ct_orig_tuple, ct_orig_tuple, ct_nw_proto, 1)
+CHECK_FEATURE__(ct_label, ct_label, ct_label.u64.lo, 1, ETH_TYPE_IP)
+CHECK_FEATURE__(ct_state_nat, ct_state, ct_state, \
+                CS_TRACKED|CS_SRC_NAT, ETH_TYPE_IP)
+CHECK_FEATURE__(ct_orig_tuple, ct_orig_tuple, ct_nw_proto, 1, ETH_TYPE_IP)
 
 #undef CHECK_FEATURE
 #undef CHECK_FEATURE__
