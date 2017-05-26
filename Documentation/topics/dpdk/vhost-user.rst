@@ -54,8 +54,12 @@ vHost User sockets, and the client connects to the server. Depending on which
 port type you use, ``dpdkvhostuser`` or ``dpdkvhostuserclient``, a different
 configuration of the client-server model is used.
 
-For vhost-user ports, Open vSwitch acts as the server and QEMU the client.  For
-vhost-user-client ports, Open vSwitch acts as the client and QEMU the server.
+For vhost-user ports, Open vSwitch acts as the server and QEMU the client. This
+means if OVS dies, all VMs **must** be restarted. On the other hand, for
+vhost-user-client ports, OVS acts as the client and QEMU the server. This means
+OVS can die and be restarted without issue, and it is also possible to restart
+an instance itself. For this reason, vhost-user-client ports are the preferred
+type for most use cases.
 
 .. _dpdk-vhost-user:
 
