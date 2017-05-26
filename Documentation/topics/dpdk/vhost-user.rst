@@ -70,10 +70,10 @@ vhost-user
 
    Use of vhost-user ports requires QEMU >= 2.2
 
-To use vhost-user ports, you must first add said ports to the switch. Unlike
-DPDK ring ports, DPDK vhost-user ports can have arbitrary names, except that
-forward and backward slashes are prohibited in the names. For vhost-user, the
-port type is ``dpdkvhostuser``::
+To use vhost-user ports, you must first add said ports to the switch. DPDK
+vhost-user ports can have arbitrary names with the exception of forward and
+backward slashes, which are prohibited. For vhost-user, the port type is
+``dpdkvhostuser``::
 
     $ ovs-vsctl add-port br0 vhost-user-1 -- set Interface vhost-user-1 \
         type=dpdkvhostuser
