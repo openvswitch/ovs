@@ -2098,7 +2098,8 @@ ofp_print_role_status_message(struct ds *string, const struct ofp_header *oh)
         break;
     case OFPCRR_N_REASONS:
     default:
-        OVS_NOT_REACHED();
+        ds_put_cstr(string, "(unknown)");
+        break;
     }
 }
 
