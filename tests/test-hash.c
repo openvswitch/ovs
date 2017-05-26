@@ -153,14 +153,13 @@ check_hash_bytes128(void (*hash)(const void *, size_t, uint32_t, ovs_u128 *),
         OVS_PACKED(struct offset_ovs_u128 {
             uint32_t a;
             ovs_u128 b;
-        }) in0_data;
-        ovs_u128 *in0, in1;
+        }) in0;
+        ovs_u128 in1;
         ovs_u128 out0, out1;
 
-        in0 = &in0_data.b;
-        set_bit128(in0, i, n_bits);
         set_bit128(&in1, i, n_bits);
-        hash(in0, sizeof(ovs_u128), 0, &out0);
+        in0.b = in1;
+        hash(&in0.b, sizeof(ovs_u128), 0, &out0);
         hash(&in1, sizeof(ovs_u128), 0, &out1);
         if (!ovs_u128_equals(&out0, &out1)) {
             printf("%s hash not the same for non-64 aligned data "
@@ -205,14 +204,15 @@ check_256byte_hash(void (*hash)(const void *, size_t, uint32_t, ovs_u128 *),
         OVS_PACKED(struct offset_ovs_u128 {
             uint32_t a;
             ovs_u128 b[16];
-        }) in0_data;
-        ovs_u128 *in0, in1[16];
+        }) in0;
+        ovs_u128 in1[16];
         ovs_u128 out0, out1;
 
-        in0 = in0_data.b;
-        set_bit128(in0, i, n_bits);
         set_bit128(in1, i, n_bits);
-        hash(in0, sizeof(ovs_u128) * 16, 0, &out0);
+        for (j = 0; j < 16; j++) {
+            in0.b[j] = in1[j];
+        }
+        hash(&in0.b, sizeof(ovs_u128) * 16, 0, &out0);
         hash(in1, sizeof(ovs_u128) * 16, 0, &out1);
         if (!ovs_u128_equals(&out0, &out1)) {
             printf("%s hash not the same for non-64 aligned data "
