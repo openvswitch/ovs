@@ -165,6 +165,7 @@ create_br_int(struct controller_ctx *ctx,
     bridges[cfg->n_bridges] = bridge;
     ovsrec_open_vswitch_verify_bridges(cfg);
     ovsrec_open_vswitch_set_bridges(cfg, bridges, cfg->n_bridges + 1);
+    free(bridges);
 
     return bridge;
 }
