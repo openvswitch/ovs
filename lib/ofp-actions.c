@@ -5693,7 +5693,7 @@ parse_CT(char *arg, struct ofpbuf *ofpacts,
             break;
         }
     }
-    if (oc->flags & NX_CT_F_FORCE && !(oc->flags & NX_CT_F_COMMIT)) {
+    if (!error && oc->flags & NX_CT_F_FORCE && !(oc->flags & NX_CT_F_COMMIT)) {
         error = xasprintf("\"force\" flag requires \"commit\" flag.");
     }
     ofpact_finish_CT(ofpacts, &oc);
