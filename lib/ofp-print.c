@@ -2013,7 +2013,8 @@ ofp_print_role_status_message(struct ds *string, const struct ofp_header *oh)
         ds_put_cstr(string, "experimenter_data_changed");
         break;
     default:
-        OVS_NOT_REACHED();
+        ds_put_cstr(string, "(unknown)");
+        break;
     }
 }
 
