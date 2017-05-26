@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Nicira, Inc.
+ * Copyright (c) 2015, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -237,6 +237,7 @@ test_pcap(struct ovs_cmdl_context *ctx)
         dp_packet_delete_batch(batch, true);
     }
     conntrack_destroy(&ct);
+    fclose(pcap);
 }
 
 static const struct ovs_cmdl_command commands[] = {
