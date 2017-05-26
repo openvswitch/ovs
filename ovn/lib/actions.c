@@ -884,6 +884,7 @@ parse_ct_lb_action(struct action_context *ctx)
         while (!lexer_match(ctx->lexer, LEX_T_RPAREN)) {
             if (ctx->lexer->token.type != LEX_T_INTEGER
                 || mf_subvalue_width(&ctx->lexer->token.value) > 32) {
+                free(dsts);
                 lexer_syntax_error(ctx->lexer, "expecting IPv4 address");
                 return;
             }
