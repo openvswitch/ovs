@@ -94,6 +94,7 @@ v2.7.0 - 21 Feb 2017
      * The "sample" action now supports "ingress" and "egress" options.
      * The "ct" action now supports the TFTP ALG where support is available.
      * New actions "clone" and "ct_clear".
+     * The "meter" action is now supported in the userspace datapath.
    - ovs-ofctl:
      * 'bundle' command now supports packet-out messages.
      * New syntax for 'ovs-ofctl packet-out' command, which uses the
