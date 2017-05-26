@@ -284,13 +284,13 @@ def run_checks(current_file, line, lineno):
         print("%s\n" % line)
 
 
-def ovs_checkpatch_parse(text):
-    global print_file_name, total_line
+def ovs_checkpatch_parse(text, filename):
+    global print_file_name, total_line, checking_file
     lineno = 0
     signatures = []
     co_authors = []
     parse = 0
-    current_file = ''
+    current_file = filename if checking_file else ''
     previous_file = ''
     scissors = re.compile(r'^[\w]*---[\w]*')
     hunks = re.compile('^(---|\+\+\+) (\S+)')
@@ -397,7 +397,7 @@ def ovs_checkpatch_file(filename):
     for part in mail.walk():
         if part.get_content_maintype() == 'multipart':
             continue
-    result = ovs_checkpatch_parse(part.get_payload(decode=True))
+    result = ovs_checkpatch_parse(part.get_payload(decode=True), filename)
     if result < 0:
         print("Lines checked: %d, Warnings: %d, Errors: %d" %
               (total_line, __warnings, __errors))
@@ -446,5 +446,5 @@ if __name__ == '__main__':
         if sys.stdin.isatty():
             usage()
             sys.exit(-1)
-        sys.exit(ovs_checkpatch_parse(sys.stdin.read()))
+        sys.exit(ovs_checkpatch_parse(sys.stdin.read()), '-')
     sys.exit(ovs_checkpatch_file(filename))
