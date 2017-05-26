@@ -2591,6 +2591,7 @@ ofctl_ofp_parse_pcap(struct ovs_cmdl_context *ctx)
         dp_packet_delete(packet);
     }
     tcp_reader_close(reader);
+    fclose(file);
 }
 
 static void
