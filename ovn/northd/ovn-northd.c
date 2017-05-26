@@ -3856,7 +3856,7 @@ build_static_route_flow(struct hmap *lflows, struct ovn_datapath *od,
                         const struct nbrec_logical_router_static_route *route)
 {
     ovs_be32 nexthop;
-    const char *lrp_addr_s;
+    const char *lrp_addr_s = NULL;
     unsigned int plen;
     bool is_ipv4;
 
