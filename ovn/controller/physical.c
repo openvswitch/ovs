@@ -769,7 +769,8 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
              const struct ovsrec_bridge *br_int,
              const struct sbrec_chassis *chassis,
              const struct simap *ct_zones, struct lport_index *lports,
-             struct hmap *flow_table, struct hmap *local_datapaths)
+             struct hmap *flow_table, struct hmap *local_datapaths,
+             const struct sset *local_lports)
 {
 
     /* This bool tracks physical mapping changes. */
@@ -988,14 +989,39 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
      */
     struct match match;
     match_init_catchall(&match);
-    ofpbuf_clear(&ofpacts);
     match_set_reg_masked(&match, MFF_LOG_FLAGS - MFF_REG0,
                          MLF_RCV_FROM_VXLAN, MLF_RCV_FROM_VXLAN);
 
     /* Resubmit to table 33. */
+    ofpbuf_clear(&ofpacts);
     put_resubmit(OFTABLE_LOCAL_OUTPUT, &ofpacts);
     ofctrl_add_flow(flow_table, OFTABLE_REMOTE_OUTPUT, 150, 0,
                     &match, &ofpacts);
+
+    /* Table 32, priority 150.
+     * =======================
+     *
+     * Handles packets received from ports of type "localport".  These ports
+     * are present on every hypervisor.  Traffic that originates at one should
+     * never go over a tunnel to a remote hypervisor, so resubmit them to table
+     * 33 for local delivery. */
+    match_init_catchall(&match);
+    ofpbuf_clear(&ofpacts);
+    put_resubmit(OFTABLE_LOCAL_OUTPUT, &ofpacts);
+    const char *localport;
+    SSET_FOR_EACH (localport, local_lports) {
+        /* Iterate over all local logical ports and insert a drop
+         * rule with higher priority for every localport in this
+         * datapath. */
+        const struct sbrec_port_binding *pb = lport_lookup_by_name(
+            lports, localport);
+        if (pb && !strcmp(pb->type, "localport")) {
+            match_set_reg(&match, MFF_LOG_INPORT - MFF_REG0, pb->tunnel_key);
+            match_set_metadata(&match, htonll(pb->datapath->tunnel_key));
+            ofctrl_add_flow(flow_table, OFTABLE_REMOTE_OUTPUT, 150, 0,
+                            &match, &ofpacts);
+        }
+    }
 
     /* Table 32, Priority 0.
      * =======================

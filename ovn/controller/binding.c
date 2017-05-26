@@ -380,7 +380,10 @@ consider_local_datapath(struct controller_ctx *ctx,
         if (iface_rec && qos_map && ctx->ovs_idl_txn) {
             get_qos_params(binding_rec, qos_map);
         }
-        our_chassis = true;
+        /* This port is in our chassis unless it is a localport. */
+	    if (strcmp(binding_rec->type, "localport")) {
+            our_chassis = true;
+        }
     } else if (!strcmp(binding_rec->type, "l2gateway")) {
         const char *chassis_id = smap_get(&binding_rec->options,
                                           "l2gateway-chassis");

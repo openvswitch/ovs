@@ -409,6 +409,21 @@
           logical patch ports at each such point of connectivity, one on
           each side.
         </li>
+        <li>
+          <dfn>Localport ports</dfn> represent the points of local
+          connectivity between logical switches and VIFs. These ports are
+          present in every chassis (not bound to any particular one) and
+          traffic from them will never go through a tunnel. A
+          <code>localport</code> is expected to only generate traffic destined
+          for a local destination, typically in response to a request it
+          received.
+          One use case is how OpenStack Neutron uses a <code>localport</code>
+          port for serving metadata to VM's residing on every hypervisor. A
+          metadata proxy process is attached to this port on every host and all
+          VM's within the same network will reach it at the same IP/MAC address
+          without any traffic being sent over a tunnel. Further details can be
+          seen at https://docs.openstack.org/developer/networking-ovn/design/metadata_api.html.
+        </li>
       </ul>
     </li>
   </ul>
@@ -993,14 +1008,30 @@
         hypervisor, in the same way as for unicast destinations.  If a
         multicast group includes a logical port or ports on the local
         hypervisor, then its actions also resubmit to table 33.  Table 32 also
-        includes a fallback flow that resubmits to table 33 if there is no
-        other match.  Table 32 also contains a higher priority rule to match
-        packets received from VXLAN tunnels, based on flag MLF_RCV_FROM_VXLAN
-        and resubmit these packets to table 33 for local delivery. Packets
-        received from VXLAN tunnels reach here because of a lack of logical
-        output port field in the tunnel key and thus these packets needed to
-        be submitted to table 16 to determine the output port.
+        includes:
       </p>
+
+      <ul>
+        <li>
+          A higher-priority rule to match packets received from VXLAN tunnels,
+          based on flag MLF_RCV_FROM_VXLAN, and resubmit these packets to table
+          33 for local delivery.  Packets received from VXLAN tunnels reach
+          here because of a lack of logical output port field in the tunnel key
+          and thus these packets needed to be submitted to table 16 to
+          determine the output port.
+        </li>
+        <li>
+          A higher-priority rule to match packets received from ports of type
+          <code>localport</code>, based on the logical input port, and resubmit
+          these packets to table 33 for local delivery.  Ports of type
+          <code>localport</code> exist on every hypervisor and by definition
+          their traffic should never go out through a tunnel.
+        </li>
+        <li>
+          A fallback flow that resubmits to table 33 if there is no other
+          match.
+        </li>
+      </ul>
 
       <p>
         Flows in table 33 resemble those in table 32 but for logical ports that

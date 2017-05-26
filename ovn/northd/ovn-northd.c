@@ -3305,9 +3305,11 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         /*
          * Add ARP/ND reply flows if either the
          *  - port is up or
-         *  - port type is router
+         *  - port type is router or
+         *  - port type is localport
          */
-        if (!lsp_is_up(op->nbsp) && strcmp(op->nbsp->type, "router")) {
+        if (!lsp_is_up(op->nbsp) && strcmp(op->nbsp->type, "router") &&
+            strcmp(op->nbsp->type, "localport")) {
             continue;
         }
 

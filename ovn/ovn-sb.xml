@@ -1802,6 +1802,11 @@ tcp.flags = RST;
             connectivity to the corresponding physical network.
           </dd>
 
+          <dt>localport</dt>
+          <dd>
+            Always empty.  A localport port is present on every chassis.
+          </dd>
+
           <dt>l3gateway</dt>
           <dd>
             The physical location of the L3 gateway.  To successfully identify a
@@ -1880,6 +1885,15 @@ tcp.flags = RST;
             <code>ovn-controller</code> instance.  A logical switch can only
             have a single <code>localnet</code> port attached.  This is used
             to model direct connectivity to an existing network.
+          </dd>
+
+          <dt><code>localport</code></dt>
+          <dd>
+            A connection to a local VIF. Traffic that arrives on a
+            <code>localport</code> is never forwarded over a tunnel to another
+            chassis. These ports are present on every chassis and have the same
+            address in all of them. This is used to model connectivity to local
+            services that run on every hypervisor.
           </dd>
 
           <dt><code>l2gateway</code></dt>

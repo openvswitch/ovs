@@ -656,7 +656,7 @@ main(int argc, char *argv[])
 
                     physical_run(&ctx, mff_ovn_geneve,
                                  br_int, chassis, &ct_zones, &lports,
-                                 &flow_table, &local_datapaths);
+                                 &flow_table, &local_datapaths, &local_lports);
 
                     ofctrl_put(&flow_table, &pending_ct_zones,
                                get_nb_cfg(ctx.ovnsb_idl));

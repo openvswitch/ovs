@@ -283,6 +283,15 @@
             to model direct connectivity to an existing network.
           </dd>
 
+          <dt><code>localport</code></dt>
+          <dd>
+            A connection to a local VIF. Traffic that arrives on a
+            <code>localport</code> is never forwarded over a tunnel to another
+            chassis. These ports are present on every chassis and have the same
+            address in all of them. This is used to model connectivity to local
+            services that run on every hypervisor.
+          </dd>
+
           <dt><code>l2gateway</code></dt>
           <dd>
             A connection to a physical network.

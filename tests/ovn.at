@@ -7374,3 +7374,125 @@ OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [expected])
 OVN_CLEANUP([hv1],[hv2])
 
 AT_CLEANUP
+
+AT_SETUP([ovn -- 2 HVs, 1 lport/HV, localport ports])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+ovn-nbctl ls-add ls1
+
+# Add localport to the switch
+ovn-nbctl lsp-add ls1 lp01
+ovn-nbctl lsp-set-addresses lp01 f0:00:00:00:00:01
+ovn-nbctl lsp-set-type lp01 localport
+
+net_add n1
+
+for i in 1 2; do
+    sim_add hv$i
+    as hv$i
+    ovs-vsctl add-br br-phys
+    ovn_attach n1 br-phys 192.168.0.$i
+    ovs-vsctl add-port br-int vif01 -- \
+        set Interface vif01 external-ids:iface-id=lp01 \
+                              options:tx_pcap=hv${i}/vif01-tx.pcap \
+                              options:rxq_pcap=hv${i}/vif01-rx.pcap \
+                              ofport-request=${i}0
+
+    ovs-vsctl add-port br-int vif${i}1 -- \
+        set Interface vif${i}1 external-ids:iface-id=lp${i}1 \
+                              options:tx_pcap=hv${i}/vif${i}1-tx.pcap \
+                              options:rxq_pcap=hv${i}/vif${i}1-rx.pcap \
+                              ofport-request=${i}1
+
+    ovn-nbctl lsp-add ls1 lp${i}1
+    ovn-nbctl lsp-set-addresses lp${i}1 f0:00:00:00:00:${i}1
+    ovn-nbctl lsp-set-port-security lp${i}1 f0:00:00:00:00:${i}1
+
+        OVS_WAIT_UNTIL([test x`ovn-nbctl lsp-get-up lp${i}1` = xup])
+done
+
+ovn-nbctl --wait=sb sync
+ovn-sbctl dump-flows
+
+ovn_populate_arp
+
+# Given the name of a logical port, prints the name of the hypervisor
+# on which it is located.
+vif_to_hv() {
+    echo hv${1%?}
+}
+#
+# test_packet INPORT DST SRC ETHTYPE EOUT LOUT DEFHV
+#
+# This shell function causes a packet to be received on INPORT.  The packet's
+# content has Ethernet destination DST and source SRC (each exactly 12 hex
+# digits) and Ethernet type ETHTYPE (4 hex digits).  INPORT is specified as
+# logical switch port numbers, e.g. 11 for vif11.
+#
+# EOUT is the end-to-end output port, that is, where the packet will end up
+# after possibly bouncing through one or more localnet ports.  LOUT is the
+# logical output port, which might be a localnet port, as seen by ovn-trace
+# (which doesn't know what localnet ports are connected to and therefore can't
+# figure out the end-to-end answer).
+#
+# DEFHV is the default hypervisor from where the packet is going to be sent
+# if the source port is a localport.
+for i in 1 2; do
+    for j in 0 1; do
+        : > $i$j.expected
+    done
+done
+test_packet() {
+    local inport=$1 dst=$2 src=$3 eth=$4 eout=$5 lout=$6 defhv=$7
+    echo "$@"
+
+    # First try tracing the packet.
+    uflow="inport==\"lp$inport\" && eth.dst==$dst && eth.src==$src && eth.type==0x$eth"
+    if test $lout != drop; then
+        echo "output(\"$lout\");"
+    fi > expout
+    AT_CAPTURE_FILE([trace])
+    AT_CHECK([ovn-trace --all ls1 "$uflow" | tee trace | sed '1,/Minimal trace/d'], [0], [expout])
+
+    # Then actually send a packet, for an end-to-end test.
+    local packet=$(echo $dst$src | sed 's/://g')${eth}
+    hv=`vif_to_hv $inport`
+    # If hypervisor 0 (localport) use the defhv parameter
+    if test $hv == hv0; then
+        hv=$defhv
+    fi
+    vif=vif$inport
+    as $hv ovs-appctl netdev-dummy/receive $vif $packet
+    if test $eout != drop; then
+        echo $packet >> ${eout#lp}.expected
+    fi
+}
+
+
+# lp11 and lp21 are on different hypervisors
+test_packet 11 f0:00:00:00:00:21 f0:00:00:00:00:11 1121 lp21 lp21
+test_packet 21 f0:00:00:00:00:11 f0:00:00:00:00:21 2111 lp11 lp11
+
+# Both VIFs should be able to reach the localport on their own HV
+test_packet 11 f0:00:00:00:00:01 f0:00:00:00:00:11 1101 lp01 lp01
+test_packet 21 f0:00:00:00:00:01 f0:00:00:00:00:21 2101 lp01 lp01
+
+# Packet sent from localport on same hv should reach the vif
+test_packet 01 f0:00:00:00:00:11 f0:00:00:00:00:01 0111 lp11 lp11 hv1
+test_packet 01 f0:00:00:00:00:21 f0:00:00:00:00:01 0121 lp21 lp21 hv2
+
+# Packet sent from localport on different hv should be dropped
+test_packet 01 f0:00:00:00:00:21 f0:00:00:00:00:01 0121 drop lp21 hv1
+test_packet 01 f0:00:00:00:00:11 f0:00:00:00:00:01 0111 drop lp11 hv2
+
+# Now check the packets actually received against the ones expected.
+for i in 1 2; do
+    for j in 0 1; do
+        OVN_CHECK_PACKETS([hv$i/vif$i$j-tx.pcap], [$i$j.expected])
+    done
+done
+
+OVN_CLEANUP([hv1],[hv2])
+
+AT_CLEANUP
