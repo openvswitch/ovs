@@ -1861,7 +1861,9 @@ parse_ofp_group_mod_file(const char *file_name, int command,
                 fclose(stream);
             }
 
-            return xasprintf("%s:%d: %s", file_name, line_number, error);
+            char *ret = xasprintf("%s:%d: %s", file_name, line_number, error);
+            free(error);
+            return ret;
         }
         *usable_protocols &= usable;
         *n_gms += 1;
