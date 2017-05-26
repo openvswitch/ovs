@@ -491,6 +491,40 @@ get_nb_cfg(struct ovsdb_idl *idl)
     return sb ? sb->nb_cfg : 0;
 }
 
+static void
+ctrl_register_ovs_idl(struct ovsdb_idl *ovs_idl)
+{
+    /* We do not monitor all tables by default, so modules must register
+     * their interest explicitly. */
+    ovsdb_idl_add_table(ovs_idl, &ovsrec_table_open_vswitch);
+    ovsdb_idl_add_column(ovs_idl, &ovsrec_open_vswitch_col_external_ids);
+    ovsdb_idl_add_column(ovs_idl, &ovsrec_open_vswitch_col_bridges);
+    ovsdb_idl_add_table(ovs_idl, &ovsrec_table_interface);
+    ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_name);
+    ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_type);
+    ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_options);
+    ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_ofport);
+    ovsdb_idl_add_table(ovs_idl, &ovsrec_table_port);
+    ovsdb_idl_add_column(ovs_idl, &ovsrec_port_col_name);
+    ovsdb_idl_add_column(ovs_idl, &ovsrec_port_col_interfaces);
+    ovsdb_idl_add_column(ovs_idl, &ovsrec_port_col_external_ids);
+    ovsdb_idl_add_table(ovs_idl, &ovsrec_table_bridge);
+    ovsdb_idl_add_column(ovs_idl, &ovsrec_bridge_col_ports);
+    ovsdb_idl_add_column(ovs_idl, &ovsrec_bridge_col_name);
+    ovsdb_idl_add_column(ovs_idl, &ovsrec_bridge_col_fail_mode);
+    ovsdb_idl_add_column(ovs_idl, &ovsrec_bridge_col_other_config);
+    ovsdb_idl_add_column(ovs_idl, &ovsrec_bridge_col_external_ids);
+    ovsdb_idl_add_table(ovs_idl, &ovsrec_table_ssl);
+    ovsdb_idl_add_column(ovs_idl, &ovsrec_ssl_col_bootstrap_ca_cert);
+    ovsdb_idl_add_column(ovs_idl, &ovsrec_ssl_col_ca_cert);
+    ovsdb_idl_add_column(ovs_idl, &ovsrec_ssl_col_certificate);
+    ovsdb_idl_add_column(ovs_idl, &ovsrec_ssl_col_private_key);
+    chassis_register_ovs_idl(ovs_idl);
+    encaps_register_ovs_idl(ovs_idl);
+    binding_register_ovs_idl(ovs_idl);
+    physical_register_ovs_idl(ovs_idl);
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -525,38 +559,10 @@ main(int argc, char *argv[])
     pinctrl_init();
     lflow_init();
 
-    /* Connect to OVS OVSDB instance.  We do not monitor all tables by
-     * default, so modules must register their interest explicitly.  */
+    /* Connect to OVS OVSDB instance. */
     struct ovsdb_idl_loop ovs_idl_loop = OVSDB_IDL_LOOP_INITIALIZER(
         ovsdb_idl_create(ovs_remote, &ovsrec_idl_class, false, true));
-    ovsdb_idl_add_table(ovs_idl_loop.idl, &ovsrec_table_open_vswitch);
-    ovsdb_idl_add_column(ovs_idl_loop.idl,
-                         &ovsrec_open_vswitch_col_external_ids);
-    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_open_vswitch_col_bridges);
-    ovsdb_idl_add_table(ovs_idl_loop.idl, &ovsrec_table_interface);
-    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_interface_col_name);
-    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_interface_col_type);
-    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_interface_col_options);
-    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_interface_col_ofport);
-    ovsdb_idl_add_table(ovs_idl_loop.idl, &ovsrec_table_port);
-    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_port_col_name);
-    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_port_col_interfaces);
-    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_port_col_external_ids);
-    ovsdb_idl_add_table(ovs_idl_loop.idl, &ovsrec_table_bridge);
-    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_bridge_col_ports);
-    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_bridge_col_name);
-    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_bridge_col_fail_mode);
-    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_bridge_col_other_config);
-    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_bridge_col_external_ids);
-    ovsdb_idl_add_table(ovs_idl_loop.idl, &ovsrec_table_ssl);
-    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_ssl_col_bootstrap_ca_cert);
-    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_ssl_col_ca_cert);
-    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_ssl_col_certificate);
-    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_ssl_col_private_key);
-    chassis_register_ovs_idl(ovs_idl_loop.idl);
-    encaps_register_ovs_idl(ovs_idl_loop.idl);
-    binding_register_ovs_idl(ovs_idl_loop.idl);
-    physical_register_ovs_idl(ovs_idl_loop.idl);
+    ctrl_register_ovs_idl(ovs_idl_loop.idl);
     ovsdb_idl_get_initial_snapshot(ovs_idl_loop.idl);
 
     /* Connect to OVN SB database and get a snapshot. */
