@@ -211,7 +211,7 @@ checks = [
 
 
 def regex_function_factory(func_name):
-    regex = re.compile('[^x]%s\([^)]*\)' % func_name)
+    regex = re.compile(r'\b%s\([^)]*\)' % func_name)
     return lambda x: regex.search(x) is not None
 
 
