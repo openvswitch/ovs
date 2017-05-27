@@ -370,8 +370,8 @@ consider_port_binding(enum mf_field_id mff_ovn_geneve,
         match_set_metadata(&match, htonll(dp_key));
         match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, port_key);
 
-        const char *distributed_port = smap_get(&binding->options,
-                                                "distributed-port");
+        const char *distributed_port = smap_get_def(&binding->options,
+                                                    "distributed-port", "");
         const struct sbrec_port_binding *distributed_binding
             = lport_lookup_by_name(lports, distributed_port);
 
