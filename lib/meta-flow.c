@@ -2026,7 +2026,7 @@ mf_set(const struct mf_field *mf,
 
     case MFF_CT_LABEL:
         match_set_ct_label_masked(match, ntoh128(value->be128),
-                                  mask ? ntoh128(mask->be128) : OVS_U128_MAX);
+                                  ntoh128(mask->be128));
         break;
 
     case MFF_ETH_DST:
