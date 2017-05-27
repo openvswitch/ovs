@@ -128,8 +128,8 @@ put_encapsulation(enum mf_field_id mff_ovn_geneve,
         put_load(outport, mff_ovn_geneve, 0, 32, ofpacts);
         put_move(MFF_LOG_INPORT, 0, mff_ovn_geneve, 16, 15, ofpacts);
     } else if (tun->type == STT) {
-        put_load(datapath->tunnel_key | (outport << 24), MFF_TUN_ID, 0, 64,
-                 ofpacts);
+        put_load(datapath->tunnel_key | ((uint64_t) outport << 24),
+                 MFF_TUN_ID, 0, 64, ofpacts);
         put_move(MFF_LOG_INPORT, 0, MFF_TUN_ID, 40, 15, ofpacts);
     } else if (tun->type == VXLAN) {
         put_load(datapath->tunnel_key, MFF_TUN_ID, 0, 24, ofpacts);
