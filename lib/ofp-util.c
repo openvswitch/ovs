@@ -5181,20 +5181,22 @@ ofputil_decode_port_mod(const struct ofp_header *oh,
 
     struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     enum ofpraw raw = ofpraw_pull_assert(&b);
+
+    enum ofperr error;
     if (raw == OFPRAW_OFPT10_PORT_MOD) {
-        return ofputil_decode_ofp10_port_mod(b.data, pm);
+        error = ofputil_decode_ofp10_port_mod(b.data, pm);
     } else if (raw == OFPRAW_OFPT11_PORT_MOD) {
-        return ofputil_decode_ofp11_port_mod(b.data, pm);
+        error = ofputil_decode_ofp11_port_mod(b.data, pm);
     } else if (raw == OFPRAW_OFPT14_PORT_MOD) {
-        return ofputil_decode_ofp14_port_mod(&b, loose, pm);
+        error = ofputil_decode_ofp14_port_mod(&b, loose, pm);
     } else if (raw == OFPRAW_OFPT16_PORT_MOD) {
-        return ofputil_decode_ofp16_port_mod(&b, loose, pm);
+        error = ofputil_decode_ofp16_port_mod(&b, loose, pm);
     } else {
-        return OFPERR_OFPBRC_BAD_TYPE;
+        error = OFPERR_OFPBRC_BAD_TYPE;
     }
 
     pm->config &= pm->mask;
-    return 0;
+    return error;
 }
 
 /* Converts the abstract form of a "port mod" message in '*pm' into an OpenFlow
