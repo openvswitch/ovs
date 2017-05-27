@@ -2830,7 +2830,13 @@ print_table_instruction_features(
 
             for (i = 0; i < 32; i++) {
                 if (tif->instructions & (1u << i)) {
-                    ds_put_format(s, "%s,", ovs_instruction_name_from_type(i));
+                    const char *name = ovs_instruction_name_from_type(i);
+                    if (name) {
+                        ds_put_cstr(s, name);
+                    } else {
+                        ds_put_format(s, "%d", i);
+                    }
+                    ds_put_char(s, ',');
                 }
             }
             ds_chomp(s, ',');
