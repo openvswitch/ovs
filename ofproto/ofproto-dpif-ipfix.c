@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2012, 2013, 2014, 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1281,13 +1281,13 @@ ipfix_define_template_fields(enum ipfix_proto_l2 l2, enum ipfix_proto_l3 l3,
 }
 
 static void
-ipfix_init_template_msg(void *msg_stub, uint32_t export_time_sec,
+ipfix_init_template_msg(uint32_t export_time_sec,
                         uint32_t seq_number, uint32_t obs_domain_id,
                         struct dp_packet *msg, size_t *set_hdr_offset)
 {
     struct ipfix_set_header *set_hdr;
 
-    dp_packet_use_stub(msg, msg_stub, sizeof msg_stub);
+    dp_packet_clear(msg);
 
     ipfix_init_header(export_time_sec, seq_number, obs_domain_id, msg);
     *set_hdr_offset = dp_packet_size(msg);
@@ -1311,8 +1311,6 @@ ipfix_send_template_msg(const struct collectors *collectors,
 
     tx_errors = ipfix_send_msg(collectors, msg);
 
-    dp_packet_uninit(msg);
-
     return tx_errors;
 }
 
@@ -1322,6 +1320,8 @@ ipfix_send_template_msgs(struct dpif_ipfix_exporter *exporter,
 {
     uint64_t msg_stub[DIV_ROUND_UP(MAX_MESSAGE_LEN, 8)];
     struct dp_packet msg;
+    dp_packet_use_stub(&msg, msg_stub, sizeof msg_stub);
+
     size_t set_hdr_offset, tmpl_hdr_offset, error_pkts;
     struct ipfix_template_record_header *tmpl_hdr;
     uint16_t field_count;
@@ -1332,7 +1332,7 @@ ipfix_send_template_msgs(struct dpif_ipfix_exporter *exporter,
     enum ipfix_proto_l4 l4;
     enum ipfix_proto_tunnel tunnel;
 
-    ipfix_init_template_msg(msg_stub, export_time_sec, exporter->seq_number,
+    ipfix_init_template_msg(export_time_sec, exporter->seq_number,
                             obs_domain_id, &msg, &set_hdr_offset);
     /* Define one template for each possible combination of
      * protocols. */
@@ -1357,7 +1357,7 @@ ipfix_send_template_msgs(struct dpif_ipfix_exporter *exporter,
                         tx_packets += collectors_count(exporter->collectors) - error_pkts;
 
                         /* Reinitialize the template msg. */
-                        ipfix_init_template_msg(msg_stub, export_time_sec,
+                        ipfix_init_template_msg(export_time_sec,
                                                 exporter->seq_number,
                                                 obs_domain_id, &msg,
                                                 &set_hdr_offset);
@@ -1389,6 +1389,7 @@ ipfix_send_template_msgs(struct dpif_ipfix_exporter *exporter,
     /* XXX: Add Options Template Sets, at least to define a Flow Keys
      * Option Template. */
 
+    dp_packet_uninit(&msg);
 }
 
 static inline uint32_t
