@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2016 Nicira, Inc.
+/* Copyright (c) 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ match_patch_port(const struct ovsrec_port *port, const char *peer)
             continue;
         }
         const char *iface_peer = smap_get(&iface->options, "peer");
-        if (peer && !strcmp(iface_peer, peer)) {
+        if (iface_peer && !strcmp(iface_peer, peer)) {
             return true;
         }
     }
