@@ -3966,7 +3966,7 @@ build_static_route_flow(struct hmap *lflows, struct ovn_datapath *od,
         }
     }
 
-     if (!lrp_addr_s) {
+    if (!out_port || !lrp_addr_s) {
         /* There is no matched out port. */
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
         VLOG_WARN_RL(&rl, "No path for static route %s; next hop %s",
