@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Nicira, Inc.
+ * Copyright (c) 2015, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -687,14 +687,14 @@ ovsdb_monitor_table_condition_update(
                             const struct ovsdb_table *table,
                             const struct json *cond_json)
 {
+    if (!condition) {
+        return NULL;
+    }
+
     struct ovsdb_monitor_table_condition *mtc =
         shash_find_data(&condition->tables, table->schema->name);
     struct ovsdb_error *error;
     struct ovsdb_condition cond = OVSDB_CONDITION_INITIALIZER(&cond);
-
-    if (!condition) {
-        return NULL;
-    }
 
     error = ovsdb_condition_from_json(table->schema, cond_json,
                                       NULL, &cond);
