@@ -10955,8 +10955,6 @@ struct ofpbuf *
 ofputil_encode_get_async_reply(const struct ofp_header *oh,
                                const struct ofputil_async_cfg *ac)
 {
-    struct ofpbuf *buf;
-
     enum ofpraw raw = (oh->version < OFP14_VERSION
                        ? OFPRAW_OFPT13_GET_ASYNC_REPLY
                        : OFPRAW_OFPT14_GET_ASYNC_REPLY);
@@ -10965,8 +10963,6 @@ ofputil_encode_get_async_reply(const struct ofp_header *oh,
                                raw == OFPRAW_OFPT14_GET_ASYNC_REPLY,
                                oh->version, UINT32_MAX);
     return reply;
-
-    return buf;
 }
 
 /* Encodes and returns a message, in a format appropriate for OpenFlow version
