@@ -155,6 +155,32 @@ AC_DEFUN([OVS_CHECK_LINUX], [
   AM_CONDITIONAL(LINUX_ENABLED, test -n "$KBUILD")
 ])
 
+dnl OVS_CHECK_LINUX_TC
+dnl
+dnl Configure Linux tc compat.
+AC_DEFUN([OVS_CHECK_LINUX_TC], [
+  AC_COMPILE_IFELSE([
+    AC_LANG_PROGRAM([#include <linux/pkt_cls.h>], [
+        int x = TCA_ACT_COOKIE;
+    ])],
+    [AC_DEFINE([HAVE_TCA_ACT_COOKIE], [1],
+               [Define to 1 if TCA_ACT_COOKIE is avaiable.])])
+
+  AC_COMPILE_IFELSE([
+    AC_LANG_PROGRAM([#include <linux/tc_act/tc_vlan.h>], [
+        int x = TCA_VLAN_PUSH_VLAN_PRIORITY;
+    ])],
+    [AC_DEFINE([HAVE_TCA_VLAN_PUSH_VLAN_PRIORITY], [1],
+               [Define to 1 if TCA_VLAN_PUSH_VLAN_PRIORITY is avaiable.])])
+
+  AC_COMPILE_IFELSE([
+    AC_LANG_PROGRAM([#include <linux/tc_act/tc_tunnel_key.h>], [
+        int x = TCA_TUNNEL_KEY_ENC_DST_PORT;
+    ])],
+    [AC_DEFINE([HAVE_TCA_TUNNEL_KEY_ENC_DST_PORT], [1],
+               [Define to 1 if TCA_TUNNEL_KEY_ENC_DST_PORT is avaiable.])])
+])
+
 dnl OVS_CHECK_DPDK
 dnl
 dnl Configure DPDK source tree
