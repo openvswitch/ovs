@@ -276,9 +276,9 @@ install -p -m 644 -D selinux/openvswitch-custom.pp \
         $RPM_BUILD_ROOT%{_datadir}/selinux/packages/%{name}/openvswitch-custom.pp
 
 install -d $RPM_BUILD_ROOT%{_prefix}/lib/firewalld/services/
-install rhel/usr_lib_firewalld_services_ovn-central-firewall-service.xml \
+install -p -m 0644 rhel/usr_lib_firewalld_services_ovn-central-firewall-service.xml \
         $RPM_BUILD_ROOT%{_prefix}/lib/firewalld/services/ovn-central-firewall-service.xml
-install rhel/usr_lib_firewalld_services_ovn-host-firewall-service.xml \
+install -p -m 0644 rhel/usr_lib_firewalld_services_ovn-host-firewall-service.xml \
         $RPM_BUILD_ROOT%{_prefix}/lib/firewalld/services/ovn-host-firewall-service.xml
 
 # remove unpackaged files
