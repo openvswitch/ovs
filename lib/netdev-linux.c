@@ -866,6 +866,13 @@ netdev_linux_construct_tap(struct netdev *netdev_)
         goto error_close;
     }
 
+    if (ioctl(netdev->tap_fd, TUNSETPERSIST, 1)) {
+        VLOG_WARN("%s: creating tap device failed (persist): %s", name,
+                  ovs_strerror(errno));
+        error = errno;
+        goto error_close;
+    }
+
     return 0;
 
 error_close:
@@ -885,6 +892,7 @@ netdev_linux_destruct(struct netdev *netdev_)
     if (netdev_get_class(netdev_) == &netdev_tap_class
         && netdev->tap_fd >= 0)
     {
+        ioctl(netdev->tap_fd, TUNSETPERSIST, 0);
         close(netdev->tap_fd);
     }
 
