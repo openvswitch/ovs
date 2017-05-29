@@ -33,6 +33,7 @@
 #include "command-line.h"
 #include "compiler.h"
 #include "dpif.h"
+#include "fatal-signal.h"
 #include "openvswitch/dynamic-string.h"
 #include "netdev.h"
 #include "packets.h"
@@ -484,16 +485,32 @@ ovs_router_flush(void)
     seq_change(tnl_conf_seq);
 }
 
-/* May not be called more than once. */
+static void
+ovs_router_flush_handler(void *aux OVS_UNUSED)
+{
+    ovs_router_flush();
+}
+
 void
 ovs_router_init(void)
 {
-    classifier_init(&cls, NULL);
-    unixctl_command_register("ovs/route/add", "ip_addr/prefix_len out_br_name [gw] [pkt_mark=mark]", 2, 4,
-                             ovs_router_add, NULL);
-    unixctl_command_register("ovs/route/show", "", 0, 0, ovs_router_show, NULL);
-    unixctl_command_register("ovs/route/del", "ip_addr/prefix_len [pkt_mark=mark]", 1, 2,
-                             ovs_router_del, NULL);
-    unixctl_command_register("ovs/route/lookup", "ip_addr [pkt_mark=mark]", 1, 2,
-                             ovs_router_lookup_cmd, NULL);
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+
+    if (ovsthread_once_start(&once)) {
+        fatal_signal_add_hook(ovs_router_flush_handler, NULL, NULL, true);
+        classifier_init(&cls, NULL);
+        unixctl_command_register("ovs/route/add",
+                                 "ip_addr/prefix_len out_br_name [gw] "
+                                 "[pkt_mark=mark]",
+                                 2, 4, ovs_router_add, NULL);
+        unixctl_command_register("ovs/route/show", "", 0, 0,
+                                 ovs_router_show, NULL);
+        unixctl_command_register("ovs/route/del", "ip_addr/prefix_len "
+                                 "[pkt_mark=mark]", 1, 2, ovs_router_del,
+                                 NULL);
+        unixctl_command_register("ovs/route/lookup", "ip_addr "
+                                 "[pkt_mark=mark]", 1, 2,
+                                 ovs_router_lookup_cmd, NULL);
+        ovsthread_once_done(&once);
+    }
 }
