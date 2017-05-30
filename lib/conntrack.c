@@ -318,22 +318,8 @@ conntrack_execute(struct conntrack *ct, struct dp_packet_batch *pkt_batch,
 {
     struct dp_packet **pkts = pkt_batch->packets;
     size_t cnt = pkt_batch->count;
-#if !defined(__CHECKER__) && !defined(_WIN32)
-    const size_t KEY_ARRAY_SIZE = cnt;
-#else
-    enum { KEY_ARRAY_SIZE = NETDEV_MAX_BURST };
-#endif
-    struct conn_lookup_ctx ctxs[KEY_ARRAY_SIZE];
-    int8_t bucket_list[CONNTRACK_BUCKETS];
-    struct {
-        unsigned bucket;
-        unsigned long maps;
-    } arr[KEY_ARRAY_SIZE];
     long long now = time_msec();
-    size_t i = 0;
-    uint8_t arrcnt = 0;
-
-    BUILD_ASSERT_DECL(sizeof arr[0].maps * CHAR_BIT >= NETDEV_MAX_BURST);
+    struct conn_lookup_ctx ctx;
 
     if (helper) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
@@ -342,48 +328,24 @@ conntrack_execute(struct conntrack *ct, struct dp_packet_batch *pkt_batch,
         /* Continue without the helper */
     }
 
-    memset(bucket_list, INT8_C(-1), sizeof bucket_list);
-    for (i = 0; i < cnt; i++) {
-        unsigned bucket;
-
-        if (!conn_key_extract(ct, pkts[i], dl_type, &ctxs[i], zone)) {
+    for (size_t i = 0; i < cnt; i++) {
+        if (!conn_key_extract(ct, pkts[i], dl_type, &ctx, zone)) {
             write_ct_md(pkts[i], CS_INVALID, zone, NULL, NULL);
             continue;
         }
 
-        bucket = hash_to_bucket(ctxs[i].hash);
-        if (bucket_list[bucket] == INT8_C(-1)) {
-            bucket_list[bucket] = arrcnt;
-
-            arr[arrcnt].maps = 0;
-            ULLONG_SET1(arr[arrcnt].maps, i);
-            arr[arrcnt++].bucket = bucket;
-        } else {
-            ULLONG_SET1(arr[bucket_list[bucket]].maps, i);
-        }
-    }
-
-    for (i = 0; i < arrcnt; i++) {
-        struct conntrack_bucket *ctb = &ct->buckets[arr[i].bucket];
-        size_t j;
-
+        struct conntrack_bucket *ctb = &ct->buckets[i];
         ct_lock_lock(&ctb->lock);
+        conn_key_lookup(ctb, &ctx, now);
+        struct conn *conn = process_one(ct, pkts[i], &ctx, zone,
+                                        force, commit, now);
 
-        ULLONG_FOR_EACH_1(j, arr[i].maps) {
-            struct conn *conn;
+        if (conn && setmark) {
+            set_mark(pkts[i], conn, setmark[0], setmark[1]);
+        }
 
-            conn_key_lookup(ctb, &ctxs[j], now);
-
-            conn = process_one(ct, pkts[j], &ctxs[j], zone, force, commit,
-                               now);
-
-            if (conn && setmark) {
-                set_mark(pkts[j], conn, setmark[0], setmark[1]);
-            }
-
-            if (conn && setlabel) {
-                set_label(pkts[j], conn, &setlabel[0], &setlabel[1]);
-            }
+        if (conn && setlabel) {
+            set_label(pkts[i], conn, &setlabel[0], &setlabel[1]);
         }
         ct_lock_unlock(&ctb->lock);
     }
