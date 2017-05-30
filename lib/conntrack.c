@@ -313,7 +313,8 @@ conntrack_execute(struct conntrack *ct, struct dp_packet_batch *pkt_batch,
                   ovs_be16 dl_type, bool force, bool commit, uint16_t zone,
                   const uint32_t *setmark,
                   const struct ovs_key_ct_labels *setlabel,
-                  const char *helper)
+                  const char *helper,
+                  const struct nat_action_info_t *nat_action_info OVS_UNUSED)
 {
     struct dp_packet **pkts = pkt_batch->packets;
     size_t cnt = pkt_batch->count;

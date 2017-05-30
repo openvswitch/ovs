@@ -29,15 +29,6 @@
 #include "packets.h"
 #include "unaligned.h"
 
-struct ct_addr {
-    union {
-        ovs_16aligned_be32 ipv4;
-        union ovs_16aligned_in6_addr ipv6;
-        ovs_be32 ipv4_aligned;
-        struct in6_addr ipv6_aligned;
-    };
-};
-
 struct ct_endpoint {
     struct ct_addr addr;
     union {
