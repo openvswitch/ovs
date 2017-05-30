@@ -2638,8 +2638,7 @@ table=10 priority=0 action=drop
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
-dnl HTTP requests from p0->p1 should work fine.
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+dnl ICMP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [ping -c 1 10.1.1.2 | FORMAT_PING], [0], [dnl
 1 packets transmitted, 1 received, 0% packet loss, time 0ms
 ])
@@ -3442,6 +3441,7 @@ AT_SETUP([conntrack - IPv6 FTP with NAT - orig tuple])
 AT_SKIP_IF([test $HAVE_FTP = no])
 CHECK_CONNTRACK()
 CHECK_CONNTRACK_NAT()
+CHECK_CONNTRACK_ALG()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
