@@ -28,6 +28,7 @@
 #include "openvswitch/types.h"
 #include "packets.h"
 #include "unaligned.h"
+#include "dp-packet.h"
 
 struct ct_endpoint {
     struct ct_addr addr;
@@ -114,6 +115,18 @@ conn_update_expiration(struct conntrack_bucket *ctb, struct conn *conn,
 {
     ovs_list_remove(&conn->exp_node);
     conn_init_expiration(ctb, conn, tm, now);
+}
+
+static inline uint32_t
+tcp_payload_length(struct dp_packet *pkt)
+{
+    const char *tcp_payload = dp_packet_get_tcp_payload(pkt);
+    if (tcp_payload) {
+        return ((char *) dp_packet_tail(pkt) - dp_packet_l2_pad_size(pkt)
+                - tcp_payload);
+    } else {
+        return 0;
+    }
 }
 
 #endif /* conntrack-private.h */
