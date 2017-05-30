@@ -85,6 +85,7 @@ __regex_is_for_if_single_line_bracket = \
 __regex_ends_with_bracket = \
     re.compile(r'[^\s]\) {(\s+/\*[\s\Sa-zA-Z0-9\.,\?\*/+-]*)?$')
 __regex_ptr_declaration_missing_whitespace = re.compile(r'[a-zA-Z0-9]\*[^*]')
+__regex_is_comment_line = re.compile(r'^\s*(/\*|\*\s)')
 
 skip_leading_whitespace_check = False
 skip_trailing_whitespace_check = False
@@ -187,6 +188,11 @@ def line_length_check(line):
     return False
 
 
+def is_comment_line(line):
+    """Returns TRUE if the current line is part of a block comment."""
+    return __regex_is_comment_line.match(line) is not None
+
+
 checks = [
     {'regex': None,
      'match_name':
@@ -204,14 +210,17 @@ checks = [
      'print': lambda: print_warning("Line has trailing whitespace")},
 
     {'regex': '(.c|.h)(.in)?$', 'match_name': None,
+     'prereq': lambda x: not is_comment_line(x),
      'check': lambda x: not if_and_for_whitespace_checks(x),
      'print': lambda: print_error("Improper whitespace around control block")},
 
     {'regex': '(.c|.h)(.in)?$', 'match_name': None,
+     'prereq': lambda x: not is_comment_line(x),
      'check': lambda x: not if_and_for_end_with_bracket_check(x),
      'print': lambda: print_error("Inappropriate bracing around statement")},
 
     {'regex': '(.c|.h)(.in)?$', 'match_name': None,
+     'prereq': lambda x: not is_comment_line(x),
      'check': lambda x: pointer_whitespace_check(x),
      'print':
      lambda: print_error("Inappropriate spacing in pointer declaration")}
@@ -245,6 +254,7 @@ std_functions = [
 checks += [
     {'regex': '(.c|.h)(.in)?$',
      'match_name': None,
+     'prereq': lambda x: not is_comment_line(x),
      'check': regex_function_factory(function_name),
      'print': regex_error_factory(description)}
     for (function_name, description) in std_functions]
@@ -272,6 +282,8 @@ def run_checks(current_file, line, lineno):
     global checking_file, total_line
     print_line = False
     for check in get_file_type_checks(current_file):
+        if 'prereq' in check and not check['prereq'](line):
+            continue
         if check['check'](line):
             check['print']()
             print_line = True
