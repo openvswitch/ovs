@@ -87,6 +87,7 @@ Damien Millescamps              damien.millescamps@6wind.com
 Dan Carpenter                   dan.carpenter@oracle.com
 Dan McGregor                    dan.mcgregor@usask.ca
 Dan Wendlandt                   dan@nicira.com
+Daniel Alvarez                  dalvarez@redhat.com
 Daniel Borkmann                 dborkman@redhat.com
 Daniel Hiltgen                  daniel@netkine.com
 Daniel Roman                    droman@nicira.com
