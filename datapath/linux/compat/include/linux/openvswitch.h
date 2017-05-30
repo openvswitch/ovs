@@ -715,7 +715,7 @@ struct ovs_action_push_tnl {
 	uint32_t out_port;
 	uint32_t header_len;
 	uint32_t tnl_type;     /* For logging. */
-	uint8_t  header[TNL_PUSH_HEADER_SIZE];
+	uint32_t header[TNL_PUSH_HEADER_SIZE / 4];
 };
 #endif
 

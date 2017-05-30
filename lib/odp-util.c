@@ -1136,7 +1136,7 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
         return -EINVAL;
     }
     eth = (struct eth_header *) data->header;
-    l3 = (data->header + sizeof *eth);
+    l3 = (struct ip_header *) (eth + 1);
     ip = (struct ip_header *) l3;
     ip6 = (struct ovs_16aligned_ip6_hdr *) l3;
     if (!ovs_scan_len(s, &n, "header(size=%"SCNi32",type=%"SCNi32","
