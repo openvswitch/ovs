@@ -99,9 +99,6 @@ m4_define([CHECK_CONNTRACK_LOCAL_STACK],
 # CHECK_CONNTRACK_NAT()
 #
 # Perform requirements checks for running conntrack NAT tests. The userspace
-# doesn't support NATs yet, so skip the tests
+# datapath supports NAT.
 #
-m4_define([CHECK_CONNTRACK_NAT],
-[
-    AT_SKIP_IF([:])
-])
+m4_define([CHECK_CONNTRACK_NAT])
