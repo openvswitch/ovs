@@ -352,6 +352,8 @@ def ovs_checkpatch_parse(text):
             # linux or windows coding standards
             if current_file.startswith('datapath'):
                 continue
+            if current_file.startswith('include/linux'):
+                continue
             run_checks(current_file, cmp_line, lineno)
     if __errors or __warnings:
         return -1
