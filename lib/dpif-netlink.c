@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2008-2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1814,10 +1814,9 @@ dpif_netlink_refresh_channels(struct dpif_netlink *dpif, uint32_t n_handlers)
             error = dpif_netlink_handler_init(handler);
             if (error) {
                 size_t j;
-                struct dpif_handler *tmp = &dpif->handlers[i];
-
 
                 for (j = 0; j < i; j++) {
+                    struct dpif_handler *tmp = &dpif->handlers[j];
                     dpif_netlink_handler_uninit(tmp);
                 }
                 free(dpif->handlers);
