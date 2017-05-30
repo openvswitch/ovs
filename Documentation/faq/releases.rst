@@ -104,7 +104,7 @@ Q: Are all features available with all datapaths?
     ===================== ============== ============== ========= =======
     Feature               Linux upstream Linux OVS tree Userspace Hyper-V
     ===================== ============== ============== ========= =======
-    NAT                   4.6            YES            NO        NO
+    NAT                   4.6            YES            Yes       NO
     Connection tracking   4.3            YES            PARTIAL   PARTIAL
     Tunnel - LISP         NO             YES            NO        NO
     Tunnel - STT          NO             YES            NO        YES
