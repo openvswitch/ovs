@@ -2869,6 +2869,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - ICMP related with NAT])
 AT_SKIP_IF([test $HAVE_NC = no])
+AT_SKIP_IF([test $HAVE_TCPDUMP = no])
 CHECK_CONNTRACK()
 CHECK_CONNTRACK_NAT()
 OVS_TRAFFIC_VSWITCHD_START()
@@ -2904,6 +2905,10 @@ table=10 priority=0 action=drop
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
+rm p0.pcap
+tcpdump -U -i ovs-p0 -w p0.pcap &
+sleep 1
+
 dnl UDP packets from ns0->ns1 should solicit "destination unreachable" response.
 NS_CHECK_EXEC([at_ns0], [bash -c "echo a | nc $NC_EOF_OPT -u 10.1.1.2 10000"])
 
@@ -2924,6 +2929,8 @@ OFPST_FLOW reply (OF1.5):
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sed -e 's/dst=10.1.1.2[[45]][[0-9]]/dst=10.1.1.2XX/'], [0], [dnl
 udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.2XX,sport=<cleared>,dport=<cleared>),mark=1
 ])
+
+AT_CHECK([tcpdump -v "icmp" -r p0.pcap 2>/dev/null | egrep 'wrong|bad'], [1], [ignore-nolog])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -3229,7 +3236,7 @@ dnl Check that ct(nat,table=foo) works with TCP sequence adjustment with
 dnl an ACL table based on matching on conntrack original direction tuple only.
 CHECK_FTP_NAT_ORIG_TUPLE([seqadj], [10.1.1.240], [0x0a0101f0])
 
-AT_SETUP([conntrack - IPv6 HTTP with NAT])
+AT_SETUP([conntrack - IPv6 HTTP with SNAT])
 CHECK_CONNTRACK()
 CHECK_CONNTRACK_NAT()
 OVS_TRAFFIC_VSWITCHD_START()
@@ -3240,15 +3247,17 @@ ADD_VETH(p0, at_ns0, br0, "fc00::1/96")
 NS_CHECK_EXEC([at_ns0], [ip link set dev p0 address 80:88:88:88:88:88])
 ADD_VETH(p1, at_ns1, br0, "fc00::2/96")
 NS_CHECK_EXEC([at_ns1], [ip -6 neigh add fc00::240 lladdr 80:88:88:88:88:88 dev p1])
+NS_CHECK_EXEC([at_ns1], [ip -6 neigh add fc00::241 lladdr 80:88:88:88:88:88 dev p1])
 
 dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
 AT_DATA([flows.txt], [dnl
 priority=1,action=drop
 priority=10,icmp6,action=normal
-priority=100,in_port=1,ip6,action=ct(commit,nat(src=fc00::240)),2
+priority=100,in_port=1,ip6,action=ct(commit,nat(src=fc00::240-fc00::241)),2
 priority=100,in_port=2,ct_state=-trk,ip6,action=ct(nat,table=0)
 priority=100,in_port=2,ct_state=+trk+est,ip6,action=1
 priority=200,in_port=2,ct_state=+trk+new,icmp6,icmpv6_code=0,icmpv6_type=135,nd_target=fc00::240,action=ct(commit,nat(dst=fc00::1)),1
+priority=200,in_port=2,ct_state=+trk+new,icmp6,icmpv6_code=0,icmpv6_type=135,nd_target=fc00::241,action=ct(commit,nat(dst=fc00::1)),1
 ])
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
@@ -3271,6 +3280,102 @@ NS_CHECK_EXEC([at_ns1], [wget http://[[fc00::1]] -t 3 -T 1 -v -o wget1.log], [4]
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - IPv6 HTTP with DNAT])
+CHECK_CONNTRACK()
+CHECK_CONNTRACK_NAT()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "fc00::1/96")
+ADD_VETH(p1, at_ns1, br0, "fc00::2/96")
+NS_CHECK_EXEC([at_ns0], [ip -6 link set dev p0 address 80:88:88:88:88:77])
+NS_CHECK_EXEC([at_ns1], [ip -6 link set dev p1 address 80:88:88:88:88:88])
+NS_CHECK_EXEC([at_ns0], [ip -6 neigh add fc00::240 lladdr 80:88:88:88:88:88 dev p0])
+NS_CHECK_EXEC([at_ns1], [ip -6 neigh add fc00::1 lladdr 80:88:88:88:88:77 dev p1])
+
+dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
+AT_DATA([flows.txt], [dnl
+priority=100 in_port=1,ip6,ipv6_dst=fc00::240,action=ct(zone=1,nat(dst=fc00::2),commit),2
+priority=100 in_port=2,ct_state=-trk,ip6,action=ct(table=0,nat,zone=1)
+priority=100 in_port=2,ct_state=+trk+est,ct_zone=1,ip6,action=1
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
+dnl "connect: Cannot assign requested address"
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::240])
+
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::240 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Should work with the virtual IP address through NAT
+OVS_START_L7([at_ns1], [http6])
+NS_CHECK_EXEC([at_ns0], [wget http://[[fc00::240]] -t 5 -T 1 --retry-connrefused -v -o wget0.log])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::1)], [0], [dnl
+icmpv6,orig=(src=fc00::1,dst=fc00::240,id=<cleared>,type=128,code=0),reply=(src=fc00::2,dst=fc00::1,id=<cleared>,type=129,code=0),zone=1
+tcp,orig=(src=fc00::1,dst=fc00::240,sport=<cleared>,dport=<cleared>),reply=(src=fc00::2,dst=fc00::1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>)
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - IPv6 ICMP6 Related with SNAT])
+AT_SKIP_IF([test $HAVE_TCPDUMP = no])
+CHECK_CONNTRACK()
+CHECK_CONNTRACK_NAT()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "fc00::1/96")
+ADD_VETH(p1, at_ns1, br0, "fc00::2/96")
+NS_CHECK_EXEC([at_ns0], [ip -6 link set dev p0 address 80:88:88:88:88:77])
+NS_CHECK_EXEC([at_ns1], [ip -6 link set dev p1 address 80:88:88:88:88:88])
+
+NS_CHECK_EXEC([at_ns0], [ip -6 neigh add fc00::2 lladdr 80:88:88:88:88:88 dev p0])
+NS_CHECK_EXEC([at_ns0], [ip -6 neigh add fc00::3 lladdr 80:88:88:88:88:88 dev p0])
+NS_CHECK_EXEC([at_ns1], [ip -6 neigh add fc00::240 lladdr 80:88:88:88:88:77 dev p1])
+NS_CHECK_EXEC([at_ns1], [ip -6 neigh add fc00::1 lladdr 80:88:88:88:88:77 dev p1])
+
+NS_CHECK_EXEC([at_ns0], [ip -6 route add default via fc00::2])
+
+dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
+AT_DATA([flows.txt], [dnl
+priority=100 in_port=1,ip6,action=ct(nat(src=fc00::240),commit),2
+priority=100 in_port=2,ct_state=-trk,ip6,action=ct(table=0,nat)
+priority=100 in_port=2,ct_state=+trk+est,ip6,action=1
+priority=100 in_port=2,ct_state=+trk+rel,ip6,action=1
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
+dnl "connect: Cannot assign requested address"
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
+
+AT_CHECK([ovs-appctl dpctl/flush-conntrack])
+
+rm p0.pcap
+tcpdump -U -i ovs-p0 -w p0.pcap &
+sleep 1
+
+dnl UDP packets from ns0->ns1 should solicit "destination unreachable" response.
+NS_CHECK_EXEC([at_ns0], [bash -c "echo a | nc -6 $NC_EOF_OPT -u fc00::2 1"])
+
+AT_CHECK([tcpdump -v "icmp6" -r p0.pcap 2>/dev/null | egrep 'wrong|bad'], [1], [ignore-nolog])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
+udp,orig=(src=fc00::1,dst=fc00::2,sport=<cleared>,dport=<cleared>),reply=(src=fc00::2,dst=fc00::240,sport=<cleared>,dport=<cleared>)
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
 
 AT_SETUP([conntrack - IPv6 FTP with NAT])
 AT_SKIP_IF([test $HAVE_FTP = no])

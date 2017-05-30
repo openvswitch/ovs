@@ -152,6 +152,9 @@ else
     NC_EOF_OPT="-q 1"
 fi
 
+# Set HAVE_TCPDUMP
+find_command tcpdump
+
 CURL_OPT="-g -v --max-time 1 --retry 2 --retry-delay 1 --connect-timeout 1"
 
 # Turn off proxies.
