@@ -1,7 +1,7 @@
 {
     "name": "OVN_Southbound",
-    "version": "1.12.1",
-    "cksum": "761192506 11009",
+    "version": "1.13.0",
+    "cksum": "3451836240 12038",
     "tables": {
         "SB_Global": {
             "columns": {
@@ -180,6 +180,7 @@
                                               "min": 0,
                                               "max": 1}},
                 "read_only": {"type": "boolean"},
+                "role": {"type": "string"},
                 "other_config": {"type": {"key": "string",
                                           "value": "string",
                                           "min": 0,
@@ -222,4 +223,25 @@
                                           "value": "string",
                                           "min": 0,
                                           "max": "unlimited"}}},
+            "isRoot": true},
+        "RBAC_Role": {
+            "columns": {
+                "name": {"type": "string"},
+                "permissions": {
+                    "type": {"key": {"type": "string"},
+                             "value": {"type": "uuid",
+                                       "refTable": "RBAC_Permission",
+                                       "refType": "weak"},
+                                     "min": 0, "max": "unlimited"}}},
+            "isRoot": true},
+        "RBAC_Permission": {
+            "columns": {
+                "table": {"type": "string"},
+                "authorization": {"type": {"key": "string",
+                                           "min": 0,
+                                           "max": "unlimited"}},
+                "insert_delete": {"type": "boolean"},
+                "update" : {"type": {"key": "string",
+                                     "min": 0,
+                                     "max": "unlimited"}}},
             "isRoot": true}}}

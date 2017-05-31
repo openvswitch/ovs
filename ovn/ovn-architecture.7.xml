@@ -1436,6 +1436,162 @@
     </li>
   </ol>
 
+  <h1>Security</h1>
+
+  <h2>Role-Based Access Controls for the Soutbound DB</h2>
+  <p>
+    In order to provide additional security against the possibility of an OVN
+    chassis becoming compromised in such a way as to allow rogue software to
+    make arbitrary modifications to the southbound database state and thus
+    disrupt the OVN network, role-based access controls (see
+    <code>ovsdb-server(1)</code> for additional details) are provided for the
+    southbound database.
+  </p>
+
+  <p>
+    The implementation of role-based access controls (RBAC) requires the
+    addition of two tables to an OVSDB schema: the <code>RBAC_Role</code>
+    table, which is indexed by role name and maps the the names of the various
+    tables that may be modifiable for a given role to individual rows in a
+    permissions table containing detailed permission information for that role,
+    and the permission table itself which consists of rows containing the
+    following information:
+  </p>
+  <dl>
+    <dt><code>Table Name</code></dt>
+    <dd>
+      The name of the associated table. This column exists primarily as an
+      aid for humans reading the contents of this table.
+    </dd>
+
+    <dt><code>Auth Criteria</code></dt>
+    <dd>
+      A set of strings containing the names of columns (or column:key pairs
+      for columns containing string:string maps).  The contents of at least
+      one of the columns or column:key values in a row to be modified,
+      inserted, or deleted must be equal to the ID of the client attempting
+      to act on the row in order for the authorization check to pass. If the
+      authorization criteria is empty, authorization checking is disabled and
+      all clients for the role will be treated as authorized.
+    </dd>
+
+    <dt><code>Insert/Delete</code></dt>
+    <dd>
+       Row insertion/deletion permission; boolean value indicating whether
+       insertion and deletion of rows is allowed for the associated table.
+       If true, insertion and deletion of rows is allowed for authorized
+       clients.
+    </dd>
+
+    <dt><code>Updatable Columns</code></dt>
+    <dd>
+      A set of strings containing the names of columns or column:key pairs
+      that may be updated or mutated by authorized clients. Modifications to
+      columns within a row are only permitted when the authorization check
+      for the client passes and all columns to be modified are included in
+      this set of modifiable columns.
+    </dd>
+  </dl>
+
+  <p>
+    RBAC configuration for the OVN southbound database is maintained by
+    ovn-northd. With RBAC enabled, modifications are only permitted for the
+    <code>Chassis</code>, <code>Encap</code>, <code>Port_Binding</code>, and
+    <code>MAC_Binding</code> tables, and are resstricted as follows:
+  </p>
+  <dl>
+    <dt><code>Chassis</code></dt>
+    <dd>
+      <p>
+       <code>Authorization</code>: client ID must match the chassis name.
+      </p>
+      <p>
+        <code>Insert/Delete</code>: authorized row insertion and deletion
+        are permitted.
+      </p>
+      <p>
+        <code>Update</code>: The columns <code>nb_cfg</code>,
+        <code>external_ids</code>, <code>encaps</code>, and
+        <code>vtep_logical_switches</code> may be modified when authorized.
+      </p>
+    </dd>
+
+    <dt><code>Encap</code></dt>
+    <dd>
+      <p>
+        <code>Authorization</code>: disabled (all clients are considered
+        to be authorized. Future: add a "creating chassis name" column to
+        this table and use it for authorization checking.
+      </p>
+      <p>
+        <code>Insert/Delete</code>: row insertion and row deletion
+        are permitted.
+      </p>
+      <p>
+        <code>Update</code>: The columns <code>type</code>,
+        <code>options</code>, and <code>ip</code> can be modified.
+      </p>
+    </dd>
+
+    <dt><code>Port_Binding</code></dt>
+    <dd>
+      <p>
+        <code>Authorization</code>: disabled (all clients are considered
+        authorized. A future enhancement may add columns (or keys to
+        <code>external_ids</code>) in order to control which chassis are
+        allowed to bind each port.
+      </p>
+      <p>
+        <code>Insert/Delete</code>: row insertion/deletion are not permitted
+        (ovn-northd maintains rows in this table.
+      </p>
+      <p>
+        <code>Update</code>: Only modifications to the <code>chassis</code>
+        column are permitted.
+      </p>
+    </dd>
+
+    <dt><code>MAC_Binding</code></dt>
+    <dd>
+      <p>
+        <code>Authorization</code>: disabled (all clients are considered
+        to be authorized).
+      </p>
+      <p>
+        <code>Insert/Delete</code>: row insertion/deletion are permitted.
+      </p>
+      <p>
+        <code>Update</code>: The columns <code>logical_port</code>,
+        <code>ip</code>, <code>mac</code>, and <code>datapath</code> may be
+        modified by ovn-controller.
+      </p>
+    </dd>
+  </dl>
+
+  <p>
+    Enabling RBAC for ovn-controller connections to the southbound database
+    requires the following steps:
+  </p>
+
+  <ol>
+    <li>
+      Creating SSL certificates for each chassis with the certificate CN field
+      set to the chassis name (e.g. for a chassis with
+      <code>external-ids:system-id=chassis-1</code>, via the command
+      "<code>ovs-pki -B 1024 -u req+sign chassis-1 switch</code>").
+    </li>
+    <li>
+      Configuring each ovn-controller to use SSL when connecting to the
+      southbound database (e.g. via "<code>ovs-vsctl set open .
+      external-ids:ovn-remote=ssl:x.x.x.x:6642</code>").
+    </li>
+    <li>
+      Configuring a southbound database SSL remote with "ovn-controller" role
+      (e.g. via "<code>ovn-sbctl set-connection role=ovn-controller
+      pssl:6642</code>").
+    </li>
+  </ol>
+
   <h1>Design Decisions</h1>
 
   <h2>Tunnel Encapsulations</h2>

@@ -5805,6 +5805,189 @@ check_and_add_supported_dhcpv6_opts_to_sb_db(struct northd_context *ctx)
     hmap_destroy(&dhcpv6_opts_to_add);
 }
 
+static const char *rbac_chassis_auth[] =
+    {"name"};
+static const char *rbac_chassis_update[] =
+    {"nb_cfg", "external_ids", "encaps", "vtep_logical_switches"};
+
+static const char *rbac_encap_auth[] =
+    {""};
+static const char *rbac_encap_update[] =
+    {"type", "options", "ip"};
+
+static const char *rbac_port_binding_auth[] =
+    {""};
+static const char *rbac_port_binding_update[] =
+    {"chassis"};
+
+static const char *rbac_mac_binding_auth[] =
+    {""};
+static const char *rbac_mac_binding_update[] =
+    {"logical_port", "ip", "mac", "datapath"};
+
+static struct rbac_perm_cfg {
+    const char *table;
+    const char **auth;
+    int n_auth;
+    bool insdel;
+    const char **update;
+    int n_update;
+    const struct sbrec_rbac_permission *row;
+} rbac_perm_cfg[] = {
+    {
+        .table = "Chassis",
+        .auth = rbac_chassis_auth,
+        .n_auth = ARRAY_SIZE(rbac_chassis_auth),
+        .insdel = true,
+        .update = rbac_chassis_update,
+        .n_update = ARRAY_SIZE(rbac_chassis_update),
+        .row = NULL
+    },{
+        .table = "Encap",
+        .auth = rbac_encap_auth,
+        .n_auth = ARRAY_SIZE(rbac_encap_auth),
+        .insdel = true,
+        .update = rbac_encap_update,
+        .n_update = ARRAY_SIZE(rbac_encap_update),
+        .row = NULL
+    },{
+        .table = "Port_Binding",
+        .auth = rbac_port_binding_auth,
+        .n_auth = ARRAY_SIZE(rbac_port_binding_auth),
+        .insdel = false,
+        .update = rbac_port_binding_update,
+        .n_update = ARRAY_SIZE(rbac_port_binding_update),
+        .row = NULL
+    },{
+        .table = "MAC_Binding",
+        .auth = rbac_mac_binding_auth,
+        .n_auth = ARRAY_SIZE(rbac_mac_binding_auth),
+        .insdel = true,
+        .update = rbac_mac_binding_update,
+        .n_update = ARRAY_SIZE(rbac_mac_binding_update),
+        .row = NULL
+    },{
+        .table = NULL,
+        .auth = NULL,
+        .n_auth = 0,
+        .insdel = false,
+        .update = NULL,
+        .n_update = 0,
+        .row = NULL
+    }
+};
+
+static bool
+ovn_rbac_validate_perm(const struct sbrec_rbac_permission *perm)
+{
+    struct rbac_perm_cfg *pcfg;
+    int i, j, n_found;
+
+    for (pcfg = rbac_perm_cfg; pcfg->table; pcfg++) {
+        if (!strcmp(perm->table, pcfg->table)) {
+            break;
+        }
+    }
+    if (!pcfg->table) {
+        return false;
+    }
+    if (perm->n_authorization != pcfg->n_auth ||
+        perm->n_update != pcfg->n_update) {
+        return false;
+    }
+    if (perm->insert_delete != pcfg->insdel) {
+        return false;
+    }
+    /* verify perm->authorization vs. pcfg->auth */
+    n_found = 0;
+    for (i = 0; i < pcfg->n_auth; i++) {
+        for (j = 0; j < perm->n_authorization; j++) {
+            if (!strcmp(pcfg->auth[i], perm->authorization[j])) {
+                n_found++;
+                break;
+            }
+        }
+    }
+    if (n_found != pcfg->n_auth) {
+        return false;
+    }
+
+    /* verify perm->update vs. pcfg->update */
+    n_found = 0;
+    for (i = 0; i < pcfg->n_update; i++) {
+        for (j = 0; j < perm->n_update; j++) {
+            if (!strcmp(pcfg->update[i], perm->update[j])) {
+                n_found++;
+                break;
+            }
+        }
+    }
+    if (n_found != pcfg->n_update) {
+        return false;
+    }
+
+    /* Success, db state matches expected state */
+    pcfg->row = perm;
+    return true;
+}
+
+static void
+ovn_rbac_create_perm(struct rbac_perm_cfg *pcfg,
+                     struct northd_context *ctx,
+                     const struct sbrec_rbac_role *rbac_role)
+{
+    struct sbrec_rbac_permission *rbac_perm;
+
+    rbac_perm = sbrec_rbac_permission_insert(ctx->ovnsb_txn);
+    sbrec_rbac_permission_set_table(rbac_perm, pcfg->table);
+    sbrec_rbac_permission_set_authorization(rbac_perm,
+                                            pcfg->auth,
+                                            pcfg->n_auth);
+    sbrec_rbac_permission_set_insert_delete(rbac_perm, pcfg->insdel);
+    sbrec_rbac_permission_set_update(rbac_perm,
+                                     pcfg->update,
+                                     pcfg->n_update);
+    sbrec_rbac_role_update_permissions_setkey(rbac_role, pcfg->table,
+                                              rbac_perm);
+}
+
+static void
+check_and_update_rbac(struct northd_context *ctx)
+{
+    const struct sbrec_rbac_role *rbac_role = NULL;
+    const struct sbrec_rbac_permission *perm_row, *perm_next;
+    const struct sbrec_rbac_role *role_row, *role_row_next;
+    struct rbac_perm_cfg *pcfg;
+
+    for (pcfg = rbac_perm_cfg; pcfg->table; pcfg++) {
+        pcfg->row = NULL;
+    }
+
+    SBREC_RBAC_PERMISSION_FOR_EACH_SAFE (perm_row, perm_next, ctx->ovnsb_idl) {
+        if (!ovn_rbac_validate_perm(perm_row)) {
+            sbrec_rbac_permission_delete(perm_row);
+        }
+    }
+    SBREC_RBAC_ROLE_FOR_EACH_SAFE (role_row, role_row_next, ctx->ovnsb_idl) {
+        if (strcmp(role_row->name, "ovn-controller")) {
+            sbrec_rbac_role_delete(role_row);
+        } else {
+            rbac_role = role_row;
+        }
+    }
+
+    if (!rbac_role) {
+        rbac_role = sbrec_rbac_role_insert(ctx->ovnsb_txn);
+        sbrec_rbac_role_set_name(rbac_role, "ovn-controller");
+    }
+
+    for (pcfg = rbac_perm_cfg; pcfg->table; pcfg++) {
+        if (!pcfg->row) {
+            ovn_rbac_create_perm(pcfg, ctx, rbac_role);
+        }
+    }
+}
+
 /* Updates the sb_cfg and hv_cfg columns in the northbound NB_Global table. */
 static void
 update_northbound_cfg(struct northd_context *ctx,
@@ -6025,6 +6208,19 @@ main(int argc, char *argv[])
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_dns_col_records);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_dns_col_external_ids);
 
+    ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_rbac_role);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_rbac_role_col_name);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_rbac_role_col_permissions);
+
+    ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_rbac_permission);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_rbac_permission_col_table);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_rbac_permission_col_authorization);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_rbac_permission_col_insert_delete);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_rbac_permission_col_update);
+
     ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_chassis);
     ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_chassis_col_nb_cfg);
 
@@ -6043,6 +6239,7 @@ main(int argc, char *argv[])
         if (ctx.ovnsb_txn) {
             check_and_add_supported_dhcp_opts_to_sb_db(&ctx);
             check_and_add_supported_dhcpv6_opts_to_sb_db(&ctx);
+            check_and_update_rbac(&ctx);
         }
 
         unixctl_server_run(unixctl);

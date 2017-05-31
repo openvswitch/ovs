@@ -2632,6 +2632,9 @@ tcp.flags = RST;
         <code>true</code> to restrict these connections to read-only
         transactions, <code>false</code> to allow them to modify the database.
       </column>
+      <column name="role">
+        String containing role name for this connection entry.
+      </column>
     </group>
 
     <group title="Client Failure Detection and Handling">
@@ -2842,5 +2845,42 @@ tcp.flags = RST;
         See <em>External IDs</em> at the beginning of this document.
       </column>
     </group>
+  </table>
+
+  <table name="RBAC_Role">
+    Role table for role-based access controls.
+
+    <column name="name">
+        The role name, corresponding to the <code>role</code>
+        column in the <code>Connection</code> table.
+    </column>
+
+    <column name="permissions">
+        A mapping of table names to rows in the
+        <code>RBAC_Permission</code> table.
+    </column>
+  </table>
+  <table name="RBAC_Permission">
+    Permissions table for role-based access controls.
+
+    <column name="table">
+      Name of table to which this row applies.
+    </column>
+
+    <column name="authorization">
+        Set of strings identifying columns and column:key pairs to be compared
+        with client ID. At least one match is required in order to be
+        authorized.  A zero-length string is treated as a special value
+        indicating all clients should be considered authorized.
+    </column>
+
+    <column name="insert_delete">
+        When "true", row insertions and authorized row
+        deletions are permitted.
+    </column>
+    <column name="update">
+        Set of strings identifying columns and column:key pairs that authorized
+        clients are allowed to modify.
+    </column>
   </table>
 </database>
