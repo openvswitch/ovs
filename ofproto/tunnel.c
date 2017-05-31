@@ -1,4 +1,4 @@
-/* Copyright (c) 2013, 2014, 2015 Nicira, Inc.
+/* Copyright (c) 2013, 2014, 2015, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -301,7 +301,7 @@ tnl_port_receive(const struct flow *flow) OVS_EXCLUDED(rwlock)
     tnl_port = tnl_find(flow);
     ofport = tnl_port ? tnl_port->ofport : NULL;
     if (!tnl_port) {
-        char *flow_str = flow_to_string(flow);
+        char *flow_str = flow_to_string(flow, NULL);
 
         VLOG_WARN_RL(&rl, "receive tunnel port not found (%s)", flow_str);
         free(flow_str);
@@ -309,11 +309,11 @@ tnl_port_receive(const struct flow *flow) OVS_EXCLUDED(rwlock)
     }
 
     if (!VLOG_DROP_DBG(&dbg_rl)) {
-        pre_flow_str = flow_to_string(flow);
+        pre_flow_str = flow_to_string(flow, NULL);
     }
 
     if (pre_flow_str) {
-        char *post_flow_str = flow_to_string(flow);
+        char *post_flow_str = flow_to_string(flow, NULL);
         char *tnl_str = tnl_port_fmt(tnl_port);
         VLOG_DBG("flow received\n"
                  "%s"
@@ -408,7 +408,7 @@ tnl_port_send(const struct ofport_dpif *ofport, struct flow *flow,
     ovs_assert(cfg);
 
     if (!VLOG_DROP_DBG(&dbg_rl)) {
-        pre_flow_str = flow_to_string(flow);
+        pre_flow_str = flow_to_string(flow, NULL);
     }
 
     if (!cfg->ip_src_flow) {
@@ -467,7 +467,7 @@ tnl_port_send(const struct ofport_dpif *ofport, struct flow *flow,
     }
 
     if (pre_flow_str) {
-        char *post_flow_str = flow_to_string(flow);
+        char *post_flow_str = flow_to_string(flow, NULL);
         char *tnl_str = tnl_port_fmt(tnl_port);
         VLOG_DBG("flow sent\n"
                  "%s"

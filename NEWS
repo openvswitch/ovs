@@ -1,5 +1,8 @@
 Post-v2.7.0
 ---------------------
+   - ovs-ofctl can now accept and display port names in place of numbers.  By
+     default it always accepts names and in interactive use it displays them;
+     use --names or --no-names to override.  See ovs-ofctl(8) for details.
    - Tunnels:
      * Added support to set packet mark for tunnel endpoint using
        `egress_pkt_mark` OVSDB option.

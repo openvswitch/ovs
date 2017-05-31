@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -413,7 +413,7 @@ int classifier_count(const struct classifier *);
  * concurrently with modifiers and each other. */
 bool cls_rule_equal(const struct cls_rule *, const struct cls_rule *);
 void cls_rule_format(const struct cls_rule *, const struct tun_table *,
-                     struct ds *);
+                     const struct ofputil_port_map *, struct ds *);
 bool cls_rule_is_catchall(const struct cls_rule *);
 bool cls_rule_is_loose_match(const struct cls_rule *rule,
                              const struct minimatch *criteria);

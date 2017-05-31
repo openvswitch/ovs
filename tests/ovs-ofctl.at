@@ -373,9 +373,12 @@ done
 AT_CLEANUP
 
 AT_SETUP([ovs-ofctl action inconsistency (OpenFlow 1.1)])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2 3
 AT_CHECK([ovs-ofctl --protocols OpenFlow11 add-flow br0 'ip actions=mod_tp_dst:1234'
 ], [1], [stdout], [ovs-ofctl: none of the usable flow formats (OpenFlow10,NXM) is among the allowed flow formats (OpenFlow11)
 ])
+OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ovs-ofctl parse-flows (skb_priority)])
@@ -484,8 +487,8 @@ NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_LABEL[
 NXT_FLOW_MOD: ADD table:255 ct_state=+trk,ct_label=0x1234567890abcdef12345678,ip actions=ct(commit)
 NXT_FLOW_MOD: ADD table:255 actions=output(port=123,max_len=100)
 NXT_FLOW_MOD: ADD table:255 actions=output(port=100,max_len=123)
-NXT_FLOW_MOD: ADD table:255 actions=output(port=65534,max_len=123)
-NXT_FLOW_MOD: ADD table:255 actions=output(port=65528,max_len=123)
+NXT_FLOW_MOD: ADD table:255 actions=output(port=LOCAL,max_len=123)
+NXT_FLOW_MOD: ADD table:255 actions=output(port=IN_PORT,max_len=123)
 ]])
 AT_CLEANUP
 
@@ -2595,12 +2598,14 @@ AT_CLEANUP
 dnl Check that "-F openflow10" rejects a flow_mod with unsupported features,
 dnl such as tunnels and metadata.
 AT_SETUP([ovs-ofctl -F option and NXM features])
-AT_CHECK([ovs-ofctl -F openflow10 add-flow dummy tun_id=123,actions=drop],
+OVS_VSWITCHD_START
+AT_CHECK([ovs-ofctl -F openflow10 add-flow br0 tun_id=123,actions=drop],
   [1], [], [ovs-ofctl: none of the usable flow formats (NXM,OXM) is among the allowed flow formats (OpenFlow10)
 ])
-AT_CHECK([ovs-ofctl -F openflow10 add-flow dummy metadata=123,actions=drop],
+AT_CHECK([ovs-ofctl -F openflow10 add-flow br0 metadata=123,actions=drop],
   [1], [], [ovs-ofctl: none of the usable flow formats (NXM,OXM,OpenFlow11) is among the allowed flow formats (OpenFlow10)
 ])
+OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 dnl Check that "-F nxm" really forces add-flow to use the NXM flow format.
@@ -2753,6 +2758,43 @@ AT_CHECK(
  priority=9,tcp,tp_src=6 actions=drop
  priority=10,tun_metadata0=0xab actions=drop
  priority=11,tun_metadata0=0xcd actions=drop
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ovs-ofctl dump-flows --names])
+AT_KEYWORDS([port names])
+OVS_VSWITCHD_START([\
+    -- add-port br0 xyzzy -- set Interface xyzzy type=dummy -- \
+    -- add-port br0 x-y -- set Interface x-y type=dummy -- \
+    -- add-port br0 abc123 -- set Interface abc123 type=dummy -- \
+    -- add-port br0 reallyverylongportname -- set Interface reallyverylongportname type=dummy -- \
+    -- add-port br0 conflictinglongportname1 -- set Interface conflictinglongportname1 type=dummy -- \
+    -- add-port br0 conflictinglongportname2 -- set Interface conflictinglongportname2 type=dummy])
+
+# These plain port names should be accepted.
+AT_CHECK([ovs-ofctl add-flow br0 in_port=xyzzy,actions=x-y,abc123])
+
+# reallyverylongportname is accepted truncated, but not in full.
+AT_CHECK([ovs-ofctl add-flow br0 in_port=reallyverylongp,actions=drop])
+AT_CHECK([ovs-ofctl add-flow br0 in_port=reallyverylongportname,actions=drop],
+  [1], [], [ovs-ofctl: reallyverylongportname: invalid or unknown port for in_port
+])
+
+# conflictinglongportname1 and 2 can't be accepted even truncated, since
+# they conflict when truncated.
+AT_CHECK([ovs-ofctl add-flow br0 in_port=conflictinglongportname1,actions=drop], [1], [], [ovs-ofctl: conflictinglongportname1: invalid or unknown port for in_port
+])
+AT_CHECK([ovs-ofctl add-flow br0 in_port=conflictinglongportname2,actions=drop], [1], [], [ovs-ofctl: conflictinglongportname2: invalid or unknown port for in_port
+])
+AT_CHECK([ovs-ofctl add-flow br0 in_port=conflictinglong,actions=drop], [1], [], [ovs-ofctl: conflictinglong: invalid or unknown port for in_port
+])
+
+# Show that the port names get displayed properly and that port names that
+# aren't alphanumeric get quoted.
+AT_CHECK([ovs-ofctl --names dump-flows br0 | ofctl_strip | sort], [0], [dnl
+ in_port=reallyverylongp actions=drop
+ in_port=xyzzy actions=output:"x-y",output:abc123
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -2995,15 +3037,15 @@ AT_CHECK([ovs-appctl vlog/set vconn:dbg])
 
 dnl Add flows to br0 with importance via OF1.4+, using an OF1.4+ bundle. For more details refer "ovs-ofctl rule with importance" test case.
 for i in 1 2 3 4 5 6 7 8; do echo "table=$i,dl_vlan=$i,importance=$i,actions=drop"; done > add-flows.txt
-AT_CHECK([ovs-ofctl --bundle add-flows br0 add-flows.txt])
+AT_CHECK([ovs-ofctl --bundle --no-names add-flows br0 add-flows.txt])
 
 dnl Replace some flows in the bridge.
 for i in 1 3 5 7; do echo " table=$i, importance=`expr $i + 10`, dl_vlan=$i actions=drop"; done > replace-flows.txt
-AT_CHECK([ovs-ofctl --bundle replace-flows br0 replace-flows.txt])
+AT_CHECK([ovs-ofctl --bundle --no-names replace-flows br0 replace-flows.txt])
 
 dnl Dump them and compare the dump flows output against the expected output.
 cat replace-flows.txt > expout
-AT_CHECK([ovs-ofctl -O OpenFlow14 dump-flows br0 | ofctl_strip | sed '/OFPST_FLOW/d' | sort],
+AT_CHECK([ovs-ofctl -O OpenFlow14 --no-names dump-flows br0 | ofctl_strip | sed '/OFPST_FLOW/d' | sort],
   [0], [expout])
 
 dnl Check logs for OpenFlow trace

@@ -2099,9 +2099,9 @@ flow in_port=6 actions=group:1
 packet-out in_port=6, packet=0001020304050010203040501234 actions=table
 flow in_port=7 actions=group:2
 ])
-AT_CHECK([ovs-ofctl bundle br0 bundle.txt 2>&1 | sed '/talking to/,$d'], [], [dnl
-Error OFPBAC_BAD_OUT_GROUP for: OFPT_FLOW_MOD (OF1.4) (xid=0x5): ADD in_port=7 actions=group:2
-Error OFPBFC_MSG_FAILED for: OFPT_BUNDLE_CONTROL (OF1.4) (xid=0x8):
+AT_CHECK([ovs-ofctl bundle br0 bundle.txt 2>&1 | sed '/talking to/,$d' | strip_xids], [], [dnl
+Error OFPBAC_BAD_OUT_GROUP for: OFPT_FLOW_MOD (OF1.4): ADD in_port=7 actions=group:2
+Error OFPBFC_MSG_FAILED for: OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
 ])
 
@@ -2112,7 +2112,7 @@ OFPST_FLOW reply (OF1.4):
 ])
 
 # Verify that the packet-in was NOT received via controller action.
-AT_CHECK([sed 's/ (xid=0x[[1-9a-fA-F]][[0-9a-fA-F]]*)//' monitor.log], [0], [])
+AT_CHECK([strip_xids < monitor.log], [0], [])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -2140,10 +2140,10 @@ flow in_port=6 actions=group:1
 packet-out in_port=6, packet=0001020304050010203040501234 actions=table
 packet-out in_port=6, packet=0001020304050010203040501234 actions=group:2
 ])
-AT_CHECK([ovs-ofctl bundle br0 bundle.txt 2>&1 | sed '/talking to/,$d'], [], [dnl
-Error OFPBAC_BAD_OUT_GROUP for: OFPT_PACKET_OUT (OF1.4) (xid=0x5): in_port=6 actions=group:2 data_len=14
+AT_CHECK([ovs-ofctl bundle br0 bundle.txt 2>&1 | sed '/talking to/,$d' | strip_xids], [], [dnl
+Error OFPBAC_BAD_OUT_GROUP for: OFPT_PACKET_OUT (OF1.4): in_port=6 actions=group:2 data_len=14
 vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234
-Error OFPBFC_MSG_FAILED for: OFPT_BUNDLE_CONTROL (OF1.4) (xid=0x8):
+Error OFPBFC_MSG_FAILED for: OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
 ])
 
@@ -2154,7 +2154,7 @@ OFPST_FLOW reply (OF1.4):
 ])
 
 # Verify that the packet-in was NOT received via controller action.
-AT_CHECK([sed 's/ (xid=0x[[1-9a-fA-F]][[0-9a-fA-F]]*)//' monitor.log], [0], [])
+AT_CHECK([strip_xids < monitor.log], [0], [])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -2227,7 +2227,7 @@ OVS_VSWITCHD_START([set-controller br0 tcp:240.0.0.1:6653])
 for i in 1 2 3 4 5; do ovs-appctl time/warp 1000; done
 
 # Check that no hidden flows are visible in OpenFlow.
-AT_CHECK([ovs-ofctl dump-flows br0], [0], [NXST_FLOW reply (xid=0x4):
+AT_CHECK([ovs-ofctl dump-flows br0 | strip_xids], [0], [NXST_FLOW reply:
 ])
 
 # Check that some hidden flows related to 240.0.0.1 are actually in table 0.
@@ -2239,7 +2239,7 @@ AT_CHECK([test `grep '240\.0\.0\.1' stdout | grep -v table_id= | wc -l` -gt 0])
 
 # Check that dump-tables doesn't count the hidden flows.
 head_table() {
-    printf 'OFPST_TABLE reply (xid=0x2):
+    printf 'OFPST_TABLE reply:
   table 0 ("%s"):
     active=0, lookup=0, matched=0
     max_entries=1000000
@@ -2265,7 +2265,7 @@ ditto() {
     done
 }
 (head_table classifier; ditto 1 253) > expout
-AT_CHECK([ovs-ofctl dump-tables br0], [0], [expout])
+AT_CHECK([ovs-ofctl dump-tables br0 | strip_xids], [0], [expout])
 OVS_VSWITCHD_STOP(["/240\.0\.0\.1/d"])
 AT_CLEANUP
 
@@ -4939,7 +4939,7 @@ OVS_VSWITCHD_START
 
 AT_CHECK([ovs-appctl vlog/set vconn:dbg])
 
-AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl --no-names del-flows br0])
 
 AT_DATA([flows.txt], [dnl
 add idle_timeout=50 in_port=2 dl_src=00:66:77:88:99:aa actions=1
@@ -4953,7 +4953,7 @@ add idle_timeout=70 in_port=2 dl_src=00:88:99:aa:bb:cc actions=7
 delete in_port=2 dl_src=00:88:99:aa:bb:cc
 ])
 
-AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl --no-names --bundle add-flows br0 flows.txt])
 
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  idle_timeout=50, in_port=2,dl_src=00:66:77:88:99:aa actions=output:5
@@ -4966,7 +4966,7 @@ modify actions=drop
 modify_strict in_port=2 dl_src=00:77:88:99:aa:bb actions=7
 ])
 
-AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl --no-names --bundle add-flows br0 flows.txt])
 
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  idle_timeout=50, in_port=2,dl_src=00:66:77:88:99:aa actions=drop
@@ -4981,7 +4981,7 @@ delete_strict in_port=2 dl_src=00:66:77:88:99:aa
 add in_port=2 dl_src=00:66:77:88:99:aa actions=drop
 ])
 
-AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl --no-names --bundle add-flows br0 flows.txt])
 
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  idle_timeout=60, in_port=2,dl_src=00:77:88:99:aa:bb actions=output:8
@@ -5168,9 +5168,9 @@ delete in_port=2 dl_src=00:88:99:aa:bb:cc
 add table=254 actions=drop
 ])
 
-AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt 2>&1 | sed '/talking to/,$d'],
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt 2>&1 | sed '/talking to/,$d' | strip_xids],
 [0], [dnl
-Error OFPBRC_EPERM for: OFPT_FLOW_MOD (OF1.4) (xid=0xb): ADD table:254 actions=drop
+Error OFPBRC_EPERM for: OFPT_FLOW_MOD (OF1.4): ADD table:254 actions=drop
 ])
 
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
@@ -5492,7 +5492,7 @@ OVS_VSWITCHD_START
 
 AT_CHECK([ovs-appctl vlog/set vconn:dbg])
 
-AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl --no-names del-flows br0])
 
 AT_DATA([flows.txt], [dnl
 add idle_timeout=50 in_port=2 dl_src=00:66:77:88:99:aa actions=1
@@ -5506,7 +5506,7 @@ add idle_timeout=70 in_port=2 dl_src=00:88:99:aa:bb:cc actions=7
 delete in_port=2 dl_src=00:88:99:aa:bb:cc
 ])
 
-AT_CHECK([ovs-ofctl -O OpenFlow13 --bundle add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl -O OpenFlow13 --no-names --bundle add-flows br0 flows.txt])
 
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  idle_timeout=50, in_port=2,dl_src=00:66:77:88:99:aa actions=output:5
@@ -5519,7 +5519,7 @@ modify actions=drop
 modify_strict in_port=2 dl_src=00:77:88:99:aa:bb actions=7
 ])
 
-AT_CHECK([ovs-ofctl -O OpenFlow13 --bundle add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl -O OpenFlow13 --no-names --bundle add-flows br0 flows.txt])
 
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  idle_timeout=50, in_port=2,dl_src=00:66:77:88:99:aa actions=drop
@@ -5534,7 +5534,7 @@ delete_strict in_port=2 dl_src=00:66:77:88:99:aa
 add in_port=2 dl_src=00:66:77:88:99:aa actions=drop
 ])
 
-AT_CHECK([ovs-ofctl -O OpenFlow13 --bundle add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl -O OpenFlow13 --bundle --no-names add-flows br0 flows.txt])
 
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  idle_timeout=60, in_port=2,dl_src=00:77:88:99:aa:bb actions=output:8
@@ -5714,9 +5714,9 @@ delete in_port=2 dl_src=00:88:99:aa:bb:cc
 add table=254 actions=drop
 ])
 
-AT_CHECK([ovs-ofctl -O OpenFlow13 --bundle add-flows br0 flows.txt 2>&1 | sed '/talking to/,$d'],
+AT_CHECK([ovs-ofctl -O OpenFlow13 --bundle add-flows br0 flows.txt 2>&1 | sed '/talking to/,$d' | strip_xids],
 [0], [dnl
-Error OFPBRC_EPERM for: OFPT_FLOW_MOD (OF1.3) (xid=0xb): ADD table:254 actions=drop
+Error OFPBRC_EPERM for: OFPT_FLOW_MOD (OF1.3): ADD table:254 actions=drop
 ])
 
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
@@ -5742,10 +5742,10 @@ add idle_timeout=60 in_port=2 dl_src=00:77:88:99:aa:bb actions=group:2
 add idle_timeout=70 in_port=2 dl_src=00:88:99:aa:bb:cc actions=group:3
 ])
 
-AT_CHECK([ovs-ofctl -O OpenFlow13 --bundle add-flows br0 flows.txt 2>&1 | sed '/talking to/,$d'],
+AT_CHECK([ovs-ofctl -O OpenFlow13 --bundle add-flows br0 flows.txt 2>&1 | sed '/talking to/,$d' | strip_xids],
 [0], [dnl
-Error OFPBAC_BAD_OUT_GROUP for: OFPT_FLOW_MOD (OF1.3) (xid=0x2): ADD in_port=2,dl_src=00:66:77:88:99:aa idle:50 actions=group:1
-Error OFPBFC_MSG_FAILED for: ONFT_BUNDLE_CONTROL (OF1.3) (xid=0x7):
+Error OFPBAC_BAD_OUT_GROUP for: OFPT_FLOW_MOD (OF1.3): ADD in_port=2,dl_src=00:66:77:88:99:aa idle:50 actions=group:1
+Error OFPBFC_MSG_FAILED for: ONFT_BUNDLE_CONTROL (OF1.3):
  bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
 ])
 
@@ -5812,8 +5812,8 @@ dnl Check the length of tun_metadata0 in the replied OXM header.
 dnl Ignore the first 0x50 bytes of hex dump from the reply msg since the NXM
 dnl header that describes the tunnel metadata starts at offset 0x50.
 AT_CHECK([ovs-ofctl dump-flows br0 -mmmm], [0], [stdout])
-AT_CHECK([sed -e 's/duration=[[0-9.]]*s/duration=?s/' -e 's/idle_age=[[0-9]]*/idle_age=?/' -e '/^000000[[0-4]]0 / d' stdout], [0], [dnl
-NXST_FLOW reply (xid=0x4):
+AT_CHECK([sed -e 's/duration=[[0-9.]]*s/duration=?s/' -e 's/idle_age=[[0-9]]*/idle_age=?/' -e '/^000000[[0-4]]0 / d' stdout | strip_xids], [0], [dnl
+NXST_FLOW reply:
  cookie=0x0, duration=?s, table=0, n_packets=0, n_bytes=0, idle_age=?, in_port=1 actions=move:NXM_NX_TUN_METADATA0[[0..31]]->NXM_NX_REG0[[]]
 00000050  ff ff 00 18 00 00 23 20-00 06 00 20 00 00 00 00 |......# ... ....|
 00000060  00 01 50 04 00 01 00 04-                        |..P.....        |

@@ -625,7 +625,7 @@ xlate_report_error(const struct xlate_ctx *ctx, const char *format, ...)
         oftrace_report(ctx->xin->trace, OFT_ERROR, ds_cstr(&s));
     } else {
         ds_put_cstr(&s, " while processing ");
-        flow_format(&s, &ctx->base_flow);
+        flow_format(&s, &ctx->base_flow, NULL);
         ds_put_format(&s, " on bridge %s", ctx->xbridge->name);
         VLOG_WARN("%s", ds_cstr(&s));
     }
@@ -672,7 +672,7 @@ xlate_report_actions(const struct xlate_ctx *ctx, enum oftrace_node_type type,
     if (OVS_UNLIKELY(ctx->xin->trace)) {
         struct ds s = DS_EMPTY_INITIALIZER;
         ds_put_format(&s, "%s: ", title);
-        ofpacts_format(ofpacts, ofpacts_len, &s);
+        ofpacts_format(ofpacts, ofpacts_len, NULL, &s);
         oftrace_report(ctx->xin->trace, type, ds_cstr(&s));
         ds_destroy(&s);
     }
@@ -693,7 +693,7 @@ xlate_report_action_set(const struct xlate_ctx *ctx, const char *verb)
         ofpacts_execute_action_set(&action_list, &ctx->action_set);
         if (action_list.size) {
             struct ds s = DS_EMPTY_INITIALIZER;
-            ofpacts_format(action_list.data, action_list.size, &s);
+            ofpacts_format(action_list.data, action_list.size, NULL, &s);
             xlate_report(ctx, OFT_DETAIL, "action set %s: %s",
                          verb, ds_cstr(&s));
             ds_destroy(&s);
@@ -732,7 +732,7 @@ xlate_report_table(const struct xlate_ctx *ctx, struct rule_dpif *rule,
     } else {
         minimatch_format(&rule->up.cr.match,
                          ofproto_get_tun_tab(&ctx->xin->ofproto->up),
-                         &s, OFP_DEFAULT_PRIORITY);
+                         NULL, &s, OFP_DEFAULT_PRIORITY);
         if (ds_last(&s) != ' ') {
             ds_put_cstr(&s, ", ");
         }
@@ -763,7 +763,7 @@ xlate_report_subfield(const struct xlate_ctx *ctx,
         if (sf->ofs == 0 && sf->n_bits >= sf->field->n_bits) {
             union mf_value value;
             mf_get_value(sf->field, &ctx->xin->flow, &value);
-            mf_format(sf->field, &value, NULL, &s);
+            mf_format(sf->field, &value, NULL, NULL, &s);
         } else {
             union mf_subvalue cst;
             mf_read_subfield(sf, &ctx->xin->flow, &cst);
@@ -4620,7 +4620,7 @@ xlate_output_trunc_action(struct xlate_ctx *ctx,
     case OFPP_ALL:
     case OFPP_CONTROLLER:
     case OFPP_NONE:
-        ofputil_port_to_string(port, name, sizeof name);
+        ofputil_port_to_string(port, NULL, name, sizeof name);
         xlate_report(ctx, OFT_WARN,
                      "output_trunc does not support port: %s", name);
         break;
@@ -4634,7 +4634,7 @@ xlate_output_trunc_action(struct xlate_ctx *ctx,
                 /* Since truncate happens at its following output action, if
                  * the output port is a patch port, the behavior is somehow
                  * unpredictable.  For simplicity, disallow this case. */
-                ofputil_port_to_string(port, name, sizeof name);
+                ofputil_port_to_string(port, NULL, name, sizeof name);
                 xlate_report_error(ctx, "output_trunc does not support "
                                    "patch port %s", name);
                 break;
@@ -4767,7 +4767,7 @@ xlate_learn_action(struct xlate_ctx *ctx, const struct ofpact_learn *learn)
         if (OVS_UNLIKELY(ctx->xin->trace)) {
             struct ds s = DS_EMPTY_INITIALIZER;
             ds_put_format(&s, "table=%"PRIu8" ", fm.table_id);
-            match_format(&fm.match, &s, OFP_DEFAULT_PRIORITY);
+            match_format(&fm.match, NULL, &s, OFP_DEFAULT_PRIORITY);
             ds_chomp(&s, ' ');
             ds_put_format(&s, " priority=%d", fm.priority);
             if (fm.new_cookie) {
@@ -4783,7 +4783,7 @@ xlate_learn_action(struct xlate_ctx *ctx, const struct ofpact_learn *learn)
                 ds_put_cstr(&s, " send_flow_rem");
             }
             ds_put_cstr(&s, " actions=");
-            ofpacts_format(fm.ofpacts, fm.ofpacts_len, &s);
+            ofpacts_format(fm.ofpacts, fm.ofpacts_len, NULL, &s);
             xlate_report(ctx, OFT_DETAIL, "%s", ds_cstr(&s));
             ds_destroy(&s);
         }
@@ -5564,7 +5564,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
         if (OVS_UNLIKELY(ctx->xin->trace)) {
             struct ds s = DS_EMPTY_INITIALIZER;
-            ofpacts_format(a, OFPACT_ALIGN(a->len), &s);
+            ofpacts_format(a, OFPACT_ALIGN(a->len), NULL, &s);
             xlate_report(ctx, OFT_ACTION, "%s", ds_cstr(&s));
             ds_destroy(&s);
         }

@@ -4385,11 +4385,11 @@ flow_stats_ds(struct ofproto *ofproto, struct rule *rule, struct ds *results)
     ds_put_format(results, "duration=%llds, ", (time_msec() - created) / 1000);
     ds_put_format(results, "n_packets=%"PRIu64", ", packet_count);
     ds_put_format(results, "n_bytes=%"PRIu64", ", byte_count);
-    cls_rule_format(&rule->cr, ofproto_get_tun_tab(ofproto), results);
+    cls_rule_format(&rule->cr, ofproto_get_tun_tab(ofproto), NULL, results);
     ds_put_char(results, ',');
 
     ds_put_cstr(results, "actions=");
-    ofpacts_format(actions->ofpacts, actions->ofpacts_len, results);
+    ofpacts_format(actions->ofpacts, actions->ofpacts_len, NULL, results);
 
     ds_put_cstr(results, "\n");
 }

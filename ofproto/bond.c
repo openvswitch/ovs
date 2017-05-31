@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2008-2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -372,7 +372,7 @@ update_recirc_rules__(struct bond *bond)
                                                    RECIRC_RULE_PRIORITY, 0,
                                                    &ofpacts, pr_op->pr_rule);
             if (error) {
-                char *err_s = match_to_string(&pr_op->match,
+                char *err_s = match_to_string(&pr_op->match, NULL,
                                               RECIRC_RULE_PRIORITY);
 
                 VLOG_ERR("failed to add post recirculation flow %s", err_s);
@@ -385,7 +385,7 @@ update_recirc_rules__(struct bond *bond)
                                                       &pr_op->match,
                                                       RECIRC_RULE_PRIORITY);
             if (error) {
-                char *err_s = match_to_string(&pr_op->match,
+                char *err_s = match_to_string(&pr_op->match, NULL,
                                               RECIRC_RULE_PRIORITY);
 
                 VLOG_ERR("failed to remove post recirculation flow %s", err_s);

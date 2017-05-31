@@ -1260,7 +1260,7 @@ nx_format_mask_tlv(struct ds *ds, enum mf_field_id id,
 
     if (!is_all_ones(mask, mf->n_bytes)) {
         ds_put_char(ds, '=');
-        mf_format(mf, mask, NULL, ds);
+        mf_format(mf, mask, NULL, NULL, ds);
     }
 
     ds_put_char(ds, ',');

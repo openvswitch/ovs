@@ -1295,7 +1295,7 @@ summarize_move(const struct mf_subfield *rsrc,
         if (rsrc->ofs == 0 && rsrc->n_bits >= rsrc->field->n_bits) {
             union mf_value value;
             mf_get_value(rsrc->field, uflow, &value);
-            mf_format(rsrc->field, &value, NULL, &s);
+            mf_format(rsrc->field, &value, NULL, NULL, &s);
         } else {
             union mf_subvalue cst;
             mf_read_subfield(rsrc, uflow, &cst);
@@ -1878,7 +1878,7 @@ trace_openflow(const struct ovntrace_flow *f, struct ovs_list *super)
         struct ds s = DS_EMPTY_INITIALIZER;
         for (size_t i = 0; i < n_fses; i++) {
             ds_clear(&s);
-            ofp_print_flow_stats(&s, &fses[i]);
+            ofp_print_flow_stats(&s, &fses[i], NULL);
 
             /* ofp_print_flow_stats() indents its output with a space.
              * Omit it. */
@@ -1971,7 +1971,7 @@ trace(const char *dp_s, const char *flow_s)
     struct ds output = DS_EMPTY_INITIALIZER;
 
     ds_put_cstr(&output, "# ");
-    flow_format(&output, &uflow);
+    flow_format(&output, &uflow, NULL);
     ds_put_char(&output, '\n');
 
     if (ovs) {

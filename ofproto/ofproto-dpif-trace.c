@@ -253,9 +253,16 @@ parse_flow_and_packet(int argc, const char *argv[],
             goto exit;
         }
 
+        struct ofputil_port_map map = OFPUTIL_PORT_MAP_INITIALIZER(&map);
+        const struct ofport *ofport;
+        HMAP_FOR_EACH (ofport, hmap_node, &(*ofprotop)->up.ports) {
+            ofputil_port_map_put(&map, ofport->ofp_port,
+                                 netdev_get_name(ofport->netdev));
+        }
         err = parse_ofp_exact_flow(flow, NULL,
                                    ofproto_get_tun_tab(&(*ofprotop)->up),
-                                   argv[argc - 1], NULL);
+                                   argv[argc - 1], &map);
+        ofputil_port_map_destroy(&map);
         if (err) {
             m_err = xasprintf("Bad openflow flow syntax: %s", err);
             free(err);
@@ -336,7 +343,8 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
     ofpbuf_init(&ofpacts, 0);
 
     /* Parse actions. */
-    error = ofpacts_parse_actions(argv[--argc], &ofpacts, &usable_protocols);
+    error = ofpacts_parse_actions(argv[--argc], NULL,
+                                  &ofpacts, &usable_protocols);
     if (error) {
         unixctl_command_reply_error(conn, error);
         free(error);
@@ -444,7 +452,7 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
      * xlate_in_init() initializes actset_output to OFPP_UNSET. */
     struct flow initial_flow = xin.flow;
     ds_put_cstr(output, "Flow: ");
-    flow_format(output, &initial_flow);
+    flow_format(output, &initial_flow, NULL);
     ds_put_char(output, '\n');
 
     struct xlate_out xout;
@@ -456,14 +464,14 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
     if (flow_equal(&initial_flow, &xin.flow)) {
         ds_put_cstr(output, "unchanged");
     } else {
-        flow_format(output, &xin.flow);
+        flow_format(output, &xin.flow, NULL);
     }
     ds_put_char(output, '\n');
 
     ds_put_cstr(output, "Megaflow: ");
     struct match match;
     match_init(&match, flow, &wc);
-    match_format(&match, output, OFP_DEFAULT_PRIORITY);
+    match_format(&match, NULL, output, OFP_DEFAULT_PRIORITY);
     ds_put_char(output, '\n');
 
     ds_put_cstr(output, "Datapath actions: ");

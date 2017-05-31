@@ -1254,7 +1254,7 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
             ofpbuf_init(&ofpacts, 0);
             ovnacts_encode(ovnacts.data, ovnacts.size, &ep, &ofpacts);
             struct ds ofpacts_s = DS_EMPTY_INITIALIZER;
-            ofpacts_format(ofpacts.data, ofpacts.size, &ofpacts_s);
+            ofpacts_format(ofpacts.data, ofpacts.size, NULL, &ofpacts_s);
             printf("    encodes as %s\n", ds_cstr(&ofpacts_s));
             ds_destroy(&ofpacts_s);
             ofpbuf_uninit(&ofpacts);

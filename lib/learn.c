@@ -232,6 +232,7 @@ learn_parse_load_immediate(union mf_subvalue *imm, const char *s,
  * error.  The caller is responsible for freeing the returned string. */
 static char * OVS_WARN_UNUSED_RESULT
 learn_parse_spec(const char *orig, char *name, char *value,
+                 const struct ofputil_port_map *port_map,
                  struct ofpact_learn_spec *spec,
                  struct ofpbuf *ofpacts, struct match *match)
 {
@@ -262,7 +263,8 @@ learn_parse_spec(const char *orig, char *name, char *value,
                 /* Try an immediate value. */
                 if (dst.ofs == 0 && dst.n_bits == dst.field->n_bits) {
                     /* Full field value. */
-                    imm_error = mf_parse_value(dst.field, value, &imm);
+                    imm_error = mf_parse_value(dst.field, value, port_map,
+                                               &imm);
                 } else {
                     char *tail;
                     /* Partial field value. */
@@ -279,7 +281,7 @@ learn_parse_spec(const char *orig, char *name, char *value,
                         struct ds ds;
 
                         ds_init(&ds);
-                        mf_format(dst.field, &imm, NULL, &ds);
+                        mf_format(dst.field, &imm, NULL, NULL, &ds);
                         imm_error = xasprintf("%s: value %s does not fit into %d bits",
                                               orig, ds_cstr(&ds), dst.n_bits);
                         ds_destroy(&ds);
@@ -378,7 +380,8 @@ learn_parse_spec(const char *orig, char *name, char *value,
 /* Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
 static char * OVS_WARN_UNUSED_RESULT
-learn_parse__(char *orig, char *arg, struct ofpbuf *ofpacts)
+learn_parse__(char *orig, char *arg, const struct ofputil_port_map *port_map,
+              struct ofpbuf *ofpacts)
 {
     struct ofpact_learn *learn;
     struct match match;
@@ -435,7 +438,8 @@ learn_parse__(char *orig, char *arg, struct ofpbuf *ofpacts)
             char *error;
 
             spec = ofpbuf_put_zeros(ofpacts, sizeof *spec);
-            error = learn_parse_spec(orig, name, value, spec, ofpacts, &match);
+            error = learn_parse_spec(orig, name, value, port_map,
+                                     spec, ofpacts, &match);
             if (error) {
                 return error;
             }
@@ -460,10 +464,11 @@ learn_parse__(char *orig, char *arg, struct ofpbuf *ofpacts)
  *
  * Modifies 'arg'. */
 char * OVS_WARN_UNUSED_RESULT
-learn_parse(char *arg, struct ofpbuf *ofpacts)
+learn_parse(char *arg, const struct ofputil_port_map *port_map,
+            struct ofpbuf *ofpacts)
 {
     char *orig = xstrdup(arg);
-    char *error = learn_parse__(orig, arg, ofpacts);
+    char *error = learn_parse__(orig, arg, port_map, ofpacts);
     free(orig);
     return error;
 }
@@ -471,7 +476,8 @@ learn_parse(char *arg, struct ofpbuf *ofpacts)
 /* Appends a description of 'learn' to 's', in the format that ovs-ofctl(8)
  * describes. */
 void
-learn_format(const struct ofpact_learn *learn, struct ds *s)
+learn_format(const struct ofpact_learn *learn,
+             const struct ofputil_port_map *port_map, struct ds *s)
 {
     const struct ofpact_learn_spec *spec;
     struct match match;
@@ -535,7 +541,7 @@ learn_format(const struct ofpact_learn *learn, struct ds *s)
                        ofpact_learn_spec_imm(spec), n_bytes);
                 ds_put_format(s, "%s%s=%s", colors.param,
                               spec->dst.field->name, colors.end);
-                mf_format(spec->dst.field, &value, NULL, s);
+                mf_format(spec->dst.field, &value, NULL, port_map, s);
             } else {
                 ds_put_format(s, "%s", colors.param);
                 mf_format_subfield(&spec->dst, s);

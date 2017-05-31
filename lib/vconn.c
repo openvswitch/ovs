@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2016 Nicira, Inc.
+ * Copyright (c) 2008-2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -495,7 +495,7 @@ vcs_recv_hello(struct vconn *vconn)
             ofpbuf_delete(b);
             return;
         } else {
-            char *s = ofp_to_string(b->data, b->size, 1);
+            char *s = ofp_to_string(b->data, b->size, NULL, 1);
             VLOG_WARN_RL(&bad_ofmsg_rl,
                          "%s: received message while expecting hello: %s",
                          vconn->name, s);
@@ -641,7 +641,7 @@ do_recv(struct vconn *vconn, struct ofpbuf **msgp)
     if (!retval) {
         COVERAGE_INC(vconn_received);
         if (VLOG_IS_DBG_ENABLED()) {
-            char *s = ofp_to_string((*msgp)->data, (*msgp)->size, 1);
+            char *s = ofp_to_string((*msgp)->data, (*msgp)->size, NULL, 1);
             VLOG_DBG_RL(&ofmsg_rl, "%s: received: %s", vconn->name, s);
             free(s);
         }
@@ -681,7 +681,7 @@ do_send(struct vconn *vconn, struct ofpbuf *msg)
         COVERAGE_INC(vconn_sent);
         retval = (vconn->vclass->send)(vconn, msg);
     } else {
-        char *s = ofp_to_string(msg->data, msg->size, 1);
+        char *s = ofp_to_string(msg->data, msg->size, NULL, 1);
         retval = (vconn->vclass->send)(vconn, msg);
         if (retval != EAGAIN) {
             VLOG_DBG_RL(&ofmsg_rl, "%s: sent (%s): %s",
@@ -970,7 +970,7 @@ recv_flow_stats_reply(struct vconn *vconn, ovs_be32 send_xid,
             error = ofptype_decode(&type, reply->data);
             if (error || type != OFPTYPE_FLOW_STATS_REPLY) {
                 VLOG_WARN_RL(&rl, "received bad reply: %s",
-                             ofp_to_string(reply->data, reply->size, 1));
+                             ofp_to_string(reply->data, reply->size, NULL, 1));
                 return EPROTO;
             }
         }

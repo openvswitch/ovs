@@ -768,7 +768,6 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     struct dpif_port_dump port_dump;
     struct dpif_port dpif_port;
     struct hmap portno_names;
-    struct simap names_portno;
 
     struct dpif_flow_dump_thread *flow_dump_thread;
     struct dpif_flow_dump *flow_dump;
@@ -794,16 +793,21 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
 
 
     hmap_init(&portno_names);
-    simap_init(&names_portno);
     DPIF_PORT_FOR_EACH (&dpif_port, &port_dump, dpif) {
         odp_portno_names_set(&portno_names, dpif_port.port_no, dpif_port.name);
-        simap_put(&names_portno, dpif_port.name,
-                  odp_to_u32(dpif_port.port_no));
     }
 
     if (filter) {
-        char *err = parse_ofp_exact_flow(&flow_filter, &wc_filter, NULL, filter,
-                                         &names_portno);
+        struct ofputil_port_map port_map;
+        ofputil_port_map_init(&port_map);
+        DPIF_PORT_FOR_EACH (&dpif_port, &port_dump, dpif) {
+            ofputil_port_map_put(&port_map,
+                                 u16_to_ofp(odp_to_u32(dpif_port.port_no)),
+                                 dpif_port.name);
+        }
+        char *err = parse_ofp_exact_flow(&flow_filter, &wc_filter, NULL,
+                                         filter, &port_map);
+        ofputil_port_map_destroy(&port_map);
         if (err) {
             dpctl_error(dpctl_p, 0, "Failed to parse filter (%s)", err);
             free(err);
@@ -868,7 +872,6 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
 
 out_dpifclose:
     odp_portno_names_destroy(&portno_names);
-    simap_destroy(&names_portno);
     hmap_destroy(&portno_names);
     dpif_close(dpif);
 out_freefilter:

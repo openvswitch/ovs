@@ -128,7 +128,8 @@ versions of OpenFlow always dump all ports.
 .
 .IP "\fBmod\-port \fIswitch\fR \fIport\fR \fIaction\fR"
 Modify characteristics of port \fBport\fR in \fIswitch\fR.  \fIport\fR
-may be an OpenFlow port number or name or the keyword \fBLOCAL\fR (the
+may be an OpenFlow port number or name (unless \fB\-\-no\-names\fR is
+specified) or the keyword \fBLOCAL\fR (the
 preferred way to refer to the OpenFlow local port).  The \fIaction\fR
 may be any one of the following:
 .
@@ -2191,6 +2192,35 @@ depending on its configuration.
 .TP
 \fB\-\-strict\fR
 Uses strict matching when running flow modification commands.
+.
+.IP "\fB\-\-names\fR"
+.IQ "\fB\-\-no\-names\fR"
+Every OpenFlow port has a name and a number.  By default,
+\fBovs\-ofctl\fR commands accept both port names and numbers, and they
+display port names if \fBovs\-ofctl\fR is running on an interactive
+console, port numbers otherwise.  With \fB\-\-names\fR,
+\fBovs\-ofctl\fR commands both accept and display port names; with
+\fB\-\-no\-names\fR, commands neither accept nor display port names.
+.IP
+If a port name contains special characters or might be confused with a
+keyword within a flow, it may be enclosed in double quotes (escaped
+from the shell).  If necessary, JSON-style escape sequences may be
+used inside quotes, as specified in RFC 7159.  When it displays port
+names, \fBovs\-ofctl\fR quotes any name that does not start with a
+letter followed by letters or digits.
+.IP
+These options are new in Open vSwitch 2.8.  Earlier versions always
+behaved as if \fB\-\-no\-names\fR were specified.
+.IP
+Open vSwitch does not place its own limit on the length of port names,
+but OpenFlow 1.0 to 1.5 limit port names to 15 bytes and OpenFlow 1.6
+limits them to 63 bytes.  Because \fRovs\-ofctl\fR uses OpenFlow to
+retrieve the mapping between port names and numbers, names longer than
+this limit will be truncated for both display and acceptance.
+Truncation can also cause long names that are different to appear to
+be the same; when a switch has two ports with the same (truncated)
+name, \fBovs\-ofctl\fR refuses to display or accept the name, using
+the number instead.
 .
 .IP "\fB\-\-read-only\fR"
 Do not execute read/write commands.

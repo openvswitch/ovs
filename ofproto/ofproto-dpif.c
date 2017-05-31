@@ -5016,7 +5016,7 @@ ofproto_unixctl_fdb_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
         char name[OFP10_MAX_PORT_NAME_LEN];
 
         ofputil_port_to_string(ofbundle_get_a_port(bundle)->up.ofp_port,
-                               name, sizeof name);
+                               NULL, name, sizeof name);
         ds_put_format(&ds, "%5s  %4d  "ETH_ADDR_FMT"  %3d\n",
                       name, e->vlan, ETH_ADDR_ARGS(e->mac),
                       mac_entry_age(ofproto->ml, e));
@@ -5058,7 +5058,7 @@ ofproto_unixctl_mcast_snooping_show(struct unixctl_conn *conn,
 
             bundle = b->port;
             ofputil_port_to_string(ofbundle_get_a_port(bundle)->up.ofp_port,
-                                   name, sizeof name);
+                                   NULL, name, sizeof name);
             ds_put_format(&ds, "%5s  %4d  ", name, grp->vlan);
             ipv6_format_mapped(&grp->addr, &ds);
             ds_put_format(&ds, "         %3d\n",
@@ -5072,7 +5072,7 @@ ofproto_unixctl_mcast_snooping_show(struct unixctl_conn *conn,
 
         bundle = mrouter->port;
         ofputil_port_to_string(ofbundle_get_a_port(bundle)->up.ofp_port,
-                               name, sizeof name);
+                               NULL, name, sizeof name);
         ds_put_format(&ds, "%5s  %4d  querier             %3d\n",
                       name, mrouter->vlan,
                       mcast_mrouter_age(ofproto->ms, mrouter));

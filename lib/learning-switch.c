@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2008-2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -368,7 +368,7 @@ lswitch_process_packet(struct lswitch *sw, const struct ofpbuf *msg)
     } else if (type == OFPTYPE_FLOW_REMOVED) {
         /* Nothing to do. */
     } else if (VLOG_IS_DBG_ENABLED()) {
-        char *s = ofp_to_string(msg->data, msg->size, 2);
+        char *s = ofp_to_string(msg->data, msg->size, NULL, 2);
         VLOG_DBG_RL(&rl, "%016llx: OpenFlow packet ignored: %s",
                     sw->datapath_id, s);
         free(s);

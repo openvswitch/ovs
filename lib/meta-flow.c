@@ -2426,28 +2426,30 @@ mf_from_ipv6_string(const struct mf_field *mf, const char *s,
 
 static char *
 mf_from_ofp_port_string(const struct mf_field *mf, const char *s,
+                        const struct ofputil_port_map *port_map,
                         ovs_be16 *valuep, ovs_be16 *maskp)
 {
     ofp_port_t port;
 
     ovs_assert(mf->n_bytes == sizeof(ovs_be16));
 
-    if (ofputil_port_from_string(s, &port)) {
+    if (ofputil_port_from_string(s, port_map, &port)) {
         *valuep = htons(ofp_to_u16(port));
         *maskp = OVS_BE16_MAX;
         return NULL;
     }
-    return xasprintf("%s: port value out of range for %s", s, mf->name);
+    return xasprintf("%s: invalid or unknown port for %s", s, mf->name);
 }
 
 static char *
 mf_from_ofp_port_string32(const struct mf_field *mf, const char *s,
+                          const struct ofputil_port_map *port_map,
                           ovs_be32 *valuep, ovs_be32 *maskp)
 {
     ofp_port_t port;
 
     ovs_assert(mf->n_bytes == sizeof(ovs_be32));
-    if (ofputil_port_from_string(s, &port)) {
+    if (ofputil_port_from_string(s, port_map, &port)) {
         *valuep = ofputil_port_to_ofp11(port);
         *maskp = OVS_BE32_MAX;
         return NULL;
@@ -2560,6 +2562,7 @@ mf_from_ct_state_string(const char *s, ovs_be32 *flagsp, ovs_be32 *maskp)
  * NULL if successful, otherwise a malloc()'d string describing the error. */
 char *
 mf_parse(const struct mf_field *mf, const char *s,
+         const struct ofputil_port_map *port_map,
          union mf_value *value, union mf_value *mask)
 {
     char *error;
@@ -2595,11 +2598,13 @@ mf_parse(const struct mf_field *mf, const char *s,
         break;
 
     case MFS_OFP_PORT:
-        error = mf_from_ofp_port_string(mf, s, &value->be16, &mask->be16);
+        error = mf_from_ofp_port_string(mf, s, port_map,
+                                        &value->be16, &mask->be16);
         break;
 
     case MFS_OFP_PORT_OXM:
-        error = mf_from_ofp_port_string32(mf, s, &value->be32, &mask->be32);
+        error = mf_from_ofp_port_string32(mf, s, port_map,
+                                          &value->be32, &mask->be32);
         break;
 
     case MFS_FRAG:
@@ -2629,12 +2634,13 @@ mf_parse(const struct mf_field *mf, const char *s,
 /* Parses 's', a string value for field 'mf', into 'value'.  Returns NULL if
  * successful, otherwise a malloc()'d string describing the error. */
 char *
-mf_parse_value(const struct mf_field *mf, const char *s, union mf_value *value)
+mf_parse_value(const struct mf_field *mf, const char *s,
+               const struct ofputil_port_map *port_map, union mf_value *value)
 {
     union mf_value mask;
     char *error;
 
-    error = mf_parse(mf, s, value, &mask);
+    error = mf_parse(mf, s, port_map, value, &mask);
     if (error) {
         return error;
     }
@@ -2714,6 +2720,7 @@ mf_format_ct_state_string(ovs_be32 value, ovs_be32 mask, struct ds *s)
 void
 mf_format(const struct mf_field *mf,
           const union mf_value *value, const union mf_value *mask,
+          const struct ofputil_port_map *port_map,
           struct ds *s)
 {
     if (mask) {
@@ -2730,13 +2737,13 @@ mf_format(const struct mf_field *mf,
         if (!mask) {
             ofp_port_t port;
             ofputil_port_from_ofp11(value->be32, &port);
-            ofputil_format_port(port, s);
+            ofputil_format_port(port, port_map, s);
             break;
         }
         /* fall through */
     case MFS_OFP_PORT:
         if (!mask) {
-            ofputil_format_port(u16_to_ofp(ntohs(value->be16)), s);
+            ofputil_format_port(u16_to_ofp(ntohs(value->be16)), port_map, s);
             break;
         }
         /* fall through */

@@ -37,25 +37,31 @@ struct dp_packet;
 extern "C" {
 #endif
 
-void ofp_print(FILE *, const void *, size_t, int verbosity);
+void ofp_print(FILE *, const void *, size_t, const struct ofputil_port_map *,
+               int verbosity);
 void ofp_print_packet(FILE *stream, const void *data,
                       size_t len, ovs_be32 packet_type);
 void ofp_print_dp_packet(FILE *stream, const struct dp_packet *packet);
 
-void ofp10_match_print(struct ds *, const struct ofp10_match *, int verbosity);
+void ofp10_match_print(struct ds *, const struct ofp10_match *,
+                       const struct ofputil_port_map *, int verbosity);
 
-char *ofp_to_string(const void *, size_t, int verbosity);
-char *ofp10_match_to_string(const struct ofp10_match *, int verbosity);
+char *ofp_to_string(const void *, size_t, const struct ofputil_port_map *,
+                    int verbosity);
+char *ofp10_match_to_string(const struct ofp10_match *,
+                            const struct ofputil_port_map *, int verbosity);
 char *ofp_packet_to_string(const void *data, size_t len, ovs_be32 packet_type);
 char *ofp_dp_packet_to_string(const struct dp_packet *packet);
 
-void ofp_print_flow_stats(struct ds *, const struct ofputil_flow_stats *);
 void ofp_print_version(const struct ofp_header *, struct ds *);
 void ofp_print_table_features(
     struct ds *, const struct ofputil_table_features *features,
     const struct ofputil_table_features *prev_features,
     const struct ofputil_table_stats *stats,
     const struct ofputil_table_stats *prev_stats);
+
+void ofp_print_flow_stats(struct ds *, const struct ofputil_flow_stats *,
+                          const struct ofputil_port_map *);
 
 #ifdef  __cplusplus
 }

@@ -1017,11 +1017,14 @@ const struct mf_field *ofpact_get_mf_dst(const struct ofpact *ofpact);
 uint32_t ofpacts_get_meter(const struct ofpact[], size_t ofpacts_len);
 
 /* Formatting and parsing ofpacts. */
-void ofpacts_format(const struct ofpact[], size_t ofpacts_len, struct ds *);
-char *ofpacts_parse_actions(const char *, struct ofpbuf *ofpacts,
+void ofpacts_format(const struct ofpact[], size_t ofpacts_len,
+                    const struct ofputil_port_map *, struct ds *);
+char *ofpacts_parse_actions(const char *, const struct ofputil_port_map *,
+                            struct ofpbuf *ofpacts,
                             enum ofputil_protocol *usable_protocols)
     OVS_WARN_UNUSED_RESULT;
-char *ofpacts_parse_instructions(const char *, struct ofpbuf *ofpacts,
+char *ofpacts_parse_instructions(const char *, const struct ofputil_port_map *,
+                                 struct ofpbuf *ofpacts,
                                  enum ofputil_protocol *usable_protocols)
     OVS_WARN_UNUSED_RESULT;
 const char *ofpact_name(enum ofpact_type);

@@ -37,6 +37,7 @@ struct ds;
 struct flow_wildcards;
 struct minimask;
 struct dp_packet;
+struct ofputil_port_map;
 struct pkt_metadata;
 struct match;
 
@@ -76,7 +77,7 @@ const char *ct_state_to_string(uint32_t state);
 uint32_t ct_state_from_string(const char *);
 void flow_clear_conntrack(struct flow *);
 
-char *flow_to_string(const struct flow *);
+char *flow_to_string(const struct flow *, const struct ofputil_port_map *);
 void format_flags(struct ds *ds, const char *(*bit_to_string)(uint32_t),
                   uint32_t flags, char del);
 void format_flags_masked(struct ds *ds, const char *name,
@@ -86,8 +87,9 @@ int parse_flags(const char *s, const char *(*bit_to_string)(uint32_t),
                 char end, const char *field_name, char **res_string,
                 uint32_t *res_flags, uint32_t allowed, uint32_t *res_mask);
 
-void flow_format(struct ds *, const struct flow *);
-void flow_print(FILE *, const struct flow *);
+void flow_format(struct ds *, const struct flow *,
+                 const struct ofputil_port_map *);
+void flow_print(FILE *, const struct flow *, const struct ofputil_port_map *);
 static inline int flow_compare_3way(const struct flow *, const struct flow *);
 static inline bool flow_equal(const struct flow *, const struct flow *);
 static inline size_t flow_hash(const struct flow *, uint32_t basis);

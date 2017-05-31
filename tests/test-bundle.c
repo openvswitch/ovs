@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2012, 2013, 2014 Nicira, Inc.
+/* Copyright (c) 2011, 2012, 2013, 2014, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,7 +71,7 @@ parse_bundle_actions(char *actions)
     char *error;
 
     ofpbuf_init(&ofpacts, 0);
-    error = bundle_parse_load(actions, &ofpacts);
+    error = bundle_parse_load(actions, NULL, &ofpacts);
     if (error) {
         ovs_fatal(0, "%s", error);
     }

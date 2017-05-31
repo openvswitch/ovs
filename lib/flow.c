@@ -1066,10 +1066,11 @@ flow_clear_conntrack(struct flow *flow)
 }
 
 char *
-flow_to_string(const struct flow *flow)
+flow_to_string(const struct flow *flow,
+               const struct ofputil_port_map *port_map)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
-    flow_format(&ds, flow);
+    flow_format(&ds, flow, port_map);
     return ds_cstr(&ds);
 }
 
@@ -1309,7 +1310,8 @@ unknown:
 }
 
 void
-flow_format(struct ds *ds, const struct flow *flow)
+flow_format(struct ds *ds,
+            const struct flow *flow, const struct ofputil_port_map *port_map)
 {
     struct match match;
     struct flow_wildcards *wc = &match.wc;
@@ -1371,13 +1373,14 @@ flow_format(struct ds *ds, const struct flow *flow)
         WC_UNMASK_FIELD(wc, metadata);
     }
 
-    match_format(&match, ds, OFP_DEFAULT_PRIORITY);
+    match_format(&match, port_map, ds, OFP_DEFAULT_PRIORITY);
 }
 
 void
-flow_print(FILE *stream, const struct flow *flow)
+flow_print(FILE *stream,
+           const struct flow *flow, const struct ofputil_port_map *port_map)
 {
-    char *s = flow_to_string(flow);
+    char *s = flow_to_string(flow, port_map);
     fputs(s, stream);
     free(s);
 }

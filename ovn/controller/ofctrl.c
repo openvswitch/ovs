@@ -286,7 +286,7 @@ recv_S_TLV_TABLE_REQUESTED(const struct ofp_header *oh, enum ofptype type,
         VLOG_ERR("switch refused to allocate Geneve option (%s)",
                  ofperr_to_string(ofperr_decode_msg(oh, NULL)));
     } else {
-        char *s = ofp_to_string(oh, ntohs(oh->length), 1);
+        char *s = ofp_to_string(oh, ntohs(oh->length), NULL, 1);
         VLOG_ERR("unexpected reply to TLV table request (%s)", s);
         free(s);
     }
@@ -340,7 +340,7 @@ recv_S_TLV_TABLE_MOD_SENT(const struct ofp_header *oh, enum ofptype type,
             goto error;
         }
     } else {
-        char *s = ofp_to_string(oh, ntohs(oh->length), 1);
+        char *s = ofp_to_string(oh, ntohs(oh->length), NULL, 1);
         VLOG_ERR("unexpected reply to Geneve option allocation request (%s)",
                  s);
         free(s);
@@ -513,7 +513,7 @@ ofctrl_run(const struct ovsrec_bridge *br_int, struct shash *pending_ct_zones)
                     OVS_NOT_REACHED();
                 }
             } else {
-                char *s = ofp_to_string(oh, ntohs(oh->length), 1);
+                char *s = ofp_to_string(oh, ntohs(oh->length), NULL, 1);
                 VLOG_WARN("could not decode OpenFlow message (%s): %s",
                           ofperr_to_string(error), s);
                 free(s);
@@ -573,7 +573,7 @@ log_openflow_rl(struct vlog_rate_limit *rl, enum vlog_level level,
                 const struct ofp_header *oh, const char *title)
 {
     if (!vlog_should_drop(&this_module, level, rl)) {
-        char *s = ofp_to_string(oh, ntohs(oh->length), 2);
+        char *s = ofp_to_string(oh, ntohs(oh->length), NULL, 2);
         vlog(&this_module, level, "%s: %s", title, s);
         free(s);
     }
@@ -683,9 +683,9 @@ ovn_flow_to_string(const struct ovn_flow *f)
     struct ds s = DS_EMPTY_INITIALIZER;
     ds_put_format(&s, "table_id=%"PRIu8", ", f->table_id);
     ds_put_format(&s, "priority=%"PRIu16", ", f->priority);
-    match_format(&f->match, &s, OFP_DEFAULT_PRIORITY);
+    match_format(&f->match, NULL, &s, OFP_DEFAULT_PRIORITY);
     ds_put_cstr(&s, ", actions=");
-    ofpacts_format(f->ofpacts, f->ofpacts_len, &s);
+    ofpacts_format(f->ofpacts, f->ofpacts_len, NULL, &s);
     return ds_steal_cstr(&s);
 }
 
@@ -875,7 +875,7 @@ ofctrl_put(struct hmap *flow_table, struct shash *pending_ct_zones,
                           desired->group_id, ds_cstr(&desired->group));
 
             error = parse_ofp_group_mod_str(&gm, OFPGC11_ADD,
-                                            ds_cstr(&group_string),
+                                            ds_cstr(&group_string), NULL,
                                             &usable_protocols);
             if (!error) {
                 add_group_mod(&gm, &msgs);
@@ -975,7 +975,7 @@ ofctrl_put(struct hmap *flow_table, struct shash *pending_ct_zones,
             ds_put_format(&group_string, "group_id=%u", installed->group_id);
 
             error = parse_ofp_group_mod_str(&gm, OFPGC11_DELETE,
-                                            ds_cstr(&group_string),
+                                            ds_cstr(&group_string), NULL,
                                             &usable_protocols);
             if (!error) {
                 add_group_mod(&gm, &msgs);
