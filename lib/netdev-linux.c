@@ -1192,11 +1192,40 @@ netdev_linux_send(struct netdev *netdev_, int qid OVS_UNUSED,
                   struct dp_packet_batch *batch, bool may_steal,
                   bool concurrent_txq OVS_UNUSED)
 {
-    int i;
     int error = 0;
+    int sock = 0;
+
+    struct sockaddr_ll sll;
+    struct msghdr msg;
+    if (!is_tap_netdev(netdev_)) {
+        sock = af_packet_sock();
+        if (sock < 0) {
+            error = -sock;
+            goto free_batch;
+        }
+
+        int ifindex = netdev_get_ifindex(netdev_);
+        if (ifindex < 0) {
+            error = -ifindex;
+            goto free_batch;
+        }
+
+        /* We don't bother setting most fields in sockaddr_ll because the
+         * kernel ignores them for SOCK_RAW. */
+        memset(&sll, 0, sizeof sll);
+        sll.sll_family = AF_PACKET;
+        sll.sll_ifindex = ifindex;
+
+        msg.msg_name = &sll;
+        msg.msg_namelen = sizeof sll;
+        msg.msg_iovlen = 1;
+        msg.msg_control = NULL;
+        msg.msg_controllen = 0;
+        msg.msg_flags = 0;
+    }
 
     /* 'i' is incremented only if there's no error */
-    for (i = 0; i < batch->count;) {
+    for (int i = 0; i < batch->count; ) {
         const void *data = dp_packet_data(batch->packets[i]);
         size_t size = dp_packet_size(batch->packets[i]);
         ssize_t retval;
@@ -1206,38 +1235,12 @@ netdev_linux_send(struct netdev *netdev_, int qid OVS_UNUSED,
 
         if (!is_tap_netdev(netdev_)) {
             /* Use our AF_PACKET socket to send to this device. */
-            struct sockaddr_ll sll;
-            struct msghdr msg;
             struct iovec iov;
-            int ifindex;
-            int sock;
-
-            sock = af_packet_sock();
-            if (sock < 0) {
-                return -sock;
-            }
-
-            ifindex = netdev_get_ifindex(netdev_);
-            if (ifindex < 0) {
-                return -ifindex;
-            }
-
-            /* We don't bother setting most fields in sockaddr_ll because the
-             * kernel ignores them for SOCK_RAW. */
-            memset(&sll, 0, sizeof sll);
-            sll.sll_family = AF_PACKET;
-            sll.sll_ifindex = ifindex;
 
             iov.iov_base = CONST_CAST(void *, data);
             iov.iov_len = size;
 
-            msg.msg_name = &sll;
-            msg.msg_namelen = sizeof sll;
             msg.msg_iov = &iov;
-            msg.msg_iovlen = 1;
-            msg.msg_control = NULL;
-            msg.msg_controllen = 0;
-            msg.msg_flags = 0;
 
             retval = sendmsg(sock, &msg, 0);
         } else {
@@ -1278,12 +1281,13 @@ netdev_linux_send(struct netdev *netdev_, int qid OVS_UNUSED,
         i++;
     }
 
-    dp_packet_delete_batch(batch, may_steal);
-
     if (error && error != EAGAIN) {
             VLOG_WARN_RL(&rl, "error sending Ethernet packet on %s: %s",
                          netdev_get_name(netdev_), ovs_strerror(error));
     }
+
+free_batch:
+    dp_packet_delete_batch(batch, may_steal);
 
     return error;
 

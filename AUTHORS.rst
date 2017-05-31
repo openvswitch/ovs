@@ -331,6 +331,7 @@ Zoltan Kiss                     zoltan.kiss@citrix.com
 Zongkai LI                      zealokii@gmail.com
 Zhi Yong Wu                     zwu.kernel@gmail.com
 Zang MingJie                    zealot0630@gmail.com
+Zhenyu Gao                      sysugaozhenyu@gmail.com
 nickcooper-zhangtonghao         nickcooper-zhangtonghao@opencloud.tech
 wenxu                           wenxu@ucloud.cn
 wisd0me                         ak47izatool@gmail.com
