@@ -944,6 +944,7 @@ pre_connection(struct ctl_context *ctx)
     ovsdb_idl_add_column(ctx->idl, &sbrec_sb_global_col_connections);
     ovsdb_idl_add_column(ctx->idl, &sbrec_connection_col_target);
     ovsdb_idl_add_column(ctx->idl, &sbrec_connection_col_read_only);
+    ovsdb_idl_add_column(ctx->idl, &sbrec_connection_col_role);
 }
 
 static void
@@ -961,8 +962,10 @@ cmd_get_connection(struct ctl_context *ctx)
     SBREC_CONNECTION_FOR_EACH(conn, ctx->idl) {
         char *s;
 
-        s = xasprintf("%s %s", conn->read_only ? "read-only" : "read-write",
-                               conn->target);
+        s = xasprintf("%s role=\"%s\" %s",
+                      conn->read_only ? "read-only" : "read-write",
+                      conn->role,
+                      conn->target);
         svec_add(&targets, s);
         free(s);
     }
@@ -1003,6 +1006,7 @@ insert_connections(struct ctl_context *ctx, char *targets[], size_t n)
     struct sbrec_connection **connections;
     size_t i, conns=0;
     bool read_only = false;
+    char *role = "";
 
     /* Insert each connection in a new row in Connection table. */
     connections = xmalloc(n * sizeof *connections);
@@ -1013,6 +1017,9 @@ insert_connections(struct ctl_context *ctx, char *targets[], size_t n)
         } else if (!strcmp(targets[i], "read-write")) {
             read_only = false;
             continue;
+        } else if (!strncmp(targets[i], "role=", 5)) {
+            role = targets[i] + 5;
+            continue;
         } else if (stream_verify_name(targets[i]) &&
                    pstream_verify_name(targets[i])) {
             VLOG_WARN("target type \"%s\" is possibly erroneous", targets[i]);
@@ -1021,6 +1028,7 @@ insert_connections(struct ctl_context *ctx, char *targets[], size_t n)
         connections[conns] = sbrec_connection_insert(ctx->txn);
         sbrec_connection_set_target(connections[conns], targets[i]);
         sbrec_connection_set_read_only(connections[conns], read_only);
+        sbrec_connection_set_role(connections[conns], role);
         conns++;
     }
 
