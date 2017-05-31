@@ -269,6 +269,9 @@ narrow down the particular syntax that could not be parsed.
 The request triggered a bug in \fBovsdb\-server\fR.
 .IP "\fBovsdb error\fR"
 A map or set contains a duplicate key.
+.IP "\fBpermission error\fR"
+The request was denied by the role-based access control extension,
+introduced in version 2.8.
 .RE
 .
 .IP "3.2. Schema Format"
@@ -281,6 +284,36 @@ This raises the issue of the behavior of the weak reference when the
 rows that it references are deleted.  Since version 2.6,
 \fBovsdb\-server\fR forces columns that contain weak references to be
 mutable.
+.IP
+Since version 2.8, the table name \fBRBAC_Role\fR is used internally
+by the role-based access control extension to \fBovsdb\-server\fR and
+should not be used for purposes other than defining mappings of role
+names to table access permissions. This table has one row per role
+name and the following columns:
+.RS
+.IP "\fBname\fR"
+The role name.
+.IP "\fBpermissions\fR"
+A map of table name to a reference to a row in a separate permission
+table.
+.RE
+.IP
+The separate RBAC permission table has one row per access control
+configuration and the following columns:
+.RS
+.IP "\fBname\fR"
+The name of the table to which the row applies.
+.IP "\fBauthorization\fR"
+The set of column names and column:key pairs to be compared with
+the client ID in order to determine the authorization status of
+the requested operation.
+.IP "\fBinsert_delete\fR"
+A boolean value, true if authorized insertions and authorized are allowed,
+false if no insertions or deletions are allowed.
+.IP "\fBupdate\fR"
+The set of columns and column:key pairs for which authorized update and
+mutate operations should be permitted.
+.RE
 .
 .IP "4. Wire Protocol"
 The original OVSDB specifications included the following reason,
@@ -298,6 +331,18 @@ any corresponding advantage.
 .IP \(bu
 The JSON-RPC specification for HTTP transport is incomplete.
 .RE
+.
+.IP "4.1.3. Transact"
+Since version 2.8, role-based access controls can be applied to operations
+within a transaction that would modify the contents of the database
+(these operations include row insert, row delete, column update, and
+column mutate). Role-based access controls are applied when the database
+schema contains a table with the name "\fBRBAC_Role\fR" and the connection
+on which the transaction request was received has an associated role
+name (from the "\fBrole\fR" column in the remote connection table). When
+role-based access controls are enabled, transactions that are otherwise
+well-formed may be rejected depending on the client's role, ID, and the
+contents of the \fBRBAC_Role\fR table and associated permissions table.
 .
 .IP "4.1.5. Monitor"
 For backward compatibility, \fBovsdb\-server\fR currently permits a

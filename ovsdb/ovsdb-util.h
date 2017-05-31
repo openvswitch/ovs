@@ -25,6 +25,10 @@ struct ovsdb_datum *ovsdb_util_get_datum(struct ovsdb_row *row,
 const char *ovsdb_util_read_map_string_column(const struct ovsdb_row *row,
                                               const char *column_name,
                                               const char *key);
+const struct ovsdb_row *ovsdb_util_read_map_string_uuid_column(
+                                                    const struct ovsdb_row *r,
+                                                    const char *column_name,
+                                                    const char *key);
 const union ovsdb_atom *ovsdb_util_read_column(const struct ovsdb_row *row,
                                                const char *column_name,
                                                enum ovsdb_atomic_type type);

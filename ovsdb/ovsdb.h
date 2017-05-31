@@ -62,6 +62,8 @@ struct ovsdb {
     /* Triggers. */
     struct ovs_list triggers;   /* Contains "struct ovsdb_trigger"s. */
     bool run_triggers;
+
+    struct ovsdb_table *rbac_role;
 };
 
 struct ovsdb *ovsdb_create(struct ovsdb_schema *);
@@ -73,6 +75,7 @@ struct ovsdb_table *ovsdb_get_table(const struct ovsdb *, const char *);
 
 struct json *ovsdb_execute(struct ovsdb *, const struct ovsdb_session *,
                            const struct json *params, bool read_only,
+                           const char *role, const char *id,
                            long long int elapsed_msec,
                            long long int *timeout_msec);
 

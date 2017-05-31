@@ -128,6 +128,7 @@ struct ovsdb_jsonrpc_remote {
     struct ovs_list sessions;   /* List of "struct ovsdb_jsonrpc_session"s. */
     uint8_t dscp;
     bool read_only;
+    char *role;
 };
 
 static struct ovsdb_jsonrpc_remote *ovsdb_jsonrpc_server_add_remote(
@@ -270,6 +271,7 @@ ovsdb_jsonrpc_server_add_remote(struct ovsdb_jsonrpc_server *svr,
     ovs_list_init(&remote->sessions);
     remote->dscp = options->dscp;
     remote->read_only = options->read_only;
+    remote->role = nullable_xstrdup(options->role);
     shash_add(&svr->remotes, name, remote);
 
     if (!listener) {
@@ -287,6 +289,7 @@ ovsdb_jsonrpc_server_del_remote(struct shash_node *node)
     ovsdb_jsonrpc_session_close_all(remote);
     pstream_close(remote->listener);
     shash_delete(&remote->server->remotes, node);
+    free(remote->role);
     free(remote);
 }
 
@@ -1038,7 +1041,8 @@ ovsdb_jsonrpc_trigger_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
     /* Insert into trigger table. */
     t = xmalloc(sizeof *t);
     ovsdb_trigger_init(&s->up, db, &t->trigger, params, time_msec(),
-                       s->read_only);
+                       s->read_only, s->remote->role,
+                       jsonrpc_session_get_id(s->js));
     t->id = id;
     hmap_insert(&s->triggers, &t->hmap_node, hash);
 

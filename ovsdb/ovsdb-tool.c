@@ -44,6 +44,9 @@
 /* -m, --more: Verbosity level for "show-log" command output. */
 static int show_log_verbosity;
 
+/* --role: RBAC role to use for "transact" and "query" commands. */
+static const char *rbac_role;
+
 static const struct ovs_cmdl_command *get_all_commands(void);
 
 OVS_NO_RETURN static void usage(void);
@@ -68,8 +71,12 @@ main(int argc, char *argv[])
 static void
 parse_options(int argc, char *argv[])
 {
+    enum {
+        OPT_RBAC_ROLE = UCHAR_MAX + 1
+    };
     static const struct option long_options[] = {
         {"more", no_argument, NULL, 'm'},
+        {"rbac-role", required_argument, NULL, OPT_RBAC_ROLE},
         {"verbose", optional_argument, NULL, 'v'},
         {"help", no_argument, NULL, 'h'},
         {"option", no_argument, NULL, 'o'},
@@ -89,6 +96,10 @@ parse_options(int argc, char *argv[])
         switch (c) {
         case 'm':
             show_log_verbosity++;
+            break;
+
+        case OPT_RBAC_ROLE:
+            rbac_role = optarg;
             break;
 
         case 'h':
@@ -135,10 +146,12 @@ usage(void)
            "The default SCHEMA is %s.\n",
            program_name, program_name, default_db(), default_schema());
     vlog_usage();
-    printf("\nOther options:\n"
-           "  -m, --more                  increase show-log verbosity\n"
-           "  -h, --help                  display this help message\n"
-           "  -V, --version               display version information\n");
+    printf("\
+\nOther options:\n\
+  -m, --more                  increase show-log verbosity\n\
+  --rbac-role=ROLE            RBAC role for transact and query commands\n\
+  -h, --help                  display this help message\n\
+  -V, --version               display version information\n");
     exit(EXIT_SUCCESS);
 }
 
@@ -366,7 +379,7 @@ transact(bool read_only, int argc, char *argv[])
     check_ovsdb_error(ovsdb_file_open(db_file_name, read_only, &db, NULL));
 
     request = parse_json(transaction);
-    result = ovsdb_execute(db, NULL, request, false, 0, NULL);
+    result = ovsdb_execute(db, NULL, request, false, rbac_role, NULL, 0, NULL);
     json_destroy(request);
 
     print_and_free_json(result);

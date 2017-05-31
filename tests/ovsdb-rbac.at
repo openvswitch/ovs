@@ -1,0 +1,375 @@
+AT_BANNER([OVSDB -- ovsdb-server rbac])
+
+AT_SETUP([ovsdb-server/rbac 2])
+AT_KEYWORDS([ovsdb server rbac])
+AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
+
+RBAC_PKIDIR="$(pwd)"
+RBAC_PKI="sh $abs_top_srcdir/utilities/ovs-pki.in --dir=$RBAC_PKIDIR/pki --log=$RBAC_PKIDIR/rbac-pki.log"
+$RBAC_PKI -B 1024 init
+$RBAC_PKI -B 1024 req+sign ovsdb-server switch
+$RBAC_PKI -B 1024 -u req+sign client-1 switch
+$RBAC_PKI -B 1024 -u req+sign client-2 switch
+
+AT_DATA([schema],
+  [[{"name": "mydb",
+     "tables": {
+       "Root": {
+         "columns": {
+           "connections": {
+             "type": {
+               "key": {"type": "uuid", "refTable": "Connection"},
+               "min": 0,
+               "max": "unlimited"}}},
+          "isRoot": true},
+       "Connection": {
+         "columns": {
+           "target": {
+             "type": "string"},
+           "role": {
+             "type": "string"}}},
+        "RBAC_Role": {
+            "columns": {
+                "name": {"type": "string"},
+                "permissions": {
+                    "type": {"key": {"type": "string"},
+                             "value": {"type": "uuid",
+                                       "refTable": "RBAC_Permission",
+                                       "refType": "weak"},
+                                     "min": 0, "max": "unlimited"}}},
+            "isRoot": true},
+        "RBAC_Permission": {
+            "columns": {
+                "table": {"type": "string"},
+                "authorization": {"type": {"key": "string",
+                                           "min": 0,
+                                           "max": "unlimited"}},
+                "insert_delete": {"type": "boolean"},
+                "update" : {"type": {"key": "string",
+                                     "min": 0,
+                                     "max": "unlimited"}}},
+            "isRoot": true},
+       "fixed_colors": {
+         "columns": {
+           "name": {"type": "string"}, "value": {"type": "integer"}},
+         "indexes": [["name"]],
+         "isRoot": true},
+       "user_colors": {
+         "columns": {
+           "creator": {"type": "string"},
+           "name": {"type": "string"},
+           "value": {"type": "integer"}},
+         "indexes": [["name"]],
+         "isRoot": true},
+       "other_colors": {
+         "columns": {
+           "creator": {
+             "type": {"key": {"type": "string"},
+                      "value": {"type": "string"},
+                      "min": 0, "max": "unlimited"}},
+           "name": {"type": "string"},
+           "value": {"type": "integer"}},
+         "indexes": [["name"]],
+         "isRoot": true}
+    },
+     "version": "5.1.3",
+     "cksum": "12345678 9"
+}
+]])
+
+AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
+AT_CHECK(
+  [[ovsdb-tool transact db \
+     '["mydb",
+       {"op": "insert",
+        "table": "Root",
+        "row": {
+          "connections": ["set", [["named-uuid", "x"]]]}},
+       {"op": "insert",
+        "table": "Connection",
+        "uuid-name": "x",
+        "row": {"target": "pssl:0:127.0.0.1",
+                "role": "testrole"}},
+       {"op": "insert",
+        "table": "fixed_colors",
+        "row": {"name": "red",
+                "value": '16711680'}},
+       {"op": "insert",
+        "table": "RBAC_Role",
+        "row": {"name": "testrole",
+                "permissions": ["map", [["user_colors", ["named-uuid", "y"]],
+                                        ["other_colors", ["named-uuid", "z"]]]]}},
+       {"op": "insert",
+        "table": "RBAC_Permission",
+        "uuid-name": "y",
+        "row": {"authorization": "creator",
+                "insert_delete": true,
+                "table": "user_colors",
+                "update": ["set", ["name", "value"]]}},
+       {"op": "insert",
+        "table": "RBAC_Permission",
+        "uuid-name": "z",
+        "row": {"authorization": "creator:chassis",
+                "insert_delete": true,
+                "table": "user_colors",
+                "update": ["set", ["name", "value"]]}}
+]']], [0], [ignore], [ignore])
+
+AT_CHECK([ovsdb-server --log-file --detach --no-chdir --pidfile --remote=db:mydb,Root,connections \
+        --private-key=$RBAC_PKIDIR/ovsdb-server-privkey.pem \
+        --certificate=$RBAC_PKIDIR/ovsdb-server-cert.pem \
+        --ca-cert=$RBAC_PKIDIR/pki/switchca/cacert.pem \
+        db], [0], [ignore], [ignore])
+PARSE_LISTENING_PORT([ovsdb-server.log], [SSL_PORT])
+
+# Test 1:
+# Attempt to insert a row into the "fixed_colors" table.  This should
+# fail as there are no permissions for role "testrole" for this table.
+AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
+        --private-key=$RBAC_PKIDIR/client-1-privkey.pem \
+        --certificate=$RBAC_PKIDIR/client-1-cert.pem \
+        --ca-cert=$RBAC_PKIDIR/pki/switchca/cacert.pem \
+        ['["mydb",
+         {"op": "insert",
+          "table": "fixed_colors",
+          "row": {"name": "chartreuse", "value": '8388352'}}
+         ]']], [0], [stdout], [ignore])
+cat stdout >> output
+AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"details":"RBAC rules for client \"client-1\" role \"testrole\" prohibit row insertion into table \"fixed_colors\".","error":"permission error"}]]
+], [ignore])
+
+# Test 2:
+# Attempt to insert a row into the "user_colors" table with a client ID that
+# does not match the value in the column used for authorization.  This should
+# fail the authorization check for insertion.
+AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
+        --private-key=$RBAC_PKIDIR/client-1-privkey.pem \
+        --certificate=$RBAC_PKIDIR/client-1-cert.pem \
+        --ca-cert=$RBAC_PKIDIR/pki/switchca/cacert.pem \
+        ['["mydb",
+         {"op": "insert",
+          "table": "user_colors",
+          "row": {"creator": "client-2", "name": "chartreuse", "value": '8388352'}}
+         ]']], [0], [stdout], [ignore])
+cat stdout >> output
+AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"details":"RBAC rules for client \"client-1\" role \"testrole\" prohibit row insertion into table \"user_colors\".","error":"permission error"}]]
+], [ignore])
+
+# Test 3:
+# Attempt to insert a row into the "user_colors" table.  This should
+# succeed since role "testrole" has permissions for this table that
+# allow row insertion.
+AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
+        --private-key=$RBAC_PKIDIR/client-1-privkey.pem \
+        --certificate=$RBAC_PKIDIR/client-1-cert.pem \
+        --ca-cert=$RBAC_PKIDIR/pki/switchca/cacert.pem \
+        ['["mydb",
+         {"op": "insert",
+          "table": "user_colors",
+          "row": {"creator": "client-1", "name": "chartreuse", "value": '8388352'}}
+         ]']], [0], [stdout], [ignore])
+cat stdout >> output
+AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"uuid":["uuid","<0>"]}]]
+], [ignore])
+
+# Test 4:
+# Attempt to update a column in the "user_colors" table.  This should
+# succeed since role "testrole" has permissions for this table that
+# allow update of the "value" column when ID is equal to the value in
+# the "creator" column.
+AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
+        --private-key=$RBAC_PKIDIR/client-1-privkey.pem \
+        --certificate=$RBAC_PKIDIR/client-1-cert.pem \
+        --ca-cert=$RBAC_PKIDIR/pki/switchca/cacert.pem \
+        ['["mydb",
+         {"op": "update",
+          "table": "user_colors",
+          "where": [["name", "==", "chartreuse"]],
+          "row": {"value": '8388353'}}
+         ]']], [0], [stdout], [ignore])
+cat stdout >> output
+AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"count":1}]]
+], [ignore])
+
+# Test 5:
+# Attempt to update a column in the "user_colors" table.  Same as
+# previous test, but with a different client ID. This should fail
+# the RBAC authorization test because "client-2" does not match the
+# "creator" column for this row.
+AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
+        --private-key=$RBAC_PKIDIR/client-2-privkey.pem \
+        --certificate=$RBAC_PKIDIR/client-2-cert.pem \
+        --ca-cert=$RBAC_PKIDIR/pki/switchca/cacert.pem \
+        ['["mydb",
+         {"op": "update",
+          "table": "user_colors",
+          "where": [["name", "==", "chartreuse"]],
+          "row": {"value": '8388354'}}
+         ]']], [0], [stdout], [ignore])
+cat stdout >> output
+AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"details":"RBAC rules for client \"client-2\" role \"testrole\" prohibit modification of table \"user_colors\".","error":"permission error"}]]
+], [ignore])
+
+# Test 6:
+# Attempt to mutate a column in the "user_colors" table.  This should
+# succeed since role "testrole" has permissions for this table that
+# allow update of the "value" column when ID is equal to the value in
+# the "creator" column.
+AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
+        --private-key=$RBAC_PKIDIR/client-1-privkey.pem \
+        --certificate=$RBAC_PKIDIR/client-1-cert.pem \
+        --ca-cert=$RBAC_PKIDIR/pki/switchca/cacert.pem \
+        ['["mydb",
+         {"op": "mutate",
+          "table": "user_colors",
+          "where": [["name", "==", "chartreuse"]],
+          "mutations": [["value", "+=", '10']]}
+         ]']], [0], [stdout], [ignore])
+cat stdout >> output
+AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"count":1}]]
+], [ignore])
+
+# Test 7:
+# Attempt to mutate a column in the "user_colors" table.  Same as
+# previous test, but with a different client ID. This should fail
+# the RBAC authorization test because "client-2" does not match the
+# "creator" column for this row.
+AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
+        --private-key=$RBAC_PKIDIR/client-2-privkey.pem \
+        --certificate=$RBAC_PKIDIR/client-2-cert.pem \
+        --ca-cert=$RBAC_PKIDIR/pki/switchca/cacert.pem \
+        ['["mydb",
+         {"op": "mutate",
+          "table": "user_colors",
+          "where": [["name", "==", "chartreuse"]],
+          "mutations": [["value", "+=", '10']]}
+         ]']], [0], [stdout], [ignore])
+cat stdout >> output
+AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"details":"RBAC rules for client \"client-2\" role \"testrole\" prohibit mutate operation on table \"user_colors\".","error":"permission error"}]]
+], [ignore])
+
+# Test 8:
+# Attempt to delete a row from the "user_colors" table. This should fail
+# the RBAC authorization test because "client-2" does not match the
+# "creator" column for this row.
+AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
+        --private-key=$RBAC_PKIDIR/client-2-privkey.pem \
+        --certificate=$RBAC_PKIDIR/client-2-cert.pem \
+        --ca-cert=$RBAC_PKIDIR/pki/switchca/cacert.pem \
+        ['["mydb",
+         {"op": "delete",
+          "table": "user_colors",
+          "where": [["name", "==", "chartreuse"]]}
+         ]']], [0], [stdout], [ignore])
+cat stdout >> output
+AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"details":"RBAC rules for client \"client-2\" role \"testrole\" prohibit row deletion from table \"user_colors\".","error":"permission error"}]]
+], [ignore])
+
+# Test 9:
+# Attempt to delete a row from the "user_colors" table. This should pass
+# the RBAC authorization test because "client-1" does matches the
+# "creator" column for this row.
+AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
+        --private-key=$RBAC_PKIDIR/client-1-privkey.pem \
+        --certificate=$RBAC_PKIDIR/client-1-cert.pem \
+        --ca-cert=$RBAC_PKIDIR/pki/switchca/cacert.pem \
+        ['["mydb",
+         {"op": "delete",
+          "table": "user_colors",
+          "where": [["name", "==", "chartreuse"]]}
+         ]']], [0], [stdout], [ignore])
+cat stdout >> output
+AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"count":1}]]
+], [ignore])
+
+# Test 10:
+# Attempt to insert a row into the "other_colors" table.  This should
+# succeed since role "testrole" has permissions for this table that
+# allow row insertion.
+AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
+        --private-key=$RBAC_PKIDIR/client-1-privkey.pem \
+        --certificate=$RBAC_PKIDIR/client-1-cert.pem \
+        --ca-cert=$RBAC_PKIDIR/pki/switchca/cacert.pem \
+        ['["mydb",
+         {"op": "insert",
+          "table": "other_colors",
+          "row": {"creator": ["map",[["chassis", "client-1"]]], "name": "seafoam", "value": '7466680'}}
+         ]']], [0], [stdout], [ignore])
+cat stdout >> output
+AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"uuid":["uuid","<0>"]}]]
+], [ignore])
+
+# Test 11:
+# Attempt to update a column in the "user_colors" table.  This should
+# succeed since role "testrole" has permissions for this table that
+# allow update of the "value" column when ID is equal to the value in
+# the "creator" column.
+AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
+        --private-key=$RBAC_PKIDIR/client-1-privkey.pem \
+        --certificate=$RBAC_PKIDIR/client-1-cert.pem \
+        --ca-cert=$RBAC_PKIDIR/pki/switchca/cacert.pem \
+        ['["mydb",
+         {"op": "update",
+          "table": "other_colors",
+          "where": [["name", "==", "seafoam"]],
+          "row": {"value": '8388353'}}
+         ]']], [0], [stdout], [ignore])
+cat stdout >> output
+AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"count":1}]]
+], [ignore])
+
+# Test 12:
+# Attempt to update a column in the "other_colors" table.  Same as
+# previous test, but with a different client ID. This should fail
+# the RBAC authorization test because "client-2" does not match the
+# "creator" column for this row.
+AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
+        --private-key=$RBAC_PKIDIR/client-2-privkey.pem \
+        --certificate=$RBAC_PKIDIR/client-2-cert.pem \
+        --ca-cert=$RBAC_PKIDIR/pki/switchca/cacert.pem \
+        ['["mydb",
+         {"op": "update",
+          "table": "other_colors",
+          "where": [["name", "==", "seafoam"]],
+          "row": {"value": '8388354'}}
+         ]']], [0], [stdout], [ignore])
+cat stdout >> output
+AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"details":"RBAC rules for client \"client-2\" role \"testrole\" prohibit modification of table \"other_colors\".","error":"permission error"}]]
+], [ignore])
+
+# Test 13:
+# Attempt to delete a row from the "other_colors" table. This should fail
+# the RBAC authorization test because "client-2" does not match the
+# "creator" column for this row.
+AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
+        --private-key=$RBAC_PKIDIR/client-2-privkey.pem \
+        --certificate=$RBAC_PKIDIR/client-2-cert.pem \
+        --ca-cert=$RBAC_PKIDIR/pki/switchca/cacert.pem \
+        ['["mydb",
+         {"op": "delete",
+          "table": "other_colors",
+          "where": [["name", "==", "seafoam"]]}
+         ]']], [0], [stdout], [ignore])
+cat stdout >> output
+AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"details":"RBAC rules for client \"client-2\" role \"testrole\" prohibit row deletion from table \"other_colors\".","error":"permission error"}]]
+], [ignore])
+
+# Test 14:
+# Attempt to delete a row from the "other_colors" table. This should pass
+# the RBAC authorization test because "client-1" does matches the
+# "creator" column for this row.
+AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
+        --private-key=$RBAC_PKIDIR/client-1-privkey.pem \
+        --certificate=$RBAC_PKIDIR/client-1-cert.pem \
+        --ca-cert=$RBAC_PKIDIR/pki/switchca/cacert.pem \
+        ['["mydb",
+         {"op": "delete",
+          "table": "other_colors",
+          "where": [["name", "==", "seafoam"]]}
+         ]']], [0], [stdout], [ignore])
+cat stdout >> output
+AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"count":1}]]
+], [ignore])
+
+OVSDB_SERVER_SHUTDOWN
+AT_CLEANUP

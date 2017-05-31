@@ -160,6 +160,7 @@ static const char *row_update_names[] = {"row_update", "row_update2"};
 
 static struct vlog_rate_limit syntax_rl = VLOG_RATE_LIMIT_INIT(1, 5);
 static struct vlog_rate_limit semantic_rl = VLOG_RATE_LIMIT_INIT(1, 5);
+static struct vlog_rate_limit other_rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 static void ovsdb_idl_clear(struct ovsdb_idl *);
 static void ovsdb_idl_send_schema_request(struct ovsdb_idl *);
@@ -3768,9 +3769,14 @@ ovsdb_idl_txn_process_reply(struct ovsdb_idl *idl,
                             soft_errors++;
                         } else if (!strcmp(error->u.string, "not owner")) {
                             lock_errors++;
+                        } else if (!strcmp(error->u.string, "not allowed")) {
+                            hard_errors++;
+                            ovsdb_idl_txn_set_error_json(txn, op);
                         } else if (strcmp(error->u.string, "aborted")) {
                             hard_errors++;
                             ovsdb_idl_txn_set_error_json(txn, op);
+                            VLOG_WARN_RL(&other_rl,
+                                         "transaction error: %s", txn->error);
                         }
                     } else {
                         hard_errors++;

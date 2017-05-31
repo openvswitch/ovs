@@ -88,6 +88,37 @@ ovsdb_util_read_map_string_column(const struct ovsdb_row *row,
     return atom_value ? atom_value->string : NULL;
 }
 
+/* Read string-uuid key-values from a map.  Returns the row associated with
+ * 'key', if found, or NULL */
+const struct ovsdb_row *
+ovsdb_util_read_map_string_uuid_column(const struct ovsdb_row *row,
+                                       const char *column_name,
+                                       const char *key)
+{
+    const struct ovsdb_column *column
+        = ovsdb_table_schema_get_column(row->table->schema, column_name);
+    if (!column ||
+        column->type.key.type != OVSDB_TYPE_STRING ||
+        column->type.value.type != OVSDB_TYPE_UUID) {
+        return NULL;
+    }
+
+    const struct ovsdb_table *ref_table = column->type.value.u.uuid.refTable;
+    if (!ref_table) {
+        return NULL;
+    }
+
+    const struct ovsdb_datum *datum = &row->fields[column->index];
+    for (size_t i = 0; i < datum->n; i++) {
+        union ovsdb_atom *atom_key = &datum->keys[i];
+        if (!strcmp(atom_key->string, key)) {
+            const union ovsdb_atom *atom_value = &datum->values[i];
+            return ovsdb_table_get_row(ref_table, &atom_value->uuid);
+        }
+    }
+    return NULL;
+}
+
 const union ovsdb_atom *
 ovsdb_util_read_column(const struct ovsdb_row *row, const char *column_name,
                        enum ovsdb_atomic_type type)

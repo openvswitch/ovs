@@ -131,7 +131,7 @@ will print a blank line.
 .
 .SS "Other Commands"
 .
-.IP "\fBquery\fI db transaction\fR"
+.IP "[\fB\-\-rbac\-role=\fIrole\fR] \fBquery\fI db transaction\fR"
 Opens \fIdb\fR, executes \fItransaction\fR on it, and prints the
 results.  The \fItransaction\fR must be a JSON array in the format of
 the \fBparams\fR array for the JSON-RPC \fBtransact\fR method, as
@@ -142,8 +142,11 @@ safely run concurrently with other database activity, including
 \fBovsdb\-server\fR and other database writers.  The \fItransaction\fR
 may specify database modifications, but these will have no effect on
 \fIdb\fR.
+.IP
+By default, the transaction is executed using the ``superuser'' RBAC
+role.  Use \fB\-\-rbac\-role\fR to specify a different role.
 .
-.IP "\fBtransact\fI db transaction\fR"
+.IP "[\fR\-\-rbac\-role=\fIrole\fR] \fBtransact\fI db transaction\fR"
 Opens \fIdb\fR, executes \fItransaction\fR on it, prints the results,
 and commits any changes to \fIdb\fR.  The \fItransaction\fR must be a
 JSON array in the format of the \fBparams\fR array for the JSON-RPC
@@ -154,6 +157,9 @@ command will fail if the database is opened for writing by any other
 process, including \fBovsdb\-server\fR(1).  Use \fBovsdb\-client\fR(1),
 instead, to write to a database that is served by
 \fBovsdb\-server\fR(1).
+.IP
+By default, the transaction is executed using the ``superuser'' RBAC
+role.  Use \fB\-\-rbac\-role\fR to specify a different role.
 .
 .IP "\fBshow\-log\fI db\fR"
 Prints a summary of the records in \fIdb\fR's log, including the time
