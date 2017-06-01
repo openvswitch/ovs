@@ -2759,7 +2759,7 @@ set_rstp_port(struct ofport *ofport_,
     rstp_port_set(rp, s->port_num, s->priority, s->path_cost,
                   s->admin_edge_port, s->auto_edge,
                   s->admin_p2p_mac_state, s->admin_port_state, s->mcheck,
-                  ofport);
+                  ofport, netdev_get_name(ofport->up.netdev));
     update_rstp_port_state(ofport);
     /* Synchronize operational status. */
     rstp_port_set_mac_operational(rp, ofport->may_enable);
