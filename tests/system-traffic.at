@@ -3877,3 +3877,38 @@ NS_CHECK_EXEC([at_ns0], [ping -q -c 1 -w 3 10.4.2.2], [1], [ignore])
 
 OVS_TRAFFIC_VSWITCHD_STOP(["/dropping VLAN \(0\|300\) packet received on dot1q-tunnel port/d"])
 AT_CLEANUP
+
+AT_SETUP([802.1ad - double vlan match])
+OVS_TRAFFIC_VSWITCHD_START([set Open_vSwitch . other_config:vlan-limit=0])
+OVS_CHECK_8021AD()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+ADD_SVLAN(p0, at_ns0, 4094, "10.255.2.1/24")
+ADD_SVLAN(p1, at_ns1, 4094, "10.255.2.2/24")
+
+ADD_CVLAN(p0.4094, at_ns0, 100, "10.2.2.1/24")
+ADD_CVLAN(p1.4094, at_ns1, 100, "10.2.2.2/24")
+
+AT_DATA([flows-br0.txt], [dnl
+table=0,priority=1                action=drop
+table=0,priority=100 dl_vlan=4094 action=pop_vlan,goto_table:1
+table=1,priority=100 dl_vlan=100  action=push_vlan:0x88a8,mod_vlan_vid:4094,normal
+])
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows-br0.txt])
+
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.2.2.2])
+
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
