@@ -1,5 +1,5 @@
 # Copyright (c) 2008,2009,2011 Citrix Systems, Inc.
-# Copyright (c) 2009,2010,2011,2012,2013 Nicira, Inc.
+# Copyright (c) 2009,2010,2011,2012,2013,2017 Nicira, Inc.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published
@@ -25,7 +25,7 @@ def netdev_down(netdev):
     if not netdev_exists(netdev):
         log("netdev: down: device %s does not exist, ignoring" % netdev)
         return
-    run_command(["/sbin/ifconfig", netdev, 'down'])
+    run_command(["/sbin/ip", "link", "set", netdev, 'down'])
 
 def netdev_up(netdev, mtu=None):
     """Bring up a bare network device"""
@@ -37,7 +37,7 @@ def netdev_up(netdev, mtu=None):
     else:
         mtu = []
 
-    run_command(["/sbin/ifconfig", netdev, 'up'] + mtu)
+    run_command(["/sbin/ip", "link", "set", netdev, 'up'] + mtu)
 
 # This is a list of drivers that do support VLAN tx or rx acceleration, but
 # to which the VLAN bug workaround should not be applied.  This could be

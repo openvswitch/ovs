@@ -34,7 +34,6 @@ EOF
 
         for utility in \
             sbin/ethtool \
-            sbin/ifconfig \
             sbin/ifdown \
             sbin/ifup \
             sbin/ip \
@@ -715,7 +714,7 @@ configure_datapath: extra bonds - []
 Applying changes to /etc/sysconfig/network-scripts/route-xenbr2 configuration
 Applying changes to /etc/sysconfig/network configuration
 Applying changes to /etc/sysconfig/network-scripts/ifcfg-xenbr2 configuration
-/sbin/ifconfig eth2 up mtu 1500
+/sbin/ip link set eth2 up mtu 1500
 /sbin/ethtool -K eth2 gro off lro off
 /usr/sbin/ovs-vlan-bug-workaround eth2 on
 /usr/bin/ovs-vsctl --timeout=20
@@ -763,7 +762,7 @@ action_down: xenbr2
 deconfigure ipdev xenbr2 on xenbr2
 deconfigure_bridge: bridge           - xenbr2
 action_down: bring down physical devices - ['eth2']
-/sbin/ifconfig eth2 down
+/sbin/ip link set eth2 down
 /usr/bin/ovs-vsctl --timeout=20
     --with-iface --if-exists del-port xenbr2
     --if-exists del-br xenbr2
@@ -790,7 +789,7 @@ configure_datapath: extra ports - []
 configure_datapath: extra bonds - []
 Applying changes to /etc/sysconfig/network-scripts/route-xapi3 configuration
 Applying changes to /etc/sysconfig/network-scripts/ifcfg-xapi3 configuration
-/sbin/ifconfig eth3 up mtu 1500
+/sbin/ip link set eth3 up mtu 1500
 /sbin/ethtool -K eth3 gro off lro off
 /usr/sbin/ovs-vlan-bug-workaround eth3 on
 /usr/bin/ovs-vsctl --timeout=20
@@ -837,7 +836,7 @@ deconfigure_bridge: bridge           - xapi3
 action_down: no more masters, bring down slave xenbr3
 deconfigure_bridge: bridge           - xenbr3
 action_down: bring down physical devices - ['eth3']
-/sbin/ifconfig eth3 down
+/sbin/ip link set eth3 down
 /usr/bin/ovs-vsctl --timeout=20
     --with-iface --if-exists del-port xapi3
     --if-exists del-br xapi3
@@ -876,10 +875,10 @@ netdev: down: device xenbr0 does not exist, ignoring
 netdev: down: device xenbr1 does not exist, ignoring
 Applying changes to /etc/sysconfig/network-scripts/route-xapi1 configuration
 Applying changes to /etc/sysconfig/network-scripts/ifcfg-xapi1 configuration
-/sbin/ifconfig eth0 up mtu 1500
+/sbin/ip link set eth0 up mtu 1500
 /sbin/ethtool -K eth0 gro off lro off
 /usr/sbin/ovs-vlan-bug-workaround eth0 on
-/sbin/ifconfig eth1 up mtu 1500
+/sbin/ip link set eth1 up mtu 1500
 /sbin/ethtool -K eth1 gro off lro off
 /usr/sbin/ovs-vlan-bug-workaround eth1 off
 /usr/bin/ovs-vsctl --timeout=20
@@ -897,7 +896,7 @@ Applying changes to /etc/sysconfig/network-scripts/ifcfg-xapi1 configuration
     br-set-external-id xapi1 xs-network-uuids 45cbbb43-113d-a712-3231-c6463f253cef;99be2da4-6c33-6f8e-49ea-3bc592fe3c85
 /sbin/ifup xapi1
 action_up: bring up bond0
-/sbin/ifconfig bond0 up
+/sbin/ip link set bond0 up
 /sbin/update-issue
 Committing changes to /etc/sysconfig/network-scripts/route-xapi1 configuration
 Committing changes to /etc/sysconfig/network-scripts/ifcfg-xapi1 configuration
@@ -927,8 +926,8 @@ action_down: xapi1
 deconfigure ipdev xapi1 on xapi1
 deconfigure_bridge: bridge           - xapi1
 action_down: bring down physical devices - ['eth0', 'eth1']
-/sbin/ifconfig eth0 down
-/sbin/ifconfig eth1 down
+/sbin/ip link set eth0 down
+/sbin/ip link set eth1 down
 /usr/bin/ovs-vsctl --timeout=20
     --with-iface --if-exists del-port xapi1
     --if-exists del-br xapi1
@@ -966,10 +965,10 @@ netdev: down: device xenbr0 does not exist, ignoring
 netdev: down: device xenbr1 does not exist, ignoring
 Applying changes to /etc/sysconfig/network-scripts/route-xapi2 configuration
 Applying changes to /etc/sysconfig/network-scripts/ifcfg-xapi2 configuration
-/sbin/ifconfig eth0 up mtu 1500
+/sbin/ip link set eth0 up mtu 1500
 /sbin/ethtool -K eth0 gro off lro off
 /usr/sbin/ovs-vlan-bug-workaround eth0 on
-/sbin/ifconfig eth1 up mtu 1500
+/sbin/ip link set eth1 up mtu 1500
 /sbin/ethtool -K eth1 gro off lro off
 /usr/sbin/ovs-vlan-bug-workaround eth1 off
 /usr/bin/ovs-vsctl --timeout=20
@@ -991,7 +990,7 @@ Applying changes to /etc/sysconfig/network-scripts/ifcfg-xapi2 configuration
     set Interface xapi2 MAC="00:22:19:22:4b:af"
 /sbin/ifup xapi2
 action_up: bring up bond0
-/sbin/ifconfig bond0 up
+/sbin/ip link set bond0 up
 /sbin/update-issue
 Committing changes to /etc/sysconfig/network-scripts/route-xapi2 configuration
 Committing changes to /etc/sysconfig/network-scripts/ifcfg-xapi2 configuration
@@ -1023,8 +1022,8 @@ deconfigure_bridge: bridge           - xapi2
 action_down: no more masters, bring down slave xapi1
 deconfigure_bridge: bridge           - xapi1
 action_down: bring down physical devices - ['eth0', 'eth1']
-/sbin/ifconfig eth0 down
-/sbin/ifconfig eth1 down
+/sbin/ip link set eth0 down
+/sbin/ip link set eth1 down
 /usr/bin/ovs-vsctl --timeout=20
     --with-iface --if-exists del-port xapi2
     --if-exists del-br xapi2

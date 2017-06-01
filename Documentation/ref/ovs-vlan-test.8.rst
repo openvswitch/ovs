@@ -93,7 +93,8 @@ with VLAN tag 10::
       -- add-port vlan-br eth1 \
       -- add-port vlan-br vlan-br-tag tag=10 \
       -- set Interface vlan-br-tag type=internal
-    ifconfig vlan-br-tag up 1.2.3.4
+    ip addr add 1.2.3.4/8 dev vlan-br-tag
+    ip link set vlan-br-tag up
 
 Run an :program:`ovs-vlan-test` server listening for client control traffic on
 `172.16.0.142` port `8080` and VLAN traffic on the default port of `1.2.3.3`::

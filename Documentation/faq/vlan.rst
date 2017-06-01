@@ -190,7 +190,8 @@ Q: Can I configure an IP address on a VLAN?
         $ ovs-vsctl add-port br0 eth0
         $ ovs-vsctl add-port br0 vlan9 tag=9 \
             -- set interface vlan9 type=internal
-        $ ifconfig vlan9 192.168.0.7
+	$ ip addr add 192.168.0.7/24 dev vlan9
+        $ ip link set vlan0 up
 
     See also the following question.
 
@@ -198,9 +199,11 @@ Q: I configured one IP address on VLAN 0 and another on VLAN 9, like this::
 
     $ ovs-vsctl add-br br0
     $ ovs-vsctl add-port br0 eth0
-    $ ifconfig br0 192.168.0.5
+    $ ip addr add 192.168.0.5/24 dev br0
+    $ ip link set br0 up
     $ ovs-vsctl add-port br0 vlan9 tag=9 -- set interface vlan9 type=internal
-    $ ifconfig vlan9 192.168.0.9
+    $ ip addr add 192.168.0.9/24 dev vlan9
+    $ ip link set vlan0 up
 
 but other hosts that are only on VLAN 0 can reach the IP address configured on
 VLAN 9.  What's going on?

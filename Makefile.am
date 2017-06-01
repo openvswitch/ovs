@@ -311,6 +311,20 @@ thread-safety-check:
 EXTRA_DIST += build-aux/thread-safety-blacklist
 .PHONY: thread-safety-check
 
+# Check that "ip" is used in preference to "ifconfig", because
+# "ifconfig" is not installed ubiquitously anymore.
+ALL_LOCAL += check-ifconfig
+check-ifconfig:
+	@if test -e $(srcdir)/.git && (git --version) >/dev/null 2>&1 && \
+	  (cd $(srcdir) && git --no-pager grep -l -E -e 'ifconfig' | \
+           $(EGREP) -v 'Makefile.am|ovs-vsctl-bashcomp|openvswitch-custom\.te'); \
+	then \
+	  echo "See above for list of files that use or reference"; \
+          echo "'ifconfig'.  Please use 'ip' instead."; \
+	  exit 1; \
+	fi
+.PHONY: check-ifconfig
+
 if HAVE_GROFF
 ALL_LOCAL += manpage-check
 manpage-check: $(man_MANS) $(dist_man_MANS) $(noinst_man_MANS)

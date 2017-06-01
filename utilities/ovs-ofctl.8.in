@@ -136,8 +136,8 @@ may be any one of the following:
 .RS
 .IQ \fBup\fR
 .IQ \fBdown\fR
-Enable or disable the interface.  This is equivalent to \fBifconfig
-up\fR or \fBifconfig down\fR on a Unix system.
+Enable or disable the interface.  This is equivalent to \fBip
+link set up\fR or \fBip link set down\fR on a Unix system.
 .
 .IP \fBstp\fR
 .IQ \fBno\-stp\fR

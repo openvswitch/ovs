@@ -83,7 +83,7 @@ Q: Does Open vSwitch support configuring a port in promiscuous mode?
       destined to a host are delivered to the host's NIC.
 
       This form of promiscuous mode is configured in the guest OS of the VMs on
-      your bridge, e.g. with "ifconfig".
+      your bridge, e.g. with "ip link set <device> promisc".
 
     - The VMware vSwitch uses a different definition of "promiscuous mode".
       When you configure promiscuous mode on a VMware vNIC, the vSwitch sends a

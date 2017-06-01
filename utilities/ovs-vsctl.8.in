@@ -600,7 +600,7 @@ access port for VLAN 10, and configure it with an IP address:
 .IP
 .B "ovs\-vsctl add\-port br0 vlan10 tag=10 \-\- set Interface vlan10 type=internal"
 .IP
-.B "ifconfig vlan10 192.168.0.123"
+.B "ip addr add 192.168.0.123/24 dev vlan10"
 .
 .PP
 Add a GRE tunnel port \fBgre0\fR to remote IP address 1.2.3.4 to

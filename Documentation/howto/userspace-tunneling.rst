@@ -103,6 +103,7 @@ Perform the folowing configuration on `host1`:
 #. Configure the IP address of the VM interface *in the VM itself*::
 
        $ ip addr add 192.168.1.1/24 dev eth0
+       $ ip link set eth0 up
 
 #. On `host1`, add a port for the VXLAN tunnel::
 

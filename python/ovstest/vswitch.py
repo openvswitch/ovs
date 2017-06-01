@@ -41,6 +41,7 @@ def ovs_vsctl_del_pbridge(bridge, iface):
     """
     (ip_addr, mask) = util.interface_get_ip(bridge)
     util.interface_assign_ip(iface, ip_addr, mask)
+    util.interface_up(iface)
     util.move_routes(bridge, iface)
     return ovs_vsctl_del_bridge(bridge)
 

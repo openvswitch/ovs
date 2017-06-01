@@ -14,7 +14,7 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #
 # Copyright (c) 2005, 2007 XenSource Ltd.
-# Copyright (c) 2010, 2011, 2012, 2013, 2015, 2016 Nicira, Inc.
+# Copyright (c) 2010, 2011, 2012, 2013, 2015, 2016, 2017 Nicira, Inc.
 
 #
 # To add new entries to the bugtool, you need to:
@@ -137,7 +137,7 @@ DPKG_QUERY = 'dpkg-query'
 ETHTOOL = 'ethtool'
 FDISK = 'fdisk'
 FIND = 'find'
-IFCONFIG = 'ifconfig'
+IP = 'ip'
 IPTABLES = 'iptables'
 ISCSIADM = 'iscsiadm'
 LOSETUP = 'losetup'
@@ -582,7 +582,7 @@ exclude those logs from the archive.
     file_output(CAP_NETWORK_CONFIG, [OPENVSWITCH_DEFAULT_SWITCH,
                 OPENVSWITCH_SYSCONFIG_SWITCH])
 
-    cmd_output(CAP_NETWORK_INFO, [IFCONFIG, '-a'])
+    cmd_output(CAP_NETWORK_INFO, [IP, 'addr', 'show'])
     cmd_output(CAP_NETWORK_INFO, [ROUTE, '-n'])
     cmd_output(CAP_NETWORK_INFO, [ARP, '-n'])
     cmd_output(CAP_NETWORK_INFO, [NETSTAT, '-an'])
