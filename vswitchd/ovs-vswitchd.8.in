@@ -141,12 +141,21 @@ interfaces if none is given) to be \fIstatus\fR.  \fIstatus\fR can be
 .IP "\fBstp/tcn\fR [\fIbridge\fR]"
 Forces a topology change event on \fIbridge\fR if it's running STP.  This
 may cause it to send Topology Change Notifications to its peers and flush
-its MAC table..  If no \fIbridge\fR is given, forces a topology change
+its MAC table.  If no \fIbridge\fR is given, forces a topology change
 event on all bridges.
 .IP "\fBstp/show\fR [\fIbridge\fR]"
 Displays detailed information about spanning tree on the \fIbridge\fR.  If
 \fIbridge\fR is not specified, then displays detailed information about all
 bridges with STP enabled.
+.IP "\fBrstp/tcn\fR [\fIbridge\fR]"
+Forces a topology change event on \fIbridge\fR if it's running RSTP.  This
+may cause it to send Topology Change Notifications to its peers and flush
+its MAC table.  If no \fIbridge\fR is given, forces a topology change
+event on all bridges.
+.IP "\fBrstp/show\fR [\fIbridge\fR]"
+Displays detailed information about rapid spanning tree on the \fIbridge\fR.
+If \fIbridge\fR is not specified, then displays detailed information about all
+bridges with RSTP enabled.
 .SS "BRIDGE COMMANDS"
 These commands manage bridges.
 .IP "\fBfdb/flush\fR [\fIbridge\fR]"

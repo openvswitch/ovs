@@ -130,6 +130,8 @@ static rstp_identifier rstp_get_root_id__(const struct rstp *rstp)
     OVS_REQUIRES(rstp_mutex);
 static void rstp_unixctl_tcn(struct unixctl_conn *, int argc,
                              const char *argv[], void *aux);
+static void rstp_unixctl_show(struct unixctl_conn *, int argc,
+                              const char *argv[], void *aux);
 
 const char *
 rstp_state_name(enum rstp_state state)
@@ -247,6 +249,8 @@ rstp_init(void)
     OVS_EXCLUDED(rstp_mutex)
 {
     unixctl_command_register("rstp/tcn", "[bridge]", 0, 1, rstp_unixctl_tcn,
+                             NULL);
+    unixctl_command_register("rstp/show", "[bridge]", 0, 1, rstp_unixctl_show,
                              NULL);
 }
 
@@ -1567,6 +1571,115 @@ rstp_unixctl_tcn(struct unixctl_conn *conn, int argc,
         }
     }
     unixctl_command_reply(conn, "OK");
+
+out:
+    ovs_mutex_unlock(&rstp_mutex);
+}
+
+static void
+rstp_bridge_id_details(struct ds *ds, const rstp_identifier bridge_id,
+                       uint16_t hello_time, uint16_t max_age,
+                       uint16_t forward_delay)
+    OVS_REQUIRES(rstp_mutex)
+{
+    uint16_t priority = bridge_id >> 48;
+    ds_put_format(ds, "\tstp-priority\t%"PRIu16"\n", priority);
+
+    struct eth_addr mac;
+    const uint64_t mac_bits = (UINT64_C(1) << 48) - 1;
+    eth_addr_from_uint64(bridge_id & mac_bits, &mac);
+    ds_put_format(ds, "\tstp-system-id\t"ETH_ADDR_FMT"\n", ETH_ADDR_ARGS(mac));
+    ds_put_format(ds, "\tstp-hello-time\t%"PRIu16"s\n", hello_time);
+    ds_put_format(ds, "\tstp-max-age\t%"PRIu16"s\n", max_age);
+    ds_put_format(ds, "\tstp-fwd-delay\t%"PRIu16"s\n", forward_delay);
+}
+
+static void
+rstp_print_details(struct ds *ds, const struct rstp *rstp)
+    OVS_REQUIRES(rstp_mutex)
+{
+    ds_put_format(ds, "---- %s ----\n", rstp->name);
+
+    bool is_root = rstp_is_root_bridge__(rstp);
+    struct rstp_port *p = rstp_get_root_port__(rstp);
+    if (!p) {
+        ds_put_cstr(ds, "unknown root port\n");
+        return;
+    }
+
+    rstp_identifier bridge_id =
+        is_root ? rstp->bridge_identifier : rstp_get_root_id__(rstp);
+    uint16_t hello_time =
+        is_root ? rstp->bridge_hello_time : p->designated_times.hello_time;
+    uint16_t max_age =
+        is_root ? rstp->bridge_max_age : p->designated_times.max_age;
+    uint16_t forward_delay =
+        (is_root
+         ? rstp->bridge_forward_delay
+         : p->designated_times.forward_delay);
+
+    ds_put_cstr(ds, "Root ID:\n");
+    rstp_bridge_id_details(ds, bridge_id, hello_time, max_age, forward_delay);
+    if (is_root) {
+        ds_put_cstr(ds, "\tThis bridge is the root\n");
+    } else {
+        ds_put_format(ds, "\troot-port\t%s\n", p->port_name);
+        ds_put_format(ds, "\troot-path-cost\t%u\n",
+                      rstp_get_root_path_cost__(rstp));
+    }
+    ds_put_cstr(ds, "\n");
+
+    ds_put_cstr(ds, "Bridge ID:\n");
+    rstp_bridge_id_details(ds, rstp->bridge_identifier,
+                           rstp->bridge_hello_time,
+                           rstp->bridge_max_age,
+                           rstp->bridge_forward_delay);
+    ds_put_cstr(ds, "\n");
+
+    ds_put_format(ds, "\t%-11.10s%-11.10s%-11.10s%-9.8s%-8.7s\n",
+                  "Interface", "Role", "State", "Cost", "Pri.Nbr");
+    ds_put_cstr(ds, "\t---------- ---------- ---------- -------- -------\n");
+    HMAP_FOR_EACH (p, node, &rstp->ports) {
+        if (p->rstp_state != RSTP_DISABLED) {
+            ds_put_format(ds, "\t%-11.10s",
+                          p->port_name ? p->port_name : "null");
+            ds_put_format(ds, "%-11.10s", rstp_port_role_name(p->role));
+            ds_put_format(ds, "%-11.10s", rstp_state_name(p->rstp_state));
+            ds_put_format(ds, "%-9d", p->port_path_cost);
+            ds_put_format(ds, "%d.%d\n", p->priority, p->port_number);
+        }
+    }
+
+    ds_put_cstr(ds, "\n");
+}
+
+static void
+rstp_unixctl_show(struct unixctl_conn *conn, int argc,
+                  const char *argv[], void *aux OVS_UNUSED)
+    OVS_EXCLUDED(rstp_mutex)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+
+    ovs_mutex_lock(&rstp_mutex);
+    if (argc > 1) {
+        struct rstp *rstp = rstp_find(argv[1]);
+
+        if (!rstp) {
+            unixctl_command_reply_error(conn, "No such RSTP object");
+            goto out;
+        }
+
+        rstp_print_details(&ds, rstp);
+    } else {
+        struct rstp *rstp;
+
+        LIST_FOR_EACH (rstp, node, all_rstps) {
+            rstp_print_details(&ds, rstp);
+        }
+    }
+
+    unixctl_command_reply(conn, ds_cstr(&ds));
+    ds_destroy(&ds);
 
 out:
     ovs_mutex_unlock(&rstp_mutex);
