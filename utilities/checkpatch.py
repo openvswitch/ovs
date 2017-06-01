@@ -458,5 +458,5 @@ if __name__ == '__main__':
         if sys.stdin.isatty():
             usage()
             sys.exit(-1)
-        sys.exit(ovs_checkpatch_parse(sys.stdin.read()), '-')
+        sys.exit(ovs_checkpatch_parse(sys.stdin.read(), '-'))
     sys.exit(ovs_checkpatch_file(filename))
