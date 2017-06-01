@@ -207,7 +207,7 @@ uint16_t rstp_get_designated_port_id(const struct rstp *)
     OVS_EXCLUDED(rstp_mutex);
 uint16_t rstp_get_bridge_port_id(const struct rstp *)
     OVS_EXCLUDED(rstp_mutex);
-struct rstp_port * rstp_get_root_port(struct rstp *)
+struct rstp_port * rstp_get_root_port(const struct rstp *)
     OVS_EXCLUDED(rstp_mutex);
 rstp_identifier rstp_get_designated_root(const struct rstp *)
     OVS_EXCLUDED(rstp_mutex);

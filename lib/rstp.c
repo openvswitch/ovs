@@ -120,6 +120,16 @@ static void rstp_port_set_mcheck__(struct rstp_port *, bool mcheck)
     OVS_REQUIRES(rstp_mutex);
 static void reinitialize_port__(struct rstp_port *p)
     OVS_REQUIRES(rstp_mutex);
+static bool rstp_is_root_bridge__(const struct rstp *rstp)
+    OVS_REQUIRES(rstp_mutex);
+static uint32_t rstp_get_root_path_cost__(const struct rstp *rstp)
+    OVS_REQUIRES(rstp_mutex);
+static struct rstp_port *rstp_get_root_port__(const struct rstp *rstp)
+    OVS_REQUIRES(rstp_mutex);
+static rstp_identifier rstp_get_root_id__(const struct rstp *rstp)
+    OVS_REQUIRES(rstp_mutex);
+static void rstp_unixctl_tcn(struct unixctl_conn *, int argc,
+                             const char *argv[], void *aux);
 
 const char *
 rstp_state_name(enum rstp_state state)
@@ -207,9 +217,6 @@ rstp_port_get_number(const struct rstp_port *p)
 
     return number;
 }
-
-static void rstp_unixctl_tcn(struct unixctl_conn *, int argc,
-                             const char *argv[], void *aux);
 
 /* Decrements the State Machines' timers. */
 void
@@ -796,6 +803,13 @@ rstp_port_set_path_cost__(struct rstp_port *port, uint32_t path_cost)
 }
 
 /* Gets the root path cost. */
+static uint32_t
+rstp_get_root_path_cost__(const struct rstp *rstp)
+    OVS_REQUIRES(rstp_mutex)
+{
+    return rstp->root_priority.root_path_cost;
+}
+
 uint32_t
 rstp_get_root_path_cost(const struct rstp *rstp)
     OVS_EXCLUDED(rstp_mutex)
@@ -803,7 +817,7 @@ rstp_get_root_path_cost(const struct rstp *rstp)
     uint32_t cost;
 
     ovs_mutex_lock(&rstp_mutex);
-    cost = rstp->root_priority.root_path_cost;
+    cost = rstp_get_root_path_cost__(rstp);
     ovs_mutex_unlock(&rstp_mutex);
     return cost;
 }
@@ -1313,6 +1327,13 @@ rstp_get_designated_id(const struct rstp *rstp)
 }
 
 /* Returns the root bridge id. */
+static rstp_identifier
+rstp_get_root_id__(const struct rstp *rstp)
+    OVS_REQUIRES(rstp_mutex)
+{
+    return rstp->root_priority.root_bridge_id;
+}
+
 rstp_identifier
 rstp_get_root_id(const struct rstp *rstp)
     OVS_EXCLUDED(rstp_mutex)
@@ -1320,7 +1341,7 @@ rstp_get_root_id(const struct rstp *rstp)
     rstp_identifier root_id;
 
     ovs_mutex_lock(&rstp_mutex);
-    root_id = rstp->root_priority.root_bridge_id;
+    root_id = rstp_get_root_id__(rstp);
     ovs_mutex_unlock(&rstp_mutex);
 
     return root_id;
@@ -1357,6 +1378,14 @@ rstp_get_bridge_port_id(const struct rstp *rstp)
 /* Returns true if the bridge believes to the be root of the spanning tree,
  * false otherwise.
  */
+static bool
+rstp_is_root_bridge__(const struct rstp *rstp)
+    OVS_REQUIRES(rstp_mutex)
+{
+    return rstp->bridge_identifier ==
+        rstp->root_priority.designated_bridge_id;
+}
+
 bool
 rstp_is_root_bridge(const struct rstp *rstp)
     OVS_EXCLUDED(rstp_mutex)
@@ -1364,8 +1393,7 @@ rstp_is_root_bridge(const struct rstp *rstp)
     bool is_root;
 
     ovs_mutex_lock(&rstp_mutex);
-    is_root = rstp->bridge_identifier ==
-                rstp->root_priority.designated_bridge_id;
+    is_root = rstp_is_root_bridge__(rstp);
     ovs_mutex_unlock(&rstp_mutex);
 
     return is_root;
@@ -1388,21 +1416,28 @@ rstp_get_designated_root(const struct rstp *rstp)
 /* Returns the port connecting 'rstp' to the root bridge, or a null pointer if
  * there is no such port.
  */
-struct rstp_port *
-rstp_get_root_port(struct rstp *rstp)
-    OVS_EXCLUDED(rstp_mutex)
+static struct rstp_port *
+rstp_get_root_port__(const struct rstp *rstp)
+    OVS_REQUIRES(rstp_mutex)
 {
     struct rstp_port *p;
 
-    ovs_mutex_lock(&rstp_mutex);
     HMAP_FOR_EACH (p, node, &rstp->ports) {
         if (p->port_id == rstp->root_port_id) {
-            ovs_mutex_unlock(&rstp_mutex);
             return p;
         }
     }
-    ovs_mutex_unlock(&rstp_mutex);
     return NULL;
+}
+
+struct rstp_port *
+rstp_get_root_port(const struct rstp *rstp)
+    OVS_EXCLUDED(rstp_mutex)
+{
+    ovs_mutex_lock(&rstp_mutex);
+    struct rstp_port *p = rstp_get_root_port__(rstp);
+    ovs_mutex_unlock(&rstp_mutex);
+    return p;
 }
 
 /* Returns the state of port 'p'. */
