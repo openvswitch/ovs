@@ -11,3 +11,7 @@ OVSDB_CHECK_POSITIVE_CPY([immutable column],
 OVSDB_CHECK_POSITIVE_CPY([ephemeral column],
   [[parse-column mycol '{"type": "uuid", "ephemeral": true}']],
   [[{"ephemeral":true,"type":"uuid"}]])
+
+OVSDB_CHECK_NEGATIVE_CPY([type member is absent in column],
+  [[parse-column mycol '{}']],
+  [[syntax "{}": syntax error: Parsing schema for column mycol failed: Required 'type' member is missing.]])

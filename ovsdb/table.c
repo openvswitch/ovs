@@ -150,7 +150,8 @@ ovsdb_table_schema_from_json(const struct json *json, const char *name,
     if (max_rows) {
         if (json_integer(max_rows) <= 0) {
             return ovsdb_syntax_error(json, NULL,
-                                      "maxRows must be at least 1");
+                                      "Table - \"%s\": maxRows must be "
+                                      "at least 1", name);
         }
         n_max_rows = max_rows->u.integer;
     } else {
@@ -159,7 +160,8 @@ ovsdb_table_schema_from_json(const struct json *json, const char *name,
 
     if (shash_is_empty(json_object(columns))) {
         return ovsdb_syntax_error(json, NULL,
-                                  "table must have at least one column");
+                                  "table \"%s\" must have at least one column",
+                                  name);
     }
 
     ts = ovsdb_table_schema_create(name,
@@ -170,10 +172,12 @@ ovsdb_table_schema_from_json(const struct json *json, const char *name,
         struct ovsdb_column *column;
 
         if (node->name[0] == '_') {
-            error = ovsdb_syntax_error(json, NULL, "names beginning with "
-                                       "\"_\" are reserved");
+            error = ovsdb_syntax_error(json, NULL, "Column - \"%s\": names "
+                                       "beginning with \"_\" are reserved",
+                                       node->name);
         } else if (!ovsdb_parser_is_id(node->name)) {
-            error = ovsdb_syntax_error(json, NULL, "name must be a valid id");
+            error = ovsdb_syntax_error(json, NULL, "Column - \"%s\": name must "
+                                       "be a valid id", node->name);
         } else {
             error = ovsdb_column_from_json(node->data, node->name, &column);
         }
@@ -222,7 +226,7 @@ ovsdb_table_schema_from_json(const struct json *json, const char *name,
 
 error:
     ovsdb_table_schema_destroy(ts);
-    return error;
+    return ovsdb_wrap_error(error, "Table - \"%s\"", name);
 }
 
 /* Returns table schema 'ts' serialized into JSON.

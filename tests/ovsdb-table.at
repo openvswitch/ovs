@@ -68,9 +68,13 @@ OVSDB_CHECK_NEGATIVE_CPY([table must have at least one column (1)],
 
 OVSDB_CHECK_NEGATIVE_CPY([table must have at least one column (2)],
   [[parse-table mytable '{"columns": {}}']],
-  [[table must have at least one column]])
+  [[table "mytable" must have at least one column]])
 
 OVSDB_CHECK_NEGATIVE_CPY([table maxRows must be positive],
   [[parse-table mytable '{"columns": {"name": {"type": "string"}}, 
                           "maxRows": 0}']],
-  [[syntax "{"columns":{"name":{"type":"string"}},"maxRows":0}": syntax error: maxRows must be at least 1]])
+  [[syntax "{"columns":{"name":{"type":"string"}},"maxRows":0}": syntax error: Table - "mytable": maxRows must be at least 1]])
+
+OVSDB_CHECK_NEGATIVE_CPY([column must contain the required type member],
+  [[parse-table mytable '{"columns": {"name": {}}}']],
+  [[syntax "{}": syntax error: Table - "mytable": Parsing schema for column name failed: Required 'type' member is missing.]])
