@@ -33,7 +33,7 @@ AT_CHECK([ovstest test-cmap check 1], [0], [...
 ])
 AT_CLEANUP
 
-AT_SETUP([counting cockoo hash])
+AT_SETUP([counting cuckoo hash])
 AT_KEYWORDS([cmap])
 AT_CHECK([ovstest test-ccmap check 1], [0], [...
 ])
