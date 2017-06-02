@@ -30,4 +30,3 @@ openvswitchinclude_HEADERS = \
 	include/openvswitch/version.h \
 	include/openvswitch/vconn.h \
 	include/openvswitch/vlog.h
-

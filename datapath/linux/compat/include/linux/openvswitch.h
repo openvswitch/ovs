@@ -291,6 +291,7 @@ enum ovs_vport_attr {
 enum {
 	OVS_VXLAN_EXT_UNSPEC,
 	OVS_VXLAN_EXT_GBP,      /* Flag or __u32 */
+	OVS_VXLAN_EXT_GPE = 8,  /* Flag or __u32 */
 	__OVS_VXLAN_EXT_MAX,
 };
 

@@ -2380,9 +2380,26 @@
               additional information.
               (<code>https://tools.ietf.org/html/draft-smith-vxlan-group-policy</code>)
             </li>
+            <li>
+              <code>gpe</code>: Support for Generic Protocol Encapsulation in
+              accordance with IETF draft
+              <code>https://tools.ietf.org/html/draft-ietf-nvo3-vxlan-gpe</code>.
+            </li>
           </ul>
         </column>
 
+        <column name="options" key="layer3" type='{"type": "boolean"}'>
+          <p>
+            By default, or if set to false, the tunnel carries L2 packets (with
+            an Ethernet header).  If set to true, the tunnel carries L3 packets
+            (without an Ethernet header present).
+          </p>
+
+          <p>
+            To set this option to true, the <code>gpe</code> extension must
+            also be enabled in <ref column="options" key="exts"/>.
+          </p>
+        </column>
       </group>
 
       <group title="Tunnel Options: gre only">

@@ -414,6 +414,7 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
     uint16_t dst_proto = 0, src_proto = 0;
     struct netdev_tunnel_config tnl_cfg;
     struct smap_node *node;
+    bool is_layer3 = false;
     int err;
 
     has_csum = strstr(type, "gre") || strstr(type, "geneve") ||
@@ -508,6 +509,9 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
             while (ext) {
                 if (!strcmp(type, "vxlan") && !strcmp(ext, "gbp")) {
                     tnl_cfg.exts |= (1 << OVS_VXLAN_EXT_GBP);
+                } else if (!strcmp(type, "vxlan") && !strcmp(ext, "gpe")) {
+                    tnl_cfg.exts |= (1 << OVS_VXLAN_EXT_GPE);
+                    optional_layer3 = true;
                 } else {
                     ds_put_format(&errors, "%s: unknown extension '%s'\n",
                                   name, ext);
@@ -520,14 +524,21 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
         } else if (!strcmp(node->key, "egress_pkt_mark")) {
             tnl_cfg.egress_pkt_mark = strtoul(node->value, NULL, 10);
             tnl_cfg.set_egress_pkt_mark = true;
-        } else if (!strcmp(node->key, "layer3") && optional_layer3) {
+        } else if (!strcmp(node->key, "layer3")) {
             if (!strcmp(node->value, "true")) {
-                tnl_cfg.is_layer3 = true;
+                is_layer3 = true;
             }
         } else {
-            ds_put_format(&errors, "%s: unknown %s argument '%s'\n",
-                          name, type, node->key);
+            ds_put_format(&errors, "%s: unknown %s argument '%s'\n", name,
+                          type, node->key);
         }
+    }
+
+    if (optional_layer3 && is_layer3) {
+       tnl_cfg.is_layer3 = is_layer3;
+    } else if (!optional_layer3 && is_layer3) {
+        ds_put_format(&errors, "%s: unknown %s argument '%s'\n",
+                      name, type, "layer3");
     }
 
     if (!ipv6_addr_is_set(&tnl_cfg.ipv6_dst) && !tnl_cfg.ip_dst_flow) {
@@ -660,7 +671,8 @@ get_tunnel_config(const struct netdev *dev, struct smap *args)
         smap_add(args, "csum", "true");
     }
 
-    if (tnl_cfg.is_layer3 && !strcmp("gre", type)) {
+    if (tnl_cfg.is_layer3 && (!strcmp("gre", type) ||
+        !strcmp("vxlan", type))) {
         smap_add(args, "layer3", "true");
     }
 

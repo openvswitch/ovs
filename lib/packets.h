@@ -1171,11 +1171,63 @@ struct gre_base_hdr {
 
 /* VXLAN protocol header */
 struct vxlanhdr {
-    ovs_16aligned_be32 vx_flags;
+    union {
+        ovs_16aligned_be32 vx_flags; /* VXLAN flags. */
+        struct {
+            uint8_t flags;           /* VXLAN GPE flags. */
+            uint8_t reserved[2];     /* 16 bits reserved. */
+            uint8_t next_protocol;   /* Next Protocol field for VXLAN GPE. */
+        } vx_gpe;
+    };
     ovs_16aligned_be32 vx_vni;
 };
+BUILD_ASSERT_DECL(sizeof(struct vxlanhdr) == 8);
 
 #define VXLAN_FLAGS 0x08000000  /* struct vxlanhdr.vx_flags required value. */
+
+/*
+ * VXLAN Generic Protocol Extension (VXLAN_F_GPE):
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |R|R|Ver|I|P|R|O|       Reserved                |Next Protocol  |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |                VXLAN Network Identifier (VNI) |   Reserved    |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ * Ver = Version. Indicates VXLAN GPE protocol version.
+ *
+ * P = Next Protocol Bit. The P bit is set to indicate that the
+ *     Next Protocol field is present.
+ *
+ * O = OAM Flag Bit. The O bit is set to indicate that the packet
+ *     is an OAM packet.
+ *
+ * Next Protocol = This 8 bit field indicates the protocol header
+ * immediately following the VXLAN GPE header.
+ *
+ * https://tools.ietf.org/html/draft-ietf-nvo3-vxlan-gpe-01
+ */
+
+/* Fields in struct vxlanhdr.vx_gpe.flags */
+#define VXLAN_GPE_FLAGS_VER     0x30    /* Version. */
+#define VLXAN_GPE_FLAGS_P       0x04    /* Next Protocol Bit. */
+#define VXLAN_GPE_FLAGS_O       0x01    /* OAM Bit. */
+
+/* VXLAN-GPE header flags. */
+#define VXLAN_HF_VER   ((1U <<29) | (1U <<28))
+#define VXLAN_HF_NP    (1U <<26)
+#define VXLAN_HF_OAM   (1U <<24)
+
+#define VXLAN_GPE_USED_BITS (VXLAN_HF_VER | VXLAN_HF_NP | VXLAN_HF_OAM | \
+                            0xff)
+
+/* VXLAN-GPE header Next Protocol. */
+#define VXLAN_GPE_NP_IPV4      0x01
+#define VXLAN_GPE_NP_IPV6      0x02
+#define VXLAN_GPE_NP_ETHERNET  0x03
+#define VXLAN_GPE_NP_NSH       0x04
+
+#define VXLAN_F_GPE  0x4000
+#define VXLAN_HF_GPE 0x04000000
 
 /* Input values for PACKET_TYPE macros have to be in host byte order.
  * The _BE postfix indicates result is in network byte order. Otherwise result
