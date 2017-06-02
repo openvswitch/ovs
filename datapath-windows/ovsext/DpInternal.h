@@ -199,6 +199,7 @@ typedef __declspec(align(8)) struct OvsFlowKey {
         UINT32 mark;
         UINT32 state;
         struct ovs_key_ct_labels labels;
+        struct ovs_key_ct_tuple_ipv4 tuple_ipv4;
     } ct;                        /* Connection Tracking Flags */
 } OvsFlowKey;
 

@@ -198,7 +198,7 @@ OvsCtEntryCreate(PNET_BUFFER_LIST curNbl,
             }
 
             state |= OVS_CS_F_NEW;
-            POVS_CT_ENTRY parentEntry = NULL;
+            POVS_CT_ENTRY parentEntry;
             parentEntry = OvsCtRelatedLookup(ctx->key, currentTime);
             if (parentEntry != NULL) {
                 state |= OVS_CS_F_RELATED;
@@ -209,10 +209,10 @@ OvsCtEntryCreate(PNET_BUFFER_LIST curNbl,
                 if (!entry) {
                     return NULL;
                 }
-                /* If this is related entry, then update parent */
-                if (parentEntry != NULL) {
-                    entry->parent = parentEntry;
-                }
+
+                /* Set parent entry for related FTP connections */
+                entry->parent = parentEntry;
+
                 OvsCtAddEntry(entry, ctx, currentTime);
                 *entryCreated = TRUE;
             }
@@ -235,6 +235,9 @@ OvsCtEntryCreate(PNET_BUFFER_LIST curNbl,
                 if (!entry) {
                     return NULL;
                 }
+
+                /* XXX Add support for ICMP-Related */
+                entry->parent = NULL;
                 OvsCtAddEntry(entry, ctx, currentTime);
                 *entryCreated = TRUE;
             }
@@ -250,6 +253,9 @@ OvsCtEntryCreate(PNET_BUFFER_LIST curNbl,
                 if (!entry) {
                     return NULL;
                 }
+
+                /* Default UDP related to NULL until TFTP is supported */
+                entry->parent = NULL;
                 OvsCtAddEntry(entry, ctx, currentTime);
                 *entryCreated = TRUE;
             }
@@ -586,8 +592,8 @@ OvsProcessConntrackEntry(PNET_BUFFER_LIST curNbl,
         } else {
             POVS_CT_ENTRY parentEntry;
             parentEntry = OvsCtRelatedLookup(ctx->key, currentTime);
+            entry->parent = parentEntry;
             if (parentEntry != NULL) {
-                entry->parent = parentEntry;
                 state |= OVS_CS_F_RELATED;
             }
         }
@@ -700,6 +706,23 @@ OvsCtExecute_(PNET_BUFFER_LIST curNbl,
         if (status != NDIS_STATUS_SUCCESS) {
             OVS_LOG_ERROR("Error while parsing the FTP packet");
         }
+    }
+
+    /* Add original tuple information to flow Key */
+    if (entry && entry->key.dl_type == ntohs(ETH_TYPE_IPV4)) {
+        OVS_CT_KEY *ctKey;
+        if (entry->parent != NULL) {
+            POVS_CT_ENTRY parent = entry->parent;
+            ctKey = &parent->key;
+        } else {
+            ctKey = &entry->key;
+        }
+
+        key->ct.tuple_ipv4.ipv4_src = ctKey->src.addr.ipv4_aligned;
+        key->ct.tuple_ipv4.ipv4_dst = ctKey->dst.addr.ipv4_aligned;
+        key->ct.tuple_ipv4.src_port = ctKey->src.port;
+        key->ct.tuple_ipv4.dst_port = ctKey->dst.port;
+        key->ct.tuple_ipv4.ipv4_proto = ctKey->nw_proto;
     }
 
     if (entryCreated && entry) {
