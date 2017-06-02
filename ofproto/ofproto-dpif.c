@@ -1357,6 +1357,7 @@ CHECK_FEATURE__(ct_label, ct_label, ct_label.u64.lo, 1, ETH_TYPE_IP)
 CHECK_FEATURE__(ct_state_nat, ct_state, ct_state, \
                 CS_TRACKED|CS_SRC_NAT, ETH_TYPE_IP)
 CHECK_FEATURE__(ct_orig_tuple, ct_orig_tuple, ct_nw_proto, 1, ETH_TYPE_IP)
+CHECK_FEATURE__(ct_orig_tuple6, ct_orig_tuple6, ct_nw_proto, 1, ETH_TYPE_IPV6)
 
 #undef CHECK_FEATURE
 #undef CHECK_FEATURE__
@@ -1387,6 +1388,7 @@ check_support(struct dpif_backer *backer)
 
     backer->support.odp.ct_state_nat = check_ct_state_nat(backer);
     backer->support.odp.ct_orig_tuple = check_ct_orig_tuple(backer);
+    backer->support.odp.ct_orig_tuple6 = check_ct_orig_tuple6(backer);
 }
 
 static int
@@ -4264,7 +4266,7 @@ check_mask(struct ofproto_dpif *ofproto, const struct miniflow *flow)
      * the features we know of. */
     if (support->ct_state && support->ct_zone && support->ct_mark
         && support->ct_label && support->ct_state_nat
-        && support->ct_orig_tuple) {
+        && support->ct_orig_tuple && support->ct_orig_tuple6) {
         return ct_state & CS_UNSUPPORTED_MASK ? OFPERR_OFPBMC_BAD_MASK : 0;
     }
 
@@ -4281,14 +4283,22 @@ check_mask(struct ofproto_dpif *ofproto, const struct miniflow *flow)
         return OFPERR_OFPBMC_BAD_MASK;
     }
 
-    if (!support->ct_orig_tuple &&
-        (MINIFLOW_GET_U8(flow, ct_nw_proto) ||
-         MINIFLOW_GET_U16(flow, ct_tp_src) ||
-         MINIFLOW_GET_U16(flow, ct_tp_dst) ||
-         MINIFLOW_GET_U32(flow, ct_nw_src) ||
-         MINIFLOW_GET_U32(flow, ct_nw_dst) ||
-         !ovs_u128_is_zero(MINIFLOW_GET_U128(flow, ct_ipv6_src)) ||
-         !ovs_u128_is_zero(MINIFLOW_GET_U128(flow, ct_ipv6_dst)))) {
+    if (!support->ct_orig_tuple && !support->ct_orig_tuple6
+        && (MINIFLOW_GET_U8(flow, ct_nw_proto)
+            || MINIFLOW_GET_U16(flow, ct_tp_src)
+            || MINIFLOW_GET_U16(flow, ct_tp_dst))) {
+        return OFPERR_OFPBMC_BAD_MASK;
+    }
+
+    if (!support->ct_orig_tuple
+        && (MINIFLOW_GET_U32(flow, ct_nw_src)
+            || MINIFLOW_GET_U32(flow, ct_nw_dst))) {
+        return OFPERR_OFPBMC_BAD_MASK;
+    }
+
+    if (!support->ct_orig_tuple6
+        && (!ovs_u128_is_zero(MINIFLOW_GET_U128(flow, ct_ipv6_src))
+            || !ovs_u128_is_zero(MINIFLOW_GET_U128(flow, ct_ipv6_dst)))) {
         return OFPERR_OFPBMC_BAD_MASK;
     }
 

@@ -196,7 +196,8 @@ int odp_flow_from_string(const char *s,
     ODP_SUPPORT_FIELD(bool, ct_state_nat, "CT state NAT")                    \
                                                                              \
     /* Conntrack original direction tuple matching * supported. */           \
-    ODP_SUPPORT_FIELD(bool, ct_orig_tuple, "CT orig tuple")
+    ODP_SUPPORT_FIELD(bool, ct_orig_tuple, "CT orig tuple")                  \
+    ODP_SUPPORT_FIELD(bool, ct_orig_tuple6, "CT orig tuple for IPv6")
 
 /* Indicates support for various fields. This defines how flows will be
  * serialised. */
