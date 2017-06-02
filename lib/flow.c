@@ -1770,7 +1770,7 @@ flow_hash_symmetric_l3l4(const struct flow *flow, uint32_t basis,
         const uint64_t *a = ALIGNED_CAST(uint64_t *, flow->ipv6_src.s6_addr);
         const uint64_t *b = ALIGNED_CAST(uint64_t *, flow->ipv6_dst.s6_addr);
 
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < sizeof flow->ipv6_src / sizeof *a; i++) {
             hash = hash_add64(hash, a[i] ^ b[i]);
         }
     } else {
