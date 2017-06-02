@@ -14,6 +14,8 @@ AT_CHECK([ovs-vsctl add-port int-br t2 -- set Interface t2 type=vxlan \
                        options:remote_ip=flow options:key=123 ofport_request=5\
                     -- add-port int-br t5 -- set Interface t5 type=geneve \
                        options:remote_ip=1.1.2.93 options:out_key=flow options:egress_pkt_mark=1234 ofport_request=6\
+                    -- add-port int-br t6 -- set Interface t6 type=gre \
+                       options:remote_ip=1.1.2.92 options:key=456 options:layer3=true ofport_request=7\
                        ], [0])
 
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
@@ -28,6 +30,7 @@ dummy@ovs-dummy: hit:0 missed:0
 		t3 4/4789: (vxlan: csum=true, out_key=flow, remote_ip=1.1.2.93)
 		t4 5/6081: (geneve: key=123, remote_ip=flow)
 		t5 6/6081: (geneve: egress_pkt_mark=1234, out_key=flow, remote_ip=1.1.2.93)
+		t6 7/3: (gre: key=456, layer3=true, remote_ip=1.1.2.92)
 ])
 
 dnl First setup dummy interface IP address, then add the route
@@ -124,6 +127,13 @@ AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: tnl_push(tnl_port(3),header(size=42,type=3,eth(dst=f8:bc:12:44:34:b6,src=aa:55:aa:55:00:00,dl_type=0x0800),ipv4(src=1.1.2.88,dst=1.1.2.92,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x2000,proto=0x6558),key=0x1c8)),out_port(100))
 ])
 
+dnl Check L3GRE tunnel push
+AT_CHECK([ovs-ofctl add-flow int-br action=7])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth(src=f8:bc:12:44:34:b6,dst=aa:55:aa:55:00:01),eth_type(0x0800),ipv4(src=1.1.3.88,dst=1.1.3.112,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: pop_eth,tnl_push(tnl_port(3),header(size=42,type=3,eth(dst=f8:bc:12:44:34:b6,src=aa:55:aa:55:00:00,dl_type=0x0800),ipv4(src=1.1.2.88,dst=1.1.2.92,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x2000,proto=0x800),key=0x1c8)),out_port(100))
+])
+
 dnl Check Geneve tunnel push
 AT_CHECK([ovs-ofctl add-flow int-br "actions=set_field:1.1.2.92->tun_dst,5"])
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth(src=f8:bc:12:44:34:b6,dst=aa:55:aa:55:00:00),eth_type(0x0800),ipv4(src=1.1.3.88,dst=1.1.3.112,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
@@ -148,18 +158,31 @@ AT_CHECK([tail -1 stdout], [0],
 
 dnl Check decapsulation of GRE packet
 AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500007e79464000402fba550101025c0101025820006558000001c8fe71d883724fbeb6f4e1494a080045000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500007e79464000402fba550101025c0101025820006558000001c8fe71d883724fbeb6f4e1494a080045000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500007e79464000402fba550101025c0101025820006558000001c8fe71d883724fbeb6f4e1494a080045000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
 ovs-appctl time/warp 1000
 
 AT_CHECK([ovs-ofctl dump-ports int-br | grep 'port  3'], [0], [dnl
-  port  3: rx pkts=1, bytes=98, drop=?, errs=?, frame=?, over=?, crc=?
+  port  3: rx pkts=3, bytes=294, drop=?, errs=?, frame=?, over=?, crc=?
 ])
 
-dnl Check GRE only accepts encapsulated Ethernet frames
-AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500007e79464000402fba550101025c0101025820000800000001c8fe71d883724fbeb6f4e1494a080045000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
+dnl Check decapsulation of L3GRE packet
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500007079464000402fba630101025c0101025820000800000001c845000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500007079464000402fba630101025c0101025820000800000001c845000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500007079464000402fba630101025c0101025820000800000001c845000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
+ovs-appctl time/warp 1000
 ovs-appctl time/warp 1000
 
-AT_CHECK([ovs-ofctl dump-ports int-br | grep 'port  3'], [0], [dnl
-  port  3: rx pkts=1, bytes=98, drop=?, errs=?, frame=?, over=?, crc=?
+AT_CHECK([ovs-ofctl dump-ports int-br | grep 'port  7'], [0], [dnl
+  port  7: rx pkts=3, bytes=252, drop=?, errs=?, frame=?, over=?, crc=?
+])
+
+dnl Check GREL3 only accepts non-fragmented packets?
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500007e79464000402fba550101025c0101025820000800000001c8fe71d883724fbeb6f4e1494a080045000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
+
+AT_CHECK([ovs-ofctl dump-ports int-br | grep 'port  [[37]]' | sort], [0], [dnl
+  port  3: rx pkts=3, bytes=294, drop=?, errs=?, frame=?, over=?, crc=?
+  port  7: rx pkts=3, bytes=252, drop=?, errs=?, frame=?, over=?, crc=?
 ])
 
 dnl Check decapsulation of Geneve packet with options

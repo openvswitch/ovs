@@ -2135,8 +2135,8 @@
 
           <dt><code>gre</code></dt>
           <dd>
-            An Ethernet over RFC 2890 Generic Routing Encapsulation over IPv4/IPv6
-            tunnel.
+            Generic Routing Encapsulation (GRE) over IPv4/IPv6 tunnel,
+            configurable to encapsulate layer 2 or layer 3 traffic.
           </dd>
 
           <dt><code>vxlan</code></dt>
@@ -2383,6 +2383,26 @@
           </ul>
         </column>
 
+      </group>
+
+      <group title="Tunnel Options: gre only">
+        <p>
+          <code>gre</code> interfaces support these options.
+        </p>
+
+        <column name="options" key="layer3" type='{"type": "boolean"}'>
+          <p>
+            By default, or if set to false, the tunnel carries L2 packets (with
+            an Ethernet header).  If set to true, the tunnel carries L3 packets
+            (without an Ethernet header present).
+          </p>
+
+          <p>
+            A single GRE tunnel cannot carry both L2 and L3 packets, but the
+            same effect can be realized by creating two tunnels with different
+            <code>layer3</code> settings and otherwise the same configuration.
+          </p>
+        </column>
       </group>
 
       <group title="Tunnel Options: gre, geneve, and vxlan">

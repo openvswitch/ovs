@@ -410,7 +410,7 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
     const char *name = netdev_get_name(dev_);
     const char *type = netdev_get_type(dev_);
     struct ds errors = DS_EMPTY_INITIALIZER;
-    bool needs_dst_port, has_csum;
+    bool needs_dst_port, has_csum, optional_layer3;
     uint16_t dst_proto = 0, src_proto = 0;
     struct netdev_tunnel_config tnl_cfg;
     struct smap_node *node;
@@ -418,6 +418,7 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
 
     has_csum = strstr(type, "gre") || strstr(type, "geneve") ||
                strstr(type, "stt") || strstr(type, "vxlan");
+    optional_layer3 = !strcmp(type, "gre");
     memset(&tnl_cfg, 0, sizeof tnl_cfg);
 
     /* Add a default destination port for tunnel ports if none specified. */
@@ -431,6 +432,7 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
 
     if (!strcmp(type, "lisp")) {
         tnl_cfg.dst_port = htons(LISP_DST_PORT);
+        tnl_cfg.is_layer3 = true;
     }
 
     if (!strcmp(type, "stt")) {
@@ -518,6 +520,10 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
         } else if (!strcmp(node->key, "egress_pkt_mark")) {
             tnl_cfg.egress_pkt_mark = strtoul(node->value, NULL, 10);
             tnl_cfg.set_egress_pkt_mark = true;
+        } else if (!strcmp(node->key, "layer3") && optional_layer3) {
+            if (!strcmp(node->value, "true")) {
+                tnl_cfg.is_layer3 = true;
+            }
         } else {
             ds_put_format(&errors, "%s: unknown %s argument '%s'\n",
                           name, type, node->key);
@@ -587,6 +593,7 @@ static int
 get_tunnel_config(const struct netdev *dev, struct smap *args)
 {
     struct netdev_vport *netdev = netdev_vport_cast(dev);
+    const char *type = netdev_get_type(dev);
     struct netdev_tunnel_config tnl_cfg;
 
     ovs_mutex_lock(&netdev->mutex);
@@ -640,7 +647,6 @@ get_tunnel_config(const struct netdev *dev, struct smap *args)
 
     if (tnl_cfg.dst_port) {
         uint16_t dst_port = ntohs(tnl_cfg.dst_port);
-        const char *type = netdev_get_type(dev);
 
         if ((!strcmp("geneve", type) && dst_port != GENEVE_DST_PORT) ||
             (!strcmp("vxlan", type) && dst_port != VXLAN_DST_PORT) ||
@@ -652,6 +658,10 @@ get_tunnel_config(const struct netdev *dev, struct smap *args)
 
     if (tnl_cfg.csum) {
         smap_add(args, "csum", "true");
+    }
+
+    if (tnl_cfg.is_layer3 && !strcmp("gre", type)) {
+        smap_add(args, "layer3", "true");
     }
 
     if (!tnl_cfg.dont_fragment) {

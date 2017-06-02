@@ -154,6 +154,10 @@ netdev_tnl_push_ip_header(struct dp_packet *packet,
     *ip_tot_size = dp_packet_size(packet) - sizeof (struct eth_header);
 
     memcpy(eth, header, size);
+    /* The encapsulated packet has type Ethernet. Adjust dp_packet. */
+    packet->packet_type = htonl(PT_ETH);
+    dp_packet_reset_offsets(packet);
+    packet->l3_ofs = sizeof (struct eth_header);
 
     if (netdev_tnl_is_header_ipv6(header)) {
         ip6 = netdev_tnl_ipv6_hdr(eth);
@@ -345,6 +349,7 @@ parse_gre_header(struct dp_packet *packet,
     ovs_16aligned_be32 *options;
     int hlen;
     unsigned int ulen;
+    uint16_t greh_protocol;
 
     greh = netdev_tnl_ip_extract_tnl_md(packet, tnl, &ulen);
     if (!greh) {
@@ -352,10 +357,6 @@ parse_gre_header(struct dp_packet *packet,
     }
 
     if (greh->flags & ~(htons(GRE_CSUM | GRE_KEY | GRE_SEQ))) {
-        return -EINVAL;
-    }
-
-    if (greh->protocol != htons(ETH_TYPE_TEB)) {
         return -EINVAL;
     }
 
@@ -386,6 +387,17 @@ parse_gre_header(struct dp_packet *packet,
 
     if (greh->flags & htons(GRE_SEQ)) {
         options++;
+    }
+
+    /* Set the new packet type depending on the GRE protocol field. */
+    greh_protocol = ntohs(greh->protocol);
+    if (greh_protocol == ETH_TYPE_TEB) {
+        packet->packet_type = htonl(PT_ETH);
+    } else if (greh_protocol >= ETH_TYPE_MIN) {
+        /* Allow all GRE protocol values above 0x5ff as Ethertypes. */
+        packet->packet_type = PACKET_TYPE_BE(OFPHTN_ETHERTYPE, greh_protocol);
+    } else {
+        return -EINVAL;
     }
 
     return hlen;
@@ -451,7 +463,11 @@ netdev_gre_build_header(const struct netdev *netdev,
 
     greh = netdev_tnl_ip_build_header(data, params, IPPROTO_GRE);
 
-    greh->protocol = htons(ETH_TYPE_TEB);
+    if (tnl_cfg->is_layer3) {
+        greh->protocol = params->flow->dl_type;
+    } else {
+        greh->protocol = htons(ETH_TYPE_TEB);
+    }
     greh->flags = 0;
 
     options = (ovs_16aligned_be32 *) (greh + 1);
@@ -504,6 +520,7 @@ netdev_vxlan_pop_header(struct dp_packet *packet)
     tnl->tun_id = htonll(ntohl(get_16aligned_be32(&vxh->vx_vni)) >> 8);
     tnl->flags |= FLOW_TNL_F_KEY;
 
+    packet->packet_type = htonl(PT_ETH);
     dp_packet_reset_packet(packet, hlen + VXLAN_HLEN);
 
     return packet;
@@ -583,6 +600,7 @@ netdev_geneve_pop_header(struct dp_packet *packet)
     tnl->metadata.present.len = opts_len;
     tnl->flags |= FLOW_TNL_F_UDPIF;
 
+    packet->packet_type = htonl(PT_ETH);
     dp_packet_reset_packet(packet, hlen);
 
     return packet;

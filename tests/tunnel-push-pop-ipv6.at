@@ -12,6 +12,8 @@ AT_CHECK([ovs-vsctl add-port int-br t2 -- set Interface t2 type=vxlan \
                        options:remote_ip=2001:cafe::93 options:out_key=flow options:csum=true ofport_request=4\
                     -- add-port int-br t4 -- set Interface t4 type=geneve \
                        options:remote_ip=flow options:key=123 ofport_request=5\
+                    -- add-port int-br t5 -- set Interface t5 type=gre \
+                       options:remote_ip=2001:cafe::92 options:key=455 options:layer3=true ofport_request=6\
                        ], [0])
 
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
@@ -25,6 +27,7 @@ dummy@ovs-dummy: hit:0 missed:0
 		t2 2/4789: (vxlan: key=123, remote_ip=2001:cafe::92)
 		t3 4/4789: (vxlan: csum=true, out_key=flow, remote_ip=2001:cafe::93)
 		t4 5/6081: (geneve: key=123, remote_ip=flow)
+		t5 6/3: (gre: key=455, layer3=true, remote_ip=2001:cafe::92)
 ])
 
 dnl First setup dummy interface IP address, then add the route
@@ -124,18 +127,21 @@ AT_CHECK([tail -1 stdout], [0],
 
 dnl Check decapsulation of GRE packet
 AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6486dd60000000006a2f402001cafe0000000000000000000000922001cafe00000000000000000000008820006558000001c8fe71d883724fbeb6f4e1494a080045000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6486dd60000000006a2f402001cafe0000000000000000000000922001cafe00000000000000000000008820006558000001c8fe71d883724fbeb6f4e1494a080045000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
 ovs-appctl time/warp 1000
 
 AT_CHECK([ovs-ofctl dump-ports int-br | grep 'port  3'], [0], [dnl
-  port  3: rx pkts=1, bytes=98, drop=?, errs=?, frame=?, over=?, crc=?
+  port  3: rx pkts=2, bytes=196, drop=?, errs=?, frame=?, over=?, crc=?
 ])
 
-dnl Check GRE only accepts encapsulated Ethernet frames
-AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6486dd60000000006a2f402001cafe0000000000000000000000922001cafe00000000000000000000008820000800000001c8fe71d883724fbeb6f4e1494a080045000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
+dnl Check decapsulation of L3GRE packet
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6486dd60000000005a2f402001cafe0000000000000000000000922001cafe00000000000000000000008820000800000001c745000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6486dd60000000005a2f402001cafe0000000000000000000000922001cafe00000000000000000000008820000800000001c745000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
+ovs-appctl time/warp 1000
 ovs-appctl time/warp 1000
 
-AT_CHECK([ovs-ofctl dump-ports int-br | grep 'port  3'], [0], [dnl
-  port  3: rx pkts=1, bytes=98, drop=?, errs=?, frame=?, over=?, crc=?
+AT_CHECK([ovs-ofctl dump-ports int-br | grep 'port  6'], [0], [dnl
+  port  6: rx pkts=2, bytes=168, drop=?, errs=?, frame=?, over=?, crc=?
 ])
 
 dnl Check decapsulation of Geneve packet with options

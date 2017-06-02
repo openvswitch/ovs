@@ -38,6 +38,7 @@
 #include "openvswitch/vlog.h"
 #include "unaligned.h"
 #include "ofproto-dpif.h"
+#include "netdev-vport.h"
 
 VLOG_DEFINE_THIS_MODULE(tunnel);
 
@@ -49,6 +50,7 @@ struct tnl_match {
     bool in_key_flow;
     bool ip_src_flow;
     bool ip_dst_flow;
+    bool is_layer3;
 };
 
 struct tnl_port {
@@ -162,6 +164,7 @@ tnl_port_add__(const struct ofport_dpif *ofport, const struct netdev *netdev,
     tnl_port->match.ip_dst_flow = cfg->ip_dst_flow;
     tnl_port->match.in_key_flow = cfg->in_key_flow;
     tnl_port->match.odp_port = odp_port;
+    tnl_port->match.is_layer3 = netdev_vport_is_layer3(netdev);
 
     map = tnl_match_map(&tnl_port->match);
     existing_port = tnl_find_exact(&tnl_port->match, *map);
@@ -205,7 +208,8 @@ tnl_port_add__(const struct ofport_dpif *ofport, const struct netdev *netdev,
  * Returns 0 if successful, otherwise a positive errno value. */
 int
 tnl_port_add(const struct ofport_dpif *ofport, const struct netdev *netdev,
-             odp_port_t odp_port, bool native_tnl, const char name[]) OVS_EXCLUDED(rwlock)
+             odp_port_t odp_port, bool native_tnl, const char name[])
+    OVS_EXCLUDED(rwlock)
 {
     bool ok;
 
@@ -232,7 +236,8 @@ tnl_port_reconfigure(const struct ofport_dpif *ofport,
     fat_rwlock_wrlock(&rwlock);
     tnl_port = tnl_find_ofport(ofport);
     if (!tnl_port) {
-        changed = tnl_port_add__(ofport, netdev, odp_port, false, native_tnl, name);
+        changed = tnl_port_add__(ofport, netdev, odp_port, false, native_tnl,
+                                 name);
     } else if (tnl_port->netdev != netdev
                || tnl_port->match.odp_port != odp_port
                || tnl_port->change_seq != netdev_get_change_seq(tnl_port->netdev)) {
@@ -383,7 +388,6 @@ tnl_wc_init(struct flow *flow, struct flow_wildcards *wc)
         }
         /* Match on packet_type for tunneled packets.*/
         wc->masks.packet_type = OVS_BE32_MAX;
-
     }
 }
 
@@ -562,6 +566,7 @@ tnl_find(const struct flow *flow) OVS_REQ_RDLOCK(rwlock)
                     match.in_key_flow = in_key_flow;
                     match.ip_dst_flow = ip_dst_flow;
                     match.ip_src_flow = ip_src == IP_SRC_FLOW;
+                    match.is_layer3 = flow->packet_type != htonl(PT_ETH);
 
                     tnl_port = tnl_find_exact(&match, map);
                     if (tnl_port) {
@@ -610,6 +615,9 @@ tnl_match_fmt(const struct tnl_match *match, struct ds *ds)
         ds_put_cstr(ds, ", key=flow");
     } else {
         ds_put_format(ds, ", key=%#"PRIx64, ntohll(match->in_key));
+    }
+    if (match->is_layer3) {
+        ds_put_cstr(ds, ", layer3");
     }
 
     ds_put_format(ds, ", dp port=%"PRIu32, match->odp_port);
