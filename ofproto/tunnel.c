@@ -381,6 +381,9 @@ tnl_wc_init(struct flow *flow, struct flow_wildcards *wc)
             && IP_ECN_is_ce(flow->tunnel.ip_tos)) {
             wc->masks.nw_tos |= IP_ECN_MASK;
         }
+        /* Match on packet_type for tunneled packets.*/
+        wc->masks.packet_type = OVS_BE32_MAX;
+
     }
 }
 

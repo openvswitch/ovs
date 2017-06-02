@@ -1414,8 +1414,8 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
             op->dop.type = DPIF_OP_EXECUTE;
             op->dop.u.execute.packet = CONST_CAST(struct dp_packet *, packet);
             op->dop.u.execute.flow = upcall->flow;
-            odp_key_to_pkt_metadata(upcall->key, upcall->key_len,
-                                    &op->dop.u.execute.packet->md);
+            odp_key_to_dp_packet(upcall->key, upcall->key_len,
+                                 op->dop.u.execute.packet);
             op->dop.u.execute.actions = upcall->odp_actions.data;
             op->dop.u.execute.actions_len = upcall->odp_actions.size;
             op->dop.u.execute.needs_help = (upcall->xout.slow & SLOW_ACTION) != 0;

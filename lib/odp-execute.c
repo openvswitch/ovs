@@ -375,6 +375,7 @@ odp_execute_set_action(struct dp_packet *packet, const struct nlattr *a)
         break;
 
     case OVS_KEY_ATTR_UNSPEC:
+    case OVS_KEY_ATTR_PACKET_TYPE:
     case OVS_KEY_ATTR_ENCAP:
     case OVS_KEY_ATTR_ETHERTYPE:
     case OVS_KEY_ATTR_IN_PORT:
@@ -473,6 +474,7 @@ odp_execute_masked_set_action(struct dp_packet *packet,
         break;
 
     case OVS_KEY_ATTR_TUNNEL:    /* Masked data not supported for tunnel. */
+    case OVS_KEY_ATTR_PACKET_TYPE:
     case OVS_KEY_ATTR_UNSPEC:
     case OVS_KEY_ATTR_CT_STATE:
     case OVS_KEY_ATTR_CT_ZONE:

@@ -97,9 +97,13 @@ netdev_vport_is_patch(const struct netdev *netdev)
 bool
 netdev_vport_is_layer3(const struct netdev *dev)
 {
-    const char *type = netdev_get_type(dev);
+    if (is_vport_class(netdev_get_class(dev))) {
+        struct netdev_vport *vport = netdev_vport_cast(dev);
 
-    return (!strcmp("lisp", type));
+        return vport->tnl_cfg.is_layer3;
+    }
+
+    return false;
 }
 
 static bool

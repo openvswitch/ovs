@@ -1049,6 +1049,7 @@ sflow_read_set_action(const struct nlattr *attr,
     case OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV4:
     case OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6:
     case OVS_KEY_ATTR_UNSPEC:
+    case OVS_KEY_ATTR_PACKET_TYPE:
     case __OVS_KEY_ATTR_MAX:
     default:
         break;

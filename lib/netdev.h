@@ -100,6 +100,7 @@ struct netdev_tunnel_config {
 
     bool csum;
     bool dont_fragment;
+    bool is_layer3;
 };
 
 void netdev_run(void);

@@ -404,6 +404,8 @@ mf_are_prereqs_ok__(const struct mf_field *mf, const struct flow *flow,
     switch (mf->prereqs) {
     case MFP_NONE:
         return true;
+    case MFP_ETHERNET:
+        return is_ethernet(flow, wc);
     case MFP_ARP:
         return (flow->dl_type == htons(ETH_TYPE_ARP) ||
                 flow->dl_type == htons(ETH_TYPE_RARP));

@@ -39,6 +39,7 @@ FORMATTING = {"decimal":            ("MFS_DECIMAL",      1,   8),
               "TCP flags":          ("MFS_TCP_FLAGS",    2,   2)}
 
 PREREQS = {"none": "MFP_NONE",
+           "Ethernet": "MFP_ETHERNET",
            "ARP": "MFP_ARP",
            "VLAN VID": "MFP_VLAN_VID",
            "IPv4": "MFP_IPV4",

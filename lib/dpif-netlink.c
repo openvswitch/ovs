@@ -1636,7 +1636,7 @@ dpif_netlink_encode_execute(int dp_ifindex, const struct dpif_execute *d_exec,
                       dp_packet_size(d_exec->packet));
 
     key_ofs = nl_msg_start_nested(buf, OVS_PACKET_ATTR_KEY);
-    odp_key_from_pkt_metadata(buf, &d_exec->packet->md);
+    odp_key_from_dp_packet(buf, d_exec->packet);
     nl_msg_end_nested(buf, key_ofs);
 
     nl_msg_put_unspec(buf, OVS_PACKET_ATTR_ACTIONS,
@@ -2984,6 +2984,38 @@ dpif_netlink_flow_from_ofpbuf(struct dpif_netlink_flow *flow,
     return 0;
 }
 
+
+/*
+ * If PACKET_TYPE attribute is present in 'data', it filters PACKET_TYPE out,
+ * then puts 'data' to 'buf'.
+ */
+static void
+put_exclude_packet_type(struct ofpbuf *buf, uint16_t type,
+                        const struct nlattr *data, uint16_t data_len)
+{
+    const struct nlattr *packet_type;
+
+    packet_type = nl_attr_find__(data, data_len, OVS_KEY_ATTR_PACKET_TYPE);
+
+    if (packet_type) {
+        /* exclude PACKET_TYPE Netlink attribute. */
+        ovs_assert(NLA_ALIGN(packet_type->nla_len) == NL_A_U32_SIZE);
+        size_t packet_type_len = NL_A_U32_SIZE;
+        size_t first_chunk_size = (uint8_t *)packet_type - (uint8_t *)data;
+        size_t second_chunk_size = data_len - first_chunk_size
+                                   - packet_type_len;
+        uint8_t *first_attr = NULL;
+        struct nlattr *next_attr = nl_attr_next(packet_type);
+
+        first_attr = nl_msg_put_unspec_uninit(buf, type,
+                                              data_len - packet_type_len);
+        memcpy(first_attr, data, first_chunk_size);
+        memcpy(first_attr + first_chunk_size, next_attr, second_chunk_size);
+    } else {
+        nl_msg_put_unspec(buf, type, data, data_len);
+    }
+}
+
 /* Appends to 'buf' (which must initially be empty) a "struct ovs_header"
  * followed by Netlink attributes corresponding to 'flow'. */
 static void
@@ -3010,13 +3042,12 @@ dpif_netlink_flow_to_ofpbuf(const struct dpif_netlink_flow *flow,
     }
     if (!flow->ufid_terse || !flow->ufid_present) {
         if (flow->key_len) {
-            nl_msg_put_unspec(buf, OVS_FLOW_ATTR_KEY,
-                              flow->key, flow->key_len);
+            put_exclude_packet_type(buf, OVS_FLOW_ATTR_KEY, flow->key,
+                                           flow->key_len);
         }
-
         if (flow->mask_len) {
-            nl_msg_put_unspec(buf, OVS_FLOW_ATTR_MASK,
-                              flow->mask, flow->mask_len);
+            put_exclude_packet_type(buf, OVS_FLOW_ATTR_MASK, flow->mask,
+                                           flow->mask_len);
         }
         if (flow->actions || flow->actions_len) {
             nl_msg_put_unspec(buf, OVS_FLOW_ATTR_ACTIONS,

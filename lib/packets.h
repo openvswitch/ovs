@@ -132,7 +132,6 @@ pkt_metadata_init(struct pkt_metadata *md, odp_port_t port)
     memset(md, 0, offsetof(struct pkt_metadata, in_port));
     md->tunnel.ip_dst = 0;
     md->tunnel.ipv6_dst = in6addr_any;
-
     md->in_port.odp_port = port;
 }
 

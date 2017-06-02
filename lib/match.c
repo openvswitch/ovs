@@ -477,6 +477,13 @@ match_set_ct_ipv6_dst_masked(struct match *match, const struct in6_addr *dst,
 }
 
 void
+match_set_packet_type(struct match *match, ovs_be32 packet_type)
+{
+    match->flow.packet_type = packet_type;
+    match->wc.masks.packet_type = OVS_BE32_MAX;
+}
+
+void
 match_set_dl_type(struct match *match, ovs_be16 dl_type)
 {
     match->wc.masks.dl_type = OVS_BE16_MAX;
@@ -1249,6 +1256,22 @@ match_format(const struct match *match,
         format_be16_masked(s, "ct_tp_dst", f->ct_tp_dst, wc->masks.ct_tp_dst);
     }
 
+    if (wc->masks.packet_type) {
+        if (pt_ns_type_be(wc->masks.packet_type) == 0) {
+            ds_put_format(s, "packet_type=(%u,*),",
+                          pt_ns(f->packet_type));
+        } else if (pt_ns_type_be(wc->masks.packet_type) == OVS_BE16_MAX) {
+            ds_put_format(s, "packet_type=(%u,%#"PRIx16"),",
+                          pt_ns(f->packet_type),
+                          pt_ns_type(f->packet_type));
+        } else {
+            ds_put_format(s, "packet_type=(%u,%#"PRIx16"/%#"PRIx16"),",
+                          pt_ns(f->packet_type),
+                          pt_ns_type(f->packet_type),
+                          pt_ns_type(wc->masks.packet_type));
+        }
+    }
+
     if (wc->masks.dl_type) {
         skip_type = true;
         if (f->dl_type == htons(ETH_TYPE_IP)) {
@@ -1361,8 +1384,10 @@ match_format(const struct match *match,
                           ntohs(wc->masks.vlans[i].tci));
         }
     }
+
     format_eth_masked(s, "dl_src", f->dl_src, wc->masks.dl_src);
     format_eth_masked(s, "dl_dst", f->dl_dst, wc->masks.dl_dst);
+
     if (!skip_type && wc->masks.dl_type) {
         ds_put_format(s, "%sdl_type=%s0x%04"PRIx16",",
                       colors.param, colors.end, ntohs(f->dl_type));

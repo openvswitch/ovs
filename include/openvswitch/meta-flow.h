@@ -986,7 +986,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Type: MAC.
      * Maskable: bitwise.
      * Formatting: Ethernet.
-     * Prerequisites: none.
+     * Prerequisites: Ethernet.
      * Access: read/write.
      * NXM: NXM_OF_ETH_SRC(2) since v1.1.
      * OXM: OXM_OF_ETH_SRC(4) since OF1.2 and v1.7.
@@ -1002,7 +1002,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Type: MAC.
      * Maskable: bitwise.
      * Formatting: Ethernet.
-     * Prerequisites: none.
+     * Prerequisites: Ethernet.
      * Access: read/write.
      * NXM: NXM_OF_ETH_DST(1) since v1.1.
      * OXM: OXM_OF_ETH_DST(3) since OF1.2 and v1.7.
@@ -1021,7 +1021,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Type: be16.
      * Maskable: no.
      * Formatting: hexadecimal.
-     * Prerequisites: none.
+     * Prerequisites: Ethernet.
      * Access: read-only.
      * NXM: NXM_OF_ETH_TYPE(3) since v1.1.
      * OXM: OXM_OF_ETH_TYPE(5) since OF1.2 and v1.7.
@@ -1051,7 +1051,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Type: be16.
      * Maskable: bitwise.
      * Formatting: hexadecimal.
-     * Prerequisites: none.
+     * Prerequisites: Ethernet.
      * Access: read/write.
      * NXM: NXM_OF_VLAN_TCI(4) since v1.1.
      * OXM: none.
@@ -1067,7 +1067,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Type: be16 (low 12 bits).
      * Maskable: no.
      * Formatting: decimal.
-     * Prerequisites: none.
+     * Prerequisites: Ethernet.
      * Access: read/write.
      * NXM: none.
      * OXM: none.
@@ -1085,7 +1085,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Type: be16 (low 12 bits).
      * Maskable: bitwise.
      * Formatting: decimal.
-     * Prerequisites: none.
+     * Prerequisites: Ethernet.
      * Access: read/write.
      * NXM: none.
      * OXM: OXM_OF_VLAN_VID(6) since OF1.2 and v1.7.
@@ -1101,7 +1101,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Type: u8 (low 3 bits).
      * Maskable: no.
      * Formatting: decimal.
-     * Prerequisites: none.
+     * Prerequisites: Ethernet.
      * Access: read/write.
      * NXM: none.
      * OXM: none.
@@ -1809,6 +1809,7 @@ enum OVS_PACKED_ENUM mf_prereqs {
     MFP_NONE,
 
     /* L2 requirements. */
+    MFP_ETHERNET,
     MFP_ARP,
     MFP_VLAN_VID,
     MFP_IPV4,

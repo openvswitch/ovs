@@ -1765,7 +1765,7 @@ log_execute_message(struct dpif *dpif, const struct dpif_execute *execute,
         packet = ofp_packet_to_string(dp_packet_data(execute->packet),
                                       dp_packet_size(execute->packet),
                                       execute->packet->packet_type);
-        odp_key_from_pkt_metadata(&md, &execute->packet->md);
+        odp_key_from_dp_packet(&md, execute->packet);
         ds_put_format(&ds, "%s: %sexecute ",
                       dpif_name(dpif),
                       (subexecute ? "sub-"
