@@ -615,12 +615,15 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
     }
     miniflow_push_uint32(mf, dp_hash, md->dp_hash);
     miniflow_push_uint32(mf, in_port, odp_to_u32(md->in_port.odp_port));
-    if (md->recirc_id || md->ct_state) {
+    if (md->ct_state) {
         miniflow_push_uint32(mf, recirc_id, md->recirc_id);
         miniflow_push_uint8(mf, ct_state, md->ct_state);
         ct_nw_proto_p = miniflow_pointer(mf, ct_nw_proto);
         miniflow_push_uint8(mf, ct_nw_proto, 0);
         miniflow_push_uint16(mf, ct_zone, md->ct_zone);
+    } else if (md->recirc_id) {
+        miniflow_push_uint32(mf, recirc_id, md->recirc_id);
+        miniflow_pad_to_64(mf, recirc_id);
     }
 
     if (md->ct_state) {
