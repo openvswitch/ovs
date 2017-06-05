@@ -11,6 +11,11 @@ fi
 
 if test x"$PYTHON3" = x; then
     PYTHON3='@PYTHON3@'
+
+    # PYTHONCOERCECLOCALE=0 disables the Unicode compatibility warning on
+    # stderr that breaks almost any Python3 test (PEP 0538)
+    PYTHONCOERCECLOCALE=0
+    export PYTHONCOERCECLOCALE
 fi
 
 PYTHONPATH=$abs_top_srcdir/python:$abs_top_builddir/tests:$PYTHONPATH
