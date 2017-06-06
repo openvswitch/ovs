@@ -1814,12 +1814,13 @@ ovn_port_update_sbrec(const struct ovn_port *op,
                                    op->nbsp->n_addresses);
 
         struct smap ids = SMAP_INITIALIZER(&ids);
-        const char *name = smap_get(&op->nbsp->external_ids,
-                                    "neutron:port_name");
+        smap_clone(&ids, &op->nbsp->external_ids);
+        const char *name = smap_get(&ids, "neutron:port_name");
         if (name && name[0]) {
             smap_add(&ids, "name", name);
         }
         sbrec_port_binding_set_external_ids(op->sb, &ids);
+        smap_destroy(&ids);
     }
 }
 

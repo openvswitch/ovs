@@ -848,7 +848,16 @@
 
     <group title="Common Columns">
       <column name="external_ids">
-        See <em>External IDs</em> at the beginning of this document.
+        <p>
+          See <em>External IDs</em> at the beginning of this document.
+        </p>
+
+        <p>
+          The <code>ovn-northd</code> program copies all these pairs into the
+          <ref column="external_ids"/> column of the
+          <ref table="Port_Binding"/> table in <ref db="OVN_Southbound"/>
+          database.
+        </p>
       </column>
     </group>
   </table>

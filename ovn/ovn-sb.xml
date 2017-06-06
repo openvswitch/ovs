@@ -2179,7 +2179,16 @@ tcp.flags = RST;
 
     <group title="Common Columns">
       <column name="external_ids">
-        See <em>External IDs</em> at the beginning of this document.
+        <p>
+          See <em>External IDs</em> at the beginning of this document.
+        </p>
+
+        <p>
+          The <code>ovn-northd</code> program populates this column with
+          all entries into the <ref column="external_ids"/> column of the
+          <ref table="Logical_Switch_Port"/> table of the
+          <ref db="OVN_Northbound"/> database.
+        </p>
       </column>
     </group>
   </table>
