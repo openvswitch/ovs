@@ -1865,6 +1865,14 @@ ipfix_update_stats(struct dpif_ipfix_exporter *exporter,
     }
 }
 
+/* Returns the current time in the form used by IPFIX (microseconds since the
+ * epoch). */
+static uint64_t
+ipfix_now(void)
+{
+    return time_wall_msec() * 1000ULL;
+}
+
 /* Add an entry into a flow cache.  The entry is either aggregated into
  * an existing entry with the same flow key and free()d, or it is
  * inserted into the cache. And IPFIX stats will be updated */
@@ -2103,7 +2111,6 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
     }
 
     {
-        struct timeval now;
         uint64_t layer2_octet_delta_count;
 
         /* Calculate the total matched octet count by considering as
@@ -2111,8 +2118,7 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
          * length. */
         layer2_octet_delta_count = packet_delta_count * ethernet_total_length;
 
-        xgettimeofday(&now);
-        entry->flow_end_timestamp_usec = now.tv_usec + 1000000LL * now.tv_sec;
+        entry->flow_end_timestamp_usec = ipfix_now();
         entry->flow_start_timestamp_usec = entry->flow_end_timestamp_usec;
 
         if (ipfix_actions && ipfix_actions->output_action) {
@@ -2662,19 +2668,12 @@ dpif_ipfix_cache_expire(struct dpif_ipfix_exporter *exporter,
 static void
 get_export_time_now(uint64_t *export_time_usec, uint32_t *export_time_sec)
 {
-    struct timeval export_time;
-    xgettimeofday(&export_time);
-
-    *export_time_usec = export_time.tv_usec + 1000000LL * export_time.tv_sec;
+    *export_time_usec = ipfix_now();
 
     /* The IPFIX start and end deltas are negative deltas relative to
      * the export time, so set the export time 1 second off to
      * calculate those deltas. */
-    if (export_time.tv_usec == 0) {
-        *export_time_sec = export_time.tv_sec;
-    } else {
-        *export_time_sec = export_time.tv_sec + 1;
-    }
+    *export_time_sec = DIV_ROUND_UP(*export_time_usec, 1000000);
 }
 
 static void
