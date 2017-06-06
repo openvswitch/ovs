@@ -99,6 +99,11 @@ skip_signoff_check = False
 line_length_blacklist = ['.am', '.at', 'etc', '.in', '.m4', '.mk', '.patch',
                          '.py']
 
+# Don't enforce a requirement that leading whitespace be all spaces on
+# files that include these characters in their name, since these kinds
+# of files need lines with leading tabs.
+leading_whitespace_blacklist = ['.mk', '.am', '.at']
+
 
 def is_subtracted_line(line):
     """Returns TRUE if the line in question has been removed."""
@@ -200,8 +205,9 @@ checks = [
      'check': lambda x: line_length_check(x),
      'print': lambda: print_warning("Line length is >79-characters long")},
 
-    {'regex': '$(?<!\.mk|\.am)',
-     'match_name': None,
+    {'regex': None,
+     'match_name':
+     lambda x: not any([fmt in x for fmt in leading_whitespace_blacklist]),
      'check': lambda x: not leading_whitespace_is_spaces(x),
      'print': lambda: print_warning("Line has non-spaces leading whitespace")},
 
