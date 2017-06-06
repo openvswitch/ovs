@@ -260,8 +260,8 @@
       </column>
     </group>
 
-     <group title="Gateway Configuration">
-       <p>
+    <group title="Gateway Configuration">
+      <p>
         A <dfn>gateway</dfn> is a chassis that forwards traffic between the
         OVN-managed part of a logical network and a physical VLAN, extending a
         tunnel-based logical network into a physical network.  Gateways are
@@ -279,7 +279,7 @@
         <ref column="vtep_logical_switches" table="Chassis"/>, will be
         associated with this <ref table="Chassis"/>.
       </column>
-     </group>
+    </group>
   </table>
 
   <table name="Encap" title="Encapsulation Types">
@@ -304,7 +304,7 @@
       <p>
         Options for configuring the encapsulation. Currently, the only
         option that has been defined is <code>csum</code>.
-       </p>
+      </p>
 
       <p>
         <code>csum</code> indicates that encapsulation checksums can be
@@ -2574,8 +2574,8 @@ tcp.flags = RST;
               e.g. <code>pssl:6640:[::1]</code>.  If <var>ip</var> is not
               specified then it listens only on IPv4 (but not IPv6) addresses.
               A valid SSL configuration must be provided when this form is used,
-             this can be specified either via command-line options or the
-             <ref table="SSL"/> table.
+              this can be specified either via command-line options or the
+              <ref table="SSL"/> table.
             </p>
             <p>
               If <var>port</var> is not specified, it defaults to 6640.
@@ -2653,7 +2653,7 @@ tcp.flags = RST;
         connection targets. They are omitted.
       </p>
 
-    <column name="is_connected">
+      <column name="is_connected">
         <code>true</code> if currently connected to this client,
         <code>false</code> otherwise.
       </column>
