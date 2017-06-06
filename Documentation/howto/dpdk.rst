@@ -361,7 +361,7 @@ Virtual DPDK devices which do not have PCI addresses can be added using a
 different format for 'dpdk-devargs'.
 
 Typically, the format expected is 'eth_<driver_name><x>' where 'x' is a
-number between 0 and RTE_MAX_ETHPORTS -1 (31).
+unique identifier of your choice for the given port.
 
 For example to add a dpdk port that uses the 'null' DPDK PMD driver::
 

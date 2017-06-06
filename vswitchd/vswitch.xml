@@ -2485,10 +2485,11 @@
           Specifies the PCI address associated with the port for physical
           devices, or the virtual driver to be used for the port when a virtual
           PMD is intended to be used. For the latter, the argument string
-          typically takes the form of eth_&lt;driver_name&gt;&lt;x&gt; where
-          'driver_name' is a valid virtual DPDK PMD driver name and where 'x'
-          lies in the range of 0 to RTE_MAX_ETHPORTS-1.
-          Only supported by the dpdk port type.
+          typically takes the form of
+          <code>eth_<var>driver_name</var><var>x</var></code>, where
+          <var>driver_name</var> is a valid virtual DPDK PMD driver name and
+          <var>x</var> is a unique identifier of your choice for the given
+          port.  Only supported by the dpdk port type.
         </p>
       </column>
 
