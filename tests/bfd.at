@@ -1,10 +1,9 @@
 AT_BANNER([bfd])
 
 m4_define([BFD_CHECK], [
-AT_CHECK([ovs-appctl bfd/show $1 | sed -e '/Time:/d' | sed -e '/Discriminator/d' | sed -e '/Interval:/d'],[0],
+AT_CHECK([ovs-appctl bfd/show $1 | sed -e '/Time:/d' | sed -e '/Discriminator/d' | sed -e '/Interval:/d'| sed -e '/Multiplier/d'],[0],
 [dnl
 	Forwarding: $2
-	Detect Multiplier: 3
 	Concatenated Path Down: $3
 
 	Local Flags: $4
@@ -39,6 +38,14 @@ m4_define([BFD_VSCTL_LIST_IFACE], [
 AT_CHECK([ovs-vsctl list interface $1 | sed -n $2],[0],
 [dnl
 $3
+])
+])
+
+m4_define([BFD_CHECK_MULT], [
+AT_CHECK([ovs-appctl bfd/show $1 | sed -n '/Detect Multiplier/p'],[0],
+[dnl
+	Detect Multiplier: $2
+	Remote Detect Multiplier: $3
 ])
 ])
 
@@ -1040,6 +1047,56 @@ ovs-appctl time/warp 5000 100
 BFD_VSCTL_LIST_IFACE([p0], ["s/^.*flap_count=\(.*\), forwarding.*$/\1/p"], ["3"])
 BFD_VSCTL_LIST_IFACE([p1], ["s/^.*flap_count=\(.*\), forwarding.*$/\1/p"], ["1"])
 check_liveness 3 LIVE
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([bfd - Edit the Detect Mult values])
+#Create 2 bridges connected by patch ports and enable BFD
+OVS_VSWITCHD_START()
+ovs-appctl time/stop
+AT_CHECK([ ovs-vsctl -- add-br br1 -- \
+           set bridge br1 datapath-type=dummy ])
+AT_CHECK([ ovs-vsctl -- add-port br1 p1 -- set Interface p1 type=patch\
+           options:peer=p0 ])
+AT_CHECK([ ovs-vsctl -- add-port br0 p0 -- set Interface p0 type=patch\
+           options:peer=p1 ])
+AT_CHECK([ ovs-vsctl -- set interface p0 bfd:enable=true ])
+AT_CHECK([ ovs-vsctl -- set interface p1 bfd:enable=true ])
+ovs-appctl time/warp 3100 100
+#Verify that BFD has been enabled on both interfaces.
+BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+#Verify that default mult values are 3.
+BFD_CHECK_MULT([p0], [3], [3])
+BFD_CHECK_MULT([p1], [3], [3])
+#Set the mult values to valid range border mult(p0)=1 mult(p1)=255.
+AT_CHECK([ovs-vsctl set interface p0 bfd:mult=1])
+AT_CHECK([ovs-vsctl set interface p1 bfd:mult=255])
+ovs-appctl time/warp 3100 100
+BFD_CHECK_MULT([p0], [1], [255])
+BFD_CHECK_MULT([p1], [255], [1])
+
+#Set the mult values out valid range border mult(p0)=0 mult(p1)=256.
+AT_CHECK([ovs-vsctl set interface p0 bfd:mult=0])
+AT_CHECK([ovs-vsctl set interface p1 bfd:mult=256])
+ovs-appctl time/warp 3100 100
+BFD_CHECK_MULT([p0], [3], [3])
+BFD_CHECK_MULT([p1], [3], [3])
+
+#Set valid non default mult values mult(p0)=8 mult(p1)=125.
+AT_CHECK([ovs-vsctl set interface p0 bfd:mult=8])
+AT_CHECK([ovs-vsctl set interface p1 bfd:mult=125])
+ovs-appctl time/warp 3100 100
+BFD_CHECK_MULT([p0], [8], [125])
+BFD_CHECK_MULT([p1], [125], [8])
+
+#Clear mult values. Detect mult values shall be default 3 again.
+AT_CHECK([ovs-vsctl remove interface p0 bfd mult])
+AT_CHECK([ovs-vsctl remove interface p1 bfd mult])
+ovs-appctl time/warp 3100 100
+BFD_CHECK_MULT([p0], [3], [3])
+BFD_CHECK_MULT([p1], [3], [3])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP

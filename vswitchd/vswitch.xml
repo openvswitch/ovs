@@ -2838,12 +2838,12 @@
         BFD operates by regularly transmitting BFD control messages at a rate
         negotiated independently in each direction.  Each endpoint specifies
         the rate at which it expects to receive control messages, and the rate
-        at which it is willing to transmit them.  Open vSwitch uses a detection
-        multiplier of three, meaning that an endpoint signals a connectivity
-        fault if three consecutive BFD control messages fail to arrive.  In the
-        case of a unidirectional connectivity issue, the system not receiving
-        BFD control messages signals the problem to its peer in the messages it
-        transmits.
+        at which it is willing to transmit them.  By default, Open vSwitch uses
+        a detection multiplier of three, meaning that an endpoint signals a
+        connectivity fault if three consecutive BFD control messages fail to
+        arrive.  In the case of a unidirectional connectivity issue, the system
+        not receiving BFD control messages signals the problem to its peer in
+        the messages it transmits.
       </p>
 
       <p>
@@ -2953,6 +2953,13 @@
           to indicate that the encapsulated packet is an OAM frame. By setting
           this to true, BFD packets will be marked as OAM if encapsulated in
           one of these tunnels.
+        </column>
+
+        <column name="bfd" key="mult"
+                type='{"type": "integer", "minInteger": 1, "maxInteger": 255}'>
+          The BFD detection multiplier, which defaults to 3.  An endpoint
+          signals a connectivity fault if the given number of consecutive BFD
+          control messages fail to arrive.
         </column>
       </group>
 

@@ -57,6 +57,7 @@ Post-v2.7.0
      * New vxlan tunnel extension "gpe" to support VXLAN-GPE tunnels.
      * Transparently pop and push Ethernet headers at transmit/reception
        of packets to/from L3 tunnels.
+   - The BFD detection multiplier is now user-configurable.
 
 v2.7.0 - 21 Feb 2017
 ---------------------
