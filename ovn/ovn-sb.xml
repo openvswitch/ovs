@@ -21,60 +21,61 @@
     different properties, as described in the sections below.
   </p>
 
-  <h3>Physical Network (PN) data</h3>
+  <h3>Physical network</h3>
 
   <p>
-    PN tables contain information about the chassis nodes in the system.  This
-    contains all the information necessary to wire the overlay, such as IP
-    addresses, supported tunnel types, and security keys.
+    Physical network tables contain information about the chassis nodes in the
+    system.  This contains all the information necessary to wire the overlay,
+    such as IP addresses, supported tunnel types, and security keys.
   </p>
 
   <p>
-    The amount of PN data is small (O(n) in the number of chassis) and it
-    changes infrequently, so it can be replicated to every chassis.
+    The amount of physical network data is small (O(n) in the number of
+    chassis) and it changes infrequently, so it can be replicated to every
+    chassis.
   </p>
 
   <p>
-    The <ref table="Chassis"/> table comprises the PN tables.
+    The <ref table="Chassis"/> and <ref table="Encap"/> tables are the physical
+    network tables.
   </p>
 
-  <h3>Logical Network (LN) data</h3>
+  <h3>Logical Network</h3>
 
   <p>
-    LN tables contain the topology of logical switches and routers, ACLs,
-    firewall rules, and everything needed to describe how packets traverse a
-    logical network, represented as logical datapath flows (see Logical
-    Datapath Flows, below).
-  </p>
-
-  <p>
-    LN data may be large (O(n) in the number of logical ports, ACL rules,
-    etc.).  Thus, to improve scaling, each chassis should receive only data
-    related to logical networks in which that chassis participates.  Past
-    experience shows that in the presence of large logical networks, even
-    finer-grained partitioning of data, e.g. designing logical flows so that
-    only the chassis hosting a logical port needs related flows, pays off
-    scale-wise.  (This is not necessary initially but it is worth bearing in
-    mind in the design.)
+    Logical network tables contain the topology of logical switches and
+    routers, ACLs, firewall rules, and everything needed to describe how
+    packets traverse a logical network, represented as logical datapath flows
+    (see Logical Datapath Flows, below).
   </p>
 
   <p>
-    The LN is a slave of the cloud management system running northbound of OVN.
-    That CMS determines the entire OVN logical configuration and therefore the
-    LN's content at any given time is a deterministic function of the CMS's
-    configuration, although that happens indirectly via the
-    <ref db="OVN_Northbound"/> database and <code>ovn-northd</code>.
+    Logical network data may be large (O(n) in the number of logical ports, ACL
+    rules, etc.).  Thus, to improve scaling, each chassis should receive only
+    data related to logical networks in which that chassis participates.
   </p>
 
   <p>
-    LN data is likely to change more quickly than PN data.  This is especially
-    true in a container environment where VMs are created and destroyed (and
-    therefore added to and deleted from logical switches) quickly.
+    The logical network data is ultimately controlled by the cloud management
+    system (CMS) running northbound of OVN.  That CMS determines the entire OVN
+    logical configuration and therefore the logical network data at any given
+    time is a deterministic function of the CMS's configuration, although that
+    happens indirectly via the <ref db="OVN_Northbound"/> database and
+    <code>ovn-northd</code>.
   </p>
 
   <p>
-    <ref table="Logical_Flow"/> and <ref table="Multicast_Group"/> contain LN
-    data.
+    Logical network data is likely to change more quickly than physical network
+    data.  This is especially true in a container environment where containers
+    are created and destroyed (and therefore added to and deleted from logical
+    switches) quickly.
+  </p>
+
+  <p>
+    The <ref table="Logical_Flow"/>, <ref table="Multicast_Group"/>, <ref
+    table="Address_Group"/>, <ref table="DHCP_Options"/>, <ref
+    table="DHCPv6_Options"/>, and <ref table="DNS"/> tables contain logical
+    network data.
   </p>
 
   <h3>Logical-physical bindings</h3>
@@ -178,7 +179,7 @@
   <table name="Chassis" title="Physical Network Hypervisor and Gateway Information">
     <p>
       Each row in this table represents a hypervisor or gateway (a chassis) in
-      the physical network (PN).  Each chassis, via
+      the physical network.  Each chassis, via
       <code>ovn-controller</code>/<code>ovn-controller-vtep</code>, adds
       and updates its own row, and keeps a copy of the remaining rows to
       determine how to reach other hypervisors.
@@ -1655,11 +1656,18 @@ tcp.flags = RST;
 
   <table name="Datapath_Binding" title="Physical-Logical Datapath Bindings">
     <p>
-      Each row in this table identifies physical bindings of a logical
-      datapath.  A logical datapath implements a logical pipeline among the
-      ports in the <ref table="Port_Binding"/> table associated with it.  In
-      practice, the pipeline in a given logical datapath implements either a
-      logical switch or a logical router.
+      Each row in this table represents a logical datapath, which implements a
+      logical pipeline among the ports in the <ref table="Port_Binding"/> table
+      associated with it.  In practice, the pipeline in a given logical
+      datapath implements either a logical switch or a logical router.
+    </p>
+
+    <p>
+      The main purpose of a row in this table is provide a physical binding for
+      a logical datapath.  A logical datapath does not have a physical
+      location, so its physical binding information is limited: just <ref
+      column="tunnel_key"/>.  The rest of the data in this table does not
+      affect packet forwarding.
     </p>
 
     <column name="tunnel_key">
@@ -1725,9 +1733,12 @@ tcp.flags = RST;
 
   <table name="Port_Binding" title="Physical-Logical Port Bindings">
     <p>
-      Most rows in this table identify the physical location of a logical port.
-      (The exceptions are logical patch ports, which do not have any physical
-      location.)
+      Each row in this table binds a logical port to a realization.  For most
+      logical ports, this means binding to some physical location, for example
+      by binding a logical port to a VIF that belongs to a VM running on a
+      particular hypervisor.  Other logical ports, such as logical patch ports,
+      can be realized without a specific physical location, but their bindings
+      are still expressed through rows in this table.
     </p>
 
     <p>
