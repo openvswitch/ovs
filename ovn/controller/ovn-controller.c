@@ -643,7 +643,7 @@ main(int argc, char *argv[])
             struct shash addr_sets = SHASH_INITIALIZER(&addr_sets);
             addr_sets_init(&ctx, &addr_sets);
 
-            patch_run(&ctx, br_int, chassis, &local_datapaths);
+            patch_run(&ctx, br_int, chassis);
 
             enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int,
                                                          &pending_ct_zones);

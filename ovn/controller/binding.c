@@ -442,6 +442,30 @@ consider_local_datapath(struct controller_ctx *ctx,
     }
 }
 
+static void
+consider_localnet_port(const struct sbrec_port_binding *binding_rec,
+                       struct hmap *local_datapaths)
+{
+    struct local_datapath *ld
+        = get_local_datapath(local_datapaths,
+                             binding_rec->datapath->tunnel_key);
+    if (!ld) {
+        return;
+    }
+
+    if (ld->localnet_port && strcmp(ld->localnet_port->logical_port,
+                                    binding_rec->logical_port)) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+        VLOG_WARN_RL(&rl, "localnet port '%s' already set for datapath "
+                     "'%"PRId64"', skipping the new port '%s'.",
+                     ld->localnet_port->logical_port,
+                     binding_rec->datapath->tunnel_key,
+                     binding_rec->logical_port);
+        return;
+    }
+    ld->localnet_port = binding_rec;
+}
+
 void
 binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
             const struct sbrec_chassis *chassis_rec,
@@ -474,6 +498,15 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
                                 &qos_map, local_datapaths, &lport_to_iface,
                                 local_lports);
 
+    }
+
+    /* Run through each binding record to see if it is a localnet port
+     * on local datapaths discovered from above loop, and update the
+     * corresponding local datapath accordingly. */
+    SBREC_PORT_BINDING_FOR_EACH (binding_rec, ctx->ovnsb_idl) {
+        if (!strcmp(binding_rec->type, "localnet")) {
+            consider_localnet_port(binding_rec, local_datapaths);
+        }
     }
 
     if (!sset_is_empty(&egress_ifaces)

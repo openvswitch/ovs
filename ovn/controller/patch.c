@@ -136,7 +136,6 @@ static void
 add_bridge_mappings(struct controller_ctx *ctx,
                     const struct ovsrec_bridge *br_int,
                     struct shash *existing_ports,
-                    struct hmap *local_datapaths,
                     const struct sbrec_chassis *chassis)
 {
     /* Get ovn-bridge-mappings. */
@@ -180,30 +179,6 @@ add_bridge_mappings(struct controller_ctx *ctx,
     SBREC_PORT_BINDING_FOR_EACH (binding, ctx->ovnsb_idl) {
         const char *patch_port_id;
         if (!strcmp(binding->type, "localnet")) {
-            struct local_datapath *ld
-                = get_local_datapath(local_datapaths,
-                                     binding->datapath->tunnel_key);
-            if (!ld) {
-                continue;
-            }
-
-            /* Under incremental processing, it is possible to re-enter the
-             * following block with a logical port that has already been
-             * recorded in binding->logical_port.  Rather than emit spurious
-             * warnings, add a check to see if the logical port name has
-             * actually changed. */
-
-            if (ld->localnet_port && strcmp(ld->localnet_port->logical_port,
-                                            binding->logical_port)) {
-                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-                VLOG_WARN_RL(&rl, "localnet port '%s' already set for datapath "
-                             "'%"PRId64"', skipping the new port '%s'.",
-                             ld->localnet_port->logical_port,
-                             binding->datapath->tunnel_key,
-                             binding->logical_port);
-                continue;
-            }
-            ld->localnet_port = binding;
             patch_port_id = "ovn-localnet-port";
         } else if (!strcmp(binding->type, "l2gateway")) {
             if (!binding->chassis
@@ -249,7 +224,7 @@ add_bridge_mappings(struct controller_ctx *ctx,
 
 void
 patch_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
-          const struct sbrec_chassis *chassis, struct hmap *local_datapaths)
+          const struct sbrec_chassis *chassis)
 {
     if (!ctx->ovs_idl_txn) {
         return;
@@ -275,8 +250,7 @@ patch_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
     /* Create in the database any patch ports that should exist.  Remove from
      * 'existing_ports' any patch ports that do exist in the database and
      * should be there. */
-    add_bridge_mappings(ctx, br_int, &existing_ports, local_datapaths,
-                        chassis);
+    add_bridge_mappings(ctx, br_int, &existing_ports, chassis);
 
     /* Now 'existing_ports' only still contains patch ports that exist in the
      * database but shouldn't.  Delete them from the database. */
