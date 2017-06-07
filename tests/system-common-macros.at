@@ -56,7 +56,8 @@ m4_define([ADD_INT],
     ]
 )
 
-# ADD_VETH([port], [namespace], [ovs-br], [ip_addr] [mac_addr [gateway]])
+# ADD_VETH([port], [namespace], [ovs-br], [ip_addr] [mac_addr], [gateway],
+#          [ip_addr_flags])
 #
 # Add a pair of veth ports. 'port' will be added to name space 'namespace',
 # and "ovs-'port'" will be added to ovs bridge 'ovs-br'.
@@ -76,7 +77,7 @@ m4_define([ADD_VETH],
       AT_CHECK([ip link set dev ovs-$1 up])
       AT_CHECK([ovs-vsctl add-port $3 ovs-$1 -- \
                 set interface ovs-$1 external-ids:iface-id="$1"])
-      NS_CHECK_EXEC([$2], [ip addr add $4 dev $1])
+      NS_CHECK_EXEC([$2], [ip addr add $4 dev $1 $7])
       NS_CHECK_EXEC([$2], [ip link set dev $1 up])
       if test -n "$5"; then
         NS_CHECK_EXEC([$2], [ip link set dev $1 address $5])
