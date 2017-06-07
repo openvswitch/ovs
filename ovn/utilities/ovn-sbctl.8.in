@@ -246,7 +246,7 @@ Prints the SSL configuration.
 .IP "\fBdel\-ssl\fR"
 Deletes the current SSL configuration.
 .
-.IP "[\fB\-\-bootstrap\fR] \fBset\-ssl\fR \fIprivate-key\fR \fIcertificate\fR \fIca-cert\fR"
+.IP "[\fB\-\-bootstrap\fR] \fBset\-ssl\fR \fIprivate-key\fR \fIcertificate\fR \fIca-cert\fR [\fIssl-protocol-list\fR [\fIssl-cipher-list\fR]]"
 Sets the SSL configuration.  The \fB\-\-bootstrap\fR option is described
 below.
 .

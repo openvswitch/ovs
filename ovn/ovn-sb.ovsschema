@@ -1,7 +1,7 @@
 {
     "name": "OVN_Southbound",
     "version": "1.12.1",
-    "cksum": "1914140659 10905",
+    "cksum": "761192506 11009",
     "tables": {
         "SB_Global": {
             "columns": {
@@ -201,6 +201,8 @@
                 "certificate": {"type": "string"},
                 "ca_cert": {"type": "string"},
                 "bootstrap_ca_cert": {"type": "boolean"},
+                "ssl_protocols": {"type": "string"},
+                "ssl_ciphers": {"type": "string"},
                 "external_ids": {"type": {"key": "string",
                                           "value": "string",
                                           "min": 0,

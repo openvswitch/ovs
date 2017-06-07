@@ -2779,6 +2779,17 @@ tcp.flags = RST;
       CA certificate.</em>  It may still be useful for bootstrapping.
     </column>
 
+    <column name="ssl_protocols">
+      List of SSL protocols to be enabled for SSL connections. The default
+      when this option is omitted is <code>TLSv1,TLSv1.1,TLSv1.2</code>.
+    </column>
+
+    <column name="ssl_ciphers">
+      List of ciphers (in OpenSSL cipher string format) to be supported
+      for SSL connections. The default when this option is omitted is
+      <code>HIGH:!aNULL:!MD5</code>.
+    </column>
+
     <group title="Common Columns">
       The overall purpose of these columns is described under <code>Common
       Columns</code> at the beginning of this document.

@@ -350,6 +350,8 @@ if $ovn; then
         --private-key=db:OVN_Northbound,SSL,private_key \
         --certificate=db:OVN_Northbound,SSL,certificate \
         --ca-cert=db:OVN_Northbound,SSL,ca_cert \
+        --ssl-protocols=db:OVN_Northbound,SSL,ssl_protocols \
+        --ssl-ciphers=db:OVN_Northbound,SSL,ssl_ciphers \
         --remote=punix:"$sandbox"/ovnnb_db.sock $ovsdb_nb_server_args
     rungdb $gdb_ovsdb $gdb_ovsdb_ex ovsdb-server --detach --no-chdir \
         --pidfile="$sandbox"/ovnsb_db.pid -vconsole:off \
@@ -358,6 +360,8 @@ if $ovn; then
         --private-key=db:OVN_Southbound,SSL,private_key \
         --certificate=db:OVN_Southbound,SSL,certificate \
         --ca-cert=db:OVN_Southbound,SSL,ca_cert \
+        --ssl-protocols=db:OVN_Southbound,SSL,ssl_protocols \
+        --ssl-ciphers=db:OVN_Southbound,SSL,ssl_ciphers \
         --remote=punix:"$sandbox"/ovnsb_db.sock $ovsdb_sb_server_args
     # Start SB back up server
     rungdb $gdb_ovsdb $gdb_ovsdb_ex ovsdb-server --detach --no-chdir \
