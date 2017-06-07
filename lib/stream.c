@@ -156,6 +156,9 @@ stream_usage(const char *name, bool active, bool passive,
         printf("  --bootstrap-ca-cert=FILE  file with peer CA certificate "
                "to read or create\n");
     }
+    printf("SSL options:\n"
+           "  --ssl-protocols=PROTOS  list of SSL protocols to enable\n"
+           "  --ssl-ciphers=CIPHERS   list of SSL ciphers to enable\n");
 #endif
 }
 
