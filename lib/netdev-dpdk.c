@@ -966,6 +966,8 @@ netdev_dpdk_vhost_construct(struct netdev *netdev)
     err = vhost_common_construct(netdev);
 
     ovs_mutex_unlock(&dpdk_mutex);
+    VLOG_WARN_ONCE("dpdkvhostuser ports are considered deprecated;  "
+                   "please migrate to dpdkvhostuserclient ports.");
     return err;
 }
 
