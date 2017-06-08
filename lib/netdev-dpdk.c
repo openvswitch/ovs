@@ -1113,6 +1113,8 @@ netdev_dpdk_get_config(const struct netdev *netdev, struct smap *args)
                         dev->txq_size);
         if (dev->hw_ol_features & NETDEV_RX_CHECKSUM_OFFLOAD) {
             smap_add(args, "rx_csum_offload", "true");
+        } else {
+            smap_add(args, "rx_csum_offload", "false");
         }
     }
     ovs_mutex_unlock(&dev->mutex);
