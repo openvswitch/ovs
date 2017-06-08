@@ -1,6 +1,6 @@
-usr/lib/lib*.so
-usr/lib/lib*.a
-usr/lib/pkgconfig
+usr/lib/*/lib*.so
+usr/lib/*/lib*.a
+usr/lib/*/pkgconfig
 include/*.h usr/include/openvswitch
 include/openflow/*.h usr/include/openvswitch/openflow
 include/openvswitch/*.h usr/include/openvswitch/openvswitch

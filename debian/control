@@ -56,6 +56,7 @@ Description: Open vSwitch datapath module source - DKMS version
 
 Package: openvswitch-common
 Architecture: linux-any
+Multi-Arch: foreign
 Depends: openssl,
          python (>= 2.7),
          python-six,
@@ -79,6 +80,7 @@ Description: Open vSwitch common components
 
 Package: libopenvswitch
 Architecture: linux-any
+Multi-Arch: same
 Depends: libssl-dev,
          ${misc:Depends},
          ${shlibs:Depends}
@@ -302,6 +304,7 @@ Description: Open vSwitch VTEP utilities
 
 Package: libopenvswitch-dev
 Architecture: linux-any
+Multi-Arch: same
 Depends:
  libopenvswitch (>= ${binary:Version}),
  ${misc:Depends}
