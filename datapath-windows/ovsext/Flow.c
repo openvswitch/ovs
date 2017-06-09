@@ -3125,9 +3125,9 @@ OvsProbeSupportedFeature(POVS_MESSAGE msgIn,
         }
     } else if (keyAttrs[OVS_KEY_ATTR_CT_STATE]) {
         UINT32 state = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_CT_STATE]);
-        if (state & OVS_CS_F_DST_NAT || state & OVS_CS_F_SRC_NAT) {
+        if (!state) {
             status = STATUS_INVALID_PARAMETER;
-            OVS_LOG_ERROR("Contrack NAT is not supported:%d", state);
+            OVS_LOG_ERROR("Invalid state specified.");
         }
     } else if (keyAttrs[OVS_KEY_ATTR_CT_ZONE]) {
         UINT16 zone = (NlAttrGetU16(keyAttrs[OVS_KEY_ATTR_CT_ZONE]));

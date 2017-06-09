@@ -651,7 +651,8 @@ OvsCtExecute_(PNET_BUFFER_LIST curNbl,
               UINT16 zone,
               MD_MARK *mark,
               MD_LABELS *labels,
-              PCHAR helper)
+              PCHAR helper,
+              PNAT_ACTION_INFO natInfo)
 {
     NDIS_STATUS status = NDIS_STATUS_SUCCESS;
     POVS_CT_ENTRY entry = NULL;
@@ -659,6 +660,9 @@ OvsCtExecute_(PNET_BUFFER_LIST curNbl,
     LOCK_STATE_EX lockState;
     UINT64 currentTime;
     NdisGetCurrentSystemTime((LARGE_INTEGER *) &currentTime);
+
+    /* XXX: Not referenced for now */
+    UNREFERENCED_PARAMETER(natInfo);
 
     /* Retrieve the Conntrack Key related fields from packet */
     OvsCtSetupLookupCtx(key, zone, &ctx, curNbl, layers->l4Offset);
@@ -753,11 +757,14 @@ OvsExecuteConntrackAction(OvsForwardingContext *fwdCtx,
     MD_MARK *mark = NULL;
     MD_LABELS *labels = NULL;
     PCHAR helper = NULL;
+    NAT_ACTION_INFO natActionInfo;
     PNET_BUFFER_LIST curNbl = fwdCtx->curNbl;
     OVS_PACKET_HDR_INFO *layers = &fwdCtx->layers;
     PNET_BUFFER_LIST newNbl = NULL;
+    NAT_ACTION_INFO natActionInfo;
     NDIS_STATUS status;
 
+    memset(&natActionInfo, 0, sizeof natActionInfo);
     status = OvsDetectCtPacket(fwdCtx, key, &newNbl);
     if (status != NDIS_STATUS_SUCCESS) {
         return status;
@@ -780,6 +787,78 @@ OvsExecuteConntrackAction(OvsForwardingContext *fwdCtx,
     if (ctAttr) {
         labels = NlAttrGet(ctAttr);
     }
+    natActionInfo.natAction = NAT_ACTION_NONE;
+    ctAttr = NlAttrFindNested(a, OVS_CT_ATTR_NAT);
+    if (ctAttr) {
+        /* Pares Nested NAT attributes. */
+        PNL_ATTR natAttr;
+        unsigned int left;
+        BOOLEAN hasMinIp = FALSE;
+        BOOLEAN hasMinPort = FALSE;
+        BOOLEAN hasMaxIp = FALSE;
+        BOOLEAN hasMaxPort = FALSE;
+        NL_NESTED_FOR_EACH_UNSAFE (natAttr, left, ctAttr) {
+            enum ovs_nat_attr sub_type_nest = NlAttrType(natAttr);
+            switch(sub_type_nest) {
+            case OVS_NAT_ATTR_SRC:
+            case OVS_NAT_ATTR_DST:
+                natActionInfo.natAction |=
+                    ((sub_type_nest == OVS_NAT_ATTR_SRC)
+                        ? NAT_ACTION_SRC : NAT_ACTION_DST);
+                break;
+            case OVS_NAT_ATTR_IP_MIN:
+               if (natAttr->nlaLen < NLA_HDRLEN) {
+                    OVS_LOG_ERROR("Incorrect header length for "
+                                  "OVS_NAT_ATTR_IP_MIN message.");
+                    break;
+                }
+                memcpy(&natActionInfo.minAddr,
+                       NlAttrData(natAttr), natAttr->nlaLen - NLA_HDRLEN);
+                hasMinIp = TRUE;
+                break;
+            case OVS_NAT_ATTR_IP_MAX:
+                if (natAttr->nlaLen < NLA_HDRLEN) {
+                    OVS_LOG_ERROR("Incorrect header length for "
+                                  "OVS_NAT_ATTR_IP_MAX message.");
+                    break;
+                }
+                memcpy(&natActionInfo.maxAddr,
+                       NlAttrData(natAttr), natAttr->nlaLen - NLA_HDRLEN);
+                hasMaxIp = TRUE;
+                break;
+            case OVS_NAT_ATTR_PROTO_MIN:
+                natActionInfo.minPort = NlAttrGetU16(natAttr);
+                hasMinPort = TRUE;
+                break;
+            case OVS_NAT_ATTR_PROTO_MAX:
+                natActionInfo.maxPort = NlAttrGetU16(natAttr);
+                hasMaxPort = TRUE;
+                break;
+            case OVS_NAT_ATTR_PERSISTENT:
+            case OVS_NAT_ATTR_PROTO_HASH:
+            case OVS_NAT_ATTR_PROTO_RANDOM:
+                break;
+            }
+        }
+        if (natActionInfo.natAction == NAT_ACTION_NONE) {
+            natActionInfo.natAction = NAT_ACTION_REVERSE;
+        }
+        if (hasMinIp && !hasMaxIp) {
+            memcpy(&natActionInfo.maxAddr,
+                   &natActionInfo.minAddr,
+                   sizeof(natActionInfo.maxAddr));
+        }
+        if (hasMinPort && !hasMaxPort) {
+            natActionInfo.maxPort = natActionInfo.minPort;
+        }
+        if (hasMinPort || hasMaxPort) {
+            if (natActionInfo.natAction & NAT_ACTION_SRC) {
+                natActionInfo.natAction |= NAT_ACTION_SRC_PORT;
+            } else if (natActionInfo.natAction & NAT_ACTION_DST) {
+                natActionInfo.natAction |= NAT_ACTION_DST_PORT;
+            }
+        }
+    }
     ctAttr = NlAttrFindNested(a, OVS_CT_ATTR_HELPER);
     if (ctAttr) {
         helper = NlAttrGetString(ctAttr);
@@ -799,7 +878,7 @@ OvsExecuteConntrackAction(OvsForwardingContext *fwdCtx,
     }
     /* If newNbl is not allocated, use the current Nbl*/
     status = OvsCtExecute_(newNbl != NULL ? newNbl : curNbl, key, layers,
-                           commit, force, zone, mark, labels, helper);
+                           commit, force, zone, mark, labels, helper, &natActionInfo);
     return status;
 }
 

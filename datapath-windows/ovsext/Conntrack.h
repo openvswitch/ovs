@@ -68,6 +68,15 @@ typedef struct MD_LABELS {
     struct ovs_key_ct_labels mask;
 } MD_LABELS;
 
+typedef enum NAT_ACTION {
+    NAT_ACTION_NONE = 0,
+    NAT_ACTION_REVERSE = 1 << 0,
+    NAT_ACTION_SRC = 1 << 1,
+    NAT_ACTION_SRC_PORT = 1 << 2,
+    NAT_ACTION_DST = 1 << 3,
+    NAT_ACTION_DST_PORT = 1 << 4,
+};
+
 typedef struct _OVS_CT_KEY {
     struct ct_endpoint src;
     struct ct_endpoint dst;
@@ -109,6 +118,14 @@ typedef struct OvsConntrackKeyLookupCtx {
     BOOLEAN         reply;
     BOOLEAN         related;
 } OvsConntrackKeyLookupCtx;
+
+typedef struct _NAT_ACTION_INFO {
+    struct ct_addr minAddr;
+    struct ct_addr maxAddr;
+    uint16_t minPort;
+    uint16_t maxPort;
+    uint16_t natAction;
+} NAT_ACTION_INFO, *PNAT_ACTION_INFO;
 
 #define CT_HASH_TABLE_SIZE ((UINT32)1 << 10)
 #define CT_HASH_TABLE_MASK (CT_HASH_TABLE_SIZE - 1)
