@@ -115,6 +115,39 @@ parent_pid () {
     fi
 }
 
+# kill_ovs_vswitchd [PID]
+#
+# Signal the ovs-vswitchd daemon to exit gracefully and wait for it to
+# terminate or kill it if that takes too long.
+#
+# It is used to cleanup all sorts of tests and results. It can't assume
+# any state, including the availability of PID file which can be provided.
+kill_ovs_vswitchd () {
+    # Use provided PID or save the current PID if available.
+    TMPPID=$1
+    if test -z "$TMPPID"; then
+        TMPPID=$(cat $OVS_RUNDIR/ovs-vswitchd.pid 2>/dev/null)
+    fi
+
+    # Tell the daemon to terminate gracefully
+    ovs-appctl --timeout=10 -t ovs-vswitchd exit --cleanup 2>/dev/null
+
+    # Nothing else to be done if there is no PID
+    test -z "$TMPPID" && return
+
+    for i in 1 2 3 4 5 6 7 8 9; do
+        # Check if the daemon is alive.
+        kill -0 $TMPPID 2>/dev/null || return
+
+        # Fallback to whole number since POSIX doesn't require
+        # fractional times to work.
+        sleep 0.1 || sleep 1
+    done
+
+    # Make sure it is terminated.
+    kill $TMPPID
+}
+
 # Normalize the output of 'wc' to match POSIX.
 # POSIX says 'wc' should print "%d %d %d", but GNU prints "%7d %7d %7d".
 # POSIX says 'wc -l' should print "%d %s", but BSD prints "%8d".

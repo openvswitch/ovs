@@ -322,7 +322,7 @@ m4_define([_OVS_VSWITCHD_START],
    dnl Start ovs-vswitchd.
    AT_CHECK([ovs-vswitchd $1 --detach --no-chdir --pidfile --log-file -vvconn -vofproto_dpif -vunixctl], [0], [], [stderr])
    AT_CAPTURE_FILE([ovs-vswitchd.log])
-   on_exit "kill `cat ovs-vswitchd.pid`"
+   on_exit "kill_ovs_vswitchd `cat ovs-vswitchd.pid`"
    AT_CHECK([[sed < stderr '
 /ovs_numa|INFO|Discovered /d
 /vlog|INFO|opened log file/d
