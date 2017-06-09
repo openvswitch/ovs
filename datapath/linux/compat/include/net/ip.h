@@ -97,6 +97,8 @@ int rpl_ip_defrag(struct net *net, struct sk_buff *skb, u32 user);
 #define ip_defrag rpl_ip_defrag
 int __init rpl_ipfrag_init(void);
 void rpl_ipfrag_fini(void);
+void ovs_netns_frags_init(struct net *net);
+void ovs_netns_frags_exit(struct net *net);
 
 #else /* HAVE_CORRECT_MRU_HANDLING */
 
@@ -131,6 +133,8 @@ static inline int rpl_ip_defrag(struct net *net, struct sk_buff *skb, u32 user)
  * compat_{in,ex}it() can be no-ops. */
 static inline int rpl_ipfrag_init(void) { return 0; }
 static inline void rpl_ipfrag_fini(void) { }
+static inline void ovs_netns_frags_init(struct net *net) { }
+static inline void ovs_netns_frags_exit(struct net *net) { }
 #endif /* HAVE_CORRECT_MRU_HANDLING */
 
 #define ipfrag_init rpl_ipfrag_init

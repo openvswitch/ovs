@@ -2297,6 +2297,8 @@ static int __net_init ovs_init_net(struct net *net)
 	INIT_LIST_HEAD(&ovs_net->dps);
 	INIT_WORK(&ovs_net->dp_notify_work, ovs_dp_notify_wq);
 	ovs_ct_init(net);
+	ovs_netns_frags_init(net);
+	ovs_netns_frags6_init(net);
 	return 0;
 }
 
@@ -2332,6 +2334,8 @@ static void __net_exit ovs_exit_net(struct net *dnet)
 	struct net *net;
 	LIST_HEAD(head);
 
+	ovs_netns_frags6_exit(dnet);
+	ovs_netns_frags_exit(dnet);
 	ovs_ct_exit(dnet);
 	ovs_lock();
 	list_for_each_entry_safe(dp, dp_next, &ovs_net->dps, list_node)
@@ -2368,13 +2372,9 @@ static int __init dp_init(void)
 
 	pr_info("Open vSwitch switching datapath %s\n", VERSION);
 
-	err = compat_init();
-	if (err)
-		goto error;
-
 	err = action_fifos_init();
 	if (err)
-		goto error_compat_exit;
+		goto error;
 
 	err = ovs_internal_dev_rtnl_link_register();
 	if (err)
@@ -2392,9 +2392,13 @@ static int __init dp_init(void)
 	if (err)
 		goto error_vport_exit;
 
-	err = register_netdevice_notifier(&ovs_dp_device_notifier);
+	err = compat_init();
 	if (err)
 		goto error_netns_exit;
+
+	err = register_netdevice_notifier(&ovs_dp_device_notifier);
+	if (err)
+		goto error_compat_exit;
 
 	err = ovs_netdev_init();
 	if (err)
@@ -2410,6 +2414,8 @@ error_unreg_netdev:
 	ovs_netdev_exit();
 error_unreg_notifier:
 	unregister_netdevice_notifier(&ovs_dp_device_notifier);
+error_compat_exit:
+	compat_exit();
 error_netns_exit:
 	unregister_pernet_device(&ovs_net_ops);
 error_vport_exit:
@@ -2420,8 +2426,6 @@ error_unreg_rtnl_link:
 	ovs_internal_dev_rtnl_link_unregister();
 error_action_fifos_exit:
 	action_fifos_exit();
-error_compat_exit:
-	compat_exit();
 error:
 	return err;
 }
@@ -2431,13 +2435,13 @@ static void dp_cleanup(void)
 	dp_unregister_genl(ARRAY_SIZE(dp_genl_families));
 	ovs_netdev_exit();
 	unregister_netdevice_notifier(&ovs_dp_device_notifier);
+	compat_exit();
 	unregister_pernet_device(&ovs_net_ops);
 	rcu_barrier();
 	ovs_vport_exit();
 	ovs_flow_exit();
 	ovs_internal_dev_rtnl_link_unregister();
 	action_fifos_exit();
-	compat_exit();
 }
 
 module_init(dp_init);

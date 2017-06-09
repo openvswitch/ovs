@@ -53,6 +53,8 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <net/netfilter/ipv6/nf_defrag_ipv6.h>
+#include <net/netns/generic.h>
+#include "datapath.h"
 
 #ifdef OVS_NF_DEFRAG6_BACKPORT
 
@@ -67,6 +69,30 @@ struct nf_ct_frag6_skb_cb
 #define NFCT_FRAG6_CB(skb)	((struct nf_ct_frag6_skb_cb*)((skb)->cb))
 
 static struct inet_frags nf_frags;
+
+static struct netns_frags *get_netns_frags6_from_net(struct net *net)
+{
+#ifdef HAVE_INET_FRAG_LRU_MOVE
+	struct ovs_net *ovs_net = net_generic(net, ovs_net_id);
+	return &(ovs_net->nf_frags);
+#else
+	return &(net->nf_frag.frags);
+#endif
+}
+
+static struct net *get_net_from_netns_frags6(struct netns_frags *frags)
+{
+	struct net *net;
+#ifdef HAVE_INET_FRAG_LRU_MOVE
+	struct ovs_net *ovs_net;
+
+	ovs_net = container_of(frags, struct ovs_net, nf_frags);
+	net = ovs_net->net;
+#else
+	net = container_of(frags, struct net, nf_frag.frags);
+#endif
+	return net;
+}
 
 static inline u8 ip6_frag_ecn(const struct ipv6hdr *ipv6h)
 {
@@ -105,7 +131,7 @@ static void nf_ct_frag6_expire(unsigned long data)
 	struct net *net;
 
 	fq = container_of((struct inet_frag_queue *)data, struct frag_queue, q);
-	net = container_of(fq->q.net, struct net, nf_frag.frags);
+	net = get_net_from_netns_frags6(fq->q.net);
 
 	ip6_expire_frag_queue(net, fq, &nf_frags);
 }
@@ -118,6 +144,7 @@ static inline struct frag_queue *fq_find(struct net *net, __be32 id,
 	struct inet_frag_queue *q;
 	struct ip6_create_arg arg;
 	unsigned int hash;
+	struct netns_frags *frags;
 
 	arg.id = id;
 	arg.user = user;
@@ -132,7 +159,8 @@ static inline struct frag_queue *fq_find(struct net *net, __be32 id,
 #endif
 	hash = nf_hash_frag(id, src, dst);
 
-	q = inet_frag_find(&net->nf_frag.frags, &nf_frags, &arg, hash);
+	frags = get_netns_frags6_from_net(net);
+	q = inet_frag_find(frags, &nf_frags, &arg, hash);
 	local_bh_enable();
 	if (IS_ERR_OR_NULL(q)) {
 		inet_frag_maybe_warn_overflow(q, pr_fmt());
@@ -506,6 +534,7 @@ int rpl_nf_ct_frag6_gather(struct net *net, struct sk_buff *skb, u32 user)
 	struct frag_queue *fq;
 	struct ipv6hdr *hdr;
 	u8 prevhdr;
+	struct netns_frags *frags;
 
 	/* Jumbo payload inhibits frag. header */
 	if (ipv6_hdr(skb)->payload_len == 0) {
@@ -524,9 +553,10 @@ int rpl_nf_ct_frag6_gather(struct net *net, struct sk_buff *skb, u32 user)
 	fhdr = (struct frag_hdr *)skb_transport_header(skb);
 
 /* See ip_evictor(). */
+	frags = get_netns_frags6_from_net(net);
 #ifdef HAVE_INET_FRAG_EVICTOR
 	local_bh_disable();
-	inet_frag_evictor(&net->nf_frag.frags, &nf_frags, false);
+	inet_frag_evictor(frags, &nf_frags, false);
 	local_bh_enable();
 #endif
 
@@ -567,7 +597,27 @@ static int nf_ct_net_init(struct net *net)
 
 static void nf_ct_net_exit(struct net *net)
 {
-	inet_frags_exit_net(&net->nf_frag.frags, &nf_frags);
+}
+
+void ovs_netns_frags6_init(struct net *net)
+{
+#ifdef HAVE_INET_FRAG_LRU_MOVE
+	struct ovs_net *ovs_net = net_generic(net, ovs_net_id);
+
+	ovs_net->nf_frags.high_thresh = IPV6_FRAG_HIGH_THRESH;
+	ovs_net->nf_frags.low_thresh = IPV6_FRAG_LOW_THRESH;
+	ovs_net->nf_frags.timeout = IPV6_FRAG_TIMEOUT;
+
+	inet_frags_init_net(&(ovs_net->nf_frags));
+#endif
+}
+
+void ovs_netns_frags6_exit(struct net *net)
+{
+	struct netns_frags *frags;
+
+	frags = get_netns_frags6_from_net(net);
+	inet_frags_exit_net(frags, &nf_frags);
 }
 
 static struct pernet_operations nf_ct_net_ops = {
