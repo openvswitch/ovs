@@ -1380,7 +1380,7 @@ PUINT8 OvsGetHeaderBySize(OvsForwardingContext *ovsFwdCtx,
  *      based on the specified key.
  *----------------------------------------------------------------------------
  */
-static __inline NDIS_STATUS
+NDIS_STATUS
 OvsUpdateUdpPorts(OvsForwardingContext *ovsFwdCtx,
                   const struct ovs_key_udp *udpAttr)
 {
@@ -1427,7 +1427,7 @@ OvsUpdateUdpPorts(OvsForwardingContext *ovsFwdCtx,
  *      based on the specified key.
  *----------------------------------------------------------------------------
  */
-static __inline NDIS_STATUS
+NDIS_STATUS
 OvsUpdateTcpPorts(OvsForwardingContext *ovsFwdCtx,
                   const struct ovs_key_tcp *tcpAttr)
 {
@@ -1465,12 +1465,125 @@ OvsUpdateTcpPorts(OvsForwardingContext *ovsFwdCtx,
 
 /*
  *----------------------------------------------------------------------------
+ * OvsUpdateAddressAndPort --
+ *      Updates the source/destination IP and port fields in
+ *      ovsFwdCtx.curNbl inline based on the specified key.
+ *----------------------------------------------------------------------------
+ */
+NDIS_STATUS
+OvsUpdateAddressAndPort(OvsForwardingContext *ovsFwdCtx,
+                        UINT32 newAddr, UINT16 newPort,
+                        BOOLEAN isSource, BOOLEAN isTx)
+{
+    PUINT8 bufferStart;
+    UINT32 hdrSize;
+    OVS_PACKET_HDR_INFO *layers = &ovsFwdCtx->layers;
+    IPHdr *ipHdr;
+    TCPHdr *tcpHdr = NULL;
+    UDPHdr *udpHdr = NULL;
+    UINT32 *addrField = NULL;
+    UINT16 *portField = NULL;
+    UINT16 *checkField = NULL;
+    BOOLEAN l4Offload = FALSE;
+    NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo;
+
+    ASSERT(layers->value != 0);
+
+    if (layers->isTcp || layers->isUdp) {
+        hdrSize = layers->l4Offset +
+                  layers->isTcp ? sizeof (*tcpHdr) : sizeof (*udpHdr);
+    } else {
+        hdrSize = layers->l3Offset + sizeof (*ipHdr);
+    }
+
+    bufferStart = OvsGetHeaderBySize(ovsFwdCtx, hdrSize);
+    if (!bufferStart) {
+        return NDIS_STATUS_RESOURCES;
+    }
+
+    ipHdr = (IPHdr *)(bufferStart + layers->l3Offset);
+
+    if (layers->isTcp) {
+        tcpHdr = (TCPHdr *)(bufferStart + layers->l4Offset);
+    } else if (layers->isUdp) {
+        udpHdr = (UDPHdr *)(bufferStart + layers->l4Offset);
+    }
+
+    csumInfo.Value = NET_BUFFER_LIST_INFO(ovsFwdCtx->curNbl,
+                                          TcpIpChecksumNetBufferListInfo);
+    /*
+     * Adjust the IP header inline as dictated by the action, and also update
+     * the IP and the TCP checksum for the data modified.
+     *
+     * In the future, this could be optimized to make one call to
+     * ChecksumUpdate32(). Ignoring this for now, since for the most common
+     * case, we only update the TTL.
+     */
+
+    if (isSource) {
+        addrField = &ipHdr->saddr;
+        if (tcpHdr) {
+            portField = &tcpHdr->source;
+            checkField = &tcpHdr->check;
+            l4Offload = isTx ? (BOOLEAN)csumInfo.Transmit.TcpChecksum :
+                        ((BOOLEAN)csumInfo.Receive.TcpChecksumSucceeded ||
+                         (BOOLEAN)csumInfo.Receive.TcpChecksumFailed);
+        } else if (udpHdr) {
+            portField = &udpHdr->source;
+            checkField = &udpHdr->check;
+            l4Offload = isTx ? (BOOLEAN)csumInfo.Transmit.UdpChecksum :
+                        ((BOOLEAN)csumInfo.Receive.UdpChecksumSucceeded ||
+                         (BOOLEAN)csumInfo.Receive.UdpChecksumFailed);
+        }
+    } else {
+        addrField = &ipHdr->daddr;
+        if (tcpHdr) {
+            portField = &tcpHdr->dest;
+            checkField = &tcpHdr->check;
+        } else if (udpHdr) {
+            portField = &udpHdr->dest;
+            checkField = &udpHdr->check;
+        }
+    }
+    if (*addrField != newAddr) {
+        UINT32 oldAddr = *addrField;
+        if (checkField && *checkField != 0) {
+            if (l4Offload) {
+                /* Recompute IP pseudo checksum */
+                *checkField = ~(*checkField);
+                *checkField = ChecksumUpdate32(*checkField, oldAddr,
+                                               newAddr);
+                *checkField = ~(*checkField);
+            } else {
+                *checkField = ChecksumUpdate32(*checkField, oldAddr,
+                                               newAddr);
+            }
+        }
+        if (ipHdr->check != 0) {
+            ipHdr->check = ChecksumUpdate32(ipHdr->check, oldAddr,
+                                            newAddr);
+        }
+        *addrField = newAddr;
+    }
+
+    if (portField && *portField != newPort) {
+        if (checkField && !l4Offload) {
+            *checkField = ChecksumUpdate16(*checkField, *portField,
+                                           newPort);
+        }
+        *portField = newPort;
+    }
+    return NDIS_STATUS_SUCCESS;
+}
+
+/*
+ *----------------------------------------------------------------------------
  * OvsUpdateIPv4Header --
  *      Updates the IPv4 header in ovsFwdCtx.curNbl inline based on the
  *      specified key.
  *----------------------------------------------------------------------------
  */
-static __inline NDIS_STATUS
+NDIS_STATUS
 OvsUpdateIPv4Header(OvsForwardingContext *ovsFwdCtx,
                     const struct ovs_key_ipv4 *ipAttr)
 {

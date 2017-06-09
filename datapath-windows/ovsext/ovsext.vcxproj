@@ -127,6 +127,7 @@
     <ClInclude Include="Actions.h" />
     <ClInclude Include="Atomic.h" />
     <ClInclude Include="BufferMgmt.h" />
+    <ClInclude Include="Conntrack-nat.h" />
     <ClInclude Include="Conntrack.h" />
     <ClInclude Include="Datapath.h" />
     <ClInclude Include="Debug.h" />
@@ -317,6 +318,7 @@
   <ItemGroup>
     <ClCompile Include="Actions.c" />
     <ClCompile Include="BufferMgmt.c" />
+    <ClCompile Include="Conntrack-nat.c" />
     <ClCompile Include="Conntrack-related.c" />
     <ClCompile Include="Conntrack-ftp.c" />
     <ClCompile Include="Conntrack-icmp.c" />

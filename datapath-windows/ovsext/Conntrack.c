@@ -19,6 +19,7 @@
 #include "Jhash.h"
 #include "PacketParser.h"
 #include "Event.h"
+#include "Conntrack-nat.h"
 
 #pragma warning(push)
 #pragma warning(disable:4311)
@@ -27,7 +28,7 @@
 #define SEC_TO_UNIX_EPOCH 11644473600LL
 #define SEC_TO_NANOSEC 1000000000LL
 
-KSTART_ROUTINE ovsConntrackEntryCleaner;
+KSTART_ROUTINE OvsConntrackEntryCleaner;
 static PLIST_ENTRY ovsConntrackTable;
 static OVS_CT_THREAD_CTX ctThreadCtx;
 static PNDIS_RW_LOCK_EX ovsConntrackLockObj;
@@ -72,7 +73,7 @@ OvsInitConntrack(POVS_SWITCH_CONTEXT context)
     /* Init CT Cleaner Thread */
     KeInitializeEvent(&ctThreadCtx.event, NotificationEvent, FALSE);
     status = PsCreateSystemThread(&threadHandle, SYNCHRONIZE, NULL, NULL,
-                                  NULL, ovsConntrackEntryCleaner,
+                                  NULL, OvsConntrackEntryCleaner,
                                   &ctThreadCtx);
 
     if (status != STATUS_SUCCESS) {
@@ -89,6 +90,13 @@ OvsInitConntrack(POVS_SWITCH_CONTEXT context)
                               &ctThreadCtx.threadObject, NULL);
     ZwClose(threadHandle);
     threadHandle = NULL;
+
+    status = OvsNatInit();
+
+    if (status != STATUS_SUCCESS) {
+        OvsCleanupConntrack();
+        return status;
+    }
     return STATUS_SUCCESS;
 }
 
@@ -121,6 +129,7 @@ OvsCleanupConntrack(VOID)
 
     NdisFreeRWLock(ovsConntrackLockObj);
     ovsConntrackLockObj = NULL;
+    OvsNatCleanup();
 }
 
 static __inline VOID
@@ -160,25 +169,46 @@ OvsPostCtEventEntry(POVS_CT_ENTRY entry, UINT8 type)
     OvsPostCtEvent(&ctEventEntry);
 }
 
-static __inline VOID
-OvsCtAddEntry(POVS_CT_ENTRY entry, OvsConntrackKeyLookupCtx *ctx, UINT64 now)
+static __inline BOOLEAN
+OvsCtAddEntry(POVS_CT_ENTRY entry, OvsConntrackKeyLookupCtx *ctx,
+              PNAT_ACTION_INFO natInfo, UINT64 now)
 {
-    NdisMoveMemory(&entry->key, &ctx->key, sizeof (OVS_CT_KEY));
-    NdisMoveMemory(&entry->rev_key, &ctx->key, sizeof (OVS_CT_KEY));
+    NdisMoveMemory(&entry->key, &ctx->key, sizeof(OVS_CT_KEY));
+    NdisMoveMemory(&entry->rev_key, &ctx->key, sizeof(OVS_CT_KEY));
     OvsCtKeyReverse(&entry->rev_key);
+
+    /* NatInfo is always initialized to be disabled, so that if NAT action
+     * fails, we will not end up deleting an non-existent NAT entry.
+     */
+    if (natInfo == NULL) {
+        entry->natInfo.natAction = NAT_ACTION_NONE;
+    } else {
+        if (OvsIsForwardNat(natInfo->natAction)) {
+            entry->natInfo = *natInfo;
+            if (!OvsNatTranslateCtEntry(entry)) {
+                return FALSE;
+            }
+            ctx->hash = OvsHashCtKey(&entry->key);
+        } else {
+            entry->natInfo.natAction = natInfo->natAction;
+        }
+    }
+
     entry->timestampStart = now;
     InsertHeadList(&ovsConntrackTable[ctx->hash & CT_HASH_TABLE_MASK],
                    &entry->link);
 
     ctTotalEntries++;
+    return TRUE;
 }
 
 static __inline POVS_CT_ENTRY
-OvsCtEntryCreate(PNET_BUFFER_LIST curNbl,
+OvsCtEntryCreate(OvsForwardingContext *fwdCtx,
                  UINT8 ipProto,
                  UINT32 l4Offset,
                  OvsConntrackKeyLookupCtx *ctx,
                  OvsFlowKey *key,
+                 PNAT_ACTION_INFO natInfo,
                  BOOLEAN commit,
                  UINT64 currentTime,
                  BOOLEAN *entryCreated)
@@ -186,6 +216,7 @@ OvsCtEntryCreate(PNET_BUFFER_LIST curNbl,
     POVS_CT_ENTRY entry = NULL;
     *entryCreated = FALSE;
     UINT32 state = 0;
+    PNET_BUFFER_LIST curNbl = fwdCtx->curNbl;
     switch (ipProto)
     {
         case IPPROTO_TCP:
@@ -213,12 +244,9 @@ OvsCtEntryCreate(PNET_BUFFER_LIST curNbl,
                 /* Set parent entry for related FTP connections */
                 entry->parent = parentEntry;
 
-                OvsCtAddEntry(entry, ctx, currentTime);
                 *entryCreated = TRUE;
             }
-
-            OvsCtUpdateFlowKey(key, state, ctx->key.zone, 0, NULL);
-            return entry;
+            break;
         }
         case IPPROTO_ICMP:
         {
@@ -232,41 +260,39 @@ OvsCtEntryCreate(PNET_BUFFER_LIST curNbl,
             state |= OVS_CS_F_NEW;
             if (commit) {
                 entry = OvsConntrackCreateIcmpEntry(currentTime);
-                if (!entry) {
-                    return NULL;
+                if (entry) {
+                    /* XXX Add support for ICMP-Related */
+                    entry->parent = NULL;
                 }
-
-                /* XXX Add support for ICMP-Related */
-                entry->parent = NULL;
-                OvsCtAddEntry(entry, ctx, currentTime);
                 *entryCreated = TRUE;
             }
-
-            OvsCtUpdateFlowKey(key, state, ctx->key.zone, 0, NULL);
-            return entry;
+            break;
         }
         case IPPROTO_UDP:
         {
             state |= OVS_CS_F_NEW;
             if (commit) {
                 entry = OvsConntrackCreateOtherEntry(currentTime);
-                if (!entry) {
-                    return NULL;
+                if (entry) {
+                    /* Default UDP related to NULL until TFTP is supported */
+                    entry->parent = NULL;
                 }
-
-                /* Default UDP related to NULL until TFTP is supported */
-                entry->parent = NULL;
-                OvsCtAddEntry(entry, ctx, currentTime);
                 *entryCreated = TRUE;
             }
-
-            OvsCtUpdateFlowKey(key, state, ctx->key.zone, 0, NULL);
-            return entry;
+            break;
         }
         default:
             goto invalid;
     }
 
+    if (commit && !entry) {
+        return NULL;
+    }
+    if (entry && !OvsCtAddEntry(entry, ctx, natInfo, currentTime)) {
+        return NULL;
+    }
+    OvsCtUpdateFlowKey(key, state, ctx->key.zone, 0, NULL);
+    return entry;
 invalid:
     state |= OVS_CS_F_INVALID;
     OvsCtUpdateFlowKey(key, state, ctx->key.zone, 0, NULL);
@@ -275,11 +301,11 @@ invalid:
 
 static enum CT_UPDATE_RES
 OvsCtUpdateEntry(OVS_CT_ENTRY* entry,
-                        PNET_BUFFER_LIST nbl,
-                        UINT8 ipProto,
-                        UINT32 l4Offset,
-                        BOOLEAN reply,
-                        UINT64 now)
+                 PNET_BUFFER_LIST nbl,
+                 UINT8 ipProto,
+                 UINT32 l4Offset,
+                 BOOLEAN reply,
+                 UINT64 now)
 {
     switch (ipProto)
     {
@@ -305,6 +331,12 @@ OvsCtUpdateEntry(OVS_CT_ENTRY* entry,
 static __inline VOID
 OvsCtEntryDelete(POVS_CT_ENTRY entry)
 {
+    if (entry == NULL) {
+        return;
+    }
+    if (entry->natInfo.natAction) {
+        OvsNatDeleteKey(&entry->key);
+    }
     OvsPostCtEventEntry(entry, OVS_EVENT_CT_DELETE);
     RemoveEntryList(&entry->link);
     OvsFreeMemoryWithTag(entry, OVS_CT_POOL_TAG);
@@ -314,10 +346,6 @@ OvsCtEntryDelete(POVS_CT_ENTRY entry)
 static __inline BOOLEAN
 OvsCtEntryExpired(POVS_CT_ENTRY entry)
 {
-    if (entry == NULL) {
-        return TRUE;
-    }
-
     UINT64 currentTime;
     NdisGetCurrentSystemTime((LARGE_INTEGER *)&currentTime);
     return entry->expiration < currentTime;
@@ -352,7 +380,7 @@ OvsDetectCtPacket(OvsForwardingContext *fwdCtx,
     return NDIS_STATUS_NOT_SUPPORTED;
 }
 
-static __inline BOOLEAN
+BOOLEAN
 OvsCtKeyAreSame(OVS_CT_KEY ctxKey, OVS_CT_KEY entryKey)
 {
     return ((ctxKey.src.addr.ipv4 == entryKey.src.addr.ipv4) &&
@@ -378,13 +406,14 @@ OvsCtIncrementCounters(POVS_CT_ENTRY entry, BOOLEAN reply, PNET_BUFFER_LIST nbl)
     }
 }
 
-static __inline POVS_CT_ENTRY
+POVS_CT_ENTRY
 OvsCtLookup(OvsConntrackKeyLookupCtx *ctx)
 {
     PLIST_ENTRY link;
     POVS_CT_ENTRY entry;
     BOOLEAN reply = FALSE;
     POVS_CT_ENTRY found = NULL;
+    OVS_CT_KEY key = ctx->key;
 
     if (!ctTotalEntries) {
         return found;
@@ -393,13 +422,19 @@ OvsCtLookup(OvsConntrackKeyLookupCtx *ctx)
     LIST_FORALL(&ovsConntrackTable[ctx->hash & CT_HASH_TABLE_MASK], link) {
         entry = CONTAINING_RECORD(link, OVS_CT_ENTRY, link);
 
-        if (OvsCtKeyAreSame(ctx->key,entry->key)) {
+        if (OvsCtKeyAreSame(key,entry->key)) {
             found = entry;
             reply = FALSE;
             break;
         }
 
-        if (OvsCtKeyAreSame(ctx->key,entry->rev_key)) {
+        /* Reverse NAT must be performed before OvsCtLookup, so here
+         * we simply need to flip the src and dst in key and compare
+         * they are equal. Note that flipped key is not equal to
+         * rev_key due to NAT effect.
+         */
+        OvsCtKeyReverse(&key);
+        if (OvsCtKeyAreSame(key, entry->key)) {
             found = entry;
             reply = TRUE;
             break;
@@ -418,17 +453,18 @@ OvsCtLookup(OvsConntrackKeyLookupCtx *ctx)
     return found;
 }
 
-static __inline UINT32
-OvsExtractLookupCtxHash(OvsConntrackKeyLookupCtx *ctx)
+UINT32
+OvsHashCtKey(const OVS_CT_KEY *key)
 {
-    UINT32 hsrc, hdst,hash;
-    hsrc = OvsJhashBytes((UINT32*) &ctx->key.src, sizeof(ctx->key.src), 0);
-    hdst = OvsJhashBytes((UINT32*) &ctx->key.dst, sizeof(ctx->key.dst), 0);
+    UINT32 hsrc, hdst, hash;
+    hsrc = OvsJhashBytes((UINT32*) &key->src, sizeof(key->src), 0);
+    hdst = OvsJhashBytes((UINT32*) &key->dst, sizeof(key->dst), 0);
     hash = hsrc ^ hdst; /* TO identify reverse traffic */
-    return OvsJhashBytes((uint32_t *) &ctx->key.dst + 1,
-                         ((uint32_t *) (&ctx->key + 1) -
-                         (uint32_t *) (&ctx->key.dst + 1)),
+    hash = OvsJhashBytes((uint32_t *) &key->dst + 1,
+                         ((uint32_t *) (key + 1) -
+                         (uint32_t *) (&key->dst + 1)),
                          hash);
+    return hash;
 }
 
 static UINT8
@@ -459,6 +495,7 @@ OvsCtSetupLookupCtx(OvsFlowKey *flowKey,
                     PNET_BUFFER_LIST curNbl,
                     UINT32 l4Offset)
 {
+    const OVS_NAT_ENTRY *natEntry;
     ctx->key.zone = zone;
     ctx->key.dl_type = flowKey->l2.dlType;
     ctx->related = FALSE;
@@ -520,7 +557,14 @@ OvsCtSetupLookupCtx(OvsFlowKey *flowKey,
         return NDIS_STATUS_INVALID_PACKET;
     }
 
-    ctx->hash = OvsExtractLookupCtxHash(ctx);
+    natEntry = OvsNatLookup(&ctx->key, TRUE);
+    if (natEntry) {
+        /* Translate address first for reverse NAT */
+        ctx->key = natEntry->ctEntry->key;
+        OvsCtKeyReverse(&ctx->key);
+    }
+
+    ctx->hash = OvsHashCtKey(&ctx->key);
     return NDIS_STATUS_SUCCESS;
 }
 
@@ -538,17 +582,19 @@ OvsDetectFtpPacket(OvsFlowKey *key) {
  *----------------------------------------------------------------------------
  */
 static __inline POVS_CT_ENTRY
-OvsProcessConntrackEntry(PNET_BUFFER_LIST curNbl,
+OvsProcessConntrackEntry(OvsForwardingContext *fwdCtx,
                          UINT32 l4Offset,
                          OvsConntrackKeyLookupCtx *ctx,
                          OvsFlowKey *key,
                          UINT16 zone,
+                         NAT_ACTION_INFO *natInfo,
                          BOOLEAN commit,
                          UINT64 currentTime,
                          BOOLEAN *entryCreated)
 {
     POVS_CT_ENTRY entry = ctx->entry;
     UINT32 state = 0;
+    PNET_BUFFER_LIST curNbl = fwdCtx->curNbl;
     *entryCreated = FALSE;
 
     /* If an entry was found, update the state based on TCP flags */
@@ -575,8 +621,8 @@ OvsProcessConntrackEntry(PNET_BUFFER_LIST curNbl,
             //Delete and update the Conntrack
             OvsCtEntryDelete(ctx->entry);
             ctx->entry = NULL;
-            entry = OvsCtEntryCreate(curNbl, key->ipKey.nwProto, l4Offset,
-                                     ctx, key, commit, currentTime,
+            entry = OvsCtEntryCreate(fwdCtx, key->ipKey.nwProto, l4Offset,
+                                     ctx, key, natInfo, commit, currentTime,
                                      entryCreated);
             if (!entry) {
                 return NULL;
@@ -643,7 +689,7 @@ OvsConntrackSetLabels(OvsFlowKey *key,
 }
 
 static __inline NDIS_STATUS
-OvsCtExecute_(PNET_BUFFER_LIST curNbl,
+OvsCtExecute_(OvsForwardingContext *fwdCtx,
               OvsFlowKey *key,
               OVS_PACKET_HDR_INFO *layers,
               BOOLEAN commit,
@@ -656,13 +702,12 @@ OvsCtExecute_(PNET_BUFFER_LIST curNbl,
 {
     NDIS_STATUS status = NDIS_STATUS_SUCCESS;
     POVS_CT_ENTRY entry = NULL;
+    PNET_BUFFER_LIST curNbl = fwdCtx->curNbl;
     OvsConntrackKeyLookupCtx ctx = { 0 };
     LOCK_STATE_EX lockState;
     UINT64 currentTime;
     NdisGetCurrentSystemTime((LARGE_INTEGER *) &currentTime);
 
-    /* XXX: Not referenced for now */
-    UNREFERENCED_PARAMETER(natInfo);
 
     /* Retrieve the Conntrack Key related fields from packet */
     OvsCtSetupLookupCtx(key, zone, &ctx, curNbl, layers->l4Offset);
@@ -681,16 +726,29 @@ OvsCtExecute_(PNET_BUFFER_LIST curNbl,
 
     if (!entry) {
         /* If no matching entry was found, create one and add New state */
-        entry = OvsCtEntryCreate(curNbl, key->ipKey.nwProto,
+        entry = OvsCtEntryCreate(fwdCtx, key->ipKey.nwProto,
                                  layers->l4Offset, &ctx,
-                                 key, commit, currentTime,
+                                 key, natInfo, commit, currentTime,
                                  &entryCreated);
     } else {
         /* Process the entry and update CT flags */
         OvsCtIncrementCounters(entry, ctx.reply, curNbl);
-        entry = OvsProcessConntrackEntry(curNbl, layers->l4Offset, &ctx, key,
-                                         zone, commit, currentTime,
+        entry = OvsProcessConntrackEntry(fwdCtx, layers->l4Offset, &ctx, key,
+                                         zone, natInfo, commit, currentTime,
                                          &entryCreated);
+    }
+
+    /*
+     * Note that natInfo is not the same as entry->natInfo here. natInfo
+     * is decided by action in the openflow rule, entry->natInfo is decided
+     * when the entry is created. In the reverse NAT case, natInfo is
+     * NAT_ACTION_REVERSE, yet entry->natInfo is NAT_ACTION_SRC or
+     * NAT_ACTION_DST without NAT_ACTION_REVERSE
+     */
+    if (entry && natInfo->natAction != NAT_ACTION_NONE)
+    {
+        OvsNatPacket(fwdCtx, entry, entry->natInfo.natAction,
+                     key, ctx.reply);
     }
 
     if (entry && mark) {
@@ -758,10 +816,8 @@ OvsExecuteConntrackAction(OvsForwardingContext *fwdCtx,
     MD_LABELS *labels = NULL;
     PCHAR helper = NULL;
     NAT_ACTION_INFO natActionInfo;
-    PNET_BUFFER_LIST curNbl = fwdCtx->curNbl;
     OVS_PACKET_HDR_INFO *layers = &fwdCtx->layers;
     PNET_BUFFER_LIST newNbl = NULL;
-    NAT_ACTION_INFO natActionInfo;
     NDIS_STATUS status;
 
     memset(&natActionInfo, 0, sizeof natActionInfo);
@@ -798,12 +854,12 @@ OvsExecuteConntrackAction(OvsForwardingContext *fwdCtx,
         BOOLEAN hasMaxIp = FALSE;
         BOOLEAN hasMaxPort = FALSE;
         NL_NESTED_FOR_EACH_UNSAFE (natAttr, left, ctAttr) {
-            enum ovs_nat_attr sub_type_nest = NlAttrType(natAttr);
-            switch(sub_type_nest) {
+            enum ovs_nat_attr subtype = NlAttrType(natAttr);
+            switch(subtype) {
             case OVS_NAT_ATTR_SRC:
             case OVS_NAT_ATTR_DST:
                 natActionInfo.natAction |=
-                    ((sub_type_nest == OVS_NAT_ATTR_SRC)
+                    ((subtype == OVS_NAT_ATTR_SRC)
                         ? NAT_ACTION_SRC : NAT_ACTION_DST);
                 break;
             case OVS_NAT_ATTR_IP_MIN:
@@ -877,19 +933,19 @@ OvsExecuteConntrackAction(OvsForwardingContext *fwdCtx,
         commit = TRUE;
     }
     /* If newNbl is not allocated, use the current Nbl*/
-    status = OvsCtExecute_(newNbl != NULL ? newNbl : curNbl, key, layers,
+    status = OvsCtExecute_(fwdCtx, key, layers,
                            commit, force, zone, mark, labels, helper, &natActionInfo);
     return status;
 }
 
 /*
  *----------------------------------------------------------------------------
- * ovsConntrackEntryCleaner
+ * OvsConntrackEntryCleaner
  *     Runs periodically and cleans up the connection tracker
  *----------------------------------------------------------------------------
  */
 VOID
-ovsConntrackEntryCleaner(PVOID data)
+OvsConntrackEntryCleaner(PVOID data)
 {
 
     POVS_CT_THREAD_CTX context = (POVS_CT_THREAD_CTX)data;
@@ -906,15 +962,13 @@ ovsConntrackEntryCleaner(PVOID data)
         }
 
         /* Set the timeout for the thread and cleanup */
-        UINT64 currentTime, threadSleepTimeout;
-        NdisGetCurrentSystemTime((LARGE_INTEGER *)&currentTime);
-        threadSleepTimeout = currentTime + CT_CLEANUP_INTERVAL;
+        INT64 threadSleepTimeout = -CT_CLEANUP_INTERVAL;
 
         if (ctTotalEntries) {
             for (int i = 0; i < CT_HASH_TABLE_SIZE; i++) {
                 LIST_FORALL_SAFE(&ovsConntrackTable[i], link, next) {
                     entry = CONTAINING_RECORD(link, OVS_CT_ENTRY, link);
-                    if (entry->expiration < currentTime) {
+                    if (entry && OvsCtEntryExpired(entry)) {
                         OvsCtEntryDelete(entry);
                     }
                 }
@@ -954,6 +1008,7 @@ OvsCtFlush(UINT16 zone)
         }
     }
 
+    OvsNatFlush(zone);
     NdisReleaseRWLock(ovsConntrackLockObj, &lockState);
     return NDIS_STATUS_SUCCESS;
 }
