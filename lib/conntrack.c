@@ -1529,14 +1529,10 @@ static uint32_t
 conn_key_hash(const struct conn_key *key, uint32_t basis)
 {
     uint32_t hsrc, hdst, hash;
-    int i;
 
     hsrc = hdst = basis;
-
-    for (i = 0; i < sizeof(key->src) / sizeof(uint32_t); i++) {
-        hsrc = hash_add(hsrc, ((uint32_t *) &key->src)[i]);
-        hdst = hash_add(hdst, ((uint32_t *) &key->dst)[i]);
-    }
+    hsrc = ct_endpoint_hash_add(hsrc, &key->src);
+    hdst = ct_endpoint_hash_add(hdst, &key->dst);
 
     /* Even if source and destination are swapped the hash will be the same. */
     hash = hsrc ^ hdst;
@@ -1546,7 +1542,7 @@ conn_key_hash(const struct conn_key *key, uint32_t basis)
                       (uint32_t *) (key + 1) - (uint32_t *) (&key->dst + 1),
                       hash);
 
-    return hash;
+    return hash_finish(hash, 0);
 }
 
 static void
