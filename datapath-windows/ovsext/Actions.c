@@ -1573,6 +1573,44 @@ OvsUpdateAddressAndPort(OvsForwardingContext *ovsFwdCtx,
         }
         *portField = newPort;
     }
+    PNET_BUFFER_LIST curNbl = ovsFwdCtx->curNbl;
+    PNET_BUFFER_LIST newNbl = NULL;
+    if (layers->isTcp) {
+        UINT32 mss = OVSGetTcpMSS(curNbl);
+        if (mss) {
+            OVS_LOG_TRACE("l4Offset %d", layers->l4Offset);
+            newNbl = OvsTcpSegmentNBL(ovsFwdCtx->switchContext, curNbl, layers,
+                                      mss, 0, FALSE);
+            if (newNbl == NULL) {
+                OVS_LOG_ERROR("Unable to segment NBL");
+                return NDIS_STATUS_FAILURE;
+            }
+            /* Clear out LSO flags after this point */
+            NET_BUFFER_LIST_INFO(newNbl, TcpLargeSendNetBufferListInfo) = 0;
+        }
+    }
+    /* If we didn't split the packet above, make a copy now */
+    if (newNbl == NULL) {
+        csumInfo.Value = NET_BUFFER_LIST_INFO(curNbl,
+                                              TcpIpChecksumNetBufferListInfo);
+        OvsApplySWChecksumOnNB(layers, curNbl, &csumInfo);
+    }
+
+    if (newNbl) {
+        curNbl = newNbl;
+        OvsCompleteNBLForwardingCtx(ovsFwdCtx,
+                                    L"Complete after cloning NBL for encapsulation");
+        OvsInitForwardingCtx(ovsFwdCtx, ovsFwdCtx->switchContext,
+                             newNbl, ovsFwdCtx->srcVportNo, 0,
+                             NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(newNbl),
+                             ovsFwdCtx->completionList,
+                             &ovsFwdCtx->layers, FALSE);
+        ovsFwdCtx->curNbl = newNbl;
+    }
+
+    NET_BUFFER_LIST_INFO(curNbl,
+                         TcpIpChecksumNetBufferListInfo) = 0;
+
     return NDIS_STATUS_SUCCESS;
 }
 
