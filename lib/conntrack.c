@@ -1509,6 +1509,20 @@ conn_key_extract(struct conntrack *ct, struct dp_packet *pkt, ovs_be16 dl_type,
 
     return false;
 }
+
+static uint32_t
+ct_addr_hash_add(uint32_t hash, const struct ct_addr *addr)
+{
+    BUILD_ASSERT_DECL(sizeof *addr % 4 == 0);
+    return hash_add_bytes32(hash, (const uint32_t *) addr, sizeof *addr);
+}
+
+static uint32_t
+ct_endpoint_hash_add(uint32_t hash, const struct ct_endpoint *ep)
+{
+    BUILD_ASSERT_DECL(sizeof *ep % 4 == 0);
+    return hash_add_bytes32(hash, (const uint32_t *) ep, sizeof *ep);
+}
 
 /* Symmetric */
 static uint32_t
@@ -1616,33 +1630,24 @@ static uint32_t
 nat_range_hash(const struct conn *conn, uint32_t basis)
 {
     uint32_t hash = basis;
-    int i;
-    uint16_t port;
 
-    for (i = 0;
-         i < sizeof(conn->nat_info->min_addr) / sizeof(uint32_t);
-         i++) {
-        hash = hash_add(hash, ((uint32_t *) &conn->nat_info->min_addr)[i]);
-        hash = hash_add(hash, ((uint32_t *) &conn->nat_info->max_addr)[i]);
-    }
+    hash = ct_addr_hash_add(hash, &conn->nat_info->min_addr);
+    hash = ct_addr_hash_add(hash, &conn->nat_info->max_addr);
+    hash = hash_add(hash,
+                    (conn->nat_info->max_port << 16)
+                    | conn->nat_info->min_port);
 
-    memcpy(&port, &conn->nat_info->min_port, sizeof port);
-    hash = hash_add(hash, port);
-
-    for (i = 0; i < sizeof(conn->key.src.addr) / sizeof(uint32_t); i++) {
-        hash = hash_add(hash, ((uint32_t *) &conn->key.src)[i]);
-        hash = hash_add(hash, ((uint32_t *) &conn->key.dst)[i]);
-    }
-
-    memcpy(&port, &conn->key.src.port, sizeof port);
-    hash = hash_add(hash, port);
-    memcpy(&port, &conn->key.dst.port, sizeof port);
-    hash = hash_add(hash, port);
+    hash = ct_endpoint_hash_add(hash, &conn->key.src);
+    hash = ct_endpoint_hash_add(hash, &conn->key.dst);
 
     hash = hash_add(hash, (OVS_FORCE uint32_t) conn->key.dl_type);
     hash = hash_add(hash, conn->key.nw_proto);
     hash = hash_add(hash, conn->key.zone);
-    return hash;
+
+    /* The purpose of the second parameter is to distinguish hashes of data of
+     * different length; our data always has the same length so there is no
+     * value in counting. */
+    return hash_finish(hash, 0);
 }
 
 static bool

@@ -42,6 +42,10 @@ struct ct_endpoint {
     };
 };
 
+/* Verify that there is no padding in struct ct_endpoint, to facilitate
+ * hashing in ct_endpoint_hash_add(). */
+BUILD_ASSERT_DECL(sizeof(struct ct_endpoint) == sizeof(struct ct_addr) + 4);
+
 /* Changes to this structure need to be reflected in conn_key_hash() */
 struct conn_key {
     struct ct_endpoint src;
