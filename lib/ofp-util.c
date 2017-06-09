@@ -159,6 +159,7 @@ ofputil_match_from_ofp10_match(const struct ofp10_match *ofmatch,
     /* Initialize match->wc. */
     memset(&match->flow, 0, sizeof match->flow);
     ofputil_wildcard_from_ofpfw10(ofpfw, &match->wc);
+    memset(&match->tun_md, 0, sizeof match->tun_md);
 
     /* Initialize most of match->flow. */
     match->flow.nw_src = ofmatch->nw_src;
