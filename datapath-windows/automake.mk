@@ -16,7 +16,9 @@ EXTRA_DIST += \
 	datapath-windows/ovsext/Conntrack-icmp.c \
 	datapath-windows/ovsext/Conntrack-other.c \
 	datapath-windows/ovsext/Conntrack-related.c \
+	datapath-windows/ovsext/Conntrack-nat.c \
 	datapath-windows/ovsext/Conntrack-tcp.c \
+	datapath-windows/ovsext/Conntrack-nat.h \
 	datapath-windows/ovsext/Conntrack.c \
 	datapath-windows/ovsext/Conntrack.h \
 	datapath-windows/ovsext/Datapath.c \
