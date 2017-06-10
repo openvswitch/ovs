@@ -2181,7 +2181,7 @@ OvsDoExecuteActions(POVS_SWITCH_CONTEXT switchContext,
             if (status != NDIS_STATUS_SUCCESS) {
                 /* Pending NBLs are consumed by Defragmentation. */
                 if (status != NDIS_STATUS_PENDING) {
-                    OVS_LOG_ERROR("CT Action failed");
+                    OVS_LOG_ERROR("CT Action failed status = %lu", status);
                     dropReason = L"OVS-conntrack action failed";
                 } else {
                     /* We added a new pending NBL to be consumed later.

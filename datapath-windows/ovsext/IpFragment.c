@@ -25,6 +25,10 @@
 #undef OVS_DBG_MOD
 #endif
 #define OVS_DBG_MOD OVS_DBG_IPFRAG
+/* Based on MIN_FRAGMENT_SIZE.*/
+#define MAX_FRAGMENTS 164
+#define MIN_FRAGMENT_SIZE 400
+#define MAX_IPDATAGRAM_SIZE 65535
 
 /* Function declarations */
 static VOID OvsIpFragmentEntryCleaner(PVOID data);
@@ -146,8 +150,9 @@ OvsIpv4Reassemble(POVS_SWITCH_CONTEXT switchContext,
     IPHdr *ipHdr, *newIpHdr;
     CHAR *ethBuf[sizeof(EthHdr)];
     CHAR *packetBuf;
-    UINT16 ipHdrLen, packetLen, packetHeader;
+    UINT16 ipHdrLen, packetHeader;
     POVS_FRAGMENT_LIST head = NULL;
+    UINT32 packetLen;
 
     curNb = NET_BUFFER_LIST_FIRST_NB(*curNbl);
     ASSERT(NET_BUFFER_NEXT_NB(curNb) == NULL);
@@ -161,7 +166,10 @@ OvsIpv4Reassemble(POVS_SWITCH_CONTEXT switchContext,
     if (ipHdr == NULL) {
         return NDIS_STATUS_INVALID_PACKET;
     }
-    ipHdrLen = (UINT16)(ipHdr->ihl * 4);
+    ipHdrLen = ipHdr->ihl * 4;
+    if (ipHdrLen + entry->totalLen > MAX_IPDATAGRAM_SIZE) {
+        return NDIS_STATUS_INVALID_LENGTH;
+    }
     packetLen = ETH_HEADER_LENGTH + ipHdrLen + entry->totalLen;
     packetBuf = (CHAR*)OvsAllocateMemoryWithTag(packetLen,
                                                 OVS_IPFRAG_POOL_TAG);
@@ -185,7 +193,10 @@ OvsIpv4Reassemble(POVS_SWITCH_CONTEXT switchContext,
     packetHeader = ETH_HEADER_LENGTH + ipHdrLen;
     head = entry->head;
     while (head) {
-        ASSERT((packetHeader + head->offset) <= packetLen);
+        if ((UINT32)(packetHeader + head->offset) > packetLen) {
+            status = NDIS_STATUS_INVALID_DATA;
+            goto cleanup;
+        }
         NdisMoveMemory(packetBuf + packetHeader + head->offset,
                        head->pbuff, head->len);
         head = head->next;
@@ -196,10 +207,6 @@ OvsIpv4Reassemble(POVS_SWITCH_CONTEXT switchContext,
         OVS_LOG_ERROR("Insufficient resources, failed to allocate newNbl");
         status = NDIS_STATUS_RESOURCES;
     }
-
-    OvsFreeMemoryWithTag(packetBuf, OVS_IPFRAG_POOL_TAG);
-    /* Timeout the entry so that clean up thread deletes it .*/
-    entry->expiration -= IPFRAG_ENTRY_TIMEOUT;
 
     /* Complete the fragment NBL */
     ctx = (POVS_BUFFER_CONTEXT)NET_BUFFER_LIST_CONTEXT_DATA_START(*curNbl);
@@ -214,6 +221,9 @@ OvsIpv4Reassemble(POVS_SWITCH_CONTEXT switchContext,
     ctx = (POVS_BUFFER_CONTEXT)NET_BUFFER_LIST_CONTEXT_DATA_START(*newNbl);
     ctx->mru = entry->mru;
     *curNbl = *newNbl;
+cleanup:
+    OvsFreeMemoryWithTag(packetBuf, OVS_IPFRAG_POOL_TAG);
+    entry->markedForDelete = TRUE;
     return status;
 }
 /*
@@ -259,12 +269,15 @@ OvsProcessIpv4Fragment(POVS_SWITCH_CONTEXT switchContext,
     if (ipHdr == NULL) {
         return NDIS_STATUS_INVALID_PACKET;
     }
-    ipHdrLen = (UINT16)(ipHdr->ihl * 4);
+    ipHdrLen = ipHdr->ihl * 4;
     payloadLen = ntohs(ipHdr->tot_len) - ipHdrLen;
     offset = ntohs(ipHdr->frag_off) & IP_OFFSET;
     offset <<= 3;
     flags = ntohs(ipHdr->frag_off) & IP_MF;
-
+    /* Only the last fragment can be of smaller size.*/
+    if (flags && ntohs(ipHdr->tot_len) < MIN_FRAGMENT_SIZE) {
+        return NDIS_STATUS_INVALID_LENGTH;
+    }
     /*Copy fragment specific fields. */
     fragKey.protocol = ipHdr->protocol;
     fragKey.id = ipHdr->id;
@@ -318,6 +331,7 @@ OvsProcessIpv4Fragment(POVS_SWITCH_CONTEXT switchContext,
         entry->mru = ETH_HEADER_LENGTH + ipHdrLen + payloadLen;
         entry->recvdLen += fragStorage->len;
         entry->head = entry->tail = fragStorage;
+        entry->numFragments = 1;
         if (!flags) {
             entry->totalLen = offset + payloadLen;
         }
@@ -337,8 +351,9 @@ OvsProcessIpv4Fragment(POVS_SWITCH_CONTEXT switchContext,
         /* Acquire the entry lock. */
         NdisAcquireSpinLock(&(entry->lockObj));
         NdisGetCurrentSystemTime((LARGE_INTEGER *)&currentTime);
-        if (currentTime > entry->expiration) {
-            /* Expired entry. */
+        if (currentTime > entry->expiration || entry->numFragments == MAX_FRAGMENTS) {
+            /* Mark the entry for delete. */
+            entry->markedForDelete = TRUE;
             goto fragment_error;
         }
         POVS_FRAGMENT_LIST next = entry->head;
@@ -393,6 +408,7 @@ found:
         /*Update Maximum recieved Unit */
         entry->mru = entry->mru > (ETH_HEADER_LENGTH + ipHdrLen + payloadLen) ?
             entry->mru : (ETH_HEADER_LENGTH + ipHdrLen + payloadLen);
+        entry->numFragments++;
         if (!flags) {
             entry->totalLen = offset + payloadLen;
         }
@@ -404,6 +420,7 @@ found:
         return status;
     }
 fragment_error:
+    status = NDIS_STATUS_INVALID_PACKET;
     /* Release the entry lock. */
     NdisReleaseSpinLock(&(entry->lockObj));
 payload_copy_error:
@@ -460,7 +477,7 @@ static VOID
 OvsIpFragmentEntryDelete(POVS_IPFRAG_ENTRY entry, BOOLEAN checkExpiry)
 {
     NdisAcquireSpinLock(&(entry->lockObj));
-    if (checkExpiry) {
+    if (!entry->markedForDelete && checkExpiry) {
         UINT64 currentTime;
         NdisGetCurrentSystemTime((LARGE_INTEGER *)&currentTime);
         if (entry->expiration > currentTime) {
