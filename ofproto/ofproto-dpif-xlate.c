@@ -3899,7 +3899,7 @@ xlate_hash_fields_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
     BITMAP_FOR_EACH_1 (i, MFF_N_IDS, fields->used.bm) {
         const struct mf_field *mf = mf_from_id(i);
 
-        /* Skip fields for which prerequisities are not met. */
+        /* Skip fields for which prerequisites are not met. */
         if (!mf_are_prereqs_ok(mf, &ctx->xin->flow, ctx->wc)) {
             /* Skip the mask bytes for this field. */
             mask_values += mf->n_bytes;

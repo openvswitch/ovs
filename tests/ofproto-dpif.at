@@ -4092,25 +4092,25 @@ ovs-ofctl: actions are invalid with specified match (OFPBAC_MATCH_INCONSISTENT)
 
 AT_CHECK([ovs-ofctl add-flow br0 "udp,ip_frag=later actions=set_field:8888->udp_src,output:1"], [1], [], [stderr])
 AT_CHECK([tail -2 stderr | sed 's/^.*|WARN|//'], [0], [dnl
-set_field udp_src lacks correct prerequisities
+set_field udp_src lacks correct prerequisites
 ovs-ofctl: actions are invalid with specified match (OFPBAC_MATCH_INCONSISTENT)
 ])
 
 AT_CHECK([ovs-ofctl add-flow br0 "udp,ip_frag=later actions=load:8888->NXM_OF_UDP_DST[[]],output:1"], [1], [], [stderr])
 AT_CHECK([tail -2 stderr | sed 's/^.*|WARN|//'], [0], [dnl
-set_field udp_dst lacks correct prerequisities
+set_field udp_dst lacks correct prerequisites
 ovs-ofctl: actions are invalid with specified match (OFPBAC_MATCH_INCONSISTENT)
 ])
 
 AT_CHECK([ovs-ofctl add-flow br0 "sctp,ip_frag=later actions=set_field:8888->sctp_src,output:1"], [1], [], [stderr])
 AT_CHECK([tail -2 stderr | sed 's/^.*|WARN|//'], [0], [dnl
-set_field sctp_src lacks correct prerequisities
+set_field sctp_src lacks correct prerequisites
 ovs-ofctl: actions are invalid with specified match (OFPBAC_MATCH_INCONSISTENT)
 ])
 
 AT_CHECK([ovs-ofctl add-flow br0 "sctp,ip_frag=later actions=set_field:8888->sctp_dst,output:1"], [1], [], [stderr])
 AT_CHECK([tail -2 stderr | sed 's/^.*|WARN|//'], [0], [dnl
-set_field sctp_dst lacks correct prerequisities
+set_field sctp_dst lacks correct prerequisites
 ovs-ofctl: actions are invalid with specified match (OFPBAC_MATCH_INCONSISTENT)
 ])
 

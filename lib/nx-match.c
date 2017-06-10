@@ -625,7 +625,7 @@ nx_pull_match(struct ofpbuf *b, unsigned int match_len, struct match *match,
 
 /* Behaves the same as nx_pull_match(), but skips over unknown NXM headers,
  * instead of failing with an error, and does not check for field
- * prerequisities. */
+ * prerequisites. */
 enum ofperr
 nx_pull_match_loose(struct ofpbuf *b, unsigned int match_len,
                     struct match *match, ovs_be64 *cookie,
@@ -695,7 +695,7 @@ oxm_pull_match(struct ofpbuf *b, bool pipeline_fields_only,
 
 /* Behaves the same as oxm_pull_match() with two exceptions.  Skips over
  * unknown OXM headers instead of failing with an error when they are
- * encountered, and does not check for field prerequisities. */
+ * encountered, and does not check for field prerequisites. */
 enum ofperr
 oxm_pull_match_loose(struct ofpbuf *b, bool pipeline_fields_only,
                      const struct tun_table *tun_table, struct match *match)

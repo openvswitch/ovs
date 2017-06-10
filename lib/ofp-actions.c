@@ -7616,7 +7616,7 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
         if (!mf_are_prereqs_ok(mf, flow, NULL) ||
             (mf->id == MFF_VLAN_VID &&
              !(flow->vlans[0].tci & htons(VLAN_CFI)))) {
-            VLOG_WARN_RL(&rl, "set_field %s lacks correct prerequisities",
+            VLOG_WARN_RL(&rl, "set_field %s lacks correct prerequisites",
                          mf->name);
             return OFPERR_OFPBAC_MATCH_INCONSISTENT;
         }
