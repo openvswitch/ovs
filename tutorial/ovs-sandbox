@@ -69,6 +69,7 @@ built=false
 ovn=false
 ovnsb_schema=
 ovnnb_schema=
+ovn_rbac=true
 dummy=override
 
 for option; do
@@ -118,6 +119,7 @@ These options force ovs-sandbox to use an installed Open vSwitch:
                        for any daemon set to run under gdb
   -S, --schema=FILE    use FILE as vswitch.ovsschema
   -o, --ovn            enable OVN
+  --no-ovn-rbac        disable role-based access control for OVN
 
 Other options:
   -h, --help           Print this usage message.
@@ -185,6 +187,9 @@ EOF
             ;;
         -o|--ovn)
             ovn=true
+            ;;
+        --no-ovn-rbac)
+            ovn_rbac=false
             ;;
         -R|--gdb-run)
             gdb_vswitchd_ex=true
@@ -337,7 +342,7 @@ if $ovn; then
         $OVS_PKI -B 1024 init
         $OVS_PKI -B 1024 req+sign ovnsb switch
         $OVS_PKI -B 1024 req+sign ovnnb switch
-        $OVS_PKI -B 1024 req+sign ovn-controller switch
+        $OVS_PKI -B 1024 -u req+sign chassis-1 switch
     fi
 fi
 rungdb $gdb_ovsdb $gdb_ovsdb_ex ovsdb-server --detach --no-chdir --pidfile -vconsole:off --log-file \
@@ -399,7 +404,7 @@ if $ovn; then
     ovn-nbctl init
     ovn-sbctl init
 
-    ovs-vsctl set open . external-ids:system-id=56b18105-5706-46ef-80c4-ff20979ab068
+    ovs-vsctl set open . external-ids:system-id=chassis-1
     ovs-vsctl set open . external-ids:hostname=sandbox
     ovs-vsctl set open . external-ids:ovn-encap-type=geneve
     ovs-vsctl set open . external-ids:ovn-encap-ip=127.0.0.1
@@ -408,9 +413,13 @@ if $ovn; then
         ovn-nbctl set-ssl $sandbox/ovnnb-privkey.pem  $sandbox/ovnnb-cert.pem $sandbox/pki/switchca/cacert.pem
         ovn-nbctl set-connection pssl:6641
         ovn-sbctl set-ssl $sandbox/ovnsb-privkey.pem  $sandbox/ovnsb-cert.pem $sandbox/pki/switchca/cacert.pem
-        ovn-sbctl set-connection pssl:6642
+        if $ovn_rbac; then
+            ovn-sbctl set-connection role=ovn-controller pssl:6642
+        else
+            ovn-sbctl set-connection pssl:6642
+        fi
         ovs-vsctl set open . external-ids:ovn-remote=ssl:127.0.0.1:6642
-        OVN_CTRLR_PKI="-p $sandbox/ovn-controller-privkey.pem -c $sandbox/ovn-controller-cert.pem -C $sandbox/pki/switchca/cacert.pem"
+        OVN_CTRLR_PKI="-p $sandbox/chassis-1-privkey.pem -c $sandbox/chassis-1-cert.pem -C $sandbox/pki/switchca/cacert.pem"
     else
         ovs-vsctl set open . external-ids:ovn-remote=unix:"$sandbox"/ovnsb_db.sock
         OVN_CTRLR_PKI=""
