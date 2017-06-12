@@ -247,8 +247,6 @@ void ofputil_match_to_ofp10_match(const struct match *, struct ofp10_match *);
 enum ofperr ofputil_pull_ofp11_match(struct ofpbuf *, const struct tun_table *,
                                      const struct vl_mff_map *, struct match *,
                                      uint16_t *padded_match_len);
-enum ofperr ofputil_pull_ofp11_mask(struct ofpbuf *, struct match *,
-                                    struct mf_bitmap *bm);
 enum ofperr ofputil_match_from_ofp11_match(const struct ofp11_match *,
                                            struct match *);
 int ofputil_put_ofp11_match(struct ofpbuf *, const struct match *,
