@@ -45,6 +45,10 @@
 #include "unaligned.h"
 #include "unixctl.h"
 #include "openvswitch/vlog.h"
+#include "netdev-tc-offloads.h"
+#ifdef __linux__
+#include "netdev-linux.h"
+#endif
 
 VLOG_DEFINE_THIS_MODULE(netdev_vport);
 
@@ -806,10 +810,37 @@ get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 }
 
 
+#ifdef __linux__
+static int
+netdev_vport_get_ifindex__(const struct netdev *netdev_)
+{
+    char buf[NETDEV_VPORT_NAME_BUFSIZE];
+    const char *name = netdev_vport_get_dpif_port(netdev_, buf, sizeof(buf));
+
+    return linux_get_ifindex(name);
+}
+
+static int
+netdev_vport_get_ifindex(const struct netdev *netdev_)
+{
+    if (netdev_is_flow_api_enabled())
+        return netdev_vport_get_ifindex__(netdev_);
+    else
+        return -EOPNOTSUPP;
+}
+
+#define NETDEV_VPORT_GET_IFINDEX netdev_vport_get_ifindex
+#define NETDEV_FLOW_OFFLOAD_API LINUX_FLOW_OFFLOAD_API
+#else /* !__linux__ */
+#define NETDEV_VPORT_GET_IFINDEX NULL
+#define NETDEV_FLOW_OFFLOAD_API NO_OFFLOAD_API
+#endif /* __linux__ */
+
 #define VPORT_FUNCTIONS(GET_CONFIG, SET_CONFIG,             \
                         GET_TUNNEL_CONFIG, GET_STATUS,      \
                         BUILD_HEADER,                       \
-                        PUSH_HEADER, POP_HEADER)            \
+                        PUSH_HEADER, POP_HEADER,            \
+                        GET_IFINDEX)                        \
     NULL,                                                   \
     netdev_vport_run,                                       \
     netdev_vport_wait,                                      \
@@ -834,7 +865,7 @@ get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     netdev_vport_get_etheraddr,                             \
     NULL,                       /* get_mtu */               \
     NULL,                       /* set_mtu */               \
-    NULL,                       /* get_ifindex */           \
+    GET_IFINDEX,                                            \
     NULL,                       /* get_carrier */           \
     NULL,                       /* get_carrier_resets */    \
     NULL,                       /* get_miimon */            \
@@ -875,24 +906,19 @@ get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     NULL,                   /* rx_wait */                   \
     NULL,                   /* rx_drain */                  \
                                                             \
-    NULL,                   /* flow_flush */                \
-    NULL,                   /* flow_dump_create */          \
-    NULL,                   /* flow_dump_destroy */         \
-    NULL,                   /* flow_dump_next */            \
-    NULL,                   /* flow_put */                  \
-    NULL,                   /* flow_get */                  \
-    NULL,                   /* flow_del */                  \
-    NULL,                   /* init_flow_api */
+    NETDEV_FLOW_OFFLOAD_API
 
 
-#define TUNNEL_CLASS(NAME, DPIF_PORT, BUILD_HEADER, PUSH_HEADER, POP_HEADER)   \
+#define TUNNEL_CLASS(NAME, DPIF_PORT, BUILD_HEADER, PUSH_HEADER, POP_HEADER,   \
+                     GET_IFINDEX)                                              \
     { DPIF_PORT,                                                               \
         { NAME, false,                                                         \
           VPORT_FUNCTIONS(get_tunnel_config,                                   \
                           set_tunnel_config,                                   \
                           get_netdev_tunnel_config,                            \
                           tunnel_get_status,                                   \
-                          BUILD_HEADER, PUSH_HEADER, POP_HEADER) }}
+                          BUILD_HEADER, PUSH_HEADER, POP_HEADER,               \
+                          GET_IFINDEX) }}
 
 void
 netdev_vport_tunnel_register(void)
@@ -902,15 +928,18 @@ netdev_vport_tunnel_register(void)
     static const struct vport_class vport_classes[] = {
         TUNNEL_CLASS("geneve", "genev_sys", netdev_geneve_build_header,
                                             netdev_tnl_push_udp_header,
-                                            netdev_geneve_pop_header),
+                                            netdev_geneve_pop_header,
+                                            NULL),
         TUNNEL_CLASS("gre", "gre_sys", netdev_gre_build_header,
                                        netdev_gre_push_header,
-                                       netdev_gre_pop_header),
+                                       netdev_gre_pop_header,
+                                       NULL),
         TUNNEL_CLASS("vxlan", "vxlan_sys", netdev_vxlan_build_header,
                                            netdev_tnl_push_udp_header,
-                                           netdev_vxlan_pop_header),
-        TUNNEL_CLASS("lisp", "lisp_sys", NULL, NULL, NULL),
-        TUNNEL_CLASS("stt", "stt_sys", NULL, NULL, NULL),
+                                           netdev_vxlan_pop_header,
+                                           NETDEV_VPORT_GET_IFINDEX),
+        TUNNEL_CLASS("lisp", "lisp_sys", NULL, NULL, NULL, NULL),
+        TUNNEL_CLASS("stt", "stt_sys", NULL, NULL, NULL, NULL),
     };
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
 
@@ -937,6 +966,6 @@ netdev_vport_patch_register(void)
               VPORT_FUNCTIONS(get_patch_config,
                               set_patch_config,
                               NULL,
-                              NULL, NULL, NULL, NULL) }};
+                              NULL, NULL, NULL, NULL, NULL) }};
     netdev_register_provider(&patch_class.netdev_class);
 }
