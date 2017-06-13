@@ -73,6 +73,7 @@ enum { MAX_PORTS = USHRT_MAX };
 #define ETH_FLAG_LRO      (1 << 15)    /* LRO is enabled */
 
 #define FLOW_DUMP_MAX_BATCH 50
+#define OPERATE_MAX_OPS 50
 
 struct dpif_netlink_dp {
     /* Generic Netlink header. */
@@ -1831,8 +1832,6 @@ static size_t
 dpif_netlink_operate__(struct dpif_netlink *dpif,
                        struct dpif_op **ops, size_t n_ops)
 {
-    enum { MAX_OPS = 50 };
-
     struct op_auxdata {
         struct nl_transaction txn;
 
@@ -1841,12 +1840,12 @@ dpif_netlink_operate__(struct dpif_netlink *dpif,
 
         struct ofpbuf reply;
         uint64_t reply_stub[1024 / 8];
-    } auxes[MAX_OPS];
+    } auxes[OPERATE_MAX_OPS];
 
-    struct nl_transaction *txnsp[MAX_OPS];
+    struct nl_transaction *txnsp[OPERATE_MAX_OPS];
     size_t i;
 
-    n_ops = MIN(n_ops, MAX_OPS);
+    n_ops = MIN(n_ops, OPERATE_MAX_OPS);
     for (i = 0; i < n_ops; i++) {
         struct op_auxdata *aux = &auxes[i];
         struct dpif_op *op = ops[i];
@@ -1989,15 +1988,218 @@ dpif_netlink_operate__(struct dpif_netlink *dpif,
     return n_ops;
 }
 
+static int
+parse_flow_put(struct dpif_netlink *dpif, struct dpif_flow_put *put)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
+    struct match match;
+    odp_port_t in_port;
+    const struct nlattr *nla;
+    size_t left;
+    int outputs = 0;
+    struct netdev *dev;
+    struct offload_info info;
+    ovs_be16 dst_port = 0;
+    int err;
+
+    if (put->flags & DPIF_FP_PROBE) {
+        return EOPNOTSUPP;
+    }
+
+    err = parse_key_and_mask_to_match(put->key, put->key_len, put->mask,
+                                      put->mask_len, &match);
+    if (err) {
+        return err;
+    }
+
+    /* When we try to install a dummy flow from a probed feature. */
+    if (match.flow.dl_type == htons(0x1234)) {
+        return EOPNOTSUPP;
+    }
+
+    in_port = match.flow.in_port.odp_port;
+    dev = netdev_ports_get(in_port, DPIF_HMAP_KEY(&dpif->dpif));
+    if (!dev) {
+        return EOPNOTSUPP;
+    }
+
+    /* Get tunnel dst port and count outputs */
+    NL_ATTR_FOR_EACH(nla, left, put->actions, put->actions_len) {
+        if (nl_attr_type(nla) == OVS_ACTION_ATTR_OUTPUT) {
+            const struct netdev_tunnel_config *tnl_cfg;
+            struct netdev *outdev;
+            odp_port_t out_port;
+
+            outputs++;
+            if (outputs > 1) {
+                VLOG_DBG_RL(&rl, "offloading multiple ports isn't supported");
+                err = EOPNOTSUPP;
+                goto out;
+            }
+
+            out_port = nl_attr_get_odp_port(nla);
+            outdev = netdev_ports_get(out_port, DPIF_HMAP_KEY(&dpif->dpif));
+            if (!outdev) {
+                err = EOPNOTSUPP;
+                goto out;
+            }
+            tnl_cfg = netdev_get_tunnel_config(outdev);
+            if (tnl_cfg && tnl_cfg->dst_port != 0) {
+                dst_port = tnl_cfg->dst_port;
+            }
+            netdev_close(outdev);
+        }
+    }
+
+    info.port_hmap_obj = DPIF_HMAP_KEY(&dpif->dpif);
+    info.tp_dst_port = dst_port;
+    err = netdev_flow_put(dev, &match,
+                          CONST_CAST(struct nlattr *, put->actions),
+                          put->actions_len,
+                          CONST_CAST(ovs_u128 *, put->ufid),
+                          &info, put->stats);
+
+    if (!err) {
+        if (put->flags & DPIF_FP_MODIFY) {
+            struct dpif_op *opp;
+            struct dpif_op op;
+
+            op.type = DPIF_OP_FLOW_DEL;
+            op.u.flow_del.key = put->key;
+            op.u.flow_del.key_len = put->key_len;
+            op.u.flow_del.ufid = put->ufid;
+            op.u.flow_del.pmd_id = put->pmd_id;
+            op.u.flow_del.stats = NULL;
+            op.u.flow_del.terse = false;
+
+            opp = &op;
+            dpif_netlink_operate__(dpif, &opp, 1);
+        }
+
+        VLOG_DBG("added flow");
+    } else if (err != EEXIST) {
+        VLOG_ERR_RL(&rl, "failed to offload flow: %s", ovs_strerror(err));
+    }
+
+out:
+    if (err && err != EEXIST && (put->flags & DPIF_FP_MODIFY)) {
+        /* Modified rule can't be offloaded, try and delete from HW */
+        int del_err = netdev_flow_del(dev, put->ufid, put->stats);
+
+        if (!del_err) {
+            /* Delete from hw success, so old flow was offloaded.
+             * Change flags to create the flow in kernel */
+            put->flags &= ~DPIF_FP_MODIFY;
+            put->flags |= DPIF_FP_CREATE;
+        } else if (del_err != ENOENT) {
+            VLOG_ERR_RL(&rl, "failed to delete offloaded flow: %s",
+                        ovs_strerror(del_err));
+            /* stop proccesing the flow in kernel */
+            err = 0;
+        }
+    }
+
+    netdev_close(dev);
+
+    return err;
+}
+
+static void
+dbg_print_flow(const struct nlattr *key, size_t key_len,
+               const struct nlattr *mask, size_t mask_len,
+               const struct nlattr *actions, size_t actions_len,
+               const ovs_u128 *ufid,
+               const char *op)
+{
+        struct ds s;
+
+        ds_init(&s);
+        ds_put_cstr(&s, op);
+        ds_put_cstr(&s, " (");
+        odp_format_ufid(ufid, &s);
+        ds_put_cstr(&s, ")");
+        if (key_len) {
+            ds_put_cstr(&s, "\nflow (verbose): ");
+            odp_flow_format(key, key_len, mask, mask_len, NULL, &s, true);
+            ds_put_cstr(&s, "\nflow: ");
+            odp_flow_format(key, key_len, mask, mask_len, NULL, &s, false);
+        }
+        ds_put_cstr(&s, "\nactions: ");
+        format_odp_actions(&s, actions, actions_len);
+        VLOG_DBG("\n%s", ds_cstr(&s));
+        ds_destroy(&s);
+}
+
+static int
+try_send_to_netdev(struct dpif_netlink *dpif, struct dpif_op *op)
+{
+    int err = EOPNOTSUPP;
+
+    switch (op->type) {
+    case DPIF_OP_FLOW_PUT: {
+        struct dpif_flow_put *put = &op->u.flow_put;
+
+        if (!put->ufid) {
+            break;
+        }
+        dbg_print_flow(put->key, put->key_len, put->mask, put->mask_len,
+                       put->actions, put->actions_len, put->ufid,
+                       (put->flags & DPIF_FP_MODIFY ? "PUT(MODIFY)" : "PUT"));
+        err = parse_flow_put(dpif, put);
+        break;
+    }
+    case DPIF_OP_FLOW_DEL:
+    case DPIF_OP_FLOW_GET:
+    case DPIF_OP_EXECUTE:
+    default:
+        break;
+    }
+
+    return err;
+}
+
+static void
+dpif_netlink_operate_chunks(struct dpif_netlink *dpif, struct dpif_op **ops,
+                            size_t n_ops)
+{
+    while (n_ops > 0) {
+        size_t chunk = dpif_netlink_operate__(dpif, ops, n_ops);
+
+        ops += chunk;
+        n_ops -= chunk;
+    }
+}
+
 static void
 dpif_netlink_operate(struct dpif *dpif_, struct dpif_op **ops, size_t n_ops)
 {
     struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
+    struct dpif_op *new_ops[OPERATE_MAX_OPS];
+    int count = 0;
+    int i = 0;
+    int err = 0;
 
-    while (n_ops > 0) {
-        size_t chunk = dpif_netlink_operate__(dpif, ops, n_ops);
-        ops += chunk;
-        n_ops -= chunk;
+    if (netdev_is_flow_api_enabled()) {
+        while (n_ops > 0) {
+            count = 0;
+
+            while (n_ops > 0 && count < OPERATE_MAX_OPS) {
+                struct dpif_op *op = ops[i++];
+
+                err = try_send_to_netdev(dpif, op);
+                if (err && err != EEXIST) {
+                    new_ops[count++] = op;
+                } else {
+                    op->error = err;
+                }
+
+                n_ops--;
+            }
+
+            dpif_netlink_operate_chunks(dpif, new_ops, count);
+        }
+    } else {
+        dpif_netlink_operate_chunks(dpif, ops, n_ops);
     }
 }
 

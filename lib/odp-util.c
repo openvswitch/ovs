@@ -41,6 +41,7 @@
 #include "util.h"
 #include "uuid.h"
 #include "openvswitch/vlog.h"
+#include "openvswitch/match.h"
 
 VLOG_DEFINE_THIS_MODULE(odp_util);
 
@@ -5575,6 +5576,61 @@ odp_flow_key_to_mask(const struct nlattr *mask_key, size_t mask_key_len,
 
         return ODP_FIT_PERFECT;
     }
+}
+
+/* Converts the netlink formated key/mask to match.
+ * Fails if odp_flow_key_from_key/mask and odp_flow_key_key/mask
+ * disagree on the acceptable form of flow */
+int
+parse_key_and_mask_to_match(const struct nlattr *key, size_t key_len,
+                            const struct nlattr *mask, size_t mask_len,
+                            struct match *match)
+{
+    enum odp_key_fitness fitness;
+
+    fitness = odp_flow_key_to_flow(key, key_len, &match->flow);
+    if (fitness) {
+        /* This should not happen: it indicates that
+         * odp_flow_key_from_flow() and odp_flow_key_to_flow() disagree on
+         * the acceptable form of a flow.  Log the problem as an error,
+         * with enough details to enable debugging. */
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+        if (!VLOG_DROP_ERR(&rl)) {
+            struct ds s;
+
+            ds_init(&s);
+            odp_flow_format(key, key_len, NULL, 0, NULL, &s, true);
+            VLOG_ERR("internal error parsing flow key %s", ds_cstr(&s));
+            ds_destroy(&s);
+        }
+
+        return EINVAL;
+    }
+
+    fitness = odp_flow_key_to_mask(mask, mask_len, &match->wc, &match->flow);
+    if (fitness) {
+        /* This should not happen: it indicates that
+         * odp_flow_key_from_mask() and odp_flow_key_to_mask()
+         * disagree on the acceptable form of a mask.  Log the problem
+         * as an error, with enough details to enable debugging. */
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+        if (!VLOG_DROP_ERR(&rl)) {
+            struct ds s;
+
+            ds_init(&s);
+            odp_flow_format(key, key_len, mask, mask_len, NULL, &s,
+                            true);
+            VLOG_ERR("internal error parsing flow mask %s (%s)",
+                     ds_cstr(&s), odp_key_fitness_to_string(fitness));
+            ds_destroy(&s);
+        }
+
+        return EINVAL;
+    }
+
+    return 0;
 }
 
 /* Returns 'fitness' as a string, for use in debug messages. */

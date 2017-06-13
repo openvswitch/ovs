@@ -256,6 +256,9 @@ enum odp_key_fitness odp_flow_key_to_mask(const struct nlattr *mask_key,
                                           size_t mask_key_len,
                                           struct flow_wildcards *mask,
                                           const struct flow *flow);
+int parse_key_and_mask_to_match(const struct nlattr *key, size_t key_len,
+                                const struct nlattr *mask, size_t mask_len,
+                                struct match *match);
 
 const char *odp_key_fitness_to_string(enum odp_key_fitness);
 
