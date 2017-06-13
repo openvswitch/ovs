@@ -873,7 +873,16 @@ get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     NULL,                   /* rx_dealloc */                \
     NULL,                   /* rx_recv */                   \
     NULL,                   /* rx_wait */                   \
-    NULL,                   /* rx_drain */
+    NULL,                   /* rx_drain */                  \
+                                                            \
+    NULL,                   /* flow_flush */                \
+    NULL,                   /* flow_dump_create */          \
+    NULL,                   /* flow_dump_destroy */         \
+    NULL,                   /* flow_dump_next */            \
+    NULL,                   /* flow_put */                  \
+    NULL,                   /* flow_get */                  \
+    NULL,                   /* flow_del */                  \
+    NULL,                   /* init_flow_api */
 
 
 #define TUNNEL_CLASS(NAME, DPIF_PORT, BUILD_HEADER, PUSH_HEADER, POP_HEADER)   \
