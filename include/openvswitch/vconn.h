@@ -61,18 +61,6 @@ int vconn_dump_flows(struct vconn *, const struct ofputil_flow_stats_request *,
                      enum ofputil_protocol,
                      struct ofputil_flow_stats **fsesp, size_t *n_fsesp);
 
-/* Bundle errors must be free()d by the caller. */
-struct vconn_bundle_error {
-    struct ovs_list list_node;
-
-    /* OpenFlow header and some of the message contents for error reporting. */
-    union {
-        struct ofp_header ofp_msg;
-        uint8_t ofp_msg_data[64];
-    };
-};
-
-/* Bundle errors must be free()d by the caller. */
 int vconn_bundle_transact(struct vconn *, struct ovs_list *requests,
                           uint16_t bundle_flags,
                           struct ovs_list *errors);
