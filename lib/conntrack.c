@@ -573,6 +573,7 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
                 nc->conn_type == CT_CONN_TYPE_DEFAULT) {
                 *nc = *conn_for_un_nat_copy;
                 conn_for_un_nat_copy->conn_type = CT_CONN_TYPE_UN_NAT;
+                conn_for_un_nat_copy->nat_info = NULL;
             }
             ct_rwlock_unlock(&ct->nat_resources_lock);
 
