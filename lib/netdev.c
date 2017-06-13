@@ -2127,6 +2127,138 @@ netdev_is_flow_api_enabled(void)
     return netdev_flow_api_enabled;
 }
 
+/* Protects below port hashmaps. */
+static struct ovs_mutex netdev_hmap_mutex = OVS_MUTEX_INITIALIZER;
+
+static struct hmap port_to_netdev OVS_GUARDED_BY(netdev_hmap_mutex)
+    = HMAP_INITIALIZER(&port_to_netdev);
+static struct hmap ifindex_to_port OVS_GUARDED_BY(netdev_hmap_mutex)
+    = HMAP_INITIALIZER(&ifindex_to_port);
+
+struct port_to_netdev_data {
+    struct hmap_node node;
+    struct netdev *netdev;
+    struct dpif_port dpif_port;
+    const void *obj;
+};
+
+struct ifindex_to_port_data {
+    struct hmap_node node;
+    int ifindex;
+    odp_port_t port;
+};
+
+static struct port_to_netdev_data *
+netdev_ports_lookup(odp_port_t port_no, const void *obj)
+    OVS_REQUIRES(netdev_hmap_mutex)
+{
+    size_t hash = hash_int(odp_to_u32(port_no), hash_pointer(obj, 0));
+    struct port_to_netdev_data *data;
+
+    HMAP_FOR_EACH_WITH_HASH(data, node, hash, &port_to_netdev) {
+            if (data->obj == obj && data->dpif_port.port_no == port_no) {
+                return data;
+            }
+    }
+    return NULL;
+}
+
+int
+netdev_ports_insert(struct netdev *netdev, const void *obj,
+                    struct dpif_port *dpif_port)
+{
+    size_t hash = hash_int(odp_to_u32(dpif_port->port_no),
+                           hash_pointer(obj, 0));
+    struct port_to_netdev_data *data;
+    struct ifindex_to_port_data *ifidx;
+    int ifindex = netdev_get_ifindex(netdev);
+
+    if (ifindex < 0) {
+        return ENODEV;
+    }
+
+    data = xzalloc(sizeof *data);
+    ifidx = xzalloc(sizeof *ifidx);
+
+    ovs_mutex_lock(&netdev_hmap_mutex);
+    if (netdev_ports_lookup(dpif_port->port_no, obj)) {
+        ovs_mutex_unlock(&netdev_hmap_mutex);
+        return EEXIST;
+    }
+
+    data->netdev = netdev_ref(netdev);
+    data->obj = obj;
+    dpif_port_clone(&data->dpif_port, dpif_port);
+
+    ifidx->ifindex = ifindex;
+    ifidx->port = dpif_port->port_no;
+
+    hmap_insert(&port_to_netdev, &data->node, hash);
+    hmap_insert(&ifindex_to_port, &ifidx->node, ifidx->ifindex);
+    ovs_mutex_unlock(&netdev_hmap_mutex);
+
+    netdev_init_flow_api(netdev);
+
+    return 0;
+}
+
+struct netdev *
+netdev_ports_get(odp_port_t port_no, const void *obj)
+{
+    struct port_to_netdev_data *data;
+    struct netdev *ret = NULL;
+
+    ovs_mutex_lock(&netdev_hmap_mutex);
+    data = netdev_ports_lookup(port_no, obj);
+    if (data) {
+        ret = netdev_ref(data->netdev);
+    }
+    ovs_mutex_unlock(&netdev_hmap_mutex);
+
+    return ret;
+}
+
+int
+netdev_ports_remove(odp_port_t port_no, const void *obj)
+{
+    struct port_to_netdev_data *data;
+    int ret = ENOENT;
+
+    ovs_mutex_lock(&netdev_hmap_mutex);
+
+    data = netdev_ports_lookup(port_no, obj);
+
+    if (data) {
+        dpif_port_destroy(&data->dpif_port);
+        netdev_close(data->netdev); /* unref and possibly close */
+        hmap_remove(&port_to_netdev, &data->node);
+        free(data);
+        ret = 0;
+    }
+
+    ovs_mutex_unlock(&netdev_hmap_mutex);
+
+    return ret;
+}
+
+odp_port_t
+netdev_ifindex_to_odp_port(int ifindex)
+{
+    struct ifindex_to_port_data *data;
+    odp_port_t ret = 0;
+
+    ovs_mutex_lock(&netdev_hmap_mutex);
+    HMAP_FOR_EACH_WITH_HASH(data, node, ifindex, &ifindex_to_port) {
+            if (data->ifindex == ifindex) {
+                ret = data->port;
+                break;
+            }
+    }
+    ovs_mutex_unlock(&netdev_hmap_mutex);
+
+    return ret;
+}
+
 #ifdef __linux__
 void
 netdev_set_flow_api_enabled(const struct smap *ovs_other_config)
