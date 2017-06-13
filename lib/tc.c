@@ -24,27 +24,6 @@
 
 VLOG_DEFINE_THIS_MODULE(tc);
 
-/* Returns tc handle 'major':'minor'. */
-unsigned int
-tc_make_handle(unsigned int major, unsigned int minor)
-{
-    return TC_H_MAKE(major << 16, minor);
-}
-
-/* Returns the major number from 'handle'. */
-unsigned int
-tc_get_major(unsigned int handle)
-{
-    return TC_H_MAJ(handle) >> 16;
-}
-
-/* Returns the minor number from 'handle'. */
-unsigned int
-tc_get_minor(unsigned int handle)
-{
-    return TC_H_MIN(handle);
-}
-
 struct tcmsg *
 tc_make_request(int ifindex, int type, unsigned int flags,
                 struct ofpbuf *request)
