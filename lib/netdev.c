@@ -2306,6 +2306,24 @@ netdev_ports_flow_dump_create(const void *obj, int *ports)
     return dumps;
 }
 
+int
+netdev_ports_flow_del(const void *obj, const ovs_u128 *ufid,
+                      struct dpif_flow_stats *stats)
+{
+    struct port_to_netdev_data *data;
+
+    ovs_mutex_lock(&netdev_hmap_mutex);
+    HMAP_FOR_EACH(data, node, &port_to_netdev) {
+        if (data->obj == obj && !netdev_flow_del(data->netdev, ufid, stats)) {
+            ovs_mutex_unlock(&netdev_hmap_mutex);
+            return 0;
+        }
+    }
+    ovs_mutex_unlock(&netdev_hmap_mutex);
+
+    return ENOENT;
+}
+
 #ifdef __linux__
 void
 netdev_set_flow_api_enabled(const struct smap *ovs_other_config)
