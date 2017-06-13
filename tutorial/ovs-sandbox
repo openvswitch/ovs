@@ -372,7 +372,6 @@ if $ovn; then
     rungdb $gdb_ovsdb $gdb_ovsdb_ex ovsdb-server --detach --no-chdir \
         --pidfile="$sandbox"/ovnsb_db2.pid  -vconsole:off \
         --log-file="$sandbox"/ovnsb_db2.log \
-        --remote=db:OVN_Southbound,SB_Global,connections \
         --private-key=db:OVN_Southbound,SSL,private_key \
         --certificate=db:OVN_Southbound,SSL,certificate \
         --ca-cert=db:OVN_Southbound,SSL,ca_cert \
