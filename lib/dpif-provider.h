@@ -281,9 +281,11 @@ struct dpif_class {
      * dpif_flow_dump_thread_init(), respectively.
      *
      * If 'terse' is true, then only UID and statistics will
-     * be returned in the dump. Otherwise, all fields will be returned. */
+     * be returned in the dump. Otherwise, all fields will be returned.
+     *
+     * If 'type' isn't null, dumps only the flows of the given type. */
     struct dpif_flow_dump *(*flow_dump_create)(const struct dpif *dpif,
-                                               bool terse);
+                                               bool terse, char *type);
     int (*flow_dump_destroy)(struct dpif_flow_dump *dump);
 
     struct dpif_flow_dump_thread *(*flow_dump_thread_create)(

@@ -5267,7 +5267,7 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
     }
 
     ds_init(&ds);
-    flow_dump = dpif_flow_dump_create(ofproto->backer->dpif, false);
+    flow_dump = dpif_flow_dump_create(ofproto->backer->dpif, false, NULL);
     flow_dump_thread = dpif_flow_dump_thread_create(flow_dump);
     while (dpif_flow_dump_next(flow_dump_thread, &f, 1)) {
         struct flow flow;

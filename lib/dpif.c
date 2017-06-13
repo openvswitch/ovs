@@ -1061,9 +1061,9 @@ dpif_flow_del(struct dpif *dpif,
  * This function always successfully returns a dpif_flow_dump.  Error
  * reporting is deferred to dpif_flow_dump_destroy(). */
 struct dpif_flow_dump *
-dpif_flow_dump_create(const struct dpif *dpif, bool terse)
+dpif_flow_dump_create(const struct dpif *dpif, bool terse, char *type)
 {
-    return dpif->dpif_class->flow_dump_create(dpif, terse);
+    return dpif->dpif_class->flow_dump_create(dpif, terse, type);
 }
 
 /* Destroys 'dump', which must have been created with dpif_flow_dump_create().
