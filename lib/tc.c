@@ -95,7 +95,7 @@ tc_add_del_ingress_qdisc(int ifindex, bool add)
     int flags = add ? NLM_F_EXCL | NLM_F_CREATE : 0;
 
     tcmsg = tc_make_request(ifindex, type, flags, &request);
-    tcmsg->tcm_handle = tc_make_handle(0xffff, 0);
+    tcmsg->tcm_handle = TC_H_MAKE(TC_H_INGRESS, 0);
     tcmsg->tcm_parent = TC_H_INGRESS;
     nl_msg_put_string(&request, TCA_KIND, "ingress");
     nl_msg_put_unspec(&request, TCA_OPTIONS, NULL, 0);
