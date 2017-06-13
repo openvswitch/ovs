@@ -29,9 +29,6 @@
 #include <linux/types.h>
 #include <linux/ethtool.h>
 #include <linux/mii.h>
-#include <linux/pkt_cls.h>
-#include <linux/pkt_sched.h>
-#include <linux/rtnetlink.h>
 #include <linux/sockios.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
@@ -70,6 +67,7 @@
 #include "openvswitch/shash.h"
 #include "socket-util.h"
 #include "sset.h"
+#include "tc.h"
 #include "timer.h"
 #include "unaligned.h"
 #include "openvswitch/vlog.h"
@@ -434,22 +432,14 @@ static const struct tc_ops *const tcs[] = {
     NULL
 };
 
-static unsigned int tc_make_handle(unsigned int major, unsigned int minor);
-static unsigned int tc_get_major(unsigned int handle);
-static unsigned int tc_get_minor(unsigned int handle);
-
 static unsigned int tc_ticks_to_bytes(unsigned int rate, unsigned int ticks);
 static unsigned int tc_bytes_to_ticks(unsigned int rate, unsigned int size);
 static unsigned int tc_buffer_per_jiffy(unsigned int rate);
 
-static struct tcmsg *tc_make_request(int ifindex, int type,
-                                     unsigned int flags, struct ofpbuf *);
 static struct tcmsg *netdev_linux_tc_make_request(const struct netdev *,
                                                   int type,
                                                   unsigned int flags,
                                                   struct ofpbuf *);
-static int tc_transact(struct ofpbuf *request, struct ofpbuf **replyp);
-static int tc_add_del_ingress_qdisc(int ifindex, bool add);
 static int tc_add_policer(struct netdev *,
                           uint32_t kbits_rate, uint32_t kbits_burst);
 
@@ -4657,44 +4647,6 @@ static double ticks_per_s;
  */
 static unsigned int buffer_hz;
 
-/* Returns tc handle 'major':'minor'. */
-static unsigned int
-tc_make_handle(unsigned int major, unsigned int minor)
-{
-    return TC_H_MAKE(major << 16, minor);
-}
-
-/* Returns the major number from 'handle'. */
-static unsigned int
-tc_get_major(unsigned int handle)
-{
-    return TC_H_MAJ(handle) >> 16;
-}
-
-/* Returns the minor number from 'handle'. */
-static unsigned int
-tc_get_minor(unsigned int handle)
-{
-    return TC_H_MIN(handle);
-}
-
-static struct tcmsg *
-tc_make_request(int ifindex, int type, unsigned int flags,
-                struct ofpbuf *request)
-{
-    struct tcmsg *tcmsg;
-
-    ofpbuf_init(request, 512);
-    nl_msg_put_nlmsghdr(request, sizeof *tcmsg, type, NLM_F_REQUEST | flags);
-    tcmsg = ofpbuf_put_zeros(request, sizeof *tcmsg);
-    tcmsg->tcm_family = AF_UNSPEC;
-    tcmsg->tcm_ifindex = ifindex;
-    /* Caller should fill in tcmsg->tcm_handle. */
-    /* Caller should fill in tcmsg->tcm_parent. */
-
-    return tcmsg;
-}
-
 static struct tcmsg *
 netdev_linux_tc_make_request(const struct netdev *netdev, int type,
                              unsigned int flags, struct ofpbuf *request)
@@ -4708,56 +4660,6 @@ netdev_linux_tc_make_request(const struct netdev *netdev, int type,
     }
 
     return tc_make_request(ifindex, type, flags, request);
-}
-
-static int
-tc_transact(struct ofpbuf *request, struct ofpbuf **replyp)
-{
-    int error = nl_transact(NETLINK_ROUTE, request, replyp);
-    ofpbuf_uninit(request);
-    return error;
-}
-
-/* Adds or deletes a root ingress qdisc on 'netdev'.  We use this for
- * policing configuration.
- *
- * This function is equivalent to running the following when 'add' is true:
- *     /sbin/tc qdisc add dev <devname> handle ffff: ingress
- *
- * This function is equivalent to running the following when 'add' is false:
- *     /sbin/tc qdisc del dev <devname> handle ffff: ingress
- *
- * The configuration and stats may be seen with the following command:
- *     /sbin/tc -s qdisc show dev <devname>
- *
- * Returns 0 if successful, otherwise a positive errno value.
- */
-static int
-tc_add_del_ingress_qdisc(int ifindex, bool add)
-{
-    struct ofpbuf request;
-    struct tcmsg *tcmsg;
-    int error;
-    int type = add ? RTM_NEWQDISC : RTM_DELQDISC;
-    int flags = add ? NLM_F_EXCL | NLM_F_CREATE : 0;
-
-    tcmsg = tc_make_request(ifindex, type, flags, &request);
-    tcmsg->tcm_handle = tc_make_handle(0xffff, 0);
-    tcmsg->tcm_parent = TC_H_INGRESS;
-    nl_msg_put_string(&request, TCA_KIND, "ingress");
-    nl_msg_put_unspec(&request, TCA_OPTIONS, NULL, 0);
-
-    error = tc_transact(&request, NULL);
-    if (error) {
-        /* If we're deleting the qdisc, don't worry about some of the
-         * error conditions. */
-        if (!add && (error == ENOENT || error == EINVAL)) {
-            return 0;
-        }
-        return error;
-    }
-
-    return 0;
 }
 
 /* Adds a policer to 'netdev' with a rate of 'kbits_rate' and a burst size
