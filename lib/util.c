@@ -132,7 +132,7 @@ void *
 xmemdup(const void *p_, size_t size)
 {
     void *p = xmalloc(size);
-    memcpy(p, p_, size);
+    nullable_memcpy(p, p_, size);
     return p;
 }
 

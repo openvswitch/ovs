@@ -920,7 +920,7 @@ nbctl_lsp_add(struct ctl_context *ctx)
     nbrec_logical_switch_verify_ports(ls);
     struct nbrec_logical_switch_port **new_ports = xmalloc(sizeof *new_ports *
                                                     (ls->n_ports + 1));
-    memcpy(new_ports, ls->ports, sizeof *new_ports * ls->n_ports);
+    nullable_memcpy(new_ports, ls->ports, sizeof *new_ports * ls->n_ports);
     new_ports[ls->n_ports] = CONST_CAST(struct nbrec_logical_switch_port *,
                                              lsp);
     nbrec_logical_switch_set_ports(ls, new_ports, ls->n_ports + 1);
@@ -1379,7 +1379,7 @@ nbctl_acl_add(struct ctl_context *ctx)
     /* Insert the acl into the logical switch. */
     nbrec_logical_switch_verify_acls(ls);
     struct nbrec_acl **new_acls = xmalloc(sizeof *new_acls * (ls->n_acls + 1));
-    memcpy(new_acls, ls->acls, sizeof *new_acls * ls->n_acls);
+    nullable_memcpy(new_acls, ls->acls, sizeof *new_acls * ls->n_acls);
     new_acls[ls->n_acls] = acl;
     nbrec_logical_switch_set_acls(ls, new_acls, ls->n_acls + 1);
     free(new_acls);
@@ -1697,7 +1697,8 @@ nbctl_lr_lb_add(struct ctl_context *ctx)
     struct nbrec_load_balancer **new_lbs
         = xmalloc(sizeof *new_lbs * (lr->n_load_balancer + 1));
 
-    memcpy(new_lbs, lr->load_balancer, sizeof *new_lbs * lr->n_load_balancer);
+    nullable_memcpy(new_lbs, lr->load_balancer,
+                    sizeof *new_lbs * lr->n_load_balancer);
     new_lbs[lr->n_load_balancer] = CONST_CAST(struct nbrec_load_balancer *,
             new_lb);
     nbrec_logical_router_set_load_balancer(lr, new_lbs,
@@ -1793,7 +1794,8 @@ nbctl_ls_lb_add(struct ctl_context *ctx)
     struct nbrec_load_balancer **new_lbs
         = xmalloc(sizeof *new_lbs * (ls->n_load_balancer + 1));
 
-    memcpy(new_lbs, ls->load_balancer, sizeof *new_lbs * ls->n_load_balancer);
+    nullable_memcpy(new_lbs, ls->load_balancer,
+                    sizeof *new_lbs * ls->n_load_balancer);
     new_lbs[ls->n_load_balancer] = CONST_CAST(struct nbrec_load_balancer *,
             new_lb);
     nbrec_logical_switch_set_load_balancer(ls, new_lbs,
@@ -2200,8 +2202,8 @@ nbctl_lr_route_add(struct ctl_context *ctx)
     nbrec_logical_router_verify_static_routes(lr);
     struct nbrec_logical_router_static_route **new_routes
         = xmalloc(sizeof *new_routes * (lr->n_static_routes + 1));
-    memcpy(new_routes, lr->static_routes,
-           sizeof *new_routes * lr->n_static_routes);
+    nullable_memcpy(new_routes, lr->static_routes,
+               sizeof *new_routes * lr->n_static_routes);
     new_routes[lr->n_static_routes] = route;
     nbrec_logical_router_set_static_routes(lr, new_routes,
                                            lr->n_static_routes + 1);
@@ -2364,7 +2366,7 @@ nbctl_lr_nat_add(struct ctl_context *ctx)
     /* Insert the NAT into the logical router. */
     nbrec_logical_router_verify_nat(lr);
     struct nbrec_nat **new_nats = xmalloc(sizeof *new_nats * (lr->n_nat + 1));
-    memcpy(new_nats, lr->nat, sizeof *new_nats * lr->n_nat);
+    nullable_memcpy(new_nats, lr->nat, sizeof *new_nats * lr->n_nat);
     new_nats[lr->n_nat] = nat;
     nbrec_logical_router_set_nat(lr, new_nats, lr->n_nat + 1);
     free(new_nats);
@@ -2642,7 +2644,7 @@ nbctl_lrp_add(struct ctl_context *ctx)
     nbrec_logical_router_verify_ports(lr);
     struct nbrec_logical_router_port **new_ports = xmalloc(sizeof *new_ports *
                                                         (lr->n_ports + 1));
-    memcpy(new_ports, lr->ports, sizeof *new_ports * lr->n_ports);
+    nullable_memcpy(new_ports, lr->ports, sizeof *new_ports * lr->n_ports);
     new_ports[lr->n_ports] = CONST_CAST(struct nbrec_logical_router_port *,
                                              lrp);
     nbrec_logical_router_set_ports(lr, new_ports, lr->n_ports + 1);

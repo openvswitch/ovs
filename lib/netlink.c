@@ -241,7 +241,10 @@ void
 nl_msg_put_unspec(struct ofpbuf *msg, uint16_t type,
                   const void *data, size_t size)
 {
-    memcpy(nl_msg_put_unspec_uninit(msg, type, size), data, size);
+    void *ptr;
+
+    ptr = nl_msg_put_unspec_uninit(msg, type, size);
+    nullable_memcpy(ptr, data, size);
 }
 
 /* Appends a Netlink attribute of the given 'type' and no payload to 'msg'.

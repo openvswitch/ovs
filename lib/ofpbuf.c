@@ -375,7 +375,7 @@ void *
 ofpbuf_put_zeros(struct ofpbuf *b, size_t size)
 {
     void *dst = ofpbuf_put_uninit(b, size);
-    memset(dst, 0, size);
+    nullable_memset(dst, 0, size);
     return dst;
 }
 
