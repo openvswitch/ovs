@@ -1989,6 +1989,45 @@ dpif_netlink_operate__(struct dpif_netlink *dpif,
 }
 
 static int
+parse_flow_get(struct dpif_netlink *dpif, struct dpif_flow_get *get)
+{
+    struct dpif_flow *dpif_flow = get->flow;
+    struct match match;
+    struct nlattr *actions;
+    struct dpif_flow_stats stats;
+    struct ofpbuf buf;
+    uint64_t act_buf[1024 / 8];
+    struct odputil_keybuf maskbuf;
+    struct odputil_keybuf keybuf;
+    struct odputil_keybuf actbuf;
+    struct ofpbuf key, mask, act;
+    int err;
+
+    ofpbuf_use_stack(&buf, &act_buf, sizeof act_buf);
+    err = netdev_ports_flow_get(DPIF_HMAP_KEY(&dpif->dpif), &match,
+                                &actions, get->ufid, &stats, &buf);
+    if (err) {
+        return err;
+    }
+
+    VLOG_DBG("found flow from netdev, translating to dpif flow");
+
+    ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
+    ofpbuf_use_stack(&act, &actbuf, sizeof actbuf);
+    ofpbuf_use_stack(&mask, &maskbuf, sizeof maskbuf);
+    dpif_netlink_netdev_match_to_dpif_flow(&match, &key, &mask, actions,
+                                           &stats,
+                                           (ovs_u128 *) get->ufid,
+                                           dpif_flow,
+                                           false);
+    ofpbuf_put(get->buffer, nl_attr_get(actions), nl_attr_get_size(actions));
+    dpif_flow->actions = ofpbuf_at(get->buffer, 0, 0);
+    dpif_flow->actions_len = nl_attr_get_size(actions);
+
+    return 0;
+}
+
+static int
 parse_flow_put(struct dpif_netlink *dpif, struct dpif_flow_put *put)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
@@ -2160,7 +2199,17 @@ try_send_to_netdev(struct dpif_netlink *dpif, struct dpif_op *op)
                                     del->stats);
         break;
     }
-    case DPIF_OP_FLOW_GET:
+    case DPIF_OP_FLOW_GET: {
+        struct dpif_flow_get *get = &op->u.flow_get;
+
+        if (!op->u.flow_get.ufid) {
+            break;
+        }
+        dbg_print_flow(get->key, get->key_len, NULL, 0, NULL, 0,
+                       get->ufid, "GET");
+        err = parse_flow_get(dpif, get);
+        break;
+    }
     case DPIF_OP_EXECUTE:
     default:
         break;
