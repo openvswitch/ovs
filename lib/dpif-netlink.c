@@ -1639,6 +1639,7 @@ dpif_netlink_flow_to_dpif_flow(struct dpif *dpif, struct dpif_flow *dpif_flow,
                        &dpif_flow->ufid);
     }
     dpif_netlink_flow_get_stats(datapath_flow, &dpif_flow->stats);
+    dpif_flow->offloaded = false;
 }
 
 /* The design is such that all threads are working together on the first dump
@@ -1721,6 +1722,9 @@ dpif_netlink_netdev_match_to_dpif_flow(struct match *match,
     flow->ufid = *ufid;
 
     flow->pmd_id = PMD_ID_NULL;
+
+    flow->offloaded = true;
+
     return 0;
 }
 
