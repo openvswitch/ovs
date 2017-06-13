@@ -885,6 +885,34 @@ int dpif_get_pmds_for_port(const struct dpif * dpif, odp_port_t port_no,
 
 char *dpif_get_dp_version(const struct dpif *);
 bool dpif_supports_tnl_push_pop(const struct dpif *);
+
+/* Log functions. */
+struct vlog_module;
+
+void log_flow_message(const struct dpif *dpif, int error,
+                      const struct vlog_module *module,
+                      const char *operation,
+                      const struct nlattr *key, size_t key_len,
+                      const struct nlattr *mask, size_t mask_len,
+                      const ovs_u128 *ufid,
+                      const struct dpif_flow_stats *stats,
+                      const struct nlattr *actions, size_t actions_len);
+void log_flow_put_message(const struct dpif *,
+                          const struct vlog_module *,
+                          const struct dpif_flow_put *,
+                          int error);
+void log_flow_del_message(const struct dpif *,
+                          const struct vlog_module *,
+                          const struct dpif_flow_del *,
+                          int error);
+void log_execute_message(const struct dpif *,
+                         const struct vlog_module *,
+                         const struct dpif_execute *,
+                         bool subexecute, int error);
+void log_flow_get_message(const struct dpif *,
+                          const struct vlog_module *,
+                          const struct dpif_flow_get *,
+                          int error);
 #ifdef  __cplusplus
 }
 #endif
