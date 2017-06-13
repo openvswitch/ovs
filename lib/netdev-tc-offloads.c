@@ -170,6 +170,60 @@ find_ufid(int prio, int handle, struct netdev *netdev, ovs_u128 *ufid)
     return (data != NULL);
 }
 
+struct prio_map_data {
+    struct hmap_node node;
+    struct tc_flower_key mask;
+    ovs_be16 protocol;
+    uint16_t prio;
+};
+
+/* Get free prio for tc flower
+ * If prio is already allocated for mask/eth_type combination then return it.
+ * If not assign new prio.
+ *
+ * Return prio on success or 0 if we are out of prios.
+ */
+static uint16_t OVS_UNUSED
+get_prio_for_tc_flower(struct tc_flower *flower)
+{
+    static struct hmap prios = HMAP_INITIALIZER(&prios);
+    static struct ovs_mutex prios_lock = OVS_MUTEX_INITIALIZER;
+    static uint16_t last_prio = 0;
+    size_t key_len = sizeof(struct tc_flower_key);
+    size_t hash = hash_bytes(&flower->mask, key_len,
+                             (OVS_FORCE uint32_t) flower->key.eth_type);
+    struct prio_map_data *data;
+    struct prio_map_data *new_data;
+
+    /* We can use the same prio for same mask/eth combination but must have
+     * different prio if not. Flower classifier will reject same prio for
+     * different mask/eth combination. */
+    ovs_mutex_lock(&prios_lock);
+    HMAP_FOR_EACH_WITH_HASH(data, node, hash, &prios) {
+        if (!memcmp(&flower->mask, &data->mask, key_len)
+            && data->protocol == flower->key.eth_type) {
+            ovs_mutex_unlock(&prios_lock);
+            return data->prio;
+        }
+    }
+
+    if (last_prio == UINT16_MAX) {
+        /* last_prio can overflow if there will be many different kinds of
+         * flows which shouldn't happen organically. */
+        ovs_mutex_unlock(&prios_lock);
+        return 0;
+    }
+
+    new_data = xzalloc(sizeof *new_data);
+    memcpy(&new_data->mask, &flower->mask, key_len);
+    new_data->prio = ++last_prio;
+    new_data->protocol = flower->key.eth_type;
+    hmap_insert(&prios, &new_data->node, hash);
+    ovs_mutex_unlock(&prios_lock);
+
+    return new_data->prio;
+}
+
 int
 netdev_tc_flow_flush(struct netdev *netdev)
 {
