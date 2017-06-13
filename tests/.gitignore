@@ -12,6 +12,7 @@
 /pki/
 /system-kmod-testsuite
 /system-userspace-testsuite
+/system-offloads-testsuite
 /test-aes128
 /test-atomic
 /test-bundle

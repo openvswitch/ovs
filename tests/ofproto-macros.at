@@ -317,7 +317,7 @@ m4_define([_OVS_VSWITCHD_START],
    AT_CAPTURE_FILE([ovsdb-server.log])
 
    dnl Initialize database.
-   AT_CHECK([ovs-vsctl --no-wait init])
+   AT_CHECK([ovs-vsctl --no-wait init $2])
 
    dnl Start ovs-vswitchd.
    AT_CHECK([ovs-vswitchd $1 --detach --no-chdir --pidfile --log-file -vvconn -vofproto_dpif -vunixctl], [0], [], [stderr])
@@ -331,7 +331,9 @@ m4_define([_OVS_VSWITCHD_START],
 /ofproto|INFO|using datapath ID/d
 /netdev_linux|INFO|.*device has unknown hardware address family/d
 /ofproto|INFO|datapath ID changed to fedcba9876543210/d
-/dpdk|INFO|DPDK Disabled - Use other_config:dpdk-init to enable/d']])
+/dpdk|INFO|DPDK Disabled - Use other_config:dpdk-init to enable/d
+/netdev: Flow API/d
+/tc: Using policy/d']])
 ])
 
 # OVS_VSWITCHD_START([vsctl-args], [vsctl-output], [=override],
