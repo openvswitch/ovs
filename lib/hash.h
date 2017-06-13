@@ -92,7 +92,6 @@ static inline uint32_t mhash_finish(uint32_t hash)
 
 static inline uint32_t hash_add(uint32_t hash, uint32_t data);
 static inline uint32_t hash_add64(uint32_t hash, uint64_t data);
-static inline uint32_t hash_finish(uint32_t hash, uint32_t final);
 
 static inline uint32_t hash_add_words(uint32_t, const uint32_t *, size_t);
 static inline uint32_t hash_add_words64(uint32_t, const uint64_t *, size_t);
