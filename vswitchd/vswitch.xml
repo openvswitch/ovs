@@ -195,6 +195,23 @@
         </p>
       </column>
 
+      <column name="other_config" key="tc-policy"
+              type='{"type": "string"}'>
+        <p>
+            Specified the policy used with HW offloading.
+            Options:
+                <code>none</code>    - Add software rule and offload rule to HW.
+                <code>skip_sw</code> - Offload rule to HW only.
+                <code>skip_hw</code> - Add software rule without offloading rule to HW.
+        </p>
+        <p>
+            This is only relevant if HW offloading is enabled (hw-offload).
+        </p>
+        <p>
+          The default value is <code>none</code>.
+        </p>
+      </column>
+
       <column name="other_config" key="dpdk-init"
               type='{"type": "boolean"}'>
         <p>

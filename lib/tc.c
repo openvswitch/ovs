@@ -39,6 +39,14 @@ VLOG_DEFINE_THIS_MODULE(tc);
 
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(60, 5);
 
+enum tc_offload_policy {
+    TC_POLICY_NONE,
+    TC_POLICY_SKIP_SW,
+    TC_POLICY_SKIP_HW
+};
+
+static enum tc_offload_policy tc_policy = TC_POLICY_NONE;
+
 struct tcmsg *
 tc_make_request(int ifindex, int type, unsigned int flags,
                 struct ofpbuf *request)
@@ -739,6 +747,18 @@ tc_get_flower(int ifindex, int prio, int handle, struct tc_flower *flower)
     return error;
 }
 
+static int
+tc_get_tc_cls_policy(enum tc_offload_policy policy)
+{
+    if (policy == TC_POLICY_SKIP_HW) {
+        return TCA_CLS_FLAGS_SKIP_HW;
+    } else if (policy == TC_POLICY_SKIP_SW) {
+        return TCA_CLS_FLAGS_SKIP_SW;
+    }
+
+    return 0;
+}
+
 static void
 nl_msg_put_act_push_vlan(struct ofpbuf *request, uint16_t vid, uint8_t prio)
 {
@@ -1044,7 +1064,7 @@ nl_msg_put_flower_options(struct ofpbuf *request, struct tc_flower *flower)
         }
     }
 
-    nl_msg_put_u32(request, TCA_FLOWER_FLAGS, 0);
+    nl_msg_put_u32(request, TCA_FLOWER_FLAGS, tc_get_tc_cls_policy(tc_policy));
 
     if (flower->tunnel.tunnel) {
         nl_msg_put_flower_tunnel(request, flower);
@@ -1088,4 +1108,25 @@ tc_replace_flower(int ifindex, uint16_t prio, uint32_t handle,
     }
 
     return error;
+}
+
+void
+tc_set_policy(const char *policy)
+{
+    if (!policy) {
+        return;
+    }
+
+    if (!strcmp(policy, "skip_sw")) {
+        tc_policy = TC_POLICY_SKIP_SW;
+    } else if (!strcmp(policy, "skip_hw")) {
+        tc_policy = TC_POLICY_SKIP_HW;
+    } else if (!strcmp(policy, "none")) {
+        tc_policy = TC_POLICY_NONE;
+    } else {
+        VLOG_WARN("tc: Invalid policy '%s'", policy);
+        return;
+    }
+
+    VLOG_INFO("tc: Using policy '%s'", policy);
 }
