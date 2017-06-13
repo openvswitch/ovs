@@ -273,6 +273,7 @@ rm -rf $RPM_BUILD_ROOT/%{_datadir}/openvswitch/python/
 install -d -m 0755 $RPM_BUILD_ROOT/%{_sharedstatedir}/openvswitch
 
 touch $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch/conf.db
+touch $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch/.conf.db.~lock~
 touch $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch/system-id.conf
 
 install -p -m 644 -D selinux/openvswitch-custom.pp \
@@ -481,6 +482,7 @@ fi
 %{_sysconfdir}/bash_completion.d/ovs-vsctl-bashcomp.bash
 %dir %{_sysconfdir}/openvswitch
 %config %ghost %{_sysconfdir}/openvswitch/conf.db
+%ghost %{_sysconfdir}/openvswitch/.conf.db.~lock~
 %config %ghost %{_sysconfdir}/openvswitch/system-id.conf
 %config(noreplace) %{_sysconfdir}/sysconfig/openvswitch
 %config(noreplace) %{_sysconfdir}/logrotate.d/openvswitch
