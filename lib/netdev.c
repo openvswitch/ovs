@@ -2346,6 +2346,18 @@ netdev_ports_flow_get(const void *obj, struct match *match,
 }
 
 #ifdef __linux__
+static void
+netdev_ports_flow_init(void)
+{
+    struct port_to_netdev_data *data;
+
+    ovs_mutex_lock(&netdev_hmap_mutex);
+    HMAP_FOR_EACH(data, node, &port_to_netdev) {
+       netdev_init_flow_api(data->netdev);
+    }
+    ovs_mutex_unlock(&netdev_hmap_mutex);
+}
+
 void
 netdev_set_flow_api_enabled(const struct smap *ovs_other_config)
 {
@@ -2359,6 +2371,8 @@ netdev_set_flow_api_enabled(const struct smap *ovs_other_config)
 
             tc_set_policy(smap_get_def(ovs_other_config, "tc-policy",
                                        TC_POLICY_DEFAULT));
+
+            netdev_ports_flow_init();
 
             ovsthread_once_done(&once);
         }
