@@ -1154,6 +1154,11 @@ dpif_netlink_flow_flush(struct dpif *dpif_)
     dpif_netlink_flow_init(&flow);
     flow.cmd = OVS_FLOW_CMD_DEL;
     flow.dp_ifindex = dpif->dp_ifindex;
+
+    if (netdev_is_flow_api_enabled()) {
+        netdev_ports_flow_flush(DPIF_HMAP_KEY(dpif_));
+    }
+
     return dpif_netlink_flow_transact(&flow, NULL, NULL);
 }
 

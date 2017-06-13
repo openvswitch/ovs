@@ -187,6 +187,7 @@ int netdev_ports_insert(struct netdev *, const void *obj, struct dpif_port *);
 struct netdev *netdev_ports_get(odp_port_t port, const void *obj);
 int netdev_ports_remove(odp_port_t port, const void *obj);
 odp_port_t netdev_ifindex_to_odp_port(int ifindex);
+void netdev_ports_flow_flush(const void *obj);
 
 /* native tunnel APIs */
 /* Structure to pass parameters required to build a tunnel header. */

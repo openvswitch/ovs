@@ -2259,6 +2259,20 @@ netdev_ifindex_to_odp_port(int ifindex)
     return ret;
 }
 
+void
+netdev_ports_flow_flush(const void *obj)
+{
+    struct port_to_netdev_data *data;
+
+    ovs_mutex_lock(&netdev_hmap_mutex);
+    HMAP_FOR_EACH(data, node, &port_to_netdev) {
+        if (data->obj == obj) {
+            netdev_flow_flush(data->netdev);
+        }
+    }
+    ovs_mutex_unlock(&netdev_hmap_mutex);
+}
+
 #ifdef __linux__
 void
 netdev_set_flow_api_enabled(const struct smap *ovs_other_config)
