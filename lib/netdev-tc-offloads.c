@@ -33,6 +33,7 @@
 #include "hash.h"
 #include "dpif.h"
 #include "tc.h"
+#include "netdev-linux.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_tc_offloads);
 
@@ -922,7 +923,27 @@ netdev_tc_flow_del(struct netdev *netdev OVS_UNUSED,
 }
 
 int
-netdev_tc_init_flow_api(struct netdev *netdev OVS_UNUSED)
+netdev_tc_init_flow_api(struct netdev *netdev)
 {
+    int ifindex;
+    int error;
+
+    ifindex = netdev_get_ifindex(netdev);
+    if (ifindex < 0) {
+        VLOG_ERR_RL(&error_rl, "failed to get ifindex for %s: %s",
+                    netdev_get_name(netdev), ovs_strerror(-ifindex));
+        return -ifindex;
+    }
+
+    error = tc_add_del_ingress_qdisc(ifindex, true);
+
+    if (error && error != EEXIST) {
+        VLOG_ERR("failed adding ingress qdisc required for offloading: %s",
+                 ovs_strerror(error));
+        return error;
+    }
+
+    VLOG_INFO("added ingress qdisc to %s", netdev_get_name(netdev));
+
     return 0;
 }
