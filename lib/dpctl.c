@@ -1558,7 +1558,7 @@ static const struct dpctl_command all_commands[] = {
     { "set-if", "dp iface...", 2, INT_MAX, dpctl_set_if, DP_RW },
     { "dump-dps", "", 0, 0, dpctl_dump_dps, DP_RO },
     { "show", "[dp...]", 0, INT_MAX, dpctl_show, DP_RO },
-    { "dump-flows", "[dp]", 0, 2, dpctl_dump_flows, DP_RO },
+    { "dump-flows", "[dp] [filter=..]", 0, 2, dpctl_dump_flows, DP_RO },
     { "add-flow", "[dp] flow actions", 2, 3, dpctl_add_flow, DP_RW },
     { "mod-flow", "[dp] flow actions", 2, 3, dpctl_mod_flow, DP_RW },
     { "get-flow", "[dp] ufid", 1, 2, dpctl_get_flow, DP_RO },
