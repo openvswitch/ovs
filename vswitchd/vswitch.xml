@@ -178,6 +178,21 @@
         <p>
           The default is 10000.
         </p>
+    </column>
+
+      <column name="other_config" key="hw-offload"
+              type='{"type": "boolean"}'>
+        <p>
+          Set this value to <code>true</code> to enable netdev flow offload.
+        </p>
+        <p>
+          The default value is <code>false</code>. Changing this value requires
+          restarting the daemon
+        </p>
+        <p>
+          Currently Open vSwitch supports hardware offloading on
+          Linux systems.  On other systems, this value is ignored.
+        </p>
       </column>
 
       <column name="other_config" key="dpdk-init"
