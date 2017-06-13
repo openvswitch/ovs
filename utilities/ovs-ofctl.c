@@ -679,16 +679,18 @@ transact_multiple_noreply(struct vconn *vconn, struct ovs_list *requests)
 static void
 bundle_print_errors(struct ovs_list *errors, struct ovs_list *requests)
 {
-    struct vconn_bundle_error *error, *next;
+    struct ofpbuf *error, *next;
     struct ofpbuf *bmsg;
 
     INIT_CONTAINER(bmsg, requests, list_node);
 
     LIST_FOR_EACH_SAFE (error, next, list_node, errors) {
+        const struct ofp_header *error_oh = error->data;
+        ovs_be32 error_xid = error_oh->xid;
         enum ofperr ofperr;
         struct ofpbuf payload;
 
-        ofperr = ofperr_decode_msg(&error->ofp_msg, &payload);
+        ofperr = ofperr_decode_msg(error_oh, &payload);
         if (!ofperr) {
             fprintf(stderr, "***decode error***");
         } else {
@@ -704,7 +706,7 @@ bundle_print_errors(struct ovs_list *errors, struct ovs_list *requests)
             LIST_FOR_EACH_CONTINUE (bmsg, list_node, requests) {
                 const struct ofp_header *oh = bmsg->data;
 
-                if (oh->xid == error->ofp_msg.xid) {
+                if (oh->xid == error_xid) {
                     ofp_msg = oh;
                     msg_len = bmsg->size;
                     break;
@@ -714,7 +716,7 @@ bundle_print_errors(struct ovs_list *errors, struct ovs_list *requests)
             ofp_print(stderr, ofp_msg, msg_len, verbosity + 1);
         }
         ofpbuf_uninit(&payload);
-        free(error);
+        ofpbuf_delete(error);
     }
     fflush(stderr);
 }

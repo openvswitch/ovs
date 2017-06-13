@@ -56,18 +56,6 @@ int vconn_transact_noreply(struct vconn *, struct ofpbuf *, struct ofpbuf **);
 int vconn_transact_multiple_noreply(struct vconn *, struct ovs_list *requests,
                                     struct ofpbuf **replyp);
 
-/* Bundle errors must be free()d by the caller. */
-struct vconn_bundle_error {
-    struct ovs_list list_node;
-
-    /* OpenFlow header and some of the message contents for error reporting. */
-    union {
-        struct ofp_header ofp_msg;
-        uint8_t ofp_msg_data[64];
-    };
-};
-
-/* Bundle errors must be free()d by the caller. */
 int vconn_bundle_transact(struct vconn *, struct ovs_list *requests,
                           uint16_t bundle_flags,
                           struct ovs_list *errors);
