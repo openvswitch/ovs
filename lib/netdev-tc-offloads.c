@@ -839,13 +839,51 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
 
 int
 netdev_tc_flow_get(struct netdev *netdev OVS_UNUSED,
-                   struct match *match OVS_UNUSED,
-                   struct nlattr **actions OVS_UNUSED,
-                   const ovs_u128 *ufid OVS_UNUSED,
-                   struct dpif_flow_stats *stats OVS_UNUSED,
-                   struct ofpbuf *buf OVS_UNUSED)
+                   struct match *match,
+                   struct nlattr **actions,
+                   const ovs_u128 *ufid,
+                   struct dpif_flow_stats *stats,
+                   struct ofpbuf *buf)
 {
-    return EOPNOTSUPP;
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
+    struct netdev *dev;
+    struct tc_flower flower;
+    odp_port_t in_port;
+    int prio = 0;
+    int ifindex;
+    int handle;
+    int err;
+
+    handle = get_ufid_tc_mapping(ufid, &prio, &dev);
+    if (!handle) {
+        return ENOENT;
+    }
+
+    ifindex = netdev_get_ifindex(dev);
+    if (ifindex < 0) {
+        VLOG_ERR_RL(&error_rl, "failed to get ifindex for %s: %s",
+                    netdev_get_name(dev), ovs_strerror(-ifindex));
+        netdev_close(dev);
+        return -ifindex;
+    }
+
+    VLOG_DBG_RL(&rl, "flow get (dev %s prio %d handle %d)",
+                netdev_get_name(dev), prio, handle);
+    err = tc_get_flower(ifindex, prio, handle, &flower);
+    netdev_close(dev);
+    if (err) {
+        VLOG_ERR_RL(&error_rl, "flow get failed (dev %s prio %d handle %d): %s",
+                    netdev_get_name(dev), prio, handle, ovs_strerror(err));
+        return err;
+    }
+
+    in_port = netdev_ifindex_to_odp_port(ifindex);
+    parse_tc_flower_to_match(&flower, match, actions, stats, buf);
+
+    match->wc.masks.in_port.odp_port = u32_to_odp(UINT32_MAX);
+    match->flow.in_port.odp_port = in_port;
+
+    return 0;
 }
 
 int
