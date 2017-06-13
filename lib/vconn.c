@@ -744,18 +744,6 @@ vconn_recv_block(struct vconn *vconn, struct ofpbuf **msgp)
     return retval;
 }
 
-static void
-vconn_add_bundle_error(const struct ofp_header *oh, struct ovs_list *errors)
-{
-    if (errors) {
-        struct vconn_bundle_error *err = xmalloc(sizeof *err);
-        size_t len = ntohs(oh->length);
-
-        memcpy(err->ofp_msg_data, oh, MIN(len, sizeof err->ofp_msg_data));
-        ovs_list_push_back(errors, &err->list_node);
-    }
-}
-
 static int
 vconn_recv_xid__(struct vconn *vconn, ovs_be32 xid, struct ofpbuf **replyp,
                  struct ovs_list *errors)
@@ -781,13 +769,13 @@ vconn_recv_xid__(struct vconn *vconn, ovs_be32 xid, struct ofpbuf **replyp,
 
         error = ofptype_decode(&type, oh);
         if (!error && type == OFPTYPE_ERROR) {
-            vconn_add_bundle_error(oh, errors);
+            ovs_list_push_back(errors, &reply->list_node);
         } else {
             VLOG_DBG_RL(&bad_ofmsg_rl, "%s: received reply with xid %08"PRIx32
                         " != expected %08"PRIx32,
                         vconn->name, ntohl(recv_xid), ntohl(xid));
+            ofpbuf_delete(reply);
         }
-        ofpbuf_delete(reply);
     }
 }
 
@@ -1078,7 +1066,8 @@ vconn_bundle_reply_validate(struct ofpbuf *reply,
     }
 
     if (type == OFPTYPE_ERROR) {
-        vconn_add_bundle_error(oh, errors);
+        struct ofpbuf *copy = ofpbuf_clone(reply);
+        ovs_list_push_back(errors, &copy->list_node);
         return ofperr_decode_msg(oh, NULL);
     }
     if (type != OFPTYPE_BUNDLE_CONTROL) {
@@ -1150,13 +1139,13 @@ vconn_recv_error(struct vconn *vconn, struct ovs_list *errors)
             oh = reply->data;
             ofperr = ofptype_decode(&type, oh);
             if (!ofperr && type == OFPTYPE_ERROR) {
-                vconn_add_bundle_error(oh, errors);
+                ovs_list_push_back(errors, &reply->list_node);
             } else {
                 VLOG_DBG_RL(&bad_ofmsg_rl,
                             "%s: received unexpected reply with xid %08"PRIx32,
                             vconn->name, ntohl(oh->xid));
+                ofpbuf_delete(reply);
             }
-            ofpbuf_delete(reply);
         }
     } while (!error);
 }
@@ -1209,6 +1198,8 @@ vconn_bundle_add_msg(struct vconn *vconn, struct ofputil_bundle_ctrl_msg *bc,
     return error;
 }
 
+/* Appends ofpbufs for received errors, if any, to 'errors'.  The caller must
+ * free the received errors. */
 int
 vconn_bundle_transact(struct vconn *vconn, struct ovs_list *requests,
                       uint16_t flags, struct ovs_list *errors)
