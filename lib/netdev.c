@@ -2273,6 +2273,39 @@ netdev_ports_flow_flush(const void *obj)
     ovs_mutex_unlock(&netdev_hmap_mutex);
 }
 
+struct netdev_flow_dump **
+netdev_ports_flow_dump_create(const void *obj, int *ports)
+{
+    struct port_to_netdev_data *data;
+    struct netdev_flow_dump **dumps;
+    int count = 0;
+    int i = 0;
+
+    ovs_mutex_lock(&netdev_hmap_mutex);
+    HMAP_FOR_EACH(data, node, &port_to_netdev) {
+        if (data->obj == obj) {
+            count++;
+        }
+    }
+
+    dumps = count ? xzalloc(sizeof *dumps * count) : NULL;
+
+    HMAP_FOR_EACH(data, node, &port_to_netdev) {
+        if (data->obj == obj) {
+            if (netdev_flow_dump_create(data->netdev, &dumps[i])) {
+                continue;
+            }
+
+            dumps[i]->port = data->dpif_port.port_no;
+            i++;
+        }
+    }
+    ovs_mutex_unlock(&netdev_hmap_mutex);
+
+    *ports = i;
+    return dumps;
+}
+
 #ifdef __linux__
 void
 netdev_set_flow_api_enabled(const struct smap *ovs_other_config)
