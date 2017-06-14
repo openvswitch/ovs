@@ -5281,13 +5281,12 @@ put_ct_label(const struct flow *flow, struct ofpbuf *odp_actions,
         struct {
             ovs_u128 key;
             ovs_u128 mask;
-        } *odp_ct_label;
+        } odp_ct_label;
 
-        odp_ct_label = nl_msg_put_unspec_uninit(odp_actions,
-                                                OVS_CT_ATTR_LABELS,
-                                                sizeof(*odp_ct_label));
-        odp_ct_label->key = ovs_u128_and(flow->ct_label, wc->masks.ct_label);
-        odp_ct_label->mask = wc->masks.ct_label;
+        odp_ct_label.key = ovs_u128_and(flow->ct_label, wc->masks.ct_label);
+        odp_ct_label.mask = wc->masks.ct_label;
+        nl_msg_put_unspec(odp_actions, OVS_CT_ATTR_LABELS,
+                          &odp_ct_label, sizeof odp_ct_label);
     }
 }
 

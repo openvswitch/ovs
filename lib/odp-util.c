@@ -85,8 +85,8 @@ static void format_geneve_opts(const struct geneve_opt *opt,
 static struct nlattr *generate_all_wildcard_mask(const struct attr_len_tbl tbl[],
                                                  int max, struct ofpbuf *,
                                                  const struct nlattr *key);
-static void format_u128(struct ds *ds, const ovs_u128 *value,
-                        const ovs_u128 *mask, bool verbose);
+static void format_u128(struct ds *d, const ovs_32aligned_u128 *key,
+                        const ovs_32aligned_u128 *mask, bool verbose);
 static int scan_u128(const char *s, ovs_u128 *value, ovs_u128 *mask);
 
 static int parse_odp_action(const char *s, const struct simap *port_names,
@@ -742,7 +742,10 @@ static void
 format_odp_conntrack_action(struct ds *ds, const struct nlattr *attr)
 {
     struct nlattr *a[ARRAY_SIZE(ovs_conntrack_policy)];
-    const ovs_u128 *label;
+    const struct {
+        ovs_32aligned_u128 value;
+        ovs_32aligned_u128 mask;
+    } *label;
     const uint32_t *mark;
     const char *helper;
     uint16_t zone;
@@ -780,7 +783,7 @@ format_odp_conntrack_action(struct ds *ds, const struct nlattr *attr)
         }
         if (label) {
             ds_put_format(ds, "label=");
-            format_u128(ds, label, label + 1, true);
+            format_u128(ds, &label->value, &label->mask, true);
             ds_put_char(ds, ',');
         }
         if (helper) {
