@@ -82,6 +82,18 @@ typedef struct {
 #endif
 } ovs_32aligned_u64;
 
+/* A 128-bit value, in host byte order, that is only aligned on a 32-bit
+ * boundary.  */
+typedef struct {
+    uint32_t u32[4];
+} ovs_32aligned_u128;
+
+/* A 128-bit value, in network byte order, that is only aligned on a 32-bit
+ * boundary.  */
+typedef struct {
+    ovs_be32 be32[4];
+} ovs_32aligned_be128;
+
 typedef union {
     uint32_t u32[4];
     struct {
