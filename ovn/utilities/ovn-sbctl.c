@@ -793,9 +793,9 @@ sbctl_dump_openflow(struct vconn *vconn, const struct uuid *uuid, bool stats)
 
             ds_clear(&s);
             if (stats) {
-                ofp_print_flow_stats(&s, fs, NULL);
+                ofp_print_flow_stats(&s, fs, NULL, true);
             } else {
-                ds_put_format(&s, " %stable=%s%"PRIu8" ",
+                ds_put_format(&s, "%stable=%s%"PRIu8" ",
                               colors.special, colors.end, fs->table_id);
                 match_format(&fs->match, NULL, &s, OFP_DEFAULT_PRIORITY);
                 if (ds_last(&s) != ' ') {
@@ -805,7 +805,7 @@ sbctl_dump_openflow(struct vconn *vconn, const struct uuid *uuid, bool stats)
                 ds_put_format(&s, "%sactions=%s", colors.actions, colors.end);
                 ofpacts_format(fs->ofpacts, fs->ofpacts_len, NULL, &s);
             }
-            printf("   %s\n", ds_cstr(&s));
+            printf("    %s\n", ds_cstr(&s));
         }
         ds_destroy(&s);
     }

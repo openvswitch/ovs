@@ -61,7 +61,7 @@ void ofp_print_table_features(
     const struct ofputil_table_stats *prev_stats);
 
 void ofp_print_flow_stats(struct ds *, const struct ofputil_flow_stats *,
-                          const struct ofputil_port_map *);
+                          const struct ofputil_port_map *, bool show_stats);
 
 #ifdef  __cplusplus
 }

@@ -132,10 +132,9 @@ mv stdout expout
 AT_CHECK([ovs-dpctl normalize-actions "$flow" "$actual"], [0], [expout])
 
 # Check for the MAC learning entry.
-AT_CHECK([ovs-ofctl dump-flows br0 table=1 | ofctl_strip | sort], [0], [dnl
- table=1, hard_timeout=60, vlan_tci=0x0000/0x0fff,dl_dst=50:54:00:00:00:05 actions=output:3
+AT_CHECK([ovs-ofctl dump-flows br0 table=1 --no-stats --sort], [0], [dnl
  table=1, priority=0 actions=FLOOD
-NXST_FLOW reply:
+ table=1, hard_timeout=60, vlan_tci=0x0000/0x0fff,dl_dst=50:54:00:00:00:05 actions=output:3
 ])
 
 # Trace a packet arrival destined for the learned MAC.
@@ -145,11 +144,10 @@ AT_CHECK([tail -1 stdout], [0], [Datapath actions: 3
 ])
 
 # Check for both MAC learning entries.
-AT_CHECK([ovs-ofctl dump-flows br0 table=1 | ofctl_strip |sort], [0], [dnl
+AT_CHECK([ovs-ofctl dump-flows br0 table=1 --no-stats | sort], [0], [dnl
  table=1, hard_timeout=60, vlan_tci=0x0000/0x0fff,dl_dst=50:54:00:00:00:05 actions=output:3
  table=1, hard_timeout=60, vlan_tci=0x0000/0x0fff,dl_dst=50:54:00:00:00:06 actions=output:1
  table=1, priority=0 actions=FLOOD
-NXST_FLOW reply:
 ])
 
 # Trace a packet arrival that updates the first learned MAC entry.
@@ -163,11 +161,10 @@ mv stdout expout
 AT_CHECK([ovs-dpctl normalize-actions "$flow" "$actual"], [0], [expout])
 
 # Check that the MAC learning entry was updated.
-AT_CHECK([ovs-ofctl dump-flows br0 table=1 | ofctl_strip | sort], [0], [dnl
+AT_CHECK([ovs-ofctl dump-flows br0 table=1 --no-stats | sort], [0], [dnl
  table=1, hard_timeout=60, vlan_tci=0x0000/0x0fff,dl_dst=50:54:00:00:00:05 actions=output:2
  table=1, hard_timeout=60, vlan_tci=0x0000/0x0fff,dl_dst=50:54:00:00:00:06 actions=output:1
  table=1, priority=0 actions=FLOOD
-NXST_FLOW reply:
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -204,10 +201,9 @@ mv stdout expout
 AT_CHECK([ovs-dpctl normalize-actions "$flow" "$actual"], [0], [expout])
 
 # Check that the MAC learning entry appeared.
-AT_CHECK([ovs-ofctl dump-flows br0 table=1 | ofctl_strip | sort], [0], [dnl
+AT_CHECK([ovs-ofctl dump-flows br0 table=1 --no-stats | sort], [0], [dnl
  table=1, hard_timeout=10, dl_dst=50:54:00:00:00:07 actions=output:3
  table=1, priority=0 actions=FLOOD
-NXST_FLOW reply:
 ])
 
 # For 25 seconds, make sure that the MAC learning entry doesn't
@@ -239,9 +235,8 @@ done
 # Make sure that 15 seconds without refreshing makes the flow time out.
 ovs-appctl time/warp 15000 5000
 sleep 1
-AT_CHECK([ovs-ofctl dump-flows br0 table=1 | ofctl_strip | sort], [0], [dnl
+AT_CHECK([ovs-ofctl dump-flows br0 table=1 --no-stats | sort], [0], [dnl
  table=1, priority=0 actions=FLOOD
-NXST_FLOW reply:
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -265,9 +260,8 @@ mv stdout expout
 AT_CHECK([ovs-dpctl normalize-actions "$flow" "$actual"], [0], [expout])
 
 # Check for the learning entry.
-AT_CHECK([ovs-ofctl dump-flows br0 table=1 | ofctl_strip | sort], [0], [dnl
+AT_CHECK([ovs-ofctl dump-flows br0 table=1 --no-stats | sort], [0], [dnl
  table=1, hard_timeout=60, tcp,nw_src=192.168.0.1,nw_dst=192.168.0.2,tp_src=80,tp_dst=40000 actions=drop
-NXST_FLOW reply:
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -293,10 +287,9 @@ mv stdout expout
 AT_CHECK([ovs-dpctl normalize-actions "$flow" "$actual"], [0], [expout])
 
 # Check for the learning entry.
-AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
+AT_CHECK([ovs-ofctl dump-flows br0 --no-stats | sort], [0], [dnl
  table=1, hard_timeout=60, tcp6,ipv6_src=fec0::1,ipv6_dst=2001:db8:85a3::8a2e:370:7334,tp_src=80,tp_dst=40000 actions=load:0x13198a2e03707348->NXM_NX_IPV6_DST[[0..63]],load:0x20010db885a308d3->NXM_NX_IPV6_DST[[64..127]]
  tcp6 actions=learn(table=1,hard_timeout=60,eth_type=0x86dd,nw_proto=6,NXM_NX_IPV6_SRC[[]]=NXM_NX_IPV6_DST[[]],ipv6_dst=2001:db8:85a3::8a2e:370:7334,NXM_OF_TCP_SRC[[]]=NXM_OF_TCP_DST[[]],NXM_OF_TCP_DST[[]]=NXM_OF_TCP_SRC[[]],load:0x20010db885a308d313198a2e03707348->NXM_NX_IPV6_DST[[]]),FLOOD
-NXST_FLOW reply:
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -508,9 +501,8 @@ OVS_VSWITCHD_START(
     [add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1])
 AT_CHECK([[ovs-ofctl add-flow br0 'actions=learn(fin_hard_timeout=10, fin_idle_timeout=5, NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[], output:NXM_OF_IN_PORT[])']])
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:05,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0806),arp(sip=192.168.0.1,tip=192.168.0.2,op=1,sha=50:54:00:00:00:05,tha=00:00:00:00:00:00)' -generate], [0], [ignore])
-AT_CHECK([ovs-ofctl dump-flows br0 table=1 | ofctl_strip], [0],
-[NXST_FLOW reply:
- table=1, dl_dst=50:54:00:00:00:05 actions=fin_timeout(idle_timeout=5,hard_timeout=10),output:1
+AT_CHECK([ovs-ofctl dump-flows br0 table=1 --no-stats], [0],
+[ table=1, dl_dst=50:54:00:00:00:05 actions=fin_timeout(idle_timeout=5,hard_timeout=10),output:1
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -528,65 +520,59 @@ cookie=0x123, table=2, reg0=0x5 actions=drop
 cookie=0x234, table=1, reg0=0x6 actions=drop
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
-AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
+AT_CHECK([ovs-ofctl dump-flows br0 --no-stats | sort], [0], [dnl
  cookie=0x123, table=1, reg0=0x3 actions=drop
  cookie=0x123, table=1, reg0=0x4 actions=drop
  cookie=0x123, table=2, reg0=0x5 actions=drop
  cookie=0x234, table=1, reg0=0x6 actions=drop
  reg0=0x1 actions=learn(table=1,delete_learned,cookie=0x123)
  reg0=0x2 actions=learn(table=1,delete_learned,cookie=0x123)
-NXST_FLOW reply:
 ])
 
 # Delete one of the learn actions.  The learned flows should stay, since there
 # is another learn action with the identical target.
 AT_CHECK([ovs-ofctl del-flows br0 'table=0 reg0=1'])
-AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
+AT_CHECK([ovs-ofctl dump-flows br0 --no-stats | sort], [0], [dnl
  cookie=0x123, table=1, reg0=0x3 actions=drop
  cookie=0x123, table=1, reg0=0x4 actions=drop
  cookie=0x123, table=2, reg0=0x5 actions=drop
  cookie=0x234, table=1, reg0=0x6 actions=drop
  reg0=0x2 actions=learn(table=1,delete_learned,cookie=0x123)
-NXST_FLOW reply:
 ])
 
 # Change the flow with the learn action by adding a second action.  The learned
 # flows should stay because the learn action is still there.
 AT_CHECK([ovs-ofctl mod-flows br0 'table=0 reg0=2 actions=output:1,learn(delete_learned,cookie=0x123)'])
-AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
+AT_CHECK([ovs-ofctl dump-flows br0 --no-stats | sort], [0], [dnl
  cookie=0x123, table=1, reg0=0x3 actions=drop
  cookie=0x123, table=1, reg0=0x4 actions=drop
  cookie=0x123, table=2, reg0=0x5 actions=drop
  cookie=0x234, table=1, reg0=0x6 actions=drop
  reg0=0x2 actions=output:1,learn(table=1,delete_learned,cookie=0x123)
-NXST_FLOW reply:
 ])
 
 # Change the flow with the learn action by replacing its learn action by one
 # with a different target.  The (previous) learned flows disappear.
 AT_CHECK([ovs-ofctl mod-flows br0 'table=0 reg0=2 actions=learn(delete_learned,cookie=0x234)'])
-AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
+AT_CHECK([ovs-ofctl dump-flows br0 --no-stats | sort], [0], [dnl
  cookie=0x123, table=2, reg0=0x5 actions=drop
  cookie=0x234, table=1, reg0=0x6 actions=drop
  reg0=0x2 actions=learn(table=1,delete_learned,cookie=0x234)
-NXST_FLOW reply:
 ])
 
 # Use add-flow to replace the flow with the learn action by one with the
 # same learn action and an extra action.  The (new) learned flow remains.
 AT_CHECK([ovs-ofctl add-flow br0 'table=0 reg0=2 actions=learn(delete_learned,cookie=0x234),output:2'])
-AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
+AT_CHECK([ovs-ofctl dump-flows br0 --no-stats | sort], [0], [dnl
  cookie=0x123, table=2, reg0=0x5 actions=drop
  cookie=0x234, table=1, reg0=0x6 actions=drop
  reg0=0x2 actions=learn(table=1,delete_learned,cookie=0x234),output:2
-NXST_FLOW reply:
 ])
 
 # Delete the flow with the learn action.  The learned flow disappears too.
 AT_CHECK([ovs-ofctl del-flows br0 table=0])
-AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
+AT_CHECK([ovs-ofctl dump-flows br0 --no-stats | sort], [0], [dnl
  cookie=0x123, table=2, reg0=0x5 actions=drop
-NXST_FLOW reply:
 ])
 
 # Add a new set of flows to check on a corner case: the learned flows
@@ -608,7 +594,7 @@ cookie=0x567, table=5, reg0=0x8 actions=drop
 ])
 AT_CHECK([ovs-ofctl del-flows br0])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
-AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
+AT_CHECK([ovs-ofctl dump-flows br0 --no-stats | sort], [0], [dnl
  cookie=0x123, table=1, reg0=0x3 actions=learn(table=3,delete_learned,cookie=0x345)
  cookie=0x234, table=2, reg0=0x3 actions=learn(table=4,delete_learned,cookie=0x456)
  cookie=0x345, table=3, reg0=0x4 actions=learn(table=5,delete_learned,cookie=0x567)
@@ -618,28 +604,24 @@ AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  cookie=0x567, table=5, reg0=0x8 actions=drop
  reg0=0x1 actions=learn(table=1,delete_learned,cookie=0x123)
  reg0=0x2 actions=learn(table=2,delete_learned,cookie=0x234)
-NXST_FLOW reply:
 ])
 
 # Deleting the flow with reg0=1 should cascade to delete a few levels
 # of learned flows, but the ones with cookie=0x567 stick around
 # because of the flow with cookie=0x456.
 AT_CHECK([ovs-ofctl del-flows br0 'table=0 reg0=1'])
-AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
+AT_CHECK([ovs-ofctl dump-flows br0 --no-stats | sort], [0], [dnl
  cookie=0x234, table=2, reg0=0x3 actions=learn(table=4,delete_learned,cookie=0x456)
  cookie=0x456, table=4, reg0=0x5 actions=learn(table=5,delete_learned,cookie=0x567)
  cookie=0x567, table=5, reg0=0x6 actions=drop
  cookie=0x567, table=5, reg0=0x7 actions=drop
  cookie=0x567, table=5, reg0=0x8 actions=drop
  reg0=0x2 actions=learn(table=2,delete_learned,cookie=0x234)
-NXST_FLOW reply:
 ])
 
 # Deleting the flow with reg0=2 should cascade to delete all the rest:
 AT_CHECK([ovs-ofctl del-flows br0 'table=0 reg0=2'])
-AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
-NXST_FLOW reply:
-])
+AT_CHECK([ovs-ofctl dump-flows br0 --no-stats | sort])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -656,9 +638,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 
 OVS_WAIT_UNTIL([ovs-ofctl dump-ports br0 2 | grep -o 'tx pkts=2' >/dev/null])
 
-AT_CHECK([ovs-ofctl dump-flows br0 table=1 | ofctl_strip | sort], [0], [dnl
+AT_CHECK([ovs-ofctl dump-flows br0 table=1 --no-stats], [0], [dnl
  cookie=0x1, table=1, dl_dst=50:54:00:00:00:01 actions=drop
-NXST_FLOW reply:
 ])
 
 dnl Delete the learned flow

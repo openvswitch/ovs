@@ -1878,13 +1878,9 @@ trace_openflow(const struct ovntrace_flow *f, struct ovs_list *super)
         struct ds s = DS_EMPTY_INITIALIZER;
         for (size_t i = 0; i < n_fses; i++) {
             ds_clear(&s);
-            ofp_print_flow_stats(&s, &fses[i], NULL);
-
-            /* ofp_print_flow_stats() indents its output with a space.
-             * Omit it. */
-            const char *p = ds_cstr(&s);
-            p += strspn(p, " ");
-            ovntrace_node_append(super, OVNTRACE_NODE_ACTION, "%s", p);
+            ofp_print_flow_stats(&s, &fses[i], NULL, true);
+            ovntrace_node_append(super, OVNTRACE_NODE_ACTION,
+                                 "%s", ds_cstr(&s));
         }
         ds_destroy(&s);
     } else {

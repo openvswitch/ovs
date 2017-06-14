@@ -222,8 +222,11 @@ syntax of \fIflows\fR.  The output format is described in
 .IP
 By default, \fBovs\-ofctl\fR prints flow entries in the same order
 that the switch sends them, which is unlikely to be intuitive or
-consistent.  See the description of \fB\-\-sort\fR and \fB\-\-rsort\fR,
-under \fBOPTIONS\fR below, to influence the display order.
+consistent.  Use \fB\-\-sort\fR and \fB\-\-rsort\fR to control display
+order.  The \fB\-\-names\fR/\fB\-\-no\-names\fR and
+\fB\-\-stats\fR/\fB\-\-no\-stats\fR options also affect output
+formatting.  See the descriptions of these options, under
+\fBOPTIONS\fR below, for more information
 .
 .TP
 \fBdump\-aggregate \fIswitch \fR[\fIflows\fR]
@@ -2221,6 +2224,13 @@ Truncation can also cause long names that are different to appear to
 be the same; when a switch has two ports with the same (truncated)
 name, \fBovs\-ofctl\fR refuses to display or accept the name, using
 the number instead.
+.
+.IP "\fB\-\-stats\fR"
+.IQ "\fB\-\-no\-stats\fR"
+The \fBdump\-flows\fR command by default, or with \fB\-\-stats\fR,
+includes flow duration, packet and byte counts, and idle and hard age
+in its output.  With \fB\-\-no\-stats\fR, it omits all of these, as
+well as cookie values and table IDs if they are zero.
 .
 .IP "\fB\-\-read-only\fR"
 Do not execute read/write commands.
