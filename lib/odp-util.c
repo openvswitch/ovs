@@ -460,8 +460,7 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
 
     if (eth->eth_type == htons(ETH_TYPE_IP)) {
         /* IPv4 */
-        const struct ip_header *ip;
-        ip = (const struct ip_header *) l3;
+        const struct ip_header *ip = l3;
         ds_put_format(ds, "ipv4(src="IP_FMT",dst="IP_FMT",proto=%"PRIu8
                       ",tos=%#"PRIx8",ttl=%"PRIu8",frag=0x%"PRIx16"),",
                       IP_ARGS(get_16aligned_be32(&ip->ip_src)),
@@ -471,16 +470,20 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
                       ntohs(ip->ip_frag_off));
         l4 = (ip + 1);
     } else {
-        const struct ip6_hdr *ip6;
-        ip6 = (const struct ip6_hdr *) l3;
+        const struct ovs_16aligned_ip6_hdr *ip6 = l3;
+        struct in6_addr src, dst;
+        memcpy(&src, &ip6->ip6_src, sizeof src);
+        memcpy(&dst, &ip6->ip6_dst, sizeof dst);
+        uint32_t ipv6_flow = ntohl(get_16aligned_be32(&ip6->ip6_flow));
+
         ds_put_format(ds, "ipv6(src=");
-        ipv6_format_addr(&ip6->ip6_src, ds);
+        ipv6_format_addr(&src, ds);
         ds_put_format(ds, ",dst=");
-        ipv6_format_addr(&ip6->ip6_dst, ds);
-        ds_put_format(ds, ",label=%i,proto=%"PRIu8",tclass=0x%"PRIx8
+        ipv6_format_addr(&dst, ds);
+        ds_put_format(ds, ",label=%i,proto=%"PRIu8",tclass=0x%"PRIx32
                           ",hlimit=%"PRIu8"),",
-                      ntohl(ip6->ip6_flow) & IPV6_LABEL_MASK, ip6->ip6_nxt,
-                      (ntohl(ip6->ip6_flow) >> 20) & 0xff, ip6->ip6_hlim);
+                      ipv6_flow & IPV6_LABEL_MASK, ip6->ip6_nxt,
+                      (ipv6_flow >> 20) & 0xff, ip6->ip6_hlim);
         l4 = (ip6 + 1);
     }
 
