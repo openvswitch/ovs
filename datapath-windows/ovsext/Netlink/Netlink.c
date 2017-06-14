@@ -1000,7 +1000,7 @@ PCHAR
 NlAttrGetString(const PNL_ATTR nla)
 {
     ASSERT(nla->nlaLen >= NLA_HDRLEN);
-    if (!memchr(NlAttrGet(nla), '\0', nla->nlaLen - NLA_HDRLEN)) {
+    if (!memchr(NlAttrGet(nla), '\0', NlAttrGetSize(nla))) {
         return NULL;
     }
     return NlAttrGet(nla);

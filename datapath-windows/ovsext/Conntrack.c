@@ -863,23 +863,13 @@ OvsExecuteConntrackAction(OvsForwardingContext *fwdCtx,
                         ? NAT_ACTION_SRC : NAT_ACTION_DST);
                 break;
             case OVS_NAT_ATTR_IP_MIN:
-               if (natAttr->nlaLen < NLA_HDRLEN) {
-                    OVS_LOG_ERROR("Incorrect header length for "
-                                  "OVS_NAT_ATTR_IP_MIN message.");
-                    break;
-                }
                 memcpy(&natActionInfo.minAddr,
-                       NlAttrData(natAttr), natAttr->nlaLen - NLA_HDRLEN);
+                       NlAttrData(natAttr), NlAttrGetSize(natAttr));
                 hasMinIp = TRUE;
                 break;
             case OVS_NAT_ATTR_IP_MAX:
-                if (natAttr->nlaLen < NLA_HDRLEN) {
-                    OVS_LOG_ERROR("Incorrect header length for "
-                                  "OVS_NAT_ATTR_IP_MAX message.");
-                    break;
-                }
                 memcpy(&natActionInfo.maxAddr,
-                       NlAttrData(natAttr), natAttr->nlaLen - NLA_HDRLEN);
+                       NlAttrData(natAttr), NlAttrGetSize(natAttr));
                 hasMaxIp = TRUE;
                 break;
             case OVS_NAT_ATTR_PROTO_MIN:
