@@ -2894,8 +2894,8 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         break;
 
     case OVS_KEY_ATTR_CT_LABELS: {
-        const ovs_u128 *value = nl_attr_get(a);
-        const ovs_u128 *mask = ma ? nl_attr_get(ma) : NULL;
+        const ovs_32aligned_u128 *value = nl_attr_get(a);
+        const ovs_32aligned_u128 *mask = ma ? nl_attr_get(ma) : NULL;
 
         format_u128(ds, value, mask, verbose);
         break;
@@ -3166,16 +3166,14 @@ generate_all_wildcard_mask(const struct attr_len_tbl tbl[], int max,
 }
 
 static void
-format_u128(struct ds *ds, const ovs_u128 *key, const ovs_u128 *mask,
-            bool verbose)
+format_u128(struct ds *ds, const ovs_32aligned_u128 *key,
+            const ovs_32aligned_u128 *mask, bool verbose)
 {
-    if (verbose || (mask && !ovs_u128_is_zero(*mask))) {
-        ovs_be128 value;
-
-        value = hton128(*key);
+    if (verbose || (mask && !ovs_u128_is_zero(get_32aligned_u128(mask)))) {
+        ovs_be128 value = hton128(get_32aligned_u128(key));
         ds_put_hex(ds, &value, sizeof value);
-        if (mask && !(ovs_u128_is_ones(*mask))) {
-            value = hton128(*mask);
+        if (mask && !(ovs_u128_is_ones(get_32aligned_u128(mask)))) {
+            value = hton128(get_32aligned_u128(mask));
             ds_put_char(ds, '/');
             ds_put_hex(ds, &value, sizeof value);
         }
@@ -4804,9 +4802,7 @@ odp_key_to_dp_packet(const struct nlattr *key, size_t key_len,
             wanted_attrs &= ~(1u << OVS_KEY_ATTR_CT_MARK);
             break;
         case OVS_KEY_ATTR_CT_LABELS: {
-            const ovs_u128 *cl = nl_attr_get(nla);
-
-            md->ct_label = *cl;
+            md->ct_label = nl_attr_get_u128(nla);
             wanted_attrs &= ~(1u << OVS_KEY_ATTR_CT_LABELS);
             break;
         }
@@ -5438,9 +5434,7 @@ odp_flow_key_to_flow__(const struct nlattr *key, size_t key_len,
         expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_CT_MARK;
     }
     if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_CT_LABELS)) {
-        const ovs_u128 *cl = nl_attr_get(attrs[OVS_KEY_ATTR_CT_LABELS]);
-
-        flow->ct_label = *cl;
+        flow->ct_label = nl_attr_get_u128(attrs[OVS_KEY_ATTR_CT_LABELS]);
         expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_CT_LABELS;
     }
     if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV4)) {
