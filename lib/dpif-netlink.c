@@ -2791,8 +2791,7 @@ dpif_netlink_flow_from_ofpbuf(struct dpif_netlink_flow *flow,
                                   .optional = true },
         [OVS_FLOW_ATTR_TCP_FLAGS] = { .type = NL_A_U8, .optional = true },
         [OVS_FLOW_ATTR_USED] = { .type = NL_A_U64, .optional = true },
-        [OVS_FLOW_ATTR_UFID] = { .type = NL_A_UNSPEC, .optional = true,
-                                 .min_len = sizeof(ovs_u128) },
+        [OVS_FLOW_ATTR_UFID] = { .type = NL_A_U128, .optional = true },
         /* The kernel never uses OVS_FLOW_ATTR_CLEAR. */
         /* The kernel never uses OVS_FLOW_ATTR_PROBE. */
         /* The kernel never uses OVS_FLOW_ATTR_UFID_FLAGS. */
@@ -2824,11 +2823,7 @@ dpif_netlink_flow_from_ofpbuf(struct dpif_netlink_flow *flow,
     }
 
     if (a[OVS_FLOW_ATTR_UFID]) {
-        const ovs_u128 *ufid;
-
-        ufid = nl_attr_get_unspec(a[OVS_FLOW_ATTR_UFID],
-                                  nl_attr_get_size(a[OVS_FLOW_ATTR_UFID]));
-        flow->ufid = *ufid;
+        flow->ufid = nl_attr_get_u128(a[OVS_FLOW_ATTR_UFID]);
         flow->ufid_present = true;
     }
     if (a[OVS_FLOW_ATTR_MASK]) {
@@ -2867,8 +2862,7 @@ dpif_netlink_flow_to_ofpbuf(const struct dpif_netlink_flow *flow,
     ovs_header->dp_ifindex = flow->dp_ifindex;
 
     if (flow->ufid_present) {
-        nl_msg_put_unspec(buf, OVS_FLOW_ATTR_UFID, &flow->ufid,
-                          sizeof flow->ufid);
+        nl_msg_put_u128(buf, OVS_FLOW_ATTR_UFID, flow->ufid);
     }
     if (flow->ufid_terse) {
         nl_msg_put_u32(buf, OVS_FLOW_ATTR_UFID_FLAGS,
