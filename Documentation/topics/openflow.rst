@@ -75,28 +75,12 @@ Here are the current approaches in a few tricky areas:
 OpenFlow 1.1
 ------------
 
-The list of remaining work items for OpenFlow 1.1 is below.  It is probably
-incomplete.
-
-* Match and set double-tagged VLANs (QinQ).
-
-  This requires kernel work for reasonable performance.
-
-  (optional for OF1.1+)
-
-* VLANs tagged with 88a8 Ethertype.
-
-  This requires kernel work for reasonable performance.
-
-  (required for OF1.1+)
+OpenFlow 1.1 support is complete.
 
 OpenFlow 1.2
 ------------
 
-OpenFlow 1.2 support requires OpenFlow 1.1 as a prerequisite. All the
-additional work specific to Openflow 1.2 are complete.  (This is based on the
-change log at the end of the OF1.2 spec.  I didn't compare the specs carefully
-yet.)
+OpenFlow 1.2 support is complete.
 
 OpenFlow 1.3
 ------------
@@ -170,8 +154,7 @@ in OVS.
 
 * Flow entry notifications
 
-  This seems to be modelled after OVS's NXST_FLOW_MONITOR.  (Simon Horman is
-  working on this.)
+  This seems to be modelled after OVS's NXST_FLOW_MONITOR.
 
   (EXT-187)
   (optional for OF1.4+)
