@@ -2141,6 +2141,9 @@ OvsExtractLayers(const NET_BUFFER_LIST *packet,
                     }
                 }
             }
+        } else {
+            /* Invalid network header */
+            return NDIS_STATUS_INVALID_PACKET;
         }
     } else if (dlType == htons(ETH_TYPE_IPV6)) {
         NDIS_STATUS status;
@@ -2360,8 +2363,10 @@ OvsExtractFlow(const NET_BUFFER_LIST *packet,
                 }
             }
         } else {
+            /* Invalid network header */
             ((UINT64 *)ipKey)[0] = 0;
             ((UINT64 *)ipKey)[1] = 0;
+            return NDIS_STATUS_INVALID_PACKET;
         }
     } else if (flow->l2.dlType == htons(ETH_TYPE_IPV6)) {
         NDIS_STATUS status;

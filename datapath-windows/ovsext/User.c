@@ -465,6 +465,11 @@ OvsExecuteDpIoctl(OvsPacketExecute *execute)
     ndisStatus = OvsExtractFlow(pNbl, execute->inPort, &key, &layers,
                      tempTunKey.tunKey.dst == 0 ? NULL : &tempTunKey.tunKey);
 
+    if (ndisStatus != NDIS_STATUS_SUCCESS) {
+        /* Invalid network header */
+        goto dropit;
+    }
+
     ctx = (POVS_BUFFER_CONTEXT)NET_BUFFER_LIST_CONTEXT_DATA_START(pNbl);
     ctx->mru = execute->mru;
 

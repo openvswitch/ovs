@@ -1019,7 +1019,7 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
                 innerIpHdr->check = IPChecksum((UINT8 *)innerIpHdr,
                                                 innerIpHdr->ihl * 4, 0);
             } else {
-                status = NDIS_STATUS_RESOURCES;
+                status = NDIS_STATUS_INVALID_PACKET;
                 goto dropNbl;
             }
         } else if (layers.isIPv6) {

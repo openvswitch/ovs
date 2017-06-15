@@ -563,6 +563,9 @@ OvsValidateIPChecksum(PNET_BUFFER_LIST curNbl,
             if (checksum != hdrChecksum) {
                 return NDIS_STATUS_FAILURE;
             }
+        } else {
+            /* Invalid network header */
+            return NDIS_STATUS_FAILURE;
         }
     }
     return NDIS_STATUS_SUCCESS;
