@@ -1536,7 +1536,8 @@ packet_put_ra_prefix_opt(struct dp_packet *b,
     nh->ip6_plen = htons(prev_l4_size + ND_PREFIX_OPT_LEN);
 
     struct ovs_ra_msg *ra = dp_packet_l4(b);
-    struct ovs_nd_prefix_opt *prefix_opt = dp_packet_put_uninit(b, sizeof *b);
+    struct ovs_nd_prefix_opt *prefix_opt =
+        dp_packet_put_uninit(b, sizeof *prefix_opt);
     prefix_opt->type = ND_OPT_PREFIX_INFORMATION;
     prefix_opt->len = 4;
     prefix_opt->prefix_len = plen;
