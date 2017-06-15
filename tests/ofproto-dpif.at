@@ -4962,6 +4962,47 @@ CHECK_CONTINUATION([patch ports], [4], [1],
        -- set interface patch11 type=patch options:peer=patch10 \
                                 ofport_request=11])
 
+
+# Check that pause works after the packet is cloned.
+AT_SETUP([ofproto-dpif - continuation after clone])
+AT_KEYWORDS([continuations clone pause resume])
+OVS_VSWITCHD_START
+
+add_of_ports --pcap br0 `seq 1 3`
+
+flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1 actions=set_field:1->reg1 resubmit(,2)
+table=1 reg1=0x5 actions=controller(pause) resubmit(,3)
+table=1 reg1=0x1 actions=2
+table=2 in_port=1 actions=clone(set_field:5->reg1, resubmit(,1))
+table=3 reg1=0x1 actions=3
+table=3 reg1=0x5 actions=2
+])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flows br0 flows.txt])
+
+AT_CAPTURE_FILE([ofctl_monitor0.log])
+ovs-ofctl monitor br0 resume --detach --no-chdir \
+--pidfile=ovs-ofctl0.pid 2> ofctl_monitor0.log
+
+# Run a packet through the switch.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 "$flow"], [0], [stdout])
+
+ovs-vsctl show
+ovs-ofctl dump-flows br0
+
+# The packet should be recieved by port 2 and not port 3
+AT_CHECK([test 1 = `$PYTHON "$top_srcdir/utilities/ovs-pcap.in" p2-tx.pcap | wc -l`])
+AT_CHECK([test 0 = `$PYTHON "$top_srcdir/utilities/ovs-pcap.in" p3-tx.pcap | wc -l`])
+
+# NXT_RESUMEs should be 1 and reg1 should be set to 0x5.
+OVS_WAIT_UNTIL([test 1 = `cat ofctl_monitor*.log | grep NXT_RESUME | grep -c reg1=0x5`])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 # Two testcases below are for the ofproto/trace command
 # The first one tests all correct syntax:
 # ofproto/trace [dp_name] odp_flow [-generate|packet]
