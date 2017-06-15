@@ -480,7 +480,7 @@ if __name__ == '__main__':
 
     if n_patches:
         status = 0
-        for i in range(n_patches, 0, -1):
+        for i in reversed(range(0, n_patches)):
             revision = 'HEAD~%d' % i
             f = os.popen('git format-patch -1 --stdout %s' % revision, 'r')
             patch = f.read()
