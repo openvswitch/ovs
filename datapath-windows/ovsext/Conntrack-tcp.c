@@ -51,6 +51,7 @@ struct conn_tcp {
     struct OVS_CT_ENTRY up;
     struct tcp_peer peer[2];
 };
+C_ASSERT(offsetof(struct conn_tcp, up) == 0);
 
 enum {
     TCPOPT_EOL,
