@@ -65,7 +65,7 @@ Post-v2.7.0
      * Transparently pop and push Ethernet headers at transmit/reception
        of packets to/from L3 tunnels.
    - The BFD detection multiplier is now user-configurable.
-   - New support for HW offloading
+   - Add experimental support for hardware offloading
      * HW offloading is disabled by default.
      * HW offloading is done through the TC interface.
 

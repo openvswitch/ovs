@@ -192,6 +192,11 @@
         <p>
           Currently Open vSwitch supports hardware offloading on
           Linux systems.  On other systems, this value is ignored.
+          This functionality is considered 'experimental'. Depending
+          on which OpenFlow matches and actions are configured,
+          which kernel version is used, and what hardware is
+          available, Open vSwitch may not be able to offload
+          functionality to hardware.
         </p>
       </column>
 
