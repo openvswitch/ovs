@@ -69,14 +69,14 @@ typedef struct MD_LABELS {
     struct ovs_key_ct_labels mask;
 } MD_LABELS;
 
-typedef enum NAT_ACTION {
+typedef enum _NAT_ACTION {
     NAT_ACTION_NONE = 0,
     NAT_ACTION_REVERSE = 1 << 0,
     NAT_ACTION_SRC = 1 << 1,
     NAT_ACTION_SRC_PORT = 1 << 2,
     NAT_ACTION_DST = 1 << 3,
     NAT_ACTION_DST_PORT = 1 << 4,
-};
+} NAT_ACTION;
 
 typedef struct _OVS_CT_KEY {
     struct ct_endpoint src;
