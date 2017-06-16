@@ -5362,7 +5362,8 @@ parse_8021q_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
                         ? nl_attr_get_be16(attrs[OVS_KEY_ATTR_VLAN])
                         : htons(0));
         if (!is_mask) {
-            if (!(present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_VLAN))) {
+            if (!(present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_VLAN)) ||
+                !(present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_ENCAP))) {
                 return ODP_FIT_TOO_LITTLE;
             } else if (flow->vlans[encaps].tci == htons(0)) {
                 /* Corner case for a truncated 802.1Q header. */
