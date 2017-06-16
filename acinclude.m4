@@ -736,6 +736,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_FIND_PARAM_IFELSE([$KSRC/include/net/netfilter/ipv6/nf_defrag_ipv6.h],
                         [nf_defrag_ipv6_enable], [net],
                         [OVS_DEFINE([HAVE_DEFRAG_ENABLE_TAKES_NET])])
+  OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [family_list],
+                        [OVS_DEFINE([HAVE_GENL_FAMILY_LIST])])
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then
