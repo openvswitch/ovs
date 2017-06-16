@@ -138,13 +138,6 @@ service_start(int *argcp, char **argvp[])
         *argcp = sargc;
         *argvp = *sargvp;
 
-        /* XXX: Windows implementation cannot have a unixctl commands in the
-        * traditional sense of unix domain sockets. If an implementation is
-        * done that involves 'unixctl' vlog commands the following call is
-        * needed to make sure that the unixctl commands for vlog get
-        * registered in a daemon, even before the first log message. */
-        vlog_init();
-
         return;
     }
 
