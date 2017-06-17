@@ -5142,6 +5142,20 @@ show_dp_feature_size_t(struct ds *ds, const char *feature, size_t s)
     ds_put_format(ds, "%s: %"PRIuSIZE"\n", feature, s);
 }
 
+enum dpif_support_field_type {
+    DPIF_SUPPORT_FIELD_bool,
+    DPIF_SUPPORT_FIELD_size_t,
+};
+
+struct dpif_support_field {
+    void *ptr;
+    const char *title;
+    enum dpif_support_field_type type;
+};
+
+#define DPIF_SUPPORT_FIELD_INTIALIZER(PTR, TITLE, TYPE) \
+    (struct dpif_support_field) {PTR, TITLE, TYPE}
+
 static void
 dpif_show_support(const struct dpif_backer_support *support, struct ds *ds)
 {
@@ -5154,6 +5168,103 @@ dpif_show_support(const struct dpif_backer_support *support, struct ds *ds)
     show_dp_feature_##TYPE (ds, TITLE, support->odp.NAME );
     ODP_SUPPORT_FIELDS
 #undef ODP_SUPPORT_FIELD
+}
+
+static void
+display_support_field(const char *name,
+                      const struct dpif_support_field *field,
+                      struct ds *ds)
+{
+    switch (field->type) {
+    case DPIF_SUPPORT_FIELD_bool: {
+        bool b = *(bool *)field->ptr;
+        ds_put_format(ds, "%s (%s) : %s\n", name,
+                      field->title, b ? "true" : "false");
+        break;
+    }
+    case DPIF_SUPPORT_FIELD_size_t:
+        ds_put_format(ds, "%s (%s) : %"PRIuSIZE"\n", name,
+                      field->title, *(size_t *)field->ptr);
+        break;
+    default:
+        OVS_NOT_REACHED();
+    }
+}
+
+static void
+dpif_set_support(struct dpif_backer_support *support,
+                 const char *name, const char *value, struct ds *ds)
+{
+    struct shash all_fields = SHASH_INITIALIZER(&all_fields);
+    struct dpif_support_field *field;
+    struct shash_node *node;
+
+#define DPIF_SUPPORT_FIELD(TYPE, NAME, TITLE) \
+    {\
+      struct dpif_support_field *f = xmalloc(sizeof *f);            \
+      *f = DPIF_SUPPORT_FIELD_INTIALIZER(&support->NAME,            \
+                                        TITLE,                      \
+                                        DPIF_SUPPORT_FIELD_##TYPE); \
+      shash_add_once(&all_fields, #NAME, f);                        \
+    }
+    DPIF_SUPPORT_FIELDS;
+#undef DPIF_SUPPORT_FIELD
+
+#define ODP_SUPPORT_FIELD(TYPE, NAME, TITLE) \
+    {\
+        struct dpif_support_field *f = xmalloc(sizeof *f);            \
+        *f = DPIF_SUPPORT_FIELD_INTIALIZER(&support->odp.NAME,        \
+                                          TITLE,                      \
+                                          DPIF_SUPPORT_FIELD_##TYPE); \
+      shash_add_once(&all_fields, #NAME, f);                          \
+    }
+    ODP_SUPPORT_FIELDS;
+#undef ODP_SUPPORT_FIELD
+
+    if (!name) {
+        struct shash_node *node;
+
+        SHASH_FOR_EACH (node, &all_fields) {
+            display_support_field(node->name, node->data, ds);
+        }
+        goto done;
+    }
+
+    node = shash_find(&all_fields, name);
+    if (!node) {
+        ds_put_cstr(ds, "Unexpected support field");
+        goto done;
+    }
+    field = node->data;
+
+    if (!value) {
+        display_support_field(node->name, field, ds);
+        goto done;
+    }
+
+    if (field->type == DPIF_SUPPORT_FIELD_bool) {
+        if (strcasecmp(value, "true") == 0) {
+            *(bool *)field->ptr = true;
+        } else if (strcasecmp(value, "false") == 0) {
+            *(bool *)field->ptr = false;
+        } else {
+            ds_put_cstr(ds, "Boolean value expected");
+        }
+    } else if (field->type == DPIF_SUPPORT_FIELD_size_t) {
+        int v;
+        if (str_to_int(value, 10, &v)) {
+            if (v >= 0) {
+                *(size_t *)field->ptr = v;
+            } else {
+                ds_put_format(ds, "Negative number not expected");
+            }
+        } else {
+            ds_put_cstr(ds, "Integer number expected");
+        }
+    }
+
+done:
+    shash_destroy_free_data(&all_fields);
 }
 
 static void
@@ -5419,6 +5530,27 @@ ofproto_unixctl_dpif_show_dp_features(struct unixctl_conn *conn,
 }
 
 static void
+ofproto_unixctl_dpif_set_dp_features(struct unixctl_conn *conn,
+                                     int argc, const char *argv[],
+                                     void *aux OVS_UNUSED)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    const char *br = argv[1];
+    const char *name, *value;
+    struct ofproto_dpif *ofproto = ofproto_dpif_lookup(br);
+
+    if (!ofproto) {
+        unixctl_command_reply_error(conn, "no such bridge");
+        return;
+    }
+
+    name = argc > 2 ? argv[2] : NULL;
+    value = argc > 3 ? argv[3] : NULL;
+    dpif_set_support(&ofproto->backer->support, name, value, &ds);
+    unixctl_command_reply(conn, ds_cstr(&ds));
+}
+
+static void
 ofproto_unixctl_init(void)
 {
     static bool registered;
@@ -5443,6 +5575,8 @@ ofproto_unixctl_init(void)
                              ofproto_unixctl_dpif_show_dp_features, NULL);
     unixctl_command_register("dpif/dump-flows", "[-m] [--names | --no-nmaes] bridge", 1, INT_MAX,
                              ofproto_unixctl_dpif_dump_flows, NULL);
+    unixctl_command_register("dpif/set-dp-features", "bridge", 1, 3 ,
+                             ofproto_unixctl_dpif_set_dp_features, NULL);
 
     unixctl_command_register("ofproto/tnl-push-pop", "[on]|[off]", 1, 1,
                              disable_tnl_push_pop, NULL);
