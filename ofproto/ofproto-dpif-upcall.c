@@ -548,7 +548,7 @@ udpif_start_threads(struct udpif *udpif, size_t n_handlers,
                 "handler", udpif_upcall_handler, handler);
         }
 
-        enable_ufid = udpif->backer->support.ufid;
+        enable_ufid = udpif->backer->rt_support.ufid;
         atomic_init(&udpif->enable_ufid, enable_ufid);
         dpif_enable_upcall(udpif->dpif);
 
@@ -707,7 +707,7 @@ udpif_use_ufid(struct udpif *udpif)
     bool enable;
 
     atomic_read_relaxed(&enable_ufid, &enable);
-    return enable && udpif->backer->support.ufid;
+    return enable && udpif->backer->rt_support.ufid;
 }
 
 
@@ -1592,7 +1592,7 @@ ukey_create_from_upcall(struct upcall *upcall, struct flow_wildcards *wc)
         .mask = wc ? &wc->masks : NULL,
     };
 
-    odp_parms.support = upcall->ofproto->backer->support.odp;
+    odp_parms.support = upcall->ofproto->backer->rt_support.odp;
     if (upcall->key_len) {
         ofpbuf_use_const(&keybuf, upcall->key, upcall->key_len);
     } else {

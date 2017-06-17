@@ -234,6 +234,8 @@ void xlate_mac_learning_update(const struct ofproto_dpif *ofproto,
                                int vlan, bool is_grat_arp);
 
 void xlate_disable_dp_clone(const struct ofproto_dpif *);
+void xlate_set_support(const struct ofproto_dpif *,
+                       const struct dpif_backer_support *);
 
 void xlate_txn_start(void);
 void xlate_txn_commit(void);

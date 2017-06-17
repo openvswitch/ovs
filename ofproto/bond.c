@@ -1159,7 +1159,7 @@ bond_rebalance(struct bond *bond)
     }
     bond->next_rebalance = time_msec() + bond->rebalance_interval;
 
-    use_recirc = bond->ofproto->backer->support.odp.recirc &&
+    use_recirc = bond->ofproto->backer->rt_support.odp.recirc &&
                  bond_may_recirc(bond);
 
     if (use_recirc) {

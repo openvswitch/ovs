@@ -446,7 +446,7 @@ type_run(const char *type)
                               ofproto->netflow,
                               ofproto->up.forward_bpdu,
                               connmgr_has_in_band(ofproto->up.connmgr),
-                              &ofproto->backer->support);
+                              &ofproto->backer->rt_support);
 
             HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
                 xlate_bundle_set(ofproto, bundle, bundle->name,
@@ -786,7 +786,7 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     /* This check fails if performed before udpif threads have been set,
      * as the kernel module checks that the 'pid' in userspace action
      * is non-zero. */
-    backer->support.variable_length_userdata
+    backer->rt_support.variable_length_userdata
         = check_variable_length_userdata(backer);
     backer->dp_version_string = dpif_get_dp_version(backer->dpif);
 
@@ -799,14 +799,21 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
         backer->meter_ids = NULL;
     }
 
+    /* Make a pristine snapshot of 'support' into 'boottime_support'.
+     * 'boottime_support' can be checked to prevent 'support' to be changed
+     * beyond the datapath capabilities. In case 'support' is changed by
+     * the user, 'boottime_support' can be used to restore it.  */
+    backer->bt_support = backer->rt_support;
+
     return error;
 }
 
 bool
 ovs_native_tunneling_is_on(struct ofproto_dpif *ofproto)
 {
-    return ofproto_use_tnl_push_pop && ofproto->backer->support.tnl_push_pop &&
-           atomic_count_get(&ofproto->backer->tnl_count);
+    return ofproto_use_tnl_push_pop
+        && ofproto->backer->rt_support.tnl_push_pop
+        && atomic_count_get(&ofproto->backer->tnl_count);
 }
 
 /* Tests whether 'backer''s datapath supports recirculation.  Only newer
@@ -1366,29 +1373,29 @@ static void
 check_support(struct dpif_backer *backer)
 {
     /* This feature needs to be tested after udpif threads are set. */
-    backer->support.variable_length_userdata = false;
+    backer->rt_support.variable_length_userdata = false;
 
     /* Actions. */
-    backer->support.odp.recirc = check_recirc(backer);
-    backer->support.odp.max_vlan_headers = check_max_vlan_headers(backer);
-    backer->support.odp.max_mpls_depth = check_max_mpls_depth(backer);
-    backer->support.masked_set_action = check_masked_set_action(backer);
-    backer->support.trunc = check_trunc_action(backer);
-    backer->support.ufid = check_ufid(backer);
-    backer->support.tnl_push_pop = dpif_supports_tnl_push_pop(backer->dpif);
-    backer->support.clone = check_clone(backer);
-    backer->support.sample_nesting = check_max_sample_nesting(backer);
-    backer->support.ct_eventmask = check_ct_eventmask(backer);
+    backer->rt_support.odp.recirc = check_recirc(backer);
+    backer->rt_support.odp.max_vlan_headers = check_max_vlan_headers(backer);
+    backer->rt_support.odp.max_mpls_depth = check_max_mpls_depth(backer);
+    backer->rt_support.masked_set_action = check_masked_set_action(backer);
+    backer->rt_support.trunc = check_trunc_action(backer);
+    backer->rt_support.ufid = check_ufid(backer);
+    backer->rt_support.tnl_push_pop = dpif_supports_tnl_push_pop(backer->dpif);
+    backer->rt_support.clone = check_clone(backer);
+    backer->rt_support.sample_nesting = check_max_sample_nesting(backer);
+    backer->rt_support.ct_eventmask = check_ct_eventmask(backer);
 
     /* Flow fields. */
-    backer->support.odp.ct_state = check_ct_state(backer);
-    backer->support.odp.ct_zone = check_ct_zone(backer);
-    backer->support.odp.ct_mark = check_ct_mark(backer);
-    backer->support.odp.ct_label = check_ct_label(backer);
+    backer->rt_support.odp.ct_state = check_ct_state(backer);
+    backer->rt_support.odp.ct_zone = check_ct_zone(backer);
+    backer->rt_support.odp.ct_mark = check_ct_mark(backer);
+    backer->rt_support.odp.ct_label = check_ct_label(backer);
 
-    backer->support.odp.ct_state_nat = check_ct_state_nat(backer);
-    backer->support.odp.ct_orig_tuple = check_ct_orig_tuple(backer);
-    backer->support.odp.ct_orig_tuple6 = check_ct_orig_tuple6(backer);
+    backer->rt_support.odp.ct_state_nat = check_ct_state_nat(backer);
+    backer->rt_support.odp.ct_orig_tuple = check_ct_orig_tuple(backer);
+    backer->rt_support.odp.ct_orig_tuple6 = check_ct_orig_tuple6(backer);
 }
 
 static int
@@ -4259,7 +4266,7 @@ check_mask(struct ofproto_dpif *ofproto, const struct miniflow *flow)
     ovs_u128 ct_label;
     uint32_t ct_mark;
 
-    support = &ofproto->backer->support.odp;
+    support = &ofproto->backer->rt_support.odp;
     ct_state = MINIFLOW_GET_U8(flow, ct_state);
 
     /* Do not bother dissecting the flow further if the datapath supports all
@@ -4319,7 +4326,7 @@ check_actions(const struct ofproto_dpif *ofproto,
               const struct rule_actions *const actions)
 {
     const struct ofpact *ofpact;
-    const struct odp_support *support = &ofproto->backer->support.odp;
+    const struct odp_support *support = &ofproto->backer->rt_support.odp;
 
     OFPACT_FOR_EACH (ofpact, actions->ofpacts, actions->ofpacts_len) {
         if (ofpact->type == OFPACT_CT) {
@@ -5148,13 +5155,14 @@ enum dpif_support_field_type {
 };
 
 struct dpif_support_field {
-    void *ptr;
+    void *rt_ptr;        /* Points to the 'rt_support' field. */
+    const void *bt_ptr;  /* Points to the 'bt_support' field. */
     const char *title;
     enum dpif_support_field_type type;
 };
 
-#define DPIF_SUPPORT_FIELD_INTIALIZER(PTR, TITLE, TYPE) \
-    (struct dpif_support_field) {PTR, TITLE, TYPE}
+#define DPIF_SUPPORT_FIELD_INTIALIZER(RT_PTR, BT_PTR, TITLE, TYPE) \
+    (struct dpif_support_field) {RT_PTR, BT_PTR, TITLE, TYPE}
 
 static void
 dpif_show_support(const struct dpif_backer_support *support, struct ds *ds)
@@ -5177,34 +5185,44 @@ display_support_field(const char *name,
 {
     switch (field->type) {
     case DPIF_SUPPORT_FIELD_bool: {
-        bool b = *(bool *)field->ptr;
-        ds_put_format(ds, "%s (%s) : %s\n", name,
-                      field->title, b ? "true" : "false");
+        bool v = *(bool *)field->rt_ptr;
+        bool b = *(bool *)field->bt_ptr;
+        ds_put_format(ds, "%s (%s) : [run time]:%s, [boot time]:%s\n", name,
+                      field->title, v ? "true" : "false",
+                      b ? "true" : "false");
         break;
     }
     case DPIF_SUPPORT_FIELD_size_t:
-        ds_put_format(ds, "%s (%s) : %"PRIuSIZE"\n", name,
-                      field->title, *(size_t *)field->ptr);
+        ds_put_format(ds, "%s (%s) : [run time]:%"PRIuSIZE
+                      ", [boot time]:%"PRIuSIZE"\n", name,
+                      field->title, *(size_t *)field->rt_ptr,
+                      *(size_t *)field->bt_ptr);
         break;
     default:
         OVS_NOT_REACHED();
     }
 }
 
-static void
-dpif_set_support(struct dpif_backer_support *support,
+/* Set a field of 'rt_support' to a new value.
+ *
+ * Returns 'true' if the value is actually set. */
+static bool
+dpif_set_support(struct dpif_backer_support *rt_support,
+                 struct dpif_backer_support *bt_support,
                  const char *name, const char *value, struct ds *ds)
 {
     struct shash all_fields = SHASH_INITIALIZER(&all_fields);
     struct dpif_support_field *field;
     struct shash_node *node;
+    bool changed = false;
 
 #define DPIF_SUPPORT_FIELD(TYPE, NAME, TITLE) \
     {\
       struct dpif_support_field *f = xmalloc(sizeof *f);            \
-      *f = DPIF_SUPPORT_FIELD_INTIALIZER(&support->NAME,            \
-                                        TITLE,                      \
-                                        DPIF_SUPPORT_FIELD_##TYPE); \
+      *f = DPIF_SUPPORT_FIELD_INTIALIZER(&rt_support->NAME,         \
+                                         &bt_support->NAME,         \
+                                         TITLE,                     \
+                                         DPIF_SUPPORT_FIELD_##TYPE);\
       shash_add_once(&all_fields, #NAME, f);                        \
     }
     DPIF_SUPPORT_FIELDS;
@@ -5213,9 +5231,10 @@ dpif_set_support(struct dpif_backer_support *support,
 #define ODP_SUPPORT_FIELD(TYPE, NAME, TITLE) \
     {\
         struct dpif_support_field *f = xmalloc(sizeof *f);            \
-        *f = DPIF_SUPPORT_FIELD_INTIALIZER(&support->odp.NAME,        \
-                                          TITLE,                      \
-                                          DPIF_SUPPORT_FIELD_##TYPE); \
+        *f = DPIF_SUPPORT_FIELD_INTIALIZER(&rt_support->odp.NAME,     \
+                                           &bt_support->odp.NAME,     \
+                                           TITLE,                     \
+                                           DPIF_SUPPORT_FIELD_##TYPE);\
       shash_add_once(&all_fields, #NAME, f);                          \
     }
     ODP_SUPPORT_FIELDS;
@@ -5243,10 +5262,16 @@ dpif_set_support(struct dpif_backer_support *support,
     }
 
     if (field->type == DPIF_SUPPORT_FIELD_bool) {
-        if (strcasecmp(value, "true") == 0) {
-            *(bool *)field->ptr = true;
-        } else if (strcasecmp(value, "false") == 0) {
-            *(bool *)field->ptr = false;
+        if (!strcasecmp(value, "true")) {
+            if (*(bool *)field->bt_ptr) {
+                *(bool *)field->rt_ptr = true;
+                changed = true;
+            } else {
+                ds_put_cstr(ds, "Can not enable features not supported by the datapth");
+            }
+        } else if (!strcasecmp(value, "false")) {
+            *(bool *)field->rt_ptr = false;
+            changed = true;
         } else {
             ds_put_cstr(ds, "Boolean value expected");
         }
@@ -5254,7 +5279,12 @@ dpif_set_support(struct dpif_backer_support *support,
         int v;
         if (str_to_int(value, 10, &v)) {
             if (v >= 0) {
-                *(size_t *)field->ptr = v;
+                if (v <= *(size_t *)field->bt_ptr) {
+                    *(size_t *)field->rt_ptr = v;
+                    changed = true;
+                } else {
+                    ds_put_cstr(ds, "Can not set value beyond the datapath capability");
+                }
             } else {
                 ds_put_format(ds, "Negative number not expected");
             }
@@ -5265,6 +5295,7 @@ dpif_set_support(struct dpif_backer_support *support,
 
 done:
     shash_destroy_free_data(&all_fields);
+    return changed;
 }
 
 static void
@@ -5484,7 +5515,7 @@ disable_datapath_truncate(struct unixctl_conn *conn OVS_UNUSED,
     backers = shash_sort(&all_dpif_backers);
     for (i = 0; i < shash_count(&all_dpif_backers); i++) {
         struct dpif_backer *backer = backers[i]->data;
-        backer->support.trunc = false;
+        backer->rt_support.trunc = false;
     }
     free(backers);
     unixctl_command_reply(conn, "Datapath truncate action diabled");
@@ -5525,7 +5556,7 @@ ofproto_unixctl_dpif_show_dp_features(struct unixctl_conn *conn,
         return;
     }
 
-    dpif_show_support(&ofproto->backer->support, &ds);
+    dpif_show_support(&ofproto->backer->bt_support, &ds);
     unixctl_command_reply(conn, ds_cstr(&ds));
 }
 
@@ -5538,6 +5569,7 @@ ofproto_unixctl_dpif_set_dp_features(struct unixctl_conn *conn,
     const char *br = argv[1];
     const char *name, *value;
     struct ofproto_dpif *ofproto = ofproto_dpif_lookup(br);
+    bool changed;
 
     if (!ofproto) {
         unixctl_command_reply_error(conn, "no such bridge");
@@ -5546,8 +5578,15 @@ ofproto_unixctl_dpif_set_dp_features(struct unixctl_conn *conn,
 
     name = argc > 2 ? argv[2] : NULL;
     value = argc > 3 ? argv[3] : NULL;
-    dpif_set_support(&ofproto->backer->support, name, value, &ds);
+    changed = dpif_set_support(&ofproto->backer->rt_support,
+                               &ofproto->backer->bt_support,
+                               name, value, &ds);
+    if (changed) {
+        xlate_set_support(ofproto, &ofproto->backer->rt_support);
+        udpif_flush(ofproto->backer->udpif);
+    }
     unixctl_command_reply(conn, ds_cstr(&ds));
+    ds_destroy(&ds);
 }
 
 static void

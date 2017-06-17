@@ -7115,3 +7115,15 @@ xlate_disable_dp_clone(const struct ofproto_dpif *ofproto)
         xbridge->support.clone = false;
     }
 }
+
+void
+xlate_set_support(const struct ofproto_dpif *ofproto,
+                    const struct dpif_backer_support *support)
+{
+    struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
+    struct xbridge *xbridge = xbridge_lookup(xcfg, ofproto);
+
+    if (xbridge) {
+        xbridge->support = *support;
+    }
+}
