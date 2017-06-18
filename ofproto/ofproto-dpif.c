@@ -5240,11 +5240,6 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
     const struct ofproto_dpif *ofproto;
 
     struct ds ds = DS_EMPTY_INITIALIZER;
-    bool verbosity = false;
-
-    struct dpif_port dpif_port;
-    struct dpif_port_dump port_dump;
-    struct hmap portno_names;
 
     struct dpif_flow_dump *flow_dump;
     struct dpif_flow_dump_thread *flow_dump_thread;
@@ -5257,13 +5252,35 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
         return;
     }
 
-    if (argc > 2 && !strcmp(argv[1], "-m")) {
-        verbosity = true;
+    bool verbosity = false;
+    bool names = false;
+    bool set_names = false;
+    for (int i = 1; i < argc - 1; i++) {
+        if (!strcmp(argv[i], "-m")) {
+            verbosity = true;
+        } else if (!strcmp(argv[i], "--names")) {
+            names = true;
+            set_names = true;
+        } else if (!strcmp(argv[i], "--no-names")) {
+            names = false;
+            set_names = true;
+        }
+    }
+    if (!set_names) {
+        names = verbosity;
     }
 
-    hmap_init(&portno_names);
-    DPIF_PORT_FOR_EACH (&dpif_port, &port_dump, ofproto->backer->dpif) {
-        odp_portno_names_set(&portno_names, dpif_port.port_no, dpif_port.name);
+    struct hmap *portno_names = NULL;
+    if (names) {
+        portno_names = xmalloc(sizeof *portno_names);
+        hmap_init(portno_names);
+
+        struct dpif_port dpif_port;
+        struct dpif_port_dump port_dump;
+        DPIF_PORT_FOR_EACH (&dpif_port, &port_dump, ofproto->backer->dpif) {
+            odp_portno_names_set(portno_names, dpif_port.port_no,
+                                 dpif_port.name);
+        }
     }
 
     ds_init(&ds);
@@ -5282,7 +5299,7 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
             ds_put_cstr(&ds, " ");
         }
         odp_flow_format(f.key, f.key_len, f.mask, f.mask_len,
-                        &portno_names, &ds, verbosity);
+                        portno_names, &ds, verbosity);
         ds_put_cstr(&ds, ", ");
         dpif_flow_stats_format(&f.stats, &ds);
         ds_put_cstr(&ds, ", actions:");
@@ -5299,8 +5316,11 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
     } else {
         unixctl_command_reply(conn, ds_cstr(&ds));
     }
-    odp_portno_names_destroy(&portno_names);
-    hmap_destroy(&portno_names);
+    if (portno_names) {
+        odp_portno_names_destroy(portno_names);
+        hmap_destroy(portno_names);
+        free(portno_names);
+    }
     ds_destroy(&ds);
 }
 
@@ -5415,7 +5435,7 @@ ofproto_unixctl_init(void)
                              NULL);
     unixctl_command_register("dpif/show-dp-features", "bridge", 1, 1,
                              ofproto_unixctl_dpif_show_dp_features, NULL);
-    unixctl_command_register("dpif/dump-flows", "[-m] bridge", 1, 2,
+    unixctl_command_register("dpif/dump-flows", "[-m] [--names | --no-nmaes] bridge", 1, INT_MAX,
                              ofproto_unixctl_dpif_dump_flows, NULL);
 
     unixctl_command_register("ofproto/tnl-push-pop", "[on]|[off]", 1, 1,

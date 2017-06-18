@@ -49,6 +49,8 @@
 #include "unixctl.h"
 #include "util.h"
 #include "openvswitch/ofp-parse.h"
+#include "openvswitch/vlog.h"
+VLOG_DEFINE_THIS_MODULE(dpctl);
 
 typedef int dpctl_command_handler(int argc, const char *argv[],
                                   struct dpctl_params *);
@@ -764,6 +766,36 @@ static char *supported_dump_types[] = {
     "ovs",
 };
 
+static struct hmap *
+dpctl_get_portno_names(struct dpif *dpif, const struct dpctl_params *dpctl_p)
+{
+    if (dpctl_p->names) {
+        struct hmap *portno_names = xmalloc(sizeof *portno_names);
+        hmap_init(portno_names);
+
+        struct dpif_port_dump port_dump;
+        struct dpif_port dpif_port;
+        DPIF_PORT_FOR_EACH (&dpif_port, &port_dump, dpif) {
+            odp_portno_names_set(portno_names, dpif_port.port_no,
+                                 dpif_port.name);
+        }
+
+        return portno_names;
+    } else {
+        return NULL;
+    }
+}
+
+static void
+dpctl_free_portno_names(struct hmap *portno_names)
+{
+    if (portno_names) {
+        odp_portno_names_destroy(portno_names);
+        hmap_destroy(portno_names);
+        free(portno_names);
+    }
+}
+
 static int
 dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
 {
@@ -775,10 +807,6 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     char *type = NULL;
     struct flow flow_filter;
     struct flow_wildcards wc_filter;
-
-    struct dpif_port_dump port_dump;
-    struct dpif_port dpif_port;
-    struct hmap portno_names;
 
     struct dpif_flow_dump_thread *flow_dump_thread;
     struct dpif_flow_dump *flow_dump;
@@ -809,15 +837,14 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
         goto out_free;
     }
 
-
-    hmap_init(&portno_names);
-    DPIF_PORT_FOR_EACH (&dpif_port, &port_dump, dpif) {
-        odp_portno_names_set(&portno_names, dpif_port.port_no, dpif_port.name);
-    }
+    struct hmap *portno_names = dpctl_get_portno_names(dpif, dpctl_p);
 
     if (filter) {
         struct ofputil_port_map port_map;
         ofputil_port_map_init(&port_map);
+
+        struct dpif_port_dump port_dump;
+        struct dpif_port dpif_port;
         DPIF_PORT_FOR_EACH (&dpif_port, &port_dump, dpif) {
             ofputil_port_map_put(&port_map,
                                  u16_to_ofp(odp_to_u32(dpif_port.port_no)),
@@ -892,7 +919,7 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
             }
             pmd_id = f.pmd_id;
         }
-        format_dpif_flow(&ds, &f, &portno_names, type, dpctl_p);
+        format_dpif_flow(&ds, &f, portno_names, type, dpctl_p);
 
         dpctl_print(dpctl_p, "%s\n", ds_cstr(&ds));
     }
@@ -905,8 +932,7 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     ds_destroy(&ds);
 
 out_dpifclose:
-    odp_portno_names_destroy(&portno_names);
-    hmap_destroy(&portno_names);
+    dpctl_free_portno_names(portno_names);
     dpif_close(dpif);
 out_free:
     free(filter);
@@ -1034,11 +1060,8 @@ dpctl_get_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
 {
     const char *key_s = argv[argc - 1];
     struct dpif_flow flow;
-    struct dpif_port dpif_port;
-    struct dpif_port_dump port_dump;
     struct dpif *dpif;
     char *dp_name;
-    struct hmap portno_names;
     ovs_u128 ufid;
     struct ofpbuf buf;
     uint64_t stub[DPIF_FLOW_BUFSIZE / 8];
@@ -1057,10 +1080,8 @@ dpctl_get_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     }
 
     ofpbuf_use_stub(&buf, &stub, sizeof stub);
-    hmap_init(&portno_names);
-    DPIF_PORT_FOR_EACH (&dpif_port, &port_dump, dpif) {
-        odp_portno_names_set(&portno_names, dpif_port.port_no, dpif_port.name);
-    }
+
+    struct hmap *portno_names = dpctl_get_portno_names(dpif, dpctl_p);
 
     n = odp_ufid_from_string(key_s, &ufid);
     if (n <= 0) {
@@ -1076,13 +1097,12 @@ dpctl_get_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     }
 
     ds_init(&ds);
-    format_dpif_flow(&ds, &flow, &portno_names, NULL, dpctl_p);
+    format_dpif_flow(&ds, &flow, portno_names, NULL, dpctl_p);
     dpctl_print(dpctl_p, "%s\n", ds_cstr(&ds));
     ds_destroy(&ds);
 
 out:
-    odp_portno_names_destroy(&portno_names);
-    hmap_destroy(&portno_names);
+    dpctl_free_portno_names(portno_names);
     ofpbuf_uninit(&buf);
     dpif_close(dpif);
     return error;
@@ -1682,6 +1702,7 @@ dpctl_unixctl_handler(struct unixctl_conn *conn, int argc, const char *argv[],
     /* Parse options (like getopt). Unfortunately it does
      * not seem a good idea to call getopt_long() here, since it uses global
      * variables */
+    bool set_names = false;
     while (argc > 1 && !error) {
         const char *arg = argv[1];
         if (!strncmp(arg, "--", 2)) {
@@ -1694,6 +1715,12 @@ dpctl_unixctl_handler(struct unixctl_conn *conn, int argc, const char *argv[],
                 dpctl_p.may_create = true;
             } else if (!strcmp(arg, "--more")) {
                 dpctl_p.verbosity++;
+            } else if (!strcmp(arg, "--names")) {
+                dpctl_p.names = true;
+                set_names = true;
+            } else if (!strcmp(arg, "--no-names")) {
+                dpctl_p.names = false;
+                set_names = true;
             } else {
                 ds_put_format(&ds, "Unrecognized option %s", argv[1]);
                 error = true;
@@ -1728,6 +1755,11 @@ dpctl_unixctl_handler(struct unixctl_conn *conn, int argc, const char *argv[],
         argv++;
         argc--;
     }
+    if (!set_names) {
+        dpctl_p.names = dpctl_p.verbosity > 0;
+    }
+    VLOG_INFO("set_names=%d verbosity=%d names=%d", set_names,
+              dpctl_p.verbosity, dpctl_p.names);
 
     if (!error) {
         dpctl_command_handler *handler = (dpctl_command_handler *) aux;

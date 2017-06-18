@@ -2944,7 +2944,7 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         break;
 
     case OVS_KEY_ATTR_IN_PORT:
-        if (portno_names && verbose && is_exact) {
+        if (portno_names && is_exact) {
             char *name = odp_portno_names_get(portno_names,
                                               nl_attr_get_odp_port(a));
             if (name) {
@@ -3251,7 +3251,7 @@ odp_format_ufid(const ovs_u128 *ufid, struct ds *ds)
 /* Appends to 'ds' a string representation of the 'key_len' bytes of
  * OVS_KEY_ATTR_* attributes in 'key'. If non-null, additionally formats the
  * 'mask_len' bytes of 'mask' which apply to 'key'. If 'portno_names' is
- * non-null and 'verbose' is true, translates odp port number to its name. */
+ * non-null, translates odp port number to its name. */
 void
 odp_flow_format(const struct nlattr *key, size_t key_len,
                 const struct nlattr *mask, size_t mask_len,

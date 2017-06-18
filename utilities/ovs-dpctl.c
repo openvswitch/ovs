@@ -78,6 +78,8 @@ parse_options(int argc, char *argv[])
         OPT_CLEAR = UCHAR_MAX + 1,
         OPT_MAY_CREATE,
         OPT_READ_ONLY,
+        OPT_NAMES,
+        OPT_NO_NAMES,
         VLOG_OPTION_ENUMS
     };
     static const struct option long_options[] = {
@@ -86,6 +88,8 @@ parse_options(int argc, char *argv[])
         {"may-create", no_argument, NULL, OPT_MAY_CREATE},
         {"read-only", no_argument, NULL, OPT_READ_ONLY},
         {"more", no_argument, NULL, 'm'},
+        {"names", no_argument, NULL, OPT_NAMES},
+        {"no-names", no_argument, NULL, OPT_NO_NAMES},
         {"timeout", required_argument, NULL, 't'},
         {"help", no_argument, NULL, 'h'},
         {"option", no_argument, NULL, 'o'},
@@ -95,6 +99,7 @@ parse_options(int argc, char *argv[])
     };
     char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
 
+    bool set_names = false;
     for (;;) {
         unsigned long int timeout;
         int c;
@@ -123,6 +128,16 @@ parse_options(int argc, char *argv[])
 
         case 'm':
             dpctl_p.verbosity++;
+            break;
+
+        case OPT_NAMES:
+            dpctl_p.names = true;
+            set_names = true;
+            break;
+
+        case OPT_NO_NAMES:
+            dpctl_p.names = false;
+            set_names = true;
             break;
 
         case 't':
@@ -156,6 +171,10 @@ parse_options(int argc, char *argv[])
         }
     }
     free(short_options);
+
+    if (!set_names) {
+        dpctl_p.names = dpctl_p.verbosity > 0;
+    }
 }
 
 static void
@@ -190,6 +209,7 @@ usage(void *userdata OVS_UNUSED)
            "  -s,  --statistics           print statistics for port or flow\n"
            "\nOptions for dump-flows:\n"
            "  -m, --more                  increase verbosity of output\n"
+           "  --names                     use port names in output\n"
            "\nOptions for mod-flow:\n"
            "  --may-create                create flow if it doesn't exist\n"
            "  --read-only                 do not run read/write commands\n"

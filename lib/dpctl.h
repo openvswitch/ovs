@@ -39,6 +39,9 @@ struct dpctl_params {
     /* -m, --more: Increase output verbosity. */
     int verbosity;
 
+    /* --names: Use port names in output? */
+    bool names;
+
     /* Callback for printing.  This function is called from dpctl_run_command()
      * to output data.  The 'aux' parameter is set to the 'aux'
      * member.  The 'error' parameter is true if 'string' is an error

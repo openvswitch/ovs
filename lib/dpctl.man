@@ -79,7 +79,7 @@ for datapath not implementing mega flow. "hit" displays the total number
 of masks visited for matching incoming packets. "total" displays number of
 masks in the datapath. "hit/pkt" displays the average number of masks
 visited per packet; the ratio between "hit" and total number of
-packets processed by the datapath".
+packets processed by the datapath.
 .IP
 If one or more datapaths are specified, information on only those
 datapaths are displayed.  Otherwise, \fB\*(PN\fR displays information
@@ -99,7 +99,7 @@ default.  When multiple datapaths exist, then a datapath name is
 required.
 .
 .TP
-.DO "[\fB\-m \fR| \fB\-\-more\fR]" \*(DX\fBdump\-flows\fR "[\fIdp\fR] [\fBfilter=\fIfilter\fR] [\fBtype=\fItype\fR]"
+.DO "[\fB\-m \fR| \fB\-\-more\fR] [\fB\-\-names \fR| \fB\-\-no\-names\fR]" \*(DX\fBdump\-flows\fR "[\fIdp\fR] [\fBfilter=\fIfilter\fR] [\fBtype=\fItype\fR]"
 Prints to the console all flow entries in datapath \fIdp\fR's flow
 table.  Without \fB\-m\fR or \fB\-\-more\fR, output omits match fields
 that a flow wildcards entirely; with \fB\-m\fR or \fB\-\-more\fR,
@@ -184,7 +184,8 @@ Deletes the flow from \fIdp\fR's flow table that matches \fIflow\fR.
 If \fB\-s\fR or \fB\-\-statistics\fR is specified, then
 \fBdel\-flow\fR prints the deleted flow's statistics.
 .
-.IP "\*(DX\fBget\-flow\fR [\fIdp\fR] ufid:\fIufid\fR"
+.TP
+.DO "[\fB\-m \fR| \fB\-\-more\fR] [\fB\-\-names \fR| \fB\-\-no\-names\fR]" "\*(DX\fBget\-flow\fR [\fIdp\fR] ufid:\fIufid\fR"
 Fetches the flow from \fIdp\fR's flow table with unique identifier \fIufid\fR.
 \fIufid\fR must be specified as a string of 32 hexadecimal characters.
 .
