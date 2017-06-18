@@ -256,6 +256,7 @@ std_functions = [
         ('strerror', 'Use ovs_strerror() in place of strerror()'),
         ('sleep', 'Use xsleep() in place of sleep()'),
         ('abort', 'Use ovs_abort() in place of abort()'),
+        ('assert', 'Use ovs_assert() in place of assert()'),
         ('error', 'Use ovs_error() in place of error()'),
 ]
 checks += [
