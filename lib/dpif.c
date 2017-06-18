@@ -1714,7 +1714,7 @@ log_flow_message(const struct dpif *dpif, int error,
     }
     if (actions || actions_len) {
         ds_put_cstr(&ds, ", actions:");
-        format_odp_actions(&ds, actions, actions_len);
+        format_odp_actions(&ds, actions, actions_len, NULL);
     }
     vlog(module, flow_message_log_level(error), "%s", ds_cstr(&ds));
     ds_destroy(&ds);
@@ -1802,7 +1802,7 @@ log_execute_message(const struct dpif *dpif,
                       (subexecute ? "sub-"
                        : dpif_execute_needs_help(execute) ? "super-"
                        : ""));
-        format_odp_actions(&ds, execute->actions, execute->actions_len);
+        format_odp_actions(&ds, execute->actions, execute->actions_len, NULL);
         if (error) {
             ds_put_format(&ds, " failed (%s)", ovs_strerror(error));
         }

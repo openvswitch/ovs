@@ -475,7 +475,7 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
     ds_put_char(output, '\n');
 
     ds_put_cstr(output, "Datapath actions: ");
-    format_odp_actions(output, odp_actions.data, odp_actions.size);
+    format_odp_actions(output, odp_actions.data, odp_actions.size, NULL);
 
     if (error != XLATE_OK) {
         ds_put_format(output,

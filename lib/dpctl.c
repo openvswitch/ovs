@@ -758,7 +758,7 @@ format_dpif_flow(struct ds *ds, const struct dpif_flow *f, struct hmap *ports,
         ds_put_cstr(ds, ", offloaded:yes");
     }
     ds_put_cstr(ds, ", actions:");
-    format_odp_actions(ds, f->actions, f->actions_len);
+    format_odp_actions(ds, f->actions, f->actions_len, ports);
 }
 
 static char *supported_dump_types[] = {
@@ -1350,7 +1350,7 @@ dpctl_parse_actions(int argc, const char *argv[], struct dpctl_params* dpctl_p)
         }
 
         ds_init(&s);
-        format_odp_actions(&s, actions.data, actions.size);
+        format_odp_actions(&s, actions.data, actions.size, NULL);
         dpctl_print(dpctl_p, "%s\n", ds_cstr(&s));
         ds_destroy(&s);
 
@@ -1515,7 +1515,7 @@ dpctl_normalize_actions(int argc, const char *argv[],
 
     if (dpctl_p->verbosity) {
         ds_clear(&s);
-        format_odp_actions(&s, odp_actions.data, odp_actions.size);
+        format_odp_actions(&s, odp_actions.data, odp_actions.size, NULL);
         dpctl_print(dpctl_p, "input actions: %s\n", ds_cstr(&s));
     }
 
@@ -1585,7 +1585,7 @@ dpctl_normalize_actions(int argc, const char *argv[],
         }
 
         ds_clear(&s);
-        format_odp_actions(&s, af->actions.data, af->actions.size);
+        format_odp_actions(&s, af->actions.data, af->actions.size, NULL);
         dpctl_puts(dpctl_p, false, ds_cstr(&s));
 
         ofpbuf_uninit(&af->actions);

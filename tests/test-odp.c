@@ -138,7 +138,7 @@ parse_actions(void)
 
         /* Convert odp_actions back to string. */
         ds_init(&out);
-        format_odp_actions(&out, odp_actions.data, odp_actions.size);
+        format_odp_actions(&out, odp_actions.data, odp_actions.size, NULL);
         puts(ds_cstr(&out));
         ds_destroy(&out);
 

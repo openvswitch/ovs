@@ -203,7 +203,8 @@ format_generic_odp_action(struct ds *ds, const struct nlattr *a)
 }
 
 static void
-format_odp_sample_action(struct ds *ds, const struct nlattr *attr)
+format_odp_sample_action(struct ds *ds, const struct nlattr *attr,
+                         const struct hmap *portno_names)
 {
     static const struct nl_policy ovs_sample_policy[] = {
         [OVS_SAMPLE_ATTR_PROBABILITY] = { .type = NL_A_U32 },
@@ -229,19 +230,20 @@ format_odp_sample_action(struct ds *ds, const struct nlattr *attr)
     ds_put_cstr(ds, "actions(");
     nla_acts = nl_attr_get(a[OVS_SAMPLE_ATTR_ACTIONS]);
     len = nl_attr_get_size(a[OVS_SAMPLE_ATTR_ACTIONS]);
-    format_odp_actions(ds, nla_acts, len);
+    format_odp_actions(ds, nla_acts, len, portno_names);
     ds_put_format(ds, "))");
 }
 
 static void
-format_odp_clone_action(struct ds *ds, const struct nlattr *attr)
+format_odp_clone_action(struct ds *ds, const struct nlattr *attr,
+                        const struct hmap *portno_names)
 {
     const struct nlattr *nla_acts = nl_attr_get(attr);
     int len = nl_attr_get_size(attr);
 
     ds_put_cstr(ds, "clone");
     ds_put_format(ds, "(");
-    format_odp_actions(ds, nla_acts, len);
+    format_odp_actions(ds, nla_acts, len, portno_names);
     ds_put_format(ds, ")");
 }
 
@@ -278,7 +280,8 @@ parse_odp_flags(const char *s, const char *(*bit_to_string)(uint32_t),
 }
 
 static void
-format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
+format_odp_userspace_action(struct ds *ds, const struct nlattr *attr,
+                            const struct hmap *portno_names)
 {
     static const struct nl_policy ovs_userspace_policy[] = {
         [OVS_USERSPACE_ATTR_PID] = { .type = NL_A_U32 },
@@ -336,12 +339,13 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
                               ",collector_set_id=%"PRIu32
                               ",obs_domain_id=%"PRIu32
                               ",obs_point_id=%"PRIu32
-                              ",output_port=%"PRIu32,
+                              ",output_port=",
                               cookie.flow_sample.probability,
                               cookie.flow_sample.collector_set_id,
                               cookie.flow_sample.obs_domain_id,
-                              cookie.flow_sample.obs_point_id,
-                              cookie.flow_sample.output_odp_port);
+                              cookie.flow_sample.obs_point_id);
+                odp_portno_name_format(portno_names,
+                                       cookie.flow_sample.output_odp_port, ds);
                 if (cookie.flow_sample.direction == NX_ACTION_SAMPLE_INGRESS) {
                     ds_put_cstr(ds, ",ingress");
                 } else if (cookie.flow_sample.direction == NX_ACTION_SAMPLE_EGRESS) {
@@ -350,8 +354,10 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
                 ds_put_char(ds, ')');
             } else if (userdata_len >= sizeof cookie.ipfix
                        && cookie.type == USER_ACTION_COOKIE_IPFIX) {
-                ds_put_format(ds, ",ipfix(output_port=%"PRIu32")",
-                              cookie.ipfix.output_odp_port);
+                ds_put_format(ds, ",ipfix(output_port=");
+                odp_portno_name_format(portno_names,
+                                       cookie.ipfix.output_odp_port, ds);
+                ds_put_char(ds, ')');
             } else {
                 userdata_unspec = true;
             }
@@ -373,8 +379,9 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
 
     tunnel_out_port_attr = a[OVS_USERSPACE_ATTR_EGRESS_TUN_PORT];
     if (tunnel_out_port_attr) {
-        ds_put_format(ds, ",tunnel_out_port=%"PRIu32,
-                      nl_attr_get_u32(tunnel_out_port_attr));
+        ds_put_format(ds, ",tunnel_out_port=");
+        odp_portno_name_format(portno_names,
+                               nl_attr_get_odp_port(tunnel_out_port_attr), ds);
     }
 
     ds_put_char(ds, ')');
@@ -571,15 +578,20 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
 }
 
 static void
-format_odp_tnl_push_action(struct ds *ds, const struct nlattr *attr)
+format_odp_tnl_push_action(struct ds *ds, const struct nlattr *attr,
+                           const struct hmap *portno_names)
 {
     struct ovs_action_push_tnl *data;
 
     data = (struct ovs_action_push_tnl *) nl_attr_get(attr);
 
-    ds_put_format(ds, "tnl_push(tnl_port(%"PRIu32"),", data->tnl_port);
+    ds_put_cstr(ds, "tnl_push(tnl_port(");
+    odp_portno_name_format(portno_names, data->tnl_port, ds);
+    ds_put_cstr(ds, "),");
     format_odp_tnl_push_header(ds, data);
-    ds_put_format(ds, ",out_port(%"PRIu32"))", data->out_port);
+    ds_put_format(ds, ",out_port(");
+    odp_portno_name_format(portno_names, data->out_port, ds);
+    ds_put_cstr(ds, "))");
 }
 
 static const struct nl_policy ovs_nat_policy[] = {
@@ -799,7 +811,8 @@ format_odp_conntrack_action(struct ds *ds, const struct nlattr *attr)
 }
 
 static void
-format_odp_action(struct ds *ds, const struct nlattr *a)
+format_odp_action(struct ds *ds, const struct nlattr *a,
+                  const struct hmap *portno_names)
 {
     int expected_len;
     enum ovs_action_attr type = nl_attr_type(a);
@@ -819,7 +832,7 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
         ds_put_format(ds, "meter(%"PRIu32")", nl_attr_get_u32(a));
         break;
     case OVS_ACTION_ATTR_OUTPUT:
-        ds_put_format(ds, "%"PRIu32, nl_attr_get_u32(a));
+        odp_portno_name_format(portno_names, nl_attr_get_odp_port(a), ds);
         break;
     case OVS_ACTION_ATTR_TRUNC: {
         const struct ovs_action_trunc *trunc =
@@ -828,15 +841,16 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
         ds_put_format(ds, "trunc(%"PRIu32")", trunc->max_len);
         break;
     }
-    break;
     case OVS_ACTION_ATTR_TUNNEL_POP:
-        ds_put_format(ds, "tnl_pop(%"PRIu32")", nl_attr_get_u32(a));
+        ds_put_cstr(ds, "tnl_pop(");
+        odp_portno_name_format(portno_names, nl_attr_get_odp_port(a), ds);
+        ds_put_char(ds, ')');
         break;
     case OVS_ACTION_ATTR_TUNNEL_PUSH:
-        format_odp_tnl_push_action(ds, a);
+        format_odp_tnl_push_action(ds, a, portno_names);
         break;
     case OVS_ACTION_ATTR_USERSPACE:
-        format_odp_userspace_action(ds, a);
+        format_odp_userspace_action(ds, a, portno_names);
         break;
     case OVS_ACTION_ATTR_RECIRC:
         format_odp_recirc_action(ds, nl_attr_get_u32(a));
@@ -907,13 +921,13 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
         break;
     }
     case OVS_ACTION_ATTR_SAMPLE:
-        format_odp_sample_action(ds, a);
+        format_odp_sample_action(ds, a, portno_names);
         break;
     case OVS_ACTION_ATTR_CT:
         format_odp_conntrack_action(ds, a);
         break;
     case OVS_ACTION_ATTR_CLONE:
-        format_odp_clone_action(ds, a);
+        format_odp_clone_action(ds, a, portno_names);
         break;
     case OVS_ACTION_ATTR_UNSPEC:
     case __OVS_ACTION_ATTR_MAX:
@@ -925,7 +939,7 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
 
 void
 format_odp_actions(struct ds *ds, const struct nlattr *actions,
-                   size_t actions_len)
+                   size_t actions_len, const struct hmap *portno_names)
 {
     if (actions_len) {
         const struct nlattr *a;
@@ -935,7 +949,7 @@ format_odp_actions(struct ds *ds, const struct nlattr *actions,
             if (a != actions) {
                 ds_put_char(ds, ',');
             }
-            format_odp_action(ds, a);
+            format_odp_action(ds, a, portno_names);
         }
         if (left) {
             int i;
@@ -2241,12 +2255,14 @@ odp_portno_names_set(struct hmap *portno_names, odp_port_t port_no,
 static char *
 odp_portno_names_get(const struct hmap *portno_names, odp_port_t port_no)
 {
-    struct odp_portno_names *odp_portno_names;
+    if (portno_names) {
+        struct odp_portno_names *odp_portno_names;
 
-    HMAP_FOR_EACH_IN_BUCKET (odp_portno_names, hmap_node,
-                             hash_odp_port(port_no), portno_names) {
-        if (odp_portno_names->port_no == port_no) {
-            return odp_portno_names->name;
+        HMAP_FOR_EACH_IN_BUCKET (odp_portno_names, hmap_node,
+                                 hash_odp_port(port_no), portno_names) {
+            if (odp_portno_names->port_no == port_no) {
+                return odp_portno_names->name;
+            }
         }
     }
     return NULL;
@@ -2260,6 +2276,18 @@ odp_portno_names_destroy(struct hmap *portno_names)
     HMAP_FOR_EACH_POP (odp_portno_names, hmap_node, portno_names) {
         free(odp_portno_names->name);
         free(odp_portno_names);
+    }
+}
+
+void
+odp_portno_name_format(const struct hmap *portno_names, odp_port_t port_no,
+                       struct ds *s)
+{
+    const char *name = odp_portno_names_get(portno_names, port_no);
+    if (name) {
+        ds_put_cstr(s, name);
+    } else {
+        ds_put_format(s, "%"PRIu32, port_no);
     }
 }
 
@@ -2944,14 +2972,8 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         break;
 
     case OVS_KEY_ATTR_IN_PORT:
-        if (portno_names && is_exact) {
-            char *name = odp_portno_names_get(portno_names,
-                                              nl_attr_get_odp_port(a));
-            if (name) {
-                ds_put_format(ds, "%s", name);
-            } else {
-                ds_put_format(ds, "%"PRIu32, nl_attr_get_u32(a));
-            }
+        if (is_exact) {
+            odp_portno_name_format(portno_names, nl_attr_get_odp_port(a), ds);
         } else {
             ds_put_format(ds, "%"PRIu32, nl_attr_get_u32(a));
             if (!is_exact) {

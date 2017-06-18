@@ -5303,7 +5303,7 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
         ds_put_cstr(&ds, ", ");
         dpif_flow_stats_format(&f.stats, &ds);
         ds_put_cstr(&ds, ", actions:");
-        format_odp_actions(&ds, f.actions, f.actions_len);
+        format_odp_actions(&ds, f.actions, f.actions_len, portno_names);
         ds_put_char(&ds, '\n');
     }
     dpif_flow_dump_thread_destroy(flow_dump_thread);
