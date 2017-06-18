@@ -3211,8 +3211,8 @@ build_tunnel_send(struct xlate_ctx *ctx, const struct xport *xport,
     if (err) {
         return err;
     }
-    tnl_push_data.tnl_port = odp_to_u32(tunnel_odp_port);
-    tnl_push_data.out_port = odp_to_u32(out_dev->odp_port);
+    tnl_push_data.tnl_port = tunnel_odp_port;
+    tnl_push_data.out_port = out_dev->odp_port;
 
     /* After tunnel header has been added, packet_type of flow and base_flow
      * need to be set to PT_ETH. */

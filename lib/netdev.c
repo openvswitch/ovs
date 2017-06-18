@@ -831,7 +831,7 @@ netdev_push_header(const struct netdev *netdev,
     struct dp_packet *packet;
     DP_PACKET_BATCH_FOR_EACH (packet, batch) {
         netdev->netdev_class->push_header(packet, data);
-        pkt_metadata_init(&packet->md, u32_to_odp(data->out_port));
+        pkt_metadata_init(&packet->md, data->out_port);
     }
 
     return 0;

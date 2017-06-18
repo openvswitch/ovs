@@ -901,7 +901,7 @@ sflow_read_tnl_push_action(const struct nlattr *attr,
     const struct ip_header *ip
         = ALIGNED_CAST(const struct ip_header *, eth + 1);
 
-    sflow_actions->out_port = u32_to_odp(data->out_port);
+    sflow_actions->out_port = data->out_port;
 
     /* Ethernet. */
     /* TODO: SFlow does not currently define a MAC-in-MAC

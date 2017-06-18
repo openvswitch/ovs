@@ -714,8 +714,8 @@ struct ovs_action_hash {
  * this header to build final header according to actual packet parameters.
  */
 struct ovs_action_push_tnl {
-	uint32_t tnl_port;
-	uint32_t out_port;
+	odp_port_t tnl_port;
+	odp_port_t out_port;
 	uint32_t header_len;
 	uint32_t tnl_type;     /* For logging. */
 	uint32_t header[TNL_PUSH_HEADER_SIZE / 4];
