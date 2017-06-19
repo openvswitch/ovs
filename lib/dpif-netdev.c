@@ -884,9 +884,8 @@ sorted_poll_list(struct dp_netdev_pmd_thread *pmd, struct rxq_poll **list,
             i++;
         }
         ovs_assert(i == *n);
+        qsort(ret, *n, sizeof *ret, compare_poll_list);
     }
-
-    qsort(ret, *n, sizeof *ret, compare_poll_list);
 
     *list = ret;
 }
