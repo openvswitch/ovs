@@ -365,7 +365,11 @@ enum ovs_key_attr {
 	OVS_KEY_ATTR_TUNNEL_INFO,  /* struct ovs_tunnel_info */
 #endif
 
+#ifndef __KERNEL__
+	/* Only used within userspace data path. */
 	OVS_KEY_ATTR_PACKET_TYPE,  /* be32 packet type */
+#endif
+
 	__OVS_KEY_ATTR_MAX
 };
 
