@@ -29,6 +29,7 @@
 #include <linux/types.h>
 #include <linux/ethtool.h>
 #include <linux/mii.h>
+#include <linux/rtnetlink.h>
 #include <linux/sockios.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>

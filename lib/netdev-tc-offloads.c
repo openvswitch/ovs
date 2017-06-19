@@ -16,24 +16,25 @@
 
 #include <config.h>
 #include "netdev-tc-offloads.h"
+
 #include <errno.h>
 #include <linux/if_ether.h>
+
+#include "dpif.h"
+#include "hash.h"
 #include "openvswitch/hmap.h"
 #include "openvswitch/match.h"
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/thread.h"
 #include "openvswitch/types.h"
 #include "openvswitch/vlog.h"
-#include "netdev-provider.h"
+#include "netdev-linux.h"
 #include "netlink.h"
 #include "netlink-socket.h"
 #include "odp-netlink.h"
+#include "tc.h"
 #include "unaligned.h"
 #include "util.h"
-#include "hash.h"
-#include "dpif.h"
-#include "tc.h"
-#include "netdev-linux.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_tc_offloads);
 
