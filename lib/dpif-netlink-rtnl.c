@@ -140,11 +140,9 @@ rtnl_policy_parse(const char *kind, struct ofpbuf *reply,
 {
     struct nlattr *linkinfo[ARRAY_SIZE(linkinfo_policy)];
     struct nlattr *rtlink[ARRAY_SIZE(rtlink_policy)];
-    struct ifinfomsg *ifmsg;
     int error = 0;
 
-    ifmsg = ofpbuf_at(reply, NLMSG_HDRLEN, sizeof *ifmsg);
-    if (!nl_policy_parse(reply, NLMSG_HDRLEN + sizeof *ifmsg,
+    if (!nl_policy_parse(reply, NLMSG_HDRLEN + sizeof(struct ifinfomsg),
                          rtlink_policy, rtlink, ARRAY_SIZE(rtlink_policy))
         || !nl_parse_nested(rtlink[IFLA_LINKINFO], linkinfo_policy,
                             linkinfo, ARRAY_SIZE(linkinfo_policy))
