@@ -555,7 +555,9 @@ show_dpif(struct dpif *dpif, struct dpctl_params *dpctl_p)
         n_port_nos++;
     }
 
-    qsort(port_nos, n_port_nos, sizeof *port_nos, compare_port_nos);
+    if (port_nos) {
+        qsort(port_nos, n_port_nos, sizeof *port_nos, compare_port_nos);
+    }
 
     for (int i = 0; i < n_port_nos; i++) {
         if (dpif_port_query_by_number(dpif, port_nos[i], &dpif_port)) {
