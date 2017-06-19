@@ -231,7 +231,7 @@ rm -rf $RPM_BUILD_ROOT
 make install DESTDIR=$RPM_BUILD_ROOT
 
 install -d -m 0755 $RPM_BUILD_ROOT%{_rundir}/openvswitch
-install -d -m 0755 $RPM_BUILD_ROOT%{_localstatedir}/log/openvswitch
+install -d -m 0750 $RPM_BUILD_ROOT%{_localstatedir}/log/openvswitch
 install -d -m 0755 $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch
 
 install -p -D -m 0644 \

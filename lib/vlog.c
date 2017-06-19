@@ -360,7 +360,7 @@ vlog_set_log_file(const char *file_name)
     new_log_file_name = (file_name
                          ? xstrdup(file_name)
                          : xasprintf("%s/%s.log", ovs_logdir(), program_name));
-    new_log_fd = open(new_log_file_name, O_WRONLY | O_CREAT | O_APPEND, 0666);
+    new_log_fd = open(new_log_file_name, O_WRONLY | O_CREAT | O_APPEND, 0660);
     if (new_log_fd < 0) {
         VLOG_WARN("failed to open %s for logging: %s",
                   new_log_file_name, ovs_strerror(errno));
