@@ -4541,12 +4541,14 @@ learn_min_len(uint16_t header)
 
 static enum ofperr
 decode_LEARN_common(const struct nx_action_learn *nal,
+                    enum ofp_raw_action_type raw,
                     struct ofpact_learn *learn)
 {
     if (nal->pad) {
         return OFPERR_OFPBAC_BAD_ARGUMENT;
     }
 
+    learn->ofpact.raw = raw;
     learn->idle_timeout = ntohs(nal->idle_timeout);
     learn->hard_timeout = ntohs(nal->hard_timeout);
     learn->priority = ntohs(nal->priority);
@@ -4658,7 +4660,7 @@ decode_NXAST_RAW_LEARN(const struct nx_action_learn *nal,
 
     learn = ofpact_put_LEARN(ofpacts);
 
-    error = decode_LEARN_common(nal, learn);
+    error = decode_LEARN_common(nal, NXAST_RAW_LEARN, learn);
     if (error) {
         return error;
     }
@@ -4689,7 +4691,7 @@ decode_NXAST_RAW_LEARN2(const struct nx_action_learn2 *nal,
     }
 
     learn = ofpact_put_LEARN(ofpacts);
-    error = decode_LEARN_common(&nal->up, learn);
+    error = decode_LEARN_common(&nal->up, NXAST_RAW_LEARN2, learn);
     if (error) {
         return error;
     }
