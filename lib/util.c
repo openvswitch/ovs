@@ -33,12 +33,20 @@
 #include "ovs-rcu.h"
 #include "ovs-thread.h"
 #include "socket-util.h"
+#include "timeval.h"
 #include "openvswitch/vlog.h"
 #ifdef HAVE_PTHREAD_SET_NAME_NP
 #include <pthread_np.h>
 #endif
 
 VLOG_DEFINE_THIS_MODULE(util);
+
+#ifdef __linux__
+#define LINUX 1
+#include <asm/param.h>
+#else
+#define LINUX 0
+#endif
 
 COVERAGE_DEFINE(util_xalloc);
 
@@ -536,6 +544,66 @@ set_subprogram_name(const char *subprogram_name)
 #elif HAVE_PTHREAD_SET_NAME_NP
     pthread_set_name_np(pthread_self(), pname);
 #endif
+}
+
+unsigned int
+get_page_size(void)
+{
+    static unsigned int cached;
+
+    if (!cached) {
+#ifndef _WIN32
+        long int value = sysconf(_SC_PAGESIZE);
+#else
+        long int value;
+        SYSTEM_INFO sysinfo;
+        GetSystemInfo(&sysinfo);
+        value = sysinfo.dwPageSize;
+#endif
+        if (value >= 0) {
+            cached = value;
+        }
+    }
+
+    return cached;
+}
+
+/* Returns the time at which the system booted, as the number of milliseconds
+ * since the epoch, or 0 if the time of boot cannot be determined. */
+long long int
+get_boot_time(void)
+{
+    static long long int cache_expiration = LLONG_MIN;
+    static long long int boot_time;
+
+    ovs_assert(LINUX);
+
+    if (time_msec() >= cache_expiration) {
+        static const char stat_file[] = "/proc/stat";
+        char line[128];
+        FILE *stream;
+
+        cache_expiration = time_msec() + 5 * 1000;
+
+        stream = fopen(stat_file, "r");
+        if (!stream) {
+            VLOG_ERR_ONCE("%s: open failed (%s)",
+                          stat_file, ovs_strerror(errno));
+            return boot_time;
+        }
+
+        while (fgets(line, sizeof line, stream)) {
+            long long int btime;
+            if (ovs_scan(line, "btime %lld", &btime)) {
+                boot_time = btime * 1000;
+                goto done;
+            }
+        }
+        VLOG_ERR_ONCE("%s: btime not found", stat_file);
+    done:
+        fclose(stream);
+    }
+    return boot_time;
 }
 
 /* Returns a pointer to a string describing the program version.  The

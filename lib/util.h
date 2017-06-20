@@ -112,6 +112,9 @@ extern "C" {
 const char *get_subprogram_name(void);
     void set_subprogram_name(const char *);
 
+unsigned int get_page_size(void);
+long long int get_boot_time(void);
+
 void ovs_print_version(uint8_t min_ofp, uint8_t max_ofp);
 
 OVS_NO_RETURN void out_of_memory(void);
