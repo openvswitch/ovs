@@ -40,7 +40,7 @@ vtep_vtep_ctl_LDADD = vtep/libvtep.la lib/libopenvswitch.la
 scripts_SCRIPTS += \
     vtep/ovs-vtep
 
-EXTRA_DIST += vtep/ovs-vtep
+EXTRA_DIST += vtep/ovs-vtep.in
 
 FLAKE8_PYFILES += vtep/ovs-vtep
 

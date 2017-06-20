@@ -1,4 +1,4 @@
-#! /usr/bin/env @PYTHON@
+#! @PYTHON@
 #
 # Copyright (c) 2013 Nicira, Inc.
 #

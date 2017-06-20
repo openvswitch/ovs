@@ -22,8 +22,8 @@ bin_SCRIPTS += \
 EXTRA_DIST += \
     ovn/utilities/ovn-ctl \
     ovn/utilities/ovn-ctl.8.xml \
-    ovn/utilities/ovn-docker-overlay-driver \
-    ovn/utilities/ovn-docker-underlay-driver \
+    ovn/utilities/ovn-docker-overlay-driver.in \
+    ovn/utilities/ovn-docker-underlay-driver.in \
     ovn/utilities/ovn-nbctl.8.xml \
     ovn/utilities/ovn-trace.8.xml \
     ovn/utilities/ovn-detrace.in \
