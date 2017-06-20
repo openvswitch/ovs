@@ -85,4 +85,20 @@ __inline long sysconf(int type)
     return value;
 }
 
+/* On Windows, a console is a specialized character device, and isatty() only
+ * reports whether a file description is a character device and thus reports
+ * that devices such as /dev/null are ttys.  This replacement avoids that
+ * problem. */
+#undef isatty
+#define isatty(fd) rpl_isatty(fd)
+static __inline int
+rpl_isatty(int fd)
+{
+    HANDLE h = (HANDLE) _get_osfhandle(fd);
+    DWORD st;
+    return (_isatty(STDOUT_FILENO)
+            && h != INVALID_HANDLE_VALUE
+            && GetConsoleMode(h, &st));
+}
+
 #endif /* unistd.h  */
