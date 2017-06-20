@@ -2254,8 +2254,6 @@ static int
 dpif_netdev_flow_from_nlattrs(const struct nlattr *key, uint32_t key_len,
                               struct flow *flow, bool probe)
 {
-    odp_port_t in_port;
-
     if (odp_flow_key_to_flow(key, key_len, flow)) {
         if (!probe) {
             /* This should not happen: it indicates that
@@ -2274,11 +2272,6 @@ dpif_netdev_flow_from_nlattrs(const struct nlattr *key, uint32_t key_len,
             }
         }
 
-        return EINVAL;
-    }
-
-    in_port = flow->in_port.odp_port;
-    if (!is_valid_port_number(in_port) && in_port != ODPP_NONE) {
         return EINVAL;
     }
 
