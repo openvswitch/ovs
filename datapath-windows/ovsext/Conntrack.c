@@ -298,24 +298,23 @@ OvsCtUpdateEntry(OVS_CT_ENTRY* entry,
                  BOOLEAN reply,
                  UINT64 now)
 {
-    switch (ipProto)
+    switch (ipProto) {
+    case IPPROTO_TCP:
     {
-        case IPPROTO_TCP:
-        {
-            TCPHdr tcpStorage;
-            const TCPHdr *tcp;
-            tcp = OvsGetTcp(nbl, l4Offset, &tcpStorage);
-            if (!tcp) {
-                return CT_UPDATE_INVALID;
-            }
-            return OvsConntrackUpdateTcpEntry(entry, tcp, nbl, reply, now);
-        }
-        case IPPROTO_ICMP:
-            return OvsConntrackUpdateIcmpEntry(entry, reply, now);
-        case IPPROTO_UDP:
-            return OvsConntrackUpdateOtherEntry(entry, reply, now);
-        default:
+        TCPHdr tcpStorage;
+        const TCPHdr *tcp;
+        tcp = OvsGetTcp(nbl, l4Offset, &tcpStorage);
+        if (!tcp) {
             return CT_UPDATE_INVALID;
+        }
+        return OvsConntrackUpdateTcpEntry(entry, tcp, nbl, reply, now);
+    }
+    case IPPROTO_ICMP:
+        return OvsConntrackUpdateIcmpEntry(entry, reply, now);
+    case IPPROTO_UDP:
+        return OvsConntrackUpdateOtherEntry(entry, reply, now);
+    default:
+        return CT_UPDATE_INVALID;
     }
 }
 
@@ -508,32 +507,32 @@ OvsCtSetupLookupCtx(OvsFlowKey *flowKey,
             /* Related bit is set when ICMP has an error */
             /* XXX parse out the appropriate src and dst from inner pkt */
             switch (icmp->type) {
-               case ICMP4_ECHO_REQUEST:
-               case ICMP4_ECHO_REPLY:
-               case ICMP4_TIMESTAMP_REQUEST:
-               case ICMP4_TIMESTAMP_REPLY:
-               case ICMP4_INFO_REQUEST:
-               case ICMP4_INFO_REPLY:
-                   if (icmp->code != 0) {
-                       return NDIS_STATUS_INVALID_PACKET;
-                   }
-                   /* Separate ICMP connection: identified using id */
-                   ctx->key.dst.icmp_id = icmp->fields.echo.id;
-                   ctx->key.src.icmp_id = icmp->fields.echo.id;
-                   ctx->key.src.icmp_type = icmp->type;
-                   ctx->key.dst.icmp_type = OvsReverseIcmpType(icmp->type);
-                   break;
-               case ICMP4_DEST_UNREACH:
-               case ICMP4_TIME_EXCEEDED:
-               case ICMP4_PARAM_PROB:
-               case ICMP4_SOURCE_QUENCH:
-               case ICMP4_REDIRECT: {
-                   /* XXX Handle inner packet */
-                   ctx->related = TRUE;
-                   break;
-               }
-               default:
-                   ctx->related = FALSE;
+            case ICMP4_ECHO_REQUEST:
+            case ICMP4_ECHO_REPLY:
+            case ICMP4_TIMESTAMP_REQUEST:
+            case ICMP4_TIMESTAMP_REPLY:
+            case ICMP4_INFO_REQUEST:
+            case ICMP4_INFO_REPLY:
+                if (icmp->code != 0) {
+                    return NDIS_STATUS_INVALID_PACKET;
+                }
+                /* Separate ICMP connection: identified using id */
+                ctx->key.dst.icmp_id = icmp->fields.echo.id;
+                ctx->key.src.icmp_id = icmp->fields.echo.id;
+                ctx->key.src.icmp_type = icmp->type;
+                ctx->key.dst.icmp_type = OvsReverseIcmpType(icmp->type);
+                break;
+            case ICMP4_DEST_UNREACH:
+            case ICMP4_TIME_EXCEEDED:
+            case ICMP4_PARAM_PROB:
+            case ICMP4_SOURCE_QUENCH:
+            case ICMP4_REDIRECT: {
+                /* XXX Handle inner packet */
+                ctx->related = TRUE;
+                break;
+            }
+            default:
+                ctx->related = FALSE;
             }
         }
     } else if (flowKey->l2.dlType == htons(ETH_TYPE_IPV6)) {
