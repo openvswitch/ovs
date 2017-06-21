@@ -1312,6 +1312,9 @@ OvsSubscribeEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         if (mcastGrp == NFNLGRP_CONNTRACK_DESTROY) {
             request.mask = OVS_EVENT_CT_DELETE;
         }
+        if (mcastGrp == NFNLGRP_CONNTRACK_UPDATE) {
+            request.mask = OVS_EVENT_CT_UPDATE;
+        }
     }
 
     status = OvsSubscribeEventIoctl(instance->fileObject, &request,

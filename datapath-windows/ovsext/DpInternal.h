@@ -336,7 +336,8 @@ enum {
 enum {
     OVS_EVENT_CT_NEW        = (1 << 0),
     OVS_EVENT_CT_DELETE     = (1 << 1),
-    OVS_EVENT_CT_MASK_ALL   = 0x3
+    OVS_EVENT_CT_UPDATE     = (1 << 2),
+    OVS_EVENT_CT_MASK_ALL   = 0x7
 };
 
 /* Supported mcast event groups */

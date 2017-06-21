@@ -71,7 +71,8 @@ OvsGetMcastEventId(UINT32 protocol, UINT32 mcastMask, UINT32 *eventId)
         return NDIS_STATUS_SUCCESS;
     case NETLINK_NETFILTER:
         if ((mcastMask & OVS_EVENT_CT_NEW)
-            || (mcastMask & OVS_EVENT_CT_DELETE)) {
+            || (mcastMask & OVS_EVENT_CT_DELETE)
+            || (mcastMask & OVS_EVENT_CT_UPDATE)) {
             *eventId =  OVS_MCAST_CT_EVENT;
             return NDIS_STATUS_SUCCESS;
         }

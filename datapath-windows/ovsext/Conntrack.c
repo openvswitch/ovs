@@ -649,13 +649,15 @@ static __inline VOID
 OvsConntrackSetMark(OvsFlowKey *key,
                     POVS_CT_ENTRY entry,
                     UINT32 value,
-                    UINT32 mask)
+                    UINT32 mask,
+                    BOOLEAN *markChanged)
 {
     UINT32 newMark;
     newMark = value | (entry->mark & ~(mask));
     if (entry->mark != newMark) {
         entry->mark = newMark;
         key->ct.mark = newMark;
+        *markChanged = TRUE;
     }
 }
 
@@ -663,7 +665,8 @@ static __inline void
 OvsConntrackSetLabels(OvsFlowKey *key,
                       POVS_CT_ENTRY entry,
                       struct ovs_key_ct_labels *val,
-                      struct ovs_key_ct_labels *mask)
+                      struct ovs_key_ct_labels *mask,
+                      BOOLEAN *labelChanged)
 {
     ovs_u128 v, m, pktMdLabel = {0};
     memcpy(&v, val, sizeof v);
@@ -672,6 +675,10 @@ OvsConntrackSetLabels(OvsFlowKey *key,
     pktMdLabel.u64.lo = v.u64.lo | (pktMdLabel.u64.lo & ~(m.u64.lo));
     pktMdLabel.u64.hi = v.u64.hi | (pktMdLabel.u64.hi & ~(m.u64.hi));
 
+    if (!NdisEqualMemory(&entry->labels, &pktMdLabel,
+                         sizeof(struct ovs_key_ct_labels))) {
+        *labelChanged = TRUE;
+    }
     NdisMoveMemory(&entry->labels, &pktMdLabel,
                    sizeof(struct ovs_key_ct_labels));
     NdisMoveMemory(&key->ct.labels, &pktMdLabel,
@@ -688,9 +695,11 @@ OvsCtExecute_(OvsForwardingContext *fwdCtx,
               MD_MARK *mark,
               MD_LABELS *labels,
               PCHAR helper,
-              PNAT_ACTION_INFO natInfo)
+              PNAT_ACTION_INFO natInfo,
+              BOOLEAN postUpdateEvent)
 {
     NDIS_STATUS status = NDIS_STATUS_SUCCESS;
+    BOOLEAN triggerUpdateEvent = FALSE;
     POVS_CT_ENTRY entry = NULL;
     PNET_BUFFER_LIST curNbl = fwdCtx->curNbl;
     OvsConntrackKeyLookupCtx ctx = { 0 };
@@ -742,11 +751,13 @@ OvsCtExecute_(OvsForwardingContext *fwdCtx,
     }
 
     if (entry && mark) {
-        OvsConntrackSetMark(key, entry, mark->value, mark->mask);
+        OvsConntrackSetMark(key, entry, mark->value, mark->mask,
+                            &triggerUpdateEvent);
     }
 
     if (entry && labels) {
-        OvsConntrackSetLabels(key, entry, &labels->value, &labels->mask);
+        OvsConntrackSetLabels(key, entry, &labels->value, &labels->mask,
+                              &triggerUpdateEvent);
     }
 
     if (entry && OvsDetectFtpPacket(key)) {
@@ -780,6 +791,9 @@ OvsCtExecute_(OvsForwardingContext *fwdCtx,
     if (entryCreated && entry) {
         OvsPostCtEventEntry(entry, OVS_EVENT_CT_NEW);
     }
+    if (postUpdateEvent && entry && !entryCreated && triggerUpdateEvent) {
+        OvsPostCtEventEntry(entry, OVS_EVENT_CT_UPDATE);
+    }
 
     NdisReleaseRWLock(ovsConntrackLockObj, &lockState);
 
@@ -801,7 +815,9 @@ OvsExecuteConntrackAction(OvsForwardingContext *fwdCtx,
     PNL_ATTR ctAttr;
     BOOLEAN commit = FALSE;
     BOOLEAN force = FALSE;
+    BOOLEAN postUpdateEvent = FALSE;
     UINT16 zone = 0;
+    UINT32 eventmask = 0;
     MD_MARK *mark = NULL;
     MD_LABELS *labels = NULL;
     PCHAR helper = NULL;
@@ -912,9 +928,17 @@ OvsExecuteConntrackAction(OvsForwardingContext *fwdCtx,
         /* Force implicitly means commit */
         commit = TRUE;
     }
+    ctAttr = NlAttrFindNested(a, OVS_CT_ATTR_EVENTMASK);
+    if (ctAttr) {
+        eventmask = NlAttrGetU32(ctAttr);
+        /* Only mark and label updates are supported. */
+        if (eventmask & (1 << IPCT_MARK | 1 << IPCT_LABEL))
+            postUpdateEvent = TRUE;
+    }
     /* If newNbl is not allocated, use the current Nbl*/
     status = OvsCtExecute_(fwdCtx, key, layers,
-                           commit, force, zone, mark, labels, helper, &natActionInfo);
+                           commit, force, zone, mark, labels, helper, &natActionInfo,
+                           postUpdateEvent);
     return status;
 }
 
@@ -1256,6 +1280,7 @@ OvsCreateNlMsgFromCtEntry(POVS_CT_ENTRY entry,
     NDIS_STATUS status;
     UINT64 currentTime, expiration;
     UINT16 nlmsgType;
+    UINT16 nlmsgFlags = NLM_F_CREATE;
     NdisGetCurrentSystemTime((LARGE_INTEGER *)&currentTime);
     UINT8 nfgenFamily = 0;
     if (entry->key.dl_type == htons(ETH_TYPE_IPV4)) {
@@ -1266,7 +1291,7 @@ OvsCreateNlMsgFromCtEntry(POVS_CT_ENTRY entry,
 
     NlBufInit(&nlBuf, outBuffer, outBufLen);
     /* Mimic netfilter */
-    if (eventType == OVS_EVENT_CT_NEW) {
+    if (eventType == OVS_EVENT_CT_NEW || eventType == OVS_EVENT_CT_UPDATE) {
         nlmsgType = (UINT16) (NFNL_SUBSYS_CTNETLINK << 8 | IPCTNL_MSG_CT_NEW);
     } else if (eventType == OVS_EVENT_CT_DELETE) {
         nlmsgType = (UINT16) (NFNL_SUBSYS_CTNETLINK << 8 | IPCTNL_MSG_CT_DELETE);
@@ -1274,7 +1299,14 @@ OvsCreateNlMsgFromCtEntry(POVS_CT_ENTRY entry,
         return STATUS_INVALID_PARAMETER;
     }
 
-    ok = NlFillOvsMsgForNfGenMsg(&nlBuf, nlmsgType, NLM_F_CREATE,
+    if (eventType == OVS_EVENT_CT_UPDATE) {
+        /* In netlink-conntrack.c IPCTNL_MSG_CT_NEW msg type is used to
+         * differentiate between OVS_EVENT_CT_NEW and OVS_EVENT_CT_UPDATE
+         * events based on nlmsgFlags, unset it to notify an update event.
+         */
+        nlmsgFlags = 0;
+    }
+    ok = NlFillOvsMsgForNfGenMsg(&nlBuf, nlmsgType, nlmsgFlags,
                                  nlmsgSeq, nlmsgPid, nfgenFamily,
                                  nfGenVersion, dpIfIndex);
     if (!ok) {
