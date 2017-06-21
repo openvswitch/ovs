@@ -214,87 +214,78 @@ OvsCtEntryCreate(OvsForwardingContext *fwdCtx,
                  BOOLEAN *entryCreated)
 {
     POVS_CT_ENTRY entry = NULL;
-    *entryCreated = FALSE;
     UINT32 state = 0;
+    POVS_CT_ENTRY parentEntry;
     PNET_BUFFER_LIST curNbl = fwdCtx->curNbl;
-    switch (ipProto)
+
+    *entryCreated = FALSE;
+    state |= OVS_CS_F_NEW;
+
+    parentEntry = OvsCtRelatedLookup(ctx->key, currentTime);
+    if (parentEntry != NULL) {
+        state |= OVS_CS_F_RELATED;
+    }
+
+    switch (ipProto) {
+    case IPPROTO_TCP:
     {
-        case IPPROTO_TCP:
-        {
-            TCPHdr tcpStorage;
-            const TCPHdr *tcp;
-            tcp = OvsGetTcp(curNbl, l4Offset, &tcpStorage);
-            if (!OvsConntrackValidateTcpPacket(tcp)) {
-                goto invalid;
-            }
-
-            state |= OVS_CS_F_NEW;
-            POVS_CT_ENTRY parentEntry;
-            parentEntry = OvsCtRelatedLookup(ctx->key, currentTime);
-            if (parentEntry != NULL) {
-                state |= OVS_CS_F_RELATED;
-            }
-
-            if (commit) {
-                entry = OvsConntrackCreateTcpEntry(tcp, curNbl, currentTime);
-                if (!entry) {
-                    return NULL;
-                }
-
-                /* Set parent entry for related FTP connections */
-                entry->parent = parentEntry;
-
-                *entryCreated = TRUE;
-            }
+        TCPHdr tcpStorage;
+        const TCPHdr *tcp;
+        tcp = OvsGetTcp(curNbl, l4Offset, &tcpStorage);
+        if (!OvsConntrackValidateTcpPacket(tcp)) {
+            state = OVS_CS_F_INVALID;
             break;
         }
-        case IPPROTO_ICMP:
-        {
-            ICMPHdr storage;
-            const ICMPHdr *icmp;
-            icmp = OvsGetIcmp(curNbl, l4Offset, &storage);
-            if (!OvsConntrackValidateIcmpPacket(icmp)) {
-                goto invalid;
-            }
 
-            state |= OVS_CS_F_NEW;
-            if (commit) {
-                entry = OvsConntrackCreateIcmpEntry(currentTime);
-                if (entry) {
-                    /* XXX Add support for ICMP-Related */
-                    entry->parent = NULL;
-                }
-                *entryCreated = TRUE;
-            }
+        if (commit) {
+            entry = OvsConntrackCreateTcpEntry(tcp, curNbl, currentTime);
+        }
+        break;
+    }
+    case IPPROTO_ICMP:
+    {
+        ICMPHdr storage;
+        const ICMPHdr *icmp;
+        icmp = OvsGetIcmp(curNbl, l4Offset, &storage);
+        if (!OvsConntrackValidateIcmpPacket(icmp)) {
+            state = OVS_CS_F_INVALID;
             break;
         }
-        case IPPROTO_UDP:
-        {
-            state |= OVS_CS_F_NEW;
-            if (commit) {
-                entry = OvsConntrackCreateOtherEntry(currentTime);
-                if (entry) {
-                    /* Default UDP related to NULL until TFTP is supported */
-                    entry->parent = NULL;
-                }
-                *entryCreated = TRUE;
-            }
-            break;
+
+        if (commit) {
+            entry = OvsConntrackCreateIcmpEntry(currentTime);
         }
-        default:
-            goto invalid;
+        break;
+    }
+    case IPPROTO_UDP:
+    {
+        if (commit) {
+            entry = OvsConntrackCreateOtherEntry(currentTime);
+        }
+        break;
+    }
+    default:
+        state = OVS_CS_F_INVALID;
+        break;
     }
 
-    if (commit && !entry) {
-        return NULL;
+    if (state != OVS_CS_F_INVALID && commit) {
+        if (entry) {
+            entry->parent = parentEntry;
+            if (OvsCtAddEntry(entry, ctx, natInfo, currentTime)) {
+                *entryCreated = TRUE;
+            } else {
+                /* Unable to add entry to the list */
+                OvsFreeMemoryWithTag(entry, OVS_CT_POOL_TAG);
+                state = OVS_CS_F_INVALID;
+                entry = NULL;
+            }
+        } else {
+            /* OvsAllocateMemoryWithTag returned NULL; treat as invalid */
+            state = OVS_CS_F_INVALID;
+        }
     }
-    if (entry && !OvsCtAddEntry(entry, ctx, natInfo, currentTime)) {
-        return NULL;
-    }
-    OvsCtUpdateFlowKey(key, state, ctx->key.zone, 0, NULL);
-    return entry;
-invalid:
-    state |= OVS_CS_F_INVALID;
+
     OvsCtUpdateFlowKey(key, state, ctx->key.zone, 0, NULL);
     return entry;
 }
