@@ -41,6 +41,7 @@ scripts_SCRIPTS += \
     vtep/ovs-vtep
 
 EXTRA_DIST += vtep/ovs-vtep.in
+CLEANFILES += vtep/ovs-vtep
 
 FLAKE8_PYFILES += vtep/ovs-vtep
 

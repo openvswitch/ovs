@@ -31,6 +31,8 @@ EXTRA_DIST += \
 
 CLEANFILES += \
     ovn/utilities/ovn-ctl.8 \
+    ovn/utilities/ovn-docker-overlay-driver \
+    ovn/utilities/ovn-docker-underlay-driver \
     ovn/utilities/ovn-nbctl.8 \
     ovn/utilities/ovn-sbctl.8 \
     ovn/utilities/ovn-trace.8 \
