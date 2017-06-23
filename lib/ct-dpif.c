@@ -409,3 +409,17 @@ ct_dpif_format_helper(struct ds *ds, const char *title,
         ds_put_cstr(ds, helper->name);
     }
 }
+
+uint8_t
+ct_dpif_coalesce_tcp_state(uint8_t state)
+{
+    return coalesce_tcp_state(state);
+}
+
+void
+ct_dpif_format_tcp_stat(struct ds * ds, int tcp_state, int conn_per_state)
+{
+    ct_dpif_format_enum(ds, "\t  [", tcp_state, ct_dpif_tcp_state_string);
+    ds_put_cstr(ds, "]");
+    ds_put_format(ds, "=%u", conn_per_state);
+}

@@ -1328,6 +1328,142 @@ dpctl_flush_conntrack(int argc, const char *argv[],
     dpif_close(dpif);
     return error;
 }
+
+static int
+dpctl_ct_stats_show(int argc, const char *argv[],
+                     struct dpctl_params *dpctl_p)
+{
+    struct dpif *dpif;
+    char *name;
+
+    struct ct_dpif_dump_state *dump;
+    struct ct_dpif_entry cte;
+    uint16_t zone, *pzone = NULL;
+    bool verbose = false;
+    int lastargc = 0;
+
+    int proto_stats[CT_STATS_MAX];
+    int tcp_conn_per_states[CT_DPIF_TCPS_MAX_NUM];
+    int error;
+
+    while (argc > 1 && lastargc != argc) {
+        lastargc = argc;
+        if (!strncmp(argv[argc - 1], "verbose", 7)) {
+            verbose = true;
+            argc--;
+        } else if (!strncmp(argv[argc - 1], "zone=", 5)) {
+            if (ovs_scan(argv[argc - 1], "zone=%"SCNu16, &zone)) {
+                pzone = &zone;
+                argc--;
+            }
+        }
+    }
+
+    name = (argc > 1) ? xstrdup(argv[1]) : get_one_dp(dpctl_p);
+    if (!name) {
+        return EINVAL;
+    }
+
+    error = parsed_dpif_open(name, false, &dpif);
+    free(name);
+    if (error) {
+        dpctl_error(dpctl_p, error, "opening datapath");
+        return error;
+    }
+
+    memset(proto_stats, 0, sizeof(proto_stats));
+    memset(tcp_conn_per_states, 0, sizeof(tcp_conn_per_states));
+    error = ct_dpif_dump_start(dpif, &dump, pzone);
+    if (error) {
+        dpctl_error(dpctl_p, error, "starting conntrack dump");
+        dpif_close(dpif);
+        return error;
+    }
+
+    int tot_conn = 0;
+    while (!ct_dpif_dump_next(dump, &cte)) {
+        ct_dpif_entry_uninit(&cte);
+        tot_conn++;
+        switch (cte.tuple_orig.ip_proto) {
+        case IPPROTO_ICMP:
+            proto_stats[CT_STATS_ICMP]++;
+            break;
+        case IPPROTO_ICMPV6:
+            proto_stats[CT_STATS_ICMPV6]++;
+            break;
+        case IPPROTO_TCP:
+            proto_stats[CT_STATS_TCP]++;
+            uint8_t tcp_state;
+            /* We keep two separate tcp states, but we print just one. The
+             * Linux kernel connection tracker internally keeps only one state,
+             * so 'state_orig' and 'state_reply', will be the same. */
+            tcp_state = MAX(cte.protoinfo.tcp.state_orig,
+                            cte.protoinfo.tcp.state_reply);
+            tcp_state = ct_dpif_coalesce_tcp_state(tcp_state);
+            tcp_conn_per_states[tcp_state]++;
+            break;
+        case IPPROTO_UDP:
+            proto_stats[CT_STATS_UDP]++;
+            break;
+        case IPPROTO_SCTP:
+            proto_stats[CT_STATS_SCTP]++;
+            break;
+        case IPPROTO_UDPLITE:
+            proto_stats[CT_STATS_UDPLITE]++;
+            break;
+        case IPPROTO_DCCP:
+            proto_stats[CT_STATS_DCCP]++;
+            break;
+        case IPPROTO_IGMP:
+            proto_stats[CT_STATS_IGMP]++;
+            break;
+        default:
+            proto_stats[CT_STATS_OTHER]++;
+            break;
+        }
+    }
+
+    dpctl_print(dpctl_p, "Connections Stats:\n    Total: %d\n", tot_conn);
+    if (proto_stats[CT_STATS_TCP]) {
+        dpctl_print(dpctl_p, "\tTCP: %d\n", proto_stats[CT_STATS_TCP]);
+        if (verbose) {
+            dpctl_print(dpctl_p, "\t  Conn per TCP states:\n");
+            for (int i = 0; i < CT_DPIF_TCPS_MAX_NUM; i++) {
+                if (tcp_conn_per_states[i]) {
+                    struct ds s = DS_EMPTY_INITIALIZER;
+                    ct_dpif_format_tcp_stat(&s, i, tcp_conn_per_states[i]);
+                    dpctl_print(dpctl_p, "%s\n", ds_cstr(&s));
+                    ds_destroy(&s);
+                }
+            }
+        }
+    }
+    if (proto_stats[CT_STATS_UDP]) {
+        dpctl_print(dpctl_p, "\tUDP: %d\n", proto_stats[CT_STATS_UDP]);
+    }
+    if (proto_stats[CT_STATS_UDPLITE]) {
+        dpctl_print(dpctl_p, "\tUDPLITE: %d\n", proto_stats[CT_STATS_UDPLITE]);
+    }
+    if (proto_stats[CT_STATS_SCTP]) {
+        dpctl_print(dpctl_p, "\tSCTP: %d\n", proto_stats[CT_STATS_SCTP]);
+    }
+    if (proto_stats[CT_STATS_ICMP]) {
+        dpctl_print(dpctl_p, "\tICMP: %d\n", proto_stats[CT_STATS_ICMP]);
+    }
+    if (proto_stats[CT_STATS_DCCP]) {
+        dpctl_print(dpctl_p, "\tDCCP: %d\n", proto_stats[CT_STATS_DCCP]);
+    }
+    if (proto_stats[CT_STATS_IGMP]) {
+        dpctl_print(dpctl_p, "\tIGMP: %d\n", proto_stats[CT_STATS_IGMP]);
+    }
+    if (proto_stats[CT_STATS_OTHER]) {
+        dpctl_print(dpctl_p, "\tOther: %d\n", proto_stats[CT_STATS_OTHER]);
+    }
+
+    ct_dpif_dump_done(dump);
+    dpif_close(dpif);
+    return error;
+}
 
 /* Undocumented commands for unit testing. */
 
@@ -1622,6 +1758,8 @@ static const struct dpctl_command all_commands[] = {
     { "del-flows", "[dp]", 0, 1, dpctl_del_flows, DP_RW },
     { "dump-conntrack", "[dp] [zone=N]", 0, 2, dpctl_dump_conntrack, DP_RO },
     { "flush-conntrack", "[dp] [zone=N]", 0, 2, dpctl_flush_conntrack, DP_RW },
+    { "ct-stats-show", "[dp] [zone=N] [verbose]",
+      0, 3, dpctl_ct_stats_show, DP_RO },
     { "help", "", 0, INT_MAX, dpctl_help, DP_RO },
     { "list-commands", "", 0, INT_MAX, dpctl_list_commands, DP_RO },
 
@@ -1645,7 +1783,6 @@ int
 dpctl_run_command(int argc, const char *argv[], struct dpctl_params *dpctl_p)
 {
     const struct dpctl_command *p;
-
     if (argc < 1) {
         dpctl_error(dpctl_p, 0, "missing command name; use --help for help");
         return EINVAL;

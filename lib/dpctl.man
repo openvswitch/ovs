@@ -221,3 +221,10 @@ added to the output.
 Flushes all the connection entries in the tracker used by \fIdp\fR.
 If \fBzone=\fIzone\fR is specified, only flushes the connections in
 \fBzone\fR.
+.
+.TP
+\*(DX\fBct\-stats\-show\fR [\fIdp\fR] [\fBzone=\fIzone\fR] [\fBverbose\fR]
+Displays the number of connections grouped by protocol used by \fIdp\fR.
+If \fBzone=\fIzone\fR is specified, numbers refer to the connections in
+\fBzone\fR. The \fBverbose\fR option allows to group by connection state
+for each protocol.

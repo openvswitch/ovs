@@ -5,6 +5,7 @@ Post-v2.7.0
        default it always accepts names and in interactive use it displays them;
        use --names or --no-names to override.  See ovs-ofctl(8) for details.
      * "ovs-ofctl dump-flows" now accepts --no-stats to omit flow statistics.
+   - New ovs-dpctl command "ct-stats-show" to show connection tracking stats.
    - Tunnels:
      * Added support to set packet mark for tunnel endpoint using
        `egress_pkt_mark` OVSDB option.
