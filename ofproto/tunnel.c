@@ -50,7 +50,7 @@ struct tnl_match {
     bool in_key_flow;
     bool ip_src_flow;
     bool ip_dst_flow;
-    bool is_layer3;
+    enum netdev_pt_mode pt_mode;
 };
 
 struct tnl_port {
@@ -164,7 +164,7 @@ tnl_port_add__(const struct ofport_dpif *ofport, const struct netdev *netdev,
     tnl_port->match.ip_dst_flow = cfg->ip_dst_flow;
     tnl_port->match.in_key_flow = cfg->in_key_flow;
     tnl_port->match.odp_port = odp_port;
-    tnl_port->match.is_layer3 = netdev_vport_is_layer3(netdev);
+    tnl_port->match.pt_mode = netdev_get_pt_mode(netdev);
 
     map = tnl_match_map(&tnl_port->match);
     existing_port = tnl_find_exact(&tnl_port->match, *map);
@@ -564,8 +564,20 @@ tnl_find(const struct flow *flow) OVS_REQ_RDLOCK(rwlock)
                     match.in_key_flow = in_key_flow;
                     match.ip_dst_flow = ip_dst_flow;
                     match.ip_src_flow = ip_src == IP_SRC_FLOW;
-                    match.is_layer3 = flow->packet_type != htonl(PT_ETH);
 
+                    /* Look for a legacy L2 or L3 tunnel port first. */
+                    if (pt_ns(flow->packet_type) == OFPHTN_ETHERTYPE) {
+                        match.pt_mode = NETDEV_PT_LEGACY_L3;
+                    } else {
+                        match.pt_mode = NETDEV_PT_LEGACY_L2;
+                    }
+                    tnl_port = tnl_find_exact(&match, map);
+                    if (tnl_port) {
+                        return tnl_port;
+                    }
+
+                    /* Then check for a packet type aware port. */
+                    match.pt_mode = NETDEV_PT_AWARE;
                     tnl_port = tnl_find_exact(&match, map);
                     if (tnl_port) {
                         return tnl_port;
@@ -614,11 +626,12 @@ tnl_match_fmt(const struct tnl_match *match, struct ds *ds)
     } else {
         ds_put_format(ds, ", key=%#"PRIx64, ntohll(match->in_key));
     }
-    if (match->is_layer3) {
-        ds_put_cstr(ds, ", layer3");
-    }
 
-    ds_put_format(ds, ", dp port=%"PRIu32, match->odp_port);
+    const char *pt_mode
+        = (match->pt_mode == NETDEV_PT_LEGACY_L2 ? "legacy_l2"
+           : match->pt_mode == NETDEV_PT_LEGACY_L3 ? "legacy_l3"
+           : "ptap");
+    ds_put_format(ds, ", %s, dp port=%"PRIu32, pt_mode, match->odp_port);
 }
 
 static void

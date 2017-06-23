@@ -1382,6 +1382,7 @@ netdev_dummy_update_flags(struct netdev *netdev_,
                                                                 \
     NULL,                       /* get_features */              \
     NULL,                       /* set_advertisements */        \
+    NULL,                       /* get_pt_mode */               \
                                                                 \
     NULL,                       /* set_policing */              \
     NULL,                       /* get_qos_types */             \

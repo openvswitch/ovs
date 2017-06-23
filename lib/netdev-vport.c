@@ -98,18 +98,6 @@ netdev_vport_is_patch(const struct netdev *netdev)
     return class->get_config == get_patch_config;
 }
 
-bool
-netdev_vport_is_layer3(const struct netdev *dev)
-{
-    if (is_vport_class(netdev_get_class(dev))) {
-        struct netdev_vport *vport = netdev_vport_cast(dev);
-
-        return vport->tnl_cfg.is_layer3;
-    }
-
-    return false;
-}
-
 static bool
 netdev_vport_needs_dst_port(const struct netdev *dev)
 {
@@ -407,6 +395,30 @@ parse_tunnel_ip(const char *value, bool accept_mcast, bool *flow,
     return 0;
 }
 
+enum tunnel_layers {
+    TNL_L2 = 1 << 0,       /* 1 if a tunnel type can carry Ethernet traffic. */
+    TNL_L3 = 1 << 1        /* 1 if a tunnel type can carry L3 traffic. */
+};
+static enum tunnel_layers
+tunnel_supported_layers(const char *type,
+                        const struct netdev_tunnel_config *tnl_cfg)
+{
+    if (!strcmp(type, "lisp")) {
+        return TNL_L3;
+    } else if (!strcmp(type, "gre")) {
+        return TNL_L2 | TNL_L3;
+    } else if (!strcmp(type, "vxlan") && tnl_cfg->exts & OVS_VXLAN_EXT_GPE) {
+        return TNL_L2 | TNL_L3;
+    } else {
+        return TNL_L2;
+    }
+}
+static enum netdev_pt_mode
+default_pt_mode(enum tunnel_layers layers)
+{
+    return layers == TNL_L3 ? NETDEV_PT_LEGACY_L3 : NETDEV_PT_LEGACY_L2;
+}
+
 static int
 set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
 {
@@ -414,16 +426,14 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
     const char *name = netdev_get_name(dev_);
     const char *type = netdev_get_type(dev_);
     struct ds errors = DS_EMPTY_INITIALIZER;
-    bool needs_dst_port, has_csum, optional_layer3;
+    bool needs_dst_port, has_csum;
     uint16_t dst_proto = 0, src_proto = 0;
     struct netdev_tunnel_config tnl_cfg;
     struct smap_node *node;
-    bool is_layer3 = false;
     int err;
 
     has_csum = strstr(type, "gre") || strstr(type, "geneve") ||
                strstr(type, "stt") || strstr(type, "vxlan");
-    optional_layer3 = !strcmp(type, "gre");
     memset(&tnl_cfg, 0, sizeof tnl_cfg);
 
     /* Add a default destination port for tunnel ports if none specified. */
@@ -437,7 +447,6 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
 
     if (!strcmp(type, "lisp")) {
         tnl_cfg.dst_port = htons(LISP_DST_PORT);
-        tnl_cfg.is_layer3 = true;
     }
 
     if (!strcmp(type, "stt")) {
@@ -501,9 +510,10 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
             }
         } else if (!strcmp(node->key, "key") ||
                    !strcmp(node->key, "in_key") ||
-                   !strcmp(node->key, "out_key")) {
+                   !strcmp(node->key, "out_key") ||
+                   !strcmp(node->key, "packet_type")) {
             /* Handled separately below. */
-        } else if (!strcmp(node->key, "exts")) {
+        } else if (!strcmp(node->key, "exts") && !strcmp(type, "vxlan")) {
             char *str = xstrdup(node->value);
             char *ext, *save_ptr = NULL;
 
@@ -515,7 +525,6 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
                     tnl_cfg.exts |= (1 << OVS_VXLAN_EXT_GBP);
                 } else if (!strcmp(type, "vxlan") && !strcmp(ext, "gpe")) {
                     tnl_cfg.exts |= (1 << OVS_VXLAN_EXT_GPE);
-                    optional_layer3 = true;
                 } else {
                     ds_put_format(&errors, "%s: unknown extension '%s'\n",
                                   name, ext);
@@ -528,21 +537,44 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
         } else if (!strcmp(node->key, "egress_pkt_mark")) {
             tnl_cfg.egress_pkt_mark = strtoul(node->value, NULL, 10);
             tnl_cfg.set_egress_pkt_mark = true;
-        } else if (!strcmp(node->key, "layer3")) {
-            if (!strcmp(node->value, "true")) {
-                is_layer3 = true;
-            }
         } else {
             ds_put_format(&errors, "%s: unknown %s argument '%s'\n", name,
                           type, node->key);
         }
     }
 
-    if (optional_layer3 && is_layer3) {
-       tnl_cfg.is_layer3 = is_layer3;
-    } else if (!optional_layer3 && is_layer3) {
-        ds_put_format(&errors, "%s: unknown %s argument '%s'\n",
-                      name, type, "layer3");
+    enum tunnel_layers layers = tunnel_supported_layers(type, &tnl_cfg);
+    const char *full_type = (strcmp(type, "vxlan") ? type
+                             : tnl_cfg.exts & OVS_VXLAN_EXT_GPE ? "VXLAN-GPE"
+                             : "VXLAN (without GPE");
+    const char *packet_type = smap_get(args, "packet_type");
+    if (!packet_type) {
+        tnl_cfg.pt_mode = default_pt_mode(layers);
+    } else if (!strcmp(packet_type, "legacy_l2")) {
+        tnl_cfg.pt_mode = NETDEV_PT_LEGACY_L2;
+        if (!(layers & TNL_L2)) {
+            ds_put_format(&errors, "%s: legacy_l2 configured on %s tunnel "
+                          "that cannot carry L2 traffic\n",
+                          name, full_type);
+            err = EINVAL;
+            goto out;
+        }
+    } else if (!strcmp(packet_type, "legacy_l3")) {
+        tnl_cfg.pt_mode = NETDEV_PT_LEGACY_L3;
+        if (!(layers & TNL_L3)) {
+            ds_put_format(&errors, "%s: legacy_l3 configured on %s tunnel "
+                          "that cannot carry L3 traffic\n",
+                          name, full_type);
+            err = EINVAL;
+            goto out;
+        }
+    } else if (!strcmp(packet_type, "ptap")) {
+        tnl_cfg.pt_mode = NETDEV_PT_AWARE;
+    } else {
+        ds_put_format(&errors, "%s: unknown packet_type '%s'\n",
+                      name, packet_type);
+        err = EINVAL;
+        goto out;
     }
 
     if (!ipv6_addr_is_set(&tnl_cfg.ipv6_dst) && !tnl_cfg.ip_dst_flow) {
@@ -675,9 +707,12 @@ get_tunnel_config(const struct netdev *dev, struct smap *args)
         smap_add(args, "csum", "true");
     }
 
-    if (tnl_cfg.is_layer3 && (!strcmp("gre", type) ||
-        !strcmp("vxlan", type))) {
-        smap_add(args, "layer3", "true");
+    enum tunnel_layers layers = tunnel_supported_layers(type, &tnl_cfg);
+    if (tnl_cfg.pt_mode != default_pt_mode(layers)) {
+        smap_add(args, "packet_type",
+                 tnl_cfg.pt_mode == NETDEV_PT_LEGACY_L2 ? "legacy_l2"
+                 : tnl_cfg.pt_mode == NETDEV_PT_LEGACY_L3 ? "legacy_l3"
+                 : "ptap");
     }
 
     if (!tnl_cfg.dont_fragment) {
@@ -809,6 +844,15 @@ get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     return 0;
 }
 
+static enum netdev_pt_mode
+get_pt_mode(const struct netdev *netdev)
+{
+    struct netdev_vport *dev = netdev_vport_cast(netdev);
+
+    return dev->tnl_cfg.pt_mode;
+}
+
+
 
 #ifdef __linux__
 static int
@@ -873,6 +917,7 @@ netdev_vport_get_ifindex(const struct netdev *netdev_)
                                                             \
     NULL,                       /* get_features */          \
     NULL,                       /* set_advertisements */    \
+    get_pt_mode,                                            \
                                                             \
     NULL,                       /* set_policing */          \
     NULL,                       /* get_qos_types */         \

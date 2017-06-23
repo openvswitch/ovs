@@ -15,7 +15,7 @@ AT_CHECK([ovs-vsctl add-port int-br t2 -- set Interface t2 type=vxlan \
                     -- add-port int-br t5 -- set Interface t5 type=geneve \
                        options:remote_ip=1.1.2.93 options:out_key=flow options:egress_pkt_mark=1234 ofport_request=6\
                     -- add-port int-br t6 -- set Interface t6 type=gre \
-                       options:remote_ip=1.1.2.92 options:key=456 options:layer3=true ofport_request=7\
+                       options:remote_ip=1.1.2.92 options:key=456 options:packet_type=legacy_l3 ofport_request=7\
                     -- add-port int-br t7 -- set Interface t7 type=vxlan \
                        options:remote_ip=1.1.2.92 options:key=345 options:exts=gpe ofport_request=8\
                        ], [0])
@@ -32,7 +32,7 @@ dummy@ovs-dummy: hit:0 missed:0
 		t3 4/4789: (vxlan: csum=true, out_key=flow, remote_ip=1.1.2.93)
 		t4 5/6081: (geneve: key=123, remote_ip=flow)
 		t5 6/6081: (geneve: egress_pkt_mark=1234, out_key=flow, remote_ip=1.1.2.93)
-		t6 7/3: (gre: key=456, layer3=true, remote_ip=1.1.2.92)
+		t6 7/3: (gre: key=456, packet_type=legacy_l3, remote_ip=1.1.2.92)
 		t7 8/4789: (vxlan: key=345, remote_ip=1.1.2.92)
 ])
 

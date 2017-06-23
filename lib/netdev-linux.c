@@ -2843,6 +2843,7 @@ netdev_linux_update_flags(struct netdev *netdev_, enum netdev_flags off,
                                                                 \
     GET_FEATURES,                                               \
     netdev_linux_set_advertisements,                            \
+    NULL,                       /* get_pt_mode */               \
                                                                 \
     netdev_linux_set_policing,                                  \
     netdev_linux_get_qos_types,                                 \

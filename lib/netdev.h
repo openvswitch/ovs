@@ -71,6 +71,32 @@ struct smap;
 struct sset;
 struct ovs_action_push_tnl;
 
+enum netdev_pt_mode {
+    /* The netdev is packet type aware.  It can potentially carry any kind of
+     * packet.  This "modern" mode is appropriate for both netdevs that handle
+     * only a single kind of packet (such as a virtual or physical Ethernet
+     * interface) and for those that can handle multiple (such as VXLAN-GPE or
+     * Geneve). */
+    NETDEV_PT_AWARE,
+
+    /* The netdev sends and receives only Ethernet frames.  The netdev cannot
+     * carry packets other than Ethernet frames.  This is a legacy mode for
+     * backward compability with controllers that are not prepared to handle
+     * OpenFlow 1.5+ "packet_type". */
+    NETDEV_PT_LEGACY_L2,
+
+    /* The netdev sends and receives only IPv4 and IPv6 packets.  The netdev
+     * cannot carry Ethernet frames or other kinds of packets.
+     *
+     * IPv4 and IPv6 packets carried over the netdev are treated as Ethernet:
+     * when they are received, they are converted to Ethernet by adding a dummy
+     * header with the proper Ethertype; on tranmission, the Ethernet header is
+     * stripped.  This is a legacy mode for backward compability with
+     * controllers that are not prepared to handle OpenFlow 1.5+
+     * "packet_type". */
+    NETDEV_PT_LEGACY_L3,
+};
+
 /* Configuration specific to tunnels. */
 struct netdev_tunnel_config {
     bool in_key_present;
@@ -100,7 +126,7 @@ struct netdev_tunnel_config {
 
     bool csum;
     bool dont_fragment;
-    bool is_layer3;
+    enum netdev_pt_mode pt_mode;
 };
 
 void netdev_run(void);
@@ -140,6 +166,7 @@ void netdev_mtu_user_config(struct netdev *, bool);
 bool netdev_mtu_is_user_config(struct netdev *);
 int netdev_get_ifindex(const struct netdev *);
 int netdev_set_tx_multiq(struct netdev *, unsigned int n_txq);
+enum netdev_pt_mode netdev_get_pt_mode(const struct netdev *);
 
 /* Packet reception. */
 int netdev_rxq_open(struct netdev *, struct netdev_rxq **, int id);

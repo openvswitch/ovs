@@ -1517,6 +1517,7 @@ netdev_bsd_update_flags(struct netdev *netdev_, enum netdev_flags off,
                                                      \
     GET_FEATURES,                                    \
     NULL, /* set_advertisement */                    \
+    NULL, /* get_pt_mode */                          \
     NULL, /* set_policing */                         \
     NULL, /* get_qos_type */                         \
     NULL, /* get_qos_capabilities */                 \

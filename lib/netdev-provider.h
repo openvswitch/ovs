@@ -474,6 +474,12 @@ struct netdev_class {
     int (*set_advertisements)(struct netdev *netdev,
                               enum netdev_features advertise);
 
+    /* Returns 'netdev''s configured packet_type mode.
+     *
+     * This function may be set to null if it would always return
+     * NETDEV_PT_LEGACY_L2. */
+    enum netdev_pt_mode (*get_pt_mode)(const struct netdev *netdev);
+
     /* Attempts to set input rate limiting (policing) policy, such that up to
      * 'kbits_rate' kbps of traffic is accepted, with a maximum accumulative
      * burst size of 'kbits' kb.

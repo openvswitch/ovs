@@ -2402,6 +2402,31 @@
         including tunnel monitoring.
       </column>
 
+      <group title="Tunnel Options: lisp only">
+        <column name="options" key="packet_type"
+                type='{"type": "string", "enum": ["set",
+                      ["legacy_l3", "ptap"]]}'>
+          <p>
+            A LISP tunnel sends and receives only IPv4 and IPv6 packets.  This
+            option controls what how the tunnel represents the packets that it
+            sends and receives:
+          </p>
+
+          <ul>
+            <li>
+              By default, or if this option is <code>legacy_l3</code>, the
+              tunnel represents packets as Ethernet frames for compatibility
+              with legacy OpenFlow controllers that expect this behavior.
+            </li>
+            <li>
+              If this option is <code>ptap</code>, the tunnel represents
+              packets using the <code>packet_type</code> mechanism introduced
+              in OpenFlow 1.5.
+            </li>
+          </ul>
+        </column>
+      </group>
+
       <group title="Tunnel Options: vxlan only">
 
         <column name="options" key="exts">
@@ -2421,21 +2446,42 @@
               <code>gpe</code>: Support for Generic Protocol Encapsulation in
               accordance with IETF draft
               <code>https://tools.ietf.org/html/draft-ietf-nvo3-vxlan-gpe</code>.
+              Without this option, a VXLAN packet always encapsulates an
+              Ethernet frame.  With this option, an VXLAN packet may also
+              encapsulate an IPv4, IPv6, NSH, or MPLS packet.
             </li>
           </ul>
         </column>
 
-        <column name="options" key="layer3" type='{"type": "boolean"}'>
+        <column name="options" key="packet_type"
+                type='{"type": "string", "enum": ["set",
+                      ["legacy_l2", "legacy_l3", "ptap"]]}'>
           <p>
-            By default, or if set to false, the tunnel carries L2 packets (with
-            an Ethernet header).  If set to true, the tunnel carries L3 packets
-            (without an Ethernet header present).
+            This option controls what types of packets the tunnel sends and
+            receives and how it represents them:
           </p>
 
-          <p>
-            To set this option to true, the <code>gpe</code> extension must
-            also be enabled in <ref column="options" key="exts"/>.
-          </p>
+          <ul>
+            <li>
+              By default, or if this option is <code>legacy_l2</code>, the
+              tunnel sends and receives only Ethernet frames.
+            </li>
+            <li>
+              If this option is <code>legacy_l3</code>, the tunnel sends and
+              receives only non-Ethernet (L3) packet, but the packets are
+              represented as Ethernet frames for compatibility with legacy
+              OpenFlow controllers that expect this behavior.  This requires
+              enabling <code>gpe</code> in <ref column="options" key="exts"/>.
+            </li>
+            <li>
+              If this option is <code>ptap</code>, Open vSwitch represents
+              packets in the tunnel using the <code>packet_type</code>
+              mechanism introduced in OpenFlow 1.5.  This mechanism supports
+              any kind of packet, but actually sending and receiving
+              non-Ethernet packets requires additionally enabling
+              <code>gpe</code> in <ref column="options" key="exts"/>.
+            </li>
+          </ul>
         </column>
       </group>
 
@@ -2444,18 +2490,32 @@
           <code>gre</code> interfaces support these options.
         </p>
 
-        <column name="options" key="layer3" type='{"type": "boolean"}'>
+        <column name="options" key="packet_type"
+                type='{"type": "string", "enum": ["set",
+                      ["legacy_l2", "legacy_l3", "ptap"]]}'>
           <p>
-            By default, or if set to false, the tunnel carries L2 packets (with
-            an Ethernet header).  If set to true, the tunnel carries L3 packets
-            (without an Ethernet header present).
+            This option controls what types of packets the tunnel sends and
+            receives and how it represents them:
           </p>
 
-          <p>
-            A single GRE tunnel cannot carry both L2 and L3 packets, but the
-            same effect can be realized by creating two tunnels with different
-            <code>layer3</code> settings and otherwise the same configuration.
-          </p>
+          <ul>
+            <li>
+              By default, or if this option is <code>legacy_l2</code>, the
+              tunnel sends and receives only Ethernet frames.
+            </li>
+            <li>
+              If this option is <code>legacy_l3</code>, the tunnel sends and
+              receives only non-Ethernet (L3) packet, but the packets are
+              represented as Ethernet frames for compatibility with legacy
+              OpenFlow controllers that expect this behavior.
+            </li>
+            <li>
+              If this option is <code>ptap</code>, the tunnel sends and
+              receives any kind of packet.  Open vSwitch represents packets in
+              the tunnel using the <code>packet_type</code> mechanism
+              introduced in OpenFlow 1.5.
+            </li>
+          </ul>
         </column>
       </group>
 

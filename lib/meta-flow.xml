@@ -26,19 +26,27 @@
     networking technology in use are called called <dfn>root fields</dfn>.
     Open vSwitch 2.7 and earlier considered Ethernet fields to be root fields,
     and this remains the default mode of operation for Open vSwitch bridges.
-    In this mode, when a packet is received from a non-Ethernet interfaces,
-    such as a layer-3 LISP or GRE tunnel, Open vSwitch force-fits it to this
+    When a packet is received from a non-Ethernet interfaces, such as a layer-3
+    LISP tunnel, Open vSwitch 2.7 and earlier force-fit the packet to this
     Ethernet-centric point of view by pretending that an Ethernet header is
     present whose Ethernet type that indicates the packet's actual type (and
     whose source and destination addresses are all-zero).
   </p>
 
   <p>
-    Open vSwitch 2.8 and later supports the ``packet type-aware pipeline''
-    concept introduced in OpenFlow 1.5.  A bridge configured to be packet
-    type-aware can handle packets of multiple networking technologies, such as
-    Ethernet, IP, ARP, MPLS, or NSH in parallel.  Such a bridge does not have
-    any root fields.
+    Open vSwitch 2.8 and later implement the ``packet type-aware pipeline''
+    concept introduced in OpenFlow 1.5.  Such a pipeline does not have any root
+    fields.  Instead, a new metadata field, <ref field="packet_type"/>,
+    indicates the basic type of the packet, which can be Ethernet, IPv4, IPv6,
+    or another type.  For backward compatibility, by default Open vSwitch 2.8
+    imitates the behavior of Open vSwitch 2.7 and earlier.  Later versions of
+    Open vSwitch may change the default, and in the meantime controllers can
+    turn off this legacy behavior, on a port-by-port basis, by setting
+    <code>options:packet_type</code> to <code>ptap</code> in the
+    <code>Interface</code> table.  This is significant only for ports that can
+    handle non-Ethernet packets, which is currently just LISP, VXLAN-GPE, and
+    GRE tunnel ports.  See <code>ovs-vwitchd.conf.db</code>(5) for more
+    information.
   </p>
 
   <p>
@@ -331,14 +339,6 @@ tcp,tp_src=0x07c0/0xfff0
     <dt><code>mpls</code></dt>   <dd><code>eth_type=0x8847</code></dd>
     <dt><code>mplsm</code></dt>  <dd><code>eth_type=0x8848</code></dd>
   </dl>
-
-  <p>
-    These shorthand notations continue to work in packet type-aware bridges.
-    The absence of a packet_type match implies
-    <code>packet_type=ethernet</code>, so that shorthands match on Ethernet
-    packets with the implied eth_type. Please note that the shorthand
-    <code>ip</code> does not match packets of packet_type (1,0x800) for IPv4.
-  </p>
 
 
   <h2>Evolution of OpenFlow Fields</h2>

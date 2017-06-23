@@ -727,6 +727,14 @@ netdev_set_tx_multiq(struct netdev *netdev, unsigned int n_txq)
     return error;
 }
 
+enum netdev_pt_mode
+netdev_get_pt_mode(const struct netdev *netdev)
+{
+    return (netdev->netdev_class->get_pt_mode
+            ? netdev->netdev_class->get_pt_mode(netdev)
+            : NETDEV_PT_LEGACY_L2);
+}
+
 /* Sends 'batch' on 'netdev'.  Returns 0 if successful (for every packet),
  * otherwise a positive errno value.  Returns EAGAIN without blocking if
  * at least one the packets cannot be queued immediately.  Returns EMSGSIZE

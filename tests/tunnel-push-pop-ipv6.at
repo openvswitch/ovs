@@ -13,7 +13,7 @@ AT_CHECK([ovs-vsctl add-port int-br t2 -- set Interface t2 type=vxlan \
                     -- add-port int-br t4 -- set Interface t4 type=geneve \
                        options:remote_ip=flow options:key=123 ofport_request=5\
                     -- add-port int-br t5 -- set Interface t5 type=gre \
-                       options:remote_ip=2001:cafe::92 options:key=455 options:layer3=true ofport_request=6\
+                       options:remote_ip=2001:cafe::92 options:key=455 options:packet_type=legacy_l3 ofport_request=6\
                        ], [0])
 
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
@@ -27,7 +27,7 @@ dummy@ovs-dummy: hit:0 missed:0
 		t2 2/4789: (vxlan: key=123, remote_ip=2001:cafe::92)
 		t3 4/4789: (vxlan: csum=true, out_key=flow, remote_ip=2001:cafe::93)
 		t4 5/6081: (geneve: key=123, remote_ip=flow)
-		t5 6/3: (gre: key=455, layer3=true, remote_ip=2001:cafe::92)
+		t5 6/3: (gre: key=455, packet_type=legacy_l3, remote_ip=2001:cafe::92)
 ])
 
 dnl First setup dummy interface IP address, then add the route
