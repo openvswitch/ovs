@@ -1415,7 +1415,7 @@ extract_l4_icmp6(struct conn_key *key, const void *data, size_t size,
  *
  * If 'related' is not NULL and an ICMP error packet is being
  * processed, the function will extract the key from the packet nested
- * in the ICMP paylod and set '*related' to true.
+ * in the ICMP payload and set '*related' to true.
  *
  * If 'related' is NULL, it means that we're already parsing a header nested
  * in an ICMP error.  In this case, we skip checksum and length validation. */

@@ -196,8 +196,10 @@ usage(void *userdata OVS_UNUSED)
            "  get-flow [DP] ufid:UFID    fetch flow corresponding to UFID\n"
            "  del-flow [DP] FLOW         delete FLOW from DP\n"
            "  del-flows [DP]             delete all flows from DP\n"
-           "  dump-conntrack [DP] [zone=ZONE]  display conntrack entries for ZONE\n"
-           "  flush-conntrack [DP] [zone=ZONE] delete all conntrack entries in ZONE\n"
+           "  dump-conntrack [DP] [zone=ZONE]  " \
+               "display conntrack entries for ZONE\n"
+           "  flush-conntrack [DP] [zone=ZONE] " \
+               "delete all conntrack entries in ZONE\n"
            "Each IFACE on add-dp, add-if, and set-if may be followed by\n"
            "comma-separated options.  See ovs-dpctl(8) for syntax, or the\n"
            "Interface table in ovs-vswitchd.conf.db(5) for an options list.\n"
