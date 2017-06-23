@@ -4136,6 +4136,87 @@ OFPT_BARRIER_REPLY:
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+dnl This test checks that 1.5 packet_out is properly encoded/decoded.
+AT_SETUP([ofproto - packet-out with set_field metadata (OpenFlow 1.5)])
+OVS_VSWITCHD_START
+
+# Start a monitor listening for packet-ins.
+AT_CHECK([ovs-ofctl -P standard -O OpenFlow13 monitor br0 --detach --no-chdir --pidfile])
+ovs-appctl -t ovs-ofctl ofctl/send 0409000c0123456700000080
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
+AT_CAPTURE_FILE([monitor.log])
+
+# Send a packet-out with a couple of set-field action to set some metadata, and forward to controller
+AT_CHECK([ovs-ofctl -O OpenFlow15 packet-out br0 CONTROLLER 'set_field:0xfafafafa5a5a5a5a->metadata, controller' '0001020304050010203040501234'])
+
+# Stop the monitor and check its output.
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl exit
+
+AT_CHECK([sed 's/ (xid=0x[[0-9a-fA-F]]*)//' monitor.log], [0], [dnl
+OFPT_PACKET_IN (OF1.3): total_len=14 metadata=0xfafafafa5a5a5a5a,in_port=CONTROLLER (via action) data_len=14 (unbuffered)
+vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234
+OFPT_BARRIER_REPLY (OF1.3):
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl This test checks that packet_type PT_ETH is properly encoded/decoded in 1.5 packet_out.
+AT_SETUP([ofproto - packet-out with set_field metadata with packet_type PT_ETH (OpenFlow 1.5)])
+OVS_VSWITCHD_START
+
+# Start a monitor listening for packet-ins.
+AT_CHECK([ovs-ofctl -P standard -O OpenFlow13 monitor br0 --detach --no-chdir --pidfile])
+ovs-appctl -t ovs-ofctl ofctl/send 0409000c0123456700000080
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
+AT_CAPTURE_FILE([monitor.log])
+
+# Send a packet-out with a couple of set-field action to set some metadata, and forward to controller
+AT_CHECK([ovs-ofctl -O OpenFlow15 packet-out br0 "in_port=controller packet=0001020304050010203040501234 packet_type(0,0x0) actions=set_field:0xfafafafa5a5a5a5a->metadata,controller"])
+
+# Stop the monitor and check its output.
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl exit
+
+AT_CHECK([sed 's/ (xid=0x[[0-9a-fA-F]]*)//' monitor.log], [0], [dnl
+OFPT_PACKET_IN (OF1.3): total_len=14 metadata=0xfafafafa5a5a5a5a,in_port=CONTROLLER (via action) data_len=14 (unbuffered)
+vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234
+OFPT_BARRIER_REPLY (OF1.3):
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl This test checks that packet_type PT_IPV4 is properly encoded/decoded in 1.5 packet_out.
+AT_SETUP([ofproto - packet-out with set_field metadata with packet_type PT_IPV4 on PTAP bridge (OpenFlow 1.5)])
+OVS_VSWITCHD_START
+
+# Start a monitor listening for packet-ins.
+AT_CHECK([ovs-ofctl -P standard -O OpenFlow13 monitor br0 --detach --no-chdir --pidfile])
+ovs-appctl -t ovs-ofctl ofctl/send 0409000c0123456700000080
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
+AT_CAPTURE_FILE([monitor.log])
+
+# Send a packet-out with a couple of set-field action to set some metadata, and forward to controller
+AT_CHECK([ovs-ofctl -O OpenFlow15 packet-out br0 "in_port=controller packet=4500002012344000ff1155670a0000140a00001e006400c8000cea78ffffffff packet_type(1,0x800) actions=set_field:0xfafafafa5a5a5a5a->metadata,controller"])
+
+# Stop the monitor and check its output.
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl exit
+
+AT_CHECK([sed 's/ (xid=0x[[0-9a-fA-F]]*)//' monitor.log], [0], [dnl
+OFPT_PACKET_IN (OF1.3): total_len=32 packet_type=(1,0x800),metadata=0xfafafafa5a5a5a5a,in_port=CONTROLLER (via action) data_len=32 (unbuffered)
+packet_type=(1,0x800),nw_src=10.0.0.20,nw_dst=10.0.0.30,nw_proto=17,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=100,tp_dst=200 udp_csum:ea78
+OFPT_BARRIER_REPLY (OF1.3):
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 dnl This test checks that metadata is encoded in packet_in structures,
 dnl supported by NXAST.
 AT_SETUP([ofproto - packet-out with metadata (NXM)])

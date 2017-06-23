@@ -4258,6 +4258,7 @@ ofputil_decode_packet_out(struct ofputil_packet_out *po,
         if (error) {
             return error;
         }
+        match_set_packet_type(&po->flow_metadata, htonl(PT_ETH));
         match_set_in_port(&po->flow_metadata, in_port);
 
         error = ofpacts_pull_openflow_actions(&b, ntohs(opo->actions_len),
@@ -4271,6 +4272,7 @@ ofputil_decode_packet_out(struct ofputil_packet_out *po,
         const struct ofp10_packet_out *opo = ofpbuf_pull(&b, sizeof *opo);
 
         po->buffer_id = ntohl(opo->buffer_id);
+        match_set_packet_type(&po->flow_metadata, htonl(PT_ETH));
         match_set_in_port(&po->flow_metadata, u16_to_ofp(ntohs(opo->in_port)));
 
         error = ofpacts_pull_openflow_actions(&b, ntohs(opo->actions_len),

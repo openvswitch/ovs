@@ -256,9 +256,9 @@ ofp_print_packet_out(struct ds *string, const struct ofp_header *oh,
     if (po.buffer_id == UINT32_MAX) {
         ds_put_format(string, " data_len=%"PRIuSIZE, po.packet_len);
         if (verbosity > 0 && po.packet_len > 0) {
-            /* Packet Out can only carry Ethernet packets. */
+            ovs_be32 po_packet_type = po.flow_metadata.flow.packet_type;
             char *packet = ofp_packet_to_string(po.packet, po.packet_len,
-                                                htonl(PT_ETH));
+                                                po_packet_type);
             ds_put_char(string, '\n');
             ds_put_cstr(string, packet);
             free(packet);

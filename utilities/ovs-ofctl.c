@@ -2206,6 +2206,7 @@ ofctl_packet_out(struct ovs_cmdl_context *ctx)
                           str_to_port_no(ctx->argv[1], ctx->argv[2]));
         po.ofpacts = ofpacts.data;
         po.ofpacts_len = ofpacts.size;
+        po.flow_metadata.flow.packet_type = htonl(PT_ETH);
 
         protocol = open_vconn_for_flow_mod(ctx->argv[1], &vconn,
                                            usable_protocols);

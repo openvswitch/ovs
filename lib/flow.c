@@ -1441,6 +1441,8 @@ void
 flow_wildcards_init_for_packet(struct flow_wildcards *wc,
                                const struct flow *flow)
 {
+    ovs_be16 dl_type = OVS_BE16_MAX;
+
     memset(&wc->masks, 0x0, sizeof wc->masks);
 
     /* Update this function whenever struct flow changes. */
@@ -1493,25 +1495,29 @@ flow_wildcards_init_for_packet(struct flow_wildcards *wc,
     /* actset_output wildcarded. */
 
     WC_MASK_FIELD(wc, packet_type);
-    WC_MASK_FIELD(wc, dl_dst);
-    WC_MASK_FIELD(wc, dl_src);
-    WC_MASK_FIELD(wc, dl_type);
-
-    /* No need to set mask of inner VLANs that don't exist. */
-    for (int i = 0; i < FLOW_MAX_VLAN_HEADERS; i++) {
-        /* Always show the first zero VLAN. */
-        WC_MASK_FIELD(wc, vlans[i]);
-        if (flow->vlans[i].tci == htons(0)) {
-            break;
+    if (flow->packet_type == htonl(PT_ETH)) {
+        WC_MASK_FIELD(wc, dl_dst);
+        WC_MASK_FIELD(wc, dl_src);
+        WC_MASK_FIELD(wc, dl_type);
+        /* No need to set mask of inner VLANs that don't exist. */
+        for (int i = 0; i < FLOW_MAX_VLAN_HEADERS; i++) {
+            /* Always show the first zero VLAN. */
+            WC_MASK_FIELD(wc, vlans[i]);
+            if (flow->vlans[i].tci == htons(0)) {
+                break;
+            }
         }
+        dl_type = flow->dl_type;
+    } else {
+        dl_type = pt_ns_type_be(flow->packet_type);
     }
 
-    if (flow->dl_type == htons(ETH_TYPE_IP)) {
+    if (dl_type == htons(ETH_TYPE_IP)) {
         WC_MASK_FIELD(wc, nw_src);
         WC_MASK_FIELD(wc, nw_dst);
         WC_MASK_FIELD(wc, ct_nw_src);
         WC_MASK_FIELD(wc, ct_nw_dst);
-    } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
+    } else if (dl_type == htons(ETH_TYPE_IPV6)) {
         WC_MASK_FIELD(wc, ipv6_src);
         WC_MASK_FIELD(wc, ipv6_dst);
         WC_MASK_FIELD(wc, ipv6_label);
@@ -1523,15 +1529,15 @@ flow_wildcards_init_for_packet(struct flow_wildcards *wc,
             WC_MASK_FIELD(wc, ct_ipv6_src);
             WC_MASK_FIELD(wc, ct_ipv6_dst);
         }
-    } else if (flow->dl_type == htons(ETH_TYPE_ARP) ||
-               flow->dl_type == htons(ETH_TYPE_RARP)) {
+    } else if (dl_type == htons(ETH_TYPE_ARP) ||
+               dl_type == htons(ETH_TYPE_RARP)) {
         WC_MASK_FIELD(wc, nw_src);
         WC_MASK_FIELD(wc, nw_dst);
         WC_MASK_FIELD(wc, nw_proto);
         WC_MASK_FIELD(wc, arp_sha);
         WC_MASK_FIELD(wc, arp_tha);
         return;
-    } else if (eth_type_mpls(flow->dl_type)) {
+    } else if (eth_type_mpls(dl_type)) {
         for (int i = 0; i < FLOW_MAX_MPLS_LABELS; i++) {
             WC_MASK_FIELD(wc, mpls_lse[i]);
             if (flow->mpls_lse[i] & htonl(MPLS_BOS_MASK)) {
