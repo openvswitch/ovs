@@ -373,15 +373,13 @@ OvsDetectCtPacket(OvsForwardingContext *fwdCtx,
 BOOLEAN
 OvsCtKeyAreSame(OVS_CT_KEY ctxKey, OVS_CT_KEY entryKey)
 {
-    return ((ctxKey.src.addr.ipv4 == entryKey.src.addr.ipv4) &&
-        (ctxKey.src.addr.ipv4_aligned == entryKey.src.addr.ipv4_aligned) &&
-        (ctxKey.src.port == entryKey.src.port) &&
-        (ctxKey.dst.addr.ipv4 == entryKey.dst.addr.ipv4) &&
-        (ctxKey.dst.addr.ipv4_aligned == entryKey.dst.addr.ipv4_aligned) &&
-        (ctxKey.dst.port == entryKey.dst.port) &&
-        (ctxKey.dl_type == entryKey.dl_type) &&
-        (ctxKey.nw_proto == entryKey.nw_proto) &&
-        (ctxKey.zone == entryKey.zone));
+    return ((NdisEqualMemory(&ctxKey.src, &entryKey.src,
+                             sizeof(struct ct_endpoint))) &&
+            (NdisEqualMemory(&ctxKey.dst, &entryKey.dst,
+                             sizeof(struct ct_endpoint))) &&
+            (ctxKey.dl_type == entryKey.dl_type) &&
+            (ctxKey.nw_proto == entryKey.nw_proto) &&
+            (ctxKey.zone == entryKey.zone));
 }
 
 static __inline VOID
