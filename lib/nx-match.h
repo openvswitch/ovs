@@ -85,9 +85,9 @@ enum ofperr nx_pull_entry(struct ofpbuf *, const struct vl_mff_map *,
                           union mf_value *mask);
 enum ofperr nx_pull_header(struct ofpbuf *, const struct vl_mff_map *,
                            const struct mf_field **, bool *masked);
-void nxm_put__(struct ofpbuf *b, enum mf_field_id field,
-               enum ofp_version version, const void *value,
-               const void *mask, size_t n_bytes);
+void nxm_put_entry_raw(struct ofpbuf *, enum mf_field_id field,
+                       enum ofp_version version, const void *value,
+                       const void *mask, size_t n_bytes);
 void nx_put_entry(struct ofpbuf *, const struct mf_field *, enum ofp_version,
                   const union mf_value *value, const union mf_value *mask);
 void nx_put_header(struct ofpbuf *, enum mf_field_id, enum ofp_version,
