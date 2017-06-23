@@ -24,3 +24,4 @@ m4_include([tests/system-common-macros.at])
 
 m4_include([tests/system-traffic.at])
 m4_include([tests/system-ovn.at])
+m4_include([tests/system-userspace-packet-type-aware.at])
