@@ -141,6 +141,7 @@ void ofpbuf_reserve(struct ofpbuf *, size_t);
 void *ofpbuf_push_uninit(struct ofpbuf *b, size_t);
 void *ofpbuf_push_zeros(struct ofpbuf *, size_t);
 void *ofpbuf_push(struct ofpbuf *b, const void *, size_t);
+void ofpbuf_insert(struct ofpbuf *b, size_t offset, const void *data, size_t);
 
 static inline size_t ofpbuf_headroom(const struct ofpbuf *);
 static inline size_t ofpbuf_tailroom(const struct ofpbuf *);

@@ -461,6 +461,24 @@ ofpbuf_push(struct ofpbuf *b, const void *p, size_t size)
     return dst;
 }
 
+/* Inserts the 'n' bytes of 'data' into 'b' starting at the given 'offset',
+ * moving data forward as necessary to make room.
+ *
+ * 'data' must not point inside 'b'. */
+void
+ofpbuf_insert(struct ofpbuf *b, size_t offset, const void *data, size_t n)
+{
+    if (offset < b->size) {
+        ofpbuf_put_uninit(b, n);
+        memmove((char *) b->data + offset + n, (char *) b->data + offset,
+                b->size - offset);
+        memcpy((char *) b->data + offset, data, n);
+    } else {
+        ovs_assert(offset == b->size);
+        ofpbuf_put(b, data, n);
+    }
+}
+
 /* Returns the data in 'b' as a block of malloc()'d memory and frees the buffer
  * within 'b'.  (If 'b' itself was dynamically allocated, e.g. with
  * ofpbuf_new(), then it should still be freed with, e.g., ofpbuf_delete().) */
