@@ -2074,11 +2074,7 @@ emc_probabilistic_insert(struct dp_netdev_pmd_thread *pmd,
     uint32_t min;
     atomic_read_relaxed(&pmd->dp->emc_insert_min, &min);
 
-#ifdef DPDK_NETDEV
-    if (min && (key->hash ^ (uint32_t) pmd->last_cycles) <= min) {
-#else
-    if (min && (key->hash ^ random_uint32()) <= min) {
-#endif
+    if (min && random_uint32() <= min) {
         emc_insert(&pmd->flow_cache, key, flow);
     }
 }
