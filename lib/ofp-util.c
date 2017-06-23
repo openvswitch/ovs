@@ -161,6 +161,19 @@ ofputil_match_from_ofp10_match(const struct ofp10_match *ofmatch,
     ofputil_wildcard_from_ofpfw10(ofpfw, &match->wc);
     memset(&match->tun_md, 0, sizeof match->tun_md);
 
+    /* If any fields, except in_port, are matched, then we also need to match
+     * on the Ethernet packet_type. */
+    const uint32_t ofpfw_data_bits = (OFPFW10_NW_TOS | OFPFW10_NW_PROTO
+                                      | OFPFW10_TP_SRC | OFPFW10_TP_DST
+                                      | OFPFW10_DL_SRC | OFPFW10_DL_DST
+                                      | OFPFW10_DL_TYPE
+                                      | OFPFW10_DL_VLAN | OFPFW10_DL_VLAN_PCP);
+    if ((ofpfw & ofpfw_data_bits) != ofpfw_data_bits
+        || ofputil_wcbits_to_netmask(ofpfw >> OFPFW10_NW_SRC_SHIFT)
+        || ofputil_wcbits_to_netmask(ofpfw >> OFPFW10_NW_DST_SHIFT)) {
+        match_set_default_packet_type(match);
+    }
+
     /* Initialize most of match->flow. */
     match->flow.nw_src = ofmatch->nw_src;
     match->flow.nw_dst = ofmatch->nw_dst;
@@ -328,6 +341,7 @@ ofputil_match_from_ofp11_match(const struct ofp11_match *ofmatch,
     bool ipv4, arp, rarp;
 
     match_init_catchall(match);
+    match->flow.tunnel.metadata.tab = NULL;
 
     if (!(wc & OFPFW11_IN_PORT)) {
         ofp_port_t ofp_port;
@@ -340,10 +354,13 @@ ofputil_match_from_ofp11_match(const struct ofp11_match *ofmatch,
         match_set_in_port(match, ofp_port);
     }
 
-    match_set_dl_src_masked(match, ofmatch->dl_src,
-                            eth_addr_invert(ofmatch->dl_src_mask));
-    match_set_dl_dst_masked(match, ofmatch->dl_dst,
-                            eth_addr_invert(ofmatch->dl_dst_mask));
+    struct eth_addr dl_src_mask = eth_addr_invert(ofmatch->dl_src_mask);
+    struct eth_addr dl_dst_mask = eth_addr_invert(ofmatch->dl_dst_mask);
+    if (!eth_addr_is_zero(dl_src_mask) || !eth_addr_is_zero(dl_dst_mask)) {
+        match_set_dl_src_masked(match, ofmatch->dl_src, dl_src_mask);
+        match_set_dl_dst_masked(match, ofmatch->dl_dst, dl_dst_mask);
+        match_set_default_packet_type(match);
+    }
 
     if (!(wc & OFPFW11_DL_VLAN)) {
         if (ofmatch->dl_vlan == htons(OFPVID11_NONE)) {
@@ -375,11 +392,13 @@ ofputil_match_from_ofp11_match(const struct ofp11_match *ofmatch,
                 }
             }
         }
+        match_set_default_packet_type(match);
     }
 
     if (!(wc & OFPFW11_DL_TYPE)) {
         match_set_dl_type(match,
                           ofputil_dl_type_from_openflow(ofmatch->dl_type));
+        match_set_default_packet_type(match);
     }
 
     ipv4 = match->flow.dl_type == htons(ETH_TYPE_IP);
@@ -7680,21 +7699,35 @@ ofputil_normalize_match__(struct match *match, bool may_log)
         MAY_IPV6        = 1 << 6, /* ipv6_src, ipv6_dst, ipv6_label */
         MAY_ND_TARGET   = 1 << 7, /* nd_target */
         MAY_MPLS        = 1 << 8, /* mpls label and tc */
+        MAY_ETHER       = 1 << 9, /* dl_src, dl_dst */
     } may_match;
 
-    struct flow_wildcards wc;
+    struct flow_wildcards wc = match->wc;
+    ovs_be16 dl_type;
 
     /* Figure out what fields may be matched. */
-    if (match->flow.dl_type == htons(ETH_TYPE_IP)) {
-        may_match = MAY_NW_PROTO | MAY_IPVx | MAY_NW_ADDR;
+    /* Check the packet_type first and extract dl_type. */
+    if (wc.masks.packet_type == 0 || match_has_default_packet_type(match)) {
+        may_match = MAY_ETHER;
+        dl_type = match->flow.dl_type;
+    } else if (wc.masks.packet_type == OVS_BE32_MAX &&
+               pt_ns(match->flow.packet_type) == OFPHTN_ETHERTYPE) {
+        may_match = 0;
+        dl_type = pt_ns_type_be(match->flow.packet_type);
+    } else {
+        may_match = 0;
+        dl_type = 0;
+    }
+    if (dl_type == htons(ETH_TYPE_IP)) {
+        may_match |= MAY_NW_PROTO | MAY_IPVx | MAY_NW_ADDR;
         if (match->flow.nw_proto == IPPROTO_TCP ||
             match->flow.nw_proto == IPPROTO_UDP ||
             match->flow.nw_proto == IPPROTO_SCTP ||
             match->flow.nw_proto == IPPROTO_ICMP) {
             may_match |= MAY_TP_ADDR;
         }
-    } else if (match->flow.dl_type == htons(ETH_TYPE_IPV6)) {
-        may_match = MAY_NW_PROTO | MAY_IPVx | MAY_IPV6;
+    } else if (dl_type == htons(ETH_TYPE_IPV6)) {
+        may_match |= MAY_NW_PROTO | MAY_IPVx | MAY_IPV6;
         if (match->flow.nw_proto == IPPROTO_TCP ||
             match->flow.nw_proto == IPPROTO_UDP ||
             match->flow.nw_proto == IPPROTO_SCTP) {
@@ -7707,17 +7740,17 @@ ofputil_normalize_match__(struct match *match, bool may_log)
                 may_match |= MAY_ND_TARGET | MAY_ARP_THA;
             }
         }
-    } else if (match->flow.dl_type == htons(ETH_TYPE_ARP) ||
-               match->flow.dl_type == htons(ETH_TYPE_RARP)) {
-        may_match = MAY_NW_PROTO | MAY_NW_ADDR | MAY_ARP_SHA | MAY_ARP_THA;
-    } else if (eth_type_mpls(match->flow.dl_type)) {
-        may_match = MAY_MPLS;
-    } else {
-        may_match = 0;
+    } else if (dl_type == htons(ETH_TYPE_ARP) ||
+               dl_type == htons(ETH_TYPE_RARP)) {
+        may_match |= MAY_NW_PROTO | MAY_NW_ADDR | MAY_ARP_SHA | MAY_ARP_THA;
+    } else if (eth_type_mpls(dl_type)) {
+        may_match |= MAY_MPLS;
     }
 
     /* Clear the fields that may not be matched. */
-    wc = match->wc;
+    if (!(may_match & MAY_ETHER)) {
+        wc.masks.dl_src = wc.masks.dl_dst = eth_addr_zero;
+    }
     if (!(may_match & MAY_NW_ADDR)) {
         wc.masks.nw_src = wc.masks.nw_dst = htonl(0);
     }

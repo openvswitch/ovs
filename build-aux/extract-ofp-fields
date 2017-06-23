@@ -36,7 +36,8 @@ FORMATTING = {"decimal":            ("MFS_DECIMAL",      1,   8),
               "OpenFlow 1.1+ port": ("MFS_OFP_PORT_OXM", 4,   4),
               "frag":               ("MFS_FRAG",         1,   1),
               "tunnel flags":       ("MFS_TNL_FLAGS",    2,   2),
-              "TCP flags":          ("MFS_TCP_FLAGS",    2,   2)}
+              "TCP flags":          ("MFS_TCP_FLAGS",    2,   2),
+              "packet type":        ("MFS_PACKET_TYPE",  4,   4)}
 
 PREREQS = {"none": "MFP_NONE",
            "Ethernet": "MFP_ETHERNET",

@@ -22,26 +22,38 @@
   </p>
 
   <p>
-    Some data fields, called <dfn>root fields</dfn>, are always present as a
-    consequence of the basic networking technology in use.  The Ethernet header
-    fields are root fields in current versions of Open vSwitch, though future
-    versions might support other roots.  (Currently, to support LISP tunnels,
-    which do not encapsulate an Ethernet header, Open vSwitch synthesizes one.)
+    Data fields that are always present as a consequence of the basic
+    networking technology in use are called called <dfn>root fields</dfn>.
+    Open vSwitch 2.7 and earlier considered Ethernet fields to be root fields,
+    and this remains the default mode of operation for Open vSwitch bridges.
+    In this mode, when a packet is received from a non-Ethernet interfaces,
+    such as a layer-3 LISP or GRE tunnel, Open vSwitch force-fits it to this
+    Ethernet-centric point of view by pretending that an Ethernet header is
+    present whose Ethernet type that indicates the packet's actual type (and
+    whose source and destination addresses are all-zero).
   </p>
 
-  <!-- future directions: EXT-112 -->
   <p>
-    Other data fields are not always present.  A packet contains ARP fields,
-    for example, only when its Ethernet header indicates the Ethertype for ARP,
+    Open vSwitch 2.8 and later supports the ``packet type-aware pipeline''
+    concept introduced in OpenFlow 1.5.  A bridge configured to be packet
+    type-aware can handle packets of multiple networking technologies, such as
+    Ethernet, IP, ARP, MPLS, or NSH in parallel.  Such a bridge does not have
+    any root fields.
+  </p>
+
+  <p>
+    Non-root data fields are not always present.  A packet contains ARP
+    fields, for example, only when its packet type is ARP or when it is an
+    Ethernet packet whose Ethernet header indicates the Ethertype for ARP,
     0x0806.  In this documentation, we say that a field is
     <dfn>applicable</dfn> when it is present in a packet, and
     <dfn>inapplicable</dfn> when it is not.  (These are not standard terms.)
     We refer to the conditions that determine whether a field is applicable as
     <dfn>prerequisites</dfn>.  Some VLAN-related fields are a special case:
-    these fields are always applicable, but have a designated value or bit that
-    indicates whether a VLAN header is present, with the remaining values or
-    bits indicating the VLAN header's content (if it is present).  <!-- XXX
-    also ethertype -->
+    these fields are always applicable for Ethernet packets, but have a
+    designated value or bit that indicates whether a VLAN header is present,
+    with the remaining values or bits indicating the VLAN header's content
+    (if it is present).  <!-- XXX also ethertype -->
   </p>
 
   <p>
@@ -51,7 +63,8 @@
     example, one may match (see <cite>Matching</cite>, below) a given
     field only if the match includes the field's prerequisite,
     e.g. matching an ARP field is only allowed if one also matches on
-    Ethertype 0x0806.
+    Ethertype 0x0806 or the <ref field="packet_type"/> for ARP in a packet
+    type-aware bridge.
   </p>
 
   <p>
@@ -301,6 +314,8 @@ tcp,tp_src=0x07c0/0xfff0
   </p>
 
   <dl>
+    <dt><code>eth</code></dt>
+    <dd><code>packet_type=(0,0)</code> (Open vSwitch 2.8 and later)</dd>
     <dt><code>ip</code></dt>     <dd><code>eth_type=0x0800</code></dd>
     <dt><code>ipv6</code></dt>   <dd><code>eth_type=0x86dd</code></dd>
     <dt><code>icmp</code></dt>   <dd><code>eth_type=0x0800,ip_proto=1</code></dd>
@@ -316,6 +331,15 @@ tcp,tp_src=0x07c0/0xfff0
     <dt><code>mpls</code></dt>   <dd><code>eth_type=0x8847</code></dd>
     <dt><code>mplsm</code></dt>  <dd><code>eth_type=0x8848</code></dd>
   </dl>
+
+  <p>
+    These shorthand notations continue to work in packet type-aware bridges.
+    The absence of a packet_type match implies
+    <code>packet_type=ethernet</code>, so that shorthands match on Ethernet
+    packets with the implied eth_type. Please note that the shorthand
+    <code>ip</code> does not match packets of packet_type (1,0x800) for IPv4.
+  </p>
+
 
   <h2>Evolution of OpenFlow Fields</h2>
 
@@ -802,18 +826,10 @@ tcp,tp_src=0x07c0/0xfff0
   </p>
 
   <ul>
+    <li>Packet type.</li>
     <li>TCP flags.</li>
     <li>Packet registers.</li>
     <li>The output port in the OpenFlow action set.</li>
-  </ul>
-
-  <p>
-    OpenFlow 1.5 also added OXMs for the following fields not documented here
-    and not yet implemented by Open vSwitch:
-  </p>
-
-  <ul>
-    <li>Packet type.</li>
   </ul>
 
   <h1>Fields Reference</h1>
@@ -2273,6 +2289,102 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
 
     <field id="MFF_DP_HASH" title="Datapath Hash" internal="yes"/>
     <field id="MFF_RECIRC_ID" title="Datapath Recirculation ID" internal="yes"/>
+
+    <field id="MFF_PACKET_TYPE" title="Packet Type">
+      <p>
+        The type of the packet in the format specified in OpenFlow 1.5:
+      </p>
+
+      <diagram>
+	<header name="Packet type">
+	  <bits name="ns" above="16" width=".75"/>
+	  <bits name="ns_type" above="16" width=".75"/>
+	</header>
+	<dots/>
+      </diagram>
+
+      <p>
+        The upper 16 bits, <var>ns</var>, are a namespace.  The meaning of
+        <var>ns_type</var> depends on the namespace.  The packet type field is
+        specified and displayed in the format
+        <code>(<var>ns</var>,<var>ns_type</var>)</code>.
+      </p>
+
+      <p>
+        Open vSwitch currently supports the following classes of packet types
+        for matching:
+        <dl>
+          <dt><code>(0,0)</code></dt>
+            <dd>Ethernet.</dd>
+          <dt><code>(1,<var>ethertype</var>)</code></dt>
+          <dd>
+            <p>
+              The specified <var>ethertype</var>.  Open vSwitch can forward
+              packets with any <var>ethertype</var>, but it can only match on
+              and process data fields for the following supported packet types:
+            </p>
+            <dl>
+              <dt><code>(1,0x800)</code></dt>  <dd>IPv4</dd>
+              <dt><code>(1,0x806)</code></dt>  <dd>ARP</dd>
+              <dt><code>(1,0x86dd)</code></dt> <dd>IPv6</dd>
+              <dt><code>(1,0x8847)</code></dt> <dd>MPLS</dd>
+              <dt><code>(1,0x8848)</code></dt> <dd>MPLS multicast</dd>
+              <dt><code>(1,0x8035)</code></dt> <dd>RARP</dd>
+              <dt><code>(1,0x894f)</code></dt> <dd>NSH</dd>
+            </dl>
+          </dd>
+        </dl>
+      </p>
+
+      <p>
+        Consider the distinction between a packet with <code>packet_type=(0,0),
+        dl_type=0x800</code> and one with <code>packet_type=(1,0x800)</code>.
+        The former is an Ethernet frame that contains an IPv4 packet, like
+        this:
+      </p>
+
+      <diagram>
+	<header name="Ethernet">
+	  <bits name="dst" above="48" width="0.4"/>
+	  <bits name="src" above="48" width="0.4"/>
+	  <bits name="type" above="16" below="0x800" width="0.4"/>
+	</header>
+	<header name="IPv4">
+	  <bits name="..." width="0.4"/>
+	  <bits name="proto" above="8" width="0.4"/>
+	  <bits name="src" above="32" width="0.4"/>
+	  <bits name="dst" above="32" width="0.4"/>
+	</header>
+	<dots/>
+      </diagram>
+
+      <p>
+        The latter is an IPv4 packet not encapsulated inside any outer frame,
+        like this:
+      </p>
+
+      <diagram>
+	<header name="IPv4">
+	  <bits name="..." width="0.4"/>
+	  <bits name="proto" above="8" width="0.4"/>
+	  <bits name="src" above="32" width="0.4"/>
+	  <bits name="dst" above="32" width="0.4"/>
+	</header>
+	<dots/>
+      </diagram>
+
+      <p>
+        Matching on <ref field="packet_type"/> is a pre-requisite for matching
+        on any data field, but for backward compatibility, when a match on a
+        data field is present without a <ref field="packet_type"/> match, Open
+        vSwitch acts as though a match on <code>(0,0)</code> (Ethernet) had
+        been supplied.  Similarly, when Open vSwitch sends flow match
+        information to a controller, e.g. in a reply to a request to dump the
+        flow table, Open vSwitch omits a match on packet type (0,0) if it would
+        be implied by a data field match.
+      </p>
+    </field>
+
   </group>
 
   <group title="Connection Tracking">

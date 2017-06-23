@@ -2390,6 +2390,7 @@ metadata in_port in_port_oxm pkt_mark ct_mark ct_label reg0 reg1 reg2 reg3 reg4 
     matching:
       dp_hash: arbitrary mask
       recirc_id: exact match or wildcard
+      packet_type: exact match or wildcard
       conj_id: exact match or wildcard
       tun_id: arbitrary mask
       tun_src: arbitrary mask

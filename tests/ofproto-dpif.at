@@ -43,12 +43,12 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),eth(src=50:54:00:00:00:
 ovs-appctl time/warp 200 100
 sleep 1
 AT_CHECK([grep 'in_port([[348]])' ovs-vswitchd.log | filter_flow_install | strip_xout], [0], [dnl
-recirc_id(0),in_port(3),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(frag=no), actions: <del>
-recirc_id(0),in_port(3),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(frag=no), actions: <del>
-recirc_id(0),in_port(4),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0d),eth_type(0x0800),ipv4(frag=no), actions: <del>
-recirc_id(0),in_port(4),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0e),eth_type(0x0800),ipv4(frag=no), actions: <del>
-recirc_id(0),in_port(4),eth(src=50:54:00:00:00:09,dst=ff:ff:ff:ff:ff:ff),eth_type(0x8035), actions: <del>
-recirc_id(0),in_port(4),eth(src=50:54:00:00:00:0b,dst=ff:ff:ff:ff:ff:ff),eth_type(0x8035), actions: <del>
+recirc_id(0),in_port(3),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(3),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(4),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0d),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(4),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0e),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(4),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=ff:ff:ff:ff:ff:ff),eth_type(0x8035), actions: <del>
+recirc_id(0),in_port(4),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=ff:ff:ff:ff:ff:ff),eth_type(0x8035), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -477,9 +477,9 @@ done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/dp_hash(.*\/0x1)/dp_hash(0xXXXX\/0x1)/' | sed 's/packets.*actions:1/actions:1/' | strip_ufid | strip_used | sort], [0], [dnl
 flow-dump from non-dpdk interfaces:
-recirc_id(0),in_port(1),eth_type(0x0800),ipv4(src=192.168.0.1,frag=no), packets:15, bytes:630, used:0.0s, actions:hash(hash_l4(0)),recirc(0x1)
-recirc_id(0x1),dp_hash(0xXXXX/0x1),in_port(1),eth_type(0x0800),ipv4(frag=no), actions:10
-recirc_id(0x1),dp_hash(0xXXXX/0x1),in_port(1),eth_type(0x0800),ipv4(frag=no), actions:11
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(src=192.168.0.1,frag=no), packets:15, bytes:630, used:0.0s, actions:hash(hash_l4(0)),recirc(0x1)
+recirc_id(0x1),dp_hash(0xXXXX/0x1),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions:10
+recirc_id(0x1),dp_hash(0xXXXX/0x1),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions:11
 ])
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
@@ -493,8 +493,8 @@ done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/dp_hash(.*\/0x1)/dp_hash(0xXXXX\/0x1)/' | strip_ufid | strip_used | sort], [0], [dnl
 flow-dump from non-dpdk interfaces:
-recirc_id(0),in_port(1),eth_type(0x0800),ipv4(src=192.168.0.1,frag=no), packets:15, bytes:630, used:0.0s, actions:hash(hash_l4(0)),recirc(0x2)
-recirc_id(0x2),dp_hash(0xXXXX/0x1),in_port(1),eth_type(0x0800),ipv4(frag=no), packets:15, bytes:630, used:0.0s, actions:11
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(src=192.168.0.1,frag=no), packets:15, bytes:630, used:0.0s, actions:hash(hash_l4(0)),recirc(0x2)
+recirc_id(0x2),dp_hash(0xXXXX/0x1),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:15, bytes:630, used:0.0s, actions:11
 ])
 
 OVS_VSWITCHD_STOP
@@ -4030,9 +4030,9 @@ done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows], [0], [dnl
 flow-dump from non-dpdk interfaces:
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(dst=80), packets:0, bytes:0, used:never, actions:set(tcp(dst=81)),1
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(dst=80), packets:0, bytes:0, used:never, actions:set(tcp(dst=81)),5
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:0, bytes:0, used:never, actions:6
+recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(dst=80), packets:0, bytes:0, used:never, actions:set(tcp(dst=81)),1
+recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(dst=80), packets:0, bytes:0, used:never, actions:set(tcp(dst=81)),5
+recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=later), packets:0, bytes:0, used:never, actions:6
 ])
 
 mode=drop
@@ -4048,9 +4048,9 @@ done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows], [0], [dnl
 flow-dump from non-dpdk interfaces:
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(dst=80), packets:0, bytes:0, used:never, actions:set(tcp(dst=81)),1
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(frag=first), packets:0, bytes:0, used:never, actions:drop
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(frag=later), packets:0, bytes:0, used:never, actions:drop
+recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(dst=80), packets:0, bytes:0, used:never, actions:set(tcp(dst=81)),1
+recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=first), packets:0, bytes:0, used:never, actions:drop
+recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=later), packets:0, bytes:0, used:never, actions:drop
 ])
 
 mode=nx-match
@@ -4066,9 +4066,9 @@ done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows], [0], [dnl
 flow-dump from non-dpdk interfaces:
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(dst=80), packets:0, bytes:0, used:never, actions:set(tcp(dst=81)),1
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(dst=80), packets:0, bytes:0, used:never, actions:set(tcp(dst=81)),2
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:0, bytes:0, used:never, actions:6
+recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(dst=80), packets:0, bytes:0, used:never, actions:set(tcp(dst=81)),1
+recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(dst=80), packets:0, bytes:0, used:never, actions:set(tcp(dst=81)),2
+recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=later), packets:0, bytes:0, used:never, actions:6
 ])
 
 OVS_VSWITCHD_STOP
@@ -4141,9 +4141,9 @@ dnl wildcard and the set_field action have a mask of 0xFF. Up to (including)
 dnl OVS-2.5, the wildcards and set_field mask are shared internally.
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
 flow-dump from non-dpdk interfaces:
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=33419/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=33419/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:74, used:0.001s, actions:1
+recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=33419/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
+recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=33419/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
+recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:74, used:0.001s, actions:1
 ])
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
@@ -4156,9 +4156,9 @@ done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
 flow-dump from non-dpdk interfaces:
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=0/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=0/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:38, used:0.001s, actions:1
+recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=0/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
+recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=0/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
+recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:38, used:0.001s, actions:1
 ])
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
@@ -4171,9 +4171,9 @@ done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
 flow-dump from non-dpdk interfaces:
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=0/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=0/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:34, used:0.001s, actions:1
+recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=0/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
+recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=0/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
+recirc_id(0),in_port(90),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:34, used:0.001s, actions:1
 ])
 
 OVS_VSWITCHD_STOP
@@ -7203,21 +7203,21 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p3 'in_port(3),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 ovs-appctl revalidator/wait
 AT_CHECK([ovs-appctl dpif/dump-flows br0 | strip_ufid | strip_used | sort], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions:drop
-recirc_id(0),in_port(2),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions:drop
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions:drop
+recirc_id(0),in_port(2),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions:drop
 ])
 
 AT_CHECK([ovs-appctl dpif/dump-flows br1 | strip_ufid | strip_used | sort], [0], [dnl
-recirc_id(0),in_port(3),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions:drop
+recirc_id(0),in_port(3),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions:drop
 ])
 
 AT_CHECK([ovs-appctl dpif/dump-flows -m br0 | strip_ufid | strip_used | sort], [0], [dnl
-skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(p1),eth(src=50:54:00:00:00:05/00:00:00:00:00:00,dst=50:54:00:00:00:07/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=192.168.0.1/0.0.0.0,dst=192.168.0.2/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no),icmp(type=8/0,code=0/0), packets:0, bytes:0, used:never, actions:drop
-skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(p2),eth(src=50:54:00:00:00:07/00:00:00:00:00:00,dst=50:54:00:00:00:05/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=192.168.0.2/0.0.0.0,dst=192.168.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no),icmp(type=0/0,code=0/0), packets:0, bytes:0, used:never, actions:drop
+skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(p1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:05/00:00:00:00:00:00,dst=50:54:00:00:00:07/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=192.168.0.1/0.0.0.0,dst=192.168.0.2/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no),icmp(type=8/0,code=0/0), packets:0, bytes:0, used:never, actions:drop
+skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(p2),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:07/00:00:00:00:00:00,dst=50:54:00:00:00:05/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=192.168.0.2/0.0.0.0,dst=192.168.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no),icmp(type=0/0,code=0/0), packets:0, bytes:0, used:never, actions:drop
 ])
 
 AT_CHECK([ovs-appctl dpif/dump-flows -m br1 | strip_ufid | strip_used | sort], [0], [dnl
-skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(p3),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no),icmp(type=8/0,code=0/0), packets:0, bytes:0, used:never, actions:drop
+skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(p3),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no),icmp(type=8/0,code=0/0), packets:0, bytes:0, used:never, actions:drop
 ])
 
 OVS_VSWITCHD_STOP
@@ -7240,7 +7240,7 @@ m4_define([OFPROTO_DPIF_GET_FLOW],
 
    UFID=`sed -n 's/\(ufid:[[-0-9a-fA-F]]*\).*/\1/p' stdout`
    AT_CHECK([ovs-appctl dpctl/get-flow $UFID], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions:drop
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions:drop
 ])
 
    OVS_VSWITCHD_STOP
@@ -7277,8 +7277,8 @@ for dl_src in 00 01; do
 done
 sleep 1  # wait for the datapath flow installed
 AT_CHECK_UNQUOTED([strip_ufid < ovs-vswitchd.log | filter_flow_install | strip_used], [0], [dnl
-recirc_id(0),in_port(1),eth(src=60:66:66:66:66:00),eth_type(0x8847),mpls(label=20,tc=0,ttl=32,bos=0,label=20,tc=0,ttl=32,bos=1), actions:userspace(pid=0,slow_path(controller))
-recirc_id(0),in_port(1),eth(src=60:66:66:66:66:01),eth_type(0x8847),mpls(label=20/0x0,tc=0/0,ttl=32/0x0,bos=0/1,label=20/0xfffff,tc=0/7,ttl=32/0xff,bos=1/1), actions:userspace(pid=0,slow_path(controller))
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=60:66:66:66:66:00),eth_type(0x8847),mpls(label=20,tc=0,ttl=32,bos=0,label=20,tc=0,ttl=32,bos=1), actions:userspace(pid=0,slow_path(controller))
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=60:66:66:66:66:01),eth_type(0x8847),mpls(label=20/0x0,tc=0/0,ttl=32/0x0,bos=0/1,label=20/0xfffff,tc=0/7,ttl=32/0xff,bos=1/1), actions:userspace(pid=0,slow_path(controller))
 ])
 
 OVS_VSWITCHD_STOP
@@ -7316,8 +7316,8 @@ for dl_src in 00 01; do
 done
 sleep 1  # wait for the datapath flow installed
 AT_CHECK_UNQUOTED([strip_ufid < ovs-vswitchd.log | filter_flow_install | strip_used], [0], [dnl
-recirc_id(0),in_port(1),eth(src=60:66:66:66:66:00),eth_type(0x8847),mpls(label=20,tc=0,ttl=32,bos=0,label=20,tc=0,ttl=32,bos=1), actions:userspace(pid=0,slow_path(controller))
-recirc_id(0),in_port(1),eth(src=60:66:66:66:66:01),eth_type(0x8847),mpls(label=20/0x0,tc=0/0,ttl=32/0x0,bos=0/1,label=20/0xfffff,tc=0/7,ttl=32/0xff,bos=1/1), actions:userspace(pid=0,slow_path(controller))
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=60:66:66:66:66:00),eth_type(0x8847),mpls(label=20,tc=0,ttl=32,bos=0,label=20,tc=0,ttl=32,bos=1), actions:userspace(pid=0,slow_path(controller))
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=60:66:66:66:66:01),eth_type(0x8847),mpls(label=20/0x0,tc=0/0,ttl=32/0x0,bos=0/1,label=20/0xfffff,tc=0/7,ttl=32/0xff,bos=1/1), actions:userspace(pid=0,slow_path(controller))
 ])
 
 OVS_VSWITCHD_STOP
@@ -7372,15 +7372,15 @@ dummy@ovs-dummy: hit:13 missed:2
 ])
 
 AT_CHECK([strip_ufid < ovs-vswitchd.log | filter_flow_install | strip_used], [0], [dnl
-recirc_id(0),in_port(100),eth_type(0x0800),ipv4(frag=no), actions:101,3,2
-recirc_id(0),in_port(101),eth_type(0x0800),ipv4(frag=no), actions:100,2,3
+recirc_id(0),in_port(100),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions:101,3,2
+recirc_id(0),in_port(101),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions:100,2,3
 ])
 
 AT_CHECK([grep -e 'in_port(100).*packets:9' ovs-vswitchd.log | strip_ufid | filter_flow_dump], [0], [dnl
-skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(100),eth(src=50:54:00:00:00:05/00:00:00:00:00:00,dst=50:54:00:00:00:07/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=192.168.0.1/0.0.0.0,dst=192.168.0.2/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no),icmp(type=8/0,code=0/0), packets:9, bytes:378, used:0.0s, actions:101,3,2
+skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(100),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:05/00:00:00:00:00:00,dst=50:54:00:00:00:07/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=192.168.0.1/0.0.0.0,dst=192.168.0.2/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no),icmp(type=8/0,code=0/0), packets:9, bytes:378, used:0.0s, actions:101,3,2
 ])
 AT_CHECK([grep -e 'in_port(101).*packets:4' ovs-vswitchd.log | strip_ufid | filter_flow_dump], [0], [dnl
-skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(101),eth(src=50:54:00:00:00:07/00:00:00:00:00:00,dst=50:54:00:00:00:05/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=192.168.0.2/0.0.0.0,dst=192.168.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no),icmp(type=8/0,code=0/0), packets:4, bytes:168, used:0.0s, actions:100,2,3
+skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(101),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:07/00:00:00:00:00:00,dst=50:54:00:00:00:05/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=192.168.0.2/0.0.0.0,dst=192.168.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no),icmp(type=8/0,code=0/0), packets:4, bytes:168, used:0.0s, actions:100,2,3
 ])
 
 AT_CHECK([ovs-ofctl dump-ports br0 pbr0], [0], [dnl
@@ -7437,7 +7437,7 @@ dummy@ovs-dummy: hit:0 missed:1
 ])
 
 AT_CHECK([strip_ufid < ovs-vswitchd.log | filter_flow_install | strip_used], [0], [dnl
-recirc_id(0),in_port(100),eth_type(0x0800),ipv4(src=192.168.0.1,frag=no), actions:101,set(ipv4(src=255.255.255.254)),2
+recirc_id(0),in_port(100),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(src=192.168.0.1,frag=no), actions:101,set(ipv4(src=255.255.255.254)),2
 ])
 
 AT_CHECK([grep -e '|ofproto_dpif_xlate|WARN|' ovs-vswitchd.log | sed "s/^.*|WARN|//"], [0], [dnl
@@ -7480,7 +7480,7 @@ sleep 1
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -7497,8 +7497,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id(0),in_port(1),eth(src=50:54:00:00:00:09),eth_type(0x0800),ipv4(frag=no), actions: <del>
-recirc_id(0),in_port(1),eth(src=50:54:00:00:00:0b),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -7516,8 +7516,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.2/255.255.255.252,frag=no), actions: <del>
-recirc_id(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.4,proto=1,frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(src=10.0.0.2/255.255.255.252,frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(src=10.0.0.4,proto=1,frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -7535,8 +7535,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x86dd),ipv6(src=2001:db8:3c4d:5:4:3:2:1,dst=2001:db8:3c4d:1:2:3:4:1,label=0,proto=99,tclass=0x70,hlimit=64,frag=no)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x86dd),ipv6(src=2001:db8:3c4d:1:2:3:4:5,frag=no), actions: <del>
-recirc_id(0),in_port(1),eth_type(0x86dd),ipv6(src=2001:db8:3c4d:5:4:3:2:1/ffff:ffff:ffff:fffc::,frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x86dd),ipv6(src=2001:db8:3c4d:1:2:3:4:5,frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x86dd),ipv6(src=2001:db8:3c4d:5:4:3:2:1/ffff:ffff:ffff:fffc::,frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -7554,7 +7554,7 @@ sleep 1
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x0800),ipv4(proto=1,frag=no),icmp(type=8), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=1,frag=no),icmp(type=8), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -7570,8 +7570,8 @@ m4_define([OFPROTO_DPIF_MEGAFLOW_NORMAL],
    AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
    sleep 1
    AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(frag=no), actions: <del>
-recirc_id(0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
    OVS_VSWITCHD_STOP
    AT_CLEANUP])
@@ -7592,8 +7592,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0a),eth_type(0x8847),mpls(label=11,tc=3,ttl=64,bos=1)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout_keep_actions], [0], [dnl
-recirc_id(0),in_port(1),eth(src=50:54:00:00:00:09),eth_type(0x8847),mpls(label=11,tc=3,ttl=64,bos=1), actions:push_mpls(label=11,tc=3,ttl=64,bos=0,eth_type=0x8847),2
-recirc_id(0),in_port(1),eth(src=50:54:00:00:00:0b),eth_type(0x8847),mpls(label=11/0x0,tc=3/0,ttl=64/0x0,bos=1/1), actions:pop_mpls(eth_type=0x800),2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09),eth_type(0x8847),mpls(label=11,tc=3,ttl=64,bos=1), actions:push_mpls(label=11,tc=3,ttl=64,bos=0,eth_type=0x8847),2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b),eth_type(0x8847),mpls(label=11/0x0,tc=3/0,ttl=64/0x0,bos=1/1), actions:pop_mpls(eth_type=0x800),2
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -7619,8 +7619,8 @@ m4_define([CHECK_MEGAFLOW_NETFLOW],
   AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
   sleep 1
   AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0/0xfc,frag=no),icmp(type=8,code=0), actions: <del>
-recirc_id(0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0/0xfc,frag=no),icmp(type=8,code=0), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0/0xfc,frag=no),icmp(type=8,code=0), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0/0xfc,frag=no),icmp(type=8,code=0), actions: <del>
 ])
   OVS_APP_EXIT_AND_WAIT([test-netflow])
   OVS_VSWITCHD_STOP])
@@ -7651,8 +7651,8 @@ m4_define([OFPROTO_DPIF_MEGAFLOW_NORMAL_ACB_BOND],
    AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
    sleep 1
    AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(frag=no), actions: <del>
-recirc_id(0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
    OVS_VSWITCHD_STOP
    AT_CLEANUP])
@@ -7675,8 +7675,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(frag=no), actions: <del>
-recirc_id(0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -7713,8 +7713,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id(0),in_port(7),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(frag=no), actions: <del>
-recirc_id(0),in_port(7),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(7),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -7732,8 +7732,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id(0),in_port(1),eth(src=50:54:00:00:00:09),eth_type(0x0800),ipv4(frag=no), actions: <del>
-recirc_id(0),in_port(1),eth(src=50:54:00:00:00:0b),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -7752,8 +7752,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id(0),in_port(1),eth(src=50:54:00:00:00:09),eth_type(0x0800),ipv4(frag=no), actions: <del>
-recirc_id(0),in_port(1),eth(src=50:54:00:00:00:0b),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -7771,8 +7771,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id(0),in_port(1),eth(src=50:54:00:00:00:09),eth_type(0x0800),ipv4(frag=no), actions: <del>
-recirc_id(0),in_port(1),eth(src=50:54:00:00:00:0b),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -7796,7 +7796,7 @@ sleep 1
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -7818,8 +7818,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x0800),ipv4(frag=no), actions: <del>
-recirc_id(0),in_port(1),eth_type(0x8100),vlan(vid=11,pcp=7/0x0),encap(eth_type(0x0800),ipv4(frag=no)), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x8100),vlan(vid=11,pcp=7/0x0),encap(eth_type(0x0800),ipv4(frag=no)), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -7838,8 +7838,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.2,frag=no), actions: <del>
-recirc_id(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.4,frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(src=10.0.0.2,frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(src=10.0.0.4,frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -7856,8 +7856,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.2,frag=no), actions: <del>
-recirc_id(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.4,frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(src=10.0.0.2,frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(src=10.0.0.4,frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -7883,8 +7883,8 @@ done
 sleep 1
 dnl The original flow is missing due to a revalidation.
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id(0),in_port(1),eth(src=50:54:00:00:00:09),eth_type(0x0800),ipv4(frag=no), actions: <del>
-recirc_id(0),in_port(1),eth(src=50:54:00:00:00:0b),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -7915,9 +7915,9 @@ sleep 1
 AT_CHECK([ovs-appctl netdev-dummy/receive p3 'in_port(3),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0x1,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x0800),ipv4(tos=0xfd/0x3,frag=no), actions: <del>
-recirc_id(0),in_port(3),eth_type(0x0800),ipv4(tos=0x1,ttl=64,frag=no), actions: <del>
-recirc_id(0),in_port(3),eth_type(0x0800),ipv4(tos=0xfd,ttl=128,frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(tos=0xfd/0x3,frag=no), actions: <del>
+recirc_id(0),in_port(3),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(tos=0x1,ttl=64,frag=no), actions: <del>
+recirc_id(0),in_port(3),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(tos=0xfd,ttl=128,frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -7935,8 +7935,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.2/255.255.255.252,frag=no), actions: <del>
-recirc_id(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.4,proto=1,ttl=64,frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(src=10.0.0.2/255.255.255.252,frag=no), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(src=10.0.0.4,proto=1,ttl=64,frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -7956,8 +7956,8 @@ dnl The first packet is essentially a no-op, as the new destination MAC is the
 dnl same as the original.  The second entry actually updates the destination
 dnl MAC.
 AT_CHECK([strip_ufid < ovs-vswitchd.log | filter_flow_install | strip_used], [0], [dnl
-recirc_id(0),in_port(1),eth(dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(frag=no), actions:2
-recirc_id(0),in_port(1),eth(dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(frag=no), actions:set(eth(dst=50:54:00:00:00:0a)),2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(frag=no), actions:2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(frag=no), actions:set(eth(dst=50:54:00:00:00:0a)),2
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -7987,12 +7987,12 @@ table=0 in_port=1,ip,nw_dst=10.0.0.3 actions=drop
    done
    sleep 1
    AT_CHECK([strip_ufid < ovs-vswitchd.log | filter_flow_install | strip_used], [0], [dnl
-skb_priority(0),skb_mark(0),ct_state(-new-est-rel-rpl-inv-trk-snat-dnat),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), actions:2
-skb_priority(0),skb_mark(0),ct_state(-new-est-rel-rpl-inv-trk-snat-dnat),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), actions:drop
+skb_priority(0),skb_mark(0),ct_state(-new-est-rel-rpl-inv-trk-snat-dnat),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), actions:2
+skb_priority(0),skb_mark(0),ct_state(-new-est-rel-rpl-inv-trk-snat-dnat),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), actions:drop
 ])
    AT_CHECK([strip_ufid < ovs-vswitchd.log | filter_flow_dump | grep 'packets:3'], [0], [dnl
-skb_priority(0),skb_mark(0),ct_state(0/0xff),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:3, bytes:126, used:0.0s, actions:2
-skb_priority(0),skb_mark(0),ct_state(0/0xff),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:3, bytes:126, used:0.0s, actions:drop
+skb_priority(0),skb_mark(0),ct_state(0/0xff),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:3, bytes:126, used:0.0s, actions:2
+skb_priority(0),skb_mark(0),ct_state(0/0xff),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:3, bytes:126, used:0.0s, actions:drop
 ])
    OVS_VSWITCHD_STOP
    AT_CLEANUP])
@@ -8561,8 +8561,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'recirc_id(0),in_port(1),eth(src=f2
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 
 AT_CHECK([strip_ufid < ovs-vswitchd.log | filter_flow_install | strip_used], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(type=128), actions:2
-recirc_id(0),in_port(1),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(type=129), actions:3
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(type=128), actions:2
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(type=129), actions:3
 ])
 
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
@@ -8608,7 +8608,7 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p0 'in_port(1),eth(src=50:54:00:00:00:
 
 OVS_WAIT_UNTIL([grep flow_add: ovs-vswitchd.log])
 AT_CHECK([grep 'in_port([[1]])' ovs-vswitchd.log | filter_flow_install | strip_xout], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x8100),vlan(vid=10),encap(eth_type(0x0800),ipv4(frag=no)), actions: <del>
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x8100),vlan(vid=10),encap(eth_type(0x0800),ipv4(frag=no)), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -8636,7 +8636,7 @@ for i in 1 2; do
 done
 
 AT_CHECK([ovs-appctl dpif/dump-flows br0 | strip_ufid | strip_used | sort], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x1234), packets:2, bytes:28, used:0.0s, actions:push_vlan(vid=3,pcp=0),100
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x1234), packets:2, bytes:28, used:0.0s, actions:push_vlan(vid=3,pcp=0),100
 ])
 
 AT_CHECK([ovs-ofctl add-flow br0 priority=60000,in_port=1,actions=mod_vlan_vid:4,output:local])
@@ -8649,11 +8649,11 @@ for i in 1 2 3; do
 done
 
 AT_CHECK([ovs-appctl dpif/dump-flows br0 | strip_ufid | strip_used | sort], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x1234), packets:5, bytes:70, used:0.0s, actions:push_vlan(vid=4,pcp=0),100
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x1234), packets:5, bytes:70, used:0.0s, actions:push_vlan(vid=4,pcp=0),100
 ])
 
 AT_CHECK([grep 'modify' ovs-vswitchd.log | strip_ufid ], [0], [dnl
-dpif|DBG|dummy@ovs-dummy: put[[modify]] skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x1234), actions:push_vlan(vid=4,pcp=0),100
+dpif|DBG|dummy@ovs-dummy: put[[modify]] skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x1234), actions:push_vlan(vid=4,pcp=0),100
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -8681,7 +8681,7 @@ for i in 1 2; do
 done
 
 AT_CHECK([ovs-appctl dpif/dump-flows br0 | strip_ufid | strip_used | sort], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x1234), packets:2, bytes:28, used:0.0s, actions:100
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x1234), packets:2, bytes:28, used:0.0s, actions:100
 ])
 
 # Delete the flow.  Then check that the datapath flow is modified to
@@ -8697,7 +8697,7 @@ for i in 1 2 3; do
 done
 
 AT_CHECK([ovs-appctl dpif/dump-flows br0 | strip_ufid | strip_used | sort], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x1234), packets:5, bytes:70, used:0.0s, actions:drop
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x1234), packets:5, bytes:70, used:0.0s, actions:drop
 ])
 
 # Add a flow that matches the non-presence of a vlan tag, and check
@@ -8712,7 +8712,7 @@ for i in 1 2 3; do
 done
 
 AT_CHECK([ovs-appctl dpif/dump-flows br0 | strip_ufid | strip_used | sort], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x1234), packets:8, bytes:112, used:0.0s, actions:100
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x1234), packets:8, bytes:112, used:0.0s, actions:100
 ])
 
 # Check that VLAN packets will not hit the same datapath megaflow.
@@ -8725,17 +8725,17 @@ for i in 1 2; do
 done
 
 AT_CHECK([ovs-appctl dpif/dump-flows br0 | strip_ufid | strip_used | sort], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x1234), packets:8, bytes:112, used:0.0s, actions:100
-recirc_id(0),in_port(1),eth_type(0x8100),vlan(vid=99,pcp=7/0x0),encap(eth_type(0x1234)), packets:2, bytes:36, used:0.0s, actions:drop
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x1234), packets:8, bytes:112, used:0.0s, actions:100
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x8100),vlan(vid=99,pcp=7/0x0),encap(eth_type(0x1234)), packets:2, bytes:36, used:0.0s, actions:drop
 ])
 
 # Check that the new flow matches the CFI bit, while both vid and pcp
 # are wildcarded.
 AT_CHECK([grep '\(modify\)\|\(flow_add\)' ovs-vswitchd.log | strip_ufid ], [0], [dnl
-dpif_netdev|DBG|flow_add: recirc_id(0),in_port(1),eth_type(0x1234), actions:100
-dpif|DBG|dummy@ovs-dummy: put[[modify]] skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x1234)
-dpif|DBG|dummy@ovs-dummy: put[[modify]] skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x1234), actions:100
-dpif_netdev|DBG|flow_add: recirc_id(0),in_port(1),eth_type(0x8100),vlan(vid=99,pcp=7/0x0),encap(eth_type(0x1234)), actions:drop
+dpif_netdev|DBG|flow_add: recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x1234), actions:100
+dpif|DBG|dummy@ovs-dummy: put[[modify]] skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x1234)
+dpif|DBG|dummy@ovs-dummy: put[[modify]] skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x1234), actions:100
+dpif_netdev|DBG|flow_add: recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x8100),vlan(vid=99,pcp=7/0x0),encap(eth_type(0x1234)), actions:drop
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -9060,10 +9060,10 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:
 
 
 AT_CHECK([cat ovs-vswitchd.log | strip_ufid | filter_flow_install], [0], [dnl
-ct_state(+new-est+trk),recirc_id(0x1),in_port(2),eth_type(0x0800),ipv4(frag=no), actions:drop
-ct_state(-new+est+trk),recirc_id(0x1),in_port(2),eth_type(0x0800),ipv4(proto=17,frag=no), actions:1
-recirc_id(0),in_port(1),eth_type(0x0800),ipv4(proto=17,frag=no), actions:ct(commit),2
-recirc_id(0),in_port(2),eth_type(0x0800),ipv4(proto=17,frag=no), actions:ct,recirc(0x1)
+ct_state(+new-est+trk),recirc_id(0x1),in_port(2),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions:drop
+ct_state(-new+est+trk),recirc_id(0x1),in_port(2),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=17,frag=no), actions:1
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=17,frag=no), actions:ct(commit),2
+recirc_id(0),in_port(2),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=17,frag=no), actions:ct,recirc(0x1)
 ])
 
 OVS_VSWITCHD_STOP
@@ -9469,9 +9469,9 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:
 ovs-appctl revalidator/wait
 
 AT_CHECK([cat ovs-vswitchd.log | strip_ufid | filter_flow_install], [0], [dnl
-ct_state(+rpl+trk),ct_label(0x1),recirc_id(0x1),in_port(2),eth_type(0x0800),ipv4(frag=no), actions:1
-recirc_id(0),in_port(1),eth_type(0x0800),ipv4(proto=17,frag=no),udp(src=1), actions:ct(commit,label=0x1),2
-recirc_id(0),in_port(2),eth_type(0x0800),ipv4(frag=no), actions:ct,recirc(0x1)
+ct_state(+rpl+trk),ct_label(0x1),recirc_id(0x1),in_port(2),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions:1
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=17,frag=no),udp(src=1), actions:ct(commit,label=0x1),2
+recirc_id(0),in_port(2),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions:ct,recirc(0x1)
 ])
 
 OVS_VSWITCHD_STOP
@@ -9495,7 +9495,7 @@ dnl Start a new connection from port 1.
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.1.1.1,dst=10.1.1.2,proto=17,tos=0,ttl=64,frag=no),udp(src=1,dst=2)'])
 
 AT_CHECK([cat ovs-vswitchd.log | strip_ufid | filter_flow_install], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x0800),ipv4(proto=17,frag=no), actions:ct(commit)
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=17,frag=no), actions:ct(commit)
 ])
 
 OVS_VSWITCHD_STOP
@@ -9781,7 +9781,7 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'recirc_id(0),in_port(1),eth_type(0
 ovs-appctl time/warp 5000
 
 AT_CHECK([strip_ufid < ovs-vswitchd.log | filter_flow_install | strip_used], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x0800),ipv4(proto=17,frag=later), actions:drop
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(proto=17,frag=later), actions:drop
 ])
 
 dnl Change the flow table.  This will trigger revalidation of all the flows.

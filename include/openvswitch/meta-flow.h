@@ -133,6 +133,11 @@ struct ofputil_tlv_table_mod;
  *
  *       TCP flags: See the description of tcp_flags in ovs-ofctl(8).
  *
+ *       packet type: A pair of packet type namespace NS and NS_TYPE within
+ *       that namespace "(NS,NS_TYPE)". NS and NS_TYPE are formatted in
+ *       decimal or hexadecimal as and accept decimal and hexadecimal (with
+ *       0x prefix) at parsing.
+ *
  *   Prerequisites:
  *
  *     The field's prerequisites.  The values should be straightfoward.
@@ -247,6 +252,20 @@ enum OVS_PACKED_ENUM mf_field_id {
      * OXM: none.
      */
     MFF_RECIRC_ID,
+
+    /* "packet_type".
+     *
+     * Define the packet type in OpenFlow 1.5+.
+     *
+     * Type: be32.
+     * Maskable: no.
+     * Formatting: packet type.
+     * Prerequisites: none.
+     * Access: read-only.
+     * NXM: none.
+     * OXM: OXM_OF_PACKET_TYPE(44) since OF1.5 and v2.8.
+     */
+    MFF_PACKET_TYPE,
 
     /* "conj_id".
      *
@@ -1860,6 +1879,7 @@ enum OVS_PACKED_ENUM mf_string {
     MFS_FRAG,                   /* no, yes, first, later, not_later */
     MFS_TNL_FLAGS,              /* FLOW_TNL_F_* flags */
     MFS_TCP_FLAGS,              /* TCP_* flags */
+    MFS_PACKET_TYPE,            /* "(NS,NS_TYPE)" */
 };
 
 struct mf_field {

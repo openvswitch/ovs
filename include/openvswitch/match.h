@@ -23,6 +23,7 @@
 
 struct ds;
 struct ofputil_port_map;
+struct mf_field;
 
 /* A flow classification match.
  *
@@ -119,6 +120,10 @@ void match_set_ct_ipv6_dst_masked(struct match *, const struct in6_addr *,
                                   const struct in6_addr *);
 
 void match_set_packet_type(struct match *, ovs_be32 packet_type);
+void match_set_default_packet_type(struct match *);
+bool match_has_default_packet_type(const struct match *);
+void match_add_ethernet_prereq(struct match *, const struct mf_field *);
+
 void match_set_skb_priority(struct match *, uint32_t skb_priority);
 void match_set_dl_type(struct match *, ovs_be16);
 void match_set_dl_src(struct match *, const struct eth_addr );

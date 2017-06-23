@@ -205,6 +205,8 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
         return !wc->masks.dp_hash;
     case MFF_RECIRC_ID:
         return !wc->masks.recirc_id;
+    case MFF_PACKET_TYPE:
+        return !wc->masks.packet_type;
     case MFF_CONJ_ID:
         return !wc->masks.conj_id;
     case MFF_TUN_SRC:
@@ -401,22 +403,24 @@ mf_are_prereqs_ok__(const struct mf_field *mf, const struct flow *flow,
                     const struct flow_wildcards *mask,
                     struct flow_wildcards *wc)
 {
+    ovs_be16 dl_type = get_dl_type(flow);
+
     switch (mf->prereqs) {
     case MFP_NONE:
         return true;
     case MFP_ETHERNET:
         return is_ethernet(flow, wc);
     case MFP_ARP:
-        return (flow->dl_type == htons(ETH_TYPE_ARP) ||
-                flow->dl_type == htons(ETH_TYPE_RARP));
+        return (dl_type == htons(ETH_TYPE_ARP) ||
+                dl_type == htons(ETH_TYPE_RARP));
     case MFP_IPV4:
-        return flow->dl_type == htons(ETH_TYPE_IP);
+        return dl_type == htons(ETH_TYPE_IP);
     case MFP_IPV6:
-        return flow->dl_type == htons(ETH_TYPE_IPV6);
+        return dl_type == htons(ETH_TYPE_IPV6);
     case MFP_VLAN_VID:
         return is_vlan(flow, wc);
     case MFP_MPLS:
-        return eth_type_mpls(flow->dl_type);
+        return eth_type_mpls(dl_type);
     case MFP_IP_ANY:
         return is_ip_any(flow);
     case MFP_CT_VALID:
@@ -476,6 +480,7 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     switch (mf->id) {
     case MFF_DP_HASH:
     case MFF_RECIRC_ID:
+    case MFF_PACKET_TYPE:
     case MFF_CONJ_ID:
     case MFF_TUN_ID:
     case MFF_TUN_SRC:
@@ -599,6 +604,9 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         break;
     case MFF_RECIRC_ID:
         value->be32 = htonl(flow->recirc_id);
+        break;
+    case MFF_PACKET_TYPE:
+        value->be32 = flow->packet_type;
         break;
     case MFF_CONJ_ID:
         value->be32 = htonl(flow->conj_id);
@@ -882,6 +890,9 @@ mf_set_value(const struct mf_field *mf,
         break;
     case MFF_RECIRC_ID:
         match_set_recirc_id(match, ntohl(value->be32));
+        break;
+    case MFF_PACKET_TYPE:
+        match_set_packet_type(match, value->be32);
         break;
     case MFF_CONJ_ID:
         match_set_conj_id(match, ntohl(value->be32));
@@ -1248,6 +1259,9 @@ mf_set_flow_value(const struct mf_field *mf,
     case MFF_RECIRC_ID:
         flow->recirc_id = ntohl(value->be32);
         break;
+    case MFF_PACKET_TYPE:
+        flow->packet_type = value->be32;
+        break;
     case MFF_CONJ_ID:
         flow->conj_id = ntohl(value->be32);
         break;
@@ -1292,7 +1306,6 @@ mf_set_flow_value(const struct mf_field *mf,
     case MFF_IN_PORT:
         flow->in_port.ofp_port = u16_to_ofp(ntohs(value->be16));
         break;
-
     case MFF_IN_PORT_OXM:
         ofputil_port_from_ofp11(value->be32, &flow->in_port.ofp_port);
         break;
@@ -1574,6 +1587,7 @@ mf_is_pipeline_field(const struct mf_field *mf)
     CASE_MFF_REGS:
     CASE_MFF_XREGS:
     CASE_MFF_XXREGS:
+    case MFF_PACKET_TYPE:
         return true;
 
     case MFF_DP_HASH:
@@ -1687,6 +1701,10 @@ mf_set_wild(const struct mf_field *mf, struct match *match, char **err_str)
     case MFF_RECIRC_ID:
         match->flow.recirc_id = 0;
         match->wc.masks.recirc_id = 0;
+        break;
+    case MFF_PACKET_TYPE:
+        match->flow.packet_type = 0;
+        match->wc.masks.packet_type = 0;
         break;
     case MFF_CONJ_ID:
         match->flow.conj_id = 0;
@@ -2021,6 +2039,7 @@ mf_set(const struct mf_field *mf,
     case MFF_CT_TP_SRC:
     case MFF_CT_TP_DST:
     case MFF_RECIRC_ID:
+    case MFF_PACKET_TYPE:
     case MFF_CONJ_ID:
     case MFF_IN_PORT:
     case MFF_IN_PORT_OXM:
@@ -2386,6 +2405,44 @@ syntax_error:
 }
 
 static char *
+mf_from_packet_type_string(const char *s, ovs_be32 *packet_type)
+{
+    char *tail;
+    const char *err_str = "";
+    int err;
+
+    if (*s != '(') {
+        err_str = "missing '('";
+        goto syntax_error;
+    }
+    s++;
+    err = parse_int_string(s, (uint8_t *)packet_type, 2, &tail);
+    if (err) {
+        err_str = "ns";
+        goto syntax_error;
+    }
+    if (*tail != ',') {
+        err_str = "missing ','";
+        goto syntax_error;
+    }
+    s = tail + 1;
+    err = parse_int_string(s, ((uint8_t *)packet_type) + 2, 2, &tail);
+    if (err) {
+        err_str = "ns_type";
+        goto syntax_error;
+    }
+    if (*tail != ')') {
+        err_str = "missing ')'";
+        goto syntax_error;
+    }
+
+    return NULL;
+
+syntax_error:
+    return xasprintf("%s: bad syntax for packet type %s", s, err_str);
+}
+
+static char *
 mf_from_ethernet_string(const struct mf_field *mf, const char *s,
                         struct eth_addr *mac, struct eth_addr *mask)
 {
@@ -2623,6 +2680,12 @@ mf_parse(const struct mf_field *mf, const char *s,
         error = mf_from_tcp_flags_string(s, &value->be16, &mask->be16);
         break;
 
+    case MFS_PACKET_TYPE:
+        ovs_assert(mf->n_bytes == sizeof(ovs_be32));
+        error = mf_from_packet_type_string(s, &value->be32);
+        mask->be32 = OVS_BE32_MAX;
+        break;
+
     default:
         OVS_NOT_REACHED();
     }
@@ -2717,6 +2780,12 @@ mf_format_ct_state_string(ovs_be32 value, ovs_be32 mask, struct ds *s)
                         ntohl(mask), UINT16_MAX);
 }
 
+static void
+mf_format_packet_type_string(ovs_be32 value, ovs_be32 mask, struct ds *s)
+{
+    format_packet_type_masked(s, value, mask);
+}
+
 /* Appends to 's' a string representation of field 'mf' whose value is in
  * 'value' and 'mask'.  'mask' may be NULL to indicate an exact match. */
 void
@@ -2783,6 +2852,11 @@ mf_format(const struct mf_field *mf,
     case MFS_TCP_FLAGS:
         mf_format_tcp_flags_string(value->be16,
                                    mask ? mask->be16 : OVS_BE16_MAX, s);
+        break;
+
+    case MFS_PACKET_TYPE:
+        mf_format_packet_type_string(value->be32,
+                                     mask ? mask->be32 : OVS_BE32_MAX, s);
         break;
 
     default:

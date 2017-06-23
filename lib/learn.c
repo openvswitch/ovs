@@ -139,6 +139,7 @@ learn_execute(const struct ofpact_learn *learn, const struct flow *flow,
         switch (spec->dst_type) {
         case NX_LEARN_DST_MATCH:
             mf_write_subfield(&spec->dst, &value, &fm->match);
+            match_add_ethernet_prereq(&fm->match, spec->dst.field);
             mf_vl_mff_set_tlv_bitmap(
                 spec->dst.field, &fm->match.flow.tunnel.metadata.present.map);
             break;

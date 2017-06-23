@@ -561,6 +561,8 @@ nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
                 free(err_str);
                 return OFPERR_OFPBMC_BAD_VALUE;
             }
+
+            match_add_ethernet_prereq(match, field);
         }
 
         if (error) {
@@ -775,6 +777,7 @@ oxm_pull_field_array(const void *fields_data, size_t fields_len,
 
 struct nxm_put_ctx {
     struct ofpbuf *output;
+    bool implied_ethernet;
 };
 
 void
@@ -795,6 +798,9 @@ nxm_put__(struct nxm_put_ctx *ctx,
           const void *value, const void *mask, size_t n_bytes)
 {
     nxm_put_entry_raw(ctx->output, field, version, value, mask, n_bytes);
+    if (!ctx->implied_ethernet && mf_from_id(field)->prereqs != MFP_NONE) {
+        ctx->implied_ethernet = true;
+    }
 }
 
 static void
@@ -904,8 +910,9 @@ nxm_put_ip(struct nxm_put_ctx *ctx,
            const struct match *match, enum ofp_version oxm)
 {
     const struct flow *flow = &match->flow;
+    ovs_be16 dl_type = get_dl_type(flow);
 
-    if (flow->dl_type == htons(ETH_TYPE_IP)) {
+    if (dl_type == htons(ETH_TYPE_IP)) {
         nxm_put_32m(ctx, MFF_IPV4_SRC, oxm,
                     flow->nw_src, match->wc.masks.nw_src);
         nxm_put_32m(ctx, MFF_IPV4_DST, oxm,
@@ -1014,12 +1021,19 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
 {
     const struct flow *flow = &match->flow;
     const size_t start_len = b->size;
+    ovs_be16 dl_type = get_dl_type(flow);
     int match_len;
     int i;
 
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 39);
 
-    struct nxm_put_ctx ctx = { .output = b };
+    struct nxm_put_ctx ctx = { .output = b, .implied_ethernet = false };
+
+    /* OpenFlow Packet Type. Must be first. */
+    if (match->wc.masks.packet_type && !match_has_default_packet_type(match)) {
+        nxm_put_32m(&ctx, MFF_PACKET_TYPE, oxm, flow->packet_type,
+                    match->wc.masks.packet_type);
+    }
 
     /* Metadata. */
     if (match->wc.masks.dp_hash) {
@@ -1082,7 +1096,7 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
     }
 
     /* MPLS. */
-    if (eth_type_mpls(flow->dl_type)) {
+    if (eth_type_mpls(dl_type)) {
         if (match->wc.masks.mpls_lse[0] & htonl(MPLS_TC_MASK)) {
             nxm_put_8(&ctx, MFF_MPLS_TC, oxm,
                       mpls_lse_to_tc(flow->mpls_lse[0]));
@@ -1102,8 +1116,8 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
     /* L3. */
     if (is_ip_any(flow)) {
         nxm_put_ip(&ctx, match, oxm);
-    } else if (flow->dl_type == htons(ETH_TYPE_ARP) ||
-               flow->dl_type == htons(ETH_TYPE_RARP)) {
+    } else if (dl_type == htons(ETH_TYPE_ARP) ||
+               dl_type == htons(ETH_TYPE_RARP)) {
         /* ARP. */
         if (match->wc.masks.nw_proto) {
             nxm_put_16(&ctx, MFF_ARP_OP, oxm,
@@ -1196,6 +1210,16 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
         if (masked) {
             ofpbuf_put(b, &cookie_mask, sizeof cookie_mask);
         }
+    }
+
+    if (match_has_default_packet_type(match) && !ctx.implied_ethernet) {
+        uint64_t pt_stub[16 / 8];
+        struct ofpbuf pt;
+        ofpbuf_use_stack(&pt, pt_stub, sizeof pt_stub);
+        nxm_put_entry_raw(&pt, MFF_PACKET_TYPE, oxm, &flow->packet_type,
+                          NULL, sizeof flow->packet_type);
+
+        ofpbuf_insert(b, start_len, pt.data, pt.size);
     }
 
     match_len = b->size - start_len;

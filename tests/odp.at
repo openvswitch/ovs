@@ -94,6 +94,7 @@ dnl Some fields are always printed for this test, because wildcards aren't
 dnl specified. We can skip these.
 sed -i 's/\(skb_mark(0)\),\(ct\)/\1,ct_state(0),ct_zone(0),\2/' odp-out.txt
 sed -i 's/\(skb_mark([[^)]]*)\),\(recirc\)/\1,ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),\2/' odp-out.txt
+sed -i 's/\(in_port(1)\),\(eth\)/\1,packet_type(ns=0,id=0),\2/' odp-out.txt
 
 AT_CHECK_UNQUOTED([ovstest test-odp parse-keys < odp-in.txt], [0], [`cat odp-out.txt`
 ])

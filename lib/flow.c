@@ -1153,6 +1153,38 @@ format_flags_masked(struct ds *ds, const char *name,
     }
 }
 
+static void
+put_u16_masked(struct ds *s, uint16_t value, uint16_t mask)
+{
+    if (!mask) {
+        ds_put_char(s, '*');
+    } else {
+        if (value > 9) {
+            ds_put_format(s, "0x%"PRIx16, value);
+        } else {
+            ds_put_format(s, "%"PRIu16, value);
+        }
+
+        if (mask != UINT16_MAX) {
+            ds_put_format(s, "/0x%"PRIx16, mask);
+        }
+    }
+}
+
+void
+format_packet_type_masked(struct ds *s, ovs_be32 value, ovs_be32 mask)
+{
+    if (value == htonl(PT_ETH) && mask == OVS_BE32_MAX) {
+        ds_put_cstr(s, "eth");
+    } else {
+        ds_put_cstr(s, "packet_type=(");
+        put_u16_masked(s, pt_ns(value), pt_ns(mask));
+        ds_put_char(s, ',');
+        put_u16_masked(s, pt_ns_type(value), pt_ns_type(mask));
+        ds_put_char(s, ')');
+    }
+}
+
 /* Scans a string 's' of flags to determine their numerical value and
  * returns the number of characters parsed using 'bit_to_string' to
  * lookup flag names. Scanning continues until the character 'end' is
@@ -1425,7 +1457,6 @@ flow_wildcards_init_for_packet(struct flow_wildcards *wc,
         WC_MASK_FIELD(wc, tunnel.tp_dst);
         WC_MASK_FIELD(wc, tunnel.gbp_id);
         WC_MASK_FIELD(wc, tunnel.gbp_flags);
-        WC_MASK_FIELD(wc, packet_type);
 
         if (!(flow->tunnel.flags & FLOW_TNL_F_UDPIF)) {
             if (flow->tunnel.metadata.present.map) {
@@ -1457,6 +1488,7 @@ flow_wildcards_init_for_packet(struct flow_wildcards *wc,
 
     /* actset_output wildcarded. */
 
+    WC_MASK_FIELD(wc, packet_type);
     WC_MASK_FIELD(wc, dl_dst);
     WC_MASK_FIELD(wc, dl_src);
     WC_MASK_FIELD(wc, dl_type);
