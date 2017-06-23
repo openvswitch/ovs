@@ -994,6 +994,10 @@ flow_get_metadata(const struct flow *flow, struct match *flow_metadata)
     }
 
     match_set_in_port(flow_metadata, flow->in_port.ofp_port);
+    if (flow->packet_type != htonl(PT_ETH)) {
+        match_set_packet_type(flow_metadata, flow->packet_type);
+    }
+
     if (flow->ct_state != 0) {
         match_set_ct_state(flow_metadata, flow->ct_state);
         if (is_ct_valid(flow, NULL, NULL) && flow->ct_nw_proto != 0) {

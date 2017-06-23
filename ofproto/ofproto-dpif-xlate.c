@@ -4259,11 +4259,6 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
         return;
     }
 
-    if (packet->packet_type != htonl(PT_ETH)) {
-        dp_packet_delete(packet);
-        return;
-    }
-
     /* A packet sent by an action in a table-miss rule is considered an
      * explicit table miss.  OpenFlow before 1.3 doesn't have that concept so
      * it will get translated back to OFPR_ACTION for those versions. */

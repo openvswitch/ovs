@@ -218,10 +218,9 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
     }
 
     if (verbosity > 0) {
-        /* Packet In can only carry Ethernet packets. */
-        char *packet = ofp_packet_to_string(public->packet,
-                                            public->packet_len,
-                                            htonl(PT_ETH));
+        char *packet = ofp_packet_to_string(
+            public->packet, public->packet_len,
+            public->flow_metadata.flow.packet_type);
         ds_put_cstr(string, packet);
         free(packet);
     }
