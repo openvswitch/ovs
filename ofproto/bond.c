@@ -827,6 +827,7 @@ bond_check_admissibility(struct bond *bond, const void *slave_,
         if (!bond->lacp_fallback_ab) {
             goto out;
         }
+        /* fall through */
 
     case BM_AB:
         /* Drop all packets which arrive on backup slaves.  This is similar to

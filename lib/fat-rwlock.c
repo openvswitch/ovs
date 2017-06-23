@@ -270,6 +270,7 @@ fat_rwlock_unlock(const struct fat_rwlock *rwlock_)
 
     case 1:
         ovs_mutex_unlock(&this->mutex);
+        /* fall through */
     default:
         this->depth--;
         break;

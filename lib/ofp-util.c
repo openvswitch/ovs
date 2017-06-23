@@ -9776,6 +9776,7 @@ ofputil_encode_group_mod(enum ofp_version ofp_version,
     switch (ofp_version) {
     case OFP10_VERSION:
         bad_group_cmd(gm->command);
+        /* fall through */
 
     case OFP11_VERSION:
     case OFP12_VERSION:
