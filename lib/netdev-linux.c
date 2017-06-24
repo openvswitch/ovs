@@ -2819,6 +2819,7 @@ netdev_linux_update_flags(struct netdev *netdev_, enum netdev_flags off,
     CONSTRUCT,                                                  \
     netdev_linux_destruct,                                      \
     netdev_linux_dealloc,                                       \
+    NULL,                                                       \
     NULL,                       /* get_config */                \
     NULL,                       /* set_config */                \
     NULL,                       /* get_tunnel_config */         \

@@ -55,6 +55,7 @@
 #include "unaligned.h"
 #include "timeval.h"
 #include "unixctl.h"
+#include "hw-pipeline.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_dpdk);
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
@@ -1123,6 +1124,29 @@ netdev_dpdk_get_config(const struct netdev *netdev, struct smap *args)
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
+}
+
+void
+netdev_dpdk_get_pipeline(__attribute__ ((unused))const struct netdev *netdev,
+                         struct dp_packet *packet,
+                         void *pipeline_res)
+{
+    struct pipeline_md *ppl_md = pipeline_res;
+    struct rte_mbuf *mbuf;
+
+    /*
+ *      * DPDK pipeline is defined by the ol_flags n the packet,
+ *           */
+    mbuf = (struct rte_mbuf *)packet;
+
+    if (mbuf->ol_flags & PKT_RX_FDIR_ID) {
+        ppl_md->id = HW_OFFLOAD_PIPELINE;
+        ppl_md->flow_tag = mbuf->hash.fdir.hi;
+    }
+    else{
+        ppl_md->id = DEFAULT_SW_PIPELINE;
+        ppl_md->flow_tag = HW_NO_FREE_FLOW_TAG;
+    }
 }
 
 static struct netdev_dpdk *
@@ -3253,6 +3277,7 @@ unlock:
     CONSTRUCT,                                                \
     DESTRUCT,                                                 \
     netdev_dpdk_dealloc,                                      \
+    netdev_dpdk_get_pipeline,                                 \
     netdev_dpdk_get_config,                                   \
     SET_CONFIG,                                               \
     NULL,                       /* get_tunnel_config */       \
