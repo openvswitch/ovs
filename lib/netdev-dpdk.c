@@ -2731,7 +2731,7 @@ start_vhost_loop(void *dummy OVS_UNUSED)
      pthread_detach(pthread_self());
      /* Put the vhost thread into quiescent state. */
      ovsrcu_quiesce_start();
-     rte_vhost_driver_session_start();
+     //rte_vhost_driver_start();
      return NULL;
 }
 
@@ -2763,9 +2763,9 @@ netdev_dpdk_vhost_class_init(void)
      * needs to be done only once */
     if (ovsthread_once_start(&once)) {
         rte_vhost_driver_callback_register(&virtio_net_device_ops);
-        rte_vhost_feature_disable(1ULL << VIRTIO_NET_F_HOST_TSO4
-                                  | 1ULL << VIRTIO_NET_F_HOST_TSO6
-                                  | 1ULL << VIRTIO_NET_F_CSUM);
+        //rte_vhost_feature_disable(1ULL << VIRTIO_NET_F_HOST_TSO4
+        //                          | 1ULL << VIRTIO_NET_F_HOST_TSO6
+        //                          | 1ULL << VIRTIO_NET_F_CSUM);
         ovs_thread_create("vhost_thread", start_vhost_loop, NULL);
 
         ovsthread_once_done(&once);
