@@ -1584,6 +1584,16 @@ dp_netdev_pmd_remove_flow(struct dp_netdev_pmd_thread *pmd,
 
     cls = dp_netdev_pmd_lookup_dpcls(pmd, in_port);
     ovs_assert(cls != NULL);
+    if(pmd->dp->ppl_md.id == HW_OFFLOAD_PIPELINE &&
+       flow->cr.flow_tag != HW_NO_FREE_FLOW_TAG )
+    {
+        VLOG_INFO("hw_pipeline_dpcls_remove");
+        hw_pipeline_dpcls_remove(pmd->dp,&flow->cr);
+    }
+    else
+    {
+        VLOG_INFO("skip hw_pipeline_dpcls_remove");
+    }
     dpcls_remove(cls, &flow->cr);
     cmap_remove(&pmd->flow_table, node, dp_netdev_flow_hash(&flow->ufid));
     flow->dead = true;
