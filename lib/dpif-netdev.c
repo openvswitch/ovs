@@ -4675,6 +4675,8 @@ dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
     long long now = time_msec();
     size_t n_batches;
     odp_port_t in_port;
+    struct dp_netdev_port *port;
+    struct netdev *netdev;
     int index=0;
 
     n_batches = 0;
@@ -4682,6 +4684,14 @@ dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
     for (index=0;index<cnt;index++) {
         md_tags[index].id = DEFAULT_SW_PIPELINE;
         md_tags[index].flow_tag = HW_NO_FREE_FLOW_TAG;
+        port= dp_netdev_lookup_port(pmd->dp,port_no);
+        netdev = port->netdev;
+        if(pmd->dp->ppl_md.id == HW_OFFLOAD_PIPELINE)
+        {
+            hw_pipeline_get_packet_md(netdev,
+                                      packets->packets[index],
+                                      &md_tags[index]);
+        }
     }
 
     emc_processing(pmd, packets, keys, batches, &n_batches,

@@ -31,7 +31,9 @@
 #include <time.h>
 
 #include "dpif-netdev.h"
+#include "netdev-provider.h"
 #include "include/openvswitch/vlog.h"
+#include "netdev-dpdk.h"
 #include "hw-pipeline.h"
 
 VLOG_DEFINE_THIS_MODULE(hw_pipeline);
@@ -397,6 +399,15 @@ static bool hw_pipeline_msg_queue_enqueue(msg_queue *message_queue,
     return true;
 }
 
+inline void
+hw_pipeline_get_packet_md(struct netdev *netdev,
+                          struct dp_packet *packet,
+                          struct pipeline_md *ppl_md)
+{
+    if(netdev->netdev_class->get_pipeline) {
+        netdev->netdev_class->get_pipeline(netdev, packet, ppl_md);
+    }
+}
 static struct dp_netdev_flow *hw_pipeline_read_flow(flow_tag_pool *p,
         uint32_t handle)
 {
