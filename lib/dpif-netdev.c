@@ -4399,8 +4399,7 @@ emc_processing(struct dp_netdev_pmd_thread *pmd,
                struct packet_batch_per_flow batches[],
                size_t *n_batches,
                bool md_is_valid,
-               odp_port_t port_no,
-               struct pipeline_md *md_tags)
+               odp_port_t port_no)
 {
     struct emc_cache *flow_cache = &pmd->flow_cache;
     struct netdev_flow_key *key = &keys[0];
@@ -4415,12 +4414,8 @@ emc_processing(struct dp_netdev_pmd_thread *pmd,
     DP_PACKET_BATCH_REFILL_FOR_EACH (i, size, packet, packets_) {
         struct dp_netdev_flow *flow;
 
-    if (md_tags[i].id == HW_OFFLOAD_PIPELINE &&
-           md_tags[i].flow_tag != HW_NO_FREE_FLOW_TAG) {
-            VLOG_INFO("skip emc_processing  flow_tag %x\n ",
-                    md_tags[i].flow_tag);
-            continue;
-        }
+    	if (pmd->dp->ppl_md.id == HW_OFFLOAD_PIPELINE) 
+            continue;        
 
         if (OVS_UNLIKELY(dp_packet_size(packet) < ETH_HEADER_LEN)) {
             dp_packet_delete(packet);
@@ -4675,17 +4670,26 @@ dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
     long long now = time_msec();
     size_t n_batches;
     odp_port_t in_port;
+    struct dp_netdev_port *port;
+    struct netdev *netdev;
     int index=0;
 
     n_batches = 0;
-
-    for (index=0;index<cnt;index++) {
-        md_tags[index].id = DEFAULT_SW_PIPELINE;
-        md_tags[index].flow_tag = HW_NO_FREE_FLOW_TAG;
+ 
+    if (pmd->dp->ppl_md.id == HW_OFFLOAD_PIPELINE) {
+        for (index=0;index<cnt;index++) {
+            md_tags[index].id = DEFAULT_SW_PIPELINE;
+            md_tags[index].flow_tag = HW_NO_FREE_FLOW_TAG;
+            port= dp_netdev_lookup_port(pmd->dp,port_no);
+            netdev = port->netdev;
+            hw_pipeline_get_packet_md(netdev,
+                                      packets->packets[index],
+                                      &md_tags[index]);
+        }
     }
 
     emc_processing(pmd, packets, keys, batches, &n_batches,
-                            md_is_valid, port_no,md_tags);
+                            md_is_valid, port_no);
     if (!dp_packet_batch_is_empty(packets)) {
         /* Get ingress port from first packet's metadata. */
         in_port = packets->packets[0]->md.in_port.odp_port;
