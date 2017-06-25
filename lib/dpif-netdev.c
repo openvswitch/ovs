@@ -76,6 +76,7 @@
 #include "tnl-ports.h"
 #include "unixctl.h"
 #include "util.h"
+#include "hw-pipeline.h"
 
 VLOG_DEFINE_THIS_MODULE(dpif_netdev);
 
@@ -86,9 +87,7 @@ DEFINE_STATIC_PER_THREAD_DATA(uint32_t, recirc_depth, 0)
 
 /* Configuration parameters. */
 enum { MAX_FLOWS = 65536 };     /* Maximum number of flows in flow table. */
-enum { MAX_METERS = 65536 };    /* Maximum number of meters. */
 enum { MAX_BANDS = 8 };         /* Maximum number of bands / meter. */
-enum { N_METER_LOCKS = 64 };    /* Maximum number of meters. */
 
 /* Protects against changes to 'dp_netdevs'. */
 static struct ovs_mutex dp_netdev_mutex = OVS_MUTEX_INITIALIZER;
@@ -112,15 +111,6 @@ static struct odp_support dp_netdev_support = {
     .ct_zone = true,
     .ct_mark = true,
     .ct_label = true,
-};
-
-/* Stores a miniflow with inline values */
-
-struct netdev_flow_key {
-    uint32_t hash;       /* Hash function differs for different users. */
-    uint32_t len;        /* Length of the following miniflow (incl. map). */
-    struct miniflow mf;
-    uint64_t buf[FLOW_MAX_PACKET_U64S];
 };
 
 /* Exact match cache for frequently used flows
@@ -184,14 +174,6 @@ struct dpcls {
     struct pvector subtables;
 };
 
-/* A rule to be inserted to the classifier. */
-struct dpcls_rule {
-    struct cmap_node cmap_node;   /* Within struct dpcls_subtable 'rules'. */
-    struct netdev_flow_key *mask; /* Subtable's mask. */
-    struct netdev_flow_key flow;  /* Matching key. */
-    /* 'flow' must be the last field, additional space is allocated here. */
-};
-
 static void dpcls_init(struct dpcls *);
 static void dpcls_destroy(struct dpcls *);
 static void dpcls_sort_subtable_vector(struct dpcls *);
@@ -210,93 +192,6 @@ static bool dpcls_lookup(struct dpcls *cls,
 /* Set of supported meter band types */
 #define DP_SUPPORTED_METER_BAND_TYPES           \
     ( 1 << OFPMBT13_DROP )
-
-struct dp_meter_band {
-    struct ofputil_meter_band up; /* type, prec_level, pad, rate, burst_size */
-    uint32_t bucket; /* In 1/1000 packets (for PKTPS), or in bits (for KBPS) */
-    uint64_t packet_count;
-    uint64_t byte_count;
-};
-
-struct dp_meter {
-    uint16_t flags;
-    uint16_t n_bands;
-    uint32_t max_delta_t;
-    uint64_t used;
-    uint64_t packet_count;
-    uint64_t byte_count;
-    struct dp_meter_band bands[];
-};
-
-/* Datapath based on the network device interface from netdev.h.
- *
- *
- * Thread-safety
- * =============
- *
- * Some members, marked 'const', are immutable.  Accessing other members
- * requires synchronization, as noted in more detail below.
- *
- * Acquisition order is, from outermost to innermost:
- *
- *    dp_netdev_mutex (global)
- *    port_mutex
- *    non_pmd_mutex
- */
-struct dp_netdev {
-    const struct dpif_class *const class;
-    const char *const name;
-    struct dpif *dpif;
-    struct ovs_refcount ref_cnt;
-    atomic_flag destroyed;
-
-    /* Ports.
-     *
-     * Any lookup into 'ports' or any access to the dp_netdev_ports found
-     * through 'ports' requires taking 'port_mutex'. */
-    struct ovs_mutex port_mutex;
-    struct hmap ports;
-    struct seq *port_seq;       /* Incremented whenever a port changes. */
-
-    /* Meters. */
-    struct ovs_mutex meter_locks[N_METER_LOCKS];
-    struct dp_meter *meters[MAX_METERS]; /* Meter bands. */
-
-    /* Probability of EMC insertions is a factor of 'emc_insert_min'.*/
-    OVS_ALIGNED_VAR(CACHE_LINE_SIZE) atomic_uint32_t emc_insert_min;
-
-    /* Protects access to ofproto-dpif-upcall interface during revalidator
-     * thread synchronization. */
-    struct fat_rwlock upcall_rwlock;
-    upcall_callback *upcall_cb;  /* Callback function for executing upcalls. */
-    void *upcall_aux;
-
-    /* Callback function for notifying the purging of dp flows (during
-     * reseting pmd deletion). */
-    dp_purge_callback *dp_purge_cb;
-    void *dp_purge_aux;
-
-    /* Stores all 'struct dp_netdev_pmd_thread's. */
-    struct cmap poll_threads;
-
-    /* Protects the access of the 'struct dp_netdev_pmd_thread'
-     * instance for non-pmd thread. */
-    struct ovs_mutex non_pmd_mutex;
-
-    /* Each pmd thread will store its pointer to
-     * 'struct dp_netdev_pmd_thread' in 'per_pmd_key'. */
-    ovsthread_key_t per_pmd_key;
-
-    struct seq *reconfigure_seq;
-    uint64_t last_reconfigure_seq;
-
-    /* Cpu mask for pin of pmd threads. */
-    char *pmd_cmask;
-
-    uint64_t last_tnl_conf_seq;
-
-    struct conntrack conntrack;
-};
 
 static void meter_lock(const struct dp_netdev *dp, uint32_t meter_id)
     OVS_ACQUIRES(dp->meter_locks[meter_id % N_METER_LOCKS])
@@ -344,30 +239,6 @@ struct dp_netdev_rxq {
     struct dp_netdev_pmd_thread *pmd;  /* pmd thread that polls this queue. */
 };
 
-/* A port in a netdev-based datapath. */
-struct dp_netdev_port {
-    odp_port_t port_no;
-    struct netdev *netdev;
-    struct hmap_node node;      /* Node in dp_netdev's 'ports'. */
-    struct netdev_saved_flags *sf;
-    struct dp_netdev_rxq *rxqs;
-    unsigned n_rxq;             /* Number of elements in 'rxq' */
-    bool dynamic_txqs;          /* If true XPS will be used. */
-    unsigned *txq_used;         /* Number of threads that use each tx queue. */
-    struct ovs_mutex txq_used_mutex;
-    char *type;                 /* Port type as requested by user. */
-    char *rxq_affinity_list;    /* Requested affinity of rx queues. */
-    bool need_reconfigure;      /* True if we should reconfigure netdev. */
-};
-
-/* Contained by struct dp_netdev_flow's 'stats' member.  */
-struct dp_netdev_flow_stats {
-    atomic_llong used;             /* Last used time, in monotonic msecs. */
-    atomic_ullong packet_count;    /* Number of packets matched. */
-    atomic_ullong byte_count;      /* Number of bytes matched. */
-    atomic_uint16_t tcp_flags;     /* Bitwise-OR of seen tcp_flags values. */
-};
-
 /* A flow in 'dp_netdev_pmd_thread's 'flow_table'.
  *
  *
@@ -405,39 +276,6 @@ struct dp_netdev_flow_stats {
  * Some members, marked 'const', are immutable.  Accessing other members
  * requires synchronization, as noted in more detail below.
  */
-struct dp_netdev_flow {
-    const struct flow flow;      /* Unmasked flow that created this entry. */
-    /* Hash table index by unmasked flow. */
-    const struct cmap_node node; /* In owning dp_netdev_pmd_thread's */
-                                 /* 'flow_table'. */
-    const ovs_u128 ufid;         /* Unique flow identifier. */
-    const unsigned pmd_id;       /* The 'core_id' of pmd thread owning this */
-                                 /* flow. */
-
-    /* Number of references.
-     * The classifier owns one reference.
-     * Any thread trying to keep a rule from being freed should hold its own
-     * reference. */
-    struct ovs_refcount ref_cnt;
-
-    bool dead;
-
-    /* Statistics. */
-    struct dp_netdev_flow_stats stats;
-
-    /* Actions. */
-    OVSRCU_TYPE(struct dp_netdev_actions *) actions;
-
-    /* While processing a group of input packets, the datapath uses the next
-     * member to store a pointer to the output batch for the flow.  It is
-     * reset after the batch has been sent out (See dp_netdev_queue_batches(),
-     * packet_batch_per_flow_init() and packet_batch_per_flow_execute()). */
-    struct packet_batch_per_flow *batch;
-
-    /* Packet classification. */
-    struct dpcls_rule cr;        /* In owning dp_netdev's 'cls'. */
-    /* 'cr' must be the last member. */
-};
 
 static void dp_netdev_flow_unref(struct dp_netdev_flow *);
 static bool dp_netdev_flow_ref(struct dp_netdev_flow *);
@@ -451,12 +289,6 @@ static int dpif_netdev_flow_from_nlattrs(const struct nlattr *, uint32_t,
  * =============
  *
  * A struct dp_netdev_actions 'actions' is protected with RCU. */
-struct dp_netdev_actions {
-    /* These members are immutable: they do not change during the struct's
-     * lifetime.  */
-    unsigned int size;          /* Size of 'actions', in bytes. */
-    struct nlattr actions[];    /* Sequence of OVS_ACTION_ATTR_* attributes. */
-};
 
 struct dp_netdev_actions *dp_netdev_actions_create(const struct nlattr *,
                                                    size_t);
@@ -603,9 +435,6 @@ struct dpif_netdev {
     uint64_t last_port_seq;
 };
 
-static int get_port_by_number(struct dp_netdev *dp, odp_port_t port_no,
-                              struct dp_netdev_port **portp)
-    OVS_REQUIRES(dp->port_mutex);
 static int get_port_by_name(struct dp_netdev *dp, const char *devname,
                             struct dp_netdev_port **portp)
     OVS_REQUIRES(dp->port_mutex);
@@ -1186,6 +1015,7 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
 
     ovs_mutex_lock(&dp->port_mutex);
     dp_netdev_set_nonpmd(dp);
+    hw_pipeline_init(dp);
 
     error = do_add_port(dp, name, dpif_netdev_port_open_type(dp->class,
                                                              "internal"),
@@ -1305,6 +1135,9 @@ dp_netdev_free(struct dp_netdev *dp)
         ovs_mutex_destroy(&dp->meter_locks[i]);
     }
 
+    if (dp->ppl_md.id == HW_OFFLOAD_PIPELINE) {
+        hw_pipeline_uninit(dp);
+    }
     free(dp->pmd_cmask);
     free(CONST_CAST(char *, dp->name));
     free(dp);
@@ -1559,7 +1392,7 @@ dp_netdev_lookup_port(const struct dp_netdev *dp, odp_port_t port_no)
     return NULL;
 }
 
-static int
+int
 get_port_by_number(struct dp_netdev *dp,
                    odp_port_t port_no, struct dp_netdev_port **portp)
     OVS_REQUIRES(dp->port_mutex)
@@ -1751,6 +1584,16 @@ dp_netdev_pmd_remove_flow(struct dp_netdev_pmd_thread *pmd,
 
     cls = dp_netdev_pmd_lookup_dpcls(pmd, in_port);
     ovs_assert(cls != NULL);
+    if(pmd->dp->ppl_md.id == HW_OFFLOAD_PIPELINE &&
+       flow->cr.flow_tag != HW_NO_FREE_FLOW_TAG )
+    {
+        VLOG_INFO("hw_pipeline_dpcls_remove");
+        hw_pipeline_dpcls_remove(pmd->dp,&flow->cr);
+    }
+    else
+    {
+        VLOG_INFO("skip hw_pipeline_dpcls_remove");
+    }
     dpcls_remove(cls, &flow->cr);
     cmap_remove(&pmd->flow_table, node, dp_netdev_flow_hash(&flow->ufid));
     flow->dead = true;
@@ -4803,12 +4646,12 @@ dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
 
     /* All the flow batches need to be reset before any call to
      * packet_batch_per_flow_execute() as it could potentially trigger
-     * recirculation. When a packet matching flow ‘j’ happens to be
+     * recirculation. When a packet matching flow ���j��� happens to be
      * recirculated, the nested call to dp_netdev_input__() could potentially
      * classify the packet as matching another flow - say 'k'. It could happen
      * that in the previous call to dp_netdev_input__() that same flow 'k' had
      * already its own batches[k] still waiting to be served.  So if its
-     * ‘batch’ member is not reset, the recirculated packet would be wrongly
+     * ���batch��� member is not reset, the recirculated packet would be wrongly
      * appended to batches[k] of the 1st call to dp_netdev_input__(). */
     size_t i;
     for (i = 0; i < n_batches; i++) {

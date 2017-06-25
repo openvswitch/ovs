@@ -1493,6 +1493,7 @@ netdev_bsd_update_flags(struct netdev *netdev_, enum netdev_flags off,
     CONSTRUCT,                                       \
     netdev_bsd_destruct,                             \
     netdev_bsd_dealloc,                              \
+    NULL, /* get pipeline */	     		     \
     NULL, /* get_config */                           \
     NULL, /* set_config */                           \
     NULL, /* get_tunnel_config */                    \

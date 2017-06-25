@@ -55,6 +55,7 @@
 #include "unaligned.h"
 #include "timeval.h"
 #include "unixctl.h"
+#include "hw-pipeline.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_dpdk);
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
@@ -1123,6 +1124,29 @@ netdev_dpdk_get_config(const struct netdev *netdev, struct smap *args)
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
+}
+
+void
+netdev_dpdk_get_pipeline(__attribute__ ((unused))const struct netdev *netdev,
+                         struct dp_packet *packet,
+                         void *pipeline_res)
+{
+    struct pipeline_md *ppl_md = pipeline_res;
+    struct rte_mbuf *mbuf;
+
+    /*
+ *      * DPDK pipeline is defined by the ol_flags n the packet,
+ *           */
+    mbuf = (struct rte_mbuf *)packet;
+
+    if (mbuf->ol_flags & PKT_RX_FDIR_ID) {
+        ppl_md->id = HW_OFFLOAD_PIPELINE;
+        ppl_md->flow_tag = mbuf->hash.fdir.hi;
+    }
+    else{
+        ppl_md->id = DEFAULT_SW_PIPELINE;
+        ppl_md->flow_tag = HW_NO_FREE_FLOW_TAG;
+    }
 }
 
 static struct netdev_dpdk *
@@ -2731,7 +2755,7 @@ start_vhost_loop(void *dummy OVS_UNUSED)
      pthread_detach(pthread_self());
      /* Put the vhost thread into quiescent state. */
      ovsrcu_quiesce_start();
-     rte_vhost_driver_session_start();
+     //rte_vhost_driver_start();
      return NULL;
 }
 
@@ -2763,9 +2787,9 @@ netdev_dpdk_vhost_class_init(void)
      * needs to be done only once */
     if (ovsthread_once_start(&once)) {
         rte_vhost_driver_callback_register(&virtio_net_device_ops);
-        rte_vhost_feature_disable(1ULL << VIRTIO_NET_F_HOST_TSO4
-                                  | 1ULL << VIRTIO_NET_F_HOST_TSO6
-                                  | 1ULL << VIRTIO_NET_F_CSUM);
+        //rte_vhost_feature_disable(1ULL << VIRTIO_NET_F_HOST_TSO4
+        //                          | 1ULL << VIRTIO_NET_F_HOST_TSO6
+        //                          | 1ULL << VIRTIO_NET_F_CSUM);
         ovs_thread_create("vhost_thread", start_vhost_loop, NULL);
 
         ovsthread_once_done(&once);
@@ -3253,6 +3277,7 @@ unlock:
     CONSTRUCT,                                                \
     DESTRUCT,                                                 \
     netdev_dpdk_dealloc,                                      \
+    netdev_dpdk_get_pipeline,                                 \
     netdev_dpdk_get_config,                                   \
     SET_CONFIG,                                               \
     NULL,                       /* get_tunnel_config */       \

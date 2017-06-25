@@ -17,17 +17,25 @@
 #ifndef NETDEV_DPDK_H
 #define NETDEV_DPDK_H
 
-#include <config.h>
-
 #include "openvswitch/compiler.h"
+#include "openvswitch/types.h"
 
 struct dp_packet;
+struct netdev;
+struct dp_netdev;
+struct rte_flow_attr;
+struct rte_flow_item;
+struct rte_flow_action;
+struct rte_flow_error;
 
 #ifdef DPDK_NETDEV
 
 void netdev_dpdk_register(void);
 void free_dpdk_buf(struct dp_packet *);
-
+void
+netdev_dpdk_get_pipeline(__attribute__ ((unused))const struct netdev *netdev,
+                         struct dp_packet *packet,
+                         void *pipeline_res);
 #else
 
 static inline void
