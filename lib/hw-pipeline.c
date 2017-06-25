@@ -30,6 +30,11 @@
 #include <unistd.h>
 #include <time.h>
 
+#ifdef DPDK_NETDEV
+#include <rte_cycles.h>
+#include <rte_flow.h>
+#endif
+
 #include "dpif-netdev.h"
 #include "netdev-provider.h"
 #include "include/openvswitch/vlog.h"
@@ -53,6 +58,8 @@ bool hw_pipeline_ft_pool_free(flow_tag_pool *p,uint32_t flow_tag);
 
 bool hw_pipeline_ft_pool_is_valid(flow_tag_pool *p);
 
+static int hw_pipeline_remove_flow(struct dp_netdev *dp,
+                                   msg_hw_flow *ptr_rule);
 // Internal functions Flow Tags Pool
 
 uint32_t hw_pipeline_ft_pool_init(flow_tag_pool *p,uint32_t pool_size);
@@ -399,6 +406,36 @@ static bool hw_pipeline_msg_queue_enqueue(msg_queue *message_queue,
     return true;
 }
 
+static int hw_pipeline_msg_queue_dequeue(msg_queue *message_queue,
+                                         msg_queue_elem *data)
+{
+    ssize_t ret=0;
+    int err=0;
+    fd_set readset;
+    int readFd = (*(int *)&message_queue->readFd);
+    FD_ZERO(&readset);
+    FD_SET(readFd, &readset);
+        // Now, check for readability
+    err = select(readFd+1,&readset,NULL, NULL,&message_queue->tv);
+
+    if (OVS_LIKELY(err>0 && FD_ISSET(readFd, &readset))) {
+        // Clear flags
+        FD_CLR(readFd, &readset);
+
+        ret = read(readFd, data, sizeof(msg_queue_elem));
+        if (OVS_UNLIKELY( ret == -1)) {
+            VLOG_ERR("Error reading from the  file descriptor.");
+            return ret;
+        }
+    }
+    else {
+        VLOG_DBG("File descriptor is not set .");
+        return err;
+    }
+
+    return 0;
+}
+
 inline void
 hw_pipeline_get_packet_md(struct netdev *netdev,
                           struct dp_packet *packet,
@@ -441,9 +478,32 @@ static int hw_pipeline_send_insert_flow(struct dp_netdev *dp,
     return 0;
 }
 
+static int hw_pipeline_remove_flow(struct dp_netdev *dp,
+                                   msg_hw_flow *ptr_rule)
+{
+    struct dp_netdev_port *dp_port;
+    struct rte_flow_error error;
+    int ret=0;
+    struct rte_flow *hw_flow_h;
+
+    ret = get_port_by_number(dp, ptr_rule->in_port,&dp_port);
+    if (OVS_UNLIKELY(ret)) {
+        VLOG_INFO("Can't get pmd port\n");
+        return -1;
+    }
+    hw_flow_h = dp->ft_pool.ft_data[ptr_rule->flow_tag].hw_flow_h;
+    ret =rte_flow_destroy(dp_port->port_no,hw_flow_h,&error);
+    return ret;
+}
+
 void *hw_pipeline_thread(void *pdp)
 {
+    msg_queue_elem ptr_rule;
+    int ret =0;
     struct dp_netdev *dp= (struct dp_netdev *)pdp;
+    msg_queue *msgq = &dp->message_queue;
+
+    ptr_rule.mode = HW_PIPELINE_NO_RULE;
     ovsrcu_quiesce_start();
     if (dp->ppl_md.id == HW_OFFLOAD_PIPELINE) {
         VLOG_INFO(" HW_OFFLOAD_PIPELINE is set \n");
@@ -454,6 +514,17 @@ void *hw_pipeline_thread(void *pdp)
     while(1) {
         // listen to read_socket :
         // call the rte_flow_create ( flow , wildcard mask)
+        ret = hw_pipeline_msg_queue_dequeue(msgq,&ptr_rule);
+        if (ret != 0) {
+            continue;
+        }
+        if (ptr_rule.mode == HW_PIPELINE_REMOVE_RULE) {
+            ret =hw_pipeline_remove_flow(dp,&ptr_rule.data.rm_flow);
+            if (OVS_UNLIKELY(ret)) {
+                VLOG_ERR(" hw_pipeline_remove_flow failed to remove flow  \n");
+            }
+        }
+        ptr_rule.mode = HW_PIPELINE_NO_RULE;
     }
     ovsrcu_quiesce_end();
     return NULL;
