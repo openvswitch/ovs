@@ -1015,6 +1015,7 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
 
     ovs_mutex_lock(&dp->port_mutex);
     dp_netdev_set_nonpmd(dp);
+    hw_pipeline_init(dp);
 
     error = do_add_port(dp, name, dpif_netdev_port_open_type(dp->class,
                                                              "internal"),
