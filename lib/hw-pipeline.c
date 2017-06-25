@@ -39,10 +39,12 @@ VLOG_DEFINE_THIS_MODULE(hw_pipeline);
 // Internal functions Flow Tags Pool
 
 uint32_t hw_pipeline_ft_pool_init(flow_tag_pool *p,uint32_t pool_size);
+uint32_t hw_pipeline_ft_pool_uninit(flow_tag_pool *p);
 // Internal functions Message Queue
 
 static int hw_pipeline_msg_queue_init(msg_queue *message_queue,
                                       unsigned core_id);
+static int hw_pipeline_msg_queue_clear(msg_queue *message_queue);
 
 void *hw_pipeline_thread(void *pdp);
 
@@ -82,6 +84,24 @@ uint32_t hw_pipeline_ft_pool_init(flow_tag_pool *p,
     return 0;
 }
 
+uint32_t hw_pipeline_ft_pool_uninit(flow_tag_pool *p)
+{
+    uint32_t ii=0;
+    if (OVS_UNLIKELY(p==NULL||p->ft_data==NULL)) {
+        VLOG_ERR("No pool or no data allocated \n");
+        return -1;
+    }
+    rte_spinlock_lock(&p->lock);
+    p->head=0;
+    p->tail=0;
+    for (ii=0; ii < p->pool_size; ii++) {
+        p->ft_data[ii].next = 0;
+        p->ft_data[ii].valid=false;
+    }
+    free(p->ft_data);
+    rte_spinlock_unlock(&p->lock);
+    return 0;
+}
 /*************************************************************************/
 // Msg Queue
 //  A queue that contains pairs : (flow , key )
@@ -143,37 +163,55 @@ static int hw_pipeline_msg_queue_init(msg_queue *message_queue,
 
     message_queue->readFd  = open(message_queue->pipeName,
             O_RDONLY|O_NONBLOCK);
-    if(OVS_UNLIKELY(message_queue->readFd == -1))
-    {
+    if (OVS_UNLIKELY( message_queue->readFd == -1)) {
         VLOG_ERR("Error creating read file descriptor");
         return -1;
     }
     message_queue->writeFd = open(message_queue->pipeName,
             O_WRONLY|O_NONBLOCK);
-    if(OVS_UNLIKELY(message_queue->writeFd == -1))
-    {
+    if (OVS_UNLIKELY( message_queue->writeFd == -1)) {
         VLOG_ERR("Error creating write file descriptor");
         return -1;
     }
     return 0;
 }
 
+static int hw_pipeline_msg_queue_clear(msg_queue *message_queue)
+{
+    int ret =0;
+    ret = close(message_queue->readFd);
+    if (OVS_UNLIKELY( ret == -1 )) {
+        VLOG_ERR("Error while closing the read file descriptor.");
+        return -1;
+    }
+    ret = close(message_queue->writeFd);
+    if (OVS_UNLIKELY( ret == -1 )) {
+        VLOG_ERR("Error while closing the write file descriptor.");
+        return -1;
+    }
+
+    ret = unlink(message_queue->pipeName);
+    if (OVS_UNLIKELY( ret < 0 )) {
+        VLOG_ERR("Remove fifo failed .\n");
+        return -1;
+    }
+
+    return 0;
+}
 void *hw_pipeline_thread(void *pdp)
 {
-    struct dp_netdev *dp= (struct dp_netdev *)pdp;    
+    struct dp_netdev *dp= (struct dp_netdev *)pdp;
     ovsrcu_quiesce_start();
-    
-    if( dp->ppl_md.id == HW_OFFLOAD_PIPELINE){
+    if (dp->ppl_md.id == HW_OFFLOAD_PIPELINE) {
         VLOG_INFO(" HW_OFFLOAD_PIPELINE is set \n");
     }
-    else{
+    else {
         VLOG_INFO(" HW_OFFLOAD_PIPELINE is off \n");
     }
     while(1) {
         // listen to read_socket :
         // call the rte_flow_create ( flow , wildcard mask)
     }
-   
     ovsrcu_quiesce_end();
     return NULL;
 }
@@ -183,19 +221,34 @@ int hw_pipeline_init(struct dp_netdev *dp)
     static uint32_t id=0;
     VLOG_INFO("hw_pipeline_init\n");
     ret = hw_pipeline_ft_pool_init(&dp->ft_pool,HW_MAX_FLOW_TAG);
-    if(OVS_UNLIKELY(ret != 0))
-    {
+    if (OVS_UNLIKELY(ret != 0)) {
         VLOG_ERR(" hw_pipeline_ft_pool_init failed \n");
         return ret;
     }
     ret = hw_pipeline_msg_queue_init(&dp->message_queue,id++);
-    if(OVS_UNLIKELY(ret != 0))
-    {
+    if (OVS_UNLIKELY(ret != 0)) {
         VLOG_ERR(" hw_pipeline_msg_queue_init failed \n");
         return ret;
     }
     dp->thread_ofload = ovs_thread_create("ft_offload",hw_pipeline_thread,dp);
     dp->ppl_md.id = HW_OFFLOAD_PIPELINE;
+    return 0;
+}
 
+int hw_pipeline_uninit(struct dp_netdev *dp)
+{
+    int ret=0;
+    ret = hw_pipeline_ft_pool_uninit(&dp->ft_pool);
+    if (OVS_UNLIKELY( ret != 0 )) {
+        VLOG_ERR(" hw_pipeline_ft_pool_uninit failed \n");
+        return ret;
+    }
+    ret = hw_pipeline_msg_queue_clear(&dp->message_queue);
+    if (OVS_UNLIKELY( ret != 0 ) {
+        VLOG_ERR(" hw_pipeline_msg_queue_clear failed \n");
+        return ret;
+    }
+    xpthread_join(dp->thread_ofload, NULL);
+    dp->ppl_md.id = DEFAULT_SW_PIPELINE;
     return 0;
 }
