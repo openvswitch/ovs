@@ -1580,18 +1580,16 @@ dp_netdev_pmd_remove_flow(struct dp_netdev_pmd_thread *pmd,
 {
     struct cmap_node *node = CONST_CAST(struct cmap_node *, &flow->node);
     struct dpcls *cls;
-    odp_port_t in_port = flow->flow.in_port.odp_port;
 
+    odp_port_t in_port = flow->flow.in_port.odp_port;
     cls = dp_netdev_pmd_lookup_dpcls(pmd, in_port);
     ovs_assert(cls != NULL);
-    if(pmd->dp->ppl_md.id == HW_OFFLOAD_PIPELINE &&
-       flow->cr.flow_tag != HW_NO_FREE_FLOW_TAG )
-    {
+    if (pmd->dp->ppl_md.id == HW_OFFLOAD_PIPELINE &&
+           flow->cr.flow_tag != HW_NO_FREE_FLOW_TAG ) {
         VLOG_INFO("hw_pipeline_dpcls_remove");
         hw_pipeline_dpcls_remove(pmd->dp,&flow->cr);
     }
-    else
-    {
+    else {
         VLOG_INFO("skip hw_pipeline_dpcls_remove");
     }
     dpcls_remove(cls, &flow->cr);
@@ -4398,8 +4396,11 @@ static inline size_t
 emc_processing(struct dp_netdev_pmd_thread *pmd,
                struct dp_packet_batch *packets_,
                struct netdev_flow_key *keys,
-               struct packet_batch_per_flow batches[], size_t *n_batches,
-               bool md_is_valid, odp_port_t port_no)
+               struct packet_batch_per_flow batches[],
+               size_t *n_batches,
+               bool md_is_valid,
+               odp_port_t port_no,
+               struct pipeline_md *md_tags)
 {
     struct emc_cache *flow_cache = &pmd->flow_cache;
     struct netdev_flow_key *key = &keys[0];
@@ -4413,6 +4414,13 @@ emc_processing(struct dp_netdev_pmd_thread *pmd,
 
     DP_PACKET_BATCH_REFILL_FOR_EACH (i, size, packet, packets_) {
         struct dp_netdev_flow *flow;
+
+    if (md_tags[i].id == HW_OFFLOAD_PIPELINE &&
+           md_tags[i].flow_tag != HW_NO_FREE_FLOW_TAG) {
+            VLOG_INFO("skip emc_processing  flow_tag %x\n ",
+                    md_tags[i].flow_tag);
+            continue;
+        }
 
         if (OVS_UNLIKELY(dp_packet_size(packet) < ETH_HEADER_LEN)) {
             dp_packet_delete(packet);
@@ -4531,7 +4539,7 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
                      struct netdev_flow_key *keys,
                      struct packet_batch_per_flow batches[], size_t *n_batches,
                      odp_port_t in_port,
-                     long long now)
+                     long long now,struct pipeline_md *md_tags)
 {
     int cnt = packets_->count;
 #if !defined(__CHECKER__) && !defined(_WIN32)
@@ -4556,7 +4564,14 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
     /* Get the classifier for the in_port */
     cls = dp_netdev_pmd_lookup_dpcls(pmd, in_port);
     if (OVS_LIKELY(cls)) {
-        any_miss = !dpcls_lookup(cls, keys, rules, cnt, &lookup_cnt);
+        if (pmd->dp->ppl_md.id == DEFAULT_SW_PIPELINE) {
+            any_miss = !dpcls_lookup(cls, keys, rules, cnt, &lookup_cnt);
+        }
+        else {
+             memset(rules, 0, sizeof(rules));
+             any_miss = !hw_pipeline_dpcls_lookup(pmd->dp,md_tags,cnt,
+                    &lookup_cnt);
+        }
     } else {
         any_miss = true;
         memset(rules, 0, sizeof(rules));
@@ -4578,8 +4593,18 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
             /* It's possible that an earlier slow path execution installed
              * a rule covering this flow.  In this case, it's a lot cheaper
              * to catch it here than execute a miss. */
-            netdev_flow = dp_netdev_pmd_lookup_flow(pmd, &keys[i],
-                                                    &add_lookup_cnt);
+
+            if (pmd->dp->ppl_md.id == DEFAULT_SW_PIPELINE) {
+                VLOG_INFO("dp_netdev_pmd_lookup_flow \n");
+                netdev_flow = dp_netdev_pmd_lookup_flow(pmd,&keys[i],
+                        &add_lookup_cnt);
+            }
+            else {
+                VLOG_INFO("hw_pipeline_lookup_flow \n");
+                netdev_flow = hw_pipeline_lookup_flow(pmd->dp,
+                                md_tags[i].flow_tag,&add_lookup_cnt);
+            }
+
             if (netdev_flow) {
                 lookup_cnt += add_lookup_cnt;
                 rules[i] = &netdev_flow->cr;
@@ -4646,28 +4671,36 @@ dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
     OVS_ALIGNED_VAR(CACHE_LINE_SIZE)
         struct netdev_flow_key keys[PKT_ARRAY_SIZE];
     struct packet_batch_per_flow batches[PKT_ARRAY_SIZE];
+    struct pipeline_md md_tags[PKT_ARRAY_SIZE];
     long long now = time_msec();
     size_t n_batches;
     odp_port_t in_port;
+    int index=0;
 
     n_batches = 0;
+
+    for (index=0;index<cnt;index++) {
+        md_tags[index].id = DEFAULT_SW_PIPELINE;
+        md_tags[index].flow_tag = HW_NO_FREE_FLOW_TAG;
+    }
+
     emc_processing(pmd, packets, keys, batches, &n_batches,
-                            md_is_valid, port_no);
+                            md_is_valid, port_no,md_tags);
     if (!dp_packet_batch_is_empty(packets)) {
         /* Get ingress port from first packet's metadata. */
         in_port = packets->packets[0]->md.in_port.odp_port;
-        fast_path_processing(pmd, packets, keys, batches, &n_batches,
-                             in_port, now);
+        fast_path_processing(pmd, packets, keys, batches, &n_batches, in_port,
+                now,md_tags);
     }
 
     /* All the flow batches need to be reset before any call to
      * packet_batch_per_flow_execute() as it could potentially trigger
-     * recirculation. When a packet matching flow ���������j��������� happens to be
+     * recirculation. When a packet matching flow ‘j’ happens to be
      * recirculated, the nested call to dp_netdev_input__() could potentially
      * classify the packet as matching another flow - say 'k'. It could happen
      * that in the previous call to dp_netdev_input__() that same flow 'k' had
      * already its own batches[k] still waiting to be served.  So if its
-     * ���������batch��������� member is not reset, the recirculated packet would be wrongly
+     * ‘batch’ member is not reset, the recirculated packet would be wrongly
      * appended to batches[k] of the 1st call to dp_netdev_input__(). */
     size_t i;
     for (i = 0; i < n_batches; i++) {

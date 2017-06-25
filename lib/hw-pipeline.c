@@ -36,6 +36,8 @@
 
 VLOG_DEFINE_THIS_MODULE(hw_pipeline);
 
+static struct dp_netdev_flow *hw_pipeline_read_flow(flow_tag_pool *p,
+                                                    uint32_t flow_tag);
 static int hw_pipeline_send_insert_flow(struct dp_netdev *dp,
                                         odp_port_t in_port,
                                         struct dp_netdev_flow *flow,
@@ -53,6 +55,10 @@ bool hw_pipeline_ft_pool_is_valid(flow_tag_pool *p);
 
 uint32_t hw_pipeline_ft_pool_init(flow_tag_pool *p,uint32_t pool_size);
 uint32_t hw_pipeline_ft_pool_uninit(flow_tag_pool *p);
+
+struct dp_netdev_flow *hw_pipeline_ft_pool_read_flow(flow_tag_pool *p,
+                                                     uint32_t handle);
+
 // Internal functions Message Queue
 
 static int hw_pipeline_msg_queue_init(msg_queue *message_queue,
@@ -77,7 +83,7 @@ void *hw_pipeline_thread(void *pdp);
 bool hw_pipeline_ft_pool_is_valid(flow_tag_pool *p)
 {
     rte_spinlock_lock(&p->lock);
-    if ( p->ft_data != NULL && p->pool_size>0) {
+    if (p->ft_data != NULL && p->pool_size>0) {
         VLOG_DBG("The pool is allocated & its size is : %d\n", p->pool_size);
         rte_spinlock_unlock(&p->lock);
         return true;
@@ -88,12 +94,56 @@ bool hw_pipeline_ft_pool_is_valid(flow_tag_pool *p)
     return false;
 }
 
+flow_elem *hw_pipeline_ft_pool_read_elem(struct dp_netdev *dp,
+                                         uint32_t handle)
+{
+    uint32_t index;
+    flow_elem *elem;
+
+    if (OVS_UNLIKELY(dp == NULL)) {
+        VLOG_ERR("no dp pointer \n");
+        return NULL;
+    }
+
+    index = OVS_FLOW_TAG_INDEX_GET(handle);
+    if (OVS_UNLIKELY(index >= HW_MAX_FLOW_TAG)) {
+        VLOG_ERR("index out of range\n");
+        return NULL;
+    }
+
+    rte_spinlock_lock(&dp->ft_pool.lock);
+    elem = &dp->ft_pool.ft_data[index];
+    rte_spinlock_unlock(&dp->ft_pool.lock);
+
+    return elem;
+}
+
+
+inline struct dp_netdev_flow *hw_pipeline_ft_pool_read_flow(flow_tag_pool *p,
+                                                            uint32_t handle)
+{
+    uint32_t index;
+    struct dp_netdev_flow *flow=NULL;
+    index = OVS_FLOW_TAG_INDEX_GET(handle);
+    if (OVS_UNLIKELY(index >= HW_MAX_FLOW_TAG)) {
+        VLOG_ERR("index out of range\n");
+        return NULL;
+    }
+
+    rte_spinlock_lock(&p->lock);
+    p->ft_data[index].valid =true;
+    flow = p->ft_data[index].sw_flow;
+    rte_spinlock_unlock(&p->lock);
+
+    return flow;
+}
+
 uint32_t hw_pipeline_ft_pool_init(flow_tag_pool *p,
                                   uint32_t pool_size)
 {
     uint32_t ii=0;
 
-    if(OVS_UNLIKELY(pool_size > HW_MAX_FLOW_TAG || p == NULL )) {
+    if (OVS_UNLIKELY(pool_size > HW_MAX_FLOW_TAG || p == NULL)) {
         VLOG_ERR("pool size is too big or pool is NULL \n");
         return -1;
     }
@@ -239,15 +289,14 @@ static int hw_pipeline_msg_queue_init(msg_queue *message_queue,
 
     strcpy(message_queue->pipeName,fifo_pmd);
 
-    if (mkdir(dir, 0755) == -1 && errno != EEXIST)
-    {
+    if (mkdir(dir, 0755) == -1 && errno != EEXIST) {
         VLOG_ERR("Failed to create directory: ");
         return -1;
     }
 
     ret = mkfifo(fifo_pmd,0666);
     if (OVS_UNLIKELY(ret < 0)) {
-        if(errno==EEXIST){
+        if (errno==EEXIST) {
             ret = unlink(fifo_pmd);
             if (OVS_UNLIKELY(ret < 0)) {
                 VLOG_ERR("Remove fifo failed .\n");
@@ -255,7 +304,7 @@ static int hw_pipeline_msg_queue_init(msg_queue *message_queue,
             }
             ret = mkfifo(fifo_pmd,0666 );
             if (OVS_UNLIKELY(ret < 0)) {
-                if(errno==EEXIST){
+                if (errno==EEXIST) {
                     VLOG_ERR("That file already exists.\n");
                     VLOG_ERR("(or we passed in a symbolic link,");
                     VLOG_ERR(" which we did not.)\n");
@@ -263,26 +312,24 @@ static int hw_pipeline_msg_queue_init(msg_queue *message_queue,
                 }
             }
         }
-        else if(errno==EROFS){
+        else if (errno==EROFS) {
             VLOG_ERR("The name file resides on a read-only file-system\n");
             return -1;
         }
-        else
-        {
+        else {
             VLOG_ERR("mkfifo failed %x \n",errno);
             return -1;
         }
     }
-
     message_queue->readFd  = open(message_queue->pipeName,
             O_RDONLY|O_NONBLOCK);
-    if (OVS_UNLIKELY( message_queue->readFd == -1)) {
+    if (OVS_UNLIKELY(message_queue->readFd == -1)) {
         VLOG_ERR("Error creating read file descriptor");
         return -1;
     }
     message_queue->writeFd = open(message_queue->pipeName,
             O_WRONLY|O_NONBLOCK);
-    if (OVS_UNLIKELY( message_queue->writeFd == -1)) {
+    if (OVS_UNLIKELY(message_queue->writeFd == -1)) {
         VLOG_ERR("Error creating write file descriptor");
         return -1;
     }
@@ -319,10 +366,8 @@ static bool hw_pipeline_msg_queue_enqueue(msg_queue *message_queue,
     ssize_t ret =0;
 
     ret = write(message_queue->writeFd, data, sizeof(msg_queue_elem));
-    if(OVS_UNLIKELY( ret == -1))
-    {
-        switch(errno)
-        {
+    if (OVS_UNLIKELY( ret == -1)) {
+        switch (errno) {
             case EBADF:
                 VLOG_ERR("FD is non-valid , or is not open for writing.\n");
                 break;
@@ -347,11 +392,23 @@ static bool hw_pipeline_msg_queue_enqueue(msg_queue *message_queue,
             default:
                 break;
         }
-
         return false;
     }
-
     return true;
+}
+
+static struct dp_netdev_flow *hw_pipeline_read_flow(flow_tag_pool *p,
+        uint32_t handle)
+{
+    struct dp_netdev_flow *netdev_flow=NULL;
+    netdev_flow = hw_pipeline_ft_pool_read_flow(p,handle);
+    if (OVS_UNLIKELY(netdev_flow == NULL)) {
+        VLOG_INFO("No flow found");
+        return NULL;
+    }
+    VLOG_INFO("flow found with tag %x\n",netdev_flow->cr.flow_tag);
+    VLOG_INFO("flow found with handle %x\n",handle);
+    return netdev_flow;
 }
 
 static int hw_pipeline_send_insert_flow(struct dp_netdev *dp,
@@ -446,6 +503,34 @@ static int hw_pipeline_send_remove_flow(struct dp_netdev *dp,uint32_t flow_tag,
     return 0;
 }
 
+bool hw_pipeline_dpcls_lookup(struct dp_netdev *dp,
+                              struct pipeline_md *md_tags,
+                              const size_t cnt,
+                              int *lookup_cnt)
+{
+    int index =0 ;
+    struct dp_netdev_flow *netdev_flow = NULL;
+    bool all_found = true;
+    bool never_lookup = true;
+
+    for (index=0;index<cnt;index++) {
+        if (md_tags[index].flow_tag == HW_NO_FREE_FLOW_TAG) {
+            continue;
+        }
+        never_lookup = false;
+        netdev_flow = hw_pipeline_lookup_flow(dp,
+            md_tags[index].flow_tag,lookup_cnt);
+        if (netdev_flow == NULL) {
+            VLOG_INFO("flow== NULL && miss_any=true");
+            all_found=false;
+        }
+    }
+    if (never_lookup) {
+        return false;
+    }
+    return all_found;
+}
+
 /* Insert 'rule' into 'cls'.
  * Get a unique tag from pool
  * The function sends a message to the message queue
@@ -491,11 +576,33 @@ hw_pipeline_dpcls_remove(struct dp_netdev *dp,
         VLOG_ERR("The Message Queue is FULL \n");
         return;
     }
-    if(OVS_LIKELY(hw_pipeline_ft_pool_is_valid(&dp->ft_pool)))
-    {
-      if(OVS_UNLIKELY(!hw_pipeline_ft_pool_free(&dp->ft_pool,rule->flow_tag))){
+    if (OVS_LIKELY(hw_pipeline_ft_pool_is_valid(&dp->ft_pool))) {
+      if (OVS_UNLIKELY(
+            !hw_pipeline_ft_pool_free(&dp->ft_pool,rule->flow_tag))) {
             VLOG_ERR("tag is out of range");
             return;
       }
     }
+}
+
+struct dp_netdev_flow *
+hw_pipeline_lookup_flow(struct dp_netdev *dp,
+                        uint32_t flow_tag,
+                        int *lookup_cnt)
+{
+    struct dp_netdev_flow *netdev_flow=NULL;
+    if (OVS_UNLIKELY(flow_tag == HW_NO_FREE_FLOW_TAG)) {
+        return NULL;
+    }
+    netdev_flow = hw_pipeline_read_flow(&dp->ft_pool,flow_tag);
+    if (netdev_flow != NULL) {
+        if (lookup_cnt != NULL) {
+            *lookup_cnt=+1;
+        }
+    }
+    else {
+        VLOG_ERR("No flow found : netdev_flow %p for flow_tag %x",
+                 netdev_flow,flow_tag);
+    }
+    return netdev_flow;
 }
