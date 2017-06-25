@@ -33,8 +33,12 @@
 #include "dpif-netdev.h"
 #include "include/openvswitch/vlog.h"
 #include "hw-pipeline.h"
-          
+
 VLOG_DEFINE_THIS_MODULE(hw_pipeline);
+
+bool hw_pipeline_ft_pool_free(flow_tag_pool *p,uint32_t flow_tag);
+
+bool hw_pipeline_ft_pool_is_valid(flow_tag_pool *p);
 
 // Internal functions Flow Tags Pool
 
@@ -46,39 +50,59 @@ static int hw_pipeline_msg_queue_init(msg_queue *message_queue,
                                       unsigned core_id);
 static int hw_pipeline_msg_queue_clear(msg_queue *message_queue);
 
+static int hw_pipeline_send_remove_flow(struct dp_netdev *dp,
+                                        uint32_t flow_tag,ovs_u128 *ufidp);
+
 void *hw_pipeline_thread(void *pdp);
+
+/*****************************************************************************/
+//    HW Flow Tags Pool
+//        A pool of unique tags used by the OVS
+//        The flow tag is used as an interface with the HW.
+//        If there is a match between a packet & a rule then
+//        the flow tag is received by the OVS in the fdir.hash in the rte_mbuf
+//        With this flow tag the OVS find the associated flow.
+//        The Pool is per pmd_thread.
+//        Each flow points on a flow tag and vice versa.
+/*****************************************************************************/
+bool hw_pipeline_ft_pool_is_valid(flow_tag_pool *p)
+{
+    rte_spinlock_lock(&p->lock);
+    if ( p->ft_data != NULL && p->pool_size>0) {
+        VLOG_DBG("The pool is allocated & its size is : %d\n", p->pool_size);
+        rte_spinlock_unlock(&p->lock);
+        return true;
+    }
+
+    VLOG_DBG("The pool is invalid its size is : %d\n", p->pool_size);
+    rte_spinlock_unlock(&p->lock);
+    return false;
+}
 
 uint32_t hw_pipeline_ft_pool_init(flow_tag_pool *p,
                                   uint32_t pool_size)
 {
     uint32_t ii=0;
 
-    if(OVS_UNLIKELY(pool_size > HW_MAX_FLOW_TAG || p == NULL ))
-    {
+    if(OVS_UNLIKELY(pool_size > HW_MAX_FLOW_TAG || p == NULL )) {
         VLOG_ERR("pool size is too big or pool is NULL \n");
         return -1;
     }
-
     p->ft_data = (flow_elem *)xmalloc(pool_size * sizeof(flow_elem));
-    if( OVS_UNLIKELY(p->ft_data == NULL))
-    {
+    if (OVS_UNLIKELY(p->ft_data == NULL)) {
         VLOG_ERR("No free memory for the pool \n");
         return -1;
     }
     memset(p->ft_data,0,(pool_size * sizeof(flow_elem)));
-
     rte_spinlock_init(&p->lock);
-
     rte_spinlock_lock(&p->lock);
     p->head=0;
     p->tail=0;
     p->pool_size = pool_size;
-    for(ii=0;ii<pool_size;ii++)
-    {
+    for (ii=0;ii<pool_size;ii++) {
         p->ft_data[ii].next = ii+1;
         rte_spinlock_init(&p->ft_data[ii].lock);
     }
-
     p->ft_data[pool_size-1].next = HW_NO_FREE_FLOW_TAG;
     rte_spinlock_unlock(&p->lock);
     return 0;
@@ -87,6 +111,7 @@ uint32_t hw_pipeline_ft_pool_init(flow_tag_pool *p,
 uint32_t hw_pipeline_ft_pool_uninit(flow_tag_pool *p)
 {
     uint32_t ii=0;
+
     if (OVS_UNLIKELY(p==NULL||p->ft_data==NULL)) {
         VLOG_ERR("No pool or no data allocated \n");
         return -1;
@@ -102,6 +127,45 @@ uint32_t hw_pipeline_ft_pool_uninit(flow_tag_pool *p)
     rte_spinlock_unlock(&p->lock);
     return 0;
 }
+
+/*
+ *  hw_pipeline_ft_pool_free returns an index to the pool.
+ *  The index is returned to the tail.
+ *  The function deals with 3 cases:
+ *        1. index out of range in the pool . returns false
+ *        2. There is an place in the pool :
+ *        		a. This is the last place .
+ *        		b. This is the common index .
+ * */
+bool hw_pipeline_ft_pool_free(flow_tag_pool *p,
+                              uint32_t handle)
+{
+    uint32_t index ,tail;
+
+    index = OVS_FLOW_TAG_INDEX_GET(handle);
+    if(OVS_UNLIKELY(index >= HW_MAX_FLOW_TAG)) {
+    // ( case 1, see function header above)
+        VLOG_ERR("index out of range \n");
+        return false;
+    }
+    rte_spinlock_lock(&p->lock);
+    tail = p->tail;
+    if (tail == HW_NO_FREE_FLOW_TAG) {
+    // last place in the pool ( case 2a, see function header above)
+        p->head = index;
+    }
+    else {
+    // common case ( case 2b, see function header above)
+        p->ft_data[tail].next = index;  // old tail next points on index
+    }
+    // current tail is updated to be index & its next HW_NO_FREE_FLOW_TAG
+    p->tail = index;
+    p->ft_data[index].next = HW_NO_FREE_FLOW_TAG;
+    p->ft_data[index].valid = false;
+    rte_spinlock_unlock(&p->lock);
+    return true;
+}
+
 /*************************************************************************/
 // Msg Queue
 //  A queue that contains pairs : (flow , key )
@@ -198,6 +262,48 @@ static int hw_pipeline_msg_queue_clear(msg_queue *message_queue)
 
     return 0;
 }
+
+
+static bool hw_pipeline_msg_queue_enqueue(msg_queue *message_queue,
+                                          msg_queue_elem *data)
+{
+    ssize_t ret =0;
+
+    ret = write(message_queue->writeFd, data, sizeof(msg_queue_elem));
+    if(OVS_UNLIKELY( ret == -1))
+    {
+        switch(errno)
+        {
+            case EBADF:
+                VLOG_ERR("FD is non-valid , or is not open for writing.\n");
+                break;
+            case EFBIG:
+                VLOG_ERR("File is too large.\n");
+                break;
+            case EINTR:
+                VLOG_ERR("interrupted by a signal\n");
+                break;
+            case EIO:
+                VLOG_ERR("hardware error\n");
+                break;
+            case ENOSPC:
+                VLOG_ERR("The device's file is full\n");
+                break;
+            case EPIPE:
+                VLOG_ERR("FIFO that isn't open for reading\n");
+                break;
+            case EINVAL:
+                VLOG_ERR("Not aligned to the block size");
+                break;
+            default:
+                break;
+        }
+
+        return false;
+    }
+
+    return true;
+}
 void *hw_pipeline_thread(void *pdp)
 {
     struct dp_netdev *dp= (struct dp_netdev *)pdp;
@@ -244,11 +350,51 @@ int hw_pipeline_uninit(struct dp_netdev *dp)
         return ret;
     }
     ret = hw_pipeline_msg_queue_clear(&dp->message_queue);
-    if (OVS_UNLIKELY( ret != 0 ) {
+    if (OVS_UNLIKELY( ret != 0 )) {
         VLOG_ERR(" hw_pipeline_msg_queue_clear failed \n");
         return ret;
     }
     xpthread_join(dp->thread_ofload, NULL);
     dp->ppl_md.id = DEFAULT_SW_PIPELINE;
     return 0;
+}
+
+static int hw_pipeline_send_remove_flow(struct dp_netdev *dp,uint32_t flow_tag,
+        ovs_u128 *ufidp)
+{
+    msg_queue_elem rule;
+
+    rule.data.rm_flow.in_port=
+        dp->ft_pool.ft_data[flow_tag].sw_flow->flow.in_port.odp_port;
+    rule.data.rm_flow.flow_tag = flow_tag;
+    memcpy(&rule.data.rm_flow.ufid,ufidp,sizeof(ovs_u128));
+    rule.mode = HW_PIPELINE_REMOVE_RULE;
+    if (OVS_UNLIKELY(
+            !hw_pipeline_msg_queue_enqueue(&dp->message_queue,&rule))) {
+        VLOG_INFO("queue overflow");
+        return -1;
+    }
+    return 0;
+}
+/* Removes 'rule' from 'cls', also distracting the 'rule'.
+ * Free the unique tag back to pool.
+ * The function sends a message to the message queue
+ * to insert a rule to HW, but
+ * in the context of hw_pipeline_thread
+ * */
+void
+hw_pipeline_dpcls_remove(struct dp_netdev *dp,
+                         struct dpcls_rule *rule)
+{
+    if (hw_pipeline_send_remove_flow(dp,rule->flow_tag,rule->ufidp)==-1) {
+        VLOG_ERR("The Message Queue is FULL \n");
+        return;
+    }
+    if(OVS_LIKELY(hw_pipeline_ft_pool_is_valid(&dp->ft_pool)))
+    {
+      if(OVS_UNLIKELY(!hw_pipeline_ft_pool_free(&dp->ft_pool,rule->flow_tag))){
+            VLOG_ERR("tag is out of range");
+            return;
+      }
+    }
 }
