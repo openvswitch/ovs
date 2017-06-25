@@ -36,6 +36,15 @@
 
 VLOG_DEFINE_THIS_MODULE(hw_pipeline);
 
+static int hw_pipeline_send_insert_flow(struct dp_netdev *dp,
+                                        odp_port_t in_port,
+                                        struct dp_netdev_flow *flow,
+                                        struct flow *masks,
+                                        int rxqid);
+
+uint32_t hw_pipeline_ft_pool_get(flow_tag_pool *p,
+        struct dp_netdev_flow *flow);
+
 bool hw_pipeline_ft_pool_free(flow_tag_pool *p,uint32_t flow_tag);
 
 bool hw_pipeline_ft_pool_is_valid(flow_tag_pool *p);
@@ -127,7 +136,47 @@ uint32_t hw_pipeline_ft_pool_uninit(flow_tag_pool *p)
     rte_spinlock_unlock(&p->lock);
     return 0;
 }
+/*
+ *  hw_pipeline_ft_pool_get returns an index from the pool
+ *  The index is returned from the head.
+ *
+ *  The function deals with 3 cases:
+ *        1. no more indexes in the pool . returns HW_NO_FREE_FLOW_TAG
+ *        2. There is an index:
+ *        		a. This is the last index
+ *        		b. This is the common index
+ * */
+uint32_t hw_pipeline_ft_pool_get(flow_tag_pool *p,struct dp_netdev_flow *flow)
+{
+    uint32_t next;
+    uint32_t index;
 
+    rte_spinlock_lock(&p->lock);
+    if (p->head != HW_NO_FREE_FLOW_TAG) {
+        //(case 2b , see function header above)
+        // returns the current head & update the head to head.next
+        index = p->head;
+        next = p->ft_data[index].next;
+        p->head = next;
+        if (next == HW_NO_FREE_FLOW_TAG) {
+            //last index (case 2a , see function header above)
+            p->tail = HW_NO_FREE_FLOW_TAG;
+        }
+        p->ft_data[index].sw_flow = flow;
+        p->ft_data[index].valid = true;
+        rte_spinlock_unlock(&p->lock);
+        return index;
+    }
+    else {
+    // no more free tags ( case 1, see function header above)
+        rte_spinlock_unlock(&p->lock);
+        VLOG_DBG("No more flow tags \n");
+        return HW_NO_FREE_FLOW_TAG;
+    }
+
+    rte_spinlock_unlock(&p->lock);
+    return index;
+}
 /*
  *  hw_pipeline_ft_pool_free returns an index to the pool.
  *  The index is returned to the tail.
@@ -304,6 +353,26 @@ static bool hw_pipeline_msg_queue_enqueue(msg_queue *message_queue,
 
     return true;
 }
+
+static int hw_pipeline_send_insert_flow(struct dp_netdev *dp,
+        odp_port_t in_port, struct dp_netdev_flow *flow, struct flow *masks,
+        int rxqid)
+{
+    msg_queue_elem rule;
+
+    rule.data.sw_flow.in_port = in_port;
+    rule.data.sw_flow.rxqid   = rxqid;
+    memcpy(&rule.data.sw_flow.sw_flow,flow,sizeof(struct dp_netdev_flow));
+    memcpy(&rule.data.sw_flow.sw_flow_mask,masks,sizeof(struct flow));
+    rule.mode = HW_PIPELINE_INSERT_RULE;
+    if (OVS_UNLIKELY(
+        !hw_pipeline_msg_queue_enqueue(&dp->message_queue,&rule))) {
+        VLOG_ERR("queue overflow");
+        return -1;
+    }
+    return 0;
+}
+
 void *hw_pipeline_thread(void *pdp)
 {
     struct dp_netdev *dp= (struct dp_netdev *)pdp;
@@ -376,6 +445,38 @@ static int hw_pipeline_send_remove_flow(struct dp_netdev *dp,uint32_t flow_tag,
     }
     return 0;
 }
+
+/* Insert 'rule' into 'cls'.
+ * Get a unique tag from pool
+ * The function sends a message to the message queue
+ * to insert a rule to HW, but
+ * in the context of hw_pipeline_thread
+ * */
+void
+hw_pipeline_dpcls_insert(struct dp_netdev *dp,
+                         struct dp_netdev_flow *netdev_flow,
+                         struct dpcls_rule *rule,
+                         odp_port_t in_port,
+                         struct flow *wc_masks,
+                         int rxqid)
+{
+    uint32_t flow_tag=HW_NO_FREE_FLOW_TAG;
+
+    flow_tag = hw_pipeline_ft_pool_get(&dp->ft_pool,netdev_flow);
+    if (OVS_UNLIKELY(flow_tag == HW_NO_FREE_FLOW_TAG)) {
+        VLOG_INFO("No more free Tags \n");
+        return;
+    }
+
+    rule->flow_tag = flow_tag;
+
+    if (OVS_UNLIKELY(hw_pipeline_send_insert_flow(dp,in_port,netdev_flow,
+        wc_masks,rxqid)== -1)) {
+        VLOG_ERR("The Message Queue is FULL \n");
+        return;
+    }
+}
+
 /* Removes 'rule' from 'cls', also distracting the 'rule'.
  * Free the unique tag back to pool.
  * The function sends a message to the message queue

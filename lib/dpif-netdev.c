@@ -2189,7 +2189,8 @@ out:
 static struct dp_netdev_flow *
 dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
                    struct match *match, const ovs_u128 *ufid,
-                   const struct nlattr *actions, size_t actions_len)
+                   const struct nlattr *actions, size_t actions_len,
+                   int rxqid,enum dpif_flow_put_flags flags)
     OVS_REQUIRES(pmd->flow_mutex)
 {
     struct dp_netdev_flow *flow;
@@ -2228,10 +2229,23 @@ dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
     ovsrcu_set(&flow->actions, dp_netdev_actions_create(actions, actions_len));
 
     netdev_flow_key_init_masked(&flow->cr.flow, &match->flow, &mask);
-
+    flow->cr.flow_tag = HW_NO_FREE_FLOW_TAG;
     /* Select dpcls for in_port. Relies on in_port to be exact match. */
     cls = dp_netdev_pmd_find_dpcls(pmd, in_port);
     dpcls_insert(cls, &flow->cr, &mask);
+    bool probe = flags & DPIF_FP_PROBE;
+
+    if (pmd->dp->ppl_md.id == HW_OFFLOAD_PIPELINE && !probe) {
+       /* The classifier rule is sent as a message
+        * to the flow_table_offload thread
+        * */
+        VLOG_INFO(" hw_pipeline_dpcls_insert : %d",flags);
+        hw_pipeline_dpcls_insert(pmd->dp,flow,&flow->cr,in_port,
+                &match->wc.masks,rxqid);
+    }
+    else {
+        VLOG_INFO("skip hw_pipeline_dpcls_insert : %x\n",flow->cr.flow_tag );
+    }
 
     cmap_insert(&pmd->flow_table, CONST_CAST(struct cmap_node *, &flow->node),
                 dp_netdev_flow_hash(&flow->ufid));
@@ -2303,7 +2317,7 @@ flow_put_on_pmd(struct dp_netdev_pmd_thread *pmd,
         if (put->flags & DPIF_FP_CREATE) {
             if (cmap_count(&pmd->flow_table) < MAX_FLOWS) {
                 dp_netdev_flow_add(pmd, match, ufid, put->actions,
-                                   put->actions_len);
+                                   put->actions_len,0,put->flags);
                 error = 0;
             } else {
                 error = EFBIG;
@@ -4446,8 +4460,9 @@ static inline void
 handle_packet_upcall(struct dp_netdev_pmd_thread *pmd,
                      struct dp_packet *packet,
                      const struct netdev_flow_key *key,
-                     struct ofpbuf *actions, struct ofpbuf *put_actions,
-                     int *lost_cnt, long long now)
+                     struct ofpbuf *actions,
+                     struct ofpbuf *put_actions,
+                     int *lost_cnt, long long now,int rxqid)
 {
     struct ofpbuf *add_actions;
     struct dp_packet_batch b;
@@ -4503,7 +4518,7 @@ handle_packet_upcall(struct dp_netdev_pmd_thread *pmd,
         if (OVS_LIKELY(!netdev_flow)) {
             netdev_flow = dp_netdev_flow_add(pmd, &match, &ufid,
                                              add_actions->data,
-                                             add_actions->size);
+                                             add_actions->size,rxqid,0);
         }
         ovs_mutex_unlock(&pmd->flow_mutex);
         emc_probabilistic_insert(pmd, key, netdev_flow);
@@ -4573,7 +4588,8 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
 
             miss_cnt++;
             handle_packet_upcall(pmd, packets[i], &keys[i], &actions,
-                                 &put_actions, &lost_cnt, now);
+                                 &put_actions, &lost_cnt, now,
+                                 packets_->rxqid);
         }
 
         ofpbuf_uninit(&actions);
@@ -4646,12 +4662,12 @@ dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
 
     /* All the flow batches need to be reset before any call to
      * packet_batch_per_flow_execute() as it could potentially trigger
-     * recirculation. When a packet matching flow ���j��� happens to be
+     * recirculation. When a packet matching flow ���������j��������� happens to be
      * recirculated, the nested call to dp_netdev_input__() could potentially
      * classify the packet as matching another flow - say 'k'. It could happen
      * that in the previous call to dp_netdev_input__() that same flow 'k' had
      * already its own batches[k] still waiting to be served.  So if its
-     * ���batch��� member is not reset, the recirculated packet would be wrongly
+     * ���������batch��������� member is not reset, the recirculated packet would be wrongly
      * appended to batches[k] of the 1st call to dp_netdev_input__(). */
     size_t i;
     for (i = 0; i < n_batches; i++) {
