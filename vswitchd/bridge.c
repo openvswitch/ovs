@@ -2369,14 +2369,14 @@ iface_refresh_stats(struct iface *iface)
     IFACE_STAT(rx_128_to_255_packets,   "rx_128_to_255_packets")    \
     IFACE_STAT(rx_256_to_511_packets,   "rx_256_to_511_packets")    \
     IFACE_STAT(rx_512_to_1023_packets,  "rx_512_to_1023_packets")   \
-    IFACE_STAT(rx_1024_to_1522_packets, "rx_1024_to_1518_packets")  \
+    IFACE_STAT(rx_1024_to_1522_packets, "rx_1024_to_1522_packets")  \
     IFACE_STAT(rx_1523_to_max_packets,  "rx_1523_to_max_packets")   \
     IFACE_STAT(tx_1_to_64_packets,      "tx_1_to_64_packets")       \
     IFACE_STAT(tx_65_to_127_packets,    "tx_65_to_127_packets")     \
     IFACE_STAT(tx_128_to_255_packets,   "tx_128_to_255_packets")    \
     IFACE_STAT(tx_256_to_511_packets,   "tx_256_to_511_packets")    \
     IFACE_STAT(tx_512_to_1023_packets,  "tx_512_to_1023_packets")   \
-    IFACE_STAT(tx_1024_to_1522_packets, "tx_1024_to_1518_packets")  \
+    IFACE_STAT(tx_1024_to_1522_packets, "tx_1024_to_1522_packets")  \
     IFACE_STAT(tx_1523_to_max_packets,  "tx_1523_to_max_packets")   \
     IFACE_STAT(tx_multicast_packets,    "tx_multicast_packets")     \
     IFACE_STAT(rx_broadcast_packets,    "rx_broadcast_packets")     \
