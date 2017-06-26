@@ -719,29 +719,6 @@ dpdk_eth_dev_queue_setup(struct netdev_dpdk *dev, int n_rxq, int n_txq)
 }
 
 static void
-dpdk_eth_checksum_offload_configure(struct netdev_dpdk *dev)
-    OVS_REQUIRES(dev->mutex)
-{
-    struct rte_eth_dev_info info;
-    bool rx_csum_ol_flag = false;
-    uint32_t rx_chksm_offload_capa = DEV_RX_OFFLOAD_UDP_CKSUM |
-                                     DEV_RX_OFFLOAD_TCP_CKSUM |
-                                     DEV_RX_OFFLOAD_IPV4_CKSUM;
-    rte_eth_dev_info_get(dev->port_id, &info);
-    rx_csum_ol_flag = (dev->hw_ol_features & NETDEV_RX_CHECKSUM_OFFLOAD) != 0;
-
-    if (rx_csum_ol_flag &&
-        (info.rx_offload_capa & rx_chksm_offload_capa) !=
-         rx_chksm_offload_capa) {
-        VLOG_WARN_ONCE("Rx checksum offload is not supported on device %"PRIu8,
-                       dev->port_id);
-        dev->hw_ol_features &= ~NETDEV_RX_CHECKSUM_OFFLOAD;
-        return;
-    }
-    netdev_request_reconfigure(&dev->up);
-}
-
-static void
 dpdk_eth_flow_ctrl_setup(struct netdev_dpdk *dev) OVS_REQUIRES(dev->mutex)
 {
     if (rte_eth_dev_flow_ctrl_set(dev->port_id, &dev->fc_conf)) {
@@ -759,8 +736,20 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev)
     struct ether_addr eth_addr;
     int diag;
     int n_rxq, n_txq;
+    uint32_t rx_chksm_offload_capa = DEV_RX_OFFLOAD_UDP_CKSUM |
+                                     DEV_RX_OFFLOAD_TCP_CKSUM |
+                                     DEV_RX_OFFLOAD_IPV4_CKSUM;
 
     rte_eth_dev_info_get(dev->port_id, &info);
+
+    if ((info.rx_offload_capa & rx_chksm_offload_capa) !=
+            rx_chksm_offload_capa) {
+        VLOG_WARN_ONCE("Rx checksum offload is not supported on device %"PRIu8,
+                        dev->port_id);
+        dev->hw_ol_features &= ~NETDEV_RX_CHECKSUM_OFFLOAD;
+    } else {
+        dev->hw_ol_features |= NETDEV_RX_CHECKSUM_OFFLOAD;
+    }
 
     n_rxq = MIN(info.max_rx_queues, dev->up.n_rxq);
     n_txq = MIN(info.max_tx_queues, dev->up.n_txq);
@@ -1209,8 +1198,6 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args,
         {RTE_FC_NONE,     RTE_FC_TX_PAUSE},
         {RTE_FC_RX_PAUSE, RTE_FC_FULL    }
     };
-    bool rx_chksm_ofld;
-    bool temp_flag;
     const char *new_devargs;
     int err = 0;
 
@@ -1290,16 +1277,6 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args,
         dev->fc_conf.mode = fc_mode;
         dev->fc_conf.autoneg = autoneg;
         dpdk_eth_flow_ctrl_setup(dev);
-    }
-
-    /* Rx checksum offload configuration */
-    /* By default the Rx checksum offload is ON */
-    rx_chksm_ofld = smap_get_bool(args, "rx-checksum-offload", true);
-    temp_flag = (dev->hw_ol_features & NETDEV_RX_CHECKSUM_OFFLOAD)
-                        != 0;
-    if (temp_flag != rx_chksm_ofld) {
-        dev->hw_ol_features ^= NETDEV_RX_CHECKSUM_OFFLOAD;
-        dpdk_eth_checksum_offload_configure(dev);
     }
 
 out:
