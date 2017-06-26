@@ -95,6 +95,13 @@ struct dpif_ipfix_global_stats {
     uint64_t tcp_rst_total_count;
     uint64_t tcp_syn_total_count;
     uint64_t tcp_urg_total_count;
+    uint64_t post_mcast_packet_total_count;
+    uint64_t post_mcast_octet_total_count;
+    uint64_t in_ucast_packet_total_count;
+    uint64_t in_mcast_packet_total_count;
+    uint64_t in_bcast_packet_total_count;
+    uint64_t out_ucast_packet_total_count;
+    uint64_t out_bcast_packet_total_count;
 };
 
 struct dpif_ipfix_port {
@@ -365,11 +372,23 @@ struct ipfix_data_record_aggregated_common {
     ovs_be32 flow_end_delta_microseconds; /* FLOW_END_DELTA_MICROSECONDS */
     ovs_be64 packet_delta_count;  /* PACKET_DELTA_COUNT */
     ovs_be64 packet_total_count;  /* PACKET_TOTAL_COUNT */
+    /* INGRESS_UNICAST_PACKET_TOTAL_COUNT */
+    ovs_be64 in_ucast_packet_total_count;
+    /* INGRESS_MULTICAST_PACKET_TOTAL_COUNT */
+    ovs_be64 in_mcast_packet_total_count;
+    /* INGRESS_BROADCAST_PACKET_TOTAL_COUNT */
+    ovs_be64 in_bcast_packet_total_count;
+    /* EGRESS_UNICAST_PACKET_TOTAL_COUNT */
+    ovs_be64 out_ucast_packet_total_count;
+    /* EGRESS_BROADCAST_PACKET_TOTAL_COUNT */
+    ovs_be64 out_bcast_packet_total_count;
+    ovs_be64 post_mcast_packet_delta_count; /* POST_MCAST_PACKET_DELTA_COUNT */
+    ovs_be64 post_mcast_packet_total_count; /* POST_MCAST_PACKET_TOTAL_COUNT */
     ovs_be64 layer2_octet_delta_count;  /* LAYER2_OCTET_DELTA_COUNT */
     ovs_be64 layer2_octet_total_count;  /* LAYER2_OCTET_TOTAL_COUNT */
     uint8_t flow_end_reason;  /* FLOW_END_REASON */
 });
-BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_aggregated_common) == 41);
+BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_aggregated_common) == 97);
 
 /* Part of data record for IP aggregated elements. */
 OVS_PACKED(
@@ -380,8 +399,10 @@ struct ipfix_data_record_aggregated_ip {
     ovs_be64 octet_total_sum_of_squares;  /* OCTET_TOTAL_SUM_OF_SQUARES */
     ovs_be64 minimum_ip_total_length;  /* MINIMUM_IP_TOTAL_LENGTH */
     ovs_be64 maximum_ip_total_length;  /* MAXIMUM_IP_TOTAL_LENGTH */
+    ovs_be64 post_mcast_octet_delta_count; /* POST_MCAST_OCTET_DELTA_COUNT */
+    ovs_be64 post_mcast_octet_total_count; /* POST_MCAST_OCTET_TOTAL_COUNT */
 });
-BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_aggregated_ip) == 48);
+BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_aggregated_ip) == 64);
 
 /* Part of data record for TCP aggregated elements. */
 OVS_PACKED(
@@ -478,6 +499,15 @@ struct ipfix_flow_cache_entry {
     uint64_t flow_end_timestamp_usec;
     uint64_t packet_delta_count;
     uint64_t packet_total_count;
+    uint64_t in_ucast_packet_total_count;
+    uint64_t in_mcast_packet_total_count;
+    uint64_t in_bcast_packet_total_count;
+    uint64_t out_ucast_packet_total_count;
+    uint64_t out_bcast_packet_total_count;
+    uint64_t post_mcast_packet_total_count;
+    uint64_t post_mcast_packet_delta_count;
+    uint64_t post_mcast_octet_total_count;
+    uint64_t post_mcast_octet_delta_count;
     uint64_t layer2_octet_delta_count;
     uint64_t layer2_octet_total_count;
     uint64_t octet_delta_count;
@@ -1254,6 +1284,13 @@ ipfix_define_template_fields(enum ipfix_proto_l2 l2, enum ipfix_proto_l3 l3,
     DEF(FLOW_END_DELTA_MICROSECONDS);
     DEF(PACKET_DELTA_COUNT);
     DEF(PACKET_TOTAL_COUNT);
+    DEF(INGRESS_UNICAST_PACKET_TOTAL_COUNT);
+    DEF(INGRESS_MULTICAST_PACKET_TOTAL_COUNT);
+    DEF(INGRESS_BROADCAST_PACKET_TOTAL_COUNT);
+    DEF(EGRESS_UNICAST_PACKET_TOTAL_COUNT);
+    DEF(EGRESS_BROADCAST_PACKET_TOTAL_COUNT);
+    DEF(POST_MCAST_PACKET_DELTA_COUNT);
+    DEF(POST_MCAST_PACKET_TOTAL_COUNT);
     DEF(LAYER2_OCTET_DELTA_COUNT);
     DEF(LAYER2_OCTET_TOTAL_COUNT);
     DEF(FLOW_END_REASON);
@@ -1265,6 +1302,8 @@ ipfix_define_template_fields(enum ipfix_proto_l2 l2, enum ipfix_proto_l3 l3,
         DEF(OCTET_TOTAL_SUM_OF_SQUARES);
         DEF(MINIMUM_IP_TOTAL_LENGTH);
         DEF(MAXIMUM_IP_TOTAL_LENGTH);
+        DEF(POST_MCAST_OCTET_DELTA_COUNT);
+        DEF(POST_MCAST_OCTET_TOTAL_COUNT);
     }
 
     if (l4 == IPFIX_PROTO_L4_TCP) {
@@ -1471,7 +1510,21 @@ ipfix_cache_aggregate_entries(struct ipfix_flow_cache_entry *from_entry,
     to_entry->layer2_octet_delta_count += from_entry->layer2_octet_delta_count;
 
     to_entry->packet_total_count = from_entry->packet_total_count;
+    to_entry->in_ucast_packet_total_count =
+        from_entry->in_ucast_packet_total_count;
+    to_entry->in_mcast_packet_total_count =
+        from_entry->in_mcast_packet_total_count;
+    to_entry->in_bcast_packet_total_count =
+        from_entry->in_bcast_packet_total_count;
+    to_entry->out_ucast_packet_total_count =
+        from_entry->out_ucast_packet_total_count;
+    to_entry->out_bcast_packet_total_count =
+        from_entry->out_bcast_packet_total_count;
     to_entry->layer2_octet_total_count = from_entry->layer2_octet_total_count;
+    to_entry->post_mcast_packet_delta_count +=
+        from_entry->post_mcast_packet_delta_count;
+    to_entry->post_mcast_octet_delta_count +=
+        from_entry->post_mcast_octet_delta_count;
 
     to_entry->octet_delta_count += from_entry->octet_delta_count;
     to_entry->octet_delta_sum_of_squares +=
@@ -1480,6 +1533,11 @@ ipfix_cache_aggregate_entries(struct ipfix_flow_cache_entry *from_entry,
     to_entry->octet_total_count = from_entry->octet_total_count;
     to_entry->octet_total_sum_of_squares =
         from_entry->octet_total_sum_of_squares;
+
+    to_entry->post_mcast_packet_total_count =
+        from_entry->post_mcast_packet_total_count;
+    to_entry->post_mcast_octet_total_count =
+        from_entry->post_mcast_octet_total_count;
 
     to_min_len = &to_entry->minimum_ip_total_length;
     to_max_len = &to_entry->maximum_ip_total_length;
@@ -1658,6 +1716,8 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
     enum ipfix_sampled_packet_type sampled_pkt_type = IPFIX_SAMPLED_PKT_UNKNOWN;
     uint8_t ethernet_header_length;
     uint16_t ethernet_total_length;
+    bool is_multicast = false;
+    bool is_broadcast = false;
 
     flow_key = &entry->flow_key;
     dp_packet_use_stub(&msg, flow_key->flow_key_msg_part,
@@ -1731,16 +1791,18 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
         ? VLAN_ETH_HEADER_LEN : ETH_HEADER_LEN;
     ethernet_total_length = dp_packet_size(packet);
 
+    uint8_t flow_direction =
+        (direction == NX_ACTION_SAMPLE_INGRESS ? INGRESS_FLOW
+         : direction == NX_ACTION_SAMPLE_EGRESS ? EGRESS_FLOW
+         : output_odp_port == ODPP_NONE ? INGRESS_FLOW : EGRESS_FLOW);
+
     /* Common Ethernet entities. */
     {
         struct ipfix_data_record_flow_key_common *data_common;
 
         data_common = dp_packet_put_zeros(&msg, sizeof *data_common);
         data_common->observation_point_id = htonl(obs_point_id);
-        data_common->flow_direction =
-            (direction == NX_ACTION_SAMPLE_INGRESS ? INGRESS_FLOW
-             : direction == NX_ACTION_SAMPLE_EGRESS ? EGRESS_FLOW
-             : output_odp_port == ODPP_NONE ? INGRESS_FLOW : EGRESS_FLOW);
+        data_common->flow_direction = flow_direction;
         data_common->source_mac_address = flow->dl_src;
         data_common->destination_mac_address = flow->dl_dst;
         data_common->ethernet_type = flow->dl_type;
@@ -1829,6 +1891,12 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
 
     flow_key->flow_key_msg_part_size = dp_packet_size(&msg);
 
+    if (eth_addr_is_broadcast(flow->dl_dst)) {
+        is_broadcast = true;
+    } else if (eth_addr_is_multicast(flow->dl_dst)) {
+        is_multicast = true;
+    }
+
     {
         struct timeval now;
         uint64_t layer2_octet_delta_count;
@@ -1846,9 +1914,43 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
 
         stats->packet_total_count += packet_delta_count;
         stats->layer2_octet_total_count += layer2_octet_delta_count;
-        entry->packet_total_count = stats->packet_total_count;
-        entry->layer2_octet_total_count = stats->layer2_octet_total_count;
 
+        entry->post_mcast_packet_delta_count = 0;
+        if (is_broadcast) {
+            if (flow_direction == INGRESS_FLOW) {
+                stats->in_bcast_packet_total_count += packet_delta_count;
+            } else if (flow_direction == EGRESS_FLOW) {
+                stats->out_bcast_packet_total_count += packet_delta_count;
+            }
+        } else if (is_multicast) {
+            if (flow_direction == INGRESS_FLOW) {
+                stats->in_mcast_packet_total_count += packet_delta_count;
+            } else if (flow_direction == EGRESS_FLOW) {
+                entry->post_mcast_packet_delta_count = packet_delta_count;
+                stats->post_mcast_packet_total_count += packet_delta_count;
+            }
+        } else {
+            if (flow_direction == INGRESS_FLOW) {
+                stats->in_ucast_packet_total_count += packet_delta_count;
+            } else if (flow_direction == EGRESS_FLOW) {
+                stats->out_ucast_packet_total_count += packet_delta_count;
+            }
+        }
+
+        entry->packet_total_count = stats->packet_total_count;
+        entry->in_ucast_packet_total_count =
+            stats->in_ucast_packet_total_count;
+        entry->in_mcast_packet_total_count =
+            stats->in_mcast_packet_total_count;
+        entry->in_bcast_packet_total_count =
+            stats->in_bcast_packet_total_count;
+        entry->out_ucast_packet_total_count =
+            stats->out_ucast_packet_total_count;
+        entry->out_bcast_packet_total_count =
+            stats->out_bcast_packet_total_count;
+        entry->post_mcast_packet_total_count =
+            stats->post_mcast_packet_total_count;
+        entry->layer2_octet_total_count = stats->layer2_octet_total_count;
     }
 
     if (l3 != IPFIX_PROTO_L3_UNKNOWN) {
@@ -1869,6 +1971,12 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
         stats->octet_total_count += octet_delta_count;
         stats->octet_total_sum_of_squares += entry->octet_delta_sum_of_squares;
 
+        if (is_multicast && flow_direction == EGRESS_FLOW) {
+            entry->post_mcast_octet_delta_count = octet_delta_count;
+            stats->post_mcast_octet_total_count += octet_delta_count;
+        } else {
+            entry->post_mcast_octet_delta_count = 0;
+        }
     } else {
         entry->octet_delta_sum_of_squares = 0;
         entry->minimum_ip_total_length = 0;
@@ -1877,6 +1985,8 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
 
     entry->octet_total_sum_of_squares = stats->octet_total_sum_of_squares;
     entry->octet_total_count = stats->octet_total_count;
+    entry->post_mcast_octet_total_count =
+        stats->post_mcast_octet_total_count;
 
     if (l4 == IPFIX_PROTO_L4_TCP) {
         uint16_t tcp_flags = ntohs(flow->tcp_flags);
@@ -1970,11 +2080,25 @@ ipfix_put_data_set(uint32_t export_time_sec,
             entry->packet_delta_count);
         data_aggregated_common->packet_total_count = htonll(
             entry->packet_total_count);
+        data_aggregated_common->in_ucast_packet_total_count = htonll(
+                entry->in_ucast_packet_total_count);
+        data_aggregated_common->in_mcast_packet_total_count = htonll(
+                entry->in_mcast_packet_total_count);
+        data_aggregated_common->in_bcast_packet_total_count = htonll(
+            entry->in_bcast_packet_total_count);
+        data_aggregated_common->out_ucast_packet_total_count = htonll(
+            entry->out_ucast_packet_total_count);
+        data_aggregated_common->out_bcast_packet_total_count = htonll(
+            entry->out_bcast_packet_total_count);
         data_aggregated_common->layer2_octet_delta_count = htonll(
             entry->layer2_octet_delta_count);
         data_aggregated_common->layer2_octet_total_count = htonll(
             entry->layer2_octet_total_count);
         data_aggregated_common->flow_end_reason = flow_end_reason;
+        data_aggregated_common->post_mcast_packet_delta_count = htonll(
+            entry->post_mcast_packet_delta_count);
+        data_aggregated_common->post_mcast_packet_total_count = htonll(
+            entry->post_mcast_packet_total_count);
     }
 
     if (entry->octet_delta_sum_of_squares) {  /* IP packet. */
@@ -1994,6 +2118,10 @@ ipfix_put_data_set(uint32_t export_time_sec,
             entry->minimum_ip_total_length);
         data_aggregated_ip->maximum_ip_total_length = htonll(
             entry->maximum_ip_total_length);
+        data_aggregated_ip->post_mcast_octet_delta_count = htonll(
+            entry->post_mcast_octet_delta_count);
+        data_aggregated_ip->post_mcast_octet_total_count = htonll(
+            entry->post_mcast_octet_total_count);
     }
 
     if (entry->tcp_packet_delta_count) {
