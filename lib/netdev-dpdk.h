@@ -29,9 +29,17 @@ struct rte_flow_action;
 struct rte_flow_error;
 
 #ifdef DPDK_NETDEV
+#include <rte_flow.h>
 
+int dpdk_netdev_is_dpdk_port(struct dp_netdev *dp, odp_port_t in_port);
 void netdev_dpdk_register(void);
 void free_dpdk_buf(struct dp_packet *);
+struct rte_flow*
+netdev_dpdk_rte_flow_validate(struct netdev *netdev,
+                              struct rte_flow_attr *attr,
+                              struct rte_flow_item *item,
+                              struct rte_flow_action *action,
+                              struct rte_flow_error *error);
 void
 netdev_dpdk_get_pipeline(__attribute__ ((unused))const struct netdev *netdev,
                          struct dp_packet *packet,
