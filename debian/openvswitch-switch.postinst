@@ -33,6 +33,15 @@ case "$1" in
                     fi
                 done
         fi
+        # Certain versions of upstream Ubuntu's openvswitch packages (which
+        # are forks) may install upstart files which are incompatible
+        # with the packages generated from this repo. Remove them.
+        if [ -e "/etc/init/openvswitch-switch.conf" ]; then
+            rm /etc/init/openvswitch-switch.conf
+        fi
+        if [ -e "/etc/init/openvswitch-force-reload-kmod.conf" ]; then
+            rm /etc/init/openvswitch-force-reload-kmod.conf
+        fi
         ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)
