@@ -1358,6 +1358,7 @@ netdev_dummy_update_flags(struct netdev *netdev_,
     netdev_dummy_construct,                                     \
     netdev_dummy_destruct,                                      \
     netdev_dummy_dealloc,                                       \
+    NULL,                                                       \
     netdev_dummy_get_config,                                    \
     netdev_dummy_set_config,                                    \
     NULL,                       /* get_tunnel_config */         \
