@@ -744,7 +744,7 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev)
 
     if ((info.rx_offload_capa & rx_chksm_offload_capa) !=
             rx_chksm_offload_capa) {
-        VLOG_WARN_ONCE("Rx checksum offload is not supported on device %"PRIu8,
+        VLOG_WARN("Rx checksum offload is not supported on port %"PRIu8,
                         dev->port_id);
         dev->hw_ol_features &= ~NETDEV_RX_CHECKSUM_OFFLOAD;
     } else {
