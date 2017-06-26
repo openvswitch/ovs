@@ -3261,6 +3261,30 @@ unlock:
     return err;
 }
 
+
+struct rte_flow *
+netdev_dpdk_rte_flow_validate(struct netdev *netdev,
+                              struct rte_flow_attr *attr,
+                              struct rte_flow_item *item,
+                              struct rte_flow_action *action,
+                              struct rte_flow_error *error)
+{
+    int ret;
+
+    ret = rte_flow_validate(netdev_dpdk_cast(netdev)->port_id,
+                            attr, item, action, error);
+
+    if (!ret) {
+        struct rte_flow *flow;
+
+        /* I should really save the pointer somwhere and delete it :) */
+        flow = rte_flow_create(netdev_dpdk_cast(netdev)->port_id,
+                               attr, item, action, error);
+        return flow;
+    }
+return NULL;
+}
+
 #define NETDEV_DPDK_CLASS(NAME, INIT, CONSTRUCT, DESTRUCT,    \
                           SET_CONFIG, SET_TX_MULTIQ, SEND,    \
                           GET_CARRIER, GET_STATS,             \

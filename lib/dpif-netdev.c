@@ -51,6 +51,7 @@
 #include "latch.h"
 #include "netdev.h"
 #include "netdev-vport.h"
+#include "netdev-vport-private.h"
 #include "netlink.h"
 #include "odp-execute.h"
 #include "odp-util.h"
@@ -1571,6 +1572,27 @@ dp_netdev_pmd_find_dpcls(struct dp_netdev_pmd_thread *pmd,
         VLOG_DBG("Creating dpcls %p for in_port %d", cls, in_port);
     }
     return cls;
+}
+
+int dpif_netdev_vport_is_tunnel(struct dp_netdev *dp,odp_port_t port_no)
+{
+    struct dp_netdev_port *port = dp_netdev_lookup_port(dp, port_no);
+    if (port == NULL) {
+        VLOG_ERR("no port found : %d", port_no);
+        return -1;
+    }
+
+    if (is_vport_class(netdev_get_class(port->netdev))) {
+        struct netdev_vport *vport=NULL;
+        vport = netdev_vport_cast(port->netdev);
+        if (vport!=NULL && vport->carrier_status) {
+            return 1;
+        }
+        else {
+            return 0;
+        }
+    }
+    return 0;
 }
 
 static void
@@ -4699,12 +4721,12 @@ dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
 
     /* All the flow batches need to be reset before any call to
      * packet_batch_per_flow_execute() as it could potentially trigger
-     * recirculation. When a packet matching flow ‘j’ happens to be
+     * recirculation. When a packet matching flow ���j��� happens to be
      * recirculated, the nested call to dp_netdev_input__() could potentially
      * classify the packet as matching another flow - say 'k'. It could happen
      * that in the previous call to dp_netdev_input__() that same flow 'k' had
      * already its own batches[k] still waiting to be served.  So if its
-     * ‘batch’ member is not reset, the recirculated packet would be wrongly
+     * ���batch��� member is not reset, the recirculated packet would be wrongly
      * appended to batches[k] of the 1st call to dp_netdev_input__(). */
     size_t i;
     for (i = 0; i < n_batches; i++) {
