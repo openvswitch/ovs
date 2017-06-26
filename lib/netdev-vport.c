@@ -849,6 +849,7 @@ netdev_vport_get_ifindex(const struct netdev *netdev_)
     netdev_vport_construct,                                 \
     netdev_vport_destruct,                                  \
     netdev_vport_dealloc,                                   \
+    NULL,  					            \
     GET_CONFIG,                                             \
     SET_CONFIG,                                             \
     GET_TUNNEL_CONFIG,                                      \
