@@ -42,6 +42,8 @@ AM_CPPFLAGS += -DNDEBUG
 AM_CFLAGS += -fomit-frame-pointer
 endif
 
+AM_CTAGSFLAGS = $(OVS_CTAGS_IDENTIFIERS_LIST)
+
 if WIN32
 psep=";"
 else
