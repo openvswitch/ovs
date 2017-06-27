@@ -171,7 +171,7 @@ AT_CLEANUP
 
 
 # complex completion check - ofproto/trace
-# ofproto/trace {[dp_name] odp_flow | bridge br_flow} [-generate|packet]
+# ofproto/trace {[dp_name] odp_flow | bridge br_flow} [OPTIONS] [-generate|packet]
 # test expansion on 'dp|dp_name' and 'bridge'
 AT_SETUP([appctl-bashcomp - complex completion check 3])
 AT_SKIP_IF([test -z ${BASH_VERSION+x}])
@@ -209,7 +209,8 @@ AT_CHECK_UNQUOTED([GET_AVAIL(${INPUT})], [0])
 # set odp_flow to some random string, should go to the next level.
 INPUT="$(bash ovs-appctl-bashcomp.bash debug ovs-appctl ofproto/trace ovs-dummy "in_port(123),mac(),ip,tcp" TAB 2>&1)"
 MATCH="$(GET_COMP_STR([-generate], [-generate])
-GET_COMP_STR([packet], []))"
+GET_COMP_STR([packet], [])
+GET_COMP_STR([OPTIONS...], []))"
 AT_CHECK_UNQUOTED([GET_EXPAN(${INPUT})],
 [0], [dnl
 ${MATCH}
@@ -242,7 +243,8 @@ AT_CHECK_UNQUOTED([GET_AVAIL(${INPUT})], [0])
 # set argument to some random string, should go to the odp_flow path.
 INPUT="$(bash ovs-appctl-bashcomp.bash debug ovs-appctl ofproto/trace "in_port(123),mac(),ip,tcp" TAB 2>&1)"
 MATCH="$(GET_COMP_STR([-generate], [-generate])
-GET_COMP_STR([packet], []))"
+GET_COMP_STR([packet], [])
+GET_COMP_STR([OPTIONS...], []))"
 AT_CHECK_UNQUOTED([GET_EXPAN(${INPUT})],
 [0], [dnl
 ${MATCH}

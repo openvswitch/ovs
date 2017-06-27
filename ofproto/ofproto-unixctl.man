@@ -6,10 +6,10 @@ These commands manage the core OpenFlow switch implementation (called
 Lists the names of the running ofproto instances.  These are the names
 that may be used on \fBofproto/trace\fR.
 .
-.IP "\fBofproto/trace\fR [\fIdpname\fR] \fIodp_flow\fR [\fB\-generate \fR| \fIpacket\fR]"
-.IQ "\fBofproto/trace\fR \fIbridge\fR \fIbr_flow\fR [\fB\-generate \fR| \fIpacket\fR]"
-.IQ "\fBofproto/trace\-packet\-out\fR [\fB\-consistent\fR] [\fIdpname\fR] \fIodp_flow\fR [\fB\-generate \fR| \fIpacket\fR] \fIactions\fR"
-.IQ "\fBofproto/trace\-packet\-out\fR [\fB\-consistent\fR] \fIbridge\fR \fIbr_flow\fR [\fB\-generate \fR| \fIpacket\fR] \fIactions\fR"
+.IP "\fBofproto/trace\fR [\fIdpname\fR] \fIodp_flow\fR [\fIOPTIONS\fR] [\fB\-generate \fR| \fIpacket\fR]"
+.IQ "\fBofproto/trace\fR \fIbridge\fR \fIbr_flow\fR [\fIOPTIONS\fR] [\fB\-generate \fR| \fIpacket\fR]"
+.IQ "\fBofproto/trace\-packet\-out\fR [\fB\-consistent\fR] [\fIdpname\fR] \fIodp_flow\fR [\fIOPTIONS\fR] [\fB\-generate \fR| \fIpacket\fR] \fIactions\fR"
+.IQ "\fBofproto/trace\-packet\-out\fR [\fB\-consistent\fR] \fIbridge\fR \fIbr_flow\fR [\fIOPTIONS\fR] [\fB\-generate \fR| \fIpacket\fR] \fIactions\fR"
 Traces the path of an imaginary packet through \fIswitch\fR and
 reports the path that it took.  The initial treatment of the packet
 varies based on the command:
@@ -45,6 +45,52 @@ have bridges of different types (say, both \fBovs-netdev\fR and
 OpenFlow flow: besides other differences, it never contains
 wildcards.)  \fIbridge\fR names of the bridge through which
 \fIbr_flow\fR should be traced.
+.RE
+.
+.IP
+.RS
+\fBofproto/trace\fR supports the following options:
+.
+.IP "--ct-next \fIflags\fR"
+When the traced flow triggers conntrack actions, \fBofproto/trace\fR
+will automatically trace the forked packet processing pipeline with
+user specified ct_state.  This option sets the ct_state flags that the
+conntrack module will report. The \fIflags\fR must be a comma- or
+space-separated list of the following connection tracking flags:
+.
+.RS
+.IP \(bu
+\fBtrk\fR: Include to indicate connection tracking has taken place.
+.
+.IP \(bu
+\fBnew\fR: Include to indicate a new flow.
+.
+.IP \(bu
+\fBest\fR: Include to indicate an established flow.
+.
+.IP \(bu
+\fBrel\fR: Include to indicate a related flow.
+.
+.IP \(bu
+\fBrpl\fR: Include to indicate a reply flow.
+.
+.IP \(bu
+\fBinv\fR: Include to indicate a connection entry in a bad state.
+.
+.IP \(bu
+\fBdnat\fR: Include to indicate a packet whose destination IP address has been
+changed.
+.
+.IP \(bu
+\fBsnat\fR: Include to indicate a packet whose source IP address has been
+changed.
+.
+.RE
+.
+.IP
+When --ct-next is unspecified, or when there are fewer --ct-next options than
+ct actions, the \fIflags\fR default to trk,new.
+.
 .RE
 .
 .IP

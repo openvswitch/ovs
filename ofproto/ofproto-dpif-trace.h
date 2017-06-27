@@ -72,6 +72,12 @@ struct oftrace_recirc_node {
     struct dp_packet *packet;
 };
 
+/* A node within a next_ct_states list. */
+struct oftrace_next_ct_state {
+    struct ovs_list node;       /* In next_ct_states. */
+    uint32_t state;
+};
+
 void ofproto_dpif_trace_init(void);
 
 struct oftrace_node *oftrace_report(struct ovs_list *, enum oftrace_node_type,
