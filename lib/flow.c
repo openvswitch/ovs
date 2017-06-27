@@ -1051,6 +1051,74 @@ ct_state_from_string(const char *s)
     return 0;
 }
 
+/* Parses conntrack state from 'state_str'.  If it is parsed successfully,
+ * stores the parsed ct_state in 'ct_state', and returns true.  Otherwise,
+ * returns false, and reports error message in 'ds'. */
+bool
+parse_ct_state(const char *state_str, uint32_t default_state,
+               uint32_t *ct_state, struct ds *ds)
+{
+    uint32_t state = default_state;
+    char *state_s = xstrdup(state_str);
+    char *save_ptr = NULL;
+
+    for (char *cs = strtok_r(state_s, ", ", &save_ptr); cs;
+         cs = strtok_r(NULL, ", ", &save_ptr)) {
+        uint32_t bit = ct_state_from_string(cs);
+        if (!bit) {
+            ds_put_format(ds, "%s: unknown connection tracking state flag",
+                          cs);
+            return false;
+        }
+        state |= bit;
+    }
+
+    *ct_state = state;
+    free(state_s);
+
+    return true;
+}
+
+/* Checks the given conntrack state 'state' according to the constraints
+ * listed in ovs-fields (7).  Returns true if it is valid.  Otherwise, returns
+ * false, and reports error in 'ds'. */
+bool
+validate_ct_state(uint32_t state, struct ds *ds)
+{
+    bool valid_ct_state = true;
+    struct ds d_str = DS_EMPTY_INITIALIZER;
+
+    format_flags(&d_str, ct_state_to_string, state, '|');
+
+    if (state && !(state & CS_TRACKED)) {
+        ds_put_format(ds, "%s: invalid connection state: "
+                      "If \"trk\" is unset, no other flags are set\n",
+                      ds_cstr(&d_str));
+        valid_ct_state = false;
+    }
+    if (state & CS_INVALID && state & ~(CS_TRACKED | CS_INVALID)) {
+        ds_put_format(ds, "%s: invalid connection state: "
+                      "when \"inv\" is set, only \"trk\" may also be set\n",
+                      ds_cstr(&d_str));
+        valid_ct_state = false;
+    }
+    if (state & CS_NEW && state & CS_ESTABLISHED) {
+        ds_put_format(ds, "%s: invalid connection state: "
+                      "\"new\" and \"est\" are mutually exclusive\n",
+                      ds_cstr(&d_str));
+        valid_ct_state = false;
+    }
+    if (state & CS_NEW && state & CS_REPLY_DIR) {
+        ds_put_format(ds, "%s: invalid connection state: "
+                      "\"new\" and \"rpy\" are mutually exclusive\n",
+                      ds_cstr(&d_str));
+        valid_ct_state = false;
+    }
+
+    ds_destroy(&d_str);
+    return valid_ct_state;
+}
+
 /* Clears the fields in 'flow' associated with connection tracking. */
 void
 flow_clear_conntrack(struct flow *flow)

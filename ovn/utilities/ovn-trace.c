@@ -169,34 +169,16 @@ default_ovs(void)
 static void
 parse_ct_option(const char *state_s_)
 {
-    uint32_t state = CS_TRACKED;
+    uint32_t state;
+    struct ds ds = DS_EMPTY_INITIALIZER;
 
-    char *state_s = xstrdup(state_s_);
-    char *save_ptr = NULL;
-    for (char *cs = strtok_r(state_s, ", ", &save_ptr); cs;
-         cs = strtok_r(NULL, ", ", &save_ptr)) {
-        uint32_t bit = ct_state_from_string(cs);
-        if (!bit) {
-            ovs_fatal(0, "%s: unknown connection tracking state flag", cs);
-        }
-        state |= bit;
+    if (!parse_ct_state(state_s_, CS_TRACKED, &state, &ds)) {
+        ovs_fatal(0, "%s", ds_cstr(&ds));
     }
-    free(state_s);
-
-    /* Check constraints listed in ovs-fields(7). */
-    if (state & CS_INVALID && state & ~(CS_TRACKED | CS_INVALID)) {
-        VLOG_WARN("%s: invalid connection state: "
-                  "when \"inv\" is set, only \"trk\" may also be set",
-                  state_s_);
+    if (!validate_ct_state(state, &ds)) {
+        VLOG_WARN("%s", ds_cstr(&ds));
     }
-    if (state & CS_NEW && state & CS_ESTABLISHED) {
-        VLOG_WARN("%s: invalid connection state: "
-                  "\"new\" and \"est\" are mutually exclusive", state_s_);
-    }
-    if (state & CS_NEW && state & CS_REPLY_DIR) {
-        VLOG_WARN("%s: invalid connection state: "
-                  "\"new\" and \"rpy\" are mutually exclusive", state_s_);
-    }
+    ds_destroy(&ds);
 
     ct_states = xrealloc(ct_states, (n_ct_states + 1) * sizeof *ct_states);
     ct_states[n_ct_states++] = state;
