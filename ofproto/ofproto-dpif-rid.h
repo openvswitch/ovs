@@ -186,6 +186,7 @@ void recirc_free_id(uint32_t recirc_id);
 void recirc_free_ofproto(struct ofproto_dpif *, const char *ofproto_name);
 
 const struct recirc_id_node *recirc_id_node_find(uint32_t recirc_id);
+bool recirc_id_node_find_and_ref(uint32_t id);
 
 static inline struct recirc_id_node *
 recirc_id_node_from_state(const struct frozen_state *state)

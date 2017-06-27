@@ -23,7 +23,7 @@
 #include "openvswitch/ofp-parse.h"
 #include "unixctl.h"
 
-static void ofproto_trace(struct ofproto_dpif *, struct flow *,
+static void ofproto_trace(struct ofproto_dpif *, const struct flow *,
                           const struct dp_packet *packet,
                           const struct ofpact[], size_t ofpacts_len,
                           struct ds *);
@@ -82,6 +82,37 @@ oftrace_node_destroy(struct oftrace_node *node)
     if (node) {
         oftrace_node_list_destroy(&node->subs);
         free(node->text);
+        free(node);
+    }
+}
+
+bool
+oftrace_add_recirc_node(struct ovs_list *recirc_queue,
+                        enum oftrace_recirc_type type, const struct flow *flow,
+                        const struct dp_packet *packet, uint32_t recirc_id)
+{
+    if (!recirc_id_node_find_and_ref(recirc_id)) {
+        return false;
+    }
+
+    struct oftrace_recirc_node *node = xmalloc(sizeof *node);
+    ovs_list_push_back(recirc_queue, &node->node);
+
+    node->type = type;
+    node->recirc_id = recirc_id;
+    node->flow = *flow;
+    node->flow.recirc_id = recirc_id;
+    node->packet = packet ? dp_packet_clone(packet) : NULL;
+
+    return true;
+}
+
+static void
+oftrace_recirc_node_destroy(struct oftrace_recirc_node *node)
+{
+    if (node) {
+        recirc_free_id(node->recirc_id);
+        dp_packet_delete(node->packet);
         free(node);
     }
 }
@@ -419,20 +450,11 @@ exit:
     ofpbuf_uninit(&ofpacts);
 }
 
-/* Implements a "trace" through 'ofproto''s flow table, appending a textual
- * description of the results to 'output'.
- *
- * The trace follows a packet with the specified 'flow' through the flow
- * table.  'packet' may be nonnull to trace an actual packet, with consequent
- * side effects (if it is nonnull then its flow must be 'flow').
- *
- * If 'ofpacts' is nonnull then its 'ofpacts_len' bytes specify the actions to
- * trace, otherwise the actions are determined by a flow table lookup. */
 static void
-ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
-              const struct dp_packet *packet,
-              const struct ofpact ofpacts[], size_t ofpacts_len,
-              struct ds *output)
+ofproto_trace__(struct ofproto_dpif *ofproto, const struct flow *flow,
+                const struct dp_packet *packet, struct ovs_list *recirc_queue,
+                const struct ofpact ofpacts[], size_t ofpacts_len,
+                struct ds *output)
 {
     struct ofpbuf odp_actions;
     ofpbuf_init(&odp_actions, 0);
@@ -447,6 +469,7 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
     xin.ofpacts = ofpacts;
     xin.ofpacts_len = ofpacts_len;
     xin.trace = &trace;
+    xin.recirc_queue = recirc_queue;
 
     /* Copy initial flow out of xin.flow.  It differs from '*flow' because
      * xlate_in_init() initializes actset_output to OFPP_UNSET. */
@@ -501,6 +524,46 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
     xlate_out_uninit(&xout);
     ofpbuf_uninit(&odp_actions);
     oftrace_node_list_destroy(&trace);
+}
+
+/* Implements a "trace" through 'ofproto''s flow table, appending a textual
+ * description of the results to 'output'.
+ *
+ * The trace follows a packet with the specified 'flow' through the flow
+ * table.  'packet' may be nonnull to trace an actual packet, with consequent
+ * side effects (if it is nonnull then its flow must be 'flow').
+ *
+ * If 'ofpacts' is nonnull then its 'ofpacts_len' bytes specify the actions to
+ * trace, otherwise the actions are determined by a flow table lookup. */
+static void
+ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
+              const struct dp_packet *packet,
+              const struct ofpact ofpacts[], size_t ofpacts_len,
+              struct ds *output)
+{
+    struct ovs_list recirc_queue = OVS_LIST_INITIALIZER(&recirc_queue);
+    ofproto_trace__(ofproto, flow, packet, &recirc_queue,
+                    ofpacts, ofpacts_len, output);
+
+    struct oftrace_recirc_node *recirc_node;
+    LIST_FOR_EACH_POP (recirc_node, node, &recirc_queue) {
+        ds_put_cstr(output, "\n\n");
+        ds_put_char_multiple(output, '=', 79);
+        ds_put_format(output, "\nrecirc(%#"PRIx32")",
+                      recirc_node->recirc_id);
+        if (recirc_node->type == OFT_RECIRC_CONNTRACK) {
+            recirc_node->flow.ct_state = CS_TRACKED | CS_NEW;
+            ds_put_cstr(output, " - resume conntrack processing with "
+                                "default ct_state=trk|new");
+        }
+        ds_put_char(output, '\n');
+        ds_put_char_multiple(output, '=', 79);
+        ds_put_cstr(output, "\n\n");
+
+        ofproto_trace__(ofproto, &recirc_node->flow, recirc_node->packet,
+                        &recirc_queue, ofpacts, ofpacts_len, output);
+        oftrace_recirc_node_destroy(recirc_node);
+    }
 }
 
 void

@@ -107,6 +107,19 @@ recirc_id_node_find(uint32_t id)
         : NULL;
 }
 
+bool
+recirc_id_node_find_and_ref(uint32_t id)
+{
+    struct recirc_id_node *rid_node =
+        CONST_CAST(struct recirc_id_node *, recirc_id_node_find(id));
+
+    if (!rid_node) {
+        return false;
+    }
+
+    return ovs_refcount_try_ref_rcu(&rid_node->refcount);
+}
+
 static uint32_t
 frozen_state_hash(const struct frozen_state *state)
 {

@@ -4359,9 +4359,14 @@ emit_continuation(struct xlate_ctx *ctx, const struct frozen_state *state)
     }
 }
 
-static void
+/* Creates a frozen state, and allocates a unique recirc id for the given
+ * state.  Returns a non-zero recirc id if it is allocated successfully.
+ * Returns 0 otherwise.
+ **/
+static uint32_t
 finish_freezing__(struct xlate_ctx *ctx, uint8_t table)
 {
+    uint32_t id = 0;
     ovs_assert(ctx->freezing);
 
     struct frozen_state state = {
@@ -4388,11 +4393,11 @@ finish_freezing__(struct xlate_ctx *ctx, uint8_t table)
          * recirculation context, will be returned if possible.
          * The life-cycle of this recirc id is managed by associating it
          * with the udpif key ('ukey') created for each new datapath flow. */
-        uint32_t id = recirc_alloc_id_ctx(&state);
+        id = recirc_alloc_id_ctx(&state);
         if (!id) {
             xlate_report_error(ctx, "Failed to allocate recirculation id");
             ctx->error = XLATE_NO_RECIRCULATION_CONTEXT;
-            return;
+            return 0;
         }
         recirc_refs_add(&ctx->xout->recircs, id);
 
@@ -4411,6 +4416,7 @@ finish_freezing__(struct xlate_ctx *ctx, uint8_t table)
 
     /* Undo changes done by freezing. */
     ctx_cancel_freeze(ctx);
+    return id;
 }
 
 /* Called only when we're freezing. */
@@ -4428,8 +4434,22 @@ finish_freezing(struct xlate_ctx *ctx)
 static void
 compose_recirculate_and_fork(struct xlate_ctx *ctx, uint8_t table)
 {
+    uint32_t recirc_id;
     ctx->freezing = true;
-    finish_freezing__(ctx, table);
+    recirc_id = finish_freezing__(ctx, table);
+
+    if (OVS_UNLIKELY(ctx->xin->trace) && recirc_id) {
+        if (oftrace_add_recirc_node(ctx->xin->recirc_queue,
+                                    OFT_RECIRC_CONNTRACK, &ctx->xin->flow,
+                                    ctx->xin->packet, recirc_id)) {
+            xlate_report(ctx, OFT_DETAIL, "A clone of the packet is forked to "
+                         "recirculate. The forked pipeline will be resumed at "
+                         "table %u.", table);
+        } else {
+            xlate_report(ctx, OFT_DETAIL, "Failed to trace the conntrack "
+                        "forked pipeline with recirc_id = %d.", recirc_id);
+        }
+    }
 }
 
 static void
@@ -5974,6 +5994,7 @@ xlate_in_init(struct xlate_in *xin, struct ofproto_dpif *ofproto,
     xin->wc = wc;
     xin->odp_actions = odp_actions;
     xin->in_packet_out = false;
+    xin->recirc_queue = NULL;
 
     /* Do recirc lookup. */
     xin->frozen_state = NULL;
