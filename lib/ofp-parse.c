@@ -735,7 +735,9 @@ out:
  * switch.  Returns the set of usable protocols in '*usable_protocols'.
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
- * error.  The caller is responsible for freeing the returned string. */
+ * error.  The caller is responsible for freeing the returned string.
+ * If successful, both 'po->ofpacts' and 'po->packet' must be free()d by
+ * the caller. */
 char * OVS_WARN_UNUSED_RESULT
 parse_ofp_packet_out_str(struct ofputil_packet_out *po, const char *str_,
                          const struct ofputil_port_map *port_map,
