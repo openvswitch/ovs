@@ -836,7 +836,8 @@ ofctrl_put(struct hmap *flow_table, struct shash *pending_ct_zones,
      * criteria for being backlogged appear very conservative, but the socket
      * between ovn-controller and OVS provides some buffering.) */
     if (state != S_UPDATE_FLOWS
-        || rconn_packet_counter_n_packets(tx_counter)) {
+        || rconn_packet_counter_n_packets(tx_counter)
+        || rconn_get_version(swconn) < 0) {
         ovn_flow_table_clear(flow_table);
         ovn_group_table_clear(groups, false);
         return;
