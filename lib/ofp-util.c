@@ -6617,6 +6617,7 @@ ofputil_pull_buckets(struct ofpbuf *msg, size_t buckets_length,
         if (error) {
             ofpbuf_uninit(&ofpacts);
             ofputil_bucket_list_destroy(buckets);
+            free(bucket);
             return OFPERR_OFPGMFC_BAD_WATCH;
         }
         bucket->watch_group = ntohl(ob->watch_group);
