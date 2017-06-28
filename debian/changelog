@@ -1,3 +1,15 @@
+openvswitch (2.7.1-1) unstable; urgency=low
+   [ Open vSwitch team ]
+   * New upstream version
+   - Fedora Packaging:
+     * OVN services are no longer restarted automatically after upgrade.
+   - Add --cleanup option to command 'ovs-appctl exit' (see ovs-vswitchd(8)).
+   - libopenvswitch-2 was renamed to libopenvswitch-2.7. Applications built
+     against libopenvswitch must be recompiled against the newer library.
+   - Bug fixes
+
+ -- Open vSwitch team <dev@openvswitch.org>  Wed, 28 Jun 2017 09:40:42 -0700
+
 openvswitch (2.7.0-1) unstable; urgency=low
    [ Open vSwitch team ]
    * New upstream version
