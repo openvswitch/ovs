@@ -817,7 +817,8 @@ bool
 ofctrl_can_put(void)
 {
     if (state != S_UPDATE_FLOWS
-        || rconn_packet_counter_n_packets(tx_counter)) {
+        || rconn_packet_counter_n_packets(tx_counter)
+        || rconn_get_version(swconn) < 0) {
         return false;
     }
     return true;
