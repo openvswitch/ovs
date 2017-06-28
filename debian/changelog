@@ -1,9 +1,9 @@
 openvswitch (2.5.3-1) unstable; urgency=low
    [ Open vSwitch team ]
    * New upstream version
-   - Nothing yet!
+   - Bug fixes
 
- -- Open vSwitch team <dev@openvswitch.org>  Tue, 21 Feb 2017 14:36:44 -0700
+ -- Open vSwitch team <dev@openvswitch.org>  Wed, 28 Jun 2017 09:49:43 -0700
 
 openvswitch (2.5.2-1) unstable; urgency=low
    [ Open vSwitch team ]
