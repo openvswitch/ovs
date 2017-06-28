@@ -754,6 +754,8 @@ parse_ofp_packet_out_str(struct ofputil_packet_out *po, const char *str_,
     return error;
 }
 
+/* Parse a string representation of a meter modification message to '*mm'.
+ * If successful, 'mm->meter.bands' must be free()d by the caller. */
 static char * OVS_WARN_UNUSED_RESULT
 parse_ofp_meter_mod_str__(struct ofputil_meter_mod *mm, char *string,
                           struct ofpbuf *bands, int command,
@@ -795,6 +797,9 @@ parse_ofp_meter_mod_str__(struct ofputil_meter_mod *mm, char *string,
     mm->command = command;
     mm->meter.meter_id = 0;
     mm->meter.flags = 0;
+    mm->meter.n_bands = 0;
+    mm->meter.bands = NULL;
+
     if (fields & F_BANDS) {
         band_str = strstr(string, "band");
         if (!band_str) {
@@ -945,9 +950,6 @@ parse_ofp_meter_mod_str__(struct ofputil_meter_mod *mm, char *string,
                 }
             }
         }
-    } else {
-        mm->meter.n_bands = 0;
-        mm->meter.bands = NULL;
     }
 
     return NULL;
@@ -957,7 +959,8 @@ parse_ofp_meter_mod_str__(struct ofputil_meter_mod *mm, char *string,
  * page) into 'mm' for sending the specified meter_mod 'command' to a switch.
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
- * error.  The caller is responsible for freeing the returned string. */
+ * error.  The caller is responsible for freeing the returned string.
+ * If successful, 'mm->meter.bands' must be free()d by the caller. */
 char * OVS_WARN_UNUSED_RESULT
 parse_ofp_meter_mod_str(struct ofputil_meter_mod *mm, const char *str_,
                         int command, enum ofputil_protocol *usable_protocols)

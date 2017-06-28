@@ -3699,11 +3699,13 @@ ofctl_meter_mod__(const char *bridge, const char *str, int command)
         usable_protocols = OFPUTIL_P_OF13_UP;
         mm.command = command;
         mm.meter.meter_id = OFPM13_ALL;
+        mm.meter.bands = NULL;
     }
 
     protocol = open_vconn_for_flow_mod(bridge, &vconn, usable_protocols);
     version = ofputil_protocol_to_ofp_version(protocol);
     transact_noreply(vconn, ofputil_encode_meter_mod(version, &mm));
+    free(mm.meter.bands);
     vconn_close(vconn);
 }
 
@@ -3726,12 +3728,14 @@ ofctl_meter_request__(const char *bridge, const char *str,
     } else {
         usable_protocols = OFPUTIL_P_OF13_UP;
         mm.meter.meter_id = OFPM13_ALL;
+        mm.meter.bands = NULL;
     }
 
     protocol = open_vconn_for_flow_mod(bridge, &vconn, usable_protocols);
     version = ofputil_protocol_to_ofp_version(protocol);
     dump_transaction(vconn, ofputil_encode_meter_request(version, type,
                                                          mm.meter.meter_id));
+    free(mm.meter.bands);
     vconn_close(vconn);
 }
 
