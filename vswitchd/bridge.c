@@ -4430,6 +4430,9 @@ iface_set_mac(const struct bridge *br, const struct port *port, struct iface *if
         } else if (eth_addr_is_multicast(*mac)) {
             VLOG_ERR("interface %s: cannot set MAC to multicast address",
                      iface->name);
+        } else if (eth_addr_is_zero(*mac)) {
+            VLOG_ERR("interface %s: cannot set MAC to all zero address",
+                     iface->name);
         } else {
             int error = netdev_set_etheraddr(iface->netdev, *mac);
             if (error) {
