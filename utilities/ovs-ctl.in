@@ -201,7 +201,7 @@ start_ovsdb() {
 
 add_managers () {
     # Now that ovs-vswitchd has started and completed its initial
-    # configuration, tell ovsdb-server to conenct to the remote managers.  We
+    # configuration, tell ovsdb-server to connect to the remote managers.  We
     # used to do this at ovsdb-server startup time, but waiting for
     # ovs-vswitchd to finish configuring means that remote managers see less
     # churn in the database at startup or restart.  (For example, managers
