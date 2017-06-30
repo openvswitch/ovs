@@ -1098,7 +1098,7 @@ if __name__ == "__main__":
                                               ['directory',
                                                'help',
                                                'version'])
-        except getopt.GetoptError, geo:
+        except getopt.GetoptError as geo:
             sys.stderr.write("%s: %s\n" % (argv0, geo.msg))
             sys.exit(1)
 
@@ -1136,7 +1136,7 @@ if __name__ == "__main__":
             sys.exit(1)
 
         func(*args[1:])
-    except ovs.db.error.Error, e:
+    except ovs.db.error.Error as e:
         sys.stderr.write("%s: %s\n" % (argv0, e))
         sys.exit(1)
 
