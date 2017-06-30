@@ -65,9 +65,15 @@ def columnGroupToNroff(table, groupXml, documented_columns):
                 if node.hasAttribute('type'):
                     type_string = node.attributes['type'].nodeValue
                     type_json = ovs.json.from_string(str(type_string))
-                    if type(type_json) in (str, unicode):
-                        raise error.Error("%s %s:%s has invalid 'type': %s" 
-                                          % (table.name, name, key, type_json))
+                    # py2 -> py3 means str -> bytes and unicode -> str
+                    try:
+                        if type(type_json) in (str, unicode):
+                            raise error.Error("%s %s:%s has invalid 'type': %s" 
+                                              % (table.name, name, key, type_json))
+                    except:
+                        if type(type_json) in (bytes, str):
+                            raise error.Error("%s %s:%s has invalid 'type': %s" 
+                                              % (table.name, name, key, type_json))
                     type_ = ovs.db.types.BaseType.from_json(type_json)
                 else:
                     type_ = column.type.value
