@@ -358,7 +358,7 @@ static void
                     print("        %s" % type.value.initCDefault(valueVar, type.n_min == 0))
                 print("    }")
             else:
-                if type.n_max != sys.maxint:
+                if type.n_max != sys.maxsize:
                     print("    size_t n = MIN(%d, datum->n);" % type.n_max)
                     nMax = "n"
                 else:
