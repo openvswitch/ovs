@@ -278,7 +278,7 @@ if __name__ == "__main__":
             options, args = getopt.gnu_getopt(sys.argv[1:], 'hV',
                                               ['er-diagram=',
                                                'version=', 'help'])
-        except getopt.GetoptError, geo:
+        except getopt.GetoptError as geo:
             sys.stderr.write("%s: %s\n" % (argv0, geo.msg))
             sys.exit(1)
 
@@ -306,7 +306,7 @@ if __name__ == "__main__":
             if len(line):
                 print(line)
 
-    except error.Error, e:
+    except error.Error as e:
         sys.stderr.write("%s: %s\n" % (argv0, e.msg))
         sys.exit(1)
 
