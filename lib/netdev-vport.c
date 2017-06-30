@@ -407,7 +407,8 @@ tunnel_supported_layers(const char *type,
         return TNL_L3;
     } else if (!strcmp(type, "gre")) {
         return TNL_L2 | TNL_L3;
-    } else if (!strcmp(type, "vxlan") && tnl_cfg->exts & OVS_VXLAN_EXT_GPE) {
+    } else if (!strcmp(type, "vxlan")
+               && tnl_cfg->exts & (1 << OVS_VXLAN_EXT_GPE)) {
         return TNL_L2 | TNL_L3;
     } else {
         return TNL_L2;
@@ -545,8 +546,8 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
 
     enum tunnel_layers layers = tunnel_supported_layers(type, &tnl_cfg);
     const char *full_type = (strcmp(type, "vxlan") ? type
-                             : tnl_cfg.exts & OVS_VXLAN_EXT_GPE ? "VXLAN-GPE"
-                             : "VXLAN (without GPE");
+                             : (tnl_cfg.exts & (1 << OVS_VXLAN_EXT_GPE)
+                                ? "VXLAN-GPE" : "VXLAN (without GPE"));
     const char *packet_type = smap_get(args, "packet_type");
     if (!packet_type) {
         tnl_cfg.pt_mode = default_pt_mode(layers);
