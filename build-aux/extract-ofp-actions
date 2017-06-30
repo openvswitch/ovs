@@ -13,7 +13,7 @@ version_map = {"1.0": 0x01,
                "1.3": 0x04,
                "1.4": 0x05,
                "1.5": 0x06}
-version_reverse_map = dict((v, k) for (k, v) in version_map.iteritems())
+version_reverse_map = dict((v, k) for (k, v) in version_map.items())
 
 # Map from vendor name to the length of the action header.
 vendor_map = {"OF": (0x00000000,  4),

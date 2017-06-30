@@ -138,7 +138,7 @@ def printCIDLHeader(schemaFile):
 #include "smap.h"
 #include "uuid.h"''' % {'prefix': prefix.upper()})
 
-    for tableName, table in sorted(schema.tables.iteritems()):
+    for tableName, table in sorted(schema.tables.items()):
         structName = "%s%s" % (prefix, tableName.lower())
 
         print("")
@@ -300,7 +300,7 @@ def printCIDLSource(schemaFile):
 ''' % schema.idlHeader)
 
     # Cast functions.
-    for tableName, table in sorted(schema.tables.iteritems()):
+    for tableName, table in sorted(schema.tables.items()):
         structName = "%s%s" % (prefix, tableName.lower())
         print('''
 static struct %(s)s *
@@ -311,7 +311,7 @@ static struct %(s)s *
 ''' % {'s': structName})
 
 
-    for tableName, table in sorted(schema.tables.iteritems()):
+    for tableName, table in sorted(schema.tables.items()):
         structName = "%s%s" % (prefix, tableName.lower())
         print("")
         print("/* %s table. */" % (tableName))
@@ -1025,7 +1025,7 @@ void
     # Table classes.
     print("")
     print("struct ovsdb_idl_table_class %stable_classes[%sN_TABLES] = {" % (prefix, prefix.upper()))
-    for tableName, table in sorted(schema.tables.iteritems()):
+    for tableName, table in sorted(schema.tables.items()):
         structName = "%s%s" % (prefix, tableName.lower())
         if table.is_root:
             is_root = "true"
