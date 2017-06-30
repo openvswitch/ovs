@@ -35,7 +35,7 @@ line = ""
 arg_structs = set()
 
 def round_up(x, y):
-    return (x + (y - 1)) / y * y
+    return int((x + (y - 1)) / y) * y
 
 def open_file(fn):
     global file_name
