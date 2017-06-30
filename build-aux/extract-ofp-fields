@@ -731,7 +731,7 @@ def make_ovs_fields(meta_flow_h, meta_flow_xml):
 ovs\-fields \- protocol header fields in OpenFlow and Open vSwitch
 .
 .PP
-''') % version
+''' % version)
 
     recursively_replace(doc, 'oxm_classes', make_oxm_classes_xml(document))
 

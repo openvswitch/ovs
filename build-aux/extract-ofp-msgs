@@ -56,14 +56,14 @@ def fatal(msg):
 
 def usage():
     argv0 = os.path.basename(sys.argv[0])
-    print '''\
+    print('''\
 %(argv0)s, for extracting OpenFlow message types from header files
 usage: %(argv0)s INPUT OUTPUT
   where INPUT is the name of the input header file
     and OUTPUT is the output file name.
 Despite OUTPUT, the output is written to stdout, and the OUTPUT argument
 only controls #line directives in the output.\
-''' % {"argv0": argv0}
+''' % {"argv0": argv0})
     sys.exit(0)
 
 def make_sizeof(s):
@@ -378,5 +378,5 @@ if __name__ == '__main__':
         line_number = 0
 
         for line in extract_ofp_msgs(sys.argv[2]):
-            print line
+            print(line)
         
