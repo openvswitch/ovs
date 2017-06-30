@@ -16,7 +16,7 @@ VERSION = {"1.0": 0x01,
            "1.3": 0x04,
            "1.4": 0x05,
            "1.5": 0x06}
-VERSION_REVERSE = dict((v,k) for k, v in VERSION.iteritems())
+VERSION_REVERSE = dict((v,k) for k, v in VERSION.items())
 
 TYPES = {"u8":       (1,   False),
          "be16":     (2,   False),
