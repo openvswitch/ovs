@@ -57,6 +57,7 @@
 #ifdef __linux__
 #include "tc.h"
 #endif
+#include "dpif-netdev.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev);
 
@@ -680,6 +681,7 @@ netdev_rxq_recv(struct netdev_rxq *rx, struct dp_packet_batch *batch)
     } else {
         batch->count = 0;
     }
+    batch->rxqid = rx->queue_id;
     return retval;
 }
 

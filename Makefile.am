@@ -22,7 +22,7 @@ AM_LDFLAGS += $(PTHREAD_LDFLAGS)
 AM_LDFLAGS += $(MSVC64_LDFLAGS)
 endif
 
-AM_CPPFLAGS += -I $(top_srcdir)/include
+AM_CPPFLAGS += -I $(top_srcdir)/include -I /usr/local/include/dpdk
 AM_CPPFLAGS += -I $(top_builddir)/include
 AM_CPPFLAGS += -I $(top_srcdir)/lib
 AM_CPPFLAGS += -I $(top_builddir)/lib

@@ -645,6 +645,7 @@ struct dp_packet_batch {
     size_t count;
     bool trunc; /* true if the batch needs truncate. */
     struct dp_packet *packets[NETDEV_MAX_BURST];
+    int rxqid;
 };
 
 static inline void

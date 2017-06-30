@@ -274,7 +274,12 @@ struct netdev_class {
     int (*construct)(struct netdev *);
     void (*destruct)(struct netdev *);
     void (*dealloc)(struct netdev *);
-
+    /* Get the pipeline information for the netdev.
+     *  This will return the pipe_line id and
+     * status of pipeline for packet processing.
+     */
+    void (*get_pipeline)(const struct netdev *netdev, struct dp_packet *packet,
+                         void *pipeline_res);
     /* Fetches the device 'netdev''s configuration, storing it in 'args'.
      * The caller owns 'args' and pre-initializes it to an empty smap.
      *
