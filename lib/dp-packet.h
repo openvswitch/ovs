@@ -739,6 +739,7 @@ dp_packet_batch_clone(struct dp_packet_batch *dst,
     DP_PACKET_BATCH_FOR_EACH (packet, src) {
         dp_packet_batch_add(dst, dp_packet_clone(packet));
     }
+    dst->trunc = src->trunc;
 }
 
 static inline void
