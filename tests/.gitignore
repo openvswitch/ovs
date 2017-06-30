@@ -52,3 +52,5 @@
 /testsuite.log
 /test-lib
 /testsuite.tmp.orig
+/valgrind.[0-9]*
+/valgrind/
