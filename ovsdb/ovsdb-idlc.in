@@ -17,7 +17,7 @@ def parseSchema(filename):
 
 def annotateSchema(schemaFile, annotationFile):
     schemaJson = ovs.json.from_file(schemaFile)
-    execfile(annotationFile, globals(), {"s": schemaJson})
+    exec(compile(open(annotationFile, "rb").read(), annotationFile, 'exec'), globals(), {"s": schemaJson})
     ovs.json.to_stream(schemaJson, sys.stdout)
     sys.stdout.write('\n')
 
