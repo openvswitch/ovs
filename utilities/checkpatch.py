@@ -320,7 +320,7 @@ def ovs_checkpatch_parse(text, filename):
     is_co_author = re.compile(r'(\s*(Co-authored-by: )(.*))$',
                               re.I | re.M | re.S)
 
-    for line in text.decode(errors='ignore').split('\n'):
+    for line in text.split('\n'):
         if current_file != previous_file:
             previous_file = current_file
 
@@ -418,7 +418,7 @@ def ovs_checkpatch_file(filename):
     for part in mail.walk():
         if part.get_content_maintype() == 'multipart':
             continue
-    result = ovs_checkpatch_parse(part.get_payload(decode=True), filename)
+    result = ovs_checkpatch_parse(part.get_payload(decode=False), filename)
     if result < 0:
         print("Lines checked: %d, Warnings: %d, Errors: %d" %
               (total_line, __warnings, __errors))
