@@ -2419,6 +2419,7 @@ dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
         ds_put_cstr(&ds, "flow match: ");
         miniflow_expand(&flow->cr.flow.mf, &m.flow);
         miniflow_expand(&flow->cr.mask->mf, &m.wc.masks);
+        memset(&m.tun_md, 0, sizeof m.tun_md);
         match_format(&m, NULL, &ds, OFP_DEFAULT_PRIORITY);
 
         VLOG_DBG("%s", ds_cstr(&ds));
