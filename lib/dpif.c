@@ -369,7 +369,8 @@ do_open(const char *name, const char *type, bool create, struct dpif **dpifp)
                 netdev_ports_insert(netdev, DPIF_HMAP_KEY(dpif), &dpif_port);
                 netdev_close(netdev);
             } else {
-                VLOG_WARN("could not open netdev %s type %s", name, type);
+                VLOG_WARN("could not open netdev %s type %s: %s",
+			  dpif_port.name, dpif_port.type, ovs_strerror(err));
             }
         }
     } else {
