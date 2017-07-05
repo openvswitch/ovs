@@ -10,6 +10,9 @@ Post-v2.8.0
      * ovsdb-tool: New "db-name" and "schema-name" commands.
    - ovs-vsctl and other commands that display data in tables now support a
      --max-column-width option to limit column width.
+   - No longer slow-path traffic that sends to a controller.  Applications,
+     such as OVN ACL logging, want to send a copy of a packet to a
+     controller while leaving the actual packet forwarding in the datapath.
    - OVN:
      * The "requested-chassis" option for a logical switch port now accepts a
        chassis "hostname" in addition to a chassis "name".

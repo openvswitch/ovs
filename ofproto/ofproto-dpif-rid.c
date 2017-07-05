@@ -142,6 +142,9 @@ frozen_state_hash(const struct frozen_state *state)
         hash = hash_bytes64(ALIGNED_CAST(const uint64_t *, state->ofpacts),
                             state->ofpacts_len, hash);
     }
+    if (state->userdata && state->userdata_len) {
+        hash = hash_bytes(state->userdata, state->userdata_len, hash);
+    }
     return hash;
 }
 
@@ -158,7 +161,8 @@ frozen_state_equal(const struct frozen_state *a, const struct frozen_state *b)
             && ofpacts_equal(a->ofpacts, a->ofpacts_len,
                              b->ofpacts, b->ofpacts_len)
             && ofpacts_equal(a->action_set, a->action_set_len,
-                             b->action_set, b->action_set_len));
+                             b->action_set, b->action_set_len)
+            && !memcmp(a->userdata, b->userdata, a->userdata_len));
 }
 
 /* Lockless RCU protected lookup.  If node is needed accross RCU quiescent
@@ -203,6 +207,9 @@ frozen_state_clone(struct frozen_state *new, const struct frozen_state *old)
     new->action_set = (new->action_set_len
                        ? xmemdup(new->action_set, new->action_set_len)
                        : NULL);
+    new->userdata = (new->userdata_len
+                     ? xmemdup(new->userdata, new->userdata_len)
+                     : NULL);
 }
 
 static void
@@ -211,6 +218,7 @@ frozen_state_free(struct frozen_state *state)
     free(state->stack);
     free(state->ofpacts);
     free(state->action_set);
+    free(state->userdata);
 }
 
 /* Allocate a unique recirculation id for the given set of flow metadata.

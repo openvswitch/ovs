@@ -620,9 +620,7 @@ trivial example::
 
   Final flow: unchanged
   Megaflow: recirc_id=0,eth,in_port=1,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x0000
-  Datapath actions: push_vlan(vid=100,pcp=0),pop_vlan,2,3
-  This flow is handled by the userspace slow path because it:
-	  - Sends "packet-in" messages to the OpenFlow controller.
+  Datapath actions: push_vlan(vid=100,pcp=0),userspace(pid=0,controller(reason=1,flags=1,recirc_id=1,rule_cookie=0x5adc15c0,controller_id=0,max_len=96)),pop_vlan,2,3
 
 The first line of output, beginning with ``Flow:``, just repeats our
 request in a more verbose form, including the L2 fields that were
@@ -640,18 +638,7 @@ Summary information follows the numbered tables.  The packet hasn't
 been changed (overall, even though a VLAN was pushed and then popped
 back off) since ingress, hence ``Final flow: unchanged``.  We'll look
 at the ``Megaflow`` information later.  The ``Datapath actions``
-summarize what would actually happen to such a packet.  Finally, the
-note at the end gives a hint that this flow would not perform well for
-large volumes of traffic, because it has to be handled in the switch's
-slow path since it sends OpenFlow messages to the controller.
-
-.. note::
-
-  This performance limitation is probably not problematic in this case
-  because it is only used for MAC learning, so that most packets won't
-  encounter it.  However, the Open vSwitch 2.9 release (which is
-  upcoming as of this writing) will likely remove this performance
-  limitation anyway.
+summarize what would actually happen to such a packet.
 
 Triggering MAC Learning
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -753,18 +740,15 @@ without any further MAC learning, e.g.::
 Performance
 ~~~~~~~~~~~
 
-We've already seen one factor that can be important for performance:
-Open vSwitch forces any flow that sends a packet to an OpenFlow
-controller into its "slow path", which means that processing packets
-in the flow will be orders of magnitude slower than otherwise.  This
-distinction between "slow path" and "fast path" is the key to making
-sure that Open vSwitch performs as fast as possible.
+Open vSwitch has a concept of a "fast path" and a "slow path"; ideally
+all packets stay in the fast path.  This distinction between slow path
+and fast path is the key to making sure that Open vSwitch performs as
+fast as possible.
 
-In addition to sending packets to a controller, some other factors can
-force a flow or a packet to take the slow path.  As one example, all
-CFM, BFD, LACP, STP, and LLDP processing takes place in the slow path,
-in the cases where Open vSwitch processes these protocols itself
-instead of delegating to controller-written flows.  As a second
+Some factors can force a flow or a packet to take the slow path.  As one
+example, all CFM, BFD, LACP, STP, and LLDP processing takes place in the
+slow path, in the cases where Open vSwitch processes these protocols
+itself instead of delegating to controller-written flows.  As a second
 example, any flow that modifies ARP fields is processed in the slow
 path.  These are corner cases that are unlikely to cause performance
 problems in practice because these protocols send packets at a
@@ -1142,9 +1126,7 @@ this::
 
   Final flow: udp,in_port=1,dl_vlan=100,dl_vlan_pcp=0,vlan_tci1=0x0000,dl_src=00:01:02:03:04:05,dl_dst=0e:00:00:00:00:01,nw_src=10.100.0.1,nw_dst=10.200.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=0,tp_dst=0
   Megaflow: recirc_id=0,eth,ip,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=00:01:02:03:04:05,dl_dst=0e:00:00:00:00:01,nw_dst=10.200.0.0/25,nw_frag=no
-  Datapath actions: push_vlan(vid=100,pcp=0)
-  This flow is handled by the userspace slow path because it:
-	  - Sends "packet-in" messages to the OpenFlow controller.
+  Datapath actions: push_vlan(vid=100,pcp=0),userspace(pid=0,controller(reason=1,flags=0,recirc_id=6,rule_cookie=0x5adc15c0,controller_id=0,max_len=128))
 
 Observe that the packet gets recognized as destined to the router, in
 table 3, and then as properly destined to the 10.200.0.0/24 network,
@@ -1201,9 +1183,7 @@ reply::
 
   Final flow: arp,in_port=4,dl_vlan=200,dl_vlan_pcp=0,vlan_tci1=0x0000,dl_src=00:10:20:30:40:50,dl_dst=0e:00:00:00:00:01,arp_spa=10.200.0.1,arp_tpa=10.200.0.254,arp_op=2,arp_sha=00:10:20:30:40:50,arp_tha=0e:00:00:00:00:01
   Megaflow: recirc_id=0,eth,arp,in_port=4,vlan_tci=0x0000/0x1fff,dl_dst=0e:00:00:00:00:01,arp_tpa=10.200.0.254
-  Datapath actions: push_vlan(vid=200,pcp=0)
-  This flow is handled by the userspace slow path because it:
-	  - Sends "packet-in" messages to the OpenFlow controller.
+  Datapath actions: push_vlan(vid=200,pcp=0),userspace(pid=0,controller(reason=1,flags=0,recirc_id=7,rule_cookie=0x5adc15c0,controller_id=0,max_len=128))
 
 It shows up in ``inst/faucet.log``::
 

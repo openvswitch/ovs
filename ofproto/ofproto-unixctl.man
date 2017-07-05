@@ -107,9 +107,9 @@ effects when a packet is specified.  If you want side effects to take
 place, then you must supply a packet.
 .
 .IP
-(Output actions are obviously side effects too, but
-the trace commands never execute them, even when one specifies a
-packet.)
+(Side effects when tracing do not have external consequences.  Even if a
+packet is specified, a trace will not output a packet or generate sFlow,
+NetFlow or controller events.)
 .
 .IP "Incomplete information."
 Most of the time, Open vSwitch can figure out everything about the

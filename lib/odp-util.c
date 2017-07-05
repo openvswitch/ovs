@@ -478,6 +478,21 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr,
                 odp_portno_name_format(portno_names,
                                        cookie.ipfix.output_odp_port, ds);
                 ds_put_char(ds, ')');
+            } else if (cookie.type == USER_ACTION_COOKIE_CONTROLLER) {
+                ds_put_format(ds, ",controller(reason=%"PRIu16
+                              ",dont_send=%"PRIu8
+                              ",recirc_id=%"PRIu32
+                              ",rule_cookie=%#"PRIx64
+                              ",controller_id=%"PRIu16
+                              ",max_len=%"PRIu16,
+                              cookie.controller.reason,
+                              cookie.controller.dont_send ? 1 : 0,
+                              cookie.controller.recirc_id,
+                              ntohll(get_32aligned_be64(
+                                         &cookie.controller.rule_cookie)),
+                              cookie.controller.controller_id,
+                              cookie.controller.max_len);
+                ds_put_char(ds, ')');
             } else {
                 userdata_unspec = true;
             }
@@ -1128,6 +1143,15 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
         uint32_t collector_set_id;
         uint32_t obs_domain_id;
         uint32_t obs_point_id;
+
+        /* USER_ACTION_COOKIE_CONTROLLER. */
+        uint8_t dont_send;
+        uint16_t reason;
+        uint32_t recirc_id;
+        ovs_be64 rule_cookie;
+        uint16_t controller_id;
+        uint16_t max_len;
+
         int vid, pcp;
         int n1 = -1;
         if (ovs_scan(&s[n], ",sFlow(vid=%i,"
@@ -1201,8 +1225,26 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
             cookie.ofp_in_port = OFPP_NONE;
             cookie.ofproto_uuid = UUID_ZERO;
             cookie.ipfix.output_odp_port = u32_to_odp(output);
-        } else if (ovs_scan(&s[n], ",userdata(%n",
-                            &n1)) {
+        } else if (ovs_scan(&s[n], ",controller(reason=%"SCNu16
+                              ",dont_send=%"SCNu8
+                              ",recirc_id=%"SCNu32
+                              ",rule_cookie=%"SCNx64
+                              ",controller_id=%"SCNu16
+                              ",max_len=%"SCNu16")%n",
+                              &reason, &dont_send, &recirc_id, &rule_cookie,
+                              &controller_id, &max_len, &n1)) {
+            n += n1;
+            cookie.type = USER_ACTION_COOKIE_CONTROLLER;
+            cookie.ofp_in_port = OFPP_NONE;
+            cookie.ofproto_uuid = UUID_ZERO;
+            cookie.controller.dont_send = dont_send ? true : false;
+            cookie.controller.reason = reason;
+            cookie.controller.recirc_id = recirc_id;
+            put_32aligned_be64(&cookie.controller.rule_cookie,
+                               htonll(rule_cookie));
+            cookie.controller.controller_id = controller_id;
+            cookie.controller.max_len = max_len;
+       } else if (ovs_scan(&s[n], ",userdata(%n", &n1)) {
             char *end;
 
             n += n1;
@@ -3266,7 +3308,7 @@ format_odp_tun_attr(const struct nlattr *attr, const struct nlattr *mask_attr,
         case OVS_TUNNEL_KEY_ATTR_ID:
             format_be64(ds, "tun_id", nl_attr_get_be64(a),
                         ma ? nl_attr_get(ma) : NULL, verbose);
-	    flags |= FLOW_TNL_F_KEY;
+            flags |= FLOW_TNL_F_KEY;
             if (ma) {
                 mask_flags |= FLOW_TNL_F_KEY;
             }
@@ -3302,10 +3344,10 @@ format_odp_tun_attr(const struct nlattr *attr, const struct nlattr *mask_attr,
                        ma ? nl_attr_get(ma) : NULL, verbose);
             break;
         case OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT:
-	    flags |= FLOW_TNL_F_DONT_FRAGMENT;
+            flags |= FLOW_TNL_F_DONT_FRAGMENT;
             break;
         case OVS_TUNNEL_KEY_ATTR_CSUM:
-	    flags |= FLOW_TNL_F_CSUM;
+            flags |= FLOW_TNL_F_CSUM;
             break;
         case OVS_TUNNEL_KEY_ATTR_TP_SRC:
             format_be16(ds, "tp_src", nl_attr_get_be16(a),
@@ -3316,7 +3358,7 @@ format_odp_tun_attr(const struct nlattr *attr, const struct nlattr *mask_attr,
                         ma ? nl_attr_get(ma) : NULL, verbose);
             break;
         case OVS_TUNNEL_KEY_ATTR_OAM:
-	    flags |= FLOW_TNL_F_OAM;
+            flags |= FLOW_TNL_F_OAM;
             break;
         case OVS_TUNNEL_KEY_ATTR_VXLAN_OPTS:
             ds_put_cstr(ds, "vxlan(");

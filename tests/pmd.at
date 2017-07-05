@@ -303,8 +303,8 @@ OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 
 dnl Make sure that both flows have been installed
 AT_CHECK([ovs-appctl dpctl/dump-flows | flow_dump_prepend_pmd], [0], [dnl
-0 recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions:userspace(pid=0,slow_path(controller))
-1 recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions:userspace(pid=0,slow_path(controller))
+0 recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions:userspace(pid=0,controller(reason=1,dont_send=0,recirc_id=1,rule_cookie=0,controller_id=0,max_len=65535))
+1 recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions:userspace(pid=0,controller(reason=1,dont_send=0,recirc_id=1,rule_cookie=0,controller_id=0,max_len=65535))
 ])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl

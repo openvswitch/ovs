@@ -149,6 +149,10 @@ struct frozen_state {
     size_t ofpacts_len;           /* Size of 'ofpacts', in bytes. */
     struct ofpact *action_set;
     size_t action_set_len;        /* Size of 'action_set', in bytes. */
+
+    /* User data for controller userspace cookie. */
+    uint8_t *userdata;
+    size_t userdata_len;
 };
 
 /* This maps a recirculation ID to saved state that flow translation can
