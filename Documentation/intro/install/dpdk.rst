@@ -64,9 +64,9 @@ Install DPDK
 #. Download the `DPDK sources`_, extract the file and set ``DPDK_DIR``::
 
        $ cd /usr/src/
-       $ wget http://fast.dpdk.org/rel/dpdk-16.11.1.tar.xz
-       $ tar xf dpdk-16.11.1.tar.xz
-       $ export DPDK_DIR=/usr/src/dpdk-stable-16.11.1
+       $ wget http://fast.dpdk.org/rel/dpdk-16.11.2.tar.xz
+       $ tar xf dpdk-16.11.2.tar.xz
+       $ export DPDK_DIR=/usr/src/dpdk-stable-16.11.2
        $ cd $DPDK_DIR
 
 #. (Optional) Configure DPDK as a shared library
