@@ -40,6 +40,14 @@ VLOG_DEFINE_THIS_MODULE(ipfix);
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
 
+/* This variable represents a number of exporters that have been created
+ * throughout OvS lifecycle.  It's used to identify Exporting Process.  Since
+ * it's NOT decreased when exporter is destroyed, it will eventually overflow.
+ * Considering the maximum value it can hold and the fact that Exporting
+ * Process may be re-started with a different ID, this shouldn't be a problem.
+ */
+static uint32_t exporter_total_count;
+
 /* Cf. IETF RFC 5101 Section 10.3.4. */
 #define IPFIX_DEFAULT_COLLECTOR_PORT 4739
 
@@ -113,6 +121,7 @@ struct dpif_ipfix_port {
 };
 
 struct dpif_ipfix_exporter {
+    uint32_t exporter_id; /* Exporting Process identifier */
     struct collectors *collectors;
     uint32_t seq_number;
     time_t last_template_set_time;
@@ -173,6 +182,11 @@ BUILD_ASSERT_DECL(sizeof(struct ipfix_header) == 16);
 #define IPFIX_SET_ID_TEMPLATE 2
 #define IPFIX_SET_ID_OPTION_TEMPLATE 3
 
+enum ipfix_options_template {
+    IPFIX_OPTIONS_TEMPLATE_EXPORTER_STATS = 0,
+    NUM_IPFIX_OPTIONS_TEMPLATE
+};
+
 /* Cf. IETF RFC 5101 Section 3.3.2. */
 OVS_PACKED(
 struct ipfix_set_header {
@@ -218,6 +232,20 @@ struct ipfix_template_record_header {
     ovs_be16 field_count;
 });
 BUILD_ASSERT_DECL(sizeof(struct ipfix_template_record_header) == 4);
+
+/* Cf. IETF RFC 5101 Section 3.4.2.2. */
+OVS_PACKED(
+struct ipfix_options_template_record_header {
+    ovs_be16 template_id;       /* Template ID of Data Set is within 256-65535
+                                   range. */
+    ovs_be16 field_count;       /* Number of all fields in this Options
+                                 * Template Record, including the Scope
+                                 * Fields. */
+    ovs_be16 scope_field_count; /* Number of scope fields. The number MUST BE
+                                 * greater than 0. */
+});
+BUILD_ASSERT_DECL(sizeof(struct ipfix_options_template_record_header) == 6);
+
 
 enum ipfix_entity_id {
 /* standard IPFIX elements */
@@ -365,6 +393,17 @@ enum ipfix_flow_end_reason {
     LACK_OF_RESOURCES = 0x05
 };
 
+/* Exporting Process Reliability Statistics data record. */
+OVS_PACKED(
+struct ipfix_data_record_exporter_stats {
+    /* Scope Fields */
+    ovs_be32 exporting_process_id;          /* EXPORTING_PROCESS_ID */
+
+    /* Fields */
+    ovs_be64 not_sent_packet_total_count;   /* NOT_SENT_PACKET_TOTAL_COUNT */
+});
+BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_exporter_stats) == 12);
+
 /* Part of data record for common aggregated elements. */
 OVS_PACKED(
 struct ipfix_data_record_aggregated_common {
@@ -468,12 +507,17 @@ BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_aggregated_tcp) == 48);
      + sizeof(struct ipfix_data_record_aggregated_ip)       \
      + sizeof(struct ipfix_data_record_aggregated_tcp))
 
+#define MAX_OPTIONS_DATA_RECORD_LEN                      \
+    (sizeof(struct ipfix_data_record_exporter_stats))
+
+
 /* Max length of a data set.  To simplify the implementation, each
  * data record is sent in a separate data set, so each data set
  * contains at most one data record. */
-#define MAX_DATA_SET_LEN             \
-    (sizeof(struct ipfix_set_header) \
-     + MAX_DATA_RECORD_LEN)
+#define MAX_DATA_SET_LEN                \
+    (sizeof(struct ipfix_set_header)    \
+     + MAX(MAX_DATA_RECORD_LEN,         \
+           MAX_OPTIONS_DATA_RECORD_LEN))
 
 /* Max length of an IPFIX message. Arbitrarily set to accommodate low
  * MTU. */
@@ -609,6 +653,7 @@ ofproto_ipfix_flow_exporter_options_destroy(
 static void
 dpif_ipfix_exporter_init(struct dpif_ipfix_exporter *exporter)
 {
+    exporter->exporter_id = ++exporter_total_count;
     exporter->collectors = NULL;
     exporter->seq_number = 1;
     exporter->last_template_set_time = 0;
@@ -630,6 +675,7 @@ dpif_ipfix_exporter_clear(struct dpif_ipfix_exporter *exporter)
     dpif_ipfix_cache_expire_now(exporter, true);
 
     collectors_destroy(exporter->collectors);
+    exporter->exporter_id = 0;
     exporter->collectors = NULL;
     exporter->seq_number = 1;
     exporter->last_template_set_time = 0;
@@ -1165,6 +1211,20 @@ ipfix_get_template_id(enum ipfix_proto_l2 l2, enum ipfix_proto_l3 l3,
     return IPFIX_TEMPLATE_ID_MIN + template_id;
 }
 
+static uint16_t
+ipfix_get_options_template_id(enum ipfix_options_template opt_tmpl_type)
+{
+    /* Check what is the maximum possible Template ID for Template Record and
+     * use it as a base number for Template ID in Options Template Record. */
+    uint16_t max_tmpl_id = ipfix_get_template_id(NUM_IPFIX_PROTO_L2,
+                                                 NUM_IPFIX_PROTO_L3,
+                                                 NUM_IPFIX_PROTO_L4,
+                                                 NUM_IPFIX_PROTO_TUNNEL);
+
+    return max_tmpl_id + opt_tmpl_type;
+}
+
+
 static void
 ipfix_define_template_entity(enum ipfix_entity_id id,
                              enum ipfix_entity_size size,
@@ -1194,21 +1254,73 @@ ipfix_define_template_entity(enum ipfix_entity_id id,
 
 }
 
+#define DEF(ID) \
+{ \
+    ipfix_define_template_entity(IPFIX_ENTITY_ID_##ID, \
+                                 IPFIX_ENTITY_SIZE_##ID, \
+                                 IPFIX_ENTITY_ENTERPRISE_##ID, msg); \
+    count++; \
+}
+
+/* Defines The Exporting Process Reliability Statistics Options Template
+ * fields, including scope fields.  Updates 'scope_field_count' and
+ * 'field_count' in Options Template Record Header. */
+static uint16_t
+ipfix_def_exporter_options_template_fields(size_t opt_tmpl_hdr_offset,
+                                           struct dp_packet *msg)
+{
+    uint16_t count = 0;
+    struct ipfix_options_template_record_header *opt_tmpl_hdr;
+
+    /* 1. Scope Fields Specifiers */
+    DEF(EXPORTING_PROCESS_ID);
+
+    /* Update 'scope_field_count' in options template header. */
+    opt_tmpl_hdr = (struct ipfix_options_template_record_header *)
+        ((uint8_t *)dp_packet_data(msg) + opt_tmpl_hdr_offset);
+    opt_tmpl_hdr->scope_field_count = htons(count);
+
+    /* 2. Fields Specifiers */
+    DEF(NOT_SENT_PACKET_TOTAL_COUNT);
+
+    /* Update 'field_count' in options template header. */
+    opt_tmpl_hdr= (struct ipfix_options_template_record_header *)
+        ((uint8_t *)dp_packet_data(msg) + opt_tmpl_hdr_offset);
+    opt_tmpl_hdr->field_count = htons(count);
+
+    return count;
+}
+
+static uint16_t
+ipfix_def_options_template_fields(enum ipfix_options_template opt_tmpl_type,
+                                  size_t opt_tmpl_hdr_offset,
+                                  struct dp_packet *msg)
+{
+    switch (opt_tmpl_type) {
+    case IPFIX_OPTIONS_TEMPLATE_EXPORTER_STATS:
+        return ipfix_def_exporter_options_template_fields(opt_tmpl_hdr_offset,
+                                                          msg);
+        break;
+    case NUM_IPFIX_OPTIONS_TEMPLATE:
+    default:
+        OVS_NOT_REACHED();
+        break;
+    }
+
+    return 0;
+}
+
+/* Defines fields in Template Record.  Updates 'field_count' in Template Record
+ * Header. */
 static uint16_t
 ipfix_define_template_fields(enum ipfix_proto_l2 l2, enum ipfix_proto_l3 l3,
                              enum ipfix_proto_l4 l4, enum ipfix_proto_tunnel tunnel,
-                             bool virtual_obs_id_set,
+                             bool virtual_obs_id_set, size_t tmpl_hdr_offset,
                              struct dp_packet *msg)
 {
-    uint16_t count = 0;
 
-#define DEF(ID) \
-    { \
-        ipfix_define_template_entity(IPFIX_ENTITY_ID_##ID, \
-                                     IPFIX_ENTITY_SIZE_##ID, \
-                                     IPFIX_ENTITY_ENTERPRISE_##ID, msg); \
-        count++; \
-    }
+    struct ipfix_template_record_header *tmpl_hdr;
+    uint16_t count = 0;
 
     /* 1. Flow key. */
 
@@ -1314,15 +1426,22 @@ ipfix_define_template_fields(enum ipfix_proto_l2 l2, enum ipfix_proto_l3 l3,
         DEF(TCP_SYN_TOTAL_COUNT);
         DEF(TCP_URG_TOTAL_COUNT);
     }
-#undef DEF
+
+    /* Update 'field_count' in template header. */
+    tmpl_hdr = (struct ipfix_template_record_header *)
+        ((uint8_t *)dp_packet_data(msg) + tmpl_hdr_offset);
+    tmpl_hdr->field_count = htons(count);
 
     return count;
 }
 
+#undef DEF
+
 static void
 ipfix_init_template_msg(uint32_t export_time_sec,
                         uint32_t seq_number, uint32_t obs_domain_id,
-                        struct dp_packet *msg, size_t *set_hdr_offset)
+                        uint16_t set_id, struct dp_packet *msg,
+                        size_t *set_hdr_offset)
 {
     struct ipfix_set_header *set_hdr;
 
@@ -1331,9 +1450,9 @@ ipfix_init_template_msg(uint32_t export_time_sec,
     ipfix_init_header(export_time_sec, seq_number, obs_domain_id, msg);
     *set_hdr_offset = dp_packet_size(msg);
 
-    /* Add a Template Set. */
+    /* Add a Set Header. */
     set_hdr = dp_packet_put_zeros(msg, sizeof *set_hdr);
-    set_hdr->set_id = htons(IPFIX_SET_ID_TEMPLATE);
+    set_hdr->set_id = htons(set_id);
 }
 
 static size_t
@@ -1354,6 +1473,63 @@ ipfix_send_template_msg(const struct collectors *collectors,
 }
 
 static void
+ipfix_add_options_template_record(enum ipfix_options_template opt_tmpl_type,
+                                  struct dp_packet *msg)
+{
+    struct ipfix_options_template_record_header *opt_tmpl_hdr;
+    size_t opt_tmpl_hdr_offset;
+
+    opt_tmpl_hdr_offset = dp_packet_size(msg);
+    opt_tmpl_hdr = dp_packet_put_zeros(msg, sizeof *opt_tmpl_hdr);
+    opt_tmpl_hdr->template_id =
+        htons(ipfix_get_options_template_id(opt_tmpl_type));
+    ipfix_def_options_template_fields(opt_tmpl_type, opt_tmpl_hdr_offset, msg);
+}
+
+static void
+ipfix_send_options_template_msgs(struct dpif_ipfix_exporter *exporter,
+                                 uint32_t export_time_sec,
+                                 uint32_t obs_domain_id,
+                                 struct dp_packet *msg)
+{
+    size_t set_hdr_offset;
+    size_t tx_packets = 0;
+    size_t tx_errors = 0, error_pkts;
+    enum ipfix_options_template opt_tmpl_type;
+
+    ipfix_init_template_msg(export_time_sec, exporter->seq_number,
+                            obs_domain_id, IPFIX_SET_ID_OPTION_TEMPLATE, msg,
+                            &set_hdr_offset);
+
+    for (opt_tmpl_type = 0; opt_tmpl_type < NUM_IPFIX_OPTIONS_TEMPLATE;
+            ++opt_tmpl_type) {
+        if (dp_packet_size(msg) >= MAX_MESSAGE_LEN) {
+            /* Send template message. */
+            error_pkts = ipfix_send_template_msg(exporter->collectors, msg,
+                                                 set_hdr_offset);
+            tx_errors += error_pkts;
+            tx_packets += collectors_count(exporter->collectors) - error_pkts;
+
+            /* Reinitialize the template msg. */
+            ipfix_init_template_msg(export_time_sec, exporter->seq_number,
+                                    obs_domain_id,
+                                    IPFIX_SET_ID_OPTION_TEMPLATE,
+                                    msg,
+                                    &set_hdr_offset);
+        }
+
+        ipfix_add_options_template_record(opt_tmpl_type, msg);
+    }
+
+    error_pkts = ipfix_send_template_msg(exporter->collectors, msg,
+                                         set_hdr_offset);
+    tx_errors += error_pkts;
+    tx_packets += collectors_count(exporter->collectors) - error_pkts;
+    exporter->ofproto_stats.tx_pkts += tx_packets;
+    exporter->ofproto_stats.tx_errors += tx_errors;
+}
+
+static void
 ipfix_send_template_msgs(struct dpif_ipfix_exporter *exporter,
                          uint32_t export_time_sec, uint32_t obs_domain_id)
 {
@@ -1363,7 +1539,6 @@ ipfix_send_template_msgs(struct dpif_ipfix_exporter *exporter,
 
     size_t set_hdr_offset, tmpl_hdr_offset, error_pkts;
     struct ipfix_template_record_header *tmpl_hdr;
-    uint16_t field_count;
     size_t tx_packets = 0;
     size_t tx_errors = 0;
     enum ipfix_proto_l2 l2;
@@ -1372,7 +1547,8 @@ ipfix_send_template_msgs(struct dpif_ipfix_exporter *exporter,
     enum ipfix_proto_tunnel tunnel;
 
     ipfix_init_template_msg(export_time_sec, exporter->seq_number,
-                            obs_domain_id, &msg, &set_hdr_offset);
+                            obs_domain_id, IPFIX_SET_ID_TEMPLATE, &msg,
+                            &set_hdr_offset);
     /* Define one template for each possible combination of
      * protocols. */
     for (l2 = 0; l2 < NUM_IPFIX_PROTO_L2; l2++) {
@@ -1398,7 +1574,9 @@ ipfix_send_template_msgs(struct dpif_ipfix_exporter *exporter,
                         /* Reinitialize the template msg. */
                         ipfix_init_template_msg(export_time_sec,
                                                 exporter->seq_number,
-                                                obs_domain_id, &msg,
+                                                obs_domain_id,
+                                                IPFIX_SET_ID_TEMPLATE,
+                                                &msg,
                                                 &set_hdr_offset);
                     }
 
@@ -1406,12 +1584,9 @@ ipfix_send_template_msgs(struct dpif_ipfix_exporter *exporter,
                     tmpl_hdr = dp_packet_put_zeros(&msg, sizeof *tmpl_hdr);
                     tmpl_hdr->template_id = htons(
                         ipfix_get_template_id(l2, l3, l4, tunnel));
-                    field_count = ipfix_define_template_fields(
+                    ipfix_define_template_fields(
                         l2, l3, l4, tunnel, exporter->virtual_obs_id != NULL,
-                        &msg);
-                    tmpl_hdr = (struct ipfix_template_record_header*)
-                        ((uint8_t*)dp_packet_data(&msg) + tmpl_hdr_offset);
-                    tmpl_hdr->field_count = htons(field_count);
+                        tmpl_hdr_offset, &msg);
                 }
             }
         }
@@ -1427,6 +1602,12 @@ ipfix_send_template_msgs(struct dpif_ipfix_exporter *exporter,
 
     /* XXX: Add Options Template Sets, at least to define a Flow Keys
      * Option Template. */
+
+    /* At the moment only a single Options Template Set is used, which contains
+     * Exporting Process Statistics.  It means that there is no specific
+     * Observation Domain ID relevant for the entire IPFIX message and it
+     * should be set to 0. */
+    ipfix_send_options_template_msgs(exporter, export_time_sec, 0U, &msg);
 
     dp_packet_uninit(&msg);
 }
@@ -2045,7 +2226,6 @@ ipfix_put_data_set(uint32_t export_time_sec,
     set_hdr->set_id = htons(entry->flow_key.template_id);
 
     /* Copy the flow key part of the data record. */
-
     dp_packet_put(msg, entry->flow_key.flow_key_msg_part,
                entry->flow_key.flow_key_msg_part_size);
 
@@ -2145,6 +2325,64 @@ ipfix_put_data_set(uint32_t export_time_sec,
 
     set_hdr = (struct ipfix_set_header*)((uint8_t*)dp_packet_data(msg) + set_hdr_offset);
     set_hdr->length = htons(dp_packet_size(msg) - set_hdr_offset);
+}
+
+static void
+ipfix_put_exporter_data_set(uint32_t exporting_process_id,
+                            const ofproto_ipfix_stats *ofproto_stats,
+                            struct dp_packet *msg)
+{
+    size_t set_hdr_offset;
+    struct ipfix_set_header *set_hdr;
+
+    set_hdr_offset = dp_packet_size(msg);
+
+    /* Put a Data Set. */
+    set_hdr = dp_packet_put_zeros(msg, sizeof *set_hdr);
+    set_hdr->set_id = htons(
+        ipfix_get_options_template_id(IPFIX_OPTIONS_TEMPLATE_EXPORTER_STATS));
+
+    {
+        struct ipfix_data_record_exporter_stats *data_exporter_stats;
+
+        data_exporter_stats = dp_packet_put_zeros(
+            msg, sizeof *data_exporter_stats);
+
+        data_exporter_stats->exporting_process_id =
+            htonl(exporting_process_id);
+        data_exporter_stats->not_sent_packet_total_count = htonll(
+            ofproto_stats->tx_errors);
+    }
+
+    set_hdr = (struct ipfix_set_header *)
+        ((uint8_t *)dp_packet_data(msg) + set_hdr_offset);
+    set_hdr->length = htons(dp_packet_size(msg) - set_hdr_offset);
+}
+
+/* Send an IPFIX message with a single data set containing Exporting Process
+ * Reliability Statistics. */
+static void
+ipfix_send_exporter_data_msg(struct dpif_ipfix_exporter *exporter,
+                             uint32_t export_time_sec)
+{
+    uint64_t msg_stub[DIV_ROUND_UP(MAX_MESSAGE_LEN, 8)];
+    struct dp_packet msg;
+    size_t tx_errors;
+
+    dp_packet_use_stub(&msg, msg_stub, sizeof msg_stub);
+
+    /* In case of Exporting Process Statistics, Observation Domain ID should
+     * be set to 0. */
+    ipfix_init_header(export_time_sec, exporter->seq_number++, 0U, &msg);
+    ipfix_put_exporter_data_set(exporter->exporter_id,
+                                &exporter->ofproto_stats, &msg);
+    tx_errors = ipfix_send_msg(exporter->collectors, &msg);
+
+    dp_packet_uninit(&msg);
+
+    exporter->ofproto_stats.tx_pkts +=
+            collectors_count(exporter->collectors) - tx_errors;
+    exporter->ofproto_stats.tx_errors += tx_errors;
 }
 
 /* Send an IPFIX message with a single data record. */
@@ -2346,6 +2584,9 @@ dpif_ipfix_cache_expire(struct dpif_ipfix_exporter *exporter,
         hmap_remove(&exporter->cache_flow_key_map,
                     &entry->flow_key_map_node);
 
+         /* XXX: Make frequency of the (Options) Template and Exporter Process
+          * Statistics transmission configurable.
+          * Cf. IETF RFC 5101 Section 4.3. and 10.3.6. */
         if (!template_msg_sent
             && (exporter->last_template_set_time + IPFIX_TEMPLATE_INTERVAL)
                 <= export_time_sec) {
@@ -2353,6 +2594,9 @@ dpif_ipfix_cache_expire(struct dpif_ipfix_exporter *exporter,
                                      entry->flow_key.obs_domain_id);
             exporter->last_template_set_time = export_time_sec;
             template_msg_sent = true;
+
+            /* Send Exporter Process Statistics. */
+            ipfix_send_exporter_data_msg(exporter, export_time_sec);
         }
 
         /* XXX: Group multiple data records for the same obs domain id
