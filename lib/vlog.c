@@ -631,6 +631,10 @@ vlog_unixctl_set(struct unixctl_conn *conn, int argc, const char *argv[],
 {
     int i;
 
+    /* With no argument, set all destinations and modules to "dbg". */
+    if (argc == 1) {
+        vlog_set_levels(NULL, VLF_ANY_DESTINATION, VLL_DBG);
+    }
     for (i = 1; i < argc; i++) {
         char *msg = vlog_set_levels_from_string(argv[i]);
         if (msg) {
@@ -791,7 +795,7 @@ vlog_init(void)
 
         unixctl_command_register(
             "vlog/set", "{spec | PATTERN:destination:pattern}",
-            1, INT_MAX, vlog_unixctl_set, NULL);
+            0, INT_MAX, vlog_unixctl_set, NULL);
         unixctl_command_register("vlog/list", "", 0, 0, vlog_unixctl_list,
                                  NULL);
         unixctl_command_register("vlog/list-pattern", "", 0, 0,
