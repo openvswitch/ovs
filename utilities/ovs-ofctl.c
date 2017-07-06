@@ -3146,8 +3146,8 @@ fte_version_equals(const struct fte_version *a, const struct fte_version *b)
             && a->hard_timeout == b->hard_timeout
             && a->importance == b->importance
             && a->table_id == b->table_id
-            && ofpacts_equal(a->ofpacts, a->ofpacts_len,
-                             b->ofpacts, b->ofpacts_len));
+            && ofpacts_equal_stringwise(a->ofpacts, a->ofpacts_len,
+                                        b->ofpacts, b->ofpacts_len));
 }
 
 /* Clears 's', then if 's' has a version 'index', formats 'fte' and version
@@ -3656,15 +3656,13 @@ ofctl_diff_flows(struct ovs_cmdl_context *ctx)
             if (!a || !b || !fte_version_equals(a, b)) {
                 fte_version_format(&fte_state, fte, 0, &a_s);
                 fte_version_format(&fte_state, fte, 1, &b_s);
-                if (strcmp(ds_cstr(&a_s), ds_cstr(&b_s))) {
-                    if (a_s.length) {
-                        printf("-%s", ds_cstr(&a_s));
-                    }
-                    if (b_s.length) {
-                        printf("+%s", ds_cstr(&b_s));
-                    }
-                    differences = true;
+                if (a_s.length) {
+                    printf("-%s", ds_cstr(&a_s));
                 }
+                if (b_s.length) {
+                    printf("+%s", ds_cstr(&b_s));
+                }
+                differences = true;
             }
         }
     }

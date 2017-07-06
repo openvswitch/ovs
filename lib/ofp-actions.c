@@ -8662,11 +8662,35 @@ ofpacts_output_to_group(const struct ofpact *ofpacts, size_t ofpacts_len,
     return false;
 }
 
+/* Returns true if the 'a_len' bytes of actions in 'a' and the 'b_len' bytes of
+ * actions in 'b' are bytewise identical. */
 bool
 ofpacts_equal(const struct ofpact *a, size_t a_len,
               const struct ofpact *b, size_t b_len)
 {
     return a_len == b_len && !memcmp(a, b, a_len);
+}
+
+/* Returns true if the 'a_len' bytes of actions in 'a' and the 'b_len' bytes of
+ * actions in 'b' are identical when formatted as strings.  (Converting actions
+ * to string form suppresses some rarely meaningful differences, such as the
+ * 'compat' member of actions.) */
+bool
+ofpacts_equal_stringwise(const struct ofpact *a, size_t a_len,
+                         const struct ofpact *b, size_t b_len)
+{
+    struct ds a_s = DS_EMPTY_INITIALIZER;
+    struct ds b_s = DS_EMPTY_INITIALIZER;
+
+    ofpacts_format(a, a_len, NULL, &a_s);
+    ofpacts_format(b, b_len, NULL, &b_s);
+
+    bool equal = !strcmp(ds_cstr(&a_s), ds_cstr(&b_s));
+
+    ds_destroy(&a_s);
+    ds_destroy(&b_s);
+
+    return equal;
 }
 
 /* Finds the OFPACT_METER action, if any, in the 'ofpacts_len' bytes of
