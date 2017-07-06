@@ -158,6 +158,7 @@ Jan Scheurich                   jan.scheurich@ericsson.com
 Jan Vansteenkiste               jan@vstone.eu
 Jarno Rajahalme                 jarno@ovn.org
 Jason Kölker                    jason@koelker.net
+Jason Wessel                    jason.wessel@windriver.com
 Jasper Capel                    jasper@capel.tv
 Jean Tourrilhes                 jt@hpl.hp.com
 Jeremy Stribling                strib@nicira.com
