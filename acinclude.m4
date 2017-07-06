@@ -23,7 +23,16 @@ AC_DEFUN([OVS_ENABLE_WERROR],
    AC_CONFIG_COMMANDS_PRE(
      [if test "X$enable_Werror" = Xyes; then
         OVS_CFLAGS="$OVS_CFLAGS -Werror"
-      fi])])
+      fi])
+
+   # Unless --enable-Werror is specified, report but do not fail the build
+   # for errors reported by flake8.
+   if test "X$enable_Werror" = Xyes; then
+     FLAKE8_WERROR=
+   else
+     FLAKE8_WERROR=-
+   fi
+   AC_SUBST([FLAKE8_WERROR])])
 
 dnl OVS_CHECK_LINUX
 dnl
