@@ -271,7 +271,7 @@ struct conntrack {
      * it is taken after a bucket lock and given back before that
      * bucket unlock.
      */
-    struct ct_rwlock nat_resources_lock;
+    struct ct_rwlock resources_lock;
 
 };
 

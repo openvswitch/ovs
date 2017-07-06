@@ -127,10 +127,10 @@ conntrack_init(struct conntrack *ct)
     unsigned i, j;
     long long now = time_msec();
 
-    ct_rwlock_init(&ct->nat_resources_lock);
-    ct_rwlock_wrlock(&ct->nat_resources_lock);
+    ct_rwlock_init(&ct->resources_lock);
+    ct_rwlock_wrlock(&ct->resources_lock);
     hmap_init(&ct->nat_conn_keys);
-    ct_rwlock_unlock(&ct->nat_resources_lock);
+    ct_rwlock_unlock(&ct->resources_lock);
 
     for (i = 0; i < CONNTRACK_BUCKETS; i++) {
         struct conntrack_bucket *ctb = &ct->buckets[i];
@@ -179,14 +179,14 @@ conntrack_destroy(struct conntrack *ct)
         ct_lock_unlock(&ctb->lock);
         ct_lock_destroy(&ctb->lock);
     }
-    ct_rwlock_wrlock(&ct->nat_resources_lock);
+    ct_rwlock_wrlock(&ct->resources_lock);
     struct nat_conn_key_node *nat_conn_key_node;
     HMAP_FOR_EACH_POP (nat_conn_key_node, node, &ct->nat_conn_keys) {
         free(nat_conn_key_node);
     }
     hmap_destroy(&ct->nat_conn_keys);
-    ct_rwlock_unlock(&ct->nat_resources_lock);
-    ct_rwlock_destroy(&ct->nat_resources_lock);
+    ct_rwlock_unlock(&ct->resources_lock);
+    ct_rwlock_destroy(&ct->resources_lock);
 }
 
 static unsigned hash_to_bucket(uint32_t hash)
@@ -476,16 +476,16 @@ nat_clean(struct conntrack *ct, struct conn *conn,
     OVS_REQUIRES(ctb->lock)
 {
     long long now = time_msec();
-    ct_rwlock_wrlock(&ct->nat_resources_lock);
+    ct_rwlock_wrlock(&ct->resources_lock);
     nat_conn_keys_remove(&ct->nat_conn_keys, &conn->rev_key, ct->hash_basis);
-    ct_rwlock_unlock(&ct->nat_resources_lock);
+    ct_rwlock_unlock(&ct->resources_lock);
     ct_lock_unlock(&ctb->lock);
 
     uint32_t hash_rev_conn = conn_key_hash(&conn->rev_key, ct->hash_basis);
     unsigned bucket_rev_conn = hash_to_bucket(hash_rev_conn);
 
     ct_lock_lock(&ct->buckets[bucket_rev_conn].lock);
-    ct_rwlock_wrlock(&ct->nat_resources_lock);
+    ct_rwlock_wrlock(&ct->resources_lock);
 
     struct conn *rev_conn = conn_lookup(ct, &conn->rev_key, now);
 
@@ -504,7 +504,7 @@ nat_clean(struct conntrack *ct, struct conn *conn,
     }
     delete_conn(conn);
 
-    ct_rwlock_unlock(&ct->nat_resources_lock);
+    ct_rwlock_unlock(&ct->resources_lock);
     ct_lock_unlock(&ct->buckets[bucket_rev_conn].lock);
     ct_lock_lock(&ctb->lock);
 }
@@ -556,7 +556,7 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
 
         if (nat_action_info) {
             nc->nat_info = xmemdup(nat_action_info, sizeof *nc->nat_info);
-            ct_rwlock_wrlock(&ct->nat_resources_lock);
+            ct_rwlock_wrlock(&ct->resources_lock);
 
             bool nat_res = nat_select_range_tuple(ct, nc,
                                                   conn_for_un_nat_copy);
@@ -565,7 +565,7 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
                 free(nc->nat_info);
                 nc->nat_info = NULL;
                 free (nc);
-                ct_rwlock_unlock(&ct->nat_resources_lock);
+                ct_rwlock_unlock(&ct->resources_lock);
                 return NULL;
             }
 
@@ -575,7 +575,7 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
                 conn_for_un_nat_copy->conn_type = CT_CONN_TYPE_UN_NAT;
                 conn_for_un_nat_copy->nat_info = NULL;
             }
-            ct_rwlock_unlock(&ct->nat_resources_lock);
+            ct_rwlock_unlock(&ct->resources_lock);
 
             nat_packet(pkt, nc, ctx->icmp_related);
         }
@@ -634,7 +634,7 @@ create_un_nat_conn(struct conntrack *ct, struct conn *conn_for_un_nat_copy,
     uint32_t un_nat_hash = conn_key_hash(&nc->key, ct->hash_basis);
     unsigned un_nat_conn_bucket = hash_to_bucket(un_nat_hash);
     ct_lock_lock(&ct->buckets[un_nat_conn_bucket].lock);
-    ct_rwlock_rdlock(&ct->nat_resources_lock);
+    ct_rwlock_rdlock(&ct->resources_lock);
 
     struct conn *rev_conn = conn_lookup(ct, &nc->key, now);
 
@@ -649,7 +649,7 @@ create_un_nat_conn(struct conntrack *ct, struct conn *conn_for_un_nat_copy,
     } else {
         free(nc);
     }
-    ct_rwlock_unlock(&ct->nat_resources_lock);
+    ct_rwlock_unlock(&ct->resources_lock);
     ct_lock_unlock(&ct->buckets[un_nat_conn_bucket].lock);
 }
 
