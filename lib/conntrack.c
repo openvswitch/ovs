@@ -524,6 +524,7 @@ conn_clean(struct conntrack *ct, struct conn *conn,
     }
 }
 
+/* This function is called with the bucket lock held. */
 static struct conn *
 conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
                struct conn_lookup_ctx *ctx, bool commit, long long now,
@@ -1783,6 +1784,7 @@ nat_select_range_tuple(struct conntrack *ct, const struct conn *conn,
     return false;
 }
 
+/* This function must be called with the ct->resources lock taken. */
 static struct nat_conn_key_node *
 nat_conn_keys_lookup(struct hmap *nat_conn_keys,
                      const struct conn_key *key,
@@ -1801,6 +1803,7 @@ nat_conn_keys_lookup(struct hmap *nat_conn_keys,
     return NULL;
 }
 
+/* This function must be called with the ct->resources write lock taken. */
 static void
 nat_conn_keys_remove(struct hmap *nat_conn_keys, const struct conn_key *key,
                      uint32_t basis)
@@ -1822,6 +1825,7 @@ nat_conn_keys_remove(struct hmap *nat_conn_keys, const struct conn_key *key,
 static void
 conn_key_lookup(struct conntrack_bucket *ctb, struct conn_lookup_ctx *ctx,
                 long long now)
+    OVS_REQUIRES(ctb->lock)
 {
     uint32_t hash = ctx->hash;
     struct conn *conn;
