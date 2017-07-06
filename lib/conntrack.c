@@ -50,7 +50,7 @@ struct conn_lookup_ctx {
     struct conn *conn;
     uint32_t hash;
     bool reply;
-    bool related;
+    bool icmp_related;
 };
 
 static bool conn_key_extract(struct conntrack *, struct dp_packet *,
@@ -577,7 +577,7 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
             }
             ct_rwlock_unlock(&ct->nat_resources_lock);
 
-            nat_packet(pkt, nc, ctx->related);
+            nat_packet(pkt, nc, ctx->icmp_related);
         }
         hmap_insert(&ct->buckets[bucket].connections, &nc->node, ctx->hash);
         atomic_count_inc(&ct->n_conn);
@@ -593,7 +593,7 @@ conn_update_state(struct conntrack *ct, struct dp_packet *pkt,
 {
     bool create_new_conn = false;
 
-    if (ctx->related) {
+    if (ctx->icmp_related) {
         pkt->md.ct_state |= CS_RELATED;
         if (ctx->reply) {
             pkt->md.ct_state |= CS_REPLY_DIR;
@@ -791,13 +791,13 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
     if (OVS_LIKELY(conn)) {
         create_new_conn = conn_update_state(ct, pkt, ctx, &conn, now, bucket);
         if (nat_action_info && !create_new_conn) {
-            handle_nat(pkt, conn, zone, ctx->reply, ctx->related);
+            handle_nat(pkt, conn, zone, ctx->reply, ctx->icmp_related);
         }
     } else if (check_orig_tuple(ct, pkt, ctx, now, &bucket, &conn,
                                 nat_action_info)) {
         create_new_conn = conn_update_state(ct, pkt, ctx, &conn, now, bucket);
     } else {
-        if (ctx->related) {
+        if (ctx->icmp_related) {
             pkt->md.ct_state = CS_INVALID;
         } else {
             create_new_conn = true;
@@ -1502,7 +1502,7 @@ conn_key_extract(struct conntrack *ct, struct dp_packet *pkt, ovs_be16 dl_type,
     }
 
     if (ok) {
-        if (extract_l4(&ctx->key, l4, tail - l4, &ctx->related, l3)) {
+        if (extract_l4(&ctx->key, l4, tail - l4, &ctx->icmp_related, l3)) {
             ctx->hash = conn_key_hash(&ctx->key, ct->hash_basis);
             return true;
         }
