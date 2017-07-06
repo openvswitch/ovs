@@ -1,5 +1,8 @@
 openvswitch (2.7.90-1) unstable; urgency=low
+
    [ Open vSwitch team ]
+   * Use debhelper for DEB_VERSION_UPSTREAM.  Thanks to Clint Byrum
+     <spamaps@debian.org> for this improvement.
    * New upstream version
    - Nothing yet!  Try NEWS...
 

@@ -13,7 +13,7 @@
 
 PACKAGE=openvswitch
 PACKAGE_DKMS=openvswitch-datapath-dkms
-DEB_UPSTREAM_VERSION=$(shell dpkg-parsechangelog | sed -rne 's,^Version: ([0-9]+:)?([0-9][a-zA-Z0-9.+:~-]*)(-[a-zA-Z0-9*.~]*),\2,p')
+include /usr/share/dpkg/pkg-info.mk
 
 ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
 PARALLEL = -j$(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
@@ -69,25 +69,25 @@ override_dh_install-indep:
 
 	# openvswitch-datapath-dkms
 	# setup the dirs
-	dh_installdirs -p$(PACKAGE_DKMS) usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)
+	dh_installdirs -p$(PACKAGE_DKMS) usr/src/$(PACKAGE)-$(DEB_VERSION_UPSTREAM)
 
 	# copy the source
-	cd debian/$(PACKAGE_DKMS)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION) && tar xvzf $(CURDIR)/openvswitch.tar.gz && mv openvswitch/* openvswitch/.[a-z]* . && rmdir openvswitch
+	cd debian/$(PACKAGE_DKMS)/usr/src/$(PACKAGE)-$(DEB_VERSION_UPSTREAM) && tar xvzf $(CURDIR)/openvswitch.tar.gz && mv openvswitch/* openvswitch/.[a-z]* . && rmdir openvswitch
 
 	# check we can get kernel module names
 	$(MAKE) -C datapath print-build-modules
 
 	# Prepare dkms.conf from the dkms.conf.in template
-	sed "s/__VERSION__/$(DEB_UPSTREAM_VERSION)/g; s/__MODULES__/$(shell $(MAKE) -C datapath print-build-modules | grep -v make)/" debian/dkms.conf.in > debian/$(PACKAGE_DKMS)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)/dkms.conf
+	sed "s/__VERSION__/$(DEB_VERSION_UPSTREAM)/g; s/__MODULES__/$(shell $(MAKE) -C datapath print-build-modules | grep -v make)/" debian/dkms.conf.in > debian/$(PACKAGE_DKMS)/usr/src/$(PACKAGE)-$(DEB_VERSION_UPSTREAM)/dkms.conf
 
 	# We don't need the debian folder in there, just upstream sources...
-	rm -rf debian/$(PACKAGE_DKMS)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)/debian
+	rm -rf debian/$(PACKAGE_DKMS)/usr/src/$(PACKAGE)-$(DEB_VERSION_UPSTREAM)/debian
 	# We don't need the rhel stuff in there either
-	rm -rf debian/$(PACKAGE_DKMS)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)/rhel
+	rm -rf debian/$(PACKAGE_DKMS)/usr/src/$(PACKAGE)-$(DEB_VERSION_UPSTREAM)/rhel
 	# And we should also clean useless license files, which are already
 	# described in our debian/copyright anyway.
-	rm -f debian/$(PACKAGE_DKMS)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)/COPYING \
-		debian/$(PACKAGE_DKMS)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)/xenserver/LICENSE
+	rm -f debian/$(PACKAGE_DKMS)/usr/src/$(PACKAGE)-$(DEB_VERSION_UPSTREAM)/COPYING \
+		debian/$(PACKAGE_DKMS)/usr/src/$(PACKAGE)-$(DEB_VERSION_UPSTREAM)/xenserver/LICENSE
 
 override_dh_installinit:
 	dh_installinit -R
