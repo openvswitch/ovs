@@ -52,22 +52,4 @@ static inline int rpl_inet_frags_init(struct inet_frags *frags)
 #define inet_frags_init rpl_inet_frags_init
 #endif
 
-#ifndef HAVE_CORRECT_MRU_HANDLING
-/* We reuse the upstream inet_fragment.c common code for managing fragment
- * stores, However we actually store the fragments within our own 'inet_frags'
- * structures (in {ip_fragment,nf_conntrack_reasm}.c). When unloading the OVS
- * kernel module, we need to flush all of the remaining fragments from these
- * caches, or else we will panic with the following sequence of events:
- *
- * 1) A fragment for a packet arrives and is cached in inet_frags. This
- *    starts a timer to ensure the fragment does not hang around forever.
- * 2) openvswitch module is unloaded.
- * 3) The timer for the fragment fires, calling into backported OVS code
- *    to free the fragment.
- * 4) BUG: unable to handle kernel paging request at ffffffffc03c01e0
- */
-void rpl_inet_frags_exit_net(struct netns_frags *nf, struct inet_frags *f);
-#define inet_frags_exit_net rpl_inet_frags_exit_net
-#endif
-
 #endif /* inet_frag.h */

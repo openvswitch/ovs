@@ -141,6 +141,12 @@ struct ovs_net {
 
 	/* Module reference for configuring conntrack. */
 	bool xt_label;
+
+#ifdef HAVE_INET_FRAG_LRU_MOVE
+	struct net *net;
+	struct netns_frags ipv4_frags;
+	struct netns_frags nf_frags;
+#endif
 };
 
 extern unsigned int ovs_net_id;

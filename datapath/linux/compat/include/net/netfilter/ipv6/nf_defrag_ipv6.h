@@ -28,9 +28,13 @@ int rpl_nf_ct_frag6_gather(struct net *net, struct sk_buff *skb, u32 user);
  */
 int __init rpl_nf_ct_frag6_init(void);
 void rpl_nf_ct_frag6_cleanup(void);
+void ovs_netns_frags6_init(struct net *net);
+void ovs_netns_frags6_exit(struct net *net);
 #else /* !OVS_NF_DEFRAG6_BACKPORT */
 static inline int __init rpl_nf_ct_frag6_init(void) { return 0; }
 static inline void rpl_nf_ct_frag6_cleanup(void) { }
+static inline void ovs_netns_frags6_init(struct net *net) { }
+static inline void ovs_netns_frags6_exit(struct net *net) { }
 #endif /* OVS_NF_DEFRAG6_BACKPORT */
 #define nf_ct_frag6_init rpl_nf_ct_frag6_init
 #define nf_ct_frag6_cleanup rpl_nf_ct_frag6_cleanup
