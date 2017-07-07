@@ -4763,6 +4763,35 @@ AT_CHECK_UNQUOTED([tail -1 stdout], [0], [Datapath actions: 3
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+
+# This test verifies that tunnel metadata is preserved across
+# recirculation.  At the time of recirculation, fields such as "tun_id"
+# may be set before the tunnel is "valid" (ie, has a destination
+# address), but the field should still be available after recirculation.
+AT_SETUP([ofproto-dpif - resubmit with tun_id])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2 3
+
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1  actions=2,load:6->NXM_NX_TUN_ID[[]],resubmit(,1)
+table=1 in_port=1  actions=debug_recirc,resubmit:55
+table=1 in_port=55 actions=3
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow" -generate], [0], [stdout])
+AT_CHECK([grep "Final flow:" stdout], [0], [Final flow: icmp,tun_id=0x6,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=128,icmp_type=8,icmp_code=0
+])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow,recirc_id(1)" -generate], [0], [stdout])
+AT_CHECK([grep "Final flow:" stdout], [0], [Final flow: recirc_id=0x1,icmp,tun_id=0x6,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=128,icmp_type=8,icmp_code=0
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
 # This test verifies that "resubmit", when it triggers recirculation
 # indirectly through the flow that it recursively invokes, is not
 # re-executed when execution continues later post-recirculation.

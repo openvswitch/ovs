@@ -124,11 +124,7 @@ static inline void
 frozen_metadata_to_flow(const struct frozen_metadata *md,
                         struct flow *flow)
 {
-    if (flow_tnl_dst_is_set(&md->tunnel)) {
-        flow->tunnel = md->tunnel;
-    } else {
-        memset(&flow->tunnel, 0, sizeof flow->tunnel);
-    }
+    flow->tunnel = md->tunnel;
     flow->metadata = md->metadata;
     memcpy(flow->regs, md->regs, sizeof flow->regs);
     flow->in_port.ofp_port = md->in_port;

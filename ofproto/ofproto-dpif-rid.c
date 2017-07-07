@@ -127,16 +127,9 @@ frozen_state_hash(const struct frozen_state *state)
 
     hash = uuid_hash(&state->ofproto_uuid);
     hash = hash_int(state->table_id, hash);
-    if (flow_tnl_dst_is_set(&state->metadata.tunnel)) {
-        /* We may leave remainder bytes unhashed, but that is unlikely as
-         * the tunnel is not in the datapath format. */
-        hash = hash_bytes64((const uint64_t *) &state->metadata.tunnel,
-                            flow_tnl_size(&state->metadata.tunnel), hash);
-    }
+    hash = hash_bytes64((const uint64_t *) &state->metadata,
+                        sizeof state->metadata, hash);
     hash = hash_boolean(state->conntracked, hash);
-    hash = hash_bytes64((const uint64_t *) &state->metadata.metadata,
-                        sizeof state->metadata - sizeof state->metadata.tunnel,
-                        hash);
     if (state->stack && state->stack_size) {
         hash = hash_bytes(state->stack, state->stack_size, hash);
     }
@@ -158,9 +151,7 @@ frozen_state_equal(const struct frozen_state *a, const struct frozen_state *b)
 {
     return (a->table_id == b->table_id
             && uuid_equals(&a->ofproto_uuid, &b->ofproto_uuid)
-            && flow_tnl_equal(&a->metadata.tunnel, &b->metadata.tunnel)
-            && !memcmp(&a->metadata.metadata, &b->metadata.metadata,
-                       sizeof a->metadata - sizeof a->metadata.tunnel)
+            && !memcmp(&a->metadata, &b->metadata, sizeof a->metadata)
             && a->stack_size == b->stack_size
             && !memcmp(a->stack, b->stack, a->stack_size)
             && a->mirrors == b->mirrors
@@ -204,8 +195,6 @@ static void
 frozen_state_clone(struct frozen_state *new, const struct frozen_state *old)
 {
     *new = *old;
-    flow_tnl_copy__(&new->metadata.tunnel, &old->metadata.tunnel);
-
     new->stack = (new->stack_size
                   ? xmemdup(new->stack, new->stack_size)
                   : NULL);
