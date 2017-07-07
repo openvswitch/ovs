@@ -342,6 +342,7 @@ xushengping                     shengping.xu@huawei.com
 yinpeijun                       yinpeijun@huawei.com
 zangchuanqiang                  zangchuanqiang@huawei.com
 zhaojingjing                    zhao.jingjing1@zte.com.cn
+zhongbaisong                    zhongbaisong@huawei.com
 =============================== ===============================================
 
 The following additional people are mentioned in commit logs as having
