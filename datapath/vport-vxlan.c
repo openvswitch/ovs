@@ -52,6 +52,18 @@ static int vxlan_get_options(const struct vport *vport, struct sk_buff *skb)
 			return -EMSGSIZE;
 
 		nla_nest_end(skb, exts);
+	} else if (vxlan->flags & VXLAN_F_GPE) {
+		struct nlattr *exts;
+
+		exts = nla_nest_start(skb, OVS_TUNNEL_ATTR_EXTENSION);
+		if (!exts)
+			return -EMSGSIZE;
+
+		if (vxlan->flags & VXLAN_F_GPE &&
+		    nla_put_flag(skb, OVS_VXLAN_EXT_GPE))
+			return -EMSGSIZE;
+
+		nla_nest_end(skb, exts);
 	}
 
 	return 0;
@@ -59,6 +71,7 @@ static int vxlan_get_options(const struct vport *vport, struct sk_buff *skb)
 
 static const struct nla_policy exts_policy[OVS_VXLAN_EXT_MAX + 1] = {
 	[OVS_VXLAN_EXT_GBP]	= { .type = NLA_FLAG, },
+	[OVS_VXLAN_EXT_GPE]	= { .type = NLA_FLAG, },
 };
 
 static int vxlan_configure_exts(struct vport *vport, struct nlattr *attr,
@@ -77,6 +90,8 @@ static int vxlan_configure_exts(struct vport *vport, struct nlattr *attr,
 
 	if (exts[OVS_VXLAN_EXT_GBP])
 		conf->flags |= VXLAN_F_GBP;
+	else if (exts[OVS_VXLAN_EXT_GPE])
+		conf->flags |= VXLAN_F_GPE;
 
 	return 0;
 }
