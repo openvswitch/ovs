@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2014, 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -127,11 +127,11 @@ frozen_state_hash(const struct frozen_state *state)
 
     hash = uuid_hash(&state->ofproto_uuid);
     hash = hash_int(state->table_id, hash);
-    if (flow_tnl_dst_is_set(state->metadata.tunnel)) {
+    if (flow_tnl_dst_is_set(&state->metadata.tunnel)) {
         /* We may leave remainder bytes unhashed, but that is unlikely as
          * the tunnel is not in the datapath format. */
-        hash = hash_bytes64((const uint64_t *) state->metadata.tunnel,
-                            flow_tnl_size(state->metadata.tunnel), hash);
+        hash = hash_bytes64((const uint64_t *) &state->metadata.tunnel,
+                            flow_tnl_size(&state->metadata.tunnel), hash);
     }
     hash = hash_boolean(state->conntracked, hash);
     hash = hash_bytes64((const uint64_t *) &state->metadata.metadata,
@@ -158,7 +158,7 @@ frozen_state_equal(const struct frozen_state *a, const struct frozen_state *b)
 {
     return (a->table_id == b->table_id
             && uuid_equals(&a->ofproto_uuid, &b->ofproto_uuid)
-            && flow_tnl_equal(a->metadata.tunnel, b->metadata.tunnel)
+            && flow_tnl_equal(&a->metadata.tunnel, &b->metadata.tunnel)
             && !memcmp(&a->metadata.metadata, &b->metadata.metadata,
                        sizeof a->metadata - sizeof a->metadata.tunnel)
             && a->stack_size == b->stack_size
@@ -201,12 +201,10 @@ recirc_ref_equal(const struct frozen_state *target, uint32_t hash)
 }
 
 static void
-frozen_state_clone(struct frozen_state *new, const struct frozen_state *old,
-                   struct flow_tnl *tunnel)
+frozen_state_clone(struct frozen_state *new, const struct frozen_state *old)
 {
     *new = *old;
-    flow_tnl_copy__(tunnel, old->metadata.tunnel);
-    new->metadata.tunnel = tunnel;
+    flow_tnl_copy__(&new->metadata.tunnel, &old->metadata.tunnel);
 
     new->stack = (new->stack_size
                   ? xmemdup(new->stack, new->stack_size)
@@ -239,8 +237,7 @@ recirc_alloc_id__(const struct frozen_state *state, uint32_t hash)
 
     node->hash = hash;
     ovs_refcount_init(&node->refcount);
-    frozen_state_clone(CONST_CAST(struct frozen_state *, &node->state), state,
-                       &node->state_metadata_tunnel);
+    frozen_state_clone(CONST_CAST(struct frozen_state *, &node->state), state);
 
     ovs_mutex_lock(&mutex);
     for (;;) {
@@ -291,13 +288,15 @@ recirc_alloc_id_ctx(const struct frozen_state *state)
 uint32_t
 recirc_alloc_id(struct ofproto_dpif *ofproto)
 {
-    struct flow_tnl tunnel;
-    tunnel.ip_dst = htonl(0);
-    tunnel.ipv6_dst = in6addr_any;
     struct frozen_state state = {
         .table_id = TBL_INTERNAL,
         .ofproto_uuid = ofproto->uuid,
-        .metadata = { .tunnel = &tunnel, .in_port = OFPP_NONE },
+        .metadata = {
+            .tunnel = {
+                .ip_dst = htonl(0),
+                .ipv6_dst = in6addr_any,
+            },
+            .in_port = OFPP_NONE },
     };
     return recirc_alloc_id__(&state, frozen_state_hash(&state))->id;
 }

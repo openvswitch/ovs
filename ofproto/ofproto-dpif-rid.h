@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2014, 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -103,7 +103,7 @@ BUILD_ASSERT_DECL(FLOW_WC_SEQ == 39);
 
 struct frozen_metadata {
     /* Metadata in struct flow. */
-    const struct flow_tnl *tunnel; /* Encapsulating tunnel parameters. */
+    struct flow_tnl tunnel;       /* Encapsulating tunnel parameters. */
     ovs_be64 metadata;            /* OpenFlow Metadata. */
     uint64_t regs[FLOW_N_XREGS];  /* Registers. */
     ofp_port_t in_port;           /* Incoming port. */
@@ -114,7 +114,7 @@ frozen_metadata_from_flow(struct frozen_metadata *md,
                           const struct flow *flow)
 {
     memset(md, 0, sizeof *md);
-    md->tunnel = &flow->tunnel;
+    md->tunnel = flow->tunnel;
     md->metadata = flow->metadata;
     memcpy(md->regs, flow->regs, sizeof md->regs);
     md->in_port = flow->in_port.ofp_port;
@@ -124,8 +124,8 @@ static inline void
 frozen_metadata_to_flow(const struct frozen_metadata *md,
                         struct flow *flow)
 {
-    if (md->tunnel && flow_tnl_dst_is_set(md->tunnel)) {
-        flow->tunnel = *md->tunnel;
+    if (flow_tnl_dst_is_set(&md->tunnel)) {
+        flow->tunnel = md->tunnel;
     } else {
         memset(&flow->tunnel, 0, sizeof flow->tunnel);
     }
@@ -171,9 +171,6 @@ struct recirc_id_node {
      * This state should not be modified after inserting a node in the pool,
      * hence the 'const' to emphasize that. */
     const struct frozen_state state;
-
-    /* Storage for tunnel metadata. */
-    struct flow_tnl state_metadata_tunnel;
 };
 
 /* This is only used for bonds and will go away when bonds implementation is
