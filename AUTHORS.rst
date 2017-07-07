@@ -81,6 +81,7 @@ Christoph Jaeger                cj@linux.com
 Chris Wright                    chrisw@sous-sol.org
 Chuck Short                     zulcss@ubuntu.com
 Ciara Loftus                    ciara.loftus@intel.com
+Clint Byrum                     clint@fewbar.com
 Cong Wang                       amwang@redhat.com
 Conner Herriges                 conner.herriges@ibm.com
 Damien Millescamps              damien.millescamps@6wind.com
