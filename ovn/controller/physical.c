@@ -64,7 +64,7 @@ static struct hmap tunnels = HMAP_INITIALIZER(&tunnels);
  * used to reach that chassis. */
 struct chassis_tunnel {
     struct hmap_node hmap_node;
-    const char *chassis_id;
+    char *chassis_id;
     ofp_port_t ofport;
     enum chassis_tunnel_type type;
 };
@@ -837,7 +837,7 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
                     tun = xmalloc(sizeof *tun);
                     hmap_insert(&tunnels, &tun->hmap_node,
                                 hash_string(chassis_id, 0));
-                    tun->chassis_id = chassis_id;
+                    tun->chassis_id = xstrdup(chassis_id);
                     tun->ofport = u16_to_ofp(ofport);
                     tun->type = tunnel_type;
                     physical_map_changed = true;
@@ -859,6 +859,7 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
         if (!simap_find(&new_tunnel_to_ofport, tun->chassis_id)) {
             hmap_remove(&tunnels, &tun->hmap_node);
             physical_map_changed = true;
+            free(tun->chassis_id);
             free(tun);
         }
     }
