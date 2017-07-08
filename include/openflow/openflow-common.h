@@ -334,9 +334,11 @@ enum ofp_flow_removed_reason {
     ((1u << OFPRR_IDLE_TIMEOUT) |               \
      (1u << OFPRR_HARD_TIMEOUT) |               \
      (1u << OFPRR_DELETE))
-#define OFPRR14_BITS                            \
+#define OFPRR13_BITS                            \
     (OFPRR10_BITS |                             \
-     (1u << OFPRR_GROUP_DELETE) |               \
+     (1u << OFPRR_GROUP_DELETE))
+#define OFPRR14_BITS                            \
+    (OFPRR13_BITS |                             \
      (1u << OFPRR_METER_DELETE) |               \
      (1u << OFPRR_EVICTION))
 

@@ -11047,15 +11047,21 @@ ofputil_async_cfg_default(enum ofp_version version)
         pin |= 1u << OFPR_IMPLICIT_MISS;
     }
 
-    return (struct ofputil_async_cfg) {
+    struct ofputil_async_cfg oac = {
         .master[OAM_PACKET_IN] = pin,
-
-        .master[OAM_FLOW_REMOVED]
-            = (version >= OFP14_VERSION ? OFPRR14_BITS : OFPRR10_BITS),
-
         .master[OAM_PORT_STATUS] = OFPPR_BITS,
-        .slave[OAM_PORT_STATUS] = OFPPR_BITS,
+        .slave[OAM_PORT_STATUS] = OFPPR_BITS
     };
+
+    if (version >= OFP14_VERSION) {
+        oac.master[OAM_FLOW_REMOVED] = OFPRR14_BITS;
+    } else if (version == OFP13_VERSION) {
+        oac.master[OAM_FLOW_REMOVED] = OFPRR13_BITS;
+    } else {
+        oac.master[OAM_FLOW_REMOVED] = OFPRR10_BITS;
+    }
+
+    return oac;
 }
 
 static void
