@@ -116,6 +116,7 @@ SYSTEM_USERSPACE_TESTSUITE_AT = \
 SYSTEM_TESTSUITE_AT = \
 	tests/system-common-macros.at \
 	tests/system-ovn.at \
+	tests/system-layer3-tunnels.at \
 	tests/system-traffic.at
 
 SYSTEM_OFFLOADS_TESTSUITE_AT = \
