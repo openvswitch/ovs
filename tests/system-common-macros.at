@@ -160,7 +160,8 @@ m4_define([ADD_CVLAN],
     ]
 )
 
-# ADD_OVS_TUNNEL([type], [bridge], [port], [remote-addr], [overlay-addr])
+# ADD_OVS_TUNNEL([type], [bridge], [port], [remote-addr], [overlay-addr],
+#                [tunnel-args])
 #
 # Add an ovs-based tunnel device in the root namespace, with name 'port' and
 # type 'type'. The tunnel device will be configured as point-to-point with the
@@ -170,7 +171,7 @@ m4_define([ADD_CVLAN],
 #
 m4_define([ADD_OVS_TUNNEL],
    [AT_CHECK([ovs-vsctl add-port $2 $3 -- \
-              set int $3 type=$1 options:remote_ip=$4])
+              set int $3 type=$1 options:remote_ip=$4 $6])
     AT_CHECK([ip addr add dev $2 $5])
     AT_CHECK([ip link set dev $2 up])
     AT_CHECK([ip link set dev $2 mtu 1450])
