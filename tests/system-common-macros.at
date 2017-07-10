@@ -295,3 +295,7 @@ m4_define([OVS_CHECK_GENEVE],
 m4_define([OVS_CHECK_8021AD],
     [AT_SKIP_IF([! grep -q "VLAN header stack length probed as" ovs-vswitchd.log])
      AT_SKIP_IF([[test `sed -n 's/.*VLAN header stack length probed as \([0-9]\+\).*/\1/p' ovs-vswitchd.log` -lt 2]])])
+
+# OVS_CHECK_IPROUTE_ENCAP()
+m4_define([OVS_CHECK_IPROUTE_ENCAP],
+    [AT_SKIP_IF([! ip route help 2>&1 |grep encap >/dev/null])])
