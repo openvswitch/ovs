@@ -33,12 +33,13 @@ VLOG_DEFINE_THIS_MODULE(dpif_netlink_rtnl);
 #ifndef IFLA_VXLAN_MAX
 #define IFLA_VXLAN_MAX 0
 #endif
-#if IFLA_VXLAN_MAX < 25
+#if IFLA_VXLAN_MAX < 27
 #define IFLA_VXLAN_LEARNING 7
 #define IFLA_VXLAN_PORT 15
 #define IFLA_VXLAN_UDP_ZERO_CSUM6_RX 20
 #define IFLA_VXLAN_GBP 23
 #define IFLA_VXLAN_COLLECT_METADATA 25
+#define IFLA_VXLAN_GPE 27
 #endif
 
 #ifndef IFLA_GRE_MAX
@@ -69,6 +70,7 @@ static const struct nl_policy vxlan_policy[] = {
     [IFLA_VXLAN_LEARNING] = { .type = NL_A_U8 },
     [IFLA_VXLAN_UDP_ZERO_CSUM6_RX] = { .type = NL_A_U8 },
     [IFLA_VXLAN_PORT] = { .type = NL_A_U16 },
+    [IFLA_VXLAN_GPE] = { .type = NL_A_FLAG },
 };
 static const struct nl_policy gre_policy[] = {
     [IFLA_GRE_COLLECT_METADATA] = { .type = NL_A_FLAG },
@@ -171,7 +173,9 @@ dpif_netlink_rtnl_vxlan_verify(const struct netdev_tunnel_config *tnl_cfg,
             || (tnl_cfg->dst_port
                 != nl_attr_get_be16(vxlan[IFLA_VXLAN_PORT]))
             || (tnl_cfg->exts & (1 << OVS_VXLAN_EXT_GBP)
-                && !nl_attr_get_flag(vxlan[IFLA_VXLAN_GBP]))) {
+                && !nl_attr_get_flag(vxlan[IFLA_VXLAN_GBP]))
+            || (tnl_cfg->exts & (1 << OVS_VXLAN_EXT_GPE)
+                && !nl_attr_get_flag(vxlan[IFLA_VXLAN_GPE]))) {
             err = EINVAL;
         }
     }
@@ -288,6 +292,9 @@ dpif_netlink_rtnl_create(const struct netdev_tunnel_config *tnl_cfg,
         nl_msg_put_u8(&request, IFLA_VXLAN_UDP_ZERO_CSUM6_RX, 1);
         if (tnl_cfg->exts & (1 << OVS_VXLAN_EXT_GBP)) {
             nl_msg_put_flag(&request, IFLA_VXLAN_GBP);
+        }
+        if (tnl_cfg->exts & (1 << OVS_VXLAN_EXT_GPE)) {
+            nl_msg_put_flag(&request, IFLA_VXLAN_GPE);
         }
         nl_msg_put_be16(&request, IFLA_VXLAN_PORT, tnl_cfg->dst_port);
         break;
