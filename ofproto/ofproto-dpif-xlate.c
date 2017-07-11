@@ -2726,6 +2726,13 @@ xlate_normal(struct xlate_ctx *ctx)
         struct mcast_group *grp = NULL;
 
         if (is_igmp(flow, wc)) {
+            /*
+             * IGMP packets need to take the slow path, in order to be
+             * processed for mdb updates. That will prevent expires
+             * firing off even after hosts have sent reports.
+             */
+            ctx->xout->slow |= SLOW_ACTION;
+
             memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
             if (mcast_snooping_is_membership(flow->tp_src) ||
                 mcast_snooping_is_query(flow->tp_src)) {
@@ -2733,12 +2740,6 @@ xlate_normal(struct xlate_ctx *ctx)
                     update_mcast_snooping_table(ctx, flow, vlan,
                                                 in_xbundle, ctx->xin->packet);
                 }
-                /*
-                 * IGMP packets need to take the slow path, in order to be
-                 * processed for mdb updates. That will prevent expires
-                 * firing off even after hosts have sent reports.
-                 */
-                ctx->xout->slow |= SLOW_ACTION;
             }
 
             if (mcast_snooping_is_membership(flow->tp_src)) {
