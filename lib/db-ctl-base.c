@@ -301,6 +301,8 @@ get_row_by_id(struct ctl_context *ctx, const struct ctl_table_class *table,
         if (uuid->n == 1) {
             final = ovsdb_idl_get_row_for_uuid(ctx->idl, table->class,
                                                &uuid->keys[0].uuid);
+        } else {
+            final = NULL;
         }
     } else {
         final = referrer;
