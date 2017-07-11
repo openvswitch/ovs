@@ -172,10 +172,13 @@ OVS_NO_RETURN void ovs_assert_failure(const char *, const char *, const char *);
  *         PADDED_MEMBERS(8, uint8_t x; uint8_t y;);
  *     };
  */
+#define PAD_PASTE2(x, y) x##y
+#define PAD_PASTE(x, y) PAD_PASTE2(x, y)
+#define PAD_ID PAD_PASTE(pad, __COUNTER__)
 #define PADDED_MEMBERS(UNIT, MEMBERS)                               \
     union {                                                         \
         struct { MEMBERS };                                         \
-        uint8_t pad[ROUND_UP(sizeof(struct { MEMBERS }), UNIT)];    \
+        uint8_t PAD_ID[ROUND_UP(sizeof(struct { MEMBERS }), UNIT)]; \
     }
 
 static inline bool
