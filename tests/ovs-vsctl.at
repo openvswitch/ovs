@@ -775,6 +775,9 @@ AT_CHECK([RUN_OVS_VSCTL([add-br br1])],
   [0], [ignore], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([set-controller br1 tcp:127.0.0.1])],
   [0], [ignore], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([list netflow br0])], [1], [],
+  [ovs-vsctl: no row "br0" in table NetFlow
+], [OVS_VSCTL_CLEANUP])
 AT_CHECK([
     RUN_OVS_VSCTL_TOGETHER([--id=@n create netflow targets='"1.2.3.4:567"'],
                            [set bridge br0 netflow=@n])],
