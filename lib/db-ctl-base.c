@@ -295,6 +295,8 @@ get_row_by_id(struct ctl_context *ctx,
         if (uuid->n == 1) {
             final = ovsdb_idl_get_row_for_uuid(ctx->idl, table,
                                                &uuid->keys[0].uuid);
+        } else {
+            final = NULL;
         }
     }
     return final;
