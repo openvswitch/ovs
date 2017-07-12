@@ -536,6 +536,7 @@ lacp_run(struct lacp *lacp, lacp_send_pdu *send_pdu) OVS_EXCLUDED(mutex)
 
     if (lacp->update) {
         lacp_update_attached(lacp);
+        seq_change(connectivity_seq_get());
     }
 
     HMAP_FOR_EACH (slave, node, &lacp->slaves) {
