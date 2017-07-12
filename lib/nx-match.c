@@ -1190,7 +1190,8 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
     nxm_put_ipv6(&ctx, MFF_CT_IPV6_DST, oxm,
                  &flow->ct_ipv6_dst, &match->wc.masks.ct_ipv6_dst);
     if (flow->ct_nw_proto) {
-        nxm_put_8(&ctx, MFF_CT_NW_PROTO, oxm, flow->ct_nw_proto);
+        nxm_put_8m(&ctx, MFF_CT_NW_PROTO, oxm, flow->ct_nw_proto,
+                   match->wc.masks.ct_nw_proto);
         nxm_put_16m(&ctx, MFF_CT_TP_SRC, oxm,
                     flow->ct_tp_src, match->wc.masks.ct_tp_src);
         nxm_put_16m(&ctx, MFF_CT_TP_DST, oxm,
