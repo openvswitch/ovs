@@ -211,17 +211,22 @@ test_pcap(struct ovs_cmdl_context *ctx)
 
     conntrack_init(&ct);
     total_count = 0;
-    while (!err) {
+    for (;;) {
         struct dp_packet *packet;
         struct dp_packet_batch pkt_batch_;
         struct dp_packet_batch *batch = &pkt_batch_;
 
         dp_packet_batch_init(batch);
-        err = ovs_pcap_read(pcap, &packet, NULL);
-        if (err) {
+        for (int i = 0; i < batch_size; i++) {
+            err = ovs_pcap_read(pcap, &packet, NULL);
+            if (err) {
+                break;
+            }
+            dp_packet_batch_add(batch, packet);
+        }
+        if (!batch->count) {
             break;
         }
-        dp_packet_batch_add(batch, packet);
         pcap_batch_execute_conntrack(&ct, batch);
 
         DP_PACKET_BATCH_FOR_EACH (packet, batch) {
