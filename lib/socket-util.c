@@ -1020,3 +1020,41 @@ sock_strerror(int error)
     return ovs_strerror(error);
 #endif
 }
+
+static int
+emulate_sendmmsg(int fd, struct mmsghdr *msgs, unsigned int n,
+                 unsigned int flags)
+{
+    for (unsigned int i = 0; i < n; i++) {
+        ssize_t retval = sendmsg(fd, &msgs[i].msg_hdr, flags);
+        if (retval < 0) {
+            return i ? i : retval;
+        }
+        msgs[i].msg_len = retval;
+    }
+    return n;
+}
+
+#ifndef HAVE_SENDMMSG
+int
+sendmmsg(int fd, struct mmsghdr *msgs, unsigned int n, unsigned int flags)
+{
+    return emulate_sendmmsg(fd, msgs, n, flags);
+}
+#else
+int
+wrap_sendmmsg(int fd, struct mmsghdr *msgs, unsigned int n, unsigned int flags)
+{
+    static bool sendmmsg_broken = false;
+    if (!sendmmsg_broken) {
+        int save_errno = errno;
+        int retval = sendmmsg(fd, msgs, n, flags);
+        if (retval >= 0 || errno != ENOSYS) {
+            return retval;
+        }
+        sendmmsg_broken = true;
+        errno = save_errno;
+    }
+    return emulate_sendmmsg(fd, msgs, n, flags);
+}
+#endif

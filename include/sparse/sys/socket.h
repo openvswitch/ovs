@@ -75,6 +75,11 @@ __cmsg_nxthdr(struct msghdr *msg, struct cmsghdr *cmsg)
             : NULL);
 }
 
+struct mmsghdr {
+    struct msghdr msg_hdr;
+    unsigned int msg_len;
+};
+
 enum {
     SCM_RIGHTS = 1
 };
