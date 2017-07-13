@@ -18,3 +18,4 @@ ExecStop=/usr/share/openvswitch/scripts/ovs-ctl --no-ovsdb-server stop
 ExecReload=/usr/share/openvswitch/scripts/ovs-ctl --no-ovsdb-server \
           --no-monitor --system-id=random \
           restart $OPTIONS
+TimeoutSec=300
