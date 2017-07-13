@@ -44,35 +44,35 @@ particular:
 - A patch should make one logical change.  Don't make multiple, logically
   unconnected changes to disparate subsystems in a single patch.
 
-- A patch that adds or removes user-visible features should also update the
-  appropriate user documentation or manpages.  Check "Feature Deprecation
-  Guidelines" section in this document if you intend to remove user-visible
-  feature.
+- A patch that adds or removes user-visible features should also
+  update the appropriate user documentation or manpages.  Consider
+  adding an item to NEWS for nontrivial changes.  Check "Feature
+  Deprecation Guidelines" section in this document if you intend to
+  remove user-visible feature.
 
 Testing is also important:
 
-- A patch that modifies existing code should be tested with ``make
-  check`` before submission.  Refer to the `install guide`, under "Self-Tests",
-  for more information.
+- Test a patch that modifies existing code with ``make check`` before
+  submission.  Refer to the "Unit Tests" in :doc:`/topics/testing`, for more
+  information.  We also encourage running the kernel and userspace system
+  tests.
 
-- A patch that adds or deletes files should also be tested with ``make
+- Consider testing a patch that adds or deletes files with ``make
   distcheck`` before submission.
 
 - A patch that modifies Linux kernel code should be at least build-tested on
   various Linux kernel versions before submission.  I suggest versions 3.10 and
   whatever the current latest release version is at the time.
 
-- A patch that modifies the ofproto or vswitchd code should be tested in at
-  least simple cases before submission.
-
-- A patch that modifies xenserver code should be tested on XenServer before
-  submission.
+- A patch that adds a new feature should add appropriate tests for the
+  feature.  A bug fix patch should preferably add a test that would
+  fail if the bug recurs.
 
 If you are using GitHub, then you may utilize the travis-ci.org CI build system
 by linking your GitHub repository to it. This will run some of the above tests
 automatically when you push changes to your repository.  See the "Continuous
-Integration with Travis-CI" in the `install guide` for details on how to set it
-up.
+Integration with Travis-CI" in :doc:`/topics/testing` for details on how to set
+it up.
 
 Email Subject
 -------------
