@@ -649,7 +649,6 @@ main(int argc, char *argv[])
                         &chassis_index, &active_tunnels, &local_datapaths,
                         &local_lports);
         }
-
         if (br_int && chassis) {
             struct shash addr_sets = SHASH_INITIALIZER(&addr_sets);
             addr_sets_init(&ctx, &addr_sets);
@@ -668,8 +667,8 @@ main(int argc, char *argv[])
 
                     struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
                     lflow_run(&ctx, chassis, &lports, &mcgroups,
-                              &local_datapaths, &group_table,
-                              &addr_sets, &flow_table);
+                              &chassis_index, &local_datapaths, &group_table,
+                              &addr_sets, &flow_table, &active_tunnels);
 
                     if (chassis_id) {
                         bfd_run(&ctx, br_int, chassis, &local_datapaths,
@@ -678,7 +677,7 @@ main(int argc, char *argv[])
                     physical_run(&ctx, mff_ovn_geneve,
                                  br_int, chassis, &ct_zones, &lports,
                                  &flow_table, &local_datapaths, &local_lports,
-                                 &chassis_index);
+                                 &chassis_index, &active_tunnels);
 
                     ofctrl_put(&flow_table, &pending_ct_zones,
                                get_nb_cfg(ctx.ovnsb_idl));

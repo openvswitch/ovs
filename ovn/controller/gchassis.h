@@ -26,6 +26,7 @@ struct ovsdb_idl;
 struct sbrec_chassis;
 struct sbrec_gateway_chassis;
 struct sbrec_port_binding;
+struct sset;
 
 
 /* Gateway_Chassis management
@@ -48,7 +49,7 @@ struct ovs_list *gateway_chassis_get_ordered(
 
 /* Checks if an specific chassis is contained in the gateway_chassis
  * list */
-bool gateway_chassis_contains(struct ovs_list *gateway_chassis,
+bool gateway_chassis_contains(const struct ovs_list *gateway_chassis,
                               const struct sbrec_chassis *chassis);
 
 /* Destroy a gateway_chassis list from memory */
@@ -60,4 +61,11 @@ bool gateway_chassis_in_pb_contains(
         const struct sbrec_port_binding *binding,
         const struct sbrec_chassis *chassis);
 
+/* Returns true if the local chassis is the active gateway among a set
+ * of gateway_chassis.  Return false if the local chassis is currently a
+ * backup in a set of multiple gateway_chassis. */
+bool gateway_chassis_is_active(
+        const struct ovs_list *gateway_chassis,
+        const struct sbrec_chassis *local_chassis,
+        const struct sset *active_tunnels);
 #endif /* ovn/controller/gchassis.h */

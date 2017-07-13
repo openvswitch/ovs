@@ -17,6 +17,7 @@
 
 #include "gchassis.h"
 #include "lport.h"
+#include "lib/sset.h"
 #include "openvswitch/vlog.h"
 #include "ovn/lib/chassis-index.h"
 #include "ovn/lib/ovn-sb-idl.h"
@@ -110,7 +111,7 @@ gateway_chassis_get_ordered(const struct sbrec_port_binding *binding,
 }
 
 bool
-gateway_chassis_contains(struct ovs_list *gateway_chassis,
+gateway_chassis_contains(const struct ovs_list *gateway_chassis,
                          const struct sbrec_chassis *chassis) {
     struct gateway_chassis *chassis_item;
     if (gateway_chassis) {
@@ -172,5 +173,50 @@ gateway_chassis_in_pb_contains(const struct sbrec_port_binding *binding,
         return !strcmp(redirect_chassis, chassis->name);
     }
 
+    return false;
+}
+
+bool
+gateway_chassis_is_active(const struct ovs_list *gateway_chassis,
+                          const struct sbrec_chassis *local_chassis,
+                          const struct sset *active_tunnels)
+{
+    struct gateway_chassis *gwc;
+
+    if (!gateway_chassis
+        || (gateway_chassis && ovs_list_is_empty(gateway_chassis))) {
+        return false;
+    }
+    /* if there's only one chassis, and local chassis is on the list
+     * it's not HA and it's the equivalent of being active */
+    if (ovs_list_is_singleton(gateway_chassis) &&
+        gateway_chassis_contains(gateway_chassis, local_chassis)) {
+        return true;
+    }
+
+    /* if there are no other tunnels active, we assume that the
+     * connection providing tunneling is down, hence we're down */
+    if (sset_is_empty(active_tunnels)) {
+        return false;
+    }
+
+    /* gateway_chassis is an ordered list, by priority, of chassis
+     * hosting the redirect of the port */
+    LIST_FOR_EACH (gwc, node, gateway_chassis) {
+        if (!gwc->db->chassis) {
+            continue;
+        }
+        /* if we found the chassis on the list, and we didn't exit before
+         * on the active_tunnels check for other higher priority chassis
+         * being active, then this chassis is master. */
+        if (!strcmp(gwc->db->chassis->name, local_chassis->name)) {
+            return true;
+        }
+        /* if we find this specific chassis on the list to have an active
+         * tunnel, then 'local_chassis' is not master */
+        if (sset_contains(active_tunnels, gwc->db->chassis->name)) {
+            return false;
+        }
+    }
     return false;
 }

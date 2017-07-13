@@ -295,6 +295,7 @@ consider_port_binding(enum mf_field_id mff_ovn_geneve,
                       const struct simap *ct_zones,
                       const struct lport_index *lports,
                       const struct chassis_index *chassis_index,
+                      struct sset *active_tunnels,
                       struct hmap *local_datapaths,
                       const struct sbrec_port_binding *binding,
                       const struct sbrec_chassis *chassis,
@@ -362,15 +363,10 @@ consider_port_binding(enum mf_field_id mff_ovn_geneve,
     struct ovs_list *gateway_chassis
         = gateway_chassis_get_ordered(binding, chassis_index);
 
-    /* XXX: later in the series we should insert the next flows only
-     * on the active chassis, and not on all of them. This is useful to
-     * check that the BFD implementation on following patches has
-     * an effect and routes packet by the chassis which is responding,
-     * but later on we should not create those flows on all the
-     * chassis of the gateway_chassis list */
     if (!strcmp(binding->type, "chassisredirect")
         && (binding->chassis == chassis
-            || gateway_chassis_contains(gateway_chassis, chassis))) {
+            || gateway_chassis_is_active(gateway_chassis, chassis,
+                                         active_tunnels))) {
 
         /* Table 33, priority 100.
          * =======================
@@ -865,7 +861,8 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
              const struct simap *ct_zones, struct lport_index *lports,
              struct hmap *flow_table, struct hmap *local_datapaths,
              const struct sset *local_lports,
-             struct chassis_index *chassis_index)
+             struct chassis_index *chassis_index,
+             struct sset *active_tunnels)
 {
 
     /* This bool tracks physical mapping changes. */
@@ -987,7 +984,7 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
     const struct sbrec_port_binding *binding;
     SBREC_PORT_BINDING_FOR_EACH (binding, ctx->ovnsb_idl) {
         consider_port_binding(mff_ovn_geneve, ct_zones, lports,
-                              chassis_index,
+                              chassis_index, active_tunnels,
                               local_datapaths, binding, chassis,
                               &ofpacts, flow_table);
     }

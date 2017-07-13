@@ -7792,17 +7792,25 @@ for chassis in gw1 gw2 hv1 hv2; do
     echo "------ $chassis dump ----------"
     ovs-ofctl show br-int
     ovs-ofctl dump-flows br-int
-    echo ""
-    echo "BFD (from $chassis):"
-    # dump BFD config and status to the other chassis
-    for chassis2 in gw1 gw2 hv1 hv2; do
-        if [[ "$chassis" != "$chassis2" ]]; then
-            echo " -> $chassis2:"
-            echo "   $(ovs-vsctl --bare --columns bfd,bfd_status find Interface name=ovn-$chassis2-0)"
-        fi
-    done
     echo "--------------------------"
 done
+function bfd_dump() {
+    for chassis in gw1 gw2 hv1 hv2; do
+        as $chassis
+        echo "------ $chassis dump (BFD)----"
+        echo "BFD (from $chassis):"
+        # dump BFD config and status to the other chassis
+        for chassis2 in gw1 gw2 hv1 hv2; do
+            if [[ "$chassis" != "$chassis2" ]]; then
+                echo " -> $chassis2:"
+                echo "   $(ovs-vsctl --bare --columns bfd,bfd_status find Interface name=ovn-$chassis2-0)"
+            fi
+        done
+        echo "--------------------------"
+    done
+}
+
+bfd_dump
 
 hv1_gw1_ofport=$(as hv1 ovs-vsctl --bare --columns ofport find Interface name=ovn-gw1-0)
 hv1_gw2_ofport=$(as hv1 ovs-vsctl --bare --columns ofport find Interface name=ovn-gw2-0)
@@ -7820,13 +7828,38 @@ as hv1 ovs-ofctl dump-flows br-int table=32
 echo "--- hv2 ---"
 as hv2 ovs-ofctl dump-flows br-int table=32
 
+gw1_chassis=$(ovn-sbctl --bare --columns=_uuid find Chassis name=gw1)
+gw2_chassis=$(ovn-sbctl --bare --columns=_uuid find Chassis name=gw2)
+
 AT_CHECK([as hv1 ovs-ofctl dump-flows br-int table=32 | grep active_backup | grep slaves:$hv1_gw1_ofport,$hv1_gw2_ofport | wc -l], [0], [1
 ])
 
 AT_CHECK([as hv2 ovs-ofctl dump-flows br-int table=32 | grep active_backup | grep slaves:$hv2_gw1_ofport,$hv2_gw2_ofport | wc -l], [0], [1
 ])
 
-# set higher priority to gw2 instead of gw1, and check for changes
+sleep 3 # let BFD sessions settle so we get the right flows on the right chassis
+
+# make sure that flows for handling the outside router port reside on gw1
+AT_CHECK([as gw1 ovs-ofctl dump-flows br-int table=23 | grep 00:00:02:01:02:04 | wc -l], [0], [[1
+]])
+AT_CHECK([as gw2 ovs-ofctl dump-flows br-int table=23 | grep 00:00:02:01:02:04 | wc -l], [0], [[0
+]])
+
+# make sure ARP responder flows for outside router port reside on gw1 too
+AT_CHECK([as gw1 ovs-ofctl dump-flows br-int table=9 | grep arp_tpa=192.168.0.101 | wc -l], [0], [[1
+]])
+AT_CHECK([as gw2 ovs-ofctl dump-flows br-int table=9 | grep arp_tpa=192.168.0.101 | wc -l], [0], [[0
+]])
+
+
+
+# check that the chassis redirect port has been claimed by the gw1 chassis
+AT_CHECK([ovn-sbctl --columns chassis --bare find Port_Binding logical_port=cr-outside | grep $gw1_chassis | wc -l],
+         [0],[[1
+]])
+
+
+# at this point, we invert the priority of the gw chassis between gw1 and gw2
 
 ovn-nbctl --id=@gc0 create Gateway_Chassis \
                     name=outside_gw1 chassis_name=gw1 priority=10 -- \
@@ -7834,15 +7867,21 @@ ovn-nbctl --id=@gc0 create Gateway_Chassis \
                     name=outside_gw2 chassis_name=gw2 priority=20 -- \
           set Logical_Router_Port outside 'gateway_chassis=[@gc0,@gc1]'
 
+
 # XXX: Let the change propagate down to the ovn-controllers
 ovn-nbctl --wait=hv sync
 
+# we make sure that the hypervisors noticed, and inverted the slave ports
 AT_CHECK([as hv1 ovs-ofctl dump-flows br-int table=32 | grep active_backup | grep slaves:$hv1_gw2_ofport,$hv1_gw1_ofport | wc -l], [0], [1
 ])
 
 AT_CHECK([as hv2 ovs-ofctl dump-flows br-int table=32 | grep active_backup | grep slaves:$hv2_gw2_ofport,$hv2_gw1_ofport | wc -l], [0], [1
 ])
 
+# check that the chassis redirect port has been reclaimed by the gw2 chassis
+AT_CHECK([ovn-sbctl --columns chassis --bare find Port_Binding logical_port=cr-outside | grep $gw2_chassis | wc -l],
+         [0],[[1
+]])
 
 # check BFD enablement on tunnel ports from gw1 #########
 as gw1
@@ -7888,6 +7927,33 @@ done
 # make sure BFD is not enabled to hv1, we don't need it
 AT_CHECK([ovs-vsctl --bare --columns bfd find Interface name=ovn-hv1-0],[0],
          [[enable=false
+]])
+
+sleep 3  # let BFD sessions settle so we get the right flows on the right chassis
+
+# make sure that flows for handling the outside router port reside on gw2 now
+AT_CHECK([as gw2 ovs-ofctl dump-flows br-int table=23 | grep 00:00:02:01:02:04 | wc -l], [0], [[1
+]])
+AT_CHECK([as gw1 ovs-ofctl dump-flows br-int table=23 | grep 00:00:02:01:02:04 | wc -l], [0], [[0
+]])
+
+# disconnect GW2 from the network, GW1 should take over
+as gw2
+port=${sandbox}_br-phys
+as main ovs-vsctl del-port n1 $port
+sleep 4
+
+bfd_dump
+
+# make sure that flows for handling the outside router port reside on gw2 now
+AT_CHECK([as gw1 ovs-ofctl dump-flows br-int table=23 | grep 00:00:02:01:02:04 | wc -l], [0], [[1
+]])
+AT_CHECK([as gw2 ovs-ofctl dump-flows br-int table=23 | grep 00:00:02:01:02:04 | wc -l], [0], [[0
+]])
+
+# check that the chassis redirect port has been reclaimed by the gw1 chassis
+AT_CHECK([ovn-sbctl --columns chassis --bare find Port_Binding logical_port=cr-outside | grep $gw1_chassis | wc -l],
+         [0],[[1
 ]])
 
 OVN_CLEANUP([gw1],[gw2],[hv1],[hv2])

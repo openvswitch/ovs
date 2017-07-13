@@ -26,6 +26,7 @@ struct sbrec_chassis;
 struct sbrec_datapath_binding;
 struct sbrec_port_binding;
 
+
 /* Database indexes.
  * =================
  *

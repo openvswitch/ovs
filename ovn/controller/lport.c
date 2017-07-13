@@ -15,11 +15,11 @@
 
 #include <config.h>
 
+#include "lib/sset.h"
 #include "lport.h"
 #include "hash.h"
 #include "openvswitch/vlog.h"
 #include "ovn/lib/ovn-sb-idl.h"
-
 VLOG_DEFINE_THIS_MODULE(lport);
 
 static struct ldatapath *ldatapath_lookup_by_key__(

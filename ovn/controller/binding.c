@@ -411,20 +411,10 @@ consider_local_datapath(struct controller_ctx *ctx,
                                                        chassis_index);
         if (gateway_chassis &&
             gateway_chassis_contains(gateway_chassis, chassis_rec)) {
-            struct gateway_chassis *gwc;
-            LIST_FOR_EACH (gwc, node, gateway_chassis) {
-                if (!gwc->db->chassis) {
-                    continue;
-                }
-                if (!strcmp(gwc->db->chassis->name, chassis_rec->name)) {
-                    /* sb_rec_port_binding->chassis should reflect master */
-                    our_chassis = true;
-                    break;
-                }
-                if (sset_contains(active_tunnels, gwc->db->chassis->name)) {
-                    break;
-                }
-            }
+
+            our_chassis = gateway_chassis_is_active(
+                gateway_chassis, chassis_rec, active_tunnels);
+
             add_local_datapath(ldatapaths, lports, binding_rec->datapath,
                                false, local_datapaths);
         }
