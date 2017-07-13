@@ -73,8 +73,6 @@ ovn-nbctl --wait=sb lrp-add R1 bob 00:00:02:01:02:03 172.16.1.1/24 \
 
 gwc1_uuid=`ovn-sbctl --bare --columns _uuid find Gateway_Chassis name="bob_gw1"`
 
-AT_CHECK([ovn-sbctl --bare --columns options find port_binding logical_port="cr-bob" | grep 'redirect-chassis=gw1' | wc -l], [0], [1
-])
 AT_CHECK([ovn-sbctl --bare --columns gateway_chassis find port_binding logical_port="cr-bob" | grep $gwc1_uuid | wc -l], [0], [1
 ])
 

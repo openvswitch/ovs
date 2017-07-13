@@ -1867,13 +1867,9 @@ ovn_port_update_sbrec(struct northd_context *ctx,
                 }
 
             } else if (redirect_chassis) {
-                /* XXX: Keep the "redirect-chassis" option on the Port_Binding
-                 * for compatibility purposes until ovn-controller implements
-                 * Gateway_Chassis handling */
-                smap_add(&new, "redirect-chassis", redirect_chassis);
-
                 /* Handle ports that had redirect-chassis option attached
-                 * to them for backwards compatibility */
+                 * to them, and for backwards compatibility convert them
+                 * to a single Gateway_Chassis entry */
                 const struct sbrec_chassis *chassis =
                     chassis_lookup_by_name(chassis_index, redirect_chassis);
                 if (chassis) {

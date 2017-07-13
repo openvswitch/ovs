@@ -20,6 +20,7 @@
 #include <stdbool.h>
 
 struct controller_ctx;
+struct chassis_index;
 struct hmap;
 struct ldatapath_index;
 struct lport_index;

@@ -40,6 +40,7 @@
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
 #include "ovn/actions.h"
+#include "ovn/lib/chassis-index.h"
 #include "ovn/lib/ovn-sb-idl.h"
 #include "ovn/lib/ovn-util.h"
 #include "patch.h"
@@ -148,6 +149,10 @@ update_sb_monitors(struct ovsdb_idl *ovnsb_idl,
     struct ovsdb_idl_condition mg = OVSDB_IDL_CONDITION_INIT(&mg);
     struct ovsdb_idl_condition dns = OVSDB_IDL_CONDITION_INIT(&dns);
     sbrec_port_binding_add_clause_type(&pb, OVSDB_F_EQ, "patch");
+    /* XXX: We can optimize this, if we find a way to only monitor
+     * ports that have a Gateway_Chassis that point's to our own
+     * chassis */
+    sbrec_port_binding_add_clause_type(&pb, OVSDB_F_EQ, "chassisredirect");
     if (chassis) {
         /* This should be mostly redundant with the other clauses for port
          * bindings, but it allows us to catch any ports that are assigned to
@@ -165,10 +170,6 @@ update_sb_monitors(struct ovsdb_idl *ovnsb_idl,
         sbrec_port_binding_add_clause_options(&pb, OVSDB_F_INCLUDES, &l2);
         const struct smap l3 = SMAP_CONST1(&l3, "l3gateway-chassis", id);
         sbrec_port_binding_add_clause_options(&pb, OVSDB_F_INCLUDES, &l3);
-        const struct smap redirect = SMAP_CONST1(&redirect,
-                                                 "redirect-chassis", id);
-        sbrec_port_binding_add_clause_options(&pb, OVSDB_F_INCLUDES,
-                                              &redirect);
     }
     if (local_ifaces) {
         const char *name;
@@ -627,9 +628,12 @@ main(int argc, char *argv[])
         struct ldatapath_index ldatapaths;
         struct lport_index lports;
         struct mcgroup_index mcgroups;
+        struct chassis_index chassis_index;
+
         ldatapath_index_init(&ldatapaths, ctx.ovnsb_idl);
         lport_index_init(&lports, ctx.ovnsb_idl);
         mcgroup_index_init(&mcgroups, ctx.ovnsb_idl);
+        chassis_index_init(&chassis_index, ctx.ovnsb_idl);
 
         const struct sbrec_chassis *chassis = NULL;
         if (chassis_id) {
@@ -662,7 +666,8 @@ main(int argc, char *argv[])
 
                     physical_run(&ctx, mff_ovn_geneve,
                                  br_int, chassis, &ct_zones, &lports,
-                                 &flow_table, &local_datapaths, &local_lports);
+                                 &flow_table, &local_datapaths, &local_lports,
+                                 &chassis_index);
 
                     ofctrl_put(&flow_table, &pending_ct_zones,
                                get_nb_cfg(ctx.ovnsb_idl));
@@ -709,6 +714,7 @@ main(int argc, char *argv[])
         mcgroup_index_destroy(&mcgroups);
         lport_index_destroy(&lports);
         ldatapath_index_destroy(&ldatapaths);
+        chassis_index_destroy(&chassis_index);
 
         sset_destroy(&local_lports);
 

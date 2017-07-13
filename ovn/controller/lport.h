@@ -17,10 +17,14 @@
 #define OVN_LPORT_H 1
 
 #include <stdint.h>
+#include "lib/uuid.h"
 #include "openvswitch/hmap.h"
+#include "openvswitch/list.h"
 
 struct ovsdb_idl;
+struct sbrec_chassis;
 struct sbrec_datapath_binding;
+struct sbrec_port_binding;
 
 /* Database indexes.
  * =================

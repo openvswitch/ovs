@@ -15,6 +15,7 @@
 
 #include <config.h>
 #include "binding.h"
+#include "gchassis.h"
 #include "lflow.h"
 #include "lport.h"
 
@@ -26,6 +27,7 @@
 #include "lib/vswitch-idl.h"
 #include "openvswitch/hmap.h"
 #include "openvswitch/vlog.h"
+#include "ovn/lib/chassis-index.h"
 #include "ovn/lib/ovn-sb-idl.h"
 #include "ovn-controller.h"
 
@@ -394,12 +396,15 @@ consider_local_datapath(struct controller_ctx *ctx,
                                false, local_datapaths);
         }
     } else if (!strcmp(binding_rec->type, "chassisredirect")) {
-        const char *chassis_id = smap_get(&binding_rec->options,
-                                          "redirect-chassis");
-        our_chassis = chassis_id && !strcmp(chassis_id, chassis_rec->name);
-        if (our_chassis) {
+        if (gateway_chassis_in_pb_contains(binding_rec, chassis_rec)) {
             add_local_datapath(ldatapaths, lports, binding_rec->datapath,
                                false, local_datapaths);
+            /* XXX this should only be set to true if our chassis
+             * (chassis_rec) is the master for this chassisredirect port
+             * but for now we'll bind it only when not bound, this is
+             * handled in subsequent patches */
+            our_chassis = !binding_rec->chassis ||
+                chassis_rec == binding_rec->chassis;
         }
     } else if (!strcmp(binding_rec->type, "l3gateway")) {
         const char *chassis_id = smap_get(&binding_rec->options,

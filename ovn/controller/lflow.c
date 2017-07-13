@@ -14,6 +14,7 @@
  */
 
 #include <config.h>
+#include "gchassis.h"
 #include "lflow.h"
 #include "lport.h"
 #include "ofctrl.h"
@@ -96,7 +97,11 @@ is_chassis_resident_cb(const void *c_aux_, const char *port_name)
 
     const struct sbrec_port_binding *pb
         = lport_lookup_by_name(c_aux->lports, port_name);
-    return pb && pb->chassis && pb->chassis == c_aux->chassis;
+    if (pb && pb->chassis && pb->chassis == c_aux->chassis) {
+        return true;
+    } else {
+        return gateway_chassis_in_pb_contains(pb, c_aux->chassis);
+    }
 }
 
 static bool
