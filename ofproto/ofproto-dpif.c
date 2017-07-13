@@ -5522,27 +5522,6 @@ disable_datapath_truncate(struct unixctl_conn *conn OVS_UNUSED,
 }
 
 static void
-disable_datapath_clone(struct unixctl_conn *conn OVS_UNUSED,
-                       int argc, const char *argv[],
-                       void *aux OVS_UNUSED)
-{
-    struct ds ds = DS_EMPTY_INITIALIZER;
-    const char *br = argv[argc -1];
-    struct ofproto_dpif *ofproto;
-
-    ofproto = ofproto_dpif_lookup(br);
-    if (!ofproto) {
-        unixctl_command_reply_error(conn, "no such bridge");
-        return;
-    }
-    xlate_disable_dp_clone(ofproto);
-    udpif_flush(ofproto->backer->udpif);
-    ds_put_format(&ds, "Datapath clone action disabled for bridge %s", br);
-    unixctl_command_reply(conn, ds_cstr(&ds));
-    ds_destroy(&ds);
-}
-
-static void
 ofproto_unixctl_dpif_show_dp_features(struct unixctl_conn *conn,
                                       int argc, const char *argv[],
                                       void *aux OVS_UNUSED)
@@ -5622,9 +5601,6 @@ ofproto_unixctl_init(void)
 
     unixctl_command_register("dpif/disable-truncate", "", 0, 0,
                              disable_datapath_truncate, NULL);
-
-    unixctl_command_register("dpif/disable-dp-clone", "bridge", 1, 1,
-                             disable_datapath_clone, NULL);
 }
 
 static odp_port_t
