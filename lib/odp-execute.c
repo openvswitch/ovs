@@ -646,8 +646,15 @@ odp_execute_actions(void *dp, struct dp_packet_batch *batch, bool steal,
                 uint32_t hash;
 
                 DP_PACKET_BATCH_FOR_EACH (packet, batch) {
-                    flow_extract(packet, &flow);
-                    hash = flow_hash_5tuple(&flow, hash_act->hash_basis);
+                    /* RSS hash can be used here instead of 5tuple for
+                     * performance reasons. */
+                    if (dp_packet_rss_valid(packet)) {
+                        hash = dp_packet_get_rss_hash(packet);
+                        hash = hash_int(hash, hash_act->hash_basis);
+                    } else {
+                        flow_extract(packet, &flow);
+                        hash = flow_hash_5tuple(&flow, hash_act->hash_basis);
+                    }
                     packet->md.dp_hash = hash;
                 }
             } else {
