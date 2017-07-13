@@ -8080,3 +8080,86 @@ AT_CHECK([grep $garp hv2_br_phys_tx | sort], [0], [])
 OVN_CLEANUP([hv1],[hv2],[hv3])
 
 AT_CLEANUP
+
+AT_SETUP([ovn -- ensure one gw controller restart in HA doesn't bounce the master])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+net_add n1
+
+# create two gateways with external network connectivity
+for i in 1 2; do
+    sim_add gw$i
+    as gw$i
+    ovs-vsctl add-br br-phys
+    ovn_attach n1 br-phys 192.168.0.$i
+    ovs-vsctl set open . external-ids:ovn-bridge-mappings=phys:br-phys
+done
+
+ovn-nbctl ls-add inside
+ovn-nbctl ls-add outside
+
+# create one hypervisors with a vif port the internal network
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.11
+ovs-vsctl -- add-port br-int hv1-vif1 -- \
+    set interface hv1-vif1 external-ids:iface-id=inside1 \
+    options:tx_pcap=hv1/vif1-tx.pcap \
+    options:rxq_pcap=hv1/vif1-rx.pcap \
+    ofport-request=1
+
+ovn-nbctl lsp-add inside inside1 \
+        -- lsp-set-addresses inside1 "f0:00:00:01:22:01 192.168.1.101"
+
+
+ovn_populate_arp
+
+ovn-nbctl create Logical_Router name=R1
+
+# Connect inside to R1
+ovn-nbctl lrp-add R1 inside 00:00:01:01:02:03 192.168.1.1/24
+ovn-nbctl lsp-add inside rp-inside -- set Logical_Switch_Port rp-inside \
+    type=router options:router-port=inside \
+    -- lsp-set-addresses rp-inside router
+
+# Connect outside to R1 as distributed router gateway port on gw1+gw2
+ovn-nbctl lrp-add R1 outside 00:00:02:01:02:04 192.168.0.101/24
+
+ovn-nbctl --id=@gc0 create Gateway_Chassis \
+                    name=outside_gw1 chassis_name=gw1 priority=20 -- \
+          --id=@gc1 create Gateway_Chassis \
+                    name=outside_gw2 chassis_name=gw2 priority=10 -- \
+          set Logical_Router_Port outside 'gateway_chassis=[@gc0,@gc1]'
+
+ovn-nbctl lsp-add outside rp-outside -- set Logical_Switch_Port rp-outside \
+    type=router options:router-port=outside \
+    -- lsp-set-addresses rp-outside router
+
+# Create localnet port in outside
+ovn-nbctl lsp-add outside ln-outside
+ovn-nbctl lsp-set-addresses ln-outside unknown
+ovn-nbctl lsp-set-type ln-outside localnet
+ovn-nbctl lsp-set-options ln-outside network_name=phys
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+ovn-nbctl --wait=hv sync
+
+# currently when ovn-controller is restarted, the old entry is deleted
+# and a new one is created, which leaves the Gateway_Chassis with
+# an empty chassis for a while. NOTE: restarting ovn-controller in tests
+# doesn't have the same effect because "name" is conserved, and the
+# Chassis entry is not replaced.
+
+gw2_chassis=$(ovn-sbctl --bare --columns=_uuid find Chassis name=gw2)
+ovn-sbctl destroy Chassis $gw2_chassis
+
+# Ensure ovn-controller has processed latest sbdb update
+# ovn-nbctl --wait=hv sync
+
+AT_CHECK([grep "Releasing lport" gw1/ovn-controller.log], [1], [])
+
+OVN_CLEANUP([gw1],[gw2],[hv1])
+
+AT_CLEANUP

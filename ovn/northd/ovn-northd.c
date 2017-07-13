@@ -1684,11 +1684,22 @@ gateway_chassis_equal(const struct nbrec_gateway_chassis *nb_gwc,
                       const struct sbrec_chassis *nb_gwc_c,
                       const struct sbrec_gateway_chassis *sb_gwc)
 {
-    return !strcmp(nb_gwc->name, sb_gwc->name)
-           && !strcmp(nb_gwc_c->name, sb_gwc->chassis->name)
-           && nb_gwc->priority == sb_gwc->priority
-           && smap_equal(&nb_gwc->options, &sb_gwc->options)
-           && smap_equal(&nb_gwc->external_ids, &sb_gwc->external_ids);
+    bool equal = !strcmp(nb_gwc->name, sb_gwc->name)
+                 && nb_gwc->priority == sb_gwc->priority
+                 && smap_equal(&nb_gwc->options, &sb_gwc->options)
+                 && smap_equal(&nb_gwc->external_ids, &sb_gwc->external_ids);
+
+    if (!equal) {
+        return false;
+    }
+
+    /* If everything else matched and we were unable to find the SBDB
+     * Chassis entry at this time, assume a match and return true.
+     * This happens when an ovn-controller is restarting and the Chassis
+     * entry is gone away momentarily */
+    return !nb_gwc_c
+           || (sb_gwc->chassis && !strcmp(nb_gwc_c->name,
+                                          sb_gwc->chassis->name));
 }
 
 static bool
@@ -1723,11 +1734,10 @@ sbpb_gw_chassis_needs_update(
             chassis_lookup_by_name(chassis_index,
                                    lrp->gateway_chassis[n]->chassis_name);
 
-        if (chassis) {
-            lrp_gwc_c[lrp_n_gateway_chassis] = chassis;
-            lrp_gwc[lrp_n_gateway_chassis] = lrp->gateway_chassis[n];
-            lrp_n_gateway_chassis++;
-        } else {
+        lrp_gwc_c[lrp_n_gateway_chassis] = chassis;
+        lrp_gwc[lrp_n_gateway_chassis] = lrp->gateway_chassis[n];
+        lrp_n_gateway_chassis++;
+        if (!chassis) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
             VLOG_WARN_RL(
                 &rl, "Chassis name %s referenced in NBDB via Gateway_Chassis "
@@ -1804,10 +1814,6 @@ copy_gw_chassis_from_nbrp_to_sbpb(
 
         const struct sbrec_chassis *chassis =
             chassis_lookup_by_name(chassis_index, lrp_gwc->chassis_name);
-
-        if (!chassis) {
-            continue;
-        }
 
         gw_chassis = xrealloc(gw_chassis, (n_gwc + 1) * sizeof *gw_chassis);
 
