@@ -23,6 +23,7 @@
 #include "dirs.h"
 #include "dp-packet.h"
 #include "flow.h"
+#include "gchassis.h"
 #include "lport.h"
 #include "nx-match.h"
 #include "ovn-controller.h"
@@ -72,7 +73,9 @@ static void send_garp_wait(void);
 static void send_garp_run(const struct ovsrec_bridge *,
                           const struct sbrec_chassis *,
                           const struct lport_index *lports,
-                          struct hmap *local_datapaths);
+                          const struct chassis_index *chassis_index,
+                          struct hmap *local_datapaths,
+                          struct sset *active_tunnels);
 static void pinctrl_handle_nd_na(const struct flow *ip_flow,
                                  const struct match *md,
                                  struct ofpbuf *userdata);
@@ -1016,7 +1019,9 @@ void
 pinctrl_run(struct controller_ctx *ctx, const struct lport_index *lports,
             const struct ovsrec_bridge *br_int,
             const struct sbrec_chassis *chassis,
-            struct hmap *local_datapaths)
+            const struct chassis_index *chassis_index,
+            struct hmap *local_datapaths,
+            struct sset *active_tunnels)
 {
     char *target = xasprintf("unix:%s/%s.mgmt", ovs_rundir(), br_int->name);
     if (strcmp(target, rconn_get_target(swconn))) {
@@ -1051,7 +1056,8 @@ pinctrl_run(struct controller_ctx *ctx, const struct lport_index *lports,
     }
 
     run_put_mac_bindings(ctx, lports);
-    send_garp_run(br_int, chassis, lports, local_datapaths);
+    send_garp_run(br_int, chassis, lports, chassis_index, local_datapaths,
+                  active_tunnels);
 }
 
 void
@@ -1490,11 +1496,26 @@ get_localnet_vifs_l3gwports(const struct ovsrec_bridge *br_int,
 static bool
 pinctrl_is_chassis_resident(const struct lport_index *lports,
                             const struct sbrec_chassis *chassis,
+                            const struct chassis_index *chassis_index,
+                            struct sset *active_tunnels,
                             const char *port_name)
 {
     const struct sbrec_port_binding *pb
         = lport_lookup_by_name(lports, port_name);
-    return pb && pb->chassis && pb->chassis == chassis;
+    if (!pb || !pb->chassis) {
+        return false;
+    }
+    if (strcmp(pb->type, "chassisredirect")) {
+        return pb->chassis == chassis;
+    } else {
+        struct ovs_list *gateway_chassis =
+            gateway_chassis_get_ordered(pb, chassis_index);
+        bool active = gateway_chassis_is_active(gateway_chassis,
+                                                chassis,
+                                                active_tunnels);
+        gateway_chassis_destroy(gateway_chassis);
+        return active;
+    }
 }
 
 /* Extracts the mac, IPv4 and IPv6 addresses, and logical port from
@@ -1569,13 +1590,16 @@ consider_nat_address(const char *nat_address,
                      struct sset *nat_address_keys,
                      const struct lport_index *lports,
                      const struct sbrec_chassis *chassis,
+                     const struct chassis_index *chassis_index,
+                     struct sset *active_tunnels,
                      struct shash *nat_addresses)
 {
     struct lport_addresses *laddrs = xmalloc(sizeof *laddrs);
     char *lport = NULL;
     if (!extract_addresses_with_port(nat_address, laddrs, &lport)
         || (!lport && !strcmp(pb->type, "patch"))
-        || (lport && !pinctrl_is_chassis_resident(lports, chassis, lport))) {
+        || (lport && !pinctrl_is_chassis_resident(
+            lports, chassis, chassis_index, active_tunnels, lport))) {
         destroy_lport_addresses(laddrs);
         free(laddrs);
         free(lport);
@@ -1598,6 +1622,8 @@ get_nat_addresses_and_keys(struct sset *nat_address_keys,
                            struct sset *local_l3gw_ports,
                            const struct lport_index *lports,
                            const struct sbrec_chassis *chassis,
+                           const struct chassis_index *chassis_index,
+                           struct sset *active_tunnels,
                            struct shash *nat_addresses)
 {
     const char *gw_port;
@@ -1612,6 +1638,7 @@ get_nat_addresses_and_keys(struct sset *nat_address_keys,
             for (int i = 0; i < pb->n_nat_addresses; i++) {
                 consider_nat_address(pb->nat_addresses[i], pb,
                                      nat_address_keys, lports, chassis,
+                                     chassis_index, active_tunnels,
                                      nat_addresses);
             }
         } else {
@@ -1622,6 +1649,7 @@ get_nat_addresses_and_keys(struct sset *nat_address_keys,
             if (nat_addresses_options) {
                 consider_nat_address(nat_addresses_options, pb,
                                      nat_address_keys, lports, chassis,
+                                     chassis_index, active_tunnels,
                                      nat_addresses);
             }
         }
@@ -1638,7 +1666,9 @@ static void
 send_garp_run(const struct ovsrec_bridge *br_int,
               const struct sbrec_chassis *chassis,
               const struct lport_index *lports,
-              struct hmap *local_datapaths)
+              const struct chassis_index *chassis_index,
+              struct hmap *local_datapaths,
+              struct sset *active_tunnels)
 {
     struct sset localnet_vifs = SSET_INITIALIZER(&localnet_vifs);
     struct sset local_l3gw_ports = SSET_INITIALIZER(&local_l3gw_ports);
@@ -1652,7 +1682,8 @@ send_garp_run(const struct ovsrec_bridge *br_int,
                       &localnet_vifs, &localnet_ofports, &local_l3gw_ports);
 
     get_nat_addresses_and_keys(&nat_ip_keys, &local_l3gw_ports, lports,
-                               chassis, &nat_addresses);
+                               chassis, chassis_index, active_tunnels,
+                               &nat_addresses);
     /* For deleted ports and deleted nat ips, remove from send_garp_data. */
     struct shash_node *iter, *next;
     SHASH_FOR_EACH_SAFE (iter, next, &send_garp_data) {

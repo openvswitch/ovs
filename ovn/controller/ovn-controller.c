@@ -658,7 +658,8 @@ main(int argc, char *argv[])
             enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int,
                                                          &pending_ct_zones);
 
-            pinctrl_run(&ctx, &lports, br_int, chassis, &local_datapaths);
+            pinctrl_run(&ctx, &lports, br_int, chassis, &chassis_index,
+                        &local_datapaths, &active_tunnels);
             update_ct_zones(&local_lports, &local_datapaths, &ct_zones,
                             ct_zone_bitmap, &pending_ct_zones);
             if (ctx.ovs_idl_txn) {
