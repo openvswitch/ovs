@@ -179,7 +179,7 @@
       <column name="other_config" key="subnet">
         Set this to an IPv4 subnet, e.g. <code>192.168.0.0/24</code>, to enable
         <code>ovn-northd</code> to automatically assign IP addresses within
-        that subnet.  
+        that subnet.
       </column>
 
       <column name="other_config" key="exclude_ips">
@@ -1250,6 +1250,34 @@
       </p>
     </column>
 
+    <column name="gateway_chassis">
+      <p>
+        If set, this indicates that this logical router port represents
+        a distributed gateway port that connects this router to a logical
+        switch with a localnet port.  There may be at most one such
+        logical router port on each logical router.
+      </p>
+
+      <p>
+        Several <ref table="Gateway_Chassis"/> can be referenced for a given
+        logical router port.  A single <ref table="Gateway_Chassis"/> is
+        functionally equivalent to setting
+        <ref column="options" key="redirect-chassis"/>.  Refer to the
+        description of <ref column="options" key="redirect-chassis"/>
+        for additional details on gateway handling.
+      </p>
+
+      <p>
+        Defining more than one <ref table="Gateway_Chassis"/> will enable
+        gateway high availability.  Only one gateway will be active at a
+        time.  OVN chassis will use BFD to monitor connectivity to a
+        gateway.  If connectivity to the active gateway is interrupted,
+        another gateway will become active.
+        The <ref column="priority" table="Gateway_Chassis"/> column
+        specifies the order that gateways will be chosen by OVN.
+      </p>
+    </column>
+
     <column name="networks">
       <p>
         The IP addresses and netmasks of the router.  For example,
@@ -1318,6 +1346,14 @@
           port's <ref column="options" key="nat-addresses"
           table="Logical_Switch_Port"/> should be set to
           <code>router</code>.
+        </p>
+
+        <p>
+          While <ref column="options" key="redirect-chassis"/> is still
+          supported for backwards compatibility, it is now preferred to
+          specify one or more <ref column="gateway_chassis"/> instead.
+          It is functionally equivalent, but allows you to specify multiple
+          chassis to enable high availability.
         </p>
       </column>
     </group>
@@ -2111,4 +2147,54 @@
       <column name="external_ids"/>
     </group>
   </table>
+  <table name="Gateway_Chassis">
+    <p>
+      Association of one or more chassis to a logical router port. The traffic
+      going out through an specific router port will be redirected to a
+      chassis, or a set of them in high availability configurations.
+      A single <ref table="Gateway_Chassis"/> is equivalent to setting
+      <ref column="options" key="redirect-chassis"/>.  Using
+      <ref table="Gateway_Chassis"/> allows associating multiple prioritized
+      chassis with a single logical router port.
+    </p>
+
+    <column name="name">
+      <p>
+        Name of the <ref table="Gateway_Chassis"/>.
+      </p>
+      <p>
+        A suggested, but not required naming convention is
+        <code>${port_name}_${chassis_name}</code>.
+      </p>
+    </column>
+
+    <column name="chassis_name">
+      <p>
+        Name of the chassis that we want to redirect traffic through for the
+        associated logical router port.  The value must match the
+        <ref db="OVN_Southbound" table="Chassis" column="name"/> column
+        of the <ref db="OVN_Southbound" table="Chassis"/> table in the
+        <ref db="OVN_Southbound"/> database.
+      </p>
+    </column>
+
+    <column name="priority">
+      <p>
+        This is the priority of a chassis among all
+        <ref table="Gateway_Chassis"/> belonging to the same logical router
+        port.
+      </p>
+    </column>
+
+    <column name="options">
+      Reserved for future use.
+    </column>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
+
 </database>

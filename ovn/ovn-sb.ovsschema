@@ -1,7 +1,7 @@
 {
     "name": "OVN_Southbound",
-    "version": "1.13.0",
-    "cksum": "3451836240 12038",
+    "version": "1.14.0",
+    "cksum": "3613553908 13275",
     "tables": {
         "SB_Global": {
             "columns": {
@@ -104,6 +104,12 @@
             "columns": {
                 "logical_port": {"type": "string"},
                 "type": {"type": "string"},
+                "gateway_chassis": {
+                    "type": {"key": {"type": "uuid",
+                                     "refTable": "Gateway_Chassis",
+                                     "refType": "strong"},
+                             "min": 0,
+                             "max": "unlimited"}},
                 "options": {
                      "type": {"key": "string",
                               "value": "string",
@@ -244,4 +250,22 @@
                 "update" : {"type": {"key": "string",
                                      "min": 0,
                                      "max": "unlimited"}}},
-            "isRoot": true}}}
+            "isRoot": true},
+        "Gateway_Chassis": {
+            "columns": {
+                "name": {"type": "string"},
+                "chassis": {"type": {"key": {"type": "uuid",
+                                             "refTable": "Chassis",
+                                             "refType": "weak"},
+                                     "min": 0, "max": 1}},
+                "priority": {"type": {"key": {"type": "integer",
+                                              "minInteger": 0,
+                                              "maxInteger": 32767}}},
+                "external_ids": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}},
+                "options": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}}},
+            "indexes": [["name"]],
+            "isRoot": false}}}

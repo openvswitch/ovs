@@ -1837,6 +1837,18 @@ tcp.flags = RST;
 
       </column>
 
+      <column name="gateway_chassis">
+        <p>
+          A list of <ref table="Gateway_Chassis"/>.
+        </p>
+        <p>
+          This should only be populated for ports with
+          <ref column="type"/> set to <code>chassisredirect</code>.
+          This column defines the list of chassis used as gateways where
+          traffic will be redirected through.
+        </p>
+      </column>
+
       <column name="tunnel_key">
         <p>
           A number that represents the logical port in the key (e.g. STT key or
@@ -2882,5 +2894,44 @@ tcp.flags = RST;
         Set of strings identifying columns and column:key pairs that authorized
         clients are allowed to modify.
     </column>
+  </table>
+  <table name="Gateway_Chassis">
+    <p>
+      Association of <ref table="Port_Binding"/> rows of
+      <ref table="Port_Binding" column="type"/> <code>chassisredirect</code> to
+      a <ref table="Chassis"/>. The traffic going out through a specific
+      <code>chassisredirect</code> port will be redirected to a chassis,
+      or a set of them in high availability configurations.
+    </p>
+
+    <column name="name">
+      <p>
+        Name of the <ref table="Gateway_Chassis"/>.
+      </p>
+      <p>
+        A suggested, but not required naming convention is
+        <code>${port_name}_${chassis_name}</code>.
+      </p>
+    </column>
+
+    <column name="chassis">
+      The <ref table="Chassis"/> to which we send the traffic.
+    </column>
+
+    <column name="priority">
+      This is the priority the specific <ref table="Chassis"/> among all
+      Gateway_Chassis belonging to the same <ref table="Port_Binding"/>.
+    </column>
+
+    <column name="options">
+      Reserved for future use.
+    </column>
+
+    <group title="Common Columns">
+      The overall purpose of these columns is described under <code>Common
+      Columns</code> at the beginning of this document.
+
+      <column name="external_ids"/>
+    </group>
   </table>
 </database>

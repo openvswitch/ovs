@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
-    "version": "5.6.0",
-    "cksum": "2552205612 15123",
+    "version": "5.7.0",
+    "cksum": "3754583060 16164",
     "tables": {
         "NB_Global": {
             "columns": {
@@ -196,6 +196,12 @@
         "Logical_Router_Port": {
             "columns": {
                 "name": {"type": "string"},
+                "gateway_chassis": {
+                    "type": {"key": {"type": "uuid",
+                                     "refTable": "Gateway_Chassis",
+                                     "refType": "strong"},
+                             "min": 0,
+                             "max": "unlimited"}},
                 "options": {
                     "type": {"key": "string",
                              "value": "string",
@@ -293,4 +299,20 @@
                                           "value": "string",
                                           "min": 0,
                                           "max": "unlimited"}}},
-            "maxRows": 1}}}
+            "maxRows": 1},
+        "Gateway_Chassis": {
+            "columns": {
+                "name": {"type": "string"},
+                "chassis_name": {"type": "string"},
+                "priority": {"type": {"key": {"type": "integer",
+                                              "minInteger": 0,
+                                              "maxInteger": 32767}}},
+                "external_ids": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}},
+                "options": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}}},
+            "indexes": [["name"]],
+            "isRoot": false}}
+    }
