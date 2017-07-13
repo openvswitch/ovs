@@ -28,6 +28,7 @@
 #include "openvswitch/hmap.h"
 #include "openvswitch/json.h"
 #include "ovn/lex.h"
+#include "ovn/lib/chassis-index.h"
 #include "ovn/lib/logical-fields.h"
 #include "ovn/lib/ovn-dhcp.h"
 #include "ovn/lib/ovn-nb-idl.h"
@@ -1453,7 +1454,7 @@ join_logical_ports(struct northd_context *ctx,
 
                 const char *redirect_chassis = smap_get(&op->nbrp->options,
                                                         "redirect-chassis");
-                if (redirect_chassis) {
+                if (redirect_chassis || op->nbrp->n_gateway_chassis) {
                     /* Additional "derived" ovn_port crp represents the
                      * instance of op on the "redirect-chassis". */
                     const char *gw_chassis = smap_get(&op->od->nbr->options,
@@ -1678,8 +1679,157 @@ get_nat_addresses(const struct ovn_port *op, size_t *n)
     return addresses;
 }
 
+static bool
+gateway_chassis_equal(const struct nbrec_gateway_chassis *nb_gwc,
+                      const struct sbrec_chassis *nb_gwc_c,
+                      const struct sbrec_gateway_chassis *sb_gwc)
+{
+    return !strcmp(nb_gwc->name, sb_gwc->name)
+           && !strcmp(nb_gwc_c->name, sb_gwc->chassis->name)
+           && nb_gwc->priority == sb_gwc->priority
+           && smap_equal(&nb_gwc->options, &sb_gwc->options)
+           && smap_equal(&nb_gwc->external_ids, &sb_gwc->external_ids);
+}
+
+static bool
+sbpb_gw_chassis_needs_update(
+        const struct sbrec_port_binding *port_binding,
+        const struct nbrec_logical_router_port *lrp,
+        const struct chassis_index *chassis_index)
+{
+    if (!lrp || !port_binding) {
+        return false;
+    }
+
+    /* These arrays are used to collect valid Gateway_Chassis and valid
+     * Chassis records from the Logical_Router_Port Gateway_Chassis list,
+     * we ignore the ones we can't match on the SBDB */
+    struct nbrec_gateway_chassis **lrp_gwc = xzalloc(lrp->n_gateway_chassis *
+                                                     sizeof *lrp_gwc);
+    const struct sbrec_chassis **lrp_gwc_c = xzalloc(lrp->n_gateway_chassis *
+                                               sizeof *lrp_gwc_c);
+
+    /* Count the number of gateway chassis chassis names from the logical
+     * router port that we are able to match on the southbound database */
+    int lrp_n_gateway_chassis = 0;
+    int n;
+    for (n = 0; n < lrp->n_gateway_chassis; n++) {
+
+        if (!lrp->gateway_chassis[n]->chassis_name) {
+            continue;
+        }
+
+        const struct sbrec_chassis *chassis =
+            chassis_lookup_by_name(chassis_index,
+                                   lrp->gateway_chassis[n]->chassis_name);
+
+        if (chassis) {
+            lrp_gwc_c[lrp_n_gateway_chassis] = chassis;
+            lrp_gwc[lrp_n_gateway_chassis] = lrp->gateway_chassis[n];
+            lrp_n_gateway_chassis++;
+        } else {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+            VLOG_WARN_RL(
+                &rl, "Chassis name %s referenced in NBDB via Gateway_Chassis "
+                     "on logical router port %s does not exist in SBDB",
+                     lrp->gateway_chassis[n]->chassis_name, lrp->name);
+        }
+    }
+
+    /* Basic check, different amount of Gateway_Chassis means that we
+     * need to update southbound database Port_Binding */
+    if (lrp_n_gateway_chassis != port_binding->n_gateway_chassis) {
+        free(lrp_gwc_c);
+        free(lrp_gwc);
+        return true;
+    }
+
+    for (n = 0; n < lrp_n_gateway_chassis; n++) {
+        int i;
+        /* For each of the valid gw chassis on the lrp, check if there's
+         * a match on the Port_Binding list, we assume order is not
+         * persisted */
+        for (i = 0; i < port_binding->n_gateway_chassis; i++) {
+            if (gateway_chassis_equal(lrp_gwc[n],
+                                      lrp_gwc_c[n],
+                                      port_binding->gateway_chassis[i])) {
+                break; /* we found a match */
+            }
+        }
+
+        /* if no Port_Binding gateway chassis matched for the entry... */
+        if (i == port_binding->n_gateway_chassis) {
+            free(lrp_gwc_c);
+            free(lrp_gwc);
+            return true; /* found no match for this gateway chassis on lrp */
+        }
+    }
+
+    /* no need for update, all ports matched */
+    free(lrp_gwc_c);
+    free(lrp_gwc);
+    return false;
+}
+
+/* This functions translates the gw chassis on the nb database
+ * to sb database entries, the only difference is that SB database
+ * Gateway_Chassis table references the chassis directly instead
+ * of using the name */
 static void
-ovn_port_update_sbrec(const struct ovn_port *op,
+copy_gw_chassis_from_nbrp_to_sbpb(
+        struct northd_context *ctx,
+        const struct nbrec_logical_router_port *lrp,
+        const struct chassis_index *chassis_index,
+        const struct sbrec_port_binding *port_binding) {
+
+    if (!lrp || !port_binding || !lrp->n_gateway_chassis) {
+        return;
+    }
+
+    struct sbrec_gateway_chassis **gw_chassis = NULL;
+    int n_gwc = 0;
+    int n;
+
+    /* XXX: This can be improved. This code will generate a set of new
+     * Gateway_Chassis and push them all in a single transaction, instead
+     * this would be more optimal if we just add/update/remove the rows in
+     * the southbound db that need to change. We don't expect lots of
+     * changes to the Gateway_Chassis table, but if that proves to be wrong
+     * we should optimize this. */
+    for (n = 0; n < lrp->n_gateway_chassis; n++) {
+        struct nbrec_gateway_chassis *lrp_gwc = lrp->gateway_chassis[n];
+        if (!lrp_gwc->chassis_name) {
+            continue;
+        }
+
+        const struct sbrec_chassis *chassis =
+            chassis_lookup_by_name(chassis_index, lrp_gwc->chassis_name);
+
+        if (!chassis) {
+            continue;
+        }
+
+        gw_chassis = xrealloc(gw_chassis, (n_gwc + 1) * sizeof *gw_chassis);
+
+        struct sbrec_gateway_chassis *pb_gwc =
+            sbrec_gateway_chassis_insert(ctx->ovnsb_txn);
+
+        sbrec_gateway_chassis_set_name(pb_gwc, lrp_gwc->name);
+        sbrec_gateway_chassis_set_priority(pb_gwc, lrp_gwc->priority);
+        sbrec_gateway_chassis_set_chassis(pb_gwc, chassis);
+        sbrec_gateway_chassis_set_options(pb_gwc, &lrp_gwc->options);
+        sbrec_gateway_chassis_set_external_ids(pb_gwc, &lrp_gwc->external_ids);
+
+        gw_chassis[n_gwc++] = pb_gwc;
+    }
+    sbrec_port_binding_set_gateway_chassis(port_binding, gw_chassis, n_gwc);
+    free(gw_chassis);
+}
+
+static void
+ovn_port_update_sbrec(struct northd_context *ctx,
+                      const struct ovn_port *op,
+                      const struct chassis_index *chassis_index,
                       struct hmap *chassis_qdisc_queues)
 {
     sbrec_port_binding_set_datapath(op->sb, op->od->sb);
@@ -1700,8 +1850,69 @@ ovn_port_update_sbrec(const struct ovn_port *op,
         if (op->derived) {
             const char *redirect_chassis = smap_get(&op->nbrp->options,
                                                     "redirect-chassis");
-            if (redirect_chassis) {
+            if (op->nbrp->n_gateway_chassis && redirect_chassis) {
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+                VLOG_WARN_RL(
+                    &rl, "logical router port %s has both options:"
+                         "redirect-chassis and gateway_chassis populated "
+                         "redirect-chassis will be ignored in favour of "
+                         "gateway chassis", op->nbrp->name);
+            }
+
+            if (op->nbrp->n_gateway_chassis) {
+                if (sbpb_gw_chassis_needs_update(op->sb, op->nbrp,
+                                                   chassis_index)) {
+                    copy_gw_chassis_from_nbrp_to_sbpb(ctx, op->nbrp,
+                                                        chassis_index, op->sb);
+                }
+
+            } else if (redirect_chassis) {
+                /* XXX: Keep the "redirect-chassis" option on the Port_Binding
+                 * for compatibility purposes until ovn-controller implements
+                 * Gateway_Chassis handling */
                 smap_add(&new, "redirect-chassis", redirect_chassis);
+
+                /* Handle ports that had redirect-chassis option attached
+                 * to them for backwards compatibility */
+                const struct sbrec_chassis *chassis =
+                    chassis_lookup_by_name(chassis_index, redirect_chassis);
+                if (chassis) {
+                    /* If we found the chassis, and the gw chassis on record
+                     * differs from what we expect go ahead and update */
+                    if (op->sb->n_gateway_chassis !=1
+                        || strcmp(op->sb->gateway_chassis[0]->chassis->name,
+                                  chassis->name)
+                        || op->sb->gateway_chassis[0]->priority != 0) {
+                        /* Construct a single Gateway_Chassis entry on the
+                         * Port_Binding attached to the redirect_chassis
+                         * name */
+                        struct sbrec_gateway_chassis *gw_chassis =
+                            sbrec_gateway_chassis_insert(ctx->ovnsb_txn);
+
+                        char *gwc_name = xasprintf("%s_%s", op->nbrp->name,
+                                chassis->name);
+
+                        /* XXX: Again, here, we could just update an existing
+                         * Gateway_Chassis, instead of creating a new one
+                         * and replacing it */
+                        sbrec_gateway_chassis_set_name(gw_chassis, gwc_name);
+                        sbrec_gateway_chassis_set_priority(gw_chassis, 0);
+                        sbrec_gateway_chassis_set_chassis(gw_chassis, chassis);
+                        sbrec_gateway_chassis_set_external_ids(gw_chassis,
+                                &op->nbrp->external_ids);
+                        sbrec_port_binding_set_gateway_chassis(op->sb,
+                                                               &gw_chassis, 1);
+                        free(gwc_name);
+                    }
+                } else {
+                    VLOG_WARN("chassis name '%s' from redirect from logical "
+                              " router port '%s' redirect-chassis not found",
+                              redirect_chassis, op->nbrp->name);
+                    if (op->sb->n_gateway_chassis) {
+                        sbrec_port_binding_set_gateway_chassis(op->sb, NULL,
+                                                               0);
+                    }
+                }
             }
             smap_add(&new, "distributed-port", op->nbrp->name);
         } else {
@@ -1845,7 +2056,7 @@ cleanup_mac_bindings(struct northd_context *ctx, struct hmap *ports)
  * datapaths. */
 static void
 build_ports(struct northd_context *ctx, struct hmap *datapaths,
-            struct hmap *ports)
+            const struct chassis_index *chassis_index, struct hmap *ports)
 {
     struct ovs_list sb_only, nb_only, both;
     struct hmap tag_alloc_table = HMAP_INITIALIZER(&tag_alloc_table);
@@ -1863,7 +2074,7 @@ build_ports(struct northd_context *ctx, struct hmap *datapaths,
         if (op->nbsp) {
             tag_alloc_create_new_tag(&tag_alloc_table, op->nbsp);
         }
-        ovn_port_update_sbrec(op, &chassis_qdisc_queues);
+        ovn_port_update_sbrec(ctx, op, chassis_index, &chassis_qdisc_queues);
 
         add_tnlid(&op->od->port_tnlids, op->sb->tunnel_key);
         if (op->sb->tunnel_key > op->od->port_key_hint) {
@@ -1879,7 +2090,7 @@ build_ports(struct northd_context *ctx, struct hmap *datapaths,
         }
 
         op->sb = sbrec_port_binding_insert(ctx->ovnsb_txn);
-        ovn_port_update_sbrec(op, &chassis_qdisc_queues);
+        ovn_port_update_sbrec(ctx, op, chassis_index, &chassis_qdisc_queues);
 
         sbrec_port_binding_set_logical_port(op->sb, op->key);
         sbrec_port_binding_set_tunnel_key(op->sb, tunnel_key);
@@ -5606,14 +5817,15 @@ sync_dns_entries(struct northd_context *ctx, struct hmap *datapaths)
 
 
 static void
-ovnnb_db_run(struct northd_context *ctx, struct ovsdb_idl_loop *sb_loop)
+ovnnb_db_run(struct northd_context *ctx, struct chassis_index *chassis_index,
+             struct ovsdb_idl_loop *sb_loop)
 {
     if (!ctx->ovnsb_txn || !ctx->ovnnb_txn) {
         return;
     }
     struct hmap datapaths, ports;
     build_datapaths(ctx, &datapaths);
-    build_ports(ctx, &datapaths, &ports);
+    build_ports(ctx, &datapaths, chassis_index, &ports);
     build_ipam(&datapaths, &ports);
     build_lflows(ctx, &datapaths, &ports);
 
@@ -6183,6 +6395,17 @@ main(int argc, char *argv[])
     add_column_noalert(ovnsb_idl_loop.idl,
                        &sbrec_port_binding_col_nat_addresses);
     ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_port_binding_col_chassis);
+    ovsdb_idl_add_column(ovnsb_idl_loop.idl,
+                         &sbrec_port_binding_col_gateway_chassis);
+    ovsdb_idl_add_column(ovnsb_idl_loop.idl,
+                         &sbrec_gateway_chassis_col_chassis);
+    ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_gateway_chassis_col_name);
+    ovsdb_idl_add_column(ovnsb_idl_loop.idl,
+                         &sbrec_gateway_chassis_col_priority);
+    ovsdb_idl_add_column(ovnsb_idl_loop.idl,
+                         &sbrec_gateway_chassis_col_external_ids);
+    ovsdb_idl_add_column(ovnsb_idl_loop.idl,
+                         &sbrec_gateway_chassis_col_options);
     add_column_noalert(ovnsb_idl_loop.idl,
                        &sbrec_port_binding_col_external_ids);
     ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_mac_binding);
@@ -6223,6 +6446,7 @@ main(int argc, char *argv[])
 
     ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_chassis);
     ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_chassis_col_nb_cfg);
+    ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_chassis_col_name);
 
     /* Main loop. */
     exiting = false;
@@ -6234,7 +6458,10 @@ main(int argc, char *argv[])
             .ovnsb_txn = ovsdb_idl_loop_run(&ovnsb_idl_loop),
         };
 
-        ovnnb_db_run(&ctx, &ovnsb_idl_loop);
+        struct chassis_index chassis_index;
+        chassis_index_init(&chassis_index, ctx.ovnsb_idl);
+
+        ovnnb_db_run(&ctx, &chassis_index, &ovnsb_idl_loop);
         ovnsb_db_run(&ctx, &ovnsb_idl_loop);
         if (ctx.ovnsb_txn) {
             check_and_add_supported_dhcp_opts_to_sb_db(&ctx);
@@ -6254,6 +6481,8 @@ main(int argc, char *argv[])
         if (should_service_stop()) {
             exiting = true;
         }
+
+        chassis_index_destroy(&chassis_index);
     }
 
     unixctl_server_destroy(unixctl);

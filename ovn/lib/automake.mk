@@ -5,6 +5,8 @@ ovn_lib_libovn_la_LDFLAGS = \
         $(AM_LDFLAGS)
 ovn_lib_libovn_la_SOURCES = \
 	ovn/lib/actions.c \
+	ovn/lib/chassis-index.c \
+	ovn/lib/chassis-index.h \
 	ovn/lib/expr.c \
 	ovn/lib/lex.c \
 	ovn/lib/ovn-dhcp.h \
