@@ -1600,30 +1600,25 @@ rstp_print_details(struct ds *ds, const struct rstp *rstp)
 {
     ds_put_format(ds, "---- %s ----\n", rstp->name);
 
-    bool is_root = rstp_is_root_bridge__(rstp);
-    struct rstp_port *p = rstp_get_root_port__(rstp);
-    if (!p) {
-        ds_put_cstr(ds, "unknown root port\n");
-        return;
-    }
-
-    rstp_identifier bridge_id =
-        is_root ? rstp->bridge_identifier : rstp_get_root_id__(rstp);
-    uint16_t hello_time =
-        is_root ? rstp->bridge_hello_time : p->designated_times.hello_time;
-    uint16_t max_age =
-        is_root ? rstp->bridge_max_age : p->designated_times.max_age;
-    uint16_t forward_delay =
-        (is_root
-         ? rstp->bridge_forward_delay
-         : p->designated_times.forward_delay);
-
     ds_put_cstr(ds, "Root ID:\n");
-    rstp_bridge_id_details(ds, bridge_id, hello_time, max_age, forward_delay);
-    if (is_root) {
+    if (rstp_is_root_bridge__(rstp)) {
+        rstp_bridge_id_details(ds, rstp->bridge_identifier,
+                               rstp->bridge_hello_time,
+                               rstp->bridge_max_age,
+                               rstp->bridge_forward_delay);
         ds_put_cstr(ds, "\tThis bridge is the root\n");
     } else {
-        ds_put_format(ds, "\troot-port\t%s\n", p->port_name);
+        struct rstp_port *root_port = rstp_get_root_port__(rstp);
+        if (!root_port) {
+            ds_put_cstr(ds, "unknown root port\n");
+            return;
+        }
+
+        rstp_bridge_id_details(ds, rstp_get_root_id__(rstp),
+                               root_port->designated_times.hello_time,
+                               root_port->designated_times.max_age,
+                               root_port->designated_times.forward_delay);
+        ds_put_format(ds, "\troot-port\t%s\n", root_port->port_name);
         ds_put_format(ds, "\troot-path-cost\t%u\n",
                       rstp_get_root_path_cost__(rstp));
     }
@@ -1639,6 +1634,8 @@ rstp_print_details(struct ds *ds, const struct rstp *rstp)
     ds_put_format(ds, "\t%-11.10s%-11.10s%-11.10s%-9.8s%-8.7s\n",
                   "Interface", "Role", "State", "Cost", "Pri.Nbr");
     ds_put_cstr(ds, "\t---------- ---------- ---------- -------- -------\n");
+
+    struct rstp_port *p;
     HMAP_FOR_EACH (p, node, &rstp->ports) {
         if (p->rstp_state != RSTP_DISABLED) {
             ds_put_format(ds, "\t%-11.10s",
