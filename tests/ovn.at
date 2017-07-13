@@ -7787,6 +7787,22 @@ echo "------ Port_Binding chassisredirect -------"
 ovn-sbctl find Port_Binding type=chassisredirect
 echo "-------------------------------------------"
 
+for chassis in gw1 gw2 hv1 hv2; do
+    as $chassis
+    echo "------ $chassis dump ----------"
+    ovs-ofctl show br-int
+    ovs-ofctl dump-flows br-int
+    echo ""
+    echo "BFD (from $chassis):"
+    # dump BFD config and status to the other chassis
+    for chassis2 in gw1 gw2 hv1 hv2; do
+        if [[ "$chassis" != "$chassis2" ]]; then
+            echo " -> $chassis2:"
+            echo "   $(ovs-vsctl --bare --columns bfd,bfd_status find Interface name=ovn-$chassis2-0)"
+        fi
+    done
+    echo "--------------------------"
+done
 
 hv1_gw1_ofport=$(as hv1 ovs-vsctl --bare --columns ofport find Interface name=ovn-gw1-0)
 hv1_gw2_ofport=$(as hv1 ovs-vsctl --bare --columns ofport find Interface name=ovn-gw2-0)
@@ -7827,6 +7843,52 @@ AT_CHECK([as hv1 ovs-ofctl dump-flows br-int table=32 | grep active_backup | gre
 AT_CHECK([as hv2 ovs-ofctl dump-flows br-int table=32 | grep active_backup | grep slaves:$hv2_gw2_ofport,$hv2_gw1_ofport | wc -l], [0], [1
 ])
 
+
+# check BFD enablement on tunnel ports from gw1 #########
+as gw1
+for chassis in gw2 hv1 hv2; do
+    echo "checking gw1 -> $chassis"
+    AT_CHECK([ovs-vsctl --bare --columns bfd find Interface name=ovn-$chassis-0],[0],
+             [[enable=true
+]])
+done
+
+
+# check BFD enablement on tunnel ports from gw2 ##########
+as gw2
+for chassis in gw1 hv1 hv2; do
+    echo "checking gw2 -> $chassis"
+    AT_CHECK([ovs-vsctl --bare --columns bfd find Interface name=ovn-$chassis-0],[0],
+             [[enable=true
+]])
+done
+
+# check BFD enablement on tunnel ports from hv1 ###########
+as hv1
+for chassis in gw1 gw2; do
+    echo "checking hv1 -> $chassis"
+    AT_CHECK([ovs-vsctl --bare --columns bfd find Interface name=ovn-$chassis-0],[0],
+             [[enable=true
+]])
+done
+# make sure BFD is not enabled to hv2, we don't need it
+AT_CHECK([ovs-vsctl --bare --columns bfd find Interface name=ovn-hv2-0],[0],
+         [[enable=false
+]])
+
+
+# check BFD enablement on tunnel ports from hv2 ##########
+as hv2
+for chassis in gw1 gw2; do
+    echo "checking hv2 -> $chassis"
+    AT_CHECK([ovs-vsctl --bare --columns bfd find Interface name=ovn-$chassis-0],[0],
+             [[enable=true
+]])
+done
+# make sure BFD is not enabled to hv1, we don't need it
+AT_CHECK([ovs-vsctl --bare --columns bfd find Interface name=ovn-hv1-0],[0],
+         [[enable=false
+]])
 
 OVN_CLEANUP([gw1],[gw2],[hv1],[hv2])
 

@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "bfd.h"
 #include "binding.h"
 #include "chassis.h"
 #include "command-line.h"
@@ -502,6 +503,8 @@ ctrl_register_ovs_idl(struct ovsdb_idl *ovs_idl)
     ovsdb_idl_add_column(ovs_idl, &ovsrec_open_vswitch_col_bridges);
     ovsdb_idl_add_table(ovs_idl, &ovsrec_table_interface);
     ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_name);
+    ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_bfd);
+    ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_bfd_status);
     ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_type);
     ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_options);
     ovsdb_idl_add_column(ovs_idl, &ovsrec_interface_col_ofport);
@@ -523,6 +526,7 @@ ctrl_register_ovs_idl(struct ovsdb_idl *ovs_idl)
     chassis_register_ovs_idl(ovs_idl);
     encaps_register_ovs_idl(ovs_idl);
     binding_register_ovs_idl(ovs_idl);
+    bfd_register_ovs_idl(ovs_idl);
     physical_register_ovs_idl(ovs_idl);
 }
 
@@ -621,6 +625,7 @@ main(int argc, char *argv[])
          * l2gateway ports for which options:l2gateway-chassis designates the
          * local hypervisor, and localnet ports. */
         struct sset local_lports = SSET_INITIALIZER(&local_lports);
+        struct sset active_tunnels = SSET_INITIALIZER(&active_tunnels);
 
         const struct ovsrec_bridge *br_int = get_br_int(&ctx);
         const char *chassis_id = get_chassis_id(ctx.ovs_idl);
@@ -639,8 +644,10 @@ main(int argc, char *argv[])
         if (chassis_id) {
             chassis = chassis_run(&ctx, chassis_id, br_int);
             encaps_run(&ctx, br_int, chassis_id);
+            bfd_calculate_active_tunnels(br_int, &active_tunnels);
             binding_run(&ctx, br_int, chassis, &ldatapaths, &lports,
-                        &local_datapaths, &local_lports);
+                        &chassis_index, &active_tunnels, &local_datapaths,
+                        &local_lports);
         }
 
         if (br_int && chassis) {
@@ -664,6 +671,10 @@ main(int argc, char *argv[])
                               &local_datapaths, &group_table,
                               &addr_sets, &flow_table);
 
+                    if (chassis_id) {
+                        bfd_run(&ctx, br_int, chassis, &local_datapaths,
+                                &chassis_index);
+                    }
                     physical_run(&ctx, mff_ovn_geneve,
                                  br_int, chassis, &ct_zones, &lports,
                                  &flow_table, &local_datapaths, &local_lports,
@@ -717,9 +728,11 @@ main(int argc, char *argv[])
         chassis_index_destroy(&chassis_index);
 
         sset_destroy(&local_lports);
+        sset_destroy(&active_tunnels);
 
         struct local_datapath *cur_node, *next_node;
         HMAP_FOR_EACH_SAFE (cur_node, next_node, hmap_node, &local_datapaths) {
+            free(cur_node->peer_dps);
             hmap_remove(&local_datapaths, &cur_node->hmap_node);
             free(cur_node);
         }
