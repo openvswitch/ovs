@@ -568,9 +568,7 @@ n_bytes=542
 
 dnl SLOW_ACTION: disable kernel datapath truncate support
 dnl Repeat the test above, but exercise the SLOW_ACTION code path
-AT_CHECK([ovs-appctl dpif/disable-truncate], [0],
-[Datapath truncate action diabled
-])
+AT_CHECK([ovs-appctl dpif/set-dp-features br0 trunc false], [0])
 
 dnl SLOW_ACTION test1: check datapatch actions
 AT_CHECK([ovs-ofctl del-flows br0])
@@ -691,9 +689,7 @@ AT_CHECK([ovs-ofctl dump-flows br0 | grep "in_port=4" | ofctl_strip], [0], [dnl
 
 dnl SLOW_ACTION: disable datapath truncate support
 dnl Repeat the test above, but exercise the SLOW_ACTION code path
-AT_CHECK([ovs-appctl dpif/disable-truncate], [0],
-[Datapath truncate action diabled
-])
+AT_CHECK([ovs-appctl dpif/set-dp-features br0 trunc false], [0])
 
 dnl SLOW_ACTION test1: check datapatch actions
 AT_CHECK([ovs-ofctl del-flows br0])

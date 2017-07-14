@@ -5504,24 +5504,6 @@ disable_tnl_push_pop(struct unixctl_conn *conn OVS_UNUSED, int argc OVS_UNUSED,
 }
 
 static void
-disable_datapath_truncate(struct unixctl_conn *conn OVS_UNUSED,
-                          int argc OVS_UNUSED,
-                          const char *argv[] OVS_UNUSED,
-                          void *aux OVS_UNUSED)
-{
-    const struct shash_node **backers;
-    int i;
-
-    backers = shash_sort(&all_dpif_backers);
-    for (i = 0; i < shash_count(&all_dpif_backers); i++) {
-        struct dpif_backer *backer = backers[i]->data;
-        backer->rt_support.trunc = false;
-    }
-    free(backers);
-    unixctl_command_reply(conn, "Datapath truncate action diabled");
-}
-
-static void
 ofproto_unixctl_dpif_show_dp_features(struct unixctl_conn *conn,
                                       int argc, const char *argv[],
                                       void *aux OVS_UNUSED)
@@ -5598,9 +5580,6 @@ ofproto_unixctl_init(void)
 
     unixctl_command_register("ofproto/tnl-push-pop", "[on]|[off]", 1, 1,
                              disable_tnl_push_pop, NULL);
-
-    unixctl_command_register("dpif/disable-truncate", "", 0, 0,
-                             disable_datapath_truncate, NULL);
 }
 
 static odp_port_t
