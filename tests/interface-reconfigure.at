@@ -681,7 +681,7 @@ EOF
 }
 
 ifr_run () {
-    ./interface-reconfigure --root-prefix="`pwd`" --no-syslog "$@"
+    $PYTHON ./interface-reconfigure --root-prefix="`pwd`" --no-syslog "$@"
 }
 
 ifr_filter () {
