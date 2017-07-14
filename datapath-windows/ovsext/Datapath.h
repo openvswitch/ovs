@@ -75,6 +75,9 @@ POVS_OPEN_INSTANCE OvsGetOpenInstance(PFILE_OBJECT fileObject,
 
 NTSTATUS OvsCompleteIrpRequest(PIRP irp, ULONG_PTR infoPtr, NTSTATUS status);
 
+_IRQL_raises_(DISPATCH_LEVEL)
+_IRQL_saves_global_(OldIrql, gOvsCtrlLock)
+_Acquires_lock_(gOvsCtrlLock)
 VOID OvsAcquireCtrlLock();
 VOID OvsReleaseCtrlLock();
 

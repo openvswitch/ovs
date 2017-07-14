@@ -429,6 +429,7 @@ OvsCleanup()
     }
 }
 
+_Use_decl_annotations_
 VOID
 OvsAcquireCtrlLock()
 {
