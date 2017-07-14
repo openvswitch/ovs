@@ -542,6 +542,7 @@ del_cached_port(struct vtep_ctl_context *vtepctl_ctx,
     ovs_list_remove(&port->ports_node);
     shash_find_and_delete(&vtepctl_ctx->ports, cache_name);
     vteprec_physical_port_delete(port->port_cfg);
+    shash_destroy(&port->bindings);
     free(cache_name);
     free(port);
 }
