@@ -63,6 +63,13 @@ def print_warning(message):
     __warnings = __warnings + 1
 
 
+def reset_counters():
+    global __errors, __warnings
+
+    __errors = 0
+    __warnings = 0
+
+
 # These are keywords whose names are normally followed by a space and
 # something in parentheses (usually an expression) then a left curly brace.
 #
@@ -323,6 +330,8 @@ def ovs_checkpatch_parse(text, filename):
     is_gerrit_change_id = re.compile(r'(\s*(change-id: )(.*))$',
                                      re.I | re.M | re.S)
 
+    reset_counters()
+
     for line in text.split('\n'):
         if current_file != previous_file:
             previous_file = current_file
@@ -414,8 +423,16 @@ Check options:
           % sys.argv[0])
 
 
+def ovs_checkpatch_print_result(result):
+    global __warnings, __errors, total_line
+    if result < 0:
+        print("Lines checked: %d, Warnings: %d, Errors: %d\n" %
+              (total_line, __warnings, __errors))
+    else:
+        print("Lines checked: %d, no obvious problems found\n" % (total_line))
+
+
 def ovs_checkpatch_file(filename):
-    global __warnings, __errors, checking_file, total_line
     try:
         mail = email.message_from_file(open(filename, 'r'))
     except:
@@ -426,11 +443,7 @@ def ovs_checkpatch_file(filename):
         if part.get_content_maintype() == 'multipart':
             continue
     result = ovs_checkpatch_parse(part.get_payload(decode=False), filename)
-    if result < 0:
-        print("Lines checked: %d, Warnings: %d, Errors: %d" %
-              (total_line, __warnings, __errors))
-    else:
-        print("Lines checked: %d, no obvious problems found" % (total_line))
+    ovs_checkpatch_print_result(result)
     return result
 
 
@@ -494,7 +507,9 @@ if __name__ == '__main__':
             f.close()
 
             print('== Checking %s ==' % revision)
-            if ovs_checkpatch_parse(patch, revision):
+            result = ovs_checkpatch_parse(patch, revision)
+            ovs_checkpatch_print_result(result)
+            if result:
                 status = -1
         sys.exit(status)
 
@@ -504,5 +519,7 @@ if __name__ == '__main__':
         if sys.stdin.isatty():
             usage()
             sys.exit(-1)
-        sys.exit(ovs_checkpatch_parse(sys.stdin.read(), '-'))
+        result = ovs_checkpatch_parse(sys.stdin.read(), '-')
+        ovs_checkpatch_print_result(result)
+        sys.exit(result)
     sys.exit(ovs_checkpatch_file(filename))
