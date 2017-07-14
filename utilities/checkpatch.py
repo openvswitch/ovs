@@ -320,6 +320,8 @@ def ovs_checkpatch_parse(text, filename):
                               re.I | re.M | re.S)
     is_co_author = re.compile(r'(\s*(Co-authored-by: )(.*))$',
                               re.I | re.M | re.S)
+    is_gerrit_change_id = re.compile(r'(\s*(change-id: )(.*))$',
+                                     re.I | re.M | re.S)
 
     for line in text.split('\n'):
         if current_file != previous_file:
@@ -357,6 +359,10 @@ def ovs_checkpatch_parse(text, filename):
             elif is_co_author.match(line):
                 m = is_co_author.match(line)
                 co_authors.append(m.group(3))
+            elif is_gerrit_change_id.match(line):
+                print_error(
+                    "Remove Gerrit Change-Id's before submitting upstream.")
+                print("%d: %s\n" % (lineno, line))
         elif parse == 2:
             newfile = hunks.match(line)
             if newfile:
