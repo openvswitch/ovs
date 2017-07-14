@@ -396,8 +396,6 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
                       name, type);
             error = EAFNOSUPPORT;
         }
-    } else if (type && type[0] && strcmp(type, netdev->netdev_class->type)) {
-        error = EEXIST;
     } else {
         error = 0;
     }
