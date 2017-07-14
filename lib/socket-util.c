@@ -808,11 +808,8 @@ describe_sockaddr(struct ds *string, int fd,
 
     if (!getaddr(fd, (struct sockaddr *) &ss, &len)) {
         if (ss.ss_family == AF_INET || ss.ss_family == AF_INET6) {
-            char addrbuf[SS_NTOP_BUFSIZE];
-
-            ds_put_format(string, "%s:%"PRIu16,
-                          ss_format_address(&ss, addrbuf, sizeof addrbuf),
-                          ss_get_port(&ss));
+            ss_format_address(&ss, string);
+            ds_put_format(string, ":%"PRIu16, ss_get_port(&ss));
 #ifndef _WIN32
         } else if (ss.ss_family == AF_UNIX) {
             struct sockaddr_un sun;
@@ -961,33 +958,32 @@ ss_get_port(const struct sockaddr_storage *ss)
     }
 }
 
-/* Formats the IPv4 or IPv6 address in 'ss' into the 'bufsize' bytes in 'buf'.
- * If 'ss' is an IPv6 address, puts square brackets around the address.
- * 'bufsize' should be at least SS_NTOP_BUFSIZE.
- *
- * Returns 'buf'. */
-char *
-ss_format_address(const struct sockaddr_storage *ss,
-                  char *buf, size_t bufsize)
+
+/* Formats the IPv4 or IPv6 address in 'ss' into 's'.  If 'ss' is an IPv6
+ * address, puts square brackets around the address.  'bufsize' should be at
+ * least SS_NTOP_BUFSIZE. */
+void
+ss_format_address(const struct sockaddr_storage *ss, struct ds *s)
 {
-    ovs_assert(bufsize >= SS_NTOP_BUFSIZE);
     if (ss->ss_family == AF_INET) {
         const struct sockaddr_in *sin
             = ALIGNED_CAST(const struct sockaddr_in *, ss);
 
-        snprintf(buf, bufsize, IP_FMT, IP_ARGS(sin->sin_addr.s_addr));
+        ds_put_format(s, IP_FMT, IP_ARGS(sin->sin_addr.s_addr));
     } else if (ss->ss_family == AF_INET6) {
         const struct sockaddr_in6 *sin6
             = ALIGNED_CAST(const struct sockaddr_in6 *, ss);
 
-        buf[0] = '[';
-        inet_ntop(AF_INET6, sin6->sin6_addr.s6_addr, buf + 1, bufsize - 1);
-        strcpy(strchr(buf, '\0'), "]");
+        ds_put_char(s, '[');
+        ds_reserve(s, s->length + INET6_ADDRSTRLEN);
+        char *tail = &s->string[s->length];
+        inet_ntop(AF_INET6, sin6->sin6_addr.s6_addr, tail, INET6_ADDRSTRLEN);
+        s->length += strlen(tail);
+
+        ds_put_char(s, ']');
     } else {
         OVS_NOT_REACHED();
     }
-
-    return buf;
 }
 
 size_t

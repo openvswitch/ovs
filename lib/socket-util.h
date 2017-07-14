@@ -28,6 +28,8 @@
 #include <netinet/in_systm.h>
 #include <netinet/ip.h>
 
+struct ds;
+
 int set_nonblocking(int fd);
 void xset_nonblocking(int fd);
 void setsockopt_tcp_nodelay(int fd);
@@ -71,9 +73,7 @@ char *describe_fd(int fd);
 /* Functions for working with sockaddr_storage that might contain an IPv4 or
  * IPv6 address. */
 uint16_t ss_get_port(const struct sockaddr_storage *);
-#define SS_NTOP_BUFSIZE (1 + INET6_ADDRSTRLEN + 1)
-char *ss_format_address(const struct sockaddr_storage *,
-                        char *buf, size_t bufsize);
+void ss_format_address(const struct sockaddr_storage *, struct ds *);
 size_t ss_length(const struct sockaddr_storage *);
 const char *sock_strerror(int error);
 

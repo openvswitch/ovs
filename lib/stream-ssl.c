@@ -825,8 +825,6 @@ static int
 pssl_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp,
           uint8_t dscp)
 {
-    char bound_name[SS_NTOP_BUFSIZE + 16];
-    char addrbuf[SS_NTOP_BUFSIZE];
     struct sockaddr_storage ss;
     struct pssl_pstream *pssl;
     uint16_t port;
@@ -844,14 +842,18 @@ pssl_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp,
     }
 
     port = ss_get_port(&ss);
-    snprintf(bound_name, sizeof bound_name, "pssl:%"PRIu16":%s",
-             port, ss_format_address(&ss, addrbuf, sizeof addrbuf));
+
+    struct ds bound_name = DS_EMPTY_INITIALIZER;
+    ds_put_format(&bound_name, "pssl:%"PRIu16":", port);
+    ss_format_address(&ss, &bound_name);
 
     pssl = xmalloc(sizeof *pssl);
-    pstream_init(&pssl->pstream, &pssl_pstream_class, xstrdup(bound_name));
+    pstream_init(&pssl->pstream, &pssl_pstream_class,
+                 ds_steal_cstr(&bound_name));
     pstream_set_bound_port(&pssl->pstream, htons(port));
     pssl->fd = fd;
     *pstreamp = &pssl->pstream;
+
     return 0;
 }
 
@@ -867,8 +869,6 @@ static int
 pssl_accept(struct pstream *pstream, struct stream **new_streamp)
 {
     struct pssl_pstream *pssl = pssl_pstream_cast(pstream);
-    char name[SS_NTOP_BUFSIZE + 16];
-    char addrbuf[SS_NTOP_BUFSIZE];
     struct sockaddr_storage ss;
     socklen_t ss_len = sizeof ss;
     int new_fd;
@@ -894,11 +894,12 @@ pssl_accept(struct pstream *pstream, struct stream **new_streamp)
         return error;
     }
 
-    snprintf(name, sizeof name, "ssl:%s:%"PRIu16,
-             ss_format_address(&ss, addrbuf, sizeof addrbuf),
-             ss_get_port(&ss));
-    return new_ssl_stream(xstrdup(name), new_fd, SERVER, STATE_SSL_CONNECTING,
-                          new_streamp);
+    struct ds name = DS_EMPTY_INITIALIZER;
+    ds_put_cstr(&name, "ssl:");
+    ss_format_address(&ss, &name);
+    ds_put_format(&name, ":%"PRIu16, ss_get_port(&ss));
+    return new_ssl_stream(ds_steal_cstr(&name), new_fd, SERVER,
+                          STATE_SSL_CONNECTING, new_streamp);
 }
 
 static void
