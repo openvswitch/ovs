@@ -31,7 +31,7 @@
 #define MAX_IPDATAGRAM_SIZE 65535
 
 /* Function declarations */
-static VOID OvsIpFragmentEntryCleaner(PVOID data);
+static KSTART_ROUTINE OvsIpFragmentEntryCleaner;
 static VOID OvsIpFragmentEntryDelete(POVS_IPFRAG_ENTRY entry, BOOLEAN checkExpiry);
 
 /* Global and static variables */
