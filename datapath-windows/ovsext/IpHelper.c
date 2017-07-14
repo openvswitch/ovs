@@ -369,7 +369,7 @@ OvsGetRoute(SOCKADDR_INET *destinationAddress,
         SOCKADDR_INET crtSrcAddr = { 0 };
         MIB_IPFORWARD_ROW2 crtRoute = { 0 };
         POVS_IPHELPER_INSTANCE crtInstance = NULL;
-        WCHAR interfaceName[IF_MAX_STRING_SIZE] = { 0 };
+        WCHAR interfaceName[IF_MAX_STRING_SIZE + 1] = { 0 };
 
         crtInstance = CONTAINING_RECORD(link, OVS_IPHELPER_INSTANCE, link);
 
@@ -608,7 +608,7 @@ OvsAddIpInterfaceNotification(PMIB_IPINTERFACE_ROW ipRow)
 
         InitializeListHead(&instance->link);
         ExInitializeResourceLite(&instance->lock);
-        WCHAR interfaceName[IF_MAX_STRING_SIZE] = { 0 };
+        WCHAR interfaceName[IF_MAX_STRING_SIZE + 1] = { 0 };
         status = ConvertInterfaceLuidToAlias(&ipRow->InterfaceLuid,
                                              interfaceName,
                                              IF_MAX_STRING_SIZE + 1);
