@@ -4517,12 +4517,8 @@ ofputil_pull_ofp16_port(struct ofputil_phy_port *pp, struct ofpbuf *msg)
     if (error) {
         return error;
     }
-    if (op->hw_addr_type & htons(OFPPHAT16_EUI48)) {
-        pp->hw_addr = op->hw_addr;
-    }
-    if (op->hw_addr_type & htons(OFPPHAT16_EUI64)) {
-        pp->hw_addr64 = op->hw_addr64;
-    }
+    pp->hw_addr = op->hw_addr;
+    pp->hw_addr64 = op->hw_addr64;
     ovs_strlcpy_arrays(pp->name, op->name);
 
     pp->config = ntohl(op->config) & OFPPC11_ALL;
@@ -4616,14 +4612,8 @@ ofputil_put_ofp16_port(const struct ofputil_phy_port *pp, struct ofpbuf *b)
     op = ofpbuf_put_zeros(b, sizeof *op);
     op->port_no = ofputil_port_to_ofp11(pp->port_no);
     op->length = htons(sizeof *op + sizeof *eth);
-    if (!eth_addr_is_zero(pp->hw_addr)) {
-        op->hw_addr_type |= htons(OFPPHAT16_EUI48);
-        op->hw_addr = pp->hw_addr;
-    }
-    if (!eth_addr64_is_zero(pp->hw_addr64)) {
-        op->hw_addr_type |= htons(OFPPHAT16_EUI64);
-        op->hw_addr64 = pp->hw_addr64;
-    }
+    op->hw_addr = pp->hw_addr;
+    op->hw_addr64 = pp->hw_addr64;
     ovs_strlcpy_arrays(op->name, pp->name);
     op->config = htonl(pp->config & OFPPC11_ALL);
     op->state = htonl(pp->state & OFPPS11_ALL);
@@ -5180,13 +5170,8 @@ ofputil_decode_ofp16_port_mod(struct ofpbuf *b, bool loose,
         return error;
     }
 
-    if (opm->hw_addr_type & htons(OFPPHAT16_EUI48)) {
-        pm->hw_addr = opm->hw_addr;
-    }
-    if (opm->hw_addr_type & htons(OFPPHAT16_EUI64)) {
-        pm->hw_addr64 = opm->hw_addr64;
-    }
     pm->hw_addr = opm->hw_addr;
+    pm->hw_addr64 = opm->hw_addr64;
     pm->config = ntohl(opm->config) & OFPPC11_ALL;
     pm->mask = ntohl(opm->mask) & OFPPC11_ALL;
 
@@ -5282,14 +5267,8 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
         b = ofpraw_alloc(OFPRAW_OFPT16_PORT_MOD, ofp_version, 0);
         opm = ofpbuf_put_zeros(b, sizeof *opm);
         opm->port_no = ofputil_port_to_ofp11(pm->port_no);
-        if (!eth_addr_is_zero(pm->hw_addr)) {
-            opm->hw_addr_type |= htons(OFPPHAT16_EUI48);
-            opm->hw_addr = pm->hw_addr;
-        }
-        if (!eth_addr64_is_zero(pm->hw_addr64)) {
-            opm->hw_addr_type |= htons(OFPPHAT16_EUI64);
-            opm->hw_addr64 = pm->hw_addr64;
-        }
+        opm->hw_addr = pm->hw_addr;
+        opm->hw_addr64 = pm->hw_addr64;
         opm->config = htonl(pm->config & OFPPC11_ALL);
         opm->mask = htonl(pm->mask & OFPPC11_ALL);
 

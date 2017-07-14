@@ -55,18 +55,12 @@
 
 #define OFP16_MAX_PORT_NAME_LEN  64
 
-/* Bitmap of hardware address types supported by an OpenFlow port. */
-enum ofp16_hardware_address_type {
-    OFPPHAT16_EUI48 = 1 << 0,   /* 48-bit Ethernet address. */
-    OFPPHAT16_EUI64 = 1 << 1,   /* 64-bit Ethernet address. */
-};
-
 struct ofp16_port {
     ovs_be32 port_no;
     ovs_be16 length;
-    ovs_be16 hw_addr_type;            /* Zero or more OFPPHAT16_*. */
-    struct eth_addr hw_addr;          /* EUI-48 hardware address. */
     uint8_t pad[2];                   /* Align to 64 bits. */
+    struct eth_addr hw_addr;          /* EUI-48 hardware address. */
+    uint8_t pad2[2];                  /* Align to 64 bits. */
     struct eth_addr64 hw_addr64;      /* EUI-64 hardware address */
     char name[OFP16_MAX_PORT_NAME_LEN]; /* Null-terminated */
 
@@ -80,8 +74,7 @@ OFP_ASSERT(sizeof(struct ofp16_port) == 96);
 
 struct ofp16_port_mod {
     ovs_be32 port_no;
-    ovs_be16 hw_addr_type;       /* Zero or more OFPPHAT16_*. */
-    uint8_t pad[2];              /* Align to 64 bits. */
+    uint8_t pad[4];              /* Align to 64 bits. */
     struct eth_addr hw_addr;
     uint8_t pad2[2];
     struct eth_addr64 hw_addr64; /* EUI-64 hardware address */
