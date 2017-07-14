@@ -408,7 +408,7 @@ def usage():
 Open vSwitch checkpatch.py
 Checks a patch for trivial mistakes.
 usage:
-%s [options] [PATCH | -f SOURCE | -1 | -2 | ...]
+%s [options] [PATCH1 [PATCH2 ...] | -f SOURCE1 [SOURCE2 ...] | -1 | -2 | ...]
 
 Input options:
 -f|--check-file                Arguments are source files, not patches.
@@ -513,13 +513,18 @@ if __name__ == '__main__':
                 status = -1
         sys.exit(status)
 
-    try:
-        filename = args[0]
-    except:
+    if not args:
         if sys.stdin.isatty():
             usage()
             sys.exit(-1)
         result = ovs_checkpatch_parse(sys.stdin.read(), '-')
         ovs_checkpatch_print_result(result)
         sys.exit(result)
-    sys.exit(ovs_checkpatch_file(filename))
+
+    status = 0
+    for filename in args:
+        print('== Checking "%s" ==' % filename)
+        result = ovs_checkpatch_file(filename)
+        if result:
+            status = -1
+    sys.exit(status)
