@@ -210,6 +210,10 @@ OvsAcquireDatapathWrite(OVS_DATAPATH *datapath,
                            dispatch ? NDIS_RWL_AT_DISPATCH_LEVEL : 0);
 }
 
+_IRQL_requires_(DISPATCH_LEVEL)
+_IRQL_restores_global_(OldIrql, lockState)
+_Requires_lock_held_(datapath->lock)
+_Releases_lock_(datapath->lock)
 static __inline VOID
 OvsReleaseDatapath(OVS_DATAPATH *datapath,
                    LOCK_STATE_EX *lockState)
