@@ -53,6 +53,7 @@ extern NL_POLICY nlFlowKeyPolicy[];
 extern UINT32 nlFlowKeyPolicyLen;
 extern NL_POLICY nlFlowTunnelKeyPolicy[];
 extern UINT32 nlFlowTunnelKeyPolicyLen;
+DRIVER_CANCEL OvsCancelIrpDatapath;
 
 static __inline VOID
 OvsAcquirePidHashLock()
