@@ -184,6 +184,9 @@ typedef struct _OVS_SWITCH_CONTEXT
 } OVS_SWITCH_CONTEXT, *POVS_SWITCH_CONTEXT;
 
 
+_IRQL_raises_(DISPATCH_LEVEL)
+_IRQL_saves_global_(OldIrql, lockState)
+_Acquires_lock_(datapath->lock)
 static __inline VOID
 OvsAcquireDatapathRead(OVS_DATAPATH *datapath,
                        LOCK_STATE_EX *lockState,
