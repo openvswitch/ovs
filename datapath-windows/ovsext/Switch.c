@@ -253,7 +253,6 @@ create_switch_done:
  *  Implements filter driver's FilterDetach function.
  * --------------------------------------------------------------------------
  */
-_Use_decl_annotations_
 VOID
 OvsExtDetach(NDIS_HANDLE filterModuleContext)
 {
@@ -309,7 +308,6 @@ OvsDeleteSwitch(POVS_SWITCH_CONTEXT switchContext)
  *  Implements filter driver's FilterRestart function.
  * --------------------------------------------------------------------------
  */
-_Use_decl_annotations_
 NDIS_STATUS
 OvsExtRestart(NDIS_HANDLE filterModuleContext,
               PNDIS_FILTER_RESTART_PARAMETERS filterRestartParameters)
