@@ -500,13 +500,18 @@ if __name__ == '__main__':
 
     if n_patches:
         status = 0
+
+        git_log = 'git log --no-color --no-merges --pretty=format:"%H %s" '
+        with os.popen(git_log + '-%d' % n_patches, 'r') as f:
+            commits = f.read().split("\n")
+
         for i in reversed(range(0, n_patches)):
-            revision = 'HEAD~%d' % i
+            revision, name = commits[i].split(" ", 1)
             f = os.popen('git format-patch -1 --stdout %s' % revision, 'r')
             patch = f.read()
             f.close()
 
-            print('== Checking %s ==' % revision)
+            print('== Checking %s ("%s") ==' % (revision[0:12], name))
             result = ovs_checkpatch_parse(patch, revision)
             ovs_checkpatch_print_result(result)
             if result:
