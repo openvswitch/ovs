@@ -855,8 +855,8 @@ OvsDecapSetOffloads(PNET_BUFFER_LIST *curNbl,
             tcpHdr = (TCPHdr *)(buf + layers->l4Offset);
 
             tcpHdr->check = IPPseudoChecksum(&ipHdr->saddr,
-                                                (uint32 *)&ipHdr->daddr,
-                                                IPPROTO_TCP, 0);
+                                             (uint32 *)&ipHdr->daddr,
+                                             IPPROTO_TCP, 0);
         } else {
             IPv6Hdr *ipHdr;
             TCPHdr *tcpHdr;
