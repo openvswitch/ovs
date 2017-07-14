@@ -361,7 +361,7 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
     OVS_EXCLUDED(netdev_mutex)
 {
     struct netdev *netdev;
-    int error;
+    int error = 0;
 
     if (!name[0]) {
         /* Reject empty names.  This saves the providers having to do this.  At
@@ -375,6 +375,29 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
 
     ovs_mutex_lock(&netdev_mutex);
     netdev = shash_find_data(&netdev_shash, name);
+
+    if (netdev &&
+        type && type[0] && strcmp(type, netdev->netdev_class->type)) {
+
+        if (netdev->auto_classified) {
+            /* If this device was first created without a classification type,
+             * for example due to routing or tunneling code, and they keep a
+             * reference, a "classified" call to open will fail. In this case
+             * we remove the classless device, and re-add it below. We remove
+             * the netdev from the shash, and change the sequence, so owners of
+             * the old classless device can release/cleanup. */
+            if (netdev->node) {
+                shash_delete(&netdev_shash, netdev->node);
+                netdev->node = NULL;
+                netdev_change_seq_changed(netdev);
+            }
+
+            netdev = NULL;
+        } else {
+            error = EEXIST;
+        }
+    }
+
     if (!netdev) {
         struct netdev_registered_class *rc;
 
@@ -384,6 +407,7 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
             if (netdev) {
                 memset(netdev, 0, sizeof *netdev);
                 netdev->netdev_class = rc->class;
+                netdev->auto_classified = type && type[0] ? false : true;
                 netdev->name = xstrdup(name);
                 netdev->change_seq = 1;
                 netdev->reconfigure_seq = seq_create();
@@ -416,10 +440,6 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
                       name, type);
             error = EAFNOSUPPORT;
         }
-    } else if (type && type[0] && strcmp(type, netdev->netdev_class->type)) {
-        error = EEXIST;
-    } else {
-        error = 0;
     }
 
     if (!error) {

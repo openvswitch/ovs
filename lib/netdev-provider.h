@@ -45,6 +45,10 @@ struct netdev {
     const struct netdev_class *netdev_class; /* Functions to control
                                                 this device. */
 
+    /* If this is 'true' the user did not specify a netdev_class when
+     * opening this device, and therefore got assigned to the "system" class */
+    bool auto_classified;
+
     /* A sequence number which indicates changes in one of 'netdev''s
      * properties.   It must be nonzero so that users have a value which
      * they may use as a reset when tracking 'netdev'.
