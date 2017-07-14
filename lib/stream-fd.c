@@ -53,10 +53,12 @@ static void maybe_unlink_and_free(char *path);
  * 'connect_status' is interpreted as described for stream_init(). 'fd_type'
  * tells whether the socket is TCP or Unix domain socket.
  *
+ * Takes ownership of 'name'.
+ *
  * Returns 0 if successful, otherwise a positive errno value.  (The current
  * implementation never fails.) */
 int
-new_fd_stream(const char *name, int fd, int connect_status, int fd_type,
+new_fd_stream(char *name, int fd, int connect_status, int fd_type,
               struct stream **streamp)
 {
     struct stream_fd *s;
@@ -205,10 +207,12 @@ fd_pstream_cast(struct pstream *pstream)
  * When '*pstreamp' is closed, then 'unlink_path' (if nonnull) will be passed
  * to fatal_signal_unlink_file_now() and freed with free().
  *
+ * Takes ownership of 'name'.
+ *
  * Returns 0 if successful, otherwise a positive errno value.  (The current
  * implementation never fails.) */
 int
-new_fd_pstream(const char *name, int fd,
+new_fd_pstream(char *name, int fd,
                int (*accept_cb)(int fd, const struct sockaddr_storage *ss,
                                 size_t ss_len, struct stream **streamp),
                char *unlink_path, struct pstream **pstreamp)
