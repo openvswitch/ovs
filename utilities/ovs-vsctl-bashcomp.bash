@@ -47,7 +47,7 @@ declare -A _OVS_VSCTL_NEW_RECORDS
 # the input; this behaves like 'grep "^$1"' but deals with regex
 # metacharacters in $1.
 _ovs_vsctl_check_startswith_string () {
-    awk 'index($0, thearg)==1' thearg="$1"
+    awk 'thearg == "" || index($0, thearg)==1' thearg="$1"
 }
 
 # $1 = word to complete on.
