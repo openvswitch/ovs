@@ -51,6 +51,9 @@ OvsCleanupEventQueue()
     }
 }
 
+_IRQL_raises_(DISPATCH_LEVEL)
+_IRQL_saves_global_(OldIrql, eventQueueLockArr[eventId])
+_Acquires_lock_(eventQueueLockArr[eventId])
 static __inline VOID
 OvsAcquireEventQueueLock(int eventId)
 {
