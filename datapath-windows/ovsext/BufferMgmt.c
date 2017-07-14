@@ -1674,9 +1674,11 @@ OvsCompleteNBL(POVS_SWITCH_CONTEXT context,
         PNET_BUFFER nbTemp = NET_BUFFER_LIST_FIRST_NB(nbl);
         while (nbTemp) {
             PMDL mdl = NET_BUFFER_FIRST_MDL(nbTemp);
+            if (mdl) {
+                ASSERT(mdl->Next == NULL);
+                OvsFreeMDLAndData(mdl);
+            }
             NET_BUFFER_FIRST_MDL(nbTemp) = NULL;
-            ASSERT(mdl->Next == NULL);
-            OvsFreeMDLAndData(mdl);
             nbTemp = NET_BUFFER_NEXT_NB(nbTemp);
         }
     }
