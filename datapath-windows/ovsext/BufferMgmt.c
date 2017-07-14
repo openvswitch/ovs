@@ -802,6 +802,7 @@ OvsPartialCopyNBL(PVOID ovsContext,
              OVS_BUFFER_PRIVATE_FORWARD_CONTEXT;
 
     srcNb = NET_BUFFER_LIST_FIRST_NB(nbl);
+    ASSERT(srcNb);
     OvsInitNBLContext(dstCtx, flags, NET_BUFFER_DATA_LENGTH(srcNb) - copySize,
                       OVS_DPPORT_NUMBER_INVALID);
 
