@@ -17,6 +17,7 @@
 #include <config.h>
 #include "socket-util.h"
 #include <arpa/inet.h>
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <net/if.h>
@@ -365,7 +366,7 @@ parse_bracketed_token(char **pp)
 
 static bool
 parse_sockaddr_components(struct sockaddr_storage *ss,
-                          const char *host_s,
+                          char *host_s,
                           const char *port_s, uint16_t default_port,
                           const char *s)
 {
@@ -382,20 +383,38 @@ parse_sockaddr_components(struct sockaddr_storage *ss,
     }
 
     memset(ss, 0, sizeof *ss);
-    if (strchr(host_s, ':')) {
+    if (host_s && strchr(host_s, ':')) {
         struct sockaddr_in6 *sin6
             = ALIGNED_CAST(struct sockaddr_in6 *, ss);
 
+        char *addr = strsep(&host_s, "%");
+
         sin6->sin6_family = AF_INET6;
         sin6->sin6_port = htons(port);
-        if (!ipv6_parse(host_s, &sin6->sin6_addr)) {
-            VLOG_ERR("%s: bad IPv6 address \"%s\"", s, host_s);
+        if (!addr || !*addr || !ipv6_parse(addr, &sin6->sin6_addr)) {
+            VLOG_ERR("%s: bad IPv6 address \"%s\"", s, addr ? addr : "");
             goto exit;
         }
+
+#ifdef HAVE_STRUCT_SOCKADDR_IN6_SIN6_SCOPE_ID
+        char *scope = strsep(&host_s, "%");
+        if (scope && *scope) {
+            if (!scope[strspn(scope, "0123456789")]) {
+                sin6->sin6_scope_id = atoi(scope);
+            } else {
+                sin6->sin6_scope_id = if_nametoindex(scope);
+                if (!sin6->sin6_scope_id) {
+                    VLOG_ERR("%s: bad IPv6 scope \"%s\" (%s)",
+                             s, scope, ovs_strerror(errno));
+                    goto exit;
+                }
+            }
+        }
+#endif
     } else {
         sin->sin_family = AF_INET;
         sin->sin_port = htons(port);
-        if (!ip_parse(host_s, &sin->sin_addr.s_addr)) {
+        if (host_s && !ip_parse(host_s, &sin->sin_addr.s_addr)) {
             VLOG_ERR("%s: bad IPv4 address \"%s\"", s, host_s);
             goto exit;
         }
@@ -421,7 +440,7 @@ inet_parse_active(const char *target_, uint16_t default_port,
 {
     char *target = xstrdup(target_);
     const char *port;
-    const char *host;
+    char *host;
     char *p;
     bool ok;
 
@@ -548,7 +567,7 @@ inet_parse_passive(const char *target_, int default_port,
 {
     char *target = xstrdup(target_);
     const char *port;
-    const char *host;
+    char *host;
     char *p;
     bool ok;
 
@@ -559,8 +578,7 @@ inet_parse_passive(const char *target_, int default_port,
         VLOG_ERR("%s: port must be specified", target_);
         ok = false;
     } else {
-        ok = parse_sockaddr_components(ss, host ? host : "0.0.0.0",
-                                       port, default_port, target_);
+        ok = parse_sockaddr_components(ss, host, port, default_port, target_);
     }
     if (!ok) {
         memset(ss, 0, sizeof *ss);
@@ -958,6 +976,21 @@ ss_get_port(const struct sockaddr_storage *ss)
     }
 }
 
+/* Returns true if 'name' is safe to include inside a network address field.
+ * We want to avoid names that include confusing punctuation, etc. */
+static bool OVS_UNUSED
+is_safe_name(const char *name)
+{
+    if (!name[0] || isdigit((unsigned char) name[0])) {
+        return false;
+    }
+    for (const char *p = name; *p; p++) {
+        if (!isalnum((unsigned char) *p) && *p != '-' && *p != '_') {
+            return false;
+        }
+    }
+    return true;
+}
 
 /* Formats the IPv4 or IPv6 address in 'ss' into 's'.  If 'ss' is an IPv6
  * address, puts square brackets around the address.  'bufsize' should be at
@@ -979,6 +1012,20 @@ ss_format_address(const struct sockaddr_storage *ss, struct ds *s)
         char *tail = &s->string[s->length];
         inet_ntop(AF_INET6, sin6->sin6_addr.s6_addr, tail, INET6_ADDRSTRLEN);
         s->length += strlen(tail);
+
+#ifdef HAVE_STRUCT_SOCKADDR_IN6_SIN6_SCOPE_ID
+        uint32_t scope = sin6->sin6_scope_id;
+        if (scope) {
+            char namebuf[IF_NAMESIZE];
+            char *name = if_indextoname(scope, namebuf);
+            ds_put_char(s, '%');
+            if (name && is_safe_name(name)) {
+                ds_put_cstr(s, name);
+            } else {
+                ds_put_format(s, "%"PRIu32, scope);
+            }
+        }
+#endif
 
         ds_put_char(s, ']');
     } else {

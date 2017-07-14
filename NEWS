@@ -69,6 +69,8 @@ Post-v2.7.0
    - Add experimental support for hardware offloading
      * HW offloading is disabled by default.
      * HW offloading is done through the TC interface.
+   - IPv6 link local addresses are now supported on Linux.  Use % to designate
+     the scope device.
 
 v2.7.0 - 21 Feb 2017
 ---------------------
