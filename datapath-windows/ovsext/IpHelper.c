@@ -369,7 +369,7 @@ OvsGetRoute(SOCKADDR_INET *destinationAddress,
         SOCKADDR_INET crtSrcAddr = { 0 };
         MIB_IPFORWARD_ROW2 crtRoute = { 0 };
         POVS_IPHELPER_INSTANCE crtInstance = NULL;
-        WCHAR interfaceName[IF_MAX_STRING_SIZE + 1] = { 0 };
+        WCHAR interfaceName[IF_MAX_STRING_SIZE + 1];
 
         crtInstance = CONTAINING_RECORD(link, OVS_IPHELPER_INSTANCE, link);
 
@@ -394,11 +394,16 @@ OvsGetRoute(SOCKADDR_INET *destinationAddress,
             RtlCopyMemory(route, &crtRoute, sizeof(*route));
             *instance = crtInstance;
 
-            ConvertInterfaceLuidToAlias(&crtInstance->internalRow.InterfaceLuid,
-                                        interfaceName, IF_MAX_STRING_SIZE + 1);
-            RtlStringCbLengthW(interfaceName, IF_MAX_STRING_SIZE, &len);
+            status =
+                ConvertInterfaceLuidToAlias(&crtInstance->internalRow.InterfaceLuid,
+                                            interfaceName,
+                                            IF_MAX_STRING_SIZE + 1);
+            if (NT_SUCCESS(status)) {
+                status = RtlStringCbLengthW(interfaceName, IF_MAX_STRING_SIZE,
+                                            &len);
+            }
 
-            if (gOvsSwitchContext != NULL) {
+            if (gOvsSwitchContext != NULL && NT_SUCCESS(status)) {
                 NdisAcquireRWLockRead(gOvsSwitchContext->dispatchLock,
                                       &lockState, 0);
                 *vport = OvsFindVportByHvNameW(gOvsSwitchContext,
@@ -608,11 +613,11 @@ OvsAddIpInterfaceNotification(PMIB_IPINTERFACE_ROW ipRow)
 
         InitializeListHead(&instance->link);
         ExInitializeResourceLite(&instance->lock);
-        WCHAR interfaceName[IF_MAX_STRING_SIZE + 1] = { 0 };
+        WCHAR interfaceName[IF_MAX_STRING_SIZE + 1];
         status = ConvertInterfaceLuidToAlias(&ipRow->InterfaceLuid,
                                              interfaceName,
                                              IF_MAX_STRING_SIZE + 1);
-        if (gOvsSwitchContext == NULL) {
+        if (gOvsSwitchContext == NULL || !NT_SUCCESS(status)) {
             goto error;
         }
         NdisAcquireRWLockRead(gOvsSwitchContext->dispatchLock, &lockState, 0);
