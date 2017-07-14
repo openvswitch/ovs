@@ -695,6 +695,7 @@ OvsSttReassemble(POVS_SWITCH_CONTEXT switchContext,
         entry->timeout = currentTime + STT_ENTRY_TIMEOUT;
 
         if (segOffset == 0) {
+            ASSERT(sttHdr);
             entry->sttHdr = *sttHdr;
         }
 
@@ -722,6 +723,7 @@ OvsSttReassemble(POVS_SWITCH_CONTEXT switchContext,
         }
 
         if (segOffset == 0) {
+            ASSERT(sttHdr);
             pktFragEntry->sttHdr = *sttHdr;
         }
         if (ipHdr->ecn == IP_ECN_CE) {
