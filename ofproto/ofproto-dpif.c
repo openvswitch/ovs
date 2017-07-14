@@ -5473,37 +5473,6 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
 }
 
 static void
-ofproto_revalidate_all_backers(void)
-{
-    const struct shash_node **backers;
-    int i;
-
-    backers = shash_sort(&all_dpif_backers);
-    for (i = 0; i < shash_count(&all_dpif_backers); i++) {
-        struct dpif_backer *backer = backers[i]->data;
-        backer->need_revalidate = REV_RECONFIGURE;
-    }
-    free(backers);
-}
-
-static void
-disable_tnl_push_pop(struct unixctl_conn *conn OVS_UNUSED, int argc OVS_UNUSED,
-                     const char *argv[], void *aux OVS_UNUSED)
-{
-    if (!strcasecmp(argv[1], "off")) {
-        ofproto_use_tnl_push_pop = false;
-        unixctl_command_reply(conn, "Tunnel push-pop off");
-        ofproto_revalidate_all_backers();
-    } else if (!strcasecmp(argv[1], "on")) {
-        ofproto_use_tnl_push_pop = true;
-        unixctl_command_reply(conn, "Tunnel push-pop on");
-        ofproto_revalidate_all_backers();
-    } else {
-        unixctl_command_reply_error(conn, "Invalid argument");
-    }
-}
-
-static void
 ofproto_unixctl_dpif_show_dp_features(struct unixctl_conn *conn,
                                       int argc, const char *argv[],
                                       void *aux OVS_UNUSED)
@@ -5577,9 +5546,6 @@ ofproto_unixctl_init(void)
                              ofproto_unixctl_dpif_dump_flows, NULL);
     unixctl_command_register("dpif/set-dp-features", "bridge", 1, 3 ,
                              ofproto_unixctl_dpif_set_dp_features, NULL);
-
-    unixctl_command_register("ofproto/tnl-push-pop", "[on]|[off]", 1, 1,
-                             disable_tnl_push_pop, NULL);
 }
 
 static odp_port_t

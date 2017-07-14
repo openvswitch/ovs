@@ -466,9 +466,8 @@ m4_define([OVS_VSWITCHD_STOP],
    OVS_APP_EXIT_AND_WAIT([ovsdb-server])])
 
 m4_define([OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP],
-  [AT_CHECK([ovs-appctl ofproto/tnl-push-pop off], [0], [dnl
-Tunnel push-pop off
-])])
+  [AT_CHECK([ovs-appctl dpif/set-dp-features br0 tnl_push_pop false], [0])
+])
 
 # WAIT_FOR_DUMMY_PORTS(NETDEV_DUMMY_PORT[, NETDEV_DUMMY_PORT...])
 #
