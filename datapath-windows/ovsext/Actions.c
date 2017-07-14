@@ -2373,6 +2373,7 @@ OvsDoRecirc(POVS_SWITCH_CONTEXT switchContext,
                          srcPortNo, 0,
                          NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(curNbl),
                          completionList, layers, TRUE);
+    ASSERT(ovsFwdCtx.switchContext);
 
     flow = OvsLookupFlow(&ovsFwdCtx.switchContext->datapath, key, &hash, FALSE);
     if (flow) {
