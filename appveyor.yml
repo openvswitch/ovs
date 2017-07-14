@@ -15,7 +15,7 @@ init:
 
     Invoke-WebRequest $source -OutFile $destination
 
-    $source = "https://slproweb.com/download/Win32OpenSSL-1_0_2l.exe"
+    $source = "https://slproweb.com/download/Win32OpenSSL-1_0_2L.exe"
 
     $destination = "C:\ovs-build-downloads\Win32OpenSSL-1_0_2l.exe"
 
