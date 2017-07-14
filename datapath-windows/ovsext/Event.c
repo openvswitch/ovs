@@ -60,6 +60,10 @@ OvsAcquireEventQueueLock(int eventId)
     NdisAcquireSpinLock(&eventQueueLockArr[eventId]);
 }
 
+_IRQL_requires_(DISPATCH_LEVEL)
+_IRQL_restores_global_(OldIrql, eventQueueLockArr[eventId])
+_Requires_lock_held_(eventQueueLockArr[eventId])
+_Releases_lock_(eventQueueLockArr[eventId])
 static __inline VOID
 OvsReleaseEventQueueLock(int eventId)
 {
