@@ -121,6 +121,8 @@ OvsJhashBytes(const VOID *p_, SIZE_T n, UINT32 basis)
         memcpy(tmp, p, n);
         a += tmp[0];
         b += tmp[1];
+#pragma warning(suppress: 6385)
+        /* Suppress buffer overflow, it is either zero or some random value */
         c += tmp[2];
         JhashFinal(&a, &b, &c);
     }
