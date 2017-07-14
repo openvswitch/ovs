@@ -917,6 +917,7 @@ static NTSTATUS
 OvsRegisterChangeNotification()
 {
     NTSTATUS status;
+    UINT dummy = 0;
 
 
     status = NotifyIpInterfaceChange(AF_INET, OvsChangeCallbackIpInterface,
@@ -928,7 +929,8 @@ OvsRegisterChangeNotification()
         return status;
     }
 
-    status = NotifyRouteChange2(AF_INET, OvsChangeCallbackIpRoute, NULL,
+    /* The CallerContext is dummy and should never be used */
+    status = NotifyRouteChange2(AF_INET, OvsChangeCallbackIpRoute, &dummy,
                                 TRUE, &ipRouteNotificationHandle);
     if (status != STATUS_SUCCESS) {
         OVS_LOG_ERROR("Fail to regiter ip route change, status: %x.",
