@@ -233,7 +233,7 @@ ovs-vsctl \
 
 ### Verify datapath configuration
 AT_CHECK([
-    ovs-appctl dpif/show | grep -v hit | sed 's/\t/    /g' | sed 's./[[0-9]]\{1,\}..'
+    ovs-appctl dpif/show | grep -v hit | sed "s/$(printf \\t)/    /g" | sed 's./[[0-9]]\{1,\}..'
 ], [0], [dnl
     br-in1:
         br-in1 65534: (dummy-internal)
