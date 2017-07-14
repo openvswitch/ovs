@@ -61,6 +61,10 @@ OvsAcquirePidHashLock()
     NdisAcquireSpinLock(&(gOvsSwitchContext->pidHashLock));
 }
 
+_IRQL_requires_(DISPATCH_LEVEL)
+_IRQL_restores_global_(OldIrql, gOvsSwitchContext->pidHashLock)
+_Requires_lock_held_(gOvsSwitchContext->pidHashLock)
+_Releases_lock_(gOvsSwitchContext->pidHashLock)
 static __inline VOID
 OvsReleasePidHashLock()
 {
