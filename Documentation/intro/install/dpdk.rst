@@ -124,7 +124,11 @@ has to be configured with DPDK support (``--with-dpdk``).
        $ ./configure --with-dpdk=$DPDK_BUILD
 
    where ``DPDK_BUILD`` is the path to the built DPDK library. This can be
-   skipped if DPDK library is installed in its default location
+   skipped if DPDK library is installed in its default location.
+
+   If no path is provided to ``--with-dpdk``, but a pkg-config configuration
+   for libdpdk is available the include paths will be generated via an
+   equivalent ``pkg-config --cflags libdpdk``.
 
    .. note::
      While ``--with-dpdk`` is required, you can pass any other configuration
