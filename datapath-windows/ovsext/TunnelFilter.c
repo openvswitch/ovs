@@ -172,8 +172,7 @@ static NTSTATUS OvsTunnelFilterThreadInit(POVS_TUNFLT_THREAD_CONTEXT threadCtx);
 static VOID     OvsTunnelFilterThreadUninit(POVS_TUNFLT_THREAD_CONTEXT threadCtx);
 static VOID     OvsTunnelFilterSetIrpContext(POVS_TUNFLT_REQUEST_LIST listRequests,
                                              POVS_TUNFLT_REQUEST request);
-static VOID     OvsTunnelFilterCancelIrp(PDEVICE_OBJECT DeviceObject,
-                                         PIRP Irp);
+DRIVER_CANCEL   OvsTunnelFilterCancelIrp;
 
 /*
  * Callout driver global variables
