@@ -47,16 +47,6 @@ static NTSTATUS
 OvsInjectPacketThroughActions(PNET_BUFFER_LIST pNbl,
                               OVS_TUNNEL_PENDED_PACKET *packet);
 
-VOID OvsAcquireDatapathRead(OVS_DATAPATH *datapath,
-                            LOCK_STATE_EX *lockState,
-                            BOOLEAN dispatch);
-VOID OvsAcquireDatapathWrite(OVS_DATAPATH *datapath,
-                             LOCK_STATE_EX *lockState,
-                             BOOLEAN dispatch);
-VOID OvsReleaseDatapath(OVS_DATAPATH *datapath,
-                        LOCK_STATE_EX *lockState);
-
-
 NTSTATUS
 OvsTunnelNotify(FWPS_CALLOUT_NOTIFY_TYPE notifyType,
                 const GUID *filterKey,
