@@ -1043,6 +1043,9 @@ sendmmsg(int fd, struct mmsghdr *msgs, unsigned int n, unsigned int flags)
     return emulate_sendmmsg(fd, msgs, n, flags);
 }
 #else
+/* sendmmsg was redefined in lib/socket-util.c, should undef sendmmsg here
+ * to avoid recursion */
+#undef sendmmsg
 int
 wrap_sendmmsg(int fd, struct mmsghdr *msgs, unsigned int n, unsigned int flags)
 {
