@@ -7467,7 +7467,7 @@ test_packet() {
     local packet=$(echo $dst$src | sed 's/://g')${eth}
     hv=`vif_to_hv $inport`
     # If hypervisor 0 (localport) use the defhv parameter
-    if test $hv == hv0; then
+    if test $hv = hv0; then
         hv=$defhv
     fi
     vif=vif$inport
