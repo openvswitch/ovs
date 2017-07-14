@@ -436,6 +436,7 @@ OvsAcquireCtrlLock()
     NdisAcquireSpinLock(gOvsCtrlLock);
 }
 
+_Use_decl_annotations_
 VOID
 OvsReleaseCtrlLock()
 {
