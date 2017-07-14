@@ -985,6 +985,9 @@ OvsFullCopyNBL(PVOID ovsContext,
     }
 
     nb = NET_BUFFER_LIST_FIRST_NB(nbl);
+    if (nb == NULL) {
+        return NULL;
+    }
 
     if (NET_BUFFER_NEXT_NB(nb) == NULL) {
         return OvsCopySinglePacketNBL(context, nbl, nb, headRoom, copyNblInfo);
