@@ -3312,6 +3312,14 @@ check_output_prerequisites(struct xlate_ctx *ctx,
             return false;
         }
     }
+
+    if (xport->pt_mode == NETDEV_PT_LEGACY_L2 &&
+        flow->packet_type != htonl(PT_ETH)) {
+        xlate_report(ctx, OFT_WARN, "Trying to send non-Ethernet packet "
+                     "through legacy L2 port. Dropping packet.");
+        return false;
+    }
+
     return true;
 }
 
@@ -3345,6 +3353,10 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     odp_port_t out_port, odp_port, odp_tnl_port;
     bool is_native_tunnel = false;
     uint8_t dscp;
+    struct eth_addr flow_dl_dst = flow->dl_dst;
+    struct eth_addr flow_dl_src = flow->dl_src;
+    ovs_be32 flow_packet_type = flow->packet_type;
+    ovs_be16 flow_dl_type = flow->dl_type;
 
     /* If 'struct flow' gets additional metadata, we'll need to zero it out
      * before traversing a patch port. */
@@ -3360,13 +3372,6 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         if (xport->pt_mode == NETDEV_PT_LEGACY_L3) {
             flow->packet_type = PACKET_TYPE_BE(OFPHTN_ETHERTYPE,
                                                ntohs(flow->dl_type));
-        }
-    } else {
-        /* Add dummy Ethernet header for legacy L2 port. */
-        if (xport->pt_mode == NETDEV_PT_LEGACY_L2) {
-            flow->packet_type = htonl(PT_ETH);
-            flow->dl_dst = eth_addr_zero;
-            flow->dl_src = eth_addr_zero;
         }
     }
 
@@ -3627,6 +3632,10 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     /* Restore flow */
     memcpy(flow->vlans, flow_vlans, sizeof flow->vlans);
     flow->nw_tos = flow_nw_tos;
+    flow->dl_dst = flow_dl_dst;
+    flow->dl_src = flow_dl_src;
+    flow->packet_type = flow_packet_type;
+    flow->dl_type = flow_dl_type;
 }
 
 static void

@@ -64,9 +64,9 @@ AT_SETUP([ptap - triangle bridge setup with L2 and L3 GRE tunnels])
 #      1030   br-in1      gre-13      legacy-l2   br-in3 3010 (l2)
 #      2010   br-in2      gre-21      ptap        br-in1 1020 (l2), 1021 (l3)
 #      2030   br-in2      gre-23      ptap        br-in3 3020 (l2), 3021 (l3)
-#      3010   br-in1      gre-31      legacy-l2   br-in1 1030 (l2)
-#      3020   br-in1      gre-32      legacy-l2   br-in2 2010 (ptap)
-#      3021   br-in1      gre-32_l3   legacy-l3         same
+#      3010   br-in3      gre-31      legacy-l2   br-in1 1030 (l2)
+#      3020   br-in3      gre-32      legacy-l2   br-in2 2010 (ptap)
+#      3021   br-in3      gre-32_l3   legacy-l3         same
 
 HWADDR_BRP1=aa:55:00:00:00:01
 HWADDR_BRP2=aa:55:00:00:00:02
@@ -457,6 +457,64 @@ aa55aa5500033a6dd2099cab0800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d
 aa55aa5500033a6dd2099cab0800450000548a83400040011aadc0a80a0ac0a80a1e0800b7170a4d0002fd509a5800000000de1c020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
 aa55aa550003461e7d1a95a1080045000054f7d440004001ad51c0a80a14c0a80a1e08000e760c1e000131519a580000000047ee0b0000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
 aa55aa550003461e7d1a95a1080045000054f89540004001ac90c0a80a14c0a80a1e0800736f0c1e000232519a5800000000e1f30b0000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+])
+
+
+# N3 to N2, from L3 GRE to PTAP port between br-in3 and br-in2. Dropping L3 packet on L2 dummy port in br-in2.
+
+# Strips 'n_packets=...' from ovs-ofctl output.
+strip_n_packets () {
+    sed 's/n_packets=[[0-9]]*, //'
+}
+
+# Strips 'n_bytes=...' from ovs-ofctl output.
+strip_n_bytes () {
+    sed 's/n_bytes=[[0-9]]*, //'
+}
+
+# Modify flow rules to receive L3 packet in br-in2.
+AT_CHECK([
+    ovs-ofctl add-flow br-in2 packet_type=\(1,0x800\),nw_dst=$N2_IP,actions=$N2_OFPORT # Route L3 packet to N2 in br-in2
+    ovs-ofctl add-flow br-in3 ip,nw_dst=$N2_IP,actions=3021 # Route to N2 via the L3 tunnel
+], [0])
+
+AT_CHECK([
+    ovs-ofctl dump-flows br-in2 | ofctl_strip | strip_n_bytes | strip_n_packets | sort | grep actions
+], [0], [dnl
+ ip,nw_dst=192.168.10.10 actions=output:2010
+ ip,nw_dst=192.168.10.20 actions=mod_dl_dst:aa:55:aa:55:00:02,output:20
+ ip,nw_dst=192.168.10.30 actions=output:2010
+ packet_type=(1,0x800),nw_dst=192.168.10.10 actions=output:2010
+ packet_type=(1,0x800),nw_dst=192.168.10.20 actions=output:20
+ packet_type=(1,0x800),nw_dst=192.168.10.30 actions=output:2030
+])
+
+AT_CHECK([
+    ovs-ofctl dump-flows br-in3 | ofctl_strip | strip_n_bytes | strip_n_packets | sort | grep actions
+], [0], [dnl
+ ip,nw_dst=192.168.10.10 actions=output:3021
+ ip,nw_dst=192.168.10.20 actions=output:3021
+ ip,nw_dst=192.168.10.30 actions=mod_dl_dst:aa:55:aa:55:00:03,output:30
+])
+
+# Clear up megaflow cache
+ovs-appctl time/warp 11000
+
+# N3 to N2 via L3 GRE tunnel between br-in3 and br-in2
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive n3 461e7d1a95a11e2ce92a669e080045000054e5b540004001bf70c0a80a1ec0a80a140800b3f1065b000188509a580000000050360c0000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+    ovs-appctl netdev-dummy/receive n3 461e7d1a95a11e2ce92a669e080045000054e5cf40004001bf56c0a80a1ec0a80a140800a2ed065b000289509a580000000060390c0000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+], [0], [ignore])
+
+ovs-appctl time/warp 1000
+
+
+AT_CHECK([
+    ovs-appctl dpctl/dump-flows --names dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
+], [0], [flow-dump from non-dpdk interfaces:
+recirc_id(0),in_port(br-p3),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:02),eth_type(0x0800),ipv4(src=30.0.0.3,dst=30.0.0.2,proto=47,frag=no), packets:1, bytes:122, used:0.0s, actions:set(ipv4(src=20.0.0.3,dst=20.0.0.2)),tnl_pop(gre_sys)
+recirc_id(0),in_port(n3),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.20,tos=0/0x3,frag=no), packets:1, bytes:98, used:0.0s, actions:pop_eth,tnl_push(tnl_port(gre_sys),header(size=38,type=3,eth(dst=aa:55:00:00:00:02,src=aa:55:00:00:00:03,dl_type=0x0800),ipv4(src=30.0.0.3,dst=30.0.0.2,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x800))),out_port(br-p3))
+tunnel(src=20.0.0.3,dst=20.0.0.2,flags(-df-csum)),recirc_id(0),in_port(gre_sys),packet_type(ns=1,id=0x800),ipv4(dst=192.168.10.20,frag=no), packets:1, bytes:84, used:0.0s, actions:drop
 ])
 
 OVS_VSWITCHD_STOP(["/The Open vSwitch kernel module is probably not loaded/d"])
