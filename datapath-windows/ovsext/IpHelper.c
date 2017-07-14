@@ -485,7 +485,7 @@ OvsResolveIPNeighEntry(PMIB_IPNET_ROW2 ipNeigh)
 
 
 NTSTATUS
-OvsGetOrResolveIPNeigh(MIB_IF_ROW2 ipRow,
+OvsGetOrResolveIPNeigh(PMIB_IF_ROW2 ipRow,
                        UINT32 ipAddr,
                        PMIB_IPNET_ROW2 ipNeigh)
 {
@@ -494,8 +494,8 @@ OvsGetOrResolveIPNeigh(MIB_IF_ROW2 ipRow,
     ASSERT(ipNeigh);
 
     RtlZeroMemory(ipNeigh, sizeof (*ipNeigh));
-    ipNeigh->InterfaceLuid.Value = ipRow.InterfaceLuid.Value;
-    ipNeigh->InterfaceIndex = ipRow.InterfaceIndex;
+    ipNeigh->InterfaceLuid.Value = ipRow->InterfaceLuid.Value;
+    ipNeigh->InterfaceIndex = ipRow->InterfaceIndex;
     ipNeigh->Address.si_family = AF_INET;
     ipNeigh->Address.Ipv4.sin_addr.s_addr = ipAddr;
 
@@ -503,8 +503,8 @@ OvsGetOrResolveIPNeigh(MIB_IF_ROW2 ipRow,
 
     if (status != STATUS_SUCCESS) {
         RtlZeroMemory(ipNeigh, sizeof (*ipNeigh));
-        ipNeigh->InterfaceLuid.Value = ipRow.InterfaceLuid.Value;
-        ipNeigh->InterfaceIndex = ipRow.InterfaceIndex;
+        ipNeigh->InterfaceLuid.Value = ipRow->InterfaceLuid.Value;
+        ipNeigh->InterfaceIndex = ipRow->InterfaceIndex;
         ipNeigh->Address.si_family = AF_INET;
         ipNeigh->Address.Ipv4.sin_addr.s_addr = ipAddr;
         status = OvsResolveIPNeighEntry(ipNeigh);
@@ -1643,7 +1643,7 @@ OvsHandleFwdRequest(POVS_IP_HELPER_REQUEST request)
     if (ipAddr == 0) {
         ipAddr = request->fwdReq.tunnelKey.dst;
     }
-    status = OvsGetOrResolveIPNeigh(instance->internalRow,
+    status = OvsGetOrResolveIPNeigh(&instance->internalRow,
                                     ipAddr, &ipNeigh);
     if (status != STATUS_SUCCESS) {
         ExReleaseResourceLite(&instance->lock);
@@ -1935,11 +1935,10 @@ OvsStartIpHelper(PVOID data)
             MIB_IPNET_ROW2 ipNeigh;
             NTSTATUS status;
             POVS_IPHELPER_INSTANCE instance = (POVS_IPHELPER_INSTANCE)ipn->context;
-            MIB_IF_ROW2 internalRow = instance->internalRow;
             NdisReleaseSpinLock(&ovsIpHelperLock);
             ExAcquireResourceExclusiveLite(&ovsInstanceListLock, TRUE);
 
-            status = OvsGetOrResolveIPNeigh(internalRow,
+            status = OvsGetOrResolveIPNeigh(&instance->internalRow,
                                             ipAddr, &ipNeigh);
             OvsUpdateIPNeighEntry(ipAddr, &ipNeigh, status);
 
