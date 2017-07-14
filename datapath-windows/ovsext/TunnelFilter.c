@@ -1618,7 +1618,7 @@ OvsTunnelFilterSetIrpContext(POVS_TUNFLT_REQUEST_LIST listRequests,
 /*
  * --------------------------------------------------------------------------
  * This function is the Cancel routine to be called by the I/O Manager in the
- * case when the IRP is cancelled.
+ * case the IRP is canceled.
  * --------------------------------------------------------------------------
  */
 VOID
