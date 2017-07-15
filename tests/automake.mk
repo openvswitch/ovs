@@ -364,11 +364,6 @@ tests_ovstest_SOURCES += \
 endif
 
 tests_ovstest_LDADD = lib/libopenvswitch.la ovn/lib/libovn.la
-tests_ovstest_CFLAGS = $(AM_CFLAGS)
-if HAVE_WNO_FORMAT_TRUNCATION
-tests_ovstest_CFLAGS += -Wno-format-truncation
-endif
-
 dist_check_SCRIPTS = tests/flowgen.pl
 
 noinst_PROGRAMS += tests/test-strtok_r

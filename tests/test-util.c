@@ -1116,11 +1116,21 @@ test_snprintf(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     char s[16];
 
+#if __GNUC__ >= 7
+    /* GCC 7+ warns about the following calls that truncate a string using
+     * snprintf().  We're testing that truncation works properly, so
+     * temporarily disable the warning. */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+#endif
     ovs_assert(snprintf(s, 4, "abcde") == 5);
     ovs_assert(!strcmp(s, "abc"));
 
     ovs_assert(snprintf(s, 5, "abcde") == 5);
     ovs_assert(!strcmp(s, "abcd"));
+#if __GNUC__ >= 7
+#pragma GCC diagnostic pop
+#endif
 
     ovs_assert(snprintf(s, 6, "abcde") == 5);
     ovs_assert(!strcmp(s, "abcde"));
