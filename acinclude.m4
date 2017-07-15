@@ -968,7 +968,7 @@ dnl ctags ignores symbols with extras identifiers. This builds a list of
 dnl specially handled identifiers to be ignored.
 AC_DEFUN([OVS_CTAGS_IDENTIFIERS],
     AC_SUBST([OVS_CTAGS_IDENTIFIERS_LIST],
-           [`echo -n '-I "'; sed -n 's/^#define \(OVS_[A-Z_]\+\)(\.\.\.)$/\1+/p' ${srcdir}/include/openvswitch/compiler.h  | tr \\\n ' ' ; echo -n '"'`] ))
+           [`printf '-I "'; sed -n 's/^#define \(OVS_[A-Z_]\+\)(\.\.\.)$/\1+/p' ${srcdir}/include/openvswitch/compiler.h  | tr \\\n ' ' ; printf '"'`] ))
 
 dnl OVS_PTHREAD_SET_NAME
 dnl
