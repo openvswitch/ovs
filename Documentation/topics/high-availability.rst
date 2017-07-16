@@ -66,6 +66,12 @@ a plan for OVN Gateway High Availability which takes into account our past
 experience building similar systems.  It should be considered a fluid changing
 proposal, not a set-in-stone decree.
 
+.. note::
+    This document describes a range of options OVN could take to provide
+    high availability for gateways.  The current implementation provides L3
+    gateway high availability by the "Router Specific Active/Backup"
+    approach described in this document.
+
 Basic Architecture
 ------------------
 
