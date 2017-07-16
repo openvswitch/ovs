@@ -1341,6 +1341,28 @@
     logical patch port representing the distributed gateway port.
   </p>
 
+  <h3>High Availability for Distributed Gateway Ports</h3>
+
+  <p>
+    OVN allows you to specify a prioritized list of chassis for a distributed
+    gateway port.  This is done by associating multiple
+    <code>Gateway_Chassis</code> rows with a <code>Logical_Router_Port</code>
+    in the <code>OVN_Northbound</code> database.
+  </p>
+
+  <p>
+    When multiple chassis have been specified for a gateway, all chassis that
+    may send packets to that gateway will enable BFD on tunnels to all
+    configured gateway chassis.  The current master chassis for the gateway
+    is the highest priority gateway chassis that is currently viewed as
+    active based on BFD status.
+  </p>
+
+  <p>
+    For more information on L3 gateway high availability, please refer to
+    http://docs.openvswitch.org/en/latest/topics/high-availability.
+  </p>
+
   <h2>Life Cycle of a VTEP gateway</h2>
 
   <p>
