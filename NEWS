@@ -45,6 +45,9 @@ Post-v2.7.0
      * "ovn-sbctl lflow-list" can now print OpenFlow flows that correspond
        to logical flows.
      * Now uses OVSDB RBAC support to reduce impact of compromised hypervisors.
+     * Multiple chassis may now be specified for L3 gateways.  When more than
+       one chassis is specified, OVN will manage high availability for that
+       gateway.
    - Tracing with ofproto/trace now traces through recirculation.
    - OVSDB:
      * New support for role-based access control (see ovsdb-server(1)).
