@@ -791,12 +791,12 @@ update_in_band_remotes(struct connmgr *mgr)
         if (!mgr->in_band) {
             in_band_create(mgr->ofproto, mgr->local_port_name, &mgr->in_band);
         }
-        in_band_set_queue(mgr->in_band, mgr->in_band_queue);
     } else {
         /* in_band_run() needs a chance to delete any existing in-band flows.
          * We will destroy mgr->in_band after it's done with that. */
     }
     if (mgr->in_band) {
+        in_band_set_queue(mgr->in_band, mgr->in_band_queue);
         in_band_set_remotes(mgr->in_band, addrs, n_addrs);
     }
 
