@@ -756,6 +756,61 @@ AT_CLEANUP
 
 dnl ---------------------------------------------------------------------
 
+AT_SETUP([ovn-nbctl - logical router port gateway chassis])
+OVN_NBCTL_TEST_START
+AT_CHECK([ovn-nbctl lr-add lr0])
+AT_CHECK([ovn-nbctl lrp-add lr0 lrp0 00:00:00:01:02:03 192.168.1.1/24])
+AT_CHECK([ovn-nbctl lrp-get-gateway-chassis lrp0], [0], [])
+
+AT_CHECK([ovn-nbctl lrp-set-gateway-chassis lp0 chassis1], [1], [],
+[ovn-nbctl: lp0: port name not found
+])
+
+AT_CHECK([ovn-nbctl lrp-get-gateway-chassis lp0], [1], [],
+[ovn-nbctl: lp0: port name not found
+])
+
+AT_CHECK([ovn-nbctl lrp-del-gateway-chassis lp0 chassis1], [1], [],
+[ovn-nbctl: lp0: port name not found
+])
+
+AT_CHECK([ovn-nbctl lrp-del-gateway-chassis lrp0 chassis1], [1], [],
+[ovn-nbctl: chassis chassis1 is not added to logical port lrp0
+])
+AT_CHECK([ovn-nbctl lrp-set-gateway-chassis lrp0 chassis1])
+
+AT_CHECK([ovn-nbctl lrp-get-gateway-chassis lrp0], [0], [dnl
+lrp0-chassis1     0
+])
+AT_CHECK([ovn-nbctl lrp-set-gateway-chassis lrp0 chassis1 10])
+
+AT_CHECK([ovn-nbctl lrp-get-gateway-chassis lrp0], [0], [dnl
+lrp0-chassis1    10
+])
+AT_CHECK([ovn-nbctl lrp-set-gateway-chassis lrp0 chassis1 20])
+
+AT_CHECK([ovn-nbctl lrp-get-gateway-chassis lrp0], [0], [dnl
+lrp0-chassis1    20
+])
+AT_CHECK([ovn-nbctl lrp-set-gateway-chassis lrp0 chassis2 5])
+AT_CHECK([ovn-nbctl lrp-get-gateway-chassis lrp0], [0], [dnl
+lrp0-chassis1    20
+lrp0-chassis2     5
+])
+
+AT_CHECK([ovn-nbctl lrp-del-gateway-chassis lrp0 chassis1])
+AT_CHECK([ovn-nbctl lrp-get-gateway-chassis lrp0], [0], [dnl
+lrp0-chassis2     5
+])
+
+AT_CHECK([ovn-nbctl lrp-del-gateway-chassis lrp0 chassis2])
+AT_CHECK([ovn-nbctl lrp-get-gateway-chassis lrp0])
+
+OVN_NBCTL_TEST_STOP
+AT_CLEANUP
+
+dnl ---------------------------------------------------------------------
+
 AT_SETUP([ovn-nbctl - logical router port enable and disable])
 OVN_NBCTL_TEST_START
 

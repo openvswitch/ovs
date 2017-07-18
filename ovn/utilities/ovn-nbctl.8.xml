@@ -389,6 +389,29 @@
         Prints the administrative state of <var>port</var>, either
         <code>enabled</code> or <code>disabled</code>.
       </dd>
+
+      <dt><code>lrp-set-gateway-chassis</code> <var>port</var>
+          <var>chassis</var> [<var>priority</var>]</dt>
+      <dd>
+        Set gateway chassis for <var>port</var>. <var>chassis</var>
+        is the name of the chassis. This creates a gateway chassis entry
+        in Gateway_Chassis table. It won't check if chassis really exists
+        in OVN_Southbound database. Priority will be set to 0
+        if <var>priority</var> is not provided by user. <var>priority</var>
+        must be between <code>0</code> and <code>32767</code>, inclusive.
+      </dd>
+      <dt><code>lrp-del-gateway-chassis</code> <var>port</var>
+          <var>chassis</var></dt>
+      <dd>
+        Deletes gateway chassis from <var>port</var>.  It is an error if
+        gateway chassis with <var>chassis</var> for <var>port</var> does
+        not exist.
+      </dd>
+      <dt><code>lrp-get-gateway-chassis</code> <var>port</var></dt>
+      <dd>
+        Lists all the gateway chassis with priority within <var>port</var> on
+        standard output, one per line, ordered based on priority.
+      </dd>
     </dl>
 
     <h1>Logical Router Static Route Commands</h1>
