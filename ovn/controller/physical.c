@@ -695,16 +695,17 @@ consider_port_binding(enum mf_field_id mff_ovn_geneve,
                     }
                     ofpbuf_put(ofpacts_p, &tun->ofport,
                                sizeof tun->ofport);
+                    bundle = ofpacts_p->header;
                     bundle->n_slaves++;
                 }
             }
 
-            ofpact_finish_BUNDLE(ofpacts_p, &bundle);
             bundle->algorithm = NX_BD_ALG_ACTIVE_BACKUP;
             /* Although ACTIVE_BACKUP bundle algorithm seems to ignore
              * the next two fields, those are always set */
             bundle->basis = 0;
             bundle->fields = NX_HASH_FIELDS_ETH_SRC;
+            ofpact_finish_BUNDLE(ofpacts_p, &bundle);
         }
         ofctrl_add_flow(flow_table, OFTABLE_REMOTE_OUTPUT, 100, 0,
                         &match, ofpacts_p);
