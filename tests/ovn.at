@@ -8034,18 +8034,22 @@ trim_zeros() {
     sed 's/\(00\)\{1,\}$//'
 }
 
+only_broadcast_from_lrp1() {
+    grep "fffffffffffff00000000001"
+}
+
 garp="fffffffffffff0000000000108060001080006040001f00000000001c0a80064000000000000c0a80064"
-echo $garp >> expout
-echo $garp >> expout
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/snoopvif-tx.pcap | trim_zeros > hv1_snoop_tx
+echo $garp > expout
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/snoopvif-tx.pcap | trim_zeros | only_broadcast_from_lrp1 | uniq > hv1_snoop_tx
 echo "packets on hv1-snoopvif:"
 cat hv1_snoop_tx
 AT_CHECK([sort hv1_snoop_tx], [0], [expout])
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/br-phys_n1-tx.pcap | trim_zeros > hv2_br_phys_tx
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/br-phys_n1-tx.pcap | trim_zeros | only_broadcast_from_lrp1 | uniq > hv2_br_phys_tx
 echo "packets on hv2 br-phys tx"
 cat hv2_br_phys_tx
 AT_CHECK([grep $garp hv2_br_phys_tx | sort], [0], [expout])
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv3/br-phys_n1-tx.pcap | trim_zeros > hv3_br_phys_tx
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv3/br-phys_n1-tx.pcap | trim_zeros | only_broadcast_from_lrp1 | uniq > hv3_br_phys_tx
 echo "packets on hv3 br-phys tx"
 cat hv3_br_phys_tx
 AT_CHECK([grep $garp hv3_br_phys_tx | sort], [0], [])
@@ -8071,11 +8075,11 @@ trim_zeros() {
     sed 's/\(00\)\{1,\}$//'
 }
 
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/snoopvif-tx.pcap | trim_zeros >  hv1_snoopvif_tx
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/snoopvif-tx.pcap | trim_zeros | only_broadcast_from_lrp1 | uniq >  hv1_snoopvif_tx
 AT_CHECK([sort hv1_snoopvif_tx], [0], [expout])
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv3/br-phys_n1-tx.pcap | trim_zeros > hv3_br_phys_tx
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv3/br-phys_n1-tx.pcap | trim_zeros | only_broadcast_from_lrp1 | uniq > hv3_br_phys_tx
 AT_CHECK([grep $garp hv3_br_phys_tx | sort], [0], [expout])
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/br-phys_n1-tx.pcap | trim_zeros > hv2_br_phys_tx
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/br-phys_n1-tx.pcap | trim_zeros | only_broadcast_from_lrp1 | uniq > hv2_br_phys_tx
 AT_CHECK([grep $garp hv2_br_phys_tx | sort], [0], [])
 OVN_CLEANUP([hv1],[hv2],[hv3])
 
