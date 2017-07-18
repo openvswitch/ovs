@@ -5249,49 +5249,83 @@ xlate_sample_action(struct xlate_ctx *ctx,
                           tunnel_out_port, false);
 }
 
-/* For datapath that does not support 'clone' action, but have a suitable
- *  sample action implementation for clone. The upstream Linux kernel
- *  version 4.11 or greater, and kernel module from OVS version 2.8 or
- *  greater version have suitable sample action implementations.  */
-static void
-compose_clone(struct xlate_ctx *ctx, struct flow *old_base_flow,
-              const struct ofpact_nest *oc)
+/* Determine if an datapath action translated from the openflow action
+ * can be reversed by another datapath action.
+ *
+ * Openflow actions that do not emit datapath actions are trivially
+ * reversible. Reversiblity of other actions depends on nature of
+ * action and their translation.  */
+static bool
+reversible_actions(const struct ofpact *ofpacts, size_t ofpacts_len)
 {
-    size_t offset, ac_offset;
+    const struct ofpact *a;
 
-    if (ctx->xbridge->support.clone) {
-        /* Use clone action as datapath clone. */
-        offset = nl_msg_start_nested(ctx->odp_actions, OVS_ACTION_ATTR_CLONE);
-        do_xlate_actions(oc->actions, ofpact_nest_get_action_len(oc), ctx);
-        nl_msg_end_non_empty_nested(ctx->odp_actions, offset);
-        ctx->base_flow = *old_base_flow;
-    } else if (ctx->xbridge->support.sample_nesting > 3) {
-        /* Use sample action as datapath clone. */
-        offset = nl_msg_start_nested(ctx->odp_actions,
-                                     OVS_ACTION_ATTR_SAMPLE);
-        ac_offset = nl_msg_start_nested(ctx->odp_actions,
-                                        OVS_SAMPLE_ATTR_ACTIONS);
-        do_xlate_actions(oc->actions, ofpact_nest_get_action_len(oc), ctx);
-        if (nl_msg_end_non_empty_nested(ctx->odp_actions, ac_offset)) {
-            nl_msg_cancel_nested(ctx->odp_actions, offset);
-        } else {
-            nl_msg_put_u32(ctx->odp_actions, OVS_SAMPLE_ATTR_PROBABILITY,
-                           UINT32_MAX); /* 100% probability. */
-            nl_msg_end_nested(ctx->odp_actions, offset);
+    OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
+        switch (a->type) {
+        case OFPACT_BUNDLE:
+        case OFPACT_CLEAR_ACTIONS:
+        case OFPACT_CLONE:
+        case OFPACT_CONJUNCTION:
+        case OFPACT_CONTROLLER:
+        case OFPACT_CT_CLEAR:
+        case OFPACT_DEBUG_RECIRC:
+        case OFPACT_DEC_MPLS_TTL:
+        case OFPACT_DEC_TTL:
+        case OFPACT_ENQUEUE:
+        case OFPACT_EXIT:
+        case OFPACT_FIN_TIMEOUT:
+        case OFPACT_GOTO_TABLE:
+        case OFPACT_GROUP:
+        case OFPACT_LEARN:
+        case OFPACT_MULTIPATH:
+        case OFPACT_NOTE:
+        case OFPACT_OUTPUT:
+        case OFPACT_OUTPUT_REG:
+        case OFPACT_POP_MPLS:
+        case OFPACT_POP_QUEUE:
+        case OFPACT_PUSH_MPLS:
+        case OFPACT_PUSH_VLAN:
+        case OFPACT_REG_MOVE:
+        case OFPACT_RESUBMIT:
+        case OFPACT_SAMPLE:
+        case OFPACT_SET_ETH_DST:
+        case OFPACT_SET_ETH_SRC:
+        case OFPACT_SET_FIELD:
+        case OFPACT_SET_IP_DSCP:
+        case OFPACT_SET_IP_ECN:
+        case OFPACT_SET_IP_TTL:
+        case OFPACT_SET_IPV4_DST:
+        case OFPACT_SET_IPV4_SRC:
+        case OFPACT_SET_L4_DST_PORT:
+        case OFPACT_SET_L4_SRC_PORT:
+        case OFPACT_SET_MPLS_LABEL:
+        case OFPACT_SET_MPLS_TC:
+        case OFPACT_SET_MPLS_TTL:
+        case OFPACT_SET_QUEUE:
+        case OFPACT_SET_TUNNEL:
+        case OFPACT_SET_VLAN_PCP:
+        case OFPACT_SET_VLAN_VID:
+        case OFPACT_STACK_POP:
+        case OFPACT_STACK_PUSH:
+        case OFPACT_STRIP_VLAN:
+        case OFPACT_UNROLL_XLATE:
+        case OFPACT_WRITE_ACTIONS:
+        case OFPACT_WRITE_METADATA:
+            break;
+
+        case OFPACT_CT:
+        case OFPACT_METER:
+        case OFPACT_NAT:
+        case OFPACT_OUTPUT_TRUNC:
+            return false;
         }
-        ctx->base_flow = *old_base_flow;
-    } else {  /* Use actions. */
-        do_xlate_actions(oc->actions, ofpact_nest_get_action_len(oc), ctx);
     }
+    return true;
 }
 
 static void
-xlate_clone(struct xlate_ctx *ctx, const struct ofpact_nest *oc)
+compose_clone(struct xlate_ctx *ctx, const struct ofpact_nest *oc)
 {
-    bool old_was_mpls = ctx->was_mpls;
-    bool old_conntracked = ctx->conntracked;
-    struct flow old_flow = ctx->xin->flow;
-
     struct ofpbuf old_stack = ctx->stack;
     union mf_subvalue new_stack[1024 / sizeof(union mf_subvalue)];
     ofpbuf_use_stub(&ctx->stack, new_stack, sizeof new_stack);
@@ -5302,16 +5336,57 @@ xlate_clone(struct xlate_ctx *ctx, const struct ofpact_nest *oc)
     ofpbuf_use_stub(&ctx->action_set, actset_stub, sizeof actset_stub);
     ofpbuf_put(&ctx->action_set, old_action_set.data, old_action_set.size);
 
+    size_t offset, ac_offset;
+    size_t oc_actions_len = ofpact_nest_get_action_len(oc);
+    struct flow old_flow = ctx->xin->flow;
+
+    if (reversible_actions(oc->actions, oc_actions_len)) {
+        old_flow = ctx->xin->flow;
+        do_xlate_actions(oc->actions, oc_actions_len, ctx);
+        goto xlate_done;
+    }
+
+    /* Commit datapath actions before emitting the clone action to
+     * avoid emitting those actions twice. Once inside
+     * the clone, another time for the action after clone.  */
+    xlate_commit_actions(ctx);
     struct flow old_base = ctx->base_flow;
-    compose_clone(ctx, &old_base, oc);
+    bool old_was_mpls = ctx->was_mpls;
+    bool old_conntracked = ctx->conntracked;
 
-    ofpbuf_uninit(&ctx->action_set);
-    ctx->action_set = old_action_set;
-    ofpbuf_uninit(&ctx->stack);
-    ctx->stack = old_stack;
+    /* The actions are not reversible, a datapath clone action is
+     * required to encode the translation. Select the clone action
+     * based on datapath capabilities.  */
+    if (ctx->xbridge->support.clone) { /* Use clone action */
+        /* Use clone action as datapath clone. */
+        offset = nl_msg_start_nested(ctx->odp_actions, OVS_ACTION_ATTR_CLONE);
+        ac_offset = ctx->odp_actions->size;
+        do_xlate_actions(oc->actions, oc_actions_len, ctx);
+        nl_msg_end_non_empty_nested(ctx->odp_actions, offset);
+        goto dp_clone_done;
+    }
 
-    ctx->xin->flow = old_flow;
+    if (ctx->xbridge->support.sample_nesting > 3) {
+        /* Use sample action as datapath clone. */
+        offset = nl_msg_start_nested(ctx->odp_actions, OVS_ACTION_ATTR_SAMPLE);
+        ac_offset = nl_msg_start_nested(ctx->odp_actions,
+                                        OVS_SAMPLE_ATTR_ACTIONS);
+        do_xlate_actions(oc->actions, oc_actions_len, ctx);
+        if (nl_msg_end_non_empty_nested(ctx->odp_actions, ac_offset)) {
+            nl_msg_cancel_nested(ctx->odp_actions, offset);
+        } else {
+            nl_msg_put_u32(ctx->odp_actions, OVS_SAMPLE_ATTR_PROBABILITY,
+                           UINT32_MAX); /* 100% probability. */
+            nl_msg_end_nested(ctx->odp_actions, offset);
+        }
+        goto dp_clone_done;
+    }
 
+    /* Datapath does not support clone, skip xlate 'oc' and
+     * report an error */
+    xlate_report_error(ctx, "Failed to compose clone action");
+
+dp_clone_done:
     /* The clone's conntrack execution should have no effect on the original
      * packet. */
     ctx->conntracked = old_conntracked;
@@ -5319,6 +5394,16 @@ xlate_clone(struct xlate_ctx *ctx, const struct ofpact_nest *oc)
     /* Popping MPLS from the clone should have no effect on the original
      * packet. */
     ctx->was_mpls = old_was_mpls;
+
+    /* Restore the 'base_flow' for the next action.  */
+    ctx->base_flow = old_base;
+
+xlate_done:
+    ofpbuf_uninit(&ctx->action_set);
+    ctx->action_set = old_action_set;
+    ofpbuf_uninit(&ctx->stack);
+    ctx->stack = old_stack;
+    ctx->xin->flow = old_flow;
 }
 
 static void
@@ -6261,7 +6346,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_CLONE:
-            xlate_clone(ctx, ofpact_get_CLONE(a));
+            compose_clone(ctx, ofpact_get_CLONE(a));
             break;
 
         case OFPACT_ENCAP:
