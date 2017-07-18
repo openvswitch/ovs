@@ -6981,7 +6981,7 @@ test_ip_packet()
 
 test_ip_packet gw1 gw2
 
-ovn-nbctl --wait=hv \
+ovn-nbctl --timeout=3 --wait=hv \
     --id=@gc0 create Gateway_Chassis name=alice_gw1 \
                                      chassis_name=gw1 \
                                      priority=10 -- \
@@ -7333,7 +7333,7 @@ OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [hv2-vif1.expected])
 AT_CHECK([ovn-sbctl --bare --columns _uuid find Port_Binding logical_port=cr-alice | wc --lines], [0], [1
 ])
 
-ovn-nbctl --wait=sb remove Logical_Router_Port alice options redirect-chassis
+ovn-nbctl --timeout=3 --wait=sb remove Logical_Router_Port alice options redirect-chassis
 
 AT_CHECK([ovn-sbctl find Port_Binding logical_port=cr-alice | wc --lines], [0], [0
 ])
@@ -7761,7 +7761,7 @@ ovn-nbctl lsp-set-options ln-outside network_name=phys
 
 # Allow some time for ovn-northd and ovn-controller to catch up.
 # XXX This should be more systematic.
-ovn-nbctl --wait=hv sync
+ovn-nbctl --wait=hv --timeout=3 sync
 
 echo "---------NB dump-----"
 ovn-nbctl show
@@ -7869,7 +7869,7 @@ ovn-nbctl --id=@gc0 create Gateway_Chassis \
 
 
 # XXX: Let the change propagate down to the ovn-controllers
-ovn-nbctl --wait=hv sync
+ovn-nbctl --wait=hv --timeout=3 sync
 
 # we make sure that the hypervisors noticed, and inverted the slave ports
 AT_CHECK([as hv1 ovs-ofctl dump-flows br-int table=32 | grep active_backup | grep slaves:$hv1_gw2_ofport,$hv1_gw1_ofport | wc -l], [0], [1
@@ -8144,7 +8144,7 @@ ovn-nbctl lsp-set-type ln-outside localnet
 ovn-nbctl lsp-set-options ln-outside network_name=phys
 
 # Allow some time for ovn-northd and ovn-controller to catch up.
-ovn-nbctl --wait=hv sync
+ovn-nbctl --wait=hv --timeout=3 sync
 
 # currently when ovn-controller is restarted, the old entry is deleted
 # and a new one is created, which leaves the Gateway_Chassis with
