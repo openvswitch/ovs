@@ -3296,6 +3296,7 @@ apply_nested_clone_actions(struct xlate_ctx *ctx, const struct xport *in_dev,
     flow->in_port.ofp_port = out_dev->ofp_port;
     flow->metadata = htonll(0);
     memset(&flow->tunnel, 0, sizeof flow->tunnel);
+    memset(&ctx->wc->masks.tunnel, 0, sizeof ctx->wc->masks.tunnel);
     flow->tunnel.metadata.tab =
                            ofproto_get_tun_tab(&out_dev->xbridge->ofproto->up);
     ctx->wc->masks.tunnel.metadata.tab = flow->tunnel.metadata.tab;
