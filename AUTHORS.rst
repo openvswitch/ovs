@@ -312,6 +312,7 @@ Tsvi Slonim                     tsvi@toroki.com
 Tuan Nguyen                     tuan.nguyen@veriksystems.com
 Tyler Coumbes                   coumbes@gmail.com
 Tony van der Peet               tony.vanderpeet@alliedtelesis.co.nz
+Tonghao Zhang                   xiangxia.m.yue@gmail.com
 Valient Gough                   vgough@pobox.com
 Venkata Anil Kommaddi           vkommadi@redhat.com
 Vivien Bernet-Rollande          vbr@soprive.net
@@ -338,7 +339,6 @@ Zang MingJie                    zealot0630@gmail.com
 Zhenyu Gao                      sysugaozhenyu@gmail.com
 ZhiPeng Lu                      lu.zhipeng@zte.com.cn
 Zhou Yangchao                   1028519445@qq.com
-nickcooper-zhangtonghao         nickcooper-zhangtonghao@opencloud.tech
 wenxu                           wenxu@ucloud.cn
 wisd0me                         ak47izatool@gmail.com
 xushengping                     shengping.xu@huawei.com
