@@ -4347,9 +4347,9 @@ put_ct_helper(struct ofpbuf *odp_actions, struct ofpact_conntrack *ofc)
 static void
 compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc)
 {
-    ovs_u128 old_ct_label = ctx->base_flow.ct_label;
+    ovs_u128 old_ct_label = ctx->xin->flow.ct_label;
     ovs_u128 old_ct_label_mask = ctx->wc->masks.ct_label;
-    uint32_t old_ct_mark = ctx->base_flow.ct_mark;
+    uint32_t old_ct_mark = ctx->xin->flow.ct_mark;
     uint32_t old_ct_mark_mask = ctx->wc->masks.ct_mark;
     size_t ct_offset;
     uint16_t zone;
@@ -4381,9 +4381,9 @@ compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc)
 
     /* Restore the original ct fields in the key. These should only be exposed
      * after recirculation to another table. */
-    ctx->base_flow.ct_mark = old_ct_mark;
+    ctx->xin->flow.ct_mark = old_ct_mark;
     ctx->wc->masks.ct_mark = old_ct_mark_mask;
-    ctx->base_flow.ct_label = old_ct_label;
+    ctx->xin->flow.ct_label = old_ct_label;
     ctx->wc->masks.ct_label = old_ct_label_mask;
 
     if (ofc->recirc_table == NX_CT_RECIRC_NONE) {
@@ -4394,6 +4394,7 @@ compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc)
         /* Use ct_* fields from datapath during recirculation upcall. */
         ctx->conntracked = true;
         compose_recirculate_and_fork(ctx, ofc->recirc_table);
+        ctx->conntracked = false;
     }
 }
 
@@ -5192,6 +5193,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         ctx.table_id = state->table_id;
         xlate_report(&ctx, "- Resuming from table %"PRIu8, ctx.table_id);
 
+        ctx.conntracked = state->conntracked;
         if (!state->conntracked) {
             clear_conntrack(flow);
         }
