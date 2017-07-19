@@ -163,12 +163,14 @@ netdev_tnl_push_ip_header(struct dp_packet *packet,
         ip6 = netdev_tnl_ipv6_hdr(eth);
         *ip_tot_size -= IPV6_HEADER_LEN;
         ip6->ip6_plen = htons(*ip_tot_size);
+        packet->l4_ofs = dp_packet_size(packet) - *ip_tot_size;
         return ip6 + 1;
     } else {
         ip = netdev_tnl_ip_hdr(eth);
         ip->ip_tot_len = htons(*ip_tot_size);
         ip->ip_csum = recalc_csum16(ip->ip_csum, 0, ip->ip_tot_len);
         *ip_tot_size -= IP_HEADER_LEN;
+        packet->l4_ofs = dp_packet_size(packet) - *ip_tot_size;
         return ip + 1;
     }
 }
