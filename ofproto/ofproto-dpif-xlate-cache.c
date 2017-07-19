@@ -89,7 +89,7 @@ xlate_cache_netdev(struct xc_entry *entry, const struct dpif_flow_stats *stats)
 /* Push stats and perform side effects of flow translation. */
 void
 xlate_push_stats_entry(struct xc_entry *entry,
-                       const struct dpif_flow_stats *stats)
+                       struct dpif_flow_stats *stats)
 {
     struct eth_addr dmac;
 
@@ -160,6 +160,14 @@ xlate_push_stats_entry(struct xc_entry *entry,
             entry->controller.am = NULL; /* One time only. */
         }
         break;
+    case XC_TUNNEL_HEADER:
+        if (entry->tunnel_hdr.operation == ADD) {
+            stats->n_bytes += stats->n_packets * entry->tunnel_hdr.hdr_size;
+        } else {
+            stats->n_bytes -= stats->n_packets * entry->tunnel_hdr.hdr_size;
+        }
+
+        break;
     default:
         OVS_NOT_REACHED();
     }
@@ -167,7 +175,7 @@ xlate_push_stats_entry(struct xc_entry *entry,
 
 void
 xlate_push_stats(struct xlate_cache *xcache,
-                 const struct dpif_flow_stats *stats)
+                 struct dpif_flow_stats *stats)
 {
     if (!stats->n_packets) {
         return;
@@ -245,6 +253,8 @@ xlate_cache_clear_entry(struct xc_entry *entry)
             entry->controller.am = NULL;
         }
         break;
+    case XC_TUNNEL_HEADER:
+        break;
     default:
         OVS_NOT_REACHED();
     }
@@ -278,4 +288,23 @@ xlate_cache_delete(struct xlate_cache *xcache)
 {
     xlate_cache_uninit(xcache);
     free(xcache);
+}
+
+/* Append all the entries in src into dst and remove them from src.
+ * The caller must own both xc-caches to use this function.
+ * The 'src' entries are not freed in this function as its owned by caller.
+ */
+void
+xlate_cache_steal_entries(struct xlate_cache *dst, struct xlate_cache *src)
+{
+    if (!dst || !src) {
+        return;
+    }
+    struct ofpbuf *src_entries = &src->entries;
+    struct ofpbuf *dst_entries = &dst->entries;
+    void *p;
+
+    p = ofpbuf_put_uninit(dst_entries, src_entries->size);
+    memcpy(p, src_entries->data, src_entries->size);
+    ofpbuf_clear(src_entries);
 }

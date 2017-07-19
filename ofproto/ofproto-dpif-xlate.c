@@ -3147,6 +3147,206 @@ tnl_send_arp_request(struct xlate_ctx *ctx, const struct xport *out_dev,
     dp_packet_uninit(&packet);
 }
 
+static void
+propagate_tunnel_data_to_flow__(struct flow *dst_flow,
+                                const struct flow *src_flow,
+                                struct eth_addr dmac, struct eth_addr smac,
+                                struct in6_addr s_ip6, ovs_be32 s_ip,
+                                bool is_tnl_ipv6, uint8_t nw_proto)
+{
+    dst_flow->dl_dst = dmac;
+    dst_flow->dl_src = smac;
+
+    dst_flow->packet_type = htonl(PT_ETH);
+    dst_flow->nw_dst = src_flow->tunnel.ip_dst;
+    dst_flow->nw_src = src_flow->tunnel.ip_src;
+    dst_flow->ipv6_dst = src_flow->tunnel.ipv6_dst;
+    dst_flow->ipv6_src = src_flow->tunnel.ipv6_src;
+
+    dst_flow->nw_tos = src_flow->tunnel.ip_tos;
+    dst_flow->nw_ttl = src_flow->tunnel.ip_ttl;
+    dst_flow->tp_dst = src_flow->tunnel.tp_dst;
+    dst_flow->tp_src = src_flow->tunnel.tp_src;
+
+    if (is_tnl_ipv6) {
+        dst_flow->dl_type = htons(ETH_TYPE_IPV6);
+        if (ipv6_mask_is_any(&dst_flow->ipv6_src)
+            && !ipv6_mask_is_any(&s_ip6)) {
+            dst_flow->ipv6_src = s_ip6;
+        }
+    } else {
+        dst_flow->dl_type = htons(ETH_TYPE_IP);
+        if (dst_flow->nw_src == 0 && s_ip) {
+            dst_flow->nw_src = s_ip;
+        }
+    }
+    dst_flow->nw_proto = nw_proto;
+}
+
+/*
+ * Populate the 'flow' and 'base_flow' L3 fields to do the post tunnel push
+ * translations.
+ */
+static void
+propagate_tunnel_data_to_flow(struct xlate_ctx *ctx, struct eth_addr dmac,
+                              struct eth_addr smac,   struct in6_addr s_ip6,
+                              ovs_be32 s_ip, bool is_tnl_ipv6,
+                              enum ovs_vport_type tnl_type)
+{
+    struct flow *base_flow, *flow;
+    flow = &ctx->xin->flow;
+    base_flow = &ctx->base_flow;
+    uint8_t nw_proto = 0;
+
+    switch (tnl_type) {
+    case OVS_VPORT_TYPE_GRE:
+        nw_proto = IPPROTO_GRE;
+        break;
+    case OVS_VPORT_TYPE_VXLAN:
+    case OVS_VPORT_TYPE_GENEVE:
+        nw_proto = IPPROTO_UDP;
+        break;
+    case OVS_VPORT_TYPE_LISP:
+    case OVS_VPORT_TYPE_STT:
+    case OVS_VPORT_TYPE_UNSPEC:
+    case OVS_VPORT_TYPE_NETDEV:
+    case OVS_VPORT_TYPE_INTERNAL:
+    case __OVS_VPORT_TYPE_MAX:
+    default:
+        OVS_NOT_REACHED();
+        break;
+    }
+    /*
+     * Update base_flow first followed by flow as the dst_flow gets modified
+     * in the function.
+     */
+    propagate_tunnel_data_to_flow__(base_flow, flow, dmac, smac, s_ip6, s_ip,
+                                    is_tnl_ipv6, nw_proto);
+    propagate_tunnel_data_to_flow__(flow, flow, dmac, smac, s_ip6, s_ip,
+                                    is_tnl_ipv6, nw_proto);
+}
+
+/* Validate if the transalated combined actions are OK to proceed.
+ * If actions consist of TRUNC action, it is not allowed to do the
+ * tunnel_push combine as it cannot update stats correctly.
+ */
+static bool
+is_tunnel_actions_clone_ready(struct xlate_ctx *ctx)
+{
+    struct nlattr *tnl_actions;
+    const struct nlattr *a;
+    unsigned int left;
+    size_t actions_len;
+    struct ofpbuf *actions = ctx->odp_actions;
+
+    if (!actions) {
+        /* No actions, no harm in doing combine. */
+        return true;
+    }
+
+    /* Cannot perform tunnel push on slow path action CONTROLLER_OUTPUT. */
+    if (ctx->xout->slow & SLOW_CONTROLLER) {
+        return false;
+    }
+    actions_len = actions->size;
+
+    tnl_actions =(struct nlattr *)(actions->data);
+    NL_ATTR_FOR_EACH_UNSAFE (a, left, tnl_actions, actions_len) {
+        int type = nl_attr_type(a);
+        if (type == OVS_ACTION_ATTR_TRUNC) {
+            VLOG_DBG("Cannot do tunnel action-combine on trunc action");
+            return false;
+            break;
+        }
+    }
+    return true;
+}
+
+static bool
+validate_and_combine_post_tnl_actions(struct xlate_ctx *ctx,
+                                      const struct xport *xport,
+                                      struct xport *out_dev,
+                                      struct ovs_action_push_tnl tnl_push_data)
+{
+    const struct dpif_flow_stats *backup_resubmit_stats;
+    struct xlate_cache *backup_xcache;
+    bool nested_act_flag = false;
+    struct flow_wildcards tmp_flow_wc;
+    struct flow_wildcards *backup_flow_wc_ptr;
+    bool backup_side_effects;
+    const struct dp_packet *backup_pkt;
+
+    memset(&tmp_flow_wc, 0 , sizeof tmp_flow_wc);
+    backup_flow_wc_ptr = ctx->wc;
+    ctx->wc = &tmp_flow_wc;
+    ctx->xin->wc = NULL;
+    backup_resubmit_stats = ctx->xin->resubmit_stats;
+    backup_xcache = ctx->xin->xcache;
+    backup_side_effects = ctx->xin->allow_side_effects;
+    backup_pkt = ctx->xin->packet;
+
+    size_t push_action_size = 0;
+    size_t clone_ofs = nl_msg_start_nested(ctx->odp_actions,
+                                           OVS_ACTION_ATTR_CLONE);
+    odp_put_tnl_push_action(ctx->odp_actions, &tnl_push_data);
+    push_action_size = ctx->odp_actions->size;
+
+    ctx->xin->resubmit_stats =  NULL;
+    ctx->xin->xcache = xlate_cache_new(); /* Use new temporary cache. */
+    ctx->xin->allow_side_effects = false;
+    ctx->xin->packet = NULL;
+
+    /* Push the cache entry for the tunnel first. */
+    struct xc_entry *entry;
+    entry = xlate_cache_add_entry(ctx->xin->xcache, XC_TUNNEL_HEADER);
+    entry->tunnel_hdr.hdr_size = tnl_push_data.header_len;
+    entry->tunnel_hdr.operation = ADD;
+
+    apply_nested_clone_actions(ctx, xport, out_dev);
+    nested_act_flag = is_tunnel_actions_clone_ready(ctx);
+
+    if (nested_act_flag) {
+         /* Similar to the stats update in revalidation, the x_cache entries
+          * are populated by the previous translation are used to update the
+          * stats correctly.
+          */
+        if (backup_resubmit_stats) {
+            struct dpif_flow_stats tmp_resubmit_stats;
+            memcpy(&tmp_resubmit_stats, backup_resubmit_stats,
+                   sizeof tmp_resubmit_stats);
+            xlate_push_stats(ctx->xin->xcache, &tmp_resubmit_stats);
+        }
+        xlate_cache_steal_entries(backup_xcache, ctx->xin->xcache);
+    } else {
+        /* Combine is not valid. */
+        nl_msg_cancel_nested(ctx->odp_actions, clone_ofs);
+        goto out;
+    }
+    if (ctx->odp_actions->size > push_action_size) {
+        /* Update the CLONE action only when combined. */
+        nl_msg_end_nested(ctx->odp_actions, clone_ofs);
+    } else {
+        nl_msg_cancel_nested(ctx->odp_actions, clone_ofs);
+        /* XXX : There is no real use-case for a tunnel push without
+         * any post actions. However keeping it now
+         * as is to make the 'make check' happy. Should remove when all the
+         * make check tunnel test case does something meaningful on a
+         * tunnel encap packets.
+         */
+        odp_put_tnl_push_action(ctx->odp_actions, &tnl_push_data);
+    }
+
+out:
+    /* Restore context status. */
+    ctx->xin->resubmit_stats = backup_resubmit_stats;
+    xlate_cache_delete(ctx->xin->xcache);
+    ctx->xin->xcache = backup_xcache;
+    ctx->xin->allow_side_effects = backup_side_effects;
+    ctx->xin->packet = backup_pkt;
+    ctx->wc = backup_flow_wc_ptr;
+    return nested_act_flag;
+}
+
 static int
 build_tunnel_send(struct xlate_ctx *ctx, const struct xport *xport,
                   const struct flow *flow, odp_port_t tunnel_odp_port)
@@ -3162,6 +3362,14 @@ build_tunnel_send(struct xlate_ctx *ctx, const struct xport *xport,
     int err;
     char buf_sip6[INET6_ADDRSTRLEN];
     char buf_dip6[INET6_ADDRSTRLEN];
+
+    /* Structures to backup Ethernet and IP of base_flow. */
+    struct flow old_base_flow;
+    struct flow old_flow;
+
+    /* Backup flow & base_flow data. */
+    memcpy(&old_base_flow, &ctx->base_flow, sizeof old_base_flow);
+    memcpy(&old_flow, &ctx->xin->flow, sizeof old_flow);
 
     err = tnl_route_lookup_flow(flow, &d_ip6, &s_ip6, &out_dev);
     if (err) {
@@ -3222,12 +3430,31 @@ build_tunnel_send(struct xlate_ctx *ctx, const struct xport *xport,
     tnl_push_data.tnl_port = tunnel_odp_port;
     tnl_push_data.out_port = out_dev->odp_port;
 
-    /* After tunnel header has been added, packet_type of flow and base_flow
-     * need to be set to PT_ETH. */
-    ctx->xin->flow.packet_type = htonl(PT_ETH);
-    ctx->base_flow.packet_type = htonl(PT_ETH);
+    /* After tunnel header has been added, MAC and IP data of flow and
+     * base_flow need to be set properly, since there is not recirculation
+     * any more when sending packet to tunnel. */
 
-    odp_put_tnl_push_action(ctx->odp_actions, &tnl_push_data);
+    propagate_tunnel_data_to_flow(ctx, dmac, smac, s_ip6, s_ip,
+                                  tnl_params.is_ipv6, tnl_push_data.tnl_type);
+
+
+    /* Try to see if its possible to apply nested clone actions on tunnel.
+     * Revert the combined actions on tunnel if its not valid.
+     */
+    if (!validate_and_combine_post_tnl_actions(ctx, xport, out_dev,
+                                      tnl_push_data)) {
+        /* Datapath is not doing the recirculation now, so lets make it
+         * happen explicitly.
+         */
+        size_t clone_ofs = nl_msg_start_nested(ctx->odp_actions,
+                                        OVS_ACTION_ATTR_CLONE);
+        odp_put_tnl_push_action(ctx->odp_actions, &tnl_push_data);
+        nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_RECIRC, 0);
+        nl_msg_end_nested(ctx->odp_actions, clone_ofs);
+    }
+    /* Restore the flows after the translation. */
+    memcpy(&ctx->xin->flow, &old_flow, sizeof ctx->xin->flow);
+    memcpy(&ctx->base_flow, &old_base_flow, sizeof ctx->base_flow);
     return 0;
 }
 

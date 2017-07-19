@@ -52,6 +52,7 @@ enum xc_type {
     XC_GROUP,
     XC_TNL_NEIGH,
     XC_CONTROLLER,
+    XC_TUNNEL_HEADER,
 };
 
 /* xlate_cache entries hold enough information to perform the side effects of
@@ -119,6 +120,13 @@ struct xc_entry {
             struct ofproto_dpif *ofproto;
             struct ofproto_async_msg *am;
         } controller;
+        struct {
+            enum {
+                ADD,
+                REMOVE,
+            } operation;
+            uint16_t hdr_size;
+        } tunnel_hdr;
     };
 };
 
@@ -134,11 +142,12 @@ struct xlate_cache {
 void xlate_cache_init(struct xlate_cache *);
 struct xlate_cache *xlate_cache_new(void);
 struct xc_entry *xlate_cache_add_entry(struct xlate_cache *, enum xc_type);
-void xlate_push_stats_entry(struct xc_entry *, const struct dpif_flow_stats *);
-void xlate_push_stats(struct xlate_cache *, const struct dpif_flow_stats *);
+void xlate_push_stats_entry(struct xc_entry *, struct dpif_flow_stats *);
+void xlate_push_stats(struct xlate_cache *, struct dpif_flow_stats *);
 void xlate_cache_clear_entry(struct xc_entry *);
 void xlate_cache_clear(struct xlate_cache *);
 void xlate_cache_uninit(struct xlate_cache *);
 void xlate_cache_delete(struct xlate_cache *);
+void xlate_cache_steal_entries(struct xlate_cache *, struct xlate_cache *);
 
 #endif /* ofproto-dpif-xlate-cache.h */

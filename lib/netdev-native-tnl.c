@@ -139,7 +139,7 @@ netdev_tnl_ip_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
  *
  * This function sets the IP header's ip_tot_len field (which should be zeroed
  * as part of 'header') and puts its value into '*ip_tot_size' as well.  Also
- * updates IP header checksum.
+ * updates IP header checksum, as well as the l3 and l4 offsets in 'packet'.
  *
  * Return pointer to the L4 header added to 'packet'. */
 void *
