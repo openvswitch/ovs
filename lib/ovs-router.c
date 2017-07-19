@@ -44,8 +44,6 @@
 #include "unixctl.h"
 #include "util.h"
 #include "unaligned.h"
-#include "unixctl.h"
-#include "util.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ovs_router);
