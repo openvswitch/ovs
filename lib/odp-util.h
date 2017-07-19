@@ -131,6 +131,7 @@ void odp_portno_name_format(const struct hmap *portno_names,
  *  OVS_KEY_ATTR_CT_MARK                 4    --     4      8
  *  OVS_KEY_ATTR_CT_LABEL               16    --     4     20
  *  OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6     40    --     4     44
+ *  OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV4      -    --     -      - (exclusive of_CT_ORIG_TUPLE_IPV6)
  *  OVS_KEY_ATTR_ETHERNET               12    --     4     16
  *  OVS_KEY_ATTR_ETHERTYPE               2     2     4      8  (outer VLAN ethertype)
  *  OVS_KEY_ATTR_VLAN                    2     2     4      8
