@@ -284,6 +284,11 @@ struct dpdk_qos_ops {
      */
     int (*qos_queue_get)(struct smap *details, uint32_t queue_id,
                          const struct qos_conf *conf);
+
+    /* Retrieves statistics of QoS Queue configuration into 'details'.
+     */
+    int (*qos_queue_get_stats)(const struct qos_conf *conf, uint32_t queue_id,
+                               struct netdev_queue_stats *stats);
 };
 
 /* dpdk_qos_ops for each type of user space QoS implementation */
@@ -3078,6 +3083,28 @@ netdev_dpdk_delete_queue(struct netdev *netdev, uint32_t queue_id)
     return 0;
 }
 
+static int
+netdev_dpdk_get_queue_stats(const struct netdev *netdev, uint32_t queue_id,
+                            struct netdev_queue_stats *stats)
+{
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    struct qos_conf *qos_conf;
+    int error = 0;
+
+    ovs_mutex_lock(&dev->mutex);
+
+    qos_conf = ovsrcu_get_protected(struct qos_conf *, &dev->qos_conf);
+    if (qos_conf && qos_conf->ops && qos_conf->ops->qos_queue_get_stats) {
+        qos_conf->ops->qos_queue_get_stats(qos_conf, queue_id, stats);
+    } else {
+        error = EOPNOTSUPP;
+    }
+
+    ovs_mutex_unlock(&dev->mutex);
+
+    return error;
+}
+
 /* egress-policer details */
 
 struct egress_policer {
@@ -3087,6 +3114,14 @@ struct egress_policer {
     struct hmap queue;
 };
 
+struct egress_queue_stats {
+    uint64_t tx_bytes;
+    uint64_t tx_packets;
+    uint64_t tx_errors;
+
+    long long int created;
+};
+
 struct egress_queue_policer {
     struct hmap_node hmap_node;
     uint32_t queue_id;
@@ -3094,6 +3129,83 @@ struct egress_queue_policer {
     struct rte_meter_srtcm egress_meter;
     struct egress_queue_stats stats;
 };
+
+struct netdev_dpdk_queue_state {
+    uint32_t *queues;
+    size_t cur_queue;
+    size_t n_queues;
+};
+
+static int
+netdev_dpdk_queue_dump_start(const struct netdev *netdev, void **statep)
+{
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    struct qos_conf *qos_conf;
+    int error = 0;
+
+    ovs_mutex_lock(&dev->mutex);
+
+    qos_conf = ovsrcu_get_protected(struct qos_conf *, &dev->qos_conf);
+    if (qos_conf) {
+        struct netdev_dpdk_queue_state *state;
+        struct egress_policer *policer = CONTAINER_OF(qos_conf, struct egress_policer,
+                                                      qos_conf);
+
+        *statep = state = xmalloc(sizeof *state);
+        state->n_queues = hmap_count(&policer->queue);
+        state->cur_queue = 0;
+        state->queues = xmalloc(state->n_queues * sizeof *state->queues);
+
+        uint32_t i = 0;
+        struct egress_queue_policer *queue_policer;
+        HMAP_FOR_EACH (queue_policer, hmap_node, &policer->queue) {
+            state->queues[i++] = queue_policer->queue_id;
+        }
+    } else {
+        error = EOPNOTSUPP;
+    }
+
+    ovs_mutex_unlock(&dev->mutex);
+
+    return error;
+}
+
+static int
+netdev_dpdk_queue_dump_next(const struct netdev *netdev, void *state_,
+                            uint32_t *queue_idp, struct smap *details)
+{
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    struct netdev_dpdk_queue_state *state = state_;
+    struct qos_conf *qos_conf;
+    int error = EOF;
+
+    ovs_mutex_lock(&dev->mutex);
+
+    while (state->cur_queue < state->n_queues) {
+        uint32_t queue_id = state->queues[state->cur_queue++];
+
+        qos_conf = ovsrcu_get_protected(struct qos_conf *, &dev->qos_conf);
+        if (qos_conf && qos_conf->ops && qos_conf->ops->qos_queue_get) {
+            *queue_idp = queue_id;
+            error = qos_conf->ops->qos_queue_get(details, queue_id, qos_conf);
+            break;
+        }
+    }
+
+    ovs_mutex_unlock(&dev->mutex);
+
+    return error;
+}
+
+static int
+netdev_dpdk_queue_dump_done(const struct netdev *netdev OVS_UNUSED, void *state_)
+{
+    struct netdev_dpdk_queue_state *state = state_;
+
+    free(state->queues);
+    free(state);
+    return 0;
+}
 
 static struct egress_queue_policer *
 egress_policer_qos_find_queue(struct egress_policer *policer, uint32_t queue_id);
@@ -3286,6 +3398,30 @@ egress_policer_qos_queue_get(struct smap *details, uint32_t queue_id, const stru
     return 0;
 }
 
+static int
+egress_policer_qos_queue_get_stats(const struct qos_conf *conf, uint32_t queue_id,
+                                   struct netdev_queue_stats *stats)
+{
+    struct egress_policer *policer =
+        CONTAINER_OF(conf, struct egress_policer, qos_conf);
+
+    struct egress_queue_policer *queue_policer;
+    queue_policer = egress_policer_qos_find_queue(policer, queue_id);
+    if (!queue_policer) {
+        stats->tx_bytes = UINT64_MAX;
+        stats->tx_packets = UINT64_MAX;
+        stats->tx_errors = UINT64_MAX;
+        stats->created = LLONG_MIN;
+        return -1;
+    } else {
+        stats->tx_bytes = queue_policer->stats.tx_bytes;
+        stats->tx_packets = queue_policer->stats.tx_packets;
+        stats->tx_errors = queue_policer->stats.tx_errors;
+        stats->created = queue_policer->stats.created;
+        return 0;
+    }
+}
+
 static const struct dpdk_qos_ops egress_policer_ops = {
     "egress-policer",    /* qos_name */
     egress_policer_qos_construct,
@@ -3295,7 +3431,8 @@ static const struct dpdk_qos_ops egress_policer_ops = {
     egress_policer_run,
     egress_policer_qos_queue_construct,
     egress_policer_qos_queue_destruct,
-    egress_policer_qos_queue_get
+    egress_policer_qos_queue_get,
+    egress_policer_qos_queue_get_stats
 };
 
 static int
@@ -3480,10 +3617,10 @@ unlock:
     netdev_dpdk_get_queue,                                    \
     netdev_dpdk_set_queue,                                    \
     netdev_dpdk_delete_queue,                                 \
-    NULL,                       /* get_queue_stats */         \
-    NULL,                       /* queue_dump_start */        \
-    NULL,                       /* queue_dump_next */         \
-    NULL,                       /* queue_dump_done */         \
+    netdev_dpdk_get_queue_stats,                              \
+    netdev_dpdk_queue_dump_start,                             \
+    netdev_dpdk_queue_dump_next,                              \
+    netdev_dpdk_queue_dump_done,                              \
     NULL,                       /* dump_queue_stats */        \
                                                               \
     NULL,                       /* set_in4 */                 \
