@@ -787,9 +787,9 @@ const char *dpif_upcall_type_to_string(enum dpif_upcall_type);
 struct dpif_upcall {
     /* All types. */
     struct dp_packet packet;    /* Packet data,'dp_packet' should be the first
-				   member to avoid a hole. This is because
-				   'rte_mbuf' in dp_packet is aligned atleast
-				   on a 64-byte boundary */
+                                   member to avoid a hole. This is because
+                                   'rte_mbuf' in dp_packet is aligned atleast
+                                   on a 64-byte boundary */
     enum dpif_upcall_type type;
     struct nlattr *key;         /* Flow key. */
     size_t key_len;             /* Length of 'key' in bytes. */
