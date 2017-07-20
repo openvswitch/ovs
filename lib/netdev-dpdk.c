@@ -3171,14 +3171,50 @@ egress_policer_qos_is_equal(const struct qos_conf *conf,
     return !memcmp(&params, &policer->app_srtcm_params, sizeof params);
 }
 
+static inline bool
+egress_policer_pkt_handle(struct egress_policer *policer, struct rte_mbuf *pkt, uint64_t time)
+{
+    struct egress_queue_policer *queue_policer;
+    uint32_t pkt_len = rte_pktmbuf_pkt_len(pkt) - sizeof(struct ether_hdr);
+
+    queue_policer = egress_policer_qos_find_queue(policer,
+                                                 ((struct dp_packet *)pkt)->md.skb_priority);
+    if (queue_policer) {
+        if (rte_meter_srtcm_color_blind_check(&queue_policer->egress_meter, time, pkt_len) !=
+                                              e_RTE_METER_GREEN) {
+            queue_policer->stats.tx_errors ++;
+            return false;
+        } else {
+            queue_policer->stats.tx_bytes += pkt_len;
+            queue_policer->stats.tx_packets ++;
+        }
+    }
+
+    return rte_meter_srtcm_color_blind_check(&policer->egress_meter, time, pkt_len) ==
+                                e_RTE_METER_GREEN;
+}
+
 static int
 egress_policer_run(struct qos_conf *conf, struct rte_mbuf **pkts, int pkt_cnt)
 {
-    int cnt = 0;
+    int i = 0, cnt = 0;
+    struct rte_mbuf *pkt = NULL;
+    uint64_t current_time = rte_rdtsc();
     struct egress_policer *policer =
         CONTAINER_OF(conf, struct egress_policer, qos_conf);
 
-    cnt = netdev_dpdk_policer_run(&policer->egress_meter, pkts, pkt_cnt);
+    for (i = 0; i < pkt_cnt; i++) {
+        pkt = pkts[i];
+        /* Handle current packet */
+        if (egress_policer_pkt_handle(policer, pkt, current_time)) {
+            if (cnt != i) {
+                pkts[cnt] = pkt;
+            }
+            cnt++;
+        } else {
+            rte_pktmbuf_free(pkt);
+        }
+    }
 
     return cnt;
 }
