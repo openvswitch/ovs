@@ -126,8 +126,16 @@ of size 64 bytes, the following command would limit the egress transmission
 rate of the port to ~1,000,000 packets per second::
 
     $ ovs-vsctl set port vhost-user0 qos=@newqos -- \
-        --id=@newqos create qos type=egress-policer other-config:cir=46000000 \
-        other-config:cbs=2048`
+        --id=@newqos create qos type=egress-policer \
+        other-config:cir=46000000 other-config:cbs=2048` \
+        queues:123=@q123 queues:234=@q234 -- \
+        --id=@q0 create queue other-config:cir=12800000 other-config:cbs=2048 -- \
+        --id=@q2 create queue other-config:cir=25600000 other-config:cbs=2048`
+
+To direct packets to queues, run::
+
+    $ ovs-ofctl add-flow br0 in_port=5,actions=set_queue:123,normal
+    $ ovs-ofctl add-flow br0 in_port=6,actions=set_queue:234,normal
 
 To examine the QoS configuration of the port, run::
 
