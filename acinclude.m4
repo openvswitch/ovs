@@ -653,6 +653,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_postpush_rcsum])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [lco_csum])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_nfct])
+  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_put_zero])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/types.h], [bool],
                   [OVS_DEFINE([HAVE_BOOL_TYPE])])
