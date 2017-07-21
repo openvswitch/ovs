@@ -1882,7 +1882,11 @@ static void stt_setup(struct net_device *dev)
 
 	dev->netdev_ops = &stt_netdev_ops;
 	dev->ethtool_ops = &stt_ethtool_ops;
+#ifndef HAVE_NEEDS_FREE_NETDEV
 	dev->destructor = free_netdev;
+#else
+	dev->needs_free_netdev = true;
+#endif
 
 	SET_NETDEV_DEVTYPE(dev, &stt_type);
 

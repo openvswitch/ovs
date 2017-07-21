@@ -580,7 +580,11 @@ static void lisp_setup(struct net_device *dev)
 
 	dev->netdev_ops = &lisp_netdev_ops;
 	dev->ethtool_ops = &lisp_ethtool_ops;
+#ifndef HAVE_NEEDS_FREE_NETDEV
 	dev->destructor = free_netdev;
+#else
+	dev->needs_free_netdev = true;
+#endif
 
 	SET_NETDEV_DEVTYPE(dev, &lisp_type);
 
