@@ -95,6 +95,7 @@ openvswitch_headers += \
 	linux/compat/include/net/netfilter/nf_conntrack.h \
 	linux/compat/include/net/netfilter/nf_conntrack_core.h \
 	linux/compat/include/net/netfilter/nf_conntrack_expect.h \
+	linux/compat/include/net/netfilter/nf_conntrack_helper.h \
 	linux/compat/include/net/netfilter/nf_conntrack_labels.h \
 	linux/compat/include/net/netfilter/nf_conntrack_seqadj.h \
 	linux/compat/include/net/netfilter/nf_conntrack_zones.h \

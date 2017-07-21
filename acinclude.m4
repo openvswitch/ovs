@@ -748,6 +748,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                         [OVS_DEFINE([HAVE_DEFRAG_ENABLE_TAKES_NET])])
   OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [family_list],
                         [OVS_DEFINE([HAVE_GENL_FAMILY_LIST])])
+  OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_helper.h],
+                  [nf_conntrack_helper_put])
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then
