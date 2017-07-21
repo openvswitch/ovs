@@ -1966,7 +1966,7 @@ netdev_get_addrs(const char dev[], struct in6_addr **paddr,
     }
 
     for (ifa = if_addr_list; ifa; ifa = ifa->ifa_next) {
-        if (ifa->ifa_addr != NULL) {
+        if (ifa->ifa_addr && ifa->ifa_name && ifa->ifa_netmask) {
             int family;
 
             family = ifa->ifa_addr->sa_family;
