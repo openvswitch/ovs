@@ -19,7 +19,7 @@ try:
     import ovs_sphinx_theme
     use_ovs_theme = True
 except ImportError:
-    print("Cannot find 'ovs_sphinx' package. Falling back to default theme.")
+    print("Cannot find 'ovs-sphinx-theme' package. Falling back to default theme.")
     use_ovs_theme = False
 
 # -- General configuration ------------------------------------------------
