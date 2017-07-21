@@ -66,8 +66,14 @@ static inline struct sk_buff *rpl_vlan_insert_tag_set_proto(struct sk_buff *skb,
  */
 static inline struct sk_buff *__vlan_hwaccel_push_inside(struct sk_buff *skb)
 {
+#if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(6, 8) && \
+	LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 34)
+	skb = vlan_insert_tag_set_proto(skb, skb->vlan_proto,
+					skb_vlan_tag_get(skb));
+#else
 	skb = vlan_insert_tag_set_proto(skb, skb->vlan_proto,
 					vlan_tx_tag_get(skb));
+#endif
 	if (likely(skb))
 		skb->vlan_tci = 0;
 	return skb;
@@ -84,8 +90,14 @@ static inline struct sk_buff *__vlan_hwaccel_push_inside(struct sk_buff *skb)
  */
 static inline struct sk_buff *vlan_hwaccel_push_inside(struct sk_buff *skb)
 {
+#if RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6, 8) && \
+	LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 34)
+	if (skb_vlan_tag_present(skb))
+		skb = __vlan_hwaccel_push_inside(skb);
+#else
 	if (vlan_tx_tag_present(skb))
 		skb = __vlan_hwaccel_push_inside(skb);
+#endif
 	return skb;
 }
 #endif
