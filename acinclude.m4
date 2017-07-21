@@ -538,6 +538,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [OVS_DEFINE([HAVE_PCPU_SW_NETSTATS])])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [netif_needs_gso.*net_device],
                   [OVS_DEFINE([HAVE_NETIF_NEEDS_GSO_NETDEV])])
+  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [skb_csum_hwoffload_help])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [udp_offload])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [udp_offload.*uoff],
                   [OVS_DEFINE([HAVE_UDP_OFFLOAD_ARG_UOFF])])
