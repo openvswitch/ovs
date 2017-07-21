@@ -300,6 +300,7 @@ error:
         SSL_free(ssl);
     }
     closesocket(fd);
+    free(name);
     return retval;
 }
 
