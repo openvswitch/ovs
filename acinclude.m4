@@ -749,6 +749,9 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                         [OVS_DEFINE([HAVE_DEFRAG_ENABLE_TAKES_NET])])
   OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [family_list],
                         [OVS_DEFINE([HAVE_GENL_FAMILY_LIST])])
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/netdevice.h], [net_device],
+                        [needs_free_netdev],
+                        [OVS_DEFINE([HAVE_NEEDS_FREE_NETDEV])])
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_helper.h],
                   [nf_conntrack_helper_put])
 
