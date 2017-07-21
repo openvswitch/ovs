@@ -257,7 +257,7 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over vxlan6 tunnel])
-OVS_CHECK_VXLAN()
+OVS_CHECK_VXLAN_UDP6ZEROCSUM()
 
 OVS_TRAFFIC_VSWITCHD_START()
 ADD_BR([br-underlay])
@@ -381,8 +381,7 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over geneve6 tunnel])
-OVS_CHECK_GENEVE()
-AT_SKIP_IF([! ip link add foo type geneve help 2>&1 | grep zerocsum >/dev/null])
+OVS_CHECK_GENEVE_UDP6ZEROCSUM()
 
 OVS_TRAFFIC_VSWITCHD_START()
 ADD_BR([br-underlay])
