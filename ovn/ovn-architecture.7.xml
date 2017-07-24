@@ -53,8 +53,7 @@
         packets between tunnels and a physical Ethernet port.  This allows
         non-virtualized machines to participate in logical networks.  A gateway
         may be a physical host, a virtual machine, or an ASIC-based hardware
-        switch that supports the <code>vtep</code>(5) schema.  (Support for the
-        latter will come later in OVN implementation.)
+        switch that supports the <code>vtep</code>(5) schema.
       </p>
 
       <p>
