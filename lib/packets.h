@@ -92,6 +92,7 @@ flow_tnl_equal(const struct flow_tnl *a, const struct flow_tnl *b)
 
 /* Datapath packet metadata */
 struct pkt_metadata {
+PADDED_MEMBERS_CACHELINE_MARKER(CACHE_LINE_SIZE, cacheline0,
     uint32_t recirc_id;         /* Recirculation id carried with the
                                    recirculating packets. 0 for packets
                                    received from the wire. */
@@ -104,15 +105,28 @@ struct pkt_metadata {
     uint16_t ct_zone;           /* Connection zone. */
     uint32_t ct_mark;           /* Connection mark. */
     ovs_u128 ct_label;          /* Connection label. */
+    union flow_in_port in_port; /* Input port. */
+);
+
+PADDED_MEMBERS_CACHELINE_MARKER(CACHE_LINE_SIZE, cacheline1,
     union {                     /* Populated only for non-zero 'ct_state'. */
         struct ovs_key_ct_tuple_ipv4 ipv4;
         struct ovs_key_ct_tuple_ipv6 ipv6;   /* Used only if                */
     } ct_orig_tuple;                         /* 'ct_orig_tuple_ipv6' is set */
-    union flow_in_port in_port; /* Input port. */
+);
+
+PADDED_MEMBERS_CACHELINE_MARKER(CACHE_LINE_SIZE, cacheline2,
     struct flow_tnl tunnel;     /* Encapsulating tunnel parameters. Note that
                                  * if 'ip_dst' == 0, the rest of the fields may
                                  * be uninitialized. */
+);
 };
+
+BUILD_ASSERT_DECL(offsetof(struct pkt_metadata, cacheline0) == 0);
+BUILD_ASSERT_DECL(offsetof(struct pkt_metadata, cacheline1) ==
+                  CACHE_LINE_SIZE);
+BUILD_ASSERT_DECL(offsetof(struct pkt_metadata, cacheline2) ==
+                  2 * CACHE_LINE_SIZE);
 
 static inline void
 pkt_metadata_init_tnl(struct pkt_metadata *md)
@@ -148,7 +162,12 @@ pkt_metadata_init(struct pkt_metadata *md, odp_port_t port)
 static inline void
 pkt_metadata_prefetch_init(struct pkt_metadata *md)
 {
-    ovs_prefetch_range(md, offsetof(struct pkt_metadata, tunnel.ip_src));
+    /* Prefetch cacheline0 as members till ct_state and odp_port will
+     * be initialized later in pkt_metadata_init(). */
+    OVS_PREFETCH(md->cacheline0);
+
+    /* Prefetch cachline2 as ip_dst & ipv6_dst fields will be initialized. */
+    OVS_PREFETCH(md->cacheline2);
 }
 
 bool dpid_from_string(const char *s, uint64_t *dpidp);
