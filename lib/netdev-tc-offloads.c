@@ -788,8 +788,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     NL_ATTR_FOR_EACH(nla, left, actions, actions_len) {
         if (nl_attr_type(nla) == OVS_ACTION_ATTR_OUTPUT) {
             odp_port_t port = nl_attr_get_odp_port(nla);
-            struct netdev *outdev = netdev_ports_get(port,
-                                                     info->port_hmap_obj);
+            struct netdev *outdev = netdev_ports_get(port, info->dpif_class);
 
             flower.ifindex_out = netdev_get_ifindex(outdev);
             flower.set.tp_dst = info->tp_dst_port;

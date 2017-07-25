@@ -186,9 +186,10 @@ void netdev_send_wait(struct netdev *, int qid);
 
 /* Flow offloading. */
 struct offload_info {
-    const void *port_hmap_obj; /* To query ports info from netdev port map */
+    const struct dpif_class *dpif_class;
     ovs_be16 tp_dst_port; /* Destination port for tunnel in SET action */
 };
+struct dpif_class;
 struct netdev_flow_dump;
 int netdev_flow_flush(struct netdev *);
 int netdev_flow_dump_create(struct netdev *, struct netdev_flow_dump **dump);
@@ -210,16 +211,18 @@ bool netdev_is_flow_api_enabled(void);
 void netdev_set_flow_api_enabled(const struct smap *ovs_other_config);
 
 struct dpif_port;
-int netdev_ports_insert(struct netdev *, const void *obj, struct dpif_port *);
-struct netdev *netdev_ports_get(odp_port_t port, const void *obj);
-int netdev_ports_remove(odp_port_t port, const void *obj);
+int netdev_ports_insert(struct netdev *, const struct dpif_class *,
+                        struct dpif_port *);
+struct netdev *netdev_ports_get(odp_port_t port, const struct dpif_class *);
+int netdev_ports_remove(odp_port_t port, const struct dpif_class *);
 odp_port_t netdev_ifindex_to_odp_port(int ifindex);
-struct netdev_flow_dump **netdev_ports_flow_dump_create(const void *obj,
-                                                        int *ports);
-void netdev_ports_flow_flush(const void *obj);
-int netdev_ports_flow_del(const void *obj, const ovs_u128 *ufid,
+struct netdev_flow_dump **netdev_ports_flow_dump_create(
+                                        const struct dpif_class *,
+                                        int *ports);
+void netdev_ports_flow_flush(const struct dpif_class *);
+int netdev_ports_flow_del(const struct dpif_class *, const ovs_u128 *ufid,
                           struct dpif_flow_stats *stats);
-int netdev_ports_flow_get(const void *obj, struct match *match,
+int netdev_ports_flow_get(const struct dpif_class *, struct match *match,
                           struct nlattr **actions,
                           const ovs_u128 *ufid,
                           struct dpif_flow_stats *stats,
