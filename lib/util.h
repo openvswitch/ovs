@@ -51,6 +51,12 @@ extern char *program_name;
 #define CACHE_LINE_SIZE 64
 BUILD_ASSERT_DECL(IS_POW2(CACHE_LINE_SIZE));
 
+/* Cacheline marking is typically done using zero-sized array.
+ * However MSVC doesn't like zero-sized array in struct/union.
+ * C4200: https://msdn.microsoft.com/en-us/library/79wf64bc.aspx
+ */
+typedef uint8_t OVS_CACHE_LINE_MARKER[1];
+
 static inline void
 ovs_prefetch_range(const void *start, size_t size)
 {

@@ -193,6 +193,54 @@ OVS_NO_RETURN void ovs_assert_failure(const char *, const char *, const char *);
     }
 #endif
 
+/* Similar to PADDED_MEMBERS with additional cacheline marker:
+ *
+ *    - OVS_CACHE_LINE_MARKER is a cacheline marker
+ *    - MEMBERS in a nested anonymous struct.
+ *    - An array as large as MEMBERS plus padding to a multiple of UNIT bytes.
+ *
+ * The effect is to add cacheline marker and pad MEMBERS to a multiple of
+ * UNIT bytes.
+ *
+ * Example:
+ *     struct padded_struct {
+ *         PADDED_MEMBERS_CACHELINE_MARKER(CACHE_LINE_SIZE, cacheline0,
+ *             uint8_t x;
+ *             uint8_t y;
+ *         );
+ *     };
+ *
+ * The PADDED_MEMBERS_CACHELINE_MARKER macro in above structure expands as:
+ *
+ *     struct padded_struct {
+ *            union {
+ *                    OVS_CACHE_LINE_MARKER cacheline0;
+ *                    struct {
+ *                            uint8_t x;
+ *                            uint8_t y;
+ *                    };
+ *                    uint8_t         pad0[64];
+ *            };
+ *            *--- cacheline 1 boundary (64 bytes) ---*
+ *     };
+ */
+#ifndef __cplusplus
+#define PADDED_MEMBERS_CACHELINE_MARKER(UNIT, CACHELINE, MEMBERS)   \
+    union {                                                         \
+        OVS_CACHE_LINE_MARKER CACHELINE;                            \
+        struct { MEMBERS };                                         \
+        uint8_t PAD_ID[ROUND_UP(sizeof(struct { MEMBERS }), UNIT)]; \
+    }
+#else
+#define PADDED_MEMBERS_CACHELINE_MARKER(UNIT, CACHELINE, MEMBERS)   \
+    union {                                                         \
+        OVS_CACHE_LINE_MARKER CACHELINE;                            \
+        struct { MEMBERS };                                         \
+        struct { MEMBERS } named_member__;                          \
+        uint8_t PAD_ID[ROUND_UP(sizeof named_member__, UNIT)];      \
+    }
+#endif
+
 static inline bool
 is_pow2(uintmax_t x)
 {
