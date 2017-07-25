@@ -177,8 +177,6 @@ static void bond_choose_active_slave(struct bond *)
     OVS_REQ_WRLOCK(rwlock);
 static unsigned int bond_hash_src(const struct eth_addr mac,
                                   uint16_t vlan, uint32_t basis);
-static unsigned int bond_hash_tcp(const struct flow *, uint16_t vlan,
-                                  uint32_t basis);
 static struct bond_entry *lookup_bond_entry(const struct bond *,
                                             const struct flow *,
                                             uint16_t vlan)
@@ -1743,24 +1741,12 @@ bond_hash_src(const struct eth_addr mac, uint16_t vlan, uint32_t basis)
 }
 
 static unsigned int
-bond_hash_tcp(const struct flow *flow, uint16_t vlan, uint32_t basis)
-{
-    struct flow hash_flow = *flow;
-    hash_flow.vlans[0].tci = htons(vlan);
-
-    /* The symmetric quality of this hash function is not required, but
-     * flow_hash_symmetric_l4 already exists, and is sufficient for our
-     * purposes, so we use it out of convenience. */
-    return flow_hash_symmetric_l4(&hash_flow, basis);
-}
-
-static unsigned int
 bond_hash(const struct bond *bond, const struct flow *flow, uint16_t vlan)
 {
     ovs_assert(bond->balance == BM_TCP || bond->balance == BM_SLB);
 
     return (bond->balance == BM_TCP
-            ? bond_hash_tcp(flow, vlan, bond->basis)
+            ? flow_hash_5tuple(flow, bond->basis)
             : bond_hash_src(flow->dl_src, vlan, bond->basis));
 }
 
