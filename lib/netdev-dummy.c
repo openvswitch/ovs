@@ -1478,8 +1478,10 @@ eth_from_flow(const char *s, size_t packet_size)
     }
 
     packet = dp_packet_new(0);
-    flow_compose(packet, &flow);
-    flow_compose_size(packet, &flow, packet_size);
+    if (!flow_compose(packet, &flow, packet_size)) {
+        dp_packet_delete(packet);
+        packet = NULL;
+    };
 
     ofpbuf_uninit(&odp_key);
     return packet;

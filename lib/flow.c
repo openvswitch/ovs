@@ -2735,17 +2735,17 @@ flow_compose_l4_csum(struct dp_packet *p, const struct flow *flow,
     }
 }
 
-/* Tries to increase the size of packet composed by 'flow_compose' up to
- * 'size' bytes.  Fixes all the required packet headers like ip/udp lengths
- * and l3/l4 checksums. */
-void
-flow_compose_size(struct dp_packet *p, const struct flow *flow, size_t size)
+/* Increase the size of packet composed by 'flow_compose_minimal'
+ * up to 'size' bytes.  Fixes all the required packet headers like
+ * ip/udp lengths and l3/l4 checksums.
+ *
+ * 'size' needs to be larger then the current packet size.  */
+static void
+packet_expand(struct dp_packet *p, const struct flow *flow, size_t size)
 {
     size_t extra_size;
 
-    if (size <= dp_packet_size(p)) {
-        return;
-    }
+    ovs_assert(size > dp_packet_size(p));
 
     extra_size = size - dp_packet_size(p);
     dp_packet_put_zeros(p, extra_size);
@@ -2754,7 +2754,6 @@ flow_compose_size(struct dp_packet *p, const struct flow *flow, size_t size)
         struct eth_header *eth = dp_packet_eth(p);
 
         eth->eth_type = htons(dp_packet_size(p));
-
     } else if (dl_type_is_ip_any(flow->dl_type)) {
         uint32_t pseudo_hdr_csum;
         size_t l4_len = (char *) dp_packet_tail(p) - (char *) dp_packet_l4(p);
@@ -2789,9 +2788,12 @@ flow_compose_size(struct dp_packet *p, const struct flow *flow, size_t size)
  * 'flow'.
  *
  * (This is useful only for testing, obviously, and the packet isn't really
- * valid.  Lots of fields are just zeroed.) */
-void
-flow_compose(struct dp_packet *p, const struct flow *flow)
+ * valid.  Lots of fields are just zeroed.)
+ *
+ * The created packet has minimal packet size, just big enough to hold
+ * the packet header fields.  */
+static void
+flow_compose_minimal(struct dp_packet *p, const struct flow *flow)
 {
     uint32_t pseudo_hdr_csum;
     size_t l4_len;
@@ -2895,6 +2897,33 @@ flow_compose(struct dp_packet *p, const struct flow *flow)
             push_mpls(p, flow->dl_type, flow->mpls_lse[--n]);
         }
     }
+}
+
+/* Puts into 'p' a Ethernet frame of size 'size' that flow_extract() would
+ * parse as having the given 'flow'.
+ *
+ * When 'size' is zero, 'p' is a minimal size packet that only big enough
+ * to contains all packet headers.
+ *
+ * When 'size' is larger than the minimal packet size, the packet will
+ * be expended to 'size' with the payload set to zero.
+ *
+ * Return 'true' if the packet is successfully created. 'false' otherwise.
+ * Note, when 'size' is set to zero, this function always returns true.  */
+bool
+flow_compose(struct dp_packet *p, const struct flow *flow, size_t size)
+{
+    flow_compose_minimal(p, flow);
+
+    if (size && size < dp_packet_size(p)) {
+        return false;
+    }
+
+    if (size > dp_packet_size(p)) {
+        packet_expand(p, flow, size);
+    }
+
+    return true;
 }
 
 /* Compressed flow. */
