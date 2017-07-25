@@ -1400,9 +1400,8 @@
       <dl>
         <dt><code>balance-tcp</code></dt>
         <dd>
-          Balances flows among slaves based on L2, L3, and L4 protocol
-          information such as destination MAC address, IP address, and TCP
-          port.
+          Balances flows among slaves based on L3 and L4 protocol information
+          such as IP addresses and TCP/UDP ports.
         </dd>
       </dl>
 
