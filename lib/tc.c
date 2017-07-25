@@ -167,6 +167,10 @@ static const struct nl_policy tca_flower_policy[] = {
     [TCA_FLOWER_KEY_UDP_DST] = { .type = NL_A_U16, .optional = true, },
     [TCA_FLOWER_KEY_UDP_SRC_MASK] = { .type = NL_A_U16, .optional = true, },
     [TCA_FLOWER_KEY_UDP_DST_MASK] = { .type = NL_A_U16, .optional = true, },
+    [TCA_FLOWER_KEY_SCTP_SRC] = { .type = NL_A_U16, .optional = true, },
+    [TCA_FLOWER_KEY_SCTP_DST] = { .type = NL_A_U16, .optional = true, },
+    [TCA_FLOWER_KEY_SCTP_SRC_MASK] = { .type = NL_A_U16, .optional = true, },
+    [TCA_FLOWER_KEY_SCTP_DST_MASK] = { .type = NL_A_U16, .optional = true, },
     [TCA_FLOWER_KEY_VLAN_ID] = { .type = NL_A_U16, .optional = true, },
     [TCA_FLOWER_KEY_VLAN_PRIO] = { .type = NL_A_U8, .optional = true, },
     [TCA_FLOWER_KEY_VLAN_ETH_TYPE] = { .type = NL_A_U16, .optional = true, },
@@ -326,6 +330,17 @@ nl_parse_flower_ip(struct nlattr **attrs, struct tc_flower *flower) {
             key->dst_port = nl_attr_get_be16(attrs[TCA_FLOWER_KEY_UDP_DST]);
             mask->dst_port =
                 nl_attr_get_be16(attrs[TCA_FLOWER_KEY_UDP_DST_MASK]);
+        }
+    } else if (ip_proto == IPPROTO_SCTP) {
+        if (attrs[TCA_FLOWER_KEY_SCTP_SRC_MASK]) {
+            key->src_port = nl_attr_get_be16(attrs[TCA_FLOWER_KEY_SCTP_SRC]);
+            mask->src_port =
+                nl_attr_get_be16(attrs[TCA_FLOWER_KEY_SCTP_SRC_MASK]);
+        }
+        if (attrs[TCA_FLOWER_KEY_SCTP_DST_MASK]) {
+            key->dst_port = nl_attr_get_be16(attrs[TCA_FLOWER_KEY_SCTP_DST]);
+            mask->dst_port =
+                nl_attr_get_be16(attrs[TCA_FLOWER_KEY_SCTP_DST_MASK]);
         }
     }
 }
@@ -1018,6 +1033,17 @@ nl_msg_put_flower_options(struct ofpbuf *request, struct tc_flower *flower)
             nl_msg_put_masked_value(request,
                                     TCA_FLOWER_KEY_TCP_DST,
                                     TCA_FLOWER_KEY_TCP_DST_MASK,
+                                    &flower->key.dst_port,
+                                    &flower->mask.dst_port, 2);
+        } else if (flower->key.ip_proto == IPPROTO_SCTP) {
+            nl_msg_put_masked_value(request,
+                                    TCA_FLOWER_KEY_SCTP_SRC,
+                                    TCA_FLOWER_KEY_SCTP_SRC_MASK,
+                                    &flower->key.src_port,
+                                    &flower->mask.src_port, 2);
+            nl_msg_put_masked_value(request,
+                                    TCA_FLOWER_KEY_SCTP_DST,
+                                    TCA_FLOWER_KEY_SCTP_DST_MASK,
                                     &flower->key.dst_port,
                                     &flower->mask.dst_port, 2);
         }

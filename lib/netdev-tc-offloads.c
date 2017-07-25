@@ -748,7 +748,9 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         flower.key.ip_proto = key->nw_proto;
         flower.mask.ip_proto = mask->nw_proto;
 
-        if (key->nw_proto == IPPROTO_TCP || key->nw_proto == IPPROTO_UDP) {
+        if (key->nw_proto == IPPROTO_TCP
+            || key->nw_proto == IPPROTO_UDP
+            || key->nw_proto == IPPROTO_SCTP) {
             flower.key.dst_port = key->tp_dst;
             flower.mask.dst_port = mask->tp_dst;
             flower.key.src_port = key->tp_src;
