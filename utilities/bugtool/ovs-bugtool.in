@@ -659,7 +659,7 @@ exclude those logs from the archive.
     if only_ovs_info:
         filters.add('ovs')
         ovs_info_caps = [CAP_NETWORK_STATUS, CAP_SYSTEM_LOGS,
-                         CAP_NETWORK_CONFIG]
+                         CAP_OPENVSWITCH_LOGS, CAP_NETWORK_CONFIG]
         ovs_info_list = ['process-tree']
         # We cannot use iteritems, since we modify 'data' as we pass through
         for (k, v) in data.items():
