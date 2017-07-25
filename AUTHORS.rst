@@ -208,6 +208,7 @@ Mark D. Gray                    mark.d.gray@intel.com
 Mark Hamilton                   mhamilton@nicira.com
 Mark Kavanagh                   mark.b.kavanagh@intel.com
 Mark Maglana                    mmaglana@gmail.com
+Mark Michelson                  mmichels@redhat.com
 Markos Chandras                 mchandras@suse.de
 Martin Casado                   casado@nicira.com
 Martino Fornasa                 mf@fornasa.it
