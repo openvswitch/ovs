@@ -2706,37 +2706,82 @@ flow_compose_l4_csum(struct dp_packet *p, const struct flow *flow,
         if (flow->nw_proto == IPPROTO_TCP) {
             struct tcp_header *tcp = dp_packet_l4(p);
 
-            /* Checksum has already been zeroed by put_zeros call in
-             * flow_compose_l4(). */
+            tcp->tcp_csum = 0;
             tcp->tcp_csum = csum_finish(csum_continue(pseudo_hdr_csum,
                                                       tcp, l4_len));
         } else if (flow->nw_proto == IPPROTO_UDP) {
             struct udp_header *udp = dp_packet_l4(p);
 
-            /* Checksum has already been zeroed by put_zeros call in
-             * flow_compose_l4(). */
+            udp->udp_csum = 0;
             udp->udp_csum = csum_finish(csum_continue(pseudo_hdr_csum,
                                                       udp, l4_len));
         } else if (flow->nw_proto == IPPROTO_ICMP) {
             struct icmp_header *icmp = dp_packet_l4(p);
 
-            /* Checksum has already been zeroed by put_zeros call in
-             * flow_compose_l4(). */
+            icmp->icmp_csum = 0;
             icmp->icmp_csum = csum(icmp, l4_len);
         } else if (flow->nw_proto == IPPROTO_IGMP) {
             struct igmp_header *igmp = dp_packet_l4(p);
 
-            /* Checksum has already been zeroed by put_zeros call in
-             * flow_compose_l4(). */
+            igmp->igmp_csum = 0;
             igmp->igmp_csum = csum(igmp, l4_len);
         } else if (flow->nw_proto == IPPROTO_ICMPV6) {
             struct icmp6_hdr *icmp = dp_packet_l4(p);
 
-            /* Checksum has already been zeroed by put_zeros call in
-             * flow_compose_l4(). */
+            icmp->icmp6_cksum = 0;
             icmp->icmp6_cksum = (OVS_FORCE uint16_t)
                 csum_finish(csum_continue(pseudo_hdr_csum, icmp, l4_len));
         }
+    }
+}
+
+/* Tries to increase the size of packet composed by 'flow_compose' up to
+ * 'size' bytes.  Fixes all the required packet headers like ip/udp lengths
+ * and l3/l4 checksums. */
+void
+flow_compose_size(struct dp_packet *p, const struct flow *flow, size_t size)
+{
+    size_t extra_size;
+
+    if (size <= dp_packet_size(p)) {
+        return;
+    }
+
+    extra_size = size - dp_packet_size(p);
+    dp_packet_put_zeros(p, extra_size);
+
+    if (flow->dl_type == htons(FLOW_DL_TYPE_NONE)) {
+        struct eth_header *eth = dp_packet_eth(p);
+
+        eth->eth_type = htons(dp_packet_size(p));
+
+    } else if (dl_type_is_ip_any(flow->dl_type)) {
+        uint32_t pseudo_hdr_csum;
+        size_t l4_len = (char *) dp_packet_tail(p) - (char *) dp_packet_l4(p);
+
+        if (flow->dl_type == htons(ETH_TYPE_IP)) {
+            struct ip_header *ip = dp_packet_l3(p);
+
+            ip->ip_tot_len = htons(p->l4_ofs - p->l3_ofs + l4_len);
+            ip->ip_csum = 0;
+            ip->ip_csum = csum(ip, sizeof *ip);
+
+            pseudo_hdr_csum = packet_csum_pseudoheader(ip);
+        } else { /* ETH_TYPE_IPV6 */
+            struct ovs_16aligned_ip6_hdr *nh = dp_packet_l3(p);
+
+            nh->ip6_plen = htons(l4_len);
+            pseudo_hdr_csum = packet_csum_pseudoheader6(nh);
+        }
+
+        if ((!(flow->nw_frag & FLOW_NW_FRAG_ANY)
+             || !(flow->nw_frag & FLOW_NW_FRAG_LATER))
+            && flow->nw_proto == IPPROTO_UDP) {
+            struct udp_header *udp = dp_packet_l4(p);
+
+            udp->udp_len = htons(l4_len + extra_size);
+        }
+        flow_compose_l4_csum(p, flow, pseudo_hdr_csum);
     }
 }
 
