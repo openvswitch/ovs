@@ -3663,15 +3663,18 @@ ovn-nbctl lsp-add ls2 ls2-lp2 \
 -- lsp-set-addresses ls2-lp2 "f0:00:00:00:00:04 30.0.0.7"
 ovn-nbctl lsp-set-port-security ls2-lp2 "f0:00:00:00:00:04 30.0.0.7"
 
-ovn-nbctl -- --id=@d1 create DHCP_Options cidr=10.0.0.0/24 \
+d1="$(ovn-nbctl create DHCP_Options cidr=10.0.0.0/24 \
 options="\"server_id\"=\"10.0.0.1\" \"server_mac\"=\"ff:10:00:00:00:01\" \
-\"lease_time\"=\"3600\" \"router\"=\"10.0.0.1\"" \
--- add Logical_Switch_Port ls1-lp1 dhcpv4_options @d1 \
--- add Logical_Switch_Port ls1-lp2 dhcpv4_options @d1
+\"lease_time\"=\"3600\" \"router\"=\"10.0.0.1\"")"
 
-ovn-nbctl -- --id=@d2 create DHCP_Options cidr=30.0.0.0/24 \
+ovn-nbctl lsp-set-dhcpv4-options ls1-lp1 ${d1}
+ovn-nbctl lsp-set-dhcpv4-options ls1-lp2 ${d1}
+
+d2="$(ovn-nbctl create DHCP_Options cidr=30.0.0.0/24 \
 options="\"server_id\"=\"30.0.0.1\" \"server_mac\"=\"ff:10:00:00:00:02\" \
-\"lease_time\"=\"3600\"" -- add Logical_Switch_Port ls2-lp2 dhcpv4_options @d2
+\"lease_time\"=\"3600\"")"
+
+ovn-nbctl lsp-set-dhcpv4-options ls2-lp2 ${d2}
 
 net_add n1
 sim_add hv1
@@ -3994,14 +3997,16 @@ ovn-nbctl lsp-add ls1 ls1-lp3 \
 
 ovn-nbctl lsp-set-port-security ls1-lp3 "f0:00:00:00:00:22 ae70::22"
 
-ovn-nbctl -- --id=@d1 create DHCP_Options cidr="ae70\:\:/64" \
-options="\"server_id\"=\"00:00:00:10:00:01\"" \
--- add Logical_Switch_Port ls1-lp1 dhcpv6_options @d1 \
--- add Logical_Switch_Port ls1-lp2 dhcpv6_options @d1
+d1="$(ovn-nbctl create DHCP_Options cidr="ae70\:\:/64" \
+options="\"server_id\"=\"00:00:00:10:00:01\"")"
 
-ovn-nbctl -- --id=@d2 create DHCP_Options cidr="ae70\:\:/64" \
-options="\"dhcpv6_stateless\"=\"true\" \"server_id\"=\"00:00:00:10:00:01\"" \
--- add Logical_Switch_Port ls1-lp3 dhcpv6_options @d2
+ovn-nbctl lsp-set-dhcpv6-options ls1-lp1 ${d1}
+ovn-nbctl lsp-set-dhcpv6-options ls1-lp2 ${d1}
+
+d2="$(ovn-nbctl create DHCP_Options cidr="ae70\:\:/64" \
+options="\"dhcpv6_stateless\"=\"true\" \"server_id\"=\"00:00:00:10:00:01\"")"
+
+ovn-nbctl lsp-set-dhcpv6-options ls1-lp3 ${d2}
 
 ovn-nbctl ls-add ls2
 ovn-nbctl lsp-add ls2 ls2-lp1 \
