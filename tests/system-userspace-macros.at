@@ -55,7 +55,7 @@ $1";/netdev_linux.*obtaining netdev stats via vport failed/d
 # This is a workaround, and should be removed when offloads are properly
 # supported in netdev-linux.
 m4_define([CONFIGURE_VETH_OFFLOADS],
-    [AT_CHECK([ethtool -K $1 tx off], [0], [ignore])]
+    [AT_CHECK([ethtool -K $1 tx off], [0], [ignore], [ignore])]
 )
 
 # CHECK_CONNTRACK()
