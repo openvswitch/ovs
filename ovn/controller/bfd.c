@@ -62,6 +62,11 @@ bfd_calculate_active_tunnels(const struct ovsrec_bridge *br_int,
 {
     int i;
 
+    if (!br_int) {
+        /* Nothing to do if integration bridge doesn't exist. */
+        return;
+    }
+
     for (i = 0; i < br_int->n_ports; i++) {
         const struct ovsrec_port *port_rec = br_int->ports[i];
 
