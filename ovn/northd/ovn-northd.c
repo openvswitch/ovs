@@ -417,6 +417,7 @@ struct ovn_datapath {
     /* The "derived" OVN port representing the instance of l3dgw_port on
      * the "redirect-chassis". */
     struct ovn_port *l3redirect_port;
+    struct ovn_port *localnet_port;
 };
 
 struct macam_node {
@@ -1350,6 +1351,10 @@ join_logical_ports(struct northd_context *ctx,
                 } else {
                     op = ovn_port_create(ports, nbsp->name, nbsp, NULL, NULL);
                     ovs_list_push_back(nb_only, &op->list);
+                }
+
+                if (!strcmp(nbsp->type, "localnet")) {
+                   od->localnet_port = op;
                 }
 
                 op->lsp_addrs
@@ -2843,6 +2848,23 @@ build_pre_acls(struct ovn_datapath *od, struct hmap *lflows)
             ds_destroy(&match_in);
             ds_destroy(&match_out);
         }
+        if (od->localnet_port) {
+            struct ds match_in = DS_EMPTY_INITIALIZER;
+            struct ds match_out = DS_EMPTY_INITIALIZER;
+
+            ds_put_format(&match_in, "ip && inport == %s",
+                          od->localnet_port->json_key);
+            ds_put_format(&match_out, "ip && outport == %s",
+                          od->localnet_port->json_key);
+            ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_ACL, 110,
+                          ds_cstr(&match_in), "next;");
+            ovn_lflow_add(lflows, od, S_SWITCH_OUT_PRE_ACL, 110,
+                          ds_cstr(&match_out), "next;");
+
+            ds_destroy(&match_in);
+            ds_destroy(&match_out);
+        }
+
         /* Ingress and Egress Pre-ACL Table (Priority 110).
          *
          * Not to do conntrack on ND packets. */

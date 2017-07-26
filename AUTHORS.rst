@@ -317,6 +317,7 @@ Tonghao Zhang                   xiangxia.m.yue@gmail.com
 Valient Gough                   vgough@pobox.com
 Venkata Anil Kommaddi           vkommadi@redhat.com
 Vivien Bernet-Rollande          vbr@soprive.net
+wangqianyu                      wang.qianyu@zte.com.cn
 Wang Sheng-Hui                  shhuiw@gmail.com
 Wei Li                          liw@dtdream.com
 Wei Yongjun                     yjwei@cn.fujitsu.com

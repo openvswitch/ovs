@@ -1007,14 +1007,7 @@
 
       <p>
         Note that you can not create an ACL matching on a port with
-        type=router.
-      </p>
-
-      <p>
-        Note that when <code>localnet</code> port exists in a lswitch, for
-        <code>to-lport</code> direction, the <code>inport</code> works only if
-        the <code>to-lport</code> is located on the same chassis as the
-        <code>inport</code>.
+        type=router or type=localnet.
       </p>
     </column>
 
