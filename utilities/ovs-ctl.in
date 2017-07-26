@@ -443,9 +443,6 @@ restart () {
     restore_flows
     flow_restore_complete
     add_managers
-
-    # Restore the interfaces if required. Return true even if restore fails.
-    restore_interfaces || true
 }
 
 ## --------------- ##
