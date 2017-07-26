@@ -298,6 +298,32 @@
         Get the type-specific options for the logical port.
       </dd>
 
+      <dt><code>lsp-set-dhcpv4-options</code> <var>port</var>
+          <var>dhcp_options</var></dt>
+      <dd>
+        Set the DHCPv4 options for the logical port.  The
+        <var>dhcp_options</var> is a UUID referring to a set of DHCP options in
+        the <ref table="DHCP_Options" /> table.
+      </dd>
+
+      <dt><code>lsp-get-dhcpv4-optoins</code> <var>port</var></dt>
+      <dd>
+        Get the configured DHCPv4 options for the logical port.
+      </dd>
+
+      <dt><code>lsp-set-dhcpv6-options</code> <var>port</var>
+          <var>dhcp_options</var></dt>
+      <dd>
+          Set the DHCPv6 options for the logical port.  The
+          <var>dhcp_options</var> is a UUID referring to a set of DHCP options
+          in the <ref table="DHCP_Options" /> table.
+      </dd>
+
+      <dt><code>lsp-get-dhcpv6-optoins</code> <var>port</var></dt>
+      <dd>
+        Get the configured DHCPv6 options for the logical port.
+      </dd>
+
     </dl>
 
     <h1>Logical Router Commands</h1>
