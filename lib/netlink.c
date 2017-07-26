@@ -235,8 +235,7 @@ nl_msg_put_unspec_zero(struct ofpbuf *msg, uint16_t type, size_t size)
 
 /* Appends a Netlink attribute of the given 'type' and the 'size' bytes of
  * 'data' as its payload, to the tail end of 'msg', reallocating and copying
- * its data if necessary.  Returns a pointer to the first byte of data in the
- * attribute, which is left uninitialized. */
+ * its data if necessary. */
 void
 nl_msg_put_unspec(struct ofpbuf *msg, uint16_t type,
                   const void *data, size_t size)
