@@ -350,7 +350,7 @@ dpif_netlink_rtnl_port_create(struct netdev *netdev)
     type = netdev_to_ovs_vport_type(netdev_get_type(netdev));
     tnl_cfg = netdev_get_tunnel_config(netdev);
     if (!tnl_cfg) {
-        return EINVAL;
+        return EOPNOTSUPP;
     }
 
     kind = vport_type_to_kind(type, tnl_cfg);
