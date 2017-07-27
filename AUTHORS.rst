@@ -427,6 +427,7 @@ Gregor Schaffrath               grsch@net.t-labs.tu-berlin.de
 Gregory Smith                   gasmith@nutanix.com
 Guolin Yang                     gyang@vmware.com
 Gur Stavi                       gstavi@mrv.com
+Harish Kanakaraju               hkanakaraju@vmware.com
 Hari Sasank Bhamidipalli        hbhamidi@cisco.com
 Hassan Khan                     hassan.khan@seecs.edu.pk
 Hector Oron                     hector.oron@gmail.com

@@ -667,6 +667,14 @@ A condition can be either a 3-element JSON array as described in the RFC or a
 boolean value. In case of an empty array an implicit true boolean value will be
 considered.
 .
+.IP "5.2.6. Wait"
+.IQ "5.2.7. Commit"
+.IQ "5.2.9. Comment"
+RFC 7047 says that the \fBwait\fR, \fBcommit\fR, and \fBcomment\fR
+operations have no corresponding result object.  This is not true.
+Instead, when such an operation is successful, it yields a result
+object with no members.
+.
 .SH "BUGS"
 .
 In Open vSwitch before version 2.4, when \fBovsdb\-server\fR sent
