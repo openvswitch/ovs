@@ -1,7 +1,12 @@
 #!/bin/bash
 
+# Build and install sparse.
+#
+# Explicitly disable sparse support for llvm because some travis
+# environments claim to have LLVM (llvm-config exists and works) but
+# linking against it fails.
 git clone git://git.kernel.org/pub/scm/devel/sparse/chrisl/sparse.git
-cd sparse && make && make install && cd ..
+cd sparse && make HAVE_LLVM= install && cd ..
 
 # Incompatibility between flake8 3.0.x and the hacking plugin:
 # https://gitlab.com/pycqa/flake8/issues/153
