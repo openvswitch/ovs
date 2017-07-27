@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -ev
+
 # Build and install sparse.
 #
 # Explicitly disable sparse support for llvm because some travis
