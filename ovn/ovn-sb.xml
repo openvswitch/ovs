@@ -353,6 +353,9 @@
     <column name="ip">
       The IPv4 address of the encapsulation tunnel endpoint.
     </column>
+    <column name="chassis_name">
+      The name of the chassis that created this encap.
+    </column>
   </table>
 
   <table name="Address_Set" title="Address Sets">

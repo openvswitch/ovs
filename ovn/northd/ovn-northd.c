@@ -6106,7 +6106,7 @@ static const char *rbac_chassis_update[] =
     {"nb_cfg", "external_ids", "encaps", "vtep_logical_switches"};
 
 static const char *rbac_encap_auth[] =
-    {""};
+    {"chassis_name"};
 static const char *rbac_encap_update[] =
     {"type", "options", "ip"};
 

@@ -571,6 +571,7 @@ cmd_chassis_add(struct ctl_context *ctx)
         sbrec_encap_set_type(encaps[i], encap_type);
         sbrec_encap_set_ip(encaps[i], encap_ip);
         sbrec_encap_set_options(encaps[i], &options);
+        sbrec_encap_set_chassis_name(encaps[i], ch_name);
         i++;
     }
     sset_destroy(&encap_set);
