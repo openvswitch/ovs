@@ -314,7 +314,7 @@ recommended to use the openvswitch.service to start and stop the Open vSwitch
 daemons. The below table shows systemd's behavior:
 
 =============================== ============== ============== ============== =============== ===============
-              -                 Process Status                systemctk <> status
+              -                 Process Status                systemctl <> status
 ------------------------------- ----------------------------- ----------------------------------------------
 Action                          ovs-vswitch     ovsdb-server  openvswitch    ovs-vswitchd    ovsdb-server
 =============================== ============== ============== ============== =============== ===============
