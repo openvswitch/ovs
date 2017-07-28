@@ -2230,17 +2230,8 @@ static bool
 odp_mask_attr_is_exact(const struct nlattr *ma)
 {
     enum ovs_key_attr attr = nl_attr_type(ma);
-    const void *mask;
-    size_t size;
-
-    if (attr == OVS_KEY_ATTR_TUNNEL) {
-        return false;
-    } else {
-        mask = nl_attr_get(ma);
-        size = nl_attr_get_size(ma);
-    }
-
-    return odp_mask_is_exact(attr, mask, size);
+    return (attr != OVS_KEY_ATTR_TUNNEL
+            && odp_mask_is_exact(attr, nl_attr_get(ma), nl_attr_get_size(ma)));
 }
 
 void
