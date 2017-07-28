@@ -1977,9 +1977,9 @@ static const struct attr_len_tbl ovs_flow_key_attr_lens[OVS_KEY_ATTR_MAX + 1] = 
  * if the attribute's payload is variable length, or ATTR_LEN_NESTED if the
  * payload is a nested type. */
 static int
-odp_key_attr_len(const struct attr_len_tbl tbl[], int max_len, uint16_t type)
+odp_key_attr_len(const struct attr_len_tbl tbl[], int max_type, uint16_t type)
 {
-    if (type > max_len) {
+    if (type > max_type) {
         return ATTR_LEN_INVALID;
     }
 
@@ -2475,11 +2475,11 @@ format_tun_flags(struct ds *ds, const char *name, uint16_t key,
 
 static bool
 check_attr_len(struct ds *ds, const struct nlattr *a, const struct nlattr *ma,
-               const struct attr_len_tbl tbl[], int max_len, bool need_key)
+               const struct attr_len_tbl tbl[], int max_type, bool need_key)
 {
     int expected_len;
 
-    expected_len = odp_key_attr_len(tbl, max_len, nl_attr_type(a));
+    expected_len = odp_key_attr_len(tbl, max_type, nl_attr_type(a));
     if (expected_len != ATTR_LEN_VARIABLE &&
         expected_len != ATTR_LEN_NESTED) {
 
