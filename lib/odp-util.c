@@ -2182,12 +2182,15 @@ tun_key_to_attr(struct ofpbuf *a, const struct flow_tnl *tun_key,
     nl_msg_end_nested(a, tun_key_ofs);
 }
 
+/* The caller must already have verified that 'ma' has a correct length. */
 static bool
 odp_mask_attr_is_wildcard(const struct nlattr *ma)
 {
     return is_all_zeros(nl_attr_get(ma), nl_attr_get_size(ma));
 }
 
+/* The caller must already have verified that 'size' is a correct length for
+ * 'attr'. */
 static bool
 odp_mask_is_exact(enum ovs_key_attr attr, const void *mask, size_t size)
 {
@@ -2222,6 +2225,7 @@ odp_mask_is_exact(enum ovs_key_attr attr, const void *mask, size_t size)
     return is_all_ones(mask, size);
 }
 
+/* The caller must already have verified that 'ma' has a correct length. */
 static bool
 odp_mask_attr_is_exact(const struct nlattr *ma)
 {
@@ -2849,10 +2853,12 @@ mask_empty(const struct nlattr *ma)
     return is_all_zeros(mask, n);
 }
 
+/* The caller must have already verified that 'a' and 'ma' have correct
+ * lengths. */
 static void
-format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
-                    const struct hmap *portno_names, struct ds *ds,
-                    bool verbose)
+format_odp_key_attr__(const struct nlattr *a, const struct nlattr *ma,
+                      const struct hmap *portno_names, struct ds *ds,
+                      bool verbose)
 {
     enum ovs_key_attr attr = nl_attr_type(a);
     char namebuf[OVS_KEY_ATTR_BUFSIZE];
@@ -2861,11 +2867,6 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
     is_exact = ma ? odp_mask_attr_is_exact(ma) : true;
 
     ds_put_cstr(ds, ovs_key_attr_to_string(attr, namebuf, sizeof namebuf));
-
-    if (!check_attr_len(ds, a, ma, ovs_flow_key_attr_lens,
-                        OVS_KEY_ATTR_MAX, false)) {
-        return;
-    }
 
     ds_put_char(ds, '(');
     switch (attr) {
@@ -3157,6 +3158,17 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
     ds_put_char(ds, ')');
 }
 
+static void
+format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
+                    const struct hmap *portno_names, struct ds *ds,
+                    bool verbose)
+{
+    if (check_attr_len(ds, a, ma, ovs_flow_key_attr_lens,
+                        OVS_KEY_ATTR_MAX, false)) {
+        format_odp_key_attr__(a, ma, portno_names, ds, verbose);
+    }
+}
+
 static struct nlattr *
 generate_all_wildcard_mask(const struct attr_len_tbl tbl[], int max,
                            struct ofpbuf *ofp, const struct nlattr *key)
@@ -3278,15 +3290,23 @@ odp_flow_format(const struct nlattr *key, size_t key_len,
         const struct nlattr *a;
         unsigned int left;
         bool has_ethtype_key = false;
-        const struct nlattr *ma = NULL;
         struct ofpbuf ofp;
         bool first_field = true;
 
         ofpbuf_init(&ofp, 100);
         NL_ATTR_FOR_EACH (a, left, key, key_len) {
+            int attr_type = nl_attr_type(a);
+            const struct nlattr *ma = (mask && mask_len
+                                       ? nl_attr_find__(mask, mask_len,
+                                                        attr_type)
+                                       : NULL);
+            if (!check_attr_len(ds, a, ma, ovs_flow_key_attr_lens,
+                                OVS_KEY_ATTR_MAX, false)) {
+                continue;
+            }
+
             bool is_nested_attr;
             bool is_wildcard = false;
-            int attr_type = nl_attr_type(a);
 
             if (attr_type == OVS_KEY_ATTR_ETHERTYPE) {
                 has_ethtype_key = true;
@@ -3310,7 +3330,7 @@ odp_flow_format(const struct nlattr *key, size_t key_len,
                 if (!first_field) {
                     ds_put_char(ds, ',');
                 }
-                format_odp_key_attr(a, ma, portno_names, ds, verbose);
+                format_odp_key_attr__(a, ma, portno_names, ds, verbose);
                 first_field = false;
             }
             ofpbuf_clear(&ofp);
@@ -3330,7 +3350,8 @@ odp_flow_format(const struct nlattr *key, size_t key_len,
             ds_put_char(ds, ')');
         }
         if (!has_ethtype_key) {
-            ma = nl_attr_find__(mask, mask_len, OVS_KEY_ATTR_ETHERTYPE);
+            const struct nlattr *ma = nl_attr_find__(mask, mask_len,
+                                                     OVS_KEY_ATTR_ETHERTYPE);
             if (ma) {
                 ds_put_format(ds, ",eth_type(0/0x%04"PRIx16")",
                               ntohs(nl_attr_get_be16(ma)));
