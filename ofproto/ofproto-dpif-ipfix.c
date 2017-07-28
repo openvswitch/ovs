@@ -93,6 +93,8 @@ enum dpif_ipfix_tunnel_type {
 typedef struct ofputil_ipfix_stats ofproto_ipfix_stats;
 
 struct dpif_ipfix_global_stats {
+    uint64_t dropped_packet_total_count;
+    uint64_t dropped_octet_total_count;
     uint64_t packet_total_count;
     uint64_t octet_total_count;
     uint64_t octet_total_sum_of_squares;
@@ -409,6 +411,8 @@ OVS_PACKED(
 struct ipfix_data_record_aggregated_common {
     ovs_be32 flow_start_delta_microseconds; /* FLOW_START_DELTA_MICROSECONDS */
     ovs_be32 flow_end_delta_microseconds; /* FLOW_END_DELTA_MICROSECONDS */
+    ovs_be64 dropped_packet_delta_count;  /* DROPPED_PACKET_DELTA_COUNT */
+    ovs_be64 dropped_packet_total_count;  /* DROPPED_PACKET_TOTAL_COUNT */
     ovs_be64 packet_delta_count;  /* PACKET_DELTA_COUNT */
     ovs_be64 packet_total_count;  /* PACKET_TOTAL_COUNT */
     /* INGRESS_UNICAST_PACKET_TOTAL_COUNT */
@@ -427,11 +431,13 @@ struct ipfix_data_record_aggregated_common {
     ovs_be64 layer2_octet_total_count;  /* LAYER2_OCTET_TOTAL_COUNT */
     uint8_t flow_end_reason;  /* FLOW_END_REASON */
 });
-BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_aggregated_common) == 97);
+BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_aggregated_common) == 113);
 
 /* Part of data record for IP aggregated elements. */
 OVS_PACKED(
 struct ipfix_data_record_aggregated_ip {
+    ovs_be64 dropped_octet_delta_count;  /* DROPPED_OCTET_DELTA_COUNT */
+    ovs_be64 dropped_octet_total_count;  /* DROPPED_OCTET_TOTAL_COUNT */
     ovs_be64 octet_delta_count;  /* OCTET_DELTA_COUNT */
     ovs_be64 octet_total_count;  /* OCTET_TOTAL_COUNT */
     ovs_be64 octet_delta_sum_of_squares;  /* OCTET_DELTA_SUM_OF_SQUARES */
@@ -441,7 +447,7 @@ struct ipfix_data_record_aggregated_ip {
     ovs_be64 post_mcast_octet_delta_count; /* POST_MCAST_OCTET_DELTA_COUNT */
     ovs_be64 post_mcast_octet_total_count; /* POST_MCAST_OCTET_TOTAL_COUNT */
 });
-BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_aggregated_ip) == 64);
+BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_aggregated_ip) == 80);
 
 /* Part of data record for TCP aggregated elements. */
 OVS_PACKED(
@@ -541,6 +547,8 @@ struct ipfix_flow_cache_entry {
     /* Common aggregated elements. */
     uint64_t flow_start_timestamp_usec;
     uint64_t flow_end_timestamp_usec;
+    uint64_t dropped_packet_delta_count;
+    uint64_t dropped_packet_total_count;
     uint64_t packet_delta_count;
     uint64_t packet_total_count;
     uint64_t in_ucast_packet_total_count;
@@ -554,6 +562,8 @@ struct ipfix_flow_cache_entry {
     uint64_t post_mcast_octet_delta_count;
     uint64_t layer2_octet_delta_count;
     uint64_t layer2_octet_total_count;
+    uint64_t dropped_octet_delta_count;
+    uint64_t dropped_octet_total_count;
     uint64_t octet_delta_count;
     uint64_t octet_total_count;
     uint64_t octet_delta_sum_of_squares;  /* 0 if not IP. */
@@ -1394,6 +1404,8 @@ ipfix_define_template_fields(enum ipfix_proto_l2 l2, enum ipfix_proto_l3 l3,
 
     DEF(FLOW_START_DELTA_MICROSECONDS);
     DEF(FLOW_END_DELTA_MICROSECONDS);
+    DEF(DROPPED_PACKET_DELTA_COUNT);
+    DEF(DROPPED_PACKET_TOTAL_COUNT);
     DEF(PACKET_DELTA_COUNT);
     DEF(PACKET_TOTAL_COUNT);
     DEF(INGRESS_UNICAST_PACKET_TOTAL_COUNT);
@@ -1408,6 +1420,8 @@ ipfix_define_template_fields(enum ipfix_proto_l2 l2, enum ipfix_proto_l3 l3,
     DEF(FLOW_END_REASON);
 
     if (l3 != IPFIX_PROTO_L3_UNKNOWN) {
+        DEF(DROPPED_OCTET_DELTA_COUNT);
+        DEF(DROPPED_OCTET_TOTAL_COUNT);
         DEF(OCTET_DELTA_COUNT);
         DEF(OCTET_TOTAL_COUNT);
         DEF(OCTET_DELTA_SUM_OF_SQUARES);
@@ -1687,9 +1701,14 @@ ipfix_cache_aggregate_entries(struct ipfix_flow_cache_entry *from_entry,
         *to_end = *from_end;
     }
 
+
+    to_entry->dropped_packet_delta_count +=
+        from_entry->dropped_packet_delta_count;
     to_entry->packet_delta_count += from_entry->packet_delta_count;
     to_entry->layer2_octet_delta_count += from_entry->layer2_octet_delta_count;
 
+    to_entry->dropped_packet_total_count =
+        from_entry->dropped_packet_total_count;
     to_entry->packet_total_count = from_entry->packet_total_count;
     to_entry->in_ucast_packet_total_count =
         from_entry->in_ucast_packet_total_count;
@@ -1707,10 +1726,14 @@ ipfix_cache_aggregate_entries(struct ipfix_flow_cache_entry *from_entry,
     to_entry->post_mcast_octet_delta_count +=
         from_entry->post_mcast_octet_delta_count;
 
+    to_entry->dropped_octet_delta_count +=
+        from_entry->dropped_octet_delta_count;
     to_entry->octet_delta_count += from_entry->octet_delta_count;
     to_entry->octet_delta_sum_of_squares +=
         from_entry->octet_delta_sum_of_squares;
 
+    to_entry->dropped_octet_total_count =
+        from_entry->dropped_octet_total_count;
     to_entry->octet_total_count = from_entry->octet_total_count;
     to_entry->octet_total_sum_of_squares =
         from_entry->octet_total_sum_of_squares;
@@ -1886,7 +1909,8 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
                        enum nx_action_sample_direction direction,
                        const struct dpif_ipfix_port *tunnel_port,
                        const struct flow_tnl *tunnel_key,
-                       struct dpif_ipfix_global_stats *stats)
+                       struct dpif_ipfix_global_stats *stats,
+                       const struct dpif_ipfix_actions *ipfix_actions)
 {
     struct ipfix_flow_key *flow_key;
     struct dp_packet msg;
@@ -2090,9 +2114,17 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
         xgettimeofday(&now);
         entry->flow_end_timestamp_usec = now.tv_usec + 1000000LL * now.tv_sec;
         entry->flow_start_timestamp_usec = entry->flow_end_timestamp_usec;
+
+        if (ipfix_actions && ipfix_actions->output_action) {
+            entry->dropped_packet_delta_count = 0;
+        } else {
+            entry->dropped_packet_delta_count = packet_delta_count;
+        }
+
         entry->packet_delta_count = packet_delta_count;
         entry->layer2_octet_delta_count = layer2_octet_delta_count;
 
+        stats->dropped_packet_total_count += entry->dropped_packet_delta_count;
         stats->packet_total_count += packet_delta_count;
         stats->layer2_octet_total_count += layer2_octet_delta_count;
 
@@ -2118,6 +2150,7 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
             }
         }
 
+        entry->dropped_packet_total_count = stats->dropped_packet_total_count;
         entry->packet_total_count = stats->packet_total_count;
         entry->in_ucast_packet_total_count =
             stats->in_ucast_packet_total_count;
@@ -2144,11 +2177,18 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
          * length. */
         octet_delta_count = packet_delta_count * ip_total_length;
 
+        if (ipfix_actions && ipfix_actions->output_action) {
+            entry->dropped_octet_delta_count = 0;
+        } else {
+            entry->dropped_octet_delta_count = octet_delta_count;
+        }
+
         entry->octet_delta_count = octet_delta_count;
         entry->octet_delta_sum_of_squares = octet_delta_count * ip_total_length;
         entry->minimum_ip_total_length = ip_total_length;
         entry->maximum_ip_total_length = ip_total_length;
 
+        stats->dropped_octet_total_count += entry->dropped_octet_delta_count;
         stats->octet_total_count += octet_delta_count;
         stats->octet_total_sum_of_squares += entry->octet_delta_sum_of_squares;
 
@@ -2164,6 +2204,7 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
         entry->maximum_ip_total_length = 0;
     }
 
+    entry->dropped_octet_total_count = stats->dropped_octet_total_count;
     entry->octet_total_sum_of_squares = stats->octet_total_sum_of_squares;
     entry->octet_total_count = stats->octet_total_count;
     entry->post_mcast_octet_total_count =
@@ -2256,6 +2297,10 @@ ipfix_put_data_set(uint32_t export_time_sec,
             flow_start_delta_usec);
         data_aggregated_common->flow_end_delta_microseconds = htonl(
             flow_end_delta_usec);
+        data_aggregated_common->dropped_packet_delta_count = htonll(
+            entry->dropped_packet_delta_count);
+        data_aggregated_common->dropped_packet_total_count = htonll(
+            entry->dropped_packet_total_count);
         data_aggregated_common->packet_delta_count = htonll(
             entry->packet_delta_count);
         data_aggregated_common->packet_total_count = htonll(
@@ -2286,6 +2331,10 @@ ipfix_put_data_set(uint32_t export_time_sec,
 
         data_aggregated_ip = dp_packet_put_zeros(
             msg, sizeof *data_aggregated_ip);
+        data_aggregated_ip->dropped_octet_delta_count = htonll(
+            entry->dropped_octet_delta_count);
+        data_aggregated_ip->dropped_octet_total_count = htonll(
+            entry->dropped_octet_total_count);
         data_aggregated_ip->octet_delta_count = htonll(
             entry->octet_delta_count);
         data_aggregated_ip->octet_total_count = htonll(
@@ -2420,7 +2469,8 @@ dpif_ipfix_sample(struct dpif_ipfix_exporter *exporter,
                   uint32_t obs_point_id, odp_port_t output_odp_port,
                   enum nx_action_sample_direction direction,
                   const struct dpif_ipfix_port *tunnel_port,
-                  const struct flow_tnl *tunnel_key)
+                  const struct flow_tnl *tunnel_key,
+                  const struct dpif_ipfix_actions *ipfix_actions)
 {
     struct ipfix_flow_cache_entry *entry;
     enum ipfix_sampled_packet_type sampled_packet_type;
@@ -2433,7 +2483,8 @@ dpif_ipfix_sample(struct dpif_ipfix_exporter *exporter,
                                    obs_domain_id, obs_point_id,
                                    output_odp_port, direction,
                                    tunnel_port, tunnel_key,
-                                   &exporter->ipfix_global_stats);
+                                   &exporter->ipfix_global_stats,
+                                   ipfix_actions);
 
     ipfix_cache_update(exporter, entry, sampled_packet_type);
 }
@@ -2448,7 +2499,8 @@ void
 dpif_ipfix_bridge_sample(struct dpif_ipfix *di, const struct dp_packet *packet,
                          const struct flow *flow,
                          odp_port_t input_odp_port, odp_port_t output_odp_port,
-                         const struct flow_tnl *output_tunnel_key)
+                         const struct flow_tnl *output_tunnel_key,
+                         const struct dpif_ipfix_actions *ipfix_actions)
     OVS_EXCLUDED(mutex)
 {
     uint64_t packet_delta_count;
@@ -2498,7 +2550,7 @@ dpif_ipfix_bridge_sample(struct dpif_ipfix *di, const struct dp_packet *packet,
                       di->bridge_exporter.options->obs_domain_id,
                       di->bridge_exporter.options->obs_point_id,
                       output_odp_port, NX_ACTION_SAMPLE_DEFAULT,
-                      tunnel_port, tunnel_key);
+                      tunnel_port, tunnel_key, ipfix_actions);
     ovs_mutex_unlock(&mutex);
 }
 
@@ -2507,7 +2559,8 @@ dpif_ipfix_flow_sample(struct dpif_ipfix *di, const struct dp_packet *packet,
                        const struct flow *flow,
                        const union user_action_cookie *cookie,
                        odp_port_t input_odp_port,
-                       const struct flow_tnl *output_tunnel_key)
+                       const struct flow_tnl *output_tunnel_key,
+                       const struct dpif_ipfix_actions *ipfix_actions)
     OVS_EXCLUDED(mutex)
 {
     struct dpif_ipfix_flow_exporter_map_node *node;
@@ -2542,7 +2595,7 @@ dpif_ipfix_flow_sample(struct dpif_ipfix *di, const struct dp_packet *packet,
                           cookie->flow_sample.obs_domain_id,
                           cookie->flow_sample.obs_point_id,
                           output_odp_port, cookie->flow_sample.direction,
-                          tunnel_port, tunnel_key);
+                          tunnel_port, tunnel_key, ipfix_actions);
     }
     ovs_mutex_unlock(&mutex);
 }
@@ -2678,4 +2731,103 @@ dpif_ipfix_wait(struct dpif_ipfix *di) OVS_EXCLUDED(mutex)
         }
     }
     ovs_mutex_unlock(&mutex);
+}
+
+static void
+dpif_ipfix_read_sample_actions(const struct flow *flow,
+                               const struct nlattr *actions,
+                               size_t actions_len,
+                               struct dpif_ipfix_actions *ipfix_actions)
+{
+    const struct nlattr *a;
+    unsigned int left;
+    uint32_t probability = 0;
+    struct dpif_ipfix_actions sample_actions = {0};
+
+    if (actions_len == 0) {
+        return;
+    }
+
+    NL_ATTR_FOR_EACH (a, left, actions, actions_len) {
+
+        enum ovs_sample_attr type = nl_attr_type(a);
+        switch (type) {
+        case OVS_SAMPLE_ATTR_PROBABILITY:
+            probability = nl_attr_get_u32(a);
+            break;
+
+        case OVS_SAMPLE_ATTR_ACTIONS:
+            dpif_ipfix_read_actions(flow, nl_attr_get(a), nl_attr_get_size(a),
+                                    &sample_actions);
+            break;
+
+        case OVS_SAMPLE_ATTR_UNSPEC:
+        case __OVS_SAMPLE_ATTR_MAX:
+        default:
+            OVS_NOT_REACHED();
+        }
+    }
+
+    /* An output action inside sample action is truly an output if the sampling
+     * probability is set to 100% */
+    if (probability == UINT32_MAX && sample_actions.output_action == true) {
+        ipfix_actions->output_action = true;
+    }
+}
+
+void
+dpif_ipfix_read_actions(const struct flow *flow,
+                        const struct nlattr *actions,
+                        size_t actions_len,
+                        struct dpif_ipfix_actions *ipfix_actions)
+{
+    const struct nlattr *a;
+    unsigned int left;
+
+    if (actions_len == 0) {
+        return;
+    }
+
+    NL_ATTR_FOR_EACH (a, left, actions, actions_len) {
+        enum ovs_action_attr type = nl_attr_type(a);
+        switch (type) {
+        case OVS_ACTION_ATTR_OUTPUT:
+            ipfix_actions->output_action = true;
+            break;
+        case OVS_ACTION_ATTR_SAMPLE:
+            dpif_ipfix_read_sample_actions(flow, nl_attr_get(a),
+                                           nl_attr_get_size(a), ipfix_actions);
+            break;
+        case OVS_ACTION_ATTR_CLONE:
+            dpif_ipfix_read_actions(flow, nl_attr_get(a), nl_attr_get_size(a),
+                                    ipfix_actions);
+            break;
+
+        /* OVS_ACTION_ATTR_USERSPACE and OVS_ACTION_ATTR_RECIRC actions can
+         * yield absolutely any kind of behavior. Let's assume that flow drops
+         * the packet if there isn't another clear OVS_ACTION_ATTR_OUTPUT
+         * action associated with packet */
+        case OVS_ACTION_ATTR_USERSPACE:
+        case OVS_ACTION_ATTR_RECIRC:
+
+        case OVS_ACTION_ATTR_TUNNEL_POP:
+        case OVS_ACTION_ATTR_TUNNEL_PUSH:
+        case OVS_ACTION_ATTR_TRUNC:
+        case OVS_ACTION_ATTR_HASH:
+        case OVS_ACTION_ATTR_CT:
+        case OVS_ACTION_ATTR_METER:
+        case OVS_ACTION_ATTR_SET_MASKED:
+        case OVS_ACTION_ATTR_SET:
+        case OVS_ACTION_ATTR_PUSH_VLAN:
+        case OVS_ACTION_ATTR_POP_VLAN:
+        case OVS_ACTION_ATTR_PUSH_MPLS:
+        case OVS_ACTION_ATTR_POP_MPLS:
+        case OVS_ACTION_ATTR_PUSH_ETH:
+        case OVS_ACTION_ATTR_POP_ETH:
+        case OVS_ACTION_ATTR_UNSPEC:
+        case __OVS_ACTION_ATTR_MAX:
+        default:
+            break;
+        }
+    }
 }

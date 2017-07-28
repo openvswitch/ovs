@@ -1279,6 +1279,59 @@ out:
     return error;
 }
 
+static size_t
+dpif_get_actions(struct udpif *udpif, struct upcall *upcall,
+                 const struct nlattr **actions)
+{
+    size_t actions_len = 0;
+
+    if (upcall->actions) {
+        /* Actions were passed up from datapath. */
+        *actions = nl_attr_get(upcall->actions);
+        actions_len = nl_attr_get_size(upcall->actions);
+    }
+
+    if (actions_len == 0) {
+        /* Lookup actions in userspace cache. */
+        struct udpif_key *ukey = ukey_lookup(udpif, upcall->ufid,
+                                             upcall->pmd_id);
+        if (ukey) {
+            ukey_get_actions(ukey, actions, &actions_len);
+        }
+    }
+
+    return actions_len;
+}
+
+static size_t
+dpif_read_actions(struct udpif *udpif, struct upcall *upcall,
+                  const struct flow *flow, enum upcall_type type,
+                  void *upcall_data)
+{
+    const struct nlattr *actions = NULL;
+    size_t actions_len = dpif_get_actions(udpif, upcall, &actions);
+
+    if (!actions || !actions_len) {
+        return 0;
+    }
+
+    switch (type) {
+    case SFLOW_UPCALL:
+        dpif_sflow_read_actions(flow, actions, actions_len, upcall_data);
+        break;
+    case FLOW_SAMPLE_UPCALL:
+    case IPFIX_UPCALL:
+        dpif_ipfix_read_actions(flow, actions, actions_len, upcall_data);
+        break;
+    case BAD_UPCALL:
+    case MISS_UPCALL:
+    default:
+        break;
+    }
+
+    return actions_len;
+}
+
 static int
 process_upcall(struct udpif *udpif, struct upcall *upcall,
                struct ofpbuf *odp_actions, struct flow_wildcards *wc)
@@ -1286,8 +1339,10 @@ process_upcall(struct udpif *udpif, struct upcall *upcall,
     const struct nlattr *userdata = upcall->userdata;
     const struct dp_packet *packet = upcall->packet;
     const struct flow *flow = upcall->flow;
+    size_t actions_len = 0;
+    enum upcall_type upcall_type = classify_upcall(upcall->type, userdata);
 
-    switch (classify_upcall(upcall->type, userdata)) {
+    switch (upcall_type) {
     case MISS_UPCALL:
         upcall_xlate(udpif, upcall, odp_actions, wc);
         return 0;
@@ -1295,31 +1350,14 @@ process_upcall(struct udpif *udpif, struct upcall *upcall,
     case SFLOW_UPCALL:
         if (upcall->sflow) {
             union user_action_cookie cookie;
-            const struct nlattr *actions;
-            size_t actions_len = 0;
             struct dpif_sflow_actions sflow_actions;
+
             memset(&sflow_actions, 0, sizeof sflow_actions);
             memset(&cookie, 0, sizeof cookie);
             memcpy(&cookie, nl_attr_get(userdata), sizeof cookie.sflow);
-            if (upcall->actions) {
-                /* Actions were passed up from datapath. */
-                actions = nl_attr_get(upcall->actions);
-                actions_len = nl_attr_get_size(upcall->actions);
-                if (actions && actions_len) {
-                    dpif_sflow_read_actions(flow, actions, actions_len,
+
+            actions_len = dpif_read_actions(udpif, upcall, flow, upcall_type,
                                             &sflow_actions);
-                }
-            }
-            if (actions_len == 0) {
-                /* Lookup actions in userspace cache. */
-                struct udpif_key *ukey = ukey_lookup(udpif, upcall->ufid,
-                                                     upcall->pmd_id);
-                if (ukey) {
-                    ukey_get_actions(ukey, &actions, &actions_len);
-                    dpif_sflow_read_actions(flow, actions, actions_len,
-                                            &sflow_actions);
-                }
-            }
             dpif_sflow_received(upcall->sflow, packet, flow,
                                 flow->in_port.odp_port, &cookie,
                                 actions_len > 0 ? &sflow_actions : NULL);
@@ -1330,18 +1368,24 @@ process_upcall(struct udpif *udpif, struct upcall *upcall,
         if (upcall->ipfix) {
             union user_action_cookie cookie;
             struct flow_tnl output_tunnel_key;
+            struct dpif_ipfix_actions ipfix_actions;
 
             memset(&cookie, 0, sizeof cookie);
             memcpy(&cookie, nl_attr_get(userdata), sizeof cookie.ipfix);
+            memset(&ipfix_actions, 0, sizeof ipfix_actions);
 
             if (upcall->out_tun_key) {
                 odp_tun_key_from_attr(upcall->out_tun_key, &output_tunnel_key);
             }
+
+            actions_len = dpif_read_actions(udpif, upcall, flow, upcall_type,
+                                            &ipfix_actions);
             dpif_ipfix_bridge_sample(upcall->ipfix, packet, flow,
                                      flow->in_port.odp_port,
                                      cookie.ipfix.output_odp_port,
                                      upcall->out_tun_key ?
-                                         &output_tunnel_key : NULL);
+                                         &output_tunnel_key : NULL,
+                                     actions_len > 0 ? &ipfix_actions: NULL);
         }
         break;
 
@@ -1349,20 +1393,25 @@ process_upcall(struct udpif *udpif, struct upcall *upcall,
         if (upcall->ipfix) {
             union user_action_cookie cookie;
             struct flow_tnl output_tunnel_key;
+            struct dpif_ipfix_actions ipfix_actions;
 
             memset(&cookie, 0, sizeof cookie);
             memcpy(&cookie, nl_attr_get(userdata), sizeof cookie.flow_sample);
+            memset(&ipfix_actions, 0, sizeof ipfix_actions);
 
             if (upcall->out_tun_key) {
                 odp_tun_key_from_attr(upcall->out_tun_key, &output_tunnel_key);
             }
 
+            actions_len = dpif_read_actions(udpif, upcall, flow, upcall_type,
+                                            &ipfix_actions);
             /* The flow reflects exactly the contents of the packet.
              * Sample the packet using it. */
             dpif_ipfix_flow_sample(upcall->ipfix, packet, flow,
                                    &cookie, flow->in_port.odp_port,
                                    upcall->out_tun_key ?
-                                       &output_tunnel_key : NULL);
+                                       &output_tunnel_key : NULL,
+                                   actions_len > 0 ? &ipfix_actions: NULL);
         }
         break;
 
