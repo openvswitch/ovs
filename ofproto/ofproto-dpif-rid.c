@@ -134,7 +134,6 @@ frozen_state_hash(const struct frozen_state *state)
         hash = hash_bytes(state->stack, state->stack_size, hash);
     }
     hash = hash_int(state->mirrors, hash);
-    hash = hash_int(state->action_set_len, hash);
     if (state->action_set_len) {
         hash = hash_bytes64(ALIGNED_CAST(const uint64_t *, state->action_set),
                             state->action_set_len, hash);
