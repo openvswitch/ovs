@@ -27,6 +27,7 @@
 #include <linux/tc_act/tc_vlan.h>
 #include <linux/gen_stats.h>
 #include <net/if.h>
+#include <unistd.h>
 
 #include "byte-order.h"
 #include "netlink-socket.h"
@@ -414,12 +415,24 @@ static const struct nl_policy gact_policy[] = {
                       .optional = false, },
 };
 
-#define JIFFIES_TO_MS(x) (x * 10)
+static int
+get_user_hz(void)
+{
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+    static int user_hz = 100;
+
+    if (ovsthread_once_start(&once)) {
+        user_hz = sysconf(_SC_CLK_TCK);
+        ovsthread_once_done(&once);
+    }
+
+    return user_hz;
+}
 
 static void
 nl_parse_tcf(const struct tcf_t *tm, struct tc_flower *flower)
 {
-    flower->lastused = time_msec() - JIFFIES_TO_MS(tm->lastuse);
+    flower->lastused = time_msec() - (tm->lastuse * 1000 / get_user_hz());
 }
 
 static int
