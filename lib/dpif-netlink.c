@@ -972,7 +972,7 @@ dpif_netlink_rtnl_port_create_and_add(struct dpif_netlink *dpif,
     error = dpif_netlink_rtnl_port_create(netdev);
     if (error) {
         if (error != EOPNOTSUPP) {
-            VLOG_INFO_RL(&rl, "Failed to create %s with rtnetlink: %s",
+            VLOG_WARN_RL(&rl, "Failed to create %s with rtnetlink: %s",
                          netdev_get_name(netdev), ovs_strerror(error));
         }
         return error;
