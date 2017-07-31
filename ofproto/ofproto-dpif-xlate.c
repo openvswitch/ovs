@@ -4517,7 +4517,7 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
         .oam = OAM_PACKET_IN,
         .pin = {
             .up = {
-                .public = {
+                .base = {
                     .packet = dp_packet_steal_data(packet),
                     .packet_len = packet_len,
                     .reason = reason,
@@ -4532,7 +4532,7 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
             .max_len = len,
         },
     };
-    flow_get_metadata(&ctx->xin->flow, &am->pin.up.public.flow_metadata);
+    flow_get_metadata(&ctx->xin->flow, &am->pin.up.base.flow_metadata);
 
     /* Async messages are only sent once, so if we send one now, no
      * xlate cache entry is created.  */
@@ -4562,7 +4562,7 @@ emit_continuation(struct xlate_ctx *ctx, const struct frozen_state *state)
         .oam = OAM_PACKET_IN,
         .pin = {
             .up = {
-                .public = {
+                .base = {
                     .userdata = xmemdup(ctx->pause->userdata,
                                         ctx->pause->userdata_len),
                     .userdata_len = ctx->pause->userdata_len,
@@ -4585,7 +4585,7 @@ emit_continuation(struct xlate_ctx *ctx, const struct frozen_state *state)
             .max_len = UINT16_MAX,
         },
     };
-    flow_get_metadata(ctx->paused_flow, &am->pin.up.public.flow_metadata);
+    flow_get_metadata(ctx->paused_flow, &am->pin.up.base.flow_metadata);
 
     /* Async messages are only sent once, so if we send one now, no
      * xlate cache entry is created.  */
@@ -6877,8 +6877,8 @@ xlate_resume(struct ofproto_dpif *ofproto,
              enum slow_path_reason *slow)
 {
     struct dp_packet packet;
-    dp_packet_use_const(&packet, pin->public.packet,
-                        pin->public.packet_len);
+    dp_packet_use_const(&packet, pin->base.packet,
+                        pin->base.packet_len);
 
     struct flow flow;
     flow_extract(&packet, &flow);
@@ -6916,7 +6916,7 @@ xlate_resume(struct ofproto_dpif *ofproto,
         .action_set_len = pin->action_set_len,
     };
     frozen_metadata_from_flow(&state.metadata,
-                              &pin->public.flow_metadata.flow);
+                              &pin->base.flow_metadata.flow);
     xin.frozen_state = &state;
 
     struct xlate_out xout;

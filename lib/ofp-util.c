@@ -3720,7 +3720,7 @@ ofputil_put_packet_in_private(const struct ofputil_packet_in_private *pin,
                               enum ofp_version version, size_t include_bytes,
                               struct ofpbuf *msg)
 {
-    ofputil_put_packet_in(&pin->public, version, include_bytes, msg);
+    ofputil_put_packet_in(&pin->base, version, include_bytes, msg);
 
     size_t continuation_ofs = ofpprop_start_nested(msg, NXPINT_CONTINUATION);
     size_t inner_ofs = msg->size;
@@ -3852,7 +3852,7 @@ ofputil_encode_nx_packet_in2(const struct ofputil_packet_in_private *pin,
                              enum ofp_version version, size_t include_bytes)
 {
     /* 'extra' is just an estimate of the space required. */
-    size_t extra = (pin->public.packet_len
+    size_t extra = (pin->base.packet_len
                     + NXM_TYPICAL_LEN   /* flow_metadata */
                     + pin->stack_size * 4
                     + pin->actions_len
@@ -3862,9 +3862,9 @@ ofputil_encode_nx_packet_in2(const struct ofputil_packet_in_private *pin,
                                           htonl(0), extra);
 
     ofputil_put_packet_in_private(pin, version, include_bytes, msg);
-    if (pin->public.userdata_len) {
-        ofpprop_put(msg, NXPINT_USERDATA, pin->public.userdata,
-                    pin->public.userdata_len);
+    if (pin->base.userdata_len) {
+        ofpprop_put(msg, NXPINT_USERDATA, pin->base.userdata,
+                    pin->base.userdata_len);
     }
 
     ofpmsg_update_length(msg);
@@ -3947,11 +3947,11 @@ ofputil_encode_packet_in_private(const struct ofputil_packet_in_private *pin,
         case OFPUTIL_P_OF10_STD_TID:
         case OFPUTIL_P_OF10_NXM:
         case OFPUTIL_P_OF10_NXM_TID:
-            msg = ofputil_encode_ofp10_packet_in(&pin->public);
+            msg = ofputil_encode_ofp10_packet_in(&pin->base);
             break;
 
         case OFPUTIL_P_OF11_STD:
-            msg = ofputil_encode_ofp11_packet_in(&pin->public);
+            msg = ofputil_encode_ofp11_packet_in(&pin->base);
             break;
 
         case OFPUTIL_P_OF12_OXM:
@@ -3959,7 +3959,7 @@ ofputil_encode_packet_in_private(const struct ofputil_packet_in_private *pin,
         case OFPUTIL_P_OF14_OXM:
         case OFPUTIL_P_OF15_OXM:
         case OFPUTIL_P_OF16_OXM:
-            msg = ofputil_encode_ofp12_packet_in(&pin->public, version);
+            msg = ofputil_encode_ofp12_packet_in(&pin->base, version);
             break;
 
         default:
@@ -3968,18 +3968,18 @@ ofputil_encode_packet_in_private(const struct ofputil_packet_in_private *pin,
         break;
 
     case NXPIF_NXT_PACKET_IN:
-        msg = ofputil_encode_nx_packet_in(&pin->public, version);
+        msg = ofputil_encode_nx_packet_in(&pin->base, version);
         break;
 
     case NXPIF_NXT_PACKET_IN2:
         return ofputil_encode_nx_packet_in2(pin, version,
-                                            pin->public.packet_len);
+                                            pin->base.packet_len);
 
     default:
         OVS_NOT_REACHED();
     }
 
-    ofpbuf_put(msg, pin->public.packet, pin->public.packet_len);
+    ofpbuf_put(msg, pin->base.packet, pin->base.packet_len);
     ofpmsg_update_length(msg);
     return msg;
 }
@@ -4104,7 +4104,7 @@ ofputil_decode_packet_in_private(const struct ofp_header *oh, bool loose,
     struct ofpbuf continuation;
     enum ofperr error;
     error = ofputil_decode_packet_in(oh, loose, tun_table, vl_mff_map,
-                                     &pin->public, total_len, buffer_id,
+                                     &pin->base, total_len, buffer_id,
                                      &continuation);
     if (error) {
         return error;
@@ -4193,7 +4193,7 @@ ofputil_decode_packet_in_private(const struct ofp_header *oh, bool loose,
 /* Frees data in 'pin' that is dynamically allocated by
  * ofputil_decode_packet_in_private().
  *
- * 'pin->public' contains some pointer members that
+ * 'pin->base' contains some pointer members that
  * ofputil_decode_packet_in_private() doesn't initialize to newly allocated
  * data, so this function doesn't free those. */
 void

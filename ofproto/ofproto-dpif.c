@@ -4865,14 +4865,14 @@ nxt_resume(struct ofproto *ofproto_,
 
     /* Steal 'pin->packet' and put it into a dp_packet. */
     struct dp_packet packet;
-    dp_packet_init(&packet, pin->public.packet_len);
-    dp_packet_put(&packet, pin->public.packet, pin->public.packet_len);
+    dp_packet_init(&packet, pin->base.packet_len);
+    dp_packet_put(&packet, pin->base.packet, pin->base.packet_len);
 
-    pkt_metadata_from_flow(&packet.md, &pin->public.flow_metadata.flow);
+    pkt_metadata_from_flow(&packet.md, &pin->base.flow_metadata.flow);
 
     /* Fix up in_port. */
     ofproto_dpif_set_packet_odp_port(ofproto,
-                                     pin->public.flow_metadata.flow.in_port.ofp_port,
+                                     pin->base.flow_metadata.flow.in_port.ofp_port,
                                      &packet);
 
     struct flow headers;

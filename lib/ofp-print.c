@@ -122,7 +122,7 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
 {
     char reasonbuf[OFPUTIL_PACKET_IN_REASON_BUFSIZE];
     struct ofputil_packet_in_private pin;
-    const struct ofputil_packet_in *public = &pin.public;
+    const struct ofputil_packet_in *public = &pin.base;
     uint32_t buffer_id;
     size_t total_len;
     enum ofperr error;
@@ -168,7 +168,7 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
 
     if (public->userdata_len) {
         ds_put_cstr(string, " userdata=");
-        format_hex_arg(string, pin.public.userdata, pin.public.userdata_len);
+        format_hex_arg(string, pin.base.userdata, pin.base.userdata_len);
         ds_put_char(string, '\n');
     }
 

@@ -1740,7 +1740,7 @@ connmgr_send_async_msg(struct connmgr *mgr,
         if (protocol == OFPUTIL_P_NONE || !rconn_is_connected(ofconn->rconn)
             || ofconn->controller_id != am->controller_id
             || !ofconn_receives_async_msg(ofconn, am->oam,
-                                          am->pin.up.public.reason)) {
+                                          am->pin.up.base.reason)) {
             continue;
         }
 
@@ -1748,11 +1748,11 @@ connmgr_send_async_msg(struct connmgr *mgr,
             &am->pin.up, protocol, ofconn->packet_in_format);
 
         struct ovs_list txq;
-        bool is_miss = (am->pin.up.public.reason == OFPR_NO_MATCH ||
-                        am->pin.up.public.reason == OFPR_EXPLICIT_MISS ||
-                        am->pin.up.public.reason == OFPR_IMPLICIT_MISS);
+        bool is_miss = (am->pin.up.base.reason == OFPR_NO_MATCH ||
+                        am->pin.up.base.reason == OFPR_EXPLICIT_MISS ||
+                        am->pin.up.base.reason == OFPR_IMPLICIT_MISS);
         pinsched_send(ofconn->schedulers[is_miss],
-                      am->pin.up.public.flow_metadata.flow.in_port.ofp_port,
+                      am->pin.up.base.flow_metadata.flow.in_port.ofp_port,
                       msg, &txq);
         do_send_packet_ins(ofconn, &txq);
     }
@@ -2322,8 +2322,8 @@ ofmonitor_wait(struct connmgr *mgr)
 void
 ofproto_async_msg_free(struct ofproto_async_msg *am)
 {
-    free(am->pin.up.public.packet);
-    free(am->pin.up.public.userdata);
+    free(am->pin.up.base.packet);
+    free(am->pin.up.base.userdata);
     free(am->pin.up.stack);
     free(am->pin.up.actions);
     free(am->pin.up.action_set);
