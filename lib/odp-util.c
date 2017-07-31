@@ -4852,7 +4852,9 @@ odp_key_to_dp_packet(const struct nlattr *key, size_t key_len,
     uint32_t wanted_attrs = 1u << OVS_KEY_ATTR_PRIORITY |
         1u << OVS_KEY_ATTR_SKB_MARK | 1u << OVS_KEY_ATTR_TUNNEL |
         1u << OVS_KEY_ATTR_IN_PORT | 1u << OVS_KEY_ATTR_ETHERTYPE |
-        1u << OVS_KEY_ATTR_ETHERNET;
+        1u << OVS_KEY_ATTR_ETHERNET | 1u << OVS_KEY_ATTR_CT_STATE |
+        1u << OVS_KEY_ATTR_CT_ZONE | 1u << OVS_KEY_ATTR_CT_MARK |
+        1u << OVS_KEY_ATTR_CT_LABELS;
 
     pkt_metadata_init(md, ODPP_NONE);
 
