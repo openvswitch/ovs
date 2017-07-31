@@ -411,6 +411,7 @@ static inline ovs_be32 be32_prefix_mask(int plen)
 
 bool is_all_zeros(const void *, size_t);
 bool is_all_ones(const void *, size_t);
+bool is_all_byte(const void *, size_t, uint8_t byte);
 void bitwise_copy(const void *src, unsigned int src_len, unsigned int src_ofs,
                   void *dst, unsigned int dst_len, unsigned int dst_ofs,
                   unsigned int n_bits);

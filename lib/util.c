@@ -1230,34 +1230,33 @@ const uint8_t count_1bits_8[256] = {
 };
 #endif
 
-/* Returns true if the 'n' bytes starting at 'p' are zeros. */
+/* Returns true if the 'n' bytes starting at 'p' are 'byte'. */
 bool
-is_all_zeros(const void *p_, size_t n)
+is_all_byte(const void *p_, size_t n, uint8_t byte)
 {
     const uint8_t *p = p_;
     size_t i;
 
     for (i = 0; i < n; i++) {
-        if (p[i] != 0x00) {
+        if (p[i] != byte) {
             return false;
         }
     }
     return true;
 }
 
+/* Returns true if the 'n' bytes starting at 'p' are zeros. */
+bool
+is_all_zeros(const void *p, size_t n)
+{
+    return is_all_byte(p, n, 0);
+}
+
 /* Returns true if the 'n' bytes starting at 'p' are 0xff. */
 bool
-is_all_ones(const void *p_, size_t n)
+is_all_ones(const void *p, size_t n)
 {
-    const uint8_t *p = p_;
-    size_t i;
-
-    for (i = 0; i < n; i++) {
-        if (p[i] != 0xff) {
-            return false;
-        }
-    }
-    return true;
+    return is_all_byte(p, n, 0xff);
 }
 
 /* Copies 'n_bits' bits starting from bit 'src_ofs' in 'src' to the 'n_bits'
