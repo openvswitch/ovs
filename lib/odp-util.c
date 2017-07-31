@@ -2182,44 +2182,100 @@ tun_key_to_attr(struct ofpbuf *a, const struct flow_tnl *tun_key,
     nl_msg_end_nested(a, tun_key_ofs);
 }
 
-/* The caller must already have verified that 'ma' has a correct length. */
+static bool
+odp_mask_is_constant__(enum ovs_key_attr attr, const void *mask, size_t size,
+                       int constant)
+{
+    /* Convert 'constant' to all the widths we need.  C conversion rules ensure
+     * that -1 becomes all-1-bits and 0 does not change. */
+    ovs_be16 be16 = (OVS_FORCE ovs_be16) constant;
+    uint32_t u32 = constant;
+    uint8_t u8 = constant;
+    const struct in6_addr *in6 = constant ? &in6addr_exact : &in6addr_any;
+
+    switch (attr) {
+    case OVS_KEY_ATTR_UNSPEC:
+    case OVS_KEY_ATTR_ENCAP:
+    case __OVS_KEY_ATTR_MAX:
+    default:
+        return false;
+
+    case OVS_KEY_ATTR_PRIORITY:
+    case OVS_KEY_ATTR_IN_PORT:
+    case OVS_KEY_ATTR_ETHERNET:
+    case OVS_KEY_ATTR_VLAN:
+    case OVS_KEY_ATTR_ETHERTYPE:
+    case OVS_KEY_ATTR_IPV4:
+    case OVS_KEY_ATTR_TCP:
+    case OVS_KEY_ATTR_UDP:
+    case OVS_KEY_ATTR_ICMP:
+    case OVS_KEY_ATTR_ICMPV6:
+    case OVS_KEY_ATTR_ND:
+    case OVS_KEY_ATTR_SKB_MARK:
+    case OVS_KEY_ATTR_TUNNEL:
+    case OVS_KEY_ATTR_SCTP:
+    case OVS_KEY_ATTR_DP_HASH:
+    case OVS_KEY_ATTR_RECIRC_ID:
+    case OVS_KEY_ATTR_MPLS:
+    case OVS_KEY_ATTR_CT_STATE:
+    case OVS_KEY_ATTR_CT_ZONE:
+    case OVS_KEY_ATTR_CT_MARK:
+    case OVS_KEY_ATTR_CT_LABELS:
+    case OVS_KEY_ATTR_PACKET_TYPE:
+        return is_all_byte(mask, size, u8);
+
+    case OVS_KEY_ATTR_TCP_FLAGS:
+        return TCP_FLAGS(*(ovs_be16 *) mask) == TCP_FLAGS(be16);
+
+    case OVS_KEY_ATTR_IPV6: {
+        const struct ovs_key_ipv6 *ipv6_mask = mask;
+        return ((ipv6_mask->ipv6_label & htonl(IPV6_LABEL_MASK))
+                == htonl(IPV6_LABEL_MASK & u32)
+                && ipv6_mask->ipv6_proto == u8
+                && ipv6_mask->ipv6_tclass == u8
+                && ipv6_mask->ipv6_hlimit == u8
+                && ipv6_mask->ipv6_frag == u8
+                && ipv6_addr_equals(&ipv6_mask->ipv6_src, in6)
+                && ipv6_addr_equals(&ipv6_mask->ipv6_dst, in6));
+    }
+
+    case OVS_KEY_ATTR_ARP:
+        return is_all_byte(mask, OFFSETOFEND(struct ovs_key_arp, arp_tha), u8);
+
+    case OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV4:
+        return is_all_byte(mask, OFFSETOFEND(struct ovs_key_ct_tuple_ipv4,
+                                             ipv4_proto), u8);
+
+    case OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6:
+        return is_all_byte(mask, OFFSETOFEND(struct ovs_key_ct_tuple_ipv6,
+                                             ipv6_proto), u8);
+    }
+}
+
+/* The caller must already have verified that 'ma' has a correct length.
+ *
+ * The main purpose of this function is formatting, to allow code to figure out
+ * whether the mask can be omitted.  It doesn't try hard for attributes that
+ * contain sub-attributes, etc., because normally those would be broken down
+ * further for formatting. */
 static bool
 odp_mask_attr_is_wildcard(const struct nlattr *ma)
 {
-    return is_all_zeros(nl_attr_get(ma), nl_attr_get_size(ma));
+    return odp_mask_is_constant__(nl_attr_type(ma),
+                                  nl_attr_get(ma), nl_attr_get_size(ma), 0);
 }
 
 /* The caller must already have verified that 'size' is a correct length for
- * 'attr'. */
+ * 'attr'.
+ *
+ * The main purpose of this function is formatting, to allow code to figure out
+ * whether the mask can be omitted.  It doesn't try hard for attributes that
+ * contain sub-attributes, etc., because normally those would be broken down
+ * further for formatting. */
 static bool
 odp_mask_is_exact(enum ovs_key_attr attr, const void *mask, size_t size)
 {
-    if (attr == OVS_KEY_ATTR_TCP_FLAGS) {
-        return TCP_FLAGS(*(ovs_be16 *)mask) == TCP_FLAGS(OVS_BE16_MAX);
-    }
-    if (attr == OVS_KEY_ATTR_IPV6) {
-        const struct ovs_key_ipv6 *ipv6_mask = mask;
-
-        return
-            ((ipv6_mask->ipv6_label & htonl(IPV6_LABEL_MASK))
-             == htonl(IPV6_LABEL_MASK))
-            && ipv6_mask->ipv6_proto == UINT8_MAX
-            && ipv6_mask->ipv6_tclass == UINT8_MAX
-            && ipv6_mask->ipv6_hlimit == UINT8_MAX
-            && ipv6_mask->ipv6_frag == UINT8_MAX
-            && ipv6_mask_is_exact(&ipv6_mask->ipv6_src)
-            && ipv6_mask_is_exact(&ipv6_mask->ipv6_dst);
-    }
-
-    if (attr == OVS_KEY_ATTR_ARP) {
-        /* ARP key has padding, ignore it. */
-        BUILD_ASSERT_DECL(sizeof(struct ovs_key_arp) == 24);
-        BUILD_ASSERT_DECL(offsetof(struct ovs_key_arp, arp_tha) == 10 + 6);
-        size = offsetof(struct ovs_key_arp, arp_tha) + ETH_ADDR_LEN;
-        ovs_assert(((uint16_t *)mask)[size/2] == 0);
-    }
-
-    return is_all_ones(mask, size);
+    return odp_mask_is_constant__(attr, mask, size, -1);
 }
 
 /* The caller must already have verified that 'ma' has a correct length. */
