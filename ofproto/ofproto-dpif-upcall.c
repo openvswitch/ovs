@@ -1649,7 +1649,7 @@ ukey_create_from_dpif_flow(const struct udpif *udpif,
      * relies on OVS userspace internal state, we need to delete all old
      * datapath flows with either a non-zero recirc_id in the key, or any
      * recirculation actions upon OVS restart. */
-    NL_ATTR_FOR_EACH_UNSAFE (a, left, flow->key, flow->key_len) {
+    NL_ATTR_FOR_EACH (a, left, flow->key, flow->key_len) {
         if (nl_attr_type(a) == OVS_KEY_ATTR_RECIRC_ID
             && nl_attr_get_u32(a) != 0) {
             return EINVAL;
