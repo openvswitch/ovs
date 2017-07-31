@@ -4853,7 +4853,7 @@ odp_key_to_dp_packet(const struct nlattr *key, size_t key_len,
     pkt_metadata_init(md, ODPP_NONE);
 
     NL_ATTR_FOR_EACH (nla, left, key, key_len) {
-        uint16_t type = nl_attr_type(nla);
+        enum ovs_key_attr type = nl_attr_type(nla);
         size_t len = nl_attr_get_size(nla);
         int expected_len = odp_key_attr_len(ovs_flow_key_attr_lens,
                                             OVS_KEY_ATTR_MAX, type);
@@ -4920,6 +4920,22 @@ odp_key_to_dp_packet(const struct nlattr *key, size_t key_len,
         case OVS_KEY_ATTR_ETHERTYPE:
             ethertype = nl_attr_get_be16(nla);
             break;
+        case OVS_KEY_ATTR_UNSPEC:
+        case OVS_KEY_ATTR_ENCAP:
+        case OVS_KEY_ATTR_VLAN:
+        case OVS_KEY_ATTR_IPV4:
+        case OVS_KEY_ATTR_IPV6:
+        case OVS_KEY_ATTR_TCP:
+        case OVS_KEY_ATTR_UDP:
+        case OVS_KEY_ATTR_ICMP:
+        case OVS_KEY_ATTR_ICMPV6:
+        case OVS_KEY_ATTR_ARP:
+        case OVS_KEY_ATTR_ND:
+        case OVS_KEY_ATTR_SCTP:
+        case OVS_KEY_ATTR_TCP_FLAGS:
+        case OVS_KEY_ATTR_MPLS:
+        case OVS_KEY_ATTR_PACKET_TYPE:
+        case __OVS_KEY_ATTR_MAX:
         default:
             break;
         }
