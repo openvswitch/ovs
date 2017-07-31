@@ -1655,7 +1655,7 @@ ukey_create_from_dpif_flow(const struct udpif *udpif,
             return EINVAL;
         }
     }
-    NL_ATTR_FOR_EACH_UNSAFE (a, left, flow->actions, flow->actions_len) {
+    NL_ATTR_FOR_EACH (a, left, flow->actions, flow->actions_len) {
         if (nl_attr_type(a) == OVS_ACTION_ATTR_RECIRC) {
             return EINVAL;
         }
