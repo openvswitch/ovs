@@ -175,11 +175,23 @@ OVS_NO_RETURN void ovs_assert_failure(const char *, const char *, const char *);
 #define PAD_PASTE2(x, y) x##y
 #define PAD_PASTE(x, y) PAD_PASTE2(x, y)
 #define PAD_ID PAD_PASTE(pad, __COUNTER__)
+#ifndef __cplusplus
 #define PADDED_MEMBERS(UNIT, MEMBERS)                               \
     union {                                                         \
         struct { MEMBERS };                                         \
         uint8_t PAD_ID[ROUND_UP(sizeof(struct { MEMBERS }), UNIT)]; \
     }
+#else
+/* C++ doesn't allow a type declaration within "sizeof", but it does support
+ * scoping for member names, so we can just declare a second member, with a
+ * name and the same type, and then use its size. */
+#define PADDED_MEMBERS(UNIT, MEMBERS)                           \
+    union {                                                     \
+        struct { MEMBERS };                                     \
+        struct { MEMBERS } named_member__;                      \
+        uint8_t PAD_ID[ROUND_UP(sizeof named_member__, UNIT)];  \
+    }
+#endif
 
 static inline bool
 is_pow2(uintmax_t x)
