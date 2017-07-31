@@ -44,3 +44,23 @@ include/openvswitch/cxxtest.cc: include/openvswitch/automake.mk
 	  echo $$header;						\
 	done | sed 's,^include/\(.*\)$$,#include <\1>,' > $@
 endif
+
+# OVS does not use C++ itself, but it provides public header files
+# that a C++ compiler should accept, so we make sure that every public
+# header file has the proper extern declaration for use with C++.
+#
+# Some header files don't declare any external functions, so they
+# don't really need extern "C".  We only white list a couple of these
+# below, which are the ones that seem unlikely to ever declare
+# external functions.  For the rest, we add extern "C" anyway; it
+# doesn't hurt.
+ALL_LOCAL += cxx-check
+cxx-check: $(openvswitchinclude_HEADERS)
+	@if LC_ALL=C grep -L 'extern "C"' $^ | \
+          $(EGREP) -v 'version.h|compiler.h'; \
+	then \
+	    echo "See above list of public headers lacking 'extern \"C\"'."; \
+	    exit 1; \
+	fi
+	$(AM_V_GEN)touch $@
+CLEANFILES += cxx-check

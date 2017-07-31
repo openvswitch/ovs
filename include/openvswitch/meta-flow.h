@@ -28,6 +28,10 @@
 #include "openvswitch/packets.h"
 #include "openvswitch/util.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct ds;
 struct match;
 struct ofputil_port_map;
@@ -2136,4 +2140,9 @@ void mf_format_subvalue(const union mf_subvalue *subvalue, struct ds *s);
 /* Field Arrays. */
 void field_array_set(enum mf_field_id id, const union mf_value *,
                      struct field_array *);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif /* meta-flow.h */

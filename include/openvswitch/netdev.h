@@ -21,6 +21,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct netdev;
 
 /* Network device statistics.
@@ -110,5 +114,9 @@ uint64_t netdev_features_to_bps(enum netdev_features features,
                                 uint64_t default_bps);
 bool netdev_features_is_full_duplex(enum netdev_features features);
 int netdev_set_advertisements(struct netdev *, enum netdev_features advertise);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* netdev.h */

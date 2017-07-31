@@ -19,6 +19,10 @@
 
 #include <limits.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* True if TYPE is _Bool, false otherwise. */
 #define TYPE_IS_BOOL(TYPE) ((TYPE) 1 == (TYPE) 2)
 
@@ -51,5 +55,9 @@
  *
  * The value is an overestimate. */
 #define INT_STRLEN(TYPE) (TYPE_IS_SIGNED(TYPE) + TYPE_VALUE_BITS(TYPE) / 3 + 1)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* type-props.h */

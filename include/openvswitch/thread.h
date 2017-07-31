@@ -23,6 +23,10 @@
 #include <sys/types.h>
 #include "openvswitch/compiler.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Mutex. */
 struct OVS_LOCKABLE ovs_mutex {
     pthread_mutex_t lock;
@@ -133,5 +137,9 @@ ovsthread_once_start(struct ovsthread_once *once)
      * once when strictly not necessary. */
     return OVS_UNLIKELY(!once->done && ovsthread_once_start__(once));
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* ovs-thread.h */

@@ -26,6 +26,10 @@
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct vl_mff_map;
 
 /* List of OVS abstracted actions.
@@ -1190,5 +1194,9 @@ enum ofperr ovs_instruction_type_from_inst_type(
 ovs_be32 ovsinst_bitmap_to_openflow(uint32_t ovsinst_bitmap, enum ofp_version);
 uint32_t ovsinst_bitmap_from_openflow(ovs_be32 ofpit_bitmap,
                                       enum ofp_version);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* ofp-actions.h */

@@ -21,6 +21,10 @@
 #include "openvswitch/packets.h"
 #include "openvswitch/tun-metadata.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct ds;
 struct ofputil_port_map;
 struct mf_field;
@@ -243,5 +247,9 @@ void minimatch_format(const struct minimatch *, const struct tun_table *,
                       struct ds *, int priority);
 char *minimatch_to_string(const struct minimatch *,
                           const struct ofputil_port_map *, int priority);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* match.h */

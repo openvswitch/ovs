@@ -25,6 +25,10 @@
 #include "openvswitch/compiler.h"
 #include "openvswitch/types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct flow;
 struct ofpbuf;
 struct ofputil_flow_mod;
@@ -122,5 +126,9 @@ char *str_to_connhelper(const char *str, uint16_t *alg) OVS_WARN_UNUSED_RESULT;
 char *parse_ofp_table_vacancy(struct ofputil_table_mod *,
                               const char *flow_miss_handling)
     OVS_WARN_UNUSED_RESULT;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* ofp-parse.h */

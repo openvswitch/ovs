@@ -34,6 +34,10 @@
 #include "openvswitch/type-props.h"
 #include "openvswitch/uuid.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct ofpbuf;
 union ofp_action;
 struct ofpact_set_field;
@@ -1498,4 +1502,9 @@ enum ofperr ofputil_decode_table_status(const struct ofp_header *oh,
 struct ofpbuf *
 ofputil_encode_table_status(const struct ofputil_table_status *ts,
                             enum ofputil_protocol protocol);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif /* ofp-util.h */

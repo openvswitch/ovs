@@ -21,6 +21,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "openflow/openflow.h"
 
 struct ds;
@@ -822,5 +826,9 @@ const char *ofperr_get_description(enum ofperr);
 
 void ofperr_format(struct ds *, enum ofperr);
 const char *ofperr_to_string(enum ofperr);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* ofp-errors.h */

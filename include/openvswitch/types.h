@@ -21,6 +21,10 @@
 #include <stdint.h>
 #include "openvswitch/compiler.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef __CHECKER__
 #define OVS_BITWISE __attribute__((bitwise))
 #define OVS_FORCE __attribute__((force))
@@ -171,5 +175,9 @@ struct eth_addr64 {
         ovs_be16 be16[4];
     };
 };
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* openvswitch/types.h */

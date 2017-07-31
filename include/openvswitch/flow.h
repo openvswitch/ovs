@@ -20,6 +20,10 @@
 #include "openvswitch/packets.h"
 #include "openvswitch/util.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* This sequence number should be incremented whenever anything involving flows
  * or the wildcarding of flows changes.  This will cause build assertion
  * failures in places which likely need to be updated. */
@@ -224,5 +228,9 @@ bool flow_wildcards_has_extra(const struct flow_wildcards *,
 uint32_t flow_wildcards_hash(const struct flow_wildcards *, uint32_t basis);
 bool flow_wildcards_equal(const struct flow_wildcards *,
                           const struct flow_wildcards *);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* flow.h */

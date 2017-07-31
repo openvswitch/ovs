@@ -41,6 +41,10 @@
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct ovs_list;
 
 /* Raw identifiers for OpenFlow messages.
@@ -776,5 +780,9 @@ enum ofpraw ofpmp_decode_raw(struct ovs_list *);
 /* Decoding multipart replies. */
 uint16_t ofpmp_flags(const struct ofp_header *);
 bool ofpmp_more(const struct ofp_header *);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* ofp-msgs.h */
