@@ -4849,13 +4849,6 @@ odp_key_to_dp_packet(const struct nlattr *key, size_t key_len,
     ovs_be32 packet_type = htonl(PT_UNKNOWN);
     ovs_be16 ethertype = 0;
     size_t left;
-    uint32_t wanted_attrs = 1u << OVS_KEY_ATTR_PRIORITY |
-        1u << OVS_KEY_ATTR_SKB_MARK | 1u << OVS_KEY_ATTR_TUNNEL |
-        1u << OVS_KEY_ATTR_IN_PORT | 1u << OVS_KEY_ATTR_ETHERTYPE |
-        1u << OVS_KEY_ATTR_ETHERNET | 1u << OVS_KEY_ATTR_CT_STATE |
-        1u << OVS_KEY_ATTR_CT_ZONE | 1u << OVS_KEY_ATTR_CT_MARK |
-        1u << OVS_KEY_ATTR_CT_LABELS | 1u << OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV4 |
-        1u << OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6;
 
     pkt_metadata_init(md, ODPP_NONE);
 
@@ -4872,42 +4865,33 @@ odp_key_to_dp_packet(const struct nlattr *key, size_t key_len,
         switch (type) {
         case OVS_KEY_ATTR_RECIRC_ID:
             md->recirc_id = nl_attr_get_u32(nla);
-            wanted_attrs &= ~(1u << OVS_KEY_ATTR_RECIRC_ID);
             break;
         case OVS_KEY_ATTR_DP_HASH:
             md->dp_hash = nl_attr_get_u32(nla);
-            wanted_attrs &= ~(1u << OVS_KEY_ATTR_DP_HASH);
             break;
         case OVS_KEY_ATTR_PRIORITY:
             md->skb_priority = nl_attr_get_u32(nla);
-            wanted_attrs &= ~(1u << OVS_KEY_ATTR_PRIORITY);
             break;
         case OVS_KEY_ATTR_SKB_MARK:
             md->pkt_mark = nl_attr_get_u32(nla);
-            wanted_attrs &= ~(1u << OVS_KEY_ATTR_SKB_MARK);
             break;
         case OVS_KEY_ATTR_CT_STATE:
             md->ct_state = odp_to_ovs_ct_state(nl_attr_get_u32(nla));
-            wanted_attrs &= ~(1u << OVS_KEY_ATTR_CT_STATE);
             break;
         case OVS_KEY_ATTR_CT_ZONE:
             md->ct_zone = nl_attr_get_u16(nla);
-            wanted_attrs &= ~(1u << OVS_KEY_ATTR_CT_ZONE);
             break;
         case OVS_KEY_ATTR_CT_MARK:
             md->ct_mark = nl_attr_get_u32(nla);
-            wanted_attrs &= ~(1u << OVS_KEY_ATTR_CT_MARK);
             break;
         case OVS_KEY_ATTR_CT_LABELS: {
             md->ct_label = nl_attr_get_u128(nla);
-            wanted_attrs &= ~(1u << OVS_KEY_ATTR_CT_LABELS);
             break;
         }
         case OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV4: {
             const struct ovs_key_ct_tuple_ipv4 *ct = nl_attr_get(nla);
             md->ct_orig_tuple.ipv4 = *ct;
             md->ct_orig_tuple_ipv6 = false;
-            wanted_attrs &= ~(1u << OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV4);
             break;
         }
         case OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6: {
@@ -4915,7 +4899,6 @@ odp_key_to_dp_packet(const struct nlattr *key, size_t key_len,
 
             md->ct_orig_tuple.ipv6 = *ct;
             md->ct_orig_tuple_ipv6 = true;
-            wanted_attrs &= ~(1u << OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6);
             break;
         }
         case OVS_KEY_ATTR_TUNNEL: {
@@ -4924,30 +4907,21 @@ odp_key_to_dp_packet(const struct nlattr *key, size_t key_len,
             res = odp_tun_key_from_attr(nla, &md->tunnel);
             if (res == ODP_FIT_ERROR) {
                 memset(&md->tunnel, 0, sizeof md->tunnel);
-            } else if (res == ODP_FIT_PERFECT) {
-                wanted_attrs &= ~(1u << OVS_KEY_ATTR_TUNNEL);
             }
             break;
         }
         case OVS_KEY_ATTR_IN_PORT:
             md->in_port.odp_port = nl_attr_get_odp_port(nla);
-            wanted_attrs &= ~(1u << OVS_KEY_ATTR_IN_PORT);
             break;
         case OVS_KEY_ATTR_ETHERNET:
             /* Presence of OVS_KEY_ATTR_ETHERNET indicates Ethernet packet. */
             packet_type = htonl(PT_ETH);
-            wanted_attrs &= ~(1u << OVS_KEY_ATTR_ETHERNET);
             break;
         case OVS_KEY_ATTR_ETHERTYPE:
             ethertype = nl_attr_get_be16(nla);
-            wanted_attrs &= ~(1u << OVS_KEY_ATTR_ETHERTYPE);
             break;
         default:
             break;
-        }
-
-        if (!wanted_attrs) {
-            break; /* Have everything. */
         }
     }
 
