@@ -4106,7 +4106,9 @@ odp_key_to_pkt_metadata(const struct nlattr *key, size_t key_len,
     size_t left;
     uint32_t wanted_attrs = 1u << OVS_KEY_ATTR_PRIORITY |
         1u << OVS_KEY_ATTR_SKB_MARK | 1u << OVS_KEY_ATTR_TUNNEL |
-        1u << OVS_KEY_ATTR_IN_PORT;
+        1u << OVS_KEY_ATTR_IN_PORT | 1u << OVS_KEY_ATTR_CT_STATE |
+        1u << OVS_KEY_ATTR_CT_ZONE | 1u << OVS_KEY_ATTR_CT_MARK |
+        1u << OVS_KEY_ATTR_CT_LABELS;
 
     pkt_metadata_init(md, ODPP_NONE);
 
