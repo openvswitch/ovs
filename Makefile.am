@@ -108,6 +108,7 @@ MAN_ROOTS =
 noinst_DATA =
 noinst_HEADERS =
 lib_LTLIBRARIES =
+noinst_LTLIBRARIES =
 noinst_man_MANS =
 noinst_PROGRAMS =
 noinst_SCRIPTS =

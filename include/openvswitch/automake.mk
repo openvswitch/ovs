@@ -30,3 +30,17 @@ openvswitchinclude_HEADERS = \
 	include/openvswitch/version.h \
 	include/openvswitch/vconn.h \
 	include/openvswitch/vlog.h
+
+if HAVE_CXX
+# OVS does not use C++ itself, but it provides public header files
+# that a C++ compiler should accept, so when --enable-Werror is in
+# effect and a C++ compiler is available, we build a C++ source file
+# that #includes all the public headers, as a way to ensure that they
+# are acceptable as C++.
+noinst_LTLIBRARIES += include/openvswitch/libcxxtest.la
+nodist_include_openvswitch_libcxxtest_la_SOURCES = include/openvswitch/cxxtest.cc
+include/openvswitch/cxxtest.cc: include/openvswitch/automake.mk
+	$(AM_V_GEN)for header in $(openvswitchinclude_HEADERS); do	\
+	  echo $$header;						\
+	done | sed 's,^include/\(.*\)$$,#include <\1>,' > $@
+endif
