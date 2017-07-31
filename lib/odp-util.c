@@ -2210,9 +2210,6 @@ odp_mask_is_exact(enum ovs_key_attr attr, const void *mask, size_t size)
             && ipv6_mask_is_exact(&ipv6_mask->ipv6_src)
             && ipv6_mask_is_exact(&ipv6_mask->ipv6_dst);
     }
-    if (attr == OVS_KEY_ATTR_TUNNEL) {
-        return false;
-    }
 
     if (attr == OVS_KEY_ATTR_ARP) {
         /* ARP key has padding, ignore it. */
@@ -2230,8 +2227,7 @@ static bool
 odp_mask_attr_is_exact(const struct nlattr *ma)
 {
     enum ovs_key_attr attr = nl_attr_type(ma);
-    return (attr != OVS_KEY_ATTR_TUNNEL
-            && odp_mask_is_exact(attr, nl_attr_get(ma), nl_attr_get_size(ma)));
+    return odp_mask_is_exact(attr, nl_attr_get(ma), nl_attr_get_size(ma));
 }
 
 void
