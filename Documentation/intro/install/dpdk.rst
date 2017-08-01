@@ -449,7 +449,7 @@ affinitized accordingly.
 
   A poll mode driver (pmd) thread handles the I/O of all DPDK interfaces
   assigned to it. A pmd thread shall poll the ports for incoming packets,
-  switch the packets and send to tx port.  pmd thread is CPU bound, and needs
+  switch the packets and send to tx port.  A pmd thread is CPU bound, and needs
   to be affinitized to isolated cores for optimum performance.
 
   By setting a bit in the mask, a pmd thread is created and pinned to the
@@ -458,8 +458,23 @@ affinitized accordingly.
       $ ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x4
 
   .. note::
-    pmd thread on a NUMA node is only created if there is at least one DPDK
-    interface from that NUMA node added to OVS.
+    A pmd thread on a NUMA node is only created if there is at least one DPDK
+    interface from that NUMA node added to OVS.  A pmd thread is created by
+    default on a core of a NUMA node or when a specified pmd-cpu-mask has
+    indicated so.  Even though a PMD thread may exist, the thread only starts
+    consuming CPU cycles if there is least one receive queue assigned to
+    the pmd.
+
+  .. note::
+    On NUMA systems PCI devices are also local to a NUMA node.  Unbound rx
+    queues for a PCI device will be assigned to a pmd on it's local NUMA node
+    if a non-isolated PMD exists on that NUMA node.  If not, the queue will be
+    assigned to a non-isolated pmd on a remote NUMA node.  This will result in
+    reduced maximum throughput on that device and possibly on other devices
+    assigned to that pmd thread. If such a queue assignment is made a warning
+    message will be logged: "There's no available (non-isolated) pmd thread on
+    numa node N. Queue Q on port P will be assigned to the pmd on core C
+    (numa node N'). Expect reduced performance."
 
 - QEMU vCPU thread Affinity
 

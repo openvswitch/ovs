@@ -3218,6 +3218,24 @@ rr_numa_list_lookup(struct rr_numa_list *rr, int numa_id)
     return NULL;
 }
 
+/* Returns the next node in numa list following 'numa' in round-robin fashion.
+ * Returns first node if 'numa' is a null pointer or the last node in 'rr'.
+ * Returns NULL if 'rr' numa list is empty. */
+static struct rr_numa *
+rr_numa_list_next(struct rr_numa_list *rr, const struct rr_numa *numa)
+{
+    struct hmap_node *node = NULL;
+
+    if (numa) {
+        node = hmap_next(&rr->numas, &numa->node);
+    }
+    if (!node) {
+        node = hmap_first(&rr->numas);
+    }
+
+    return (node) ? CONTAINER_OF(node, struct rr_numa, node) : NULL;
+}
+
 static void
 rr_numa_list_populate(struct dp_netdev *dp, struct rr_numa_list *rr)
 {
@@ -3272,6 +3290,7 @@ rxq_scheduling(struct dp_netdev *dp, bool pinned) OVS_REQUIRES(dp->port_mutex)
 {
     struct dp_netdev_port *port;
     struct rr_numa_list rr;
+    struct rr_numa *non_local_numa = NULL;
 
     rr_numa_list_populate(dp, &rr);
 
@@ -3304,11 +3323,28 @@ rxq_scheduling(struct dp_netdev *dp, bool pinned) OVS_REQUIRES(dp->port_mutex)
                 }
             } else if (!pinned && q->core_id == OVS_CORE_UNSPEC) {
                 if (!numa) {
-                    VLOG_WARN("There's no available (non isolated) pmd thread "
+                    /* There are no pmds on the queue's local NUMA node.
+                       Round-robin on the NUMA nodes that do have pmds. */
+                    non_local_numa = rr_numa_list_next(&rr, non_local_numa);
+                    if (!non_local_numa) {
+                        VLOG_ERR("There is no available (non-isolated) pmd "
+                                 "thread for port \'%s\' queue %d. This queue "
+                                 "will not be polled. Is pmd-cpu-mask set to "
+                                 "zero? Or are all PMDs isolated to other "
+                                 "queues?", netdev_get_name(port->netdev),
+                                 qid);
+                        continue;
+                    }
+                    q->pmd = rr_numa_get_pmd(non_local_numa);
+                    VLOG_WARN("There's no available (non-isolated) pmd thread "
                               "on numa node %d. Queue %d on port \'%s\' will "
-                              "not be polled.",
-                              numa_id, qid, netdev_get_name(port->netdev));
+                              "be assigned to the pmd on core %d "
+                              "(numa node %d). Expect reduced performance.",
+                              numa_id, qid, netdev_get_name(port->netdev),
+                              q->pmd->core_id, q->pmd->numa_id);
                 } else {
+                    /* Assign queue to the next (round-robin) PMD on it's local
+                       NUMA node. */
                     q->pmd = rr_numa_get_pmd(numa);
                 }
             }
