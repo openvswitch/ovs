@@ -650,13 +650,12 @@ dpdk_eth_dev_queue_setup(struct netdev_dpdk *dev, int n_rxq, int n_txq)
     int i;
     struct rte_eth_conf conf = port_conf;
 
+    /* For some NICs (e.g. Niantic), scatter_rx mode needs to be explicitly
+     * enabled. */
     if (dev->mtu > ETHER_MTU) {
-        conf.rxmode.jumbo_frame = 1;
-        conf.rxmode.max_rx_pkt_len = dev->max_packet_len;
-    } else {
-        conf.rxmode.jumbo_frame = 0;
-        conf.rxmode.max_rx_pkt_len = 0;
+        conf.rxmode.enable_scatter = 1;
     }
+
     conf.rxmode.hw_ip_checksum = (dev->hw_ol_features &
                                   NETDEV_RX_CHECKSUM_OFFLOAD) != 0;
     /* A device may report more queues than it makes available (this has
@@ -673,6 +672,13 @@ dpdk_eth_dev_queue_setup(struct netdev_dpdk *dev, int n_rxq, int n_txq)
         if (diag) {
             VLOG_WARN("Interface %s eth_dev setup error %s\n",
                       dev->up.name, rte_strerror(-diag));
+            break;
+        }
+
+        diag = rte_eth_dev_set_mtu(dev->port_id, dev->mtu);
+        if (diag) {
+            VLOG_ERR("Interface %s MTU (%d) setup error: %s",
+                    dev->up.name, dev->mtu, rte_strerror(-diag));
             break;
         }
 
