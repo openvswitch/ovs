@@ -185,15 +185,15 @@ main(int argc, char *argv[])
         /* Try dequeuing max possible packets first, if that fails, get the
          * most we can. Loop body should only execute once, maximum.
          */
-        while (unlikely(rte_ring_dequeue_bulk(rx_ring, pkts, rx_pkts) != 0) &&
-            rx_pkts > 0) {
+        while (unlikely(rte_ring_dequeue_bulk(rx_ring, pkts,
+                        rx_pkts, NULL) != 0) && rx_pkts > 0) {
             rx_pkts = (uint16_t)RTE_MIN(rte_ring_count(rx_ring), PKT_READ_SIZE);
         }
 
         if (rx_pkts > 0) {
             /* blocking enqueue */
             do {
-                rslt = rte_ring_enqueue_bulk(tx_ring, pkts, rx_pkts);
+                rslt = rte_ring_enqueue_bulk(tx_ring, pkts, rx_pkts, NULL);
             } while (rslt == -ENOBUFS);
         }
     }

@@ -292,9 +292,9 @@ To begin, instantiate a guest as described in :ref:`dpdk-vhost-user` or
 DPDK sources to VM and build DPDK::
 
     $ cd /root/dpdk/
-    $ wget http://fast.dpdk.org/rel/dpdk-16.11.2.tar.xz
-    $ tar xf dpdk-16.11.2.tar.xz
-    $ export DPDK_DIR=/root/dpdk/dpdk-stable-16.11.2
+    $ wget http://fast.dpdk.org/rel/dpdk-17.05.1.tar.xz
+    $ tar xf dpdk-17.05.1.tar.xz
+    $ export DPDK_DIR=/root/dpdk/dpdk-stable-17.05.1
     $ export DPDK_TARGET=x86_64-native-linuxapp-gcc
     $ export DPDK_BUILD=$DPDK_DIR/$DPDK_TARGET
     $ cd $DPDK_DIR
@@ -314,8 +314,8 @@ Setup huge pages and DPDK devices using UIO::
     $ mount -t hugetlbfs hugetlbfs /dev/hugepages  # only if not already mounted
     $ modprobe uio
     $ insmod $DPDK_BUILD/kmod/igb_uio.ko
-    $ $DPDK_DIR/tools/dpdk-devbind.py --status
-    $ $DPDK_DIR/tools/dpdk-devbind.py -b igb_uio 00:03.0 00:04.0
+    $ $DPDK_DIR/usertools/dpdk-devbind.py --status
+    $ $DPDK_DIR/usertools/dpdk-devbind.py -b igb_uio 00:03.0 00:04.0
 
 .. note::
 
@@ -378,7 +378,7 @@ Sample XML
         </disk>
         <disk type='dir' device='disk'>
           <driver name='qemu' type='fat'/>
-          <source dir='/usr/src/dpdk-stable-16.11.2'/>
+          <source dir='/usr/src/dpdk-stable-17.05.1'/>
           <target dev='vdb' bus='virtio'/>
           <readonly/>
         </disk>

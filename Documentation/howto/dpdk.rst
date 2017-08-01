@@ -331,7 +331,7 @@ Detaching will be performed while processing del-port command::
 
     $ ovs-vsctl del-port dpdkx
 
-This feature is not supported with VFIO and does not work with some NICs.
+This feature does not work with some NICs.
 For more information please refer to the `DPDK Port Hotplug Framework
 <http://dpdk.org/doc/guides/prog_guide/port_hotplug_framework.html#hotplug>`__.
 
@@ -528,15 +528,15 @@ described in :ref:`dpdk-testpmd`. Once compiled, run the application::
 
 When you finish testing, bind the vNICs back to kernel::
 
-    $ $DPDK_DIR/tools/dpdk-devbind.py --bind=virtio-pci 0000:00:03.0
-    $ $DPDK_DIR/tools/dpdk-devbind.py --bind=virtio-pci 0000:00:04.0
+    $ $DPDK_DIR/usertools/dpdk-devbind.py --bind=virtio-pci 0000:00:03.0
+    $ $DPDK_DIR/usertools/dpdk-devbind.py --bind=virtio-pci 0000:00:04.0
 
 .. note::
 
   Valid PCI IDs must be passed in above example. The PCI IDs can be retrieved
   like so::
 
-      $ $DPDK_DIR/tools/dpdk-devbind.py --status
+      $ $DPDK_DIR/usertools/dpdk-devbind.py --status
 
 More information on the dpdkvhostuser ports can be found in
 :doc:`/topics/dpdk/vhost-user`.

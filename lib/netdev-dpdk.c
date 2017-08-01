@@ -22,6 +22,9 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <unistd.h>
+#include <linux/virtio_net.h>
+#include <sys/socket.h>
+#include <linux/if.h>
 
 #include <rte_config.h>
 #include <rte_cycles.h>
@@ -31,7 +34,7 @@
 #include <rte_malloc.h>
 #include <rte_mbuf.h>
 #include <rte_meter.h>
-#include <rte_virtio_net.h>
+#include <rte_vhost.h>
 
 #include "dirs.h"
 #include "dp-packet.h"
@@ -55,6 +58,8 @@
 #include "unaligned.h"
 #include "timeval.h"
 #include "unixctl.h"
+
+enum {VIRTIO_RXQ, VIRTIO_TXQ, VIRTIO_QNUM};
 
 VLOG_DEFINE_THIS_MODULE(netdev_dpdk);
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
@@ -169,6 +174,21 @@ static const struct rte_eth_conf port_conf = {
     .txmode = {
         .mq_mode = ETH_MQ_TX_NONE,
     },
+};
+
+/*
+ * These callbacks allow virtio-net devices to be added to vhost ports when
+ * configuration has been fully completed.
+ */
+static int new_device(int vid);
+static void destroy_device(int vid);
+static int vring_state_changed(int vid, uint16_t queue_id, int enable);
+static const struct vhost_device_ops virtio_net_device_ops =
+{
+    .new_device =  new_device,
+    .destroy_device = destroy_device,
+    .vring_state_changed = vring_state_changed,
+    .features_changed = NULL
 };
 
 enum { DPDK_RING_SIZE = 256 };
@@ -412,8 +432,8 @@ struct netdev_rxq_dpdk {
     dpdk_port_t port_id;
 };
 
-static int netdev_dpdk_class_init(void);
-static int netdev_dpdk_vhost_class_init(void);
+static void netdev_dpdk_destruct(struct netdev *netdev);
+static void netdev_dpdk_vhost_destruct(struct netdev *netdev);
 
 int netdev_dpdk_get_vid(const struct netdev_dpdk *dev);
 
@@ -423,8 +443,8 @@ netdev_dpdk_get_ingress_policer(const struct netdev_dpdk *dev);
 static bool
 is_dpdk_class(const struct netdev_class *class)
 {
-    return class->init == netdev_dpdk_class_init
-           || class->init == netdev_dpdk_vhost_class_init;
+    return class->destruct == netdev_dpdk_destruct
+           || class->destruct == netdev_dpdk_vhost_destruct;
 }
 
 /* DPDK NIC drivers allocate RX buffers at a particular granularity, typically
@@ -954,13 +974,45 @@ netdev_dpdk_vhost_construct(struct netdev *netdev)
     if (err) {
         VLOG_ERR("vhost-user socket device setup failure for socket %s\n",
                  dev->vhost_id);
+        goto out;
     } else {
         fatal_signal_add_file_to_unlink(dev->vhost_id);
         VLOG_INFO("Socket %s created for vhost-user port %s\n",
                   dev->vhost_id, name);
     }
-    err = vhost_common_construct(netdev);
 
+    err = rte_vhost_driver_callback_register(dev->vhost_id,
+                                                &virtio_net_device_ops);
+    if (err) {
+        VLOG_ERR("rte_vhost_driver_callback_register failed for vhost user "
+                 "port: %s\n", name);
+        goto out;
+    }
+
+    err = rte_vhost_driver_disable_features(dev->vhost_id,
+                                1ULL << VIRTIO_NET_F_HOST_TSO4
+                                | 1ULL << VIRTIO_NET_F_HOST_TSO6
+                                | 1ULL << VIRTIO_NET_F_CSUM);
+    if (err) {
+        VLOG_ERR("rte_vhost_driver_disable_features failed for vhost user "
+                 "port: %s\n", name);
+        goto out;
+    }
+
+    err = rte_vhost_driver_start(dev->vhost_id);
+    if (err) {
+        VLOG_ERR("rte_vhost_driver_start failed for vhost user "
+                 "port: %s\n", name);
+        goto out;
+    }
+
+    err = vhost_common_construct(netdev);
+    if (err) {
+        VLOG_ERR("vhost_common_construct failed for vhost user "
+                 "port: %s\n", name);
+    }
+
+out:
     ovs_mutex_unlock(&dpdk_mutex);
     VLOG_WARN_ONCE("dpdkvhostuser ports are considered deprecated;  "
                    "please migrate to dpdkvhostuserclient ports.");
@@ -974,6 +1026,10 @@ netdev_dpdk_vhost_client_construct(struct netdev *netdev)
 
     ovs_mutex_lock(&dpdk_mutex);
     err = vhost_common_construct(netdev);
+    if (err) {
+        VLOG_ERR("vhost_common_construct failed for vhost user client"
+                 "port: %s\n", netdev->name);
+    }
     ovs_mutex_unlock(&dpdk_mutex);
     return err;
 }
@@ -2462,12 +2518,9 @@ static void
 set_irq_status(int vid)
 {
     uint32_t i;
-    uint64_t idx;
 
-    for (i = 0; i < rte_vhost_get_queue_num(vid); i++) {
-        idx = i * VIRTIO_QNUM;
-        rte_vhost_enable_guest_notification(vid, idx + VIRTIO_RXQ, 0);
-        rte_vhost_enable_guest_notification(vid, idx + VIRTIO_TXQ, 0);
+    for (i = 0; i < rte_vhost_get_vring_num(vid); i++) {
+        rte_vhost_enable_guest_notification(vid, i, 0);
     }
 }
 
@@ -2530,7 +2583,7 @@ new_device(int vid)
     LIST_FOR_EACH(dev, list_node, &dpdk_list) {
         ovs_mutex_lock(&dev->mutex);
         if (strncmp(ifname, dev->vhost_id, IF_NAME_SZ) == 0) {
-            uint32_t qp_num = rte_vhost_get_queue_num(vid);
+            uint32_t qp_num = rte_vhost_get_vring_num(vid)/VIRTIO_QNUM;
 
             /* Get NUMA information */
             newnode = rte_vhost_get_numa_node(vid);
@@ -2697,27 +2750,6 @@ netdev_dpdk_get_ingress_policer(const struct netdev_dpdk *dev)
     return ovsrcu_get(struct ingress_policer *, &dev->ingress_policer);
 }
 
-/*
- * These callbacks allow virtio-net devices to be added to vhost ports when
- * configuration has been fully complete.
- */
-static const struct virtio_net_device_ops virtio_net_device_ops =
-{
-    .new_device =  new_device,
-    .destroy_device = destroy_device,
-    .vring_state_changed = vring_state_changed
-};
-
-static void *
-start_vhost_loop(void *dummy OVS_UNUSED)
-{
-     pthread_detach(pthread_self());
-     /* Put the vhost thread into quiescent state. */
-     ovsrcu_quiesce_start();
-     rte_vhost_driver_session_start();
-     return NULL;
-}
-
 static int
 netdev_dpdk_class_init(void)
 {
@@ -2737,25 +2769,6 @@ netdev_dpdk_class_init(void)
     return 0;
 }
 
-static int
-netdev_dpdk_vhost_class_init(void)
-{
-    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
-
-    /* This function can be called for different classes.  The initialization
-     * needs to be done only once */
-    if (ovsthread_once_start(&once)) {
-        rte_vhost_driver_callback_register(&virtio_net_device_ops);
-        rte_vhost_feature_disable(1ULL << VIRTIO_NET_F_HOST_TSO4
-                                  | 1ULL << VIRTIO_NET_F_HOST_TSO6
-                                  | 1ULL << VIRTIO_NET_F_CSUM);
-        ovs_thread_create("vhost_thread", start_vhost_loop, NULL);
-
-        ovsthread_once_done(&once);
-    }
-
-    return 0;
-}
 
 /* Client Rings */
 
@@ -3210,6 +3223,31 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
                       "using client socket '%s'",
                       dev->up.name, dev->vhost_id);
         }
+
+        err = rte_vhost_driver_callback_register(dev->vhost_id,
+                                                 &virtio_net_device_ops);
+        if (err) {
+            VLOG_ERR("rte_vhost_driver_callback_register failed for "
+                     "vhost user client port: %s\n", dev->up.name);
+            goto unlock;
+        }
+
+        err = rte_vhost_driver_disable_features(dev->vhost_id,
+                                    1ULL << VIRTIO_NET_F_HOST_TSO4
+                                    | 1ULL << VIRTIO_NET_F_HOST_TSO6
+                                    | 1ULL << VIRTIO_NET_F_CSUM);
+        if (err) {
+            VLOG_ERR("rte_vhost_driver_disable_features failed for vhost user "
+                     "client port: %s\n", dev->up.name);
+            goto unlock;
+        }
+
+        err = rte_vhost_driver_start(dev->vhost_id);
+        if (err) {
+            VLOG_ERR("rte_vhost_driver_start failed for vhost user "
+                     "client port: %s\n", dev->up.name);
+            goto unlock;
+        }
     }
 
     err = dpdk_vhost_reconfigure_helper(dev);
@@ -3330,7 +3368,7 @@ static const struct netdev_class dpdk_ring_class =
 static const struct netdev_class dpdk_vhost_class =
     NETDEV_DPDK_CLASS(
         "dpdkvhostuser",
-        netdev_dpdk_vhost_class_init,
+        NULL,
         netdev_dpdk_vhost_construct,
         netdev_dpdk_vhost_destruct,
         NULL,
@@ -3345,7 +3383,7 @@ static const struct netdev_class dpdk_vhost_class =
 static const struct netdev_class dpdk_vhost_client_class =
     NETDEV_DPDK_CLASS(
         "dpdkvhostuserclient",
-        netdev_dpdk_vhost_class_init,
+        NULL,
         netdev_dpdk_vhost_client_construct,
         netdev_dpdk_vhost_destruct,
         netdev_dpdk_vhost_client_set_config,

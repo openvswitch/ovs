@@ -40,7 +40,7 @@ Build requirements
 In addition to the requirements described in :doc:`general`, building Open
 vSwitch with DPDK will require the following:
 
-- DPDK 16.11
+- DPDK 17.05.1
 
 - A `DPDK supported NIC`_
 
@@ -69,9 +69,9 @@ Install DPDK
 #. Download the `DPDK sources`_, extract the file and set ``DPDK_DIR``::
 
        $ cd /usr/src/
-       $ wget http://fast.dpdk.org/rel/dpdk-16.11.2.tar.xz
-       $ tar xf dpdk-16.11.2.tar.xz
-       $ export DPDK_DIR=/usr/src/dpdk-stable-16.11.2
+       $ wget http://fast.dpdk.org/rel/dpdk-17.05.1.tar.xz
+       $ tar xf dpdk-17.05.1.tar.xz
+       $ export DPDK_DIR=/usr/src/dpdk-stable-17.05.1
        $ cd $DPDK_DIR
 
 #. (Optional) Configure DPDK as a shared library
@@ -187,8 +187,8 @@ to the VFIO driver::
     $ modprobe vfio-pci
     $ /usr/bin/chmod a+x /dev/vfio
     $ /usr/bin/chmod 0666 /dev/vfio/*
-    $ $DPDK_DIR/tools/dpdk-devbind.py --bind=vfio-pci eth1
-    $ $DPDK_DIR/tools/dpdk-devbind.py --status
+    $ $DPDK_DIR/usertools/dpdk-devbind.py --bind=vfio-pci eth1
+    $ $DPDK_DIR/usertools/dpdk-devbind.py --status
 
 Setup OVS
 ~~~~~~~~~
@@ -584,7 +584,7 @@ Limitations
   The latest list of validated firmware versions can be found in the `DPDK
   release notes`_.
 
-.. _DPDK release notes: http://dpdk.org/doc/guides/rel_notes/release_16_11.html
+.. _DPDK release notes: http://dpdk.org/doc/guides/rel_notes/release_17_05.html
 
 Reporting Bugs
 --------------

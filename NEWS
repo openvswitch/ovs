@@ -21,6 +21,7 @@ Post-v2.7.0
        still can be configured via extra arguments for DPDK EAL.
      * dpdkvhostuser ports are marked as deprecated.  They will be removed
        in an upcoming release.
+     * Support for DPDK v17.05.1.
    - IPFIX now provides additional counters:
      * Total counters since metering process startup.
      * Per-flow TCP flag counters.
