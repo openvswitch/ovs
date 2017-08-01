@@ -3794,9 +3794,9 @@ pmd_thread_main(void *f_)
     ovs_numa_thread_setaffinity_core(pmd->core_id);
     dpdk_set_lcore_id(pmd->core_id);
     poll_cnt = pmd_load_queues_and_ports(pmd, &poll_list);
+    emc_cache_init(&pmd->flow_cache);
 reload:
     pmd_alloc_static_tx_qid(pmd);
-    emc_cache_init(&pmd->flow_cache);
 
     /* List port/core affinity */
     for (i = 0; i < poll_cnt; i++) {
@@ -3850,13 +3850,13 @@ reload:
      * reloading the updated configuration. */
     dp_netdev_pmd_reload_done(pmd);
 
-    emc_cache_uninit(&pmd->flow_cache);
     pmd_free_static_tx_qid(pmd);
 
     if (!exiting) {
         goto reload;
     }
 
+    emc_cache_uninit(&pmd->flow_cache);
     free(poll_list);
     pmd_free_cached_ports(pmd);
     return NULL;
