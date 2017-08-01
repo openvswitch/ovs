@@ -401,7 +401,14 @@ OvsCtLookup(OvsConntrackKeyLookupCtx *ctx)
     POVS_CT_ENTRY entry;
     BOOLEAN reply = FALSE;
     POVS_CT_ENTRY found = NULL;
-    OVS_CT_KEY key = ctx->key;
+
+    /* Reverse NAT must be performed before OvsCtLookup, so here
+     * we simply need to flip the src and dst in key and compare
+     * they are equal. Note that flipped key is not equal to
+     * rev_key due to NAT effect.
+     */
+    OVS_CT_KEY revCtxKey = ctx->key;
+    OvsCtKeyReverse(&revCtxKey);
 
     if (!ctTotalEntries) {
         return found;
@@ -410,19 +417,13 @@ OvsCtLookup(OvsConntrackKeyLookupCtx *ctx)
     LIST_FORALL(&ovsConntrackTable[ctx->hash & CT_HASH_TABLE_MASK], link) {
         entry = CONTAINING_RECORD(link, OVS_CT_ENTRY, link);
 
-        if (OvsCtKeyAreSame(key,entry->key)) {
+        if (OvsCtKeyAreSame(ctx->key, entry->key)) {
             found = entry;
             reply = FALSE;
             break;
         }
 
-        /* Reverse NAT must be performed before OvsCtLookup, so here
-         * we simply need to flip the src and dst in key and compare
-         * they are equal. Note that flipped key is not equal to
-         * rev_key due to NAT effect.
-         */
-        OvsCtKeyReverse(&key);
-        if (OvsCtKeyAreSame(key, entry->key)) {
+        if (OvsCtKeyAreSame(revCtxKey, entry->key)) {
             found = entry;
             reply = TRUE;
             break;
