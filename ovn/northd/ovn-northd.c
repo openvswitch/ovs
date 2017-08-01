@@ -6531,6 +6531,12 @@ main(int argc, char *argv[])
     ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_chassis_col_nb_cfg);
     ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_chassis_col_name);
 
+    /* Ensure that only a single ovn-northd is active in the deployment by
+     * acquiring a lock called "ovn_northd" on the southbound database
+     * and then only performing DB transactions if the lock is held. */
+    ovsdb_idl_set_lock(ovnsb_idl_loop.idl, "ovn_northd");
+    bool had_lock = false;
+
     /* Main loop. */
     exiting = false;
     while (!exiting) {
@@ -6541,15 +6547,29 @@ main(int argc, char *argv[])
             .ovnsb_txn = ovsdb_idl_loop_run(&ovnsb_idl_loop),
         };
 
-        struct chassis_index chassis_index;
-        chassis_index_init(&chassis_index, ctx.ovnsb_idl);
+        if (!had_lock && ovsdb_idl_has_lock(ovnsb_idl_loop.idl)) {
+            VLOG_INFO("ovn-northd lock acquired. "
+                      "This ovn-northd instance is now active.");
+            had_lock = true;
+        } else if (had_lock && !ovsdb_idl_has_lock(ovnsb_idl_loop.idl)) {
+            VLOG_INFO("ovn-northd lock lost. "
+                      "This ovn-northd instance is now on standby.");
+            had_lock = false;
+        }
 
-        ovnnb_db_run(&ctx, &chassis_index, &ovnsb_idl_loop);
-        ovnsb_db_run(&ctx, &ovnsb_idl_loop);
-        if (ctx.ovnsb_txn) {
-            check_and_add_supported_dhcp_opts_to_sb_db(&ctx);
-            check_and_add_supported_dhcpv6_opts_to_sb_db(&ctx);
-            check_and_update_rbac(&ctx);
+        struct chassis_index chassis_index;
+        bool destroy_chassis_index = false;
+        if (ovsdb_idl_has_lock(ovnsb_idl_loop.idl)) {
+            chassis_index_init(&chassis_index, ctx.ovnsb_idl);
+            destroy_chassis_index = true;
+
+            ovnnb_db_run(&ctx, &chassis_index, &ovnsb_idl_loop);
+            ovnsb_db_run(&ctx, &ovnsb_idl_loop);
+            if (ctx.ovnsb_txn) {
+                check_and_add_supported_dhcp_opts_to_sb_db(&ctx);
+                check_and_add_supported_dhcpv6_opts_to_sb_db(&ctx);
+                check_and_update_rbac(&ctx);
+            }
         }
 
         unixctl_server_run(unixctl);
@@ -6565,7 +6585,9 @@ main(int argc, char *argv[])
             exiting = true;
         }
 
-        chassis_index_destroy(&chassis_index);
+        if (destroy_chassis_index) {
+            chassis_index_destroy(&chassis_index);
+        }
     }
 
     unixctl_server_destroy(unixctl);

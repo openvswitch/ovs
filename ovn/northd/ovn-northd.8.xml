@@ -72,6 +72,15 @@
       </dl>
     </p>
 
+    <h1>Active-Standby for High Availability</h1>
+    <p>
+      You may run <code>ovn-northd</code> more than once in an OVN deployment.
+      OVN will automatically ensure that only one of them is active at a time.
+      If multiple instances of <code>ovn-northd</code> are running and the
+      active <code>ovn-northd</code> fails, one of the hot standby instances
+      of <code>ovn-northd</code> will automatically take over.
+    </p>
+
     <h1>Logical Flow Table Structure</h1>
 
     <p>

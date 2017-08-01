@@ -50,6 +50,7 @@ Post-v2.7.0
        one chassis is specified, OVN will manage high availability for that
        gateway.
      * Add support for ACL logging.
+     * ovn-northd now has native support for active-standby high availability.
    - Tracing with ofproto/trace now traces through recirculation.
    - OVSDB:
      * New support for role-based access control (see ovsdb-server(1)).
