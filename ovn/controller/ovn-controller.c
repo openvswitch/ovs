@@ -176,6 +176,7 @@ update_sb_monitors(struct ovsdb_idl *ovnsb_idl,
         const char *name;
         SSET_FOR_EACH (name, local_ifaces) {
             sbrec_port_binding_add_clause_logical_port(&pb, OVSDB_F_EQ, name);
+            sbrec_port_binding_add_clause_parent_port(&pb, OVSDB_F_EQ, name);
         }
     }
     if (local_datapaths) {
