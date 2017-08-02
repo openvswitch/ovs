@@ -149,6 +149,7 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/odp-util.c \
 	lib/odp-util.h \
 	lib/ofp-actions.c \
+	lib/ofp-ed-props.c \
 	lib/ofp-errors.c \
 	lib/ofp-msgs.c \
 	lib/ofp-parse.c \

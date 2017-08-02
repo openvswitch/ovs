@@ -64,11 +64,17 @@ Post-v2.7.0
      * The "learn" action now supports a "limit" option (see ovs-ofctl(8)).
      * The port status bit OFPPS_LIVE now reflects link aliveness.
      * OpenFlow 1.5 packet-out is now supported.
+     * Support for OpenFlow 1.5 field packet_type and packet-type-aware
+       pipeline (PTAP).
+     * Added generic encap and decap actions (EXT-382).
+       First supported use case is encap/decap for Ethernet.
    - Fedora Packaging:
      * OVN services are no longer restarted automatically after upgrade.
    - Add --cleanup option to command 'ovs-appctl exit' (see ovs-vswitchd(8)).
    - L3 tunneling:
      * Use new tunnel port option "packet_type" to configure L2 vs. L3.
+     * In conjunction with PTAP tunnel ports can handle a mix of L2 and L3
+       payload.
      * New vxlan tunnel extension "gpe" to support VXLAN-GPE tunnels.
      * New support for non-Ethernet (L3) payloads in GRE and VXLAN-GPE.
    - The BFD detection multiplier is now user-configurable.

@@ -1273,7 +1273,8 @@ pt_ns_type(ovs_be32 packet_type)
 
 /* Well-known packet_type field values. */
 enum packet_type {
-    PT_ETH  = PACKET_TYPE(OFPHTN_ONF, 0x0000),  /* Default: Ethernet */
+    PT_ETH  = PACKET_TYPE(OFPHTN_ONF, 0x0000),  /* Default PT: Ethernet */
+    PT_USE_NEXT_PROTO = PACKET_TYPE(OFPHTN_ONF, 0xfffe),  /* Pseudo PT for decap. */
     PT_IPV4 = PACKET_TYPE(OFPHTN_ETHERTYPE, ETH_TYPE_IP),
     PT_IPV6 = PACKET_TYPE(OFPHTN_ETHERTYPE, ETH_TYPE_IPV6),
     PT_MPLS = PACKET_TYPE(OFPHTN_ETHERTYPE, ETH_TYPE_MPLS),

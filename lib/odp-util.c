@@ -5922,12 +5922,16 @@ put_ethernet_key(const struct ovs_key_ethernet *eth, struct flow *flow)
 }
 
 static void
-commit_set_ether_addr_action(const struct flow *flow, struct flow *base_flow,
-                             struct ofpbuf *odp_actions,
-                             struct flow_wildcards *wc,
-                             bool use_masked)
+commit_set_ether_action(const struct flow *flow, struct flow *base_flow,
+                        struct ofpbuf *odp_actions,
+                        struct flow_wildcards *wc,
+                        bool use_masked)
 {
     struct ovs_key_ethernet key, base, mask;
+
+    if (flow->packet_type != htonl(PT_ETH)) {
+        return;
+    }
 
     get_ethernet_key(flow, &key);
     get_ethernet_key(base_flow, &base);
@@ -5937,29 +5941,6 @@ commit_set_ether_addr_action(const struct flow *flow, struct flow *base_flow,
                &key, &base, &mask, sizeof key, odp_actions)) {
         put_ethernet_key(&base, base_flow);
         put_ethernet_key(&mask, &wc->masks);
-    }
-}
-
-static void
-commit_ether_action(const struct flow *flow, struct flow *base_flow,
-                    struct ofpbuf *odp_actions, struct flow_wildcards *wc,
-                    bool use_masked)
-{
-    if (flow->packet_type == htonl(PT_ETH)) {
-        if (base_flow->packet_type != htonl(PT_ETH)) {
-            odp_put_push_eth_action(odp_actions, &flow->dl_src, &flow->dl_dst);
-            base_flow->packet_type = flow->packet_type;
-            base_flow->dl_src = flow->dl_src;
-            base_flow->dl_dst = flow->dl_dst;
-        } else {
-            commit_set_ether_addr_action(flow, base_flow, odp_actions, wc,
-                                         use_masked);
-        }
-    } else {
-        if (base_flow->packet_type == htonl(PT_ETH)) {
-            odp_put_pop_eth_action(odp_actions);
-            base_flow->packet_type = flow->packet_type;
-        }
     }
 }
 
@@ -6400,6 +6381,50 @@ commit_set_pkt_mark_action(const struct flow *flow, struct flow *base_flow,
     }
 }
 
+static void
+commit_packet_type_change(const struct flow *flow,
+                          struct flow *base_flow,
+                          struct ofpbuf *odp_actions,
+                          struct flow_wildcards *wc,
+                          bool pending_encap)
+{
+    if (flow->packet_type == base_flow->packet_type) {
+        return;
+    }
+
+    if (pending_encap) {
+        switch (ntohl(flow->packet_type)) {
+        case PT_ETH: {
+            /* push_eth */
+            odp_put_push_eth_action(odp_actions, &flow->dl_src,
+                                    &flow->dl_dst);
+            base_flow->packet_type = flow->packet_type;
+            base_flow->dl_src = flow->dl_src;
+            base_flow->dl_dst = flow->dl_dst;
+            break;
+        }
+        default:
+            /* Only the above protocols are supported for encap. The check
+             * is done at action decoding. */
+            OVS_NOT_REACHED();
+        }
+    } else {
+        if (pt_ns(flow->packet_type) == OFPHTN_ETHERTYPE &&
+            base_flow->packet_type == htonl(PT_ETH)) {
+            /* pop_eth */
+            odp_put_pop_eth_action(odp_actions);
+            base_flow->packet_type = flow->packet_type;
+            base_flow->dl_src = eth_addr_zero;
+            base_flow->dl_dst = eth_addr_zero;
+        } else {
+            /* All other cases are handled through recirculation. */
+            OVS_NOT_REACHED();
+        }
+    }
+
+    wc->masks.packet_type = OVS_BE32_MAX;
+}
+
 /* If any of the flow key data that ODP actions can modify are different in
  * 'base' and 'flow', appends ODP actions to 'odp_actions' that change the flow
  * key from 'base' into 'flow', and then changes 'base' the same way.  Does not
@@ -6412,12 +6437,13 @@ commit_set_pkt_mark_action(const struct flow *flow, struct flow *base_flow,
 enum slow_path_reason
 commit_odp_actions(const struct flow *flow, struct flow *base,
                    struct ofpbuf *odp_actions, struct flow_wildcards *wc,
-                   bool use_masked)
+                   bool use_masked, bool pending_encap)
 {
     enum slow_path_reason slow1, slow2;
     bool mpls_done = false;
 
-    commit_ether_action(flow, base, odp_actions, wc, use_masked);
+    commit_packet_type_change(flow, base, odp_actions, wc, pending_encap);
+    commit_set_ether_action(flow, base, odp_actions, wc, use_masked);
     /* Make packet a non-MPLS packet before committing L3/4 actions,
      * which would otherwise do nothing. */
     if (eth_type_mpls(base->dl_type) && !eth_type_mpls(flow->dl_type)) {

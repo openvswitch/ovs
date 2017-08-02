@@ -342,6 +342,12 @@ enum ofp_raw_action_type {
     /* NX1.0+(43): void. */
     NXAST_RAW_CT_CLEAR,
 
+    /* NX1.3+(46): struct nx_action_encap, ... */
+    NXAST_RAW_ENCAP,
+
+    /* NX1.3+(47): struct nx_action_decap, ... */
+    NXAST_RAW_DECAP,
+
 /* ## ------------------ ## */
 /* ## Debugging actions. ## */
 /* ## ------------------ ## */
@@ -472,6 +478,8 @@ ofpact_next_flattened(const struct ofpact *ofpact)
     case OFPACT_WRITE_METADATA:
     case OFPACT_GOTO_TABLE:
     case OFPACT_NAT:
+    case OFPACT_ENCAP:
+    case OFPACT_DECAP:
         return ofpact_next(ofpact);
 
     case OFPACT_CLONE:
@@ -4019,6 +4027,304 @@ format_FIN_TIMEOUT(const struct ofpact_fin_timeout *a,
     ds_chomp(s, ',');
     ds_put_format(s, "%s)%s", colors.paren, colors.end);
 }
+
+/* Action structure for NXAST_ENCAP */
+struct nx_action_encap {
+    ovs_be16 type;         /* OFPAT_VENDOR. */
+    ovs_be16 len;          /* Total size including any property TLVs. */
+    ovs_be32 vendor;       /* NX_VENDOR_ID. */
+    ovs_be16 subtype;      /* NXAST_ENCAP. */
+    ovs_be16 hdr_size;     /* Header size in bytes, 0 = 'not specified'.*/
+    ovs_be32 new_pkt_type; /* Header type to add and PACKET_TYPE of result. */
+    struct ofp_ed_prop_header props[];  /* Encap TLV properties. */
+};
+OFP_ASSERT(sizeof(struct nx_action_encap) == 16);
+
+static enum ofperr
+decode_NXAST_RAW_ENCAP(const struct nx_action_encap *nae,
+                       enum ofp_version ofp_version OVS_UNUSED,
+                       struct ofpbuf *out)
+{
+    struct ofpact_encap *encap;
+    const struct ofp_ed_prop_header *ofp_prop;
+    size_t props_len;
+    uint16_t n_props = 0;
+    int err;
+
+    encap = ofpact_put_ENCAP(out);
+    encap->ofpact.raw = NXAST_RAW_ENCAP;
+    switch (ntohl(nae->new_pkt_type)) {
+    case PT_ETH:
+        /* Add supported encap header types here. */
+        break;
+    default:
+        return OFPERR_NXBAC_BAD_HEADER_TYPE;
+    }
+    encap->new_pkt_type = nae->new_pkt_type;
+    encap->hdr_size = ntohs(nae->hdr_size);
+
+    ofp_prop = nae->props;
+    props_len = ntohs(nae->len) - offsetof(struct nx_action_encap, props);
+    n_props = 0;
+    while (props_len > 0) {
+        err = decode_ed_prop(&ofp_prop, out, &props_len);
+        if (err) {
+            return err;
+        }
+        n_props++;
+    }
+    encap->n_props = n_props;
+    out->header = &encap->ofpact;
+    ofpact_finish_ENCAP(out, &encap);
+
+    return 0;
+}
+
+static void
+encode_ENCAP(const struct ofpact_encap *encap,
+             enum ofp_version ofp_version OVS_UNUSED,
+             struct ofpbuf *out)
+{
+    size_t start_ofs = out->size;
+    struct nx_action_encap *nae = put_NXAST_ENCAP(out);
+    int i;
+
+    nae->new_pkt_type = encap->new_pkt_type;
+    nae->hdr_size = htons(encap->hdr_size);
+    const struct ofpact_ed_prop *prop = encap->props;
+    for (i = 0; i < encap->n_props; i++) {
+        encode_ed_prop(&prop, out);
+    }
+    pad_ofpat(out, start_ofs);
+}
+
+static bool
+parse_encap_header(const char *hdr, ovs_be32 *packet_type)
+{
+    if (strcmp(hdr, "ethernet") == 0) {
+        *packet_type = htonl(PT_ETH);
+    } else {
+        return false;
+    }
+    return true;
+}
+
+static char *
+parse_ed_props(const uint16_t prop_class, char **arg, int *n_props, struct ofpbuf *out)
+{
+    char *key, *value, *err;
+    uint8_t prop_type;
+
+    while (ofputil_parse_key_value(arg, &key, &value)) {
+        if (!parse_ed_prop_type(prop_class, key, &prop_type)) {
+            return xasprintf("Invalid property: %s", key);
+        }
+        if (value == NULL) {
+            return xasprintf("Missing the value for property: %s", key);
+        }
+        err = parse_ed_prop_value(prop_class, prop_type, value, out);
+        if (err != NULL) {
+            return err;
+        }
+        (*n_props)++;
+    }
+    return NULL;
+}
+
+/* The string representation of the encap action is
+ * encap(header_type(prop=<value>,tlv(<class>,<type>,<value>),...))
+ */
+
+static char * OVS_WARN_UNUSED_RESULT
+parse_ENCAP(char *arg,
+            const struct ofputil_port_map *port_map OVS_UNUSED,
+            struct ofpbuf *out,
+            enum ofputil_protocol *usable_protocols OVS_UNUSED)
+{
+    struct ofpact_encap *encap;
+    char *key, *value, *str;
+    char *error = NULL;
+    uint16_t prop_class;
+    int n_props = 0;
+
+    encap = ofpact_put_ENCAP(out);
+    encap->hdr_size = 0;
+    /* Parse encap header type. */
+    str = arg;
+    if (!ofputil_parse_key_value(&arg, &key, &value)) {
+        return xasprintf("Missing encap hdr: %s", str);
+    }
+    if (!parse_encap_header(key, &encap->new_pkt_type)) {
+        return xasprintf("Encap hdr not supported: %s", value);
+    }
+    if (!parse_ed_prop_class(key, &prop_class)) {
+        return xasprintf("Invalid encap prop class: %s", key);
+    }
+    /* Parse encap properties. */
+    error = parse_ed_props(prop_class, &value, &n_props, out);
+    if (error != NULL) {
+        return error;
+    }
+    /* ofbuf out may have been re-allocated. */
+    encap = out->header;
+    encap->n_props = n_props;
+    ofpact_finish_ENCAP(out, &encap);
+    return NULL;
+}
+
+static char *
+format_encap_pkt_type(const ovs_be32 pkt_type)
+{
+    switch (ntohl(pkt_type)) {
+    case PT_ETH:
+        return "ethernet";
+    default:
+        return "UNKNOWN";
+    }
+}
+
+static void
+format_ed_props(struct ds *s, uint16_t n_props,
+                const struct ofpact_ed_prop *prop)
+{
+    const uint8_t *p = (uint8_t *) prop;
+    int i;
+
+    if (n_props == 0) {
+        return;
+    }
+    for (i = 0; i < n_props; i++) {
+        format_ed_prop(s, prop);
+        ds_put_char(s, ',');
+        p += ROUND_UP(prop->len, 8);
+        prop = ALIGNED_CAST(const struct ofpact_ed_prop *, p);
+    }
+    if (n_props > 0) {
+        ds_chomp(s, ',');
+    }
+}
+
+static void
+format_ENCAP(const struct ofpact_encap *a,
+             const struct ofputil_port_map *port_map OVS_UNUSED,
+             struct ds *s)
+{
+    ds_put_format(s, "%sencap(%s", colors.paren, colors.end);
+    ds_put_format(s, "%s", format_encap_pkt_type(a->new_pkt_type));
+    if (a->n_props > 0) {
+        ds_put_format(s, "%s(%s", colors.paren, colors.end);
+        format_ed_props(s, a->n_props, a->props);
+        ds_put_format(s, "%s)%s", colors.paren, colors.end);
+    }
+    ds_put_format(s, "%s)%s", colors.paren, colors.end);
+}
+
+/* Action structure for NXAST_DECAP */
+struct nx_action_decap {
+    ovs_be16 type;         /* OFPAT_VENDOR. */
+    ovs_be16 len;          /* Total size including any property TLVs. */
+    ovs_be32 vendor;       /* NX_VENDOR_ID. */
+    ovs_be16 subtype;      /* NXAST_DECAP. */
+    uint8_t pad[2];        /* 2 bytes padding */
+
+    /* Packet type or result.
+     *
+     * The special value (0,0xFFFE) "Use next proto"
+     * is used to request OVS to automatically set the new packet type based
+     * on the decap'ed header's next protocol.
+     */
+    ovs_be32 new_pkt_type;
+};
+OFP_ASSERT(sizeof(struct nx_action_decap) == 16);
+
+static enum ofperr
+decode_NXAST_RAW_DECAP(const struct nx_action_decap *nad,
+                       enum ofp_version ofp_version OVS_UNUSED,
+                       struct ofpbuf *ofpacts)
+{
+    struct ofpact_decap * decap;
+
+    if (ntohs(nad->len) > sizeof *nad) {
+        /* No properties supported yet. */
+        return OFPERR_NXBAC_UNKNOWN_ED_PROP;
+    }
+
+    decap = ofpact_put_DECAP(ofpacts);
+    decap->ofpact.raw = NXAST_RAW_DECAP;
+    decap->new_pkt_type = nad->new_pkt_type;
+    return 0;
+}
+
+static void
+encode_DECAP(const struct ofpact_decap *decap,
+                enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *out)
+{
+    struct nx_action_decap *nad = put_NXAST_DECAP(out);
+
+    nad->len = htons(sizeof(struct nx_action_decap));
+    nad->new_pkt_type = decap->new_pkt_type;
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+parse_DECAP(char *arg,
+            const struct ofputil_port_map *port_map OVS_UNUSED,
+            struct ofpbuf *ofpacts,
+            enum ofputil_protocol *usable_protocols OVS_UNUSED)
+{
+    struct ofpact_decap *decap;
+    char *key, *value, *pos;
+    char *error = NULL;
+    uint16_t ns, type;
+
+    decap = ofpact_put_DECAP(ofpacts);
+    /* Default next packet_type is PT_USE_NEXT_PROTO. */
+    decap->new_pkt_type = htonl(PT_USE_NEXT_PROTO);
+
+    /* Parse decap packet_type if given. */
+    if (ofputil_parse_key_value(&arg, &key, &value)) {
+        if (strcmp(key, "packet_type") == 0) {
+            pos = value;
+            if (!ofputil_parse_key_value(&pos, &key, &value)
+                || strcmp(key, "ns") != 0) {
+                return xstrdup("Missing packet_type attribute ns");
+            }
+            error = str_to_u16(value, "ns", &ns);
+            if (error) {
+                return error;
+            }
+            if (ns >= OFPHTN_N_TYPES) {
+                return xasprintf("Unsupported ns value: %"PRIu16, ns);
+            }
+            if (!ofputil_parse_key_value(&pos, &key, &value)
+                || strcmp(key, "type") != 0) {
+                return xstrdup("Missing packet_type attribute type");
+            }
+            error = str_to_u16(value, "type", &type);
+            if (error) {
+                return error;
+            }
+            decap->new_pkt_type = htonl(PACKET_TYPE(ns, type));
+        } else {
+            return xasprintf("Invalid decap argument: %s", key);
+        }
+    }
+    return NULL;
+}
+
+static void
+format_DECAP(const struct ofpact_decap *a,
+             const struct ofputil_port_map *port_map OVS_UNUSED,
+             struct ds *s)
+{
+    ds_put_format(s, "%sdecap(%s", colors.paren, colors.end);
+    if (a->new_pkt_type != htonl(PT_USE_NEXT_PROTO)) {
+        ds_put_format(s, "packet_type(ns=%"PRIu16",id=%#"PRIx16")",
+                      pt_ns(a->new_pkt_type),
+                      pt_ns_type(a->new_pkt_type));
+    }
+    ds_put_format(s, "%s)%s", colors.paren, colors.end);
+}
+
 
 /* Action structures for NXAST_RESUBMIT, NXAST_RESUBMIT_TABLE, and
  * NXAST_RESUBMIT_TABLE_CT.
@@ -6802,6 +7108,8 @@ ofpact_is_set_or_move_action(const struct ofpact *a)
     case OFPACT_SET_TUNNEL:
     case OFPACT_SET_VLAN_PCP:
     case OFPACT_SET_VLAN_VID:
+    case OFPACT_ENCAP:
+    case OFPACT_DECAP:
         return true;
     case OFPACT_BUNDLE:
     case OFPACT_CLEAR_ACTIONS:
@@ -6877,6 +7185,8 @@ ofpact_is_allowed_in_actions_set(const struct ofpact *a)
     case OFPACT_SET_VLAN_PCP:
     case OFPACT_SET_VLAN_VID:
     case OFPACT_STRIP_VLAN:
+    case OFPACT_ENCAP:
+    case OFPACT_DECAP:
         return true;
 
     /* In general these actions are excluded because they are not part of
@@ -6984,6 +7294,8 @@ ofpacts_execute_action_set(struct ofpbuf *action_list,
     /* The OpenFlow spec "Action Set" section specifies this order. */
     ofpacts_copy_last(action_list, action_set, OFPACT_STRIP_VLAN);
     ofpacts_copy_last(action_list, action_set, OFPACT_POP_MPLS);
+    ofpacts_copy_last(action_list, action_set, OFPACT_DECAP);
+    ofpacts_copy_last(action_list, action_set, OFPACT_ENCAP);
     ofpacts_copy_last(action_list, action_set, OFPACT_PUSH_MPLS);
     ofpacts_copy_last(action_list, action_set, OFPACT_PUSH_VLAN);
     ofpacts_copy_last(action_list, action_set, OFPACT_DEC_TTL);
@@ -7127,6 +7439,8 @@ ovs_instruction_type_from_ofpact_type(enum ofpact_type type)
     case OFPACT_CT:
     case OFPACT_CT_CLEAR:
     case OFPACT_NAT:
+    case OFPACT_ENCAP:
+    case OFPACT_DECAP:
     default:
         return OVSINST_OFPIT11_APPLY_ACTIONS;
     }
@@ -7488,8 +7802,8 @@ inconsistent_match(enum ofputil_protocol *usable_protocols)
     *usable_protocols &= OFPUTIL_P_OF10_ANY;
 }
 
-/* May modify flow->dl_type, flow->nw_proto and flow->vlan_tci,
- * caller must restore them.
+/* May modify flow->packet_type, flow->dl_type, flow->nw_proto and
+ * flow->vlan_tci, caller must restore them.
  *
  * Modifies some actions, filling in fields that could not be properly set
  * without context. */
@@ -7501,6 +7815,7 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
     struct flow *flow = &match->flow;
     const struct ofpact_enqueue *enqueue;
     const struct mf_field *mf;
+    ovs_be16 dl_type = get_dl_type(flow);
 
     switch (a->type) {
     case OFPACT_OUTPUT:
@@ -7578,7 +7893,7 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
 
     case OFPACT_SET_IPV4_SRC:
     case OFPACT_SET_IPV4_DST:
-        if (flow->dl_type != htons(ETH_TYPE_IP)) {
+        if (dl_type != htons(ETH_TYPE_IP)) {
             inconsistent_match(usable_protocols);
         }
         return 0;
@@ -7643,7 +7958,7 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
     case OFPACT_SET_MPLS_TC:
     case OFPACT_SET_MPLS_TTL:
     case OFPACT_DEC_MPLS_TTL:
-        if (!eth_type_mpls(flow->dl_type)) {
+        if (!eth_type_mpls(dl_type)) {
             inconsistent_match(usable_protocols);
         }
         return 0;
@@ -7681,6 +7996,9 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
         return 0;
 
     case OFPACT_PUSH_MPLS:
+        if (flow->packet_type != htonl(PT_ETH)) {
+            inconsistent_match(usable_protocols);
+        }
         flow->dl_type = ofpact_get_PUSH_MPLS(a)->ethertype;
         /* The packet is now MPLS and the MPLS payload is opaque.
          * Thus nothing can be assumed about the network protocol.
@@ -7689,7 +8007,8 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
         return 0;
 
     case OFPACT_POP_MPLS:
-        if (!eth_type_mpls(flow->dl_type)) {
+        if (flow->packet_type != htonl(PT_ETH)
+            || !eth_type_mpls(dl_type)) {
             inconsistent_match(usable_protocols);
         }
         flow->dl_type = ofpact_get_POP_MPLS(a)->ethertype;
@@ -7708,7 +8027,7 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
     case OFPACT_CT: {
         struct ofpact_conntrack *oc = ofpact_get_CT(a);
 
-        if (!dl_type_is_ip_any(flow->dl_type)
+        if (!dl_type_is_ip_any(dl_type)
             || (flow->ct_state & CS_INVALID && oc->flags & NX_CT_F_COMMIT)
             || (oc->alg == IPPORT_FTP && flow->nw_proto != IPPROTO_TCP)
             || (oc->alg == IPPORT_TFTP && flow->nw_proto != IPPROTO_UDP)) {
@@ -7733,10 +8052,10 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
     case OFPACT_NAT: {
         struct ofpact_nat *on = ofpact_get_NAT(a);
 
-        if (!dl_type_is_ip_any(flow->dl_type) ||
-            (on->range_af == AF_INET && flow->dl_type != htons(ETH_TYPE_IP)) ||
+        if (!dl_type_is_ip_any(dl_type) ||
+            (on->range_af == AF_INET && dl_type != htons(ETH_TYPE_IP)) ||
             (on->range_af == AF_INET6
-             && flow->dl_type != htons(ETH_TYPE_IPV6))) {
+             && dl_type != htons(ETH_TYPE_IPV6))) {
             return OFPERR_OFPBAC_MATCH_INCONSISTENT;
         }
         return 0;
@@ -7785,6 +8104,29 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
     case OFPACT_DEBUG_RECIRC:
         return 0;
 
+    case OFPACT_ENCAP:
+        flow->packet_type = ofpact_get_ENCAP(a)->new_pkt_type;
+        if (pt_ns(flow->packet_type) == OFPHTN_ETHERTYPE) {
+            flow->dl_type = htons(pt_ns_type(flow->packet_type));
+        }
+        if (!is_ip_any(flow)) {
+            flow->nw_proto = 0;
+        }
+        return 0;
+
+    case OFPACT_DECAP:
+        if (flow->packet_type == htonl(PT_ETH)) {
+            /* Adjust the packet_type to allow subsequent actions. */
+            flow->packet_type = PACKET_TYPE_BE(OFPHTN_ETHERTYPE,
+                                               ntohs(flow->dl_type));
+        } else {
+            /* The actual packet_type is only known after decapsulation.
+             * Do not allow subsequent actions that depend on packet headers. */
+            flow->packet_type = htonl(PT_UNKNOWN);
+            flow->dl_type = OVS_BE16_MAX;
+        }
+        return 0;
+
     default:
         OVS_NOT_REACHED();
     }
@@ -7810,6 +8152,7 @@ ofpacts_check(struct ofpact ofpacts[], size_t ofpacts_len,
               enum ofputil_protocol *usable_protocols)
 {
     struct ofpact *a;
+    ovs_be32 packet_type = match->flow.packet_type;
     ovs_be16 dl_type = match->flow.dl_type;
     uint8_t nw_proto = match->flow.nw_proto;
     enum ofperr error = 0;
@@ -7825,6 +8168,7 @@ ofpacts_check(struct ofpact ofpacts[], size_t ofpacts_len,
         }
     }
     /* Restore fields that may have been modified. */
+    match->flow.packet_type = packet_type;
     match->flow.dl_type = dl_type;
     memcpy(&match->flow.vlans, &vlans, sizeof(vlans));
     match->flow.nw_proto = nw_proto;
@@ -8276,6 +8620,8 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, ofp_port_t port)
     case OFPACT_CT:
     case OFPACT_CT_CLEAR:
     case OFPACT_NAT:
+    case OFPACT_ENCAP:
+    case OFPACT_DECAP:
     default:
         return false;
     }

@@ -1561,17 +1561,23 @@ the action set, the one written later replaces the earlier action:
 \fBpop_mpls\fR
 .
 .IP 2.
-\fBpush_mpls\fR
+\fBdecap\fR
 .
 .IP 3.
-\fBpush_vlan\fR
+\fBencap\fR
 .
 .IP 4.
+\fBpush_mpls\fR
+.
+.IP 5.
+\fBpush_vlan\fR
+.
+.IP 6.
 \fBdec_ttl\fR
 .IQ
 \fBdec_mpls_ttl\fR
 .
-.IP 5.
+.IP 7.
 \fBload\fR
 .IQ
 \fBmove\fR
@@ -1611,10 +1617,10 @@ the later modification takes effect, and when they modify
 different parts of a field (or different fields), then both
 modifications are applied.
 .
-.IP 6.
+.IP 8.
 \fBset_queue\fR
 .
-.IP 7.
+.IP 9.
 \fBgroup\fR
 .IQ
 \fBoutput\fR
@@ -1630,6 +1636,7 @@ not visible.)
 .RE
 .IP
 Only the actions listed above may be written to the action set.
+\fBencap\fR and \fBdecap\fR actions are nonstandard.
 .
 .IP \fBwrite_metadata\fB:\fIvalue\fR[/\fImask\fR]
 Updates the metadata field for the flow. If \fImask\fR is omitted, the
@@ -1730,6 +1737,65 @@ that is saved and restored includes all flow data and metadata
 \fBpush\fR and \fBpop\fR actions, and the OpenFlow action set.
 .IP
 This action was added in Open vSwitch 2.6.90.
+.
+.IP "\fBencap(\fR\fIheader\fR[\fB(\fR\fIprop\fR\fB=\fR\fIvalue\fR,\fItlv\fR\fB(\fR\fIclass\fR,\fItype\fR,\fIvalue\fB)\fR,...\fB)\fR]\fB)\fR"
+Encapsulates the packet with a new packet header, e.g., ethernet
+or nsh.
+.
+.RS
+.IP "\fIheader\fR"
+Used to specify encapsulation header type.
+.
+.IP "\fIprop\fR\fB=\fR\fIvalue\fR"
+Used to specify the initial value for the property in the encapsulation header.
+.
+.IP "\fItlv\fR\fB(\fR\fIclass\fR,\fItype\fR,\fIvalue\fB)\fR"
+Used to specify the initial value for the TLV (Type Length Value)
+in the encapsulation header.
+.RE
+.IP
+For example, \fBencap(ethernet)\fR will encapsulate the L3 packet with
+Ethernet header.
+.IP
+\fBencap(nsh(md_type=1))\fR will encapsulate the packet with nsh header
+and nsh metadata type 1.
+.IP
+\fBencap(nsh(md_type=2,tlv(0x1000,10,0x12345678)))\fR will encapsulate
+the packet with nsh header and nsh metadata type 2, and the nsh TLV with
+class 0x1000 and type 10 is set to 0x12345678.
+.IP
+\fIprop\fR\fB=\fR\fIvalue\fR is just used to set some
+necessary fields for encapsulation header initialization. Other fields
+in the encapsulation header must be set by \fBset_field\fR action. New
+encapsulation header implementation must add new match fields and
+corresponding \fBset\fR action in order that \fBset_field\fR action can
+change the fields in the encapsulation header on demand.
+.IP
+\fBencap(nsh(md_type=1)),\fR
+\fBset_field:0x1234->nsh_spi,set_field:0x11223344->nsh_c1\fR
+is an example to encapsulate nsh header and set nsh spi and c1.
+.IP
+This action was added in Open vSwitch 2.8.
+.
+.IP "\fBdecap(\fR[\fBpacket_type(ns=\fR\fInamespace\fR\fB,type=\fR\fItype\fR\fB)\fR]\fB)\fR"
+Decapsulates the outer packet header.
+.
+.RS
+.IP "\fBpacket_type(ns=\fR\fInamespace\fR\fB,type=\fR\fItype\fR\fB)\fR"
+It is optional and used to specify the outer header type of the
+decapsulated packet. \fInamespace\fR is 0 for Ethernet packet,
+1 for L3 packet, \fItype\fR\ is L3 protocol type, e.g.,
+0x894f for nsh, 0x0 for Ethernet.
+.RE
+.IP
+By default, \fBdecap()\fR will decapsulate the outer packet header
+according to the packet header type, if
+\fBpacket_type(ns=\fR\fInamespace\fR\fB,type=\fR\fItype\fR\fB)\fR
+is given, it will decapsulate the given packet header, it will fail
+if the actual outer packet header type is not of
+\fBpacket_type(ns=\fR\fInamespace\fR\fB,type=\fR\fItype\fR\fB)\fR.
+.IP
+This action was added in Open vSwitch 2.8.
 .RE
 .
 .PP

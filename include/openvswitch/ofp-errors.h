@@ -276,6 +276,15 @@ enum ofperr {
      * 64. */
     OFPERR_NXBAC_BAD_CONJUNCTION,
 
+    /* NX1.3+(39).  Unsupported packet type in encap or decap. */
+    OFPERR_NXBAC_BAD_HEADER_TYPE,
+
+    /* NX1.3+(40).  Unrecognized encap or decap property. */
+    OFPERR_NXBAC_UNKNOWN_ED_PROP,
+
+    /* NX1.3+(41).  Error in encap or decap property. */
+    OFPERR_NXBAC_BAD_ED_PROP,
+
 /* ## --------------------- ## */
 /* ## OFPET_BAD_INSTRUCTION ## */
 /* ## --------------------- ## */

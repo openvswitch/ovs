@@ -25,6 +25,7 @@
 #include "openvswitch/ofp-util.h"
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/types.h"
+#include "openvswitch/ofp-ed-props.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -92,6 +93,10 @@ struct vl_mff_map;
     OFPACT(DEC_MPLS_TTL,    ofpact_null,        ofpact, "dec_mpls_ttl") \
     OFPACT(PUSH_MPLS,       ofpact_push_mpls,   ofpact, "push_mpls")    \
     OFPACT(POP_MPLS,        ofpact_pop_mpls,    ofpact, "pop_mpls")     \
+                                                                        \
+    /* Generic encap & decap */                                         \
+    OFPACT(ENCAP,           ofpact_encap,       props, "encap")         \
+    OFPACT(DECAP,           ofpact_decap,       ofpact, "decap")        \
                                                                         \
     /* Metadata. */                                                     \
     OFPACT(SET_TUNNEL,      ofpact_tunnel,      ofpact, "set_tunnel")   \
@@ -972,6 +977,33 @@ struct ofpact_unroll_xlate {
     /* Metadata in xlate context, visible to controller via PACKET_INs. */
     uint8_t  rule_table_id;       /* 0xFF if none. */
     ovs_be64 rule_cookie;         /* OVS_BE64_MAX if none. */
+};
+
+/* OFPACT_ENCAP.
+ *
+ * Used for NXAST_ENCAP. */
+
+struct ofpact_encap {
+    struct ofpact ofpact;
+    ovs_be32 new_pkt_type;        /* Packet type of the header to add. */
+    uint16_t hdr_size;            /* New header size in bytes. */
+    uint16_t n_props;             /* Number of encap properties. */
+    struct ofpact_ed_prop props[]; /* Properties in internal format. */
+};
+
+/* OFPACT_DECAP.
+ *
+ * Used for NXAST_DECAP. */
+struct ofpact_decap {
+    struct ofpact ofpact;
+
+    /* New packet type.
+     *
+     * The special value (0,0xFFFE) "Use next proto" is used to request OVS to
+     * automatically set the new packet type based on the decap'ed header's
+     * next protocol.
+     */
+    ovs_be32 new_pkt_type;
 };
 
 /* Converting OpenFlow to ofpacts. */

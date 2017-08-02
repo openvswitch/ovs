@@ -466,6 +466,7 @@ enum ofp_header_type_namespaces {
     OFPHTN_IP_PROTO = 2,        /* ns_type is a IP protocol number. */
     OFPHTN_UDP_TCP_PORT = 3,    /* ns_type is a TCP or UDP port. */
     OFPHTN_IPV4_OPTION = 4,     /* ns_type is an IPv4 option number. */
+    OFPHTN_N_TYPES
 };
 
 #endif /* openflow/openflow-common.h */
