@@ -6679,7 +6679,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
         /* Set the bridge for post-recirculation processing if needed. */
         if (!uuid_equals(&ctx.xbridge->ofproto->uuid, &state->ofproto_uuid)) {
-            struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
             const struct xbridge *new_bridge
                 = xbridge_lookup_by_uuid(xcfg, &state->ofproto_uuid);
 
