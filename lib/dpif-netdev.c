@@ -355,17 +355,17 @@ struct dp_netdev_rxq {
 /* A port in a netdev-based datapath. */
 struct dp_netdev_port {
     odp_port_t port_no;
+    bool dynamic_txqs;          /* If true XPS will be used. */
+    bool need_reconfigure;      /* True if we should reconfigure netdev. */
     struct netdev *netdev;
     struct hmap_node node;      /* Node in dp_netdev's 'ports'. */
     struct netdev_saved_flags *sf;
     struct dp_netdev_rxq *rxqs;
     unsigned n_rxq;             /* Number of elements in 'rxqs' */
-    bool dynamic_txqs;          /* If true XPS will be used. */
     unsigned *txq_used;         /* Number of threads that use each tx queue. */
     struct ovs_mutex txq_used_mutex;
     char *type;                 /* Port type as requested by user. */
     char *rxq_affinity_list;    /* Requested affinity of rx queues. */
-    bool need_reconfigure;      /* True if we should reconfigure netdev. */
 };
 
 /* Contained by struct dp_netdev_flow's 'stats' member.  */
