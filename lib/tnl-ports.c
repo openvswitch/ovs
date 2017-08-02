@@ -408,7 +408,7 @@ insert_ipdev(const char dev_name[])
     struct netdev *dev;
     int error, n_in6;
 
-    error = netdev_open(dev_name, NULL, &dev);
+    error = netdev_open(dev_name, netdev_get_type_from_name(dev_name), &dev);
     if (error) {
         return;
     }
