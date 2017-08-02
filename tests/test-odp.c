@@ -178,14 +178,11 @@ parse_filter(char *filter_parse)
         struct ofpbuf odp_key;
         struct ofpbuf odp_mask;
         struct ds out;
-        int error;
 
         /* Convert string to OVS DP key. */
         ofpbuf_init(&odp_key, 0);
         ofpbuf_init(&odp_mask, 0);
-        error = odp_flow_from_string(ds_cstr(&in), NULL,
-                                     &odp_key, &odp_mask);
-        if (error) {
+        if (odp_flow_from_string(ds_cstr(&in), NULL, &odp_key, &odp_mask)) {
             printf("odp_flow_from_string: error\n");
             goto next;
         }

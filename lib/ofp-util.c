@@ -8314,7 +8314,6 @@ ofputil_pull_ofp14_port_stats(struct ofputil_port_stats *ops,
                                                         len);
     while (properties.size > 0) {
         struct ofpbuf payload;
-        enum ofperr error;
         uint64_t type = 0;
 
         error = ofpprop_pull(&properties, &payload, &type);

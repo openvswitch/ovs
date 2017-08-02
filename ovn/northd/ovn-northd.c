@@ -1847,10 +1847,10 @@ ovn_port_update_sbrec(struct northd_context *ctx,
     if (op->nbrp) {
         /* If the router is for l3 gateway, it resides on a chassis
          * and its port type is "l3gateway". */
-        const char *chassis = smap_get(&op->od->nbr->options, "chassis");
+        const char *chassis_name = smap_get(&op->od->nbr->options, "chassis");
         if (op->derived) {
             sbrec_port_binding_set_type(op->sb, "chassisredirect");
-        } else if (chassis) {
+        } else if (chassis_name) {
             sbrec_port_binding_set_type(op->sb, "l3gateway");
         } else {
             sbrec_port_binding_set_type(op->sb, "patch");
@@ -1925,8 +1925,8 @@ ovn_port_update_sbrec(struct northd_context *ctx,
         } else {
             const char *peer = op->peer ? op->peer->key : "<error>";
             smap_add(&new, "peer", peer);
-            if (chassis) {
-                smap_add(&new, "l3gateway-chassis", chassis);
+            if (chassis_name) {
+                smap_add(&new, "l3gateway-chassis", chassis_name);
             }
         }
         sbrec_port_binding_set_options(op->sb, &new);
@@ -2764,9 +2764,7 @@ build_dhcpv6_action(struct ovn_port *op, struct in6_addr *offer_ip,
     /* Check whether the dhcpv6 options should be configured as stateful.
      * Only reply with ia_addr option for dhcpv6 stateful address mode. */
     if (!smap_get_bool(options_map, "dhcpv6_stateless", false)) {
-        char ia_addr[INET6_ADDRSTRLEN + 1];
         ipv6_string_mapped(ia_addr, offer_ip);
-
         ds_put_format(options_action, "ia_addr = %s, ", ia_addr);
     }
 
@@ -3722,7 +3720,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                 if (build_dhcpv4_action(
                         op, op->lsp_addrs[i].ipv4_addrs[j].addr,
                         &options_action, &response_action, &ipv4_addr_match)) {
-                    struct ds match = DS_EMPTY_INITIALIZER;
+                    ds_clear(&match);
                     ds_put_format(
                         &match, "inport == %s && eth.src == %s && "
                         "ip4.src == 0.0.0.0 && ip4.dst == 255.255.255.255 && "
@@ -3761,7 +3759,6 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                     ovn_lflow_add(lflows, op->od, S_SWITCH_IN_DHCP_RESPONSE,
                                   100, ds_cstr(&match),
                                   ds_cstr(&response_action));
-                    ds_destroy(&match);
                     ds_destroy(&options_action);
                     ds_destroy(&response_action);
                     ds_destroy(&ipv4_addr_match);
@@ -3775,7 +3772,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                 if (build_dhcpv6_action(
                         op, &op->lsp_addrs[i].ipv6_addrs[j].addr,
                         &options_action, &response_action)) {
-                    struct ds match = DS_EMPTY_INITIALIZER;
+                    ds_clear(&match);
                     ds_put_format(
                         &match, "inport == %s && eth.src == %s"
                         " && ip6.dst == ff02::1:2 && udp.src == 546 &&"
@@ -3790,7 +3787,6 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                     ds_put_cstr(&match, " && "REGBIT_DHCP_OPTS_RESULT);
                     ovn_lflow_add(lflows, op->od, S_SWITCH_IN_DHCP_RESPONSE, 100,
                                   ds_cstr(&match), ds_cstr(&response_action));
-                    ds_destroy(&match);
                     ds_destroy(&options_action);
                     ds_destroy(&response_action);
                     break;
@@ -3807,10 +3803,9 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
            continue;
         }
 
-        struct ds match;
-        struct ds action;
-        ds_init(&match);
-        ds_init(&action);
+        struct ds action = DS_EMPTY_INITIALIZER;
+
+        ds_clear(&match);
         ds_put_cstr(&match, "udp.dst == 53");
         ds_put_format(&action,
                       REGBIT_DNS_LOOKUP_RESULT" = dns_lookup(); next;");
@@ -3829,7 +3824,6 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                       "flags.loopback = 1; output;");
         ovn_lflow_add(lflows, od, S_SWITCH_IN_DNS_RESPONSE, 100,
                       ds_cstr(&match), ds_cstr(&action));
-        ds_destroy(&match);
         ds_destroy(&action);
     }
 
@@ -3937,9 +3931,9 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                  * distributed logical routers. */
                 if (op->peer->od->l3dgw_port
                     && op->peer == op->peer->od->l3dgw_port) {
-                    for (int i = 0; i < op->peer->od->nbr->n_nat; i++) {
+                    for (int j = 0; j < op->peer->od->nbr->n_nat; j++) {
                         const struct nbrec_nat *nat
-                                                  = op->peer->od->nbr->nat[i];
+                                                  = op->peer->od->nbr->nat[j];
                         if (!strcmp(nat->type, "dnat_and_snat")
                             && nat->logical_port && nat->external_mac
                             && eth_addr_from_string(nat->external_mac, &mac)) {
@@ -4170,7 +4164,7 @@ build_static_route_flow(struct hmap *lflows, struct ovn_datapath *od,
         free(error);
 
         struct in6_addr ip6;
-        char *error = ipv6_parse_cidr(route->nexthop, &ip6, &plen);
+        error = ipv6_parse_cidr(route->nexthop, &ip6, &plen);
         if (!error) {
             if (plen != 128) {
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
@@ -5148,8 +5142,8 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                               "clone { ct_clear; "
                               "inport = outport; outport = \"\"; "
                               "flags = 0; flags.loopback = 1; ");
-                for (int i = 0; i < MFF_N_LOG_REGS; i++) {
-                    ds_put_format(&actions, "reg%d = 0; ", i);
+                for (int j = 0; j < MFF_N_LOG_REGS; j++) {
+                    ds_put_format(&actions, "reg%d = 0; ", j);
                 }
                 ds_put_format(&actions, REGBIT_EGRESS_LOOPBACK" = 1; "
                               "next(pipeline=ingress, table=0); };");
@@ -5874,7 +5868,7 @@ sync_dns_entries(struct northd_context *ctx, struct hmap *datapaths)
     struct dns_info *dns_info;
     HMAP_FOR_EACH_POP (dns_info, hmap_node, &dns_map) {
         if (!dns_info->sb_dns) {
-            struct sbrec_dns *sbrec_dns = sbrec_dns_insert(ctx->ovnsb_txn);
+            sbrec_dns = sbrec_dns_insert(ctx->ovnsb_txn);
             dns_info->sb_dns = sbrec_dns;
             char *dns_id = xasprintf(
                 UUID_FMT, UUID_ARGS(&dns_info->nb_dns->header_.uuid));

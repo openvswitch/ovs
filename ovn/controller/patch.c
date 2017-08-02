@@ -256,7 +256,7 @@ patch_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
      * database but shouldn't.  Delete them from the database. */
     struct shash_node *port_node, *port_next_node;
     SHASH_FOR_EACH_SAFE (port_node, port_next_node, &existing_ports) {
-        struct ovsrec_port *port = port_node->data;
+        port = port_node->data;
         shash_delete(&existing_ports, port_node);
         remove_port(ctx, port);
     }

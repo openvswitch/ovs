@@ -87,7 +87,6 @@ hash_bytes128(const void *p_, size_t len, uint32_t basis, ovs_u128 *out)
     uint32_t h2 = basis;
     uint32_t h3 = basis;
     uint32_t h4 = basis;
-    uint32_t k1, k2, k3, k4;
 
     /* Body */
     for (int i = 0; i < nblocks; i++) {
@@ -134,6 +133,7 @@ hash_bytes128(const void *p_, size_t len, uint32_t basis, ovs_u128 *out)
     }
 
     /* Tail */
+    uint32_t k1, k2, k3, k4;
     k1 = k2 = k3 = k4 = 0;
     tail = data + nblocks * 16;
     switch (len & 15) {

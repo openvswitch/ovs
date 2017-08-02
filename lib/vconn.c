@@ -877,7 +877,6 @@ vconn_transact_noreply(struct vconn *vconn, struct ofpbuf *request,
     for (;;) {
         struct ofpbuf *msg;
         ovs_be32 msg_xid;
-        int error;
 
         error = vconn_recv_block(vconn, &msg);
         if (error) {

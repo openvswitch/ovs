@@ -787,10 +787,10 @@ ovsdb_idl_check_consistency(const struct ovsdb_idl *idl)
                     ok = false;
                 }
             }
-            for (size_t i = 0; i < n_dsts; i++) {
+            for (size_t j = 0; j < n_dsts; j++) {
                 VLOG_ERR("%s row "UUID_FMT" missing arc to row "UUID_FMT,
                          table->class->name, UUID_ARGS(&row->uuid),
-                         UUID_ARGS(&dsts[i]));
+                         UUID_ARGS(&dsts[j]));
                 ok = false;
             }
         }

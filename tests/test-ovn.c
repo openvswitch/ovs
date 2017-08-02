@@ -373,7 +373,6 @@ test_evaluate_expr(struct ovs_cmdl_context *ctx)
     ds_init(&input);
     while (!ds_get_test_line(&input, stdin)) {
         struct expr *expr;
-        char *error;
 
         expr = expr_parse_string(ds_cstr(&input), &symtab, NULL, &error);
         if (!error) {

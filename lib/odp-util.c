@@ -4264,13 +4264,11 @@ static int
 parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
                         struct ofpbuf *key, struct ofpbuf *mask)
 {
-    ovs_u128 ufid;
-    int len;
-
     /* Skip UFID. */
-    len = odp_ufid_from_string(s, &ufid);
-    if (len) {
-        return len;
+    ovs_u128 ufid;
+    int ufid_len = odp_ufid_from_string(s, &ufid);
+    if (ufid_len) {
+        return ufid_len;
     }
 
     SCAN_SINGLE("skb_priority(", uint32_t, u32, OVS_KEY_ATTR_PRIORITY);

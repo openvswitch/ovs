@@ -816,11 +816,11 @@ consider_mc_group(enum mf_field_id mff_ovn_geneve,
                      remote_ofpacts_p);
         }
 
-        const char *chassis;
+        const char *chassis_name;
         const struct chassis_tunnel *prev = NULL;
-        SSET_FOR_EACH (chassis, &remote_chassis) {
+        SSET_FOR_EACH (chassis_name, &remote_chassis) {
             const struct chassis_tunnel *tun
-                = chassis_tunnel_find(chassis);
+                = chassis_tunnel_find(chassis_name);
             if (!tun) {
                 continue;
             }

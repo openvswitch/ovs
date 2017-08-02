@@ -371,14 +371,11 @@ kill_connection(struct unixctl_conn *conn)
 void
 unixctl_server_run(struct unixctl_server *server)
 {
-    struct unixctl_conn *conn, *next;
-    int i;
-
     if (!server) {
         return;
     }
 
-    for (i = 0; i < 10; i++) {
+    for (int i = 0; i < 10; i++) {
         struct stream *stream;
         int error;
 
@@ -396,6 +393,7 @@ unixctl_server_run(struct unixctl_server *server)
         }
     }
 
+    struct unixctl_conn *conn, *next;
     LIST_FOR_EACH_SAFE (conn, next, node, &server->conns) {
         int error = run_connection(conn);
         if (error && error != EAGAIN) {

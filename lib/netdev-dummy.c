@@ -1102,11 +1102,11 @@ netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
 
         /* Reply to ARP requests for 'dev''s assigned IP address. */
         if (dev->address.s_addr) {
-            struct dp_packet packet;
+            struct dp_packet dp;
             struct flow flow;
 
-            dp_packet_use_const(&packet, buffer, size);
-            flow_extract(&packet, &flow);
+            dp_packet_use_const(&dp, buffer, size);
+            flow_extract(&dp, &flow);
             if (flow.dl_type == htons(ETH_TYPE_ARP)
                 && flow.nw_proto == ARP_OP_REQUEST
                 && flow.nw_dst == dev->address.s_addr) {
@@ -1118,10 +1118,10 @@ netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
         }
 
         if (dev->tx_pcap) {
-            struct dp_packet packet;
+            struct dp_packet dp;
 
-            dp_packet_use_const(&packet, buffer, size);
-            ovs_pcap_write(dev->tx_pcap, &packet);
+            dp_packet_use_const(&dp, buffer, size);
+            ovs_pcap_write(dev->tx_pcap, &dp);
             fflush(dev->tx_pcap);
         }
 

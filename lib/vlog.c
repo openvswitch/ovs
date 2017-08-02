@@ -843,7 +843,6 @@ vlog_get_levels(void)
     struct ds s = DS_EMPTY_INITIALIZER;
     struct vlog_module *mp;
     struct svec lines = SVEC_EMPTY_INITIALIZER;
-    char *line;
     size_t i;
 
     ds_put_format(&s, "                 console    syslog    file\n");
@@ -869,6 +868,8 @@ vlog_get_levels(void)
     ovs_mutex_unlock(&log_file_mutex);
 
     svec_sort(&lines);
+
+    char *line;
     SVEC_FOR_EACH (i, line, &lines) {
         ds_put_cstr(&s, line);
     }

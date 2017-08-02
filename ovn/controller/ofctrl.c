@@ -1026,7 +1026,6 @@ ofctrl_put(struct hmap *flow_table, struct shash *pending_ct_zones,
         }
 
         /* Store the barrier's xid with any newly sent ct flushes. */
-        struct shash_node *iter;
         SHASH_FOR_EACH(iter, pending_ct_zones) {
             struct ct_zone_pending_entry *ctzpe = iter->data;
             if (ctzpe->state == CT_ZONE_OF_SENT && !ctzpe->of_xid) {

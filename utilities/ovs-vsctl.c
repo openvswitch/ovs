@@ -1503,7 +1503,6 @@ add_port(struct ctl_context *ctx,
          char *settings[], int n_settings)
 {
     struct vsctl_context *vsctl_ctx = vsctl_context_cast(ctx);
-    struct vsctl_port *vsctl_port;
     struct vsctl_bridge *bridge;
     struct ovsrec_interface **ifaces;
     struct ovsrec_port *port;
@@ -1593,7 +1592,7 @@ add_port(struct ctl_context *ctx,
     bridge_insert_port((bridge->parent ? bridge->parent->br_cfg
                         : bridge->br_cfg), port);
 
-    vsctl_port = add_port_to_cache(vsctl_ctx, bridge, port);
+    struct vsctl_port *vsctl_port = add_port_to_cache(vsctl_ctx, bridge, port);
     for (i = 0; i < n_ifaces; i++) {
         add_iface_to_cache(vsctl_ctx, vsctl_port, ifaces[i]);
     }

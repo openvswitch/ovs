@@ -145,6 +145,30 @@ replication_add_local_db(const char *database, struct ovsdb *db)
     shash_add_assert(&local_dbs, database, db);
 }
 
+static void
+send_schema_requests(const struct json *result)
+{
+    for (size_t i = 0; i < result->u.array.n; i++) {
+        const struct json *name = result->u.array.elems[i];
+        if (name->type == JSON_STRING) {
+            /* Send one schema request for each remote DB. */
+            const char *db_name = json_string(name);
+            struct ovsdb *db = find_db(db_name);
+            if (db) {
+                struct jsonrpc_msg *request =
+                    jsonrpc_create_request(
+                        "get_schema",
+                        json_array_create_1(
+                            json_string_create(db_name)),
+                        NULL);
+
+                request_ids_add(request->id, db);
+                jsonrpc_session_send(session, request);
+            }
+        }
+    }
+}
+
 void
 replication_run(void)
 {
@@ -245,26 +269,7 @@ replication_run(void)
                     ovsdb_error_assert(error);
                     state = RPL_S_ERR;
                 } else {
-                    size_t i;
-                    for (i = 0; i < msg->result->u.array.n; i++) {
-                        const struct json *name = msg->result->u.array.elems[i];
-                        if (name->type == JSON_STRING) {
-                            /* Send one schema request for each remote DB. */
-                            const char *db_name = json_string(name);
-                            struct ovsdb *db = find_db(db_name);
-                            if (db) {
-                                struct jsonrpc_msg *request =
-                                    jsonrpc_create_request(
-                                        "get_schema",
-                                        json_array_create_1(
-                                            json_string_create(db_name)),
-                                        NULL);
-
-                                request_ids_add(request->id, db);
-                                jsonrpc_session_send(session, request);
-                            }
-                        }
-                    }
+                    send_schema_requests(msg->result);
                     VLOG_DBG("Send schema requests");
                     state = RPL_S_SCHEMA_REQUESTED;
                 }
@@ -299,7 +304,7 @@ replication_run(void)
 
                     SHASH_FOR_EACH_SAFE (node, next, replication_dbs) {
                         db = node->data;
-                        struct ovsdb_error *error = reset_database(db);
+                        error = reset_database(db);
                         if (error) {
                             const char *db_name = db->schema->name;
                             shash_find_and_delete(replication_dbs, db_name);
@@ -315,7 +320,6 @@ replication_run(void)
                     } else {
                         SHASH_FOR_EACH (node, replication_dbs) {
                             db = node->data;
-                            struct ovsdb *db = node->data;
                             struct jsonrpc_msg *request =
                                 create_monitor_request(db);
 

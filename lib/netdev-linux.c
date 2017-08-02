@@ -5373,7 +5373,7 @@ get_stats_via_netlink(const struct netdev *netdev_, struct netdev_stats *stats)
             netdev_stats_from_rtnl_link_stats64(stats, nl_attr_get(a));
             error = 0;
         } else {
-            const struct nlattr *a = nl_attr_find(reply, 0, IFLA_STATS);
+            a = nl_attr_find(reply, 0, IFLA_STATS);
             if (a && nl_attr_get_size(a) >= sizeof(struct rtnl_link_stats)) {
                 netdev_stats_from_rtnl_link_stats(stats, nl_attr_get(a));
                 error = 0;

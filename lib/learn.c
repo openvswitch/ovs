@@ -342,14 +342,13 @@ learn_parse_spec(const char *orig, char *name, char *value,
                                  name, value);
             }
 
-            char *error = learn_parse_load_immediate(&imm, dst_value + 2, value, spec,
-                                                     ofpacts);
+            error = learn_parse_load_immediate(&imm, dst_value + 2, value, spec,
+                                               ofpacts);
             if (error) {
                 return error;
             }
         } else {
             struct ofpact_reg_move move;
-            char *error;
 
             error = nxm_parse_reg_move(&move, value);
             if (error) {
@@ -363,7 +362,7 @@ learn_parse_spec(const char *orig, char *name, char *value,
             spec->dst = move.dst;
         }
     } else if (!strcmp(name, "output")) {
-        char *error = mf_parse_subfield(&spec->src, value);
+        error = mf_parse_subfield(&spec->src, value);
         if (error) {
             return error;
         }

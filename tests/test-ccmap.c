@@ -58,8 +58,8 @@ check_ccmap(struct ccmap *ccmap, const int values[], size_t n, hash_func *hash)
 
     /* Check that all the values are there in lookup. */
     for (i = 0; i < n; i++) {
-        uint32_t hash = hashes[i];
-        size_t count = ccmap_find(ccmap, hash);
+        uint32_t h = hashes[i];
+        size_t count = ccmap_find(ccmap, h);
 
         assert(count);   /* Must have at least one. */
         assert(i + count <= n); /* May not have too many. */
@@ -67,11 +67,11 @@ check_ccmap(struct ccmap *ccmap, const int values[], size_t n, hash_func *hash)
         /* Skip colliding hash values and assert they were in the count. */
         while (--count) {
             i++;
-            assert(hashes[i] == hash);
+            assert(hashes[i] == h);
         }
         /* Make sure next hash is different. */
         if (i + 1 < n) {
-            assert(hashes[i + 1] != hash);
+            assert(hashes[i + 1] != h);
         }
     }
 

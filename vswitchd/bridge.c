@@ -1740,8 +1740,7 @@ add_del_bridges(const struct ovsrec_open_vswitch *cfg)
     /* Add new bridges. */
     SHASH_FOR_EACH(node, &new_br) {
         const struct ovsrec_bridge *br_cfg = node->data;
-        struct bridge *br = bridge_lookup(br_cfg->name);
-        if (!br) {
+        if (!bridge_lookup(br_cfg->name)) {
             bridge_create(br_cfg);
         }
     }
@@ -1874,9 +1873,6 @@ iface_create(struct bridge *br, const struct ovsrec_interface *iface_cfg,
 
         if (ofproto_port_query_by_name(br->ofproto, port->name,
                                        &ofproto_port)) {
-            struct netdev *netdev;
-            int error;
-
             error = netdev_open(port->name, "internal", &netdev);
             if (!error) {
                 ofp_port_t fake_ofp_port = OFPP_NONE;
@@ -3417,11 +3413,11 @@ bridge_del_ports(struct bridge *br, const struct shash *wanted_ports)
 
     /* Update iface->cfg and iface->type in interfaces that still exist. */
     SHASH_FOR_EACH (port_node, wanted_ports) {
-        const struct ovsrec_port *port = port_node->data;
+        const struct ovsrec_port *port_rec = port_node->data;
         size_t i;
 
-        for (i = 0; i < port->n_interfaces; i++) {
-            const struct ovsrec_interface *cfg = port->interfaces[i];
+        for (i = 0; i < port_rec->n_interfaces; i++) {
+            const struct ovsrec_interface *cfg = port_rec->interfaces[i];
             struct iface *iface = iface_lookup(br, cfg->name);
             const char *type = iface_get_type(cfg, br->cfg);
             const char *dp_type = br->cfg->datapath_type;
@@ -3684,7 +3680,7 @@ bridge_configure_tables(struct bridge *br)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
     int n_tables;
-    int i, j, k;
+    int i, j;
 
     n_tables = ofproto_get_n_tables(br->ofproto);
     j = 0;
@@ -3712,7 +3708,7 @@ bridge_configure_tables(struct bridge *br)
                                  && !strcmp(cfg->overflow_policy, "evict"));
             if (cfg->n_groups) {
                 s.groups = xmalloc(cfg->n_groups * sizeof *s.groups);
-                for (k = 0; k < cfg->n_groups; k++) {
+                for (int k = 0; k < cfg->n_groups; k++) {
                     const char *string = cfg->groups[k];
                     char *msg;
 
@@ -3733,7 +3729,7 @@ bridge_configure_tables(struct bridge *br)
 
             /* Prefix lookup fields. */
             s.n_prefix_fields = 0;
-            for (k = 0; k < cfg->n_prefixes; k++) {
+            for (int k = 0; k < cfg->n_prefixes; k++) {
                 const char *name = cfg->prefixes[k];
                 const struct mf_field *mf;
 
@@ -3768,9 +3764,8 @@ bridge_configure_tables(struct bridge *br)
             memcpy(s.prefix_fields, default_prefix_fields,
                    sizeof default_prefix_fields);
         } else {
-            int k;
             struct ds ds = DS_EMPTY_INITIALIZER;
-            for (k = 0; k < s.n_prefix_fields; k++) {
+            for (int k = 0; k < s.n_prefix_fields; k++) {
                 if (k) {
                     ds_put_char(&ds, ',');
                 }
@@ -3904,8 +3899,7 @@ bridge_configure_aa(struct bridge *br)
 
     /* Add new mappings and reconfigure existing ones. */
     for (i = 0; i < auto_attach->n_mappings; ++i) {
-        struct aa_mapping *m =
-            bridge_aa_mapping_find(br, auto_attach->key_mappings[i]);
+        m = bridge_aa_mapping_find(br, auto_attach->key_mappings[i]);
 
         if (!m) {
             VLOG_INFO("Adding isid=%"PRId64", vlan=%"PRId64,
@@ -4524,7 +4518,7 @@ iface_configure_qos(struct iface *iface, const struct ovsrec_qos *qos)
         queue_zero = false;
         for (i = 0; i < qos->n_queues; i++) {
             const struct ovsrec_queue *queue = qos->value_queues[i];
-            unsigned int queue_id = qos->key_queues[i];
+            queue_id = qos->key_queues[i];
 
             if (queue_id == 0) {
                 queue_zero = true;
@@ -4542,8 +4536,6 @@ iface_configure_qos(struct iface *iface, const struct ovsrec_qos *qos)
             netdev_set_queue(iface->netdev, queue_id, &queue->other_config);
         }
         if (!queue_zero) {
-            struct smap details;
-
             smap_init(&details);
             netdev_set_queue(iface->netdev, 0, &details);
             smap_destroy(&details);
@@ -4688,7 +4680,7 @@ bridge_configure_mirrors(struct bridge *br)
     /* Add new mirrors and reconfigure existing ones. */
     for (i = 0; i < br->cfg->n_mirrors; i++) {
         const struct ovsrec_mirror *cfg = br->cfg->mirrors[i];
-        struct mirror *m = mirror_find_by_uuid(br, &cfg->header_.uuid);
+        m = mirror_find_by_uuid(br, &cfg->header_.uuid);
         if (!m) {
             m = mirror_create(br, cfg);
         }

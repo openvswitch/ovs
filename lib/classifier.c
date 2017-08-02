@@ -793,8 +793,6 @@ check_priority:
             && --subtable->max_count == 0) {
             /* Find the new 'max_priority' and 'max_count'. */
             int max_priority = INT_MIN;
-            struct cls_match *head;
-
             CMAP_FOR_EACH (head, cmap_node, &subtable->rules) {
                 if (head->priority > max_priority) {
                     max_priority = head->priority;

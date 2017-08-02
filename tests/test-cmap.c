@@ -78,7 +78,6 @@ check_cmap(struct cmap *cmap, const int values[], size_t n,
     /* Here we test iteration with cmap_next_position() */
     i = 0;
     while ((node = cmap_next_position(cmap, &pos))) {
-        struct element *e = NULL;
         e = OBJECT_CONTAINING(node, e, node);
 
         assert(i < n);
@@ -128,8 +127,6 @@ check_cmap(struct cmap *cmap, const int values[], size_t n,
         map = cmap_find_batch(cmap, map, hashes, nodes);
 
         ULLONG_FOR_EACH_1(k, map) {
-            struct element *e;
-
             CMAP_NODE_FOR_EACH (e, node, nodes[k]) {
                 count += e->value == values[i + k];
             }

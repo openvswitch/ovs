@@ -1016,14 +1016,13 @@ dpif_netdev_pmd_info(struct unixctl_conn *conn, int argc, const char *argv[],
         } else {
             unsigned long long stats[DP_N_STATS];
             uint64_t cycles[PMD_N_CYCLES];
-            int i;
 
             /* Read current stats and cycle counters */
-            for (i = 0; i < ARRAY_SIZE(stats); i++) {
-                atomic_read_relaxed(&pmd->stats.n[i], &stats[i]);
+            for (size_t j = 0; j < ARRAY_SIZE(stats); j++) {
+                atomic_read_relaxed(&pmd->stats.n[j], &stats[j]);
             }
-            for (i = 0; i < ARRAY_SIZE(cycles); i++) {
-                atomic_read_relaxed(&pmd->cycles.n[i], &cycles[i]);
+            for (size_t j = 0; j < ARRAY_SIZE(cycles); j++) {
+                atomic_read_relaxed(&pmd->cycles.n[j], &cycles[j]);
             }
 
             if (type == PMD_INFO_CLEAR_STATS) {

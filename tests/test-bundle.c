@@ -218,7 +218,7 @@ test_bundle_main(int argc, char *argv[])
                mask_str(mask, sg.n_slaves), disruption, perfect);
 
         for (j = 0 ; j < sg.n_slaves; j++) {
-            struct slave *slave = &sg.slaves[j];
+            slave = &sg.slaves[j];
             double flow_percent;
 
             flow_percent = slave->flow_count / (double)N_FLOWS;

@@ -1002,11 +1002,11 @@ daemon_set_new_user(const char *user_spec)
         grpstr += strspn(grpstr, " \t\r\n");
 
         if (*grpstr) {
-            struct group grp, *res;
+            struct group grp, *gres;
 
             bufsize = init_bufsize;
             buf = xmalloc(bufsize);
-            while ((e = getgrnam_r(grpstr, &grp, buf, bufsize, &res))
+            while ((e = getgrnam_r(grpstr, &grp, buf, bufsize, &gres))
                          == ERANGE) {
                 if (!enlarge_buffer(&buf, &bufsize)) {
                     break;
@@ -1018,7 +1018,7 @@ daemon_set_new_user(const char *user_spec)
                            "(%s), aborting.", pidfile, grpstr,
                            ovs_strerror(e));
             }
-            if (res == NULL) {
+            if (gres == NULL) {
                 VLOG_FATAL("%s: group %s not found, aborting.", pidfile,
                            grpstr);
             }

@@ -2344,12 +2344,12 @@ ofp_async_config_reason_to_string(uint32_t reason,
 #define OFP_ASYNC_CONFIG_REASON_BUFSIZE (INT_STRLEN(int) + 1)
 static void
 ofp_print_set_async_config(struct ds *string, const struct ofp_header *oh,
-                           enum ofptype type)
+                           enum ofptype ofptype)
 {
     struct ofputil_async_cfg basis = OFPUTIL_ASYNC_CFG_INIT;
     struct ofputil_async_cfg ac;
 
-    bool is_reply = type == OFPTYPE_GET_ASYNC_REPLY;
+    bool is_reply = ofptype == OFPTYPE_GET_ASYNC_REPLY;
     enum ofperr error = ofputil_decode_set_async_config(oh, is_reply,
                                                         &basis, &ac);
     if (error) {

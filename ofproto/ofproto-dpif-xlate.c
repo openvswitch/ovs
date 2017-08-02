@@ -1901,14 +1901,14 @@ mirror_packet(struct xlate_ctx *ctx, struct xbundle *xbundle,
             }
         } else if (xvlan.v[0].vid != out_vlan
                    && !eth_addr_is_reserved(ctx->xin->flow.dl_dst)) {
-            struct xbundle *xbundle;
+            struct xbundle *xb;
             uint16_t old_vid = xvlan.v[0].vid;
 
             xvlan.v[0].vid = out_vlan;
-            LIST_FOR_EACH (xbundle, list_node, &xbridge->xbundles) {
-                if (xbundle_includes_vlan(xbundle, &xvlan)
-                    && !xbundle_mirror_out(xbridge, xbundle)) {
-                    output_normal(ctx, xbundle, &xvlan);
+            LIST_FOR_EACH (xb, list_node, &xbridge->xbundles) {
+                if (xbundle_includes_vlan(xb, &xvlan)
+                    && !xbundle_mirror_out(xbridge, xb)) {
+                    output_normal(ctx, xb, &xvlan);
                 }
             }
             xvlan.v[0].vid = old_vid;
@@ -7068,8 +7068,9 @@ xlate_send_packet(const struct ofport_dpif *ofport, bool oam,
     }
 
     if (oam) {
-        const ovs_be16 oam = htons(NX_TUN_FLAG_OAM);
-        ofpact_put_set_field(&ofpacts, mf_from_id(MFF_TUN_FLAGS), &oam, &oam);
+        const ovs_be16 flag = htons(NX_TUN_FLAG_OAM);
+        ofpact_put_set_field(&ofpacts, mf_from_id(MFF_TUN_FLAGS),
+                             &flag, &flag);
     }
 
     ofpact_put_OUTPUT(&ofpacts)->port = xport->ofp_port;

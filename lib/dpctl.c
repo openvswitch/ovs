@@ -336,7 +336,8 @@ dpctl_set_if(int argc, const char *argv[], struct dpctl_params *dpctl_p)
         struct smap args;
         odp_port_t port_no;
         char *option;
-        int error = 0;
+
+        error = 0;
 
         argcopy = xstrdup(argv[i]);
         name = strtok_r(argcopy, ",", &save_ptr);
@@ -1787,8 +1788,7 @@ dpctl_normalize_actions(int argc, const char *argv[],
     qsort(afs, n_afs, sizeof *afs, compare_actions_for_flow);
 
     for (i = 0; i < n_afs; i++) {
-        struct actions_for_flow *af = afs[i];
-
+        af = afs[i];
         sort_output_actions(af->actions.data, af->actions.size);
 
         for (encaps = 0; encaps < FLOW_MAX_VLAN_HEADERS; encaps ++) {

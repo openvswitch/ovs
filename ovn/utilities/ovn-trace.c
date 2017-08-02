@@ -948,7 +948,7 @@ ovntrace_port_lookup_by_name(const char *name)
 
     struct shash_node *node;
     SHASH_FOR_EACH (node, &ports) {
-        const struct ovntrace_port *port = node->data;
+        port = node->data;
 
         if (port->name2 && !strcmp(port->name2, name)) {
             if (match) {
@@ -960,9 +960,8 @@ ovntrace_port_lookup_by_name(const char *name)
     }
 
     if (uuid_is_partial_string(name) >= 4) {
-        struct shash_node *node;
         SHASH_FOR_EACH (node, &ports) {
-            const struct ovntrace_port *port = node->data;
+            port = node->data;
 
             struct uuid name_uuid;
             if (uuid_is_partial_match(&port->uuid, name)
@@ -1562,17 +1561,16 @@ execute_put_dhcp_opts(const struct ovnact_put_dhcp_opts *pdo,
     }
     ovntrace_node_append(super, OVNTRACE_NODE_MODIFY, "%s(%s)",
                          name, ds_cstr(&s));
-    ds_destroy(&s);
 
     struct mf_subfield dst = expr_resolve_field(&pdo->dst);
     if (!mf_is_register(dst.field->id)) {
         /* Format assignment. */
-        struct ds s = DS_EMPTY_INITIALIZER;
+        ds_clear(&s);
         expr_field_format(&pdo->dst, &s);
         ovntrace_node_append(super, OVNTRACE_NODE_MODIFY,
                              "%s = 1", ds_cstr(&s));
-        ds_destroy(&s);
     }
+    ds_destroy(&s);
 
     struct mf_subfield sf = expr_resolve_field(&pdo->dst);
     union mf_subvalue sv = { .u8_val = 1 };

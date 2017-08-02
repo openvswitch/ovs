@@ -4722,7 +4722,6 @@ group_dpif_credit_stats(struct group_dpif *group,
         bucket->stats.packet_count += stats->n_packets;
         bucket->stats.byte_count += stats->n_bytes;
     } else { /* Credit to all buckets */
-        struct ofputil_bucket *bucket;
         LIST_FOR_EACH (bucket, list_node, &group->up.buckets) {
             bucket->stats.packet_count += stats->n_packets;
             bucket->stats.byte_count += stats->n_bytes;
@@ -5203,14 +5202,10 @@ dpif_show_backer(const struct dpif_backer *backer, struct ds *ds)
 
             smap_init(&config);
             if (!netdev_get_config(ofport->netdev, &config)) {
-                const struct smap_node **nodes;
-                size_t i;
-
-                nodes = smap_sort(&config);
-                for (i = 0; i < smap_count(&config); i++) {
-                    const struct smap_node *node = nodes[i];
-                    ds_put_format(ds, "%c %s=%s", i ? ',' : ':',
-                                  node->key, node->value);
+                const struct smap_node **nodes = smap_sort(&config);
+                for (size_t k = 0; k < smap_count(&config); k++) {
+                    ds_put_format(ds, "%c %s=%s", k ? ',' : ':',
+                                  nodes[k]->key, nodes[k]->value);
                 }
                 free(nodes);
             }
