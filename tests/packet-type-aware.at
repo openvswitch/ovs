@@ -510,3 +510,408 @@ tunnel(src=20.0.0.3,dst=20.0.0.2,flags(-df-csum)),recirc_id(0),in_port(gre_sys),
 
 OVS_VSWITCHD_STOP(["/The Open vSwitch kernel module is probably not loaded/d"])
 AT_CLEANUP
+
+
+AT_SETUP([ptap - check decap() prerequisits])
+OVS_VSWITCHD_START
+
+# Decap IP header, then set IP destination address. This should fail.
+AT_CHECK([
+    ovs-ofctl add-flow br0 "in_port=1,packet_type=(1,0x800),actions=decap(),set_field:1.1.1.1->nw_dst"
+], [1], [stdout], [stderr])
+
+AT_CHECK([
+    cat stderr | cut -d '|' -f 3-
+], [0], [dnl
+ofp_actions|WARN|set_field ip_dst lacks correct prerequisites
+ovs-ofctl: actions are invalid with specified match (OFPBAC_MATCH_INCONSISTENT)
+])
+
+# Decap Ethernet header, then set IP destination address. This should work.
+AT_CHECK([
+    ovs-ofctl add-flow br0 -OOpenFlow13 "in_port=1,ip,actions=decap(),set_field:1.1.1.1->nw_dst"
+], [0])
+
+# Decap IP header, then set metadata. This should work.
+AT_CHECK([
+    ovs-ofctl add-flow br0 -OOpenFlow13 "in_port=1,packet_type=(1,0x800),actions=decap(),set_field:1234->metadata"
+], [0])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
+AT_SETUP([ptap - check encap/decap VLAN tagged Ethernet frame])
+OVS_VSWITCHD_START([dnl
+    -- add-port br0 n1 -- set interface n1 type=dummy ofport_request=1 \
+    -- add-port br0 n2 -- set interface n2 type=dummy ofport_request=2 \
+    -- add-port br0 p1 -- set interface p1 type=patch options:peer=p2 ofport_request=3 \
+    -- add-port br0 p2 -- set interface p2 type=patch options:peer=p1 ofport_request=4
+])
+
+# Decap VLAN tagged Ethernet frames -> should be dropped
+AT_CHECK([
+    ovs-ofctl add-flow br0 -OOpenFlow13 "in_port=1,actions=push_vlan:0x8100,mod_vlan_vid:100,decap(),3"
+    ovs-ofctl add-flow br0 -OOpenFlow13 "in_port=4,actions=encap(ethernet),2"
+], [0])
+
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive n1 1e2ce92a669e3a6dd2099cab0800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d0001fc509a58000000002715020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+    ovs-appctl netdev-dummy/receive n1 1e2ce92a669e3a6dd2099cab0800450000548a83400040011aadc0a80a0ac0a80a1e0800b7170a4d0002fd509a5800000000de1c020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+], [0], [ignore])
+
+ovs-appctl time/warp 1000
+
+AT_CHECK([
+    ovs-appctl dpctl/dump-flows | strip_used | grep -v ipv6 | sort
+], [0], [flow-dump from non-dpdk interfaces:
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:drop
+])
+
+# Encap(ethernet) on Ethernet frame -> should be droped
+AT_CHECK([
+    ovs-ofctl del-flows br0
+    ovs-ofctl add-flow br0 -OOpenFlow13 "in_port=1,actions=3"
+    ovs-ofctl add-flow br0 -OOpenFlow13 "in_port=4,actions=encap(ethernet),2"
+])
+
+ovs-appctl time/warp 11000
+
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive n1 1e2ce92a669e3a6dd2099cab0800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d0001fc509a58000000002715020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+    ovs-appctl netdev-dummy/receive n1 1e2ce92a669e3a6dd2099cab0800450000548a83400040011aadc0a80a0ac0a80a1e0800b7170a4d0002fd509a5800000000de1c020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+], [0], [ignore])
+
+ovs-appctl time/warp 1000
+
+AT_CHECK([
+    ovs-appctl dpctl/dump-flows | strip_used | grep -v ipv6 | sort
+], [0], [flow-dump from non-dpdk interfaces:
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:drop
+])
+
+# Encap(ethernet) on VLAN tagged Ethernet frame -> should be droped
+AT_CHECK([
+    ovs-ofctl del-flows br0
+    ovs-ofctl add-flow br0 -OOpenFlow13 "in_port=1,actions=push_vlan:0x8100,mod_vlan_vid:100,encap(ethernet),3"
+    ovs-ofctl add-flow br0 -OOpenFlow13 "in_port=4,actions=2"
+])
+
+ovs-appctl time/warp 11000
+
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive n1 1e2ce92a669e3a6dd2099cab0800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d0001fc509a58000000002715020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+    ovs-appctl netdev-dummy/receive n1 1e2ce92a669e3a6dd2099cab0800450000548a83400040011aadc0a80a0ac0a80a1e0800b7170a4d0002fd509a5800000000de1c020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+], [0], [ignore])
+
+ovs-appctl time/warp 1000
+
+AT_CHECK([
+    ovs-appctl dpctl/dump-flows | strip_used | grep -v ipv6 | sort
+], [0], [flow-dump from non-dpdk interfaces:
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:drop
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
+AT_SETUP([ptap - L3 over patch port])
+
+########################
+# L3 over patch port
+#
+# (192.168.10.10)     (192.168.10.30)
+#    n0                  n1
+#     |                   |
+#  +--o------+         +--o------+
+#  |   br0   |         |   br1   |
+#  +------o--+         +--o---o--+
+#      p0 |            p1 |   gre1 (ptap)
+#         +---------------+   10.0.0.1
+#
+#                             LOCAL
+#                      +------o--+
+#                      |   br2   |
+#                      +------o--+
+#                             |
+#                            n2
+#                         10.0.0.2
+
+HWADDR_BRP2=aa:55:00:00:00:02
+
+OVS_VSWITCHD_START([dnl
+    -- add-br br1 \
+    -- set bridge br1 datapath_type=dummy fail-mode=secure \
+    -- add-br br2 \
+    -- set bridge br2 datapath_type=dummy fail-mode=secure \
+       other_config:hwaddr=\"$HWADDR_BRP2\" \
+    -- add-port br0 p0 \
+    -- set interface p0 type=patch options:peer=p1 ofport_request=10 \
+    -- add-port br1 p1 \
+    -- set interface p1 type=patch options:peer=p0 ofport_request=20 \
+    -- add-port br0 n0 \
+    -- set interface n0 type=dummy ofport_request=30 \
+    -- add-port br1 n1 \
+    -- set interface n1 type=dummy options:tx_pcap=n1.pcap ofport_request=40 \
+    -- add-port br2 n2 \
+    -- set interface n2 type=dummy options:tx_pcap=n2.pcap ofport_request=50 \
+    -- add-port br1 gre1 \
+    -- set interface gre1 type=gre options:remote_ip=10.0.0.2 \
+       options:packet_type=ptap ofport_request=100
+])
+
+### Verify datapath configuration
+AT_CHECK([
+    ovs-appctl dpif/show | grep -v hit | sed 's/\t/    /g' | sed 's./[[0-9]]\{1,\}..'
+], [0], [dnl
+    br0:
+        br0 65534: (dummy-internal)
+        n0 30: (dummy)
+        p0 10/none: (patch: peer=p1)
+    br1:
+        br1 65534: (dummy-internal)
+        gre1 100: (gre: packet_type=ptap, remote_ip=10.0.0.2)
+        n1 40: (dummy)
+        p1 20/none: (patch: peer=p0)
+    br2:
+        br2 65534: (dummy-internal)
+        n2 50: (dummy)
+])
+
+AT_CHECK([
+    ovs-appctl netdev-dummy/ip4addr br2 10.0.0.1/24 &&
+    ovs-appctl ovs/route/add 10.0.0.0/24 br2 &&
+    ovs-appctl tnl/arp/set br2 10.0.0.2 de:af:be:ef:ba:be
+], [0], [ignore])
+
+AT_CHECK([
+    ovs-appctl ovs/route/show | grep User:
+], [0], [dnl
+User: 10.0.0.0/24 dev br2 SRC 10.0.0.1
+])
+
+
+AT_CHECK([
+    ovs-ofctl del-flows br0 &&
+    ovs-ofctl del-flows br1 &&
+    ovs-ofctl del-flows br2 &&
+    ovs-ofctl add-flow br0 in_port=n0,actions=decap,output=p0 -OOpenFlow13 &&
+    ovs-ofctl add-flow br1 in_port=p1,actions=output=gre1 &&
+    ovs-ofctl add-flow br2 in_port=LOCAL,actions=output=n2
+], [0])
+
+AT_CHECK([ovs-ofctl -OOpenFlow13 dump-flows br0 | ofctl_strip | grep actions],
+[0], [dnl
+ in_port=30 actions=decap(),output:10
+])
+
+AT_CHECK([ovs-ofctl -OOpenFlow13 dump-flows br1 | ofctl_strip | grep actions],
+[0], [dnl
+ reset_counts in_port=20 actions=output:100
+])
+
+AT_CHECK([ovs-ofctl -OOpenFlow13 dump-flows br2 | ofctl_strip | grep actions],
+[0], [dnl
+ reset_counts in_port=LOCAL actions=output:50
+])
+
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive n0 1e2ce92a669e3a6dd2099cab0800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d0001fc509a58000000002715020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+    ovs-appctl netdev-dummy/receive n0 1e2ce92a669e3a6dd2099cab0800450000548a83400040011aadc0a80a0ac0a80a1e0800b7170a4d0002fd509a5800000000de1c020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+], [0], [ignore])
+
+ovs-appctl time/warp 1000
+
+AT_CHECK([
+    ovs-appctl dpctl/dump-flows --names dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
+], [0], [flow-dump from non-dpdk interfaces:
+recirc_id(0),in_port(n0),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(tos=0/0x3,frag=no), packets:1, bytes:98, used:0.0s, actions:pop_eth,clone(tnl_push(tnl_port(gre_sys),header(size=38,type=3,eth(dst=de:af:be:ef:ba:be,src=aa:55:00:00:00:02,dl_type=0x0800),ipv4(src=10.0.0.1,dst=10.0.0.2,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x800))),out_port(br2)),n2)
+])
+
+AT_CHECK([
+    ovs-pcap n2.pcap
+], [0], [dnl
+deafbeefbabeaa550000000208004500006c00004000402f26610a0000010a00000200000800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d0001fc509a58000000002715020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+deafbeefbabeaa550000000208004500006c00004000402f26610a0000010a00000200000800450000548a83400040011aadc0a80a0ac0a80a1e0800b7170a4d0002fd509a5800000000de1c020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+])
+
+
+dnl output L3 to ports with different packet_type properties
+ovs-appctl time/warp 11000
+
+## L3 packet over L2 legacy port
+
+AT_CHECK([
+    ovs-ofctl del-flows br0 &&
+    ovs-ofctl del-flows br1 &&
+    ovs-ofctl del-flows br2 &&
+    ovs-ofctl add-flow br0 -OOpenFlow13 in_port=n0,actions=decap,output=p0 &&
+    ovs-ofctl add-flow br1 in_port=p1,actions=output=n1
+], [0])
+
+AT_CHECK([ovs-ofctl -OOpenFlow13 dump-flows br0 | ofctl_strip | grep actions | sed 's/reset_counts //'],
+[0], [dnl
+ in_port=30 actions=decap(),output:10
+])
+
+AT_CHECK([ovs-ofctl -OOpenFlow13 dump-flows br1 | ofctl_strip | grep actions | sed 's/reset_counts //'],
+[0], [dnl
+ in_port=20 actions=output:40
+])
+
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive n0 1e2ce92a669e3a6dd2099cab0800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d0001fc509a58000000002715020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+    ovs-appctl netdev-dummy/receive n0 1e2ce92a669e3a6dd2099cab0800450000548a83400040011aadc0a80a0ac0a80a1e0800b7170a4d0002fd509a5800000000de1c020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+], [0], [ignore])
+
+ovs-appctl time/warp 1000
+
+AT_CHECK([
+    ovs-appctl dpctl/dump-flows --names dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
+], [0], [flow-dump from non-dpdk interfaces:
+recirc_id(0),in_port(n0),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:drop
+])
+
+AT_CHECK([
+    ovs-pcap n1.pcap
+], [0], [dnl
+])
+
+## L3 packet over ptap and L2 legacy port
+
+AT_CHECK([
+    ovs-ofctl del-flows br0 &&
+    ovs-ofctl del-flows br1 &&
+    ovs-ofctl del-flows br2 &&
+    ovs-ofctl add-flow br0 in_port=n0,actions=decap,output=p0 -OOpenFlow13 &&
+    ovs-ofctl add-flow br1 in_port=p1,actions=output=n1,gre1 &&
+    ovs-ofctl add-flow br2 in_port=LOCAL,actions=output=n2
+], [0])
+
+AT_CHECK([ovs-ofctl -OOpenFlow13 dump-flows br0 | ofctl_strip | grep actions | sed 's/reset_counts //'],
+[0], [dnl
+ in_port=30 actions=decap(),output:10
+])
+
+AT_CHECK([ovs-ofctl -OOpenFlow13 dump-flows br1 | ofctl_strip | grep actions | sed 's/reset_counts //'],
+[0], [dnl
+ in_port=20 actions=output:40,output:100
+])
+
+AT_CHECK([ovs-ofctl -OOpenFlow13 dump-flows br2 | ofctl_strip | grep actions | sed 's/reset_counts //'],
+[0], [dnl
+ in_port=LOCAL actions=output:50
+])
+
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive n0 1e2ce92a669e3a6dd2099cab0800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d0001fc509a58000000002715020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+    ovs-appctl netdev-dummy/receive n0 1e2ce92a669e3a6dd2099cab0800450000548a83400040011aadc0a80a0ac0a80a1e0800b7170a4d0002fd509a5800000000de1c020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+], [0], [ignore])
+
+ovs-appctl time/warp 1000
+
+AT_CHECK([
+    ovs-appctl dpctl/dump-flows --names dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
+], [0], [flow-dump from non-dpdk interfaces:
+recirc_id(0),in_port(n0),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(tos=0/0x3,frag=no), packets:1, bytes:98, used:0.0s, actions:pop_eth,clone(tnl_push(tnl_port(gre_sys),header(size=38,type=3,eth(dst=de:af:be:ef:ba:be,src=aa:55:00:00:00:02,dl_type=0x0800),ipv4(src=10.0.0.1,dst=10.0.0.2,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x800))),out_port(br2)),n2)
+])
+
+AT_CHECK([
+    ovs-pcap n1.pcap
+], [0], [dnl
+])
+
+AT_CHECK([
+    ovs-pcap n2.pcap
+], [0], [dnl
+deafbeefbabeaa550000000208004500006c00004000402f26610a0000010a00000200000800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d0001fc509a58000000002715020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+deafbeefbabeaa550000000208004500006c00004000402f26610a0000010a00000200000800450000548a83400040011aadc0a80a0ac0a80a1e0800b7170a4d0002fd509a5800000000de1c020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+deafbeefbabeaa550000000208004500006c00004000402f26610a0000010a00000200000800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d0001fc509a58000000002715020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+deafbeefbabeaa550000000208004500006c00004000402f26610a0000010a00000200000800450000548a83400040011aadc0a80a0ac0a80a1e0800b7170a4d0002fd509a5800000000de1c020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+])
+
+
+## L2 packet over L3 legacy port and L2 legacy port
+ovs-appctl time/warp 11000
+
+AT_CHECK([
+    ovs-vsctl set interface gre1 type=gre options:remote_ip=10.0.0.2 \
+              options:packet_type=legacy_l3 ofport_request=100
+], [0])
+
+### Verify datapath configuration
+AT_CHECK([
+    ovs-appctl dpif/show | grep -v hit | sed 's/\t/    /g' | sed 's./[[0-9]]\{1,\}..'
+], [0], [dnl
+    br0:
+        br0 65534: (dummy-internal)
+        n0 30: (dummy)
+        p0 10/none: (patch: peer=p1)
+    br1:
+        br1 65534: (dummy-internal)
+        gre1 100: (gre: packet_type=legacy_l3, remote_ip=10.0.0.2)
+        n1 40: (dummy)
+        p1 20/none: (patch: peer=p0)
+    br2:
+        br2 65534: (dummy-internal)
+        n2 50: (dummy)
+])
+
+AT_CHECK([
+    ovs-ofctl del-flows br0 &&
+    ovs-ofctl del-flows br1 &&
+    ovs-ofctl del-flows br2 &&
+    ovs-ofctl add-flow br0 in_port=n0,actions=output=p0 &&
+    ovs-ofctl add-flow br1 in_port=p1,actions=output=n1,gre1 &&
+    ovs-ofctl add-flow br2 in_port=LOCAL,actions=output=n2
+], [0])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | grep actions | sed 's/reset_counts //'],
+[0], [dnl
+ in_port=30 actions=output:10
+])
+
+AT_CHECK([ovs-ofctl dump-flows br1 | ofctl_strip | grep actions | sed 's/reset_counts //'],
+[0], [dnl
+ in_port=20 actions=output:40,output:100
+])
+
+AT_CHECK([ovs-ofctl dump-flows br2 | ofctl_strip | grep actions | sed 's/reset_counts //'],
+[0], [dnl
+ in_port=LOCAL actions=output:50
+])
+
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive n0 1e2ce92a669e3a6dd2099cab0800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d0001fc509a58000000002715020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+    ovs-appctl netdev-dummy/receive n0 1e2ce92a669e3a6dd2099cab0800450000548a83400040011aadc0a80a0ac0a80a1e0800b7170a4d0002fd509a5800000000de1c020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+], [0], [ignore])
+
+ovs-appctl time/warp 1000
+
+AT_CHECK([
+    ovs-appctl dpctl/dump-flows --names dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
+], [0], [flow-dump from non-dpdk interfaces:
+recirc_id(0),in_port(n0),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(tos=0/0x3,frag=no), packets:1, bytes:98, used:0.0s, actions:n1,pop_eth,clone(tnl_push(tnl_port(gre_sys),header(size=38,type=3,eth(dst=de:af:be:ef:ba:be,src=aa:55:00:00:00:02,dl_type=0x0800),ipv4(src=10.0.0.1,dst=10.0.0.2,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x800))),out_port(br2)),n2)
+])
+
+AT_CHECK([
+    ovs-pcap n1.pcap
+], [0], [dnl
+1e2ce92a669e3a6dd2099cab0800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d0001fc509a58000000002715020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+1e2ce92a669e3a6dd2099cab0800450000548a83400040011aadc0a80a0ac0a80a1e0800b7170a4d0002fd509a5800000000de1c020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+])
+
+AT_CHECK([
+    ovs-pcap n2.pcap
+], [0], [dnl
+deafbeefbabeaa550000000208004500006c00004000402f26610a0000010a00000200000800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d0001fc509a58000000002715020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+deafbeefbabeaa550000000208004500006c00004000402f26610a0000010a00000200000800450000548a83400040011aadc0a80a0ac0a80a1e0800b7170a4d0002fd509a5800000000de1c020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+deafbeefbabeaa550000000208004500006c00004000402f26610a0000010a00000200000800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d0001fc509a58000000002715020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+deafbeefbabeaa550000000208004500006c00004000402f26610a0000010a00000200000800450000548a83400040011aadc0a80a0ac0a80a1e0800b7170a4d0002fd509a5800000000de1c020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+deafbeefbabeaa550000000208004500006c00004000402f26610a0000010a00000200000800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d0001fc509a58000000002715020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+deafbeefbabeaa550000000208004500006c00004000402f26610a0000010a00000200000800450000548a83400040011aadc0a80a0ac0a80a1e0800b7170a4d0002fd509a5800000000de1c020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
