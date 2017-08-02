@@ -1182,12 +1182,88 @@ netdev_linux_rxq_drain(struct netdev_rxq *rxq_)
     }
 }
 
-/* Sends 'buffer' on 'netdev'.  Returns 0 if successful, otherwise a positive
+static int
+netdev_linux_sock_batch_send(int sock, int ifindex,
+                             struct dp_packet_batch *batch)
+{
+    /* We don't bother setting most fields in sockaddr_ll because the
+     * kernel ignores them for SOCK_RAW. */
+    struct sockaddr_ll sll = { .sll_family = AF_PACKET,
+                               .sll_ifindex = ifindex };
+
+    struct mmsghdr *mmsg = xmalloc(sizeof(*mmsg) * batch->count);
+    struct iovec *iov = xmalloc(sizeof(*iov) * batch->count);
+
+    for (int i = 0; i < batch->count; i++) {
+        struct dp_packet *packet = batch->packets[i];
+        iov[i].iov_base = dp_packet_data(packet);
+        iov[i].iov_len = dp_packet_get_send_len(packet);
+        mmsg[i].msg_hdr = (struct msghdr) { .msg_name = &sll,
+                                            .msg_namelen = sizeof sll,
+                                            .msg_iov = &iov[i],
+                                            .msg_iovlen = 1 };
+    }
+
+    int error = 0;
+    for (uint32_t ofs = 0; ofs < batch->count; ) {
+        ssize_t retval;
+        do {
+            retval = sendmmsg(sock, mmsg + ofs, batch->count - ofs, 0);
+            error = retval < 0 ? errno : 0;
+        } while (error == EINTR);
+        if (error) {
+            break;
+        }
+        ofs += retval;
+    }
+
+    free(mmsg);
+    free(iov);
+    return error;
+}
+
+/* Use the tap fd to send 'batch' to tap device 'netdev'.  Using the tap fd is
+ * essential, because packets sent to a tap device with an AF_PACKET socket
+ * will loop back to be *received* again on the tap device.  This doesn't occur
+ * on other interface types because we attach a socket filter to the rx
+ * socket. */
+static int
+netdev_linux_tap_batch_send(struct netdev *netdev_,
+                            struct dp_packet_batch *batch)
+{
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    for (int i = 0; i < batch->count; i++) {
+        struct dp_packet *packet = batch->packets[i];
+        size_t size = dp_packet_get_send_len(packet);
+        ssize_t retval;
+        int error;
+
+        do {
+            retval = write(netdev->tap_fd, dp_packet_data(packet), size);
+            error = retval < 0 ? errno : 0;
+        } while (error == EINTR);
+
+        if (error) {
+            /* The Linux tap driver returns EIO if the device is not up.  From
+             * the OVS side this is not an error, so we ignore it; otherwise,
+             * return the erro. */
+            if (error != EIO) {
+                return error;
+            }
+        } else if (retval != size) {
+            VLOG_WARN_RL(&rl, "sent partial Ethernet packet (%"PRIuSIZE" "
+                         "bytes of %"PRIuSIZE") on %s",
+                         retval, size, netdev_get_name(netdev_));
+            return EMSGSIZE;
+        }
+    }
+    return 0;
+}
+
+/* Sends 'batch' on 'netdev'.  Returns 0 if successful, otherwise a positive
  * errno value.  Returns EAGAIN without blocking if the packet cannot be queued
  * immediately.  Returns EMSGSIZE if a partial packet was transmitted or if
  * the packet is too big or too small to transmit on the device.
- *
- * The caller retains ownership of 'buffer' in all cases.
  *
  * The kernel maintains a packet transmission queue, so the caller is not
  * expected to do additional queuing of packets. */
@@ -1199,8 +1275,6 @@ netdev_linux_send(struct netdev *netdev_, int qid OVS_UNUSED,
     int error = 0;
     int sock = 0;
 
-    struct sockaddr_ll sll;
-    struct msghdr msg;
     if (!is_tap_netdev(netdev_)) {
         sock = af_packet_sock();
         if (sock < 0) {
@@ -1214,84 +1288,25 @@ netdev_linux_send(struct netdev *netdev_, int qid OVS_UNUSED,
             goto free_batch;
         }
 
-        /* We don't bother setting most fields in sockaddr_ll because the
-         * kernel ignores them for SOCK_RAW. */
-        memset(&sll, 0, sizeof sll);
-        sll.sll_family = AF_PACKET;
-        sll.sll_ifindex = ifindex;
-
-        msg.msg_name = &sll;
-        msg.msg_namelen = sizeof sll;
-        msg.msg_iovlen = 1;
-        msg.msg_control = NULL;
-        msg.msg_controllen = 0;
-        msg.msg_flags = 0;
+        error = netdev_linux_sock_batch_send(sock, ifindex, batch);
+    } else {
+        error = netdev_linux_tap_batch_send(netdev_, batch);
     }
-
-    /* 'i' is incremented only if there's no error */
-    for (int i = 0; i < batch->count; ) {
-        const void *data = dp_packet_data(batch->packets[i]);
-        size_t size = dp_packet_get_send_len(batch->packets[i]);
-        ssize_t retval;
-
-        if (!is_tap_netdev(netdev_)) {
-            /* Use our AF_PACKET socket to send to this device. */
-            struct iovec iov;
-
-            iov.iov_base = CONST_CAST(void *, data);
-            iov.iov_len = size;
-
-            msg.msg_iov = &iov;
-
-            retval = sendmsg(sock, &msg, 0);
+    if (error) {
+        if (error == ENOBUFS) {
+            /* The Linux AF_PACKET implementation never blocks waiting
+             * for room for packets, instead returning ENOBUFS.
+             * Translate this into EAGAIN for the caller. */
+            error = EAGAIN;
         } else {
-            /* Use the tap fd to send to this device.  This is essential for
-             * tap devices, because packets sent to a tap device with an
-             * AF_PACKET socket will loop back to be *received* again on the
-             * tap device.  This doesn't occur on other interface types
-             * because we attach a socket filter to the rx socket. */
-            struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-
-            retval = write(netdev->tap_fd, data, size);
-        }
-
-        if (retval < 0) {
-            if (errno == EINTR) {
-                /* The send was interrupted by a signal.  Retry the packet by
-                 * continuing without incrementing 'i'.*/
-                continue;
-            } else if (errno == EIO && is_tap_netdev(netdev_)) {
-                /* The Linux tap driver returns EIO if the device is not up.
-                 * From the OVS side this is not an error, so ignore it. */
-            } else {
-                /* The Linux AF_PACKET implementation never blocks waiting for
-                 * room for packets, instead returning ENOBUFS.  Translate this
-                 * into EAGAIN for the caller. */
-                error = errno == ENOBUFS ? EAGAIN : errno;
-                break;
-            }
-        } else if (retval != size) {
-            VLOG_WARN_RL(&rl, "sent partial Ethernet packet (%"PRIuSIZE" bytes"
-                              " of %"PRIuSIZE") on %s", retval, size,
-                         netdev_get_name(netdev_));
-            error = EMSGSIZE;
-            break;
-        }
-
-        /* Process the next packet in the batch */
-        i++;
-    }
-
-    if (error && error != EAGAIN) {
             VLOG_WARN_RL(&rl, "error sending Ethernet packet on %s: %s",
                          netdev_get_name(netdev_), ovs_strerror(error));
+        }
     }
 
 free_batch:
     dp_packet_delete_batch(batch, may_steal);
-
     return error;
-
 }
 
 /* Registers with the poll loop to wake up from the next call to poll_block()
