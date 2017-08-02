@@ -1948,7 +1948,7 @@ conn_key_to_tuple(const struct conn_key *key, struct ct_dpif_tuple *tuple)
 
 static void
 conn_to_ct_dpif_entry(const struct conn *conn, struct ct_dpif_entry *entry,
-                      long long now)
+                      long long now, int bkt)
 {
     struct ct_l4_proto *class;
     long long expiration;
@@ -1971,11 +1971,12 @@ conn_to_ct_dpif_entry(const struct conn *conn, struct ct_dpif_entry *entry,
     if (class->conn_get_protoinfo) {
         class->conn_get_protoinfo(conn, &entry->protoinfo);
     }
+    entry->bkt = bkt;
 }
 
 int
 conntrack_dump_start(struct conntrack *ct, struct conntrack_dump *dump,
-                     const uint16_t *pzone)
+                     const uint16_t *pzone, int *ptot_bkts)
 {
     memset(dump, 0, sizeof(*dump));
     if (pzone) {
@@ -1983,6 +1984,8 @@ conntrack_dump_start(struct conntrack *ct, struct conntrack_dump *dump,
         dump->filter_zone = true;
     }
     dump->ct = ct;
+
+    *ptot_bkts = CONNTRACK_BUCKETS;
 
     return 0;
 }
@@ -2008,7 +2011,7 @@ conntrack_dump_next(struct conntrack_dump *dump, struct ct_dpif_entry *entry)
             INIT_CONTAINER(conn, node, node);
             if ((!dump->filter_zone || conn->key.zone == dump->zone) &&
                  (conn->conn_type != CT_CONN_TYPE_UN_NAT)) {
-                conn_to_ct_dpif_entry(conn, entry, now);
+                conn_to_ct_dpif_entry(conn, entry, now, dump->bucket);
                 break;
             }
             /* Else continue, until we find an entry in the appropriate zone

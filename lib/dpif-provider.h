@@ -419,7 +419,7 @@ struct dpif_class {
      * ct_dump_done() should perform any cleanup necessary (including
      * deallocating the 'state' structure, if applicable). */
     int (*ct_dump_start)(struct dpif *, struct ct_dpif_dump_state **state,
-                         const uint16_t *zone);
+                         const uint16_t *zone, int *);
     int (*ct_dump_next)(struct dpif *, struct ct_dpif_dump_state *state,
                         struct ct_dpif_entry *entry);
     int (*ct_dump_done)(struct dpif *, struct ct_dpif_dump_state *state);

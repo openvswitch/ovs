@@ -202,6 +202,7 @@ usage(void *userdata OVS_UNUSED)
                "delete all conntrack entries in ZONE\n"
            "  ct-stats-show [DP] [zone=ZONE] [verbose] " \
                "CT connections grouped by protocol\n"
+           "  ct-bkts [DP] [gt=N] display connections per CT bucket\n"
            "Each IFACE on add-dp, add-if, and set-if may be followed by\n"
            "comma-separated options.  See ovs-dpctl(8) for syntax, or the\n"
            "Interface table in ovs-vswitchd.conf.db(5) for an options list.\n"

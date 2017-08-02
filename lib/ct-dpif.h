@@ -169,6 +169,7 @@ struct ct_dpif_entry {
     /* Timeout for this entry in seconds */
     uint32_t timeout;
     uint32_t mark;
+    uint32_t bkt;       /* CT bucket number. */
 };
 
 enum {
@@ -191,7 +192,7 @@ struct ct_dpif_dump_state {
 };
 
 int ct_dpif_dump_start(struct dpif *, struct ct_dpif_dump_state **,
-                       const uint16_t *zone);
+                       const uint16_t *zone, int *);
 int ct_dpif_dump_next(struct ct_dpif_dump_state *, struct ct_dpif_entry *);
 int ct_dpif_dump_done(struct ct_dpif_dump_state *);
 int ct_dpif_flush(struct dpif *, const uint16_t *zone);

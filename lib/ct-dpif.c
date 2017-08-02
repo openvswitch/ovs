@@ -65,12 +65,12 @@ static const struct flags ct_dpif_status_flags[] = {
  * that represents the error.  Otherwise it returns zero. */
 int
 ct_dpif_dump_start(struct dpif *dpif, struct ct_dpif_dump_state **dump,
-                   const uint16_t *zone)
+                   const uint16_t *zone, int *ptot_bkts)
 {
     int err;
 
     err = (dpif->dpif_class->ct_dump_start
-           ? dpif->dpif_class->ct_dump_start(dpif, dump, zone)
+           ? dpif->dpif_class->ct_dump_start(dpif, dump, zone, ptot_bkts)
            : EOPNOTSUPP);
 
     if (!err) {

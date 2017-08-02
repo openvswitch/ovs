@@ -228,3 +228,10 @@ Displays the number of connections grouped by protocol used by \fIdp\fR.
 If \fBzone=\fIzone\fR is specified, numbers refer to the connections in
 \fBzone\fR. The \fBverbose\fR option allows to group by connection state
 for each protocol.
+.
+.TP
+\*(DX\fBct\-bkts\fR [\fIdp\fR] [\fBgt=\fIThreshold\fR]
+For each ConnTracker bucket, displays the number of connections used
+by \fIdp\fR.
+If \fBgt=\fIThreshold\fR is specified, bucket numbers are displayed when
+the number of connections in a bucket is greater than \fIThreshold\fR.

@@ -2848,13 +2848,13 @@ struct dpif_netlink_ct_dump_state {
 static int
 dpif_netlink_ct_dump_start(struct dpif *dpif OVS_UNUSED,
                            struct ct_dpif_dump_state **dump_,
-                           const uint16_t *zone)
+                           const uint16_t *zone, int *ptot_bkts)
 {
     struct dpif_netlink_ct_dump_state *dump;
     int err;
 
     dump = xzalloc(sizeof *dump);
-    err = nl_ct_dump_start(&dump->nl_ct_dump, zone);
+    err = nl_ct_dump_start(&dump->nl_ct_dump, zone, ptot_bkts);
     if (err) {
         free(dump);
         return err;

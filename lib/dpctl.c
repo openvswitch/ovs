@@ -1258,6 +1258,7 @@ dpctl_dump_conntrack(int argc, const char *argv[],
     struct ct_dpif_dump_state *dump;
     struct ct_dpif_entry cte;
     uint16_t zone, *pzone = NULL;
+    int tot_bkts;
     struct dpif *dpif;
     char *name;
     int error;
@@ -1277,7 +1278,7 @@ dpctl_dump_conntrack(int argc, const char *argv[],
         return error;
     }
 
-    error = ct_dpif_dump_start(dpif, &dump, pzone);
+    error = ct_dpif_dump_start(dpif, &dump, pzone, &tot_bkts);
     if (error) {
         dpctl_error(dpctl_p, error, "starting conntrack dump");
         dpif_close(dpif);
@@ -1339,6 +1340,7 @@ dpctl_ct_stats_show(int argc, const char *argv[],
     struct ct_dpif_dump_state *dump;
     struct ct_dpif_entry cte;
     uint16_t zone, *pzone = NULL;
+    int tot_bkts;
     bool verbose = false;
     int lastargc = 0;
 
@@ -1373,7 +1375,7 @@ dpctl_ct_stats_show(int argc, const char *argv[],
 
     memset(proto_stats, 0, sizeof(proto_stats));
     memset(tcp_conn_per_states, 0, sizeof(tcp_conn_per_states));
-    error = ct_dpif_dump_start(dpif, &dump, pzone);
+    error = ct_dpif_dump_start(dpif, &dump, pzone, &tot_bkts);
     if (error) {
         dpctl_error(dpctl_p, error, "starting conntrack dump");
         dpif_close(dpif);
@@ -1462,6 +1464,102 @@ dpctl_ct_stats_show(int argc, const char *argv[],
 
     ct_dpif_dump_done(dump);
     dpif_close(dpif);
+    return error;
+}
+
+#define CT_BKTS_GT "gt="
+static int
+dpctl_ct_bkts(int argc, const char *argv[],
+                     struct dpctl_params *dpctl_p)
+{
+    struct dpif *dpif;
+    char *name;
+
+    struct ct_dpif_dump_state *dump;
+    struct ct_dpif_entry cte;
+    uint16_t gt = 0; /* Threshold: display value when greater than gt. */
+    uint16_t *pzone = NULL;
+    int tot_bkts = 0;
+    int error;
+
+    if (argc > 1 && !strncmp(argv[argc - 1], CT_BKTS_GT, strlen(CT_BKTS_GT))) {
+        if (ovs_scan(argv[argc - 1], CT_BKTS_GT"%"SCNu16, &gt)) {
+            argc--;
+        }
+    }
+
+    name = (argc == 2) ? xstrdup(argv[1]) : get_one_dp(dpctl_p);
+    if (!name) {
+        return EINVAL;
+    }
+
+    error = parsed_dpif_open(name, false, &dpif);
+    free(name);
+    if (error) {
+        dpctl_error(dpctl_p, error, "opening datapath");
+        return error;
+    }
+
+    error = ct_dpif_dump_start(dpif, &dump, pzone, &tot_bkts);
+    if (error) {
+        dpctl_error(dpctl_p, error, "starting conntrack dump");
+        dpif_close(dpif);
+        return error;
+    }
+    if (tot_bkts == -1) {
+         /* Command not available when called by kernel OvS. */
+         dpctl_print(dpctl_p,
+             "Command is available for UserSpace ConnTracker only.\n");
+         ct_dpif_dump_done(dump);
+         dpif_close(dpif);
+         return 0;
+    }
+
+    dpctl_print(dpctl_p, "Total Buckets: %d\n", tot_bkts);
+
+    int tot_conn = 0;
+    uint32_t *conn_per_bkts = xzalloc(tot_bkts * sizeof(uint32_t));
+
+    while (!ct_dpif_dump_next(dump, &cte)) {
+        ct_dpif_entry_uninit(&cte);
+        tot_conn++;
+        if (tot_bkts > 0) {
+            if (cte.bkt < tot_bkts) {
+                conn_per_bkts[cte.bkt]++;
+            } else {
+                dpctl_print(dpctl_p, "Bucket nr out of range: %d >= %d\n",
+                        cte.bkt, tot_bkts);
+            }
+        }
+    }
+
+    dpctl_print(dpctl_p, "Current Connections: %d\n", tot_conn);
+    dpctl_print(dpctl_p, "\n");
+    if (tot_bkts && tot_conn) {
+        dpctl_print(dpctl_p, "+-----------+"
+                "-----------------------------------------+\n");
+        dpctl_print(dpctl_p, "|  Buckets  |"
+                "         Connections per Buckets         |\n");
+        dpctl_print(dpctl_p, "+-----------+"
+                "-----------------------------------------+");
+#define NUM_BKTS_DIPLAYED_PER_ROW 8
+        for (int i = 0; i < tot_bkts; i++) {
+            if (i % NUM_BKTS_DIPLAYED_PER_ROW == 0) {
+                 dpctl_print(dpctl_p, "\n %3d..%3d   | ",
+                         i, i + NUM_BKTS_DIPLAYED_PER_ROW - 1);
+            }
+            if (conn_per_bkts[i] > gt) {
+                dpctl_print(dpctl_p, "%5d", conn_per_bkts[i]);
+            } else {
+                dpctl_print(dpctl_p, "%5s", ".");
+            }
+        }
+        dpctl_print(dpctl_p, "\n\n");
+    }
+
+    ct_dpif_dump_done(dump);
+    dpif_close(dpif);
+    free(conn_per_bkts);
     return error;
 }
 
@@ -1760,6 +1858,7 @@ static const struct dpctl_command all_commands[] = {
     { "flush-conntrack", "[dp] [zone=N]", 0, 2, dpctl_flush_conntrack, DP_RW },
     { "ct-stats-show", "[dp] [zone=N] [verbose]",
       0, 3, dpctl_ct_stats_show, DP_RO },
+    { "ct-bkts", "[dp] [gt=N]", 0, 2, dpctl_ct_bkts, DP_RO },
     { "help", "", 0, INT_MAX, dpctl_help, DP_RO },
     { "list-commands", "", 0, INT_MAX, dpctl_list_commands, DP_RO },
 
