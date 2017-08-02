@@ -5840,6 +5840,8 @@ packet="inport==\"lp1\" && eth.src==$lp1_mac && eth.dst==$lp2_mac &&
         tcp && tcp.flags==2 && tcp.src==4367 && tcp.dst==87"
 as hv ovs-appctl -t ovn-controller inject-pkt "$packet"
 
+OVS_WAIT_UNTIL([ test 4 = $(grep -c 'acl_log' hv/ovn-controller.log) ])
+
 AT_CHECK([grep 'acl_log' hv/ovn-controller.log | sed 's/.*name=/name=/'], [0], [dnl
 name="drop-flow", verdict=drop, severity=alert: tcp,vlan_tci=0x0000,dl_src=f0:00:00:00:00:01,dl_dst=f0:00:00:00:00:02,nw_src=192.168.1.2,nw_dst=192.168.1.3,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=4361,tp_dst=81,tcp_flags=syn
 name="allow-flow", verdict=allow, severity=info: tcp,vlan_tci=0x0000,dl_src=f0:00:00:00:00:01,dl_dst=f0:00:00:00:00:02,nw_src=192.168.1.2,nw_dst=192.168.1.3,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=4363,tp_dst=83,tcp_flags=syn
