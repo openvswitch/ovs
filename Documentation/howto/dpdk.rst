@@ -331,6 +331,27 @@ Detaching will be performed while processing del-port command::
 
     $ ovs-vsctl del-port dpdkx
 
+Sometimes, the del-port command may not detach the device.
+Detaching can be confirmed by the appearance of an INFO log.
+For example::
+
+    INFO|Device '0000:04:00.1' has been detached
+
+If the log is not seen, then the port can be detached using::
+
+$ ovs-appctl netdev-dpdk/detach 0000:01:00.0
+
+Detaching can be confirmed by console output::
+
+    Device '0000:04:00.1' has been detached
+
+.. warning::
+    Detaching should not be done if a device is known to be non-detachable, as
+    this may cause the device to behave improperly when added back with
+    add-port. The Chelsio Terminator adapters which use the cxgbe driver seem
+    to be an example of this behavior; check the driver documentation if this
+    is suspected.
+
 This feature does not work with some NICs.
 For more information please refer to the `DPDK Port Hotplug Framework
 <http://dpdk.org/doc/guides/prog_guide/port_hotplug_framework.html#hotplug>`__.

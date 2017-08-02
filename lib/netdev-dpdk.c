@@ -1075,7 +1075,7 @@ netdev_dpdk_destruct(struct netdev *netdev)
         if (rte_eth_dev_detach(dev->port_id, devname) < 0) {
             VLOG_ERR("Device '%s' can not be detached", dev->devargs);
         } else {
-            VLOG_INFO("Device '%s' detached", devname);
+            VLOG_INFO("Device '%s' has been detached", devname);
         }
     }
 
@@ -2511,6 +2511,53 @@ netdev_dpdk_set_admin_state(struct unixctl_conn *conn, int argc,
     unixctl_command_reply(conn, "OK");
 }
 
+static void
+netdev_dpdk_detach(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                   const char *argv[], void *aux OVS_UNUSED)
+{
+    int ret;
+    char *response;
+    uint8_t port_id;
+    char devname[RTE_ETH_NAME_MAX_LEN];
+    struct netdev_dpdk *dev;
+
+    ovs_mutex_lock(&dpdk_mutex);
+
+    if (!rte_eth_dev_count() || rte_eth_dev_get_port_by_name(argv[1],
+                                                             &port_id)) {
+        response = xasprintf("Device '%s' not found in DPDK", argv[1]);
+        goto error;
+    }
+
+    dev = netdev_dpdk_lookup_by_port_id(port_id);
+    if (dev) {
+        response = xasprintf("Device '%s' is being used by interface '%s'. "
+                             "Remove it before detaching",
+                             argv[1], netdev_get_name(&dev->up));
+        goto error;
+    }
+
+    rte_eth_dev_close(port_id);
+
+    ret = rte_eth_dev_detach(port_id, devname);
+    if (ret < 0) {
+        response = xasprintf("Device '%s' can not be detached", argv[1]);
+        goto error;
+    }
+
+    response = xasprintf("Device '%s' has been detached", argv[1]);
+
+    ovs_mutex_unlock(&dpdk_mutex);
+    unixctl_command_reply(conn, response);
+    free(response);
+    return;
+
+error:
+    ovs_mutex_unlock(&dpdk_mutex);
+    unixctl_command_reply_error(conn, response);
+    free(response);
+}
+
 /*
  * Set virtqueue flags so that we do not receive interrupts.
  */
@@ -2762,6 +2809,10 @@ netdev_dpdk_class_init(void)
         unixctl_command_register("netdev-dpdk/set-admin-state",
                                  "[netdev] up|down", 1, 2,
                                  netdev_dpdk_set_admin_state, NULL);
+
+        unixctl_command_register("netdev-dpdk/detach",
+                                 "pci address of device", 1, 1,
+                                 netdev_dpdk_detach, NULL);
 
         ovsthread_once_done(&once);
     }
