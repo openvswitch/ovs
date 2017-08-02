@@ -381,6 +381,8 @@ set_defaults () {
 
     DB_SB_CREATE_INSECURE_REMOTE="no"
     DB_NB_CREATE_INSECURE_REMOTE="no"
+
+    MONITOR="yes"
 }
 
 set_option () {

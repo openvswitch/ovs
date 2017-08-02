@@ -34,6 +34,7 @@ After=openvswitch.service
 
 [Service]
 Type=simple
+Restart=on-failure
 Environment=OVS_RUNDIR=%t/openvswitch
 Environment=OVN_DB=unix:%t/openvswitch/db.sock
 Environment=VTEP_DB=unix:%t/openvswitch/db.sock

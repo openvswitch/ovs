@@ -20,10 +20,11 @@ Requires=openvswitch.service
 After=openvswitch.service
 
 [Service]
-Type=oneshot
-RemainAfterExit=yes
+Type=forking
+Restart=on-failure
 EnvironmentFile=-/etc/sysconfig/ovn-controller
-ExecStart=/usr/share/openvswitch/scripts/ovn-ctl start_controller $OVN_CONTROLLER_OPTS
+ExecStart=/usr/share/openvswitch/scripts/ovn-ctl --no-monitor \
+          start_controller $OVN_CONTROLLER_OPTS
 ExecStop=/usr/share/openvswitch/scripts/ovn-ctl stop_controller
 
 [Install]
