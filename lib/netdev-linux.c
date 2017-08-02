@@ -1231,11 +1231,8 @@ netdev_linux_send(struct netdev *netdev_, int qid OVS_UNUSED,
     /* 'i' is incremented only if there's no error */
     for (int i = 0; i < batch->count; ) {
         const void *data = dp_packet_data(batch->packets[i]);
-        size_t size = dp_packet_size(batch->packets[i]);
+        size_t size = dp_packet_get_send_len(batch->packets[i]);
         ssize_t retval;
-
-        /* Truncate the packet if it is configured. */
-        size -= dp_packet_get_cutlen(batch->packets[i]);
 
         if (!is_tap_netdev(netdev_)) {
             /* Use our AF_PACKET socket to send to this device. */
