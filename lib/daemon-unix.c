@@ -356,6 +356,7 @@ monitor_daemon(pid_t daemon_pid)
     for (;;) {
         int retval;
         int status;
+        const char *strerror = NULL;
 
         ovs_cmdl_proctitle_set("monitoring pid %lu (%s)",
                                (unsigned long int) daemon_pid, status_msg);
@@ -364,8 +365,13 @@ monitor_daemon(pid_t daemon_pid)
             do {
                 retval = waitpid(daemon_pid, &status, 0);
             } while (retval == -1 && errno == EINTR);
+
             if (retval == -1) {
-                VLOG_FATAL("waitpid failed (%s)", ovs_strerror(errno));
+                strerror = ovs_strerror(errno);
+            }
+            vlog_reopen_log_file();
+            if (retval == -1) {
+                VLOG_FATAL("waitpid failed (%s)", strerror);
             }
         }
 
