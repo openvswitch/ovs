@@ -1139,7 +1139,7 @@ checksum_valid(const struct conn_key *key, const void *data, size_t size,
 
 static inline bool
 check_l4_tcp(const struct conn_key *key, const void *data, size_t size,
-             const void *l3)
+             const void *l3, bool validate_checksum)
 {
     const struct tcp_header *tcp = data;
     if (size < sizeof *tcp) {
@@ -1151,12 +1151,12 @@ check_l4_tcp(const struct conn_key *key, const void *data, size_t size,
         return false;
     }
 
-    return checksum_valid(key, data, size, l3);
+    return validate_checksum ? checksum_valid(key, data, size, l3) : true;
 }
 
 static inline bool
 check_l4_udp(const struct conn_key *key, const void *data, size_t size,
-             const void *l3)
+             const void *l3, bool validate_checksum)
 {
     const struct udp_header *udp = data;
     if (size < sizeof *udp) {
@@ -1170,20 +1170,20 @@ check_l4_udp(const struct conn_key *key, const void *data, size_t size,
 
     /* Validation must be skipped if checksum is 0 on IPv4 packets */
     return (udp->udp_csum == 0 && key->dl_type == htons(ETH_TYPE_IP))
-           || checksum_valid(key, data, size, l3);
+           || (validate_checksum ? checksum_valid(key, data, size, l3) : true);
 }
 
 static inline bool
-check_l4_icmp(const void *data, size_t size)
+check_l4_icmp(const void *data, size_t size, bool validate_checksum)
 {
-    return csum(data, size) == 0;
+    return validate_checksum ? csum(data, size) == 0 : true;
 }
 
 static inline bool
 check_l4_icmp6(const struct conn_key *key, const void *data, size_t size,
-               const void *l3)
+               const void *l3, bool validate_checksum)
 {
-    return checksum_valid(key, data, size, l3);
+    return validate_checksum ? checksum_valid(key, data, size, l3) : true;
 }
 
 static inline bool
@@ -1219,7 +1219,8 @@ extract_l4_udp(struct conn_key *key, const void *data, size_t size)
 }
 
 static inline bool extract_l4(struct conn_key *key, const void *data,
-                              size_t size, bool *related, const void *l3);
+                              size_t size, bool *related, const void *l3,
+                              bool validate_checksum);
 
 static uint8_t
 reverse_icmp_type(uint8_t type)
@@ -1307,7 +1308,7 @@ extract_l4_icmp(struct conn_key *key, const void *data, size_t size,
         key->dst = inner_key.dst;
         key->nw_proto = inner_key.nw_proto;
 
-        ok = extract_l4(key, l4, tail - l4, NULL, l3);
+        ok = extract_l4(key, l4, tail - l4, NULL, l3, false);
         if (ok) {
             conn_key_reverse(key);
             *related = true;
@@ -1397,7 +1398,7 @@ extract_l4_icmp6(struct conn_key *key, const void *data, size_t size,
         key->dst = inner_key.dst;
         key->nw_proto = inner_key.nw_proto;
 
-        ok = extract_l4(key, l4, tail - l4, NULL, l3);
+        ok = extract_l4(key, l4, tail - l4, NULL, l3, false);
         if (ok) {
             conn_key_reverse(key);
             *related = true;
@@ -1422,22 +1423,23 @@ extract_l4_icmp6(struct conn_key *key, const void *data, size_t size,
  * in an ICMP error.  In this case, we skip checksum and length validation. */
 static inline bool
 extract_l4(struct conn_key *key, const void *data, size_t size, bool *related,
-           const void *l3)
+           const void *l3, bool validate_checksum)
 {
     if (key->nw_proto == IPPROTO_TCP) {
-        return (!related || check_l4_tcp(key, data, size, l3))
-               && extract_l4_tcp(key, data, size);
+        return (!related || check_l4_tcp(key, data, size, l3,
+                validate_checksum)) && extract_l4_tcp(key, data, size);
     } else if (key->nw_proto == IPPROTO_UDP) {
-        return (!related || check_l4_udp(key, data, size, l3))
-               && extract_l4_udp(key, data, size);
+        return (!related || check_l4_udp(key, data, size, l3,
+                validate_checksum)) && extract_l4_udp(key, data, size);
     } else if (key->dl_type == htons(ETH_TYPE_IP)
                && key->nw_proto == IPPROTO_ICMP) {
-        return (!related || check_l4_icmp(data, size))
+        return (!related || check_l4_icmp(data, size, validate_checksum))
                && extract_l4_icmp(key, data, size, related);
     } else if (key->dl_type == htons(ETH_TYPE_IPV6)
                && key->nw_proto == IPPROTO_ICMPV6) {
-        return (!related || check_l4_icmp6(key, data, size, l3))
-               && extract_l4_icmp6(key, data, size, related);
+        return (!related || check_l4_icmp6(key, data, size, l3,
+                validate_checksum)) && extract_l4_icmp6(key, data, size,
+                related);
     } else {
         return false;
     }
@@ -1495,17 +1497,32 @@ conn_key_extract(struct conntrack *ct, struct dp_packet *pkt, ovs_be16 dl_type,
      */
     ctx->key.dl_type = dl_type;
     if (ctx->key.dl_type == htons(ETH_TYPE_IP)) {
-        ok = extract_l3_ipv4(&ctx->key, l3, tail - (char *) l3, NULL, true);
+        bool  hwol_bad_l3_csum = dp_packet_ip_checksum_bad(pkt);
+        if (hwol_bad_l3_csum) {
+            ok = false;
+        } else {
+            bool  hwol_good_l3_csum = dp_packet_ip_checksum_valid(pkt);
+            /* Validate the checksum only when hwol is not supported. */
+            ok = extract_l3_ipv4(&ctx->key, l3, tail - (char *) l3, NULL,
+                                 !hwol_good_l3_csum);
+        }
     } else if (ctx->key.dl_type == htons(ETH_TYPE_IPV6)) {
         ok = extract_l3_ipv6(&ctx->key, l3, tail - (char *) l3, NULL);
     } else {
         ok = false;
     }
 
+
     if (ok) {
-        if (extract_l4(&ctx->key, l4, tail - l4, &ctx->icmp_related, l3)) {
-            ctx->hash = conn_key_hash(&ctx->key, ct->hash_basis);
-            return true;
+        bool hwol_bad_l4_csum = dp_packet_l4_checksum_bad(pkt);
+        if (!hwol_bad_l4_csum) {
+            bool  hwol_good_l4_csum = dp_packet_l4_checksum_valid(pkt);
+            /* Validate the checksum only when hwol is not supported. */
+            if (extract_l4(&ctx->key, l4, tail - l4, &ctx->icmp_related, l3,
+                           !hwol_good_l4_csum)) {
+                ctx->hash = conn_key_hash(&ctx->key, ct->hash_basis);
+                return true;
+            }
         }
     }
 
