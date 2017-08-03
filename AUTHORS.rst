@@ -171,6 +171,7 @@ Jiri Benc                       jbenc@redhat.com
 Joe Perches                     joe@perches.com
 Joe Stringer                    joe@ovn.org
 Jonathan Vestin                 jonavest@kau.se
+Jorge Arturo Sauma Vargas       jorge.sauma@hpe.com
 Jun Nakajima                    jun.nakajima@intel.com
 JunoZhu                         zhunatuzi@gmail.com
 Justin Pettit                   jpettit@ovn.org
@@ -444,7 +445,7 @@ James Schmidt                   jschmidt@nicira.com
 Jan Medved                      jmedved@juniper.net
 Janis Hamme                     janis.hamme@student.kit.edu
 Jari Sundell                    sundell.software@gmail.com
-Javier Albornz                  javier.albornoz@hpe.com
+Javier Albornoz                 javier.albornoz@hpe.com
 Jed Daniels                     openvswitch@jeddaniels.com
 Jeff Merrick                    jmerrick@vmware.com
 Jeongkeun Lee                   jklee@hp.com
