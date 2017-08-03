@@ -2864,20 +2864,17 @@ odp_ct_state_to_string(uint32_t flag)
 
 static void
 format_frag(struct ds *ds, const char *name, uint8_t key,
-            const uint8_t *mask, bool verbose)
+            const uint8_t *mask, bool verbose OVS_UNUSED)
 {
     bool mask_empty = mask && !*mask;
+    bool mask_full = !mask || *mask == UINT8_MAX;
 
     /* ODP frag is an enumeration field; partial masks are not meaningful. */
-    if (verbose || !mask_empty) {
-        bool mask_full = !mask || *mask == UINT8_MAX;
-
-        if (!mask_full) { /* Partially masked. */
-            ds_put_format(ds, "error: partial mask not supported for frag (%#"
-                          PRIx8"),", *mask);
-        } else {
-            ds_put_format(ds, "%s=%s,", name, ovs_frag_type_to_string(key));
-        }
+    if (!mask_empty && !mask_full) {
+        ds_put_format(ds, "error: partial mask not supported for frag (%#"
+                      PRIx8"),", *mask);
+    } else if (!mask_empty) {
+        ds_put_format(ds, "%s=%s,", name, ovs_frag_type_to_string(key));
     }
 }
 
