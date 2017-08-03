@@ -47,19 +47,17 @@ lflow_init(void)
 
 struct lookup_port_aux {
     struct ovsdb_idl *ovnsb_idl;
-    const struct lport_index *lports;
     const struct sbrec_datapath_binding *dp;
 };
 
 struct condition_aux {
-    const struct lport_index *lports;
+    struct ovsdb_idl *ovnsb_idl;
     const struct sbrec_chassis *chassis;
     const struct sset *active_tunnels;
     const struct chassis_index *chassis_index;
 };
 
 static void consider_logical_flow(struct controller_ctx *ctx,
-                                  const struct lport_index *lports,
                                   const struct chassis_index *chassis_index,
                                   const struct sbrec_logical_flow *lflow,
                                   const struct hmap *local_datapaths,
@@ -78,7 +76,7 @@ lookup_port_cb(const void *aux_, const char *port_name, unsigned int *portp)
     const struct lookup_port_aux *aux = aux_;
 
     const struct sbrec_port_binding *pb
-        = lport_lookup_by_name(aux->lports, port_name);
+        = lport_lookup_by_name(aux->ovnsb_idl, port_name);
     if (pb && pb->datapath == aux->dp) {
         *portp = pb->tunnel_key;
         return true;
@@ -100,7 +98,7 @@ is_chassis_resident_cb(const void *c_aux_, const char *port_name)
     const struct condition_aux *c_aux = c_aux_;
 
     const struct sbrec_port_binding *pb
-        = lport_lookup_by_name(c_aux->lports, port_name);
+        = lport_lookup_by_name(c_aux->ovnsb_idl, port_name);
     if (!pb) {
         return false;
     }
@@ -140,7 +138,7 @@ is_gateway_router(const struct sbrec_datapath_binding *ldp,
 
 /* Adds the logical flows from the Logical_Flow table to flow tables. */
 static void
-add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
+add_logical_flows(struct controller_ctx *ctx,
                   const struct chassis_index *chassis_index,
                   const struct hmap *local_datapaths,
                   struct group_table *group_table,
@@ -168,7 +166,7 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
     }
 
     SBREC_LOGICAL_FLOW_FOR_EACH (lflow, ctx->ovnsb_idl) {
-        consider_logical_flow(ctx, lports, chassis_index,
+        consider_logical_flow(ctx, chassis_index,
                               lflow, local_datapaths,
                               group_table, chassis,
                               &dhcp_opts, &dhcpv6_opts, &conj_id_ofs,
@@ -181,7 +179,6 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
 
 static void
 consider_logical_flow(struct controller_ctx *ctx,
-                      const struct lport_index *lports,
                       const struct chassis_index *chassis_index,
                       const struct sbrec_logical_flow *lflow,
                       const struct hmap *local_datapaths,
@@ -246,7 +243,6 @@ consider_logical_flow(struct controller_ctx *ctx,
     uint64_t ofpacts_stub[1024 / 8];
     struct ofpbuf ofpacts = OFPBUF_STUB_INITIALIZER(ofpacts_stub);
     struct lookup_port_aux aux = {
-        .lports = lports,
         .ovnsb_idl = ctx->ovnsb_idl,
         .dp = lflow->logical_datapath
     };
@@ -289,7 +285,7 @@ consider_logical_flow(struct controller_ctx *ctx,
         return;
     }
 
-    struct condition_aux cond_aux = { lports, chassis, active_tunnels,
+    struct condition_aux cond_aux = { ctx->ovnsb_idl, chassis, active_tunnels,
                                       chassis_index};
     expr = expr_simplify(expr, is_chassis_resident_cb, &cond_aux);
     expr = expr_normalize(expr);
@@ -347,12 +343,12 @@ put_load(const uint8_t *data, size_t len,
 }
 
 static void
-consider_neighbor_flow(const struct lport_index *lports,
+consider_neighbor_flow(struct controller_ctx *ctx,
                        const struct sbrec_mac_binding *b,
                        struct hmap *flow_table)
 {
     const struct sbrec_port_binding *pb
-        = lport_lookup_by_name(lports, b->logical_port);
+        = lport_lookup_by_name(ctx->ovnsb_idl, b->logical_port);
     if (!pb) {
         return;
     }
@@ -396,16 +392,14 @@ consider_neighbor_flow(const struct lport_index *lports,
 }
 
 /* Adds an OpenFlow flow to flow tables for each MAC binding in the OVN
- * southbound database, using 'lports' to resolve logical port names to
- * numbers. */
+ * southbound database. */
 static void
 add_neighbor_flows(struct controller_ctx *ctx,
-                   const struct lport_index *lports,
                    struct hmap *flow_table)
 {
     const struct sbrec_mac_binding *b;
     SBREC_MAC_BINDING_FOR_EACH (b, ctx->ovnsb_idl) {
-        consider_neighbor_flow(lports, b, flow_table);
+        consider_neighbor_flow(ctx, b, flow_table);
     }
 }
 
@@ -414,7 +408,6 @@ add_neighbor_flows(struct controller_ctx *ctx,
 void
 lflow_run(struct controller_ctx *ctx,
           const struct sbrec_chassis *chassis,
-          const struct lport_index *lports,
           const struct chassis_index *chassis_index,
           const struct hmap *local_datapaths,
           struct group_table *group_table,
@@ -422,10 +415,10 @@ lflow_run(struct controller_ctx *ctx,
           struct hmap *flow_table,
           struct sset *active_tunnels)
 {
-    add_logical_flows(ctx, lports, chassis_index, local_datapaths,
+    add_logical_flows(ctx, chassis_index, local_datapaths,
                       group_table, chassis, addr_sets, flow_table,
                       active_tunnels);
-    add_neighbor_flows(ctx, lports, flow_table);
+    add_neighbor_flows(ctx, flow_table);
 }
 
 void

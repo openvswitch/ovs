@@ -56,25 +56,11 @@ void ldatapath_index_destroy(struct ldatapath_index *);
 const struct ldatapath *ldatapath_lookup_by_key(
     const struct ldatapath_index *, uint32_t dp_key);
 
-/* Logical port index
- * ==================
- *
- * This data structure holds multiple indexes over logical ports, to allow for
- * efficient searching for logical ports by name or number.
- */
-
-struct lport_index {
-    struct hmap by_name;
-    struct hmap by_key;
-};
-
-void lport_index_init(struct lport_index *, struct ovsdb_idl *);
-void lport_index_destroy(struct lport_index *);
 
 const struct sbrec_port_binding *lport_lookup_by_name(
-    const struct lport_index *, const char *name);
+    struct ovsdb_idl *, const char *name);
 const struct sbrec_port_binding *lport_lookup_by_key(
-    const struct lport_index *, uint32_t dp_key, uint16_t port_key);
+    struct ovsdb_idl *, uint64_t dp_key, uint64_t port_key);
 
 
 const struct sbrec_multicast_group *mcgroup_lookup_by_dp_name(

@@ -30,7 +30,7 @@ struct ovsrec_bridge;
 struct sbrec_chassis;
 
 void pinctrl_init(void);
-void pinctrl_run(struct controller_ctx *, const struct lport_index *,
+void pinctrl_run(struct controller_ctx *,
                  const struct ovsrec_bridge *, const struct sbrec_chassis *,
                  const struct chassis_index *, struct hmap *local_datapaths,
                  struct sset *active_tunnels);
