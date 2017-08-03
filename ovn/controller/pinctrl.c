@@ -1476,7 +1476,15 @@ get_localnet_vifs_l3gwports(struct controller_ctx *ctx,
     }
 
     const struct local_datapath *ld;
+    struct ovsdb_idl_index_cursor cursor;
+    struct sbrec_port_binding *lpval;
+    lpval = sbrec_port_binding_index_init_row(ctx->ovnsb_idl,
+                                              &sbrec_table_port_binding);
+    ovsdb_idl_initialize_cursor(ctx->ovnsb_idl, &sbrec_table_port_binding,
+                                "lport-by-datapath", &cursor);
     HMAP_FOR_EACH (ld, hmap_node, local_datapaths) {
+        const struct sbrec_port_binding *pb;
+
         if (!ld->localnet_port) {
             continue;
         }
@@ -1485,14 +1493,17 @@ get_localnet_vifs_l3gwports(struct controller_ctx *ctx,
          * that connect to gateway routers (if local), and consider port
          * bindings of type "patch" since they might connect to
          * distributed gateway ports with NAT addresses. */
-        for (size_t i = 0; i < ld->ldatapath->n_lports; i++) {
-            const struct sbrec_port_binding *pb = ld->ldatapath->lports[i];
+
+        sbrec_port_binding_index_set_datapath(lpval, ld->datapath);
+
+        SBREC_PORT_BINDING_FOR_EACH_EQUAL (pb, &cursor, lpval) {
             if ((ld->has_local_l3gateway && !strcmp(pb->type, "l3gateway"))
                 || !strcmp(pb->type, "patch")) {
                 sset_add(local_l3gw_ports, pb->logical_port);
             }
         }
     }
+    sbrec_port_binding_index_destroy_row(lpval);
 }
 
 static bool

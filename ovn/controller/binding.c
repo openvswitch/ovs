@@ -111,12 +111,14 @@ get_local_iface_ids(const struct ovsrec_bridge *br_int,
 
 static void
 add_local_datapath__(struct controller_ctx *ctx,
-                     const struct ldatapath_index *ldatapaths,
                      const struct sbrec_datapath_binding *datapath,
                      bool has_local_l3gateway, int depth,
                      struct hmap *local_datapaths)
 {
     uint32_t dp_key = datapath->tunnel_key;
+    const struct sbrec_port_binding *pb;
+    struct ovsdb_idl_index_cursor cursor;
+    struct sbrec_port_binding *lpval;
 
     struct local_datapath *ld = get_local_datapath(local_datapaths, dp_key);
     if (ld) {
@@ -129,8 +131,6 @@ add_local_datapath__(struct controller_ctx *ctx,
     ld = xzalloc(sizeof *ld);
     hmap_insert(local_datapaths, &ld->hmap_node, dp_key);
     ld->datapath = datapath;
-    ld->ldatapath = ldatapath_lookup_by_key(ldatapaths, dp_key);
-    ovs_assert(ld->ldatapath);
     ld->localnet_port = NULL;
     ld->has_local_l3gateway = has_local_l3gateway;
 
@@ -141,35 +141,42 @@ add_local_datapath__(struct controller_ctx *ctx,
     }
 
     /* Recursively add logical datapaths to which this one patches. */
-    for (size_t i = 0; i < ld->ldatapath->n_lports; i++) {
-        const struct sbrec_port_binding *pb = ld->ldatapath->lports[i];
+    lpval = sbrec_port_binding_index_init_row(ctx->ovnsb_idl,
+                                              &sbrec_table_port_binding);
+    sbrec_port_binding_index_set_datapath(lpval, datapath);
+    ovsdb_idl_initialize_cursor(ctx->ovnsb_idl, &sbrec_table_port_binding,
+                                "lport-by-datapath", &cursor);
+
+    SBREC_PORT_BINDING_FOR_EACH_EQUAL (pb, &cursor, lpval) {
         if (!strcmp(pb->type, "patch")) {
             const char *peer_name = smap_get(&pb->options, "peer");
             if (peer_name) {
-                const struct sbrec_port_binding *peer = lport_lookup_by_name(
-                    ctx->ovnsb_idl, peer_name);
+                const struct sbrec_port_binding *peer;
+
+                peer = lport_lookup_by_name( ctx->ovnsb_idl, peer_name);
+
                 if (peer && peer->datapath) {
-                    add_local_datapath__(ctx, ldatapaths, peer->datapath,
+                    add_local_datapath__(ctx, peer->datapath,
                                          false, depth + 1, local_datapaths);
                     ld->n_peer_dps++;
                     ld->peer_dps = xrealloc(
                             ld->peer_dps,
                             ld->n_peer_dps * sizeof *ld->peer_dps);
-                    ld->peer_dps[ld->n_peer_dps - 1] = ldatapath_lookup_by_key(
-                        ldatapaths, peer->datapath->tunnel_key);
+                    ld->peer_dps[ld->n_peer_dps - 1] = datapath_lookup_by_key(
+                        ctx->ovnsb_idl, peer->datapath->tunnel_key);
                 }
             }
         }
     }
+    sbrec_port_binding_index_destroy_row(lpval);
 }
 
 static void
 add_local_datapath(struct controller_ctx *ctx,
-                   const struct ldatapath_index *ldatapaths,
                    const struct sbrec_datapath_binding *datapath,
                    bool has_local_l3gateway, struct hmap *local_datapaths)
 {
-    add_local_datapath__(ctx, ldatapaths, datapath, has_local_l3gateway, 0,
+    add_local_datapath__(ctx, datapath, has_local_l3gateway, 0,
                          local_datapaths);
 }
 
@@ -365,7 +372,6 @@ setup_qos(const char *egress_iface, struct hmap *queue_map)
 
 static void
 consider_local_datapath(struct controller_ctx *ctx,
-                        const struct ldatapath_index *ldatapaths,
                         const struct chassis_index *chassis_index,
                         struct sset *active_tunnels,
                         const struct sbrec_chassis *chassis_rec,
@@ -387,13 +393,13 @@ consider_local_datapath(struct controller_ctx *ctx,
             /* Add child logical port to the set of all local ports. */
             sset_add(local_lports, binding_rec->logical_port);
         }
-        add_local_datapath(ctx, ldatapaths, binding_rec->datapath,
+        add_local_datapath(ctx, binding_rec->datapath,
                            false, local_datapaths);
         if (iface_rec && qos_map && ctx->ovs_idl_txn) {
             get_qos_params(binding_rec, qos_map);
         }
         /* This port is in our chassis unless it is a localport. */
-	    if (strcmp(binding_rec->type, "localport")) {
+       if (strcmp(binding_rec->type, "localport")) {
             our_chassis = true;
         }
     } else if (!strcmp(binding_rec->type, "l2gateway")) {
@@ -402,7 +408,7 @@ consider_local_datapath(struct controller_ctx *ctx,
         our_chassis = chassis_id && !strcmp(chassis_id, chassis_rec->name);
         if (our_chassis) {
             sset_add(local_lports, binding_rec->logical_port);
-            add_local_datapath(ctx, ldatapaths, binding_rec->datapath,
+            add_local_datapath(ctx, binding_rec->datapath,
                                false, local_datapaths);
         }
     } else if (!strcmp(binding_rec->type, "chassisredirect")) {
@@ -414,7 +420,7 @@ consider_local_datapath(struct controller_ctx *ctx,
             our_chassis = gateway_chassis_is_active(
                 gateway_chassis, chassis_rec, active_tunnels);
 
-            add_local_datapath(ctx, ldatapaths, binding_rec->datapath,
+            add_local_datapath(ctx, binding_rec->datapath,
                                false, local_datapaths);
         }
         gateway_chassis_destroy(gateway_chassis);
@@ -423,7 +429,7 @@ consider_local_datapath(struct controller_ctx *ctx,
                                           "l3gateway-chassis");
         our_chassis = chassis_id && !strcmp(chassis_id, chassis_rec->name);
         if (our_chassis) {
-            add_local_datapath(ctx, ldatapaths, binding_rec->datapath,
+            add_local_datapath(ctx, binding_rec->datapath,
                                true, local_datapaths);
         }
     } else if (!strcmp(binding_rec->type, "localnet")) {
@@ -486,7 +492,6 @@ consider_localnet_port(const struct sbrec_port_binding *binding_rec,
 void
 binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
             const struct sbrec_chassis *chassis_rec,
-            const struct ldatapath_index *ldatapaths,
             const struct chassis_index *chassis_index,
             struct sset *active_tunnels,
             struct hmap *local_datapaths, struct sset *local_lports)
@@ -510,7 +515,7 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
      * chassis and update the binding accordingly.  This includes both
      * directly connected logical ports and children of those ports. */
     SBREC_PORT_BINDING_FOR_EACH(binding_rec, ctx->ovnsb_idl) {
-        consider_local_datapath(ctx, ldatapaths, chassis_index,
+        consider_local_datapath(ctx, chassis_index,
                                 active_tunnels, chassis_rec, binding_rec,
                                 sset_is_empty(&egress_ifaces) ? NULL :
                                 &qos_map, local_datapaths, &lport_to_iface,

@@ -558,6 +558,12 @@ create_ovnsb_indexes(struct ovsdb_idl *ovnsb_idl)
     ovsdb_idl_index_add_column(index, &sbrec_port_binding_col_datapath,
                                OVSDB_INDEX_ASC, NULL);
 
+    /* Index logical port table by datapath. */
+    index = ovsdb_idl_create_index(ovnsb_idl, &sbrec_table_port_binding,
+                                   "lport-by-datapath");
+    ovsdb_idl_index_add_column(index, &sbrec_port_binding_col_datapath,
+                               OVSDB_INDEX_ASC, NULL);
+
     /* Index datapath binding table by tunnel key. */
     index = ovsdb_idl_create_index(ovnsb_idl, &sbrec_table_datapath_binding,
                                    "dpath-by-key");
@@ -669,10 +675,8 @@ main(int argc, char *argv[])
         const struct ovsrec_bridge *br_int = get_br_int(&ctx);
         const char *chassis_id = get_chassis_id(ctx.ovs_idl);
 
-        struct ldatapath_index ldatapaths;
         struct chassis_index chassis_index;
 
-        ldatapath_index_init(&ldatapaths, ctx.ovnsb_idl);
         chassis_index_init(&chassis_index, ctx.ovnsb_idl);
 
         const struct sbrec_chassis *chassis = NULL;
@@ -680,7 +684,7 @@ main(int argc, char *argv[])
             chassis = chassis_run(&ctx, chassis_id, br_int);
             encaps_run(&ctx, br_int, chassis_id);
             bfd_calculate_active_tunnels(br_int, &active_tunnels);
-            binding_run(&ctx, br_int, chassis, &ldatapaths,
+            binding_run(&ctx, br_int, chassis,
                         &chassis_index, &active_tunnels, &local_datapaths,
                         &local_lports);
         }
@@ -757,7 +761,6 @@ main(int argc, char *argv[])
             free(pending_pkt.flow_s);
         }
 
-        ldatapath_index_destroy(&ldatapaths);
         chassis_index_destroy(&chassis_index);
 
         sset_destroy(&local_lports);
