@@ -76,24 +76,28 @@ struct tc_flower_key {
     struct eth_addr dst_mac;
     struct eth_addr src_mac;
 
-    ovs_be16 src_port;
-    ovs_be16 dst_port;
+    ovs_be16 tcp_src;
+    ovs_be16 tcp_dst;
+
+    ovs_be16 udp_src;
+    ovs_be16 udp_dst;
+
+    ovs_be16 sctp_src;
+    ovs_be16 sctp_dst;
 
     uint16_t vlan_id;
     uint8_t vlan_prio;
 
     ovs_be16 encap_eth_type;
 
-    union {
-        struct {
-            ovs_be32 ipv4_src;
-            ovs_be32 ipv4_dst;
-        } ipv4;
-        struct {
-            struct in6_addr ipv6_src;
-            struct in6_addr ipv6_dst;
-        } ipv6;
-    };
+    struct {
+        ovs_be32 ipv4_src;
+        ovs_be32 ipv4_dst;
+    } ipv4;
+    struct {
+        struct in6_addr ipv6_src;
+        struct in6_addr ipv6_dst;
+    } ipv6;
 };
 
 struct tc_flower {
