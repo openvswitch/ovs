@@ -1301,3 +1301,285 @@ OVSDB_CHECK_IDL_NOTIFY([simple idl verify notify],
 014: i=1 r=123.5 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
 015: done
 ]])
+
+# Tests to verify the functionality of the one column compound index.
+# It tests index for one column string and integer indexes.
+# The run of test-ovsdb generates the output of the display of data using the different indexes defined in
+# the program.
+# Then, some at_checks are used to verify the correctness of the corresponding index as well as the existence
+# of all the rows involved in the test.
+m4_define([OVSDB_CHECK_IDL_COMPOUND_INDEX_SINGLE_COLUMN_C],
+  [AT_SETUP([$1 - C])
+   AT_KEYWORDS([ovsdb server idl compound_index_single_column compound_index positive $5])
+   AT_CHECK([ovsdb_start_idltest])
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
+# Generate the data to be tested.
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl-compound-index unix:socket $3],
+            [0], [stdout], [ignore], [kill `cat pid`])
+# Filter the rows of data that corresponds to the string index eliminating the extra columns of data.
+# This is done to verifiy that the output data is in the correct and expected order.
+   AT_CHECK([[cat stdout | grep -oh '[0-9]\{3\}: s=.*' | sed -e 's/ i=.*//g']],
+            [0], [$4], [], [kill `cat pid`])
+# Here, the data is filtered and sorted in order to have all the rows in the index and be
+# able to determined that all the involved rows are present.
+   AT_CHECK([[cat stdout | grep -oh '[0-9]\{3\}: s=.*' | sort -k 1,1n -k 2,2 -k 3,3]],
+            [0], [$5], [], [kill `cat pid`])
+# Filter the rows of data that corresponds to the integer index eliminating the extra columns of data.
+# This is done to verifiy that the output data is in the correct and expected order.
+   AT_CHECK([[cat stdout | grep -oh '[0-9]\{3\}: i=.*' | sed -e 's/ s=.*//g']],
+            [0], [$6], [], [kill `cat pid`])
+# Here again, the data is filtered and sorted in order to have all the rows in the index and be
+# able to determined that all the involved rows are present.
+   AT_CHECK([[cat stdout | grep -oh '[0-9]\{3\}: i=.*' | sort -k 1,1n -k 2,2 -k 3,3]],
+            [0], [$7], [], [kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+OVSDB_CHECK_IDL_COMPOUND_INDEX_SINGLE_COLUMN_C([Compound_index, single column test ],
+    [['["idltest",
+      {"op": "insert", "table": "simple", "row": {"s":"List000", "i": 1, "b":true, "r":101.0}},
+      {"op": "insert", "table": "simple", "row": {"s":"List000", "i": 2, "b":false, "r":102.0}},
+      {"op": "insert", "table": "simple", "row": {"s":"List000", "i": 10, "b":true, "r":110.0}},
+      {"op": "insert", "table": "simple", "row": {"s":"List001", "i": 1, "b":false, "r":110.0}},
+      {"op": "insert", "table": "simple", "row": {"s":"List001", "i": 2, "b":true, "r":120.0}},
+      {"op": "insert", "table": "simple", "row": {"s":"List001", "i": 2, "b":true, "r":122.0}},
+      {"op": "insert", "table": "simple", "row": {"s":"List001", "i": 4, "b":true, "r":130.0}},
+      {"op": "insert", "table": "simple", "row": {"s":"List005", "i": 5, "b":true, "r":130.0}},
+      {"op": "insert", "table": "simple", "row": {"s":"List020", "i": 20, "b":true, "r":220.0}},
+      {"op": "insert", "table": "simple", "row": {"s":"List020", "i": 19, "b":true, "r":219.0}}
+      ]']],
+    [idl_compound_index_single_column],
+    [001: s=List000
+001: s=List000
+001: s=List000
+001: s=List001
+001: s=List001
+001: s=List001
+001: s=List001
+001: s=List005
+001: s=List020
+001: s=List020
+003: s=List001
+003: s=List001
+003: s=List001
+003: s=List001
+],
+[001: s=List000 i=1 b=True r=101.000000
+001: s=List000 i=10 b=True r=110.000000
+001: s=List000 i=2 b=False r=102.000000
+001: s=List001 i=1 b=False r=110.000000
+001: s=List001 i=2 b=True r=120.000000
+001: s=List001 i=2 b=True r=122.000000
+001: s=List001 i=4 b=True r=130.000000
+001: s=List005 i=5 b=True r=130.000000
+001: s=List020 i=19 b=True r=219.000000
+001: s=List020 i=20 b=True r=220.000000
+003: s=List001 i=1 b=False r=110.000000
+003: s=List001 i=2 b=True r=120.000000
+003: s=List001 i=2 b=True r=122.000000
+003: s=List001 i=4 b=True r=130.000000
+],
+[002: i=1
+002: i=1
+002: i=2
+002: i=2
+002: i=2
+002: i=4
+002: i=5
+002: i=10
+002: i=19
+002: i=20
+004: i=5
+005: i=4
+005: i=5
+006: i=5
+006: i=10
+006: i=19
+006: i=20
+006: i=54
+007: i=1
+007: i=1
+007: i=2
+007: i=2
+007: i=2
+007: i=5
+007: i=10
+007: i=19
+007: i=20
+007: i=54
+],
+[002: i=1 s=List000 b=True r=101.000000
+002: i=1 s=List001 b=False r=110.000000
+002: i=10 s=List000 b=True r=110.000000
+002: i=19 s=List020 b=True r=219.000000
+002: i=2 s=List000 b=False r=102.000000
+002: i=2 s=List001 b=True r=120.000000
+002: i=2 s=List001 b=True r=122.000000
+002: i=20 s=List020 b=True r=220.000000
+002: i=4 s=List001 b=True r=130.000000
+002: i=5 s=List005 b=True r=130.000000
+004: i=5 s=List005 b=True r=130.000000
+005: i=4 s=List001 b=True r=130.000000
+005: i=5 s=List005 b=True r=130.000000
+006: i=10 s=List000 b=True r=110.000000
+006: i=19 s=List020 b=True r=219.000000
+006: i=20 s=List020 b=True r=220.000000
+006: i=5 s=List005 b=True r=130.000000
+006: i=54 s=Lista054 b=False r=0.000000
+007: i=1 s=List000 b=True r=101.000000
+007: i=1 s=List001 b=False r=110.000000
+007: i=10 s=List000 b=True r=110.000000
+007: i=19 s=List020 b=True r=219.000000
+007: i=2 s=List000 b=False r=102.000000
+007: i=2 s=List001 b=True r=120.000000
+007: i=2 s=List001 b=True r=122.000000
+007: i=20 s=List020 b=True r=220.000000
+007: i=5 s=List005 b=True r=130.000000
+007: i=54 s=Lista054 b=False r=0.000000
+])
+
+# Tests to verify the functionality of two column compound index.
+# It tests index for two columns using string and integer fields.
+# The run of test-ovsdb generates the output of the display of data using the different indexes defined in
+# the program.
+# Then, some at_checks are used to verify the correctness of the corresponding index as well as the existence
+# of all the rows involved in the test.
+m4_define([OVSDB_CHECK_IDL_COMPOUND_INDEX_DOUBLE_COLUMN_C],
+  [AT_SETUP([$1 - C])
+   AT_KEYWORDS([ovsdb server idl compound_index_double_column compound_index positive $5])
+   AT_CHECK([ovsdb_start_idltest])
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
+# Generate the data to be tested.
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl-compound-index unix:socket $3],
+            [0], [stdout], [ignore], [kill `cat pid`])
+# Filter the rows of data that corresponds to the string-integer index eliminating the extra columns of data.
+# This is done to verifiy that the output data is in the correct and expected order.
+   AT_CHECK([[cat stdout | grep -oh '[0-9]\{3\}: s=.*' | sed -e 's/ b=.*//g']],
+            [0], [$4], [], [kill `cat pid`])
+# Here, the data is filtered and sorted in order to have all the rows in the index and be
+# able to determined that all the involved rows are present.
+   AT_CHECK([[cat stdout | grep -oh '[0-9]\{3\}: s=.*' | sort -k 1,1n -k 2,2 -k 3,3]],
+            [0], [$5], [], [kill `cat pid`])
+# Filter the rows of data that corresponds to the integer index eliminating the extra columns of data.
+# This is done to verifiy that the output data is in the correct and expected order.
+   AT_CHECK([[cat stdout | grep -oh '[0-9]\{3\}: i=.*' | sed -e 's/ b=.*//g']],
+            [0], [$6], [], [kill `cat pid`])
+# Here again, the data is filtered and sorted in order to have all the rows in the index and be
+# able to determined that all the involved rows are present.
+   AT_CHECK([[cat stdout | grep -oh '[0-9]\{3\}: i=.*' | sort -k 1,1n -k 2,2 -k 3,3]],
+            [0], [$7], [], [kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+OVSDB_CHECK_IDL_COMPOUND_INDEX_DOUBLE_COLUMN_C([Compound_index, double column test ],
+    [['["idltest",
+      {"op": "insert", "table": "simple", "row": {"s":"List000", "i": 1, "b":true, "r":101.0}},
+      {"op": "insert", "table": "simple", "row": {"s":"List000", "i": 2, "b":false, "r":102.0}},
+      {"op": "insert", "table": "simple", "row": {"s":"List000", "i": 10, "b":true, "r":110.0}},
+      {"op": "insert", "table": "simple", "row": {"s":"List001", "i": 1, "b":false, "r":110.0}},
+      {"op": "insert", "table": "simple", "row": {"s":"List001", "i": 2, "b":true, "r":120.0}},
+      {"op": "insert", "table": "simple", "row": {"s":"List001", "i": 2, "b":true, "r":122.0}},
+      {"op": "insert", "table": "simple", "row": {"s":"List001", "i": 4, "b":true, "r":130.0}},
+      {"op": "insert", "table": "simple", "row": {"s":"List005", "i": 5, "b":true, "r":130.0}},
+      {"op": "insert", "table": "simple", "row": {"s":"List020", "i": 20, "b":true, "r":220.0}},
+      {"op": "insert", "table": "simple", "row": {"s":"List020", "i": 19, "b":true, "r":219.0}}
+      ]']],
+    [idl_compound_index_double_column],
+    [001: s=List000 i=1
+001: s=List000 i=2
+001: s=List000 i=10
+001: s=List001 i=1
+001: s=List001 i=2
+001: s=List001 i=2
+001: s=List001 i=4
+001: s=List005 i=5
+001: s=List020 i=19
+001: s=List020 i=20
+002: s=List000 i=10
+002: s=List000 i=2
+002: s=List000 i=1
+002: s=List001 i=4
+002: s=List001 i=2
+002: s=List001 i=2
+002: s=List001 i=1
+002: s=List005 i=5
+002: s=List020 i=20
+002: s=List020 i=19
+003: s=List000 i=10
+004: s=List001 i=1
+004: s=List001 i=2
+004: s=List001 i=2
+004: s=List001 i=4
+004: s=List005 i=5
+],
+    [001: s=List000 i=1 b=True r=101.000000
+001: s=List000 i=10 b=True r=110.000000
+001: s=List000 i=2 b=False r=102.000000
+001: s=List001 i=1 b=False r=110.000000
+001: s=List001 i=2 b=True r=120.000000
+001: s=List001 i=2 b=True r=122.000000
+001: s=List001 i=4 b=True r=130.000000
+001: s=List005 i=5 b=True r=130.000000
+001: s=List020 i=19 b=True r=219.000000
+001: s=List020 i=20 b=True r=220.000000
+002: s=List000 i=1 b=True r=101.000000
+002: s=List000 i=10 b=True r=110.000000
+002: s=List000 i=2 b=False r=102.000000
+002: s=List001 i=1 b=False r=110.000000
+002: s=List001 i=2 b=True r=120.000000
+002: s=List001 i=2 b=True r=122.000000
+002: s=List001 i=4 b=True r=130.000000
+002: s=List005 i=5 b=True r=130.000000
+002: s=List020 i=19 b=True r=219.000000
+002: s=List020 i=20 b=True r=220.000000
+003: s=List000 i=10 b=True r=110.000000
+004: s=List001 i=1 b=False r=110.000000
+004: s=List001 i=2 b=True r=120.000000
+004: s=List001 i=2 b=True r=122.000000
+004: s=List001 i=4 b=True r=130.000000
+004: s=List005 i=5 b=True r=130.000000
+],
+    [005: i=1 s=List000
+005: i=1 s=List001
+005: i=2 s=List000
+005: i=2 s=List001
+005: i=2 s=List001
+005: i=4 s=List001
+005: i=5 s=List005
+005: i=10 s=List000
+005: i=19 s=List020
+005: i=20 s=List020
+006: i=20 s=List020
+006: i=19 s=List020
+006: i=10 s=List000
+006: i=5 s=List005
+006: i=4 s=List001
+006: i=2 s=List000
+006: i=2 s=List001
+006: i=2 s=List001
+006: i=1 s=List000
+006: i=1 s=List001
+],
+    [005: i=1 s=List000 b=True r=101.000000
+005: i=1 s=List001 b=False r=110.000000
+005: i=10 s=List000 b=True r=110.000000
+005: i=19 s=List020 b=True r=219.000000
+005: i=2 s=List000 b=False r=102.000000
+005: i=2 s=List001 b=True r=120.000000
+005: i=2 s=List001 b=True r=122.000000
+005: i=20 s=List020 b=True r=220.000000
+005: i=4 s=List001 b=True r=130.000000
+005: i=5 s=List005 b=True r=130.000000
+006: i=1 s=List000 b=True r=101.000000
+006: i=1 s=List001 b=False r=110.000000
+006: i=10 s=List000 b=True r=110.000000
+006: i=19 s=List020 b=True r=219.000000
+006: i=2 s=List000 b=False r=102.000000
+006: i=2 s=List001 b=True r=120.000000
+006: i=2 s=List001 b=True r=122.000000
+006: i=20 s=List020 b=True r=220.000000
+006: i=4 s=List001 b=True r=130.000000
+006: i=5 s=List005 b=True r=130.000000
+])
