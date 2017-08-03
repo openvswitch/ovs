@@ -5317,6 +5317,8 @@ reversible_actions(const struct ofpact *ofpacts, size_t ofpacts_len)
         case OFPACT_METER:
         case OFPACT_NAT:
         case OFPACT_OUTPUT_TRUNC:
+        case OFPACT_ENCAP:
+        case OFPACT_DECAP:
             return false;
         }
     }
