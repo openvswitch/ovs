@@ -22,6 +22,8 @@
 #include "ovn/lib/ovn-sb-idl.h"
 VLOG_DEFINE_THIS_MODULE(lport);
 
+static struct ovsdb_idl_index_cursor mc_grp_by_dp_name_cursor;
+
 static struct ldatapath *ldatapath_lookup_by_key__(
     const struct ldatapath_index *, uint32_t dp_key);
 
@@ -177,63 +179,42 @@ lport_lookup_by_key(const struct lport_index *lports,
     return NULL;
 }
 
-struct mcgroup {
-    struct hmap_node dp_name_node; /* Index by (logical datapath, name). */
-    const struct sbrec_multicast_group *mg;
-};
-
-void
-mcgroup_index_init(struct mcgroup_index *mcgroups, struct ovsdb_idl *ovnsb_idl)
-{
-    hmap_init(&mcgroups->by_dp_name);
-
-    const struct sbrec_multicast_group *mg;
-    SBREC_MULTICAST_GROUP_FOR_EACH (mg, ovnsb_idl) {
-        const struct uuid *dp_uuid = &mg->datapath->header_.uuid;
-        if (mcgroup_lookup_by_dp_name(mcgroups, mg->datapath, mg->name)) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-            VLOG_WARN_RL(&rl, "datapath "UUID_FMT" contains duplicate "
-                         "multicast group '%s'", UUID_ARGS(dp_uuid), mg->name);
-            continue;
-        }
-
-        struct mcgroup *m = xmalloc(sizeof *m);
-        hmap_insert(&mcgroups->by_dp_name, &m->dp_name_node,
-                    hash_string(mg->name, uuid_hash(dp_uuid)));
-        m->mg = mg;
-    }
-}
-
-void
-mcgroup_index_destroy(struct mcgroup_index *mcgroups)
-{
-    if (!mcgroups) {
-        return;
-    }
-
-    struct mcgroup *mcgroup, *next;
-    HMAP_FOR_EACH_SAFE (mcgroup, next, dp_name_node, &mcgroups->by_dp_name) {
-        hmap_remove(&mcgroups->by_dp_name, &mcgroup->dp_name_node);
-        free(mcgroup);
-    }
-
-    hmap_destroy(&mcgroups->by_dp_name);
-}
-
+/* Finds and returns the logical multicast group with the given 'name' and
+ * datapath binding, or NULL if no such logical multicast group exists. */
 const struct sbrec_multicast_group *
-mcgroup_lookup_by_dp_name(const struct mcgroup_index *mcgroups,
-                          const struct sbrec_datapath_binding *dp,
-                          const char *name)
+mcgroup_lookup_by_dp_name(struct ovsdb_idl *idl,
+                           const struct sbrec_datapath_binding *dp,
+                           const char *name)
 {
-    const struct uuid *dp_uuid = &dp->header_.uuid;
-    const struct mcgroup *mcgroup;
-    HMAP_FOR_EACH_WITH_HASH (mcgroup, dp_name_node,
-                             hash_string(name, uuid_hash(dp_uuid)),
-                             &mcgroups->by_dp_name) {
-        if (uuid_equals(&mcgroup->mg->datapath->header_.uuid, dp_uuid)
-            && !strcmp(mcgroup->mg->name, name)) {
-            return mcgroup->mg;
-        }
+    struct sbrec_multicast_group *mcval;
+    const struct sbrec_multicast_group *mc, *retval = NULL;
+
+    /* Build key for an indexed lookup. */
+    mcval = sbrec_multicast_group_index_init_row(idl,
+                                                 &sbrec_table_multicast_group);
+    sbrec_multicast_group_index_set_name(mcval, name);
+    sbrec_multicast_group_index_set_datapath(mcval, dp);
+
+    /* Find an entry with matching logical multicast group name and datapath.
+     * Since this column pair is declared to be an index in the OVN_Southbound
+     * schema, the first match (if any) will be the only match. */
+    SBREC_MULTICAST_GROUP_FOR_EACH_EQUAL (mc, &mc_grp_by_dp_name_cursor,
+                                          mcval) {
+        retval = mc;
+        break;
     }
-    return NULL;
+
+    sbrec_multicast_group_index_destroy_row(mcval);
+
+    return retval;
+}
+
+void
+lport_init(struct ovsdb_idl *idl)
+{
+    /* Create a cursor for searching multicast group table by datapath
+     * and group name. */
+    ovsdb_idl_initialize_cursor(idl, &sbrec_table_multicast_group,
+                                "multicast-group-by-dp-name",
+                                &mc_grp_by_dp_name_cursor);
 }

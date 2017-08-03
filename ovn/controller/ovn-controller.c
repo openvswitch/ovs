@@ -531,6 +531,20 @@ ctrl_register_ovs_idl(struct ovsdb_idl *ovs_idl)
     physical_register_ovs_idl(ovs_idl);
 }
 
+static void
+create_ovnsb_indexes(struct ovsdb_idl *ovnsb_idl)
+{
+    struct ovsdb_idl_index *index;
+
+    /* Index multicast group table by name and datapath. */
+    index = ovsdb_idl_create_index(ovnsb_idl, &sbrec_table_multicast_group,
+                                   "multicast-group-by-dp-name");
+    ovsdb_idl_index_add_column(index, &sbrec_multicast_group_col_name,
+                               OVSDB_INDEX_ASC, NULL);
+    ovsdb_idl_index_add_column(index, &sbrec_multicast_group_col_datapath,
+                               OVSDB_INDEX_ASC, NULL);
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -575,6 +589,10 @@ main(int argc, char *argv[])
     char *ovnsb_remote = get_ovnsb_remote(ovs_idl_loop.idl);
     struct ovsdb_idl_loop ovnsb_idl_loop = OVSDB_IDL_LOOP_INITIALIZER(
         ovsdb_idl_create(ovnsb_remote, &sbrec_idl_class, true, true));
+
+    create_ovnsb_indexes(ovnsb_idl_loop.idl);
+    lport_init(ovnsb_idl_loop.idl);
+
     ovsdb_idl_omit_alert(ovnsb_idl_loop.idl, &sbrec_chassis_col_nb_cfg);
     update_sb_monitors(ovnsb_idl_loop.idl, NULL, NULL, NULL);
     ovsdb_idl_get_initial_snapshot(ovnsb_idl_loop.idl);
@@ -633,12 +651,10 @@ main(int argc, char *argv[])
 
         struct ldatapath_index ldatapaths;
         struct lport_index lports;
-        struct mcgroup_index mcgroups;
         struct chassis_index chassis_index;
 
         ldatapath_index_init(&ldatapaths, ctx.ovnsb_idl);
         lport_index_init(&lports, ctx.ovnsb_idl);
-        mcgroup_index_init(&mcgroups, ctx.ovnsb_idl);
         chassis_index_init(&chassis_index, ctx.ovnsb_idl);
 
         const struct sbrec_chassis *chassis = NULL;
@@ -668,7 +684,7 @@ main(int argc, char *argv[])
                     commit_ct_zones(br_int, &pending_ct_zones);
 
                     struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
-                    lflow_run(&ctx, chassis, &lports, &mcgroups,
+                    lflow_run(&ctx, chassis, &lports,
                               &chassis_index, &local_datapaths, &group_table,
                               &addr_sets, &flow_table, &active_tunnels);
 
@@ -723,7 +739,6 @@ main(int argc, char *argv[])
             free(pending_pkt.flow_s);
         }
 
-        mcgroup_index_destroy(&mcgroups);
         lport_index_destroy(&lports);
         ldatapath_index_destroy(&ldatapaths);
         chassis_index_destroy(&chassis_index);

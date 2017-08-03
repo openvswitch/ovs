@@ -76,26 +76,12 @@ const struct sbrec_port_binding *lport_lookup_by_name(
 const struct sbrec_port_binding *lport_lookup_by_key(
     const struct lport_index *, uint32_t dp_key, uint16_t port_key);
 
-/* Multicast group index
- * =====================
- *
- * This is separate from the logical port index because of namespace issues:
- * logical port names are globally unique, but multicast group names are only
- * unique within the scope of a logical datapath.
- *
- * Multicast groups could be indexed by number also, but so far the clients do
- * not need this index. */
-
-struct mcgroup_index {
-    struct hmap by_dp_name;
-};
-
-void mcgroup_index_init(struct mcgroup_index *, struct ovsdb_idl *);
-void mcgroup_index_destroy(struct mcgroup_index *);
 
 const struct sbrec_multicast_group *mcgroup_lookup_by_dp_name(
-    const struct mcgroup_index *,
+    struct ovsdb_idl *idl,
     const struct sbrec_datapath_binding *,
     const char *name);
+
+void lport_init(struct ovsdb_idl *idl);
 
 #endif /* ovn/lport.h */
