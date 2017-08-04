@@ -10,6 +10,7 @@ EXTRA_DIST += \
 	rhel/automake.mk \
 	rhel/etc_init.d_openvswitch \
 	rhel/etc_logrotate.d_openvswitch \
+	rhel/etc_openvswitch_default.conf \
 	rhel/etc_sysconfig_network-scripts_ifdown-ovs \
 	rhel/etc_sysconfig_network-scripts_ifup-ovs \
 	rhel/openvswitch-dkms.spec \
