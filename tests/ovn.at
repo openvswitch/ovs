@@ -7134,7 +7134,7 @@ ovn_start
 # for the localnet on hv2. These tests are expected to succeed.
 
 # Create three hypervisors and create OVS ports corresponding
-to logical ports.
+# to logical ports.
 net_add n1
 
 sim_add hv1
