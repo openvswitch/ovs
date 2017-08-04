@@ -82,6 +82,7 @@ EXTRA_DIST = \
 	build-aux/cksum-schema-check \
 	build-aux/calculate-schema-cksum \
 	build-aux/dist-docs \
+	build-aux/dpdkstrip.pl \
 	build-aux/sodepends.pl \
 	build-aux/soexpand.pl \
 	build-aux/xml2nroff \
