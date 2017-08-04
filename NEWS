@@ -80,6 +80,7 @@ v2.8.0 - xx xxx xxxx
        IETF NSH draft - https://datatracker.ietf.org/doc/draft-ietf-sfc-nsh/
    - Fedora Packaging:
      * OVN services are no longer restarted automatically after upgrade.
+     * ovs-vswitchd and ovsdb-server run as non-root users by default.
    - Add --cleanup option to command 'ovs-appctl exit' (see ovs-vswitchd(8)).
    - L3 tunneling:
      * Use new tunnel port option "packet_type" to configure L2 vs. L3.

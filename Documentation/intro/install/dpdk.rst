@@ -138,6 +138,13 @@ has to be configured with DPDK support (``--with-dpdk``).
 
 Additional information can be found in :doc:`general`.
 
+.. note::
+  If you are running using the Fedora or Red Hat package, the Open vSwitch
+  daemon will run as a non-root user.  This implies that you must have a
+  working IOMMU.  Visit the `RHEL README`__ for additional information.
+
+__ https://github.com/openvswitch/ovs/blob/master/rhel/README.RHEL.rst
+
 Setup
 -----
 
