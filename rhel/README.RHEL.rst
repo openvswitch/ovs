@@ -337,6 +337,17 @@ running. All other commands where executed when Open vSwitch was successfully
 running.
 
 
+Non-root User Support
+-----------------------
+Fedora and RHEL support running the Open vSwitch daemons as a non-root user.
+By default, a fresh installation will create an *openvswitch* user, along
+with any additional support groups needed (such as *hugetlbfs* for DPDK
+support).
+
+This is controlled by modifying the ``OVS_USER_ID`` option.  Setting this
+to 'root:root', or commenting the variable out will revert this behavior.
+
+
 Reporting Bugs
 --------------
 
