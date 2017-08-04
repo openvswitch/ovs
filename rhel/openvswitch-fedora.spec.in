@@ -225,6 +225,15 @@ Docker network plugins for OVN.
 	--enable-ssl \
 	--with-pkidir=%{_sharedstatedir}/openvswitch/pki
 
+/usr/bin/perl build-aux/dpdkstrip.pl \
+%if %{with dpdk}
+	--dpdk \
+%else
+	--nodpdk \
+%endif
+	< rhel/usr_lib_systemd_system_ovs-vswitchd.service.in \
+	> rhel/usr_lib_systemd_system_ovs-vswitchd.service
+
 make %{?_smp_mflags}
 cd selinux
 make -f %{_datadir}/selinux/devel/Makefile
