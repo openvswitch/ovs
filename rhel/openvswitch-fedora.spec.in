@@ -92,6 +92,9 @@ Requires: openssl hostname iproute module-init-tools
 #Upstream kernel commit 4f647e0a3c37b8d5086214128614a136064110c3
 #Requires: kernel >= 3.15.0-0
 
+Requires(post): /usr/bin/getent
+Requires(post): /usr/sbin/useradd
+Requires(post): /usr/bin/sed
 Requires(post): systemd-units
 Requires(preun): systemd-units
 Requires(postun): systemd-units
@@ -361,6 +364,16 @@ rm -rf $RPM_BUILD_ROOT
 %endif
 
 %post
+if [ $1 -eq 1 ]; then
+    getent passwd openvswitch >/dev/null || \
+        useradd -r -d / -s /sbin/nologin -c "Open vSwitch Daemons" openvswitch
+
+    sed -i 's:^#OVS_USER_ID=:OVS_USER_ID=:' /etc/sysconfig/openvswitch
+
+    # In the case of upgrade, this is not needed.
+    chown -R openvswitch:openvswitch /etc/openvswitch
+fi
+
 %if 0%{?systemd_post:1}
     %systemd_post %{name}.service
 %else
