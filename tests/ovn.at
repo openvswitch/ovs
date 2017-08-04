@@ -7442,12 +7442,12 @@ expected=${dst_mac}${src_mac}08004500001c000000003f110100${src_ip}${dst_ip}00351
 echo $expected >> hv2-vif1.expected
 OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [hv2-vif1.expected])
 
-AT_CHECK([ovn-sbctl --bare --columns _uuid find Port_Binding logical_port=cr-alice | wc --lines], [0], [1
+AT_CHECK([ovn-sbctl --bare --columns _uuid find Port_Binding logical_port=cr-alice | wc -l], [0], [1
 ])
 
 ovn-nbctl --timeout=3 --wait=sb remove Logical_Router_Port alice options redirect-chassis
 
-AT_CHECK([ovn-sbctl find Port_Binding logical_port=cr-alice | wc --lines], [0], [0
+AT_CHECK([ovn-sbctl find Port_Binding logical_port=cr-alice | wc -l], [0], [0
 ])
 
 OVN_CLEANUP([hv1],[hv2],[hv3])
