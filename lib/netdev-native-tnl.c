@@ -531,6 +531,9 @@ netdev_vxlan_pop_header(struct dp_packet *packet)
         case VXLAN_GPE_NP_IPV6:
             next_pt = PT_IPV6;
             break;
+        case VXLAN_GPE_NP_NSH:
+            next_pt = PT_NSH;
+            break;
         case VXLAN_GPE_NP_ETHERNET:
             next_pt = PT_ETH;
             break;
@@ -589,6 +592,9 @@ netdev_vxlan_build_header(const struct netdev *netdev,
                 break;
             case ETH_TYPE_IPV6:
                 vxh->vx_gpe.next_protocol = VXLAN_GPE_NP_IPV6;
+                break;
+            case ETH_TYPE_NSH:
+                vxh->vx_gpe.next_protocol = VXLAN_GPE_NP_NSH;
                 break;
             case ETH_TYPE_TEB:
                 vxh->vx_gpe.next_protocol = VXLAN_GPE_NP_ETHERNET;
