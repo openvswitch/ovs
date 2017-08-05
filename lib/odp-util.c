@@ -129,6 +129,8 @@ odp_action_len(uint16_t type)
     case OVS_ACTION_ATTR_PUSH_ETH: return sizeof(struct ovs_action_push_eth);
     case OVS_ACTION_ATTR_POP_ETH: return 0;
     case OVS_ACTION_ATTR_CLONE: return ATTR_LEN_VARIABLE;
+    case OVS_ACTION_ATTR_ENCAP_NSH: return ATTR_LEN_VARIABLE;
+    case OVS_ACTION_ATTR_DECAP_NSH: return 0;
 
     case OVS_ACTION_ATTR_UNSPEC:
     case __OVS_ACTION_ATTR_MAX:
@@ -266,10 +268,9 @@ format_nsh_key(struct ds *ds, const struct ovs_key_nsh *key)
             }
             break;
         case NSH_M_TYPE2:
-            /* TODO */
-            break;
         default:
-            OVS_NOT_REACHED();
+            /* No support for matching other metadata formats yet. */
+            break;
     }
 }
 
@@ -338,6 +339,40 @@ format_nsh_key_mask(struct ds *ds, const struct ovs_key_nsh *key,
         format_be32_masked(ds, &first, "c3", key->c[2], mask->c[2]);
         format_be32_masked(ds, &first, "c4", key->c[3], mask->c[3]);
     }
+}
+
+static void
+format_odp_encap_nsh_action(struct ds *ds,
+                            const struct ovs_action_encap_nsh *encap_nsh)
+ {
+    uint32_t path_hdr = ntohl(encap_nsh->path_hdr);
+    uint32_t spi = (path_hdr & NSH_SPI_MASK) >> NSH_SPI_SHIFT;
+    uint8_t si = (path_hdr & NSH_SI_MASK) >> NSH_SI_SHIFT;
+
+    ds_put_cstr(ds, "encap_nsh(");
+    ds_put_format(ds, "flags=%d", encap_nsh->flags);
+    ds_put_format(ds, ",mdtype=%d", encap_nsh->mdtype);
+    ds_put_format(ds, ",np=%d", encap_nsh->np);
+    ds_put_format(ds, ",spi=0x%x", spi);
+    ds_put_format(ds, ",si=%d", si);
+    switch (encap_nsh->mdtype) {
+    case NSH_M_TYPE1: {
+        struct nsh_md1_ctx *md1_ctx =
+            ALIGNED_CAST(struct nsh_md1_ctx *, encap_nsh->metadata);
+        for (int i = 0; i < 4; i++) {
+            ds_put_format(ds, ",c%d=0x%x", i + 1,
+                          ntohl(get_16aligned_be32(&md1_ctx->c[i])));
+        }
+        break;
+    }
+    case NSH_M_TYPE2:
+        ds_put_cstr(ds, ",md2=");
+        ds_put_hex(ds, encap_nsh->metadata, encap_nsh->mdlen);
+        break;
+    default:
+        OVS_NOT_REACHED();
+    }
+    ds_put_format(ds, ")");
 }
 
 static const char *
@@ -635,7 +670,7 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
                       gnh->oam ? "oam," : "",
                       gnh->critical ? "crit," : "",
                       ntohl(get_16aligned_be32(&gnh->vni)) >> 8);
- 
+
         if (gnh->opt_len) {
             ds_put_cstr(ds, ",options(");
             format_geneve_opts(gnh->options, NULL, gnh->opt_len * 4,
@@ -1021,6 +1056,12 @@ format_odp_action(struct ds *ds, const struct nlattr *a,
         break;
     case OVS_ACTION_ATTR_CLONE:
         format_odp_clone_action(ds, a, portno_names);
+        break;
+    case OVS_ACTION_ATTR_ENCAP_NSH:
+        format_odp_encap_nsh_action(ds, nl_attr_get(a));
+        break;
+    case OVS_ACTION_ATTR_DECAP_NSH:
+        ds_put_cstr(ds, "decap_nsh()");
         break;
     case OVS_ACTION_ATTR_UNSPEC:
     case __OVS_ACTION_ATTR_MAX:
@@ -1740,6 +1781,113 @@ find_end:
 }
 
 static int
+parse_odp_encap_nsh_action(const char *s, struct ofpbuf *actions)
+{
+    int n = 0;
+    int ret = 0;
+    struct ovs_action_encap_nsh encap_nsh;
+    uint32_t spi;
+    uint8_t si;
+    uint32_t cd;
+
+    if (!ovs_scan_len(s, &n, "encap_nsh(")) {
+        ret = -EINVAL;
+        goto out;
+    }
+
+    /* The default is NSH_M_TYPE1 */
+    encap_nsh.flags = 0;
+    encap_nsh.mdtype = NSH_M_TYPE1;
+    encap_nsh.mdlen = NSH_M_TYPE1_MDLEN;
+    encap_nsh.path_hdr = htonl(255);
+    memset(encap_nsh.metadata, 0, NSH_M_TYPE1_MDLEN);
+
+    for (;;) {
+        n += strspn(s + n, delimiters);
+        if (s[n] == ')') {
+            break;
+        }
+
+        if (ovs_scan_len(s, &n, "flags=%"SCNi8, &encap_nsh.flags)) {
+            continue;
+        }
+        if (ovs_scan_len(s, &n, "mdtype=%"SCNi8, &encap_nsh.mdtype)) {
+            switch (encap_nsh.mdtype) {
+            case NSH_M_TYPE1:
+                /* This is the default format. */;
+                break;
+            case NSH_M_TYPE2:
+                /* Length will be updated later. */
+                encap_nsh.mdlen = 0;
+                break;
+            default:
+                ret = -EINVAL;
+                goto out;
+            }
+            continue;
+        }
+        if (ovs_scan_len(s, &n, "np=%"SCNi8, &encap_nsh.np)) {
+            continue;
+        }
+        if (ovs_scan_len(s, &n, "spi=0x%"SCNx32, &spi)) {
+            encap_nsh.path_hdr =
+                    htonl(((spi << NSH_SPI_SHIFT) & NSH_SPI_MASK) |
+                            (ntohl(encap_nsh.path_hdr) & ~NSH_SPI_MASK));
+            continue;
+        }
+        if (ovs_scan_len(s, &n, "si=%"SCNi8, &si)) {
+            encap_nsh.path_hdr =
+                    htonl((si << NSH_SI_SHIFT) |
+                            (ntohl(encap_nsh.path_hdr) & ~NSH_SI_MASK));
+            continue;
+        }
+        if (encap_nsh.mdtype == NSH_M_TYPE1) {
+            struct nsh_md1_ctx *md1 =
+                ALIGNED_CAST(struct nsh_md1_ctx *, encap_nsh.metadata);
+            if (ovs_scan_len(s, &n, "c1=0x%"SCNx32, &cd)) {
+                put_16aligned_be32(&md1->c[0], htonl(cd));
+                continue;
+            }
+            if (ovs_scan_len(s, &n, "c2=0x%"SCNx32, &cd)) {
+                put_16aligned_be32(&md1->c[1], htonl(cd));
+                continue;
+            }
+            if (ovs_scan_len(s, &n, "c3=0x%"SCNx32, &cd)) {
+                put_16aligned_be32(&md1->c[2], htonl(cd));
+                continue;
+            }
+            if (ovs_scan_len(s, &n, "c4=0x%"SCNx32, &cd)) {
+                put_16aligned_be32(&md1->c[3], htonl(cd));
+                continue;
+            }
+        }
+        else if (encap_nsh.mdtype == NSH_M_TYPE2) {
+            struct ofpbuf b;
+            char buf[512];
+            size_t mdlen;
+            if (ovs_scan_len(s, &n, "md2=0x%511[0-9a-fA-F]", buf)) {
+                ofpbuf_use_stub(&b, encap_nsh.metadata,
+                                OVS_ENCAP_NSH_MAX_MD_LEN);
+                ofpbuf_put_hex(&b, buf, &mdlen);
+                encap_nsh.mdlen = mdlen;
+                ofpbuf_uninit(&b);
+            }
+            continue;
+        }
+    }
+out:
+    if (ret < 0) {
+        return ret;
+    } else {
+        size_t size = offsetof(struct ovs_action_encap_nsh, metadata)
+                + ROUND_UP(encap_nsh.mdlen, 4);
+        nl_msg_put_unspec(actions, OVS_ACTION_ATTR_ENCAP_NSH,
+                          &encap_nsh, size);
+        return n;
+    }
+}
+
+static int
 parse_action_list(const char *s, const struct simap *port_names,
                   struct ofpbuf *actions)
 {
@@ -1937,6 +2085,24 @@ parse_odp_action(const char *s, const struct simap *port_names,
             n += retval;
             nl_msg_end_nested(actions, actions_ofs);
             return n + 1;
+        }
+    }
+
+    {
+        if (!strncmp(s, "encap_nsh(", 10)) {
+            int retval = parse_odp_encap_nsh_action(s, actions);
+            if (retval < 0) {
+                return retval;
+            }
+            return retval + 1;
+        }
+    }
+
+    {
+        int n;
+        if (ovs_scan(s, "decap_nsh()%n", &n)) {
+            nl_msg_put_flag(actions, OVS_ACTION_ATTR_DECAP_NSH);
+            return n;
         }
     }
 
@@ -2453,6 +2619,7 @@ format_eth(struct ds *ds, const char *name, const struct eth_addr key,
         }
     }
 }
+
 
 static void
 format_be64(struct ds *ds, const char *name, ovs_be64 key,
@@ -6463,7 +6630,8 @@ get_nsh_key(const struct flow *flow, struct ovs_key_nsh *nsh, bool is_mask)
             }
             break;
         case NSH_M_TYPE2:
-            /* TODO: MD type 2 */
+        default:
+            /* No match support for other MD formats yet. */
             break;
         }
     }
@@ -6486,7 +6654,8 @@ put_nsh_key(const struct ovs_key_nsh *nsh, struct flow *flow,
             }
             break;
         case NSH_M_TYPE2:
-            /* TODO: MD type 2 */
+        default:
+            /* No match support for other MD formats yet. */
             memset(flow->nsh.c, 0, sizeof flow->nsh.c);
             break;
     }
@@ -6619,11 +6788,58 @@ commit_set_pkt_mark_action(const struct flow *flow, struct flow *base_flow,
 }
 
 static void
+odp_put_decap_nsh_action(struct ofpbuf *odp_actions)
+{
+    nl_msg_put_flag(odp_actions, OVS_ACTION_ATTR_DECAP_NSH);
+}
+
+static void
+odp_put_encap_nsh_action(struct ofpbuf *odp_actions,
+                         const struct flow *flow,
+                         struct ofpbuf *encap_data)
+{
+    struct ovs_action_encap_nsh encap_nsh;
+
+    encap_nsh.flags = flow->nsh.flags;
+    encap_nsh.mdtype = flow->nsh.mdtype;
+    encap_nsh.np = flow->nsh.np;
+    encap_nsh.path_hdr = htonl((ntohl(flow->nsh.spi) << NSH_SPI_SHIFT) |
+                                   flow->nsh.si);
+
+    switch (encap_nsh.mdtype) {
+    case NSH_M_TYPE1: {
+        struct nsh_md1_ctx *md1 =
+            ALIGNED_CAST(struct nsh_md1_ctx *, encap_nsh.metadata);
+        encap_nsh.mdlen = NSH_M_TYPE1_MDLEN;
+        for (int i = 0; i < 4; i++) {
+            put_16aligned_be32(&md1->c[i], flow->nsh.c[i]);
+        }
+        break;
+    }
+    case NSH_M_TYPE2:
+        if (encap_data) {
+            ovs_assert(encap_data->size < OVS_ENCAP_NSH_MAX_MD_LEN);
+            encap_nsh.mdlen = encap_data->size;
+            memcpy(encap_nsh.metadata, encap_data->data, encap_data->size);
+        } else {
+            encap_nsh.mdlen = 0;
+        }
+        break;
+    default:
+        encap_nsh.mdlen = 0;
+        break;
+    }
+    nl_msg_put_unspec(odp_actions, OVS_ACTION_ATTR_ENCAP_NSH,
+                      &encap_nsh, sizeof(encap_nsh));
+}
+
+static void
 commit_packet_type_change(const struct flow *flow,
                           struct flow *base_flow,
                           struct ofpbuf *odp_actions,
                           struct flow_wildcards *wc,
-                          bool pending_encap)
+                          bool pending_encap,
+                          struct ofpbuf *encap_data)
 {
     if (flow->packet_type == base_flow->packet_type) {
         return;
@@ -6640,22 +6856,40 @@ commit_packet_type_change(const struct flow *flow,
             base_flow->dl_dst = flow->dl_dst;
             break;
         }
+        case PT_NSH:
+            /* encap_nsh */
+            odp_put_encap_nsh_action(odp_actions, flow, encap_data);
+            base_flow->packet_type = flow->packet_type;
+            /* Update all packet headers in base_flow. */
+            memcpy(&base_flow->dl_dst, &flow->dl_dst,
+                   sizeof(*flow) - offsetof(struct flow, dl_dst));
+            break;
         default:
-            /* Only the above protocols are supported for encap. The check
-             * is done at action decoding. */
+            /* Only the above protocols are supported for encap.
+             * The check is done at action translation. */
             OVS_NOT_REACHED();
         }
     } else {
+        /* This is an explicit or implicit decap case. */
         if (pt_ns(flow->packet_type) == OFPHTN_ETHERTYPE &&
             base_flow->packet_type == htonl(PT_ETH)) {
-            /* pop_eth */
+            /* Generate pop_eth and continue without recirculation. */
             odp_put_pop_eth_action(odp_actions);
             base_flow->packet_type = flow->packet_type;
             base_flow->dl_src = eth_addr_zero;
             base_flow->dl_dst = eth_addr_zero;
         } else {
-            /* All other cases are handled through recirculation. */
-            OVS_NOT_REACHED();
+            /* All other decap cases require recirculation.
+             * No need to update the base flow here. */
+            switch (ntohl(base_flow->packet_type)) {
+            case PT_NSH:
+                /* decap_nsh. */
+                odp_put_decap_nsh_action(odp_actions);
+                break;
+            default:
+                /* Checks are done during translation. */
+                OVS_NOT_REACHED();
+            }
         }
     }
 
@@ -6674,12 +6908,14 @@ commit_packet_type_change(const struct flow *flow,
 enum slow_path_reason
 commit_odp_actions(const struct flow *flow, struct flow *base,
                    struct ofpbuf *odp_actions, struct flow_wildcards *wc,
-                   bool use_masked, bool pending_encap)
+                   bool use_masked, bool pending_encap,
+                   struct ofpbuf *encap_data)
 {
     enum slow_path_reason slow1, slow2;
     bool mpls_done = false;
 
-    commit_packet_type_change(flow, base, odp_actions, wc, pending_encap);
+    commit_packet_type_change(flow, base, odp_actions, wc,
+                              pending_encap, encap_data);
     commit_set_ether_action(flow, base, odp_actions, wc, use_masked);
     /* Make packet a non-MPLS packet before committing L3/4 actions,
      * which would otherwise do nothing. */

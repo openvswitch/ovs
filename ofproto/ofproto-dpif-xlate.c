@@ -55,6 +55,7 @@
 #include "openvswitch/meta-flow.h"
 #include "openvswitch/list.h"
 #include "openvswitch/ofp-actions.h"
+#include "openvswitch/ofp-ed-props.h"
 #include "openvswitch/vlog.h"
 #include "ovs-lldp.h"
 #include "ovs-router.h"
@@ -234,8 +235,10 @@ struct xlate_ctx {
     bool in_action_set;         /* Currently translating action_set, if true. */
     bool in_packet_out;         /* Currently translating a packet_out msg, if
                                  * true. */
-    bool pending_encap;         /* Waiting to commit a pending encap
-                                 * action, if true. */
+    bool pending_encap;         /* True when waiting to commit a pending
+                                 * encap action. */
+    struct ofpbuf *encap_data;  /* May contain a pointer to an ofpbuf with
+                                 * context for the datapath encap action.*/
 
     uint8_t table_id;           /* OpenFlow table ID where flow was found. */
     ovs_be64 rule_cookie;       /* Cookie of the rule being translated. */
@@ -3468,8 +3471,11 @@ xlate_commit_actions(struct xlate_ctx *ctx)
 
     ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
                                           ctx->odp_actions, ctx->wc,
-                                          use_masked, ctx->pending_encap);
+                                          use_masked, ctx->pending_encap,
+                                          ctx->encap_data);
     ctx->pending_encap = false;
+    ofpbuf_delete(ctx->encap_data);
+    ctx->encap_data = NULL;
 }
 
 static void
@@ -4386,6 +4392,8 @@ xlate_fixup_actions(struct ofpbuf *b, const struct nlattr *actions,
         case OVS_ACTION_ATTR_CT:
         case OVS_ACTION_ATTR_PUSH_ETH:
         case OVS_ACTION_ATTR_POP_ETH:
+        case OVS_ACTION_ATTR_ENCAP_NSH:
+        case OVS_ACTION_ATTR_DECAP_NSH:
         case OVS_ACTION_ATTR_METER:
             ofpbuf_put(b, a, nl_attr_len_pad(a, left));
             break;
@@ -5786,12 +5794,122 @@ rewrite_flow_encap_ethernet(struct xlate_ctx *ctx,
         flow->dl_dst = eth_addr_zero;
         flow->dl_type = ethertype;
     } else {
+        /* Error handling: drop packet. */
         xlate_report_debug(ctx, OFT_ACTION,
-                           "encap(ethernet) unsupported for packet type "
-                           "ethernet");
-        /* TODO: Error handling: drop packet. */
+                           "Dropping packet as encap(ethernet) is not "
+                           "supported for packet type ethernet.");
         ctx->error = 1;
     }
+}
+
+/* For an MD2 NSH header returns a pointer to an ofpbuf with the encoded
+ * MD2 TLVs provided as encap properties to the encap operation. This
+ * will be stored as encap_data in the ctx and copied into the encap_nsh
+ * action at the next commit. */
+static struct ofpbuf *
+rewrite_flow_encap_nsh(struct xlate_ctx *ctx,
+                       const struct ofpact_encap *encap,
+                       struct flow *flow,
+                       struct flow_wildcards *wc)
+{
+    ovs_be32 packet_type = flow->packet_type;
+    const char *ptr = (char *) encap->props;
+    struct ofpbuf *buf = ofpbuf_new(OVS_ENCAP_NSH_MAX_MD_LEN);
+    uint8_t md_type = NSH_M_TYPE1;
+    uint8_t np = 0;
+    int i;
+
+    /* Scan the optional NSH encap TLV properties, if any. */
+    for (i = 0; i < encap->n_props; i++) {
+        struct ofpact_ed_prop *prop_ptr =
+            ALIGNED_CAST(struct ofpact_ed_prop *, ptr);
+        if (prop_ptr->prop_class == OFPPPC_NSH) {
+            switch (prop_ptr->type) {
+                case OFPPPT_PROP_NSH_MDTYPE: {
+                    struct ofpact_ed_prop_nsh_md_type *prop_md_type =
+                        ALIGNED_CAST(struct ofpact_ed_prop_nsh_md_type *,
+                                     prop_ptr);
+                    md_type = prop_md_type->md_type;
+                    break;
+                }
+                case OFPPPT_PROP_NSH_TLV: {
+                    struct ofpact_ed_prop_nsh_tlv *tlv_prop =
+                        ALIGNED_CAST(struct ofpact_ed_prop_nsh_tlv *,
+                                     prop_ptr);
+                    struct nsh_md2_tlv *md2_ctx =
+                            ofpbuf_put_uninit(buf, sizeof(*md2_ctx));
+                    md2_ctx->md_class = tlv_prop->tlv_class;
+                    md2_ctx->type = tlv_prop->tlv_type;
+                    md2_ctx->length = tlv_prop->tlv_len;
+                    size_t len = ROUND_UP(md2_ctx->length, 4);
+                    size_t padding = len - md2_ctx->length;
+                    ofpbuf_put(buf, tlv_prop->data, md2_ctx->length);
+                    ofpbuf_put_zeros(buf, padding);
+                    break;
+                }
+                default:
+                    /* No other NSH encap properties defined yet. */
+                    break;
+            }
+        }
+        ptr += ROUND_UP(prop_ptr->len, 8);
+    }
+    if (buf->size == 0 || buf->size > OVS_ENCAP_NSH_MAX_MD_LEN) {
+        ofpbuf_delete(buf);
+        buf = NULL;
+    }
+
+    /* Determine the Next Protocol field for NSH header. */
+    switch (ntohl(packet_type)) {
+        case PT_ETH:
+            np = NSH_P_ETHERNET;
+            break;
+        case PT_IPV4:
+            np = NSH_P_IPV4;
+            break;
+        case PT_IPV6:
+            np = NSH_P_IPV6;
+            break;
+        case PT_NSH:
+            np = NSH_P_NSH;
+            break;
+        default:
+            /* Error handling: drop packet. */
+            xlate_report_debug(ctx, OFT_ACTION,
+                               "Dropping packet as encap(nsh) is not "
+                               "supported for packet type (%d,0x%x)",
+                               pt_ns(packet_type), pt_ns_type(packet_type));
+            ctx->error = 1;
+            return buf;
+    }
+    /* Note that we have matched on packet_type! */
+    wc->masks.packet_type = OVS_BE32_MAX;
+
+    /* Reset all current flow packet headers. */
+    memset(&flow->dl_dst, 0,
+           sizeof(struct flow) - offsetof(struct flow, dl_dst));
+
+    /* Populate the flow with the new NSH header. */
+    flow->packet_type = htonl(PT_NSH);
+    flow->dl_type = htons(ETH_TYPE_NSH);
+    flow->nsh.flags = 0;    /* */
+    flow->nsh.np = np;
+    flow->nsh.spi = 0;
+    flow->nsh.si = 255;
+
+    if (md_type == NSH_M_TYPE1) {
+        flow->nsh.mdtype = NSH_M_TYPE1;
+        memset(flow->nsh.c, 0, sizeof flow->nsh.c);
+        if (buf) {
+            /* Drop any MD2 context TLVs. */
+            ofpbuf_delete(buf);
+            buf = NULL;
+        }
+    } else if (md_type == NSH_M_TYPE2) {
+        flow->nsh.mdtype = NSH_M_TYPE2;
+    }
+
+    return buf;
 }
 
 static void
@@ -5800,6 +5918,7 @@ xlate_generic_encap_action(struct xlate_ctx *ctx,
 {
     struct flow *flow = &ctx->xin->flow;
     struct flow_wildcards *wc = ctx->wc;
+    struct ofpbuf *encap_data = NULL;
 
     /* Ensure that any pending actions on the inner packet are applied before
      * rewriting the flow */
@@ -5810,15 +5929,19 @@ xlate_generic_encap_action(struct xlate_ctx *ctx,
         case PT_ETH:
             rewrite_flow_encap_ethernet(ctx, flow, wc);
             break;
+        case PT_NSH:
+            encap_data = rewrite_flow_encap_nsh(ctx, encap, flow, wc);
+            break;
         default:
-            /* TODO: Error handling: Should not happen if the PT is checked
-             * at decoding */
+            /* New packet type was checked during decoding. */
+            OVS_NOT_REACHED();
             break;
     }
 
     if (!ctx->error) {
         /* The actual encap datapath action will be generated at next commit. */
         ctx->pending_encap = true;
+        ctx->encap_data = encap_data;
     }
 }
 
@@ -5849,11 +5972,42 @@ xlate_generic_decap_action(struct xlate_ctx *ctx,
                 ctx->wc->masks.dl_type = OVS_BE16_MAX;
             }
             return false;
+        case PT_NSH:
+            /* The decap_nsh action is generated at the commit executed as
+             * part of freezing the ctx for recirculation. Here we just set
+             * the new packet type based on the NSH next protocol field. */
+            switch (flow->nsh.np) {
+            case NSH_P_ETHERNET:
+                flow->packet_type = htonl(PT_ETH);
+                break;
+            case NSH_P_IPV4:
+                flow->packet_type = htonl(PT_IPV4);
+                break;
+            case NSH_P_IPV6:
+                flow->packet_type = htonl(PT_IPV6);
+                break;
+            case NSH_P_NSH:
+                flow->packet_type = htonl(PT_NSH);
+                break;
+            default:
+                /* Error handling: drop packet. */
+                xlate_report_debug(ctx, OFT_ACTION,
+                                   "Dropping packet as NSH next protocol %d "
+                                   "is not supported", flow->nsh.np);
+                ctx->error = 1;
+                return false;
+                break;
+            }
+            ctx->wc->masks.nsh.np = UINT8_MAX;
+            /* Trigger recirculation. */
+            return true;
         default:
-            xlate_report_debug(ctx, OFT_ACTION,
-                               "decap() for unsupported packet type %x",
-                               ntohl(flow->packet_type));
-            /* TODO: Error handling: drop packet. */
+            /* Error handling: drop packet. */
+            xlate_report_debug(
+                    ctx, OFT_ACTION,
+                    "Dropping packet as the decap() does not support "
+                    "packet type (%d,0x%x)",
+                    pt_ns(flow->packet_type), pt_ns_type(flow->packet_type));
             ctx->error = 1;
             return false;
     }
@@ -6699,6 +6853,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .in_action_set = false,
         .in_packet_out = xin->in_packet_out,
         .pending_encap = false,
+        .encap_data = NULL,
 
         .table_id = 0,
         .rule_cookie = OVS_BE64_MAX,
@@ -7046,6 +7201,7 @@ exit:
     ofpbuf_uninit(&ctx.action_set);
     ofpbuf_uninit(&ctx.frozen_actions);
     ofpbuf_uninit(&scratch_actions);
+    ofpbuf_delete(ctx.encap_data);
 
     /* Make sure we return a "drop flow" in case of an error. */
     if (ctx.error) {

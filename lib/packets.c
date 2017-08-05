@@ -402,6 +402,88 @@ pop_mpls(struct dp_packet *packet, ovs_be16 ethtype)
     }
 }
 
+void
+encap_nsh(struct dp_packet *packet, const struct ovs_action_encap_nsh *encap)
+{
+    struct nsh_hdr *nsh;
+    size_t length = NSH_BASE_HDR_LEN + encap->mdlen;
+    uint8_t next_proto;
+
+    switch (ntohl(packet->packet_type)) {
+        case PT_ETH:
+            next_proto = NSH_P_ETHERNET;
+            break;
+        case PT_IPV4:
+            next_proto = NSH_P_IPV4;
+            break;
+        case PT_IPV6:
+            next_proto = NSH_P_IPV6;
+            break;
+        case PT_NSH:
+            next_proto = NSH_P_NSH;
+            break;
+        default:
+            OVS_NOT_REACHED();
+    }
+
+    nsh = (struct nsh_hdr *) dp_packet_push_uninit(packet, length);
+    nsh->ver_flags_len = htons(encap->flags << NSH_FLAGS_SHIFT | length >> 2);
+    nsh->next_proto = next_proto;
+    put_16aligned_be32(&nsh->path_hdr, encap->path_hdr);
+    nsh->md_type = encap->mdtype;
+    switch (nsh->md_type) {
+        case NSH_M_TYPE1:
+            nsh->md1 = *ALIGNED_CAST(struct nsh_md1_ctx *, encap->metadata);
+            break;
+        case NSH_M_TYPE2: {
+            /* The MD2 metadata in encap is already padded to 4 bytes. */
+            size_t len = ROUND_UP(encap->mdlen, 4);
+            memcpy(nsh->md2, encap->metadata, len);
+            break;
+        }
+        default:
+            OVS_NOT_REACHED();
+    }
+
+    packet->packet_type = htonl(PT_NSH);
+    dp_packet_reset_offsets(packet);
+    packet->l3_ofs = 0;
+}
+
+bool
+decap_nsh(struct dp_packet *packet)
+{
+    struct nsh_hdr *nsh = (struct nsh_hdr *) dp_packet_l3(packet);
+    size_t length;
+    uint32_t next_pt;
+
+    if (packet->packet_type == htonl(PT_NSH) && nsh) {
+        switch (nsh->next_proto) {
+            case NSH_P_ETHERNET:
+                next_pt = PT_ETH;
+                break;
+            case NSH_P_IPV4:
+                next_pt = PT_IPV4;
+                break;
+            case NSH_P_IPV6:
+                next_pt = PT_IPV6;
+                break;
+            case NSH_P_NSH:
+                next_pt = PT_NSH;
+                break;
+            default:
+                /* Unknown inner packet type. Drop packet. */
+                return false;
+        }
+
+        length = nsh_hdr_len(nsh);
+        dp_packet_reset_packet(packet, length);
+        packet->packet_type = htonl(next_pt);
+        /* Packet must be recirculated for further processing. */
+    }
+    return true;
+}
+
 /* Converts hex digits in 'hex' to an Ethernet packet in '*packetp'.  The
  * caller must free '*packetp'.  On success, returns NULL.  On failure, returns
  * an error message and stores NULL in '*packetp'.

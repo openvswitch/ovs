@@ -289,10 +289,9 @@ odp_set_nsh(struct dp_packet *packet, const struct ovs_key_nsh *key,
                 }
                 break;
             case NSH_M_TYPE2:
-                /* TODO */
-                break;
             default:
-                OVS_NOT_REACHED();
+                /* No support for setting any other metadata format yet. */
+                break;
         }
     } else {
         uint8_t flags = (ntohs(nsh->ver_flags_len) & NSH_FLAGS_MASK) >>
@@ -314,10 +313,9 @@ odp_set_nsh(struct dp_packet *packet, const struct ovs_key_nsh *key,
                 }
                 break;
             case NSH_M_TYPE2:
-                /* TODO */
-                break;
             default:
-                OVS_NOT_REACHED();
+                /* No support for setting any other metadata format yet. */
+                break;
         }
     }
 }
@@ -654,6 +652,8 @@ requires_datapath_assistance(const struct nlattr *a)
     case OVS_ACTION_ATTR_PUSH_ETH:
     case OVS_ACTION_ATTR_POP_ETH:
     case OVS_ACTION_ATTR_CLONE:
+    case OVS_ACTION_ATTR_ENCAP_NSH:
+    case OVS_ACTION_ATTR_DECAP_NSH:
         return false;
 
     case OVS_ACTION_ATTR_UNSPEC:
@@ -817,6 +817,26 @@ odp_execute_actions(void *dp, struct dp_packet_batch *batch, bool steal,
                 pop_eth(packet);
             }
             break;
+
+        case OVS_ACTION_ATTR_ENCAP_NSH: {
+            const struct ovs_action_encap_nsh *enc_nsh = nl_attr_get(a);
+            DP_PACKET_BATCH_FOR_EACH (packet, batch) {
+                encap_nsh(packet, enc_nsh);
+            }
+            break;
+        }
+        case OVS_ACTION_ATTR_DECAP_NSH: {
+            size_t i, num = batch->count;
+
+            DP_PACKET_BATCH_REFILL_FOR_EACH (i, num, packet, batch) {
+                if (decap_nsh(packet)) {
+                    dp_packet_batch_refill(batch, packet, i);
+                } else {
+                    dp_packet_delete(packet);
+                }
+            }
+            break;
+        }
 
         case OVS_ACTION_ATTR_OUTPUT:
         case OVS_ACTION_ATTR_TUNNEL_PUSH:

@@ -793,6 +793,25 @@ struct ovs_action_push_eth {
 	struct ovs_key_ethernet addresses;
 };
 
+#define OVS_ENCAP_NSH_MAX_MD_LEN 16
+/*
+ * struct ovs_action_encap_nsh - %OVS_ACTION_ATTR_ENCAP_NSH
+ * @flags: NSH header flags.
+ * @mdtype: NSH metadata type.
+ * @mdlen: Length of NSH metadata in bytes.
+ * @np: NSH next_protocol: Inner packet type.
+ * @path_hdr: NSH service path id and service index.
+ * @metadata: NSH metadata for MD type 1 or 2
+ */
+struct ovs_action_encap_nsh {
+    uint8_t flags;
+    uint8_t mdtype;
+    uint8_t mdlen;
+    uint8_t np;
+    __be32 path_hdr;
+    uint8_t metadata[OVS_ENCAP_NSH_MAX_MD_LEN];
+};
+
 /**
  * enum ovs_nat_attr - Attributes for %OVS_CT_ATTR_NAT.
  *
@@ -868,6 +887,8 @@ enum ovs_nat_attr {
  * @OVS_ACTION_ATTR_PUSH_ETH: Push a new outermost Ethernet header onto the
  * packet.
  * @OVS_ACTION_ATTR_POP_ETH: Pop the outermost Ethernet header off the packet.
+ * @OVS_ACTION_ATTR_ENCAP_NSH: encap NSH action to push NSH header.
+ * @OVS_ACTION_ATTR_DECAP_NSH: decap NSH action to remove NSH header.
  *
  * Only a single header can be set with a single %OVS_ACTION_ATTR_SET.  Not all
  * fields within a header are modifiable, e.g. the IPv4 protocol and fragment
@@ -909,6 +930,8 @@ enum ovs_action_attr {
 	OVS_ACTION_ATTR_TUNNEL_POP,    /* u32 port number. */
 	OVS_ACTION_ATTR_CLONE,         /* Nested OVS_CLONE_ATTR_*.  */
 	OVS_ACTION_ATTR_METER,         /* u32 meter number. */
+	OVS_ACTION_ATTR_ENCAP_NSH,    /* struct ovs_action_encap_nsh. */
+	OVS_ACTION_ATTR_DECAP_NSH,    /* No argument. */
 #endif
 	__OVS_ACTION_ATTR_MAX,	      /* Nothing past this will be accepted
 				       * from userspace. */

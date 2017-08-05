@@ -4055,6 +4055,7 @@ decode_NXAST_RAW_ENCAP(const struct nx_action_encap *nae,
     encap->ofpact.raw = NXAST_RAW_ENCAP;
     switch (ntohl(nae->new_pkt_type)) {
     case PT_ETH:
+    case PT_NSH:
         /* Add supported encap header types here. */
         break;
     default:
@@ -4103,6 +4104,8 @@ parse_encap_header(const char *hdr, ovs_be32 *packet_type)
 {
     if (strcmp(hdr, "ethernet") == 0) {
         *packet_type = htonl(PT_ETH);
+    } else if (strcmp(hdr, "nsh") == 0) {
+        *packet_type = htonl(PT_NSH);
     } else {
         return false;
     }
@@ -4178,6 +4181,8 @@ format_encap_pkt_type(const ovs_be32 pkt_type)
     switch (ntohl(pkt_type)) {
     case PT_ETH:
         return "ethernet";
+    case PT_NSH:
+        return "nsh";
     default:
         return "UNKNOWN";
     }
