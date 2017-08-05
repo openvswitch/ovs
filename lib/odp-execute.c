@@ -270,6 +270,58 @@ odp_set_nd(struct dp_packet *packet, const struct ovs_key_nd *key,
     }
 }
 
+/* Set the NSH header. Assumes the NSH header is present and matches the
+ * MD format of the key. The slow path must take case of that. */
+static void
+odp_set_nsh(struct dp_packet *packet, const struct ovs_key_nsh *key,
+            const struct ovs_key_nsh *mask)
+{
+    struct nsh_hdr *nsh = dp_packet_l3(packet);
+
+    if (!mask) {
+        nsh->ver_flags_len = htons(key->flags << NSH_FLAGS_SHIFT) |
+                             (nsh->ver_flags_len & ~htons(NSH_FLAGS_MASK));
+        put_16aligned_be32(&nsh->path_hdr, key->path_hdr);
+        switch (nsh->md_type) {
+            case NSH_M_TYPE1:
+                for (int i = 0; i < 4; i++) {
+                    put_16aligned_be32(&nsh->md1.c[i], key->c[i]);
+                }
+                break;
+            case NSH_M_TYPE2:
+                /* TODO */
+                break;
+            default:
+                OVS_NOT_REACHED();
+        }
+    } else {
+        uint8_t flags = (ntohs(nsh->ver_flags_len) & NSH_FLAGS_MASK) >>
+                            NSH_FLAGS_SHIFT;
+        flags = key->flags | (flags & ~mask->flags);
+        nsh->ver_flags_len = htons(flags << NSH_FLAGS_SHIFT) |
+                             (nsh->ver_flags_len & ~htons(NSH_FLAGS_MASK));
+
+        ovs_be32 path_hdr = get_16aligned_be32(&nsh->path_hdr);
+        path_hdr = key->path_hdr | (path_hdr & ~mask->path_hdr);
+        put_16aligned_be32(&nsh->path_hdr, path_hdr);
+        switch (nsh->md_type) {
+            case NSH_M_TYPE1:
+                for (int i = 0; i < 4; i++) {
+                    ovs_be32 p = get_16aligned_be32(&nsh->md1.c[i]);
+                    ovs_be32 k = key->c[i];
+                    ovs_be32 m = mask->c[i];
+                    put_16aligned_be32(&nsh->md1.c[i], k | (p & ~m));
+                }
+                break;
+            case NSH_M_TYPE2:
+                /* TODO */
+                break;
+            default:
+                OVS_NOT_REACHED();
+        }
+    }
+}
+
 static void
 odp_execute_set_action(struct dp_packet *packet, const struct nlattr *a)
 {
@@ -293,6 +345,10 @@ odp_execute_set_action(struct dp_packet *packet, const struct nlattr *a)
 
     case OVS_KEY_ATTR_ETHERNET:
         odp_eth_set_addrs(packet, nl_attr_get(a), NULL);
+        break;
+
+    case OVS_KEY_ATTR_NSH:
+        odp_set_nsh(packet, nl_attr_get(a), NULL);
         break;
 
     case OVS_KEY_ATTR_IPV4:
@@ -417,6 +473,11 @@ odp_execute_masked_set_action(struct dp_packet *packet,
     case OVS_KEY_ATTR_ETHERNET:
         odp_eth_set_addrs(packet, nl_attr_get(a),
                           get_mask(a, struct ovs_key_ethernet));
+        break;
+
+    case OVS_KEY_ATTR_NSH:
+        odp_set_nsh(packet, nl_attr_get(a),
+                    get_mask(a, struct ovs_key_nsh));
         break;
 
     case OVS_KEY_ATTR_IPV4:

@@ -175,6 +175,7 @@ ovs_key_attr_to_string(enum ovs_key_attr attr, char *namebuf, size_t bufsize)
     case OVS_KEY_ATTR_DP_HASH: return "dp_hash";
     case OVS_KEY_ATTR_RECIRC_ID: return "recirc_id";
     case OVS_KEY_ATTR_PACKET_TYPE: return "packet_type";
+    case OVS_KEY_ATTR_NSH: return "nsh";
 
     case __OVS_KEY_ATTR_MAX:
     default:
@@ -245,6 +246,98 @@ format_odp_clone_action(struct ds *ds, const struct nlattr *attr,
     ds_put_format(ds, "(");
     format_odp_actions(ds, nla_acts, len, portno_names);
     ds_put_format(ds, ")");
+}
+
+static void
+format_nsh_key(struct ds *ds, const struct ovs_key_nsh *key)
+{
+    ds_put_format(ds, "flags=%d", key->flags);
+    ds_put_format(ds, ",mdtype=%d", key->mdtype);
+    ds_put_format(ds, ",np=%d", key->np);
+    ds_put_format(ds, ",spi=0x%x",
+                  (ntohl(key->path_hdr) & NSH_SPI_MASK) >> NSH_SPI_SHIFT);
+    ds_put_format(ds, ",si=%d",
+                  (ntohl(key->path_hdr) & NSH_SI_MASK) >> NSH_SI_SHIFT);
+
+    switch (key->mdtype) {
+        case NSH_M_TYPE1:
+            for (int i = 0; i < 4; i++) {
+                ds_put_format(ds, ",c%d=0x%x", i + 1, ntohl(key->c[i]));
+            }
+            break;
+        case NSH_M_TYPE2:
+            /* TODO */
+            break;
+        default:
+            OVS_NOT_REACHED();
+    }
+}
+
+static void
+format_uint8_masked(struct ds *s, bool *first, const char *name,
+                    uint8_t value, uint8_t mask)
+{
+    if (mask != 0) {
+        if (!*first) {
+            ds_put_char(s, ',');
+        }
+        ds_put_format(s, "%s=", name);
+        if (mask == UINT8_MAX) {
+            ds_put_format(s, "%"PRIu8, value);
+        } else {
+            ds_put_format(s, "0x%02"PRIx8"/0x%02"PRIx8, value, mask);
+        }
+        *first = false;
+    }
+}
+
+static void
+format_be32_masked(struct ds *s, bool *first, const char *name,
+                   ovs_be32 value, ovs_be32 mask)
+{
+    if (mask != htonl(0)) {
+        if (!*first) {
+            ds_put_char(s, ',');
+        }
+        ds_put_format(s, "%s=", name);
+        if (mask == OVS_BE32_MAX) {
+            ds_put_format(s, "0x%"PRIx32, ntohl(value));
+        } else {
+            ds_put_format(s, "0x%"PRIx32"/0x%08"PRIx32,
+                          ntohl(value), ntohl(mask));
+        }
+        *first = false;
+    }
+}
+
+static void
+format_nsh_key_mask(struct ds *ds, const struct ovs_key_nsh *key,
+                    const struct ovs_key_nsh *mask)
+{
+    if (!mask) {
+        format_nsh_key(ds, key);
+    } else {
+        bool first = true;
+        uint32_t spi = (ntohl(key->path_hdr) & NSH_SPI_MASK) >> NSH_SPI_SHIFT;
+        uint32_t spi_mask = (ntohl(mask->path_hdr) & NSH_SPI_MASK) >>
+                                NSH_SPI_SHIFT;
+        if (spi_mask == 0x00ffffff) {
+            spi_mask = UINT32_MAX;
+        }
+        uint8_t si = (ntohl(key->path_hdr) & NSH_SI_MASK) >> NSH_SI_SHIFT;
+        uint8_t si_mask = (ntohl(mask->path_hdr) & NSH_SI_MASK) >>
+                              NSH_SI_SHIFT;
+
+        format_uint8_masked(ds, &first, "flags", key->flags, mask->flags);
+        format_uint8_masked(ds, &first, "mdtype", key->mdtype, mask->mdtype);
+        format_uint8_masked(ds, &first, "np", key->np, mask->np);
+        format_be32_masked(ds, &first, "spi", htonl(spi), htonl(spi_mask));
+        format_uint8_masked(ds, &first, "si", si, si_mask);
+        format_be32_masked(ds, &first, "c1", key->c[0], mask->c[0]);
+        format_be32_masked(ds, &first, "c2", key->c[1], mask->c[1]);
+        format_be32_masked(ds, &first, "c3", key->c[2], mask->c[2]);
+        format_be32_masked(ds, &first, "c4", key->c[3], mask->c[3]);
+    }
 }
 
 static const char *
@@ -1970,6 +2063,7 @@ static const struct attr_len_tbl ovs_flow_key_attr_lens[OVS_KEY_ATTR_MAX + 1] = 
     [OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV4] = { .len = sizeof(struct ovs_key_ct_tuple_ipv4) },
     [OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6] = { .len = sizeof(struct ovs_key_ct_tuple_ipv6) },
     [OVS_KEY_ATTR_PACKET_TYPE] = { .len = 4  },
+    [OVS_KEY_ATTR_NSH]       = { .len = sizeof(struct ovs_key_nsh) },
 };
 
 /* Returns the correct length of the payload for a flow key attribute of the
@@ -2222,6 +2316,7 @@ odp_mask_is_constant__(enum ovs_key_attr attr, const void *mask, size_t size,
     case OVS_KEY_ATTR_CT_MARK:
     case OVS_KEY_ATTR_CT_LABELS:
     case OVS_KEY_ATTR_PACKET_TYPE:
+    case OVS_KEY_ATTR_NSH:
         return is_all_byte(mask, size, u8);
 
     case OVS_KEY_ATTR_TCP_FLAGS:
@@ -3185,6 +3280,12 @@ format_odp_key_attr__(const struct nlattr *a, const struct nlattr *ma,
         ds_chomp(ds, ',');
         break;
     }
+    case OVS_KEY_ATTR_NSH: {
+        const struct ovs_key_nsh *mask = ma ? nl_attr_get(ma) : NULL;
+        const struct ovs_key_nsh *key = nl_attr_get(a);
+        format_nsh_key_mask(ds, key, mask);
+        break;
+    }
     case OVS_KEY_ATTR_UNSPEC:
     case __OVS_KEY_ATTR_MAX:
     default:
@@ -3595,6 +3696,29 @@ scan_be16(const char *s, ovs_be16 *key, ovs_be16 *mask)
                 *mask = htons(mask_);
             } else {
                 *mask = OVS_BE16_MAX;
+            }
+        }
+        return len;
+    }
+    return 0;
+}
+
+static int
+scan_be32(const char *s, ovs_be32 *key, ovs_be32 *mask)
+{
+    uint32_t key_, mask_;
+    int n;
+
+    if (ovs_scan(s, "%"SCNi32"%n", &key_, &n)) {
+        int len = n;
+
+        *key = htonl(key_);
+        if (mask) {
+            if (ovs_scan(s + len, "/%"SCNi32"%n", &mask_, &n)) {
+                len += n;
+                *mask = htonl(mask_);
+            } else {
+                *mask = OVS_BE32_MAX;
             }
         }
         return len;
@@ -4403,6 +4527,17 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
         SCAN_FIELD("id=", be16, id);
     } SCAN_END(OVS_KEY_ATTR_PACKET_TYPE);
 
+    SCAN_BEGIN("nsh(", struct ovs_key_nsh) {
+        SCAN_FIELD("flags=", u8, flags);
+        SCAN_FIELD("mdtype=", u8, mdtype);
+        SCAN_FIELD("np=", u8, np);
+        SCAN_FIELD("path_hdr=", be32, path_hdr);
+        SCAN_FIELD("c1=", be32, c[0]);
+        SCAN_FIELD("c2=", be32, c[1]);
+        SCAN_FIELD("c3=", be32, c[2]);
+        SCAN_FIELD("c4=", be32, c[2]);
+    } SCAN_END(OVS_KEY_ATTR_NSH);
+
     /* Encap open-coded. */
     if (!strncmp(s, "encap(", 6)) {
         const char *start = s;
@@ -4511,6 +4646,10 @@ static void get_arp_key(const struct flow *, struct ovs_key_arp *);
 static void put_arp_key(const struct ovs_key_arp *, struct flow *);
 static void get_nd_key(const struct flow *, struct ovs_key_nd *);
 static void put_nd_key(const struct ovs_key_nd *, struct flow *);
+static void get_nsh_key(const struct flow *flow, struct ovs_key_nsh *nsh,
+                        bool is_mask);
+static void put_nsh_key(const struct ovs_key_nsh *nsh, struct flow *flow,
+                        bool is_mask);
 
 /* These share the same layout. */
 union ovs_key_tp {
@@ -4687,6 +4826,12 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
         for (i = 0; i < n; i++) {
             mpls_key[i].mpls_lse = data->mpls_lse[i];
         }
+    } else if (flow->dl_type == htons(ETH_TYPE_NSH)) {
+        struct ovs_key_nsh *nsh_key;
+
+        nsh_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_NSH,
+                                            sizeof *nsh_key);
+        get_nsh_key(data, nsh_key, export_mask);
     }
 
     if (is_ip_any(flow) && !(flow->nw_frag & FLOW_NW_FRAG_LATER)) {
@@ -4930,6 +5075,7 @@ odp_key_to_dp_packet(const struct nlattr *key, size_t key_len,
         case OVS_KEY_ATTR_TCP_FLAGS:
         case OVS_KEY_ATTR_MPLS:
         case OVS_KEY_ATTR_PACKET_TYPE:
+        case OVS_KEY_ATTR_NSH:
         case __OVS_KEY_ATTR_MAX:
         default:
             break;
@@ -5238,6 +5384,21 @@ parse_l2_5_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
                 check_start = arp_key;
                 check_len = sizeof *arp_key;
                 expected_bit = OVS_KEY_ATTR_ARP;
+            }
+        }
+    } else if (src_flow->dl_type == htons(ETH_TYPE_NSH)) {
+        if (!is_mask) {
+            expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_NSH;
+        }
+        if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_NSH)) {
+            const struct ovs_key_nsh *nsh_key;
+
+            nsh_key = nl_attr_get(attrs[OVS_KEY_ATTR_NSH]);
+            put_nsh_key(nsh_key, flow, false);
+            if (is_mask) {
+                check_start = nsh_key;
+                check_len = sizeof *nsh_key;
+                expected_bit = OVS_KEY_ATTR_NSH;
             }
         }
     } else {
@@ -6282,6 +6443,87 @@ commit_set_nw_action(const struct flow *flow, struct flow *base,
     return 0;
 }
 
+static void
+get_nsh_key(const struct flow *flow, struct ovs_key_nsh *nsh, bool is_mask)
+{
+    nsh->flags = flow->nsh.flags;
+    nsh->mdtype = flow->nsh.mdtype;
+    nsh->np = flow->nsh.np;
+    nsh->path_hdr = htonl((ntohl(flow->nsh.spi) << NSH_SPI_SHIFT) |
+                          flow->nsh.si);
+    if (is_mask) {
+        for (int i = 0; i < 4; i++) {
+            nsh->c[i] = flow->nsh.c[i];
+        }
+    } else {
+        switch (nsh->mdtype) {
+        case NSH_M_TYPE1:
+            for (int i = 0; i < 4; i++) {
+                nsh->c[i] = flow->nsh.c[i];
+            }
+            break;
+        case NSH_M_TYPE2:
+            /* TODO: MD type 2 */
+            break;
+        }
+    }
+}
+
+static void
+put_nsh_key(const struct ovs_key_nsh *nsh, struct flow *flow,
+            bool is_mask OVS_UNUSED)
+{
+    flow->nsh.flags = nsh->flags;
+    flow->nsh.mdtype = nsh->mdtype;
+    flow->nsh.np = nsh->np;
+    flow->nsh.spi = htonl((ntohl(nsh->path_hdr) & NSH_SPI_MASK) >>
+                              NSH_SPI_SHIFT);
+    flow->nsh.si = (ntohl(nsh->path_hdr) & NSH_SI_MASK) >> NSH_SI_SHIFT;
+    switch (nsh->mdtype) {
+        case NSH_M_TYPE1:
+            for (int i = 0; i < 4; i++) {
+                flow->nsh.c[i] = nsh->c[i];
+            }
+            break;
+        case NSH_M_TYPE2:
+            /* TODO: MD type 2 */
+            memset(flow->nsh.c, 0, sizeof flow->nsh.c);
+            break;
+    }
+}
+
+static void
+commit_set_nsh_action(const struct flow *flow, struct flow *base_flow,
+                      struct ofpbuf *odp_actions,
+                      struct flow_wildcards *wc,
+                      bool use_masked)
+{
+    struct ovs_key_nsh key, mask, base;
+
+    if (flow->dl_type != htons(ETH_TYPE_NSH) ||
+        !memcmp(&base_flow->nsh, &flow->nsh, sizeof base_flow->nsh)) {
+        return;
+    }
+
+    /* Check that mdtype and np remain unchanged. */
+    ovs_assert(flow->nsh.mdtype == base_flow->nsh.mdtype &&
+               flow->nsh.np == base_flow->nsh.np);
+
+    get_nsh_key(flow, &key, false);
+    get_nsh_key(base_flow, &base, false);
+    get_nsh_key(&wc->masks, &mask, true);
+    mask.mdtype = 0;     /* Not writable. */
+    mask.np = 0;         /* Not writable. */
+
+    if (commit(OVS_KEY_ATTR_NSH, use_masked, &key, &base, &mask, sizeof key,
+               odp_actions)) {
+        put_nsh_key(&base, base_flow, false);
+        if (mask.mdtype != 0) { /* Mask was changed by commit(). */
+            put_nsh_key(&mask, &wc->masks, true);
+        }
+    }
+}
+
 /* TCP, UDP, and SCTP keys have the same layout. */
 BUILD_ASSERT_DECL(sizeof(struct ovs_key_tcp) == sizeof(struct ovs_key_udp) &&
                   sizeof(struct ovs_key_tcp) == sizeof(struct ovs_key_sctp));
@@ -6445,6 +6687,7 @@ commit_odp_actions(const struct flow *flow, struct flow *base,
         commit_mpls_action(flow, base, odp_actions);
         mpls_done = true;
     }
+    commit_set_nsh_action(flow, base, odp_actions, wc, use_masked);
     slow1 = commit_set_nw_action(flow, base, odp_actions, wc, use_masked);
     commit_set_port_action(flow, base, odp_actions, wc, use_masked);
     slow2 = commit_set_icmp_action(flow, base, odp_actions, wc);

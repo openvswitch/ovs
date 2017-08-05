@@ -129,6 +129,7 @@ bool flow_compose(struct dp_packet *, const struct flow *, size_t);
 bool parse_ipv6_ext_hdrs(const void **datap, size_t *sizep, uint8_t *nw_proto,
                          uint8_t *nw_frag);
 ovs_be16 parse_dl_type(const struct eth_header *data_, size_t size);
+bool parse_nsh(const void **datap, size_t *sizep, struct flow_nsh *key);
 
 static inline uint64_t
 flow_get_xreg(const struct flow *flow, int idx)
@@ -914,7 +915,7 @@ static inline void
 pkt_metadata_from_flow(struct pkt_metadata *md, const struct flow *flow)
 {
     /* Update this function whenever struct flow changes. */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 39);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 40);
 
     md->recirc_id = flow->recirc_id;
     md->dp_hash = flow->dp_hash;

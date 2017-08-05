@@ -369,6 +369,7 @@ enum ovs_key_attr {
 #ifndef __KERNEL__
 	/* Only used within userspace data path. */
 	OVS_KEY_ATTR_PACKET_TYPE,  /* be32 packet type */
+	OVS_KEY_ATTR_NSH,	   /* struct ovs_key_nsh */
 #endif
 
 	__OVS_KEY_ATTR_MAX
@@ -489,6 +490,15 @@ struct ovs_key_ct_labels {
 		__u8	ct_labels[OVS_CT_LABELS_LEN];
 		__u32	ct_labels_32[OVS_CT_LABELS_LEN_32];
 	};
+};
+
+struct ovs_key_nsh {
+    __u8 flags;
+    __u8 mdtype;
+    __u8 np;
+    __u8 pad;
+    __be32 path_hdr;
+    __be32 c[4];
 };
 
 /* OVS_KEY_ATTR_CT_STATE flags */

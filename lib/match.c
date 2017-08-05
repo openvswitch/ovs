@@ -24,6 +24,7 @@
 #include "openvswitch/ofp-util.h"
 #include "packets.h"
 #include "tun-metadata.h"
+#include "openvswitch/nsh.h"
 
 /* Converts the flow in 'flow' into a match in 'match', with the given
  * 'wildcards'. */
@@ -1089,6 +1090,21 @@ format_ipv6_netmask(struct ds *s, const char *name,
 }
 
 static void
+format_uint8_masked(struct ds *s, const char *name,
+                   uint8_t value, uint8_t mask)
+{
+    if (mask != 0) {
+        ds_put_format(s, "%s%s=%s", colors.param, name, colors.end);
+        if (mask == UINT8_MAX) {
+            ds_put_format(s, "%"PRIu8, value);
+        } else {
+            ds_put_format(s, "0x%02"PRIx8"/0x%02"PRIx8, value, mask);
+        }
+        ds_put_char(s, ',');
+    }
+}
+
+static void
 format_uint16_masked(struct ds *s, const char *name,
                    uint16_t value, uint16_t mask)
 {
@@ -1127,6 +1143,22 @@ format_be32_masked(struct ds *s, const char *name,
         ds_put_format(s, "%s%s=%s", colors.param, name, colors.end);
         if (mask == OVS_BE32_MAX) {
             ds_put_format(s, "%"PRIu32, ntohl(value));
+        } else {
+            ds_put_format(s, "0x%08"PRIx32"/0x%08"PRIx32,
+                          ntohl(value), ntohl(mask));
+        }
+        ds_put_char(s, ',');
+    }
+}
+
+static void
+format_be32_masked_hex(struct ds *s, const char *name,
+                       ovs_be32 value, ovs_be32 mask)
+{
+    if (mask != htonl(0)) {
+        ds_put_format(s, "%s%s=%s", colors.param, name, colors.end);
+        if (mask == OVS_BE32_MAX) {
+            ds_put_format(s, "0x%"PRIx32, ntohl(value));
         } else {
             ds_put_format(s, "0x%"PRIx32"/0x%"PRIx32,
                           ntohl(value), ntohl(mask));
@@ -1218,6 +1250,22 @@ format_ct_label_masked(struct ds *s, const ovs_u128 *key, const ovs_u128 *mask)
     }
 }
 
+static void
+format_nsh_masked(struct ds *s, const struct flow *f, const struct flow *m)
+{
+    format_uint8_masked(s, "nsh_flags", f->nsh.flags, m->nsh.flags);
+    format_uint8_masked(s, "nsh_mdtype", f->nsh.mdtype, m->nsh.mdtype);
+    format_uint8_masked(s, "nsh_np", f->nsh.np, m->nsh.np);
+    format_be32_masked_hex(s, "nsh_spi", f->nsh.spi, m->nsh.spi);
+    format_uint8_masked(s, "nsh_si", f->nsh.si, m->nsh.si);
+    if (m->nsh.mdtype == UINT8_MAX && f->nsh.mdtype == NSH_M_TYPE1) {
+        format_be32_masked_hex(s, "nsh_c1", f->nsh.c[0], m->nsh.c[0]);
+        format_be32_masked_hex(s, "nsh_c2", f->nsh.c[1], m->nsh.c[1]);
+        format_be32_masked_hex(s, "nsh_c3", f->nsh.c[2], m->nsh.c[2]);
+        format_be32_masked_hex(s, "nsh_c4", f->nsh.c[3], m->nsh.c[3]);
+    }
+}
+
 /* Appends a string representation of 'match' to 's'.  If 'priority' is
  * different from OFP_DEFAULT_PRIORITY, includes it in 's'.  If 'port_map' is
  * nonnull, uses it to translate port numbers to names in output. */
@@ -1235,7 +1283,7 @@ match_format(const struct match *match,
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 39);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 40);
 
     if (priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "%spriority=%s%d,",
@@ -1321,7 +1369,6 @@ match_format(const struct match *match,
     }
 
     if (wc->masks.dl_type) {
-        dl_type = f->dl_type;
         skip_type = true;
         if (dl_type == htons(ETH_TYPE_IP)) {
             if (wc->masks.nw_proto) {
@@ -1459,6 +1506,8 @@ match_format(const struct match *match,
                dl_type == htons(ETH_TYPE_RARP)) {
         format_ip_netmask(s, "arp_spa", f->nw_src, wc->masks.nw_src);
         format_ip_netmask(s, "arp_tpa", f->nw_dst, wc->masks.nw_dst);
+    } else if (dl_type == htons(ETH_TYPE_NSH)) {
+        format_nsh_masked(s, f, &wc->masks);
     } else {
         format_ip_netmask(s, "nw_src", f->nw_src, wc->masks.nw_src);
         format_ip_netmask(s, "nw_dst", f->nw_dst, wc->masks.nw_dst);

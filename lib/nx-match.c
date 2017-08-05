@@ -1025,7 +1025,7 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 39);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 40);
 
     struct nxm_put_ctx ctx = { .output = b, .implied_ethernet = false };
 
@@ -1153,6 +1153,21 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
     nxm_put_8m(&ctx, MFF_TUN_GBP_FLAGS, oxm,
                flow->tunnel.gbp_flags, match->wc.masks.tunnel.gbp_flags);
     tun_metadata_to_nx_match(b, oxm, match);
+
+    /* Network Service Header */
+    nxm_put_8m(&ctx, MFF_NSH_FLAGS, oxm, flow->nsh.flags,
+            match->wc.masks.nsh.flags);
+    nxm_put_8m(&ctx, MFF_NSH_MDTYPE, oxm, flow->nsh.mdtype,
+            match->wc.masks.nsh.mdtype);
+    nxm_put_8m(&ctx, MFF_NSH_NP, oxm, flow->nsh.np,
+            match->wc.masks.nsh.np);
+    nxm_put_32m(&ctx, MFF_NSH_SPI, oxm, flow->nsh.spi,
+                match->wc.masks.nsh.spi);
+    nxm_put_8m(&ctx, MFF_NSH_SI, oxm, flow->nsh.si, match->wc.masks.nsh.si);
+    for (int i = 0; i < 4; i++) {
+        nxm_put_32m(&ctx, MFF_NSH_C1 + i, oxm, flow->nsh.c[i],
+                    match->wc.masks.nsh.c[i]);
+    }
 
     /* Registers. */
     if (oxm < OFP15_VERSION) {
