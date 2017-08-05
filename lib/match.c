@@ -1280,7 +1280,7 @@ match_format(const struct match *match,
     bool skip_type = false;
     bool skip_proto = false;
     ovs_be16 dl_type = f->dl_type;
-
+    bool is_megaflow = false;
     int i;
 
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 40);
@@ -1295,6 +1295,7 @@ match_format(const struct match *match,
     if (wc->masks.recirc_id) {
         format_uint32_masked(s, "recirc_id", f->recirc_id,
                              wc->masks.recirc_id);
+        is_megaflow = true;
     }
 
     if (wc->masks.dp_hash) {
@@ -1360,7 +1361,8 @@ match_format(const struct match *match,
         format_be16_masked(s, "ct_tp_dst", f->ct_tp_dst, wc->masks.ct_tp_dst);
     }
 
-    if (wc->masks.packet_type && !match_has_default_packet_type(match)) {
+    if (wc->masks.packet_type &&
+        (!match_has_default_packet_type(match) || is_megaflow)) {
         format_packet_type_masked(s, f->packet_type, wc->masks.packet_type);
         ds_put_char(s, ',');
         if (pt_ns(f->packet_type) == OFPHTN_ETHERTYPE) {

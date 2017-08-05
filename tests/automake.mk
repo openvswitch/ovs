@@ -100,7 +100,8 @@ TESTSUITE_AT = \
 	tests/ovn-controller.at \
 	tests/ovn-controller-vtep.at \
 	tests/mcast-snooping.at \
-	tests/packet-type-aware.at
+	tests/packet-type-aware.at \
+	tests/nsh.at
 
 SYSTEM_KMOD_TESTSUITE_AT = \
 	tests/system-common-macros.at \
