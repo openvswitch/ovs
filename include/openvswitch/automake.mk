@@ -30,7 +30,8 @@ openvswitchinclude_HEADERS = \
 	include/openvswitch/uuid.h \
 	include/openvswitch/version.h \
 	include/openvswitch/vconn.h \
-	include/openvswitch/vlog.h
+	include/openvswitch/vlog.h \
+	include/openvswitch/nsh.h
 
 if HAVE_CXX
 # OVS does not use C++ itself, but it provides public header files

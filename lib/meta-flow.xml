@@ -689,11 +689,7 @@ tcp,tp_src=0x07c0/0xfff0
     using the first 32 bits of the body as an <code>experimenter</code> field
     whose most significant byte is zero and whose remaining bytes are an
     Organizationally Unique Identifier (OUI) assigned by the IEEE [IEEE OUI],
-    as shown below.  OpenFlow says that support for experimenter fields is
-    optional.  Open vSwitch 2.4 and later does support them, primarily so that
-    it can support the <code>ONFOXM_ET_</code>* code points defined by official
-    Open Networking Foundation extensions to OpenFlow 1.3 in e.g. [TCP Flags
-    Match Field Extension].
+    as shown below.
   </p>
 
   <diagram>
@@ -715,6 +711,46 @@ tcp,tp_src=0x07c0/0xfff0
       <bits name="body" above="(length - 4) bytes" width="1.7"/>
     </header>
   </diagram>
+
+  <p>
+    OpenFlow says that support for experimenter fields is optional.  Open
+    vSwitch 2.4 and later does support them, so that it can support the
+    following experimenter classes:
+  </p>
+
+  <dl>
+    <dt>0x4f4e4600 (<code>ONFOXM_ET</code>)</dt>
+    <dd>
+      Used by official Open Networking Foundation extensions to OpenFlow 1.3 in
+      e.g. [TCP Flags Match Field Extension].
+    </dd>
+
+    <dt>0x005ad650 (<code>NXOXM_NSH</code>)</dt>
+    <dd>
+      Used by Open vSwitch for NSH extensions, in the absence of an official
+      ONF-assigned class.  (This OUI is randomly generated.)
+    </dd>
+  </dl>
+
+  <p>
+    OpenFlow says that support for experimenter fields is optional.  Open
+    vSwitch 2.4 and later does support them, so that it can support the
+    following experimenter classes:
+  </p>
+
+  <dl>
+    <dt>0x4f4e4600 (<code>ONFOXM_ET</code>)</dt>
+    <dd>
+      Used by official Open Networking Foundation extensions to OpenFlow 1.3 in
+      e.g. [TCP Flags Match Field Extension].
+    </dd>
+
+    <dt>0x005ad650 (<code>NXOXM_NSH</code>)</dt>
+    <dd>
+      Used by Open vSwitch for NSH extensions, in the absence of an official
+      ONF-assigned class.  (This OUI is randomly generated.)
+    </dd>
+  </dl>
 
   <p>
     Taken as a unit, <code>class</code> (or <code>vendor</code>),
@@ -1290,6 +1326,27 @@ tcp,tp_src=0x07c0/0xfff0
     <field id="MFF_CONJ_ID" title="Conjunction ID">
       Used for conjunctive matching.  See above for more information.
     </field>
+  </group>
+
+  <group title="Network Service Header">
+    <field id="MFF_NSH_FLAGS"
+        title="flags field (8 bits)"/>
+    <field id="MFF_NSH_MDTYPE"
+        title="mdtype field (8 bits)"/>
+    <field id="MFF_NSH_NP"
+        title="np (next protocol) field (8 bits)"/>
+    <field id="MFF_NSH_SPI"
+        title="spi (service path identifier) field (24 bits)"/>
+    <field id="MFF_NSH_SI"
+        title="si (service index) field (8 bits)"/>
+    <field id="MFF_NSH_C1"
+        title="c1 (Network Platform Context) field (32 bits)"/>
+    <field id="MFF_NSH_C2"
+        title="c2 (Network Shared Context) field (32 bits)"/>
+    <field id="MFF_NSH_C3"
+        title="c3 (Service Platform Context) field (32 bits)"/>
+    <field id="MFF_NSH_C4"
+        title="c4 (Service Shared Context) field (32 bits)"/>
   </group>
 
   <group title="Tunnel">

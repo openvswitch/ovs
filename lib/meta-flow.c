@@ -359,6 +359,22 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_TCP_FLAGS:
         return !wc->masks.tcp_flags;
 
+    case MFF_NSH_FLAGS:
+        return !wc->masks.nsh.flags;
+    case MFF_NSH_MDTYPE:
+        return !wc->masks.nsh.mdtype;
+    case MFF_NSH_NP:
+        return !wc->masks.nsh.np;
+    case MFF_NSH_SPI:
+        return !wc->masks.nsh.spi;
+    case MFF_NSH_SI:
+        return !wc->masks.nsh.si;
+    case MFF_NSH_C1:
+    case MFF_NSH_C2:
+    case MFF_NSH_C3:
+    case MFF_NSH_C4:
+        return !wc->masks.nsh.c[mf->id - MFF_NSH_C1];
+
     case MFF_N_IDS:
     default:
         OVS_NOT_REACHED();
@@ -423,6 +439,8 @@ mf_are_prereqs_ok__(const struct mf_field *mf, const struct flow *flow,
         return eth_type_mpls(dl_type);
     case MFP_IP_ANY:
         return is_ip_any(flow);
+    case MFP_NSH:
+        return dl_type == htons(ETH_TYPE_NSH);
     case MFP_CT_VALID:
         return is_ct_valid(flow, mask, wc);
     case MFP_TCP:
@@ -585,6 +603,21 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
 
     case MFF_CT_STATE:
         return !(value->be32 & ~htonl(CS_SUPPORTED_MASK));
+
+    case MFF_NSH_FLAGS:
+        return true;
+    case MFF_NSH_MDTYPE:
+        return (value->u8 == 1 || value->u8 == 2);
+    case MFF_NSH_NP:
+        return true;
+    case MFF_NSH_SPI:
+        return !(value->be32 & htonl(0xFF000000));
+    case MFF_NSH_SI:
+    case MFF_NSH_C1:
+    case MFF_NSH_C2:
+    case MFF_NSH_C3:
+    case MFF_NSH_C4:
+        return true;
 
     case MFF_N_IDS:
     default:
@@ -861,6 +894,28 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
 
     case MFF_ND_TARGET:
         value->ipv6 = flow->nd_target;
+        break;
+
+    case MFF_NSH_FLAGS:
+        value->u8 = flow->nsh.flags;
+        break;
+    case MFF_NSH_MDTYPE:
+        value->u8 = flow->nsh.mdtype;
+        break;
+    case MFF_NSH_NP:
+        value->u8 = flow->nsh.np;
+        break;
+    case MFF_NSH_SPI:
+        value->be32 = flow->nsh.spi;
+        break;
+    case MFF_NSH_SI:
+        value->u8 = flow->nsh.si;
+        break;
+    case MFF_NSH_C1:
+    case MFF_NSH_C2:
+    case MFF_NSH_C3:
+    case MFF_NSH_C4:
+        value->be32 = flow->nsh.c[mf->id - MFF_NSH_C1];
         break;
 
     case MFF_N_IDS:
@@ -1154,6 +1209,28 @@ mf_set_value(const struct mf_field *mf,
 
     case MFF_ND_TARGET:
         match_set_nd_target(match, &value->ipv6);
+        break;
+
+    case MFF_NSH_FLAGS:
+        MATCH_SET_FIELD_UINT8(match, nsh.flags, value->u8);
+        break;
+    case MFF_NSH_MDTYPE:
+        MATCH_SET_FIELD_UINT8(match, nsh.mdtype, value->u8);
+        break;
+    case MFF_NSH_NP:
+        MATCH_SET_FIELD_UINT8(match, nsh.np, value->u8);
+        break;
+    case MFF_NSH_SPI:
+        MATCH_SET_FIELD_BE32(match, nsh.spi, value->be32);
+        break;
+    case MFF_NSH_SI:
+        MATCH_SET_FIELD_UINT8(match, nsh.si, value->u8);
+        break;
+    case MFF_NSH_C1:
+    case MFF_NSH_C2:
+    case MFF_NSH_C3:
+    case MFF_NSH_C4:
+        MATCH_SET_FIELD_BE32(match, nsh.c[mf->id - MFF_NSH_C1], value->be32);
         break;
 
     case MFF_N_IDS:
@@ -1525,6 +1602,28 @@ mf_set_flow_value(const struct mf_field *mf,
         flow->nd_target = value->ipv6;
         break;
 
+    case MFF_NSH_FLAGS:
+        flow->nsh.flags = value->u8;
+        break;
+    case MFF_NSH_MDTYPE:
+        flow->nsh.mdtype = value->u8;
+        break;
+    case MFF_NSH_NP:
+        flow->nsh.np = value->u8;
+        break;
+    case MFF_NSH_SPI:
+        flow->nsh.spi = value->be32;
+        break;
+    case MFF_NSH_SI:
+        flow->nsh.si = value->u8;
+        break;
+    case MFF_NSH_C1:
+    case MFF_NSH_C2:
+    case MFF_NSH_C3:
+    case MFF_NSH_C4:
+        flow->nsh.c[mf->id - MFF_NSH_C1] = value->be32;
+        break;
+
     case MFF_N_IDS:
     default:
         OVS_NOT_REACHED();
@@ -1651,6 +1750,15 @@ mf_is_pipeline_field(const struct mf_field *mf)
     case MFF_ND_TARGET:
     case MFF_ND_SLL:
     case MFF_ND_TLL:
+    case MFF_NSH_FLAGS:
+    case MFF_NSH_MDTYPE:
+    case MFF_NSH_NP:
+    case MFF_NSH_SPI:
+    case MFF_NSH_SI:
+    case MFF_NSH_C1:
+    case MFF_NSH_C2:
+    case MFF_NSH_C3:
+    case MFF_NSH_C4:
         return false;
 
     case MFF_N_IDS:
@@ -1985,6 +2093,29 @@ mf_set_wild(const struct mf_field *mf, struct match *match, char **err_str)
         memset(&match->flow.nd_target, 0, sizeof match->flow.nd_target);
         break;
 
+    case MFF_NSH_FLAGS:
+        MATCH_SET_FIELD_MASKED(match, nsh.flags, 0, 0);
+        break;
+    case MFF_NSH_MDTYPE:
+        MATCH_SET_FIELD_MASKED(match, nsh.mdtype, 0, 0);
+        break;
+    case MFF_NSH_NP:
+        MATCH_SET_FIELD_MASKED(match, nsh.np, 0, 0);
+        break;
+    case MFF_NSH_SPI:
+        MATCH_SET_FIELD_MASKED(match, nsh.spi, htonl(0), htonl(0));
+        break;
+    case MFF_NSH_SI:
+        MATCH_SET_FIELD_MASKED(match, nsh.si, 0, 0);
+        break;
+    case MFF_NSH_C1:
+    case MFF_NSH_C2:
+    case MFF_NSH_C3:
+    case MFF_NSH_C4:
+        MATCH_SET_FIELD_MASKED(match, nsh.c[mf->id - MFF_NSH_C1],
+                               htonl(0), htonl(0));
+        break;
+
     case MFF_N_IDS:
     default:
         OVS_NOT_REACHED();
@@ -2220,6 +2351,29 @@ mf_set(const struct mf_field *mf,
 
     case MFF_TCP_FLAGS:
         match_set_tcp_flags_masked(match, value->be16, mask->be16);
+        break;
+
+    case MFF_NSH_FLAGS:
+        MATCH_SET_FIELD_MASKED(match, nsh.flags, value->u8, mask->u8);
+        break;
+    case MFF_NSH_MDTYPE:
+        MATCH_SET_FIELD_MASKED(match, nsh.mdtype, value->u8, mask->u8);
+        break;
+    case MFF_NSH_NP:
+        MATCH_SET_FIELD_MASKED(match, nsh.np, value->u8, mask->u8);
+        break;
+    case MFF_NSH_SPI:
+        MATCH_SET_FIELD_MASKED(match, nsh.spi, value->be32, mask->be32);
+        break;
+    case MFF_NSH_SI:
+        MATCH_SET_FIELD_MASKED(match, nsh.si, value->u8, mask->u8);
+        break;
+    case MFF_NSH_C1:
+    case MFF_NSH_C2:
+    case MFF_NSH_C3:
+    case MFF_NSH_C4:
+        MATCH_SET_FIELD_MASKED(match, nsh.c[mf->id - MFF_NSH_C1],
+                               value->be32, mask->be32);
         break;
 
     case MFF_N_IDS:

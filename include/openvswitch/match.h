@@ -46,6 +46,18 @@ struct match {
 /* Initializer for a "struct match" that matches every packet. */
 #define MATCH_CATCHALL_INITIALIZER { .flow = { .dl_type = 0 } }
 
+#define MATCH_SET_FIELD_MASKED(match, field, value, msk)      \
+    do {                                                      \
+        (match)->wc.masks.field = (msk);                      \
+        (match)->flow.field = (value) & (msk);                \
+    } while (0)
+
+#define MATCH_SET_FIELD_UINT8(match, field, value)            \
+    MATCH_SET_FIELD_MASKED(match, field, value, UINT8_MAX)
+
+#define MATCH_SET_FIELD_BE32(match, field, value)             \
+    MATCH_SET_FIELD_MASKED(match, field, value, OVS_BE32_MAX)
+
 void match_init(struct match *,
                 const struct flow *, const struct flow_wildcards *);
 void match_wc_init(struct match *match, const struct flow *flow);

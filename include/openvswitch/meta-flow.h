@@ -1739,6 +1739,100 @@ enum OVS_PACKED_ENUM mf_field_id {
      */
     MFF_ND_TLL,
 
+/* ## ---- ## */
+/* ## NSH  ## */
+/* ## ---- ## */
+
+    /* "nsh_flags".
+     *
+     * flags field in NSH base header.
+     *
+     * Type: u8.
+     * Maskable: bitwise.
+     * Formatting: decimal.
+     * Prerequisites: NSH.
+     * Access: read/write.
+     * NXM: none.
+     * OXM: NXOXM_NSH_FLAGS(1) since OF1.3 and v2.8.
+     */
+    MFF_NSH_FLAGS,
+
+    /* "nsh_mdtype".
+     *
+     * mdtype field in NSH base header.
+     *
+     * Type: u8.
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: NSH.
+     * Access: read-only.
+     * NXM: none.
+     * OXM: NXOXM_NSH_MDTYPE(2) since OF1.3 and v2.8.
+     */
+    MFF_NSH_MDTYPE,
+
+    /* "nsh_np".
+     *
+     * np (next protocol) field in NSH base header.
+     *
+     * Type: u8.
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: NSH.
+     * Access: read-only.
+     * NXM: none.
+     * OXM: NXOXM_NSH_NP(3) since OF1.3 and v2.8.
+     */
+    MFF_NSH_NP,
+
+    /* "nsh_spi" (aka "nsp").
+     *
+     * spi (service path identifier) field in NSH base header.
+     *
+     * Type: be32 (low 24 bits).
+     * Maskable: no.
+     * Formatting: hexadecimal.
+     * Prerequisites: NSH.
+     * Access: read/write.
+     * NXM: none.
+     * OXM: NXOXM_NSH_SPI(4) since OF1.3 and v2.8.
+     */
+    MFF_NSH_SPI,
+
+    /* "nsh_si" (aka "nsi").
+     *
+     * si (service index) field in NSH base header.
+     *
+     * Type: u8.
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: NSH.
+     * Access: read/write.
+     * NXM: none.
+     * OXM: NXOXM_NSH_SI(5) since OF1.3 and v2.8.
+     */
+    MFF_NSH_SI,
+
+    /* "nsh_c<N>" (aka "nshc<N>").
+     *
+     * context fields in NSH context header.
+     *
+     * Type: be32.
+     * Maskable: bitwise.
+     * Formatting: hexadecimal.
+     * Prerequisites: NSH.
+     * Access: read/write.
+     * NXM: none.
+     * OXM: NXOXM_NSH_C1(6) since OF1.3 and v2.8.        <1>
+     * OXM: NXOXM_NSH_C2(7) since OF1.3 and v2.8.        <2>
+     * OXM: NXOXM_NSH_C3(8) since OF1.3 and v2.8.        <3>
+     * OXM: NXOXM_NSH_C4(9) since OF1.3 and v2.8.        <4>
+     */
+    MFF_NSH_C1,
+    MFF_NSH_C2,
+    MFF_NSH_C3,
+    MFF_NSH_C4,
+
     MFF_N_IDS
 };
 
@@ -1838,6 +1932,7 @@ enum OVS_PACKED_ENUM mf_prereqs {
     MFP_IPV4,
     MFP_IPV6,
     MFP_IP_ANY,
+    MFP_NSH,
 
     /* L2.5 requirements. */
     MFP_MPLS,
