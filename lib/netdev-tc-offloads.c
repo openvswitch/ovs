@@ -326,6 +326,9 @@ parse_tc_flower_to_match(struct tc_flower *flower,
         } else if (key->ip_proto == IPPROTO_UDP) {
             match_set_tp_dst_masked(match, key->udp_dst, mask->udp_dst);
             match_set_tp_src_masked(match, key->udp_src, mask->udp_src);
+        } else if (key->ip_proto == IPPROTO_SCTP) {
+            match_set_tp_dst_masked(match, key->sctp_dst, mask->sctp_dst);
+            match_set_tp_src_masked(match, key->sctp_src, mask->sctp_src);
         }
     }
 
