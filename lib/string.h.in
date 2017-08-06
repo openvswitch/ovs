@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2011, 2013, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@
 #define strcasecmp _stricmp
 #define strncasecmp _strnicmp
 #define strerror_r(errnum, buf, buflen) strerror_s(buf, buflen, errnum)
+char *strcasestr(const char *, const char *);
 #endif
 
 #ifndef HAVE_STRNLEN
