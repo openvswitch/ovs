@@ -64,6 +64,7 @@ enum ftp_ctl_pkt {
 enum ct_alg_mode {
     CT_FTP_MODE_ACTIVE,
     CT_FTP_MODE_PASSIVE,
+    CT_TFTP_MODE,
 };
 
 static bool conn_key_extract(struct conntrack *, struct dp_packet *,
@@ -141,6 +142,11 @@ handle_ftp_ctl(struct conntrack *ct, const struct conn_lookup_ctx *ctx,
                struct dp_packet *pkt,
                const struct conn *conn_for_expectation,
                long long now, enum ftp_ctl_pkt ftp_ctl, bool nat);
+
+static void
+handle_tftp_ctl(struct conntrack *ct,
+                const struct conn *conn_for_expectation,
+                long long now);
 
 static struct ct_l4_proto *l4_protos[] = {
     [IPPROTO_TCP] = &ct_proto_tcp,
@@ -381,6 +387,21 @@ is_ftp_ctl(const struct dp_packet *pkt)
     return (ip_proto == IPPROTO_TCP &&
             (th->tcp_src == htons(CT_IPPORT_FTP) ||
              th->tcp_dst == htons(CT_IPPORT_FTP)));
+
+}
+
+static bool
+is_tftp_ctl(const struct dp_packet *pkt)
+{
+    uint8_t ip_proto = get_ip_proto(pkt);
+    struct udp_header *uh = dp_packet_l4(pkt);
+
+    /* CT_IPPORT_TFTP is used because IPPORT_TFTP in not defined in OSX,
+     * at least in in.h. Since this value will never change, remove
+     * the external dependency. */
+#define CT_IPPORT_TFTP 69
+    return (ip_proto == IPPROTO_UDP &&
+            uh->udp_dst == htons(CT_IPPORT_TFTP));
 
 }
 
@@ -1080,8 +1101,9 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
         set_label(pkt, conn, &setlabel[0], &setlabel[1]);
     }
 
+    bool tftp_ctl = is_tftp_ctl(pkt);
     struct conn conn_for_expectation;
-    if (conn && ftp_ctl) {
+    if (conn && (ftp_ctl || tftp_ctl)) {
         conn_for_expectation = *conn;
     }
 
@@ -1095,6 +1117,8 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
     if (OVS_UNLIKELY(conn && ftp_ctl)) {
         handle_ftp_ctl(ct, ctx, pkt, &conn_for_expectation,
                        now, CT_FTP_CTL_INTEREST, !!nat_action_info);
+    } else if (OVS_UNLIKELY(conn && tftp_ctl)) {
+        handle_tftp_ctl(ct, &conn_for_expectation, now);
     }
 }
 
@@ -2399,6 +2423,7 @@ expectation_create(struct conntrack *ct,
 
     switch (mode) {
     case CT_FTP_MODE_ACTIVE:
+    case CT_TFTP_MODE:
         src_addr = master_conn->rev_key.src.addr;
         dst_addr = master_conn->rev_key.dst.addr;
         alg_nat_repl_addr = master_conn->key.src.addr;
@@ -2691,6 +2716,7 @@ process_ftp_ctl_v4(struct conntrack *ct,
         *v4_addr_rep = conn_for_expectation->key.dst.addr.ipv4_aligned;
         conn_ipv4_addr = conn_for_expectation->rev_key.src.addr.ipv4_aligned;
         break;
+    case CT_TFTP_MODE:
     default:
         OVS_NOT_REACHED();
     }
@@ -2801,6 +2827,7 @@ process_ftp_ctl_v6(struct conntrack *ct,
     case CT_FTP_MODE_PASSIVE:
         *v6_addr_rep = conn_for_expectation->key.dst.addr;
         break;
+    case CT_TFTP_MODE:
     default:
         OVS_NOT_REACHED();
     }
@@ -2976,5 +3003,15 @@ handle_ftp_ctl(struct conntrack *ct, const struct conn_lookup_ctx *ctx,
     }
     th->tcp_csum = csum_finish(
         csum_continue(tcp_csum, th, tail - (char *) th - pad));
+    return;
+}
+
+static void
+handle_tftp_ctl(struct conntrack *ct,
+                const struct conn *conn_for_expectation,
+                long long now)
+{
+    expectation_create(ct, conn_for_expectation->key.src.port, now,
+                       CT_TFTP_MODE, conn_for_expectation);
     return;
 }
