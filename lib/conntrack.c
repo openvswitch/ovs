@@ -119,6 +119,29 @@ long long ct_timeout_val[] = {
  * are accepted; this is for CT_CONN_TYPE_DEFAULT connections. */
 #define DEFAULT_N_CONN_LIMIT 3000000
 
+/* Does a member by member comparison of two conn_keys; this
+ * function must be kept in sync with struct conn_key; returns 0
+ * if the keys are equal or 1 if the keys are not equal. */
+static int
+conn_key_cmp(const struct conn_key *key1, const struct conn_key *key2)
+{
+    if (!memcmp(&key1->src.addr, &key2->src.addr, sizeof key1->src.addr) &&
+        !memcmp(&key1->dst.addr, &key2->dst.addr, sizeof key1->dst.addr) &&
+        (key1->src.icmp_id == key2->src.icmp_id) &&
+        (key1->src.icmp_type == key2->src.icmp_type) &&
+        (key1->src.icmp_code == key2->src.icmp_code) &&
+        (key1->dst.icmp_id == key2->dst.icmp_id) &&
+        (key1->dst.icmp_type == key2->dst.icmp_type) &&
+        (key1->dst.icmp_code == key2->dst.icmp_code) &&
+        (key1->dl_type == key2->dl_type) &&
+        (key1->zone == key2->zone) &&
+        (key1->nw_proto == key2->nw_proto)) {
+
+        return 0;
+    }
+    return 1;
+}
+
 /* Initializes the connection tracker 'ct'.  The caller is responsible for
  * calling 'conntrack_destroy()', when the instance is not needed anymore */
 void
@@ -496,8 +519,8 @@ nat_clean(struct conntrack *ct, struct conn *conn,
     /* In the unlikely event, rev conn was recreated, then skip
      * rev_conn cleanup. */
     if (rev_conn && (!nat_conn_key_node ||
-                     memcmp(&nat_conn_key_node->value, &rev_conn->rev_key,
-                            sizeof nat_conn_key_node->value))) {
+                     conn_key_cmp(&nat_conn_key_node->value,
+                                  &rev_conn->rev_key))) {
         hmap_remove(&ct->buckets[bucket_rev_conn].connections,
                     &rev_conn->node);
         free(rev_conn);
@@ -642,8 +665,7 @@ create_un_nat_conn(struct conntrack *ct, struct conn *conn_for_un_nat_copy,
     struct nat_conn_key_node *nat_conn_key_node =
         nat_conn_keys_lookup(&ct->nat_conn_keys, &nc->key, ct->hash_basis);
     if (nat_conn_key_node
-        && !memcmp(&nat_conn_key_node->value, &nc->rev_key,
-                   sizeof nat_conn_key_node->value)
+        && !conn_key_cmp(&nat_conn_key_node->value, &nc->rev_key)
         && !rev_conn) {
         hmap_insert(&ct->buckets[un_nat_conn_bucket].connections,
                     &nc->node, un_nat_hash);
@@ -1812,8 +1834,7 @@ nat_conn_keys_lookup(struct hmap *nat_conn_keys,
 
     HMAP_FOR_EACH_WITH_HASH (nat_conn_key_node, node, nat_conn_key_hash,
                              nat_conn_keys) {
-        if (!memcmp(&nat_conn_key_node->key, key,
-                    sizeof nat_conn_key_node->key)) {
+        if (!conn_key_cmp(&nat_conn_key_node->key, key)) {
             return nat_conn_key_node;
         }
     }
@@ -1830,8 +1851,7 @@ nat_conn_keys_remove(struct hmap *nat_conn_keys, const struct conn_key *key,
 
     HMAP_FOR_EACH_WITH_HASH (nat_conn_key_node, node, nat_conn_key_hash,
                              nat_conn_keys) {
-        if (!memcmp(&nat_conn_key_node->key, key,
-                    sizeof nat_conn_key_node->key)) {
+        if (!conn_key_cmp(&nat_conn_key_node->key, key)) {
             hmap_remove(nat_conn_keys, &nat_conn_key_node->node);
             free(nat_conn_key_node);
             return;
@@ -1850,13 +1870,13 @@ conn_key_lookup(struct conntrack_bucket *ctb, struct conn_lookup_ctx *ctx,
     ctx->conn = NULL;
 
     HMAP_FOR_EACH_WITH_HASH (conn, node, hash, &ctb->connections) {
-        if (!memcmp(&conn->key, &ctx->key, sizeof conn->key)
+        if (!conn_key_cmp(&conn->key, &ctx->key)
                 && !conn_expired(conn, now)) {
             ctx->conn = conn;
             ctx->reply = false;
             break;
         }
-        if (!memcmp(&conn->rev_key, &ctx->key, sizeof conn->rev_key)
+        if (!conn_key_cmp(&conn->rev_key, &ctx->key)
                 && !conn_expired(conn, now)) {
             ctx->conn = conn;
             ctx->reply = true;
