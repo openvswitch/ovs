@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -267,9 +267,17 @@ struct conntrack {
     /* The following resources are referenced during nat connection
      * creation and deletion. */
     struct hmap nat_conn_keys OVS_GUARDED;
+    /* Hash table for alg expectations. Expectations are created
+     * by control connections to help create data connections. */
+    struct hmap alg_expectations OVS_GUARDED;
+    /* Expiry list for alg expectations. */
+    struct ovs_list alg_exp_list OVS_GUARDED;
     /* This lock is used during NAT connection creation and deletion;
      * it is taken after a bucket lock and given back before that
      * bucket unlock.
+     * This lock is similarly used to guard alg_expectations and
+     * alg_exp_list. If a bucket lock is also held during the normal
+     * code flow, then is must be taken first first and released last.
      */
     struct ct_rwlock resources_lock;
 
