@@ -325,6 +325,7 @@ parse_tc_flower_to_match(struct tc_flower *flower,
         if (key->ip_proto == IPPROTO_TCP) {
             match_set_tp_dst_masked(match, key->tcp_dst, mask->tcp_dst);
             match_set_tp_src_masked(match, key->tcp_src, mask->tcp_src);
+            match_set_tcp_flags_masked(match, key->tcp_flags, mask->tcp_flags);
         } else if (key->ip_proto == IPPROTO_UDP) {
             match_set_tp_dst_masked(match, key->udp_dst, mask->udp_dst);
             match_set_tp_src_masked(match, key->udp_src, mask->udp_src);
@@ -646,13 +647,6 @@ test_key_and_mask(struct match *match)
             return EOPNOTSUPP;
         }
     }
-    if (is_ip_any(key) && key->nw_proto == IPPROTO_TCP && mask->tcp_flags) {
-        if (mask->tcp_flags) {
-            VLOG_DBG_RL(&rl,
-                        "offloading attribute tcp_flags isn't supported");
-            return EOPNOTSUPP;
-        }
-    }
 
     if (!is_all_zeros(mask, sizeof *mask)) {
         VLOG_DBG_RL(&rl, "offloading isn't supported, unknown attribute");
@@ -762,8 +756,11 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
             flower.mask.tcp_dst = mask->tp_dst;
             flower.key.tcp_src = key->tp_src;
             flower.mask.tcp_src = mask->tp_src;
+            flower.key.tcp_flags = key->tcp_flags;
+            flower.mask.tcp_flags = mask->tcp_flags;
             mask->tp_src = 0;
             mask->tp_dst = 0;
+            mask->tcp_flags = 0;
         } else if (key->nw_proto == IPPROTO_UDP) {
             flower.key.udp_dst = key->tp_dst;
             flower.mask.udp_dst = mask->tp_dst;
