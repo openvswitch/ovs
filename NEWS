@@ -37,6 +37,7 @@ v2.8.0 - xx xxx xxxx
    - Userspace Datapath:
      * Added NAT support for userspace datapath.
      * Added FTP and TFTP support with NAT for userspace datapath.
+     * Added NSH (Network Service Header) support for userspace datapath.
    - OVN:
      * New built-in DNS support.
      * IPAM for IPv4 can now exclude user-defined addresses from assignment.
@@ -73,6 +74,10 @@ v2.8.0 - xx xxx xxxx
        pipeline (PTAP).
      * Added generic encap and decap actions (EXT-382).
        First supported use case is encap/decap for Ethernet.
+     * Added NSH (Network Service Header) support in userspace
+       Used generic encap and decap actions to implement encapsulation and
+       decapsulation of NSH header.
+       IETF NSH draft - https://datatracker.ietf.org/doc/draft-ietf-sfc-nsh/
    - Fedora Packaging:
      * OVN services are no longer restarted automatically after upgrade.
    - Add --cleanup option to command 'ovs-appctl exit' (see ovs-vswitchd(8)).
