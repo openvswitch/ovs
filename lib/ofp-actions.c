@@ -5858,20 +5858,19 @@ format_DEBUG_RECIRC(const struct ofpact_null *a OVS_UNUSED,
  *
  *   - Packet State:
  *
- *      Untracked packets have not yet passed through the connection tracker,
- *      and the connection state for such packets is unknown. In most cases,
- *      packets entering the OpenFlow pipeline will initially be in the
- *      untracked state. Untracked packets may become tracked by executing
- *      NXAST_CT with a "recirc_table" specified. This makes various aspects
- *      about the connection available, in particular the connection state.
+ *      Untracked packets have an unknown connection state.  In most
+ *      cases, packets entering the OpenFlow pipeline will initially be
+ *      in the untracked state. Untracked packets may become tracked by
+ *      executing NXAST_CT with a "recirc_table" specified. This makes
+ *      various aspects about the connection available, in particular
+ *      the connection state.
  *
- *      Tracked packets have previously passed through the connection tracker.
- *      These packets will remain tracked through until the end of the OpenFlow
- *      pipeline. Tracked packets which have NXAST_CT executed with a
- *      "recirc_table" specified will return to the tracked state.
- *
- *      The packet state is only significant for the duration of packet
- *      processing within the OpenFlow pipeline.
+ *      An NXAST_CT action always puts the packet into an untracked
+ *      state for the current processing path.  If "recirc_table" is
+ *      set, execution is forked and the packet passes through the
+ *      connection tracker.  The specified table's processing path is
+ *      able to match on Connection state until the end of the OpenFlow
+ *      pipeline or NXAST_CT is called again.
  *
  *   - Connection State:
  *

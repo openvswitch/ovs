@@ -5721,9 +5721,7 @@ put_ct_nat(struct xlate_ctx *ctx)
 static void
 compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc)
 {
-    ovs_u128 old_ct_label = ctx->xin->flow.ct_label;
     ovs_u128 old_ct_label_mask = ctx->wc->masks.ct_label;
-    uint32_t old_ct_mark = ctx->xin->flow.ct_mark;
     uint32_t old_ct_mark_mask = ctx->wc->masks.ct_mark;
     size_t ct_offset;
     uint16_t zone;
@@ -5735,7 +5733,7 @@ compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc)
     /* Process nested actions first, to populate the key. */
     ctx->ct_nat_action = NULL;
     ctx->wc->masks.ct_mark = 0;
-    ctx->wc->masks.ct_label.u64.hi = ctx->wc->masks.ct_label.u64.lo = 0;
+    ctx->wc->masks.ct_label = OVS_U128_ZERO;
     do_xlate_actions(ofc->actions, ofpact_ct_get_action_len(ofc), ctx);
 
     if (ofc->zone_src.field) {
@@ -5761,23 +5759,18 @@ compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc)
     ctx->ct_nat_action = NULL;
     nl_msg_end_nested(ctx->odp_actions, ct_offset);
 
-    /* Restore the original ct fields in the key. These should only be exposed
-     * after recirculation to another table. */
-    ctx->xin->flow.ct_mark = old_ct_mark;
     ctx->wc->masks.ct_mark = old_ct_mark_mask;
-    ctx->xin->flow.ct_label = old_ct_label;
     ctx->wc->masks.ct_label = old_ct_label_mask;
 
-    if (ofc->recirc_table == NX_CT_RECIRC_NONE) {
-        /* If we do not recirculate as part of this action, hide the results of
-         * connection tracking from subsequent recirculations. */
-        ctx->conntracked = false;
-    } else {
-        /* Use ct_* fields from datapath during recirculation upcall. */
+    if (ofc->recirc_table != NX_CT_RECIRC_NONE) {
         ctx->conntracked = true;
         compose_recirculate_and_fork(ctx, ofc->recirc_table);
-        ctx->conntracked = false;
     }
+
+    /* The ct_* fields are only available in the scope of the 'recirc_table'
+     * call chain. */
+    flow_clear_conntrack(&ctx->xin->flow);
+    ctx->conntracked = false;
 }
 
 static void

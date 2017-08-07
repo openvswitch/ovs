@@ -78,6 +78,10 @@ v2.8.0 - xx xxx xxxx
        Used generic encap and decap actions to implement encapsulation and
        decapsulation of NSH header.
        IETF NSH draft - https://datatracker.ietf.org/doc/draft-ietf-sfc-nsh/
+     * Conntrack state is only available to the processing path that
+       follows the "recirc_table" argument of the ct() action.  Starting
+       in OVS 2.8, this state is now cleared for the current processing
+       path whenever ct() is called.
    - Fedora Packaging:
      * OVN services are no longer restarted automatically after upgrade.
      * ovs-vswitchd and ovsdb-server run as non-root users by default.

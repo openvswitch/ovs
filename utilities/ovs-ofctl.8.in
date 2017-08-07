@@ -1031,11 +1031,13 @@ Restores the queue to the value it was before any \fBset_queue\fR
 actions were applied.
 .
 .IP \fBct\fR
-.IQ \fBct\fB(\fR[\fIargument\fR][\fB,\fIargument\fR...]\fB)
+.IQ \fBct(\fR[\fIargument\fR][\fB,\fIargument\fR...]\fB)
 Send the packet through the connection tracker.  Refer to the \fBct_state\fR
-documentation above for possible packet and connection states. The following
-arguments are supported:
-
+documentation above for possible packet and connection states. A \fBct\fR
+action always sets the packet to an untracked state and clears out the
+\fBct_state\fR fields for the current processing path.  Those fields are
+only available for the processing path pointed to by the \fBtable\fR
+argument.  The following arguments are supported:
 .RS
 .IP \fBcommit\fR
 .RS
