@@ -312,6 +312,8 @@ parse_tc_flower_to_match(struct tc_flower *flower,
             match_set_nw_proto(match, key->ip_proto);
         }
 
+        match_set_nw_ttl_masked(match, key->ip_ttl, mask->ip_ttl);
+
         match_set_nw_src_masked(match, key->ipv4.ipv4_src, mask->ipv4.ipv4_src);
         match_set_nw_dst_masked(match, key->ipv4.ipv4_dst, mask->ipv4.ipv4_dst);
 
@@ -595,11 +597,6 @@ test_key_and_mask(struct match *match)
         return EOPNOTSUPP;
     }
 
-    if (mask->nw_ttl) {
-        VLOG_DBG_RL(&rl, "offloading attribute nw_ttl isn't supported");
-        return EOPNOTSUPP;
-    }
-
     if (mask->nw_frag) {
         VLOG_DBG_RL(&rl, "offloading attribute nw_frag isn't supported");
         return EOPNOTSUPP;
@@ -757,6 +754,8 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     if (is_ip_any(key)) {
         flower.key.ip_proto = key->nw_proto;
         flower.mask.ip_proto = mask->nw_proto;
+        flower.key.ip_ttl = key->nw_ttl;
+        flower.mask.ip_ttl = mask->nw_ttl;
 
         if (key->nw_proto == IPPROTO_TCP) {
             flower.key.tcp_dst = key->tp_dst;
@@ -784,6 +783,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         mask->nw_frag = 0;
         mask->nw_tos = 0;
         mask->nw_proto = 0;
+        mask->nw_ttl = 0;
 
         if (key->dl_type == htons(ETH_P_IP)) {
             flower.key.ipv4.ipv4_src = key->nw_src;
