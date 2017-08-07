@@ -78,6 +78,7 @@ struct tc_flower_key {
 
     ovs_be16 tcp_src;
     ovs_be16 tcp_dst;
+    ovs_be16 tcp_flags;
 
     ovs_be16 udp_src;
     ovs_be16 udp_dst;

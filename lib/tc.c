@@ -200,6 +200,10 @@ static const struct nl_policy tca_flower_policy[] = {
                                 .optional = true, },
     [TCA_FLOWER_KEY_IP_TTL_MASK] = { .type = NL_A_U8,
                                      .optional = true, },
+    [TCA_FLOWER_KEY_TCP_FLAGS] = { .type = NL_A_U16,
+                                   .optional = true, },
+    [TCA_FLOWER_KEY_TCP_FLAGS_MASK] = { .type = NL_A_U16,
+                                        .optional = true, },
 };
 
 static void
@@ -324,6 +328,12 @@ nl_parse_flower_ip(struct nlattr **attrs, struct tc_flower *flower) {
                 nl_attr_get_be16(attrs[TCA_FLOWER_KEY_TCP_DST]);
             mask->tcp_dst =
                 nl_attr_get_be16(attrs[TCA_FLOWER_KEY_TCP_DST_MASK]);
+        }
+        if (attrs[TCA_FLOWER_KEY_TCP_FLAGS_MASK]) {
+            key->tcp_flags =
+                nl_attr_get_be16(attrs[TCA_FLOWER_KEY_TCP_FLAGS]);
+            mask->tcp_flags =
+                nl_attr_get_be16(attrs[TCA_FLOWER_KEY_TCP_FLAGS_MASK]);
         }
     } else if (ip_proto == IPPROTO_UDP) {
         if (attrs[TCA_FLOWER_KEY_UDP_SRC_MASK]) {
@@ -1036,6 +1046,7 @@ nl_msg_put_flower_options(struct ofpbuf *request, struct tc_flower *flower)
         } else if (flower->key.ip_proto == IPPROTO_TCP) {
             FLOWER_PUT_MASKED_VALUE(tcp_src, TCA_FLOWER_KEY_TCP_SRC);
             FLOWER_PUT_MASKED_VALUE(tcp_dst, TCA_FLOWER_KEY_TCP_DST);
+            FLOWER_PUT_MASKED_VALUE(tcp_flags, TCA_FLOWER_KEY_TCP_FLAGS);
         } else if (flower->key.ip_proto == IPPROTO_SCTP) {
             FLOWER_PUT_MASKED_VALUE(sctp_src, TCA_FLOWER_KEY_SCTP_SRC);
             FLOWER_PUT_MASKED_VALUE(sctp_dst, TCA_FLOWER_KEY_SCTP_DST);
