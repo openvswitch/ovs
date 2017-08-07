@@ -2287,7 +2287,7 @@ dnl Ingress pipeline
 dnl - Allow all connections from LOCAL port (commit and proceed to egress)
 dnl - All other connections go through conntracker using the input port as
 dnl   a connection tracking zone.
-table=1,priority=150,in_port=LOCAL,ip,ct_state=+trk+new,action=ct(commit,zone=OXM_OF_IN_PORT[[0..15]]),goto_table:2
+table=1,priority=150,in_port=LOCAL,ip,ct_state=+trk+new,action=ct(commit,table=2,zone=OXM_OF_IN_PORT[[0..15]])
 table=1,priority=100,ip,action=ct(table=2,zone=OXM_OF_IN_PORT[[0..15]])
 table=1,priority=1,action=drop
 
@@ -2295,7 +2295,7 @@ dnl Egress pipeline
 dnl - Allow all connections from LOCAL port (commit and skip to output)
 dnl - Allow other established connections to go through conntracker using
 dnl   output port as a connection tracking zone.
-table=2,priority=150,in_port=LOCAL,ip,ct_state=+trk+new,action=ct(commit,zone=NXM_NX_REG0[[0..15]]),goto_table:4
+table=2,priority=150,in_port=LOCAL,ip,ct_state=+trk+new,action=ct(commit,table=4,zone=NXM_NX_REG0[[0..15]])
 table=2,priority=100,ip,ct_state=+trk+est,action=ct(table=3,zone=NXM_NX_REG0[[0..15]])
 table=2,priority=1,action=drop
 
