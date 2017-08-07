@@ -890,6 +890,13 @@ match_set_nw_ttl(struct match *match, uint8_t nw_ttl)
 }
 
 void
+match_set_nw_ttl_masked(struct match *match, uint8_t nw_ttl, uint8_t mask)
+{
+    match->flow.nw_ttl = nw_ttl & mask;
+    match->wc.masks.nw_ttl = mask;
+}
+
+void
 match_set_nw_frag(struct match *match, uint8_t nw_frag)
 {
     match->wc.masks.nw_frag |= FLOW_NW_FRAG_MASK;
