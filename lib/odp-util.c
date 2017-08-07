@@ -5008,7 +5008,7 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
             tcp_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_TCP,
                                                sizeof *tcp_key);
             get_tp_key(data, tcp_key);
-            if (data->tcp_flags) {
+            if (data->tcp_flags || (mask && mask->tcp_flags)) {
                 nl_msg_put_be16(buf, OVS_KEY_ATTR_TCP_FLAGS, data->tcp_flags);
             }
         } else if (flow->nw_proto == IPPROTO_UDP) {
