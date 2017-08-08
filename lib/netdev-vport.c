@@ -857,21 +857,12 @@ get_pt_mode(const struct netdev *netdev)
 
 #ifdef __linux__
 static int
-netdev_vport_get_ifindex__(const struct netdev *netdev_)
+netdev_vport_get_ifindex(const struct netdev *netdev_)
 {
     char buf[NETDEV_VPORT_NAME_BUFSIZE];
     const char *name = netdev_vport_get_dpif_port(netdev_, buf, sizeof(buf));
 
     return linux_get_ifindex(name);
-}
-
-static int
-netdev_vport_get_ifindex(const struct netdev *netdev_)
-{
-    if (netdev_is_flow_api_enabled())
-        return netdev_vport_get_ifindex__(netdev_);
-    else
-        return -EOPNOTSUPP;
 }
 
 #define NETDEV_VPORT_GET_IFINDEX netdev_vport_get_ifindex
