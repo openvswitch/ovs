@@ -7,4 +7,5 @@
 
 EXTRA_DIST += \
 	m4/absolute-header.m4 \
-	m4/include_next.m4
+	m4/include_next.m4 \
+	m4/pkg.m4
