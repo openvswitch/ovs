@@ -708,6 +708,12 @@ netdev_dummy_destruct(struct netdev *netdev_)
     ovs_mutex_unlock(&dummy_list_mutex);
 
     ovs_mutex_lock(&netdev->mutex);
+    if (netdev->rxq_pcap) {
+        fclose(netdev->rxq_pcap);
+    }
+    if (netdev->tx_pcap && netdev->tx_pcap != netdev->rxq_pcap) {
+        fclose(netdev->tx_pcap);
+    }
     dummy_packet_conn_close(&netdev->conn);
     netdev->conn.type = NONE;
 
