@@ -721,27 +721,8 @@ tcp,tp_src=0x07c0/0xfff0
   <dl>
     <dt>0x4f4e4600 (<code>ONFOXM_ET</code>)</dt>
     <dd>
-      Used by official Open Networking Foundation extensions to OpenFlow 1.3 in
-      e.g. [TCP Flags Match Field Extension].
-    </dd>
-
-    <dt>0x005ad650 (<code>NXOXM_NSH</code>)</dt>
-    <dd>
-      Used by Open vSwitch for NSH extensions, in the absence of an official
-      ONF-assigned class.  (This OUI is randomly generated.)
-    </dd>
-  </dl>
-
-  <p>
-    OpenFlow says that support for experimenter fields is optional.  Open
-    vSwitch 2.4 and later does support them, so that it can support the
-    following experimenter classes:
-  </p>
-
-  <dl>
-    <dt>0x4f4e4600 (<code>ONFOXM_ET</code>)</dt>
-    <dd>
-      Used by official Open Networking Foundation extensions to OpenFlow 1.3 in
+      Used by official Open Networking Foundation extensions in OpenFlow 1.3
+      and later.
       e.g. [TCP Flags Match Field Extension].
     </dd>
 
