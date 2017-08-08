@@ -438,7 +438,7 @@ encap_nsh(struct dp_packet *packet, const struct ovs_action_encap_nsh *encap)
         case NSH_M_TYPE2: {
             /* The MD2 metadata in encap is already padded to 4 bytes. */
             size_t len = ROUND_UP(encap->mdlen, 4);
-            memcpy(nsh->md2, encap->metadata, len);
+            memcpy(&nsh->md2, encap->metadata, len);
             break;
         }
         default:
