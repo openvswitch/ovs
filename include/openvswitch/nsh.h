@@ -58,7 +58,7 @@ struct nsh_md2_tlv {
     ovs_be16 md_class;
     uint8_t type;
     uint8_t length;
-    uint8_t md_value[];
+    /* Followed by variable-length data. */
 };
 
 struct nsh_hdr {
@@ -68,7 +68,7 @@ struct nsh_hdr {
     ovs_16aligned_be32 path_hdr;
     union {
         struct nsh_md1_ctx md1;
-        struct nsh_md2_tlv md2[0];
+        struct nsh_md2_tlv md2;
     };
 };
 
@@ -125,7 +125,7 @@ nsh_md1_ctx(struct nsh_hdr *nsh)
 static inline struct nsh_md2_tlv *
 nsh_md2_ctx(struct nsh_hdr *nsh)
 {
-    return nsh->md2;
+    return &nsh->md2;
 }
 
 #ifdef  __cplusplus
