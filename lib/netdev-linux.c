@@ -5438,8 +5438,12 @@ linux_get_ifindex(const char *netdev_name)
 
     error = af_inet_ioctl(SIOCGIFINDEX, &ifr);
     if (error) {
-        VLOG_WARN_RL(&rl, "ioctl(SIOCGIFINDEX) on %s device failed: %s",
-                     netdev_name, ovs_strerror(error));
+        /* ENODEV probably means that a vif disappeared asynchronously and
+         * hasn't been removed from the database yet, so reduce the log level
+         * to INFO for that case. */
+        VLOG_RL(&rl, error == ENODEV ? VLL_INFO : VLL_ERR,
+                "ioctl(SIOCGIFINDEX) on %s device failed: %s",
+                netdev_name, ovs_strerror(error));
         return -error;
     }
     return ifr.ifr_ifindex;
