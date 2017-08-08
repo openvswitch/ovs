@@ -29,6 +29,7 @@ struct ofp10_match;
 struct ofp_flow_mod;
 struct ofp_header;
 struct ofputil_flow_stats;
+struct ofputil_port_map;
 struct ofputil_table_features;
 struct ofputil_table_stats;
 struct dp_packet;
