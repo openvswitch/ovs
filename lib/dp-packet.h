@@ -615,46 +615,46 @@ dp_packet_rss_invalidate(struct dp_packet *p)
 }
 
 static inline bool
-dp_packet_ip_checksum_valid(struct dp_packet *p)
+dp_packet_ip_checksum_valid(struct dp_packet *p OVS_UNUSED)
 {
 #ifdef DPDK_NETDEV
     return (p->mbuf.ol_flags & PKT_RX_IP_CKSUM_MASK) ==
             PKT_RX_IP_CKSUM_GOOD;
 #else
-    return 0 && p;
+    return false;
 #endif
 }
 
 static inline bool
-dp_packet_ip_checksum_bad(struct dp_packet *p)
+dp_packet_ip_checksum_bad(struct dp_packet *p OVS_UNUSED)
 {
 #ifdef DPDK_NETDEV
     return (p->mbuf.ol_flags & PKT_RX_IP_CKSUM_MASK) ==
             PKT_RX_IP_CKSUM_BAD;
 #else
-    return 0 && p;
+    return false;
 #endif
 }
 
 static inline bool
-dp_packet_l4_checksum_valid(struct dp_packet *p)
+dp_packet_l4_checksum_valid(struct dp_packet *p OVS_UNUSED)
 {
 #ifdef DPDK_NETDEV
     return (p->mbuf.ol_flags & PKT_RX_L4_CKSUM_MASK) ==
             PKT_RX_L4_CKSUM_GOOD;
 #else
-    return 0 && p;
+    return false;
 #endif
 }
 
 static inline bool
-dp_packet_l4_checksum_bad(struct dp_packet *p)
+dp_packet_l4_checksum_bad(struct dp_packet *p OVS_UNUSED)
 {
 #ifdef DPDK_NETDEV
     return (p->mbuf.ol_flags & PKT_RX_L4_CKSUM_MASK) ==
             PKT_RX_L4_CKSUM_BAD;
 #else
-    return 0 && p;
+    return false;
 #endif
 }
 
