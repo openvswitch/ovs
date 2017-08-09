@@ -94,6 +94,7 @@ __regex_ends_with_bracket = \
     re.compile(r'[^\s]\) {(\s+/\*[\s\Sa-zA-Z0-9\.,\?\*/+-]*)?$')
 __regex_ptr_declaration_missing_whitespace = re.compile(r'[a-zA-Z0-9]\*[^*]')
 __regex_is_comment_line = re.compile(r'^\s*(/\*|\*\s)')
+__regex_trailing_operator = re.compile(r'^[^ ]* [^ ]*[?:]$')
 
 skip_leading_whitespace_check = False
 skip_trailing_whitespace_check = False
@@ -206,6 +207,11 @@ def is_comment_line(line):
     return __regex_is_comment_line.match(line) is not None
 
 
+def trailing_operator(line):
+    """Returns TRUE if the current line ends with an operatorsuch as ? or :"""
+    return __regex_trailing_operator.match(line) is not None
+
+
 checks = [
     {'regex': None,
      'match_name':
@@ -237,7 +243,13 @@ checks = [
      'prereq': lambda x: not is_comment_line(x),
      'check': lambda x: pointer_whitespace_check(x),
      'print':
-     lambda: print_error("Inappropriate spacing in pointer declaration")}
+     lambda: print_error("Inappropriate spacing in pointer declaration")},
+
+    {'regex': '(\.c|\.h)(\.in)?$', 'match_name': None,
+     'prereq': lambda x: not is_comment_line(x),
+     'check': lambda x: trailing_operator(x),
+     'print':
+     lambda: print_error("Line has '?' or ':' operator at end of line")},
 ]
 
 
