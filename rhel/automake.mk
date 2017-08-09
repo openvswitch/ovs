@@ -26,6 +26,7 @@ EXTRA_DIST += \
 	rhel/openvswitch-fedora.spec.in \
 	rhel/usr_share_openvswitch_scripts_sysconfig.template \
 	rhel/usr_share_openvswitch_scripts_systemd_sysconfig.template \
+	rhel/usr_lib_udev_rules.d_91-vfio.rules \
 	rhel/usr_lib_systemd_system_openvswitch.service \
 	rhel/usr_lib_systemd_system_ovsdb-server.service \
 	rhel/usr_lib_systemd_system_ovs-vswitchd.service.in \
