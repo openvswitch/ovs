@@ -275,6 +275,25 @@ checks += [
     for (function_name, description) in std_functions]
 
 
+def regex_operator_factory(operator):
+    regex = re.compile(r'^[^#][^"\']*[^ "]%s[^ "\'][^"]*' % operator)
+    return lambda x: regex.search(x) is not None
+
+
+infix_operators = \
+    [re.escape(op) for op in ['/', '%', '<<', '>>', '<=', '>=', '==', '!=',
+            '^', '|', '&&', '||', '?:', '=', '+=', '-=', '*=', '/=', '%=',
+            '&=', '^=', '|=', '<<=', '>>=']] \
+    + ['[^<" ]<[^=" ]', '[^->" ]>[^=" ]', '[^ !()/"]\*[^/]', '[^ !&()"]&',
+       '[^" +(]\+[^"+;]', '[^" -(]-[^"->;]', '[^" <>=!^|+\-*/%&]=[^"=]']
+checks += [
+    {'regex': '(\.c|\.h)(\.in)?$', 'match_name': None,
+     'prereq': lambda x: not is_comment_line(x),
+     'check': regex_operator_factory(operator),
+     'print': lambda: print_warning("Line lacks whitespace around operator")}
+    for operator in infix_operators]
+
+
 def get_file_type_checks(filename):
     """Returns the list of checks for a file based on matching the filename
        against regex."""
