@@ -315,6 +315,19 @@ OVSDB_CHECK_IDL([simple idl, writing via IDL],
 005: done
 ]])
 
+OVSDB_CHECK_IDL([simple idl, writing via IDL with unicode],
+  [['["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"s": "(╯°□°）╯︵ ┻━┻"}}]']],
+  [['set 0 b 1, insert 1, set 1 s "¯\_(ツ)_/¯"']],
+  [[000: i=0 r=0 b=false s=(╯°□°）╯︵ ┻━┻ u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+001: commit, status=success
+002: i=0 r=0 b=true s=(╯°□°）╯︵ ┻━┻ u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+002: i=1 r=0 b=false s="¯\_(ツ)_/¯" u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
+003: done
+]])
+
 OVSDB_CHECK_IDL([simple idl, handling verification failure],
   [['["idltest",
       {"op": "insert",

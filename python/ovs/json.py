@@ -28,8 +28,13 @@ except ImportError:
 __pychecker__ = 'no-stringiter'
 
 SPACES_PER_LEVEL = 2
-dumper = functools.partial(json.dumps, separators=(",", ":"),
-                           ensure_ascii=False)
+_dumper = functools.partial(json.dumps, separators=(",", ":"))
+
+if six.PY2:
+    def dumper(*args, **kwargs):
+        return _dumper(*args, **kwargs).decode('raw-unicode-escape')
+else:
+    dumper = _dumper
 
 
 def to_stream(obj, stream, pretty=False, sort_keys=True):
