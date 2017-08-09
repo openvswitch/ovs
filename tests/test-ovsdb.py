@@ -334,7 +334,11 @@ def idl_set(idl, commands, step):
             if args[1] == "b":
                 s.b = args[2] == "1"
             elif args[1] == "s":
-                s.s = args[2]
+                if six.PY2:
+                    s.s = args[2].decode('utf-8')
+                else:
+                    s.s = args[2].encode('utf-8', 'surrogateescape') \
+                                 .decode('utf-8', 'replace')
             elif args[1] == "u":
                 s.u = uuid.UUID(args[2])
             elif args[1] == "r":
