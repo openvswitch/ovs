@@ -435,8 +435,16 @@ dpif_close(struct dpif *dpif)
 {
     if (dpif) {
         struct registered_dpif_class *rc;
+        struct dpif_port_dump port_dump;
+        struct dpif_port dpif_port;
 
         rc = shash_find_data(&dpif_classes, dpif->dpif_class->type);
+
+        DPIF_PORT_FOR_EACH (&dpif_port, &port_dump, dpif) {
+            if (!dpif_is_internal_port(dpif_port.type)) {
+                netdev_ports_remove(dpif_port.port_no, dpif->dpif_class);
+            }
+        }
         dpif_uninit(dpif, true);
         dp_class_unref(rc);
     }
