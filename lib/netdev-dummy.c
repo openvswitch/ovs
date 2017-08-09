@@ -1574,7 +1574,7 @@ netdev_dummy_receive(struct unixctl_conn *conn,
                     unixctl_command_reply_error(conn, "too small packet len");
                     goto exit;
                 }
-                i+=2;
+                i += 2;
             }
             /* Try parse 'argv[i]' as odp flow. */
             packet = eth_from_flow(flow_str, packet_size);
