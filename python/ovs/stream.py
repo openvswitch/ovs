@@ -386,8 +386,10 @@ class Stream(object):
         try:
             # Python 3 has separate types for strings and bytes.  We must have
             # bytes here.
-            if six.PY3 and not isinstance(buf, six.binary_type):
-                buf = six.binary_type(buf, 'utf-8')
+            if six.PY3 and not isinstance(buf, bytes):
+                buf = bytes(buf, 'utf-8')
+            elif six.PY2:
+                buf = buf.encode('utf-8')
             return self.socket.send(buf)
         except socket.error as e:
             return -ovs.socket_util.get_exception_errno(e)
