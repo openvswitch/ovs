@@ -1294,7 +1294,7 @@ ipfix_def_exporter_options_template_fields(size_t opt_tmpl_hdr_offset,
     DEF(NOT_SENT_PACKET_TOTAL_COUNT);
 
     /* Update 'field_count' in options template header. */
-    opt_tmpl_hdr= (struct ipfix_options_template_record_header *)
+    opt_tmpl_hdr = (struct ipfix_options_template_record_header *)
         ((uint8_t *)dp_packet_data(msg) + opt_tmpl_hdr_offset);
     opt_tmpl_hdr->field_count = htons(count);
 
