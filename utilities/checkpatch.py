@@ -223,17 +223,17 @@ checks = [
      'check': lambda x: trailing_whitespace_or_crlf(x),
      'print': lambda: print_warning("Line has trailing whitespace")},
 
-    {'regex': '(.c|.h)(.in)?$', 'match_name': None,
+    {'regex': '(\.c|\.h)(\.in)?$', 'match_name': None,
      'prereq': lambda x: not is_comment_line(x),
      'check': lambda x: not if_and_for_whitespace_checks(x),
      'print': lambda: print_error("Improper whitespace around control block")},
 
-    {'regex': '(.c|.h)(.in)?$', 'match_name': None,
+    {'regex': '(\.c|\.h)(\.in)?$', 'match_name': None,
      'prereq': lambda x: not is_comment_line(x),
      'check': lambda x: not if_and_for_end_with_bracket_check(x),
      'print': lambda: print_error("Inappropriate bracing around statement")},
 
-    {'regex': '(.c|.h)(.in)?$', 'match_name': None,
+    {'regex': '(\.c|\.h)(\.in)?$', 'match_name': None,
      'prereq': lambda x: not is_comment_line(x),
      'check': lambda x: pointer_whitespace_check(x),
      'print':
@@ -267,7 +267,7 @@ std_functions = [
         ('error', 'Use ovs_error() in place of error()'),
 ]
 checks += [
-    {'regex': '(.c|.h)(.in)?$',
+    {'regex': '(\.c|\.h)(\.in)?$',
      'match_name': None,
      'prereq': lambda x: not is_comment_line(x),
      'check': regex_function_factory(function_name),
