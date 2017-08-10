@@ -102,16 +102,16 @@ if [ "$KERNEL" ] && [ ! "$TESTSUITE" ] && [ ! "$DPDK" ]; then
 fi
 
 if [ "$CC" = "clang" ]; then
-    make CFLAGS="$CFLAGS -Wno-error=unused-command-line-argument"
+    make -j2 CFLAGS="$CFLAGS -Wno-error=unused-command-line-argument"
 elif [[ $BUILD_ENV =~ "-m32" ]]; then
     # Disable sparse for 32bit builds on 64bit machine
-    make CFLAGS="$CFLAGS $BUILD_ENV"
+    make -j2 CFLAGS="$CFLAGS $BUILD_ENV"
 else
-    make CFLAGS="$CFLAGS $BUILD_ENV $SPARSE_FLAGS" C=1
+    make -j2 CFLAGS="$CFLAGS $BUILD_ENV $SPARSE_FLAGS" C=1
 fi
 
 if [ "$TESTSUITE" ] && [ "$CC" != "clang" ]; then
-    if ! make distcheck RECHECK=yes; then
+    if ! make distcheck TESTSUITEFLAGS=-j4 RECHECK=yes; then
         # testsuite.log is necessary for debugging.
         cat */_build/tests/testsuite.log
         exit 1
