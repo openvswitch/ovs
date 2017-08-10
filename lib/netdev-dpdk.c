@@ -2916,7 +2916,7 @@ netdev_dpdk_ring_send(struct netdev *netdev, int qid,
      * modified by the consumer of the ring and return into the datapath
      * without recalculating the RSS hash. */
     for (i = 0; i < batch->count; i++) {
-        dp_packet_rss_invalidate(batch->packets[i]);
+        dp_packet_mbuf_rss_flag_reset(batch->packets[i]);
     }
 
     netdev_dpdk_send__(dev, qid, batch, may_steal, concurrent_txq);
