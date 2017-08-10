@@ -2266,6 +2266,27 @@ netdev_ports_remove(odp_port_t port_no, const struct dpif_class *dpif_class)
     data = netdev_ports_lookup(port_no, dpif_class);
 
     if (data) {
+        int ifindex = netdev_get_ifindex(data->netdev);
+
+        if (ifindex > 0) {
+            struct ifindex_to_port_data *ifidx = NULL;
+
+            HMAP_FOR_EACH_WITH_HASH (ifidx, node, ifindex, &ifindex_to_port) {
+                if (ifidx->port == port_no) {
+                    hmap_remove(&ifindex_to_port, &ifidx->node);
+                    free(ifidx);
+                    break;
+                }
+            }
+            ovs_assert(ifidx);
+        } else {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+            VLOG_WARN_RL(&rl, "netdev ports map has dpif port %"PRIu32
+                         " but netdev has no ifindex: %s", port_no,
+                         ovs_strerror(ifindex));
+        }
+
         dpif_port_destroy(&data->dpif_port);
         netdev_close(data->netdev); /* unref and possibly close */
         hmap_remove(&port_to_netdev, &data->node);
