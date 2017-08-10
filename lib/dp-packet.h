@@ -605,12 +605,30 @@ dp_packet_rss_valid(struct dp_packet *p)
 }
 
 static inline void
-dp_packet_rss_invalidate(struct dp_packet *p)
+dp_packet_rss_invalidate(struct dp_packet *p OVS_UNUSED)
+{
+#ifndef DPDK_NETDEV
+    p->rss_hash_valid = false;
+#endif
+}
+
+static inline void
+dp_packet_mbuf_rss_flag_reset(struct dp_packet *p OVS_UNUSED)
 {
 #ifdef DPDK_NETDEV
     p->mbuf.ol_flags &= ~PKT_RX_RSS_HASH;
-#else
-    p->rss_hash_valid = false;
+#endif
+}
+
+/* This initialization is needed for packets that do not come
+ * from DPDK interfaces, when vswitchd is built with --with-dpdk.
+ * The DPDK rte library will still otherwise manage the mbuf.
+ * We only need to initialize the mbuf ol_flags. */
+static inline void
+dp_packet_mbuf_init(struct dp_packet *p OVS_UNUSED)
+{
+#ifdef DPDK_NETDEV
+    p->mbuf.ol_flags = 0;
 #endif
 }
 
