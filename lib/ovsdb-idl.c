@@ -1907,7 +1907,7 @@ ovsdb_idl_row_change__(struct ovsdb_idl_row *row, const struct json *row_json,
         }
 
         column_idx = column - table->class_->columns;
-        old = &row->old[column_idx];
+        old = &row->old_datum[column_idx];
 
         error = NULL;
         if (apply_diff) {
@@ -1992,7 +1992,7 @@ ovsdb_idl_row_apply_diff(struct ovsdb_idl_row *row,
 static bool
 ovsdb_idl_row_is_orphan(const struct ovsdb_idl_row *row)
 {
-    return !row->old && !row->new_datum;
+    return !row->old_datum && !row->new_datum;
 }
 
 /* Returns true if 'row' is conceptually part of the database as modified by
@@ -2025,7 +2025,7 @@ ovsdb_idl_row_parse(struct ovsdb_idl_row *row)
 
     for (i = 0; i < class->n_columns; i++) {
         const struct ovsdb_idl_column *c = &class->columns[i];
-        (c->parse)(row, &row->old[i]);
+        (c->parse)(row, &row->old_datum[i]);
     }
 }
 
@@ -2427,23 +2427,23 @@ ovsdb_idl_index_compare(struct ovsdb_idl_index_cursor *cursor,
 static void
 ovsdb_idl_row_clear_old(struct ovsdb_idl_row *row)
 {
-    ovs_assert(row->old == row->new_datum);
+    ovs_assert(row->old_datum == row->new_datum);
     if (!ovsdb_idl_row_is_orphan(row)) {
         const struct ovsdb_idl_table_class *class = row->table->class_;
         size_t i;
 
         for (i = 0; i < class->n_columns; i++) {
-            ovsdb_datum_destroy(&row->old[i], &class->columns[i].type);
+            ovsdb_datum_destroy(&row->old_datum[i], &class->columns[i].type);
         }
-        free(row->old);
-        row->old = row->new_datum = NULL;
+        free(row->old_datum);
+        row->old_datum = row->new_datum = NULL;
     }
 }
 
 static void
 ovsdb_idl_row_clear_new(struct ovsdb_idl_row *row)
 {
-    if (row->old != row->new_datum) {
+    if (row->old_datum != row->new_datum) {
         if (row->new_datum) {
             const struct ovsdb_idl_table_class *class = row->table->class_;
             size_t i;
@@ -2458,7 +2458,7 @@ ovsdb_idl_row_clear_new(struct ovsdb_idl_row *row)
             free(row->written);
             row->written = NULL;
         }
-        row->new_datum = row->old;
+        row->new_datum = row->old_datum;
     }
 }
 
@@ -2622,12 +2622,13 @@ static void
 ovsdb_idl_insert_row(struct ovsdb_idl_row *row, const struct json *row_json)
 {
     const struct ovsdb_idl_table_class *class = row->table->class_;
-    size_t i;
+    size_t i, datum_size;
 
-    ovs_assert(!row->old && !row->new_datum);
-    row->old = row->new_datum = xmalloc(class->n_columns * sizeof *row->old);
+    ovs_assert(!row->old_datum && !row->new_datum);
+    datum_size = class->n_columns * sizeof *row->old_datum;
+    row->old_datum = row->new_datum = xmalloc(datum_size);
     for (i = 0; i < class->n_columns; i++) {
-        ovsdb_datum_init_default(&row->old[i], &class->columns[i].type);
+        ovsdb_datum_init_default(&row->old_datum[i], &class->columns[i].type);
     }
     ovsdb_idl_row_update(row, row_json, OVSDB_IDL_CHANGE_INSERT);
     ovsdb_idl_row_parse(row);
@@ -2834,8 +2835,8 @@ ovsdb_idl_read(const struct ovsdb_idl_row *row,
 
     if (row->written && bitmap_is_set(row->written, column_idx)) {
         return &row->new_datum[column_idx];
-    } else if (row->old) {
-        return &row->old[column_idx];
+    } else if (row->old_datum) {
+        return &row->old_datum[column_idx];
     } else {
         return ovsdb_datum_default(&column->type);
     }
@@ -2872,7 +2873,7 @@ bool
 ovsdb_idl_is_mutable(const struct ovsdb_idl_row *row,
                      const struct ovsdb_idl_column *column)
 {
-    return column->is_mutable || (row->new_datum && !row->old);
+    return column->is_mutable || (row->new_datum && !row->old_datum);
 }
 
 /* Returns false if 'row' was obtained from the IDL, true if it was initialized
@@ -3101,7 +3102,7 @@ substitute_uuids(struct json *json, const struct ovsdb_idl_txn *txn)
             const struct ovsdb_idl_row *row;
 
             row = ovsdb_idl_txn_get_row(txn, &uuid);
-            if (row && !row->old && row->new_datum) {
+            if (row && !row->old_datum && row->new_datum) {
                 json_destroy(json);
 
                 return json_array_create_2(
@@ -3138,7 +3139,7 @@ ovsdb_idl_txn_disassemble(struct ovsdb_idl_txn *txn)
     HMAP_FOR_EACH_SAFE (row, next, txn_node, &txn->txn_rows) {
         ovsdb_idl_destroy_all_map_op_lists(row);
         ovsdb_idl_destroy_all_set_op_lists(row);
-        if (row->old) {
+        if (row->old_datum) {
             if (row->written) {
                 ovsdb_idl_row_unparse(row);
                 ovsdb_idl_row_clear_arcs(row, false);
@@ -3157,7 +3158,7 @@ ovsdb_idl_txn_disassemble(struct ovsdb_idl_txn *txn)
 
         hmap_remove(&txn->txn_rows, &row->txn_node);
         hmap_node_nullify(&row->txn_node);
-        if (!row->old) {
+        if (!row->old_datum) {
             hmap_remove(&row->table->rows, &row->hmap_node);
             free(row);
         }
@@ -3193,8 +3194,8 @@ ovsdb_idl_txn_extract_mutations(struct ovsdb_idl_row *row,
             if (row->new_datum && row->written
                 && bitmap_is_set(row->written,idx)) {
                 old_datum = &row->new_datum[idx];
-            } else if (row->old != NULL) {
-                old_datum = &row->old[idx];
+            } else if (row->old_datum != NULL) {
+                old_datum = &row->old_datum[idx];
             } else {
                 old_datum = ovsdb_datum_default(&column->type);
             }
@@ -3302,8 +3303,8 @@ ovsdb_idl_txn_extract_mutations(struct ovsdb_idl_row *row,
             if (row->new_datum && row->written
                 && bitmap_is_set(row->written,idx)) {
                 old_datum = &row->new_datum[idx];
-            } else if (row->old != NULL) {
-                old_datum = &row->old[idx];
+            } else if (row->old_datum != NULL) {
+                old_datum = &row->old_datum[idx];
             } else {
                 old_datum = ovsdb_datum_default(&column->type);
             }
@@ -3465,7 +3466,7 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
                 const struct ovsdb_idl_column *column = &class->columns[idx];
                 json_array_add(columns, json_string_create(column->name));
                 json_object_put(row_json, column->name,
-                                ovsdb_datum_to_json(&row->old[idx],
+                                ovsdb_datum_to_json(&row->old_datum[idx],
                                                     &column->type));
             }
         }
@@ -3487,15 +3488,16 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
             } else {
                 /* Let ovsdb-server decide whether to really delete it. */
             }
-        } else if (row->old != row->new_datum) {
+        } else if (row->old_datum != row->new_datum) {
             struct json *row_json;
             struct json *op;
             size_t idx;
 
             op = json_object_create();
-            json_object_put_string(op, "op", row->old ? "update" : "insert");
+            json_object_put_string(op, "op", row->old_datum ? "update"
+                                                            : "insert");
             json_object_put_string(op, "table", class->name);
-            if (row->old) {
+            if (row->old_datum) {
                 json_object_put(op, "where", where_uuid_equals(&row->uuid));
             } else {
                 struct ovsdb_idl_txn_insert *insert;
@@ -3521,7 +3523,7 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
                     const struct ovsdb_idl_column *column =
                                                         &class->columns[idx];
 
-                    if (row->old
+                    if (row->old_datum
                         || !ovsdb_datum_is_default(&row->new_datum[idx],
                                                   &column->type)) {
                         struct json *value;
@@ -3535,8 +3537,8 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
                          * We can't suppress not-really-changed values earlier
                          * or transactions would become nonatomic (see the big
                          * comment inside ovsdb_idl_txn_write()). */
-                        if (!any_updates && row->old &&
-                            !ovsdb_datum_equals(&row->old[idx],
+                        if (!any_updates && row->old_datum &&
+                            !ovsdb_datum_equals(&row->old_datum[idx],
                                                 &row->new_datum[idx],
                                                 &column->type)) {
                             any_updates = true;
@@ -3545,7 +3547,7 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
                 }
             }
 
-            if (!row->old || !shash_is_empty(json_object(row_json))) {
+            if (!row->old_datum || !shash_is_empty(json_object(row_json))) {
                 json_array_add(operations, op);
             } else {
                 json_destroy(op);
@@ -3778,7 +3780,7 @@ ovsdb_idl_txn_write__(const struct ovsdb_idl_row *row_,
 
     ovs_assert(row->new_datum != NULL);
     ovs_assert(column_idx < class->n_columns);
-    ovs_assert(row->old == NULL ||
+    ovs_assert(row->old_datum == NULL ||
                row->table->modes[column_idx] & OVSDB_IDL_MONITOR);
 
     if (row->table->idl->verify_write_only && !write_only) {
@@ -3807,7 +3809,7 @@ ovsdb_idl_txn_write__(const struct ovsdb_idl_row *row_,
         hmap_insert(&row->table->idl->txn->txn_rows, &row->txn_node,
                     uuid_hash(&row->uuid));
     }
-    if (row->old == row->new_datum) {
+    if (row->old_datum == row->new_datum) {
         row->new_datum = xmalloc(class->n_columns * sizeof *row->new_datum);
     }
     if (!row->written) {
@@ -3918,9 +3920,9 @@ ovsdb_idl_txn_verify(const struct ovsdb_idl_row *row_,
     column_idx = column - class->columns;
 
     ovs_assert(row->new_datum != NULL);
-    ovs_assert(row->old == NULL ||
+    ovs_assert(row->old_datum == NULL ||
                row->table->modes[column_idx] & OVSDB_IDL_MONITOR);
-    if (!row->old
+    if (!row->old_datum
         || (row->written && bitmap_is_set(row->written, column_idx))) {
         return;
     }
@@ -3952,7 +3954,7 @@ ovsdb_idl_txn_delete(const struct ovsdb_idl_row *row_)
     }
 
     ovs_assert(row->new_datum != NULL);
-    if (!row->old) {
+    if (!row->old_datum) {
         ovsdb_idl_row_unparse(row);
         ovsdb_idl_row_clear_new(row);
         ovs_assert(!row->prereqs);
