@@ -1268,7 +1268,7 @@ void
          .type = {
 %(type)s
          },
-         .mutable = %(mutable)s,
+         .is_mutable = %(mutable)s,
          .parse = %(s)s_parse_%(c)s,
          .unparse = %(s)s_unparse_%(c)s,
     },\n""" % {'P': prefix.upper(),

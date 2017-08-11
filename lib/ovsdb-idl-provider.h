@@ -89,7 +89,7 @@ struct ovsdb_idl_row {
 struct ovsdb_idl_column {
     char *name;
     struct ovsdb_type type;
-    bool mutable;
+    bool is_mutable;
     void (*parse)(struct ovsdb_idl_row *, const struct ovsdb_datum *);
     void (*unparse)(struct ovsdb_idl_row *);
 };

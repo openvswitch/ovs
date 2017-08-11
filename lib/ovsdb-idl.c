@@ -2871,7 +2871,7 @@ bool
 ovsdb_idl_is_mutable(const struct ovsdb_idl_row *row,
                      const struct ovsdb_idl_column *column)
 {
-    return column->mutable || (row->new && !row->old);
+    return column->is_mutable || (row->new && !row->old);
 }
 
 /* Returns false if 'row' was obtained from the IDL, true if it was initialized
