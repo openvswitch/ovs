@@ -635,7 +635,7 @@ check_mutable(const struct ovsdb_idl_row *row,
 {
     if (!ovsdb_idl_is_mutable(row, column)) {
         ctl_fatal("cannot modify read-only column %s in table %s",
-                  column->name, row->table->class->name);
+                  column->name, row->table->class_->name);
     }
 }
 
@@ -1715,7 +1715,7 @@ cmd_show_find_table_by_row(const struct ovsdb_idl_row *row)
     const struct cmd_show_table *show;
 
     for (show = cmd_show_tables; show->table; show++) {
-        if (show->table == row->table->class) {
+        if (show->table == row->table->class_) {
             return show;
         }
     }

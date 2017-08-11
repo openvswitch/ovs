@@ -104,7 +104,7 @@ struct ovsdb_idl_table_class {
 };
 
 struct ovsdb_idl_table {
-    const struct ovsdb_idl_table_class *class;
+    const struct ovsdb_idl_table_class *class_;
     unsigned char *modes;    /* OVSDB_IDL_* bitmasks, indexed by column. */
     bool need_table;         /* Monitor table even if no columns are selected
                               * for replication. */

@@ -89,11 +89,11 @@ enum ovsdb_idl_state {
 };
 
 struct ovsdb_idl {
-    const struct ovsdb_idl_class *class;
+    const struct ovsdb_idl_class *class_;
     struct jsonrpc_session *session;
     struct uuid uuid;
     struct shash table_by_name; /* Contains "struct ovsdb_idl_table *"s.*/
-    struct ovsdb_idl_table *tables; /* Array of ->class->n_tables elements. */
+    struct ovsdb_idl_table *tables; /* Array of ->class_->n_tables elements. */
     unsigned int change_seqno;
     bool verify_write_only;
 
@@ -270,7 +270,7 @@ ovsdb_idl_create(const char *remote, const struct ovsdb_idl_class *class,
                     : 0);
 
     idl = xzalloc(sizeof *idl);
-    idl->class = class;
+    idl->class_ = class;
     idl->session = jsonrpc_session_open(remote, retry);
     shash_init(&idl->table_by_name);
     idl->tables = xmalloc(class->n_tables * sizeof *idl->tables);
@@ -280,7 +280,7 @@ ovsdb_idl_create(const char *remote, const struct ovsdb_idl_class *class,
         size_t j;
 
         shash_add_assert(&idl->table_by_name, tc->name, table);
-        table->class = tc;
+        table->class_ = tc;
         table->modes = xmalloc(tc->n_columns);
         memset(table->modes, default_mode, tc->n_columns);
         table->need_table = false;
@@ -338,7 +338,7 @@ ovsdb_idl_destroy(struct ovsdb_idl *idl)
         ovsdb_idl_clear(idl);
         jsonrpc_session_close(idl->session);
 
-        for (i = 0; i < idl->class->n_tables; i++) {
+        for (i = 0; i < idl->class_->n_tables; i++) {
             struct ovsdb_idl_table *table = &idl->tables[i];
             ovsdb_idl_condition_destroy(&table->condition);
             ovsdb_idl_destroy_indexes(table);
@@ -363,7 +363,7 @@ ovsdb_idl_clear(struct ovsdb_idl *idl)
     bool changed = false;
     size_t i;
 
-    for (i = 0; i < idl->class->n_tables; i++) {
+    for (i = 0; i < idl->class_->n_tables; i++) {
         struct ovsdb_idl_table *table = &idl->tables[i];
         struct ovsdb_idl_row *row, *next_row;
 
@@ -768,9 +768,9 @@ ovsdb_idl_check_consistency(const struct ovsdb_idl *idl)
     struct uuid *dsts = NULL;
     size_t allocated_dsts = 0;
 
-    for (size_t i = 0; i < idl->class->n_tables; i++) {
+    for (size_t i = 0; i < idl->class_->n_tables; i++) {
         const struct ovsdb_idl_table *table = &idl->tables[i];
-        const struct ovsdb_idl_table_class *class = table->class;
+        const struct ovsdb_idl_table_class *class = table->class_;
 
         const struct ovsdb_idl_row *row;
         HMAP_FOR_EACH (row, hmap_node, &table->rows) {
@@ -794,16 +794,16 @@ ovsdb_idl_check_consistency(const struct ovsdb_idl *idl)
                                             dsts, &n_dsts)) {
                     VLOG_ERR("unexpected arc from %s row "UUID_FMT" to %s "
                              "row "UUID_FMT,
-                             table->class->name,
+                             table->class_->name,
                              UUID_ARGS(&row->uuid),
-                             arc->dst->table->class->name,
+                             arc->dst->table->class_->name,
                              UUID_ARGS(&arc->dst->uuid));
                     ok = false;
                 }
             }
             for (size_t j = 0; j < n_dsts; j++) {
                 VLOG_ERR("%s row "UUID_FMT" missing arc to row "UUID_FMT,
-                         table->class->name, UUID_ARGS(&row->uuid),
+                         table->class_->name, UUID_ARGS(&row->uuid),
                          UUID_ARGS(&dsts[j]));
                 ok = false;
             }
@@ -816,7 +816,7 @@ ovsdb_idl_check_consistency(const struct ovsdb_idl *idl)
 const struct ovsdb_idl_class *
 ovsdb_idl_get_class(const struct ovsdb_idl *idl)
 {
-    return idl->class;
+    return idl->class_;
 }
 
 /* Given 'column' in some table in 'class', returns the table's class. */
@@ -840,8 +840,8 @@ ovsdb_idl_table_from_column(struct ovsdb_idl *idl,
                             const struct ovsdb_idl_column *column)
 {
     const struct ovsdb_idl_table_class *tc =
-        ovsdb_idl_table_class_from_column(idl->class, column);
-    return &idl->tables[tc - idl->class->tables];
+        ovsdb_idl_table_class_from_column(idl->class_, column);
+    return &idl->tables[tc - idl->class_->tables];
 }
 
 static unsigned char *
@@ -852,7 +852,7 @@ ovsdb_idl_get_mode(struct ovsdb_idl *idl,
 
     const struct ovsdb_idl_table *table = ovsdb_idl_table_from_column(idl,
                                                                       column);
-    return &table->modes[column - table->class->columns];
+    return &table->modes[column - table->class_->columns];
 }
 
 static void
@@ -867,7 +867,7 @@ add_ref_table(struct ovsdb_idl *idl, const struct ovsdb_base_type *base)
             table->need_table = true;
         } else {
             VLOG_WARN("%s IDL class missing referenced table %s",
-                      idl->class->database, base->u.uuid.refTableName);
+                      idl->class_->database, base->u.uuid.refTableName);
         }
     }
 }
@@ -909,10 +909,10 @@ ovsdb_idl_add_table(struct ovsdb_idl *idl,
 {
     size_t i;
 
-    for (i = 0; i < idl->class->n_tables; i++) {
+    for (i = 0; i < idl->class_->n_tables; i++) {
         struct ovsdb_idl_table *table = &idl->tables[i];
 
-        if (table->class == tc) {
+        if (table->class_ == tc) {
             table->need_table = true;
             return;
         }
@@ -1191,7 +1191,7 @@ ovsdb_idl_send_cond_change(struct ovsdb_idl *idl)
 
     struct json *monitor_cond_change_requests = NULL;
 
-    for (i = 0; i < idl->class->n_tables; i++) {
+    for (i = 0; i < idl->class_->n_tables; i++) {
         struct ovsdb_idl_table *table = &idl->tables[i];
 
         if (table->cond_changed) {
@@ -1201,7 +1201,7 @@ ovsdb_idl_send_cond_change(struct ovsdb_idl *idl)
                     monitor_cond_change_requests = json_object_create();
                 }
                 json_object_put(monitor_cond_change_requests,
-                             table->class->name,
+                             table->class_->name,
                              json_array_create_1(req));
             }
             table->cond_changed = false;
@@ -1308,8 +1308,8 @@ ovsdb_idl_track_add_all(struct ovsdb_idl *idl)
 {
     size_t i, j;
 
-    for (i = 0; i < idl->class->n_tables; i++) {
-        const struct ovsdb_idl_table_class *tc = &idl->class->tables[i];
+    for (i = 0; i < idl->class_->n_tables; i++) {
+        const struct ovsdb_idl_table_class *tc = &idl->class_->tables[i];
 
         for (j = 0; j < tc->n_columns; j++) {
             const struct ovsdb_idl_column *column = &tc->columns[j];
@@ -1324,7 +1324,7 @@ ovsdb_idl_track_is_set(struct ovsdb_idl_table *table)
 {
     size_t i;
 
-    for (i = 0; i < table->class->n_columns; i++) {
+    for (i = 0; i < table->class_->n_columns; i++) {
         if (table->modes[i] & OVSDB_IDL_TRACK) {
             return true;
         }
@@ -1372,7 +1372,7 @@ ovsdb_idl_track_is_updated(const struct ovsdb_idl_row *row,
     const struct ovsdb_idl_table_class *class;
     size_t column_idx;
 
-    class = row->table->class;
+    class = row->table->class_;
     column_idx = column - class->columns;
 
     if (row->updated && bitmap_is_set(row->updated, column_idx)) {
@@ -1392,7 +1392,7 @@ ovsdb_idl_track_clear(const struct ovsdb_idl *idl)
 {
     size_t i;
 
-    for (i = 0; i < idl->class->n_tables; i++) {
+    for (i = 0; i < idl->class_->n_tables; i++) {
         struct ovsdb_idl_table *table = &idl->tables[i];
 
         if (!ovs_list_is_empty(&table->track_list)) {
@@ -1423,7 +1423,7 @@ ovsdb_idl_send_schema_request(struct ovsdb_idl *idl)
     json_destroy(idl->request_id);
     msg = jsonrpc_create_request(
         "get_schema",
-        json_array_create_1(json_string_create(idl->class->database)),
+        json_array_create_1(json_string_create(idl->class_->database)),
         &idl->request_id);
     jsonrpc_session_send(idl->session, msg);
 }
@@ -1524,15 +1524,15 @@ ovsdb_idl_send_monitor_request__(struct ovsdb_idl *idl,
 
     schema = parse_schema(idl->schema);
     monitor_requests = json_object_create();
-    for (i = 0; i < idl->class->n_tables; i++) {
+    for (i = 0; i < idl->class_->n_tables; i++) {
         struct ovsdb_idl_table *table = &idl->tables[i];
-        const struct ovsdb_idl_table_class *tc = table->class;
+        const struct ovsdb_idl_table_class *tc = table->class_;
         struct json *monitor_request, *columns, *where;
         const struct sset *table_schema;
         size_t j;
 
         table_schema = (schema
-                        ? shash_find_data(schema, table->class->name)
+                        ? shash_find_data(schema, table->class_->name)
                         : NULL);
 
         columns = table->need_table ? json_array_create_empty() : NULL;
@@ -1543,7 +1543,7 @@ ovsdb_idl_send_monitor_request__(struct ovsdb_idl *idl,
                     && !sset_contains(table_schema, column->name)) {
                     VLOG_WARN("%s table in %s database lacks %s column "
                               "(database needs upgrade?)",
-                              table->class->name, idl->class->database,
+                              table->class_->name, idl->class_->database,
                               column->name);
                     continue;
                 }
@@ -1558,7 +1558,7 @@ ovsdb_idl_send_monitor_request__(struct ovsdb_idl *idl,
             if (schema && !table_schema) {
                 VLOG_WARN("%s database lacks %s table "
                           "(database needs upgrade?)",
-                          idl->class->database, table->class->name);
+                          idl->class_->database, table->class_->name);
                 json_destroy(columns);
                 continue;
             }
@@ -1581,7 +1581,7 @@ ovsdb_idl_send_monitor_request__(struct ovsdb_idl *idl,
     snprintf(uuid, sizeof uuid, UUID_FMT, UUID_ARGS(&idl->uuid));
     msg = jsonrpc_create_request(
         method,
-        json_array_create_3(json_string_create(idl->class->database),
+        json_array_create_3(json_string_create(idl->class_->database),
                             json_string_create(uuid), monitor_requests),
         &idl->request_id);
     jsonrpc_session_send(idl->session, msg);
@@ -1657,7 +1657,7 @@ ovsdb_idl_parse_update__(struct ovsdb_idl *idl,
                                       "<%s> for table \"%s\" is "
                                       "not an object",
                                       table_update_name,
-                                      table->class->name);
+                                      table->class_->name);
         }
         SHASH_FOR_EACH (table_node, json_object(table_update)) {
             const struct json *row_update = table_node->data;
@@ -1670,7 +1670,7 @@ ovsdb_idl_parse_update__(struct ovsdb_idl *idl,
                                           "contains bad UUID "
                                           "\"%s\" as member name",
                                           table_update_name,
-                                          table->class->name,
+                                          table->class_->name,
                                           table_node->name);
             }
             if (row_update->type != JSON_OBJECT) {
@@ -1679,7 +1679,7 @@ ovsdb_idl_parse_update__(struct ovsdb_idl *idl,
                                           "contains <%s> for %s that "
                                           "is not an object",
                                           table_update_name,
-                                          table->class->name,
+                                          table->class_->name,
                                           row_update_name,
                                           table_node->name);
             }
@@ -1779,7 +1779,7 @@ ovsdb_idl_process_update(struct ovsdb_idl_table *table,
         } else {
             VLOG_WARN_RL(&semantic_rl, "cannot delete missing row "UUID_FMT" "
                          "from table %s",
-                         UUID_ARGS(uuid), table->class->name);
+                         UUID_ARGS(uuid), table->class_->name);
             return false;
         }
     } else if (!old) {
@@ -1790,7 +1790,7 @@ ovsdb_idl_process_update(struct ovsdb_idl_table *table,
             ovsdb_idl_insert_row(row, new);
         } else {
             VLOG_WARN_RL(&semantic_rl, "cannot add existing row "UUID_FMT" to "
-                         "table %s", UUID_ARGS(uuid), table->class->name);
+                         "table %s", UUID_ARGS(uuid), table->class_->name);
             return ovsdb_idl_modify_row(row, new);
         }
     } else {
@@ -1802,12 +1802,12 @@ ovsdb_idl_process_update(struct ovsdb_idl_table *table,
             } else {
                 VLOG_WARN_RL(&semantic_rl, "cannot modify missing but "
                              "referenced row "UUID_FMT" in table %s",
-                             UUID_ARGS(uuid), table->class->name);
+                             UUID_ARGS(uuid), table->class_->name);
                 ovsdb_idl_insert_row(row, new);
             }
         } else {
             VLOG_WARN_RL(&semantic_rl, "cannot modify missing row "UUID_FMT" "
-                         "in table %s", UUID_ARGS(uuid), table->class->name);
+                         "in table %s", UUID_ARGS(uuid), table->class_->name);
             ovsdb_idl_insert_row(ovsdb_idl_row_create(table, uuid), new);
         }
     }
@@ -1833,7 +1833,7 @@ ovsdb_idl_process_update2(struct ovsdb_idl_table *table,
         } else {
             VLOG_WARN_RL(&semantic_rl, "cannot delete missing row "UUID_FMT" "
                          "from table %s",
-                         UUID_ARGS(uuid), table->class->name);
+                         UUID_ARGS(uuid), table->class_->name);
             return false;
         }
     } else if (!strcmp(operation, "insert") || !strcmp(operation, "initial")) {
@@ -1844,7 +1844,7 @@ ovsdb_idl_process_update2(struct ovsdb_idl_table *table,
             ovsdb_idl_insert_row(row, json_row);
         } else {
             VLOG_WARN_RL(&semantic_rl, "cannot add existing row "UUID_FMT" to "
-                         "table %s", UUID_ARGS(uuid), table->class->name);
+                         "table %s", UUID_ARGS(uuid), table->class_->name);
             ovsdb_idl_delete_row(row);
             ovsdb_idl_insert_row(row, json_row);
         }
@@ -1856,17 +1856,17 @@ ovsdb_idl_process_update2(struct ovsdb_idl_table *table,
             } else {
                 VLOG_WARN_RL(&semantic_rl, "cannot modify missing but "
                              "referenced row "UUID_FMT" in table %s",
-                             UUID_ARGS(uuid), table->class->name);
+                             UUID_ARGS(uuid), table->class_->name);
                 return false;
             }
         } else {
             VLOG_WARN_RL(&semantic_rl, "cannot modify missing row "UUID_FMT" "
-                         "in table %s", UUID_ARGS(uuid), table->class->name);
+                         "in table %s", UUID_ARGS(uuid), table->class_->name);
             return false;
         }
     } else {
             VLOG_WARN_RL(&semantic_rl, "unknown operation %s to "
-                         "table %s", operation, table->class->name);
+                         "table %s", operation, table->class_->name);
             return false;
     }
 
@@ -1885,7 +1885,7 @@ ovsdb_idl_row_change__(struct ovsdb_idl_row *row, const struct json *row_json,
                        enum ovsdb_idl_change change)
 {
     struct ovsdb_idl_table *table = row->table;
-    const struct ovsdb_idl_table_class *class = table->class;
+    const struct ovsdb_idl_table_class *class = table->class_;
     struct shash_node *node;
     bool changed = false;
     bool apply_diff = diff_json != NULL;
@@ -1906,7 +1906,7 @@ ovsdb_idl_row_change__(struct ovsdb_idl_row *row, const struct json *row_json,
             continue;
         }
 
-        column_idx = column - table->class->columns;
+        column_idx = column - table->class_->columns;
         old = &row->old[column_idx];
 
         error = NULL;
@@ -1957,7 +1957,7 @@ ovsdb_idl_row_change__(struct ovsdb_idl_row *row, const struct json *row_json,
             char *s = ovsdb_error_to_string(error);
             VLOG_WARN_RL(&syntax_rl, "error parsing column %s in row "UUID_FMT
                          " in table %s: %s", column_name,
-                         UUID_ARGS(&row->uuid), table->class->name, s);
+                         UUID_ARGS(&row->uuid), table->class_->name, s);
             free(s);
             ovsdb_error_destroy(error);
         }
@@ -2020,7 +2020,7 @@ ovsdb_idl_row_exists(const struct ovsdb_idl_row *row)
 static void
 ovsdb_idl_row_parse(struct ovsdb_idl_row *row)
 {
-    const struct ovsdb_idl_table_class *class = row->table->class;
+    const struct ovsdb_idl_table_class *class = row->table->class_;
     size_t i;
 
     for (i = 0; i < class->n_columns; i++) {
@@ -2032,7 +2032,7 @@ ovsdb_idl_row_parse(struct ovsdb_idl_row *row)
 static void
 ovsdb_idl_row_unparse(struct ovsdb_idl_row *row)
 {
-    const struct ovsdb_idl_table_class *class = row->table->class;
+    const struct ovsdb_idl_table_class *class = row->table->class_;
     size_t i;
 
     for (i = 0; i < class->n_columns; i++) {
@@ -2059,14 +2059,14 @@ ovsdb_idl_create_index(struct ovsdb_idl *idl,
     struct ovsdb_idl_index *index;
     size_t i;
 
-    for (i = 0; i < idl->class->n_tables; i++) {
+    for (i = 0; i < idl->class_->n_tables; i++) {
         struct ovsdb_idl_table *table = &idl->tables[i];
 
-        if (table->class == tc) {
+        if (table->class_ == tc) {
             index = ovsdb_idl_create_index_(table, 1);
             if (!shash_add_once(&table->indexes, index_name, index)) {
                 VLOG_ERR("Duplicate index name '%s' in table %s",
-                         index_name, table->class->name);
+                         index_name, table->class_->name);
                 return NULL;
             }
             index->index_name = index_name;
@@ -2215,7 +2215,7 @@ ovsdb_idl_index_add_column(struct ovsdb_idl_index *index,
           *ovsdb_idl_get_mode(index->table->idl, column))) {
         VLOG_ERR("Can't add unmonitored column '%s' at index '%s' in "
                  "table '%s'.",
-                 column->name, index->index_name, index->table->class->name);
+                 column->name, index->index_name, index->table->class_->name);
     }
     if (!ovsdb_type_is_scalar(&column->type) && !custom_comparer) {
         VLOG_WARN("Comparing non-scalar values.");
@@ -2250,10 +2250,10 @@ ovsdb_idl_initialize_cursor(struct ovsdb_idl *idl,
 {
     size_t i;
 
-    for (i = 0; i < idl->class->n_tables; i++) {
+    for (i = 0; i < idl->class_->n_tables; i++) {
         struct ovsdb_idl_table *table = &idl->tables[i];
 
-        if (table->class == tc) {
+        if (table->class_ == tc) {
             struct shash_node *node = shash_find(&table->indexes, index_name);
 
             if (!node || !node->data) {
@@ -2321,7 +2321,7 @@ void
 ovsdb_idl_index_destroy_row__(const struct ovsdb_idl_row *row_)
 {
     struct ovsdb_idl_row *row = CONST_CAST(struct ovsdb_idl_row *, row_);
-    const struct ovsdb_idl_table_class *class = row->table->class;
+    const struct ovsdb_idl_table_class *class = row->table->class_;
     const struct ovsdb_idl_column *c;
     size_t i;
 
@@ -2429,7 +2429,7 @@ ovsdb_idl_row_clear_old(struct ovsdb_idl_row *row)
 {
     ovs_assert(row->old == row->new);
     if (!ovsdb_idl_row_is_orphan(row)) {
-        const struct ovsdb_idl_table_class *class = row->table->class;
+        const struct ovsdb_idl_table_class *class = row->table->class_;
         size_t i;
 
         for (i = 0; i < class->n_columns; i++) {
@@ -2445,7 +2445,7 @@ ovsdb_idl_row_clear_new(struct ovsdb_idl_row *row)
 {
     if (row->old != row->new) {
         if (row->new) {
-            const struct ovsdb_idl_table_class *class = row->table->class;
+            const struct ovsdb_idl_table_class *class = row->table->class_;
             size_t i;
 
             if (row->written) {
@@ -2523,7 +2523,7 @@ ovsdb_idl_row_create__(const struct ovsdb_idl_table_class *class)
 static struct ovsdb_idl_row *
 ovsdb_idl_row_create(struct ovsdb_idl_table *table, const struct uuid *uuid)
 {
-    struct ovsdb_idl_row *row = ovsdb_idl_row_create__(table->class);
+    struct ovsdb_idl_row *row = ovsdb_idl_row_create__(table->class_);
     hmap_insert(&table->rows, &row->hmap_node, uuid_hash(uuid));
     row->uuid = *uuid;
     row->table = table;
@@ -2562,8 +2562,8 @@ ovsdb_idl_destroy_all_map_op_lists(struct ovsdb_idl_row *row)
         size_t idx, n_columns;
         const struct ovsdb_idl_column *columns;
         const struct ovsdb_type *type;
-        n_columns = row->table->class->n_columns;
-        columns = row->table->class->columns;
+        n_columns = row->table->class_->n_columns;
+        columns = row->table->class_->columns;
         BITMAP_FOR_EACH_1 (idx, n_columns, row->map_op_written) {
             type = &columns[idx].type;
             map_op_list_destroy(row->map_op_lists[idx], type);
@@ -2583,8 +2583,8 @@ ovsdb_idl_destroy_all_set_op_lists(struct ovsdb_idl_row *row)
         size_t idx, n_columns;
         const struct ovsdb_idl_column *columns;
         const struct ovsdb_type *type;
-        n_columns = row->table->class->n_columns;
-        columns = row->table->class->columns;
+        n_columns = row->table->class_->n_columns;
+        columns = row->table->class_->columns;
         BITMAP_FOR_EACH_1 (idx, n_columns, row->set_op_written) {
             type = &columns[idx].type;
             set_op_list_destroy(row->set_op_lists[idx], type);
@@ -2601,7 +2601,7 @@ ovsdb_idl_row_destroy_postprocess(struct ovsdb_idl *idl)
 {
     size_t i;
 
-    for (i = 0; i < idl->class->n_tables; i++) {
+    for (i = 0; i < idl->class_->n_tables; i++) {
         struct ovsdb_idl_table *table = &idl->tables[i];
 
         if (!ovs_list_is_empty(&table->track_list)) {
@@ -2620,7 +2620,7 @@ ovsdb_idl_row_destroy_postprocess(struct ovsdb_idl *idl)
 static void
 ovsdb_idl_insert_row(struct ovsdb_idl_row *row, const struct json *row_json)
 {
-    const struct ovsdb_idl_table_class *class = row->table->class;
+    const struct ovsdb_idl_table_class *class = row->table->class_;
     size_t i;
 
     ovs_assert(!row->old && !row->new);
@@ -2708,7 +2708,7 @@ static struct ovsdb_idl_table *
 ovsdb_idl_table_from_class(const struct ovsdb_idl *idl,
                            const struct ovsdb_idl_table_class *table_class)
 {
-    return &idl->tables[table_class - idl->class->tables];
+    return &idl->tables[table_class - idl->class_->tables];
 }
 
 /* Called by ovsdb-idlc generated code. */
@@ -2825,7 +2825,7 @@ ovsdb_idl_read(const struct ovsdb_idl_row *row,
 
     ovs_assert(!ovsdb_idl_row_is_synthetic(row));
 
-    class = row->table->class;
+    class = row->table->class_;
     column_idx = column - class->columns;
 
     ovs_assert(row->new != NULL);
@@ -3002,7 +3002,7 @@ ovsdb_idl_txn_increment(struct ovsdb_idl_txn *txn,
     ovs_assert(column->type.key.type == OVSDB_TYPE_INTEGER);
     ovs_assert(column->type.value.type == OVSDB_TYPE_VOID);
 
-    txn->inc_table = row->table->class->name;
+    txn->inc_table = row->table->class_->name;
     txn->inc_column = column->name;
     txn->inc_row = row->uuid;
     txn->inc_force = force;
@@ -3169,7 +3169,7 @@ static bool
 ovsdb_idl_txn_extract_mutations(struct ovsdb_idl_row *row,
                                 struct json *mutations)
 {
-    const struct ovsdb_idl_table_class *class = row->table->class;
+    const struct ovsdb_idl_table_class *class = row->table->class_;
     size_t idx;
     bool any_mutations = false;
 
@@ -3427,7 +3427,7 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
     }
 
     operations = json_array_create_1(
-        json_string_create(txn->idl->class->database));
+        json_string_create(txn->idl->class_->database));
 
     /* Assert that we have the required lock (avoiding a race). */
     if (txn->idl->lock_name) {
@@ -3441,7 +3441,7 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
     HMAP_FOR_EACH (row, txn_node, &txn->txn_rows) {
         /* XXX check that deleted rows exist even if no prereqs? */
         if (row->prereqs) {
-            const struct ovsdb_idl_table_class *class = row->table->class;
+            const struct ovsdb_idl_table_class *class = row->table->class_;
             size_t n_columns = class->n_columns;
             struct json *op, *columns, *row_json;
             size_t idx;
@@ -3471,7 +3471,7 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
     /* Add updates. */
     any_updates = false;
     HMAP_FOR_EACH (row, txn_node, &txn->txn_rows) {
-        const struct ovsdb_idl_table_class *class = row->table->class;
+        const struct ovsdb_idl_table_class *class = row->table->class_;
 
         if (!row->new) {
             if (class->is_root) {
@@ -3767,7 +3767,7 @@ ovsdb_idl_txn_write__(const struct ovsdb_idl_row *row_,
         goto discard_datum;
     }
 
-    class = row->table->class;
+    class = row->table->class_;
     column_idx = column - class->columns;
     write_only = row->table->modes[column_idx] == OVSDB_IDL_MONITOR;
 
@@ -3909,7 +3909,7 @@ ovsdb_idl_txn_verify(const struct ovsdb_idl_row *row_,
         return;
     }
 
-    class = row->table->class;
+    class = row->table->class_;
     column_idx = column - class->columns;
 
     ovs_assert(row->new != NULL);
@@ -4398,7 +4398,7 @@ ovsdb_idl_txn_add_map_op(struct ovsdb_idl_row *row,
     size_t column_idx;
     struct map_op *map_op;
 
-    class = row->table->class;
+    class = row->table->class_;
     column_idx = column - class->columns;
 
     /* Check if a map operation list exists for this column. */
@@ -4434,7 +4434,7 @@ ovsdb_idl_txn_add_set_op(struct ovsdb_idl_row *row,
     size_t column_idx;
     struct set_op *set_op;
 
-    class = row->table->class;
+    class = row->table->class_;
     column_idx = column - class->columns;
 
     /* Check if a set operation list exists for this column. */
@@ -4465,7 +4465,7 @@ is_valid_partial_update(const struct ovsdb_idl_row *row,
                         struct ovsdb_datum *datum)
 {
     /* Verify that this column is being monitored. */
-    unsigned int column_idx = column - row->table->class->columns;
+    unsigned int column_idx = column - row->table->class_->columns;
     if (!(row->table->modes[column_idx] & OVSDB_IDL_MONITOR)) {
         VLOG_WARN("cannot partially update non-monitored column");
         return false;
