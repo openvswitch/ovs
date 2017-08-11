@@ -222,10 +222,10 @@ void ovsdb_datum_subtract(struct ovsdb_datum *a,
 /* Generate and apply diffs */
 void ovsdb_datum_diff(struct ovsdb_datum *diff,
                       const struct ovsdb_datum *old,
-                      const struct ovsdb_datum *new,
+                      const struct ovsdb_datum *new_datum,
                       const struct ovsdb_type *type);
 
-struct ovsdb_error *ovsdb_datum_apply_diff(struct ovsdb_datum *new,
+struct ovsdb_error *ovsdb_datum_apply_diff(struct ovsdb_datum *new_datum,
                                            const struct ovsdb_datum *old,
                                            const struct ovsdb_datum *diff,
                                            const struct ovsdb_type *type)

@@ -37,30 +37,30 @@
  *     - 'old' points to the data committed to the database and currently
  *       in the row.
  *
- *     - 'new == old'.
+ *     - 'new_datum == old'.
  *
  * When a transaction is in progress, the situation is a little different.  For
- * a row inserted in the transaction, 'old' is NULL and 'new' points to the
- * row's initial contents.  Otherwise:
+ * a row inserted in the transaction, 'old' is NULL and 'new_datum' points to
+ * the row's initial contents.  Otherwise:
  *
  *     - 'old' points to the data committed to the database and currently in
  *       the row.  (This is the same as when no transaction is in progress.)
  *
- *     - If the transaction does not modify the row, 'new == old'.
+ *     - If the transaction does not modify the row, 'new_datum == old'.
  *
- *     - If the transaction modifies the row, 'new' points to the modified
- *       data.
+ *     - If the transaction modifies the row, 'new_datum' points to the
+ *       modified data.
  *
- *     - If the transaction deletes the row, 'new' is NULL.
+ *     - If the transaction deletes the row, 'new_datum' is NULL.
  *
  * Thus:
  *
  *     - 'old' always points to committed data, except that it is NULL if the
  *       row is inserted within the current transaction.
  *
- *     - 'new' always points to the newest, possibly uncommitted version of the
- *       row's data, except that it is NULL if the row is deleted within the
- *       current transaction.
+ *     - 'new_datum' always points to the newest, possibly uncommitted version
+ *       of the row's data, except that it is NULL if the row is deleted within
+ *       the current transaction.
  */
 struct ovsdb_idl_row {
     struct hmap_node hmap_node; /* In struct ovsdb_idl_table's 'rows'. */
@@ -71,9 +71,9 @@ struct ovsdb_idl_row {
     struct ovsdb_datum *old;    /* Committed data (null if orphaned). */
 
     /* Transactional data. */
-    struct ovsdb_datum *new;    /* Modified data (null to delete row). */
+    struct ovsdb_datum *new_datum; /* Modified data (null to delete row). */
     unsigned long int *prereqs; /* Bitmap of columns to verify in "old". */
-    unsigned long int *written; /* Bitmap of columns from "new" to write. */
+    unsigned long int *written; /* Bitmap of "new_datum" columns to write. */
     struct hmap_node txn_node;  /* Node in ovsdb_idl_txn's list. */
     unsigned long int *map_op_written; /* Bitmap of columns pending map ops. */
     struct map_op_list **map_op_lists; /* Per-column map operations. */
