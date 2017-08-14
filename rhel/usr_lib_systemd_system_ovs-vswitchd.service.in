@@ -14,8 +14,8 @@ Environment=HOME=/var/run/openvswitch
 EnvironmentFile=/etc/openvswitch/default.conf
 EnvironmentFile=-/etc/sysconfig/openvswitch
 @begin_dpdk@
-ExecStartPre=/usr/bin/chown :hugetlbfs /dev/hugepages
-ExecStartPre=/usr/bin/chmod 0775 /dev/hugepages
+ExecStartPre=-/usr/bin/chown :hugetlbfs /dev/hugepages
+ExecStartPre=-/usr/bin/chmod 0775 /dev/hugepages
 @end_dpdk@
 ExecStart=/usr/share/openvswitch/scripts/ovs-ctl \
           --no-ovsdb-server --no-monitor --system-id=random \
