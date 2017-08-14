@@ -33,6 +33,7 @@
 #include "ovs-router.h"
 #include "packets.h"
 #include "rtnetlink.h"
+#include "tnl-ports.h"
 #include "openvswitch/vlog.h"
 
 /* Linux 2.6.36 added RTA_MARK, so define it just in case we're building with
@@ -333,10 +334,16 @@ name_table_init(void)
 
 
 static void
-name_table_change(const struct rtnetlink_change *change OVS_UNUSED,
+name_table_change(const struct rtnetlink_change *change,
                   void *aux OVS_UNUSED)
 {
     /* Changes to interface status can cause routing table changes that some
      * versions of the linux kernel do not advertise for some reason. */
     route_table_valid = false;
+
+    if (change && change->nlmsg_type == RTM_DELLINK) {
+        if (change->ifname) {
+            tnl_port_map_delete_ipdev(change->ifname);
+        }
+    }
 }
