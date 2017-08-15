@@ -22,6 +22,12 @@ OvsHashNatKey(const OVS_CT_KEY *key)
     HASH_ADD(src.port);
     HASH_ADD(dst.port);
     HASH_ADD(zone);
+    /* icmp_id and port overlap in the union */
+    HASH_ADD(src.icmp_type);
+    HASH_ADD(dst.icmp_type);
+    HASH_ADD(src.icmp_code);
+    HASH_ADD(dst.icmp_code);
+
 #undef HASH_ADD
     return hash;
 }
@@ -44,6 +50,11 @@ OvsNatKeyAreSame(const OVS_CT_KEY *key1, const OVS_CT_KEY *key2)
     FIELD_COMPARE(src.port);
     FIELD_COMPARE(dst.port);
     FIELD_COMPARE(zone);
+    /* icmp_id and port overlap in the union */
+    FIELD_COMPARE(src.icmp_type);
+    FIELD_COMPARE(dst.icmp_type);
+    FIELD_COMPARE(src.icmp_code);
+    FIELD_COMPARE(dst.icmp_code);
     return TRUE;
 #undef FIELD_COMPARE
 }
@@ -253,6 +264,7 @@ OvsNatAddEntry(OVS_NAT_ENTRY* entry)
  *     Update an Conntrack entry with NAT information. Translated address and
  *     port will be generated and write back to the conntrack entry as a
  *     result.
+ *     Note: For ICMP, only address is translated.
  *----------------------------------------------------------------------------
  */
 BOOLEAN
@@ -271,7 +283,7 @@ OvsNatTranslateCtEntry(OVS_CT_ENTRY *entry)
     BOOLEAN allPortsTried;
     BOOLEAN originalPortsTried;
     struct ct_addr firstAddr;
-    
+
     uint32_t hash = OvsNatHashRange(entry, 0);
 
     if ((entry->natInfo.natAction & NAT_ACTION_SRC) &&
@@ -310,10 +322,14 @@ OvsNatTranslateCtEntry(OVS_CT_ENTRY *entry)
     for (;;) {
         if (entry->natInfo.natAction & NAT_ACTION_SRC) {
             entry->rev_key.dst.addr = ctAddr;
-            entry->rev_key.dst.port = htons(port);
+            if (entry->rev_key.nw_proto != IPPROTO_ICMP) {
+                entry->rev_key.dst.port = htons(port);
+            }
         } else {
             entry->rev_key.src.addr = ctAddr;
-            entry->rev_key.src.port = htons(port);
+            if (entry->rev_key.nw_proto != IPPROTO_ICMP) {
+                entry->rev_key.src.port = htons(port);
+            }
         }
 
         OVS_NAT_ENTRY *natEntry = OvsNatLookup(&entry->rev_key, TRUE);
