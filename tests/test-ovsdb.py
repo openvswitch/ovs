@@ -337,7 +337,8 @@ def idl_set(idl, commands, step):
                 if six.PY2:
                     s.s = args[2].decode('utf-8')
                 else:
-                    s.s = args[2].encode('utf-8', 'surrogateescape') \
+                    s.s = args[2].encode(sys.getfilesystemencoding(),
+                                         'surrogateescape') \
                                  .decode('utf-8', 'replace')
             elif args[1] == "u":
                 s.u = uuid.UUID(args[2])
