@@ -41,14 +41,16 @@ struct ct_addr {
 struct ct_endpoint {
     struct ct_addr addr;
     union {
-        ovs_be16 port;
+        struct {
+            ovs_be16 port;
+            uint16 pad_port;
+        };
         struct {
             ovs_be16 icmp_id;
             uint8_t icmp_type;
             uint8_t icmp_code;
         };
     };
-    UINT16 pad;
 };
 
 typedef enum CT_UPDATE_RES {

@@ -782,9 +782,16 @@ OvsCtExecute_(OvsForwardingContext *fwdCtx,
 
         key->ct.tuple_ipv4.ipv4_src = ctKey->src.addr.ipv4_aligned;
         key->ct.tuple_ipv4.ipv4_dst = ctKey->dst.addr.ipv4_aligned;
-        key->ct.tuple_ipv4.src_port = ctKey->src.port;
-        key->ct.tuple_ipv4.dst_port = ctKey->dst.port;
         key->ct.tuple_ipv4.ipv4_proto = ctKey->nw_proto;
+
+        /* Orig tuple Port is overloaded to take in ICMP-Type & Code */
+        /* This mimics the behavior in lib/conntrack.c*/
+        key->ct.tuple_ipv4.src_port = ctKey->nw_proto != IPPROTO_ICMP ?
+                                      ctKey->src.port :
+                                      htons(ctKey->src.icmp_type);
+        key->ct.tuple_ipv4.dst_port = ctKey->nw_proto != IPPROTO_ICMP ?
+                                      ctKey->dst.port :
+                                      htons(ctKey->src.icmp_code);
     }
 
     if (entryCreated && entry) {
