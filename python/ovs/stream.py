@@ -322,8 +322,10 @@ class Stream(object):
                                                             False)
                 self._read_pending = False
                 recvBuffer = self._read_buffer[:nBytesRead]
-
-                return (0, winutils.get_decoded_buffer(recvBuffer))
+                # recvBuffer will have the type memoryview in Python3.
+                # We can use bytes to convert it to type bytes which works on
+                # both Python2 and Python3.
+                return (0, bytes(recvBuffer))
             except pywintypes.error as e:
                 if e.winerror == winutils.winerror.ERROR_IO_INCOMPLETE:
                     # The operation is still pending, try again
@@ -334,7 +336,6 @@ class Stream(object):
                     return (0, "")
                 else:
                     return (errno.EINVAL, "")
-
         (errCode, self._read_buffer) = winutils.read_file(self.pipe,
                                                           n,
                                                           self._read)
@@ -361,7 +362,10 @@ class Stream(object):
                 return (e.winerror, "")
 
         recvBuffer = self._read_buffer[:nBytesRead]
-        return (0, winutils.get_decoded_buffer(recvBuffer))
+        # recvBuffer will have the type memoryview in Python3.
+        # We can use bytes to convert it to type bytes which works on
+        # both Python2 and Python3.
+        return (0, bytes(recvBuffer))
 
     def send(self, buf):
         """Tries to send 'buf' on this stream.
@@ -380,16 +384,17 @@ class Stream(object):
         elif len(buf) == 0:
             return 0
 
+        # Python 3 has separate types for strings and bytes.  We must have
+        # bytes here.
+        if six.PY3 and not isinstance(buf, bytes):
+            buf = bytes(buf, 'utf-8')
+        elif six.PY2:
+            buf = buf.encode('utf-8')
+
         if sys.platform == 'win32' and self.socket is None:
             return self.__send_windows(buf)
 
         try:
-            # Python 3 has separate types for strings and bytes.  We must have
-            # bytes here.
-            if six.PY3 and not isinstance(buf, bytes):
-                buf = bytes(buf, 'utf-8')
-            elif six.PY2:
-                buf = buf.encode('utf-8')
             return self.socket.send(buf)
         except socket.error as e:
             return -ovs.socket_util.get_exception_errno(e)
@@ -413,7 +418,6 @@ class Stream(object):
                 else:
                     return -errno.EINVAL
 
-        buf = winutils.get_encoded_buffer(buf)
         self._write_pending = False
         (errCode, nBytesWritten) = winutils.write_file(self.pipe,
                                                        buf,

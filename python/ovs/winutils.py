@@ -14,8 +14,6 @@
 
 import sys
 
-import six
-
 if sys.platform != 'win32':
     raise Exception("Intended to use only on Windows")
 else:
@@ -196,24 +194,6 @@ def get_overlapped_result(handle, overlapped=None, bWait=False):
         return win32file.GetOverlappedResult(handle, overlapped, bWait)
     except pywintypes.error:
         raise
-
-
-def get_decoded_buffer(recvBuffer):
-    if six.PY3:
-        return bytes(recvBuffer).decode("utf-8")
-    else:
-        return str(recvBuffer)
-
-
-def get_encoded_buffer(buff):
-    # Python 3 has separate types for strings and bytes.
-    # We must have bytes here.
-    if not isinstance(buff, six.binary_type):
-        if six.PY3:
-            buff = six.binary_type(buff, 'utf-8')
-        else:
-            buff = six.binary_type(buff)
-    return buff
 
 
 def get_new_event(sa=None, bManualReset=True, bInitialState=True,
