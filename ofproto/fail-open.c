@@ -32,7 +32,7 @@
 #include "ofproto.h"
 #include "ofproto-provider.h"
 #include "poll-loop.h"
-#include "rconn.h"
+#include "openvswitch/rconn.h"
 #include "timeval.h"
 
 VLOG_DEFINE_THIS_MODULE(fail_open);

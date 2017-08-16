@@ -21,7 +21,6 @@
 #include <stdint.h>
 #include <time.h>
 #include "openvswitch/types.h"
-#include "ovs-thread.h"
 
 /* A wrapper around vconn that provides queuing and optionally reliability.
  *
@@ -40,6 +39,10 @@
  *
  * Fully thread-safe.
  */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 struct vconn;
 struct rconn_packet_counter;
@@ -90,14 +93,6 @@ unsigned int rconn_get_connection_seqno(const struct rconn *);
 int rconn_get_last_error(const struct rconn *);
 unsigned int rconn_count_txqlen(const struct rconn *);
 
-/* Counts packets and bytes queued into an rconn by a given source. */
-struct rconn_packet_counter {
-    struct ovs_mutex mutex;
-    unsigned int n_packets OVS_GUARDED; /* Number of packets queued. */
-    unsigned int n_bytes OVS_GUARDED;   /* Number of bytes queued. */
-    int ref_cnt OVS_GUARDED;            /* Number of owners. */
-};
-
 struct rconn_packet_counter *rconn_packet_counter_create(void);
 void rconn_packet_counter_destroy(struct rconn_packet_counter *);
 void rconn_packet_counter_inc(struct rconn_packet_counter *, unsigned n_bytes);
@@ -106,5 +101,9 @@ void rconn_packet_counter_dec(struct rconn_packet_counter *, unsigned n_bytes);
 unsigned int rconn_packet_counter_n_packets(
     const struct rconn_packet_counter *);
 unsigned int rconn_packet_counter_n_bytes(const struct rconn_packet_counter *);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* rconn.h */

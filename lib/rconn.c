@@ -15,7 +15,7 @@
  */
 
 #include <config.h>
-#include "rconn.h"
+#include "openvswitch/rconn.h"
 #include <errno.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -32,6 +32,7 @@
 #include "stream.h"
 #include "timeval.h"
 #include "util.h"
+#include "ovs-thread.h"
 
 VLOG_DEFINE_THIS_MODULE(rconn);
 
@@ -141,6 +142,14 @@ struct rconn {
     size_t n_monitors;
 
     uint32_t allowed_versions;
+};
+
+/* Counts packets and bytes queued into an rconn by a given source. */
+struct rconn_packet_counter {
+    struct ovs_mutex mutex;
+    unsigned int n_packets OVS_GUARDED; /* Number of packets queued. */
+    unsigned int n_bytes OVS_GUARDED;   /* Number of bytes queued. */
+    int ref_cnt OVS_GUARDED;            /* Number of owners. */
 };
 
 uint32_t rconn_get_allowed_versions(const struct rconn *rconn)

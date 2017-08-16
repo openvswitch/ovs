@@ -28,7 +28,7 @@
 #include "openflow/openflow.h"
 #include "poll-loop.h"
 #include "random.h"
-#include "rconn.h"
+#include "openvswitch/rconn.h"
 #include "sat-math.h"
 #include "timeval.h"
 #include "openvswitch/token-bucket.h"

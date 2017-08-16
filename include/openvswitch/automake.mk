@@ -20,6 +20,7 @@ openvswitchinclude_HEADERS = \
 	include/openvswitch/ofp-prop.h \
 	include/openvswitch/ofp-util.h \
 	include/openvswitch/packets.h \
+	include/openvswitch/rconn.h \
 	include/openvswitch/shash.h \
 	include/openvswitch/thread.h \
 	include/openvswitch/token-bucket.h \

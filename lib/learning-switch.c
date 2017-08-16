@@ -40,7 +40,7 @@
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
 #include "poll-loop.h"
-#include "rconn.h"
+#include "openvswitch/rconn.h"
 #include "openvswitch/shash.h"
 #include "simap.h"
 #include "timeval.h"

@@ -33,7 +33,7 @@
 #include "openvswitch/ofpbuf.h"
 #include "openflow/openflow.h"
 #include "poll-loop.h"
-#include "rconn.h"
+#include "openvswitch/rconn.h"
 #include "simap.h"
 #include "stream-ssl.h"
 #include "timeval.h"

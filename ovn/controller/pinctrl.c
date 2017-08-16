@@ -44,7 +44,7 @@
 #include "ovn/lib/ovn-dhcp.h"
 #include "ovn/lib/ovn-util.h"
 #include "poll-loop.h"
-#include "rconn.h"
+#include "openvswitch/rconn.h"
 #include "socket-util.h"
 #include "timeval.h"
 #include "vswitch-idl.h"

@@ -35,7 +35,7 @@
 #include "ovs-atomic.h"
 #include "pinsched.h"
 #include "poll-loop.h"
-#include "rconn.h"
+#include "openvswitch/rconn.h"
 #include "openvswitch/shash.h"
 #include "simap.h"
 #include "stream.h"

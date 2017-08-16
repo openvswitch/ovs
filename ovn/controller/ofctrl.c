@@ -38,7 +38,7 @@
 #include "ovn/actions.h"
 #include "poll-loop.h"
 #include "physical.h"
-#include "rconn.h"
+#include "openvswitch/rconn.h"
 #include "socket-util.h"
 #include "util.h"
 #include "vswitch-idl.h"
