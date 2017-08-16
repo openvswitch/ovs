@@ -232,7 +232,7 @@ netdev_tc_flow_flush(struct netdev *netdev)
     int ifindex = netdev_get_ifindex(netdev);
 
     if (ifindex < 0) {
-        VLOG_ERR_RL(&error_rl, "failed to get ifindex for %s: %s",
+        VLOG_ERR_RL(&error_rl, "flow_flush: failed to get ifindex for %s: %s",
                     netdev_get_name(netdev), ovs_strerror(-ifindex));
         return -ifindex;
     }
@@ -249,7 +249,7 @@ netdev_tc_flow_dump_create(struct netdev *netdev,
 
     ifindex = netdev_get_ifindex(netdev);
     if (ifindex < 0) {
-        VLOG_ERR_RL(&error_rl, "failed to get ifindex for %s: %s",
+        VLOG_ERR_RL(&error_rl, "dump_create: failed to get ifindex for %s: %s",
                     netdev_get_name(netdev), ovs_strerror(-ifindex));
         return -ifindex;
     }
@@ -676,7 +676,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
 
     ifindex = netdev_get_ifindex(netdev);
     if (ifindex < 0) {
-        VLOG_ERR_RL(&error_rl, "failed to get ifindex for %s: %s",
+        VLOG_ERR_RL(&error_rl, "flow_put: failed to get ifindex for %s: %s",
                     netdev_get_name(netdev), ovs_strerror(-ifindex));
         return -ifindex;
     }
@@ -883,7 +883,7 @@ netdev_tc_flow_get(struct netdev *netdev OVS_UNUSED,
 
     ifindex = netdev_get_ifindex(dev);
     if (ifindex < 0) {
-        VLOG_ERR_RL(&error_rl, "failed to get ifindex for %s: %s",
+        VLOG_ERR_RL(&error_rl, "flow_get: failed to get ifindex for %s: %s",
                     netdev_get_name(dev), ovs_strerror(-ifindex));
         netdev_close(dev);
         return -ifindex;
@@ -926,7 +926,7 @@ netdev_tc_flow_del(struct netdev *netdev OVS_UNUSED,
 
     ifindex = netdev_get_ifindex(dev);
     if (ifindex < 0) {
-        VLOG_ERR_RL(&error_rl, "failed to get ifindex for %s: %s",
+        VLOG_ERR_RL(&error_rl, "flow_del: failed to get ifindex for %s: %s",
                     netdev_get_name(dev), ovs_strerror(-ifindex));
         netdev_close(dev);
         return -ifindex;
@@ -951,7 +951,7 @@ netdev_tc_init_flow_api(struct netdev *netdev)
 
     ifindex = netdev_get_ifindex(netdev);
     if (ifindex < 0) {
-        VLOG_ERR_RL(&error_rl, "failed to get ifindex for %s: %s",
+        VLOG_ERR_RL(&error_rl, "init: failed to get ifindex for %s: %s",
                     netdev_get_name(netdev), ovs_strerror(-ifindex));
         return -ifindex;
     }
