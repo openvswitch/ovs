@@ -95,6 +95,8 @@ __regex_ends_with_bracket = \
 __regex_ptr_declaration_missing_whitespace = re.compile(r'[a-zA-Z0-9]\*[^*]')
 __regex_is_comment_line = re.compile(r'^\s*(/\*|\*\s)')
 __regex_trailing_operator = re.compile(r'^[^ ]* [^ ]*[?:]$')
+__regex_conditional_else_bracing = re.compile(r'^\s*else\s*{?$')
+__regex_conditional_else_bracing2 = re.compile(r'^\s*}\selse\s*$')
 
 skip_leading_whitespace_check = False
 skip_trailing_whitespace_check = False
@@ -186,6 +188,10 @@ def if_and_for_end_with_bracket_check(line):
             return True
         if __regex_ends_with_bracket.search(line) is None:
             return False
+    if __regex_conditional_else_bracing.match(line) is not None:
+        return False
+    if __regex_conditional_else_bracing2.match(line) is not None:
+        return False
     return True
 
 
