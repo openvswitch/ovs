@@ -75,3 +75,4 @@ testsuite.tmp.orig
 /tests/lcov/
 /Documentation/_build
 /.venv
+/cxx-check
