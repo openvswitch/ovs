@@ -440,7 +440,12 @@ consider_local_datapath(struct controller_ctx *ctx,
     }
 
     if (ctx->ovnsb_idl_txn) {
-        if (our_chassis) {
+        const char *vif_chassis = smap_get(&binding_rec->options,
+                                           "requested-chassis");
+        bool can_bind = !vif_chassis || !vif_chassis[0] ||
+                        !strcmp(vif_chassis, chassis_rec->name);
+
+        if (can_bind && our_chassis) {
             if (binding_rec->chassis != chassis_rec) {
                 if (binding_rec->chassis) {
                     VLOG_INFO("Changing chassis for lport %s from %s to %s.",
@@ -461,6 +466,14 @@ consider_local_datapath(struct controller_ctx *ctx,
             VLOG_INFO("Releasing lport %s from this chassis.",
                       binding_rec->logical_port);
             sbrec_port_binding_set_chassis(binding_rec, NULL);
+        } else if (our_chassis) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+            VLOG_INFO_RL(&rl,
+                         "Not claiming lport %s, chassis %s "
+                         "requested-chassis %s",
+                         binding_rec->logical_port,
+                         chassis_rec->name,
+                         vif_chassis);
         }
     }
 }
