@@ -8281,3 +8281,62 @@ AT_CHECK([grep "Releasing lport" gw1/ovn-controller.log], [1], [])
 OVN_CLEANUP([gw1],[gw2],[hv1])
 
 AT_CLEANUP
+
+AT_SETUP([ovn -- options:requested-chassis for logical port])
+ovn_start
+
+net_add n1
+
+ovn-nbctl ls-add ls0
+ovn-nbctl lsp-add ls0 lsp0
+
+# create two hypervisors, each with one vif port
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.11
+ovs-vsctl -- add-port br-int hv1-vif0
+
+sim_add hv2
+as hv2
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.12
+ovs-vsctl -- add-port br-int hv2-vif0
+
+# Allow only chassis hv1 to bind logical port lsp0.
+ovn-nbctl lsp-set-options lsp0 requested-chassis=hv1
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+ovn-nbctl --wait=hv --timeout=3 sync
+
+# Retrieve hv1 and hv2 chassis UUIDs from southbound database
+hv1_uuid=$(ovn-sbctl --bare --columns _uuid find chassis name=hv1)
+hv2_uuid=$(ovn-sbctl --bare --columns _uuid find chassis name=hv2)
+
+# (1) Chassis hv2 should not bind lsp0 when requested-chassis is hv1.
+echo "verifying that hv2 does not bind lsp0 when hv2 physical/logical mapping is added"
+as hv2
+ovs-vsctl set interface hv2-vif0 external-ids:iface-id=lsp0
+
+OVS_WAIT_UNTIL([test 1 = $(grep -c "Not claiming lport lsp0" hv2/ovn-controller.log)])
+AT_CHECK([test x$(ovn-sbctl --bare --columns chassis find port_binding logical_port=lsp0) = x], [0], [])
+
+# (2) Chassis hv1 should bind lsp0 when physical to logical mapping exists on hv1.
+echo "verifying that hv1 binds lsp0 when hv1 physical/logical mapping is added"
+as hv1
+ovs-vsctl set interface hv1-vif0 external-ids:iface-id=lsp0
+
+OVS_WAIT_UNTIL([test 1 = $(grep -c "Claiming lport lsp0" hv1/ovn-controller.log)])
+AT_CHECK([test $(ovn-sbctl --bare --columns chassis find port_binding logical_port=lsp0) = "$hv1_uuid"], [0], [])
+
+# (3) Chassis hv1 should release lsp0 binding and chassis hv2 should bind lsp0 when
+# the requested chassis for lsp0 is changed from hv1 to hv2.
+echo "verifying that lsp0 binding moves when requested-chassis is changed"
+
+ovn-nbctl lsp-set-options lsp0 requested-chassis=hv2
+OVS_WAIT_UNTIL([test 1 = $(grep -c "Releasing lport lsp0 from this chassis" hv1/ovn-controller.log)])
+OVS_WAIT_UNTIL([test $(ovn-sbctl --bare --columns chassis find port_binding logical_port=lsp0) = "$hv2_uuid"])
+
+OVN_CLEANUP([hv1],[hv2])
+
+AT_CLEANUP
