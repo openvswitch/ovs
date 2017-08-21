@@ -211,6 +211,7 @@ enum xlate_error {
     XLATE_RECIRCULATION_CONFLICT,
     XLATE_TOO_MANY_MPLS_LABELS,
     XLATE_INVALID_TUNNEL_METADATA,
+    XLATE_UNSUPPORTED_PACKET_TYPE,
 };
 
 const char *xlate_strerror(enum xlate_error error);
