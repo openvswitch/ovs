@@ -424,6 +424,8 @@ const char *xlate_strerror(enum xlate_error error)
         return "Too many MPLS labels";
     case XLATE_INVALID_TUNNEL_METADATA:
         return "Invalid tunnel metadata";
+    case XLATE_UNSUPPORTED_PACKET_TYPE:
+        return "Unsupported packet type";
     }
     return "Unknown error";
 }
@@ -5810,7 +5812,7 @@ rewrite_flow_encap_ethernet(struct xlate_ctx *ctx,
         xlate_report_debug(ctx, OFT_ACTION,
                            "Dropping packet as encap(ethernet) is not "
                            "supported for packet type ethernet.");
-        ctx->error = 1;
+        ctx->error = XLATE_UNSUPPORTED_PACKET_TYPE;
     }
 }
 
@@ -5891,7 +5893,7 @@ rewrite_flow_encap_nsh(struct xlate_ctx *ctx,
                                "Dropping packet as encap(nsh) is not "
                                "supported for packet type (%d,0x%x)",
                                pt_ns(packet_type), pt_ns_type(packet_type));
-            ctx->error = 1;
+            ctx->error = XLATE_UNSUPPORTED_PACKET_TYPE;
             return buf;
     }
     /* Note that we have matched on packet_type! */
@@ -5975,7 +5977,7 @@ xlate_generic_decap_action(struct xlate_ctx *ctx,
                 /* Error handling: drop packet. */
                 xlate_report_debug(ctx, OFT_ACTION, "Dropping packet, cannot "
                                    "decap Ethernet if VLAN is present.");
-                ctx->error = 1;
+                ctx->error = XLATE_UNSUPPORTED_PACKET_TYPE;
             } else {
                 /* Just change the packet_type.
                  * Delay generating pop_eth to the next commit. */
@@ -6006,7 +6008,7 @@ xlate_generic_decap_action(struct xlate_ctx *ctx,
                 xlate_report_debug(ctx, OFT_ACTION,
                                    "Dropping packet as NSH next protocol %d "
                                    "is not supported", flow->nsh.np);
-                ctx->error = 1;
+                ctx->error = XLATE_UNSUPPORTED_PACKET_TYPE;
                 return false;
                 break;
             }
@@ -6020,7 +6022,7 @@ xlate_generic_decap_action(struct xlate_ctx *ctx,
                     "Dropping packet as the decap() does not support "
                     "packet type (%d,0x%x)",
                     pt_ns(flow->packet_type), pt_ns_type(flow->packet_type));
-            ctx->error = 1;
+            ctx->error = XLATE_UNSUPPORTED_PACKET_TYPE;
             return false;
     }
 }
