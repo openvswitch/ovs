@@ -321,11 +321,6 @@ class Stream(object):
                                                             self._read,
                                                             False)
                 self._read_pending = False
-                recvBuffer = self._read_buffer[:nBytesRead]
-                # recvBuffer will have the type memoryview in Python3.
-                # We can use bytes to convert it to type bytes which works on
-                # both Python2 and Python3.
-                return (0, bytes(recvBuffer))
             except pywintypes.error as e:
                 if e.winerror == winutils.winerror.ERROR_IO_INCOMPLETE:
                     # The operation is still pending, try again
@@ -336,30 +331,31 @@ class Stream(object):
                     return (0, "")
                 else:
                     return (errno.EINVAL, "")
-        (errCode, self._read_buffer) = winutils.read_file(self.pipe,
-                                                          n,
-                                                          self._read)
-        if errCode:
-            if errCode == winutils.winerror.ERROR_IO_PENDING:
-                self._read_pending = True
-                return (errno.EAGAIN, "")
-            elif errCode in winutils.pipe_disconnected_errors:
-                # If the pipe was disconnected, return 0.
-                return (0, "")
-            else:
-                return (errCode, "")
+        else:
+            (errCode, self._read_buffer) = winutils.read_file(self.pipe,
+                                                              n,
+                                                              self._read)
+            if errCode:
+                if errCode == winutils.winerror.ERROR_IO_PENDING:
+                    self._read_pending = True
+                    return (errno.EAGAIN, "")
+                elif errCode in winutils.pipe_disconnected_errors:
+                    # If the pipe was disconnected, return 0.
+                    return (0, "")
+                else:
+                    return (errCode, "")
 
-        try:
-            nBytesRead = winutils.get_overlapped_result(self.pipe,
-                                                        self._read,
-                                                        False)
-            winutils.win32event.SetEvent(self._read.hEvent)
-        except pywintypes.error as e:
-            if e.winerror in winutils.pipe_disconnected_errors:
-                # If the pipe was disconnected, return 0.
-                return (0, "")
-            else:
-                return (e.winerror, "")
+            try:
+                nBytesRead = winutils.get_overlapped_result(self.pipe,
+                                                            self._read,
+                                                            False)
+                winutils.win32event.SetEvent(self._read.hEvent)
+            except pywintypes.error as e:
+                if e.winerror in winutils.pipe_disconnected_errors:
+                    # If the pipe was disconnected, return 0.
+                    return (0, "")
+                else:
+                    return (e.winerror, "")
 
         recvBuffer = self._read_buffer[:nBytesRead]
         # recvBuffer will have the type memoryview in Python3.
@@ -406,7 +402,6 @@ class Stream(object):
                                                                self._write,
                                                                False)
                 self._write_pending = False
-                return nBytesWritten
             except pywintypes.error as e:
                 if e.winerror == winutils.winerror.ERROR_IO_INCOMPLETE:
                     # The operation is still pending, try again
@@ -417,19 +412,18 @@ class Stream(object):
                     return -errno.ECONNRESET
                 else:
                     return -errno.EINVAL
-
-        self._write_pending = False
-        (errCode, nBytesWritten) = winutils.write_file(self.pipe,
-                                                       buf,
-                                                       self._write)
-        if errCode:
-            if errCode == winutils.winerror.ERROR_IO_PENDING:
-                self._write_pending = True
-                return -errno.EAGAIN
-            if (not nBytesWritten and
-                    errCode in winutils.pipe_disconnected_errors):
-                # If the pipe was disconnected, return connection reset.
-                return -errno.ECONNRESET
+        else:
+            (errCode, nBytesWritten) = winutils.write_file(self.pipe,
+                                                           buf,
+                                                           self._write)
+            if errCode:
+                if errCode == winutils.winerror.ERROR_IO_PENDING:
+                    self._write_pending = True
+                    return -errno.EAGAIN
+                if (not nBytesWritten and
+                        errCode in winutils.pipe_disconnected_errors):
+                    # If the pipe was disconnected, return connection reset.
+                    return -errno.ECONNRESET
         return nBytesWritten
 
     def run(self):
