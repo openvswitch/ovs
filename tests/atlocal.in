@@ -114,6 +114,8 @@ else
     HAVE_IPV6=no
 fi
 
+# Look for a python L7 library 'LIB' in the system. If it is found, defines
+# HAVE_LIB="yes", otherwise HAVE_LIB="no"
 find_l7_lib()
 {
     set +x
@@ -130,7 +132,9 @@ find_l7_lib()
     fi
 }
 
+# HAVE_FTP
 find_l7_lib ftp
+# HAVE_TFTP
 find_l7_lib tftp
 
 # Look for a commnand in the system. If it is found, defines
