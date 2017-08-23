@@ -17,6 +17,7 @@ import sys
 if sys.platform != 'win32':
     raise Exception("Intended to use only on Windows")
 else:
+    import ntsecuritycon
     import pywintypes
     import win32con
     import win32event
@@ -139,7 +140,65 @@ def create_named_pipe(pipename, openMode=None, pipeMode=None,
     if saAttr == -1:
         # saAttr can be None
         saAttr = win32security.SECURITY_ATTRIBUTES()
+
+        # The identifier authority.
+        sia = ntsecuritycon.SECURITY_NT_AUTHORITY
+
+        # Initialize the SID.
+        remoteAccessSid = win32security.SID()
+        remoteAccessSid.Initialize(
+            sia,  # The identifier authority.
+            1)  # The number of sub authorities to allocate.
+        # Disable access over network.
+        remoteAccessSid.SetSubAuthority(
+            0,  # The index of the sub authority to set
+            ntsecuritycon.SECURITY_NETWORK_RID)
+
+        allowedPsids = []
+        # Allow Windows Services to access the Named Pipe.
+        allowedPsid_0 = win32security.SID()
+        allowedPsid_0.Initialize(
+            sia,  # The identifier authority.
+            1)  # The number of sub authorities to allocate.
+        allowedPsid_0.SetSubAuthority(
+            0,  # The index of the sub authority to set
+            ntsecuritycon.SECURITY_LOCAL_SYSTEM_RID)
+        # Allow Administrators to access the Named Pipe.
+        allowedPsid_1 = win32security.SID()
+        allowedPsid_1.Initialize(
+            sia,  # The identifier authority.
+            2)  # The number of sub authorities to allocate.
+        allowedPsid_1.SetSubAuthority(
+            0,  # The index of the sub authority to set
+            ntsecuritycon.SECURITY_BUILTIN_DOMAIN_RID)
+        allowedPsid_1.SetSubAuthority(
+            1,  # The index of the sub authority to set
+            ntsecuritycon.DOMAIN_ALIAS_RID_ADMINS)
+
+        allowedPsids.append(allowedPsid_0)
+        allowedPsids.append(allowedPsid_1)
+
+        # Initialize an ACL.
+        acl = win32security.ACL()
+        acl.Initialize()
+        # Add denied ACL.
+        acl.AddAccessDeniedAce(win32security.ACL_REVISION,
+                               ntsecuritycon.GENERIC_ALL,
+                               remoteAccessSid)
+        # Add allowed ACLs.
+        for allowedPsid in allowedPsids:
+            acl.AddAccessAllowedAce(win32security.ACL_REVISION,
+                                    ntsecuritycon.GENERIC_ALL,
+                                    allowedPsid)
+
+        # Initialize an SD.
+        sd = win32security.SECURITY_DESCRIPTOR()
+        sd.Initialize()
+        # Set DACL.
+        sd.SetSecurityDescriptorDacl(True, acl, False)
+
         saAttr.bInheritHandle = 1
+        saAttr.SECURITY_DESCRIPTOR = sd
 
     try:
         npipe = win32pipe.CreateNamedPipe(pipename,
