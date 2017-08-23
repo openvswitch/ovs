@@ -552,6 +552,10 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_FIND_PARAM_IFELSE([$KSRC/include/linux/netdevice.h],
                         [netdev_master_upper_dev_link], [upper_priv],
                         [OVS_DEFINE([HAVE_NETDEV_MASTER_UPPER_DEV_LINK_PRIV])])
+  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h],
+                  [netdev_master_upper_dev_link_rh],
+                  [OVS_DEFINE([HAVE_NETDEV_MASTER_UPPER_DEV_LINK_RH])])
+
   OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/netdevice.h], [net_device],
                         [max_mtu])
 
