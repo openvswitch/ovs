@@ -1303,7 +1303,7 @@ ovsdb_datum_from_json__(struct ovsdb_datum *datum,
  * If 'symtab' is nonnull, then named UUIDs in 'symtab' are accepted.  Refer to
  * RFC 7047 for information about this, and for the syntax that this function
  * accepts. */
-struct ovsdb_error *
+struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 ovsdb_datum_from_json(struct ovsdb_datum *datum,
                       const struct ovsdb_type *type,
                       const struct json *json,
@@ -1329,7 +1329,7 @@ ovsdb_datum_from_json(struct ovsdb_datum *datum,
  *
  * The datum generated should be used then discard. It is not suitable
  * for storing into IDL because of the possible member size violation.  */
-struct ovsdb_error *
+struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 ovsdb_transient_datum_from_json(struct ovsdb_datum *datum,
                                 const struct ovsdb_type *type,
                                 const struct json *json)
