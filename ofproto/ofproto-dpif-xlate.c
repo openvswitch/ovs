@@ -5334,7 +5334,8 @@ reversible_actions(const struct ofpact *ofpacts, size_t ofpacts_len)
 }
 
 static void
-compose_clone(struct xlate_ctx *ctx, const struct ofpact_nest *oc)
+clone_xlate_actions(const struct ofpact *actions, size_t actions_len,
+                    struct xlate_ctx *ctx)
 {
     struct ofpbuf old_stack = ctx->stack;
     union mf_subvalue new_stack[1024 / sizeof(union mf_subvalue)];
@@ -5347,12 +5348,11 @@ compose_clone(struct xlate_ctx *ctx, const struct ofpact_nest *oc)
     ofpbuf_put(&ctx->action_set, old_action_set.data, old_action_set.size);
 
     size_t offset, ac_offset;
-    size_t oc_actions_len = ofpact_nest_get_action_len(oc);
     struct flow old_flow = ctx->xin->flow;
 
-    if (reversible_actions(oc->actions, oc_actions_len)) {
+    if (reversible_actions(actions, actions_len)) {
         old_flow = ctx->xin->flow;
-        do_xlate_actions(oc->actions, oc_actions_len, ctx);
+        do_xlate_actions(actions, actions_len, ctx);
         if (ctx->freezing) {
             finish_freezing(ctx);
         }
@@ -5373,7 +5373,7 @@ compose_clone(struct xlate_ctx *ctx, const struct ofpact_nest *oc)
     if (ctx->xbridge->support.clone) { /* Use clone action */
         /* Use clone action as datapath clone. */
         offset = nl_msg_start_nested(ctx->odp_actions, OVS_ACTION_ATTR_CLONE);
-        do_xlate_actions(oc->actions, oc_actions_len, ctx);
+        do_xlate_actions(actions, actions_len, ctx);
         if (ctx->freezing) {
             finish_freezing(ctx);
         }
@@ -5386,7 +5386,7 @@ compose_clone(struct xlate_ctx *ctx, const struct ofpact_nest *oc)
         offset = nl_msg_start_nested(ctx->odp_actions, OVS_ACTION_ATTR_SAMPLE);
         ac_offset = nl_msg_start_nested(ctx->odp_actions,
                                         OVS_SAMPLE_ATTR_ACTIONS);
-        do_xlate_actions(oc->actions, oc_actions_len, ctx);
+        do_xlate_actions(actions, actions_len, ctx);
         if (ctx->freezing) {
             finish_freezing(ctx);
         }
@@ -5422,6 +5422,14 @@ xlate_done:
     ofpbuf_uninit(&ctx->stack);
     ctx->stack = old_stack;
     ctx->xin->flow = old_flow;
+}
+
+static void
+compose_clone(struct xlate_ctx *ctx, const struct ofpact_nest *oc)
+{
+    size_t oc_actions_len = ofpact_nest_get_action_len(oc);
+
+    clone_xlate_actions(oc->actions, oc_actions_len, ctx);
 }
 
 static void
