@@ -432,8 +432,8 @@ static void xlate_action_set(struct xlate_ctx *ctx);
 static void xlate_commit_actions(struct xlate_ctx *ctx);
 
 static void
-apply_nested_clone_actions(struct xlate_ctx *ctx, const struct xport *in_dev,
-                           struct xport *out_dev);
+patch_port_output(struct xlate_ctx *ctx, const struct xport *in_dev,
+                  struct xport *out_dev);
 
 static void
 ctx_trigger_freeze(struct xlate_ctx *ctx)
@@ -3317,7 +3317,7 @@ validate_and_combine_post_tnl_actions(struct xlate_ctx *ctx,
     entry->tunnel_hdr.hdr_size = tnl_push_data.header_len;
     entry->tunnel_hdr.operation = ADD;
 
-    apply_nested_clone_actions(ctx, xport, out_dev);
+    patch_port_output(ctx, xport, out_dev);
     nested_act_flag = is_tunnel_actions_clone_ready(ctx);
 
     if (nested_act_flag) {
@@ -3509,21 +3509,22 @@ xlate_flow_is_protected(const struct xlate_ctx *ctx, const struct flow *flow, co
             xport_in->xbundle->protected && xport_out->xbundle->protected);
 }
 
-/* Function to combine actions from following device/port with the current
- * device actions in openflow pipeline. Mainly used for the translation of
- * patch/tunnel port output actions. It pushes the openflow state into a stack
- * first, clear out to execute the packet through the device and finally pop
- * the openflow state back from the stack. This is equivalent to cloning
- * a packet in translation for the duration of execution.
+/* Function handles when a packet is sent from one bridge to another bridge.
  *
- * On output to a patch port, the output action will be replaced with set of
- * nested actions on the peer patch port.
- * Similarly on output to a tunnel port, the post nested actions on
- * tunnel are chained up with the tunnel-push action.
+ * The bridges are internally connected, either with patch ports or with
+ * tunnel ports.
+ *
+ * The output action to another bridge causes translation to continue within
+ * the next bridge. This process can be recursive; the next bridge can
+ * output yet to another bridge.
+ *
+ * The translated actions from the second bridge onwards are enclosed within
+ * the clone action, so that any modification to the packet will not be visible
+ * to the remaining actions of the originating bridge.
  */
 static void
-apply_nested_clone_actions(struct xlate_ctx *ctx, const struct xport *in_dev,
-              struct xport *out_dev)
+patch_port_output(struct xlate_ctx *ctx, const struct xport *in_dev,
+                  struct xport *out_dev)
 {
     struct flow *flow = &ctx->xin->flow;
     struct flow old_flow = ctx->xin->flow;
@@ -3760,7 +3761,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     }
 
     if (xport->peer) {
-       apply_nested_clone_actions(ctx, xport, xport->peer);
+       patch_port_output(ctx, xport, xport->peer);
        return;
     }
 
