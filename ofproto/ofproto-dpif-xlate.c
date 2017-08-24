@@ -5353,6 +5353,9 @@ compose_clone(struct xlate_ctx *ctx, const struct ofpact_nest *oc)
     if (reversible_actions(oc->actions, oc_actions_len)) {
         old_flow = ctx->xin->flow;
         do_xlate_actions(oc->actions, oc_actions_len, ctx);
+        if (ctx->freezing) {
+            finish_freezing(ctx);
+        }
         goto xlate_done;
     }
 
@@ -5372,6 +5375,9 @@ compose_clone(struct xlate_ctx *ctx, const struct ofpact_nest *oc)
         offset = nl_msg_start_nested(ctx->odp_actions, OVS_ACTION_ATTR_CLONE);
         ac_offset = ctx->odp_actions->size;
         do_xlate_actions(oc->actions, oc_actions_len, ctx);
+        if (ctx->freezing) {
+            finish_freezing(ctx);
+        }
         nl_msg_end_non_empty_nested(ctx->odp_actions, offset);
         goto dp_clone_done;
     }
@@ -5382,6 +5388,9 @@ compose_clone(struct xlate_ctx *ctx, const struct ofpact_nest *oc)
         ac_offset = nl_msg_start_nested(ctx->odp_actions,
                                         OVS_SAMPLE_ATTR_ACTIONS);
         do_xlate_actions(oc->actions, oc_actions_len, ctx);
+        if (ctx->freezing) {
+            finish_freezing(ctx);
+        }
         if (nl_msg_end_non_empty_nested(ctx->odp_actions, ac_offset)) {
             nl_msg_cancel_nested(ctx->odp_actions, offset);
         } else {
