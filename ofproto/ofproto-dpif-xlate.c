@@ -544,7 +544,7 @@ struct xlate_bond_recirc {
 
 static void compose_output_action(struct xlate_ctx *, ofp_port_t ofp_port,
                                   const struct xlate_bond_recirc *xr,
-                                  bool is_last_action);
+                                  bool is_last_action, bool truncate);
 
 static struct xbridge *xbridge_lookup(struct xlate_cfg *,
                                       const struct ofproto_dpif *);
@@ -2227,7 +2227,7 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
     xvlan_put(&ctx->xin->flow, &out_xvlan);
 
     compose_output_action(ctx, xport->ofp_port, use_recirc ? &xr : NULL,
-                          false);
+                          false, false);
     memcpy(&ctx->xin->flow.vlans, &old_vlans, sizeof(old_vlans));
 }
 
@@ -3241,130 +3241,10 @@ propagate_tunnel_data_to_flow(struct xlate_ctx *ctx, struct eth_addr dmac,
                                     is_tnl_ipv6, nw_proto);
 }
 
-/* Validate if the transalated combined actions are OK to proceed.
- * If actions consist of TRUNC action, it is not allowed to do the
- * tunnel_push combine as it cannot update stats correctly.
- */
-static bool
-is_tunnel_actions_clone_ready(struct xlate_ctx *ctx)
-{
-    struct nlattr *tnl_actions;
-    const struct nlattr *a;
-    unsigned int left;
-    size_t actions_len;
-    struct ofpbuf *actions = ctx->odp_actions;
-
-    if (!actions) {
-        /* No actions, no harm in doing combine. */
-        return true;
-    }
-
-    /* Cannot perform tunnel push on slow path action CONTROLLER_OUTPUT. */
-    if (ctx->xout->slow & SLOW_CONTROLLER) {
-        return false;
-    }
-    actions_len = actions->size;
-
-    tnl_actions =(struct nlattr *)(actions->data);
-    NL_ATTR_FOR_EACH_UNSAFE (a, left, tnl_actions, actions_len) {
-        int type = nl_attr_type(a);
-        if (type == OVS_ACTION_ATTR_TRUNC) {
-            VLOG_DBG("Cannot do tunnel action-combine on trunc action");
-            return false;
-            break;
-        }
-    }
-    return true;
-}
-
-static bool
-validate_and_combine_post_tnl_actions(struct xlate_ctx *ctx,
-                                      const struct xport *xport,
-                                      struct xport *out_dev,
-                                      struct ovs_action_push_tnl tnl_push_data)
-{
-    const struct dpif_flow_stats *backup_resubmit_stats;
-    struct xlate_cache *backup_xcache;
-    bool nested_act_flag = false;
-    struct flow_wildcards tmp_flow_wc;
-    struct flow_wildcards *backup_flow_wc_ptr;
-    bool backup_side_effects;
-    const struct dp_packet *backup_pkt;
-
-    memset(&tmp_flow_wc, 0 , sizeof tmp_flow_wc);
-    backup_flow_wc_ptr = ctx->wc;
-    ctx->wc = &tmp_flow_wc;
-    ctx->xin->wc = NULL;
-    backup_resubmit_stats = ctx->xin->resubmit_stats;
-    backup_xcache = ctx->xin->xcache;
-    backup_side_effects = ctx->xin->allow_side_effects;
-    backup_pkt = ctx->xin->packet;
-
-    size_t push_action_size = 0;
-    size_t clone_ofs = nl_msg_start_nested(ctx->odp_actions,
-                                           OVS_ACTION_ATTR_CLONE);
-    odp_put_tnl_push_action(ctx->odp_actions, &tnl_push_data);
-    push_action_size = ctx->odp_actions->size;
-
-    ctx->xin->resubmit_stats =  NULL;
-    ctx->xin->xcache = xlate_cache_new(); /* Use new temporary cache. */
-    ctx->xin->allow_side_effects = false;
-    ctx->xin->packet = NULL;
-
-    /* Push the cache entry for the tunnel first. */
-    struct xc_entry *entry;
-    entry = xlate_cache_add_entry(ctx->xin->xcache, XC_TUNNEL_HEADER);
-    entry->tunnel_hdr.hdr_size = tnl_push_data.header_len;
-    entry->tunnel_hdr.operation = ADD;
-
-    patch_port_output(ctx, xport, out_dev);
-    nested_act_flag = is_tunnel_actions_clone_ready(ctx);
-
-    if (nested_act_flag) {
-         /* Similar to the stats update in revalidation, the x_cache entries
-          * are populated by the previous translation are used to update the
-          * stats correctly.
-          */
-        if (backup_resubmit_stats) {
-            struct dpif_flow_stats tmp_resubmit_stats;
-            memcpy(&tmp_resubmit_stats, backup_resubmit_stats,
-                   sizeof tmp_resubmit_stats);
-            xlate_push_stats(ctx->xin->xcache, &tmp_resubmit_stats);
-        }
-        xlate_cache_steal_entries(backup_xcache, ctx->xin->xcache);
-    } else {
-        /* Combine is not valid. */
-        nl_msg_cancel_nested(ctx->odp_actions, clone_ofs);
-        goto out;
-    }
-    if (ctx->odp_actions->size > push_action_size) {
-        /* Update the CLONE action only when combined. */
-        nl_msg_end_nested(ctx->odp_actions, clone_ofs);
-    } else {
-        nl_msg_cancel_nested(ctx->odp_actions, clone_ofs);
-        /* XXX : There is no real use-case for a tunnel push without
-         * any post actions. However keeping it now
-         * as is to make the 'make check' happy. Should remove when all the
-         * make check tunnel test case does something meaningful on a
-         * tunnel encap packets.
-         */
-        odp_put_tnl_push_action(ctx->odp_actions, &tnl_push_data);
-    }
-
-out:
-    /* Restore context status. */
-    ctx->xin->resubmit_stats = backup_resubmit_stats;
-    xlate_cache_delete(ctx->xin->xcache);
-    ctx->xin->xcache = backup_xcache;
-    ctx->xin->allow_side_effects = backup_side_effects;
-    ctx->xin->packet = backup_pkt;
-    ctx->wc = backup_flow_wc_ptr;
-    return nested_act_flag;
-}
-
 static int
-build_tunnel_send(struct xlate_ctx *ctx, const struct xport *xport,
-                  const struct flow *flow, odp_port_t tunnel_odp_port)
+native_tunnel_output(struct xlate_ctx *ctx, const struct xport *xport,
+                     const struct flow *flow, odp_port_t tunnel_odp_port,
+                     bool truncate)
 {
     struct netdev_tnl_build_header_params tnl_params;
     struct ovs_action_push_tnl tnl_push_data;
@@ -3449,24 +3329,83 @@ build_tunnel_send(struct xlate_ctx *ctx, const struct xport *xport,
      * base_flow need to be set properly, since there is not recirculation
      * any more when sending packet to tunnel. */
 
-    propagate_tunnel_data_to_flow(ctx, dmac, smac, s_ip6, s_ip,
-                                  tnl_params.is_ipv6, tnl_push_data.tnl_type);
+    propagate_tunnel_data_to_flow(ctx, dmac, smac, s_ip6,
+                                  s_ip, tnl_params.is_ipv6,
+                                  tnl_push_data.tnl_type);
 
+    size_t clone_ofs = 0;
+    size_t push_action_size;
 
-    /* Try to see if its possible to apply nested clone actions on tunnel.
-     * Revert the combined actions on tunnel if its not valid.
-     */
-    if (!validate_and_combine_post_tnl_actions(ctx, xport, out_dev,
-                                      tnl_push_data)) {
-        /* Datapath is not doing the recirculation now, so lets make it
-         * happen explicitly.
+    clone_ofs = nl_msg_start_nested(ctx->odp_actions, OVS_ACTION_ATTR_CLONE);
+    odp_put_tnl_push_action(ctx->odp_actions, &tnl_push_data);
+    push_action_size = ctx->odp_actions->size;
+
+    if (!truncate) {
+        const struct dpif_flow_stats *backup_resubmit_stats;
+        struct xlate_cache *backup_xcache;
+        struct flow_wildcards *backup_wc, wc;
+        bool backup_side_effects;
+        const struct dp_packet *backup_packet;
+
+        memset(&wc, 0 , sizeof wc);
+        backup_wc = ctx->wc;
+        ctx->wc = &wc;
+        ctx->xin->wc = NULL;
+        backup_resubmit_stats = ctx->xin->resubmit_stats;
+        backup_xcache = ctx->xin->xcache;
+        backup_side_effects = ctx->xin->allow_side_effects;
+        backup_packet = ctx->xin->packet;
+
+        ctx->xin->resubmit_stats =  NULL;
+        ctx->xin->xcache = xlate_cache_new(); /* Use new temporary cache. */
+        ctx->xin->allow_side_effects = false;
+        ctx->xin->packet = NULL;
+
+        /* Push the cache entry for the tunnel first. */
+        struct xc_entry *entry;
+        entry = xlate_cache_add_entry(ctx->xin->xcache, XC_TUNNEL_HEADER);
+        entry->tunnel_hdr.hdr_size = tnl_push_data.header_len;
+        entry->tunnel_hdr.operation = ADD;
+
+        patch_port_output(ctx, xport, out_dev);
+
+        /* Similar to the stats update in revalidation, the x_cache entries
+         * are populated by the previous translation are used to update the
+         * stats correctly.
          */
-        size_t clone_ofs = nl_msg_start_nested(ctx->odp_actions,
-                                        OVS_ACTION_ATTR_CLONE);
-        odp_put_tnl_push_action(ctx->odp_actions, &tnl_push_data);
+        if (backup_resubmit_stats) {
+            struct dpif_flow_stats stats = *backup_resubmit_stats;
+            xlate_push_stats(ctx->xin->xcache, &stats);
+        }
+        xlate_cache_steal_entries(backup_xcache, ctx->xin->xcache);
+
+        if (ctx->odp_actions->size > push_action_size) {
+            nl_msg_end_non_empty_nested(ctx->odp_actions, clone_ofs);
+        } else {
+            nl_msg_cancel_nested(ctx->odp_actions, clone_ofs);
+            /* XXX : There is no real use-case for a tunnel push without
+             * any post actions. However keeping it now
+             * as is to make the 'make check' happy. Should remove when all the
+             * make check tunnel test case does something meaningful on a
+             * tunnel encap packets.
+             */
+            odp_put_tnl_push_action(ctx->odp_actions, &tnl_push_data);
+        }
+
+        /* Restore context status. */
+        ctx->xin->resubmit_stats = backup_resubmit_stats;
+        xlate_cache_delete(ctx->xin->xcache);
+        ctx->xin->xcache = backup_xcache;
+        ctx->xin->allow_side_effects = backup_side_effects;
+        ctx->xin->packet = backup_packet;
+        ctx->wc = backup_wc;
+    } else {
+        /* In order to maintain accurate stats, use recirc for
+         * natvie tunneling.  */
         nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_RECIRC, 0);
         nl_msg_end_nested(ctx->odp_actions, clone_ofs);
     }
+
     /* Restore the flows after the translation. */
     memcpy(&ctx->xin->flow, &old_flow, sizeof ctx->xin->flow);
     memcpy(&ctx->base_flow, &old_base_flow, sizeof ctx->base_flow);
@@ -3727,7 +3666,7 @@ terminate_native_tunnel(struct xlate_ctx *ctx, ofp_port_t ofp_port,
 static void
 compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                         const struct xlate_bond_recirc *xr, bool check_stp,
-                        bool is_last_action OVS_UNUSED)
+                        bool is_last_action OVS_UNUSED, bool truncate)
 {
     const struct xport *xport = get_ofp_port(ctx->xbridge, ofp_port);
     struct flow_wildcards *wc = ctx->wc;
@@ -3761,6 +3700,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     }
 
     if (xport->peer) {
+       ovs_assert(!truncate)
        patch_port_output(ctx, xport, xport->peer);
        return;
     }
@@ -3837,7 +3777,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                            xr->recirc_id);
         } else if (is_native_tunnel) {
             /* Output to native tunnel port. */
-            build_tunnel_send(ctx, xport, flow, odp_port);
+            native_tunnel_output(ctx, xport, flow, odp_port, truncate);
             flow->tunnel = flow_tnl; /* Restore tunnel metadata */
 
         } else if (terminate_native_tunnel(ctx, ofp_port, flow, wc,
@@ -3894,9 +3834,10 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
 static void
 compose_output_action(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                       const struct xlate_bond_recirc *xr,
-                      bool is_last_action)
+                      bool is_last_action, bool truncate)
 {
-    compose_output_action__(ctx, ofp_port, xr, true, is_last_action);
+    compose_output_action__(ctx, ofp_port, xr, true,
+                            is_last_action, truncate);
 }
 
 static void
@@ -4363,9 +4304,10 @@ flood_packet_to_port(struct xlate_ctx *ctx, const struct xport *xport,
 
     if (all) {
         compose_output_action__(ctx, xport->ofp_port, NULL, false,
-                                is_last_action);
+                                is_last_action, false);
     } else {
-        compose_output_action(ctx, xport->ofp_port, NULL, is_last_action);
+        compose_output_action(ctx, xport->ofp_port, NULL, is_last_action,
+                              false);
     }
 }
 
@@ -4887,26 +4829,31 @@ xlate_output_action(struct xlate_ctx *ctx,
                     bool is_last_action)
 {
     ofp_port_t prev_nf_output_iface = ctx->nf_output_iface;
+    bool truncate = max_len != 0;
 
     ctx->nf_output_iface = NF_OUT_DROP;
 
     switch (port) {
     case OFPP_IN_PORT:
         compose_output_action(ctx, ctx->xin->flow.in_port.ofp_port, NULL,
-                              is_last_action);
+                              is_last_action, truncate);
         break;
     case OFPP_TABLE:
+        ovs_assert(!truncate);
         xlate_table_action(ctx, ctx->xin->flow.in_port.ofp_port,
-                           0, may_packet_in, true, false, is_last_action,
+                           0, may_packet_in, true, false, false,
                            do_xlate_actions);
         break;
     case OFPP_NORMAL:
+        ovs_assert(!truncate);
         xlate_normal(ctx);
         break;
     case OFPP_FLOOD:
+        ovs_assert(!truncate);
         flood_packets(ctx, false, is_last_action);
         break;
     case OFPP_ALL:
+        ovs_assert(!truncate);
         flood_packets(ctx, true, is_last_action);
         break;
     case OFPP_CONTROLLER:
@@ -4922,7 +4869,7 @@ xlate_output_action(struct xlate_ctx *ctx,
     case OFPP_LOCAL:
     default:
         if (port != ctx->xin->flow.in_port.ofp_port) {
-            compose_output_action(ctx, port, NULL, is_last_action);
+            compose_output_action(ctx, port, NULL, is_last_action, truncate);
         } else {
             xlate_report(ctx, OFT_WARN, "skipping output to input port");
         }
@@ -5039,7 +4986,7 @@ xlate_enqueue_action(struct xlate_ctx *ctx,
     /* Add datapath actions. */
     flow_priority = ctx->xin->flow.skb_priority;
     ctx->xin->flow.skb_priority = priority;
-    compose_output_action(ctx, ofp_port, NULL, is_last_action);
+    compose_output_action(ctx, ofp_port, NULL, is_last_action, false);
     ctx->xin->flow.skb_priority = flow_priority;
 
     /* Update NetFlow output port. */
@@ -7190,7 +7137,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             && xbridge->has_in_band
             && in_band_must_output_to_local_port(flow)
             && !actions_output_to_local_port(&ctx)) {
-            compose_output_action(&ctx, OFPP_LOCAL, NULL, false);
+            compose_output_action(&ctx, OFPP_LOCAL, NULL, false, false);
         }
 
         if (user_cookie_offset) {
