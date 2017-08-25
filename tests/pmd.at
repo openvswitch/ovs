@@ -53,7 +53,7 @@ m4_define([CHECK_PMD_THREADS_CREATED], [
 ])
 
 m4_define([SED_NUMA_CORE_PATTERN], ["s/\(numa_id \)[[0-9]]*\( core_id \)[[0-9]]*:/\1<cleared>\2<cleared>:/"])
-m4_define([SED_NUMA_CORE_QUEUE_PATTERN], ["s/\(numa_id \)[[0-9]]*\( core_id \)[[0-9]]*:/\1<cleared>\2<cleared>:/;s/\(queue-id: \)0 2 4 6/\1<cleared>/;s/\(queue-id: \)1 3 5 7/\1<cleared>/"])
+m4_define([SED_NUMA_CORE_QUEUE_PATTERN], ["s/\(numa_id \)[[0-9]]*\( core_id \)[[0-9]]*:/\1<cleared>\2<cleared>:/;s/\(queue-id: \)1 2 5 6/\1<cleared>/;s/\(queue-id: \)0 3 4 7/\1<cleared>/"])
 m4_define([DUMMY_NUMA], [--dummy-numa="0,0,0,0"])
 
 AT_SETUP([PMD - creating a thread/add-port])
