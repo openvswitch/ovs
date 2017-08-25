@@ -160,8 +160,9 @@ dp_packet_clone(const struct dp_packet *buffer)
     return dp_packet_clone_with_headroom(buffer, 0);
 }
 
-/* Creates and returns a new dp_packet whose data are copied from 'buffer'.   The
- * returned dp_packet will additionally have 'headroom' bytes of headroom. */
+/* Creates and returns a new dp_packet whose data are copied from 'buffer'.
+ * The returned dp_packet will additionally have 'headroom' bytes of
+ * headroom. */
 struct dp_packet *
 dp_packet_clone_with_headroom(const struct dp_packet *buffer, size_t headroom)
 {
@@ -170,13 +171,12 @@ dp_packet_clone_with_headroom(const struct dp_packet *buffer, size_t headroom)
     new_buffer = dp_packet_clone_data_with_headroom(dp_packet_data(buffer),
                                                  dp_packet_size(buffer),
                                                  headroom);
-    new_buffer->l2_pad_size = buffer->l2_pad_size;
-    new_buffer->l2_5_ofs = buffer->l2_5_ofs;
-    new_buffer->l3_ofs = buffer->l3_ofs;
-    new_buffer->l4_ofs = buffer->l4_ofs;
-    new_buffer->md = buffer->md;
-    new_buffer->cutlen = buffer->cutlen;
-    new_buffer->packet_type = buffer->packet_type;
+    /* Copy the following fields into the returned buffer: l2_pad_size,
+     * l2_5_ofs, l3_ofs, l4_ofs, cutlen, packet_type and md. */
+    memcpy(&new_buffer->l2_pad_size, &buffer->l2_pad_size,
+            sizeof(struct dp_packet) -
+            offsetof(struct dp_packet, l2_pad_size));
+
 #ifdef DPDK_NETDEV
     new_buffer->mbuf.ol_flags = buffer->mbuf.ol_flags;
 #else
