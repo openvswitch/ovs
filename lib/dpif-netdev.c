@@ -5385,7 +5385,7 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
 
         conntrack_execute(&dp->conntrack, packets_, aux->flow->dl_type, force,
                           commit, zone, setmark, setlabel, helper,
-                          nat_action_info_ref);
+                          nat_action_info_ref, now);
         break;
     }
 

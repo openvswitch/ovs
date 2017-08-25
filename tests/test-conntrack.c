@@ -84,12 +84,13 @@ ct_thread_main(void *aux_)
     struct dp_packet_batch *pkt_batch;
     ovs_be16 dl_type;
     size_t i;
+    long long now = time_msec();
 
     pkt_batch = prepare_packets(batch_size, change_conn, aux->tid, &dl_type);
     ovs_barrier_block(&barrier);
     for (i = 0; i < n_pkts; i += batch_size) {
         conntrack_execute(&ct, pkt_batch, dl_type, false, true, 0, NULL, NULL,
-                          NULL, NULL);
+                          NULL, NULL, now);
     }
     ovs_barrier_block(&barrier);
     destroy_packets(pkt_batch);
@@ -154,6 +155,7 @@ pcap_batch_execute_conntrack(struct conntrack *ct,
 {
     struct dp_packet_batch new_batch;
     ovs_be16 dl_type = htons(0);
+    long long now = time_msec();
 
     dp_packet_batch_init(&new_batch);
 
@@ -172,7 +174,7 @@ pcap_batch_execute_conntrack(struct conntrack *ct,
 
         if (flow.dl_type != dl_type) {
             conntrack_execute(ct, &new_batch, dl_type, false, true, 0,
-                              NULL, NULL, NULL, NULL);
+                              NULL, NULL, NULL, NULL, now);
             dp_packet_batch_init(&new_batch);
         }
         new_batch.packets[new_batch.count++] = packet;;
@@ -180,7 +182,7 @@ pcap_batch_execute_conntrack(struct conntrack *ct,
 
     if (!dp_packet_batch_is_empty(&new_batch)) {
         conntrack_execute(ct, &new_batch, dl_type, false, true, 0, NULL, NULL,
-                          NULL, NULL);
+                          NULL, NULL, now);
     }
 
 }

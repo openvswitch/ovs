@@ -1136,13 +1136,13 @@ conntrack_execute(struct conntrack *ct, struct dp_packet_batch *pkt_batch,
                   const uint32_t *setmark,
                   const struct ovs_key_ct_labels *setlabel,
                   const char *helper,
-                  const struct nat_action_info_t *nat_action_info)
+                  const struct nat_action_info_t *nat_action_info,
+                  long long now)
 {
 
     struct dp_packet **pkts = pkt_batch->packets;
     size_t cnt = pkt_batch->count;
     struct conn_lookup_ctx ctx;
-    long long now = time_msec();
 
     for (size_t i = 0; i < cnt; i++) {
         if (!conn_key_extract(ct, pkts[i], dl_type, &ctx, zone)) {
