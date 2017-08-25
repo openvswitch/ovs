@@ -181,6 +181,10 @@ struct emc_cache {
 /* Time in ms between successive optimizations of the dpcls subtable vector */
 #define DPCLS_OPTIMIZATION_INTERVAL 1000
 
+/* Number of intervals for which cycles are stored
+ * and used during rxq to pmd assignment. */
+#define PMD_RXQ_INTERVAL_MAX 6
+
 struct dpcls {
     struct cmap_node node;      /* Within dp_netdev_pmd_thread.classifiers */
     odp_port_t in_port;
@@ -339,6 +343,15 @@ enum pmd_cycles_counter_type {
     PMD_N_CYCLES
 };
 
+enum rxq_cycles_counter_type {
+    RXQ_CYCLES_PROC_CURR,       /* Cycles spent successfully polling and
+                                   processing packets during the current
+                                   interval. */
+    RXQ_CYCLES_PROC_HIST,       /* Total cycles of all intervals that are used
+                                   during rxq to pmd assignment. */
+    RXQ_N_CYCLES
+};
+
 #define XPS_TIMEOUT_MS 500LL
 
 /* Contained by struct dp_netdev_port's 'rxqs' member.  */
@@ -350,6 +363,13 @@ struct dp_netdev_rxq {
                                           queue doesn't need to be pinned to a
                                           particular core. */
     struct dp_netdev_pmd_thread *pmd;  /* pmd thread that polls this queue. */
+
+    /* Counters of cycles spent successfully polling and processing pkts. */
+    atomic_ullong cycles[RXQ_N_CYCLES];
+    /* We store PMD_RXQ_INTERVAL_MAX intervals of data for an rxq and then
+       sum them to yield the cycles used for an rxq. */
+    atomic_ullong cycles_intrvl[PMD_RXQ_INTERVAL_MAX];
+    unsigned intrvl_idx;               /* Write index for 'cycles_intrvl'. */
 };
 
 /* A port in a netdev-based datapath. */
@@ -676,7 +696,6 @@ static void pmd_load_cached_ports(struct dp_netdev_pmd_thread *pmd)
     OVS_REQUIRES(pmd->port_mutex);
 static inline void
 dp_netdev_pmd_try_optimize(struct dp_netdev_pmd_thread *pmd);
-
 static void
 dpif_netdev_xps_revalidate_pmd(const struct dp_netdev_pmd_thread *pmd,
                                long long now, bool purge);
@@ -3091,6 +3110,7 @@ cycles_count_end(struct dp_netdev_pmd_thread *pmd,
 /* Calculate the intermediate cycle result and add to the counter 'type' */
 static inline void
 cycles_count_intermediate(struct dp_netdev_pmd_thread *pmd,
+                          struct dp_netdev_rxq *rxq,
                           enum pmd_cycles_counter_type type)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
@@ -3099,6 +3119,10 @@ cycles_count_intermediate(struct dp_netdev_pmd_thread *pmd,
     pmd->last_cycles = new_cycles;
 
     non_atomic_ullong_add(&pmd->cycles.n[type], interval);
+    if (rxq && (type == PMD_CYCLES_PROCESSING)) {
+        /* Add to the amount of current processing cycles. */
+        non_atomic_ullong_add(&rxq->cycles[RXQ_CYCLES_PROC_CURR], interval);
+    }
 }
 
 static int
@@ -3667,7 +3691,7 @@ dpif_netdev_run(struct dpif *dpif)
                         dp_netdev_process_rxq_port(non_pmd,
                                                    port->rxqs[i].rx,
                                                    port->port_no);
-                    cycles_count_intermediate(non_pmd, process_packets ?
+                    cycles_count_intermediate(non_pmd, NULL, process_packets ?
                                                        PMD_CYCLES_PROCESSING
                                                      : PMD_CYCLES_IDLE);
                 }
@@ -3854,7 +3878,7 @@ reload:
             process_packets =
                 dp_netdev_process_rxq_port(pmd, poll_list[i].rxq->rx,
                                            poll_list[i].port_no);
-            cycles_count_intermediate(pmd,
+            cycles_count_intermediate(pmd, NULL,
                                       process_packets ? PMD_CYCLES_PROCESSING
                                                       : PMD_CYCLES_IDLE);
         }
