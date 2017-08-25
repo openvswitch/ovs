@@ -102,10 +102,6 @@ class Stream(object):
         self.socket = socket
         self.pipe = pipe
         if sys.platform == 'win32':
-            self._read = pywintypes.OVERLAPPED()
-            self._read.hEvent = winutils.get_new_event()
-            self._write = pywintypes.OVERLAPPED()
-            self._write.hEvent = winutils.get_new_event()
             if pipe is not None:
                 # Flag to check if fd is a server HANDLE.  In the case of a
                 # server handle we have to issue a disconnect before closing
@@ -114,6 +110,13 @@ class Stream(object):
                 suffix = name.split(":", 1)[1]
                 suffix = ovs.util.abs_file_name(ovs.dirs.RUNDIR, suffix)
                 self._pipename = winutils.get_pipe_name(suffix)
+                self._read = pywintypes.OVERLAPPED()
+                self._read.hEvent = winutils.get_new_event()
+                self._write = pywintypes.OVERLAPPED()
+                self._write.hEvent = winutils.get_new_event()
+            else:
+                self._wevent = winutils.get_new_event(bManualReset=False,
+                                                      bInitialState=False)
 
         self.name = name
         if status == errno.EAGAIN:
@@ -459,24 +462,24 @@ class Stream(object):
                               win32file.FD_CLOSE)
                 try:
                     win32file.WSAEventSelect(self.socket,
-                                             self._read.hEvent,
+                                             self._wevent,
                                              read_flags)
                 except pywintypes.error as e:
                     vlog.err("failed to associate events with socket: %s"
                              % e.strerror)
-                poller.fd_wait(self._read.hEvent, ovs.poller.POLLIN)
+                poller.fd_wait(self._wevent, ovs.poller.POLLIN)
             else:
                 write_flags = (win32file.FD_WRITE |
                                win32file.FD_CONNECT |
                                win32file.FD_CLOSE)
                 try:
                     win32file.WSAEventSelect(self.socket,
-                                             self._write.hEvent,
+                                             self._wevent,
                                              write_flags)
                 except pywintypes.error as e:
                     vlog.err("failed to associate events with socket: %s"
                              % e.strerror)
-                poller.fd_wait(self._write.hEvent, ovs.poller.POLLOUT)
+                poller.fd_wait(self._wevent, ovs.poller.POLLOUT)
         else:
             if wait == Stream.W_RECV:
                 if self._read:
