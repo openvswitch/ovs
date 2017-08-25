@@ -485,7 +485,7 @@ struct dp_netdev_pmd_cycles {
 };
 
 struct polled_queue {
-    struct netdev_rxq *rx;
+    struct dp_netdev_rxq *rxq;
     odp_port_t port_no;
 };
 
@@ -3798,7 +3798,7 @@ pmd_load_queues_and_ports(struct dp_netdev_pmd_thread *pmd,
 
     i = 0;
     HMAP_FOR_EACH (poll, node, &pmd->poll_list) {
-        poll_list[i].rx = poll->rxq->rx;
+        poll_list[i].rxq = poll->rxq;
         poll_list[i].port_no = poll->rxq->port->port_no;
         i++;
     }
@@ -3836,8 +3836,8 @@ reload:
     /* List port/core affinity */
     for (i = 0; i < poll_cnt; i++) {
        VLOG_DBG("Core %d processing port \'%s\' with queue-id %d\n",
-                pmd->core_id, netdev_rxq_get_name(poll_list[i].rx),
-                netdev_rxq_get_queue_id(poll_list[i].rx));
+                pmd->core_id, netdev_rxq_get_name(poll_list[i].rxq->rx),
+                netdev_rxq_get_queue_id(poll_list[i].rxq->rx));
     }
 
     if (!poll_cnt) {
@@ -3852,7 +3852,7 @@ reload:
     for (;;) {
         for (i = 0; i < poll_cnt; i++) {
             process_packets =
-                dp_netdev_process_rxq_port(pmd, poll_list[i].rx,
+                dp_netdev_process_rxq_port(pmd, poll_list[i].rxq->rx,
                                            poll_list[i].port_no);
             cycles_count_intermediate(pmd,
                                       process_packets ? PMD_CYCLES_PROCESSING
