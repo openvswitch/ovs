@@ -139,7 +139,10 @@ Core 3: Q1 (80%) |
 Core 7: Q4 (70%) | Q5 (10%)
 core 8: Q3 (60%) | Q0 (30%)
 
-Rxq to pmds assignment takes place whenever there are configuration changes.
+Rxq to pmds assignment takes place whenever there are configuration changes
+or can be triggered by using::
+
+    $ ovs-appctl dpif-netdev/pmd-rxq-rebalance
 
 QoS
 ---
