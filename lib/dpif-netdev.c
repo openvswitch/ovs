@@ -181,6 +181,10 @@ struct emc_cache {
 /* Time in ms between successive optimizations of the dpcls subtable vector */
 #define DPCLS_OPTIMIZATION_INTERVAL 1000
 
+/* Time in ms of the interval in which rxq processing cycles used in
+ * rxq to pmd assignments is measured and stored. */
+#define PMD_RXQ_INTERVAL_LEN 10000
+
 /* Number of intervals for which cycles are stored
  * and used during rxq to pmd assignment. */
 #define PMD_RXQ_INTERVAL_MAX 6
@@ -569,6 +573,9 @@ struct dp_netdev_pmd_thread {
     struct cmap classifiers;
     /* Periodically sort subtable vectors according to hit frequencies */
     long long int next_optimization;
+    /* End of the next time interval for which processing cycles
+       are stored for each polled rxq. */
+    long long int rxq_interval;
 
     /* Statistics. */
     struct dp_netdev_pmd_stats stats;
@@ -695,7 +702,18 @@ static void dp_netdev_pmd_flow_flush(struct dp_netdev_pmd_thread *pmd);
 static void pmd_load_cached_ports(struct dp_netdev_pmd_thread *pmd)
     OVS_REQUIRES(pmd->port_mutex);
 static inline void
-dp_netdev_pmd_try_optimize(struct dp_netdev_pmd_thread *pmd);
+dp_netdev_pmd_try_optimize(struct dp_netdev_pmd_thread *pmd,
+                           struct polled_queue *poll_list, int poll_cnt);
+static void
+dp_netdev_rxq_set_cycles(struct dp_netdev_rxq *rx,
+                         enum rxq_cycles_counter_type type,
+                         unsigned long long cycles);
+static uint64_t
+dp_netdev_rxq_get_cycles(struct dp_netdev_rxq *rx,
+                         enum rxq_cycles_counter_type type);
+static void
+dp_netdev_rxq_set_intrvl_cycles(struct dp_netdev_rxq *rx,
+                           unsigned long long cycles);
 static void
 dpif_netdev_xps_revalidate_pmd(const struct dp_netdev_pmd_thread *pmd,
                                long long now, bool purge);
@@ -3125,6 +3143,31 @@ cycles_count_intermediate(struct dp_netdev_pmd_thread *pmd,
     }
 }
 
+static void
+dp_netdev_rxq_set_cycles(struct dp_netdev_rxq *rx,
+                         enum rxq_cycles_counter_type type,
+                         unsigned long long cycles)
+{
+   atomic_store_relaxed(&rx->cycles[type], cycles);
+}
+
+static uint64_t
+dp_netdev_rxq_get_cycles(struct dp_netdev_rxq *rx,
+                         enum rxq_cycles_counter_type type)
+{
+    unsigned long long processing_cycles;
+    atomic_read_relaxed(&rx->cycles[type], &processing_cycles);
+    return processing_cycles;
+}
+
+static void
+dp_netdev_rxq_set_intrvl_cycles(struct dp_netdev_rxq *rx,
+                                unsigned long long cycles)
+{
+   atomic_store_relaxed(&rx->cycles_intrvl[rx->intrvl_idx++
+                                           % PMD_RXQ_INTERVAL_MAX], cycles);
+}
+
 static int
 dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
                            struct netdev_rxq *rx,
@@ -3178,6 +3221,7 @@ port_reconfigure(struct dp_netdev_port *port)
         netdev_rxq_close(port->rxqs[i].rx);
         port->rxqs[i].rx = NULL;
     }
+    unsigned last_nrxq = port->n_rxq;
     port->n_rxq = 0;
 
     /* Allows 'netdev' to apply the pending configuration changes. */
@@ -3198,6 +3242,14 @@ port_reconfigure(struct dp_netdev_port *port)
 
     for (i = 0; i < netdev_n_rxq(netdev); i++) {
         port->rxqs[i].port = port;
+        if (i >= last_nrxq) {
+            /* Only reset cycle stats for new queues */
+            dp_netdev_rxq_set_cycles(&port->rxqs[i], RXQ_CYCLES_PROC_CURR, 0);
+            dp_netdev_rxq_set_cycles(&port->rxqs[i], RXQ_CYCLES_PROC_HIST, 0);
+            for (unsigned j = 0; j < PMD_RXQ_INTERVAL_MAX; j++) {
+                dp_netdev_rxq_set_intrvl_cycles(&port->rxqs[i], 0);
+            }
+        }
         err = netdev_rxq_open(netdev, &port->rxqs[i].rx, i);
         if (err) {
             return err;
@@ -3878,7 +3930,7 @@ reload:
             process_packets =
                 dp_netdev_process_rxq_port(pmd, poll_list[i].rxq->rx,
                                            poll_list[i].port_no);
-            cycles_count_intermediate(pmd, NULL,
+            cycles_count_intermediate(pmd, poll_list[i].rxq,
                                       process_packets ? PMD_CYCLES_PROCESSING
                                                       : PMD_CYCLES_IDLE);
         }
@@ -3889,7 +3941,7 @@ reload:
             lc = 0;
 
             coverage_try_clear();
-            dp_netdev_pmd_try_optimize(pmd);
+            dp_netdev_pmd_try_optimize(pmd, poll_list, poll_cnt);
             if (!ovsrcu_try_quiesce()) {
                 emc_cache_slow_sweep(&pmd->flow_cache);
             }
@@ -4333,6 +4385,7 @@ dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
     cmap_init(&pmd->flow_table);
     cmap_init(&pmd->classifiers);
     pmd->next_optimization = time_msec() + DPCLS_OPTIMIZATION_INTERVAL;
+    pmd->rxq_interval = time_msec() + PMD_RXQ_INTERVAL_LEN;
     hmap_init(&pmd->poll_list);
     hmap_init(&pmd->tx_ports);
     hmap_init(&pmd->tnl_port_cache);
@@ -5770,10 +5823,24 @@ dpcls_sort_subtable_vector(struct dpcls *cls)
 }
 
 static inline void
-dp_netdev_pmd_try_optimize(struct dp_netdev_pmd_thread *pmd)
+dp_netdev_pmd_try_optimize(struct dp_netdev_pmd_thread *pmd,
+                           struct polled_queue *poll_list, int poll_cnt)
 {
     struct dpcls *cls;
     long long int now = time_msec();
+
+    if (now > pmd->rxq_interval) {
+        /* Get the cycles that were used to process each queue and store. */
+        for (unsigned i = 0; i < poll_cnt; i++) {
+            uint64_t rxq_cyc_curr = dp_netdev_rxq_get_cycles(poll_list[i].rxq,
+                                                        RXQ_CYCLES_PROC_CURR);
+            dp_netdev_rxq_set_intrvl_cycles(poll_list[i].rxq, rxq_cyc_curr);
+            dp_netdev_rxq_set_cycles(poll_list[i].rxq, RXQ_CYCLES_PROC_CURR,
+                                     0);
+        }
+        /* Start new measuring interval */
+        pmd->rxq_interval = now + PMD_RXQ_INTERVAL_LEN;
+    }
 
     if (now > pmd->next_optimization) {
         /* Try to obtain the flow lock to block out revalidator threads.
