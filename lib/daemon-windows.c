@@ -138,6 +138,12 @@ service_start(int *argcp, char **argvp[])
         *argcp = sargc;
         *argvp = *sargvp;
 
+        /* Enable default error mode so we can take advantage of WER
+         * (Windows Error Reporting) crash dumps.
+         * Being a service it does not allow for WER window pop-up.
+         * XXX implement our on crash dump collection mechanism. */
+        SetErrorMode(0);
+
         return;
     }
 
