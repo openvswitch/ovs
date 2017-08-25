@@ -492,8 +492,6 @@ class Stream(object):
         self.wait(poller, Stream.W_RECV)
 
     def send_wait(self, poller):
-        if sys.platform == 'win32':
-            poller.fd_wait(self.connect.hEvent, ovs.poller.POLLIN)
         self.wait(poller, Stream.W_SEND)
 
     def __del__(self):
