@@ -457,29 +457,24 @@ class Stream(object):
     def __wait_windows(self, poller, wait):
         if self.socket is not None:
             if wait == Stream.W_RECV:
-                read_flags = (win32file.FD_READ |
-                              win32file.FD_ACCEPT |
-                              win32file.FD_CLOSE)
-                try:
-                    win32file.WSAEventSelect(self.socket,
-                                             self._wevent,
-                                             read_flags)
-                except pywintypes.error as e:
-                    vlog.err("failed to associate events with socket: %s"
-                             % e.strerror)
-                poller.fd_wait(self._wevent, ovs.poller.POLLIN)
+                mask = (win32file.FD_READ |
+                        win32file.FD_ACCEPT |
+                        win32file.FD_CLOSE)
+                event = ovs.poller.POLLIN
             else:
-                write_flags = (win32file.FD_WRITE |
-                               win32file.FD_CONNECT |
-                               win32file.FD_CLOSE)
-                try:
-                    win32file.WSAEventSelect(self.socket,
-                                             self._wevent,
-                                             write_flags)
-                except pywintypes.error as e:
-                    vlog.err("failed to associate events with socket: %s"
-                             % e.strerror)
-                poller.fd_wait(self._wevent, ovs.poller.POLLOUT)
+                mask = (win32file.FD_WRITE |
+                        win32file.FD_CONNECT |
+                        win32file.FD_CLOSE)
+                event = ovs.poller.POLLOUT
+
+            try:
+                win32file.WSAEventSelect(self.socket,
+                                         self._wevent,
+                                         mask)
+            except pywintypes.error as e:
+                vlog.err("failed to associate events with socket: %s"
+                         % e.strerror)
+            poller.fd_wait(self._wevent, event)
         else:
             if wait == Stream.W_RECV:
                 if self._read:
@@ -549,7 +544,7 @@ class PassiveStream(object):
         self.socket = sock
         if pipe is not None:
             self.connect = pywintypes.OVERLAPPED()
-            self.connect.hEvent = winutils.get_new_event(bManualReset=True)
+            self.connect.hEvent = winutils.get_new_event()
             self.connect_pending = False
             suffix = name.split(":", 1)[1]
             suffix = ovs.util.abs_file_name(ovs.dirs.RUNDIR, suffix)
