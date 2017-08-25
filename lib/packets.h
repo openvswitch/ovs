@@ -799,6 +799,20 @@ struct udp_header {
 };
 BUILD_ASSERT_DECL(UDP_HEADER_LEN == sizeof(struct udp_header));
 
+#define ESP_HEADER_LEN 8
+struct esp_header {
+    ovs_be32 spi;
+    ovs_be32 seq_no;
+};
+BUILD_ASSERT_DECL(ESP_HEADER_LEN == sizeof(struct esp_header));
+
+#define ESP_TRAILER_LEN 2
+struct esp_trailer {
+    uint8_t pad_len;
+    uint8_t next_hdr;
+};
+BUILD_ASSERT_DECL(ESP_TRAILER_LEN == sizeof(struct esp_trailer));
+
 #define TCP_FIN 0x001
 #define TCP_SYN 0x002
 #define TCP_RST 0x004
