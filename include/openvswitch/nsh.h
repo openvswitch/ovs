@@ -113,7 +113,7 @@ struct nsh_hdr {
 static inline uint16_t
 nsh_hdr_len(const struct nsh_hdr *nsh)
 {
-    return 4 * (ntohs(nsh->ver_flags_len) & NSH_LEN_MASK) >> NSH_LEN_SHIFT;
+    return ((ntohs(nsh->ver_flags_len) & NSH_LEN_MASK) >> NSH_LEN_SHIFT) << 2;
 }
 
 static inline struct nsh_md1_ctx *
