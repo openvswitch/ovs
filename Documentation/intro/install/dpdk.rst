@@ -248,19 +248,11 @@ or::
     $ ovs-vsctl --no-wait set Open_vSwitch . \
         other_config:dpdk-socket-mem="1024"
 
-Similarly, if you wish to better scale the workloads across cores, then
-multiple pmd threads can be created and pinned to CPU cores by explicity
-specifying ``pmd-cpu-mask``. Cores are numbered from 0, so to spawn two pmd
-threads and pin them to cores 1,2, run::
-
-    $ ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x6
-
-Refer to ovs-vswitchd.conf.db(5) for additional information on configuration
-options.
-
 .. note::
   Changing any of these options requires restarting the ovs-vswitchd
   application
+
+See the section ``Performance Tuning`` for important DPDK customizations.
 
 Validating
 ----------
@@ -384,6 +376,94 @@ Now mount the huge pages, if not already done so::
 
     $ mount -t hugetlbfs -o pagesize=1G none /dev/hugepages
 
+Isolate Cores
+~~~~~~~~~~~~~
+
+The ``isolcpus`` option can be used to isolate cores from the Linux scheduler.
+The isolated cores can then be used to dedicatedly run HPC applications or
+threads.  This helps in better application performance due to zero context
+switching and minimal cache thrashing. To run platform logic on core 0 and
+isolate cores between 1 and 19 from scheduler, add  ``isolcpus=1-19`` to GRUB
+cmdline.
+
+.. note::
+  It has been verified that core isolation has minimal advantage due to mature
+  Linux scheduler in some circumstances.
+
+Compiler Optimizations
+~~~~~~~~~~~~~~~~~~~~~~
+
+The default compiler optimization level is ``-O2``. Changing this to more
+aggressive compiler optimization such as ``-O3 -march=native`` with
+gcc (verified on 5.3.1) can produce performance gains though not siginificant.
+``-march=native`` will produce optimized code on local machine and should be
+used when software compilation is done on Testbed.
+
+Multiple Poll-Mode Driver Threads
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+With pmd multi-threading support, OVS creates one pmd thread for each NUMA node
+by default, if there is at least one DPDK interface from that NUMA node added
+to OVS. However, in cases where there are multiple ports/rxq's producing
+traffic, performance can be improved by creating multiple pmd threads running
+on separate cores. These pmd threads can share the workload by each being
+responsible for different ports/rxq's. Assignment of ports/rxq's to pmd threads
+is done automatically.
+
+A set bit in the mask means a pmd thread is created and pinned to the
+corresponding CPU core. For example, to run pmd threads on core 1 and 2::
+
+    $ ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x6
+
+When using dpdk and dpdkvhostuser ports in a bi-directional VM loopback as
+shown below, spreading the workload over 2 or 4 pmd threads shows significant
+improvements as there will be more total CPU occupancy available::
+
+    NIC port0 <-> OVS <-> VM <-> OVS <-> NIC port 1
+
+Refer to ovs-vswitchd.conf.db(5) for additional information on configuration
+options.
+
+Affinity
+~~~~~~~~
+
+For superior performance, DPDK pmd threads and Qemu vCPU threads needs to be
+affinitized accordingly.
+
+- PMD thread Affinity
+
+  A poll mode driver (pmd) thread handles the I/O of all DPDK interfaces
+  assigned to it. A pmd thread shall poll the ports for incoming packets,
+  switch the packets and send to tx port.  A pmd thread is CPU bound, and needs
+  to be affinitized to isolated cores for optimum performance.  Even though a
+  PMD thread may exist, the thread only starts consuming CPU cycles if there is
+  at least one receive queue assigned to the pmd.
+
+  .. note::
+    On NUMA systems, PCI devices are also local to a NUMA node.  Unbound rx
+    queues for a PCI device will be assigned to a pmd on it's local NUMA node
+    if a non-isolated PMD exists on that NUMA node.  If not, the queue will be
+    assigned to a non-isolated pmd on a remote NUMA node.  This will result in
+    reduced maximum throughput on that device and possibly on other devices
+    assigned to that pmd thread. If such a queue assignment is made a warning
+    message will be logged: "There's no available (non-isolated) pmd thread on
+    numa node N. Queue Q on port P will be assigned to the pmd on core C
+    (numa node N'). Expect reduced performance."
+
+  Binding PMD threads to cores is described in the above section
+  ``Multiple Poll-Mode Driver Threads``.
+
+- QEMU vCPU thread Affinity
+
+  A VM performing simple packet forwarding or running complex packet pipelines
+  has to ensure that the vCPU threads performing the work has as much CPU
+  occupancy as possible.
+
+  For example, on a multicore VM, multiple QEMU vCPU threads shall be spawned.
+  When the DPDK ``testpmd`` application that does packet forwarding is invoked,
+  the ``taskset`` command should be used to affinitize the vCPU threads to the
+  dedicated isolated cores on the host system.
+
 Enable HyperThreading
 ~~~~~~~~~~~~~~~~~~~~~
 
@@ -404,25 +484,8 @@ core shared by two logical cores, run::
 where ``N`` is the logical core number.
 
 In this example, it would show that cores ``1`` and ``21`` share the same
-physical core. As cores are counted from 0, the ``pmd-cpu-mask`` can be used
-to enable these two pmd threads running on these two logical cores (one
-physical core) is::
-
-    $ ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x200002
-
-Isolate Cores
-~~~~~~~~~~~~~
-
-The ``isolcpus`` option can be used to isolate cores from the Linux scheduler.
-The isolated cores can then be used to dedicatedly run HPC applications or
-threads.  This helps in better application performance due to zero context
-switching and minimal cache thrashing. To run platform logic on core 0 and
-isolate cores between 1 and 19 from scheduler, add  ``isolcpus=1-19`` to GRUB
-cmdline.
-
-.. note::
-  It has been verified that core isolation has minimal advantage due to mature
-  Linux scheduler in some circumstances.
+physical core. Logical cores can be specified in pmd-cpu-masks similarly to
+physical cores, as described in ``Multiple Poll-Mode Driver Threads``.
 
 NUMA/Cluster-on-Die
 ~~~~~~~~~~~~~~~~~~~
@@ -441,83 +504,8 @@ User ports automatically detect the NUMA socket of the QEMU vCPUs and will be
 serviced by a PMD from the same node provided a core on this node is enabled in
 the ``pmd-cpu-mask``. ``libnuma`` packages are required for this feature.
 
-Compiler Optimizations
-~~~~~~~~~~~~~~~~~~~~~~
-
-The default compiler optimization level is ``-O2``. Changing this to more
-aggressive compiler optimization such as ``-O3 -march=native`` with
-gcc (verified on 5.3.1) can produce performance gains though not siginificant.
-``-march=native`` will produce optimized code on local machine and should be
-used when software compilation is done on Testbed.
-
-Affinity
-~~~~~~~~
-
-For superior performance, DPDK pmd threads and Qemu vCPU threads needs to be
-affinitized accordingly.
-
-- PMD thread Affinity
-
-  A poll mode driver (pmd) thread handles the I/O of all DPDK interfaces
-  assigned to it. A pmd thread shall poll the ports for incoming packets,
-  switch the packets and send to tx port.  A pmd thread is CPU bound, and needs
-  to be affinitized to isolated cores for optimum performance.
-
-  By setting a bit in the mask, a pmd thread is created and pinned to the
-  corresponding CPU core. e.g. to run a pmd thread on core 2::
-
-      $ ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x4
-
-  .. note::
-    A pmd thread on a NUMA node is only created if there is at least one DPDK
-    interface from that NUMA node added to OVS.  A pmd thread is created by
-    default on a core of a NUMA node or when a specified pmd-cpu-mask has
-    indicated so.  Even though a PMD thread may exist, the thread only starts
-    consuming CPU cycles if there is least one receive queue assigned to
-    the pmd.
-
-  .. note::
-    On NUMA systems PCI devices are also local to a NUMA node.  Unbound rx
-    queues for a PCI device will be assigned to a pmd on it's local NUMA node
-    if a non-isolated PMD exists on that NUMA node.  If not, the queue will be
-    assigned to a non-isolated pmd on a remote NUMA node.  This will result in
-    reduced maximum throughput on that device and possibly on other devices
-    assigned to that pmd thread. If such a queue assignment is made a warning
-    message will be logged: "There's no available (non-isolated) pmd thread on
-    numa node N. Queue Q on port P will be assigned to the pmd on core C
-    (numa node N'). Expect reduced performance."
-
-- QEMU vCPU thread Affinity
-
-  A VM performing simple packet forwarding or running complex packet pipelines
-  has to ensure that the vCPU threads performing the work has as much CPU
-  occupancy as possible.
-
-  For example, on a multicore VM, multiple QEMU vCPU threads shall be spawned.
-  When the DPDK ``testpmd`` application that does packet forwarding is invoked,
-  the ``taskset`` command should be used to affinitize the vCPU threads to the
-  dedicated isolated cores on the host system.
-
-Multiple Poll-Mode Driver Threads
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-With pmd multi-threading support, OVS creates one pmd thread for each NUMA node
-by default. However, in cases where there are multiple ports/rxq's producing
-traffic, performance can be improved by creating multiple pmd threads running
-on separate cores. These pmd threads can share the workload by each being
-responsible for different ports/rxq's. Assignment of ports/rxq's to pmd threads
-is done automatically.
-
-A set bit in the mask means a pmd thread is created and pinned to the
-corresponding CPU core. For example, to run pmd threads on core 1 and 2::
-
-    $ ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x6
-
-When using dpdk and dpdkvhostuser ports in a bi-directional VM loopback as
-shown below, spreading the workload over 2 or 4 pmd threads shows significant
-improvements as there will be more total CPU occupancy available::
-
-    NIC port0 <-> OVS <-> VM <-> OVS <-> NIC port 1
+Binding PMD threads is described in the above section
+``Multiple Poll-Mode Driver Threads``.
 
 DPDK Physical Port Rx Queues
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
