@@ -1415,7 +1415,7 @@ ovsdb_jsonrpc_monitor_cond_change(struct ovsdb_jsonrpc_session *s,
 
     m = ovsdb_jsonrpc_monitor_find(s, params->u.array.elems[0]);
     if (!m) {
-        error = ovsdb_syntax_error(request_id, NULL,
+        error = ovsdb_syntax_error(params->u.array.elems[0], NULL,
                                    "unknown monitor session");
         goto error;
     }
