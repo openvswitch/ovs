@@ -9827,21 +9827,21 @@ table=0,priority=1,action=drop
 dnl
 dnl Table 1
 dnl
-table=1,priority=10,in_port=1,ct_state=+trk+new,udp,action=ct(commit,zone=0),2
-table=1,priority=10,in_port=1,ct_state=+trk+est,udp,action=2
-table=1,priority=10,in_port=2,ct_state=+trk+est,udp,action=1
+table=1,priority=10,in_port=1,ct_zone=0,ct_state=+trk+new,udp,action=ct(commit,zone=0),2
+table=1,priority=10,in_port=1,ct_zone=0,ct_state=+trk+est,udp,action=2
+table=1,priority=10,in_port=2,ct_zone=0,ct_state=+trk+est,udp,action=1
 table=1,priority=1,action=drop
 dnl
 dnl Table 2
 dnl
-table=2,priority=10,in_port=1,tcp,ct_state=+trk+new,tcp,action=ct(commit,zone=1),ct(table=3,zone=2)
-table=2,priority=10,in_port=1,tcp,ct_state=+trk+est,tcp,action=ct(table=3,zone=2)
+table=2,priority=10,in_port=1,tcp,ct_zone=1,ct_state=+trk+new,tcp,action=ct(commit,zone=1),ct(table=3,zone=2)
+table=2,priority=10,in_port=1,tcp,ct_zone=1,ct_state=+trk+est,tcp,action=ct(table=3,zone=2)
 table=2,priority=1,action=drop
 dnl
 dnl Table 3
 dnl
-table=3,priority=10,in_port=1,tcp,ct_state=+trk+new,tcp,action=ct(commit,zone=2),4
-table=3,priority=10,in_port=1,tcp,ct_state=+trk+est,tcp,action=3
+table=3,priority=10,in_port=1,tcp,ct_zone=2,ct_state=+trk+new,tcp,action=ct(commit,zone=2),4
+table=3,priority=10,in_port=1,tcp,ct_zone=2,ct_state=+trk+est,tcp,action=3
 table=2,priority=1,action=drop
 ])
 

@@ -4678,7 +4678,8 @@ finish_freezing(struct xlate_ctx *ctx)
  * the remainder of the current action list and asynchronously resume pipeline
  * processing in 'table' with the current metadata and action set. */
 static void
-compose_recirculate_and_fork(struct xlate_ctx *ctx, uint8_t table)
+compose_recirculate_and_fork(struct xlate_ctx *ctx, uint8_t table,
+                             const uint16_t zone)
 {
     uint32_t recirc_id;
     ctx->freezing = true;
@@ -4687,7 +4688,7 @@ compose_recirculate_and_fork(struct xlate_ctx *ctx, uint8_t table)
     if (OVS_UNLIKELY(ctx->xin->trace) && recirc_id) {
         if (oftrace_add_recirc_node(ctx->xin->recirc_queue,
                                     OFT_RECIRC_CONNTRACK, &ctx->xin->flow,
-                                    ctx->xin->packet, recirc_id)) {
+                                    ctx->xin->packet, recirc_id, zone)) {
             xlate_report(ctx, OFT_DETAIL, "A clone of the packet is forked to "
                          "recirculate. The forked pipeline will be resumed at "
                          "table %u.", table);
@@ -5785,7 +5786,7 @@ compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc,
 
     if (ofc->recirc_table != NX_CT_RECIRC_NONE) {
         ctx->conntracked = true;
-        compose_recirculate_and_fork(ctx, ofc->recirc_table);
+        compose_recirculate_and_fork(ctx, ofc->recirc_table, zone);
     }
 
     /* The ct_* fields are only available in the scope of the 'recirc_table'
