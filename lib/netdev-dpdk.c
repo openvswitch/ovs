@@ -1644,6 +1644,7 @@ netdev_dpdk_vhost_rxq_recv(struct netdev_rxq *rxq,
                                          nb_rx, dropped);
     rte_spinlock_unlock(&dev->stats_lock);
 
+    dp_packet_batch_init_cutlen(batch);
     batch->count = (int) nb_rx;
     return 0;
 }
@@ -1683,6 +1684,7 @@ netdev_dpdk_rxq_recv(struct netdev_rxq *rxq, struct dp_packet_batch *batch)
         rte_spinlock_unlock(&dev->stats_lock);
     }
 
+    dp_packet_batch_init_cutlen(batch);
     batch->count = nb_rx;
 
     return 0;

@@ -92,16 +92,18 @@ dp_packet_use_const(struct dp_packet *b, const void *data, size_t size)
     dp_packet_set_size(b, size);
 }
 
-/* Initializes 'b' as an empty dp_packet that contains the 'allocated' bytes of
- * memory starting at 'base'.  DPDK allocated dp_packet and *data is allocated
- * from one continous memory region, so in memory data start right after
- * dp_packet.  Therefore there is special method to free this type of
- * buffer.  dp_packet base, data and size are initialized by dpdk rcv() so no
- * need to initialize those fields. */
+/* Initializes 'b' as an empty dp_packet that contains the 'allocated' bytes.
+ * DPDK allocated dp_packet and *data is allocated from one continous memory
+ * region as part of memory pool, so in memory data start right after
+ * dp_packet.  Therefore, there is a special method to free this type of
+ * buffer.  Here, non-transient ovs dp-packet fields are initialized for
+ * packets that are part of a DPDK memory pool. */
 void
 dp_packet_init_dpdk(struct dp_packet *b, size_t allocated)
 {
-    dp_packet_init__(b, allocated, DPBUF_DPDK);
+    dp_packet_set_allocated(b, allocated);
+    b->source = DPBUF_DPDK;
+    b->packet_type = htonl(PT_ETH);
 }
 
 /* Initializes 'b' as an empty dp_packet with an initial capacity of 'size'
