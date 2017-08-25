@@ -118,6 +118,13 @@ After that PMD threads on cores where RX queues was pinned will become
   ``core_id`` not in ``pmd-cpu-mask``), RX queue will not be polled by any PMD
   thread.
 
+If pmd-rxq-affinity is not set for rxqs, they will be assigned to pmds (cores)
+automatically. The processing cycles that have been stored for each rxq
+will be used where known to assign rxqs to pmd based on a round robin of the
+sorted rxqs.
+
+Rxq to pmds assignment takes place whenever there are configuration changes.
+
 QoS
 ---
 

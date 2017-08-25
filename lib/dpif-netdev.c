@@ -714,6 +714,8 @@ dp_netdev_rxq_get_cycles(struct dp_netdev_rxq *rx,
 static void
 dp_netdev_rxq_set_intrvl_cycles(struct dp_netdev_rxq *rx,
                            unsigned long long cycles);
+static uint64_t
+dp_netdev_rxq_get_intrvl_cycles(struct dp_netdev_rxq *rx, unsigned idx);
 static void
 dpif_netdev_xps_revalidate_pmd(const struct dp_netdev_pmd_thread *pmd,
                                long long now, bool purge);
@@ -3168,6 +3170,14 @@ dp_netdev_rxq_set_intrvl_cycles(struct dp_netdev_rxq *rx,
                                            % PMD_RXQ_INTERVAL_MAX], cycles);
 }
 
+static uint64_t
+dp_netdev_rxq_get_intrvl_cycles(struct dp_netdev_rxq *rx, unsigned idx)
+{
+    unsigned long long processing_cycles;
+    atomic_read_relaxed(&rx->cycles_intrvl[idx], &processing_cycles);
+    return processing_cycles;
+}
+
 static int
 dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
                            struct netdev_rxq *rx,
@@ -3354,9 +3364,38 @@ rr_numa_list_destroy(struct rr_numa_list *rr)
     hmap_destroy(&rr->numas);
 }
 
+/* Sort Rx Queues by the processing cycles they are consuming. */
+static int
+rxq_cycle_sort(const void *a, const void *b)
+{
+    struct dp_netdev_rxq * qa;
+    struct dp_netdev_rxq * qb;
+    uint64_t total_qa, total_qb;
+    unsigned i;
+
+    qa = *(struct dp_netdev_rxq **) a;
+    qb = *(struct dp_netdev_rxq **) b;
+
+    total_qa = total_qb = 0;
+    for (i = 0; i < PMD_RXQ_INTERVAL_MAX; i++) {
+        total_qa += dp_netdev_rxq_get_intrvl_cycles(qa, i);
+        total_qb += dp_netdev_rxq_get_intrvl_cycles(qb, i);
+    }
+    dp_netdev_rxq_set_cycles(qa, RXQ_CYCLES_PROC_HIST, total_qa);
+    dp_netdev_rxq_set_cycles(qb, RXQ_CYCLES_PROC_HIST, total_qb);
+
+    if (total_qa >= total_qb) {
+        return -1;
+    }
+    return 1;
+}
+
 /* Assign pmds to queues.  If 'pinned' is true, assign pmds to pinned
  * queues and marks the pmds as isolated.  Otherwise, assign non isolated
  * pmds to unpinned queues.
+ *
+ * If 'pinned' is false queues will be sorted by processing cycles they are
+ * consuming and then assigned to pmds in round robin order.
  *
  * The function doesn't touch the pmd threads, it just stores the assignment
  * in the 'pmd' member of each rxq. */
@@ -3366,19 +3405,15 @@ rxq_scheduling(struct dp_netdev *dp, bool pinned) OVS_REQUIRES(dp->port_mutex)
     struct dp_netdev_port *port;
     struct rr_numa_list rr;
     struct rr_numa *non_local_numa = NULL;
-
-    rr_numa_list_populate(dp, &rr);
+    struct dp_netdev_rxq ** rxqs = NULL;
+    int i, n_rxqs = 0;
+    struct rr_numa *numa = NULL;
+    int numa_id;
 
     HMAP_FOR_EACH (port, node, &dp->ports) {
-        struct rr_numa *numa;
-        int numa_id;
-
         if (!netdev_is_pmd(port->netdev)) {
             continue;
         }
-
-        numa_id = netdev_get_numa_id(port->netdev);
-        numa = rr_numa_list_lookup(&rr, numa_id);
 
         for (int qid = 0; qid < port->n_rxq; qid++) {
             struct dp_netdev_rxq *q = &port->rxqs[qid];
@@ -3397,36 +3432,62 @@ rxq_scheduling(struct dp_netdev *dp, bool pinned) OVS_REQUIRES(dp->port_mutex)
                     dp_netdev_pmd_unref(pmd);
                 }
             } else if (!pinned && q->core_id == OVS_CORE_UNSPEC) {
-                if (!numa) {
-                    /* There are no pmds on the queue's local NUMA node.
-                       Round-robin on the NUMA nodes that do have pmds. */
-                    non_local_numa = rr_numa_list_next(&rr, non_local_numa);
-                    if (!non_local_numa) {
-                        VLOG_ERR("There is no available (non-isolated) pmd "
-                                 "thread for port \'%s\' queue %d. This queue "
-                                 "will not be polled. Is pmd-cpu-mask set to "
-                                 "zero? Or are all PMDs isolated to other "
-                                 "queues?", netdev_get_name(port->netdev),
-                                 qid);
-                        continue;
-                    }
-                    q->pmd = rr_numa_get_pmd(non_local_numa);
-                    VLOG_WARN("There's no available (non-isolated) pmd thread "
-                              "on numa node %d. Queue %d on port \'%s\' will "
-                              "be assigned to the pmd on core %d "
-                              "(numa node %d). Expect reduced performance.",
-                              numa_id, qid, netdev_get_name(port->netdev),
-                              q->pmd->core_id, q->pmd->numa_id);
+                if (n_rxqs == 0) {
+                    rxqs = xmalloc(sizeof *rxqs);
                 } else {
-                    /* Assign queue to the next (round-robin) PMD on it's local
-                       NUMA node. */
-                    q->pmd = rr_numa_get_pmd(numa);
+                    rxqs = xrealloc(rxqs, sizeof *rxqs * (n_rxqs + 1));
                 }
+                /* Store the queue. */
+                rxqs[n_rxqs++] = q;
             }
         }
     }
 
+    if (n_rxqs > 1) {
+        /* Sort the queues in order of the processing cycles
+         * they consumed during their last pmd interval. */
+        qsort(rxqs, n_rxqs, sizeof *rxqs, rxq_cycle_sort);
+    }
+
+    rr_numa_list_populate(dp, &rr);
+    /* Assign the sorted queues to pmds in round robin. */
+    for (i = 0; i < n_rxqs; i++) {
+        numa_id = netdev_get_numa_id(rxqs[i]->port->netdev);
+        numa = rr_numa_list_lookup(&rr, numa_id);
+        if (!numa) {
+            /* There are no pmds on the queue's local NUMA node.
+               Round robin on the NUMA nodes that do have pmds. */
+            non_local_numa = rr_numa_list_next(&rr, non_local_numa);
+            if (!non_local_numa) {
+                VLOG_ERR("There is no available (non-isolated) pmd "
+                         "thread for port \'%s\' queue %d. This queue "
+                         "will not be polled. Is pmd-cpu-mask set to "
+                         "zero? Or are all PMDs isolated to other "
+                         "queues?", netdev_rxq_get_name(rxqs[i]->rx),
+                         netdev_rxq_get_queue_id(rxqs[i]->rx));
+                continue;
+            }
+            rxqs[i]->pmd = rr_numa_get_pmd(non_local_numa);
+            VLOG_WARN("There's no available (non-isolated) pmd thread "
+                      "on numa node %d. Queue %d on port \'%s\' will "
+                      "be assigned to the pmd on core %d "
+                      "(numa node %d). Expect reduced performance.",
+                      numa_id, netdev_rxq_get_queue_id(rxqs[i]->rx),
+                      netdev_rxq_get_name(rxqs[i]->rx),
+                      rxqs[i]->pmd->core_id, rxqs[i]->pmd->numa_id);
+        } else {
+        rxqs[i]->pmd = rr_numa_get_pmd(numa);
+        VLOG_INFO("Core %d on numa node %d assigned port \'%s\' "
+                  "rx queue %d (measured processing cycles %"PRIu64").",
+                  rxqs[i]->pmd->core_id, numa_id,
+                  netdev_rxq_get_name(rxqs[i]->rx),
+                  netdev_rxq_get_queue_id(rxqs[i]->rx),
+                  dp_netdev_rxq_get_cycles(rxqs[i], RXQ_CYCLES_PROC_HIST));
+        }
+    }
+
     rr_numa_list_destroy(&rr);
+    free(rxqs);
 }
 
 static void
