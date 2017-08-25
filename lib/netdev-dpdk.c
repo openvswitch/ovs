@@ -2018,10 +2018,10 @@ netdev_dpdk_vhost_get_stats(const struct netdev *netdev,
 
     rte_spinlock_lock(&dev->stats_lock);
     /* Supported Stats */
-    stats->rx_packets += dev->stats.rx_packets;
-    stats->tx_packets += dev->stats.tx_packets;
+    stats->rx_packets = dev->stats.rx_packets;
+    stats->tx_packets = dev->stats.tx_packets;
     stats->rx_dropped = dev->stats.rx_dropped;
-    stats->tx_dropped += dev->stats.tx_dropped;
+    stats->tx_dropped = dev->stats.tx_dropped;
     stats->multicast = dev->stats.multicast;
     stats->rx_bytes = dev->stats.rx_bytes;
     stats->tx_bytes = dev->stats.tx_bytes;
