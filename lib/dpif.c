@@ -1547,11 +1547,11 @@ dpif_set_config(struct dpif *dpif, const struct smap *cfg)
     return error;
 }
 
-/* Polls for an upcall from 'dpif' for an upcall handler.  Since there
- * there can be multiple poll loops, 'handler_id' is needed as index to
- * identify the corresponding poll loop.  If successful, stores the upcall
- * into '*upcall', using 'buf' for storage.  Should only be called if
- * 'recv_set' has been used to enable receiving packets from 'dpif'.
+/* Polls for an upcall from 'dpif' for an upcall handler.  Since there can
+ * be multiple poll loops, 'handler_id' is needed as index to identify the
+ * corresponding poll loop.  If successful, stores the upcall into '*upcall',
+ * using 'buf' for storage.  Should only be called if 'recv_set' has been used
+ * to enable receiving packets from 'dpif'.
  *
  * 'upcall->key' and 'upcall->userdata' point into data in the caller-provided
  * 'buf', so their memory cannot be freed separately from 'buf'.
