@@ -131,7 +131,6 @@ send_bogus_packet_ins(struct fail_open *fo)
                 .base = {
                     .packet = dp_packet_data(&b),
                     .packet_len = dp_packet_size(&b),
-                    .flow_metadata = MATCH_CATCHALL_INITIALIZER,
                     .flow_metadata.flow.in_port.ofp_port = OFPP_LOCAL,
                     .flow_metadata.wc.masks.in_port.ofp_port
                     = u16_to_ofp(UINT16_MAX),
