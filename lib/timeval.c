@@ -171,16 +171,14 @@ time_timespec__(struct clock *c, struct timespec *ts)
     }
 }
 
-/* Stores a monotonic timer, accurate within TIME_UPDATE_INTERVAL ms, into
- * '*ts'. */
+/* Stores a monotonic timer into '*ts'. */
 void
 time_timespec(struct timespec *ts)
 {
     time_timespec__(&monotonic_clock, ts);
 }
 
-/* Stores the current time, accurate within TIME_UPDATE_INTERVAL ms, into
- * '*ts'. */
+/* Stores the current time into '*ts'. */
 void
 time_wall_timespec(struct timespec *ts)
 {
@@ -219,14 +217,14 @@ time_msec__(struct clock *c)
     return timespec_to_msec(&ts);
 }
 
-/* Returns a monotonic timer, in ms (within TIME_UPDATE_INTERVAL ms). */
+/* Returns a monotonic timer, in ms. */
 long long int
 time_msec(void)
 {
     return time_msec__(&monotonic_clock);
 }
 
-/* Returns the current time, in ms (within TIME_UPDATE_INTERVAL ms). */
+/* Returns the current time, in ms. */
 long long int
 time_wall_msec(void)
 {
