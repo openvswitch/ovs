@@ -805,6 +805,7 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
      * against with firewall rules or a separate firewall.
      * Also using zone partitioning can limit DoS impact. */
 nat_res_exhaustion:
+    ovs_list_remove(&nc->exp_node);
     delete_conn(nc);
     /* conn_for_un_nat_copy is a local variable in process_one; this
      * memset() serves to document that conn_for_un_nat_copy is from
@@ -1136,13 +1137,13 @@ conntrack_execute(struct conntrack *ct, struct dp_packet_batch *pkt_batch,
                   const uint32_t *setmark,
                   const struct ovs_key_ct_labels *setlabel,
                   const char *helper,
-                  const struct nat_action_info_t *nat_action_info)
+                  const struct nat_action_info_t *nat_action_info,
+                  long long now)
 {
 
     struct dp_packet **pkts = pkt_batch->packets;
     size_t cnt = pkt_batch->count;
     struct conn_lookup_ctx ctx;
-    long long now = time_msec();
 
     for (size_t i = 0; i < cnt; i++) {
         if (!conn_key_extract(ct, pkts[i], dl_type, &ctx, zone)) {

@@ -40,7 +40,8 @@ enum OVS_PACKED_ENUM dp_packet_source {
     DPBUF_STACK,               /* Un-movable stack space or static buffer. */
     DPBUF_STUB,                /* Starts on stack, may expand into heap. */
     DPBUF_DPDK,                /* buffer data is from DPDK allocated memory.
-                                * ref to dp_packet_init_dpdk() in dp-packet.c. */
+                                * ref to dp_packet_init_dpdk() in dp-packet.c.
+                                */
 };
 
 #define DP_PACKET_CONTEXT_SIZE 64
@@ -61,6 +62,9 @@ struct dp_packet {
     bool rss_hash_valid;        /* Is the 'rss_hash' valid? */
 #endif
     enum dp_packet_source source;  /* Source of memory allocated as 'base'. */
+
+    /* All the following elements of this struct are copied in a single call
+     * of memcpy in dp_packet_clone_with_headroom. */
     uint8_t l2_pad_size;           /* Detected l2 padding size.
                                     * Padding is non-pullable. */
     uint16_t l2_5_ofs;             /* MPLS label stack offset, or UINT16_MAX */
@@ -797,6 +801,16 @@ dp_packet_delete_batch(struct dp_packet_batch *batch, bool may_steal)
             dp_packet_delete(packet);
         }
         dp_packet_batch_init(batch);
+    }
+}
+
+static inline void
+dp_packet_batch_init_cutlen(struct dp_packet_batch *batch)
+{
+    struct dp_packet *packet;
+
+    DP_PACKET_BATCH_FOR_EACH (packet, batch) {
+        dp_packet_reset_cutlen(packet);
     }
 }
 

@@ -95,7 +95,8 @@ int conntrack_execute(struct conntrack *, struct dp_packet_batch *,
                       uint16_t zone, const uint32_t *setmark,
                       const struct ovs_key_ct_labels *setlabel,
                       const char *helper,
-                      const struct nat_action_info_t *nat_action_info);
+                      const struct nat_action_info_t *nat_action_info,
+                      long long now);
 
 struct conntrack_dump {
     struct conntrack *ct;
