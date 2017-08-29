@@ -37,7 +37,7 @@ v2.8.0 - xx xxx xxxx
    - Userspace Datapath:
      * Added NAT support for userspace datapath.
      * Added FTP and TFTP support with NAT for userspace datapath.
-     * Added NSH (Network Service Header) support for userspace datapath.
+     * Experimental NSH (Network Service Header) support in userspace datapath.
    - OVN:
      * New built-in DNS support.
      * IPAM for IPv4 can now exclude user-defined addresses from assignment.
