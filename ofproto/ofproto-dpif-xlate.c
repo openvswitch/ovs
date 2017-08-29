@@ -505,14 +505,20 @@ struct xlate_cfg {
 static OVSRCU_TYPE(struct xlate_cfg *) xcfgp = OVSRCU_INITIALIZER(NULL);
 static struct xlate_cfg *new_xcfg = NULL;
 
+typedef void xlate_actions_handler(const struct ofpact *, size_t ofpacts_len,
+                                   struct xlate_ctx *, bool);
+
 static bool may_receive(const struct xport *, struct xlate_ctx *);
 static void do_xlate_actions(const struct ofpact *, size_t ofpacts_len,
                              struct xlate_ctx *, bool);
+static void clone_xlate_actions(const struct ofpact *, size_t ofpacts_len,
+                                struct xlate_ctx *, bool);
 static void xlate_normal(struct xlate_ctx *);
 static void xlate_table_action(struct xlate_ctx *, ofp_port_t in_port,
                                uint8_t table_id, bool may_packet_in,
                                bool honor_table_miss, bool with_ct_orig,
-                               bool is_last_action);
+                               bool is_last_action, xlate_actions_handler *);
+
 static bool input_vid_is_valid(const struct xlate_ctx *,
                                uint16_t vid, struct xbundle *);
 static void xvlan_copy(struct xvlan *dst, const struct xvlan *src);
@@ -3560,7 +3566,7 @@ apply_nested_clone_actions(struct xlate_ctx *ctx, const struct xport *in_dev,
         if (xport_stp_forward_state(out_dev) &&
             xport_rstp_forward_state(out_dev)) {
             xlate_table_action(ctx, flow->in_port.ofp_port, 0, true, true,
-                               false, true);
+                               false, true, clone_xlate_actions);
             if (!ctx->freezing) {
                 xlate_action_set(ctx);
             }
@@ -3575,7 +3581,7 @@ apply_nested_clone_actions(struct xlate_ctx *ctx, const struct xport *in_dev,
             mirror_mask_t old_mirrors2 = ctx->mirrors;
 
             xlate_table_action(ctx, flow->in_port.ofp_port, 0, true, true,
-                               false, true);
+                               false, true, clone_xlate_actions);
             ctx->mirrors = old_mirrors2;
             ctx->base_flow = old_base_flow;
             ctx->odp_actions->size = old_size;
@@ -3894,7 +3900,8 @@ compose_output_action(struct xlate_ctx *ctx, ofp_port_t ofp_port,
 
 static void
 xlate_recursively(struct xlate_ctx *ctx, struct rule_dpif *rule,
-                  bool deepens, bool is_last_action)
+                  bool deepens, bool is_last_action,
+                  xlate_actions_handler *actions_xlator)
 {
     struct rule_dpif *old_rule = ctx->rule;
     ovs_be64 old_cookie = ctx->rule_cookie;
@@ -3910,8 +3917,8 @@ xlate_recursively(struct xlate_ctx *ctx, struct rule_dpif *rule,
     ctx->rule = rule;
     ctx->rule_cookie = rule->up.flow_cookie;
     actions = rule_get_actions(&rule->up);
-    do_xlate_actions(actions->ofpacts, actions->ofpacts_len, ctx,
-                     is_last_action);
+    actions_xlator(actions->ofpacts, actions->ofpacts_len, ctx,
+                   is_last_action);
     ctx->rule_cookie = old_cookie;
     ctx->rule = old_rule;
     ctx->depth -= deepens;
@@ -3986,7 +3993,8 @@ tuple_swap(struct flow *flow, struct flow_wildcards *wc)
 static void
 xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
                    bool may_packet_in, bool honor_table_miss,
-                   bool with_ct_orig, bool is_last_action)
+                   bool with_ct_orig, bool is_last_action,
+                   xlate_actions_handler *xlator)
 {
     /* Check if we need to recirculate before matching in a table. */
     if (ctx->was_mpls) {
@@ -4038,7 +4046,7 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
             struct ovs_list *old_trace = ctx->xin->trace;
             xlate_report_table(ctx, rule, table_id);
             xlate_recursively(ctx, rule, table_id <= old_table_id,
-                              is_last_action);
+                              is_last_action, xlator);
             ctx->xin->trace = old_trace;
         }
 
@@ -4341,7 +4349,7 @@ xlate_ofpact_resubmit(struct xlate_ctx *ctx,
 
     xlate_table_action(ctx, in_port, table_id, may_packet_in,
                        honor_table_miss, resubmit->with_ct_orig,
-                       is_last_action);
+                       is_last_action, do_xlate_actions);
 }
 
 static void
@@ -4888,7 +4896,8 @@ xlate_output_action(struct xlate_ctx *ctx,
         break;
     case OFPP_TABLE:
         xlate_table_action(ctx, ctx->xin->flow.in_port.ofp_port,
-                           0, may_packet_in, true, false, is_last_action);
+                           0, may_packet_in, true, false, is_last_action,
+                           do_xlate_actions);
         break;
     case OFPP_NORMAL:
         xlate_normal(ctx);
@@ -6554,7 +6563,8 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             ovs_assert(ctx->table_id < ogt->table_id);
 
             xlate_table_action(ctx, ctx->xin->flow.in_port.ofp_port,
-                               ogt->table_id, true, true, false, last);
+                               ogt->table_id, true, true, false, last,
+                               do_xlate_actions);
             break;
         }
 
