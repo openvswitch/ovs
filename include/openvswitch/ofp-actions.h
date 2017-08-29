@@ -216,6 +216,13 @@ ofpact_end(const struct ofpact *ofpacts, size_t ofpacts_len)
     return ALIGNED_CAST(struct ofpact *, (uint8_t *) ofpacts + ofpacts_len);
 }
 
+static inline bool
+ofpact_last(const struct ofpact *a, const struct ofpact *ofpacts,
+            size_t ofpact_len)
+{
+    return ofpact_next(a) == ofpact_end(ofpacts, ofpact_len);
+}
+
 static inline const struct ofpact *
 ofpact_find_type_flattened(const struct ofpact *a, enum ofpact_type type,
                            const struct ofpact * const end)
