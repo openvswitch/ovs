@@ -722,6 +722,16 @@ OvsCtExecute_(OvsForwardingContext *fwdCtx,
         entry = NULL;
     }
 
+    if (!entry && commit && ctTotalEntries >= CT_MAX_ENTRIES) {
+        /* Don't proceed with processing if the max limit has been hit.
+         * This blocks only new entries from being created and doesn't
+         * affect existing connections.
+         */
+        NdisReleaseRWLock(ovsConntrackLockObj, &lockState);
+        OVS_LOG_ERROR("Conntrack Limit hit: %lu", ctTotalEntries);
+        return NDIS_STATUS_RESOURCES;
+    }
+
     if (!entry) {
         /* If no matching entry was found, create one and add New state */
         entry = OvsCtEntryCreate(fwdCtx, key->ipKey.nwProto,
