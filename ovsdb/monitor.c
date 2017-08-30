@@ -651,8 +651,8 @@ ovsdb_monitor_table_condition_create(
     ovsdb_condition_clone(&mtc->new_condition, &mtc->old_condition);
     if (ovsdb_condition_is_true(&mtc->old_condition)) {
         condition->n_true_cnd++;
-        ovsdb_monitor_session_condition_set_mode(condition);
     }
+    ovsdb_monitor_session_condition_set_mode(condition);
 
     return NULL;
 }
