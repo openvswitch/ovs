@@ -472,7 +472,9 @@ daemonize_start(bool access_datapath)
         if (daemon_pid > 0) {
             /* Running in monitor process. */
             fork_notify_startup(saved_daemonize_fd);
-            close_standard_fds();
+            if (detach) {
+                close_standard_fds();
+            }
             monitor_daemon(daemon_pid);
         }
         /* Running in daemon process. */
