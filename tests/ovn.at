@@ -5860,13 +5860,13 @@ packet="inport==\"lp1\" && eth.src==$lp1_mac && eth.dst==$lp2_mac &&
         tcp && tcp.flags==2 && tcp.src==4365 && tcp.dst==85"
 as hv ovs-appctl -t ovn-controller inject-pkt "$packet"
 
-# Send packet that should allow related flows with logging.
+# Send packet that should be rejected without logging.
 packet="inport==\"lp1\" && eth.src==$lp1_mac && eth.dst==$lp2_mac &&
         ip4 && ip.ttl==64 && ip4.src==$lp1_ip && ip4.dst==$lp2_ip &&
         tcp && tcp.flags==2 && tcp.src==4366 && tcp.dst==86"
 as hv ovs-appctl -t ovn-controller inject-pkt "$packet"
 
-# Send packet that should allow related flows with logging.
+# Send packet that should be rejected with logging.
 packet="inport==\"lp1\" && eth.src==$lp1_mac && eth.dst==$lp2_mac &&
         ip4 && ip.ttl==64 && ip4.src==$lp1_ip && ip4.dst==$lp2_ip &&
         tcp && tcp.flags==2 && tcp.src==4367 && tcp.dst==87"
