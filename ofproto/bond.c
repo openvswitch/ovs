@@ -1679,6 +1679,8 @@ bond_slave_lookup(struct bond *bond, const void *slave_)
 static void
 bond_enable_slave(struct bond_slave *slave, bool enable)
 {
+    struct bond *bond = slave->bond;
+
     slave->delay_expires = LLONG_MAX;
     if (enable != slave->enabled) {
         slave->bond->bond_revalidate = true;
@@ -1688,6 +1690,7 @@ bond_enable_slave(struct bond_slave *slave, bool enable)
         if (enable) {
             ovs_list_insert(&slave->bond->enabled_slaves, &slave->list_node);
         } else {
+            bond->send_learning_packets = true;
             ovs_list_remove(&slave->list_node);
         }
         ovs_mutex_unlock(&slave->bond->mutex);
