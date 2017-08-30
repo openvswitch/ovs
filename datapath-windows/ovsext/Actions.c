@@ -160,14 +160,7 @@ OvsDoFragmentNbl(OvsForwardingContext *ovsFwdCtx, UINT16 mru)
 
    if (fragNbl != NULL) {
         OvsCompleteNBL(ovsFwdCtx->switchContext, ovsFwdCtx->curNbl, TRUE);
-        OvsInitForwardingCtx(ovsFwdCtx,
-                            ovsFwdCtx->switchContext,
-                             fragNbl,
-                             ovsFwdCtx->srcVportNo,
-                             ovsFwdCtx->sendFlags,
-                             NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(fragNbl),
-                             ovsFwdCtx->completionList,
-                             &ovsFwdCtx->layers, FALSE);
+        ovsFwdCtx->curNbl = fragNbl;
     } else {
         OVS_LOG_INFO("Fragment NBL failed for MRU = %u", mru);
     }
