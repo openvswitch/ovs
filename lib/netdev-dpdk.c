@@ -3186,7 +3186,11 @@ dpdk_vhost_reconfigure_helper(struct netdev_dpdk *dev)
     }
 
     if (netdev_dpdk_get_vid(dev) >= 0) {
-        dev->vhost_reconfigured = true;
+        if (dev->vhost_reconfigured == false) {
+            dev->vhost_reconfigured = true;
+            /* Carrier status may need updating. */
+            netdev_change_seq_changed(&dev->up);
+        }
     }
 
     return 0;
