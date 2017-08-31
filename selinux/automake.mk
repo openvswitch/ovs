@@ -6,4 +6,4 @@
 # without warranty of any kind.
 
 EXTRA_DIST += \
-        selinux/openvswitch-custom.te
+        selinux/openvswitch-custom.te.in
