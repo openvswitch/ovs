@@ -1535,6 +1535,7 @@ do_trigger(struct ovs_cmdl_context *ctx)
         struct test_trigger *t;
         LIST_FOR_EACH_POP (t, trigger.node, &session.completions) {
             do_trigger_dump(t, now, "delayed");
+            ovsdb_trigger_run(db, now);
         }
 
         ovsdb_trigger_wait(db, now);
