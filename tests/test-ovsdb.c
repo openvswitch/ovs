@@ -1531,10 +1531,10 @@ do_trigger(struct ovs_cmdl_context *ctx)
         }
 
         ovsdb_trigger_run(db, now);
-        while (!ovs_list_is_empty(&session.completions)) {
-            do_trigger_dump(CONTAINER_OF(ovs_list_pop_front(&session.completions),
-                                         struct test_trigger, trigger.node),
-                            now, "delayed");
+
+        struct test_trigger *t;
+        LIST_FOR_EACH_POP (t, trigger.node, &session.completions) {
+            do_trigger_dump(t, now, "delayed");
         }
 
         ovsdb_trigger_wait(db, now);
