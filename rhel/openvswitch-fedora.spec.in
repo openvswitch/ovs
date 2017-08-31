@@ -239,6 +239,7 @@ Docker network plugins for OVN.
 	> rhel/usr_lib_systemd_system_ovs-vswitchd.service
 
 make %{?_smp_mflags}
+make selinux/openvswitch-custom.te
 cd selinux
 make -f %{_datadir}/selinux/devel/Makefile
 
