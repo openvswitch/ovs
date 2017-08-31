@@ -90,6 +90,11 @@ v2.8.0 - xx xxx xxxx
      * HW offloading is done through the TC interface.
    - IPv6 link local addresses are now supported on Linux.  Use % to designate
      the scope device.
+   - The next major version of OVS will introduce a change in the
+     conntrack API.  Conntrack state is only available to the processing
+     path that follows the "recirc_table" argument of the ct() action.
+     Starting in OVS 2.9, this state will be cleared for the current
+     processing path whenever ct() is called.
 
 v2.7.0 - 21 Feb 2017
 ---------------------
