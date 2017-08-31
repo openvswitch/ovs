@@ -10,9 +10,8 @@ openvswitch (2.8.0-1) unstable; urgency=medium
    * Use debhelper for DEB_VERSION_UPSTREAM.  Thanks to Clint Byrum
      <spamaps@debian.org> for this improvement.
    * New upstream version
-   - Nothing yet!  Try NEWS...
 
- -- Open vSwitch team <dev@openvswitch.org>  Fri, 04 Aug 2017 14:55:14 -0700
+ -- Open vSwitch team <dev@openvswitch.org>  Thu, 31 Aug 2017 09:32:16 -0700
 
 openvswitch (2.7.0-1) unstable; urgency=low
    [ Open vSwitch team ]

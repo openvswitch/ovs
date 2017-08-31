@@ -6,8 +6,7 @@ Post-v2.8.0
    - Linux kernel 4.13
      * Add support for compiling OVS with the latest Linux 4.13 kernel
 
-v2.8.0 - xx xxx xxxx
----------------------
+v2.8.0 - 31 Aug 2017
    - ovs-ofctl:
      * ovs-ofctl can now accept and display port names in place of numbers.  By
        default it always accepts names and in interactive use it displays them;
