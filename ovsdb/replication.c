@@ -529,8 +529,8 @@ reset_database(struct ovsdb *db)
         /* Delete all rows if the table is not blacklisted. */
         if (!blacklist_tables_find(db->schema->name, table_node->name)) {
             struct ovsdb_table *table = table_node->data;
-            struct ovsdb_row *row;
-            HMAP_FOR_EACH (row, hmap_node, &table->rows) {
+            struct ovsdb_row *row, *next;
+            HMAP_FOR_EACH_SAFE (row, next, hmap_node, &table->rows) {
                 ovsdb_txn_row_delete(txn, row);
             }
         }
