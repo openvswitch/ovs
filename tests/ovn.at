@@ -8541,3 +8541,36 @@ OVS_WAIT_UNTIL([test $(ovn-sbctl --bare --columns chassis find port_binding logi
 OVN_CLEANUP([hv1],[hv2])
 
 AT_CLEANUP
+
+AT_SETUP([ovn -- options:requested-chassis with hostname])
+
+ovn_start
+
+ovn-nbctl ls-add ls0
+ovn-nbctl lsp-add ls0 lsp0
+
+net_add n1
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.11
+ovs-vsctl -- add-port br-int hv1-vif0
+
+hv1_hostname=$(ovn-sbctl --bare --columns hostname find Chassis name=hv1)
+echo "hv1_hostname=${hv1_hostname}"
+ovn-nbctl --wait=hv --timeout=3 lsp-set-options lsp0 requested-chassis=${hv1_hostname}
+as hv1 ovs-vsctl set interface hv1-vif0 external-ids:iface-id=lsp0
+
+hv1_uuid=$(ovn-sbctl --bare --columns _uuid find Chassis name=hv1)
+echo "hv1_uuid=${hv1_uuid}"
+OVS_WAIT_UNTIL([test 1 = $(grep -c "Claiming lport lsp0" hv1/ovn-controller.log)])
+AT_CHECK([test x$(ovn-sbctl --bare --columns chassis find port_binding logical_port=lsp0) = x"$hv1_uuid"], [0], [])
+
+ovn-nbctl --wait=hv --timeout=3 lsp-set-options lsp0 requested-chassis=non-existant-chassis
+OVS_WAIT_UNTIL([test 1 = $(grep -c "Releasing lport lsp0 from this chassis" hv1/ovn-controller.log)])
+ovn-nbctl --wait=hv --timeout=3 sync
+AT_CHECK([test x$(ovn-sbctl --bare --columns chassis find port_binding logical_port=lsp0) = x], [0], [])
+
+OVN_CLEANUP([hv1])
+
+AT_CLEANUP
