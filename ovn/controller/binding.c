@@ -442,8 +442,9 @@ consider_local_datapath(struct controller_ctx *ctx,
     if (ctx->ovnsb_idl_txn) {
         const char *vif_chassis = smap_get(&binding_rec->options,
                                            "requested-chassis");
-        bool can_bind = !vif_chassis || !vif_chassis[0] ||
-                        !strcmp(vif_chassis, chassis_rec->name);
+        bool can_bind = !vif_chassis || !vif_chassis[0]
+                        || !strcmp(vif_chassis, chassis_rec->name)
+                        || !strcmp(vif_chassis, chassis_rec->hostname);
 
         if (can_bind && our_chassis) {
             if (binding_rec->chassis != chassis_rec) {

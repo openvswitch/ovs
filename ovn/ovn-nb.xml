@@ -436,11 +436,12 @@
         </p>
 
         <column name="options" key="requested-chassis">
-          If set, identifies a specific chassis (by name) that is allowed to
-          bind this port. Using this option will prevent thrashing between
-          two chassis trying to bind the same port during a live migration.
-          It can also prevent similar thrashing due to a mis-configuration,
-          if a port is accidentally created on more than one chassis.
+          If set, identifies a specific chassis (by name or hostname) that
+          is allowed to bind this port. Using this option will prevent
+          thrashing between two chassis trying to bind the same port during
+          a live migration. It can also prevent similar thrashing due to a
+          mis-configuration, if a port is accidentally created on more than
+          one chassis.
         </column>
 
         <column name="options" key="qos_max_rate">
