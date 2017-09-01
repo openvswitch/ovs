@@ -3427,8 +3427,8 @@ rr_numa_list_destroy(struct rr_numa_list *rr)
 static int
 rxq_cycle_sort(const void *a, const void *b)
 {
-    struct dp_netdev_rxq * qa;
-    struct dp_netdev_rxq * qb;
+    struct dp_netdev_rxq *qa;
+    struct dp_netdev_rxq *qb;
     uint64_t total_qa, total_qb;
     unsigned i;
 
@@ -3863,9 +3863,10 @@ dpif_netdev_run(struct dpif *dpif)
                         dp_netdev_process_rxq_port(non_pmd,
                                                    port->rxqs[i].rx,
                                                    port->port_no);
-                    cycles_count_intermediate(non_pmd, NULL, process_packets ?
-                                                       PMD_CYCLES_PROCESSING
-                                                     : PMD_CYCLES_IDLE);
+                    cycles_count_intermediate(non_pmd, NULL,
+                                              process_packets
+                                              ? PMD_CYCLES_PROCESSING
+                                              : PMD_CYCLES_IDLE);
                 }
             }
         }
