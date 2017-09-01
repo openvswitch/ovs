@@ -18,6 +18,7 @@ require {
 @end_dpdk@
 
         class capability { dac_override audit_write };
+        class chr_file { write getattr read open ioctl };
         class dir { write remove_name add_name lock read };
         class file { write getattr read open execute execute_no_trans create unlink };
         class netlink_audit_socket { create nlmsg_relay audit_write read write };
@@ -25,7 +26,6 @@ require {
         class unix_stream_socket { write getattr read connectto connect setopt getopt sendto accept bind recvfrom acceptfrom };
 
 @begin_dpdk@
-        class chr_file { write getattr read open ioctl };
         class tun_socket { relabelfrom relabelto create };
 @end_dpdk@
 }
