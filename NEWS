@@ -1,6 +1,8 @@
 Post-v2.8.0
 --------------------
-   - Nothing yet.
+   - OVN:
+     * The "requested-chassis" option for a logical switch port now accepts a
+       chassis "hostname" in addition to a chassis "name".
 
 v2.8.0 - xx xxx xxxx
 ---------------------
