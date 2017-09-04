@@ -29,33 +29,56 @@ Patchwork
 
 Open vSwitch uses `Patchwork`__ to track the status of patches sent to the
 :doc:`ovs-dev mailing list <mailing-lists>`. The Open vSwitch Patchwork
-instance can be found on `ozlabs.org`__. The ``pwclientrc`` file, required for
-*pwclient*, can be found on the `project page`__
+instance can be found on `ozlabs.org`__.
 
 Patchwork provides a number of useful features for developers working on Open
 vSwitch:
 
 - Tracking the lifecycle of patches (accepted, rejected, under-review, ...)
 - Assigning reviewers (delegates) to patches
-- Downloading/applying patches via the web UI or the XML-RPC API (see
-  :ref:`pwclient`)
+- Downloading/applying patches, series, and bundles via the web UI or the REST
+  API (see :ref:`git-pw`)
 - A usable UI for viewing patch discussions
 
 __ https://github.com/getpatchwork/patchwork
 __ https://patchwork.ozlabs.org/project/openvswitch/list/
-__ https://patchwork.ozlabs.org/project/openvswitch/
+
+.. _git-pw:
+
+git-pw
+------
+
+The *git-pw* tool provides a way to download and apply patches, series, and
+bundles. You can install *git-pw* from `PyPi`__ like so::
+
+    $ pip install --user git-pw
+
+To actually use *git-pw*, you must configure it with the Patchwork instance
+URL, Patchwork project, and your Patchwork user authentication token. The URL
+and project are provided below, but you must obtain your authentication token
+from your `Patchwork User Profile`__ page. If you do not already have a
+Patchwork user account, you should create one now.
+
+Once your token is obtained, configure *git-pw* as below. Note that this must
+be run from within the Open vSwitch Git repository::
+
+    $ git config pw.server https://patchwork.ozlabs.org/
+    $ git config pw.project openvswitch
+    $ git config pw.token $PW_TOKEN  # using the token obtained earlier
+
+Once configured, run the following to get information about available
+commands::
+
+    $ git pw --help
+
+__ https://pypi.python.org/pypi/git-pw
+__ https://patchwork.ozlabs.org/user/
 
 .. _pwclient:
 
 pwclient
 --------
 
-The *pwclient* tool provides an way to download and apply patches, change the
-state of patches in Patchwork, and more. You can download *pwclient* from
-`here`__. Once downloaded, run::
-
-    $ pwclient help
-
-to get more information about the functionality pwclient provides.
-
-__ https://patchwork.ozlabs.org/pwclient/
+The *pwclient* is a legacy tool that provides some of the functionality of
+*git-pw* but uses the legacy XML-RPC API. It is considered deprecated in its
+current form and *git-pw* should be used instead.
