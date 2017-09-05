@@ -169,6 +169,18 @@ OvsPostCtEventEntry(POVS_CT_ENTRY entry, UINT8 type)
     OvsPostCtEvent(&ctEventEntry);
 }
 
+static __inline VOID
+OvsCtIncrementCounters(POVS_CT_ENTRY entry, BOOLEAN reply, PNET_BUFFER_LIST nbl)
+{
+    if (reply) {
+        entry->rev_key.byteCount+= OvsPacketLenNBL(nbl);
+        entry->rev_key.packetCount++;
+    } else {
+        entry->key.byteCount += OvsPacketLenNBL(nbl);
+        entry->key.packetCount++;
+    }
+}
+
 static __inline BOOLEAN
 OvsCtAddEntry(POVS_CT_ENTRY entry, OvsConntrackKeyLookupCtx *ctx,
               PNAT_ACTION_INFO natInfo, UINT64 now)
@@ -287,6 +299,9 @@ OvsCtEntryCreate(OvsForwardingContext *fwdCtx,
     }
 
     OvsCtUpdateFlowKey(key, state, ctx->key.zone, 0, NULL);
+    if (entry) {
+        OvsCtIncrementCounters(entry, ctx->reply, curNbl);
+    }
     return entry;
 }
 
@@ -380,18 +395,6 @@ OvsCtKeyAreSame(OVS_CT_KEY ctxKey, OVS_CT_KEY entryKey)
             (ctxKey.dl_type == entryKey.dl_type) &&
             (ctxKey.nw_proto == entryKey.nw_proto) &&
             (ctxKey.zone == entryKey.zone));
-}
-
-static __inline VOID
-OvsCtIncrementCounters(POVS_CT_ENTRY entry, BOOLEAN reply, PNET_BUFFER_LIST nbl)
-{
-    if (reply) {
-        entry->rev_key.byteCount+= OvsPacketLenNBL(nbl);
-        entry->rev_key.packetCount++;
-    } else {
-        entry->key.byteCount += OvsPacketLenNBL(nbl);
-        entry->key.packetCount++;
-    }
 }
 
 POVS_CT_ENTRY
@@ -732,6 +735,13 @@ OvsCtExecute_(OvsForwardingContext *fwdCtx,
         return NDIS_STATUS_RESOURCES;
     }
 
+    /* Increment the counters soon after the lookup, since we set ct.state
+     * to OVS_CS_F_TRACKED after processing the ct entry.
+     */
+    if (entry && (!(key->ct.state & OVS_CS_F_TRACKED))) {
+        OvsCtIncrementCounters(entry, ctx.reply, curNbl);
+    }
+
     if (!entry) {
         /* If no matching entry was found, create one and add New state */
         entry = OvsCtEntryCreate(fwdCtx, key->ipKey.nwProto,
@@ -740,7 +750,6 @@ OvsCtExecute_(OvsForwardingContext *fwdCtx,
                                  &entryCreated);
     } else {
         /* Process the entry and update CT flags */
-        OvsCtIncrementCounters(entry, ctx.reply, curNbl);
         entry = OvsProcessConntrackEntry(fwdCtx, layers->l4Offset, &ctx, key,
                                          zone, natInfo, commit, currentTime,
                                          &entryCreated);
