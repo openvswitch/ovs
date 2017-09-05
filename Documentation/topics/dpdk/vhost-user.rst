@@ -44,7 +44,7 @@ existing bridge called ``br0``::
 
 For the above examples to work, an appropriate server socket must be created
 at the paths specified (``/tmp/dpdkvhostclient0`` and
-``/tmp/dpdkvhostclient0``).  These sockets can be created with QEMU; see the
+``/tmp/dpdkvhostclient1``).  These sockets can be created with QEMU; see the
 :ref:`vhost-user client <dpdk-vhost-user-client>` section for details.
 
 vhost-user vs. vhost-user-client
