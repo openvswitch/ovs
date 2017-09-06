@@ -299,3 +299,33 @@ default_sb_db(void)
     }
     return def;
 }
+
+/* l3gateway, chassisredirect, and patch
+ * are not in this list since they are
+ * only set in the SB DB by northd
+ */
+static const char *OVN_NB_LSP_TYPES[] = {
+    "l2gateway",
+    "localnet",
+    "localport",
+    "router",
+    "vtep",
+};
+
+bool
+ovn_is_known_nb_lsp_type(const char *type)
+{
+    int i;
+
+    if (!type || !type[0]) {
+        return true;
+    }
+
+    for (i = 0; i < ARRAY_SIZE(OVN_NB_LSP_TYPES); ++i) {
+        if (!strcmp(OVN_NB_LSP_TYPES[i], type)) {
+            return true;
+        }
+    }
+
+    return false;
+}

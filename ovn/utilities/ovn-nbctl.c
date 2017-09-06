@@ -1173,7 +1173,12 @@ nbctl_lsp_set_type(struct ctl_context *ctx)
     const struct nbrec_logical_switch_port *lsp;
 
     lsp = lsp_by_name_or_uuid(ctx, id, true);
-    nbrec_logical_switch_port_set_type(lsp, type);
+    if (ovn_is_known_nb_lsp_type(type)) {
+        nbrec_logical_switch_port_set_type(lsp, type);
+    } else {
+        ctl_fatal("Logical switch port type '%s' is unrecognized. "
+                  "Not setting type.", type);
+    }
 }
 
 static void

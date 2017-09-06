@@ -67,4 +67,6 @@ char *alloc_nat_zone_key(const struct uuid *key, const char *type);
 const char *default_nb_db(void);
 const char *default_sb_db(void);
 
+bool ovn_is_known_nb_lsp_type(const char *type);
+
 #endif

@@ -951,3 +951,76 @@ IPv6 Routes
 
 OVN_NBCTL_TEST_STOP
 AT_CLEANUP
+
+dnl ---------------------------------------------------------------------
+
+AT_SETUP([ovn-nbctl - lsp types])
+OVN_NBCTL_TEST_START
+
+AT_CHECK([ovn-nbctl ls-add ls0])
+AT_CHECK([ovn-nbctl lsp-add ls0 lp0])
+
+dnl switchport type defaults to empty
+AT_CHECK([ovn-nbctl lsp-get-type lp0], [0], [dnl
+
+])
+
+dnl The following are the valid entries for
+dnl switchport type
+AT_CHECK([ovn-nbctl lsp-set-type lp0 l2gateway])
+AT_CHECK([ovn-nbctl lsp-get-type lp0], [0], [dnl
+l2gateway
+])
+
+AT_CHECK([ovn-nbctl lsp-set-type lp0 router])
+AT_CHECK([ovn-nbctl lsp-get-type lp0], [0], [dnl
+router
+])
+
+AT_CHECK([ovn-nbctl lsp-set-type lp0 localnet])
+AT_CHECK([ovn-nbctl lsp-get-type lp0], [0], [dnl
+localnet
+])
+
+AT_CHECK([ovn-nbctl lsp-set-type lp0 localport])
+AT_CHECK([ovn-nbctl lsp-get-type lp0], [0], [dnl
+localport
+])
+
+AT_CHECK([ovn-nbctl lsp-set-type lp0 vtep])
+AT_CHECK([ovn-nbctl lsp-get-type lp0], [0], [dnl
+vtep
+])
+
+dnl All of these are valid southbound port types but
+dnl should be rejected for northbound logical switch
+dnl ports.
+AT_CHECK([ovn-nbctl lsp-set-type lp0 l3gateway], [1], [], [dnl
+ovn-nbctl: Logical switch port type 'l3gateway' is unrecognized. Not setting type.
+])
+AT_CHECK([ovn-nbctl lsp-set-type lp0 patch], [1], [], [dnl
+ovn-nbctl: Logical switch port type 'patch' is unrecognized. Not setting type.
+])
+AT_CHECK([ovn-nbctl lsp-set-type lp0 chassisredirect], [1], [], [dnl
+ovn-nbctl: Logical switch port type 'chassisredirect' is unrecognized. Not setting type.
+])
+
+dnl switch port type should still be "vtep" since previous
+dnl commands failed.
+AT_CHECK([ovn-nbctl lsp-get-type lp0], [0], [dnl
+vtep
+])
+
+dnl Attempt a nonsense type
+AT_CHECK([ovn-nbctl lsp-set-type lp0 eggs], [1], [], [dnl
+ovn-nbctl: Logical switch port type 'eggs' is unrecognized. Not setting type.
+])
+
+dnl Empty string should work too
+AT_CHECK([ovn-nbctl lsp-set-type lp0 ""])
+AT_CHECK([ovn-nbctl lsp-get-type lp0], [0], [dnl
+
+])
+
+OVN_NBCTL_TEST_STOP
+AT_CLEANUP

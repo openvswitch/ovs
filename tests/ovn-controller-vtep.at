@@ -327,7 +327,7 @@ ${tunnel_key}
 
 # changes the ovn-nb logical port type so that it is no longer
 # vtep port.
-AT_CHECK([ovn-nbctl lsp-set-type br-vtep_lswitch0 void])
+AT_CHECK([ovn-nbctl lsp-set-type br-vtep_lswitch0 ""])
 OVS_WAIT_UNTIL([test -z "`vtep-ctl --columns=tunnel_key list Logical_Switch | grep 1`"])
 # now should see the tunnel key reset.
 AT_CHECK([vtep-ctl --columns=tunnel_key list Logical_Switch | cut -d ':' -f2 | tr -d ' '], [0], [dnl

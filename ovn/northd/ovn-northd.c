@@ -1963,7 +1963,14 @@ ovn_port_update_sbrec(struct northd_context *ctx,
             }
             sbrec_port_binding_set_options(op->sb, &options);
             smap_destroy(&options);
-            sbrec_port_binding_set_type(op->sb, op->nbsp->type);
+            if (ovn_is_known_nb_lsp_type(op->nbsp->type)) {
+                sbrec_port_binding_set_type(op->sb, op->nbsp->type);
+            } else {
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+                VLOG_WARN_RL(
+                    &rl, "Unknown port type '%s' set on logical switch '%s'.",
+                    op->nbsp->type, op->nbsp->name);
+            }
         } else {
             const char *chassis = NULL;
             if (op->peer && op->peer->od && op->peer->od->nbr) {
