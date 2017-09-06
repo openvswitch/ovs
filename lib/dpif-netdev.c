@@ -3201,8 +3201,8 @@ static void
 dp_netdev_rxq_set_intrvl_cycles(struct dp_netdev_rxq *rx,
                                 unsigned long long cycles)
 {
-   atomic_store_relaxed(&rx->cycles_intrvl[rx->intrvl_idx++
-                                           % PMD_RXQ_INTERVAL_MAX], cycles);
+    unsigned int idx = rx->intrvl_idx++ % PMD_RXQ_INTERVAL_MAX;
+    atomic_store_relaxed(&rx->cycles_intrvl[idx], cycles);
 }
 
 static uint64_t
