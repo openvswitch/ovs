@@ -2720,11 +2720,17 @@ refresh_controller_status(void)
             struct ofproto_controller_info *cinfo =
                 shash_find_data(&info, cfg->target);
 
-            ovs_assert(cinfo);
-            ovsrec_controller_set_is_connected(cfg, cinfo->is_connected);
-            const char *role = ofp12_controller_role_to_str(cinfo->role);
-            ovsrec_controller_set_role(cfg, role);
-            ovsrec_controller_set_status(cfg, &cinfo->pairs);
+            /* cinfo is NULL when 'cfg->target' is a passive connection.  */
+            if (cinfo) {
+                ovsrec_controller_set_is_connected(cfg, cinfo->is_connected);
+                const char *role = ofp12_controller_role_to_str(cinfo->role);
+                ovsrec_controller_set_role(cfg, role);
+                ovsrec_controller_set_status(cfg, &cinfo->pairs);
+            } else {
+                ovsrec_controller_set_is_connected(cfg, false);
+                ovsrec_controller_set_role(cfg, NULL);
+                ovsrec_controller_set_status(cfg, NULL);
+            }
         }
 
         ofproto_free_ofproto_controller_info(&info);
