@@ -2227,6 +2227,11 @@ push_dp_ops(struct udpif *udpif, struct ukey_op *ops, size_t n_ops)
 
         if (op->dop.error) {
             /* flow_del error, 'stats' is unusable. */
+            if (op->ukey) {
+                ovs_mutex_lock(&op->ukey->mutex);
+                transition_ukey(op->ukey, UKEY_EVICTED);
+                ovs_mutex_unlock(&op->ukey->mutex);
+            }
             continue;
         }
 
