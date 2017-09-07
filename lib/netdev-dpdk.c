@@ -279,7 +279,7 @@ struct dpdk_qos_ops {
      * For all QoS implementations it should always be non-null.
      */
     int (*qos_run)(struct qos_conf *qos_conf, struct rte_mbuf **pkts,
-                   int pkt_cnt);
+                   int pkt_cnt, bool may_steal);
 };
 
 /* dpdk_qos_ops for each type of user space QoS implementation */
@@ -1522,7 +1522,8 @@ netdev_dpdk_policer_pkt_handle(struct rte_meter_srtcm *meter,
 
 static int
 netdev_dpdk_policer_run(struct rte_meter_srtcm *meter,
-                        struct rte_mbuf **pkts, int pkt_cnt)
+                        struct rte_mbuf **pkts, int pkt_cnt,
+                        bool may_steal)
 {
     int i = 0;
     int cnt = 0;
@@ -1538,7 +1539,9 @@ netdev_dpdk_policer_run(struct rte_meter_srtcm *meter,
             }
             cnt++;
         } else {
-            rte_pktmbuf_free(pkt);
+            if (may_steal) {
+                rte_pktmbuf_free(pkt);
+            }
         }
     }
 
@@ -1547,12 +1550,13 @@ netdev_dpdk_policer_run(struct rte_meter_srtcm *meter,
 
 static int
 ingress_policer_run(struct ingress_policer *policer, struct rte_mbuf **pkts,
-                    int pkt_cnt)
+                    int pkt_cnt, bool may_steal)
 {
     int cnt = 0;
 
     rte_spinlock_lock(&policer->policer_lock);
-    cnt = netdev_dpdk_policer_run(&policer->in_policer, pkts, pkt_cnt);
+    cnt = netdev_dpdk_policer_run(&policer->in_policer, pkts,
+                                  pkt_cnt, may_steal);
     rte_spinlock_unlock(&policer->policer_lock);
 
     return cnt;
@@ -1656,7 +1660,7 @@ netdev_dpdk_vhost_rxq_recv(struct netdev_rxq *rxq,
         dropped = nb_rx;
         nb_rx = ingress_policer_run(policer,
                                     (struct rte_mbuf **) batch->packets,
-                                    nb_rx);
+                                    nb_rx, true);
         dropped -= nb_rx;
     }
 
@@ -1694,7 +1698,7 @@ netdev_dpdk_rxq_recv(struct netdev_rxq *rxq, struct dp_packet_batch *batch)
         dropped = nb_rx;
         nb_rx = ingress_policer_run(policer,
                                     (struct rte_mbuf **) batch->packets,
-                                    nb_rx);
+                                    nb_rx, true);
         dropped -= nb_rx;
     }
 
@@ -1713,13 +1717,13 @@ netdev_dpdk_rxq_recv(struct netdev_rxq *rxq, struct dp_packet_batch *batch)
 
 static inline int
 netdev_dpdk_qos_run(struct netdev_dpdk *dev, struct rte_mbuf **pkts,
-                    int cnt)
+                    int cnt, bool may_steal)
 {
     struct qos_conf *qos_conf = ovsrcu_get(struct qos_conf *, &dev->qos_conf);
 
     if (qos_conf) {
         rte_spinlock_lock(&qos_conf->lock);
-        cnt = qos_conf->ops->qos_run(qos_conf, pkts, cnt);
+        cnt = qos_conf->ops->qos_run(qos_conf, pkts, cnt, may_steal);
         rte_spinlock_unlock(&qos_conf->lock);
     }
 
@@ -1793,7 +1797,7 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
 
     cnt = netdev_dpdk_filter_packet_len(dev, cur_pkts, cnt);
     /* Check has QoS has been configured for the netdev */
-    cnt = netdev_dpdk_qos_run(dev, cur_pkts, cnt);
+    cnt = netdev_dpdk_qos_run(dev, cur_pkts, cnt, true);
     dropped = total_pkts - cnt;
 
     do {
@@ -1839,51 +1843,56 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet_batch *batch)
 #endif
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     struct rte_mbuf *pkts[PKT_ARRAY_SIZE];
-    int dropped = 0;
-    int newcnt = 0;
-    int i;
+    uint32_t cnt = batch->count;
+    uint32_t dropped = 0;
+
+    if (dev->type != DPDK_DEV_VHOST) {
+        /* Check if QoS has been configured for this netdev. */
+        cnt = netdev_dpdk_qos_run(dev, (struct rte_mbuf **) batch->packets,
+                                  cnt, false);
+        dropped += batch->count - cnt;
+    }
 
     dp_packet_batch_apply_cutlen(batch);
 
-    for (i = 0; i < batch->count; i++) {
-        int size = dp_packet_size(batch->packets[i]);
+    uint32_t txcnt = 0;
+
+    for (uint32_t i = 0; i < cnt; i++) {
+
+        uint32_t size = dp_packet_size(batch->packets[i]);
 
         if (OVS_UNLIKELY(size > dev->max_packet_len)) {
-            VLOG_WARN_RL(&rl, "Too big size %d max_packet_len %d",
-                         (int) size, dev->max_packet_len);
+            VLOG_WARN_RL(&rl, "Too big size %u max_packet_len %d",
+                         size, dev->max_packet_len);
 
             dropped++;
             continue;
         }
 
-        pkts[newcnt] = rte_pktmbuf_alloc(dev->dpdk_mp->mp);
+        pkts[txcnt] = rte_pktmbuf_alloc(dev->dpdk_mp->mp);
 
-        if (!pkts[newcnt]) {
-            dropped += batch->count - i;
+        if (!pkts[txcnt]) {
+            dropped += cnt - i;
             break;
         }
 
         /* We have to do a copy for now */
-        memcpy(rte_pktmbuf_mtod(pkts[newcnt], void *),
+        memcpy(rte_pktmbuf_mtod(pkts[txcnt], void *),
                dp_packet_data(batch->packets[i]), size);
 
-        rte_pktmbuf_data_len(pkts[newcnt]) = size;
-        rte_pktmbuf_pkt_len(pkts[newcnt]) = size;
+        rte_pktmbuf_data_len(pkts[txcnt]) = size;
+        rte_pktmbuf_pkt_len(pkts[txcnt]) = size;
 
-        newcnt++;
+        txcnt++;
     }
 
-    if (dev->type == DPDK_DEV_VHOST) {
-        __netdev_dpdk_vhost_send(netdev, qid, (struct dp_packet **) pkts,
-                                 newcnt);
-    } else {
-        unsigned int qos_pkts = newcnt;
-
-        /* Check if QoS has been configured for this netdev. */
-        newcnt = netdev_dpdk_qos_run(dev, pkts, newcnt);
-
-        dropped += qos_pkts - newcnt;
-        dropped += netdev_dpdk_eth_tx_burst(dev, qid, pkts, newcnt);
+    if (OVS_LIKELY(txcnt)) {
+        if (dev->type == DPDK_DEV_VHOST) {
+            __netdev_dpdk_vhost_send(netdev, qid, (struct dp_packet **) pkts,
+                                     txcnt);
+        } else {
+            dropped += netdev_dpdk_eth_tx_burst(dev, qid, pkts, txcnt);
+        }
     }
 
     if (OVS_UNLIKELY(dropped)) {
@@ -1938,7 +1947,7 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
         dp_packet_batch_apply_cutlen(batch);
 
         cnt = netdev_dpdk_filter_packet_len(dev, pkts, cnt);
-        cnt = netdev_dpdk_qos_run(dev, pkts, cnt);
+        cnt = netdev_dpdk_qos_run(dev, pkts, cnt, true);
         dropped = batch->count - cnt;
 
         dropped += netdev_dpdk_eth_tx_burst(dev, qid, pkts, cnt);
@@ -3155,13 +3164,15 @@ egress_policer_qos_is_equal(const struct qos_conf *conf,
 }
 
 static int
-egress_policer_run(struct qos_conf *conf, struct rte_mbuf **pkts, int pkt_cnt)
+egress_policer_run(struct qos_conf *conf, struct rte_mbuf **pkts, int pkt_cnt,
+                   bool may_steal)
 {
     int cnt = 0;
     struct egress_policer *policer =
         CONTAINER_OF(conf, struct egress_policer, qos_conf);
 
-    cnt = netdev_dpdk_policer_run(&policer->egress_meter, pkts, pkt_cnt);
+    cnt = netdev_dpdk_policer_run(&policer->egress_meter, pkts,
+                                  pkt_cnt, may_steal);
 
     return cnt;
 }
