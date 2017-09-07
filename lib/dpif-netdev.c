@@ -796,7 +796,7 @@ pmd_info_show_stats(struct ds *reply,
                     unsigned long long stats[DP_N_STATS],
                     uint64_t cycles[PMD_N_CYCLES])
 {
-    unsigned long long total_packets = 0;
+    unsigned long long total_packets;
     uint64_t total_cycles = 0;
     int i;
 
@@ -812,12 +812,11 @@ pmd_info_show_stats(struct ds *reply,
         } else {
             stats[i] = 0;
         }
-
-        if (i != DP_STAT_LOST) {
-            /* Lost packets are already included in DP_STAT_MISS */
-            total_packets += stats[i];
-        }
     }
+
+    /* Sum of all the matched and not matched packets gives the total.  */
+    total_packets = stats[DP_STAT_EXACT_HIT] + stats[DP_STAT_MASKED_HIT]
+                    + stats[DP_STAT_MISS];
 
     for (i = 0; i < PMD_N_CYCLES; i++) {
         if (cycles[i] > pmd->cycles_zero[i]) {
@@ -3428,8 +3427,8 @@ rr_numa_list_destroy(struct rr_numa_list *rr)
 static int
 rxq_cycle_sort(const void *a, const void *b)
 {
-    struct dp_netdev_rxq * qa;
-    struct dp_netdev_rxq * qb;
+    struct dp_netdev_rxq *qa;
+    struct dp_netdev_rxq *qb;
     uint64_t total_qa, total_qb;
     unsigned i;
 
@@ -3864,9 +3863,10 @@ dpif_netdev_run(struct dpif *dpif)
                         dp_netdev_process_rxq_port(non_pmd,
                                                    port->rxqs[i].rx,
                                                    port->port_no);
-                    cycles_count_intermediate(non_pmd, NULL, process_packets ?
-                                                       PMD_CYCLES_PROCESSING
-                                                     : PMD_CYCLES_IDLE);
+                    cycles_count_intermediate(non_pmd, NULL,
+                                              process_packets
+                                              ? PMD_CYCLES_PROCESSING
+                                              : PMD_CYCLES_IDLE);
                 }
             }
         }
@@ -4858,8 +4858,11 @@ dp_netdev_queue_batches(struct dp_packet *pkt,
  * The function returns the number of packets that needs to be processed in the
  * 'packets' array (they have been moved to the beginning of the vector).
  *
- * If 'md_is_valid' is false, the metadata in 'packets' is not valid and must
- * be initialized by this function using 'port_no'.
+ * For performance reasons a caller may choose not to initialize the metadata
+ * in 'packets_'.  If 'md_is_valid' is false, the metadata in 'packets'
+ * is not valid and must be initialized by this function using 'port_no'.
+ * If 'md_is_valid' is true, the metadata is already valid and 'port_no'
+ * will be ignored.
  */
 static inline size_t
 emc_processing(struct dp_netdev_pmd_thread *pmd,
@@ -4872,13 +4875,13 @@ emc_processing(struct dp_netdev_pmd_thread *pmd,
     struct netdev_flow_key *key = &keys[0];
     size_t n_missed = 0, n_dropped = 0;
     struct dp_packet *packet;
-    const size_t size = dp_packet_batch_size(packets_);
+    const size_t cnt = dp_packet_batch_size(packets_);
     uint32_t cur_min;
     int i;
 
     atomic_read_relaxed(&pmd->dp->emc_insert_min, &cur_min);
 
-    DP_PACKET_BATCH_REFILL_FOR_EACH (i, size, packet, packets_) {
+    DP_PACKET_BATCH_REFILL_FOR_EACH (i, cnt, packet, packets_) {
         struct dp_netdev_flow *flow;
 
         if (OVS_UNLIKELY(dp_packet_size(packet) < ETH_HEADER_LEN)) {
@@ -4887,7 +4890,7 @@ emc_processing(struct dp_netdev_pmd_thread *pmd,
             continue;
         }
 
-        if (i != size - 1) {
+        if (i != cnt - 1) {
             struct dp_packet **packets = packets_->packets;
             /* Prefetch next packet data and metadata. */
             OVS_PREFETCH(dp_packet_data(packets[i+1]));
@@ -4918,7 +4921,7 @@ emc_processing(struct dp_netdev_pmd_thread *pmd,
     }
 
     dp_netdev_count_packet(pmd, DP_STAT_EXACT_HIT,
-                           size - n_dropped - n_missed);
+                           cnt - n_dropped - n_missed);
 
     return dp_packet_batch_size(packets_);
 }
@@ -5092,10 +5095,8 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
 
 /* Packets enter the datapath from a port (or from recirculation) here.
  *
- * For performance reasons a caller may choose not to initialize the metadata
- * in 'packets': in this case 'mdinit' is false and this function needs to
- * initialize it using 'port_no'.  If the metadata in 'packets' is already
- * valid, 'md_is_valid' must be true and 'port_no' will be ignored. */
+ * When 'md_is_valid' is true the metadata in 'packets' are already valid.
+ * When false the metadata in 'packets' need to be initialized. */
 static void
 dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
                   struct dp_packet_batch *packets,
