@@ -49,6 +49,12 @@ struct netdev {
      * opening this device, and therefore got assigned to the "system" class */
     bool auto_classified;
 
+    /* If this is 'true', the user explicitly specified an MTU for this
+     * netdev.  Otherwise, Open vSwitch is allowed to override it. */
+    bool mtu_user_config;
+
+    int ref_cnt;                        /* Times this devices was opened. */
+
     /* A sequence number which indicates changes in one of 'netdev''s
      * properties.   It must be nonzero so that users have a value which
      * they may use as a reset when tracking 'netdev'.
@@ -67,16 +73,11 @@ struct netdev {
     struct seq *reconfigure_seq;
     uint64_t last_reconfigure_seq;
 
-    /* If this is 'true', the user explicitly specified an MTU for this
-     * netdev.  Otherwise, Open vSwitch is allowed to override it. */
-    bool mtu_user_config;
-
     /* The core netdev code initializes these at netdev construction and only
      * provide read-only access to its client.  Netdev implementations may
      * modify them. */
     int n_txq;
     int n_rxq;
-    int ref_cnt;                        /* Times this devices was opened. */
     struct shash_node *node;            /* Pointer to element in global map. */
     struct ovs_list saved_flags_list; /* Contains "struct netdev_saved_flags". */
 };
