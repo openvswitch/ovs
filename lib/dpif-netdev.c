@@ -366,6 +366,7 @@ struct dp_netdev_rxq {
                                           pinned. OVS_CORE_UNSPEC if the
                                           queue doesn't need to be pinned to a
                                           particular core. */
+    unsigned intrvl_idx;               /* Write index for 'cycles_intrvl'. */
     struct dp_netdev_pmd_thread *pmd;  /* pmd thread that polls this queue. */
 
     /* Counters of cycles spent successfully polling and processing pkts. */
@@ -373,7 +374,6 @@ struct dp_netdev_rxq {
     /* We store PMD_RXQ_INTERVAL_MAX intervals of data for an rxq and then
        sum them to yield the cycles used for an rxq. */
     atomic_ullong cycles_intrvl[PMD_RXQ_INTERVAL_MAX];
-    unsigned intrvl_idx;               /* Write index for 'cycles_intrvl'. */
 };
 
 /* A port in a netdev-based datapath. */
