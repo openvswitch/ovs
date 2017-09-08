@@ -92,7 +92,7 @@ struct ofbundle {
     char *name;                 /* Identifier for log messages. */
 
     /* Configuration. */
-    struct ovs_list ports;      /* Contains "struct ofport"s. */
+    struct ovs_list ports;      /* Contains "struct ofport_dpif"s. */
     enum port_vlan_mode vlan_mode; /* VLAN mode */
     uint16_t qinq_ethtype;
     int vlan;                   /* -1=trunk port, else a 12-bit VLAN ID. */
