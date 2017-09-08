@@ -3011,15 +3011,16 @@ bundle_set(struct ofproto *ofproto_, void *aux,
     size_t i;
     bool ok;
 
+    bundle = bundle_lookup(ofproto, aux);
+
     if (!s) {
-        bundle_destroy(bundle_lookup(ofproto, aux));
+        bundle_destroy(bundle);
         return 0;
     }
 
     ovs_assert(s->n_slaves == 1 || s->bond != NULL);
     ovs_assert((s->lacp != NULL) == (s->lacp_slaves != NULL));
 
-    bundle = bundle_lookup(ofproto, aux);
     if (!bundle) {
         bundle = xmalloc(sizeof *bundle);
 
