@@ -50,8 +50,8 @@ struct reconnect;
 
 struct dummy_packet_stream {
     struct stream *stream;
-    struct dp_packet rxbuf;
     struct ovs_list txq;
+    struct dp_packet rxbuf;
 };
 
 enum dummy_packet_conn_type {
