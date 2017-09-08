@@ -1469,10 +1469,6 @@ nbctl_acl_del(struct ctl_context *ctx)
     const struct nbrec_logical_switch *ls;
     ls = ls_by_name_or_uuid(ctx, ctx->argv[1], true);
 
-    if (ctx->argc != 2 && ctx->argc != 3 && ctx->argc != 5) {
-        ctl_fatal("cannot specify priority without match");
-    }
-
     if (ctx->argc == 2) {
         /* If direction, priority, and match are not specified, delete
          * all ACLs. */
@@ -1502,6 +1498,10 @@ nbctl_acl_del(struct ctl_context *ctx)
     }
 
     int64_t priority = parse_priority(ctx->argv[3]);
+
+    if (ctx->argc == 4) {
+        ctl_fatal("cannot specify priority without match");
+    }
 
     /* Remove the matching rule. */
     for (size_t i = 0; i < ls->n_acls; i++) {
