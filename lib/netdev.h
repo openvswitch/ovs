@@ -99,9 +99,9 @@ enum netdev_pt_mode {
 
 /* Configuration specific to tunnels. */
 struct netdev_tunnel_config {
+    ovs_be64 in_key;
     bool in_key_present;
     bool in_key_flow;
-    ovs_be64 in_key;
 
     bool out_key_present;
     bool out_key_flow;
@@ -115,8 +115,8 @@ struct netdev_tunnel_config {
     struct in6_addr ipv6_dst;
 
     uint32_t exts;
-    bool set_egress_pkt_mark;
     uint32_t egress_pkt_mark;
+    bool set_egress_pkt_mark;
 
     uint8_t ttl;
     bool ttl_inherit;
