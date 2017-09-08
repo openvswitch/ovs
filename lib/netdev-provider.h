@@ -123,8 +123,8 @@ struct netdev *netdev_rxq_get_netdev(const struct netdev_rxq *);
 struct netdev_flow_dump {
     struct netdev *netdev;
     odp_port_t port;
-    struct nl_dump *nl_dump;
     bool terse;
+    struct nl_dump *nl_dump;
 };
 
 /* Network device class structure, to be defined by each implementation of a
