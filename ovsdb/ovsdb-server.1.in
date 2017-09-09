@@ -47,7 +47,7 @@ reset, requiring clients to reconnect to the server.
 .PP
 By default, \fBovsdb\-server\fR runs as an active server, except when the
 \fB\-\-sync\-from=\fIserver\fR command line option is specified and without
-the \fB\-\-no\-sync option\fR.  During runtime, \fBovsdb\-server\fR role can be switch by using appctl commands.
+the \fB\-\-active\fR option.  During runtime, \fBovsdb\-server\fR role can be switch by using appctl commands.
 .PP
 \fBovsdb-server/connect\-active\-ovsdb\-server\fR switches
 \fBovsdb\-server\fR into a backup server, Conversely,
