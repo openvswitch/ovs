@@ -201,10 +201,12 @@ create_macros(struct shash *macros)
     static const char *const addrs3[] = {
         "00:00:00:00:00:01", "00:00:00:00:00:02", "00:00:00:00:00:03",
     };
+    static const char *const addrs4[] = {};
 
     expr_macros_add(macros, "set1", addrs1, 3);
     expr_macros_add(macros, "set2", addrs2, 3);
     expr_macros_add(macros, "set3", addrs3, 3);
+    expr_macros_add(macros, "set4", addrs4, 0);
 }
 
 static bool
