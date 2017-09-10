@@ -623,6 +623,38 @@ dl_src=00:00:00:00:00:02
 dl_src=00:00:00:00:00:03
 dl_src=ba:be:be:ef:de:ad
 ])
+AT_CHECK([expr_to_flow 'ip4.src == {$set4}'], [0], [dnl
+(no flows)
+])
+AT_CHECK([expr_to_flow 'ip4.src == {1.2.3.4, $set4}'], [0], [dnl
+ip,nw_src=1.2.3.4
+])
+AT_CHECK([expr_to_flow 'ip4.src == 1.2.3.4 || ip4.src == {$set4}'], [0], [dnl
+ip,nw_src=1.2.3.4
+])
+AT_CHECK([expr_to_flow 'ip4.src != {$set4}'], [0], [dnl
+
+])
+AT_CHECK([expr_to_flow 'ip4.src != {1.0.0.0/8, $set4}'], [0], [dnl
+ip,nw_src=0.0.0.0/1.0.0.0
+ip,nw_src=128.0.0.0/1
+ip,nw_src=16.0.0.0/16.0.0.0
+ip,nw_src=2.0.0.0/2.0.0.0
+ip,nw_src=32.0.0.0/32.0.0.0
+ip,nw_src=4.0.0.0/4.0.0.0
+ip,nw_src=64.0.0.0/64.0.0.0
+ip,nw_src=8.0.0.0/8.0.0.0
+])
+AT_CHECK([expr_to_flow 'ip4.src != 1.0.0.0/8 && ip4.src != {$set4}'], [0], [dnl
+ip,nw_src=0.0.0.0/1.0.0.0
+ip,nw_src=128.0.0.0/1
+ip,nw_src=16.0.0.0/16.0.0.0
+ip,nw_src=2.0.0.0/2.0.0.0
+ip,nw_src=32.0.0.0/32.0.0.0
+ip,nw_src=4.0.0.0/4.0.0.0
+ip,nw_src=64.0.0.0/64.0.0.0
+ip,nw_src=8.0.0.0/8.0.0.0
+])
 AT_CLEANUP
 
 AT_SETUP([ovn -- action parsing])

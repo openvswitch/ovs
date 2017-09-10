@@ -612,6 +612,10 @@ make_cmp(struct expr_context *ctx,
         }
     }
 
+    if (!cs->n_values) {
+        e = expr_create_boolean(r == EXPR_R_NE);
+        goto exit;
+    }
     e = make_cmp__(f, r, &cs->values[0]);
     for (size_t i = 1; i < cs->n_values; i++) {
         e = expr_combine(r == EXPR_R_EQ ? EXPR_T_OR : EXPR_T_AND,
