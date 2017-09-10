@@ -297,6 +297,7 @@ Sten Spans                      sten@blinkenlights.nl
 Stephane A. Sezer               sas@cd80.net
 Stephen Finucane                stephen@that.guru
 Steve Ruan                      ruansx@cn.ibm.com
+Stuart Cardall                  developer@it-offshore.co.uk
 Sugesh Chandran                 sugesh.chandran@intel.com
 SUGYO Kazushi                   sugyo.org@gmail.com
 Tadaaki Nagao                   nagao@stratosphere.co.jp
