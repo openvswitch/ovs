@@ -8501,7 +8501,7 @@ ovn-nbctl --wait=hv --timeout=3 sync
 # doesn't have the same effect because "name" is conserved, and the
 # Chassis entry is not replaced.
 
-truncate -s 0 gw1/ovn-controller.log
+> gw1/ovn-controller.log
 
 gw2_chassis=$(ovn-sbctl --bare --columns=_uuid find Chassis name=gw2)
 ovn-sbctl destroy Chassis $gw2_chassis
