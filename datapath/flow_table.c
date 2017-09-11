@@ -104,6 +104,8 @@ struct sw_flow *ovs_flow_alloc(void)
 
 	RCU_INIT_POINTER(flow->stats[0], stats);
 
+	cpumask_set_cpu(0, &flow->cpu_used_mask);
+
 	return flow;
 err:
 	kmem_cache_free(flow_cache, flow);
@@ -147,7 +149,7 @@ static void flow_free(struct sw_flow *flow)
 	if (flow->sf_acts)
 		ovs_nla_free_flow_actions((struct sw_flow_actions __force *)flow->sf_acts);
 	/* We open code this to make sure cpu 0 is always considered */
-	for (cpu = 0; cpu < nr_cpu_ids; cpu = cpumask_next(cpu, cpu_possible_mask))
+	for (cpu = 0; cpu < nr_cpu_ids; cpu = cpumask_next(cpu, &flow->cpu_used_mask))
 		if (flow->stats[cpu])
 			kmem_cache_free(flow_stats_cache,
 					rcu_dereference_raw(flow->stats[cpu]));
