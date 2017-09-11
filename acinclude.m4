@@ -775,6 +775,9 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_FIND_FIELD_IFELSE([$KSRC/include/net/rtnetlink.h], [rtnl_link_ops],
                         [extack],
                   [OVS_DEFINE([HAVE_EXT_ACK_IN_RTNL_LINKOPS])])
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/netfilter.h], [nf_hook_ops],
+                        [list],
+                        [OVS_DEFINE([HAVE_LIST_IN_NF_HOOK_OPS])])
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then
