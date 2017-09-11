@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Nicira, Inc.
+ * Copyright (c) 2015,2017 Nicira, Inc.
  * Copyright (c) 2013 Cisco Systems, Inc.
  *
  * This program is free software; you can redistribute it and/or
@@ -60,14 +60,22 @@ static int vxlan_get_options(const struct vport *vport, struct sk_buff *skb)
 			return -EMSGSIZE;
 
 		nla_nest_end(skb, exts);
+#ifdef HAVE_VXLAN_DEV_CFG
+	} else if (vxlan->cfg.flags & VXLAN_F_GPE) {
+#else
 	} else if (vxlan->flags & VXLAN_F_GPE) {
+#endif
 		struct nlattr *exts;
 
 		exts = nla_nest_start(skb, OVS_TUNNEL_ATTR_EXTENSION);
 		if (!exts)
 			return -EMSGSIZE;
 
+#ifdef HAVE_VXLAN_DEV_CFG
+		if (vxlan->cfg.flags & VXLAN_F_GPE &&
+#else
 		if (vxlan->flags & VXLAN_F_GPE &&
+#endif
 		    nla_put_flag(skb, OVS_VXLAN_EXT_GPE))
 			return -EMSGSIZE;
 
