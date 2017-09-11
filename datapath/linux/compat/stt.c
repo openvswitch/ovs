@@ -2110,7 +2110,9 @@ int stt_init_module(void)
 	if (rc)
 		goto out2;
 
+#ifdef HAVE_LIST_IN_NF_HOOK_OPS
 	INIT_LIST_HEAD(&nf_hook_ops.list);
+#endif
 	pr_info("STT tunneling driver\n");
 	return 0;
 out2:
