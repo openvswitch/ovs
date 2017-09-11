@@ -1909,7 +1909,12 @@ static const struct nla_policy stt_policy[IFLA_STT_MAX + 1] = {
 	[IFLA_STT_PORT]              = { .type = NLA_U16 },
 };
 
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+static int stt_validate(struct nlattr *tb[], struct nlattr *data[],
+			struct netlink_ext_ack __always_unused *extack)
+#else
 static int stt_validate(struct nlattr *tb[], struct nlattr *data[])
+#endif
 {
 	if (tb[IFLA_ADDRESS]) {
 		if (nla_len(tb[IFLA_ADDRESS]) != ETH_ALEN)
@@ -1961,8 +1966,14 @@ static int stt_configure(struct net *net, struct net_device *dev,
 	return 0;
 }
 
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+static int stt_newlink(struct net *net, struct net_device *dev,
+		struct nlattr *tb[], struct nlattr *data[],
+		struct netlink_ext_ack __always_unused *extack)
+#else
 static int stt_newlink(struct net *net, struct net_device *dev,
 		struct nlattr *tb[], struct nlattr *data[])
+#endif
 {
 	__be16 dst_port = htons(STT_DST_PORT);
 

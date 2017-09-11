@@ -608,7 +608,12 @@ static const struct nla_policy lisp_policy[IFLA_LISP_MAX + 1] = {
 	[IFLA_LISP_PORT]              = { .type = NLA_U16 },
 };
 
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+static int lisp_validate(struct nlattr *tb[], struct nlattr *data[],
+			 struct netlink_ext_ack __always_unused *extack)
+#else
 static int lisp_validate(struct nlattr *tb[], struct nlattr *data[])
+#endif
 {
 	if (tb[IFLA_ADDRESS]) {
 		if (nla_len(tb[IFLA_ADDRESS]) != ETH_ALEN)
@@ -660,17 +665,15 @@ static int lisp_configure(struct net *net, struct net_device *dev,
 	return 0;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+static int lisp_newlink(struct net *net, struct net_device *dev,
+		struct nlattr *tb[], struct nlattr *data[],
+		struct netlink_ext_ack __always_unused *extack)
+#else
 static int lisp_newlink(struct net *net, struct net_device *dev,
 		struct nlattr *tb[], struct nlattr *data[])
-{
-#else
-static int lisp_newlink(struct net_device *dev,
-		struct nlattr *tb[], struct nlattr *data[])
-
-{
-	struct net *net = &init_net;
 #endif
+{
 	__be16 dst_port = htons(LISP_UDP_PORT);
 
 	if (data[IFLA_LISP_PORT])
@@ -679,11 +682,7 @@ static int lisp_newlink(struct net_device *dev,
 	return lisp_configure(net, dev, dst_port);
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
 static void lisp_dellink(struct net_device *dev, struct list_head *head)
-#else
-static void lisp_dellink(struct net_device *dev)
-#endif
 {
 	struct lisp_dev *lisp = netdev_priv(dev);
 
