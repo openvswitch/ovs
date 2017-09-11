@@ -772,6 +772,9 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [OVS_DEFINE([HAVE_SKB_GSO_UDP])])
   OVS_GREP_IFELSE([$KSRC/include/net/dst.h],[DST_NOCACHE],
                   [OVS_DEFINE([HAVE_DST_NOCACHE])])
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/net/rtnetlink.h], [rtnl_link_ops],
+                        [extack],
+                  [OVS_DEFINE([HAVE_EXT_ACK_IN_RTNL_LINKOPS])])
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then
