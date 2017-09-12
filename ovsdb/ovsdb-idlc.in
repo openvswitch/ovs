@@ -1298,9 +1298,13 @@ void
             is_root = "true"
         else:
             is_root = "false"
-        print("    {\"%s\", %s," % (tableName, is_root))
+        if table.max_rows == 1:
+            is_singleton = "true"
+        else:
+            is_singleton = "false"
+        print("    {\"%s\", %s, %s," % (tableName, is_root, is_singleton))
         print("     %s_columns, ARRAY_SIZE(%s_columns)," % (
-            structName, structName))
+              structName, structName))
         print("     sizeof(struct %s), %s_init__}," % (structName, structName))
     print("};")
 
