@@ -2721,18 +2721,20 @@ init_ports(struct ofproto *p)
 }
 
 static bool
-ofport_is_internal(const struct ofproto *p, const struct ofport *port)
+ofport_is_internal_or_patch(const struct ofproto *p, const struct ofport *port)
 {
     return !strcmp(netdev_get_type(port->netdev),
-                   ofproto_port_open_type(p->type, "internal"));
+                   ofproto_port_open_type(p->type, "internal")) ||
+           !strcmp(netdev_get_type(port->netdev),
+                   ofproto_port_open_type(p->type, "patch"));
 }
 
-/* If 'port' is internal and if the user didn't explicitly specify an mtu
- * through the database, we have to override it. */
+/* If 'port' is internal or patch and if the user didn't explicitly specify an
+ * mtu through the database, we have to override it. */
 static bool
 ofport_is_mtu_overridden(const struct ofproto *p, const struct ofport *port)
 {
-    return ofport_is_internal(p, port)
+    return ofport_is_internal_or_patch(p, port)
            && !netdev_mtu_is_user_config(port->netdev);
 }
 
