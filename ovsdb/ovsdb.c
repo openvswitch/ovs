@@ -18,6 +18,7 @@
 #include "ovsdb.h"
 
 #include "column.h"
+#include "file.h"
 #include "openvswitch/json.h"
 #include "ovsdb-error.h"
 #include "ovsdb-parser.h"
@@ -328,6 +329,7 @@ ovsdb_create(struct ovsdb_schema *schema)
 
     db = xmalloc(sizeof *db);
     db->schema = schema;
+    db->file = NULL;
     ovs_list_init(&db->replicas);
     ovs_list_init(&db->triggers);
     db->run_triggers = false;
@@ -362,6 +364,11 @@ ovsdb_destroy(struct ovsdb *db)
 {
     if (db) {
         struct shash_node *node;
+
+        /* Close the log. */
+        if (db->file) {
+            ovsdb_file_destroy(db->file);
+        }
 
         /* Remove all the replicas. */
         while (!ovs_list_is_empty(&db->replicas)) {
