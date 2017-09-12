@@ -1573,7 +1573,7 @@ ovsdb_monitor_destroy(struct ovsdb_monitor *dbmon)
     free(dbmon);
 }
 
-static struct ovsdb_error *
+static void
 ovsdb_monitor_commit(struct ovsdb_replica *replica,
                      const struct ovsdb_txn *txn,
                      bool durable OVS_UNUSED)
@@ -1601,8 +1601,6 @@ ovsdb_monitor_commit(struct ovsdb_replica *replica,
         ovsdb_monitor_json_cache_flush(m);
         break;
     }
-
-    return NULL;
 }
 
 static void

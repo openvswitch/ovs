@@ -56,6 +56,7 @@ bool ovsdb_schema_equal(const struct ovsdb_schema *,
 /* Database. */
 struct ovsdb {
     struct ovsdb_schema *schema;
+    struct ovsdb_file *file;    /* If nonnull, log for transactions. */
     struct ovs_list replicas;   /* Contains "struct ovsdb_replica"s. */
     struct shash tables;        /* Contains "struct ovsdb_table *"s. */
 
@@ -87,8 +88,8 @@ struct ovsdb_replica {
 };
 
 struct ovsdb_replica_class {
-    struct ovsdb_error *(*commit)(struct ovsdb_replica *,
-                                  const struct ovsdb_txn *, bool durable);
+    void (*commit)(struct ovsdb_replica *,
+                   const struct ovsdb_txn *, bool durable);
     void (*destroy)(struct ovsdb_replica *);
 };
 
