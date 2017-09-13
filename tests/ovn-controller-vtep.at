@@ -80,19 +80,7 @@ m4_define([OVN_CONTROLLER_VTEP_START],
 # So many exits... Yeah, we started a lot daemons~
 #
 m4_define([OVN_CONTROLLER_VTEP_STOP],
-  [# removes all 'Broken pipe' warning logs from ovsdb-server.log.  this is in
-   # that *ctl command (e.g. ovn-nbctl) exits right after committing the change
-   # to database.  however, in reaction, some daemon (e.g. ovn-controller-vtep)
-   # may immediately update the database.  this later update may cause database
-   # sending update back to *ctl command if *ctl has not proceeded to exit yet.
-   # and if *ctl command exits before database calling send, the send from
-   # database will fail with 'Broken pipe' error. Also removes all "connection
-   # reset" warning logs by a similar rationale (either EPIPE or ECONNRESET can
-   # be returned on a send depending on whether the peer had unconsumed data when
-   # it closed the socket).
-   AT_CHECK([check_logs "$1
-/reset by peer/d
-/Broken pipe/d"])
+  [AT_CHECK([check_logs "$1"])
    OVS_APP_EXIT_AND_WAIT([ovs-vtep])
    OVS_APP_EXIT_AND_WAIT([ovn-northd])
    OVS_APP_EXIT_AND_WAIT([ovn-controller-vtep])
