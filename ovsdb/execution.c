@@ -120,9 +120,7 @@ ovsdb_execute(struct ovsdb *db, const struct ovsdb_session *session,
                                        "as first parameter");
         }
 
-        results = ovsdb_error_to_json(error);
-        ovsdb_error_destroy(error);
-        return results;
+        return ovsdb_error_to_json_free(error);
     }
 
     x.db = db;

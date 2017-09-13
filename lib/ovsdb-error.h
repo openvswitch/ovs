@@ -66,6 +66,7 @@ struct ovsdb_error *ovsdb_error_clone(const struct ovsdb_error *)
 char *ovsdb_error_to_string(const struct ovsdb_error *);
 char *ovsdb_error_to_string_free(struct ovsdb_error *);
 struct json *ovsdb_error_to_json(const struct ovsdb_error *);
+struct json *ovsdb_error_to_json_free(struct ovsdb_error *);
 
 const char *ovsdb_error_get_tag(const struct ovsdb_error *);
 

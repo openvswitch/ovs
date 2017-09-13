@@ -203,6 +203,8 @@ ovsdb_error_clone(const struct ovsdb_error *old)
     }
 }
 
+/* Returns 'error' converted to the <error> JSON object format described in RFC
+ * 7047.  The caller must free the returned json (with json_destroy()). */
 struct json *
 ovsdb_error_to_json(const struct ovsdb_error *error)
 {
@@ -211,6 +213,8 @@ ovsdb_error_to_json(const struct ovsdb_error *error)
     if (error->details) {
         json_object_put_string(json, "details", error->details);
     }
+
+    /* These are RFC 7047-compliant extensions. */
     if (error->syntax) {
         json_object_put_string(json, "syntax", error->syntax);
     }
@@ -218,6 +222,19 @@ ovsdb_error_to_json(const struct ovsdb_error *error)
         json_object_put_string(json, "io-error",
                                ovs_retval_to_string(error->errno_));
     }
+
+    return json;
+}
+
+/* Returns 'error' converted to the <error> JSON object format described in RFC
+ * 7047.  The caller must free the returned json (with json_destroy()).
+ *
+ * Also, frees 'error'. */
+struct json *
+ovsdb_error_to_json_free(struct ovsdb_error *error)
+{
+    struct json *json = ovsdb_error_to_json(error);
+    ovsdb_error_destroy(error);
     return json;
 }
 
