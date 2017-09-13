@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ extern "C" {
 #endif
 
 struct ds;
+struct uuid;
 
 /* Type of a JSON value. */
 enum json_type {
@@ -92,6 +93,9 @@ struct json *json_object_create(void);
 void json_object_put(struct json *, const char *name, struct json *value);
 void json_object_put_string(struct json *,
                             const char *name, const char *value);
+void json_object_put_format(struct json *,
+                            const char *name, const char *format, ...)
+    OVS_PRINTF_FORMAT(3, 4);
 
 const char *json_string(const struct json *);
 struct json_array *json_array(const struct json *);

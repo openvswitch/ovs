@@ -29,6 +29,7 @@
 #include "openvswitch/shash.h"
 #include "unicode.h"
 #include "util.h"
+#include "uuid.h"
 
 /* The type of a JSON token. */
 enum json_token_type {
@@ -282,6 +283,17 @@ void
 json_object_put_string(struct json *json, const char *name, const char *value)
 {
     json_object_put(json, name, json_string_create(value));
+}
+
+void OVS_PRINTF_FORMAT(3, 4)
+json_object_put_format(struct json *json,
+                       const char *name, const char *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    json_object_put(json, name,
+                    json_string_create_nocopy(xvasprintf(format, args)));
+    va_end(args);
 }
 
 const char *
