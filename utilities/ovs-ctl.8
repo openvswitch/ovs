@@ -44,6 +44,8 @@ ovs\-ctl \- OVS startup helper script
 [\fB\-\-dport=\fIdport\fR]
 \fBenable\-protocol\fR
 .br
+\fBovs\-ctl delete\-transient\-ports
+.br
 \fBovs\-ctl help \fR| \fB\-h \fR| \fB\-\-help
 .br
 \fBovs\-ctl \-\-version
@@ -411,6 +413,10 @@ The name of the IP protocol to be enabled, such as \fBgre\fR or
 TCP or UDP source or destination port to match.  These are optional
 and allowed only with \fB\-\-protocol=tcp\fR or
 \fB\-\-protocol=udp\fR.
+.
+.SH "The ``delete\-transient\-ports'' command"
+.
+Deletes all ports that have the \fBother_config:transient\fR value set to true.
 .
 .SH "The ``help'' command"
 .

@@ -558,16 +558,17 @@ This program is intended to be invoked internally by Open vSwitch startup
 scripts.  System administrators should not normally invoke it directly.
 
 Commands:
-  start              start Open vSwitch daemons
-  stop               stop Open vSwitch daemons
-  restart            stop and start Open vSwitch daemons
-  status             check whether Open vSwitch daemons are running
-  version            print versions of Open vSwitch daemons
-  load-kmod          insert modules if not already present
-  force-reload-kmod  save OVS network device state, stop OVS, unload kernel
-                     module, reload kernel module, start OVS, restore state
-  enable-protocol    enable protocol specified in options with iptables
-  help               display this help message
+  start                   start Open vSwitch daemons
+  stop                    stop Open vSwitch daemons
+  restart                 stop and start Open vSwitch daemons
+  status                  check whether Open vSwitch daemons are running
+  version                 print versions of Open vSwitch daemons
+  load-kmod               insert modules if not already present
+  force-reload-kmod       save OVS network device state, stop OVS, unload kernel
+                          module, reload kernel module, start OVS, restore state
+  enable-protocol         enable protocol specified in options with iptables
+  delete-transient-ports  delete transient (other_config:transient=true) ports
+  help                    display this help message
 
 One of the following options is required for "start", "restart" and "force-reload-kmod":
   --system-id=UUID   set specific ID to uniquely identify this system
@@ -729,6 +730,9 @@ case $command in
         ;;
     enable-protocol)
         enable_protocol
+        ;;
+    delete-transient-ports)
+        del_transient_ports
         ;;
     help)
         usage
