@@ -259,7 +259,7 @@ install -p -D -m 0644 rhel/usr_lib_udev_rules.d_91-vfio.rules \
 install -p -D -m 0644 \
         rhel/usr_share_openvswitch_scripts_systemd_sysconfig.template \
         $RPM_BUILD_ROOT/%{_sysconfdir}/sysconfig/openvswitch
-for service in openvswitch ovsdb-server ovs-vswitchd \
+for service in openvswitch ovsdb-server ovs-vswitchd ovs-delete-transient-ports \
 		ovn-controller ovn-controller-vtep ovn-northd; do
 	install -p -D -m 0644 \
 			rhel/usr_lib_systemd_system_${service}.service \
@@ -528,6 +528,7 @@ fi
 %{_unitdir}/openvswitch.service
 %{_unitdir}/ovsdb-server.service
 %{_unitdir}/ovs-vswitchd.service
+%{_unitdir}/ovs-delete-transient-ports.service
 %{_datadir}/openvswitch/scripts/openvswitch.init
 %{_sysconfdir}/sysconfig/network-scripts/ifup-ovs
 %{_sysconfdir}/sysconfig/network-scripts/ifdown-ovs
