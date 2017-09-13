@@ -683,7 +683,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
 
     memset(&flower, 0, sizeof flower);
 
-    if (tnl->tun_id) {
+    if (flow_tnl_dst_is_set(&key->tunnel)) {
         VLOG_DBG_RL(&rl,
                     "tunnel: id %#" PRIx64 " src " IP_FMT
                     " dst " IP_FMT " tp_src %d tp_dst %d",
@@ -698,9 +698,8 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         flower.tunnel.tp_src = tnl->tp_src;
         flower.tunnel.tp_dst = tnl->tp_dst;
         flower.tunnel.tunnel = true;
-
-        memset(&mask->tunnel, 0, sizeof mask->tunnel);
     }
+    memset(&mask->tunnel, 0, sizeof mask->tunnel);
 
     flower.key.eth_type = key->dl_type;
     flower.mask.eth_type = mask->dl_type;
