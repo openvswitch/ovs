@@ -41,7 +41,7 @@ OVSDB_CHECK_REPLICATION([insert monitored table, insert excluded table],
   [[8,10c8,9
 < _uuid                                name number
 < ------------------------------------ ---- ------
-< <0> one  1     @&t@
+< <0> one  1
 ---
 > _uuid name number
 > ----- ---- ------]]
@@ -69,7 +69,7 @@ OVSDB_CHECK_REPLICATION([insert monitored table, update excluded table],
   [[8,10c8,9
 < _uuid                                name number
 < ------------------------------------ ---- ------
-< <0> two  2     @&t@
+< <0> two  2
 ---
 > _uuid name number
 > ----- ---- ------]]
@@ -93,7 +93,7 @@ OVSDB_CHECK_REPLICATION([update monitored table, insert excluded table],
   [[7,9c7,8
 < _uuid                                name number
 < ------------------------------------ ---- ------
-< <0> two  2     @&t@
+< <0> two  2
 ---
 > _uuid name number
 > ----- ---- ------]]
@@ -122,7 +122,7 @@ OVSDB_CHECK_REPLICATION([update monitored table, update excluded table],
   [[7,9c7,8
 < _uuid                                name  number
 < ------------------------------------ ----- ------
-< <0> three 3     @&t@
+< <0> three 3
 ---
 > _uuid name number
 > ----- ---- ------]]
@@ -149,7 +149,7 @@ OVSDB_CHECK_REPLICATION([delete monitored table, insert excluded table],
   [[7,9c7,8
 < _uuid                                name number
 < ------------------------------------ ---- ------
-< <0> one  1     @&t@
+< <0> one  1
 ---
 > _uuid name number
 > ----- ---- ------]]
@@ -181,7 +181,7 @@ OVSDB_CHECK_REPLICATION([delete monitored table, update excluded table],
   [[7,9c7,8
 < _uuid                                name number
 < ------------------------------------ ---- ------
-< <0> two  2     @&t@
+< <0> two  2
 ---
 > _uuid name number
 > ----- ---- ------]]

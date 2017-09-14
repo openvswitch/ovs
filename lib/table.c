@@ -214,6 +214,9 @@ table_add_cell(struct table *table)
 static void
 table_print_table_line__(struct ds *line)
 {
+    while (ds_last(line) == ' ') {
+        line->length--;
+    }
     puts(ds_cstr(line));
     ds_clear(line);
 }
