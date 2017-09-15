@@ -658,14 +658,15 @@ ovs_hex_dump(FILE *stream, const void *buf_, size_t size,
       n = end - start;
 
       /* Print line. */
-      fprintf(stream, "%08"PRIxMAX"  ", (uintmax_t) ROUND_DOWN(ofs, per_line));
+      fprintf(stream, "%08"PRIxMAX" ", (uintmax_t) ROUND_DOWN(ofs, per_line));
       for (i = 0; i < start; i++)
         fprintf(stream, "   ");
       for (; i < end; i++)
-        fprintf(stream, "%02x%c",
-                buf[i - start], i == per_line / 2 - 1? '-' : ' ');
+        fprintf(stream, "%c%02x",
+                i == per_line / 2 ? '-' : ' ', buf[i - start]);
       if (ascii)
         {
+          fprintf(stream, " ");
           for (; i < per_line; i++)
             fprintf(stream, "   ");
           fprintf(stream, "|");
