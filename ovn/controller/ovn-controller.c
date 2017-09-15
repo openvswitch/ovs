@@ -590,6 +590,9 @@ main(int argc, char *argv[])
          * l2gateway ports for which options:l2gateway-chassis designates the
          * local hypervisor, and localnet ports. */
         struct sset local_lports = SSET_INITIALIZER(&local_lports);
+        /* Contains the same ports as local_lports, but in the format:
+         * <datapath-tunnel-key>_<port-tunnel-key> */
+        struct sset local_lport_ids = SSET_INITIALIZER(&local_lport_ids);
 
         const struct ovsrec_bridge *br_int = get_br_int(&ctx);
         const char *chassis_id = get_chassis_id(ctx.ovs_idl);
@@ -606,7 +609,7 @@ main(int argc, char *argv[])
             chassis = chassis_run(&ctx, chassis_id, br_int);
             encaps_run(&ctx, br_int, chassis_id);
             binding_run(&ctx, br_int, chassis, &ldatapaths, &lports,
-                        &local_datapaths, &local_lports);
+                        &local_datapaths, &local_lports, &local_lport_ids);
         }
 
         if (br_int && chassis) {
@@ -628,7 +631,7 @@ main(int argc, char *argv[])
                     struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
                     lflow_run(&ctx, chassis, &lports, &mcgroups,
                               &local_datapaths, &group_table, &ct_zones,
-                              &addr_sets, &flow_table);
+                              &addr_sets, &flow_table, &local_lport_ids);
 
                     physical_run(&ctx, mff_ovn_geneve,
                                  br_int, chassis, &ct_zones, &lports,
@@ -681,6 +684,7 @@ main(int argc, char *argv[])
         ldatapath_index_destroy(&ldatapaths);
 
         sset_destroy(&local_lports);
+        sset_destroy(&local_lport_ids);
 
         struct local_datapath *cur_node, *next_node;
         HMAP_FOR_EACH_SAFE (cur_node, next_node, hmap_node, &local_datapaths) {

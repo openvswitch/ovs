@@ -32,7 +32,7 @@ void binding_register_ovs_idl(struct ovsdb_idl *);
 void binding_run(struct controller_ctx *, const struct ovsrec_bridge *br_int,
                  const struct sbrec_chassis *, const struct ldatapath_index *,
                  const struct lport_index *, struct hmap *local_datapaths,
-                 struct sset *all_lports);
+                 struct sset *all_lports, struct sset *local_lport_ids);
 bool binding_cleanup(struct controller_ctx *, const struct sbrec_chassis *);
 
 #endif /* ovn/binding.h */

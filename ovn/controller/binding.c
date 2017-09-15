@@ -354,6 +354,17 @@ setup_qos(const char *egress_iface, struct hmap *queue_map)
 }
 
 static void
+update_local_lport_ids(struct sset *local_lport_ids,
+                       const struct sbrec_port_binding *binding_rec)
+{
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%"PRId64"_%"PRId64,
+                 binding_rec->datapath->tunnel_key,
+                 binding_rec->tunnel_key);
+        sset_add(local_lport_ids, buf);
+}
+
+static void
 consider_local_datapath(struct controller_ctx *ctx,
                         const struct ldatapath_index *ldatapaths,
                         const struct lport_index *lports,
@@ -362,7 +373,8 @@ consider_local_datapath(struct controller_ctx *ctx,
                         struct hmap *qos_map,
                         struct hmap *local_datapaths,
                         struct shash *lport_to_iface,
-                        struct sset *local_lports)
+                        struct sset *local_lports,
+                        struct sset *local_lport_ids)
 {
     const struct ovsrec_interface *iface_rec
         = shash_find_data(lport_to_iface, binding_rec->logical_port);
@@ -413,6 +425,14 @@ consider_local_datapath(struct controller_ctx *ctx,
         our_chassis = false;
     }
 
+    if (our_chassis
+        || !strcmp(binding_rec->type, "patch")
+        || !strcmp(binding_rec->type, "localport")
+        || !strcmp(binding_rec->type, "vtep")
+        || !strcmp(binding_rec->type, "localnet")) {
+        update_local_lport_ids(local_lport_ids, binding_rec);
+    }
+
     if (ctx->ovnsb_idl_txn) {
         if (our_chassis) {
             if (binding_rec->chassis != chassis_rec) {
@@ -444,7 +464,7 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
             const struct sbrec_chassis *chassis_rec,
             const struct ldatapath_index *ldatapaths,
             const struct lport_index *lports, struct hmap *local_datapaths,
-            struct sset *local_lports)
+            struct sset *local_lports, struct sset *local_lport_ids)
 {
     if (!chassis_rec) {
         return;
@@ -469,7 +489,7 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
                                 chassis_rec, binding_rec,
                                 sset_is_empty(&egress_ifaces) ? NULL :
                                 &qos_map, local_datapaths, &lport_to_iface,
-                                local_lports);
+                                local_lports, local_lport_ids);
 
     }
 
