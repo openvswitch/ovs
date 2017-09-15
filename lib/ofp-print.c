@@ -3791,6 +3791,7 @@ ofp_to_string(const void *oh_, size_t len,
         error = ofpraw_decode(&raw, oh);
         if (!error) {
             ofp_to_string__(oh, port_map, raw, &string, verbosity);
+            ds_chomp(&string, ' ');
             if (verbosity >= 5) {
                 if (ds_last(&string) != '\n') {
                     ds_put_char(&string, '\n');
