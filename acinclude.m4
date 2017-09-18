@@ -188,6 +188,13 @@ AC_DEFUN([OVS_CHECK_LINUX_TC], [
     ])],
     [AC_DEFINE([HAVE_TCA_TUNNEL_KEY_ENC_DST_PORT], [1],
                [Define to 1 if TCA_TUNNEL_KEY_ENC_DST_PORT is avaiable.])])
+
+  AC_COMPILE_IFELSE([
+    AC_LANG_PROGRAM([#include <linux/tc_act/tc_pedit.h>], [
+        int x = TCA_PEDIT_KEY_EX_HDR_TYPE_UDP;
+    ])],
+    [AC_DEFINE([HAVE_TCA_PEDIT_KEY_EX_HDR_TYPE_UDP], [1],
+               [Define to 1 if TCA_PEDIT_KEY_EX_HDR_TYPE_UDP is avaiable.])])
 ])
 
 dnl OVS_CHECK_DPDK
