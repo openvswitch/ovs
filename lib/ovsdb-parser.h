@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2015 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,6 +68,7 @@ const struct json *ovsdb_parser_member(struct ovsdb_parser *, const char *name,
 void ovsdb_parser_raise_error(struct ovsdb_parser *parser,
                               const char *format, ...)
     OVS_PRINTF_FORMAT(2, 3);
+void ovsdb_parser_put_error(struct ovsdb_parser *, struct ovsdb_error *);
 bool ovsdb_parser_has_error(const struct ovsdb_parser *);
 struct ovsdb_error *ovsdb_parser_get_error(const struct ovsdb_parser *);
 struct ovsdb_error *ovsdb_parser_finish(struct ovsdb_parser *)
