@@ -27,11 +27,13 @@
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/thread.h"
 #include "openvswitch/types.h"
+#include "openvswitch/util.h"
 #include "openvswitch/vlog.h"
 #include "netdev-linux.h"
 #include "netlink.h"
 #include "netlink-socket.h"
 #include "odp-netlink.h"
+#include "odp-util.h"
 #include "tc.h"
 #include "unaligned.h"
 #include "util.h"
@@ -41,6 +43,76 @@ VLOG_DEFINE_THIS_MODULE(netdev_tc_offloads);
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(60, 5);
 
 static struct hmap ufid_tc = HMAP_INITIALIZER(&ufid_tc);
+
+struct netlink_field {
+    int offset;
+    int flower_offset;
+    int size;
+};
+
+static struct netlink_field set_flower_map[][3] = {
+    [OVS_KEY_ATTR_IPV4] = {
+        { offsetof(struct ovs_key_ipv4, ipv4_src),
+          offsetof(struct tc_flower_key, ipv4.ipv4_src),
+          MEMBER_SIZEOF(struct tc_flower_key, ipv4.ipv4_src)
+        },
+        { offsetof(struct ovs_key_ipv4, ipv4_dst),
+          offsetof(struct tc_flower_key, ipv4.ipv4_dst),
+          MEMBER_SIZEOF(struct tc_flower_key, ipv4.ipv4_dst)
+        },
+        { offsetof(struct ovs_key_ipv4, ipv4_ttl),
+          offsetof(struct tc_flower_key, ipv4.rewrite_ttl),
+          MEMBER_SIZEOF(struct tc_flower_key, ipv4.rewrite_ttl)
+        },
+    },
+    [OVS_KEY_ATTR_IPV6] = {
+        { offsetof(struct ovs_key_ipv6, ipv6_src),
+          offsetof(struct tc_flower_key, ipv6.ipv6_src),
+          MEMBER_SIZEOF(struct tc_flower_key, ipv6.ipv6_src)
+        },
+        { offsetof(struct ovs_key_ipv6, ipv6_dst),
+          offsetof(struct tc_flower_key, ipv6.ipv6_dst),
+          MEMBER_SIZEOF(struct tc_flower_key, ipv6.ipv6_dst)
+        },
+    },
+    [OVS_KEY_ATTR_ETHERNET] = {
+        { offsetof(struct ovs_key_ethernet, eth_src),
+          offsetof(struct tc_flower_key, src_mac),
+          MEMBER_SIZEOF(struct tc_flower_key, src_mac)
+        },
+        { offsetof(struct ovs_key_ethernet, eth_dst),
+          offsetof(struct tc_flower_key, dst_mac),
+          MEMBER_SIZEOF(struct tc_flower_key, dst_mac)
+        },
+    },
+    [OVS_KEY_ATTR_ETHERTYPE] = {
+        { 0,
+          offsetof(struct tc_flower_key, eth_type),
+          MEMBER_SIZEOF(struct tc_flower_key, eth_type)
+        },
+    },
+    [OVS_KEY_ATTR_TCP] = {
+        { offsetof(struct ovs_key_tcp, tcp_src),
+          offsetof(struct tc_flower_key, tcp_src),
+          MEMBER_SIZEOF(struct tc_flower_key, tcp_src)
+        },
+        { offsetof(struct ovs_key_tcp, tcp_dst),
+          offsetof(struct tc_flower_key, tcp_dst),
+          MEMBER_SIZEOF(struct tc_flower_key, tcp_dst)
+        },
+    },
+    [OVS_KEY_ATTR_UDP] = {
+        { offsetof(struct ovs_key_udp, udp_src),
+          offsetof(struct tc_flower_key, udp_src),
+          MEMBER_SIZEOF(struct tc_flower_key, udp_src)
+        },
+        { offsetof(struct ovs_key_udp, udp_dst),
+          offsetof(struct tc_flower_key, udp_dst),
+          MEMBER_SIZEOF(struct tc_flower_key, udp_dst)
+        },
+    },
+};
+
 static struct ovs_mutex ufid_lock = OVS_MUTEX_INITIALIZER;
 
 /**
@@ -274,6 +346,48 @@ netdev_tc_flow_dump_destroy(struct netdev_flow_dump *dump)
     return 0;
 }
 
+static void
+parse_flower_rewrite_to_netlink_action(struct ofpbuf *buf,
+                                       struct tc_flower *flower)
+{
+    char *mask = (char *) &flower->rewrite.mask;
+    char *data = (char *) &flower->rewrite.key;
+
+    for (int type = 0; type < ARRAY_SIZE(set_flower_map); type++) {
+        char *put = NULL;
+        size_t nested = 0;
+        int len = ovs_flow_key_attr_lens[type].len;
+
+        if (len <= 0) {
+            continue;
+        }
+
+        for (int j = 0; j < ARRAY_SIZE(set_flower_map[type]); j++) {
+            struct netlink_field *f = &set_flower_map[type][j];
+
+            if (!f->size) {
+                break;
+            }
+
+            if (!is_all_zeros(mask + f->flower_offset, f->size)) {
+                if (!put) {
+                    nested = nl_msg_start_nested(buf,
+                                                 OVS_ACTION_ATTR_SET_MASKED);
+                    put = nl_msg_put_unspec_zero(buf, type, len * 2);
+                }
+
+                memcpy(put + f->offset, data + f->flower_offset, f->size);
+                memcpy(put + len + f->offset,
+                       mask + f->flower_offset, f->size);
+            }
+        }
+
+        if (put) {
+            nl_msg_end_nested(buf, nested);
+        }
+    }
+}
+
 static int
 parse_tc_flower_to_match(struct tc_flower *flower,
                          struct match *match,
@@ -367,6 +481,10 @@ parse_tc_flower_to_match(struct tc_flower *flower,
                                    | VLAN_CFI);
         }
 
+        if (flower->rewrite.rewrite) {
+            parse_flower_rewrite_to_netlink_action(buf, flower);
+        }
+
         if (flower->set.set) {
             size_t set_offset = nl_msg_start_nested(buf, OVS_ACTION_ATTR_SET);
             size_t tunnel_offset =
@@ -457,14 +575,77 @@ netdev_tc_flow_dump_next(struct netdev_flow_dump *dump,
 }
 
 static int
+parse_put_flow_set_masked_action(struct tc_flower *flower,
+                                 const struct nlattr *set,
+                                 size_t set_len,
+                                 bool hasmask)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
+    char *set_buff[set_len], *set_data, *set_mask;
+    char *key = (char *) &flower->rewrite.key;
+    char *mask = (char *) &flower->rewrite.mask;
+    const struct nlattr *attr;
+    int i, j, type;
+    size_t size;
+
+    /* copy so we can set attr mask to 0 for used ovs key struct members  */
+    memcpy(set_buff, set, set_len);
+    attr = (struct nlattr *) set_buff;
+
+    type = nl_attr_type(attr);
+    size = nl_attr_get_size(attr) / 2;
+    set_data = CONST_CAST(char *, nl_attr_get(attr));
+    set_mask = set_data + size;
+
+    if (type >= ARRAY_SIZE(set_flower_map)
+        || !set_flower_map[type][0].size) {
+        VLOG_DBG_RL(&rl, "unsupported set action type: %d", type);
+        return EOPNOTSUPP;
+    }
+
+    for (i = 0; i < ARRAY_SIZE(set_flower_map[type]); i++) {
+        struct netlink_field *f = &set_flower_map[type][i];
+
+        if (!f->size) {
+            break;
+        }
+
+        /* copy masked value */
+        for (j = 0; j < f->size; j++) {
+            char maskval = hasmask ? set_mask[f->offset + j] : 0xFF;
+
+            key[f->flower_offset + j] = maskval & set_data[f->offset + j];
+            mask[f->flower_offset + j] = maskval;
+
+        }
+
+        /* set its mask to 0 to show it's been used. */
+        if (hasmask) {
+            memset(set_mask + f->offset, 0, f->size);
+        }
+    }
+
+    if (!is_all_zeros(&flower->rewrite, sizeof flower->rewrite)) {
+        flower->rewrite.rewrite = true;
+    }
+
+    if (hasmask && !is_all_zeros(set_mask, size)) {
+        VLOG_DBG_RL(&rl, "unsupported sub attribute of set action type %d",
+                    type);
+        return EOPNOTSUPP;
+    }
+
+    return 0;
+}
+
+static int
 parse_put_flow_set_action(struct tc_flower *flower, const struct nlattr *set,
                           size_t set_len)
 {
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
     const struct nlattr *set_attr;
     size_t set_left;
 
-    NL_ATTR_FOR_EACH_UNSAFE(set_attr, set_left, set, set_len) {
+    NL_ATTR_FOR_EACH_UNSAFE (set_attr, set_left, set, set_len) {
         if (nl_attr_type(set_attr) == OVS_KEY_ATTR_TUNNEL) {
             const struct nlattr *tunnel = nl_attr_get(set_attr);
             const size_t tunnel_len = nl_attr_get_size(set_attr);
@@ -472,7 +653,7 @@ parse_put_flow_set_action(struct tc_flower *flower, const struct nlattr *set,
             size_t tun_left;
 
             flower->set.set = true;
-            NL_ATTR_FOR_EACH_UNSAFE(tun_attr, tun_left, tunnel, tunnel_len) {
+            NL_ATTR_FOR_EACH_UNSAFE (tun_attr, tun_left, tunnel, tunnel_len) {
                 switch (nl_attr_type(tun_attr)) {
                 case OVS_TUNNEL_KEY_ATTR_ID: {
                     flower->set.id = nl_attr_get_be64(tun_attr);
@@ -507,9 +688,8 @@ parse_put_flow_set_action(struct tc_flower *flower, const struct nlattr *set,
                 }
             }
         } else {
-            VLOG_DBG_RL(&rl, "unsupported set action type: %d",
-                        nl_attr_type(set_attr));
-            return EOPNOTSUPP;
+            return parse_put_flow_set_masked_action(flower, set, set_len,
+                                                    false);
         }
     }
     return 0;
@@ -823,6 +1003,15 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
             const size_t set_len = nl_attr_get_size(nla);
 
             err = parse_put_flow_set_action(&flower, set, set_len);
+            if (err) {
+                return err;
+            }
+        } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_SET_MASKED) {
+            const struct nlattr *set = nl_attr_get(nla);
+            const size_t set_len = nl_attr_get_size(nla);
+
+            err = parse_put_flow_set_masked_action(&flower, set, set_len,
+                                                   true);
             if (err) {
                 return err;
             }
