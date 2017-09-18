@@ -56,15 +56,6 @@ VLOG_DEFINE_THIS_MODULE(odp_util);
 static const char *delimiters = ", \t\r\n";
 static const char *delimiters_end = ", \t\r\n)";
 
-struct attr_len_tbl {
-    int len;
-    const struct attr_len_tbl *next;
-    int next_max;
-};
-#define ATTR_LEN_INVALID  -1
-#define ATTR_LEN_VARIABLE -2
-#define ATTR_LEN_NESTED   -3
-
 static int parse_odp_key_mask_attr(const char *, const struct simap *port_names,
                               struct ofpbuf *, struct ofpbuf *);
 static void format_odp_key_attr(const struct nlattr *a,
@@ -2212,7 +2203,7 @@ static const struct attr_len_tbl ovs_tun_key_attr_lens[OVS_TUNNEL_KEY_ATTR_MAX +
     [OVS_TUNNEL_KEY_ATTR_IPV6_DST]      = { .len = 16 },
 };
 
-static const struct attr_len_tbl ovs_flow_key_attr_lens[OVS_KEY_ATTR_MAX + 1] = {
+const struct attr_len_tbl ovs_flow_key_attr_lens[OVS_KEY_ATTR_MAX + 1] = {
     [OVS_KEY_ATTR_ENCAP]     = { .len = ATTR_LEN_NESTED },
     [OVS_KEY_ATTR_PRIORITY]  = { .len = 4 },
     [OVS_KEY_ATTR_SKB_MARK]  = { .len = 4 },

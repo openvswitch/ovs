@@ -344,4 +344,15 @@ void odp_put_push_eth_action(struct ofpbuf *odp_actions,
                              const struct eth_addr *eth_src,
                              const struct eth_addr *eth_dst);
 
+struct attr_len_tbl {
+    int len;
+    const struct attr_len_tbl *next;
+    int next_max;
+};
+
+#define ATTR_LEN_INVALID  -1
+#define ATTR_LEN_VARIABLE -2
+#define ATTR_LEN_NESTED   -3
+
+extern const struct attr_len_tbl ovs_flow_key_attr_lens[OVS_KEY_ATTR_MAX + 1];
 #endif /* odp-util.h */
