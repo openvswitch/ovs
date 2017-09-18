@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -337,8 +337,8 @@ guess_netmask(ovs_be32 ip_)
  *
  *    - Square brackets [] quote ":" separators and are removed from the
  *      tokens. */
-static char *
-parse_bracketed_token(char **pp)
+char *
+inet_parse_token(char **pp)
 {
     char *p = *pp;
 
@@ -445,8 +445,8 @@ inet_parse_active(const char *target_, uint16_t default_port,
     bool ok;
 
     p = target;
-    host = parse_bracketed_token(&p);
-    port = parse_bracketed_token(&p);
+    host = inet_parse_token(&p);
+    port = inet_parse_token(&p);
     if (!host) {
         VLOG_ERR("%s: host must be specified", target_);
         ok = false;
@@ -572,8 +572,8 @@ inet_parse_passive(const char *target_, int default_port,
     bool ok;
 
     p = target;
-    port = parse_bracketed_token(&p);
-    host = parse_bracketed_token(&p);
+    port = inet_parse_token(&p);
+    host = inet_parse_token(&p);
     if (!port && default_port < 0) {
         VLOG_ERR("%s: port must be specified", target_);
         ok = false;
