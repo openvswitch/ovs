@@ -314,7 +314,7 @@ OVS_SYSCONFDIR=$sandbox; export OVS_SYSCONFDIR
 
 if $built; then
     # Easy access to OVS manpages.
-    (cd "$builddir" && ${MAKE-make} install-man mandir="$sandbox"/man)
+    (cd "$builddir" && ${MAKE-make} install-man install-man-rst mandir="$sandbox"/man)
     MANPATH=$sandbox/man:; export MANPATH
 fi
 
