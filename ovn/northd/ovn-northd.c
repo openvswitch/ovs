@@ -1887,6 +1887,7 @@ ovn_port_update_sbrec(struct northd_context *ctx,
                     /* If we found the chassis, and the gw chassis on record
                      * differs from what we expect go ahead and update */
                     if (op->sb->n_gateway_chassis != 1
+                        || !op->sb->gateway_chassis[0]->chassis
                         || strcmp(op->sb->gateway_chassis[0]->chassis->name,
                                   chassis->name)
                         || op->sb->gateway_chassis[0]->priority != 0) {
