@@ -46,6 +46,7 @@ static void iph_to_flow_copy_addrs(struct flow_keys *flow, const struct iphdr *i
 	memcpy(&flow->src, &iph->saddr, sizeof(flow->src) + sizeof(flow->dst));
 }
 
+#if RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(6,8)
 static __be32 skb_flow_get_ports(const struct sk_buff *skb, int thoff, u8 ip_proto)
 {
 	int poff = proto_ports_offset(ip_proto);
@@ -191,6 +192,7 @@ ipv6:
 
 	return true;
 }
+#endif
 
 static u32 hashrnd __read_mostly;
 static __always_inline void __flow_hash_secret_init(void)
