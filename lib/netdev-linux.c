@@ -1232,8 +1232,8 @@ netdev_linux_tap_batch_send(struct netdev *netdev_,
                             struct dp_packet_batch *batch)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-    for (int i = 0; i < batch->count; i++) {
-        struct dp_packet *packet = batch->packets[i];
+    struct dp_packet *packet;
+    DP_PACKET_BATCH_FOR_EACH (packet, batch) {
         size_t size = dp_packet_get_send_len(packet);
         ssize_t retval;
         int error;
