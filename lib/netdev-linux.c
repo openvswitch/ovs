@@ -1186,16 +1186,17 @@ static int
 netdev_linux_sock_batch_send(int sock, int ifindex,
                              struct dp_packet_batch *batch)
 {
+    const size_t size = dp_packet_batch_size(batch);
     /* We don't bother setting most fields in sockaddr_ll because the
      * kernel ignores them for SOCK_RAW. */
     struct sockaddr_ll sll = { .sll_family = AF_PACKET,
                                .sll_ifindex = ifindex };
 
-    struct mmsghdr *mmsg = xmalloc(sizeof(*mmsg) * batch->count);
-    struct iovec *iov = xmalloc(sizeof(*iov) * batch->count);
+    struct mmsghdr *mmsg = xmalloc(sizeof(*mmsg) * size);
+    struct iovec *iov = xmalloc(sizeof(*iov) * size);
 
-    for (int i = 0; i < batch->count; i++) {
-        struct dp_packet *packet = batch->packets[i];
+    struct dp_packet *packet;
+    DP_PACKET_BATCH_FOR_EACH (packet, batch) {
         iov[i].iov_base = dp_packet_data(packet);
         iov[i].iov_len = dp_packet_get_send_len(packet);
         mmsg[i].msg_hdr = (struct msghdr) { .msg_name = &sll,
@@ -1205,10 +1206,10 @@ netdev_linux_sock_batch_send(int sock, int ifindex,
     }
 
     int error = 0;
-    for (uint32_t ofs = 0; ofs < batch->count; ) {
+    for (uint32_t ofs = 0; ofs < size; ) {
         ssize_t retval;
         do {
-            retval = sendmmsg(sock, mmsg + ofs, batch->count - ofs, 0);
+            retval = sendmmsg(sock, mmsg + ofs, size - ofs, 0);
             error = retval < 0 ? errno : 0;
         } while (error == EINTR);
         if (error) {
