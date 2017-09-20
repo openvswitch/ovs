@@ -93,7 +93,7 @@ Daniel Borkmann                 dborkman@redhat.com
 Daniel Hiltgen                  daniel@netkine.com
 Daniel Roman                    droman@nicira.com
 Daniele Di Proietto             daniele.di.proietto@gmail.com
-Daniele Venturino               daniele.venturino@m3s.it
+Daniele Venturino               venturino.daniele+ovs@gmail.com
 Danny Kukawka                   danny.kukawka@bisect.de
 Darrell Ball                    dlu998@gmail.com
 Dave Tucker                     dave@dtucker.co.uk
