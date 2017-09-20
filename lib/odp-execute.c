@@ -826,7 +826,8 @@ odp_execute_actions(void *dp, struct dp_packet_batch *batch, bool steal,
             break;
         }
         case OVS_ACTION_ATTR_DECAP_NSH: {
-            size_t i, num = batch->count;
+            size_t i;
+            const size_t num = dp_packet_batch_size(batch);
 
             DP_PACKET_BATCH_REFILL_FOR_EACH (i, num, packet, batch) {
                 if (decap_nsh(packet)) {
