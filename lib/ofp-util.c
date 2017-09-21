@@ -9581,8 +9581,13 @@ ofputil_decode_ofp15_group_desc_reply(struct ofputil_group_desc *gd,
      * Such properties are valid for group desc replies so
      * claim that the group mod command is OFPGC15_ADD to
      * satisfy the check in parse_group_prop_ntr_selection_method() */
-    return parse_ofp15_group_properties(msg, gd->type, OFPGC15_ADD, &gd->props,
-                                        length - sizeof *ogds - bucket_list_len);
+    error = parse_ofp15_group_properties(
+        msg, gd->type, OFPGC15_ADD, &gd->props,
+        length - sizeof *ogds - bucket_list_len);
+    if (error) {
+        ofputil_bucket_list_destroy(&gd->buckets);
+    }
+    return error;
 }
 
 /* Converts a group description reply in 'msg' into an abstract
@@ -9881,8 +9886,12 @@ ofputil_pull_ofp15_group_mod(struct ofpbuf *msg, enum ofp_version ofp_version,
         return error;
     }
 
-    return parse_ofp15_group_properties(msg, gm->type, gm->command, &gm->props,
-                                        msg->size);
+    error = parse_ofp15_group_properties(msg, gm->type, gm->command,
+                                         &gm->props, msg->size);
+    if (error) {
+        ofputil_bucket_list_destroy(&gm->buckets);
+    }
+    return error;
 }
 
 static enum ofperr
