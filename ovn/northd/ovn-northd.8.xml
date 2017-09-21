@@ -1459,61 +1459,69 @@ icmp4 {
       in the reverse direction needs to be unDNATed.
     </p>
 
-    <p>Ingress Table 4: DNAT on Gateway Routers</p>
+    <p>Ingress Table 4: Load balancing DNAT rules</p>
+
+    <p>
+      Following load balancing DNAT flows are added for Gateway router or
+      Router with gateway port. These flows are programmed only on the
+      <code>redirect-chassis</code>.
+    </p>
 
     <ul>
       <li>
-        For all the configured load balancing rules for Gateway router in
-        <code>OVN_Northbound</code> database that includes a L4 port
-        <var>PORT</var> of protocol <var>P</var> and IPv4 address
-        <var>VIP</var>, a priority-120 flow that matches on
+        For all the configured load balancing rules for a Gateway router or
+        Router with gateway port in <code>OVN_Northbound</code> database that
+        includes a L4 port <var>PORT</var> of protocol <var>P</var> and IPv4
+        address <var>VIP</var>, a priority-120 flow that matches on
         <code>ct.new &amp;&amp; ip &amp;&amp; ip4.dst == <var>VIP</var>
         &amp;&amp; <var>P</var> &amp;&amp; <var>P</var>.dst == <var>PORT
         </var></code> with an action of <code>ct_lb(<var>args</var>)</code>,
         where <var>args</var> contains comma separated IPv4 addresses (and
-        optional port numbers) to load balance to.  If the Gateway router
-        is configured to force SNAT any load-balanced packets, the above
-        action will be replaced by <code>flags.force_snat_for_lb = 1;
+        optional port numbers) to load balance to.  If the router is configured
+        to force SNAT any load-balanced packets, the above action will be
+        replaced by <code>flags.force_snat_for_lb = 1;
         ct_lb(<var>args</var>);</code>.
       </li>
 
       <li>
-        For all the configured load balancing rules for Gateway router in
+        For all the configured load balancing rules for a router in
         <code>OVN_Northbound</code> database that includes a L4 port
         <var>PORT</var> of protocol <var>P</var> and IPv4 address
         <var>VIP</var>, a priority-120 flow that matches on
         <code>ct.est &amp;&amp; ip &amp;&amp; ip4.dst == <var>VIP</var>
         &amp;&amp; <var>P</var> &amp;&amp; <var>P</var>.dst == <var>PORT
-        </var></code> with an action of <code>ct_dnat;</code>.
-        If the Gateway router is configured to force SNAT any load-balanced
-        packets, the above action will be replaced by
-        <code>flags.force_snat_for_lb = 1; ct_dnat;</code>.
+        </var></code> with an action of <code>ct_dnat;</code>. If the router is
+        configured to force SNAT any load-balanced packets, the above action
+        will be replaced by <code>flags.force_snat_for_lb = 1; ct_dnat;</code>.
       </li>
 
       <li>
-        For all the configured load balancing rules for Gateway router in
+        For all the configured load balancing rules for a router in
         <code>OVN_Northbound</code> database that includes just an IP address
         <var>VIP</var> to match on, a priority-110 flow that matches on
         <code>ct.new &amp;&amp; ip &amp;&amp; ip4.dst ==
         <var>VIP</var></code> with an action of
         <code>ct_lb(<var>args</var>)</code>, where <var>args</var> contains
-        comma separated IPv4 addresses.  If the Gateway router
-        is configured to force SNAT any load-balanced packets, the above
-        action will be replaced by <code>flags.force_snat_for_lb = 1;
-        ct_lb(<var>args</var>);</code>.
+        comma separated IPv4 addresses.  If the router is configured to force
+        SNAT any load-balanced packets, the above action will be replaced by
+        <code>flags.force_snat_for_lb = 1; ct_lb(<var>args</var>);</code>.
       </li>
 
       <li>
-        For all the configured load balancing rules for Gateway router in
+        For all the configured load balancing rules for a router in
         <code>OVN_Northbound</code> database that includes just an IP address
         <var>VIP</var> to match on, a priority-110 flow that matches on
         <code>ct.est &amp;&amp; ip &amp;&amp; ip4.dst ==
         <var>VIP</var></code> with an action of <code>ct_dnat;</code>.
-        If the Gateway router is configured to force SNAT any load-balanced
+        If the router is configured to force SNAT any load-balanced
         packets, the above action will be replaced by
         <code>flags.force_snat_for_lb = 1; ct_dnat;</code>.
       </li>
+    </ul>
 
+    <p>Ingress Table 4: DNAT on Gateway Routers</p>
+
+    <ul>
       <li>
         For each configuration in the OVN Northbound database, that asks
         to change the destination IP address of a packet from <var>A</var> to
@@ -1890,6 +1898,28 @@ arp {
     </p>
 
     <ul>
+      <li>
+        <p>
+          For all the configured load balancing rules for a router with gateway
+          port in <code>OVN_Northbound</code> database that includes an IPv4
+          address <code>VIP</code>, for every backend IPv4 address <var>B</var>
+          defined for the <code>VIP</code> a priority-120 flow is programmed on
+          <code>redirect-chassis</code> that matches
+          <code>ip &amp;&amp; ip4.src == <var>B</var> &amp;&amp;
+          outport == <var>GW</var></code>, where <var>GW</var> is the logical
+          router gateway port with an action <code>ct_dnat;</code>. If the
+          backend IPv4 address <var>B</var> is also configured with L4 port
+          <var>PORT</var> of protocol <var>P</var>, then the
+          match also includes <code>P.src</code> == <var>PORT</var>.
+        </p>
+
+        <p>
+          If the router is configured to force SNAT  any load-balanced packets,
+          above action will be replaced by
+          <code>flags.force_snat_for_lb = 1; ct_dnat;</code>.
+        </p>
+      </li>
+
       <li>
         <p>
           For each configuration in the OVN Northbound database that asks

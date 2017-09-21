@@ -1075,6 +1075,147 @@ OVS_TRAFFIC_VSWITCHD_STOP(["/failed to query port patch-.*/d
 /connection dropped.*/d"])
 AT_CLEANUP
 
+AT_SETUP([ovn -- load balancing in router with gateway router port])
+AT_KEYWORDS([ovnlb])
+
+CHECK_CONNTRACK()
+CHECK_CONNTRACK_NAT()
+ovn_start
+OVS_TRAFFIC_VSWITCHD_START()
+ADD_BR([br-int])
+
+# Set external-ids in br-int needed for ovn-controller
+ovs-vsctl \
+        -- set Open_vSwitch . external-ids:system-id=hv1 \
+        -- set Open_vSwitch . external-ids:ovn-remote=unix:$ovs_base/ovn-sb/ovn-sb.sock \
+        -- set Open_vSwitch . external-ids:ovn-encap-type=geneve \
+        -- set Open_vSwitch . external-ids:ovn-encap-ip=169.0.0.1 \
+        -- set bridge br-int fail-mode=secure other-config:disable-in-band=true
+
+# Start ovn-controller
+start_daemon ovn-controller
+
+# Logical network:
+# One LR R1 with switches foo (192.168.1.0/24), bar (192.168.2.0/24),
+# and alice (172.16.1.0/24) connected to it.  The port between R1 and
+# alice is the router gateway port where the R1 LB rules are applied.
+#
+#    foo -- R1 -- bar
+#           |
+#    alice ----
+
+ovn-nbctl lr-add R1
+
+ovn-nbctl ls-add foo
+ovn-nbctl ls-add bar
+ovn-nbctl ls-add alice
+
+ovn-nbctl lrp-add R1 foo 00:00:01:01:02:03 192.168.1.1/24
+ovn-nbctl lrp-add R1 bar 00:00:01:01:02:04 192.168.2.1/24
+ovn-nbctl lrp-add R1 alice 00:00:02:01:02:03 172.16.1.1/24 \
+    -- set Logical_Router_Port alice options:redirect-chassis=hv1
+
+# Connect foo to R1
+ovn-nbctl lsp-add foo rp-foo -- set Logical_Switch_Port rp-foo \
+    type=router options:router-port=foo \
+    -- lsp-set-addresses rp-foo router
+
+# Connect bar to R1
+ovn-nbctl lsp-add bar rp-bar -- set Logical_Switch_Port rp-bar \
+    type=router options:router-port=bar \
+    -- lsp-set-addresses rp-bar router
+
+# Connect alice to R1
+ovn-nbctl lsp-add alice rp-alice -- set Logical_Switch_Port rp-alice \
+    type=router options:router-port=alice \
+    -- lsp-set-addresses rp-alice router
+
+# Logical port 'foo1' in switch 'foo'.
+ADD_NAMESPACES(foo1)
+ADD_VETH(foo1, foo1, br-int, "192.168.1.2/24", "f0:00:00:01:02:03", \
+         "192.168.1.1")
+ovn-nbctl lsp-add foo foo1 \
+-- lsp-set-addresses foo1 "f0:00:00:01:02:03 192.168.1.2"
+
+# Logical port 'foo2' in switch 'foo'.
+ADD_NAMESPACES(foo2)
+ADD_VETH(foo2, foo2, br-int, "192.168.1.3/24", "f0:00:00:01:02:06", \
+         "192.168.1.1")
+ovn-nbctl lsp-add foo foo2 \
+-- lsp-set-addresses foo2 "f0:00:00:01:02:06 192.168.1.3"
+
+# Logical port 'bar1' in switch 'bar'.
+ADD_NAMESPACES(bar1)
+ADD_VETH(bar1, bar1, br-int, "192.168.2.2/24", "f0:00:00:01:02:04", \
+         "192.168.2.1")
+ovn-nbctl lsp-add bar bar1 \
+-- lsp-set-addresses bar1 "f0:00:00:01:02:04 192.168.2.2"
+
+# Logical port 'alice1' in switch 'alice'.
+ADD_NAMESPACES(alice1)
+ADD_VETH(alice1, alice1, br-int, "172.16.1.2/24", "f0:00:00:01:02:05", \
+         "172.16.1.1")
+ovn-nbctl lsp-add alice alice1 \
+-- lsp-set-addresses alice1 "f0:00:00:01:02:05 172.16.1.2"
+
+# Config OVN load-balancer with a VIP.
+uuid=`ovn-nbctl  create load_balancer vips:172.16.1.10="192.168.1.2,192.168.2.2"`
+ovn-nbctl set logical_router R1 load_balancer=$uuid
+
+# Config OVN load-balancer with another VIP (this time with ports).
+ovn-nbctl set load_balancer $uuid vips:'"172.16.1.11:8000"'='"192.168.1.2:80,192.168.2.2:80"'
+
+# Wait for ovn-controller to catch up.
+ovn-nbctl --wait=hv sync
+OVS_WAIT_UNTIL([ovs-ofctl -O OpenFlow13 dump-groups br-int | \
+grep 'nat(dst=192.168.2.2:80)'])
+
+# Start webservers in 'foo1', 'bar1'.
+OVS_START_L7([foo1], [http])
+OVS_START_L7([bar1], [http])
+
+dnl Should work with the virtual IP address through NAT
+for i in `seq 1 20`; do
+    echo Request $i
+    NS_CHECK_EXEC([alice1], [wget 172.16.1.10 -t 5 -T 1 --retry-connrefused -v -o wget$i.log])
+done
+
+dnl Each server should have at least one connection.
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(172.16.1.10) |
+sed -e 's/zone=[[0-9]]*/zone=<cleared>/'], [0], [dnl
+tcp,orig=(src=172.16.1.2,dst=172.16.1.10,sport=<cleared>,dport=<cleared>),reply=(src=192.168.1.2,dst=172.16.1.2,sport=<cleared>,dport=<cleared>),zone=<cleared>,protoinfo=(state=<cleared>)
+tcp,orig=(src=172.16.1.2,dst=172.16.1.10,sport=<cleared>,dport=<cleared>),reply=(src=192.168.2.2,dst=172.16.1.2,sport=<cleared>,dport=<cleared>),zone=<cleared>,protoinfo=(state=<cleared>)
+])
+
+dnl Test load-balancing that includes L4 ports in NAT.
+for i in `seq 1 20`; do
+    echo Request $i
+    NS_CHECK_EXEC([alice1], [wget 172.16.1.11:8000 -t 5 -T 1 --retry-connrefused -v -o wget$i.log])
+done
+
+dnl Each server should have at least one connection.
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(172.16.1.11) |
+sed -e 's/zone=[[0-9]]*/zone=<cleared>/'], [0], [dnl
+tcp,orig=(src=172.16.1.2,dst=172.16.1.11,sport=<cleared>,dport=<cleared>),reply=(src=192.168.1.2,dst=172.16.1.2,sport=<cleared>,dport=<cleared>),zone=<cleared>,protoinfo=(state=<cleared>)
+tcp,orig=(src=172.16.1.2,dst=172.16.1.11,sport=<cleared>,dport=<cleared>),reply=(src=192.168.2.2,dst=172.16.1.2,sport=<cleared>,dport=<cleared>),zone=<cleared>,protoinfo=(state=<cleared>)
+])
+
+OVS_APP_EXIT_AND_WAIT([ovn-controller])
+
+as ovn-sb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-nb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as northd
+OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
+as
+OVS_TRAFFIC_VSWITCHD_STOP(["/failed to query port patch-.*/d
+/connection dropped.*/d"])
+AT_CLEANUP
+
 AT_SETUP([ovn -- DNAT and SNAT on distributed router - N/S])
 AT_KEYWORDS([ovnnat])
 

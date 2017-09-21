@@ -4339,7 +4339,8 @@ get_force_snat_ip(struct ovn_datapath *od, const char *key_type, ovs_be32 *ip)
 static void
 add_router_lb_flow(struct hmap *lflows, struct ovn_datapath *od,
                    struct ds *match, struct ds *actions, int priority,
-                   const char *lb_force_snat_ip)
+                   const char *lb_force_snat_ip, char *backend_ips,
+                   bool is_udp)
 {
     /* A match and actions for new connections. */
     char *new_match = xasprintf("ct.new && %s", ds_cstr(match));
@@ -4366,6 +4367,63 @@ add_router_lb_flow(struct hmap *lflows, struct ovn_datapath *od,
 
     free(new_match);
     free(est_match);
+
+    if (!od->l3dgw_port || !od->l3redirect_port || !backend_ips) {
+        return;
+    }
+
+    /* Add logical flows to UNDNAT the load balanced reverse traffic in
+     * the router egress pipleine stage - S_ROUTER_OUT_UNDNAT if the logical
+     * router has a gateway router port associated.
+     */
+    struct ds undnat_match = DS_EMPTY_INITIALIZER;
+    ds_put_cstr(&undnat_match, "ip4 && (");
+    char *start, *next, *ip_str;
+    start = next = xstrdup(backend_ips);
+    ip_str = strsep(&next, ",");
+    bool backend_ips_found = false;
+    while (ip_str && ip_str[0]) {
+        char *ip_address = NULL;
+        uint16_t port = 0;
+        ip_address_and_port_from_lb_key(ip_str, &ip_address, &port);
+        if (!ip_address) {
+            break;
+        }
+
+        ds_put_format(&undnat_match, "(ip4.src == %s", ip_address);
+        free(ip_address);
+        if (port) {
+            ds_put_format(&undnat_match, " && %s.src == %d) || ",
+                          is_udp ? "udp" : "tcp", port);
+        } else {
+            ds_put_cstr(&undnat_match, ") || ");
+        }
+        ip_str = strsep(&next, ",");
+        backend_ips_found = true;
+    }
+
+    free(start);
+    if (!backend_ips_found) {
+        ds_destroy(&undnat_match);
+        return;
+    }
+    ds_chomp(&undnat_match, ' ');
+    ds_chomp(&undnat_match, '|');
+    ds_chomp(&undnat_match, '|');
+    ds_chomp(&undnat_match, ' ');
+    ds_put_format(&undnat_match, ") && outport == %s && "
+                 "is_chassis_resident(%s)", od->l3dgw_port->json_key,
+                 od->l3redirect_port->json_key);
+    if (lb_force_snat_ip) {
+        ovn_lflow_add(lflows, od, S_ROUTER_OUT_UNDNAT, 120,
+                      ds_cstr(&undnat_match),
+                      "flags.force_snat_for_lb = 1; ct_dnat;");
+    } else {
+        ovn_lflow_add(lflows, od, S_ROUTER_OUT_UNDNAT, 120,
+                      ds_cstr(&undnat_match), "ct_dnat;");
+    }
+
+    ds_destroy(&undnat_match);
 }
 
 static void
@@ -5243,8 +5301,8 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         }
 
         /* Load balancing and packet defrag are only valid on
-         * Gateway routers. */
-        if (!smap_get(&od->nbr->options, "chassis")) {
+         * Gateway routers or router with gateway port. */
+        if (!smap_get(&od->nbr->options, "chassis") && !od->l3dgw_port) {
             continue;
         }
 
@@ -5283,20 +5341,26 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                               ip_address);
                 free(ip_address);
 
+                int prio = 110;
+                bool is_udp = lb->protocol && !strcmp(lb->protocol, "udp") ?
+                    true : false;
                 if (port) {
-                    if (lb->protocol && !strcmp(lb->protocol, "udp")) {
+                    if (is_udp) {
                         ds_put_format(&match, " && udp && udp.dst == %d",
                                       port);
                     } else {
                         ds_put_format(&match, " && tcp && tcp.dst == %d",
                                       port);
                     }
-                    add_router_lb_flow(lflows, od, &match, &actions, 120,
-                                       lb_force_snat_ip);
-                } else {
-                    add_router_lb_flow(lflows, od, &match, &actions, 110,
-                                       lb_force_snat_ip);
+                    prio = 120;
                 }
+
+                if (od->l3redirect_port) {
+                    ds_put_format(&match, " && is_chassis_resident(%s)",
+                                  od->l3redirect_port->json_key);
+                }
+                add_router_lb_flow(lflows, od, &match, &actions, prio,
+                                   lb_force_snat_ip, node->value, is_udp);
             }
         }
 
