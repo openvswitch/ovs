@@ -59,9 +59,12 @@
 #define OFP_ASSERT(EXPR)                                                \
         extern int (*build_assert(void))[ sizeof(struct {               \
                     unsigned int build_assert_failed : (EXPR) ? 1 : -1; })]
-#else /* __cplusplus */
+#elif __cplusplus >= 201103L
 #define OFP_ASSERT(EXPR) static_assert(EXPR, "assertion failed")
-#endif /* __cplusplus */
+#else  /* __cplusplus < 201103L */
+#include <boost/static_assert.hpp>
+#define OFP_ASSERT BOOST_STATIC_ASSERT
+#endif /* __cplusplus < 201103L */
 
 /* Version number:
  * Non-experimental versions released: 0x01 0x02

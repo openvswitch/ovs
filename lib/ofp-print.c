@@ -16,6 +16,8 @@
 
 #include <config.h>
 
+#include "openvswitch/ofp-print.h"
+
 #include <errno.h>
 #include <inttypes.h>
 #include <sys/types.h>
@@ -43,7 +45,6 @@
 #include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/ofp-msgs.h"
-#include "openvswitch/ofp-print.h"
 #include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/type-props.h"

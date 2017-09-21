@@ -102,10 +102,6 @@ class Stream(object):
         self.socket = socket
         self.pipe = pipe
         if sys.platform == 'win32':
-            self._read = pywintypes.OVERLAPPED()
-            self._read.hEvent = winutils.get_new_event()
-            self._write = pywintypes.OVERLAPPED()
-            self._write.hEvent = winutils.get_new_event()
             if pipe is not None:
                 # Flag to check if fd is a server HANDLE.  In the case of a
                 # server handle we have to issue a disconnect before closing
@@ -114,6 +110,13 @@ class Stream(object):
                 suffix = name.split(":", 1)[1]
                 suffix = ovs.util.abs_file_name(ovs.dirs.RUNDIR, suffix)
                 self._pipename = winutils.get_pipe_name(suffix)
+                self._read = pywintypes.OVERLAPPED()
+                self._read.hEvent = winutils.get_new_event()
+                self._write = pywintypes.OVERLAPPED()
+                self._write.hEvent = winutils.get_new_event()
+            else:
+                self._wevent = winutils.get_new_event(bManualReset=False,
+                                                      bInitialState=False)
 
         self.name = name
         if status == errno.EAGAIN:
@@ -321,9 +324,6 @@ class Stream(object):
                                                             self._read,
                                                             False)
                 self._read_pending = False
-                recvBuffer = self._read_buffer[:nBytesRead]
-
-                return (0, winutils.get_decoded_buffer(recvBuffer))
             except pywintypes.error as e:
                 if e.winerror == winutils.winerror.ERROR_IO_INCOMPLETE:
                     # The operation is still pending, try again
@@ -334,34 +334,37 @@ class Stream(object):
                     return (0, "")
                 else:
                     return (errno.EINVAL, "")
+        else:
+            (errCode, self._read_buffer) = winutils.read_file(self.pipe,
+                                                              n,
+                                                              self._read)
+            if errCode:
+                if errCode == winutils.winerror.ERROR_IO_PENDING:
+                    self._read_pending = True
+                    return (errno.EAGAIN, "")
+                elif errCode in winutils.pipe_disconnected_errors:
+                    # If the pipe was disconnected, return 0.
+                    return (0, "")
+                else:
+                    return (errCode, "")
 
-        (errCode, self._read_buffer) = winutils.read_file(self.pipe,
-                                                          n,
-                                                          self._read)
-        if errCode:
-            if errCode == winutils.winerror.ERROR_IO_PENDING:
-                self._read_pending = True
-                return (errno.EAGAIN, "")
-            elif errCode in winutils.pipe_disconnected_errors:
-                # If the pipe was disconnected, return 0.
-                return (0, "")
-            else:
-                return (errCode, "")
-
-        try:
-            nBytesRead = winutils.get_overlapped_result(self.pipe,
-                                                        self._read,
-                                                        False)
-            winutils.win32event.SetEvent(self._read.hEvent)
-        except pywintypes.error as e:
-            if e.winerror in winutils.pipe_disconnected_errors:
-                # If the pipe was disconnected, return 0.
-                return (0, "")
-            else:
-                return (e.winerror, "")
+            try:
+                nBytesRead = winutils.get_overlapped_result(self.pipe,
+                                                            self._read,
+                                                            False)
+                winutils.win32event.SetEvent(self._read.hEvent)
+            except pywintypes.error as e:
+                if e.winerror in winutils.pipe_disconnected_errors:
+                    # If the pipe was disconnected, return 0.
+                    return (0, "")
+                else:
+                    return (e.winerror, "")
 
         recvBuffer = self._read_buffer[:nBytesRead]
-        return (0, winutils.get_decoded_buffer(recvBuffer))
+        # recvBuffer will have the type memoryview in Python3.
+        # We can use bytes to convert it to type bytes which works on
+        # both Python2 and Python3.
+        return (0, bytes(recvBuffer))
 
     def send(self, buf):
         """Tries to send 'buf' on this stream.
@@ -380,14 +383,17 @@ class Stream(object):
         elif len(buf) == 0:
             return 0
 
+        # Python 3 has separate types for strings and bytes.  We must have
+        # bytes here.
+        if six.PY3 and not isinstance(buf, bytes):
+            buf = bytes(buf, 'utf-8')
+        elif six.PY2:
+            buf = buf.encode('utf-8')
+
         if sys.platform == 'win32' and self.socket is None:
             return self.__send_windows(buf)
 
         try:
-            # Python 3 has separate types for strings and bytes.  We must have
-            # bytes here.
-            if six.PY3 and not isinstance(buf, six.binary_type):
-                buf = six.binary_type(buf, 'utf-8')
             return self.socket.send(buf)
         except socket.error as e:
             return -ovs.socket_util.get_exception_errno(e)
@@ -399,7 +405,6 @@ class Stream(object):
                                                                self._write,
                                                                False)
                 self._write_pending = False
-                return nBytesWritten
             except pywintypes.error as e:
                 if e.winerror == winutils.winerror.ERROR_IO_INCOMPLETE:
                     # The operation is still pending, try again
@@ -410,20 +415,18 @@ class Stream(object):
                     return -errno.ECONNRESET
                 else:
                     return -errno.EINVAL
-
-        buf = winutils.get_encoded_buffer(buf)
-        self._write_pending = False
-        (errCode, nBytesWritten) = winutils.write_file(self.pipe,
-                                                       buf,
-                                                       self._write)
-        if errCode:
-            if errCode == winutils.winerror.ERROR_IO_PENDING:
-                self._write_pending = True
-                return -errno.EAGAIN
-            if (not nBytesWritten and
-                    errCode in winutils.pipe_disconnected_errors):
-                # If the pipe was disconnected, return connection reset.
-                return -errno.ECONNRESET
+        else:
+            (errCode, nBytesWritten) = winutils.write_file(self.pipe,
+                                                           buf,
+                                                           self._write)
+            if errCode:
+                if errCode == winutils.winerror.ERROR_IO_PENDING:
+                    self._write_pending = True
+                    return -errno.EAGAIN
+                if (not nBytesWritten and
+                        errCode in winutils.pipe_disconnected_errors):
+                    # If the pipe was disconnected, return connection reset.
+                    return -errno.ECONNRESET
         return nBytesWritten
 
     def run(self):
@@ -454,29 +457,24 @@ class Stream(object):
     def __wait_windows(self, poller, wait):
         if self.socket is not None:
             if wait == Stream.W_RECV:
-                read_flags = (win32file.FD_READ |
-                              win32file.FD_ACCEPT |
-                              win32file.FD_CLOSE)
-                try:
-                    win32file.WSAEventSelect(self.socket,
-                                             self._read.hEvent,
-                                             read_flags)
-                except pywintypes.error as e:
-                    vlog.err("failed to associate events with socket: %s"
-                             % e.strerror)
-                poller.fd_wait(self._read.hEvent, ovs.poller.POLLIN)
+                mask = (win32file.FD_READ |
+                        win32file.FD_ACCEPT |
+                        win32file.FD_CLOSE)
+                event = ovs.poller.POLLIN
             else:
-                write_flags = (win32file.FD_WRITE |
-                               win32file.FD_CONNECT |
-                               win32file.FD_CLOSE)
-                try:
-                    win32file.WSAEventSelect(self.socket,
-                                             self._write.hEvent,
-                                             write_flags)
-                except pywintypes.error as e:
-                    vlog.err("failed to associate events with socket: %s"
-                             % e.strerror)
-                poller.fd_wait(self._write.hEvent, ovs.poller.POLLOUT)
+                mask = (win32file.FD_WRITE |
+                        win32file.FD_CONNECT |
+                        win32file.FD_CLOSE)
+                event = ovs.poller.POLLOUT
+
+            try:
+                win32file.WSAEventSelect(self.socket,
+                                         self._wevent,
+                                         mask)
+            except pywintypes.error as e:
+                vlog.err("failed to associate events with socket: %s"
+                         % e.strerror)
+            poller.fd_wait(self._wevent, event)
         else:
             if wait == Stream.W_RECV:
                 if self._read:
@@ -494,8 +492,6 @@ class Stream(object):
         self.wait(poller, Stream.W_RECV)
 
     def send_wait(self, poller):
-        if sys.platform == 'win32':
-            poller.fd_wait(self.connect.hEvent, ovs.poller.POLLIN)
         self.wait(poller, Stream.W_SEND)
 
     def __del__(self):
@@ -546,7 +542,7 @@ class PassiveStream(object):
         self.socket = sock
         if pipe is not None:
             self.connect = pywintypes.OVERLAPPED()
-            self.connect.hEvent = winutils.get_new_event(bManualReset=True)
+            self.connect.hEvent = winutils.get_new_event()
             self.connect_pending = False
             suffix = name.split(":", 1)[1]
             suffix = ovs.util.abs_file_name(ovs.dirs.RUNDIR, suffix)

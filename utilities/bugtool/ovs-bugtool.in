@@ -637,9 +637,7 @@ exclude those logs from the archive.
         prefix_output(CAP_OPENVSWITCH_LOGS, log,
                       last_mod_time=log_last_mod_time)
 
-    if not os.path.exists('/var/log/dmesg') and \
-       not os.path.exists('/var/log/boot'):
-        cmd_output(CAP_SYSTEM_LOGS, [DMESG])
+    cmd_output(CAP_SYSTEM_LOGS, [DMESG])
 
     cmd_output(CAP_SYSTEM_SERVICES, [CHKCONFIG, '--list'])
 
@@ -659,7 +657,7 @@ exclude those logs from the archive.
     if only_ovs_info:
         filters.add('ovs')
         ovs_info_caps = [CAP_NETWORK_STATUS, CAP_SYSTEM_LOGS,
-                         CAP_NETWORK_CONFIG]
+                         CAP_OPENVSWITCH_LOGS, CAP_NETWORK_CONFIG]
         ovs_info_list = ['process-tree']
         # We cannot use iteritems, since we modify 'data' as we pass through
         for (k, v) in data.items():

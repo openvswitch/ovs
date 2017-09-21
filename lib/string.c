@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011 Nicira, Inc.
+ * Copyright (c) 2009, 2011, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,10 @@
  */
 
 #include <config.h>
-
+#include <ctype.h>
 #include <string.h>
+
+#include "util.h"
 
 #ifndef HAVE_STRNLEN
 size_t
@@ -24,5 +26,21 @@ strnlen(const char *s, size_t maxlen)
 {
     const char *end = memchr(s, '\0', maxlen);
     return end ? end - s : maxlen;
+}
+#endif
+
+#ifdef _WIN32
+char *strcasestr(const char *str, const char *substr)
+{
+    do {
+        for (size_t i = 0; ; i++) {
+            if (!substr[i]) {
+                return CONST_CAST(char *, str);
+            } else if (tolower(substr[i]) != tolower(str[i])) {
+                break;
+            }
+        }
+    } while (*str++);
+    return NULL;
 }
 #endif

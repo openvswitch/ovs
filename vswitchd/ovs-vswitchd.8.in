@@ -280,6 +280,8 @@ bridge statistics, only the values shown by the above command.
 .IP "\fBdpif-netdev/pmd-rxq-show\fR [\fIdp\fR]"
 For each pmd thread of the datapath \fIdp\fR shows list of queue-ids with
 port names, which this thread polls.
+.IP "\fBdpif-netdev/pmd-rxq-rebalance\fR [\fIdp\fR]"
+Reassigns rxqs to pmds in the datapath \fIdp\fR based on their current usage.
 .
 .so ofproto/ofproto-dpif-unixctl.man
 .so ofproto/ofproto-unixctl.man

@@ -47,7 +47,7 @@ reset, requiring clients to reconnect to the server.
 .PP
 By default, \fBovsdb\-server\fR runs as an active server, except when the
 \fB\-\-sync\-from=\fIserver\fR command line option is specified and without
-the \fB\-\-no\-sync option\fR.  During runtime, \fBovsdb\-server\fR role can be switch by using appctl commands.
+the \fB\-\-active\fR option.  During runtime, \fBovsdb\-server\fR role can be switch by using appctl commands.
 .PP
 \fBovsdb-server/connect\-active\-ovsdb\-server\fR switches
 \fBovsdb\-server\fR into a backup server, Conversely,
@@ -666,6 +666,14 @@ in RFC 7047 for integer and real types.
 A condition can be either a 3-element JSON array as described in the RFC or a
 boolean value. In case of an empty array an implicit true boolean value will be
 considered.
+.
+.IP "5.2.6. Wait"
+.IQ "5.2.7. Commit"
+.IQ "5.2.9. Comment"
+RFC 7047 says that the \fBwait\fR, \fBcommit\fR, and \fBcomment\fR
+operations have no corresponding result object.  This is not true.
+Instead, when such an operation is successful, it yields a result
+object with no members.
 .
 .SH "BUGS"
 .

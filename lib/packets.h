@@ -25,6 +25,7 @@
 #include "openvswitch/geneve.h"
 #include "openvswitch/packets.h"
 #include "openvswitch/types.h"
+#include "openvswitch/nsh.h"
 #include "odp-netlink.h"
 #include "random.h"
 #include "hash.h"
@@ -397,6 +398,7 @@ ovs_be32 set_mpls_lse_values(uint8_t ttl, uint8_t tc, uint8_t bos,
 #define ETH_TYPE_RARP          0x8035
 #define ETH_TYPE_MPLS          0x8847
 #define ETH_TYPE_MPLS_MCAST    0x8848
+#define ETH_TYPE_NSH           0x894f
 
 static inline bool eth_type_mpls(ovs_be16 eth_type)
 {
@@ -431,6 +433,10 @@ BUILD_ASSERT_DECL(ETH_HEADER_LEN == sizeof(struct eth_header));
 void push_eth(struct dp_packet *packet, const struct eth_addr *dst,
               const struct eth_addr *src);
 void pop_eth(struct dp_packet *packet);
+
+void encap_nsh(struct dp_packet *packet,
+               const struct ovs_action_encap_nsh *encap_nsh);
+bool decap_nsh(struct dp_packet *packet);
 
 #define LLC_DSAP_SNAP 0xaa
 #define LLC_SSAP_SNAP 0xaa
@@ -1298,6 +1304,7 @@ enum packet_type {
     PT_IPV6 = PACKET_TYPE(OFPHTN_ETHERTYPE, ETH_TYPE_IPV6),
     PT_MPLS = PACKET_TYPE(OFPHTN_ETHERTYPE, ETH_TYPE_MPLS),
     PT_MPLS_MC = PACKET_TYPE(OFPHTN_ETHERTYPE, ETH_TYPE_MPLS_MCAST),
+    PT_NSH  = PACKET_TYPE(OFPHTN_ETHERTYPE, ETH_TYPE_NSH),
     PT_UNKNOWN = PACKET_TYPE(0xffff, 0xffff),   /* Unknown packet type. */
 };
 

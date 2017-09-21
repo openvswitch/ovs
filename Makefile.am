@@ -35,6 +35,9 @@ AM_CFLAGS += $(OVS_CFLAGS)
 
 if DPDK_NETDEV
 AM_CFLAGS += -D_FILE_OFFSET_BITS=64
+DPDKSTRIP_FLAGS = --dpdk
+else
+DPDKSTRIP_FLAGS = --nodpdk
 endif
 
 if NDEBUG
@@ -82,6 +85,7 @@ EXTRA_DIST = \
 	build-aux/cksum-schema-check \
 	build-aux/calculate-schema-cksum \
 	build-aux/dist-docs \
+	build-aux/dpdkstrip.pl \
 	build-aux/sodepends.pl \
 	build-aux/soexpand.pl \
 	build-aux/xml2nroff \
@@ -140,6 +144,7 @@ ro_shell = printf '\043 Generated automatically -- do not modify!    -*- buffer-
 SUFFIXES += .in
 .in:
 	$(AM_V_GEN)$(PERL) $(srcdir)/build-aux/soexpand.pl -I$(srcdir) < $< | \
+	  $(PERL) $(srcdir)/build-aux/dpdkstrip.pl $(DPDKSTRIP_FLAGS) | \
 	  sed \
 	    -e 's,[@]PKIDIR[@],$(PKIDIR),g' \
 	    -e 's,[@]LOGDIR[@],$(LOGDIR),g' \

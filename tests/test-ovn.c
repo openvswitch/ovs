@@ -202,10 +202,12 @@ create_addr_sets(struct shash *addr_sets)
     static const char *const addrs3[] = {
         "00:00:00:00:00:01", "00:00:00:00:00:02", "00:00:00:00:00:03",
     };
+    static const char *const addrs4[] = { NULL };
 
     expr_addr_sets_add(addr_sets, "set1", addrs1, 3);
     expr_addr_sets_add(addr_sets, "set2", addrs2, 3);
     expr_addr_sets_add(addr_sets, "set3", addrs3, 3);
+    expr_addr_sets_add(addr_sets, "set4", addrs4, 0);
 }
 
 static bool

@@ -34,33 +34,33 @@
  *
  * When no transaction is in progress:
  *
- *     - 'old' points to the data committed to the database and currently
+ *     - 'old_datum' points to the data committed to the database and currently
  *       in the row.
  *
- *     - 'new == old'.
+ *     - 'new_datum == old_datum'.
  *
  * When a transaction is in progress, the situation is a little different.  For
- * a row inserted in the transaction, 'old' is NULL and 'new' points to the
- * row's initial contents.  Otherwise:
+ * a row inserted in the transaction, 'old_datum' is NULL and 'new_datum'
+ * points to the row's initial contents.  Otherwise:
  *
- *     - 'old' points to the data committed to the database and currently in
- *       the row.  (This is the same as when no transaction is in progress.)
+ *     - 'old_datum' points to the data committed to the database and currently
+ *       in the row.  (This is the same as when no transaction is in progress.)
  *
- *     - If the transaction does not modify the row, 'new == old'.
+ *     - If the transaction does not modify the row, 'new_datum == old_datum'.
  *
- *     - If the transaction modifies the row, 'new' points to the modified
- *       data.
+ *     - If the transaction modifies the row, 'new_datum' points to the
+ *       modified data.
  *
- *     - If the transaction deletes the row, 'new' is NULL.
+ *     - If the transaction deletes the row, 'new_datum' is NULL.
  *
  * Thus:
  *
- *     - 'old' always points to committed data, except that it is NULL if the
- *       row is inserted within the current transaction.
+ *     - 'old_datum' always points to committed data, except that it is NULL if
+ *       the row is inserted within the current transaction.
  *
- *     - 'new' always points to the newest, possibly uncommitted version of the
- *       row's data, except that it is NULL if the row is deleted within the
- *       current transaction.
+ *     - 'new_datum' always points to the newest, possibly uncommitted version
+ *       of the row's data, except that it is NULL if the row is deleted within
+ *       the current transaction.
  */
 struct ovsdb_idl_row {
     struct hmap_node hmap_node; /* In struct ovsdb_idl_table's 'rows'. */
@@ -68,12 +68,12 @@ struct ovsdb_idl_row {
     struct ovs_list src_arcs;   /* Forward arcs (ovsdb_idl_arc.src_node). */
     struct ovs_list dst_arcs;   /* Backward arcs (ovsdb_idl_arc.dst_node). */
     struct ovsdb_idl_table *table; /* Containing table. */
-    struct ovsdb_datum *old;    /* Committed data (null if orphaned). */
+    struct ovsdb_datum *old_datum; /* Committed data (null if orphaned). */
 
     /* Transactional data. */
-    struct ovsdb_datum *new;    /* Modified data (null to delete row). */
-    unsigned long int *prereqs; /* Bitmap of columns to verify in "old". */
-    unsigned long int *written; /* Bitmap of columns from "new" to write. */
+    struct ovsdb_datum *new_datum; /* Modified data (null to delete row). */
+    unsigned long int *prereqs; /* Bitmap of "old_datum" columns to verify. */
+    unsigned long int *written; /* Bitmap of "new_datum" columns to write. */
     struct hmap_node txn_node;  /* Node in ovsdb_idl_txn's list. */
     unsigned long int *map_op_written; /* Bitmap of columns pending map ops. */
     struct map_op_list **map_op_lists; /* Per-column map operations. */
@@ -89,7 +89,7 @@ struct ovsdb_idl_row {
 struct ovsdb_idl_column {
     char *name;
     struct ovsdb_type type;
-    bool mutable;
+    bool is_mutable;
     void (*parse)(struct ovsdb_idl_row *, const struct ovsdb_datum *);
     void (*unparse)(struct ovsdb_idl_row *);
 };
@@ -104,7 +104,7 @@ struct ovsdb_idl_table_class {
 };
 
 struct ovsdb_idl_table {
-    const struct ovsdb_idl_table_class *class;
+    const struct ovsdb_idl_table_class *class_;
     unsigned char *modes;    /* OVSDB_IDL_* bitmasks, indexed by column. */
     bool need_table;         /* Monitor table even if no columns are selected
                               * for replication. */

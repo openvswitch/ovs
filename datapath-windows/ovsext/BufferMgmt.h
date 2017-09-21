@@ -141,4 +141,8 @@ NDIS_STATUS OvsSetCtxSourcePortNo(PNET_BUFFER_LIST nbl, UINT32 portNo);
 
 NDIS_STATUS OvsGetCtxSourcePortNo(PNET_BUFFER_LIST nbl, UINT32 *portNo);
 
+NTSTATUS OvsCreateNewNBLsFromMultipleNBs(PVOID context,
+                                         PNET_BUFFER_LIST *curNbl,
+                                         PNET_BUFFER_LIST *lastNbl);
+
 #endif /* __BUFFER_MGMT_H_ */

@@ -448,7 +448,7 @@ get_peer_common_name(const struct ssl_stream *sslv)
     }
 
     const char *cn;
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined (LIBRESSL_VERSION_NUMBER)
     /* ASN1_STRING_data() is deprecated as of OpenSSL version 1.1 */
     cn = (const char *)ASN1_STRING_data(cn_data);
 #else

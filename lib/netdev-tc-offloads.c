@@ -232,7 +232,7 @@ netdev_tc_flow_flush(struct netdev *netdev)
     int ifindex = netdev_get_ifindex(netdev);
 
     if (ifindex < 0) {
-        VLOG_ERR_RL(&error_rl, "failed to get ifindex for %s: %s",
+        VLOG_ERR_RL(&error_rl, "flow_flush: failed to get ifindex for %s: %s",
                     netdev_get_name(netdev), ovs_strerror(-ifindex));
         return -ifindex;
     }
@@ -249,7 +249,7 @@ netdev_tc_flow_dump_create(struct netdev *netdev,
 
     ifindex = netdev_get_ifindex(netdev);
     if (ifindex < 0) {
-        VLOG_ERR_RL(&error_rl, "failed to get ifindex for %s: %s",
+        VLOG_ERR_RL(&error_rl, "dump_create: failed to get ifindex for %s: %s",
                     netdev_get_name(netdev), ovs_strerror(-ifindex));
         return -ifindex;
     }
@@ -312,6 +312,8 @@ parse_tc_flower_to_match(struct tc_flower *flower,
             match_set_nw_proto(match, key->ip_proto);
         }
 
+        match_set_nw_ttl_masked(match, key->ip_ttl, mask->ip_ttl);
+
         match_set_nw_src_masked(match, key->ipv4.ipv4_src, mask->ipv4.ipv4_src);
         match_set_nw_dst_masked(match, key->ipv4.ipv4_dst, mask->ipv4.ipv4_dst);
 
@@ -323,9 +325,13 @@ parse_tc_flower_to_match(struct tc_flower *flower,
         if (key->ip_proto == IPPROTO_TCP) {
             match_set_tp_dst_masked(match, key->tcp_dst, mask->tcp_dst);
             match_set_tp_src_masked(match, key->tcp_src, mask->tcp_src);
+            match_set_tcp_flags_masked(match, key->tcp_flags, mask->tcp_flags);
         } else if (key->ip_proto == IPPROTO_UDP) {
             match_set_tp_dst_masked(match, key->udp_dst, mask->udp_dst);
             match_set_tp_src_masked(match, key->udp_src, mask->udp_src);
+        } else if (key->ip_proto == IPPROTO_SCTP) {
+            match_set_tp_dst_masked(match, key->sctp_dst, mask->sctp_dst);
+            match_set_tp_src_masked(match, key->sctp_src, mask->sctp_src);
         }
     }
 
@@ -592,11 +598,6 @@ test_key_and_mask(struct match *match)
         return EOPNOTSUPP;
     }
 
-    if (mask->nw_ttl) {
-        VLOG_DBG_RL(&rl, "offloading attribute nw_ttl isn't supported");
-        return EOPNOTSUPP;
-    }
-
     if (mask->nw_frag) {
         VLOG_DBG_RL(&rl, "offloading attribute nw_frag isn't supported");
         return EOPNOTSUPP;
@@ -646,13 +647,6 @@ test_key_and_mask(struct match *match)
             return EOPNOTSUPP;
         }
     }
-    if (is_ip_any(key) && key->nw_proto == IPPROTO_TCP && mask->tcp_flags) {
-        if (mask->tcp_flags) {
-            VLOG_DBG_RL(&rl,
-                        "offloading attribute tcp_flags isn't supported");
-            return EOPNOTSUPP;
-        }
-    }
 
     if (!is_all_zeros(mask, sizeof *mask)) {
         VLOG_DBG_RL(&rl, "offloading isn't supported, unknown attribute");
@@ -682,14 +676,14 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
 
     ifindex = netdev_get_ifindex(netdev);
     if (ifindex < 0) {
-        VLOG_ERR_RL(&error_rl, "failed to get ifindex for %s: %s",
+        VLOG_ERR_RL(&error_rl, "flow_put: failed to get ifindex for %s: %s",
                     netdev_get_name(netdev), ovs_strerror(-ifindex));
         return -ifindex;
     }
 
     memset(&flower, 0, sizeof flower);
 
-    if (tnl->tun_id) {
+    if (flow_tnl_dst_is_set(&key->tunnel)) {
         VLOG_DBG_RL(&rl,
                     "tunnel: id %#" PRIx64 " src " IP_FMT
                     " dst " IP_FMT " tp_src %d tp_dst %d",
@@ -704,9 +698,8 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         flower.tunnel.tp_src = tnl->tp_src;
         flower.tunnel.tp_dst = tnl->tp_dst;
         flower.tunnel.tunnel = true;
-
-        memset(&mask->tunnel, 0, sizeof mask->tunnel);
     }
+    memset(&mask->tunnel, 0, sizeof mask->tunnel);
 
     flower.key.eth_type = key->dl_type;
     flower.mask.eth_type = mask->dl_type;
@@ -754,14 +747,19 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     if (is_ip_any(key)) {
         flower.key.ip_proto = key->nw_proto;
         flower.mask.ip_proto = mask->nw_proto;
+        flower.key.ip_ttl = key->nw_ttl;
+        flower.mask.ip_ttl = mask->nw_ttl;
 
         if (key->nw_proto == IPPROTO_TCP) {
             flower.key.tcp_dst = key->tp_dst;
             flower.mask.tcp_dst = mask->tp_dst;
             flower.key.tcp_src = key->tp_src;
             flower.mask.tcp_src = mask->tp_src;
+            flower.key.tcp_flags = key->tcp_flags;
+            flower.mask.tcp_flags = mask->tcp_flags;
             mask->tp_src = 0;
             mask->tp_dst = 0;
+            mask->tcp_flags = 0;
         } else if (key->nw_proto == IPPROTO_UDP) {
             flower.key.udp_dst = key->tp_dst;
             flower.mask.udp_dst = mask->tp_dst;
@@ -781,6 +779,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         mask->nw_frag = 0;
         mask->nw_tos = 0;
         mask->nw_proto = 0;
+        mask->nw_ttl = 0;
 
         if (key->dl_type == htons(ETH_P_IP)) {
             flower.key.ipv4.ipv4_src = key->nw_src;
@@ -883,7 +882,7 @@ netdev_tc_flow_get(struct netdev *netdev OVS_UNUSED,
 
     ifindex = netdev_get_ifindex(dev);
     if (ifindex < 0) {
-        VLOG_ERR_RL(&error_rl, "failed to get ifindex for %s: %s",
+        VLOG_ERR_RL(&error_rl, "flow_get: failed to get ifindex for %s: %s",
                     netdev_get_name(dev), ovs_strerror(-ifindex));
         netdev_close(dev);
         return -ifindex;
@@ -926,7 +925,7 @@ netdev_tc_flow_del(struct netdev *netdev OVS_UNUSED,
 
     ifindex = netdev_get_ifindex(dev);
     if (ifindex < 0) {
-        VLOG_ERR_RL(&error_rl, "failed to get ifindex for %s: %s",
+        VLOG_ERR_RL(&error_rl, "flow_del: failed to get ifindex for %s: %s",
                     netdev_get_name(dev), ovs_strerror(-ifindex));
         netdev_close(dev);
         return -ifindex;
@@ -951,7 +950,7 @@ netdev_tc_init_flow_api(struct netdev *netdev)
 
     ifindex = netdev_get_ifindex(netdev);
     if (ifindex < 0) {
-        VLOG_ERR_RL(&error_rl, "failed to get ifindex for %s: %s",
+        VLOG_ERR_RL(&error_rl, "init: failed to get ifindex for %s: %s",
                     netdev_get_name(netdev), ovs_strerror(-ifindex));
         return -ifindex;
     }

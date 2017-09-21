@@ -223,7 +223,8 @@ script that depends on openvswitch but starts before it, needs to be changed
 to depend on openvswitch-switch too.
 
 * Ideally, an admin should not add openvswitch bridges in the 'auto'
-section of the 'interfaces' file.  This is because, when ifupdown starts
+section of the 'interfaces' file (i.e., if "br0" is a OVS bridge, you should
+not have a line "auto br0"). This is because, when ifupdown starts
 working on bridges listed in 'auto', openvswitch has not yet started.
 
 But, if the admin wants to go down this route and adds openvswitch bridges
@@ -231,3 +232,13 @@ in the 'auto' section, openvswitch-switch will forcefully be started when
 ifupdown kicks in. In a case like this, the admin needs to make sure that /usr
 has already been mounted and that a remote $syslog (if used) is ready to
 receive openvswitch logs.
+
+* With systemd, adding openvswitch bridges in the 'auto' section of the
+'interfaces' file can cause race conditions (i.e., if "br0" is a OVS bridge,
+you should not have a line "auto br0").  Debian systems have added a
+systemd ifup@.service file.  This file will call ifdown and ifup on interfaces
+in "auto" section automatically when the interfaces disappear and appear
+respectively.  This will cause race conditions if you delete and add the same
+bridges using tools like "ovs-vsctl" or "ovs-dpctl".  This is also a problem
+when you upgrade your openvswitch kernel module using commands like
+'force-reload-kmod'.

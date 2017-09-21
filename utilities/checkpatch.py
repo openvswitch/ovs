@@ -94,6 +94,9 @@ __regex_ends_with_bracket = \
     re.compile(r'[^\s]\) {(\s+/\*[\s\Sa-zA-Z0-9\.,\?\*/+-]*)?$')
 __regex_ptr_declaration_missing_whitespace = re.compile(r'[a-zA-Z0-9]\*[^*]')
 __regex_is_comment_line = re.compile(r'^\s*(/\*|\*\s)')
+__regex_trailing_operator = re.compile(r'^[^ ]* [^ ]*[?:]$')
+__regex_conditional_else_bracing = re.compile(r'^\s*else\s*{?$')
+__regex_conditional_else_bracing2 = re.compile(r'^\s*}\selse\s*$')
 
 skip_leading_whitespace_check = False
 skip_trailing_whitespace_check = False
@@ -185,6 +188,10 @@ def if_and_for_end_with_bracket_check(line):
             return True
         if __regex_ends_with_bracket.search(line) is None:
             return False
+    if __regex_conditional_else_bracing.match(line) is not None:
+        return False
+    if __regex_conditional_else_bracing2.match(line) is not None:
+        return False
     return True
 
 
@@ -206,6 +213,11 @@ def is_comment_line(line):
     return __regex_is_comment_line.match(line) is not None
 
 
+def trailing_operator(line):
+    """Returns TRUE if the current line ends with an operatorsuch as ? or :"""
+    return __regex_trailing_operator.match(line) is not None
+
+
 checks = [
     {'regex': None,
      'match_name':
@@ -223,21 +235,27 @@ checks = [
      'check': lambda x: trailing_whitespace_or_crlf(x),
      'print': lambda: print_warning("Line has trailing whitespace")},
 
-    {'regex': '(.c|.h)(.in)?$', 'match_name': None,
+    {'regex': '(\.c|\.h)(\.in)?$', 'match_name': None,
      'prereq': lambda x: not is_comment_line(x),
      'check': lambda x: not if_and_for_whitespace_checks(x),
      'print': lambda: print_error("Improper whitespace around control block")},
 
-    {'regex': '(.c|.h)(.in)?$', 'match_name': None,
+    {'regex': '(\.c|\.h)(\.in)?$', 'match_name': None,
      'prereq': lambda x: not is_comment_line(x),
      'check': lambda x: not if_and_for_end_with_bracket_check(x),
      'print': lambda: print_error("Inappropriate bracing around statement")},
 
-    {'regex': '(.c|.h)(.in)?$', 'match_name': None,
+    {'regex': '(\.c|\.h)(\.in)?$', 'match_name': None,
      'prereq': lambda x: not is_comment_line(x),
      'check': lambda x: pointer_whitespace_check(x),
      'print':
-     lambda: print_error("Inappropriate spacing in pointer declaration")}
+     lambda: print_error("Inappropriate spacing in pointer declaration")},
+
+    {'regex': '(\.c|\.h)(\.in)?$', 'match_name': None,
+     'prereq': lambda x: not is_comment_line(x),
+     'check': lambda x: trailing_operator(x),
+     'print':
+     lambda: print_error("Line has '?' or ':' operator at end of line")},
 ]
 
 
@@ -267,12 +285,31 @@ std_functions = [
         ('error', 'Use ovs_error() in place of error()'),
 ]
 checks += [
-    {'regex': '(.c|.h)(.in)?$',
+    {'regex': '(\.c|\.h)(\.in)?$',
      'match_name': None,
      'prereq': lambda x: not is_comment_line(x),
      'check': regex_function_factory(function_name),
      'print': regex_error_factory(description)}
     for (function_name, description) in std_functions]
+
+
+def regex_operator_factory(operator):
+    regex = re.compile(r'^[^#][^"\']*[^ "]%s[^ "\'][^"]*' % operator)
+    return lambda x: regex.search(x) is not None
+
+
+infix_operators = \
+    [re.escape(op) for op in ['/', '%', '<<', '>>', '<=', '>=', '==', '!=',
+            '^', '|', '&&', '||', '?:', '=', '+=', '-=', '*=', '/=', '%=',
+            '&=', '^=', '|=', '<<=', '>>=']] \
+    + ['[^<" ]<[^=" ]', '[^->" ]>[^=" ]', '[^ !()/"]\*[^/]', '[^ !&()"]&',
+       '[^" +(]\+[^"+;]', '[^" -(]-[^"->;]', '[^" <>=!^|+\-*/%&]=[^"=]']
+checks += [
+    {'regex': '(\.c|\.h)(\.in)?$', 'match_name': None,
+     'prereq': lambda x: not is_comment_line(x),
+     'check': regex_operator_factory(operator),
+     'print': lambda: print_warning("Line lacks whitespace around operator")}
+    for operator in infix_operators]
 
 
 def get_file_type_checks(filename):

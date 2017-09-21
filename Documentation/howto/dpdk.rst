@@ -118,6 +118,32 @@ After that PMD threads on cores where RX queues was pinned will become
   ``core_id`` not in ``pmd-cpu-mask``), RX queue will not be polled by any PMD
   thread.
 
+If pmd-rxq-affinity is not set for rxqs, they will be assigned to pmds (cores)
+automatically. The processing cycles that have been stored for each rxq
+will be used where known to assign rxqs to pmd based on a round robin of the
+sorted rxqs.
+
+For example, in the case where here there are 5 rxqs and 3 cores (e.g. 3,7,8)
+available, and the measured usage of core cycles per rxq over the last
+interval is seen to be:
+
+- Queue #0: 30%
+- Queue #1: 80%
+- Queue #3: 60%
+- Queue #4: 70%
+- Queue #5: 10%
+
+The rxqs will be assigned to cores 3,7,8 in the following order:
+
+Core 3: Q1 (80%) |
+Core 7: Q4 (70%) | Q5 (10%)
+core 8: Q3 (60%) | Q0 (30%)
+
+Rxq to pmds assignment takes place whenever there are configuration changes
+or can be triggered by using::
+
+    $ ovs-appctl dpif-netdev/pmd-rxq-rebalance
+
 QoS
 ---
 

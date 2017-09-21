@@ -136,7 +136,7 @@ Then verify that this module was indeed loaded::
     openvswitch          1.1.1
 
 If you still see Permission denied errors, then take a look into
-``selinux/openvswitch.te`` file in the OVS source tree and try to add white
+``selinux/openvswitch.te.in`` file in the OVS source tree and try to add white
 list rules.  This is really simple, just run SELinux audit2allow tool::
 
     $ grep "openvswitch_t" /var/log/audit/audit.log | audit2allow -M ovslocal

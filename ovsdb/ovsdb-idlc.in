@@ -1028,12 +1028,12 @@ void
         print("""
 /* Creates a new row of kind "%(t)s". */
 struct %(s)s *
-%(s)s_index_init_row(struct ovsdb_idl *idl, const struct ovsdb_idl_table_class *class)
+%(s)s_index_init_row(struct ovsdb_idl *idl, const struct ovsdb_idl_table_class *class_)
 {""" % {'s': structName, 't': tableName})
         #for columnName, column in sorted(table.columns.iteritems()):
         #    if column.type.is_smap():
         #        print "    smap_init(&row->%s);" % columnName
-        print("    return (struct %(s)s *) ovsdb_idl_index_init_row(idl, class);" % {'s': structName, 't': tableName})
+        print("    return (struct %(s)s *) ovsdb_idl_index_init_row(idl, class_);" % {'s': structName, 't': tableName})
         print("}")
 
         print("""
@@ -1268,7 +1268,7 @@ void
          .type = {
 %(type)s
          },
-         .mutable = %(mutable)s,
+         .is_mutable = %(mutable)s,
          .parse = %(s)s_parse_%(c)s,
          .unparse = %(s)s_unparse_%(c)s,
     },\n""" % {'P': prefix.upper(),

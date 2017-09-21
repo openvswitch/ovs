@@ -46,8 +46,7 @@ static struct hmap ovsdb_monitors = HMAP_INITIALIZER(&ovsdb_monitors);
 
 /* Keep state of session's conditions */
 struct ovsdb_monitor_session_condition {
-    bool conditional;
-    size_t n_true_cnd;
+    bool conditional;        /* True iff every table's condition is true. */
     struct shash tables;     /* Contains
                               *   "struct ovsdb_monitor_table_condition *"s. */
 };
@@ -583,8 +582,17 @@ static inline void
 ovsdb_monitor_session_condition_set_mode(
                                   struct ovsdb_monitor_session_condition *cond)
 {
-    cond->conditional = shash_count(&cond->tables) !=
-        cond->n_true_cnd;
+    struct shash_node *node;
+
+    SHASH_FOR_EACH (node, &cond->tables) {
+        struct ovsdb_monitor_table_condition *mtc = node->data;
+
+        if (!ovsdb_condition_is_true(&mtc->new_condition)) {
+            cond->conditional = true;
+            return;
+        }
+    }
+    cond->conditional = false;
 }
 
 /* Returnes an empty allocated session's condition state holder */
@@ -649,10 +657,7 @@ ovsdb_monitor_table_condition_create(
     shash_add(&condition->tables, table->schema->name, mtc);
     /* On session startup old == new condition */
     ovsdb_condition_clone(&mtc->new_condition, &mtc->old_condition);
-    if (ovsdb_condition_is_true(&mtc->old_condition)) {
-        condition->n_true_cnd++;
-        ovsdb_monitor_session_condition_set_mode(condition);
-    }
+    ovsdb_monitor_session_condition_set_mode(condition);
 
     return NULL;
 }
@@ -722,15 +727,6 @@ ovsdb_monitor_table_condition_updated(struct ovsdb_monitor_table *mt,
         /* If conditional monitoring - set old condition to new condition */
         if (ovsdb_condition_cmp_3way(&mtc->old_condition,
                                      &mtc->new_condition)) {
-            if (ovsdb_condition_is_true(&mtc->new_condition)) {
-                if (!ovsdb_condition_is_true(&mtc->old_condition)) {
-                    condition->n_true_cnd++;
-                }
-            } else {
-                if (ovsdb_condition_is_true(&mtc->old_condition)) {
-                    condition->n_true_cnd--;
-                }
-            }
             ovsdb_condition_destroy(&mtc->old_condition);
             ovsdb_condition_clone(&mtc->old_condition, &mtc->new_condition);
             ovsdb_monitor_session_condition_set_mode(condition);

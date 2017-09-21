@@ -45,7 +45,11 @@ s,#.*<linux/if_ether\.h>,,
 s/__u8[[:space:]]*\([a-zA-Z0-9_]*\)[[:space:]]*\[[[:space:]]*ETH_ALEN[[:space:]]*\]/struct eth_addr \1/
 
 # Transform IPv6 addresses from an array to struct in6_addr
-s/__be32[[:space:]]*\([a-zA-Z0-9_]*\)[[:space:]]*\[[[:space:]]*4[[:space:]]*\]/struct in6_addr \1/
+#
+# As a very special case, only transform member names with more than
+# one character because struct ovs_key_nsh has a member "__be32 c[4];"
+# that is not an IPv6 address.
+s/__be32[[:space:]]*\([a-zA-Z0-9_]\{2,\}\)[[:space:]]*\[[[:space:]]*4[[:space:]]*\]/struct in6_addr \1/
 
 # Transform most Linux-specific __u<N> types into C99 uint<N>_t types,
 # and most Linux-specific __be<N> into Open vSwitch ovs_be<N>,

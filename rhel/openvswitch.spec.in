@@ -68,6 +68,7 @@ Tailored Open vSwitch SELinux policy
 ./configure --prefix=/usr --sysconfdir=/etc --localstatedir=%{_localstatedir} \
     --libdir=%{_libdir} --enable-ssl --enable-shared
 make %{_smp_mflags}
+make selinux/openvswitch-custom.te
 cd selinux
 make -f %{_datadir}/selinux/devel/Makefile
 

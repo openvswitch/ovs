@@ -23,5 +23,13 @@ ovn-nbctl lsp-set-type lrp1-attachment router
 ovn-nbctl lsp-set-addresses lrp1-attachment 00:00:00:00:ff:02
 ovn-nbctl lsp-set-options lrp1-attachment router-port=lrp1
 
+ovs-vsctl add-port br-int p1 -- \
+    set Interface p1 external_ids:iface-id=sw0-port1
+ovs-vsctl add-port br-int p2 -- \
+    set Interface p2 external_ids:iface-id=sw1-port1
+
 # View a summary of the configuration
+printf "\n=== ovn-nbctl show ===\n\n"
 ovn-nbctl show
+printf "\n=== ovn-sbctl show ===\n\n"
+ovn-sbctl show

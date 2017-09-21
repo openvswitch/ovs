@@ -708,6 +708,12 @@ netdev_dummy_destruct(struct netdev *netdev_)
     ovs_mutex_unlock(&dummy_list_mutex);
 
     ovs_mutex_lock(&netdev->mutex);
+    if (netdev->rxq_pcap) {
+        fclose(netdev->rxq_pcap);
+    }
+    if (netdev->tx_pcap && netdev->tx_pcap != netdev->rxq_pcap) {
+        fclose(netdev->tx_pcap);
+    }
     dummy_packet_conn_close(&netdev->conn);
     netdev->conn.type = NONE;
 
@@ -1568,7 +1574,7 @@ netdev_dummy_receive(struct unixctl_conn *conn,
                     unixctl_command_reply_error(conn, "too small packet len");
                     goto exit;
                 }
-                i+=2;
+                i += 2;
             }
             /* Try parse 'argv[i]' as odp flow. */
             packet = eth_from_flow(flow_str, packet_size);

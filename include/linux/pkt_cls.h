@@ -1,7 +1,7 @@
 #ifndef __LINUX_PKT_CLS_WRAPPER_H
 #define __LINUX_PKT_CLS_WRAPPER_H 1
 
-#if defined(__KERNEL__) || defined(HAVE_TCA_ACT_COOKIE)
+#if defined(__KERNEL__) || defined(HAVE_TCA_FLOWER_KEY_IP_TTL_MASK)
 #include_next <linux/pkt_cls.h>
 #else
 
@@ -88,8 +88,10 @@ enum {
 };
 
 /* tca flags definitions */
-#define TCA_CLS_FLAGS_SKIP_HW	(1 << 0)
-#define TCA_CLS_FLAGS_SKIP_SW	(1 << 1)
+#define TCA_CLS_FLAGS_SKIP_HW	(1 << 0) /* don't offload filter to HW */
+#define TCA_CLS_FLAGS_SKIP_SW	(1 << 1) /* don't use filter in SW */
+#define TCA_CLS_FLAGS_IN_HW	(1 << 2) /* filter is offloaded to HW */
+#define TCA_CLS_FLAGS_NOT_IN_HW (1 << 3) /* filter isn't offloaded to HW */
 
 /* Basic filter */
 
@@ -157,9 +159,50 @@ enum {
 	TCA_FLOWER_KEY_ENC_UDP_SRC_PORT_MASK,	/* be16 */
 	TCA_FLOWER_KEY_ENC_UDP_DST_PORT,	/* be16 */
 	TCA_FLOWER_KEY_ENC_UDP_DST_PORT_MASK,	/* be16 */
+
+	TCA_FLOWER_KEY_FLAGS,		/* be32 */
+	TCA_FLOWER_KEY_FLAGS_MASK,	/* be32 */
+
+	TCA_FLOWER_KEY_ICMPV4_CODE,	/* u8 */
+	TCA_FLOWER_KEY_ICMPV4_CODE_MASK,/* u8 */
+	TCA_FLOWER_KEY_ICMPV4_TYPE,	/* u8 */
+	TCA_FLOWER_KEY_ICMPV4_TYPE_MASK,/* u8 */
+	TCA_FLOWER_KEY_ICMPV6_CODE,	/* u8 */
+	TCA_FLOWER_KEY_ICMPV6_CODE_MASK,/* u8 */
+	TCA_FLOWER_KEY_ICMPV6_TYPE,	/* u8 */
+	TCA_FLOWER_KEY_ICMPV6_TYPE_MASK,/* u8 */
+
+	TCA_FLOWER_KEY_ARP_SIP,		/* be32 */
+	TCA_FLOWER_KEY_ARP_SIP_MASK,	/* be32 */
+	TCA_FLOWER_KEY_ARP_TIP,		/* be32 */
+	TCA_FLOWER_KEY_ARP_TIP_MASK,	/* be32 */
+	TCA_FLOWER_KEY_ARP_OP,		/* u8 */
+	TCA_FLOWER_KEY_ARP_OP_MASK,	/* u8 */
+	TCA_FLOWER_KEY_ARP_SHA,		/* ETH_ALEN */
+	TCA_FLOWER_KEY_ARP_SHA_MASK,	/* ETH_ALEN */
+	TCA_FLOWER_KEY_ARP_THA,		/* ETH_ALEN */
+	TCA_FLOWER_KEY_ARP_THA_MASK,	/* ETH_ALEN */
+
+	TCA_FLOWER_KEY_MPLS_TTL,	/* u8 - 8 bits */
+	TCA_FLOWER_KEY_MPLS_BOS,	/* u8 - 1 bit */
+	TCA_FLOWER_KEY_MPLS_TC,		/* u8 - 3 bits */
+	TCA_FLOWER_KEY_MPLS_LABEL,	/* be32 - 20 bits */
+
+	TCA_FLOWER_KEY_TCP_FLAGS,	/* be16 */
+	TCA_FLOWER_KEY_TCP_FLAGS_MASK,	/* be16 */
+
+	TCA_FLOWER_KEY_IP_TOS,		/* u8 */
+	TCA_FLOWER_KEY_IP_TOS_MASK,	/* u8 */
+	TCA_FLOWER_KEY_IP_TTL,		/* u8 */
+	TCA_FLOWER_KEY_IP_TTL_MASK,	/* u8 */
+
 	__TCA_FLOWER_MAX,
 };
 
-#endif /* __KERNEL__ || !HAVE_TCA_ACT_COOKIE */
+enum {
+	TCA_FLOWER_KEY_FLAGS_IS_FRAGMENT = (1 << 0),
+};
+
+#endif /* __KERNEL__ || !HAVE_TCA_FLOWER_KEY_IP_TTL_MASK */
 
 #endif /* __LINUX_PKT_CLS_WRAPPER_H */
