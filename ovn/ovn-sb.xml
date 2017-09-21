@@ -498,6 +498,11 @@
       The logical datapath to which the logical flow belongs.
     </column>
 
+    <column name="logical_port">
+      The logical port to which the logical flow belongs, if null
+      indicate the logical flow belonges to all ports in datapath.
+    </column>
+
     <column name="pipeline">
       <p>
         The primary flows used for deciding on a packet's destination are the

@@ -2236,6 +2236,7 @@ struct ovn_lflow {
     char *match;
     char *actions;
     char *stage_hint;
+    struct ovn_port *op;
     const char *where;
 };
 
@@ -2262,7 +2263,7 @@ static void
 ovn_lflow_init(struct ovn_lflow *lflow, struct ovn_datapath *od,
                enum ovn_stage stage, uint16_t priority,
                char *match, char *actions, char *stage_hint,
-               const char *where)
+               struct ovn_port *op, const char *where)
 {
     lflow->od = od;
     lflow->stage = stage;
@@ -2270,6 +2271,7 @@ ovn_lflow_init(struct ovn_lflow *lflow, struct ovn_datapath *od,
     lflow->match = match;
     lflow->actions = actions;
     lflow->stage_hint = stage_hint;
+    lflow->op = op;
     lflow->where = where;
 }
 
@@ -2278,14 +2280,15 @@ static void
 ovn_lflow_add_at(struct hmap *lflow_map, struct ovn_datapath *od,
                  enum ovn_stage stage, uint16_t priority,
                  const char *match, const char *actions,
-                 const char *stage_hint, const char *where)
+                 const char *stage_hint, struct ovn_port *op,
+                 const char *where)
 {
     ovs_assert(ovn_stage_to_datapath_type(stage) == ovn_datapath_get_type(od));
 
     struct ovn_lflow *lflow = xmalloc(sizeof *lflow);
     ovn_lflow_init(lflow, od, stage, priority,
                    xstrdup(match), xstrdup(actions),
-                   nullable_xstrdup(stage_hint), where);
+                   nullable_xstrdup(stage_hint), op, where);
     hmap_insert(lflow_map, &lflow->hmap_node, ovn_lflow_hash(lflow));
 }
 
@@ -2293,11 +2296,17 @@ ovn_lflow_add_at(struct hmap *lflow_map, struct ovn_datapath *od,
 #define ovn_lflow_add_with_hint(LFLOW_MAP, OD, STAGE, PRIORITY, MATCH, \
                                 ACTIONS, STAGE_HINT) \
     ovn_lflow_add_at(LFLOW_MAP, OD, STAGE, PRIORITY, MATCH, ACTIONS, \
-                     STAGE_HINT, OVS_SOURCE_LOCATOR)
+                     STAGE_HINT, NULL, OVS_SOURCE_LOCATOR)
+
+/* Adds a row with the port to the Logical_Flow table. */
+#define ovn_lflow_add_with_port(LFLOW_MAP, OD, STAGE, PRIORITY, MATCH, \
+                                ACTIONS, STAGE_HINT, OP) \
+    ovn_lflow_add_at(LFLOW_MAP, OD, STAGE, PRIORITY, MATCH, ACTIONS, \
+                     STAGE_HINT, OP, OVS_SOURCE_LOCATOR)
 
 #define ovn_lflow_add(LFLOW_MAP, OD, STAGE, PRIORITY, MATCH, ACTIONS) \
-    ovn_lflow_add_with_hint(LFLOW_MAP, OD, STAGE, PRIORITY, MATCH, \
-                            ACTIONS, NULL)
+    ovn_lflow_add_with_port(LFLOW_MAP, OD, STAGE, PRIORITY, MATCH, \
+                            ACTIONS, NULL, NULL)
 
 static struct ovn_lflow *
 ovn_lflow_find(struct hmap *lflows, struct ovn_datapath *od,
@@ -2307,7 +2316,7 @@ ovn_lflow_find(struct hmap *lflows, struct ovn_datapath *od,
     struct ovn_lflow target;
     ovn_lflow_init(&target, od, stage, priority,
                    CONST_CAST(char *, match), CONST_CAST(char *, actions),
-                   NULL, NULL);
+                   NULL, NULL, NULL);
 
     struct ovn_lflow *lflow;
     HMAP_FOR_EACH_WITH_HASH (lflow, hmap_node, ovn_lflow_hash(&target),
@@ -2473,8 +2482,8 @@ build_port_security_nd(struct ovn_port *op, struct hmap *lflows)
                 ds_chomp(&match, ',');
                 ds_put_cstr(&match, "}");
             }
-            ovn_lflow_add(lflows, op->od, S_SWITCH_IN_PORT_SEC_ND, 90,
-                          ds_cstr(&match), "next;");
+            ovn_lflow_add_with_port(lflows, op->od, S_SWITCH_IN_PORT_SEC_ND, 90,
+                          ds_cstr(&match), "next;", NULL, op);
         }
 
         if (ps->n_ipv6_addrs || no_ip) {
@@ -2483,15 +2492,15 @@ build_port_security_nd(struct ovn_port *op, struct hmap *lflows)
                           op->json_key, ps->ea_s);
             build_port_security_ipv6_nd_flow(&match, ps->ea, ps->ipv6_addrs,
                                              ps->n_ipv6_addrs);
-            ovn_lflow_add(lflows, op->od, S_SWITCH_IN_PORT_SEC_ND, 90,
-                          ds_cstr(&match), "next;");
+            ovn_lflow_add_with_port(lflows, op->od, S_SWITCH_IN_PORT_SEC_ND, 90,
+                          ds_cstr(&match), "next;", NULL, op);
         }
     }
 
     ds_clear(&match);
     ds_put_format(&match, "inport == %s && (arp || nd)", op->json_key);
-    ovn_lflow_add(lflows, op->od, S_SWITCH_IN_PORT_SEC_ND, 80,
-                  ds_cstr(&match), "drop;");
+    ovn_lflow_add_with_port(lflows, op->od, S_SWITCH_IN_PORT_SEC_ND, 80,
+                  ds_cstr(&match), "drop;", NULL, op);
     ds_destroy(&match);
 }
 
@@ -2542,8 +2551,8 @@ build_port_security_ip(enum ovn_pipeline pipeline, struct ovn_port *op,
                               " && ip4.dst == 255.255.255.255"
                               " && udp.src == 68 && udp.dst == 67",
                               op->json_key, ps->ea_s);
-                ovn_lflow_add(lflows, op->od, stage, 90,
-                              ds_cstr(&dhcp_match), "next;");
+                ovn_lflow_add_with_port(lflows, op->od, stage, 90,
+                              ds_cstr(&dhcp_match), "next;", NULL, op);
                 ds_destroy(&dhcp_match);
                 ds_put_format(&match, "inport == %s && eth.src == %s"
                               " && ip4.src == {", op->json_key,
@@ -2582,7 +2591,8 @@ build_port_security_ip(enum ovn_pipeline pipeline, struct ovn_port *op,
             ds_chomp(&match, ' ');
             ds_chomp(&match, ',');
             ds_put_cstr(&match, "}");
-            ovn_lflow_add(lflows, op->od, stage, 90, ds_cstr(&match), "next;");
+            ovn_lflow_add_with_port(lflows, op->od, stage, 90,
+                                     ds_cstr(&match), "next;", NULL, op);
             ds_destroy(&match);
         }
 
@@ -2598,8 +2608,8 @@ build_port_security_ip(enum ovn_pipeline pipeline, struct ovn_port *op,
                               " && ip6.dst == ff02::/16"
                               " && icmp6.type == {131, 135, 143}", op->json_key,
                               ps->ea_s);
-                ovn_lflow_add(lflows, op->od, stage, 90,
-                              ds_cstr(&dad_match), "next;");
+                ovn_lflow_add_with_port(lflows, op->od, stage, 90,
+                              ds_cstr(&dad_match), "next;", NULL, op);
                 ds_destroy(&dad_match);
             }
             ds_put_format(&match, "%s == %s && %s == %s",
@@ -2607,8 +2617,8 @@ build_port_security_ip(enum ovn_pipeline pipeline, struct ovn_port *op,
                           pipeline == P_IN ? "eth.src" : "eth.dst", ps->ea_s);
             build_port_security_ipv6_flow(pipeline, &match, ps->ea,
                                           ps->ipv6_addrs, ps->n_ipv6_addrs);
-            ovn_lflow_add(lflows, op->od, stage, 90,
-                          ds_cstr(&match), "next;");
+            ovn_lflow_add_with_port(lflows, op->od, stage, 90,
+                          ds_cstr(&match), "next;", NULL, op);
             ds_destroy(&match);
         }
 
@@ -2616,7 +2626,8 @@ build_port_security_ip(enum ovn_pipeline pipeline, struct ovn_port *op,
                                 port_direction, op->json_key,
                                 pipeline == P_IN ? "eth.src" : "eth.dst",
                                 ps->ea_s);
-        ovn_lflow_add(lflows, op->od, stage, 80, match, "drop;");
+        ovn_lflow_add_with_port(lflows, op->od, stage, 80, match, "drop;",
+                                NULL, op);
         free(match);
     }
 
@@ -3053,7 +3064,7 @@ build_acl_log(struct ds *actions, const struct nbrec_acl *acl)
 }
 
 static void
-build_acls(struct ovn_datapath *od, struct hmap *lflows)
+build_acls(struct ovn_datapath *od, struct hmap *lflows, struct hmap *ports)
 {
     bool has_stateful = has_stateful_acl(od);
 
@@ -3156,6 +3167,12 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
         struct nbrec_acl *acl = od->nbs->acls[i];
         bool ingress = !strcmp(acl->direction, "from-lport") ? true :false;
         enum ovn_stage stage = ingress ? S_SWITCH_IN_ACL : S_SWITCH_OUT_ACL;
+        const char *lport_name = smap_get(&acl->external_ids,
+                                          "neutron:lport");
+        struct ovn_port *op = NULL;
+        if (lport_name) {
+            op = ovn_port_find(ports, lport_name);
+        }
 
         char *stage_hint = xasprintf("%08x", acl->header_.uuid.parts[0]);
         if (!strcmp(acl->action, "allow")
@@ -3169,10 +3186,10 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
                 struct ds actions = DS_EMPTY_INITIALIZER;
                 build_acl_log(&actions, acl);
                 ds_put_cstr(&actions, "next;");
-                ovn_lflow_add_with_hint(lflows, od, stage,
+                ovn_lflow_add_with_port(lflows, od, stage,
                                         acl->priority + OVN_ACL_PRI_OFFSET,
                                         acl->match, ds_cstr(&actions),
-                                        stage_hint);
+                                        stage_hint, op);
                 ds_destroy(&actions);
             } else {
                 struct ds match = DS_EMPTY_INITIALIZER;
@@ -3197,11 +3214,11 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
                 ds_put_cstr(&actions, REGBIT_CONNTRACK_COMMIT" = 1; ");
                 build_acl_log(&actions, acl);
                 ds_put_cstr(&actions, "next;");
-                ovn_lflow_add_with_hint(lflows, od, stage,
+                ovn_lflow_add_with_port(lflows, od, stage,
                                         acl->priority + OVN_ACL_PRI_OFFSET,
                                         ds_cstr(&match),
                                         ds_cstr(&actions),
-                                        stage_hint);
+                                        stage_hint, op);
 
                 /* Match on traffic in the request direction for an established
                  * connection tracking entry that has not been marked for
@@ -3218,10 +3235,10 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
 
                 build_acl_log(&actions, acl);
                 ds_put_cstr(&actions, "next;");
-                ovn_lflow_add_with_hint(lflows, od, stage,
+                ovn_lflow_add_with_port(lflows, od, stage,
                                         acl->priority + OVN_ACL_PRI_OFFSET,
                                         ds_cstr(&match), ds_cstr(&actions),
-                                        stage_hint);
+                                        stage_hint, op);
 
                 ds_destroy(&match);
                 ds_destroy(&actions);
@@ -3250,10 +3267,10 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
                 ds_clear(&actions);
                 build_acl_log(&actions, acl);
                 ds_put_cstr(&actions, "/* drop */");
-                ovn_lflow_add_with_hint(lflows, od, stage,
+                ovn_lflow_add_with_port(lflows, od, stage,
                                         acl->priority + OVN_ACL_PRI_OFFSET,
                                         ds_cstr(&match), ds_cstr(&actions),
-                                        stage_hint);
+                                        stage_hint, op);
 
                 /* For an existing connection without ct_label set, we've
                  * encountered a policy change. ACLs previously allowed
@@ -3273,10 +3290,10 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
                 ds_put_cstr(&actions, "ct_commit(ct_label=1/1); ");
                 build_acl_log(&actions, acl);
                 ds_put_cstr(&actions, "/* drop */");
-                ovn_lflow_add_with_hint(lflows, od, stage,
+                ovn_lflow_add_with_port(lflows, od, stage,
                                         acl->priority + OVN_ACL_PRI_OFFSET,
                                         ds_cstr(&match), ds_cstr(&actions),
-                                        stage_hint);
+                                        stage_hint, op);
 
             } else {
                 /* There are no stateful ACLs in use on this datapath,
@@ -3285,10 +3302,10 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
                 ds_clear(&actions);
                 build_acl_log(&actions, acl);
                 ds_put_cstr(&actions, "/* drop */");
-                ovn_lflow_add_with_hint(lflows, od, stage,
+                ovn_lflow_add_with_port(lflows, od, stage,
                                         acl->priority + OVN_ACL_PRI_OFFSET,
                                         acl->match, ds_cstr(&actions),
-                                        stage_hint);
+                                        stage_hint, op);
             }
             ds_destroy(&match);
             ds_destroy(&actions);
@@ -3315,9 +3332,11 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
                               "&& ip4.src == %s && udp && udp.src == 67 "
                               "&& udp.dst == 68", od->nbs->ports[i]->name,
                               server_mac, server_id);
-                ovn_lflow_add(
+                struct ovn_port *op = ovn_port_find(ports,
+                    od->nbs->ports[i]->name);
+                ovn_lflow_add_with_port(
                     lflows, od, S_SWITCH_OUT_ACL, 34000, ds_cstr(&match),
-                    actions);
+                    actions, NULL, op);
                 ds_destroy(&match);
             }
         }
@@ -3342,9 +3361,11 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
                               "&& ip6.src == %s && udp && udp.src == 547 "
                               "&& udp.dst == 546", od->nbs->ports[i]->name,
                               server_mac, server_ip);
-                ovn_lflow_add(
+                struct ovn_port *op = ovn_port_find(ports,
+                    od->nbs->ports[i]->name);
+                ovn_lflow_add_with_port(
                     lflows, od, S_SWITCH_OUT_ACL, 34000, ds_cstr(&match),
-                    actions);
+                    actions, NULL, op);
                 ds_destroy(&match);
             }
         }
@@ -3499,7 +3520,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         build_pre_acls(od, lflows);
         build_pre_lb(od, lflows);
         build_pre_stateful(od, lflows);
-        build_acls(od, lflows);
+        build_acls(od, lflows, ports);
         build_qos(od, lflows);
         build_lb(od, lflows);
         build_stateful(od, lflows);
@@ -3552,8 +3573,8 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
             ds_put_format(&actions, "set_queue(%s); ", queue_id);
         }
         ds_put_cstr(&actions, "next;");
-        ovn_lflow_add(lflows, op->od, S_SWITCH_IN_PORT_SEC_L2, 50,
-                      ds_cstr(&match), ds_cstr(&actions));
+        ovn_lflow_add_with_port(lflows, op->od, S_SWITCH_IN_PORT_SEC_L2, 50,
+                      ds_cstr(&match), ds_cstr(&actions), NULL, op);
 
         if (op->nbsp->n_port_security) {
             build_port_security_ip(P_IN, op, lflows);
@@ -3584,8 +3605,8 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
             (!strcmp(op->nbsp->type, "vtep"))) {
             ds_clear(&match);
             ds_put_format(&match, "inport == %s", op->json_key);
-            ovn_lflow_add(lflows, op->od, S_SWITCH_IN_ARP_ND_RSP, 100,
-                          ds_cstr(&match), "next;");
+            ovn_lflow_add_with_port(lflows, op->od, S_SWITCH_IN_ARP_ND_RSP, 100,
+                          ds_cstr(&match), "next;", NULL, op);
         }
     }
 
@@ -3626,8 +3647,8 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                     "output;",
                     op->lsp_addrs[i].ea_s, op->lsp_addrs[i].ea_s,
                     op->lsp_addrs[i].ipv4_addrs[j].addr_s);
-                ovn_lflow_add(lflows, op->od, S_SWITCH_IN_ARP_ND_RSP, 50,
-                              ds_cstr(&match), ds_cstr(&actions));
+                ovn_lflow_add_with_port(lflows, op->od, S_SWITCH_IN_ARP_ND_RSP, 50,
+                              ds_cstr(&match), ds_cstr(&actions), NULL, NULL);
 
                 /* Do not reply to an ARP request from the port that owns the
                  * address (otherwise a DHCP client that ARPs to check for a
@@ -3642,8 +3663,8 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                  * configured, so dropping the request would frustrate that
                  * intent.) */
                 ds_put_format(&match, " && inport == %s", op->json_key);
-                ovn_lflow_add(lflows, op->od, S_SWITCH_IN_ARP_ND_RSP, 100,
-                              ds_cstr(&match), "next;");
+                ovn_lflow_add_with_port(lflows, op->od, S_SWITCH_IN_ARP_ND_RSP, 100,
+                              ds_cstr(&match), "next;", NULL, NULL);
             }
 
             /* For ND solicitations, we need to listen for both the
@@ -3672,14 +3693,16 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                         op->lsp_addrs[i].ipv6_addrs[j].addr_s,
                         op->lsp_addrs[i].ipv6_addrs[j].addr_s,
                         op->lsp_addrs[i].ea_s);
-                ovn_lflow_add(lflows, op->od, S_SWITCH_IN_ARP_ND_RSP, 50,
-                              ds_cstr(&match), ds_cstr(&actions));
+                ovn_lflow_add_with_port(lflows, op->od,
+                              S_SWITCH_IN_ARP_ND_RSP,50,
+                              ds_cstr(&match), ds_cstr(&actions), NULL, NULL);
 
                 /* Do not reply to a solicitation from the port that owns the
                  * address (otherwise DAD detection will fail). */
                 ds_put_format(&match, " && inport == %s", op->json_key);
-                ovn_lflow_add(lflows, op->od, S_SWITCH_IN_ARP_ND_RSP, 100,
-                              ds_cstr(&match), "next;");
+                ovn_lflow_add_with_port(lflows, op->od,
+                               S_SWITCH_IN_ARP_ND_RSP, 100,
+                              ds_cstr(&match), "next;", NULL, NULL);
             }
         }
     }
@@ -3728,9 +3751,10 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                         "udp.src == 68 && udp.dst == 67", op->json_key,
                         op->lsp_addrs[i].ea_s);
 
-                    ovn_lflow_add(lflows, op->od, S_SWITCH_IN_DHCP_OPTIONS,
-                                  100, ds_cstr(&match),
-                                  ds_cstr(&options_action));
+                    ovn_lflow_add_with_port(lflows, op->od,
+                                  S_SWITCH_IN_DHCP_OPTIONS, 100,
+                                  ds_cstr(&match),
+                                  ds_cstr(&options_action), NULL, op);
                     ds_clear(&match);
                     /* Allow ip4.src = OFFER_IP and
                      * ip4.dst = {SERVER_IP, 255.255.255.255} for the below
@@ -3745,9 +3769,10 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                         "%s && udp.src == 68 && udp.dst == 67", op->json_key,
                         op->lsp_addrs[i].ea_s, ds_cstr(&ipv4_addr_match));
 
-                    ovn_lflow_add(lflows, op->od, S_SWITCH_IN_DHCP_OPTIONS,
-                                  100, ds_cstr(&match),
-                                  ds_cstr(&options_action));
+                    ovn_lflow_add_with_port(lflows, op->od,
+                                  S_SWITCH_IN_DHCP_OPTIONS, 100,
+                                  ds_cstr(&match),
+                                  ds_cstr(&options_action), NULL, op);
                     ds_clear(&match);
 
                     /* If REGBIT_DHCP_OPTS_RESULT is set, it means the
@@ -3757,9 +3782,10 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                         "ip4 && udp.src == 68 && udp.dst == 67"
                         " && "REGBIT_DHCP_OPTS_RESULT, op->json_key,
                         op->lsp_addrs[i].ea_s);
-                    ovn_lflow_add(lflows, op->od, S_SWITCH_IN_DHCP_RESPONSE,
-                                  100, ds_cstr(&match),
-                                  ds_cstr(&response_action));
+                    ovn_lflow_add_with_port(lflows, op->od,
+                                  S_SWITCH_IN_DHCP_RESPONSE, 100,
+                                  ds_cstr(&match),
+                                  ds_cstr(&response_action), NULL, op);
                     ds_destroy(&options_action);
                     ds_destroy(&response_action);
                     ds_destroy(&ipv4_addr_match);
@@ -3780,8 +3806,10 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                         " udp.dst == 547", op->json_key,
                         op->lsp_addrs[i].ea_s);
 
-                    ovn_lflow_add(lflows, op->od, S_SWITCH_IN_DHCP_OPTIONS, 100,
-                                  ds_cstr(&match), ds_cstr(&options_action));
+                    ovn_lflow_add_with_port(lflows, op->od,
+                                  S_SWITCH_IN_DHCP_OPTIONS, 100,
+                                  ds_cstr(&match), ds_cstr(&options_action),
+                                  NULL, op);
 
                     /* If REGBIT_DHCP_OPTS_RESULT is set to 1, it means the
                      * put_dhcpv6_opts action is successful */
@@ -4008,11 +4036,11 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         if (lsp_is_enabled(op->nbsp)) {
             build_port_security_l2("eth.dst", op->ps_addrs, op->n_ps_addrs,
                                    &match);
-            ovn_lflow_add(lflows, op->od, S_SWITCH_OUT_PORT_SEC_L2, 50,
-                          ds_cstr(&match), "output;");
+            ovn_lflow_add_with_port(lflows, op->od, S_SWITCH_OUT_PORT_SEC_L2,
+                           50, ds_cstr(&match), "output;", NULL, op);
         } else {
-            ovn_lflow_add(lflows, op->od, S_SWITCH_OUT_PORT_SEC_L2, 150,
-                          ds_cstr(&match), "drop;");
+            ovn_lflow_add_with_port(lflows, op->od, S_SWITCH_OUT_PORT_SEC_L2,
+                           150, ds_cstr(&match), "drop;", NULL, op);
         }
 
         if (op->nbsp->n_port_security) {
@@ -5691,6 +5719,10 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
 
         sbflow = sbrec_logical_flow_insert(ctx->ovnsb_txn);
         sbrec_logical_flow_set_logical_datapath(sbflow, lflow->od->sb);
+        if (lflow->op && lflow->op->sb) {
+            sbrec_logical_flow_set_logical_port(sbflow,
+                lflow->op->sb->logical_port);
+        }
         sbrec_logical_flow_set_pipeline(
             sbflow, pipeline == P_IN ? "ingress" : "egress");
         sbrec_logical_flow_set_table_id(sbflow, table);

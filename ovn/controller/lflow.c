@@ -137,6 +137,20 @@ is_gateway_router(const struct sbrec_datapath_binding *ldp,
     return ld ? ld->has_local_l3gateway : false;
 }
 
+static bool
+is_local_port(struct controller_ctx *ctx,
+                  const char *logical_port_name,
+                  const struct sbrec_chassis *chassis)
+{
+    const struct sbrec_port_binding *binding_rec =lport_lookup_by_name(
+            ctx->ovnsb_idl, logical_port_name);
+    return binding_rec? (!strcmp(binding_rec->type, "patch")
+        || !strcmp(binding_rec->type, "localport")
+        || !strcmp(binding_rec->type, "vtep")
+        || !strcmp(binding_rec->type, "localnet")
+        || binding_rec->chassis == chassis) : false;
+}
+
 /* Adds the logical flows from the Logical_Flow table to flow tables. */
 static void
 add_logical_flows(struct controller_ctx *ctx,
@@ -168,6 +182,15 @@ add_logical_flows(struct controller_ctx *ctx,
     }
 
     SBREC_LOGICAL_FLOW_FOR_EACH (lflow, ctx->ovnsb_idl) {
+         if (lflow->logical_port
+            && lflow->logical_port[0]
+            && !is_local_port(ctx, lflow->logical_port, chassis)) {
+            VLOG_INFO("flow: table=%"PRIu64", priority=%"PRIu64", %s, "
+                "actions=%s not need to add in this chassis",
+                lflow->table_id, lflow->priority,
+                lflow->match, lflow->actions);
+            continue;
+        }
         consider_logical_flow(ctx, chassis_index,
                               lflow, local_datapaths,
                               group_table, chassis,
