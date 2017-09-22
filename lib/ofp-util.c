@@ -10509,14 +10509,21 @@ ofputil_decode_bundle_add(const struct ofp_header *oh,
                           enum ofptype *typep)
 {
     struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+
+    /* Pull the outer ofp_header. */
     enum ofpraw raw = ofpraw_pull_assert(&b);
     ovs_assert(raw == OFPRAW_OFPT14_BUNDLE_ADD_MESSAGE
                || raw == OFPRAW_ONFT13_BUNDLE_ADD_MESSAGE);
 
+    /* Pull the bundle_ctrl header. */
     const struct ofp14_bundle_ctrl_msg *m = ofpbuf_pull(&b, sizeof *m);
     msg->bundle_id = ntohl(m->bundle_id);
     msg->flags = ntohs(m->flags);
 
+    /* Pull the inner ofp_header. */
+    if (b.size < sizeof(struct ofp_header)) {
+        return OFPERR_OFPBFC_MSG_BAD_LEN;
+    }
     msg->msg = b.data;
     if (msg->msg->version != oh->version) {
         return OFPERR_OFPBFC_BAD_VERSION;
