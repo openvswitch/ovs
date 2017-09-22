@@ -980,10 +980,14 @@ OvsConntrackEntryCleaner(PVOID data)
     POVS_CT_THREAD_CTX context = (POVS_CT_THREAD_CTX)data;
     PLIST_ENTRY link, next;
     POVS_CT_ENTRY entry;
+    LOCK_STATE_EX lockState;
     BOOLEAN success = TRUE;
 
     while (success) {
-        LOCK_STATE_EX lockState;
+        if (ovsConntrackLockObj == NULL) {
+            /* Lock has been freed by 'OvsCleanupConntrack()' */
+            break;
+        }
         NdisAcquireRWLockWrite(ovsConntrackLockObj, &lockState, 0);
         if (context->exit) {
             NdisReleaseRWLock(ovsConntrackLockObj, &lockState);
