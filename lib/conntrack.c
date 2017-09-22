@@ -1141,17 +1141,16 @@ conntrack_execute(struct conntrack *ct, struct dp_packet_batch *pkt_batch,
                   long long now)
 {
 
-    struct dp_packet **pkts = pkt_batch->packets;
-    size_t cnt = pkt_batch->count;
+    struct dp_packet *packet;
     struct conn_lookup_ctx ctx;
 
-    for (size_t i = 0; i < cnt; i++) {
-        if (!conn_key_extract(ct, pkts[i], dl_type, &ctx, zone)) {
-            pkts[i]->md.ct_state = CS_INVALID;
-            write_ct_md(pkts[i], zone, NULL, NULL, NULL);
+    DP_PACKET_BATCH_FOR_EACH (packet, pkt_batch) {
+        if (!conn_key_extract(ct, packet, dl_type, &ctx, zone)) {
+            packet->md.ct_state = CS_INVALID;
+            write_ct_md(packet, zone, NULL, NULL, NULL);
             continue;
         }
-        process_one(ct, pkts[i], &ctx, zone, force, commit,
+        process_one(ct, packet, &ctx, zone, force, commit,
                     now, setmark, setlabel, nat_action_info, helper);
     }
 
