@@ -5124,9 +5124,8 @@ dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
                   struct dp_packet_batch *packets,
                   bool md_is_valid, odp_port_t port_no)
 {
-    int cnt = packets->count;
 #if !defined(__CHECKER__) && !defined(_WIN32)
-    const size_t PKT_ARRAY_SIZE = cnt;
+    const size_t PKT_ARRAY_SIZE = dp_packet_batch_size(packets);
 #else
     /* Sparse or MSVC doesn't like variable length array. */
     enum { PKT_ARRAY_SIZE = NETDEV_MAX_BURST };
