@@ -1938,17 +1938,17 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
         dpdk_do_tx_copy(netdev, qid, batch);
         dp_packet_delete_batch(batch, may_steal);
     } else {
-        int dropped;
-        int cnt = batch->count;
+        int tx_cnt, dropped;
+        int batch_cnt = dp_packet_batch_size(batch);
         struct rte_mbuf **pkts = (struct rte_mbuf **) batch->packets;
 
         dp_packet_batch_apply_cutlen(batch);
 
-        cnt = netdev_dpdk_filter_packet_len(dev, pkts, cnt);
-        cnt = netdev_dpdk_qos_run(dev, pkts, cnt, true);
-        dropped = batch->count - cnt;
+        tx_cnt = netdev_dpdk_filter_packet_len(dev, pkts, batch_cnt);
+        tx_cnt = netdev_dpdk_qos_run(dev, pkts, tx_cnt, true);
+        dropped = batch_cnt - tx_cnt;
 
-        dropped += netdev_dpdk_eth_tx_burst(dev, qid, pkts, cnt);
+        dropped += netdev_dpdk_eth_tx_burst(dev, qid, pkts, tx_cnt);
 
         if (OVS_UNLIKELY(dropped)) {
             rte_spinlock_lock(&dev->stats_lock);
