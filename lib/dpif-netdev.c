@@ -4121,10 +4121,11 @@ dp_netdev_run_meter(struct dp_netdev *dp, struct dp_packet_batch *packets_,
 {
     struct dp_meter *meter;
     struct dp_meter_band *band;
+    struct dp_packet *packet;
     long long int long_delta_t; /* msec */
     uint32_t delta_t; /* msec */
     int i;
-    int cnt = packets_->count;
+    const size_t cnt = dp_packet_batch_size(packets_);
     uint32_t bytes, volume;
     int exceeded_band[NETDEV_MAX_BURST];
     uint32_t exceeded_rate[NETDEV_MAX_BURST];
@@ -4157,8 +4158,8 @@ dp_netdev_run_meter(struct dp_netdev *dp, struct dp_packet_batch *packets_,
     meter->used = now;
     meter->packet_count += cnt;
     bytes = 0;
-    for (i = 0; i < cnt; i++) {
-        bytes += dp_packet_size(packets_->packets[i]);
+    DP_PACKET_BATCH_FOR_EACH (packet, packets_) {
+        bytes += dp_packet_size(packet);
     }
     meter->byte_count += bytes;
 
@@ -4208,8 +4209,8 @@ dp_netdev_run_meter(struct dp_netdev *dp, struct dp_packet_batch *packets_,
             } else {
                 /* Packet sizes differ, must process one-by-one. */
                 band_exceeded_pkt = cnt;
-                for (i = 0; i < cnt; i++) {
-                    uint32_t bits = dp_packet_size(packets_->packets[i]) * 8;
+                DP_PACKET_BATCH_FOR_EACH (packet, packets_) {
+                    uint32_t bits = dp_packet_size(packet) * 8;
 
                     if (band->bucket >= bits) {
                         band->bucket -= bits;
@@ -4237,10 +4238,8 @@ dp_netdev_run_meter(struct dp_netdev *dp, struct dp_packet_batch *packets_,
     /* Fire the highest rate band exceeded by each packet.
      * Drop packets if needed, by swapping packet to the end that will be
      * ignored. */
-    const size_t size = dp_packet_batch_size(packets_);
-    struct dp_packet *packet;
     size_t j;
-    DP_PACKET_BATCH_REFILL_FOR_EACH (j, size, packet, packets_) {
+    DP_PACKET_BATCH_REFILL_FOR_EACH (j, cnt, packet, packets_) {
         if (exceeded_band[j] >= 0) {
             /* Meter drop packet. */
             band = &meter->bands[exceeded_band[j]];
