@@ -444,10 +444,14 @@ OvsIpFragmentEntryCleaner(PVOID data)
     POVS_IPFRAG_THREAD_CTX context = (POVS_IPFRAG_THREAD_CTX)data;
     PLIST_ENTRY link, next;
     POVS_IPFRAG_ENTRY entry;
+    LOCK_STATE_EX lockState;
     BOOLEAN success = TRUE;
 
     while (success) {
-        LOCK_STATE_EX lockState;
+        if (ovsIpFragmentHashLockObj == NULL) {
+            /* Lock has been freed by 'OvsCleanupIpFragment()' */
+            break;
+        }
         NdisAcquireRWLockWrite(ovsIpFragmentHashLockObj, &lockState, 0);
         if (context->exit) {
             NdisReleaseRWLock(ovsIpFragmentHashLockObj, &lockState);

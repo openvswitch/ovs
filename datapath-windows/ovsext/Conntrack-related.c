@@ -181,10 +181,14 @@ OvsCtRelatedEntryCleaner(PVOID data)
     POVS_CT_THREAD_CTX context = (POVS_CT_THREAD_CTX)data;
     PLIST_ENTRY link, next;
     POVS_CT_REL_ENTRY entry;
+    LOCK_STATE_EX lockState;
     BOOLEAN success = TRUE;
 
     while (success) {
-        LOCK_STATE_EX lockState;
+        if (ovsCtRelatedLockObj == NULL) {
+            /* Lock has been freed by 'OvsCleanupCtRelated()' */
+            break;
+        }
         NdisAcquireRWLockWrite(ovsCtRelatedLockObj, &lockState, 0);
         if (context->exit) {
             NdisReleaseRWLock(ovsCtRelatedLockObj, &lockState);

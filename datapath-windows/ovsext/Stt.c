@@ -551,6 +551,10 @@ OvsSttDefragCleaner(PVOID data)
     BOOLEAN success = TRUE;
 
     while (success) {
+        if (&OvsSttSpinLock == NULL) {
+            /* Lock has been freed by 'OvsCleanupSttDefragmentation()' */
+            break;
+        }
         NdisAcquireSpinLock(&OvsSttSpinLock);
         if (context->exit) {
             NdisReleaseSpinLock(&OvsSttSpinLock);
