@@ -2942,14 +2942,14 @@ netdev_dpdk_ring_send(struct netdev *netdev, int qid,
                       bool concurrent_txq)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    unsigned i;
+    struct dp_packet *packet;
 
     /* When using 'dpdkr' and sending to a DPDK ring, we want to ensure that
      * the rss hash field is clear. This is because the same mbuf may be
      * modified by the consumer of the ring and return into the datapath
      * without recalculating the RSS hash. */
-    for (i = 0; i < batch->count; i++) {
-        dp_packet_mbuf_rss_flag_reset(batch->packets[i]);
+    DP_PACKET_BATCH_FOR_EACH (packet, batch) {
+        dp_packet_mbuf_rss_flag_reset(packet);
     }
 
     netdev_dpdk_send__(dev, qid, batch, may_steal, concurrent_txq);
