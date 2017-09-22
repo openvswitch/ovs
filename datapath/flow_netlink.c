@@ -1902,7 +1902,11 @@ int ovs_nla_put_mask(const struct sw_flow *flow, struct sk_buff *skb)
 				OVS_FLOW_ATTR_MASK, true, skb);
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,9,0)
+#define MAX_ACTIONS_BUFSIZE	(16 * 1024)
+#else
 #define MAX_ACTIONS_BUFSIZE	(32 * 1024)
+#endif
 
 static struct sw_flow_actions *nla_alloc_flow_actions(int size, bool log)
 {
