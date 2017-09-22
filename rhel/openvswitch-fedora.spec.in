@@ -577,7 +577,7 @@ fi
 %endif
 %doc COPYING NOTICE README.rst NEWS rhel/README.RHEL.rst
 /var/lib/openvswitch
-/var/log/openvswitch
+%attr(755,-,-) /var/log/openvswitch
 %ghost %attr(755,root,root) %{_rundir}/openvswitch
 
 %files ovn-docker
