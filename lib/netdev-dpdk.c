@@ -1835,22 +1835,23 @@ static void
 dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet_batch *batch)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
+    const size_t batch_cnt = dp_packet_batch_size(batch);
 #if !defined(__CHECKER__) && !defined(_WIN32)
-    const size_t PKT_ARRAY_SIZE = batch->count;
+    const size_t PKT_ARRAY_SIZE = batch_cnt;
 #else
     /* Sparse or MSVC doesn't like variable length array. */
     enum { PKT_ARRAY_SIZE = NETDEV_MAX_BURST };
 #endif
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     struct rte_mbuf *pkts[PKT_ARRAY_SIZE];
-    uint32_t cnt = batch->count;
+    uint32_t cnt = batch_cnt;
     uint32_t dropped = 0;
 
     if (dev->type != DPDK_DEV_VHOST) {
         /* Check if QoS has been configured for this netdev. */
         cnt = netdev_dpdk_qos_run(dev, (struct rte_mbuf **) batch->packets,
-                                  cnt, false);
-        dropped += batch->count - cnt;
+                                  batch_cnt, false);
+        dropped += batch_cnt - cnt;
     }
 
     dp_packet_batch_apply_cutlen(batch);
@@ -1858,8 +1859,8 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet_batch *batch)
     uint32_t txcnt = 0;
 
     for (uint32_t i = 0; i < cnt; i++) {
-
-        uint32_t size = dp_packet_size(batch->packets[i]);
+        struct dp_packet *packet = batch->packets[i];
+        uint32_t size = dp_packet_size(packet);
 
         if (OVS_UNLIKELY(size > dev->max_packet_len)) {
             VLOG_WARN_RL(&rl, "Too big size %u max_packet_len %d",
@@ -1870,18 +1871,15 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet_batch *batch)
         }
 
         pkts[txcnt] = rte_pktmbuf_alloc(dev->dpdk_mp->mp);
-
-        if (!pkts[txcnt]) {
+        if (OVS_UNLIKELY(!pkts[txcnt])) {
             dropped += cnt - i;
             break;
         }
 
         /* We have to do a copy for now */
         memcpy(rte_pktmbuf_mtod(pkts[txcnt], void *),
-               dp_packet_data(batch->packets[i]), size);
-
-        rte_pktmbuf_data_len(pkts[txcnt]) = size;
-        rte_pktmbuf_pkt_len(pkts[txcnt]) = size;
+               dp_packet_data(packet), size);
+        dp_packet_set_size((struct dp_packet *)pkts[txcnt], size);
 
         txcnt++;
     }
