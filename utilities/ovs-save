@@ -99,6 +99,11 @@ save_interfaces () {
     fi
 }
 
+get_highest_ofp_version() {
+    ovs-vsctl get bridge "$1" protocols | \
+        awk -F '"' '{ print (NF>1)? $(NF-1) : "OpenFlow14" }'
+}
+
 save_flows () {
     if (ovs-ofctl --version) > /dev/null 2>&1; then :; else
         echo "$0: ovs-ofctl not found in $PATH" >&2
@@ -106,15 +111,26 @@ save_flows () {
     fi
 
     for bridge in "$@"; do
+        # Get the highest enabled OpenFlow version
+        ofp_version=$(get_highest_ofp_version "$bridge")
+
         echo -n "ovs-ofctl add-tlv-map ${bridge} '"
         ovs-ofctl dump-tlv-map ${bridge} | \
         awk '/^ 0x/ {if (cnt != 0) printf ","; \
              cnt++;printf "{class="$1",type="$2",len="$3"}->"$4}'
         echo "'"
 
-        echo "ovs-ofctl add-flows ${bridge} - << EOF"
-        ovs-ofctl dump-flows "${bridge}" | sed -e '/NXST_FLOW/d' \
-            -e 's/\(idle\|hard\)_age=[^,]*,//g'
+        echo -n "ovs-ofctl -O $ofp_version add-flows ${bridge} "
+
+        # If possible, use OpenFlow 1.4 atomic bundle transaction to add flows
+        [ ${ofp_version#OpenFlow} -ge 14 ] && echo -n "--bundle "
+
+        echo  "- << EOF"
+
+        ovs-ofctl -O $ofp_version dump-flows --no-names --no-stats "$bridge" | \
+            sed -e '/NXST_FLOW/d' \
+                -e '/OFPST_FLOW/d' \
+                -e 's/\(idle\|hard\)_age=[^,]*,//g'
         echo "EOF"
     done
 }
