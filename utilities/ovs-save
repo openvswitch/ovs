@@ -110,6 +110,7 @@ save_flows () {
         exit 1
     fi
 
+    workdir=$(mktemp -d "${TMPDIR:-/tmp}/ovs-save.XXXXXXXXXX")
     for bridge in "$@"; do
         # Get the highest enabled OpenFlow version
         ofp_version=$(get_highest_ofp_version "$bridge")
@@ -120,19 +121,19 @@ save_flows () {
              cnt++;printf "{class="$1",type="$2",len="$3"}->"$4}'
         echo "'"
 
-        echo -n "ovs-ofctl -O $ofp_version add-flows ${bridge} "
+        echo -n "ovs-ofctl -O $ofp_version add-flows ${bridge} " \
+            "\"$workdir/$bridge.flows.dump\""
 
         # If possible, use OpenFlow 1.4 atomic bundle transaction to add flows
-        [ ${ofp_version#OpenFlow} -ge 14 ] && echo -n "--bundle "
-
-        echo  "- << EOF"
+        [ ${ofp_version#OpenFlow} -ge 14 ] && echo " --bundle" || echo
 
         ovs-ofctl -O $ofp_version dump-flows --no-names --no-stats "$bridge" | \
             sed -e '/NXST_FLOW/d' \
                 -e '/OFPST_FLOW/d' \
-                -e 's/\(idle\|hard\)_age=[^,]*,//g'
-        echo "EOF"
+                -e 's/\(idle\|hard\)_age=[^,]*,//g' > \
+                "$workdir/$bridge.flows.dump"
     done
+    echo "rm -rf \"$workdir\""
 }
 
 while [ $# -ne 0 ]
