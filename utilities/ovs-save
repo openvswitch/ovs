@@ -115,13 +115,13 @@ save_flows () {
         # Get the highest enabled OpenFlow version
         ofp_version=$(get_highest_ofp_version "$bridge")
 
-        echo -n "ovs-ofctl add-tlv-map ${bridge} '"
+        printf "%s" "ovs-ofctl add-tlv-map ${bridge} '"
         ovs-ofctl dump-tlv-map ${bridge} | \
         awk '/^ 0x/ {if (cnt != 0) printf ","; \
              cnt++;printf "{class="$1",type="$2",len="$3"}->"$4}'
         echo "'"
 
-        echo -n "ovs-ofctl -O $ofp_version add-flows ${bridge} " \
+        printf "%s" "ovs-ofctl -O $ofp_version add-flows ${bridge} " \
             "\"$workdir/$bridge.flows.dump\""
 
         # If possible, use OpenFlow 1.4 atomic bundle transaction to add flows
