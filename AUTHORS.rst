@@ -330,6 +330,7 @@ Wenyu Zhang                     wenyuz@vmware.com
 William Fulton
 William Tu                      u9012063@gmail.com
 Xiao Liang                      shaw.leon@gmail.com
+xu rong                         xu.rong@zte.com.cn
 YAMAMOTO Takashi                yamamoto@midokura.com
 Yasuhito Takamiya               yasuhito@gmail.com
 Yi-Hung Wei                     yihung.wei@gmail.com

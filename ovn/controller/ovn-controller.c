@@ -843,6 +843,7 @@ main(int argc, char *argv[])
     pinctrl_destroy();
 
     simap_destroy(&ct_zones);
+    shash_destroy(&pending_ct_zones);
 
     bitmap_free(group_table.group_ids);
     hmap_destroy(&group_table.desired_groups);
