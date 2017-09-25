@@ -162,8 +162,8 @@ Q: What DPDK version does each Open vSwitch release work with?
     2.4.x        2.0
     2.5.x        2.2
     2.6.x        16.07.2
-    2.7.x        16.11.2
-    2.8.x        17.05.1
+    2.7.x        16.11.3
+    2.8.x        17.05.2
     ============ =======
 
 Q: I get an error like this when I configure Open vSwitch:

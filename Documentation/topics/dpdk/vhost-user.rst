@@ -292,9 +292,9 @@ To begin, instantiate a guest as described in :ref:`dpdk-vhost-user` or
 DPDK sources to VM and build DPDK::
 
     $ cd /root/dpdk/
-    $ wget http://fast.dpdk.org/rel/dpdk-17.05.1.tar.xz
-    $ tar xf dpdk-17.05.1.tar.xz
-    $ export DPDK_DIR=/root/dpdk/dpdk-stable-17.05.1
+    $ wget http://fast.dpdk.org/rel/dpdk-17.05.2.tar.xz
+    $ tar xf dpdk-17.05.2.tar.xz
+    $ export DPDK_DIR=/root/dpdk/dpdk-stable-17.05.2
     $ export DPDK_TARGET=x86_64-native-linuxapp-gcc
     $ export DPDK_BUILD=$DPDK_DIR/$DPDK_TARGET
     $ cd $DPDK_DIR
@@ -378,7 +378,7 @@ Sample XML
         </disk>
         <disk type='dir' device='disk'>
           <driver name='qemu' type='fat'/>
-          <source dir='/usr/src/dpdk-stable-17.05.1'/>
+          <source dir='/usr/src/dpdk-stable-17.05.2'/>
           <target dev='vdb' bus='virtio'/>
           <readonly/>
         </disk>

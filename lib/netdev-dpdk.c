@@ -1669,8 +1669,9 @@ netdev_dpdk_vhost_rxq_recv(struct netdev_rxq *rxq,
                                          nb_rx, dropped);
     rte_spinlock_unlock(&dev->stats_lock);
 
-    dp_packet_batch_init_cutlen(batch);
-    batch->count = (int) nb_rx;
+    batch->count = nb_rx;
+    dp_packet_batch_init_packet_fields(batch);
+
     return 0;
 }
 
@@ -1709,8 +1710,8 @@ netdev_dpdk_rxq_recv(struct netdev_rxq *rxq, struct dp_packet_batch *batch)
         rte_spinlock_unlock(&dev->stats_lock);
     }
 
-    dp_packet_batch_init_cutlen(batch);
     batch->count = nb_rx;
+    dp_packet_batch_init_packet_fields(batch);
 
     return 0;
 }
@@ -1835,22 +1836,23 @@ static void
 dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet_batch *batch)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
+    const size_t batch_cnt = dp_packet_batch_size(batch);
 #if !defined(__CHECKER__) && !defined(_WIN32)
-    const size_t PKT_ARRAY_SIZE = batch->count;
+    const size_t PKT_ARRAY_SIZE = batch_cnt;
 #else
     /* Sparse or MSVC doesn't like variable length array. */
     enum { PKT_ARRAY_SIZE = NETDEV_MAX_BURST };
 #endif
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     struct rte_mbuf *pkts[PKT_ARRAY_SIZE];
-    uint32_t cnt = batch->count;
+    uint32_t cnt = batch_cnt;
     uint32_t dropped = 0;
 
     if (dev->type != DPDK_DEV_VHOST) {
         /* Check if QoS has been configured for this netdev. */
         cnt = netdev_dpdk_qos_run(dev, (struct rte_mbuf **) batch->packets,
-                                  cnt, false);
-        dropped += batch->count - cnt;
+                                  batch_cnt, false);
+        dropped += batch_cnt - cnt;
     }
 
     dp_packet_batch_apply_cutlen(batch);
@@ -1858,8 +1860,8 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet_batch *batch)
     uint32_t txcnt = 0;
 
     for (uint32_t i = 0; i < cnt; i++) {
-
-        uint32_t size = dp_packet_size(batch->packets[i]);
+        struct dp_packet *packet = batch->packets[i];
+        uint32_t size = dp_packet_size(packet);
 
         if (OVS_UNLIKELY(size > dev->max_packet_len)) {
             VLOG_WARN_RL(&rl, "Too big size %u max_packet_len %d",
@@ -1870,18 +1872,15 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet_batch *batch)
         }
 
         pkts[txcnt] = rte_pktmbuf_alloc(dev->dpdk_mp->mp);
-
-        if (!pkts[txcnt]) {
+        if (OVS_UNLIKELY(!pkts[txcnt])) {
             dropped += cnt - i;
             break;
         }
 
         /* We have to do a copy for now */
         memcpy(rte_pktmbuf_mtod(pkts[txcnt], void *),
-               dp_packet_data(batch->packets[i]), size);
-
-        rte_pktmbuf_data_len(pkts[txcnt]) = size;
-        rte_pktmbuf_pkt_len(pkts[txcnt]) = size;
+               dp_packet_data(packet), size);
+        dp_packet_set_size((struct dp_packet *)pkts[txcnt], size);
 
         txcnt++;
     }
@@ -1940,17 +1939,17 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
         dpdk_do_tx_copy(netdev, qid, batch);
         dp_packet_delete_batch(batch, may_steal);
     } else {
-        int dropped;
-        int cnt = batch->count;
+        int tx_cnt, dropped;
+        int batch_cnt = dp_packet_batch_size(batch);
         struct rte_mbuf **pkts = (struct rte_mbuf **) batch->packets;
 
         dp_packet_batch_apply_cutlen(batch);
 
-        cnt = netdev_dpdk_filter_packet_len(dev, pkts, cnt);
-        cnt = netdev_dpdk_qos_run(dev, pkts, cnt, true);
-        dropped = batch->count - cnt;
+        tx_cnt = netdev_dpdk_filter_packet_len(dev, pkts, batch_cnt);
+        tx_cnt = netdev_dpdk_qos_run(dev, pkts, tx_cnt, true);
+        dropped = batch_cnt - tx_cnt;
 
-        dropped += netdev_dpdk_eth_tx_burst(dev, qid, pkts, cnt);
+        dropped += netdev_dpdk_eth_tx_burst(dev, qid, pkts, tx_cnt);
 
         if (OVS_UNLIKELY(dropped)) {
             rte_spinlock_lock(&dev->stats_lock);
@@ -2942,14 +2941,14 @@ netdev_dpdk_ring_send(struct netdev *netdev, int qid,
                       bool concurrent_txq)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    unsigned i;
+    struct dp_packet *packet;
 
     /* When using 'dpdkr' and sending to a DPDK ring, we want to ensure that
      * the rss hash field is clear. This is because the same mbuf may be
      * modified by the consumer of the ring and return into the datapath
      * without recalculating the RSS hash. */
-    for (i = 0; i < batch->count; i++) {
-        dp_packet_mbuf_rss_flag_reset(batch->packets[i]);
+    DP_PACKET_BATCH_FOR_EACH (packet, batch) {
+        dp_packet_mbuf_rss_flag_reset(packet);
     }
 
     netdev_dpdk_send__(dev, qid, batch, may_steal, concurrent_txq);

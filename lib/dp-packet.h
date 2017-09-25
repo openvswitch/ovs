@@ -805,12 +805,13 @@ dp_packet_delete_batch(struct dp_packet_batch *batch, bool may_steal)
 }
 
 static inline void
-dp_packet_batch_init_cutlen(struct dp_packet_batch *batch)
+dp_packet_batch_init_packet_fields(struct dp_packet_batch *batch)
 {
     struct dp_packet *packet;
 
     DP_PACKET_BATCH_FOR_EACH (packet, batch) {
         dp_packet_reset_cutlen(packet);
+        packet->packet_type = htonl(PT_ETH);
     }
 }
 
