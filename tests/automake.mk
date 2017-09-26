@@ -81,6 +81,7 @@ TESTSUITE_AT = \
 	tests/ovsdb-tool.at \
 	tests/ovsdb-replication.at \
 	tests/ovsdb-server.at \
+	tests/ovsdb-client.at \
 	tests/ovsdb-monitor.at \
 	tests/ovsdb-idl.at \
 	tests/ovsdb-lock.at \

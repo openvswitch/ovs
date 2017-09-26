@@ -137,16 +137,6 @@ AT_CHECK([uuidfilt output], [0],
          [test ! -e pid || kill `cat pid`])
 AT_CLEANUP
 
-AT_SETUP([ovsdb-client get-schema-version])
-AT_KEYWORDS([ovsdb server positive])
-ordinal_schema > schema
-AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket db], [0], [ignore], [ignore])
-AT_CHECK([ovsdb-client get-schema-version unix:socket ordinals], [0], [5.1.3
-])
-OVSDB_SERVER_SHUTDOWN
-AT_CLEANUP
-
 AT_SETUP([database multiplexing implementation])
 AT_KEYWORDS([ovsdb server positive])
 ordinal_schema > schema1
@@ -931,17 +921,6 @@ cat stdout >> output
 ONE_EXECUTION_EXAMPLE
 
 AT_BANNER([OVSDB -- ovsdb-server transactions (TCP IPv4 sockets)])
-
-AT_SETUP([ovsdb-client get-schema-version - tcp socket])
-AT_KEYWORDS([ovsdb server positive tcp])
-ordinal_schema > schema
-AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
-AT_CHECK([ovsdb-server --log-file --detach --no-chdir --pidfile --remote=ptcp:0:127.0.0.1 db], [0], [ignore], [ignore])
-PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
-AT_CHECK([ovsdb-client get-schema-version tcp:127.0.0.1:$TCP_PORT ordinals], [0], [5.1.3
-])
-OVSDB_SERVER_SHUTDOWN
-AT_CLEANUP])
 
 # OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
 #
