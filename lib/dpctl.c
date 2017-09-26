@@ -1304,7 +1304,7 @@ dpctl_dump_conntrack(int argc, const char *argv[],
         return error;
     }
 
-    while (!ct_dpif_dump_next(dump, &cte)) {
+    while (!(error = ct_dpif_dump_next(dump, &cte))) {
         struct ds s = DS_EMPTY_INITIALIZER;
 
         ct_dpif_format_entry(&cte, &s, dpctl_p->verbosity,
@@ -1314,6 +1314,13 @@ dpctl_dump_conntrack(int argc, const char *argv[],
         dpctl_print(dpctl_p, "%s\n", ds_cstr(&s));
         ds_destroy(&s);
     }
+    if (error == EOF) {
+        /* Any CT entry was dumped with no issue. */
+        error = 0;
+    } else if (error) {
+        dpctl_error(dpctl_p, error, "dumping conntrack entry");
+    }
+
     ct_dpif_dump_done(dump);
     dpif_close(dpif);
     return error;
@@ -1407,7 +1414,7 @@ dpctl_ct_stats_show(int argc, const char *argv[],
     }
 
     int tot_conn = 0;
-    while (!ct_dpif_dump_next(dump, &cte)) {
+    while (!(error = ct_dpif_dump_next(dump, &cte))) {
         ct_dpif_entry_uninit(&cte);
         tot_conn++;
         switch (cte.tuple_orig.ip_proto) {
@@ -1447,6 +1454,13 @@ dpctl_ct_stats_show(int argc, const char *argv[],
             proto_stats[CT_STATS_OTHER]++;
             break;
         }
+    }
+    if (error == EOF) {
+        /* All CT entries were dumped with no issue.  */
+        error = 0;
+    } else if (error) {
+        dpctl_error(dpctl_p, error, "dumping conntrack entry");
+        /* Fall through to show any other info we collected. */
     }
 
     dpctl_print(dpctl_p, "Connections Stats:\n    Total: %d\n", tot_conn);
@@ -1547,7 +1561,7 @@ dpctl_ct_bkts(int argc, const char *argv[],
     int tot_conn = 0;
     uint32_t *conn_per_bkts = xzalloc(tot_bkts * sizeof(uint32_t));
 
-    while (!ct_dpif_dump_next(dump, &cte)) {
+    while (!(error = ct_dpif_dump_next(dump, &cte))) {
         ct_dpif_entry_uninit(&cte);
         tot_conn++;
         if (tot_bkts > 0) {
@@ -1558,6 +1572,13 @@ dpctl_ct_bkts(int argc, const char *argv[],
                         cte.bkt, tot_bkts);
             }
         }
+    }
+    if (error == EOF) {
+        /* All CT entries were dumped with no issue.  */
+        error = 0;
+    } else if (error) {
+        dpctl_error(dpctl_p, error, "dumping conntrack entry");
+        /* Fall through and display all the collected info.  */
     }
 
     dpctl_print(dpctl_p, "Current Connections: %d\n", tot_conn);
