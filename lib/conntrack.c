@@ -96,6 +96,11 @@ nat_conn_keys_lookup(struct hmap *nat_conn_keys,
                      const struct conn_key *key,
                      uint32_t basis);
 
+static bool
+nat_conn_keys_insert(struct hmap *nat_conn_keys,
+                     const struct conn *nat_conn,
+                     uint32_t hash_basis);
+
 static void
 nat_conn_keys_remove(struct hmap *nat_conn_keys,
                      const struct conn_key *key,
@@ -2064,19 +2069,9 @@ nat_select_range_tuple(struct conntrack *ct, const struct conn *conn,
             nat_conn->rev_key.src.port = htons(port);
         }
 
-        struct nat_conn_key_node *nat_conn_key_node =
-            nat_conn_keys_lookup(&ct->nat_conn_keys, &nat_conn->rev_key,
-                                 ct->hash_basis);
-
-        if (!nat_conn_key_node) {
-            struct nat_conn_key_node *nat_conn_key =
-                xzalloc(sizeof *nat_conn_key);
-            nat_conn_key->key = nat_conn->rev_key;
-            nat_conn_key->value = nat_conn->key;
-            uint32_t nat_conn_key_hash = conn_key_hash(&nat_conn_key->key,
-                                                       ct->hash_basis);
-            hmap_insert(&ct->nat_conn_keys, &nat_conn_key->node,
-                        nat_conn_key_hash);
+        bool new_insert = nat_conn_keys_insert(&ct->nat_conn_keys, nat_conn,
+                                               ct->hash_basis);
+        if (new_insert) {
             return true;
         } else if (!all_ports_tried) {
             if (min_port == max_port) {
@@ -2134,6 +2129,26 @@ nat_conn_keys_lookup(struct hmap *nat_conn_keys,
         }
     }
     return NULL;
+}
+
+/* This function must be called with the ct->resources lock taken. */
+static bool
+nat_conn_keys_insert(struct hmap *nat_conn_keys, const struct conn *nat_conn,
+                     uint32_t basis)
+{
+    struct nat_conn_key_node *nat_conn_key_node =
+        nat_conn_keys_lookup(nat_conn_keys, &nat_conn->rev_key, basis);
+
+    if (!nat_conn_key_node) {
+        struct nat_conn_key_node *nat_conn_key = xzalloc(sizeof *nat_conn_key);
+        nat_conn_key->key = nat_conn->rev_key;
+        nat_conn_key->value = nat_conn->key;
+        uint32_t nat_conn_key_hash = conn_key_hash(&nat_conn_key->key,
+                                                   basis);
+        hmap_insert(nat_conn_keys, &nat_conn_key->node, nat_conn_key_hash);
+        return true;
+    }
+    return false;
 }
 
 /* This function must be called with the ct->resources write lock taken. */
