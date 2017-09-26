@@ -2711,7 +2711,7 @@ process_ftp_ctl_v4(struct conntrack *ct,
 
     char *ftp = ftp_msg;
     enum ct_alg_mode mode;
-    if (!strncasecmp(ftp_msg, FTP_PORT_CMD, strlen(FTP_PORT_CMD))) {
+    if (!strncasecmp(ftp, FTP_PORT_CMD, strlen(FTP_PORT_CMD))) {
         ftp = ftp_msg + strlen(FTP_PORT_CMD);
         mode = CT_FTP_MODE_ACTIVE;
     } else {
@@ -2857,7 +2857,7 @@ process_ftp_ctl_v6(struct conntrack *ct,
 
     char *ftp = ftp_msg;
     struct in6_addr ip6_addr;
-    if (!strncasecmp(ftp_msg, FTP_EPRT_CMD, strlen(FTP_EPRT_CMD))) {
+    if (!strncasecmp(ftp, FTP_EPRT_CMD, strlen(FTP_EPRT_CMD))) {
         ftp = ftp_msg + strlen(FTP_EPRT_CMD);
         ftp = skip_non_digits(ftp);
         if (*ftp != FTP_AF_V6 || isdigit(ftp[1])) {
@@ -3000,10 +3000,8 @@ handle_ftp_ctl(struct conntrack *ct, const struct conn_lookup_ctx *ctx,
 
     struct ovs_16aligned_ip6_hdr *nh6 = dp_packet_l3(pkt);
     int64_t seq_skew = 0;
-    bool seq_skew_dir;
     if (ftp_ctl == CT_FTP_CTL_OTHER) {
         seq_skew = conn_for_expectation->seq_skew;
-        seq_skew_dir = conn_for_expectation->seq_skew_dir;
     } else if (ftp_ctl == CT_FTP_CTL_INTEREST) {
         enum ftp_ctl_pkt rc;
         if (ctx->key.dl_type == htons(ETH_TYPE_IPV6)) {
@@ -3027,18 +3025,16 @@ handle_ftp_ctl(struct conntrack *ct, const struct conn_lookup_ctx *ctx,
                 seq_skew = repl_ftp_v6_addr(pkt, v6_addr_rep, ftp_data_start,
                                             addr_offset_from_ftp_data_start,
                                             addr_size, mode);
-                seq_skew_dir = ctx->reply;
                 if (seq_skew) {
                     ip_len = ntohs(nh6->ip6_ctlun.ip6_un1.ip6_un1_plen);
                     ip_len += seq_skew;
                     nh6->ip6_ctlun.ip6_un1.ip6_un1_plen = htons(ip_len);
                     conn_seq_skew_set(ct, &conn_for_expectation->key, now,
-                                      seq_skew, seq_skew_dir);
+                                      seq_skew, ctx->reply);
                 }
             } else {
                 seq_skew = repl_ftp_v4_addr(pkt, v4_addr_rep, ftp_data_start,
                                             addr_offset_from_ftp_data_start);
-                seq_skew_dir = ctx->reply;
                 ip_len = ntohs(l3_hdr->ip_tot_len);
                 if (seq_skew) {
                     ip_len += seq_skew;
@@ -3046,7 +3042,7 @@ handle_ftp_ctl(struct conntrack *ct, const struct conn_lookup_ctx *ctx,
                                           l3_hdr->ip_tot_len, htons(ip_len));
                     l3_hdr->ip_tot_len = htons(ip_len);
                     conn_seq_skew_set(ct, &conn_for_expectation->key, now,
-                                      seq_skew, seq_skew_dir);
+                                      seq_skew, ctx->reply);
                 }
             }
         } else {
