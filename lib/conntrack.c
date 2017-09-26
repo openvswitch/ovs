@@ -67,9 +67,6 @@ enum ct_alg_mode {
     CT_TFTP_MODE,
 };
 
-void ct_print_conn_info(struct conn *c, char *log_msg, enum vlog_level vll,
-                        bool force, bool rl_on);
-
 static bool conn_key_extract(struct conntrack *, struct dp_packet *,
                              ovs_be16 dl_type, struct conn_lookup_ctx *,
                              uint16_t zone);
@@ -226,7 +223,7 @@ conn_key_cmp(const struct conn_key *key1, const struct conn_key *key2)
     return 1;
 }
 
-void
+static void
 ct_print_conn_info(struct conn *c, char *log_msg, enum vlog_level vll,
                    bool force, bool rl_on)
 {
@@ -835,6 +832,18 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
                     nc->nat_info->nat_action = NAT_ACTION_DST;
                 }
                 *conn_for_un_nat_copy = *nc;
+                ct_rwlock_wrlock(&ct->resources_lock);
+                bool new_insert = nat_conn_keys_insert(&ct->nat_conn_keys,
+                                                       conn_for_un_nat_copy,
+                                                       ct->hash_basis);
+                ct_rwlock_unlock(&ct->resources_lock);
+                if (!new_insert) {
+                    char *log_msg = xasprintf("Pre-existing alg "
+                                              "nat_conn_key");
+                    ct_print_conn_info(conn_for_un_nat_copy, log_msg, VLL_INFO,
+                                       true, false);
+                    free(log_msg);
+                }
             } else {
                 *conn_for_un_nat_copy = *nc;
                 ct_rwlock_wrlock(&ct->resources_lock);
@@ -936,8 +945,16 @@ create_un_nat_conn(struct conntrack *ct, struct conn *conn_for_un_nat_copy,
     struct conn *rev_conn = conn_lookup(ct, &nc->key, now);
 
     if (alg_un_nat) {
-        hmap_insert(&ct->buckets[un_nat_conn_bucket].connections,
-                    &nc->node, un_nat_hash);
+        if (!rev_conn) {
+            hmap_insert(&ct->buckets[un_nat_conn_bucket].connections,
+                        &nc->node, un_nat_hash);
+        } else {
+            char *log_msg = xasprintf("Unusual condition for un_nat conn "
+                                      "create for alg: rev_conn %p", rev_conn);
+            ct_print_conn_info(nc, log_msg, VLL_INFO, true, false);
+            free(log_msg);
+            free(nc);
+        }
     } else {
         ct_rwlock_rdlock(&ct->resources_lock);
 
@@ -949,6 +966,11 @@ create_un_nat_conn(struct conntrack *ct, struct conn *conn_for_un_nat_copy,
             hmap_insert(&ct->buckets[un_nat_conn_bucket].connections,
                         &nc->node, un_nat_hash);
         } else {
+            char *log_msg = xasprintf("Unusual condition for un_nat conn "
+                                      "create: nat_conn_key_node/rev_conn "
+                                      "%p/%p", nat_conn_key_node, rev_conn);
+            ct_print_conn_info(nc, log_msg, VLL_INFO, true, false);
+            free(log_msg);
             free(nc);
         }
         ct_rwlock_unlock(&ct->resources_lock);
