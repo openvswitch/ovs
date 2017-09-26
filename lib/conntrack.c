@@ -1189,7 +1189,7 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
 
     bool tftp_ctl = is_tftp_ctl(pkt);
     struct conn conn_for_expectation;
-    if (conn && (ftp_ctl || tftp_ctl)) {
+    if (OVS_UNLIKELY((ftp_ctl || tftp_ctl) && conn)) {
         conn_for_expectation = *conn;
     }
 
@@ -1200,10 +1200,10 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
     }
 
     /* FTP control packet handling with expectation creation. */
-    if (OVS_UNLIKELY(conn && ftp_ctl)) {
+    if (OVS_UNLIKELY(ftp_ctl && conn)) {
         handle_ftp_ctl(ct, ctx, pkt, &conn_for_expectation,
                        now, CT_FTP_CTL_INTEREST, !!nat_action_info);
-    } else if (OVS_UNLIKELY(conn && tftp_ctl)) {
+    } else if (OVS_UNLIKELY(tftp_ctl && conn)) {
         handle_tftp_ctl(ct, &conn_for_expectation, now);
     }
 }
