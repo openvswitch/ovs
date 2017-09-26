@@ -103,7 +103,6 @@ dp_packet_init_dpdk(struct dp_packet *b, size_t allocated)
 {
     dp_packet_set_allocated(b, allocated);
     b->source = DPBUF_DPDK;
-    b->packet_type = htonl(PT_ETH);
 }
 
 /* Initializes 'b' as an empty dp_packet with an initial capacity of 'size'
