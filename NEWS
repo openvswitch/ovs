@@ -1,8 +1,9 @@
-v2.8.1 - xx xxx xxxx
---------------------
+v2.8.1 - 26 Sep 2017
+---------------------
    - OVN:
      * The "requested-chassis" option for a logical switch port now accepts a
        chassis "hostname" in addition to a chassis "name".
+   - Bug fixes
 
 v2.8.0 - 31 Aug 2017
 ---------------------
