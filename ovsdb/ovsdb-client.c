@@ -251,6 +251,9 @@ usage(void)
            "\n  get-schema-version [SERVER] [DATABASE]\n"
            "    retrieve schema for DATABASE from SERVER and report only its\n"
            "    version number on stdout\n"
+           "\n  get-schema-cksum [SERVER] [DATABASE]\n"
+           "    retrieve schema for DATABASE from SERVER and report only its\n"
+           "    checksum on stdout\n"
            "\n  list-tables [SERVER] [DATABASE]\n"
            "    list tables for DATABASE on SERVER\n"
            "\n  list-columns [SERVER] [DATABASE] [TABLE]\n"
@@ -444,6 +447,15 @@ do_get_schema_version(struct jsonrpc *rpc, const char *database,
 {
     struct ovsdb_schema *schema = fetch_schema(rpc, database);
     puts(schema->version);
+    ovsdb_schema_destroy(schema);
+}
+
+static void
+do_get_schema_cksum(struct jsonrpc *rpc, const char *database,
+                      int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+    struct ovsdb_schema *schema = fetch_schema(rpc, database);
+    puts(schema->cksum);
     ovsdb_schema_destroy(schema);
 }
 
@@ -1575,6 +1587,7 @@ static const struct ovsdb_client_command all_commands[] = {
     { "list-dbs",           NEED_RPC,      0, 0,       do_list_dbs },
     { "get-schema",         NEED_DATABASE, 0, 0,       do_get_schema },
     { "get-schema-version", NEED_DATABASE, 0, 0,       do_get_schema_version },
+    { "get-schema-cksum",   NEED_DATABASE, 0, 0,       do_get_schema_cksum },
     { "list-tables",        NEED_DATABASE, 0, 0,       do_list_tables },
     { "list-columns",       NEED_DATABASE, 0, 1,       do_list_columns },
     { "transact",           NEED_RPC,      1, 1,       do_transact },
