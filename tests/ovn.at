@@ -3050,6 +3050,27 @@ echo $packet | ovstest test-ovn expr-to-packets > expected
 
 OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [expected])
 
+AT_CHECK([ovn-sbctl dump-flows | grep lr_in_arp_resolve | \
+grep "reg0 == 172.16.1.2" | wc -l], [0], [1
+])
+
+# Disable the ls2-lp1 port.
+ovn-nbctl --wait=hv set logical_switch_port ls2-lp1 enabled=false
+
+AT_CHECK([ovn-sbctl dump-flows | grep lr_in_arp_resolve | \
+grep "reg0 == 172.16.1.2" | wc -l], [0], [0
+])
+
+# Generate the packet destined for ls2-lp1 and it should not be delivered.
+# Packet to send.
+packet="inport==\"ls1-lp1\" && eth.src==$ls1_lp1_mac && eth.dst==$rp_ls1_mac &&
+        ip4 && ip.ttl==64 && ip4.src==$ls1_lp1_ip && ip4.dst==$ls2_lp1_ip &&
+        udp && udp.src==53 && udp.dst==4369"
+
+as hv1 ovs-appctl -t ovn-controller inject-pkt "$packet"
+# The 2nd packet sent shound not be received.
+OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [expected])
+
 OVN_CLEANUP([hv1],[hv2])
 
 AT_CLEANUP
