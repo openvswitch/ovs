@@ -408,7 +408,7 @@ upgrade_db () {
         log_warning_msg "$DB_FILE does not exist"
         install_dir `dirname $DB_FILE`
         create_db "$DB_FILE" "$DB_SCHEMA"
-    elif test X"`ovsdb_tool needs-conversion "$DB_FILE" "$DB_SCHEMA"`" != Xno; then
+    elif test X"`ovsdb_tool needs-conversion "$DB_FILE" "$DB_SCHEMA"`" = Xyes; then
         # Back up the old version.
         version=`ovsdb_tool db-version "$DB_FILE"`
         cksum=`ovsdb_tool db-cksum "$DB_FILE" | awk '{print $1}'`
