@@ -5695,6 +5695,8 @@ meter_set(struct ofproto *ofproto_, ofproto_meter_id *meter_id,
         return OFPERR_OFPMMFC_OUT_OF_BANDS;
     case ENODEV: /* Unsupported band type */
         return OFPERR_OFPMMFC_BAD_BAND;
+    case EBADRQC: /* Rate must be non-zero */
+        return OFPERR_OFPMMFC_BAD_RATE;
     default:
         return OFPERR_OFPMMFC_UNKNOWN;
     }
