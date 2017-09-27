@@ -4285,7 +4285,7 @@ dpif_netdev_meter_set(struct dpif *dpif, ofproto_meter_id *meter_id,
     /* Validate rates */
     for (i = 0; i < config->n_bands; i++) {
         if (config->bands[i].rate == 0) {
-            return EBADRQC; /* rate must be non-zero */
+            return EDOM; /* rate must be non-zero */
         }
     }
 
