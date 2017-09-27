@@ -58,6 +58,7 @@
 #include "openvswitch/ofp-print.h"
 #include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
+#include "openvswitch/uuid.h"
 #include "openvswitch/vlog.h"
 #include "ovs-lldp.h"
 #include "ovs-rcu.h"
@@ -71,6 +72,7 @@
 #include "unaligned.h"
 #include "unixctl.h"
 #include "util.h"
+#include "uuid.h"
 #include "vlan-bitmap.h"
 
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif);
@@ -187,7 +189,12 @@ COVERAGE_DEFINE(rev_mcast_snooping);
 struct shash all_dpif_backers = SHASH_INITIALIZER(&all_dpif_backers);
 
 /* All existing ofproto_dpif instances, indexed by ->up.name. */
-struct hmap all_ofproto_dpifs = HMAP_INITIALIZER(&all_ofproto_dpifs);
+static struct hmap all_ofproto_dpifs_by_name =
+                          HMAP_INITIALIZER(&all_ofproto_dpifs_by_name);
+
+/* All existing ofproto_dpif instances, indexed by ->uuid. */
+static struct hmap all_ofproto_dpifs_by_uuid =
+                          HMAP_INITIALIZER(&all_ofproto_dpifs_by_uuid);
 
 static bool ofproto_use_tnl_push_pop = true;
 static void ofproto_unixctl_init(void);
@@ -268,7 +275,8 @@ enumerate_names(const char *type, struct sset *names)
     struct ofproto_dpif *ofproto;
 
     sset_clear(names);
-    HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+    HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_by_name_node,
+                   &all_ofproto_dpifs_by_name) {
         if (strcmp(type, ofproto->up.type)) {
             continue;
         }
@@ -311,7 +319,8 @@ lookup_ofproto_dpif_by_port_name(const char *name)
 {
     struct ofproto_dpif *ofproto;
 
-    HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+    HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_by_name_node,
+                   &all_ofproto_dpifs_by_name) {
         if (sset_contains(&ofproto->ports, name)) {
             return ofproto;
         }
@@ -368,7 +377,8 @@ type_run(const char *type)
         simap_init(&tmp_backers);
         simap_swap(&backer->tnl_backers, &tmp_backers);
 
-        HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+        HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_by_name_node,
+                       &all_ofproto_dpifs_by_name) {
             struct ofport_dpif *iter;
 
             if (backer != ofproto->backer) {
@@ -433,7 +443,8 @@ type_run(const char *type)
         backer->need_revalidate = 0;
 
         xlate_txn_start();
-        HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+        HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_by_name_node,
+                       &all_ofproto_dpifs_by_name) {
             struct ofport_dpif *ofport;
             struct ofbundle *bundle;
 
@@ -522,7 +533,8 @@ process_dpif_all_ports_changed(struct dpif_backer *backer)
     const char *devname;
 
     sset_init(&devnames);
-    HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+    HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_by_name_node,
+                   &all_ofproto_dpifs_by_name) {
         if (ofproto->backer == backer) {
             struct ofport *ofport;
 
@@ -552,8 +564,8 @@ process_dpif_port_change(struct dpif_backer *backer, const char *devname)
         return;
     }
 
-    HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node,
-                   &all_ofproto_dpifs) {
+    HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_by_name_node,
+                   &all_ofproto_dpifs_by_name) {
         if (simap_contains(&ofproto->backer->tnl_backers, devname)) {
             return;
         }
@@ -604,7 +616,8 @@ process_dpif_port_error(struct dpif_backer *backer, int error)
 {
     struct ofproto_dpif *ofproto;
 
-    HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+    HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_by_name_node,
+                   &all_ofproto_dpifs_by_name) {
         if (ofproto->backer == backer) {
             sset_clear(&ofproto->port_poll_set);
             ofproto->port_poll_errno = error;
@@ -1373,8 +1386,12 @@ construct(struct ofproto *ofproto_)
         }
     }
 
-    hmap_insert(&all_ofproto_dpifs, &ofproto->all_ofproto_dpifs_node,
+    hmap_insert(&all_ofproto_dpifs_by_name,
+                &ofproto->all_ofproto_dpifs_by_name_node,
                 hash_string(ofproto->up.name, 0));
+    hmap_insert(&all_ofproto_dpifs_by_uuid,
+                &ofproto->all_ofproto_dpifs_by_uuid_node,
+                uuid_hash(&ofproto->uuid));
     memset(&ofproto->stats, 0, sizeof ofproto->stats);
 
     ofproto_init_tables(ofproto_, N_TABLES);
@@ -1473,7 +1490,10 @@ destruct(struct ofproto *ofproto_, bool del)
      * to the ofproto or anything in it. */
     udpif_synchronize(ofproto->backer->udpif);
 
-    hmap_remove(&all_ofproto_dpifs, &ofproto->all_ofproto_dpifs_node);
+    hmap_remove(&all_ofproto_dpifs_by_name,
+                &ofproto->all_ofproto_dpifs_by_name_node);
+    hmap_remove(&all_ofproto_dpifs_by_uuid,
+                &ofproto->all_ofproto_dpifs_by_uuid_node);
 
     OFPROTO_FOR_EACH_TABLE (table, &ofproto->up) {
         CLS_FOR_EACH (rule, up.cr, &table->cls) {
@@ -2761,7 +2781,8 @@ bundle_flush_macs(struct ofbundle *bundle, bool all_ofprotos)
             if (all_ofprotos) {
                 struct ofproto_dpif *o;
 
-                HMAP_FOR_EACH (o, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+                HMAP_FOR_EACH (o, all_ofproto_dpifs_by_name_node,
+                               &all_ofproto_dpifs_by_name) {
                     if (o != ofproto) {
                         struct mac_entry *e;
 
@@ -3440,7 +3461,8 @@ ofport_update_peer(struct ofport_dpif *ofport)
         return;
     }
 
-    HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+    HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_by_name_node,
+                   &all_ofproto_dpifs_by_name) {
         struct ofport *peer_ofport;
         struct ofport_dpif *peer;
         char *peer_peer;
@@ -4858,13 +4880,28 @@ get_netflow_ids(const struct ofproto *ofproto_,
 }
 
 struct ofproto_dpif *
-ofproto_dpif_lookup(const char *name)
+ofproto_dpif_lookup_by_name(const char *name)
 {
     struct ofproto_dpif *ofproto;
 
-    HMAP_FOR_EACH_WITH_HASH (ofproto, all_ofproto_dpifs_node,
-                             hash_string(name, 0), &all_ofproto_dpifs) {
+    HMAP_FOR_EACH_WITH_HASH (ofproto, all_ofproto_dpifs_by_name_node,
+                             hash_string(name, 0),
+                             &all_ofproto_dpifs_by_name) {
         if (!strcmp(ofproto->up.name, name)) {
+            return ofproto;
+        }
+    }
+    return NULL;
+}
+
+struct ofproto_dpif *
+ofproto_dpif_lookup_by_uuid(const struct uuid *uuid)
+{
+    struct ofproto_dpif *ofproto;
+
+    HMAP_FOR_EACH_WITH_HASH (ofproto, all_ofproto_dpifs_by_uuid_node,
+                             uuid_hash(uuid), &all_ofproto_dpifs_by_uuid) {
+        if (uuid_equals(&ofproto->uuid, uuid)) {
             return ofproto;
         }
     }
@@ -4878,7 +4915,7 @@ ofproto_unixctl_fdb_flush(struct unixctl_conn *conn, int argc,
     struct ofproto_dpif *ofproto;
 
     if (argc > 1) {
-        ofproto = ofproto_dpif_lookup(argv[1]);
+        ofproto = ofproto_dpif_lookup_by_name(argv[1]);
         if (!ofproto) {
             unixctl_command_reply_error(conn, "no such bridge");
             return;
@@ -4887,7 +4924,8 @@ ofproto_unixctl_fdb_flush(struct unixctl_conn *conn, int argc,
         mac_learning_flush(ofproto->ml);
         ovs_rwlock_unlock(&ofproto->ml->rwlock);
     } else {
-        HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+        HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_by_name_node,
+                       &all_ofproto_dpifs_by_name) {
             ovs_rwlock_wrlock(&ofproto->ml->rwlock);
             mac_learning_flush(ofproto->ml);
             ovs_rwlock_unlock(&ofproto->ml->rwlock);
@@ -4904,7 +4942,7 @@ ofproto_unixctl_mcast_snooping_flush(struct unixctl_conn *conn, int argc,
     struct ofproto_dpif *ofproto;
 
     if (argc > 1) {
-        ofproto = ofproto_dpif_lookup(argv[1]);
+        ofproto = ofproto_dpif_lookup_by_name(argv[1]);
         if (!ofproto) {
             unixctl_command_reply_error(conn, "no such bridge");
             return;
@@ -4916,7 +4954,8 @@ ofproto_unixctl_mcast_snooping_flush(struct unixctl_conn *conn, int argc,
         }
         mcast_snooping_mdb_flush(ofproto->ms);
     } else {
-        HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+        HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_by_name_node,
+                       &all_ofproto_dpifs_by_name) {
             if (!mcast_snooping_enabled(ofproto->ms)) {
                 continue;
             }
@@ -4942,7 +4981,7 @@ ofproto_unixctl_fdb_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
     const struct ofproto_dpif *ofproto;
     const struct mac_entry *e;
 
-    ofproto = ofproto_dpif_lookup(argv[1]);
+    ofproto = ofproto_dpif_lookup_by_name(argv[1]);
     if (!ofproto) {
         unixctl_command_reply_error(conn, "no such bridge");
         return;
@@ -4978,7 +5017,7 @@ ofproto_unixctl_mcast_snooping_show(struct unixctl_conn *conn,
     struct mcast_group_bundle *b;
     struct mcast_mrouter_bundle *mrouter;
 
-    ofproto = ofproto_dpif_lookup(argv[1]);
+    ofproto = ofproto_dpif_lookup_by_name(argv[1]);
     if (!ofproto) {
         unixctl_command_reply_error(conn, "no such bridge");
         return;
@@ -5029,7 +5068,8 @@ get_ofprotos(struct shash *ofproto_shash)
 {
     const struct ofproto_dpif *ofproto;
 
-    HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+    HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_by_name_node,
+                   &all_ofproto_dpifs_by_name) {
         char *name = xasprintf("%s@%s", ofproto->up.type, ofproto->up.name);
         shash_add_nocopy(ofproto_shash, name, ofproto);
     }
@@ -5318,7 +5358,7 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
     struct dpif_flow f;
     int error;
 
-    ofproto = ofproto_dpif_lookup(argv[argc - 1]);
+    ofproto = ofproto_dpif_lookup_by_name(argv[argc - 1]);
     if (!ofproto) {
         unixctl_command_reply_error(conn, "no such bridge");
         return;
@@ -5403,7 +5443,7 @@ ofproto_unixctl_dpif_show_dp_features(struct unixctl_conn *conn,
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     const char *br = argv[argc -1];
-    struct ofproto_dpif *ofproto = ofproto_dpif_lookup(br);
+    struct ofproto_dpif *ofproto = ofproto_dpif_lookup_by_name(br);
 
     if (!ofproto) {
         unixctl_command_reply_error(conn, "no such bridge");
@@ -5422,7 +5462,7 @@ ofproto_unixctl_dpif_set_dp_features(struct unixctl_conn *conn,
     struct ds ds = DS_EMPTY_INITIALIZER;
     const char *br = argv[1];
     const char *name, *value;
-    struct ofproto_dpif *ofproto = ofproto_dpif_lookup(br);
+    struct ofproto_dpif *ofproto = ofproto_dpif_lookup_by_name(br);
     bool changed;
 
     if (!ofproto) {

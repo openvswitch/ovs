@@ -354,7 +354,7 @@ parse_flow_and_packet(int argc, const char *argv[],
             goto exit;
         }
 
-        *ofprotop = ofproto_dpif_lookup(argv[1]);
+        *ofprotop = ofproto_dpif_lookup_by_name(argv[1]);
         if (!*ofprotop) {
             error = "Unknown bridge name";
             goto exit;
