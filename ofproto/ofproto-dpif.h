@@ -152,12 +152,6 @@ struct group_dpif *group_dpif_lookup(struct ofproto_dpif *,
  * They are defined as macros to keep 'dpif_show_support()' in sync
  * as new fields are added.  */
 #define DPIF_SUPPORT_FIELDS                                                 \
-    /* True if the datapath supports variable-length                        \
-     * OVS_USERSPACE_ATTR_USERDATA in OVS_ACTION_ATTR_USERSPACE actions.    \
-     * False if the datapath supports only 8-byte (or shorter) userdata. */ \
-    DPIF_SUPPORT_FIELD(bool, variable_length_userdata,                      \
-                       "Variable length userdata")                          \
-                                                                            \
     /* True if the datapath supports masked data in OVS_ACTION_ATTR_SET     \
      * actions. */                                                          \
     DPIF_SUPPORT_FIELD(bool, masked_set_action, "Masked set action")        \

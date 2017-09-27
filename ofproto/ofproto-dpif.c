@@ -676,7 +676,6 @@ struct odp_garbage {
     odp_port_t odp_port;
 };
 
-static bool check_variable_length_userdata(struct dpif_backer *backer);
 static void check_support(struct dpif_backer *backer);
 
 static int
@@ -785,11 +784,6 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
         udpif_set_threads(backer->udpif, n_handlers, n_revalidators);
     }
 
-    /* This check fails if performed before udpif threads have been set,
-     * as the kernel module checks that the 'pid' in userspace action
-     * is non-zero. */
-    backer->rt_support.variable_length_userdata
-        = check_variable_length_userdata(backer);
     backer->dp_version_string = dpif_get_dp_version(backer->dpif);
 
     /* Manage Datapath meter IDs if supported. */
@@ -893,82 +887,6 @@ check_ufid(struct dpif_backer *backer)
                   dpif_name(backer->dpif));
     }
     return enable_ufid;
-}
-
-/* Tests whether 'backer''s datapath supports variable-length
- * OVS_USERSPACE_ATTR_USERDATA in OVS_ACTION_ATTR_USERSPACE actions.  We need
- * to disable some features on older datapaths that don't support this
- * feature.
- *
- * Returns false if 'backer' definitely does not support variable-length
- * userdata, true if it seems to support them or if at least the error we get
- * is ambiguous. */
-static bool
-check_variable_length_userdata(struct dpif_backer *backer)
-{
-    struct eth_header *eth;
-    struct ofpbuf actions;
-    struct dpif_execute execute;
-    struct dp_packet packet;
-    struct flow flow;
-    size_t start;
-    int error;
-
-    /* Compose a userspace action that will cause an ERANGE error on older
-     * datapaths that don't support variable-length userdata.
-     *
-     * We really test for using userdata longer than 8 bytes, but older
-     * datapaths accepted these, silently truncating the userdata to 8 bytes.
-     * The same older datapaths rejected userdata shorter than 8 bytes, so we
-     * test for that instead as a proxy for longer userdata support. */
-    ofpbuf_init(&actions, 64);
-    start = nl_msg_start_nested(&actions, OVS_ACTION_ATTR_USERSPACE);
-    nl_msg_put_u32(&actions, OVS_USERSPACE_ATTR_PID,
-                   dpif_port_get_pid(backer->dpif, ODPP_NONE, 0));
-    nl_msg_put_unspec_zero(&actions, OVS_USERSPACE_ATTR_USERDATA, 4);
-    nl_msg_end_nested(&actions, start);
-
-    /* Compose a dummy ethernet packet. */
-    dp_packet_init(&packet, ETH_HEADER_LEN);
-    eth = dp_packet_put_zeros(&packet, ETH_HEADER_LEN);
-    eth->eth_type = htons(0x1234);
-
-    flow_extract(&packet, &flow);
-
-    /* Execute the actions.  On older datapaths this fails with ERANGE, on
-     * newer datapaths it succeeds. */
-    execute.actions = actions.data;
-    execute.actions_len = actions.size;
-    execute.packet = &packet;
-    execute.flow = &flow;
-    execute.needs_help = false;
-    execute.probe = true;
-    execute.mtu = 0;
-
-    error = dpif_execute(backer->dpif, &execute);
-
-    dp_packet_uninit(&packet);
-    ofpbuf_uninit(&actions);
-
-    switch (error) {
-    case 0:
-        return true;
-
-    case ERANGE:
-        /* Variable-length userdata is not supported. */
-        VLOG_WARN("%s: datapath does not support variable-length userdata "
-                  "feature (needs Linux 3.10+ or kernel module from OVS "
-                  "1..11+).  The NXAST_SAMPLE action will be ignored.",
-                  dpif_name(backer->dpif));
-        return false;
-
-    default:
-        /* Something odd happened.  We're not sure whether variable-length
-         * userdata is supported.  Default to "yes". */
-        VLOG_WARN("%s: variable-length userdata feature probe failed (%s)",
-                  dpif_name(backer->dpif), ovs_strerror(error));
-        return true;
-    }
 }
 
 /* Tests number of 802.1q VLAN headers supported by 'backer''s datapath.
@@ -1374,9 +1292,6 @@ CHECK_FEATURE__(ct_orig_tuple6, ct_orig_tuple6, ct_nw_proto, 1, ETH_TYPE_IPV6)
 static void
 check_support(struct dpif_backer *backer)
 {
-    /* This feature needs to be tested after udpif threads are set. */
-    backer->rt_support.variable_length_userdata = false;
-
     /* Actions. */
     backer->rt_support.odp.recirc = check_recirc(backer);
     backer->rt_support.odp.max_vlan_headers = check_max_vlan_headers(backer);

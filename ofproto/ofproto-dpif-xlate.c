@@ -5212,13 +5212,6 @@ xlate_sample_action(struct xlate_ctx *ctx,
      * the same percentage. */
     uint32_t probability = (os->probability << 16) | os->probability;
 
-    if (!ctx->xbridge->support.variable_length_userdata) {
-        xlate_report_error(ctx, "ignoring NXAST_SAMPLE action because "
-                           "datapath lacks support (needs Linux 3.10+ or "
-                           "kernel module from OVS 1.11+)");
-        return;
-    }
-
     /* If ofp_port in flow sample action is equel to ofp_port,
      * this sample action is a input port action. */
     if (os->sampling_port != OFPP_NONE &&
