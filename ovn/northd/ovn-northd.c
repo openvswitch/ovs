@@ -5368,6 +5368,10 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
      * resolves the IP address in reg0 into an output port in outport and an
      * Ethernet address in eth.dst. */
     HMAP_FOR_EACH (op, key_node, ports) {
+        if (op->nbsp && !lsp_is_enabled(op->nbsp)) {
+            continue;
+        }
+
         if (op->nbrp) {
             /* This is a logical router port. If next-hop IP address in
              * '[xx]reg0' matches IP address of this router port, then
