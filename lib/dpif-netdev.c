@@ -4276,10 +4276,19 @@ dpif_netdev_meter_set(struct dpif *dpif, ofproto_meter_id *meter_id,
         !(config->flags & (OFPMF13_KBPS | OFPMF13_PKTPS))) {
         return EBADF; /* Unsupported flags set */
     }
+
     /* Validate bands */
     if (config->n_bands == 0 || config->n_bands > MAX_BANDS) {
         return EINVAL; /* Too many bands */
     }
+
+    /* Validate rates */
+    for (i = 0; i < config->n_bands; i++) {
+        if (config->bands[i].rate == 0) {
+            return EBADRQC; /* rate must be non-zero */
+        }
+    }
+
     for (i = 0; i < config->n_bands; ++i) {
         switch (config->bands[i].type) {
         case OFPMBT13_DROP:
