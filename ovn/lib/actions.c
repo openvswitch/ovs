@@ -983,7 +983,7 @@ encode_CT_LB(const struct ovnact_ct_lb *cl,
                             : MFF_LOG_DNAT_ZONE - MFF_REG0;
 
     struct ds ds = DS_EMPTY_INITIALIZER;
-    ds_put_format(&ds, "type=select");
+    ds_put_format(&ds, "type=select,selection_method=dp_hash");
 
     BUILD_ASSERT(MFF_LOG_CT_ZONE >= MFF_REG0);
     BUILD_ASSERT(MFF_LOG_CT_ZONE < MFF_REG0 + FLOW_N_REGS);
