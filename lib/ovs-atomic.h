@@ -69,6 +69,8 @@
  *     int8_t                   atomic_int8_t      (*)
  *     int16_t                  atomic_int16_t     (*)
  *     int32_t                  atomic_int32_t     (*)
+ *     uint64_t                 atomic_uint64_t    (*)
+ *     int64_t                  atomic_int64_t     (*)
  *
  *     (*) Not specified by C11.
  *
@@ -378,10 +380,12 @@ typedef ATOMIC(uintptr_t)          atomic_uintptr_t;
 typedef ATOMIC(uint8_t)   atomic_uint8_t;
 typedef ATOMIC(uint16_t)  atomic_uint16_t;
 typedef ATOMIC(uint32_t)  atomic_uint32_t;
+typedef ATOMIC(uint64_t)  atomic_uint64_t;
 
 typedef ATOMIC(int8_t)    atomic_int8_t;
 typedef ATOMIC(int16_t)   atomic_int16_t;
 typedef ATOMIC(int32_t)   atomic_int32_t;
+typedef ATOMIC(int64_t)   atomic_int64_t;
 
 /* Relaxed atomic operations.
  *
