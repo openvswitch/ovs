@@ -6205,11 +6205,8 @@ update_logical_port_status(struct northd_context *ctx)
             continue;
         }
 
-        if (sb->chassis && (!nbsp->up || !*nbsp->up)) {
-            bool up = true;
-            nbrec_logical_switch_port_set_up(nbsp, &up, 1);
-        } else if (!sb->chassis && (!nbsp->up || *nbsp->up)) {
-            bool up = false;
+        bool up = sb->chassis ? true : false;
+        if (!nbsp->up || *nbsp->up != up) {
             nbrec_logical_switch_port_set_up(nbsp, &up, 1);
         }
     }
