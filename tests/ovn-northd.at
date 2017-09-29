@@ -83,3 +83,72 @@ ovn-nbctl --wait=sb remove Logical_Router_Port bob options redirect-chassis
 AT_CHECK([ovn-sbctl find Gateway_Chassis name=bob_gw1], [0], [])
 
 AT_CLEANUP
+
+AT_SETUP([ovn -- check up state of VIF LSP])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+ovn-nbctl ls-add S1
+ovn-nbctl lsp-add S1 S1-vm1
+AT_CHECK([test x`ovn-nbctl lsp-get-up S1-vm1` = xdown])
+
+ovn-sbctl chassis-add hv1 geneve 127.0.0.1
+ovn-sbctl lsp-bind S1-vm1 hv1
+AT_CHECK([test x`ovn-nbctl lsp-get-up S1-vm1` = xup])
+
+AT_CLEANUP
+
+AT_SETUP([ovn -- check up state of router LSP linked to a distributed LR])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+ovn-nbctl lr-add R1
+ovn-nbctl lrp-add R1 R1-S1 02:ac:10:01:00:01 172.16.1.1/24
+
+ovn-nbctl ls-add S1
+ovn-nbctl lsp-add S1 S1-R1
+ovn-nbctl lsp-set-type S1-R1 router
+ovn-nbctl lsp-set-addresses S1-R1 02:ac:10:01:00:01
+ovn-nbctl lsp-set-options S1-R1 router-port=R1-S1
+AT_CHECK([test x`ovn-nbctl lsp-get-up S1-R1` = xup])
+
+AT_CLEANUP
+
+AT_SETUP([ovn -- check up state of router LSP linked to a gateway LR])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+ovn-sbctl chassis-add gw1 geneve 127.0.0.1
+
+ovn-nbctl create Logical_Router name=R1 options:chassis=gw1
+ovn-nbctl lrp-add R1 R1-S1 02:ac:10:01:00:01 172.16.1.1/24
+
+ovn-nbctl ls-add S1
+ovn-nbctl lsp-add S1 S1-R1
+ovn-nbctl lsp-set-type S1-R1 router
+ovn-nbctl lsp-set-addresses S1-R1 02:ac:10:01:00:01
+ovn-nbctl lsp-set-options S1-R1 router-port=R1-S1
+
+ovn-sbctl lsp-bind S1-R1 gw1
+AT_CHECK([test x`ovn-nbctl lsp-get-up S1-R1` = xup])
+
+AT_CLEANUP
+
+AT_SETUP([ovn -- check up state of router LSP linked to an LRP with set Gateway Chassis])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+ovn-sbctl chassis-add gw1 geneve 127.0.0.1
+
+ovn-nbctl lr-add R1
+ovn-nbctl lrp-add R1 R1-S1 02:ac:10:01:00:01 172.16.1.1/24
+ovn-nbctl lrp-set-gateway-chassis R1-S1 gw1
+
+ovn-nbctl ls-add S1
+ovn-nbctl lsp-add S1 S1-R1
+ovn-nbctl lsp-set-type S1-R1 router
+ovn-nbctl lsp-set-addresses S1-R1 router
+ovn-nbctl lsp-set-options S1-R1 router-port=R1-S1
+AT_CHECK([test x`ovn-nbctl lsp-get-up S1-R1` = xup])
+
+AT_CLEANUP

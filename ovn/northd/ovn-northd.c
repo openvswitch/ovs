@@ -6205,7 +6205,7 @@ update_logical_port_status(struct northd_context *ctx)
             continue;
         }
 
-        bool up = sb->chassis ? true : false;
+        bool up = (sb->chassis || !strcmp(nbsp->type, "router"));
         if (!nbsp->up || *nbsp->up != up) {
             nbrec_logical_switch_port_set_up(nbsp, &up, 1);
         }
