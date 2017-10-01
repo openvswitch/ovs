@@ -874,7 +874,6 @@ replication_status(void)
             break;
         default:
             OVS_NOT_REACHED();
-            break;
         }
     } else {
         ds_put_format(&ds, "not connected to %s", sync_from);
