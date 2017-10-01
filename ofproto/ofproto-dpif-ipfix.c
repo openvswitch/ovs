@@ -1314,7 +1314,6 @@ ipfix_def_options_template_fields(enum ipfix_options_template opt_tmpl_type,
     case NUM_IPFIX_OPTIONS_TEMPLATE:
     default:
         OVS_NOT_REACHED();
-        break;
     }
 
     return 0;

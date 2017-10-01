@@ -3231,7 +3231,6 @@ propagate_tunnel_data_to_flow(struct xlate_ctx *ctx, struct eth_addr dmac,
     case __OVS_VPORT_TYPE_MAX:
     default:
         OVS_NOT_REACHED();
-        break;
     }
     /*
      * Update base_flow first followed by flow as the dst_flow gets modified
@@ -5950,7 +5949,6 @@ xlate_generic_encap_action(struct xlate_ctx *ctx,
         default:
             /* New packet type was checked during decoding. */
             OVS_NOT_REACHED();
-            break;
     }
 
     if (!ctx->error) {
