@@ -350,80 +350,90 @@ enum dpdk_hw_ol_features {
 };
 
 struct netdev_dpdk {
-    struct netdev up;
-    dpdk_port_t port_id;
-    int max_packet_len;
-    enum dpdk_dev_type type;
+    PADDED_MEMBERS_CACHELINE_MARKER(CACHE_LINE_SIZE, cacheline0,
+        dpdk_port_t port_id;
 
-    struct dpdk_tx_queue *tx_q;
+        /* If true, device was attached by rte_eth_dev_attach(). */
+        bool attached;
+        struct eth_addr hwaddr;
+        int mtu;
+        int socket_id;
+        int buf_size;
+        int max_packet_len;
+        enum dpdk_dev_type type;
+        enum netdev_flags flags;
+        char *devargs;  /* Device arguments for dpdk ports */
+        struct dpdk_tx_queue *tx_q;
+        struct rte_eth_link link;
+        int link_reset_cnt;
+        /* 4 pad bytes here. */
+    );
 
-    struct ovs_mutex mutex OVS_ACQ_AFTER(dpdk_mutex);
+    PADDED_MEMBERS_CACHELINE_MARKER(CACHE_LINE_SIZE, cacheline1,
+        struct ovs_mutex mutex OVS_ACQ_AFTER(dpdk_mutex);
+        struct dpdk_mp *dpdk_mp;
 
-    struct dpdk_mp *dpdk_mp;
-    int mtu;
-    int socket_id;
-    int buf_size;
-    struct netdev_stats stats;
-    /* Protects stats */
-    rte_spinlock_t stats_lock;
+        /* virtio identifier for vhost devices */
+        ovsrcu_index vid;
 
-    struct eth_addr hwaddr;
-    enum netdev_flags flags;
+        /* True if vHost device is 'up' and has been reconfigured at least once */
+        bool vhost_reconfigured;
+        /* 3 pad bytes here. */
+    );
 
-    struct rte_eth_link link;
-    int link_reset_cnt;
+    PADDED_MEMBERS(CACHE_LINE_SIZE,
+        /* Identifier used to distinguish vhost devices from each other. */
+        char vhost_id[PATH_MAX];
+    );
 
-    /* virtio identifier for vhost devices */
-    ovsrcu_index vid;
+    PADDED_MEMBERS(CACHE_LINE_SIZE,
+        struct netdev up;
+        /* In dpdk_list. */
+        struct ovs_list list_node OVS_GUARDED_BY(dpdk_mutex);
 
-    /* True if vHost device is 'up' and has been reconfigured at least once */
-    bool vhost_reconfigured;
+        /* QoS configuration and lock for the device */
+        OVSRCU_TYPE(struct qos_conf *) qos_conf;
 
-    /* Identifier used to distinguish vhost devices from each other. */
-    char vhost_id[PATH_MAX];
+        /* Ingress Policer */
+        OVSRCU_TYPE(struct ingress_policer *) ingress_policer;
+        uint32_t policer_rate;
+        uint32_t policer_burst;
+    );
 
-    /* Device arguments for dpdk ports */
-    char *devargs;
+    PADDED_MEMBERS(CACHE_LINE_SIZE,
+        struct netdev_stats stats;
+        /* Protects stats */
+        rte_spinlock_t stats_lock;
+        /* 44 pad bytes here. */
+    );
 
-    /* If true, device was attached by rte_eth_dev_attach(). */
-    bool attached;
+    PADDED_MEMBERS(CACHE_LINE_SIZE,
+        /* The following properties cannot be changed when a device is running,
+         * so we remember the request and update them next time
+         * netdev_dpdk*_reconfigure() is called */
+        int requested_mtu;
+        int requested_n_txq;
+        int requested_n_rxq;
+        int requested_rxq_size;
+        int requested_txq_size;
 
-    /* In dpdk_list. */
-    struct ovs_list list_node OVS_GUARDED_BY(dpdk_mutex);
+        /* Number of rx/tx descriptors for physical devices */
+        int rxq_size;
+        int txq_size;
 
-    /* QoS configuration and lock for the device */
-    OVSRCU_TYPE(struct qos_conf *) qos_conf;
+        /* Socket ID detected when vHost device is brought up */
+        int requested_socket_id;
 
-    /* The following properties cannot be changed when a device is running,
-     * so we remember the request and update them next time
-     * netdev_dpdk*_reconfigure() is called */
-    int requested_mtu;
-    int requested_n_txq;
-    int requested_n_rxq;
-    int requested_rxq_size;
-    int requested_txq_size;
+        /* Denotes whether vHost port is client/server mode */
+        uint64_t vhost_driver_flags;
 
-    /* Number of rx/tx descriptors for physical devices */
-    int rxq_size;
-    int txq_size;
+        /* DPDK-ETH Flow control */
+        struct rte_eth_fc_conf fc_conf;
 
-    /* Socket ID detected when vHost device is brought up */
-    int requested_socket_id;
-
-    /* Denotes whether vHost port is client/server mode */
-    uint64_t vhost_driver_flags;
-
-    /* Ingress Policer */
-    OVSRCU_TYPE(struct ingress_policer *) ingress_policer;
-    uint32_t policer_rate;
-    uint32_t policer_burst;
-
-    /* DPDK-ETH Flow control */
-    struct rte_eth_fc_conf fc_conf;
-
-    /* DPDK-ETH hardware offload features,
-     * from the enum set 'dpdk_hw_ol_features' */
-    uint32_t hw_ol_features;
+        /* DPDK-ETH hardware offload features,
+         * from the enum set 'dpdk_hw_ol_features' */
+        uint32_t hw_ol_features;
+    );
 };
 
 struct netdev_rxq_dpdk {
