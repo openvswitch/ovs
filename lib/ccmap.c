@@ -102,16 +102,15 @@ BUILD_ASSERT_DECL(sizeof(struct ccmap_bucket) == CACHE_LINE_SIZE);
 
 /* The implementation of a concurrent hash map. */
 struct ccmap_impl {
-    unsigned int n_unique;      /* Number of in-use nodes. */
-    unsigned int n;             /* Number of hashes inserted. */
-    unsigned int max_n;         /* Max nodes before enlarging. */
-    unsigned int min_n;         /* Min nodes before shrinking. */
-    uint32_t mask;              /* Number of 'buckets', minus one. */
-    uint32_t basis;             /* Basis for rehashing client's hash values. */
-
-    /* Padding to make ccmap_impl exactly one cache line long. */
-    uint8_t pad[CACHE_LINE_SIZE - sizeof(unsigned int) * 6];
-
+    PADDED_MEMBERS(CACHE_LINE_SIZE,
+        unsigned int n_unique;      /* Number of in-use nodes. */
+        unsigned int n;             /* Number of hashes inserted. */
+        unsigned int max_n;         /* Max nodes before enlarging. */
+        unsigned int min_n;         /* Min nodes before shrinking. */
+        uint32_t mask;              /* Number of 'buckets', minus one. */
+        uint32_t basis;             /* Basis for rehashing client's
+                                       hash values. */
+    );
     struct ccmap_bucket buckets[];
 };
 BUILD_ASSERT_DECL(sizeof(struct ccmap_impl) == CACHE_LINE_SIZE);
