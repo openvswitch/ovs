@@ -547,18 +547,31 @@ struct tx_port {
  * actions in either case.
  * */
 struct dp_netdev_pmd_thread {
-    struct dp_netdev *dp;
-    struct ovs_refcount ref_cnt;    /* Every reference must be refcount'ed. */
-    struct cmap_node node;          /* In 'dp->poll_threads'. */
+    PADDED_MEMBERS_CACHELINE_MARKER(CACHE_LINE_SIZE, cacheline0,
+        struct dp_netdev *dp;
+        struct cmap_node node;          /* In 'dp->poll_threads'. */
+        pthread_cond_t cond;            /* For synchronizing pmd thread
+                                           reload. */
+    );
 
-    pthread_cond_t cond;            /* For synchronizing pmd thread reload. */
-    struct ovs_mutex cond_mutex;    /* Mutex for condition variable. */
+    PADDED_MEMBERS_CACHELINE_MARKER(CACHE_LINE_SIZE, cacheline1,
+        struct ovs_mutex cond_mutex;    /* Mutex for condition variable. */
+        pthread_t thread;
+        unsigned core_id;               /* CPU core id of this pmd thread. */
+        int numa_id;                    /* numa node id of this pmd thread. */
+    );
 
     /* Per thread exact-match cache.  Note, the instance for cpu core
      * NON_PMD_CORE_ID can be accessed by multiple threads, and thusly
      * need to be protected by 'non_pmd_mutex'.  Every other instance
      * will only be accessed by its own pmd thread. */
-    struct emc_cache flow_cache;
+    OVS_ALIGNED_VAR(CACHE_LINE_SIZE) struct emc_cache flow_cache;
+    struct ovs_refcount ref_cnt;    /* Every reference must be refcount'ed. */
+
+    /* Queue id used by this pmd thread to send packets on all netdevs if
+     * XPS disabled for this netdev. All static_tx_qid's are unique and less
+     * than 'cmap_count(dp->poll_threads)'. */
+    uint32_t static_tx_qid;
 
     /* Flow-Table and classifiers
      *
@@ -567,68 +580,77 @@ struct dp_netdev_pmd_thread {
      * 'flow_mutex'.
      */
     struct ovs_mutex flow_mutex;
-    struct cmap flow_table OVS_GUARDED; /* Flow table. */
+    PADDED_MEMBERS(CACHE_LINE_SIZE,
+        struct cmap flow_table OVS_GUARDED; /* Flow table. */
 
-    /* One classifier per in_port polled by the pmd */
-    struct cmap classifiers;
-    /* Periodically sort subtable vectors according to hit frequencies */
-    long long int next_optimization;
-    /* End of the next time interval for which processing cycles
-       are stored for each polled rxq. */
-    long long int rxq_interval;
+        /* One classifier per in_port polled by the pmd */
+        struct cmap classifiers;
+        /* Periodically sort subtable vectors according to hit frequencies */
+        long long int next_optimization;
+        /* End of the next time interval for which processing cycles
+           are stored for each polled rxq. */
+        long long int rxq_interval;
 
-    /* Statistics. */
-    struct dp_netdev_pmd_stats stats;
+        /* Cycles counters */
+        struct dp_netdev_pmd_cycles cycles;
 
-    /* Cycles counters */
-    struct dp_netdev_pmd_cycles cycles;
+        /* Used to count cycles. See 'cycles_counter_end()'. */
+        unsigned long long last_cycles;
+        struct latch exit_latch;        /* For terminating the pmd thread. */
+    );
 
-    /* Used to count cicles. See 'cycles_counter_end()' */
-    unsigned long long last_cycles;
+    PADDED_MEMBERS(CACHE_LINE_SIZE,
+        /* Statistics. */
+        struct dp_netdev_pmd_stats stats;
 
-    struct latch exit_latch;        /* For terminating the pmd thread. */
-    struct seq *reload_seq;
-    uint64_t last_reload_seq;
-    atomic_bool reload;             /* Do we need to reload ports? */
-    pthread_t thread;
-    unsigned core_id;               /* CPU core id of this pmd thread. */
-    int numa_id;                    /* numa node id of this pmd thread. */
-    bool isolated;
+        struct seq *reload_seq;
+        uint64_t last_reload_seq;
+        atomic_bool reload;             /* Do we need to reload ports? */
+        bool isolated;
 
-    /* Queue id used by this pmd thread to send packets on all netdevs if
-     * XPS disabled for this netdev. All static_tx_qid's are unique and less
-     * than 'cmap_count(dp->poll_threads)'. */
-    uint32_t static_tx_qid;
+        /* Set to true if the pmd thread needs to be reloaded. */
+        bool need_reload;
+        /* 5 pad bytes. */
+    );
 
-    struct ovs_mutex port_mutex;    /* Mutex for 'poll_list' and 'tx_ports'. */
-    /* List of rx queues to poll. */
-    struct hmap poll_list OVS_GUARDED;
-    /* Map of 'tx_port's used for transmission.  Written by the main thread,
-     * read by the pmd thread. */
-    struct hmap tx_ports OVS_GUARDED;
+    PADDED_MEMBERS(CACHE_LINE_SIZE,
+        struct ovs_mutex port_mutex;    /* Mutex for 'poll_list'
+                                           and 'tx_ports'. */
+        /* 16 pad bytes. */
+    );
+    PADDED_MEMBERS(CACHE_LINE_SIZE,
+        /* List of rx queues to poll. */
+        struct hmap poll_list OVS_GUARDED;
+        /* Map of 'tx_port's used for transmission.  Written by the main
+         * thread, read by the pmd thread. */
+        struct hmap tx_ports OVS_GUARDED;
+    );
+    PADDED_MEMBERS(CACHE_LINE_SIZE,
+        /* These are thread-local copies of 'tx_ports'.  One contains only
+         * tunnel ports (that support push_tunnel/pop_tunnel), the other
+         * contains ports with at least one txq (that support send).
+         * A port can be in both.
+         *
+         * There are two separate maps to make sure that we don't try to
+         * execute OUTPUT on a device which has 0 txqs or PUSH/POP on a
+         * non-tunnel device.
+         *
+         * The instances for cpu core NON_PMD_CORE_ID can be accessed by
+         * multiple threads and thusly need to be protected by 'non_pmd_mutex'.
+         * Every other instance will only be accessed by its own pmd thread. */
+        struct hmap tnl_port_cache;
+        struct hmap send_port_cache;
+    );
 
-    /* These are thread-local copies of 'tx_ports'.  One contains only tunnel
-     * ports (that support push_tunnel/pop_tunnel), the other contains ports
-     * with at least one txq (that support send).  A port can be in both.
-     *
-     * There are two separate maps to make sure that we don't try to execute
-     * OUTPUT on a device which has 0 txqs or PUSH/POP on a non-tunnel device.
-     *
-     * The instances for cpu core NON_PMD_CORE_ID can be accessed by multiple
-     * threads, and thusly need to be protected by 'non_pmd_mutex'.  Every
-     * other instance will only be accessed by its own pmd thread. */
-    struct hmap tnl_port_cache;
-    struct hmap send_port_cache;
-
-    /* Only a pmd thread can write on its own 'cycles' and 'stats'.
-     * The main thread keeps 'stats_zero' and 'cycles_zero' as base
-     * values and subtracts them from 'stats' and 'cycles' before
-     * reporting to the user */
-    unsigned long long stats_zero[DP_N_STATS];
-    uint64_t cycles_zero[PMD_N_CYCLES];
-
-    /* Set to true if the pmd thread needs to be reloaded. */
-    bool need_reload;
+    PADDED_MEMBERS(CACHE_LINE_SIZE,
+        /* Only a pmd thread can write on its own 'cycles' and 'stats'.
+         * The main thread keeps 'stats_zero' and 'cycles_zero' as base
+         * values and subtracts them from 'stats' and 'cycles' before
+         * reporting to the user */
+        unsigned long long stats_zero[DP_N_STATS];
+        uint64_t cycles_zero[PMD_N_CYCLES];
+        /* 8 pad bytes. */
+    );
 };
 
 /* Interface to netdev-based datapath. */
