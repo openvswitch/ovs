@@ -92,7 +92,7 @@ Perform the folowing configuration on `host1`:
 #. Add a port to this bridge. If using tap ports, first boot a VM and then add
    the port to the bridge::
 
-       $ ovs-vsctl add-port br0 tap0
+       $ ovs-vsctl add-port br-int tap0
 
    If using DPDK vhost-user ports, add the port and then boot the VM
    accordingly, using ``vm_port0`` as the interface name::

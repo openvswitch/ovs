@@ -150,6 +150,7 @@ Hui Kang                        kangh@us.ibm.com
 Ian Campbell                    Ian.Campbell@citrix.com
 Ian Stokes                      ian.stokes@intel.com
 Ilya Maximets                   i.maximets@samsung.com
+Iman Tabrizian                  tabrizian@outlook.com
 Isaku Yamahata                  yamahata@valinux.co.jp
 Jakub Libosvar                  libosvar@redhat.com
 Jakub Sitnicki                  jkbs@redhat.com
