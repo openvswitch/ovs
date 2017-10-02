@@ -1871,6 +1871,10 @@ mirror_packet(struct xlate_ctx *ctx, struct xbundle *xbundle,
         return;
     }
 
+    if (ctx->xin->flow.recirc_id != 0) {
+        return;
+    }
+
     if (ctx->xin->resubmit_stats) {
         mirror_update_stats(xbridge->mbridge, mirrors,
                             ctx->xin->resubmit_stats->n_packets,
