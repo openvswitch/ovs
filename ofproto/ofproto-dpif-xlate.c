@@ -4829,31 +4829,26 @@ xlate_output_action(struct xlate_ctx *ctx,
                     bool is_last_action)
 {
     ofp_port_t prev_nf_output_iface = ctx->nf_output_iface;
-    bool truncate = max_len != 0;
 
     ctx->nf_output_iface = NF_OUT_DROP;
 
     switch (port) {
     case OFPP_IN_PORT:
         compose_output_action(ctx, ctx->xin->flow.in_port.ofp_port, NULL,
-                              is_last_action, truncate);
+                              is_last_action, false);
         break;
     case OFPP_TABLE:
-        ovs_assert(!truncate);
         xlate_table_action(ctx, ctx->xin->flow.in_port.ofp_port,
                            0, may_packet_in, true, false, false,
                            do_xlate_actions);
         break;
     case OFPP_NORMAL:
-        ovs_assert(!truncate);
         xlate_normal(ctx);
         break;
     case OFPP_FLOOD:
-        ovs_assert(!truncate);
         flood_packets(ctx, false, is_last_action);
         break;
     case OFPP_ALL:
-        ovs_assert(!truncate);
         flood_packets(ctx, true, is_last_action);
         break;
     case OFPP_CONTROLLER:
@@ -4869,7 +4864,7 @@ xlate_output_action(struct xlate_ctx *ctx,
     case OFPP_LOCAL:
     default:
         if (port != ctx->xin->flow.in_port.ofp_port) {
-            compose_output_action(ctx, port, NULL, is_last_action, truncate);
+            compose_output_action(ctx, port, NULL, is_last_action, false);
         } else {
             xlate_report(ctx, OFT_WARN, "skipping output to input port");
         }
