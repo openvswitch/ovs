@@ -2927,7 +2927,11 @@ compose_sflow_action(struct xlate_ctx *ctx)
         return 0;
     }
 
-    struct user_action_cookie cookie = { .type = USER_ACTION_COOKIE_SFLOW };
+    struct user_action_cookie cookie = {
+        .type = USER_ACTION_COOKIE_SFLOW,
+        .ofp_in_port = ctx->xin->flow.in_port.ofp_port,
+        .ofproto_uuid = ctx->xbridge->ofproto->uuid
+    };
     return compose_sample_action(ctx, dpif_sflow_get_probability(sflow),
                                  &cookie, ODPP_NONE, true);
 }
@@ -2969,7 +2973,9 @@ compose_ipfix_action(struct xlate_ctx *ctx, odp_port_t output_odp_port)
 
     struct user_action_cookie cookie = {
         .type = USER_ACTION_COOKIE_IPFIX,
-        .ipfix.output_odp_port = output_odp_port,
+        .ofp_in_port = ctx->xin->flow.in_port.ofp_port,
+        .ofproto_uuid = ctx->xbridge->ofproto->uuid,
+        .ipfix.output_odp_port = output_odp_port
     };
     compose_sample_action(ctx,
                           dpif_ipfix_get_bridge_exporter_probability(ipfix),
@@ -2990,7 +2996,6 @@ fix_sflow_action(struct xlate_ctx *ctx, unsigned int user_cookie_offset)
     cookie = ofpbuf_at(ctx->odp_actions, user_cookie_offset, sizeof *cookie);
     ovs_assert(cookie->type == USER_ACTION_COOKIE_SFLOW);
 
-    cookie->type = USER_ACTION_COOKIE_SFLOW;
     cookie->sflow.vlan_tci = base->vlans[0].tci;
 
     /* See http://www.sflow.org/sflow_version_5.txt (search for "Input/output
@@ -5270,6 +5275,8 @@ xlate_sample_action(struct xlate_ctx *ctx,
 
     struct user_action_cookie cookie = {
         .type = USER_ACTION_COOKIE_FLOW_SAMPLE,
+        .ofp_in_port = ctx->xin->flow.in_port.ofp_port,
+        .ofproto_uuid = ctx->xbridge->ofproto->uuid,
         .flow_sample = {
             .probability = os->probability,
             .collector_set_id = os->collector_set_id,

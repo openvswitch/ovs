@@ -1142,13 +1142,16 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
             }
 
             cookie.type = USER_ACTION_COOKIE_SFLOW;
+            cookie.ofp_in_port = OFPP_NONE;
+            cookie.ofproto_uuid = UUID_ZERO;
             cookie.sflow.vlan_tci = htons(tci);
             cookie.sflow.output = output;
         } else if (ovs_scan(&s[n], ",slow_path(%n",
                             &n1)) {
             n += n1;
             cookie.type = USER_ACTION_COOKIE_SLOW_PATH;
-            cookie.slow_path.unused = 0;
+            cookie.ofp_in_port = OFPP_NONE;
+            cookie.ofproto_uuid = UUID_ZERO;
             cookie.slow_path.reason = 0;
 
             res = parse_odp_flags(&s[n], slow_path_reason_to_string,
@@ -1169,6 +1172,8 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
             n += n1;
 
             cookie.type = USER_ACTION_COOKIE_FLOW_SAMPLE;
+            cookie.ofp_in_port = OFPP_NONE;
+            cookie.ofproto_uuid = UUID_ZERO;
             cookie.flow_sample.probability = probability;
             cookie.flow_sample.collector_set_id = collector_set_id;
             cookie.flow_sample.obs_domain_id = obs_domain_id;
@@ -1193,6 +1198,8 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
                             &output, &n1) ) {
             n += n1;
             cookie.type = USER_ACTION_COOKIE_IPFIX;
+            cookie.ofp_in_port = OFPP_NONE;
+            cookie.ofproto_uuid = UUID_ZERO;
             cookie.ipfix.output_odp_port = u32_to_odp(output);
         } else if (ovs_scan(&s[n], ",userdata(%n",
                             &n1)) {

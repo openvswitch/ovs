@@ -38,6 +38,7 @@
 #include "packets.h"
 #include "openvswitch/poll-loop.h"
 #include "seq.h"
+#include "tunnel.h"
 #include "unixctl.h"
 #include "openvswitch/vlog.h"
 
@@ -207,7 +208,7 @@ struct upcall {
     const ovs_u128 *ufid;          /* Unique identifier for 'flow'. */
     unsigned pmd_id;               /* Datapath poll mode driver id. */
     const struct dp_packet *packet;   /* Packet associated with this upcall. */
-    ofp_port_t in_port;            /* OpenFlow in port, or OFPP_NONE. */
+    ofp_port_t ofp_in_port;        /* OpenFlow in port, or OFPP_NONE. */
     uint16_t mru;                  /* If !0, Maximum receive unit of
                                       fragmented IP packet */
 
@@ -1021,16 +1022,18 @@ classify_upcall(enum dpif_upcall_type type, const struct nlattr *userdata,
  * initialized with at least 128 bytes of space. */
 static void
 compose_slow_path(struct udpif *udpif, struct xlate_out *xout,
-                  const struct flow *flow, odp_port_t odp_in_port,
+                  const struct flow *flow,
+                  odp_port_t odp_in_port, ofp_port_t ofp_in_port,
                   struct ofpbuf *buf, uint32_t slowpath_meter_id,
-                  uint32_t controller_meter_id)
+                  uint32_t controller_meter_id, struct uuid *ofproto_uuid)
 {
     struct user_action_cookie cookie;
     odp_port_t port;
     uint32_t pid;
 
     cookie.type = USER_ACTION_COOKIE_SLOW_PATH;
-    cookie.slow_path.unused = 0;
+    cookie.ofp_in_port = ofp_in_port;
+    cookie.ofproto_uuid = *ofproto_uuid;
     cookie.slow_path.reason = xout->slow;
 
     port = xout->slow & (SLOW_CFM | SLOW_BFD | SLOW_LACP | SLOW_STP)
@@ -1077,12 +1080,23 @@ upcall_receive(struct upcall *upcall, const struct dpif_backer *backer,
     upcall->type = classify_upcall(type, userdata, &upcall->cookie);
     if (upcall->type == BAD_UPCALL) {
         return EAGAIN;
-    }
-
-    error = xlate_lookup(backer, flow, &upcall->ofproto, &upcall->ipfix,
-                         &upcall->sflow, NULL, &upcall->in_port);
-    if (error) {
-        return error;
+    } else if (upcall->type == MISS_UPCALL) {
+        error = xlate_lookup(backer, flow, &upcall->ofproto, &upcall->ipfix,
+                             &upcall->sflow, NULL, &upcall->ofp_in_port);
+        if (error) {
+            return error;
+        }
+    } else {
+        struct ofproto_dpif *ofproto
+            = ofproto_dpif_lookup_by_uuid(&upcall->cookie.ofproto_uuid);
+        if (!ofproto) {
+            VLOG_INFO_RL(&rl, "upcall could not find ofproto");
+            return ENODEV;
+        }
+        upcall->ofproto = ofproto;
+        upcall->ipfix = ofproto->ipfix;
+        upcall->sflow = ofproto->sflow;
+        upcall->ofp_in_port = upcall->cookie.ofp_in_port;
     }
 
     upcall->recirc = NULL;
@@ -1123,7 +1137,7 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
 
     xlate_in_init(&xin, upcall->ofproto,
                   ofproto_dpif_get_tables_version(upcall->ofproto),
-                  upcall->flow, upcall->in_port, NULL,
+                  upcall->flow, upcall->ofp_in_port, NULL,
                   stats.tcp_flags, upcall->packet, wc, odp_actions);
 
     if (upcall->type == MISS_UPCALL) {
@@ -1168,8 +1182,9 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
         uint32_t cmid = upcall->ofproto->up.controller_meter_id;
         /* upcall->put_actions already initialized by upcall_receive(). */
         compose_slow_path(udpif, &upcall->xout, upcall->flow,
-                          upcall->flow->in_port.odp_port,
-                          &upcall->put_actions, smid, cmid);
+                          upcall->flow->in_port.odp_port, upcall->ofp_in_port,
+                          &upcall->put_actions, smid, cmid,
+                          &upcall->ofproto->uuid);
     }
 
     /* This function is also called for slow-pathed flows.  As we are only
@@ -2025,13 +2040,17 @@ revalidate_ukey__(struct udpif *udpif, const struct udpif_key *ukey,
 
     if (xoutp->slow) {
         struct ofproto_dpif *ofproto;
-        ofproto = xlate_lookup_ofproto(udpif->backer, &ctx.flow, NULL);
+        ofp_port_t ofp_in_port;
+
+        ofproto = xlate_lookup_ofproto(udpif->backer, &ctx.flow,
+                                       &ofp_in_port);
         uint32_t smid = ofproto ? ofproto->up.slowpath_meter_id : UINT32_MAX;
         uint32_t cmid = ofproto ? ofproto->up.controller_meter_id : UINT32_MAX;
 
         ofpbuf_clear(odp_actions);
         compose_slow_path(udpif, xoutp, &ctx.flow, ctx.flow.in_port.odp_port,
-                          odp_actions, smid, cmid);
+                          ofp_in_port, odp_actions, smid, cmid,
+                          &ofproto->uuid);
     }
 
     if (odp_flow_key_to_mask(ukey->mask, ukey->mask_len, &dp_mask, &ctx.flow)

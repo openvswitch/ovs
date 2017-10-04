@@ -25,6 +25,7 @@
 #include "hash.h"
 #include "openvswitch/hmap.h"
 #include "openvswitch/ofp-actions.h"
+#include "openvswitch/uuid.h"
 #include "odp-netlink.h"
 #include "openflow/openflow.h"
 #include "util.h"
@@ -302,6 +303,8 @@ enum user_action_cookie_type {
 /* user_action_cookie is passed as argument to OVS_ACTION_ATTR_USERSPACE. */
 struct user_action_cookie {
     uint16_t type;              /* enum user_action_cookie_type. */
+    ofp_port_t ofp_in_port;     /* OpenFlow in port, or OFPP_NONE. */
+    struct uuid ofproto_uuid;   /* UUID of ofproto-dpif. */
 
     union {
         struct {
@@ -332,7 +335,7 @@ struct user_action_cookie {
         } ipfix;
     };
 };
-BUILD_ASSERT_DECL(sizeof(struct user_action_cookie) == 28);
+BUILD_ASSERT_DECL(sizeof(struct user_action_cookie) == 48);
 
 size_t odp_put_userspace_action(uint32_t pid,
                                 const void *userdata, size_t userdata_size,
