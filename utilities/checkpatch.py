@@ -64,10 +64,11 @@ def print_warning(message):
 
 
 def reset_counters():
-    global __errors, __warnings
+    global __errors, __warnings, total_line
 
     __errors = 0
     __warnings = 0
+    total_line = 0
 
 
 # These are keywords whose names are normally followed by a space and
