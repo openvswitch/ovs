@@ -1606,18 +1606,18 @@ netdev_dpdk_vhost_rxq_recv(struct netdev_rxq *rxq,
                            struct dp_packet_batch *batch)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(rxq->netdev);
-    int qid = rxq->queue_id;
     struct ingress_policer *policer = netdev_dpdk_get_ingress_policer(dev);
     uint16_t nb_rx = 0;
     uint16_t dropped = 0;
+    int qid = rxq->queue_id;
+    int vid = netdev_dpdk_get_vid(dev);
 
-    if (OVS_UNLIKELY(!is_vhost_running(dev)
+    if (OVS_UNLIKELY(vid < 0 || !dev->vhost_reconfigured
                      || !(dev->flags & NETDEV_UP))) {
         return EAGAIN;
     }
 
-    nb_rx = rte_vhost_dequeue_burst(netdev_dpdk_get_vid(dev),
-                                    qid * VIRTIO_QNUM + VIRTIO_TXQ,
+    nb_rx = rte_vhost_dequeue_burst(vid, qid * VIRTIO_QNUM + VIRTIO_TXQ,
                                     dev->mp,
                                     (struct rte_mbuf **) batch->packets,
                                     NETDEV_MAX_BURST);
@@ -1752,10 +1752,11 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
     unsigned int total_pkts = cnt;
     unsigned int dropped = 0;
     int i, retries = 0;
+    int vid = netdev_dpdk_get_vid(dev);
 
     qid = dev->tx_q[qid % netdev->n_txq].map;
 
-    if (OVS_UNLIKELY(!is_vhost_running(dev) || qid < 0
+    if (OVS_UNLIKELY(vid < 0 || !dev->vhost_reconfigured || qid < 0
                      || !(dev->flags & NETDEV_UP))) {
         rte_spinlock_lock(&dev->stats_lock);
         dev->stats.tx_dropped+= cnt;
@@ -1774,8 +1775,7 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
         int vhost_qid = qid * VIRTIO_QNUM + VIRTIO_RXQ;
         unsigned int tx_pkts;
 
-        tx_pkts = rte_vhost_enqueue_burst(netdev_dpdk_get_vid(dev),
-                                          vhost_qid, cur_pkts, cnt);
+        tx_pkts = rte_vhost_enqueue_burst(vid, vhost_qid, cur_pkts, cnt);
         if (OVS_LIKELY(tx_pkts)) {
             /* Packets have been sent.*/
             cnt -= tx_pkts;
