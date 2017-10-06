@@ -27,6 +27,8 @@
 # Short-Description: Open vSwitch switch
 ### END INIT INFO
 
+SYSTEMCTL_SKIP_REDIRECT=yes
+
 . /usr/share/openvswitch/scripts/ovs-lib || exit 1
 test -e /etc/sysconfig/openvswitch && . /etc/sysconfig/openvswitch
 
