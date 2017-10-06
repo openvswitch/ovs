@@ -166,7 +166,13 @@ ovsdb_log_open(const char *name, const char *magic,
 #ifdef _WIN32
     flags = flags | O_BINARY;
 #endif
-    fd = open(name, flags, 0666);
+    /* Special case for /dev/stdin to make it work even if the operating system
+     * doesn't support it under that name. */
+    if (!strcmp(name, "/dev/stdin") && open_mode == OVSDB_LOG_READ_ONLY) {
+        fd = dup(STDIN_FILENO);
+    } else {
+        fd = open(name, flags, 0666);
+    }
     if (fd < 0) {
         const char *op = (open_mode == OVSDB_LOG_CREATE_EXCL ? "create"
             : open_mode == OVSDB_LOG_CREATE ? "create or open"
