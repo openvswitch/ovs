@@ -75,6 +75,12 @@ ovs_vsctl () {
     ovs-vsctl --no-wait "$@"
 }
 
+set_hostname () {
+    # 'hostname -f' needs network connectivity to work.  So we should
+    # call this only after ovs-vswitchd is running.
+    ovs_vsctl set Open_vSwitch . external-ids:hostname="$(hostname -f)"
+}
+
 set_system_ids () {
     set ovs_vsctl set Open_vSwitch .
 
@@ -107,8 +113,6 @@ set_system_ids () {
             ;;
     esac
     set "$@" external-ids:system-id="\"$SYSTEM_ID\""
-
-    set "$@" external-ids:hostname="\"$(hostname -f)\""
 
     set "$@" external-ids:rundir="\"$rundir\""
 
@@ -254,6 +258,7 @@ start_forwarding () {
     if test X"$OVS_VSWITCHD" = Xyes; then
         do_start_forwarding || return 1
     fi
+    set_hostname &
     return 0
 }
 
