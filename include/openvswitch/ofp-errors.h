@@ -60,7 +60,9 @@ struct ofpbuf;
  *     type, and sometimes a code for each protocol that supports the error:
  *
  *         # The vendor is OF for standard OpenFlow error codes.  Otherwise it
- *           is one of the *_VENDOR_ID codes defined in openflow-common.h.
+ *           is one of the *_VENDOR_ID codes defined in openflow-common.h.  (To
+ *           add support for a new vendor, add a VENDOR_ID code to that
+ *           header.)
  *
  *         # The version can specify a specific OpenFlow version, a version
  *           range delimited by "-", or an open-ended range with "+".

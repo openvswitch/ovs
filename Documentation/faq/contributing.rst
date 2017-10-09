@@ -33,15 +33,22 @@ Q: How do I implement a new OpenFlow message?
     as needed.  (If you configure with ``--enable-Werror``, as described in
     :doc:`/intro/install/general`, then it is impossible to miss any warnings.)
 
-    If you need to add an OpenFlow vendor extension message for a vendor that
-    doesn't yet have any extension messages, then you will also need to edit
-    ``build-aux/extract-ofp-msgs``.
+    To add an OpenFlow vendor extension message (aka experimenter message) for
+    a vendor that doesn't yet have any extension messages, you will also need
+    to edit ``build-aux/extract-ofp-msgs`` and at least ``ofphdrs_decode()``
+    and ``ofpraw_put__()`` in ``lib/ofp-msgs.c``.  OpenFlow doesn't standardize
+    vendor extensions very well, so it's hard to make the process simpler than
+    that.  (If you have a choice of how to design your vendor extension
+    messages, it will be easier if you make them resemble the ONF and OVS
+    extension messages.)
 
 Q: How do I add support for a new field or header?
 
     A: Add new members for your field to ``struct flow`` in ``lib/flow.h``, and
     add new enumerations for your new field to ``enum mf_field_id`` in
-    ``lib/meta-flow.h``, following the existing pattern.  Also, add support to
+    ``include/openvswitch/meta-flow.h``, following the existing pattern.  If
+    the field uses a new OXM class, add it to OXM_CLASSES in
+    ``build-aux/extract-ofp-fields``.  Also, add support to
     ``miniflow_extract()`` in ``lib/flow.c`` for extracting your new field from
     a packet into struct miniflow, and to ``nx_put_raw()`` in
     ``lib/nx-match.c`` to output your new field in OXM matches.  Then recompile
@@ -71,5 +78,17 @@ Q: How do I add support for a new OpenFlow action?
     warnings.)
 
     If you need to add an OpenFlow vendor extension action for a vendor that
-    doesn't yet have any extension actions, then you will also need to edit
-    ``build-aux/extract-ofp-actions``.
+    doesn't yet have any extension actions, then you will also need to add the
+    vendor to ``vendor_map`` in ``build-aux/extract-ofp-actions``.  Also, you
+    will need to add support for the vendor to ``ofpact_decode_raw()`` and
+    ``ofpact_put_raw()`` in ``lib/ofp-actions.c``.  (If you have a choice of
+    how to design your vendor extension actions, it will be easier if you make
+    them resemble the ONF and OVS extension actions.)
+
+Q: How do I add support for a new OpenFlow error message?
+
+    A: Add your new error to ``enum ofperr`` in
+    ``include/openvswitch/ofp-errors.h``.  Read the large comment at the top of
+    the file for details.  If you need to add an OpenFlow vendor extension
+    error for a vendor that doesn't yet have any, first add the vendor ID to
+    the ``<name>_VENDOR_ID`` list in ``include/openflow/openflow-common.h``.
