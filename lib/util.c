@@ -642,49 +642,53 @@ void
 ovs_hex_dump(FILE *stream, const void *buf_, size_t size,
              uintptr_t ofs, bool ascii)
 {
-  const uint8_t *buf = buf_;
-  const size_t per_line = 16; /* Maximum bytes per line. */
+    const uint8_t *buf = buf_;
+    const size_t per_line = 16; /* Maximum bytes per line. */
 
-  while (size > 0)
-    {
-      size_t start, end, n;
-      size_t i;
+    while (size > 0) {
+        size_t i;
 
-      /* Number of bytes on this line. */
-      start = ofs % per_line;
-      end = per_line;
-      if (end - start > size)
-        end = start + size;
-      n = end - start;
-
-      /* Print line. */
-      fprintf(stream, "%08"PRIxMAX" ", (uintmax_t) ROUND_DOWN(ofs, per_line));
-      for (i = 0; i < start; i++)
-        fprintf(stream, "   ");
-      for (; i < end; i++)
-        fprintf(stream, "%c%02x",
-                i == per_line / 2 ? '-' : ' ', buf[i - start]);
-      if (ascii)
-        {
-          fprintf(stream, " ");
-          for (; i < per_line; i++)
-            fprintf(stream, "   ");
-          fprintf(stream, "|");
-          for (i = 0; i < start; i++)
-            fprintf(stream, " ");
-          for (; i < end; i++) {
-              int c = buf[i - start];
-              putc(c >= 32 && c < 127 ? c : '.', stream);
-          }
-          for (; i < per_line; i++)
-            fprintf(stream, " ");
-          fprintf(stream, "|");
+        /* Number of bytes on this line. */
+        size_t start = ofs % per_line;
+        size_t end = per_line;
+        if (end - start > size) {
+            end = start + size;
         }
-      fprintf(stream, "\n");
+        size_t n = end - start;
 
-      ofs += n;
-      buf += n;
-      size -= n;
+        /* Print line. */
+        fprintf(stream, "%08"PRIxMAX" ",
+                (uintmax_t) ROUND_DOWN(ofs, per_line));
+        for (i = 0; i < start; i++) {
+            fprintf(stream, "   ");
+        }
+        for (; i < end; i++) {
+            fprintf(stream, "%c%02x",
+                    i == per_line / 2 ? '-' : ' ', buf[i - start]);
+        }
+        if (ascii) {
+            fprintf(stream, " ");
+            for (; i < per_line; i++) {
+                fprintf(stream, "   ");
+            }
+            fprintf(stream, "|");
+            for (i = 0; i < start; i++) {
+                fprintf(stream, " ");
+            }
+            for (; i < end; i++) {
+                int c = buf[i - start];
+                putc(c >= 32 && c < 127 ? c : '.', stream);
+            }
+            for (; i < per_line; i++) {
+                fprintf(stream, " ");
+            }
+            fprintf(stream, "|");
+        }
+        fprintf(stream, "\n");
+
+        ofs += n;
+        buf += n;
+        size -= n;
     }
 }
 
