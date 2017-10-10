@@ -48,9 +48,9 @@ const char *ovs_get_program_version(void);
  * log. */
 #ifndef NDEBUG
 #define ovs_assert(CONDITION)                                           \
-    if (!OVS_LIKELY(CONDITION)) {                                       \
-        ovs_assert_failure(OVS_SOURCE_LOCATOR, __func__, #CONDITION);       \
-    }
+    (OVS_LIKELY(CONDITION)                                              \
+     ? (void) 0                                                         \
+     : ovs_assert_failure(OVS_SOURCE_LOCATOR, __func__, #CONDITION))
 #else
 #define ovs_assert(CONDITION) ((void) (CONDITION))
 #endif

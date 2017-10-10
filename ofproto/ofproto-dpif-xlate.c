@@ -3700,7 +3700,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     }
 
     if (xport->peer) {
-       ovs_assert(!truncate)
+       ovs_assert(!truncate);
        patch_port_output(ctx, xport, xport->peer);
        return;
     }
