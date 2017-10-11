@@ -24,7 +24,7 @@ struct ofpbuf;
 struct seq;
 struct simap;
 
-/* Udif is responsible for retrieving upcalls from the kernel and processing
+/* Udpif is responsible for retrieving upcalls from the kernel and processing
  * them.  Additionally, it's responsible for maintaining the datapath flow
  * table. */
 

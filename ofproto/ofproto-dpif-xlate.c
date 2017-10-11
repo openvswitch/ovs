@@ -1387,7 +1387,7 @@ xlate_lookup_ofproto(const struct dpif_backer *backer, const struct flow *flow,
 }
 
 /* Given a datapath and flow metadata ('backer', and 'flow' respectively),
- * optionally populates 'ofproto' with the ofproto_dpif, 'ofp_in_port' with the
+ * optionally populates 'ofprotop' with the ofproto_dpif, 'ofp_in_port' with the
  * openflow in_port, and 'ipfix', 'sflow', and 'netflow' with the appropriate
  * handles for those protocols if they're enabled.  Caller may use the returned
  * pointers until quiescing, for longer term use additional references must
