@@ -2214,19 +2214,18 @@ netdev_ports_insert(struct netdev *netdev, const struct dpif_class *dpif_class,
         return ENODEV;
     }
 
-    data = xzalloc(sizeof *data);
-    ifidx = xzalloc(sizeof *ifidx);
-
     ovs_mutex_lock(&netdev_hmap_mutex);
     if (netdev_ports_lookup(dpif_port->port_no, dpif_class)) {
         ovs_mutex_unlock(&netdev_hmap_mutex);
         return EEXIST;
     }
 
+    data = xzalloc(sizeof *data);
     data->netdev = netdev_ref(netdev);
     data->dpif_class = dpif_class;
     dpif_port_clone(&data->dpif_port, dpif_port);
 
+    ifidx = xzalloc(sizeof *ifidx);
     ifidx->ifindex = ifindex;
     ifidx->port = dpif_port->port_no;
 
