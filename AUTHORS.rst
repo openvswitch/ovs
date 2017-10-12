@@ -444,6 +444,7 @@ Henrik Amren                    henrik@nicira.com
 Hiroshi Tanaka                  htanaka@nicira.com
 Hiroshi Miyata                  miyahiro.dazu@gmail.com
 Hsin-Yi Shen                    shenh@vmware.com
+Hui Xiang                       xianghuir@gmail.com
 Hyojoon Kim                     joonk@gatech.edu
 Igor Ganichev                   iganichev@nicira.com
 Igor Sever                      igor@xorops.com

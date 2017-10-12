@@ -2548,8 +2548,36 @@
 
     <group title="Patch Options">
       <p>
-        Only <code>patch</code> interfaces support these options.
+        These options apply only to <dfn>patch ports</dfn>, that is, interfaces
+        whose <ref column="type"/> column is <code>patch</code>.  Patch ports
+        are mainly a way to connect otherwise independent bridges to one
+        another, similar to how one might plug an Ethernet cable (a ``patch
+        cable'') into two physical switches to connect those switches.  The
+        effect of plugging a patch port into two switches is conceptually
+        similar to that of plugging the two ends of a Linux <code>veth</code>
+        device into those switches, but the implementation of patch ports makes
+        them much more efficient.
       </p>
+
+      <p>
+        Patch ports may connect two different bridges (the usual case) or the
+        same bridge.  In the latter case, take special care to avoid loops,
+        e.g. by programming appropriate flows with OpenFlow.  Patch ports do
+        not work if its ends are attached to bridges on different datapaths,
+        e.g. to connect bridges in <code>system</code> and <code>netdev</code>
+        datapaths.
+      </p>
+
+      <p>
+        The following command creates and connects patch ports <code>p0</code>
+        and <code>p1</code> and adds them to bridges <code>br0</code> and
+        <code>br1</code>, respectively:
+      </p>
+
+      <pre>
+ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
+       -- add-port br1 p1 -- set Interface p1 type=patch options:peer=p0
+      </pre>
 
       <column name="options" key="peer">
         The <ref column="name"/> of the <ref table="Interface"/> for the other
