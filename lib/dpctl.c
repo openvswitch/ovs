@@ -825,6 +825,9 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
         }
     }
 
+    /* The datapath name is not a mandatory parameter for this command.
+     * If it is not specified - so argc == 1 - we retrieve it from the
+     * current setup, assuming only one exists. */
     name = (argc > 1) ? xstrdup(argv[1]) : get_one_dp(dpctl_p);
     if (!name) {
         error = EINVAL;
@@ -960,6 +963,9 @@ dpctl_put_flow(int argc, const char *argv[], enum dpif_flow_put_flags flags,
     struct simap port_names;
     int n, error;
 
+    /* The datapath name is not a mandatory parameter for this command.
+     * If it is not specified - so argc < 4 - we retrieve it from the
+     * current setup, assuming only one exists. */
     dp_name = argc == 4 ? xstrdup(argv[1]) : get_one_dp(dpctl_p);
     if (!dp_name) {
         return EINVAL;
@@ -1069,6 +1075,9 @@ dpctl_get_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     struct ds ds;
     int n, error;
 
+    /* The datapath name is not a mandatory parameter for this command.
+     * If it is not specified - so argc < 3 - we retrieve it from the
+     * current setup, assuming only one exists. */
     dp_name = argc == 3 ? xstrdup(argv[1]) : get_one_dp(dpctl_p);
     if (!dp_name) {
         return EINVAL;
@@ -1125,6 +1134,9 @@ dpctl_del_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     struct simap port_names;
     int n, error;
 
+    /* The datapath name is not a mandatory parameter for this command.
+     * If it is not specified - so argc < 3 - we retrieve it from the
+     * current setup, assuming only one exists. */
     dp_name = argc == 3 ? xstrdup(argv[1]) : get_one_dp(dpctl_p);
     if (!dp_name) {
         return EINVAL;
@@ -1202,6 +1214,9 @@ dpctl_del_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     char *name;
     int error;
 
+    /* The datapath name is not a mandatory parameter for this command.
+     * If it is not specified - so argc < 2 - we retrieve it from the
+     * current setup, assuming only one exists. */
     name = (argc == 2) ? xstrdup(argv[1]) : get_one_dp(dpctl_p);
     if (!name) {
         return EINVAL;
@@ -1268,6 +1283,9 @@ dpctl_dump_conntrack(int argc, const char *argv[],
         pzone = &zone;
         argc--;
     }
+    /* The datapath name is not a mandatory parameter for this command.
+     * If it is not specified - so argc < 2 - we retrieve it from the
+     * current setup, assuming only one exists. */
     name = (argc == 2) ? xstrdup(argv[1]) : get_one_dp(dpctl_p);
     if (!name) {
         return EINVAL;
@@ -1314,6 +1332,9 @@ dpctl_flush_conntrack(int argc, const char *argv[],
         pzone = &zone;
         argc--;
     }
+    /* The datapath name is not a mandatory parameter for this command.
+     * If it is not specified - so argc < 2 - we retrieve it from the
+     * current setup, assuming only one exists. */
     name = (argc == 2) ? xstrdup(argv[1]) : get_one_dp(dpctl_p);
     if (!name) {
         return EINVAL;
@@ -1361,7 +1382,9 @@ dpctl_ct_stats_show(int argc, const char *argv[],
             }
         }
     }
-
+    /* The datapath name is not a mandatory parameter for this command.
+     * If it is not specified - so argc == 1 - we retrieve it from the
+     * current setup, assuming only one exists. */
     name = (argc > 1) ? xstrdup(argv[1]) : get_one_dp(dpctl_p);
     if (!name) {
         return EINVAL;
@@ -1489,6 +1512,9 @@ dpctl_ct_bkts(int argc, const char *argv[],
         }
     }
 
+    /* The datapath name is not a mandatory parameter for this command.
+     * If it is not specified - so argc < 2 - we retrieve it from the
+     * current setup, assuming only one exists. */
     name = (argc == 2) ? xstrdup(argv[1]) : get_one_dp(dpctl_p);
     if (!name) {
         return EINVAL;
