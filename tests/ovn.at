@@ -8743,6 +8743,37 @@ $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv3/br-phys_n1-tx.pcap | trim_zeros 
 AT_CHECK([grep $garp hv3_br_phys_tx | sort], [0], [expout])
 $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/br-phys_n1-tx.pcap | trim_zeros | only_broadcast_from_lrp1 | uniq > hv2_br_phys_tx
 AT_CHECK([grep $garp hv2_br_phys_tx | sort], [0], [])
+
+# change localnet port tag.
+AT_CHECK([ovn-nbctl set Logical_Switch_Port ln_port tag=2014])
+
+# wait for earlier changes to take effect
+AT_CHECK([ovn-nbctl --timeout=3 --wait=sb sync], [0], [ignore])
+
+# update nat-addresses option
+ovn-nbctl --wait=sb lsp-set-options lrp0-rp router-port=lrp0
+ovn-nbctl --wait=sb lsp-set-options lrp0-rp router-port=lrp0 nat-addresses="router"
+
+as hv1 reset_pcap_file snoopvif hv1/snoopvif
+as hv2 reset_pcap_file br-phys_n1 hv2/br-phys_n1
+as hv3 reset_pcap_file br-phys_n1 hv3/br-phys_n1
+
+# Wait for packets to be received.
+OVS_WAIT_UNTIL([test `wc -c < "hv1/snoopvif-tx.pcap"` -ge 100])
+trim_zeros() {
+    sed 's/\(00\)\{1,\}$//'
+}
+
+garp="fffffffffffff00000000001810007de08060001080006040001f00000000001c0a80064000000000000c0a80064"
+echo $garp > expout
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/snoopvif-tx.pcap | trim_zeros | only_broadcast_from_lrp1 | uniq >  hv1_snoopvif_tx
+AT_CHECK([sort hv1_snoopvif_tx], [0], [expout])
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv3/br-phys_n1-tx.pcap | trim_zeros | only_broadcast_from_lrp1 | uniq > hv3_br_phys_tx
+AT_CHECK([grep $garp hv3_br_phys_tx | sort], [0], [expout])
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/br-phys_n1-tx.pcap | trim_zeros | only_broadcast_from_lrp1 | uniq > hv2_br_phys_tx
+AT_CHECK([grep $garp hv2_br_phys_tx | sort], [0], [])
+
 OVN_CLEANUP([hv1],[hv2],[hv3])
 
 AT_CLEANUP
