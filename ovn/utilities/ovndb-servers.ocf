@@ -8,6 +8,8 @@
 : ${SB_MASTER_PORT_DEFAULT="6642"}
 : ${SB_MASTER_PROTO_DEFAULT="tcp"}
 : ${MANAGE_NORTHD_DEFAULT="no"}
+: ${INACTIVE_PROBE_DEFAULT="5000"}
+
 CRM_MASTER="${HA_SBIN_DIR}/crm_master -l reboot"
 CRM_ATTR_REPL_INFO="${HA_SBIN_DIR}/crm_attribute --type crm_config --name OVN_REPL_INFO -s ovn_ovsdb_master_server"
 OVN_CTL=${OCF_RESKEY_ovn_ctl:-${OVN_CTL_DEFAULT}}
@@ -17,6 +19,7 @@ NB_MASTER_PROTO=${OCF_RESKEY_nb_master_protocol:-${NB_MASTER_PROTO_DEFAULT}}
 SB_MASTER_PORT=${OCF_RESKEY_sb_master_port:-${SB_MASTER_PORT_DEFAULT}}
 SB_MASTER_PROTO=${OCF_RESKEY_sb_master_protocol:-${SB_MASTER_PROTO_DEFAULT}}
 MANAGE_NORTHD=${OCF_RESKEY_manage_northd:-${MANAGE_NORTHD_DEFAULT}}
+INACTIVE_PROBE=${OCF_RESKEY_inactive_probe_interval:-${INACTIVE_PROBE_DEFAULT}}
 
 # Invalid IP address is an address that can never exist in the network, as
 # mentioned in rfc-5737. The ovsdb servers connects to this IP address till
@@ -101,6 +104,14 @@ ovsdb_server_metadata() {
   <content type="string" />
   </parameter>
 
+  <parameter name="inactive_probe_interval" unique="1">
+  <longdesc lang="en">
+  Inactive probe interval to set for ovsdb-server.
+  </longdesc>
+  <shortdesc lang="en">Set inactive probe interval</shortdesc>
+  <content type="string" />
+  </parameter>
+
   </parameters>
 
   <actions>
@@ -136,6 +147,22 @@ ovsdb_server_notify() {
         if [ "$MANAGE_NORTHD" = "yes" ]; then
             # Startup ovn-northd service
             ${OVN_CTL} --ovn-manage-ovsdb=no start_northd
+        fi
+
+        conn=`ovn-nbctl get NB_global . connections`
+        if [ "$conn" == "[]" ]
+        then
+            ovn-nbctl -- --id=@conn_uuid create Connection \
+target="p${NB_MASTER_PROTO}\:${NB_MASTER_PORT}\:${MASTER_IP}" \
+inactivity_probe=$INACTIVE_PROBE -- set NB_Global . connections=@conn_uuid
+        fi
+
+        conn=`ovn-sbctl get SB_global . connections`
+        if [ "$conn" == "[]" ]
+        then
+            ovn-sbctl -- --id=@conn_uuid create Connection \
+target="p${SB_MASTER_PROTO}\:${SB_MASTER_PORT}\:${MASTER_IP}" \
+inactivity_probe=$INACTIVE_PROBE -- set SB_Global . connections=@conn_uuid
         fi
 
     else
