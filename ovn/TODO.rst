@@ -211,6 +211,15 @@ OVN To-do List
     Multicast_Group table entry in ovn-sb database into Mcast_Macs_Remote table
     configuration in VTEP database.
 
+  * OVN OCF pacemaker script to support Active / Passive HA for OVN dbs provides
+    the option to configure the inactivity_probe value. The default 5 seconds
+    inactivity_probe value is not sufficient and ovsdb-server drops the client
+    IDL connections for openstack deployments when the neutron server is heavily
+    loaded.
+
+    We need to find a proper solution to solve this issue instead of increasing
+    the inactivity_probe value.
+
 * Consider the use of BFD as tunnel monitor.
 
   The use of BFD for hypervisor-to-hypervisor tunnels is probably not worth it,
