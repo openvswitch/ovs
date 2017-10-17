@@ -41,10 +41,12 @@ if HAVE_CXX
 # are acceptable as C++.
 noinst_LTLIBRARIES += include/openvswitch/libcxxtest.la
 nodist_include_openvswitch_libcxxtest_la_SOURCES = include/openvswitch/cxxtest.cc
-include/openvswitch/cxxtest.cc: include/openvswitch/automake.mk
-	$(AM_V_GEN)for header in $(openvswitchinclude_HEADERS); do	\
-	  echo $$header;						\
-	done | sed 's,^include/\(.*\)$$,#include <\1>,' > $@
+include/openvswitch/cxxtest.cc: \
+	include/openvswitch/automake.mk $(top_builddir)/config.status
+	$(AM_V_GEN){ echo "#include <config.h>"; \
+	for header in $(openvswitchinclude_HEADERS); do	\
+	  echo $$header; \
+	done | sed 's,^include/\(.*\)$$,#include <\1>,'; } > $@
 endif
 
 # OVS does not use C++ itself, but it provides public header files

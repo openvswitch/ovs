@@ -632,6 +632,9 @@ AC_DEFUN([OVS_CHECK_CXX],
    AX_CXX_COMPILE_STDCXX([11], [], [optional])
    if test $enable_Werror = yes && test $HAVE_CXX11 = 1; then
      enable_cxx=:
+     AC_LANG_PUSH([C++])
+     AC_CHECK_HEADERS([atomic])
+     AC_LANG_POP([C++])
    else
      enable_cxx=false
    fi
