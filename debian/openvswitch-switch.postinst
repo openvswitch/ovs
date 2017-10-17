@@ -24,14 +24,6 @@ case "$1" in
         TEMPLATE=/usr/share/openvswitch/switch/default.template
         if ! test -e $DEFAULT; then
             cp $TEMPLATE $DEFAULT
-        else
-                for var in $(awk -F'[ :]' '/^# [_A-Z0-9]+:/{print $2}' $TEMPLATE)
-                do
-                    if ! grep $var $DEFAULT >/dev/null 2>&1; then
-                        echo >> $DEFAULT
-                        sed -n "/$var:/,/$var=/p" $TEMPLATE >> $DEFAULT
-                    fi
-                done
         fi
         # Certain versions of upstream Ubuntu's openvswitch packages (which
         # are forks) may install upstart files which are incompatible
