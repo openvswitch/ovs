@@ -22,6 +22,10 @@
 #include <openvswitch/types.h>
 #include <openvswitch/util.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Doubly linked list head or element. */
 struct ovs_list {
     struct ovs_list *prev;     /* Previous list element. */
@@ -300,5 +304,9 @@ ovs_list_push_back_all(struct ovs_list *dst, struct ovs_list *src)
 {
     ovs_list_splice(dst, src->next, src);
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* list.h */

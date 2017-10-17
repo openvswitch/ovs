@@ -42,6 +42,10 @@ typedef UINT16 BE16;
 typedef UINT32 BE32;
 typedef UINT64 BE64;
 
+typedef uint32_t ofp_port_t;
+typedef uint32_t odp_port_t;
+typedef uint32_t ofp11_port_t;
+
 #define ETH_ALEN 6
 
 #define SIZE_MAX MAXUINT32

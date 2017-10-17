@@ -53,8 +53,7 @@
         packets between tunnels and a physical Ethernet port.  This allows
         non-virtualized machines to participate in logical networks.  A gateway
         may be a physical host, a virtual machine, or an ASIC-based hardware
-        switch that supports the <code>vtep</code>(5) schema.  (Support for the
-        latter will come later in OVN implementation.)
+        switch that supports the <code>vtep</code>(5) schema.
       </p>
 
       <p>
@@ -408,6 +407,21 @@
           in some cases between peer logical routers.  There is a pair of
           logical patch ports at each such point of connectivity, one on
           each side.
+        </li>
+        <li>
+          <dfn>Localport ports</dfn> represent the points of local
+          connectivity between logical switches and VIFs. These ports are
+          present in every chassis (not bound to any particular one) and
+          traffic from them will never go through a tunnel. A
+          <code>localport</code> is expected to only generate traffic destined
+          for a local destination, typically in response to a request it
+          received.
+          One use case is how OpenStack Neutron uses a <code>localport</code>
+          port for serving metadata to VM's residing on every hypervisor. A
+          metadata proxy process is attached to this port on every host and all
+          VM's within the same network will reach it at the same IP/MAC address
+          without any traffic being sent over a tunnel. Further details can be
+          seen at https://docs.openstack.org/developer/networking-ovn/design/metadata_api.html.
         </li>
       </ul>
     </li>
@@ -774,7 +788,7 @@
         VXLAN tunnels do not transmit the logical output port field.
         Since VXLAN tunnels do not carry a logical output port field in
         the tunnel key, when a packet is received from VXLAN tunnel by
-        an OVN hypervisor, the packet is resubmitted to table 16 to
+        an OVN hypervisor, the packet is resubmitted to table 8 to
         determine the output port(s);  when the packet reaches table 32,
         these packets are resubmitted to table 33 for local delivery by
         checking a MLF_RCV_FROM_VXLAN flag, which is set when the packet
@@ -835,7 +849,7 @@
         the packet's ingress port.  Its actions annotate the packet with
         logical metadata, by setting the logical datapath field to identify the
         logical datapath that the packet is traversing and the logical input
-        port field to identify the ingress port.  Then it resubmits to table 16
+        port field to identify the ingress port.  Then it resubmits to table 8
         to enter the logical ingress pipeline.
       </p>
 
@@ -864,13 +878,13 @@
 
     <li>
       <p>
-        OpenFlow tables 16 through 31 execute the logical ingress pipeline from
+        OpenFlow tables 8 through 31 execute the logical ingress pipeline from
         the <code>Logical_Flow</code> table in the OVN Southbound database.
         These tables are expressed entirely in terms of logical concepts like
         logical ports and logical datapaths.  A big part of
         <code>ovn-controller</code>'s job is to translate them into equivalent
         OpenFlow (in particular it translates the table numbers:
-        <code>Logical_Flow</code> tables 0 through 15 become OpenFlow tables 16
+        <code>Logical_Flow</code> tables 0 through 23 become OpenFlow tables 8
         through 31).
       </p>
 
@@ -993,14 +1007,30 @@
         hypervisor, in the same way as for unicast destinations.  If a
         multicast group includes a logical port or ports on the local
         hypervisor, then its actions also resubmit to table 33.  Table 32 also
-        includes a fallback flow that resubmits to table 33 if there is no
-        other match.  Table 32 also contains a higher priority rule to match
-        packets received from VXLAN tunnels, based on flag MLF_RCV_FROM_VXLAN
-        and resubmit these packets to table 33 for local delivery. Packets
-        received from VXLAN tunnels reach here because of a lack of logical
-        output port field in the tunnel key and thus these packets needed to
-        be submitted to table 16 to determine the output port.
+        includes:
       </p>
+
+      <ul>
+        <li>
+          A higher-priority rule to match packets received from VXLAN tunnels,
+          based on flag MLF_RCV_FROM_VXLAN, and resubmit these packets to table
+          33 for local delivery.  Packets received from VXLAN tunnels reach
+          here because of a lack of logical output port field in the tunnel key
+          and thus these packets needed to be submitted to table 8 to
+          determine the output port.
+        </li>
+        <li>
+          A higher-priority rule to match packets received from ports of type
+          <code>localport</code>, based on the logical input port, and resubmit
+          these packets to table 33 for local delivery.  Ports of type
+          <code>localport</code> exist on every hypervisor and by definition
+          their traffic should never go out through a tunnel.
+        </li>
+        <li>
+          A fallback flow that resubmits to table 33 if there is no other
+          match.
+        </li>
+      </ul>
 
       <p>
         Flows in table 33 resemble those in table 32 but for logical ports that
@@ -1024,13 +1054,13 @@
       <p>
         Table 34 matches and drops packets for which the logical input and
         output ports are the same and the MLF_ALLOW_LOOPBACK flag is not
-        set.  It resubmits other packets to table 48.
+        set.  It resubmits other packets to table 40.
       </p>
     </li>
 
     <li>
       <p>
-        OpenFlow tables 48 through 63 execute the logical egress pipeline from
+        OpenFlow tables 40 through 63 execute the logical egress pipeline from
         the <code>Logical_Flow</code> table in the OVN Southbound database.
         The egress pipeline can perform a final stage of validation before
         packet delivery.  Eventually, it may execute an <code>output</code>
@@ -1110,27 +1140,28 @@
 
     <li>
       In OVS versions 2.7 and later, the packet is cloned and resubmitted
-      directly to OpenFlow flow table 16, setting the logical ingress
-      port to the peer logical patch port, and using the peer logical
-      patch port's logical datapath (that represents the logical router).
+      directly to the first OpenFlow flow table in the ingress pipeline,
+      setting the logical ingress port to the peer logical patch port, and
+      using the peer logical patch port's logical datapath (that
+      represents the logical router).
     </li>
   </ul>
 
   <p>
     The packet re-enters the ingress pipeline in order to traverse tables
-    16 to 65 again, this time using the logical datapath representing the
+    8 to 65 again, this time using the logical datapath representing the
     logical router.  The processing continues as described in the previous
     section <code>Architectural Physical Life Cycle of a Packet</code>.
     When the packet reachs table 65, the logical egress port will once
     again be a logical patch port.  In the same manner as described above,
     this logical patch port will cause the packet to be resubmitted to
-    OpenFlow tables 16 to 65, this time using the logical datapath
+    OpenFlow tables 8 to 65, this time using the logical datapath
     representing the logical switch that the destination VM or container
     is attached to.
   </p>
 
   <p>
-    The packet traverses tables 16 to 65 a third and final time.  If the
+    The packet traverses tables 8 to 65 a third and final time.  If the
     destination VM or container resides on a remote hypervisor, then table
     32 will send the packet on a tunnel port from the sender's hypervisor
     to the remote hypervisor.  Finally table 65 will output the packet
@@ -1309,6 +1340,28 @@
     logical patch port representing the distributed gateway port.
   </p>
 
+  <h3>High Availability for Distributed Gateway Ports</h3>
+
+  <p>
+    OVN allows you to specify a prioritized list of chassis for a distributed
+    gateway port.  This is done by associating multiple
+    <code>Gateway_Chassis</code> rows with a <code>Logical_Router_Port</code>
+    in the <code>OVN_Northbound</code> database.
+  </p>
+
+  <p>
+    When multiple chassis have been specified for a gateway, all chassis that
+    may send packets to that gateway will enable BFD on tunnels to all
+    configured gateway chassis.  The current master chassis for the gateway
+    is the highest priority gateway chassis that is currently viewed as
+    active based on BFD status.
+  </p>
+
+  <p>
+    For more information on L3 gateway high availability, please refer to
+    http://docs.openvswitch.org/en/latest/topics/high-availability.
+  </p>
+
   <h2>Life Cycle of a VTEP gateway</h2>
 
   <p>
@@ -1401,6 +1454,162 @@
       <code>Chassis</code> table entries for all registered VTEP gateways
       and their port bindings, and all <code>Ucast_Macs_Remote</code> table
       entries and the <code>Logical_Switch</code> tunnel keys.
+    </li>
+  </ol>
+
+  <h1>Security</h1>
+
+  <h2>Role-Based Access Controls for the Soutbound DB</h2>
+  <p>
+    In order to provide additional security against the possibility of an OVN
+    chassis becoming compromised in such a way as to allow rogue software to
+    make arbitrary modifications to the southbound database state and thus
+    disrupt the OVN network, role-based access controls (see
+    <code>ovsdb-server(1)</code> for additional details) are provided for the
+    southbound database.
+  </p>
+
+  <p>
+    The implementation of role-based access controls (RBAC) requires the
+    addition of two tables to an OVSDB schema: the <code>RBAC_Role</code>
+    table, which is indexed by role name and maps the the names of the various
+    tables that may be modifiable for a given role to individual rows in a
+    permissions table containing detailed permission information for that role,
+    and the permission table itself which consists of rows containing the
+    following information:
+  </p>
+  <dl>
+    <dt><code>Table Name</code></dt>
+    <dd>
+      The name of the associated table. This column exists primarily as an
+      aid for humans reading the contents of this table.
+    </dd>
+
+    <dt><code>Auth Criteria</code></dt>
+    <dd>
+      A set of strings containing the names of columns (or column:key pairs
+      for columns containing string:string maps).  The contents of at least
+      one of the columns or column:key values in a row to be modified,
+      inserted, or deleted must be equal to the ID of the client attempting
+      to act on the row in order for the authorization check to pass. If the
+      authorization criteria is empty, authorization checking is disabled and
+      all clients for the role will be treated as authorized.
+    </dd>
+
+    <dt><code>Insert/Delete</code></dt>
+    <dd>
+       Row insertion/deletion permission; boolean value indicating whether
+       insertion and deletion of rows is allowed for the associated table.
+       If true, insertion and deletion of rows is allowed for authorized
+       clients.
+    </dd>
+
+    <dt><code>Updatable Columns</code></dt>
+    <dd>
+      A set of strings containing the names of columns or column:key pairs
+      that may be updated or mutated by authorized clients. Modifications to
+      columns within a row are only permitted when the authorization check
+      for the client passes and all columns to be modified are included in
+      this set of modifiable columns.
+    </dd>
+  </dl>
+
+  <p>
+    RBAC configuration for the OVN southbound database is maintained by
+    ovn-northd. With RBAC enabled, modifications are only permitted for the
+    <code>Chassis</code>, <code>Encap</code>, <code>Port_Binding</code>, and
+    <code>MAC_Binding</code> tables, and are resstricted as follows:
+  </p>
+  <dl>
+    <dt><code>Chassis</code></dt>
+    <dd>
+      <p>
+       <code>Authorization</code>: client ID must match the chassis name.
+      </p>
+      <p>
+        <code>Insert/Delete</code>: authorized row insertion and deletion
+        are permitted.
+      </p>
+      <p>
+        <code>Update</code>: The columns <code>nb_cfg</code>,
+        <code>external_ids</code>, <code>encaps</code>, and
+        <code>vtep_logical_switches</code> may be modified when authorized.
+      </p>
+    </dd>
+
+    <dt><code>Encap</code></dt>
+    <dd>
+      <p>
+        <code>Authorization</code>: disabled (all clients are considered
+        to be authorized. Future: add a "creating chassis name" column to
+        this table and use it for authorization checking.
+      </p>
+      <p>
+        <code>Insert/Delete</code>: row insertion and row deletion
+        are permitted.
+      </p>
+      <p>
+        <code>Update</code>: The columns <code>type</code>,
+        <code>options</code>, and <code>ip</code> can be modified.
+      </p>
+    </dd>
+
+    <dt><code>Port_Binding</code></dt>
+    <dd>
+      <p>
+        <code>Authorization</code>: disabled (all clients are considered
+        authorized. A future enhancement may add columns (or keys to
+        <code>external_ids</code>) in order to control which chassis are
+        allowed to bind each port.
+      </p>
+      <p>
+        <code>Insert/Delete</code>: row insertion/deletion are not permitted
+        (ovn-northd maintains rows in this table.
+      </p>
+      <p>
+        <code>Update</code>: Only modifications to the <code>chassis</code>
+        column are permitted.
+      </p>
+    </dd>
+
+    <dt><code>MAC_Binding</code></dt>
+    <dd>
+      <p>
+        <code>Authorization</code>: disabled (all clients are considered
+        to be authorized).
+      </p>
+      <p>
+        <code>Insert/Delete</code>: row insertion/deletion are permitted.
+      </p>
+      <p>
+        <code>Update</code>: The columns <code>logical_port</code>,
+        <code>ip</code>, <code>mac</code>, and <code>datapath</code> may be
+        modified by ovn-controller.
+      </p>
+    </dd>
+  </dl>
+
+  <p>
+    Enabling RBAC for ovn-controller connections to the southbound database
+    requires the following steps:
+  </p>
+
+  <ol>
+    <li>
+      Creating SSL certificates for each chassis with the certificate CN field
+      set to the chassis name (e.g. for a chassis with
+      <code>external-ids:system-id=chassis-1</code>, via the command
+      "<code>ovs-pki -B 1024 -u req+sign chassis-1 switch</code>").
+    </li>
+    <li>
+      Configuring each ovn-controller to use SSL when connecting to the
+      southbound database (e.g. via "<code>ovs-vsctl set open .
+      external-ids:ovn-remote=ssl:x.x.x.x:6642</code>").
+    </li>
+    <li>
+      Configuring a southbound database SSL remote with "ovn-controller" role
+      (e.g. via "<code>ovn-sbctl set-connection role=ovn-controller
+      pssl:6642</code>").
     </li>
   </ol>
 

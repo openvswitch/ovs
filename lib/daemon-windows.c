@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 Nicira, Inc.
+ * Copyright (c) 2014, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,9 @@
 #include <stdio.h>
 #include <io.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include "dirs.h"
+#include "fatal-signal.h"
 #include "ovs-thread.h"
 #include "poll-loop.h"
 #include "openvswitch/vlog.h"
@@ -136,12 +138,11 @@ service_start(int *argcp, char **argvp[])
         *argcp = sargc;
         *argvp = *sargvp;
 
-        /* XXX: Windows implementation cannot have a unixctl commands in the
-        * traditional sense of unix domain sockets. If an implementation is
-        * done that involves 'unixctl' vlog commands the following call is
-        * needed to make sure that the unixctl commands for vlog get
-        * registered in a daemon, even before the first log message. */
-        vlog_init();
+        /* Enable default error mode so we can take advantage of WER
+         * (Windows Error Reporting) crash dumps.
+         * Being a service it does not allow for WER window pop-up.
+         * XXX implement our on crash dump collection mechanism. */
+        SetErrorMode(0);
 
         return;
     }
@@ -196,6 +197,7 @@ control_handler(DWORD request)
         service_status.dwCurrentState = SERVICE_STOPPED;
         service_status.dwWin32ExitCode = NO_ERROR;
         SetEvent(wevent);
+        SetServiceStatus(hstatus, &service_status);
         break;
 
     default:
@@ -475,7 +477,7 @@ make_pidfile(void)
 
     fatal_signal_add_hook(unlink_pidfile, NULL, NULL, true);
 
-    fprintf(filep_pidfile, "%d\n", _getpid());
+    fprintf(filep_pidfile, "%ld\n", (long int) getpid());
     if (fflush(filep_pidfile) == EOF) {
         VLOG_FATAL("Failed to write into the pidfile %s", pidfile);
     }

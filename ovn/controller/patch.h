@@ -28,6 +28,6 @@ struct ovsrec_bridge;
 struct sbrec_chassis;
 
 void patch_run(struct controller_ctx *, const struct ovsrec_bridge *br_int,
-               const struct sbrec_chassis *, struct hmap *local_datapaths);
+               const struct sbrec_chassis *);
 
 #endif /* ovn/patch.h */

@@ -17,6 +17,8 @@
 #ifndef __PACKET_PARSER_H_
 #define __PACKET_PARSER_H_ 1
 
+#define MIN_IPV4_HLEN 20
+
 #include "precomp.h"
 #include "NetProto.h"
 
@@ -107,7 +109,12 @@ OvsGetIp(const NET_BUFFER_LIST *packet,
     const IPHdr *ip = OvsGetPacketBytes(packet, sizeof *ip, ofs, storage);
     if (ip) {
         int ipLen = ip->ihl * 4;
-        if (ipLen >= sizeof *ip && OvsPacketLenNBL(packet) >= ofs + ipLen) {
+        if (ipLen <  MIN_IPV4_HLEN ||
+                ipLen > MAX_IPV4_HLEN ||
+                OvsPacketLenNBL(packet) < ofs + ipLen) {
+           /* IP header is invalid, flag it */
+           return NULL;
+        } else {
             return ip;
         }
     }

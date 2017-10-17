@@ -11,6 +11,11 @@ fi
 
 if test x"$PYTHON3" = x; then
     PYTHON3='@PYTHON3@'
+
+    # PYTHONCOERCECLOCALE=0 disables the Unicode compatibility warning on
+    # stderr that breaks almost any Python3 test (PEP 0538)
+    PYTHONCOERCECLOCALE=0
+    export PYTHONCOERCECLOCALE
 fi
 
 PYTHONPATH=$abs_top_srcdir/python:$abs_top_builddir/tests:$PYTHONPATH
@@ -109,6 +114,8 @@ else
     HAVE_IPV6=no
 fi
 
+# Look for a python L7 library 'LIB' in the system. If it is found, defines
+# HAVE_LIB="yes", otherwise HAVE_LIB="no"
 find_l7_lib()
 {
     set +x
@@ -125,7 +132,9 @@ find_l7_lib()
     fi
 }
 
+# HAVE_FTP
 find_l7_lib ftp
+# HAVE_TFTP
 find_l7_lib tftp
 
 # Look for a commnand in the system. If it is found, defines
@@ -147,10 +156,15 @@ find_command nc
 
 # Determine correct netcat option to quit on stdin EOF
 if nc --version 2>&1 | grep -q nmap.org; then
-    NC_EOF_OPT="--send-only"
+    # Nmap netcat
+    NC_EOF_OPT="--send-only -w 5"
 else
-    NC_EOF_OPT="-q 1"
+    # BSD netcat
+    NC_EOF_OPT="-q 1 -w 5"
 fi
+
+# Set HAVE_TCPDUMP
+find_command tcpdump
 
 CURL_OPT="-g -v --max-time 1 --retry 2 --retry-delay 1 --connect-timeout 1"
 

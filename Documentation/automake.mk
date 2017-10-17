@@ -28,9 +28,11 @@ DOC_SOURCE = \
 	Documentation/tutorials/ovn-sandbox.rst \
 	Documentation/topics/index.rst \
 	Documentation/topics/bonding.rst \
+	Documentation/topics/idl-compound-indexes.rst \
 	Documentation/topics/datapath.rst \
 	Documentation/topics/design.rst \
 	Documentation/topics/dpdk/index.rst \
+	Documentation/topics/dpdk/ring.rst \
 	Documentation/topics/dpdk/vhost-user.rst \
 	Documentation/topics/testing.rst \
 	Documentation/topics/high-availability.rst \
@@ -176,8 +178,8 @@ extract_stem_and_section = \
 	eval "mandir=\$$man$${section}dir"; \
 	test -n "$$mandir" || { echo "unknown directory for manpage section $$section"; continue; }
 
-if HAVE_SPHINX
 INSTALL_DATA_LOCAL += install-man-rst
+if HAVE_SPHINX
 install-man-rst: docs-check
 	@$(set_mandirs); \
 	for rst in $(RST_MANPAGES); do \
@@ -187,6 +189,9 @@ install-man-rst: docs-check
 	    echo " $(INSTALL_DATA) $(SPHINXBUILDDIR)/man/$$stem.$$section '$(DESTDIR)'\"$$mandir/$$stem.$$section\""; \
 	    $(INSTALL_DATA) $(SPHINXBUILDDIR)/man/$$stem.$$section '$(DESTDIR)'"$$mandir/$$stem.$$section"; \
 	done
+else
+install-man-rst:
+	@:
 endif
 
 UNINSTALL_LOCAL += uninstall-man-rst

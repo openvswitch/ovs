@@ -92,27 +92,22 @@ static struct vlog_rate_limit dpmsg_rl = VLOG_RATE_LIMIT_INIT(600, 600);
 /* Not really much point in logging many dpif errors. */
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(60, 5);
 
-static void log_flow_message(const struct dpif *dpif, int error,
-                             const char *operation,
-                             const struct nlattr *key, size_t key_len,
-                             const struct nlattr *mask, size_t mask_len,
-                             const ovs_u128 *ufid,
-                             const struct dpif_flow_stats *stats,
-                             const struct nlattr *actions, size_t actions_len);
 static void log_operation(const struct dpif *, const char *operation,
                           int error);
-static bool should_log_flow_message(int error);
-static void log_flow_put_message(struct dpif *, const struct dpif_flow_put *,
-                                 int error);
-static void log_flow_del_message(struct dpif *, const struct dpif_flow_del *,
-                                 int error);
-static void log_execute_message(struct dpif *, const struct dpif_execute *,
-                                bool subexecute, int error);
-static void log_flow_get_message(const struct dpif *,
-                                 const struct dpif_flow_get *, int error);
+static bool should_log_flow_message(const struct vlog_module *module,
+                                    int error);
 
 /* Incremented whenever tnl route, arp, etc changes. */
 struct seq *tnl_conf_seq;
+
+static bool
+dpif_is_internal_port(const char *type)
+{
+    /* For userspace datapath, tap devices are the equivalent
+     * of internal devices in the kernel datapath, so both
+     * these types are 'internal' devices. */
+    return !strcmp(type, "internal") || !strcmp(type, "tap");
+}
 
 static void
 dp_initialize(void)
@@ -355,7 +350,29 @@ do_open(const char *name, const char *type, bool create, struct dpif **dpifp)
     error = registered_class->dpif_class->open(registered_class->dpif_class,
                                                name, create, &dpif);
     if (!error) {
+        struct dpif_port_dump port_dump;
+        struct dpif_port dpif_port;
+
         ovs_assert(dpif->dpif_class == registered_class->dpif_class);
+
+        DPIF_PORT_FOR_EACH(&dpif_port, &port_dump, dpif) {
+            struct netdev *netdev;
+            int err;
+
+            if (dpif_is_internal_port(dpif_port.type)) {
+                continue;
+            }
+
+            err = netdev_open(dpif_port.name, dpif_port.type, &netdev);
+
+            if (!err) {
+                netdev_ports_insert(netdev, dpif->dpif_class, &dpif_port);
+                netdev_close(netdev);
+            } else {
+                VLOG_WARN("could not open netdev %s type %s: %s",
+			  dpif_port.name, dpif_port.type, ovs_strerror(err));
+            }
+        }
     } else {
         dp_class_unref(registered_class);
     }
@@ -411,6 +428,18 @@ dpif_create_and_open(const char *name, const char *type, struct dpif **dpifp)
     return error;
 }
 
+static void
+dpif_remove_netdev_ports(struct dpif *dpif) {
+        struct dpif_port_dump port_dump;
+        struct dpif_port dpif_port;
+
+        DPIF_PORT_FOR_EACH (&dpif_port, &port_dump, dpif) {
+            if (!dpif_is_internal_port(dpif_port.type)) {
+                netdev_ports_remove(dpif_port.port_no, dpif->dpif_class);
+            }
+        }
+}
+
 /* Closes and frees the connection to 'dpif'.  Does not destroy the datapath
  * itself; call dpif_delete() first, instead, if that is desirable. */
 void
@@ -420,6 +449,10 @@ dpif_close(struct dpif *dpif)
         struct registered_dpif_class *rc;
 
         rc = shash_find_data(&dpif_classes, dpif->dpif_class->type);
+
+        if (rc->refcount == 1) {
+            dpif_remove_netdev_ports(dpif);
+        }
         dpif_uninit(dpif, true);
         dp_class_unref(rc);
     }
@@ -548,6 +581,16 @@ dpif_port_add(struct dpif *dpif, struct netdev *netdev, odp_port_t *port_nop)
     if (!error) {
         VLOG_DBG_RL(&dpmsg_rl, "%s: added %s as port %"PRIu32,
                     dpif_name(dpif), netdev_name, port_no);
+
+        if (!dpif_is_internal_port(netdev_get_type(netdev))) {
+
+            struct dpif_port dpif_port;
+
+            dpif_port.type = CONST_CAST(char *, netdev_get_type(netdev));
+            dpif_port.name = CONST_CAST(char *, netdev_name);
+            dpif_port.port_no = port_no;
+            netdev_ports_insert(netdev, dpif->dpif_class, &dpif_port);
+        }
     } else {
         VLOG_WARN_RL(&error_rl, "%s: failed to add %s as port: %s",
                      dpif_name(dpif), netdev_name, ovs_strerror(error));
@@ -572,6 +615,8 @@ dpif_port_del(struct dpif *dpif, odp_port_t port_no)
     if (!error) {
         VLOG_DBG_RL(&dpmsg_rl, "%s: port_del(%"PRIu32")",
                     dpif_name(dpif), port_no);
+
+        netdev_ports_remove(port_no, dpif->dpif_class);
     } else {
         log_operation(dpif, "port_del", error);
     }
@@ -1029,9 +1074,9 @@ dpif_flow_del(struct dpif *dpif,
  * This function always successfully returns a dpif_flow_dump.  Error
  * reporting is deferred to dpif_flow_dump_destroy(). */
 struct dpif_flow_dump *
-dpif_flow_dump_create(const struct dpif *dpif, bool terse)
+dpif_flow_dump_create(const struct dpif *dpif, bool terse, char *type)
 {
-    return dpif->dpif_class->flow_dump_create(dpif, terse);
+    return dpif->dpif_class->flow_dump_create(dpif, terse, type);
 }
 
 /* Destroys 'dump', which must have been created with dpif_flow_dump_create().
@@ -1093,8 +1138,9 @@ dpif_flow_dump_next(struct dpif_flow_dump_thread *thread,
     if (n > 0) {
         struct dpif_flow *f;
 
-        for (f = flows; f < &flows[n] && should_log_flow_message(0); f++) {
-            log_flow_message(dpif, 0, "flow_dump",
+        for (f = flows; f < &flows[n]
+             && should_log_flow_message(&this_module, 0); f++) {
+            log_flow_message(dpif, 0, &this_module, "flow_dump",
                              f->key, f->key_len, f->mask, f->mask_len,
                              &f->ufid, &f->stats, f->actions, f->actions_len);
         }
@@ -1199,7 +1245,8 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
         execute.probe = false;
         execute.mtu = 0;
         aux->error = dpif_execute(aux->dpif, &execute);
-        log_execute_message(aux->dpif, &execute, true, aux->error);
+        log_execute_message(aux->dpif, &this_module, &execute,
+                            true, aux->error);
 
         dp_packet_delete(clone);
 
@@ -1224,6 +1271,8 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
     case OVS_ACTION_ATTR_PUSH_ETH:
     case OVS_ACTION_ATTR_POP_ETH:
     case OVS_ACTION_ATTR_CLONE:
+    case OVS_ACTION_ATTR_ENCAP_NSH:
+    case OVS_ACTION_ATTR_DECAP_NSH:
     case OVS_ACTION_ATTR_UNSPEC:
     case __OVS_ACTION_ATTR_MAX:
         OVS_NOT_REACHED();
@@ -1314,7 +1363,7 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
                     struct dpif_flow_put *put = &op->u.flow_put;
 
                     COVERAGE_INC(dpif_flow_put);
-                    log_flow_put_message(dpif, put, error);
+                    log_flow_put_message(dpif, &this_module, put, error);
                     if (error && put->stats) {
                         memset(put->stats, 0, sizeof *put->stats);
                     }
@@ -1328,7 +1377,7 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
                     if (error) {
                         memset(get->flow, 0, sizeof *get->flow);
                     }
-                    log_flow_get_message(dpif, get, error);
+                    log_flow_get_message(dpif, &this_module, get, error);
 
                     break;
                 }
@@ -1337,7 +1386,7 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
                     struct dpif_flow_del *del = &op->u.flow_del;
 
                     COVERAGE_INC(dpif_flow_del);
-                    log_flow_del_message(dpif, del, error);
+                    log_flow_del_message(dpif, &this_module, del, error);
                     if (error && del->stats) {
                         memset(del->stats, 0, sizeof *del->stats);
                     }
@@ -1346,7 +1395,8 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
 
                 case DPIF_OP_EXECUTE:
                     COVERAGE_INC(dpif_execute);
-                    log_execute_message(dpif, &op->u.execute, false, error);
+                    log_execute_message(dpif, &this_module, &op->u.execute,
+                                        false, error);
                     break;
                 }
             }
@@ -1658,14 +1708,16 @@ flow_message_log_level(int error)
 }
 
 static bool
-should_log_flow_message(int error)
+should_log_flow_message(const struct vlog_module *module, int error)
 {
-    return !vlog_should_drop(&this_module, flow_message_log_level(error),
+    return !vlog_should_drop(module, flow_message_log_level(error),
                              error ? &error_rl : &dpmsg_rl);
 }
 
-static void
-log_flow_message(const struct dpif *dpif, int error, const char *operation,
+void
+log_flow_message(const struct dpif *dpif, int error,
+                 const struct vlog_module *module,
+                 const char *operation,
                  const struct nlattr *key, size_t key_len,
                  const struct nlattr *mask, size_t mask_len,
                  const ovs_u128 *ufid, const struct dpif_flow_stats *stats,
@@ -1691,17 +1743,20 @@ log_flow_message(const struct dpif *dpif, int error, const char *operation,
     }
     if (actions || actions_len) {
         ds_put_cstr(&ds, ", actions:");
-        format_odp_actions(&ds, actions, actions_len);
+        format_odp_actions(&ds, actions, actions_len, NULL);
     }
-    vlog(&this_module, flow_message_log_level(error), "%s", ds_cstr(&ds));
+    vlog(module, flow_message_log_level(error), "%s", ds_cstr(&ds));
     ds_destroy(&ds);
 }
 
-static void
-log_flow_put_message(struct dpif *dpif, const struct dpif_flow_put *put,
+void
+log_flow_put_message(const struct dpif *dpif,
+                     const struct vlog_module *module,
+                     const struct dpif_flow_put *put,
                      int error)
 {
-    if (should_log_flow_message(error) && !(put->flags & DPIF_FP_PROBE)) {
+    if (should_log_flow_message(module, error)
+        && !(put->flags & DPIF_FP_PROBE)) {
         struct ds s;
 
         ds_init(&s);
@@ -1715,7 +1770,7 @@ log_flow_put_message(struct dpif *dpif, const struct dpif_flow_put *put,
         if (put->flags & DPIF_FP_ZERO_STATS) {
             ds_put_cstr(&s, "[zero]");
         }
-        log_flow_message(dpif, error, ds_cstr(&s),
+        log_flow_message(dpif, error, module, ds_cstr(&s),
                          put->key, put->key_len, put->mask, put->mask_len,
                          put->ufid, put->stats, put->actions,
                          put->actions_len);
@@ -1723,12 +1778,15 @@ log_flow_put_message(struct dpif *dpif, const struct dpif_flow_put *put,
     }
 }
 
-static void
-log_flow_del_message(struct dpif *dpif, const struct dpif_flow_del *del,
+void
+log_flow_del_message(const struct dpif *dpif,
+                     const struct vlog_module *module,
+                     const struct dpif_flow_del *del,
                      int error)
 {
-    if (should_log_flow_message(error)) {
-        log_flow_message(dpif, error, "flow_del", del->key, del->key_len,
+    if (should_log_flow_message(module, error)) {
+        log_flow_message(dpif, error, module, "flow_del",
+                         del->key, del->key_len,
                          NULL, 0, del->ufid, !error ? del->stats : NULL,
                          NULL, 0);
     }
@@ -1751,8 +1809,10 @@ log_flow_del_message(struct dpif *dpif, const struct dpif_flow_del *del,
  *
  * It would still be better to avoid the potential problem.  I don't know of a
  * good way to do that, though, that isn't expensive. */
-static void
-log_execute_message(struct dpif *dpif, const struct dpif_execute *execute,
+void
+log_execute_message(const struct dpif *dpif,
+                    const struct vlog_module *module,
+                    const struct dpif_execute *execute,
                     bool subexecute, int error)
 {
     if (!(error ? VLOG_DROP_WARN(&error_rl) : VLOG_DROP_DBG(&dpmsg_rl))
@@ -1765,13 +1825,13 @@ log_execute_message(struct dpif *dpif, const struct dpif_execute *execute,
         packet = ofp_packet_to_string(dp_packet_data(execute->packet),
                                       dp_packet_size(execute->packet),
                                       execute->packet->packet_type);
-        odp_key_from_pkt_metadata(&md, &execute->packet->md);
+        odp_key_from_dp_packet(&md, execute->packet);
         ds_put_format(&ds, "%s: %sexecute ",
                       dpif_name(dpif),
                       (subexecute ? "sub-"
                        : dpif_execute_needs_help(execute) ? "super-"
                        : ""));
-        format_odp_actions(&ds, execute->actions, execute->actions_len);
+        format_odp_actions(&ds, execute->actions, execute->actions_len, NULL);
         if (error) {
             ds_put_format(&ds, " failed (%s)", ovs_strerror(error));
         }
@@ -1779,19 +1839,21 @@ log_execute_message(struct dpif *dpif, const struct dpif_execute *execute,
         ds_put_format(&ds, " with metadata ");
         odp_flow_format(md.data, md.size, NULL, 0, NULL, &ds, true);
         ds_put_format(&ds, " mtu %d", execute->mtu);
-        vlog(&this_module, error ? VLL_WARN : VLL_DBG, "%s", ds_cstr(&ds));
+        vlog(module, error ? VLL_WARN : VLL_DBG, "%s", ds_cstr(&ds));
         ds_destroy(&ds);
         free(packet);
         ofpbuf_uninit(&md);
     }
 }
 
-static void
-log_flow_get_message(const struct dpif *dpif, const struct dpif_flow_get *get,
+void
+log_flow_get_message(const struct dpif *dpif,
+                     const struct vlog_module *module,
+                     const struct dpif_flow_get *get,
                      int error)
 {
-    if (should_log_flow_message(error)) {
-        log_flow_message(dpif, error, "flow_get",
+    if (should_log_flow_message(module, error)) {
+        log_flow_message(dpif, error, module, "flow_get",
                          get->key, get->key_len,
                          get->flow->mask, get->flow->mask_len,
                          get->ufid, &get->flow->stats,

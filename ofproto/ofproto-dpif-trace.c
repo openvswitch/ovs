@@ -18,14 +18,16 @@
 
 #include "ofproto-dpif-trace.h"
 
+#include "conntrack.h"
 #include "dpif.h"
 #include "ofproto-dpif-xlate.h"
 #include "openvswitch/ofp-parse.h"
 #include "unixctl.h"
 
-static void ofproto_trace(struct ofproto_dpif *, struct flow *,
+static void ofproto_trace(struct ofproto_dpif *, const struct flow *,
                           const struct dp_packet *packet,
                           const struct ofpact[], size_t ofpacts_len,
+                          struct ovs_list *next_ct_states,
                           struct ds *);
 static void oftrace_node_destroy(struct oftrace_node *);
 
@@ -86,6 +88,56 @@ oftrace_node_destroy(struct oftrace_node *node)
     }
 }
 
+bool
+oftrace_add_recirc_node(struct ovs_list *recirc_queue,
+                        enum oftrace_recirc_type type, const struct flow *flow,
+                        const struct dp_packet *packet, uint32_t recirc_id)
+{
+    if (!recirc_id_node_find_and_ref(recirc_id)) {
+        return false;
+    }
+
+    struct oftrace_recirc_node *node = xmalloc(sizeof *node);
+    ovs_list_push_back(recirc_queue, &node->node);
+
+    node->type = type;
+    node->recirc_id = recirc_id;
+    node->flow = *flow;
+    node->flow.recirc_id = recirc_id;
+    node->packet = packet ? dp_packet_clone(packet) : NULL;
+
+    return true;
+}
+
+static void
+oftrace_recirc_node_destroy(struct oftrace_recirc_node *node)
+{
+    if (node) {
+        recirc_free_id(node->recirc_id);
+        dp_packet_delete(node->packet);
+        free(node);
+    }
+}
+
+static void
+oftrace_push_ct_state(struct ovs_list *next_ct_states, uint32_t ct_state)
+{
+    struct oftrace_next_ct_state *next_ct_state =
+        xmalloc(sizeof *next_ct_state);
+    next_ct_state->state = ct_state;
+    ovs_list_push_back(next_ct_states, &next_ct_state->node);
+}
+
+static uint32_t
+oftrace_pop_ct_state(struct ovs_list *next_ct_states)
+{
+    struct oftrace_next_ct_state *s;
+    LIST_FOR_EACH_POP (s, node, next_ct_states) {
+        return s->state;
+    }
+    OVS_NOT_REACHED();
+}
+
 static void
 oftrace_node_print_details(struct ds *output,
                            const struct ovs_list *nodes, int level)
@@ -127,18 +179,49 @@ oftrace_node_print_details(struct ds *output,
     }
 }
 
+static char * OVS_WARN_UNUSED_RESULT
+parse_oftrace_options(int argc, const char *argv[],
+                      struct ovs_list *next_ct_states)
+{
+    int k;
+    struct ds ds = DS_EMPTY_INITIALIZER;
+
+    for (k = 0; k < argc; k++) {
+        if (!strncmp(argv[k], "--ct-next", 9)) {
+            if (k + 1 > argc) {
+                return xasprintf("Missing argument for option %s", argv[k]);
+            }
+
+            uint32_t ct_state;
+            if (!parse_ct_state(argv[++k], 0, &ct_state, &ds)) {
+                return ds_steal_cstr(&ds);
+            }
+            if (!validate_ct_state(ct_state, &ds)) {
+                return ds_steal_cstr(&ds);
+            }
+            oftrace_push_ct_state(next_ct_states, ct_state);
+        } else {
+            return xasprintf("Invalid option %s", argv[k]);
+        }
+    }
+
+    ds_destroy(&ds);
+    return NULL;
+}
+
 /* Parses the 'argc' elements of 'argv', ignoring argv[0].  The following
  * forms are supported:
  *
- *     - [dpname] odp_flow [-generate | packet]
- *     - bridge br_flow [-generate | packet]
+ *     - [dpname] odp_flow [OPTIONS] [-generate | packet]
+ *     - bridge br_flow [OPTIONS] [-generate | packet]
  *
  * On success, initializes '*ofprotop' and 'flow' and returns NULL.  On failure
  * returns a nonnull malloced error message. */
 static char * OVS_WARN_UNUSED_RESULT
 parse_flow_and_packet(int argc, const char *argv[],
                       struct ofproto_dpif **ofprotop, struct flow *flow,
-                      struct dp_packet **packetp)
+                      struct dp_packet **packetp,
+                      struct ovs_list *next_ct_states)
 {
     const struct dpif_backer *backer = NULL;
     const char *error = NULL;
@@ -147,6 +230,7 @@ parse_flow_and_packet(int argc, const char *argv[],
     struct dp_packet *packet;
     struct ofpbuf odp_key;
     struct ofpbuf odp_mask;
+    int first_option;
 
     ofpbuf_init(&odp_key, 0);
     ofpbuf_init(&odp_mask, 0);
@@ -164,6 +248,25 @@ parse_flow_and_packet(int argc, const char *argv[],
             goto exit;
         }
         error = NULL;
+    }
+
+    /* Parse options. */
+    if (argc >= 4) {
+        if (!strncmp(argv[2], "--", 2)) {
+            first_option = 2;
+        } else if (!strncmp(argv[3], "--", 2)) {
+            first_option = 3;
+        } else {
+            error = "Syntax error: invalid option";
+            goto exit;
+        }
+
+        m_err = parse_oftrace_options(argc - first_option, argv + first_option,
+                                      next_ct_states);
+        if (m_err) {
+            goto exit;
+        }
+        argc = first_option;
     }
 
     /* odp_flow can have its in_port specified as a name instead of port no.
@@ -253,9 +356,16 @@ parse_flow_and_packet(int argc, const char *argv[],
             goto exit;
         }
 
+        struct ofputil_port_map map = OFPUTIL_PORT_MAP_INITIALIZER(&map);
+        const struct ofport *ofport;
+        HMAP_FOR_EACH (ofport, hmap_node, &(*ofprotop)->up.ports) {
+            ofputil_port_map_put(&map, ofport->ofp_port,
+                                 netdev_get_name(ofport->netdev));
+        }
         err = parse_ofp_exact_flow(flow, NULL,
                                    ofproto_get_tun_tab(&(*ofprotop)->up),
-                                   argv[argc - 1], NULL);
+                                   argv[argc - 1], &map);
+        ofputil_port_map_destroy(&map);
         if (err) {
             m_err = xasprintf("Bad openflow flow syntax: %s", err);
             free(err);
@@ -266,7 +376,7 @@ parse_flow_and_packet(int argc, const char *argv[],
     /* Generate a packet, if requested. */
     if (packet) {
         if (!dp_packet_size(packet)) {
-            flow_compose(packet, flow);
+            flow_compose(packet, flow, 0);
         } else {
             /* Use the metadata from the flow and the packet argument
              * to reconstruct the flow. */
@@ -291,6 +401,14 @@ exit:
 }
 
 static void
+free_ct_states(struct ovs_list *ct_states)
+{
+    while (!ovs_list_is_empty(ct_states)) {
+        oftrace_pop_ct_state(ct_states);
+    }
+}
+
+static void
 ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
                       void *aux OVS_UNUSED)
 {
@@ -298,13 +416,16 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
     struct dp_packet *packet;
     char *error;
     struct flow flow;
+    struct ovs_list next_ct_states = OVS_LIST_INITIALIZER(&next_ct_states);
 
-    error = parse_flow_and_packet(argc, argv, &ofproto, &flow, &packet);
+    error = parse_flow_and_packet(argc, argv, &ofproto, &flow, &packet,
+                                  &next_ct_states);
     if (!error) {
         struct ds result;
 
         ds_init(&result);
-        ofproto_trace(ofproto, &flow, packet, NULL, 0, &result);
+        ofproto_trace(ofproto, &flow, packet, NULL, 0, &next_ct_states,
+                      &result);
         unixctl_command_reply(conn, ds_cstr(&result));
         ds_destroy(&result);
         dp_packet_delete(packet);
@@ -312,6 +433,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
         unixctl_command_reply_error(conn, error);
         free(error);
     }
+    free_ct_states(&next_ct_states);
 }
 
 static void
@@ -326,6 +448,7 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
     struct ds result;
     struct match match;
     uint16_t in_port;
+    struct ovs_list next_ct_states = OVS_LIST_INITIALIZER(&next_ct_states);
 
     /* Three kinds of error return values! */
     enum ofperr retval;
@@ -336,7 +459,8 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
     ofpbuf_init(&ofpacts, 0);
 
     /* Parse actions. */
-    error = ofpacts_parse_actions(argv[--argc], &ofpacts, &usable_protocols);
+    error = ofpacts_parse_actions(argv[--argc], NULL,
+                                  &ofpacts, &usable_protocols);
     if (error) {
         unixctl_command_reply_error(conn, error);
         free(error);
@@ -354,7 +478,8 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
         enforce_consistency = false;
     }
 
-    error = parse_flow_and_packet(argc, argv, &ofproto, &match.flow, &packet);
+    error = parse_flow_and_packet(argc, argv, &ofproto, &match.flow, &packet,
+                                  &next_ct_states);
     if (error) {
         unixctl_command_reply_error(conn, error);
         free(error);
@@ -402,29 +527,21 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
     }
 
     ofproto_trace(ofproto, &match.flow, packet,
-                  ofpacts.data, ofpacts.size, &result);
+                  ofpacts.data, ofpacts.size, &next_ct_states, &result);
     unixctl_command_reply(conn, ds_cstr(&result));
 
 exit:
     ds_destroy(&result);
     dp_packet_delete(packet);
     ofpbuf_uninit(&ofpacts);
+    free_ct_states(&next_ct_states);
 }
 
-/* Implements a "trace" through 'ofproto''s flow table, appending a textual
- * description of the results to 'output'.
- *
- * The trace follows a packet with the specified 'flow' through the flow
- * table.  'packet' may be nonnull to trace an actual packet, with consequent
- * side effects (if it is nonnull then its flow must be 'flow').
- *
- * If 'ofpacts' is nonnull then its 'ofpacts_len' bytes specify the actions to
- * trace, otherwise the actions are determined by a flow table lookup. */
 static void
-ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
-              const struct dp_packet *packet,
-              const struct ofpact ofpacts[], size_t ofpacts_len,
-              struct ds *output)
+ofproto_trace__(struct ofproto_dpif *ofproto, const struct flow *flow,
+                const struct dp_packet *packet, struct ovs_list *recirc_queue,
+                const struct ofpact ofpacts[], size_t ofpacts_len,
+                struct ds *output)
 {
     struct ofpbuf odp_actions;
     ofpbuf_init(&odp_actions, 0);
@@ -439,12 +556,13 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
     xin.ofpacts = ofpacts;
     xin.ofpacts_len = ofpacts_len;
     xin.trace = &trace;
+    xin.recirc_queue = recirc_queue;
 
     /* Copy initial flow out of xin.flow.  It differs from '*flow' because
      * xlate_in_init() initializes actset_output to OFPP_UNSET. */
     struct flow initial_flow = xin.flow;
     ds_put_cstr(output, "Flow: ");
-    flow_format(output, &initial_flow);
+    flow_format(output, &initial_flow, NULL);
     ds_put_char(output, '\n');
 
     struct xlate_out xout;
@@ -456,18 +574,18 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
     if (flow_equal(&initial_flow, &xin.flow)) {
         ds_put_cstr(output, "unchanged");
     } else {
-        flow_format(output, &xin.flow);
+        flow_format(output, &xin.flow, NULL);
     }
     ds_put_char(output, '\n');
 
     ds_put_cstr(output, "Megaflow: ");
     struct match match;
     match_init(&match, flow, &wc);
-    match_format(&match, output, OFP_DEFAULT_PRIORITY);
+    match_format(&match, NULL, output, OFP_DEFAULT_PRIORITY);
     ds_put_char(output, '\n');
 
     ds_put_cstr(output, "Datapath actions: ");
-    format_odp_actions(output, odp_actions.data, odp_actions.size);
+    format_odp_actions(output, odp_actions.data, odp_actions.size, NULL);
 
     if (error != XLATE_OK) {
         ds_put_format(output,
@@ -495,6 +613,58 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
     oftrace_node_list_destroy(&trace);
 }
 
+/* Implements a "trace" through 'ofproto''s flow table, appending a textual
+ * description of the results to 'output'.
+ *
+ * The trace follows a packet with the specified 'flow' through the flow
+ * table.  'packet' may be nonnull to trace an actual packet, with consequent
+ * side effects (if it is nonnull then its flow must be 'flow').
+ *
+ * If 'ofpacts' is nonnull then its 'ofpacts_len' bytes specify the actions to
+ * trace, otherwise the actions are determined by a flow table lookup. */
+static void
+ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
+              const struct dp_packet *packet,
+              const struct ofpact ofpacts[], size_t ofpacts_len,
+              struct ovs_list *next_ct_states, struct ds *output)
+{
+    struct ovs_list recirc_queue = OVS_LIST_INITIALIZER(&recirc_queue);
+    ofproto_trace__(ofproto, flow, packet, &recirc_queue,
+                    ofpacts, ofpacts_len, output);
+
+    struct oftrace_recirc_node *recirc_node;
+    LIST_FOR_EACH_POP (recirc_node, node, &recirc_queue) {
+        ds_put_cstr(output, "\n\n");
+        ds_put_char_multiple(output, '=', 79);
+        ds_put_format(output, "\nrecirc(%#"PRIx32")",
+                      recirc_node->recirc_id);
+
+        if (recirc_node->type == OFT_RECIRC_CONNTRACK) {
+            uint32_t ct_state;
+            if (ovs_list_is_empty(next_ct_states)) {
+                ct_state = CS_TRACKED | CS_NEW;
+                ds_put_cstr(output, " - resume conntrack with default "
+                            "ct_state=trk|new (use --ct-next to customize)");
+            } else {
+                ct_state = oftrace_pop_ct_state(next_ct_states);
+                struct ds s = DS_EMPTY_INITIALIZER;
+                format_flags(&s, ct_state_to_string, ct_state, '|');
+                ds_put_format(output, " - resume conntrack with ct_state=%s",
+                              ds_cstr(&s));
+                ds_destroy(&s);
+            }
+            recirc_node->flow.ct_state = ct_state;
+        }
+        ds_put_char(output, '\n');
+        ds_put_char_multiple(output, '=', 79);
+        ds_put_cstr(output, "\n\n");
+
+        ofproto_trace__(ofproto, &recirc_node->flow, recirc_node->packet,
+                        &recirc_queue, ofpacts, ofpacts_len, output);
+        oftrace_recirc_node_destroy(recirc_node);
+    }
+}
+
 void
 ofproto_dpif_trace_init(void)
 {
@@ -506,10 +676,11 @@ ofproto_dpif_trace_init(void)
 
     unixctl_command_register(
         "ofproto/trace",
-        "{[dp_name] odp_flow | bridge br_flow} [-generate|packet]",
-        1, 3, ofproto_unixctl_trace, NULL);
+        "{[dp_name] odp_flow | bridge br_flow} [OPTIONS...] "
+        "[-generate|packet]", 1, INT_MAX, ofproto_unixctl_trace, NULL);
     unixctl_command_register(
         "ofproto/trace-packet-out",
-        "[-consistent] {[dp_name] odp_flow | bridge br_flow} [-generate|packet] actions",
-        2, 6, ofproto_unixctl_trace_actions, NULL);
+        "[-consistent] {[dp_name] odp_flow | bridge br_flow} [OPTIONS...] "
+        "[-generate|packet] actions",
+        2, INT_MAX, ofproto_unixctl_trace_actions, NULL);
 }

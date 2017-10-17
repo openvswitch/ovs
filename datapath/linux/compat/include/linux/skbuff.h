@@ -387,4 +387,16 @@ static inline struct nf_conntrack *skb_nfct(const struct sk_buff *skb)
 #endif
 }
 #endif
+
+#ifndef HAVE_SKB_PUT_ZERO
+static inline void *skb_put_zero(struct sk_buff *skb, unsigned int len)
+{
+	void *tmp = skb_put(skb, len);
+
+	memset(tmp, 0, len);
+
+	return tmp;
+}
+#endif
+
 #endif

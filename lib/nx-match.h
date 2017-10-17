@@ -50,17 +50,19 @@ char *mf_parse_subfield(struct mf_subfield *, const char *s)
 
 /* Decoding matches. */
 enum ofperr nx_pull_match(struct ofpbuf *, unsigned int match_len,
-                          struct match *,
-                          ovs_be64 *cookie, ovs_be64 *cookie_mask,
+                          struct match *, ovs_be64 *cookie,
+                          ovs_be64 *cookie_mask, bool pipeline_fields_only,
                           const struct tun_table *, const struct vl_mff_map *);
 enum ofperr nx_pull_match_loose(struct ofpbuf *, unsigned int match_len,
                                 struct match *, ovs_be64 *cookie,
                                 ovs_be64 *cookie_mask,
+                                bool pipeline_fields_only,
                                 const struct tun_table *);
-enum ofperr oxm_pull_match(struct ofpbuf *, const struct tun_table *,
-                           const struct vl_mff_map *, struct match *);
-enum ofperr oxm_pull_match_loose(struct ofpbuf *, const struct tun_table *,
-                                 struct match *);
+enum ofperr oxm_pull_match(struct ofpbuf *, bool pipeline_fields_only,
+                           const struct tun_table *, const struct vl_mff_map *,
+                           struct match *);
+enum ofperr oxm_pull_match_loose(struct ofpbuf *, bool pipeline_fields_only,
+                                 const struct tun_table *, struct match *);
 enum ofperr oxm_decode_match(const void *, size_t, bool,
                              const struct tun_table *,
                              const struct vl_mff_map *, struct match *);
@@ -83,9 +85,9 @@ enum ofperr nx_pull_entry(struct ofpbuf *, const struct vl_mff_map *,
                           union mf_value *mask);
 enum ofperr nx_pull_header(struct ofpbuf *, const struct vl_mff_map *,
                            const struct mf_field **, bool *masked);
-void nxm_put__(struct ofpbuf *b, enum mf_field_id field,
-               enum ofp_version version, const void *value,
-               const void *mask, size_t n_bytes);
+void nxm_put_entry_raw(struct ofpbuf *, enum mf_field_id field,
+                       enum ofp_version version, const void *value,
+                       const void *mask, size_t n_bytes);
 void nx_put_entry(struct ofpbuf *, const struct mf_field *, enum ofp_version,
                   const union mf_value *value, const union mf_value *mask);
 void nx_put_header(struct ofpbuf *, enum mf_field_id, enum ofp_version,

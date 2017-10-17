@@ -1,5 +1,6 @@
 /Makefile
 /Makefile.in
+/ovs-vtep
 /vtep-ctl
 /vtep-ctl.8
 /vtep-idl.c

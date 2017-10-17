@@ -18,6 +18,10 @@
 
 #include "openvswitch/util.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define UUID_BIT 128            /* Number of bits in a UUID. */
 #define UUID_OCTET (UUID_BIT / 8) /* Number of bytes in a UUID. */
 
@@ -31,5 +35,9 @@ struct uuid {
     uint32_t parts[4];
 };
 BUILD_ASSERT_DECL(sizeof(struct uuid) == UUID_OCTET);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* uuid.h */

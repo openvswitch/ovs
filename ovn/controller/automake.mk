@@ -1,11 +1,15 @@
 bin_PROGRAMS += ovn/controller/ovn-controller
 ovn_controller_ovn_controller_SOURCES = \
+	ovn/controller/bfd.c \
+	ovn/controller/bfd.h \
 	ovn/controller/binding.c \
 	ovn/controller/binding.h \
 	ovn/controller/chassis.c \
 	ovn/controller/chassis.h \
 	ovn/controller/encaps.c \
 	ovn/controller/encaps.h \
+	ovn/controller/gchassis.c \
+	ovn/controller/gchassis.h \
 	ovn/controller/lflow.c \
 	ovn/controller/lflow.h \
 	ovn/controller/lport.c \

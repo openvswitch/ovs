@@ -623,6 +623,38 @@ dl_src=00:00:00:00:00:02
 dl_src=00:00:00:00:00:03
 dl_src=ba:be:be:ef:de:ad
 ])
+AT_CHECK([expr_to_flow 'ip4.src == {$set4}'], [0], [dnl
+(no flows)
+])
+AT_CHECK([expr_to_flow 'ip4.src == {1.2.3.4, $set4}'], [0], [dnl
+ip,nw_src=1.2.3.4
+])
+AT_CHECK([expr_to_flow 'ip4.src == 1.2.3.4 || ip4.src == {$set4}'], [0], [dnl
+ip,nw_src=1.2.3.4
+])
+AT_CHECK([expr_to_flow 'ip4.src != {$set4}'], [0], [dnl
+
+])
+AT_CHECK([expr_to_flow 'ip4.src != {1.0.0.0/8, $set4}'], [0], [dnl
+ip,nw_src=0.0.0.0/1.0.0.0
+ip,nw_src=128.0.0.0/1
+ip,nw_src=16.0.0.0/16.0.0.0
+ip,nw_src=2.0.0.0/2.0.0.0
+ip,nw_src=32.0.0.0/32.0.0.0
+ip,nw_src=4.0.0.0/4.0.0.0
+ip,nw_src=64.0.0.0/64.0.0.0
+ip,nw_src=8.0.0.0/8.0.0.0
+])
+AT_CHECK([expr_to_flow 'ip4.src != 1.0.0.0/8 && ip4.src != {$set4}'], [0], [dnl
+ip,nw_src=0.0.0.0/1.0.0.0
+ip,nw_src=128.0.0.0/1
+ip,nw_src=16.0.0.0/16.0.0.0
+ip,nw_src=2.0.0.0/2.0.0.0
+ip,nw_src=32.0.0.0/32.0.0.0
+ip,nw_src=4.0.0.0/4.0.0.0
+ip,nw_src=64.0.0.0/64.0.0.0
+ip,nw_src=8.0.0.0/8.0.0.0
+])
 AT_CLEANUP
 
 AT_SETUP([ovn -- action parsing])
@@ -643,41 +675,41 @@ output;
 
 # next
 next;
-    encodes as resubmit(,27)
+    encodes as resubmit(,19)
 next(11);
     formats as next;
-    encodes as resubmit(,27)
+    encodes as resubmit(,19)
 next(0);
-    encodes as resubmit(,16)
-next(15);
+    encodes as resubmit(,8)
+next(23);
     encodes as resubmit(,31)
 
 next();
     Syntax error at `)' expecting "pipeline" or "table".
 next(10;
     Syntax error at `;' expecting `)'.
-next(16);
-    "next" action cannot advance beyond table 15.
+next(24);
+    "next" action cannot advance beyond table 23.
 
 next(table=11);
     formats as next;
-    encodes as resubmit(,27)
+    encodes as resubmit(,19)
 next(pipeline=ingress);
     formats as next;
-    encodes as resubmit(,27)
+    encodes as resubmit(,19)
 next(table=11, pipeline=ingress);
     formats as next;
-    encodes as resubmit(,27)
+    encodes as resubmit(,19)
 next(pipeline=ingress, table=11);
     formats as next;
-    encodes as resubmit(,27)
+    encodes as resubmit(,19)
 
 next(pipeline=egress);
     "next" action cannot advance from ingress to egress pipeline (use "output" action instead)
 
 next(table=10);
     formats as next(10);
-    encodes as resubmit(,26)
+    encodes as resubmit(,18)
 
 # Loading a constant value.
 tcp.dst=80;
@@ -699,7 +731,7 @@ ip.ttl=4;
     has prereqs eth.type == 0x800 || eth.type == 0x86dd
 outport="eth0"; next; outport="LOCAL"; next;
     formats as outport = "eth0"; next; outport = "LOCAL"; next;
-    encodes as set_field:0x5->reg15,resubmit(,27),set_field:0xfffe->reg15,resubmit(,27)
+    encodes as set_field:0x5->reg15,resubmit(,19),set_field:0xfffe->reg15,resubmit(,19)
 
 inport[1] = 1;
     Cannot select subfield of string field inport.
@@ -780,11 +812,11 @@ ip.ttl
 
 # load balancing.
 ct_lb;
-    encodes as ct(table=27,zone=NXM_NX_REG13[0..15],nat)
+    encodes as ct(table=19,zone=NXM_NX_REG13[0..15],nat)
     has prereqs ip
 ct_lb();
     formats as ct_lb;
-    encodes as ct(table=27,zone=NXM_NX_REG13[0..15],nat)
+    encodes as ct(table=19,zone=NXM_NX_REG13[0..15],nat)
     has prereqs ip
 ct_lb(192.168.1.2:80, 192.168.1.3:80);
     encodes as group:1
@@ -803,7 +835,7 @@ ct_lb(foo);
 
 # ct_next
 ct_next;
-    encodes as ct(table=27,zone=NXM_NX_REG13[0..15])
+    encodes as ct(table=19,zone=NXM_NX_REG13[0..15])
     has prereqs ip
 
 # ct_commit
@@ -855,10 +887,10 @@ ct_commit(ct_label=18446744073709551616);
 
 # ct_dnat
 ct_dnat;
-    encodes as ct(table=27,zone=NXM_NX_REG11[0..15],nat)
+    encodes as ct(table=19,zone=NXM_NX_REG11[0..15],nat)
     has prereqs ip
 ct_dnat(192.168.1.2);
-    encodes as ct(commit,table=27,zone=NXM_NX_REG11[0..15],nat(dst=192.168.1.2))
+    encodes as ct(commit,table=19,zone=NXM_NX_REG11[0..15],nat(dst=192.168.1.2))
     has prereqs ip
 
 ct_dnat(192.168.1.2, 192.168.1.3);
@@ -872,10 +904,10 @@ ct_dnat();
 
 # ct_snat
 ct_snat;
-    encodes as ct(table=27,zone=NXM_NX_REG12[0..15],nat)
+    encodes as ct(table=19,zone=NXM_NX_REG12[0..15],nat)
     has prereqs ip
 ct_snat(192.168.1.2);
-    encodes as ct(commit,table=27,zone=NXM_NX_REG12[0..15],nat(src=192.168.1.2))
+    encodes as ct(commit,table=19,zone=NXM_NX_REG12[0..15],nat(src=192.168.1.2))
     has prereqs ip
 
 ct_snat(192.168.1.2, 192.168.1.3);
@@ -893,7 +925,7 @@ ct_clear;
 
 # clone
 clone { ip4.dst = 255.255.255.255; output; }; next;
-    encodes as clone(set_field:255.255.255.255->ip_dst,resubmit(,64)),resubmit(,27)
+    encodes as clone(set_field:255.255.255.255->ip_dst,resubmit(,64)),resubmit(,19)
     has prereqs eth.type == 0x800
 
 # arp
@@ -3663,15 +3695,18 @@ ovn-nbctl lsp-add ls2 ls2-lp2 \
 -- lsp-set-addresses ls2-lp2 "f0:00:00:00:00:04 30.0.0.7"
 ovn-nbctl lsp-set-port-security ls2-lp2 "f0:00:00:00:00:04 30.0.0.7"
 
-ovn-nbctl -- --id=@d1 create DHCP_Options cidr=10.0.0.0/24 \
+d1="$(ovn-nbctl create DHCP_Options cidr=10.0.0.0/24 \
 options="\"server_id\"=\"10.0.0.1\" \"server_mac\"=\"ff:10:00:00:00:01\" \
-\"lease_time\"=\"3600\" \"router\"=\"10.0.0.1\"" \
--- add Logical_Switch_Port ls1-lp1 dhcpv4_options @d1 \
--- add Logical_Switch_Port ls1-lp2 dhcpv4_options @d1
+\"lease_time\"=\"3600\" \"router\"=\"10.0.0.1\"")"
 
-ovn-nbctl -- --id=@d2 create DHCP_Options cidr=30.0.0.0/24 \
+ovn-nbctl lsp-set-dhcpv4-options ls1-lp1 ${d1}
+ovn-nbctl lsp-set-dhcpv4-options ls1-lp2 ${d1}
+
+d2="$(ovn-nbctl create DHCP_Options cidr=30.0.0.0/24 \
 options="\"server_id\"=\"30.0.0.1\" \"server_mac\"=\"ff:10:00:00:00:02\" \
-\"lease_time\"=\"3600\"" -- add Logical_Switch_Port ls2-lp2 dhcpv4_options @d2
+\"lease_time\"=\"3600\"")"
+
+ovn-nbctl lsp-set-dhcpv4-options ls2-lp2 ${d2}
 
 net_add n1
 sim_add hv1
@@ -3994,14 +4029,16 @@ ovn-nbctl lsp-add ls1 ls1-lp3 \
 
 ovn-nbctl lsp-set-port-security ls1-lp3 "f0:00:00:00:00:22 ae70::22"
 
-ovn-nbctl -- --id=@d1 create DHCP_Options cidr="ae70\:\:/64" \
-options="\"server_id\"=\"00:00:00:10:00:01\"" \
--- add Logical_Switch_Port ls1-lp1 dhcpv6_options @d1 \
--- add Logical_Switch_Port ls1-lp2 dhcpv6_options @d1
+d1="$(ovn-nbctl create DHCP_Options cidr="ae70\:\:/64" \
+options="\"server_id\"=\"00:00:00:10:00:01\"")"
 
-ovn-nbctl -- --id=@d2 create DHCP_Options cidr="ae70\:\:/64" \
-options="\"dhcpv6_stateless\"=\"true\" \"server_id\"=\"00:00:00:10:00:01\"" \
--- add Logical_Switch_Port ls1-lp3 dhcpv6_options @d2
+ovn-nbctl lsp-set-dhcpv6-options ls1-lp1 ${d1}
+ovn-nbctl lsp-set-dhcpv6-options ls1-lp2 ${d1}
+
+d2="$(ovn-nbctl create DHCP_Options cidr="ae70\:\:/64" \
+options="\"dhcpv6_stateless\"=\"true\" \"server_id\"=\"00:00:00:10:00:01\"")"
+
+ovn-nbctl lsp-set-dhcpv6-options ls1-lp3 ${d2}
 
 ovn-nbctl ls-add ls2
 ovn-nbctl lsp-add ls2 ls2-lp1 \
@@ -5741,6 +5778,113 @@ OVN_CLEANUP([hv1],[hv2])
 
 AT_CLEANUP
 
+
+AT_SETUP([ovn -- ACL logging])
+AT_KEYWORDS([ovn])
+ovn_start
+
+net_add n1
+
+sim_add hv
+as hv
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+for i in lp1 lp2; do
+    ovs-vsctl -- add-port br-int $i -- \
+        set interface $i external-ids:iface-id=$i \
+        options:tx_pcap=hv/$i-tx.pcap \
+        options:rxq_pcap=hv/$i-rx.pcap
+done
+
+lp1_mac="f0:00:00:00:00:01"
+lp1_ip="192.168.1.2"
+
+lp2_mac="f0:00:00:00:00:02"
+lp2_ip="192.168.1.3"
+
+ovn-nbctl ls-add lsw0
+ovn-nbctl --wait=sb lsp-add lsw0 lp1
+ovn-nbctl --wait=sb lsp-add lsw0 lp2
+ovn-nbctl lsp-set-addresses lp1 $lp1_mac
+ovn-nbctl lsp-set-addresses lp2 $lp2_mac
+ovn-nbctl --wait=sb sync
+
+ovn-nbctl acl-add lsw0 to-lport 1000 'tcp.dst==80' drop
+ovn-nbctl --log --severity=alert --name=drop-flow acl-add lsw0 to-lport 1000 'tcp.dst==81' drop
+
+ovn-nbctl acl-add lsw0 to-lport 1000 'tcp.dst==82' allow
+ovn-nbctl --log --severity=info --name=allow-flow acl-add lsw0 to-lport 1000 'tcp.dst==83' allow
+
+ovn-nbctl acl-add lsw0 to-lport 1000 'tcp.dst==84' allow-related
+ovn-nbctl --log acl-add lsw0 to-lport 1000 'tcp.dst==85' allow-related
+
+ovn-nbctl acl-add lsw0 to-lport 1000 'tcp.dst==86' reject
+ovn-nbctl --log --severity=alert --name=reject-flow acl-add lsw0 to-lport 1000 'tcp.dst==87' reject
+
+ovn-sbctl dump-flows
+
+
+# Send packet that should be dropped without logging.
+packet="inport==\"lp1\" && eth.src==$lp1_mac && eth.dst==$lp2_mac &&
+        ip4 && ip.ttl==64 && ip4.src==$lp1_ip && ip4.dst==$lp2_ip &&
+        tcp && tcp.flags==2 && tcp.src==4360 && tcp.dst==80"
+as hv ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+# Send packet that should be dropped with logging.
+packet="inport==\"lp1\" && eth.src==$lp1_mac && eth.dst==$lp2_mac &&
+        ip4 && ip.ttl==64 && ip4.src==$lp1_ip && ip4.dst==$lp2_ip &&
+        tcp && tcp.flags==2 && tcp.src==4361 && tcp.dst==81"
+as hv ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+# Send packet that should be allowed without logging.
+packet="inport==\"lp1\" && eth.src==$lp1_mac && eth.dst==$lp2_mac &&
+        ip4 && ip.ttl==64 && ip4.src==$lp1_ip && ip4.dst==$lp2_ip &&
+        tcp && tcp.flags==2 && tcp.src==4362 && tcp.dst==82"
+as hv ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+# Send packet that should be allowed with logging.
+packet="inport==\"lp1\" && eth.src==$lp1_mac && eth.dst==$lp2_mac &&
+        ip4 && ip.ttl==64 && ip4.src==$lp1_ip && ip4.dst==$lp2_ip &&
+        tcp && tcp.flags==2 && tcp.src==4363 && tcp.dst==83"
+as hv ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+# Send packet that should allow related flows without logging.
+packet="inport==\"lp1\" && eth.src==$lp1_mac && eth.dst==$lp2_mac &&
+        ip4 && ip.ttl==64 && ip4.src==$lp1_ip && ip4.dst==$lp2_ip &&
+        tcp && tcp.flags==2 && tcp.src==4364 && tcp.dst==84"
+as hv ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+# Send packet that should allow related flows with logging.
+packet="inport==\"lp1\" && eth.src==$lp1_mac && eth.dst==$lp2_mac &&
+        ip4 && ip.ttl==64 && ip4.src==$lp1_ip && ip4.dst==$lp2_ip &&
+        tcp && tcp.flags==2 && tcp.src==4365 && tcp.dst==85"
+as hv ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+# Send packet that should be rejected without logging.
+packet="inport==\"lp1\" && eth.src==$lp1_mac && eth.dst==$lp2_mac &&
+        ip4 && ip.ttl==64 && ip4.src==$lp1_ip && ip4.dst==$lp2_ip &&
+        tcp && tcp.flags==2 && tcp.src==4366 && tcp.dst==86"
+as hv ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+# Send packet that should be rejected with logging.
+packet="inport==\"lp1\" && eth.src==$lp1_mac && eth.dst==$lp2_mac &&
+        ip4 && ip.ttl==64 && ip4.src==$lp1_ip && ip4.dst==$lp2_ip &&
+        tcp && tcp.flags==2 && tcp.src==4367 && tcp.dst==87"
+as hv ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+OVS_WAIT_UNTIL([ test 4 = $(grep -c 'acl_log' hv/ovn-controller.log) ])
+
+AT_CHECK([grep 'acl_log' hv/ovn-controller.log | sed 's/.*name=/name=/'], [0], [dnl
+name="drop-flow", verdict=drop, severity=alert: tcp,vlan_tci=0x0000,dl_src=f0:00:00:00:00:01,dl_dst=f0:00:00:00:00:02,nw_src=192.168.1.2,nw_dst=192.168.1.3,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=4361,tp_dst=81,tcp_flags=syn
+name="allow-flow", verdict=allow, severity=info: tcp,vlan_tci=0x0000,dl_src=f0:00:00:00:00:01,dl_dst=f0:00:00:00:00:02,nw_src=192.168.1.2,nw_dst=192.168.1.3,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=4363,tp_dst=83,tcp_flags=syn
+name="<unnamed>", verdict=allow, severity=info: tcp,vlan_tci=0x0000,dl_src=f0:00:00:00:00:01,dl_dst=f0:00:00:00:00:02,nw_src=192.168.1.2,nw_dst=192.168.1.3,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=4365,tp_dst=85,tcp_flags=syn
+name="reject-flow", verdict=reject, severity=alert: tcp,vlan_tci=0x0000,dl_src=f0:00:00:00:00:01,dl_dst=f0:00:00:00:00:02,nw_src=192.168.1.2,nw_dst=192.168.1.3,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=4367,tp_dst=87,tcp_flags=syn
+])
+
+OVN_CLEANUP([hv])
+AT_CLEANUP
+
+
 AT_SETUP([ovn -- DSCP marking check])
 AT_KEYWORDS([ovn])
 ovn_start
@@ -6812,6 +6956,390 @@ OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
+AT_SETUP([ovn -- 4 HV, 1 LS, 1 LR, packet test with HA distributed router gateway port])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+net_add n1
+
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl -- add-port br-int hv1-vif1 -- \
+    set interface hv1-vif1 external-ids:iface-id=foo1 \
+    options:tx_pcap=hv1/vif1-tx.pcap \
+    options:rxq_pcap=hv1/vif1-rx.pcap \
+    ofport-request=1
+
+sim_add gw1
+as gw1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.2
+
+sim_add gw2
+as gw2
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.4
+
+sim_add ext1
+as ext1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.3
+ovs-vsctl -- add-port br-int ext1-vif1 -- \
+    set interface ext1-vif1 external-ids:iface-id=outside1 \
+    options:tx_pcap=ext1/vif1-tx.pcap \
+    options:rxq_pcap=ext1/vif1-rx.pcap \
+    ofport-request=1
+
+# Pre-populate the hypervisors' ARP tables so that we don't lose any
+# packets for ARP resolution (native tunneling doesn't queue packets
+# for ARP resolution).
+ovn_populate_arp
+
+ovn-nbctl create Logical_Router name=R1
+
+ovn-nbctl ls-add foo
+ovn-nbctl ls-add alice
+ovn-nbctl ls-add outside
+
+# Connect foo to R1
+ovn-nbctl lrp-add R1 foo 00:00:01:01:02:03 192.168.1.1/24
+ovn-nbctl lsp-add foo rp-foo -- set Logical_Switch_Port rp-foo \
+    type=router options:router-port=foo \
+    -- lsp-set-addresses rp-foo router
+
+# Connect alice to R1 as distributed router gateway port on gw1
+ovn-nbctl lrp-add R1 alice 00:00:02:01:02:03 172.16.1.1/24
+
+ovn-nbctl \
+    --id=@gc0 create Gateway_Chassis name=alice_gw1 \
+                                     chassis_name=gw1 \
+                                     priority=20 -- \
+    --id=@gc1 create Gateway_Chassis name=alice_gw2 \
+                                     chassis_name=gw2 \
+                                     priority=10 -- \
+    set Logical_Router_Port alice 'gateway_chassis=[@gc0,@gc1]'
+
+ovn-nbctl lsp-add alice rp-alice -- set Logical_Switch_Port rp-alice \
+    type=router options:router-port=alice \
+    -- lsp-set-addresses rp-alice router
+
+# Create logical port foo1 in foo
+ovn-nbctl lsp-add foo foo1 \
+-- lsp-set-addresses foo1 "f0:00:00:01:02:03 192.168.1.2"
+
+# Create logical port outside1 in outside
+ovn-nbctl lsp-add outside outside1 \
+-- lsp-set-addresses outside1 "f0:00:00:01:02:04 172.16.1.3"
+
+# Create localnet port in alice
+ovn-nbctl lsp-add alice ln-alice
+ovn-nbctl lsp-set-addresses ln-alice unknown
+ovn-nbctl lsp-set-type ln-alice localnet
+ovn-nbctl lsp-set-options ln-alice network_name=phys
+
+# Create localnet port in outside
+ovn-nbctl lsp-add outside ln-outside
+ovn-nbctl lsp-set-addresses ln-outside unknown
+ovn-nbctl lsp-set-type ln-outside localnet
+ovn-nbctl lsp-set-options ln-outside network_name=phys
+
+# Create bridge-mappings on gw1, gw2 and ext1, hv1 doesn't need
+# mapping to the external network, is the one generating packets
+as gw1 ovs-vsctl set open . external-ids:ovn-bridge-mappings=phys:br-phys
+as gw2 ovs-vsctl set open . external-ids:ovn-bridge-mappings=phys:br-phys
+as ext1 ovs-vsctl set open . external-ids:ovn-bridge-mappings=phys:br-phys
+
+AT_CHECK([ovn-nbctl --timeout=3 --wait=sb sync], [0], [ignore])
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 2
+
+ip_to_hex() {
+    printf "%02x%02x%02x%02x" "$@"
+}
+
+reset_pcap_file() {
+    local iface=$1
+    local pcap_file=$2
+    ovs-vsctl -- set Interface $iface options:tx_pcap=dummy-tx.pcap \
+options:rxq_pcap=dummy-rx.pcap
+    rm -f ${pcap_file}*.pcap
+    ovs-vsctl -- set Interface $iface options:tx_pcap=${pcap_file}-tx.pcap \
+options:rxq_pcap=${pcap_file}-rx.pcap
+}
+
+test_ip_packet()
+{
+    local active_gw=$1
+    local backup_gw=$2
+
+    # Send ip packet between foo1 and outside1
+    src_mac="f00000010203" # foo1 mac
+    dst_mac="000001010203" # rp-foo mac (internal router leg)
+    src_ip=`ip_to_hex 192 168 1 2`
+    dst_ip=`ip_to_hex 172 16 1 3`
+    packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
+
+    # ARP request packet to expect at outside1
+    #arp_request=ffffffffffff${src_mac}08060001080006040001${src_mac}${src_ip}000000000000${dst_ip}
+
+    as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
+
+    # Send ARP reply from outside1 back to the router
+    # XXX: note, we could avoid this if we plug this port into a netns
+    # and setup the IP address into the port, so the kernel would simply reply
+    src_mac="000002010203"
+    reply_mac="f00000010204"
+    dst_ip=`ip_to_hex 172 16 1 3`
+    src_ip=`ip_to_hex 172 16 1 1`
+    arp_reply=${src_mac}${reply_mac}08060001080006040002${reply_mac}${dst_ip}${src_mac}${src_ip}
+
+    as ext1 ovs-appctl netdev-dummy/receive ext1-vif1 $arp_reply
+
+    # Packet to Expect at ext1 chassis, outside1 port
+    src_mac="000002010203"
+    dst_mac="f00000010204"
+    src_ip=`ip_to_hex 192 168 1 2`
+    dst_ip=`ip_to_hex 172 16 1 3`
+    expected=${dst_mac}${src_mac}08004500001c000000003f110100${src_ip}${dst_ip}0035111100080000
+    echo $expected > ext1-vif1.expected
+
+    as $active_gw reset_pcap_file br-phys_n1 $active_gw/br-phys_n1
+    as $backup_gw reset_pcap_file br-phys_n1 $backup_gw/br-phys_n1
+    as ext1 reset_pcap_file ext1-vif1 ext1/vif1
+
+    # Resend packet from foo1 to outside1
+    as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
+
+    sleep 1
+
+    OVN_CHECK_PACKETS([ext1/vif1-tx.pcap], [ext1-vif1.expected])
+    $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $active_gw/br-phys_n1-tx.pcap  > packets
+    AT_CHECK([grep $expected packets | sort], [0], [expout])
+    $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $backup_gw/br-phys_n1-tx.pcap  > packets
+    AT_CHECK([grep $expected packets | sort], [0], [])
+}
+
+test_ip_packet gw1 gw2
+
+ovn-nbctl --timeout=3 --wait=hv \
+    --id=@gc0 create Gateway_Chassis name=alice_gw1 \
+                                     chassis_name=gw1 \
+                                     priority=10 -- \
+    --id=@gc1 create Gateway_Chassis name=alice_gw2 \
+                                     chassis_name=gw2 \
+                                     priority=20 -- \
+    set Logical_Router_Port alice 'gateway_chassis=[@gc0,@gc1]'
+
+test_ip_packet gw2 gw1
+
+OVN_CLEANUP([hv1],[gw1],[gw2],[ext1])
+AT_CLEANUP
+
+AT_SETUP([ovn -- 4 HV, 3 LS, 2 LR, packet test with HA distributed router gateway port])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+net_add n1
+
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl -- add-port br-int hv1-vif1 -- \
+    set interface hv1-vif1 external-ids:iface-id=foo1 \
+    options:tx_pcap=hv1/vif1-tx.pcap \
+    options:rxq_pcap=hv1/vif1-rx.pcap \
+    ofport-request=1
+
+sim_add gw1
+as gw1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.2
+
+sim_add gw2
+as gw2
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.4
+
+sim_add ext1
+as ext1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.3
+ovs-vsctl -- add-port br-int ext1-vif1 -- \
+    set interface ext1-vif1 external-ids:iface-id=outside1 \
+    options:tx_pcap=ext1/vif1-tx.pcap \
+    options:rxq_pcap=ext1/vif1-rx.pcap \
+    ofport-request=1
+
+# Pre-populate the hypervisors' ARP tables so that we don't lose any
+# packets for ARP resolution (native tunneling doesn't queue packets
+# for ARP resolution).
+ovn_populate_arp
+
+ovn-nbctl create Logical_Router name=R0
+ovn-nbctl create Logical_Router name=R1
+
+ovn-nbctl ls-add foo
+ovn-nbctl ls-add join
+ovn-nbctl ls-add alice
+ovn-nbctl ls-add outside
+
+#Connect foo to R0
+ovn-nbctl lrp-add R0 R0-foo 00:00:01:01:02:03 192.168.1.1/24
+ovn-nbctl lsp-add foo foo-R0 -- set Logical_Switch_Port foo-R0 \
+    type=router options:router-port=R0-foo \
+    -- lsp-set-addresses foo-R0 router
+
+#Connect R0 to join
+ovn-nbctl lrp-add R0 R0-join 00:00:0d:01:02:03 100.60.1.1/24
+ovn-nbctl lsp-add join join-R0 -- set Logical_Switch_Port join-R0 \
+    type=router options:router-port=R0-join \
+    -- lsp-set-addresses join-R0 router
+
+#Connect join to R1
+ovn-nbctl lrp-add R1 R1-join 00:00:0e:01:02:03 100.60.1.2/24
+ovn-nbctl lsp-add join join-R1 -- set Logical_Switch_Port join-R1 \
+    type=router options:router-port=R1-join \
+    -- lsp-set-addresses join-R1 router
+
+#add route rules
+ovn-nbctl lr-route-add R0 0.0.0.0/0 100.60.1.2
+ovn-nbctl lr-route-add R1 192.168.0.0/16 100.60.1.1
+
+# Connect alice to R1 as distributed router gateway port on gw1
+ovn-nbctl lrp-add R1 alice 00:00:02:01:02:03 172.16.1.1/24
+
+ovn-nbctl \
+    --id=@gc0 create Gateway_Chassis name=alice_gw1 \
+                                     chassis_name=gw1 \
+                                     priority=20 -- \
+    --id=@gc1 create Gateway_Chassis name=alice_gw2 \
+                                     chassis_name=gw2 \
+                                     priority=10 -- \
+    set Logical_Router_Port alice 'gateway_chassis=[@gc0,@gc1]'
+
+ovn-nbctl lsp-add alice rp-alice -- set Logical_Switch_Port rp-alice \
+    type=router options:router-port=alice \
+    -- lsp-set-addresses rp-alice router
+
+# Create logical port foo1 in foo
+ovn-nbctl lsp-add foo foo1 \
+-- lsp-set-addresses foo1 "f0:00:00:01:02:03 192.168.1.2"
+
+# Create logical port outside1 in outside
+ovn-nbctl lsp-add outside outside1 \
+-- lsp-set-addresses outside1 "f0:00:00:01:02:04 172.16.1.3"
+
+# Create localnet port in alice
+ovn-nbctl lsp-add alice ln-alice
+ovn-nbctl lsp-set-addresses ln-alice unknown
+ovn-nbctl lsp-set-type ln-alice localnet
+ovn-nbctl lsp-set-options ln-alice network_name=phys
+
+# Create localnet port in outside
+ovn-nbctl lsp-add outside ln-outside
+ovn-nbctl lsp-set-addresses ln-outside unknown
+ovn-nbctl lsp-set-type ln-outside localnet
+ovn-nbctl lsp-set-options ln-outside network_name=phys
+
+# Create bridge-mappings on gw1, gw2 and ext1, hv1 doesn't need
+# mapping to the external network, is the one generating packets
+as gw1 ovs-vsctl set open . external-ids:ovn-bridge-mappings=phys:br-phys
+as gw2 ovs-vsctl set open . external-ids:ovn-bridge-mappings=phys:br-phys
+as ext1 ovs-vsctl set open . external-ids:ovn-bridge-mappings=phys:br-phys
+
+AT_CHECK([ovn-nbctl --timeout=3 --wait=sb sync], [0], [ignore])
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 2
+
+ip_to_hex() {
+    printf "%02x%02x%02x%02x" "$@"
+}
+
+reset_pcap_file() {
+    local iface=$1
+    local pcap_file=$2
+    ovs-vsctl -- set Interface $iface options:tx_pcap=dummy-tx.pcap \
+options:rxq_pcap=dummy-rx.pcap
+    rm -f ${pcap_file}*.pcap
+    ovs-vsctl -- set Interface $iface options:tx_pcap=${pcap_file}-tx.pcap \
+options:rxq_pcap=${pcap_file}-rx.pcap
+}
+
+test_ip_packet()
+{
+    local active_gw=$1
+    local backup_gw=$2
+
+    # Send ip packet between foo1 and outside1
+    src_mac="f00000010203" # foo1 mac
+    dst_mac="000001010203" # foo-R0 mac (internal router leg)
+    src_ip=`ip_to_hex 192 168 1 2`
+    dst_ip=`ip_to_hex 172 16 1 3`
+    packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
+
+    # ARP request packet to expect at outside1
+    #arp_request=ffffffffffff${src_mac}08060001080006040001${src_mac}${src_ip}000000000000${dst_ip}
+
+    as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
+
+    # Send ARP reply from outside1 back to the router
+    # XXX: note, we could avoid this if we plug this port into a netns
+    # and setup the IP address into the port, so the kernel would simply reply
+    src_mac="000002010203"
+    reply_mac="f00000010204"
+    dst_ip=`ip_to_hex 172 16 1 3`
+    src_ip=`ip_to_hex 172 16 1 1`
+    arp_reply=${src_mac}${reply_mac}08060001080006040002${reply_mac}${dst_ip}${src_mac}${src_ip}
+
+    as ext1 ovs-appctl netdev-dummy/receive ext1-vif1 $arp_reply
+
+    # Packet to Expect at ext1 chassis, outside1 port
+    src_mac="000002010203"
+    dst_mac="f00000010204"
+    src_ip=`ip_to_hex 192 168 1 2`
+    dst_ip=`ip_to_hex 172 16 1 3`
+    expected=${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}0035111100080000
+    echo $expected > ext1-vif1.expected
+
+    as $active_gw reset_pcap_file br-phys_n1 $active_gw/br-phys_n1
+    as $backup_gw reset_pcap_file br-phys_n1 $backup_gw/br-phys_n1
+    as ext1 reset_pcap_file ext1-vif1 ext1/vif1
+
+    # Resend packet from foo1 to outside1
+    as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
+
+    sleep 1
+
+    OVN_CHECK_PACKETS([ext1/vif1-tx.pcap], [ext1-vif1.expected])
+    $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $active_gw/br-phys_n1-tx.pcap  > packets
+    AT_CHECK([grep $expected packets | sort], [0], [expout])
+    $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $backup_gw/br-phys_n1-tx.pcap  > packets
+    AT_CHECK([grep $expected packets | sort], [0], [])
+}
+
+test_ip_packet gw1 gw2
+
+ovn-nbctl --timeout=3 --wait=hv \
+    --id=@gc0 create Gateway_Chassis name=alice_gw1 \
+                                     chassis_name=gw1 \
+                                     priority=10 -- \
+    --id=@gc1 create Gateway_Chassis name=alice_gw2 \
+                                     chassis_name=gw2 \
+                                     priority=20 -- \
+    set Logical_Router_Port alice 'gateway_chassis=[@gc0,@gc1]'
+
+test_ip_packet gw2 gw1
+
+OVN_CLEANUP([hv1],[gw1],[gw2],[ext1])
+AT_CLEANUP
+
 AT_SETUP([ovn -- 1 LR with distributed router gateway port])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
@@ -6839,7 +7367,7 @@ ovn_start
 # for the localnet on hv2. These tests are expected to succeed.
 
 # Create three hypervisors and create OVS ports corresponding
-to logical ports.
+# to logical ports.
 net_add n1
 
 sim_add hv1
@@ -6937,7 +7465,11 @@ ovn-sbctl dump-flows
 echo "---------------------"
 ovn-sbctl list chassis
 ovn-sbctl list encap
-echo "---------------------"
+echo "------ Gateway_Chassis dump (SBDB) -------"
+ovn-sbctl list Gateway_Chassis
+echo "------ Port_Binding chassisredirect -------"
+ovn-sbctl find Port_Binding type=chassisredirect
+echo "-------------------------------------------"
 
 echo "------ hv1 dump ----------"
 as hv1 ovs-ofctl show br-int
@@ -6949,6 +7481,7 @@ echo "------ hv3 dump ----------"
 as hv3 ovs-ofctl show br-int
 as hv3 ovs-ofctl dump-flows br-int
 echo "--------------------------"
+
 
 # Check that redirect mapping is programmed only on hv2
 AT_CHECK([as hv1 ovs-ofctl dump-flows br-int table=33 | grep =0x3,metadata=0x1 | wc -l], [0], [0
@@ -7141,6 +7674,14 @@ expected=${dst_mac}${src_mac}08004500001c000000003f110100${src_ip}${dst_ip}00351
 
 echo $expected >> hv2-vif1.expected
 OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [hv2-vif1.expected])
+
+AT_CHECK([ovn-sbctl --bare --columns _uuid find Port_Binding logical_port=cr-alice | wc -l], [0], [1
+])
+
+ovn-nbctl --timeout=3 --wait=sb remove Logical_Router_Port alice options redirect-chassis
+
+AT_CHECK([ovn-sbctl find Port_Binding logical_port=cr-alice | wc -l], [0], [0
+])
 
 OVN_CLEANUP([hv1],[hv2],[hv3])
 
@@ -7372,5 +7913,696 @@ echo "${dst_mac}${src_mac}08004500001c000000003f110100${src_ip}${dst_ip}00351111
 OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [expected])
 
 OVN_CLEANUP([hv1],[hv2])
+
+AT_CLEANUP
+
+AT_SETUP([ovn -- 2 HVs, 1 lport/HV, localport ports])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+ovn-nbctl ls-add ls1
+
+# Add localport to the switch
+ovn-nbctl lsp-add ls1 lp01
+ovn-nbctl lsp-set-addresses lp01 f0:00:00:00:00:01
+ovn-nbctl lsp-set-type lp01 localport
+
+net_add n1
+
+for i in 1 2; do
+    sim_add hv$i
+    as hv$i
+    ovs-vsctl add-br br-phys
+    ovn_attach n1 br-phys 192.168.0.$i
+    ovs-vsctl add-port br-int vif01 -- \
+        set Interface vif01 external-ids:iface-id=lp01 \
+                              options:tx_pcap=hv${i}/vif01-tx.pcap \
+                              options:rxq_pcap=hv${i}/vif01-rx.pcap \
+                              ofport-request=${i}0
+
+    ovs-vsctl add-port br-int vif${i}1 -- \
+        set Interface vif${i}1 external-ids:iface-id=lp${i}1 \
+                              options:tx_pcap=hv${i}/vif${i}1-tx.pcap \
+                              options:rxq_pcap=hv${i}/vif${i}1-rx.pcap \
+                              ofport-request=${i}1
+
+    ovn-nbctl lsp-add ls1 lp${i}1
+    ovn-nbctl lsp-set-addresses lp${i}1 f0:00:00:00:00:${i}1
+    ovn-nbctl lsp-set-port-security lp${i}1 f0:00:00:00:00:${i}1
+
+        OVS_WAIT_UNTIL([test x`ovn-nbctl lsp-get-up lp${i}1` = xup])
+done
+
+ovn-nbctl --wait=sb sync
+ovn-sbctl dump-flows
+
+ovn_populate_arp
+
+# Given the name of a logical port, prints the name of the hypervisor
+# on which it is located.
+vif_to_hv() {
+    echo hv${1%?}
+}
+#
+# test_packet INPORT DST SRC ETHTYPE EOUT LOUT DEFHV
+#
+# This shell function causes a packet to be received on INPORT.  The packet's
+# content has Ethernet destination DST and source SRC (each exactly 12 hex
+# digits) and Ethernet type ETHTYPE (4 hex digits).  INPORT is specified as
+# logical switch port numbers, e.g. 11 for vif11.
+#
+# EOUT is the end-to-end output port, that is, where the packet will end up
+# after possibly bouncing through one or more localnet ports.  LOUT is the
+# logical output port, which might be a localnet port, as seen by ovn-trace
+# (which doesn't know what localnet ports are connected to and therefore can't
+# figure out the end-to-end answer).
+#
+# DEFHV is the default hypervisor from where the packet is going to be sent
+# if the source port is a localport.
+for i in 1 2; do
+    for j in 0 1; do
+        : > $i$j.expected
+    done
+done
+test_packet() {
+    local inport=$1 dst=$2 src=$3 eth=$4 eout=$5 lout=$6 defhv=$7
+    echo "$@"
+
+    # First try tracing the packet.
+    uflow="inport==\"lp$inport\" && eth.dst==$dst && eth.src==$src && eth.type==0x$eth"
+    if test $lout != drop; then
+        echo "output(\"$lout\");"
+    fi > expout
+    AT_CAPTURE_FILE([trace])
+    AT_CHECK([ovn-trace --all ls1 "$uflow" | tee trace | sed '1,/Minimal trace/d'], [0], [expout])
+
+    # Then actually send a packet, for an end-to-end test.
+    local packet=$(echo $dst$src | sed 's/://g')${eth}
+    hv=`vif_to_hv $inport`
+    # If hypervisor 0 (localport) use the defhv parameter
+    if test $hv = hv0; then
+        hv=$defhv
+    fi
+    vif=vif$inport
+    as $hv ovs-appctl netdev-dummy/receive $vif $packet
+    if test $eout != drop; then
+        echo $packet >> ${eout#lp}.expected
+    fi
+}
+
+
+# lp11 and lp21 are on different hypervisors
+test_packet 11 f0:00:00:00:00:21 f0:00:00:00:00:11 1121 lp21 lp21
+test_packet 21 f0:00:00:00:00:11 f0:00:00:00:00:21 2111 lp11 lp11
+
+# Both VIFs should be able to reach the localport on their own HV
+test_packet 11 f0:00:00:00:00:01 f0:00:00:00:00:11 1101 lp01 lp01
+test_packet 21 f0:00:00:00:00:01 f0:00:00:00:00:21 2101 lp01 lp01
+
+# Packet sent from localport on same hv should reach the vif
+test_packet 01 f0:00:00:00:00:11 f0:00:00:00:00:01 0111 lp11 lp11 hv1
+test_packet 01 f0:00:00:00:00:21 f0:00:00:00:00:01 0121 lp21 lp21 hv2
+
+# Packet sent from localport on different hv should be dropped
+test_packet 01 f0:00:00:00:00:21 f0:00:00:00:00:01 0121 drop lp21 hv1
+test_packet 01 f0:00:00:00:00:11 f0:00:00:00:00:01 0111 drop lp11 hv2
+
+# Now check the packets actually received against the ones expected.
+for i in 1 2; do
+    for j in 0 1; do
+        OVN_CHECK_PACKETS([hv$i/vif$i$j-tx.pcap], [$i$j.expected])
+    done
+done
+
+OVN_CLEANUP([hv1],[hv2])
+
+AT_CLEANUP
+
+AT_SETUP([ovn -- 1 LR with HA distributed router gateway port])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+net_add n1
+
+# create gateways with external network connectivity
+
+for i in 1 2; do
+    sim_add gw$i
+    as gw$i
+    ovs-vsctl add-br br-phys
+    ovn_attach n1 br-phys 192.168.0.$i
+    ovs-vsctl set open . external-ids:ovn-bridge-mappings=phys:br-phys
+done
+
+ovn-nbctl ls-add inside
+ovn-nbctl ls-add outside
+
+# create hypervisors with a vif port each to an internal network
+
+for i in 1 2; do
+    sim_add hv$i
+    as hv$i
+    ovs-vsctl add-br br-phys
+    ovn_attach n1 br-phys 192.168.0.1$i
+    ovs-vsctl -- add-port br-int hv$i-vif1 -- \
+        set interface hv$i-vif1 external-ids:iface-id=inside$i \
+        options:tx_pcap=hv$i/vif1-tx.pcap \
+        options:rxq_pcap=hv$i/vif1-rx.pcap \
+        ofport-request=1
+
+        ovn-nbctl lsp-add inside inside$i \
+            -- lsp-set-addresses inside$i "f0:00:00:01:22:$i 192.168.1.10$i"
+
+done
+
+ovn_populate_arp
+
+ovn-nbctl create Logical_Router name=R1
+
+# Connect inside to R1
+ovn-nbctl lrp-add R1 inside 00:00:01:01:02:03 192.168.1.1/24
+ovn-nbctl lsp-add inside rp-inside -- set Logical_Switch_Port rp-inside \
+    type=router options:router-port=inside \
+    -- lsp-set-addresses rp-inside router
+
+# Connect outside to R1 as distributed router gateway port on gw1+gw2
+ovn-nbctl lrp-add R1 outside 00:00:02:01:02:04 192.168.0.101/24
+
+ovn-nbctl --id=@gc0 create Gateway_Chassis \
+                    name=outside_gw1 chassis_name=gw1 priority=20 -- \
+          --id=@gc1 create Gateway_Chassis \
+                    name=outside_gw2 chassis_name=gw2 priority=10 -- \
+          set Logical_Router_Port outside 'gateway_chassis=[@gc0,@gc1]'
+
+ovn-nbctl lsp-add outside rp-outside -- set Logical_Switch_Port rp-outside \
+    type=router options:router-port=outside \
+    -- lsp-set-addresses rp-outside router
+
+# Create localnet port in outside
+ovn-nbctl lsp-add outside ln-outside
+ovn-nbctl lsp-set-addresses ln-outside unknown
+ovn-nbctl lsp-set-type ln-outside localnet
+ovn-nbctl lsp-set-options ln-outside network_name=phys
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+ovn-nbctl --wait=hv --timeout=3 sync
+
+echo "---------NB dump-----"
+ovn-nbctl show
+echo "---------------------"
+ovn-nbctl list logical_router
+echo "---------------------"
+ovn-nbctl list logical_router_port
+echo "---------------------"
+
+echo "---------SB dump-----"
+ovn-sbctl list datapath_binding
+echo "---------------------"
+ovn-sbctl list port_binding
+echo "---------------------"
+ovn-sbctl dump-flows
+echo "---------------------"
+ovn-sbctl list chassis
+ovn-sbctl list encap
+echo "---------------------"
+echo "------ Gateway_Chassis dump (SBDB) -------"
+ovn-sbctl list Gateway_Chassis
+echo "------ Port_Binding chassisredirect -------"
+ovn-sbctl find Port_Binding type=chassisredirect
+echo "-------------------------------------------"
+
+for chassis in gw1 gw2 hv1 hv2; do
+    as $chassis
+    echo "------ $chassis dump ----------"
+    ovs-ofctl show br-int
+    ovs-ofctl dump-flows br-int
+    echo "--------------------------"
+done
+function bfd_dump() {
+    for chassis in gw1 gw2 hv1 hv2; do
+        as $chassis
+        echo "------ $chassis dump (BFD)----"
+        echo "BFD (from $chassis):"
+        # dump BFD config and status to the other chassis
+        for chassis2 in gw1 gw2 hv1 hv2; do
+            if [[ "$chassis" != "$chassis2" ]]; then
+                echo " -> $chassis2:"
+                echo "   $(ovs-vsctl --bare --columns bfd,bfd_status find Interface name=ovn-$chassis2-0)"
+            fi
+        done
+        echo "--------------------------"
+    done
+}
+
+bfd_dump
+
+hv1_gw1_ofport=$(as hv1 ovs-vsctl --bare --columns ofport find Interface name=ovn-gw1-0)
+hv1_gw2_ofport=$(as hv1 ovs-vsctl --bare --columns ofport find Interface name=ovn-gw2-0)
+hv2_gw1_ofport=$(as hv2 ovs-vsctl --bare --columns ofport find Interface name=ovn-gw1-0)
+hv2_gw2_ofport=$(as hv2 ovs-vsctl --bare --columns ofport find Interface name=ovn-gw2-0)
+
+echo $hv1_gw1_ofport
+echo $hv1_gw2_ofport
+echo $hv2_gw1_ofport
+echo $hv2_gw2_ofport
+
+echo "--- hv1 ---"
+as hv1 ovs-ofctl dump-flows br-int table=32
+
+echo "--- hv2 ---"
+as hv2 ovs-ofctl dump-flows br-int table=32
+
+gw1_chassis=$(ovn-sbctl --bare --columns=_uuid find Chassis name=gw1)
+gw2_chassis=$(ovn-sbctl --bare --columns=_uuid find Chassis name=gw2)
+
+AT_CHECK([as hv1 ovs-ofctl dump-flows br-int table=32 | grep active_backup | grep slaves:$hv1_gw1_ofport,$hv1_gw2_ofport | wc -l], [0], [1
+])
+
+AT_CHECK([as hv2 ovs-ofctl dump-flows br-int table=32 | grep active_backup | grep slaves:$hv2_gw1_ofport,$hv2_gw2_ofport | wc -l], [0], [1
+])
+
+sleep 3 # let BFD sessions settle so we get the right flows on the right chassis
+
+# make sure that flows for handling the outside router port reside on gw1
+AT_CHECK([as gw1 ovs-ofctl dump-flows br-int table=23 | grep 00:00:02:01:02:04 | wc -l], [0], [[1
+]])
+AT_CHECK([as gw2 ovs-ofctl dump-flows br-int table=23 | grep 00:00:02:01:02:04 | wc -l], [0], [[0
+]])
+
+# make sure ARP responder flows for outside router port reside on gw1 too
+AT_CHECK([as gw1 ovs-ofctl dump-flows br-int table=9 | grep arp_tpa=192.168.0.101 | wc -l], [0], [[1
+]])
+AT_CHECK([as gw2 ovs-ofctl dump-flows br-int table=9 | grep arp_tpa=192.168.0.101 | wc -l], [0], [[0
+]])
+
+
+
+# check that the chassis redirect port has been claimed by the gw1 chassis
+AT_CHECK([ovn-sbctl --columns chassis --bare find Port_Binding logical_port=cr-outside | grep $gw1_chassis | wc -l],
+         [0],[[1
+]])
+
+
+# at this point, we invert the priority of the gw chassis between gw1 and gw2
+
+ovn-nbctl --id=@gc0 create Gateway_Chassis \
+                    name=outside_gw1 chassis_name=gw1 priority=10 -- \
+          --id=@gc1 create Gateway_Chassis \
+                    name=outside_gw2 chassis_name=gw2 priority=20 -- \
+          set Logical_Router_Port outside 'gateway_chassis=[@gc0,@gc1]'
+
+
+# XXX: Let the change propagate down to the ovn-controllers
+ovn-nbctl --wait=hv --timeout=3 sync
+
+# we make sure that the hypervisors noticed, and inverted the slave ports
+AT_CHECK([as hv1 ovs-ofctl dump-flows br-int table=32 | grep active_backup | grep slaves:$hv1_gw2_ofport,$hv1_gw1_ofport | wc -l], [0], [1
+])
+
+AT_CHECK([as hv2 ovs-ofctl dump-flows br-int table=32 | grep active_backup | grep slaves:$hv2_gw2_ofport,$hv2_gw1_ofport | wc -l], [0], [1
+])
+
+# check that the chassis redirect port has been reclaimed by the gw2 chassis
+AT_CHECK([ovn-sbctl --columns chassis --bare find Port_Binding logical_port=cr-outside | grep $gw2_chassis | wc -l],
+         [0],[[1
+]])
+
+# check BFD enablement on tunnel ports from gw1 #########
+as gw1
+for chassis in gw2 hv1 hv2; do
+    echo "checking gw1 -> $chassis"
+    AT_CHECK([ovs-vsctl --bare --columns bfd find Interface name=ovn-$chassis-0],[0],
+             [[enable=true
+]])
+done
+
+
+# check BFD enablement on tunnel ports from gw2 ##########
+as gw2
+for chassis in gw1 hv1 hv2; do
+    echo "checking gw2 -> $chassis"
+    AT_CHECK([ovs-vsctl --bare --columns bfd find Interface name=ovn-$chassis-0],[0],
+             [[enable=true
+]])
+done
+
+# check BFD enablement on tunnel ports from hv1 ###########
+as hv1
+for chassis in gw1 gw2; do
+    echo "checking hv1 -> $chassis"
+    AT_CHECK([ovs-vsctl --bare --columns bfd find Interface name=ovn-$chassis-0],[0],
+             [[enable=true
+]])
+done
+# make sure BFD is not enabled to hv2, we don't need it
+AT_CHECK([ovs-vsctl --bare --columns bfd find Interface name=ovn-hv2-0],[0],
+         [[enable=false
+]])
+
+
+# check BFD enablement on tunnel ports from hv2 ##########
+as hv2
+for chassis in gw1 gw2; do
+    echo "checking hv2 -> $chassis"
+    AT_CHECK([ovs-vsctl --bare --columns bfd find Interface name=ovn-$chassis-0],[0],
+             [[enable=true
+]])
+done
+# make sure BFD is not enabled to hv1, we don't need it
+AT_CHECK([ovs-vsctl --bare --columns bfd find Interface name=ovn-hv1-0],[0],
+         [[enable=false
+]])
+
+sleep 3  # let BFD sessions settle so we get the right flows on the right chassis
+
+# make sure that flows for handling the outside router port reside on gw2 now
+AT_CHECK([as gw2 ovs-ofctl dump-flows br-int table=23 | grep 00:00:02:01:02:04 | wc -l], [0], [[1
+]])
+AT_CHECK([as gw1 ovs-ofctl dump-flows br-int table=23 | grep 00:00:02:01:02:04 | wc -l], [0], [[0
+]])
+
+# disconnect GW2 from the network, GW1 should take over
+as gw2
+port=${sandbox}_br-phys
+as main ovs-vsctl del-port n1 $port
+sleep 4
+
+bfd_dump
+
+# make sure that flows for handling the outside router port reside on gw2 now
+AT_CHECK([as gw1 ovs-ofctl dump-flows br-int table=23 | grep 00:00:02:01:02:04 | wc -l], [0], [[1
+]])
+AT_CHECK([as gw2 ovs-ofctl dump-flows br-int table=23 | grep 00:00:02:01:02:04 | wc -l], [0], [[0
+]])
+
+# check that the chassis redirect port has been reclaimed by the gw1 chassis
+AT_CHECK([ovn-sbctl --columns chassis --bare find Port_Binding logical_port=cr-outside | grep $gw1_chassis | wc -l],
+         [0],[[1
+]])
+
+OVN_CLEANUP([gw1],[gw2],[hv1],[hv2])
+
+AT_CLEANUP
+
+AT_SETUP([ovn -- send gratuitous ARP for NAT rules on HA distributed router])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+ovn-nbctl ls-add ls0
+ovn-nbctl ls-add ls1
+ovn-nbctl create Logical_Router name=lr0
+ovn-nbctl lrp-add lr0 lrp0 f0:00:00:00:00:01 192.168.0.100/24
+
+ovn-nbctl --id=@gc0 create Gateway_Chassis \
+                    name=outside_gw1 chassis_name=hv2 priority=10 -- \
+          --id=@gc1 create Gateway_Chassis \
+                    name=outside_gw2 chassis_name=hv3 priority=1 -- \
+          set Logical_Router_Port lrp0 'gateway_chassis=[@gc0,@gc1]'
+
+ovn-nbctl lsp-add ls0 lrp0-rp -- set Logical_Switch_Port lrp0-rp \
+    type=router options:router-port=lrp0 addresses="router"
+ovn-nbctl lrp-add lr0 lrp1 f0:00:00:00:00:02 10.0.0.1/24
+ovn-nbctl lsp-add ls1 lrp1-rp -- set Logical_Switch_Port lrp1-rp \
+    type=router options:router-port=lrp1 addresses="router"
+
+# Add NAT rules
+AT_CHECK([ovn-nbctl lr-nat-add lr0 snat 192.168.0.100 10.0.0.0/24])
+
+net_add n1
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+AT_CHECK([ovs-vsctl set Open_vSwitch . external-ids:ovn-bridge-mappings=physnet1:br-phys])
+AT_CHECK([ovs-vsctl add-port br-phys snoopvif -- set Interface snoopvif options:tx_pcap=hv1/snoopvif-tx.pcap options:rxq_pcap=hv1/snoopvif-rx.pcap])
+
+sim_add hv2
+as hv2
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.2
+AT_CHECK([as hv2 ovs-vsctl set Open_vSwitch . external-ids:ovn-bridge-mappings=physnet1:br-phys])
+
+sim_add hv3
+as hv3
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.3
+AT_CHECK([as hv3 ovs-vsctl set Open_vSwitch . external-ids:ovn-bridge-mappings=physnet1:br-phys])
+
+# Create a localnet port.
+AT_CHECK([ovn-nbctl lsp-add ls0 ln_port])
+AT_CHECK([ovn-nbctl lsp-set-addresses ln_port unknown])
+AT_CHECK([ovn-nbctl lsp-set-type ln_port localnet])
+AT_CHECK([ovn-nbctl lsp-set-options ln_port network_name=physnet1])
+
+# wait for earlier changes to take effect
+AT_CHECK([ovn-nbctl --timeout=3 --wait=sb sync], [0], [ignore])
+
+reset_pcap_file() {
+    local iface=$1
+    local pcap_file=$2
+    ovs-vsctl -- set Interface $iface options:tx_pcap=dummy-tx.pcap \
+options:rxq_pcap=dummy-rx.pcap
+    rm -f ${pcap_file}*.pcap
+    ovs-vsctl -- set Interface $iface options:tx_pcap=${pcap_file}-tx.pcap \
+options:rxq_pcap=${pcap_file}-rx.pcap
+}
+
+as hv1 reset_pcap_file snoopvif hv1/snoopvif
+as hv2 reset_pcap_file br-phys_n1 hv2/br-phys_n1
+as hv3 reset_pcap_file br-phys_n1 hv3/br-phys_n1
+# add nat-addresses option
+ovn-nbctl --wait=sb lsp-set-options lrp0-rp router-port=lrp0 nat-addresses="router"
+
+# Wait for packets to be received through hv2.
+OVS_WAIT_UNTIL([test `wc -c < "hv1/snoopvif-tx.pcap"` -ge 100])
+trim_zeros() {
+    sed 's/\(00\)\{1,\}$//'
+}
+
+only_broadcast_from_lrp1() {
+    grep "fffffffffffff00000000001"
+}
+
+garp="fffffffffffff0000000000108060001080006040001f00000000001c0a80064000000000000c0a80064"
+echo $garp > expout
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/snoopvif-tx.pcap | trim_zeros | only_broadcast_from_lrp1 | uniq > hv1_snoop_tx
+echo "packets on hv1-snoopvif:"
+cat hv1_snoop_tx
+AT_CHECK([sort hv1_snoop_tx], [0], [expout])
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/br-phys_n1-tx.pcap | trim_zeros | only_broadcast_from_lrp1 | uniq > hv2_br_phys_tx
+echo "packets on hv2 br-phys tx"
+cat hv2_br_phys_tx
+AT_CHECK([grep $garp hv2_br_phys_tx | sort], [0], [expout])
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv3/br-phys_n1-tx.pcap | trim_zeros | only_broadcast_from_lrp1 | uniq > hv3_br_phys_tx
+echo "packets on hv3 br-phys tx"
+cat hv3_br_phys_tx
+AT_CHECK([grep $garp hv3_br_phys_tx | sort], [0], [])
+
+
+# at this point, we invert the priority of the gw chassis between hv2 and hv3
+
+ovn-nbctl --wait=hv \
+          --id=@gc0 create Gateway_Chassis \
+                    name=outside_gw1 chassis_name=hv2 priority=1 -- \
+          --id=@gc1 create Gateway_Chassis \
+                    name=outside_gw2 chassis_name=hv3 priority=10 -- \
+          set Logical_Router_Port lrp0 'gateway_chassis=[@gc0,@gc1]'
+
+
+as hv1 reset_pcap_file snoopvif hv1/snoopvif
+as hv2 reset_pcap_file br-phys_n1 hv2/br-phys_n1
+as hv3 reset_pcap_file br-phys_n1 hv3/br-phys_n1
+
+# Wait for packets to be received.
+OVS_WAIT_UNTIL([test `wc -c < "hv1/snoopvif-tx.pcap"` -ge 100])
+trim_zeros() {
+    sed 's/\(00\)\{1,\}$//'
+}
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/snoopvif-tx.pcap | trim_zeros | only_broadcast_from_lrp1 | uniq >  hv1_snoopvif_tx
+AT_CHECK([sort hv1_snoopvif_tx], [0], [expout])
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv3/br-phys_n1-tx.pcap | trim_zeros | only_broadcast_from_lrp1 | uniq > hv3_br_phys_tx
+AT_CHECK([grep $garp hv3_br_phys_tx | sort], [0], [expout])
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/br-phys_n1-tx.pcap | trim_zeros | only_broadcast_from_lrp1 | uniq > hv2_br_phys_tx
+AT_CHECK([grep $garp hv2_br_phys_tx | sort], [0], [])
+OVN_CLEANUP([hv1],[hv2],[hv3])
+
+AT_CLEANUP
+
+AT_SETUP([ovn -- ensure one gw controller restart in HA doesn't bounce the master])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+net_add n1
+
+# create two gateways with external network connectivity
+for i in 1 2; do
+    sim_add gw$i
+    as gw$i
+    ovs-vsctl add-br br-phys
+    ovn_attach n1 br-phys 192.168.0.$i
+    ovs-vsctl set open . external-ids:ovn-bridge-mappings=phys:br-phys
+done
+
+ovn-nbctl ls-add inside
+ovn-nbctl ls-add outside
+
+# create one hypervisors with a vif port the internal network
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.11
+ovs-vsctl -- add-port br-int hv1-vif1 -- \
+    set interface hv1-vif1 external-ids:iface-id=inside1 \
+    options:tx_pcap=hv1/vif1-tx.pcap \
+    options:rxq_pcap=hv1/vif1-rx.pcap \
+    ofport-request=1
+
+ovn-nbctl lsp-add inside inside1 \
+        -- lsp-set-addresses inside1 "f0:00:00:01:22:01 192.168.1.101"
+
+
+ovn_populate_arp
+
+ovn-nbctl create Logical_Router name=R1
+
+# Connect inside to R1
+ovn-nbctl lrp-add R1 inside 00:00:01:01:02:03 192.168.1.1/24
+ovn-nbctl lsp-add inside rp-inside -- set Logical_Switch_Port rp-inside \
+    type=router options:router-port=inside \
+    -- lsp-set-addresses rp-inside router
+
+# Connect outside to R1 as distributed router gateway port on gw1+gw2
+ovn-nbctl lrp-add R1 outside 00:00:02:01:02:04 192.168.0.101/24
+
+ovn-nbctl --id=@gc0 create Gateway_Chassis \
+                    name=outside_gw1 chassis_name=gw1 priority=20 -- \
+          --id=@gc1 create Gateway_Chassis \
+                    name=outside_gw2 chassis_name=gw2 priority=10 -- \
+          set Logical_Router_Port outside 'gateway_chassis=[@gc0,@gc1]'
+
+ovn-nbctl lsp-add outside rp-outside -- set Logical_Switch_Port rp-outside \
+    type=router options:router-port=outside \
+    -- lsp-set-addresses rp-outside router
+
+# Create localnet port in outside
+ovn-nbctl lsp-add outside ln-outside
+ovn-nbctl lsp-set-addresses ln-outside unknown
+ovn-nbctl lsp-set-type ln-outside localnet
+ovn-nbctl lsp-set-options ln-outside network_name=phys
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+ovn-nbctl --wait=hv --timeout=3 sync
+
+# currently when ovn-controller is restarted, the old entry is deleted
+# and a new one is created, which leaves the Gateway_Chassis with
+# an empty chassis for a while. NOTE: restarting ovn-controller in tests
+# doesn't have the same effect because "name" is conserved, and the
+# Chassis entry is not replaced.
+
+> gw1/ovn-controller.log
+
+gw2_chassis=$(ovn-sbctl --bare --columns=_uuid find Chassis name=gw2)
+ovn-sbctl destroy Chassis $gw2_chassis
+
+# Ensure ovn-controller has processed latest sbdb update
+# ovn-nbctl --wait=hv sync
+
+AT_CHECK([grep "Releasing lport" gw1/ovn-controller.log], [1], [])
+
+OVN_CLEANUP([gw1],[gw2],[hv1])
+
+AT_CLEANUP
+
+AT_SETUP([ovn -- options:requested-chassis for logical port])
+ovn_start
+
+net_add n1
+
+ovn-nbctl ls-add ls0
+ovn-nbctl lsp-add ls0 lsp0
+
+# create two hypervisors, each with one vif port
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.11
+ovs-vsctl -- add-port br-int hv1-vif0
+
+sim_add hv2
+as hv2
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.12
+ovs-vsctl -- add-port br-int hv2-vif0
+
+# Allow only chassis hv1 to bind logical port lsp0.
+ovn-nbctl lsp-set-options lsp0 requested-chassis=hv1
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+ovn-nbctl --wait=hv --timeout=3 sync
+
+# Retrieve hv1 and hv2 chassis UUIDs from southbound database
+hv1_uuid=$(ovn-sbctl --bare --columns _uuid find chassis name=hv1)
+hv2_uuid=$(ovn-sbctl --bare --columns _uuid find chassis name=hv2)
+
+# (1) Chassis hv2 should not bind lsp0 when requested-chassis is hv1.
+echo "verifying that hv2 does not bind lsp0 when hv2 physical/logical mapping is added"
+as hv2
+ovs-vsctl set interface hv2-vif0 external-ids:iface-id=lsp0
+
+OVS_WAIT_UNTIL([test 1 = $(grep -c "Not claiming lport lsp0" hv2/ovn-controller.log)])
+AT_CHECK([test x$(ovn-sbctl --bare --columns chassis find port_binding logical_port=lsp0) = x], [0], [])
+
+# (2) Chassis hv1 should bind lsp0 when physical to logical mapping exists on hv1.
+echo "verifying that hv1 binds lsp0 when hv1 physical/logical mapping is added"
+as hv1
+ovs-vsctl set interface hv1-vif0 external-ids:iface-id=lsp0
+
+OVS_WAIT_UNTIL([test 1 = $(grep -c "Claiming lport lsp0" hv1/ovn-controller.log)])
+AT_CHECK([test $(ovn-sbctl --bare --columns chassis find port_binding logical_port=lsp0) = "$hv1_uuid"], [0], [])
+
+# (3) Chassis hv1 should release lsp0 binding and chassis hv2 should bind lsp0 when
+# the requested chassis for lsp0 is changed from hv1 to hv2.
+echo "verifying that lsp0 binding moves when requested-chassis is changed"
+
+ovn-nbctl lsp-set-options lsp0 requested-chassis=hv2
+OVS_WAIT_UNTIL([test 1 = $(grep -c "Releasing lport lsp0 from this chassis" hv1/ovn-controller.log)])
+OVS_WAIT_UNTIL([test $(ovn-sbctl --bare --columns chassis find port_binding logical_port=lsp0) = "$hv2_uuid"])
+
+OVN_CLEANUP([hv1],[hv2])
+
+AT_CLEANUP
+
+AT_SETUP([ovn -- options:requested-chassis with hostname])
+
+ovn_start
+
+ovn-nbctl ls-add ls0
+ovn-nbctl lsp-add ls0 lsp0
+
+net_add n1
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.11
+ovs-vsctl -- add-port br-int hv1-vif0
+
+hv1_hostname=$(ovn-sbctl --bare --columns hostname find Chassis name=hv1)
+echo "hv1_hostname=${hv1_hostname}"
+ovn-nbctl --wait=hv --timeout=3 lsp-set-options lsp0 requested-chassis=${hv1_hostname}
+as hv1 ovs-vsctl set interface hv1-vif0 external-ids:iface-id=lsp0
+
+hv1_uuid=$(ovn-sbctl --bare --columns _uuid find Chassis name=hv1)
+echo "hv1_uuid=${hv1_uuid}"
+OVS_WAIT_UNTIL([test 1 = $(grep -c "Claiming lport lsp0" hv1/ovn-controller.log)])
+AT_CHECK([test x$(ovn-sbctl --bare --columns chassis find port_binding logical_port=lsp0) = x"$hv1_uuid"], [0], [])
+
+ovn-nbctl --wait=hv --timeout=3 lsp-set-options lsp0 requested-chassis=non-existant-chassis
+OVS_WAIT_UNTIL([test 1 = $(grep -c "Releasing lport lsp0 from this chassis" hv1/ovn-controller.log)])
+ovn-nbctl --wait=hv --timeout=3 sync
+AT_CHECK([test x$(ovn-sbctl --bare --columns chassis find port_binding logical_port=lsp0) = x], [0], [])
+
+OVN_CLEANUP([hv1])
 
 AT_CLEANUP

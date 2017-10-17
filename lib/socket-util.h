@@ -28,6 +28,8 @@
 #include <netinet/in_systm.h>
 #include <netinet/ip.h>
 
+struct ds;
+
 int set_nonblocking(int fd);
 void xset_nonblocking(int fd);
 void setsockopt_tcp_nodelay(int fd);
@@ -71,9 +73,7 @@ char *describe_fd(int fd);
 /* Functions for working with sockaddr_storage that might contain an IPv4 or
  * IPv6 address. */
 uint16_t ss_get_port(const struct sockaddr_storage *);
-#define SS_NTOP_BUFSIZE (1 + INET6_ADDRSTRLEN + 1)
-char *ss_format_address(const struct sockaddr_storage *,
-                        char *buf, size_t bufsize);
+void ss_format_address(const struct sockaddr_storage *, struct ds *);
 size_t ss_length(const struct sockaddr_storage *);
 const char *sock_strerror(int error);
 
@@ -86,6 +86,33 @@ int drain_rcvbuf(int fd);
 int make_unix_socket(int style, bool nonblock,
                      const char *bind_path, const char *connect_path);
 int get_unix_name_len(const struct sockaddr_un *sun, socklen_t sun_len);
+
+/* Universal sendmmsg support.
+ *
+ * Some platforms, such as new enough Linux and FreeBSD, support sendmmsg, but
+ * other platforms (or older ones) do not.  We add the following infrastructure
+ * to allow all code to use sendmmsg, regardless of platform support:
+ *
+ *   - For platforms that lack sendmmsg entirely, we emulate it.
+ *
+ *   - Some platforms have sendmmsg() in the C library but not in the kernel.
+ *     For example, this is true if a Linux system has a newer glibc with an
+ *     old kernel.  To compensate, even if sendmmsg() appears to be available,
+ *     we still wrap it with a handler that uses our emulation if sendmmsg()
+ *     returns ENOSYS.
+ */
+#ifndef HAVE_STRUCT_MMSGHDR_MSG_LEN
+struct mmsghdr {
+    struct msghdr msg_hdr;
+    unsigned int msg_len;
+};
+#endif
+#ifndef HAVE_SENDMMSG
+int sendmmsg(int, struct mmsghdr *, unsigned int, unsigned int);
+#else
+#define sendmmsg wrap_sendmmsg
+int wrap_sendmmsg(int, struct mmsghdr *, unsigned int, unsigned int);
+#endif
 
 /* Helpers for calling ioctl() on an AF_INET socket. */
 struct ifreq;

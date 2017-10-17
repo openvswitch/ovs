@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2009-2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1291,7 +1291,7 @@ do_dump(struct jsonrpc *rpc, const char *database,
         if (!node) {
             ovs_fatal(0, "No table \"%s\" found.", argv[0]);
         }
-        tables = xmemdup(&node, sizeof(&node));
+        tables = xmemdup(&node, sizeof node);
         n_tables = 1;
         tschema = tables[0]->data;
         for (i = 1; i < argc; i++) {

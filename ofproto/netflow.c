@@ -413,6 +413,14 @@ netflow_unref(struct netflow *nf)
         atomic_count_dec(&netflow_count);
         collectors_destroy(nf->collectors);
         ofpbuf_uninit(&nf->packet);
+
+        struct netflow_flow *nf_flow, *next;
+        HMAP_FOR_EACH_SAFE (nf_flow, next, hmap_node, &nf->flows) {
+            hmap_remove(&nf->flows, &nf_flow->hmap_node);
+            free(nf_flow);
+        }
+        hmap_destroy(&nf->flows);
+
         free(nf);
     }
 }

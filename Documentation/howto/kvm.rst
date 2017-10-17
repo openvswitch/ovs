@@ -50,7 +50,7 @@ Create the following two files and store them in known locations. For example::
     #!/bin/sh
 
     switch='br0'
-    /sbin/ifconfig $1 0.0.0.0 up
+    ip link set $1 up
     ovs-vsctl add-port ${switch} $1
     EOF
 
@@ -60,7 +60,8 @@ Create the following two files and store them in known locations. For example::
     #!/bin/sh
 
     switch='br0'
-    /sbin/ifconfig $1 0.0.0.0 down
+    ip addr flush dev $1
+    ip link set $1 down
     ovs-vsctl del-port ${switch} $1
     EOF
 

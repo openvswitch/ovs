@@ -148,6 +148,8 @@ def fatal(msg):
 
 
 def put_text(text, x, y, s):
+    x = int(x)
+    y = int(y)
     extend = x + len(s) - len(text[y])
     if extend > 0:
         text[y] += ' ' * extend

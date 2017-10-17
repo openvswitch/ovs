@@ -206,7 +206,7 @@ esac
 
 logdir=$(dirname "$log")
 if test ! -d "$logdir"; then
-    mkdir -p -m755 "$logdir" 2>/dev/null || true
+    mkdir -p -m750 "$logdir" 2>/dev/null || true
     if test ! -d "$logdir"; then
         echo "$0: log directory $logdir does not exist and cannot be created" >&2
         exit 1

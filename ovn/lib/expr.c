@@ -612,6 +612,10 @@ make_cmp(struct expr_context *ctx,
         }
     }
 
+    if (!cs->n_values) {
+        e = expr_create_boolean(r == EXPR_R_NE);
+        goto exit;
+    }
     e = make_cmp__(f, r, &cs->values[0]);
     for (size_t i = 1; i < cs->n_values; i++) {
         e = expr_combine(r == EXPR_R_EQ ? EXPR_T_OR : EXPR_T_AND,
@@ -2377,9 +2381,9 @@ expr_sort(struct expr *expr)
     qsort(subs, n, sizeof *subs, compare_expr_sort);
 
     ovs_list_init(&expr->andor);
-    for (int i = 0; i < n; ) {
+    for (i = 0; i < n; ) {
         if (subs[i].relop) {
-            int j;
+            size_t j;
             for (j = i + 1; j < n; j++) {
                 if (subs[i].relop != subs[j].relop) {
                     break;
@@ -2391,7 +2395,7 @@ expr_sort(struct expr *expr)
                 crushed = crush_cmps(subs[i].expr, subs[i].relop);
             } else {
                 struct expr *combined = subs[i].expr;
-                for (int k = i + 1; k < j; k++) {
+                for (size_t k = i + 1; k < j; k++) {
                     combined = expr_combine(EXPR_T_AND, combined,
                                             subs[k].expr);
                 }
@@ -2400,7 +2404,7 @@ expr_sort(struct expr *expr)
             }
             if (crushed->type == EXPR_T_BOOLEAN) {
                 if (!crushed->boolean) {
-                    for (int k = j; k < n; k++) {
+                    for (size_t k = j; k < n; k++) {
                         expr_destroy(subs[k].expr);
                     }
                     expr_destroy(expr);
@@ -2528,9 +2532,9 @@ expr_normalize_or(struct expr *expr)
         return expr_create_boolean(false);
     }
     if (ovs_list_is_short(&expr->andor)) {
-        struct expr *sub = expr_from_node(ovs_list_pop_front(&expr->andor));
+        struct expr *e = expr_from_node(ovs_list_pop_front(&expr->andor));
         free(expr);
-        return sub;
+        return e;
     }
 
     return expr;
@@ -2901,7 +2905,7 @@ expr_matches_print(const struct hmap *matches, FILE *stream)
 
     const struct expr_match *m;
     HMAP_FOR_EACH (m, hmap_node, matches) {
-        char *s = match_to_string(&m->match, OFP_DEFAULT_PRIORITY);
+        char *s = match_to_string(&m->match, NULL, OFP_DEFAULT_PRIORITY);
         fputs(s, stream);
         free(s);
 

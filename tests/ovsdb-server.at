@@ -689,12 +689,12 @@ AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [dnl
 ordinals table
 _uuid                                name  number
 ------------------------------------ ----- ------
-<0> five  5     @&t@
-<1> four  4     @&t@
-<2> one   1     @&t@
-<3> three 3     @&t@
-<4> two   2     @&t@
-<5> zero  0     @&t@
+<0> five  5
+<1> four  4
+<2> one   1
+<3> three 3
+<4> two   2
+<5> zero  0
 ], [], [test ! -e pid || kill `cat pid`])
 dnl Now compact the database in-place.
 AT_CHECK([[ovs-appctl -t ovsdb-server ovsdb-server/compact]],
@@ -720,12 +720,12 @@ AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [dnl
 ordinals table
 _uuid                                name  number
 ------------------------------------ ----- ------
-<0> five  5     @&t@
-<1> four  4     @&t@
-<2> one   1     @&t@
-<3> three 3     @&t@
-<4> two   2     @&t@
-<5> zero  0     @&t@
+<0> five  5
+<1> four  4
+<2> one   1
+<3> three 3
+<4> two   2
+<5> zero  0
 ], [], [test ! -e pid || kill `cat pid`])
 dnl Now do some more transactions.
 AT_CHECK(
@@ -750,9 +750,9 @@ AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [dnl
 ordinals table
 _uuid                                name  number
 ------------------------------------ ----- ------
-<0> five  5     @&t@
-<1> four  4     @&t@
-<2> three 3     @&t@
+<0> five  5
+<1> four  4
+<2> three 3
 ], [], [test ! -e pid || kill `cat pid`])
 OVSDB_SERVER_SHUTDOWN
 AT_CLEANUP
@@ -1223,7 +1223,7 @@ cat stdout > output
 AT_CHECK([${PERL} $srcdir/uuidfilt.pl output], [0], [7,9c7,8
 < _uuid                                name number
 < ------------------------------------ ---- ------
-< <0> one  1     @&t@
+< <0> one  1
 ---
 > _uuid name number
 > ----- ---- ------
@@ -1325,7 +1325,7 @@ cat stdout > output
 AT_CHECK([${PERL} $srcdir/uuidfilt.pl output], [0], [7,9c7,8
 < _uuid                                name number
 < ------------------------------------ ---- ------
-< <0> one  1     @&t@
+< <0> one  1
 ---
 > _uuid name number
 > ----- ---- ------
@@ -1344,12 +1344,12 @@ cat stdout > output
 AT_CHECK([${PERL} $srcdir/uuidfilt.pl output], [0], [a table
 _uuid                                name number
 ------------------------------------ ---- ------
-<0> zero 0     @&t@
+<0> zero 0
 
 b table
 _uuid                                name number
 ------------------------------------ ---- ------
-<1> one  1     @&t@
+<1> one  1
 ])
 
 OVSDB_SERVER_SHUTDOWN

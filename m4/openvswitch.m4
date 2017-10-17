@@ -620,3 +620,19 @@ AC_DEFUN([OVS_LIBTOOL_VERSIONS],
   AC_MSG_RESULT([libX-$OVS_MAJOR.$OVS_MINOR.so.$LT_CURRENT.0.$OVS_MICRO)])
   AC_SUBST(OVS_LTINFO)
     ])
+
+dnl OVS does not use C++ itself, but it provides public header files
+dnl that a C++ compiler should accept, so when --enable-Werror is in
+dnl effect and a C++ compiler is available, we enable building a C++
+dnl source file that #includes all the public headers, as a way to
+dnl ensure that they are acceptable as C++.
+AC_DEFUN([OVS_CHECK_CXX],
+  [AC_REQUIRE([AC_PROG_CXX])
+   AC_REQUIRE([OVS_ENABLE_WERROR])
+   AX_CXX_COMPILE_STDCXX([11], [], [optional])
+   if test $enable_Werror = yes && test $HAVE_CXX11 = 1; then
+     enable_cxx=:
+   else
+     enable_cxx=false
+   fi
+   AM_CONDITIONAL([HAVE_CXX], [$enable_cxx])])

@@ -4,9 +4,11 @@ EXTRA_DIST += \
 	$(SYSTEM_TESTSUITE_AT) \
 	$(SYSTEM_KMOD_TESTSUITE_AT) \
 	$(SYSTEM_USERSPACE_TESTSUITE_AT) \
+	$(SYSTEM_OFFLOADS_TESTSUITE_AT) \
 	$(TESTSUITE) \
 	$(SYSTEM_KMOD_TESTSUITE) \
 	$(SYSTEM_USERSPACE_TESTSUITE) \
+	$(SYSTEM_OFFLOADS_TESTSUITE) \
 	tests/atlocal.in \
 	$(srcdir)/package.m4 \
 	$(srcdir)/tests/testsuite \
@@ -82,6 +84,7 @@ TESTSUITE_AT = \
 	tests/ovsdb-monitor.at \
 	tests/ovsdb-idl.at \
 	tests/ovsdb-lock.at \
+	tests/ovsdb-rbac.at \
 	tests/ovs-vsctl.at \
 	tests/ovs-xapi-sync.at \
 	tests/stp.at \
@@ -91,11 +94,14 @@ TESTSUITE_AT = \
 	tests/vtep-ctl.at \
 	tests/auto-attach.at \
 	tests/ovn.at \
+	tests/ovn-northd.at \
 	tests/ovn-nbctl.at \
 	tests/ovn-sbctl.at \
 	tests/ovn-controller.at \
 	tests/ovn-controller-vtep.at \
-	tests/mcast-snooping.at
+	tests/mcast-snooping.at \
+	tests/packet-type-aware.at \
+	tests/nsh.at
 
 SYSTEM_KMOD_TESTSUITE_AT = \
 	tests/system-common-macros.at \
@@ -105,12 +111,19 @@ SYSTEM_KMOD_TESTSUITE_AT = \
 SYSTEM_USERSPACE_TESTSUITE_AT = \
 	tests/system-userspace-testsuite.at \
 	tests/system-ovn.at \
-	tests/system-userspace-macros.at
+	tests/system-userspace-macros.at \
+	tests/system-userspace-packet-type-aware.at
 
 SYSTEM_TESTSUITE_AT = \
 	tests/system-common-macros.at \
 	tests/system-ovn.at \
+	tests/system-layer3-tunnels.at \
 	tests/system-traffic.at
+
+SYSTEM_OFFLOADS_TESTSUITE_AT = \
+	tests/system-common-macros.at \
+	tests/system-offloads-traffic.at \
+	tests/system-offloads-testsuite.at
 
 check_SCRIPTS += tests/atlocal
 
@@ -118,6 +131,7 @@ TESTSUITE = $(srcdir)/tests/testsuite
 TESTSUITE_PATCH = $(srcdir)/tests/testsuite.patch
 SYSTEM_KMOD_TESTSUITE = $(srcdir)/tests/system-kmod-testsuite
 SYSTEM_USERSPACE_TESTSUITE = $(srcdir)/tests/system-userspace-testsuite
+SYSTEM_OFFLOADS_TESTSUITE = $(srcdir)/tests/system-offloads-testsuite
 DISTCLEANFILES += tests/atconfig tests/atlocal
 
 AUTOTEST_PATH = utilities:vswitchd:ovsdb:vtep:tests:$(PTHREAD_WIN32_DIR_DLL):ovn/controller-vtep:ovn/northd:ovn/utilities:ovn/controller
@@ -174,6 +188,7 @@ valgrind_wrappers = \
 	tests/valgrind/ovsdb-tool \
 	tests/valgrind/ovstest \
 	tests/valgrind/test-ovsdb \
+	tests/valgrind/test-skiplist \
 	tests/valgrind/test-strtok_r \
 	tests/valgrind/test-type-props
 
@@ -229,6 +244,10 @@ check-system-userspace: all
 	set $(SHELL) '$(SYSTEM_USERSPACE_TESTSUITE)' -C tests  AUTOTEST_PATH='$(AUTOTEST_PATH)' $(TESTSUITEFLAGS) -j1; \
 	"$$@" || (test X'$(RECHECK)' = Xyes && "$$@" --recheck)
 
+check-offloads: all
+	set $(SHELL) '$(SYSTEM_OFFLOADS_TESTSUITE)' -C tests  AUTOTEST_PATH='$(AUTOTEST_PATH)' $(TESTSUITEFLAGS) -j1; \
+	"$$@" || (test X'$(RECHECK)' = Xyes && "$$@" --recheck)
+
 clean-local:
 	test ! -f '$(TESTSUITE)' || $(SHELL) '$(TESTSUITE)' -C tests --clean
 
@@ -250,6 +269,10 @@ $(SYSTEM_KMOD_TESTSUITE): package.m4 $(SYSTEM_TESTSUITE_AT) $(SYSTEM_KMOD_TESTSU
 	$(AM_V_at)mv $@.tmp $@
 
 $(SYSTEM_USERSPACE_TESTSUITE): package.m4 $(SYSTEM_TESTSUITE_AT) $(SYSTEM_USERSPACE_TESTSUITE_AT) $(COMMON_MACROS_AT)
+	$(AM_V_GEN)$(AUTOTEST) -I '$(srcdir)' -o $@.tmp $@.at
+	$(AM_V_at)mv $@.tmp $@
+
+$(SYSTEM_OFFLOADS_TESTSUITE): package.m4 $(SYSTEM_TESTSUITE_AT) $(SYSTEM_OFFLOADS_TESTSUITE_AT) $(COMMON_MACROS_AT)
 	$(AM_V_GEN)$(AUTOTEST) -I '$(srcdir)' -o $@.tmp $@.at
 	$(AM_V_at)mv $@.tmp $@
 
@@ -326,6 +349,7 @@ tests_ovstest_SOURCES = \
 	tests/test-rstp.c \
 	tests/test-sflow.c \
 	tests/test-sha1.c \
+	tests/test-skiplist.c \
 	tests/test-stp.c \
 	tests/test-unixctl.c \
 	tests/test-util.c \

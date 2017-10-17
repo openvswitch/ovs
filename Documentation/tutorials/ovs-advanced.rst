@@ -103,10 +103,9 @@ From Open vSwitch's perspective, the bridge that you create this way is as real
 as any other.  You can, for example, connect it to an OpenFlow controller or
 use ``ovs-ofctl`` to examine and modify it and its OpenFlow flow table.  On the
 other hand, the bridge is not visible to the operating system's network stack,
-so ``ifconfig`` or ``ip`` cannot see it or affect it, which means that
-utilities like ``ping`` and ``tcpdump`` will not work either.  (That has its
-good side, too: you can't screw up your computer's network stack by
-manipulating a sandboxed OVS.)
+so ``ip`` cannot see it or affect it, which means that utilities like ``ping``
+and ``tcpdump`` will not work either.  (That has its good side, too: you can't
+screw up your computer's network stack by manipulating a sandboxed OVS.)
 
 When you're done using OVS from the sandbox, exit the nested shell (by entering
 the "exit" shell command or pressing Control+D).  This will kill the daemons
@@ -267,9 +266,9 @@ In addition to adding a port, the ``ovs-vsctl`` command above sets its
   we can talk about OpenFlow port 1 and know that it corresponds to ``p1``.
 
 The ``ovs-ofctl`` command above brings up the simulated interfaces, which are
-down initially, using an OpenFlow request.  The effect is similar to ``ifconfig
+down initially, using an OpenFlow request.  The effect is similar to ``ip link
 up``, but the sandbox's interfaces are not visible to the operating system and
-therefore ``ifconfig`` would not affect them.
+therefore ``ip`` would not affect them.
 
 We have not configured anything related to VLANs or MAC learning.  That's
 because we're going to implement those features in the flow table.

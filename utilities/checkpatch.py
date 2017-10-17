@@ -16,6 +16,7 @@ from __future__ import print_function
 
 import email
 import getopt
+import os
 import re
 import sys
 
@@ -62,21 +63,41 @@ def print_warning(message):
     __warnings = __warnings + 1
 
 
+def reset_counters():
+    global __errors, __warnings, total_line
+
+    __errors = 0
+    __warnings = 0
+    total_line = 0
+
+
+# These are keywords whose names are normally followed by a space and
+# something in parentheses (usually an expression) then a left curly brace.
+#
+# 'do' almost qualifies but it's also used as "do { ... } while (...);".
+__parenthesized_constructs = 'if|for|while|switch|[_A-Z]+FOR_EACH[_A-Z]*'
+
 __regex_added_line = re.compile(r'^\+{1,2}[^\+][\w\W]*')
 __regex_subtracted_line = re.compile(r'^\-{1,2}[^\-][\w\W]*')
 __regex_leading_with_whitespace_at_all = re.compile(r'^\s+')
 __regex_leading_with_spaces = re.compile(r'^ +[\S]+')
 __regex_trailing_whitespace = re.compile(r'[^\S]+$')
 __regex_single_line_feed = re.compile(r'^\f$')
-__regex_for_if_missing_whitespace = re.compile(r' +(if|for|while)[\(]')
-__regex_for_if_too_much_whitespace = re.compile(r' +(if|for|while)  +[\(]')
+__regex_for_if_missing_whitespace = re.compile(r' +(%s)[\(]'
+                                               % __parenthesized_constructs)
+__regex_for_if_too_much_whitespace = re.compile(r' +(%s)  +[\(]'
+                                                % __parenthesized_constructs)
 __regex_for_if_parens_whitespace = \
-    re.compile(r' +(if|for|while) \( +[\s\S]+\)')
+    re.compile(r' +(%s) \( +[\s\S]+\)' % __parenthesized_constructs)
 __regex_is_for_if_single_line_bracket = \
-    re.compile(r'^ +(if|for|while) \(.*\)')
+    re.compile(r'^ +(%s) \(.*\)' % __parenthesized_constructs)
 __regex_ends_with_bracket = \
     re.compile(r'[^\s]\) {(\s+/\*[\s\Sa-zA-Z0-9\.,\?\*/+-]*)?$')
 __regex_ptr_declaration_missing_whitespace = re.compile(r'[a-zA-Z0-9]\*[^*]')
+__regex_is_comment_line = re.compile(r'^\s*(/\*|\*\s)')
+__regex_trailing_operator = re.compile(r'^[^ ]* [^ ]*[?:]$')
+__regex_conditional_else_bracing = re.compile(r'^\s*else\s*{?$')
+__regex_conditional_else_bracing2 = re.compile(r'^\s*}\selse\s*$')
 
 skip_leading_whitespace_check = False
 skip_trailing_whitespace_check = False
@@ -89,6 +110,11 @@ skip_signoff_check = False
 # Python isn't checked as flake8 performs these checks during build.
 line_length_blacklist = ['.am', '.at', 'etc', '.in', '.m4', '.mk', '.patch',
                          '.py']
+
+# Don't enforce a requirement that leading whitespace be all spaces on
+# files that include these characters in their name, since these kinds
+# of files need lines with leading tabs.
+leading_whitespace_blacklist = ['.mk', '.am', '.at']
 
 
 def is_subtracted_line(line):
@@ -163,6 +189,10 @@ def if_and_for_end_with_bracket_check(line):
             return True
         if __regex_ends_with_bracket.search(line) is None:
             return False
+    if __regex_conditional_else_bracing.match(line) is not None:
+        return False
+    if __regex_conditional_else_bracing2.match(line) is not None:
+        return False
     return True
 
 
@@ -179,6 +209,16 @@ def line_length_check(line):
     return False
 
 
+def is_comment_line(line):
+    """Returns TRUE if the current line is part of a block comment."""
+    return __regex_is_comment_line.match(line) is not None
+
+
+def trailing_operator(line):
+    """Returns TRUE if the current line ends with an operatorsuch as ? or :"""
+    return __regex_trailing_operator.match(line) is not None
+
+
 checks = [
     {'regex': None,
      'match_name':
@@ -186,8 +226,9 @@ checks = [
      'check': lambda x: line_length_check(x),
      'print': lambda: print_warning("Line length is >79-characters long")},
 
-    {'regex': '$(?<!\.mk)',
-     'match_name': None,
+    {'regex': None,
+     'match_name':
+     lambda x: not any([fmt in x for fmt in leading_whitespace_blacklist]),
      'check': lambda x: not leading_whitespace_is_spaces(x),
      'print': lambda: print_warning("Line has non-spaces leading whitespace")},
 
@@ -195,19 +236,81 @@ checks = [
      'check': lambda x: trailing_whitespace_or_crlf(x),
      'print': lambda: print_warning("Line has trailing whitespace")},
 
-    {'regex': '(.c|.h)(.in)?$', 'match_name': None,
+    {'regex': '(\.c|\.h)(\.in)?$', 'match_name': None,
+     'prereq': lambda x: not is_comment_line(x),
      'check': lambda x: not if_and_for_whitespace_checks(x),
      'print': lambda: print_error("Improper whitespace around control block")},
 
-    {'regex': '(.c|.h)(.in)?$', 'match_name': None,
+    {'regex': '(\.c|\.h)(\.in)?$', 'match_name': None,
+     'prereq': lambda x: not is_comment_line(x),
      'check': lambda x: not if_and_for_end_with_bracket_check(x),
      'print': lambda: print_error("Inappropriate bracing around statement")},
 
-    {'regex': '(.c|.h)(.in)?$', 'match_name': None,
+    {'regex': '(\.c|\.h)(\.in)?$', 'match_name': None,
+     'prereq': lambda x: not is_comment_line(x),
      'check': lambda x: pointer_whitespace_check(x),
      'print':
-     lambda: print_error("Inappropriate spacing in pointer declaration")}
+     lambda: print_error("Inappropriate spacing in pointer declaration")},
+
+    {'regex': '(\.c|\.h)(\.in)?$', 'match_name': None,
+     'prereq': lambda x: not is_comment_line(x),
+     'check': lambda x: trailing_operator(x),
+     'print':
+     lambda: print_error("Line has '?' or ':' operator at end of line")},
 ]
+
+
+def regex_function_factory(func_name):
+    regex = re.compile(r'\b%s\([^)]*\)' % func_name)
+    return lambda x: regex.search(x) is not None
+
+
+def regex_error_factory(description):
+    return lambda: print_error(description)
+
+
+std_functions = [
+        ('malloc', 'Use xmalloc() in place of malloc()'),
+        ('calloc', 'Use xcalloc() in place of calloc()'),
+        ('realloc', 'Use xrealloc() in place of realloc()'),
+        ('strdup', 'Use xstrdup() in place of strdup()'),
+        ('asprintf', 'Use xasprintf() in place of asprintf()'),
+        ('vasprintf', 'Use xvasprintf() in place of vasprintf()'),
+        ('strcpy', 'Use ovs_strlcpy() in place of strcpy()'),
+        ('strlcpy', 'Use ovs_strlcpy() in place of strlcpy()'),
+        ('strncpy', 'Use ovs_strzcpy() in place of strncpy()'),
+        ('strerror', 'Use ovs_strerror() in place of strerror()'),
+        ('sleep', 'Use xsleep() in place of sleep()'),
+        ('abort', 'Use ovs_abort() in place of abort()'),
+        ('assert', 'Use ovs_assert() in place of assert()'),
+        ('error', 'Use ovs_error() in place of error()'),
+]
+checks += [
+    {'regex': '(\.c|\.h)(\.in)?$',
+     'match_name': None,
+     'prereq': lambda x: not is_comment_line(x),
+     'check': regex_function_factory(function_name),
+     'print': regex_error_factory(description)}
+    for (function_name, description) in std_functions]
+
+
+def regex_operator_factory(operator):
+    regex = re.compile(r'^[^#][^"\']*[^ "]%s[^ "\'][^"]*' % operator)
+    return lambda x: regex.search(x) is not None
+
+
+infix_operators = \
+    [re.escape(op) for op in ['/', '%', '<<', '>>', '<=', '>=', '==', '!=',
+            '^', '|', '&&', '||', '?:', '=', '+=', '-=', '*=', '/=', '%=',
+            '&=', '^=', '|=', '<<=', '>>=']] \
+    + ['[^<" ]<[^=" ]', '[^->" ]>[^=" ]', '[^ !()/"]\*[^/]', '[^ !&()"]&',
+       '[^" +(]\+[^"+;]', '[^" -(]-[^"->;]', '[^" <>=!^|+\-*/%&]=[^"=]']
+checks += [
+    {'regex': '(\.c|\.h)(\.in)?$', 'match_name': None,
+     'prereq': lambda x: not is_comment_line(x),
+     'check': regex_operator_factory(operator),
+     'print': lambda: print_warning("Line lacks whitespace around operator")}
+    for operator in infix_operators]
 
 
 def get_file_type_checks(filename):
@@ -232,6 +335,8 @@ def run_checks(current_file, line, lineno):
     global checking_file, total_line
     print_line = False
     for check in get_file_type_checks(current_file):
+        if 'prereq' in check and not check['prereq'](line):
+            continue
         if check['check'](line):
             check['print']()
             print_line = True
@@ -244,13 +349,13 @@ def run_checks(current_file, line, lineno):
         print("%s\n" % line)
 
 
-def ovs_checkpatch_parse(text):
-    global print_file_name, total_line
+def ovs_checkpatch_parse(text, filename):
+    global print_file_name, total_line, checking_file
     lineno = 0
     signatures = []
     co_authors = []
     parse = 0
-    current_file = ''
+    current_file = filename if checking_file else ''
     previous_file = ''
     scissors = re.compile(r'^[\w]*---[\w]*')
     hunks = re.compile('^(---|\+\+\+) (\S+)')
@@ -260,8 +365,12 @@ def ovs_checkpatch_parse(text):
                               re.I | re.M | re.S)
     is_co_author = re.compile(r'(\s*(Co-authored-by: )(.*))$',
                               re.I | re.M | re.S)
+    is_gerrit_change_id = re.compile(r'(\s*(change-id: )(.*))$',
+                                     re.I | re.M | re.S)
 
-    for line in text.decode(errors='ignore').split('\n'):
+    reset_counters()
+
+    for line in text.split('\n'):
         if current_file != previous_file:
             previous_file = current_file
 
@@ -297,6 +406,10 @@ def ovs_checkpatch_parse(text):
             elif is_co_author.match(line):
                 m = is_co_author.match(line)
                 co_authors.append(m.group(3))
+            elif is_gerrit_change_id.match(line):
+                print_error(
+                    "Remove Gerrit Change-Id's before submitting upstream.")
+                print("%d: %s\n" % (lineno, line))
         elif parse == 2:
             newfile = hunks.match(line)
             if newfile:
@@ -320,6 +433,8 @@ def ovs_checkpatch_parse(text):
             # linux or windows coding standards
             if current_file.startswith('datapath'):
                 continue
+            if current_file.startswith('include/linux'):
+                continue
             run_checks(current_file, cmp_line, lineno)
     if __errors or __warnings:
         return -1
@@ -327,25 +442,35 @@ def ovs_checkpatch_parse(text):
 
 
 def usage():
-    print("Open vSwitch checkpatch.py")
-    print("Checks a patch for trivial mistakes.")
-    print("usage:")
-    print("%s [options] [patch file]" % sys.argv[0])
-    print("options:")
-    print("-h|--help\t\t\t\tThis help message")
-    print("-b|--skip-block-whitespace\t"
-          "Skips the if/while/for whitespace tests")
-    print("-f|--check-file\t\t\tCheck a file instead of a patchfile.")
-    print("-l|--skip-leading-whitespace\t"
-          "Skips the leading whitespace test")
-    print("-s|--skip-signoff-lines\t"
-          "Do not emit an error if no Signed-off-by line is present")
-    print("-t|--skip-trailing-whitespace\t"
-          "Skips the trailing whitespace test")
+    print("""\
+Open vSwitch checkpatch.py
+Checks a patch for trivial mistakes.
+usage:
+%s [options] [PATCH1 [PATCH2 ...] | -f SOURCE1 [SOURCE2 ...] | -1 | -2 | ...]
+
+Input options:
+-f|--check-file                Arguments are source files, not patches.
+-1, -2, ...                    Check recent commits in this repo.
+
+Check options:
+-h|--help                      This help message
+-b|--skip-block-whitespace     Skips the if/while/for whitespace tests
+-l|--skip-leading-whitespace   Skips the leading whitespace test
+-s|--skip-signoff-lines        Tolerate missing Signed-off-by line
+-t|--skip-trailing-whitespace  Skips the trailing whitespace test"""
+          % sys.argv[0])
+
+
+def ovs_checkpatch_print_result(result):
+    global __warnings, __errors, total_line
+    if result < 0:
+        print("Lines checked: %d, Warnings: %d, Errors: %d\n" %
+              (total_line, __warnings, __errors))
+    else:
+        print("Lines checked: %d, no obvious problems found\n" % (total_line))
 
 
 def ovs_checkpatch_file(filename):
-    global __warnings, __errors, checking_file, total_line
     try:
         mail = email.message_from_file(open(filename, 'r'))
     except:
@@ -355,18 +480,31 @@ def ovs_checkpatch_file(filename):
     for part in mail.walk():
         if part.get_content_maintype() == 'multipart':
             continue
-    result = ovs_checkpatch_parse(part.get_payload(decode=True))
-    if result < 0:
-        print("Lines checked: %d, Warnings: %d, Errors: %d" %
-              (total_line, __warnings, __errors))
-    else:
-        print("Lines checked: %d, no obvious problems found" % (total_line))
+    result = ovs_checkpatch_parse(part.get_payload(decode=False), filename)
+    ovs_checkpatch_print_result(result)
     return result
+
+
+def partition(pred, iterable):
+    """Returns [[trues], [falses]], where [trues] is the items in
+    'iterable' that satisfy 'pred' and [falses] is all the rest."""
+    trues = []
+    falses = []
+    for item in iterable:
+        if pred(item):
+            trues.append(item)
+        else:
+            falses.append(item)
+    return trues, falses
 
 
 if __name__ == '__main__':
     try:
-        optlist, args = getopt.getopt(sys.argv[1:], 'bhlstf',
+        numeric_options, args = partition(lambda s: re.match('-[0-9]+$', s),
+                                          sys.argv[1:])
+        n_patches = int(numeric_options[-1][1:]) if numeric_options else 0
+
+        optlist, args = getopt.getopt(args, 'bhlstf',
                                       ["check-file",
                                        "help",
                                        "skip-block-whitespace",
@@ -398,11 +536,38 @@ if __name__ == '__main__':
     if sys.stdout.isatty():
         colors = True
 
-    try:
-        filename = args[0]
-    except:
+    if n_patches:
+        status = 0
+
+        git_log = 'git log --no-color --no-merges --pretty=format:"%H %s" '
+        with os.popen(git_log + '-%d' % n_patches, 'r') as f:
+            commits = f.read().split("\n")
+
+        for i in reversed(range(0, n_patches)):
+            revision, name = commits[i].split(" ", 1)
+            f = os.popen('git format-patch -1 --stdout %s' % revision, 'r')
+            patch = f.read()
+            f.close()
+
+            print('== Checking %s ("%s") ==' % (revision[0:12], name))
+            result = ovs_checkpatch_parse(patch, revision)
+            ovs_checkpatch_print_result(result)
+            if result:
+                status = -1
+        sys.exit(status)
+
+    if not args:
         if sys.stdin.isatty():
             usage()
             sys.exit(-1)
-        sys.exit(ovs_checkpatch_parse(sys.stdin.read()))
-    sys.exit(ovs_checkpatch_file(filename))
+        result = ovs_checkpatch_parse(sys.stdin.read(), '-')
+        ovs_checkpatch_print_result(result)
+        sys.exit(result)
+
+    status = 0
+    for filename in args:
+        print('== Checking "%s" ==' % filename)
+        result = ovs_checkpatch_file(filename)
+        if result:
+            status = -1
+    sys.exit(status)

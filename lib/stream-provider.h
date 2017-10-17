@@ -34,7 +34,7 @@ struct stream {
 };
 
 void stream_init(struct stream *, const struct stream_class *,
-                 int connect_status, const char *name);
+                 int connect_status, char *name);
 static inline void stream_assert_class(const struct stream *stream,
                                        const struct stream_class *class)
 {
@@ -135,7 +135,7 @@ struct pstream {
     ovs_be16 bound_port;
 };
 
-void pstream_init(struct pstream *, const struct pstream_class *, const char *name);
+void pstream_init(struct pstream *, const struct pstream_class *, char *name);
 void pstream_set_bound_port(struct pstream *, ovs_be16 bound_port);
 static inline void pstream_assert_class(const struct pstream *pstream,
                                         const struct pstream_class *class)

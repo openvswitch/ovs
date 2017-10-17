@@ -29,6 +29,11 @@ struct ofproto_ipfix_flow_exporter_options;
 struct flow_tnl;
 struct ofport;
 
+struct dpif_ipfix_actions {
+    bool output_action;     /* Set to true if packet has at least one
+                               OVS_ACTION_ATTR_OUTPUT action. */
+};
+
 struct dpif_ipfix *dpif_ipfix_create(void);
 struct dpif_ipfix *dpif_ipfix_ref(const struct dpif_ipfix *);
 void dpif_ipfix_unref(struct dpif_ipfix *);
@@ -52,12 +57,19 @@ int dpif_ipfix_get_stats(const struct dpif_ipfix *, bool, struct ovs_list *);
 
 void dpif_ipfix_bridge_sample(struct dpif_ipfix *, const struct dp_packet *,
                               const struct flow *,
-                              odp_port_t, odp_port_t, const struct flow_tnl *);
+                              odp_port_t, odp_port_t, const struct flow_tnl *,
+                              const struct dpif_ipfix_actions *);
 void dpif_ipfix_flow_sample(struct dpif_ipfix *, const struct dp_packet *,
                             const struct flow *, const union user_action_cookie *,
-                            odp_port_t, const struct flow_tnl *);
+                            odp_port_t, const struct flow_tnl *,
+                            const struct dpif_ipfix_actions *);
 
 void dpif_ipfix_run(struct dpif_ipfix *);
 void dpif_ipfix_wait(struct dpif_ipfix *);
+
+void dpif_ipfix_read_actions(const struct flow *flow,
+                             const struct nlattr *actions,
+                             size_t actions_len,
+                             struct dpif_ipfix_actions *ipfix_actions);
 
 #endif /* ofproto/ofproto-dpif-ipfix.h */

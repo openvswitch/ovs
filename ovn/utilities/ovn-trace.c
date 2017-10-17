@@ -34,6 +34,7 @@
 #include "ovn/actions.h"
 #include "ovn/expr.h"
 #include "ovn/lex.h"
+#include "ovn/lib/acl-log.h"
 #include "ovn/lib/logical-fields.h"
 #include "ovn/lib/ovn-sb-idl.h"
 #include "ovn/lib/ovn-dhcp.h"
@@ -169,34 +170,16 @@ default_ovs(void)
 static void
 parse_ct_option(const char *state_s_)
 {
-    uint32_t state = CS_TRACKED;
+    uint32_t state;
+    struct ds ds = DS_EMPTY_INITIALIZER;
 
-    char *state_s = xstrdup(state_s_);
-    char *save_ptr = NULL;
-    for (char *cs = strtok_r(state_s, ", ", &save_ptr); cs;
-         cs = strtok_r(NULL, ", ", &save_ptr)) {
-        uint32_t bit = ct_state_from_string(cs);
-        if (!bit) {
-            ovs_fatal(0, "%s: unknown connection tracking state flag", cs);
-        }
-        state |= bit;
+    if (!parse_ct_state(state_s_, CS_TRACKED, &state, &ds)) {
+        ovs_fatal(0, "%s", ds_cstr(&ds));
     }
-    free(state_s);
-
-    /* Check constraints listed in ovs-fields(7). */
-    if (state & CS_INVALID && state & ~(CS_TRACKED | CS_INVALID)) {
-        VLOG_WARN("%s: invalid connection state: "
-                  "when \"inv\" is set, only \"trk\" may also be set",
-                  state_s_);
+    if (!validate_ct_state(state, &ds)) {
+        VLOG_WARN("%s", ds_cstr(&ds));
     }
-    if (state & CS_NEW && state & CS_ESTABLISHED) {
-        VLOG_WARN("%s: invalid connection state: "
-                  "\"new\" and \"est\" are mutually exclusive", state_s_);
-    }
-    if (state & CS_NEW && state & CS_REPLY_DIR) {
-        VLOG_WARN("%s: invalid connection state: "
-                  "\"new\" and \"rpy\" are mutually exclusive", state_s_);
-    }
+    ds_destroy(&ds);
 
     ct_states = xrealloc(ct_states, (n_ct_states + 1) * sizeof *ct_states);
     ct_states[n_ct_states++] = state;
@@ -826,7 +809,7 @@ read_flows(void)
             .pipeline = (!strcmp(sblf->pipeline, "ingress")
                          ? OVNACT_P_INGRESS
                          : OVNACT_P_EGRESS),
-            .n_tables = 16,
+            .n_tables = 24,
             .cur_ltable = sblf->table_id,
         };
         uint64_t stub[1024 / 8];
@@ -965,7 +948,7 @@ ovntrace_port_lookup_by_name(const char *name)
 
     struct shash_node *node;
     SHASH_FOR_EACH (node, &ports) {
-        const struct ovntrace_port *port = node->data;
+        port = node->data;
 
         if (port->name2 && !strcmp(port->name2, name)) {
             if (match) {
@@ -977,9 +960,8 @@ ovntrace_port_lookup_by_name(const char *name)
     }
 
     if (uuid_is_partial_string(name) >= 4) {
-        struct shash_node *node;
         SHASH_FOR_EACH (node, &ports) {
-            const struct ovntrace_port *port = node->data;
+            port = node->data;
 
             struct uuid name_uuid;
             if (uuid_is_partial_match(&port->uuid, name)
@@ -1295,7 +1277,7 @@ summarize_move(const struct mf_subfield *rsrc,
         if (rsrc->ofs == 0 && rsrc->n_bits >= rsrc->field->n_bits) {
             union mf_value value;
             mf_get_value(rsrc->field, uflow, &value);
-            mf_format(rsrc->field, &value, NULL, &s);
+            mf_format(rsrc->field, &value, NULL, NULL, &s);
         } else {
             union mf_subvalue cst;
             mf_read_subfield(rsrc, uflow, &cst);
@@ -1579,17 +1561,16 @@ execute_put_dhcp_opts(const struct ovnact_put_dhcp_opts *pdo,
     }
     ovntrace_node_append(super, OVNTRACE_NODE_MODIFY, "%s(%s)",
                          name, ds_cstr(&s));
-    ds_destroy(&s);
 
     struct mf_subfield dst = expr_resolve_field(&pdo->dst);
     if (!mf_is_register(dst.field->id)) {
         /* Format assignment. */
-        struct ds s = DS_EMPTY_INITIALIZER;
+        ds_clear(&s);
         expr_field_format(&pdo->dst, &s);
         ovntrace_node_append(super, OVNTRACE_NODE_MODIFY,
                              "%s = 1", ds_cstr(&s));
-        ds_destroy(&s);
     }
+    ds_destroy(&s);
 
     struct mf_subfield sf = expr_resolve_field(&pdo->dst);
     union mf_subvalue sv = { .u8_val = 1 };
@@ -1697,6 +1678,20 @@ execute_ct_nat(const struct ovnact_ct_nat *ct_nat,
     /* Upon return, we will trace the actions following the ct action in the
      * original table.  The pipeline forked, so we're using the original
      * flow, not ct_flow. */
+}
+
+static void
+execute_log(const struct ovnact_log *log, struct flow *uflow,
+            struct ovs_list *super)
+{
+    char *packet_str = flow_to_string(uflow, NULL);
+    ovntrace_node_append(super, OVNTRACE_NODE_TRANSFORMATION,
+                    "LOG: ACL name=%s, verdict=%s, severity=%s, packet=\"%s\"",
+                    log->name ? log->name : "<unnamed>",
+                    log_verdict_to_string(log->verdict),
+                    log_severity_to_string(log->severity),
+                    packet_str);
+    free(packet_str);
 }
 
 static void
@@ -1834,6 +1829,10 @@ trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
         case OVNACT_DNS_LOOKUP:
             execute_dns_lookup(ovnact_get_DNS_LOOKUP(a), uflow, super);
             break;
+
+        case OVNACT_LOG:
+            execute_log(ovnact_get_LOG(a), uflow, super);
+            break;
         }
 
     }
@@ -1878,13 +1877,9 @@ trace_openflow(const struct ovntrace_flow *f, struct ovs_list *super)
         struct ds s = DS_EMPTY_INITIALIZER;
         for (size_t i = 0; i < n_fses; i++) {
             ds_clear(&s);
-            ofp_print_flow_stats(&s, &fses[i]);
-
-            /* ofp_print_flow_stats() indents its output with a space.
-             * Omit it. */
-            const char *p = ds_cstr(&s);
-            p += strspn(p, " ");
-            ovntrace_node_append(super, OVNTRACE_NODE_ACTION, "%s", p);
+            ofp_print_flow_stats(&s, &fses[i], NULL, true);
+            ovntrace_node_append(super, OVNTRACE_NODE_ACTION,
+                                 "%s", ds_cstr(&s));
         }
         ds_destroy(&s);
     } else {
@@ -1971,7 +1966,7 @@ trace(const char *dp_s, const char *flow_s)
     struct ds output = DS_EMPTY_INITIALIZER;
 
     ds_put_cstr(&output, "# ");
-    flow_format(&output, &uflow);
+    flow_format(&output, &uflow, NULL);
     ds_put_char(&output, '\n');
 
     if (ovs) {

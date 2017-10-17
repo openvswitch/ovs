@@ -1,0 +1,410 @@
+AT_BANNER([packet-type-aware pipeline])
+
+AT_SETUP([ptap - triangle bridge setup with L2 and L3 GRE tunnels])
+
+########################
+# GRE tunneling test setup for PTAP bridge
+#
+#     192.168.10.10           192.168.10.20             192.168.10.30
+#          n1                       n2                        n3
+#          |ovs-n1                  |ovs-n2                   |ovs-n3
+#   +------o------+          +------o------+           +------o------+
+#   |    br-in1   |          |    br-in2   |           |    br-in3   |
+#   |             |          |   (PTAP)    |           |             |
+#   +------o------+          +------o------+           +------o------+
+#         gre                      gre                       gre
+#   10.0.0.1                (10.0.0.2)                (10.0.0.3)
+#  (20.0.0.1)                20.0.0.2                 (20.0.0.3)
+#  (30.0.0.1) LOCAL         (30.0.0.2) LOCAL           30.0.0.3  LOCAL
+#   +-----------o-+          +-----------o-+           +-----------o-+
+#   |    br-p1    |          |    br-p2    |           |    br-p3    |
+#   +------o------+          +------o------+           +------o------+
+#     p1-0 |                        | p2-0                    | p3-0
+#     p0-1 |                        | p0-2                    | p0-3
+#       +--o------------------------o-------------------------o--+
+#       |                          br0                           |
+#       +--------------------------------------------------------+
+#"
+#   GRE tunnel ports:
+#      No     Bridge      Name        Packet-type Remote bridge & ports
+#     -----------------------------------------------------------------------
+#      1020   br-in1      gre-12      l2          br-in2 2010 (ptap)
+#      1021   br-in1      gre-12_l3   l3                same
+#      1030   br-in1      gre-13      l2          br-in3 3010 (l2)
+#      2010   br-in2      gre-21      ptap        br-in1 1020 (l2), 1021 (l3)
+#      2030   br-in2      gre-23      ptap        br-in3 3020 (l2), 3021 (l3)
+#      3010   br-in1      gre-31      l2          br-in1 1030 (l2)
+#      3020   br-in1      gre-32      l2          br-in2 2010 (ptap)
+#      3021   br-in1      gre-32_l3   l3                same
+
+
+AT_SKIP_IF([test $HAVE_NC = no])
+OVS_TRAFFIC_VSWITCHD_START()
+
+HWADDR_BRP1=aa:55:00:00:00:01
+HWADDR_BRP2=aa:55:00:00:00:02
+HWADDR_BRP3=aa:55:00:00:00:03
+
+dnl Create veth ports to connect br0 with br-p1, br-p2 and br-p3
+AT_CHECK([ip link add p1-0 type veth peer name p0-1])
+AT_CHECK([ip link set p1-0 up])
+AT_CHECK([ip link set p0-1 up])
+AT_CHECK([ip link set dev p1-0 mtu 3300])
+AT_CHECK([ip link set dev p0-1 mtu 3300])
+on_exit 'ip link del p0-1'
+
+AT_CHECK([ip link add p2-0 type veth peer name p0-2])
+AT_CHECK([ip link set p2-0 up])
+AT_CHECK([ip link set p0-2 up])
+AT_CHECK([ip link set dev p2-0 mtu 3300])
+AT_CHECK([ip link set dev p0-2 mtu 3300])
+on_exit 'ip link del p0-2'
+
+AT_CHECK([ip link add p3-0 type veth peer name p0-3])
+AT_CHECK([ip link set p3-0 up])
+AT_CHECK([ip link set p0-3 up])
+AT_CHECK([ip link set dev p3-0 mtu 3300])
+AT_CHECK([ip link set dev p0-3 mtu 3300])
+on_exit 'ip link del p0-3'
+
+# Setup bridge infrastructure
+AT_CHECK([
+    ovs-vsctl add-br br-in1 -- \
+        set bridge br-in1 datapath_type=netdev fail-mode=standalone
+    ovs-vsctl add-br br-in2 -- \
+        set bridge br-in2 datapath_type=netdev fail-mode=standalone
+    ovs-vsctl add-br br-in3 -- \
+        set bridge br-in3 datapath_type=netdev fail-mode=standalone
+    ovs-vsctl add-br br-p1 -- \
+        set bridge br-p1 datapath_type=netdev fail-mode=standalone other-config:hwaddr=$HWADDR_BRP1
+    ovs-vsctl add-br br-p2 -- \
+        set bridge br-p2 datapath_type=netdev fail-mode=standalone other-config:hwaddr=$HWADDR_BRP2
+    ovs-vsctl add-br br-p3 -- \
+        set bridge br-p3 datapath_type=netdev fail-mode=standalone other-config:hwaddr=$HWADDR_BRP3
+
+    ovs-vsctl add-port br-p1 p1-0 -- set interface p1-0 ofport_request=2
+    ovs-vsctl add-port br-p2 p2-0 -- set interface p2-0 ofport_request=2
+    ovs-vsctl add-port br-p3 p3-0 -- set interface p3-0 ofport_request=2
+    ovs-vsctl add-port br0 p0-1 -- set interface p0-1 ofport_request=10
+    ovs-vsctl add-port br0 p0-2 -- set interface p0-2 ofport_request=20
+    ovs-vsctl add-port br0 p0-3 -- set interface p0-3 ofport_request=30
+
+    # Populate the MAC table of br0
+    ovs-ofctl del-flows br0
+    ovs-ofctl add-flow br0 dl_dst=$HWADDR_BRP1,actions=10
+    ovs-ofctl add-flow br0 dl_dst=$HWADDR_BRP2,actions=20
+    ovs-ofctl add-flow br0 dl_dst=$HWADDR_BRP3,actions=30
+
+    ovs-ofctl del-flows br-in1
+    ovs-ofctl del-flows br-in2
+    ovs-ofctl del-flows br-in3
+    ovs-ofctl del-flows br-p1
+    ovs-ofctl del-flows br-p2
+    ovs-ofctl del-flows br-p3
+], [0])
+
+### Setup GRE tunnels
+AT_CHECK([
+    ovs-vsctl add-port br-in1 gre12 -- \
+        set interface gre12 type=gre options:remote_ip=10.0.0.2 ofport_request=1020
+    ovs-vsctl add-port br-in1 gre12_l3 -- \
+        set interface gre12_l3 type=gre options:remote_ip=10.0.0.2 ofport_request=1021 options:packet_type=legacy_l3
+    ovs-vsctl add-port br-in1 gre13 -- \
+        set interface gre13 type=gre options:remote_ip=10.0.0.3 ofport_request=1030
+
+    ovs-vsctl add-port br-in2 gre21 -- \
+        set interface gre21 type=gre options:remote_ip=20.0.0.1 ofport_request=2010 options:packet_type=ptap
+    ovs-vsctl add-port br-in2 gre23 -- \
+        set interface gre23 type=gre options:remote_ip=20.0.0.3 ofport_request=2030 options:packet_type=ptap
+
+    ovs-vsctl add-port br-in3 gre31 -- \
+        set interface gre31 type=gre options:remote_ip=30.0.0.1 ofport_request=3010
+    ovs-vsctl add-port br-in3 gre32 -- \
+        set interface gre32 type=gre options:remote_ip=30.0.0.2 ofport_request=3020
+    ovs-vsctl add-port br-in3 gre32_l3 -- \
+        set interface gre32_l3 type=gre options:remote_ip=30.0.0.2 ofport_request=3021 options:packet_type=legacy_l3
+], [0], [stdout])
+
+AT_CHECK([
+    ip addr add 10.0.0.1/24 dev br-p1
+    ip link set br-p1 up
+], [0], [stdout])
+
+AT_CHECK([
+    ovs-appctl ovs/route/add 10.0.0.0/24 br-p1
+    ovs-appctl tnl/arp/set br-p1 10.0.0.1 $HWADDR_BRP1
+    ovs-appctl tnl/arp/set br-p1 10.0.0.2 $HWADDR_BRP2
+    ovs-appctl tnl/arp/set br-p1 10.0.0.3 $HWADDR_BRP3
+], [0], [stdout])
+
+AT_CHECK([
+    ip addr add 20.0.0.2/24 dev br-p2
+    ip link set br-p2 up
+], [0], [stdout])
+
+AT_CHECK([
+    ovs-appctl ovs/route/add 20.0.0.0/24 br-p2
+    ovs-appctl tnl/arp/set br-p2 20.0.0.1 $HWADDR_BRP1
+    ovs-appctl tnl/arp/set br-p2 20.0.0.2 $HWADDR_BRP2
+    ovs-appctl tnl/arp/set br-p2 20.0.0.3 $HWADDR_BRP3
+], [0], [stdout])
+
+AT_CHECK([
+    ip addr add 30.0.0.3/24 dev br-p3
+    ip link set br-p3 up
+], [0], [stdout])
+
+AT_CHECK([
+    ovs-appctl ovs/route/add 30.0.0.0/24 br-p3
+    ovs-appctl tnl/arp/set br-p3 30.0.0.1 $HWADDR_BRP1
+    ovs-appctl tnl/arp/set br-p3 30.0.0.2 $HWADDR_BRP2
+    ovs-appctl tnl/arp/set br-p3 30.0.0.3 $HWADDR_BRP3
+], [0], [stdout])
+
+AT_CHECK([
+    ovs-appctl ovs/route/show | grep User:
+], [0], [dnl
+User: 10.0.0.0/24 dev br-p1 SRC 10.0.0.1
+User: 20.0.0.0/24 dev br-p2 SRC 20.0.0.2
+User: 30.0.0.0/24 dev br-p3 SRC 30.0.0.3
+])
+
+AT_CHECK([
+    ovs-appctl tnl/neigh/show | grep br-p | sort
+], [0], [stdout])
+
+
+### Flows in br-p<x>to twist TEP IP addresses in tunnel IP headers
+AT_CHECK([
+    ovs-ofctl add-flow br-p1 in_port:LOCAL,actions=2
+    ovs-ofctl add-flow br-p1 in_port:2,ip,nw_dst:20.0.0.1,actions=mod_nw_dst:10.0.0.1,mod_nw_src:10.0.0.2,LOCAL
+    ovs-ofctl add-flow br-p1 in_port:2,ip,nw_dst:30.0.0.1,actions=mod_nw_dst:10.0.0.1,mod_nw_src:10.0.0.3,LOCAL
+
+    ovs-ofctl add-flow br-p2 in_port:LOCAL,actions=2
+    ovs-ofctl add-flow br-p2 in_port:2,ip,nw_dst:10.0.0.2,actions=mod_nw_dst:20.0.0.2,mod_nw_src:20.0.0.1,LOCAL
+    ovs-ofctl add-flow br-p2 in_port:2,ip,nw_dst:30.0.0.2,actions=mod_nw_dst:20.0.0.2,mod_nw_src:20.0.0.3,LOCAL
+
+    ovs-ofctl add-flow br-p3 in_port:LOCAL,actions=2
+    ovs-ofctl add-flow br-p3 in_port:2,ip,nw_dst:10.0.0.3,actions=mod_nw_dst:30.0.0.3,mod_nw_src:30.0.0.1,LOCAL
+    ovs-ofctl add-flow br-p3 in_port:2,ip,nw_dst:20.0.0.3,actions=mod_nw_dst:30.0.0.3,mod_nw_src:30.0.0.2,LOCAL
+], [0])
+
+# Strips 'n_packets=...' from ovs-ofctl output.
+strip_n_packets () {
+    sed 's/n_packets=[[0-9]]*, //'
+}
+
+# Strips 'n_bytes=...' from ovs-ofctl output.
+strip_n_bytes () {
+    sed 's/n_bytes=[[0-9]]*, //'
+}
+
+AT_CHECK([
+    ovs-ofctl dump-flows br-p1 | ofctl_strip | strip_n_packets | strip_n_bytes | sort | grep actions
+    ovs-ofctl dump-flows br-p2 | ofctl_strip | strip_n_packets | strip_n_bytes | sort | grep actions
+    ovs-ofctl dump-flows br-p3 | ofctl_strip | strip_n_packets | strip_n_bytes | sort | grep actions
+], [0], [dnl
+ in_port=LOCAL actions=output:2
+ ip,in_port=2,nw_dst=20.0.0.1 actions=mod_nw_dst:10.0.0.1,mod_nw_src:10.0.0.2,LOCAL
+ ip,in_port=2,nw_dst=30.0.0.1 actions=mod_nw_dst:10.0.0.1,mod_nw_src:10.0.0.3,LOCAL
+ in_port=LOCAL actions=output:2
+ ip,in_port=2,nw_dst=10.0.0.2 actions=mod_nw_dst:20.0.0.2,mod_nw_src:20.0.0.1,LOCAL
+ ip,in_port=2,nw_dst=30.0.0.2 actions=mod_nw_dst:20.0.0.2,mod_nw_src:20.0.0.3,LOCAL
+ in_port=LOCAL actions=output:2
+ ip,in_port=2,nw_dst=10.0.0.3 actions=mod_nw_dst:30.0.0.3,mod_nw_src:30.0.0.1,LOCAL
+ ip,in_port=2,nw_dst=20.0.0.3 actions=mod_nw_dst:30.0.0.3,mod_nw_src:30.0.0.2,LOCAL
+])
+
+### Setup test ports for traffic injection
+N1_IP=192.168.10.10
+N2_IP=192.168.10.20
+N3_IP=192.168.10.30
+N1_MAC=aa:55:aa:55:00:01
+N2_MAC=aa:55:aa:55:00:02
+N3_MAC=aa:55:aa:55:00:03
+N1_OFPORT=10
+N2_OFPORT=20
+N3_OFPORT=30
+
+ADD_NAMESPACES(ns1, ns2, ns3)
+ADD_VETH(n1, ns1, br-in1, "$N1_IP/24", $N1_MAC)
+ADD_VETH(n2, ns2, br-in2, "$N2_IP/24", $N2_MAC)
+ADD_VETH(n3, ns3, br-in3, "$N3_IP/24", $N3_MAC)
+
+NS_EXEC([ns1], [arp -s $N2_IP $N2_MAC])
+NS_EXEC([ns1], [arp -s $N3_IP $N3_MAC])
+
+NS_EXEC([ns2], [arp -s $N1_IP $N1_MAC])
+NS_EXEC([ns2], [arp -s $N3_IP $N3_MAC])
+
+NS_EXEC([ns3], [arp -s $N2_IP $N2_MAC])
+NS_EXEC([ns3], [arp -s $N1_IP $N1_MAC])
+
+AT_CHECK([
+    ovs-vsctl set interface ovs-n1 ofport_request=$N1_OFPORT
+    ovs-vsctl set interface ovs-n2 ofport_request=$N2_OFPORT
+    ovs-vsctl set interface ovs-n3 ofport_request=$N3_OFPORT
+], [0])
+
+#N1_DPPORT=$(ovs-appctl dpif/show | grep "n1 10" | sed 's|.*/\([[0-9]]*\):.*|\1|')
+#N2_DPPORT=$(ovs-appctl dpif/show | grep "n2 20" | sed 's|.*/\([[0-9]]*\):.*|\1|')
+#N3_DPPORT=$(ovs-appctl dpif/show | grep "n3 30" | sed 's|.*/\([[0-9]]*\):.*|\1|')
+
+### Verify datapath configuration
+AT_CHECK([
+    ovs-appctl dpif/show | grep -v hit | sed 's/\t/    /g'
+], [0], [dnl
+    br-in1:
+        br-in1 65534/2: (tap)
+        gre12 1020/14: (gre: remote_ip=10.0.0.2)
+        gre12_l3 1021/14: (gre: packet_type=legacy_l3, remote_ip=10.0.0.2)
+        gre13 1030/14: (gre: remote_ip=10.0.0.3)
+        ovs-n1 10/15: (system)
+    br-in2:
+        br-in2 65534/3: (tap)
+        gre21 2010/14: (gre: packet_type=ptap, remote_ip=20.0.0.1)
+        gre23 2030/14: (gre: packet_type=ptap, remote_ip=20.0.0.3)
+        ovs-n2 20/16: (system)
+    br-in3:
+        br-in3 65534/4: (tap)
+        gre31 3010/14: (gre: remote_ip=30.0.0.1)
+        gre32 3020/14: (gre: remote_ip=30.0.0.2)
+        gre32_l3 3021/14: (gre: packet_type=legacy_l3, remote_ip=30.0.0.2)
+        ovs-n3 30/17: (system)
+    br-p1:
+        br-p1 65534/5: (tap)
+        p1-0 2/8: (system)
+    br-p2:
+        br-p2 65534/6: (tap)
+        p2-0 2/9: (system)
+    br-p3:
+        br-p3 65534/7: (tap)
+        p3-0 2/10: (system)
+    br0:
+        br0 65534/1: (tap)
+        p0-1 10/11: (system)
+        p0-2 20/12: (system)
+        p0-3 30/13: (system)
+])
+
+### Test L3 forwarding flows
+AT_CHECK([
+    ovs-ofctl add-flow br-in1 ip,nw_dst=$N1_IP,actions=mod_dl_dst:$N1_MAC,$N1_OFPORT # Local route to N1
+    ovs-ofctl add-flow br-in1 ip,nw_dst=$N2_IP,actions=1020 # Route to N2 via the L2 tunnel to br-in2
+    ovs-ofctl add-flow br-in1 ip,nw_dst=$N3_IP,actions=1030 # Route to N3 direct through L2 tunnel
+
+    ovs-ofctl add-flow br-in2 ip,nw_dst=$N2_IP,actions=mod_dl_dst:$N2_MAC,$N2_OFPORT # Local route to N2 for ethernet packets
+    ovs-ofctl add-flow br-in2 ip,nw_dst=$N1_IP,actions=2010 # Route to N1 for ethernet packet
+    ovs-ofctl add-flow br-in2 packet_type=\(1,0x800\),nw_dst=$N1_IP,actions=2010 # Route to N1 for IP packets
+    ovs-ofctl add-flow br-in2 ip,nw_dst=$N3_IP,actions=2010 # Indirect route to N3 via br-in1 for ethernet packet
+    ovs-ofctl add-flow br-in2 packet_type=\(1,0x800\),nw_dst=$N3_IP,actions=2030 # Direct route to N3 for IP packets
+
+    ovs-ofctl add-flow br-in3 ip,nw_dst=$N3_IP,actions=mod_dl_dst:$N3_MAC,$N3_OFPORT # Local route to N1
+    ovs-ofctl add-flow br-in3 ip,nw_dst=$N2_IP,actions=3020 # Route to N2 via the L2 tunnel
+    ovs-ofctl add-flow br-in3 ip,nw_dst=$N1_IP,actions=3021 # Route to N1 via br-in2 through L3 tunnel
+], [0])
+
+AT_CHECK([
+    ovs-ofctl dump-flows br-in1 | ofctl_strip | strip_n_packets | strip_n_bytes | sort | grep actions
+], [0], [dnl
+ ip,nw_dst=192.168.10.10 actions=mod_dl_dst:aa:55:aa:55:00:01,output:10
+ ip,nw_dst=192.168.10.20 actions=output:1020
+ ip,nw_dst=192.168.10.30 actions=output:1030
+])
+
+AT_CHECK([
+    ovs-ofctl dump-flows br-in2 | ofctl_strip | strip_n_packets | strip_n_bytes | sort | grep actions
+], [0], [dnl
+ ip,nw_dst=192.168.10.10 actions=output:2010
+ ip,nw_dst=192.168.10.20 actions=mod_dl_dst:aa:55:aa:55:00:02,output:20
+ ip,nw_dst=192.168.10.30 actions=output:2010
+ packet_type=(1,0x800),nw_dst=192.168.10.10 actions=output:2010
+ packet_type=(1,0x800),nw_dst=192.168.10.30 actions=output:2030
+])
+
+AT_CHECK([
+    ovs-ofctl dump-flows br-in3 | ofctl_strip | strip_n_packets | strip_n_bytes | sort | grep actions
+], [0], [dnl
+ ip,nw_dst=192.168.10.10 actions=output:3021
+ ip,nw_dst=192.168.10.20 actions=output:3020
+ ip,nw_dst=192.168.10.30 actions=mod_dl_dst:aa:55:aa:55:00:03,output:30
+])
+
+
+# Clear up megaflow cache
+sleep 10
+
+# Ping between N1 and N3, via the L2 GRE tunnel between br-in1 and br-in3
+NS_CHECK_EXEC([ns1], [ping -q -c 3 -i 0.3 -w 2 $N3_IP | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+sleep 1
+
+AT_CHECK([
+    ovs-appctl dpctl/dump-flows | strip_used | grep -v ipv6 | grep -v arp |sort
+], [0], [flow-dump from non-dpdk interfaces:
+recirc_id(0),in_port(10),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:03),eth_type(0x0800),ipv4(src=10.0.0.1,dst=10.0.0.3,proto=47,frag=no), packets:2, bytes:272, used:0.0s, actions:set(ipv4(src=30.0.0.1,dst=30.0.0.3)),tnl_pop(14)
+recirc_id(0),in_port(11),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:03),eth_type(0x0800),ipv4(frag=no), packets:2, bytes:272, used:0.0s, actions:13
+recirc_id(0),in_port(12),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:01),eth_type(0x0800),ipv4(frag=no), packets:2, bytes:244, used:0.0s, actions:11
+recirc_id(0),in_port(13),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:02),eth_type(0x0800),ipv4(frag=no), packets:2, bytes:244, used:0.0s, actions:12
+recirc_id(0),in_port(15),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.30,tos=0/0x3,frag=no), packets:2, bytes:196, used:0.0s, actions:clone(tnl_push(tnl_port(14),header(size=38,type=3,eth(dst=aa:55:00:00:00:03,src=aa:55:00:00:00:01,dl_type=0x0800),ipv4(src=10.0.0.1,dst=10.0.0.3,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x6558))),out_port(5)),8)
+recirc_id(0),in_port(17),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.10,tos=0/0x3,frag=no), packets:2, bytes:196, used:0.0s, actions:pop_eth,clone(tnl_push(tnl_port(14),header(size=38,type=3,eth(dst=aa:55:00:00:00:02,src=aa:55:00:00:00:03,dl_type=0x0800),ipv4(src=30.0.0.3,dst=30.0.0.2,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x800))),out_port(7)),10)
+recirc_id(0),in_port(8),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:01),eth_type(0x0800),ipv4(src=20.0.0.2,dst=20.0.0.1,proto=47,frag=no), packets:2, bytes:244, used:0.0s, actions:set(ipv4(src=10.0.0.2,dst=10.0.0.1)),tnl_pop(14)
+recirc_id(0),in_port(9),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:02),eth_type(0x0800),ipv4(src=30.0.0.3,dst=30.0.0.2,proto=47,frag=no), packets:2, bytes:244, used:0.0s, actions:set(ipv4(src=20.0.0.3,dst=20.0.0.2)),tnl_pop(14)
+tunnel(src=10.0.0.2,dst=10.0.0.1,flags(-df-csum)),recirc_id(0),in_port(14),packet_type(ns=1,id=0x800),ipv4(dst=192.168.10.10,frag=no), packets:2, bytes:168, used:0.0s, actions:push_eth(src=00:00:00:00:00:00,dst=aa:55:aa:55:00:01),15
+tunnel(src=20.0.0.3,dst=20.0.0.2,flags(-df-csum)),recirc_id(0),in_port(14),packet_type(ns=1,id=0x800),ipv4(dst=192.168.10.10,tos=0/0x3,frag=no), packets:2, bytes:168, used:0.0s, actions:clone(tnl_push(tnl_port(14),header(size=38,type=3,eth(dst=aa:55:00:00:00:01,src=aa:55:00:00:00:02,dl_type=0x0800),ipv4(src=20.0.0.2,dst=20.0.0.1,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x800))),out_port(6)),9)
+tunnel(src=30.0.0.1,dst=30.0.0.3,flags(-df-csum)),recirc_id(0),in_port(14),packet_type(ns=0,id=0),eth(dst=aa:55:aa:55:00:03),eth_type(0x0800),ipv4(dst=192.168.10.30,frag=no), packets:2, bytes:196, used:0.0s, actions:17
+])
+
+# Clear up megaflow cache
+sleep 10
+
+# Ping between N1 and N2, via the L2 GRE tunnel between br-in1 and br-in2
+NS_CHECK_EXEC([ns1], [ping -q -c 3 -i 0.3 -w 2 $N2_IP | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+sleep 1
+
+AT_CHECK([
+    ovs-appctl dpctl/dump-flows | strip_used | grep -v ipv6 | grep -v arp | sort
+], [0], [flow-dump from non-dpdk interfaces:
+recirc_id(0),in_port(11),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:02),eth_type(0x0800),ipv4(frag=no), packets:2, bytes:272, used:0.0s, actions:12
+recirc_id(0),in_port(12),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:01),eth_type(0x0800),ipv4(frag=no), packets:2, bytes:272, used:0.0s, actions:11
+recirc_id(0),in_port(15),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.20,tos=0/0x3,frag=no), packets:2, bytes:196, used:0.0s, actions:clone(tnl_push(tnl_port(14),header(size=38,type=3,eth(dst=aa:55:00:00:00:02,src=aa:55:00:00:00:01,dl_type=0x0800),ipv4(src=10.0.0.1,dst=10.0.0.2,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x6558))),out_port(5)),8)
+recirc_id(0),in_port(16),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.10,tos=0/0x3,frag=no), packets:2, bytes:196, used:0.0s, actions:clone(tnl_push(tnl_port(14),header(size=38,type=3,eth(dst=aa:55:00:00:00:01,src=aa:55:00:00:00:02,dl_type=0x0800),ipv4(src=20.0.0.2,dst=20.0.0.1,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x6558))),out_port(6)),9)
+recirc_id(0),in_port(8),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:01),eth_type(0x0800),ipv4(src=20.0.0.2,dst=20.0.0.1,proto=47,frag=no), packets:2, bytes:272, used:0.0s, actions:set(ipv4(src=10.0.0.2,dst=10.0.0.1)),tnl_pop(14)
+recirc_id(0),in_port(9),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:02),eth_type(0x0800),ipv4(src=10.0.0.1,dst=10.0.0.2,proto=47,frag=no), packets:2, bytes:272, used:0.0s, actions:set(ipv4(src=20.0.0.1,dst=20.0.0.2)),tnl_pop(14)
+tunnel(src=10.0.0.2,dst=10.0.0.1,flags(-df-csum)),recirc_id(0),in_port(14),packet_type(ns=0,id=0),eth(dst=aa:55:aa:55:00:01),eth_type(0x0800),ipv4(dst=192.168.10.10,frag=no), packets:2, bytes:196, used:0.0s, actions:15
+tunnel(src=20.0.0.1,dst=20.0.0.2,flags(-df-csum)),recirc_id(0),in_port(14),packet_type(ns=0,id=0),eth(dst=aa:55:aa:55:00:02),eth_type(0x0800),ipv4(dst=192.168.10.20,frag=no), packets:2, bytes:196, used:0.0s, actions:16
+])
+
+# Clear up megaflow cache
+sleep 10
+
+# Ping between N3 and N2, via the L3 GRE tunnel between br-in3 and br-in2
+NS_CHECK_EXEC([ns3], [ping -q -c 3 -i 0.3 -w 2 $N1_IP | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+sleep 1
+
+AT_CHECK([
+    ovs-appctl dpctl/dump-flows | strip_used | grep -v ipv6 | grep -v arp | sort
+], [0], [flow-dump from non-dpdk interfaces:
+recirc_id(0),in_port(10),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:03),eth_type(0x0800),ipv4(src=10.0.0.1,dst=10.0.0.3,proto=47,frag=no), packets:2, bytes:272, used:0.0s, actions:set(ipv4(src=30.0.0.1,dst=30.0.0.3)),tnl_pop(14)
+recirc_id(0),in_port(11),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:03),eth_type(0x0800),ipv4(frag=no), packets:2, bytes:272, used:0.0s, actions:13
+recirc_id(0),in_port(12),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:01),eth_type(0x0800),ipv4(frag=no), packets:2, bytes:244, used:0.0s, actions:11
+recirc_id(0),in_port(13),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:02),eth_type(0x0800),ipv4(frag=no), packets:2, bytes:244, used:0.0s, actions:12
+recirc_id(0),in_port(15),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.30,tos=0/0x3,frag=no), packets:2, bytes:196, used:0.0s, actions:clone(tnl_push(tnl_port(14),header(size=38,type=3,eth(dst=aa:55:00:00:00:03,src=aa:55:00:00:00:01,dl_type=0x0800),ipv4(src=10.0.0.1,dst=10.0.0.3,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x6558))),out_port(5)),8)
+recirc_id(0),in_port(17),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.10,tos=0/0x3,frag=no), packets:2, bytes:196, used:0.0s, actions:pop_eth,clone(tnl_push(tnl_port(14),header(size=38,type=3,eth(dst=aa:55:00:00:00:02,src=aa:55:00:00:00:03,dl_type=0x0800),ipv4(src=30.0.0.3,dst=30.0.0.2,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x800))),out_port(7)),10)
+recirc_id(0),in_port(8),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:01),eth_type(0x0800),ipv4(src=20.0.0.2,dst=20.0.0.1,proto=47,frag=no), packets:2, bytes:244, used:0.0s, actions:set(ipv4(src=10.0.0.2,dst=10.0.0.1)),tnl_pop(14)
+recirc_id(0),in_port(9),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:02),eth_type(0x0800),ipv4(src=30.0.0.3,dst=30.0.0.2,proto=47,frag=no), packets:2, bytes:244, used:0.0s, actions:set(ipv4(src=20.0.0.3,dst=20.0.0.2)),tnl_pop(14)
+tunnel(src=10.0.0.2,dst=10.0.0.1,flags(-df-csum)),recirc_id(0),in_port(14),packet_type(ns=1,id=0x800),ipv4(dst=192.168.10.10,frag=no), packets:2, bytes:168, used:0.0s, actions:push_eth(src=00:00:00:00:00:00,dst=aa:55:aa:55:00:01),15
+tunnel(src=20.0.0.3,dst=20.0.0.2,flags(-df-csum)),recirc_id(0),in_port(14),packet_type(ns=1,id=0x800),ipv4(dst=192.168.10.10,tos=0/0x3,frag=no), packets:2, bytes:168, used:0.0s, actions:clone(tnl_push(tnl_port(14),header(size=38,type=3,eth(dst=aa:55:00:00:00:01,src=aa:55:00:00:00:02,dl_type=0x0800),ipv4(src=20.0.0.2,dst=20.0.0.1,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x800))),out_port(6)),9)
+tunnel(src=30.0.0.1,dst=30.0.0.3,flags(-df-csum)),recirc_id(0),in_port(14),packet_type(ns=0,id=0),eth(dst=aa:55:aa:55:00:03),eth_type(0x0800),ipv4(dst=192.168.10.30,frag=no), packets:2, bytes:196, used:0.0s, actions:17
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP

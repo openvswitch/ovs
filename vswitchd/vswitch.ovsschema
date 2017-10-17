@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "7.15.0",
- "cksum": "544856471 23228",
+ "version": "7.15.1",
+ "cksum": "3682332033 23608",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -17,7 +17,8 @@
                           "refTable": "SSL"},
                   "min": 0, "max": 1}},
        "other_config": {
-         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"}},
        "external_ids": {
          "type": {"key": "string", "value": "string",
                   "min": 0, "max": "unlimited"}},
@@ -26,7 +27,8 @@
        "cur_cfg": {
          "type": "integer"},
        "statistics": {
-         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"},
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"},
          "ephemeral": true},
        "ovs_version": {
          "type": {"key": {"type": "string"},
@@ -105,15 +107,19 @@
                           "enum": ["set", ["standalone", "secure"]]},
                   "min": 0, "max": 1}},
        "status": {
-         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"},
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"},
          "ephemeral": true},
        "rstp_status": {
-         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"},
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"},
          "ephemeral": true},
        "other_config": {
-         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"}},
        "external_ids": {
-         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"}},
        "flood_vlans": {
          "type": {"key": {"type": "integer",
                           "minInteger": 0,
@@ -187,23 +193,29 @@
        "fake_bridge": {
          "type": "boolean"},
        "status": {
-         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"},
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"},
          "ephemeral": true},
        "rstp_status": {
-         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"},
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"},
          "ephemeral": true},
        "rstp_statistics": {
-           "type": {"key": "string", "value": "integer", "min": 0, "max": "unlimited"},
+           "type": {"key": "string", "value": "integer",
+                    "min": 0, "max": "unlimited"},
            "ephemeral": true},
        "statistics": {
-         "type": {"key": "string", "value": "integer", "min": 0, "max": "unlimited"},
+         "type": {"key": "string", "value": "integer",
+                  "min": 0, "max": "unlimited"},
          "ephemeral": true},
        "protected": {
          "type": "boolean"},
        "other_config": {
-         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"}},
        "external_ids": {
-         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}}},
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"}}},
      "indexes": [["name"]]},
    "Interface": {
      "columns": {
@@ -213,7 +225,8 @@
        "type": {
          "type": "string"},
        "options": {
-         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"}},
        "ingress_policing_rate": {
          "type": {"key": {"type": "integer",
                           "minInteger": 0}}},
@@ -236,7 +249,8 @@
            "max": 1},
          "ephemeral": true},
        "external_ids": {
-         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"}},
        "ofport": {
          "type": {"key": "integer", "min": 0, "max": 1}},
        "ofport_request": {
@@ -297,12 +311,15 @@
            "type": {"key": "string", "value": "string",
                "min": 0, "max": "unlimited"}},
        "other_config": {
-         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"}},
        "statistics": {
-         "type": {"key": "string", "value": "integer", "min": 0, "max": "unlimited"},
+         "type": {"key": "string", "value": "integer",
+                  "min": 0, "max": "unlimited"},
          "ephemeral": true},
        "status": {
-         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"},
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"},
          "ephemeral": true},
        "admin_state": {
          "type": {"key": {"type": "string",
@@ -559,7 +576,8 @@
                           "minInteger": 25},
                   "min": 0, "max": 1}},
        "other_config": {
-         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"}},
        "external_ids": {
          "type": {"key": "string", "value": "string",
                   "min": 0, "max": "unlimited"}},
@@ -572,7 +590,8 @@
                   "min": 0, "max": 1},
          "ephemeral": true},
        "status": {
-         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"},
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"},
          "ephemeral": true}}},
    "Manager": {
      "columns": {
@@ -589,7 +608,8 @@
                   "enum": ["set", ["in-band", "out-of-band"]]},
                   "min": 0, "max": 1}},
        "other_config": {
-         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"}},
        "external_ids": {
          "type": {"key": "string", "value": "string",
                   "min": 0, "max": "unlimited"}},
@@ -597,7 +617,8 @@
          "type": "boolean",
          "ephemeral": true},
        "status": {
-         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"},
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"},
          "ephemeral": true}},
      "indexes": [["target"]]},
    "SSL": {

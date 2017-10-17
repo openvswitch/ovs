@@ -697,10 +697,7 @@ netdev_bsd_send(struct netdev *netdev_, int qid OVS_UNUSED,
 
     for (i = 0; i < batch->count; i++) {
         const void *data = dp_packet_data(batch->packets[i]);
-        size_t size = dp_packet_size(batch->packets[i]);
-
-        /* Truncate the packet if it is configured. */
-        size -= dp_packet_get_cutlen(batch->packets[i]);
+        size_t size = dp_packet_get_send_len(batch->packets[i]);
 
         while (!error) {
             ssize_t retval;
@@ -1517,6 +1514,7 @@ netdev_bsd_update_flags(struct netdev *netdev_, enum netdev_flags off,
                                                      \
     GET_FEATURES,                                    \
     NULL, /* set_advertisement */                    \
+    NULL, /* get_pt_mode */                          \
     NULL, /* set_policing */                         \
     NULL, /* get_qos_type */                         \
     NULL, /* get_qos_capabilities */                 \
@@ -1548,6 +1546,8 @@ netdev_bsd_update_flags(struct netdev *netdev_, enum netdev_flags off,
     netdev_bsd_rxq_recv,                             \
     netdev_bsd_rxq_wait,                             \
     netdev_bsd_rxq_drain,                            \
+                                                     \
+    NO_OFFLOAD_API                                   \
 }
 
 const struct netdev_class netdev_bsd_class =

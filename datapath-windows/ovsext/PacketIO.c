@@ -46,10 +46,6 @@ extern NDIS_STRING ovsExtFriendlyNameUC;
 static VOID OvsFinalizeCompletionList(OvsCompletionList *completionList);
 static VOID OvsCompleteNBLIngress(POVS_SWITCH_CONTEXT switchContext,
                     PNET_BUFFER_LIST netBufferLists, ULONG sendCompleteFlags);
-static NTSTATUS OvsCreateNewNBLsFromMultipleNBs(
-                    POVS_SWITCH_CONTEXT switchContext,
-                    PNET_BUFFER_LIST *curNbl,
-                    PNET_BUFFER_LIST *nextNbl);
 
 VOID
 OvsInitCompletionList(OvsCompletionList *completionList,
@@ -212,7 +208,7 @@ OvsStartNBLIngress(POVS_SWITCH_CONTEXT switchContext,
     NDIS_SWITCH_PORT_ID sourcePort = 0;
     NDIS_SWITCH_NIC_INDEX sourceIndex = 0;
     PNDIS_SWITCH_FORWARDING_DETAIL_NET_BUFFER_LIST_INFO fwdDetail;
-    PNET_BUFFER_LIST curNbl = NULL, nextNbl = NULL;
+    PNET_BUFFER_LIST curNbl = NULL, nextNbl = NULL, lastNbl = NULL;
     ULONG sendCompleteFlags;
     UCHAR dispatch;
     LOCK_STATE_EX lockState, dpLockState;
@@ -282,7 +278,7 @@ OvsStartNBLIngress(POVS_SWITCH_CONTEXT switchContext,
             /* Create a NET_BUFFER_LIST for each NET_BUFFER. */
             status = OvsCreateNewNBLsFromMultipleNBs(switchContext,
                                                      &curNbl,
-                                                     &nextNbl);
+                                                     &lastNbl);
             if (!NT_SUCCESS(status)) {
                 RtlInitUnicodeString(&filterReason,
                                      L"Cannot allocate NBLs with single NB.");
@@ -292,6 +288,10 @@ OvsStartNBLIngress(POVS_SWITCH_CONTEXT switchContext,
                                         NDIS_STATUS_RESOURCES);
                 continue;
             }
+
+            lastNbl->Next = nextNbl;
+            nextNbl = curNbl->Next;
+            curNbl->Next = NULL;
         }
         {
             OvsFlow *flow;
@@ -495,44 +495,4 @@ OvsExtCancelSendNBL(NDIS_HANDLE filterModuleContext,
 
     /* All send requests get completed synchronously, so there is no need to
      * implement this callback. */
-}
-
-static NTSTATUS
-OvsCreateNewNBLsFromMultipleNBs(POVS_SWITCH_CONTEXT switchContext,
-                                PNET_BUFFER_LIST *curNbl,
-                                PNET_BUFFER_LIST *nextNbl)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-    PNET_BUFFER_LIST newNbls = NULL;
-    PNET_BUFFER_LIST lastNbl = NULL;
-    PNET_BUFFER_LIST nbl = NULL;
-    BOOLEAN error = TRUE;
-
-    do {
-        /* Create new NBLs from curNbl with multiple net buffers. */
-        newNbls = OvsPartialCopyToMultipleNBLs(switchContext,
-                                               *curNbl, 0, 0, TRUE);
-        if (NULL == newNbls) {
-            OVS_LOG_ERROR("Failed to allocate NBLs with single NB.");
-            status = NDIS_STATUS_RESOURCES;
-            break;
-        }
-
-        nbl = newNbls;
-        while (nbl) {
-            lastNbl = nbl;
-            nbl = NET_BUFFER_LIST_NEXT_NBL(nbl);
-        }
-        lastNbl->Next = *nextNbl;
-        *nextNbl = newNbls->Next;
-
-        OvsCompleteNBL(switchContext, *curNbl, TRUE);
-
-        *curNbl = newNbls;
-        (*curNbl)->Next = NULL;
-
-        error = FALSE;
-    } while (error);
-
-    return status;
 }

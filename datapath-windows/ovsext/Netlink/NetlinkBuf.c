@@ -40,7 +40,6 @@
 #include <intsafe.h>
 #include <ntintsafe.h>
 #include <ntstrsafe.h>
-#include <Strsafe.h>
 
 #ifdef OVS_DBG_MOD
 #undef OVS_DBG_MOD

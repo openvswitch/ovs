@@ -27,6 +27,7 @@ struct conn_other {
     struct OVS_CT_ENTRY up;
     enum other_state state;
 };
+C_ASSERT(offsetof(struct conn_other, up) == 0);
 
 static const long long other_timeouts[] = {
     [OTHERS_FIRST] = 60 * CT_INTERVAL_SEC,

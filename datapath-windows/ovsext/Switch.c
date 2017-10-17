@@ -143,7 +143,7 @@ OvsExtAttach(NDIS_HANDLE ndisFilterHandle,
     KeMemoryBarrier();
 
 cleanup:
-    gOvsInAttach = FALSE;
+    InterlockedExchange(&gOvsInAttach, 0);
     if (status != NDIS_STATUS_SUCCESS) {
         if (switchContext != NULL) {
             OvsDeleteSwitch(switchContext);
@@ -253,7 +253,6 @@ create_switch_done:
  *  Implements filter driver's FilterDetach function.
  * --------------------------------------------------------------------------
  */
-_Use_decl_annotations_
 VOID
 OvsExtDetach(NDIS_HANDLE filterModuleContext)
 {
@@ -309,7 +308,6 @@ OvsDeleteSwitch(POVS_SWITCH_CONTEXT switchContext)
  *  Implements filter driver's FilterRestart function.
  * --------------------------------------------------------------------------
  */
-_Use_decl_annotations_
 NDIS_STATUS
 OvsExtRestart(NDIS_HANDLE filterModuleContext,
               PNDIS_FILTER_RESTART_PARAMETERS filterRestartParameters)
@@ -518,7 +516,7 @@ OvsReleaseSwitchContext(POVS_SWITCH_CONTEXT switchContext)
     LONG icxRef = 0;
 
     do {
-        ref = gOvsSwitchContextRefCount;
+        ref = InterlockedAdd(&gOvsSwitchContextRefCount, 0);
         newRef = (0 == ref) ? 0 : ref - 1;
         icxRef = InterlockedCompareExchange(&gOvsSwitchContextRefCount,
                                             newRef,
@@ -540,7 +538,7 @@ OvsAcquireSwitchContext(VOID)
     BOOLEAN ret = FALSE;
 
     do {
-        ref = gOvsSwitchContextRefCount;
+        ref = InterlockedAdd(&gOvsSwitchContextRefCount, 0);
         newRef = (0 == ref) ? 0 : ref + 1;
         icxRef = InterlockedCompareExchange(&gOvsSwitchContextRefCount,
                                             newRef,

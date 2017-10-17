@@ -2511,8 +2511,7 @@ ofport_destroy__(struct ofport *port)
     const char *name = netdev_get_name(port->netdev);
 
     hmap_remove(&ofproto->ports, &port->hmap_node);
-    shash_delete(&ofproto->port_by_name,
-                 shash_find(&ofproto->port_by_name, name));
+    shash_find_and_delete(&ofproto->port_by_name, name);
 
     netdev_close(port->netdev);
     ofproto->ofproto_class->port_dealloc(port);
@@ -2722,18 +2721,20 @@ init_ports(struct ofproto *p)
 }
 
 static bool
-ofport_is_internal(const struct ofproto *p, const struct ofport *port)
+ofport_is_internal_or_patch(const struct ofproto *p, const struct ofport *port)
 {
     return !strcmp(netdev_get_type(port->netdev),
-                   ofproto_port_open_type(p->type, "internal"));
+                   ofproto_port_open_type(p->type, "internal")) ||
+           !strcmp(netdev_get_type(port->netdev),
+                   ofproto_port_open_type(p->type, "patch"));
 }
 
-/* If 'port' is internal and if the user didn't explicitly specify an mtu
- * through the database, we have to override it. */
+/* If 'port' is internal or patch and if the user didn't explicitly specify an
+ * mtu through the database, we have to override it. */
 static bool
 ofport_is_mtu_overridden(const struct ofproto *p, const struct ofport *port)
 {
-    return ofport_is_internal(p, port)
+    return ofport_is_internal_or_patch(p, port)
            && !netdev_mtu_is_user_config(port->netdev);
 }
 
@@ -3458,9 +3459,13 @@ ofproto_packet_out_init(struct ofproto *ofproto,
 {
     enum ofperr error;
     struct match match;
+    struct {
+        struct miniflow mf;
+        uint64_t buf[FLOW_U64S];
+    } m;
 
-    if (ofp_to_u16(po->in_port) >= ofproto->max_ports
-        && ofp_to_u16(po->in_port) < ofp_to_u16(OFPP_MAX)) {
+    uint16_t in_port = ofp_to_u16(po->flow_metadata.flow.in_port.ofp_port);
+    if (in_port >= ofproto->max_ports && in_port < ofp_to_u16(OFPP_MAX)) {
         return OFPERR_OFPBRC_BAD_PORT;
     }
 
@@ -3472,10 +3477,14 @@ ofproto_packet_out_init(struct ofproto *ofproto,
     /* Ensure that the L3 header is 32-bit aligned. */
     opo->packet = dp_packet_clone_data_with_headroom(po->packet,
                                                      po->packet_len, 2);
+    /* Take the received packet_tpye as packet_type of the packet. */
+    opo->packet->packet_type = po->flow_metadata.flow.packet_type;
+
     /* Store struct flow. */
     opo->flow = xmalloc(sizeof *opo->flow);
-    flow_extract(opo->packet, opo->flow);
-    opo->flow->in_port.ofp_port = po->in_port;
+    *opo->flow = po->flow_metadata.flow;
+    miniflow_extract(opo->packet, &m.mf);
+    flow_union_with_miniflow(opo->flow, &m.mf);
 
     /* Check actions like for flow mods.  We pass a 'table_id' of 0 to
      * ofproto_check_consistency(), which isn't strictly correct because these
@@ -3551,7 +3560,8 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
 
     /* Decode message. */
     ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
-    error = ofputil_decode_packet_out(&po, oh, &ofpacts);
+    error = ofputil_decode_packet_out(&po, oh, ofproto_get_tun_tab(p),
+                                      &ofpacts);
     if (error) {
         ofpbuf_uninit(&ofpacts);
         return error;
@@ -4379,11 +4389,11 @@ flow_stats_ds(struct ofproto *ofproto, struct rule *rule, struct ds *results)
     ds_put_format(results, "duration=%llds, ", (time_msec() - created) / 1000);
     ds_put_format(results, "n_packets=%"PRIu64", ", packet_count);
     ds_put_format(results, "n_bytes=%"PRIu64", ", byte_count);
-    cls_rule_format(&rule->cr, ofproto_get_tun_tab(ofproto), results);
+    cls_rule_format(&rule->cr, ofproto_get_tun_tab(ofproto), NULL, results);
     ds_put_char(results, ',');
 
     ds_put_cstr(results, "actions=");
-    ofpacts_format(actions->ofpacts, actions->ofpacts_len, results);
+    ofpacts_format(actions->ofpacts, actions->ofpacts_len, NULL, results);
 
     ds_put_cstr(results, "\n");
 }
@@ -7918,7 +7928,9 @@ handle_bundle_add(struct ofconn *ofconn, const struct ofp_header *oh)
         COVERAGE_INC(ofproto_packet_out);
 
         /* Decode message. */
-        error = ofputil_decode_packet_out(&po, badd.msg, &ofpacts);
+        error = ofputil_decode_packet_out(&po, badd.msg,
+                                          ofproto_get_tun_tab(ofproto),
+                                          &ofpacts);
         if (!error) {
             po.ofpacts = ofpbuf_steal_data(&ofpacts);   /* Move to heap. */
             error = ofproto_packet_out_init(ofproto, ofconn, &bmsg->opo, &po);

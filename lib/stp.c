@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2016 Nicira, Inc.
+ * Copyright (c) 2008-2014, 2016-2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,12 +45,11 @@ static struct vlog_rate_limit stp_rl = VLOG_RATE_LIMIT_INIT(60, 60);
 #define STP_TYPE_CONFIG 0x00
 #define STP_TYPE_TCN 0x80
 
-OVS_PACKED(
 struct stp_bpdu_header {
     ovs_be16 protocol_id;       /* STP_PROTOCOL_ID. */
     uint8_t protocol_version;   /* STP_PROTOCOL_VERSION. */
     uint8_t bpdu_type;          /* One of STP_TYPE_*. */
-});
+};
 BUILD_ASSERT_DECL(sizeof(struct stp_bpdu_header) == 4);
 
 enum stp_config_bpdu_flags {
@@ -73,10 +72,9 @@ struct stp_config_bpdu {
 });
 BUILD_ASSERT_DECL(sizeof(struct stp_config_bpdu) == 35);
 
-OVS_PACKED(
 struct stp_tcn_bpdu {
     struct stp_bpdu_header header; /* Type STP_TYPE_TCN. */
-});
+};
 BUILD_ASSERT_DECL(sizeof(struct stp_tcn_bpdu) == 4);
 
 struct stp_timer {

@@ -9,4 +9,3 @@ usr/sbin/ovs-bugtool
 usr/share/openvswitch/bugtool-plugins
 usr/share/openvswitch/scripts/ovs-bugtool-*
 usr/share/openvswitch/scripts/ovs-lib
-usr/lib/lib*.so.*

@@ -6,6 +6,8 @@
 /control
 /copyright
 /files
+/libopenvswitch
+/libopenvswitch-dev
 /nicira-switch
 /openvswitch
 /openvswitch-common
@@ -13,7 +15,6 @@
 /openvswitch-datapath-source
 /openvswitch-datapath-dkms
 /openvswitch-dbg
-/openvswitch-dev
 /openvswitch-ipsec
 /openvswitch-pki
 /openvswitch-switch
@@ -22,6 +23,7 @@
 /openvswitch-testcontroller
 /openvswitch-vtep
 /ovn-common
+/ovn-controller-vtep
 /ovn-host
 /ovn-central
 /ovn-docker

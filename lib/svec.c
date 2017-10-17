@@ -127,7 +127,9 @@ compare_strings(const void *a_, const void *b_)
 void
 svec_sort(struct svec *svec)
 {
-    qsort(svec->names, svec->n, sizeof *svec->names, compare_strings);
+    if (svec->n) {
+        qsort(svec->names, svec->n, sizeof *svec->names, compare_strings);
+    }
 }
 
 void

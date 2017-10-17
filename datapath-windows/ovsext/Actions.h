@@ -110,4 +110,24 @@ OvsDoRecirc(POVS_SWITCH_CONTEXT switchContext,
             UINT32 srcPortNo,
             OVS_PACKET_HDR_INFO *layers);
 
+PUINT8 OvsGetHeaderBySize(OvsForwardingContext *ovsFwdCtx,
+                          UINT32 size);
+
+NDIS_STATUS
+OvsUpdateUdpPorts(OvsForwardingContext *ovsFwdCtx,
+                  const struct ovs_key_udp *udpAttr);
+
+NDIS_STATUS
+OvsUpdateTcpPorts(OvsForwardingContext *ovsFwdCtx,
+                  const struct ovs_key_tcp *tcpAttr);
+
+NDIS_STATUS
+OvsUpdateIPv4Header(OvsForwardingContext *ovsFwdCtx,
+                    const struct ovs_key_ipv4 *ipAttr);
+
+NDIS_STATUS
+OvsUpdateAddressAndPort(OvsForwardingContext *ovsFwdCtx,
+                        UINT32 newAddr, UINT16 newPort,
+                        BOOLEAN isSource, BOOLEAN isTx);
+
 #endif /* __ACTIONS_H_ */

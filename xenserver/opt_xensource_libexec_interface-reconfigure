@@ -147,7 +147,7 @@ def netdev_remap_name(pif, already_renamed=[]):
     def rename_netdev(old_name, new_name):
         raise Error("Trying to rename %s to %s - This functionality has been removed" % (old_name, new_name))
         # log("Changing the name of %s to %s" % (old_name, new_name))
-        # run_command(['/sbin/ifconfig', old_name, 'down'])
+        # run_command(['/sbin/ip', 'link', 'set', old_name, 'down'])
         # if not run_command(['/sbin/ip', 'link', 'set', old_name, 'name', new_name]):
         #     raise Error("Could not rename %s to %s" % (old_name, new_name))
 
@@ -191,7 +191,7 @@ def ifdown(netdev):
         return
     if not os.path.exists("%s/etc/sysconfig/network-scripts/ifcfg-%s" % (root_prefix(), netdev)):
         log("ifdown: device %s exists but ifcfg-%s does not" % (netdev,netdev))
-        run_command(["/sbin/ifconfig", netdev, 'down'])
+        run_command(["/sbin/ip", "link", "set", netdev, 'down'])
         return
     run_command(["/sbin/ifdown", netdev])
 

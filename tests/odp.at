@@ -94,6 +94,7 @@ dnl Some fields are always printed for this test, because wildcards aren't
 dnl specified. We can skip these.
 sed -i 's/\(skb_mark(0)\),\(ct\)/\1,ct_state(0),ct_zone(0),\2/' odp-out.txt
 sed -i 's/\(skb_mark([[^)]]*)\),\(recirc\)/\1,ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),\2/' odp-out.txt
+sed -i 's/\(in_port(1)\),\(eth\)/\1,packet_type(ns=0,id=0),\2/' odp-out.txt
 
 AT_CHECK_UNQUOTED([ovstest test-odp parse-keys < odp-in.txt], [0], [`cat odp-out.txt`
 ])
@@ -293,6 +294,11 @@ set(ipv6(label=0,proto=10,hlimit=128))
 set(ipv6(label=0/0xfff,proto=10,tclass=0x70/0x70))
 set(ipv6(label=0))
 set(icmpv6(type=1,code=2))
+set(vlan(vid=5))
+set(vlan(vid=3,pcp=5))
+set(vlan(vid=3,pcp=5,cfi=0))
+set(vlan(vid=5/0x3))
+set(vlan(vid=5/0x1)),3
 push_vlan(vid=12,pcp=0)
 push_vlan(vid=13,pcp=5,cfi=0)
 push_vlan(tpid=0x9100,vid=13,pcp=5)

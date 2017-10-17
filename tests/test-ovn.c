@@ -202,10 +202,12 @@ create_addr_sets(struct shash *addr_sets)
     static const char *const addrs3[] = {
         "00:00:00:00:00:01", "00:00:00:00:00:02", "00:00:00:00:00:03",
     };
+    static const char *const addrs4[] = { NULL };
 
     expr_addr_sets_add(addr_sets, "set1", addrs1, 3);
     expr_addr_sets_add(addr_sets, "set2", addrs2, 3);
     expr_addr_sets_add(addr_sets, "set3", addrs3, 3);
+    expr_addr_sets_add(addr_sets, "set4", addrs4, 0);
 }
 
 static bool
@@ -373,7 +375,6 @@ test_evaluate_expr(struct ovs_cmdl_context *ctx)
     ds_init(&input);
     while (!ds_get_test_line(&input, stdin)) {
         struct expr *expr;
-        char *error;
 
         expr = expr_parse_string(ds_cstr(&input), &symtab, NULL, &error);
         if (!error) {
@@ -1164,7 +1165,7 @@ test_expr_to_packets(struct ovs_cmdl_context *ctx OVS_UNUSED)
         uint64_t packet_stub[128 / 8];
         struct dp_packet packet;
         dp_packet_use_stub(&packet, packet_stub, sizeof packet_stub);
-        flow_compose(&packet, &uflow);
+        flow_compose(&packet, &uflow, 0);
 
         struct ds output = DS_EMPTY_INITIALIZER;
         const uint8_t *buf = dp_packet_data(&packet);
@@ -1224,7 +1225,7 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
             .symtab = &symtab,
             .dhcp_opts = &dhcp_opts,
             .dhcpv6_opts = &dhcpv6_opts,
-            .n_tables = 16,
+            .n_tables = 24,
             .cur_ltable = 10,
         };
         error = ovnacts_parse_string(ds_cstr(&input), &pp, &ovnacts, &prereqs);
@@ -1245,8 +1246,8 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
                 .group_table = &group_table,
 
                 .pipeline = OVNACT_P_INGRESS,
-                .ingress_ptable = 16,
-                .egress_ptable = 48,
+                .ingress_ptable = 8,
+                .egress_ptable = 40,
                 .output_ptable = 64,
                 .mac_bind_ptable = 65,
             };
@@ -1254,7 +1255,7 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
             ofpbuf_init(&ofpacts, 0);
             ovnacts_encode(ovnacts.data, ovnacts.size, &ep, &ofpacts);
             struct ds ofpacts_s = DS_EMPTY_INITIALIZER;
-            ofpacts_format(ofpacts.data, ofpacts.size, &ofpacts_s);
+            ofpacts_format(ofpacts.data, ofpacts.size, NULL, &ofpacts_s);
             printf("    encodes as %s\n", ds_cstr(&ofpacts_s));
             ds_destroy(&ofpacts_s);
             ofpbuf_uninit(&ofpacts);
@@ -1489,6 +1490,7 @@ test_ovn_main(int argc, char *argv[])
 
         case 'h':
             usage();
+            /* fall through */
 
         case '?':
             exit(1);

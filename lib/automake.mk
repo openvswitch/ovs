@@ -149,6 +149,7 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/odp-util.c \
 	lib/odp-util.h \
 	lib/ofp-actions.c \
+	lib/ofp-ed-props.c \
 	lib/ofp-errors.c \
 	lib/ofp-msgs.c \
 	lib/ofp-parse.c \
@@ -229,6 +230,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/shash.c \
 	lib/simap.c \
 	lib/simap.h \
+	lib/skiplist.c \
+	lib/skiplist.h \
 	lib/smap.c \
 	lib/smap.h \
 	lib/socket-util.c \
@@ -352,10 +355,14 @@ if LINUX
 lib_libopenvswitch_la_SOURCES += \
 	lib/dpif-netlink.c \
 	lib/dpif-netlink.h \
+	lib/dpif-netlink-rtnl.c \
+	lib/dpif-netlink-rtnl.h \
 	lib/if-notifier.c \
 	lib/if-notifier.h \
 	lib/netdev-linux.c \
 	lib/netdev-linux.h \
+	lib/netdev-tc-offloads.c \
+	lib/netdev-tc-offloads.h \
 	lib/netlink-conntrack.c \
 	lib/netlink-conntrack.h \
 	lib/netlink-notifier.c \
@@ -366,7 +373,9 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/rtnetlink.c \
 	lib/rtnetlink.h \
 	lib/route-table.c \
-	lib/route-table.h
+	lib/route-table.h \
+	lib/tc.c \
+	lib/tc.h
 endif
 
 if DPDK_NETDEV
@@ -382,6 +391,7 @@ if WIN32
 lib_libopenvswitch_la_SOURCES += \
 	lib/dpif-netlink.c \
 	lib/dpif-netlink.h \
+	lib/dpif-netlink-rtnl.h \
 	lib/netdev-windows.c \
 	lib/netlink-conntrack.c \
 	lib/netlink-conntrack.h \

@@ -30,6 +30,7 @@
 
 #include "openvswitch/compiler.h"
 #include "openvswitch/list.h"
+#include "flow.h"
 
 /* Type of a node within a trace. */
 enum oftrace_node_type {
@@ -45,6 +46,13 @@ enum oftrace_node_type {
     OFT_ERROR,                  /* An erroneous situation, worth logging. */
 };
 
+/* Reason why a flow is in a recirculation queue. */
+enum oftrace_recirc_type {
+    OFT_RECIRC_CONNTRACK,
+    OFT_RECIRC_MPLS,
+    OFT_RECIRC_BOND,
+};
+
 /* A node within a trace. */
 struct oftrace_node {
     struct ovs_list node;       /* In parent. */
@@ -54,9 +62,28 @@ struct oftrace_node {
     char *text;
 };
 
+/* A node within a recirculation queue. */
+struct oftrace_recirc_node {
+    struct ovs_list node;       /* In recirc_queue. */
+
+    enum oftrace_recirc_type type;
+    uint32_t recirc_id;
+    struct flow flow;
+    struct dp_packet *packet;
+};
+
+/* A node within a next_ct_states list. */
+struct oftrace_next_ct_state {
+    struct ovs_list node;       /* In next_ct_states. */
+    uint32_t state;
+};
+
 void ofproto_dpif_trace_init(void);
 
 struct oftrace_node *oftrace_report(struct ovs_list *, enum oftrace_node_type,
                                     const char *text);
+bool oftrace_add_recirc_node(struct ovs_list *recirc_queue,
+                             enum oftrace_recirc_type, const struct flow *,
+                             const struct dp_packet *, uint32_t recirc_id);
 
 #endif /* ofproto-dpif-trace.h */

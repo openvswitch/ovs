@@ -551,6 +551,10 @@ OvsSttDefragCleaner(PVOID data)
     BOOLEAN success = TRUE;
 
     while (success) {
+        if (&OvsSttSpinLock == NULL) {
+            /* Lock has been freed by 'OvsCleanupSttDefragmentation()' */
+            break;
+        }
         NdisAcquireSpinLock(&OvsSttSpinLock);
         if (context->exit) {
             NdisReleaseSpinLock(&OvsSttSpinLock);
@@ -695,6 +699,7 @@ OvsSttReassemble(POVS_SWITCH_CONTEXT switchContext,
         entry->timeout = currentTime + STT_ENTRY_TIMEOUT;
 
         if (segOffset == 0) {
+            ASSERT(sttHdr);
             entry->sttHdr = *sttHdr;
         }
 
@@ -722,6 +727,7 @@ OvsSttReassemble(POVS_SWITCH_CONTEXT switchContext,
         }
 
         if (segOffset == 0) {
+            ASSERT(sttHdr);
             pktFragEntry->sttHdr = *sttHdr;
         }
         if (ipHdr->ecn == IP_ECN_CE) {
@@ -855,8 +861,8 @@ OvsDecapSetOffloads(PNET_BUFFER_LIST *curNbl,
             tcpHdr = (TCPHdr *)(buf + layers->l4Offset);
 
             tcpHdr->check = IPPseudoChecksum(&ipHdr->saddr,
-                                                (uint32 *)&ipHdr->daddr,
-                                                IPPROTO_TCP, 0);
+                                             (uint32 *)&ipHdr->daddr,
+                                             IPPROTO_TCP, 0);
         } else {
             IPv6Hdr *ipHdr;
             TCPHdr *tcpHdr;
@@ -1019,7 +1025,7 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
                 innerIpHdr->check = IPChecksum((UINT8 *)innerIpHdr,
                                                 innerIpHdr->ihl * 4, 0);
             } else {
-                status = NDIS_STATUS_RESOURCES;
+                status = NDIS_STATUS_INVALID_PACKET;
                 goto dropNbl;
             }
         } else if (layers.isIPv6) {

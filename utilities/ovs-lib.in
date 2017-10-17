@@ -150,13 +150,14 @@ version_geq() {
 
 install_dir () {
     DIR="$1"
+    INSTALL_MODE="${2:-755}"
     INSTALL_USER="root"
     INSTALL_GROUP="root"
     [ "$OVS_USER" != "" ] && INSTALL_USER="${OVS_USER%:*}"
     [ "${OVS_USER##*:}" != "" ] && INSTALL_GROUP="${OVS_USER##*:}"
 
     if test ! -d "$DIR"; then
-        install -d -m 755 -o "$INSTALL_USER" -g "$INSTALL_GROUP" "$DIR"
+        install -d -m "$INSTALL_MODE" -o "$INSTALL_USER" -g "$INSTALL_GROUP" "$DIR"
         restorecon "$DIR" >/dev/null 2>&1
     fi
 }
@@ -174,7 +175,7 @@ start_daemon () {
     cd "$DAEMON_CWD"
 
     # log file
-    install_dir "$logdir"
+    install_dir "$logdir" "750"
     set "$@" --log-file="$logdir/$daemon.log"
 
     # pidfile and monitoring

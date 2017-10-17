@@ -12,6 +12,7 @@
 /pki/
 /system-kmod-testsuite
 /system-userspace-testsuite
+/system-offloads-testsuite
 /test-aes128
 /test-atomic
 /test-bundle
@@ -38,6 +39,7 @@
 /test-rstp
 /test-sflow
 /test-sha1
+/test-skiplist
 /test-stp
 /test-strtok_r
 /test-timeval
@@ -51,3 +53,5 @@
 /testsuite.log
 /test-lib
 /testsuite.tmp.orig
+/valgrind.[0-9]*
+/valgrind/

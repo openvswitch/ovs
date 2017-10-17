@@ -167,6 +167,19 @@ ovsdb_internal_error(struct ovsdb_error *inner_error,
     return error;
 }
 
+struct ovsdb_error *
+ovsdb_perm_error(const char *details, ...)
+{
+    struct ovsdb_error *error;
+    va_list args;
+
+    va_start(args, details);
+    error = ovsdb_error_valist("permission error", details, args);
+    va_end(args);
+
+    return error;
+}
+
 void
 ovsdb_error_destroy(struct ovsdb_error *error)
 {

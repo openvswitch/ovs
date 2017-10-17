@@ -420,6 +420,7 @@ AT_CHECK([ovs-vsctl add-port br1 p8 -- \
    set port p8 other_config:stp-enable=false -- \
 ])
 
+ovs-appctl netdev-dummy/set-admin-state up
 ovs-appctl time/stop
 
 AT_CHECK([ovs-ofctl add-flow br0 "in_port=7 icmp actions=1"])
@@ -519,7 +520,7 @@ AT_CHECK([
         set interface p6 type=dummy options:pstream=punix:$OVS_RUNDIR/p6.sock ofport_request=6
 ], [0])
 
-
+ovs-appctl netdev-dummy/set-admin-state up
 ovs-appctl time/stop
 
 # give time for STP to move initially
@@ -625,6 +626,74 @@ AT_CHECK([ovs-appctl mdb/show br1], [0], [dnl
 AT_CHECK([ovs-appctl mdb/show br2], [0], [dnl
  port  VLAN  GROUP                Age
 ])
+
+AT_CLEANUP
+
+AT_SETUP([STP - check link-state when stp is running])
+OVS_VSWITCHD_START([])
+
+AT_CHECK([
+    ovs-vsctl -- \
+    set port br0 other_config:stp-enable=false -- \
+    set bridge br0 datapath-type=dummy stp_enable=true \
+    other-config:hwaddr=aa:66:aa:66:00:00
+], [0])
+
+AT_CHECK([
+    ovs-vsctl add-port br0 p1 -- \
+        set interface p1 type=dummy -- \
+        set port p1 other_config:stp-port-num=1
+    ovs-vsctl add-port br0 p2 -- \
+        set interface p2 type=dummy -- \
+        set port p2 other_config:stp-port-num=2
+], [0])
+
+ovs-appctl netdev-dummy/set-admin-state up
+ovs-appctl time/stop
+
+# give time for STP to move initially
+for i in $(seq 0 30); do
+    ovs-appctl time/warp 1000
+done
+
+AT_CHECK([ovs-appctl stp/show br0 | grep p1], [0], [dnl
+	p1         designated forwarding 19    128.1
+])
+AT_CHECK([ovs-appctl stp/show br0 | grep p2], [0], [dnl
+	p2         designated forwarding 19    128.2
+])
+
+# add a stp port
+AT_CHECK([
+    ovs-vsctl add-port br0 p3 -- \
+        set interface p3 type=dummy -- \
+        set port p3 other_config:stp-port-num=3
+], [0])
+
+ovs-appctl netdev-dummy/set-admin-state p3 down
+
+# We should not show the p3 because its link-state is down
+AT_CHECK([ovs-appctl stp/show br0 | grep p1], [0], [dnl
+	p1         designated forwarding 19    128.1
+])
+AT_CHECK([ovs-appctl stp/show br0 | grep p2], [0], [dnl
+	p2         designated forwarding 19    128.2
+])
+AT_CHECK([ovs-appctl stp/show br0 | grep p3], [1], [dnl
+])
+
+ovs-appctl netdev-dummy/set-admin-state p3 up
+
+AT_CHECK([ovs-appctl stp/show br0 | grep p1], [0], [dnl
+	p1         designated forwarding 19    128.1
+])
+AT_CHECK([ovs-appctl stp/show br0 | grep p2], [0], [dnl
+	p2         designated forwarding 19    128.2
+])
+AT_CHECK([ovs-appctl stp/show br0 | grep p3], [0], [dnl
+	p3         designated listening  19    128.3
+])
+
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP

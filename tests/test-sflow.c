@@ -675,7 +675,7 @@ print_sflow(struct ofpbuf *buf)
         process_datagram(x);
     } else {
         // CATCH
-        printf("\n>>>>> ERROR in " __FILE__ " at line %u\n", x->errline);
+        printf("\n>>>>> ERROR in " __FILE__ " at line %d\n", x->errline);
     }
 }
 

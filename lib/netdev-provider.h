@@ -45,6 +45,10 @@ struct netdev {
     const struct netdev_class *netdev_class; /* Functions to control
                                                 this device. */
 
+    /* If this is 'true' the user did not specify a netdev_class when
+     * opening this device, and therefore got assigned to the "system" class */
+    bool auto_classified;
+
     /* A sequence number which indicates changes in one of 'netdev''s
      * properties.   It must be nonzero so that users have a value which
      * they may use as a reset when tracking 'netdev'.
@@ -114,6 +118,14 @@ struct netdev_rxq {
 };
 
 struct netdev *netdev_rxq_get_netdev(const struct netdev_rxq *);
+
+
+struct netdev_flow_dump {
+    struct netdev *netdev;
+    odp_port_t port;
+    struct nl_dump *nl_dump;
+    bool terse;
+};
 
 /* Network device class structure, to be defined by each implementation of a
  * network device.
@@ -466,6 +478,12 @@ struct netdev_class {
     int (*set_advertisements)(struct netdev *netdev,
                               enum netdev_features advertise);
 
+    /* Returns 'netdev''s configured packet_type mode.
+     *
+     * This function may be set to null if it would always return
+     * NETDEV_PT_LEGACY_L2. */
+    enum netdev_pt_mode (*get_pt_mode)(const struct netdev *netdev);
+
     /* Attempts to set input rate limiting (policing) policy, such that up to
      * 'kbits_rate' kbps of traffic is accepted, with a maximum accumulative
      * burst size of 'kbits' kb.
@@ -769,6 +787,68 @@ struct netdev_class {
 
     /* Discards all packets waiting to be received from 'rx'. */
     int (*rxq_drain)(struct netdev_rxq *rx);
+
+    /* ## -------------------------------- ## */
+    /* ## netdev flow offloading functions ## */
+    /* ## -------------------------------- ## */
+
+    /* If a particular netdev class does not support offloading flows,
+     * all these function pointers must be NULL. */
+
+    /* Flush all offloaded flows from a netdev.
+     * Return 0 if successful, otherwise returns a positive errno value. */
+    int (*flow_flush)(struct netdev *);
+
+    /* Flow dumping interface.
+     *
+     * This is the back-end for the flow dumping interface described in
+     * dpif.h.  Please read the comments there first, because this code
+     * closely follows it.
+     *
+     * On success returns 0 and allocates data, on failure returns
+     * positive errno. */
+    int (*flow_dump_create)(struct netdev *, struct netdev_flow_dump **dump);
+    int (*flow_dump_destroy)(struct netdev_flow_dump *);
+
+    /* Returns true if there are more flows to dump.
+     * 'rbuffer' is used as a temporary buffer and needs to be pre allocated
+     * by the caller.  While there are more flows the same 'rbuffer'
+     * should be provided. 'wbuffer' is used to store dumped actions and needs
+     * to be pre allocated by the caller. */
+    bool (*flow_dump_next)(struct netdev_flow_dump *, struct match *,
+                           struct nlattr **actions,
+                           struct dpif_flow_stats *stats, ovs_u128 *ufid,
+                           struct ofpbuf *rbuffer, struct ofpbuf *wbuffer);
+
+    /* Offload the given flow on netdev.
+     * To modify a flow, use the same ufid.
+     * 'actions' are in netlink format, as with struct dpif_flow_put.
+     * 'info' is extra info needed to offload the flow.
+     * 'stats' is populated according to the rules set out in the description
+     * above 'struct dpif_flow_put'.
+     * Return 0 if successful, otherwise returns a positive errno value. */
+    int (*flow_put)(struct netdev *, struct match *, struct nlattr *actions,
+                    size_t actions_len, const ovs_u128 *ufid,
+                    struct offload_info *info, struct dpif_flow_stats *);
+
+    /* Queries a flow specified by ufid on netdev.
+     * Fills output buffer as 'wbuffer' in flow_dump_next, which
+     * needs to be be pre allocated.
+     * Return 0 if successful, otherwise returns a positive errno value. */
+    int (*flow_get)(struct netdev *, struct match *, struct nlattr **actions,
+                    const ovs_u128 *ufid, struct dpif_flow_stats *,
+                    struct ofpbuf *wbuffer);
+
+    /* Delete a flow specified by ufid from netdev.
+     * 'stats' is populated according to the rules set out in the description
+     * above 'struct dpif_flow_del'.
+     * Return 0 if successful, otherwise returns a positive errno value. */
+    int (*flow_del)(struct netdev *, const ovs_u128 *ufid,
+                    struct dpif_flow_stats *);
+
+    /* Initializies the netdev flow api.
+     * Return 0 if successful, otherwise returns a positive errno value. */
+    int (*init_flow_api)(struct netdev *);
 };
 
 int netdev_register_provider(const struct netdev_class *);
@@ -787,5 +867,7 @@ extern const struct netdev_class netdev_tap_class;
 #ifdef  __cplusplus
 }
 #endif
+
+#define NO_OFFLOAD_API NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
 
 #endif /* netdev.h */

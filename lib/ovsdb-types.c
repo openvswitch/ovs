@@ -364,6 +364,7 @@ ovsdb_base_type_from_json(struct ovsdb_base_type *base,
 
     error = ovsdb_atomic_type_from_json(&base->type, type);
     if (error) {
+        ovsdb_error_destroy(ovsdb_parser_destroy(&parser));
         return error;
     }
 

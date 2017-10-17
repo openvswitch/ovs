@@ -13,7 +13,7 @@ version_map = {"1.0": 0x01,
                "1.3": 0x04,
                "1.4": 0x05,
                "1.5": 0x06}
-version_reverse_map = dict((v, k) for (k, v) in version_map.iteritems())
+version_reverse_map = dict((v, k) for (k, v) in version_map.items())
 
 # Map from vendor name to the length of the action header.
 vendor_map = {"OF": (0x00000000,  4),
@@ -35,7 +35,7 @@ line = ""
 arg_structs = set()
 
 def round_up(x, y):
-    return (x + (y - 1)) / y * y
+    return int((x + (y - 1)) / y) * y
 
 def open_file(fn):
     global file_name
@@ -67,7 +67,7 @@ def fatal(msg):
 
 def usage():
     argv0 = os.path.basename(sys.argv[0])
-    print ('''\
+    print('''\
 %(argv0)s, for extracting OpenFlow action data
 usage: %(argv0)s OFP_ACTIONS.C [--prototypes | --definitions]
 
@@ -238,36 +238,36 @@ def extract_ofp_actions(fn, definitions):
     if n_errors:
         sys.exit(1)
 
-    print """\
+    print("""\
 /* Generated automatically; do not modify!     -*- buffer-read-only: t -*- */
-"""
+""")
 
     if definitions:
-        print "/* Verify that structs used as actions are reasonable sizes. */"
+        print("/* Verify that structs used as actions are reasonable sizes. */")
         for s in sorted(arg_structs):
-            print "BUILD_ASSERT_DECL(sizeof(%s) %% OFP_ACTION_ALIGN == 0);" % s
+            print("BUILD_ASSERT_DECL(sizeof(%s) %% OFP_ACTION_ALIGN == 0);" % s)
 
-        print "\nstatic struct ofpact_raw_instance all_raw_instances[] = {"
+        print("\nstatic struct ofpact_raw_instance all_raw_instances[] = {")
         for vendor in domain:
             for type_ in domain[vendor]:
                 for version in domain[vendor][type_]:
                     d = domain[vendor][type_][version]
-                    print "    { { 0x%08x, %2d, 0x%02x }, " % (
-                        vendor, type_, version)
-                    print "      %s," % d["enum"]
-                    print "      HMAP_NODE_NULL_INITIALIZER,"
-                    print "      HMAP_NODE_NULL_INITIALIZER,"
-                    print "      %s," % d["min_length"]
-                    print "      %s," % d["max_length"]
-                    print "      %s," % d["arg_ofs"]
-                    print "      %s," % d["arg_len"]
-                    print "      \"%s\"," % re.sub('_RAW[0-9]*', '', d["enum"], 1)
+                    print("    { { 0x%08x, %2d, 0x%02x }, " % (
+                        vendor, type_, version))
+                    print("      %s," % d["enum"])
+                    print("      HMAP_NODE_NULL_INITIALIZER,")
+                    print("      HMAP_NODE_NULL_INITIALIZER,")
+                    print("      %s," % d["min_length"])
+                    print("      %s," % d["max_length"])
+                    print("      %s," % d["arg_ofs"])
+                    print("      %s," % d["arg_len"])
+                    print("      \"%s\"," % re.sub('_RAW[0-9]*', '', d["enum"], 1))
                     if d["deprecation"]:
-                        print "      \"%s\"," % re.sub(r'(["\\])', r'\\\1', d["deprecation"])
+                        print("      \"%s\"," % re.sub(r'(["\\])', r'\\\1', d["deprecation"]))
                     else:
-                        print "      NULL,"
-                    print "    },"
-        print "};";
+                        print("      NULL,")
+                    print("    },")
+        print("};")
 
     for versions in enums.values():
         need_ofp_version = False
@@ -314,11 +314,11 @@ def extract_ofp_actions(fn, definitions):
             decl += "}"
         else:
             decl += ";"
-        print decl
-        print
+        print(decl)
+        print("")
 
     if definitions:
-        print """\
+        print("""\
 static enum ofperr
 ofpact_decode(const struct ofp_action_header *a, enum ofp_raw_action_type raw,
               enum ofp_version version, uint64_t arg,
@@ -326,14 +326,14 @@ ofpact_decode(const struct ofp_action_header *a, enum ofp_raw_action_type raw,
               uint64_t *tlv_bitmap, struct ofpbuf *out)
 {
     switch (raw) {\
-"""
+""")
         for versions in enums.values():
             enum = versions[0]["enum"]
-            print "    case %s:" % enum
+            print("    case %s:" % enum)
             base_argtype = versions[0]["base_argtype"]
             arg_vl_mff_map = versions[0]["arg_vl_mff_map"]
             if base_argtype == 'void':
-                print "        return decode_%s(out);" % enum
+                print("        return decode_%s(out);" % enum)
             else:
                 if base_argtype.startswith('struct'):
                     arg = "ALIGNED_CAST(const %s *, a)" % base_argtype
@@ -344,16 +344,16 @@ ofpact_decode(const struct ofp_action_header *a, enum ofp_raw_action_type raw,
                     else:
                         arg = "arg"
                 if arg_vl_mff_map:
-                    print "        return decode_%s(%s, version, vl_mff_map, tlv_bitmap, out);" % (enum, arg)
+                    print("        return decode_%s(%s, version, vl_mff_map, tlv_bitmap, out);" % (enum, arg))
                 else:
-                    print "        return decode_%s(%s, version, out);" % (enum, arg)
-            print
-        print """\
+                    print("        return decode_%s(%s, version, out);" % (enum, arg))
+            print("")
+        print("""\
     default:
         OVS_NOT_REACHED();
     }
 }\
-"""
+""")
     else:
         for versions in enums.values():
             enum = versions[0]["enum"]
@@ -368,15 +368,15 @@ ofpact_decode(const struct ofp_action_header *a, enum ofp_raw_action_type raw,
                 if arg_vl_mff_map:
                     prototype += 'const struct vl_mff_map *, uint64_t *, '
             prototype += "struct ofpbuf *);"
-            print prototype
+            print(prototype)
 
-        print """
+        print("""
 static enum ofperr ofpact_decode(const struct ofp_action_header *,
                                  enum ofp_raw_action_type raw,
                                  enum ofp_version version,
                                  uint64_t arg, const struct vl_mff_map *vl_mff_map,
                                  uint64_t *tlv_bitmap, struct ofpbuf *out);
-"""
+""")
 
 if __name__ == '__main__':
     if '--help' in sys.argv:

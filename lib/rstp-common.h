@@ -262,6 +262,7 @@ struct rstp_port {
     struct rstp *rstp OVS_GUARDED_BY(rstp_mutex);
     struct hmap_node node OVS_GUARDED_BY(rstp_mutex); /* In rstp->ports. */
     void *aux OVS_GUARDED_BY(rstp_mutex);
+    char *port_name;
     struct rstp_bpdu received_bpdu_buffer OVS_GUARDED_BY(rstp_mutex);
     /*************************************************************************
      * MAC status parameters

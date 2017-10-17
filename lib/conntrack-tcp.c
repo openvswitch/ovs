@@ -144,13 +144,6 @@ tcp_get_wscale(const struct tcp_header *tcp)
     return wscale;
 }
 
-static uint32_t
-tcp_payload_length(struct dp_packet *pkt)
-{
-    return (char *) dp_packet_tail(pkt) - dp_packet_l2_pad_size(pkt)
-           - (char *) dp_packet_get_tcp_payload(pkt);
-}
-
 static enum ct_update_res
 tcp_conn_update(struct conn *conn_, struct conntrack_bucket *ctb,
                 struct dp_packet *pkt, bool reply, long long now)

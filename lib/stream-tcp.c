@@ -37,9 +37,9 @@ VLOG_DEFINE_THIS_MODULE(stream_tcp);
 
 /* Active TCP. */
 
+/* Takes ownership of 'name'. */
 static int
-new_tcp_stream(const char *name, int fd, int connect_status,
-               struct stream **streamp)
+new_tcp_stream(char *name, int fd, int connect_status, struct stream **streamp)
 {
     if (connect_status == 0) {
         setsockopt_tcp_nodelay(fd);
@@ -55,7 +55,7 @@ tcp_open(const char *name, char *suffix, struct stream **streamp, uint8_t dscp)
 
     error = inet_open_active(SOCK_STREAM, suffix, 0, NULL, &fd, dscp);
     if (fd >= 0) {
-        return new_tcp_stream(name, fd, error, streamp);
+        return new_tcp_stream(xstrdup(name), fd, error, streamp);
     } else {
         VLOG_ERR("%s: connect: %s", name, ovs_strerror(error));
         return error;
@@ -84,13 +84,9 @@ static int
 new_pstream(char *suffix, const char *name, struct pstream **pstreamp,
             int dscp, char *unlink_path, bool kernel_print_port)
 {
-    char bound_name[SS_NTOP_BUFSIZE + 16];
-    char addrbuf[SS_NTOP_BUFSIZE];
     struct sockaddr_storage ss;
     int error;
-    uint16_t port;
     int fd;
-    char *conn_name = CONST_CAST(char *, name);
 
     fd = inet_open_passive(SOCK_STREAM, suffix, -1, &ss, dscp,
                            kernel_print_port);
@@ -98,16 +94,18 @@ new_pstream(char *suffix, const char *name, struct pstream **pstreamp,
         return -fd;
     }
 
-    port = ss_get_port(&ss);
-    if (!conn_name) {
-        snprintf(bound_name, sizeof bound_name, "ptcp:%"PRIu16":%s",
-                 port, ss_format_address(&ss, addrbuf, sizeof addrbuf));
-        conn_name = bound_name;
+    struct ds bound_name = DS_EMPTY_INITIALIZER;
+    if (!name) {
+        ds_put_format(&bound_name, "ptcp:%"PRIu16":", ss_get_port(&ss));
+        ss_format_address(&ss, &bound_name);
+    } else {
+        ds_put_cstr(&bound_name, name);
     }
 
-    error = new_fd_pstream(conn_name, fd, ptcp_accept, unlink_path, pstreamp);
+    error = new_fd_pstream(ds_steal_cstr(&bound_name), fd,
+                           ptcp_accept, unlink_path, pstreamp);
     if (!error) {
-        pstream_set_bound_port(*pstreamp, htons(port));
+        pstream_set_bound_port(*pstreamp, htons(ss_get_port(&ss)));
     }
     return error;
 }
@@ -123,13 +121,12 @@ static int
 ptcp_accept(int fd, const struct sockaddr_storage *ss,
             size_t ss_len OVS_UNUSED, struct stream **streamp)
 {
-    char name[SS_NTOP_BUFSIZE + 16];
-    char addrbuf[SS_NTOP_BUFSIZE];
+    struct ds name = DS_EMPTY_INITIALIZER;
+    ds_put_cstr(&name, "tcp:");
+    ss_format_address(ss, &name);
+    ds_put_format(&name, ":%"PRIu16, ss_get_port(ss));
 
-    snprintf(name, sizeof name, "tcp:%s:%"PRIu16,
-             ss_format_address(ss, addrbuf, sizeof addrbuf),
-             ss_get_port(ss));
-    return new_tcp_stream(name, fd, 0, streamp);
+    return new_tcp_stream(ds_steal_cstr(&name), fd, 0, streamp);
 }
 
 const struct pstream_class ptcp_pstream_class = {

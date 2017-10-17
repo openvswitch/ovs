@@ -59,10 +59,12 @@
 #define OFP_ASSERT(EXPR)                                                \
         extern int (*build_assert(void))[ sizeof(struct {               \
                     unsigned int build_assert_failed : (EXPR) ? 1 : -1; })]
-#else /* __cplusplus */
+#elif __cplusplus >= 201103L
+#define OFP_ASSERT(EXPR) static_assert(EXPR, "assertion failed")
+#else  /* __cplusplus < 201103L */
 #include <boost/static_assert.hpp>
 #define OFP_ASSERT BOOST_STATIC_ASSERT
-#endif /* __cplusplus */
+#endif /* __cplusplus < 201103L */
 
 /* Version number:
  * Non-experimental versions released: 0x01 0x02
@@ -334,9 +336,11 @@ enum ofp_flow_removed_reason {
     ((1u << OFPRR_IDLE_TIMEOUT) |               \
      (1u << OFPRR_HARD_TIMEOUT) |               \
      (1u << OFPRR_DELETE))
-#define OFPRR14_BITS                            \
+#define OFPRR13_BITS                            \
     (OFPRR10_BITS |                             \
-     (1u << OFPRR_GROUP_DELETE) |               \
+     (1u << OFPRR_GROUP_DELETE))
+#define OFPRR14_BITS                            \
+    (OFPRR13_BITS |                             \
      (1u << OFPRR_METER_DELETE) |               \
      (1u << OFPRR_EVICTION))
 
@@ -465,6 +469,7 @@ enum ofp_header_type_namespaces {
     OFPHTN_IP_PROTO = 2,        /* ns_type is a IP protocol number. */
     OFPHTN_UDP_TCP_PORT = 3,    /* ns_type is a TCP or UDP port. */
     OFPHTN_IPV4_OPTION = 4,     /* ns_type is an IPv4 option number. */
+    OFPHTN_N_TYPES
 };
 
 #endif /* openflow/openflow-common.h */

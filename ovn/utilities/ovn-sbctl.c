@@ -246,9 +246,11 @@ parse_options(int argc, char *argv[], struct shash *local_options)
 
         case OPT_COMMANDS:
             ctl_print_commands();
+            /* fall through */
 
         case OPT_OPTIONS:
             ctl_print_options(global_long_options);
+            /* fall through */
 
         case 'V':
             ovs_print_version(0, 0);
@@ -319,7 +321,8 @@ Connection commands:\n\
 SSL commands:\n\
   get-ssl                     print the SSL configuration\n\
   del-ssl                     delete the SSL configuration\n\
-  set-ssl PRIV-KEY CERT CA-CERT  set the SSL configuration\n\
+  set-ssl PRIV-KEY CERT CA-CERT [SSL-PROTOS [SSL-CIPHERS]] \
+set the SSL configuration\n\
 \n\
 %s\
 \n\
@@ -568,6 +571,7 @@ cmd_chassis_add(struct ctl_context *ctx)
         sbrec_encap_set_type(encaps[i], encap_type);
         sbrec_encap_set_ip(encaps[i], encap_ip);
         sbrec_encap_set_options(encaps[i], &options);
+        sbrec_encap_set_chassis_name(encaps[i], ch_name);
         i++;
     }
     sset_destroy(&encap_set);
@@ -792,19 +796,19 @@ sbctl_dump_openflow(struct vconn *vconn, const struct uuid *uuid, bool stats)
 
             ds_clear(&s);
             if (stats) {
-                ofp_print_flow_stats(&s, fs);
+                ofp_print_flow_stats(&s, fs, NULL, true);
             } else {
-                ds_put_format(&s, " %stable=%s%"PRIu8" ",
+                ds_put_format(&s, "%stable=%s%"PRIu8" ",
                               colors.special, colors.end, fs->table_id);
-                match_format(&fs->match, &s, OFP_DEFAULT_PRIORITY);
+                match_format(&fs->match, NULL, &s, OFP_DEFAULT_PRIORITY);
                 if (ds_last(&s) != ' ') {
                     ds_put_char(&s, ' ');
                 }
 
                 ds_put_format(&s, "%sactions=%s", colors.actions, colors.end);
-                ofpacts_format(fs->ofpacts, fs->ofpacts_len, &s);
+                ofpacts_format(fs->ofpacts, fs->ofpacts_len, NULL, &s);
             }
-            printf("   %s\n", ds_cstr(&s));
+            printf("    %s\n", ds_cstr(&s));
         }
         ds_destroy(&s);
     }
@@ -943,6 +947,7 @@ pre_connection(struct ctl_context *ctx)
     ovsdb_idl_add_column(ctx->idl, &sbrec_sb_global_col_connections);
     ovsdb_idl_add_column(ctx->idl, &sbrec_connection_col_target);
     ovsdb_idl_add_column(ctx->idl, &sbrec_connection_col_read_only);
+    ovsdb_idl_add_column(ctx->idl, &sbrec_connection_col_role);
 }
 
 static void
@@ -960,8 +965,10 @@ cmd_get_connection(struct ctl_context *ctx)
     SBREC_CONNECTION_FOR_EACH(conn, ctx->idl) {
         char *s;
 
-        s = xasprintf("%s %s", conn->read_only ? "read-only" : "read-write",
-                               conn->target);
+        s = xasprintf("%s role=\"%s\" %s",
+                      conn->read_only ? "read-only" : "read-write",
+                      conn->role,
+                      conn->target);
         svec_add(&targets, s);
         free(s);
     }
@@ -1002,6 +1009,7 @@ insert_connections(struct ctl_context *ctx, char *targets[], size_t n)
     struct sbrec_connection **connections;
     size_t i, conns=0;
     bool read_only = false;
+    char *role = "";
 
     /* Insert each connection in a new row in Connection table. */
     connections = xmalloc(n * sizeof *connections);
@@ -1012,6 +1020,9 @@ insert_connections(struct ctl_context *ctx, char *targets[], size_t n)
         } else if (!strcmp(targets[i], "read-write")) {
             read_only = false;
             continue;
+        } else if (!strncmp(targets[i], "role=", 5)) {
+            role = targets[i] + 5;
+            continue;
         } else if (stream_verify_name(targets[i]) &&
                    pstream_verify_name(targets[i])) {
             VLOG_WARN("target type \"%s\" is possibly erroneous", targets[i]);
@@ -1020,6 +1031,7 @@ insert_connections(struct ctl_context *ctx, char *targets[], size_t n)
         connections[conns] = sbrec_connection_insert(ctx->txn);
         sbrec_connection_set_target(connections[conns], targets[i]);
         sbrec_connection_set_read_only(connections[conns], read_only);
+        sbrec_connection_set_role(connections[conns], role);
         conns++;
     }
 
@@ -1113,6 +1125,13 @@ cmd_set_ssl(struct ctl_context *ctx)
     sbrec_ssl_set_ca_cert(ssl, ctx->argv[3]);
 
     sbrec_ssl_set_bootstrap_ca_cert(ssl, bootstrap);
+
+    if (ctx->argc == 5) {
+        sbrec_ssl_set_ssl_protocols(ssl, ctx->argv[4]);
+    } else if (ctx->argc == 6) {
+        sbrec_ssl_set_ssl_protocols(ssl, ctx->argv[4]);
+        sbrec_ssl_set_ssl_ciphers(ssl, ctx->argv[5]);
+    }
 
     sbrec_sb_global_set_ssl(sb_global, ssl);
 }
@@ -1344,11 +1363,10 @@ do_sbctl(const char *args, struct ctl_command *commands, size_t n_commands,
 try_again:
     /* Our transaction needs to be rerun, or a prerequisite was not met.  Free
      * resources and return so that the caller can try again. */
-    if (txn) {
-        ovsdb_idl_txn_abort(txn);
-        ovsdb_idl_txn_destroy(txn);
-        the_idl_txn = NULL;
-    }
+    ovsdb_idl_txn_abort(txn);
+    ovsdb_idl_txn_destroy(txn);
+    the_idl_txn = NULL;
+
     ovsdb_symbol_table_destroy(symtab);
     for (c = commands; c < &commands[n_commands]; c++) {
         ds_destroy(&c->output);
@@ -1408,8 +1426,9 @@ static const struct ctl_command_syntax sbctl_commands[] = {
     /* SSL commands. */
     {"get-ssl", 0, 0, "", pre_cmd_get_ssl, cmd_get_ssl, NULL, "", RO},
     {"del-ssl", 0, 0, "", pre_cmd_del_ssl, cmd_del_ssl, NULL, "", RW},
-    {"set-ssl", 3, 3, "PRIVATE-KEY CERTIFICATE CA-CERT", pre_cmd_set_ssl,
-     cmd_set_ssl, NULL, "--bootstrap", RW},
+    {"set-ssl", 3, 5,
+        "PRIVATE-KEY CERTIFICATE CA-CERT [SSL-PROTOS [SSL-CIPHERS]]",
+        pre_cmd_set_ssl, cmd_set_ssl, NULL, "--bootstrap", RW},
 
     {NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, RO},
 };

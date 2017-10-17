@@ -84,7 +84,7 @@ BuildRequires: libcap-ng libcap-ng-devel
 %endif
 %if %{with dpdk}
 BuildRequires: libpcap-devel numactl-devel
-BuildRequires: dpdk-devel >= 16.11
+BuildRequires: dpdk-devel >= 17.05.1
 Provides: %{name}-dpdk = %{version}-%{release}
 %endif
 
@@ -92,6 +92,13 @@ Requires: openssl hostname iproute module-init-tools
 #Upstream kernel commit 4f647e0a3c37b8d5086214128614a136064110c3
 #Requires: kernel >= 3.15.0-0
 
+Requires(post): /usr/bin/getent
+Requires(post): /usr/sbin/useradd
+Requires(post): /usr/bin/sed
+%if %{with dpdk}
+Requires(post): /usr/sbin/usermod
+Requires(post): /usr/sbin/groupadd
+%endif
 Requires(post): systemd-units
 Requires(preun): systemd-units
 Requires(postun): systemd-units
@@ -222,7 +229,17 @@ Docker network plugins for OVN.
 	--enable-ssl \
 	--with-pkidir=%{_sharedstatedir}/openvswitch/pki
 
+/usr/bin/perl build-aux/dpdkstrip.pl \
+%if %{with dpdk}
+	--dpdk \
+%else
+	--nodpdk \
+%endif
+	< rhel/usr_lib_systemd_system_ovs-vswitchd.service.in \
+	> rhel/usr_lib_systemd_system_ovs-vswitchd.service
+
 make %{?_smp_mflags}
+make selinux/openvswitch-custom.te
 cd selinux
 make -f %{_datadir}/selinux/devel/Makefile
 
@@ -231,8 +248,13 @@ rm -rf $RPM_BUILD_ROOT
 make install DESTDIR=$RPM_BUILD_ROOT
 
 install -d -m 0755 $RPM_BUILD_ROOT%{_rundir}/openvswitch
-install -d -m 0755 $RPM_BUILD_ROOT%{_localstatedir}/log/openvswitch
+install -d -m 0750 $RPM_BUILD_ROOT%{_localstatedir}/log/openvswitch
 install -d -m 0755 $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch
+
+%if %{with dpdk}
+install -p -D -m 0644 rhel/usr_lib_udev_rules.d_91-vfio.rules \
+        $RPM_BUILD_ROOT%{_prefix}/lib/udev/rules.d/91-vfio.rules
+%endif
 
 install -p -D -m 0644 \
         rhel/usr_share_openvswitch_scripts_systemd_sysconfig.template \
@@ -245,6 +267,9 @@ for service in openvswitch ovsdb-server ovs-vswitchd \
 done
 install -m 0755 rhel/etc_init.d_openvswitch \
         $RPM_BUILD_ROOT%{_datadir}/openvswitch/scripts/openvswitch.init
+
+install -p -D -m 0644 rhel/etc_openvswitch_default.conf \
+        $RPM_BUILD_ROOT/%{_sysconfdir}/openvswitch/default.conf
 
 install -p -D -m 0644 rhel/etc_logrotate.d_openvswitch \
         $RPM_BUILD_ROOT/%{_sysconfdir}/logrotate.d/openvswitch
@@ -273,16 +298,21 @@ rm -rf $RPM_BUILD_ROOT/%{_datadir}/openvswitch/python/
 install -d -m 0755 $RPM_BUILD_ROOT/%{_sharedstatedir}/openvswitch
 
 touch $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch/conf.db
+touch $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch/.conf.db.~lock~
 touch $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch/system-id.conf
 
 install -p -m 644 -D selinux/openvswitch-custom.pp \
         $RPM_BUILD_ROOT%{_datadir}/selinux/packages/%{name}/openvswitch-custom.pp
 
 install -d $RPM_BUILD_ROOT%{_prefix}/lib/firewalld/services/
-install rhel/usr_lib_firewalld_services_ovn-central-firewall-service.xml \
+install -p -m 0644 rhel/usr_lib_firewalld_services_ovn-central-firewall-service.xml \
         $RPM_BUILD_ROOT%{_prefix}/lib/firewalld/services/ovn-central-firewall-service.xml
-install rhel/usr_lib_firewalld_services_ovn-host-firewall-service.xml \
+install -p -m 0644 rhel/usr_lib_firewalld_services_ovn-host-firewall-service.xml \
         $RPM_BUILD_ROOT%{_prefix}/lib/firewalld/services/ovn-host-firewall-service.xml
+
+install -d -m 0755 $RPM_BUILD_ROOT%{_prefix}/lib/ocf/resource.d/ovn
+ln -s %{_datadir}/openvswitch/scripts/ovndb-servers.ocf \
+      $RPM_BUILD_ROOT%{_prefix}/lib/ocf/resource.d/ovn/ovndb-servers
 
 # remove unpackaged files
 rm -f $RPM_BUILD_ROOT%{_bindir}/ovs-parse-backtrace \
@@ -353,6 +383,25 @@ rm -rf $RPM_BUILD_ROOT
 %endif
 
 %post
+if [ $1 -eq 1 ]; then
+    getent passwd openvswitch >/dev/null || \
+        useradd -r -d / -s /sbin/nologin -c "Open vSwitch Daemons" openvswitch
+
+    sed -i 's:^#OVS_USER_ID=:OVS_USER_ID=:' /etc/sysconfig/openvswitch
+
+%if %{with dpdk}
+    getent group hugetlbfs >/dev/null || \
+        groupadd hugetlbfs
+    usermod -a -G hugetlbfs openvswitch
+    sed -i \
+        's@OVS_USER_ID="openvswitch:openvswitch"@OVS_USER_ID="openvswitch:hugetlbfs"@'\
+        /etc/sysconfig/openvswitch
+%endif
+
+    # In the case of upgrade, this is not needed.
+    chown -R openvswitch:openvswitch /etc/openvswitch
+fi
+
 %if 0%{?systemd_post:1}
     %systemd_post %{name}.service
 %else
@@ -361,10 +410,6 @@ rm -rf $RPM_BUILD_ROOT
         /bin/systemctl daemon-reload >dev/null || :
     fi
 %endif
-
-%post ovn-common
-mkdir -p /usr/lib/ocf/resource.d/ovn
-ln -sf %{_datadir}/openvswitch/scripts/ovndb-servers.ocf /usr/lib/ocf/resource.d/ovn/ovndb-servers
 
 %post ovn-central
 %if 0%{?systemd_post:1}
@@ -405,12 +450,6 @@ ln -sf %{_datadir}/openvswitch/scripts/ovndb-servers.ocf /usr/lib/ocf/resource.d
 %else
     /bin/systemctl daemon-reload >/dev/null 2>&1 || :
 %endif
-
-%postun ovn-common
-if [ $1 -eq 0 ] ; then
-    # Package removal, not upgrade
-    rm -rf /usr/lib/ocf/resource.d/ovn
-fi
 
 %postun ovn-central
 %if 0%{?systemd_postun:1}
@@ -480,7 +519,9 @@ fi
 %{_sysconfdir}/bash_completion.d/ovs-appctl-bashcomp.bash
 %{_sysconfdir}/bash_completion.d/ovs-vsctl-bashcomp.bash
 %dir %{_sysconfdir}/openvswitch
+%{_sysconfdir}/openvswitch/default.conf
 %config %ghost %{_sysconfdir}/openvswitch/conf.db
+%ghost %{_sysconfdir}/openvswitch/.conf.db.~lock~
 %config %ghost %{_sysconfdir}/openvswitch/system-id.conf
 %config(noreplace) %{_sysconfdir}/sysconfig/openvswitch
 %config(noreplace) %{_sysconfdir}/logrotate.d/openvswitch
@@ -531,6 +572,9 @@ fi
 %{_mandir}/man8/ovs-vswitchd.8*
 %{_mandir}/man8/ovs-parse-backtrace.8*
 %{_mandir}/man8/ovs-testcontroller.8*
+%if %{with dpdk}
+%{_prefix}/lib/udev/rules.d/91-vfio.rules
+%endif
 %doc COPYING NOTICE README.rst NEWS rhel/README.RHEL.rst
 /var/lib/openvswitch
 /var/log/openvswitch
@@ -558,6 +602,7 @@ fi
 %{_mandir}/man8/ovn-sbctl.8*
 %{_mandir}/man5/ovn-nb.5*
 %{_mandir}/man5/ovn-sb.5*
+%{_prefix}/lib/ocf/resource.d/ovn/ovndb-servers
 
 %files ovn-central
 %{_bindir}/ovn-northd

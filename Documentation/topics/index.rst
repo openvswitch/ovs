@@ -48,6 +48,7 @@ OVS
    language-bindings
    testing
    tracing
+   idl-compound-indexes
 
 OVN
 ---

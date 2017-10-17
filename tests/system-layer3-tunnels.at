@@ -1,0 +1,99 @@
+AT_BANNER([layer3-tunnels])
+
+AT_SETUP([layer3 - ping over VXLAN-GPE])
+OVS_TRAFFIC_VSWITCHD_START([set Bridge br0 other-config:hwaddr="00:12:34:56:78:bb"])
+OVS_CHECK_VXLAN_GPE()
+OVS_CHECK_IPROUTE_ENCAP()
+
+ADD_BR([br-underlay])
+
+ADD_NAMESPACES(at_ns0)
+
+dnl Set up underlay link from host into the namespace using veth pair.
+ADD_VETH(p0, at_ns0, br-underlay, "172.31.1.1/24")
+AT_CHECK([ip addr add dev br-underlay "172.31.1.100/24"])
+AT_CHECK([ip link set dev br-underlay up])
+
+dnl Set up tunnel endpoints on OVS outside the namespace and with a native
+dnl linux device inside the namespace.
+ADD_OVS_TUNNEL([vxlan], [br0], [at_vxlan0], [172.31.1.1], [10.1.1.2/24],
+               [options:packet_type=legacy_l3 options:exts=gpe])
+AT_CHECK([ip neigh add 10.1.1.1 lladdr 00:12:34:56:78:aa dev br0])
+NS_CHECK_EXEC([at_ns0], [ip link add dev at_vxlan1 type vxlan dstport 4789 external gpe])
+NS_CHECK_EXEC([at_ns0], [ip addr add dev at_vxlan1 10.1.1.1/24])
+NS_CHECK_EXEC([at_ns0], [ip link set dev at_vxlan1 mtu 1450 up])
+NS_CHECK_EXEC([at_ns0], [ip route add 10.1.1.2/32 encap ip id 0 dst 172.31.1.100 dev at_vxlan1])
+
+AT_CHECK([ovs-ofctl add-flow br-underlay "actions=normal"])
+
+dnl Now add rules for OVS to forward to the tunnel and local port
+AT_CHECK([ovs-ofctl add-flow br0 "priority=1 action=drop"])
+AT_CHECK([ovs-ofctl add-flow br0 "priority=100 ip,nw_dst=10.1.1.1 action=output:at_vxlan0"])
+AT_CHECK([ovs-ofctl add-flow br0 "priority=100 ip,nw_dst=10.1.1.2 action=mod_dl_src:00:12:34:56:78:aa,mod_dl_dst:00:12:34:56:78:bb,local"])
+
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.1.1.2])
+
+dnl First, check the underlay
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Okay, now check the overlay with different packet sizes
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([layer3 - ping over GRE])
+OVS_TRAFFIC_VSWITCHD_START([set Bridge br0 other-config:hwaddr="00:12:34:56:78:bb"])
+OVS_CHECK_GRE_L3()
+OVS_CHECK_IPROUTE_ENCAP()
+
+ADD_BR([br-underlay])
+
+ADD_NAMESPACES(at_ns0)
+
+dnl Set up underlay link from host into the namespace using veth pair.
+ADD_VETH(p0, at_ns0, br-underlay, "172.31.1.1/24")
+AT_CHECK([ip addr add dev br-underlay "172.31.1.100/24"])
+AT_CHECK([ip link set dev br-underlay up])
+
+dnl Set up tunnel endpoints on OVS outside the namespace and with a native
+dnl linux device inside the namespace.
+ADD_OVS_TUNNEL([gre], [br0], [at_gre0], [172.31.1.1], [10.1.1.2/24],
+               [options:packet_type=legacy_l3])
+AT_CHECK([ip neigh add 10.1.1.1 lladdr 00:12:34:56:78:aa dev br0])
+NS_CHECK_EXEC([at_ns0], [ip link add dev at_gre1 type gre remote 172.31.1.100])
+NS_CHECK_EXEC([at_ns0], [ip addr add dev at_gre1 10.1.1.1/24])
+NS_CHECK_EXEC([at_ns0], [ip link set dev at_gre1 mtu 1450 up])
+NS_CHECK_EXEC([at_ns0], [ip route add 10.1.1.2/32 encap ip id 0 dst 172.31.1.100 dev at_gre1])
+
+AT_CHECK([ovs-ofctl add-flow br-underlay "actions=normal"])
+
+dnl Now add rules for OVS to forward to the tunnel and local port
+AT_CHECK([ovs-ofctl add-flow br0 "priority=1 action=drop"])
+AT_CHECK([ovs-ofctl add-flow br0 "priority=100 ip,nw_dst=10.1.1.1 action=output:at_gre0"])
+AT_CHECK([ovs-ofctl add-flow br0 "priority=100 ip,nw_dst=10.1.1.2 action=mod_dl_src:00:12:34:56:78:aa,mod_dl_dst:00:12:34:56:78:bb,local"])
+
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.1.1.2])
+
+dnl First, check the underlay
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Okay, now check the overlay with different packet sizes
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP

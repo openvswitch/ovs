@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2012, 2013, 2014 Nicira, Inc.
+/* Copyright (c) 2011, 2012, 2013, 2014, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,7 +71,7 @@ parse_bundle_actions(char *actions)
     char *error;
 
     ofpbuf_init(&ofpacts, 0);
-    error = bundle_parse_load(actions, &ofpacts);
+    error = bundle_parse_load(actions, NULL, &ofpacts);
     if (error) {
         ovs_fatal(0, "%s", error);
     }
@@ -218,7 +218,7 @@ test_bundle_main(int argc, char *argv[])
                mask_str(mask, sg.n_slaves), disruption, perfect);
 
         for (j = 0 ; j < sg.n_slaves; j++) {
-            struct slave *slave = &sg.slaves[j];
+            slave = &sg.slaves[j];
             double flow_percent;
 
             flow_percent = slave->flow_count / (double)N_FLOWS;

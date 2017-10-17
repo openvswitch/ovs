@@ -38,14 +38,21 @@ pidfile_is_running () {
     test -e "$pidfile" && pid=`cat "$pidfile"` && pid_exists "$pid"
 } >/dev/null 2>&1
 
-stop_ovsdb () {
+stop_nb_ovsdb() {
     if pidfile_is_running $DB_NB_PID; then
         ovs-appctl -t $rundir/ovnnb_db.ctl exit
     fi
+}
 
+stop_sb_ovsdb() {
     if pidfile_is_running $DB_SB_PID; then
         ovs-appctl -t $rundir/ovnsb_db.ctl exit
     fi
+}
+
+stop_ovsdb () {
+    stop_nb_ovsdb
+    stop_sb_ovsdb
 }
 
 demote_ovnnb() {
@@ -86,7 +93,7 @@ promote_ovnsb() {
     ovs-appctl -t $rundir/ovnsb_db.ctl ovsdb-server/disconnect-active-ovsdb-server
 }
 
-start_ovsdb () {
+start_nb_ovsdb() {
     # Check and eventually start ovsdb-server for Northbound DB
     if ! pidfile_is_running $DB_NB_PID; then
         upgrade_db "$DB_NB_FILE" "$DB_NB_SCHEMA" 1>/dev/null 2>/dev/null
@@ -101,6 +108,8 @@ start_ovsdb () {
         set "$@" --private-key=db:OVN_Northbound,SSL,private_key
         set "$@" --certificate=db:OVN_Northbound,SSL,certificate
         set "$@" --ca-cert=db:OVN_Northbound,SSL,ca_cert
+        set "$@" --ssl-protocols=db:OVN_Northbound,SSL,ssl_protocols
+        set "$@" --ssl-ciphers=db:OVN_Northbound,SSL,ssl_ciphers
 
         if test X"$DB_NB_CREATE_INSECURE_REMOTE" = Xyes; then
             set "$@" --remote=ptcp:$DB_NB_PORT:$DB_NB_ADDR
@@ -117,7 +126,9 @@ start_ovsdb () {
         $@ $DB_NB_FILE
         ovn-nbctl init
     fi
+}
 
+start_sb_ovsdb() {
     # Check and eventually start ovsdb-server for Southbound DB
     if ! pidfile_is_running $DB_SB_PID; then
         upgrade_db "$DB_SB_FILE" "$DB_SB_SCHEMA" 1>/dev/null 2>/dev/null
@@ -132,6 +143,8 @@ start_ovsdb () {
         set "$@" --private-key=db:OVN_Southbound,SSL,private_key
         set "$@" --certificate=db:OVN_Southbound,SSL,certificate
         set "$@" --ca-cert=db:OVN_Southbound,SSL,ca_cert
+        set "$@" --ssl-protocols=db:OVN_Southbound,SSL,ssl_protocols
+        set "$@" --ssl-ciphers=db:OVN_Southbound,SSL,ssl_ciphers
 
         if test X"$DB_SB_CREATE_INSECURE_REMOTE" = Xyes; then
             set "$@" --remote=ptcp:$DB_SB_PORT:$DB_SB_ADDR
@@ -148,6 +161,11 @@ start_ovsdb () {
         $@ $DB_SB_FILE
         ovn-sbctl init
     fi
+}
+
+start_ovsdb () {
+    start_nb_ovsdb
+    start_sb_ovsdb
 }
 
 sync_status() {
@@ -188,15 +206,15 @@ start_northd () {
     if [ ! -e $ovn_northd_db_conf_file ]; then
         if test X"$OVN_MANAGE_OVSDB" = Xyes; then
             start_ovsdb
-        fi
 
-        if ! pidfile_is_running $DB_NB_PID; then
-            log_failure_msg "OVN Northbound DB is not running"
-            exit
-        fi
-        if ! pidfile_is_running $DB_SB_PID; then
-            log_failure_msg "OVN Southbound DB is not running"
-            exit
+            if ! pidfile_is_running $DB_NB_PID; then
+                log_failure_msg "OVN Northbound DB is not running"
+                exit
+            fi
+            if ! pidfile_is_running $DB_SB_PID; then
+                log_failure_msg "OVN Southbound DB is not running"
+                exit
+            fi
         fi
         ovn_northd_params="--ovnnb-db=unix:$DB_NB_SOCK --ovnsb-db=unix:$DB_SB_SOCK"
     else
@@ -299,6 +317,16 @@ restart_ovsdb () {
     start_ovsdb
 }
 
+restart_nb_ovsdb () {
+    stop_nb_ovsdb
+    start_nb_ovsdb
+}
+
+restart_sb_ovsdb () {
+    stop_sb_ovsdb
+    start_sb_ovsdb
+}
+
 ## ---- ##
 ## main ##
 ## ---- ##
@@ -353,6 +381,8 @@ set_defaults () {
 
     DB_SB_CREATE_INSECURE_REMOTE="no"
     DB_NB_CREATE_INSECURE_REMOTE="no"
+
+    MONITOR="yes"
 }
 
 set_option () {
@@ -380,21 +410,27 @@ startup scripts.  System administrators should not normally invoke it directly.
 Commands:
   start_northd                start ovn-northd
   start_ovsdb                 start ovn related ovsdb-server processes
+  start_nb_ovsdb              start ovn northbound db ovsdb-server process
+  start_sb_ovsdb              start ovn southbound db ovsdb-server process
   start_controller            start ovn-controller
   start_controller_vtep       start ovn-controller-vtep
   stop_northd                 stop ovn-northd
   stop_ovsdb                  stop ovn related ovsdb-server processes
+  stop_nb_ovsdb               stop ovn northbound db ovsdb-server process
+  stop_sb_ovsdb               stop ovn southbound db ovsdb-server process
   stop_controller             stop ovn-controller
   stop_controller_vtep        stop ovn-controller-vtep
   restart_northd              restart ovn-northd
   restart_ovsdb               restart ovn related ovsdb-server processes
+  restart_nb_ovsdb            restart ovn northbound db ovsdb-server process
+  restart_sb_ovsdb            restart ovn southbound db ovsdb-server process
   restart_controller          restart ovn-controller
   restart_controller_vtep     restart ovn-controller-vtep
 
 Options:
   --ovn-northd-priority=NICE     set ovn-northd's niceness (default: $OVN_NORTHD_PRIORITY)
   --ovn-northd-wrapper=WRAPPER   run with a wrapper like valgrind for debugging
-  --ovn-controller-priority=NICE     set ovn-northd's niceness (default: $OVN_CONTROLLER_PRIORITY)
+  --ovn-controller-priority=NICE     set ovn-controller's niceness (default: $OVN_CONTROLLER_PRIORITY)
   --ovn-controller-wrapper=WRAPPER   run with a wrapper like valgrind for debugging
   --ovn-controller-ssl-key=KEY OVN Southbound SSL private key file
   --ovn-controller-ssl-cert=CERT OVN Southbound SSL certificate file
@@ -493,6 +529,12 @@ case $command in
     start_ovsdb)
         start_ovsdb
         ;;
+    start_nb_ovsdb)
+        start_nb_ovsdb
+        ;;
+    start_sb_ovsdb)
+        start_sb_ovsdb
+        ;;
     start_controller)
         start_controller
         ;;
@@ -504,6 +546,12 @@ case $command in
         ;;
     stop_ovsdb)
        stop_ovsdb
+        ;;
+    stop_nb_ovsdb)
+       stop_nb_ovsdb
+        ;;
+    stop_sb_ovsdb)
+       stop_sb_ovsdb
         ;;
     stop_controller)
         stop_controller
@@ -519,6 +567,12 @@ case $command in
         ;;
     restart_ovsdb)
         restart_ovsdb
+        ;;
+    restart_nb_ovsdb)
+        restart_nb_ovsdb
+        ;;
+    restart_sb_ovsdb)
+        restart_sb_ovsdb
         ;;
     restart_controller)
         restart_controller

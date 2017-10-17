@@ -35,12 +35,17 @@ AM_CFLAGS += $(OVS_CFLAGS)
 
 if DPDK_NETDEV
 AM_CFLAGS += -D_FILE_OFFSET_BITS=64
+DPDKSTRIP_FLAGS = --dpdk
+else
+DPDKSTRIP_FLAGS = --nodpdk
 endif
 
 if NDEBUG
 AM_CPPFLAGS += -DNDEBUG
 AM_CFLAGS += -fomit-frame-pointer
 endif
+
+AM_CTAGSFLAGS = $(OVS_CTAGS_IDENTIFIERS_LIST)
 
 if WIN32
 psep=";"
@@ -80,6 +85,7 @@ EXTRA_DIST = \
 	build-aux/cksum-schema-check \
 	build-aux/calculate-schema-cksum \
 	build-aux/dist-docs \
+	build-aux/dpdkstrip.pl \
 	build-aux/sodepends.pl \
 	build-aux/soexpand.pl \
 	build-aux/xml2nroff \
@@ -106,6 +112,7 @@ MAN_ROOTS =
 noinst_DATA =
 noinst_HEADERS =
 lib_LTLIBRARIES =
+noinst_LTLIBRARIES =
 noinst_man_MANS =
 noinst_PROGRAMS =
 noinst_SCRIPTS =
@@ -137,6 +144,7 @@ ro_shell = printf '\043 Generated automatically -- do not modify!    -*- buffer-
 SUFFIXES += .in
 .in:
 	$(AM_V_GEN)$(PERL) $(srcdir)/build-aux/soexpand.pl -I$(srcdir) < $< | \
+	  $(PERL) $(srcdir)/build-aux/dpdkstrip.pl $(DPDKSTRIP_FLAGS) | \
 	  sed \
 	    -e 's,[@]PKIDIR[@],$(PKIDIR),g' \
 	    -e 's,[@]LOGDIR[@],$(LOGDIR),g' \
@@ -311,6 +319,20 @@ thread-safety-check:
 EXTRA_DIST += build-aux/thread-safety-blacklist
 .PHONY: thread-safety-check
 
+# Check that "ip" is used in preference to "ifconfig", because
+# "ifconfig" is not installed ubiquitously anymore.
+ALL_LOCAL += check-ifconfig
+check-ifconfig:
+	@if test -e $(srcdir)/.git && (git --version) >/dev/null 2>&1 && \
+	  (cd $(srcdir) && git --no-pager grep -l -E -e 'ifconfig' | \
+           $(EGREP) -v 'Makefile.am|ovs-vsctl-bashcomp|openvswitch-custom\.te'); \
+	then \
+	  echo "See above for list of files that use or reference"; \
+          echo "'ifconfig'.  Please use 'ip' instead."; \
+	  exit 1; \
+	fi
+.PHONY: check-ifconfig
+
 if HAVE_GROFF
 ALL_LOCAL += manpage-check
 manpage-check: $(man_MANS) $(dist_man_MANS) $(noinst_man_MANS)
@@ -351,7 +373,7 @@ ALL_LOCAL += flake8-check
 FLAKE8_SELECT = H231,H232,H233,H238
 FLAKE8_IGNORE = E121,E123,E125,E126,E127,E128,E129,E131,W503,F811,D,H,I
 flake8-check: $(FLAKE8_PYFILES)
-	$(AM_V_GEN) \
+	$(FLAKE8_WERROR)$(AM_V_GEN) \
 	  src='$^' && \
 	  flake8 $$src --select=$(FLAKE8_SELECT) $(FLAKE8_FLAGS) && \
 	  flake8 $$src --ignore=$(FLAKE8_IGNORE) $(FLAKE8_FLAGS) && \

@@ -791,12 +791,12 @@ update_in_band_remotes(struct connmgr *mgr)
         if (!mgr->in_band) {
             in_band_create(mgr->ofproto, mgr->local_port_name, &mgr->in_band);
         }
-        in_band_set_queue(mgr->in_band, mgr->in_band_queue);
     } else {
         /* in_band_run() needs a chance to delete any existing in-band flows.
          * We will destroy mgr->in_band after it's done with that. */
     }
     if (mgr->in_band) {
+        in_band_set_queue(mgr->in_band, mgr->in_band_queue);
         in_band_set_remotes(mgr->in_band, addrs, n_addrs);
     }
 
@@ -1740,7 +1740,7 @@ connmgr_send_async_msg(struct connmgr *mgr,
         if (protocol == OFPUTIL_P_NONE || !rconn_is_connected(ofconn->rconn)
             || ofconn->controller_id != am->controller_id
             || !ofconn_receives_async_msg(ofconn, am->oam,
-                                          am->pin.up.public.reason)) {
+                                          am->pin.up.base.reason)) {
             continue;
         }
 
@@ -1748,11 +1748,11 @@ connmgr_send_async_msg(struct connmgr *mgr,
             &am->pin.up, protocol, ofconn->packet_in_format);
 
         struct ovs_list txq;
-        bool is_miss = (am->pin.up.public.reason == OFPR_NO_MATCH ||
-                        am->pin.up.public.reason == OFPR_EXPLICIT_MISS ||
-                        am->pin.up.public.reason == OFPR_IMPLICIT_MISS);
+        bool is_miss = (am->pin.up.base.reason == OFPR_NO_MATCH ||
+                        am->pin.up.base.reason == OFPR_EXPLICIT_MISS ||
+                        am->pin.up.base.reason == OFPR_IMPLICIT_MISS);
         pinsched_send(ofconn->schedulers[is_miss],
-                      am->pin.up.public.flow_metadata.flow.in_port.ofp_port,
+                      am->pin.up.base.flow_metadata.flow.in_port.ofp_port,
                       msg, &txq);
         do_send_packet_ins(ofconn, &txq);
     }
@@ -2237,22 +2237,22 @@ ofmonitor_flush(struct connmgr *mgr)
     struct ofconn *ofconn;
 
     LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
+        struct rconn_packet_counter *counter = ofconn->monitor_counter;
+
         struct ofpbuf *msg;
-
         LIST_FOR_EACH_POP (msg, list_node, &ofconn->updates) {
-            unsigned int n_bytes;
+            ofconn_send(ofconn, msg, counter);
+        }
 
-            ofconn_send(ofconn, msg, ofconn->monitor_counter);
-            n_bytes = rconn_packet_counter_n_bytes(ofconn->monitor_counter);
-            if (!ofconn->monitor_paused && n_bytes > 128 * 1024) {
-                struct ofpbuf *pause;
+        if (!ofconn->monitor_paused
+            && rconn_packet_counter_n_bytes(counter) > 128 * 1024) {
+            struct ofpbuf *pause;
 
-                COVERAGE_INC(ofmonitor_pause);
-                ofconn->monitor_paused = monitor_seqno++;
-                pause = ofpraw_alloc_xid(OFPRAW_NXT_FLOW_MONITOR_PAUSED,
-                                         OFP10_VERSION, htonl(0), 0);
-                ofconn_send(ofconn, pause, ofconn->monitor_counter);
-            }
+            COVERAGE_INC(ofmonitor_pause);
+            ofconn->monitor_paused = monitor_seqno++;
+            pause = ofpraw_alloc_xid(OFPRAW_NXT_FLOW_MONITOR_PAUSED,
+                                     OFP10_VERSION, htonl(0), 0);
+            ofconn_send(ofconn, pause, counter);
         }
     }
 }
@@ -2322,8 +2322,8 @@ ofmonitor_wait(struct connmgr *mgr)
 void
 ofproto_async_msg_free(struct ofproto_async_msg *am)
 {
-    free(am->pin.up.public.packet);
-    free(am->pin.up.public.userdata);
+    free(am->pin.up.base.packet);
+    free(am->pin.up.base.userdata);
     free(am->pin.up.stack);
     free(am->pin.up.actions);
     free(am->pin.up.action_set);

@@ -240,13 +240,15 @@ class TestArena(xmlrpc.XMLRPC):
             util.interface_up(bridge)
             (ip_addr, mask) = util.interface_get_ip(iface)
             util.interface_assign_ip(bridge, ip_addr, mask)
+            util.interface_up(bridge)
             util.move_routes(iface, bridge)
-            util.interface_assign_ip(iface, "0.0.0.0", "255.255.255.255")
+            util.interface_remove_ip(iface, ip_addr, mask)
             ret = vswitch.ovs_vsctl_add_port_to_bridge(bridge, iface)
             if ret == 0:
                 self.ports.add(iface)
             else:
                 util.interface_assign_ip(iface, ip_addr, mask)
+                util.interface_up(iface)
                 util.move_routes(bridge, iface)
                 vswitch.ovs_vsctl_del_bridge(bridge)
 
@@ -326,6 +328,12 @@ class TestArena(xmlrpc.XMLRPC):
         This function allows to assing ip address to the given interface.
         """
         return util.interface_assign_ip(iface, ip_address, mask)
+
+    def xmlrpc_interface_remove_ip(self, iface, ip_address, mask):
+        """
+        This function allows to assing ip address to the given interface.
+        """
+        return util.interface_remove_ip(iface, ip_address, mask)
 
     def xmlrpc_get_interface(self, address):
         """

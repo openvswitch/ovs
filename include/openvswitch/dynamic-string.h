@@ -24,6 +24,10 @@
 #include <stdio.h>
 #include "openvswitch/compiler.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* A "dynamic string", that is, a buffer that can be used to construct a
  * string across a series of operations that extend or modify it.
  *
@@ -89,5 +93,9 @@ ds_put_char(struct ds *ds, char c)
         ds_put_char__(ds, c);
     }
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* dynamic-string.h */

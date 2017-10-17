@@ -128,15 +128,16 @@ versions of OpenFlow always dump all ports.
 .
 .IP "\fBmod\-port \fIswitch\fR \fIport\fR \fIaction\fR"
 Modify characteristics of port \fBport\fR in \fIswitch\fR.  \fIport\fR
-may be an OpenFlow port number or name or the keyword \fBLOCAL\fR (the
+may be an OpenFlow port number or name (unless \fB\-\-no\-names\fR is
+specified) or the keyword \fBLOCAL\fR (the
 preferred way to refer to the OpenFlow local port).  The \fIaction\fR
 may be any one of the following:
 .
 .RS
 .IQ \fBup\fR
 .IQ \fBdown\fR
-Enable or disable the interface.  This is equivalent to \fBifconfig
-up\fR or \fBifconfig down\fR on a Unix system.
+Enable or disable the interface.  This is equivalent to \fBip
+link set up\fR or \fBip link set down\fR on a Unix system.
 .
 .IP \fBstp\fR
 .IQ \fBno\-stp\fR
@@ -221,8 +222,11 @@ syntax of \fIflows\fR.  The output format is described in
 .IP
 By default, \fBovs\-ofctl\fR prints flow entries in the same order
 that the switch sends them, which is unlikely to be intuitive or
-consistent.  See the description of \fB\-\-sort\fR and \fB\-\-rsort\fR,
-under \fBOPTIONS\fR below, to influence the display order.
+consistent.  Use \fB\-\-sort\fR and \fB\-\-rsort\fR to control display
+order.  The \fB\-\-names\fR/\fB\-\-no\-names\fR and
+\fB\-\-stats\fR/\fB\-\-no\-stats\fR options also affect output
+formatting.  See the descriptions of these options, under
+\fBOPTIONS\fR below, for more information
 .
 .TP
 \fBdump\-aggregate \fIswitch \fR[\fIflows\fR]
@@ -1027,11 +1031,13 @@ Restores the queue to the value it was before any \fBset_queue\fR
 actions were applied.
 .
 .IP \fBct\fR
-.IQ \fBct\fB(\fR[\fIargument\fR][\fB,\fIargument\fR...]\fB)
+.IQ \fBct(\fR[\fIargument\fR][\fB,\fIargument\fR...]\fB)
 Send the packet through the connection tracker.  Refer to the \fBct_state\fR
-documentation above for possible packet and connection states. The following
-arguments are supported:
-
+documentation above for possible packet and connection states. A \fBct\fR
+action always sets the packet to an untracked state and clears out the
+\fBct_state\fR fields for the current processing path.  Those fields are
+only available for the processing path pointed to by the \fBtable\fR
+argument.  The following arguments are supported:
 .RS
 .IP \fBcommit\fR
 .RS
@@ -1557,17 +1563,23 @@ the action set, the one written later replaces the earlier action:
 \fBpop_mpls\fR
 .
 .IP 2.
-\fBpush_mpls\fR
+\fBdecap\fR
 .
 .IP 3.
-\fBpush_vlan\fR
+\fBencap\fR
 .
 .IP 4.
+\fBpush_mpls\fR
+.
+.IP 5.
+\fBpush_vlan\fR
+.
+.IP 6.
 \fBdec_ttl\fR
 .IQ
 \fBdec_mpls_ttl\fR
 .
-.IP 5.
+.IP 7.
 \fBload\fR
 .IQ
 \fBmove\fR
@@ -1607,10 +1619,10 @@ the later modification takes effect, and when they modify
 different parts of a field (or different fields), then both
 modifications are applied.
 .
-.IP 6.
+.IP 8.
 \fBset_queue\fR
 .
-.IP 7.
+.IP 9.
 \fBgroup\fR
 .IQ
 \fBoutput\fR
@@ -1626,6 +1638,7 @@ not visible.)
 .RE
 .IP
 Only the actions listed above may be written to the action set.
+\fBencap\fR and \fBdecap\fR actions are nonstandard.
 .
 .IP \fBwrite_metadata\fB:\fIvalue\fR[/\fImask\fR]
 Updates the metadata field for the flow. If \fImask\fR is omitted, the
@@ -1726,6 +1739,65 @@ that is saved and restored includes all flow data and metadata
 \fBpush\fR and \fBpop\fR actions, and the OpenFlow action set.
 .IP
 This action was added in Open vSwitch 2.6.90.
+.
+.IP "\fBencap(\fR\fIheader\fR[\fB(\fR\fIprop\fR\fB=\fR\fIvalue\fR,\fItlv\fR\fB(\fR\fIclass\fR,\fItype\fR,\fIvalue\fB)\fR,...\fB)\fR]\fB)\fR"
+Encapsulates the packet with a new packet header, e.g., ethernet
+or nsh.
+.
+.RS
+.IP "\fIheader\fR"
+Used to specify encapsulation header type.
+.
+.IP "\fIprop\fR\fB=\fR\fIvalue\fR"
+Used to specify the initial value for the property in the encapsulation header.
+.
+.IP "\fItlv\fR\fB(\fR\fIclass\fR,\fItype\fR,\fIvalue\fB)\fR"
+Used to specify the initial value for the TLV (Type Length Value)
+in the encapsulation header.
+.RE
+.IP
+For example, \fBencap(ethernet)\fR will encapsulate the L3 packet with
+Ethernet header.
+.IP
+\fBencap(nsh(md_type=1))\fR will encapsulate the packet with nsh header
+and nsh metadata type 1.
+.IP
+\fBencap(nsh(md_type=2,tlv(0x1000,10,0x12345678)))\fR will encapsulate
+the packet with nsh header and nsh metadata type 2, and the nsh TLV with
+class 0x1000 and type 10 is set to 0x12345678.
+.IP
+\fIprop\fR\fB=\fR\fIvalue\fR is just used to set some
+necessary fields for encapsulation header initialization. Other fields
+in the encapsulation header must be set by \fBset_field\fR action. New
+encapsulation header implementation must add new match fields and
+corresponding \fBset\fR action in order that \fBset_field\fR action can
+change the fields in the encapsulation header on demand.
+.IP
+\fBencap(nsh(md_type=1)),\fR
+\fBset_field:0x1234->nsh_spi,set_field:0x11223344->nsh_c1\fR
+is an example to encapsulate nsh header and set nsh spi and c1.
+.IP
+This action was added in Open vSwitch 2.8.
+.
+.IP "\fBdecap(\fR[\fBpacket_type(ns=\fR\fInamespace\fR\fB,type=\fR\fItype\fR\fB)\fR]\fB)\fR"
+Decapsulates the outer packet header.
+.
+.RS
+.IP "\fBpacket_type(ns=\fR\fInamespace\fR\fB,type=\fR\fItype\fR\fB)\fR"
+It is optional and used to specify the outer header type of the
+decapsulated packet. \fInamespace\fR is 0 for Ethernet packet,
+1 for L3 packet, \fItype\fR\ is L3 protocol type, e.g.,
+0x894f for nsh, 0x0 for Ethernet.
+.RE
+.IP
+By default, \fBdecap()\fR will decapsulate the outer packet header
+according to the packet header type, if
+\fBpacket_type(ns=\fR\fInamespace\fR\fB,type=\fR\fItype\fR\fB)\fR
+is given, it will decapsulate the given packet header, it will fail
+if the actual outer packet header type is not of
+\fBpacket_type(ns=\fR\fInamespace\fR\fB,type=\fR\fItype\fR\fB)\fR.
+.IP
+This action was added in Open vSwitch 2.8.
 .RE
 .
 .PP
@@ -1919,6 +1991,11 @@ This can be any valid OpenFlow port number, or any of the \fBLOCAL\fR,
 \fBCONTROLLER\fR, or \fBNONE\fR.
 .
 This field is required.
+
+.IP \fIpipeline_field\fR=\fIvalue\fR
+Optionally, user can specify a list of pipeline fields for a packet-out
+message. The supported pipeline fields includes \fBtunnel fields\fR and
+\fBregister fields\fR as defined in \fBovs\-fields\fR(7).
 
 .IP \fBpacket=\fIhex-string\fR
 The actual packet to send, expressed as a string of hexadecimal bytes.
@@ -2186,6 +2263,42 @@ depending on its configuration.
 .TP
 \fB\-\-strict\fR
 Uses strict matching when running flow modification commands.
+.
+.IP "\fB\-\-names\fR"
+.IQ "\fB\-\-no\-names\fR"
+Every OpenFlow port has a name and a number.  By default,
+\fBovs\-ofctl\fR commands accept both port names and numbers, and they
+display port names if \fBovs\-ofctl\fR is running on an interactive
+console, port numbers otherwise.  With \fB\-\-names\fR,
+\fBovs\-ofctl\fR commands both accept and display port names; with
+\fB\-\-no\-names\fR, commands neither accept nor display port names.
+.IP
+If a port name contains special characters or might be confused with a
+keyword within a flow, it may be enclosed in double quotes (escaped
+from the shell).  If necessary, JSON-style escape sequences may be
+used inside quotes, as specified in RFC 7159.  When it displays port
+names, \fBovs\-ofctl\fR quotes any name that does not start with a
+letter followed by letters or digits.
+.IP
+These options are new in Open vSwitch 2.8.  Earlier versions always
+behaved as if \fB\-\-no\-names\fR were specified.
+.IP
+Open vSwitch does not place its own limit on the length of port names,
+but OpenFlow 1.0 to 1.5 limit port names to 15 bytes and OpenFlow 1.6
+limits them to 63 bytes.  Because \fRovs\-ofctl\fR uses OpenFlow to
+retrieve the mapping between port names and numbers, names longer than
+this limit will be truncated for both display and acceptance.
+Truncation can also cause long names that are different to appear to
+be the same; when a switch has two ports with the same (truncated)
+name, \fBovs\-ofctl\fR refuses to display or accept the name, using
+the number instead.
+.
+.IP "\fB\-\-stats\fR"
+.IQ "\fB\-\-no\-stats\fR"
+The \fBdump\-flows\fR command by default, or with \fB\-\-stats\fR,
+includes flow duration, packet and byte counts, and idle and hard age
+in its output.  With \fB\-\-no\-stats\fR, it omits all of these, as
+well as cookie values and table IDs if they are zero.
 .
 .IP "\fB\-\-read-only\fR"
 Do not execute read/write commands.

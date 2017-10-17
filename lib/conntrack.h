@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@
 #include "openvswitch/thread.h"
 #include "openvswitch/types.h"
 #include "ovs-atomic.h"
+#include "ovs-thread.h"
+#include "packets.h"
 
 /* Userspace connection tracker
  * ============================
@@ -61,6 +63,30 @@ struct dp_packet_batch;
 
 struct conntrack;
 
+struct ct_addr {
+    union {
+        ovs_16aligned_be32 ipv4;
+        union ovs_16aligned_in6_addr ipv6;
+        ovs_be32 ipv4_aligned;
+        struct in6_addr ipv6_aligned;
+    };
+};
+
+enum nat_action_e {
+    NAT_ACTION_SRC = 1 << 0,
+    NAT_ACTION_SRC_PORT = 1 << 1,
+    NAT_ACTION_DST = 1 << 2,
+    NAT_ACTION_DST_PORT = 1 << 3,
+};
+
+struct nat_action_info_t {
+    struct ct_addr min_addr;
+    struct ct_addr max_addr;
+    uint16_t min_port;
+    uint16_t max_port;
+    uint16_t nat_action;
+};
+
 void conntrack_init(struct conntrack *);
 void conntrack_destroy(struct conntrack *);
 
@@ -68,7 +94,9 @@ int conntrack_execute(struct conntrack *, struct dp_packet_batch *,
                       ovs_be16 dl_type, bool force, bool commit,
                       uint16_t zone, const uint32_t *setmark,
                       const struct ovs_key_ct_labels *setlabel,
-                      const char *helper);
+                      const char *helper,
+                      const struct nat_action_info_t *nat_action_info,
+                      long long now);
 
 struct conntrack_dump {
     struct conntrack *ct;
@@ -81,7 +109,7 @@ struct conntrack_dump {
 struct ct_dpif_entry;
 
 int conntrack_dump_start(struct conntrack *, struct conntrack_dump *,
-                         const uint16_t *pzone);
+                         const uint16_t *pzone, int *);
 int conntrack_dump_next(struct conntrack_dump *, struct ct_dpif_entry *);
 int conntrack_dump_done(struct conntrack_dump *);
 
@@ -92,6 +120,10 @@ int conntrack_flush(struct conntrack *, const uint16_t *zone);
 
 struct OVS_LOCKABLE ct_lock {
     struct ovs_mutex lock;
+};
+
+struct OVS_LOCKABLE ct_rwlock {
+    struct ovs_rwlock lock;
 };
 
 static inline void ct_lock_init(struct ct_lock *lock)
@@ -117,6 +149,39 @@ static inline void ct_lock_destroy(struct ct_lock *lock)
 {
     ovs_mutex_destroy(&lock->lock);
 }
+
+static inline void ct_rwlock_init(struct ct_rwlock *lock)
+{
+    ovs_rwlock_init(&lock->lock);
+}
+
+
+static inline void ct_rwlock_wrlock(struct ct_rwlock *lock)
+    OVS_ACQ_WRLOCK(lock)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
+{
+    ovs_rwlock_wrlock(&lock->lock);
+}
+
+static inline void ct_rwlock_rdlock(struct ct_rwlock *lock)
+    OVS_ACQ_RDLOCK(lock)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
+{
+    ovs_rwlock_rdlock(&lock->lock);
+}
+
+static inline void ct_rwlock_unlock(struct ct_rwlock *lock)
+    OVS_RELEASES(lock)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
+{
+    ovs_rwlock_unlock(&lock->lock);
+}
+
+static inline void ct_rwlock_destroy(struct ct_rwlock *lock)
+{
+    ovs_rwlock_destroy(&lock->lock);
+}
+
 
 /* Timeouts: all the possible timeout states passed to update_expiration()
  * are listed here. The name will be prefix by CT_TM_ and the value is in
@@ -199,6 +264,24 @@ struct conntrack {
     /* Connections limit. When this limit is reached, no new connection
      * will be accepted. */
     atomic_uint n_conn_limit;
+
+    /* The following resources are referenced during nat connection
+     * creation and deletion. */
+    struct hmap nat_conn_keys OVS_GUARDED;
+    /* Hash table for alg expectations. Expectations are created
+     * by control connections to help create data connections. */
+    struct hmap alg_expectations OVS_GUARDED;
+    /* Expiry list for alg expectations. */
+    struct ovs_list alg_exp_list OVS_GUARDED;
+    /* This lock is used during NAT connection creation and deletion;
+     * it is taken after a bucket lock and given back before that
+     * bucket unlock.
+     * This lock is similarly used to guard alg_expectations and
+     * alg_exp_list. If a bucket lock is also held during the normal
+     * code flow, then is must be taken first first and released last.
+     */
+    struct ct_rwlock resources_lock;
+
 };
 
 #endif /* conntrack.h */

@@ -314,7 +314,7 @@ recommended to use the openvswitch.service to start and stop the Open vSwitch
 daemons. The below table shows systemd's behavior:
 
 =============================== ============== ============== ============== =============== ===============
-              -                 Process Status                systemctk <> status
+              -                 Process Status                systemctl <> status
 ------------------------------- ----------------------------- ----------------------------------------------
 Action                          ovs-vswitch     ovsdb-server  openvswitch    ovs-vswitchd    ovsdb-server
 =============================== ============== ============== ============== =============== ===============
@@ -335,6 +335,17 @@ systemctl start ovsdb-server*   not started    started        inactive, dead ina
 \* These commands where executed when no Open vSwitch related processes where
 running. All other commands where executed when Open vSwitch was successfully
 running.
+
+
+Non-root User Support
+-----------------------
+Fedora and RHEL support running the Open vSwitch daemons as a non-root user.
+By default, a fresh installation will create an *openvswitch* user, along
+with any additional support groups needed (such as *hugetlbfs* for DPDK
+support).
+
+This is controlled by modifying the ``OVS_USER_ID`` option.  Setting this
+to 'root:root', or commenting the variable out will revert this behavior.
 
 
 Reporting Bugs

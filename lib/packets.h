@@ -25,6 +25,7 @@
 #include "openvswitch/geneve.h"
 #include "openvswitch/packets.h"
 #include "openvswitch/types.h"
+#include "openvswitch/nsh.h"
 #include "odp-netlink.h"
 #include "random.h"
 #include "hash.h"
@@ -92,6 +93,7 @@ flow_tnl_equal(const struct flow_tnl *a, const struct flow_tnl *b)
 
 /* Datapath packet metadata */
 struct pkt_metadata {
+PADDED_MEMBERS_CACHELINE_MARKER(CACHE_LINE_SIZE, cacheline0,
     uint32_t recirc_id;         /* Recirculation id carried with the
                                    recirculating packets. 0 for packets
                                    received from the wire. */
@@ -104,15 +106,28 @@ struct pkt_metadata {
     uint16_t ct_zone;           /* Connection zone. */
     uint32_t ct_mark;           /* Connection mark. */
     ovs_u128 ct_label;          /* Connection label. */
+    union flow_in_port in_port; /* Input port. */
+);
+
+PADDED_MEMBERS_CACHELINE_MARKER(CACHE_LINE_SIZE, cacheline1,
     union {                     /* Populated only for non-zero 'ct_state'. */
         struct ovs_key_ct_tuple_ipv4 ipv4;
         struct ovs_key_ct_tuple_ipv6 ipv6;   /* Used only if                */
     } ct_orig_tuple;                         /* 'ct_orig_tuple_ipv6' is set */
-    union flow_in_port in_port; /* Input port. */
+);
+
+PADDED_MEMBERS_CACHELINE_MARKER(CACHE_LINE_SIZE, cacheline2,
     struct flow_tnl tunnel;     /* Encapsulating tunnel parameters. Note that
                                  * if 'ip_dst' == 0, the rest of the fields may
                                  * be uninitialized. */
+);
 };
+
+BUILD_ASSERT_DECL(offsetof(struct pkt_metadata, cacheline0) == 0);
+BUILD_ASSERT_DECL(offsetof(struct pkt_metadata, cacheline1) ==
+                  CACHE_LINE_SIZE);
+BUILD_ASSERT_DECL(offsetof(struct pkt_metadata, cacheline2) ==
+                  2 * CACHE_LINE_SIZE);
 
 static inline void
 pkt_metadata_init_tnl(struct pkt_metadata *md)
@@ -126,13 +141,20 @@ pkt_metadata_init_tnl(struct pkt_metadata *md)
 static inline void
 pkt_metadata_init(struct pkt_metadata *md, odp_port_t port)
 {
+    /* This is called for every packet in userspace datapath and affects
+     * performance if all the metadata is initialized. Hence, fields should
+     * only be zeroed out when necessary.
+     *
+     * Initialize only till ct_state. Once the ct_state is zeroed out rest
+     * of ct fields will not be looked at unless ct_state != 0.
+     */
+    memset(md, 0, offsetof(struct pkt_metadata, ct_orig_tuple_ipv6));
+
     /* It can be expensive to zero out all of the tunnel metadata. However,
      * we can just zero out ip_dst and the rest of the data will never be
      * looked at. */
-    memset(md, 0, offsetof(struct pkt_metadata, in_port));
     md->tunnel.ip_dst = 0;
     md->tunnel.ipv6_dst = in6addr_any;
-
     md->in_port.odp_port = port;
 }
 
@@ -141,7 +163,12 @@ pkt_metadata_init(struct pkt_metadata *md, odp_port_t port)
 static inline void
 pkt_metadata_prefetch_init(struct pkt_metadata *md)
 {
-    ovs_prefetch_range(md, offsetof(struct pkt_metadata, tunnel.ip_src));
+    /* Prefetch cacheline0 as members till ct_state and odp_port will
+     * be initialized later in pkt_metadata_init(). */
+    OVS_PREFETCH(md->cacheline0);
+
+    /* Prefetch cachline2 as ip_dst & ipv6_dst fields will be initialized. */
+    OVS_PREFETCH(md->cacheline2);
 }
 
 bool dpid_from_string(const char *s, uint64_t *dpidp);
@@ -371,6 +398,7 @@ ovs_be32 set_mpls_lse_values(uint8_t ttl, uint8_t tc, uint8_t bos,
 #define ETH_TYPE_RARP          0x8035
 #define ETH_TYPE_MPLS          0x8847
 #define ETH_TYPE_MPLS_MCAST    0x8848
+#define ETH_TYPE_NSH           0x894f
 
 static inline bool eth_type_mpls(ovs_be16 eth_type)
 {
@@ -395,29 +423,31 @@ static inline bool eth_type_vlan(ovs_be16 eth_type)
 #define ETH_TOTAL_MIN (ETH_HEADER_LEN + ETH_PAYLOAD_MIN)
 #define ETH_TOTAL_MAX (ETH_HEADER_LEN + ETH_PAYLOAD_MAX)
 #define ETH_VLAN_TOTAL_MAX (ETH_HEADER_LEN + VLAN_HEADER_LEN + ETH_PAYLOAD_MAX)
-OVS_PACKED(
 struct eth_header {
     struct eth_addr eth_dst;
     struct eth_addr eth_src;
     ovs_be16 eth_type;
-});
+};
 BUILD_ASSERT_DECL(ETH_HEADER_LEN == sizeof(struct eth_header));
 
 void push_eth(struct dp_packet *packet, const struct eth_addr *dst,
               const struct eth_addr *src);
 void pop_eth(struct dp_packet *packet);
 
+void encap_nsh(struct dp_packet *packet,
+               const struct ovs_action_encap_nsh *encap_nsh);
+bool decap_nsh(struct dp_packet *packet);
+
 #define LLC_DSAP_SNAP 0xaa
 #define LLC_SSAP_SNAP 0xaa
 #define LLC_CNTL_SNAP 3
 
 #define LLC_HEADER_LEN 3
-OVS_PACKED(
 struct llc_header {
     uint8_t llc_dsap;
     uint8_t llc_ssap;
     uint8_t llc_cntl;
-});
+};
 BUILD_ASSERT_DECL(LLC_HEADER_LEN == sizeof(struct llc_header));
 
 /* LLC field values used for STP frames. */
@@ -484,14 +514,13 @@ struct vlan_header {
 BUILD_ASSERT_DECL(VLAN_HEADER_LEN == sizeof(struct vlan_header));
 
 #define VLAN_ETH_HEADER_LEN (ETH_HEADER_LEN + VLAN_HEADER_LEN)
-OVS_PACKED(
 struct vlan_eth_header {
     struct eth_addr veth_dst;
     struct eth_addr veth_src;
     ovs_be16 veth_type;         /* Always htons(ETH_TYPE_VLAN). */
     ovs_be16 veth_tci;          /* Lowest 12 bits are VLAN ID. */
     ovs_be16 veth_next_type;
-});
+};
 BUILD_ASSERT_DECL(VLAN_ETH_HEADER_LEN == sizeof(struct vlan_eth_header));
 
 /* MPLS related definitions */
@@ -893,6 +922,13 @@ struct icmp6_header {
 };
 BUILD_ASSERT_DECL(ICMP6_HEADER_LEN == sizeof(struct icmp6_header));
 
+#define ICMP6_ERROR_HEADER_LEN 8
+struct icmp6_error_header {
+    struct icmp6_header icmp6_base;
+    ovs_be32 icmp6_error_ext;
+};
+BUILD_ASSERT_DECL(ICMP6_ERROR_HEADER_LEN == sizeof(struct icmp6_error_header));
+
 uint32_t packet_csum_pseudoheader6(const struct ovs_16aligned_ip6_hdr *);
 uint16_t packet_csum_upperlayer6(const struct ovs_16aligned_ip6_hdr *,
                                  const void *, uint8_t, uint16_t);
@@ -1175,11 +1211,63 @@ struct gre_base_hdr {
 
 /* VXLAN protocol header */
 struct vxlanhdr {
-    ovs_16aligned_be32 vx_flags;
+    union {
+        ovs_16aligned_be32 vx_flags; /* VXLAN flags. */
+        struct {
+            uint8_t flags;           /* VXLAN GPE flags. */
+            uint8_t reserved[2];     /* 16 bits reserved. */
+            uint8_t next_protocol;   /* Next Protocol field for VXLAN GPE. */
+        } vx_gpe;
+    };
     ovs_16aligned_be32 vx_vni;
 };
+BUILD_ASSERT_DECL(sizeof(struct vxlanhdr) == 8);
 
 #define VXLAN_FLAGS 0x08000000  /* struct vxlanhdr.vx_flags required value. */
+
+/*
+ * VXLAN Generic Protocol Extension (VXLAN_F_GPE):
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |R|R|Ver|I|P|R|O|       Reserved                |Next Protocol  |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |                VXLAN Network Identifier (VNI) |   Reserved    |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ * Ver = Version. Indicates VXLAN GPE protocol version.
+ *
+ * P = Next Protocol Bit. The P bit is set to indicate that the
+ *     Next Protocol field is present.
+ *
+ * O = OAM Flag Bit. The O bit is set to indicate that the packet
+ *     is an OAM packet.
+ *
+ * Next Protocol = This 8 bit field indicates the protocol header
+ * immediately following the VXLAN GPE header.
+ *
+ * https://tools.ietf.org/html/draft-ietf-nvo3-vxlan-gpe-01
+ */
+
+/* Fields in struct vxlanhdr.vx_gpe.flags */
+#define VXLAN_GPE_FLAGS_VER     0x30    /* Version. */
+#define VLXAN_GPE_FLAGS_P       0x04    /* Next Protocol Bit. */
+#define VXLAN_GPE_FLAGS_O       0x01    /* OAM Bit. */
+
+/* VXLAN-GPE header flags. */
+#define VXLAN_HF_VER   ((1U <<29) | (1U <<28))
+#define VXLAN_HF_NP    (1U <<26)
+#define VXLAN_HF_OAM   (1U <<24)
+
+#define VXLAN_GPE_USED_BITS (VXLAN_HF_VER | VXLAN_HF_NP | VXLAN_HF_OAM | \
+                            0xff)
+
+/* VXLAN-GPE header Next Protocol. */
+#define VXLAN_GPE_NP_IPV4      0x01
+#define VXLAN_GPE_NP_IPV6      0x02
+#define VXLAN_GPE_NP_ETHERNET  0x03
+#define VXLAN_GPE_NP_NSH       0x04
+
+#define VXLAN_F_GPE  0x4000
+#define VXLAN_HF_GPE 0x04000000
 
 /* Input values for PACKET_TYPE macros have to be in host byte order.
  * The _BE postfix indicates result is in network byte order. Otherwise result
@@ -1210,11 +1298,13 @@ pt_ns_type(ovs_be32 packet_type)
 
 /* Well-known packet_type field values. */
 enum packet_type {
-    PT_ETH  = PACKET_TYPE(OFPHTN_ONF, 0x0000),  /* Default: Ethernet */
+    PT_ETH  = PACKET_TYPE(OFPHTN_ONF, 0x0000),  /* Default PT: Ethernet */
+    PT_USE_NEXT_PROTO = PACKET_TYPE(OFPHTN_ONF, 0xfffe),  /* Pseudo PT for decap. */
     PT_IPV4 = PACKET_TYPE(OFPHTN_ETHERTYPE, ETH_TYPE_IP),
     PT_IPV6 = PACKET_TYPE(OFPHTN_ETHERTYPE, ETH_TYPE_IPV6),
     PT_MPLS = PACKET_TYPE(OFPHTN_ETHERTYPE, ETH_TYPE_MPLS),
     PT_MPLS_MC = PACKET_TYPE(OFPHTN_ETHERTYPE, ETH_TYPE_MPLS_MCAST),
+    PT_NSH  = PACKET_TYPE(OFPHTN_ETHERTYPE, ETH_TYPE_NSH),
     PT_UNKNOWN = PACKET_TYPE(0xffff, 0xffff),   /* Unknown packet type. */
 };
 

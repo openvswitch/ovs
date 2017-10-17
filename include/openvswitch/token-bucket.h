@@ -20,6 +20,10 @@
 #include <limits.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct token_bucket {
     /* Configuration settings. */
     unsigned int rate;          /* Tokens added per millisecond. */
@@ -41,5 +45,9 @@ void token_bucket_wait_at(struct token_bucket *, unsigned int n,
                           const char *where);
 #define token_bucket_wait(bucket, n)                    \
     token_bucket_wait_at(bucket, n, OVS_SOURCE_LOCATOR)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* token-bucket.h */

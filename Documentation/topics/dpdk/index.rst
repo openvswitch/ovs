@@ -29,3 +29,4 @@ The DPDK Datapath
    :maxdepth: 2
 
    vhost-user
+   ring

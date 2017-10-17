@@ -1,0 +1,85 @@
+AT_BANNER([OVN northd])
+AT_SETUP([ovn -- check Gateway_Chassis propagation from NBDB to SBDB])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+ovn-nbctl create Logical_Router name=R1
+ovn-sbctl chassis-add gw1 geneve 127.0.0.1
+ovn-sbctl chassis-add gw2 geneve 1.2.4.8
+
+# Connect alice to R1 as distributed router gateway port on hv2
+ovn-nbctl lrp-add R1 alice 00:00:02:01:02:03 172.16.1.1/24
+
+ovn-nbctl --wait=sb \
+    --id=@gc0 create Gateway_Chassis name=alice_gw1 \
+                                     chassis_name=gw1 \
+                                     priority=20 -- \
+    --id=@gc1 create Gateway_Chassis name=alice_gw2 \
+                                     chassis_name=gw2 \
+                                     priority=10 -- \
+    set Logical_Router_Port alice 'gateway_chassis=[@gc0,@gc1]'
+
+nb_gwc1_uuid=`ovn-nbctl --bare --columns _uuid find Gateway_Chassis name="alice_gw1"`
+gwc1_uuid=`ovn-sbctl --bare --columns _uuid find Gateway_Chassis name="alice_gw1"`
+gwc2_uuid=`ovn-sbctl --bare --columns _uuid find Gateway_Chassis name="alice_gw2"`
+
+
+echo "Port_Binding for cr-alice:"
+ovn-sbctl find port_binding logical_port="cr-alice"
+echo "Gateway_Chassis list:"
+ovn-sbctl list Gateway_Chassis
+
+AT_CHECK([ovn-sbctl --bare --columns gateway_chassis find port_binding logical_port="cr-alice" | grep $gwc1_uuid | wc -l], [0], [1
+])
+AT_CHECK([ovn-sbctl --bare --columns gateway_chassis find port_binding logical_port="cr-alice" | grep $gwc2_uuid | wc -l], [0], [1
+])
+
+# delete the 2nd Gateway_Chassis on NBDB for alice port
+
+ovn-nbctl --wait=sb set Logical_Router_Port alice gateway_chassis=${nb_gwc1_uuid}
+
+gwc1_uuid=`ovn-sbctl --bare --columns _uuid find Gateway_Chassis name="alice_gw1"`
+
+AT_CHECK([ovn-sbctl --bare --columns gateway_chassis find port_binding logical_port="cr-alice" | grep $gwc1_uuid | wc -l], [0], [1
+])
+
+AT_CHECK([ovn-sbctl find Gateway_Chassis name=alice_gw2], [0], [])
+
+# delete all the gateway_chassis on NBDB for alice port
+
+ovn-nbctl --wait=sb clear Logical_Router_Port alice gateway_chassis
+
+# expect that the Gateway_Chassis doesn't exist anymore
+
+AT_CHECK([ovn-sbctl find Gateway_Chassis name=alice_gw1], [0], [])
+AT_CHECK([ovn-sbctl find Gateway_Chassis name=alice_gw2], [0], [])
+
+AT_CLEANUP
+
+AT_SETUP([ovn -- check Gateway_Chassis propagation from NBDB to SBDB backwards compatibility])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+ovn-nbctl create Logical_Router name=R1
+ovn-sbctl chassis-add gw1 geneve 127.0.0.1
+ovn-sbctl chassis-add gw2 geneve 1.2.4.8
+
+ovn-nbctl --wait=sb lrp-add R1 bob 00:00:02:01:02:03 172.16.1.1/24 \
+    -- set Logical_Router_Port bob options:redirect-chassis="gw1"
+
+
+# It should be converted to Gateway_Chassis entries in SBDB, and
+# still redirect-chassis is kept for backwards compatibility
+
+gwc1_uuid=`ovn-sbctl --bare --columns _uuid find Gateway_Chassis name="bob_gw1"`
+
+AT_CHECK([ovn-sbctl --bare --columns gateway_chassis find port_binding logical_port="cr-bob" | grep $gwc1_uuid | wc -l], [0], [1
+])
+
+ovn-nbctl --wait=sb remove Logical_Router_Port bob options redirect-chassis
+
+# expect that the Gateway_Chassis doesn't exist anymore
+
+AT_CHECK([ovn-sbctl find Gateway_Chassis name=bob_gw1], [0], [])
+
+AT_CLEANUP

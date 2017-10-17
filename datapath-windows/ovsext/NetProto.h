@@ -68,7 +68,7 @@ typedef UINT64 IP4FragUnitLength;
 // length UINT for ipv6 header length.
 typedef UINT64 IP6UnitLength;
 
-#define TCP_HDR_LEN(tcph)             IP4_UNITS_TO_BYTES((tcph)->doff)
+#define TCP_HDR_LEN(tcph)             ((tcph)->doff * 4)
 #define TCP_DATA_LENGTH(iph, tcph)    (ntohs(iph->tot_len) -                \
                                        IP4_HDR_LEN(iph) - TCP_HDR_LEN(tcph))
 

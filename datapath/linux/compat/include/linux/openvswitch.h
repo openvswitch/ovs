@@ -290,7 +290,9 @@ enum ovs_vport_attr {
 
 enum {
 	OVS_VXLAN_EXT_UNSPEC,
-	OVS_VXLAN_EXT_GBP,      /* Flag or __u32 */
+	OVS_VXLAN_EXT_GBP,
+	/* place new values here to fill gap. */
+	OVS_VXLAN_EXT_GPE = 8,
 	__OVS_VXLAN_EXT_MAX,
 };
 
@@ -363,6 +365,13 @@ enum ovs_key_attr {
 	/* Only used within kernel data path. */
 	OVS_KEY_ATTR_TUNNEL_INFO,  /* struct ovs_tunnel_info */
 #endif
+
+#ifndef __KERNEL__
+	/* Only used within userspace data path. */
+	OVS_KEY_ATTR_PACKET_TYPE,  /* be32 packet type */
+	OVS_KEY_ATTR_NSH,	   /* struct ovs_key_nsh */
+#endif
+
 	__OVS_KEY_ATTR_MAX
 };
 
@@ -481,6 +490,15 @@ struct ovs_key_ct_labels {
 		__u8	ct_labels[OVS_CT_LABELS_LEN];
 		__u32	ct_labels_32[OVS_CT_LABELS_LEN_32];
 	};
+};
+
+struct ovs_key_nsh {
+    __u8 flags;
+    __u8 mdtype;
+    __u8 np;
+    __u8 pad;
+    __be32 path_hdr;
+    __be32 c[4];
 };
 
 /* OVS_KEY_ATTR_CT_STATE flags */
@@ -711,11 +729,11 @@ struct ovs_action_hash {
  * this header to build final header according to actual packet parameters.
  */
 struct ovs_action_push_tnl {
-	uint32_t tnl_port;
-	uint32_t out_port;
+	odp_port_t tnl_port;
+	odp_port_t out_port;
 	uint32_t header_len;
 	uint32_t tnl_type;     /* For logging. */
-	uint8_t  header[TNL_PUSH_HEADER_SIZE];
+	uint32_t header[TNL_PUSH_HEADER_SIZE / 4];
 };
 #endif
 
@@ -773,6 +791,25 @@ enum ovs_ct_attr {
  */
 struct ovs_action_push_eth {
 	struct ovs_key_ethernet addresses;
+};
+
+#define OVS_ENCAP_NSH_MAX_MD_LEN 16
+/*
+ * struct ovs_action_encap_nsh - %OVS_ACTION_ATTR_ENCAP_NSH
+ * @flags: NSH header flags.
+ * @mdtype: NSH metadata type.
+ * @mdlen: Length of NSH metadata in bytes.
+ * @np: NSH next_protocol: Inner packet type.
+ * @path_hdr: NSH service path id and service index.
+ * @metadata: NSH metadata for MD type 1 or 2
+ */
+struct ovs_action_encap_nsh {
+    uint8_t flags;
+    uint8_t mdtype;
+    uint8_t mdlen;
+    uint8_t np;
+    __be32 path_hdr;
+    uint8_t metadata[OVS_ENCAP_NSH_MAX_MD_LEN];
 };
 
 /**
@@ -834,8 +871,8 @@ enum ovs_nat_attr {
  * is copied from the value to the packet header field, rest of the bits are
  * left unchanged.  The non-masked value bits must be passed in as zeroes.
  * Masking is not supported for the %OVS_KEY_ATTR_TUNNEL attribute.
- * @OVS_ACTION_RECIRC: Recirculate within the data path.
- * @OVS_ACTION_HASH: Compute and set flow hash value.
+ * @OVS_ACTION_ATTR_RECIRC: Recirculate within the data path.
+ * @OVS_ACTION_ATTR_HASH: Compute and set flow hash value.
  * @OVS_ACTION_ATTR_PUSH_MPLS: Push a new MPLS label stack entry onto the
  * top of the packets MPLS label stack.  Set the ethertype of the
  * encapsulating frame to either %ETH_P_MPLS_UC or %ETH_P_MPLS_MC to
@@ -850,6 +887,8 @@ enum ovs_nat_attr {
  * @OVS_ACTION_ATTR_PUSH_ETH: Push a new outermost Ethernet header onto the
  * packet.
  * @OVS_ACTION_ATTR_POP_ETH: Pop the outermost Ethernet header off the packet.
+ * @OVS_ACTION_ATTR_ENCAP_NSH: encap NSH action to push NSH header.
+ * @OVS_ACTION_ATTR_DECAP_NSH: decap NSH action to remove NSH header.
  *
  * Only a single header can be set with a single %OVS_ACTION_ATTR_SET.  Not all
  * fields within a header are modifiable, e.g. the IPv4 protocol and fragment
@@ -891,6 +930,8 @@ enum ovs_action_attr {
 	OVS_ACTION_ATTR_TUNNEL_POP,    /* u32 port number. */
 	OVS_ACTION_ATTR_CLONE,         /* Nested OVS_CLONE_ATTR_*.  */
 	OVS_ACTION_ATTR_METER,         /* u32 meter number. */
+	OVS_ACTION_ATTR_ENCAP_NSH,    /* struct ovs_action_encap_nsh. */
+	OVS_ACTION_ATTR_DECAP_NSH,    /* No argument. */
 #endif
 	__OVS_ACTION_ATTR_MAX,	      /* Nothing past this will be accepted
 				       * from userspace. */

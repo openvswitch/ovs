@@ -40,7 +40,8 @@ enum OVS_PACKED_ENUM dp_packet_source {
     DPBUF_STACK,               /* Un-movable stack space or static buffer. */
     DPBUF_STUB,                /* Starts on stack, may expand into heap. */
     DPBUF_DPDK,                /* buffer data is from DPDK allocated memory.
-                                * ref to dp_packet_init_dpdk() in dp-packet.c. */
+                                * ref to dp_packet_init_dpdk() in dp-packet.c.
+                                */
 };
 
 #define DP_PACKET_CONTEXT_SIZE 64
@@ -61,6 +62,9 @@ struct dp_packet {
     bool rss_hash_valid;        /* Is the 'rss_hash' valid? */
 #endif
     enum dp_packet_source source;  /* Source of memory allocated as 'base'. */
+
+    /* All the following elements of this struct are copied in a single call
+     * of memcpy in dp_packet_clone_with_headroom. */
     uint8_t l2_pad_size;           /* Detected l2 padding size.
                                     * Padding is non-pullable. */
     uint16_t l2_5_ofs;             /* MPLS label stack offset, or UINT16_MAX */
@@ -533,10 +537,16 @@ dp_packet_set_cutlen(struct dp_packet *b, uint32_t max_len)
 }
 
 static inline uint32_t
-dp_packet_get_cutlen(struct dp_packet *b)
+dp_packet_get_cutlen(const struct dp_packet *b)
 {
     /* Always in valid range if user uses dp_packet_set_cutlen. */
     return b->cutlen;
+}
+
+static inline uint32_t
+dp_packet_get_send_len(const struct dp_packet *b)
+{
+    return dp_packet_size(b) - dp_packet_get_cutlen(b);
 }
 
 static inline void *
@@ -599,32 +609,74 @@ dp_packet_rss_valid(struct dp_packet *p)
 }
 
 static inline void
-dp_packet_rss_invalidate(struct dp_packet *p)
+dp_packet_rss_invalidate(struct dp_packet *p OVS_UNUSED)
 {
-#ifdef DPDK_NETDEV
-    p->mbuf.ol_flags &= ~PKT_RX_RSS_HASH;
-#else
+#ifndef DPDK_NETDEV
     p->rss_hash_valid = false;
 #endif
 }
 
-static inline bool
-dp_packet_ip_checksum_valid(struct dp_packet *p)
+static inline void
+dp_packet_mbuf_rss_flag_reset(struct dp_packet *p OVS_UNUSED)
 {
 #ifdef DPDK_NETDEV
-    return p->mbuf.ol_flags & PKT_RX_IP_CKSUM_GOOD;
-#else
-    return 0 && p;
+    p->mbuf.ol_flags &= ~PKT_RX_RSS_HASH;
+#endif
+}
+
+/* This initialization is needed for packets that do not come
+ * from DPDK interfaces, when vswitchd is built with --with-dpdk.
+ * The DPDK rte library will still otherwise manage the mbuf.
+ * We only need to initialize the mbuf ol_flags. */
+static inline void
+dp_packet_mbuf_init(struct dp_packet *p OVS_UNUSED)
+{
+#ifdef DPDK_NETDEV
+    p->mbuf.ol_flags = 0;
 #endif
 }
 
 static inline bool
-dp_packet_l4_checksum_valid(struct dp_packet *p)
+dp_packet_ip_checksum_valid(struct dp_packet *p OVS_UNUSED)
 {
 #ifdef DPDK_NETDEV
-    return p->mbuf.ol_flags & PKT_RX_L4_CKSUM_GOOD;
+    return (p->mbuf.ol_flags & PKT_RX_IP_CKSUM_MASK) ==
+            PKT_RX_IP_CKSUM_GOOD;
 #else
-    return 0 && p;
+    return false;
+#endif
+}
+
+static inline bool
+dp_packet_ip_checksum_bad(struct dp_packet *p OVS_UNUSED)
+{
+#ifdef DPDK_NETDEV
+    return (p->mbuf.ol_flags & PKT_RX_IP_CKSUM_MASK) ==
+            PKT_RX_IP_CKSUM_BAD;
+#else
+    return false;
+#endif
+}
+
+static inline bool
+dp_packet_l4_checksum_valid(struct dp_packet *p OVS_UNUSED)
+{
+#ifdef DPDK_NETDEV
+    return (p->mbuf.ol_flags & PKT_RX_L4_CKSUM_MASK) ==
+            PKT_RX_L4_CKSUM_GOOD;
+#else
+    return false;
+#endif
+}
+
+static inline bool
+dp_packet_l4_checksum_bad(struct dp_packet *p OVS_UNUSED)
+{
+#ifdef DPDK_NETDEV
+    return (p->mbuf.ol_flags & PKT_RX_L4_CKSUM_MASK) ==
+            PKT_RX_L4_CKSUM_BAD;
+#else
+    return false;
 #endif
 }
 
@@ -678,11 +730,8 @@ dp_packet_batch_size(const struct dp_packet_batch *batch)
     return batch->count;
 }
 
-/*
- * Clear 'batch' for refill. Use dp_packet_batch_refill() to add
- * packets back into the 'batch'.
- *
- * Return the original size of the 'batch'.  */
+/* Clear 'batch' for refill. Use dp_packet_batch_refill() to add
+ * packets back into the 'batch'. */
 static inline void
 dp_packet_batch_refill_init(struct dp_packet_batch *batch)
 {
@@ -739,6 +788,7 @@ dp_packet_batch_clone(struct dp_packet_batch *dst,
     DP_PACKET_BATCH_FOR_EACH (packet, src) {
         dp_packet_batch_add(dst, dp_packet_clone(packet));
     }
+    dst->trunc = src->trunc;
 }
 
 static inline void
@@ -755,15 +805,24 @@ dp_packet_delete_batch(struct dp_packet_batch *batch, bool may_steal)
 }
 
 static inline void
+dp_packet_batch_init_packet_fields(struct dp_packet_batch *batch)
+{
+    struct dp_packet *packet;
+
+    DP_PACKET_BATCH_FOR_EACH (packet, batch) {
+        dp_packet_reset_cutlen(packet);
+        packet->packet_type = htonl(PT_ETH);
+    }
+}
+
+static inline void
 dp_packet_batch_apply_cutlen(struct dp_packet_batch *batch)
 {
     if (batch->trunc) {
         struct dp_packet *packet;
 
         DP_PACKET_BATCH_FOR_EACH (packet, batch) {
-            uint32_t cutlen = dp_packet_get_cutlen(packet);
-
-            dp_packet_set_size(packet, dp_packet_size(packet) - cutlen);
+            dp_packet_set_size(packet, dp_packet_get_send_len(packet));
             dp_packet_reset_cutlen(packet);
         }
         batch->trunc = false;

@@ -24,6 +24,7 @@
 #include "openvswitch/ofp-util.h"
 #include "packets.h"
 #include "tun-metadata.h"
+#include "openvswitch/nsh.h"
 
 /* Converts the flow in 'flow' into a match in 'match', with the given
  * 'wildcards'. */
@@ -279,6 +280,19 @@ match_set_tun_flags_masked(struct match *match, uint16_t flags, uint16_t mask)
 }
 
 void
+match_set_tun_tp_dst(struct match *match, ovs_be16 tp_dst)
+{
+    match_set_tun_tp_dst_masked(match, tp_dst, OVS_BE16_MAX);
+}
+
+void
+match_set_tun_tp_dst_masked(struct match *match, ovs_be16 port, ovs_be16 mask)
+{
+    match->wc.masks.tunnel.tp_dst = mask;
+    match->flow.tunnel.tp_dst = port & mask;
+}
+
+void
 match_set_tun_gbp_id_masked(struct match *match, ovs_be16 gbp_id, ovs_be16 mask)
 {
     match->wc.masks.tunnel.gbp_id = mask;
@@ -474,6 +488,56 @@ match_set_ct_ipv6_dst_masked(struct match *match, const struct in6_addr *dst,
 {
     match->flow.ct_ipv6_dst = ipv6_addr_bitand(dst, mask);
     match->wc.masks.ct_ipv6_dst = *mask;
+}
+
+void
+match_set_packet_type(struct match *match, ovs_be32 packet_type)
+{
+    match->flow.packet_type = packet_type;
+    match->wc.masks.packet_type = OVS_BE32_MAX;
+}
+
+/* If 'match' does not match on any packet type, make it match on Ethernet
+ * packets (the default packet type, as specified by OpenFlow). */
+void
+match_set_default_packet_type(struct match *match)
+{
+    if (!match->wc.masks.packet_type) {
+        match_set_packet_type(match, htonl(PT_ETH));
+    }
+}
+
+/* Returns true if 'match' matches only Ethernet packets (the default packet
+ * type, as specified by OpenFlow). */
+bool
+match_has_default_packet_type(const struct match *match)
+{
+    return (match->flow.packet_type == htonl(PT_ETH)
+            && match->wc.masks.packet_type == OVS_BE32_MAX);
+}
+
+/* A match on 'field' is being added to or has been added to 'match'.  If
+ * 'field' is a data field, and 'match' does not already match on packet_type,
+ * this function make it match on the Ethernet packet_type.
+ *
+ * This function is useful because OpenFlow implicitly applies to Ethernet
+ * packets when there's no explicit packet_type, but matching on a metadata
+ * field doesn't imply anything about the packet_type and falsely inferring
+ * that it does can cause harm.  A flow that matches only on metadata fields,
+ * for example, should be able to match more than just Ethernet flows.  There
+ * are also important reasons that a catch-all match (one with no field matches
+ * at all) should not imply a packet_type(0,0) match.  For example, a "flow
+ * dump" request that matches on no fields should return every flow in the
+ * switch, not just the flows that match on Ethernet.  As a second example,
+ * OpenFlow 1.2+ special-cases "table miss" flows, that is catch-all flows with
+ * priority 0, and inferring a match on packet_type(0,0) causes such a flow not
+ * to be a table miss flow.  */
+void
+match_add_ethernet_prereq(struct match *match, const struct mf_field *field)
+{
+    if (field->prereqs != MFP_NONE) {
+        match_set_default_packet_type(match);
+    }
 }
 
 void
@@ -826,6 +890,13 @@ match_set_nw_ttl(struct match *match, uint8_t nw_ttl)
 }
 
 void
+match_set_nw_ttl_masked(struct match *match, uint8_t nw_ttl, uint8_t mask)
+{
+    match->flow.nw_ttl = nw_ttl & mask;
+    match->wc.masks.nw_ttl = mask;
+}
+
+void
 match_set_nw_frag(struct match *match, uint8_t nw_frag)
 {
     match->wc.masks.nw_frag |= FLOW_NW_FRAG_MASK;
@@ -1026,6 +1097,21 @@ format_ipv6_netmask(struct ds *s, const char *name,
 }
 
 static void
+format_uint8_masked(struct ds *s, const char *name,
+                   uint8_t value, uint8_t mask)
+{
+    if (mask != 0) {
+        ds_put_format(s, "%s%s=%s", colors.param, name, colors.end);
+        if (mask == UINT8_MAX) {
+            ds_put_format(s, "%"PRIu8, value);
+        } else {
+            ds_put_format(s, "0x%02"PRIx8"/0x%02"PRIx8, value, mask);
+        }
+        ds_put_char(s, ',');
+    }
+}
+
+static void
 format_uint16_masked(struct ds *s, const char *name,
                    uint16_t value, uint16_t mask)
 {
@@ -1064,6 +1150,22 @@ format_be32_masked(struct ds *s, const char *name,
         ds_put_format(s, "%s%s=%s", colors.param, name, colors.end);
         if (mask == OVS_BE32_MAX) {
             ds_put_format(s, "%"PRIu32, ntohl(value));
+        } else {
+            ds_put_format(s, "0x%08"PRIx32"/0x%08"PRIx32,
+                          ntohl(value), ntohl(mask));
+        }
+        ds_put_char(s, ',');
+    }
+}
+
+static void
+format_be32_masked_hex(struct ds *s, const char *name,
+                       ovs_be32 value, ovs_be32 mask)
+{
+    if (mask != htonl(0)) {
+        ds_put_format(s, "%s%s=%s", colors.param, name, colors.end);
+        if (mask == OVS_BE32_MAX) {
+            ds_put_format(s, "0x%"PRIx32, ntohl(value));
         } else {
             ds_put_format(s, "0x%"PRIx32"/0x%"PRIx32,
                           ntohl(value), ntohl(mask));
@@ -1155,21 +1257,40 @@ format_ct_label_masked(struct ds *s, const ovs_u128 *key, const ovs_u128 *mask)
     }
 }
 
+static void
+format_nsh_masked(struct ds *s, const struct flow *f, const struct flow *m)
+{
+    format_uint8_masked(s, "nsh_flags", f->nsh.flags, m->nsh.flags);
+    format_uint8_masked(s, "nsh_mdtype", f->nsh.mdtype, m->nsh.mdtype);
+    format_uint8_masked(s, "nsh_np", f->nsh.np, m->nsh.np);
+    format_be32_masked_hex(s, "nsh_spi", f->nsh.spi, m->nsh.spi);
+    format_uint8_masked(s, "nsh_si", f->nsh.si, m->nsh.si);
+    if (m->nsh.mdtype == UINT8_MAX && f->nsh.mdtype == NSH_M_TYPE1) {
+        format_be32_masked_hex(s, "nsh_c1", f->nsh.c[0], m->nsh.c[0]);
+        format_be32_masked_hex(s, "nsh_c2", f->nsh.c[1], m->nsh.c[1]);
+        format_be32_masked_hex(s, "nsh_c3", f->nsh.c[2], m->nsh.c[2]);
+        format_be32_masked_hex(s, "nsh_c4", f->nsh.c[3], m->nsh.c[3]);
+    }
+}
+
 /* Appends a string representation of 'match' to 's'.  If 'priority' is
- * different from OFP_DEFAULT_PRIORITY, includes it in 's'. */
+ * different from OFP_DEFAULT_PRIORITY, includes it in 's'.  If 'port_map' is
+ * nonnull, uses it to translate port numbers to names in output. */
 void
-match_format(const struct match *match, struct ds *s, int priority)
+match_format(const struct match *match,
+             const struct ofputil_port_map *port_map,
+             struct ds *s, int priority)
 {
     const struct flow_wildcards *wc = &match->wc;
     size_t start_len = s->length;
     const struct flow *f = &match->flow;
     bool skip_type = false;
-
     bool skip_proto = false;
-
+    ovs_be16 dl_type = f->dl_type;
+    bool is_megaflow = false;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 39);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 40);
 
     if (priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "%spriority=%s%d,",
@@ -1181,6 +1302,7 @@ match_format(const struct match *match, struct ds *s, int priority)
     if (wc->masks.recirc_id) {
         format_uint32_masked(s, "recirc_id", f->recirc_id,
                              wc->masks.recirc_id);
+        is_megaflow = true;
     }
 
     if (wc->masks.dp_hash) {
@@ -1200,7 +1322,7 @@ match_format(const struct match *match, struct ds *s, int priority)
 
     if (wc->masks.actset_output) {
         ds_put_format(s, "%sactset_output=%s", colors.param, colors.end);
-        ofputil_format_port(f->actset_output, s);
+        ofputil_format_port(f->actset_output, port_map, s);
         ds_put_char(s, ',');
     }
 
@@ -1246,9 +1368,18 @@ match_format(const struct match *match, struct ds *s, int priority)
         format_be16_masked(s, "ct_tp_dst", f->ct_tp_dst, wc->masks.ct_tp_dst);
     }
 
+    if (wc->masks.packet_type &&
+        (!match_has_default_packet_type(match) || is_megaflow)) {
+        format_packet_type_masked(s, f->packet_type, wc->masks.packet_type);
+        ds_put_char(s, ',');
+        if (pt_ns(f->packet_type) == OFPHTN_ETHERTYPE) {
+            dl_type = pt_ns_type_be(f->packet_type);
+        }
+    }
+
     if (wc->masks.dl_type) {
         skip_type = true;
-        if (f->dl_type == htons(ETH_TYPE_IP)) {
+        if (dl_type == htons(ETH_TYPE_IP)) {
             if (wc->masks.nw_proto) {
                 skip_proto = true;
                 if (f->nw_proto == IPPROTO_ICMP) {
@@ -1268,7 +1399,7 @@ match_format(const struct match *match, struct ds *s, int priority)
             } else {
                 ds_put_format(s, "%sip%s,", colors.value, colors.end);
             }
-        } else if (f->dl_type == htons(ETH_TYPE_IPV6)) {
+        } else if (dl_type == htons(ETH_TYPE_IPV6)) {
             if (wc->masks.nw_proto) {
                 skip_proto = true;
                 if (f->nw_proto == IPPROTO_ICMPV6) {
@@ -1286,13 +1417,13 @@ match_format(const struct match *match, struct ds *s, int priority)
             } else {
                 ds_put_format(s, "%sipv6%s,", colors.value, colors.end);
             }
-        } else if (f->dl_type == htons(ETH_TYPE_ARP)) {
+        } else if (dl_type == htons(ETH_TYPE_ARP)) {
             ds_put_format(s, "%sarp%s,", colors.value, colors.end);
-        } else if (f->dl_type == htons(ETH_TYPE_RARP)) {
+        } else if (dl_type == htons(ETH_TYPE_RARP)) {
             ds_put_format(s, "%srarp%s,", colors.value, colors.end);
-        } else if (f->dl_type == htons(ETH_TYPE_MPLS)) {
+        } else if (dl_type == htons(ETH_TYPE_MPLS)) {
             ds_put_format(s, "%smpls%s,", colors.value, colors.end);
-        } else if (f->dl_type == htons(ETH_TYPE_MPLS_MCAST)) {
+        } else if (dl_type == htons(ETH_TYPE_MPLS_MCAST)) {
             ds_put_format(s, "%smplsm%s,", colors.value, colors.end);
         } else {
             skip_type = false;
@@ -1313,7 +1444,7 @@ match_format(const struct match *match, struct ds *s, int priority)
 
     if (wc->masks.in_port.ofp_port) {
         ds_put_format(s, "%sin_port=%s", colors.param, colors.end);
-        ofputil_format_port(f->in_port.ofp_port, s);
+        ofputil_format_port(f->in_port.ofp_port, port_map, s);
         ds_put_char(s, ',');
     }
     for (i = 0; i < FLOW_MAX_VLAN_HEADERS; i++) {
@@ -1358,13 +1489,15 @@ match_format(const struct match *match, struct ds *s, int priority)
                           ntohs(wc->masks.vlans[i].tci));
         }
     }
+
     format_eth_masked(s, "dl_src", f->dl_src, wc->masks.dl_src);
     format_eth_masked(s, "dl_dst", f->dl_dst, wc->masks.dl_dst);
+
     if (!skip_type && wc->masks.dl_type) {
         ds_put_format(s, "%sdl_type=%s0x%04"PRIx16",",
-                      colors.param, colors.end, ntohs(f->dl_type));
+                      colors.param, colors.end, ntohs(dl_type));
     }
-    if (f->dl_type == htons(ETH_TYPE_IPV6)) {
+    if (dl_type == htons(ETH_TYPE_IPV6)) {
         format_ipv6_netmask(s, "ipv6_src", &f->ipv6_src, &wc->masks.ipv6_src);
         format_ipv6_netmask(s, "ipv6_dst", &f->ipv6_dst, &wc->masks.ipv6_dst);
         if (wc->masks.ipv6_label) {
@@ -1378,17 +1511,19 @@ match_format(const struct match *match, struct ds *s, int priority)
                               ntohl(wc->masks.ipv6_label));
             }
         }
-    } else if (f->dl_type == htons(ETH_TYPE_ARP) ||
-               f->dl_type == htons(ETH_TYPE_RARP)) {
+    } else if (dl_type == htons(ETH_TYPE_ARP) ||
+               dl_type == htons(ETH_TYPE_RARP)) {
         format_ip_netmask(s, "arp_spa", f->nw_src, wc->masks.nw_src);
         format_ip_netmask(s, "arp_tpa", f->nw_dst, wc->masks.nw_dst);
+    } else if (dl_type == htons(ETH_TYPE_NSH)) {
+        format_nsh_masked(s, f, &wc->masks);
     } else {
         format_ip_netmask(s, "nw_src", f->nw_src, wc->masks.nw_src);
         format_ip_netmask(s, "nw_dst", f->nw_dst, wc->masks.nw_dst);
     }
     if (!skip_proto && wc->masks.nw_proto) {
-        if (f->dl_type == htons(ETH_TYPE_ARP) ||
-            f->dl_type == htons(ETH_TYPE_RARP)) {
+        if (dl_type == htons(ETH_TYPE_ARP) ||
+            dl_type == htons(ETH_TYPE_RARP)) {
             ds_put_format(s, "%sarp_op=%s%"PRIu8",",
                           colors.param, colors.end, f->nw_proto);
         } else {
@@ -1396,8 +1531,8 @@ match_format(const struct match *match, struct ds *s, int priority)
                           colors.param, colors.end, f->nw_proto);
         }
     }
-    if (f->dl_type == htons(ETH_TYPE_ARP) ||
-        f->dl_type == htons(ETH_TYPE_RARP)) {
+    if (dl_type == htons(ETH_TYPE_ARP) ||
+        dl_type == htons(ETH_TYPE_RARP)) {
         format_eth_masked(s, "arp_sha", f->arp_sha, wc->masks.arp_sha);
         format_eth_masked(s, "arp_tha", f->arp_tha, wc->masks.arp_tha);
     }
@@ -1450,15 +1585,15 @@ match_format(const struct match *match, struct ds *s, int priority)
                       f->nw_frag & FLOW_NW_FRAG_LATER ? "later" : "not_later");
         break;
     }
-    if (f->dl_type == htons(ETH_TYPE_IP) &&
+    if (dl_type == htons(ETH_TYPE_IP) &&
         f->nw_proto == IPPROTO_ICMP) {
         format_be16_masked(s, "icmp_type", f->tp_src, wc->masks.tp_src);
         format_be16_masked(s, "icmp_code", f->tp_dst, wc->masks.tp_dst);
-    } else if (f->dl_type == htons(ETH_TYPE_IP) &&
+    } else if (dl_type == htons(ETH_TYPE_IP) &&
                f->nw_proto == IPPROTO_IGMP) {
         format_be16_masked(s, "igmp_type", f->tp_src, wc->masks.tp_src);
         format_be16_masked(s, "igmp_code", f->tp_dst, wc->masks.tp_dst);
-    } else if (f->dl_type == htons(ETH_TYPE_IPV6) &&
+    } else if (dl_type == htons(ETH_TYPE_IPV6) &&
                f->nw_proto == IPPROTO_ICMPV6) {
         format_be16_masked(s, "icmp_type", f->tp_src, wc->masks.tp_src);
         format_be16_masked(s, "icmp_code", f->tp_dst, wc->masks.tp_dst);
@@ -1482,20 +1617,23 @@ match_format(const struct match *match, struct ds *s, int priority)
 }
 
 /* Converts 'match' to a string and returns the string.  If 'priority' is
- * different from OFP_DEFAULT_PRIORITY, includes it in the string.  The caller
- * must free the string (with free()). */
+ * different from OFP_DEFAULT_PRIORITY, includes it in the string.  If
+ * 'port_map' is nonnull, uses it to translate port numbers to names in
+ * output.  The caller must free the string (with free()). */
 char *
-match_to_string(const struct match *match, int priority)
+match_to_string(const struct match *match,
+                const struct ofputil_port_map *port_map, int priority)
 {
     struct ds s = DS_EMPTY_INITIALIZER;
-    match_format(match, &s, priority);
+    match_format(match, port_map, &s, priority);
     return ds_steal_cstr(&s);
 }
 
 void
-match_print(const struct match *match)
+match_print(const struct match *match,
+            const struct ofputil_port_map *port_map)
 {
-    char *s = match_to_string(match, OFP_DEFAULT_PRIORITY);
+    char *s = match_to_string(match, port_map, OFP_DEFAULT_PRIORITY);
     puts(s);
     free(s);
 }
@@ -1586,27 +1724,32 @@ minimatch_matches_flow(const struct minimatch *match,
 }
 
 /* Appends a string representation of 'match' to 's'.  If 'priority' is
- * different from OFP_DEFAULT_PRIORITY, includes it in 's'. */
+ * different from OFP_DEFAULT_PRIORITY, includes it in 's'.  If 'port_map' is
+ * nonnull, uses it to translate port numbers to names in output. */
 void
 minimatch_format(const struct minimatch *match,
-                 const struct tun_table *tun_table,struct ds *s, int priority)
+                 const struct tun_table *tun_table,
+                 const struct ofputil_port_map *port_map,
+                 struct ds *s, int priority)
 {
     struct match megamatch;
 
     minimatch_expand(match, &megamatch);
     megamatch.flow.tunnel.metadata.tab = tun_table;
 
-    match_format(&megamatch, s, priority);
+    match_format(&megamatch, port_map, s, priority);
 }
 
 /* Converts 'match' to a string and returns the string.  If 'priority' is
  * different from OFP_DEFAULT_PRIORITY, includes it in the string.  The caller
- * must free the string (with free()). */
+ * must free the string (with free()).  If 'port_map' is nonnull, uses it to
+ * translate port numbers to names in output. */
 char *
-minimatch_to_string(const struct minimatch *match, int priority)
+minimatch_to_string(const struct minimatch *match,
+                    const struct ofputil_port_map *port_map, int priority)
 {
     struct match megamatch;
 
     minimatch_expand(match, &megamatch);
-    return match_to_string(&megamatch, priority);
+    return match_to_string(&megamatch, port_map, priority);
 }

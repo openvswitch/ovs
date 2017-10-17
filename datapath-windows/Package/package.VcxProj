@@ -25,6 +25,14 @@
       <Configuration>Win8 Release</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
+    <ProjectConfiguration Include="Win8.1Analyze|x64">
+      <Configuration>Win8.1Analyze</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Win8Analyze|x64">
+      <Configuration>Win8Analyze</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="PropertySheets">
     <ConfigurationType>Utility</ConfigurationType>
@@ -46,6 +54,11 @@
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>WindowsKernelModeDriver8.1</PlatformToolset>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1Analyze|x64'" Label="Configuration">
+    <TargetVersion>WindowsV6.3</TargetVersion>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver8.1</PlatformToolset>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'" Label="Configuration">
     <TargetVersion>
     </TargetVersion>
@@ -54,6 +67,11 @@
     <DriverTargetPlatform>Desktop</DriverTargetPlatform>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|x64'" Label="Configuration">
+    <TargetVersion>Windows8</TargetVersion>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver8.1</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8Analyze|x64'" Label="Configuration">
     <TargetVersion>Windows8</TargetVersion>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>WindowsKernelModeDriver8.1</PlatformToolset>
@@ -82,7 +100,9 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'">
+    <Inf2CatUseLocalTime>true</Inf2CatUseLocalTime>
+  </PropertyGroup>
   <PropertyGroup>
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <EnableDeployment>False</EnableDeployment>
@@ -100,7 +120,15 @@
     <VerifyDrivers />
     <VerifyFlags>133563</VerifyFlags>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'">
+    <Inf2CatUseLocalTime>true</Inf2CatUseLocalTime>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|x64'">
+    <Inf2Cat>
+      <UseLocalTime>true</UseLocalTime>
+    </Inf2Cat>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win8Analyze|x64'">
     <Inf2Cat>
       <UseLocalTime>true</UseLocalTime>
     </Inf2Cat>
@@ -111,6 +139,11 @@
     </Inf2Cat>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|x64'">
+    <Inf2Cat>
+      <UseLocalTime>true</UseLocalTime>
+    </Inf2Cat>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Win8.1Analyze|x64'">
     <Inf2Cat>
       <UseLocalTime>true</UseLocalTime>
     </Inf2Cat>

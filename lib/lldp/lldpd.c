@@ -339,7 +339,7 @@ lldpd_decode(struct lldpd *cfg, char *frame, int s,
 
     /* No, but do we already know the system? */
     if (!oport) {
-        bool found = false;
+        found = false;
         VLOG_DBG("MSAP is unknown, search for the chassis");
 
         LIST_FOR_EACH (ochassis, list, &cfg->g_chassis) {

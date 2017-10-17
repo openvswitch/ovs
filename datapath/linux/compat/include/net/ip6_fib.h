@@ -27,7 +27,11 @@
 static inline u32 rt6_get_cookie(const struct rt6_info *rt)
 {
 	if (rt->rt6i_flags & RTF_PCPU ||
-			(unlikely(rt->dst.flags & DST_NOCACHE) && rt->dst.from))
+#ifdef HAVE_DST_NOCACHE
+	    (unlikely(rt->dst.flags & DST_NOCACHE) && rt->dst.from))
+#else
+	    (unlikely(!list_empty(&rt->rt6i_uncached)) && rt->dst.from))
+#endif
 		rt = (struct rt6_info *)(rt->dst.from);
 
 	return rt->rt6i_node ? rt->rt6i_node->fn_sernum : 0;

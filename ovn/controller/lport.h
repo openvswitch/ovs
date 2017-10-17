@@ -17,10 +17,15 @@
 #define OVN_LPORT_H 1
 
 #include <stdint.h>
+#include "lib/uuid.h"
 #include "openvswitch/hmap.h"
+#include "openvswitch/list.h"
 
 struct ovsdb_idl;
+struct sbrec_chassis;
 struct sbrec_datapath_binding;
+struct sbrec_port_binding;
+
 
 /* Database indexes.
  * =================
@@ -30,67 +35,21 @@ struct sbrec_datapath_binding;
  * instead we define our own indexes.
  */
 
-/* Logical datapath index
- * ======================
- */
 
-struct ldatapath {
-    struct hmap_node by_key_node; /* Index by tunnel key. */
-    const struct sbrec_datapath_binding *db;
-    const struct sbrec_port_binding **lports;
-    size_t n_lports, allocated_lports;
-};
-
-struct ldatapath_index {
-    struct hmap by_key;
-};
-
-void ldatapath_index_init(struct ldatapath_index *, struct ovsdb_idl *);
-void ldatapath_index_destroy(struct ldatapath_index *);
-
-const struct ldatapath *ldatapath_lookup_by_key(
-    const struct ldatapath_index *, uint32_t dp_key);
-
-/* Logical port index
- * ==================
- *
- * This data structure holds multiple indexes over logical ports, to allow for
- * efficient searching for logical ports by name or number.
- */
-
-struct lport_index {
-    struct hmap by_name;
-    struct hmap by_key;
-};
-
-void lport_index_init(struct lport_index *, struct ovsdb_idl *);
-void lport_index_destroy(struct lport_index *);
+const struct sbrec_datapath_binding *datapath_lookup_by_key(struct ovsdb_idl *,
+                                                            uint64_t dp_key);
 
 const struct sbrec_port_binding *lport_lookup_by_name(
-    const struct lport_index *, const char *name);
+    struct ovsdb_idl *, const char *name);
 const struct sbrec_port_binding *lport_lookup_by_key(
-    const struct lport_index *, uint32_t dp_key, uint16_t port_key);
+    struct ovsdb_idl *, uint64_t dp_key, uint64_t port_key);
 
-/* Multicast group index
- * =====================
- *
- * This is separate from the logical port index because of namespace issues:
- * logical port names are globally unique, but multicast group names are only
- * unique within the scope of a logical datapath.
- *
- * Multicast groups could be indexed by number also, but so far the clients do
- * not need this index. */
-
-struct mcgroup_index {
-    struct hmap by_dp_name;
-};
-
-void mcgroup_index_init(struct mcgroup_index *, struct ovsdb_idl *);
-void mcgroup_index_destroy(struct mcgroup_index *);
 
 const struct sbrec_multicast_group *mcgroup_lookup_by_dp_name(
-    const struct mcgroup_index *,
+    struct ovsdb_idl *idl,
     const struct sbrec_datapath_binding *,
     const char *name);
+
+void lport_init(struct ovsdb_idl *idl);
 
 #endif /* ovn/lport.h */

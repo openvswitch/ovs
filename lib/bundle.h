@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2012, 2013, 2014 Nicira, Inc.
+/* Copyright (c) 2011, 2012, 2013, 2014, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ struct flow_wildcards;
 struct match;
 struct ofpact_bundle;
 struct ofpbuf;
+struct ofputil_port_map;
 
 /* NXAST_BUNDLE helper functions.
  *
@@ -45,9 +46,12 @@ ofp_port_t bundle_execute(const struct ofpact_bundle *, const struct flow *,
                         void *aux);
 enum ofperr bundle_check(const struct ofpact_bundle *, ofp_port_t max_ports,
                          const struct match *);
-char *bundle_parse(const char *, struct ofpbuf *ofpacts) OVS_WARN_UNUSED_RESULT;
-char *bundle_parse_load(const char *, struct ofpbuf *ofpacts)
+char *bundle_parse(const char *, const struct ofputil_port_map *port_map,
+                   struct ofpbuf *ofpacts) OVS_WARN_UNUSED_RESULT;
+char *bundle_parse_load(const char *, const struct ofputil_port_map *port_map,
+                        struct ofpbuf *ofpacts)
     OVS_WARN_UNUSED_RESULT;
-void bundle_format(const struct ofpact_bundle *, struct ds *);
+void bundle_format(const struct ofpact_bundle *,
+                   const struct ofputil_port_map *, struct ds *);
 
 #endif /* bundle.h */

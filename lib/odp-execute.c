@@ -270,6 +270,56 @@ odp_set_nd(struct dp_packet *packet, const struct ovs_key_nd *key,
     }
 }
 
+/* Set the NSH header. Assumes the NSH header is present and matches the
+ * MD format of the key. The slow path must take case of that. */
+static void
+odp_set_nsh(struct dp_packet *packet, const struct ovs_key_nsh *key,
+            const struct ovs_key_nsh *mask)
+{
+    struct nsh_hdr *nsh = dp_packet_l3(packet);
+
+    if (!mask) {
+        nsh->ver_flags_len = htons(key->flags << NSH_FLAGS_SHIFT) |
+                             (nsh->ver_flags_len & ~htons(NSH_FLAGS_MASK));
+        put_16aligned_be32(&nsh->path_hdr, key->path_hdr);
+        switch (nsh->md_type) {
+            case NSH_M_TYPE1:
+                for (int i = 0; i < 4; i++) {
+                    put_16aligned_be32(&nsh->md1.c[i], key->c[i]);
+                }
+                break;
+            case NSH_M_TYPE2:
+            default:
+                /* No support for setting any other metadata format yet. */
+                break;
+        }
+    } else {
+        uint8_t flags = (ntohs(nsh->ver_flags_len) & NSH_FLAGS_MASK) >>
+                            NSH_FLAGS_SHIFT;
+        flags = key->flags | (flags & ~mask->flags);
+        nsh->ver_flags_len = htons(flags << NSH_FLAGS_SHIFT) |
+                             (nsh->ver_flags_len & ~htons(NSH_FLAGS_MASK));
+
+        ovs_be32 path_hdr = get_16aligned_be32(&nsh->path_hdr);
+        path_hdr = key->path_hdr | (path_hdr & ~mask->path_hdr);
+        put_16aligned_be32(&nsh->path_hdr, path_hdr);
+        switch (nsh->md_type) {
+            case NSH_M_TYPE1:
+                for (int i = 0; i < 4; i++) {
+                    ovs_be32 p = get_16aligned_be32(&nsh->md1.c[i]);
+                    ovs_be32 k = key->c[i];
+                    ovs_be32 m = mask->c[i];
+                    put_16aligned_be32(&nsh->md1.c[i], k | (p & ~m));
+                }
+                break;
+            case NSH_M_TYPE2:
+            default:
+                /* No support for setting any other metadata format yet. */
+                break;
+        }
+    }
+}
+
 static void
 odp_execute_set_action(struct dp_packet *packet, const struct nlattr *a)
 {
@@ -293,6 +343,10 @@ odp_execute_set_action(struct dp_packet *packet, const struct nlattr *a)
 
     case OVS_KEY_ATTR_ETHERNET:
         odp_eth_set_addrs(packet, nl_attr_get(a), NULL);
+        break;
+
+    case OVS_KEY_ATTR_NSH:
+        odp_set_nsh(packet, nl_attr_get(a), NULL);
         break;
 
     case OVS_KEY_ATTR_IPV4:
@@ -375,6 +429,7 @@ odp_execute_set_action(struct dp_packet *packet, const struct nlattr *a)
         break;
 
     case OVS_KEY_ATTR_UNSPEC:
+    case OVS_KEY_ATTR_PACKET_TYPE:
     case OVS_KEY_ATTR_ENCAP:
     case OVS_KEY_ATTR_ETHERTYPE:
     case OVS_KEY_ATTR_IN_PORT:
@@ -416,6 +471,11 @@ odp_execute_masked_set_action(struct dp_packet *packet,
     case OVS_KEY_ATTR_ETHERNET:
         odp_eth_set_addrs(packet, nl_attr_get(a),
                           get_mask(a, struct ovs_key_ethernet));
+        break;
+
+    case OVS_KEY_ATTR_NSH:
+        odp_set_nsh(packet, nl_attr_get(a),
+                    get_mask(a, struct ovs_key_nsh));
         break;
 
     case OVS_KEY_ATTR_IPV4:
@@ -473,6 +533,7 @@ odp_execute_masked_set_action(struct dp_packet *packet,
         break;
 
     case OVS_KEY_ATTR_TUNNEL:    /* Masked data not supported for tunnel. */
+    case OVS_KEY_ATTR_PACKET_TYPE:
     case OVS_KEY_ATTR_UNSPEC:
     case OVS_KEY_ATTR_CT_STATE:
     case OVS_KEY_ATTR_CT_ZONE:
@@ -591,6 +652,8 @@ requires_datapath_assistance(const struct nlattr *a)
     case OVS_ACTION_ATTR_PUSH_ETH:
     case OVS_ACTION_ATTR_POP_ETH:
     case OVS_ACTION_ATTR_CLONE:
+    case OVS_ACTION_ATTR_ENCAP_NSH:
+    case OVS_ACTION_ATTR_DECAP_NSH:
         return false;
 
     case OVS_ACTION_ATTR_UNSPEC:
@@ -644,8 +707,15 @@ odp_execute_actions(void *dp, struct dp_packet_batch *batch, bool steal,
                 uint32_t hash;
 
                 DP_PACKET_BATCH_FOR_EACH (packet, batch) {
-                    flow_extract(packet, &flow);
-                    hash = flow_hash_5tuple(&flow, hash_act->hash_basis);
+                    /* RSS hash can be used here instead of 5tuple for
+                     * performance reasons. */
+                    if (dp_packet_rss_valid(packet)) {
+                        hash = dp_packet_get_rss_hash(packet);
+                        hash = hash_int(hash, hash_act->hash_basis);
+                    } else {
+                        flow_extract(packet, &flow);
+                        hash = flow_hash_5tuple(&flow, hash_act->hash_basis);
+                    }
                     packet->md.dp_hash = hash;
                 }
             } else {
@@ -747,6 +817,26 @@ odp_execute_actions(void *dp, struct dp_packet_batch *batch, bool steal,
                 pop_eth(packet);
             }
             break;
+
+        case OVS_ACTION_ATTR_ENCAP_NSH: {
+            const struct ovs_action_encap_nsh *enc_nsh = nl_attr_get(a);
+            DP_PACKET_BATCH_FOR_EACH (packet, batch) {
+                encap_nsh(packet, enc_nsh);
+            }
+            break;
+        }
+        case OVS_ACTION_ATTR_DECAP_NSH: {
+            size_t i, num = batch->count;
+
+            DP_PACKET_BATCH_REFILL_FOR_EACH (i, num, packet, batch) {
+                if (decap_nsh(packet)) {
+                    dp_packet_batch_refill(batch, packet, i);
+                } else {
+                    dp_packet_delete(packet);
+                }
+            }
+            break;
+        }
 
         case OVS_ACTION_ATTR_OUTPUT:
         case OVS_ACTION_ATTR_TUNNEL_PUSH:

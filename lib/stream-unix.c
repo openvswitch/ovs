@@ -57,7 +57,7 @@ unix_open(const char *name, char *suffix, struct stream **streamp,
     }
 
     free(connect_path);
-    return new_fd_stream(name, fd, check_connection_completion(fd),
+    return new_fd_stream(xstrdup(name), fd, check_connection_completion(fd),
                          AF_UNIX, streamp);
 }
 
@@ -102,7 +102,8 @@ punix_open(const char *name OVS_UNUSED, char *suffix,
         return error;
     }
 
-    return new_fd_pstream(name, fd, punix_accept, bind_path, pstreamp);
+    return new_fd_pstream(xstrdup(name), fd,
+                          punix_accept, bind_path, pstreamp);
 }
 
 static int
@@ -111,14 +112,10 @@ punix_accept(int fd, const struct sockaddr_storage *ss, size_t ss_len,
 {
     const struct sockaddr_un *sun = (const struct sockaddr_un *) ss;
     int name_len = get_unix_name_len(sun, ss_len);
-    char name[128];
-
-    if (name_len > 0) {
-        snprintf(name, sizeof name, "unix:%.*s", name_len, sun->sun_path);
-    } else {
-        strcpy(name, "unix");
-    }
-    return new_fd_stream(name, fd, 0, AF_UNIX, streamp);
+    char *bound_name = (name_len > 0
+                        ? xasprintf("unix:%.*s", name_len, sun->sun_path)
+                        : xstrdup("unix"));
+    return new_fd_stream(bound_name, fd, 0, AF_UNIX, streamp);
 }
 
 const struct pstream_class punix_pstream_class = {

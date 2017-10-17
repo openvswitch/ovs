@@ -25,6 +25,11 @@
 #include "openvswitch/ofp-util.h"
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/types.h"
+#include "openvswitch/ofp-ed-props.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 struct vl_mff_map;
 
@@ -88,6 +93,10 @@ struct vl_mff_map;
     OFPACT(DEC_MPLS_TTL,    ofpact_null,        ofpact, "dec_mpls_ttl") \
     OFPACT(PUSH_MPLS,       ofpact_push_mpls,   ofpact, "push_mpls")    \
     OFPACT(POP_MPLS,        ofpact_pop_mpls,    ofpact, "pop_mpls")     \
+                                                                        \
+    /* Generic encap & decap */                                         \
+    OFPACT(ENCAP,           ofpact_encap,       props, "encap")         \
+    OFPACT(DECAP,           ofpact_decap,       ofpact, "decap")        \
                                                                         \
     /* Metadata. */                                                     \
     OFPACT(SET_TUNNEL,      ofpact_tunnel,      ofpact, "set_tunnel")   \
@@ -195,7 +204,8 @@ BUILD_ASSERT_DECL(sizeof(struct ofpact) == 4);
 static inline struct ofpact *
 ofpact_next(const struct ofpact *ofpact)
 {
-    return (void *) ((uint8_t *) ofpact + OFPACT_ALIGN(ofpact->len));
+    return ALIGNED_CAST(struct ofpact *,
+                        (uint8_t *) ofpact + OFPACT_ALIGN(ofpact->len));
 }
 
 struct ofpact *ofpact_next_flattened(const struct ofpact *);
@@ -203,7 +213,14 @@ struct ofpact *ofpact_next_flattened(const struct ofpact *);
 static inline struct ofpact *
 ofpact_end(const struct ofpact *ofpacts, size_t ofpacts_len)
 {
-    return (void *) ((uint8_t *) ofpacts + ofpacts_len);
+    return ALIGNED_CAST(struct ofpact *, (uint8_t *) ofpacts + ofpacts_len);
+}
+
+static inline bool
+ofpact_last(const struct ofpact *a, const struct ofpact *ofpacts,
+            size_t ofpact_len)
+{
+    return ofpact_next(a) == ofpact_end(ofpacts, ofpact_len);
 }
 
 static inline const struct ofpact *
@@ -969,6 +986,33 @@ struct ofpact_unroll_xlate {
     ovs_be64 rule_cookie;         /* OVS_BE64_MAX if none. */
 };
 
+/* OFPACT_ENCAP.
+ *
+ * Used for NXAST_ENCAP. */
+
+struct ofpact_encap {
+    struct ofpact ofpact;
+    ovs_be32 new_pkt_type;        /* Packet type of the header to add. */
+    uint16_t hdr_size;            /* New header size in bytes. */
+    uint16_t n_props;             /* Number of encap properties. */
+    struct ofpact_ed_prop props[]; /* Properties in internal format. */
+};
+
+/* OFPACT_DECAP.
+ *
+ * Used for NXAST_DECAP. */
+struct ofpact_decap {
+    struct ofpact ofpact;
+
+    /* New packet type.
+     *
+     * The special value (0,0xFFFE) "Use next proto" is used to request OVS to
+     * automatically set the new packet type based on the decap'ed header's
+     * next protocol.
+     */
+    ovs_be32 new_pkt_type;
+};
+
 /* Converting OpenFlow to ofpacts. */
 enum ofperr ofpacts_pull_openflow_actions(struct ofpbuf *openflow,
                                           unsigned int actions_len,
@@ -1013,15 +1057,20 @@ bool ofpacts_output_to_group(const struct ofpact[], size_t ofpacts_len,
                              uint32_t group_id);
 bool ofpacts_equal(const struct ofpact a[], size_t a_len,
                    const struct ofpact b[], size_t b_len);
+bool ofpacts_equal_stringwise(const struct ofpact a[], size_t a_len,
+                              const struct ofpact b[], size_t b_len);
 const struct mf_field *ofpact_get_mf_dst(const struct ofpact *ofpact);
 uint32_t ofpacts_get_meter(const struct ofpact[], size_t ofpacts_len);
 
 /* Formatting and parsing ofpacts. */
-void ofpacts_format(const struct ofpact[], size_t ofpacts_len, struct ds *);
-char *ofpacts_parse_actions(const char *, struct ofpbuf *ofpacts,
+void ofpacts_format(const struct ofpact[], size_t ofpacts_len,
+                    const struct ofputil_port_map *, struct ds *);
+char *ofpacts_parse_actions(const char *, const struct ofputil_port_map *,
+                            struct ofpbuf *ofpacts,
                             enum ofputil_protocol *usable_protocols)
     OVS_WARN_UNUSED_RESULT;
-char *ofpacts_parse_instructions(const char *, struct ofpbuf *ofpacts,
+char *ofpacts_parse_instructions(const char *, const struct ofputil_port_map *,
+                                 struct ofpbuf *ofpacts,
                                  enum ofputil_protocol *usable_protocols)
     OVS_WARN_UNUSED_RESULT;
 const char *ofpact_name(enum ofpact_type);
@@ -1100,8 +1149,8 @@ void *ofpact_finish(struct ofpbuf *, struct ofpact *);
     static inline struct STRUCT *                                       \
     ofpact_put_##ENUM(struct ofpbuf *ofpacts)                           \
     {                                                                   \
-        return ofpact_put(ofpacts, OFPACT_##ENUM,                       \
-                          OFPACT_##ENUM##_SIZE);                        \
+        return (struct STRUCT *) ofpact_put(ofpacts, OFPACT_##ENUM,     \
+                                            OFPACT_##ENUM##_SIZE);      \
     }                                                                   \
                                                                         \
     static inline void                                                  \
@@ -1116,7 +1165,7 @@ void *ofpact_finish(struct ofpbuf *, struct ofpact *);
     {                                                                   \
         struct ofpact *ofpact = &(*ofpactp)->ofpact;                    \
         ovs_assert(ofpact->type == OFPACT_##ENUM);                      \
-        *ofpactp = ofpact_finish(ofpbuf, ofpact);                       \
+        *ofpactp = (struct STRUCT *) ofpact_finish(ofpbuf, ofpact);     \
     }
 OFPACTS
 #undef OFPACT
@@ -1186,5 +1235,9 @@ enum ofperr ovs_instruction_type_from_inst_type(
 ovs_be32 ovsinst_bitmap_to_openflow(uint32_t ovsinst_bitmap, enum ofp_version);
 uint32_t ovsinst_bitmap_from_openflow(ovs_be32 ofpit_bitmap,
                                       enum ofp_version);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* ofp-actions.h */

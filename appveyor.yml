@@ -15,9 +15,9 @@ init:
 
     Invoke-WebRequest $source -OutFile $destination
 
-    $source = "https://slproweb.com/download/Win32OpenSSL-1_0_2k.exe"
+    $source = "https://slproweb.com/download/Win32OpenSSL-1_0_2L.exe"
 
-    $destination = "C:\ovs-build-downloads\Win32OpenSSL-1_0_2k.exe"
+    $destination = "C:\ovs-build-downloads\Win32OpenSSL-1_0_2l.exe"
 
     Invoke-WebRequest $source -OutFile $destination
 
@@ -27,7 +27,7 @@ init:
 
     cd C:\ovs-build-downloads
 
-    .\Win32OpenSSL-1_0_2k.exe /silent /verysilent /sp- /suppressmsgboxes
+    .\Win32OpenSSL-1_0_2l.exe /silent /verysilent /sp- /suppressmsgboxes
 
     Start-Sleep -s 30
 
@@ -43,3 +43,4 @@ build_script:
 - C:\MinGW\msys\1.0\bin\bash -lc "cd /c/openvswitch && ./boot.sh"
 - C:\MinGW\msys\1.0\bin\bash -lc "cd /c/openvswitch && ./configure CC=build-aux/cccl LD=\"`which link`\" LIBS=\"-lws2_32 -liphlpapi -lwbemuuid -lole32 -loleaut32\" --with-pthread=C:/pthreads-win32/Pre-built.2 --with-openssl=C:/OpenSSL-Win32 --with-vstudiotarget=\"Debug\""
 - C:\MinGW\msys\1.0\bin\bash -lc "cd /c/openvswitch && make"
+- C:\MinGW\msys\1.0\bin\bash -lc "cd /c/openvswitch && make datapath_windows_analyze"

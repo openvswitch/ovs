@@ -150,4 +150,17 @@ struct ofp15_group_desc_stats {
 };
 OFP_ASSERT(sizeof(struct ofp15_group_desc_stats) == 16);
 
+/* Send packet (controller -> datapath). */
+struct ofp15_packet_out {
+    ovs_be32 buffer_id;         /* ID assigned by datapath (-1 if none). */
+    ovs_be16 actions_len;       /* Size of action array in bytes. */
+    uint8_t pad[2];
+    /* Followed by:
+     *   - Match
+     *   - List of actions
+     *   - Packet data
+     */
+};
+OFP_ASSERT(sizeof(struct ofp15_packet_out) == 8);
+
 #endif /* openflow/openflow-1.5.h */

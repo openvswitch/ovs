@@ -8,12 +8,16 @@ PartOf=openvswitch.service
 [Service]
 Type=forking
 Restart=on-failure
+EnvironmentFile=/etc/openvswitch/default.conf
 EnvironmentFile=-/etc/sysconfig/openvswitch
+ExecStartPre=/usr/bin/chown ${OVS_USER_ID} /var/run/openvswitch
 ExecStart=/usr/share/openvswitch/scripts/ovs-ctl \
           --no-ovs-vswitchd --no-monitor --system-id=random \
+          --ovs-user=${OVS_USER_ID} \
           start $OPTIONS
 ExecStop=/usr/share/openvswitch/scripts/ovs-ctl --no-ovs-vswitchd stop
 ExecReload=/usr/share/openvswitch/scripts/ovs-ctl --no-ovs-vswitchd \
+           --ovs-user=${OVS_USER_ID} \
            --no-monitor restart $OPTIONS
 RuntimeDirectory=openvswitch
 RuntimeDirectoryMode=0755

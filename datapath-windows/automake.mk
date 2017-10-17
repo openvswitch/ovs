@@ -16,7 +16,9 @@ EXTRA_DIST += \
 	datapath-windows/ovsext/Conntrack-icmp.c \
 	datapath-windows/ovsext/Conntrack-other.c \
 	datapath-windows/ovsext/Conntrack-related.c \
+	datapath-windows/ovsext/Conntrack-nat.c \
 	datapath-windows/ovsext/Conntrack-tcp.c \
+	datapath-windows/ovsext/Conntrack-nat.h \
 	datapath-windows/ovsext/Conntrack.c \
 	datapath-windows/ovsext/Conntrack.h \
 	datapath-windows/ovsext/Datapath.c \
@@ -82,3 +84,7 @@ EXTRA_DIST += \
 	datapath-windows/ovsext/precomp.h \
 	datapath-windows/ovsext/precompsrc.c \
 	datapath-windows/ovsext/resource.h
+
+datapath_windows_analyze: all
+	MSBuild.exe //maxcpucount datapath-windows/ovsext.sln /target:Build /property:Configuration="Win8.1Analyze"
+	MSBuild.exe //maxcpucount datapath-windows/ovsext.sln /target:Build /property:Configuration="Win8Analyze"

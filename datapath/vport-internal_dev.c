@@ -114,7 +114,9 @@ static void internal_dev_destructor(struct net_device *dev)
 	struct vport *vport = ovs_internal_dev_get_vport(dev);
 
 	ovs_vport_free(vport);
+#ifndef HAVE_NEEDS_FREE_NETDEV
 	free_netdev(dev);
+#endif
 }
 
 static void
@@ -188,7 +190,12 @@ static void do_setup(struct net_device *netdev)
 	netdev->priv_flags &= ~IFF_TX_SKB_SHARING;
 	netdev->priv_flags |= IFF_LIVE_ADDR_CHANGE | IFF_OPENVSWITCH |
 			      IFF_PHONY_HEADROOM | IFF_NO_QUEUE;
+#ifndef HAVE_NEEDS_FREE_NETDEV
 	netdev->destructor = internal_dev_destructor;
+#else
+	netdev->needs_free_netdev = true;
+	netdev->priv_destructor = internal_dev_destructor;
+#endif /* HAVE_NEEDS_FREE_NETDEV */
 	netdev->ethtool_ops = &internal_dev_ethtool_ops;
 	netdev->rtnl_link_ops = &internal_dev_link_ops;
 

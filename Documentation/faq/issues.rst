@@ -43,8 +43,9 @@ eth0.  Help!
     itself.  For example, assuming that eth0's IP address is 192.168.128.5, you
     could run the commands below to fix up the situation::
 
-        $ ifconfig eth0 0.0.0.0
-        $ ifconfig br0 192.168.128.5
+        $ ip addr flush dev eth0
+        $ ip addr add 192.168.128.5/24 dev br0
+        $ ip link set br0 up
 
     (If your only connection to the machine running OVS is through the IP
     address in question, then you would want to run all of these commands on a
@@ -56,7 +57,7 @@ eth0.  Help!
     client that was listening on the physical Ethernet interface (e.g. eth0)
     and start one listening on the internal interface (e.g. br0).  You might
     still need to manually clear the IP address from the physical interface
-    (e.g. with "ifconfig eth0 0.0.0.0").
+    (e.g. with "ip addr flush dev eth0").
 
     There is no compelling reason why Open vSwitch must work this way.
     However, this is the way that the Linux kernel bridge module has always
@@ -285,7 +286,8 @@ Q: I created a tap device tap0, configured an IP address on it, and added it to
 a bridge, like this::
 
     $ tunctl -t tap0
-    $ ifconfig tap0 192.168.0.123
+    $ ip addr add 192.168.0.123/24 dev tap0
+    $ ip link set tap0 up
     $ ovs-vsctl add-br br0
     $ ovs-vsctl add-port br0 tap0
 
@@ -299,13 +301,15 @@ network, but it doesn't work.  Why not?
 
         $ ovs-vsctl add-br br0
         $ ovs-vsctl add-port br0 int0 -- set Interface int0 type=internal
-        $ ifconfig int0 192.168.0.123
+	$ ip addr add 192.168.0.123/24 dev int0
+        $ ip link set int0 up
 
     Even more simply, you can take advantage of the internal port that every
     bridge has under the name of the bridge::
 
         $ ovs-vsctl add-br br0
-        $ ifconfig br0 192.168.0.123
+	$ ip addr add 192.168.0.123/24 dev br0
+        $ ip link set br0 up
 
     In more detail, a "tap" device is an interface between the Linux (or BSD)
     network stack and a user program that opens it as a socket.  When the "tap"
@@ -380,9 +384,8 @@ keep changing internal ports MTU?
     A: By default Open vSwitch overrides the internal interfaces (e.g. br0)
     MTU.  If you have just an internal interface (e.g. br0) and a physical
     interface (e.g. eth0), then every change in MTU to eth0 will be reflected
-    to br0.  Any manual MTU configuration using `ip` or `ifconfig` on internal
-    interfaces is going to be overridden by Open vSwitch to match the current
-    bridge minimum.
+    to br0.  Any manual MTU configuration using `ip` on internal interfaces is
+    going to be overridden by Open vSwitch to match the current bridge minimum.
 
     Sometimes this behavior is not desirable, for example with tunnels.  The
     MTU of an internal interface can be explicitly set using the following
@@ -392,7 +395,7 @@ keep changing internal ports MTU?
 
     After this, Open vSwitch will configure br0 MTU to 1450.  Since this
     setting is in the database it will be persistent (compared to what happens
-    with `ip` or `ifconfig`).
+    with `ip`).
 
     The MTU configuration can be removed to restore the default behavior
     with::

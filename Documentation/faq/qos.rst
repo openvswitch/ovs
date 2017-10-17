@@ -165,5 +165,5 @@ as well as I expect.
 Q: Does Open vSwitch support OpenFlow meters?
 
     A: Since version 2.0, Open vSwitch has OpenFlow protocol support for
-    OpenFlow meters.  There is no implementation of meters in the Open vSwitch
-    software switch (neither the kernel-based nor userspace switches).
+    OpenFlow meters.  Currently, only the userspace datapath implements
+    meters.

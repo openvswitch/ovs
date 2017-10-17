@@ -56,7 +56,8 @@ m4_define([ADD_INT],
     ]
 )
 
-# ADD_VETH([port], [namespace], [ovs-br], [ip_addr] [mac_addr [gateway]])
+# ADD_VETH([port], [namespace], [ovs-br], [ip_addr] [mac_addr], [gateway],
+#          [ip_addr_flags])
 #
 # Add a pair of veth ports. 'port' will be added to name space 'namespace',
 # and "ovs-'port'" will be added to ovs bridge 'ovs-br'.
@@ -76,7 +77,7 @@ m4_define([ADD_VETH],
       AT_CHECK([ip link set dev ovs-$1 up])
       AT_CHECK([ovs-vsctl add-port $3 ovs-$1 -- \
                 set interface ovs-$1 external-ids:iface-id="$1"])
-      NS_CHECK_EXEC([$2], [ip addr add $4 dev $1])
+      NS_CHECK_EXEC([$2], [ip addr add $4 dev $1 $7])
       NS_CHECK_EXEC([$2], [ip link set dev $1 up])
       if test -n "$5"; then
         NS_CHECK_EXEC([$2], [ip link set dev $1 address $5])
@@ -159,7 +160,8 @@ m4_define([ADD_CVLAN],
     ]
 )
 
-# ADD_OVS_TUNNEL([type], [bridge], [port], [remote-addr], [overlay-addr])
+# ADD_OVS_TUNNEL([type], [bridge], [port], [remote-addr], [overlay-addr],
+#                [tunnel-args])
 #
 # Add an ovs-based tunnel device in the root namespace, with name 'port' and
 # type 'type'. The tunnel device will be configured as point-to-point with the
@@ -169,11 +171,21 @@ m4_define([ADD_CVLAN],
 #
 m4_define([ADD_OVS_TUNNEL],
    [AT_CHECK([ovs-vsctl add-port $2 $3 -- \
-              set int $3 type=$1 options:remote_ip=$4])
+              set int $3 type=$1 options:remote_ip=$4 $6])
     AT_CHECK([ip addr add dev $2 $5])
     AT_CHECK([ip link set dev $2 up])
     AT_CHECK([ip link set dev $2 mtu 1450])
     on_exit 'ip addr del dev $2 $5'
+   ]
+)
+
+# ADD_OVS_TUNNEL6([type], [bridge], [port], [remote-addr], [overlay-addr])
+#
+# Same as ADD_OVS_TUNNEL, but drops MTU enough for the IPv6 underlay.
+#
+m4_define([ADD_OVS_TUNNEL6],
+   [ADD_OVS_TUNNEL([$1], [$2], [$3], [$4], [$5])
+    AT_CHECK([ip link set dev $2 mtu 1430])
    ]
 )
 
@@ -195,6 +207,17 @@ m4_define([ADD_NATIVE_TUNNEL],
    [NS_CHECK_EXEC([$3], [ip link add dev $2 type $1 remote $4 $6])
     NS_CHECK_EXEC([$3], [ip addr add dev $2 $5])
     NS_CHECK_EXEC([$3], [ip link set dev $2 mtu 1450 $7 up])
+   ]
+)
+
+# ADD_NATIVE_TUNNEL6([type], [port], [namespace], [remote-addr], [overlay-addr],
+#                   [type-args], [link-args])
+#
+# Same as ADD_NATIVE_TUNNEL, but drops MTU enough for the IPv6 underlay.
+#
+m4_define([ADD_NATIVE_TUNNEL6],
+   [ADD_NATIVE_TUNNEL([$1], [$2], [$3], [$4], [$5], [$6], [$7])
+    NS_CHECK_EXEC([$3], [ip link set dev $2 mtu 1430])
    ]
 )
 
@@ -258,9 +281,24 @@ m4_define([OVS_CHECK_VXLAN],
     [AT_SKIP_IF([! ip link add foo type vxlan help 2>&1 | grep dstport >/dev/null])
      OVS_CHECK_FIREWALL()])
 
+# OVS_CHECK_VXLAN_UDP6ZEROCSUM()
+m4_define([OVS_CHECK_VXLAN_UDP6ZEROCSUM],
+    [AT_SKIP_IF([! ip link add foo type vxlan help 2>&1 | grep udp6zerocsum >/dev/null])
+     OVS_CHECK_FIREWALL()])
+
+# OVS_CHECK_VXLAN_GPE()
+m4_define([OVS_CHECK_VXLAN_GPE],
+    [OVS_CHECK_VXLAN()
+     AT_SKIP_IF([! ip link add foo type vxlan help 2>&1 | grep gpe >/dev/null])])
+
 # OVS_CHECK_GRE()
 m4_define([OVS_CHECK_GRE],
-    [AT_SKIP_IF([! ip link add foo type gretap help 2>&1 | grep gre >/dev/null])
+    [AT_SKIP_IF([! ip link add foo type gretap help 2>&1 | grep gretap >/dev/null])
+     OVS_CHECK_FIREWALL()])
+
+# OVS_CHECK_GRE_L3()
+m4_define([OVS_CHECK_GRE_L3],
+    [AT_SKIP_IF([! ip link add foo type gre help 2>&1 | grep "gre " >/dev/null])
      OVS_CHECK_FIREWALL()])
 
 # OVS_CHECK_GENEVE()
@@ -268,7 +306,16 @@ m4_define([OVS_CHECK_GENEVE],
     [AT_SKIP_IF([! ip link add foo type geneve help 2>&1 | grep geneve >/dev/null])
      OVS_CHECK_FIREWALL()])
 
+# OVS_CHECK_GENEVE_UDP6ZEROCSUM()
+m4_define([OVS_CHECK_GENEVE_UDP6ZEROCSUM],
+    [AT_SKIP_IF([! ip link add foo type geneve help 2>&1 | grep udp6zerocsum >/dev/null])
+     OVS_CHECK_FIREWALL()])
+
 # OVS_CHECK_8021AD()
 m4_define([OVS_CHECK_8021AD],
     [AT_SKIP_IF([! grep -q "VLAN header stack length probed as" ovs-vswitchd.log])
      AT_SKIP_IF([[test `sed -n 's/.*VLAN header stack length probed as \([0-9]\+\).*/\1/p' ovs-vswitchd.log` -lt 2]])])
+
+# OVS_CHECK_IPROUTE_ENCAP()
+m4_define([OVS_CHECK_IPROUTE_ENCAP],
+    [AT_SKIP_IF([! ip route help 2>&1 |grep encap >/dev/null])])

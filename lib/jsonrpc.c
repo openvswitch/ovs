@@ -1005,6 +1005,16 @@ jsonrpc_session_get_name(const struct jsonrpc_session *s)
     return reconnect_get_name(s->reconnect);
 }
 
+const char *
+jsonrpc_session_get_id(const struct jsonrpc_session *s)
+{
+    if (s->rpc && s->rpc->stream) {
+        return stream_get_peer_id(s->rpc->stream);
+    } else {
+        return NULL;
+    }
+}
+
 /* Always takes ownership of 'msg', regardless of success. */
 int
 jsonrpc_session_send(struct jsonrpc_session *s, struct jsonrpc_msg *msg)

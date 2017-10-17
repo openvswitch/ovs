@@ -542,6 +542,7 @@ del_cached_port(struct vtep_ctl_context *vtepctl_ctx,
     ovs_list_remove(&port->ports_node);
     shash_find_and_delete(&vtepctl_ctx->ports, cache_name);
     vteprec_physical_port_delete(port->port_cfg);
+    shash_destroy(&port->bindings);
     free(cache_name);
     free(port);
 }
@@ -1085,7 +1086,6 @@ vtep_ctl_context_populate_cache(struct ctl_context *ctx)
             port = add_port_to_cache(vtepctl_ctx, ps, port_cfg);
 
             for (k = 0; k < port_cfg->n_vlan_bindings; k++) {
-                struct vteprec_logical_switch *ls_cfg;
                 struct vtep_ctl_lswitch *ls;
                 char *vlan;
 

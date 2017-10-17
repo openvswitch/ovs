@@ -65,6 +65,8 @@ Q: What Linux kernel versions does each Open vSwitch release work with?
     2.5.x        2.6.32 to 4.3
     2.6.x        3.10 to 4.7
     2.7.x        3.10 to 4.9
+    2.8.x        3.10 to 4.12
+    2.9.x        3.10 to 4.13
     ============ ==============
 
     Open vSwitch userspace should also work with the Linux kernel module built
@@ -104,7 +106,7 @@ Q: Are all features available with all datapaths?
     ===================== ============== ============== ========= =======
     Feature               Linux upstream Linux OVS tree Userspace Hyper-V
     ===================== ============== ============== ========= =======
-    NAT                   4.6            YES            NO        NO
+    NAT                   4.6            YES            Yes       NO
     Connection tracking   4.3            YES            PARTIAL   PARTIAL
     Tunnel - LISP         NO             YES            NO        NO
     Tunnel - STT          NO             YES            NO        YES
@@ -160,7 +162,8 @@ Q: What DPDK version does each Open vSwitch release work with?
     2.4.x        2.0
     2.5.x        2.2
     2.6.x        16.07.2
-    2.7.x        16.11.1
+    2.7.x        16.11.3
+    2.8.x        17.05.2
     ============ =======
 
 Q: I get an error like this when I configure Open vSwitch:

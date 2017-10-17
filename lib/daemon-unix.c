@@ -361,11 +361,14 @@ monitor_daemon(pid_t daemon_pid)
                                (unsigned long int) daemon_pid, status_msg);
 
         if (child_ready) {
+            int error;
             do {
                 retval = waitpid(daemon_pid, &status, 0);
-            } while (retval == -1 && errno == EINTR);
-            if (retval == -1) {
-                VLOG_FATAL("waitpid failed (%s)", ovs_strerror(errno));
+                error = retval == -1 ? errno : 0;
+            } while (error == EINTR);
+            vlog_reopen_log_file();
+            if (error) {
+                VLOG_FATAL("waitpid failed (%s)", ovs_strerror(error));
             }
         }
 
@@ -469,7 +472,9 @@ daemonize_start(bool access_datapath)
         if (daemon_pid > 0) {
             /* Running in monitor process. */
             fork_notify_startup(saved_daemonize_fd);
-            close_standard_fds();
+            if (detach) {
+                close_standard_fds();
+            }
             monitor_daemon(daemon_pid);
         }
         /* Running in daemon process. */
@@ -999,11 +1004,11 @@ daemon_set_new_user(const char *user_spec)
         grpstr += strspn(grpstr, " \t\r\n");
 
         if (*grpstr) {
-            struct group grp, *res;
+            struct group grp, *gres;
 
             bufsize = init_bufsize;
             buf = xmalloc(bufsize);
-            while ((e = getgrnam_r(grpstr, &grp, buf, bufsize, &res))
+            while ((e = getgrnam_r(grpstr, &grp, buf, bufsize, &gres))
                          == ERANGE) {
                 if (!enlarge_buffer(&buf, &bufsize)) {
                     break;
@@ -1015,7 +1020,7 @@ daemon_set_new_user(const char *user_spec)
                            "(%s), aborting.", pidfile, grpstr,
                            ovs_strerror(e));
             }
-            if (res == NULL) {
+            if (gres == NULL) {
                 VLOG_FATAL("%s: group %s not found, aborting.", pidfile,
                            grpstr);
             }

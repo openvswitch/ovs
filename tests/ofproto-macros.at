@@ -156,6 +156,9 @@ m4_define([OVN_CLEANUP],[
     as northd
     OVS_APP_EXIT_AND_WAIT([ovn-northd])
 
+    as northd-backup
+    OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
     OVN_CLEANUP_VSWITCH([main])
 ])
 
@@ -191,6 +194,12 @@ ovn_start () {
     echo "starting ovn-northd"
     mkdir "$ovs_base"/northd
     as northd start_daemon ovn-northd \
+               --ovnnb-db=unix:"$ovs_base"/ovn-nb/ovn-nb.sock \
+               --ovnsb-db=unix:"$ovs_base"/ovn-sb/ovn-sb.sock
+
+    echo "starting backup ovn-northd"
+    mkdir "$ovs_base"/northd-backup
+    as northd-backup start_daemon ovn-northd \
                --ovnnb-db=unix:"$ovs_base"/ovn-nb/ovn-nb.sock \
                --ovnsb-db=unix:"$ovs_base"/ovn-sb/ovn-sb.sock
 }
@@ -317,12 +326,12 @@ m4_define([_OVS_VSWITCHD_START],
    AT_CAPTURE_FILE([ovsdb-server.log])
 
    dnl Initialize database.
-   AT_CHECK([ovs-vsctl --no-wait init])
+   AT_CHECK([ovs-vsctl --no-wait init $2])
 
    dnl Start ovs-vswitchd.
    AT_CHECK([ovs-vswitchd $1 --detach --no-chdir --pidfile --log-file -vvconn -vofproto_dpif -vunixctl], [0], [], [stderr])
    AT_CAPTURE_FILE([ovs-vswitchd.log])
-   on_exit "kill `cat ovs-vswitchd.pid`"
+   on_exit "kill_ovs_vswitchd `cat ovs-vswitchd.pid`"
    AT_CHECK([[sed < stderr '
 /ovs_numa|INFO|Discovered /d
 /vlog|INFO|opened log file/d
@@ -331,7 +340,9 @@ m4_define([_OVS_VSWITCHD_START],
 /ofproto|INFO|using datapath ID/d
 /netdev_linux|INFO|.*device has unknown hardware address family/d
 /ofproto|INFO|datapath ID changed to fedcba9876543210/d
-/dpdk|INFO|DPDK Disabled - Use other_config:dpdk-init to enable/d']])
+/dpdk|INFO|DPDK Disabled - Use other_config:dpdk-init to enable/d
+/netdev: Flow API/d
+/tc: Using policy/d']])
 ])
 
 # OVS_VSWITCHD_START([vsctl-args], [vsctl-output], [=override],
@@ -455,9 +466,8 @@ m4_define([OVS_VSWITCHD_STOP],
    OVS_APP_EXIT_AND_WAIT([ovsdb-server])])
 
 m4_define([OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP],
-  [AT_CHECK([ovs-appctl ofproto/tnl-push-pop off], [0], [dnl
-Tunnel push-pop off
-])])
+  [AT_CHECK([ovs-appctl dpif/set-dp-features br0 tnl_push_pop false], [0])
+])
 
 # WAIT_FOR_DUMMY_PORTS(NETDEV_DUMMY_PORT[, NETDEV_DUMMY_PORT...])
 #

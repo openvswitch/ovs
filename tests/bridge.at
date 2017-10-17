@@ -48,7 +48,8 @@ OVS_VSWITCHD_START(
     set bridge br1 datapath-type=dummy other-config:datapath-id=1234 ])
 
 dnl Start ovs-testcontroller
-AT_CHECK([ovs-testcontroller --detach punix:controller], [0], [ignore])
+AT_CHECK([ovs-testcontroller --detach punix:controller --pidfile], [0], [ignore])
+on_exit 'kill `cat ovs-testcontroller.pid`'
 OVS_WAIT_UNTIL([test -e controller])
 
 dnl Add the controller to both bridges, 5 seconds apart.
@@ -61,7 +62,7 @@ AT_CHECK([ovs-vsctl set-fail-mode br1 secure])
 dnl Wait for the controller connectionsi to be up
 for i in `seq 0 19`
 do
-    if ovs-vsctl --column=is_connected list controller |grep "false"; then
+    if ovs-vsctl --columns=is_connected list controller |grep "false"; then
         :
     else
         break
@@ -71,7 +72,7 @@ done
 
 dnl Make sure the connection status have two records and they are different.
 dnl (The exact output contains timing information that are machine dependent.)
-AT_CHECK([ovs-vsctl --column=status list controller | dnl
+AT_CHECK([ovs-vsctl --columns=status list controller | dnl
           grep "status" | sort -u |wc -l], [0], [2
 ])
 

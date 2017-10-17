@@ -1,0 +1,676 @@
+AT_BANNER([network service header (NSH)])
+
+### -----------------------------------------------------------------
+###   Simple NSH matching test case
+### -----------------------------------------------------------------
+
+AT_SETUP([nsh - matching])
+
+OVS_VSWITCHD_START([dnl
+    set bridge br0 datapath_type=dummy \
+        protocols=OpenFlow10,OpenFlow13,OpenFlow14,OpenFlow15 -- \
+    add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1 -- \
+    add-port br0 p2 -- set Interface p2 type=dummy ofport_request=2])
+
+AT_DATA([flows.txt], [dnl
+    table=0,in_port=1,dl_type=0x894f,nsh_mdtype=1,nsh_np=3,nsh_spi=0x123456,nsh_si=255,nsh_c1=0x11223344,actions=set_field:0x80->nsh_flags,set_field:254->nsh_si,set_field:0x44332211->nsh_c1,2
+])
+
+AT_CHECK([
+    ovs-ofctl del-flows br0
+    ovs-ofctl -Oopenflow13 add-flows br0 flows.txt
+    ovs-ofctl -Oopenflow13 dump-flows br0 | ofctl_strip | sort | grep actions
+], [0], [dnl
+ in_port=1,dl_type=0x894f,nsh_mdtype=1,nsh_np=3,nsh_spi=0x123456,nsh_si=255,nsh_c1=0x11223344 actions=set_field:128->nsh_flags,set_field:254->nsh_si,set_field:0x44332211->nsh_c1,output:2
+])
+
+AT_CHECK([
+    ovs-appctl ofproto/trace br0 'in_port=1,dl_type=0x894f,nsh_mdtype=1,nsh_np=3,nsh_spi=0x123456,nsh_si=255,nsh_c1=0x11223344,nsh_c2=0x55667788,nsh_c3=0x99aabbcc,nsh_c4=0xddeeff00'
+], [0], [dnl
+Flow: in_port=1,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x894f,nsh_flags=0,nsh_mdtype=1,nsh_np=3,nsh_spi=0x123456,nsh_si=255,nsh_c1=0x11223344,nsh_c2=0x55667788,nsh_c3=0x99aabbcc,nsh_c4=0xddeeff00,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0
+
+bridge("br0")
+-------------
+ 0. in_port=1,dl_type=0x894f,nsh_mdtype=1,nsh_np=3,nsh_spi=0x123456,nsh_si=255,nsh_c1=0x11223344, priority 32768
+    set_field:128->nsh_flags
+    set_field:254->nsh_si
+    set_field:0x44332211->nsh_c1
+    output:2
+
+Final flow: in_port=1,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x894f,nsh_flags=128,nsh_mdtype=1,nsh_np=3,nsh_spi=0x123456,nsh_si=254,nsh_c1=0x44332211,nsh_c2=0x55667788,nsh_c3=0x99aabbcc,nsh_c4=0xddeeff00,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0
+Megaflow: recirc_id=0,eth,in_port=1,dl_type=0x894f,nsh_flags=0,nsh_mdtype=1,nsh_np=3,nsh_spi=0x123456,nsh_si=255,nsh_c1=0x11223344
+Datapath actions: set(nsh(flags=128,spi=0x123456,si=254,c1=0x44332211)),2
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
+### -----------------------------------------------------------------
+###   NSH MD1 on Ethernet encapsulation over veth link
+### -----------------------------------------------------------------
+
+AT_SETUP([nsh - md1 encap over a veth link])
+
+OVS_VSWITCHD_START([])
+
+AT_CHECK([
+ovs-vsctl set bridge br0 datapath_type=dummy \
+            protocols=OpenFlow10,OpenFlow13,OpenFlow14,OpenFlow15 -- \
+        add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1 -- \
+        add-port br0 p2 -- set Interface p2 type=dummy ofport_request=2 -- \
+        add-port br0 v3 -- set Interface v3 type=patch options:peer=v4 ofport_request=3 -- \
+        add-port br0 v4 -- set Interface v4 type=patch options:peer=v3 ofport_request=4])
+
+AT_DATA([flows.txt], [dnl
+    table=0,in_port=1,ip,actions=encap(nsh(md_type=1)),set_field:0x1234->nsh_spi,set_field:0x11223344->nsh_c1,encap(ethernet),set_field:11:22:33:44:55:66->dl_dst,3
+    table=0,in_port=4,dl_type=0x894f,nsh_mdtype=1,nsh_spi=0x1234,nsh_c1=0x11223344,actions=decap(),decap(),2
+])
+
+AT_CHECK([
+    ovs-ofctl del-flows br0
+    ovs-ofctl -Oopenflow13 add-flows br0 flows.txt
+    ovs-ofctl -Oopenflow13 dump-flows br0 | ofctl_strip | sort | grep actions
+], [0], [dnl
+ in_port=4,dl_type=0x894f,nsh_mdtype=1,nsh_spi=0x1234,nsh_c1=0x11223344 actions=decap(),decap(),output:2
+ ip,in_port=1 actions=encap(nsh(md_type=1)),set_field:0x1234->nsh_spi,set_field:0x11223344->nsh_c1,encap(ethernet),set_field:11:22:33:44:55:66->eth_dst,output:3
+])
+
+# TODO:
+# The fields nw_proto, nw_tos, nw_ecn, nw_ttl in final flow seem unnecessary. Can they be avoided?
+# The match on dl_dst=66:77:88:99:aa:bb in the Megaflow is a side effect of setting the dl_dst in the pushed outer
+# Ethernet header. It is a consequence of using wc->masks both for tracking matched and set bits and seems hard to
+# avoid except by using separate masks for both purposes.
+
+AT_CHECK([
+    ovs-appctl ofproto/trace br0 'in_port=1,icmp,dl_src=00:11:22:33:44:55,dl_dst=66:77:88:99:aa:bb,nw_dst=10.10.10.10,nw_src=20.20.20.20'
+], [0], [dnl
+Flow: icmp,in_port=1,vlan_tci=0x0000,dl_src=00:11:22:33:44:55,dl_dst=66:77:88:99:aa:bb,nw_src=20.20.20.20,nw_dst=10.10.10.10,nw_tos=0,nw_ecn=0,nw_ttl=0,icmp_type=0,icmp_code=0
+
+bridge("br0")
+-------------
+ 0. ip,in_port=1, priority 32768
+    encap(nsh(md_type=1))
+    set_field:0x1234->nsh_spi
+    set_field:0x11223344->nsh_c1
+    encap(ethernet)
+    set_field:11:22:33:44:55:66->eth_dst
+    output:3
+
+bridge("br0")
+-------------
+ 0. in_port=4,dl_type=0x894f,nsh_mdtype=1,nsh_spi=0x1234,nsh_c1=0x11223344, priority 32768
+    decap()
+    decap()
+
+Final flow: in_port=1,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=11:22:33:44:55:66,dl_type=0x894f,nsh_flags=0,nsh_mdtype=1,nsh_np=3,nsh_spi=0x1234,nsh_si=255,nsh_c1=0x11223344,nsh_c2=0x0,nsh_c3=0x0,nsh_c4=0x0,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0
+Megaflow: recirc_id=0,eth,ip,in_port=1,dl_dst=66:77:88:99:aa:bb,nw_frag=no
+Datapath actions: encap_nsh(flags=0,mdtype=1,np=3,spi=0x1234,si=255,c1=0x11223344,c2=0x0,c3=0x0,c4=0x0),push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),pop_eth,decap_nsh(),set(eth(dst=11:22:33:44:55:66)),recirc(0x1)
+])
+
+AT_CHECK([
+    ovs-appctl ofproto/trace br0 'in_port=4,dl_type=0x894f,nsh_mdtype=1,nsh_np=3,nsh_spi=0x1234,nsh_c1=0x11223344'
+], [0], [dnl
+Flow: in_port=4,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x894f,nsh_flags=0,nsh_mdtype=1,nsh_np=3,nsh_spi=0x1234,nsh_si=0,nsh_c1=0x11223344,nsh_c2=0x0,nsh_c3=0x0,nsh_c4=0x0,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0
+
+bridge("br0")
+-------------
+ 0. in_port=4,dl_type=0x894f,nsh_mdtype=1,nsh_spi=0x1234,nsh_c1=0x11223344, priority 32768
+    decap()
+    decap()
+
+Final flow: unchanged
+Megaflow: recirc_id=0,eth,in_port=4,dl_type=0x894f,nsh_mdtype=1,nsh_np=3,nsh_spi=0x1234,nsh_c1=0x11223344
+Datapath actions: pop_eth,decap_nsh(),recirc(0x2)
+])
+
+# Now send two real ICMP echo request packets in on port p1
+
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive p1 1e2ce92a669e3a6dd2099cab0800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d0001fc509a58000000002715020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+    ovs-appctl netdev-dummy/receive p1 1e2ce92a669e3a6dd2099cab0800450000548a83400040011aadc0a80a0ac0a80a1e0800b7170a4d0002fd509a5800000000de1c020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+], [0], [ignore])
+
+ovs-appctl time/warp 1000
+
+# A packet count of 1 in the megaflow entries means the first packet was processed by
+# the ofproto slow path and the second successfully by the datapath flow entry.
+
+AT_CHECK([
+    ovs-appctl dpctl/dump-flows dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
+], [0], [flow-dump from non-dpdk interfaces:
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(dst=1e:2c:e9:2a:66:9e),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:encap_nsh(flags=0,mdtype=1,np=3,spi=0x1234,si=255,c1=0x11223344,c2=0x0,c3=0x0,c4=0x0),push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),pop_eth,decap_nsh(),set(eth(dst=11:22:33:44:55:66)),recirc(0x3)
+recirc_id(0x3),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:2
+])
+
+# Verify, that VLAN tagged packets can be encapsulated by NSH header.
+ovs-appctl time/warp 10000
+
+AT_DATA([flows.txt], [dnl
+    table=0,in_port=1,actions=push_vlan:0x8100,mod_vlan_vid:100,3
+    table=0,in_port=4,actions=encap(nsh),decap(),2
+])
+
+AT_CHECK([
+    ovs-ofctl del-flows br0
+    ovs-ofctl -Oopenflow13 add-flows br0 flows.txt
+    ovs-ofctl -Oopenflow13 dump-flows br0 | ofctl_strip | sort | grep actions
+], [0], [dnl
+ in_port=1 actions=push_vlan:0x8100,set_field:4196->vlan_vid,output:3
+ in_port=4 actions=encap(nsh),decap(),output:2
+])
+
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive p1 1e2ce92a669e3a6dd2099cab0800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d0001fc509a58000000002715020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+    ovs-appctl netdev-dummy/receive p1 1e2ce92a669e3a6dd2099cab0800450000548a83400040011aadc0a80a0ac0a80a1e0800b7170a4d0002fd509a5800000000de1c020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+], [0], [ignore])
+
+ovs-appctl time/warp 1000
+
+AT_CHECK([
+    ovs-appctl dpctl/dump-flows dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
+], [0], [flow-dump from non-dpdk interfaces:
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:push_vlan(vid=100,pcp=0),encap_nsh(flags=0,mdtype=1,np=3,spi=0x0,si=255,c1=0x0,c2=0x0,c3=0x0,c4=0x0),decap_nsh(),recirc(0x4)
+recirc_id(0x4),in_port(1),packet_type(ns=0,id=0),eth_type(0x8100),vlan(vid=100,pcp=0),encap(eth_type(0x0800),ipv4(frag=no)), packets:1, bytes:102, used:0.0s, actions:2
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
+### -----------------------------------------------------------------
+###   NSH MD2 on Ethernet encapsulation over veth link
+### -----------------------------------------------------------------
+
+AT_SETUP([nsh - md2 encap over a veth link])
+
+OVS_VSWITCHD_START([])
+
+AT_CHECK([
+ovs-vsctl set bridge br0 datapath_type=dummy \
+            protocols=OpenFlow10,OpenFlow13,OpenFlow14,OpenFlow15 -- \
+        add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1 -- \
+        add-port br0 p2 -- set Interface p2 type=dummy ofport_request=2 -- \
+        add-port br0 v3 -- set Interface v3 type=patch options:peer=v4 ofport_request=3 -- \
+        add-port br0 v4 -- set Interface v4 type=patch options:peer=v3 ofport_request=4])
+
+AT_DATA([flows.txt], [dnl
+    table=0,in_port=1,ip,actions=encap(nsh(md_type=2,tlv(0x1000,10,0x12345678))),set_field:0x1234->nsh_spi,encap(ethernet),set_field:11:22:33:44:55:66->dl_dst,3
+    table=0,in_port=4,dl_type=0x894f,nsh_mdtype=2,nsh_spi=0x1234,actions=decap(),decap(),2
+])
+
+AT_CHECK([
+    ovs-ofctl del-flows br0
+    ovs-ofctl -Oopenflow13 add-flows br0 flows.txt
+    ovs-ofctl -Oopenflow13 dump-flows br0 | ofctl_strip | sort | grep actions
+], [0], [dnl
+ in_port=4,dl_type=0x894f,nsh_mdtype=2,nsh_spi=0x1234 actions=decap(),decap(),output:2
+ ip,in_port=1 actions=encap(nsh(md_type=2,tlv(0x1000,10,0x12345678))),set_field:0x1234->nsh_spi,encap(ethernet),set_field:11:22:33:44:55:66->eth_dst,output:3
+])
+
+AT_CHECK([
+    ovs-appctl ofproto/trace br0 'in_port=1,icmp,dl_src=00:11:22:33:44:55,dl_dst=66:77:88:99:aa:bb,nw_dst=10.10.10.10,nw_src=20.20.20.20'
+], [0], [dnl
+Flow: icmp,in_port=1,vlan_tci=0x0000,dl_src=00:11:22:33:44:55,dl_dst=66:77:88:99:aa:bb,nw_src=20.20.20.20,nw_dst=10.10.10.10,nw_tos=0,nw_ecn=0,nw_ttl=0,icmp_type=0,icmp_code=0
+
+bridge("br0")
+-------------
+ 0. ip,in_port=1, priority 32768
+    encap(nsh(md_type=2,tlv(0x1000,10,0x12345678)))
+    set_field:0x1234->nsh_spi
+    encap(ethernet)
+    set_field:11:22:33:44:55:66->eth_dst
+    output:3
+
+bridge("br0")
+-------------
+ 0. in_port=4,dl_type=0x894f,nsh_mdtype=2,nsh_spi=0x1234, priority 32768
+    decap()
+    decap()
+
+Final flow: in_port=1,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=11:22:33:44:55:66,dl_type=0x894f,nsh_flags=0,nsh_mdtype=2,nsh_np=3,nsh_spi=0x1234,nsh_si=255,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0
+Megaflow: recirc_id=0,eth,ip,in_port=1,dl_dst=66:77:88:99:aa:bb,nw_frag=no
+Datapath actions: encap_nsh(flags=0,mdtype=2,np=3,spi=0x1234,si=255,md2=0x10000a0412345678),push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),pop_eth,decap_nsh(),set(eth(dst=11:22:33:44:55:66)),recirc(0x1)
+])
+
+AT_CHECK([
+    ovs-appctl ofproto/trace br0 'in_port=4,dl_type=0x894f,nsh_mdtype=2,nsh_np=3,nsh_spi=0x1234'
+], [0], [dnl
+Flow: in_port=4,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x894f,nsh_flags=0,nsh_mdtype=2,nsh_np=3,nsh_spi=0x1234,nsh_si=0,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0
+
+bridge("br0")
+-------------
+ 0. in_port=4,dl_type=0x894f,nsh_mdtype=2,nsh_spi=0x1234, priority 32768
+    decap()
+    decap()
+
+Final flow: unchanged
+Megaflow: recirc_id=0,eth,in_port=4,dl_type=0x894f,nsh_mdtype=2,nsh_np=3,nsh_spi=0x1234
+Datapath actions: pop_eth,decap_nsh(),recirc(0x2)
+])
+
+# Now send two real ICMP echo request packets in on port p1
+
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive p1 1e2ce92a669e3a6dd2099cab0800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d0001fc509a58000000002715020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+    ovs-appctl netdev-dummy/receive p1 1e2ce92a669e3a6dd2099cab0800450000548a83400040011aadc0a80a0ac0a80a1e0800b7170a4d0002fd509a5800000000de1c020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+], [0], [ignore])
+
+ovs-appctl time/warp 1000
+
+# A packet count of 1 in the megaflow entries means the first packet was processed by
+# the ofproto slow path and the second successfully by the datapath flow entry.
+
+AT_CHECK([
+    ovs-appctl dpctl/dump-flows dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
+], [0], [flow-dump from non-dpdk interfaces:
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(dst=1e:2c:e9:2a:66:9e),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:encap_nsh(flags=0,mdtype=2,np=3,spi=0x1234,si=255,md2=0x10000a0412345678),push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),pop_eth,decap_nsh(),set(eth(dst=11:22:33:44:55:66)),recirc(0x3)
+recirc_id(0x3),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:2
+])
+
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
+### -----------------------------------------------------------------
+###   Triangle bridge setup with VXLAN-GPE tunnels
+### -----------------------------------------------------------------
+
+########################
+# VxLAN-gpe + NSH tunneling test setup for PTAP bridge
+#
+#     192.168.10.10           192.168.10.20             192.168.10.30
+#          n1                       n2                        n3
+#          |ovs-n1                  |ovs-n2                   |ovs-n3
+#   +------o------+          +------o------+           +------o------+
+#   |    br-in1   |          |    br-in2   |           |    br-in3   |
+#   |    (PTAP)   |          |    (PTAP)   |           |    (PTAP)   |
+#   +------o------+          +------o------+           +------o------+
+#      vxlan-gpe                vxlan-gpe                 vxlan-gpe
+#   10.0.0.1                (10.0.0.2)                (10.0.0.3)
+#  (20.0.0.1)                20.0.0.2                 (20.0.0.3)
+#  (30.0.0.1) LOCAL         (30.0.0.2) LOCAL           30.0.0.3  LOCAL
+#   +-----------o-+          +-----------o-+           +-----------o-+
+#   |    br-p1    |          |    br-p2    |           |    br-p3    |
+#   +------o------+          +------o------+           +------o------+
+#     p1-0 |                        | p2-0                    | p3-0
+#     p0-1 |                        | p0-2                    | p0-3
+#       +--o------------------------o-------------------------o--+
+#       |                          br0                           |
+#       +--------------------------------------------------------+
+#
+#   VxLAN-gpe tunnel ports:
+#
+#   No     Bridge    Name             Packet-type Remote bridge & ports
+#   -----------------------------------------------------------------------
+#   1020   br-in1    vxlangpe12       ptap        br-in2 2010 (ptap)
+#   1030   br-in1    vxlangpe13       ptap        br-in3 3010 (ptap)
+#   2010   br-in2    vxlangpe21       ptap        br-in1 1020 (ptap)
+#   2030   br-in2    vxlangpe13       ptap        br-in3 3020 (ptap)
+#   3010   br-in1    vxlangpe31       ptap        br-in1 1030 (ptap)
+#   3020   br-in1    vxlangpe32       ptap        br-in2 2010 (ptap)
+
+AT_SETUP([nsh - triangle PTAP bridge setup with NSH over vxlan-gpe])
+
+OVS_VSWITCHD_START([])
+
+HWADDR_BRP1=aa:55:00:00:00:01
+HWADDR_BRP2=aa:55:00:00:00:02
+HWADDR_BRP3=aa:55:00:00:00:03
+
+# Setup bridge infrastructure
+AT_CHECK([
+    ovs-vsctl add-br br-in1 -- \
+        set bridge br-in1 datapath_type=dummy fail-mode=standalone
+    ovs-vsctl add-br br-in2 -- \
+        set bridge br-in2 datapath_type=dummy fail-mode=standalone
+    ovs-vsctl add-br br-in3 -- \
+        set bridge br-in3 datapath_type=dummy fail-mode=standalone
+    ovs-vsctl add-br br-p1 -- \
+        set bridge br-p1 datapath_type=dummy fail-mode=standalone other-config:hwaddr=$HWADDR_BRP1
+    ovs-vsctl add-br br-p2 -- \
+        set bridge br-p2 datapath_type=dummy fail-mode=standalone other-config:hwaddr=$HWADDR_BRP2
+    ovs-vsctl add-br br-p3 -- \
+        set bridge br-p3 datapath_type=dummy fail-mode=standalone other-config:hwaddr=$HWADDR_BRP3
+
+    ovs-vsctl add-port br-p1 p1-0 -- set interface p1-0 type=patch options:peer=p0-1 ofport_request=2
+    ovs-vsctl add-port br-p2 p2-0 -- set interface p2-0 type=patch options:peer=p0-2 ofport_request=2
+    ovs-vsctl add-port br-p3 p3-0 -- set interface p3-0 type=patch options:peer=p0-3 ofport_request=2
+    ovs-vsctl add-port br0 p0-1 -- set interface p0-1 type=patch options:peer=p1-0 ofport_request=10
+    ovs-vsctl add-port br0 p0-2 -- set interface p0-2 type=patch options:peer=p2-0 ofport_request=20
+    ovs-vsctl add-port br0 p0-3 -- set interface p0-3 type=patch options:peer=p3-0 ofport_request=30
+
+    # Populate the MAC table of br0
+    ovs-ofctl del-flows br0
+    ovs-ofctl add-flow br0 dl_dst=$HWADDR_BRP1,actions=10
+    ovs-ofctl add-flow br0 dl_dst=$HWADDR_BRP2,actions=20
+    ovs-ofctl add-flow br0 dl_dst=$HWADDR_BRP3,actions=30
+
+    ovs-ofctl del-flows br-in1
+    ovs-ofctl del-flows br-in2
+    ovs-ofctl del-flows br-in3
+    ovs-ofctl del-flows br-p1
+    ovs-ofctl del-flows br-p2
+    ovs-ofctl del-flows br-p3
+], [0])
+
+### Setup vxlan-gpe tunnels
+AT_CHECK([
+    ovs-vsctl add-port br-in1 vxlangpe12 -- \
+        set interface vxlangpe12 type=vxlan options:exts=gpe options:remote_ip=10.0.0.2 options:packet_type=ptap ofport_request=1020
+    ovs-vsctl add-port br-in1 vxlangpe13 -- \
+        set interface vxlangpe13 type=vxlan options:exts=gpe options:remote_ip=10.0.0.3 options:packet_type=ptap ofport_request=1030
+
+    ovs-vsctl add-port br-in2 vxlangpe21 -- \
+        set interface vxlangpe21 type=vxlan options:exts=gpe options:remote_ip=20.0.0.1 options:packet_type=ptap ofport_request=2010
+    ovs-vsctl add-port br-in2 vxlangpe23 -- \
+        set interface vxlangpe23 type=vxlan options:exts=gpe options:remote_ip=20.0.0.3 options:packet_type=ptap ofport_request=2030
+
+    ovs-vsctl add-port br-in3 vxlangpe31 -- \
+        set interface vxlangpe31 type=vxlan options:exts=gpe options:remote_ip=30.0.0.1 options:packet_type=ptap ofport_request=3010
+    ovs-vsctl add-port br-in3 vxlangpe32 -- \
+        set interface vxlangpe32 type=vxlan options:exts=gpe options:remote_ip=30.0.0.2 options:packet_type=ptap ofport_request=3020
+
+    ovs-appctl netdev-dummy/ip4addr br-p1 10.0.0.1/24
+    ovs-appctl ovs/route/add 10.0.0.0/24 br-p1
+    ovs-appctl tnl/arp/set br-p1 10.0.0.1 $HWADDR_BRP1
+    ovs-appctl tnl/arp/set br-p1 10.0.0.2 $HWADDR_BRP2
+    ovs-appctl tnl/arp/set br-p1 10.0.0.3 $HWADDR_BRP3
+
+    ovs-appctl netdev-dummy/ip4addr br-p2 20.0.0.2/24
+    ovs-appctl ovs/route/add 20.0.0.0/24 br-p2
+    ovs-appctl tnl/arp/set br-p2 20.0.0.1 $HWADDR_BRP1
+    ovs-appctl tnl/arp/set br-p2 20.0.0.2 $HWADDR_BRP2
+    ovs-appctl tnl/arp/set br-p2 20.0.0.3 $HWADDR_BRP3
+
+    ovs-appctl netdev-dummy/ip4addr br-p3 30.0.0.3/24
+    ovs-appctl ovs/route/add 30.0.0.0/24 br-p3
+    ovs-appctl tnl/arp/set br-p3 30.0.0.1 $HWADDR_BRP1
+    ovs-appctl tnl/arp/set br-p3 30.0.0.2 $HWADDR_BRP2
+    ovs-appctl tnl/arp/set br-p3 30.0.0.3 $HWADDR_BRP3
+], [0], [stdout])
+
+AT_CHECK([
+    ovs-appctl ovs/route/add 10.0.0.0/24 br-p1
+    ovs-appctl tnl/arp/set br-p1 10.0.0.1 $HWADDR_BRP1
+    ovs-appctl tnl/arp/set br-p1 10.0.0.2 $HWADDR_BRP2
+    ovs-appctl tnl/arp/set br-p1 10.0.0.3 $HWADDR_BRP3
+], [0], [stdout])
+
+AT_CHECK([
+    ovs-appctl ovs/route/add 20.0.0.0/24 br-p2
+    ovs-appctl tnl/arp/set br-p2 20.0.0.1 $HWADDR_BRP1
+    ovs-appctl tnl/arp/set br-p2 20.0.0.2 $HWADDR_BRP2
+    ovs-appctl tnl/arp/set br-p2 20.0.0.3 $HWADDR_BRP3
+], [0], [stdout])
+
+AT_CHECK([
+    ovs-appctl ovs/route/add 30.0.0.0/24 br-p3
+    ovs-appctl tnl/arp/set br-p3 30.0.0.1 $HWADDR_BRP1
+    ovs-appctl tnl/arp/set br-p3 30.0.0.2 $HWADDR_BRP2
+    ovs-appctl tnl/arp/set br-p3 30.0.0.3 $HWADDR_BRP3
+], [0], [stdout])
+
+AT_CHECK([
+    ovs-appctl ovs/route/show | grep User:
+], [0], [dnl
+User: 10.0.0.0/24 dev br-p1 SRC 10.0.0.1
+User: 20.0.0.0/24 dev br-p2 SRC 20.0.0.2
+User: 30.0.0.0/24 dev br-p3 SRC 30.0.0.3
+])
+
+AT_CHECK([
+    ovs-appctl tnl/neigh/show | grep br-p | sort
+], [0], [stdout])
+
+
+### Flows in br-p<x>to twist TEP IP addresses in tunnel IP headers
+AT_CHECK([
+    ovs-ofctl add-flow br-p1 in_port:LOCAL,actions=2
+    ovs-ofctl add-flow br-p1 in_port:2,ip,nw_dst:20.0.0.1,actions=mod_nw_dst:10.0.0.1,mod_nw_src:10.0.0.2,LOCAL
+    ovs-ofctl add-flow br-p1 in_port:2,ip,nw_dst:30.0.0.1,actions=mod_nw_dst:10.0.0.1,mod_nw_src:10.0.0.3,LOCAL
+
+    ovs-ofctl add-flow br-p2 in_port:LOCAL,actions=2
+    ovs-ofctl add-flow br-p2 in_port:2,ip,nw_dst:10.0.0.2,actions=mod_nw_dst:20.0.0.2,mod_nw_src:20.0.0.1,LOCAL
+    ovs-ofctl add-flow br-p2 in_port:2,ip,nw_dst:30.0.0.2,actions=mod_nw_dst:20.0.0.2,mod_nw_src:20.0.0.3,LOCAL
+
+    ovs-ofctl add-flow br-p3 in_port:LOCAL,actions=2
+    ovs-ofctl add-flow br-p3 in_port:2,ip,nw_dst:10.0.0.3,actions=mod_nw_dst:30.0.0.3,mod_nw_src:30.0.0.1,LOCAL
+    ovs-ofctl add-flow br-p3 in_port:2,ip,nw_dst:20.0.0.3,actions=mod_nw_dst:30.0.0.3,mod_nw_src:30.0.0.2,LOCAL
+], [0])
+
+AT_CHECK([
+    ovs-ofctl dump-flows br-p1 | ofctl_strip | sort | grep actions
+    ovs-ofctl dump-flows br-p2 | ofctl_strip | sort | grep actions
+    ovs-ofctl dump-flows br-p3 | ofctl_strip | sort | grep actions
+], [0], [dnl
+ in_port=LOCAL actions=output:2
+ ip,in_port=2,nw_dst=20.0.0.1 actions=mod_nw_dst:10.0.0.1,mod_nw_src:10.0.0.2,LOCAL
+ ip,in_port=2,nw_dst=30.0.0.1 actions=mod_nw_dst:10.0.0.1,mod_nw_src:10.0.0.3,LOCAL
+ in_port=LOCAL actions=output:2
+ ip,in_port=2,nw_dst=10.0.0.2 actions=mod_nw_dst:20.0.0.2,mod_nw_src:20.0.0.1,LOCAL
+ ip,in_port=2,nw_dst=30.0.0.2 actions=mod_nw_dst:20.0.0.2,mod_nw_src:20.0.0.3,LOCAL
+ in_port=LOCAL actions=output:2
+ ip,in_port=2,nw_dst=10.0.0.3 actions=mod_nw_dst:30.0.0.3,mod_nw_src:30.0.0.1,LOCAL
+ ip,in_port=2,nw_dst=20.0.0.3 actions=mod_nw_dst:30.0.0.3,mod_nw_src:30.0.0.2,LOCAL
+])
+
+### Setup test ports for traffic injection
+N1_IP=192.168.10.10
+N2_IP=192.168.10.20
+N3_IP=192.168.10.30
+N1_MAC=aa:55:aa:55:00:01
+N2_MAC=aa:55:aa:55:00:02
+N3_MAC=aa:55:aa:55:00:03
+N1_OFPORT=10
+N2_OFPORT=20
+N3_OFPORT=30
+
+AT_CHECK([
+    ovs-vsctl add-port br-in1 n1 -- \
+        set interface n1 type=dummy ofport_request=$N1_OFPORT options:tx_pcap=n1.pcap
+    ovs-vsctl add-port br-in2 n2 -- \
+        set interface n2 type=dummy ofport_request=$N2_OFPORT options:tx_pcap=n2.pcap
+    ovs-vsctl add-port br-in3 n3 -- \
+        set interface n3 type=dummy ofport_request=$N3_OFPORT options:tx_pcap=n3.pcap
+], [0])
+
+#N1_DPPORT=$(ovs-appctl dpif/show | grep "n1 10" | sed 's|.*/\([[0-9]]*\):.*|\1|')
+#N2_DPPORT=$(ovs-appctl dpif/show | grep "n2 20" | sed 's|.*/\([[0-9]]*\):.*|\1|')
+#N3_DPPORT=$(ovs-appctl dpif/show | grep "n3 30" | sed 's|.*/\([[0-9]]*\):.*|\1|')
+
+### Verify datapath configuration
+AT_CHECK([
+    ovs-appctl dpif/show | grep -v hit | sed 's/\t/    /g'
+], [0], [dnl
+    br-in1:
+        br-in1 65534/101: (dummy-internal)
+        n1 10/4: (dummy)
+        vxlangpe12 1020/4789: (vxlan: packet_type=ptap, remote_ip=10.0.0.2)
+        vxlangpe13 1030/4789: (vxlan: packet_type=ptap, remote_ip=10.0.0.3)
+    br-in2:
+        br-in2 65534/102: (dummy-internal)
+        n2 20/5: (dummy)
+        vxlangpe21 2010/4789: (vxlan: packet_type=ptap, remote_ip=20.0.0.1)
+        vxlangpe23 2030/4789: (vxlan: packet_type=ptap, remote_ip=20.0.0.3)
+    br-in3:
+        br-in3 65534/103: (dummy-internal)
+        n3 30/6: (dummy)
+        vxlangpe31 3010/4789: (vxlan: packet_type=ptap, remote_ip=30.0.0.1)
+        vxlangpe32 3020/4789: (vxlan: packet_type=ptap, remote_ip=30.0.0.2)
+    br-p1:
+        br-p1 65534/1: (dummy-internal)
+        p1-0 2/none: (patch: peer=p0-1)
+    br-p2:
+        br-p2 65534/2: (dummy-internal)
+        p2-0 2/none: (patch: peer=p0-2)
+    br-p3:
+        br-p3 65534/3: (dummy-internal)
+        p3-0 2/none: (patch: peer=p0-3)
+    br0:
+        br0 65534/100: (dummy-internal)
+        p0-1 10/none: (patch: peer=p1-0)
+        p0-2 20/none: (patch: peer=p2-0)
+        p0-3 30/none: (patch: peer=p3-0)
+])
+
+### Setup SFC flow configuration
+
+# br-in1 is SFC classifier (table 1) and final SFF (tables 2,3)
+AT_DATA([br-in1.txt], [dnl
+    table=0,in_port=10,ip,actions=decap(),goto_table:1
+    table=0,in_port=10,packet_type=(1,0x800),actions=goto_table:1
+    table=0,in_port=1020,packet_type=(1,0x894f),actions=goto_table:2
+    table=0,in_port=1030,packet_type=(1,0x894f),actions=goto_table:2
+    table=1,priority=32,packet_type=(1,0x800),nw_dst=192.168.10.30,actions=encap(nsh(md_type=1)),set_field:0x3000->nsh_spi,output:1030
+    table=1,priority=0,packet_type=(1,0x800),nw_dst=0.0.0.0/0,actions=encap(nsh(md_type=1)),set_field:0x3020->nsh_spi,output:1020
+    table=2,packet_type=(1,0x894f),nsh_spi=0x1000,nsh_si=255,actions=decap(),goto_table:3
+    table=2,packet_type=(1,0x894f),nsh_spi=0x1020,nsh_si=254,actions=decap(),goto_table:3
+    table=3,ip,actions=set_field:aa:55:aa:55:00:01->dl_dst,output:10
+    table=3,packet_type=(1,0x800),actions=encap(ethernet),set_field:aa:55:aa:55:00:01->dl_dst,output:10
+])
+
+# br-in2 is intermediate SFF (table 2) and simulated SF (table 4)
+AT_DATA([br-in2.txt], [dnl
+    table=0,in_port=2010,packet_type=(1,0x894f),actions=goto_table:2
+    table=0,in_port=2030,packet_type=(1,0x894f),actions=goto_table:2
+    table=2,packet_type=(1,0x894f),nsh_spi=0x3020,nsh_si=255,actions=encap(ethernet),set_field:11:22:33:44:55:66->dl_dst,goto_table:4
+    table=2,packet_type=(1,0x894f),nsh_spi=0x3020,nsh_si=254,actions=output:2030
+    table=2,packet_type=(1,0x894f),nsh_spi=0x1020,nsh_si=255,actions=encap(ethernet),set_field:77:88:99:aa:bb:cc->dl_dst,goto_table:4
+    table=2,packet_type=(1,0x894f),nsh_spi=0x1020,nsh_si=254,actions=output:2010
+    table=4,dl_type=0x894f,dl_dst=11:22:33:44:55:66,actions=set_field:254->nsh_si,decap(),resubmit(,2)
+    table=4,dl_type=0x894f,dl_dst=77:88:99:aa:bb:cc,actions=set_field:254->nsh_si,decap(),resubmit(,2)
+])
+
+# br-in3 is SFC classifier (table 1) and final SFF (tables 2,3)
+AT_DATA([br-in3.txt], [dnl
+    table=0,in_port=30,ip,actions=decap(),goto_table:1
+    table=0,in_port=30,packet_type=(1,0x800),actions=goto_table:1
+    table=0,in_port=3010,packet_type=(1,0x894f),actions=goto_table:2
+    table=0,in_port=3020,packet_type=(1,0x894f),actions=goto_table:2
+    table=1,priority=32,packet_type=(1,0x800),nw_dst=192.168.10.10,actions=encap(nsh(md_type=1)),set_field:0x1000->nsh_spi,3010
+    table=1,priority=0,packet_type=(1,0x800),nw_dst=0.0.0.0/0,actions=encap(nsh(md_type=1)),set_field:0x1020->nsh_spi,3020
+    table=2,packet_type=(1,0x894f),nsh_spi=0x3000,nsh_si=255,actions=decap(),goto_table:3
+    table=2,packet_type=(1,0x894f),nsh_spi=0x3020,nsh_si=254,actions=decap(),goto_table:3
+    table=3,ip,actions=set_field:aa:55:aa:55:00:03->dl_dst,output:30
+    table=3,packet_type=(1,0x800),actions=encap(ethernet),set_field:aa:55:aa:55:00:03->dl_dst,output:30
+])
+
+AT_CHECK([
+    ovs-ofctl -Oopenflow13 add-flows br-in1 br-in1.txt
+    ovs-ofctl -Oopenflow13 add-flows br-in2 br-in2.txt
+    ovs-ofctl -Oopenflow13 add-flows br-in3 br-in3.txt
+])
+
+### Inject ICMP Echo request test packets
+
+# N1 to N3, via the direct SF path with spi 0x3000
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive n1 1e2ce92a669e3a6dd2099cab0800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d0001fc509a58000000002715020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+    ovs-appctl netdev-dummy/receive n1 1e2ce92a669e3a6dd2099cab0800450000548a83400040011aadc0a80a0ac0a80a1e0800b7170a4d0002fd509a5800000000de1c020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+], [0], [ignore])
+
+ovs-appctl time/warp 1000
+ovs-appctl time/warp 1000
+
+AT_CHECK([
+    ovs-appctl dpctl/dump-flows dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
+], [0], [flow-dump from non-dpdk interfaces:
+recirc_id(0),in_port(4),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.30,frag=no), packets:1, bytes:98, used:0.0s, actions:pop_eth,encap_nsh(flags=0,mdtype=1,np=1,spi=0x3000,si=255,c1=0x0,c2=0x0,c3=0x0,c4=0x0),clone(tnl_push(tnl_port(4789),header(size=50,type=4,eth(dst=aa:55:00:00:00:03,src=aa:55:00:00:00:01,dl_type=0x0800),ipv4(src=10.0.0.1,dst=10.0.0.3,proto=17,tos=0,ttl=64,frag=0x4000),udp(src=0,dst=4789,csum=0x0),vxlan(flags=0xc000004,vni=0x0)),out_port(1)),set(ipv4(src=30.0.0.1,dst=30.0.0.3)),tnl_pop(4789))
+tunnel(tun_id=0x0,src=30.0.0.1,dst=30.0.0.3,flags(-df-csum+key)),recirc_id(0),in_port(4789),packet_type(ns=1,id=0x894f),nsh(np=1,spi=0x3000,si=255), packets:1, bytes:108, used:0.0s, actions:decap_nsh(),recirc(0x1)
+tunnel(tun_id=0x0,src=30.0.0.1,dst=30.0.0.3,flags(-df-csum+key)),recirc_id(0x1),in_port(4789),packet_type(ns=1,id=0x800),ipv4(frag=no), packets:1, bytes:84, used:0.0s, actions:push_eth(src=00:00:00:00:00:00,dst=aa:55:aa:55:00:03),6
+])
+
+AT_CHECK([
+    ovs-ofctl -Oopenflow13 dump-flows br-in1 | ofctl_strip | sort | grep actions
+    ovs-ofctl -Oopenflow13 dump-flows br-in2 | ofctl_strip | sort | grep actions
+    ovs-ofctl -Oopenflow13 dump-flows br-in3 | ofctl_strip | sort | grep actions
+], [0], [dnl
+ n_packets=2, n_bytes=196, ip,in_port=10 actions=decap(),goto_table:1
+ packet_type=(1,0x800),in_port=10 actions=goto_table:1
+ packet_type=(1,0x894f),in_port=1020 actions=goto_table:2
+ packet_type=(1,0x894f),in_port=1030 actions=goto_table:2
+ table=1, n_packets=2, n_bytes=196, priority=32,packet_type=(1,0x800),nw_dst=192.168.10.30 actions=encap(nsh(md_type=1)),set_field:0x3000->nsh_spi,output:1030
+ table=1, priority=0,packet_type=(1,0x800) actions=encap(nsh(md_type=1)),set_field:0x3020->nsh_spi,output:1020
+ table=2, packet_type=(1,0x894f),nsh_spi=0x1000,nsh_si=255 actions=decap(),goto_table:3
+ table=2, packet_type=(1,0x894f),nsh_spi=0x1020,nsh_si=254 actions=decap(),goto_table:3
+ table=3, ip actions=set_field:aa:55:aa:55:00:01->eth_dst,output:10
+ table=3, packet_type=(1,0x800) actions=encap(ethernet),set_field:aa:55:aa:55:00:01->eth_dst,output:10
+ packet_type=(1,0x894f),in_port=2010 actions=goto_table:2
+ packet_type=(1,0x894f),in_port=2030 actions=goto_table:2
+ table=2, packet_type=(1,0x894f),nsh_spi=0x1020,nsh_si=254 actions=output:2010
+ table=2, packet_type=(1,0x894f),nsh_spi=0x1020,nsh_si=255 actions=encap(ethernet),set_field:77:88:99:aa:bb:cc->eth_dst,goto_table:4
+ table=2, packet_type=(1,0x894f),nsh_spi=0x3020,nsh_si=254 actions=output:2030
+ table=2, packet_type=(1,0x894f),nsh_spi=0x3020,nsh_si=255 actions=encap(ethernet),set_field:11:22:33:44:55:66->eth_dst,goto_table:4
+ table=4, dl_dst=11:22:33:44:55:66,dl_type=0x894f actions=set_field:254->nsh_si,decap(),resubmit(,2)
+ table=4, dl_dst=77:88:99:aa:bb:cc,dl_type=0x894f actions=set_field:254->nsh_si,decap(),resubmit(,2)
+ ip,in_port=30 actions=decap(),goto_table:1
+ n_packets=2, n_bytes=216, packet_type=(1,0x894f),in_port=3010 actions=goto_table:2
+ packet_type=(1,0x800),in_port=30 actions=goto_table:1
+ packet_type=(1,0x894f),in_port=3020 actions=goto_table:2
+ table=1, priority=0,packet_type=(1,0x800) actions=encap(nsh(md_type=1)),set_field:0x1020->nsh_spi,output:3020
+ table=1, priority=32,packet_type=(1,0x800),nw_dst=192.168.10.10 actions=encap(nsh(md_type=1)),set_field:0x1000->nsh_spi,output:3010
+ table=2, n_packets=2, n_bytes=216, packet_type=(1,0x894f),nsh_spi=0x3000,nsh_si=255 actions=decap(),goto_table:3
+ table=2, packet_type=(1,0x894f),nsh_spi=0x3020,nsh_si=254 actions=decap(),goto_table:3
+ table=3, ip actions=set_field:aa:55:aa:55:00:03->eth_dst,output:30
+ table=3, n_packets=2, n_bytes=168, packet_type=(1,0x800) actions=encap(ethernet),set_field:aa:55:aa:55:00:03->eth_dst,output:30
+])
+
+# Clear up megaflow cache
+ovs-appctl time/warp 11000
+
+# N1 to some other IP destination (192.168.10.20), via the indirect SF path with spi 0x3020
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive n1 461e7d1a95a13a6dd2099cab080045000054500b40004001552fc0a80a0ac0a80a140800531f09a90001e9509a580000000055ba030000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+    ovs-appctl netdev-dummy/receive n1 461e7d1a95a13a6dd2099cab08004500005450934000400154a7c0a80a0ac0a80a140800f41d09a90002ea509a5800000000b3ba030000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637], [0], [ignore])
+
+ovs-appctl time/warp 1000
+ovs-appctl time/warp 1000
+
+AT_CHECK([
+    ovs-appctl dpctl/dump-flows dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
+], [0], [flow-dump from non-dpdk interfaces:
+recirc_id(0),in_port(4),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.20/255.255.255.248,frag=no), packets:1, bytes:98, used:0.0s, actions:pop_eth,encap_nsh(flags=0,mdtype=1,np=1,spi=0x3020,si=255,c1=0x0,c2=0x0,c3=0x0,c4=0x0),clone(tnl_push(tnl_port(4789),header(size=50,type=4,eth(dst=aa:55:00:00:00:02,src=aa:55:00:00:00:01,dl_type=0x0800),ipv4(src=10.0.0.1,dst=10.0.0.2,proto=17,tos=0,ttl=64,frag=0x4000),udp(src=0,dst=4789,csum=0x0),vxlan(flags=0xc000004,vni=0x0)),out_port(1)),set(ipv4(src=20.0.0.1,dst=20.0.0.2)),tnl_pop(4789))
+tunnel(tun_id=0x0,src=20.0.0.1,dst=20.0.0.2,flags(-df-csum+key)),recirc_id(0),in_port(4789),packet_type(ns=1,id=0x894f),nsh(spi=0x3020,si=255), packets:1, bytes:108, used:0.0s, actions:push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),set(nsh(spi=0x3020,si=254)),pop_eth,clone(tnl_push(tnl_port(4789),header(size=50,type=4,eth(dst=aa:55:00:00:00:03,src=aa:55:00:00:00:02,dl_type=0x0800),ipv4(src=20.0.0.2,dst=20.0.0.3,proto=17,tos=0,ttl=64,frag=0x4000),udp(src=0,dst=4789,csum=0x0),vxlan(flags=0xc000004,vni=0x0)),out_port(2)),set(ipv4(src=30.0.0.2,dst=30.0.0.3)),tnl_pop(4789))
+tunnel(tun_id=0x0,src=30.0.0.2,dst=30.0.0.3,flags(-df-csum+key)),recirc_id(0),in_port(4789),packet_type(ns=1,id=0x894f),nsh(np=1,spi=0x3020,si=254), packets:1, bytes:108, used:0.0s, actions:decap_nsh(),recirc(0x2)
+tunnel(tun_id=0x0,src=30.0.0.2,dst=30.0.0.3,flags(-df-csum+key)),recirc_id(0x2),in_port(4789),packet_type(ns=1,id=0x800),ipv4(frag=no), packets:1, bytes:84, used:0.0s, actions:push_eth(src=00:00:00:00:00:00,dst=aa:55:aa:55:00:03),6
+])
+
+AT_CHECK([
+    ovs-ofctl -Oopenflow13 dump-flows br-in1 | ofctl_strip | sort | grep actions
+    ovs-ofctl -Oopenflow13 dump-flows br-in2 | ofctl_strip | sort | grep actions
+    ovs-ofctl -Oopenflow13 dump-flows br-in3 | ofctl_strip | sort | grep actions
+], [0], [dnl
+ n_packets=4, n_bytes=392, ip,in_port=10 actions=decap(),goto_table:1
+ packet_type=(1,0x800),in_port=10 actions=goto_table:1
+ packet_type=(1,0x894f),in_port=1020 actions=goto_table:2
+ packet_type=(1,0x894f),in_port=1030 actions=goto_table:2
+ table=1, n_packets=2, n_bytes=196, priority=0,packet_type=(1,0x800) actions=encap(nsh(md_type=1)),set_field:0x3020->nsh_spi,output:1020
+ table=1, n_packets=2, n_bytes=196, priority=32,packet_type=(1,0x800),nw_dst=192.168.10.30 actions=encap(nsh(md_type=1)),set_field:0x3000->nsh_spi,output:1030
+ table=2, packet_type=(1,0x894f),nsh_spi=0x1000,nsh_si=255 actions=decap(),goto_table:3
+ table=2, packet_type=(1,0x894f),nsh_spi=0x1020,nsh_si=254 actions=decap(),goto_table:3
+ table=3, ip actions=set_field:aa:55:aa:55:00:01->eth_dst,output:10
+ table=3, packet_type=(1,0x800) actions=encap(ethernet),set_field:aa:55:aa:55:00:01->eth_dst,output:10
+ n_packets=2, n_bytes=216, packet_type=(1,0x894f),in_port=2010 actions=goto_table:2
+ packet_type=(1,0x894f),in_port=2030 actions=goto_table:2
+ table=2, n_packets=2, n_bytes=216, packet_type=(1,0x894f),nsh_spi=0x3020,nsh_si=254 actions=output:2030
+ table=2, n_packets=2, n_bytes=216, packet_type=(1,0x894f),nsh_spi=0x3020,nsh_si=255 actions=encap(ethernet),set_field:11:22:33:44:55:66->eth_dst,goto_table:4
+ table=2, packet_type=(1,0x894f),nsh_spi=0x1020,nsh_si=254 actions=output:2010
+ table=2, packet_type=(1,0x894f),nsh_spi=0x1020,nsh_si=255 actions=encap(ethernet),set_field:77:88:99:aa:bb:cc->eth_dst,goto_table:4
+ table=4, dl_dst=77:88:99:aa:bb:cc,dl_type=0x894f actions=set_field:254->nsh_si,decap(),resubmit(,2)
+ table=4, n_packets=2, n_bytes=216, dl_dst=11:22:33:44:55:66,dl_type=0x894f actions=set_field:254->nsh_si,decap(),resubmit(,2)
+ ip,in_port=30 actions=decap(),goto_table:1
+ n_packets=2, n_bytes=216, packet_type=(1,0x894f),in_port=3010 actions=goto_table:2
+ n_packets=2, n_bytes=216, packet_type=(1,0x894f),in_port=3020 actions=goto_table:2
+ packet_type=(1,0x800),in_port=30 actions=goto_table:1
+ table=1, priority=0,packet_type=(1,0x800) actions=encap(nsh(md_type=1)),set_field:0x1020->nsh_spi,output:3020
+ table=1, priority=32,packet_type=(1,0x800),nw_dst=192.168.10.10 actions=encap(nsh(md_type=1)),set_field:0x1000->nsh_spi,output:3010
+ table=2, n_packets=2, n_bytes=216, packet_type=(1,0x894f),nsh_spi=0x3000,nsh_si=255 actions=decap(),goto_table:3
+ table=2, n_packets=2, n_bytes=216, packet_type=(1,0x894f),nsh_spi=0x3020,nsh_si=254 actions=decap(),goto_table:3
+ table=3, ip actions=set_field:aa:55:aa:55:00:03->eth_dst,output:30
+ table=3, n_packets=4, n_bytes=336, packet_type=(1,0x800) actions=encap(ethernet),set_field:aa:55:aa:55:00:03->eth_dst,output:30
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP

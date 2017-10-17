@@ -7,6 +7,8 @@ Open vSwitch
 
 .. image:: https://travis-ci.org/openvswitch/ovs.png
     :target: https://travis-ci.org/openvswitch/ovs
+.. image:: https://ci.appveyor.com/api/projects/status/github/openvswitch/ovs?branch=master&svg=true&retina=true
+    :target: https://ci.appveyor.com/project/blp/ovs/history
 
 What is Open vSwitch?
 ---------------------

@@ -32,13 +32,20 @@ documentation`_ on same.
 Quick Example
 -------------
 
-This example demonstrates how to add two ``dpdkvhostuser`` ports to an existing
-bridge called ``br0``::
+This example demonstrates how to add two ``dpdkvhostuserclient`` ports to an
+existing bridge called ``br0``::
 
-    $ ovs-vsctl add-port br0 dpdkvhostuser0 \
-        -- set Interface dpdkvhostuser0 type=dpdkvhostuser
-    $ ovs-vsctl add-port br0 dpdkvhostuser1 \
-        -- set Interface dpdkvhostuser1 type=dpdkvhostuser
+    $ ovs-vsctl add-port br0 dpdkvhostclient0 \
+        -- set Interface dpdkvhostclient0 type=dpdkvhostuserclient \
+           options:vhost-server-path=/tmp/dpdkvhostclient0
+    $ ovs-vsctl add-port br0 dpdkvhostclient1 \
+        -- set Interface dpdkvhostclient1 type=dpdkvhostuserclient \
+           options:vhost-server-path=/tmp/dpdkvhostclient1
+
+For the above examples to work, an appropriate server socket must be created
+at the paths specified (``/tmp/dpdkvhostclient0`` and
+``/tmp/dpdkvhostclient1``).  These sockets can be created with QEMU; see the
+:ref:`vhost-user client <dpdk-vhost-user-client>` section for details.
 
 vhost-user vs. vhost-user-client
 --------------------------------
@@ -54,8 +61,14 @@ vHost User sockets, and the client connects to the server. Depending on which
 port type you use, ``dpdkvhostuser`` or ``dpdkvhostuserclient``, a different
 configuration of the client-server model is used.
 
-For vhost-user ports, Open vSwitch acts as the server and QEMU the client.  For
-vhost-user-client ports, Open vSwitch acts as the client and QEMU the server.
+For vhost-user ports, Open vSwitch acts as the server and QEMU the client. This
+means if OVS dies, all VMs **must** be restarted. On the other hand, for
+vhost-user-client ports, OVS acts as the client and QEMU the server. This means
+OVS can die and be restarted without issue, and it is also possible to restart
+an instance itself. For this reason, vhost-user-client ports are the preferred
+type for all known use cases; the only limitation is that vhost-user client
+mode ports require QEMU version 2.7.  Ports of type vhost-user are currently
+deprecated and will be removed in a future release.
 
 .. _dpdk-vhost-user:
 
@@ -64,12 +77,13 @@ vhost-user
 
 .. important::
 
-   Use of vhost-user ports requires QEMU >= 2.2
+   Use of vhost-user ports requires QEMU >= 2.2;  vhost-user ports are
+   *deprecated*.
 
-To use vhost-user ports, you must first add said ports to the switch. Unlike
-DPDK ring ports, DPDK vhost-user ports can have arbitrary names, except that
-forward and backward slashes are prohibited in the names. For vhost-user, the
-port type is ``dpdkvhostuser``::
+To use vhost-user ports, you must first add said ports to the switch. DPDK
+vhost-user ports can have arbitrary names with the exception of forward and
+backward slashes, which are prohibited. For vhost-user, the port type is
+``dpdkvhostuser``::
 
     $ ovs-vsctl add-port br0 vhost-user-1 -- set Interface vhost-user-1 \
         type=dpdkvhostuser
@@ -85,7 +99,7 @@ VM on the QEMU command line.
    ovsdb like so::
 
        $ ovs-vsctl --no-wait \
-           set Open_vSwitch . other_config:vhost-sock-dir=subdir`
+           set Open_vSwitch . other_config:vhost-sock-dir=subdir
 
 Once the vhost-user ports have been added to the switch, they must be added to
 the guest. There are two ways to do this: using QEMU directly, or using
@@ -222,8 +236,8 @@ vhost-user-client
 
 To use vhost-user-client ports, you must first add said ports to the switch.
 Like DPDK vhost-user ports, DPDK vhost-user-client ports can have mostly
-arbitrary. However, the name given to the port does not govern the name of the
-socket device. Instead, this must be configured by the user by way of a
+arbitrary names. However, the name given to the port does not govern the name
+of the socket device. Instead, this must be configured by the user by way of a
 ``vhost-server-path`` option. For vhost-user-client, the port type is
 ``dpdkvhostuserclient``::
 
@@ -278,9 +292,9 @@ To begin, instantiate a guest as described in :ref:`dpdk-vhost-user` or
 DPDK sources to VM and build DPDK::
 
     $ cd /root/dpdk/
-    $ wget http://fast.dpdk.org/rel/dpdk-16.11.1.tar.xz
-    $ tar xf dpdk-16.11.1.tar.xz
-    $ export DPDK_DIR=/root/dpdk/dpdk-stable-16.11.1
+    $ wget http://fast.dpdk.org/rel/dpdk-17.05.2.tar.xz
+    $ tar xf dpdk-17.05.2.tar.xz
+    $ export DPDK_DIR=/root/dpdk/dpdk-stable-17.05.2
     $ export DPDK_TARGET=x86_64-native-linuxapp-gcc
     $ export DPDK_BUILD=$DPDK_DIR/$DPDK_TARGET
     $ cd $DPDK_DIR
@@ -300,8 +314,8 @@ Setup huge pages and DPDK devices using UIO::
     $ mount -t hugetlbfs hugetlbfs /dev/hugepages  # only if not already mounted
     $ modprobe uio
     $ insmod $DPDK_BUILD/kmod/igb_uio.ko
-    $ $DPDK_DIR/tools/dpdk-devbind.py --status
-    $ $DPDK_DIR/tools/dpdk-devbind.py -b igb_uio 00:03.0 00:04.0
+    $ $DPDK_DIR/usertools/dpdk-devbind.py --status
+    $ $DPDK_DIR/usertools/dpdk-devbind.py -b igb_uio 00:03.0 00:04.0
 
 .. note::
 
@@ -344,7 +358,7 @@ Sample XML
       <features>
         <acpi/>
         <apic/>
-      </feature>
+      </features>
       <cpu mode='host-model'>
         <model fallback='allow'/>
         <topology sockets='2' cores='1' threads='1'/>
@@ -364,7 +378,7 @@ Sample XML
         </disk>
         <disk type='dir' device='disk'>
           <driver name='qemu' type='fat'/>
-          <source dir='/usr/src/dpdk-stable-16.11.1'/>
+          <source dir='/usr/src/dpdk-stable-17.05.2'/>
           <target dev='vdb' bus='virtio'/>
           <readonly/>
         </disk>

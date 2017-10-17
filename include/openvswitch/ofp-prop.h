@@ -52,6 +52,10 @@
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct ofpbuf;
 struct uuid;
 struct vlog_module;
@@ -134,5 +138,9 @@ enum ofperr ofpprop_unknown(struct vlog_module *, bool loose, const char *msg,
                             uint64_t type);
 #define OFPPROP_UNKNOWN(LOOSE, MSG, TYPE) \
     ofpprop_unknown(&this_module, LOOSE, MSG, TYPE)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* ofp-prop.h */

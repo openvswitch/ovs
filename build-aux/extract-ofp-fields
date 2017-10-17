@@ -16,7 +16,7 @@ VERSION = {"1.0": 0x01,
            "1.3": 0x04,
            "1.4": 0x05,
            "1.5": 0x06}
-VERSION_REVERSE = dict((v,k) for k, v in VERSION.iteritems())
+VERSION_REVERSE = dict((v,k) for k, v in VERSION.items())
 
 TYPES = {"u8":       (1,   False),
          "be16":     (2,   False),
@@ -36,14 +36,17 @@ FORMATTING = {"decimal":            ("MFS_DECIMAL",      1,   8),
               "OpenFlow 1.1+ port": ("MFS_OFP_PORT_OXM", 4,   4),
               "frag":               ("MFS_FRAG",         1,   1),
               "tunnel flags":       ("MFS_TNL_FLAGS",    2,   2),
-              "TCP flags":          ("MFS_TCP_FLAGS",    2,   2)}
+              "TCP flags":          ("MFS_TCP_FLAGS",    2,   2),
+              "packet type":        ("MFS_PACKET_TYPE",  4,   4)}
 
 PREREQS = {"none": "MFP_NONE",
+           "Ethernet": "MFP_ETHERNET",
            "ARP": "MFP_ARP",
            "VLAN VID": "MFP_VLAN_VID",
            "IPv4": "MFP_IPV4",
            "IPv6": "MFP_IPV6",
            "IPv4/IPv6": "MFP_IP_ANY",
+           "NSH": "MFP_NSH",
            "CT": "MFP_CT_VALID",
            "MPLS": "MFP_MPLS",
            "TCP": "MFP_TCP",
@@ -64,6 +67,7 @@ PREREQS = {"none": "MFP_NONE",
 # If a name matches more than one prefix, the longest one is used.
 OXM_CLASSES = {"NXM_OF_":        (0,          0x0000),
                "NXM_NX_":        (0,          0x0001),
+               "NXOXM_NSH_":     (0x005ad650, 0xffff),
                "OXM_OF_":        (0,          0x8000),
                "OXM_OF_PKT_REG": (0,          0x8001),
                "ONFOXM_ET_":     (0x4f4e4600, 0xffff),
@@ -729,7 +733,7 @@ def make_ovs_fields(meta_flow_h, meta_flow_xml):
 ovs\-fields \- protocol header fields in OpenFlow and Open vSwitch
 .
 .PP
-''') % version
+''' % version)
 
     recursively_replace(doc, 'oxm_classes', make_oxm_classes_xml(document))
 
@@ -785,7 +789,7 @@ if __name__ == "__main__":
     try:
         options, args = getopt.gnu_getopt(sys.argv[1:], 'h',
                                           ['help', 'ovs-version='])
-    except getopt.GetoptError, geo:
+    except getopt.GetoptError as geo:
         sys.stderr.write("%s: %s\n" % (argv0, geo.msg))
         sys.exit(1)
 

@@ -106,6 +106,7 @@ test_nl_ct_dump(struct ovs_cmdl_context *ctx)
     uint16_t zone, *pzone = NULL;
     struct ct_dpif_entry entry;
     int err;
+    int tot_bkts;
 
     if (ctx->argc >= 2) {
         if (!ovs_scan(ctx->argv[1], "zone=%"SCNu16, &zone)) {
@@ -113,7 +114,7 @@ test_nl_ct_dump(struct ovs_cmdl_context *ctx)
         }
         pzone = &zone;
     }
-    err = nl_ct_dump_start(&dump, pzone);
+    err = nl_ct_dump_start(&dump, pzone, &tot_bkts);
     if (err) {
         ovs_fatal(err, "Error creating conntrack netlink dump");
     }

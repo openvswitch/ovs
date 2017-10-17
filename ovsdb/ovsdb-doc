@@ -65,9 +65,15 @@ def columnGroupToNroff(table, groupXml, documented_columns):
                 if node.hasAttribute('type'):
                     type_string = node.attributes['type'].nodeValue
                     type_json = ovs.json.from_string(str(type_string))
-                    if type(type_json) in (str, unicode):
-                        raise error.Error("%s %s:%s has invalid 'type': %s" 
-                                          % (table.name, name, key, type_json))
+                    # py2 -> py3 means str -> bytes and unicode -> str
+                    try:
+                        if type(type_json) in (str, unicode):
+                            raise error.Error("%s %s:%s has invalid 'type': %s" 
+                                              % (table.name, name, key, type_json))
+                    except:
+                        if type(type_json) in (bytes, str):
+                            raise error.Error("%s %s:%s has invalid 'type': %s" 
+                                              % (table.name, name, key, type_json))
                     type_ = ovs.db.types.BaseType.from_json(type_json)
                 else:
                     type_ = column.type.value
@@ -258,7 +264,7 @@ represent strong references; thin lines represent weak references.
     return s
 
 def usage():
-    print """\
+    print("""\
 %(argv0)s: ovsdb schema documentation generator
 Prints documentation for an OVSDB schema as an nroff-formatted manpage.
 usage: %(argv0)s [OPTIONS] SCHEMA XML
@@ -269,7 +275,7 @@ The following options are also available:
   --er-diagram=DIAGRAM.PIC    include E-R diagram from DIAGRAM.PIC
   --version=VERSION           use VERSION to display on document footer
   -h, --help                  display this help message\
-""" % {'argv0': argv0}
+""" % {'argv0': argv0})
     sys.exit(0)
 
 if __name__ == "__main__":
@@ -278,7 +284,7 @@ if __name__ == "__main__":
             options, args = getopt.gnu_getopt(sys.argv[1:], 'hV',
                                               ['er-diagram=',
                                                'version=', 'help'])
-        except getopt.GetoptError, geo:
+        except getopt.GetoptError as geo:
             sys.stderr.write("%s: %s\n" % (argv0, geo.msg))
             sys.exit(1)
 
@@ -304,9 +310,9 @@ if __name__ == "__main__":
         for line in s.split("\n"):
             line = line.strip()
             if len(line):
-                print line
+                print(line)
 
-    except error.Error, e:
+    except error.Error as e:
         sys.stderr.write("%s: %s\n" % (argv0, e.msg))
         sys.exit(1)
 

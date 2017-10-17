@@ -1882,7 +1882,11 @@ static void stt_setup(struct net_device *dev)
 
 	dev->netdev_ops = &stt_netdev_ops;
 	dev->ethtool_ops = &stt_ethtool_ops;
+#ifndef HAVE_NEEDS_FREE_NETDEV
 	dev->destructor = free_netdev;
+#else
+	dev->needs_free_netdev = true;
+#endif
 
 	SET_NETDEV_DEVTYPE(dev, &stt_type);
 
@@ -1905,7 +1909,12 @@ static const struct nla_policy stt_policy[IFLA_STT_MAX + 1] = {
 	[IFLA_STT_PORT]              = { .type = NLA_U16 },
 };
 
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+static int stt_validate(struct nlattr *tb[], struct nlattr *data[],
+			struct netlink_ext_ack __always_unused *extack)
+#else
 static int stt_validate(struct nlattr *tb[], struct nlattr *data[])
+#endif
 {
 	if (tb[IFLA_ADDRESS]) {
 		if (nla_len(tb[IFLA_ADDRESS]) != ETH_ALEN)
@@ -1957,8 +1966,14 @@ static int stt_configure(struct net *net, struct net_device *dev,
 	return 0;
 }
 
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+static int stt_newlink(struct net *net, struct net_device *dev,
+		struct nlattr *tb[], struct nlattr *data[],
+		struct netlink_ext_ack __always_unused *extack)
+#else
 static int stt_newlink(struct net *net, struct net_device *dev,
 		struct nlattr *tb[], struct nlattr *data[])
+#endif
 {
 	__be16 dst_port = htons(STT_DST_PORT);
 
@@ -2095,7 +2110,9 @@ int stt_init_module(void)
 	if (rc)
 		goto out2;
 
+#ifdef HAVE_LIST_IN_NF_HOOK_OPS
 	INIT_LIST_HEAD(&nf_hook_ops.list);
+#endif
 	pr_info("STT tunneling driver\n");
 	return 0;
 out2:

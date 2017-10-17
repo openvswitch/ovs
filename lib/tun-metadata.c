@@ -875,8 +875,8 @@ tun_metadata_to_nx_match(struct ofpbuf *b, enum ofp_version oxm,
                              loc);
         memcpy_from_metadata(mask_opts.tun_metadata,
                              &match->wc.masks.tunnel.metadata, loc);
-        nxm_put__(b, MFF_TUN_METADATA0 + i, oxm, opts.tun_metadata,
-                  is_masked ? mask_opts.tun_metadata : NULL, loc->len);
+        nxm_put_entry_raw(b, MFF_TUN_METADATA0 + i, oxm, opts.tun_metadata,
+                          is_masked ? mask_opts.tun_metadata : NULL, loc->len);
     }
 }
 

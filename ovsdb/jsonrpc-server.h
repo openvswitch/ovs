@@ -37,6 +37,7 @@ struct ovsdb_jsonrpc_options {
     int probe_interval;         /* Max idle time before probing, in msec. */
     bool read_only;             /* Only read-only transactions are allowed. */
     int dscp;                   /* Dscp value for manager connections */
+    char *role;                 /* Role, for role-based access controls */
 };
 struct ovsdb_jsonrpc_options *
 ovsdb_jsonrpc_default_options(const char *target);

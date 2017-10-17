@@ -98,17 +98,22 @@ uint32_byteswap(uint32_t crc) {
          ((((ovs_be64) (VALUE)) & UINT64_C(0xff00000000000000)) >> 56))
 #endif
 
+/* Returns the ovs_be32 that you would get from:
+ *
+ *    union { uint8_t b[4]; ovs_be32 be32; } x = { .b = { b0, b1, b2, b3 } };
+ *    return x.be32;
+ *
+ * but without the undefined behavior. */
+static inline ovs_be32
+bytes_to_be32(uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3)
+{
 #if WORDS_BIGENDIAN
-#define BYTES_TO_BE32(B1, B2, B3, B4) \
-    (OVS_FORCE ovs_be32)((uint32_t)(B1) << 24 | (B2) << 16 | (B3) << 8 | (B4))
-#define BE16S_TO_BE32(B1, B2) \
-    (OVS_FORCE ovs_be32)((uint32_t)(B1) << 16 | (B2))
+    uint32_t x = ((uint32_t) b0 << 24) | (b1 << 16) | (b2 << 8) | b3;
 #else
-#define BYTES_TO_BE32(B1, B2, B3, B4) \
-    (OVS_FORCE ovs_be32)((uint32_t)(B1) | (B2) << 8 | (B3) << 16 | (B4) << 24)
-#define BE16S_TO_BE32(B1, B2) \
-    (OVS_FORCE ovs_be32)((uint32_t)(B1) | (B2) << 16)
+    uint32_t x = ((uint32_t) b3 << 24) | (b2 << 16) | (b1 << 8) | b0;
 #endif
+    return (OVS_FORCE ovs_be32) x;
+}
 
 /* These functions zero-extend big-endian values to longer ones,
  * or truncate long big-endian value to shorter ones. */

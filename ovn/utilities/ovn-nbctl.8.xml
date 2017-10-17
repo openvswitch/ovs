@@ -76,17 +76,29 @@
 
     <h1>Logical Switch ACL Commands</h1>
     <dl>
-      <dt>[<code>--log</code>] [<code>--may-exist</code>] <code>acl-add</code> <var>switch</var> <var>direction</var> <var>priority</var> <var>match</var> <var>action</var></dt>
+      <dt>[<code>--log</code>] [<code>--severity=</code><var>severity</var>] [<code>--name=</code><var>name</var>] [<code>--may-exist</code>] <code>acl-add</code> <var>switch</var> <var>direction</var> <var>priority</var> <var>match</var> <var>verdict</var></dt>
       <dd>
-        Adds the specified ACL to <var>switch</var>.
-        <var>direction</var> must be either <code>from-lport</code> or
-        <code>to-lport</code>.  <var>priority</var> must be between
-        <code>0</code> and <code>32767</code>, inclusive.  If
-        <code>--log</code> is specified, packet logging is enabled for the
-        ACL.  A full description of the fields are in <code>ovn-nb</code>(5).
-        If <code>--may-exist</code> is specified, adding a duplicated ACL
-        succeeds but the ACL is not really created. Without <code>--may-exist</code>,
-        adding a duplicated ACL results in error.
+        <p>
+          Adds the specified ACL to <var>switch</var>.
+          <var>direction</var> must be either <code>from-lport</code> or
+          <code>to-lport</code>.  <var>priority</var> must be between
+          <code>0</code> and <code>32767</code>, inclusive.  A full
+          description of the fields are in <code>ovn-nb</code>(5).  If
+          <code>--may-exist</code> is specified, adding a duplicated ACL
+          succeeds but the ACL is not really created. Without
+          <code>--may-exist</code>, adding a duplicated ACL results in
+          error.
+        </p>
+
+        <p>
+          The <code>--log</code> option enables packet logging for the ACL.
+          The options <code>--severity</code> and <code>--name</code> specify a
+          severity and name, respectively, for log entries (and also enable
+          logging).  The severity must be one of <code>alert</code>,
+          <code>warning</code>, <code>notice</code>, <code>info</code>, or
+          <code>debug</code>.  If a severity is not specified, the default is
+          <code>info</code>.
+        </p>
       </dd>
 
       <dt><code>acl-del</code> <var>switch</var> [<var>direction</var> [<var>priority</var> <var>match</var>]]</dt>
@@ -286,6 +298,32 @@
         Get the type-specific options for the logical port.
       </dd>
 
+      <dt><code>lsp-set-dhcpv4-options</code> <var>port</var>
+          <var>dhcp_options</var></dt>
+      <dd>
+        Set the DHCPv4 options for the logical port.  The
+        <var>dhcp_options</var> is a UUID referring to a set of DHCP options in
+        the <ref table="DHCP_Options" /> table.
+      </dd>
+
+      <dt><code>lsp-get-dhcpv4-optoins</code> <var>port</var></dt>
+      <dd>
+        Get the configured DHCPv4 options for the logical port.
+      </dd>
+
+      <dt><code>lsp-set-dhcpv6-options</code> <var>port</var>
+          <var>dhcp_options</var></dt>
+      <dd>
+          Set the DHCPv6 options for the logical port.  The
+          <var>dhcp_options</var> is a UUID referring to a set of DHCP options
+          in the <ref table="DHCP_Options" /> table.
+      </dd>
+
+      <dt><code>lsp-get-dhcpv6-optoins</code> <var>port</var></dt>
+      <dd>
+        Get the configured DHCPv6 options for the logical port.
+      </dd>
+
     </dl>
 
     <h1>Logical Router Commands</h1>
@@ -388,6 +426,29 @@
       <dd>
         Prints the administrative state of <var>port</var>, either
         <code>enabled</code> or <code>disabled</code>.
+      </dd>
+
+      <dt><code>lrp-set-gateway-chassis</code> <var>port</var>
+          <var>chassis</var> [<var>priority</var>]</dt>
+      <dd>
+        Set gateway chassis for <var>port</var>. <var>chassis</var>
+        is the name of the chassis. This creates a gateway chassis entry
+        in Gateway_Chassis table. It won't check if chassis really exists
+        in OVN_Southbound database. Priority will be set to 0
+        if <var>priority</var> is not provided by user. <var>priority</var>
+        must be between <code>0</code> and <code>32767</code>, inclusive.
+      </dd>
+      <dt><code>lrp-del-gateway-chassis</code> <var>port</var>
+          <var>chassis</var></dt>
+      <dd>
+        Deletes gateway chassis from <var>port</var>.  It is an error if
+        gateway chassis with <var>chassis</var> for <var>port</var> does
+        not exist.
+      </dd>
+      <dt><code>lrp-get-gateway-chassis</code> <var>port</var></dt>
+      <dd>
+        Lists all the gateway chassis with priority within <var>port</var> on
+        standard output, one per line, ordered based on priority.
       </dd>
     </dl>
 
@@ -796,7 +857,9 @@
       Deletes the current SSL configuration.
       </dd>
 
-      <dt>[<code>--bootstrap</code>] <code>set-ssl</code> <var>private-key</var> <var>certificate</var> <var>ca-cert</var></dt>
+      <dt>[<code>--bootstrap</code>] <code>set-ssl</code>
+         <var>private-key</var> <var>certificate</var> <var>ca-cert</var>
+         [<var>ssl-protocol-list</var> [<var>ssl-cipher-list</var>]]</dt>
       <dd>
       Sets the SSL configuration.
       </dd>

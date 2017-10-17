@@ -19,6 +19,10 @@
 
 #include "openvswitch/types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define TLV_MAX_OPT_SIZE 124
 #define TLV_TOT_OPT_SIZE 252
 
@@ -59,5 +63,9 @@ struct genevehdr {
     ovs_16aligned_be32 vni;
     struct geneve_opt options[];
 };
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* geneve.h */

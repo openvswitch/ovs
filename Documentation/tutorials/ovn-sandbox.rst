@@ -136,7 +136,7 @@ Using ovn-trace
 Once you have configured resources in OVN, try using ``ovn-trace`` to see
 how OVN would process a sample packet through its logical pipeline.
 
-For example, we can trace an IP packet from ``sw0-port1`` to ``sw0-port2``.
+For example, we can trace an IP packet from ``sw0-port1`` to ``sw1-port1``.
 The ``--minimal`` output shows each visible action performed on the packet,
 which includes:
 

@@ -37,6 +37,8 @@ typedef struct _OVS_IPFRAG_KEY {
 
 typedef struct _OVS_IPFRAG_ENTRY {
     NDIS_SPIN_LOCK lockObj;       /* To access the entry. */
+    BOOLEAN markedForDelete;
+    UINT8 numFragments;
     UINT16 totalLen;
     UINT16 recvdLen;
     UINT16 mru;

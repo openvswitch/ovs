@@ -1537,7 +1537,6 @@ static bool
 next_random_flow(struct flow *flow, unsigned int idx)
 {
     uint32_t *flow_u32 = (uint32_t *) flow;
-    int i;
 
     memset(flow, 0, sizeof *flow);
 
@@ -1547,14 +1546,14 @@ next_random_flow(struct flow *flow, unsigned int idx)
     }
 
     /* All flows with a small number of consecutive nonzero values. */
-    for (i = 1; i <= 4; i++) {
+    for (int i = 1; i <= 4; i++) {
         if (init_consecutive_values(i, flow, &idx)) {
             return true;
         }
     }
 
     /* All flows with a large number of consecutive nonzero values. */
-    for (i = FLOW_U32S - 4; i <= FLOW_U32S; i++) {
+    for (int i = FLOW_U32S - 4; i <= FLOW_U32S; i++) {
         if (init_consecutive_values(i, flow, &idx)) {
             return true;
         }
@@ -1581,9 +1580,8 @@ next_random_flow(struct flow *flow, unsigned int idx)
     /* 16 randomly chosen flows with N >= 3 nonzero values. */
     if (choose(16 * (FLOW_U32S - 4), &idx)) {
         int n = idx / 16 + 3;
-        int i;
 
-        for (i = 0; i < n; i++) {
+        for (int i = 0; i < n; i++) {
             flow_u32[i] = random_value();
         }
         shuffle_u32s(flow_u32, FLOW_U32S);

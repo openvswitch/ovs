@@ -33,7 +33,7 @@ AT_CHECK([ovstest test-cmap check 1], [0], [...
 ])
 AT_CLEANUP
 
-AT_SETUP([counting cockoo hash])
+AT_SETUP([counting cuckoo hash])
 AT_KEYWORDS([cmap])
 AT_CHECK([ovstest test-ccmap check 1], [0], [...
 ])
@@ -54,6 +54,17 @@ AT_CLEANUP
 
 AT_SETUP([SHA-1])
 AT_CHECK([ovstest test-sha1], [0], [.........
+])
+AT_CLEANUP
+
+AT_SETUP([test skiplist])
+AT_KEYWORDS([skiplist])
+AT_CHECK([ovstest test-skiplist], [0], [skiplist insert
+skiplist delete
+skiplist find
+skiplist forward_to
+skiplist random
+
 ])
 AT_CLEANUP
 

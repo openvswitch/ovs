@@ -21,3 +21,6 @@
 #   --ovsdb-server-wrapper=valgrind
 #
 OPTIONS=""
+
+# Uncomment and set the OVS User/Group value
+#OVS_USER_ID="openvswitch:openvswitch"

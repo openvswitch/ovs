@@ -19,7 +19,6 @@
 #include <intsafe.h>
 #include <ntintsafe.h>
 #include <ntstrsafe.h>
-#include <Strsafe.h>
 
 #include "Types.h"
 

@@ -41,6 +41,10 @@ struct ovsdb_error *ovsdb_internal_error(struct ovsdb_error *error,
     OVS_PRINTF_FORMAT(4, 5)
     OVS_WARN_UNUSED_RESULT;
 
+struct ovsdb_error *ovsdb_perm_error(const char *details, ...)
+    OVS_PRINTF_FORMAT(1, 2)
+    OVS_WARN_UNUSED_RESULT;
+
 /* Returns a pointer to an ovsdb_error that represents an internal error for
  * the current file name and line number with MSG as the associated message.
  * The caller is responsible for freeing the internal error. */

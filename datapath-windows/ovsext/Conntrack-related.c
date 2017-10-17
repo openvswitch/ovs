@@ -22,6 +22,7 @@ static UINT64 ctTotalRelatedEntries;
 static OVS_CT_THREAD_CTX ctRelThreadCtx;
 static PNDIS_RW_LOCK_EX ovsCtRelatedLockObj;
 extern POVS_SWITCH_CONTEXT gOvsSwitchContext;
+KSTART_ROUTINE OvsCtRelatedEntryCleaner;
 
 static __inline UINT32
 OvsExtractCtRelatedKeyHash(OVS_CT_KEY *key)
@@ -170,20 +171,24 @@ OvsCtRelatedFlush()
 
 /*
  *----------------------------------------------------------------------------
- * ovsCtRelatedEntryCleaner
+ * OvsCtRelatedEntryCleaner
  *     Runs periodically and cleans up the related connections tracker
  *----------------------------------------------------------------------------
  */
 VOID
-ovsCtRelatedEntryCleaner(PVOID data)
+OvsCtRelatedEntryCleaner(PVOID data)
 {
     POVS_CT_THREAD_CTX context = (POVS_CT_THREAD_CTX)data;
     PLIST_ENTRY link, next;
     POVS_CT_REL_ENTRY entry;
+    LOCK_STATE_EX lockState;
     BOOLEAN success = TRUE;
 
     while (success) {
-        LOCK_STATE_EX lockState;
+        if (ovsCtRelatedLockObj == NULL) {
+            /* Lock has been freed by 'OvsCleanupCtRelated()' */
+            break;
+        }
         NdisAcquireRWLockWrite(ovsCtRelatedLockObj, &lockState, 0);
         if (context->exit) {
             NdisReleaseRWLock(ovsCtRelatedLockObj, &lockState);
@@ -249,7 +254,7 @@ OvsInitCtRelated(POVS_SWITCH_CONTEXT context)
     /* Init CT Cleaner Thread */
     KeInitializeEvent(&ctRelThreadCtx.event, NotificationEvent, FALSE);
     status = PsCreateSystemThread(&threadHandle, SYNCHRONIZE, NULL, NULL,
-                                  NULL, ovsCtRelatedEntryCleaner,
+                                  NULL, OvsCtRelatedEntryCleaner,
                                   &ctRelThreadCtx);
 
     if (status != STATUS_SUCCESS) {

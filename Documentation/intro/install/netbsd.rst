@@ -34,7 +34,6 @@ you need at least the following packages.
 - python27
 - py27-six
 - py27-xml
-- pkg_alternatives
 
 Some components have additional requirements. Refer to :doc:`general` for more
 information.

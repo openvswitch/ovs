@@ -199,6 +199,7 @@ typedef __declspec(align(8)) struct OvsFlowKey {
         UINT32 mark;
         UINT32 state;
         struct ovs_key_ct_labels labels;
+        struct ovs_key_ct_tuple_ipv4 tuple_ipv4;
     } ct;                        /* Connection Tracking Flags */
 } OvsFlowKey;
 
@@ -335,7 +336,8 @@ enum {
 enum {
     OVS_EVENT_CT_NEW        = (1 << 0),
     OVS_EVENT_CT_DELETE     = (1 << 1),
-    OVS_EVENT_CT_MASK_ALL   = 0x3
+    OVS_EVENT_CT_UPDATE     = (1 << 2),
+    OVS_EVENT_CT_MASK_ALL   = 0x7
 };
 
 /* Supported mcast event groups */

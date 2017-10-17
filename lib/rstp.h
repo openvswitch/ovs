@@ -207,7 +207,7 @@ uint16_t rstp_get_designated_port_id(const struct rstp *)
     OVS_EXCLUDED(rstp_mutex);
 uint16_t rstp_get_bridge_port_id(const struct rstp *)
     OVS_EXCLUDED(rstp_mutex);
-struct rstp_port * rstp_get_root_port(struct rstp *)
+struct rstp_port * rstp_get_root_port(const struct rstp *)
     OVS_EXCLUDED(rstp_mutex);
 rstp_identifier rstp_get_designated_root(const struct rstp *)
     OVS_EXCLUDED(rstp_mutex);
@@ -227,7 +227,8 @@ uint32_t rstp_convert_speed_to_cost(unsigned int speed);
 void rstp_port_set(struct rstp_port *, uint16_t port_num, int priority,
                    uint32_t path_cost, bool is_admin_edge, bool is_auto_edge,
                    enum rstp_admin_point_to_point_mac_state admin_p2p_mac_state,
-                   bool admin_port_state, bool do_mcheck, void *aux)
+                   bool admin_port_state, bool do_mcheck, void *aux,
+                   const char *name)
     OVS_EXCLUDED(rstp_mutex);
 
 enum rstp_state rstp_port_get_state(const struct rstp_port *)

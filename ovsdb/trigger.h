@@ -30,12 +30,15 @@ struct ovsdb_trigger {
     long long int created;      /* Time created. */
     long long int timeout_msec; /* Max wait duration. */
     bool read_only;             /* Database is in read only mode. */
+    char *role;                 /* Role, for role-based access controls. */
+    char *id;                   /* ID, for role-based access controls. */
 };
 
 void ovsdb_trigger_init(struct ovsdb_session *, struct ovsdb *,
                         struct ovsdb_trigger *,
                         struct json *request, long long int now,
-                        bool read_only);
+                        bool read_only, const char *role,
+                        const char *id);
 void ovsdb_trigger_destroy(struct ovsdb_trigger *);
 
 bool ovsdb_trigger_is_complete(const struct ovsdb_trigger *);

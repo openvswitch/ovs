@@ -57,6 +57,8 @@
 #include <net/inet_ecn.h>
 #include <net/vrf.h>
 #include <net/netfilter/ipv4/nf_defrag_ipv4.h>
+#include <net/netns/generic.h>
+#include "datapath.h"
 
 /* NOTE. Logic of IP defragmentation is parallel to corresponding IPv6
  * code now. If you change something here, _PLEASE_ update ipv6/reassembly.c
@@ -106,6 +108,51 @@ struct ip4_create_arg {
 	u32 user;
 	int vif;
 };
+
+static struct netns_frags *get_netns_frags_from_net(struct net *net)
+{
+#ifdef HAVE_INET_FRAG_LRU_MOVE
+	struct ovs_net *ovs_net = net_generic(net, ovs_net_id);
+	return &(ovs_net->ipv4_frags);
+#else
+	return &(net->ipv4.frags);
+#endif
+}
+
+static struct net *get_net_from_netns_frags(struct netns_frags *frags)
+{
+	struct net *net;
+#ifdef HAVE_INET_FRAG_LRU_MOVE
+	struct ovs_net *ovs_net;
+
+	ovs_net = container_of(frags, struct ovs_net, ipv4_frags);
+	net = ovs_net->net;
+#else
+	net = container_of(frags, struct net, ipv4.frags);
+#endif
+	return net;
+}
+
+void ovs_netns_frags_init(struct net *net)
+{
+#ifdef HAVE_INET_FRAG_LRU_MOVE
+	struct ovs_net *ovs_net = net_generic(net, ovs_net_id);
+
+	ovs_net->ipv4_frags.high_thresh = 4 * 1024 * 1024;
+	ovs_net->ipv4_frags.low_thresh = 3 * 1024 * 1024;
+	ovs_net->ipv4_frags.timeout = IP_FRAG_TIME;
+	inet_frags_init_net(&(ovs_net->ipv4_frags));
+	ovs_net->net = net;
+#endif
+}
+
+void ovs_netns_frags_exit(struct net *net)
+{
+	struct netns_frags *frags;
+
+	frags = get_netns_frags_from_net(net);
+	inet_frags_exit_net(frags, &ip4_frags);
+}
 
 static unsigned int ipqhashfn(__be16 id, __be32 saddr, __be32 daddr, u8 prot)
 {
@@ -158,9 +205,7 @@ static void ip4_frag_init(struct inet_frag_queue *q, void *a)
 #endif
 {
 	struct ipq *qp = container_of(q, struct ipq, q);
-	struct netns_ipv4 *ipv4 = container_of(q->net, struct netns_ipv4,
-					       frags);
-	struct net *net = container_of(ipv4, struct net, ipv4);
+	struct net *net = get_net_from_netns_frags(q->net);
 
 	const struct ip4_create_arg *arg = a;
 
@@ -219,7 +264,7 @@ static void ip_expire(unsigned long arg)
 	struct net *net;
 
 	qp = container_of((struct inet_frag_queue *) arg, struct ipq, q);
-	net = container_of(qp->q.net, struct net, ipv4.frags);
+	net = get_net_from_netns_frags(qp->q.net);
 
 	spin_lock(&qp->q.lock);
 
@@ -278,8 +323,10 @@ out:
 static void ip_evictor(struct net *net)
 {
 	int evicted;
+	struct netns_frags *frags;
 
-	evicted = inet_frag_evictor(&net->ipv4.frags, &ip4_frags, false);
+	frags = get_netns_frags_from_net(net);
+	evicted = inet_frag_evictor(frags, &ip4_frags, false);
 	if (evicted)
 		IP_ADD_STATS_BH(net, IPSTATS_MIB_REASMFAILS, evicted);
 }
@@ -294,6 +341,7 @@ static struct ipq *ip_find(struct net *net, struct iphdr *iph,
 	struct inet_frag_queue *q;
 	struct ip4_create_arg arg;
 	unsigned int hash;
+	struct netns_frags *frags;
 
 	arg.iph = iph;
 	arg.user = user;
@@ -304,7 +352,8 @@ static struct ipq *ip_find(struct net *net, struct iphdr *iph,
 #endif
 	hash = ipqhashfn(iph->id, iph->saddr, iph->daddr, iph->protocol);
 
-	q = inet_frag_find(&net->ipv4.frags, &ip4_frags, &arg, hash);
+	frags = get_netns_frags_from_net(net);
+	q = inet_frag_find(frags, &ip4_frags, &arg, hash);
 	if (IS_ERR_OR_NULL(q)) {
 		inet_frag_maybe_warn_overflow(q, pr_fmt());
 		return NULL;
@@ -333,7 +382,7 @@ static int ip_frag_too_far(struct ipq *qp)
 	if (rc) {
 		struct net *net;
 
-		net = container_of(qp->q.net, struct net, ipv4.frags);
+		net = get_net_from_netns_frags(qp->q.net);
 		IP_INC_STATS_BH(net, IPSTATS_MIB_REASMFAILS);
 	}
 
@@ -566,7 +615,7 @@ err:
 static int ip_frag_reasm(struct ipq *qp, struct sk_buff *prev,
 			 struct net_device *dev)
 {
-	struct net *net = container_of(qp->q.net, struct net, ipv4.frags);
+	struct net *net = get_net_from_netns_frags(qp->q.net);
 	struct iphdr *iph;
 	struct sk_buff *fp, *head = qp->q.fragments;
 	int len;
@@ -738,7 +787,6 @@ static int __net_init ipv4_frags_init_net(struct net *net)
 
 static void __net_exit ipv4_frags_exit_net(struct net *net)
 {
-	inet_frags_exit_net(&net->ipv4.frags, &ip4_frags);
 }
 
 static struct pernet_operations ip4_frags_ops = {

@@ -1,8 +1,24 @@
-Post-v2.7.0
----------------------
+Post-v2.8.0
+--------------------
+   - OVN:
+     * The "requested-chassis" option for a logical switch port now accepts a
+       chassis "hostname" in addition to a chassis "name".
+   - Linux kernel 4.13
+     * Add support for compiling OVS with the latest Linux 4.13 kernel
+
+v2.8.0 - 31 Aug 2017
+   - ovs-ofctl:
+     * ovs-ofctl can now accept and display port names in place of numbers.  By
+       default it always accepts names and in interactive use it displays them;
+       use --names or --no-names to override.  See ovs-ofctl(8) for details.
+     * "ovs-ofctl dump-flows" now accepts --no-stats to omit flow statistics.
+   - New ovs-dpctl command "ct-stats-show" to show connection tracking stats.
    - Tunnels:
      * Added support to set packet mark for tunnel endpoint using
        `egress_pkt_mark` OVSDB option.
+     * When using Linux kernel datapath tunnels may be created using rtnetlink.
+       This will allow us to take advantage of new tunnel features without
+       having to make changes to the vport modules.
    - EMC insertion probability is reduced to 1% and is configurable via
      the new 'other_config:emc-insert-inv-prob' option.
    - DPDK:
@@ -10,11 +26,21 @@ Post-v2.7.0
        Log level can be changed in a usual OVS way using
        'ovs-appctl vlog' commands for 'dpdk' module. Lower bound
        still can be configured via extra arguments for DPDK EAL.
-   - IPFIX now provides additional counters for totals since startup.
+     * dpdkvhostuser ports are marked as deprecated.  They will be removed
+       in an upcoming release.
+     * Support for DPDK v17.05.1.
+   - IPFIX now provides additional counters:
+     * Total counters since metering process startup.
+     * Per-flow TCP flag counters.
+     * Multicast, broadcast, and unicast counters.
    - New support for multiple VLANs (802.1ad or "QinQ"), including a new
      "dot1q-tunnel" port VLAN mode.
    - In ovn-vsctl and vtep-ctl, record UUIDs in commands may now be
      abbreviated to 4 hex digits.
+   - Userspace Datapath:
+     * Added NAT support for userspace datapath.
+     * Added FTP and TFTP support with NAT for userspace datapath.
+     * Experimental NSH (Network Service Header) support in userspace datapath.
    - OVN:
      * New built-in DNS support.
      * IPAM for IPv4 can now exclude user-defined addresses from assignment.
@@ -28,7 +54,16 @@ Post-v2.7.0
        abbreviated to 4 hex digits.
      * "ovn-sbctl lflow-list" can now print OpenFlow flows that correspond
        to logical flows.
-   - Add the command 'ovs-appctl stp/show' (see ovs-vswitchd(8)).
+     * Now uses OVSDB RBAC support to reduce impact of compromised hypervisors.
+     * Multiple chassis may now be specified for L3 gateways.  When more than
+       one chassis is specified, OVN will manage high availability for that
+       gateway.
+     * Add support for ACL logging.
+     * ovn-northd now has native support for active-standby high availability.
+   - Tracing with ofproto/trace now traces through recirculation.
+   - OVSDB:
+     * New support for role-based access control (see ovsdb-server(1)).
+   - New commands 'stp/show' and 'rstp/show' (see ovs-vswitchd(8)).
    - OpenFlow:
      * All features required by OpenFlow 1.4 are now implemented, so
        ovs-vswitchd now enables OpenFlow 1.4 by default (in addition to
@@ -37,9 +72,35 @@ Post-v2.7.0
      * Bundles now support hashing by just nw_src or nw_dst.
      * The "learn" action now supports a "limit" option (see ovs-ofctl(8)).
      * The port status bit OFPPS_LIVE now reflects link aliveness.
+     * OpenFlow 1.5 packet-out is now supported.
+     * Support for OpenFlow 1.5 field packet_type and packet-type-aware
+       pipeline (PTAP).
+     * Added generic encap and decap actions (EXT-382).
+       First supported use case is encap/decap for Ethernet.
+     * Added NSH (Network Service Header) support in userspace
+       Used generic encap and decap actions to implement encapsulation and
+       decapsulation of NSH header.
+       IETF NSH draft - https://datatracker.ietf.org/doc/draft-ietf-sfc-nsh/
+     * Conntrack state is only available to the processing path that
+       follows the "recirc_table" argument of the ct() action.  Starting
+       in OVS 2.8, this state is now cleared for the current processing
+       path whenever ct() is called.
    - Fedora Packaging:
      * OVN services are no longer restarted automatically after upgrade.
+     * ovs-vswitchd and ovsdb-server run as non-root users by default.
    - Add --cleanup option to command 'ovs-appctl exit' (see ovs-vswitchd(8)).
+   - L3 tunneling:
+     * Use new tunnel port option "packet_type" to configure L2 vs. L3.
+     * In conjunction with PTAP tunnel ports can handle a mix of L2 and L3
+       payload.
+     * New vxlan tunnel extension "gpe" to support VXLAN-GPE tunnels.
+     * New support for non-Ethernet (L3) payloads in GRE and VXLAN-GPE.
+   - The BFD detection multiplier is now user-configurable.
+   - Add experimental support for hardware offloading
+     * HW offloading is disabled by default.
+     * HW offloading is done through the TC interface.
+   - IPv6 link local addresses are now supported on Linux.  Use % to designate
+     the scope device.
 
 v2.7.0 - 21 Feb 2017
 ---------------------
@@ -89,6 +150,7 @@ v2.7.0 - 21 Feb 2017
      * The "sample" action now supports "ingress" and "egress" options.
      * The "ct" action now supports the TFTP ALG where support is available.
      * New actions "clone" and "ct_clear".
+     * The "meter" action is now supported in the userspace datapath.
    - ovs-ofctl:
      * 'bundle' command now supports packet-out messages.
      * New syntax for 'ovs-ofctl packet-out' command, which uses the

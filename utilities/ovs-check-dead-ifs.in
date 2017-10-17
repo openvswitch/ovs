@@ -1,4 +1,4 @@
-#! /usr/bin/env @PYTHON@
+#! @PYTHON@
 
 import os
 import re

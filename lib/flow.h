@@ -37,6 +37,7 @@ struct ds;
 struct flow_wildcards;
 struct minimask;
 struct dp_packet;
+struct ofputil_port_map;
 struct pkt_metadata;
 struct match;
 
@@ -74,20 +75,25 @@ void flow_get_metadata(const struct flow *, struct match *flow_metadata);
 
 const char *ct_state_to_string(uint32_t state);
 uint32_t ct_state_from_string(const char *);
+bool parse_ct_state(const char *state_str, uint32_t default_state,
+                    uint32_t *ct_state, struct ds *);
+bool validate_ct_state(uint32_t state, struct ds *);
 void flow_clear_conntrack(struct flow *);
 
-char *flow_to_string(const struct flow *);
+char *flow_to_string(const struct flow *, const struct ofputil_port_map *);
 void format_flags(struct ds *ds, const char *(*bit_to_string)(uint32_t),
                   uint32_t flags, char del);
 void format_flags_masked(struct ds *ds, const char *name,
                          const char *(*bit_to_string)(uint32_t),
                          uint32_t flags, uint32_t mask, uint32_t max_mask);
+void format_packet_type_masked(struct ds *, ovs_be32 value, ovs_be32 mask);
 int parse_flags(const char *s, const char *(*bit_to_string)(uint32_t),
                 char end, const char *field_name, char **res_string,
                 uint32_t *res_flags, uint32_t allowed, uint32_t *res_mask);
 
-void flow_format(struct ds *, const struct flow *);
-void flow_print(FILE *, const struct flow *);
+void flow_format(struct ds *, const struct flow *,
+                 const struct ofputil_port_map *);
+void flow_print(FILE *, const struct flow *, const struct ofputil_port_map *);
 static inline int flow_compare_3way(const struct flow *, const struct flow *);
 static inline bool flow_equal(const struct flow *, const struct flow *);
 static inline size_t flow_hash(const struct flow *, uint32_t basis);
@@ -118,11 +124,12 @@ void flow_set_mpls_tc(struct flow *, int idx, uint8_t tc);
 void flow_set_mpls_bos(struct flow *, int idx, uint8_t stack);
 void flow_set_mpls_lse(struct flow *, int idx, ovs_be32 lse);
 
-void flow_compose(struct dp_packet *, const struct flow *);
+bool flow_compose(struct dp_packet *, const struct flow *, size_t);
 
 bool parse_ipv6_ext_hdrs(const void **datap, size_t *sizep, uint8_t *nw_proto,
                          uint8_t *nw_frag);
 ovs_be16 parse_dl_type(const struct eth_header *data_, size_t size);
+bool parse_nsh(const void **datap, size_t *sizep, struct flow_nsh *key);
 
 static inline uint64_t
 flow_get_xreg(const struct flow *flow, int idx)
@@ -908,7 +915,7 @@ static inline void
 pkt_metadata_from_flow(struct pkt_metadata *md, const struct flow *flow)
 {
     /* Update this function whenever struct flow changes. */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 39);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 40);
 
     md->recirc_id = flow->recirc_id;
     md->dp_hash = flow->dp_hash;
@@ -962,9 +969,23 @@ static inline bool is_ethernet(const struct flow *flow,
     return flow->packet_type == htonl(PT_ETH);
 }
 
+static inline ovs_be16 get_dl_type(const struct flow *flow)
+{
+    if (flow->packet_type == htonl(PT_ETH)) {
+        return flow->dl_type;
+    } else if (pt_ns(flow->packet_type) == OFPHTN_ETHERTYPE) {
+        return pt_ns_type_be(flow->packet_type);
+    } else {
+        return htons(FLOW_DL_TYPE_NONE);
+    }
+}
+
 static inline bool is_vlan(const struct flow *flow,
                            struct flow_wildcards *wc)
 {
+    if (!is_ethernet(flow, wc)) {
+        return false;
+    }
     if (wc) {
         WC_MASK_FIELD_MASK(wc, vlans[0].tci, htons(VLAN_CFI));
     }
@@ -973,7 +994,7 @@ static inline bool is_vlan(const struct flow *flow,
 
 static inline bool is_ip_any(const struct flow *flow)
 {
-    return dl_type_is_ip_any(flow->dl_type);
+    return dl_type_is_ip_any(get_dl_type(flow));
 }
 
 static inline bool is_ip_proto(const struct flow *flow, uint8_t ip_proto,
@@ -1009,7 +1030,7 @@ static inline bool is_sctp(const struct flow *flow,
 static inline bool is_icmpv4(const struct flow *flow,
                              struct flow_wildcards *wc)
 {
-    if (flow->dl_type == htons(ETH_TYPE_IP)) {
+    if (get_dl_type(flow) == htons(ETH_TYPE_IP)) {
         if (wc) {
             memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
         }
@@ -1021,7 +1042,7 @@ static inline bool is_icmpv4(const struct flow *flow,
 static inline bool is_icmpv6(const struct flow *flow,
                              struct flow_wildcards *wc)
 {
-    if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
+    if (get_dl_type(flow) == htons(ETH_TYPE_IPV6)) {
         if (wc) {
             memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
         }
@@ -1052,7 +1073,7 @@ static inline bool is_nd(const struct flow *flow,
 
 static inline bool is_igmp(const struct flow *flow, struct flow_wildcards *wc)
 {
-    if (flow->dl_type == htons(ETH_TYPE_IP)) {
+    if (get_dl_type(flow) == htons(ETH_TYPE_IP)) {
         if (wc) {
             memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
         }
@@ -1096,8 +1117,8 @@ static inline bool is_mld_report(const struct flow *flow,
 
 static inline bool is_stp(const struct flow *flow)
 {
-    return (eth_addr_equals(flow->dl_dst, eth_addr_stp)
-            && flow->dl_type == htons(FLOW_DL_TYPE_NONE));
+    return (flow->dl_type == htons(FLOW_DL_TYPE_NONE)
+            && eth_addr_equals(flow->dl_dst, eth_addr_stp));
 }
 
 #endif /* flow.h */

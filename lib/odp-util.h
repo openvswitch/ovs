@@ -78,7 +78,7 @@ const char *slow_path_reason_to_explanation(enum slow_path_reason);
 #define ODPP_NONE  ODP_PORT_C(UINT32_MAX)
 
 void format_odp_actions(struct ds *, const struct nlattr *odp_actions,
-                        size_t actions_len);
+                        size_t actions_len, const struct hmap *portno_names);
 int odp_actions_from_string(const char *, const struct simap *port_names,
                             struct ofpbuf *odp_actions);
 
@@ -92,6 +92,9 @@ struct odp_portno_names {
 void odp_portno_names_set(struct hmap *portno_names, odp_port_t port_no,
                           char *port_name);
 void odp_portno_names_destroy(struct hmap *portno_names);
+void odp_portno_name_format(const struct hmap *portno_names,
+                            odp_port_t, struct ds *);
+
 /* The maximum number of bytes that odp_flow_key_from_flow() appends to a
  * buffer.  This is the upper bound on the length of a nlattr-formatted flow
  * key that ovs-vswitchd fully understands.
@@ -128,6 +131,7 @@ void odp_portno_names_destroy(struct hmap *portno_names);
  *  OVS_KEY_ATTR_CT_MARK                 4    --     4      8
  *  OVS_KEY_ATTR_CT_LABEL               16    --     4     20
  *  OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6     40    --     4     44
+ *  OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV4      -    --     -      - (exclusive of_CT_ORIG_TUPLE_IPV6)
  *  OVS_KEY_ATTR_ETHERNET               12    --     4     16
  *  OVS_KEY_ATTR_ETHERTYPE               2     2     4      8  (outer VLAN ethertype)
  *  OVS_KEY_ATTR_VLAN                    2     2     4      8
@@ -143,7 +147,7 @@ void odp_portno_names_destroy(struct hmap *portno_names);
  * add another field and forget to adjust this value.
  */
 #define ODPUTIL_FLOW_KEY_BYTES 640
-BUILD_ASSERT_DECL(FLOW_WC_SEQ == 39);
+BUILD_ASSERT_DECL(FLOW_WC_SEQ == 40);
 
 /* A buffer with sufficient size and alignment to hold an nlattr-formatted flow
  * key.  An array of "struct nlattr" might not, in theory, be sufficiently
@@ -193,7 +197,8 @@ int odp_flow_from_string(const char *s,
     ODP_SUPPORT_FIELD(bool, ct_state_nat, "CT state NAT")                    \
                                                                              \
     /* Conntrack original direction tuple matching * supported. */           \
-    ODP_SUPPORT_FIELD(bool, ct_orig_tuple, "CT orig tuple")
+    ODP_SUPPORT_FIELD(bool, ct_orig_tuple, "CT orig tuple")                  \
+    ODP_SUPPORT_FIELD(bool, ct_orig_tuple6, "CT orig tuple for IPv6")
 
 /* Indicates support for various fields. This defines how flows will be
  * serialised. */
@@ -233,9 +238,9 @@ uint32_t odp_flow_key_hash(const struct nlattr *, size_t);
 
 /* Estimated space needed for metadata. */
 enum { ODP_KEY_METADATA_SIZE = 9 * 8 };
-void odp_key_from_pkt_metadata(struct ofpbuf *, const struct pkt_metadata *);
-void odp_key_to_pkt_metadata(const struct nlattr *key, size_t key_len,
-                              struct pkt_metadata *md);
+void odp_key_from_dp_packet(struct ofpbuf *, const struct dp_packet *);
+void odp_key_to_dp_packet(const struct nlattr *key, size_t key_len,
+                          struct dp_packet *md);
 
 /* How well a kernel-provided flow key (a sequence of OVS_KEY_ATTR_*
  * attributes) matches OVS userspace expectations.
@@ -256,6 +261,9 @@ enum odp_key_fitness odp_flow_key_to_mask(const struct nlattr *mask_key,
                                           size_t mask_key_len,
                                           struct flow_wildcards *mask,
                                           const struct flow *flow);
+int parse_key_and_mask_to_match(const struct nlattr *key, size_t key_len,
+                                const struct nlattr *mask, size_t mask_len,
+                                struct match *match);
 
 const char *odp_key_fitness_to_string(enum odp_key_fitness);
 
@@ -268,7 +276,9 @@ enum slow_path_reason commit_odp_actions(const struct flow *,
                                          struct flow *base,
                                          struct ofpbuf *odp_actions,
                                          struct flow_wildcards *wc,
-                                         bool use_masked);
+                                         bool use_masked,
+                                         bool pending_encap,
+                                         struct ofpbuf *encap_data);
 
 /* ofproto-dpif interface.
  *

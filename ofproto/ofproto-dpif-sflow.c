@@ -901,7 +901,7 @@ sflow_read_tnl_push_action(const struct nlattr *attr,
     const struct ip_header *ip
         = ALIGNED_CAST(const struct ip_header *, eth + 1);
 
-    sflow_actions->out_port = u32_to_odp(data->out_port);
+    sflow_actions->out_port = data->out_port;
 
     /* Ethernet. */
     /* TODO: SFlow does not currently define a MAC-in-MAC
@@ -1049,6 +1049,8 @@ sflow_read_set_action(const struct nlattr *attr,
     case OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV4:
     case OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6:
     case OVS_KEY_ATTR_UNSPEC:
+    case OVS_KEY_ATTR_PACKET_TYPE:
+    case OVS_KEY_ATTR_NSH:
     case __OVS_KEY_ATTR_MAX:
     default:
         break;
@@ -1197,6 +1199,8 @@ dpif_sflow_read_actions(const struct flow *flow,
 	    break;
 	case OVS_ACTION_ATTR_SAMPLE:
 	case OVS_ACTION_ATTR_CLONE:
+        case OVS_ACTION_ATTR_ENCAP_NSH:
+        case OVS_ACTION_ATTR_DECAP_NSH:
 	case OVS_ACTION_ATTR_UNSPEC:
 	case __OVS_ACTION_ATTR_MAX:
 	default:

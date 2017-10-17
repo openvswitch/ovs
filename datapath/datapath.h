@@ -99,12 +99,14 @@ struct datapath {
  * @input_vport: The original vport packet came in on. This value is cached
  * when a packet is received by OVS.
  * @mru: The maximum received fragement size; 0 if the packet is not
- * @cutlen: The number of bytes from the packet end to be removed.
  * fragmented.
+ * @acts_origlen: The netlink size of the flow actions applied to this skb.
+ * @cutlen: The number of bytes from the packet end to be removed.
  */
 struct ovs_skb_cb {
 	struct vport		*input_vport;
 	u16			mru;
+	u16			acts_origlen;
 	u32			cutlen;
 };
 #define OVS_CB(skb) ((struct ovs_skb_cb *)(skb)->cb)
@@ -141,6 +143,12 @@ struct ovs_net {
 
 	/* Module reference for configuring conntrack. */
 	bool xt_label;
+
+#ifdef HAVE_INET_FRAG_LRU_MOVE
+	struct net *net;
+	struct netns_frags ipv4_frags;
+	struct netns_frags nf_frags;
+#endif
 };
 
 extern unsigned int ovs_net_id;

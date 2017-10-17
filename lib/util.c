@@ -33,12 +33,20 @@
 #include "ovs-rcu.h"
 #include "ovs-thread.h"
 #include "socket-util.h"
+#include "timeval.h"
 #include "openvswitch/vlog.h"
 #ifdef HAVE_PTHREAD_SET_NAME_NP
 #include <pthread_np.h>
 #endif
 
 VLOG_DEFINE_THIS_MODULE(util);
+
+#ifdef __linux__
+#define LINUX 1
+#include <asm/param.h>
+#else
+#define LINUX 0
+#endif
 
 COVERAGE_DEFINE(util_xalloc);
 
@@ -132,7 +140,7 @@ void *
 xmemdup(const void *p_, size_t size)
 {
     void *p = xmalloc(size);
-    memcpy(p, p_, size);
+    nullable_memcpy(p, p_, size);
     return p;
 }
 
@@ -538,6 +546,66 @@ set_subprogram_name(const char *subprogram_name)
 #endif
 }
 
+unsigned int
+get_page_size(void)
+{
+    static unsigned int cached;
+
+    if (!cached) {
+#ifndef _WIN32
+        long int value = sysconf(_SC_PAGESIZE);
+#else
+        long int value;
+        SYSTEM_INFO sysinfo;
+        GetSystemInfo(&sysinfo);
+        value = sysinfo.dwPageSize;
+#endif
+        if (value >= 0) {
+            cached = value;
+        }
+    }
+
+    return cached;
+}
+
+/* Returns the time at which the system booted, as the number of milliseconds
+ * since the epoch, or 0 if the time of boot cannot be determined. */
+long long int
+get_boot_time(void)
+{
+    static long long int cache_expiration = LLONG_MIN;
+    static long long int boot_time;
+
+    ovs_assert(LINUX);
+
+    if (time_msec() >= cache_expiration) {
+        static const char stat_file[] = "/proc/stat";
+        char line[128];
+        FILE *stream;
+
+        cache_expiration = time_msec() + 5 * 1000;
+
+        stream = fopen(stat_file, "r");
+        if (!stream) {
+            VLOG_ERR_ONCE("%s: open failed (%s)",
+                          stat_file, ovs_strerror(errno));
+            return boot_time;
+        }
+
+        while (fgets(line, sizeof line, stream)) {
+            long long int btime;
+            if (ovs_scan(line, "btime %lld", &btime)) {
+                boot_time = btime * 1000;
+                goto done;
+            }
+        }
+        VLOG_ERR_ONCE("%s: btime not found", stat_file);
+    done:
+        fclose(stream);
+    }
+    return boot_time;
+}
+
 /* Returns a pointer to a string describing the program version.  The
  * caller must not modify or free the returned string.
  */
@@ -574,48 +642,53 @@ void
 ovs_hex_dump(FILE *stream, const void *buf_, size_t size,
              uintptr_t ofs, bool ascii)
 {
-  const uint8_t *buf = buf_;
-  const size_t per_line = 16; /* Maximum bytes per line. */
+    const uint8_t *buf = buf_;
+    const size_t per_line = 16; /* Maximum bytes per line. */
 
-  while (size > 0)
-    {
-      size_t start, end, n;
-      size_t i;
+    while (size > 0) {
+        size_t i;
 
-      /* Number of bytes on this line. */
-      start = ofs % per_line;
-      end = per_line;
-      if (end - start > size)
-        end = start + size;
-      n = end - start;
-
-      /* Print line. */
-      fprintf(stream, "%08"PRIxMAX"  ", (uintmax_t) ROUND_DOWN(ofs, per_line));
-      for (i = 0; i < start; i++)
-        fprintf(stream, "   ");
-      for (; i < end; i++)
-        fprintf(stream, "%02x%c",
-                buf[i - start], i == per_line / 2 - 1? '-' : ' ');
-      if (ascii)
-        {
-          for (; i < per_line; i++)
-            fprintf(stream, "   ");
-          fprintf(stream, "|");
-          for (i = 0; i < start; i++)
-            fprintf(stream, " ");
-          for (; i < end; i++) {
-              int c = buf[i - start];
-              putc(c >= 32 && c < 127 ? c : '.', stream);
-          }
-          for (; i < per_line; i++)
-            fprintf(stream, " ");
-          fprintf(stream, "|");
+        /* Number of bytes on this line. */
+        size_t start = ofs % per_line;
+        size_t end = per_line;
+        if (end - start > size) {
+            end = start + size;
         }
-      fprintf(stream, "\n");
+        size_t n = end - start;
 
-      ofs += n;
-      buf += n;
-      size -= n;
+        /* Print line. */
+        fprintf(stream, "%08"PRIxMAX" ",
+                (uintmax_t) ROUND_DOWN(ofs, per_line));
+        for (i = 0; i < start; i++) {
+            fprintf(stream, "   ");
+        }
+        for (; i < end; i++) {
+            fprintf(stream, "%c%02x",
+                    i == per_line / 2 ? '-' : ' ', buf[i - start]);
+        }
+        if (ascii) {
+            fprintf(stream, " ");
+            for (; i < per_line; i++) {
+                fprintf(stream, "   ");
+            }
+            fprintf(stream, "|");
+            for (i = 0; i < start; i++) {
+                fprintf(stream, " ");
+            }
+            for (; i < end; i++) {
+                int c = buf[i - start];
+                putc(c >= 32 && c < 127 ? c : '.', stream);
+            }
+            for (; i < per_line; i++) {
+                fprintf(stream, " ");
+            }
+            fprintf(stream, "|");
+        }
+        fprintf(stream, "\n");
+
+        ofs += n;
+        buf += n;
+        size -= n;
     }
 }
 
@@ -1162,34 +1235,33 @@ const uint8_t count_1bits_8[256] = {
 };
 #endif
 
-/* Returns true if the 'n' bytes starting at 'p' are zeros. */
+/* Returns true if the 'n' bytes starting at 'p' are 'byte'. */
 bool
-is_all_zeros(const void *p_, size_t n)
+is_all_byte(const void *p_, size_t n, uint8_t byte)
 {
     const uint8_t *p = p_;
     size_t i;
 
     for (i = 0; i < n; i++) {
-        if (p[i] != 0x00) {
+        if (p[i] != byte) {
             return false;
         }
     }
     return true;
 }
 
+/* Returns true if the 'n' bytes starting at 'p' are zeros. */
+bool
+is_all_zeros(const void *p, size_t n)
+{
+    return is_all_byte(p, n, 0);
+}
+
 /* Returns true if the 'n' bytes starting at 'p' are 0xff. */
 bool
-is_all_ones(const void *p_, size_t n)
+is_all_ones(const void *p, size_t n)
 {
-    const uint8_t *p = p_;
-    size_t i;
-
-    for (i = 0; i < n; i++) {
-        if (p[i] != 0xff) {
-            return false;
-        }
-    }
-    return true;
+    return is_all_byte(p, n, 0xff);
 }
 
 /* Copies 'n_bits' bits starting from bit 'src_ofs' in 'src' to the 'n_bits'

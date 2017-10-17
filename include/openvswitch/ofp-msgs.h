@@ -41,6 +41,10 @@
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct ovs_list;
 
 /* Raw identifiers for OpenFlow messages.
@@ -177,8 +181,10 @@ enum ofpraw {
 
     /* OFPT 1.0 (13): struct ofp10_packet_out, uint8_t[]. */
     OFPRAW_OFPT10_PACKET_OUT,
-    /* OFPT 1.1+ (13): struct ofp11_packet_out, uint8_t[]. */
+    /* OFPT 1.1-1.4 (13): struct ofp11_packet_out, uint8_t[]. */
     OFPRAW_OFPT11_PACKET_OUT,
+    /* OFPT 1.5+ (13): struct ofp15_packet_out, uint8_t[]. */
+    OFPRAW_OFPT15_PACKET_OUT,
 
     /* OFPT 1.0 (14): struct ofp10_flow_mod, uint8_t[8][]. */
     OFPRAW_OFPT10_FLOW_MOD,
@@ -561,7 +567,8 @@ enum ofptype {
 
     /* Controller command messages. */
     OFPTYPE_PACKET_OUT,          /* OFPRAW_OFPT10_PACKET_OUT.
-                                  * OFPRAW_OFPT11_PACKET_OUT. */
+                                  * OFPRAW_OFPT11_PACKET_OUT.
+                                  * OFPRAW_OFPT15_PACKET_OUT. */
     OFPTYPE_FLOW_MOD,            /* OFPRAW_OFPT10_FLOW_MOD.
                                   * OFPRAW_OFPT11_FLOW_MOD.
                                   * OFPRAW_NXT_FLOW_MOD. */
@@ -773,5 +780,9 @@ enum ofpraw ofpmp_decode_raw(struct ovs_list *);
 /* Decoding multipart replies. */
 uint16_t ofpmp_flags(const struct ofp_header *);
 bool ofpmp_more(const struct ofp_header *);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* ofp-msgs.h */

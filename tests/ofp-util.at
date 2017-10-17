@@ -3,49 +3,49 @@ AT_BANNER([OpenFlow utilities])
 AT_SETUP([encoding hellos])
 dnl All versions up to a max version supported:
 AT_CHECK([ovs-ofctl encode-hello 0x2], [0], [dnl
-00000000  01 00 00 08 00 00 00 01-
+00000000  01 00 00 08 00 00 00 01
 OFPT_HELLO (xid=0x1):
  version bitmap: 0x01
 ])
 AT_CHECK([ovs-ofctl encode-hello 0x6], [0], [dnl
-00000000  02 00 00 08 00 00 00 01-
+00000000  02 00 00 08 00 00 00 01
 OFPT_HELLO (OF1.1) (xid=0x1):
  version bitmap: 0x01, 0x02
 ])
 AT_CHECK([ovs-ofctl encode-hello 0xe], [0], [dnl
-00000000  03 00 00 08 00 00 00 01-
+00000000  03 00 00 08 00 00 00 01
 OFPT_HELLO (OF1.2) (xid=0x1):
  version bitmap: 0x01, 0x02, 0x03
 ])
 AT_CHECK([ovs-ofctl encode-hello 0x1e], [0], [dnl
-00000000  04 00 00 08 00 00 00 01-
+00000000  04 00 00 08 00 00 00 01
 OFPT_HELLO (OF1.3) (xid=0x1):
  version bitmap: 0x01, 0x02, 0x03, 0x04
 ])
 AT_CHECK([ovs-ofctl encode-hello 0x3e], [0], [dnl
-00000000  05 00 00 08 00 00 00 01-
+00000000  05 00 00 08 00 00 00 01
 OFPT_HELLO (OF1.4) (xid=0x1):
  version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05
 ])
 
 dnl Some versions below max version missing.
 AT_CHECK([ovs-ofctl encode-hello 0xc], [0], [dnl
-00000000  03 00 00 10 00 00 00 01-00 01 00 08 00 00 00 0c @&t@
+00000000  03 00 00 10 00 00 00 01-00 01 00 08 00 00 00 0c
 OFPT_HELLO (OF1.2) (xid=0x1):
  version bitmap: 0x02, 0x03
 ])
 AT_CHECK([ovs-ofctl encode-hello 0xa], [0], [dnl
-00000000  03 00 00 10 00 00 00 01-00 01 00 08 00 00 00 0a @&t@
+00000000  03 00 00 10 00 00 00 01-00 01 00 08 00 00 00 0a
 OFPT_HELLO (OF1.2) (xid=0x1):
  version bitmap: 0x01, 0x03
 ])
 AT_CHECK([ovs-ofctl encode-hello 0x8], [0], [dnl
-00000000  03 00 00 10 00 00 00 01-00 01 00 08 00 00 00 08 @&t@
+00000000  03 00 00 10 00 00 00 01-00 01 00 08 00 00 00 08
 OFPT_HELLO (OF1.2) (xid=0x1):
  version bitmap: 0x03
 ])
 AT_CHECK([ovs-ofctl encode-hello 0x4], [0], [dnl
-00000000  02 00 00 10 00 00 00 01-00 01 00 08 00 00 00 04 @&t@
+00000000  02 00 00 10 00 00 00 01-00 01 00 08 00 00 00 04
 OFPT_HELLO (OF1.1) (xid=0x1):
  version bitmap: 0x02
 ])

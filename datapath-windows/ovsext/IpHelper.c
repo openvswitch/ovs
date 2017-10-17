@@ -369,7 +369,7 @@ OvsGetRoute(SOCKADDR_INET *destinationAddress,
         SOCKADDR_INET crtSrcAddr = { 0 };
         MIB_IPFORWARD_ROW2 crtRoute = { 0 };
         POVS_IPHELPER_INSTANCE crtInstance = NULL;
-        WCHAR interfaceName[IF_MAX_STRING_SIZE] = { 0 };
+        WCHAR interfaceName[IF_MAX_STRING_SIZE + 1];
 
         crtInstance = CONTAINING_RECORD(link, OVS_IPHELPER_INSTANCE, link);
 
@@ -394,11 +394,16 @@ OvsGetRoute(SOCKADDR_INET *destinationAddress,
             RtlCopyMemory(route, &crtRoute, sizeof(*route));
             *instance = crtInstance;
 
-            ConvertInterfaceLuidToAlias(&crtInstance->internalRow.InterfaceLuid,
-                                        interfaceName, IF_MAX_STRING_SIZE + 1);
-            RtlStringCbLengthW(interfaceName, IF_MAX_STRING_SIZE, &len);
+            status =
+                ConvertInterfaceLuidToAlias(&crtInstance->internalRow.InterfaceLuid,
+                                            interfaceName,
+                                            IF_MAX_STRING_SIZE + 1);
+            if (NT_SUCCESS(status)) {
+                status = RtlStringCbLengthW(interfaceName, IF_MAX_STRING_SIZE,
+                                            &len);
+            }
 
-            if (gOvsSwitchContext != NULL) {
+            if (gOvsSwitchContext != NULL && NT_SUCCESS(status)) {
                 NdisAcquireRWLockRead(gOvsSwitchContext->dispatchLock,
                                       &lockState, 0);
                 *vport = OvsFindVportByHvNameW(gOvsSwitchContext,
@@ -485,7 +490,7 @@ OvsResolveIPNeighEntry(PMIB_IPNET_ROW2 ipNeigh)
 
 
 NTSTATUS
-OvsGetOrResolveIPNeigh(MIB_IF_ROW2 ipRow,
+OvsGetOrResolveIPNeigh(PMIB_IF_ROW2 ipRow,
                        UINT32 ipAddr,
                        PMIB_IPNET_ROW2 ipNeigh)
 {
@@ -494,8 +499,8 @@ OvsGetOrResolveIPNeigh(MIB_IF_ROW2 ipRow,
     ASSERT(ipNeigh);
 
     RtlZeroMemory(ipNeigh, sizeof (*ipNeigh));
-    ipNeigh->InterfaceLuid.Value = ipRow.InterfaceLuid.Value;
-    ipNeigh->InterfaceIndex = ipRow.InterfaceIndex;
+    ipNeigh->InterfaceLuid.Value = ipRow->InterfaceLuid.Value;
+    ipNeigh->InterfaceIndex = ipRow->InterfaceIndex;
     ipNeigh->Address.si_family = AF_INET;
     ipNeigh->Address.Ipv4.sin_addr.s_addr = ipAddr;
 
@@ -503,8 +508,8 @@ OvsGetOrResolveIPNeigh(MIB_IF_ROW2 ipRow,
 
     if (status != STATUS_SUCCESS) {
         RtlZeroMemory(ipNeigh, sizeof (*ipNeigh));
-        ipNeigh->InterfaceLuid.Value = ipRow.InterfaceLuid.Value;
-        ipNeigh->InterfaceIndex = ipRow.InterfaceIndex;
+        ipNeigh->InterfaceLuid.Value = ipRow->InterfaceLuid.Value;
+        ipNeigh->InterfaceIndex = ipRow->InterfaceIndex;
         ipNeigh->Address.si_family = AF_INET;
         ipNeigh->Address.Ipv4.sin_addr.s_addr = ipAddr;
         status = OvsResolveIPNeighEntry(ipNeigh);
@@ -608,11 +613,11 @@ OvsAddIpInterfaceNotification(PMIB_IPINTERFACE_ROW ipRow)
 
         InitializeListHead(&instance->link);
         ExInitializeResourceLite(&instance->lock);
-        WCHAR interfaceName[IF_MAX_STRING_SIZE] = { 0 };
+        WCHAR interfaceName[IF_MAX_STRING_SIZE + 1];
         status = ConvertInterfaceLuidToAlias(&ipRow->InterfaceLuid,
                                              interfaceName,
                                              IF_MAX_STRING_SIZE + 1);
-        if (gOvsSwitchContext == NULL) {
+        if (gOvsSwitchContext == NULL || !NT_SUCCESS(status)) {
             goto error;
         }
         NdisAcquireRWLockRead(gOvsSwitchContext->dispatchLock, &lockState, 0);
@@ -917,6 +922,7 @@ static NTSTATUS
 OvsRegisterChangeNotification()
 {
     NTSTATUS status;
+    UINT dummy = 0;
 
 
     status = NotifyIpInterfaceChange(AF_INET, OvsChangeCallbackIpInterface,
@@ -928,7 +934,8 @@ OvsRegisterChangeNotification()
         return status;
     }
 
-    status = NotifyRouteChange2(AF_INET, OvsChangeCallbackIpRoute, NULL,
+    /* The CallerContext is dummy and should never be used */
+    status = NotifyRouteChange2(AF_INET, OvsChangeCallbackIpRoute, &dummy,
                                 TRUE, &ipRouteNotificationHandle);
     if (status != STATUS_SUCCESS) {
         OVS_LOG_ERROR("Fail to regiter ip route change, status: %x.",
@@ -1641,7 +1648,7 @@ OvsHandleFwdRequest(POVS_IP_HELPER_REQUEST request)
     if (ipAddr == 0) {
         ipAddr = request->fwdReq.tunnelKey.dst;
     }
-    status = OvsGetOrResolveIPNeigh(instance->internalRow,
+    status = OvsGetOrResolveIPNeigh(&instance->internalRow,
                                     ipAddr, &ipNeigh);
     if (status != STATUS_SUCCESS) {
         ExReleaseResourceLite(&instance->lock);
@@ -1933,11 +1940,10 @@ OvsStartIpHelper(PVOID data)
             MIB_IPNET_ROW2 ipNeigh;
             NTSTATUS status;
             POVS_IPHELPER_INSTANCE instance = (POVS_IPHELPER_INSTANCE)ipn->context;
-            MIB_IF_ROW2 internalRow = instance->internalRow;
             NdisReleaseSpinLock(&ovsIpHelperLock);
             ExAcquireResourceExclusiveLite(&ovsInstanceListLock, TRUE);
 
-            status = OvsGetOrResolveIPNeigh(internalRow,
+            status = OvsGetOrResolveIPNeigh(&instance->internalRow,
                                             ipAddr, &ipNeigh);
             OvsUpdateIPNeighEntry(ipAddr, &ipNeigh, status);
 

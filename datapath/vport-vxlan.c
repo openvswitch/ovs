@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Nicira, Inc.
+ * Copyright (c) 2015,2017 Nicira, Inc.
  * Copyright (c) 2013 Cisco Systems, Inc.
  *
  * This program is free software; you can redistribute it and/or
@@ -40,15 +40,43 @@ static int vxlan_get_options(const struct vport *vport, struct sk_buff *skb)
 	if (nla_put_u16(skb, OVS_TUNNEL_ATTR_DST_PORT, ntohs(dst_port)))
 		return -EMSGSIZE;
 
+#ifdef HAVE_VXLAN_DEV_CFG
+	if (vxlan->cfg.flags & VXLAN_F_GBP) {
+#else
 	if (vxlan->flags & VXLAN_F_GBP) {
+#endif
 		struct nlattr *exts;
 
 		exts = nla_nest_start(skb, OVS_TUNNEL_ATTR_EXTENSION);
 		if (!exts)
 			return -EMSGSIZE;
 
+#ifdef HAVE_VXLAN_DEV_CFG
+		if (vxlan->cfg.flags & VXLAN_F_GBP &&
+#else
 		if (vxlan->flags & VXLAN_F_GBP &&
+#endif
 		    nla_put_flag(skb, OVS_VXLAN_EXT_GBP))
+			return -EMSGSIZE;
+
+		nla_nest_end(skb, exts);
+#ifdef HAVE_VXLAN_DEV_CFG
+	} else if (vxlan->cfg.flags & VXLAN_F_GPE) {
+#else
+	} else if (vxlan->flags & VXLAN_F_GPE) {
+#endif
+		struct nlattr *exts;
+
+		exts = nla_nest_start(skb, OVS_TUNNEL_ATTR_EXTENSION);
+		if (!exts)
+			return -EMSGSIZE;
+
+#ifdef HAVE_VXLAN_DEV_CFG
+		if (vxlan->cfg.flags & VXLAN_F_GPE &&
+#else
+		if (vxlan->flags & VXLAN_F_GPE &&
+#endif
+		    nla_put_flag(skb, OVS_VXLAN_EXT_GPE))
 			return -EMSGSIZE;
 
 		nla_nest_end(skb, exts);
@@ -59,6 +87,7 @@ static int vxlan_get_options(const struct vport *vport, struct sk_buff *skb)
 
 static const struct nla_policy exts_policy[OVS_VXLAN_EXT_MAX + 1] = {
 	[OVS_VXLAN_EXT_GBP]	= { .type = NLA_FLAG, },
+	[OVS_VXLAN_EXT_GPE]	= { .type = NLA_FLAG, },
 };
 
 static int vxlan_configure_exts(struct vport *vport, struct nlattr *attr,
@@ -77,6 +106,8 @@ static int vxlan_configure_exts(struct vport *vport, struct nlattr *attr,
 
 	if (exts[OVS_VXLAN_EXT_GBP])
 		conf->flags |= VXLAN_F_GBP;
+	else if (exts[OVS_VXLAN_EXT_GPE])
+		conf->flags |= VXLAN_F_GPE;
 
 	return 0;
 }

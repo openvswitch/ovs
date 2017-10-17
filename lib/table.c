@@ -214,6 +214,9 @@ table_add_cell(struct table *table)
 static void
 table_print_table_line__(struct ds *line)
 {
+    while (ds_last(line) == ' ') {
+        line->length--;
+    }
     puts(ds_cstr(line));
     ds_clear(line);
 }
@@ -490,7 +493,6 @@ table_print_json__(const struct table *table, const struct table_style *style)
 {
     struct json *json, *headings, *data;
     size_t x, y;
-    char *s;
 
     json = json_object_create();
     if (table->caption) {
@@ -526,7 +528,7 @@ table_print_json__(const struct table *table, const struct table_style *style)
     }
     json_object_put(json, "data", data);
 
-    s = json_to_string(json, style->json_flags);
+    char *s = json_to_string(json, style->json_flags);
     json_destroy(json);
     puts(s);
     free(s);

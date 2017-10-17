@@ -232,7 +232,14 @@ struct dpif_backer {
     char *dp_version_string;
 
     /* Datapath feature support. */
-    struct dpif_backer_support support;
+    struct dpif_backer_support bt_support;   /* Boot time support. Set once
+                                                when vswitch starts up, then
+                                                it is read only through out
+                                                the life time of vswitchd. */
+    struct dpif_backer_support rt_support;   /* Runtime support. Can be
+                                                set to a lower level in
+                                                feature than 'bt_support'. */
+
     struct atomic_count tnl_count;
 };
 

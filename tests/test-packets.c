@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014 Nicira, Inc.
+ * Copyright (c) 2011, 2014, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -159,16 +159,16 @@ test_ipv6_parsing(void)
 
     inet_pton(AF_INET6, "2001:db8:0:0:0:0:2:1", &o_ipv6);
 
-    ipv6_parse_masked("2001:db8:0:0:0:0:2:1/64", &p_ipv6, &mask);
+    assert(!ipv6_parse_masked("2001:db8:0:0:0:0:2:1/64", &p_ipv6, &mask));
     assert(ipv6_addr_equals(&o_ipv6, &p_ipv6));
     assert(ipv6_count_cidr_bits(&mask) == 64);
 
-    ipv6_parse_masked("2001:db8:0:0:0:0:2:1/ffff:ffff:ffff:ffff::",
-                      &p_ipv6, &mask);
+    assert(!ipv6_parse_masked("2001:db8:0:0:0:0:2:1/ffff:ffff:ffff:ffff::",
+                              &p_ipv6, &mask));
     assert(ipv6_addr_equals(&o_ipv6, &p_ipv6));
     assert(ipv6_count_cidr_bits(&mask) == 64);
 
-    ipv6_parse_masked("2001:db8:0:0:0:0:2:1", &p_ipv6, &mask);
+    assert(!ipv6_parse_masked("2001:db8:0:0:0:0:2:1", &p_ipv6, &mask));
     assert(ipv6_addr_equals(&o_ipv6, &p_ipv6));
     assert(ipv6_count_cidr_bits(&mask) == 128);
 }

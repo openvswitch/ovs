@@ -74,22 +74,4 @@ VOID OvsLog(UINT32 level, UINT32 flag, CHAR *funcName,
 #define OVS_LOG_WARN(_format, ...) \
    OvsLog(OVS_DBG_WARN, OVS_DBG_MOD, __FUNCTION__, __LINE__, _format, __VA_ARGS__)
 
-#if DBG
-#define OVS_VERIFY_IRQL(_x)  \
-    if (KeGetCurrentIrql() != (KIRQL)_x) { \
-        OVS_LOG_WARN("expected IRQL %u, actual IRQL: %u", \
-                     _x, KeGetCurrentIrql()); \
-    }
-
-#define OVS_VERIFY_IRQL_LE(_x)  \
-    if (KeGetCurrentIrql() > (KIRQL)_x) { \
-        OVS_LOG_WARN("expected IRQL <= %u, actual IRQL: %u", \
-                     _x, KeGetCurrentIrql()); \
-    }
-
-#else
-#define OVS_VERIFY_IRQL(_x)
-#define OVS_VERIFY_IRQL_LE(_x)
-#endif
-
 #endif /* __DEBUG_H_ */

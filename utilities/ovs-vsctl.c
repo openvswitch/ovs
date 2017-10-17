@@ -295,9 +295,11 @@ parse_options(int argc, char *argv[], struct shash *local_options)
 
         case OPT_COMMANDS:
             ctl_print_commands();
+            /* fall through */
 
         case OPT_OPTIONS:
             ctl_print_options(global_long_options);
+            /* fall through */
 
         case 'V':
             ovs_print_version(0, 0);
@@ -1501,7 +1503,6 @@ add_port(struct ctl_context *ctx,
          char *settings[], int n_settings)
 {
     struct vsctl_context *vsctl_ctx = vsctl_context_cast(ctx);
-    struct vsctl_port *vsctl_port;
     struct vsctl_bridge *bridge;
     struct ovsrec_interface **ifaces;
     struct ovsrec_port *port;
@@ -1591,7 +1592,7 @@ add_port(struct ctl_context *ctx,
     bridge_insert_port((bridge->parent ? bridge->parent->br_cfg
                         : bridge->br_cfg), port);
 
-    vsctl_port = add_port_to_cache(vsctl_ctx, bridge, port);
+    struct vsctl_port *vsctl_port = add_port_to_cache(vsctl_ctx, bridge, port);
     for (i = 0; i < n_ifaces; i++) {
         add_iface_to_cache(vsctl_ctx, vsctl_port, ifaces[i]);
     }
@@ -2670,11 +2671,10 @@ do_vsctl(const char *args, struct ctl_command *commands, size_t n_commands,
 try_again:
     /* Our transaction needs to be rerun, or a prerequisite was not met.  Free
      * resources and return so that the caller can try again. */
-    if (txn) {
-        ovsdb_idl_txn_abort(txn);
-        ovsdb_idl_txn_destroy(txn);
-        the_idl_txn = NULL;
-    }
+    ovsdb_idl_txn_abort(txn);
+    ovsdb_idl_txn_destroy(txn);
+    the_idl_txn = NULL;
+
     ovsdb_symbol_table_destroy(symtab);
     for (c = commands; c < &commands[n_commands]; c++) {
         ds_destroy(&c->output);

@@ -72,6 +72,15 @@
       </dl>
     </p>
 
+    <h1>Active-Standby for High Availability</h1>
+    <p>
+      You may run <code>ovn-northd</code> more than once in an OVN deployment.
+      OVN will automatically ensure that only one of them is active at a time.
+      If multiple instances of <code>ovn-northd</code> are running and the
+      active <code>ovn-northd</code> fails, one of the hot standby instances
+      of <code>ovn-northd</code> will automatically take over.
+    </p>
+
     <h1>Logical Flow Table Structure</h1>
 
     <p>
@@ -220,7 +229,9 @@
       logical datapath, a priority-100 flow is added that sets a hint
       (with <code>reg0[0] = 1; next;</code>) for table
       <code>Pre-stateful</code> to send IP packets to the connection tracker
-      before eventually advancing to ingress table <code>ACLs</code>.
+      before eventually advancing to ingress table <code>ACLs</code>. If
+      special ports such as route ports or localnet ports can't use ct(), a
+      priority-110 flow is added to skip over stateful ACLs.
     </p>
 
     <h3>Ingress Table 4: Pre-LB</h3>
@@ -492,8 +503,8 @@ output;
         </pre>
 
         <p>
-          These flows are omitted for logical ports (other than router ports)
-          that are down.
+          These flows are omitted for logical ports (other than router ports or
+          <code>localport</code> ports) that are down.
         </p>
       </li>
 
@@ -519,8 +530,8 @@ nd_na {
         </pre>
 
         <p>
-          These flows are omitted for logical ports (other than router ports)
-          that are down.
+          These flows are omitted for logical ports (other than router ports or
+          <code>localport</code> ports) that are down.
         </p>
       </li>
 

@@ -156,6 +156,9 @@ stream_usage(const char *name, bool active, bool passive,
         printf("  --bootstrap-ca-cert=FILE  file with peer CA certificate "
                "to read or create\n");
     }
+    printf("SSL options:\n"
+           "  --ssl-protocols=PROTOS  list of SSL protocols to enable\n"
+           "  --ssl-ciphers=CIPHERS   list of SSL ciphers to enable\n");
 #endif
 }
 
@@ -631,10 +634,10 @@ pstream_get_bound_port(const struct pstream *pstream)
  * After calling this function, stream_close() must be used to destroy
  * 'stream', otherwise resources will be leaked.
  *
- * The caller retains ownership of 'name'. */
+ * Takes ownership of 'name'. */
 void
 stream_init(struct stream *stream, const struct stream_class *class,
-            int connect_status, const char *name)
+            int connect_status, char *name)
 {
     memset(stream, 0, sizeof *stream);
     stream->class = class;
@@ -642,17 +645,18 @@ stream_init(struct stream *stream, const struct stream_class *class,
                     : !connect_status ? SCS_CONNECTED
                     : SCS_DISCONNECTED);
     stream->error = connect_status;
-    stream->name = xstrdup(name);
+    stream->name = name;
     ovs_assert(stream->state != SCS_CONNECTING || class->connect);
 }
 
+/* Takes ownership of 'name'. */
 void
 pstream_init(struct pstream *pstream, const struct pstream_class *class,
-            const char *name)
+            char *name)
 {
     memset(pstream, 0, sizeof *pstream);
     pstream->class = class;
-    pstream->name = xstrdup(name);
+    pstream->name = name;
 }
 
 void

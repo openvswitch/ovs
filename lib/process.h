@@ -22,6 +22,15 @@
 
 struct process;
 
+struct process_info {
+    unsigned long int vsz;      /* Virtual size, in kB. */
+    unsigned long int rss;      /* Resident set size, in kB. */
+    long long int booted;       /* ms since monitor started. */
+    int crashes;                /* # of crashes (usually 0). */
+    long long int uptime;       /* ms since last (re)started by monitor. */
+    long long int cputime;      /* ms of CPU used during 'uptime'. */
+};
+
 /* Starting and monitoring subprocesses.
  *
  * process_init() and process_start() may safely be called only from a
@@ -38,6 +47,9 @@ bool process_exited(struct process *);
 int process_status(const struct process *);
 void process_run(void);
 void process_wait(struct process *);
+
+int count_crashes(pid_t);
+bool get_process_info(pid_t, struct process_info *);
 
 /* These functions are thread-safe. */
 char *process_status_msg(int);

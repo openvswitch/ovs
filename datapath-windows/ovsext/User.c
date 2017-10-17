@@ -53,13 +53,21 @@ extern NL_POLICY nlFlowKeyPolicy[];
 extern UINT32 nlFlowKeyPolicyLen;
 extern NL_POLICY nlFlowTunnelKeyPolicy[];
 extern UINT32 nlFlowTunnelKeyPolicyLen;
+DRIVER_CANCEL OvsCancelIrpDatapath;
 
+_IRQL_raises_(DISPATCH_LEVEL)
+_IRQL_saves_global_(OldIrql, gOvsSwitchContext->pidHashLock)
+_Acquires_lock_(gOvsSwitchContext->pidHashLock)
 static __inline VOID
 OvsAcquirePidHashLock()
 {
     NdisAcquireSpinLock(&(gOvsSwitchContext->pidHashLock));
 }
 
+_IRQL_requires_(DISPATCH_LEVEL)
+_IRQL_restores_global_(OldIrql, gOvsSwitchContext->pidHashLock)
+_Requires_lock_held_(gOvsSwitchContext->pidHashLock)
+_Releases_lock_(gOvsSwitchContext->pidHashLock)
 static __inline VOID
 OvsReleasePidHashLock()
 {
@@ -464,6 +472,11 @@ OvsExecuteDpIoctl(OvsPacketExecute *execute)
 
     ndisStatus = OvsExtractFlow(pNbl, execute->inPort, &key, &layers,
                      tempTunKey.tunKey.dst == 0 ? NULL : &tempTunKey.tunKey);
+
+    if (ndisStatus != NDIS_STATUS_SUCCESS) {
+        /* Invalid network header */
+        goto dropit;
+    }
 
     ctx = (POVS_BUFFER_CONTEXT)NET_BUFFER_LIST_CONTEXT_DATA_START(pNbl);
     ctx->mru = execute->mru;

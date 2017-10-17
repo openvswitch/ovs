@@ -92,7 +92,7 @@ Perform the folowing configuration on `host1`:
 #. Add a port to this bridge. If using tap ports, first boot a VM and then add
    the port to the bridge::
 
-       $ ovs-vsctl add-port br0 tap0
+       $ ovs-vsctl add-port br-int tap0
 
    If using DPDK vhost-user ports, add the port and then boot the VM
    accordingly, using ``vm_port0`` as the interface name::
@@ -103,6 +103,7 @@ Perform the folowing configuration on `host1`:
 #. Configure the IP address of the VM interface *in the VM itself*::
 
        $ ip addr add 192.168.1.1/24 dev eth0
+       $ ip link set eth0 up
 
 #. On `host1`, add a port for the VXLAN tunnel::
 

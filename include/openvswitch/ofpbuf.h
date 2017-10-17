@@ -93,7 +93,7 @@ struct ofpbuf {
  * ofpbuf_use_const().
  */
 static inline struct ofpbuf
-ofpbuf_const_initializer(const void *data, size_t size)
+ofpbuf_const_initializer(const void *data, uint32_t size)
 {
     return (struct ofpbuf) {
         .base = CONST_CAST(void *, data),
@@ -141,6 +141,7 @@ void ofpbuf_reserve(struct ofpbuf *, size_t);
 void *ofpbuf_push_uninit(struct ofpbuf *b, size_t);
 void *ofpbuf_push_zeros(struct ofpbuf *, size_t);
 void *ofpbuf_push(struct ofpbuf *b, const void *, size_t);
+void ofpbuf_insert(struct ofpbuf *b, size_t offset, const void *data, size_t);
 
 static inline size_t ofpbuf_headroom(const struct ofpbuf *);
 static inline size_t ofpbuf_tailroom(const struct ofpbuf *);

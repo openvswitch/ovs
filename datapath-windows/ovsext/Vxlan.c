@@ -489,7 +489,8 @@ OvsSlowPathDecapVxlan(const PNET_BUFFER_LIST packet,
         if (nh) {
             layers.l4Offset = layers.l3Offset + nh->ihl * 4;
         } else {
-            break;
+           status = NDIS_STATUS_INVALID_PACKET;
+           break;
         }
 
         /* make sure it's a VXLAN packet */

@@ -19,7 +19,8 @@ try:
     import ovs_sphinx_theme
     use_ovs_theme = True
 except ImportError:
-    print("Cannot find 'ovs_sphinx' package. Falling back to default theme.")
+    print("Cannot find 'ovs-sphinx-theme' package. "
+          "Falling back to default theme.")
     use_ovs_theme = False
 
 # -- General configuration ------------------------------------------------
@@ -121,6 +122,6 @@ _man_pages = [
 
 # Generate list of (path, name, description, [author, ...], section)
 man_pages = [
-    ('ref/%s' % filename, filename.split('.', 1)[0],
-     description, [author], filename.split('.', 1)[1])
-    for filename, description in _man_pages]
+    ('ref/%s' % file_name, file_name.split('.', 1)[0],
+     description, [author], file_name.split('.', 1)[1])
+    for file_name, description in _man_pages]
