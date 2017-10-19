@@ -502,6 +502,9 @@ dpdk_mp_name(struct dpdk_mp *dmp)
     int ret = snprintf(mp_name, RTE_MEMPOOL_NAMESIZE, "ovs_%x_%d_%d_%u",
                        h, dmp->socket_id, dmp->mtu, dmp->mp_size);
     if (ret < 0 || ret >= RTE_MEMPOOL_NAMESIZE) {
+        VLOG_DBG("snprintf returned %d. Failed to generate a mempool "
+            "name for \"%s\". Hash:0x%x, mtu:%d, mbufs:%u.",
+            ret, dmp->if_name, h, dmp->mtu, dmp->mp_size);
         return NULL;
     }
     return mp_name;
@@ -533,6 +536,10 @@ dpdk_mp_create(struct netdev_dpdk *dev, int mtu, bool *mp_exists)
 
     do {
         char *mp_name = dpdk_mp_name(dmp);
+        if (!mp_name) {
+            rte_free(dmp);
+            return NULL;
+        }
 
         VLOG_DBG("Port %s: Requesting a mempool of %u mbufs "
                   "on socket %d for %d Rx and %d Tx queues.",
