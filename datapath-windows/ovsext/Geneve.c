@@ -324,10 +324,10 @@ NDIS_STATUS OvsDecapGeneve(POVS_SWITCH_CONTEXT switchContext,
         status = STATUS_NDIS_INVALID_PACKET;
         goto dropNbl;
     }
-    tunKey->flags = OVS_TNL_F_KEY;
-    if (geneveHdr->oam) {
-        tunKey->flags |= OVS_TNL_F_OAM;
-    }
+    /* Update tunnelKey flags. */
+    tunKey->flags = OVS_TNL_F_KEY | (geneveHdr->oam ? OVS_TNL_F_OAM : 0) |
+                    (geneveHdr->critical ? OVS_TNL_F_CRT_OPT : 0);
+
     tunKey->tunnelId = GENEVE_VNI_TO_TUNNELID(geneveHdr->vni);
     tunKey->tunOptLen = (uint8)geneveHdr->optLen * 4;
     if (tunKey->tunOptLen > TUN_OPT_MAX_LEN ||
@@ -349,6 +349,7 @@ NDIS_STATUS OvsDecapGeneve(POVS_SWITCH_CONTEXT switchContext,
             memcpy(TunnelKeyGetOptions(tunKey), optStart, tunKey->tunOptLen);
         }
         NdisAdvanceNetBufferDataStart(curNb, tunKey->tunOptLen, FALSE, NULL);
+        tunKey->flags |= OVS_TNL_F_GENEVE_OPT;
     }
 
     return NDIS_STATUS_SUCCESS;
