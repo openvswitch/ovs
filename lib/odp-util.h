@@ -43,7 +43,6 @@ struct pkt_metadata;
     SPR(SLOW_LACP,       "lacp",       "Consists of LACP packets")      \
     SPR(SLOW_STP,        "stp",        "Consists of STP packets")       \
     SPR(SLOW_LLDP,       "lldp",       "Consists of LLDP packets")      \
-    SPR(SLOW_PAUSE,      "pause",      "Controller action with pause")  \
     SPR(SLOW_ACTION,     "action",                                      \
         "Uses action(s) not supported by datapath")
 
@@ -337,6 +336,7 @@ struct user_action_cookie {
         struct {
             /* USER_ACTION_COOKIE_CONTROLLER. */
             bool dont_send;         /* Don't send the packet to controller. */
+            bool continuation;      /* Send packet-in as a continuation. */
             uint16_t reason;
             uint32_t recirc_id;
             ovs_32aligned_be64 rule_cookie;

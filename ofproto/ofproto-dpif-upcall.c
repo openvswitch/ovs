@@ -1428,6 +1428,8 @@ process_upcall(struct udpif *udpif, struct upcall *upcall,
                 break;
             }
 
+            const struct frozen_state *state = &recirc_node->state;
+
             struct ofproto_async_msg *am = xmalloc(sizeof *am);
             *am = (struct ofproto_async_msg) {
                 .controller_id = cookie->controller.controller_id,
@@ -1439,7 +1441,7 @@ process_upcall(struct udpif *udpif, struct upcall *upcall,
                                               dp_packet_size(packet)),
                             .packet_len = dp_packet_size(packet),
                             .reason = cookie->controller.reason,
-                            .table_id = recirc_node->state.table_id,
+                            .table_id = state->table_id,
                             .cookie = get_32aligned_be64(
                                          &cookie->controller.rule_cookie),
                             .userdata = (recirc_node->state.userdata_len
@@ -1453,18 +1455,36 @@ process_upcall(struct udpif *udpif, struct upcall *upcall,
                 },
             };
 
+            if (cookie->controller.continuation) {
+                am->pin.up.stack = (state->stack_size
+                          ? xmemdup(state->stack, state->stack_size)
+                          : NULL),
+                am->pin.up.stack_size = state->stack_size,
+                am->pin.up.mirrors = state->mirrors,
+                am->pin.up.conntracked = state->conntracked,
+                am->pin.up.actions = (state->ofpacts_len
+                            ? xmemdup(state->ofpacts,
+                                      state->ofpacts_len) : NULL),
+                am->pin.up.actions_len = state->ofpacts_len,
+                am->pin.up.action_set = (state->action_set_len
+                               ? xmemdup(state->action_set,
+                                         state->action_set_len)
+                               : NULL),
+                am->pin.up.action_set_len = state->action_set_len,
+                am->pin.up.bridge = upcall->ofproto->uuid;
+            }
+
             /* We don't want to use the upcall 'flow', since it may be
              * more specific than the point at which the "controller"
              * action was specified. */
             struct flow frozen_flow;
 
             frozen_flow = *flow;
-            if (!recirc_node->state.conntracked) {
+            if (!state->conntracked) {
                 flow_clear_conntrack(&frozen_flow);
             }
 
-            frozen_metadata_to_flow(&recirc_node->state.metadata,
-                                    &frozen_flow);
+            frozen_metadata_to_flow(&state->metadata, &frozen_flow);
             flow_get_metadata(&frozen_flow, &am->pin.up.base.flow_metadata);
 
             ofproto_dpif_send_async_msg(upcall->ofproto, am);
@@ -1493,9 +1513,6 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
      *     protocols.
      *
      *   - For SLOW_ACTION, translation executes the actions directly.
-     *
-     *   - For SLOW_PAUSE, translation needs to handle a pause request
-     *     from the controller.
      *
      * The loop fills 'ops' with an array of operations to execute in the
      * datapath. */

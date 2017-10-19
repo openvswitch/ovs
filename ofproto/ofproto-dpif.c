@@ -4586,7 +4586,6 @@ ofproto_dpif_xcache_execute(struct ofproto_dpif *ofproto,
         case XC_NORMAL:
         case XC_GROUP:
         case XC_TNL_NEIGH:
-        case XC_CONTROLLER:
         case XC_TUNNEL_HEADER:
             xlate_push_stats_entry(entry, stats);
             break;

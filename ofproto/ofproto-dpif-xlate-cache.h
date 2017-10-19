@@ -52,7 +52,6 @@ enum xc_type {
     XC_FIN_TIMEOUT,      /* Calls back to ofproto. */
     XC_GROUP,
     XC_TNL_NEIGH,
-    XC_CONTROLLER,
     XC_TUNNEL_HEADER,
 };
 

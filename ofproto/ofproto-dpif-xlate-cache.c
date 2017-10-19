@@ -154,13 +154,6 @@ xlate_push_stats_entry(struct xc_entry *entry,
         tnl_neigh_lookup(entry->tnl_neigh_cache.br_name,
                          &entry->tnl_neigh_cache.d_ipv6, &dmac);
         break;
-    case XC_CONTROLLER:
-        if (entry->controller.am) {
-            ofproto_dpif_send_async_msg(entry->controller.ofproto,
-                                        entry->controller.am);
-            entry->controller.am = NULL; /* One time only. */
-        }
-        break;
     case XC_TUNNEL_HEADER:
         if (entry->tunnel_hdr.operation == ADD) {
             stats->n_bytes += stats->n_packets * entry->tunnel_hdr.hdr_size;
@@ -247,12 +240,6 @@ xlate_cache_clear_entry(struct xc_entry *entry)
         ofproto_group_unref(&entry->group.group->up);
         break;
     case XC_TNL_NEIGH:
-        break;
-    case XC_CONTROLLER:
-        if (entry->controller.am) {
-            ofproto_async_msg_free(entry->controller.am);
-            entry->controller.am = NULL;
-        }
         break;
     case XC_TUNNEL_HEADER:
         break;

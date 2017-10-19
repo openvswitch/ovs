@@ -365,7 +365,6 @@ struct xlate_ctx {
     uint32_t dp_hash_basis;
     struct ofpbuf frozen_actions;
     const struct ofpact_controller *pause;
-    struct flow *paused_flow;
 
     /* True if a packet was but is no longer MPLS (due to an MPLS pop action).
      * This is a trigger for recirculation in cases where translating an action
@@ -4356,6 +4355,35 @@ flood_packets(struct xlate_ctx *ctx, bool all, bool is_last_action)
 }
 
 static void
+put_controller_user_action(struct xlate_ctx *ctx,
+                           bool dont_send, bool continuation,
+                           uint32_t recirc_id, int len,
+                           enum ofp_packet_in_reason reason,
+                           uint16_t controller_id)
+{
+    struct user_action_cookie cookie;
+
+    memset(&cookie, 0, sizeof cookie);
+    cookie.type = USER_ACTION_COOKIE_CONTROLLER;
+    cookie.ofp_in_port = OFPP_NONE,
+    cookie.ofproto_uuid = ctx->xbridge->ofproto->uuid;
+    cookie.controller.dont_send = dont_send;
+    cookie.controller.continuation = continuation;
+    cookie.controller.reason = reason;
+    cookie.controller.recirc_id = recirc_id;
+    put_32aligned_be64(&cookie.controller.rule_cookie, ctx->rule_cookie);
+    cookie.controller.controller_id = controller_id;
+    cookie.controller.max_len = len;
+
+    odp_port_t odp_port = ofp_port_to_odp_port(ctx->xbridge,
+                                             ctx->xin->flow.in_port.ofp_port);
+    uint32_t pid = dpif_port_get_pid(ctx->xbridge->dpif, odp_port,
+                                     flow_hash_5tuple(&ctx->xin->flow, 0));
+    odp_put_userspace_action(pid, &cookie, sizeof cookie, ODPP_NONE,
+                             false, ctx->odp_actions);
+}
+
+static void
 xlate_controller_action(struct xlate_ctx *ctx, int len,
                         enum ofp_packet_in_reason reason,
                         uint16_t controller_id,
@@ -4409,86 +4437,18 @@ xlate_controller_action(struct xlate_ctx *ctx, int len,
         nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_METER, meter_id);
     }
 
-    struct user_action_cookie cookie;
-
-    memset(&cookie, 0, sizeof cookie);
-    cookie.type = USER_ACTION_COOKIE_CONTROLLER;
-    cookie.ofp_in_port = OFPP_NONE;
-    cookie.ofproto_uuid = ctx->xbridge->ofproto->uuid;
-    cookie.controller.dont_send = false;
-    cookie.controller.reason = reason;
-    cookie.controller.recirc_id = recirc_id;
-    put_32aligned_be64(&cookie.controller.rule_cookie, ctx->rule_cookie);
-    cookie.controller.max_len = len;
-    cookie.controller.controller_id = controller_id;
-
     /* Generate the datapath flows even if we don't send the packet-in
      * so that debugging more closely represents normal state. */
+    bool dont_send = false;
     if (!ctx->xin->allow_side_effects && !ctx->xin->xcache) {
-        cookie.controller.dont_send = true;
+        dont_send = true;
     }
-
-    odp_port_t odp_port = ofp_port_to_odp_port(
-        ctx->xbridge, ctx->xin->flow.in_port.ofp_port);
-    uint32_t pid = dpif_port_get_pid(ctx->xbridge->dpif, odp_port,
-                                     flow_hash_5tuple(&ctx->xin->flow, 0));
-    odp_put_userspace_action(pid, &cookie, sizeof cookie, ODPP_NONE,
-                             false, ctx->odp_actions);
+    put_controller_user_action(ctx, dont_send, false, recirc_id, len,
+                               reason, controller_id);
 
     if (meter_id != UINT32_MAX) {
         nl_msg_end_nested(ctx->odp_actions, ac_offset);
         nl_msg_end_nested(ctx->odp_actions, offset);
-    }
-}
-
-static void
-emit_continuation(struct xlate_ctx *ctx, const struct frozen_state *state)
-{
-    if (!ctx->xin->allow_side_effects && !ctx->xin->xcache) {
-        return;
-    }
-
-    struct ofproto_async_msg *am = xmalloc(sizeof *am);
-    *am = (struct ofproto_async_msg) {
-        .controller_id = ctx->pause->controller_id,
-        .oam = OAM_PACKET_IN,
-        .pin = {
-            .up = {
-                .base = {
-                    .userdata = xmemdup(ctx->pause->userdata,
-                                        ctx->pause->userdata_len),
-                    .userdata_len = ctx->pause->userdata_len,
-                    .packet = xmemdup(dp_packet_data(ctx->xin->packet),
-                                      dp_packet_size(ctx->xin->packet)),
-                    .packet_len = dp_packet_size(ctx->xin->packet),
-                    .reason = ctx->pause->reason,
-                },
-                .bridge = ctx->xbridge->ofproto->uuid,
-                .stack = xmemdup(state->stack, state->stack_size),
-                .stack_size = state->stack_size,
-                .mirrors = state->mirrors,
-                .conntracked = state->conntracked,
-                .actions = xmemdup(state->ofpacts, state->ofpacts_len),
-                .actions_len = state->ofpacts_len,
-                .action_set = xmemdup(state->action_set,
-                                      state->action_set_len),
-                .action_set_len = state->action_set_len,
-            },
-            .max_len = UINT16_MAX,
-        },
-    };
-    flow_get_metadata(ctx->paused_flow, &am->pin.up.base.flow_metadata);
-
-    /* Async messages are only sent once, so if we send one now, no
-     * xlate cache entry is created.  */
-    if (ctx->xin->allow_side_effects) {
-        ofproto_dpif_send_async_msg(ctx->xbridge->ofproto, am);
-    } else /* xcache */ {
-        struct xc_entry *entry;
-
-        entry = xlate_cache_add_entry(ctx->xin->xcache, XC_CONTROLLER);
-        entry->controller.ofproto = ctx->xbridge->ofproto;
-        entry->controller.am = am;
     }
 }
 
@@ -4499,7 +4459,6 @@ emit_continuation(struct xlate_ctx *ctx, const struct frozen_state *state)
 static uint32_t
 finish_freezing__(struct xlate_ctx *ctx, uint8_t table)
 {
-    uint32_t id = 0;
     ovs_assert(ctx->freezing);
 
     struct frozen_state state = {
@@ -4513,27 +4472,35 @@ finish_freezing__(struct xlate_ctx *ctx, uint8_t table)
         .ofpacts_len = ctx->frozen_actions.size,
         .action_set = ctx->action_set.data,
         .action_set_len = ctx->action_set.size,
+        .userdata = ctx->pause ? CONST_CAST(uint8_t *,ctx->pause->userdata)
+                               : NULL,
+        .userdata_len = ctx->pause ? ctx->pause->userdata_len : 0,
     };
     frozen_metadata_from_flow(&state.metadata, &ctx->xin->flow);
 
+    /* Allocate a unique recirc id for the given metadata state in the
+     * flow.  An existing id, with a new reference to the corresponding
+     * recirculation context, will be returned if possible.
+     * The life-cycle of this recirc id is managed by associating it
+     * with the udpif key ('ukey') created for each new datapath flow. */
+    uint32_t recirc_id = recirc_alloc_id_ctx(&state);
+    if (!recirc_id) {
+        xlate_report_error(ctx, "Failed to allocate recirculation id");
+        ctx->error = XLATE_NO_RECIRCULATION_CONTEXT;
+        return 0;
+    }
+    recirc_refs_add(&ctx->xout->recircs, recirc_id);
+
     if (ctx->pause) {
-        if (ctx->xin->packet) {
-            emit_continuation(ctx, &state);
-        }
-    } else {
-        /* Allocate a unique recirc id for the given metadata state in the
-         * flow.  An existing id, with a new reference to the corresponding
-         * recirculation context, will be returned if possible.
-         * The life-cycle of this recirc id is managed by associating it
-         * with the udpif key ('ukey') created for each new datapath flow. */
-        id = recirc_alloc_id_ctx(&state);
-        if (!id) {
-            xlate_report_error(ctx, "Failed to allocate recirculation id");
-            ctx->error = XLATE_NO_RECIRCULATION_CONTEXT;
+        if (!ctx->xin->allow_side_effects && !ctx->xin->xcache) {
             return 0;
         }
-        recirc_refs_add(&ctx->xout->recircs, id);
 
+        put_controller_user_action(ctx, false, true, recirc_id,
+                                   ctx->pause->max_len,
+                                   ctx->pause->reason,
+                                   ctx->pause->controller_id);
+    } else {
         if (ctx->recirc_update_dp_hash) {
             struct ovs_action_hash *act_hash;
 
@@ -4544,12 +4511,12 @@ finish_freezing__(struct xlate_ctx *ctx, uint8_t table)
             act_hash->hash_alg = OVS_HASH_ALG_L4;  /* Make configurable. */
             act_hash->hash_basis = 0;              /* Make configurable. */
         }
-        nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_RECIRC, id);
+        nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_RECIRC, recirc_id);
     }
 
     /* Undo changes done by freezing. */
     ctx_cancel_freeze(ctx);
-    return id;
+    return recirc_id;
 }
 
 /* Called only when we're freezing. */
@@ -6120,8 +6087,6 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             controller = ofpact_get_CONTROLLER(a);
             if (controller->pause) {
                 ctx->pause = controller;
-                ctx->xout->slow |= SLOW_PAUSE;
-                *ctx->paused_flow = ctx->xin->flow;
                 ctx_trigger_freeze(ctx);
                 a = ofpact_next(a);
             } else {
@@ -6756,7 +6721,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     uint64_t frozen_actions_stub[1024 / 8];
     uint64_t actions_stub[256 / 8];
     struct ofpbuf scratch_actions = OFPBUF_STUB_INITIALIZER(actions_stub);
-    struct flow paused_flow;
     struct xlate_ctx ctx = {
         .xin = xin,
         .xout = xout,
@@ -6792,7 +6756,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .recirc_update_dp_hash = false,
         .frozen_actions = OFPBUF_STUB_INITIALIZER(frozen_actions_stub),
         .pause = NULL,
-        .paused_flow = &paused_flow,
 
         .was_mpls = false,
         .conntracked = false,

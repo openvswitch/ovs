@@ -481,12 +481,14 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr,
             } else if (cookie.type == USER_ACTION_COOKIE_CONTROLLER) {
                 ds_put_format(ds, ",controller(reason=%"PRIu16
                               ",dont_send=%"PRIu8
+                              ",continuation=%"PRIu8
                               ",recirc_id=%"PRIu32
                               ",rule_cookie=%#"PRIx64
                               ",controller_id=%"PRIu16
                               ",max_len=%"PRIu16,
                               cookie.controller.reason,
                               cookie.controller.dont_send ? 1 : 0,
+                              cookie.controller.continuation ? 1 : 0,
                               cookie.controller.recirc_id,
                               ntohll(get_32aligned_be64(
                                          &cookie.controller.rule_cookie)),
@@ -1146,6 +1148,7 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
 
         /* USER_ACTION_COOKIE_CONTROLLER. */
         uint8_t dont_send;
+        uint8_t continuation;
         uint16_t reason;
         uint32_t recirc_id;
         ovs_be64 rule_cookie;
@@ -1227,17 +1230,19 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
             cookie.ipfix.output_odp_port = u32_to_odp(output);
         } else if (ovs_scan(&s[n], ",controller(reason=%"SCNu16
                               ",dont_send=%"SCNu8
+                              ",continuation=%"SCNu8
                               ",recirc_id=%"SCNu32
                               ",rule_cookie=%"SCNx64
                               ",controller_id=%"SCNu16
                               ",max_len=%"SCNu16")%n",
-                              &reason, &dont_send, &recirc_id, &rule_cookie,
-                              &controller_id, &max_len, &n1)) {
+                              &reason, &dont_send, &continuation, &recirc_id,
+                              &rule_cookie, &controller_id, &max_len, &n1)) {
             n += n1;
             cookie.type = USER_ACTION_COOKIE_CONTROLLER;
             cookie.ofp_in_port = OFPP_NONE;
             cookie.ofproto_uuid = UUID_ZERO;
             cookie.controller.dont_send = dont_send ? true : false;
+            cookie.controller.continuation = continuation ? true : false;
             cookie.controller.reason = reason;
             cookie.controller.recirc_id = recirc_id;
             put_32aligned_be64(&cookie.controller.rule_cookie,
