@@ -602,8 +602,9 @@ dpdk_mp_get(struct netdev_dpdk *dev, int mtu, bool *mp_exists)
     return dmp;
 }
 
+/* Release an existing mempool. */
 static void
-dpdk_mp_put(struct dpdk_mp *dmp)
+dpdk_mp_free(struct dpdk_mp *dmp)
 {
     char *mp_name;
 
@@ -649,7 +650,8 @@ netdev_dpdk_mempool_configure(struct netdev_dpdk *dev)
         dev->max_packet_len = MTU_TO_FRAME_LEN(dev->mtu);
         return EEXIST;
     } else {
-        dpdk_mp_put(dev->dpdk_mp);
+        /* A new mempool was created, release the previous one. */
+        dpdk_mp_free(dev->dpdk_mp);
         dev->dpdk_mp = mp;
         dev->mtu = dev->requested_mtu;
         dev->socket_id = dev->requested_socket_id;
@@ -1094,7 +1096,7 @@ common_destruct(struct netdev_dpdk *dev)
     OVS_EXCLUDED(dev->mutex)
 {
     rte_free(dev->tx_q);
-    dpdk_mp_put(dev->dpdk_mp);
+    dpdk_mp_free(dev->dpdk_mp);
 
     ovs_list_remove(&dev->list_node);
     free(ovsrcu_get_protected(struct ingress_policer *,
