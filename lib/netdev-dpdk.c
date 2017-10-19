@@ -499,8 +499,8 @@ dpdk_mp_name(struct dpdk_mp *dmp)
 {
     uint32_t h = hash_string(dmp->if_name, 0);
     char *mp_name = xcalloc(RTE_MEMPOOL_NAMESIZE, sizeof *mp_name);
-    int ret = snprintf(mp_name, RTE_MEMPOOL_NAMESIZE, "ovs_%x_%d_%u",
-                       h, dmp->mtu, dmp->mp_size);
+    int ret = snprintf(mp_name, RTE_MEMPOOL_NAMESIZE, "ovs_%x_%d_%d_%u",
+                       h, dmp->socket_id, dmp->mtu, dmp->mp_size);
     if (ret < 0 || ret >= RTE_MEMPOOL_NAMESIZE) {
         return NULL;
     }
@@ -534,10 +534,11 @@ dpdk_mp_create(struct netdev_dpdk *dev, int mtu, bool *mp_exists)
     do {
         char *mp_name = dpdk_mp_name(dmp);
 
-        VLOG_DBG("Requesting a mempool of %u mbufs for netdev %s "
-                 "with %d Rx and %d Tx queues.",
-                 dmp->mp_size, dev->up.name,
-                 dev->requested_n_rxq, dev->requested_n_txq);
+        VLOG_DBG("Port %s: Requesting a mempool of %u mbufs "
+                  "on socket %d for %d Rx and %d Tx queues.",
+                  dev->up.name, dmp->mp_size,
+                  dev->requested_socket_id,
+                  dev->requested_n_rxq, dev->requested_n_txq);
 
         dmp->mp = rte_pktmbuf_pool_create(mp_name, dmp->mp_size,
                                           MP_CACHE_SZ,
