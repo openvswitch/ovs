@@ -329,6 +329,14 @@ move_ip_address () {
         while test $# != 0; do
             case $1 in
                 dynamic)
+                    # XXX: According to 'man ip-address', "dynamic" is only
+                    # used for ipv6 addresses.  But, atleast on RHEL 7.4
+                    # (iproute-3.10.0-87), it is being used for ipv4
+                    # addresses assigned with dhcp.
+                    if [ "$family" = "inet" ]; then
+                        shift
+                        continue
+                    fi
                     # Omit kernel-maintained route.
                     continue 2
                     ;;
