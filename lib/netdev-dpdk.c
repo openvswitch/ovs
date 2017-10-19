@@ -550,6 +550,11 @@ dpdk_mp_create(struct netdev_dpdk *dev, int mtu, bool *mp_exists)
         if (dmp->mp) {
             VLOG_DBG("Allocated \"%s\" mempool with %u mbufs", mp_name,
                      dmp->mp_size);
+            /* rte_pktmbuf_pool_create has done some initialization of the
+             * rte_mbuf part of each dp_packet. Some OvS specific fields
+             * of the packet still need to be initialized by
+             * ovs_rte_pktmbuf_init. */
+            rte_mempool_obj_iter(dmp->mp, ovs_rte_pktmbuf_init, NULL);
         } else if (rte_errno == EEXIST) {
             /* A mempool with the same name already exists.  We just
              * retrieve its pointer to be returned to the caller. */
@@ -566,11 +571,6 @@ dpdk_mp_create(struct netdev_dpdk *dev, int mtu, bool *mp_exists)
         }
         free(mp_name);
         if (dmp->mp) {
-            /* rte_pktmbuf_pool_create has done some initialization of the
-             * rte_mbuf part of each dp_packet, while ovs_rte_pktmbuf_init
-             * initializes some OVS specific fields of dp_packet.
-             */
-            rte_mempool_obj_iter(dmp->mp, ovs_rte_pktmbuf_init, NULL);
             return dmp;
         }
     } while (!(*mp_exists) &&
