@@ -39,6 +39,7 @@ vSwitch.
 .. toctree::
    :maxdepth: 2
 
+   faucet
    ovs-advanced
    ovn-sandbox
    ovn-openstack
