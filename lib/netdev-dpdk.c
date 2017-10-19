@@ -308,7 +308,7 @@ struct dpdk_mp {
     int mtu;
     int socket_id;
     char if_name[IFNAMSIZ];
-    unsigned mp_size;
+    unsigned n_mbufs;   /* Number of mbufs inside the mempool. */
     struct ovs_list list_node OVS_GUARDED_BY(dpdk_mp_mutex);
 };
 
@@ -500,11 +500,11 @@ dpdk_mp_name(struct dpdk_mp *dmp)
     uint32_t h = hash_string(dmp->if_name, 0);
     char *mp_name = xcalloc(RTE_MEMPOOL_NAMESIZE, sizeof *mp_name);
     int ret = snprintf(mp_name, RTE_MEMPOOL_NAMESIZE, "ovs_%x_%d_%d_%u",
-                       h, dmp->socket_id, dmp->mtu, dmp->mp_size);
+                       h, dmp->socket_id, dmp->mtu, dmp->n_mbufs);
     if (ret < 0 || ret >= RTE_MEMPOOL_NAMESIZE) {
         VLOG_DBG("snprintf returned %d. Failed to generate a mempool "
             "name for \"%s\". Hash:0x%x, mtu:%d, mbufs:%u.",
-            ret, dmp->if_name, h, dmp->mtu, dmp->mp_size);
+            ret, dmp->if_name, h, dmp->mtu, dmp->n_mbufs);
         return NULL;
     }
     return mp_name;
@@ -523,13 +523,13 @@ dpdk_mp_create(struct netdev_dpdk *dev, int mtu, bool *mp_exists)
     ovs_strzcpy(dmp->if_name, dev->up.name, IFNAMSIZ);
 
     /*
-     * XXX: rough estimation of memory required for port:
+     * XXX: rough estimation of number of mbufs required for this port:
      * <packets required to fill the device rxqs>
      * + <packets that could be stuck on other ports txqs>
      * + <packets in the pmd threads>
      * + <additional memory for corner cases>
      */
-    dmp->mp_size = dev->requested_n_rxq * dev->requested_rxq_size
+    dmp->n_mbufs = dev->requested_n_rxq * dev->requested_rxq_size
             + dev->requested_n_txq * dev->requested_txq_size
             + MIN(RTE_MAX_LCORE, dev->requested_n_rxq) * NETDEV_MAX_BURST
             + MIN_NB_MBUF;
@@ -543,11 +543,11 @@ dpdk_mp_create(struct netdev_dpdk *dev, int mtu, bool *mp_exists)
 
         VLOG_DBG("Port %s: Requesting a mempool of %u mbufs "
                   "on socket %d for %d Rx and %d Tx queues.",
-                  dev->up.name, dmp->mp_size,
+                  dev->up.name, dmp->n_mbufs,
                   dev->requested_socket_id,
                   dev->requested_n_rxq, dev->requested_n_txq);
 
-        dmp->mp = rte_pktmbuf_pool_create(mp_name, dmp->mp_size,
+        dmp->mp = rte_pktmbuf_pool_create(mp_name, dmp->n_mbufs,
                                           MP_CACHE_SZ,
                                           sizeof (struct dp_packet)
                                                  - sizeof (struct rte_mbuf),
@@ -556,7 +556,7 @@ dpdk_mp_create(struct netdev_dpdk *dev, int mtu, bool *mp_exists)
                                           dmp->socket_id);
         if (dmp->mp) {
             VLOG_DBG("Allocated \"%s\" mempool with %u mbufs", mp_name,
-                     dmp->mp_size);
+                     dmp->n_mbufs);
             /* rte_pktmbuf_pool_create has done some initialization of the
              * rte_mbuf part of each dp_packet. Some OvS specific fields
              * of the packet still need to be initialized by
@@ -574,14 +574,14 @@ dpdk_mp_create(struct netdev_dpdk *dev, int mtu, bool *mp_exists)
             *mp_exists = true;
         } else {
             VLOG_ERR("Failed mempool \"%s\" create request of %u mbufs",
-                     mp_name, dmp->mp_size);
+                     mp_name, dmp->n_mbufs);
         }
         free(mp_name);
         if (dmp->mp) {
             return dmp;
         }
     } while (!(*mp_exists) &&
-            (rte_errno == ENOMEM && (dmp->mp_size /= 2) >= MIN_NB_MBUF));
+            (rte_errno == ENOMEM && (dmp->n_mbufs /= 2) >= MIN_NB_MBUF));
 
     rte_free(dmp);
     return NULL;
