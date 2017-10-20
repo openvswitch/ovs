@@ -57,6 +57,7 @@ OVN
    :maxdepth: 2
 
    high-availability
+   role-based-access-control
 
 .. list-table::
 
