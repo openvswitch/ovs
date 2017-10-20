@@ -76,7 +76,11 @@ the below command::
 
     $ yum install gcc make python-devel openssl-devel kernel-devel graphviz \
         kernel-debug-devel autoconf automake rpm-build redhat-rpm-config \
-        libtool checkpolicy selinux-policy-devel
+        libtool checkpolicy selinux-policy-devel python-sphinx
+
+.. note::
+  If python-sphinx package is not available in your version of RHEL, you can
+  install it via pip with 'pip install sphinx'.
 
 .. _rhel-bootstrapping:
 
