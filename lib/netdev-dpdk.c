@@ -2582,7 +2582,7 @@ netdev_dpdk_detach(struct unixctl_conn *conn, int argc OVS_UNUSED,
 {
     int ret;
     char *response;
-    uint8_t port_id;
+    dpdk_port_t port_id;
     char devname[RTE_ETH_NAME_MAX_LEN];
     struct netdev_dpdk *dev;
 
