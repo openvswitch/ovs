@@ -872,7 +872,7 @@
       </column>
 
       <column name="other_config" key="dp-desc">
-        Human readable description of datapath.  It it a maximum 256
+        Human readable description of datapath.  It is a maximum 256
         byte-long free-form string to describe the datapath for
         debugging purposes, e.g. <code>switch3 in room 3120</code>.
       </column>
