@@ -51,6 +51,13 @@ flow_tnl_src(const struct flow_tnl *tnl)
     return tnl->ip_src ? in6_addr_mapped_ipv4(tnl->ip_src) : tnl->ipv6_src;
 }
 
+/* Returns true if 's' consists entirely of hex digits, false otherwise. */
+static bool
+is_all_hex(const char *s)
+{
+    return s[strspn(s, "0123456789abcdefABCDEF")] == '\0';
+}
+
 /* Parses 's' as a 16-digit hexadecimal number representing a datapath ID.  On
  * success stores the dpid into '*dpidp' and returns true, on failure stores 0
  * into '*dpidp' and returns false.
@@ -59,7 +66,10 @@ flow_tnl_src(const struct flow_tnl *tnl)
 bool
 dpid_from_string(const char *s, uint64_t *dpidp)
 {
-    *dpidp = (strlen(s) == 16 && strspn(s, "0123456789abcdefABCDEF") == 16
+    size_t len = strlen(s);
+    *dpidp = ((len == 16 && is_all_hex(s))
+              || (len <= 18 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X')
+                  && is_all_hex(s + 2))
               ? strtoull(s, NULL, 16)
               : 0);
     return *dpidp != 0;

@@ -225,3 +225,41 @@ AT_CHECK([test ! -e b/c.mgmt])
 
 OVS_VSWITCHD_STOP(['/ignoring bridge with invalid name/d'])
 AT_CLEANUP
+
+dnl ----------------------------------------------------------------------
+AT_SETUP([ovs-vswitchd - set datapath IDs])
+OVS_VSWITCHD_START([remove bridge br0 other-config datapath-id])
+
+# Get the default dpid and verify that it is of the expected form.
+AT_CHECK([ovs-vsctl --timeout=10 wait-until bridge br0 datapath-id!='[[]]'])
+AT_CHECK([ovs-vsctl get bridge br0 datapath-id], [0], [stdout])
+orig_dpid=$(tr -d \" < stdout)
+AT_CHECK([sed 's/[[0-9a-f]]/x/g' stdout], [0], ["xxxxxxxxxxxxxxxx"
+])
+AT_CHECK_UNQUOTED([ovs-ofctl show br0 | strip_xids | head -1], [0], [dnl
+OFPT_FEATURES_REPLY: dpid:$orig_dpid
+])
+
+# Set a dpid with 16 hex digits.
+AT_CHECK([ovs-vsctl set bridge br0 other-config:datapath-id=0123456789abcdef])
+AT_CHECK([ovs-vsctl --timeout=10 wait-until bridge br0 datapath-id=0123456789abcdef])
+AT_CHECK([ovs-ofctl show br0 | strip_xids | head -1], [0], [dnl
+OFPT_FEATURES_REPLY: dpid:0123456789abcdef
+])
+
+# Set a dpif with 0x prefix.
+AT_CHECK([ovs-vsctl set bridge br0 other-config:datapath-id=0x5ad515c0])
+AT_CHECK([ovs-vsctl --timeout=10 wait-until bridge br0 datapath-id=000000005ad515c0])
+AT_CHECK([ovs-ofctl show br0 | strip_xids | head -1], [0], [dnl
+OFPT_FEATURES_REPLY: dpid:000000005ad515c0
+])
+
+# Set invalid all-zeros dpid and make sure that the default reappears.
+AT_CHECK([ovs-vsctl set bridge br0 other-config:datapath-id=0x00])
+AT_CHECK([ovs-vsctl --timeout=10 wait-until bridge br0 datapath-id=$orig_dpid])
+AT_CHECK_UNQUOTED([ovs-ofctl show br0 | strip_xids | head -1], [0], [dnl
+OFPT_FEATURES_REPLY: dpid:$orig_dpid
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP

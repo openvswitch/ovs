@@ -882,8 +882,9 @@
       </column>
 
       <column name="other_config" key="datapath-id">
-        Exactly 16 hex digits to set the OpenFlow datapath ID to a specific
-        value.  May not be all-zero.
+        Overrides the default OpenFlow datapath ID, setting it to the specified
+        value specified in hex.  The value must either have a <code>0x</code>
+        prefix or be exactly 16 hex digits long.  May not be all-zero.
       </column>
 
       <column name="other_config" key="dp-desc">
