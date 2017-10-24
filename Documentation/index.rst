@@ -106,7 +106,8 @@ Learn more about the Open vSwitch project and about how you can contribute:
   :doc:`internals/contributing/coding-style` |
   :doc:`internals/contributing/coding-style-windows`
 
-- **Maintaining:** :doc:`internals/maintainers` |
+- **Maintaining:** :doc:`internals/charter` |
+  :doc:`internals/maintainers` |
   :doc:`internals/committer-responsibilities` |
   :doc:`internals/committer-grant-revocation` |
   :doc:`internals/committer-emeritus-status`
