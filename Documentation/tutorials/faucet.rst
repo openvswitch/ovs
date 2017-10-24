@@ -25,11 +25,12 @@
 OVS Faucet Tutorial
 ===================
 
-This tutorial demonstrates how Open vSwitch works with a controller, using the
-Faucet controller as a simple way to get started.  It was tested with the
-"master" branch of Open vSwitch and version 1.6.7 of Faucet in October 2017.
-It does not use advanced or recently added features in OVS or Faucet, so other
-versions of both pieces of software are likely to work equally well.
+This tutorial demonstrates how Open vSwitch works with a general-purpose
+OpenFlow controller, using the Faucet controller as a simple way to get
+started.  It was tested with the "master" branch of Open vSwitch and version
+1.6.7 of Faucet in October 2017.  It does not use advanced or recently added
+features in OVS or Faucet, so other versions of both pieces of software are
+likely to work equally well.
 
 The goal of the tutorial is to demonstrate Open vSwitch and Faucet in an
 end-to-end way, that is, to show how it works from the Faucet controller
@@ -145,7 +146,7 @@ between one and the other.
 
 4. Create a container and start Faucet::
 
-     $ docker run -d --name faucet -v `pwd`/inst/:/etc/ryu/faucet/ -v `pwd`/inst/:/var/log/ryu/faucet/ -p 6653:6653 faucet/faucet
+     $ docker run -d --name faucet -v $(pwd)/inst/:/etc/ryu/faucet/ -v $(pwd)/inst/:/var/log/ryu/faucet/ -p 6653:6653 faucet/faucet
 
 5. Look in ``inst/faucet.log`` to verify that Faucet started.  It will
    probably start with an exception and traceback because we have not
@@ -183,8 +184,9 @@ from Faucet at the top to the data plane layer at the bottom.  From
 the highest to lowest level, these layers and the software components
 that connect them are:
 
-* Faucet, which as the top level in the system is the authoritative
-  source of the network configuration.
+Faucet.
+  As the top level in the system, this is the authoritative source of the
+  network configuration.
 
   Faucet connects to a variety of monitoring and performance tools,
   but we won't use them in this tutorial.  Our main insights into the
@@ -193,10 +195,10 @@ that connect them are:
   resolution, and to tell when we've screwed up configuration syntax
   or semantics.
 
-* The OpenFlow subsystem in Open vSwitch.  OpenFlow is the protocol,
-  standardized by the Open Networking Foundation, that controllers
-  like Faucet use to control how Open vSwitch and other switches treat
-  packets in the network.
+The OpenFlow subsystem in Open vSwitch.
+  OpenFlow is the protocol, standardized by the Open Networking Foundation,
+  that controllers like Faucet use to control how Open vSwitch and other
+  switches treat packets in the network.
 
   We will use ``ovs-ofctl``, a utility that comes with Open vSwitch,
   to observe and occasionally modify Open vSwitch's OpenFlow behavior.
@@ -208,12 +210,12 @@ that connect them are:
   logging level for OpenFlow high enough that we can learn a great
   deal about OpenFlow behavior simply by reading its log file.
 
-* Open vSwitch datapath.  This is essentially a cache designed to
-  accelerate packet processing.  Open vSwitch includes a few different
-  datapaths, such as one based on the Linux kernel and a
-  userspace-only datapath (sometimes called the "DPDK" datapath).  The
-  OVS sandbox uses the latter, but the principles behind it apply
-  equally well to other datapaths.
+Open vSwitch datapath.
+  This is essentially a cache designed to accelerate packet processing.  Open
+  vSwitch includes a few different datapaths, such as one based on the Linux
+  kernel and a userspace-only datapath (sometimes called the "DPDK" datapath).
+  The OVS sandbox uses the latter, but the principles behind it apply equally
+  well to other datapaths.
 
 At each step, we discuss how the design of each layer influences
 performance.  We demonstrate how Open vSwitch features can be used to
@@ -273,7 +275,7 @@ Faucet is now waiting for a switch with datapath ID 0x1 to connect to
 it over OpenFlow, so our next step is to create a switch with OVS and
 make it connect to Faucet.  To do that, switch to the terminal where
 you checked out OVS and start a sandbox with ``make sandbox`` or
-`tutorial/ovs-sandbox`` (as explained earlier under `Setting Up
+``tutorial/ovs-sandbox`` (as explained earlier under `Setting Up
 OVS`_).  You should see something like this toward the end of the
 output::
 

@@ -61,7 +61,8 @@ vSwitch? Start here.
   :doc:`intro/install/dpdk` |
   :doc:`Installation FAQs <faq/releases>`
 
-- **Tutorials:** :doc:`tutorials/ovs-advanced` |
+- **Tutorials:** :doc:`tutorials/faucet` |
+  :doc:`tutorials/ovs-advanced` |
   :doc:`tutorials/ovn-sandbox` |
   :doc:`tutorials/ovn-openstack`
 
