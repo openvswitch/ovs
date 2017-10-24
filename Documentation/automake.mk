@@ -47,6 +47,7 @@ DOC_SOURCE = \
 	Documentation/howto/index.rst \
 	Documentation/howto/docker.rst \
 	Documentation/howto/dpdk.rst \
+	Documentation/howto/firewalld.rst \
 	Documentation/howto/kvm.rst \
 	Documentation/howto/libvirt.rst \
 	Documentation/howto/selinux.rst \

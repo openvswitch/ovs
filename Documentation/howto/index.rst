@@ -57,3 +57,4 @@ OVN
 
    docker
    openstack-containers
+   firewalld
