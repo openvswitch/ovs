@@ -1605,7 +1605,7 @@ copymultiple_error:
  * --------------------------------------------------------------------------
  */
 PNET_BUFFER_LIST
-OvsCompleteNBL(POVS_SWITCH_CONTEXT context,
+OvsCompleteNBL(PVOID switch_ctx,
                PNET_BUFFER_LIST nbl,
                BOOLEAN updateRef)
 {
@@ -1615,6 +1615,7 @@ OvsCompleteNBL(POVS_SWITCH_CONTEXT context,
     NDIS_STATUS status;
     NDIS_HANDLE poolHandle;
     LONG value;
+    POVS_SWITCH_CONTEXT context = (POVS_SWITCH_CONTEXT)switch_ctx;
     POVS_NBL_POOL ovsPool = &context->ovsPool;
     PNET_BUFFER nb;
 
