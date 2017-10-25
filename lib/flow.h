@@ -929,7 +929,7 @@ pkt_metadata_from_flow(struct pkt_metadata *md, const struct flow *flow)
     md->ct_label = flow->ct_label;
 
     md->ct_orig_tuple_ipv6 = false;
-    if (is_ct_valid(flow, NULL, NULL)) {
+    if (flow->dl_type && is_ct_valid(flow, NULL, NULL)) {
         if (flow->dl_type == htons(ETH_TYPE_IP)) {
             md->ct_orig_tuple.ipv4 = (struct ovs_key_ct_tuple_ipv4) {
                 flow->ct_nw_src,
@@ -947,6 +947,9 @@ pkt_metadata_from_flow(struct pkt_metadata *md, const struct flow *flow)
                 flow->ct_tp_dst,
                 flow->ct_nw_proto,
             };
+        } else {
+            /* Reset ct_orig_tuple for other types. */
+            memset(&md->ct_orig_tuple, 0, sizeof md->ct_orig_tuple);
         }
     } else {
         memset(&md->ct_orig_tuple, 0, sizeof md->ct_orig_tuple);
