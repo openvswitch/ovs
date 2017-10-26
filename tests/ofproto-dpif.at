@@ -8952,7 +8952,7 @@ AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): table_id=6 cookie=0x0 total_len=42 reg0=0x1,reg1=0x4d2,reg2=0x1,reg3=0x1,reg4=0x1,in_port=1 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=1,tp_dst=2 udp_csum:e9d6
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=6 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_zone=1,ct_mark=0x1,ct_label=0x4d2000000000000000000000000,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,reg0=0x1,reg1=0x4d2,reg2=0x1,reg3=0x2,reg4=0x1,in_port=2 (via action) data_len=42 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=6 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_zone=1,ct_mark=0x1,ct_label=0x4d2000000000000000000000000,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,ip,reg0=0x1,reg1=0x4d2,reg2=0x1,reg3=0x2,reg4=0x1,in_port=2 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:e9d6
 ])
 
@@ -8973,7 +8973,7 @@ AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): table_id=6 cookie=0x0 total_len=42 reg0=0x1,reg1=0x4d2,reg2=0x1,reg3=0x1,reg4=0x1,in_port=1 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=3,tp_dst=2 udp_csum:e9d4
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=6 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_zone=1,ct_mark=0x1,ct_label=0x4d2000000000000000000000000,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=3,ct_tp_dst=2,reg0=0x1,reg1=0x4d2,reg2=0x1,reg3=0x2,reg4=0x1,in_port=2 (via action) data_len=42 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=6 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_zone=1,ct_mark=0x1,ct_label=0x4d2000000000000000000000000,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=3,ct_tp_dst=2,ip,reg0=0x1,reg1=0x4d2,reg2=0x1,reg3=0x2,reg4=0x1,in_port=2 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=3 udp_csum:e9d4
 ])
 
@@ -9105,7 +9105,7 @@ dnl happens because the ct_state field is available only after recirc.
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 udp6,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,ipv6_src=2001:db8::1,ipv6_dst=2001:db8::2,ipv6_label=0x00000,nw_tos=112,nw_ecn=0,nw_ttl=128,tp_src=1,tp_dst=2 udp_csum:a466
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=62 ct_state=est|rpl|trk,ct_ipv6_src=2001:db8::1,ct_ipv6_dst=2001:db8::2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,in_port=2 (via action) data_len=62 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=62 ct_state=est|rpl|trk,ct_ipv6_src=2001:db8::1,ct_ipv6_dst=2001:db8::2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,ipv6,in_port=2 (via action) data_len=62 (unbuffered)
 udp6,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,ipv6_src=2001:db8::2,ipv6_dst=2001:db8::1,ipv6_label=0x00000,nw_tos=112,nw_ecn=0,nw_ttl=128,tp_src=2,tp_dst=1 udp_csum:a466
 ])
 
@@ -9216,7 +9216,7 @@ OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 
 dnl Check this output. Only one reply must be there
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,in_port=2 (via action) data_len=42 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,ip,in_port=2 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:e9d6
 dnl
 OFPT_ECHO_REQUEST (xid=0x0): 0 bytes of payload
@@ -9250,7 +9250,7 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 1])
 OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=86 ct_state=inv|trk,in_port=2 (via action) data_len=86 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=86 ct_state=inv|trk,ipv6,in_port=2 (via action) data_len=86 (unbuffered)
 icmp6,vlan_tci=0x0000,dl_src=00:00:86:05:80:da,dl_dst=00:60:97:07:69:ea,ipv6_src=fe80::200:86ff:fe05:80da,ipv6_dst=fe80::260:97ff:fe07:69ea,ipv6_label=0x00000,nw_tos=0,nw_ecn=0,nw_ttl=255,icmp_type=135,icmp_code=0,nd_target=fe80::260:97ff:fe07:69ea,nd_sll=00:00:86:05:80:da,nd_tll=00:00:00:00:00:00 icmp6_csum:68bd
 ])
 
@@ -9309,13 +9309,13 @@ AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=1,tp_dst=2 udp_csum:e9d6
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,in_port=2 (via action) data_len=42 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,ip,in_port=2 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:e9d6
 dnl
 NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 in_port=3 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=1,tp_dst=2 udp_csum:e9d6
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_zone=1,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,in_port=4 (via action) data_len=42 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_zone=1,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,ip,in_port=4 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:e9d6
 ])
 
@@ -9365,7 +9365,7 @@ AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=1,tp_dst=2 udp_csum:e9d6
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,in_port=2 (via action) data_len=42 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,ip,in_port=2 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:e9d6
 ])
 
@@ -9412,10 +9412,10 @@ OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 
 dnl Check this output. We only see the first and the last packet
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=47 ct_state=new|trk,ct_nw_src=172.16.0.1,ct_nw_dst=172.16.0.2,ct_nw_proto=17,ct_tp_src=41614,ct_tp_dst=5555,in_port=1 (via action) data_len=47 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=47 ct_state=new|trk,ct_nw_src=172.16.0.1,ct_nw_dst=172.16.0.2,ct_nw_proto=17,ct_tp_src=41614,ct_tp_dst=5555,ip,in_port=1 (via action) data_len=47 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=e6:4c:47:35:28:c9,dl_dst=c6:f9:4e:cb:72:db,nw_src=172.16.0.1,nw_dst=172.16.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=41614,tp_dst=5555 udp_csum:2096
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=75 ct_state=rel|rpl|trk,ct_nw_src=172.16.0.1,ct_nw_dst=172.16.0.2,ct_nw_proto=17,ct_tp_src=41614,ct_tp_dst=5555,in_port=2 (via action) data_len=75 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=75 ct_state=rel|rpl|trk,ct_nw_src=172.16.0.1,ct_nw_dst=172.16.0.2,ct_nw_proto=17,ct_tp_src=41614,ct_tp_dst=5555,ip,in_port=2 (via action) data_len=75 (unbuffered)
 icmp,vlan_tci=0x0000,dl_src=c6:f9:4e:cb:72:db,dl_dst=e6:4c:47:35:28:c9,nw_src=172.16.0.2,nw_dst=172.16.0.1,nw_tos=192,nw_ecn=0,nw_ttl=64,icmp_type=3,icmp_code=3 icmp_csum:553f
 ])
 
@@ -9473,10 +9473,10 @@ dnl
 NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=5,tp_dst=6 udp_csum:e9ce
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_mark=0x1,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,in_port=2 (via action) data_len=42 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_mark=0x1,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,ip,in_port=2 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:e9d6
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_mark=0x3,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=3,ct_tp_dst=4,in_port=2 (via action) data_len=42 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_mark=0x3,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=3,ct_tp_dst=4,ip,in_port=2 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=4,tp_dst=3 udp_csum:e9d2
 ])
 
@@ -9521,10 +9521,10 @@ OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 
 dnl Check this output.
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_label=0x1,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,in_port=2 (via action) data_len=42 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_label=0x1,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,ip,in_port=2 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:e9d6
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_label=0x2,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=3,ct_tp_dst=4,in_port=2 (via action) data_len=42 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_label=0x2,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=3,ct_tp_dst=4,ip,in_port=2 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=4,tp_dst=3 udp_csum:e9d2
 ])
 
@@ -9803,7 +9803,7 @@ dnl
 NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=1,tp_dst=2 udp_csum:e9d6
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,in_port=2 (via action) data_len=42 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,ip,in_port=2 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:e9d6
 dnl
 NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=42 in_port=2 (via action) data_len=42 (unbuffered)
