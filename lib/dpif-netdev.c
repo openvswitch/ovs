@@ -3285,9 +3285,14 @@ port_reconfigure(struct dp_netdev_port *port)
     port->txq_used = xcalloc(netdev_n_txq(netdev), sizeof *port->txq_used);
 
     for (i = 0; i < netdev_n_rxq(netdev); i++) {
+        bool new_queue = i >= last_nrxq;
+        if (new_queue) {
+            memset(&port->rxqs[i], 0, sizeof port->rxqs[i]);
+        }
+
         port->rxqs[i].port = port;
-        if (i >= last_nrxq) {
-            /* Only reset cycle stats for new queues */
+
+        if (new_queue) {
             dp_netdev_rxq_set_cycles(&port->rxqs[i], RXQ_CYCLES_PROC_CURR, 0);
             dp_netdev_rxq_set_cycles(&port->rxqs[i], RXQ_CYCLES_PROC_HIST, 0);
             for (unsigned j = 0; j < PMD_RXQ_INTERVAL_MAX; j++) {
