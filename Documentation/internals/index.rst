@@ -39,6 +39,7 @@ itself and how they might involved.
    release-process
    bugs
    security
+   committer-emeritus-status
    committer-responsibilities
    committer-grant-revocation
    authors

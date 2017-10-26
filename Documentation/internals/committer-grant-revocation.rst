@@ -102,47 +102,10 @@ The process to grant commit access to a candidate is simple:
 Revoking Commit Access
 ----------------------
 
-There are two situations in which commit access might be revoked.
-
-The straightforward situation is a committer who is no longer active in the
-project and has no plans to become active in the near future. The process in
-this case is:
-
-- Any time after a committer has been inactive for more than 6 months any other
-  committer to the project may identify that committer as a candidate for
-  revocation of commit access due to inactivity.
-
-- The plans of revocation should be sent in a private email to the candidate.
-
-- If the candidate for removal states plans to continue participating no action
-  is taken and this process terminates.
-
-- If the candidate replies they no longer require commit access then commit
-  access is removed and a notification is sent to the candidate and all
-  existing committers.
-
-- If the candidate can not be reached within 1 week of the first attempting to
-  contact this process continues.
-
-- A message proposing removal of commit access is sent to the candidate and all
-  other committers.
-
-  - If the candidate for removal states plans to continue participating no
-    action is taken.
-
-  - If the candidate replies they no longer require commit access then their
-    access is removed.
-
-  - If the candidate can not be reached within 2 months of the second
-    attempting to contact them, access is removed.
-
-- In any case, where access is removed, this fact is published through an email
-  to all existing committers (including the candidate for removal).
-
-The more difficult situation is a committer who is behaving in a manner that is
-viewed as detrimental to the future of the project by other committers. This is
-a delicate situation with the potential for the creation of division within the
-greater community and should be handled with care. The process in this case is:
+When a committer behaves in a manner that other committers view as detrimental
+to the future of the project, it raises a delicate situation with the potential
+for the creation of division within the greater community.  These situations
+should be handled with care.  The process in this case is:
 
 - Discuss the behavior of concern with the individual privately and explain why
   you believe it is detrimental to the project. Stick to the facts and keep the
@@ -275,24 +238,6 @@ Invitation to Accepted Committer
     you agree to fulfill these responsibilities. Once we receive your response
     we'll set up access. We're looking forward continuing to work together to
     advance the Open vSwitch project.
-
-Proposal to Remove Commit Access for Inactivity
------------------------------------------------
-
-    Committer *[candidate]* has been inactive for *[duration]*. I have
-    attempted to privately contacted *[him/her]* and *[he/she]* could not be
-    reached.
-
-    Based on this I would like to formally propose removal of commit access.
-    If a response to this message documenting the reasons to retain commit
-    access is not received by *[date]* access will be removed.
-
-Notification of Commit Removal for Inactivity
----------------------------------------------
-
-    Committer *[candidate]* has been inactive for *[duration]*. *[He/she]*
-    *[stated no commit access is required/failed to respond]* to the formal
-    proposal to remove access on *[date]*. Commit access has now been removed.
 
 Proposal to Revoke Commit Access for Detrimental Behavior
 ---------------------------------------------------------
