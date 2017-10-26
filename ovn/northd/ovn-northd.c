@@ -1924,8 +1924,9 @@ ovn_port_update_sbrec(struct northd_context *ctx,
             }
             smap_add(&new, "distributed-port", op->nbrp->name);
         } else {
-            const char *peer = op->peer ? op->peer->key : "<error>";
-            smap_add(&new, "peer", peer);
+            if (op->peer) {
+                smap_add(&new, "peer", op->peer->key);
+            }
             if (chassis_name) {
                 smap_add(&new, "l3gateway-chassis", chassis_name);
             }
@@ -1985,16 +1986,20 @@ ovn_port_update_sbrec(struct northd_context *ctx,
                 sbrec_port_binding_set_type(op->sb, "patch");
             }
 
-            const char *router_port = smap_get_def(&op->nbsp->options,
-                                                   "router-port", "<error>");
-            struct smap new;
-            smap_init(&new);
-            smap_add(&new, "peer", router_port);
-            if (chassis) {
-                smap_add(&new, "l3gateway-chassis", chassis);
+            const char *router_port = smap_get(&op->nbsp->options,
+                                               "router-port");
+            if (router_port || chassis) {
+                struct smap new;
+                smap_init(&new);
+                if (router_port) {
+                    smap_add(&new, "peer", router_port);
+                }
+                if (chassis) {
+                    smap_add(&new, "l3gateway-chassis", chassis);
+                }
+                sbrec_port_binding_set_options(op->sb, &new);
+                smap_destroy(&new);
             }
-            sbrec_port_binding_set_options(op->sb, &new);
-            smap_destroy(&new);
 
             const char *nat_addresses = smap_get(&op->nbsp->options,
                                            "nat-addresses");
