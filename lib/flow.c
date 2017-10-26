@@ -1073,6 +1073,9 @@ flow_get_metadata(const struct flow *flow, struct match *flow_metadata)
 
     if (flow->ct_state != 0) {
         match_set_ct_state(flow_metadata, flow->ct_state);
+        /* Match dl_type since it is required for the later interpretation of
+         * the conntrack metadata. */
+        match_set_dl_type(flow_metadata, flow->dl_type);
         if (is_ct_valid(flow, NULL, NULL) && flow->ct_nw_proto != 0) {
             if (flow->dl_type == htons(ETH_TYPE_IP)) {
                 match_set_ct_nw_src(flow_metadata, flow->ct_nw_src);
