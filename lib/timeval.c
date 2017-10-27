@@ -231,6 +231,29 @@ time_wall_msec(void)
     return time_msec__(&wall_clock);
 }
 
+static long long int
+time_usec__(struct clock *c)
+{
+    struct timespec ts;
+
+    time_timespec__(c, &ts);
+    return timespec_to_usec(&ts);
+}
+
+/* Returns a monotonic timer, in microseconds. */
+long long int
+time_usec(void)
+{
+    return time_usec__(&monotonic_clock);
+}
+
+/* Returns the current time, in microseconds. */
+long long int
+time_wall_usec(void)
+{
+    return time_usec__(&wall_clock);
+}
+
 /* Configures the program to die with SIGALRM 'secs' seconds from now, if
  * 'secs' is nonzero, or disables the feature if 'secs' is zero. */
 void
@@ -356,6 +379,18 @@ long long int
 timeval_to_msec(const struct timeval *tv)
 {
     return (long long int) tv->tv_sec * 1000 + tv->tv_usec / 1000;
+}
+
+long long int
+timespec_to_usec(const struct timespec *ts)
+{
+    return (long long int) ts->tv_sec * 1000 * 1000 + ts->tv_nsec / 1000;
+}
+
+long long int
+timeval_to_usec(const struct timeval *tv)
+{
+    return (long long int) tv->tv_sec * 1000 * 1000 + tv->tv_usec;
 }
 
 /* Returns the monotonic time at which the "time" module was initialized, in
