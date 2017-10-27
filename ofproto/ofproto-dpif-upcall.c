@@ -2047,8 +2047,8 @@ revalidate_ukey__(struct udpif *udpif, const struct udpif_key *ukey,
     if (xoutp->slow) {
         struct ofproto_dpif *ofproto;
         ofproto = xlate_lookup_ofproto(udpif->backer, &ctx.flow, NULL);
-        uint32_t smid = ofproto->up.slowpath_meter_id;
-        uint32_t cmid = ofproto->up.controller_meter_id;
+        uint32_t smid = ofproto ? ofproto->up.slowpath_meter_id : UINT32_MAX;
+        uint32_t cmid = ofproto ? ofproto->up.controller_meter_id : UINT32_MAX;
 
         ofpbuf_clear(odp_actions);
         compose_slow_path(udpif, xoutp, &ctx.flow, ctx.flow.in_port.odp_port,
