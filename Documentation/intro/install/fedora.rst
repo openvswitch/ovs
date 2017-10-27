@@ -43,7 +43,7 @@ in the :doc:`general`. Specific packages (by package name) include:
 - autoconf automake libtool
 - systemd-units openssl openssl-devel
 - python2-devel python3-devel
-- python2 python2-twisted python2-zope-interface python2-six python-sphinx
+- python2 python2-twisted python2-zope-interface python2-six python2-sphinx
 - desktop-file-utils
 - groff graphviz
 - procps-ng
