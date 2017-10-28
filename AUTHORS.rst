@@ -263,6 +263,7 @@ Raymond Burkholder              ray@oneunified.net
 Reid Price                      reid@nicira.com
 Remko Tronçon                   git@el-tramo.be
 Rich Lane                       rlane@bigswitch.com
+Richard Oliver                  richard@richard-oliver.co.uk
 Rishi Bamba                     rishi.bamba@tcs.com
 Rob Adams                       readams@readams.net
 Robert Åkerblom-Andersson       Robert.nr1@gmail.com

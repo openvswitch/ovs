@@ -41,7 +41,7 @@
 
 VLOG_DEFINE_THIS_MODULE(timeval);
 
-#if defined(_WIN32) || defined(__MACH__)
+#if !defined(HAVE_CLOCK_GETTIME)
 typedef unsigned int clockid_t;
 static int clock_gettime(clock_t id, struct timespec *ts);
 
@@ -52,7 +52,7 @@ static int clock_gettime(clock_t id, struct timespec *ts);
 #ifndef CLOCK_REALTIME
 #define CLOCK_REALTIME 2
 #endif
-#endif /* defined(_WIN32) || defined(__MACH__) */
+#endif /* !defined(HAVE_CLOCK_GETTIME) */
 
 #ifdef _WIN32
 /* Number of 100 ns intervals from January 1, 1601 till January 1, 1970. */
@@ -453,7 +453,7 @@ clock_gettime(clock_t id, struct timespec *ts)
 }
 #endif /* _WIN32 */
 
-#ifdef __MACH__
+#if defined(__MACH__) && !defined(HAVE_CLOCK_GETTIME)
 #include <mach/clock.h>
 #include <mach/mach.h>
 static int
