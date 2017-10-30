@@ -1235,7 +1235,7 @@ do_sbctl(const char *args, struct ctl_command *commands, size_t n_commands,
     const struct sbrec_sb_global *sb = sbrec_sb_global_first(idl);
     if (!sb) {
         /* XXX add verification that table is empty */
-        sb = sbrec_sb_global_insert(txn);
+        sbrec_sb_global_insert(txn);
     }
 
     symtab = ovsdb_symbol_table_create();
