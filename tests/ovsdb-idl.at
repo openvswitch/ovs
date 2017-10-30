@@ -1596,3 +1596,29 @@ OVSDB_CHECK_IDL_COMPOUND_INDEX_DOUBLE_COLUMN_C([Compound_index, double column te
 006: i=4 s=List001 b=True r=130.000000
 006: i=5 s=List005 b=True r=130.000000
 ])
+
+m4_define([OVSDB_CHECK_IDL_COMPOUND_INDEX_WITH_REF],
+  [AT_SETUP([$1 - C])
+   AT_KEYWORDS([ovsdb server idl compound_index compound_index_with_ref positive $5])
+   AT_CHECK([ovsdb_start_idltest])
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl-compound-index-with-ref unix:socket $3],
+            [0], [stdout], [ignore])
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+            [0], [$4])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+OVSDB_CHECK_IDL_COMPOUND_INDEX_WITH_REF([set, simple3 idl-compound-index-with-ref, initially populated],
+[],
+[],
+[[000: After add to other table + set of strong ref
+001: name= uset=[] uref=[[<0>]]
+002: check simple4: not empty
+003: Query using index with reference
+004: name= uset=[] uref=[[<0>]]
+005: After delete
+007: check simple4: empty
+008: End test
+]])

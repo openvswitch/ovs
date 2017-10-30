@@ -2298,6 +2298,20 @@ ovsdb_idl_index_write_(struct ovsdb_idl_row *const_row,
     (column->parse)(row, &row->new_datum[column_idx]);
 }
 
+/* Magic UUID for index rows */
+static const struct uuid index_row_uuid = {
+        .parts = {0xdeadbeef,
+                  0xdeadbeef,
+                  0xdeadbeef,
+                  0xdeadbeef}};
+
+/* Check if a row is an index row */
+static bool
+is_index_row(struct ovsdb_idl_row *row)
+{
+    return uuid_equals(&row->uuid, &index_row_uuid);
+}
+
 /* Initializes a row for use in an indexed query.
  * Not intended for direct usage.
  */
@@ -2307,9 +2321,13 @@ ovsdb_idl_index_init_row(struct ovsdb_idl * idl,
 {
     struct ovsdb_idl_row *row = xzalloc(class->allocation_size);
     class->row_init(row);
+    row->uuid = index_row_uuid;
     row->new_datum = xmalloc(class->n_columns * sizeof *row->new_datum);
     row->written = bitmap_allocate(class->n_columns);
     row->table = ovsdb_idl_table_from_class(idl, class);
+    /* arcs are not used for index row, but it doesn't harm to initialize */
+    ovs_list_init(&row->src_arcs);
+    ovs_list_init(&row->dst_arcs);
     return row;
 }
 
@@ -2325,6 +2343,8 @@ ovsdb_idl_index_destroy_row__(const struct ovsdb_idl_row *row_)
     const struct ovsdb_idl_column *c;
     size_t i;
 
+    ovs_assert(ovs_list_is_empty(&row_->src_arcs));
+    ovs_assert(ovs_list_is_empty(&row_->dst_arcs));
     BITMAP_FOR_EACH_1 (i, class->n_columns, row->written) {
         c = &class->columns[i];
         (c->unparse) (row);
@@ -2726,13 +2746,17 @@ ovsdb_idl_get_row_arc(struct ovsdb_idl_row *src,
 
     dst_table = ovsdb_idl_table_from_class(idl, dst_table_class);
     dst = ovsdb_idl_get_row(dst_table, dst_uuid);
-    if (idl->txn) {
-        /* We're being called from ovsdb_idl_txn_write().  We must not update
+    if (idl->txn || is_index_row(src)) {
+        /* There are two cases we should not update any arcs:
+         *
+         * 1. We're being called from ovsdb_idl_txn_write(). We must not update
          * any arcs, because the transaction will be backed out at commit or
          * abort time and we don't want our graph screwed up.
          *
-         * Just return the destination row, if there is one and it has not been
-         * deleted. */
+         * 2. The row is used as an index for querying purpose only.
+         *
+         * In these cases, just return the destination row, if there is one and
+         * it has not been deleted. */
         if (dst && (hmap_node_is_null(&dst->txn_node) || dst->new_datum)) {
             return dst;
         }

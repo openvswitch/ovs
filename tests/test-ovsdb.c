@@ -2661,6 +2661,87 @@ do_idl_partial_update_set_column(struct ovs_cmdl_context *ctx)
     return;
 }
 
+static void
+do_idl_compound_index_with_ref(struct ovs_cmdl_context *ctx)
+{
+    struct ovsdb_idl *idl;
+    struct ovsdb_idl_txn *myTxn;
+    const struct idltest_simple3 *myRow;
+    struct idltest_simple4 *myRow2;
+    const struct ovsdb_datum *uset OVS_UNUSED;
+    const struct ovsdb_datum *uref OVS_UNUSED;
+    struct ovsdb_idl_index_cursor cursor;
+    int step = 0;
+
+    idl = ovsdb_idl_create(ctx->argv[1], &idltest_idl_class, false, true);
+    ovsdb_idl_add_table(idl, &idltest_table_simple3);
+    ovsdb_idl_add_column(idl, &idltest_simple3_col_name);
+    ovsdb_idl_add_column(idl, &idltest_simple3_col_uset);
+    ovsdb_idl_add_column(idl, &idltest_simple3_col_uref);
+    ovsdb_idl_add_table(idl, &idltest_table_simple4);
+    ovsdb_idl_add_column(idl, &idltest_simple4_col_name);
+
+    struct ovsdb_idl_index *index;
+    index = ovsdb_idl_create_index(idl, &idltest_table_simple3, "uref");
+    ovsdb_idl_index_add_column(index, &idltest_simple3_col_uref,
+                               OVSDB_INDEX_ASC, NULL);
+
+    ovsdb_idl_get_initial_snapshot(idl);
+
+    ovsdb_idl_initialize_cursor(idl, &idltest_table_simple3, "uref",
+                                &cursor);
+
+    setvbuf(stdout, NULL, _IONBF, 0);
+    ovsdb_idl_run(idl);
+
+    /* Adds to a table and update a strong reference in another table. */
+    myTxn = ovsdb_idl_txn_create(idl);
+    myRow = idltest_simple3_insert(myTxn);
+    myRow2 = idltest_simple4_insert(myTxn);
+    idltest_simple4_set_name(myRow2, "test");
+    idltest_simple3_update_uref_addvalue(myRow, myRow2);
+    ovsdb_idl_txn_commit_block(myTxn);
+    ovsdb_idl_txn_destroy(myTxn);
+    ovsdb_idl_get_initial_snapshot(idl);
+    printf("%03d: After add to other table + set of strong ref\n", step++);
+    dump_simple3(idl, myRow, step++);
+
+    myRow2 = (struct idltest_simple4 *) idltest_simple4_first(idl);
+    printf("%03d: check simple4: %s\n", step++,
+           myRow2 ? "not empty" : "empty");
+
+    /* Use index to query the row with reference */
+
+    struct idltest_simple3 *equal;
+    equal = idltest_simple3_index_init_row(idl, &idltest_table_simple3);
+    myRow2 = (struct idltest_simple4 *) idltest_simple4_first(idl);
+    idltest_simple3_index_set_uref(equal, &myRow2, 1);
+    printf("%03d: Query using index with reference\n", step++);
+    IDLTEST_SIMPLE3_FOR_EACH_EQUAL (myRow, &cursor, equal) {
+        print_idl_row_simple3(myRow, step++);
+    }
+    idltest_simple3_index_destroy_row(equal);
+
+    /* Delete the row with reference */
+    myTxn = ovsdb_idl_txn_create(idl);
+    myRow = idltest_simple3_first(idl);
+    idltest_simple3_delete(myRow);
+    ovsdb_idl_txn_commit_block(myTxn);
+    ovsdb_idl_txn_destroy(myTxn);
+    ovsdb_idl_get_initial_snapshot(idl);
+    printf("%03d: After delete\n", step++);
+    dump_simple3(idl, myRow, step++);
+
+    myRow2 = (struct idltest_simple4 *) idltest_simple4_first(idl);
+    printf("%03d: check simple4: %s\n", step++,
+           myRow2 ? "not empty" : "empty");
+
+    ovsdb_idl_destroy(idl);
+    printf("%03d: End test\n", step);
+    return;
+}
+
+
 static int
 test_idl_compound_index_single_column(struct ovsdb_idl *idl,
         struct ovsdb_idl_index_cursor *sCursor,
@@ -2962,6 +3043,8 @@ static struct ovs_cmdl_command all_commands[] = {
     { "trigger", NULL, 2, INT_MAX, do_trigger, OVS_RO },
     { "idl", NULL, 1, INT_MAX, do_idl, OVS_RO },
     { "idl-compound-index", NULL, 2, 2, do_idl_compound_index, OVS_RW },
+    { "idl-compound-index-with-ref", NULL, 1, INT_MAX,
+        do_idl_compound_index_with_ref, OVS_RO },
     { "idl-partial-update-map-column", NULL, 1, INT_MAX,
         do_idl_partial_update_map_column, OVS_RO },
     { "idl-partial-update-set-column", NULL, 1, INT_MAX,

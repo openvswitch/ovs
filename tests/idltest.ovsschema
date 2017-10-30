@@ -34,7 +34,8 @@
             "min": 0
           }
         }
-      }
+      },
+      "isRoot" : true
     },
     "link2": {
       "columns": {
@@ -50,7 +51,8 @@
             "min": 0
           }
         }
-      }
+      },
+      "isRoot" : true
     },
     "simple": {
       "columns": {
@@ -104,7 +106,8 @@
             "min": 0
           }
         }
-      }
+      },
+      "isRoot" : true
     },
     "simple2" : {
       "columns" : {
@@ -133,7 +136,8 @@
             "max": "unlimited"
           }
         }
-      }
+      },
+      "isRoot" : true
     },
     "simple3" : {
       "columns" : {
@@ -156,14 +160,16 @@
              "max": "unlimited"
           }
         }
-      }
+      },
+      "isRoot" : true
     },
     "simple4" : {
       "columns" : {
         "name" : {
           "type": "string"
         }
-      }
+      },
+      "isRoot" : false
     }
   }
 }
