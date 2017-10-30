@@ -178,6 +178,7 @@ Jorge Arturo Sauma Vargas       jorge.sauma@hpe.com
 Jun Nakajima                    jun.nakajima@intel.com
 JunoZhu                         zhunatuzi@gmail.com
 Justin Pettit                   jpettit@ovn.org
+Kaige Fu                        fukaige@huawei.com
 Keith Amidon                    keith@nicira.com
 Ken Ajiro                       ajiro@mxw.nes.nec.co.jp
 Kenneth Duda                    kduda@arista.com
