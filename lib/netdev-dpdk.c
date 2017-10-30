@@ -505,6 +505,7 @@ dpdk_mp_name(struct dpdk_mp *dmp)
         VLOG_DBG("snprintf returned %d. Failed to generate a mempool "
             "name for \"%s\". Hash:0x%x, mtu:%d, mbufs:%u.",
             ret, dmp->if_name, h, dmp->mtu, dmp->n_mbufs);
+        free(mp_name);
         return NULL;
     }
     return mp_name;
