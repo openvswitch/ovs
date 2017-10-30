@@ -28,10 +28,11 @@ Development
 Q: How do I implement a new OpenFlow message?
 
     A: Add your new message to ``enum ofpraw`` and ``enum ofptype`` in
-    ``lib/ofp-msgs.h``, following the existing pattern.  Then recompile and fix
-    all of the new warnings, implementing new functionality for the new message
-    as needed.  (If you configure with ``--enable-Werror``, as described in
-    :doc:`/intro/install/general`, then it is impossible to miss any warnings.)
+    ``include/openvswitch/ofp-msgs.h``, following the existing pattern.
+    Then recompile and fix all of the new warnings, implementing new functionality
+    for the new message as needed.  (If you configure with ``--enable-Werror``, as
+    described in :doc:`/intro/install/general`, then it is impossible to miss any
+    warnings.)
 
     To add an OpenFlow vendor extension message (aka experimenter message) for
     a vendor that doesn't yet have any extension messages, you will also need
