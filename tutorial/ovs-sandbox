@@ -385,7 +385,7 @@ sleep 0.1
 
 #Wait for ovsdb-server to finish launching.
 if test ! -e "$sandbox"/db.sock; then
-    echo -n "Waiting for ovsdb-server to start..."
+    printf "Waiting for ovsdb-server to start..."
     while test ! -e "$sandbox"/db.sock; do
         sleep 1;
     done

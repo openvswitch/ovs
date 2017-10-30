@@ -303,6 +303,17 @@ check-endian:
 	fi
 .PHONY: check-endian
 
+ALL_LOCAL += check-echo-n
+check-echo-n:
+	@if test -e $(srcdir)/.git && (git --version) >/dev/null 2>&1 && \
+	  git --no-pager grep -n 'echo'' -n' $(srcdir); \
+	then \
+	  echo "See above for uses for \"echo"" -n\", which is non-POSIX"; \
+	  echo "and does not work with all shells.  Use \"printf\" instead."; \
+	  exit 1; \
+	fi
+.PHONY: check-echo-n
+
 ALL_LOCAL += thread-safety-check
 thread-safety-check:
 	@cd $(srcdir); \

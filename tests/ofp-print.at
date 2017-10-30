@@ -1656,26 +1656,26 @@ AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
 00 00 00 07 00 00 00 00 00 0f 42 40 "
  tail="00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00"
 
- echo -n "03 13 7f 90 00 00 00 02 00 03 00 00 00 00 00 00 "
+ printf "03 13 7f 90 00 00 00 02 00 03 00 00 00 00 00 00 "
 
  x=0
  printf "%02x $pad7" $x
  printf "%s$pad32" "classifier" | od -A n -t x1 -v -N 32 | tr '\n' ' '
- echo -n "$mid 00 00 00 01  "
- echo -n "00 00 00 00 00 01 23 76 00 00 00 00 00 01 9e 28 "
+ printf "$mid 00 00 00 01  "
+ printf "00 00 00 00 00 01 23 76 00 00 00 00 00 01 9e 28 "
 
  x=1
  while test $x -lt 254; do
    printf "%02x $pad7" $x
    printf "%s$pad32" "table$x" | od -A n -t x1 -v -N 32 | tr '\n' ' '
-   echo -n "$mid 00 00 00 00 $tail "
+   printf "$mid 00 00 00 00 $tail "
    x=`expr $x + 1`
  done
 
  x=254
  printf "%02x $pad7" $x
  printf "%s$pad32" "table$x" | od -A n -t x1 -v -N 32 | tr '\n' ' '
- echo -n "$mid 00 00 00 02 $tail") > in
+ printf "$mid 00 00 00 02 $tail") > in
 AT_CHECK([ovs-ofctl ofp-print - < in], [0], [expout])
 AT_CLEANUP
 
