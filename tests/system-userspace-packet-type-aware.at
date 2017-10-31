@@ -33,9 +33,9 @@ AT_SETUP([ptap - triangle bridge setup with L2 and L3 GRE tunnels])
 #      1030   br-in1      gre-13      l2          br-in3 3010 (l2)
 #      2010   br-in2      gre-21      ptap        br-in1 1020 (l2), 1021 (l3)
 #      2030   br-in2      gre-23      ptap        br-in3 3020 (l2), 3021 (l3)
-#      3010   br-in1      gre-31      l2          br-in1 1030 (l2)
-#      3020   br-in1      gre-32      l2          br-in2 2010 (ptap)
-#      3021   br-in1      gre-32_l3   l3                same
+#      3010   br-in3      gre-31      l2          br-in1 1030 (l2)
+#      3020   br-in3      gre-32      l2          br-in2 2010 (ptap)
+#      3021   br-in3      gre-32_l3   l3                same
 
 
 AT_SKIP_IF([test $HAVE_NC = no])
@@ -176,15 +176,15 @@ AT_CHECK([
 
 ### Flows in br-p<x>to twist TEP IP addresses in tunnel IP headers
 AT_CHECK([
-    ovs-ofctl add-flow br-p1 in_port:LOCAL,actions=2
+    ovs-ofctl add-flow br-p1 in_port:LOCAL,ip,actions=2
     ovs-ofctl add-flow br-p1 in_port:2,ip,nw_dst:20.0.0.1,actions=mod_nw_dst:10.0.0.1,mod_nw_src:10.0.0.2,LOCAL
     ovs-ofctl add-flow br-p1 in_port:2,ip,nw_dst:30.0.0.1,actions=mod_nw_dst:10.0.0.1,mod_nw_src:10.0.0.3,LOCAL
 
-    ovs-ofctl add-flow br-p2 in_port:LOCAL,actions=2
+    ovs-ofctl add-flow br-p2 in_port:LOCAL,ip,actions=2
     ovs-ofctl add-flow br-p2 in_port:2,ip,nw_dst:10.0.0.2,actions=mod_nw_dst:20.0.0.2,mod_nw_src:20.0.0.1,LOCAL
     ovs-ofctl add-flow br-p2 in_port:2,ip,nw_dst:30.0.0.2,actions=mod_nw_dst:20.0.0.2,mod_nw_src:20.0.0.3,LOCAL
 
-    ovs-ofctl add-flow br-p3 in_port:LOCAL,actions=2
+    ovs-ofctl add-flow br-p3 in_port:LOCAL,ip,actions=2
     ovs-ofctl add-flow br-p3 in_port:2,ip,nw_dst:10.0.0.3,actions=mod_nw_dst:30.0.0.3,mod_nw_src:30.0.0.1,LOCAL
     ovs-ofctl add-flow br-p3 in_port:2,ip,nw_dst:20.0.0.3,actions=mod_nw_dst:30.0.0.3,mod_nw_src:30.0.0.2,LOCAL
 ], [0])
@@ -204,15 +204,15 @@ AT_CHECK([
     ovs-ofctl dump-flows br-p2 | ofctl_strip | strip_n_packets | strip_n_bytes | sort | grep actions
     ovs-ofctl dump-flows br-p3 | ofctl_strip | strip_n_packets | strip_n_bytes | sort | grep actions
 ], [0], [dnl
- in_port=LOCAL actions=output:2
  ip,in_port=2,nw_dst=20.0.0.1 actions=mod_nw_dst:10.0.0.1,mod_nw_src:10.0.0.2,LOCAL
  ip,in_port=2,nw_dst=30.0.0.1 actions=mod_nw_dst:10.0.0.1,mod_nw_src:10.0.0.3,LOCAL
- in_port=LOCAL actions=output:2
+ ip,in_port=LOCAL actions=output:2
  ip,in_port=2,nw_dst=10.0.0.2 actions=mod_nw_dst:20.0.0.2,mod_nw_src:20.0.0.1,LOCAL
  ip,in_port=2,nw_dst=30.0.0.2 actions=mod_nw_dst:20.0.0.2,mod_nw_src:20.0.0.3,LOCAL
- in_port=LOCAL actions=output:2
+ ip,in_port=LOCAL actions=output:2
  ip,in_port=2,nw_dst=10.0.0.3 actions=mod_nw_dst:30.0.0.3,mod_nw_src:30.0.0.1,LOCAL
  ip,in_port=2,nw_dst=20.0.0.3 actions=mod_nw_dst:30.0.0.3,mod_nw_src:30.0.0.2,LOCAL
+ ip,in_port=LOCAL actions=output:2
 ])
 
 ### Setup test ports for traffic injection
@@ -331,9 +331,6 @@ AT_CHECK([
 ])
 
 
-# Clear up megaflow cache
-sleep 10
-
 # Ping between N1 and N3, via the L2 GRE tunnel between br-in1 and br-in3
 NS_CHECK_EXEC([ns1], [ping -q -c 3 -i 0.3 -w 2 $N3_IP | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
@@ -342,23 +339,25 @@ NS_CHECK_EXEC([ns1], [ping -q -c 3 -i 0.3 -w 2 $N3_IP | FORMAT_PING], [0], [dnl
 sleep 1
 
 AT_CHECK([
-    ovs-appctl dpctl/dump-flows | strip_used | grep -v ipv6 | grep -v arp |sort
-], [0], [flow-dump from non-dpdk interfaces:
-recirc_id(0),in_port(10),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:03),eth_type(0x0800),ipv4(src=10.0.0.1,dst=10.0.0.3,proto=47,frag=no), packets:2, bytes:272, used:0.0s, actions:set(ipv4(src=30.0.0.1,dst=30.0.0.3)),tnl_pop(14)
-recirc_id(0),in_port(11),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:03),eth_type(0x0800),ipv4(frag=no), packets:2, bytes:272, used:0.0s, actions:13
-recirc_id(0),in_port(12),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:01),eth_type(0x0800),ipv4(frag=no), packets:2, bytes:244, used:0.0s, actions:11
-recirc_id(0),in_port(13),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:02),eth_type(0x0800),ipv4(frag=no), packets:2, bytes:244, used:0.0s, actions:12
-recirc_id(0),in_port(15),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.30,tos=0/0x3,frag=no), packets:2, bytes:196, used:0.0s, actions:clone(tnl_push(tnl_port(14),header(size=38,type=3,eth(dst=aa:55:00:00:00:03,src=aa:55:00:00:00:01,dl_type=0x0800),ipv4(src=10.0.0.1,dst=10.0.0.3,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x6558))),out_port(5)),8)
-recirc_id(0),in_port(17),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.10,tos=0/0x3,frag=no), packets:2, bytes:196, used:0.0s, actions:pop_eth,clone(tnl_push(tnl_port(14),header(size=38,type=3,eth(dst=aa:55:00:00:00:02,src=aa:55:00:00:00:03,dl_type=0x0800),ipv4(src=30.0.0.3,dst=30.0.0.2,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x800))),out_port(7)),10)
-recirc_id(0),in_port(8),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:01),eth_type(0x0800),ipv4(src=20.0.0.2,dst=20.0.0.1,proto=47,frag=no), packets:2, bytes:244, used:0.0s, actions:set(ipv4(src=10.0.0.2,dst=10.0.0.1)),tnl_pop(14)
-recirc_id(0),in_port(9),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:02),eth_type(0x0800),ipv4(src=30.0.0.3,dst=30.0.0.2,proto=47,frag=no), packets:2, bytes:244, used:0.0s, actions:set(ipv4(src=20.0.0.3,dst=20.0.0.2)),tnl_pop(14)
-tunnel(src=10.0.0.2,dst=10.0.0.1,flags(-df-csum)),recirc_id(0),in_port(14),packet_type(ns=1,id=0x800),ipv4(dst=192.168.10.10,frag=no), packets:2, bytes:168, used:0.0s, actions:push_eth(src=00:00:00:00:00:00,dst=aa:55:aa:55:00:01),15
-tunnel(src=20.0.0.3,dst=20.0.0.2,flags(-df-csum)),recirc_id(0),in_port(14),packet_type(ns=1,id=0x800),ipv4(dst=192.168.10.10,tos=0/0x3,frag=no), packets:2, bytes:168, used:0.0s, actions:clone(tnl_push(tnl_port(14),header(size=38,type=3,eth(dst=aa:55:00:00:00:01,src=aa:55:00:00:00:02,dl_type=0x0800),ipv4(src=20.0.0.2,dst=20.0.0.1,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x800))),out_port(6)),9)
-tunnel(src=30.0.0.1,dst=30.0.0.3,flags(-df-csum)),recirc_id(0),in_port(14),packet_type(ns=0,id=0),eth(dst=aa:55:aa:55:00:03),eth_type(0x0800),ipv4(dst=192.168.10.30,frag=no), packets:2, bytes:196, used:0.0s, actions:17
+    ovs-ofctl dump-flows br-in1 | ofctl_strip | sort | grep n_packets
+], [0], [dnl
+ n_packets=3, n_bytes=252, ip,nw_dst=192.168.10.10 actions=mod_dl_dst:aa:55:aa:55:00:01,output:10
+ n_packets=3, n_bytes=294, ip,nw_dst=192.168.10.30 actions=output:1030
 ])
 
-# Clear up megaflow cache
-sleep 10
+AT_CHECK([
+    ovs-ofctl dump-flows br-in2 | ofctl_strip | sort | grep n_packets
+], [0], [dnl
+ n_packets=3, n_bytes=252, packet_type=(1,0x800),nw_dst=192.168.10.10 actions=output:2010
+])
+
+AT_CHECK([
+    ovs-ofctl dump-flows br-in3 | ofctl_strip | sort | grep n_packets
+], [0], [dnl
+ n_packets=3, n_bytes=294, ip,nw_dst=192.168.10.10 actions=output:3021
+ n_packets=3, n_bytes=294, ip,nw_dst=192.168.10.30 actions=mod_dl_dst:aa:55:aa:55:00:03,output:30
+])
+
 
 # Ping between N1 and N2, via the L2 GRE tunnel between br-in1 and br-in2
 NS_CHECK_EXEC([ns1], [ping -q -c 3 -i 0.3 -w 2 $N2_IP | FORMAT_PING], [0], [dnl
@@ -368,20 +367,28 @@ NS_CHECK_EXEC([ns1], [ping -q -c 3 -i 0.3 -w 2 $N2_IP | FORMAT_PING], [0], [dnl
 sleep 1
 
 AT_CHECK([
-    ovs-appctl dpctl/dump-flows | strip_used | grep -v ipv6 | grep -v arp | sort
-], [0], [flow-dump from non-dpdk interfaces:
-recirc_id(0),in_port(11),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:02),eth_type(0x0800),ipv4(frag=no), packets:2, bytes:272, used:0.0s, actions:12
-recirc_id(0),in_port(12),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:01),eth_type(0x0800),ipv4(frag=no), packets:2, bytes:272, used:0.0s, actions:11
-recirc_id(0),in_port(15),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.20,tos=0/0x3,frag=no), packets:2, bytes:196, used:0.0s, actions:clone(tnl_push(tnl_port(14),header(size=38,type=3,eth(dst=aa:55:00:00:00:02,src=aa:55:00:00:00:01,dl_type=0x0800),ipv4(src=10.0.0.1,dst=10.0.0.2,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x6558))),out_port(5)),8)
-recirc_id(0),in_port(16),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.10,tos=0/0x3,frag=no), packets:2, bytes:196, used:0.0s, actions:clone(tnl_push(tnl_port(14),header(size=38,type=3,eth(dst=aa:55:00:00:00:01,src=aa:55:00:00:00:02,dl_type=0x0800),ipv4(src=20.0.0.2,dst=20.0.0.1,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x6558))),out_port(6)),9)
-recirc_id(0),in_port(8),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:01),eth_type(0x0800),ipv4(src=20.0.0.2,dst=20.0.0.1,proto=47,frag=no), packets:2, bytes:272, used:0.0s, actions:set(ipv4(src=10.0.0.2,dst=10.0.0.1)),tnl_pop(14)
-recirc_id(0),in_port(9),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:02),eth_type(0x0800),ipv4(src=10.0.0.1,dst=10.0.0.2,proto=47,frag=no), packets:2, bytes:272, used:0.0s, actions:set(ipv4(src=20.0.0.1,dst=20.0.0.2)),tnl_pop(14)
-tunnel(src=10.0.0.2,dst=10.0.0.1,flags(-df-csum)),recirc_id(0),in_port(14),packet_type(ns=0,id=0),eth(dst=aa:55:aa:55:00:01),eth_type(0x0800),ipv4(dst=192.168.10.10,frag=no), packets:2, bytes:196, used:0.0s, actions:15
-tunnel(src=20.0.0.1,dst=20.0.0.2,flags(-df-csum)),recirc_id(0),in_port(14),packet_type(ns=0,id=0),eth(dst=aa:55:aa:55:00:02),eth_type(0x0800),ipv4(dst=192.168.10.20,frag=no), packets:2, bytes:196, used:0.0s, actions:16
+    ovs-ofctl dump-flows br-in1 | ofctl_strip | sort | grep n_packets
+], [0], [dnl
+ n_packets=3, n_bytes=294, ip,nw_dst=192.168.10.20 actions=output:1020
+ n_packets=3, n_bytes=294, ip,nw_dst=192.168.10.30 actions=output:1030
+ n_packets=6, n_bytes=546, ip,nw_dst=192.168.10.10 actions=mod_dl_dst:aa:55:aa:55:00:01,output:10
 ])
 
-# Clear up megaflow cache
-sleep 10
+AT_CHECK([
+    ovs-ofctl dump-flows br-in2 | ofctl_strip | sort | grep n_packets
+], [0], [dnl
+ n_packets=3, n_bytes=252, packet_type=(1,0x800),nw_dst=192.168.10.10 actions=output:2010
+ n_packets=3, n_bytes=294, ip,nw_dst=192.168.10.10 actions=output:2010
+ n_packets=3, n_bytes=294, ip,nw_dst=192.168.10.20 actions=mod_dl_dst:aa:55:aa:55:00:02,output:20
+])
+
+AT_CHECK([
+    ovs-ofctl dump-flows br-in3 | ofctl_strip | sort | grep n_packets
+], [0], [dnl
+ n_packets=3, n_bytes=294, ip,nw_dst=192.168.10.10 actions=output:3021
+ n_packets=3, n_bytes=294, ip,nw_dst=192.168.10.30 actions=mod_dl_dst:aa:55:aa:55:00:03,output:30
+])
+
 
 # Ping between N3 and N2, via the L3 GRE tunnel between br-in3 and br-in2
 NS_CHECK_EXEC([ns3], [ping -q -c 3 -i 0.3 -w 2 $N1_IP | FORMAT_PING], [0], [dnl
@@ -391,20 +398,28 @@ NS_CHECK_EXEC([ns3], [ping -q -c 3 -i 0.3 -w 2 $N1_IP | FORMAT_PING], [0], [dnl
 sleep 1
 
 AT_CHECK([
-    ovs-appctl dpctl/dump-flows | strip_used | grep -v ipv6 | grep -v arp | sort
-], [0], [flow-dump from non-dpdk interfaces:
-recirc_id(0),in_port(10),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:03),eth_type(0x0800),ipv4(src=10.0.0.1,dst=10.0.0.3,proto=47,frag=no), packets:2, bytes:272, used:0.0s, actions:set(ipv4(src=30.0.0.1,dst=30.0.0.3)),tnl_pop(14)
-recirc_id(0),in_port(11),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:03),eth_type(0x0800),ipv4(frag=no), packets:2, bytes:272, used:0.0s, actions:13
-recirc_id(0),in_port(12),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:01),eth_type(0x0800),ipv4(frag=no), packets:2, bytes:244, used:0.0s, actions:11
-recirc_id(0),in_port(13),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:02),eth_type(0x0800),ipv4(frag=no), packets:2, bytes:244, used:0.0s, actions:12
-recirc_id(0),in_port(15),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.30,tos=0/0x3,frag=no), packets:2, bytes:196, used:0.0s, actions:clone(tnl_push(tnl_port(14),header(size=38,type=3,eth(dst=aa:55:00:00:00:03,src=aa:55:00:00:00:01,dl_type=0x0800),ipv4(src=10.0.0.1,dst=10.0.0.3,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x6558))),out_port(5)),8)
-recirc_id(0),in_port(17),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.10,tos=0/0x3,frag=no), packets:2, bytes:196, used:0.0s, actions:pop_eth,clone(tnl_push(tnl_port(14),header(size=38,type=3,eth(dst=aa:55:00:00:00:02,src=aa:55:00:00:00:03,dl_type=0x0800),ipv4(src=30.0.0.3,dst=30.0.0.2,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x800))),out_port(7)),10)
-recirc_id(0),in_port(8),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:01),eth_type(0x0800),ipv4(src=20.0.0.2,dst=20.0.0.1,proto=47,frag=no), packets:2, bytes:244, used:0.0s, actions:set(ipv4(src=10.0.0.2,dst=10.0.0.1)),tnl_pop(14)
-recirc_id(0),in_port(9),packet_type(ns=0,id=0),eth(dst=aa:55:00:00:00:02),eth_type(0x0800),ipv4(src=30.0.0.3,dst=30.0.0.2,proto=47,frag=no), packets:2, bytes:244, used:0.0s, actions:set(ipv4(src=20.0.0.3,dst=20.0.0.2)),tnl_pop(14)
-tunnel(src=10.0.0.2,dst=10.0.0.1,flags(-df-csum)),recirc_id(0),in_port(14),packet_type(ns=1,id=0x800),ipv4(dst=192.168.10.10,frag=no), packets:2, bytes:168, used:0.0s, actions:push_eth(src=00:00:00:00:00:00,dst=aa:55:aa:55:00:01),15
-tunnel(src=20.0.0.3,dst=20.0.0.2,flags(-df-csum)),recirc_id(0),in_port(14),packet_type(ns=1,id=0x800),ipv4(dst=192.168.10.10,tos=0/0x3,frag=no), packets:2, bytes:168, used:0.0s, actions:clone(tnl_push(tnl_port(14),header(size=38,type=3,eth(dst=aa:55:00:00:00:01,src=aa:55:00:00:00:02,dl_type=0x0800),ipv4(src=20.0.0.2,dst=20.0.0.1,proto=47,tos=0,ttl=64,frag=0x4000),gre((flags=0x0,proto=0x800))),out_port(6)),9)
-tunnel(src=30.0.0.1,dst=30.0.0.3,flags(-df-csum)),recirc_id(0),in_port(14),packet_type(ns=0,id=0),eth(dst=aa:55:aa:55:00:03),eth_type(0x0800),ipv4(dst=192.168.10.30,frag=no), packets:2, bytes:196, used:0.0s, actions:17
+    ovs-ofctl dump-flows br-in1 | ofctl_strip | sort | grep n_packets
+], [0], [dnl
+ n_packets=3, n_bytes=294, ip,nw_dst=192.168.10.20 actions=output:1020
+ n_packets=6, n_bytes=588, ip,nw_dst=192.168.10.30 actions=output:1030
+ n_packets=9, n_bytes=798, ip,nw_dst=192.168.10.10 actions=mod_dl_dst:aa:55:aa:55:00:01,output:10
 ])
+
+AT_CHECK([
+    ovs-ofctl dump-flows br-in2 | ofctl_strip | sort | grep n_packets
+], [0], [dnl
+ n_packets=3, n_bytes=294, ip,nw_dst=192.168.10.10 actions=output:2010
+ n_packets=3, n_bytes=294, ip,nw_dst=192.168.10.20 actions=mod_dl_dst:aa:55:aa:55:00:02,output:20
+ n_packets=6, n_bytes=504, packet_type=(1,0x800),nw_dst=192.168.10.10 actions=output:2010
+])
+
+AT_CHECK([
+    ovs-ofctl dump-flows br-in3 | ofctl_strip | sort | grep n_packets
+], [0], [dnl
+ n_packets=6, n_bytes=588, ip,nw_dst=192.168.10.10 actions=output:3021
+ n_packets=6, n_bytes=588, ip,nw_dst=192.168.10.30 actions=mod_dl_dst:aa:55:aa:55:00:03,output:30
+])
+
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
