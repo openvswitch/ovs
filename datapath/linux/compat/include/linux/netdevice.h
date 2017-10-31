@@ -22,9 +22,6 @@ struct net;
 #define IFF_LIVE_ADDR_CHANGE 0
 #endif
 
-#ifndef IFF_NO_QUEUE
-#define IFF_NO_QUEUE	0
-#endif
 #ifndef IFF_OPENVSWITCH
 #define IFF_OPENVSWITCH 0
 #endif
