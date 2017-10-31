@@ -674,6 +674,20 @@ add_remote(struct shash *remotes, const char *target)
     return options;
 }
 
+static void
+free_remotes(struct shash *remotes)
+{
+    if (remotes) {
+        struct shash_node *node;
+
+        SHASH_FOR_EACH (node, remotes) {
+            struct ovsdb_jsonrpc_options *options = node->data;
+            free(options->role);
+        }
+        shash_destroy_free_data(remotes);
+    }
+}
+
 /* Adds a remote and options to 'remotes', based on the Manager table row in
  * 'row'. */
 static void
@@ -929,7 +943,7 @@ reconfigure_remotes(struct ovsdb_jsonrpc_server *jsonrpc,
         }
     }
     ovsdb_jsonrpc_server_set_remotes(jsonrpc, &resolved_remotes);
-    shash_destroy_free_data(&resolved_remotes);
+    free_remotes(&resolved_remotes);
 
     return errors.string;
 }
