@@ -582,6 +582,7 @@ do_parse_atom_strings(struct ovs_cmdl_context *ctx)
         ovsdb_atom_destroy(&atom, base.type);
         if (range_end_atom) {
             ovsdb_atom_destroy(range_end_atom, base.type);
+            free(range_end_atom);
         }
     }
     ovsdb_base_type_destroy(&base);
