@@ -2163,6 +2163,7 @@ ovsdb_idl_destroy_indexes(struct ovsdb_idl_table *table)
         skiplist_destroy(index->skiplist, NULL);
         free(index->columns);
     }
+    shash_destroy_free_data(&table->indexes);
 }
 
 static void
