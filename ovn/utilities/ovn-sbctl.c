@@ -860,7 +860,10 @@ cmd_lflow_list(struct ctl_context *ctx)
         lflows[n_flows] = lflow;
         n_flows++;
     }
-    qsort(lflows, n_flows, sizeof *lflows, lflow_cmp);
+
+    if (n_flows) {
+        qsort(lflows, n_flows, sizeof *lflows, lflow_cmp);
+    }
 
     bool print_uuid = shash_find(&ctx->options, "--uuid") != NULL;
 
