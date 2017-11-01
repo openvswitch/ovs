@@ -128,6 +128,7 @@ struct vl_mff_map;
      * These are intentionally undocumented, subject to change, and     \
      * only accepted if ovs-vswitchd is started with --enable-dummy. */ \
     OFPACT(DEBUG_RECIRC, ofpact_null,           ofpact, "debug_recirc") \
+    OFPACT(DEBUG_SLOW,   ofpact_null,           ofpact, "debug_slow")   \
                                                                         \
     /* Instructions. */                                                 \
     OFPACT(METER,           ofpact_meter,       ofpact, "meter")        \

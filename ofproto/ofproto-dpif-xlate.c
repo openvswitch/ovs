@@ -5302,6 +5302,7 @@ reversible_actions(const struct ofpact *ofpacts, size_t ofpacts_len)
         case OFPACT_CONTROLLER:
         case OFPACT_CT_CLEAR:
         case OFPACT_DEBUG_RECIRC:
+        case OFPACT_DEBUG_SLOW:
         case OFPACT_DEC_MPLS_TTL:
         case OFPACT_DEC_TTL:
         case OFPACT_ENQUEUE:
@@ -5635,6 +5636,7 @@ freeze_unroll_actions(const struct ofpact *a, const struct ofpact *end,
         case OFPACT_ENCAP:
         case OFPACT_DECAP:
         case OFPACT_DEBUG_RECIRC:
+        case OFPACT_DEBUG_SLOW:
         case OFPACT_CT:
         case OFPACT_CT_CLEAR:
         case OFPACT_NAT:
@@ -6130,6 +6132,7 @@ recirc_for_mpls(const struct ofpact *a, struct xlate_ctx *ctx)
     case OFPACT_CT_CLEAR:
     case OFPACT_NAT:
     case OFPACT_DEBUG_RECIRC:
+    case OFPACT_DEBUG_SLOW:
     case OFPACT_METER:
     case OFPACT_CLEAR_ACTIONS:
     case OFPACT_WRITE_ACTIONS:
@@ -6577,6 +6580,10 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         case OFPACT_DEBUG_RECIRC:
             ctx_trigger_freeze(ctx);
             a = ofpact_next(a);
+            break;
+
+        case OFPACT_DEBUG_SLOW:
+            ctx->xout->slow |= SLOW_ACTION;
             break;
         }
 
