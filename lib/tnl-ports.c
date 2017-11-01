@@ -195,7 +195,7 @@ tnl_port_map_insert(odp_port_t port, ovs_be16 tp_port,
 
     ovs_mutex_lock(&mutex);
     LIST_FOR_EACH(p, node, &port_list) {
-        if (tp_port == p->tp_port && p->nw_proto == nw_proto) {
+        if (p->port == port && p->nw_proto == nw_proto) {
             ovs_refcount_ref(&p->ref_cnt);
             goto out;
         }
@@ -255,7 +255,7 @@ ipdev_map_delete(struct ip_device *ip_dev, ovs_be16 tp_port, uint8_t nw_proto)
 }
 
 void
-tnl_port_map_delete(ovs_be16 tp_port, const char type[])
+tnl_port_map_delete(odp_port_t port, const char type[])
 {
     struct tnl_port *p, *next;
     struct ip_device *ip_dev;
@@ -265,7 +265,7 @@ tnl_port_map_delete(ovs_be16 tp_port, const char type[])
 
     ovs_mutex_lock(&mutex);
     LIST_FOR_EACH_SAFE(p, next, node, &port_list) {
-        if (p->tp_port == tp_port && p->nw_proto == nw_proto &&
+        if (p->port == port && p->nw_proto == nw_proto &&
                     ovs_refcount_unref_relaxed(&p->ref_cnt) == 1) {
             ovs_list_remove(&p->node);
             LIST_FOR_EACH(ip_dev, node, &addr_list) {
@@ -348,7 +348,8 @@ tnl_port_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
     }
 
     LIST_FOR_EACH(p, node, &port_list) {
-        ds_put_format(&ds, "%s (%"PRIu32")\n", p->dev_name, p->port);
+        ds_put_format(&ds, "%s (%"PRIu32") ref_cnt=%u\n", p->dev_name, p->port,
+                      ovs_refcount_read(&p->ref_cnt));
     }
 
 out:

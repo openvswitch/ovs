@@ -378,6 +378,7 @@ type_run(const char *type)
             HMAP_FOR_EACH (iter, up.hmap_node, &ofproto->up.ports) {
                 char namebuf[NETDEV_VPORT_NAME_BUFSIZE];
                 const char *dp_port;
+                odp_port_t old_odp_port;
 
                 if (!iter->is_tunnel) {
                     continue;
@@ -385,6 +386,7 @@ type_run(const char *type)
 
                 dp_port = netdev_vport_get_dpif_port(iter->up.netdev,
                                                      namebuf, sizeof namebuf);
+                old_odp_port = iter->odp_port;
                 node = simap_find(&tmp_backers, dp_port);
                 if (node) {
                     simap_put(&backer->tnl_backers, dp_port, node->data);
@@ -406,7 +408,7 @@ type_run(const char *type)
 
                 iter->odp_port = node ? u32_to_odp(node->data) : ODPP_NONE;
                 if (tnl_port_reconfigure(iter, iter->up.netdev,
-                                         iter->odp_port,
+                                         iter->odp_port, old_odp_port,
                                          ovs_native_tunneling_is_on(ofproto), dp_port)) {
                     backer->need_revalidate = REV_RECONFIGURE;
                 }
@@ -1950,7 +1952,7 @@ port_destruct(struct ofport *port_, bool del)
        dpif_ipfix_del_tunnel_port(ofproto->ipfix, port->odp_port);
     }
 
-    tnl_port_del(port);
+    tnl_port_del(port, port->odp_port);
     sset_find_and_delete(&ofproto->ports, devname);
     sset_find_and_delete(&ofproto->ghost_ports, devname);
     bundle_remove(port_);
@@ -2006,7 +2008,7 @@ port_modified(struct ofport *port_)
     if (port->is_tunnel) {
         struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
 
-        if (tnl_port_reconfigure(port, netdev, port->odp_port,
+        if (tnl_port_reconfigure(port, netdev, port->odp_port, port->odp_port,
                                  ovs_native_tunneling_is_on(ofproto),
                                  dp_port_name)) {
             ofproto->backer->need_revalidate = REV_RECONFIGURE;
