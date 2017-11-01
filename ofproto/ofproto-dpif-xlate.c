@@ -5131,7 +5131,7 @@ xlate_learn_action(struct xlate_ctx *ctx, const struct ofpact_learn *learn)
             }
         }
 
-        if (ctx->xin->xcache) {
+        if (ofm != &ofm__) {
             free(ofm);
         }
 
