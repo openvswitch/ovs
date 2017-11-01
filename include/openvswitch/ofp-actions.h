@@ -1128,7 +1128,7 @@ void *ofpact_finish(struct ofpbuf *, struct ofpact *);
     BUILD_ASSERT_DECL(offsetof(struct STRUCT, ofpact) == 0);            \
                                                                         \
     enum { OFPACT_##ENUM##_SIZE                                         \
-           = (offsetof(struct STRUCT, MEMBER)                           \
+           = (offsetof(struct STRUCT, MEMBER) != 0                      \
               ? offsetof(struct STRUCT, MEMBER)                         \
               : OFPACT_ALIGN(sizeof(struct STRUCT))) };                 \
                                                                         \
