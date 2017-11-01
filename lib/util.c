@@ -490,7 +490,10 @@ ovs_set_program_name(const char *argv0, const char *version)
     size_t max_len = strlen(argv0) + 1;
 
     SetErrorMode(GetErrorMode() | SEM_NOGPFAULTERRORBOX);
+#if _MSC_VER < 1900
+     /* This function is deprecated from 1900 (Visual Studio 2015) */
     _set_output_format(_TWO_DIGIT_EXPONENT);
+#endif
 
     basename = xmalloc(max_len);
     _splitpath_s(argv0, NULL, 0, NULL, 0, basename, max_len, NULL, 0);
