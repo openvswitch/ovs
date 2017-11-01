@@ -41,6 +41,13 @@ typedef enum {
     memory_order_seq_cst
 } memory_order;
 
+#if _MSC_VER > 1800 && defined(_M_IX86)
+/* From WDK 10 _InlineInterlocked* functions are renamed to
+ * _InlineInterlocked* although the documentation does not specify it */
+#define _InterlockedExchangeAdd64 _InlineInterlockedExchangeAdd64
+#define _InterlockedExchange64 _InlineInterlockedExchange64
+#endif
+
 #define ATOMIC_BOOL_LOCK_FREE 2
 #define ATOMIC_CHAR_LOCK_FREE 2
 #define ATOMIC_SHORT_LOCK_FREE 2
