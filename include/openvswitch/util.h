@@ -232,12 +232,12 @@ OVS_NO_RETURN void ovs_assert_failure(const char *, const char *, const char *);
         uint8_t PAD_ID[ROUND_UP(sizeof(struct { MEMBERS }), UNIT)]; \
     }
 #else
-#define PADDED_MEMBERS_CACHELINE_MARKER(UNIT, CACHELINE, MEMBERS)   \
-    union {                                                         \
-        OVS_CACHE_LINE_MARKER CACHELINE;                            \
-        struct { MEMBERS };                                         \
-        struct { MEMBERS } named_member__;                          \
-        uint8_t PAD_ID[ROUND_UP(sizeof named_member__, UNIT)];      \
+#define PADDED_MEMBERS_CACHELINE_MARKER(UNIT, CACHELINE, MEMBERS)           \
+    union {                                                                 \
+        OVS_CACHE_LINE_MARKER CACHELINE;                                    \
+        struct { MEMBERS };                                                 \
+        struct { MEMBERS } named_member_##CACHELINE;                        \
+        uint8_t PAD_ID[ROUND_UP(sizeof named_member_##CACHELINE, UNIT)];    \
     }
 #endif
 

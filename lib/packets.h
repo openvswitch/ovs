@@ -1107,7 +1107,9 @@ static inline bool ipv6_addr_is_multicast(const struct in6_addr *ip) {
 static inline struct in6_addr
 in6_addr_mapped_ipv4(ovs_be32 ip4)
 {
-    struct in6_addr ip6 = { .s6_addr = { [10] = 0xff, [11] = 0xff } };
+    struct in6_addr ip6;
+    memset(&ip6, 0, sizeof(ip6));
+    ip6.s6_addr[10] = 0xff, ip6.s6_addr[11] = 0xff;
     memcpy(&ip6.s6_addr[12], &ip4, 4);
     return ip6;
 }
