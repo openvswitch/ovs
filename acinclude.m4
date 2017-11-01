@@ -768,7 +768,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_helper.h],
                   [nf_conntrack_helper_put],
                   [OVS_DEFINE(HAVE_NF_CONNTRACK_HELPER_PUT)])
-  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h],[SKB_GSO_UDP],
+  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h],[[[[:space:]]]SKB_GSO_UDP[[[:space:]]]],
                   [OVS_DEFINE([HAVE_SKB_GSO_UDP])])
   OVS_GREP_IFELSE([$KSRC/include/net/dst.h],[DST_NOCACHE],
                   [OVS_DEFINE([HAVE_DST_NOCACHE])])
