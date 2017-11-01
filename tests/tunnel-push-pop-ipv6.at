@@ -66,9 +66,9 @@ AT_CHECK([ovs-appctl tnl/arp/show | tail -n+3 | sort], [0], [dnl
 
 AT_CHECK([ovs-appctl tnl/ports/show |sort], [0], [dnl
 Listening ports:
-genev_sys_6081 (6081)
-gre_sys (3)
-vxlan_sys_4789 (4789)
+genev_sys_6081 (6081) ref_cnt=1
+gre_sys (3) ref_cnt=2
+vxlan_sys_4789 (4789) ref_cnt=2
 ])
 
 dnl Check VXLAN tunnel pop
@@ -165,6 +165,33 @@ AT_CHECK([ovs-ofctl dump-ports int-br | grep 'port  5'], [0], [dnl
 ])
 AT_CHECK([ovs-appctl dpif/dump-flows int-br | grep 'in_port(6081)'], [0], [dnl
 tunnel(tun_id=0x7b,ipv6_src=2001:cafe::92,ipv6_dst=2001:cafe::88,geneve({class=0xffff,type=0x80,len=4,0xa/0xf}{class=0xffff,type=0,len=4}),flags(-df-csum+key)),recirc_id(0),in_port(6081),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions:userspace(pid=0,slow_path(controller))
+])
+
+ovs-appctl time/warp 10000
+
+AT_CHECK([ovs-vsctl del-port int-br t3 \
+                    -- set Interface t1 type=vxlan \
+                    -- set Interface t2 options:dst_port=4790 \
+                       ], [0])
+
+dnl Check tunnel lookup entries after deleting/reconfiguring some ports
+AT_CHECK([ovs-appctl tnl/ports/show |sort], [0], [dnl
+Listening ports:
+genev_sys_6081 (6081) ref_cnt=1
+gre_sys (3) ref_cnt=1
+vxlan_sys_4789 (4789) ref_cnt=1
+vxlan_sys_4790 (4790) ref_cnt=1
+])
+
+AT_CHECK([ovs-vsctl del-port int-br t1 \
+                    -- del-port int-br t2 \
+                    -- del-port int-br t4 \
+                    -- del-port int-br t5 \
+                       ], [0])
+
+dnl Check tunnel lookup entries after deleting all remaining tunnel ports
+AT_CHECK([ovs-appctl tnl/ports/show |sort], [0], [dnl
+Listening ports:
 ])
 
 OVS_VSWITCHD_STOP
