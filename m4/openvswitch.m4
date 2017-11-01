@@ -143,6 +143,7 @@ AC_DEFUN([OVS_CHECK_WIN32],
       )
 
       AC_DEFINE([WIN32], [1], [Define to 1 if building on WIN32.])
+      AC_CHECK_TYPES([struct timespec], [], [], [[#include <time.h>]])
       AH_BOTTOM([#ifdef WIN32
 #include "include/windows/windefs.h"
 #endif])
