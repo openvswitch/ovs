@@ -22,6 +22,8 @@
 #include <netinet/ip6.h>
 #include <netinet/icmp6.h>
 #include <stdlib.h>
+#include <sys/types.h>
+#include <netdb.h>
 #include "byte-order.h"
 #include "csum.h"
 #include "crc32c.h"
@@ -653,6 +655,82 @@ ip_parse_cidr(const char *s, ovs_be32 *ip, unsigned int *plen)
     if (!error && s[n]) {
         return xasprintf("%s: invalid IP address", s);
     }
+    return error;
+}
+
+/* Parses the string into an IPv4 or IPv6 address.
+ * The port flags act as follows:
+ * * PORT_OPTIONAL: A port may be present but is not required
+ * * PORT_REQUIRED: A port must be present
+ * * PORT_FORBIDDEN: A port must not be present
+ */
+char * OVS_WARN_UNUSED_RESULT
+ipv46_parse(const char *s, enum port_flags flags, struct sockaddr_storage *ss)
+{
+    char *error = NULL;
+
+    char *copy;
+    copy = xstrdup(s);
+
+    char *addr;
+    char *port;
+    if (*copy == '[') {
+        char *end;
+
+        addr = copy + 1;
+        end = strchr(addr, ']');
+        if (!end) {
+            error = xasprintf("No closing bracket on address %s", s);
+            goto finish;
+        }
+        *end++ = '\0';
+        if (*end == ':') {
+            port = end + 1;
+        } else {
+            port = NULL;
+        }
+    } else {
+        addr = copy;
+        port = strchr(copy, ':');
+        if (port) {
+            if (strchr(port + 1, ':')) {
+                port = NULL;
+            } else {
+                *port++ = '\0';
+            }
+        }
+    }
+
+    if (port && !*port) {
+        error = xasprintf("Port is an empty string");
+        goto finish;
+    }
+
+    if (port && flags == PORT_FORBIDDEN) {
+        error = xasprintf("Port forbidden in address %s", s);
+        goto finish;
+    } else if (!port && flags == PORT_REQUIRED) {
+        error = xasprintf("Port required in address %s", s);
+        goto finish;
+    }
+
+    struct addrinfo hints = {
+        .ai_flags = AI_NUMERICHOST | AI_NUMERICSERV,
+        .ai_family = AF_UNSPEC,
+    };
+    struct addrinfo *res;
+    int status;
+    status = getaddrinfo(addr, port, &hints, &res);
+    if (status) {
+        error = xasprintf("Error parsing address %s: %s",
+                s, gai_strerror(status));
+        goto finish;
+    }
+    memcpy(ss, res->ai_addr, res->ai_addrlen);
+    freeaddrinfo(res);
+
+finish:
+    free(copy);
     return error;
 }
 
