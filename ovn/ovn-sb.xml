@@ -1516,6 +1516,83 @@
             <b>Prerequisite:</b> <code>udp</code>
           </p>
         </dd>
+
+        <dt>
+          <code><var>R</var> = put_nd_ra_opts(<var>D1</var> = <var>V1</var>, <var>D2</var> = <var>V2</var>, ..., <var>Dn</var> = <var>Vn</var>);</code>
+        </dt>
+
+        <dd>
+          <p>
+            <b>Parameters</b>: The following IPv6 ND Router Advertisement
+               option/value pairs as defined in RFC 4861.
+
+            <ul>
+              <li>
+                <code>addr_mode</code>
+                <p>
+                  Mandatory parameter which specifies the address mode flag to
+                  be set in the RA flag options field. The value of this option
+                  is a string and the following values can be defined -
+                  "slaac", "dhcpv6_stateful" and "dhcpv6_stateless".
+                </p>
+              </li>
+
+              <li>
+                <code>slla</code>
+                <p>
+                  Mandatory parameter which specifies the link-layer address of
+                  the interface from which the Router Advertisement is sent.
+                </p>
+              </li>
+
+              <li>
+                <code>mtu</code>
+                <p>
+                  Optional parameter which specifies the MTU.
+                </p>
+              </li>
+
+              <li>
+                <code>prefix</code>
+                <p>
+                  Optional parameter which should be specified if the addr_mode
+                  is "slaac" or "dhcpv6_stateless". The value should be an IPv6
+                  prefix which will be used for stateless IPv6 address
+                  configuration. This option can be defined multiple times.
+                </p>
+              </li>
+            </ul>
+          </p>
+
+          <p>
+            <b>Result</b>: stored to a 1-bit subfield <var>R</var>.
+          </p>
+
+          <p>
+            Valid only in the ingress pipeline.
+          </p>
+
+          <p>
+            When this action is applied to an IPv6 Router solicitation request
+            packet, it changes the packet into an IPv6 Router Advertisement
+            reply and adds the options specified in the parameters, and stores
+            1 in <var>R</var>.
+          </p>
+
+          <p>
+            When this action is applied to a non-IPv6 Router solicitation
+            packet or an invalid IPv6 request packet , it leaves the packet
+            unchanged and stores 0 in <var>R</var>.
+          </p>
+
+          <p>
+            <b>Example:</b>
+            <code>
+              reg0[3] = put_nd_ra_opts(addr_mode = "slaac",
+              slla = 00:00:00:00:10:02, prefix = aef0::/64, mtu = 1450);
+            </code>
+          </p>
+        </dd>
       </dl>
 
       <dl>

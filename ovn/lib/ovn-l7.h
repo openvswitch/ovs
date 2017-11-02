@@ -18,6 +18,7 @@
 #define OVN_DHCP_H 1
 
 #include <netinet/in.h>
+#include <netinet/icmp6.h>
 #include "openvswitch/hmap.h"
 #include "hash.h"
 
@@ -205,5 +206,52 @@ struct dhcpv6_opt_ia_na {
 
 #define DHCPV6_OPT_PAYLOAD(opt) \
     (void *)((char *)opt + sizeof(struct dhcpv6_opt_header))
+
+static inline struct gen_opts_map *
+nd_ra_opts_find(const struct hmap *nd_ra_opts, char *opt_name)
+{
+    return gen_opts_find(nd_ra_opts, opt_name);
+}
+
+static inline void
+nd_ra_opt_add(struct hmap *nd_ra_opts, char *opt_name, size_t code,
+               char *type)
+{
+    gen_opt_add(nd_ra_opts, opt_name, code, type);
+}
+
+static inline void
+nd_ra_opts_destroy(struct hmap *nd_ra_opts)
+{
+    gen_opts_destroy(nd_ra_opts);
+}
+
+
+#define ND_RA_FLAG_ADDR_MODE    0
+
+
+/* Default values of various IPv6 Neighbor Discovery protocol options and
+ * flags. See RFC 4861 for more information.
+ * */
+#define IPV6_ND_RA_FLAG_MANAGED_ADDR_CONFIG         0x80
+#define IPV6_ND_RA_FLAG_OTHER_ADDR_CONFIG           0x40
+
+#define IPV6_ND_RA_CUR_HOP_LIMIT                    255
+#define IPV6_ND_RA_LIFETIME                         0xffff
+#define IPV6_ND_RA_REACHABLE_TIME                   0
+#define IPV6_ND_RA_RETRANSMIT_TIMER                 0
+
+#define IPV6_ND_RA_OPT_PREFIX_FLAGS                 0xc0
+#define IPV6_ND_RA_OPT_PREFIX_VALID_LIFETIME        0xffffffff
+#define IPV6_ND_RA_OPT_PREFIX_PREFERRED_LIFETIME    0xffffffff
+
+static inline void
+nd_ra_opts_init(struct hmap *nd_ra_opts)
+{
+    nd_ra_opt_add(nd_ra_opts, "addr_mode", ND_RA_FLAG_ADDR_MODE, "str");
+    nd_ra_opt_add(nd_ra_opts, "slla", ND_OPT_SOURCE_LINKADDR, "mac");
+    nd_ra_opt_add(nd_ra_opts, "prefix", ND_OPT_PREFIX_INFORMATION, "ipv6");
+    nd_ra_opt_add(nd_ra_opts, "mtu", ND_OPT_MTU, "uint32");
+}
 
 #endif /* OVN_DHCP_H */

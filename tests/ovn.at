@@ -1072,6 +1072,37 @@ reg1[0] = dns_lookup();
 reg1[0] = dns_lookup("foo");
     dns_lookup doesn't take any parameters
 
+# put_nd_ra_opts
+reg1[0] = put_nd_ra_opts(addr_mode = "slaac", mtu = 1500, prefix = aef0::/64, slla = ae:01:02:03:04:05);
+    encodes as controller(userdata=00.00.00.08.00.00.00.00.00.01.de.10.00.00.00.40.86.00.00.00.ff.00.ff.ff.00.00.00.00.00.00.00.00.05.01.00.00.00.00.05.dc.03.04.40.c0.ff.ff.ff.ff.ff.ff.ff.ff.00.00.00.00.ae.f0.00.00.00.00.00.00.00.00.00.00.00.00.00.00.01.01.ae.01.02.03.04.05,pause)
+    has prereqs ip6
+reg1[0] = put_nd_ra_opts(addr_mode = "dhcpv6_stateful", slla = ae:01:02:03:04:10, mtu = 1450);
+    encodes as controller(userdata=00.00.00.08.00.00.00.00.00.01.de.10.00.00.00.40.86.00.00.00.ff.80.ff.ff.00.00.00.00.00.00.00.00.01.01.ae.01.02.03.04.10.05.01.00.00.00.00.05.aa,pause)
+    has prereqs ip6
+reg1[0] = put_nd_ra_opts(addr_mode = "dhcpv6_stateless", slla = ae:01:02:03:04:06, prefix = aef0::/64);
+    encodes as controller(userdata=00.00.00.08.00.00.00.00.00.01.de.10.00.00.00.40.86.00.00.00.ff.40.ff.ff.00.00.00.00.00.00.00.00.01.01.ae.01.02.03.04.06.03.04.40.c0.ff.ff.ff.ff.ff.ff.ff.ff.00.00.00.00.ae.f0.00.00.00.00.00.00.00.00.00.00.00.00.00.00,pause)
+    has prereqs ip6
+reg1[0] = put_nd_ra_opts(addr_mode = "slaac", mtu = 1500, prefix = aef0::/64);
+    slla option not present
+reg1[0] = put_nd_ra_opts(addr_mode = "dhcpv6_stateful", mtu = 1450, prefix = aef0::/64, prefix = bef0::/64, slla = ae:01:02:03:04:10);
+    prefix option can't be set when address mode is dhcpv6_stateful.
+reg1[0] = put_nd_ra_opts(addr_mode = "dhcpv6_stateful", mtu = 1450, prefix = aef0::/64, prefix = bef0::/64, slla = ae:01:02:03:04:10);
+    prefix option can't be set when address mode is dhcpv6_stateful.
+reg1[0] = put_nd_ra_opts(addr_mode = "slaac", slla = ae:01:02:03:04:10);
+    prefix option needs to be set when address mode is slaac/dhcpv6_stateless.
+reg1[0] = put_nd_ra_opts(addr_mode = "dhcpv6_stateless", slla = ae:01:02:03:04:10);
+    prefix option needs to be set when address mode is slaac/dhcpv6_stateless.
+reg1[0] = put_nd_ra_opts(addr_mode = dhcpv6_stateless, prefix = aef0::/64, slla = ae:01:02:03:04:10);
+    Syntax error at `dhcpv6_stateless' expecting constant.
+reg1[0] = put_nd_ra_opts(addr_mode = "slaac", mtu = 1500, prefix = aef0::, slla = ae:01:02:03:04:10);
+    Invalid value for "prefix" option
+reg1[0] = put_nd_ra_opts(addr_mode = "foo", mtu = 1500, slla = ae:01:02:03:04:10);
+    Invalid value for "addr_mode" option
+reg1[0] = put_nd_ra_opts(addr_mode = "slaac", mtu = "1500", slla = ae:01:02:03:04:10);
+    IPv6 ND RA option mtu requires numeric value.
+reg1[0] = put_nd_ra_opts(addr_mode = "slaac", mtu = 10.0.0.4, slla = ae:01:02:03:04:10);
+    Invalid value for "mtu" option
+
 # Contradictionary prerequisites (allowed but not useful):
 ip4.src = ip6.src[0..31];
     encodes as move:NXM_NX_IPV6_SRC[0..31]->NXM_OF_IP_SRC[]

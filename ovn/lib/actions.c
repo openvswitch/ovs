@@ -22,6 +22,7 @@
 #include "compiler.h"
 #include "ovn-l7.h"
 #include "hash.h"
+#include "lib/packets.h"
 #include "logical-fields.h"
 #include "nx-match.h"
 #include "openvswitch/dynamic-string.h"
@@ -1496,7 +1497,7 @@ parse_put_opts(struct action_context *ctx, const struct expr_field *dst,
                struct ovnact_put_opts *po, const struct hmap *gen_opts,
                const char *opts_type)
 {
-    lexer_get(ctx->lexer); /* Skip put_dhcp[v6]_opts. */
+    lexer_get(ctx->lexer); /* Skip put_dhcp[v6]_opts / put_nd_ra_opts. */
     lexer_get(ctx->lexer); /* Skip '('. */
 
     /* Validate that the destination is a 1-bit, modifiable field. */
@@ -1829,6 +1830,181 @@ static void
 ovnact_dns_lookup_free(struct ovnact_dns_lookup *dl OVS_UNUSED)
 {
 }
+
+/* Parses the "put_nd_ra_opts" action.
+ * The caller has already consumed "<dst> =", so this just parses the rest. */
+static void
+parse_put_nd_ra_opts(struct action_context *ctx, const struct expr_field *dst,
+                     struct ovnact_put_opts *po)
+{
+    parse_put_opts(ctx, dst, po, ctx->pp->nd_ra_opts, "IPv6 ND RA");
+
+    if (ctx->lexer->error) {
+        return;
+    }
+
+    bool addr_mode_stateful = false;
+    bool prefix_set = false;
+    bool slla_present = false;
+    /* Let's validate the options. */
+    for (struct ovnact_gen_option *o = po->options;
+            o < &po->options[po->n_options]; o++) {
+        const union expr_constant *c = o->value.values;
+        if (o->value.n_values > 1) {
+            lexer_error(ctx->lexer, "Invalid value for \"%s\" option",
+                        o->option->name);
+            return;
+        }
+
+        bool ok = true;
+        switch (o->option->code) {
+        case ND_RA_FLAG_ADDR_MODE:
+            ok = (c->string && (!strcmp(c->string, "slaac") ||
+                                !strcmp(c->string, "dhcpv6_stateful") ||
+                                !strcmp(c->string, "dhcpv6_stateless")));
+            if (ok && !strcmp(c->string, "dhcpv6_stateful")) {
+                addr_mode_stateful = true;
+            }
+            break;
+
+        case ND_OPT_SOURCE_LINKADDR:
+            ok = c->format == LEX_F_ETHERNET;
+            slla_present = true;
+            break;
+
+        case ND_OPT_PREFIX_INFORMATION:
+            ok = c->format == LEX_F_IPV6 && c->masked;
+            prefix_set = true;
+            break;
+
+        case ND_OPT_MTU:
+            ok = c->format == LEX_F_DECIMAL;
+            break;
+        }
+
+        if (!ok) {
+            lexer_error(ctx->lexer, "Invalid value for \"%s\" option",
+                        o->option->name);
+            return;
+        }
+    }
+
+    if (!slla_present) {
+        lexer_error(ctx->lexer, "slla option not present");
+        return;
+    }
+
+    if (addr_mode_stateful && prefix_set) {
+        lexer_error(ctx->lexer, "prefix option can't be"
+                    " set when address mode is dhcpv6_stateful.");
+        return;
+    }
+
+    if (!addr_mode_stateful && !prefix_set) {
+        lexer_error(ctx->lexer, "prefix option needs "
+                    "to be set when address mode is slaac/dhcpv6_stateless.");
+        return;
+    }
+
+    add_prerequisite(ctx, "ip6");
+}
+
+static void
+format_PUT_ND_RA_OPTS(const struct ovnact_put_opts *po,
+                      struct ds *s)
+{
+    format_put_opts("put_nd_ra_opts", po, s);
+}
+
+static void
+encode_put_nd_ra_option(const struct ovnact_gen_option *o,
+                        struct ofpbuf *ofpacts, struct ovs_ra_msg *ra)
+{
+    const union expr_constant *c = o->value.values;
+
+    switch (o->option->code) {
+    case ND_RA_FLAG_ADDR_MODE:
+        if (!strcmp(c->string, "dhcpv6_stateful")) {
+            ra->mo_flags = IPV6_ND_RA_FLAG_MANAGED_ADDR_CONFIG;
+        } else if (!strcmp(c->string, "dhcpv6_stateless")) {
+            ra->mo_flags = IPV6_ND_RA_FLAG_OTHER_ADDR_CONFIG;
+        }
+        break;
+
+    case ND_OPT_SOURCE_LINKADDR:
+    {
+        struct ovs_nd_lla_opt *lla_opt =
+            ofpbuf_put_uninit(ofpacts, sizeof *lla_opt);
+        lla_opt->type = ND_OPT_SOURCE_LINKADDR;
+        lla_opt->len = 1;
+        lla_opt->mac = c->value.mac;
+        break;
+    }
+
+    case ND_OPT_MTU:
+    {
+        struct ovs_nd_mtu_opt *mtu_opt =
+            ofpbuf_put_uninit(ofpacts, sizeof *mtu_opt);
+        mtu_opt->type = ND_OPT_MTU;
+        mtu_opt->len = 1;
+        mtu_opt->reserved = 0;
+        put_16aligned_be32(&mtu_opt->mtu, c->value.be32_int);
+        break;
+    }
+
+    case ND_OPT_PREFIX_INFORMATION:
+    {
+        struct ovs_nd_prefix_opt *prefix_opt =
+            ofpbuf_put_uninit(ofpacts, sizeof *prefix_opt);
+        uint8_t prefix_len = ipv6_count_cidr_bits(&c->mask.ipv6);
+        prefix_opt->type = ND_OPT_PREFIX_INFORMATION;
+        prefix_opt->len = 4;
+        prefix_opt->prefix_len = prefix_len;
+        prefix_opt->la_flags = IPV6_ND_RA_OPT_PREFIX_FLAGS;
+        put_16aligned_be32(&prefix_opt->valid_lifetime,
+                           htonl(IPV6_ND_RA_OPT_PREFIX_VALID_LIFETIME));
+        put_16aligned_be32(&prefix_opt->preferred_lifetime,
+                           htonl(IPV6_ND_RA_OPT_PREFIX_PREFERRED_LIFETIME));
+        put_16aligned_be32(&prefix_opt->reserved, 0);
+        memcpy(prefix_opt->prefix.be32, &c->value.be128[7].be32,
+               sizeof(ovs_be32[4]));
+        break;
+    }
+    }
+}
+
+static void
+encode_PUT_ND_RA_OPTS(const struct ovnact_put_opts *po,
+                      const struct ovnact_encode_params *ep OVS_UNUSED,
+                      struct ofpbuf *ofpacts)
+{
+    struct mf_subfield dst = expr_resolve_field(&po->dst);
+
+    size_t oc_offset = encode_start_controller_op(
+        ACTION_OPCODE_PUT_ND_RA_OPTS, true, ofpacts);
+    nx_put_header(ofpacts, dst.field->id, OFP13_VERSION, false);
+    ovs_be32 ofs = htonl(dst.ofs);
+    ofpbuf_put(ofpacts, &ofs, sizeof ofs);
+
+    /* Frame the complete ICMPv6 Router Advertisement data encoding
+     * the ND RA options in it, in the userdata field, so that when
+     * pinctrl module receives the ICMPv6 Router Solicitation packet
+     * it can copy the userdata field AS IS and resume the packet.
+     */
+    struct ovs_ra_msg *ra = ofpbuf_put_zeros(ofpacts, sizeof *ra);
+    ra->icmph.icmp6_type = ND_ROUTER_ADVERT;
+    ra->cur_hop_limit = IPV6_ND_RA_CUR_HOP_LIMIT;
+    ra->mo_flags = 0;
+    ra->router_lifetime = htons(IPV6_ND_RA_LIFETIME);
+
+    for (const struct ovnact_gen_option *o = po->options;
+         o < &po->options[po->n_options]; o++) {
+        encode_put_nd_ra_option(o, ofpacts, ra);
+    }
+
+    encode_finish_controller_op(oc_offset, ofpacts);
+}
+
 
 static void
 parse_log_arg(struct action_context *ctx, struct ovnact_log *log)
@@ -1968,6 +2144,10 @@ parse_set_action(struct action_context *ctx)
         } else if (!strcmp(ctx->lexer->token.s, "dns_lookup")
                    && lexer_lookahead(ctx->lexer) == LEX_T_LPAREN) {
             parse_dns_lookup(ctx, &lhs, ovnact_put_DNS_LOOKUP(ctx->ovnacts));
+        } else if (!strcmp(ctx->lexer->token.s, "put_nd_ra_opts")
+                && lexer_lookahead(ctx->lexer) == LEX_T_LPAREN) {
+            parse_put_nd_ra_opts(ctx, &lhs,
+                                 ovnact_put_PUT_ND_RA_OPTS(ctx->ovnacts));
         } else {
             parse_assignment_action(ctx, false, &lhs);
         }

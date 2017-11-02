@@ -81,6 +81,10 @@ static void pinctrl_handle_nd_na(const struct flow *ip_flow,
                                  struct ofpbuf *userdata);
 static void reload_metadata(struct ofpbuf *ofpacts,
                             const struct match *md);
+static void pinctrl_handle_put_nd_ra_opts(
+    const struct flow *ip_flow, struct dp_packet *pkt_in,
+    struct ofputil_packet_in *pin, struct ofpbuf *userdata,
+    struct ofpbuf *continuation);
 
 COVERAGE_DEFINE(pinctrl_drop_put_mac_binding);
 
@@ -985,6 +989,11 @@ process_packet_in(const struct ofp_header *msg, struct controller_ctx *ctx)
         handle_acl_log(&headers, &userdata);
         break;
 
+    case ACTION_OPCODE_PUT_ND_RA_OPTS:
+        pinctrl_handle_put_nd_ra_opts(&headers, &packet, &pin, &userdata,
+                                      &continuation);
+        break;
+
     default:
         VLOG_WARN_RL(&rl, "unrecognized packet-in opcode %"PRIu32,
                      ntohl(ah->opcode));
@@ -1847,4 +1856,91 @@ pinctrl_handle_nd_na(const struct flow *ip_flow, const struct match *md,
 exit:
     dp_packet_uninit(&packet);
     ofpbuf_uninit(&ofpacts);
+}
+
+static void
+pinctrl_handle_put_nd_ra_opts(
+    const struct flow *in_flow, struct dp_packet *pkt_in,
+    struct ofputil_packet_in *pin, struct ofpbuf *userdata,
+    struct ofpbuf *continuation)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+    enum ofp_version version = rconn_get_version(swconn);
+    enum ofputil_protocol proto = ofputil_protocol_from_ofp_version(version);
+    struct dp_packet *pkt_out_ptr = NULL;
+    uint32_t success = 0;
+
+    /* Parse result field. */
+    const struct mf_field *f;
+    enum ofperr ofperr = nx_pull_header(userdata, NULL, &f, NULL);
+    if (ofperr) {
+       VLOG_WARN_RL(&rl, "bad result OXM (%s)", ofperr_to_string(ofperr));
+       goto exit;
+    }
+
+    /* Parse result offset. */
+    ovs_be32 *ofsp = ofpbuf_try_pull(userdata, sizeof *ofsp);
+    if (!ofsp) {
+        VLOG_WARN_RL(&rl, "offset not present in the userdata");
+        goto exit;
+    }
+
+    /* Check that the result is valid and writable. */
+    struct mf_subfield dst = { .field = f, .ofs = ntohl(*ofsp), .n_bits = 1 };
+    ofperr = mf_check_dst(&dst, NULL);
+    if (ofperr) {
+        VLOG_WARN_RL(&rl, "bad result bit (%s)", ofperr_to_string(ofperr));
+        goto exit;
+    }
+
+    if (!userdata->size) {
+        VLOG_WARN_RL(&rl, "IPv6 ND RA options not present in the userdata");
+        goto exit;
+    }
+
+    if (!is_icmpv6(in_flow, NULL) || in_flow->tp_dst != htons(0) ||
+        in_flow->tp_src != htons(ND_ROUTER_SOLICIT)) {
+        VLOG_WARN_RL(&rl, "put_nd_ra action on invalid or unsupported packet");
+        goto exit;
+    }
+
+    size_t new_packet_size = pkt_in->l4_ofs + userdata->size;
+    struct dp_packet pkt_out;
+    dp_packet_init(&pkt_out, new_packet_size);
+    dp_packet_clear(&pkt_out);
+    dp_packet_prealloc_tailroom(&pkt_out, new_packet_size);
+    pkt_out_ptr = &pkt_out;
+
+    /* Copy L2 and L3 headers from pkt_in. */
+    dp_packet_put(&pkt_out, dp_packet_pull(pkt_in, pkt_in->l4_ofs),
+                  pkt_in->l4_ofs);
+
+    pkt_out.l2_5_ofs = pkt_in->l2_5_ofs;
+    pkt_out.l2_pad_size = pkt_in->l2_pad_size;
+    pkt_out.l3_ofs = pkt_in->l3_ofs;
+    pkt_out.l4_ofs = pkt_in->l4_ofs;
+
+    /* Copy the ICMPv6 Router Advertisement data from 'userdata' field. */
+    dp_packet_put(&pkt_out, userdata->data, userdata->size);
+
+    /* Set the IPv6 payload length and calculate the ICMPv6 checksum. */
+    struct ovs_16aligned_ip6_hdr *nh = dp_packet_l3(&pkt_out);
+    nh->ip6_plen = htons(userdata->size);
+    struct ovs_ra_msg *ra = dp_packet_l4(&pkt_out);
+    ra->icmph.icmp6_cksum = 0;
+    uint32_t icmp_csum = packet_csum_pseudoheader6(nh);
+    ra->icmph.icmp6_cksum = csum_finish(csum_continue(
+        icmp_csum, ra, userdata->size));
+    pin->packet = dp_packet_data(&pkt_out);
+    pin->packet_len = dp_packet_size(&pkt_out);
+    success = 1;
+
+exit:
+    if (!ofperr) {
+        union mf_subvalue sv;
+        sv.u8_val = success;
+        mf_write_subfield(&dst, &sv, &pin->flow_metadata);
+    }
+    queue_msg(ofputil_encode_resume(pin, continuation, proto));
+    dp_packet_uninit(pkt_out_ptr);
 }

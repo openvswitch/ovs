@@ -155,7 +155,8 @@ create_symtab(struct shash *symtab)
 }
 
 static void
-create_dhcp_opts(struct hmap *dhcp_opts, struct hmap *dhcpv6_opts)
+create_gen_opts(struct hmap *dhcp_opts, struct hmap *dhcpv6_opts,
+                struct hmap *nd_ra_opts)
 {
     hmap_init(dhcp_opts);
     dhcp_opt_add(dhcp_opts, "offerip", 0, "ipv4");
@@ -187,6 +188,10 @@ create_dhcp_opts(struct hmap *dhcp_opts, struct hmap *dhcpv6_opts)
     dhcp_opt_add(dhcpv6_opts, "ia_addr",  5, "ipv6");
     dhcp_opt_add(dhcpv6_opts, "dns_server",  23, "ipv6");
     dhcp_opt_add(dhcpv6_opts, "domain_search",  24, "str");
+
+    /* IPv6 ND RA options. */
+    hmap_init(nd_ra_opts);
+    nd_ra_opts_init(nd_ra_opts);
 }
 
 static void
@@ -1193,12 +1198,13 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
     struct shash symtab;
     struct hmap dhcp_opts;
     struct hmap dhcpv6_opts;
+    struct hmap nd_ra_opts;
     struct simap ports;
     struct ds input;
     bool ok = true;
 
     create_symtab(&symtab);
-    create_dhcp_opts(&dhcp_opts, &dhcpv6_opts);
+    create_gen_opts(&dhcp_opts, &dhcpv6_opts, &nd_ra_opts);
 
     /* Initialize group ids. */
     struct group_table group_table;
@@ -1226,6 +1232,7 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
             .symtab = &symtab,
             .dhcp_opts = &dhcp_opts,
             .dhcpv6_opts = &dhcpv6_opts,
+            .nd_ra_opts = &nd_ra_opts,
             .n_tables = 24,
             .cur_ltable = 10,
         };
@@ -1310,7 +1317,7 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
     shash_destroy(&symtab);
     dhcp_opts_destroy(&dhcp_opts);
     dhcp_opts_destroy(&dhcpv6_opts);
-
+    nd_ra_opts_destroy(&nd_ra_opts);
     exit(ok ? EXIT_SUCCESS : EXIT_FAILURE);
 }
 
