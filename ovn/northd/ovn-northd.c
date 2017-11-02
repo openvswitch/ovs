@@ -129,15 +129,17 @@ enum ovn_stage {
     PIPELINE_STAGE(SWITCH, OUT, PORT_SEC_L2,  8, "ls_out_port_sec_l2")    \
                                                                       \
     /* Logical router ingress stages. */                              \
-    PIPELINE_STAGE(ROUTER, IN,  ADMISSION,   0, "lr_in_admission")    \
-    PIPELINE_STAGE(ROUTER, IN,  IP_INPUT,    1, "lr_in_ip_input")     \
-    PIPELINE_STAGE(ROUTER, IN,  DEFRAG,      2, "lr_in_defrag")       \
-    PIPELINE_STAGE(ROUTER, IN,  UNSNAT,      3, "lr_in_unsnat")       \
-    PIPELINE_STAGE(ROUTER, IN,  DNAT,        4, "lr_in_dnat")         \
-    PIPELINE_STAGE(ROUTER, IN,  IP_ROUTING,  5, "lr_in_ip_routing")   \
-    PIPELINE_STAGE(ROUTER, IN,  ARP_RESOLVE, 6, "lr_in_arp_resolve")  \
-    PIPELINE_STAGE(ROUTER, IN,  GW_REDIRECT, 7, "lr_in_gw_redirect")  \
-    PIPELINE_STAGE(ROUTER, IN,  ARP_REQUEST, 8, "lr_in_arp_request")  \
+    PIPELINE_STAGE(ROUTER, IN,  ADMISSION,      0, "lr_in_admission")    \
+    PIPELINE_STAGE(ROUTER, IN,  IP_INPUT,       1, "lr_in_ip_input")     \
+    PIPELINE_STAGE(ROUTER, IN,  DEFRAG,         2, "lr_in_defrag")       \
+    PIPELINE_STAGE(ROUTER, IN,  UNSNAT,         3, "lr_in_unsnat")       \
+    PIPELINE_STAGE(ROUTER, IN,  DNAT,           4, "lr_in_dnat")         \
+    PIPELINE_STAGE(ROUTER, IN,  ND_RA_OPTIONS,  5, "lr_in_nd_ra_options") \
+    PIPELINE_STAGE(ROUTER, IN,  ND_RA_RESPONSE, 6, "lr_in_nd_ra_response") \
+    PIPELINE_STAGE(ROUTER, IN,  IP_ROUTING,     7, "lr_in_ip_routing")   \
+    PIPELINE_STAGE(ROUTER, IN,  ARP_RESOLVE,    8, "lr_in_arp_resolve")  \
+    PIPELINE_STAGE(ROUTER, IN,  GW_REDIRECT,    9, "lr_in_gw_redirect")  \
+    PIPELINE_STAGE(ROUTER, IN,  ARP_REQUEST,    10, "lr_in_arp_request")  \
                                                                       \
     /* Logical router egress stages. */                               \
     PIPELINE_STAGE(ROUTER, OUT, UNDNAT,    0, "lr_out_undnat")        \
@@ -159,11 +161,12 @@ enum ovn_stage {
 #define OVN_ACL_PRI_OFFSET 1000
 
 /* Register definitions specific to switches. */
-#define REGBIT_CONNTRACK_DEFRAG "reg0[0]"
-#define REGBIT_CONNTRACK_COMMIT "reg0[1]"
-#define REGBIT_CONNTRACK_NAT    "reg0[2]"
-#define REGBIT_DHCP_OPTS_RESULT "reg0[3]"
+#define REGBIT_CONNTRACK_DEFRAG  "reg0[0]"
+#define REGBIT_CONNTRACK_COMMIT  "reg0[1]"
+#define REGBIT_CONNTRACK_NAT     "reg0[2]"
+#define REGBIT_DHCP_OPTS_RESULT  "reg0[3]"
 #define REGBIT_DNS_LOOKUP_RESULT "reg0[4]"
+#define REGBIT_ND_RA_OPTS_RESULT "reg0[5]"
 
 /* Register definitions for switches and routers. */
 #define REGBIT_NAT_REDIRECT     "reg9[0]"
@@ -2882,7 +2885,11 @@ build_pre_acls(struct ovn_datapath *od, struct hmap *lflows)
          *
          * Not to do conntrack on ND packets. */
         ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_ACL, 110, "nd", "next;");
+        ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_ACL, 110, "(nd_rs || nd_ra)",
+                      "next;");
         ovn_lflow_add(lflows, od, S_SWITCH_OUT_PRE_ACL, 110, "nd", "next;");
+        ovn_lflow_add(lflows, od, S_SWITCH_OUT_PRE_ACL, 110,
+                      "(nd_rs || nd_ra)", "next;");
 
         /* Ingress and Egress Pre-ACL Table (Priority 100).
          *
@@ -5431,7 +5438,103 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         sset_destroy(&all_ips);
     }
 
-    /* Logical router ingress table 5: IP Routing.
+    /* Logical router ingress table 5 and 6: IPv6 Router Adv (RA) options and
+     * response. */
+    HMAP_FOR_EACH (op, key_node, ports) {
+        if (!op->nbrp || op->nbrp->peer || !op->peer) {
+            continue;
+        }
+
+        if (!op->lrp_networks.n_ipv6_addrs) {
+            continue;
+        }
+
+        const char *address_mode = smap_get(
+            &op->nbrp->ipv6_ra_configs, "address_mode");
+
+        if (!address_mode) {
+            continue;
+        }
+        if (strcmp(address_mode, "slaac") &&
+            strcmp(address_mode, "dhcpv6_stateful") &&
+            strcmp(address_mode, "dhcpv6_stateless")) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+            VLOG_WARN_RL(&rl, "Invalid address mode [%s] defined",
+                         address_mode);
+            continue;
+        }
+
+        ds_clear(&match);
+        ds_put_format(&match, "inport == %s && ip6.dst == ff02::2 && nd_rs",
+                              op->json_key);
+        ds_clear(&actions);
+
+        const char *mtu_s = smap_get(
+            &op->nbrp->ipv6_ra_configs, "mtu");
+
+        /* As per RFC 2460, 1280 is minimum IPv6 MTU. */
+        uint32_t mtu = (mtu_s && atoi(mtu_s) >= 1280) ? atoi(mtu_s) : 0;
+
+        ds_put_format(&actions, REGBIT_ND_RA_OPTS_RESULT" = put_nd_ra_opts("
+                      "addr_mode = \"%s\", slla = %s",
+                      address_mode, op->lrp_networks.ea_s);
+        if (mtu > 0) {
+            ds_put_format(&actions, ", mtu = %u", mtu);
+        }
+
+        bool add_rs_response_flow = false;
+
+        for (size_t i = 0; i < op->lrp_networks.n_ipv6_addrs; i++) {
+            if (in6_is_lla(&op->lrp_networks.ipv6_addrs[i].network)) {
+                continue;
+            }
+
+            /* Add the prefix option if the address mode is slaac or
+             * dhcpv6_stateless. */
+            if (strcmp(address_mode, "dhcpv6_stateful")) {
+                ds_put_format(&actions, ", prefix = %s/%u",
+                              op->lrp_networks.ipv6_addrs[i].network_s,
+                              op->lrp_networks.ipv6_addrs[i].plen);
+            }
+            add_rs_response_flow = true;
+        }
+
+        if (add_rs_response_flow) {
+            ds_put_cstr(&actions, "); next;");
+            ovn_lflow_add(lflows, op->od, S_ROUTER_IN_ND_RA_OPTIONS, 50,
+                          ds_cstr(&match), ds_cstr(&actions));
+            ds_clear(&actions);
+            ds_clear(&match);
+            ds_put_format(&match, "inport == %s && ip6.dst == ff02::2 && "
+                          "nd_ra && "REGBIT_ND_RA_OPTS_RESULT, op->json_key);
+
+            char ip6_str[INET6_ADDRSTRLEN + 1];
+            struct in6_addr lla;
+            in6_generate_lla(op->lrp_networks.ea, &lla);
+            memset(ip6_str, 0, sizeof(ip6_str));
+            ipv6_string_mapped(ip6_str, &lla);
+            ds_put_format(&actions, "eth.dst = eth.src; eth.src = %s; "
+                          "ip6.dst = ip6.src; ip6.src = %s; "
+                          "outport = inport; flags.loopback = 1; "
+                          "output;",
+                          op->lrp_networks.ea_s, ip6_str);
+            ovn_lflow_add(lflows, op->od, S_ROUTER_IN_ND_RA_RESPONSE, 50,
+                          ds_cstr(&match), ds_cstr(&actions));
+        }
+    }
+
+    /* Logical router ingress table 5, 6: RS responder, by default goto next.
+     * (priority 0)*/
+    HMAP_FOR_EACH (od, key_node, datapaths) {
+        if (!od->nbr) {
+            continue;
+        }
+
+        ovn_lflow_add(lflows, od, S_ROUTER_IN_ND_RA_OPTIONS, 0, "1", "next;");
+        ovn_lflow_add(lflows, od, S_ROUTER_IN_ND_RA_RESPONSE, 0, "1", "next;");
+    }
+
+    /* Logical router ingress table 7: IP Routing.
      *
      * A packet that arrives at this table is an IP packet that should be
      * routed to the address in 'ip[46].dst'. This table sets outport to
@@ -5473,7 +5576,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
 
     /* XXX destination unreachable */
 
-    /* Local router ingress table 6: ARP Resolution.
+    /* Local router ingress table 8: ARP Resolution.
      *
      * Any packet that reaches this table is an IP packet whose next-hop IP
      * address is in reg0. (ip4.dst is the final destination.) This table
@@ -5672,7 +5775,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                       "get_nd(outport, xxreg0); next;");
     }
 
-    /* Logical router ingress table 7: Gateway redirect.
+    /* Logical router ingress table 9: Gateway redirect.
      *
      * For traffic with outport equal to the l3dgw_port
      * on a distributed router, this table redirects a subset
@@ -5712,7 +5815,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         ovn_lflow_add(lflows, od, S_ROUTER_IN_GW_REDIRECT, 0, "1", "next;");
     }
 
-    /* Local router ingress table 8: ARP request.
+    /* Local router ingress table 10: ARP request.
      *
      * In the common case where the Ethernet destination has been resolved,
      * this table outputs the packet (priority 0).  Otherwise, it composes

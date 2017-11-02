@@ -7874,6 +7874,255 @@ OVN_CLEANUP([hv1],[hv2],[hv3])
 
 AT_CLEANUP
 
+AT_SETUP([ovn -- IPv6 ND Router Solicitation responder])
+AT_KEYWORDS([ovn-nd_ra])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# In this test case we create 1 lswitch with 3 VIF ports attached,
+# and a lrouter connected to the lswitch.
+# We generate the Router solicitation packet and verify the Router Advertisement
+# reply packet from the ovn-controller.
+
+# Create hypervisor and logical switch lsw0, logical router lr0, attach lsw0
+# onto lr0, set Logical_Router_Port.ipv6_ra_configs:address_mode column to
+# 'slaac' to allow lrp0 send RA for SLAAC mode.
+ovn-nbctl ls-add lsw0
+ovn-nbctl lr-add lr0
+ovn-nbctl lrp-add lr0 lrp0 fa:16:3e:00:00:01 fdad:1234:5678::1/64
+ovn-nbctl set Logical_Router_Port lrp0 ipv6_ra_configs:address_mode="slaac"
+ovn-nbctl \
+    -- lsp-add lsw0 lsp0 \
+    -- set Logical_Switch_Port lsp0 type=router \
+                     options:router-port=lrp0 \
+                     addresses='"fa:16:3e:00:00:01 fdad:1234:5678::1"'
+net_add n1
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.2
+
+ovn-nbctl lsp-add lsw0 lp1
+ovn-nbctl lsp-set-addresses lp1 "fa:16:3e:00:00:02 10.0.0.12 fdad:1234:5678:0:f816:3eff:fe:2"
+ovn-nbctl lsp-set-port-security lp1 "fa:16:3e:00:00:02 10.0.0.12 fdad:1234:5678:0:f816:3eff:fe:2"
+
+ovn-nbctl lsp-add lsw0 lp2
+ovn-nbctl lsp-set-addresses lp2 "fa:16:3e:00:00:03 10.0.0.13 fdad:1234:5678:0:f816:3eff:fe:3"
+ovn-nbctl lsp-set-port-security lp2 "fa:16:3e:00:00:03 10.0.0.13 fdad:1234:5678:0:f816:3eff:fe:3"
+
+ovn-nbctl lsp-add lsw0 lp3
+ovn-nbctl lsp-set-addresses lp3 "fa:16:3e:00:00:04 10.0.0.14 fdad:1234:5678:0:f816:3eff:fe:4"
+ovn-nbctl lsp-set-port-security lp3 "fa:16:3e:00:00:04 10.0.0.14 fdad:1234:5678:0:f816:3eff:fe:4"
+
+# Add ACL rule for ICMPv6 on lsw0
+ovn-nbctl acl-add lsw0 from-lport 1002 'ip6 && icmp6'  allow-related
+ovn-nbctl acl-add lsw0 to-lport 1002 'outport == "lp1" && ip6 && icmp6'  allow-related
+ovn-nbctl acl-add lsw0 to-lport 1002 'outport == "lp2" && ip6 && icmp6'  allow-related
+ovn-nbctl acl-add lsw0 to-lport 1002 'outport == "lp3" && ip6 && icmp6'  allow-related
+
+ovs-vsctl -- add-port br-int hv1-vif1 -- \
+    set interface hv1-vif1 external-ids:iface-id=lp1 \
+    options:tx_pcap=hv1/vif1-tx.pcap \
+    options:rxq_pcap=hv1/vif1-rx.pcap \
+    ofport-request=1
+
+ovs-vsctl -- add-port br-int hv1-vif2 -- \
+    set interface hv1-vif2 external-ids:iface-id=lp2 \
+    options:tx_pcap=hv1/vif2-tx.pcap \
+    options:rxq_pcap=hv1/vif2-rx.pcap \
+    ofport-request=2
+
+ovs-vsctl -- add-port br-int hv1-vif3 -- \
+    set interface hv1-vif3 external-ids:iface-id=lp3 \
+    options:tx_pcap=hv1/vif3-tx.pcap \
+    options:rxq_pcap=hv1/vif3-rx.pcap \
+    ofport-request=3
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
+
+reset_pcap_file() {
+    local iface=$1
+    local pcap_file=$2
+    ovs-vsctl -- set Interface $iface options:tx_pcap=dummy-tx.pcap \
+options:rxq_pcap=dummy-rx.pcap
+    rm -f ${pcap_file}*.pcap
+    ovs-vsctl -- set Interface $iface options:tx_pcap=${pcap_file}-tx.pcap \
+options:rxq_pcap=${pcap_file}-rx.pcap
+}
+
+# Make sure that ovn-controller has installed the corresponding OF Flow.
+OVS_WAIT_UNTIL([test 1 = `as hv1 ovs-ofctl dump-flows br-int | grep -c "ipv6_dst=ff02::2,nw_ttl=255,icmp_type=133,icmp_code=0"`])
+
+# This shell function sends a Router Solicitation packet.
+# test_ipv6_ra INPORT SRC_MAC SRC_LLA ADDR_MODE MTU RA_PREFIX_OPT
+test_ipv6_ra() {
+    local inport=$1 src_mac=$2 src_lla=$3 addr_mode=$4 mtu=$5 prefix_opt=$6
+    local request=333300000002${src_mac}86dd6000000000103aff${src_lla}ff02000000000000000000000000000285000efc000000000101${src_mac}
+
+    local len=24
+    local mtu_opt=""
+    if test $mtu != 0; then
+        len=`expr $len + 8`
+        mtu_opt=05010000${mtu}
+    fi
+
+    if test ${#prefix_opt} != 0; then
+        prefix_opt=${prefix_opt}fdad1234567800000000000000000000
+        len=`expr $len + ${#prefix_opt} / 2`
+    fi
+
+    len=$(printf "%x" $len)
+    local lrp_mac=fa163e000001
+    local lrp_lla=fe80000000000000f8163efffe000001
+    local reply=${src_mac}${lrp_mac}86dd6000000000${len}3aff${lrp_lla}${src_lla}8600XXXXff${addr_mode}ffff00000000000000000101${lrp_mac}${mtu_opt}${prefix_opt}
+    echo $reply >> $inport.expected
+
+    as hv1 ovs-appctl netdev-dummy/receive hv1-vif${inport} $request
+}
+
+AT_CAPTURE_FILE([ofctl_monitor0.log])
+as hv1 ovs-ofctl monitor br-int resume --detach --no-chdir \
+--pidfile=ovs-ofctl0.pid 2> ofctl_monitor0.log
+
+# MTU is not set and the address mode is set to slaac
+addr_mode=00
+default_prefix_option_config=030440c0ffffffffffffffff00000000
+src_mac=fa163e000002
+src_lla=fe80000000000000f8163efffe000002
+test_ipv6_ra 1 $src_mac $src_lla $addr_mode 0 $default_prefix_option_config
+
+# NXT_RESUME should be 1.
+OVS_WAIT_UNTIL([test 1 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif1-tx.pcap  > 1.packets
+
+cat 1.expected | cut -c -112 > expout
+AT_CHECK([cat 1.packets | cut -c -112], [0], [expout])
+
+# Skipping the ICMPv6 checksum.
+cat 1.expected | cut -c 117- > expout
+AT_CHECK([cat 1.packets | cut -c 117-], [0], [expout])
+
+rm -f *.expected
+reset_pcap_file hv1-vif1 hv1/vif1
+reset_pcap_file hv1-vif2 hv1/vif2
+reset_pcap_file hv1-vif3 hv1/vif3
+
+# Set the MTU to 1500
+ovn-nbctl --wait=hv set Logical_Router_Port lrp0 ipv6_ra_configs:mtu=1500
+
+# Make sure that ovn-controller has installed the corresponding OF Flow.
+OVS_WAIT_UNTIL([test 1 = `as hv1 ovs-ofctl dump-flows br-int | grep -c "ipv6_dst=ff02::2,nw_ttl=255,icmp_type=133,icmp_code=0"`])
+
+addr_mode=00
+default_prefix_option_config=030440c0ffffffffffffffff00000000
+src_mac=fa163e000003
+src_lla=fe80000000000000f8163efffe000003
+mtu=000005dc
+
+test_ipv6_ra 2 $src_mac $src_lla $addr_mode $mtu $default_prefix_option_config
+
+# NXT_RESUME should be 2.
+OVS_WAIT_UNTIL([test 2 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap  > 2.packets
+
+cat 2.expected | cut -c -112 > expout
+AT_CHECK([cat 2.packets | cut -c -112], [0], [expout])
+
+# Skipping the ICMPv6 checksum.
+cat 2.expected | cut -c 117- > expout
+AT_CHECK([cat 2.packets | cut -c 117-], [0], [expout])
+
+rm -f *.expected
+reset_pcap_file hv1-vif1 hv1/vif1
+reset_pcap_file hv1-vif2 hv1/vif2
+reset_pcap_file hv1-vif3 hv1/vif3
+
+# Set the address mode to dhcpv6_stateful
+ovn-nbctl --wait=hv set Logical_Router_Port lrp0 ipv6_ra_configs:address_mode=dhcpv6_stateful
+# Make sure that ovn-controller has installed the corresponding OF Flow.
+OVS_WAIT_UNTIL([test 1 = `as hv1 ovs-ofctl dump-flows br-int | grep -c "ipv6_dst=ff02::2,nw_ttl=255,icmp_type=133,icmp_code=0"`])
+
+addr_mode=80
+default_prefix_option_config=""
+src_mac=fa163e000004
+src_lla=fe80000000000000f8163efffe000004
+mtu=000005dc
+
+test_ipv6_ra 3 $src_mac $src_lla $addr_mode $mtu $default_prefix_option_config
+
+# NXT_RESUME should be 3.
+OVS_WAIT_UNTIL([test 3 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif3-tx.pcap  > 3.packets
+
+cat 3.expected | cut -c -112 > expout
+AT_CHECK([cat 3.packets | cut -c -112], [0], [expout])
+
+# Skipping the ICMPv6 checksum.
+cat 3.expected | cut -c 117- > expout
+AT_CHECK([cat 3.packets | cut -c 117-], [0], [expout])
+
+rm -f *.expected
+reset_pcap_file hv1-vif1 hv1/vif1
+reset_pcap_file hv1-vif2 hv1/vif2
+reset_pcap_file hv1-vif3 hv1/vif3
+
+# Set the address mode to dhcpv6_stateless
+ovn-nbctl --wait=hv set Logical_Router_Port lrp0 ipv6_ra_configs:address_mode=dhcpv6_stateless
+# Make sure that ovn-controller has installed the corresponding OF Flow.
+OVS_WAIT_UNTIL([test 1 = `as hv1 ovs-ofctl dump-flows br-int | grep -c "ipv6_dst=ff02::2,nw_ttl=255,icmp_type=133,icmp_code=0"`])
+
+addr_mode=40
+default_prefix_option_config=030440c0ffffffffffffffff00000000
+src_mac=fa163e000002
+src_lla=fe80000000000000f8163efffe000002
+mtu=000005dc
+
+test_ipv6_ra 1 $src_mac $src_lla $addr_mode $mtu $default_prefix_option_config
+
+# NXT_RESUME should be 4.
+OVS_WAIT_UNTIL([test 4 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif1-tx.pcap  > 1.packets
+
+cat 1.expected | cut -c -112 > expout
+AT_CHECK([cat 1.packets | cut -c -112], [0], [expout])
+
+# Skipping the ICMPv6 checksum.
+cat 1.expected | cut -c 117- > expout
+AT_CHECK([cat 1.packets | cut -c 117-], [0], [expout])
+
+rm -f *.expected
+reset_pcap_file hv1-vif1 hv1/vif1
+reset_pcap_file hv1-vif2 hv1/vif2
+reset_pcap_file hv1-vif3 hv1/vif3
+
+# Set the address mode to invalid.
+ovn-nbctl --wait=hv set Logical_Router_Port lrp0 ipv6_ra_configs:address_mode=invalid
+# Make sure that ovn-controller has not installed any OF Flow for IPv6 ND RA.
+OVS_WAIT_UNTIL([test 0 = `as hv1 ovs-ofctl dump-flows br-int | grep -c "ipv6_dst=ff02::2,nw_ttl=255,icmp_type=133,icmp_code=0"`])
+
+addr_mode=40
+default_prefix_option_config=""
+src_mac=fa163e000002
+src_lla=fe80000000000000f8163efffe000002
+mtu=000005dc
+
+test_ipv6_ra 1 $src_mac $src_lla $addr_mode $mtu $default_prefix_option_config
+
+# NXT_RESUME should be 4 only.
+OVS_WAIT_UNTIL([test 4 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif1-tx.pcap  > 1.packets
+AT_CHECK([cat 1.packets], [0], [])
+
+OVN_CLEANUP([hv1])
+AT_CLEANUP
+
 AT_SETUP([ovn -- /32 router IP address])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start

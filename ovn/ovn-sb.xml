@@ -911,6 +911,10 @@
         <li><code>nd</code> expands to <code>icmp6.type == {135, 136} &amp;&amp; icmp6.code == 0 &amp;&amp; ip.ttl == 255</code></li>
         <li><code>nd_ns</code> expands to <code>icmp6.type == 135 &amp;&amp; icmp6.code == 0 &amp;&amp; ip.ttl == 255</code></li>
         <li><code>nd_na</code> expands to <code>icmp6.type == 136 &amp;&amp; icmp6.code == 0 &amp;&amp; ip.ttl == 255</code></li>
+        <li><code>nd_rs</code> expands to <code>icmp6.type == 133 &amp;&amp;
+        icmp6.code == 0 &amp;&amp; ip.ttl == 255</code></li>
+        <li><code>nd_ra</code> expands to <code>icmp6.type == 134 &amp;&amp;
+        icmp6.code == 0 &amp;&amp; ip.ttl == 255</code></li>
         <li><code>tcp</code> expands to <code>ip.proto == 6</code></li>
         <li><code>udp</code> expands to <code>ip.proto == 17</code></li>
         <li><code>sctp</code> expands to <code>ip.proto == 132</code></li>

@@ -1336,6 +1336,45 @@
       port has all ingress and egress traffic dropped.
     </column>
 
+    <group title="ipv6_ra_configs">
+      <p>
+        This column defines the IPv6 ND RA address mode and ND MTU Option to be
+        included by <code>ovn-controller</code> when it replies to the IPv6
+        Router solicitation requests.
+      </p>
+
+      <column name="ipv6_ra_configs" key="address_mode">
+        The address mode to be used for IPv6 address configuration.
+        The supported values are:
+        <ul>
+          <li>
+            <code>slaac</code>: Address configuration using Router
+            Advertisement (RA) packet. The IPv6 prefixes defined in the
+            <ref table="Logical_Router_Port"/> table's
+            <ref table="Logical_Router_Port" column="networks"/> column will
+            be included in the RA's ICMPv6 option - Prefix information.
+          </li>
+
+          <li>
+            <code>dhcpv6_stateful</code>: Address configuration using DHCPv6.
+          </li>
+
+          <li>
+            <code>dhcpv6_stateless</code>: Address configuration using Router
+            Advertisement (RA) packet. Other IPv6 options are provided by
+            DHCPv6.
+          </li>
+        </ul>
+      </column>
+
+      <column name="ipv6_ra_configs" key="mtu">
+        The recommended MTU for the link. Default is 0, which means no MTU
+        Option will be included in RA packet replied by ovn-controller.
+        Per RFC 2460, the mtu value is recommended no less than 1280, so
+        any mtu value less than 1280 will be considered as no MTU Option.
+      </column>
+    </group>
+
     <group title="Options">
       <p>
         Additional options for the logical router port.
