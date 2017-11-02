@@ -440,6 +440,7 @@ dpif_netlink_rtnl_probe_oot_tunnels(void)
 
     error = netdev_open("ovs-system-probe", "geneve", &netdev);
     if (!error) {
+        struct ofpbuf *reply;
         const struct netdev_tunnel_config *tnl_cfg;
 
         tnl_cfg = netdev_get_tunnel_config(netdev);
@@ -448,6 +449,44 @@ dpif_netlink_rtnl_probe_oot_tunnels(void)
         }
 
         name = netdev_vport_get_dpif_port(netdev, namebuf, sizeof namebuf);
+
+        /* The geneve module exists when ovs-vswitchd crashes
+         * and restarts, handle the case here.
+         */
+        error = dpif_netlink_rtnl_getlink(name, &reply);
+        if (!error) {
+
+            struct nlattr *linkinfo[ARRAY_SIZE(linkinfo_policy)];
+            struct nlattr *rtlink[ARRAY_SIZE(rtlink_policy)];
+            const char *kind;
+
+            if (!nl_policy_parse(reply,
+                                 NLMSG_HDRLEN + sizeof(struct ifinfomsg),
+                                 rtlink_policy, rtlink,
+                                 ARRAY_SIZE(rtlink_policy))
+                || !nl_parse_nested(rtlink[IFLA_LINKINFO], linkinfo_policy,
+                                    linkinfo, ARRAY_SIZE(linkinfo_policy))) {
+                VLOG_ABORT("Error fetching Geneve tunnel device %s "
+                           "linkinfo", name);
+            }
+
+            kind = nl_attr_get_string(linkinfo[IFLA_INFO_KIND]);
+
+            if (!strcmp(kind, "ovs_geneve")) {
+                out_of_tree = true;
+            } else if (!strcmp(kind, "geneve")) {
+                out_of_tree = false;
+            } else {
+                VLOG_ABORT("Geneve tunnel device %s with kind %s"
+                           " not supported", name, kind);
+            }
+
+            ofpbuf_delete(reply);
+            netdev_close(netdev);
+
+            return out_of_tree;
+        }
+
         error = dpif_netlink_rtnl_create(tnl_cfg, name, OVS_VPORT_TYPE_GENEVE,
                                          "ovs_geneve",
                                          (NLM_F_REQUEST | NLM_F_ACK
