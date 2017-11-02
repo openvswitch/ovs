@@ -200,7 +200,11 @@ struct ovnact_ct_nat {
 };
 
 struct ovnact_ct_lb_dst {
-    ovs_be32 ip;
+    int family;
+    union {
+        struct in6_addr ipv6;
+        ovs_be32 ipv4;
+    };
     uint16_t port;
 };
 

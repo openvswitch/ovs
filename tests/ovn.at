@@ -825,13 +825,19 @@ ct_lb(192.168.1.2, 192.168.1.3, );
     formats as ct_lb(192.168.1.2, 192.168.1.3);
     encodes as group:2
     has prereqs ip
+ct_lb(fd0f::2, fd0f::3, );
+    formats as ct_lb(fd0f::2, fd0f::3);
+    encodes as group:3
+    has prereqs ip
 
 ct_lb(192.168.1.2:);
     Syntax error at `)' expecting port number.
 ct_lb(192.168.1.2:123456);
     Syntax error at `123456' expecting port number.
 ct_lb(foo);
-    Syntax error at `foo' expecting IPv4 address.
+    Syntax error at `foo' expecting IP address.
+ct_lb([192.168.1.2]);
+    Syntax error at `192.168.1.2' expecting IPv6 address.
 
 # ct_next
 ct_next;

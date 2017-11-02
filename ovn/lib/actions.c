@@ -883,23 +883,62 @@ parse_ct_lb_action(struct action_context *ctx)
 
     if (lexer_match(ctx->lexer, LEX_T_LPAREN)) {
         while (!lexer_match(ctx->lexer, LEX_T_RPAREN)) {
-            if (ctx->lexer->token.type != LEX_T_INTEGER
-                || mf_subvalue_width(&ctx->lexer->token.value) > 32) {
-                free(dsts);
-                lexer_syntax_error(ctx->lexer, "expecting IPv4 address");
-                return;
-            }
+            struct ovnact_ct_lb_dst dst;
+            if (lexer_match(ctx->lexer, LEX_T_LSQUARE)) {
+                /* IPv6 address and port */
+                if (ctx->lexer->token.type != LEX_T_INTEGER
+                    || ctx->lexer->token.format != LEX_F_IPV6) {
+                    free(dsts);
+                    lexer_syntax_error(ctx->lexer, "expecting IPv6 address");
+                    return;
+                }
+                dst.family = AF_INET6;
+                dst.ipv6 = ctx->lexer->token.value.ipv6;
 
-            /* Parse IP. */
-            ovs_be32 ip = ctx->lexer->token.value.ipv4;
-            lexer_get(ctx->lexer);
+                lexer_get(ctx->lexer);
+                if (!lexer_match(ctx->lexer, LEX_T_RSQUARE)) {
+                    free(dsts);
+                    lexer_syntax_error(ctx->lexer, "no closing square "
+                                                   "bracket");
+                    return;
+                }
+                dst.port = 0;
+                if (lexer_match(ctx->lexer, LEX_T_COLON)
+                    && !action_parse_port(ctx, &dst.port)) {
+                    free(dsts);
+                    return;
+                }
+            } else {
+                if (ctx->lexer->token.type != LEX_T_INTEGER
+                    || (ctx->lexer->token.format != LEX_F_IPV4
+                    && ctx->lexer->token.format != LEX_F_IPV6)) {
+                    free(dsts);
+                    lexer_syntax_error(ctx->lexer, "expecting IP address");
+                    return;
+                }
 
-            /* Parse optional port. */
-            uint16_t port = 0;
-            if (lexer_match(ctx->lexer, LEX_T_COLON)
-                && !action_parse_port(ctx, &port)) {
-                free(dsts);
-                return;
+                /* Parse IP. */
+                if (ctx->lexer->token.format == LEX_F_IPV4) {
+                    dst.family = AF_INET;
+                    dst.ipv4 = ctx->lexer->token.value.ipv4;
+                } else {
+                    dst.family = AF_INET6;
+                    dst.ipv6 = ctx->lexer->token.value.ipv6;
+                }
+
+                lexer_get(ctx->lexer);
+                dst.port = 0;
+                if (lexer_match(ctx->lexer, LEX_T_COLON)) {
+                    if (dst.family == AF_INET6) {
+                        free(dsts);
+                        lexer_syntax_error(ctx->lexer, "IPv6 address needs "
+                                "square brackets if port is included");
+                        return;
+                    } else if (!action_parse_port(ctx, &dst.port)) {
+                        free(dsts);
+                        return;
+                    }
+                }
             }
             lexer_match(ctx->lexer, LEX_T_COMMA);
 
@@ -907,7 +946,7 @@ parse_ct_lb_action(struct action_context *ctx)
             if (n_dsts >= allocated_dsts) {
                 dsts = x2nrealloc(dsts, &allocated_dsts, sizeof *dsts);
             }
-            dsts[n_dsts++] = (struct ovnact_ct_lb_dst) { ip, port };
+            dsts[n_dsts++] = dst;
         }
     }
 
@@ -929,9 +968,19 @@ format_CT_LB(const struct ovnact_ct_lb *cl, struct ds *s)
             }
 
             const struct ovnact_ct_lb_dst *dst = &cl->dsts[i];
-            ds_put_format(s, IP_FMT, IP_ARGS(dst->ip));
-            if (dst->port) {
-                ds_put_format(s, ":%"PRIu16, dst->port);
+            if (dst->family == AF_INET) {
+                ds_put_format(s, IP_FMT, IP_ARGS(dst->ipv4));
+                if (dst->port) {
+                    ds_put_format(s, ":%"PRIu16, dst->port);
+                }
+            } else {
+                if (dst->port) {
+                    ds_put_char(s, '[');
+                }
+                ipv6_format_addr(&dst->ipv6, s);
+                if (dst->port) {
+                    ds_put_format(s, "]:%"PRIu16, dst->port);
+                }
             }
         }
         ds_put_char(s, ')');
@@ -991,8 +1040,17 @@ encode_CT_LB(const struct ovnact_ct_lb *cl,
     BUILD_ASSERT(MFF_LOG_DNAT_ZONE < MFF_REG0 + FLOW_N_REGS);
     for (size_t bucket_id = 0; bucket_id < cl->n_dsts; bucket_id++) {
         const struct ovnact_ct_lb_dst *dst = &cl->dsts[bucket_id];
+        char ip_addr[INET6_ADDRSTRLEN];
+        if (dst->family == AF_INET) {
+            inet_ntop(AF_INET, &dst->ipv4, ip_addr, sizeof ip_addr);
+        } else {
+            inet_ntop(AF_INET6, &dst->ipv6, ip_addr, sizeof ip_addr);
+        }
         ds_put_format(&ds, ",bucket=bucket_id=%"PRIuSIZE",weight:100,actions="
-                      "ct(nat(dst="IP_FMT, bucket_id, IP_ARGS(dst->ip));
+                      "ct(nat(dst=%s%s%s", bucket_id,
+                      dst->family == AF_INET6 && dst->port ? "[" : "",
+                      ip_addr,
+                      dst->family == AF_INET6 && dst->port ? "]" : "");
         if (dst->port) {
             ds_put_format(&ds, ":%"PRIu16, dst->port);
         }
