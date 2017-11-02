@@ -73,7 +73,8 @@ struct simap;
     OVNACT(SET_QUEUE,         ovnact_set_queue)       \
     OVNACT(DNS_LOOKUP,        ovnact_dns_lookup)      \
     OVNACT(LOG,               ovnact_log)             \
-    OVNACT(PUT_ND_RA_OPTS,    ovnact_put_opts)
+    OVNACT(PUT_ND_RA_OPTS,    ovnact_put_opts)        \
+    OVNACT(ND_NS,             ovnact_nest)
 
 /* enum ovnact_type, with a member OVNACT_<ENUM> for each action. */
 enum OVS_PACKED_ENUM ovnact_type {
@@ -431,6 +432,12 @@ enum action_opcode {
      *   - Any number of ICMPv6 options.
      */
     ACTION_OPCODE_PUT_ND_RA_OPTS,
+
+    /* "nd_ns { ...actions... }".
+     *
+     * The actions, in OpenFlow 1.3 format, follow the action_header.
+     */
+    ACTION_OPCODE_ND_NS,
 };
 
 /* Header. */

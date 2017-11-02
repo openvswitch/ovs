@@ -1258,6 +1258,43 @@
           <p><b>Example:</b> <code>put_arp(inport, arp.spa, arp.sha);</code></p>
         </dd>
 
+        <dt><code>nd_ns { <var>action</var>; </code>...<code> };</code></dt>
+        <dd>
+          <p>
+            Temporarily replaces the IPv6 packet being processed by an IPv6
+            Neighbor Solicitation packet and executes each nested
+            <var>action</var> on the IPv6 NS packet.  Actions following the
+            <var>nd_ns</var> action, if any, apply to the original, unmodified
+            packet.
+          </p>
+
+          <p>
+            The IPv6 NS packet that this action operates on is initialized
+            based on the IPv6 packet being processed, as follows.  These are
+            default values that the nested actions will probably want to
+            change:
+          </p>
+
+          <ul>
+            <li><code>eth.src</code> unchanged</li>
+            <li><code>eth.dst</code> set to IPv6 multicast MAC address</li>
+            <li><code>eth.type = 0x86dd</code></li>
+            <li><code>ip6.src</code> copied from <code>ip6.src</code></li>
+            <li>
+              <code>ip6.dst</code> set to IPv6 Solicited-Node multicast address
+            </li>
+            <li><code>icmp6.type = 135</code> (Neighbor Solicitation)</li>
+            <li><code>nd.target</code> copied from <code>ip6.dst</code></li>
+          </ul>
+
+          <p>
+            The IPv6 NS packet has the same VLAN header, if any, as the IP
+            packet it replaces.
+          </p>
+
+          <p><b>Prerequisite:</b> <code>ip6</code></p>
+        </dd>
+
         <dt>
           <code>nd_na { <var>action</var>; </code>...<code> };</code>
         </dt>

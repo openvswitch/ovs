@@ -1936,15 +1936,15 @@ next;
 
     <p>
       In the common case where the Ethernet destination has been resolved, this
-      table outputs the packet.  Otherwise, it composes and sends an ARP
-      request.  It holds the following flows:
+      table outputs the packet.  Otherwise, it composes and sends an ARP or
+      IPv6 Neighbor Solicitation request.  It holds the following flows:
     </p>
 
     <ul>
       <li>
         <p>
-          Unknown MAC address.  A priority-100 flow with match <code>eth.dst ==
-          00:00:00:00:00:00</code> has the following actions:
+          Unknown MAC address.  A priority-100 flow for IPv4 packets with match
+          <code>eth.dst == 00:00:00:00:00:00</code> has the following actions:
         </p>
 
         <pre>
@@ -1958,13 +1958,25 @@ arp {
         </pre>
 
         <p>
+          Unknown MAC address.  A priority-100 flow for IPv6 packets with match
+          <code>eth.dst == 00:00:00:00:00:00</code> has the following actions:
+        </p>
+
+        <pre>
+nd_ns {
+    nd.target = xxreg0;
+    output;
+};
+        </pre>
+
+        <p>
           (Ingress table <code>IP Routing</code> initialized <code>reg1</code>
           with the IP address owned by <code>outport</code> and
-          <code>reg0</code> with the next-hop IP address)
+          <code>(xx)reg0</code> with the next-hop IP address)
         </p>
 
         <p>
-          The IP packet that triggers the ARP request is dropped.
+          The IP packet that triggers the ARP/IPv6 NS request is dropped.
         </p>
       </li>
 

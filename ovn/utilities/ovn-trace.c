@@ -1510,6 +1510,31 @@ execute_nd_na(const struct ovnact_nest *on, const struct ovntrace_datapath *dp,
 }
 
 static void
+execute_nd_ns(const struct ovnact_nest *on, const struct ovntrace_datapath *dp,
+              const struct flow *uflow, uint8_t table_id,
+              enum ovnact_pipeline pipeline, struct ovs_list *super)
+{
+    struct flow na_flow = *uflow;
+
+    /* Update fields for NA. */
+    na_flow.dl_src = uflow->dl_src;
+    na_flow.ipv6_src = uflow->ipv6_src;
+    na_flow.ipv6_dst = uflow->ipv6_dst;
+    struct in6_addr sn_addr;
+    in6_addr_solicited_node(&sn_addr, &uflow->ipv6_dst);
+    ipv6_multicast_to_ethernet(&na_flow.dl_dst, &sn_addr);
+    na_flow.tp_src = htons(135);
+    na_flow.arp_sha = eth_addr_zero;
+    na_flow.arp_tha = uflow->dl_dst;
+
+    struct ovntrace_node *node = ovntrace_node_append(
+        super, OVNTRACE_NODE_TRANSFORMATION, "nd_ns");
+
+    trace_actions(on->nested, on->nested_len, dp, &na_flow,
+                  table_id, pipeline, &node->subs);
+}
+
+static void
 execute_get_mac_bind(const struct ovnact_get_mac_bind *bind,
                      const struct ovntrace_datapath *dp,
                      struct flow *uflow, struct ovs_list *super)
@@ -1808,6 +1833,11 @@ trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
 
         case OVNACT_ND_NA:
             execute_nd_na(ovnact_get_ND_NA(a), dp, uflow, table_id, pipeline,
+                          super);
+            break;
+
+        case OVNACT_ND_NS:
+            execute_nd_ns(ovnact_get_ND_NS(a), dp, uflow, table_id, pipeline,
                           super);
             break;
 

@@ -999,6 +999,16 @@ reg1[0] = put_dhcp_opts(offerip="xyzzy");
 reg1[0] = put_dhcp_opts(offerip=1.2.3.4, domain=1.2.3.4);
     DHCPv4 option domain requires string value.
 
+# nd_ns
+nd_ns { nd.target = xxreg0; output; };
+    encodes as controller(userdata=00.00.00.09.00.00.00.00.ff.ff.00.18.00.00.23.20.00.06.00.80.00.00.00.00.00.01.de.10.00.01.2e.10.ff.ff.00.10.00.00.23.20.00.0e.ff.f8.40.00.00.00)
+    has prereqs ip6
+
+nd_ns { };
+    formats as nd_ns { drop; };
+    encodes as controller(userdata=00.00.00.09.00.00.00.00)
+    has prereqs ip6
+
 # nd_na
 nd_na { eth.src = 12:34:56:78:9a:bc; nd.tll = 12:34:56:78:9a:bc; outport = inport; inport = ""; /* Allow sending out inport. */ output; };
     formats as nd_na { eth.src = 12:34:56:78:9a:bc; nd.tll = 12:34:56:78:9a:bc; outport = inport; inport = ""; output; };
@@ -8819,6 +8829,112 @@ ovn-sbctl destroy Chassis $gw2_chassis
 AT_CHECK([grep "Releasing lport" gw1/ovn-controller.log], [1], [])
 
 OVN_CLEANUP([gw1],[gw2],[hv1])
+
+AT_CLEANUP
+
+AT_SETUP([ovn -- IPv6 Neighbor Solicitation for unknown MAC])
+AT_KEYWORDS([ovn-nd_ns for unknown mac])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+ovn-nbctl ls-add sw0_ip6
+ovn-nbctl lsp-add sw0_ip6 sw0_ip6-port1
+ovn-nbctl lsp-set-addresses sw0_ip6-port1 \
+"50:64:00:00:00:02 aef0::5264:00ff:fe00:0002"
+
+ovn-nbctl lsp-set-port-security sw0_ip6-port1 \
+"50:64:00:00:00:02 aef0::5264:00ff:fe00:0002"
+
+ovn-nbctl lr-add lr0_ip6
+ovn-nbctl lrp-add lr0_ip6 lrp0_ip6 00:00:00:00:af:01 aef0::/64
+ovn-nbctl lsp-add sw0_ip6 lrp0_ip6-attachment
+ovn-nbctl lsp-set-type lrp0_ip6-attachment router
+ovn-nbctl lsp-set-addresses lrp0_ip6-attachment 00:00:00:00:af:01
+ovn-nbctl lsp-set-options lrp0_ip6-attachment router-port=lrp0_ip6
+ovn-nbctl set logical_router_port lrp0_ip6 ipv6_ra_configs:address_mode=slaac
+
+ovn-nbctl ls-add public
+ovn-nbctl lsp-add public ln-public
+ovn-nbctl lsp-set-addresses ln-public unknown
+ovn-nbctl lsp-set-type ln-public localnet
+ovn-nbctl lsp-set-options ln-public network_name=phys
+
+ovn-nbctl lrp-add lr0_ip6 ip6_public 00:00:02:01:02:04 \
+2001:db8:1:0:200:02ff:fe01:0204/64 \
+-- set Logical_Router_port ip6_public options:redirect-chassis="hv1"
+
+
+ovn-nbctl lsp-add public rp-ip6_public -- set Logical_Switch_Port \
+rp-ip6_public  type=router options:router-port=ip6_public \
+-- lsp-set-addresses rp-ip6_public router
+
+net_add n1
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.2
+
+ovs-vsctl -- add-port br-int hv1-vif1 -- \
+    set interface hv1-vif1 external-ids:iface-id=sw0_ip6-port1 \
+    options:tx_pcap=hv1/vif1-tx.pcap \
+    options:rxq_pcap=hv1/vif1-rx.pcap \
+    ofport-request=1
+ovs-vsctl set open . external-ids:ovn-bridge-mappings=phys:br-phys
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
+
+trim_zeros() {
+    sed 's/\(00\)\{1,\}$//'
+}
+
+# Test the IPv6 Neighbor Solicitation (NS) - nd_ns action for unknown MAC
+# addresses. ovn-controller should generate an IPv6 NS request for IPv6
+# packets whose MAC is unknown (in the ARP_REQUEST router pipeline stage.
+# test_ipv6 INPORT SRC_MAC DST_MAC SRC_IP DST_IP OUTPORT...
+# This function sends ipv6 packet
+test_ipv6() {
+    local inport=$1 src_mac=$2 dst_mac=$3 src_ip=$4
+    dst_ip=20010db800010000020002fffe010205
+
+    local packet=${dst_mac}${src_mac}86dd6000000000083aff${src_ip}${dst_ip}
+    packet=${packet}8000000000000000
+    shift; shift; shift; shift
+
+    dst_mac=3333ff010205
+    src_mac=000002010204
+    mcast_node_ip=ff0200000000000000000001ff010205
+    expected_packet=${dst_mac}${src_mac}86dd6000000000203aff${src_ip}
+    expected_packet=${expected_packet}${mcast_node_ip}8700XXXX00000000${dst_ip}
+    expected_packet=${expected_packet}0101${src_mac}
+
+    as hv1 ovs-appctl netdev-dummy/receive hv1-vif${inport} $packet
+    echo $expected_packet >> ipv6_ns.expected
+}
+
+src_mac=506400000002
+dst_mac=00000000af01
+src_ip=aef0000000000000526400fffe000002
+# Send an IPv6 packet. Generated IPv6 Neighbor solicitation packet
+# should be received by the ports attached to br-phys.
+test_ipv6 1 $src_mac $dst_mac $src_ip 2
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/br-phys_n1-tx.pcap | \
+trim_zeros > 1.packets
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/br-phys-tx.pcap | \
+trim_zeros > 2.packets
+
+cat ipv6_ns.expected | cut -c -112 > expout
+AT_CHECK([cat 1.packets | cut -c -112], [0], [expout])
+AT_CHECK([cat 2.packets | cut -c -112], [0], [expout])
+
+# Skipping the ICMPv6 checksum
+cat ipv6_ns.expected | cut -c 117- > expout
+AT_CHECK([cat 1.packets | cut -c 117-], [0], [expout])
+AT_CHECK([cat 2.packets | cut -c 117-], [0], [expout])
+
+OVN_CLEANUP([hv1])
 
 AT_CLEANUP
 

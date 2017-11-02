@@ -85,6 +85,9 @@ static void pinctrl_handle_put_nd_ra_opts(
     const struct flow *ip_flow, struct dp_packet *pkt_in,
     struct ofputil_packet_in *pin, struct ofpbuf *userdata,
     struct ofpbuf *continuation);
+static void pinctrl_handle_nd_ns(const struct flow *ip_flow,
+                                 const struct match *md,
+                                 struct ofpbuf *userdata);
 
 COVERAGE_DEFINE(pinctrl_drop_put_mac_binding);
 
@@ -132,6 +135,43 @@ set_switch_config(struct rconn *swconn,
 }
 
 static void
+set_actions_and_enqueue_msg(const struct dp_packet *packet,
+                           const struct match *md,
+                           struct ofpbuf *userdata)
+{
+    /* Copy metadata from 'md' into the packet-out via "set_field"
+     * actions, then add actions from 'userdata'.
+     */
+    uint64_t ofpacts_stub[4096 / 8];
+    struct ofpbuf ofpacts = OFPBUF_STUB_INITIALIZER(ofpacts_stub);
+    enum ofp_version version = rconn_get_version(swconn);
+
+    reload_metadata(&ofpacts, md);
+    enum ofperr error = ofpacts_pull_openflow_actions(userdata, userdata->size,
+                                                      version, NULL, NULL,
+                                                      &ofpacts);
+    if (error) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "failed to parse actions from userdata (%s)",
+                     ofperr_to_string(error));
+        ofpbuf_uninit(&ofpacts);
+        return;
+    }
+
+    struct ofputil_packet_out po = {
+        .packet = dp_packet_data(packet),
+        .packet_len = dp_packet_size(packet),
+        .buffer_id = UINT32_MAX,
+        .ofpacts = ofpacts.data,
+        .ofpacts_len = ofpacts.size,
+    };
+    match_set_in_port(&po.flow_metadata, OFPP_CONTROLLER);
+    enum ofputil_protocol proto = ofputil_protocol_from_ofp_version(version);
+    queue_msg(ofputil_encode_packet_out(&po, proto));
+    ofpbuf_uninit(&ofpacts);
+}
+
+static void
 pinctrl_handle_arp(const struct flow *ip_flow, const struct match *md,
                    struct ofpbuf *userdata)
 {
@@ -166,40 +206,8 @@ pinctrl_handle_arp(const struct flow *ip_flow, const struct match *md,
                       ip_flow->vlans[0].tci);
     }
 
-    /* Compose actions.
-     *
-     * First, copy metadata from 'md' into the packet-out via "set_field"
-     * actions, then add actions from 'userdata'.
-     */
-    uint64_t ofpacts_stub[4096 / 8];
-    struct ofpbuf ofpacts = OFPBUF_STUB_INITIALIZER(ofpacts_stub);
-    enum ofp_version version = rconn_get_version(swconn);
-
-    reload_metadata(&ofpacts, md);
-    enum ofperr error = ofpacts_pull_openflow_actions(userdata, userdata->size,
-                                                      version, NULL, NULL,
-                                                      &ofpacts);
-    if (error) {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-        VLOG_WARN_RL(&rl, "failed to parse arp actions (%s)",
-                     ofperr_to_string(error));
-        goto exit;
-    }
-
-    struct ofputil_packet_out po = {
-        .packet = dp_packet_data(&packet),
-        .packet_len = dp_packet_size(&packet),
-        .buffer_id = UINT32_MAX,
-        .ofpacts = ofpacts.data,
-        .ofpacts_len = ofpacts.size,
-    };
-    match_set_in_port(&po.flow_metadata, OFPP_CONTROLLER);
-    enum ofputil_protocol proto = ofputil_protocol_from_ofp_version(version);
-    queue_msg(ofputil_encode_packet_out(&po, proto));
-
-exit:
+    set_actions_and_enqueue_msg(&packet, md, userdata);
     dp_packet_uninit(&packet);
-    ofpbuf_uninit(&ofpacts);
 }
 
 static void
@@ -992,6 +1000,10 @@ process_packet_in(const struct ofp_header *msg, struct controller_ctx *ctx)
     case ACTION_OPCODE_PUT_ND_RA_OPTS:
         pinctrl_handle_put_nd_ra_opts(&headers, &packet, &pin, &userdata,
                                       &continuation);
+        break;
+
+    case ACTION_OPCODE_ND_NS:
+        pinctrl_handle_nd_ns(&headers, &pin.flow_metadata, &userdata);
         break;
 
     default:
@@ -1812,9 +1824,6 @@ pinctrl_handle_nd_na(const struct flow *ip_flow, const struct match *md,
         return;
     }
 
-    enum ofp_version version = rconn_get_version(swconn);
-    enum ofputil_protocol proto = ofputil_protocol_from_ofp_version(version);
-
     uint64_t packet_stub[128 / 8];
     struct dp_packet packet;
     dp_packet_use_stub(&packet, packet_stub, sizeof packet_stub);
@@ -1827,35 +1836,32 @@ pinctrl_handle_nd_na(const struct flow *ip_flow, const struct match *md,
                   &ip_flow->nd_target, &ip_flow->ipv6_src,
                   htonl(ND_RSO_SOLICITED | ND_RSO_OVERRIDE));
 
-    /* Reload previous packet metadata. */
-    uint64_t ofpacts_stub[4096 / 8];
-    struct ofpbuf ofpacts = OFPBUF_STUB_INITIALIZER(ofpacts_stub);
-    reload_metadata(&ofpacts, md);
+    /* Reload previous packet metadata and set actions from userdata. */
+    set_actions_and_enqueue_msg(&packet, md, userdata);
+    dp_packet_uninit(&packet);
+}
 
-    enum ofperr error = ofpacts_pull_openflow_actions(userdata, userdata->size,
-                                                      version, NULL, NULL,
-                                                      &ofpacts);
-    if (error) {
+static void
+pinctrl_handle_nd_ns(const struct flow *ip_flow, const struct match *md,
+                     struct ofpbuf *userdata)
+{
+    /* This action only works for IPv6 packets. */
+    if (get_dl_type(ip_flow) != htons(ETH_TYPE_IPV6)) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-        VLOG_WARN_RL(&rl, "failed to parse actions for 'na' (%s)",
-                     ofperr_to_string(error));
-        goto exit;
+        VLOG_WARN_RL(&rl, "NS action on non-IPv6 packet");
+        return;
     }
 
-    struct ofputil_packet_out po = {
-        .packet = dp_packet_data(&packet),
-        .packet_len = dp_packet_size(&packet),
-        .buffer_id = UINT32_MAX,
-        .ofpacts = ofpacts.data,
-        .ofpacts_len = ofpacts.size,
-    };
-    match_set_in_port(&po.flow_metadata, OFPP_CONTROLLER);
+    uint64_t packet_stub[128 / 8];
+    struct dp_packet packet;
+    dp_packet_use_stub(&packet, packet_stub, sizeof packet_stub);
 
-    queue_msg(ofputil_encode_packet_out(&po, proto));
+    compose_nd_ns(&packet, ip_flow->dl_src, &ip_flow->ipv6_src,
+                  &ip_flow->ipv6_dst);
 
-exit:
+    /* Reload previous packet metadata and set actions from userdata. */
+    set_actions_and_enqueue_msg(&packet, md, userdata);
     dp_packet_uninit(&packet);
-    ofpbuf_uninit(&ofpacts);
 }
 
 static void
