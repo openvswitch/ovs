@@ -113,8 +113,8 @@
     </column>
 
     <column name="load_balancer">
-      Load balance a virtual ipv4 address to a set of logical port endpoint
-      ipv4 addresses.
+      Load balance a virtual ip address to a set of logical port endpoint
+      ip addresses.
     </column>
 
     <column name="acls">
@@ -925,16 +925,20 @@
 
     <column name="vips">
       <p>
-        A map of virtual IPv4 addresses (and an optional port number with
+        A map of virtual IP addresses (and an optional port number with
         <code>:</code> as a separator) associated with this load balancer and
-        their corresponding endpoint IPv4 addresses (and optional port numbers
+        their corresponding endpoint IP addresses (and optional port numbers
         with <code>:</code> as separators) separated by commas.  If
         the destination IP address (and port number) of a packet leaving a
-        container or a VM matches the virtual IPv4 address (and port number)
+        container or a VM matches the virtual IP address (and port number)
         provided here as a key, then OVN will statefully replace the
-        destination IP address by one of the provided IPv4 address (and port
-        number) in this map as a value.  Examples for keys are "192.168.1.4"
-        and "172.16.1.8:80".  Examples for value are "10.0.0.1, 10.0.0.2" and
+        destination IP address by one of the provided IP address (and port
+        number) in this map as a value.  IPv4 and IPv6 addresses are supported
+        for load balancing; however a VIP of one address family may not be
+        mapped to a destination IP address of a different family.  If
+        specifying an IPv6 address with a port, the address portion must be
+        enclosed in square brackets.  Examples for keys are "192.168.1.4" and
+        "[fd0f::1]:8800".  Examples for value are "10.0.0.1, 10.0.0.2" and
         "20.0.0.10:8800, 20.0.0.11:8800".
       </p>
     </column>
@@ -1116,7 +1120,7 @@
     </column>
 
     <column name="load_balancer">
-      Load balance a virtual ipv4 address to a set of logical port ipv4
+      Load balance a virtual ip address to a set of logical port ip
       addresses.  Load balancer rules only work on the Gateway routers.
     </column>
 

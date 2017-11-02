@@ -243,8 +243,10 @@
       balancing rules with virtual IP addresses (and ports) are configured in
       <code>OVN_Northbound</code> database for a logical switch datapath, a
       priority-100 flow is added for each configured virtual IP address
-      <var>VIP</var> with a match <code>ip &amp;&amp; ip4.dst == <var>VIP</var>
-      </code> that sets an action <code>reg0[0] = 1; next;</code> to act as a
+      <var>VIP</var>. For IPv4 <var>VIPs</var>, the match is <code>ip
+      &amp;&amp; ip4.dst == <var>VIP</var></code>.  For IPv6 <var>VIPs</var>,
+      the match is <code>ip &amp;&amp; ip6.dst == <var>VIP</var></code>. The
+      flow sets an action <code>reg0[0] = 1; next;</code> to act as a
       hint for table <code>Pre-stateful</code> to send IP packets to the
       connection tracker for packet de-fragmentation before eventually
       advancing to ingress table <code>LB</code>.
@@ -383,21 +385,29 @@
       <li>
         For all the configured load balancing rules for a switch in
         <code>OVN_Northbound</code> database that includes a L4 port
-        <var>PORT</var> of protocol <var>P</var> and IPv4 address
-        <var>VIP</var>, a priority-120 flow that matches on
-        <code>ct.new &amp;&amp; ip &amp;&amp; ip4.dst == <var>VIP
-        </var>&amp;&amp; <var>P</var> &amp;&amp; <var>P</var>.dst == <var>PORT
-        </var></code> with an action of <code>ct_lb(<var>args</var>)</code>,
-        where <var>args</var> contains comma separated IPv4 addresses (and
-        optional port numbers) to load balance to.
+        <var>PORT</var> of protocol <var>P</var> and IP address
+        <var>VIP</var>, a priority-120 flow is added.  For IPv4 <var>VIPs
+        </var>, the flow matches <code>ct.new &amp;&amp; ip &amp;&amp;
+        ip4.dst == <var>VIP</var> &amp;&amp; <var>P</var> &amp;&amp;
+        <var>P</var>.dst == <var>PORT</var></code>.  For IPv6 <var>VIPs</var>,
+        the flow matches <code>ct.new &amp;&amp; ip &amp;&amp; ip6.dst == <var>
+        VIP </var>&amp;&amp; <var>P</var> &amp;&amp; <var>P</var>.dst == <var>
+        PORT</var></code>. The flow's action is <code>ct_lb(<var>args</var>)
+        </code>, where <var>args</var> contains comma separated IP addresses
+        (and optional port numbers) to load balance to.  The address family of
+        the IP addresses of <var>args</var> is the same as the address family
+        of <var>VIP</var>
       </li>
       <li>
         For all the configured load balancing rules for a switch in
         <code>OVN_Northbound</code> database that includes just an IP address
-        <var>VIP</var> to match on, a priority-110 flow that matches on
-        <code>ct.new &amp;&amp; ip &amp;&amp; ip4.dst == <var>VIP</var></code>
-        with an action of <code>ct_lb(<var>args</var>)</code>, where
-        <var>args</var> contains comma separated IPv4 addresses.
+        <var>VIP</var> to match on, OVN adds a priority-110 flow.  For IPv4
+        <var>VIPs</var>, the flow matches <code>ct.new &amp;&amp; ip &amp;&amp;
+        ip4.dst == <var>VIP</var></code>. For IPv6 <var>VIPs</var>,
+        the flow matches <code>ct.new &amp;&amp; ip &amp;&amp; ip6.dst == <var>
+        VIP</var></code>. The action on this flow is <code>
+        ct_lb(<var>args</var>)</code>, where <var>args</var> contains comma
+        separated IP addresses of the same address family as <var>VIP</var>.
       </li>
       <li>
         A priority-100 flow commits packets to connection tracker using
@@ -1113,7 +1123,7 @@ output;
         <p>
           These flows reply to ARP requests for the virtual IP addresses
           configured in the router for DNAT or load balancing.  For a
-          configured DNAT IP address or a load balancer VIP <var>A</var>,
+          configured DNAT IP address or a load balancer IPv4 VIP <var>A</var>,
           for each router port <var>P</var> with Ethernet
           address <var>E</var>, a priority-90 flow matches
           <code>inport == <var>P</var> &amp;&amp; arp.op == 1 &amp;&amp;
@@ -1190,13 +1200,13 @@ arp.sha = <var>external_mac</var>;
         <p>
           Reply to IPv6 Neighbor Solicitations.  These flows reply to
           Neighbor Solicitation requests for the router's own IPv6
-          address and populate the logical router's mac binding table.
-          For each router port <var>P</var> that owns IPv6 address
-          <var>A</var>, solicited node address <var>S</var>, and
-          Ethernet address <var>E</var>, a priority-90 flow matches
-          <code>inport == <var>P</var> &amp;&amp; nd_ns &amp;&amp;
-          ip6.dst == {<var>A</var>, <var>E</var>} &amp;&amp; nd.target
-          == <var>A</var></code> with the following actions:
+          address and load balancing IPv6 VIPs and populate the logical
+          router's mac binding table. For each router port <var>P</var> that
+          owns IPv6 address or has load balancing VIP <var>A</var>, solicited
+          node address <var>S</var>, and Ethernet address <var>E</var>, a
+          priority-90 flow matches <code>inport == <var>P</var> &amp;&amp;
+          nd_ns &amp;&amp; ip6.dst == {<var>A</var>, <var>E</var>} &amp;&amp;
+          nd.target == <var>A</var></code> with the following actions:
         </p>
 
         <pre>
@@ -1364,10 +1374,12 @@ icmp4 {
       to the next table.  If load balancing rules with virtual IP addresses
       (and ports) are configured in <code>OVN_Northbound</code> database for a
       Gateway router, a priority-100 flow is added for each configured virtual
-      IP address <var>VIP</var> with a match <code>ip &amp;&amp;
-      ip4.dst == <var>VIP</var></code> that sets an action
-      <code>ct_next;</code> to send IP packets to the connection tracker for
-      packet de-fragmentation and tracking before sending it to the next table.
+      IP address <var>VIP</var>. For IPv4 <var>VIPs</var> the flow matches
+      <code>ip &amp;&amp; ip4.dst == <var>VIP</var></code>.  For IPv6
+      <var>VIPs</var>, the flow matches <code>ip &amp;&amp; ip6.dst ==
+      <var>VIP</var></code>.  The flow uses the action <code>ct_next;</code>
+      to send IP packets to the connection tracker for packet de-fragmentation
+      and tracking before sending it to the next table.
     </p>
 
     <h3>Ingress Table 3: UNSNAT</h3>
@@ -1464,7 +1476,8 @@ icmp4 {
     <p>
       Following load balancing DNAT flows are added for Gateway router or
       Router with gateway port. These flows are programmed only on the
-      <code>redirect-chassis</code>.
+      <code>redirect-chassis</code>.  These flows do not get programmed for
+      load balancers with IPv6 <var>VIPs</var>.
     </p>
 
     <ul>
@@ -1910,7 +1923,8 @@ arp {
           router gateway port with an action <code>ct_dnat;</code>. If the
           backend IPv4 address <var>B</var> is also configured with L4 port
           <var>PORT</var> of protocol <var>P</var>, then the
-          match also includes <code>P.src</code> == <var>PORT</var>.
+          match also includes <code>P.src</code> == <var>PORT</var>.  These
+          flows are not added for load balancers with IPv6 <var>VIPs</var>.
         </p>
 
         <p>

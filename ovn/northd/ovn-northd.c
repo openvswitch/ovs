@@ -1562,11 +1562,11 @@ join_logical_ports(struct northd_context *ctx,
 
 static void
 ip_address_and_port_from_lb_key(const char *key, char **ip_address,
-                                uint16_t *port);
+                                uint16_t *port, int *addr_family);
 
 static void
 get_router_load_balancer_ips(const struct ovn_datapath *od,
-                             struct sset *all_ips)
+                             struct sset *all_ips, int *addr_family)
 {
     if (!od->nbr) {
         return;
@@ -1582,7 +1582,8 @@ get_router_load_balancer_ips(const struct ovn_datapath *od,
             char *ip_address = NULL;
             uint16_t port;
 
-            ip_address_and_port_from_lb_key(node->key, &ip_address, &port);
+            ip_address_and_port_from_lb_key(node->key, &ip_address, &port,
+                                            addr_family);
             if (!ip_address) {
                 continue;
             }
@@ -1659,7 +1660,8 @@ get_nat_addresses(const struct ovn_port *op, size_t *n)
 
     /* A set to hold all load-balancer vips. */
     struct sset all_ips = SSET_INITIALIZER(&all_ips);
-    get_router_load_balancer_ips(op->od, &all_ips);
+    int addr_family;
+    get_router_load_balancer_ips(op->od, &all_ips, &addr_family);
 
     const char *ip_address;
     SSET_FOR_EACH (ip_address, &all_ips) {
@@ -2902,44 +2904,33 @@ build_pre_acls(struct ovn_datapath *od, struct hmap *lflows)
  * 'ip_address'. */
 static void
 ip_address_and_port_from_lb_key(const char *key, char **ip_address,
-                                uint16_t *port)
+                                uint16_t *port, int *addr_family)
 {
-    char *ip_str, *start, *next;
-    *ip_address = NULL;
-    *port = 0;
+    struct sockaddr_storage ss;
+    char ip_addr_buf[INET6_ADDRSTRLEN];
+    char *error;
 
-    next = start = xstrdup(key);
-    ip_str = strsep(&next, ":");
-    if (!ip_str || !ip_str[0]) {
+    error = ipv46_parse(key, PORT_OPTIONAL, &ss);
+    if (error) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-        VLOG_WARN_RL(&rl, "bad ip address for load balancer key %s", key);
-        free(start);
-        return;
-    }
-
-    ovs_be32 ip, mask;
-    char *error = ip_parse_masked(ip_str, &ip, &mask);
-    if (error || mask != OVS_BE32_MAX) {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-        VLOG_WARN_RL(&rl, "bad ip address for load balancer key %s", key);
-        free(start);
+        VLOG_WARN_RL(&rl, "bad ip address or port for load balancer key %s",
+                     key);
         free(error);
         return;
     }
 
-    int l4_port = 0;
-    if (next && next[0]) {
-        if (!str_to_int(next, 0, &l4_port) || l4_port < 0 || l4_port > 65535) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-            VLOG_WARN_RL(&rl, "bad ip port for load balancer key %s", key);
-            free(start);
-            return;
-        }
+    if (ss.ss_family == AF_INET) {
+        struct sockaddr_in *sin = ALIGNED_CAST(struct sockaddr_in *, &ss);
+        *port = sin->sin_port == 0 ? 0 : ntohs(sin->sin_port);
+        inet_ntop(AF_INET, &sin->sin_addr, ip_addr_buf, sizeof ip_addr_buf);
+    } else {
+        struct sockaddr_in6 *sin6 = ALIGNED_CAST(struct sockaddr_in6 *, &ss);
+        *port = sin6->sin6_port == 0 ? 0 : ntohs(sin6->sin6_port);
+        inet_ntop(AF_INET6, &sin6->sin6_addr, ip_addr_buf, sizeof ip_addr_buf);
     }
 
-    *port = l4_port;
-    *ip_address = strdup(ip_str);
-    free(start);
+    *ip_address = xstrdup(ip_addr_buf);
+    *addr_family = ss.ss_family;
 }
 
 /*
@@ -2967,6 +2958,7 @@ build_pre_lb(struct ovn_datapath *od, struct hmap *lflows)
 
     struct sset all_ips = SSET_INITIALIZER(&all_ips);
     bool vip_configured = false;
+    int addr_family = AF_INET;
     for (int i = 0; i < od->nbs->n_load_balancer; i++) {
         struct nbrec_load_balancer *lb = od->nbs->load_balancer[i];
         struct smap *vips = &lb->vips;
@@ -2978,7 +2970,8 @@ build_pre_lb(struct ovn_datapath *od, struct hmap *lflows)
             /* node->key contains IP:port or just IP. */
             char *ip_address = NULL;
             uint16_t port;
-            ip_address_and_port_from_lb_key(node->key, &ip_address, &port);
+            ip_address_and_port_from_lb_key(node->key, &ip_address, &port,
+                                            &addr_family);
             if (!ip_address) {
                 continue;
             }
@@ -3000,7 +2993,13 @@ build_pre_lb(struct ovn_datapath *od, struct hmap *lflows)
      * packet to conntrack for defragmentation. */
     const char *ip_address;
     SSET_FOR_EACH(ip_address, &all_ips) {
-        char *match = xasprintf("ip && ip4.dst == %s", ip_address);
+        char *match;
+
+        if (addr_family == AF_INET) {
+            match = xasprintf("ip && ip4.dst == %s", ip_address);
+        } else {
+            match = xasprintf("ip && ip6.dst == %s", ip_address);
+        }
         ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_LB,
                       100, match, REGBIT_CONNTRACK_DEFRAG" = 1; next;");
         free(match);
@@ -3458,10 +3457,12 @@ build_stateful(struct ovn_datapath *od, struct hmap *lflows)
 
         SMAP_FOR_EACH (node, vips) {
             uint16_t port = 0;
+            int addr_family;
 
             /* node->key contains IP:port or just IP. */
             char *ip_address = NULL;
-            ip_address_and_port_from_lb_key(node->key, &ip_address, &port);
+            ip_address_and_port_from_lb_key(node->key, &ip_address, &port,
+                                            &addr_family);
             if (!ip_address) {
                 continue;
             }
@@ -3469,7 +3470,11 @@ build_stateful(struct ovn_datapath *od, struct hmap *lflows)
             /* New connections in Ingress table. */
             char *action = xasprintf("ct_lb(%s);", node->value);
             struct ds match = DS_EMPTY_INITIALIZER;
-            ds_put_format(&match, "ct.new && ip4.dst == %s", ip_address);
+            if (addr_family == AF_INET) {
+                ds_put_format(&match, "ct.new && ip4.dst == %s", ip_address);
+            } else {
+                ds_put_format(&match, "ct.new && ip6.dst == %s", ip_address);
+            }
             if (port) {
                 if (lb->protocol && !strcmp(lb->protocol, "udp")) {
                     ds_put_format(&match, " && udp.dst == %d", port);
@@ -4352,7 +4357,7 @@ static void
 add_router_lb_flow(struct hmap *lflows, struct ovn_datapath *od,
                    struct ds *match, struct ds *actions, int priority,
                    const char *lb_force_snat_ip, char *backend_ips,
-                   bool is_udp)
+                   bool is_udp, int addr_family)
 {
     /* A match and actions for new connections. */
     char *new_match = xasprintf("ct.new && %s", ds_cstr(match));
@@ -4380,7 +4385,8 @@ add_router_lb_flow(struct hmap *lflows, struct ovn_datapath *od,
     free(new_match);
     free(est_match);
 
-    if (!od->l3dgw_port || !od->l3redirect_port || !backend_ips) {
+    if (!od->l3dgw_port || !od->l3redirect_port || !backend_ips
+            || addr_family != AF_INET) {
         return;
     }
 
@@ -4397,7 +4403,9 @@ add_router_lb_flow(struct hmap *lflows, struct ovn_datapath *od,
     while (ip_str && ip_str[0]) {
         char *ip_address = NULL;
         uint16_t port = 0;
-        ip_address_and_port_from_lb_key(ip_str, &ip_address, &port);
+        int addr_family;
+        ip_address_and_port_from_lb_key(ip_str, &ip_address, &port,
+                                        &addr_family);
         if (!ip_address) {
             break;
         }
@@ -4635,36 +4643,55 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
 
         /* A set to hold all load-balancer vips that need ARP responses. */
         struct sset all_ips = SSET_INITIALIZER(&all_ips);
-        get_router_load_balancer_ips(op->od, &all_ips);
+        int addr_family;
+        get_router_load_balancer_ips(op->od, &all_ips, &addr_family);
 
         const char *ip_address;
         SSET_FOR_EACH(ip_address, &all_ips) {
-            ovs_be32 ip;
-            if (!ip_parse(ip_address, &ip) || !ip) {
-                continue;
+            ds_clear(&match);
+            if (addr_family == AF_INET) {
+                ds_put_format(&match,
+                              "inport == %s && arp.tpa == %s && arp.op == 1",
+                              op->json_key, ip_address);
+            } else {
+                ds_put_format(&match,
+                              "inport == %s && nd_ns && nd.target == %s",
+                              op->json_key, ip_address);
             }
 
-            ds_clear(&match);
-            ds_put_format(&match,
-                          "inport == %s && arp.tpa == "IP_FMT" && arp.op == 1",
-                          op->json_key, IP_ARGS(ip));
-
             ds_clear(&actions);
-            ds_put_format(&actions,
+            if (addr_family == AF_INET) {
+                ds_put_format(&actions,
                 "eth.dst = eth.src; "
                 "eth.src = %s; "
                 "arp.op = 2; /* ARP reply */ "
                 "arp.tha = arp.sha; "
                 "arp.sha = %s; "
                 "arp.tpa = arp.spa; "
-                "arp.spa = "IP_FMT"; "
+                "arp.spa = %s; "
                 "outport = %s; "
                 "flags.loopback = 1; "
                 "output;",
                 op->lrp_networks.ea_s,
                 op->lrp_networks.ea_s,
-                IP_ARGS(ip),
+                ip_address,
                 op->json_key);
+            } else {
+                ds_put_format(&actions,
+                "nd_na { "
+                "eth.src = %s; "
+                "ip6.src = %s; "
+                "nd.target = %s; "
+                "nd.tll = %s; "
+                "outport = inport; "
+                "flags.loopback = 1; "
+                "output; "
+                "};",
+                op->lrp_networks.ea_s,
+                ip_address,
+                ip_address,
+                op->lrp_networks.ea_s);
+            }
             ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 90,
                           ds_cstr(&match), ds_cstr(&actions));
         }
@@ -5328,16 +5355,36 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
 
             SMAP_FOR_EACH (node, vips) {
                 uint16_t port = 0;
+                int addr_family;
 
                 /* node->key contains IP:port or just IP. */
                 char *ip_address = NULL;
-                ip_address_and_port_from_lb_key(node->key, &ip_address, &port);
+                ip_address_and_port_from_lb_key(node->key, &ip_address, &port,
+                        &addr_family);
                 if (!ip_address) {
                     continue;
                 }
 
                 if (!sset_contains(&all_ips, ip_address)) {
                     sset_add(&all_ips, ip_address);
+                    /* If there are any load balancing rules, we should send
+                     * the packet to conntrack for defragmentation and
+                     * tracking.  This helps with two things.
+                     *
+                     * 1. With tracking, we can send only new connections to
+                     *    pick a DNAT ip address from a group.
+                     * 2. If there are L4 ports in load balancing rules, we
+                     *    need the defragmentation to match on L4 ports. */
+                    ds_clear(&match);
+                    if (addr_family == AF_INET) {
+                        ds_put_format(&match, "ip && ip4.dst == %s",
+                                      ip_address);
+                    } else {
+                        ds_put_format(&match, "ip && ip6.dst == %s",
+                                      ip_address);
+                    }
+                    ovn_lflow_add(lflows, od, S_ROUTER_IN_DEFRAG,
+                                  100, ds_cstr(&match), "ct_next;");
                 }
 
                 /* Higher priority rules are added for load-balancing in DNAT
@@ -5349,8 +5396,13 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                 ds_put_format(&actions, "ct_lb(%s);", node->value);
 
                 ds_clear(&match);
-                ds_put_format(&match, "ip && ip4.dst == %s",
-                              ip_address);
+                if (addr_family == AF_INET) {
+                    ds_put_format(&match, "ip && ip4.dst == %s",
+                                ip_address);
+                } else {
+                    ds_put_format(&match, "ip && ip6.dst == %s",
+                                ip_address);
+                }
                 free(ip_address);
 
                 int prio = 110;
@@ -5372,26 +5424,10 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                                   od->l3redirect_port->json_key);
                 }
                 add_router_lb_flow(lflows, od, &match, &actions, prio,
-                                   lb_force_snat_ip, node->value, is_udp);
+                                   lb_force_snat_ip, node->value, is_udp,
+                                   addr_family);
             }
         }
-
-        /* If there are any load balancing rules, we should send the
-         * packet to conntrack for defragmentation and tracking.  This helps
-         * with two things.
-         *
-         * 1. With tracking, we can send only new connections to pick a
-         *    DNAT ip address from a group.
-         * 2. If there are L4 ports in load balancing rules, we need the
-         *    defragmentation to match on L4 ports. */
-        const char *ip_address;
-        SSET_FOR_EACH(ip_address, &all_ips) {
-            ds_clear(&match);
-            ds_put_format(&match, "ip && ip4.dst == %s", ip_address);
-            ovn_lflow_add(lflows, od, S_ROUTER_IN_DEFRAG,
-                          100, ds_cstr(&match), "ct_next;");
-        }
-
         sset_destroy(&all_ips);
     }
 
