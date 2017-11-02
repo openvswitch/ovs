@@ -338,6 +338,7 @@ xu rong                         xu.rong@zte.com.cn
 YAMAMOTO Takashi                yamamoto@midokura.com
 Yasuhito Takamiya               yasuhito@gmail.com
 Yi-Hung Wei                     yihung.wei@gmail.com
+Yifeng Sun                      pkusunyifeng@gmail.com
 Yin Lin                         linyi@vmware.com
 Yu Zhiguo                       yuzg@cn.fujitsu.com
 Yuanhan Liu                     yuanhan.liu@linux.intel.com

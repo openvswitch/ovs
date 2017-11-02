@@ -1764,7 +1764,6 @@ netdev_dummy_ip6addr(struct unixctl_conn *conn, int argc OVS_UNUSED,
             unixctl_command_reply_error(conn, error);
             free(error);
         }
-        netdev_close(netdev);
     } else {
         unixctl_command_reply_error(conn, "Unknown Dummy Interface");
     }
