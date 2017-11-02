@@ -600,13 +600,15 @@
          Creates a new load balancer named <var>lb</var> with the provided
          <var>vip</var> and <var>ips</var> or adds the <var>vip</var> to
          an existing <var>lb</var>.  <var>vip</var> should be a
-         virtual IPv4 address (or an IPv4 address and a port number with
+         virtual IP address (or an IP address and a port number with
          <code>:</code> as a separator).  Examples for <var>vip</var> are
-         <code>192.168.1.4</code> and <code>192.168.1.5:8080</code>.
-         <var>ips</var> should be comma separated IPv4 endpoints (or comma
-         separated IPv4 addresses and port numbers with <code>:</code> as a
-         separator).  Examples for <var>ips</var> are <code>10.0.0.1,10.0.0.2
-         </code>or <code>20.0.0.10:8800,20.0.0.11:8800</code>.
+         <code>192.168.1.4</code>, <code>fd0f::1</code>, and
+         <code>192.168.1.5:8080</code>. <var>ips</var> should be comma
+         separated IP endpoints (or comma separated IP addresses and port
+         numbers with <code>:</code> as a separator).  <var>ips</var> must
+         be the same address family as <var>vip</var>.  Examples for
+         <var>ips</var> are <code>10.0.0.1,10.0.0.2</code>or
+         <code>[fdef::1]:8800,[fdef::2]:8800</code>.
         </p>
 
         <p>

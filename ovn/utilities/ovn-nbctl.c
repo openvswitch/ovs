@@ -1553,40 +1553,76 @@ nbctl_lb_add(struct ctl_context *ctx)
         }
     }
 
-    ovs_be32 ipv4 = 0;
-    ovs_be16 port = 0;
-    char *error = ip_parse_port(lb_vip, &ipv4, &port);
+    struct sockaddr_storage ss_vip;
+    char *error;
+    error = ipv46_parse(lb_vip, PORT_OPTIONAL, &ss_vip);
     if (error) {
         free(error);
-        if (!ip_parse(lb_vip, &ipv4)) {
-            ctl_fatal("%s: should be an IPv4 address (or an IPv4 address "
-                    "and a port number with : as a separator).", lb_vip);
-        }
+        ctl_fatal("%s: should be an IP address (or an IP address "
+                  "and a port number with : as a separator).", lb_vip);
+    }
 
-        if (is_update_proto) {
-            ctl_fatal("Protocol is unnecessary when no port of vip "
-                    "is given.");
+    char lb_vip_normalized[INET6_ADDRSTRLEN + 8];
+    char normalized_ip[INET6_ADDRSTRLEN];
+    if (ss_vip.ss_family == AF_INET) {
+        struct sockaddr_in *sin = ALIGNED_CAST(struct sockaddr_in *, &ss_vip);
+        inet_ntop(AF_INET, &sin->sin_addr, normalized_ip,
+                  sizeof normalized_ip);
+        if (sin->sin_port) {
+            is_vip_with_port = true;
+            snprintf(lb_vip_normalized, sizeof lb_vip_normalized, "%s:%d",
+                     normalized_ip, ntohs(sin->sin_port));
+        } else {
+            is_vip_with_port = false;
+            ovs_strlcpy(lb_vip_normalized, normalized_ip,
+                        sizeof lb_vip_normalized);
         }
-        is_vip_with_port = false;
+    } else {
+        struct sockaddr_in6 *sin6 = ALIGNED_CAST(struct sockaddr_in6 *,
+                                                 &ss_vip);
+        inet_ntop(AF_INET6, &sin6->sin6_addr, normalized_ip,
+                  sizeof normalized_ip);
+        if (sin6->sin6_port) {
+            is_vip_with_port = true;
+            snprintf(lb_vip_normalized, sizeof lb_vip_normalized, "[%s]:%d",
+                     normalized_ip, ntohs(sin6->sin6_port));
+        } else {
+            is_vip_with_port = false;
+            ovs_strlcpy(lb_vip_normalized, normalized_ip,
+                        sizeof lb_vip_normalized);
+        }
+    }
+
+    if (!is_vip_with_port && is_update_proto) {
+        ctl_fatal("Protocol is unnecessary when no port of vip "
+                  "is given.");
     }
 
     char *token = NULL, *save_ptr = NULL;
     struct ds lb_ips_new = DS_EMPTY_INITIALIZER;
     for (token = strtok_r(lb_ips, ",", &save_ptr);
             token != NULL; token = strtok_r(NULL, ",", &save_ptr)) {
-        if (is_vip_with_port) {
-            error = ip_parse_port(token, &ipv4, &port);
-            if (error) {
-                free(error);
-                ds_destroy(&lb_ips_new);
-                ctl_fatal("%s: should be an IPv4 address and a port "
+        struct sockaddr_storage ss_dst;
+
+        error = ipv46_parse(token, is_vip_with_port
+                ? PORT_REQUIRED
+                : PORT_FORBIDDEN,
+                &ss_dst);
+
+        if (error) {
+            free(error);
+            if (is_vip_with_port) {
+                ctl_fatal("%s: should be an IP address and a port "
                         "number with : as a separator.", token);
+            } else {
+                ctl_fatal("%s: should be an IP address.", token);
             }
-        } else {
-            if (!ip_parse(token, &ipv4)) {
-                ds_destroy(&lb_ips_new);
-                ctl_fatal("%s: should be an IPv4 address.", token);
-            }
+        }
+
+        if (ss_vip.ss_family != ss_dst.ss_family) {
+            ds_destroy(&lb_ips_new);
+            ctl_fatal("%s: IP address family is different from VIP %s.",
+                    token, lb_vip_normalized);
         }
         ds_put_format(&lb_ips_new, "%s%s",
                 lb_ips_new.length ? "," : "", token);
@@ -1596,19 +1632,19 @@ nbctl_lb_add(struct ctl_context *ctx)
     if (!add_duplicate) {
         lb = lb_by_name_or_uuid(ctx, lb_name, false);
         if (lb) {
-            if (smap_get(&lb->vips, lb_vip)) {
+            if (smap_get(&lb->vips, lb_vip_normalized)) {
                 if (!may_exist) {
                     ds_destroy(&lb_ips_new);
                     ctl_fatal("%s: a load balancer with this vip (%s) "
-                            "already exists", lb_name, lb_vip);
+                            "already exists", lb_name, lb_vip_normalized);
                 }
                 /* Update the vips. */
                 smap_replace(CONST_CAST(struct smap *, &lb->vips),
-                        lb_vip, ds_cstr(&lb_ips_new));
+                        lb_vip_normalized, ds_cstr(&lb_ips_new));
             } else {
                 /* Add the new vips. */
                 smap_add(CONST_CAST(struct smap *, &lb->vips),
-                        lb_vip, ds_cstr(&lb_ips_new));
+                        lb_vip_normalized, ds_cstr(&lb_ips_new));
             }
 
             /* Update the load balancer. */
@@ -1628,7 +1664,7 @@ nbctl_lb_add(struct ctl_context *ctx)
     nbrec_load_balancer_set_name(lb, lb_name);
     nbrec_load_balancer_set_protocol(lb, lb_proto);
     smap_add(CONST_CAST(struct smap *, &lb->vips),
-            lb_vip, ds_cstr(&lb_ips_new));
+            lb_vip_normalized, ds_cstr(&lb_ips_new));
     nbrec_load_balancer_set_vips(lb, &lb->vips);
     ds_destroy(&lb_ips_new);
 }
@@ -1670,32 +1706,49 @@ nbctl_lb_del(struct ctl_context *ctx)
 
 static void
 lb_info_add_smap(const struct nbrec_load_balancer *lb,
-                 struct smap *lbs)
+                 struct smap *lbs, int vip_width)
 {
     struct ds key = DS_EMPTY_INITIALIZER;
     struct ds val = DS_EMPTY_INITIALIZER;
     char *error, *protocol;
-    ovs_be32 ipv4 = 0;
-    ovs_be16 port = 0;
 
     const struct smap_node **nodes = smap_sort(&lb->vips);
     if (nodes) {
         for (int i = 0; i < smap_count(&lb->vips); i++) {
             const struct smap_node *node = nodes[i];
             protocol = lb->protocol;
-            error = ip_parse_port(node->key, &ipv4, &port);
+
+            struct sockaddr_storage ss;
+            error = ipv46_parse(node->key, PORT_OPTIONAL, &ss);
             if (error) {
+                VLOG_WARN("%s", error);
                 free(error);
-                protocol = "tcp/udp";
+                continue;
+            }
+
+            if (ss.ss_family == AF_INET) {
+                struct sockaddr_in *sin = ALIGNED_CAST(struct sockaddr_in *,
+                                                       &ss);
+                if (!sin->sin_port) {
+                    protocol = "tcp/udp";
+                }
+            } else {
+                struct sockaddr_in6 *sin6 = ALIGNED_CAST(struct sockaddr_in6 *,
+                                                         &ss);
+                if (!sin6->sin6_port) {
+                    protocol = "tcp/udp";
+                }
             }
 
             i == 0 ? ds_put_format(&val,
-                        UUID_FMT "    %-20.16s%-11.7s%-25.21s%s",
+                        UUID_FMT "    %-20.16s%-11.7s%-*.*s%s",
                         UUID_ARGS(&lb->header_.uuid),
                         lb->name, protocol,
+                        vip_width + 4, vip_width,
                         node->key, node->value)
-                   : ds_put_format(&val, "\n%60s%-11.7s%-25.21s%s",
+                   : ds_put_format(&val, "\n%60s%-11.7s%-*.*s%s",
                         "", protocol,
+                        vip_width + 4, vip_width,
                         node->key, node->value);
         }
 
@@ -1709,12 +1762,12 @@ lb_info_add_smap(const struct nbrec_load_balancer *lb,
 }
 
 static void
-lb_info_print(struct ctl_context *ctx, struct smap *lbs)
+lb_info_print(struct ctl_context *ctx, struct smap *lbs, int vip_width)
 {
     const struct smap_node **nodes = smap_sort(lbs);
     if (nodes) {
-        ds_put_format(&ctx->output, "%-40.36s%-20.16s%-11.7s%-25.21s%s\n",
-                "UUID", "LB", "PROTO", "VIP", "IPs");
+        ds_put_format(&ctx->output, "%-40.36s%-20.16s%-11.7s%-*.*s%s\n",
+                "UUID", "LB", "PROTO", vip_width + 4, vip_width, "VIP", "IPs");
         for (size_t i = 0; i < smap_count(lbs); i++) {
             const struct smap_node *node = nodes[i];
             ds_put_format(&ctx->output, "%s\n", node->value);
@@ -1724,21 +1777,45 @@ lb_info_print(struct ctl_context *ctx, struct smap *lbs)
     }
 }
 
+static int
+lb_get_max_vip_length(const struct nbrec_load_balancer *lb, int vip_width)
+{
+    const struct smap_node *node;
+    int max_length = vip_width;
+
+    SMAP_FOR_EACH (node, &lb->vips) {
+        size_t keylen = strlen(node->key);
+        if (max_length < keylen) {
+            max_length = keylen;
+        }
+    }
+
+    return max_length;
+}
+
 static void
 lb_info_list_all(struct ctl_context *ctx,
                  const char *lb_name, bool lb_check)
 {
     const struct nbrec_load_balancer *lb;
     struct smap lbs = SMAP_INITIALIZER(&lbs);
+    int vip_width = 0;
+
+    NBREC_LOAD_BALANCER_FOR_EACH (lb, ctx->idl) {
+        if (lb_check && strcmp(lb->name, lb_name)) {
+            continue;
+        }
+        vip_width = lb_get_max_vip_length(lb, vip_width);
+    }
 
     NBREC_LOAD_BALANCER_FOR_EACH(lb, ctx->idl) {
         if (lb_check && strcmp(lb->name, lb_name)) {
             continue;
         }
-        lb_info_add_smap(lb, &lbs);
+        lb_info_add_smap(lb, &lbs, vip_width);
     }
 
-    lb_info_print(ctx, &lbs);
+    lb_info_print(ctx, &lbs, vip_width);
     smap_destroy(&lbs);
 }
 
@@ -1837,15 +1914,21 @@ nbctl_lr_lb_list(struct ctl_context *ctx)
     const char *lr_name = ctx->argv[1];
     const struct nbrec_logical_router *lr;
     struct smap lbs = SMAP_INITIALIZER(&lbs);
+    int vip_width = 0;
 
     lr = lr_by_name_or_uuid(ctx, lr_name, true);
     for (int i = 0; i < lr->n_load_balancer; i++) {
         const struct nbrec_load_balancer *lb
             = lr->load_balancer[i];
-        lb_info_add_smap(lb, &lbs);
+        vip_width = lb_get_max_vip_length(lb, vip_width);
+    }
+    for (int i = 0; i < lr->n_load_balancer; i++) {
+        const struct nbrec_load_balancer *lb
+            = lr->load_balancer[i];
+        lb_info_add_smap(lb, &lbs, vip_width);
     }
 
-    lb_info_print(ctx, &lbs);
+    lb_info_print(ctx, &lbs, vip_width);
     smap_destroy(&lbs);
 }
 
@@ -1934,15 +2017,21 @@ nbctl_ls_lb_list(struct ctl_context *ctx)
     const char *ls_name = ctx->argv[1];
     const struct nbrec_logical_switch *ls;
     struct smap lbs = SMAP_INITIALIZER(&lbs);
+    int vip_width = 0;
 
     ls = ls_by_name_or_uuid(ctx, ls_name, true);
     for (int i = 0; i < ls->n_load_balancer; i++) {
         const struct nbrec_load_balancer *lb
             = ls->load_balancer[i];
-        lb_info_add_smap(lb, &lbs);
+        vip_width = lb_get_max_vip_length(lb, vip_width);
+    }
+    for (int i = 0; i < ls->n_load_balancer; i++) {
+        const struct nbrec_load_balancer *lb
+            = ls->load_balancer[i];
+        lb_info_add_smap(lb, &lbs, vip_width);
     }
 
-    lb_info_print(ctx, &lbs);
+    lb_info_print(ctx, &lbs, vip_width);
     smap_destroy(&lbs);
 }
 

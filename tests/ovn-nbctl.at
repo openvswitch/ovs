@@ -399,47 +399,43 @@ OVN_NBCTL_TEST_START
 
 dnl Add two LBs.
 AT_CHECK([ovn-nbctl lb-add lb0 30.0.0.10:80a 192.168.10.10:80,192.168.10.20:80 tcp], [1], [],
-[ovn-nbctl: 30.0.0.10:80a: should be an IPv4 address (or an IPv4 address and a port number with : as a separator).
+[ovn-nbctl: 30.0.0.10:80a: should be an IP address (or an IP address and a port number with : as a separator).
 ])
 
 AT_CHECK([ovn-nbctl lb-add lb0 30.0.0.10:a80 192.168.10.10:80,192.168.10.20:80 tcp], [1], [],
-[ovn-nbctl: 30.0.0.10:a80: should be an IPv4 address (or an IPv4 address and a port number with : as a separator).
+[ovn-nbctl: 30.0.0.10:a80: should be an IP address (or an IP address and a port number with : as a separator).
 ])
 
 AT_CHECK([ovn-nbctl lb-add lb0 30.0.0.10: 192.168.10.10:80,192.168.10.20:80 tcp], [1], [],
-[ovn-nbctl: 30.0.0.10:: should be an IPv4 address (or an IPv4 address and a port number with : as a separator).
+[ovn-nbctl: 30.0.0.10:: should be an IP address (or an IP address and a port number with : as a separator).
 ])
 
 AT_CHECK([ovn-nbctl lb-add lb0 30.0.0.10:80 192.168.10.10:80,192.168.10.20 tcp], [1], [],
-[ovn-nbctl: 192.168.10.20: should be an IPv4 address and a port number with : as a separator.
+[ovn-nbctl: 192.168.10.20: should be an IP address and a port number with : as a separator.
 ])
 
 AT_CHECK([ovn-nbctl lb-add lb0 30.0.0.1a 192.168.10.10:80,192.168.10.20:80], [1], [],
-[ovn-nbctl: 30.0.0.1a: should be an IPv4 address (or an IPv4 address and a port number with : as a separator).
+[ovn-nbctl: 30.0.0.1a: should be an IP address (or an IP address and a port number with : as a separator).
 ])
 
 AT_CHECK([ovn-nbctl lb-add lb0 30.0.0 192.168.10.10:80,192.168.10.20:80], [1], [],
-[ovn-nbctl: 30.0.0: should be an IPv4 address (or an IPv4 address and a port number with : as a separator).
+[ovn-nbctl: 192.168.10.10:80: should be an IP address.
 ])
 
 AT_CHECK([ovn-nbctl lb-add lb0 30.0.0.10 192.168.10.10,192.168.10.20:80], [1], [],
-[ovn-nbctl: 192.168.10.20:80: should be an IPv4 address.
+[ovn-nbctl: 192.168.10.20:80: should be an IP address.
 ])
 
 AT_CHECK([ovn-nbctl lb-add lb0 30.0.0.10 192.168.10.10:a80], [1], [],
-[ovn-nbctl: 192.168.10.10:a80: should be an IPv4 address.
+[ovn-nbctl: 192.168.10.10:a80: should be an IP address.
 ])
 
 AT_CHECK([ovn-nbctl lb-add lb0 30.0.0.10 192.168.10.10:], [1], [],
-[ovn-nbctl: 192.168.10.10:: should be an IPv4 address.
+[ovn-nbctl: 192.168.10.10:: should be an IP address.
 ])
 
 AT_CHECK([ovn-nbctl lb-add lb0 30.0.0.10 192.168.10.1a], [1], [],
-[ovn-nbctl: 192.168.10.1a: should be an IPv4 address.
-])
-
-AT_CHECK([ovn-nbctl lb-add lb0 30.0.0.10 192.168.10], [1], [],
-[ovn-nbctl: 192.168.10: should be an IPv4 address.
+[ovn-nbctl: 192.168.10.1a: should be an IP address.
 ])
 
 AT_CHECK([ovn-nbctl lb-add lb0 30.0.0.10 192.168.10.10 tcp], [1], [],
@@ -454,9 +450,9 @@ dnl Add ips to lb
 AT_CHECK([ovn-nbctl lb-add lb0 30.0.0.10:80 ,,,192.168.10.10:80,,,,,])
 AT_CHECK([ovn-nbctl lb-add lb1 30.0.0.10:80 ,,,192.168.10.10:80,,,,192.168.10.20:80,,,,])
 AT_CHECK([ovn-nbctl lb-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
-UUID                                    LB                  PROTO      VIP                      IPs
-<0>    lb0                 tcp        30.0.0.10:80             192.168.10.10:80
-<1>    lb1                 tcp        30.0.0.10:80             192.168.10.10:80,192.168.10.20:80
+UUID                                    LB                  PROTO      VIP             IPs
+<0>    lb0                 tcp        30.0.0.10:80    192.168.10.10:80
+<1>    lb1                 tcp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:80
 ])
 AT_CHECK([ovn-nbctl lb-del lb0])
 AT_CHECK([ovn-nbctl lb-del lb1])
@@ -464,51 +460,51 @@ AT_CHECK([ovn-nbctl lb-del lb1])
 AT_CHECK([ovn-nbctl lb-add lb0 30.0.0.10:80 192.168.10.10:80,192.168.10.20:80])
 AT_CHECK([ovn-nbctl lb-add lb1 30.0.0.10:80 192.168.10.10:80,192.168.10.20:80 tcp])
 AT_CHECK([ovn-nbctl lb-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
-UUID                                    LB                  PROTO      VIP                      IPs
-<0>    lb0                 tcp        30.0.0.10:80             192.168.10.10:80,192.168.10.20:80
-<1>    lb1                 tcp        30.0.0.10:80             192.168.10.10:80,192.168.10.20:80
+UUID                                    LB                  PROTO      VIP             IPs
+<0>    lb0                 tcp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:80
+<1>    lb1                 tcp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:80
 ])
 
 dnl Update the VIP of the lb1.
 AT_CHECK([ovn-nbctl --may-exist lb-add lb1 30.0.0.10:80 192.168.10.10:80,192.168.10.20:8080])
 AT_CHECK([ovn-nbctl lb-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
-UUID                                    LB                  PROTO      VIP                      IPs
-<0>    lb0                 tcp        30.0.0.10:80             192.168.10.10:80,192.168.10.20:80
-<1>    lb1                 tcp        30.0.0.10:80             192.168.10.10:80,192.168.10.20:8080
+UUID                                    LB                  PROTO      VIP             IPs
+<0>    lb0                 tcp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:80
+<1>    lb1                 tcp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:8080
 ])
 
 AT_CHECK([ovn-nbctl --may-exist lb-add lb1 30.0.0.10:80 192.168.10.10:80,192.168.10.20:8080 udp])
 AT_CHECK([ovn-nbctl lb-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
-UUID                                    LB                  PROTO      VIP                      IPs
-<0>    lb0                 tcp        30.0.0.10:80             192.168.10.10:80,192.168.10.20:80
-<1>    lb1                 udp        30.0.0.10:80             192.168.10.10:80,192.168.10.20:8080
+UUID                                    LB                  PROTO      VIP             IPs
+<0>    lb0                 tcp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:80
+<1>    lb1                 udp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:8080
 ])
 
 dnl Config lb1 with another VIP.
 AT_CHECK([ovn-nbctl lb-add lb1 30.0.0.20:80 192.168.10.10:80 udp])
 AT_CHECK([ovn-nbctl lb-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
-UUID                                    LB                  PROTO      VIP                      IPs
-<0>    lb0                 tcp        30.0.0.10:80             192.168.10.10:80,192.168.10.20:80
-<1>    lb1                 udp        30.0.0.10:80             192.168.10.10:80,192.168.10.20:8080
-                                                            udp        30.0.0.20:80             192.168.10.10:80
+UUID                                    LB                  PROTO      VIP             IPs
+<0>    lb0                 tcp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:80
+<1>    lb1                 udp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:8080
+                                                            udp        30.0.0.20:80    192.168.10.10:80
 ])
 
 AT_CHECK([ovn-nbctl lb-del lb1 30.0.0.20:80])
 AT_CHECK([ovn-nbctl lb-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
-UUID                                    LB                  PROTO      VIP                      IPs
-<0>    lb0                 tcp        30.0.0.10:80             192.168.10.10:80,192.168.10.20:80
-<1>    lb1                 udp        30.0.0.10:80             192.168.10.10:80,192.168.10.20:8080
+UUID                                    LB                  PROTO      VIP             IPs
+<0>    lb0                 tcp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:80
+<1>    lb1                 udp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:8080
 ])
 
 dnl Add LBs whose vip is just an IP address.
 AT_CHECK([ovn-nbctl lb-add lb2 30.0.0.30 192.168.10.10])
 AT_CHECK([ovn-nbctl lb-add lb3 30.0.0.30 192.168.10.10])
 AT_CHECK([ovn-nbctl lb-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
-UUID                                    LB                  PROTO      VIP                      IPs
-<0>    lb0                 tcp        30.0.0.10:80             192.168.10.10:80,192.168.10.20:80
-<1>    lb1                 udp        30.0.0.10:80             192.168.10.10:80,192.168.10.20:8080
-<2>    lb2                 tcp/udp    30.0.0.30                192.168.10.10
-<3>    lb3                 tcp/udp    30.0.0.30                192.168.10.10
+UUID                                    LB                  PROTO      VIP             IPs
+<0>    lb0                 tcp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:80
+<1>    lb1                 udp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:8080
+<2>    lb2                 tcp/udp    30.0.0.30       192.168.10.10
+<3>    lb3                 tcp/udp    30.0.0.30       192.168.10.10
 ])
 AT_CHECK([ovn-nbctl lb-del lb2 30.0.0.30])
 AT_CHECK([ovn-nbctl lb-del lb3 30.0.0.30])
@@ -516,11 +512,11 @@ AT_CHECK([ovn-nbctl lb-del lb3 30.0.0.30])
 AT_CHECK([ovn-nbctl lb-add lb2 30.0.0.10:8080 192.168.10.10:80,192.168.10.20:80 tcp])
 AT_CHECK([ovn-nbctl --add-duplicate lb-add lb2 30.0.0.10:8080 192.168.10.10:80,192.168.10.20:80 tcp])
 AT_CHECK([ovn-nbctl lb-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
-UUID                                    LB                  PROTO      VIP                      IPs
-<0>    lb0                 tcp        30.0.0.10:80             192.168.10.10:80,192.168.10.20:80
-<1>    lb1                 udp        30.0.0.10:80             192.168.10.10:80,192.168.10.20:8080
-<2>    lb2                 tcp        30.0.0.10:8080           192.168.10.10:80,192.168.10.20:80
-<3>    lb2                 tcp        30.0.0.10:8080           192.168.10.10:80,192.168.10.20:80
+UUID                                    LB                  PROTO      VIP               IPs
+<0>    lb0                 tcp        30.0.0.10:80      192.168.10.10:80,192.168.10.20:80
+<1>    lb1                 udp        30.0.0.10:80      192.168.10.10:80,192.168.10.20:8080
+<2>    lb2                 tcp        30.0.0.10:8080    192.168.10.10:80,192.168.10.20:80
+<3>    lb2                 tcp        30.0.0.10:8080    192.168.10.10:80,192.168.10.20:80
 ])
 
 dnl If there are multiple load balancers with the same name, use a UUID to update/delete.
@@ -538,9 +534,9 @@ AT_CHECK([ovn-nbctl --may-exist lb-add lb1 30.0.0.10:9090 192.168.10.10:8080,192
 AT_CHECK([ovn-nbctl lb-del lb0 30.0.0.10:80])
 AT_CHECK([ovn-nbctl lb-del lb1])
 AT_CHECK([ovn-nbctl lb-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
-UUID                                    LB                  PROTO      VIP                      IPs
-<0>    lb2                 tcp        30.0.0.10:8080           192.168.10.10:80,192.168.10.20:80
-<1>    lb2                 tcp        30.0.0.10:8080           192.168.10.10:80,192.168.10.20:80
+UUID                                    LB                  PROTO      VIP               IPs
+<0>    lb2                 tcp        30.0.0.10:8080    192.168.10.10:80,192.168.10.20:80
+<1>    lb2                 tcp        30.0.0.10:8080    192.168.10.10:80,192.168.10.20:80
 ])
 
 dnl Add load balancer to logical switch.
@@ -557,17 +553,17 @@ AT_CHECK([ovn-nbctl ls-lb-add ls0 lb2], [1], [],
 AT_CHECK([ovn-nbctl ls-lb-add ls0 lb3])
 
 AT_CHECK([ovn-nbctl ls-lb-list ls0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
-UUID                                    LB                  PROTO      VIP                      IPs
-<0>    lb0                 tcp        30.0.0.10:80             192.168.10.10:80,192.168.10.20:80
-<1>    lb1                 udp        30.0.0.10:80             192.168.10.10:80,192.168.10.20:80
-<2>    lb3                 tcp/udp    30.0.0.10                192.168.10.10,192.168.10.20
+UUID                                    LB                  PROTO      VIP             IPs
+<0>    lb0                 tcp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:80
+<1>    lb1                 udp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:80
+<2>    lb3                 tcp/udp    30.0.0.10       192.168.10.10,192.168.10.20
 ])
 
 AT_CHECK([ovn-nbctl ls-lb-del ls0 lb0])
 AT_CHECK([ovn-nbctl ls-lb-list ls0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
-UUID                                    LB                  PROTO      VIP                      IPs
-<0>    lb1                 udp        30.0.0.10:80             192.168.10.10:80,192.168.10.20:80
-<1>    lb3                 tcp/udp    30.0.0.10                192.168.10.10,192.168.10.20
+UUID                                    LB                  PROTO      VIP             IPs
+<0>    lb1                 udp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:80
+<1>    lb3                 tcp/udp    30.0.0.10       192.168.10.10,192.168.10.20
 ])
 
 AT_CHECK([ovn-nbctl ls-lb-del ls0 lb1])
@@ -593,17 +589,17 @@ AT_CHECK([ovn-nbctl lr-lb-add lr0 lb2], [1], [],
 AT_CHECK([ovn-nbctl lr-lb-add lr0 lb3])
 
 AT_CHECK([ovn-nbctl lr-lb-list lr0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
-UUID                                    LB                  PROTO      VIP                      IPs
-<0>    lb0                 tcp        30.0.0.10:80             192.168.10.10:80,192.168.10.20:80
-<1>    lb1                 udp        30.0.0.10:80             192.168.10.10:80,192.168.10.20:80
-<2>    lb3                 tcp/udp    30.0.0.10                192.168.10.10,192.168.10.20
+UUID                                    LB                  PROTO      VIP             IPs
+<0>    lb0                 tcp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:80
+<1>    lb1                 udp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:80
+<2>    lb3                 tcp/udp    30.0.0.10       192.168.10.10,192.168.10.20
 ])
 
 AT_CHECK([ovn-nbctl lr-lb-del lr0 lb0])
 AT_CHECK([ovn-nbctl lr-lb-list lr0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
-UUID                                    LB                  PROTO      VIP                      IPs
-<0>    lb1                 udp        30.0.0.10:80             192.168.10.10:80,192.168.10.20:80
-<1>    lb3                 tcp/udp    30.0.0.10                192.168.10.10,192.168.10.20
+UUID                                    LB                  PROTO      VIP             IPs
+<0>    lb1                 udp        30.0.0.10:80    192.168.10.10:80,192.168.10.20:80
+<1>    lb3                 tcp/udp    30.0.0.10       192.168.10.10,192.168.10.20
 ])
 
 AT_CHECK([ovn-nbctl lr-lb-del lr0 lb1])
@@ -620,7 +616,270 @@ AT_CHECK([ovn-nbctl lr-lb-list lr0 | ${PERL} $srcdir/uuidfilt.pl], [0], [])
 
 OVN_NBCTL_TEST_STOP
 AT_CLEANUP
+dnl
+dnl ---------------------------------------------------------------------
 
+AT_SETUP([ovn-nbctl - LBs IPv6])
+OVN_NBCTL_TEST_START
+
+dnl A bunch of commands that should fail
+AT_CHECK([ovn-nbctl lb-add lb0 [[ae0f::10]]:80a [[fd0f::10]]:80,[[fd0f::20]]:80 tcp], [1], [],
+[ovn-nbctl: [[ae0f::10]]:80a: should be an IP address (or an IP address and a port number with : as a separator).
+])
+
+
+AT_CHECK([ovn-nbctl lb-add lb0 [[ae0f::10]]:a80 [[fd0f::10]]:80,[[fd0f::20]]:80 tcp], [1], [],
+[ovn-nbctl: [[ae0f::10]]:a80: should be an IP address (or an IP address and a port number with : as a separator).
+])
+
+
+AT_CHECK([ovn-nbctl lb-add lb0 [[ae0f::10]]: [[fd0f::10]]:80,[[fd0f::20]]:80 tcp], [1], [],
+[ovn-nbctl: [[ae0f::10]]:: should be an IP address (or an IP address and a port number with : as a separator).
+])
+
+
+AT_CHECK([ovn-nbctl lb-add lb0 [[ae0f::10]]:80 [[fd0f::10]]:80,fd0f::20 tcp], [1], [],
+[ovn-nbctl: fd0f::20: should be an IP address and a port number with : as a separator.
+])
+
+
+AT_CHECK([ovn-nbctl lb-add lb0 ae0f::10fff [[fd0f::10]]:80,fd0f::20 tcp], [1], [],
+[ovn-nbctl: ae0f::10fff: should be an IP address (or an IP address and a port number with : as a separator).
+])
+
+
+AT_CHECK([ovn-nbctl lb-add lb0 ae0f::10 [[fd0f::10]]:80,[[fd0f::20]]:80], [1], [],
+[ovn-nbctl: [[fd0f::10]]:80: should be an IP address.
+])
+
+
+AT_CHECK([ovn-nbctl lb-add lb0 ae0f::10 fd0f::10,[[fd0f::20]]:80], [1], [],
+[ovn-nbctl: [[fd0f::20]]:80: should be an IP address.
+])
+
+
+AT_CHECK([ovn-nbctl lb-add lb0 ae0f::10 [[fd0f::10]]:a80], [1], [],
+[ovn-nbctl: [[fd0f::10]]:a80: should be an IP address.
+])
+
+
+AT_CHECK([ovn-nbctl lb-add lb0 ae0f::10 [[fd0f::10]]:], [1], [],
+[ovn-nbctl: [[fd0f::10]]:: should be an IP address.
+])
+
+
+AT_CHECK([ovn-nbctl lb-add lb0 ae0f::10 fd0f::1001a], [1], [],
+[ovn-nbctl: fd0f::1001a: should be an IP address.
+])
+
+
+AT_CHECK([ovn-nbctl lb-add lb0 ae0f::10 fd0f::10 tcp], [1], [],
+[ovn-nbctl: Protocol is unnecessary when no port of vip is given.
+])
+
+
+AT_CHECK([ovn-nbctl lb-add lb0 ae0f::10 [[fd0f::10]]:900 tcp], [1], [],
+[ovn-nbctl: Protocol is unnecessary when no port of vip is given.
+])
+
+AT_CHECK([ovn-nbctl lb-add lb0 ae0f::10 192.168.10.10], [1], [],
+[ovn-nbctl: 192.168.10.10: IP address family is different from VIP ae0f::10.
+])
+
+AT_CHECK([ovn-nbctl lb-add lb0 ae0f::10 192.168.10.10], [1], [],
+[ovn-nbctl: 192.168.10.10: IP address family is different from VIP ae0f::10.
+])
+
+AT_CHECK([ovn-nbctl lb-add lb0 [[ae0f::10]]:80 192.168.10.10:80], [1], [],
+[ovn-nbctl: 192.168.10.10:80: IP address family is different from VIP [[ae0f::10]]:80.
+])
+
+AT_CHECK([ovn-nbctl lb-add lb0 30.0.0.10 ae0f::10], [1], [],
+[ovn-nbctl: ae0f::10: IP address family is different from VIP 30.0.0.10.
+])
+
+AT_CHECK([ovn-nbctl lb-add lb0 30.0.0.10:80 [[ae0f::10]]:80], [1], [],
+[ovn-nbctl: [[ae0f::10]]:80: IP address family is different from VIP 30.0.0.10:80.
+])
+
+AT_CHECK([ovn-nbctl lb-add lb0 ae0f::10 fd0f::10])
+AT_CHECK([ovn-nbctl lb-add lb0 ae0f:0000:0000:0000:0000:0000:0000:0010 fd0f::20],
+[1], [], [ovn-nbctl: lb0: a load balancer with this vip (ae0f::10) already exists
+])
+
+AT_CHECK([ovn-nbctl lb-del lb0])
+
+dnl Add ips to lb
+AT_CHECK([ovn-nbctl lb-add lb0 [[ae0f::10]]:80 ,,,[[fd0f::10]]:80,,,,,])
+AT_CHECK([ovn-nbctl lb-add lb1 [[ae0f::10]]:80 ,,,[[fd0f::10]]:80,,,,[[fd0f::20]]:80,,,,])
+AT_CHECK([ovn-nbctl lb-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+UUID                                    LB                  PROTO      VIP              IPs
+<0>    lb0                 tcp        [[ae0f::10]]:80    [[fd0f::10]]:80
+<1>    lb1                 tcp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:80
+])
+AT_CHECK([ovn-nbctl lb-del lb0])
+AT_CHECK([ovn-nbctl lb-del lb1])
+
+
+AT_CHECK([ovn-nbctl lb-add lb0 [[ae0f::10]]:80 [[fd0f::10]]:80,[[fd0f::20]]:80])
+AT_CHECK([ovn-nbctl lb-add lb1 [[ae0f::10]]:80 [[fd0f::10]]:80,[[fd0f::20]]:80 tcp])
+AT_CHECK([ovn-nbctl lb-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+UUID                                    LB                  PROTO      VIP              IPs
+<0>    lb0                 tcp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:80
+<1>    lb1                 tcp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:80
+])
+
+dnl Update the VIP of the lb1.
+AT_CHECK([ovn-nbctl --may-exist lb-add lb1 [[ae0f::10]]:80 [[fd0f::10]]:80,[[fd0f::20]]:8080])
+AT_CHECK([ovn-nbctl lb-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+UUID                                    LB                  PROTO      VIP              IPs
+<0>    lb0                 tcp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:80
+<1>    lb1                 tcp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:8080
+])
+
+AT_CHECK([ovn-nbctl --may-exist lb-add lb1 [[ae0f::10]]:80 [[fd0f::10]]:80,[[fd0f::20]]:8080 udp])
+AT_CHECK([ovn-nbctl lb-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+UUID                                    LB                  PROTO      VIP              IPs
+<0>    lb0                 tcp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:80
+<1>    lb1                 udp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:8080
+])
+
+dnl Config lb1 with another VIP.
+AT_CHECK([ovn-nbctl lb-add lb1 [[ae0f::20]]:80 [[fd0f::10]]:80 udp])
+AT_CHECK([ovn-nbctl lb-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+UUID                                    LB                  PROTO      VIP              IPs
+<0>    lb0                 tcp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:80
+<1>    lb1                 udp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:8080
+                                                            udp        [[ae0f::20]]:80    [[fd0f::10]]:80
+])
+
+AT_CHECK([ovn-nbctl lb-del lb1 [[ae0f::20]]:80])
+AT_CHECK([ovn-nbctl lb-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+UUID                                    LB                  PROTO      VIP              IPs
+<0>    lb0                 tcp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:80
+<1>    lb1                 udp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:8080
+])
+
+dnl Add LBs whose vip is just an IP address.
+AT_CHECK([ovn-nbctl lb-add lb2 ae0f::30 fd0f::10])
+AT_CHECK([ovn-nbctl lb-add lb3 ae0f::30 fd0f::10])
+AT_CHECK([ovn-nbctl lb-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+UUID                                    LB                  PROTO      VIP              IPs
+<0>    lb0                 tcp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:80
+<1>    lb1                 udp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:8080
+<2>    lb2                 tcp/udp    ae0f::30         fd0f::10
+<3>    lb3                 tcp/udp    ae0f::30         fd0f::10
+])
+AT_CHECK([ovn-nbctl lb-del lb2 ae0f::30])
+AT_CHECK([ovn-nbctl lb-del lb3 ae0f::30])
+
+AT_CHECK([ovn-nbctl lb-add lb2 [[ae0f::10]]:8080 [[fd0f::10]]:80,[[fd0f::20]]:80 tcp])
+AT_CHECK([ovn-nbctl --add-duplicate lb-add lb2 [[ae0f::10]]:8080 [[fd0f::10]]:80,[[fd0f::20]]:80 tcp])
+AT_CHECK([ovn-nbctl lb-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+UUID                                    LB                  PROTO      VIP                IPs
+<0>    lb0                 tcp        [[ae0f::10]]:80      [[fd0f::10]]:80,[[fd0f::20]]:80
+<1>    lb1                 udp        [[ae0f::10]]:80      [[fd0f::10]]:80,[[fd0f::20]]:8080
+<2>    lb2                 tcp        [[ae0f::10]]:8080    [[fd0f::10]]:80,[[fd0f::20]]:80
+<3>    lb2                 tcp        [[ae0f::10]]:8080    [[fd0f::10]]:80,[[fd0f::20]]:80
+])
+
+dnl If there are multiple load balancers with the same name, use a UUID to update/delete.
+AT_CHECK([ovn-nbctl lb-add lb2 [[ae0f::10]]:8080 [[fd0f::10]]:80,[[fd0f::20]]:80 tcp], [1], [],
+[ovn-nbctl: Multiple load balancers named 'lb2'.  Use a UUID.
+])
+
+AT_CHECK([ovn-nbctl lb-del lb2], [1], [],
+[ovn-nbctl: Multiple load balancers named 'lb2'.  Use a UUID.
+])
+
+AT_CHECK([ovn-nbctl --may-exist lb-add lb1 [[ae0f::10]]:80 [[fd0f::10]]:8080,[[fd0f::20]]:8080 udp])
+AT_CHECK([ovn-nbctl --may-exist lb-add lb1 [[ae0f::10]]:8080 [[fd0f::10]]:8080,[[fd0f::20]]:8080 udp])
+AT_CHECK([ovn-nbctl --may-exist lb-add lb1 [[ae0f::10]]:9090 [[fd0f::10]]:8080,[[fd0f::20]]:8080 udp])
+AT_CHECK([ovn-nbctl lb-del lb0 [[ae0f::10]]:80])
+AT_CHECK([ovn-nbctl lb-del lb1])
+AT_CHECK([ovn-nbctl lb-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+UUID                                    LB                  PROTO      VIP                IPs
+<0>    lb2                 tcp        [[ae0f::10]]:8080    [[fd0f::10]]:80,[[fd0f::20]]:80
+<1>    lb2                 tcp        [[ae0f::10]]:8080    [[fd0f::10]]:80,[[fd0f::20]]:80
+])
+
+dnl Add load balancer to logical switch.
+AT_CHECK([ovn-nbctl ls-add ls0])
+AT_CHECK([ovn-nbctl lb-add lb0 [[ae0f::10]]:80 [[fd0f::10]]:80,[[fd0f::20]]:80])
+AT_CHECK([ovn-nbctl lb-add lb1 [[ae0f::10]]:80 [[fd0f::10]]:80,[[fd0f::20]]:80 udp])
+AT_CHECK([ovn-nbctl lb-add lb3 ae0f::10 fd0f::10,fd0f::20])
+AT_CHECK([ovn-nbctl ls-lb-add ls0 lb0])
+AT_CHECK([ovn-nbctl ls-lb-add ls0 lb1])
+AT_CHECK([ovn-nbctl --may-exist ls-lb-add ls0 lb1])
+AT_CHECK([ovn-nbctl ls-lb-add ls0 lb2], [1], [],
+[ovn-nbctl: Multiple load balancers named 'lb2'.  Use a UUID.
+])
+AT_CHECK([ovn-nbctl ls-lb-add ls0 lb3])
+
+AT_CHECK([ovn-nbctl ls-lb-list ls0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+UUID                                    LB                  PROTO      VIP              IPs
+<0>    lb0                 tcp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:80
+<1>    lb1                 udp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:80
+<2>    lb3                 tcp/udp    ae0f::10         fd0f::10,fd0f::20
+])
+
+AT_CHECK([ovn-nbctl ls-lb-del ls0 lb0])
+AT_CHECK([ovn-nbctl ls-lb-list ls0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+UUID                                    LB                  PROTO      VIP              IPs
+<0>    lb1                 udp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:80
+<1>    lb3                 tcp/udp    ae0f::10         fd0f::10,fd0f::20
+])
+
+AT_CHECK([ovn-nbctl ls-lb-del ls0 lb1])
+AT_CHECK([ovn-nbctl ls-lb-del ls0 lb3])
+AT_CHECK([ovn-nbctl ls-lb-list ls0 | ${PERL} $srcdir/uuidfilt.pl], [0], [])
+AT_CHECK([ovn-nbctl --if-exists ls-lb-del ls0 lb1])
+
+dnl Remove all load balancers from logical switch.
+AT_CHECK([ovn-nbctl ls-lb-add ls0 lb0])
+AT_CHECK([ovn-nbctl ls-lb-add ls0 lb1])
+AT_CHECK([ovn-nbctl ls-lb-add ls0 lb3])
+AT_CHECK([ovn-nbctl ls-lb-del ls0])
+AT_CHECK([ovn-nbctl ls-lb-list ls0 | ${PERL} $srcdir/uuidfilt.pl], [0], [])
+
+dnl Add load balancer to logical router.
+AT_CHECK([ovn-nbctl lr-add lr0])
+AT_CHECK([ovn-nbctl lr-lb-add lr0 lb0])
+AT_CHECK([ovn-nbctl lr-lb-add lr0 lb1])
+AT_CHECK([ovn-nbctl --may-exist lr-lb-add lr0 lb1])
+AT_CHECK([ovn-nbctl lr-lb-add lr0 lb2], [1], [],
+[ovn-nbctl: Multiple load balancers named 'lb2'.  Use a UUID.
+])
+AT_CHECK([ovn-nbctl lr-lb-add lr0 lb3])
+
+AT_CHECK([ovn-nbctl lr-lb-list lr0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+UUID                                    LB                  PROTO      VIP              IPs
+<0>    lb0                 tcp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:80
+<1>    lb1                 udp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:80
+<2>    lb3                 tcp/udp    ae0f::10         fd0f::10,fd0f::20
+])
+
+AT_CHECK([ovn-nbctl lr-lb-del lr0 lb0])
+AT_CHECK([ovn-nbctl lr-lb-list lr0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+UUID                                    LB                  PROTO      VIP              IPs
+<0>    lb1                 udp        [[ae0f::10]]:80    [[fd0f::10]]:80,[[fd0f::20]]:80
+<1>    lb3                 tcp/udp    ae0f::10         fd0f::10,fd0f::20
+])
+
+AT_CHECK([ovn-nbctl lr-lb-del lr0 lb1])
+AT_CHECK([ovn-nbctl lr-lb-del lr0 lb3])
+AT_CHECK([ovn-nbctl lr-lb-list lr0 | ${PERL} $srcdir/uuidfilt.pl], [0], [])
+AT_CHECK([ovn-nbctl --if-exists lr-lb-del lr0 lb1])
+
+dnl Remove all load balancers from logical router.
+AT_CHECK([ovn-nbctl lr-lb-add lr0 lb0])
+AT_CHECK([ovn-nbctl lr-lb-add lr0 lb1])
+AT_CHECK([ovn-nbctl lr-lb-add lr0 lb3])
+AT_CHECK([ovn-nbctl lr-lb-del lr0])
+AT_CHECK([ovn-nbctl lr-lb-list lr0 | ${PERL} $srcdir/uuidfilt.pl], [0], [])
+
+OVN_NBCTL_TEST_STOP
+AT_CLEANUP
 dnl ---------------------------------------------------------------------
 
 AT_SETUP([ovn-nbctl - basic logical router commands])
