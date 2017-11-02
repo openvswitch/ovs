@@ -68,8 +68,8 @@ struct simap;
     OVNACT(PUT_ARP,           ovnact_put_mac_bind)    \
     OVNACT(GET_ND,            ovnact_get_mac_bind)    \
     OVNACT(PUT_ND,            ovnact_put_mac_bind)    \
-    OVNACT(PUT_DHCPV4_OPTS,   ovnact_put_dhcp_opts)   \
-    OVNACT(PUT_DHCPV6_OPTS,   ovnact_put_dhcp_opts)   \
+    OVNACT(PUT_DHCPV4_OPTS,   ovnact_put_opts)        \
+    OVNACT(PUT_DHCPV6_OPTS,   ovnact_put_opts)        \
     OVNACT(SET_QUEUE,         ovnact_set_queue)       \
     OVNACT(DNS_LOOKUP,        ovnact_dns_lookup)      \
     OVNACT(LOG,               ovnact_log)
@@ -238,16 +238,16 @@ struct ovnact_put_mac_bind {
     struct expr_field mac;      /* 48-bit Ethernet address. */
 };
 
-struct ovnact_dhcp_option {
-    const struct dhcp_opts_map *option;
+struct ovnact_gen_option {
+    const struct gen_opts_map *option;
     struct expr_constant_set value;
 };
 
 /* OVNACT_PUT_DHCPV4_OPTS, OVNACT_PUT_DHCPV6_OPTS. */
-struct ovnact_put_dhcp_opts {
+struct ovnact_put_opts {
     struct ovnact ovnact;
     struct expr_field dst;      /* 1-bit destination field. */
-    struct ovnact_dhcp_option *options;
+    struct ovnact_gen_option *options;
     size_t n_options;
 };
 
@@ -436,10 +436,10 @@ struct ovnact_parse_params {
      * expr_parse()). */
     const struct shash *symtab;
 
-    /* hmap of 'struct dhcp_opts_map' to support 'put_dhcp_opts' action */
+    /* hmap of 'struct gen_opts_map' to support 'put_dhcp_opts' action */
     const struct hmap *dhcp_opts;
 
-    /* hmap of 'struct dhcp_opts_map'  to support 'put_dhcpv6_opts' action */
+    /* hmap of 'struct gen_opts_map'  to support 'put_dhcpv6_opts' action */
     const struct hmap *dhcpv6_opts;
 
     /* Each OVN flow exists in a logical table within a logical pipeline.

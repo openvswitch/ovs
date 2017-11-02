@@ -41,7 +41,7 @@
 #include "ovn/lex.h"
 #include "ovn/lib/acl-log.h"
 #include "ovn/lib/logical-fields.h"
-#include "ovn/lib/ovn-dhcp.h"
+#include "ovn/lib/ovn-l7.h"
 #include "ovn/lib/ovn-util.h"
 #include "poll-loop.h"
 #include "openvswitch/rconn.h"

@@ -25,7 +25,7 @@
 #include "ovn-controller.h"
 #include "ovn/actions.h"
 #include "ovn/expr.h"
-#include "ovn/lib/ovn-dhcp.h"
+#include "ovn/lib/ovn-l7.h"
 #include "ovn/lib/ovn-sb-idl.h"
 #include "packets.h"
 #include "physical.h"

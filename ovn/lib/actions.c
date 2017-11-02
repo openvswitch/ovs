@@ -20,7 +20,7 @@
 #include "bitmap.h"
 #include "byte-order.h"
 #include "compiler.h"
-#include "ovn-dhcp.h"
+#include "ovn-l7.h"
 #include "hash.h"
 #include "logical-fields.h"
 #include "nx-match.h"
@@ -1432,19 +1432,17 @@ ovnact_put_mac_bind_free(struct ovnact_put_mac_bind *put_mac OVS_UNUSED)
 }
 
 static void
-parse_dhcp_opt(struct action_context *ctx, struct ovnact_dhcp_option *o,
-               bool v6)
+parse_gen_opt(struct action_context *ctx, struct ovnact_gen_option *o,
+              const struct hmap *gen_opts, const char *opts_type)
 {
     if (ctx->lexer->token.type != LEX_T_ID) {
         lexer_syntax_error(ctx->lexer, NULL);
         return;
     }
 
-    const char *name = v6 ? "DHCPv6" : "DHCPv4";
-    const struct hmap *map = v6 ? ctx->pp->dhcpv6_opts : ctx->pp->dhcp_opts;
-    o->option = map ? dhcp_opts_find(map, ctx->lexer->token.s) : NULL;
+    o->option = gen_opts ? gen_opts_find(gen_opts, ctx->lexer->token.s) : NULL;
     if (!o->option) {
-        lexer_syntax_error(ctx->lexer, "expecting %s option name", name);
+        lexer_syntax_error(ctx->lexer, "expecting %s option name", opts_type);
         return;
     }
     lexer_get(ctx->lexer);
@@ -1461,22 +1459,22 @@ parse_dhcp_opt(struct action_context *ctx, struct ovnact_dhcp_option *o,
     if (!strcmp(o->option->type, "str")) {
         if (o->value.type != EXPR_C_STRING) {
             lexer_error(ctx->lexer, "%s option %s requires string value.",
-                        name, o->option->name);
+                        opts_type, o->option->name);
             return;
         }
     } else {
         if (o->value.type != EXPR_C_INTEGER) {
             lexer_error(ctx->lexer, "%s option %s requires numeric value.",
-                        name, o->option->name);
+                        opts_type, o->option->name);
             return;
         }
     }
 }
 
-static const struct ovnact_dhcp_option *
-find_offerip(const struct ovnact_dhcp_option *options, size_t n)
+static const struct ovnact_gen_option *
+find_offerip(const struct ovnact_gen_option *options, size_t n)
 {
-    for (const struct ovnact_dhcp_option *o = options; o < &options[n]; o++) {
+    for (const struct ovnact_gen_option *o = options; o < &options[n]; o++) {
         if (o->option->code == 0) {
             return o;
         }
@@ -1485,21 +1483,18 @@ find_offerip(const struct ovnact_dhcp_option *options, size_t n)
 }
 
 static void
-free_dhcp_options(struct ovnact_dhcp_option *options, size_t n)
+free_gen_options(struct ovnact_gen_option *options, size_t n)
 {
-    for (struct ovnact_dhcp_option *o = options; o < &options[n]; o++) {
+    for (struct ovnact_gen_option *o = options; o < &options[n]; o++) {
         expr_constant_set_destroy(&o->value);
     }
     free(options);
 }
 
-/* Parses the "put_dhcp_opts" and "put_dhcpv6_opts" actions.
- *
- * The caller has already consumed "<dst> =", so this just parses the rest. */
 static void
-parse_put_dhcp_opts(struct action_context *ctx,
-                    const struct expr_field *dst,
-                    struct ovnact_put_dhcp_opts *pdo)
+parse_put_opts(struct action_context *ctx, const struct expr_field *dst,
+               struct ovnact_put_opts *po, const struct hmap *gen_opts,
+               const char *opts_type)
 {
     lexer_get(ctx->lexer); /* Skip put_dhcp[v6]_opts. */
     lexer_get(ctx->lexer); /* Skip '('. */
@@ -1511,27 +1506,44 @@ parse_put_dhcp_opts(struct action_context *ctx,
         free(error);
         return;
     }
-    pdo->dst = *dst;
+    po->dst = *dst;
 
     size_t allocated_options = 0;
     while (!lexer_match(ctx->lexer, LEX_T_RPAREN)) {
-        if (pdo->n_options >= allocated_options) {
-            pdo->options = x2nrealloc(pdo->options, &allocated_options,
-                                      sizeof *pdo->options);
+        if (po->n_options >= allocated_options) {
+            po->options = x2nrealloc(po->options, &allocated_options,
+                                     sizeof *po->options);
         }
 
-        struct ovnact_dhcp_option *o = &pdo->options[pdo->n_options++];
+        struct ovnact_gen_option *o = &po->options[po->n_options++];
         memset(o, 0, sizeof *o);
-        parse_dhcp_opt(ctx, o, pdo->ovnact.type == OVNACT_PUT_DHCPV6_OPTS);
+        parse_gen_opt(ctx, o, gen_opts, opts_type);
         if (ctx->lexer->error) {
             return;
         }
 
         lexer_match(ctx->lexer, LEX_T_COMMA);
     }
+}
 
-    if (pdo->ovnact.type == OVNACT_PUT_DHCPV4_OPTS
-        && !find_offerip(pdo->options, pdo->n_options)) {
+/* Parses the "put_dhcp_opts" and "put_dhcpv6_opts" actions.
+ *
+ * The caller has already consumed "<dst> =", so this just parses the rest. */
+static void
+parse_put_dhcp_opts(struct action_context *ctx,
+                    const struct expr_field *dst,
+                    struct ovnact_put_opts *po)
+{
+    const struct hmap *dhcp_opts =
+        (po->ovnact.type == OVNACT_PUT_DHCPV6_OPTS) ?
+            ctx->pp->dhcpv6_opts : ctx->pp->dhcp_opts;
+    const char *opts_type =
+        (po->ovnact.type == OVNACT_PUT_DHCPV6_OPTS) ? "DHCPv6" : "DHCPv4";
+
+    parse_put_opts(ctx, dst, po, dhcp_opts, opts_type);
+
+    if (!ctx->lexer->error && po->ovnact.type == OVNACT_PUT_DHCPV4_OPTS
+        && !find_offerip(po->options, po->n_options)) {
         lexer_error(ctx->lexer,
                     "put_dhcp_opts requires offerip to be specified.");
         return;
@@ -1539,12 +1551,12 @@ parse_put_dhcp_opts(struct action_context *ctx,
 }
 
 static void
-format_put_dhcp_opts(const char *name,
-                     const struct ovnact_put_dhcp_opts *pdo, struct ds *s)
+format_put_opts(const char *name, const struct ovnact_put_opts *pdo,
+                struct ds *s)
 {
     expr_field_format(&pdo->dst, s);
     ds_put_format(s, " = %s(", name);
-    for (const struct ovnact_dhcp_option *o = pdo->options;
+    for (const struct ovnact_gen_option *o = pdo->options;
          o < &pdo->options[pdo->n_options]; o++) {
         if (o != pdo->options) {
             ds_put_cstr(s, ", ");
@@ -1556,19 +1568,19 @@ format_put_dhcp_opts(const char *name,
 }
 
 static void
-format_PUT_DHCPV4_OPTS(const struct ovnact_put_dhcp_opts *pdo, struct ds *s)
+format_PUT_DHCPV4_OPTS(const struct ovnact_put_opts *pdo, struct ds *s)
 {
-    format_put_dhcp_opts("put_dhcp_opts", pdo, s);
+    format_put_opts("put_dhcp_opts", pdo, s);
 }
 
 static void
-format_PUT_DHCPV6_OPTS(const struct ovnact_put_dhcp_opts *pdo, struct ds *s)
+format_PUT_DHCPV6_OPTS(const struct ovnact_put_opts *pdo, struct ds *s)
 {
-    format_put_dhcp_opts("put_dhcpv6_opts", pdo, s);
+    format_put_opts("put_dhcpv6_opts", pdo, s);
 }
 
 static void
-encode_put_dhcpv4_option(const struct ovnact_dhcp_option *o,
+encode_put_dhcpv4_option(const struct ovnact_gen_option *o,
                          struct ofpbuf *ofpacts)
 {
     uint8_t *opt_header = ofpbuf_put_zeros(ofpacts, 2);
@@ -1644,7 +1656,7 @@ encode_put_dhcpv4_option(const struct ovnact_dhcp_option *o,
 }
 
 static void
-encode_put_dhcpv6_option(const struct ovnact_dhcp_option *o,
+encode_put_dhcpv6_option(const struct ovnact_gen_option *o,
                          struct ofpbuf *ofpacts)
 {
     struct dhcp_opt6_header *opt = ofpbuf_put_uninit(ofpacts, sizeof *opt);
@@ -1672,7 +1684,7 @@ encode_put_dhcpv6_option(const struct ovnact_dhcp_option *o,
 }
 
 static void
-encode_PUT_DHCPV4_OPTS(const struct ovnact_put_dhcp_opts *pdo,
+encode_PUT_DHCPV4_OPTS(const struct ovnact_put_opts *pdo,
                        const struct ovnact_encode_params *ep OVS_UNUSED,
                        struct ofpbuf *ofpacts)
 {
@@ -1687,12 +1699,12 @@ encode_PUT_DHCPV4_OPTS(const struct ovnact_put_dhcp_opts *pdo,
     /* Encode the offerip option first, because it's a special case and needs
      * to be first in the actual DHCP response, and then encode the rest
      * (skipping offerip the second time around). */
-    const struct ovnact_dhcp_option *offerip_opt = find_offerip(
+    const struct ovnact_gen_option *offerip_opt = find_offerip(
         pdo->options, pdo->n_options);
     ovs_be32 offerip = offerip_opt->value.values[0].value.ipv4;
     ofpbuf_put(ofpacts, &offerip, sizeof offerip);
 
-    for (const struct ovnact_dhcp_option *o = pdo->options;
+    for (const struct ovnact_gen_option *o = pdo->options;
          o < &pdo->options[pdo->n_options]; o++) {
         if (o != offerip_opt) {
             encode_put_dhcpv4_option(o, ofpacts);
@@ -1703,7 +1715,7 @@ encode_PUT_DHCPV4_OPTS(const struct ovnact_put_dhcp_opts *pdo,
 }
 
 static void
-encode_PUT_DHCPV6_OPTS(const struct ovnact_put_dhcp_opts *pdo,
+encode_PUT_DHCPV6_OPTS(const struct ovnact_put_opts *pdo,
                        const struct ovnact_encode_params *ep OVS_UNUSED,
                        struct ofpbuf *ofpacts)
 {
@@ -1715,7 +1727,7 @@ encode_PUT_DHCPV6_OPTS(const struct ovnact_put_dhcp_opts *pdo,
     ovs_be32 ofs = htonl(dst.ofs);
     ofpbuf_put(ofpacts, &ofs, sizeof ofs);
 
-    for (const struct ovnact_dhcp_option *o = pdo->options;
+    for (const struct ovnact_gen_option *o = pdo->options;
          o < &pdo->options[pdo->n_options]; o++) {
         encode_put_dhcpv6_option(o, ofpacts);
     }
@@ -1724,9 +1736,9 @@ encode_PUT_DHCPV6_OPTS(const struct ovnact_put_dhcp_opts *pdo,
 }
 
 static void
-ovnact_put_dhcp_opts_free(struct ovnact_put_dhcp_opts *pdo)
+ovnact_put_opts_free(struct ovnact_put_opts *pdo)
 {
-    free_dhcp_options(pdo->options, pdo->n_options);
+    free_gen_options(pdo->options, pdo->n_options);
 }
 
 static void

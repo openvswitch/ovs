@@ -30,7 +30,7 @@
 #include "ovn/lex.h"
 #include "ovn/lib/chassis-index.h"
 #include "ovn/lib/logical-fields.h"
-#include "ovn/lib/ovn-dhcp.h"
+#include "ovn/lib/ovn-l7.h"
 #include "ovn/lib/ovn-nb-idl.h"
 #include "ovn/lib/ovn-sb-idl.h"
 #include "ovn/lib/ovn-util.h"
@@ -6111,7 +6111,7 @@ update_logical_port_status(struct northd_context *ctx)
     hmap_destroy(&lports_hmap);
 }
 
-static struct dhcp_opts_map supported_dhcp_opts[] = {
+static struct gen_opts_map supported_dhcp_opts[] = {
     OFFERIP,
     DHCP_OPT_NETMASK,
     DHCP_OPT_ROUTER,
@@ -6138,7 +6138,7 @@ static struct dhcp_opts_map supported_dhcp_opts[] = {
     DHCP_OPT_T2
 };
 
-static struct dhcp_opts_map supported_dhcpv6_opts[] = {
+static struct gen_opts_map supported_dhcpv6_opts[] = {
     DHCPV6_OPT_IA_ADDR,
     DHCPV6_OPT_SERVER_ID,
     DHCPV6_OPT_DOMAIN_SEARCH,
@@ -6157,7 +6157,7 @@ check_and_add_supported_dhcp_opts_to_sb_db(struct northd_context *ctx)
 
     const struct sbrec_dhcp_options *opt_row, *opt_row_next;
     SBREC_DHCP_OPTIONS_FOR_EACH_SAFE(opt_row, opt_row_next, ctx->ovnsb_idl) {
-        struct dhcp_opts_map *dhcp_opt =
+        struct gen_opts_map *dhcp_opt =
             dhcp_opts_find(&dhcp_opts_to_add, opt_row->name);
         if (dhcp_opt) {
             hmap_remove(&dhcp_opts_to_add, &dhcp_opt->hmap_node);
@@ -6166,7 +6166,7 @@ check_and_add_supported_dhcp_opts_to_sb_db(struct northd_context *ctx)
         }
     }
 
-    struct dhcp_opts_map *opt;
+    struct gen_opts_map *opt;
     HMAP_FOR_EACH (opt, hmap_node, &dhcp_opts_to_add) {
         struct sbrec_dhcp_options *sbrec_dhcp_option =
             sbrec_dhcp_options_insert(ctx->ovnsb_txn);
@@ -6190,7 +6190,7 @@ check_and_add_supported_dhcpv6_opts_to_sb_db(struct northd_context *ctx)
 
     const struct sbrec_dhcpv6_options *opt_row, *opt_row_next;
     SBREC_DHCPV6_OPTIONS_FOR_EACH_SAFE(opt_row, opt_row_next, ctx->ovnsb_idl) {
-        struct dhcp_opts_map *dhcp_opt =
+        struct gen_opts_map *dhcp_opt =
             dhcp_opts_find(&dhcpv6_opts_to_add, opt_row->name);
         if (dhcp_opt) {
             hmap_remove(&dhcpv6_opts_to_add, &dhcp_opt->hmap_node);
@@ -6199,7 +6199,7 @@ check_and_add_supported_dhcpv6_opts_to_sb_db(struct northd_context *ctx)
         }
     }
 
-    struct dhcp_opts_map *opt;
+    struct gen_opts_map *opt;
     HMAP_FOR_EACH(opt, hmap_node, &dhcpv6_opts_to_add) {
         struct sbrec_dhcpv6_options *sbrec_dhcpv6_option =
             sbrec_dhcpv6_options_insert(ctx->ovnsb_txn);

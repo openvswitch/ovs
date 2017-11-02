@@ -21,7 +21,8 @@
 #include "openvswitch/hmap.h"
 #include "hash.h"
 
-struct dhcp_opts_map {
+/* Generic options map which is used to store dhcpv4 opts and dhcpv6 opts. */
+struct gen_opts_map {
     struct hmap_node hmap_node;
     char *name;
     char *type;
@@ -68,45 +69,69 @@ struct dhcp_opts_map {
 #define DHCP_OPT_T2 DHCP_OPTION("T2", 59, "uint32")
 
 static inline uint32_t
-dhcp_opt_hash(char *opt_name)
+gen_opt_hash(char *opt_name)
 {
     return hash_string(opt_name, 0);
 }
 
-static inline struct dhcp_opts_map *
-dhcp_opts_find(const struct hmap *dhcp_opts, char *opt_name)
+static inline uint32_t
+dhcp_opt_hash(char *opt_name)
 {
-    struct dhcp_opts_map *dhcp_opt;
-    HMAP_FOR_EACH_WITH_HASH (dhcp_opt, hmap_node, dhcp_opt_hash(opt_name),
-                             dhcp_opts) {
-        if (!strcmp(dhcp_opt->name, opt_name)) {
-            return dhcp_opt;
+    return gen_opt_hash(opt_name);
+}
+
+static inline struct gen_opts_map *
+gen_opts_find(const struct hmap *gen_opts, char *opt_name)
+{
+    struct gen_opts_map *gen_opt;
+    HMAP_FOR_EACH_WITH_HASH (gen_opt, hmap_node, gen_opt_hash(opt_name),
+                             gen_opts) {
+        if (!strcmp(gen_opt->name, opt_name)) {
+            return gen_opt;
         }
     }
 
     return NULL;
 }
 
+static inline struct gen_opts_map *
+dhcp_opts_find(const struct hmap *dhcp_opts, char *opt_name)
+{
+    return gen_opts_find(dhcp_opts, opt_name);
+}
+
+static inline void
+gen_opt_add(struct hmap *gen_opts, char *opt_name, size_t code, char *type)
+{
+    struct gen_opts_map *gen_opt = xzalloc(sizeof *gen_opt);
+    gen_opt->name = xstrdup(opt_name);
+    gen_opt->code = code;
+    gen_opt->type = xstrdup(type);
+    hmap_insert(gen_opts, &gen_opt->hmap_node, gen_opt_hash(opt_name));
+}
+
 static inline void
 dhcp_opt_add(struct hmap *dhcp_opts, char *opt_name, size_t code, char *type)
 {
-    struct dhcp_opts_map *dhcp_opt = xzalloc(sizeof *dhcp_opt);
-    dhcp_opt->name = xstrdup(opt_name);
-    dhcp_opt->code = code;
-    dhcp_opt->type = xstrdup(type);
-    hmap_insert(dhcp_opts, &dhcp_opt->hmap_node, dhcp_opt_hash(opt_name));
+    gen_opt_add(dhcp_opts, opt_name, code, type);
+}
+
+static inline void
+gen_opts_destroy(struct hmap *gen_opts)
+{
+    struct gen_opts_map *gen_opt;
+    HMAP_FOR_EACH_POP (gen_opt, hmap_node, gen_opts) {
+        free(gen_opt->name);
+        free(gen_opt->type);
+        free(gen_opt);
+    }
+    hmap_destroy(gen_opts);
 }
 
 static inline void
 dhcp_opts_destroy(struct hmap *dhcp_opts)
 {
-    struct dhcp_opts_map *dhcp_opt;
-    HMAP_FOR_EACH_POP(dhcp_opt, hmap_node, dhcp_opts) {
-        free(dhcp_opt->name);
-        free(dhcp_opt->type);
-        free(dhcp_opt);
-    }
-    hmap_destroy(dhcp_opts);
+    gen_opts_destroy(dhcp_opts);
 }
 
 /* Used in the OpenFlow PACKET_IN userdata */

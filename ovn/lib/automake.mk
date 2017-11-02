@@ -11,7 +11,7 @@ ovn_lib_libovn_la_SOURCES = \
 	ovn/lib/chassis-index.h \
 	ovn/lib/expr.c \
 	ovn/lib/lex.c \
-	ovn/lib/ovn-dhcp.h \
+	ovn/lib/ovn-l7.h \
 	ovn/lib/ovn-util.c \
 	ovn/lib/ovn-util.h \
 	ovn/lib/logical-fields.c \
