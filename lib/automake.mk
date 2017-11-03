@@ -206,7 +206,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/perf-counter.h \
 	lib/perf-counter.c \
 	lib/poll-loop.c \
-	lib/poll-loop.h \
 	lib/process.c \
 	lib/process.h \
 	lib/pvector.c \
