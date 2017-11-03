@@ -220,6 +220,7 @@ Markos Chandras                 mchandras@suse.de
 Martin Casado                   casado@nicira.com
 Martino Fornasa                 mf@fornasa.it
 Maryam Tahhan                   maryam.tahhan@intel.com
+Matteo Croce                    mcroce@redhat.com
 Mauricio Vásquez                mauricio.vasquezbernal@studenti.polito.it
 Maxime Coquelin                 maxime.coquelin@redhat.com
 Mehak Mahajan                   mmahajan@nicira.com
