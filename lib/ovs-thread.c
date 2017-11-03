@@ -29,7 +29,7 @@
 #include "openvswitch/list.h"
 #include "netdev-dpdk.h"
 #include "ovs-rcu.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "seq.h"
 #include "socket-util.h"
 #include "util.h"

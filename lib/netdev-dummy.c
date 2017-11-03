@@ -35,7 +35,7 @@
 #include "ovs-atomic.h"
 #include "packets.h"
 #include "pcap-file.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "openvswitch/shash.h"
 #include "sset.h"
 #include "stream.h"

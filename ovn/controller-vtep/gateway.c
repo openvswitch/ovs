@@ -16,7 +16,7 @@
 #include <config.h>
 #include "gateway.h"
 
-#include "lib/poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "lib/simap.h"
 #include "lib/sset.h"
 #include "lib/util.h"

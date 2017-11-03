@@ -27,7 +27,7 @@
 #include "dirs.h"
 #include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "stream.h"
 #include "stream-ssl.h"
 #include "unixctl.h"

@@ -29,7 +29,7 @@
 #include "ofproto-dpif.h"
 #include "dp-packet.h"
 #include "packets.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "sset.h"
 #include "util.h"
 #include "timeval.h"

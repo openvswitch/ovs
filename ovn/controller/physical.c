@@ -21,7 +21,7 @@
 #include "lflow.h"
 #include "lport.h"
 #include "lib/bundle.h"
-#include "lib/poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "lib/uuid.h"
 #include "ofctrl.h"
 #include "openvswitch/list.h"

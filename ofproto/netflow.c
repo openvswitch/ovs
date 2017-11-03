@@ -29,7 +29,7 @@
 #include "ofproto.h"
 #include "ofproto/netflow.h"
 #include "packets.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "socket-util.h"
 #include "timeval.h"
 #include "util.h"

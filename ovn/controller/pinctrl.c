@@ -43,7 +43,7 @@
 #include "ovn/lib/logical-fields.h"
 #include "ovn/lib/ovn-l7.h"
 #include "ovn/lib/ovn-util.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "openvswitch/rconn.h"
 #include "socket-util.h"
 #include "timeval.h"

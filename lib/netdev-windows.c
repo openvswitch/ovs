@@ -26,7 +26,7 @@
 #include "netdev-provider.h"
 #include "openvswitch/ofpbuf.h"
 #include "packets.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "openvswitch/shash.h"
 #include "svec.h"
 #include "openvswitch/vlog.h"

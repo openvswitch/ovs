@@ -18,7 +18,7 @@
 
 #include "timer.h"
 
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "timeval.h"
 
 /* Returns the number of milliseconds until 'timer' expires. */

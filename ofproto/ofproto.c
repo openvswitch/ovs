@@ -50,7 +50,7 @@
 #include "ovs-rcu.h"
 #include "packets.h"
 #include "pinsched.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "random.h"
 #include "seq.h"
 #include "openvswitch/shash.h"

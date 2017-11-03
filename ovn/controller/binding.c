@@ -20,7 +20,7 @@
 #include "lport.h"
 
 #include "lib/bitmap.h"
-#include "lib/poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "lib/sset.h"
 #include "lib/util.h"
 #include "lib/netdev.h"

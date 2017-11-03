@@ -24,7 +24,7 @@
 #include "openvswitch/json.h"
 #include "jsonrpc.h"
 #include "openvswitch/list.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "openvswitch/shash.h"
 #include "stream.h"
 #include "stream-provider.h"

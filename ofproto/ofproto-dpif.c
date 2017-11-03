@@ -62,7 +62,7 @@
 #include "ovs-lldp.h"
 #include "ovs-rcu.h"
 #include "ovs-router.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "seq.h"
 #include "simap.h"
 #include "smap.h"

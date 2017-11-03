@@ -43,7 +43,7 @@
 #include "ovsdb/table.h"
 #include "ovsdb/transaction.h"
 #include "ovsdb/trigger.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "stream.h"
 #include "svec.h"
 #include "tests/idltest.h"

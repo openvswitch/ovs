@@ -36,7 +36,7 @@
 #include "ovn/lib/ovn-util.h"
 #include "ovn/actions.h"
 #include "packets.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "smap.h"
 #include "sset.h"
 #include "stream.h"

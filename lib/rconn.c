@@ -27,7 +27,7 @@
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "sat-math.h"
 #include "stream.h"
 #include "timeval.h"

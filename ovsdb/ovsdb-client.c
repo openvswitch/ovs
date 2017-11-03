@@ -38,7 +38,7 @@
 #include "ovsdb.h"
 #include "ovsdb-data.h"
 #include "ovsdb-error.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "sort.h"
 #include "svec.h"
 #include "stream.h"

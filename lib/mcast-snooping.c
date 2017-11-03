@@ -27,7 +27,7 @@
 #include "coverage.h"
 #include "hash.h"
 #include "openvswitch/list.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "timeval.h"
 #include "entropy.h"
 #include "unaligned.h"

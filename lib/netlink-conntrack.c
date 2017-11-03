@@ -32,7 +32,7 @@
 #include "netlink-socket.h"
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"

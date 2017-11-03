@@ -30,7 +30,7 @@
 #include "fatal-signal.h"
 #include "openvswitch/list.h"
 #include "ovs-thread.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "signals.h"
 #include "socket-util.h"
 #include "timeval.h"

@@ -36,7 +36,7 @@
 #include "ovsdb-error.h"
 #include "ovsdb-idl-provider.h"
 #include "ovsdb-parser.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "openvswitch/shash.h"
 #include "skiplist.h"
 #include "sset.h"

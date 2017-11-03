@@ -29,7 +29,7 @@
 #include "ovsdb-parser.h"
 #include "ovsdb.h"
 #include "condition.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "reconnect.h"
 #include "row.h"
 #include "server.h"

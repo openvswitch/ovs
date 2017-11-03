@@ -27,7 +27,7 @@
 
 #include "coverage.h"
 #include "socket-util.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(rtbsd);

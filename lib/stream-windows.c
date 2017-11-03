@@ -20,7 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "dirs.h"
 #include "fatal-signal.h"
 #include "util.h"

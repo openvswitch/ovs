@@ -33,8 +33,13 @@
 #ifndef POLL_LOOP_H
 #define POLL_LOOP_H 1
 
+#ifndef _WIN32
 #include <poll.h>
-#include "util.h"
+#endif
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #ifdef  __cplusplus
 extern "C" {

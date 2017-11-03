@@ -39,7 +39,7 @@
 #include "openvswitch/ofpbuf.h"
 #include "ovs-rcu.h"
 #include "ovs-thread.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "openvswitch/shash.h"
 #include "process.h"
 #include "smap.h"

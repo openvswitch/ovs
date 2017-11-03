@@ -28,7 +28,7 @@
 #include "openvswitch/ofpbuf.h"
 #include "ovstest.h"
 #include "packets.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "socket-util.h"
 #include "unixctl.h"
 #include "util.h"

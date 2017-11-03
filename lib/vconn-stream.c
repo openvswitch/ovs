@@ -24,7 +24,7 @@
 #include "fatal-signal.h"
 #include "openvswitch/ofpbuf.h"
 #include "openflow/openflow.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "socket-util.h"
 #include "stream.h"
 #include "util.h"

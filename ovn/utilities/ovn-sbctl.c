@@ -44,7 +44,7 @@
 #include "ovn/lib/ovn-util.h"
 #include "ovsdb-data.h"
 #include "ovsdb-idl.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "process.h"
 #include "sset.h"
 #include "stream-ssl.h"

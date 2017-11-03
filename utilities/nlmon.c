@@ -26,7 +26,7 @@
 #include "netlink.h"
 #include "netlink-socket.h"
 #include "openvswitch/ofpbuf.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "timeval.h"
 #include "util.h"
 #include "openvswitch/vlog.h"

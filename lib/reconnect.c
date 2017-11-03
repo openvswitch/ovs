@@ -19,7 +19,7 @@
 
 #include <stdlib.h>
 
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "util.h"
 #include "openvswitch/vlog.h"
 

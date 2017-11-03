@@ -31,7 +31,7 @@
 #include "odp-netlink.h"
 #include "openvswitch/ofpbuf.h"
 #include "ovs-thread.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "seq.h"
 #include "socket-util.h"
 #include "util.h"

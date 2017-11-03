@@ -39,7 +39,7 @@
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "openvswitch/rconn.h"
 #include "openvswitch/shash.h"
 #include "simap.h"

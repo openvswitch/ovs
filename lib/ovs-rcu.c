@@ -21,7 +21,7 @@
 #include "guarded-list.h"
 #include "openvswitch/list.h"
 #include "ovs-thread.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "seq.h"
 #include "timeval.h"
 #include "util.h"

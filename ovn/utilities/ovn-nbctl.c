@@ -28,7 +28,7 @@
 #include "ovn/lib/ovn-nb-idl.h"
 #include "ovn/lib/ovn-util.h"
 #include "packets.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "process.h"
 #include "smap.h"
 #include "sset.h"

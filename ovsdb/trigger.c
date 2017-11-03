@@ -22,8 +22,9 @@
 #include "openvswitch/json.h"
 #include "jsonrpc.h"
 #include "ovsdb.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "server.h"
+#include "util.h"
 
 static bool ovsdb_trigger_try(struct ovsdb_trigger *, long long int now);
 static void ovsdb_trigger_complete(struct ovsdb_trigger *);

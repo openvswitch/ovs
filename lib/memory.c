@@ -20,7 +20,7 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include "openvswitch/dynamic-string.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "simap.h"
 #include "timeval.h"
 #include "unixctl.h"

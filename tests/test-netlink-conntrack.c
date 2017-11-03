@@ -23,7 +23,7 @@
 #include "netlink-conntrack.h"
 #include "netlink-notifier.h"
 #include "ovstest.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 
 /* Monitor command */
 struct test_change {

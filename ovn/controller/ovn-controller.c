@@ -47,7 +47,7 @@
 #include "patch.h"
 #include "physical.h"
 #include "pinctrl.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "lib/bitmap.h"
 #include "lib/hash.h"
 #include "smap.h"

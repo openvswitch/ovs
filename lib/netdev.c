@@ -45,7 +45,7 @@
 #include "odp-netlink.h"
 #include "openflow/openflow.h"
 #include "packets.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "seq.h"
 #include "openvswitch/shash.h"
 #include "smap.h"

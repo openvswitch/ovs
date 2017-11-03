@@ -31,7 +31,7 @@
 #include "netdev.h"
 #include "ovs-atomic.h"
 #include "packets.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "random.h"
 #include "seq.h"
 #include "timer.h"

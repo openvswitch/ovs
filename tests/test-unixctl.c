@@ -22,7 +22,7 @@
 #include "fatal-signal.h"
 #include "openvswitch/vlog.h"
 #include "ovstest.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "unixctl.h"
 #include "util.h"
 

@@ -38,7 +38,7 @@
 #include "openvswitch/ofpbuf.h"
 #include "openflow/openflow.h"
 #include "packets.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "openvswitch/shash.h"
 #include "socket-util.h"
 #include "util.h"

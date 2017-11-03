@@ -27,7 +27,7 @@
 #include <string.h>
 #include <unistd.h>
 #include "packets.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "socket-util.h"
 #include "dirs.h"
 #include "util.h"

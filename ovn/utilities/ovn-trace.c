@@ -40,7 +40,7 @@
 #include "ovn/lib/ovn-sb-idl.h"
 #include "ovn/lib/ovn-util.h"
 #include "ovsdb-idl.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "stream-ssl.h"
 #include "stream.h"
 #include "unixctl.h"

@@ -38,7 +38,7 @@
 #include "openvswitch/dynamic-string.h"
 #include "ovs-router.h"
 #include "packets.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "route-table.h"
 #include "smap.h"
 #include "socket-util.h"

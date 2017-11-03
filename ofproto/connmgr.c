@@ -34,7 +34,7 @@
 #include "openvswitch/vlog.h"
 #include "ovs-atomic.h"
 #include "pinsched.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "openvswitch/rconn.h"
 #include "openvswitch/shash.h"
 #include "simap.h"

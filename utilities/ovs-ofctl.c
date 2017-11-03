@@ -58,7 +58,7 @@
 #include "openvswitch/vlog.h"
 #include "packets.h"
 #include "pcap-file.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "random.h"
 #include "sort.h"
 #include "stream-ssl.h"

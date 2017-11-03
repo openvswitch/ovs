@@ -26,7 +26,7 @@
 #include "latch.h"
 #include "openvswitch/list.h"
 #include "ovs-thread.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 
 COVERAGE_DEFINE(seq_change);
 

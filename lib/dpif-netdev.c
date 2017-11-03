@@ -66,7 +66,7 @@
 #include "ovs-numa.h"
 #include "ovs-rcu.h"
 #include "packets.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "pvector.h"
 #include "random.h"
 #include "seq.h"

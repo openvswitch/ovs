@@ -26,7 +26,7 @@
 #include "daemon.h"
 #include "openvswitch/json.h"
 #include "ovstest.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "stream-ssl.h"
 #include "stream.h"
 #include "timeval.h"

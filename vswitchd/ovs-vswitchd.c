@@ -37,7 +37,7 @@
 #include "netdev.h"
 #include "openflow/openflow.h"
 #include "ovsdb-idl.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "simap.h"
 #include "stream-ssl.h"
 #include "stream.h"

@@ -24,7 +24,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include "fatal-signal.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "socket-util.h"
 #include "util.h"
 #include "stream-provider.h"

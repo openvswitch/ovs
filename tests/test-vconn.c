@@ -31,7 +31,7 @@
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
 #include "ovstest.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "socket-util.h"
 #include "stream.h"
 #include "stream-ssl.h"

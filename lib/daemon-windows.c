@@ -24,7 +24,7 @@
 #include "dirs.h"
 #include "fatal-signal.h"
 #include "ovs-thread.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(daemon_windows);

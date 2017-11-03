@@ -36,7 +36,7 @@
 #include "openvswitch/dynamic-string.h"
 #include "ovs-thread.h"
 #include "packets.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "util.h"
 #include "openvswitch/vlog.h"
 #ifdef __linux__

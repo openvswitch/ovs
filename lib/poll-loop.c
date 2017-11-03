@@ -15,7 +15,7 @@
  */
 
 #include <config.h>
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include <errno.h>
 #include <inttypes.h>
 #include <poll.h>

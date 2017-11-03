@@ -18,7 +18,7 @@
 
 #include "openvswitch/token-bucket.h"
 
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "sat-math.h"
 #include "timeval.h"
 #include "util.h"

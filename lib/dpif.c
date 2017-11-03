@@ -37,7 +37,7 @@
 #include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
 #include "packets.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "route-table.h"
 #include "seq.h"
 #include "openvswitch/shash.h"

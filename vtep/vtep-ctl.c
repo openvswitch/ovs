@@ -37,7 +37,7 @@
 #include "openvswitch/json.h"
 #include "ovsdb-data.h"
 #include "ovsdb-idl.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "process.h"
 #include "stream.h"
 #include "stream-ssl.h"

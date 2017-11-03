@@ -26,7 +26,7 @@
 #include "openvswitch/hmap.h"
 #include "openvswitch/ofpbuf.h"
 #include "openflow/openflow.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "random.h"
 #include "openvswitch/rconn.h"
 #include "sat-math.h"

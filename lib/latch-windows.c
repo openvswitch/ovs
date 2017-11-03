@@ -20,7 +20,7 @@
 #include <errno.h>
 #include <poll.h>
 #include <unistd.h>
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "socket-util.h"
 
 /* Initializes 'latch' as initially unset. */

@@ -32,7 +32,7 @@
 #include "openvswitch/ofpbuf.h"
 #include "ofproto.h"
 #include "packets.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "ovs-router.h"
 #include "route-table.h"
 #include "sflow_api.h"

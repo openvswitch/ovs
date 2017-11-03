@@ -36,7 +36,7 @@
 #include "ofproto-dpif-xlate-cache.h"
 #include "ovs-rcu.h"
 #include "packets.h"
-#include "poll-loop.h"
+#include "openvswitch/poll-loop.h"
 #include "seq.h"
 #include "unixctl.h"
 #include "openvswitch/vlog.h"
