@@ -9,7 +9,7 @@ Requires=ovs-vswitchd.service
 [Service]
 Type=oneshot
 ExecStart=/bin/true
-ExecReload=/bin/true
+ExecReload=/usr/share/openvswitch/scripts/ovs-systemd-reload
 ExecStop=/bin/true
 RemainAfterExit=yes
 

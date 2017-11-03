@@ -3,7 +3,6 @@ Description=Open vSwitch Database Unit
 After=syslog.target network-pre.target
 Before=network.target network.service
 Wants=ovs-delete-transient-ports.service
-ReloadPropagatedFrom=openvswitch.service
 PartOf=openvswitch.service
 
 [Service]
