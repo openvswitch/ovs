@@ -2643,7 +2643,7 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
       reflect the values from that initial non-committed non-related packet,
       and thus may be different from the actual packet headers, as the
       actual packet headers may be in reverse direction (for reply packets),
-      transformed by NAT (when \fBnat\fR option was applied to the
+      transformed by NAT (when <code>nat</code> option was applied to the
       connection), or be of different protocol (i.e., when an ICMP response
       is sent to an UDP packet).  In case of related connections, e.g., an
       FTP data connection, the original direction tuple contains the
@@ -2655,8 +2655,9 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
       The following fields are populated by the ct action, and require a
       match to a valid connection tracking state as a prerequisite, in
       addition to the IP or IPv6 ethertype match.  Examples of valid
-      connection tracking state matches include \fBct_state=+new\fR,
-      \fBct_state=+est\fR, \fBct_state=+rel\fR, and \fBct_state=+trk-inv\fR.
+      connection tracking state matches include <code>ct_state=+new</code>,
+      <code>ct_state=+est</code>, <code>ct_state=+rel</code>, and
+      <code>ct_state=+trk-inv</code>.
     </p>
 
     <field id="MFF_CT_NW_SRC" title="Connection Tracking Original Direction IPv4 Source Address">
