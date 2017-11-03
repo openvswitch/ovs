@@ -1434,7 +1434,7 @@ icmp4 {
           <var>B</var>, a priority-100 flow matches <code>ip &amp;&amp;
           ip4.dst == <var>B</var> &amp;&amp; inport == <var>GW</var></code>,
           where <var>GW</var> is the logical router gateway port, with an
-          action <code>ct_snat; next;</code>.
+          action <code>ct_snat;</code>.
         </p>
 
         <p>
