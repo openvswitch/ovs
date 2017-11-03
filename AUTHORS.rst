@@ -107,6 +107,7 @@ Dmitry Krivenok                 krivenok.dmitry@gmail.com
 Dominic Curran                  dominic.curran@citrix.com
 Dongdong                        dongdong1@huawei.com
 Dongjun                         dongj@dtdream.com
+Duan Jiong                      djduanjiong@gmail.com
 Duffie Cooley                   dcooley@nicira.com
 Dustin Lundquist                dustin@null-ptr.net
 Ed Maste                        emaste@freebsd.org
