@@ -938,7 +938,7 @@ OvsRegisterChangeNotification()
     status = NotifyRouteChange2(AF_INET, OvsChangeCallbackIpRoute, &dummy,
                                 TRUE, &ipRouteNotificationHandle);
     if (status != STATUS_SUCCESS) {
-        OVS_LOG_ERROR("Fail to regiter ip route change, status: %x.",
+        OVS_LOG_ERROR("Failed to register IP route change, status: %x.",
                       status);
         goto register_cleanup;
     }
@@ -947,7 +947,8 @@ OvsRegisterChangeNotification()
                                           NULL, TRUE,
                                           &unicastIPNotificationHandle);
     if (status != STATUS_SUCCESS) {
-        OVS_LOG_ERROR("Fail to regiter unicast ip change, status: %x.", status);
+        OVS_LOG_ERROR("Failed to register UNICAST IP change, status: %x.",
+                      status);
     }
 register_cleanup:
     if (status != STATUS_SUCCESS) {
