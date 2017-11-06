@@ -429,11 +429,14 @@ encap_nsh(struct dp_packet *packet, const struct ovs_action_encap_nsh *encap)
     }
 
     nsh = (struct nsh_hdr *) dp_packet_push_uninit(packet, length);
-    nsh->ver_flags_len = htons(encap->flags << NSH_FLAGS_SHIFT | length >> 2);
+    nsh->ver_flags_ttl_len =
+            htons(((encap->flags << NSH_FLAGS_SHIFT) & NSH_FLAGS_MASK)
+                    | (63 << NSH_TTL_SHIFT)
+                    | ((length >> 2) << NSH_LEN_SHIFT));
+    nsh->md_type = (encap->mdtype << NSH_MDTYPE_SHIFT) & NSH_MDTYPE_MASK;
     nsh->next_proto = next_proto;
     put_16aligned_be32(&nsh->path_hdr, encap->path_hdr);
-    nsh->md_type = encap->mdtype;
-    switch (nsh->md_type) {
+    switch (encap->mdtype) {
         case NSH_M_TYPE1:
             nsh->md1 = *ALIGNED_CAST(struct nsh_md1_ctx *, encap->metadata);
             break;
