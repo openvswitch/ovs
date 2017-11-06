@@ -1157,7 +1157,7 @@ FixFragmentHeader(PNET_BUFFER nb, UINT16 fragmentSize,
 
     mdl = NET_BUFFER_FIRST_MDL(nb);
 
-    bufferStart = (PUINT8)MmGetSystemAddressForMdlSafe(mdl, LowPagePriority);
+    bufferStart = (PUINT8)OvsGetMdlWithLowPriority(mdl);
     if (!bufferStart) {
         return NDIS_STATUS_RESOURCES;
     }
@@ -1215,7 +1215,7 @@ FixSegmentHeader(PNET_BUFFER nb, UINT16 segmentSize, UINT32 seqNumber,
 
     mdl = NET_BUFFER_FIRST_MDL(nb);
 
-    bufferStart = (PUINT8)MmGetSystemAddressForMdlSafe(mdl, LowPagePriority);
+    bufferStart = (PUINT8)OvsGetMdlWithLowPriority(mdl);
     if (!bufferStart) {
         return NDIS_STATUS_RESOURCES;
     }
@@ -1521,8 +1521,8 @@ OvsAllocateNBLFromBuffer(PVOID context,
 
     nb = NET_BUFFER_LIST_FIRST_NB(nbl);
     mdl = NET_BUFFER_CURRENT_MDL(nb);
-    data = (PUINT8)MmGetSystemAddressForMdlSafe(mdl, LowPagePriority) +
-                    NET_BUFFER_CURRENT_MDL_OFFSET(nb);
+    data = (PUINT8)OvsGetMdlWithLowPriority(mdl)
+        + NET_BUFFER_CURRENT_MDL_OFFSET(nb);
     if (!data) {
         OvsCompleteNBL(switchContext, nbl, TRUE);
         return NULL;

@@ -1933,7 +1933,7 @@ GetStartAddrNBL(const NET_BUFFER_LIST *_pNB)
 
     // Ethernet Header is a guaranteed safe access.
     curMdl = (NET_BUFFER_LIST_FIRST_NB(_pNB))->CurrentMdl;
-    curBuffer =  MmGetSystemAddressForMdlSafe(curMdl, LowPagePriority);
+    curBuffer = OvsGetMdlWithLowPriority(curMdl);
     if (!curBuffer) {
         return NULL;
     }

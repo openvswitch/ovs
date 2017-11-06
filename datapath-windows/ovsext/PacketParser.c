@@ -38,8 +38,7 @@ OvsGetPacketBytes(const NET_BUFFER_LIST *nbl,
 
     // Data on current MDL may be offset from start of MDL
     while (destOffset < copyLen && currentMdl) {
-        PUCHAR srcMemory = MmGetSystemAddressForMdlSafe(currentMdl,
-                                                        LowPagePriority);
+        PUCHAR srcMemory = OvsGetMdlWithLowPriority(currentMdl);
         ULONG length = MmGetMdlByteCount(currentMdl);
         if (!srcMemory) {
             status = NDIS_STATUS_RESOURCES;

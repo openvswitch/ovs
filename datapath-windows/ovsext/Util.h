@@ -152,4 +152,19 @@ UINT32 Rand()
     return seed.LowPart *= 0x8088405 + 1;
 }
 
+/*
+ *----------------------------------------------------------------------------
+ *  OvsGetMdlWithLowPriority --
+ *    Return the nonpaged system-space virtual address for the given MDL
+ *    `curMdl` using low page priority and no executable memory.
+ *----------------------------------------------------------------------------
+ */
+
+static __inline
+PVOID OvsGetMdlWithLowPriority(PMDL curMdl)
+{
+return	MmGetSystemAddressForMdlSafe(curMdl,
+                                     LowPagePriority | MdlMappingNoExecute);
+}
+
 #endif /* __UTIL_H_ */

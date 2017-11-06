@@ -1593,8 +1593,7 @@ MapIrpOutputBuffer(PIRP irp,
     if (irp->MdlAddress == NULL) {
         return STATUS_INVALID_PARAMETER;
     }
-    *buffer = MmGetSystemAddressForMdlSafe(irp->MdlAddress,
-                                           NormalPagePriority);
+    *buffer = OvsGetMdlWithLowPriority(irp->MdlAddress);
     if (*buffer == NULL) {
         return STATUS_INSUFFICIENT_RESOURCES;
     }
