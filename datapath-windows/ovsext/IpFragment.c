@@ -206,6 +206,7 @@ OvsIpv4Reassemble(POVS_SWITCH_CONTEXT switchContext,
     if (*newNbl == NULL) {
         OVS_LOG_ERROR("Insufficient resources, failed to allocate newNbl");
         status = NDIS_STATUS_RESOURCES;
+        goto cleanup;
     }
 
     /* Complete the fragment NBL */
