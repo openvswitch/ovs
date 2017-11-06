@@ -279,10 +279,10 @@
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Win8Analyze|x64'">$(IntDir);%(AdditionalIncludeDirectories);..\..</AdditionalIncludeDirectories>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Win8.1 Debug|x64'">$(IntDir);%(AdditionalIncludeDirectories);..\..</AdditionalIncludeDirectories>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Win8.1Analyze|x64'">$(IntDir);%(AdditionalIncludeDirectories);..\..</AdditionalIncludeDirectories>
-      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'">$(IntDir);%(AdditionalIncludeDirectories);..\..</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'">$(IntDir);%(AdditionalIncludeDirectories);..\..;$(MSBuildProjectDirectory)</AdditionalIncludeDirectories>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Win8 Release|x64'">$(IntDir);%(AdditionalIncludeDirectories);..\..</AdditionalIncludeDirectories>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Win8.1 Release|x64'">$(IntDir);%(AdditionalIncludeDirectories);..\..</AdditionalIncludeDirectories>
-      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'">$(IntDir);%(AdditionalIncludeDirectories);..\..</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Win10 Release|x64'">$(IntDir);%(AdditionalIncludeDirectories);..\..;$(MSBuildProjectDirectory)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation Condition="'$(Configuration)|$(Platform)'=='Win8 Release|x64'">true</MultiProcessorCompilation>
       <MultiProcessorCompilation Condition="'$(Configuration)|$(Platform)'=='Win8 Debug|x64'">true</MultiProcessorCompilation>
       <MultiProcessorCompilation Condition="'$(Configuration)|$(Platform)'=='Win8Analyze|x64'">true</MultiProcessorCompilation>
