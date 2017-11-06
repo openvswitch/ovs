@@ -451,7 +451,7 @@ int dpif_get_dp_stats(const struct dpif *, struct dpif_dp_stats *);
 const char *dpif_port_open_type(const char *datapath_type,
                                 const char *port_type);
 int dpif_port_add(struct dpif *, struct netdev *, odp_port_t *port_nop);
-int dpif_port_del(struct dpif *, odp_port_t port_no);
+int dpif_port_del(struct dpif *, odp_port_t port_no, bool local_delete);
 
 /* A port within a datapath.
  *
