@@ -10,8 +10,8 @@ Global
 		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{259905A2-7434-4190-8A33-8FBA67171DD6}.Release|x64.ActiveCfg = Release|x86
-		{259905A2-7434-4190-8A33-8FBA67171DD6}.Release|x64.Build.0 = Release|x86
+		{259905A2-7434-4190-8A33-8FBA67171DD6}.Release|x64.ActiveCfg = Release|x64
+		{259905A2-7434-4190-8A33-8FBA67171DD6}.Release|x64.Build.0 = Release|x64
 		{259905A2-7434-4190-8A33-8FBA67171DD6}.Release|x86.ActiveCfg = Release|x86
 		{259905A2-7434-4190-8A33-8FBA67171DD6}.Release|x86.Build.0 = Release|x86
 	EndGlobalSection
