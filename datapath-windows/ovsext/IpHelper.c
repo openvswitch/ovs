@@ -1989,6 +1989,12 @@ OvsInitIpHelper(NDIS_HANDLE ndisFilterHandle)
     HANDLE threadHandle;
     UINT32 i;
 
+    status = ExInitializeResourceLite(&ovsInstanceListLock);
+    if (status != NDIS_STATUS_SUCCESS) {
+        return status;
+    }
+    InitializeListHead(&ovsInstanceList);
+
     ovsFwdHashTable = (PLIST_ENTRY)OvsAllocateMemoryWithTag(
         sizeof(LIST_ENTRY) * OVS_FWD_HASH_TABLE_SIZE, OVS_IPHELPER_POOL_TAG);
 
@@ -2008,9 +2014,6 @@ OvsInitIpHelper(NDIS_HANDLE ndisFilterHandle)
     ipInterfaceNotificationHandle = NULL;
     ipRouteNotificationHandle = NULL;
     unicastIPNotificationHandle = NULL;
-
-    ExInitializeResourceLite(&ovsInstanceListLock);
-    InitializeListHead(&ovsInstanceList);
 
     if (ovsFwdHashTable == NULL ||
         ovsRouteHashTable == NULL ||
@@ -2074,7 +2077,7 @@ init_cleanup:
         ExDeleteResourceLite(&ovsInstanceListLock);
         NdisFreeSpinLock(&ovsIpHelperLock);
     }
-    return STATUS_SUCCESS;
+    return status;
 }
 
 
