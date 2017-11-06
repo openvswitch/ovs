@@ -1237,6 +1237,7 @@ OvsActionMplsPush(OvsForwardingContext *ovsFwdCtx,
     ASSERT(mdlLen >= MPLS_HLEN);
 
     ethHdr = (EthHdr *)(bufferStart + curMdlOffset);
+    ASSERT(ethHdr);
     RtlMoveMemory(ethHdr, (UINT8*)ethHdr + MPLS_HLEN, sizeof(*ethHdr));
     ethHdr->Type = mpls->mpls_ethertype;
 
