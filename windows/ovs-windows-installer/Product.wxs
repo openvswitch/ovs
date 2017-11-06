@@ -16,6 +16,16 @@
     under the License.
   </copyright>
 -->
+<!--
+  Predefined variables with regards of the platform we are building for
+-->
+<?if $(var.Platform) = x64 ?>
+  <?define Win64 = "yes" ?>
+  <?define PlatformProgramFilesFolder = "ProgramFiles64Folder" ?>
+<?else ?>
+  <?define Win64 = "no" ?>
+  <?define PlatformProgramFilesFolder = "ProgramFilesFolder" ?>
+<?endif ?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
      xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
   <Product Id="{0DF60ED5-6C22-49A0-913E-77412D35C400}" Name="Open vSwitch for Hyper-V" Language="1033" Version="$(var.Version)"
@@ -93,7 +103,7 @@
 
   <Fragment>
     <Directory Id="TARGETDIR" Name="SourceDir">
-      <Directory Id="ProgramFilesFolder">
+      <Directory Id="$(var.PlatformProgramFilesFolder)">
         <Directory Id="INSTALLDIR" Name="Open vSwitch" />
       </Directory>
       <Directory Id="CommonAppDataFolder">
