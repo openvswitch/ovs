@@ -19,7 +19,7 @@
 
 #include <ntddk.h>
 #include <netioapi.h>
-#include <Vport.h>
+#include "Vport.h"
 
 #define OVS_FWD_HASH_TABLE_SIZE ((UINT32)1 << 10)
 #define OVS_FWD_HASH_TABLE_MASK (OVS_FWD_HASH_TABLE_SIZE - 1)
