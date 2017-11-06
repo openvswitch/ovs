@@ -15,6 +15,8 @@
  */
 
 #include <config.h>
+
+#include <sys/types.h>
 #include <netinet/in.h>
 
 #include "bundle.h"

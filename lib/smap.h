@@ -15,6 +15,7 @@
 #ifndef SMAP_H
 #define SMAP_H 1
 
+#include <sys/types.h>
 #include <netinet/in.h>
 #include "hash.h"
 #include "openvswitch/hmap.h"

@@ -20,11 +20,9 @@
 #define _LLDPD_STRUCTS_H
 
 #include <net/if.h>
-#ifndef _WIN32
-#include <netinet/in.h>
-#endif
-#include <sys/socket.h>
 #include <sys/types.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 #include "aa-structs.h"
 #include "lldp-const.h"
 #include "packets.h"

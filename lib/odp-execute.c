@@ -17,8 +17,9 @@
 
 #include <config.h>
 #include "odp-execute.h"
-#include <arpa/inet.h>
+#include <sys/types.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <netinet/icmp6.h>
 #include <netinet/ip6.h>
 #include <stdlib.h>

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 Nicira, Inc.
+ * Copyright (c) 2011, 2013, 2014, 2015, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,5 @@
 #error "Use this header only with sparse.  It is not a correct implementation."
 #endif
 
-#ifndef NETINET_IN_H_INCLUDED
-#error "Must include <netinet/in.h> before <arpa/inet.h> for FreeBSD support"
-#endif
-
-#include <netinet/in.h>
+#define SYS_TYPES_H_INCLUDED 1
+#include_next <sys/types.h>

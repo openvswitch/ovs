@@ -19,6 +19,8 @@
 #include "route-table.h"
 
 #include <errno.h>
+#include <sys/types.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <linux/rtnetlink.h>

@@ -17,6 +17,8 @@
 #ifndef UTIL_H
 #define UTIL_H 1
 
+#include <sys/types.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <inttypes.h>
 #include <limits.h>

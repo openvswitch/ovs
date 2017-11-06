@@ -31,11 +31,11 @@
 #include <config.h>
 #include "rstp.h"
 #include "rstp-state-machines.h"
+#include <sys/types.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <inttypes.h>
-#include <netinet/in.h>
 #include <stdlib.h>
-#include <sys/types.h>
 #include "byte-order.h"
 #include "connectivity.h"
 #include "openvswitch/ofpbuf.h"

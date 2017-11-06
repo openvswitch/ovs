@@ -16,6 +16,8 @@
 
 #include <config.h>
 #include "socket-util.h"
+#include <sys/types.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <errno.h>

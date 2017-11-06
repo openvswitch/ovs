@@ -16,10 +16,11 @@
 
 #include "ofproto/ofproto-dpif-xlate-cache.h"
 
+#include <sys/types.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <errno.h>
 #include <net/if.h>
-#include <netinet/in.h>
 #include <sys/socket.h>
 
 #include "bfd.h"

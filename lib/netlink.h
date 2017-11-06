@@ -31,6 +31,7 @@
  * Linux-specific definitions for Netlink sockets, see netlink-socket.h.
  */
 
+#include <sys/types.h>
 #include <netinet/in.h>
 #include <stdbool.h>
 #include <stddef.h>

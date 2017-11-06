@@ -17,6 +17,7 @@
 #include <config.h>
 #include "csum.h"
 #include "unaligned.h"
+#include <sys/types.h>
 #include <netinet/in.h>
 
 #ifndef __CHECKER__

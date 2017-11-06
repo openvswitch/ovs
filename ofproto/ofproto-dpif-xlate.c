@@ -17,10 +17,11 @@
 #include "ofproto/ofproto-dpif-xlate.h"
 
 #include <errno.h>
+#include <sys/types.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <net/if.h>
 #include <sys/socket.h>
-#include <netinet/in.h>
 
 #include "bfd.h"
 #include "bitmap.h"

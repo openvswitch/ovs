@@ -18,6 +18,12 @@
 #error "Use this header only with sparse.  It is not a correct implementation."
 #endif
 
+#define NETINET_IN_H_INCLUDED 1
+
+#ifndef SYS_TYPES_H_INCLUDED
+#error "Must include <sys/types.h> before <netinet/in.h> for FreeBSD support"
+#endif
+
 #ifndef _NETINET_IN_H
 #define _NETINET_IN_H 1
 

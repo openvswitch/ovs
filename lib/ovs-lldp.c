@@ -28,12 +28,12 @@
 
 #include <config.h>
 #include "ovs-lldp.h"
+#include <sys/types.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <inttypes.h>
-#include <netinet/in.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#include <sys/types.h>
 #include "openvswitch/dynamic-string.h"
 #include "flow.h"
 #include "openvswitch/list.h"

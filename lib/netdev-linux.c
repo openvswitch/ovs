@@ -20,6 +20,8 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/types.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <inttypes.h>
 #include <linux/filter.h>
@@ -31,7 +33,6 @@
 #include <linux/mii.h>
 #include <linux/rtnetlink.h>
 #include <linux/sockios.h>
-#include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/utsname.h>
@@ -40,7 +41,6 @@
 #include <net/if_arp.h>
 #include <net/if_packet.h>
 #include <net/route.h>
-#include <netinet/in.h>
 #include <poll.h>
 #include <stdlib.h>
 #include <string.h>

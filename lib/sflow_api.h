@@ -13,18 +13,18 @@
    callback in sfl_agent_init.*/
 /* #define SFLOW_DO_SOCKET */
 
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
-#include <sys/types.h>
-#include <arpa/inet.h> /* for htonl */
 
 #ifdef SFLOW_DO_SOCKET
 #include <sys/socket.h>
 #include <netinet/in_systm.h>
-#include <netinet/in.h>
 #include <netinet/ip.h>
 #endif
 

@@ -17,6 +17,7 @@
 #ifndef OPENVSWITCH_PACKETS_H
 #define OPENVSWITCH_PACKETS_H 1
 
+#include <sys/types.h>
 #include <netinet/in.h>
 #include "openvswitch/tun-metadata.h"
 

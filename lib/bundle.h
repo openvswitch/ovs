@@ -16,6 +16,8 @@
 #ifndef BUNDLE_H
 #define BUNDLE_H 1
 
+#include <sys/types.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <stdbool.h>
 #include <stddef.h>

@@ -18,6 +18,7 @@
 #include "classifier.h"
 #include "classifier-private.h"
 #include <errno.h>
+#include <sys/types.h>
 #include <netinet/in.h>
 #include "byte-order.h"
 #include "openvswitch/dynamic-string.h"

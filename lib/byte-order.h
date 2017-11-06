@@ -16,8 +16,9 @@
 #ifndef BYTE_ORDER_H
 #define BYTE_ORDER_H 1
 
-#include <arpa/inet.h>
 #include <sys/types.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <inttypes.h>
 #include "openvswitch/types.h"
 

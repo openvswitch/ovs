@@ -19,13 +19,11 @@
 #ifndef _LLDPD_H
 #define _LLDPD_H
 
-#ifndef _WIN32
+#include <sys/types.h>
 #include <netinet/in.h>
-#endif
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
-#include <sys/types.h>
 #include "dp-packet.h"
 #include "openvswitch/list.h"
 #include "lldpd-structs.h"

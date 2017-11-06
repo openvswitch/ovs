@@ -16,13 +16,13 @@
 
 #include <config.h>
 #include "packets.h"
+#include <sys/types.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
-#include <netinet/in.h>
 #include <netinet/ip6.h>
 #include <netinet/icmp6.h>
 #include <stdlib.h>
-#include <sys/types.h>
 #include <netdb.h>
 #include "byte-order.h"
 #include "csum.h"

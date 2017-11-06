@@ -16,6 +16,8 @@
 
 #include <config.h>
 #include "netflow.h"
+#include <sys/types.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <errno.h>
 #include <stdlib.h>

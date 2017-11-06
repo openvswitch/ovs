@@ -17,10 +17,10 @@
 #include <config.h>
 
 #include "multipath.h"
-#include <arpa/inet.h>
-#include <inttypes.h>
 #include <sys/types.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
+#include <inttypes.h>
 #include "colors.h"
 #include "nx-match.h"
 #include "openflow/nicira-ext.h"

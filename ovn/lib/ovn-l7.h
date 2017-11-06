@@ -17,6 +17,7 @@
 #ifndef OVN_DHCP_H
 #define OVN_DHCP_H 1
 
+#include <sys/types.h>
 #include <netinet/in.h>
 #include <netinet/icmp6.h>
 #include "openvswitch/hmap.h"
