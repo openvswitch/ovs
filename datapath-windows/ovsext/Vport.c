@@ -1144,8 +1144,13 @@ GetNICAlias(PNDIS_SWITCH_NIC_PARAMETERS nicParam,
         if (status == STATUS_SUCCESS) {
             RtlStringCbPrintfW(portFriendlyName->String,
                                IF_MAX_STRING_SIZE, L"%s", interfaceName);
-            RtlStringCbLengthW(portFriendlyName->String, IF_MAX_STRING_SIZE,
-                               &len);
+            status = RtlStringCbLengthW(portFriendlyName->String,
+                                        IF_MAX_STRING_SIZE, &len);
+            if (!NT_SUCCESS(status)) {
+                OVS_LOG_ERROR("Failed to get the length of the string,"
+                              "status: %x", status);
+                return status;
+            }
             portFriendlyName->Length = (USHORT)len;
         } else {
             OVS_LOG_ERROR("Fail to convert interface LUID to alias, status: %x",
