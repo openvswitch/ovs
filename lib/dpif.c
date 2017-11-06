@@ -605,21 +605,23 @@ dpif_port_add(struct dpif *dpif, struct netdev *netdev, odp_port_t *port_nop)
 /* Attempts to remove 'dpif''s port number 'port_no'.  Returns 0 if successful,
  * otherwise a positive errno value. */
 int
-dpif_port_del(struct dpif *dpif, odp_port_t port_no)
+dpif_port_del(struct dpif *dpif, odp_port_t port_no, bool local_delete)
 {
-    int error;
+    int error = 0;
 
     COVERAGE_INC(dpif_port_del);
 
-    error = dpif->dpif_class->port_del(dpif, port_no);
-    if (!error) {
-        VLOG_DBG_RL(&dpmsg_rl, "%s: port_del(%"PRIu32")",
-                    dpif_name(dpif), port_no);
-
-        netdev_ports_remove(port_no, dpif->dpif_class);
-    } else {
-        log_operation(dpif, "port_del", error);
+    if (!local_delete) {
+        error = dpif->dpif_class->port_del(dpif, port_no);
+        if (!error) {
+            VLOG_DBG_RL(&dpmsg_rl, "%s: port_del(%"PRIu32")",
+                        dpif_name(dpif), port_no);
+        } else {
+            log_operation(dpif, "port_del", error);
+        }
     }
+
+    netdev_ports_remove(port_no, dpif->dpif_class);
     return error;
 }
 

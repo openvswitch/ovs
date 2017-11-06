@@ -2176,6 +2176,7 @@ struct ifindex_to_port_data {
     struct hmap_node node;
     int ifindex;
     odp_port_t port;
+    const struct dpif_class *dpif_class;
 };
 
 #define NETDEV_PORTS_HASH_INT(port, dpif) \
@@ -2225,6 +2226,7 @@ netdev_ports_insert(struct netdev *netdev, const struct dpif_class *dpif_class,
     ifidx = xzalloc(sizeof *ifidx);
     ifidx->ifindex = ifindex;
     ifidx->port = dpif_port->port_no;
+    ifidx->dpif_class = dpif_class;
 
     hmap_insert(&port_to_netdev, &data->node, hash);
     hmap_insert(&ifindex_to_port, &ifidx->node, ifidx->ifindex);
@@ -2263,10 +2265,9 @@ netdev_ports_remove(odp_port_t port_no, const struct dpif_class *dpif_class)
 
     if (data) {
         int ifindex = netdev_get_ifindex(data->netdev);
+        struct ifindex_to_port_data *ifidx = NULL;
 
         if (ifindex > 0) {
-            struct ifindex_to_port_data *ifidx = NULL;
-
             HMAP_FOR_EACH_WITH_HASH (ifidx, node, ifindex, &ifindex_to_port) {
                 if (ifidx->port == port_no) {
                     hmap_remove(&ifindex_to_port, &ifidx->node);
@@ -2276,11 +2277,18 @@ netdev_ports_remove(odp_port_t port_no, const struct dpif_class *dpif_class)
             }
             ovs_assert(ifidx);
         } else {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-
-            VLOG_WARN_RL(&rl, "netdev ports map has dpif port %"PRIu32
-                         " but netdev has no ifindex: %s", port_no,
-                         ovs_strerror(ifindex));
+            /* case where the interface is already deleted form the datapath
+             * (e.g. tunctl -d or ip tuntap del), then the ifindex is not
+             * valid anymore. Traverse the HMAP for the port number. */
+            HMAP_FOR_EACH (ifidx, node, &ifindex_to_port) {
+                if (ifidx->port == port_no &&
+                    ifidx->dpif_class == dpif_class) {
+                    hmap_remove(&ifindex_to_port, &ifidx->node);
+                    free(ifidx);
+                    break;
+                }
+            }
+            ovs_assert(ifidx);
         }
 
         dpif_port_destroy(&data->dpif_port);
