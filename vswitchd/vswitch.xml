@@ -2367,6 +2367,11 @@
         </ul>
       </column>
 
+      <column name="options" key="dst_port">
+        Optional.  The tunnel transport layer destination port, for UDP and TCP
+        based tunnel protocols (Geneve, VXLAN, LISP, and STT).
+      </column>
+
       <column name="options" key="key">
         Optional.  Shorthand to set <code>in_key</code> and
         <code>out_key</code> at the same time.
