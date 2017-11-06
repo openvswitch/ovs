@@ -86,5 +86,5 @@ EXTRA_DIST += \
 	datapath-windows/ovsext/resource.h
 
 datapath_windows_analyze: all
-	MSBuild.exe //maxcpucount datapath-windows/ovsext.sln /target:Build /property:Configuration="Win8.1Analyze"
-	MSBuild.exe //maxcpucount datapath-windows/ovsext.sln /target:Build /property:Configuration="Win8Analyze"
+	MSBuild.exe //nologo //maxcpucount datapath-windows/ovsext.sln /target:Build /property:Configuration="Win8.1Analyze"
+	MSBuild.exe //nologo //maxcpucount datapath-windows/ovsext.sln /target:Build /property:Configuration="Win8Analyze"
