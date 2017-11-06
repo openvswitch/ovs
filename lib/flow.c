@@ -546,7 +546,7 @@ parse_nsh(const void **datap, size_t *sizep, struct flow_nsh *key)
 
     memset(key, 0, sizeof(struct flow_nsh));
 
-    ver_flags_len = ntohs(nsh->ver_flags_len);
+    ver_flags_len = ntohs(nsh->ver_flags_ttl_len);
     version = (ver_flags_len & NSH_VER_MASK) >> NSH_VER_SHIFT;
     flags = (ver_flags_len & NSH_FLAGS_MASK) >> NSH_FLAGS_SHIFT;
 

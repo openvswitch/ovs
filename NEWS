@@ -1,5 +1,6 @@
 v2.8.2 - xx xxx xxxx
 ---------------------
+   - NSH implementation now conforms to latest draft (draft-ietf-sfc-nsh-28).
 
 
 v2.8.1 - 26 Sep 2017
