@@ -589,7 +589,7 @@ struct dp_netdev_pmd_thread {
         long long int next_optimization;
         /* End of the next time interval for which processing cycles
            are stored for each polled rxq. */
-        long long int rxq_interval;
+        long long int rxq_next_cycle_store;
 
         /* Cycles counters */
         struct dp_netdev_pmd_cycles cycles;
@@ -4536,7 +4536,7 @@ dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
     cmap_init(&pmd->flow_table);
     cmap_init(&pmd->classifiers);
     pmd->next_optimization = time_msec() + DPCLS_OPTIMIZATION_INTERVAL;
-    pmd->rxq_interval = time_msec() + PMD_RXQ_INTERVAL_LEN;
+    pmd->rxq_next_cycle_store = time_msec() + PMD_RXQ_INTERVAL_LEN;
     hmap_init(&pmd->poll_list);
     hmap_init(&pmd->tx_ports);
     hmap_init(&pmd->tnl_port_cache);
@@ -6003,7 +6003,7 @@ dp_netdev_pmd_try_optimize(struct dp_netdev_pmd_thread *pmd,
     struct dpcls *cls;
     long long int now = time_msec();
 
-    if (now > pmd->rxq_interval) {
+    if (now > pmd->rxq_next_cycle_store) {
         /* Get the cycles that were used to process each queue and store. */
         for (unsigned i = 0; i < poll_cnt; i++) {
             uint64_t rxq_cyc_curr = dp_netdev_rxq_get_cycles(poll_list[i].rxq,
@@ -6013,7 +6013,7 @@ dp_netdev_pmd_try_optimize(struct dp_netdev_pmd_thread *pmd,
                                      0);
         }
         /* Start new measuring interval */
-        pmd->rxq_interval = now + PMD_RXQ_INTERVAL_LEN;
+        pmd->rxq_next_cycle_store = now + PMD_RXQ_INTERVAL_LEN;
     }
 
     if (now > pmd->next_optimization) {
