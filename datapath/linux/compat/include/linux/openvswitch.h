@@ -793,15 +793,15 @@ struct ovs_action_push_eth {
 	struct ovs_key_ethernet addresses;
 };
 
-#define OVS_ENCAP_NSH_MAX_MD_LEN 16
+#define OVS_ENCAP_NSH_MAX_MD_LEN 248
 /*
  * struct ovs_action_encap_nsh - %OVS_ACTION_ATTR_ENCAP_NSH
  * @flags: NSH header flags.
  * @mdtype: NSH metadata type.
- * @mdlen: Length of NSH metadata in bytes.
+ * @mdlen: Length of NSH metadata in bytes, including padding.
  * @np: NSH next_protocol: Inner packet type.
  * @path_hdr: NSH service path id and service index.
- * @metadata: NSH metadata for MD type 1 or 2
+ * @metadata: NSH context metadata, padded to 4-bytes
  */
 struct ovs_action_encap_nsh {
     uint8_t flags;
