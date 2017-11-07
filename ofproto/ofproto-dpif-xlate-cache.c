@@ -279,6 +279,9 @@ xlate_cache_clear(struct xlate_cache *xcache)
 void
 xlate_cache_uninit(struct xlate_cache *xcache)
 {
+    if (!xcache) {
+        return;
+    }
     xlate_cache_clear(xcache);
     ofpbuf_uninit(&xcache->entries);
 }
