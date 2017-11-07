@@ -1864,12 +1864,17 @@ parse_odp_encap_nsh_action(const char *s, struct ofpbuf *actions)
         else if (encap_nsh.mdtype == NSH_M_TYPE2) {
             struct ofpbuf b;
             char buf[512];
-            size_t mdlen;
+            size_t mdlen, padding;
             if (ovs_scan_len(s, &n, "md2=0x%511[0-9a-fA-F]", buf)) {
                 ofpbuf_use_stub(&b, encap_nsh.metadata,
                                 OVS_ENCAP_NSH_MAX_MD_LEN);
                 ofpbuf_put_hex(&b, buf, &mdlen);
-                encap_nsh.mdlen = mdlen;
+                /* Pad metadata to 4 bytes. */
+                padding = PAD_SIZE(mdlen, 4);
+                if (padding > 0) {
+                    ofpbuf_push_zeros(&b, padding);
+                }
+                encap_nsh.mdlen = mdlen + padding;
                 ofpbuf_uninit(&b);
             }
             continue;
