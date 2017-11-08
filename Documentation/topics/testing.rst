@@ -280,8 +280,9 @@ Native
 ++++++
 
 The datapath testsuite as invoked by Vagrant above may also be run manually on
-a Linux system with root privileges. These tests may take several minutes to
-complete, and cannot be run in parallel.
+a Linux system with root privileges. Make sure, no other Open vSwitch instance
+is running on the test suite. These tests may take several minutes to complete,
+and cannot be run in parallel.
 
 Userspace datapath
 '''''''''''''''''''
@@ -290,7 +291,7 @@ To invoke the datapath testsuite with the userspace datapath, run::
 
     $ make check-system-userspace
 
-The results of the testsuite are in ``tests/system-userspace-traffic.dir``.
+The results of the testsuite are in ``tests/system-userspace-testsuite.dir``.
 
 Kernel datapath
 '''''''''''''''
