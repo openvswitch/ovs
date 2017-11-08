@@ -369,8 +369,8 @@ set_defaults () {
     OVN_CONTROLLER_LOG="-vconsole:emer -vsyslog:err -vfile:info"
     OVN_NORTHD_LOG="-vconsole:emer -vsyslog:err -vfile:info"
     OVN_NORTHD_LOGFILE=""
-    OVN_NB_LOG="-vconsole:off"
-    OVN_SB_LOG="-vconsole:off"
+    OVN_NB_LOG="-vconsole:off -vfile:info"
+    OVN_SB_LOG="-vconsole:off -vfile:info"
     OVN_NB_LOGFILE="$logdir/ovsdb-server-nb.log"
     OVN_SB_LOGFILE="$logdir/ovsdb-server-sb.log"
 
