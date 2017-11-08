@@ -64,7 +64,8 @@ struct raw_process_info {
     long long int uptime;       /* ms since started. */
     long long int cputime;      /* ms of CPU used during 'uptime'. */
     pid_t ppid;                 /* Parent. */
-    char name[18];              /* Name (surrounded by parentheses). */
+    int core_id;                /* Core id last executed on. */
+    char name[18];              /* Name. */
 };
 
 /* Pipe used to signal child termination. */
@@ -421,7 +422,7 @@ get_raw_process_info(pid_t pid, struct raw_process_info *raw)
 
     n = fscanf(stream,
                "%*d "           /* (1. pid) */
-               "%17s "          /* 2. process name */
+               "(%17[^)]) "     /* 2. process name */
                "%*c "           /* (3. state) */
                "%lu "           /* 4. ppid */
                "%*d "           /* (5. pgid) */
@@ -444,33 +445,34 @@ get_raw_process_info(pid_t pid, struct raw_process_info *raw)
                "%llu "          /* 22. start_time */
                "%llu "          /* 23. vsize */
                "%llu "          /* 24. rss */
+               "%*u "           /* (25. rsslim) */
+               "%*u "           /* (26. start_code) */
+               "%*u "           /* (27. end_code) */
+               "%*u "           /* (28. start_stack) */
+               "%*u "           /* (29. esp) */
+               "%*u "           /* (30. eip) */
+               "%*u "           /* (31. pending signals) */
+               "%*u "           /* (32. blocked signals) */
+               "%*u "           /* (33. ignored signals) */
+               "%*u "           /* (34. caught signals) */
+               "%*u "           /* (35. whcan) */
+               "%*u "           /* (36. always 0) */
+               "%*u "           /* (37. always 0) */
+               "%*d "           /* (38. exit_signal) */
+               "%d "            /* 39. task_cpu */
 #if 0
                /* These are here for documentation but #if'd out to save
                 * actually parsing them from the stream for no benefit. */
-               "%*lu "          /* (25. rsslim) */
-               "%*lu "          /* (26. start_code) */
-               "%*lu "          /* (27. end_code) */
-               "%*lu "          /* (28. start_stack) */
-               "%*lu "          /* (29. esp) */
-               "%*lu "          /* (30. eip) */
-               "%*lu "          /* (31. pending signals) */
-               "%*lu "          /* (32. blocked signals) */
-               "%*lu "          /* (33. ignored signals) */
-               "%*lu "          /* (34. caught signals) */
-               "%*lu "          /* (35. whcan) */
-               "%*lu "          /* (36. always 0) */
-               "%*lu "          /* (37. always 0) */
-               "%*d "           /* (38. exit_signal) */
-               "%*d "           /* (39. task_cpu) */
                "%*u "           /* (40. rt_priority) */
                "%*u "           /* (41. policy) */
                "%*llu "         /* (42. blkio_ticks) */
                "%*lu "          /* (43. gtime) */
                "%*ld"           /* (44. cgtime) */
 #endif
-               , raw->name, &ppid, &utime, &stime, &start_time, &vsize, &rss);
+               , raw->name, &ppid, &utime, &stime, &start_time,
+                  &vsize, &rss, &raw->core_id);
     fclose(stream);
-    if (n != 7) {
+    if (n != 8) {
         VLOG_ERR_ONCE("%s: fscanf failed", file_name);
         return false;
     }
@@ -496,12 +498,14 @@ get_process_info(pid_t pid, struct process_info *pinfo)
         return false;
     }
 
+    ovs_strlcpy(pinfo->name, child.name, sizeof pinfo->name);
     pinfo->vsz = child.vsz;
     pinfo->rss = child.rss;
     pinfo->booted = child.uptime;
     pinfo->crashes = 0;
     pinfo->uptime = child.uptime;
     pinfo->cputime = child.cputime;
+    pinfo->core_id = child.core_id;
 
     if (child.ppid) {
         struct raw_process_info parent;
@@ -578,7 +582,6 @@ process_run(void)
     }
 #endif
 }
-
 
 /* Causes the next call to poll_block() to wake up when process 'p' has
  * exited. */

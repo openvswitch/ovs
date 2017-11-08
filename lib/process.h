@@ -29,6 +29,8 @@ struct process_info {
     int crashes;                /* # of crashes (usually 0). */
     long long int uptime;       /* ms since last (re)started by monitor. */
     long long int cputime;      /* ms of CPU used during 'uptime'. */
+    int core_id;
+    char name[18];
 };
 
 /* Starting and monitoring subprocesses.
