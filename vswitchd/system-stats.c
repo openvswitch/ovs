@@ -205,9 +205,10 @@ get_process_stats(struct smap *stats)
                         (int) (extension - de->d_name), de->d_name);
         if (!smap_get(stats, key)) {
             if (LINUX && get_process_info(pid, &pinfo)) {
-                smap_add_format(stats, key, "%lu,%lu,%lld,%d,%lld,%lld",
+                smap_add_format(stats, key, "%lu,%lu,%lld,%d,%lld,%lld,%d",
                                 pinfo.vsz, pinfo.rss, pinfo.cputime,
-                                pinfo.crashes, pinfo.booted, pinfo.uptime);
+                                pinfo.crashes, pinfo.booted, pinfo.uptime,
+                                pinfo.core_id);
             } else {
                 smap_add(stats, key, "");
             }
