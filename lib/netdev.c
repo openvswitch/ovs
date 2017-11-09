@@ -784,10 +784,7 @@ netdev_get_pt_mode(const struct netdev *netdev)
  * transmission queues, so that the caller does not ordinarily have to
  * do additional queuing of packets.  'qid' specifies the queue to use
  * and can be ignored if the implementation does not support multiple
- * queues.
- *
- * Some network devices may not implement support for this function.  In such
- * cases this function will always return EOPNOTSUPP. */
+ * queues. */
 int
 netdev_send(struct netdev *netdev, int qid, struct dp_packet_batch *batch,
             bool may_steal, bool concurrent_txq)
