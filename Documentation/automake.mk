@@ -40,6 +40,7 @@ DOC_SOURCE = \
 	Documentation/topics/integration.rst \
 	Documentation/topics/language-bindings.rst \
 	Documentation/topics/openflow.rst \
+	Documentation/topics/ovn-news-2.8.rst \
 	Documentation/topics/ovsdb-replication.rst \
 	Documentation/topics/porting.rst \
 	Documentation/topics/role-based-access-control.rst \

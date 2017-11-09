@@ -58,6 +58,7 @@ OVN
 
    high-availability
    role-based-access-control
+   ovn-news-2.8
 
 .. list-table::
 
