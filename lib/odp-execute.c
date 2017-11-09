@@ -800,6 +800,7 @@ odp_execute_actions(void *dp, struct dp_packet_batch *batch, bool steal,
                  * stolen them.  */
                 return;
             }
+            break;
         case OVS_ACTION_ATTR_METER:
             /* Not implemented yet. */
             break;
