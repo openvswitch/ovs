@@ -18,6 +18,7 @@ import fcntl
 
 import os
 import pwd
+from random import randint
 import struct
 import subprocess
 import sys
@@ -39,6 +40,8 @@ except Exception:
 
 tapdev_fd = None
 _make_taps = {}
+_make_mirror_name = {}
+IFNAMSIZ_LINUX = 15      # this is the max name size, excluding the null byte.
 
 
 def _doexec(*args, **kwargs):
@@ -76,8 +79,16 @@ def _install_tap_linux(tap_name, mtu_value=None):
     pipe.wait()
 
 
+def _make_linux_mirror_name(interface_name):
+    if len(interface_name) > IFNAMSIZ_LINUX - 2:
+        return "ovsmi%06d" % randint(1, 999999)
+    return "mi%s" % interface_name
+
+
 _make_taps['linux'] = _install_tap_linux
 _make_taps['linux2'] = _install_tap_linux
+_make_mirror_name['linux'] = _make_linux_mirror_name
+_make_mirror_name['linux2'] = _make_linux_mirror_name
 
 
 def username():
@@ -406,7 +417,10 @@ def main():
         print("TCPDUMP Args: %s" % ' '.join(tcpdargs))
 
     ovsdb = OVSDB(db_sock)
-    mirror_interface = mirror_interface or "mi%s" % interface
+    if mirror_interface is None:
+        mirror_interface = "mi%s" % interface
+        if sys.platform in _make_mirror_name:
+            mirror_interface = _make_mirror_name[sys.platform](interface)
 
     if sys.platform in _make_taps and \
        mirror_interface not in netifaces.interfaces():
