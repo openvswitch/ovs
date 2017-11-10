@@ -510,7 +510,8 @@ dpdk_mp_create(struct netdev_dpdk *dev, int mtu)
     do {
         /* Full DPDK memory pool name must be unique and cannot be
          * longer than RTE_MEMPOOL_NAMESIZE. */
-        int ret = snprintf(mp_name, RTE_MEMPOOL_NAMESIZE, "ovs_%x_%d_%d_%u",
+        int ret = snprintf(mp_name, RTE_MEMPOOL_NAMESIZE,
+                           "ovs%08x%02d%05d%07u",
                            hash, socket_id, mtu, n_mbufs);
         if (ret < 0 || ret >= RTE_MEMPOOL_NAMESIZE) {
             VLOG_DBG("snprintf returned %d. "
