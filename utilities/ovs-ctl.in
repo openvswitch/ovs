@@ -30,17 +30,9 @@ done
 ## start ##
 ## ----- ##
 
-# Keep track of removed vports so we can reload them if needed
-removed_vports=""
-
 insert_mods () {
     # Try loading openvswitch again.
     action "Inserting openvswitch module" modprobe openvswitch
-
-    for vport in $removed_vports; do
-        # Don't treat failures to load vports as fatal error
-        action "Inserting $vport module" modprobe $vport || true
-    done
 }
 
 insert_mod_if_required () {
@@ -398,9 +390,6 @@ force_reload_kmod () {
 
     for vport in `awk '/^vport_/ { print $1 }' /proc/modules`; do
         action "Removing $vport module" rmmod $vport
-        if ! grep -q $vport /proc/modules; then
-            removed_vports="$removed_vports $vport"
-        fi
     done
 
     if test -e /sys/module/openvswitch; then
