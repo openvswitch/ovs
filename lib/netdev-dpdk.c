@@ -659,6 +659,12 @@ netdev_dpdk_mempool_configure(struct netdev_dpdk *dev)
          * Update dev with the new values. */
         dev->mtu = dev->requested_mtu;
         dev->max_packet_len = MTU_TO_FRAME_LEN(dev->mtu);
+        /* 'mp' should contain pointer to the mempool already owned by netdev.
+         * Otherwise something went completely wrong. */
+        ovs_assert(dev->dpdk_mp);
+        ovs_assert(dev->dpdk_mp->mp == mp->mp);
+        /* Free the returned struct dpdk_mp because it will not be used. */
+        rte_free(mp);
         return EEXIST;
     } else {
         /* A new mempool was created, release the previous one. */
