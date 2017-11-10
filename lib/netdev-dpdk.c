@@ -89,22 +89,12 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 #define NETDEV_DPDK_MBUF_ALIGN      1024
 #define NETDEV_DPDK_MAX_PKT_LEN     9728
 
-/* Max and min number of packets in the mempool.  OVS tries to allocate a
- * mempool with MAX_NB_MBUF: if this fails (because the system doesn't have
- * enough hugepages) we keep halving the number until the allocation succeeds
- * or we reach MIN_NB_MBUF */
-
-#define MAX_NB_MBUF          (4096 * 64)
+/* Min number of packets in the mempool.  OVS tries to allocate a mempool with
+ * roughly estimated number of mbufs: if this fails (because the system doesn't
+ * have enough hugepages) we keep halving the number until the allocation
+ * succeeds or we reach MIN_NB_MBUF */
 #define MIN_NB_MBUF          (4096 * 4)
 #define MP_CACHE_SZ          RTE_MEMPOOL_CACHE_MAX_SIZE
-
-/* MAX_NB_MBUF can be divided by 2 many times, until MIN_NB_MBUF */
-BUILD_ASSERT_DECL(MAX_NB_MBUF % ROUND_DOWN_POW2(MAX_NB_MBUF/MIN_NB_MBUF) == 0);
-
-/* The smallest possible NB_MBUF that we're going to try should be a multiple
- * of MP_CACHE_SZ. This is advised by DPDK documentation. */
-BUILD_ASSERT_DECL((MAX_NB_MBUF / ROUND_DOWN_POW2(MAX_NB_MBUF/MIN_NB_MBUF))
-                  % MP_CACHE_SZ == 0);
 
 /*
  * DPDK XSTATS Counter names definition
