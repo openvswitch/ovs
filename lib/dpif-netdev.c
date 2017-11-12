@@ -3314,13 +3314,6 @@ port_reconfigure(struct dp_netdev_port *port)
 
         port->rxqs[i].port = port;
 
-        if (new_queue) {
-            dp_netdev_rxq_set_cycles(&port->rxqs[i], RXQ_CYCLES_PROC_CURR, 0);
-            dp_netdev_rxq_set_cycles(&port->rxqs[i], RXQ_CYCLES_PROC_HIST, 0);
-            for (unsigned j = 0; j < PMD_RXQ_INTERVAL_MAX; j++) {
-                dp_netdev_rxq_set_intrvl_cycles(&port->rxqs[i], 0);
-            }
-        }
         err = netdev_rxq_open(netdev, &port->rxqs[i].rx, i);
         if (err) {
             return err;
