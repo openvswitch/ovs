@@ -2179,22 +2179,25 @@ struct ifindex_to_port_data {
     const struct dpif_class *dpif_class;
 };
 
-#define NETDEV_PORTS_HASH_INT(port, dpif) \
-                        hash_int(odp_to_u32(port),\
-                            hash_pointer(dpif, 0));
+static uint32_t
+netdev_ports_hash(odp_port_t port, const struct dpif_class *dpif_class)
+{
+    return hash_int(odp_to_u32(port), hash_pointer(dpif_class, 0));
+}
 
 static struct port_to_netdev_data *
 netdev_ports_lookup(odp_port_t port_no, const struct dpif_class *dpif_class)
     OVS_REQUIRES(netdev_hmap_mutex)
 {
-    size_t hash = NETDEV_PORTS_HASH_INT(port_no, dpif_class);
     struct port_to_netdev_data *data;
 
-    HMAP_FOR_EACH_WITH_HASH(data, node, hash, &port_to_netdev) {
-            if (data->dpif_class == dpif_class
-                && data->dpif_port.port_no == port_no) {
-                return data;
-            }
+    HMAP_FOR_EACH_WITH_HASH (data, node,
+                             netdev_ports_hash(port_no, dpif_class),
+                             &port_to_netdev) {
+        if (data->dpif_class == dpif_class
+            && data->dpif_port.port_no == port_no) {
+            return data;
+        }
     }
     return NULL;
 }
@@ -2203,7 +2206,6 @@ int
 netdev_ports_insert(struct netdev *netdev, const struct dpif_class *dpif_class,
                     struct dpif_port *dpif_port)
 {
-    size_t hash = NETDEV_PORTS_HASH_INT(dpif_port->port_no, dpif_class);
     struct port_to_netdev_data *data;
     struct ifindex_to_port_data *ifidx;
     int ifindex = netdev_get_ifindex(netdev);
@@ -2228,7 +2230,8 @@ netdev_ports_insert(struct netdev *netdev, const struct dpif_class *dpif_class,
     ifidx->port = dpif_port->port_no;
     ifidx->dpif_class = dpif_class;
 
-    hmap_insert(&port_to_netdev, &data->node, hash);
+    hmap_insert(&port_to_netdev, &data->node,
+                netdev_ports_hash(dpif_port->port_no, dpif_class));
     hmap_insert(&ifindex_to_port, &ifidx->node, ifidx->ifindex);
     ovs_mutex_unlock(&netdev_hmap_mutex);
 
