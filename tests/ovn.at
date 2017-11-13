@@ -5332,6 +5332,40 @@ echo $expected > expout
 AT_CHECK([sort packets], [0], [expout])
 cat packets
 
+# change localnet port tag.
+AT_CHECK([ovn-nbctl set Logical_Switch_Port ln_port tag=2014])
+
+# wait for earlier changes to take effect
+AT_CHECK([ovn-nbctl --timeout=3 --wait=sb sync], [0], [ignore])
+
+# update nat-addresses option
+ovn-nbctl --wait=sb lsp-set-options lrp0-rp router-port=lrp0
+ovn-nbctl lsp-set-options lrp0-rp router-port=lrp0 nat-addresses="f0:00:00:00:00:01 192.168.0.2"
+
+reset_pcap_file() {
+    local iface=$1
+    local pcap_file=$2
+    ovs-vsctl -- set Interface $iface options:tx_pcap=dummy-tx.pcap \
+options:rxq_pcap=dummy-rx.pcap
+    rm -f ${pcap_file}*.pcap
+    ovs-vsctl -- set Interface $iface options:tx_pcap=${pcap_file}-tx.pcap \
+options:rxq_pcap=${pcap_file}-rx.pcap
+}
+
+as hv1 reset_pcap_file snoopvif hv1/snoopvif
+
+# Wait for packets to be received.
+OVS_WAIT_UNTIL([test `wc -c < "hv1/snoopvif-tx.pcap"` -ge 100])
+trim_zeros() {
+    sed 's/\(00\)\{1,\}$//'
+}
+
+garp="fffffffffffff00000000001810007de08060001080006040001f00000000001c0a80002000000000000c0a80002"
+echo $garp > expout
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/snoopvif-tx.pcap | trim_zeros | uniq >  hv1_snoopvif_tx
+AT_CHECK([sort hv1_snoopvif_tx], [0], [expout])
+
 OVN_CLEANUP([hv1])
 
 AT_CLEANUP

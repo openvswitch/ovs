@@ -1001,6 +1001,7 @@ struct garp_data {
     long long int announce_time; /* Next announcement in ms. */
     int backoff;                 /* Backoff for the next announcement. */
     ofp_port_t ofport;           /* ofport used to output this GARP. */
+    int tag;                     /* VLAN tag of this GARP packet, or -1. */
 };
 
 /* Contains GARPs to be sent. */
@@ -1023,7 +1024,7 @@ destroy_send_garps(void)
 }
 
 static void
-add_garp(const char *name, ofp_port_t ofport,
+add_garp(const char *name, ofp_port_t ofport, int tag,
          const struct eth_addr ea, ovs_be32 ip)
 {
     struct garp_data *garp = xmalloc(sizeof *garp);
@@ -1032,6 +1033,7 @@ add_garp(const char *name, ofp_port_t ofport,
     garp->announce_time = time_msec() + 1000;
     garp->backoff = 1;
     garp->ofport = ofport;
+    garp->tag = tag;
     shash_add(&send_garp_data, name, garp);
 }
 
@@ -1050,6 +1052,7 @@ send_garp_update(const struct sbrec_port_binding *binding_rec,
     }
     ofp_port_t ofport = u16_to_ofp(simap_get(localnet_ofports,
                                              ld->localnet_port->logical_port));
+    int tag = ld->localnet_port->n_tag ? *ld->localnet_port->tag : -1;
 
     volatile struct garp_data *garp = NULL;
     /* Update GARP for NAT IP if it exists. */
@@ -1066,8 +1069,10 @@ send_garp_update(const struct sbrec_port_binding *binding_rec,
             garp = shash_find_data(&send_garp_data, name);
             if (garp) {
                 garp->ofport = ofport;
+                garp->tag = tag;
             } else {
-                add_garp(name, ofport, laddrs->ea, laddrs->ipv4_addrs[i].addr);
+                add_garp(name, ofport, tag, laddrs->ea,
+                         laddrs->ipv4_addrs[i].addr);
             }
             free(name);
         }
@@ -1090,7 +1095,7 @@ send_garp_update(const struct sbrec_port_binding *binding_rec,
             continue;
         }
 
-        add_garp(binding_rec->logical_port, ofport,
+        add_garp(binding_rec->logical_port, ofport, tag,
                  laddrs.ea, laddrs.ipv4_addrs[0].addr);
 
         destroy_lport_addresses(&laddrs);
@@ -1119,6 +1124,11 @@ send_garp(struct garp_data *garp, long long int current_time)
     dp_packet_use_stub(&packet, packet_stub, sizeof packet_stub);
     compose_arp(&packet, ARP_OP_REQUEST, garp->ea, eth_addr_zero,
                 true, garp->ipv4, garp->ipv4);
+
+    /* Compose a GARP request packet's vlan if exist. */
+    if (garp->tag >= 0) {
+        eth_push_vlan(&packet, htons(ETH_TYPE_VLAN), htons(garp->tag));
+    }
 
     /* Compose actions.  The garp request is output on localnet ofport. */
     uint64_t ofpacts_stub[4096 / 8];
