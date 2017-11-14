@@ -2166,17 +2166,12 @@ static struct hmap ifindex_to_port OVS_GUARDED_BY(netdev_hmap_mutex)
     = HMAP_INITIALIZER(&ifindex_to_port);
 
 struct port_to_netdev_data {
-    struct hmap_node node;
+    struct hmap_node portno_node; /* By (dpif_class, dpif_port.port_no). */
+    struct hmap_node ifindex_node; /* By (dpif_class, ifindex). */
     struct netdev *netdev;
     struct dpif_port dpif_port;
     const struct dpif_class *dpif_class;
-};
-
-struct ifindex_to_port_data {
-    struct hmap_node node;
     int ifindex;
-    odp_port_t port;
-    const struct dpif_class *dpif_class;
 };
 
 static uint32_t
@@ -2191,7 +2186,7 @@ netdev_ports_lookup(odp_port_t port_no, const struct dpif_class *dpif_class)
 {
     struct port_to_netdev_data *data;
 
-    HMAP_FOR_EACH_WITH_HASH (data, node,
+    HMAP_FOR_EACH_WITH_HASH (data, portno_node,
                              netdev_ports_hash(port_no, dpif_class),
                              &port_to_netdev) {
         if (data->dpif_class == dpif_class
@@ -2207,7 +2202,6 @@ netdev_ports_insert(struct netdev *netdev, const struct dpif_class *dpif_class,
                     struct dpif_port *dpif_port)
 {
     struct port_to_netdev_data *data;
-    struct ifindex_to_port_data *ifidx;
     int ifindex = netdev_get_ifindex(netdev);
 
     if (ifindex < 0) {
@@ -2224,15 +2218,11 @@ netdev_ports_insert(struct netdev *netdev, const struct dpif_class *dpif_class,
     data->netdev = netdev_ref(netdev);
     data->dpif_class = dpif_class;
     dpif_port_clone(&data->dpif_port, dpif_port);
+    data->ifindex = ifindex;
 
-    ifidx = xzalloc(sizeof *ifidx);
-    ifidx->ifindex = ifindex;
-    ifidx->port = dpif_port->port_no;
-    ifidx->dpif_class = dpif_class;
-
-    hmap_insert(&port_to_netdev, &data->node,
+    hmap_insert(&port_to_netdev, &data->portno_node,
                 netdev_ports_hash(dpif_port->port_no, dpif_class));
-    hmap_insert(&ifindex_to_port, &ifidx->node, ifidx->ifindex);
+    hmap_insert(&ifindex_to_port, &data->ifindex_node, ifindex);
     ovs_mutex_unlock(&netdev_hmap_mutex);
 
     netdev_init_flow_api(netdev);
@@ -2265,38 +2255,11 @@ netdev_ports_remove(odp_port_t port_no, const struct dpif_class *dpif_class)
     ovs_mutex_lock(&netdev_hmap_mutex);
 
     data = netdev_ports_lookup(port_no, dpif_class);
-
     if (data) {
-        int ifindex = netdev_get_ifindex(data->netdev);
-        struct ifindex_to_port_data *ifidx = NULL;
-
-        if (ifindex > 0) {
-            HMAP_FOR_EACH_WITH_HASH (ifidx, node, ifindex, &ifindex_to_port) {
-                if (ifidx->port == port_no) {
-                    hmap_remove(&ifindex_to_port, &ifidx->node);
-                    free(ifidx);
-                    break;
-                }
-            }
-            ovs_assert(ifidx);
-        } else {
-            /* case where the interface is already deleted form the datapath
-             * (e.g. tunctl -d or ip tuntap del), then the ifindex is not
-             * valid anymore. Traverse the HMAP for the port number. */
-            HMAP_FOR_EACH (ifidx, node, &ifindex_to_port) {
-                if (ifidx->port == port_no &&
-                    ifidx->dpif_class == dpif_class) {
-                    hmap_remove(&ifindex_to_port, &ifidx->node);
-                    free(ifidx);
-                    break;
-                }
-            }
-            ovs_assert(ifidx);
-        }
-
         dpif_port_destroy(&data->dpif_port);
         netdev_close(data->netdev); /* unref and possibly close */
-        hmap_remove(&port_to_netdev, &data->node);
+        hmap_remove(&port_to_netdev, &data->portno_node);
+        hmap_remove(&ifindex_to_port, &data->ifindex_node);
         free(data);
         ret = 0;
     }
@@ -2309,13 +2272,13 @@ netdev_ports_remove(odp_port_t port_no, const struct dpif_class *dpif_class)
 odp_port_t
 netdev_ifindex_to_odp_port(int ifindex)
 {
-    struct ifindex_to_port_data *data;
+    struct port_to_netdev_data *data;
     odp_port_t ret = 0;
 
     ovs_mutex_lock(&netdev_hmap_mutex);
-    HMAP_FOR_EACH_WITH_HASH(data, node, ifindex, &ifindex_to_port) {
+    HMAP_FOR_EACH_WITH_HASH (data, ifindex_node, ifindex, &ifindex_to_port) {
         if (data->ifindex == ifindex) {
-            ret = data->port;
+            ret = data->dpif_port.port_no;
             break;
         }
     }
@@ -2330,7 +2293,7 @@ netdev_ports_flow_flush(const struct dpif_class *dpif_class)
     struct port_to_netdev_data *data;
 
     ovs_mutex_lock(&netdev_hmap_mutex);
-    HMAP_FOR_EACH (data, node, &port_to_netdev) {
+    HMAP_FOR_EACH (data, portno_node, &port_to_netdev) {
         if (data->dpif_class == dpif_class) {
             netdev_flow_flush(data->netdev);
         }
@@ -2347,7 +2310,7 @@ netdev_ports_flow_dump_create(const struct dpif_class *dpif_class, int *ports)
     int i = 0;
 
     ovs_mutex_lock(&netdev_hmap_mutex);
-    HMAP_FOR_EACH (data, node, &port_to_netdev) {
+    HMAP_FOR_EACH (data, portno_node, &port_to_netdev) {
         if (data->dpif_class == dpif_class) {
             count++;
         }
@@ -2355,7 +2318,7 @@ netdev_ports_flow_dump_create(const struct dpif_class *dpif_class, int *ports)
 
     dumps = count ? xzalloc(sizeof *dumps * count) : NULL;
 
-    HMAP_FOR_EACH (data, node, &port_to_netdev) {
+    HMAP_FOR_EACH (data, portno_node, &port_to_netdev) {
         if (data->dpif_class == dpif_class) {
             if (netdev_flow_dump_create(data->netdev, &dumps[i])) {
                 continue;
@@ -2379,7 +2342,7 @@ netdev_ports_flow_del(const struct dpif_class *dpif_class,
     struct port_to_netdev_data *data;
 
     ovs_mutex_lock(&netdev_hmap_mutex);
-    HMAP_FOR_EACH (data, node, &port_to_netdev) {
+    HMAP_FOR_EACH (data, portno_node, &port_to_netdev) {
         if (data->dpif_class == dpif_class
             && !netdev_flow_del(data->netdev, ufid, stats)) {
             ovs_mutex_unlock(&netdev_hmap_mutex);
@@ -2399,7 +2362,7 @@ netdev_ports_flow_get(const struct dpif_class *dpif_class, struct match *match,
     struct port_to_netdev_data *data;
 
     ovs_mutex_lock(&netdev_hmap_mutex);
-    HMAP_FOR_EACH (data, node, &port_to_netdev) {
+    HMAP_FOR_EACH (data, portno_node, &port_to_netdev) {
         if (data->dpif_class == dpif_class
             && !netdev_flow_get(data->netdev, match, actions,
                                 ufid, stats, buf)) {
@@ -2418,7 +2381,7 @@ netdev_ports_flow_init(void)
     struct port_to_netdev_data *data;
 
     ovs_mutex_lock(&netdev_hmap_mutex);
-    HMAP_FOR_EACH (data, node, &port_to_netdev) {
+    HMAP_FOR_EACH (data, portno_node, &port_to_netdev) {
        netdev_init_flow_api(data->netdev);
     }
     ovs_mutex_unlock(&netdev_hmap_mutex);
