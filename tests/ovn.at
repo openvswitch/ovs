@@ -8877,7 +8877,7 @@ ovn-nbctl lsp-set-port-security sw0_ip6-port1 \
 "50:64:00:00:00:02 aef0::5264:00ff:fe00:0002"
 
 ovn-nbctl lr-add lr0_ip6
-ovn-nbctl lrp-add lr0_ip6 lrp0_ip6 00:00:00:00:af:01 aef0::/64
+ovn-nbctl lrp-add lr0_ip6 lrp0_ip6 00:00:00:00:af:01 aef0:0:0:0:0:0:0:0/64
 ovn-nbctl lsp-add sw0_ip6 lrp0_ip6-attachment
 ovn-nbctl lsp-set-type lrp0_ip6-attachment router
 ovn-nbctl lsp-set-addresses lrp0_ip6-attachment 00:00:00:00:af:01
