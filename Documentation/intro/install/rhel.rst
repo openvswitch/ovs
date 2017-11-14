@@ -70,17 +70,33 @@ directory is ``/usr/src/redhat/SOURCES``. On RHEL 6, the default ``_topdir`` is
 Build Requirements
 ------------------
 
-To compile the RPMs, you will need to install the packages described in the
-:doc:`general` along with some additional packages. These can be installed with
-the below command::
+You will need to install all required packages to build the RPMs.
+The command below will install RPM tools and generic build dependencies:
+::
+    $ yum install @'Development Tools' rpm-build yum-utils
 
-    $ yum install gcc make python-devel openssl-devel kernel-devel graphviz \
-        kernel-debug-devel autoconf automake rpm-build redhat-rpm-config \
-        libtool checkpolicy selinux-policy-devel python-sphinx
+Then it is necessary to install Open vSwitch specific build dependencies.
+The dependencies are listed in the SPEC file, but first it is necessary
+to replace the VERSION tag to be a valid SPEC.
 
-.. note::
-  If python-sphinx package is not available in your version of RHEL, you can
-  install it via pip with 'pip install sphinx'.
+The command below will create a temporary SPEC file:
+::
+    $ sed -e 's/@VERSION@/0.0.1/' rhel/openvswitch.spec.in > /tmp/ovs.spec
+
+And to install specific dependencies, use yum-builddep tool:
+::
+    $ yum-builddep /tmp/ovs.spec
+
+Once that is completed, remove the file ``/tmp/ovs.spec``.
+
+If python-sphinx package is not available in your version of RHEL, you can
+install it via pip with 'pip install sphinx'.
+
+Open vSwitch requires python 2.7 or newer which is not available in older
+distributions. In the case of RHEL 6.x and its derivatives, one option is
+to install python34 and python34-six from `EPEL`_.
+
+.. _EPEL: https://fedoraproject.org/wiki/EPEL
 
 .. _rhel-bootstrapping:
 
