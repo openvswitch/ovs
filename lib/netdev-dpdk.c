@@ -37,6 +37,7 @@
 #include <rte_meter.h>
 #include <rte_pci.h>
 #include <rte_vhost.h>
+#include <rte_version.h>
 
 #include "dirs.h"
 #include "dp-packet.h"
@@ -2462,6 +2463,14 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
                            dev_info.max_hash_mac_addrs);
     smap_add_format(args, "max_vfs", "%u", dev_info.max_vfs);
     smap_add_format(args, "max_vmdq_pools", "%u", dev_info.max_vmdq_pools);
+
+    /* Querying the DPDK library for iftype may be done in future, pending
+     * support; cf. RFC 3635 Section 3.2.4. */
+    enum { IF_TYPE_ETHERNETCSMACD = 6 };
+
+    smap_add_format(args, "if_type", "%"PRIu32, IF_TYPE_ETHERNETCSMACD);
+    smap_add_format(args, "if_descr", "%s %s", rte_version(),
+                                               dev_info.driver_name);
 
     if (dev_info.pci_dev) {
         smap_add_format(args, "pci-vendor_id", "0x%u",
