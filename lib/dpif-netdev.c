@@ -2925,6 +2925,9 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
         /* If this is part of a probe, Drop the packet, since executing
          * the action may actually cause spurious packets be sent into
          * the network. */
+        if (pmd->core_id == NON_PMD_CORE_ID) {
+            dp_netdev_pmd_unref(pmd);
+        }
         return 0;
     }
 
