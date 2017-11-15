@@ -368,7 +368,6 @@ tests_ovstest_SOURCES += \
 endif
 
 tests_ovstest_LDADD = lib/libopenvswitch.la ovn/lib/libovn.la
-dist_check_SCRIPTS = tests/flowgen.pl
 
 noinst_PROGRAMS += tests/test-strtok_r
 tests_test_strtok_r_SOURCES = tests/test-strtok_r.c
@@ -379,6 +378,7 @@ tests_test_type_props_SOURCES = tests/test-type-props.c
 # Python tests.
 CHECK_PYFILES = \
 	tests/appctl.py \
+	tests/flowgen.py \
 	tests/ovsdb-monitor-sort.py \
 	tests/test-daemon.py \
 	tests/test-json.py \
