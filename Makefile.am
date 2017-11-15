@@ -86,7 +86,7 @@ EXTRA_DIST = \
 	build-aux/cksum-schema-check \
 	build-aux/calculate-schema-cksum \
 	build-aux/dist-docs \
-	build-aux/dpdkstrip.pl \
+	build-aux/dpdkstrip.py \
 	build-aux/sodepends.pl \
 	build-aux/soexpand.pl \
 	build-aux/xml2nroff \
@@ -145,7 +145,7 @@ ro_shell = printf '\043 Generated automatically -- do not modify!    -*- buffer-
 SUFFIXES += .in
 .in:
 	$(AM_V_GEN)$(PERL) $(srcdir)/build-aux/soexpand.pl -I$(srcdir) < $< | \
-	  $(PERL) $(srcdir)/build-aux/dpdkstrip.pl $(DPDKSTRIP_FLAGS) | \
+	  $(PYTHON) $(srcdir)/build-aux/dpdkstrip.py $(DPDKSTRIP_FLAGS) | \
 	  sed \
 	    -e 's,[@]PKIDIR[@],$(PKIDIR),g' \
 	    -e 's,[@]LOGDIR[@],$(LOGDIR),g' \

@@ -229,7 +229,7 @@ Docker network plugins for OVN.
 	--enable-ssl \
 	--with-pkidir=%{_sharedstatedir}/openvswitch/pki
 
-/usr/bin/perl build-aux/dpdkstrip.pl \
+build-aux/dpdkstrip.py \
 %if %{with dpdk}
 	--dpdk \
 %else
