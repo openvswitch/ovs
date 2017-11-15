@@ -1150,6 +1150,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet **packets, int cnt,
     case __OVS_ACTION_ATTR_MAX:
         OVS_NOT_REACHED();
     }
+    dp_packet_delete_batch(packets_, may_steal);
 }
 
 /* Executes 'execute' by performing most of the actions in userspace and
