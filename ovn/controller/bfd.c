@@ -221,6 +221,7 @@ bfd_calculate_chassis(struct controller_ctx *ctx,
                     /* we don't need BFD for non-HA  chassisredirect */
                     if (!gateway_chassis ||
                         ovs_list_is_short(gateway_chassis)) {
+                        gateway_chassis_destroy(gateway_chassis);
                         continue;
                     }
                     our_chassis_is_gw_for_dp = gateway_chassis_contains(
