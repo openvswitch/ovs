@@ -1,6 +1,5 @@
 AT_TESTED([ovs-vswitchd])
 AT_TESTED([ovs-vsctl])
-AT_TESTED([perl])
 
 m4_include([m4/compat.m4])
 

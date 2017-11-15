@@ -150,7 +150,6 @@ SUFFIXES += .in
 	    -e 's,[@]PKIDIR[@],$(PKIDIR),g' \
 	    -e 's,[@]LOGDIR[@],$(LOGDIR),g' \
 	    -e 's,[@]DBDIR[@],$(DBDIR),g' \
-	    -e 's,[@]PERL[@],$(PERL),g' \
 	    -e 's,[@]PYTHON[@],$(PYTHON),g' \
 	    -e 's,[@]RUNDIR[@],$(RUNDIR),g' \
 	    -e 's,[@]VERSION[@],$(VERSION),g' \
@@ -175,7 +174,6 @@ SUFFIXES += .xml
 	  PKIDIR='$(PKIDIR)' \
 	  LOGDIR='$(LOGDIR)' \
 	  DBDIR='$(DBDIR)' \
-	  PERL='$(PERL)' \
 	  PYTHON='$(PYTHON)' \
 	  RUNDIR='$(RUNDIR)' \
 	  VERSION='$(VERSION)' \

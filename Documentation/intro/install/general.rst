@@ -138,11 +138,6 @@ schema, you will also need the following software:
 
 - libtool version 2.4 or later. (Older versions might work too.)
 
-To run the unit tests, you also need:
-
-- Perl. Version 5.10.1 is known to work. Earlier versions should also
-  work.
-
 The datapath tests for userspace and Linux datapaths also rely upon:
 
 - pyftpdlib. Version 1.2.0 is known to work. Earlier versions should
@@ -161,9 +156,6 @@ The ovs-vswitchd.conf.db(5) manpage will include an E-R diagram, in formats
 other than plain text, only if you have the following:
 
 - dot from graphviz (http://www.graphviz.org/).
-
-- Perl. Version 5.10.1 is known to work. Earlier versions should also
-  work.
 
 If you are going to extensively modify Open vSwitch, consider installing the
 following to obtain better warnings:

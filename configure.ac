@@ -30,12 +30,6 @@ AC_PROG_FGREP
 AC_PROG_EGREP
 PKG_PROG_PKG_CONFIG
 
-AC_ARG_VAR([PERL], [path to Perl interpreter])
-AC_PATH_PROG([PERL], perl, no)
-if test "$PERL" = no; then
-   AC_MSG_ERROR([Perl interpreter not found in $PATH or $PERL.])
-fi
-
 AM_MISSING_PROG([AUTOM4TE], [autom4te])
 
 AC_USE_SYSTEM_EXTENSIONS
