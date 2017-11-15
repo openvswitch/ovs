@@ -4340,23 +4340,26 @@ AT_CLEANUP
 m4_divert_push([PREPARE_TESTS])
 # Sorts groups of lines that start with a space, without moving them
 # past the nearest line that does not start with a space.
+[
 multiline_sort () {
-    ${PERL} -e '
-        use warnings;
-        use strict;
-        my @buffer = ();
-        while (<STDIN>) {
-            if (/^ /) {
-                push(@buffer, $_);
-            } else {
-                print $_ foreach sort(@buffer);
-                print $_;
-                @buffer = ();
-            }
-        }
-        print $_ foreach sort(@buffer);
+    $PYTHON -c '
+import sys
+
+buffer = []
+while True:
+    line = sys.stdin.readline()
+    if not line:
+        break
+    if line.startswith(" "):
+        buffer.append(line)
+    else:
+        sys.stdout.write("".join(sorted(buffer)))
+        sys.stdout.write(line)
+        buffer = []
+sys.stdout.write("".join(sorted(buffer)))
 '
 }
+]
 m4_divert_pop([PREPARE_TESTS])
 
 AT_SETUP([ofproto - flow monitoring])
@@ -4626,10 +4629,9 @@ ovs-appctl -t ovs-ofctl ofctl/block
 
 # Add $n_msgs flows.
 (echo "in_port=2,actions=output:2"
-${PERL} -e '
-    for ($i = 0; $i < '$n_msgs'; $i++) {
-        print "cookie=1,reg1=$i,actions=drop\n";
-    }
+$PYTHON -c '
+for i in range('$n_msgs'):
+    print("cookie=1,reg1=%d,actions=drop" % i)
 ') > flows.txt
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 # Check that multipart flow dumps work properly:
