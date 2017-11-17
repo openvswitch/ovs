@@ -1101,6 +1101,7 @@ netdev_tc_flow_del(struct netdev *netdev OVS_UNUSED,
                    const ovs_u128 *ufid,
                    struct dpif_flow_stats *stats)
 {
+    struct tc_flower flower;
     struct netdev *dev;
     int prio = 0;
     int ifindex;
@@ -1120,14 +1121,20 @@ netdev_tc_flow_del(struct netdev *netdev OVS_UNUSED,
         return -ifindex;
     }
 
+    if (stats) {
+        memset(stats, 0, sizeof *stats);
+        if (!tc_get_flower(ifindex, prio, handle, &flower)) {
+            stats->n_packets = get_32aligned_u64(&flower.stats.n_packets);
+            stats->n_bytes = get_32aligned_u64(&flower.stats.n_bytes);
+            stats->used = flower.lastused;
+        }
+    }
+
     error = tc_del_filter(ifindex, prio, handle);
     del_ufid_tc_mapping(ufid);
 
     netdev_close(dev);
 
-    if (stats) {
-        memset(stats, 0, sizeof *stats);
-    }
     return error;
 }
 
