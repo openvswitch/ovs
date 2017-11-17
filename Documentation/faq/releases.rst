@@ -124,6 +124,7 @@ Q: Are all features available with all datapaths?
     Set action            YES            YES            YES       PARTIAL
     NIC Bonding           YES            YES            YES       YES
     Multiple VTEPs        YES            YES            YES       YES
+    Meters                4.15           YES            YES       NO
     ===================== ============== ============== ========= =======
 
     Do note, however:
