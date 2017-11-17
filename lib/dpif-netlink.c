@@ -212,6 +212,7 @@ static int ovs_datapath_family;
 static int ovs_vport_family;
 static int ovs_flow_family;
 static int ovs_packet_family;
+static int ovs_meter_family;
 
 /* Generic Netlink multicast groups for OVS.
  *
@@ -2920,41 +2921,286 @@ dpif_netlink_ct_flush(struct dpif *dpif OVS_UNUSED, const uint16_t *zone,
 
 
 /* Meters */
+
+/* Set of supported meter flags */
+#define DP_SUPPORTED_METER_FLAGS_MASK \
+    (OFPMF13_STATS | OFPMF13_PKTPS | OFPMF13_KBPS | OFPMF13_BURST)
+
 static void
-dpif_netlink_meter_get_features(const struct dpif * dpif OVS_UNUSED,
+dpif_netlink_meter_init(struct dpif_netlink *dpif, struct ofpbuf *buf,
+                        void *stub, size_t size, uint32_t command)
+{
+    ofpbuf_use_stub(buf, stub, size);
+
+    nl_msg_put_genlmsghdr(buf, 0, ovs_meter_family, NLM_F_REQUEST | NLM_F_ECHO,
+                          command, OVS_METER_VERSION);
+
+    struct ovs_header *ovs_header;
+    ovs_header = ofpbuf_put_uninit(buf, sizeof *ovs_header);
+    ovs_header->dp_ifindex = dpif->dp_ifindex;
+}
+
+/* Execute meter 'request' in the kernel datapath.  If the command
+ * fails, returns a positive errno value.  Otherwise, stores the reply
+ * in '*replyp', parses the policy according to 'reply_policy' into the
+ * array of Netlink attribute in 'a', and returns 0.  On success, the
+ * caller is responsible for calling ofpbuf_delete() on '*replyp'
+ * ('replyp' will contain pointers into 'a'). */
+static int
+dpif_netlink_meter_transact(struct ofpbuf *request, struct ofpbuf **replyp,
+                            const struct nl_policy *reply_policy,
+                            struct nlattr **a, size_t size_a)
+{
+    int error = nl_transact(NETLINK_GENERIC, request, replyp);
+    ofpbuf_uninit(request);
+
+    if (error) {
+        return error;
+    }
+
+    struct nlmsghdr *nlmsg = ofpbuf_try_pull(*replyp, sizeof *nlmsg);
+    struct genlmsghdr *genl = ofpbuf_try_pull(*replyp, sizeof *genl);
+    struct ovs_header *ovs_header = ofpbuf_try_pull(*replyp,
+                                                    sizeof *ovs_header);
+    if (!nlmsg || !genl || !ovs_header
+        || nlmsg->nlmsg_type != ovs_meter_family
+        || !nl_policy_parse(*replyp, 0, reply_policy, a, size_a)) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_DBG_RL(&rl,
+                    "Kernel module response to meter tranaction is invalid");
+        return EINVAL;
+    }
+    return 0;
+}
+
+static void
+dpif_netlink_meter_get_features(const struct dpif *dpif_,
                                 struct ofputil_meter_features *features)
 {
-    features->max_meters = 0;
-    features->band_types = 0;
-    features->capabilities = 0;
-    features->max_bands = 0;
-    features->max_color = 0;
+    struct ofpbuf buf, *msg;
+    uint64_t stub[1024 / 8];
+
+    static const struct nl_policy ovs_meter_features_policy[] = {
+        [OVS_METER_ATTR_MAX_METERS] = { .type = NL_A_U32 },
+        [OVS_METER_ATTR_MAX_BANDS] = { .type = NL_A_U32 },
+        [OVS_METER_ATTR_BANDS] = { .type = NL_A_NESTED, .optional = true },
+    };
+    struct nlattr *a[ARRAY_SIZE(ovs_meter_features_policy)];
+
+    struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
+    dpif_netlink_meter_init(dpif, &buf, stub, sizeof stub,
+                            OVS_METER_CMD_FEATURES);
+    if (dpif_netlink_meter_transact(&buf, &msg, ovs_meter_features_policy, a,
+                                    ARRAY_SIZE(ovs_meter_features_policy))) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_INFO_RL(&rl,
+                  "dpif_netlink_meter_transact OVS_METER_CMD_FEATURES failed");
+        return;
+    }
+
+    features->max_meters = nl_attr_get_u32(a[OVS_METER_ATTR_MAX_METERS]);
+    features->max_bands = nl_attr_get_u32(a[OVS_METER_ATTR_MAX_BANDS]);
+
+    /* Bands is a nested attribute of zero or more nested
+     * band attributes.  */
+    if (a[OVS_METER_ATTR_BANDS]) {
+        const struct nlattr *nla;
+        size_t left;
+
+        NL_NESTED_FOR_EACH (nla, left, a[OVS_METER_ATTR_BANDS]) {
+            const struct nlattr *band_nla;
+            size_t band_left;
+
+            NL_NESTED_FOR_EACH (band_nla, band_left, nla) {
+                if (nl_attr_type(band_nla) == OVS_BAND_ATTR_TYPE) {
+                    if (nl_attr_get_size(band_nla) == sizeof(uint32_t)) {
+                        switch (nl_attr_get_u32(band_nla)) {
+                        case OVS_METER_BAND_TYPE_DROP:
+                            features->band_types |= 1 << OFPMBT13_DROP;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    features->capabilities = DP_SUPPORTED_METER_FLAGS_MASK;
+
+    ofpbuf_delete(msg);
 }
 
 static int
-dpif_netlink_meter_set(struct dpif *dpif OVS_UNUSED,
-                       ofproto_meter_id *meter_id OVS_UNUSED,
-                       struct ofputil_meter_config *config OVS_UNUSED)
+dpif_netlink_meter_set(struct dpif *dpif_, ofproto_meter_id *meter_id,
+                       struct ofputil_meter_config *config)
 {
-    return EFBIG; /* meter_id out of range */
+    struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
+    struct ofpbuf buf, *msg;
+    uint64_t stub[1024 / 8];
+
+    static const struct nl_policy ovs_meter_set_response_policy[] = {
+        [OVS_METER_ATTR_ID] = { .type = NL_A_U32 },
+    };
+    struct nlattr *a[ARRAY_SIZE(ovs_meter_set_response_policy)];
+
+    if (config->flags & ~DP_SUPPORTED_METER_FLAGS_MASK) {
+        return EBADF; /* Unsupported flags set */
+    }
+
+    for (size_t i = 0; i < config->n_bands; i++) {
+        switch (config->bands[i].type) {
+        case OFPMBT13_DROP:
+            break;
+        default:
+            return ENODEV; /* Unsupported band type */
+        }
+    }
+
+    dpif_netlink_meter_init(dpif, &buf, stub, sizeof stub, OVS_METER_CMD_SET);
+
+    if (meter_id->uint32 != UINT32_MAX) {
+        nl_msg_put_u32(&buf, OVS_METER_ATTR_ID, meter_id->uint32);
+    }
+    if (config->flags & OFPMF13_KBPS) {
+        nl_msg_put_flag(&buf, OVS_METER_ATTR_KBPS);
+    }
+
+    size_t bands_offset = nl_msg_start_nested(&buf, OVS_METER_ATTR_BANDS);
+    /* Bands */
+    for (size_t i = 0; i < config->n_bands; ++i) {
+        struct ofputil_meter_band * band = &config->bands[i];
+        uint32_t band_type;
+
+        size_t band_offset = nl_msg_start_nested(&buf, OVS_BAND_ATTR_UNSPEC);
+
+        switch (band->type) {
+        case OFPMBT13_DROP:
+            band_type = OVS_METER_BAND_TYPE_DROP;
+            break;
+        default:
+            band_type = OVS_METER_BAND_TYPE_UNSPEC;
+        }
+        nl_msg_put_u32(&buf, OVS_BAND_ATTR_TYPE, band_type);
+        nl_msg_put_u32(&buf, OVS_BAND_ATTR_RATE, band->rate);
+        nl_msg_put_u32(&buf, OVS_BAND_ATTR_BURST,
+                       config->flags & OFPMF13_BURST ?
+                       band->burst_size : band->rate);
+        nl_msg_end_nested(&buf, band_offset);
+    }
+    nl_msg_end_nested(&buf, bands_offset);
+
+    int error = dpif_netlink_meter_transact(&buf, &msg,
+                                    ovs_meter_set_response_policy, a,
+                                    ARRAY_SIZE(ovs_meter_set_response_policy));
+    if (error) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_INFO_RL(&rl,
+                     "dpif_netlink_meter_transact OVS_METER_CMD_SET failed");
+        return error;
+    }
+
+    meter_id->uint32 = nl_attr_get_u32(a[OVS_METER_ATTR_ID]);
+    ofpbuf_delete(msg);
+    return 0;
+}
+
+/* Retrieve statistics and/or delete meter 'meter_id'.  Statistics are
+ * stored in 'stats', if it is not null.  If 'command' is
+ * OVS_METER_CMD_DEL, the meter is deleted and statistics are optionally
+ * retrieved.  If 'command' is OVS_METER_CMD_GET, then statistics are
+ * simply retrieved. */
+static int
+dpif_netlink_meter_get_stats(const struct dpif *dpif_,
+                             ofproto_meter_id meter_id,
+                             struct ofputil_meter_stats *stats,
+                             uint16_t max_bands,
+                             enum ovs_meter_cmd command)
+{
+    struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
+    struct ofpbuf buf, *msg;
+    uint64_t stub[1024 / 8];
+
+    static const struct nl_policy ovs_meter_stats_policy[] = {
+        [OVS_METER_ATTR_ID] = { .type = NL_A_U32, .optional = true},
+        [OVS_METER_ATTR_STATS] = { NL_POLICY_FOR(struct ovs_flow_stats),
+                                   .optional = true},
+        [OVS_METER_ATTR_BANDS] = { .type = NL_A_NESTED, .optional = true },
+    };
+    struct nlattr *a[ARRAY_SIZE(ovs_meter_stats_policy)];
+
+    dpif_netlink_meter_init(dpif, &buf, stub, sizeof stub, command);
+
+    nl_msg_put_u32(&buf, OVS_METER_ATTR_ID, meter_id.uint32);
+
+    int error = dpif_netlink_meter_transact(&buf, &msg,
+                                            ovs_meter_stats_policy, a,
+                                            ARRAY_SIZE(ovs_meter_stats_policy));
+    if (error) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_INFO_RL(&rl, "dpif_netlink_meter_transact %s failed",
+                     command == OVS_METER_CMD_GET ? "get" : "del");
+        return error;
+    }
+
+    if (stats
+        && a[OVS_METER_ATTR_ID]
+        && a[OVS_METER_ATTR_STATS]
+        && nl_attr_get_u32(a[OVS_METER_ATTR_ID]) == meter_id.uint32) {
+        /* return stats */
+        const struct ovs_flow_stats *stat;
+        const struct nlattr *nla;
+        size_t left;
+
+        stat = nl_attr_get(a[OVS_METER_ATTR_STATS]);
+        stats->packet_in_count = get_32aligned_u64(&stat->n_packets);
+        stats->byte_in_count = get_32aligned_u64(&stat->n_bytes);
+
+        if (a[OVS_METER_ATTR_BANDS]) {
+            size_t n_bands = 0;
+            NL_NESTED_FOR_EACH (nla, left, a[OVS_METER_ATTR_BANDS]) {
+                const struct nlattr *band_nla;
+                band_nla = nl_attr_find_nested(nla, OVS_BAND_ATTR_STATS);
+                if (band_nla && nl_attr_get_size(band_nla) \
+                                == sizeof(struct ovs_flow_stats)) {
+                    stat = nl_attr_get(band_nla);
+
+                    if (n_bands < max_bands) {
+                        stats->bands[n_bands].packet_count
+                            = get_32aligned_u64(&stat->n_packets);
+                        stats->bands[n_bands].byte_count
+                            = get_32aligned_u64(&stat->n_bytes);
+                        ++n_bands;
+                    }
+                } else {
+                    stats->bands[n_bands].packet_count = 0;
+                    stats->bands[n_bands].byte_count = 0;
+                    ++n_bands;
+                }
+            }
+            stats->n_bands = n_bands;
+        } else {
+            /* For a non-existent meter, return 0 stats. */
+            stats->n_bands = 0;
+        }
+    }
+
+    ofpbuf_delete(msg);
+    return error;
 }
 
 static int
-dpif_netlink_meter_get(const struct dpif *dpif OVS_UNUSED,
-                       ofproto_meter_id meter_id OVS_UNUSED,
-                       struct ofputil_meter_stats *stats OVS_UNUSED,
-                       uint16_t n_bands OVS_UNUSED)
+dpif_netlink_meter_get(const struct dpif *dpif, ofproto_meter_id meter_id,
+                       struct ofputil_meter_stats *stats, uint16_t max_bands)
 {
-    return EFBIG; /* meter_id out of range */
+    return dpif_netlink_meter_get_stats(dpif, meter_id, stats, max_bands,
+                                        OVS_METER_CMD_GET);
 }
 
 static int
-dpif_netlink_meter_del(struct dpif *dpif OVS_UNUSED,
-                       ofproto_meter_id meter_id OVS_UNUSED,
-                       struct ofputil_meter_stats *stats OVS_UNUSED,
-                       uint16_t n_bands OVS_UNUSED)
+dpif_netlink_meter_del(struct dpif *dpif, ofproto_meter_id meter_id,
+                       struct ofputil_meter_stats *stats, uint16_t max_bands)
 {
-    return EFBIG; /* meter_id out of range */
+    return dpif_netlink_meter_get_stats(dpif, meter_id, stats, max_bands,
+                                        OVS_METER_CMD_DEL);
 }
 
 
@@ -3039,6 +3285,11 @@ dpif_netlink_init(void)
         if (!error) {
             error = nl_lookup_genl_mcgroup(OVS_VPORT_FAMILY, OVS_VPORT_MCGROUP,
                                            &ovs_vport_mcgroup);
+        }
+        if (!error) {
+            if (nl_lookup_genl_family(OVS_METER_FAMILY, &ovs_meter_family)) {
+                VLOG_INFO("The kernel module does not support meters.");
+            }
         }
 
         ovs_tunnels_out_of_tree = dpif_netlink_rtnl_probe_oot_tunnels();
