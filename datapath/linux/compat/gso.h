@@ -34,11 +34,16 @@ struct ovs_gso_cb {
 static inline void skb_clear_ovs_gso_cb(struct sk_buff *skb)
 {
 	OVS_GSO_CB(skb)->fix_segment = NULL;
+#ifndef USE_UPSTREAM_TUNNEL
+	OVS_GSO_CB(skb)->tun_dst = NULL;
+#endif
 }
 #else
 static inline void skb_clear_ovs_gso_cb(struct sk_buff *skb)
 {
-
+#ifndef USE_UPSTREAM_TUNNEL
+	OVS_GSO_CB(skb)->tun_dst = NULL;
+#endif
 }
 #endif
 
