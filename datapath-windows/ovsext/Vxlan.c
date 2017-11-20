@@ -391,11 +391,17 @@ OvsDecapVxlan(POVS_SWITCH_CONTEXT switchContext,
     UINT32 tunnelSize, packetLength;
     PUINT8 bufferStart;
     NDIS_STATUS status;
+    OVS_PACKET_HDR_INFO layers = { 0 };
+
+    status = OvsExtractLayers(curNbl, &layers);
+    if (status != NDIS_STATUS_SUCCESS) {
+        return status;
+    }
 
     /* Check the length of the UDP payload */
     curNb = NET_BUFFER_LIST_FIRST_NB(curNbl);
     packetLength = NET_BUFFER_DATA_LENGTH(curNb);
-    tunnelSize = OvsGetVxlanTunHdrSize();
+    tunnelSize = OvsGetVxlanTunHdrSizeFromLayers(&layers);
     if (packetLength < tunnelSize) {
         return NDIS_STATUS_INVALID_LENGTH;
     }
@@ -424,13 +430,13 @@ OvsDecapVxlan(POVS_SWITCH_CONTEXT switchContext,
 
     ethHdr = (EthHdr *)bufferStart;
     /* XXX: Handle IP options. */
-    ipHdr = (IPHdr *)((PCHAR)ethHdr + sizeof *ethHdr);
+    ipHdr = (IPHdr *)(bufferStart + layers.l3Offset);
     tunKey->src = ipHdr->saddr;
     tunKey->dst = ipHdr->daddr;
     tunKey->tos = ipHdr->tos;
     tunKey->ttl = ipHdr->ttl;
     tunKey->pad = 0;
-    udpHdr = (UDPHdr *)((PCHAR)ipHdr + sizeof *ipHdr);
+    udpHdr = (UDPHdr *)(bufferStart + layers.l4Offset);
 
     /* Validate if NIC has indicated checksum failure. */
     status = OvsValidateUDPChecksum(curNbl, udpHdr->check == 0);
@@ -442,7 +448,7 @@ OvsDecapVxlan(POVS_SWITCH_CONTEXT switchContext,
     if (udpHdr->check != 0) {
         tunKey->flags |= OVS_TNL_F_CSUM;
         status = OvsCalculateUDPChecksum(curNbl, curNb, ipHdr, udpHdr,
-                                         packetLength);
+                                         packetLength, &layers);
         if (status != NDIS_STATUS_SUCCESS) {
             goto dropNbl;
         }

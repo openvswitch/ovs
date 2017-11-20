@@ -317,35 +317,42 @@ OvsDecapGre(POVS_SWITCH_CONTEXT switchContext,
     GREHdr *greHdr;
     UINT32 tunnelSize, packetLength;
     UINT32 headRoom = 0;
+    UINT32 maxGreLen;
     PUINT8 bufferStart;
     NDIS_STATUS status = NDIS_STATUS_SUCCESS;
     PCHAR tempBuf = NULL;
+    OVS_PACKET_HDR_INFO layers;
 
     ASSERT(*newNbl == NULL);
 
     *newNbl = NULL;
+    status = OvsExtractLayers(curNbl, &layers);
+    if (status != NDIS_STATUS_SUCCESS) {
+        return status;
+    }
 
     curNb = NET_BUFFER_LIST_FIRST_NB(curNbl);
     packetLength = NET_BUFFER_DATA_LENGTH(curNb);
     curMdl = NET_BUFFER_CURRENT_MDL(curNb);
-    tunnelSize = GreTunHdrSize(0);
+    tunnelSize = GreTunHdrSizeFromLayers(0, &layers);
     if (packetLength <= tunnelSize) {
         return NDIS_STATUS_INVALID_LENGTH;
     }
 
+    maxGreLen = GreMaxLengthFromLayers(&layers);
     /* Get a contiguous buffer for the maximum length of a GRE header */
-    bufferStart = NdisGetDataBuffer(curNb, OVS_MAX_GRE_LGTH, NULL, 1, 0);
+    bufferStart = NdisGetDataBuffer(curNb, maxGreLen, NULL, 1, 0);
     if (!bufferStart) {
         /* Documentation is unclear on where the packet can be fragmented.
          * For the moment allocate the buffer needed to get the maximum length
          * of a GRE header contiguous */
-        tempBuf = OvsAllocateMemoryWithTag(OVS_MAX_GRE_LGTH, OVS_GRE_POOL_TAG);
+        tempBuf = OvsAllocateMemoryWithTag(maxGreLen, OVS_GRE_POOL_TAG);
         if (!tempBuf) {
             status = NDIS_STATUS_RESOURCES;
             goto end;
         }
-        RtlZeroMemory(tempBuf, OVS_MAX_GRE_LGTH);
-        bufferStart = NdisGetDataBuffer(curNb, OVS_MAX_GRE_LGTH, tempBuf,
+        RtlZeroMemory(tempBuf, maxGreLen);
+        bufferStart = NdisGetDataBuffer(curNb, maxGreLen, tempBuf,
                                         1, 0);
         if (!bufferStart) {
             status = NDIS_STATUS_RESOURCES;
@@ -354,9 +361,9 @@ OvsDecapGre(POVS_SWITCH_CONTEXT switchContext,
     }
 
     ethHdr = (EthHdr *)bufferStart;
-    headRoom += sizeof *ethHdr;
+    headRoom += layers.l3Offset;
 
-    ipHdr = (IPHdr *)((PCHAR)ethHdr + sizeof *ethHdr);
+    ipHdr = (IPHdr *)(bufferStart + layers.l3Offset);
     tunKey->src = ipHdr->saddr;
     tunKey->dst = ipHdr->daddr;
     tunKey->tos = ipHdr->tos;
@@ -364,10 +371,10 @@ OvsDecapGre(POVS_SWITCH_CONTEXT switchContext,
     tunKey->pad = 0;
     headRoom += sizeof *ipHdr;
 
-    greHdr = (GREHdr *)((PCHAR)ipHdr + sizeof *ipHdr);
+    greHdr = (GREHdr *)(bufferStart + layers.l4Offset);
     headRoom += sizeof *greHdr;
 
-    tunnelSize = GreTunHdrSize(greHdr->flags);
+    tunnelSize = GreTunHdrSizeFromLayers(greHdr->flags, &layers);
 
     /* Verify the packet length after looking at the GRE flags*/
     if (packetLength <= tunnelSize) {
@@ -390,8 +397,8 @@ OvsDecapGre(POVS_SWITCH_CONTEXT switchContext,
         UINT16 chksum =
             CalculateChecksumNB(curNb,
                                 (UINT16)(NET_BUFFER_DATA_LENGTH(curNb) -
-                                (ipHdr->ihl * 4 + sizeof *ethHdr)),
-                                ipHdr->ihl * 4 + sizeof *ethHdr);
+                                layers.l4Offset),
+                                layers.l4Offset);
         if (prevChksum != chksum) {
             status = STATUS_NDIS_INVALID_PACKET;
             goto end;

@@ -85,6 +85,12 @@ OvsGetVxlanTunHdrSize(VOID)
            sizeof (VXLANHdr);
 }
 
+static __inline UINT32
+OvsGetVxlanTunHdrSizeFromLayers(POVS_PACKET_HDR_INFO layers)
+{
+    return layers->l7Offset + sizeof(VXLANHdr);
+}
+
 #define VXLAN_UDP_PORT 4789
 #define VXLAN_UDP_PORT_NBO 0xB512
 

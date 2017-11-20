@@ -103,4 +103,20 @@ GreTunHdrSize(UINT16 flags)
     return sum;
 }
 
+static __inline UINT32
+GreTunHdrSizeFromLayers(UINT16 flags, POVS_PACKET_HDR_INFO layers)
+{
+    UINT32 sum = layers->l4Offset + sizeof(GREHdr);
+    sum += (flags & GRE_CSUM) ? 4 : 0;
+    sum += (flags & GRE_KEY) ? 4 : 0;
+
+    return sum;
+}
+
+static __inline UINT32
+GreMaxLengthFromLayers(POVS_PACKET_HDR_INFO layers)
+{
+    return (layers->l4Offset + sizeof(GREHdr) + 12);
+}
+
 #endif /*__GRE_H_ */

@@ -115,4 +115,10 @@ OvsGetSttTunHdrSize(VOID)
                   STT_HDR_LEN;
 }
 
+static __inline UINT32
+OvsGetSttTunHdrSizeFromLayers(POVS_PACKET_HDR_INFO layers)
+{
+    return layers->l7Offset + STT_HDR_LEN;
+}
+
 #endif /*__OVS_STT_H_ */

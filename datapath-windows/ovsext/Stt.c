@@ -415,9 +415,23 @@ ret_error:
  *----------------------------------------------------------------------------
  */
 static __inline NDIS_STATUS
-OvsValidateTCPChecksum(PNET_BUFFER_LIST curNbl, PNET_BUFFER curNb)
+OvsValidateTCPChecksum(PNET_BUFFER_LIST curNbl,
+                       PNET_BUFFER curNb,
+                       POVS_PACKET_HDR_INFO layers)
 {
+    PUINT8 buf;
+    PMDL curMdl;
     NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo;
+    NDIS_STATUS status;
+
+    curMdl = NET_BUFFER_CURRENT_MDL(curNb);
+    buf = (PUINT8)MmGetSystemAddressForMdlSafe(curMdl, LowPagePriority)
+        + NET_BUFFER_CURRENT_MDL_OFFSET(curNb);
+    if (!buf) {
+        status = NDIS_STATUS_INVALID_PACKET;
+        return status;
+    }
+
     csumInfo.Value = NET_BUFFER_LIST_INFO(curNbl,
                                           TcpIpChecksumNetBufferListInfo);
 
@@ -433,23 +447,22 @@ OvsValidateTCPChecksum(PNET_BUFFER_LIST curNbl, PNET_BUFFER curNb)
         return NDIS_STATUS_SUCCESS;
     }
 
-    EthHdr *eth = (EthHdr *)NdisGetDataBuffer(curNb, sizeof(EthHdr),
-                                              NULL, 1, 0);
-    if (eth == NULL) {
+    EthHdr *ethHdr = (EthHdr *)buf;
+    if (ethHdr == NULL) {
         return NDIS_STATUS_RESOURCES;
     }
 
-    if (eth->Type == ntohs(NDIS_ETH_TYPE_IPV4)) {
-        IPHdr *ip = (IPHdr *)((PCHAR)eth + sizeof *eth);
-        UINT32 l4Payload = ntohs(ip->tot_len) - ip->ihl * 4;
-        TCPHdr *tcp = (TCPHdr *)((PCHAR)ip + ip->ihl * 4);
+    if (ethHdr->Type == ntohs(NDIS_ETH_TYPE_IPV4)) {
+        IPHdr *ipHdr = (IPHdr *)(buf + layers->l3Offset);
+        UINT32 l4Payload = ntohs(ipHdr->tot_len) - ipHdr->ihl * 4;
+        TCPHdr *tcp = (TCPHdr *)(buf + layers->l4Offset);
         checkSum = tcp->check;
 
         tcp->check = 0;
-        tcp->check = IPPseudoChecksum(&ip->saddr, &ip->daddr,
+        tcp->check = IPPseudoChecksum(&ipHdr->saddr, &ipHdr->daddr,
                                       IPPROTO_TCP, (UINT16)l4Payload);
         tcp->check = CalculateChecksumNB(curNb, (UINT16)(l4Payload),
-                                         sizeof(EthHdr) + ip->ihl * 4);
+                                         layers->l4Offset);
         if (checkSum != tcp->check) {
             return NDIS_STATUS_INVALID_PACKET;
         }
@@ -912,18 +925,24 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
     SttHdr *sttHdr;
     char *sttBuf[STT_HDR_LEN];
     UINT32 advanceCnt, hdrLen;
+    OVS_PACKET_HDR_INFO layers = { 0 };
+
+    status = OvsExtractLayers(curNbl, &layers);
+    if (status != NDIS_STATUS_SUCCESS) {
+        return status;
+    }
 
     curNb = NET_BUFFER_LIST_FIRST_NB(curNbl);
     ASSERT(NET_BUFFER_NEXT_NB(curNb) == NULL);
 
     /* Validate the TCP Checksum */
-    status = OvsValidateTCPChecksum(curNbl, curNb);
+    status = OvsValidateTCPChecksum(curNbl, curNb, &layers);
     if (status != NDIS_STATUS_SUCCESS) {
         return status;
     }
 
     /* Skip Eth header */
-    hdrLen = sizeof(EthHdr);
+    hdrLen = layers.l3Offset;
     NdisAdvanceNetBufferDataStart(curNb, hdrLen, FALSE, NULL);
     advanceCnt = hdrLen;
 
@@ -996,7 +1015,6 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
     tunKey->pad = 0;
 
     /* Handle ECN */
-    OVS_PACKET_HDR_INFO layers = {0};
     if (0 != ipHdr->tos) {
         status = OvsExtractLayers(*newNbl, &layers);
         if (status != NDIS_STATUS_SUCCESS) {

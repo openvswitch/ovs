@@ -113,6 +113,12 @@ OvsGetGeneveTunHdrMaxSize(VOID)
     return OvsGetGeneveTunHdrMinSize() + TUN_OPT_MAX_LEN;
 }
 
+static __inline UINT32
+OvsGetGeneveTunHdrSizeFromLayers(POVS_PACKET_HDR_INFO layers)
+{
+    return layers->l7Offset + sizeof(GeneveHdr);
+}
+
 #define GENEVE_UDP_PORT 6081
 #define GENEVE_UDP_PORT_NBO 0xC117
 #define GENEVE_VER 0

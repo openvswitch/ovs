@@ -39,7 +39,8 @@ NDIS_STATUS OvsCalculateUDPChecksum(PNET_BUFFER_LIST curNbl,
                                     PNET_BUFFER curNb,
                                     IPHdr *ipHdr,
                                     UDPHdr *udpHdr,
-                                    UINT32 packetLength);
+                                    UINT32 packetLength,
+                                    POVS_PACKET_HDR_INFO layers);
 
 ULONG OVSGetTcpMSS(PNET_BUFFER_LIST nbl);
 
