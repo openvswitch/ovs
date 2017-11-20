@@ -31,7 +31,7 @@ if HAVE_DOT
 vswitchd/vswitch.gv: ovsdb/ovsdb-dot.in vswitchd/vswitch.ovsschema
 	$(AM_V_GEN)$(OVSDB_DOT) --no-arrows $(srcdir)/vswitchd/vswitch.ovsschema > $@
 vswitchd/vswitch.pic: vswitchd/vswitch.gv ovsdb/dot2pic
-	$(AM_V_GEN)(dot -T plain < vswitchd/vswitch.gv | $(PERL) $(srcdir)/ovsdb/dot2pic -f 3) > $@.tmp && \
+	$(AM_V_GEN)(dot -T plain < vswitchd/vswitch.gv | $(PYTHON) $(srcdir)/ovsdb/dot2pic -f 3) > $@.tmp && \
 	mv $@.tmp $@
 VSWITCH_PIC = vswitchd/vswitch.pic
 VSWITCH_DOT_DIAGRAM_ARG = --er-diagram=$(VSWITCH_PIC)

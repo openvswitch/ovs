@@ -1,6 +1,6 @@
-#! /usr/bin/perl
+#! /usr/bin/env python
 
-# Copyright (c) 2009, 2010, 2011, 2013 Nicira, Inc.
+# Copyright (c) 2009, 2010, 2011, 2013, 2017 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,67 +14,104 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-use strict;
-use warnings;
+import getopt
+import sys
 
-use Getopt::Long;
+def dot2pic(src, dst):
+    scale = 1.0
+    while True:
+        line = src.readline()
+        if not line:
+            break
 
-my $font_scale = 0;
-GetOptions("f=i" => \$font_scale) || exit 1;
+        words = line.split()
+        command = words[0]
+        if command == 'graph':
+            scale = float(words[1])
+        elif command == 'node':
+            name = words[1]
+            x = float(words[2])
+            y = float(words[3])
+            width = float(words[4])
+            height = float(words[5])
+            label, style, shape, color, fillcolor = words[6:11]
+            x *= scale
+            y *= scale
+            width *= scale
+            height *= scale
+            dst.write("linethick = %f;\n" % (0.5 if style == 'bold' else 1.0))
+            dst.write('box at %f,%f wid %f height %f "%s"\n'
+                      % (x, y, width, height, name))
+            if style == 'bold':
+                inset = 2.0 / 72.0
+                width -= inset * 2
+                height -= inset * 2
+                dst.write("box at %f,%f wid %f height %f\n"
+                          % (x, y, width, height))
+        elif command == 'edge':
+            tail = words[1]
+            head = words[2]
+            n = int(words[3])
 
-my ($scale) = 1;
-printf ".ps %+d\n", -$font_scale if $font_scale;
-print ".PS\n";
-print "linethick = 1;\n";
-while (<>) {
-    if (/^graph/) {
-        (undef, $scale) = split;
-    } elsif (/^node/) {
-        my (undef, $name, $x, $y, $width, $height, $label, $style, $shape, $color, $fillcolor) = split;
-        $x *= $scale;
-        $y *= $scale;
-        $width *= $scale;
-        $height *= $scale;
-        print "linethick = ", ($style eq 'bold' ? 0.5 : 1.0), ";\n";
-        print "box at $x,$y wid $width height $height \"$name\"\n";
-        if ($style eq 'bold') {
-            my $inset = 2.0 / 72.0;
-            $width -= $inset * 2;
-            $height -= $inset * 2;
-            print "box at $x,$y wid $width height $height\n";
-        }
-    } elsif (/edge/) {
-        my (undef, $tail, $head, $n, $rest) = split(' ', $_, 5);
-        my @xy;
-        for (1...$n) {
-            my ($x, $y);
-            ($x, $y, $rest) = split(' ', $rest, 3);
-            push(@xy, [$x * $scale, $y * $scale]);
-        }
-        my ($label, $xl, $yl);
-        if (scalar(my @junk = split(' ', $rest)) > 2) {
-            if ($rest =~ s/^"([^"]*)"\s+//) {
-                $label = $1;
-            } else {
-                ($label, $rest) = split(' ', $rest, 2);
-            }
-            ($xl, $yl, $rest) = split(' ', $rest, 3);
-            $xl *= $scale;
-            $yl *= $scale;
-        }
-        my ($style, $color) = split(' ', $rest);
+            # Extract x,y coordinates.
+            words = words[4:]
+            xy = []
+            for i in range(n):
+                x = float(words[0]) * scale
+                y = float(words[1]) * scale
+                words = words[2:]
+                xy.append((x, y))
 
-        print "linethick = ", ($style eq 'dotted' ? 0.5 : 1), ";\n";
+            # Extract style and color from end of words.
+            style, color = words[-2:]
+            words = words[:-2]
 
-        print "spline -> from $xy[0][0],$xy[0][1]";
-        for (my ($i) = 0; $i <= $#xy; $i++) {
-            print " to $xy[$i][0],$xy[$i][1]";
-        }
-        print "\n";
+            # If there's anything left, that's the label.
+            if words:
+                xl = float(words[-2]) * scale
+                yl = float(words[-1]) * scale
+                label = ' '.join(words[:-2])
+                if label.startswith('"') and label.endswith('"'):
+                    label = label[1:-1]
+            else:
+                label = None
 
-        print "\"$label\" at $xl,$yl\n" if defined($label);
-    }
+            dst.write("linethick = %f;\n"
+                      % (0.5 if style == 'dotted' else 1.0))
+            dst.write("spline -> from %f,%f" % xy[0])
+            for x, y in xy:
+                dst.write(" to %f,%f" % (x, y))
+            dst.write('\n')
 
-}
-printf ".ps %+d\n", $font_scale if $font_scale;
-print ".PE\n";
+            if label:
+                dst.write('"%s" at %f,%f\n' % (label, xl, yl))
+        elif command == 'stop':
+            break
+        else:
+            sys.stderr.write("%s\n" % command)
+            assert False
+
+
+options, args = getopt.gnu_getopt(sys.argv[1:], 'f:', [])
+
+font_scale = 0
+for key, value in options:
+    if key == '-f':
+        font_scale = int(value)
+    else:
+        raise False
+
+if font_scale:
+    print(".ps %+d" % -font_scale)
+
+print(".PS")
+print("linethick = 1;")
+if args:
+    for arg in args:
+        dot2pic(open(arg), sys.stdout)
+else:
+    dot2pic(sys.stdin, sys.stdout)
+if font_scale:
+    print(".ps %+d" % font_scale)
+print(".PE")
+
