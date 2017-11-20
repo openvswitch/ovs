@@ -44,7 +44,7 @@ m4_define([OVSDB_CHECK_MONITOR],
             [ignore], [ignore])
    OVS_APP_EXIT_AND_WAIT_BY_TARGET([ovsdb-server], [ovsdb-server.pid])
    OVS_WAIT_UNTIL([test ! -e ovsdb-client.pid])
-   AT_CHECK([${PERL} $srcdir/ovsdb-monitor-sort.pl < output | uuidfilt], [0], [$7], [ignore])
+   AT_CHECK([$PYTHON $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0], [$7], [ignore])
    AT_CLEANUP])
 
 # OVSDB_CHECK_MONITOR_COND(TITLE, SCHEMA, [PRE-MONITOR-TXN], DB, TABLE,
@@ -86,7 +86,7 @@ m4_define([OVSDB_CHECK_MONITOR_COND],
             [ignore], [ignore])
    AT_CHECK([ovs-appctl -t ovsdb-server -e exit], [0], [ignore], [ignore])
    OVS_WAIT_UNTIL([test ! -e ovsdb-server.pid && test ! -e ovsdb-client.pid])
-   AT_CHECK([${PERL} $srcdir/ovsdb-monitor-sort.pl < output | uuidfilt], [0], [$7], [ignore])
+   AT_CHECK([$PYTHON $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0], [$7], [ignore])
    AT_CLEANUP])
 
 OVSDB_CHECK_MONITOR([monitor insert into empty table],

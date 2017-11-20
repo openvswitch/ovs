@@ -290,7 +290,6 @@ $(srcdir)/package.m4: $(top_srcdir)/configure.ac
 noinst_PROGRAMS += tests/test-ovsdb
 tests_test_ovsdb_SOURCES = tests/test-ovsdb.c
 nodist_tests_test_ovsdb_SOURCES = tests/idltest.c tests/idltest.h
-EXTRA_DIST += tests/ovsdb-monitor-sort.pl
 tests_test_ovsdb_LDADD = ovsdb/libovsdb.la lib/libopenvswitch.la
 
 noinst_PROGRAMS += tests/test-lib
@@ -380,6 +379,7 @@ tests_test_type_props_SOURCES = tests/test-type-props.c
 # Python tests.
 CHECK_PYFILES = \
 	tests/appctl.py \
+	tests/ovsdb-monitor-sort.py \
 	tests/test-daemon.py \
 	tests/test-json.py \
 	tests/test-jsonrpc.py \
