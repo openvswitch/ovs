@@ -348,7 +348,6 @@ ovsdb_execute_insert(struct ovsdb_execution *x, struct ovsdb_parser *parser,
             if (datum->n == 1) {
                 error = ovsdb_datum_check_constraints(datum, &column->type);
                 if (error) {
-                    ovsdb_row_destroy(row);
                     break;
                 }
             }
@@ -367,6 +366,8 @@ ovsdb_execute_insert(struct ovsdb_execution *x, struct ovsdb_parser *parser,
         json_object_put(result, "uuid",
                         ovsdb_datum_to_json(&row->fields[OVSDB_COL_UUID],
                                             &ovsdb_type_uuid));
+    } else {
+        ovsdb_row_destroy(row);
     }
     return error;
 }
