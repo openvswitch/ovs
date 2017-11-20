@@ -87,7 +87,7 @@ EXTRA_DIST = \
 	build-aux/calculate-schema-cksum \
 	build-aux/dist-docs \
 	build-aux/dpdkstrip.py \
-	build-aux/sodepends.pl \
+	build-aux/sodepends.py \
 	build-aux/soexpand.py \
 	build-aux/xml2nroff \
 	$(MAN_FRAGMENTS) \
@@ -394,8 +394,8 @@ endif
 CLEANFILES += flake8-check
 
 include $(srcdir)/manpages.mk
-$(srcdir)/manpages.mk: $(MAN_ROOTS) build-aux/sodepends.pl
-	@$(PERL) $(srcdir)/build-aux/sodepends.pl -I. -I$(srcdir) $(MAN_ROOTS) >$(@F).tmp
+$(srcdir)/manpages.mk: $(MAN_ROOTS) build-aux/sodepends.py python/build/soutil.py
+	@PYTHONPATH=$$PYTHONPATH:$(srcdir)/python $(PYTHON) $(srcdir)/build-aux/sodepends.py -I. -I$(srcdir) $(MAN_ROOTS) >$(@F).tmp
 	@if cmp -s $(@F).tmp $@; then \
 	  touch $@; \
 	  rm -f $(@F).tmp; \
