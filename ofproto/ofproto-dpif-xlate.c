@@ -5123,6 +5123,8 @@ xlate_learn_action(struct xlate_ctx *ctx, const struct ofpact_learn *learn)
                 entry->learn.ofm = ofm;
                 entry->learn.limit = learn->limit;
                 ofm = NULL;
+            } else {
+                ofproto_flow_mod_uninit(ofm);
             }
 
             if (OVS_UNLIKELY(ctx->xin->trace && !success)) {
