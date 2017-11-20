@@ -327,6 +327,7 @@ Tony van der Peet               tony.vanderpeet@alliedtelesis.co.nz
 Tonghao Zhang                   xiangxia.m.yue@gmail.com
 Valient Gough                   vgough@pobox.com
 Venkata Anil Kommaddi           vkommadi@redhat.com
+Vishal Deep Ajmera              vishal.deep.ajmera@ericsson.com
 Vivien Bernet-Rollande          vbr@soprive.net
 wangqianyu                      wang.qianyu@zte.com.cn
 Wang Sheng-Hui                  shhuiw@gmail.com
