@@ -159,6 +159,8 @@ struct tc_flower {
     } tunnel;
 
     struct tc_cookie act_cookie;
+
+    bool needs_full_ip_proto_mask;
 };
 
 /* assert that if we overflow with a masked write of uint32_t to the last byte

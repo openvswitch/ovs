@@ -131,6 +131,10 @@ static struct flower_key_to_pedit flower_pedit_map[] = {
     },
 };
 
+static inline int
+csum_update_flag(struct tc_flower *flower,
+                 enum pedit_header_type htype);
+
 struct tcmsg *
 tc_make_request(int ifindex, int type, unsigned int flags,
                 struct ofpbuf *request)
@@ -465,7 +469,7 @@ nl_parse_act_pedit(struct nlattr *options, struct tc_flower *flower)
     char *rewrite_key = (void *) &flower->rewrite.key;
     char *rewrite_mask = (void *) &flower->rewrite.mask;
     size_t keys_ex_size, left;
-    int type, i = 0;
+    int type, i = 0, err;
 
     if (!nl_parse_nested(options, pedit_policy, pe_attrs,
                          ARRAY_SIZE(pedit_policy))) {
@@ -492,6 +496,11 @@ nl_parse_act_pedit(struct nlattr *options, struct tc_flower *flower)
 
         ex_type = nl_attr_find_nested(nla, TCA_PEDIT_KEY_EX_HTYPE);
         type = nl_attr_get_u16(ex_type);
+
+        err = csum_update_flag(flower, type);
+        if (err) {
+            return err;
+        }
 
         for (int j = 0; j < ARRAY_SIZE(flower_pedit_map); j++) {
             struct flower_key_to_pedit *m = &flower_pedit_map[j];
@@ -736,6 +745,46 @@ nl_parse_act_vlan(struct nlattr *options, struct tc_flower *flower)
     return 0;
 }
 
+static const struct nl_policy csum_policy[] = {
+    [TCA_CSUM_PARMS] = { .type = NL_A_UNSPEC,
+                         .min_len = sizeof(struct tc_csum),
+                         .optional = false, },
+};
+
+static int
+nl_parse_act_csum(struct nlattr *options, struct tc_flower *flower)
+{
+    struct nlattr *csum_attrs[ARRAY_SIZE(csum_policy)];
+    const struct tc_csum *c;
+    const struct nlattr *csum_parms;
+
+    if (!nl_parse_nested(options, csum_policy, csum_attrs,
+                         ARRAY_SIZE(csum_policy))) {
+        VLOG_ERR_RL(&error_rl, "failed to parse csum action options");
+        return EPROTO;
+    }
+
+    csum_parms = csum_attrs[TCA_CSUM_PARMS];
+    c = nl_attr_get_unspec(csum_parms, sizeof *c);
+
+    /* sanity checks */
+    if (c->update_flags != flower->csum_update_flags) {
+        VLOG_WARN_RL(&error_rl,
+                     "expected different act csum flags: 0x%x != 0x%x",
+                     flower->csum_update_flags, c->update_flags);
+        return EINVAL;
+    }
+    flower->csum_update_flags = 0; /* so we know csum was handled */
+
+    if (flower->needs_full_ip_proto_mask
+        && flower->mask.ip_proto != UINT8_MAX) {
+        VLOG_WARN_RL(&error_rl, "expected full matching on flower ip_proto");
+        return EINVAL;
+    }
+
+    return 0;
+}
+
 static const struct nl_policy act_policy[] = {
     [TCA_ACT_KIND] = { .type = NL_A_STRING, .optional = false, },
     [TCA_ACT_COOKIE] = { .type = NL_A_UNSPEC, .optional = true, },
@@ -782,8 +831,7 @@ nl_parse_single_action(struct nlattr *action, struct tc_flower *flower)
     } else if (!strcmp(act_kind, "pedit")) {
         nl_parse_act_pedit(act_options, flower);
     } else if (!strcmp(act_kind, "csum")) {
-        /* not doing anything for now, ovs has an implicit csum recalculation
-         * with rewriting of packet headers (translating of pedit acts). */
+        nl_parse_act_csum(act_options, flower);
     } else {
         VLOG_ERR_RL(&error_rl, "unknown tc action kind: %s", act_kind);
         return EINVAL;
@@ -838,6 +886,13 @@ nl_parse_flower_actions(struct nlattr **attrs, struct tc_flower *flower)
                 return err;
             }
         }
+    }
+
+    if (flower->csum_update_flags) {
+        VLOG_WARN_RL(&error_rl,
+                     "expected act csum with flags: 0x%x",
+                     flower->csum_update_flags);
+        return EINVAL;
     }
 
     return 0;
@@ -1181,28 +1236,49 @@ calc_offsets(struct tc_flower *flower, struct flower_key_to_pedit *m,
     *mask = (void *) (rewrite_mask + m->flower_offset - diff);
 }
 
-static inline void
+static inline int
 csum_update_flag(struct tc_flower *flower,
                  enum pedit_header_type htype) {
-    if (htype == TCA_PEDIT_KEY_EX_HDR_TYPE_IP4) {
+    /* Explictily specifiy the csum flags so HW can return EOPNOTSUPP
+     * if it doesn't support a checksum recalculation of some headers.
+     * And since OVS allows a flow such as
+     * eth(dst=<mac>),eth_type(0x0800) actions=set(ipv4(src=<new_ip>))
+     * we need to force a more specific flow as this can, for example,
+     * need a recalculation of icmp checksum if the packet that passes
+     * is icmp and tcp checksum if its tcp. */
+
+    switch (htype) {
+    case TCA_PEDIT_KEY_EX_HDR_TYPE_IP4:
         flower->csum_update_flags |= TCA_CSUM_UPDATE_FLAG_IPV4HDR;
-    }
-    if (htype == TCA_PEDIT_KEY_EX_HDR_TYPE_IP4
-        || htype == TCA_PEDIT_KEY_EX_HDR_TYPE_IP6
-        || htype == TCA_PEDIT_KEY_EX_HDR_TYPE_TCP
-        || htype == TCA_PEDIT_KEY_EX_HDR_TYPE_UDP) {
+    case TCA_PEDIT_KEY_EX_HDR_TYPE_IP6:
+    case TCA_PEDIT_KEY_EX_HDR_TYPE_TCP:
+    case TCA_PEDIT_KEY_EX_HDR_TYPE_UDP:
         if (flower->key.ip_proto == IPPROTO_TCP) {
-            flower->mask.ip_proto = UINT8_MAX;
+            flower->needs_full_ip_proto_mask = true;
             flower->csum_update_flags |= TCA_CSUM_UPDATE_FLAG_TCP;
         } else if (flower->key.ip_proto == IPPROTO_UDP) {
-            flower->mask.ip_proto = UINT8_MAX;
+            flower->needs_full_ip_proto_mask = true;
             flower->csum_update_flags |= TCA_CSUM_UPDATE_FLAG_UDP;
         } else if (flower->key.ip_proto == IPPROTO_ICMP
                    || flower->key.ip_proto == IPPROTO_ICMPV6) {
-            flower->mask.ip_proto = UINT8_MAX;
+            flower->needs_full_ip_proto_mask = true;
             flower->csum_update_flags |= TCA_CSUM_UPDATE_FLAG_ICMP;
+        } else {
+            VLOG_WARN_RL(&error_rl,
+                         "can't offload rewrite of IP/IPV6 with ip_proto: %d",
+                         flower->key.ip_proto);
+            break;
         }
+    case TCA_PEDIT_KEY_EX_HDR_TYPE_ETH:
+        return 0; /* success */
+
+    case TCA_PEDIT_KEY_EX_HDR_TYPE_NETWORK:
+    case __PEDIT_HDR_TYPE_MAX:
+    default:
+        break;
     }
+
+    return EOPNOTSUPP;
 }
 
 static int
@@ -1218,7 +1294,7 @@ nl_msg_put_flower_rewrite_pedits(struct ofpbuf *request,
             .nkeys = 0
         }
     };
-    int i, j;
+    int i, j, err;
 
     for (i = 0; i < ARRAY_SIZE(flower_pedit_map); i++) {
         struct flower_key_to_pedit *m = &flower_pedit_map[i];
@@ -1260,7 +1336,15 @@ nl_msg_put_flower_rewrite_pedits(struct ofpbuf *request,
             pedit_key->mask = ~mask_word;
             pedit_key->val = *data & mask_word;
             sel.sel.nkeys++;
-            csum_update_flag(flower, m->htype);
+
+            err = csum_update_flag(flower, m->htype);
+            if (err) {
+                return err;
+            }
+
+            if (flower->needs_full_ip_proto_mask) {
+                flower->mask.ip_proto = UINT8_MAX;
+            }
         }
     }
     nl_msg_put_act_pedit(request, &sel.sel, sel.keys_ex);
@@ -1382,7 +1466,8 @@ nl_msg_put_flower_options(struct ofpbuf *request, struct tc_flower *flower)
     bool is_vlan = (host_eth_type == ETH_TYPE_VLAN);
     int err;
 
-    /* need to parse acts first as some acts require changing the matching */
+    /* need to parse acts first as some acts require changing the matching
+     * see csum_update_flag()  */
     err  = nl_msg_put_flower_acts(request, flower);
     if (err) {
         return err;
