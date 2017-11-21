@@ -484,7 +484,7 @@ nl_parse_act_pedit(struct nlattr *options, struct tc_flower *flower)
             break;
         }
 
-        if (nl_attr_type(nla) == TCA_PEDIT_KEY_EX) {
+        if (nl_attr_type(nla) != TCA_PEDIT_KEY_EX) {
             VLOG_ERR_RL(&error_rl, "unable to parse legacy pedit type: %d",
                         nl_attr_type(nla));
             return EOPNOTSUPP;
