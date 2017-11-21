@@ -1371,9 +1371,11 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
             }
             nl_msg_end_nested(request, act_offset);
 
-            act_offset = nl_msg_start_nested(request, act_index++);
-            nl_msg_put_act_csum(request, flower->csum_update_flags);
-            nl_msg_end_nested(request, act_offset);
+            if (flower->csum_update_flags) {
+                act_offset = nl_msg_start_nested(request, act_index++);
+                nl_msg_put_act_csum(request, flower->csum_update_flags);
+                nl_msg_end_nested(request, act_offset);
+            }
         }
         if (flower->set.set) {
             act_offset = nl_msg_start_nested(request, act_index++);
