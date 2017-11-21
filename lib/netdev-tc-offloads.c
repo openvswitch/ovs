@@ -581,12 +581,14 @@ parse_put_flow_set_masked_action(struct tc_flower *flower,
                                  bool hasmask)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
-    char *set_buff[set_len], *set_data, *set_mask;
+    char *set_buff[128], *set_data, *set_mask;
     char *key = (char *) &flower->rewrite.key;
     char *mask = (char *) &flower->rewrite.mask;
     const struct nlattr *attr;
     int i, j, type;
     size_t size;
+
+    ovs_assert(set_len <= 128);
 
     /* copy so we can set attr mask to 0 for used ovs key struct members  */
     memcpy(set_buff, set, set_len);
