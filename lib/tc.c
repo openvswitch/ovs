@@ -1059,7 +1059,7 @@ static void
 nl_msg_put_act_pedit(struct ofpbuf *request, struct tc_pedit *parm,
                      struct tc_pedit_key_ex *ex)
 {
-    size_t ksize = sizeof *parm + (parm->nkeys * sizeof(struct tc_pedit_key));
+    size_t ksize = sizeof *parm + parm->nkeys * sizeof(struct tc_pedit_key);
     size_t offset, offset_keys_ex, offset_key;
     int i;
 
