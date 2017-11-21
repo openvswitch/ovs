@@ -62,8 +62,8 @@ struct tc_pedit_key_ex {
 
 struct flower_key_to_pedit {
     enum pedit_header_type htype;
-    int flower_offset;
     int offset;
+    int flower_offset;
     int size;
 };
 
