@@ -35,8 +35,10 @@ static PNDIS_RW_LOCK_EX ovsConntrackLockObj;
 extern POVS_SWITCH_CONTEXT gOvsSwitchContext;
 static UINT64 ctTotalEntries;
 
-static __inline NDIS_STATUS OvsCtFlush(UINT16 zone);
-
+static __inline OvsCtFlush(UINT16 zone, struct ovs_key_ct_tuple_ipv4 *tuple);
+static __inline NDIS_STATUS
+MapNlToCtTuple(POVS_MESSAGE msgIn, PNL_ATTR attr,
+               struct ovs_key_ct_tuple_ipv4 *ct_tuple);
 /*
  *----------------------------------------------------------------------------
  * OvsInitConntrack
@@ -120,7 +122,7 @@ OvsCleanupConntrack(VOID)
     ObDereferenceObject(ctThreadCtx.threadObject);
 
     /* Force flush all entries before removing */
-    OvsCtFlush(0);
+    OvsCtFlush(0, NULL);
 
     if (ovsConntrackTable) {
         OvsFreeMemoryWithTag(ovsConntrackTable, OVS_CT_POOL_TAG);
@@ -1018,11 +1020,11 @@ OvsConntrackEntryCleaner(PVOID data)
 /*
  *----------------------------------------------------------------------------
  * OvsCtFlush
- *     Flushes out all Conntrack Entries that match the given zone
+ *     Flushes out all Conntrack Entries that match any of the arguments
  *----------------------------------------------------------------------------
  */
 static __inline NDIS_STATUS
-OvsCtFlush(UINT16 zone)
+OvsCtFlush(UINT16 zone, struct ovs_key_ct_tuple_ipv4 *tuple)
 {
     PLIST_ENTRY link, next;
     POVS_CT_ENTRY entry;
@@ -1034,9 +1036,26 @@ OvsCtFlush(UINT16 zone)
         for (int i = 0; i < CT_HASH_TABLE_SIZE; i++) {
             LIST_FORALL_SAFE(&ovsConntrackTable[i], link, next) {
                 entry = CONTAINING_RECORD(link, OVS_CT_ENTRY, link);
-                /* zone is a non-zero value */
-                if (!zone || zone == entry->key.zone)
+                if (tuple) {
+                    if (tuple->ipv4_proto != IPPROTO_ICMP &&
+                        tuple->ipv4_src == entry->key.src.addr.ipv4_aligned &&
+                        tuple->ipv4_dst == entry->key.dst.addr.ipv4_aligned &&
+                        tuple->ipv4_proto == entry->key.nw_proto &&
+                        tuple->src_port == entry->key.src.port &&
+                        tuple->dst_port == entry->key.dst.port &&
+                        (zone ? entry->key.zone == zone: TRUE)) {
+                        OvsCtEntryDelete(entry);
+                    } else if (tuple->ipv4_src == entry->key.src.addr.ipv4_aligned &&
+                        tuple->ipv4_dst == entry->key.dst.addr.ipv4_aligned &&
+                        tuple->ipv4_proto == entry->key.nw_proto &&
+                        tuple->src_port == entry->key.src.icmp_type &&
+                        tuple->dst_port == entry->key.src.icmp_code &&
+                        (zone ? entry->key.zone == zone: TRUE)) {
+                        OvsCtEntryDelete(entry);
+                    }
+                } else if (!zone || zone == entry->key.zone) {
                     OvsCtEntryDelete(entry);
+                }
             }
         }
     }
@@ -1058,19 +1077,21 @@ OvsCtDeleteCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     NL_ERROR nlError = NL_ERROR_SUCCESS;
     NTSTATUS status;
     UINT16 zone = 0;
+    struct ovs_key_ct_tuple_ipv4 *ct_tuple = NULL;
     NL_BUFFER nlBuf;
     UINT16 nlmsgType;
     PNL_MSG_HDR nlMsg;
 
-    static const NL_POLICY ctZonePolicy[] = {
-        [CTA_ZONE] = { .type = NL_A_BE16, .optional = TRUE },
+    static const NL_POLICY ctAttrPolicy[] = {
+        [CTA_TUPLE_ORIG] = {.type = NL_A_NESTED, .optional = TRUE},
+        [CTA_ZONE] = {.type = NL_A_BE16, .optional = TRUE },
     };
 
     if ((NlAttrParse(nlMsgHdr, attrOffset, NlNfMsgAttrsLen(nlMsgHdr),
-        ctZonePolicy, ARRAY_SIZE(ctZonePolicy),
+        ctAttrPolicy, ARRAY_SIZE(ctAttrPolicy),
         ctAttrs, ARRAY_SIZE(ctAttrs)))
         != TRUE) {
-        OVS_LOG_ERROR("Zone attr parsing failed for msg: %p", nlMsgHdr);
+        OVS_LOG_ERROR("Ct attr parsing failed for msg: %p", nlMsgHdr);
         status = STATUS_INVALID_PARAMETER;
         goto done;
     }
@@ -1079,7 +1100,21 @@ OvsCtDeleteCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         zone = ntohs(NlAttrGetU16(ctAttrs[CTA_ZONE]));
     }
 
-    status = OvsCtFlush(zone);
+    if (ctAttrs[CTA_TUPLE_ORIG]) {
+        ct_tuple = OvsAllocateMemoryWithTag(sizeof(struct ovs_key_ct_tuple_ipv4),
+                                            OVS_CT_POOL_TAG);
+        if (ct_tuple == NULL) {
+            status = STATUS_INSUFFICIENT_RESOURCES;
+            goto done;
+        }
+        /* Parse ct tuple. */
+        status = MapNlToCtTuple(msgIn, ctAttrs[CTA_TUPLE_ORIG], ct_tuple);
+        if (status != STATUS_SUCCESS) {
+            goto done;
+        }
+    }
+
+    status = OvsCtFlush(zone, ct_tuple);
     if (status == STATUS_SUCCESS) {
         nlmsgType = (NFNL_SUBSYS_CTNETLINK << 8 | IPCTNL_MSG_CT_DELETE);
         NlBufInit(&nlBuf,
@@ -1099,6 +1134,10 @@ OvsCtDeleteCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     }
 
 done:
+    if (ct_tuple) {
+        OvsFreeMemoryWithTag(ct_tuple, OVS_CT_POOL_TAG);
+    }
+
     nlError = NlMapStatusToNlErr(status);
     if (nlError != NL_ERROR_SUCCESS) {
         POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
@@ -1111,6 +1150,89 @@ done:
     }
 
     return status;
+}
+
+static __inline NDIS_STATUS
+MapNlToCtTuple(POVS_MESSAGE msgIn, PNL_ATTR ctAttr,
+                  struct ovs_key_ct_tuple_ipv4 *ct_tuple) {
+
+    PNL_MSG_HDR nlMsgHdr = &(msgIn->nlMsg);
+    PNL_ATTR ctTupleAttrs[__CTA_MAX];
+    UINT32 attrOffset;
+    static const NL_POLICY ctTuplePolicy[] = {
+        [CTA_TUPLE_IP] = {.type = NL_A_NESTED, .optional = FALSE },
+        [CTA_TUPLE_PROTO] = {.type = NL_A_NESTED, .optional = FALSE},
+    };
+
+    static const NL_POLICY ctTupleIpPolicy[] = {
+        [CTA_IP_V4_SRC] = { .type = NL_A_BE32, .optional = TRUE },
+        [CTA_IP_V4_DST] = { .type = NL_A_BE32, .optional = TRUE },
+    };
+
+    static const NL_POLICY ctTupleProtoPolicy[] = {
+        [CTA_PROTO_NUM] = { .type = NL_A_U8, .optional = FALSE },
+        [CTA_PROTO_SRC_PORT] = { .type = NL_A_BE16, .optional = TRUE },
+        [CTA_PROTO_DST_PORT] = { .type = NL_A_BE16, .optional = TRUE },
+        [CTA_PROTO_ICMP_TYPE] = { .type = NL_A_U8, .optional = TRUE },
+        [CTA_PROTO_ICMP_CODE] = { .type = NL_A_U8, .optional = TRUE },
+    };
+
+    if (!ctAttr) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    attrOffset = (UINT32)((PCHAR) ctAttr - (PCHAR)nlMsgHdr);
+    if ((NlAttrParseNested(nlMsgHdr, attrOffset, NlAttrLen(ctAttr),
+        ctTuplePolicy, ARRAY_SIZE(ctTuplePolicy),
+        ctTupleAttrs, ARRAY_SIZE(ctTupleAttrs)))
+        != TRUE) {
+        OVS_LOG_ERROR("CTA_TUPLE attr parsing failed for msg: %p", nlMsgHdr);
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    if (ctTupleAttrs[CTA_TUPLE_IP]) {
+        PNL_ATTR ctTupleIpAttrs[__CTA_MAX];
+        attrOffset = (UINT32)((PCHAR) ctTupleAttrs[CTA_TUPLE_IP] - (PCHAR)nlMsgHdr);
+        if ((NlAttrParseNested(nlMsgHdr, attrOffset, NlAttrLen(ctTupleAttrs[CTA_TUPLE_IP]),
+            ctTupleIpPolicy, ARRAY_SIZE(ctTupleIpPolicy),
+            ctTupleIpAttrs, ARRAY_SIZE(ctTupleIpAttrs)))
+            != TRUE) {
+            OVS_LOG_ERROR("CTA_TUPLE_IP attr parsing failed for msg: %p", nlMsgHdr);
+            return STATUS_INVALID_PARAMETER;
+        }
+
+        if (ctTupleIpAttrs[CTA_IP_V4_SRC] && ctTupleIpAttrs[CTA_IP_V4_DST]) {
+            ct_tuple->ipv4_src = NlAttrGetU32(ctTupleIpAttrs[CTA_IP_V4_SRC]);
+            ct_tuple->ipv4_dst = NlAttrGetU32(ctTupleIpAttrs[CTA_IP_V4_DST]);
+        }
+    }
+
+    if (ctTupleAttrs[CTA_TUPLE_PROTO]) {
+        PNL_ATTR ctTupleProtoAttrs[__CTA_MAX];
+        attrOffset = (UINT32)((PCHAR) ctTupleAttrs[CTA_TUPLE_PROTO] - (PCHAR)nlMsgHdr);
+        if ((NlAttrParseNested(nlMsgHdr, attrOffset, NlAttrLen(ctTupleAttrs[CTA_TUPLE_PROTO]),
+            ctTupleProtoPolicy, ARRAY_SIZE(ctTupleProtoPolicy),
+            ctTupleProtoAttrs, ARRAY_SIZE(ctTupleProtoAttrs)))
+            != TRUE) {
+            OVS_LOG_ERROR("CTA_TUPLE_PROTO attr parsing failed for msg: %p", nlMsgHdr);
+            return STATUS_INVALID_PARAMETER;
+        }
+
+        if (ctTupleProtoAttrs[CTA_PROTO_NUM]) {
+            ct_tuple->ipv4_proto =  NlAttrGetU8 (ctTupleProtoAttrs[CTA_PROTO_NUM]);
+            if (ctTupleProtoAttrs[CTA_PROTO_SRC_PORT] && ctTupleProtoAttrs[CTA_PROTO_DST_PORT]) {
+                ct_tuple->src_port = NlAttrGetU16(ctTupleProtoAttrs[CTA_PROTO_SRC_PORT]);
+                ct_tuple->dst_port = NlAttrGetU16(ctTupleProtoAttrs[CTA_PROTO_DST_PORT]);
+            } else if (ctTupleProtoAttrs[CTA_PROTO_ICMP_TYPE] &&
+                        ctTupleProtoAttrs[CTA_PROTO_ICMP_CODE] ) {
+                ct_tuple->src_port = NlAttrGetU8(ctTupleProtoAttrs[CTA_PROTO_ICMP_TYPE]);
+                ct_tuple->dst_port = NlAttrGetU8(ctTupleProtoAttrs[CTA_PROTO_ICMP_CODE]);
+            }
+
+        }
+    }
+
+    return NDIS_STATUS_SUCCESS;
 }
 
 static __inline NDIS_STATUS
