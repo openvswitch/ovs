@@ -2486,12 +2486,13 @@ netdev_dpdk_set_admin_state(struct unixctl_conn *conn, int argc,
 
     if (argc > 2) {
         struct netdev *netdev = netdev_from_name(argv[1]);
-        if (netdev && is_dpdk_class(netdev->netdev_class)) {
-            struct netdev_dpdk *dpdk_dev = netdev_dpdk_cast(netdev);
 
-            ovs_mutex_lock(&dpdk_dev->mutex);
-            netdev_dpdk_set_admin_state__(dpdk_dev, up);
-            ovs_mutex_unlock(&dpdk_dev->mutex);
+        if (netdev && is_dpdk_class(netdev->netdev_class)) {
+            struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+
+            ovs_mutex_lock(&dev->mutex);
+            netdev_dpdk_set_admin_state__(dev, up);
+            ovs_mutex_unlock(&dev->mutex);
 
             netdev_close(netdev);
         } else {
@@ -2500,13 +2501,13 @@ netdev_dpdk_set_admin_state(struct unixctl_conn *conn, int argc,
             return;
         }
     } else {
-        struct netdev_dpdk *netdev;
+        struct netdev_dpdk *dev;
 
         ovs_mutex_lock(&dpdk_mutex);
-        LIST_FOR_EACH (netdev, list_node, &dpdk_list) {
-            ovs_mutex_lock(&netdev->mutex);
-            netdev_dpdk_set_admin_state__(netdev, up);
-            ovs_mutex_unlock(&netdev->mutex);
+        LIST_FOR_EACH (dev, list_node, &dpdk_list) {
+            ovs_mutex_lock(&dev->mutex);
+            netdev_dpdk_set_admin_state__(dev, up);
+            ovs_mutex_unlock(&dev->mutex);
         }
         ovs_mutex_unlock(&dpdk_mutex);
     }
