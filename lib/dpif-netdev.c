@@ -3463,10 +3463,19 @@ rxq_cycle_sort(const void *a, const void *b)
     dp_netdev_rxq_set_cycles(qa, RXQ_CYCLES_PROC_HIST, total_qa);
     dp_netdev_rxq_set_cycles(qb, RXQ_CYCLES_PROC_HIST, total_qb);
 
-    if (total_qa >= total_qb) {
-        return -1;
+    if (total_qa != total_qb) {
+        return (total_qa < total_qb) ? 1 : -1;
+    } else {
+        /* Cycles are the same so tiebreak on port/queue id.
+         * Tiebreaking (as opposed to return 0) ensures consistent
+         * sort results across multiple OS's. */
+        if (qa->port->port_no != qb->port->port_no) {
+            return (qa->port->port_no > qb->port->port_no) ? 1 : -1;
+        } else {
+            return netdev_rxq_get_queue_id(qa->rx)
+                    - netdev_rxq_get_queue_id(qb->rx);
+        }
     }
-    return 1;
 }
 
 /* Assign pmds to queues.  If 'pinned' is true, assign pmds to pinned
