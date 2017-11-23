@@ -3445,7 +3445,7 @@ rr_numa_list_destroy(struct rr_numa_list *rr)
 
 /* Sort Rx Queues by the processing cycles they are consuming. */
 static int
-rxq_cycle_sort(const void *a, const void *b)
+compare_rxq_cycles(const void *a, const void *b)
 {
     struct dp_netdev_rxq *qa;
     struct dp_netdev_rxq *qb;
@@ -3534,7 +3534,7 @@ rxq_scheduling(struct dp_netdev *dp, bool pinned) OVS_REQUIRES(dp->port_mutex)
     if (n_rxqs > 1) {
         /* Sort the queues in order of the processing cycles
          * they consumed during their last pmd interval. */
-        qsort(rxqs, n_rxqs, sizeof *rxqs, rxq_cycle_sort);
+        qsort(rxqs, n_rxqs, sizeof *rxqs, compare_rxq_cycles);
     }
 
     rr_numa_list_populate(dp, &rr);
