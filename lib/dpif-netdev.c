@@ -3449,22 +3449,16 @@ compare_rxq_cycles(const void *a, const void *b)
 {
     struct dp_netdev_rxq *qa;
     struct dp_netdev_rxq *qb;
-    uint64_t total_qa, total_qb;
-    unsigned i;
+    uint64_t cycles_qa, cycles_qb;
 
     qa = *(struct dp_netdev_rxq **) a;
     qb = *(struct dp_netdev_rxq **) b;
 
-    total_qa = total_qb = 0;
-    for (i = 0; i < PMD_RXQ_INTERVAL_MAX; i++) {
-        total_qa += dp_netdev_rxq_get_intrvl_cycles(qa, i);
-        total_qb += dp_netdev_rxq_get_intrvl_cycles(qb, i);
-    }
-    dp_netdev_rxq_set_cycles(qa, RXQ_CYCLES_PROC_HIST, total_qa);
-    dp_netdev_rxq_set_cycles(qb, RXQ_CYCLES_PROC_HIST, total_qb);
+    cycles_qa = dp_netdev_rxq_get_cycles(qa, RXQ_CYCLES_PROC_HIST);
+    cycles_qb = dp_netdev_rxq_get_cycles(qb, RXQ_CYCLES_PROC_HIST);
 
-    if (total_qa != total_qb) {
-        return (total_qa < total_qb) ? 1 : -1;
+    if (cycles_qa != cycles_qb) {
+        return (cycles_qa < cycles_qb) ? 1 : -1;
     } else {
         /* Cycles are the same so tiebreak on port/queue id.
          * Tiebreaking (as opposed to return 0) ensures consistent
@@ -3520,11 +3514,19 @@ rxq_scheduling(struct dp_netdev *dp, bool pinned) OVS_REQUIRES(dp->port_mutex)
                     dp_netdev_pmd_unref(pmd);
                 }
             } else if (!pinned && q->core_id == OVS_CORE_UNSPEC) {
+                uint64_t cycle_hist = 0;
+
                 if (n_rxqs == 0) {
                     rxqs = xmalloc(sizeof *rxqs);
                 } else {
                     rxqs = xrealloc(rxqs, sizeof *rxqs * (n_rxqs + 1));
                 }
+                /* Sum the queue intervals and store the cycle history. */
+                for (unsigned i = 0; i < PMD_RXQ_INTERVAL_MAX; i++) {
+                    cycle_hist += dp_netdev_rxq_get_intrvl_cycles(q, i);
+                }
+                dp_netdev_rxq_set_cycles(q, RXQ_CYCLES_PROC_HIST, cycle_hist);
+
                 /* Store the queue. */
                 rxqs[n_rxqs++] = q;
             }
