@@ -330,6 +330,23 @@ enum dpdk_hw_ol_features {
     NETDEV_RX_CHECKSUM_OFFLOAD = 1 << 0,
 };
 
+/*
+ * In order to avoid confusion in variables names, following naming convention
+ * should be used, if possible:
+ *
+ *     'struct netdev'          : 'netdev'
+ *     'struct netdev_dpdk'     : 'dev'
+ *     'struct netdev_rxq'      : 'rxq'
+ *     'struct netdev_rxq_dpdk' : 'rx'
+ *
+ * Example:
+ *     struct netdev *netdev = netdev_from_name(name);
+ *     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+ *
+ *  Also, 'netdev' should be used instead of 'dev->up', where 'netdev' was
+ *  already defined.
+ */
+
 struct netdev_dpdk {
     PADDED_MEMBERS_CACHELINE_MARKER(CACHE_LINE_SIZE, cacheline0,
         dpdk_port_t port_id;
