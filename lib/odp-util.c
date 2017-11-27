@@ -3552,7 +3552,7 @@ scan_u128(const char *s_, ovs_u128 *value, ovs_u128 *mask)
                 error = parse_int_string(s, (uint8_t *)&be_mask,
                                          sizeof be_mask, &s);
                 if (error) {
-                    return error;
+                    return 0;
                 }
                 *mask = ntoh128(be_mask);
             } else {
