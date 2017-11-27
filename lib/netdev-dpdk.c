@@ -1208,8 +1208,7 @@ netdev_dpdk_process_devargs(struct netdev_dpdk *dev,
     char *name = xmemdup0(devargs, strcspn(devargs, ","));
     dpdk_port_t new_port_id = DPDK_ETH_PORT_ID_INVALID;
 
-    if (!rte_eth_dev_count()
-            || rte_eth_dev_get_port_by_name(name, &new_port_id)
+    if (rte_eth_dev_get_port_by_name(name, &new_port_id)
             || !rte_eth_dev_is_valid_port(new_port_id)) {
         /* Device not found in DPDK, attempt to attach it */
         if (!rte_eth_dev_attach(devargs, &new_port_id)) {
@@ -2543,8 +2542,7 @@ netdev_dpdk_detach(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
     ovs_mutex_lock(&dpdk_mutex);
 
-    if (!rte_eth_dev_count() || rte_eth_dev_get_port_by_name(argv[1],
-                                                             &port_id)) {
+    if (rte_eth_dev_get_port_by_name(argv[1], &port_id)) {
         response = xasprintf("Device '%s' not found in DPDK", argv[1]);
         goto error;
     }
