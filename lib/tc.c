@@ -1250,6 +1250,7 @@ csum_update_flag(struct tc_flower *flower,
     switch (htype) {
     case TCA_PEDIT_KEY_EX_HDR_TYPE_IP4:
         flower->csum_update_flags |= TCA_CSUM_UPDATE_FLAG_IPV4HDR;
+        /* Fall through. */
     case TCA_PEDIT_KEY_EX_HDR_TYPE_IP6:
     case TCA_PEDIT_KEY_EX_HDR_TYPE_TCP:
     case TCA_PEDIT_KEY_EX_HDR_TYPE_UDP:
@@ -1269,6 +1270,7 @@ csum_update_flag(struct tc_flower *flower,
                          flower->key.ip_proto);
             break;
         }
+        /* Fall through. */
     case TCA_PEDIT_KEY_EX_HDR_TYPE_ETH:
         return 0; /* success */
 
