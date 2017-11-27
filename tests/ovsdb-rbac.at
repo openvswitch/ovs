@@ -135,7 +135,7 @@ AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
           "row": {"name": "chartreuse", "value": '8388352'}}
          ]']], [0], [stdout], [ignore])
 cat stdout >> output
-AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"details":"RBAC rules for client \"client-1\" role \"testrole\" prohibit row insertion into table \"fixed_colors\".","error":"permission error"}]]
+AT_CHECK([uuidfilt stdout], [0], [[[{"details":"RBAC rules for client \"client-1\" role \"testrole\" prohibit row insertion into table \"fixed_colors\".","error":"permission error"}]]
 ], [ignore])
 
 # Test 2:
@@ -152,7 +152,7 @@ AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
           "row": {"creator": "client-2", "name": "chartreuse", "value": '8388352'}}
          ]']], [0], [stdout], [ignore])
 cat stdout >> output
-AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"details":"RBAC rules for client \"client-1\" role \"testrole\" prohibit row insertion into table \"user_colors\".","error":"permission error"}]]
+AT_CHECK([uuidfilt stdout], [0], [[[{"details":"RBAC rules for client \"client-1\" role \"testrole\" prohibit row insertion into table \"user_colors\".","error":"permission error"}]]
 ], [ignore])
 
 # Test 3:
@@ -169,7 +169,7 @@ AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
           "row": {"creator": "client-1", "name": "chartreuse", "value": '8388352'}}
          ]']], [0], [stdout], [ignore])
 cat stdout >> output
-AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"uuid":["uuid","<0>"]}]]
+AT_CHECK([uuidfilt stdout], [0], [[[{"uuid":["uuid","<0>"]}]]
 ], [ignore])
 
 # Test 4:
@@ -188,7 +188,7 @@ AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
           "row": {"value": '8388353'}}
          ]']], [0], [stdout], [ignore])
 cat stdout >> output
-AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"count":1}]]
+AT_CHECK([uuidfilt stdout], [0], [[[{"count":1}]]
 ], [ignore])
 
 # Test 5:
@@ -207,7 +207,7 @@ AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
           "row": {"value": '8388354'}}
          ]']], [0], [stdout], [ignore])
 cat stdout >> output
-AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"details":"RBAC rules for client \"client-2\" role \"testrole\" prohibit modification of table \"user_colors\".","error":"permission error"}]]
+AT_CHECK([uuidfilt stdout], [0], [[[{"details":"RBAC rules for client \"client-2\" role \"testrole\" prohibit modification of table \"user_colors\".","error":"permission error"}]]
 ], [ignore])
 
 # Test 6:
@@ -226,7 +226,7 @@ AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
           "mutations": [["value", "+=", '10']]}
          ]']], [0], [stdout], [ignore])
 cat stdout >> output
-AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"count":1}]]
+AT_CHECK([uuidfilt stdout], [0], [[[{"count":1}]]
 ], [ignore])
 
 # Test 7:
@@ -245,7 +245,7 @@ AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
           "mutations": [["value", "+=", '10']]}
          ]']], [0], [stdout], [ignore])
 cat stdout >> output
-AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"details":"RBAC rules for client \"client-2\" role \"testrole\" prohibit mutate operation on table \"user_colors\".","error":"permission error"}]]
+AT_CHECK([uuidfilt stdout], [0], [[[{"details":"RBAC rules for client \"client-2\" role \"testrole\" prohibit mutate operation on table \"user_colors\".","error":"permission error"}]]
 ], [ignore])
 
 # Test 8:
@@ -262,7 +262,7 @@ AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
           "where": [["name", "==", "chartreuse"]]}
          ]']], [0], [stdout], [ignore])
 cat stdout >> output
-AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"details":"RBAC rules for client \"client-2\" role \"testrole\" prohibit row deletion from table \"user_colors\".","error":"permission error"}]]
+AT_CHECK([uuidfilt stdout], [0], [[[{"details":"RBAC rules for client \"client-2\" role \"testrole\" prohibit row deletion from table \"user_colors\".","error":"permission error"}]]
 ], [ignore])
 
 # Test 9:
@@ -279,7 +279,7 @@ AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
           "where": [["name", "==", "chartreuse"]]}
          ]']], [0], [stdout], [ignore])
 cat stdout >> output
-AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"count":1}]]
+AT_CHECK([uuidfilt stdout], [0], [[[{"count":1}]]
 ], [ignore])
 
 # Test 10:
@@ -296,7 +296,7 @@ AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
           "row": {"creator": ["map",[["chassis", "client-1"]]], "name": "seafoam", "value": '7466680'}}
          ]']], [0], [stdout], [ignore])
 cat stdout >> output
-AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"uuid":["uuid","<0>"]}]]
+AT_CHECK([uuidfilt stdout], [0], [[[{"uuid":["uuid","<0>"]}]]
 ], [ignore])
 
 # Test 11:
@@ -315,7 +315,7 @@ AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
           "row": {"value": '8388353'}}
          ]']], [0], [stdout], [ignore])
 cat stdout >> output
-AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"count":1}]]
+AT_CHECK([uuidfilt stdout], [0], [[[{"count":1}]]
 ], [ignore])
 
 # Test 12:
@@ -334,7 +334,7 @@ AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
           "row": {"value": '8388354'}}
          ]']], [0], [stdout], [ignore])
 cat stdout >> output
-AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"details":"RBAC rules for client \"client-2\" role \"testrole\" prohibit modification of table \"other_colors\".","error":"permission error"}]]
+AT_CHECK([uuidfilt stdout], [0], [[[{"details":"RBAC rules for client \"client-2\" role \"testrole\" prohibit modification of table \"other_colors\".","error":"permission error"}]]
 ], [ignore])
 
 # Test 13:
@@ -351,7 +351,7 @@ AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
           "where": [["name", "==", "seafoam"]]}
          ]']], [0], [stdout], [ignore])
 cat stdout >> output
-AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"details":"RBAC rules for client \"client-2\" role \"testrole\" prohibit row deletion from table \"other_colors\".","error":"permission error"}]]
+AT_CHECK([uuidfilt stdout], [0], [[[{"details":"RBAC rules for client \"client-2\" role \"testrole\" prohibit row deletion from table \"other_colors\".","error":"permission error"}]]
 ], [ignore])
 
 # Test 14:
@@ -368,7 +368,7 @@ AT_CHECK([ovsdb-client transact ssl:127.0.0.1:$SSL_PORT \
           "where": [["name", "==", "seafoam"]]}
          ]']], [0], [stdout], [ignore])
 cat stdout >> output
-AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [[[{"count":1}]]
+AT_CHECK([uuidfilt stdout], [0], [[[{"count":1}]]
 ], [ignore])
 
 OVSDB_SERVER_SHUTDOWN

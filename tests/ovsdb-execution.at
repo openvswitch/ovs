@@ -141,7 +141,7 @@ m4_define([OVSDB_CHECK_EXECUTION_RO],
    AT_KEYWORDS([ovsdb execute execution positive $5])
    AT_CHECK([test-ovsdb execute-readonly "`$2`" m4_foreach([txn], [$3],
                                          [ 'txn'])], [0], [stdout], [])
-   AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [$4])
+   AT_CHECK([uuidfilt stdout], [0], [$4])
    AT_CLEANUP])
 
 OVSDB_CHECK_EXECUTION_RO([block insert on read only DB],
@@ -179,7 +179,7 @@ m4_define([OVSDB_CHECK_EXECUTION],
    AT_KEYWORDS([ovsdb execute execution positive $5])
    AT_CHECK([test-ovsdb execute "`$2`" m4_foreach([txn], [$3], [ 'txn'])],
      [0], [stdout], [])
-   AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [$4])
+   AT_CHECK([uuidfilt stdout], [0], [$4])
    AT_CLEANUP])
 
 OVSDB_CHECK_EXECUTION([uuid-name must be <id>],

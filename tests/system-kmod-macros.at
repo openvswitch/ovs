@@ -11,7 +11,7 @@ m4_define([_ADD_BR], [[add-br $1 -- set Bridge $1 protocols=OpenFlow10,OpenFlow1
 # br0 with predictable settings, passing 'vsctl-args' as additional
 # commands to ovs-vsctl.  If 'vsctl-args' causes ovs-vsctl to provide
 # output (e.g. because it includes "create" commands) then 'vsctl-output'
-# specifies the expected output after filtering through uuidfilt.pl.
+# specifies the expected output after filtering through uuidfilt.
 #
 # Best-effort loading of all available vport modules is performed.
 #
@@ -25,7 +25,7 @@ m4_define([OVS_TRAFFIC_VSWITCHD_START],
    on_exit 'ovs-dpctl del-dp ovs-system'
    _OVS_VSWITCHD_START([])
    dnl Add bridges, ports, etc.
-   AT_CHECK([ovs-vsctl -- _ADD_BR([br0]) -- $1 m4_if([$2], [], [], [| ${PERL} $srcdir/uuidfilt.pl])], [0], [$2])
+   AT_CHECK([ovs-vsctl -- _ADD_BR([br0]) -- $1 m4_if([$2], [], [], [| uuidfilt])], [0], [$2])
 ])
 
 # OVS_TRAFFIC_VSWITCHD_STOP([WHITELIST], [extra_cmds])

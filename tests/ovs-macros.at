@@ -197,6 +197,10 @@ kill_ovs_vswitchd () {
 wc () {
    command wc "$@" | tr -s ' ' ' ' | sed 's/^ *//'
 }
+
+uuidfilt () {
+    $PYTHON "$top_srcdir"/tests/uuidfilt.py "$@"
+}
 ]
 m4_divert_pop([PREPARE_TESTS])
 

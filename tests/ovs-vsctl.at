@@ -654,7 +654,7 @@ cp stdout out1
 AT_CHECK([RUN_OVS_VSCTL([list bridge], [get bridge br0 _uuid])],
   [0], [stdout], [], [OVS_VSCTL_CLEANUP])
 cp stdout out2
-AT_CHECK([${PERL} $srcdir/uuidfilt.pl out1 out2], [0],
+AT_CHECK([uuidfilt out1 out2], [0],
   [[<0>
 
 
@@ -785,7 +785,7 @@ AT_CHECK([
 cp stdout netflow-uuid
 AT_CHECK([RUN_OVS_VSCTL([list netflow `cat netflow-uuid`])],
   [0], [stdout], [], [OVS_VSCTL_CLEANUP])
-AT_CHECK([${PERL} $srcdir/uuidfilt.pl netflow-uuid stdout], [0],
+AT_CHECK([uuidfilt netflow-uuid stdout], [0],
   [[<0>
 
 _uuid               : <0>
@@ -1084,7 +1084,7 @@ AT_CHECK(
     [--id=@m create mirror name=mymirror select-dst-port=@eth0 select-src-port=@eth0 output-port=@eth1])],
   [0], [stdout], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK(
-  [${PERL} $srcdir/uuidfilt.pl stdout], [0], [dnl
+  [uuidfilt stdout], [0], [dnl
 
 
 
@@ -1098,7 +1098,7 @@ AT_CHECK(
     [list bridge br0])],
   [0], [stdout], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK(
-  [sed -n -e '/uuid/p' -e '/name/p' -e '/mirrors/p' -e '/select/p' -e '/output/p' < stdout | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+  [sed -n -e '/uuid/p' -e '/name/p' -e '/mirrors/p' -e '/select/p' -e '/output/p' < stdout | uuidfilt], [0], [dnl
 [_uuid               : <0>
 name                : "eth0"
 _uuid               : <1>
@@ -1124,13 +1124,13 @@ AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
 AT_CHECK(
   [ovs-vsctl -vPATTERN:console:'%c|%p|%m' --no-wait -vreconnect:emer --db=unix:socket \
-     -- create Bridge name=br0 | ${PERL} $srcdir/uuidfilt.pl],
+     -- create Bridge name=br0 | uuidfilt],
   [0], [<0>
 ], [db_ctl_base|WARN|applying "create" command to table Bridge without --id option will have no effect
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK(
   [ovs-vsctl -vPATTERN:console:'%c|%p|%m' --no-wait -vreconnect:emer --db=unix:socket \
-     -- --id=@br0 create Bridge name=br0 | ${PERL} $srcdir/uuidfilt.pl],
+     -- --id=@br0 create Bridge name=br0 | uuidfilt],
   [0], [<0>
 ], [vsctl|WARN|row id "@br0" was created but no reference to it was inserted, so it will not actually appear in the database
 ], [OVS_VSCTL_CLEANUP])
@@ -1140,7 +1140,7 @@ AT_CHECK(
      -- --id=@eth0 create Port name=eth0 interfaces=@eth0_iface \
      -- --id=@m0 create Mirror name=m0 output_port=@eth0 \
      -- --id=@br0 create Bridge name=br0 mirrors=@m0 \
-     -- set Open_vSwitch . bridges=@br0 | ${PERL} $srcdir/uuidfilt.pl],
+     -- set Open_vSwitch . bridges=@br0 | uuidfilt],
   [0], [<0>
 <1>
 <2>
@@ -1158,7 +1158,7 @@ AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL([--id=@br0 create Bridge name=br0 -- add Open_vSwitch . bridges @br0 -- list bridge])],
   [0], [stdout], [], [OVS_VSCTL_CLEANUP])
-AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0],
+AT_CHECK([uuidfilt stdout], [0],
   [[<0>
 _uuid               : <1>
 auto_attach         : []

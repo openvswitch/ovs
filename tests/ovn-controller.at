@@ -96,7 +96,7 @@ AT_CHECK([ovn-sbctl \
     -- create Port_Binding datapath=@dp1 logical_port=foo tunnel_key=1 type=patch options:peer=bar \
     -- create Port_Binding datapath=@dp2 logical_port=bar tunnel_key=2 type=patch options:peer=foo \
     -- create Port_Binding datapath=@dp1 logical_port=dp1vif tunnel_key=3 \
-| ${PERL} $srcdir/uuidfilt.pl], [0], [<0>
+| uuidfilt], [0], [<0>
 <1>
 <2>
 <3>

@@ -2196,7 +2196,7 @@ AT_CHECK(
      -- --id=@t0 create Flow_Table name=main \
      -- --id=@t1 create Flow_Table flow-limit=1024 \
      -- set bridge br0 'flow_tables={1=@t1,0=@t0}' \
-   | ${PERL} $srcdir/uuidfilt.pl],
+   | uuidfilt],
   [0], [<0>
 <1>
 ])
@@ -2348,7 +2348,7 @@ AT_CHECK(
      -- --id=@t0 create Flow_Table name=main \
      -- --id=@t1 create Flow_Table flow-limit=1024 \
      -- set bridge br0 'flow_tables={1=@t1,0=@t0}' \
-   | ${PERL} $srcdir/uuidfilt.pl],
+   | uuidfilt],
   [0], [<0>
 <1>
 ])
@@ -2603,7 +2603,7 @@ AT_CHECK(
      -- --id=@t0 create Flow_Table name=main \
      -- --id=@t1 create Flow_Table flow-limit=1024 \
      -- set bridge br0 'flow_tables={1=@t1,0=@t0}' \
-   | ${PERL} $srcdir/uuidfilt.pl],
+   | uuidfilt],
   [0], [<0>
 <1>
 ])
@@ -2655,7 +2655,7 @@ AT_CHECK(
   [ovs-vsctl \
      -- --id=@t0 create Flow_Table flow-limit=4 \
      -- set bridge br0 flow_tables:0=@t0 \
-   | ${PERL} $srcdir/uuidfilt.pl],
+   | uuidfilt],
   [0], [<0>
 ])
 # Add 4 flows.
@@ -2699,7 +2699,7 @@ AT_CHECK(
   [ovs-vsctl \
      -- --id=@t0 create Flow_Table flow-limit=4 \
      -- set bridge br0 flow_tables:0=@t0 \
-   | ${PERL} $srcdir/uuidfilt.pl],
+   | uuidfilt],
   [0], [<0>
 ])
 # Add 4 flows.
@@ -2738,7 +2738,7 @@ AT_CHECK(
   [ovs-vsctl \
      -- --id=@t0 create Flow_Table flow-limit=4 overflow-policy=evict \
      -- set bridge br0 flow_tables:0=@t0 \
-   | ${PERL} $srcdir/uuidfilt.pl],
+   | uuidfilt],
   [0], [<0>
 ])
 # Add 4 flows.
@@ -2796,7 +2796,7 @@ AT_CHECK(
   [ovs-vsctl \
      -- --id=@t0 create Flow_Table flow-limit=4 overflow-policy=evict \
      -- set bridge br0 flow_tables:0=@t0 \
-   | ${PERL} $srcdir/uuidfilt.pl],
+   | uuidfilt],
   [0], [<0>
 ])
 # Add 4 flows.
@@ -2855,7 +2855,7 @@ AT_CHECK(
   [ovs-vsctl \
      -- --id=@t0 create Flow_Table name=evict flow-limit=4 \
      -- set bridge br0 flow_tables:0=@t0 \
-   | ${PERL} $srcdir/uuidfilt.pl],
+   | uuidfilt],
   [0], [<0>
 ])
 # Use mod-table to turn on eviction just to demonstrate that it works.
@@ -2921,7 +2921,7 @@ AT_CHECK(
                                    overflow-policy=evict \
                                    groups='"NXM_OF_IN_PORT[[]]"' \
      -- set bridge br0 flow_tables:0=@t0 \
-   | ${PERL} $srcdir/uuidfilt.pl],
+   | uuidfilt],
   [0], [<0>
 ])
 # Add 4 flows.
@@ -3003,7 +3003,7 @@ AT_CHECK(
                                    overflow-policy=evict \
                                    groups='"NXM_OF_IN_PORT[[]]"' \
      -- set bridge br0 flow_tables:0=@t0 \
-   | ${PERL} $srcdir/uuidfilt.pl],
+   | uuidfilt],
   [0], [<0>
 ])
 # Add 4 flows.
@@ -3083,7 +3083,7 @@ AT_CHECK(
   [ovs-vsctl \
      -- --id=@t0 create Flow_Table flow-limit=4 overflow-policy=evict \
      -- set bridge br0 flow_tables:0=@t0 \
-   | ${PERL} $srcdir/uuidfilt.pl],
+   | uuidfilt],
   [0], [<0>
 ])
 ovs-appctl time/stop
@@ -3127,7 +3127,7 @@ AT_CHECK(
   [ovs-vsctl \
      -- --id=@t0 create Flow_Table flow-limit=4 overflow-policy=evict \
      -- set bridge br0 flow_tables:0=@t0 \
-   | ${PERL} $srcdir/uuidfilt.pl],
+   | uuidfilt],
   [0], [<0>
 ])
 # Add 4 flows.

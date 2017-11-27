@@ -37,7 +37,7 @@ m4_define([OVSDB_CHECK_IDL_C],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
    AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl unix:socket $3],
             [0], [stdout], [ignore])
-   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+   AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
             [0], [$4])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
@@ -52,7 +52,7 @@ m4_define([OVSDB_CHECK_IDL_PYN],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
    AT_CHECK([$8 $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket $3],
             [0], [stdout], [ignore])
-   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+   AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
             [0], [$4])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
@@ -72,7 +72,7 @@ m4_define([OVSDB_CHECK_IDL_REGISTER_COLUMNS_PYN],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
    AT_CHECK([$8 $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket ?simple:b,ba,i,ia,r,ra,s,sa,u,ua?link1:i,k,ka,l2?link2:i,l1 $3],
             [0], [stdout], [ignore])
-   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+   AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
             [0], [$4])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
@@ -95,7 +95,7 @@ m4_define([OVSDB_CHECK_IDL_TCP_PYN],
      [AT_CHECK([ovsdb-client transact tcp:127.0.0.1:$TCP_PORT $2], [0], [ignore], [ignore])])
    AT_CHECK([$8 $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema tcp:127.0.0.1:$TCP_PORT $3],
             [0], [stdout], [ignore])
-   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+   AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
             [0], [$4])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
@@ -121,7 +121,7 @@ m4_define([OVSDB_CHECK_IDL_TCP6_PYN],
      [AT_CHECK([ovsdb-client transact "tcp:[[::1]]:$TCP_PORT" $2], [0], [ignore], [ignore])])
    AT_CHECK([$8 $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema tcp:[[::1]]:$TCP_PORT $3],
             [0], [stdout], [ignore])
-   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+   AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
             [0], [$4])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
@@ -154,7 +154,7 @@ m4_define([OVSDB_CHECK_IDL_PASSIVE_TCP_PY],
    AT_CHECK([ovsdb_start_idltest "tcp:127.0.0.1:$TCP_PORT"])
    AT_CHECK([$PYTHON $srcdir/test-ovsdb.py -t10 idl_passive $srcdir/idltest.ovsschema ptcp:127.0.0.1:$TCP_PORT $3],
       [0], [stdout], [ignore])
-   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+   AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
             [0], [$4])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP
@@ -764,7 +764,7 @@ AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl uni
        "where": [],
        "row": {"k": ["uuid", "#0#"]}}]']],
 	 [0], [stdout], [stderr])
-AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl], [0],
+AT_CHECK([sort stdout | uuidfilt], [0],
     [[000: empty
 001: {"error":null,"result":[{"uuid":["uuid","<0>"]}]}
 002: i=0 k=0 ka=[] l2= uuid=<0>
@@ -812,7 +812,7 @@ m4_define([OVSDB_CHECK_IDL_FETCH_COLUMNS_PY],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
    AT_CHECK([$PYTHON $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket [$3] $4],
             [0], [stdout], [ignore])
-   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$7],,, [[| $7]]),
+   AT_CHECK([sort stdout | uuidfilt]m4_if([$7],,, [[| $7]]),
             [0], [$5])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
@@ -856,7 +856,7 @@ m4_define([OVSDB_CHECK_IDL_WO_MONITOR_COND_PY],
    AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/disable-monitor-cond])
    AT_CHECK([$PYTHON $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket $2],
             [0], [stdout], [ignore], [kill `cat pid`])
-   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$5],,, [[| $5]]),
+   AT_CHECK([sort stdout | uuidfilt]m4_if([$5],,, [[| $5]]),
             [0], [$3], [], [kill `cat pid`])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
@@ -951,7 +951,7 @@ m4_define([OVSDB_CHECK_IDL_TRACK_C],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
    AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl unix:socket $3],
             [0], [stdout], [ignore])
-   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+   AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
             [0], [$4])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
@@ -1080,7 +1080,7 @@ m4_define([OVSDB_CHECK_IDL_PARTIAL_UPDATE_MAP_COLUMN],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
    AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl-partial-update-map-column unix:socket $3],
             [0], [stdout], [ignore])
-   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+   AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
             [0], [$4])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
@@ -1129,7 +1129,7 @@ m4_define([OVSDB_CHECK_IDL_PARTIAL_UPDATE_SET_COLUMN],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
    AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl-partial-update-set-column unix:socket $3],
             [0], [stdout], [ignore])
-   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+   AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
             [0], [$4])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
@@ -1188,7 +1188,7 @@ m4_define([OVSDB_CHECK_IDL_NOTIFY_PY],
    AT_CHECK([ovsdb_start_idltest])
    AT_CHECK([$PYTHON $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket $2],
             [0], [stdout], [ignore], [kill `cat pid`])
-   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$5],,, [[| $5]]),
+   AT_CHECK([sort stdout | uuidfilt]m4_if([$5],,, [[| $5]]),
             [0], [$3], [], [kill `cat pid`])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
@@ -1217,7 +1217,7 @@ m4_define([OVSDB_CHECK_IDL_NOTIFY_SSL_PY],
              ssl:127.0.0.1:$TCP_PORT $PKIDIR/testpki-privkey.pem \
              $PKIDIR/testpki-cert.pem $PKIDIR/testpki-cacert.pem $2],
             [0], [stdout], [ignore], [kill `cat pid`])
-   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$5],,, [[| $5]]),
+   AT_CHECK([sort stdout | uuidfilt]m4_if([$5],,, [[| $5]]),
             [0], [$3], [], [kill `cat pid`])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
@@ -1605,7 +1605,7 @@ m4_define([OVSDB_CHECK_IDL_COMPOUND_INDEX_WITH_REF],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
    AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl-compound-index-with-ref unix:socket $3],
             [0], [stdout], [ignore])
-   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+   AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
             [0], [$4])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])

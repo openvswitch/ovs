@@ -353,7 +353,7 @@ m4_define([_OVS_VSWITCHD_START],
 # br0 with predictable settings, passing 'vsctl-args' as additional
 # commands to ovs-vsctl.  If 'vsctl-args' causes ovs-vsctl to provide
 # output (e.g. because it includes "create" commands) then 'vsctl-output'
-# specifies the expected output after filtering through uuidfilt.pl.
+# specifies the expected output after filtering through uuidfilt.
 #
 # If a test needs to use "system" devices (as dummies), then specify
 # =override (literally) as the third argument.  Otherwise, system devices
@@ -364,7 +364,7 @@ m4_define([_OVS_VSWITCHD_START],
 # to ovs-vswitchd
 m4_define([OVS_VSWITCHD_START],
   [_OVS_VSWITCHD_START([--enable-dummy$3 --disable-system $4])
-   AT_CHECK([add_of_br 0 $1 m4_if([$2], [], [], [| ${PERL} $srcdir/uuidfilt.pl])], [0], [$2])
+   AT_CHECK([add_of_br 0 $1 m4_if([$2], [], [], [| uuidfilt])], [0], [$2])
 ])
 
 # check_logs scans through all *.log files (except '*.log' and testsuite.log)
