@@ -27,21 +27,8 @@ OVN To-do List
 
 * Work out database for clustering or HA properly.
 
-* Compromised chassis mitigation.
-
-  Possibly depends on database solution.
-
-  Latest discussion:
-
-  https://mail.openvswitch.org/pipermail/ovs-dev/2016-August/321649.html
-
 * Get incremental updates in ovn-controller and ovn-northd in some
   sensible way.
-
-* Testing improvements, possibly heavily based on ovn-trace.
-
-  Justin Pettit: "I'm planning to write some ovn-trace tests for IPv6.
-  Hopefully we can get those into 2.6."
 
 * Self-managing HA for ovn-northd (avoiding the need to set up
   independent tooling for fail-over).
@@ -60,11 +47,6 @@ OVN To-do List
 
   Russell Bryant: "Today that would require creating 4096 ports for the VM and
   attach to 4096 OVN networks, so doable, but not quite ideal."
-
-* Native DNS support
-
-  Russell Bryant: "This is an OpenStack requirement to fully eliminate the DHCP
-  agent."
 
 * Service function chaining.
 
@@ -118,42 +100,6 @@ OVN To-do List
     The table of MAC bindings must not be allowed to grow unreasonably large.
 
   * MTU handling (fragmentation on output)
-
-* Security
-
-  * Limiting the impact of a compromised chassis.
-
-    Every instance of ovn-controller has the same full access to the central
-    OVN_Southbound database.  This means that a compromised chassis can
-    interfere with the normal operation of the rest of the deployment.  Some
-    specific examples include writing to the logical flow table to alter
-    traffic handling or updating the port binding table to claim ports that are
-    actually present on a different chassis.  In practice, the compromised host
-    would be fighting against ovn-northd and other instances of ovn-controller
-    that would be trying to restore the correct state.  The impact could
-    include at least temporarily redirecting traffic (so the compromised host
-    could receive traffic that it shouldn't) and potentially a more general
-    denial of service.
-
-    There are different potential improvements to this area.  The first would
-    be to add some sort of ACL scheme to ovsdb-server.  A proposal for this
-    should first include an ACL scheme for ovn-controller.  An example policy
-    would be to make Logical_Flow read-only.  Table-level control is needed,
-    but is not enough.  For example, ovn-controller must be able to update the
-    Chassis and Encap tables, but should only be able to modify the rows
-    associated with that chassis and no others.
-
-    A more complex example is the Port_Binding table.  Currently,
-    ovn-controller is the source of truth of where a port is located.  There
-    seems to be  no policy that can prevent malicious behavior of a compromised
-    host with this table.
-
-    An alternative scheme for port bindings would be to provide an optional
-    mode where an external entity controls port bindings and make them
-    read-only to ovn-controller.  This is actually how OpenStack works today,
-    for example.  The part of OpenStack that manages VMs (Nova) tells the
-    networking component (Neutron) where a port will be located, as opposed to
-    the networking component discovering it.
 
 * ovsdb-server
 
@@ -220,23 +166,8 @@ OVN To-do List
     We need to find a proper solution to solve this issue instead of increasing
     the inactivity_probe value.
 
-* Consider the use of BFD as tunnel monitor.
-
-  The use of BFD for hypervisor-to-hypervisor tunnels is probably not worth it,
-  since there's no alternative to switch to if a tunnel goes down.  It could
-  make sense at a slow rate if someone does OVN monitoring system integration,
-  but not otherwise.
-
-  When OVN gets to supporting HA for gateways (see ovn/OVN-GW-HA.rst), BFD is
-  likely needed as a part of that solution.
-
-  There's more commentary in this ML post:
-  https://mail.openvswitch.org/pipermail/ovs-dev/2015-November/305928.html
-
 * ACL
 
   * Support FTP ALGs.
 
   * Support reject action.
-
-  * Support log option.
