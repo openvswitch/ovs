@@ -581,18 +581,17 @@ parse_put_flow_set_masked_action(struct tc_flower *flower,
                                  bool hasmask)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
-    char *set_buff[128], *set_data, *set_mask;
+    uint64_t set_stub[1024 / 8];
+    struct ofpbuf set_buf = OFPBUF_STUB_INITIALIZER(set_stub);
+    char *set_data, *set_mask;
     char *key = (char *) &flower->rewrite.key;
     char *mask = (char *) &flower->rewrite.mask;
     const struct nlattr *attr;
     int i, j, type;
     size_t size;
 
-    ovs_assert(set_len <= 128);
-
     /* copy so we can set attr mask to 0 for used ovs key struct members  */
-    memcpy(set_buff, set, set_len);
-    attr = (struct nlattr *) set_buff;
+    attr = ofpbuf_put(&set_buf, set, set_len);
 
     type = nl_attr_type(attr);
     size = nl_attr_get_size(attr) / 2;
@@ -602,6 +601,7 @@ parse_put_flow_set_masked_action(struct tc_flower *flower,
     if (type >= ARRAY_SIZE(set_flower_map)
         || !set_flower_map[type][0].size) {
         VLOG_DBG_RL(&rl, "unsupported set action type: %d", type);
+        ofpbuf_uninit(&set_buf);
         return EOPNOTSUPP;
     }
 
@@ -634,9 +634,11 @@ parse_put_flow_set_masked_action(struct tc_flower *flower,
     if (hasmask && !is_all_zeros(set_mask, size)) {
         VLOG_DBG_RL(&rl, "unsupported sub attribute of set action type %d",
                     type);
+        ofpbuf_uninit(&set_buf);
         return EOPNOTSUPP;
     }
 
+    ofpbuf_uninit(&set_buf);
     return 0;
 }
 
