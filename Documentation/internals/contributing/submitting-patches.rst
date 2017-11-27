@@ -252,7 +252,7 @@ Examples of common tags follow.
 
   ::
 
-      Reported-at: http://openvswitch.org/pipermail/dev/2014-June/040952.html
+      Reported-at: https://mail.openvswitch.org/pipermail/ovs-dev/2014-June/284495.html
 
 ``Submitted-at: <URL>``
 

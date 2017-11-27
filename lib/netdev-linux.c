@@ -144,7 +144,7 @@ struct tpacket_auxdata {
  *
  * To avoid revisiting problems reported with using configure to detect
  * compatibility (see report at
- * http://openvswitch.org/pipermail/dev/2014-October/047978.html)
+ * https://mail.openvswitch.org/pipermail/ovs-dev/2014-October/291521.html)
  * unconditionally replace ethtool_cmd_speed. */
 #define ethtool_cmd_speed rpl_ethtool_cmd_speed
 static inline uint32_t rpl_ethtool_cmd_speed(const struct ethtool_cmd *ep)
@@ -182,8 +182,8 @@ static inline uint32_t rpl_ethtool_cmd_speed(const struct ethtool_cmd *ep)
  *
  * Tests for rtnl_link_stats64 don't seem to consistently work, e.g. on
  * 2.6.32-431.29.2.el6.x86_64 (see report at
- * http://openvswitch.org/pipermail/dev/2014-October/047978.html).  Maybe
- * if_link.h is not self-contained on those kernels.  It is easiest to
+ * https://mail.openvswitch.org/pipermail/ovs-dev/2014-October/291521.html).
+ * Maybe if_link.h is not self-contained on those kernels.  It is easiest to
  * unconditionally define a replacement. */
 #ifndef IFLA_STATS64
 #define IFLA_STATS64 23

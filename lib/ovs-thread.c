@@ -402,7 +402,7 @@ ovs_thread_create(const char *name, void *(*start)(void *), void *arg)
 
     /* Some small systems use a default stack size as small as 80 kB, but OVS
      * requires approximately 384 kB according to the following analysis:
-     * http://openvswitch.org/pipermail/dev/2016-January/065049.html
+     * https://mail.openvswitch.org/pipermail/ovs-dev/2016-January/308592.html
      *
      * We use 512 kB to give us some margin of error. */
     pthread_attr_t attr;

@@ -221,7 +221,7 @@ sections for the document include:
       tags, such as Acked-by tags obtained during review.
 
 `CVE-2016-2074
-<https://mail.openvswitch.org/pipermail/ovs-announce/2016-March/000082.html>`__
+<https://mail.openvswitch.org/pipermail/ovs-announce/2016-March/000222.html>`__
 is an example advisory document.
 
 Step 3b: Fix

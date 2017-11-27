@@ -33,7 +33,7 @@ OVN To-do List
 
   Latest discussion:
 
-  http://openvswitch.org/pipermail/dev/2016-August/078106.html
+  https://mail.openvswitch.org/pipermail/ovs-dev/2016-August/321649.html
 
 * Get incremental updates in ovn-controller and ovn-northd in some
   sensible way.
@@ -231,7 +231,7 @@ OVN To-do List
   likely needed as a part of that solution.
 
   There's more commentary in this ML post:
-  http://openvswitch.org/pipermail/dev/2015-November/062385.html
+  https://mail.openvswitch.org/pipermail/ovs-dev/2015-November/305928.html
 
 * ACL
 
