@@ -26,11 +26,11 @@
 #define ETH_TYPE_LLDP   0x88cc
 
 /* Dummy MAC addresses */
-static const struct eth_addr chassis_mac = { { { 0x5e, 0x10, 0x8e, 0xe7, 0x84, 0xad } } };
-static const struct eth_addr eth_src = { { { 0x5e, 0x10, 0x8e, 0xe7, 0x84, 0xad } } };
+static const struct eth_addr chassis_mac = ETH_ADDR_C(5e,10,8e,e7,84,ad);
+static const struct eth_addr eth_src = ETH_ADDR_C(5e,10,8e,e7,84,ad);
 
 /* LLDP multicast address */
-static const struct eth_addr eth_addr_lldp = { { { 0x01, 0x80, 0xC2, 0x00, 0x00, 0x0e } } };
+static const struct eth_addr eth_addr_lldp = ETH_ADDR_C(01,80,c2,00,00,0e);
 
 /* Count of tests run */
 static int num_tests = 0;

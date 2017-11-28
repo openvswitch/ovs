@@ -726,8 +726,7 @@ lldp_put_packet(struct lldp *lldp, struct dp_packet *packet,
 {
     struct lldpd *mylldpd = lldp->lldpd;
     struct lldpd_hardware *hw = lldpd_first_hardware(mylldpd);
-    static const struct eth_addr eth_addr_lldp =
-        { { { 0x01, 0x80, 0xC2, 0x00, 0x00, 0x0e } } };
+    static const struct eth_addr eth_addr_lldp = ETH_ADDR_C(01,80,c2,00,00,0e);
 
     ovs_mutex_lock(&mutex);
 

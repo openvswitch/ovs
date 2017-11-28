@@ -316,11 +316,13 @@ static ovs_be16 tp_src_values[] = { CONSTANT_HTONS(49362),
                                     CONSTANT_HTONS(80) };
 static ovs_be16 tp_dst_values[] = { CONSTANT_HTONS(6667), CONSTANT_HTONS(22) };
 static struct eth_addr dl_src_values[] = {
-    { { { 0x00, 0x02, 0xe3, 0x0f, 0x80, 0xa4 } } },
-    { { { 0x5e, 0x33, 0x7f, 0x5f, 0x1e, 0x99 } } } };
+    ETH_ADDR_C(00,02,e3,0f,80,a4),
+    ETH_ADDR_C(5e,33,7f,5f,1e,99)
+};
 static struct eth_addr dl_dst_values[] = {
-    { { { 0x4a, 0x27, 0x71, 0xae, 0x64, 0xc1 } } },
-    { { { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff } } } };
+    ETH_ADDR_C(4a,27,71,ae,64,c1),
+    ETH_ADDR_C(ff,ff,ff,ff,ff,ff)
+};
 static uint8_t nw_proto_values[] = { IPPROTO_TCP, IPPROTO_ICMP };
 static uint8_t nw_dscp_values[] = { 48, 0 };
 

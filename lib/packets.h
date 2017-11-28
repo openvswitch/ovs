@@ -176,24 +176,24 @@ bool dpid_from_string(const char *s, uint64_t *dpidp);
 #define ETH_ADDR_LEN           6
 
 static const struct eth_addr eth_addr_broadcast OVS_UNUSED
-    = { { { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff } } };
+    = ETH_ADDR_C(ff,ff,ff,ff,ff,ff);
 
 static const struct eth_addr eth_addr_exact OVS_UNUSED
-    = { { { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff } } };
+    = ETH_ADDR_C(ff,ff,ff,ff,ff,ff);
 
 static const struct eth_addr eth_addr_zero OVS_UNUSED
-    = { { { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 } } };
+    = ETH_ADDR_C(00,00,00,00,00,00);
 static const struct eth_addr64 eth_addr64_zero OVS_UNUSED
-    = { { { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 } } };
+    = ETH_ADDR64_C(00,00,00,00,00,00,00,00);
 
 static const struct eth_addr eth_addr_stp OVS_UNUSED
-    = { { { 0x01, 0x80, 0xC2, 0x00, 0x00, 0x00 } } };
+    = ETH_ADDR_C(01,80,c2,00,00,00);
 
 static const struct eth_addr eth_addr_lacp OVS_UNUSED
-    = { { { 0x01, 0x80, 0xC2, 0x00, 0x00, 0x02 } } };
+    = ETH_ADDR_C(01,80,c2,00,00,02);
 
 static const struct eth_addr eth_addr_bfd OVS_UNUSED
-    = { { { 0x00, 0x23, 0x20, 0x00, 0x00, 0x01 } } };
+    = ETH_ADDR_C(00,23,20,00,00,01);
 
 static inline bool eth_addr_is_broadcast(const struct eth_addr a)
 {

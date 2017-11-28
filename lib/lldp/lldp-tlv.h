@@ -18,9 +18,7 @@
 #ifndef _LLDP_TLV_H
 #define _LLDP_TLV_H
 
-#define LLDP_MULTICAST_ADDR    {                \
-    { { 0x01, 0x80, 0xc2, 0x00, 0x00, 0x0e } }  \
-}
+#define LLDP_MULTICAST_ADDR ETH_ADDR_C(01,80,c2,00,00,0e)
 
 #define LLDP_TLV_END            0
 #define LLDP_TLV_CHASSIS_ID     1
