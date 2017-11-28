@@ -73,6 +73,7 @@ size_t strftime_msec(char *s, size_t max, const char *format,
                      const struct tm_msec *);
 void xgettimeofday(struct timeval *);
 void xclock_gettime(clock_t, struct timespec *);
+void nsec_to_timespec(long long int, struct timespec *);
 
 int get_cpu_usage(void);
 

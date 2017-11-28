@@ -514,6 +514,25 @@ msec_to_timespec(long long int ms, struct timespec *ts)
     ts->tv_nsec = (ms % 1000) * 1000 * 1000;
 }
 
+void
+nsec_to_timespec(long long int nsec, struct timespec *ts)
+{
+    if (!nsec) {
+        ts->tv_sec = ts->tv_nsec = 0;
+        return;
+    }
+    ts->tv_sec = nsec / (1000 * 1000 * 1000);
+
+    nsec = nsec % (1000 * 1000 * 1000);
+    /* This is to handle dates before epoch. */
+    if (OVS_UNLIKELY(nsec < 0)) {
+        nsec += 1000 * 1000 * 1000;
+        ts->tv_sec--;
+    }
+
+    ts->tv_nsec = nsec;
+}
+
 static void
 timewarp_work(void)
 {

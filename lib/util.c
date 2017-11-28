@@ -2205,6 +2205,41 @@ xsleep(unsigned int seconds)
     ovsrcu_quiesce_end();
 }
 
+/* High resolution sleep. */
+void
+xnanosleep(uint64_t nanoseconds)
+{
+    ovsrcu_quiesce_start();
+#ifndef _WIN32
+    int retval;
+    struct timespec ts_sleep;
+    nsec_to_timespec(nanoseconds, &ts_sleep);
+
+    int error = 0;
+    do {
+        retval = nanosleep(&ts_sleep, NULL);
+        error = retval < 0 ? errno : 0;
+    } while (error == EINTR);
+#else
+    HANDLE timer = CreateWaitableTimer(NULL, FALSE, NULL);
+    if (timer) {
+        LARGE_INTEGER duetime;
+        duetime.QuadPart = -nanoseconds;
+        if (SetWaitableTimer(timer, &duetime, 0, NULL, NULL, FALSE)) {
+            WaitForSingleObject(timer, INFINITE);
+        } else {
+            VLOG_ERR_ONCE("SetWaitableTimer Failed (%s)",
+                           ovs_lasterror_to_string());
+        }
+        CloseHandle(timer);
+    } else {
+        VLOG_ERR_ONCE("CreateWaitableTimer Failed (%s)",
+                       ovs_lasterror_to_string());
+    }
+#endif
+    ovsrcu_quiesce_end();
+}
+
 /* Determine whether standard output is a tty or not. This is useful to decide
  * whether to use color output or not when --color option for utilities is set
  * to `auto`.

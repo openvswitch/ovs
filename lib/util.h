@@ -502,6 +502,7 @@ ovs_u128_and(const ovs_u128 a, const ovs_u128 b)
 }
 
 void xsleep(unsigned int seconds);
+void xnanosleep(uint64_t nanoseconds);
 
 bool is_stdout_a_tty(void);
 
