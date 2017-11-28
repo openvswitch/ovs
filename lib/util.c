@@ -196,15 +196,9 @@ x2nrealloc(void *p, size_t *n, size_t s)
     return xrealloc(p, *n * s);
 }
 
-/* The desired minimum alignment for an allocated block of memory. */
-#define MEM_ALIGN MAX(sizeof(void *), 8)
-BUILD_ASSERT_DECL(IS_POW2(MEM_ALIGN));
-BUILD_ASSERT_DECL(CACHE_LINE_SIZE >= MEM_ALIGN);
-
-/* Allocates and returns 'size' bytes of memory in dedicated cache lines.  That
- * is, the memory block returned will not share a cache line with other data,
- * avoiding "false sharing".  (The memory returned will not be at the start of
- * a cache line, though, so don't assume such alignment.)
+/* Allocates and returns 'size' bytes of memory aligned to a cache line and in
+ * dedicated cache lines.  That is, the memory block returned will not share a
+ * cache line with other data, avoiding "false sharing".
  *
  * Use free_cacheline() to free the returned memory block. */
 void *
@@ -221,28 +215,37 @@ xmalloc_cacheline(size_t size)
     }
     return p;
 #else
-    void **payload;
-    void *base;
-
     /* Allocate room for:
      *
-     *     - Up to CACHE_LINE_SIZE - 1 bytes before the payload, so that the
-     *       start of the payload doesn't potentially share a cache line.
+     *     - Header padding: Up to CACHE_LINE_SIZE - 1 bytes, to allow the
+     *       pointer to be aligned exactly sizeof(void *) bytes before the
+     *       beginning of a cache line.
      *
-     *     - A payload consisting of a void *, followed by padding out to
-     *       MEM_ALIGN bytes, followed by 'size' bytes of user data.
+     *     - Pointer: A pointer to the start of the header padding, to allow us
+     *       to free() the block later.
      *
-     *     - Space following the payload up to the end of the cache line, so
-     *       that the end of the payload doesn't potentially share a cache line
-     *       with some following block. */
-    base = xmalloc((CACHE_LINE_SIZE - 1)
-                   + ROUND_UP(MEM_ALIGN + size, CACHE_LINE_SIZE));
-
-    /* Locate the payload and store a pointer to the base at the beginning. */
-    payload = (void **) ROUND_UP((uintptr_t) base, CACHE_LINE_SIZE);
-    *payload = base;
-
-    return (char *) payload + MEM_ALIGN;
+     *     - User data: 'size' bytes.
+     *
+     *     - Trailer padding: Enough to bring the user data up to a cache line
+     *       multiple.
+     *
+     * +---------------+---------+------------------------+---------+
+     * | header        | pointer | user data              | trailer |
+     * +---------------+---------+------------------------+---------+
+     * ^               ^         ^
+     * |               |         |
+     * p               q         r
+     *
+     */
+    void *p = xmalloc((CACHE_LINE_SIZE - 1)
+                      + sizeof(void *)
+                      + ROUND_UP(size, CACHE_LINE_SIZE));
+    bool runt = PAD_SIZE((uintptr_t) p, CACHE_LINE_SIZE) < sizeof(void *);
+    void *r = (void *) ROUND_UP((uintptr_t) p + (runt ? CACHE_LINE_SIZE : 0),
+                                CACHE_LINE_SIZE);
+    void **q = (void **) r - 1;
+    *q = p;
+    return r;
 #endif
 }
 
@@ -265,7 +268,8 @@ free_cacheline(void *p)
     free(p);
 #else
     if (p) {
-        free(*(void **) ((uintptr_t) p - MEM_ALIGN));
+        void **q = (void **) p - 1;
+        free(*q);
     }
 #endif
 }
