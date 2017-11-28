@@ -1879,6 +1879,9 @@ parse_odp_encap_nsh_action(const char *s, struct ofpbuf *actions)
             }
             continue;
         }
+
+        ret = -EINVAL;
+        goto out;
     }
 out:
     if (ret < 0) {
