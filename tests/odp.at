@@ -362,3 +362,11 @@ AT_CHECK_UNQUOTED([ovstest test-odp parse-actions < actions.txt], [0],
   [`cat actions.txt`
 ])
 AT_CLEANUP
+
+AT_SETUP([OVS datapath actions parsing and formatting - invalid forms])
+dnl This caused a hang in older versions.
+AT_CHECK([echo 'encap_nsh@:{@' | ovstest test-odp parse-actions
+], [0], [dnl
+odp_actions_from_string: error
+])
+AT_CLEANUP
