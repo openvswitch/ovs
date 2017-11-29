@@ -1867,8 +1867,8 @@ parse_odp_encap_nsh_action(const char *s, struct ofpbuf *actions)
                 }
                 encap_nsh.mdlen = mdlen + padding;
                 ofpbuf_uninit(&b);
+                continue;
             }
-            continue;
         }
 
         ret = -EINVAL;
