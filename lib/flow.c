@@ -553,7 +553,7 @@ parse_nsh(const void **datap, size_t *sizep, struct flow_nsh *key)
     /* NSH header length is in 4 byte words. */
     length = ((ver_flags_len & NSH_LEN_MASK) >> NSH_LEN_SHIFT) << 2;
 
-    if (version != 0) {
+    if (length > *sizep || version != 0) {
         return false;
     }
 
