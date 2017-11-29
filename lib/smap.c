@@ -20,6 +20,7 @@
 #include "hash.h"
 #include "openvswitch/json.h"
 #include "packets.h"
+#include "util.h"
 #include "uuid.h"
 
 static struct smap_node *smap_add__(struct smap *, char *, void *,
@@ -221,25 +222,37 @@ smap_get_bool(const struct smap *smap, const char *key, bool def)
     }
 }
 
-/* Gets the value associated with 'key' in 'smap' and converts it to an int
- * using atoi().  If 'key' is not in 'smap', returns 'def'. */
+/* Gets the value associated with 'key' in 'smap' and converts it to an int.
+ * If 'key' is not in 'smap' or a valid integer can't be parsed from it's
+ * value, returns 'def'. */
 int
 smap_get_int(const struct smap *smap, const char *key, int def)
 {
     const char *value = smap_get(smap, key);
+    int i_value;
 
-    return value ? atoi(value) : def;
+    if (!value || !str_to_int(value, 10, &i_value)) {
+        return def;
+    }
+
+    return i_value;
 }
 
-/* Gets the value associated with 'key' in 'smap' and converts it to an int
- * using strtoull().  If 'key' is not in 'smap', returns 'def'. */
+/* Gets the value associated with 'key' in 'smap' and converts it to an
+ * unsigned long long.  If 'key' is not in 'smap' or a valid number can't be
+ * parsed from it's value, returns 'def'. */
 unsigned long long int
 smap_get_ullong(const struct smap *smap, const char *key,
                 unsigned long long def)
 {
     const char *value = smap_get(smap, key);
+    unsigned long long ull_value;
 
-    return value ? strtoull(value, NULL, 10) : def;
+    if (!value || !str_to_ullong(value, 10, &ull_value)) {
+        return def;
+    }
+
+    return ull_value;
 }
 
 /* Gets the value associated with 'key' in 'smap' and converts it to a UUID
