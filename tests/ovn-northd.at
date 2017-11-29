@@ -152,3 +152,113 @@ ovn-nbctl lsp-set-options S1-R1 router-port=R1-S1
 AT_CHECK([test x`ovn-nbctl lsp-get-up S1-R1` = xup])
 
 AT_CLEANUP
+
+AT_SETUP([ovn -- check IPv6 RA config propagation to SBDB])
+ovn_start
+
+ovn-nbctl lr-add ro
+ovn-nbctl lrp-add ro ro-sw 00:00:00:00:00:01 aef0::1/64
+ovn-nbctl ls-add sw
+ovn-nbctl lsp-add sw sw-ro
+ovn-nbctl lsp-set-type sw-ro router
+ovn-nbctl lsp-set-options sw-ro router-port=ro-sw
+ovn-nbctl lsp-set-addresses sw-ro 00:00:00:00:00:01
+ovn-nbctl set Logical_Router_Port ro-sw ipv6_ra_configs:send_periodic=true
+ovn-nbctl set Logical_Router_Port ro-sw ipv6_ra_configs:address_mode=slaac
+ovn-nbctl --wait=sb set Logical_Router_Port ro-sw ipv6_ra_configs:mtu=1280
+
+uuid=$(ovn-sbctl --columns=_uuid --bare find Port_Binding logical_port=ro-sw)
+
+AT_CHECK([ovn-sbctl get Port_Binding ${uuid} options:ipv6_ra_send_periodic],
+[0], ["true"
+])
+AT_CHECK([ovn-sbctl get Port_Binding ${uuid} options:ipv6_ra_address_mode],
+[0], [slaac
+])
+AT_CHECK([ovn-sbctl get Port_Binding ${uuid} options:ipv6_ra_max_interval],
+[0], ["600"
+])
+AT_CHECK([ovn-sbctl get Port_Binding ${uuid} options:ipv6_ra_min_interval],
+[0], ["200"
+])
+AT_CHECK([ovn-sbctl get Port_Binding ${uuid} options:ipv6_ra_mtu],
+[0], ["1280"
+])
+AT_CHECK([ovn-sbctl get Port_Binding ${uuid} options:ipv6_ra_src_eth],
+[0], ["00:00:00:00:00:01"
+])
+AT_CHECK([ovn-sbctl get Port_Binding ${uuid} options:ipv6_ra_src_addr],
+[0], ["fe80::200:ff:fe00:1"
+])
+AT_CHECK([ovn-sbctl get Port_Binding ${uuid} options:ipv6_ra_prefixes],
+[0], ["aef0::/64"
+])
+
+ovn-nbctl set Logical_Router_Port ro-sw ipv6_ra_configs:max_interval=300
+ovn-nbctl --wait=sb set Logical_Router_Port ro-sw ipv6_ra_configs:min_interval=600
+
+AT_CHECK([ovn-sbctl get Port_Binding ${uuid} options:ipv6_ra_max_interval],
+[0], ["300"
+])
+AT_CHECK([ovn-sbctl get Port_Binding ${uuid} options:ipv6_ra_min_interval],
+[0], ["225"
+])
+
+ovn-nbctl set Logical_Router_Port ro-sw ipv6_ra_configs:max_interval=300
+ovn-nbctl --wait=sb set Logical_Router_Port ro-sw ipv6_ra_configs:min_interval=250
+
+AT_CHECK([ovn-sbctl get Port_Binding ${uuid} options:ipv6_ra_max_interval],
+[0], ["300"
+])
+AT_CHECK([ovn-sbctl get Port_Binding ${uuid} options:ipv6_ra_min_interval],
+[0], ["225"
+])
+
+ovn-nbctl set Logical_Router_Port ro-sw ipv6_ra_configs:max_interval=0
+ovn-nbctl --wait=sb set Logical_Router_Port ro-sw ipv6_ra_configs:min_interval=0
+
+AT_CHECK([ovn-sbctl get Port_Binding ${uuid} options:ipv6_ra_max_interval],
+[0], ["4"
+])
+AT_CHECK([ovn-sbctl get Port_Binding ${uuid} options:ipv6_ra_min_interval],
+[0], ["3"
+])
+
+ovn-nbctl set Logical_Router_Port ro-sw ipv6_ra_configs:max_interval=3600
+ovn-nbctl --wait=sb set Logical_Router_Port ro-sw ipv6_ra_configs:min_interval=2400
+
+AT_CHECK([ovn-sbctl get Port_Binding ${uuid} options:ipv6_ra_max_interval],
+[0], ["1800"
+])
+AT_CHECK([ovn-sbctl get Port_Binding ${uuid} options:ipv6_ra_min_interval],
+[0], ["1350"
+])
+
+ovn-nbctl --wait=sb set Logical_Router_port ro-sw ipv6_ra_configs:send_periodic=false
+
+AT_CHECK_UNQUOTED([ovn-sbctl get Port_Binding ${uuid} options:ipv6_ra_send_periodic],
+[1], [], [ovn-sbctl: no key "ipv6_ra_send_periodic" in Port_Binding record "${uuid}" column options
+])
+AT_CHECK_UNQUOTED([ovn-sbctl get Port_Binding ${uuid} options:ipv6_ra_max_interval],
+[1], [], [ovn-sbctl: no key "ipv6_ra_max_interval" in Port_Binding record "${uuid}" column options
+])
+AT_CHECK_UNQUOTED([ovn-sbctl get Port_Binding ${uuid} options:ipv6_ra_min_interval],
+[1], [], [ovn-sbctl: no key "ipv6_ra_min_interval" in Port_Binding record "${uuid}" column options
+])
+AT_CHECK_UNQUOTED([ovn-sbctl get Port_Binding ${uuid} options:ipv6_ra_mtu],
+[1], [], [ovn-sbctl: no key "ipv6_ra_mtu" in Port_Binding record "${uuid}" column options
+])
+AT_CHECK_UNQUOTED([ovn-sbctl get Port_Binding ${uuid} options:ipv6_ra_address_mode],
+[1], [], [ovn-sbctl: no key "ipv6_ra_address_mode" in Port_Binding record "${uuid}" column options
+])
+AT_CHECK_UNQUOTED([ovn-sbctl get Port_Binding ${uuid} options:ipv6_ra_src_eth],
+[1], [], [ovn-sbctl: no key "ipv6_ra_src_eth" in Port_Binding record "${uuid}" column options
+])
+AT_CHECK_UNQUOTED([ovn-sbctl get Port_Binding ${uuid} options:ipv6_ra_src_addr],
+[1], [], [ovn-sbctl: no key "ipv6_ra_src_addr" in Port_Binding record "${uuid}" column options
+])
+AT_CHECK_UNQUOTED([ovn-sbctl get Port_Binding ${uuid} options:ipv6_ra_prefixes],
+[1], [], [ovn-sbctl: no key "ipv6_ra_prefixes" in Port_Binding record "${uuid}" column options
+])
+
+AT_CLEANUP

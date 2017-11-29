@@ -9060,3 +9060,153 @@ AT_CHECK([test x$(ovn-sbctl --bare --columns chassis find port_binding logical_p
 OVN_CLEANUP([hv1])
 
 AT_CLEANUP
+
+AT_SETUP([ovn -- IPv6 periodic RA])
+ovn_start
+
+# This test sets up two hypervisors.
+# hv1 and hv2 run ovn-controllers, and
+# each has a VIF connected to the same
+# logical switch in OVN. The logical
+# switch is connected to a logical
+# router port that is configured to send
+# periodic router advertisements.
+#
+# The reason for having two ovn-controller
+# hypervisors is to ensure that the
+# periodic RAs being sent by each ovn-controller
+# are kept to their local hypervisors. If the
+# packets are not kept local, then each port
+# will receive too many RAs.
+
+net_add n1
+sim_add hv1
+sim_add hv2
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.2
+as hv2
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.3
+
+ovn-nbctl lr-add ro
+ovn-nbctl lrp-add ro ro-sw 00:00:00:00:00:01 aef0::1/64
+
+ovn-nbctl ls-add sw
+ovn-nbctl lsp-add sw sw-ro
+ovn-nbctl lsp-set-type sw-ro router
+ovn-nbctl lsp-set-options sw-ro router-port=ro-sw
+ovn-nbctl lsp-set-addresses sw-ro 00:00:00:00:00:01
+ovn-nbctl lsp-add sw sw-p1
+ovn-nbctl lsp-set-addresses sw-p1 "00:00:00:00:00:02 aef0::200:ff:fe00:2"
+ovn-nbctl lsp-add sw sw-p2
+ovn-nbctl lsp-set-addresses sw-p2 "00:00:00:00:00:03 aef0::200:ff:fe00:3"
+
+ovn-nbctl set Logical_Router_Port ro-sw ipv6_ra_configs:send_periodic=true
+ovn-nbctl set Logical_Router_Port ro-sw ipv6_ra_configs:address_mode=slaac
+ovn-nbctl set Logical_Router_Port ro-sw ipv6_ra_configs:max_interval=4
+ovn-nbctl set Logical_Router_Port ro-sw ipv6_ra_configs:min_interval=3
+
+for i in hv1 hv2 ; do
+    as $i
+    ovs-vsctl -- add-port br-int $i-vif1 -- \
+        set interface $i-vif1 external-ids:iface-id=sw-p1 \
+        options:tx_pcap=$i/vif1-tx.pcap \
+        options:rxq_pcap=$i/vif1-rx.pcap \
+        ofport-request=1
+done
+
+# Allow time for ovn-northd and ovn-controller to catch up
+sleep 1
+
+reset_pcap_file() {
+    local iface=$1
+    local pcap_file=$2
+    ovs-vsctl -- set Interface $iface options:tx_pcap=dummy-tx.pcap \
+options:rxq_pcap=dummy-rx.pcap
+    rm -f ${pcap_file}*.pcap
+    ovs-vsctl -- set Interface $iface options:tx_pcap=${pcap_file}-tx.pcap \
+options:rxq_pcap=${pcap_file}-rx.pcap
+
+}
+
+construct_expected_ra() {
+    local src_mac=000000000001
+    local dst_mac=333300000001
+    local src_addr=fe80000000000000020000fffe000001
+    local dst_addr=ff020000000000000000000000000001
+
+    local mtu=$1
+    local ra_mo=$2
+    local ra_prefix_la=$3
+
+    local slla=0101${src_mac}
+    local mtu_opt=""
+    if test $mtu != 0; then
+        mtu_opt=05010000${mtu}
+    fi
+    shift 3
+
+    local prefix=""
+    while [[ $# -gt 0 ]] ; do
+        local size=$1
+        local net=$2
+        prefix=${prefix}0304${size}${ra_prefix_la}ffffffffffffffff00000000${net}
+        shift 2
+    done
+
+    local ra=ff${ra_mo}00000000000000000000${slla}${mtu_opt}${prefix}
+    local icmp=8600XXXX${ra}
+
+    local ip_len=$(expr ${#icmp} / 2)
+    ip_len=$(printf "%0.4x" ${ip_len})
+
+    local ip=60000000${ip_len}3aff${src_addr}${dst_addr}${icmp}
+    local eth=${dst_mac}${src_mac}86dd${ip}
+    local packet=${eth}
+    echo $packet >> expected
+}
+
+ra_test() {
+    construct_expected_ra $@
+
+    for i in hv1 hv2 ; do
+        OVS_WAIT_WHILE([test 24 = $(wc -c $i/vif1-tx.pcap | cut -d " " -f1)])
+
+        $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $i/vif1-tx.pcap > packets
+
+        cat expected | cut -c -112 > expout
+        AT_CHECK([cat packets | cut -c -112], [0], [expout])
+
+        # Skip ICMPv6 checksum.
+        cat expected | cut -c 117- > expout
+        AT_CHECK([cat packets | cut -c 117-], [0], [expout])
+
+        rm -f packets
+        as $i reset_pcap_file $i-vif1 $i/vif1
+    done
+
+    rm -f expected
+}
+
+# Baseline test with no MTU
+ra_test 0 00 c0 40 aef00000000000000000000000000000
+
+# Now make sure an MTU option makes it
+ovn-nbctl --wait=hv set Logical_Router_Port ro-sw ipv6_ra_configs:mtu=1500
+ra_test 000005dc 00 c0 40 aef00000000000000000000000000000
+
+# Now test for multiple network prefixes
+ovn-nbctl --wait=hv set Logical_Router_port ro-sw networks='aef0\:\:1/64 fd0f\:\:1/48'
+ra_test 000005dc 00 c0 40 aef00000000000000000000000000000 30 fd0f0000000000000000000000000000
+
+# Test a different address mode now
+ovn-nbctl --wait=hv set Logical_Router_Port ro-sw ipv6_ra_configs:address_mode=dhcpv6_stateful
+ra_test 000005dc 80 80 40 aef00000000000000000000000000000 30 fd0f0000000000000000000000000000
+
+# And the other address mode
+ovn-nbctl --wait=hv set Logical_Router_Port ro-sw ipv6_ra_configs:address_mode=dhcpv6_stateless
+ra_test 000005dc 40 80 40 aef00000000000000000000000000000 30 fd0f0000000000000000000000000000
+
+OVN_CLEANUP([hv1],[hv2])
+AT_CLEANUP

@@ -1941,7 +1941,14 @@ ovn_port_update_sbrec(struct northd_context *ctx,
 
         sbrec_port_binding_set_parent_port(op->sb, NULL);
         sbrec_port_binding_set_tag(op->sb, NULL, 0);
-        sbrec_port_binding_set_mac(op->sb, NULL, 0);
+
+        struct ds s = DS_EMPTY_INITIALIZER;
+        ds_put_cstr(&s, op->nbrp->mac);
+        for (int i = 0; i < op->nbrp->n_networks; ++i) {
+            ds_put_format(&s, " %s", op->nbrp->networks[i]);
+        }
+        const char *addresses = ds_cstr(&s);
+        sbrec_port_binding_set_mac(op->sb, &addresses, 1);
 
         struct smap ids = SMAP_INITIALIZER(&ids);
         sbrec_port_binding_set_external_ids(op->sb, &ids);
@@ -4453,6 +4460,67 @@ add_router_lb_flow(struct hmap *lflows, struct ovn_datapath *od,
     ds_destroy(&undnat_match);
 }
 
+#define ND_RA_MAX_INTERVAL_MAX 1800
+#define ND_RA_MAX_INTERVAL_MIN 4
+
+#define ND_RA_MIN_INTERVAL_MAX(max) ((max) * 3 / 4)
+#define ND_RA_MIN_INTERVAL_MIN 3
+
+static void
+copy_ra_to_sb(struct ovn_port *op, const char *address_mode)
+{
+    struct smap options;
+    smap_clone(&options, &op->sb->options);
+
+    smap_add(&options, "ipv6_ra_send_periodic", "true");
+    smap_add(&options, "ipv6_ra_address_mode", address_mode);
+
+    int max_interval = smap_get_int(&op->nbrp->ipv6_ra_configs,
+            "max_interval", ND_RA_MAX_INTERVAL_DEFAULT);
+    if (max_interval > ND_RA_MAX_INTERVAL_MAX) {
+        max_interval = ND_RA_MAX_INTERVAL_MAX;
+    }
+    if (max_interval < ND_RA_MAX_INTERVAL_MIN) {
+        max_interval = ND_RA_MAX_INTERVAL_MIN;
+    }
+    smap_add_format(&options, "ipv6_ra_max_interval", "%d", max_interval);
+
+    int min_interval = smap_get_int(&op->nbrp->ipv6_ra_configs,
+            "min_interval", nd_ra_min_interval_default(max_interval));
+    if (min_interval > ND_RA_MIN_INTERVAL_MAX(max_interval)) {
+        min_interval = ND_RA_MIN_INTERVAL_MAX(max_interval);
+    }
+    if (min_interval < ND_RA_MIN_INTERVAL_MIN) {
+        min_interval = ND_RA_MIN_INTERVAL_MIN;
+    }
+    smap_add_format(&options, "ipv6_ra_min_interval", "%d", min_interval);
+
+    int mtu = smap_get_int(&op->nbrp->ipv6_ra_configs, "mtu", ND_MTU_DEFAULT);
+    /* RFC 2460 requires the MTU for IPv6 to be at least 1280 */
+    if (mtu && mtu >= 1280) {
+        smap_add_format(&options, "ipv6_ra_mtu", "%d", mtu);
+    }
+
+    struct ds s = DS_EMPTY_INITIALIZER;
+    for (int i = 0; i < op->lrp_networks.n_ipv6_addrs; ++i) {
+        struct ipv6_netaddr *addrs = &op->lrp_networks.ipv6_addrs[i];
+        if (in6_is_lla(&addrs->network)) {
+            smap_add(&options, "ipv6_ra_src_addr", addrs->addr_s);
+            continue;
+        }
+        ds_put_format(&s, "%s/%u ", addrs->network_s, addrs->plen);
+    }
+    /* Remove trailing space */
+    ds_chomp(&s, ' ');
+    smap_add(&options, "ipv6_ra_prefixes", ds_cstr(&s));
+    ds_destroy(&s);
+
+    smap_add(&options, "ipv6_ra_src_eth", op->lrp_networks.ea_s);
+
+    sbrec_port_binding_set_options(op->sb, &options);
+    smap_destroy(&options);
+}
+
 static void
 build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                     struct hmap *lflows)
@@ -5462,6 +5530,11 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
             VLOG_WARN_RL(&rl, "Invalid address mode [%s] defined",
                          address_mode);
             continue;
+        }
+
+        if (smap_get_bool(&op->nbrp->ipv6_ra_configs, "send_periodic",
+                          false)) {
+            copy_ra_to_sb(op, address_mode);
         }
 
         ds_clear(&match);

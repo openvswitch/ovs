@@ -1654,7 +1654,7 @@ compose_nd_ra(struct dp_packet *b,
               const struct in6_addr *ipv6_src, const struct in6_addr *ipv6_dst,
               uint8_t cur_hop_limit, uint8_t mo_flags,
               ovs_be16 router_lt, ovs_be32 reachable_time,
-              ovs_be32 retrans_timer, ovs_be32 mtu)
+              ovs_be32 retrans_timer, uint32_t mtu)
 {
     /* Don't compose Router Advertisement packet with MTU Option if mtu
      * value is 0. */
@@ -1686,7 +1686,7 @@ compose_nd_ra(struct dp_packet *b,
         mtu_opt->type = ND_OPT_MTU;
         mtu_opt->len = 1;
         mtu_opt->reserved = 0;
-        put_16aligned_be32(&mtu_opt->mtu, mtu);
+        put_16aligned_be32(&mtu_opt->mtu, htonl(mtu));
     }
 
     ra->icmph.icmp6_cksum = 0;
