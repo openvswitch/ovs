@@ -519,15 +519,16 @@ fi
 %{_includedir}/ovn/*
 
 %files
-%defattr(-,root,root)
-%{_sysconfdir}/bash_completion.d/ovs-appctl-bashcomp.bash
-%{_sysconfdir}/bash_completion.d/ovs-vsctl-bashcomp.bash
+%defattr(-,openvswitch,openvswitch)
 %dir %{_sysconfdir}/openvswitch
 %{_sysconfdir}/openvswitch/default.conf
 %config %ghost %{_sysconfdir}/openvswitch/conf.db
 %ghost %{_sysconfdir}/openvswitch/.conf.db.~lock~
 %config %ghost %{_sysconfdir}/openvswitch/system-id.conf
 %config(noreplace) %{_sysconfdir}/sysconfig/openvswitch
+%defattr(-,root,root)
+%{_sysconfdir}/bash_completion.d/ovs-appctl-bashcomp.bash
+%{_sysconfdir}/bash_completion.d/ovs-vsctl-bashcomp.bash
 %config(noreplace) %{_sysconfdir}/logrotate.d/openvswitch
 %{_unitdir}/openvswitch.service
 %{_unitdir}/ovsdb-server.service
