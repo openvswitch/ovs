@@ -205,6 +205,7 @@ bool str_to_long(const char *, int base, long *);
 bool str_to_llong(const char *, int base, long long *);
 bool str_to_llong_with_tail(const char *, char **, int base, long long *);
 bool str_to_uint(const char *, int base, unsigned int *);
+bool str_to_ullong(const char *, int base, unsigned long long *);
 bool str_to_llong_range(const char *, int base, long long *, long long *);
 
 bool ovs_scan(const char *s, const char *format, ...) OVS_SCANF_FORMAT(2, 3);

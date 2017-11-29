@@ -766,6 +766,24 @@ str_to_uint(const char *s, int base, unsigned int *u)
 }
 
 bool
+str_to_ullong(const char *s, int base, unsigned long long *x)
+{
+    int save_errno = errno;
+    char *tail;
+
+    errno = 0;
+    *x = strtoull(s, &tail, base);
+    if (errno == EINVAL || errno == ERANGE || tail == s || *tail != '\0') {
+        errno = save_errno;
+        *x = 0;
+        return false;
+    } else {
+        errno = save_errno;
+        return true;
+    }
+}
+
+bool
 str_to_llong_range(const char *s, int base, long long *begin,
                    long long *end)
 {
