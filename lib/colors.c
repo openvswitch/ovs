@@ -112,6 +112,7 @@ colors_parse_from_env(const struct color_key color_dic[])
 
     /* Loop on tokens: they are separated by columns ':' */
     char *s = xstrdup(color_str);
+    char *s_head = s;
     for (char *token = strsep(&s, ":");
          token != NULL;
          token = strsep(&s, ":")) {
@@ -134,5 +135,5 @@ colors_parse_from_env(const struct color_key color_dic[])
             }
         }
     }
-    free(s);
+    free(s_head);
 }
