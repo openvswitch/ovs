@@ -995,6 +995,21 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
     struct ofpbuf remote_ofpacts;
     ofpbuf_init(&remote_ofpacts, 0);
     SBREC_MULTICAST_GROUP_FOR_EACH (mc, ctx->ovnsb_idl) {
+        /* Table 32, priority 150.
+         * =======================
+         *
+         * Multicast packets that should not be sent to other hypervisors.
+         */
+        struct match match = MATCH_CATCHALL_INITIALIZER;
+        match_set_metadata(&match, htonll(mc->datapath->tunnel_key));
+        match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, mc->tunnel_key);
+        match_set_reg_masked(&match, MFF_LOG_FLAGS - MFF_REG0,
+                             MLF_LOCAL_ONLY, MLF_LOCAL_ONLY);
+        ofpbuf_clear(&ofpacts);
+        put_resubmit(OFTABLE_LOCAL_OUTPUT, &ofpacts);
+        ofctrl_add_flow(flow_table, OFTABLE_REMOTE_OUTPUT, 150, 0, &match,
+                        &ofpacts);
+
         consider_mc_group(mff_ovn_geneve, ct_zones, local_datapaths, chassis,
                           mc, &ofpacts, &remote_ofpacts, flow_table);
     }

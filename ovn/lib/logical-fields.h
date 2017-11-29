@@ -49,6 +49,7 @@ enum mff_log_flags_bits {
     MLF_RCV_FROM_VXLAN_BIT = 1,
     MLF_FORCE_SNAT_FOR_DNAT_BIT = 2,
     MLF_FORCE_SNAT_FOR_LB_BIT = 3,
+    MLF_LOCAL_ONLY_BIT = 4,
 };
 
 /* MFF_LOG_FLAGS_REG flag assignments */
@@ -69,6 +70,11 @@ enum mff_log_flags {
     /* Indicate that a packet needs a force SNAT in the gateway router when
      * load-balancing has taken place. */
     MLF_FORCE_SNAT_FOR_LB = (1 << MLF_FORCE_SNAT_FOR_LB_BIT),
+
+    /* Indicate that a packet that should be distributed across multiple
+     * hypervisors should instead only be output to local targets
+     */
+    MLF_LOCAL_ONLY = (1 << MLF_LOCAL_ONLY_BIT),
 };
 
 #endif /* ovn/lib/logical-fields.h */

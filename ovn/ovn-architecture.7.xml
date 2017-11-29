@@ -1027,6 +1027,16 @@
           their traffic should never go out through a tunnel.
         </li>
         <li>
+          A higher-priority rule to match packets that have the MLF_LOCAL_ONLY
+          logical flow flag set, and whose destination is a multicast address.
+          This flag indicates that the packet should not be delivered to remote
+          hypervisors, even if the multicast destination includes ports on
+          remote hypervisors. This flag is used when
+          <code>ovn-controller</code> is the originator of the multicast packet.
+          Since each <code>ovn-controller</code> instance is originating these
+          packets, the packets only need to be delivered to local ports.
+        </li>
+        <li>
           A fallback flow that resubmits to table 33 if there is no other
           match.
         </li>
