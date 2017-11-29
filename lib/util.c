@@ -700,8 +700,13 @@ str_to_int(const char *s, int base, int *i)
 {
     long long ll;
     bool ok = str_to_llong(s, base, &ll);
+
+    if (!ok || ll < INT_MIN || ll > INT_MAX) {
+        *i = 0;
+        return false;
+    }
     *i = ll;
-    return ok;
+    return true;
 }
 
 bool
@@ -709,8 +714,13 @@ str_to_long(const char *s, int base, long *li)
 {
     long long ll;
     bool ok = str_to_llong(s, base, &ll);
+
+    if (!ok || ll < LONG_MIN || ll > LONG_MAX) {
+        *li = 0;
+        return false;
+    }
     *li = ll;
-    return ok;
+    return true;
 }
 
 bool
