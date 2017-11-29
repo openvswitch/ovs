@@ -627,9 +627,8 @@ Most C99 features are OK because they are widely implemented:
 - Designated initializers (e.g. ``struct foo foo = {.a = 1};`` and ``int
   a[] = {[2] = 5};``).
 
-- Mixing of declarations and code within a block. Please use this
-  judiciously; keep declarations nicely grouped together in the
-  beginning of a block if possible.
+- Mixing of declarations and code within a block.  Favor positioning that
+  allows variables to be initialized at their point of declaration.
 
 - Use of declarations in iteration statements (e.g. ``for (int i = 0; i
   < 10; i++)``).
