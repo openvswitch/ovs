@@ -120,36 +120,31 @@ COVERAGE_DEFINE(cmap_shrink);
 /* An entry is an int and a pointer: 8 bytes on 32-bit, 12 bytes on 64-bit. */
 #define CMAP_ENTRY_SIZE (4 + (UINTPTR_MAX == UINT32_MAX ? 4 : 8))
 
-/* Number of entries per bucket: 7 on 32-bit, 5 on 64-bit. */
+/* Number of entries per bucket: 7 on 32-bit, 5 on 64-bit for 64B cacheline. */
 #define CMAP_K ((CACHE_LINE_SIZE - 4) / CMAP_ENTRY_SIZE)
-
-/* Pad to make a bucket a full cache line in size: 4 on 32-bit, 0 on 64-bit. */
-#define CMAP_PADDING ((CACHE_LINE_SIZE - 4) - (CMAP_K * CMAP_ENTRY_SIZE))
 
 /* A cuckoo hash bucket.  Designed to be cache-aligned and exactly one cache
  * line long. */
 struct cmap_bucket {
-    /* Allows readers to track in-progress changes.  Initially zero, each
-     * writer increments this value just before and just after each change (see
-     * cmap_set_bucket()).  Thus, a reader can ensure that it gets a consistent
-     * snapshot by waiting for the counter to become even (see
-     * read_even_counter()), then checking that its value does not change while
-     * examining the bucket (see cmap_find()). */
-    atomic_uint32_t counter;
-
-    /* (hash, node) slots.  They are parallel arrays instead of an array of
-     * structs to reduce the amount of space lost to padding.
-     *
-     * The slots are in no particular order.  A null pointer indicates that a
-     * pair is unused.  In-use slots are not necessarily in the earliest
-     * slots. */
-    uint32_t hashes[CMAP_K];
-    struct cmap_node nodes[CMAP_K];
-
     /* Padding to make cmap_bucket exactly one cache line long. */
-#if CMAP_PADDING > 0
-    uint8_t pad[CMAP_PADDING];
-#endif
+    PADDED_MEMBERS(CACHE_LINE_SIZE,
+        /* Allows readers to track in-progress changes.  Initially zero, each
+         * writer increments this value just before and just after each change
+         * (see cmap_set_bucket()).  Thus, a reader can ensure that it gets a
+         * consistent snapshot by waiting for the counter to become even (see
+         * read_even_counter()), then checking that its value does not change
+         * while examining the bucket (see cmap_find()). */
+        atomic_uint32_t counter;
+
+        /* (hash, node) slots.  They are parallel arrays instead of an array of
+         * structs to reduce the amount of space lost to padding.
+         *
+         * The slots are in no particular order.  A null pointer indicates that
+         * a pair is unused.  In-use slots are not necessarily in the earliest
+         * slots. */
+        uint32_t hashes[CMAP_K];
+        struct cmap_node nodes[CMAP_K];
+    );
 };
 BUILD_ASSERT_DECL(sizeof(struct cmap_bucket) == CACHE_LINE_SIZE);
 
