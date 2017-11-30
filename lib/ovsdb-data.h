@@ -21,6 +21,10 @@
 #include "ovsdb-types.h"
 #include "openvswitch/shash.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 #define MAX_OVSDB_ATOM_RANGE_SIZE 4096
 
 struct ds;
@@ -281,5 +285,9 @@ bool ovsdb_token_is_delim(unsigned char);
 
 struct ovsdb_error *ovsdb_atom_range_check_size(int64_t range_start,
                                                 int64_t range_end);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* ovsdb-data.h */

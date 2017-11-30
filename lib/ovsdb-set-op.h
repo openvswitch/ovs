@@ -20,6 +20,10 @@
 
 #include "ovsdb-data.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 enum set_op_type {
     SET_OP_INSERT,
     SET_OP_DELETE
@@ -41,5 +45,9 @@ void set_op_list_add(struct set_op_list *, struct set_op *,
                      const struct ovsdb_type *);
 struct set_op *set_op_list_first(struct set_op_list *);
 struct set_op *set_op_list_next(struct set_op_list *, struct set_op *);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* ovsdb-set-op.h */

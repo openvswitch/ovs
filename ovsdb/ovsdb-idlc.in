@@ -137,7 +137,12 @@ def printCIDLHeader(schemaFile):
 #include "ovsdb-data.h"
 #include "ovsdb-idl-provider.h"
 #include "smap.h"
-#include "uuid.h"''' % {'prefix': prefix.upper()})
+#include "uuid.h"
+
+#ifdef  __cplusplus
+extern "C" {
+#endif
+''' % {'prefix': prefix.upper()})
 
     for tableName, table in sorted(schema.tables.items()):
         structName = "%s%s" % (prefix, tableName.lower())
@@ -305,6 +310,10 @@ bool %(s)s_is_updated(const struct %(s)s *, enum %(s)s_column_id);
     print("\nextern struct ovsdb_idl_class %sidl_class;" % prefix)
 
     print("\nconst char * %sget_db_version(void);" % prefix)
+    print('''
+#ifdef  __cplusplus
+}
+#endif''')
     print("\n#endif /* %(prefix)sIDL_HEADER */" % {'prefix': prefix.upper()})
 
 def printEnum(type, members):

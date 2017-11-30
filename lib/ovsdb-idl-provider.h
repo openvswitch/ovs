@@ -26,6 +26,10 @@
 #include "openvswitch/shash.h"
 #include "uuid.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* A local copy of a row in an OVSDB table, replicated from an OVSDB server.
  * This structure is used as a header for a larger structure that translates
  * the "struct ovsdb_datum"s into easier-to-use forms, via the ->parse() and
@@ -160,5 +164,9 @@ void ovsdb_idl_txn_verify(const struct ovsdb_idl_row *,
                           const struct ovsdb_idl_column *);
 
 struct ovsdb_idl_txn *ovsdb_idl_txn_get(const struct ovsdb_idl_row *);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* ovsdb-idl-provider.h */

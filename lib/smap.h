@@ -19,6 +19,10 @@
 #include "hash.h"
 #include "openvswitch/hmap.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct json;
 struct uuid;
 
@@ -112,5 +116,9 @@ void smap_from_json(struct smap *, const struct json *);
 struct json *smap_to_json(const struct smap *);
 
 bool smap_equal(const struct smap *, const struct smap *);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* smap.h */

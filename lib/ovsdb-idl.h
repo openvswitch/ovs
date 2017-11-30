@@ -44,6 +44,10 @@
 #include "ovsdb-condition.h"
 #include "skiplist.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct json;
 struct ovsdb_datum;
 struct ovsdb_idl_class;
@@ -409,4 +413,9 @@ struct ovsdb_idl_row *ovsdb_idl_index_forward_to(
 int ovsdb_idl_index_compare(struct ovsdb_idl_index_cursor *,
                             struct ovsdb_idl_row *a,
                             struct ovsdb_idl_row *b);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif /* ovsdb-idl.h */

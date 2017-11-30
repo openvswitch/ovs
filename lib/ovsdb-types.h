@@ -22,6 +22,10 @@
 #include "compiler.h"
 #include "uuid.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct json;
 
 /* An atomic type: one that OVSDB regards as a single unit of data. */
@@ -226,5 +230,9 @@ static inline bool ovsdb_type_is_map(const struct ovsdb_type *type)
 {
     return type->value.type != OVSDB_TYPE_VOID;
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* ovsdb-types.h */

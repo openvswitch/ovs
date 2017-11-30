@@ -19,6 +19,10 @@
 
 #include "ovsdb-data.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 enum map_op_type {
     MAP_OP_UPDATE,
     MAP_OP_INSERT,
@@ -41,5 +45,9 @@ void map_op_list_add(struct map_op_list *, struct map_op *,
                      const struct ovsdb_type *);
 struct map_op *map_op_list_first(struct map_op_list *);
 struct map_op *map_op_list_next(struct map_op_list *, struct map_op *);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* ovsdb-map-op.h */

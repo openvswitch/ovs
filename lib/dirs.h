@@ -17,11 +17,19 @@
 #ifndef DIRS_H
 #define DIRS_H 1
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 const char *ovs_sysconfdir(void); /* /usr/local/etc */
 const char *ovs_pkgdatadir(void); /* /usr/local/share/openvswitch */
 const char *ovs_rundir(void);     /* /usr/local/var/run/openvswitch */
 const char *ovs_logdir(void);     /* /usr/local/var/log/openvswitch */
 const char *ovs_dbdir(void);      /* /usr/local/etc/openvswitch */
 const char *ovs_bindir(void);     /* /usr/local/bin */
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* dirs.h */
