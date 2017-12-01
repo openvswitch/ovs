@@ -57,19 +57,19 @@ Then it is necessary to install Open vSwitch specific build dependencies.
 The dependencies are listed in the SPEC file, but first it is necessary
 to replace the VERSION tag to be a valid SPEC.
 
-The command below will create a temporary SPEC file:
-::
+The command below will create a temporary SPEC file::
+
     $ sed -e 's/@VERSION@/0.0.1/' rhel/openvswitch-fedora.spec.in \
       > /tmp/ovs.spec
 
 And to install specific dependencies, use the corresponding tool below.
 
-DNF:
-::
+DNF::
+
     $ dnf builddep /tmp/ovs.spec
 
-YUM:
-::
+YUM::
+
     $ yum-builddep /tmp/ovs.spec
 
 Once that is completed, remove the file ``/tmp/ovs.spec``.
