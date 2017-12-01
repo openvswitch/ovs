@@ -10,6 +10,7 @@ Post-v2.8.0
        - Added support to generate Neighbor Solicitation packets using the OVN
          action 'nd_ns' to resolve unknown next hop MAC addresses for the
          IPv6 packets.
+     * ovn-ctl: New commands run_nb_ovsdb and run_sb_ovsdb.
    - Linux kernel 4.13
      * Add support for compiling OVS with the latest Linux 4.13 kernel
 

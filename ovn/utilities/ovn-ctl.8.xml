@@ -28,6 +28,15 @@
       <dt><code>demote_ovnsb</code></dt>
       <dt><code>status_ovnnb</code></dt>
       <dt><code>status_ovnsb</code></dt>
+      <dt><code>start_ovsdb</code></dt>
+      <dt><code>start_nb_ovsdb</code></dt>
+      <dt><code>start_sb_ovsdb</code></dt>
+      <dt><code>stop_ovsdb</code></dt>
+      <dt><code>stop_nb_ovsdb</code></dt>
+      <dt><code>stop_sb_ovsdb</code></dt>
+      <dt><code>restart_ovsdb</code></dt>
+      <dt><code>run_nb_ovsdb</code></dt>
+      <dt><code>run_sb_ovsdb</code></dt>
     </dl>
 
     <h1>Options</h1>
@@ -83,6 +92,22 @@
     </p>
     <p><code>--ovnnb-db=tcp:x.x.x.x:6641 --ovnsb-db=tcp:x.x.x.x:6642</code></p>
 
+    <h1> Running OVN db servers without detaching </h1>
+    <p><code># ovn-ctl run_nb_ovsdb</code></p>
+    <p>
+      This command runs the OVN nb ovsdb-server without passing the
+      <code>detach</code> option, making it to block until ovsdb-server exits.
+      This command will be useful for starting the OVN nb ovsdb-server in a
+      container.
+    </p>
+    <p><code># ovn-ctl run_sb_ovsdb</code></p>
+    <p>
+      This command runs the OVN sb ovsdb-server without passing the
+      <code>detach</code> option, making it to block until ovsdb-server exits.
+      This command will be useful for starting the OVN sb ovsdb-server in a
+      container.
+    </p>
+
     <h1>Example Usage</h1>
     <h2>Run ovn-controller on a host already running OVS</h2>
     <p><code># ovn-ctl start_controller</code></p>
@@ -100,5 +125,4 @@
     <p><code># ovn-ctl promote_ovnsb</code></p>
     <p><code># ovn-ctl --db-nb-sync-from-addr=x.x.x.x --db-nb-sync-from-port=6641 demote_ovnnb</code></p>
     <p><code># ovn-ctl --db-sb-sync-from-addr=x.x.x.x --db-sb-sync-from-port=6642 demote_ovnsb</code></p>
-
 </manpage>

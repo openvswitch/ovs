@@ -100,7 +100,12 @@ start_nb_ovsdb() {
 
         set ovsdb-server
 
-        set "$@" --detach --monitor
+        if test X"$DB_NB_DETACH" != Xno; then
+            set "$@" --detach --monitor
+        else
+            set exec "$@"
+        fi
+
         set "$@" $OVN_NB_LOG --log-file=$OVN_NB_LOGFILE
         set "$@" --remote=punix:$DB_NB_SOCK --pidfile=$DB_NB_PID
         set "$@" --remote=db:OVN_Northbound,NB_Global,connections
@@ -135,7 +140,12 @@ start_sb_ovsdb() {
 
         set ovsdb-server
 
-        set "$@" --detach --monitor
+        if test X"$DB_SB_DETACH" != Xno; then
+            set "$@" --detach --monitor
+        else
+            set exec "$@"
+        fi
+
         set "$@" $OVN_SB_LOG --log-file=$OVN_SB_LOGFILE
         set "$@" --remote=punix:$DB_SB_SOCK --pidfile=$DB_SB_PID
         set "$@" --remote=db:OVN_Southbound,SB_Global,connections
@@ -200,6 +210,16 @@ status_ovsdb () {
   else
       log_success_msg "OVN Southbound DB is running"
   fi
+}
+
+run_nb_ovsdb() {
+    DB_NB_DETACH=no
+    start_nb_ovsdb
+}
+
+run_sb_ovsdb() {
+    DB_SB_DETACH=no
+    start_sb_ovsdb
 }
 
 start_northd () {
@@ -383,6 +403,9 @@ set_defaults () {
     DB_NB_CREATE_INSECURE_REMOTE="no"
 
     MONITOR="yes"
+
+    DB_NB_DETACH="yes"
+    DB_SB_DETACH="yes"
 }
 
 set_option () {
@@ -426,6 +449,8 @@ Commands:
   restart_sb_ovsdb            restart ovn southbound db ovsdb-server process
   restart_controller          restart ovn-controller
   restart_controller_vtep     restart ovn-controller-vtep
+  run_nb_ovsdb                run ovn northbound db ovsdb-server process
+  run_sb_ovsdb                run ovn southbound db ovsdb-server process
 
 Options:
   --ovn-northd-priority=NICE     set ovn-northd's niceness (default: $OVN_NORTHD_PRIORITY)
@@ -609,6 +634,12 @@ case $command in
         ;;
     status_ovnsb)
         status_ovnsb
+        ;;
+    run_nb_ovsdb)
+        run_nb_ovsdb
+        ;;
+    run_sb_ovsdb)
+        run_sb_ovsdb
         ;;
     help)
         usage
