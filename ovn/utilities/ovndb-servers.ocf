@@ -120,7 +120,10 @@ ovsdb_server_metadata() {
     <action name="stop"         timeout="20s" />
     <action name="promote"      timeout="50s" />
     <action name="demote"       timeout="50s" />
-    <action name="monitor"      timeout="20s"  depth="0" interval="10s" />
+    <action name="monitor"      timeout="20s"  depth="0" interval="10s"
+     role="Master" />
+    <action name="monitor"      timeout="20s"  depth="0" interval="30s"
+     role="Slave"/>
     <action name="meta-data"    timeout="5s" />
     <action name="validate-all" timeout="20s" />
   </actions>
@@ -247,7 +250,7 @@ ovsdb_server_master_update() {
 }
 
 ovsdb_server_monitor() {
-    ovsdb_server_check_status
+    ovsdb_server_check_status $@
     rc=$?
 
     ovsdb_server_master_update $rc
@@ -262,8 +265,21 @@ ovsdb_server_check_status() {
         return $OCF_SUCCESS
     fi
 
+    check_northd="no"
+    if [ "$MANAGE_NORTHD" == "yes" ] && [ "$1" != "ignore_northd" ]; then
+        check_northd="yes"
+    fi
+
     if [[ $sb_status == "running/active" && $nb_status == "running/active" ]]; then
-        return $OCF_RUNNING_MASTER
+        if [ "$check_northd" == "yes" ]; then
+            # Verify if ovn-northd is running or not.
+            ${OVN_CTL} status_northd
+            if [ "$?" == "0" ] ; then
+                return $OCF_RUNNING_MASTER
+            fi
+        else
+            return $OCF_RUNNING_MASTER
+        fi
     fi
 
     # TODO: What about service running but not in either state above?
@@ -317,8 +333,13 @@ ovsdb_server_start() {
     $@ start_ovsdb
 
     while [ 1 = 1 ]; do
-        # It is important that we don't return until we're in a functional state
-        ovsdb_server_monitor
+        # It is important that we don't return until we're in a functional
+        # state. When checking the status of the ovsdb-server's ignore northd.
+        # It is possible that when the resource is restarted ovsdb-server's
+        # can be started as masters and ovn-northd would not have been started.
+        # ovn-northd will be started once a node is promoted to master and
+        # 'manage_northd' is set to yes.
+        ovsdb_server_monitor ignore_northd
         rc=$?
         case $rc in
             $OCF_SUCCESS)        return $rc;;
@@ -350,7 +371,7 @@ ovsdb_server_stop() {
         ${OVN_CTL} --ovn-manage-ovsdb=no stop_northd
     fi
 
-    ovsdb_server_check_status
+    ovsdb_server_check_status ignore_northd
     case $? in
         $OCF_NOT_RUNNING)    return ${OCF_SUCCESS};;
     esac
@@ -360,7 +381,7 @@ ovsdb_server_stop() {
 
     while [ 1 = 1 ]; do
         # It is important that we don't return until we're stopped
-        ovsdb_server_check_status
+        ovsdb_server_check_status ignore_northd
         rc=$?
         case $rc in
         $OCF_SUCCESS)
@@ -381,7 +402,7 @@ ovsdb_server_stop() {
 }
 
 ovsdb_server_promote() {
-    ovsdb_server_check_status
+    ovsdb_server_check_status ignore_northd
     rc=$?
     case $rc in
         ${OCF_SUCCESS}) ;;
@@ -395,6 +416,11 @@ ovsdb_server_promote() {
     ${OVN_CTL} promote_ovnnb
     ${OVN_CTL} promote_ovnsb
 
+    if [ "$MANAGE_NORTHD" = "yes" ]; then
+        # Startup ovn-northd service
+        ${OVN_CTL} --ovn-manage-ovsdb=no start_northd
+    fi
+
     ocf_log debug "ovndb_servers: Promoting $host_name as the master"
     # Record ourselves so that the agent has a better chance of doing
     # the right thing at startup
@@ -404,6 +430,8 @@ ovsdb_server_promote() {
 }
 
 ovsdb_server_demote() {
+    # While demoting, check the status of ovn_northd.
+    # In case ovn_northd is not running, we should return OCF_NOT_RUNNING.
     ovsdb_server_check_status
     if [ $? = $OCF_NOT_RUNNING ]; then
         return $OCF_NOT_RUNNING
@@ -452,6 +480,10 @@ ovsdb_server_demote() {
         ${OVN_CTL} demote_ovnsb --db-sb-sync-from-addr=${INVALID_IP_ADDRESS}
     fi
 
+    if [ "$MANAGE_NORTHD" = "yes" ]; then
+        # Stop ovn-northd service
+        ${OVN_CTL} --ovn-manage-ovsdb=no stop_northd
+    fi
     ovsdb_server_master_update $OCF_SUCCESS
     return $OCF_SUCCESS
 }
