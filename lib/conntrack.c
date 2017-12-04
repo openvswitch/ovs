@@ -462,23 +462,37 @@ is_ftp_ctl(const enum ct_alg_ctl_type ct_alg_ctl)
 }
 
 static enum ct_alg_ctl_type
-get_alg_ctl_type(const struct dp_packet *pkt)
+get_alg_ctl_type(const struct dp_packet *pkt, ovs_be16 tp_src, ovs_be16 tp_dst,
+                 const char *helper)
 {
-    uint8_t ip_proto = get_ip_proto(pkt);
-    struct udp_header *uh = dp_packet_l4(pkt);
-    struct tcp_header *th = dp_packet_l4(pkt);
-
     /* CT_IPPORT_FTP/TFTP is used because IPPORT_FTP/TFTP in not defined
      * in OSX, at least in in.h. Since these values will never change, remove
      * the external dependency. */
     enum { CT_IPPORT_FTP = 21 };
     enum { CT_IPPORT_TFTP = 69 };
+    uint8_t ip_proto = get_ip_proto(pkt);
+    struct udp_header *uh = dp_packet_l4(pkt);
+    struct tcp_header *th = dp_packet_l4(pkt);
+    ovs_be16 ftp_src_port = htons(CT_IPPORT_FTP);
+    ovs_be16 ftp_dst_port = htons(CT_IPPORT_FTP);
+    ovs_be16 tftp_dst_port = htons(CT_IPPORT_TFTP);
 
-    if (ip_proto == IPPROTO_UDP && uh->udp_dst == htons(CT_IPPORT_TFTP)) {
+    if (OVS_UNLIKELY(tp_dst)) {
+        if (helper && !strncmp(helper, "ftp", strlen("ftp"))) {
+            ftp_dst_port = tp_dst;
+        } else if (helper && !strncmp(helper, "tftp", strlen("tftp"))) {
+            tftp_dst_port = tp_dst;
+        }
+    } else if (OVS_UNLIKELY(tp_src)) {
+        if (helper && !strncmp(helper, "ftp", strlen("ftp"))) {
+            ftp_src_port = tp_src;
+        }
+    }
+
+    if (ip_proto == IPPROTO_UDP && uh->udp_dst == tftp_dst_port) {
         return CT_ALG_CTL_TFTP;
     } else if (ip_proto == IPPROTO_TCP &&
-               (th->tcp_src == htons(CT_IPPORT_FTP) ||
-                th->tcp_dst == htons(CT_IPPORT_FTP))) {
+               (th->tcp_src == ftp_src_port || th->tcp_dst == ftp_dst_port)) {
         return CT_ALG_CTL_FTP;
     }
     return CT_ALG_CTL_NONE;
@@ -1134,7 +1148,7 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
             bool force, bool commit, long long now, const uint32_t *setmark,
             const struct ovs_key_ct_labels *setlabel,
             const struct nat_action_info_t *nat_action_info,
-            const char *helper)
+            ovs_be16 tp_src, ovs_be16 tp_dst, const char *helper)
 {
     struct conn *conn;
     unsigned bucket = hash_to_bucket(ctx->hash);
@@ -1181,7 +1195,8 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
     struct conn conn_for_un_nat_copy;
     conn_for_un_nat_copy.conn_type = CT_CONN_TYPE_DEFAULT;
 
-    enum ct_alg_ctl_type ct_alg_ctl = get_alg_ctl_type(pkt);
+    enum ct_alg_ctl_type ct_alg_ctl = get_alg_ctl_type(pkt, tp_src, tp_dst,
+                                                       helper);
 
     if (OVS_LIKELY(conn)) {
         if (OVS_LIKELY(!conn_update_state_alg(ct, pkt, ctx, conn,
@@ -1264,7 +1279,7 @@ conntrack_execute(struct conntrack *ct, struct dp_packet_batch *pkt_batch,
                   ovs_be16 dl_type, bool force, bool commit, uint16_t zone,
                   const uint32_t *setmark,
                   const struct ovs_key_ct_labels *setlabel,
-                  const char *helper,
+                  ovs_be16 tp_src, ovs_be16 tp_dst, const char *helper,
                   const struct nat_action_info_t *nat_action_info,
                   long long now)
 {
@@ -1279,7 +1294,7 @@ conntrack_execute(struct conntrack *ct, struct dp_packet_batch *pkt_batch,
             continue;
         }
         process_one(ct, packet, &ctx, zone, force, commit, now, setmark,
-                    setlabel, nat_action_info, helper);
+                    setlabel, nat_action_info, tp_src, tp_dst, helper);
     }
 
     return 0;
