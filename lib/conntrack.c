@@ -505,7 +505,7 @@ handle_alg_ctl(struct conntrack *ct, const struct conn_lookup_ctx *ctx,
                const struct conn *conn_for_expectation)
 {
     /* ALG control packet handling with expectation creation. */
-    if (OVS_UNLIKELY(alg_helpers[ct_alg_ctl] && conn)) {
+    if (OVS_UNLIKELY(alg_helpers[ct_alg_ctl] && conn && conn->alg)) {
         alg_helpers[ct_alg_ctl](ct, ctx, pkt, conn_for_expectation, now,
                                 CT_FTP_CTL_INTEREST, nat);
     }
@@ -819,6 +819,26 @@ conn_clean(struct conntrack *ct, struct conn *conn,
     }
 }
 
+static bool
+ct_verify_helper(const char *helper, enum ct_alg_ctl_type ct_alg_ctl)
+{
+    if (ct_alg_ctl == CT_ALG_CTL_NONE) {
+        return true;
+    } else if (helper) {
+        if ((ct_alg_ctl == CT_ALG_CTL_FTP) &&
+             !strncmp(helper, "ftp", strlen("ftp"))) {
+            return true;
+        } else if ((ct_alg_ctl == CT_ALG_CTL_TFTP) &&
+                   !strncmp(helper, "tftp", strlen("tftp"))) {
+            return true;
+        } else {
+            return false;
+        }
+    } else {
+        return false;
+    }
+}
+
 /* This function is called with the bucket lock held. */
 static struct conn *
 conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
@@ -826,7 +846,8 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
                const struct nat_action_info_t *nat_action_info,
                struct conn *conn_for_un_nat_copy,
                const char *helper,
-               const struct alg_exp_node *alg_exp)
+               const struct alg_exp_node *alg_exp,
+               enum ct_alg_ctl_type ct_alg_ctl)
 {
     unsigned bucket = hash_to_bucket(ctx->hash);
     struct conn *nc = NULL;
@@ -855,8 +876,8 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
         nc->rev_key = nc->key;
         conn_key_reverse(&nc->rev_key);
 
-        if (helper) {
-            nc->alg = xstrdup(helper);
+        if (ct_verify_helper(helper, ct_alg_ctl)) {
+            nc->alg = nullable_xstrdup(helper);
         }
 
         if (alg_exp) {
@@ -1238,7 +1259,8 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
         ct_rwlock_unlock(&ct->resources_lock);
 
         conn = conn_not_found(ct, pkt, ctx, commit, now, nat_action_info,
-                              &conn_for_un_nat_copy, helper, alg_exp);
+                              &conn_for_un_nat_copy, helper, alg_exp,
+                              ct_alg_ctl);
     }
 
     write_ct_md(pkt, zone, conn, &ctx->key, alg_exp);
