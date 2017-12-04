@@ -542,34 +542,44 @@ them, e.g.
             : alpheus_output_control(dp, skb, fwd_save_skb(skb),
                                      VIGR_ACTION));
 
-Do not parenthesize the operands of ``&&`` and ``||`` unless operator
-precedence makes it necessary, or unless the operands are themselves
-expressions that use ``&&`` and ``||``. Thus:
-
-::
-
-    if (!isdigit((unsigned char)s[0])
-        || !isdigit((unsigned char)s[1])
-        || !isdigit((unsigned char)s[2])) {
-        printf("string %s does not start with 3-digit code\n", s);
-    }
-
-but
-
-::
+Parenthesize the operands of ``&&`` and ``||`` if operator precedence makes it
+necessary, or if the operands are themselves expressions that use ``&&`` and
+``||``, but not otherwise. Thus::
 
     if (rule && (!best || rule->priority > best->priority)) {
         best = rule;
     }
 
+but::
+
+    if (!isdigit((unsigned char)s[0]) ||
+        !isdigit((unsigned char)s[1]) ||
+        !isdigit((unsigned char)s[2])) {
+        printf("string %s does not start with 3-digit code\n", s);
+    }
+
 Do parenthesize a subexpression that must be split across more than one line,
-e.g.:
+e.g.::
 
-::
+    *idxp = ((l1_idx << PORT_ARRAY_L1_SHIFT) |
+             (l2_idx << PORT_ARRAY_L2_SHIFT) |
+             (l3_idx << PORT_ARRAY_L3_SHIFT));
 
-    *idxp = ((l1_idx << PORT_ARRAY_L1_SHIFT)
-             | (l2_idx << PORT_ARRAY_L2_SHIFT)
-             | (l3_idx << PORT_ARRAY_L3_SHIFT));
+Breaking a long line after a binary operator gives its operands a more
+consistent look, since each operand has the same horizontal position.  This
+makes the end-of-line position a good choice when the operands naturally
+resemble each other, as in the previous two examples.  On the other hand,
+breaking before a binary operator better draws the eye to the operator, which
+can help clarify code by making it more obvious what's happening, such as in
+the following example::
+
+    if (!ctx.freezing
+        && xbridge->has_in_band
+        && in_band_must_output_to_local_port(flow)
+        && !actions_output_to_local_port(&ctx)) {
+
+Thus, decide whether to break before or after a binary operator separately in
+each situation, based on which of these factors appear to be more important.
 
 Try to avoid casts. Don't cast the return value of malloc().
 
