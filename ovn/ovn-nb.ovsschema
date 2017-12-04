@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
-    "version": "5.8.1",
-    "cksum": "607160660 16929",
+    "version": "5.9.0",
+    "cksum": "1120419033 17249",
     "tables": {
         "NB_Global": {
             "columns": {
@@ -238,7 +238,10 @@
                                                              "dst-ip"]]},
                                     "min": 0, "max": 1}},
                 "nexthop": {"type": "string"},
-                "output_port": {"type": {"key": "string", "min": 0, "max": 1}}},
+                "output_port": {"type": {"key": "string", "min": 0, "max": 1}},
+                "external_ids": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}}},
             "isRoot": false},
         "NAT": {
             "columns": {
@@ -252,7 +255,10 @@
                                            "enum": ["set", ["dnat",
                                                              "snat",
                                                              "dnat_and_snat"
-                                                               ]]}}}},
+                                                               ]]}}},
+                "external_ids": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}}},
             "isRoot": false},
         "DHCP_Options": {
             "columns": {

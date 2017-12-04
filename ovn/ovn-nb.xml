@@ -1540,6 +1540,13 @@
         address as the one via which the <ref column="nexthop"/> is reachable.
       </p>
     </column>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+
   </table>
 
   <table name="NAT" title="NAT rules">
@@ -1618,6 +1625,13 @@
         port instance on the <code>redirect-chassis</code>.
       </p>
     </column>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+
   </table>
 
   <table name="DHCP_Options" title="DHCP options">
