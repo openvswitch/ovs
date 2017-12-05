@@ -275,7 +275,7 @@ nl_ct_flush_zone(uint16_t flush_zone)
 
     nl_msg_put_nfgenmsg(&buf, 0, AF_UNSPEC, NFNL_SUBSYS_CTNETLINK,
                         IPCTNL_MSG_CT_DELETE, NLM_F_REQUEST);
-    nl_msg_put_be16(&buf, CTA_ZONE, flush_zone);
+    nl_msg_put_be16(&buf, CTA_ZONE, htons(flush_zone));
 
     err = nl_transact(NETLINK_NETFILTER, &buf, NULL);
     ofpbuf_uninit(&buf);

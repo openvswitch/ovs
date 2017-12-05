@@ -1076,7 +1076,7 @@ OvsCtDeleteCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     }
 
     if (ctAttrs[CTA_ZONE]) {
-        zone = NlAttrGetU16(ctAttrs[CTA_ZONE]);
+        zone = ntohs(NlAttrGetU16(ctAttrs[CTA_ZONE]));
     }
 
     status = OvsCtFlush(zone);
