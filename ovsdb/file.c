@@ -439,7 +439,7 @@ ovsdb_file_save_copy__(const char *file_name, int locking,
     struct json *json;
 
     error = ovsdb_log_open(file_name, OVSDB_MAGIC,
-                           OVSDB_LOG_CREATE, locking, &log);
+                           OVSDB_LOG_CREATE_EXCL, locking, &log);
     if (error) {
         return error;
     }

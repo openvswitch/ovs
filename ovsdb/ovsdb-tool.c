@@ -220,7 +220,7 @@ do_create(struct ovs_cmdl_context *ctx)
 
     /* Create database file. */
     check_ovsdb_error(ovsdb_log_open(db_file_name, OVSDB_MAGIC,
-                                     OVSDB_LOG_CREATE, -1, &log));
+                                     OVSDB_LOG_CREATE_EXCL, -1, &log));
     check_ovsdb_error(ovsdb_log_write(log, json));
     check_ovsdb_error(ovsdb_log_commit(log));
     ovsdb_log_close(log);

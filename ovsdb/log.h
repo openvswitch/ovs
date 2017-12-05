@@ -27,7 +27,8 @@ struct ovsdb_log;
 enum ovsdb_log_open_mode {
     OVSDB_LOG_READ_ONLY,        /* Open existing file, read-only. */
     OVSDB_LOG_READ_WRITE,       /* Open existing file, read/write. */
-    OVSDB_LOG_CREATE            /* Create new file, read/write. */
+    OVSDB_LOG_CREATE_EXCL,      /* Create new file, read/write. */
+    OVSDB_LOG_CREATE            /* Create or open file, read/write. */
 };
 
 #define OVSDB_MAGIC "OVSDB JSON"
