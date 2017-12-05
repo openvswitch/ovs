@@ -45,7 +45,7 @@ void ovsdb_log_unread(struct ovsdb_log *);
 void ovsdb_log_compose_record(const struct json *, const char *magic,
                               struct ds *header, struct ds *data);
 
-struct ovsdb_error *ovsdb_log_write(struct ovsdb_log *, struct json *)
+struct ovsdb_error *ovsdb_log_write(struct ovsdb_log *, const struct json *)
     OVS_WARN_UNUSED_RESULT;
 struct ovsdb_error *ovsdb_log_commit(struct ovsdb_log *)
     OVS_WARN_UNUSED_RESULT;

@@ -386,8 +386,10 @@ ovsdb_log_compose_record(const struct json *json,
                   magic, data->length, SHA1_ARGS(sha1));
 }
 
+/* Writes log record 'json' to 'file'.  Returns NULL if successful or an error
+ * (which the caller must eventually destroy) on failure. */
 struct ovsdb_error *
-ovsdb_log_write(struct ovsdb_log *file, struct json *json)
+ovsdb_log_write(struct ovsdb_log *file, const struct json *json)
 {
     struct ovsdb_error *error;
 
