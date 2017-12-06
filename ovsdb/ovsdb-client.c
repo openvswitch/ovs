@@ -75,6 +75,13 @@ struct ovsdb_client_command {
 /* --timestamp: Print a timestamp before each update on "monitor" command? */
 static bool timestamp;
 
+/* --db-change-aware, --no-db-change-aware: Enable db_change_aware feature for
+ * "monitor" command?
+ *
+ * (This option is undocumented because it is expected to be useful only for
+ * testing that the db_change_aware feature actually works.) */
+static int db_change_aware;
+
 /* --force: Ignore schema differences for "restore" command? */
 static bool force;
 
@@ -201,6 +208,8 @@ parse_options(int argc, char *argv[])
         {"timestamp", no_argument, NULL, OPT_TIMESTAMP},
         {"force", no_argument, NULL, OPT_FORCE},
         {"timeout", required_argument, NULL, 't'},
+        {"db-change-aware", no_argument, &db_change_aware, 1},
+        {"no-db-change-aware", no_argument, &db_change_aware, 0},
         VLOG_LONG_OPTIONS,
         DAEMON_LONG_OPTIONS,
 #ifdef HAVE_OPENSSL
@@ -1034,7 +1043,6 @@ do_monitor__(struct jsonrpc *rpc, const char *database,
     const char *table_name = argv[0];
     struct unixctl_server *unixctl;
     struct ovsdb_schema *schema;
-    struct jsonrpc_msg *request;
     struct json *monitor, *monitor_requests, *request_id;
     bool exiting = false;
     bool blocked = false;
@@ -1102,11 +1110,29 @@ do_monitor__(struct jsonrpc *rpc, const char *database,
         free(nodes);
     }
 
+    if (db_change_aware) {
+        struct jsonrpc_msg *request = jsonrpc_create_request(
+            "set_db_change_aware",
+            json_array_create_1(json_boolean_create(true)),
+            NULL);
+        struct jsonrpc_msg *reply;
+        int error = jsonrpc_transact_block(rpc, request, &reply);
+        if (error) {
+            ovs_fatal(error, "%s: error setting db_change_aware", server);
+        }
+        if (reply->type == JSONRPC_ERROR) {
+            ovs_fatal(0, "%s: set_db_change_aware failed (%s)",
+                      server, json_to_string(reply->error, 0));
+        }
+        jsonrpc_msg_destroy(reply);
+    }
+
     monitor = json_array_create_3(json_string_create(database),
                                   json_null_create(), monitor_requests);
     const char *method = version == OVSDB_MONITOR_V2 ? "monitor_cond"
                                                      : "monitor";
 
+    struct jsonrpc_msg *request;
     request = jsonrpc_create_request(method, monitor, NULL);
     request_id = json_clone(request->id);
     jsonrpc_send(rpc, request);
