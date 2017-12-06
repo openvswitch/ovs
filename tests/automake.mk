@@ -176,7 +176,7 @@ valgrind_wrappers = \
 	tests/valgrind/test-vconn
 
 $(valgrind_wrappers): tests/valgrind-wrapper.in
-	@test -d tests/valgrind || mkdir tests/valgrind
+	@$(MKDIR_P) tests/valgrind
 	$(AM_V_GEN) sed -e 's,[@]wrap_program[@],$@,' \
 		$(top_srcdir)/tests/valgrind-wrapper.in > $@.tmp && \
 	chmod +x $@.tmp && \
