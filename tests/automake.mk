@@ -152,7 +152,7 @@ check-lcov: all tests/atconfig tests/atlocal $(TESTSUITE) $(check_DATA) clean-lc
 	find . -name '*.gcda' | xargs -n1 rm -f
 	-set $(SHELL) '$(TESTSUITE)' -C tests AUTOTEST_PATH=$(AUTOTEST_PATH) $(TESTSUITEFLAGS); \
 	"$$@" || (test X'$(RECHECK)' = Xyes && "$$@" --recheck)
-	mkdir -p tests/lcov
+	$(MKDIR_P) tests/lcov
 	lcov $(LCOV_OPTS) -o tests/lcov/coverage.info
 	genhtml $(GENHTML_OPTS) -o tests/lcov tests/lcov/coverage.info
 	@echo "coverage report generated at tests/lcov/index.html"
