@@ -298,7 +298,7 @@ ovsdb_log_read(struct ovsdb_log *file, struct json **jsonp)
     if (file->read_error) {
         return ovsdb_error_clone(file->read_error);
     } else if (file->mode == OVSDB_LOG_WRITE) {
-        return OVSDB_BUG("reading file in write mode");
+        return NULL;
     }
 
     if (!fgets(header, sizeof header, file->stream)) {
