@@ -302,35 +302,27 @@ _uuid                                name number
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
-AT_SETUP([ovsdb-tool schema-version])
-AT_KEYWORDS([ovsdb file positive])
+AT_SETUP([ovsdb-tool schema-version, schema-cksum, schema-name])
+AT_KEYWORDS([ovsdb file positive schema-version schema-cksum])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool schema-version schema], [0], [5.1.3
 ])
+AT_CHECK([ovsdb-tool schema-cksum schema], [0], [12345678 9
+])
+AT_CHECK([ovsdb-tool schema-name schema], [0], [ordinals
+])
 AT_CLEANUP
 
-AT_SETUP([ovsdb-tool db-version])
-AT_KEYWORDS([ovsdb file positive])
+AT_SETUP([ovsdb-tool db-version, db-cksum, db-name])
+AT_KEYWORDS([ovsdb file positive db-version db-cksum])
 ordinal_schema > schema
 touch .db.~lock~
 AT_CHECK([ovsdb-tool create db schema], [0], [], [ignore])
 AT_CHECK([ovsdb-tool db-version db], [0], [5.1.3
 ])
-AT_CLEANUP
-
-AT_SETUP([ovsdb-tool schema-cksum])
-AT_KEYWORDS([ovsdb file positive])
-ordinal_schema > schema
-AT_CHECK([ovsdb-tool schema-cksum schema], [0], [12345678 9
-])
-AT_CLEANUP
-
-AT_SETUP([ovsdb-tool db-cksum])
-AT_KEYWORDS([ovsdb file positive])
-ordinal_schema > schema
-touch .db.~lock~
-AT_CHECK([ovsdb-tool create db schema], [0], [], [ignore])
 AT_CHECK([ovsdb-tool db-cksum db], [0], [12345678 9
+])
+AT_CHECK([ovsdb-tool db-name db], [0], [ordinals
 ])
 AT_CLEANUP
 

@@ -135,8 +135,10 @@ usage(void)
            "  create [DB [SCHEMA]]    create DB with the given SCHEMA\n"
            "  compact [DB [DST]]      compact DB in-place (or to DST)\n"
            "  convert [DB [SCHEMA [DST]]]   convert DB to SCHEMA (to DST)\n"
+           "  db-name [DB]            report name of schema used by DB\n"
            "  db-version [DB]         report version of schema used by DB\n"
            "  db-cksum [DB]           report checksum of schema used by DB\n"
+           "  schema-name [SCHEMA]    report SCHEMA's name\n"
            "  schema-version [SCHEMA] report SCHEMA's schema version\n"
            "  schema-cksum [SCHEMA]   report SCHEMA's checksum\n"
            "  query [DB] TRNS         execute read-only transaction on DB\n"
@@ -325,6 +327,17 @@ do_needs_conversion(struct ovs_cmdl_context *ctx)
 }
 
 static void
+do_db_name(struct ovs_cmdl_context *ctx)
+{
+    const char *db_file_name = ctx->argc >= 2 ? ctx->argv[1] : default_db();
+    struct ovsdb_schema *schema;
+
+    check_ovsdb_error(ovsdb_file_read_schema(db_file_name, &schema));
+    puts(schema->name);
+    ovsdb_schema_destroy(schema);
+}
+
+static void
 do_db_version(struct ovs_cmdl_context *ctx)
 {
     const char *db_file_name = ctx->argc >= 2 ? ctx->argv[1] : default_db();
@@ -365,6 +378,18 @@ do_schema_cksum(struct ovs_cmdl_context *ctx)
 
     check_ovsdb_error(ovsdb_schema_from_file(schema_file_name, &schema));
     puts(schema->cksum);
+    ovsdb_schema_destroy(schema);
+}
+
+static void
+do_schema_name(struct ovs_cmdl_context *ctx)
+{
+    const char *schema_file_name
+        = ctx->argc >= 2 ? ctx->argv[1] : default_schema();
+    struct ovsdb_schema *schema;
+
+    check_ovsdb_error(ovsdb_schema_from_file(schema_file_name, &schema));
+    puts(schema->name);
     ovsdb_schema_destroy(schema);
 }
 
@@ -590,8 +615,10 @@ static const struct ovs_cmdl_command all_commands[] = {
     { "compact", "[db [dst]]", 0, 2, do_compact, OVS_RW },
     { "convert", "[db [schema [dst]]]", 0, 3, do_convert, OVS_RW },
     { "needs-conversion", NULL, 0, 2, do_needs_conversion, OVS_RO },
+    { "db-name", "[db]",  0, 1, do_db_name, OVS_RO },
     { "db-version", "[db]",  0, 1, do_db_version, OVS_RO },
     { "db-cksum", "[db]", 0, 1, do_db_cksum, OVS_RO },
+    { "schema-name", "[schema]", 0, 1, do_schema_name, OVS_RO },
     { "schema-version", "[schema]", 0, 1, do_schema_version, OVS_RO },
     { "schema-cksum", "[schema]", 0, 1, do_schema_cksum, OVS_RO },
     { "query", "[db] trns", 1, 2, do_query, OVS_RO },

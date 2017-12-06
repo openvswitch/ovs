@@ -7,6 +7,7 @@ Post-v2.8.0
      * Protocol documentation moved from ovsdb-server(1) to ovsdb-server(7).
      * ovsdb-client: New "get-schema-cksum" command.
      * ovsdb-client: New "backup" command.
+     * ovsdb-tool: New "db-name" and "schema-name" commands.
    - OVN:
      * The "requested-chassis" option for a logical switch port now accepts a
        chassis "hostname" in addition to a chassis "name".

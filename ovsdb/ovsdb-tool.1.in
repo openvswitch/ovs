@@ -37,6 +37,10 @@ ovsdb\-tool \- Open vSwitch database management utility
 .br
 \fBovsdb\-tool \fR[\fIoptions\fR] [\fB\-m\fR | \fB\-\-more\fR]... \fBshow\-log \fR[\fIdb\fR]
 .br
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBdb\-name \fR[\fIdb\fR]
+.br
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBschema\-name \fR[\fIschema\fR]
+.br
 \fBovsdb\-tool help\fR
 .so lib/vlog-syn.man
 .so lib/common-syn.man
