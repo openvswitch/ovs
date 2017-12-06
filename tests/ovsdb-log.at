@@ -19,14 +19,14 @@ AT_SETUP([write one, reread])
 AT_KEYWORDS([ovsdb log])
 AT_CAPTURE_FILE([file])
 AT_CHECK(
-  [[test-ovsdb log-io file create 'write:[0]']], [0], 
+  [[test-ovsdb log-io file create 'write:{"x":0}']], [0],
   [[file: open successful
-file: write:[0] successful
+file: write:{"x":0} successful
 ]], [ignore])
 AT_CHECK(
   [test-ovsdb log-io file read-only read read], [0], 
   [[file: open successful
-file: read: [0]
+file: read: {"x":0}
 file: read: end of log
 ]], [ignore])
 AT_CHECK([test -f .file.~lock~])
@@ -36,14 +36,14 @@ AT_SETUP([check that create fails if file exists])
 AT_KEYWORDS([ovsdb log])
 AT_CAPTURE_FILE([file])
 AT_CHECK(
-  [[test-ovsdb log-io file create 'write:[1]']], [0], 
+  [[test-ovsdb log-io file create 'write:{"x":1}']], [0],
   [[file: open successful
-file: write:[1] successful
+file: write:{"x":1} successful
 ]], [ignore])
 AT_CHECK(
   [test-ovsdb log-io file read-only read], [0], 
   [[file: open successful
-file: read: [1]
+file: read: {"x":1}
 ]], [ignore])
 AT_CHECK(
   [test-ovsdb log-io file create read], [1],
@@ -56,18 +56,18 @@ AT_SETUP([write one, reread])
 AT_KEYWORDS([ovsdb log])
 AT_CAPTURE_FILE([file])
 AT_CHECK(
-  [[test-ovsdb log-io file create 'write:[0]' 'write:[1]' 'write:[2]']], [0], 
+  [[test-ovsdb log-io file create 'write:{"x":0}' 'write:{"x":1}' 'write:{"x":2}']], [0],
   [[file: open successful
-file: write:[0] successful
-file: write:[1] successful
-file: write:[2] successful
+file: write:{"x":0} successful
+file: write:{"x":1} successful
+file: write:{"x":2} successful
 ]], [ignore])
 AT_CHECK(
   [test-ovsdb log-io file read-only read read read read], [0], 
   [[file: open successful
-file: read: [0]
-file: read: [1]
-file: read: [2]
+file: read: {"x":0}
+file: read: {"x":1}
+file: read: {"x":2}
 file: read: end of log
 ]], [ignore])
 AT_CHECK([test -f .file.~lock~])
@@ -79,18 +79,18 @@ AT_CAPTURE_FILE([file])
 # Sometimes you just need more magic:
 # http://www.catb.org/jargon/html/magic-story.html
 AT_CHECK(
-  [[test-ovsdb --magic="MORE MAGIC" log-io file create 'write:[0]' 'write:[1]' 'write:[2]']], [0],
+  [[test-ovsdb --magic="MORE_MAGIC" log-io file create 'write:{"x":0}' 'write:{"x":1}' 'write:{"x":2}']], [0],
   [[file: open successful
-file: write:[0] successful
-file: write:[1] successful
-file: write:[2] successful
+file: write:{"x":0} successful
+file: write:{"x":1} successful
+file: write:{"x":2} successful
 ]], [ignore])
 AT_CHECK(
-  [test-ovsdb --magic="MORE MAGIC" log-io file read-only read read read read], [0],
+  [test-ovsdb --magic="MORE_MAGIC" log-io file read-only read read read read], [0],
   [[file: open successful
-file: read: [0]
-file: read: [1]
-file: read: [2]
+file: read: {"x":0}
+file: read: {"x":1}
+file: read: {"x":2}
 file: read: end of log
 ]], [ignore])
 AT_CHECK(
@@ -104,27 +104,27 @@ AT_SETUP([write one, reread, append])
 AT_KEYWORDS([ovsdb log])
 AT_CAPTURE_FILE([file])
 AT_CHECK(
-  [[test-ovsdb log-io file create 'write:[0]' 'write:[1]' 'write:[2]']], [0], 
+  [[test-ovsdb log-io file create 'write:{"x":0}' 'write:{"x":1}' 'write:{"x":2}']], [0],
   [[file: open successful
-file: write:[0] successful
-file: write:[1] successful
-file: write:[2] successful
+file: write:{"x":0} successful
+file: write:{"x":1} successful
+file: write:{"x":2} successful
 ]], [ignore])
 AT_CHECK(
-  [[test-ovsdb log-io file read/write read read read 'write:["append"]']], [0], 
+  [[test-ovsdb log-io file read/write read read read 'write:{"append":0}']], [0],
   [[file: open successful
-file: read: [0]
-file: read: [1]
-file: read: [2]
-file: write:["append"] successful
+file: read: {"x":0}
+file: read: {"x":1}
+file: read: {"x":2}
+file: write:{"append":0} successful
 ]], [ignore])
 AT_CHECK(
   [test-ovsdb log-io file read-only read read read read read], [0], 
   [[file: open successful
-file: read: [0]
-file: read: [1]
-file: read: [2]
-file: read: ["append"]
+file: read: {"x":0}
+file: read: {"x":1}
+file: read: {"x":2}
+file: read: {"append":0}
 file: read: end of log
 ]], [ignore])
 AT_CHECK([test -f .file.~lock~])
@@ -134,23 +134,23 @@ AT_SETUP([write, reread one, overwrite])
 AT_KEYWORDS([ovsdb log])
 AT_CAPTURE_FILE([file])
 AT_CHECK(
-  [[test-ovsdb log-io file create 'write:[0]' 'write:[1]' 'write:[2]']], [0], 
+  [[test-ovsdb log-io file create 'write:{"x":0}' 'write:{"x":1}' 'write:{"x":2}']], [0],
   [[file: open successful
-file: write:[0] successful
-file: write:[1] successful
-file: write:[2] successful
+file: write:{"x":0} successful
+file: write:{"x":1} successful
+file: write:{"x":2} successful
 ]], [ignore])
 AT_CHECK(
-  [[test-ovsdb log-io file read/write read 'write:["more data"]']], [0], 
+  [[test-ovsdb log-io file read/write read 'write:{"more data":0}']], [0],
   [[file: open successful
-file: read: [0]
-file: write:["more data"] successful
+file: read: {"x":0}
+file: write:{"more data":0} successful
 ]], [ignore])
 AT_CHECK(
   [test-ovsdb log-io file read-only read read read], [0], 
   [[file: open successful
-file: read: [0]
-file: read: ["more data"]
+file: read: {"x":0}
+file: read: {"more data":0}
 file: read: end of log
 ]], [ignore])
 AT_CHECK([test -f .file.~lock~])
@@ -160,20 +160,20 @@ AT_SETUP([write, add corrupted data, read])
 AT_KEYWORDS([ovsdb log])
 AT_CAPTURE_FILE([file])
 AT_CHECK(
-  [[test-ovsdb log-io file create 'write:[0]' 'write:[1]' 'write:[2]']], [0], 
+  [[test-ovsdb log-io file create 'write:{"x":0}' 'write:{"x":1}' 'write:{"x":2}']], [0],
   [[file: open successful
-file: write:[0] successful
-file: write:[1] successful
-file: write:[2] successful
+file: write:{"x":0} successful
+file: write:{"x":1} successful
+file: write:{"x":2} successful
 ]], [ignore])
 AT_CHECK([echo 'xxx' >> file])
 AT_CHECK(
   [test-ovsdb log-io file read-only read read read read], [0], 
   [[file: open successful
-file: read: [0]
-file: read: [1]
-file: read: [2]
-file: read failed: syntax error: file: parse error at offset 174 in header line "xxx"
+file: read: {"x":0}
+file: read: {"x":1}
+file: read: {"x":2}
+file: read failed: syntax error: file: parse error at offset 186 in header line "xxx"
 ]], [ignore])
 AT_CHECK([test -f .file.~lock~])
 AT_CLEANUP
@@ -182,29 +182,29 @@ AT_SETUP([write, add corrupted data, read, overwrite])
 AT_KEYWORDS([ovsdb log])
 AT_CAPTURE_FILE([file])
 AT_CHECK(
-  [[test-ovsdb log-io file create 'write:[0]' 'write:[1]' 'write:[2]']], [0], 
+  [[test-ovsdb log-io file create 'write:{"x":0}' 'write:{"x":1}' 'write:{"x":2}']], [0],
   [[file: open successful
-file: write:[0] successful
-file: write:[1] successful
-file: write:[2] successful
+file: write:{"x":0} successful
+file: write:{"x":1} successful
+file: write:{"x":2} successful
 ]], [ignore])
 AT_CHECK([echo 'xxx' >> file])
 AT_CHECK(
-  [[test-ovsdb log-io file read/write read read read read 'write:[3]']], [0], 
+  [[test-ovsdb log-io file read/write read read read read 'write:{"x":3}']], [0],
   [[file: open successful
-file: read: [0]
-file: read: [1]
-file: read: [2]
-file: read failed: syntax error: file: parse error at offset 174 in header line "xxx"
-file: write:[3] successful
+file: read: {"x":0}
+file: read: {"x":1}
+file: read: {"x":2}
+file: read failed: syntax error: file: parse error at offset 186 in header line "xxx"
+file: write:{"x":3} successful
 ]], [ignore])
 AT_CHECK(
   [test-ovsdb log-io file read-only read read read read read], [0], 
   [[file: open successful
-file: read: [0]
-file: read: [1]
-file: read: [2]
-file: read: [3]
+file: read: {"x":0}
+file: read: {"x":1}
+file: read: {"x":2}
+file: read: {"x":3}
 file: read: end of log
 ]], [ignore])
 AT_CHECK([test -f .file.~lock~])
@@ -214,30 +214,30 @@ AT_SETUP([write, corrupt some data, read, overwrite])
 AT_KEYWORDS([ovsdb log])
 AT_CAPTURE_FILE([file])
 AT_CHECK(
-  [[test-ovsdb log-io file create 'write:[0]' 'write:[1]' 'write:[2]']], [0], 
+  [[test-ovsdb log-io file create 'write:{"x":0}' 'write:{"x":1}' 'write:{"x":2}']], [0],
   [[file: open successful
-file: write:[0] successful
-file: write:[1] successful
-file: write:[2] successful
+file: write:{"x":0} successful
+file: write:{"x":1} successful
+file: write:{"x":2} successful
 ]], [ignore])
-AT_CHECK([[sed 's/\[2]/[3]/' < file > file.tmp]])
+AT_CHECK([[sed 's/{"x":2}/{"x":3}/' < file > file.tmp]])
 AT_CHECK([mv file.tmp file])
-AT_CHECK([[grep -c '\[3]' file]], [0], [1
+AT_CHECK([[grep -c '{"x":3}' file]], [0], [1
 ])
 AT_CHECK(
-  [[test-ovsdb log-io file read/write read read read 'write:["longer data"]']], [0], 
+  [[test-ovsdb log-io file read/write read read read 'write:{"longer data":0}']], [0],
   [[file: open successful
-file: read: [0]
-file: read: [1]
-file: read failed: syntax error: file: 4 bytes starting at offset 170 have SHA-1 hash 5c031e5c0d3a9338cc127ebe40bb2748b6a67e78 but should have hash 98f55556e7ffd432381b56a19bd485b3e6446442
-file: write:["longer data"] successful
+file: read: {"x":0}
+file: read: {"x":1}
+file: read failed: syntax error: file: 8 bytes starting at offset 178 have SHA-1 hash 2683fd63b5b9fd49df4f2aa25bf7db5cbbebbe6f but should have hash 3d8ed30f471ad1b7b4b571cb0c7d5ed3e81350aa
+file: write:{"longer data":0} successful
 ]], [ignore])
 AT_CHECK(
   [test-ovsdb log-io file read-only read read read read], [0], 
   [[file: open successful
-file: read: [0]
-file: read: [1]
-file: read: ["longer data"]
+file: read: {"x":0}
+file: read: {"x":1}
+file: read: {"longer data":0}
 file: read: end of log
 ]], [ignore])
 AT_CHECK([test -f .file.~lock~])
@@ -247,30 +247,30 @@ AT_SETUP([write, truncate file, read, overwrite])
 AT_KEYWORDS([ovsdb log])
 AT_CAPTURE_FILE([file])
 AT_CHECK(
-  [[test-ovsdb log-io file create 'write:[0]' 'write:[1]' 'write:[2]']], [0], 
+  [[test-ovsdb log-io file create 'write:{"x":0}' 'write:{"x":1}' 'write:{"x":2}']], [0],
   [[file: open successful
-file: write:[0] successful
-file: write:[1] successful
-file: write:[2] successful
+file: write:{"x":0} successful
+file: write:{"x":1} successful
+file: write:{"x":2} successful
 ]], [ignore])
-AT_CHECK([[sed 's/\[2]/2/' < file > file.tmp]])
+AT_CHECK([[sed 's/{"x":2}/2/' < file > file.tmp]])
 AT_CHECK([mv file.tmp file])
 AT_CHECK([[grep -c '^2$' file]], [0], [1
 ])
 AT_CHECK(
-  [[test-ovsdb log-io file read/write read read read 'write:["longer data"]']], [0], 
+  [[test-ovsdb log-io file read/write read read read 'write:{"longer data":0}']], [0],
   [[file: open successful
-file: read: [0]
-file: read: [1]
-file: read failed: I/O error: file: error reading 4 bytes starting at offset 170 (End of file)
-file: write:["longer data"] successful
+file: read: {"x":0}
+file: read: {"x":1}
+file: read failed: I/O error: file: error reading 8 bytes starting at offset 178 (End of file)
+file: write:{"longer data":0} successful
 ]], [ignore])
 AT_CHECK(
   [test-ovsdb log-io file read-only read read read read], [0], 
   [[file: open successful
-file: read: [0]
-file: read: [1]
-file: read: ["longer data"]
+file: read: {"x":0}
+file: read: {"x":1}
+file: read: {"longer data":0}
 file: read: end of log
 ]], [ignore])
 AT_CHECK([test -f .file.~lock~])
@@ -280,29 +280,29 @@ AT_SETUP([write bad JSON, read, overwrite])
 AT_KEYWORDS([ovsdb log])
 AT_CAPTURE_FILE([file])
 AT_CHECK(
-  [[test-ovsdb log-io file create 'write:[0]' 'write:[1]' 'write:[2]']], [0], 
+  [[test-ovsdb log-io file create 'write:{"x":0}' 'write:{"x":1}' 'write:{"x":2}']], [0],
   [[file: open successful
-file: write:[0] successful
-file: write:[1] successful
-file: write:[2] successful
+file: write:{"x":0} successful
+file: write:{"x":1} successful
+file: write:{"x":2} successful
 ]], [ignore])
 AT_CHECK([[printf '%s\n%s\n' 'OVSDB JSON 5 d910b02871075d3156ec8675dfc95b7d5d640aa6' 'null' >> file]])
 AT_CHECK(
-  [[test-ovsdb log-io file read/write read read read read 'write:["replacement data"]']], [0], 
+  [[test-ovsdb log-io file read/write read read read read 'write:{"replacement data":0}']], [0],
   [[file: open successful
-file: read: [0]
-file: read: [1]
-file: read: [2]
-file: read failed: syntax error: file: 5 bytes starting at offset 228 are not valid JSON (line 0, column 4, byte 4: syntax error at beginning of input)
-file: write:["replacement data"] successful
+file: read: {"x":0}
+file: read: {"x":1}
+file: read: {"x":2}
+file: read failed: syntax error: file: 5 bytes starting at offset 240 are not valid JSON (line 0, column 4, byte 4: syntax error at beginning of input)
+file: write:{"replacement data":0} successful
 ]], [ignore])
 AT_CHECK(
   [test-ovsdb log-io file read-only read read read read read], [0], 
   [[file: open successful
-file: read: [0]
-file: read: [1]
-file: read: [2]
-file: read: ["replacement data"]
+file: read: {"x":0}
+file: read: {"x":1}
+file: read: {"x":2}
+file: read: {"replacement data":0}
 file: read: end of log
 ]], [ignore])
 AT_CHECK([test -f .file.~lock~])
