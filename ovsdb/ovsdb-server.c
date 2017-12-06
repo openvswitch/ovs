@@ -1240,7 +1240,7 @@ ovsdb_server_disable_monitor_cond(struct unixctl_conn *conn,
     struct ovsdb_jsonrpc_server *jsonrpc = jsonrpc_;
 
     ovsdb_jsonrpc_disable_monitor_cond();
-    ovsdb_jsonrpc_server_reconnect(jsonrpc);
+    ovsdb_jsonrpc_server_reconnect(jsonrpc, true);
     unixctl_command_reply(conn, NULL);
 }
 
@@ -1298,7 +1298,7 @@ ovsdb_server_reconnect(struct unixctl_conn *conn, int argc OVS_UNUSED,
                        const char *argv[] OVS_UNUSED, void *jsonrpc_)
 {
     struct ovsdb_jsonrpc_server *jsonrpc = jsonrpc_;
-    ovsdb_jsonrpc_server_reconnect(jsonrpc);
+    ovsdb_jsonrpc_server_reconnect(jsonrpc, true);
     unixctl_command_reply(conn, NULL);
 }
 
@@ -1400,10 +1400,9 @@ ovsdb_server_add_database(struct unixctl_conn *conn, int argc OVS_UNUSED,
 static void
 remove_db(struct server_config *config, struct shash_node *node)
 {
-    struct db *db;
+    struct db *db = node->data;
 
-    db = node->data;
-    ovs_assert(ovsdb_jsonrpc_server_remove_db(config->jsonrpc, db->db));
+    ovsdb_jsonrpc_server_remove_db(config->jsonrpc, db->db);
 
     close_db(db);
     shash_delete(config->all_dbs, node);

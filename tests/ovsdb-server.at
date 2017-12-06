@@ -169,14 +169,31 @@ AT_CLEANUP
 
 AT_SETUP([ovsdb-server/add-db and remove-db])
 AT_KEYWORDS([ovsdb server positive])
-on_exit 'kill `cat ovsdb-server.pid`'
+on_exit 'kill `cat *.pid`'
 ordinal_schema > schema1
 constraint_schema > schema2
 AT_CHECK([ovsdb-tool create db1 schema1], [0], [ignore], [ignore])
 AT_CHECK([ovsdb-tool create db2 schema2], [0], [ignore], [ignore])
 
 # Start ovsdb-server with just a single database - db1.
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:db.sock db1], [0])
+AT_CHECK([ovsdb-server -vfile -vvlog:off --log-file --detach --no-chdir --pidfile --remote=punix:db.sock db1], [0])
+CHECK_DBS([ordinals
+])
+
+# Remove the database.
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/remove-db ordinals], [0])
+CHECK_DBS([])
+
+# Start monitoring processes.
+AT_CHECK([ovsdb-client --detach --pidfile=ovsdb-client-1.pid --no-db-change-aware --no-headings monitor _Server Database name > db-change-unaware.stdout 2> db-change-unaware.stderr])
+AT_CHECK([ovsdb-client --detach --pidfile=ovsdb-client-2.pid --db-change-aware --no-headings monitor _Server Database name > db-change-aware.stdout 2> db-change-aware.stderr])
+AT_CAPTURE_FILE([db-change-unaware.stdout])
+AT_CAPTURE_FILE([db-change-unaware.stderr])
+AT_CAPTURE_FILE([db-change-aware.stdout])
+AT_CAPTURE_FILE([db-change-aware.stderr])
+
+# Add the first database back.
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/add-db db1], [0])
 CHECK_DBS([ordinals
 ])
 
@@ -243,6 +260,25 @@ AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/add-db db2], [0])
 CHECK_DBS([constraints
 ])
 AT_CHECK([ovsdb-client list-tables unix:db.sock constraints], [0], [ignore], [ignore])
+
+# Check the monitoring results.
+AT_CHECK([uuidfilt db-change-aware.stdout], [0], [dnl
+<0> initial _Server
+
+<1> insert ordinals
+
+<2> insert constraints
+
+<1> delete ordinals
+
+<2> delete constraints
+
+<3> insert constraints
+])
+AT_CHECK([uuidfilt db-change-unaware.stdout], [0], [dnl
+<0> initial _Server
+])
+
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 

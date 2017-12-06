@@ -13,6 +13,40 @@
       one row per database.  As its database configuration and status changes,
       the server automatically and immediately updates the table to match.
     </p>
+
+    <p>
+      The OVSDB protocol specified in RFC 7047 does not provide a way for an
+      OVSDB client to find out about some kinds of configuration changes, such
+      as about databases added or removed while a client is connected to the
+      server, or databases changing between read/write and read-only due to a
+      transition between active and backup roles.  This table provides a
+      solution: clients can monitor the table's contents to find out about
+      important changes.
+    </p>
+
+    <p>
+      Traditionally, <code>ovsdb-server</code> disconnects all of its clients
+      when a significant configuration change occurs, because this prompts a
+      well-written client to reassess what is available from the server when it
+      reconnects.  Because this table provides an alternative and more
+      efficient way to find out about those changes, OVS 2.9 also introduces
+      the <code>set_db_change_aware</code> RPC, documented in
+      <code>ovsdb-server</code>(7), to allow clients to suppress this
+      disconnection behavior.
+    </p>
+
+    <p>
+      When a database is removed from the server, in addition to
+      <code>Database</code> table updates, the server sends <code>cancel</code>
+      messages, as described in RFC 7047 section 4.1.4, in reply to outstanding
+      transactions for the removed database.  The server also cancels any
+      outstanding monitoring initiated by <code>monitor</code> or
+      <code>monitor_cond</code> requested on the removed database, sending the
+      <code>monitor_canceled</code> RPC described in
+      <code>ovsdb-server</code>(7).  Only clients that disable disconnection
+      with <code>set_db_change_aware</code> receive these messages.
+    </p>
+
     <p>
       Clients can use the <code>_uuid</code> column in this table as a
       generation number.  The server generates a fresh <code>_uuid</code> every
