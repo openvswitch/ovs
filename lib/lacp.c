@@ -595,7 +595,7 @@ lacp_wait(struct lacp *lacp) OVS_EXCLUDED(mutex)
 static void
 lacp_update_attached(struct lacp *lacp) OVS_REQUIRES(mutex)
 {
-    struct slave *lead, *slave;
+    struct slave *lead, *lead_current, *slave;
     struct lacp_info lead_pri;
     bool lead_enable;
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 10);
@@ -603,7 +603,25 @@ lacp_update_attached(struct lacp *lacp) OVS_REQUIRES(mutex)
     lacp->update = false;
 
     lead = NULL;
+    lead_current = NULL;
     lead_enable = false;
+
+    /* Check if there is a working interface.
+     * Store as lead_current, if there is one. */
+    HMAP_FOR_EACH (slave, node, &lacp->slaves) {
+        if (slave->status == LACP_CURRENT && slave->attached) {
+            struct lacp_info pri;
+            slave_get_priority(slave, &pri);
+            if (!lead_current || memcmp(&pri, &lead_pri, sizeof pri) < 0) {
+                lead_current = slave;
+                lead = lead_current;
+                lead_pri = pri;
+                lead_enable = true;
+            }
+        }
+    }
+
+    /* Find interface with highest priority. */
     HMAP_FOR_EACH (slave, node, &lacp->slaves) {
         struct lacp_info pri;
 
@@ -624,14 +642,22 @@ lacp_update_attached(struct lacp *lacp) OVS_REQUIRES(mutex)
             continue;
         }
 
-        slave->attached = true;
         slave_get_priority(slave, &pri);
         bool enable = slave_may_enable__(slave);
 
-        if (!lead
-            || enable > lead_enable
-            || (enable == lead_enable
-                && memcmp(&pri, &lead_pri, sizeof pri) < 0)) {
+        /* Check if partner MAC address is the same as on the working
+         * interface. Activate slave only if the MAC is the same, or
+         * there is no working interface. */
+        if (!lead_current || (lead_current
+            && eth_addr_equals(slave->partner.sys_id,
+                               lead_current->partner.sys_id))) {
+            slave->attached = true;
+        }
+        if (slave->attached &&
+                (!lead
+                 || enable > lead_enable
+                 || (enable == lead_enable
+                     && memcmp(&pri, &lead_pri, sizeof pri) < 0))) {
             lead = slave;
             lead_enable = enable;
             lead_pri = pri;
