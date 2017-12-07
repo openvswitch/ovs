@@ -20,6 +20,7 @@
 #include <errno.h>
 
 #include "ct-dpif.h"
+#include "openvswitch/ofp-parse.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ct_dpif);
@@ -434,4 +435,111 @@ ct_dpif_format_tcp_stat(struct ds * ds, int tcp_state, int conn_per_state)
     ct_dpif_format_enum(ds, "\t  [", tcp_state, ct_dpif_tcp_state_string);
     ds_put_cstr(ds, "]");
     ds_put_format(ds, "=%u", conn_per_state);
+}
+
+/* Parses a specification of a conntrack 5-tuple from 's' into 'tuple'.
+ * Returns true on success.  Otherwise, returns false and puts the error
+ * message in 'ds'. */
+bool
+ct_dpif_parse_tuple(struct ct_dpif_tuple *tuple, const char *s, struct ds *ds)
+{
+    char *pos, *key, *value, *copy;
+    memset(tuple, 0, sizeof *tuple);
+
+    pos = copy = xstrdup(s);
+    while (ofputil_parse_key_value(&pos, &key, &value)) {
+        if (!*value) {
+            ds_put_format(ds, "field %s missing value", key);
+            goto error;
+        }
+
+        if (!strcmp(key, "ct_nw_src") || !strcmp(key, "ct_nw_dst")) {
+            if (tuple->l3_type && tuple->l3_type != AF_INET) {
+                ds_put_cstr(ds, "L3 type set multiple times");
+                goto error;
+            } else {
+                tuple->l3_type = AF_INET;
+            }
+            if (!ip_parse(value, key[6] == 's' ? &tuple->src.ip :
+                                                 &tuple->dst.ip)) {
+                goto error_with_msg;
+            }
+        } else if (!strcmp(key, "ct_ipv6_src") ||
+                   !strcmp(key, "ct_ipv6_dst")) {
+            if (tuple->l3_type && tuple->l3_type != AF_INET6) {
+                ds_put_cstr(ds, "L3 type set multiple times");
+                goto error;
+            } else {
+                tuple->l3_type = AF_INET6;
+            }
+            if (!ipv6_parse(value, key[8] == 's' ? &tuple->src.in6 :
+                                                   &tuple->dst.in6)) {
+                goto error_with_msg;
+            }
+        } else if (!strcmp(key, "ct_nw_proto")) {
+            char *err = str_to_u8(value, key, &tuple->ip_proto);
+            if (err) {
+                free(err);
+                goto error_with_msg;
+            }
+        } else if (!strcmp(key, "ct_tp_src") || !strcmp(key,"ct_tp_dst")) {
+            uint16_t port;
+            char *err = str_to_u16(value, key, &port);
+            if (err) {
+                free(err);
+                goto error_with_msg;
+            }
+            if (key[6] == 's') {
+                tuple->src_port = htons(port);
+            } else {
+                tuple->dst_port = htons(port);
+            }
+        } else if (!strcmp(key, "icmp_type") || !strcmp(key, "icmp_code") ||
+                   !strcmp(key, "icmp_id") ) {
+            if (tuple->ip_proto != IPPROTO_ICMP &&
+                tuple->ip_proto != IPPROTO_ICMPV6) {
+                ds_put_cstr(ds, "invalid L4 fields");
+                goto error;
+            }
+            uint16_t icmp_id;
+            char *err;
+            if (key[5] == 't') {
+                err = str_to_u8(value, key, &tuple->icmp_type);
+            } else if (key[5] == 'c') {
+                err = str_to_u8(value, key, &tuple->icmp_code);
+            } else {
+                err = str_to_u16(value, key, &icmp_id);
+                tuple->icmp_id = htons(icmp_id);
+            }
+            if (err) {
+                free(err);
+                goto error_with_msg;
+            }
+        } else {
+            ds_put_format(ds, "invalid conntrack tuple field: %s", key);
+            goto error;
+        }
+    }
+
+    if (ipv6_is_zero(&tuple->src.in6) || ipv6_is_zero(&tuple->dst.in6) ||
+        !tuple->ip_proto) {
+        /* icmp_type, icmp_code, and icmp_id can be 0. */
+        if (tuple->ip_proto != IPPROTO_ICMP &&
+            tuple->ip_proto != IPPROTO_ICMPV6) {
+            if (!tuple->src_port || !tuple->dst_port) {
+                ds_put_cstr(ds, "at least one of the conntrack 5-tuple fields "
+                                "is missing.");
+                goto error;
+            }
+        }
+    }
+
+    free(copy);
+    return true;
+
+error_with_msg:
+    ds_put_format(ds, "failed to parse field %s", key);
+error:
+    free(copy);
+    return false;
 }

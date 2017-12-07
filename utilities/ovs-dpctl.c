@@ -198,8 +198,8 @@ usage(void *userdata OVS_UNUSED)
            "  del-flows [DP]             delete all flows from DP\n"
            "  dump-conntrack [DP] [zone=ZONE]  " \
                "display conntrack entries for ZONE\n"
-           "  flush-conntrack [DP] [zone=ZONE] " \
-               "delete all conntrack entries in ZONE\n"
+           "  flush-conntrack [DP] [zone=ZONE] [ct-tuple]" \
+               "delete matched conntrack entries in ZONE\n"
            "  ct-stats-show [DP] [zone=ZONE] [verbose] " \
                "CT connections grouped by protocol\n"
            "  ct-bkts [DP] [gt=N] display connections per CT bucket\n"

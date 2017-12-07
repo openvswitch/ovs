@@ -203,5 +203,6 @@ void ct_dpif_format_entry(const struct ct_dpif_entry *, struct ds *,
 void ct_dpif_format_tuple(struct ds *, const struct ct_dpif_tuple *);
 uint8_t ct_dpif_coalesce_tcp_state(uint8_t state);
 void ct_dpif_format_tcp_stat(struct ds *, int, int);
+bool ct_dpif_parse_tuple(struct ct_dpif_tuple *, const char *s, struct ds *);
 
 #endif /* CT_DPIF_H */

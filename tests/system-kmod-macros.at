@@ -96,3 +96,11 @@ m4_define([CHECK_CONNTRACK_LOCAL_STACK])
 # always supports NAT, so no check is needed.
 #
 m4_define([CHECK_CONNTRACK_NAT])
+
+# CHECK_CT_DPIF_FLUSH_BY_CT_TUPLE()
+#
+# Perform requirements checks for running ovs-dpctl flush-conntrack by
+# conntrack 5-tuple test. The kernel datapath does support this
+# feature. Will remove this check after both kernel and userspace datapath
+# support it.
+m4_define([CHECK_CT_DPIF_FLUSH_BY_CT_TUPLE])

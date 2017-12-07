@@ -217,10 +217,22 @@ are included. With \fB\-\-statistics\fR timeouts and timestamps are
 added to the output.
 .
 .TP
-\*(DX\fBflush\-conntrack\fR [\fIdp\fR] [\fBzone=\fIzone\fR]
-Flushes all the connection entries in the tracker used by \fIdp\fR.
-If \fBzone=\fIzone\fR is specified, only flushes the connections in
-\fBzone\fR.
+\*(DX\fBflush\-conntrack\fR [\fIdp\fR] [\fBzone=\fIzone\fR] [\fIct-tuple\fR]
+Flushes the connection entries in the tracker used by \fIdp\fR based on
+\fIzone\fR and connection tracking tuple \fIct-tuple\fR.
+If \fIct-tuple\fR is not provided, flushes all the connection entries.
+If \fBzone\fR=\fIzone\fR is specified, only flushes the connections in
+\fIzone\fR.
+.IP
+If \fIct-tuple\fR is provided, flushes the connection entry specified by
+\fIct-tuple\fR in \fIzone\fR. The zone defaults to 0 if it is not provided.
+An example of an IPv4 ICMP \fIct-tuple\fR:
+.IP
+"ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=1,icmp_type=8,icmp_code=0,icmp_id=10"
+.IP
+An example of an IPv6 TCP \fIct-tuple\fR:
+.IP
+"ct_ipv6_src=fc00::1,ct_ipv6_dst=fc00::2,ct_nw_proto=6,ct_tp_src=1,ct_tp_dst=2"
 .
 .TP
 \*(DX\fBct\-stats\-show\fR [\fIdp\fR] [\fBzone=\fIzone\fR] [\fBverbose\fR]
