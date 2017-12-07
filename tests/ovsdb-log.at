@@ -78,6 +78,80 @@ file: read: end of log
 AT_CHECK([test -f .file.~lock~])
 AT_CLEANUP
 
+AT_SETUP([write one, replace, commit])
+AT_KEYWORDS([ovsdb log])
+AT_CAPTURE_FILE([file])
+for option in '' --no-rename-open-files; do
+    rm -f file
+    AT_CHECK(
+      [[test-ovsdb $option log-io file create \
+	  'write:{"x":0}' \
+	  'replace_start' \
+	  'new-write:{"x":1}' \
+	  'new-write:{"x":2}' \
+	  'old-write:{"x":4}' \
+	  'replace_commit' \
+	  'read' \
+	  'write:{"x":3}']], [0],
+      [[file: open successful
+file: write:{"x":0} successful
+file: replace_start successful
+(temp): write:{"x":1} successful
+(temp): write:{"x":2} successful
+file: write:{"x":4} successful
+file: replace_commit successful
+file: read: end of log
+file: write:{"x":3} successful
+]])
+    AT_CHECK(
+      [test-ovsdb log-io file read-only read read read read], [0],
+      [[file: open successful
+file: read: {"x":1}
+file: read: {"x":2}
+file: read: {"x":3}
+file: read: end of log
+]], [ignore])
+done
+AT_CHECK([test -f .file.~lock~])
+AT_CLEANUP
+
+AT_SETUP([write one, replace, abort])
+AT_KEYWORDS([ovsdb log])
+AT_CAPTURE_FILE([file])
+for option in '' --no-rename-open-files; do
+    rm -f file
+    AT_CHECK(
+      [[test-ovsdb $option log-io file create \
+	  'write:{"x":0}' \
+	  'replace_start' \
+	  'new-write:{"x":1}' \
+	  'new-write:{"x":2}' \
+	  'old-write:{"x":4}' \
+	  'replace_abort' \
+	  'read' \
+	  'write:{"x":3}']], [0],
+      [[file: open successful
+file: write:{"x":0} successful
+file: replace_start successful
+(temp): write:{"x":1} successful
+(temp): write:{"x":2} successful
+file: write:{"x":4} successful
+file: replace_abort successful
+file: read: end of log
+file: write:{"x":3} successful
+]])
+    AT_CHECK(
+      [test-ovsdb log-io file read-only read read read read], [0],
+      [[file: open successful
+file: read: {"x":0}
+file: read: {"x":4}
+file: read: {"x":3}
+file: read: end of log
+]], [ignore])
+done
+AT_CHECK([test -f .file.~lock~])
+AT_CLEANUP
+
 AT_SETUP([write one, reread - alternative magic])
 AT_KEYWORDS([ovsdb log])
 AT_CAPTURE_FILE([file])

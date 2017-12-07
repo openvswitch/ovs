@@ -53,4 +53,18 @@ struct ovsdb_error *ovsdb_log_commit(struct ovsdb_log *)
 
 off_t ovsdb_log_get_offset(const struct ovsdb_log *);
 
+struct ovsdb_error *ovsdb_log_replace(struct ovsdb_log *,
+                                      struct json **entries, size_t n)
+    OVS_WARN_UNUSED_RESULT;
+struct ovsdb_error *ovsdb_log_replace_start(struct ovsdb_log *old,
+                                            struct ovsdb_log **newp)
+    OVS_WARN_UNUSED_RESULT;
+struct ovsdb_error *ovsdb_log_replace_commit(struct ovsdb_log *old,
+                                             struct ovsdb_log *new)
+    OVS_WARN_UNUSED_RESULT;
+void ovsdb_log_replace_abort(struct ovsdb_log *new);
+
+/* For testing. */
+void ovsdb_log_disable_renaming_open_files(void);
+
 #endif /* ovsdb/log.h */

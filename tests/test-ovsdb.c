@@ -81,12 +81,14 @@ parse_options(int argc, char *argv[], struct test_ovsdb_pvt_context *pvt)
 {
     enum {
         OPT_MAGIC = CHAR_MAX + 1,
+        OPT_NO_RENAME_OPEN_FILES
     };
     static const struct option long_options[] = {
         {"timeout", required_argument, NULL, 't'},
         {"verbose", optional_argument, NULL, 'v'},
         {"change-track", optional_argument, NULL, 'c'},
         {"magic", required_argument, NULL, OPT_MAGIC},
+        {"no-rename-open-files", no_argument, NULL, OPT_NO_RENAME_OPEN_FILES},
         {"help", no_argument, NULL, 'h'},
         {NULL, 0, NULL, 0},
     };
@@ -127,6 +129,10 @@ parse_options(int argc, char *argv[], struct test_ovsdb_pvt_context *pvt)
             magic = optarg;
             break;
 
+        case OPT_NO_RENAME_OPEN_FILES:
+            ovsdb_log_disable_renaming_open_files();
+            break;
+
         case '?':
             exit(EXIT_FAILURE);
 
@@ -142,7 +148,8 @@ usage(void)
 {
     printf("%s: Open vSwitch database test utility\n"
            "usage: %s [OPTIONS] COMMAND [ARG...]\n\n"
-           "  [--magic=MAGIC] log-io FILE FLAGS COMMAND...\n"
+           "  [--magic=MAGIC] [--no-rename-open-files] "
+           " log-io FILE FLAGS COMMAND...\n"
            "    open FILE with FLAGS (and MAGIC), run COMMANDs\n"
            "  default-atoms\n"
            "    test ovsdb_atom_default()\n"
@@ -312,7 +319,6 @@ do_log_io(struct ovs_cmdl_context *ctx)
 
     struct ovsdb_error *error;
     enum ovsdb_log_open_mode mode;
-    struct ovsdb_log *log;
     int i;
 
     if (!strcmp(mode_string, "read-only")) {
@@ -327,17 +333,41 @@ do_log_io(struct ovs_cmdl_context *ctx)
         ovs_fatal(0, "unknown log-io open mode \"%s\"", mode_string);
     }
 
+    struct ovsdb_log *log;
     check_ovsdb_error(ovsdb_log_open(name, magic, mode, -1, &log));
     printf("%s: open successful\n", name);
 
+    struct ovsdb_log *replacement = NULL;
+
     for (i = 3; i < ctx->argc; i++) {
         const char *command = ctx->argv[i];
+
+        struct ovsdb_log *target;
+        const char *target_name;
+        if (!strncmp(command, "old-", 4)) {
+            command += 4;
+            target = log;
+            target_name = name;
+        } else if (!strncmp(command, "new-", 4)) {
+            if (!replacement) {
+                ovs_fatal(0, "%s: can't execute command without "
+                          "replacement log", command);
+            }
+
+            command += 4;
+            target = replacement;
+            target_name = "(temp)";
+        } else {
+            target = log;
+            target_name = name;
+        }
+
         if (!strcmp(command, "read")) {
             struct json *json;
 
-            error = ovsdb_log_read(log, &json);
+            error = ovsdb_log_read(target, &json);
             if (!error) {
-                printf("%s: read: ", name);
+                printf("%s: read: ", target_name);
                 if (json) {
                     print_and_free_json(json);
                 } else {
@@ -347,19 +377,31 @@ do_log_io(struct ovs_cmdl_context *ctx)
             }
         } else if (!strncmp(command, "write:", 6)) {
             struct json *json = parse_json(command + 6);
-            error = ovsdb_log_write(log, json);
+            error = ovsdb_log_write(target, json);
             json_destroy(json);
         } else if (!strcmp(command, "commit")) {
-            error = ovsdb_log_commit(log);
+            error = ovsdb_log_commit(target);
+        } else if (!strcmp(command, "replace_start")) {
+            ovs_assert(!replacement);
+            error = ovsdb_log_replace_start(log, &replacement);
+        } else if (!strcmp(command, "replace_commit")) {
+            ovs_assert(replacement);
+            error = ovsdb_log_replace_commit(log, replacement);
+            replacement = NULL;
+        } else if (!strcmp(command, "replace_abort")) {
+            ovs_assert(replacement);
+            ovsdb_log_replace_abort(replacement);
+            replacement = NULL;
+            error = NULL;
         } else {
             ovs_fatal(0, "unknown log-io command \"%s\"", command);
         }
         if (error) {
             char *s = ovsdb_error_to_string_free(error);
-            printf("%s: %s failed: %s\n", name, command, s);
+            printf("%s: %s failed: %s\n", target_name, command, s);
             free(s);
         } else {
-            printf("%s: %s successful\n", name, command);
+            printf("%s: %s successful\n", target_name, command);
         }
     }
 
