@@ -3167,7 +3167,7 @@ AT_CHECK([ovs-appctl vlog/set ct_dpif:dbg])
 AT_CHECK([ovs-ofctl ct-flush-zone br0 123])
 
 OVS_WAIT_UNTIL([grep -q "|ct_dpif|DBG|.*ct_flush:" ovs-vswitchd.log])
-AT_CHECK([grep -q "ct_dpif|DBG|.*ct_flush: 123" ovs-vswitchd.log])
+AT_CHECK([grep -q "ct_dpif|DBG|.*ct_flush: zone 123" ovs-vswitchd.log])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP

@@ -110,20 +110,32 @@ ct_dpif_dump_done(struct ct_dpif_dump_state *dump)
             : EOPNOTSUPP);
 }
 
-/* Flush the entries in the connection tracker used by 'dpif'.
+/* Flush the entries in the connection tracker used by 'dpif'.  The
+ * arguments have the following behavior:
  *
- * If 'zone' is not NULL, flush only the entries in '*zone'. */
+ *   - If both 'zone' and 'tuple' are NULL, flush all the conntrack entries.
+ *   - If 'zone' is not NULL, and 'tuple' is NULL, flush all the conntrack
+ *     entries in '*zone'.
+ *   - If 'tuple' is not NULL, flush the conntrack entry specified by 'tuple'
+ *     in '*zone'. If 'zone' is NULL, use the default zone (zone 0). */
 int
-ct_dpif_flush(struct dpif *dpif, const uint16_t *zone)
+ct_dpif_flush(struct dpif *dpif, const uint16_t *zone,
+              const struct ct_dpif_tuple *tuple)
 {
-    if (zone) {
-        VLOG_DBG("%s: ct_flush: %"PRIu16, dpif_name(dpif), *zone);
+    if (tuple) {
+        struct ds ds = DS_EMPTY_INITIALIZER;
+        ct_dpif_format_tuple(&ds, tuple);
+        VLOG_DBG("%s: ct_flush: %s in zone %d", dpif_name(dpif), ds_cstr(&ds),
+                                                zone ? *zone : 0);
+        ds_destroy(&ds);
+    } else if (zone) {
+        VLOG_DBG("%s: ct_flush: zone %"PRIu16, dpif_name(dpif), *zone);
     } else {
         VLOG_DBG("%s: ct_flush: <all>", dpif_name(dpif));
     }
 
     return (dpif->dpif_class->ct_flush
-            ? dpif->dpif_class->ct_flush(dpif, zone)
+            ? dpif->dpif_class->ct_flush(dpif, zone, tuple)
             : EOPNOTSUPP);
 }
 

@@ -75,6 +75,7 @@ dpif_flow_dump_thread_init(struct dpif_flow_dump_thread *thread,
 
 struct ct_dpif_dump_state;
 struct ct_dpif_entry;
+struct ct_dpif_tuple;
 
 /* Datapath interface class structure, to be defined by each implementation of
  * a datapath interface.
@@ -424,9 +425,18 @@ struct dpif_class {
                         struct ct_dpif_entry *entry);
     int (*ct_dump_done)(struct dpif *, struct ct_dpif_dump_state *state);
 
-    /* Flushes the connection tracking tables. If 'zone' is not NULL,
-     * only deletes connections in '*zone'. */
-    int (*ct_flush)(struct dpif *, const uint16_t *zone);
+    /* Flushes the connection tracking tables.  The arguments have the
+     * following behavior:
+     *
+     *   - If both 'zone' and 'tuple' are NULL, flush all the conntrack
+     *     entries.
+     *   - If 'zone' is not NULL, and 'tuple' is NULL, flush all the
+     *     conntrack entries in '*zone'.
+     *   - If 'tuple' is not NULL, flush the conntrack entry specified by
+     *     'tuple' in '*zone'. If 'zone' is NULL, use the default zone
+     *     (zone 0). */
+    int (*ct_flush)(struct dpif *, const uint16_t *zone,
+                    const struct ct_dpif_tuple *tuple);
 
     /* Meters */
 

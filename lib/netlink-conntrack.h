@@ -42,6 +42,7 @@ int nl_ct_dump_done(struct nl_ct_dump_state *);
 
 int nl_ct_flush(void);
 int nl_ct_flush_zone(uint16_t zone);
+int nl_ct_flush_tuple(const struct ct_dpif_tuple *, uint16_t zone);
 
 bool nl_ct_parse_entry(struct ofpbuf *, struct ct_dpif_entry *,
                        enum nl_ct_event_type *);

@@ -2892,9 +2892,12 @@ dpif_netlink_ct_dump_done(struct dpif *dpif OVS_UNUSED,
 }
 
 static int
-dpif_netlink_ct_flush(struct dpif *dpif OVS_UNUSED, const uint16_t *zone)
+dpif_netlink_ct_flush(struct dpif *dpif OVS_UNUSED, const uint16_t *zone,
+                      const struct ct_dpif_tuple *tuple)
 {
-    if (zone) {
+    if (tuple) {
+        return nl_ct_flush_tuple(tuple, zone ? *zone : 0);
+    } else if (zone) {
         return nl_ct_flush_zone(*zone);
     } else {
         return nl_ct_flush();

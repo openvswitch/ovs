@@ -4850,7 +4850,7 @@ ct_flush(const struct ofproto *ofproto_, const uint16_t *zone)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
 
-    ct_dpif_flush(ofproto->backer->dpif, zone);
+    ct_dpif_flush(ofproto->backer->dpif, zone, NULL);
 }
 
 static bool

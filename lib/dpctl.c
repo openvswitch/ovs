@@ -1353,7 +1353,7 @@ dpctl_flush_conntrack(int argc, const char *argv[],
         return error;
     }
 
-    error = ct_dpif_flush(dpif, pzone);
+    error = ct_dpif_flush(dpif, pzone, NULL);
 
     dpif_close(dpif);
     return error;

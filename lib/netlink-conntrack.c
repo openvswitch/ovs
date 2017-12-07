@@ -18,6 +18,7 @@
 
 #include "netlink-conntrack.h"
 
+#include <errno.h>
 #include <linux/netfilter/nfnetlink.h>
 #include <linux/netfilter/nfnetlink_conntrack.h>
 #include <linux/netfilter/nf_conntrack_common.h>
@@ -111,6 +112,8 @@ static bool nl_ct_parse_header_policy(struct ofpbuf *buf,
 static bool nl_ct_attrs_to_ct_dpif_entry(struct ct_dpif_entry *entry,
         struct nlattr *attrs[ARRAY_SIZE(nfnlgrp_conntrack_policy)],
         uint8_t nfgen_family);
+static bool nl_ct_put_ct_tuple(struct ofpbuf *buf,
+        const struct ct_dpif_tuple *tuple, enum ctattr_type type);
 
 struct nl_ct_dump_state {
     struct nl_dump dump;
@@ -236,6 +239,27 @@ nl_ct_flush(void)
     /* Expectations are flushed automatically, because they do not
      * have a master connection anymore */
 
+    return err;
+}
+
+int
+nl_ct_flush_tuple(const struct ct_dpif_tuple *tuple, uint16_t zone)
+{
+    int err;
+    struct ofpbuf buf;
+
+    ofpbuf_init(&buf, NL_DUMP_BUFSIZE);
+    nl_msg_put_nfgenmsg(&buf, 0, tuple->l3_type, NFNL_SUBSYS_CTNETLINK,
+                        IPCTNL_MSG_CT_DELETE, NLM_F_REQUEST);
+
+    nl_msg_put_be16(&buf, CTA_ZONE, htons(zone));
+    if (!nl_ct_put_ct_tuple(&buf, tuple, CTA_TUPLE_ORIG)) {
+        err = EOPNOTSUPP;
+        goto out;
+    }
+    err = nl_transact(NETLINK_NETFILTER, &buf, NULL);
+out:
+    ofpbuf_uninit(&buf);
     return err;
 }
 
@@ -515,6 +539,79 @@ nl_ct_parse_tuple(struct nlattr *nla, struct ct_dpif_tuple *tuple,
     }
 
     return parsed;
+}
+
+static bool
+nl_ct_put_tuple_ip(struct ofpbuf *buf, const struct ct_dpif_tuple *tuple)
+{
+    size_t offset = nl_msg_start_nested(buf, CTA_TUPLE_IP);
+
+    if (tuple->l3_type == AF_INET) {
+        nl_msg_put_be32(buf, CTA_IP_V4_SRC, tuple->src.ip);
+        nl_msg_put_be32(buf, CTA_IP_V4_DST, tuple->dst.ip);
+    } else if (tuple->l3_type == AF_INET6) {
+        nl_msg_put_in6_addr(buf, CTA_IP_V6_SRC, &tuple->src.in6);
+        nl_msg_put_in6_addr(buf, CTA_IP_V6_DST, &tuple->dst.in6);
+    } else {
+        VLOG_WARN_RL(&rl, "Unsupported IP protocol: %"PRIu16".",
+                     tuple->l3_type);
+        return false;
+    }
+
+    nl_msg_end_nested(buf, offset);
+    return true;
+}
+
+static bool
+nl_ct_put_tuple_proto(struct ofpbuf *buf, const struct ct_dpif_tuple *tuple)
+{
+    size_t offset = nl_msg_start_nested(buf, CTA_TUPLE_PROTO);
+
+    nl_msg_put_u8(buf, CTA_PROTO_NUM, tuple->ip_proto);
+
+    if (tuple->l3_type == AF_INET && tuple->ip_proto == IPPROTO_ICMP) {
+        nl_msg_put_be16(buf, CTA_PROTO_ICMP_ID, tuple->icmp_id);
+        nl_msg_put_u8(buf, CTA_PROTO_ICMP_TYPE, tuple->icmp_type);
+        nl_msg_put_u8(buf, CTA_PROTO_ICMP_CODE, tuple->icmp_code);
+    } else if (tuple->l3_type == AF_INET6 &&
+               tuple->ip_proto == IPPROTO_ICMPV6) {
+        nl_msg_put_be16(buf, CTA_PROTO_ICMPV6_ID, tuple->icmp_id);
+        nl_msg_put_u8(buf, CTA_PROTO_ICMPV6_TYPE, tuple->icmp_type);
+        nl_msg_put_u8(buf, CTA_PROTO_ICMPV6_CODE, tuple->icmp_code);
+    } else if (tuple->ip_proto == IPPROTO_TCP ||
+               tuple->ip_proto == IPPROTO_UDP) {
+        nl_msg_put_be16(buf, CTA_PROTO_SRC_PORT, tuple->src_port);
+        nl_msg_put_be16(buf, CTA_PROTO_DST_PORT, tuple->dst_port);
+    } else {
+        VLOG_WARN_RL(&rl, "Unsupported L4 protocol: %"PRIu8".",
+                     tuple->ip_proto);
+        return false;
+    }
+
+    nl_msg_end_nested(buf, offset);
+    return true;
+}
+
+static bool
+nl_ct_put_ct_tuple(struct ofpbuf *buf, const struct ct_dpif_tuple *tuple,
+                   enum ctattr_type type)
+{
+    if (type != CTA_TUPLE_ORIG && type != CTA_TUPLE_REPLY &&
+        type != CTA_TUPLE_MASTER) {
+        return false;
+    }
+
+    size_t offset = nl_msg_start_nested(buf, type);
+
+    if (!nl_ct_put_tuple_ip(buf, tuple)) {
+        return false;
+    }
+    if (!nl_ct_put_tuple_proto(buf, tuple)) {
+        return false;
+    }
+
+    nl_msg_end_nested(buf, offset);
+    return true;
 }
 
 /* Translate netlink TCP state to CT_DPIF_TCP state. */
