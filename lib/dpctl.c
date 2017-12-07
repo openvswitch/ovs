@@ -129,8 +129,8 @@ if_up(struct netdev *netdev)
 }
 
 /* Retrieve the name of the datapath if exactly one exists.  The caller
- * is responsible for freeing the returned string.  If there is not one
- * datapath, aborts with an error message. */
+ * is responsible for freeing the returned string.  If a single datapath
+ * name cannot be determined, returns NULL. */
 static char *
 get_one_dp(struct dpctl_params *dpctl_p)
 {
