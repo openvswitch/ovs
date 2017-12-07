@@ -6905,6 +6905,13 @@ handle_queue_get_config_request(struct ofconn *ofconn,
     return error;
 }
 
+/* Allocates, initializes, and constructs a new group in 'ofproto', obtaining
+ * all the attributes for it from 'gm', and stores a pointer to it in
+ * '*ofgroup'.  Makes the new group visible from the flow table starting from
+ * 'version'.
+ *
+ * Returns 0 if successful, otherwise an error code.  If there is an error then
+ * '*ofgroup' is indeterminate upon return. */
 static enum ofperr
 init_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm,
            ovs_version_t version, struct ofgroup **ofgroup)
@@ -7111,6 +7118,16 @@ modify_group_start(struct ofproto *ofproto, struct ofproto_group_mod *ogm)
                                        OVS_VERSION_MAX);
     if (!old_group) {
         return OFPERR_OFPGMFC_UNKNOWN_GROUP;
+    }
+
+    /* Inserting or deleting a bucket should not change the group's type or
+     * properties, so change the group mod so that these aspects match the old
+     * group.  (See EXT-570.)  */
+    if (ogm->gm.command == OFPGC15_INSERT_BUCKET ||
+        ogm->gm.command == OFPGC15_REMOVE_BUCKET) {
+        ogm->gm.type = old_group->type;
+        ofputil_group_properties_destroy(&ogm->gm.props);
+        ofputil_group_properties_copy(&ogm->gm.props, &old_group->props);
     }
 
     if (old_group->type != ogm->gm.type
