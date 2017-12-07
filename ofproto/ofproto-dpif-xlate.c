@@ -4825,13 +4825,27 @@ compose_dec_mpls_ttl_action(struct xlate_ctx *ctx)
     return true;
 }
 
+/* Emits an action that outputs to 'port', within 'ctx'.
+ *
+ * 'controller_len' affects only packets sent to an OpenFlow controller.  It
+ * is the maximum number of bytes of the packet to send.  UINT16_MAX means to
+ * send the whole packet (and 0 means to omit the packet entirely).
+ *
+ * 'may_packet_in' determines whether the packet may be sent to an OpenFlow
+ * controller.  If it is false, then the packet is never sent to the OpenFlow
+ * controller.
+ *
+ * 'is_last_action' should be true if this output is the last OpenFlow action
+ * to be processed, which enables certain optimizations.
+ *
+ * 'truncate' should be true if the packet to be output is being truncated,
+ * which suppresses certain optimizations. */
 static void
-xlate_output_action(struct xlate_ctx *ctx,
-                    ofp_port_t port, uint16_t max_len, bool may_packet_in,
-                    bool is_last_action)
+xlate_output_action(struct xlate_ctx *ctx, ofp_port_t port,
+                    uint16_t controller_len, bool may_packet_in,
+                    bool is_last_action, bool truncate)
 {
     ofp_port_t prev_nf_output_iface = ctx->nf_output_iface;
-    bool truncate = max_len != 0;
 
     ctx->nf_output_iface = NF_OUT_DROP;
 
@@ -4855,7 +4869,7 @@ xlate_output_action(struct xlate_ctx *ctx,
         flood_packets(ctx, true, is_last_action);
         break;
     case OFPP_CONTROLLER:
-        execute_controller_action(ctx, max_len,
+        execute_controller_action(ctx, controller_len,
                                   (ctx->in_packet_out ? OFPR_PACKET_OUT
                                    : ctx->in_group ? OFPR_GROUP
                                    : ctx->in_action_set ? OFPR_ACTION_SET
@@ -4897,8 +4911,8 @@ xlate_output_reg_action(struct xlate_ctx *ctx,
 
         memset(&value, 0xff, sizeof value);
         mf_write_subfield_flow(&or->src, &value, &ctx->wc->masks);
-        xlate_output_action(ctx, u16_to_ofp(port), or->max_len, false,
-                            is_last_action);
+        xlate_output_action(ctx, u16_to_ofp(port), or->max_len,
+                            false, is_last_action, false);
     } else {
         xlate_report(ctx, OFT_WARN, "output port %"PRIu64" is out of range",
                      port);
@@ -4945,7 +4959,7 @@ xlate_output_trunc_action(struct xlate_ctx *ctx,
                                 OVS_ACTION_ATTR_TRUNC,
                                 sizeof *trunc);
             trunc->max_len = max_len;
-            xlate_output_action(ctx, port, max_len, false, is_last_action);
+            xlate_output_action(ctx, port, 0, false, is_last_action, true);
             if (!support_trunc) {
                 ctx->xout->slow |= SLOW_ACTION;
             }
@@ -4970,7 +4984,8 @@ xlate_enqueue_action(struct xlate_ctx *ctx,
     error = dpif_queue_to_priority(ctx->xbridge->dpif, queue_id, &priority);
     if (error) {
         /* Fall back to ordinary output action. */
-        xlate_output_action(ctx, enqueue->port, 0, false, is_last_action);
+        xlate_output_action(ctx, enqueue->port, 0, false,
+                            is_last_action, false);
         return;
     }
 
@@ -5043,7 +5058,7 @@ xlate_bundle_action(struct xlate_ctx *ctx,
         nxm_reg_load(&bundle->dst, ofp_to_u16(port), &ctx->xin->flow, ctx->wc);
         xlate_report_subfield(ctx, &bundle->dst);
     } else {
-        xlate_output_action(ctx, port, 0, false, is_last_action);
+        xlate_output_action(ctx, port, 0, false, is_last_action, false);
     }
 }
 
@@ -6202,7 +6217,8 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         switch (a->type) {
         case OFPACT_OUTPUT:
             xlate_output_action(ctx, ofpact_get_OUTPUT(a)->port,
-                                ofpact_get_OUTPUT(a)->max_len, true, last);
+                                ofpact_get_OUTPUT(a)->max_len, true, last,
+                                false);
             break;
 
         case OFPACT_GROUP:
