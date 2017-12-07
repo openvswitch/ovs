@@ -3701,7 +3701,9 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     }
 
     if (xport->peer) {
-       ovs_assert(!truncate);
+       if (truncate) {
+           xlate_report_error(ctx, "Cannot truncate output to patch port");
+       }
        patch_port_output(ctx, xport, xport->peer);
        return;
     }
