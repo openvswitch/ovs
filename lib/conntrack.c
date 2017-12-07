@@ -1782,8 +1782,7 @@ extract_l4_icmp(struct conn_key *key, const void *data, size_t size,
             return false;
         }
 
-        if (inner_key.src.addr.ipv4_aligned != key->dst.addr.ipv4_aligned
-            || inner_key.dst.addr.ipv4_aligned != key->src.addr.ipv4_aligned) {
+        if (inner_key.src.addr.ipv4_aligned != key->dst.addr.ipv4_aligned) {
             return false;
         }
 
@@ -1871,9 +1870,7 @@ extract_l4_icmp6(struct conn_key *key, const void *data, size_t size,
 
         /* pf doesn't do this, but it seems a good idea */
         if (!ipv6_addr_equals(&inner_key.src.addr.ipv6_aligned,
-                              &key->dst.addr.ipv6_aligned)
-            || !ipv6_addr_equals(&inner_key.dst.addr.ipv6_aligned,
-                                 &key->src.addr.ipv6_aligned)) {
+                              &key->dst.addr.ipv6_aligned)) {
             return false;
         }
 
