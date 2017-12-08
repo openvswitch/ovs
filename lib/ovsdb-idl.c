@@ -552,8 +552,8 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
                    && idl->state == IDL_S_MONITOR_COND_REQUESTED
                    && idl->request_id
                    && json_equal(idl->request_id, msg->id)) {
-            if (msg->error && !strcmp(json_string(msg->error),
-                                      "unknown method")) {
+            if (msg->error && msg->error->type == JSON_STRING
+                && !strcmp(json_string(msg->error), "unknown method")) {
                 /* Fall back to using "monitor" method.  */
                 json_destroy(idl->request_id);
                 idl->request_id = NULL;
