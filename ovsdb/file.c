@@ -670,7 +670,7 @@ ovsdb_file_compact(struct ovsdb_file *file)
 
     /* Commit the old version, so that we can be assured that we'll eventually
      * have either the old or the new version. */
-    error = ovsdb_log_commit(file->log);
+    error = ovsdb_log_commit_block(file->log);
     if (error) {
         goto exit;
     }
@@ -866,7 +866,7 @@ ovsdb_file_txn_commit(struct json *json, const char *comment,
     }
 
     if (durable) {
-        error = ovsdb_log_commit(log);
+        error = ovsdb_log_commit_block(log);
         if (error) {
             return ovsdb_wrap_error(error, "committing transaction failed");
         }

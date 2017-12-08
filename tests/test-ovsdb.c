@@ -380,7 +380,7 @@ do_log_io(struct ovs_cmdl_context *ctx)
             error = ovsdb_log_write(target, json);
             json_destroy(json);
         } else if (!strcmp(command, "commit")) {
-            error = ovsdb_log_commit(target);
+            error = ovsdb_log_commit_block(target);
         } else if (!strcmp(command, "replace_start")) {
             ovs_assert(!replacement);
             error = ovsdb_log_replace_start(log, &replacement);
