@@ -512,7 +512,8 @@ is the requested value for this session. This value is valid only after
 "monitor_cond_change" is committed. A user can use these values to distinguish
 between update messages before conditions update and after. The
 <monitor-cond-update-requests> object maps the name of the table to an array of
-<monitor-cond-update-request>.
+<monitor-cond-update-request>.  Monitored tables not included in
+<monitor-cond-update-requests> retain their current conditions.
 .
 .IP
 Each <monitor-cond-update-request> is an object with the following members:
