@@ -1341,6 +1341,23 @@ ovsdb_transient_datum_from_json(struct ovsdb_datum *datum,
     return ovsdb_datum_from_json(datum, &relaxed_type, json, NULL);
 }
 
+/* Parses 'json' as a datum of the type described by 'type', but ignoring all
+ * constraints. */
+struct ovsdb_error * OVS_WARN_UNUSED_RESULT
+ovsdb_unconstrained_datum_from_json(struct ovsdb_datum *datum,
+                                    const struct ovsdb_type *type,
+                                    const struct json *json)
+{
+    struct ovsdb_type relaxed_type;
+
+    ovsdb_base_type_init(&relaxed_type.key, type->key.type);
+    ovsdb_base_type_init(&relaxed_type.value, type->value.type);
+    relaxed_type.n_min = 0;
+    relaxed_type.n_max = UINT_MAX;
+
+    return ovsdb_datum_from_json(datum, &relaxed_type, json, NULL);
+}
+
 static struct json *
 ovsdb_base_to_json(const union ovsdb_atom *atom,
                    const struct ovsdb_base_type *base,

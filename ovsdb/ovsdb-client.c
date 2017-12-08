@@ -1312,9 +1312,8 @@ dump_table(const char *table_name, const struct shash *cols,
                           y, table_name, columns[x]->name);
             }
 
-            check_ovsdb_error(ovsdb_datum_from_json(&data[y][x],
-                                                    &columns[x]->type,
-                                                    json, NULL));
+            check_ovsdb_error(ovsdb_unconstrained_datum_from_json(
+                                  &data[y][x], &columns[x]->type, json));
         }
     }
 
