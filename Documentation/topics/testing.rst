@@ -311,7 +311,7 @@ testsuite against that kernel module::
 
     $ make check-kmod
 
-The results of the testsuite are in ``tests/system-kmod-traffic.dir``.
+The results of the testsuite are in ``tests/system-kmod-testsuite.dir``.
 
 .. _testing-static-analysis:
 
