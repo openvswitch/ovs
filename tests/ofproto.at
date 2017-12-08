@@ -5219,7 +5219,7 @@ vconn|DBG|unix: sent (Success): NXST_FLOW reply:
  in_port=2,dl_src=00:66:77:88:99:aa actions=drop
 ])
 
-AT_CHECK([grep " flow_mods in the last " ovs-vswitchd.log | sed -e 's/^.*connmgr|INFO|//'], [0], [dnl
+AT_CHECK([grep " flow_mods in the last " ovs-vswitchd.log | sed -e 's/^.*connmgr|INFO|//' | vconn_sub], [0], [dnl
 br0<->unix: 1 flow_mods in the last 0 s (1 deletes)
 br0<->unix: 9 flow_mods in the last 0 s (7 adds, 2 deletes)
 br0<->unix: 2 flow_mods in the last 0 s (2 modifications)
