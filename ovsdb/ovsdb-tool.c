@@ -222,7 +222,7 @@ do_create(struct ovs_cmdl_context *ctx)
     check_ovsdb_error(ovsdb_log_open(db_file_name, OVSDB_MAGIC,
                                      OVSDB_LOG_CREATE_EXCL, -1, &log));
     check_ovsdb_error(ovsdb_log_write(log, json));
-    check_ovsdb_error(ovsdb_log_commit(log));
+    check_ovsdb_error(ovsdb_log_commit_block(log));
     ovsdb_log_close(log);
 
     json_destroy(json);

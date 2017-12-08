@@ -35,6 +35,7 @@
  * that compacting is advised.
  */
 
+#include <stdint.h>
 #include <sys/types.h>
 #include "compiler.h"
 
@@ -70,7 +71,11 @@ void ovsdb_log_compose_record(const struct json *, const char *magic,
 
 struct ovsdb_error *ovsdb_log_write(struct ovsdb_log *, const struct json *)
     OVS_WARN_UNUSED_RESULT;
-struct ovsdb_error *ovsdb_log_commit(struct ovsdb_log *)
+
+uint64_t ovsdb_log_commit_start(struct ovsdb_log *);
+uint64_t ovsdb_log_commit_progress(struct ovsdb_log *);
+void ovsdb_log_commit_wait(struct ovsdb_log *, uint64_t);
+struct ovsdb_error *ovsdb_log_commit_block(struct ovsdb_log *)
     OVS_WARN_UNUSED_RESULT;
 
 void ovsdb_log_mark_base(struct ovsdb_log *);
