@@ -48,3 +48,9 @@ dpdk_get_vhost_sock_dir(void)
 {
     return NULL;
 }
+
+bool
+dpdk_vhost_iommu_enabled(void)
+{
+    return false;
+}

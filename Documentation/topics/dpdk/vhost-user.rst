@@ -273,6 +273,34 @@ One benefit of using this mode is the ability for vHost ports to 'reconnect' in
 event of the switch crashing or being brought down. Once it is brought back up,
 the vHost ports will reconnect automatically and normal service will resume.
 
+vhost-user-client IOMMU Support
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+vhost IOMMU is a feature which restricts the vhost memory that a virtio device
+can access, and as such is useful in deployments in which security is a
+concern.
+
+IOMMU support may be enabled via a global config value,
+```vhost-iommu-support```. Setting this to true enables vhost IOMMU support for
+all vhost ports when/where available::
+
+    $ ovs-vsctl set Open_vSwitch . other_config:vhost-iommu-support=true
+
+The default value is false.
+
+.. important::
+
+    Changing this value requires restarting the daemon.
+
+.. important::
+
+    Enabling the IOMMU feature also enables the vhost user reply-ack protocol;
+    this is known to work on QEMU v2.10.0, but is buggy on older versions
+    (2.7.0 - 2.9.0, inclusive). Consequently, the IOMMU feature is disabled by
+    default (and should remain so if using the aforementioned versions of
+    QEMU). Starting with QEMU v2.9.1, vhost-iommu-support can safely be
+    enabled, even without having an IOMMU device, with no performance penalty.
+
 .. _dpdk-testpmd:
 
 DPDK in the Guest

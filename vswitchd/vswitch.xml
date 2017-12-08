@@ -344,6 +344,21 @@
         </p>
       </column>
 
+      <column name="other_config" key="vhost-iommu-support"
+              type='{"type": "boolean"}'>
+        <p>
+          vHost IOMMU is a security feature, which restricts the vhost memory
+          that a virtio device may access. vHost IOMMU support is disabled by
+          default, due to a bug in QEMU implementations of the vhost REPLY_ACK
+          protocol, (on which vHost IOMMU relies) prior to v2.9.1. Setting this
+          value to <code>true</code> enables vHost IOMMU support for vHost User
+          Client ports in OvS-DPDK, starting from DPDK v17.11.
+        </p>
+        <p>
+          Changing this value requires restarting the daemon.
+        </p>
+      </column>
+
       <column name="other_config" key="n-handler-threads"
               type='{"type": "integer", "minInteger": 1}'>
         <p>

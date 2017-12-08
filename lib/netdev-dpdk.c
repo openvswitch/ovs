@@ -3269,6 +3269,7 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     int err;
+    uint64_t vhost_flags = 0;
 
     ovs_mutex_lock(&dev->mutex);
 
@@ -3279,16 +3280,21 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
      */
     if (!(dev->vhost_driver_flags & RTE_VHOST_USER_CLIENT)
             && strlen(dev->vhost_id)) {
-        /* Register client-mode device */
-        err = rte_vhost_driver_register(dev->vhost_id,
-                                        RTE_VHOST_USER_CLIENT);
+        /* Register client-mode device. */
+        vhost_flags |= RTE_VHOST_USER_CLIENT;
+
+        /* Enable IOMMU support, if explicitly requested. */
+        if (dpdk_vhost_iommu_enabled()) {
+            vhost_flags |= RTE_VHOST_USER_IOMMU_SUPPORT;
+        }
+        err = rte_vhost_driver_register(dev->vhost_id, vhost_flags);
         if (err) {
             VLOG_ERR("vhost-user device setup failure for device %s\n",
                      dev->vhost_id);
             goto unlock;
         } else {
             /* Configuration successful */
-            dev->vhost_driver_flags |= RTE_VHOST_USER_CLIENT;
+            dev->vhost_driver_flags |= vhost_flags;
             VLOG_INFO("vHost User device '%s' created in 'client' mode, "
                       "using client socket '%s'",
                       dev->up.name, dev->vhost_id);
