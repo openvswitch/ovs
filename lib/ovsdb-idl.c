@@ -1631,12 +1631,12 @@ ovsdb_idl_send_monitor_request(struct ovsdb_idl *idl)
 static void
 log_parse_update_error(struct ovsdb_error *error)
 {
-        if (!VLOG_DROP_WARN(&syntax_rl)) {
-            char *s = ovsdb_error_to_string(error);
-            VLOG_WARN_RL(&syntax_rl, "%s", s);
-            free(s);
-        }
-        ovsdb_error_destroy(error);
+    if (!VLOG_DROP_WARN(&syntax_rl)) {
+        char *s = ovsdb_error_to_string(error);
+        VLOG_WARN_RL(&syntax_rl, "%s", s);
+        free(s);
+    }
+    ovsdb_error_destroy(error);
 }
 
 static void
@@ -1899,9 +1899,9 @@ ovsdb_idl_process_update2(struct ovsdb_idl_table *table,
             return false;
         }
     } else {
-            VLOG_WARN_RL(&semantic_rl, "unknown operation %s to "
-                         "table %s", operation, table->class_->name);
-            return false;
+        VLOG_WARN_RL(&semantic_rl, "unknown operation %s to "
+                     "table %s", operation, table->class_->name);
+        return false;
     }
 
     return true;
