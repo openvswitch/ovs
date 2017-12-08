@@ -26,6 +26,7 @@
 #include <sys/socket.h>
 #include <linux/if.h>
 
+#include <rte_bus_pci.h>
 #include <rte_config.h>
 #include <rte_cycles.h>
 #include <rte_errno.h>
@@ -140,8 +141,8 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
 #define DPDK_ETH_PORT_ID_INVALID    RTE_MAX_ETHPORTS
 
-/* DPDK library uses uint8_t for port_id. */
-typedef uint8_t dpdk_port_t;
+/* DPDK library uses uint16_t for port_id. */
+typedef uint16_t dpdk_port_t;
 
 #define VHOST_ENQ_RETRY_NUM 8
 #define IF_NAME_SZ (PATH_MAX > IFNAMSIZ ? PATH_MAX : IFNAMSIZ)

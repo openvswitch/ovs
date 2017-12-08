@@ -40,7 +40,7 @@ Build requirements
 In addition to the requirements described in :doc:`general`, building Open
 vSwitch with DPDK will require the following:
 
-- DPDK 17.05.2
+- DPDK 17.11
 
 - A `DPDK supported NIC`_
 
@@ -69,9 +69,9 @@ Install DPDK
 #. Download the `DPDK sources`_, extract the file and set ``DPDK_DIR``::
 
        $ cd /usr/src/
-       $ wget http://fast.dpdk.org/rel/dpdk-17.05.2.tar.xz
-       $ tar xf dpdk-17.05.2.tar.xz
-       $ export DPDK_DIR=/usr/src/dpdk-stable-17.05.2
+       $ wget http://fast.dpdk.org/rel/dpdk-17.11.tar.xz
+       $ tar xf dpdk-17.11.tar.xz
+       $ export DPDK_DIR=/usr/src/dpdk-17.11
        $ cd $DPDK_DIR
 
 #. (Optional) Configure DPDK as a shared library
@@ -583,7 +583,7 @@ Limitations
   The latest list of validated firmware versions can be found in the `DPDK
   release notes`_.
 
-.. _DPDK release notes: http://dpdk.org/doc/guides/rel_notes/release_17_05.html
+.. _DPDK release notes: http://dpdk.org/doc/guides/rel_notes/release_17_11.html
 
 Reporting Bugs
 --------------

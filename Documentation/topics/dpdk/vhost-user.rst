@@ -292,9 +292,9 @@ To begin, instantiate a guest as described in :ref:`dpdk-vhost-user` or
 DPDK sources to VM and build DPDK::
 
     $ cd /root/dpdk/
-    $ wget http://fast.dpdk.org/rel/dpdk-17.05.2.tar.xz
-    $ tar xf dpdk-17.05.2.tar.xz
-    $ export DPDK_DIR=/root/dpdk/dpdk-stable-17.05.2
+    $ wget http://fast.dpdk.org/rel/dpdk-17.11.tar.xz
+    $ tar xf dpdk-17.11.tar.xz
+    $ export DPDK_DIR=/root/dpdk/dpdk-17.11
     $ export DPDK_TARGET=x86_64-native-linuxapp-gcc
     $ export DPDK_BUILD=$DPDK_DIR/$DPDK_TARGET
     $ cd $DPDK_DIR
@@ -326,6 +326,28 @@ Setup huge pages and DPDK devices using UIO::
 Finally, start the application::
 
     # TODO
+
+.. important::
+
+  DPDK v17.11 virtio PMD contains a bug in the vectorized Rx function that
+  affects testpmd/DPDK guest applications. As such, guest DPDK applications
+  should use a non-vectorized Rx function.
+
+The DPDK v17.11 virtio net driver contains a bug that prevents guest DPDK
+applications from receiving packets when the vectorized Rx function is used.
+This only occurs when guest-bound traffic is live before a DPDK application is
+started within the guest, and where two or more forwarding cores are used. As
+such, it is not recommended for guests which execute DPDK applications to use
+the virtio vectorized Rx function. A simple method of ensuring that a non-
+vectorized Rx function is used is to enable mergeable buffers for the guest,
+with the following QEMU command line option::
+
+    mrg_rxbuf=on
+
+Additional details regarding the virtio driver bug are available on the
+`DPDK mailing list`_.
+
+.. _DPDK mailing list: http://dpdk.org/ml/archives/dev/2017-December/082801.html
 
 .. _dpdk-vhost-user-xml:
 
@@ -387,7 +409,7 @@ Sample XML
           <source type='unix' path='/usr/local/var/run/openvswitch/dpdkvhostuser0' mode='client'/>
            <model type='virtio'/>
           <driver queues='2'>
-            <host mrg_rxbuf='off'/>
+            <host mrg_rxbuf='on'/>
           </driver>
         </interface>
         <interface type='vhostuser'>
@@ -395,7 +417,7 @@ Sample XML
           <source type='unix' path='/usr/local/var/run/openvswitch/dpdkvhostuser1' mode='client'/>
           <model type='virtio'/>
           <driver queues='2'>
-            <host mrg_rxbuf='off'/>
+            <host mrg_rxbuf='on'/>
           </driver>
         </interface>
         <serial type='pty'>
