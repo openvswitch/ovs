@@ -16,6 +16,11 @@
     under the License.
   </copyright>
 -->
+<?if $(var.Platform) = x64 ?>
+  <?define NetcfgFolder = "[System64Folder]" ?>
+<?else ?>
+  <?define NetcfgFolder = "[WindowsFolder]Sysnative" ?>
+<?endif ?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Fragment>
     <Binary Id="OVSActions" SourceFile="Actions\OVSActions.js" />
@@ -35,14 +40,14 @@
               JScriptCall="runCommandAction" Execute="deferred" Return="check" Impersonate="no" />
 
     <CustomAction Id="InstallOpenVSwitchDriver_Prop" Property="InstallOpenVSwitchDriver"
-                  Value='"[WindowsFolder]Sysnative\netcfg.exe" -l "[DRIVERDIR]\ovsext.inf" -c s -i ovsext|0|netcfg failed to install the Open vSwitch Hyper-V switch extension'
+                  Value='"$(var.NetcfgFolder)\netcfg.exe" -l "[DRIVERDIR]\ovsext.inf" -c s -i ovsext|0|netcfg failed to install the Open vSwitch Hyper-V switch extension'
                   Execute="immediate" />
     <CustomAction Id="InstallOpenVSwitchDriver"
               BinaryKey="OVSActions"
               JScriptCall="runCommandAction" Execute="deferred" Return="check" Impersonate="no" />
 
     <CustomAction Id="UninstallOpenVSwitchDriver_Prop" Property="UninstallOpenVSwitchDriver"
-                  Value='"[WindowsFolder]Sysnative\netcfg.exe" -u ovsext|0|netcfg failed to uninstall the Open vSwitch Hyper-V switch extension'
+                  Value='"$(var.NetcfgFolder)\netcfg.exe" -u ovsext|0|netcfg failed to uninstall the Open vSwitch Hyper-V switch extension'
                   Execute="immediate" />
     <CustomAction Id="UninstallOpenVSwitchDriver"
               BinaryKey="OVSActions"
