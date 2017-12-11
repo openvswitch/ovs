@@ -2586,6 +2586,56 @@ error:
     free(response);
 }
 
+static void
+netdev_dpdk_get_mempool_info(struct unixctl_conn *conn,
+                             int argc, const char *argv[],
+                             void *aux OVS_UNUSED)
+{
+    size_t size;
+    FILE *stream;
+    char *response = NULL;
+    struct netdev *netdev = NULL;
+
+    if (argc == 2) {
+        netdev = netdev_from_name(argv[1]);
+        if (!netdev || !is_dpdk_class(netdev->netdev_class)) {
+            unixctl_command_reply_error(conn, "Not a DPDK Interface");
+            goto out;
+        }
+    }
+
+    stream = open_memstream(&response, &size);
+    if (!stream) {
+        response = xasprintf("Unable to open memstream: %s.",
+                             ovs_strerror(errno));
+        unixctl_command_reply_error(conn, response);
+        goto out;
+    }
+
+    if (netdev) {
+        struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+
+        ovs_mutex_lock(&dev->mutex);
+        ovs_mutex_lock(&dpdk_mp_mutex);
+
+        rte_mempool_dump(stream, dev->mp);
+
+        ovs_mutex_unlock(&dpdk_mp_mutex);
+        ovs_mutex_unlock(&dev->mutex);
+    } else {
+        ovs_mutex_lock(&dpdk_mp_mutex);
+        rte_mempool_list_dump(stream);
+        ovs_mutex_unlock(&dpdk_mp_mutex);
+    }
+
+    fclose(stream);
+
+    unixctl_command_reply(conn, response);
+out:
+    free(response);
+    netdev_close(netdev);
+}
+
 /*
  * Set virtqueue flags so that we do not receive interrupts.
  */
@@ -2841,6 +2891,10 @@ netdev_dpdk_class_init(void)
         unixctl_command_register("netdev-dpdk/detach",
                                  "pci address of device", 1, 1,
                                  netdev_dpdk_detach, NULL);
+
+        unixctl_command_register("netdev-dpdk/get-mempool-info",
+                                 "[netdev]", 0, 1,
+                                 netdev_dpdk_get_mempool_info, NULL);
 
         ovsthread_once_done(&once);
     }

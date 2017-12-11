@@ -7,3 +7,8 @@ If \fIinterface\fR is not specified, then it applies to all DPDK ports.
 Detaches device with corresponding \fIpci-address\fR from DPDK.  This command
 can be used to detach device if it wasn't detached automatically after port
 deletion. Refer to the documentation for details and instructions.
+.IP "\fBnetdev-dpdk/get-mempool-info\fR [\fIinterface\fR]"
+Prints the debug information about memory pool used by DPDK \fIinterface\fR.
+If called without arguments, information of all the available mempools will
+be printed. For additional mempool statistics enable
+\fBCONFIG_RTE_LIBRTE_MEMPOOL_DEBUG\fR while building DPDK.
