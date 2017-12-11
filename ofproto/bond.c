@@ -393,7 +393,9 @@ update_recirc_rules__(struct bond *bond)
             }
 
             hmap_remove(&bond->pr_rule_ops, &pr_op->hmap_node);
-            *pr_op->pr_rule = NULL;
+            if (bond->hash) {
+                *pr_op->pr_rule = NULL;
+            }
             free(pr_op);
             break;
         }
