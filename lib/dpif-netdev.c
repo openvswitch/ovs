@@ -3444,8 +3444,10 @@ compare_rxq_cycles(const void *a, const void *b)
         /* Cycles are the same so tiebreak on port/queue id.
          * Tiebreaking (as opposed to return 0) ensures consistent
          * sort results across multiple OS's. */
-        if (qa->port->port_no != qb->port->port_no) {
-            return (qa->port->port_no > qb->port->port_no) ? 1 : -1;
+        uint32_t port_qa = odp_to_u32(qa->port->port_no);
+        uint32_t port_qb = odp_to_u32(qb->port->port_no);
+        if (port_qa != port_qb) {
+            return port_qa > port_qb ? 1 : -1;
         } else {
             return netdev_rxq_get_queue_id(qa->rx)
                     - netdev_rxq_get_queue_id(qb->rx);
