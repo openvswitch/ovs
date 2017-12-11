@@ -273,6 +273,34 @@ One benefit of using this mode is the ability for vHost ports to 'reconnect' in
 event of the switch crashing or being brought down. Once it is brought back up,
 the vHost ports will reconnect automatically and normal service will resume.
 
+vhost-user-client IOMMU Support
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+vhost IOMMU is a feature which restricts the vhost memory that a virtio device
+can access, and as such is useful in deployments in which security is a
+concern.
+
+IOMMU support may be enabled via a global config value,
+```vhost-iommu-support```. Setting this to true enables vhost IOMMU support for
+all vhost ports when/where available::
+
+    $ ovs-vsctl set Open_vSwitch . other_config:vhost-iommu-support=true
+
+The default value is false.
+
+.. important::
+
+    Changing this value requires restarting the daemon.
+
+.. important::
+
+    Enabling the IOMMU feature also enables the vhost user reply-ack protocol;
+    this is known to work on QEMU v2.10.0, but is buggy on older versions
+    (2.7.0 - 2.9.0, inclusive). Consequently, the IOMMU feature is disabled by
+    default (and should remain so if using the aforementioned versions of
+    QEMU). Starting with QEMU v2.9.1, vhost-iommu-support can safely be
+    enabled, even without having an IOMMU device, with no performance penalty.
+
 .. _dpdk-testpmd:
 
 DPDK in the Guest
@@ -292,9 +320,9 @@ To begin, instantiate a guest as described in :ref:`dpdk-vhost-user` or
 DPDK sources to VM and build DPDK::
 
     $ cd /root/dpdk/
-    $ wget http://fast.dpdk.org/rel/dpdk-17.05.2.tar.xz
-    $ tar xf dpdk-17.05.2.tar.xz
-    $ export DPDK_DIR=/root/dpdk/dpdk-stable-17.05.2
+    $ wget http://fast.dpdk.org/rel/dpdk-17.11.tar.xz
+    $ tar xf dpdk-17.11.tar.xz
+    $ export DPDK_DIR=/root/dpdk/dpdk-17.11
     $ export DPDK_TARGET=x86_64-native-linuxapp-gcc
     $ export DPDK_BUILD=$DPDK_DIR/$DPDK_TARGET
     $ cd $DPDK_DIR
@@ -326,6 +354,28 @@ Setup huge pages and DPDK devices using UIO::
 Finally, start the application::
 
     # TODO
+
+.. important::
+
+  DPDK v17.11 virtio PMD contains a bug in the vectorized Rx function that
+  affects testpmd/DPDK guest applications. As such, guest DPDK applications
+  should use a non-vectorized Rx function.
+
+The DPDK v17.11 virtio net driver contains a bug that prevents guest DPDK
+applications from receiving packets when the vectorized Rx function is used.
+This only occurs when guest-bound traffic is live before a DPDK application is
+started within the guest, and where two or more forwarding cores are used. As
+such, it is not recommended for guests which execute DPDK applications to use
+the virtio vectorized Rx function. A simple method of ensuring that a non-
+vectorized Rx function is used is to enable mergeable buffers for the guest,
+with the following QEMU command line option::
+
+    mrg_rxbuf=on
+
+Additional details regarding the virtio driver bug are available on the
+`DPDK mailing list`_.
+
+.. _DPDK mailing list: http://dpdk.org/ml/archives/dev/2017-December/082801.html
 
 .. _dpdk-vhost-user-xml:
 
@@ -387,7 +437,7 @@ Sample XML
           <source type='unix' path='/usr/local/var/run/openvswitch/dpdkvhostuser0' mode='client'/>
            <model type='virtio'/>
           <driver queues='2'>
-            <host mrg_rxbuf='off'/>
+            <host mrg_rxbuf='on'/>
           </driver>
         </interface>
         <interface type='vhostuser'>
@@ -395,7 +445,7 @@ Sample XML
           <source type='unix' path='/usr/local/var/run/openvswitch/dpdkvhostuser1' mode='client'/>
           <model type='virtio'/>
           <driver queues='2'>
-            <host mrg_rxbuf='off'/>
+            <host mrg_rxbuf='on'/>
           </driver>
         </interface>
         <serial type='pty'>

@@ -15,6 +15,9 @@ Post-v2.8.0
      * Add support for compiling OVS with the latest Linux 4.13 kernel
    - "flush-conntrack" in ovs-dpctl and ovs-appctl now accept a 5-tuple to
      delete a specific connection tracking entry.
+   - DPDK:
+     * Add support for DPDK v17.11
+     * Add support for vHost IOMMU
 
 v2.8.0 - 31 Aug 2017
 --------------------

@@ -26,6 +26,7 @@
 #include <sys/socket.h>
 #include <linux/if.h>
 
+#include <rte_bus_pci.h>
 #include <rte_config.h>
 #include <rte_cycles.h>
 #include <rte_errno.h>
@@ -36,6 +37,7 @@
 #include <rte_meter.h>
 #include <rte_pci.h>
 #include <rte_vhost.h>
+#include <rte_version.h>
 
 #include "dirs.h"
 #include "dp-packet.h"
@@ -140,8 +142,8 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
 #define DPDK_ETH_PORT_ID_INVALID    RTE_MAX_ETHPORTS
 
-/* DPDK library uses uint8_t for port_id. */
-typedef uint8_t dpdk_port_t;
+/* DPDK library uses uint16_t for port_id. */
+typedef uint16_t dpdk_port_t;
 
 #define VHOST_ENQ_RETRY_NUM 8
 #define IF_NAME_SZ (PATH_MAX > IFNAMSIZ ? PATH_MAX : IFNAMSIZ)
@@ -329,6 +331,23 @@ struct ingress_policer {
 enum dpdk_hw_ol_features {
     NETDEV_RX_CHECKSUM_OFFLOAD = 1 << 0,
 };
+
+/*
+ * In order to avoid confusion in variables names, following naming convention
+ * should be used, if possible:
+ *
+ *     'struct netdev'          : 'netdev'
+ *     'struct netdev_dpdk'     : 'dev'
+ *     'struct netdev_rxq'      : 'rxq'
+ *     'struct netdev_rxq_dpdk' : 'rx'
+ *
+ * Example:
+ *     struct netdev *netdev = netdev_from_name(name);
+ *     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+ *
+ *  Also, 'netdev' should be used instead of 'dev->up', where 'netdev' was
+ *  already defined.
+ */
 
 struct netdev_dpdk {
     PADDED_MEMBERS_CACHELINE_MARKER(CACHE_LINE_SIZE, cacheline0,
@@ -1191,8 +1210,7 @@ netdev_dpdk_process_devargs(struct netdev_dpdk *dev,
     char *name = xmemdup0(devargs, strcspn(devargs, ","));
     dpdk_port_t new_port_id = DPDK_ETH_PORT_ID_INVALID;
 
-    if (!rte_eth_dev_count()
-            || rte_eth_dev_get_port_by_name(name, &new_port_id)
+    if (rte_eth_dev_get_port_by_name(name, &new_port_id)
             || !rte_eth_dev_is_valid_port(new_port_id)) {
         /* Device not found in DPDK, attempt to attach it */
         if (!rte_eth_dev_attach(devargs, &new_port_id)) {
@@ -2446,6 +2464,14 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
     smap_add_format(args, "max_vfs", "%u", dev_info.max_vfs);
     smap_add_format(args, "max_vmdq_pools", "%u", dev_info.max_vmdq_pools);
 
+    /* Querying the DPDK library for iftype may be done in future, pending
+     * support; cf. RFC 3635 Section 3.2.4. */
+    enum { IF_TYPE_ETHERNETCSMACD = 6 };
+
+    smap_add_format(args, "if_type", "%"PRIu32, IF_TYPE_ETHERNETCSMACD);
+    smap_add_format(args, "if_descr", "%s %s", rte_version(),
+                                               dev_info.driver_name);
+
     if (dev_info.pci_dev) {
         smap_add_format(args, "pci-vendor_id", "0x%u",
                         dev_info.pci_dev->id.vendor_id);
@@ -2486,12 +2512,13 @@ netdev_dpdk_set_admin_state(struct unixctl_conn *conn, int argc,
 
     if (argc > 2) {
         struct netdev *netdev = netdev_from_name(argv[1]);
-        if (netdev && is_dpdk_class(netdev->netdev_class)) {
-            struct netdev_dpdk *dpdk_dev = netdev_dpdk_cast(netdev);
 
-            ovs_mutex_lock(&dpdk_dev->mutex);
-            netdev_dpdk_set_admin_state__(dpdk_dev, up);
-            ovs_mutex_unlock(&dpdk_dev->mutex);
+        if (netdev && is_dpdk_class(netdev->netdev_class)) {
+            struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+
+            ovs_mutex_lock(&dev->mutex);
+            netdev_dpdk_set_admin_state__(dev, up);
+            ovs_mutex_unlock(&dev->mutex);
 
             netdev_close(netdev);
         } else {
@@ -2500,13 +2527,13 @@ netdev_dpdk_set_admin_state(struct unixctl_conn *conn, int argc,
             return;
         }
     } else {
-        struct netdev_dpdk *netdev;
+        struct netdev_dpdk *dev;
 
         ovs_mutex_lock(&dpdk_mutex);
-        LIST_FOR_EACH (netdev, list_node, &dpdk_list) {
-            ovs_mutex_lock(&netdev->mutex);
-            netdev_dpdk_set_admin_state__(netdev, up);
-            ovs_mutex_unlock(&netdev->mutex);
+        LIST_FOR_EACH (dev, list_node, &dpdk_list) {
+            ovs_mutex_lock(&dev->mutex);
+            netdev_dpdk_set_admin_state__(dev, up);
+            ovs_mutex_unlock(&dev->mutex);
         }
         ovs_mutex_unlock(&dpdk_mutex);
     }
@@ -2525,8 +2552,7 @@ netdev_dpdk_detach(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
     ovs_mutex_lock(&dpdk_mutex);
 
-    if (!rte_eth_dev_count() || rte_eth_dev_get_port_by_name(argv[1],
-                                                             &port_id)) {
+    if (rte_eth_dev_get_port_by_name(argv[1], &port_id)) {
         response = xasprintf("Device '%s' not found in DPDK", argv[1]);
         goto error;
     }
@@ -3252,6 +3278,7 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     int err;
+    uint64_t vhost_flags = 0;
 
     ovs_mutex_lock(&dev->mutex);
 
@@ -3262,16 +3289,21 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
      */
     if (!(dev->vhost_driver_flags & RTE_VHOST_USER_CLIENT)
             && strlen(dev->vhost_id)) {
-        /* Register client-mode device */
-        err = rte_vhost_driver_register(dev->vhost_id,
-                                        RTE_VHOST_USER_CLIENT);
+        /* Register client-mode device. */
+        vhost_flags |= RTE_VHOST_USER_CLIENT;
+
+        /* Enable IOMMU support, if explicitly requested. */
+        if (dpdk_vhost_iommu_enabled()) {
+            vhost_flags |= RTE_VHOST_USER_IOMMU_SUPPORT;
+        }
+        err = rte_vhost_driver_register(dev->vhost_id, vhost_flags);
         if (err) {
             VLOG_ERR("vhost-user device setup failure for device %s\n",
                      dev->vhost_id);
             goto unlock;
         } else {
             /* Configuration successful */
-            dev->vhost_driver_flags |= RTE_VHOST_USER_CLIENT;
+            dev->vhost_driver_flags |= vhost_flags;
             VLOG_INFO("vHost User device '%s' created in 'client' mode, "
                       "using client socket '%s'",
                       dev->up.name, dev->vhost_id);

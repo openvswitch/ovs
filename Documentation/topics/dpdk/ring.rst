@@ -77,4 +77,4 @@ DPDK. However, this functionality was removed because:
 - :doc:`vhost-user interfaces <vhost-user>` are the defacto DPDK-based path to
   guests
 
-.. _DPDK documentation: https://dpdk.readthedocs.io/en/v17.05/prog_guide/ring_lib.html
+.. _DPDK documentation: https://dpdk.readthedocs.io/en/v17.11/prog_guide/ring_lib.html
