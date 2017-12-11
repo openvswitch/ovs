@@ -1,0 +1,9 @@
+.SS "NETDEV-DPDK COMMANDS"
+These commands manage DPDK related ports (\fBtype=\fR\fIdpdk*\fR).
+.IP "\fBnetdev-dpdk/set-admin-state\fR [\fIinterface\fR] \fBup\fR | \fBdown\fR"
+Change the admin state for DPDK \fIinterface\fR to \fBup\fR or \fBdown\fR.
+If \fIinterface\fR is not specified, then it applies to all DPDK ports.
+.IP "\fBnetdev-dpdk/detach\fR \fIpci-address\fR"
+Detaches device with corresponding \fIpci-address\fR from DPDK.  This command
+can be used to detach device if it wasn't detached automatically after port
+deletion. Refer to the documentation for details and instructions.

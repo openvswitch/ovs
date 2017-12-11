@@ -25,6 +25,7 @@ Post-v2.8.0
    - DPDK:
      * Add support for DPDK v17.11
      * Add support for vHost IOMMU
+     * All the netdev-dpdk appctl commands described in ovs-vswitchd man page.
 
 v2.8.0 - 31 Aug 2017
 --------------------
