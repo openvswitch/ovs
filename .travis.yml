@@ -15,6 +15,7 @@ addons:
       - llvm-dev
       - libjemalloc1
       - libjemalloc-dev
+      - libnuma-dev
       - python-sphinx
 
 before_install: ./.travis/${TRAVIS_OS_NAME}-prepare.sh
