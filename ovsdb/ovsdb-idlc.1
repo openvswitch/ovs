@@ -50,11 +50,15 @@ modified is re-serialized as JSON on standard output.
 .
 .IP "\fBc\-idl\-header\fI idl\fR"
 Reads \fIidl\fR and prints on standard output a C header file that
-defines a structure for each table defined by the schema.
+defines a structure for each table defined by the schema.  If a column
+name in \fIidl\fR is a C or C++ keyword, it will be appended with an
+underscore.
 .
 .IP "\fBc\-idl\-source\fI idl\fR"
 Reads \fIidl\fR and prints on standard output a C source file that
-implements C bindings for the database defined by the schema.
+implements C bindings for the database defined by the schema.  If a column
+name in \fIidl\fR is a C or C++ keyword, it will be appended with an
+underscore.
 .
 .SS "Options"
 .so lib/common.man

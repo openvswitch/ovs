@@ -122,8 +122,33 @@ def cMembers(prefix, tableName, columnName, column, const, refTable=True):
 def sorted_columns(table):
     return sorted(table.columns.items())
 
+# If a column name in the schema is a C or C++ keyword, append an underscore
+# to the column name.
+def replace_cplusplus_keyword(schema):
+    keywords = {'alignas', 'alignof', 'and', 'and_eq', 'asm', 'auto', 'bitand',
+                'bitor', 'bool', 'break', 'case', 'catch', 'char', 'char16_t',
+                'char32_t', 'class', 'compl', 'concept', 'const', 'const_cast',
+                'constexpr', 'continue', 'decltype', 'default', 'delete', 'do',
+                'double', 'dynamic_cast', 'else', 'enum', 'explicit', 'export',
+                'extern', 'false', 'float', 'for', 'friend', 'goto', 'if',
+                'inline', 'int', 'long', 'mutable', 'namespace', 'new',
+                'noexcept', 'not', 'not_eq', 'nullptr', 'operator', 'or',
+                'or_eq', 'private', 'protected', 'public', 'register',
+                'reinterpret_cast', 'requires', 'restrict', 'return', 'short',
+                'signed', 'sizeof', 'static', 'static_assert', 'static_cast',
+                'struct', 'switch', 'template', 'this', 'thread_local',
+                'throw', 'true', 'try', 'typedef', 'typeid', 'typename',
+                'union', 'unsigned', 'using', 'virtual', 'void', 'volatile',
+                'wchar_t', 'while', 'xor', 'xor_eq'}
+
+    for tableName, table in schema.tables.items():
+        for columnName in table.columns:
+            if columnName in keywords:
+                table.columns[columnName + '_'] = table.columns.pop(columnName)
+
 def printCIDLHeader(schemaFile):
     schema = parseSchema(schemaFile)
+    replace_cplusplus_keyword(schema)
     prefix = schema.idlPrefix
     print('''\
 /* Generated automatically -- do not modify!    -*- buffer-read-only: t -*- */
@@ -328,6 +353,7 @@ def printEnum(type, members):
 
 def printCIDLSource(schemaFile):
     schema = parseSchema(schemaFile)
+    replace_cplusplus_keyword(schema)
     prefix = schema.idlPrefix
     print('''\
 /* Generated automatically -- do not modify!    -*- buffer-read-only: t -*- */
@@ -1273,7 +1299,7 @@ void
                                   for x in column.type.cInitType("%s_col_%s" % (tableName, columnName), prereqs))
             print("""\
     [%(P)s%(T)s_COL_%(C)s] = {
-         .name = "%(c)s",
+         .name = "%(column_name_in_schema)s",
          .type = {
 %(type)s
          },
@@ -1286,7 +1312,8 @@ void
                'C': columnName.upper(),
                's': structName,
                'mutable': mutable,
-               'type': type_init})
+               'type': type_init,
+               'column_name_in_schema': column.name})
         print("};")
 
     # Table classes.
