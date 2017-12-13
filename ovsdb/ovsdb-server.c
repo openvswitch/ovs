@@ -517,7 +517,7 @@ open_db(struct server_config *config, const char *filename)
 
     db_error = ovsdb_file_open(db->filename, false, &db->db, &db->file);
     if (db_error) {
-        error = ovsdb_error_to_string(db_error);
+        error = ovsdb_error_to_string_free(db_error);
     } else if (!ovsdb_jsonrpc_server_add_db(config->jsonrpc, db->db)) {
         error = xasprintf("%s: duplicate database name", db->db->schema->name);
     } else {
@@ -525,7 +525,6 @@ open_db(struct server_config *config, const char *filename)
         return NULL;
     }
 
-    ovsdb_error_destroy(db_error);
     close_db(db);
     return error;
 }
@@ -916,10 +915,9 @@ update_remote_status(const struct ovsdb_jsonrpc_server *jsonrpc,
         db = node->data;
         error = ovsdb_txn_commit(db->txn, false);
         if (error) {
-            char *msg = ovsdb_error_to_string(error);
+            char *msg = ovsdb_error_to_string_free(error);
             VLOG_ERR_RL(&rl, "Failed to update remote status: %s", msg);
             free(msg);
-            ovsdb_error_destroy(error);
         }
     }
 }
@@ -1157,10 +1155,9 @@ ovsdb_server_compact(struct unixctl_conn *conn, int argc,
 
             error = ovsdb_file_compact(db->file);
             if (error) {
-                char *s = ovsdb_error_to_string(error);
+                char *s = ovsdb_error_to_string_free(error);
                 ds_put_format(&reply, "%s\n", s);
                 free(s);
-                ovsdb_error_destroy(error);
             }
 
             n++;

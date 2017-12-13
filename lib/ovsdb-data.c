@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2014, 2016 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2014, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -664,8 +664,7 @@ ovsdb_atom_from_string(union ovsdb_atom *atom,
             free(*range_end_atom);
             *range_end_atom = NULL;
         }
-        msg = ovsdb_error_to_string(error);
-        ovsdb_error_destroy(error);
+        msg = ovsdb_error_to_string_free(error);
     }
     return msg;
 }

@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,6 +64,7 @@ struct ovsdb_error *ovsdb_error_clone(const struct ovsdb_error *)
     OVS_WARN_UNUSED_RESULT;
 
 char *ovsdb_error_to_string(const struct ovsdb_error *);
+char *ovsdb_error_to_string_free(struct ovsdb_error *);
 struct json *ovsdb_error_to_json(const struct ovsdb_error *);
 
 const char *ovsdb_error_get_tag(const struct ovsdb_error *);

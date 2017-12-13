@@ -237,11 +237,9 @@ ovsdb_file_open__(const char *file_name,
         /* Log error but otherwise ignore it.  Probably the database just got
          * truncated due to power failure etc. and we should use its current
          * contents. */
-        char *msg = ovsdb_error_to_string(error);
+        char *msg = ovsdb_error_to_string_free(error);
         VLOG_ERR("%s", msg);
         free(msg);
-
-        ovsdb_error_destroy(error);
     }
 
     if (!read_only) {
@@ -608,8 +606,7 @@ ovsdb_file_commit(struct ovsdb_replica *replica,
     {
         error = ovsdb_file_compact(file);
         if (error) {
-            char *s = ovsdb_error_to_string(error);
-            ovsdb_error_destroy(error);
+            char *s = ovsdb_error_to_string_free(error);
             VLOG_WARN("%s: compacting database failed (%s), retrying in "
                       "%d seconds",
                       file->file_name, s, COMPACT_RETRY_MSEC / 1000);

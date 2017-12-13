@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2016 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -153,11 +153,9 @@ ovsdb_internal_error(struct ovsdb_error *inner_error,
     ds_put_format(&ds, " (%s %s)", program_name, VERSION);
 
     if (inner_error) {
-        char *s = ovsdb_error_to_string(inner_error);
+        char *s = ovsdb_error_to_string_free(inner_error);
         ds_put_format(&ds, " (generated from: %s)", s);
         free(s);
-
-        ovsdb_error_destroy(inner_error);
     }
 
     error = ovsdb_error("internal error", "%s", ds_cstr(&ds));
@@ -223,6 +221,8 @@ ovsdb_error_to_json(const struct ovsdb_error *error)
     return json;
 }
 
+/* Returns 'error' converted to a string suitable for use as an error message.
+ * The caller must free the returned string (with free()). */
 char *
 ovsdb_error_to_string(const struct ovsdb_error *error)
 {
@@ -240,6 +240,24 @@ ovsdb_error_to_string(const struct ovsdb_error *error)
     return ds_steal_cstr(&ds);
 }
 
+/* Returns 'error' converted to a string suitable for use as an error message.
+ * The caller must free the returned string (with free()).
+ *
+ * If 'error' is NULL, returns NULL.
+ *
+ * Also, frees 'error'. */
+char *
+ovsdb_error_to_string_free(struct ovsdb_error *error)
+{
+    if (error) {
+        char *s = ovsdb_error_to_string(error);
+        ovsdb_error_destroy(error);
+        return s;
+    } else {
+        return NULL;
+    }
+}
+
 const char *
 ovsdb_error_get_tag(const struct ovsdb_error *error)
 {
@@ -254,9 +272,8 @@ ovsdb_error_assert(struct ovsdb_error *error)
 {
     if (error) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-        char *s = ovsdb_error_to_string(error);
+        char *s = ovsdb_error_to_string_free(error);
         VLOG_ERR_RL(&rl, "unexpected ovsdb error: %s", s);
         free(s);
-        ovsdb_error_destroy(error);
     }
 }
