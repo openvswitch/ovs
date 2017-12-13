@@ -8,6 +8,8 @@ Post-v2.8.0
      * ovsdb-client: New "get-schema-cksum" and "query" commands.
      * ovsdb-client: New "backup" and "restore" commands.
      * ovsdb-tool: New "db-name" and "schema-name" commands.
+   - ovs-vsctl and other commands that display data in tables now support a
+     --max-column-width option to limit column width.
    - OVN:
      * The "requested-chassis" option for a logical switch port now accepts a
        chassis "hostname" in addition to a chassis "name".

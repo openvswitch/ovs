@@ -64,12 +64,12 @@ AT_CHECK(
 ]])
 AT_CHECK([ovsdb-client --no-headings dump ordinals | sort -k 3 | uuidfilt], [0], [dnl
 ordinals table
-<0> ""   0
-<1> ""   1
-<2> ""   2
-<3> ""   3
-<4> ""   4
-<5> ""   5
+<0> "" 0
+<1> "" 1
+<2> "" 2
+<3> "" 3
+<4> "" 4
+<5> "" 5
 ])
 AT_CHECK([ovsdb-client restore < backup])
 AT_CHECK([ovsdb-client dump | tr -s ' ' | sort -k 3 | uuidfilt], [0], [dnl

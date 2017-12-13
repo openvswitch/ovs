@@ -69,3 +69,8 @@ This option does not affect JSON in tables, which is always printed
 compactly.
 .IP "\fB\-\-bare\fR"
 Equivalent to \fB\-\-format=list \-\-data=bare \-\-no\-headings\fR.
+.IP "\fB\-\-max\-column-width=\fIn\fR"
+For table output only, limits the width of any column in the output to
+\fIn\fR columns.  Longer cell data is truncated to fit, as necessary.
+Columns are always wide enough to display the column names, if the
+heading row is printed.

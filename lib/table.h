@@ -78,21 +78,24 @@ struct table_style {
     enum cell_format cell_format; /* CF_*. */
     bool headings;              /* Include headings? */
     int json_flags;             /* CF_JSON: Flags for json_to_string(). */
+    int max_column_width;       /* CF_STRING: Limit for column width. */
 };
 
-#define TABLE_STYLE_DEFAULT { TF_LIST, CF_STRING, true, JSSF_SORT }
+#define TABLE_STYLE_DEFAULT { TF_LIST, CF_STRING, true, JSSF_SORT, 0 }
 
 #define TABLE_OPTION_ENUMS                      \
     OPT_NO_HEADINGS,                            \
     OPT_PRETTY,                                 \
-    OPT_BARE
+    OPT_BARE,                                   \
+    OPT_MAX_COLUMN_WIDTH
 
 #define TABLE_LONG_OPTIONS                                      \
         {"format", required_argument, NULL, 'f'},               \
         {"data", required_argument, NULL, 'd'},                 \
         {"no-headings", no_argument, NULL, OPT_NO_HEADINGS},    \
         {"pretty", no_argument, NULL, OPT_PRETTY},              \
-        {"bare", no_argument, NULL, OPT_BARE}
+        {"bare", no_argument, NULL, OPT_BARE},                  \
+        {"max-column-width", required_argument, NULL, OPT_MAX_COLUMN_WIDTH}
 
 #define TABLE_OPTION_HANDLERS(STYLE)                \
         case 'f':                                   \
@@ -115,6 +118,10 @@ struct table_style {
             (STYLE)->format = TF_LIST;              \
             (STYLE)->cell_format = CF_BARE;         \
             (STYLE)->headings = false;              \
+            break;                                  \
+                                                    \
+        case OPT_MAX_COLUMN_WIDTH:                  \
+            (STYLE)->max_column_width = atoi(optarg); \
             break;
 
 void table_parse_format(struct table_style *, const char *format);

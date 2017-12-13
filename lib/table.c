@@ -255,19 +255,31 @@ table_print_table__(const struct table *table, const struct table_style *style)
         puts(table->caption);
     }
 
-    widths = xmalloc(table->n_columns * sizeof *widths);
+    widths = xzalloc(table->n_columns * sizeof *widths);
     for (x = 0; x < table->n_columns; x++) {
         const struct column *column = &table->columns[x];
 
-        widths[x] = strlen(column->heading);
+        int w = 0;
         for (y = 0; y < table->n_rows; y++) {
             const char *text = cell_to_text(table_cell__(table, y, x), style);
             size_t length = strlen(text);
 
-            if (length > widths[x]) {
-                widths[x] = length;
+            if (length > w) {
+                w = length;
             }
         }
+
+        int max = style->max_column_width;
+        if (max > 0 && w > max) {
+            w = max;
+        }
+        if (style->headings) {
+            int min = strlen(column->heading);
+            if (w < min) {
+                w = min;
+            }
+        }
+        widths[x] = w;
     }
 
     if (style->headings) {
@@ -295,7 +307,7 @@ table_print_table__(const struct table *table, const struct table_style *style)
             if (x) {
                 ds_put_char(&line, ' ');
             }
-            ds_put_format(&line, "%-*s", widths[x], text);
+            ds_put_format(&line, "%-*.*s", widths[x], widths[x], text);
         }
         table_print_table_line__(&line);
     }
