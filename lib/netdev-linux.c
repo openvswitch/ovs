@@ -1198,7 +1198,7 @@ netdev_linux_sock_batch_send(int sock, int ifindex,
     struct dp_packet *packet;
     DP_PACKET_BATCH_FOR_EACH (packet, batch) {
         iov[i].iov_base = dp_packet_data(packet);
-        iov[i].iov_len = dp_packet_get_send_len(packet);
+        iov[i].iov_len = dp_packet_size(packet);
         mmsg[i].msg_hdr = (struct msghdr) { .msg_name = &sll,
                                             .msg_namelen = sizeof sll,
                                             .msg_iov = &iov[i],
@@ -1235,7 +1235,7 @@ netdev_linux_tap_batch_send(struct netdev *netdev_,
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     struct dp_packet *packet;
     DP_PACKET_BATCH_FOR_EACH (packet, batch) {
-        size_t size = dp_packet_get_send_len(packet);
+        size_t size = dp_packet_size(packet);
         ssize_t retval;
         int error;
 

@@ -697,7 +697,7 @@ netdev_bsd_send(struct netdev *netdev_, int qid OVS_UNUSED,
 
     for (i = 0; i < batch->count; i++) {
         const void *data = dp_packet_data(batch->packets[i]);
-        size_t size = dp_packet_get_send_len(batch->packets[i]);
+        size_t size = dp_packet_size(batch->packets[i]);
 
         while (!error) {
             ssize_t retval;

@@ -1843,8 +1843,6 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet_batch *batch)
         dropped += batch_cnt - cnt;
     }
 
-    dp_packet_batch_apply_cutlen(batch);
-
     uint32_t txcnt = 0;
 
     for (uint32_t i = 0; i < cnt; i++) {
@@ -1899,7 +1897,6 @@ netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
         dpdk_do_tx_copy(netdev, qid, batch);
         dp_packet_delete_batch(batch, true);
     } else {
-        dp_packet_batch_apply_cutlen(batch);
         __netdev_dpdk_vhost_send(netdev, qid, batch->packets, batch->count);
     }
     return 0;
@@ -1929,8 +1926,6 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
         int tx_cnt, dropped;
         int batch_cnt = dp_packet_batch_size(batch);
         struct rte_mbuf **pkts = (struct rte_mbuf **) batch->packets;
-
-        dp_packet_batch_apply_cutlen(batch);
 
         tx_cnt = netdev_dpdk_filter_packet_len(dev, pkts, batch_cnt);
         tx_cnt = netdev_dpdk_qos_run(dev, pkts, tx_cnt, true);

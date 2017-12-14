@@ -1071,7 +1071,7 @@ netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
     struct dp_packet *packet;
     DP_PACKET_BATCH_FOR_EACH(packet, batch) {
         const void *buffer = dp_packet_data(packet);
-        size_t size = dp_packet_get_send_len(packet);
+        size_t size = dp_packet_size(packet);
 
         if (batch->packets[i]->packet_type != htonl(PT_ETH)) {
             error = EPFNOSUPPORT;
