@@ -526,6 +526,7 @@ struct tx_port {
     int qid;
     long long last_used;
     struct hmap_node node;
+    struct dp_packet_batch output_pkts;
 };
 
 /* A set of properties for the current processing loop that is not directly
@@ -704,6 +705,9 @@ static void dp_netdev_add_rxq_to_pmd(struct dp_netdev_pmd_thread *pmd,
 static void dp_netdev_del_rxq_from_pmd(struct dp_netdev_pmd_thread *pmd,
                                        struct rxq_poll *poll)
     OVS_REQUIRES(pmd->port_mutex);
+static void
+dp_netdev_pmd_flush_output_packets(struct dp_netdev_pmd_thread *pmd);
+
 static void reconfigure_datapath(struct dp_netdev *dp)
     OVS_REQUIRES(dp->port_mutex);
 static bool dp_netdev_pmd_try_ref(struct dp_netdev_pmd_thread *pmd);
@@ -781,7 +785,7 @@ emc_cache_slow_sweep(struct emc_cache *flow_cache)
  *
  *     2. Before processing of the new packet batch:
  *         - dpif_netdev_execute()
- *         - dp_netdev_input__()
+ *         - dp_netdev_process_rxq_port()
  *
  *     3. At least once per polling iteration in main polling threads if no
  *        packets received on current iteration:
@@ -2963,6 +2967,7 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
     dp_packet_batch_init_packet(&pp, execute->packet);
     dp_netdev_execute_actions(pmd, &pp, false, execute->flow,
                               execute->actions, execute->actions_len);
+    dp_netdev_pmd_flush_output_packets(pmd);
 
     if (pmd->core_id == NON_PMD_CORE_ID) {
         ovs_mutex_unlock(&dp->non_pmd_mutex);
@@ -3249,6 +3254,36 @@ dp_netdev_rxq_get_intrvl_cycles(struct dp_netdev_rxq *rx, unsigned idx)
     return processing_cycles;
 }
 
+static void
+dp_netdev_pmd_flush_output_on_port(struct dp_netdev_pmd_thread *pmd,
+                                   struct tx_port *p)
+{
+    int tx_qid;
+    bool dynamic_txqs;
+
+    dynamic_txqs = p->port->dynamic_txqs;
+    if (dynamic_txqs) {
+        tx_qid = dpif_netdev_xps_get_tx_qid(pmd, p);
+    } else {
+        tx_qid = pmd->static_tx_qid;
+    }
+
+    netdev_send(p->port->netdev, tx_qid, &p->output_pkts, true, dynamic_txqs);
+    dp_packet_batch_init(&p->output_pkts);
+}
+
+static void
+dp_netdev_pmd_flush_output_packets(struct dp_netdev_pmd_thread *pmd)
+{
+    struct tx_port *p;
+
+    HMAP_FOR_EACH (p, node, &pmd->send_port_cache) {
+        if (!dp_packet_batch_is_empty(&p->output_pkts)) {
+            dp_netdev_pmd_flush_output_on_port(pmd, p);
+        }
+    }
+}
+
 static int
 dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
                            struct netdev_rxq *rx,
@@ -3262,9 +3297,11 @@ dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
     error = netdev_rxq_recv(rx, &batch);
     if (!error) {
         *recirc_depth_get() = 0;
+        pmd_thread_ctx_time_update(pmd);
 
         batch_cnt = batch.count;
         dp_netdev_input(pmd, &batch, port_no);
+        dp_netdev_pmd_flush_output_packets(pmd);
     } else if (error != EAGAIN && error != EOPNOTSUPP) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
@@ -4742,6 +4779,7 @@ dp_netdev_add_port_tx_to_pmd(struct dp_netdev_pmd_thread *pmd,
 
     tx->port = port;
     tx->qid = -1;
+    dp_packet_batch_init(&tx->output_pkts);
 
     hmap_insert(&pmd->tx_ports, &tx->node, hash_port_no(tx->port->port_no));
     pmd->need_reload = true;
@@ -5199,8 +5237,6 @@ dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
     size_t n_batches;
     odp_port_t in_port;
 
-    pmd_thread_ctx_time_update(pmd);
-
     n_batches = 0;
     emc_processing(pmd, packets, keys, batches, &n_batches,
                             md_is_valid, port_no);
@@ -5414,18 +5450,35 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
     case OVS_ACTION_ATTR_OUTPUT:
         p = pmd_send_port_cache_lookup(pmd, nl_attr_get_odp_port(a));
         if (OVS_LIKELY(p)) {
-            int tx_qid;
-            bool dynamic_txqs;
+            struct dp_packet *packet;
+            struct dp_packet_batch out;
 
-            dynamic_txqs = p->port->dynamic_txqs;
-            if (dynamic_txqs) {
-                tx_qid = dpif_netdev_xps_get_tx_qid(pmd, p);
-            } else {
-                tx_qid = pmd->static_tx_qid;
+            if (!may_steal) {
+                dp_packet_batch_clone(&out, packets_);
+                dp_packet_batch_reset_cutlen(packets_);
+                packets_ = &out;
             }
+            dp_packet_batch_apply_cutlen(packets_);
 
-            netdev_send(p->port->netdev, tx_qid, packets_, may_steal,
-                        dynamic_txqs);
+#ifdef DPDK_NETDEV
+            if (OVS_UNLIKELY(!dp_packet_batch_is_empty(&p->output_pkts)
+                             && packets_->packets[0]->source
+                                != p->output_pkts.packets[0]->source)) {
+                /* XXX: netdev-dpdk assumes that all packets in a single
+                 *      output batch has the same source. Flush here to
+                 *      avoid memory access issues. */
+                dp_netdev_pmd_flush_output_on_port(pmd, p);
+            }
+#endif
+            if (OVS_UNLIKELY(dp_packet_batch_size(&p->output_pkts)
+                       + dp_packet_batch_size(packets_) > NETDEV_MAX_BURST)) {
+                /* Some packets was generated while input batch processing.
+                 * Flush here to avoid overflow. */
+                dp_netdev_pmd_flush_output_on_port(pmd, p);
+            }
+            DP_PACKET_BATCH_FOR_EACH (packet, packets_) {
+                dp_packet_batch_add(&p->output_pkts, packet);
+            }
             return;
         }
         break;
