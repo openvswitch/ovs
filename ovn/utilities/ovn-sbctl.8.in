@@ -58,11 +58,8 @@ Otherwise, the default is \fBunix:@RUNDIR@/ovnsb_db.sock\fR, but this
 default is unlikely to be useful outside of single-machine OVN test
 environments.
 .IP
-\fIserver\fR must take one of the following forms:
-.RS
-.so ovsdb/remote-active.man
-.so ovsdb/remote-passive.man
-.RE
+\fIserver\fR may be an OVSDB active or passive connection method,
+e.g. \fBssl:192.168.10.5:6640\fR, as described in \fBovsdb\fR(7).
 .
 .IP "\fB\-\-no\-syslog\fR"
 By default, \fBovn\-sbctl\fR logs its arguments and the details of any
@@ -210,14 +207,10 @@ Deletes the configured connection(s).
 .
 .IP "\fBset\-connection\fR [\fIaccess\-specifier\fR] \fItarget\fR\&..."
 Sets the configured manager target or targets.  Each \fItarget\fR may
-be preceded by an optional access-specifier (\fBread\-only\fR or
-\fBread\-write\fR) and may use any of the following forms:
-.
-.RS
-.so ovsdb/remote-active.man
-.so ovsdb/remote-passive.man
-.RE
-
+may be an OVSDB active or passive connection method,
+e.g. \fBpssl:6640\fR, as described in \fBovsdb\fR(7),
+optionally preceded by an optional access-specifier (\fBread\-only\fR or
+\fBread\-write\fR).
 If provided, the effect of the access specifier persists for subsequent
 targets until changed by another access specifier.
 .

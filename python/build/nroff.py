@@ -80,23 +80,24 @@ def inline_xml_to_nroff(node, font, to_upper=False, newline='\n'):
                 s += inline_xml_to_nroff(child, r'\fB', to_upper, newline)
             return s + font
         elif node.tagName == 'ref':
-            s = r'\fB'
             if node.hasAttribute('column'):
-                s += node.attributes['column'].nodeValue
+                s = node.attributes['column'].nodeValue
                 if node.hasAttribute('key'):
                     s += ':' + node.attributes['key'].nodeValue
             elif node.hasAttribute('table'):
-                s += node.attributes['table'].nodeValue
+                s = node.attributes['table'].nodeValue
             elif node.hasAttribute('group'):
-                s += node.attributes['group'].nodeValue
+                s = node.attributes['group'].nodeValue
             elif node.hasAttribute('db'):
-                s += node.attributes['db'].nodeValue
+                s = node.attributes['db'].nodeValue
             elif node.hasAttribute('field'):
-                s += node.attributes['field'].nodeValue
+                s = node.attributes['field'].nodeValue
+            elif node.hasAttribute('section'):
+                s = node.attributes['section'].nodeValue
             else:
                 raise error.Error("'ref' lacks required attributes: %s"
                                   % list(node.attributes.keys()))
-            return s + font
+            return r'\fB' + re.sub(r'\s+', ' ', s) + font
         elif node.tagName in ['var', 'dfn', 'i', 'cite']:
             s = r'\fI'
             for child in node.childNodes:

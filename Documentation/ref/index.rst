@@ -41,6 +41,9 @@ time:
 
    ovs-test.8
    ovs-vlan-test.8
+   ovsdb-server.7
+   ovsdb.5
+   ovsdb.7
 
 The remainder are still in roff format can be found below:
 

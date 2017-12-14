@@ -19,10 +19,9 @@ A daemon that manages and controls any number of Open vSwitch switches
 on the local machine.
 .PP
 The \fIdatabase\fR argument specifies how \fBovs\-vswitchd\fR connects
-to \fBovsdb\-server\fR.  The default is \fBunix:@RUNDIR@/db.sock\fR.
-The following forms are accepted:
-.so ovsdb/remote-active.man
-.so ovsdb/remote-passive.man
+to \fBovsdb\-server\fR.  \fIdatabase\fR may be an OVSDB active or
+passive connection method, as described in \fBovsdb\fR(7).  The
+default is \fBunix:@RUNDIR@/db.sock\fR.
 .PP
 \fBovs\-vswitchd\fR retrieves its configuration from \fIdatabase\fR at
 startup.  It sets up Open vSwitch datapaths and then operates

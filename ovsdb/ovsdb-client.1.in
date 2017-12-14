@@ -13,16 +13,18 @@
 ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 .
 .SH SYNOPSIS
+.IP "Server-Level Commands:"
 \fBovsdb\-client \fR[\fIoptions\fR] \fBlist\-dbs \fR[\fIserver\fR]
-.br
+.IP "Database Schema Commands:"
 \fBovsdb\-client \fR[\fIoptions\fR] \fBget\-schema \fR[\fIserver\fR] \fR[\fIdatabase\fR]
-.br
-\fBovsdb\-client \fR[\fIoptions\fR] \fBget\-schema\-version\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]
 .br
 \fBovsdb\-client \fR[\fIoptions\fR] \fBlist\-tables\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]
 .br
 \fBovsdb\-client \fR[\fIoptions\fR] \fBlist\-columns\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] [\fItable\fR]
+.IP "Database Version Management Commands:"
 .br
+\fBovsdb\-client \fR[\fIoptions\fR] \fBget\-schema\-version\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]
+.IP "Data Management Commands:"
 \fBovsdb\-client \fR[\fIoptions\fR] \fBtransact\fI \fR[\fIserver\fR] \fItransaction\fR
 .br
 \fBovsdb\-client \fR[\fIoptions\fR] \fBdump\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]\fR [\fItable\fR
@@ -33,8 +35,9 @@ ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 .br
 \fBovsdb\-client \fR[\fIoptions\fR] \fBmonitor\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fBALL\fR
 .br
-\fBovsdb\-client \fR[\fIoptions\fR] \fBmonitor-cond\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fIconditions
+\fBovsdb\-client \fR[\fIoptions\fR] \fBmonitor\-cond\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fIconditions
 \fItable\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...]...
+.IP "Testing Commands:"
 .br
 \fBovsdb\-client \fR[\fIoptions\fR] \fBlock\fI \fR[\fIserver\fR] \fIlock\fR
 .br
@@ -42,6 +45,7 @@ ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 .br
 \fBovsdb\-client \fR[\fIoptions\fR] \fBunlock\fI \fR[\fIserver\fR] \fIlock\fR
 .br
+.IP "Other Commands:"
 \fBovsdb\-client help\fR
 .IP "Output formatting options:"
 [\fB\-\-format=\fIformat\fR]
@@ -60,39 +64,34 @@ ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 .SH DESCRIPTION
 The \fBovsdb\-client\fR program is a command-line client for
 interacting with a running \fBovsdb\-server\fR process.
-Each command connects to an OVSDB server, which is
-\fBunix:@RUNDIR@/db.sock\fR by default, or may be specified as
-\fIserver\fR in one of the following forms:
-.RS
-.so ovsdb/remote-active.man
-.so ovsdb/remote-passive.man
-.RE
+Each command connects to the specified OVSDB \fIserver\fR, which may
+be an OVSDB active or passive connection method, as described in
+\fBovsdb\fR(7).  The default server is \fBunix:@RUNDIR@/db.sock\fR
+and
+the default \fIdatabase\fR is \fBOpen_vSwitch\fR.
 .PP
-The default \fIdatabase\fR is \fBOpen_vSwitch\fR.
+For an introduction to OVSDB and its implementation in Open vSwitch,
+see \fBovsdb\fR(7).
+.PP
+The following sections describe the commands that \fBovsdb\-client\fR
+supports.
+.SS "Server-Level Commands"
+Most \fBovsdb\-client\fR commands work with an individual database,
+but these commands apply to an entire database server.
 .
-.SS "Commands"
-The following commands are implemented:
 .IP "\fBlist\-dbs \fR[\fIserver\fR]"
 Connects to \fIserver\fR, retrieves the list of known databases, and
-prints them one per line.  These database names are the ones that may
-be used for \fIdatabase\fR in the following commands.
+prints them one per line.  These database names are the ones that
+other commands may use for \fIdatabase\fR.
+.
+.SS "Database Schema Commands"
+.PP
+These commands obtain the schema from a database and print it or part
+of it.
 .
 .IP "\fBget\-schema \fR[\fIserver\fR] \fR[\fIdatabase\fR]"
 Connects to \fIserver\fR, retrieves the schema for \fIdatabase\fR, and
 prints it in JSON format.
-.
-.IP "\fBget\-schema\-version\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]"
-Connects to \fIserver\fR, retrieves the schema for \fIdatabase\fR, and
-prints its version number on stdout.  A schema version number has the form
-\fIx\fB.\fIy\fB.\fIz\fR.  See \fBovs\-vswitchd.conf.db\fR(5) for
-details.
-.IP
-Schema version numbers and Open vSwitch version numbers are
-independent.
-.IP
-If \fIdatabase\fR was created before schema versioning was introduced,
-then it will not have a version number and this command will print a
-blank line.
 .
 .IP "\fBlist\-tables\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]"
 Connects to \fIserver\fR, retrieves the schema for \fIdatabase\fR, and
@@ -105,10 +104,33 @@ prints a table listing the name and type of each
 column.  If \fItable\fR is specified, only columns in that table are
 listed; otherwise, the tables include columns in all tables.
 .
+.SS "Database Version Management Commands"
+.so ovsdb/ovsdb-schemas.man
+.PP
+These commands work with different versions of OVSDB schemas and
+databases.
+.
+.IP "\fBget\-schema\-version\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]"
+Connects to \fIserver\fR, retrieves the schema for \fIdatabase\fR, and
+prints its version number on stdout.
+If \fIdatabase\fR was created before schema versioning was introduced,
+then it will not have a version number and this command will print a
+blank line.
+.
+.IP "\fBget\-schema\-cksum\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]"
+Connects to \fIserver\fR, retrieves the schema for \fIdatabase\fR, and
+prints its checksum on stdout.  If \fIdatabase\fR does not include a
+checksum, prints a blank line.
+.
+.SS "Data Management Commands"
+.PP
+These commands read or modify the data in a database.
+.
 .IP "\fBtransact\fI \fR[\fIserver\fR] \fItransaction\fR"
 Connects to \fIserver\fR, sends it the specified \fItransaction\fR,
-which must be a JSON array containing one or more valid OVSDB
-operations, and prints the received reply on stdout.
+which must be a JSON array appropriate for use as the \fBparams\fR to
+a JSON-RPC \fBtransact\fR request, and prints the received reply on
+stdout.
 .
 .IP "\fBdump\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]\fR [\fItable \fR[\fIcolumn\fR...]]"
 Connects to \fIserver\fR, retrieves all of the data in \fIdatabase\fR,
@@ -117,7 +139,7 @@ specified, only that table is retrieved.  If at least one \fIcolumn\fR
 is specified, only those columns are retrieved.
 .
 .IP "\fBmonitor\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fItable\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...]..."
-.IQ "\fBmonitor-cond\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fIconditions\fR \fItable\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...]..."
+.IQ "\fBmonitor\-cond\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fIconditions\fR \fItable\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...]..."
 Connects to \fIserver\fR and monitors the contents of rows that match conditions in
 \fItable\fR in \fIdatabase\fR. By default, the initial contents of \fItable\fR are
 printed, followed by each change as it occurs.  If conditions empty,
@@ -144,12 +166,12 @@ line.
 with the following change: A condition can be either a 3-element JSON array
 as deescribed in the RFC or a boolean value..
 .IP
-If \fB\-\-detach\fR is used with \fBmonitor\fR or \fBmonitor-cond\fR, then
+If \fB\-\-detach\fR is used with \fBmonitor\fR or \fBmonitor\-cond\fR, then
 \fBovsdb\-client\fR detaches after it has successfully received and
 printed the initial contents of \fItable\fR.
 .IP
 The \fBmonitor\fR command uses RFC 7047 "monitor" method to open a monitor
-session with the server. The \fBmonitor-cond\fR command uses RFC 7047
+session with the server. The \fBmonitor\-cond\fR command uses RFC 7047
 extension "monitor_cond" method. See \fBovsdb\-server\fR(1) for details.
 .IP "\fBmonitor\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fBALL\fR"
 Connects to \fIserver\fR and monitors the contents of all tables in
@@ -161,13 +183,13 @@ prints the initial database contents.
 The \fBmonitor\fR command uses RFC 7047 "monitor" method to open a monitor
 session with the server.
 .
-.SH TESTING COMMANDS
-The following commands are mostly of interest for testing the correctness
+.SS "Testing commands"
+These commands are mostly of interest for testing the correctness
 of the OVSDB server.
 .
-.IP "\fBovsdb\-client\fR [\fIoptions\fR] \fBlock\fI \fR[\fIserver\fR] \fIlock\fR"
-.IQ "\fBovsdb\-client\fR [\fIoptions\fR] \fBsteal\fI \fR[\fIserver\fR] \fIlock\fR"
-.IQ "\fBovsdb\-client\fR [\fIoptions\fR] \fBunlock\fI \fR[\fIserver\fR] \fIlock\fR"
+.IP "\fBlock\fI \fR[\fIserver\fR] \fIlock\fR"
+.IQ "\fBsteal\fI \fR[\fIserver\fR] \fIlock\fR"
+.IQ "\fBunlock\fI \fR[\fIserver\fR] \fIlock\fR"
 Connects to \fIserver\fR and issues corresponding RFC 7047 lock operations
 on \fIlock\fR. Prints json reply or subsequent update messages.
 The \fB\-\-detach\fR option causes \fBovsdb\-client\fR to detach after it
@@ -190,13 +212,13 @@ The following options controlling output formatting:
 .so lib/table.man
 .
 .IP "\fB\-\-timestamp\fR"
-For the \fBmonitor\fR and \fBmonitor-cond\fR commands, add a timestamp to each
+For the \fBmonitor\fR and \fBmonitor\-cond\fR commands, add a timestamp to each
 table update.  Most output formats add the timestamp on a line of its own
 just above the table.  The JSON output format puts the timestamp in a
 member of the top-level JSON object named \fBtime\fR.
 .
 .SS "Daemon Options"
-The daemon options apply only to the \fBmonitor\fR and \fBmonitor-cond\fR commands.
+The daemon options apply only to the \fBmonitor\fR and \fBmonitor\-cond\fR commands.
 With any other command, they have no effect.
 .ds DD
 .so lib/daemon.man
@@ -211,6 +233,6 @@ With any other command, they have no effect.
 .so lib/common.man
 .SH "SEE ALSO"
 .
+\fBovsdb\fR(7),
 \fBovsdb\-server\fR(1),
-\fBovsdb\-client\fR(1),
-and the OVSDB specification.
+\fBovsdb\-client\fR(1).

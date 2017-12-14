@@ -1,6 +1,10 @@
 Post-v2.8.0
 --------------------
    - NSH implementation now conforms to latest draft (draft-ietf-sfc-nsh-28).
+   - OVSDB:
+     * New high-level documentation in ovsdb(7).
+     * New file format documentation for developers in ovsdb(5).
+     * Protocol documentation moved from ovsdb-server(1) to ovsdb-server(7).
    - OVN:
      * The "requested-chassis" option for a logical switch port now accepts a
        chassis "hostname" in addition to a chassis "name".

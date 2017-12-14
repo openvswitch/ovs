@@ -46,15 +46,7 @@ ovsdb_libovsdb_la_CPPFLAGS = $(AM_CPPFLAGS)
 pkgconfig_DATA += \
 	ovsdb/libovsdb.pc
 
-MAN_FRAGMENTS += \
-	ovsdb/remote-active.man \
-	ovsdb/remote-passive.man \
-	ovsdb/replication.man \
-	ovsdb/replication-syn.man
-
-EXTRA_DIST += \
-	ovsdb/remote-active.xml \
-	ovsdb/remote-passive.xml
+MAN_FRAGMENTS += ovsdb/ovsdb-schemas.man
 
 # ovsdb-tool
 bin_PROGRAMS += ovsdb/ovsdb-tool

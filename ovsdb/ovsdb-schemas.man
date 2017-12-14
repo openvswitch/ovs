@@ -1,0 +1,19 @@
+.PP
+An OVSDB schema has a schema version number, and an OVSDB database
+embeds a particular version of an OVSDB schema.  These version numbers
+take the form \fIx\fB.\fIy\fB.\fIz\fR, e.g. \fB1.2.3\fR.  The OVSDB
+implementation does not enforce a particular version numbering scheme,
+but schemas managed within the Open vSwitch project use the following
+approach.  Whenever the database schema is changed in a non-backward
+compatible way (e.g. deleting a column or a table), \fIx\fR is
+incremented (and \fIy\fR and \fIz\fR are reset to 0).  When the
+database schema is changed in a backward compatible way (e.g. adding a
+new column), \fIy\fR is incremented (and \fIz\fR is reset to 0).  When
+the database schema is changed cosmetically (e.g. reindenting its
+syntax), \fIz\fR is incremented.
+.PP
+Some OVSDB databases and schemas, especially very old ones, do not
+have a version number.
+.PP
+Schema version numbers and Open vSwitch version numbers are
+independent.

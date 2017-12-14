@@ -19,7 +19,10 @@ ovsdb\-server \- Open vSwitch database server
 .so lib/daemon-syn.man
 .so lib/service-syn.man
 .so lib/vlog-syn.man
-.so ovsdb/replication-syn.man
+.IP "Active-backup options:"
+[\fB\-\-sync\-from=\fIserver\fR]
+[\fB\-\-sync\-exclude-tables=\fIdb\fB:\fItable\fR[\fB,\fIdb\fB:\fItable\fR]...\fR]
+[\fB\-\-active\fR]
 .so lib/ssl-syn.man
 .so lib/ssl-bootstrap-syn.man
 .so lib/ssl-peer-ca-cert-syn.man
@@ -31,39 +34,26 @@ ovsdb\-server \- Open vSwitch database server
 The \fBovsdb\-server\fR program provides RPC interfaces to one or more
 Open vSwitch databases (OVSDBs).  It supports JSON-RPC client
 connections over active or passive TCP/IP or Unix domain sockets.
+For an introduction to OVSDB and its implementation in Open vSwitch,
+see \fBovsdb\fR(7).
 .PP
 Each OVSDB file may be specified on the command line as \fIdatabase\fR.
 If none is specified, the default is \fB@DBDIR@/conf.db\fR.  The database
 files must already have been created and initialized using, for
 example, \fBovsdb\-tool create\fR.
-.
-.SH "ACTIVE and BACKUP"
-\fBovsdb\-server\fR runs either as a backup server, or as an active server.
-When  \fBovsdb\-server\fR is running as a backup server, all transactions that
-can modify the database content, including the lock commands are rejected.
-Active server, on the other hand, accepts all ovsdb server transactions.
-When \fBovsdb\-server\fR role changes, all existing client connection are
-reset, requiring clients to reconnect to the server.
 .PP
-By default, \fBovsdb\-server\fR runs as an active server, except when the
-\fB\-\-sync\-from=\fIserver\fR command line option is specified and without
-the \fB\-\-active\fR option.  During runtime, \fBovsdb\-server\fR role can be switch by using appctl commands.
-.PP
-\fBovsdb-server/connect\-active\-ovsdb\-server\fR switches
-\fBovsdb\-server\fR into a backup server, Conversely,
-\fBovsdb-server/disconnect\-active\-ovsdb\-server\fR switches server into
-an active one.
-.
+This OVSDB implementation supports standalone and active-backup
+databases, as well as database replication.
+See the Service Models section of \fBovsdb\fR(7) for more information.
 .SH OPTIONS
 .
 .IP "\fB\-\-remote=\fIremote\fR"
 Adds \fIremote\fR as a connection method used by \fBovsdb\-server\fR.
-\fIremote\fR must take one of the following forms:
+The \fIremote\fR may be an OVSDB active or passive connection method,
+e.g. \fBpssl:6640\fR, as described in \fBovsdb\fR(7).  The following
+additional form is also supported:
 .
 .RS
-.so ovsdb/remote-passive.man
-.so ovsdb/remote-active.man
-.
 .IP "\fBdb:\fIdb\fB,\fItable\fB,\fIcolumn\fR"
 Reads additional connection methods from \fIcolumn\fR in all of the
 rows in \fItable\fR within \fIdb\fR.  As the contents of \fIcolumn\fR changes,
@@ -121,8 +111,50 @@ configured remotes.
 .so lib/service.man
 .SS "Logging Options"
 .so lib/vlog.man
-.SS "Syncing Options"
-.so ovsdb/replication.man
+.SS "Active-Backup Options"
+These options support the \fBovsdb\-server\fR active-backup service
+model and database replication.  By
+default, when it serves a database in this format, \fBovsdb\-server\fR
+runs as a standalone server.  These options can configure it for
+active-backup use:
+.IP \(bu
+Use \fB\-\-sync\-from=\fIserver\fR to start the server in the backup
+role, replicating data from \fIserver\fR.  When \fBovsdb\-server\fR is
+running as a backup server, it rejects all transactions that can
+modify the database content, including lock commands.  The same form
+can be used to configure the local database as a replica of
+\fIserver\fR.
+.IP \(bu
+Use \fB\-\-sync\-from=\fIserver\fB \-\-active\fR to start the server
+in the active role, but prepared to switch to the backup role in which
+it would replicate data from \fIserver\fR.  When \fBovsdb\-server\fR
+runs in active mode, it allows all transactions, including those that
+modify the database.
+.PP
+At runtime, management commands can change a server's role and otherwise
+manage active-backup features.  See \fBActive-Backup Commands\fR, below,
+for more information.
+.TP
+\fB\-\-sync\-from=\fIserver\fR
+Sets up \fBovsdb\-server\fR to synchronize its databases with the
+databases in \fIserver\fR, which must be an active connection method
+in one of the forms documented in \fBovsdb\-client\fR(1).  Every
+transaction committed by \fIserver\fR will be replicated to
+\fBovsdb\-server\fR.  This option makes \fBovsdb\-server\fR start
+as a backup server; add \fB\-\-active\fR to make it start as an
+active server.
+.TP
+\fB\-\-sync\-exclude-tables=\fIdb\fB:\fItable\fR[\fB,\fIdb\fB:\fItable\fR]...\fR
+Causes the specified tables to be excluded from replication.
+.TP
+\fB\-\-active\fR
+By default, \fB\-\-sync\-from\fR makes \fBovsdb\-server\fR start up as
+a backup for \fIserver\fR.  With \fB\-\-active\fR, however,
+\fBovsdb\-server\fR starts as an active server.  Use this option to
+allow the syncing options to be specified using command line options,
+yet start the server, as the default, active server.  To switch the
+running server to backup mode, use \fBovs-appctl(1)\fR to execute the
+\fBovsdb\-server/connect\-active\-ovsdb\-server\fR command.
 .SS "Public Key Infrastructure Options"
 The options described below for configuring the SSL public key
 infrastructure accept a special syntax for obtaining their
@@ -145,7 +177,7 @@ one row in \fItable\fR.)
 \fBovs\-appctl\fR(8) can send commands to a running
 \fBovsdb\-server\fR process.  The currently supported commands are
 described below.
-.SS "OVSDB\-SERVER COMMANDS"
+.SS "\fBovsdb\-server\fR Commands"
 These commands are specific to \fBovsdb\-server\fR.
 .IP "\fBexit\fR"
 Causes \fBovsdb\-server\fR to gracefully terminate.
@@ -210,23 +242,37 @@ again (with \fBovsdb\-server/add\-db\fR).
 Outputs a list of the currently configured databases added either through
 the command line or through the \fBovsdb\-server/add\-db\fR command.
 .
+.SS "Active-Backup Commands"
+.PP
+These commands query and update the role of \fBovsdb\-server\fR within
+an active-backup pair of servers.  See \fBActive-Backup Options\fR,
+above, and \fBActive-Backup Database Service Model\fR in
+\fBovsdb\fR(7) for more information.
+.
 .IP "\fBovsdb\-server/set\-active\-ovsdb\-server \fIserver"
 Sets  the active \fIserver\fR from which \fBovsdb\-server\fR connects through
 \fBovsdb\-server/connect\-active\-ovsdb\-server\fR.
+This overrides the \fB\-\-sync\-from\fR command-line option.
 .
 .IP "\fBovsdb\-server/get\-active\-ovsdb\-server"
 Gets the active server from which \fBovsdb\-server\fR is currently synchronizing
 its databases.
 .
 .IP "\fBovsdb\-server/connect\-active\-ovsdb\-server"
-Causes \fBovsdb\-server\fR to synchronize its databases with the server
-specified by \fBovsdb\-server/set\-active\-ovsdb\-server\fR.
+Switches the server to a backup role.  The server starts synchronizing
+its databases with the active server specified by
+\fBovsdb\-server/set\-active\-ovsdb\-server\fR (or the
+\fB\-\-sync\-from\fR command-line option) and closes all existing
+client connections, which requires clients to reconnect.
 .
 .IP "\fBovsdb\-server/disconnect\-active\-ovsdb\-server"
-Causes \fBovsdb\-server\fR to  stop  synchronizing  its  databases with a active server.
+Switches the server to an active role.  The server stops synchronizing
+its databases with an active server and closes all existing client
+connections, which requires clients to reconnect.
 .
 .IP "\fBovsdb\-server/set\-sync\-exclude\-tables \fIdb\fB:\fItable\fR[\fB,\fIdb\fB:\fItable\fR]..."
-Sets the \fItable\fR whitin \fIdb\fR that will be excluded from synchronization.
+Sets the \fItable\fR within \fIdb\fR that will be excluded from synchronization.
+This overrides the \fB\-\-sync\-exclude-tables\fR command-line option.
 .
 .IP "\fBovsdb\-server/get\-sync\-exclude\-tables"
 Gets  the  tables  that are currently excluded from synchronization.
@@ -244,438 +290,6 @@ excluded.
 .so lib/vlog-unixctl.man
 .so lib/memory-unixctl.man
 .so lib/coverage-unixctl.man
-.SH "SPECIFICATIONS"
-.
-.PP
-\fBovsdb\-server\fR implements the Open vSwitch Database (OVSDB)
-protocol specified in RFC 7047, with the following clarifications:
-.
-.IP "3.1. JSON Usage"
-RFC 4627 says that names within a JSON object should be unique.
-The Open vSwitch JSON parser discards all but the last value
-for a name that is specified more than once.
-.
-.IP
-The definition of <error> allows for implementation extensions.
-Currently \fBovsdb\-server\fR uses the following additional "error"
-strings which might change in later releases):
-.
-.RS
-.IP "\fBsyntax error\fR or \fBunknown column\fR"
-The request could not be parsed as an OVSDB request.  An additional
-"syntax" member, whose value is a string that contains JSON, may
-narrow down the particular syntax that could not be parsed.
-.IP "\fBinternal error\fR"
-The request triggered a bug in \fBovsdb\-server\fR.
-.IP "\fBovsdb error\fR"
-A map or set contains a duplicate key.
-.IP "\fBpermission error\fR"
-The request was denied by the role-based access control extension,
-introduced in version 2.8.
-.RE
-.
-.IP "3.2. Schema Format"
-RFC 7047 requires the "version" field in <database-schema>.  Current
-versions of \fBovsdb\-server\fR allow it to be omitted (future
-versions are likely to require it).
-.IP
-RFC 7047 allows columns that contain weak references to be immutable.
-This raises the issue of the behavior of the weak reference when the
-rows that it references are deleted.  Since version 2.6,
-\fBovsdb\-server\fR forces columns that contain weak references to be
-mutable.
-.IP
-Since version 2.8, the table name \fBRBAC_Role\fR is used internally
-by the role-based access control extension to \fBovsdb\-server\fR and
-should not be used for purposes other than defining mappings of role
-names to table access permissions. This table has one row per role
-name and the following columns:
-.RS
-.IP "\fBname\fR"
-The role name.
-.IP "\fBpermissions\fR"
-A map of table name to a reference to a row in a separate permission
-table.
-.RE
-.IP
-The separate RBAC permission table has one row per access control
-configuration and the following columns:
-.RS
-.IP "\fBname\fR"
-The name of the table to which the row applies.
-.IP "\fBauthorization\fR"
-The set of column names and column:key pairs to be compared with
-the client ID in order to determine the authorization status of
-the requested operation.
-.IP "\fBinsert_delete\fR"
-A boolean value, true if authorized insertions and authorized are allowed,
-false if no insertions or deletions are allowed.
-.IP "\fBupdate\fR"
-The set of columns and column:key pairs for which authorized update and
-mutate operations should be permitted.
-.RE
-.
-.IP "4. Wire Protocol"
-The original OVSDB specifications included the following reason,
-omitted from RFC 7047, to operate JSON-RPC directly over a stream
-instead of over HTTP:
-.
-.RS
-.IP \(bu
-JSON-RPC is a peer-to-peer protocol, but HTTP is a client-server
-protocol, which is a poor match.  Thus, JSON-RPC over HTTP requires
-the client to periodically poll the server to receive server requests.
-.IP \(bu
-HTTP is more complicated than stream connections and doesn't provide
-any corresponding advantage.
-.IP \(bu
-The JSON-RPC specification for HTTP transport is incomplete.
-.RE
-.
-.IP "4.1.3. Transact"
-Since version 2.8, role-based access controls can be applied to operations
-within a transaction that would modify the contents of the database
-(these operations include row insert, row delete, column update, and
-column mutate). Role-based access controls are applied when the database
-schema contains a table with the name "\fBRBAC_Role\fR" and the connection
-on which the transaction request was received has an associated role
-name (from the "\fBrole\fR" column in the remote connection table). When
-role-based access controls are enabled, transactions that are otherwise
-well-formed may be rejected depending on the client's role, ID, and the
-contents of the \fBRBAC_Role\fR table and associated permissions table.
-.
-.IP "4.1.5. Monitor"
-For backward compatibility, \fBovsdb\-server\fR currently permits a
-single <monitor-request> to be used instead of an array; it is treated
-as a single-element array.  Future versions of \fBovsdb\-server\fR
-might remove this compatibility feature.
-.IP
-Because the <json-value> parameter is used to match subsequent update
-notifications (see below) to the request, it must be unique among all
-active monitors.  \fBovsdb\-server\fR rejects attempt to create two
-monitors with the same identifier.
-.
-.IP "4.1.12. Monitor_cond"
-A new monitor method added in Open vSwitch version 2.6. The monitor_cond
-request enables a client to replicate subsets of tables within an OVSDB
-database by requesting notifications of changes to rows matching one of
-the conditions specified in "where" by receiving the specified contents
-of these rows when table updates occur. Monitor_cond also allows a more
-efficient update notifications by receiving table-updates2 notifications
-(described below).
-.
-.IP
-The monitor method described in Section 4.1.5 also applies to monitor_cond,
-with the following exceptions:
-.
-.RS
-.IP \(bu
-RPC request method becomes "monitor_cond".
-.IP \(bu
-Reply result follows <table-updates2>, described in Section 4.1.14.
-.IP \(bu
-Subsequent changes are sent to the client using the "update2" monitor
-notification, described in Section 4.1.14
-.IP \(bu
-Update notifications are being sent only for rows matching [<condition>*].
-.RE
-.
-.IP
-The request object has the following members:
-.
-.PP
-.RS
-.nf
-"method": "monitor_cond"
-"params": [<db-name>, <json-value>, <monitor-cond-requests>]
-"id": <nonnull-json-value>
-.fi
-.RE
-.
-.IP
-The <json-value> parameter is used to match subsequent update notifications
-(see below) to this request. The <monitor-cond-requests> object maps the name
-of the table to an array of <monitor-cond-request>.
-.
-.IP
-Each <monitor-cond-request> is an object with the following members:
-.
-.PP
-.RS
-.nf
-"columns": [<column>*]            optional
-"where": [<condition>*]           optional
-"select": <monitor-select>        optional
-.fi
-.RE
-.
-.IP
-The "columns", if present, define the columns within the table to be monitored
-that match conditions. If not present all columns are being monitored.
-.
-.IP
-The "where" if present is a JSON array of <condition> and boolean values. If not
-present or condition is an empty array, implicit True will be considered and
-updates on all rows will be sent.
-.
-.IP
-<monitor-select> is an object with the following members:
-.
-.PP
-.RS
-.nf
-"initial": <boolean>              optional
-"insert": <boolean>               optional
-"delete": <boolean>               optional
-"modify": <boolean>               optional
-.fi
-.RE
-.
-.IP
-The contents of this object specify how the columns or table are to be
-monitored as explained in more detail below.
-.
-.IP
-The response object has the following members:
-.
-.PP
-.RS
-.nf
-"result": <table-updates2>
-"error": null
-"id": same "id" as request
-.fi
-.RE
-.
-.IP
-The <table-updates2> object is described in detail in Section 4.1.14. It
-contains the contents of the tables for which "initial" rows are selected.
-If no tables initial contents are requested, then "result" is an empty object.
-.
-.IP
-Subsequently, when changes to a specified table that match one of the conditions
-in monitor-cond-request are committed, the changes are automatically sent to the
-client using the "update2" monitor notification (see Section 4.1.14). This
-monitoring persists until the JSON-RPC session terminates or until the client
-sends a "monitor_cancel" JSON-RPC request.
-.
-.IP
-Each <monitor-cond-request> specifies one or more conditions and the manner in
-which the rows that match the conditions are to be monitored. The circumstances in
-which an "update" notification is sent for a row within the table are determined by
-<monitor-select>:
-.
-.RS
-.IP \(bu
-If "initial" is omitted or true, every row in the original table that matches one of
-the conditions is sent as part of the response to the "monitor_cond" request.
-.IP \(bu
-If "insert" is omitted or true, "update" notifications are sent for rows newly
-inserted into the table that match conditions or for rows modified in the table
-so that their old version does not match the condition and new version does.
-.IP \(bu
-If "delete" is omitted or true, "update" notifications are sent for rows deleted
-from the table that match conditions or for rows modified in the table so that
-their old version does match the conditions and new version does not.
-.IP \(bu
-If "modify" is omitted or true, "update" notifications are sent whenever a row in
-the table that matches conditions in both old and new version is modified.
-.RE
-.
-.IP
-Both monitor and monitor_cond sessions can exist concurrently. However,
-monitor and monitor_cond shares the same <json-value> parameter space; it
-must be unique among all monitor and monitor_cond sessions.
-.
-.IP "4.1.13. Monitor_cond_change"
-The "monitor_cond_change" request enables a client to change an existing
-"monitor_cond" replication of the database by specifying a new condition
-and columns for each replicated table. Currently changing the columns set
-is not supported.
-.
-.IP
-The request object has the following members:
-.
-.IP
-.RS
-.nf
-"method": "monitor_cond_change"
-"params": [<json-value>, <json-value>, <monitor-cond-update-requests>]
-"id": <nonnull-json-value>
-.fi
-.RE
-.
-.IP
-The <json-value> parameter should have a value of an existing conditional
-monitoring session from this client. The second <json-value> in params array
-is the requested value for this session. This value is valid only after
-"monitor_cond_change" is committed. A user can use these values to distinguish
-between update messages before conditions update and after. The
-<monitor-cond-update-requests> object maps the name of the table to an array of
-<monitor-cond-update-request>.  Monitored tables not included in
-<monitor-cond-update-requests> retain their current conditions.
-.
-.IP
-Each <monitor-cond-update-request> is an object with the following members:
-.
-.IP
-.RS
-.nf
-"columns": [<column>*]         optional
-"where": [<condition>*]        optional
-.fi
-.RE
-.
-.IP
-The "columns" specify a new array of columns to be monitored
-(Currently unsupported).
-.
-.IP
-The "where" specify a new array of conditions to be applied to this monitoring
-session.
-.
-.IP
-The response object has the following members:
-.
-.IP
-.RS
-.nf
-"result": null
-"error": null
-"id": same "id" as request
-.fi
-.RE
-.IP
-Subsequent <table-updates2> notifications are described in detail in Section
-4.1.14 in the RFC. If insert contents are requested by original monitor_cond
-request, <table-updates2> will contain rows that match the new condition and
-do not match the old condition.
-If deleted contents are requested by origin monitor request, <table-updates2>
-will contain any matched rows by old condition and not matched by the new
-condition.
-.
-.IP
-Changes according to the new conditions are automatically sent to the client
-using the "update2" monitor notification. An update, if any, as a result of a
-condition change, will be sent to the client before the reply to the
-"monitor_cond_change" request.
-.
-.IP "4.1.14. Update2 notification"
-The "update2" notification is sent by the server to the client to report
-changes in tables that are being monitored following a "monitor_cond" request
-as described above. The notification has the following members:
-.
-.RS
-.nf
-"method": "update2"
-"params": [<json-value>, <table-updates2>]
-"id": null
-.fi
-.RE
-.
-.IP
-The <json-value> in "params" is the same as the value passed as the
-<json-value>  in "params" for the corresponding "monitor" request.
-<table-updates2> is an object that maps from a table name to a <table-update2>.
-A <table-update2> is an object that maps from row's UUID to a <row-update2>
-object. A <row-update2> is an object with one of the following members:
-.
-.RS
-.IP "\(dqinitial\(dq: <row>"
-present for "initial" updates
-.IP "\(dqinsert\(dq: <row>"
-present for "insert" updates
-.IP "\(dqdelete\(dq: <row>"
-present for "delete" updates
-.IP "\(dqmodify\(dq: <row>"
-present for "modify" updates
-.RE
-.
-.IP
-The format of <row> is described in Section 5.1.
-.
-.IP
-<row> is always a null object for a "delete" update. In "initial" and
-"insert" updates, <row> omits columns whose values equal the default
-value of the column type.
-.
-.IP
-For a "modify" update, <row> contains only the columns that are modified.
-<row> stores the difference between the old and new value for those columns,
-as described below.
-.
-.IP
-For columns with single value, the difference is the value of the new
-column.
-.
-.IP
-The difference between two sets are all elements that only belong
-to one of the sets.
-.
-.IP
-The difference between two maps are all key-value pairs whose keys
-appears in only one of the maps, plus the key-value pairs whose keys
-appear in both maps but with different values.  For the latter
-elements, <row> includes the value from the new column.
-.
-.IP
-Initial views of rows are not presented in update2 notifications,
-but in the response object to the monitor_cond request. The formatting
-of the <table-updates2> object, however, is the same in either case.
-.
-.IP "4.1.15. Get Server ID"
-A new RPC method added in Open vSwitch version 2.7. The request contains
-the following members:
-.
-.PP
-.RS
-.nf
-"method": "get_server_id"
-"params": null
-"id": <nonnull-json-value>
-.fi
-.RE
-.
-.IP
-The response object contains the following members:
-.
-.PP
-.RS
-.nf
-"result": "<server_id>"
-"error": null
-"id": same "id" as request
-.fi
-.RE
-.
-.IP
-<server_id> is JSON string that contains a UUID that uniquely identifies
-the running OVSDB server process. A fresh UUID is generated when the
-process restarts.
-.
-.IP "5.1. Notation"
-For <condition>, RFC 7047 only allows the use of \fB!=\fR, \fB==\fR,
-\fBincludes\fR, and \fBexcludes\fR operators with set types.  Open
-vSwitch 2.4 and later extend <condition> to allow the use of \fB<\fR,
-\fB<=\fR, \fB>=\fR, and \fB>\fR operators with columns with type ``set
-of 0 or 1 integer'' and ``set of 0 or 1 real''.  These conditions
-evaluate to false when the column is empty, and otherwise as described
-in RFC 7047 for integer and real types.
-.
-.IP
-<condition> is specified in Section 5.1 in the RFC with the following change:
-A condition can be either a 3-element JSON array as described in the RFC or a
-boolean value. In case of an empty array an implicit true boolean value will be
-considered.
-.
-.IP "5.2.6. Wait"
-.IQ "5.2.7. Commit"
-.IQ "5.2.9. Comment"
-RFC 7047 says that the \fBwait\fR, \fBcommit\fR, and \fBcomment\fR
-operations have no corresponding result object.  This is not true.
-Instead, when such an operation is successful, it yields a result
-object with no members.
-.
 .SH "BUGS"
 .
 In Open vSwitch before version 2.4, when \fBovsdb\-server\fR sent
@@ -704,5 +318,7 @@ treat a \fBmonitor\fR response with a \fBresult\fR that contains an
 being monitored does not contain a table named \fBerror\fR).
 .
 .SH "SEE ALSO"
-.
-.BR ovsdb\-tool (1).
+\fBovsdb\fR(7),
+\fBovsdb\-tool\fR(1),
+\fBovsdb\-server\fR(5),
+\fBovsdb\-server\fR(7).

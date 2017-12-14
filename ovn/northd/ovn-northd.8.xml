@@ -36,11 +36,9 @@
       </dd>
     </dl>
     <p>
-      <var>database</var> in the above options must take one of the following
-      forms:
+      <var>database</var> in the above options must be an OVSDB active or
+      passive connection method, as described in <code>ovsdb</code>(7).
     </p>
-    <xi:include href="ovsdb/remote-active.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
-    <xi:include href="ovsdb/remote-passive.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
 
     <h2>Daemon Options</h2>
     <xi:include href="lib/daemon.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>

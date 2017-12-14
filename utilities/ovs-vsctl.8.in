@@ -78,14 +78,9 @@ the global options by \fB\-\-\fR.
 .
 .IP "\fB\-\-db=\fIserver\fR"
 Sets \fIserver\fR as the database server that \fBovs\-vsctl\fR
-contacts to query or modify configuration.  The default is
-\fBunix:@RUNDIR@/db.sock\fR.  \fIserver\fR must take one of the
-following forms:
-.RS
-.so ovsdb/remote-active.man
-.so ovsdb/remote-passive.man
-.RE
-.
+contacts to query or modify configuration.  \fIserver\fR may be an
+OVSDB active or passive connection method, as described in
+\fBovsdb\fR(7).  The default is \fBunix:@RUNDIR@/db.sock\fR.
 .IP "\fB\-\-no\-wait\fR"
 Prevents \fBovs\-vsctl\fR from waiting for \fBovs\-vswitchd\fR to
 reconfigure itself according to the modified database.  This
@@ -410,13 +405,9 @@ Prints the configured manager(s).
 Deletes the configured manager(s).
 .
 .IP "\fBset\-manager\fR \fItarget\fR\&..."
-Sets the configured manager target or targets.  Each \fItarget\fR may
-use any of the following forms:
-.
-.RS
-.so ovsdb/remote-active.man
-.so ovsdb/remote-passive.man
-.RE
+Sets the configured manager target or targets.
+Each \fItarget\fR may be an OVSDB active or passive connection method,
+e.g. \fBpssl:6640\fR, as described in \fBovsdb\fR(7).
 .
 .SS "SSL Configuration"
 When \fBovs\-vswitchd\fR is configured to connect over SSL for management or

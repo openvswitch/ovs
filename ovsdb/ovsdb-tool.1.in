@@ -12,10 +12,10 @@
 ovsdb\-tool \- Open vSwitch database management utility
 .
 .SH SYNOPSIS
+.IP "Database Creation Commands:"
 \fBovsdb\-tool \fR[\fIoptions\fR] \fBcreate \fR[\fIdb\fR [\fIschema\fR]]
 .br
-\fBovsdb\-tool \fR[\fIoptions\fR] \fBcompact \fR[\fIdb\fR [\fItarget\fR]]
-.br
+.IP "Version Management Commands:"
 \fBovsdb\-tool \fR[\fIoptions\fR] \fBconvert \fR[\fIdb\fR [\fIschema
 \fR[\fItarget\fR]]]
 .br
@@ -28,6 +28,8 @@ ovsdb\-tool \- Open vSwitch database management utility
 \fBovsdb\-tool \fR[\fIoptions\fR] \fBdb\-cksum \fR[\fIdb\fR]
 .br
 \fBovsdb\-tool \fR[\fIoptions\fR] \fBschema\-cksum \fR[\fIschema\fR]
+.IP "Other commands:"
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBcompact \fR[\fIdb\fR [\fItarget\fR]]
 .br
 \fBovsdb\-tool \fR[\fIoptions\fR] \fBquery \fR[\fIdb\fR] \fItransaction\fR
 .br
@@ -44,43 +46,30 @@ The \fBovsdb\-tool\fR program is a command-line tool for managing Open
 vSwitch database (OVSDB) files.  It does not interact directly with
 running Open vSwitch database servers (instead, use
 \fBovsdb\-client\fR).
+For an introduction to OVSDB and its implementation in Open vSwitch,
+see \fBovsdb\fR(7).
+.PP
+This OVSDB implementation supports standalone and active-backup
+database service models with a common on-disk format  For a
+specification of this format, see \fBovsdb\fR(5).  For more
+information on OVSDB service models, see the \fBService Models\fR
+section in \fBovsdb\fR(7).
 .
-.SS "Basic Commands"
+.SS "Database Creation Commands"
+This command creates a new OVSDB database file.
+It will not overwrite an existing database file.  To
+replace an existing database with a new one, first delete the old one.
+.
 .IP "\fBcreate\fI db schema\fR"
-Reads an OVSDB schema from the file named \fIschema\fR and creates a
-new OVSDB database file named \fIdb\fR using that schema.  The new
-database is initially empty.  This command will not overwrite an
-existing \fIdb\fR.
-.IP
-\fIschema\fR must contain an OVSDB schema in JSON format.  Refer to
-the OVSDB specification for details.
-.
-.IP "\fBcompact\fI db \fR[\fItarget\fR]"
-Reads \fIdb\fR and writes a compacted version.  If \fItarget\fR is
-specified, the compacted version is written as a new file named
-\fItarget\fR, which must not already exist.  If \fItarget\fR is
-omitted, then the compacted version of the database replaces \fIdb\fR
-in-place.
+Use this command to create the database for controlling
+\fBovs\-vswitchd\fR or another standalone or active-backup database.
+It creates database file \fIdb\fR with the given \fIschema\fR, which
+must be the name of a file that contains an OVSDB schema in JSON
+format, as specified in the OVSDB specification.  The new database is
+initially empty.
 .
 .SS "Version Management Commands"
-.PP
-An OVSDB schema has a schema version number, and an OVSDB database
-embeds a particular version of an OVSDB schema.  These version numbers
-take the form \fIx\fB.\fIy\fB.\fIz\fR, e.g. \fB1.2.3\fR.  The OVSDB
-implementation does not enforce a particular version numbering scheme,
-but schemas managed within the Open vSwitch project use the following
-approach.  Whenever the database schema is changed in a non-backward
-compatible way (e.g. deleting a column or a table), \fIx\fR is
-incremented (and \fIy\fR and \fIz\fR are reset to 0).  When the
-database schema is changed in a backward compatible way (e.g. adding a
-new column), \fIy\fR is incremented (and \fIz\fR is reset to 0).  When
-the database schema is changed cosmetically (e.g. reindenting its
-syntax), \fIz\fR is incremented.
-.
-.PP
-Some OVSDB databases and schemas, especially very old ones, do not
-have a version number.
-.
+.so ovsdb/ovsdb-schemas.man
 .PP
 These commands work with different versions of OVSDB schemas and
 databases.
@@ -91,7 +80,10 @@ Reads \fIdb\fR, translating it into to the schema specified in
 is specified, the translated version is written as a new file named
 \fItarget\fR, which must not already exist.  If \fItarget\fR is
 omitted, then the translated version of the database replaces \fIdb\fR
-in-place.
+in-place.  In-place conversion cannot take place if the database is
+currently being served by \fBovsdb\-server\fR (instead, either stop
+\fBovsdb\-server\fR first or use \fBovsdb\-client\fR's \fBconvert\fR
+command).
 .IP
 This command can do simple ``upgrades'' and ``downgrades'' on a
 database's schema.  The data in \fIdb\fR must be valid when
@@ -100,36 +92,48 @@ interpreted under \fIschema\fR, with only one exception: data in
 ignored.  Columns that exist in \fIschema\fR but not in \fIdb\fR are
 set to their default values.  All of \fIschema\fR's constraints apply
 in full.
-.
+.IP
+Some uses of this command can cause unrecoverable data loss.  For
+example, converting a database from a schema that has a given column
+or table to one that does not will delete all data in that column or
+table.  Back up critical databases before converting them.
+.IP
 .IP "\fBneeds\-conversion\fI db schema\fR"
-Reads the schema embedded in \fIdb\fR and the standalone schema in
+Reads the schema embedded in \fIdb\fR and the JSON schema from
 \fIschema\fR and compares them.  If the schemas are the same, prints
-\fBno\fR on stdout; if they differ, print \fByes\fR.
-.
+\fBno\fR on stdout; if they differ, prints \fByes\fR.
+.IP
 .IP "\fBdb\-version\fI db\fR"
 .IQ "\fBschema\-version\fI schema\fR"
 Prints the version number in the schema embedded within the database
-\fIdb\fR or in the standalone schema \fIschema\fR on stdout.  A schema
-version number has the form \fIx\fB.\fIy\fB.\fIz\fR.  See
-\fBovs\-vswitchd.conf.db\fR(5) for details.
-.IP
-Schema version numbers and Open vSwitch version numbers are
-independent.
-.IP
+\fIdb\fR or in the JSON schema \fIschema\fR on stdout.
 If \fIschema\fR or \fIdb\fR was created before schema versioning was
 introduced, then it will not have a version number and this command
 will print a blank line.
-.
+.IP
 .IP "\fBdb\-cksum\fI db\fR"
 .IQ "\fBschema\-cksum\fI schema\fR"
 Prints the checksum in the schema embedded within the database
-\fIdb\fR or of the standalone schema \fIschema\fR on stdout.
-.IP
+\fIdb\fR or of the JSON schema \fIschema\fR on stdout.
 If \fIschema\fR or \fIdb\fR was created before schema checksums were
 introduced, then it will not have a checksum and this command
 will print a blank line.
-.
+.IP
 .SS "Other Commands"
+.
+.IP "\fBcompact\fI db \fR[\fItarget\fR]"
+Reads \fIdb\fR and writes a compacted version.  If \fItarget\fR is
+specified, the compacted version is written as a new file named
+\fItarget\fR, which must not already exist.  If \fItarget\fR is
+omitted, then the compacted version of the database replaces \fIdb\fR
+in-place.  This command is not needed in normal operation because
+\fBovsdb\-server\fR from time to time automatically compacts a
+database that grows much larger than its minimum size.
+.IP
+This command does not work if \fIdb\fR is currently being served by
+\fBovsdb\-server\fR, or if it is otherwise locked for writing by
+another process.  Instead, send the \fBovsdb\-server/compact\fR
+command to \fBovsdb\-server\fR, via \fBovs\-appctl\fR).
 .
 .IP "[\fB\-\-rbac\-role=\fIrole\fR] \fBquery\fI db transaction\fR"
 Opens \fIdb\fR, executes \fItransaction\fR on it, and prints the
@@ -137,7 +141,7 @@ results.  The \fItransaction\fR must be a JSON array in the format of
 the \fBparams\fR array for the JSON-RPC \fBtransact\fR method, as
 described in the OVSDB specification.
 .IP
-The \fIdb\fR is opened for read-only access, so this command may
+This command opens \fIdb\fR for read-only access, so it may
 safely run concurrently with other database activity, including
 \fBovsdb\-server\fR and other database writers.  The \fItransaction\fR
 may specify database modifications, but these will have no effect on
@@ -152,11 +156,10 @@ and commits any changes to \fIdb\fR.  The \fItransaction\fR must be a
 JSON array in the format of the \fBparams\fR array for the JSON-RPC
 \fBtransact\fR method, as described in the OVSDB specification.
 .IP
-The \fIdb\fR is opened and locked for read/write access, so this
-command will fail if the database is opened for writing by any other
-process, including \fBovsdb\-server\fR(1).  Use \fBovsdb\-client\fR(1),
-instead, to write to a database that is served by
-\fBovsdb\-server\fR(1).
+This command does not work if \fIdb\fR is currently being served by
+\fBovsdb\-server\fR, or if it is otherwise locked for writing by
+another process.  Instead, use \fBovsdb\-client\fR's \fBtransact\fR
+command to send the query to \fBovsdb\-server\fR.
 .IP
 By default, the transaction is executed using the ``superuser'' RBAC
 role.  Use \fB\-\-rbac\-role\fR to specify a different role.
@@ -173,6 +176,11 @@ modified by each transaction.  With two \fB\-m\fRs, \fBshow\-log\fR
 also prints the values of the columns modified by each change to a
 record.
 .
+.IP "\fBdb\-name \fR[\fIdb\fR]"
+.IQ "\fBschema\-name \fR[\fIschema\fR]"
+Prints the name of the schema embedded within the database \fIdb\fR or
+in the JSON schema \fIschema\fR on stdout.
+.
 .SH OPTIONS
 .SS "Logging Options"
 .so lib/vlog.man
@@ -184,6 +192,6 @@ default \fIschema\fR is \fB@pkgdatadir@/vswitch.ovsschema\fR.  The
 \fBhelp\fR command also displays these defaults.
 .SH "SEE ALSO"
 .
+\fBovsdb\fR(7),
 \fBovsdb\-server\fR(1),
-\fBovsdb\-client\fR(1),
-and the OVSDB specification.
+\fBovsdb\-client\fR(1).

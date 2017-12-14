@@ -145,7 +145,10 @@ endif
 # rST formatted manpages under Documentation/ref.
 RST_MANPAGES = \
 	ovs-test.8.rst \
-	ovs-vlan-test.8.rst
+	ovs-vlan-test.8.rst \
+	ovsdb-server.7.rst \
+	ovsdb.5.rst \
+	ovsdb.7.rst
 
 # The GNU standards say that these variables should control
 # installation directories for manpages in each section.  Automake

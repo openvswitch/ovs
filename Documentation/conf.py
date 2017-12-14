@@ -118,6 +118,12 @@ _man_pages = [
      u'Check Linux drivers for performance, vlan and L3 tunneling problems'),
     ('ovs-vlan-test.8',
      u'Check Linux drivers for problems with vlan traffic'),
+    ('ovsdb-server.7',
+     u'Open vSwitch Database Server Protocol'),
+    ('ovsdb.5',
+     u'Open vSwitch Database (File Formats)'),
+    ('ovsdb.7',
+     u'Open vSwitch Database (Overview)'),
 ]
 
 # Generate list of (path, name, description, [author, ...], section)

@@ -55,10 +55,9 @@
       information from the local Open vSwitch's ovsdb-server instance.
       The default location is <code>db.sock</code> in the local Open
       vSwitch's "run" directory.  It may be overridden by specifying the
-      <var>ovs-database</var> argument in one of the following forms:
+      <var>ovs-database</var> argument as an OVSDB active or passive
+      connection method, as described in <code>ovsdb</code>(7).
     </p>
-    <xi:include href="ovsdb/remote-active.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
-    <xi:include href="ovsdb/remote-passive.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
 
     <p>
       <code>ovn-controller</code> assumes it gets configuration
