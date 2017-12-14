@@ -1892,12 +1892,12 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet_batch *batch)
 static int
 netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
                        struct dp_packet_batch *batch,
-                       bool may_steal, bool concurrent_txq OVS_UNUSED)
+                       bool concurrent_txq OVS_UNUSED)
 {
 
-    if (OVS_UNLIKELY(!may_steal || batch->packets[0]->source != DPBUF_DPDK)) {
+    if (OVS_UNLIKELY(batch->packets[0]->source != DPBUF_DPDK)) {
         dpdk_do_tx_copy(netdev, qid, batch);
-        dp_packet_delete_batch(batch, may_steal);
+        dp_packet_delete_batch(batch, true);
     } else {
         dp_packet_batch_apply_cutlen(batch);
         __netdev_dpdk_vhost_send(netdev, qid, batch->packets, batch->count);
@@ -1907,11 +1907,11 @@ netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
 
 static inline void
 netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
-                   struct dp_packet_batch *batch, bool may_steal,
+                   struct dp_packet_batch *batch,
                    bool concurrent_txq)
 {
     if (OVS_UNLIKELY(!(dev->flags & NETDEV_UP))) {
-        dp_packet_delete_batch(batch, may_steal);
+        dp_packet_delete_batch(batch, true);
         return;
     }
 
@@ -1920,12 +1920,11 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
         rte_spinlock_lock(&dev->tx_q[qid].tx_lock);
     }
 
-    if (OVS_UNLIKELY(!may_steal ||
-                     batch->packets[0]->source != DPBUF_DPDK)) {
+    if (OVS_UNLIKELY(batch->packets[0]->source != DPBUF_DPDK)) {
         struct netdev *netdev = &dev->up;
 
         dpdk_do_tx_copy(netdev, qid, batch);
-        dp_packet_delete_batch(batch, may_steal);
+        dp_packet_delete_batch(batch, true);
     } else {
         int tx_cnt, dropped;
         int batch_cnt = dp_packet_batch_size(batch);
@@ -1953,12 +1952,11 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
 
 static int
 netdev_dpdk_eth_send(struct netdev *netdev, int qid,
-                     struct dp_packet_batch *batch, bool may_steal,
-                     bool concurrent_txq)
+                     struct dp_packet_batch *batch, bool concurrent_txq)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
 
-    netdev_dpdk_send__(dev, qid, batch, may_steal, concurrent_txq);
+    netdev_dpdk_send__(dev, qid, batch, concurrent_txq);
     return 0;
 }
 
@@ -2987,8 +2985,7 @@ dpdk_ring_open(const char dev_name[], dpdk_port_t *eth_port_id)
 
 static int
 netdev_dpdk_ring_send(struct netdev *netdev, int qid,
-                      struct dp_packet_batch *batch, bool may_steal,
-                      bool concurrent_txq)
+                      struct dp_packet_batch *batch, bool concurrent_txq)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     struct dp_packet *packet;
@@ -3001,7 +2998,7 @@ netdev_dpdk_ring_send(struct netdev *netdev, int qid,
         dp_packet_mbuf_rss_flag_reset(packet);
     }
 
-    netdev_dpdk_send__(dev, qid, batch, may_steal, concurrent_txq);
+    netdev_dpdk_send__(dev, qid, batch, concurrent_txq);
     return 0;
 }
 

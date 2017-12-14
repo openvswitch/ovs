@@ -3268,7 +3268,7 @@ dp_netdev_pmd_flush_output_on_port(struct dp_netdev_pmd_thread *pmd,
         tx_qid = pmd->static_tx_qid;
     }
 
-    netdev_send(p->port->netdev, tx_qid, &p->output_pkts, true, dynamic_txqs);
+    netdev_send(p->port->netdev, tx_qid, &p->output_pkts, dynamic_txqs);
     dp_packet_batch_init(&p->output_pkts);
 }
 

@@ -1270,7 +1270,7 @@ netdev_linux_tap_batch_send(struct netdev *netdev_,
  * expected to do additional queuing of packets. */
 static int
 netdev_linux_send(struct netdev *netdev_, int qid OVS_UNUSED,
-                  struct dp_packet_batch *batch, bool may_steal,
+                  struct dp_packet_batch *batch,
                   bool concurrent_txq OVS_UNUSED)
 {
     int error = 0;
@@ -1306,7 +1306,7 @@ netdev_linux_send(struct netdev *netdev_, int qid OVS_UNUSED,
     }
 
 free_batch:
-    dp_packet_delete_batch(batch, may_steal);
+    dp_packet_delete_batch(batch, true);
     return error;
 }
 

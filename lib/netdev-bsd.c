@@ -680,7 +680,7 @@ netdev_bsd_rxq_drain(struct netdev_rxq *rxq_)
  */
 static int
 netdev_bsd_send(struct netdev *netdev_, int qid OVS_UNUSED,
-                struct dp_packet_batch *batch, bool may_steal,
+                struct dp_packet_batch *batch,
                 bool concurrent_txq OVS_UNUSED)
 {
     struct netdev_bsd *dev = netdev_bsd_cast(netdev_);
@@ -728,7 +728,7 @@ netdev_bsd_send(struct netdev *netdev_, int qid OVS_UNUSED,
     }
 
     ovs_mutex_unlock(&dev->mutex);
-    dp_packet_delete_batch(batch, may_steal);
+    dp_packet_delete_batch(batch, true);
 
     return error;
 }
