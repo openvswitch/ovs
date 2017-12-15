@@ -166,7 +166,7 @@ const struct ovsdb_idl_row *ovsdb_idl_track_get_first(
 const struct ovsdb_idl_row *ovsdb_idl_track_get_next(const struct ovsdb_idl_row *);
 bool ovsdb_idl_track_is_updated(const struct ovsdb_idl_row *row,
                                 const struct ovsdb_idl_column *column);
-void ovsdb_idl_track_clear(const struct ovsdb_idl *);
+void ovsdb_idl_track_clear(struct ovsdb_idl *);
 
 
 /* Reading the database replica. */
