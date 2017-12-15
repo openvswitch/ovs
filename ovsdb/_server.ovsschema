@@ -1,0 +1,9 @@
+{"name": "_Server",
+ "version": "1.0.0",
+ "cksum": "3931859656 185",
+ "tables": {
+   "Database": {
+     "columns": {
+       "name": {"type": "string"},
+       "schema": {"type": "string"}},
+     "isRoot": true}}}

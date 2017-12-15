@@ -137,20 +137,31 @@ AT_CHECK([uuidfilt output], [0],
          [test ! -e pid || kill `cat pid`])
 AT_CLEANUP
 
+dnl CHECK_DBS([databases])
+dnl
+dnl Checks that ovsdb-server hosts the given 'databases', each of which
+dnl needs to be followed by a newline.
+m4_define([CHECK_DBS],
+  [AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
+  [0], [_Server
+$1])
+AT_CHECK([ovsdb-client --no-headings dump _Server Database name | sort], [0], [dnl
+Database table
+_Server
+$1])])
+
 AT_SETUP([database multiplexing implementation])
 AT_KEYWORDS([ovsdb server positive])
 ordinal_schema > schema1
 constraint_schema > schema2
 AT_CHECK([ovsdb-tool create db1 schema1], [0], [ignore], [ignore])
 AT_CHECK([ovsdb-tool create db2 schema2], [0], [ignore], [ignore])
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket db1 db2], [0], [ignore], [ignore])
-AT_CHECK(
-  [[ovsdb-client list-dbs unix:socket]], 
-  [0], [constraints
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:db.sock db1 db2], [0], [ignore], [ignore])
+CHECK_DBS([constraints
 ordinals
-], [ignore], [test ! -e pid || kill `cat pid`])
+])
 AT_CHECK(
-  [[ovstest test-jsonrpc request unix:socket get_schema [\"nonexistent\"]]], [0],
+  [[ovstest test-jsonrpc request unix:db.sock get_schema [\"nonexistent\"]]], [0],
   [[{"error":{"details":"get_schema request specifies unknown database nonexistent","error":"unknown database","syntax":"[\"nonexistent\"]"},"id":0,"result":null}
 ]], [], [test ! -e pid || kill `cat pid`])
 OVSDB_SERVER_SHUTDOWN
@@ -165,21 +176,19 @@ AT_CHECK([ovsdb-tool create db1 schema1], [0], [ignore], [ignore])
 AT_CHECK([ovsdb-tool create db2 schema2], [0], [ignore], [ignore])
 
 # Start ovsdb-server with just a single database - db1.
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket db1], [0])
-AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
-  [0], [ordinals
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:db.sock db1], [0])
+CHECK_DBS([ordinals
 ])
 
 # Add the second database.
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/add-db db2], [0])
-AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
-  [0], [constraints
+CHECK_DBS([constraints
 ordinals
 ])
 
 # The databases are responsive.
-AT_CHECK([ovsdb-client list-tables unix:socket constraints], [0], [ignore], [ignore])
-AT_CHECK([ovsdb-client list-tables unix:socket ordinals], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-client list-tables unix:db.sock constraints], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-client list-tables unix:db.sock ordinals], [0], [ignore], [ignore])
 
 # Add an already added database.
 if test $IS_WIN32 = "yes"; then
@@ -205,25 +214,23 @@ ovs-appctl: ovsdb-server: server returned an error
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/add-remote db:ordinals,ordinals,name], [0])
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-remotes],
   [0], [db:ordinals,ordinals,name
-punix:socket
+punix:db.sock
 ])
 
 # Removing db1 has no effect on its remote.
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/remove-db ordinals], [0])
-AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
-  [0], [constraints
+CHECK_DBS([constraints
 ])
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-remotes],
   [0], [db:ordinals,ordinals,name
-punix:socket
+punix:db.sock
 ])
-AT_CHECK([ovsdb-client list-tables unix:socket ordinals], [1], [ignore], [ignore])
+AT_CHECK([ovsdb-client list-tables unix:db.sock ordinals], [1], [ignore], [ignore])
 
 # Remove db2.
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/remove-db constraints], [0])
-AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
-  [0], [])
-AT_CHECK([ovsdb-client list-tables unix:socket constraints], [1], [ignore], [ignore])
+CHECK_DBS()
+AT_CHECK([ovsdb-client list-tables unix:db.sock constraints], [1], [ignore], [ignore])
 
 # Remove a non-existent database.
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/remove-db ordinals], [2],
@@ -233,10 +240,9 @@ ovs-appctl: ovsdb-server: server returned an error
 
 # Add a removed database.
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/add-db db2], [0])
-AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
-  [0], [constraints
+CHECK_DBS([constraints
 ])
-AT_CHECK([ovsdb-client list-tables unix:socket constraints], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-client list-tables unix:db.sock constraints], [0], [ignore], [ignore])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
@@ -247,14 +253,13 @@ AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db1 schema], [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
-AT_CHECK([ovsdb-server -v -vvlog:off --monitor --detach --no-chdir --pidfile --log-file db1])
+AT_CHECK([ovsdb-server -v -vvlog:off --monitor --detach --no-chdir --pidfile --log-file --remote=punix:db.sock db1])
 
 # Add the second database.
 constraint_schema > schema2
 AT_CHECK([ovsdb-tool create db2 schema2], [0], [ignore], [ignore])
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/add-db db2], [0])
-AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
-  [0], [constraints
+CHECK_DBS([constraints
 ordinals
 ])
 
@@ -266,8 +271,7 @@ OVS_WAIT_WHILE([kill -0 `cat old.pid`])
 OVS_WAIT_UNTIL(
   [test -s ovsdb-server.pid && test `cat ovsdb-server.pid` != `cat old.pid`])
 OVS_WAIT_UNTIL([ovs-appctl -t ovsdb-server version])
-AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
-  [0], [constraints
+CHECK_DBS([constraints
 ordinals
 ])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
@@ -282,12 +286,11 @@ AT_CHECK([ovsdb-tool create db1 schema], [0], [ignore], [ignore])
 constraint_schema > schema2
 AT_CHECK([ovsdb-tool create db2 schema2], [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
-AT_CHECK([ovsdb-server -v -vvlog:off --monitor --detach --no-chdir --pidfile --log-file db1 db2])
+AT_CHECK([ovsdb-server -v -vvlog:off --monitor --detach --no-chdir --pidfile --log-file --remote=punix:db.sock db1 db2])
 
 # Remove the second database.
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/remove-db constraints])
-AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
-  [0], [ordinals
+CHECK_DBS([ordinals
 ])
 
 # Kill the daemon process, making it look like a segfault,
@@ -298,8 +301,7 @@ OVS_WAIT_WHILE([kill -0 `cat old.pid`])
 OVS_WAIT_UNTIL(
   [test -s ovsdb-server.pid && test `cat ovsdb-server.pid` != `cat old.pid`])
 OVS_WAIT_UNTIL([ovs-appctl -t ovsdb-server version])
-AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
-  [0], [ordinals
+CHECK_DBS([ordinals
 ])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP

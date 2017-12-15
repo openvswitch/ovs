@@ -1,0 +1,16 @@
+#! /usr/bin/python
+
+import re
+import sys
+
+"""This utility reads its input, which should be plain text, and
+prints it back transformed into quoted strings that may be #included
+into C source code."""
+
+while True:
+    line = sys.stdin.readline()
+    if not line:
+        break
+
+    s = line.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+    print('"' + s + '"')

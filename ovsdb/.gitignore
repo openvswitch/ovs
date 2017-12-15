@@ -1,3 +1,5 @@
+/_server.ovsschema.inc
+/_server.ovsschema.stamp
 /ovsdb-client
 /ovsdb-client.1
 /ovsdb-doc
@@ -5,6 +7,7 @@
 /ovsdb-idlc
 /ovsdb-server
 /ovsdb-server.1
+/ovsdb-server.5
 /ovsdb-tool
 /ovsdb-tool.1
 /libovsdb.pc

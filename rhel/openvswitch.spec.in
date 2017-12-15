@@ -225,6 +225,7 @@ exit 0
 /usr/share/man/man1/ovsdb-client.1.gz
 /usr/share/man/man1/ovsdb-server.1.gz
 /usr/share/man/man1/ovsdb-tool.1.gz
+/usr/share/man/man5/ovsdb-server.5.gz
 /usr/share/man/man5/ovs-vswitchd.conf.db.5.gz
 %{_mandir}/man5/ovsdb.5*
 /usr/share/man/man5/vtep.5.gz

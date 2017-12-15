@@ -109,6 +109,10 @@ The remainder are still in roff format can be found below:
      - `(pdf) <http://openvswitch.org/support/dist-docs/ovsdb-server.1.pdf>`__
      - `(html) <http://openvswitch.org/support/dist-docs/ovsdb-server.1.html>`__
      - `(plain text) <http://openvswitch.org/support/dist-docs/ovsdb-server.1.txt>`__
+   * - ovsdb-server(5)
+     - `(pdf) <http://openvswitch.org/support/dist-docs/ovsdb-server.5.pdf>`__
+     - `(html) <http://openvswitch.org/support/dist-docs/ovsdb-server.5.html>`__
+     - `(plain text) <http://openvswitch.org/support/dist-docs/ovsdb-server.5.txt>`__
    * - ovsdb-tool(1)
      - `(pdf) <http://openvswitch.org/support/dist-docs/ovsdb-tool.1.pdf>`__
      - `(html) <http://openvswitch.org/support/dist-docs/ovsdb-tool.1.html>`__

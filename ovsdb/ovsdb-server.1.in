@@ -45,6 +45,12 @@ example, \fBovsdb\-tool create\fR.
 This OVSDB implementation supports standalone and active-backup
 databases, as well as database replication.
 See the Service Models section of \fBovsdb\fR(7) for more information.
+.PP
+In addition to user-specified databases, \fBovsdb\-server\fR version
+2.9 and later also always hosts a built-in database named
+\fB_Server\fR.  Please see \fBovsdb\-server\fR(5) for documentation on
+this database's schema.
+.
 .SH OPTIONS
 .
 .IP "\fB\-\-remote=\fIremote\fR"
