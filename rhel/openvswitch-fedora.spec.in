@@ -565,8 +565,11 @@ fi
 %{_mandir}/man1/ovsdb-server.1*
 %{_mandir}/man1/ovsdb-tool.1*
 %{_mandir}/man5/ovs-vswitchd.conf.db.5*
+%{_mandir}/man5/ovsdb.5*
 %{_mandir}/man5/vtep.5*
 %{_mandir}/man7/ovs-fields.7*
+%{_mandir}/man7/ovsdb.7*
+%{_mandir}/man7/ovsdb-server.7*
 %{_mandir}/man8/vtep-ctl.8*
 %{_mandir}/man8/ovs-appctl.8*
 %{_mandir}/man8/ovs-bugtool.8*
