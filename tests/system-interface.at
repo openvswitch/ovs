@@ -1,0 +1,27 @@
+AT_BANNER([system-inteface])
+
+dnl add a veth interface to br0, then delete and re-create
+dnl the veth interface with the same name in the system
+AT_SETUP([interface - add delete add same interface])
+
+OVS_TRAFFIC_VSWITCHD_START()
+
+AT_CHECK([ip link add ovs-veth0 type veth peer name ovs-veth1])
+on_exit 'ip link del ovs-veth0'
+
+AT_CHECK([ovs-vsctl add-port br0 ovs-veth0])
+
+AT_CHECK([ip link del ovs-veth0])
+AT_CHECK([ip link add ovs-veth0 type veth peer name ovs-veth1])
+
+AT_CHECK([ovs-vsctl del-port br0 ovs-veth0])
+
+OVS_TRAFFIC_VSWITCHD_STOP(["dnl
+/could not open network device ovs-veth0/d
+/cannot get .*STP status on nonexistent port/d
+/ethtool command .*on network device ovs-veth0 failed/d
+/error receiving .*ovs-veth0/d
+/ovs-veth0: removing policing failed/d"])
+
+AT_CLEANUP
+
