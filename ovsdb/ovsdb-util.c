@@ -22,6 +22,38 @@
 
 VLOG_DEFINE_THIS_MODULE(ovsdb_util);
 
+static void
+ovsdb_util_clear_column(struct ovsdb_row *row, const char *column_name)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+    const struct ovsdb_table_schema *schema = row->table->schema;
+    const struct ovsdb_column *column;
+
+    column = ovsdb_table_schema_get_column(schema, column_name);
+    if (!column) {
+        VLOG_DBG_RL(&rl, "Table `%s' has no `%s' column",
+                    schema->name, column_name);
+        return;
+    }
+
+    if (column->type.n_min) {
+        if (!VLOG_DROP_DBG(&rl)) {
+            char *type_name = ovsdb_type_to_english(&column->type);
+            VLOG_DBG("Table `%s' column `%s' has type %s, which requires "
+                     "a value, but an attempt was made to clear it",
+                     schema->name, column_name, type_name);
+            free(type_name);
+        }
+        return;
+    }
+
+    struct ovsdb_datum *datum = &row->fields[column->index];
+    if (datum->n) {
+        ovsdb_datum_destroy(datum, &column->type);
+        ovsdb_datum_init_empty(datum);
+    }
+}
+
 struct ovsdb_datum *
 ovsdb_util_get_datum(struct ovsdb_row *row, const char *column_name,
                     const enum ovsdb_atomic_type key_type,
@@ -164,29 +196,75 @@ ovsdb_util_read_bool_column(const struct ovsdb_row *row,
     return atom != NULL;
 }
 
-void
-ovsdb_util_write_bool_column(struct ovsdb_row *row, const char *column_name,
-                             bool value)
+bool
+ovsdb_util_read_uuid_column(const struct ovsdb_row *row,
+                            const char *column_name, struct uuid *uuid)
+{
+    const union ovsdb_atom *atom;
+
+    atom = ovsdb_util_read_column(row, column_name, OVSDB_TYPE_UUID);
+    *uuid = atom ? atom->uuid : UUID_ZERO;
+    return atom != NULL;
+}
+
+static void
+ovsdb_util_write_singleton(struct ovsdb_row *row, const char *column_name,
+                           const union ovsdb_atom *atom,
+                           enum ovsdb_atomic_type type)
 {
     const struct ovsdb_column *column;
     struct ovsdb_datum *datum;
 
     column = ovsdb_table_schema_get_column(row->table->schema, column_name);
-    datum = ovsdb_util_get_datum(row, column_name, OVSDB_TYPE_BOOLEAN,
-                                 OVSDB_TYPE_VOID, 1);
+    datum = ovsdb_util_get_datum(row, column_name, type, OVSDB_TYPE_VOID, 1);
     if (!datum) {
         return;
     }
 
-    if (datum->n != 1) {
+    if (datum->n == 1) {
+        if (ovsdb_atom_equals(&datum->keys[0], atom, type)) {
+            return;
+        }
+        ovsdb_atom_destroy(&datum->keys[0], type);
+    } else {
         ovsdb_datum_destroy(datum, &column->type);
-
         datum->n = 1;
         datum->keys = xmalloc(sizeof *datum->keys);
         datum->values = NULL;
     }
+    ovsdb_atom_clone(&datum->keys[0], atom, type);
+}
 
-    datum->keys[0].boolean = value;
+void
+ovsdb_util_write_bool_column(struct ovsdb_row *row, const char *column_name,
+                             bool value)
+{
+    const union ovsdb_atom atom = { .boolean = value };
+    ovsdb_util_write_singleton(row, column_name, &atom, OVSDB_TYPE_BOOLEAN);
+}
+
+void
+ovsdb_util_write_uuid_column(struct ovsdb_row *row, const char *column_name,
+                             const struct uuid *uuid)
+{
+    if (uuid) {
+        const union ovsdb_atom atom = { .uuid = *uuid };
+        ovsdb_util_write_singleton(row, column_name, &atom, OVSDB_TYPE_UUID);
+    } else {
+        ovsdb_util_clear_column(row, column_name);
+    }
+}
+
+void
+ovsdb_util_write_string_column(struct ovsdb_row *row, const char *column_name,
+                               const char *string)
+{
+    if (string) {
+        const union ovsdb_atom atom = { .string = CONST_CAST(char *, string) };
+        ovsdb_util_write_singleton(row, column_name, &atom, OVSDB_TYPE_STRING);
+    } else {
+        ovsdb_util_clear_column(row, column_name);
+    }
 }
 
 void

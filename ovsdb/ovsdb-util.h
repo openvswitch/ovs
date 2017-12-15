@@ -38,6 +38,9 @@ bool ovsdb_util_read_integer_column(const struct ovsdb_row *row,
 bool ovsdb_util_read_string_column(const struct ovsdb_row *row,
                                    const char *column_name,
                                    const char **stringp);
+void ovsdb_util_write_string_column(struct ovsdb_row *row,
+                                    const char *column_name,
+                                    const char *string);
 void ovsdb_util_write_string_string_column(struct ovsdb_row *row,
                                            const char *column_name,
                                            char **keys, char **values,
@@ -48,5 +51,11 @@ bool ovsdb_util_read_bool_column(const struct ovsdb_row *row,
 void ovsdb_util_write_bool_column(struct ovsdb_row *row,
                                   const char *column_name,
                                   bool value);
+bool ovsdb_util_read_uuid_column(const struct ovsdb_row *row,
+                                 const char *column_name,
+                                 struct uuid *);
+void ovsdb_util_write_uuid_column(struct ovsdb_row *row,
+                                  const char *column_name,
+                                  const struct uuid *);
 
 #endif /* ovsdb/util.h */

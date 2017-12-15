@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<database name="ovsdb-server" title="ovsdb-server _Server schema">
+  <p>
+    Every <code>ovsdb-server</code> (version 2.9 or later) always hosts an
+    instance of this schema, which holds information on the status and
+    configuration of the server itself.  This database is read-only.  This
+    manpage describes the schema for this database.
+  </p>
+
+  <table name="Database" title="Databases.">
+    <p>
+      This table describes the databases hosted by the database server, with
+      one row per database.  As its database configuration and status changes,
+      the server automatically and immediately updates the table to match.
+    </p>
+    <p>
+      Clients can use the <code>_uuid</code> column in this table as a
+      generation number.  The server generates a fresh <code>_uuid</code> every
+      time it adds a database, so that removing and then re-adding a database
+      to the server causes its row <code>_uuid</code> to change.
+    </p>
+
+    <column name="name">
+      The database's name, as specified in its schema.
+    </column>
+
+    <column name="schema">
+      The database schema, as a JSON string.
+    </column>
+  </table>
+</database>

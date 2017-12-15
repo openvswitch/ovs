@@ -65,6 +65,7 @@ struct db {
     char *filename;
     struct ovsdb_file *file;
     struct ovsdb *db;
+    struct uuid row_uuid;
 };
 
 /* SSL configuration. */
@@ -107,6 +108,7 @@ static unixctl_cb_func ovsdb_server_remove_database;
 static unixctl_cb_func ovsdb_server_list_databases;
 
 static char *open_db(struct server_config *config, const char *filename);
+static void add_server_db(struct server_config *);
 static void close_db(struct db *db);
 
 static void parse_options(int *argc, char **argvp[],
@@ -124,6 +126,7 @@ static void report_error_if_changed(char *error, char **last_errorp);
 static void update_remote_status(const struct ovsdb_jsonrpc_server *jsonrpc,
                                  const struct sset *remotes,
                                  struct shash *all_dbs);
+static void update_server_status(struct shash *all_dbs);
 
 static void save_config__(FILE *config_file, const struct sset *remotes,
                           const struct sset *db_filenames,
@@ -213,6 +216,8 @@ main_loop(struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
             status_timer = time_msec() + 2500;
             update_remote_status(jsonrpc, remotes, all_dbs);
         }
+
+        update_server_status(all_dbs);
 
         memory_wait();
         if (*is_backup) {
@@ -328,6 +333,7 @@ main(int argc, char *argv[])
             ovs_fatal(0, "%s", error);
         }
     }
+    add_server_db(&server_config);
 
     error = reconfigure_remotes(jsonrpc, &all_dbs, &remotes);
     if (!error) {
@@ -490,6 +496,16 @@ close_db(struct db *db)
     free(db);
 }
 
+static void
+add_db(struct server_config *config, const char *name, struct db *db)
+{
+    db->row_uuid = UUID_ZERO;
+    shash_add_assert(config->all_dbs, name, db);
+    bool ok OVS_UNUSED = ovsdb_jsonrpc_server_add_db(config->jsonrpc,
+                                                     db->db);
+    ovs_assert(ok);
+}
+
 static char *
 open_db(struct server_config *config, const char *filename)
 {
@@ -522,6 +538,27 @@ open_db(struct server_config *config, const char *filename)
 
     close_db(db);
     return error;
+}
+
+/* Add the internal _Server database to the server configuration. */
+static void
+add_server_db(struct server_config *config)
+{
+    struct json *schema_json = json_from_string(
+#include "ovsdb/_server.ovsschema.inc"
+        );
+    ovs_assert(schema_json->type == JSON_OBJECT);
+
+    struct ovsdb_schema *schema;
+    struct ovsdb_error *error OVS_UNUSED = ovsdb_schema_from_json(schema_json,
+                                                                  &schema);
+    ovs_assert(!error);
+    json_destroy(schema_json);
+
+    struct db *db = xzalloc(sizeof *db);
+    db->filename = xstrdup("<internal>");
+    db->db = ovsdb_create(schema);
+    add_db(config, db->db->schema->name, db);
 }
 
 static char * OVS_WARN_UNUSED_RESULT
@@ -888,6 +925,18 @@ update_remote_rows(const struct shash *all_dbs, const struct db *db_,
 }
 
 static void
+commit_txn(struct ovsdb_txn *txn, const char *name)
+{
+    struct ovsdb_error *error = ovsdb_txn_commit(txn, false);
+    if (error) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+        char *msg = ovsdb_error_to_string_free(error);
+        VLOG_ERR_RL(&rl, "Failed to update %s: %s", name, msg);
+        free(msg);
+    }
+}
+
+static void
 update_remote_status(const struct ovsdb_jsonrpc_server *jsonrpc,
                      const struct sset *remotes,
                      struct shash *all_dbs)
@@ -903,14 +952,84 @@ update_remote_status(const struct ovsdb_jsonrpc_server *jsonrpc,
             update_remote_rows(all_dbs, db, remote, jsonrpc, txn);
         }
 
-        struct ovsdb_error *error = ovsdb_txn_commit(txn, false);
-        if (error) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-            char *msg = ovsdb_error_to_string_free(error);
-            VLOG_ERR_RL(&rl, "Failed to update remote status: %s", msg);
-            free(msg);
+        commit_txn(txn, node->name);
+    }
+}
+
+/* Updates 'row', a row in the _Server database's Database table, to match
+ * 'db'. */
+static void
+update_database_status(struct ovsdb_row *row, struct db *db)
+{
+    ovsdb_util_write_string_column(row, "name", db->db->schema->name);
+
+    const struct uuid *row_uuid = ovsdb_row_get_uuid(row);
+    if (!uuid_equals(row_uuid, &db->row_uuid)) {
+        db->row_uuid = *row_uuid;
+
+        /* The schema can only change if the row UUID changes, so only update
+         * it in that case.  Presumably, this is worth optimizing because
+         * schemas are often kilobytes in size and nontrivial to serialize. */
+        struct json *json_schema = ovsdb_schema_to_json(db->db->schema);
+        char *schema = json_to_string(json_schema, JSSF_SORT);
+        ovsdb_util_write_string_column(row, "schema", schema);
+        free(schema);
+        json_destroy(json_schema);
+    }
+}
+
+/* Updates the Database table in the _Server database. */
+static void
+update_server_status(struct shash *all_dbs)
+{
+    struct db *server_db = shash_find_data(all_dbs, "_Server");
+    struct ovsdb_table *database_table = shash_find_data(
+        &server_db->db->tables, "Database");
+    struct ovsdb_txn *txn = ovsdb_txn_create(server_db->db);
+
+    /* Update rows for databases that still exist.
+     * Delete rows for databases that no longer exist. */
+    const struct ovsdb_row *row, *next_row;
+    HMAP_FOR_EACH_SAFE (row, next_row, hmap_node, &database_table->rows) {
+        const char *name;
+        ovsdb_util_read_string_column(row, "name", &name);
+        struct db *db = shash_find_data(all_dbs, name);
+        if (!db || !db->db) {
+            ovsdb_txn_row_delete(txn, row);
+        } else {
+            update_database_status(ovsdb_txn_row_modify(txn, row), db);
         }
     }
+
+    /* Add rows for new databases.
+     *
+     * This is O(n**2) but usually there are only 2 or 3 databases. */
+    struct shash_node *node;
+    SHASH_FOR_EACH (node, all_dbs) {
+        struct db *db = node->data;
+
+        if (!db->db) {
+            continue;
+        }
+
+        HMAP_FOR_EACH (row, hmap_node, &database_table->rows) {
+            const char *name;
+            ovsdb_util_read_string_column(row, "name", &name);
+            if (!strcmp(name, node->name)) {
+                goto next;
+            }
+        }
+
+        /* Add row. */
+        struct ovsdb_row *row = ovsdb_row_create(database_table);
+        uuid_generate(ovsdb_row_get_uuid_rw(row));
+        update_database_status(row, db);
+        ovsdb_txn_row_insert(txn, row);
+
+    next:;
+    }
+
+    commit_txn(txn, "_Server");
 }
 
 /* Reconfigures ovsdb-server's remotes based on information in the database. */
