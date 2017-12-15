@@ -32,9 +32,11 @@
 #include "dirs.h"
 #include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
+#include "file.h"
 #include "openvswitch/json.h"
 #include "jsonrpc.h"
 #include "lib/table.h"
+#include "log.h"
 #include "ovsdb.h"
 #include "ovsdb-data.h"
 #include "ovsdb-error.h"
@@ -275,6 +277,8 @@ usage(void)
            "    in DATBASE on SERVER.\n"
            "\n  dump [SERVER] [DATABASE]\n"
            "    dump contents of DATABASE on SERVER to stdout\n"
+           "\n  backup [SERVER] [DATABASE] > DB\n"
+           "    dump database contents in the form of a database file\n"
            "\n  lock [SERVER] LOCK\n"
            "    create or wait for LOCK in SERVER\n"
            "\n  steal [SERVER] LOCK\n"
@@ -1383,6 +1387,135 @@ do_dump(struct jsonrpc *rpc, const char *database,
 }
 
 static void
+print_and_free_log_record(struct json *record)
+{
+    struct ds header = DS_EMPTY_INITIALIZER;
+    struct ds data = DS_EMPTY_INITIALIZER;
+    ovsdb_log_compose_record(record, &header, &data);
+    fwrite(header.string, header.length, 1, stdout);
+    fwrite(data.string, data.length, 1, stdout);
+    ds_destroy(&data);
+    ds_destroy(&header);
+    json_destroy(record);
+}
+
+static void
+do_backup(struct jsonrpc *rpc, const char *database,
+          int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+    if (isatty(STDOUT_FILENO)) {
+        ovs_fatal(0, "not writing backup to a terminal; "
+                  "please redirect stdout to a file");
+    }
+
+    /* Get schema. */
+    struct ovsdb_schema *schema = fetch_schema(rpc, database);
+
+    /* Construct transaction to retrieve all tables. */
+    struct json *txn = json_array_create_1(json_string_create(database));
+    struct shash_node *node;
+    SHASH_FOR_EACH (node, &schema->tables) {
+        const char *table_name = node->name;
+        const struct ovsdb_table_schema *table = node->data;
+
+        /* Get all the columns except _version and the ephemeral ones.
+         *
+         * We don't omit tables that only have ephemeral columns because of the
+         * possibility that other tables references rows in those tables; that
+         * is, even if all the columns are ephemeral, the rows themselves are
+         * not. */
+        struct json *columns = json_array_create_empty();
+        struct shash_node *node2;
+        SHASH_FOR_EACH (node2, &table->columns) {
+            const struct ovsdb_column *column = node2->data;
+
+            if (column->persistent) {
+                if (!columns) {
+                    columns = json_array_create_empty();
+                }
+                json_array_add(columns, json_string_create(column->name));
+            }
+        }
+
+        struct json *op = json_object_create();
+        json_object_put_string(op, "op", "select");
+        json_object_put_string(op, "table", table_name);
+        json_object_put(op, "where", json_array_create_empty());
+        json_object_put(op, "columns", columns);
+        json_array_add(txn, op);
+    }
+
+    /* Send request, get reply. */
+    struct jsonrpc_msg *rq = jsonrpc_create_request("transact", txn, NULL);
+    struct jsonrpc_msg *reply;
+    check_txn(jsonrpc_transact_block(rpc, rq, &reply), &reply);
+
+    /* Print schema record. */
+    print_and_free_log_record(ovsdb_schema_to_json(schema));
+
+    /* Print database transaction record. */
+    if (reply->result->type != JSON_ARRAY
+        || reply->result->u.array.n != shash_count(&schema->tables)) {
+        ovs_fatal(0, "reply is not array of %"PRIuSIZE" elements: %s",
+                  shash_count(&schema->tables),
+                  json_to_string(reply->result, 0));
+    }
+    struct json *output_txn = json_object_create();
+
+    size_t i = 0;
+    SHASH_FOR_EACH (node, &schema->tables) {
+        const char *table_name = node->name;
+        const struct ovsdb_table_schema *table = node->data;
+        const struct json *op_result = reply->result->u.array.elems[i++];
+        struct json *rows;
+
+        if (op_result->type != JSON_OBJECT
+            || !(rows = shash_find_data(json_object(op_result), "rows"))
+            || rows->type != JSON_ARRAY) {
+            ovs_fatal(0, "%s table reply is not an object with a \"rows\" "
+                      "member array: %s",
+                      table->name, json_to_string(op_result, 0));
+        }
+
+        if (!rows->u.array.n) {
+            continue;
+        }
+
+        struct json *output_rows = json_object_create();
+        for (size_t j = 0; j < rows->u.array.n; j++) {
+            struct json *row = rows->u.array.elems[j];
+            if (row->type != JSON_OBJECT) {
+                ovs_fatal(0, "%s table reply row is not an object: %s",
+                          table_name, json_to_string(row, 0));
+            }
+
+            struct json *uuid_json = shash_find_and_delete(json_object(row),
+                                                           "_uuid");
+            if (!uuid_json) {
+                ovs_fatal(0, "%s table reply row lacks _uuid member: %s",
+                          table_name, json_to_string(row, 0));
+            }
+
+            const struct ovsdb_base_type uuid_base = OVSDB_BASE_UUID_INIT;
+            union ovsdb_atom atom;
+            check_ovsdb_error(ovsdb_atom_from_json(&atom, &uuid_base,
+                                                   uuid_json, NULL));
+
+            char uuid_s[UUID_LEN + 1];
+            snprintf(uuid_s, sizeof uuid_s, UUID_FMT, UUID_ARGS(&atom.uuid));
+            json_object_put(output_rows, uuid_s, json_clone(row));
+        }
+        json_object_put(output_txn, table_name, output_rows);
+    }
+    output_txn = ovsdb_file_txn_annotate(
+        output_txn, "produced by \"ovsdb-client backup\"");
+    print_and_free_log_record(output_txn);
+
+    ovsdb_schema_destroy(schema);
+    jsonrpc_msg_destroy(reply);
+}
+
+static void
 do_help(struct jsonrpc *rpc OVS_UNUSED, const char *database OVS_UNUSED,
         int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
@@ -1594,6 +1727,7 @@ static const struct ovsdb_client_command all_commands[] = {
     { "monitor",            NEED_DATABASE, 1, INT_MAX, do_monitor },
     { "monitor-cond",       NEED_DATABASE, 2, 3,       do_monitor_cond },
     { "dump",               NEED_DATABASE, 0, INT_MAX, do_dump },
+    { "backup",             NEED_DATABASE, 0, 0,       do_backup },
     { "lock",               NEED_RPC,      1, 1,       do_lock_create },
     { "steal",              NEED_RPC,      1, 1,       do_lock_steal },
     { "unlock",             NEED_RPC,      1, 1,       do_lock_unlock },

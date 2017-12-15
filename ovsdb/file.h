@@ -44,4 +44,6 @@ struct ovsdb_error *ovsdb_file_read_schema(const char *file_name,
                                            struct ovsdb_schema **)
     OVS_WARN_UNUSED_RESULT;
 
+struct json *ovsdb_file_txn_annotate(struct json *, const char *comment);
+
 #endif /* ovsdb/file.h */

@@ -316,6 +316,10 @@ database file, e.g. using ``cp``, effectively makes a snapshot, and because
 OVSDB database files are append-only, it works even if the database is being
 modified when the snapshot takes place.
 
+Another way to make a backup is to use ``ovsdb-client backup``, which
+connects to a running database server and outputs an atomic snapshot of its
+schema and content, in the same format used for on-disk databases.
+
 To restore from a backup, stop the database server or servers, overwrite
 the database file with the backup (e.g. with ``cp``), and then
 restart the servers.
