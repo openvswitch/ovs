@@ -220,7 +220,11 @@ put_32aligned_u64(ovs_32aligned_u64 *x, uint64_t value)
 static inline ovs_u128
 get_32aligned_u128(const ovs_32aligned_u128 *x)
 {
-    ovs_u128 u = { .u32 = { x->u32[0], x->u32[1], x->u32[2], x->u32[3] } };
+    ovs_u128 u;
+    u.u32[0] = x->u32[0];
+    u.u32[1] = x->u32[1];
+    u.u32[2] = x->u32[2];
+    u.u32[3] = x->u32[3];
     return u;
 }
 
@@ -287,8 +291,11 @@ put_32aligned_be64(ovs_32aligned_be64 *x, ovs_be64 value)
 static inline ovs_be128
 get_32aligned_be128(const ovs_32aligned_be128 *x)
 {
-    ovs_be128 u = { .be32 = { x->be32[0], x->be32[1],
-                              x->be32[2], x->be32[3] } };
+    ovs_be128 u;
+    u.be32[0] = x->be32[0];
+    u.be32[1] = x->be32[1];
+    u.be32[2] = x->be32[2];
+    u.be32[3] = x->be32[3];
     return u;
 }
 
