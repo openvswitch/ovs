@@ -260,7 +260,7 @@ void xpthread_join(pthread_t, void **);
     static inline NAME##_type *                                         \
     NAME##_get_unsafe(void)                                             \
     {                                                                   \
-        return &NAME##_var;                                             \
+        return (NAME##_type *)&NAME##_var;                              \
     }                                                                   \
                                                                         \
     static inline NAME##_type *                                         \
@@ -316,7 +316,7 @@ void xpthread_join(pthread_t, void **);
     static inline NAME##_type *                                         \
     NAME##_get_unsafe(void)                                             \
     {                                                                   \
-        return pthread_getspecific(NAME##_key);                         \
+        return (NAME##_type *)pthread_getspecific(NAME##_key);          \
     }                                                                   \
                                                                         \
     NAME##_type *NAME##_get(void);

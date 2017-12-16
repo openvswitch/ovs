@@ -153,7 +153,8 @@ enum nl_attr_type
 static inline struct nlattr *
 nl_attr_next(const struct nlattr *nla)
 {
-    return (void *) ((uint8_t *) nla + NLA_ALIGN(nla->nla_len));
+    return ALIGNED_CAST(struct nlattr *,
+                        ((uint8_t *) nla + NLA_ALIGN(nla->nla_len)));
 }
 
 static inline bool

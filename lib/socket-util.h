@@ -138,7 +138,7 @@ static inline int make_unix_socket(int style, bool nonblock,
 static inline int rpl_setsockopt(int sock, int level, int optname,
                                  const void *optval, socklen_t optlen)
 {
-    return (setsockopt)(sock, level, optname, optval, optlen);
+    return (setsockopt)(sock, level, optname, (const char *)optval, optlen);
 }
 
 #define getsockopt(sock, level, optname, optval, optlen) \
@@ -146,7 +146,7 @@ static inline int rpl_setsockopt(int sock, int level, int optname,
 static inline int rpl_getsockopt(int sock, int level, int optname,
                                  void *optval, socklen_t *optlen)
 {
-    return (getsockopt)(sock, level, optname, optval, optlen);
+    return (getsockopt)(sock, level, optname, (char *)optval, optlen);
 }
 #endif
 

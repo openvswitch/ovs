@@ -1123,7 +1123,8 @@ in6_addr_set_mapped_ipv4(struct in6_addr *ip6, ovs_be32 ip4)
 static inline ovs_be32
 in6_addr_get_mapped_ipv4(const struct in6_addr *addr)
 {
-    union ovs_16aligned_in6_addr *taddr = (void *) addr;
+    union ovs_16aligned_in6_addr *taddr =
+        (union ovs_16aligned_in6_addr *) addr;
     if (IN6_IS_ADDR_V4MAPPED(addr)) {
         return get_16aligned_be32(&taddr->be32[3]);
     } else {
@@ -1134,7 +1135,8 @@ in6_addr_get_mapped_ipv4(const struct in6_addr *addr)
 static inline void
 in6_addr_solicited_node(struct in6_addr *addr, const struct in6_addr *ip6)
 {
-    union ovs_16aligned_in6_addr *taddr = (void *) addr;
+    union ovs_16aligned_in6_addr *taddr =
+        (union ovs_16aligned_in6_addr *) addr;
     memset(taddr->be16, 0, sizeof(taddr->be16));
     taddr->be16[0] = htons(0xff02);
     taddr->be16[5] = htons(0x1);
@@ -1150,8 +1152,10 @@ static inline void
 in6_generate_eui64(struct eth_addr ea, struct in6_addr *prefix,
                    struct in6_addr *lla)
 {
-    union ovs_16aligned_in6_addr *taddr = (void *) lla;
-    union ovs_16aligned_in6_addr *prefix_taddr = (void *) prefix;
+    union ovs_16aligned_in6_addr *taddr =
+        (union ovs_16aligned_in6_addr *) lla;
+    union ovs_16aligned_in6_addr *prefix_taddr =
+        (union ovs_16aligned_in6_addr *) prefix;
     taddr->be16[0] = prefix_taddr->be16[0];
     taddr->be16[1] = prefix_taddr->be16[1];
     taddr->be16[2] = prefix_taddr->be16[2];
@@ -1169,7 +1173,8 @@ in6_generate_eui64(struct eth_addr ea, struct in6_addr *prefix,
 static inline void
 in6_generate_lla(struct eth_addr ea, struct in6_addr *lla)
 {
-    union ovs_16aligned_in6_addr *taddr = (void *) lla;
+    union ovs_16aligned_in6_addr *taddr =
+        (union ovs_16aligned_in6_addr *) lla;
     memset(taddr->be16, 0, sizeof(taddr->be16));
     taddr->be16[0] = htons(0xfe80);
     taddr->be16[4] = htons(((ea.ea[0] ^ 0x02) << 8) | ea.ea[1]);
