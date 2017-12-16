@@ -185,11 +185,11 @@ OVS_NO_RETURN void ovs_assert_failure(const char *, const char *, const char *);
 /* C++ doesn't allow a type declaration within "sizeof", but it does support
  * scoping for member names, so we can just declare a second member, with a
  * name and the same type, and then use its size. */
-#define PADDED_MEMBERS(UNIT, MEMBERS)                           \
-    union {                                                     \
-        struct { MEMBERS };                                     \
-        struct { MEMBERS } named_member__;                      \
-        uint8_t PAD_ID[ROUND_UP(sizeof named_member__, UNIT)];  \
+#define PADDED_MEMBERS(UNIT, MEMBERS)                                       \
+    struct named_member__ { MEMBERS };                                      \
+    union {                                                                 \
+        struct { MEMBERS };                                                 \
+        uint8_t PAD_ID[ROUND_UP(sizeof(struct named_member__), UNIT)];      \
     }
 #endif
 
@@ -233,11 +233,11 @@ OVS_NO_RETURN void ovs_assert_failure(const char *, const char *, const char *);
     }
 #else
 #define PADDED_MEMBERS_CACHELINE_MARKER(UNIT, CACHELINE, MEMBERS)           \
+    struct struct_##CACHELINE { MEMBERS };                                  \
     union {                                                                 \
         OVS_CACHE_LINE_MARKER CACHELINE;                                    \
         struct { MEMBERS };                                                 \
-        struct { MEMBERS } named_member_##CACHELINE;                        \
-        uint8_t PAD_ID[ROUND_UP(sizeof named_member_##CACHELINE, UNIT)];    \
+        uint8_t PAD_ID[ROUND_UP(sizeof(struct struct_##CACHELINE), UNIT)];  \
     }
 #endif
 
