@@ -98,8 +98,8 @@ atomic_signal_fence(memory_order order)
 
 #define atomic_store32(DST, SRC, ORDER)                                 \
     if (ORDER == memory_order_seq_cst) {                                \
-        InterlockedExchange((int32_t volatile *) (DST),                 \
-                               (int32_t) (SRC));                        \
+        InterlockedExchange((long volatile *) (DST),                    \
+                               (long) (SRC));                           \
     } else {                                                            \
         *(DST) = (SRC);                                                 \
     }
@@ -128,13 +128,18 @@ atomic_signal_fence(memory_order order)
     atomic_storeX(64, DST, SRC, ORDER)
 #endif
 
-/* Used for 8 and 16 bit variations. */
-#define atomic_storeX(X, DST, SRC, ORDER)                               \
-    if (ORDER == memory_order_seq_cst) {                                \
-        InterlockedExchange##X((int##X##_t volatile *) (DST),           \
-                               (int##X##_t) (SRC));                     \
-    } else {                                                            \
-        *(DST) = (SRC);                                                 \
+#define atomic_store8(DST, SRC, ORDER)                                     \
+    if (ORDER == memory_order_seq_cst) {                                   \
+        InterlockedExchange8((char volatile *) (DST), (char) (SRC));       \
+    } else {                                                               \
+        *(DST) = (SRC);                                                    \
+    }
+
+#define atomic_store16(DST, SRC, ORDER)                                    \
+    if (ORDER == memory_order_seq_cst) {                                   \
+        InterlockedExchange16((short volatile *) (DST), (short) (SRC));    \
+    } else {                                                               \
+        *(DST) = (SRC);                                                    \
     }
 
 #define atomic_store(DST, SRC)                               \
@@ -142,9 +147,9 @@ atomic_signal_fence(memory_order order)
 
 #define atomic_store_explicit(DST, SRC, ORDER)                           \
     if (sizeof *(DST) == 1) {                                            \
-        atomic_storeX(8, DST, SRC, ORDER)                                \
+        atomic_store8(DST, SRC, ORDER)                                   \
     } else if (sizeof *(DST) == 2) {                                     \
-        atomic_storeX(16, DST, SRC, ORDER)                               \
+        atomic_store16( DST, SRC, ORDER)                                 \
     } else if (sizeof *(DST) == 4) {                                     \
         atomic_store32(DST, SRC, ORDER)                                  \
     } else if (sizeof *(DST) == 8) {                                     \
@@ -209,27 +214,33 @@ atomic_signal_fence(memory_order order)
 
 /* Arithmetic addition calls. */
 
-#define atomic_add32(RMW, ARG, ORIG, ORDER)                        \
-    *(ORIG) = InterlockedExchangeAdd((int32_t volatile *) (RMW),   \
-                                      (int32_t) (ARG));
+#define atomic_add8(RMW, ARG, ORIG, ORDER)                        \
+    *(ORIG) = _InterlockedExchangeAdd8((char volatile *) (RMW),   \
+                                      (char) (ARG));
 
-/* For 8, 16 and 64 bit variations. */
-#define atomic_add_generic(X, RMW, ARG, ORIG, ORDER)                        \
-    *(ORIG) = _InterlockedExchangeAdd##X((int##X##_t volatile *) (RMW),     \
-                                      (int##X##_t) (ARG));
+#define atomic_add16(RMW, ARG, ORIG, ORDER)                        \
+    *(ORIG) = _InterlockedExchangeAdd16((short volatile *) (RMW),   \
+                                      (short) (ARG));
+
+#define atomic_add32(RMW, ARG, ORIG, ORDER)                        \
+    *(ORIG) = InterlockedExchangeAdd((long volatile *) (RMW),   \
+                                      (long) (ARG));
+#define atomic_add64(RMW, ARG, ORIG, ORDER)                        \
+    *(ORIG) = _InterlockedExchangeAdd64((int64_t volatile *) (RMW),   \
+                                      (int64_t) (ARG));
 
 #define atomic_add(RMW, ARG, ORIG)                               \
         atomic_add_explicit(RMW, ARG, ORIG, memory_order_seq_cst)
 
 #define atomic_add_explicit(RMW, ARG, ORIG, ORDER)             \
     if (sizeof *(RMW) == 1) {                                  \
-        atomic_op(add, 8, RMW, ARG, ORIG, ORDER)               \
+        atomic_add8(RMW, ARG, ORIG, ORDER)               \
     } else if (sizeof *(RMW) == 2) {                           \
-        atomic_op(add, 16, RMW, ARG, ORIG, ORDER)              \
+        atomic_add16(RMW, ARG, ORIG, ORDER)              \
     } else if (sizeof *(RMW) == 4) {                           \
         atomic_add32(RMW, ARG, ORIG, ORDER)                    \
     } else if (sizeof *(RMW) == 8) {                           \
-        atomic_op(add, 64, RMW, ARG, ORIG, ORDER)              \
+        atomic_add64(RMW, ARG, ORIG, ORDER)              \
     } else {                                                   \
         abort();                                               \
     }
@@ -335,7 +346,8 @@ atomic_signal_fence(memory_order order)
 static inline bool
 atomic_compare_exchange8(int8_t volatile *dst, int8_t *expected, int8_t src)
 {
-    int8_t previous = _InterlockedCompareExchange8(dst, src, *expected);
+    int8_t previous = _InterlockedCompareExchange8((char volatile *)dst,
+                                                   src, *expected);
     if (previous == *expected) {
         return true;
     } else {
@@ -361,7 +373,8 @@ static inline bool
 atomic_compare_exchange32(int32_t volatile *dst, int32_t *expected,
                           int32_t src)
 {
-    int32_t previous = InterlockedCompareExchange(dst, src, *expected);
+    int32_t previous = InterlockedCompareExchange((long volatile *)dst,
+                                                  src, *expected);
     if (previous == *expected) {
         return true;
     } else {
