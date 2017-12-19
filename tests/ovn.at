@@ -1337,7 +1337,7 @@ for is in 1 2 3; do
                 bacl2="$bacl2 $acl2"
                 bacl3="$bacl3 $acl3"
 
-                sip=`ip_to_hex 192 168 0 $i$j`
+                sip=`ip_to_hex 192 168 0 $is$js`
                 tip=`ip_to_hex 192 168 0 $id$jd`
                 tip_unknown=`ip_to_hex 11 11 11 11`
                 if test $d != $s; then
