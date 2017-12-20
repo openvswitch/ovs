@@ -337,6 +337,8 @@ enum dp_stat_type {
     DP_STAT_LOST,               /* Packets not passed up to the client. */
     DP_STAT_LOOKUP_HIT,         /* Number of subtable lookups for flow table
                                    hits */
+    DP_STAT_SENT_PKTS,          /* Packets that has been sent. */
+    DP_STAT_SENT_BATCHES,       /* Number of batches sent. */
     DP_N_STATS
 };
 
@@ -507,6 +509,9 @@ struct dp_netdev_pmd_cycles {
     /* Indexed by PMD_CYCLES_*. */
     atomic_ullong n[PMD_N_CYCLES];
 };
+
+static void dp_netdev_count_packet(struct dp_netdev_pmd_thread *,
+                                   enum dp_stat_type type, int cnt);
 
 struct polled_queue {
     struct dp_netdev_rxq *rxq;
@@ -834,6 +839,7 @@ pmd_info_show_stats(struct ds *reply,
 {
     unsigned long long total_packets;
     uint64_t total_cycles = 0;
+    double lookups_per_hit = 0, packets_per_batch = 0;
     int i;
 
     /* These loops subtracts reference values ('*_zero') from the counters.
@@ -875,15 +881,23 @@ pmd_info_show_stats(struct ds *reply,
     }
     ds_put_cstr(reply, ":\n");
 
+    if (stats[DP_STAT_MASKED_HIT] > 0) {
+        lookups_per_hit = stats[DP_STAT_LOOKUP_HIT]
+                          / (double) stats[DP_STAT_MASKED_HIT];
+    }
+    if (stats[DP_STAT_SENT_BATCHES] > 0) {
+        packets_per_batch = stats[DP_STAT_SENT_PKTS]
+                            / (double) stats[DP_STAT_SENT_BATCHES];
+    }
+
     ds_put_format(reply,
                   "\temc hits:%llu\n\tmegaflow hits:%llu\n"
                   "\tavg. subtable lookups per hit:%.2f\n"
-                  "\tmiss:%llu\n\tlost:%llu\n",
+                  "\tmiss:%llu\n\tlost:%llu\n"
+                  "\tavg. packets per output batch: %.2f\n",
                   stats[DP_STAT_EXACT_HIT], stats[DP_STAT_MASKED_HIT],
-                  stats[DP_STAT_MASKED_HIT] > 0
-                  ? (1.0*stats[DP_STAT_LOOKUP_HIT])/stats[DP_STAT_MASKED_HIT]
-                  : 0,
-                  stats[DP_STAT_MISS], stats[DP_STAT_LOST]);
+                  lookups_per_hit, stats[DP_STAT_MISS], stats[DP_STAT_LOST],
+                  packets_per_batch);
 
     if (total_cycles == 0) {
         return;
@@ -3259,6 +3273,7 @@ dp_netdev_pmd_flush_output_on_port(struct dp_netdev_pmd_thread *pmd,
                                    struct tx_port *p)
 {
     int tx_qid;
+    int output_cnt;
     bool dynamic_txqs;
 
     dynamic_txqs = p->port->dynamic_txqs;
@@ -3268,8 +3283,13 @@ dp_netdev_pmd_flush_output_on_port(struct dp_netdev_pmd_thread *pmd,
         tx_qid = pmd->static_tx_qid;
     }
 
+    output_cnt = dp_packet_batch_size(&p->output_pkts);
+
     netdev_send(p->port->netdev, tx_qid, &p->output_pkts, dynamic_txqs);
     dp_packet_batch_init(&p->output_pkts);
+
+    dp_netdev_count_packet(pmd, DP_STAT_SENT_PKTS, output_cnt);
+    dp_netdev_count_packet(pmd, DP_STAT_SENT_BATCHES, 1);
 }
 
 static void
