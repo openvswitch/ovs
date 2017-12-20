@@ -1443,8 +1443,8 @@ for i in 1 2 3; do
         else
            ip_addrs="192.168.0.$i"
         fi
-        ovn-nbctl lsp-set-addresses lp$i "f0:00:00:00:00:$i $ip_addrs"
-        ovn-nbctl lsp-set-port-security lp$i f0:00:00:00:00:$i
+        ovn-nbctl lsp-set-addresses lp$i "f0:00:00:00:00:0$i $ip_addrs"
+        ovn-nbctl lsp-set-port-security lp$i f0:00:00:00:00:0$i
     fi
 done
 ovn-nbctl acl-add lsw0 from-lport 1000 'eth.type == 0x1234' drop
