@@ -1185,7 +1185,7 @@ ovn-nbctl acl-add lsw0 to-lport 1000 'eth.type == 0x1237 && eth.src == $set1 && 
 # Pre-populate the hypervisors' ARP tables so that we don't lose any
 # packets for ARP resolution (native tunneling doesn't queue packets
 # for ARP resolution).
-ovn_populate_arp
+OVN_POPULATE_ARP
 
 # Allow some time for ovn-northd and ovn-controller to catch up.
 # XXX This should be more systematic.
@@ -1721,7 +1721,7 @@ done
 ovn-nbctl --wait=sb sync
 ovn-sbctl dump-flows
 
-ovn_populate_arp
+OVN_POPULATE_ARP
 
 # XXX This is now the 3rd copy of these functions in this file ...
 
@@ -1924,7 +1924,7 @@ ovs-vsctl add-port br-phys vif3 -- set Interface vif3 options:tx_pcap=hv3/vif3-t
 # Pre-populate the hypervisors' ARP tables so that we don't lose any
 # packets for ARP resolution (native tunneling doesn't queue packets
 # for ARP resolution).
-ovn_populate_arp
+OVN_POPULATE_ARP
 
 # Allow some time for ovn-northd and ovn-controller to catch up.
 # XXX This should be more systematic.
@@ -2094,7 +2094,7 @@ ovs-vsctl add-port br-phys vif3 -- set Interface vif3 options:tx_pcap=hv3/vif3-t
 # Pre-populate the hypervisors' ARP tables so that we don't lose any
 # packets for ARP resolution (native tunneling doesn't queue packets
 # for ARP resolution).
-ovn_populate_arp
+OVN_POPULATE_ARP
 
 # Allow some time for ovn-northd and ovn-controller to catch up.
 # XXX This should be more systematic.
@@ -2291,7 +2291,7 @@ done
 # Pre-populate the hypervisors' ARP tables so that we don't lose any
 # packets for ARP resolution (native tunneling doesn't queue packets
 # for ARP resolution).
-ovn_populate_arp
+OVN_POPULATE_ARP
 
 # Allow some time for ovn-northd and ovn-controller to catch up.
 # XXX This should be more systematic.
@@ -2638,7 +2638,7 @@ done
 # Pre-populate the hypervisors' ARP tables so that we don't lose any
 # packets for ARP resolution (native tunneling doesn't queue packets
 # for ARP resolution).
-ovn_populate_arp
+OVN_POPULATE_ARP
 
 # Allow some time for ovn-northd and ovn-controller to catch up.
 # XXX This should be more systematic.
@@ -3054,7 +3054,7 @@ ovs-vsctl -- add-port br-int hv2-vif1 -- \
 # Pre-populate the hypervisors' ARP tables so that we don't lose any
 # packets for ARP resolution (native tunneling doesn't queue packets
 # for ARP resolution).
-ovn_populate_arp
+OVN_POPULATE_ARP
 
 # Allow some time for ovn-northd and ovn-controller to catch up.
 # XXX This should be more systematic.
@@ -3454,7 +3454,7 @@ ovs-vsctl -- add-port br-int hv2-vif1 -- \
 # Pre-populate the hypervisors' ARP tables so that we don't lose any
 # packets for ARP resolution (native tunneling doesn't queue packets
 # for ARP resolution).
-ovn_populate_arp
+OVN_POPULATE_ARP
 
 # Allow some time for ovn-northd and ovn-controller to catch up.
 # XXX This should be more systematic.
@@ -3666,7 +3666,7 @@ ovs-vsctl -- add-port br-int hv2-vif1 -- \
 # Pre-populate the hypervisors' ARP tables so that we don't lose any
 # packets for ARP resolution (native tunneling doesn't queue packets
 # for ARP resolution).
-ovn_populate_arp
+OVN_POPULATE_ARP
 
 # Allow some time for ovn-northd and ovn-controller to catch up.
 # XXX This should be more systematic.
@@ -3806,7 +3806,7 @@ ovs-vsctl -- add-port br-int hv1-vif4 -- \
     options:rxq_pcap=hv1/vif4-rx.pcap \
     ofport-request=4
 
-ovn_populate_arp
+OVN_POPULATE_ARP
 
 sleep 2
 
@@ -4152,7 +4152,7 @@ ovs-vsctl -- add-port br-int hv1-vif5 -- \
     options:rxq_pcap=hv1/vif5-rx.pcap \
     ofport-request=5
 
-ovn_populate_arp
+OVN_POPULATE_ARP
 
 sleep 2
 
@@ -4379,7 +4379,7 @@ ovs-vsctl -- add-port br-int hv2-vif1 -- \
 # Pre-populate the hypervisors' ARP tables so that we don't lose any
 # packets for ARP resolution (native tunneling doesn't queue packets
 # for ARP resolution).
-ovn_populate_arp
+OVN_POPULATE_ARP
 
 ovn-nbctl create Logical_Router name=R1
 ovn-nbctl create Logical_Router name=R2 options:chassis="hv2"
@@ -5288,7 +5288,7 @@ ovs-vsctl -- add-port br-int hv1-vif1 -- \
     options:rxq_pcap=hv1/vif1-rx.pcap \
     ofport-request=1
 
-ovn_populate_arp
+OVN_POPULATE_ARP
 sleep 2
 
 as hv1 ovs-vsctl show
@@ -6323,7 +6323,7 @@ ovs-vsctl -- add-port br-int vm2 -- \
 # Pre-populate the hypervisors' ARP tables so that we don't lose any
 # packets for ARP resolution (native tunneling doesn't queue packets
 # for ARP resolution).
-ovn_populate_arp
+OVN_POPULATE_ARP
 
 # Allow some time for ovn-northd and ovn-controller to catch up.
 # XXX This should be more systematic.
@@ -6558,7 +6558,7 @@ ovn-nbctl lsp-add bob bob1 \
 # Pre-populate the hypervisors' ARP tables so that we don't lose any
 # packets for ARP resolution (native tunneling doesn't queue packets
 # for ARP resolution).
-ovn_populate_arp
+OVN_POPULATE_ARP
 
 # Allow some time for ovn-northd and ovn-controller to catch up.
 # XXX This should be more systematic.
@@ -6690,7 +6690,7 @@ ovs-vsctl -- add-port br-int hv1-vif2 -- \
     options:rxq_pcap=hv1/vif2-rx.pcap \
     ofport-request=2
 
-ovn_populate_arp
+OVN_POPULATE_ARP
 sleep 2
 as hv1 ovs-vsctl show
 
@@ -7063,7 +7063,7 @@ ovs-vsctl -- add-port br-int ext1-vif1 -- \
 # Pre-populate the hypervisors' ARP tables so that we don't lose any
 # packets for ARP resolution (native tunneling doesn't queue packets
 # for ARP resolution).
-ovn_populate_arp
+OVN_POPULATE_ARP
 
 ovn-nbctl create Logical_Router name=R1
 
@@ -7246,7 +7246,7 @@ ovs-vsctl -- add-port br-int ext1-vif1 -- \
 # Pre-populate the hypervisors' ARP tables so that we don't lose any
 # packets for ARP resolution (native tunneling doesn't queue packets
 # for ARP resolution).
-ovn_populate_arp
+OVN_POPULATE_ARP
 
 ovn-nbctl create Logical_Router name=R0
 ovn-nbctl create Logical_Router name=R1
@@ -7466,7 +7466,7 @@ ovs-vsctl -- add-port br-int hv3-vif1 -- \
 # Pre-populate the hypervisors' ARP tables so that we don't lose any
 # packets for ARP resolution (native tunneling doesn't queue packets
 # for ARP resolution).
-ovn_populate_arp
+OVN_POPULATE_ARP
 
 ovn-nbctl create Logical_Router name=R1
 
@@ -8195,7 +8195,7 @@ ovs-vsctl -- add-port br-int hv2-vif1 -- \
 # Pre-populate the hypervisors' ARP tables so that we don't lose any
 # packets for ARP resolution (native tunneling doesn't queue packets
 # for ARP resolution).
-ovn_populate_arp
+OVN_POPULATE_ARP
 
 # Allow some time for ovn-northd and ovn-controller to catch up.
 # XXX This should be more systematic.
@@ -8273,7 +8273,7 @@ done
 ovn-nbctl --wait=sb sync
 ovn-sbctl dump-flows
 
-ovn_populate_arp
+OVN_POPULATE_ARP
 
 # Given the name of a logical port, prints the name of the hypervisor
 # on which it is located.
@@ -8392,7 +8392,7 @@ for i in 1 2; do
 
 done
 
-ovn_populate_arp
+OVN_POPULATE_ARP
 
 ovn-nbctl create Logical_Router name=R1
 
@@ -8811,7 +8811,7 @@ ovn-nbctl lsp-add inside inside1 \
         -- lsp-set-addresses inside1 "f0:00:00:01:22:01 192.168.1.101"
 
 
-ovn_populate_arp
+OVN_POPULATE_ARP
 
 ovn-nbctl create Logical_Router name=R1
 

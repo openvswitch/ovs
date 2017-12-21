@@ -271,23 +271,24 @@ ovn_attach() {
     start_daemon ovn-controller || return 1
 }
 
-# ovn_populate_arp
+# OVN_POPULATE_ARP
 #
 # This pre-populates the ARP tables of all of the OVN instances that have been
 # started with ovn_attach().  That means that packets sent from one hypervisor
 # to another never get dropped or delayed by ARP resolution, which makes
 # testing easier.
-ovn_populate_arp() {
+ovn_populate_arp__() {
     for e1 in $arp_table; do
         set `echo $e1 | sed 's/,/ /g'`; sb1=$1 br1=$2 ip=$3 mac=$4
         for e2 in $arp_table; do
             set `echo $e2 | sed 's/,/ /g'`; sb2=$1 br2=$2
             if test $sb1,$br1 != $sb2,$br2; then
-                as $sb2 ovs-appctl tnl/neigh/set $br2 $ip $mac
+                as $sb2 ovs-appctl tnl/neigh/set $br2 $ip $mac || return 1
             fi
         done
     done
 }
+m4_define([OVN_POPULATE_ARP], [AT_CHECK(ovn_populate_arp__, [0], [ignore])])
 
 # Strips 'xid=0x1234' from ovs-ofctl output.
 strip_xids () {
