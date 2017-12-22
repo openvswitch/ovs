@@ -14,23 +14,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Save flows
-bridges=$(ovs-vsctl -- --real list-br)
-flows=$(/usr/share/openvswitch/scripts/ovs-save save-flows $bridges)
+case $0 in
+    */*) dir0=`echo "$0" | sed 's,/[^/]*$,,'` ;;
+    *) dir0=./ ;;
+esac
+. "$dir0/ovs-lib" || exit 1
 
-# Restart the database first, since a large database may take a
-# while to load, and we want to minimize forwarding disruption.
-systemctl --job-mode=ignore-dependencies restart ovsdb-server
+stop_ovsdb() {
+    systemctl --job-mode=ignore-dependencies stop ovsdb-server
+}
 
-# Stop ovs-vswitchd.
-systemctl --job-mode=ignore-dependencies stop ovs-vswitchd
+start_ovsdb() {
+    systemctl --job-mode=ignore-dependencies start ovsdb-server
+}
 
-# Start vswitchd by asking it to wait till flow restore is finished.
-ovs-vsctl --no-wait set open_vswitch . other_config:flow-restore-wait=true
-systemctl --job-mode=ignore-dependencies start ovs-vswitchd
+stop_forwarding() {
+    systemctl --job-mode=ignore-dependencies stop ovs-vswitchd
+}
 
-# Restore saved flows and inform vswitchd that we are done.
-eval "$flows"
-ovs-vsctl --if-exists remove open_vswitch . other_config flow-restore-wait=true
+start_forwarding() {
+    systemctl --job-mode=ignore-dependencies start ovs-vswitchd
+}
+
+add_managers() {
+    :
+}
+
+restart
 
 exit 0
