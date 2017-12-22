@@ -12,7 +12,7 @@ AT_CHECK([ovsdb-client get-schema-cksum unix:socket ordinals], [0], [12345678 9
 OVSDB_SERVER_SHUTDOWN
 AT_CLEANUP
 
-AT_SETUP([ovsdb-client backup])
+AT_SETUP([ovsdb-client backup and restore])
 AT_KEYWORDS([ovsdb client positive])
 
 on_exit 'kill `cat *.pid`'
@@ -49,6 +49,62 @@ AT_CAPTURE_FILE([ovsdb-server.log])
 dnl Dump a copy of the data and a backup of it.
 AT_CHECK([ovsdb-client dump > dump1])
 AT_CHECK([ovsdb-client backup > backup])
+
+dnl Mess up the data a little, verify that it changed, then restore it
+dnl and verify restoration.
+AT_CHECK(
+  [[ovsdb-client transact '
+      ["ordinals",
+       {"op": "update",
+        "table": "ordinals",
+	"where": [],
+	"row": {"name": ""}}]']],
+  [0],
+  [[[{"count":6}]
+]])
+AT_CHECK([ovsdb-client --no-headings dump ordinals | sort -k 3 | uuidfilt], [0], [dnl
+ordinals table
+<0> ""   0
+<1> ""   1
+<2> ""   2
+<3> ""   3
+<4> ""   4
+<5> ""   5
+])
+AT_CHECK([ovsdb-client restore < backup])
+AT_CHECK([ovsdb-client dump | tr -s ' ' | sort -k 3 | uuidfilt], [0], [dnl
+ordinals table
+------------------------------------ ----- ------
+<0> zero 0
+<1> one 1
+<2> two 2
+<3> three 3
+<4> four 4
+<5> five 5
+_uuid name number
+])
+# Combining the original dump and the backup dump should reveal that the
+# rows have different uuids:
+AT_CHECK([(ovsdb-client dump; cat dump1) | tr -s ' ' | sort -k 3 | uuidfilt], [0], [dnl
+ordinals table
+ordinals table
+------------------------------------ ----- ------
+------------------------------------ ----- ------
+<0> zero 0
+<1> zero 0
+<2> one 1
+<3> one 1
+<4> two 2
+<5> two 2
+<6> three 3
+<7> three 3
+<8> four 4
+<9> four 4
+<10> five 5
+<11> five 5
+_uuid name number
+_uuid name number
+])
 
 dnl Stop the database server, then re-start it based on the backup.
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])

@@ -244,6 +244,11 @@ void ovsdb_datum_add_unsafe(struct ovsdb_datum *,
                             const struct ovsdb_type *,
                             const union ovsdb_atom *range_end_atom);
 
+/* Transactions with named-uuid row names. */
+struct json *ovsdb_datum_to_json_with_row_names(const struct ovsdb_datum *,
+                                                const struct ovsdb_type *);
+char *ovsdb_data_row_name(const struct uuid *);
+
 /* Type checking. */
 static inline bool
 ovsdb_datum_conforms_to_type(const struct ovsdb_datum *datum,

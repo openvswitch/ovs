@@ -3102,22 +3102,6 @@ where_uuid_equals(const struct uuid *uuid)
                         xasprintf(UUID_FMT, UUID_ARGS(uuid))))));
 }
 
-static char *
-uuid_name_from_uuid(const struct uuid *uuid)
-{
-    char *name;
-    char *p;
-
-    name = xasprintf("row"UUID_FMT, UUID_ARGS(uuid));
-    for (p = name; *p != '\0'; p++) {
-        if (*p == '-') {
-            *p = '_';
-        }
-    }
-
-    return name;
-}
-
 static const struct ovsdb_idl_row *
 ovsdb_idl_txn_get_row(const struct ovsdb_idl_txn *txn, const struct uuid *uuid)
 {
@@ -3152,7 +3136,7 @@ substitute_uuids(struct json *json, const struct ovsdb_idl_txn *txn)
 
                 return json_array_create_2(
                     json_string_create("named-uuid"),
-                    json_string_create_nocopy(uuid_name_from_uuid(&uuid)));
+                    json_string_create_nocopy(ovsdb_data_row_name(&uuid)));
             }
         }
 
@@ -3567,7 +3551,7 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
 
                 json_object_put(op, "uuid-name",
                                 json_string_create_nocopy(
-                                    uuid_name_from_uuid(&row->uuid)));
+                                    ovsdb_data_row_name(&row->uuid)));
 
                 insert = xmalloc(sizeof *insert);
                 insert->dummy = row->uuid;

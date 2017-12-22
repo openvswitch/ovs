@@ -320,9 +320,15 @@ Another way to make a backup is to use ``ovsdb-client backup``, which
 connects to a running database server and outputs an atomic snapshot of its
 schema and content, in the same format used for on-disk databases.
 
-To restore from a backup, stop the database server or servers, overwrite
-the database file with the backup (e.g. with ``cp``), and then
-restart the servers.
+Multiple options are also available when the time comes to restore a database
+from a backup.  One option is to stop the database server or servers, overwrite
+the database file with the backup (e.g. with ``cp``), and then restart the
+servers.  Another way is to use ``ovsdb-client restore``, which connects to a
+running database server and replaces the data in one of its databases by a
+provided snapshot.  The advantage of ``ovsdb-client restore`` is that it causes
+zero downtime for the database and its server.  It has the downside that UUIDs
+of rows in the restored database will differ from those in the snapshot,
+because the OVSDB protocol does not allow clients to specify row UUIDs.
 
 None of these approaches saves and restores data in columns that the schema
 designates as ephemeral.  This is by design: the designer of a schema only
