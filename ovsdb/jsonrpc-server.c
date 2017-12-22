@@ -1411,6 +1411,14 @@ ovsdb_jsonrpc_monitor_cond_change(struct ovsdb_jsonrpc_session *s,
         goto error;
     }
 
+    const struct json *new_monitor_id = params->u.array.elems[1];
+    bool changing_id = !json_equal(m->monitor_id, new_monitor_id);
+    if (changing_id && ovsdb_jsonrpc_monitor_find(s, new_monitor_id)) {
+        error = ovsdb_syntax_error(new_monitor_id, NULL,
+                                   "duplicate monitor ID");
+        goto error;
+    }
+
     monitor_cond_change_reqs = params->u.array.elems[2];
     if (monitor_cond_change_reqs->type != JSON_OBJECT) {
         error =
@@ -1457,11 +1465,12 @@ ovsdb_jsonrpc_monitor_cond_change(struct ovsdb_jsonrpc_session *s,
         }
     }
 
-    /* Change monitor id */
-    hmap_remove(&s->monitors, &m->node);
-    json_destroy(m->monitor_id);
-    m->monitor_id = json_clone(params->u.array.elems[1]);
-    hmap_insert(&s->monitors, &m->node, json_hash(m->monitor_id, 0));
+    if (changing_id) {
+        hmap_remove(&s->monitors, &m->node);
+        json_destroy(m->monitor_id);
+        m->monitor_id = json_clone(new_monitor_id);
+        hmap_insert(&s->monitors, &m->node, json_hash(m->monitor_id, 0));
+    }
 
     /* Send the new update, if any,  represents the difference from the old
      * condition and the new one. */
