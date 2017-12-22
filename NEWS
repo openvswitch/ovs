@@ -5,7 +5,7 @@ Post-v2.8.0
      * New high-level documentation in ovsdb(7).
      * New file format documentation for developers in ovsdb(5).
      * Protocol documentation moved from ovsdb-server(1) to ovsdb-server(7).
-     * ovsdb-client: New "get-schema-cksum" command.
+     * ovsdb-client: New "get-schema-cksum" and "query" commands.
      * ovsdb-client: New "backup" and "restore" commands.
      * ovsdb-tool: New "db-name" and "schema-name" commands.
    - OVN:

@@ -118,3 +118,56 @@ dnl Verify that the two dumps are the same.
 AT_CHECK([sort dump1], [0], [expout])
 
 AT_CLEANUP
+
+AT_SETUP([ovsdb-client query])
+AT_KEYWORDS([ovsdb client positive])
+
+on_exit 'kill `cat *.pid`'
+
+dnl Create a database.
+ordinal_schema > schema
+touch .db.~lock~
+AT_CHECK([ovsdb-tool create db schema])
+
+dnl Start the database server.
+AT_CHECK([ovsdb-server -vfile -vvlog:off --detach --no-chdir --pidfile --log-file --remote=punix:db.sock db], [0])
+AT_CAPTURE_FILE([ovsdb-server.log])
+
+dnl Put some data in the database.
+dnl Use "query" for some of them, which won't have any effect.
+AT_CHECK(
+  [[for txn in 'transact zero 0' \
+               'query one 1' \
+	       'transact two 2' \
+	       'query three 3' \
+	       'transact four 4' \
+	       'query five 5'
+    do
+      set -- $txn
+      ovsdb-client $1 '
+        ["ordinals",
+         {"op": "insert",
+          "table": "ordinals",
+          "row": {"name": "'$2'", "number": '$3'}},
+         {"op": "comment",
+          "comment": "add row for '"$pair"'"}]'
+    done | uuidfilt]], [0],
+[[[{"uuid":["uuid","<0>"]},{}]
+[{"uuid":["uuid","<1>"]},{}]
+[{"uuid":["uuid","<2>"]},{}]
+[{"uuid":["uuid","<3>"]},{}]
+[{"uuid":["uuid","<4>"]},{}]
+[{"uuid":["uuid","<5>"]},{}]
+]], [ignore])
+
+AT_CHECK([ovsdb-client -f csv dump | sort -t, -k 3 | uuidfilt], [0], [dnl
+ordinals table
+<0>,zero,0
+<1>,two,2
+<2>,four,4
+_uuid,name,number
+])
+
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+AT_CLEANUP

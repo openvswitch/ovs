@@ -27,6 +27,8 @@ ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 .IP "Data Management Commands:"
 \fBovsdb\-client \fR[\fIoptions\fR] \fBtransact\fI \fR[\fIserver\fR] \fItransaction\fR
 .br
+\fBovsdb\-client \fR[\fIoptions\fR] \fBquery \fR[\fIserver\fR] \fItransaction\fR
+.br
 \fBovsdb\-client \fR[\fIoptions\fR] \fBdump\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]\fR [\fItable\fR
 [\fIcolumn\fR...]]
 .br
@@ -136,6 +138,16 @@ Connects to \fIserver\fR, sends it the specified \fItransaction\fR,
 which must be a JSON array appropriate for use as the \fBparams\fR to
 a JSON-RPC \fBtransact\fR request, and prints the received reply on
 stdout.
+.
+.IP "\fBquery \fR[\fIserver\fR] \fItransaction\fR"
+This commands acts like a read-only version of \fBtransact\fR.
+It connects to \fIserver\fR, sends it the specified \fItransaction\fR,
+which must be a JSON array appropriate for use as the \fBparams\fR to
+a JSON-RPC \fBtransact\fR request, and prints the received reply on
+stdout.  To ensure that the transaction does not modify the database,
+this command appends an \fBabort\fR operation to the set of operations
+included in \fItransaction\fR before sending it to the database, and
+then removes the \fBabort\fR result from the reply (if it is present).
 .
 .IP "\fBdump\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]\fR [\fItable \fR[\fIcolumn\fR...]]"
 Connects to \fIserver\fR, retrieves all of the data in \fIdatabase\fR,
