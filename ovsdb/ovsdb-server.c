@@ -142,7 +142,9 @@ ovsdb_replication_init(const char *sync_from, const char *exclude,
     struct shash_node *node;
     SHASH_FOR_EACH (node, all_dbs) {
         struct db *db = node->data;
-        replication_add_local_db(node->name, db->db);
+        if (node->name[0] != '_' && db->db) {
+            replication_add_local_db(node->name, db->db);
+        }
     }
 }
 
@@ -514,6 +516,9 @@ open_db(struct server_config *config, const char *filename)
     db_error = ovsdb_file_open(db->filename, false, &db->db, &db->file);
     if (db_error) {
         error = ovsdb_error_to_string_free(db_error);
+    } else if (db->db->schema->name[0] == '_') {
+        error = xasprintf("%s: names beginning with \"_\" are reserved",
+                          db->db->schema->name);
     } else if (!ovsdb_jsonrpc_server_add_db(config->jsonrpc, db->db)) {
         error = xasprintf("%s: duplicate database name", db->db->schema->name);
     } else {
@@ -1131,16 +1136,24 @@ static void
 ovsdb_server_compact(struct unixctl_conn *conn, int argc,
                      const char *argv[], void *dbs_)
 {
+    const char *db_name = argc < 2 ? NULL : argv[1];
     struct shash *all_dbs = dbs_;
     struct ds reply;
     struct db *db;
     struct shash_node *node;
     int n = 0;
 
+    if (db_name && db_name[0] == '_') {
+        unixctl_command_reply_error(conn, "cannot compact built-in databases");
+        return;
+    }
+
     ds_init(&reply);
     SHASH_FOR_EACH(node, all_dbs) {
         db = node->data;
-        if (argc < 2 || !strcmp(argv[1], node->name)) {
+        if (db_name
+            ? !strcmp(node->name, db_name)
+            : node->name[0] != '_') {
             struct ovsdb_error *error;
 
             VLOG_INFO("compacting %s database by user request", node->name);
@@ -1275,21 +1288,12 @@ ovsdb_server_add_database(struct unixctl_conn *conn, int argc OVS_UNUSED,
 }
 
 static void
-ovsdb_server_remove_database(struct unixctl_conn *conn, int argc OVS_UNUSED,
-                             const char *argv[], void *config_)
+remove_db(struct server_config *config, struct shash_node *node)
 {
-    struct server_config *config = config_;
-    struct shash_node *node;
     struct db *db;
     bool ok;
 
-    node = shash_find(config->all_dbs, argv[1]);
-    if (!node)  {
-        unixctl_command_reply_error(conn, "Failed to find the database.");
-        return;
-    }
     db = node->data;
-
     ok = ovsdb_jsonrpc_server_remove_db(config->jsonrpc, db->db);
     ovs_assert(ok);
 
@@ -1303,6 +1307,26 @@ ovsdb_server_remove_database(struct unixctl_conn *conn, int argc OVS_UNUSED,
         ovsdb_replication_init(*config->sync_from, *config->sync_exclude,
                                config->all_dbs, server_uuid);
     }
+}
+
+static void
+ovsdb_server_remove_database(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                             const char *argv[], void *config_)
+{
+    struct server_config *config = config_;
+    struct shash_node *node;
+
+    node = shash_find(config->all_dbs, argv[1]);
+    if (!node) {
+        unixctl_command_reply_error(conn, "Failed to find the database.");
+        return;
+    }
+    if (node->name[0] == '_') {
+        unixctl_command_reply_error(conn, "Cannot remove reserved database.");
+        return;
+    }
+
+    remove_db(config, node);
     unixctl_command_reply(conn, NULL);
 }
 
@@ -1562,7 +1586,9 @@ save_config(struct server_config *config)
     sset_init(&db_filenames);
     SHASH_FOR_EACH (node, config->all_dbs) {
         struct db *db = node->data;
-        sset_add(&db_filenames, db->filename);
+        if (node->name[0] != '_') {
+            sset_add(&db_filenames, db->filename);
+        }
     }
 
     save_config__(config->config_tmpfile, config->remotes, &db_filenames,

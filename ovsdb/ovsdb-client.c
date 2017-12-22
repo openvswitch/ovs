@@ -137,14 +137,23 @@ main(int argc, char *argv[])
         if (argc - optind > command->min_args
             && svec_contains(&dbs, argv[optind])) {
             database = xstrdup(argv[optind++]);
-        } else if (dbs.n == 1) {
-            database = xstrdup(dbs.names[0]);
         } else if (svec_contains(&dbs, "Open_vSwitch")) {
             database = xstrdup("Open_vSwitch");
         } else {
-            jsonrpc_close(rpc);
-            ovs_fatal(0, "no default database for `%s' command, please "
-                      "specify a database name", command->name);
+            size_t n = 0;
+            const char *best = NULL;
+            for (size_t i = 0; i < dbs.n; i++) {
+                if (dbs.names[i][0] != '_') {
+                    best = dbs.names[i];
+                    n++;
+                }
+            }
+            if (n != 1) {
+                jsonrpc_close(rpc);
+                ovs_fatal(0, "no default database for `%s' command, please "
+                          "specify a database name", command->name);
+            }
+            database = xstrdup(best);
         }
         svec_destroy(&dbs);
     } else {

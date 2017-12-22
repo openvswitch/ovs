@@ -689,6 +689,11 @@ _uuid                                name  number
 dnl Now compact the database in-place.
 AT_CHECK([[ovs-appctl -t ovsdb-server ovsdb-server/compact]],
   [0], [], [ignore], [test ! -e pid || kill `cat pid`])
+dnl Negative test.
+AT_CHECK([[ovs-appctl -t ovsdb-server ovsdb-server/compact _Server]],
+  [2], [], [cannot compact built-in databases
+ovs-appctl: ovsdb-server: server returned an error
+])
 dnl Make sure that "db" is still a symlink to dir/db instead of getting
 dnl replaced by a regular file, ditto for .db.~lock~.
 if test "$IS_WIN32" = "no"; then
