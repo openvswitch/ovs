@@ -40,6 +40,10 @@ add_managers() {
     :
 }
 
-restart
+if [ "$1" = "force-reload-kmod" ]; then
+    force_reload_kmod
+else
+    restart
+fi
 
 exit 0
