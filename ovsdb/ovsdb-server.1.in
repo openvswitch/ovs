@@ -181,8 +181,8 @@ described below.
 These commands are specific to \fBovsdb\-server\fR.
 .IP "\fBexit\fR"
 Causes \fBovsdb\-server\fR to gracefully terminate.
-.IP "\fBovsdb\-server/compact\fR [\fIdb\fR]\&..."
-Compacts each database \fIdb\fR in-place.  If no \fIdb\fR is
+.IP "\fBovsdb\-server/compact\fR [\fIdb\fR]"
+Compacts database \fIdb\fR in-place.  If \fIdb\fR is not
 specified, compacts every database in-place.  A database is also
 compacted automatically when a transaction is logged if it is over 4
 times as large as its previous compacted size (and at least 10 MB),
