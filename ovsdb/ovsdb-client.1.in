@@ -14,43 +14,43 @@ ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 .
 .SH SYNOPSIS
 .IP "Server-Level Commands:"
-\fBovsdb\-client \fR[\fIoptions\fR] \fBlist\-dbs \fR[\fIserver\fR]
+\fBovsdb\-client\fR [\fIoptions\fR] \fBlist\-dbs\fR [\fIserver\fR]
 .IP "Database Schema Commands:"
-\fBovsdb\-client \fR[\fIoptions\fR] \fBget\-schema \fR[\fIserver\fR] \fR[\fIdatabase\fR]
+\fBovsdb\-client\fR [\fIoptions\fR] \fBget\-schema\fR [\fIserver\fR] [\fIdatabase\fR]
 .br
-\fBovsdb\-client \fR[\fIoptions\fR] \fBlist\-tables\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]
+\fBovsdb\-client\fR [\fIoptions\fR] \fBlist\-tables\fR [\fIserver\fR] [\fIdatabase\fR]
 .br
-\fBovsdb\-client \fR[\fIoptions\fR] \fBlist\-columns\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] [\fItable\fR]
+\fBovsdb\-client\fR [\fIoptions\fR] \fBlist\-columns\fR [\fIserver\fR] [\fIdatabase\fR] [\fItable\fR]
 .IP "Database Version Management Commands:"
 .br
-\fBovsdb\-client \fR[\fIoptions\fR] \fBget\-schema\-version\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]
+\fBovsdb\-client\fR [\fIoptions\fR] \fBget\-schema\-version\fR [\fIserver\fR] [\fIdatabase\fR]
 .IP "Data Management Commands:"
-\fBovsdb\-client \fR[\fIoptions\fR] \fBtransact\fI \fR[\fIserver\fR] \fItransaction\fR
+\fBovsdb\-client\fR [\fIoptions\fR] \fBtransact\fR [\fIserver\fR] \fItransaction\fR
 .br
-\fBovsdb\-client \fR[\fIoptions\fR] \fBquery \fR[\fIserver\fR] \fItransaction\fR
+\fBovsdb\-client\fR [\fIoptions\fR] \fBquery\fR [\fIserver\fR] \fItransaction\fR
 .br
-\fBovsdb\-client \fR[\fIoptions\fR] \fBdump\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]\fR [\fItable\fR
+\fBovsdb\-client\fR [\fIoptions\fR] \fBdump\fR [\fIserver\fR] [\fIdatabase\fR] [\fItable\fR
 [\fIcolumn\fR...]]
 .br
-\fBovsdb\-client \fR[\fIoptions\fR]
-\fBbackup \fR[\fIserver\fR] [\fIdatabase\fR] \fB> \fIsnapshot\fR
+\fBovsdb\-client\fR [\fIoptions\fR]
+\fBbackup\fR [\fIserver\fR] [\fIdatabase\fR] \fB> \fIsnapshot\fR
 .br
-\fBovsdb\-client \fR[\fIoptions\fR] [\fB\-\-force\fR]
-\fBrestore \fR[\fIserver\fR] [\fIdatabase\fR] \fB< \fIsnapshot\fR
+\fBovsdb\-client\fR [\fIoptions\fR] [\fB\-\-force\fR]
+\fBrestore\fR [\fIserver\fR] [\fIdatabase\fR] \fB< \fIsnapshot\fR
 .br
-\fBovsdb\-client \fR[\fIoptions\fR] \fBmonitor\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fItable\fR
+\fBovsdb\-client\fR [\fIoptions\fR] \fBmonitor\fR [\fIserver\fR] [\fIdatabase\fR] \fItable\fR
 [\fIcolumn\fR[\fB,\fIcolumn\fR]...]...
 .br
-\fBovsdb\-client \fR[\fIoptions\fR] \fBmonitor\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fBALL\fR
+\fBovsdb\-client\fR [\fIoptions\fR] \fBmonitor\fR [\fIserver\fR] [\fIdatabase\fR] \fBALL\fR
 .br
-\fBovsdb\-client \fR[\fIoptions\fR] \fBmonitor\-cond\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fIconditions
+\fBovsdb\-client\fR [\fIoptions\fR] \fBmonitor\-cond\fR [\fIserver\fR] [\fIdatabase\fR] \fIconditions
 \fItable\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...]...
 .IP "Testing Commands:"
-\fBovsdb\-client \fR[\fIoptions\fR] \fBlock\fI \fR[\fIserver\fR] \fIlock\fR
+\fBovsdb\-client\fR [\fIoptions\fR] \fBlock\fR [\fIserver\fR] \fIlock\fR
 .br
-\fBovsdb\-client \fR[\fIoptions\fR] \fBsteal\fI \fR[\fIserver\fR] \fIlock\fR
+\fBovsdb\-client\fR [\fIoptions\fR] \fBsteal\fR [\fIserver\fR] \fIlock\fR
 .br
-\fBovsdb\-client \fR[\fIoptions\fR] \fBunlock\fI \fR[\fIserver\fR] \fIlock\fR
+\fBovsdb\-client\fR [\fIoptions\fR] \fBunlock\fR [\fIserver\fR] \fIlock\fR
 .br
 .IP "Other Commands:"
 \fBovsdb\-client help\fR
@@ -86,7 +86,7 @@ supports.
 Most \fBovsdb\-client\fR commands work with an individual database,
 but these commands apply to an entire database server.
 .
-.IP "\fBlist\-dbs \fR[\fIserver\fR]"
+.IP "\fBlist\-dbs\fR [\fIserver\fR]"
 Connects to \fIserver\fR, retrieves the list of known databases, and
 prints them one per line.  These database names are the ones that
 other commands may use for \fIdatabase\fR.
@@ -96,16 +96,16 @@ other commands may use for \fIdatabase\fR.
 These commands obtain the schema from a database and print it or part
 of it.
 .
-.IP "\fBget\-schema \fR[\fIserver\fR] \fR[\fIdatabase\fR]"
+.IP "\fBget\-schema\fR [\fIserver\fR] [\fIdatabase\fR]"
 Connects to \fIserver\fR, retrieves the schema for \fIdatabase\fR, and
 prints it in JSON format.
 .
-.IP "\fBlist\-tables\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]"
+.IP "\fBlist\-tables\fR [\fIserver\fR] [\fIdatabase\fR]"
 Connects to \fIserver\fR, retrieves the schema for \fIdatabase\fR, and
 prints a table listing the name of each table
 within the database.
 .
-.IP "\fBlist\-columns\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fItable\fR"
+.IP "\fBlist\-columns\fR [\fIserver\fR] [\fIdatabase\fR] \fItable\fR"
 Connects to \fIserver\fR, retrieves the schema for \fIdatabase\fR, and
 prints a table listing the name and type of each
 column.  If \fItable\fR is specified, only columns in that table are
@@ -117,14 +117,14 @@ listed; otherwise, the tables include columns in all tables.
 These commands work with different versions of OVSDB schemas and
 databases.
 .
-.IP "\fBget\-schema\-version\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]"
+.IP "\fBget\-schema\-version\fR [\fIserver\fR] [\fIdatabase\fR]"
 Connects to \fIserver\fR, retrieves the schema for \fIdatabase\fR, and
 prints its version number on stdout.
 If \fIdatabase\fR was created before schema versioning was introduced,
 then it will not have a version number and this command will print a
 blank line.
 .
-.IP "\fBget\-schema\-cksum\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]"
+.IP "\fBget\-schema\-cksum\fR [\fIserver\fR] [\fIdatabase\fR]"
 Connects to \fIserver\fR, retrieves the schema for \fIdatabase\fR, and
 prints its checksum on stdout.  If \fIdatabase\fR does not include a
 checksum, prints a blank line.
@@ -133,13 +133,13 @@ checksum, prints a blank line.
 .PP
 These commands read or modify the data in a database.
 .
-.IP "\fBtransact\fI \fR[\fIserver\fR] \fItransaction\fR"
+.IP "\fBtransact\fR [\fIserver\fR] \fItransaction\fR"
 Connects to \fIserver\fR, sends it the specified \fItransaction\fR,
 which must be a JSON array appropriate for use as the \fBparams\fR to
 a JSON-RPC \fBtransact\fR request, and prints the received reply on
 stdout.
 .
-.IP "\fBquery \fR[\fIserver\fR] \fItransaction\fR"
+.IP "\fBquery\fR [\fIserver\fR] \fItransaction\fR"
 This commands acts like a read-only version of \fBtransact\fR.
 It connects to \fIserver\fR, sends it the specified \fItransaction\fR,
 which must be a JSON array appropriate for use as the \fBparams\fR to
@@ -149,13 +149,13 @@ this command appends an \fBabort\fR operation to the set of operations
 included in \fItransaction\fR before sending it to the database, and
 then removes the \fBabort\fR result from the reply (if it is present).
 .
-.IP "\fBdump\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]\fR [\fItable \fR[\fIcolumn\fR...]]"
+.IP "\fBdump\fR [\fIserver\fR] [\fIdatabase\fR] [\fItable\fR [\fIcolumn\fR...]]"
 Connects to \fIserver\fR, retrieves all of the data in \fIdatabase\fR,
 and prints it on stdout as a series of tables. If \fItable\fR is
 specified, only that table is retrieved.  If at least one \fIcolumn\fR
 is specified, only those columns are retrieved.
 .
-.IP "\fBbackup \fR[\fIserver\fR] [\fIdatabase\fR] \fB> \fIsnapshot\fR"
+.IP "\fBbackup\fR [\fIserver\fR] [\fIdatabase\fR] \fB> \fIsnapshot\fR"
 Connects to \fIserver\fR, retrieves a snapshot of the schema and data
 in \fIdatabase\fR, and prints it on stdout in the format used for
 OVSDB database files.  This is an appropriate
@@ -170,7 +170,7 @@ database is in use.
 The output does not include ephemeral columns, which by design do not
 survive across restarts of \fBovsdb\-server\fR.
 .
-.IP "[\fB\-\-force\fR] \fBrestore \fR[\fIserver\fR] [\fIdatabase\fR] \fB< \fIsnapshot\fR"
+.IP "[\fB\-\-force\fR] \fBrestore\fR [\fIserver\fR] [\fIdatabase\fR] \fB< \fIsnapshot\fR"
 Reads \fIsnapshot\fR, which must be a OVSDB standalone or
 active-backup database (possibly but not necessarily created by
 \fBovsdb\-client backup).  Then, connects to \fIserver\fR, verifies
@@ -195,8 +195,8 @@ e.g. with \fBovsdb\-client convert\fR.  Use \fB\-\-force\fR to proceed
 regardless of schema differences even though the restore might fail
 with an error or succeed with surprising results.
 .
-.IP "\fBmonitor\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fItable\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...]..."
-.IQ "\fBmonitor\-cond\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fIconditions\fR \fItable\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...]..."
+.IP "\fBmonitor\fR [\fIserver\fR] [\fIdatabase\fR] \fItable\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...]..."
+.IQ "\fBmonitor\-cond\fR [\fIserver\fR] [\fIdatabase\fR] \fIconditions\fR \fItable\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...]..."
 Connects to \fIserver\fR and monitors the contents of rows that match conditions in
 \fItable\fR in \fIdatabase\fR. By default, the initial contents of \fItable\fR are
 printed, followed by each change as it occurs.  If conditions empty,
@@ -244,9 +244,9 @@ session with the server.
 These commands are mostly of interest for testing the correctness
 of the OVSDB server.
 .
-.IP "\fBlock\fI \fR[\fIserver\fR] \fIlock\fR"
-.IQ "\fBsteal\fI \fR[\fIserver\fR] \fIlock\fR"
-.IQ "\fBunlock\fI \fR[\fIserver\fR] \fIlock\fR"
+.IP "\fBlock\fR [\fIserver\fR] \fIlock\fR"
+.IQ "\fBsteal\fR [\fIserver\fR] \fIlock\fR"
+.IQ "\fBunlock\fR [\fIserver\fR] \fIlock\fR"
 Connects to \fIserver\fR and issues corresponding RFC 7047 lock operations
 on \fIlock\fR. Prints json reply or subsequent update messages.
 The \fB\-\-detach\fR option causes \fBovsdb\-client\fR to detach after it
