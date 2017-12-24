@@ -473,7 +473,7 @@ struct ofpact_reg_move {
     struct mf_subfield dst;
 };
 
-/* OFPACT_STACK_PUSH.
+/* OFPACT_STACK_PUSH, OFPACT_STACK_POP.
  *
  * Used for NXAST_STACK_PUSH and NXAST_STACK_POP. */
 struct ofpact_stack {
