@@ -129,7 +129,7 @@ ovsdb_file_open_log(const char *file_name, enum ovsdb_log_open_mode open_mode,
 
     ovs_assert(logp || schemap);
 
-    error = ovsdb_log_open(file_name, open_mode, -1, &log);
+    error = ovsdb_log_open(file_name, OVSDB_MAGIC, open_mode, -1, &log);
     if (error) {
         goto error;
     }
@@ -438,7 +438,8 @@ ovsdb_file_save_copy__(const char *file_name, int locking,
     struct ovsdb_log *log;
     struct json *json;
 
-    error = ovsdb_log_open(file_name, OVSDB_LOG_CREATE, locking, &log);
+    error = ovsdb_log_open(file_name, OVSDB_MAGIC,
+                           OVSDB_LOG_CREATE, locking, &log);
     if (error) {
         return error;
     }

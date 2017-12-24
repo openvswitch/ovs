@@ -55,6 +55,9 @@ struct test_ovsdb_pvt_context {
     bool track;
 };
 
+/* Magic to pass to ovsdb_log_open(). */
+static const char *magic = OVSDB_MAGIC;
+
 OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[],
     struct test_ovsdb_pvt_context *pvt);
@@ -76,10 +79,14 @@ main(int argc, char *argv[])
 static void
 parse_options(int argc, char *argv[], struct test_ovsdb_pvt_context *pvt)
 {
+    enum {
+        OPT_MAGIC = CHAR_MAX + 1,
+    };
     static const struct option long_options[] = {
         {"timeout", required_argument, NULL, 't'},
         {"verbose", optional_argument, NULL, 'v'},
         {"change-track", optional_argument, NULL, 'c'},
+        {"magic", required_argument, NULL, OPT_MAGIC},
         {"help", no_argument, NULL, 'h'},
         {NULL, 0, NULL, 0},
     };
@@ -116,6 +123,10 @@ parse_options(int argc, char *argv[], struct test_ovsdb_pvt_context *pvt)
             pvt->track = true;
             break;
 
+        case OPT_MAGIC:
+            magic = optarg;
+            break;
+
         case '?':
             exit(EXIT_FAILURE);
 
@@ -131,8 +142,8 @@ usage(void)
 {
     printf("%s: Open vSwitch database test utility\n"
            "usage: %s [OPTIONS] COMMAND [ARG...]\n\n"
-           "  log-io FILE FLAGS COMMAND...\n"
-           "    open FILE with FLAGS, run COMMANDs\n"
+           "  [--magic=MAGIC] log-io FILE FLAGS COMMAND...\n"
+           "    open FILE with FLAGS (and MAGIC), run COMMANDs\n"
            "  default-atoms\n"
            "    test ovsdb_atom_default()\n"
            "  default-data\n"
@@ -314,7 +325,7 @@ do_log_io(struct ovs_cmdl_context *ctx)
         ovs_fatal(0, "unknown log-io open mode \"%s\"", mode_string);
     }
 
-    check_ovsdb_error(ovsdb_log_open(name, mode, -1, &log));
+    check_ovsdb_error(ovsdb_log_open(name, magic, mode, -1, &log));
     printf("%s: open successful\n", name);
 
     for (i = 3; i < ctx->argc; i++) {

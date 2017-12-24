@@ -73,6 +73,33 @@ file: read: end of log
 AT_CHECK([test -f .file.~lock~])
 AT_CLEANUP
 
+AT_SETUP([write one, reread - alternative magic])
+AT_KEYWORDS([ovsdb log])
+AT_CAPTURE_FILE([file])
+# Sometimes you just need more magic:
+# http://www.catb.org/jargon/html/magic-story.html
+AT_CHECK(
+  [[test-ovsdb --magic="MORE MAGIC" log-io file create 'write:[0]' 'write:[1]' 'write:[2]']], [0],
+  [[file: open successful
+file: write:[0] successful
+file: write:[1] successful
+file: write:[2] successful
+]], [ignore])
+AT_CHECK(
+  [test-ovsdb --magic="MORE MAGIC" log-io file read-only read read read read], [0],
+  [[file: open successful
+file: read: [0]
+file: read: [1]
+file: read: [2]
+file: read: end of log
+]], [ignore])
+AT_CHECK(
+  [test-ovsdb log-io file read-only], [1], [],
+  [test-ovsdb: ovsdb error: file: bad magic (unexpected kind of file)
+])
+AT_CHECK([test -f .file.~lock~])
+AT_CLEANUP
+
 AT_SETUP([write one, reread, append])
 AT_KEYWORDS([ovsdb log])
 AT_CAPTURE_FILE([file])

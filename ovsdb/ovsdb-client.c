@@ -1455,7 +1455,7 @@ print_and_free_log_record(struct json *record)
 {
     struct ds header = DS_EMPTY_INITIALIZER;
     struct ds data = DS_EMPTY_INITIALIZER;
-    ovsdb_log_compose_record(record, &header, &data);
+    ovsdb_log_compose_record(record, OVSDB_MAGIC, &header, &data);
     fwrite(header.string, header.length, 1, stdout);
     fwrite(data.string, data.length, 1, stdout);
     ds_destroy(&data);
