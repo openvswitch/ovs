@@ -1341,23 +1341,32 @@ subfield, \fBOFPAT_SET_FIELD\fR otherwise; and OpenFlow 1.5 and later,
 \fBOFPAT_SET_FIELD\fR.
 .
 .IP "\fBpush:\fIsrc\fB[\fIstart\fB..\fIend\fB]"
-Pushes \fIstart\fR to \fIend\fR bits inclusive, in fields
-on top of the stack.
+.IQ "\fBpop:\fIdst\fB[\fIstart\fB..\fIend\fB]"
+These Open vSwitch extension actions act on bits \fIstart\fR to
+\fIend\fR, inclusive, in the named field, pushing or popping the bits
+on a general-purpose stack of fields or subfields.  Controllers can
+use this stack for saving and restoring data or metadata around
+\fBresubmit\fR actions, for swapping or rearranging data and metadata,
+or for other purposes.  Any data or metadata field, or part of one,
+may be pushed, and any modifiable field or subfield may be popped.
+.IP
+The number of bits pushed in a stack entry do not have to match the
+number of bits later popped from that entry.  If more bits are popped
+from an entry than were pushed, then the entry is conceptually
+left-padded with 0-bits as needed.  If fewer bits are popped than
+pushed, then bits are conceptually trimmed from the left side of the
+entry.
+.IP
+The stack's size is intended to have a large enough limit that
+``normal'' use will not pose problems.  Stack overflow or underflow is
+an error that causes action execution to stop.
 .IP
 Example: \fBpush:NXM_NX_REG2[0..5]\fR or \fBpush:reg2[0..5]\fR push
-the value stored in register 2 bits 0 through 5, inclusive, on to the
-internal stack.
-.
-.IP "\fBpop:\fIdst\fB[\fIstart\fB..\fIend\fB]"
-Pops from the top of the stack, retrieves the \fIstart\fR to \fIend\fR bits
-inclusive, from the value popped and store them into the corresponding
-bits in \fIdst\fR.
-.
-.IP
-Example: \fBpop:NXM_NX_REG2[0..5]\fR or \fBpop:reg2[0..5]\fR pops the
-value from top of the stack.  Set register 2 bits 0 through 5,
-inclusive, based on bits 0 through 5 from the value just popped.
-.
+the value stored in register 2 bits 0 through 5, inclusive, on the
+internal stack, and \fBpop:NXM_NX_REG2[0..5]\fR or
+\fBpop:reg2[0..5]\fR pops the value from top of the stack and sets
+register 2 bits 0 through 5, inclusive, based on bits 0 through 5 from
+the value just popped.
 .
 .IP "\fBmultipath(\fIfields\fB, \fIbasis\fB, \fIalgorithm\fB, \fIn_links\fB, \fIarg\fB, \fIdst\fB[\fIstart\fB..\fIend\fB])\fR"
 Hashes \fIfields\fR using \fIbasis\fR as a universal hash parameter,
