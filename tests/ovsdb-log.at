@@ -174,7 +174,7 @@ file: read: end of log
 ]], [ignore])
 AT_CHECK(
   [test-ovsdb log-io file read-only], [1], [],
-  [test-ovsdb: ovsdb error: file: bad magic (unexpected kind of file)
+  [test-ovsdb: ovsdb error: file: cannot identify file type
 ])
 AT_CHECK([test -f .file.~lock~])
 AT_CLEANUP
