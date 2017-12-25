@@ -73,7 +73,6 @@ static struct ovsdb_error *ovsdb_file_create(struct ovsdb *,
                                              struct ovsdb_log *,
                                              const char *file_name,
                                              unsigned int n_transactions,
-                                             off_t snapshot_size,
                                              struct ovsdb_file **filep);
 
 /* Opens database 'file_name' and stores a pointer to the new database in
@@ -209,7 +208,6 @@ ovsdb_file_open__(const char *file_name,
      *
      * The schema precedes the snapshot in the log; we could compensate for its
      * size, but it's just not that important. */
-    off_t snapshot_size = 0;
     unsigned int n_transactions = 0;
     while ((error = ovsdb_log_read(log, &json)) == NULL && json) {
         struct ovsdb_txn *txn;
@@ -230,7 +228,7 @@ ovsdb_file_open__(const char *file_name,
         }
 
         if (n_transactions == 1) {
-            snapshot_size = ovsdb_log_get_offset(log);
+            ovsdb_log_mark_base(log);
         }
     }
     if (error) {
@@ -245,8 +243,7 @@ ovsdb_file_open__(const char *file_name,
     if (!read_only) {
         struct ovsdb_file *file;
 
-        error = ovsdb_file_create(db, log, file_name, n_transactions,
-                                  snapshot_size, &file);
+        error = ovsdb_file_create(db, log, file_name, n_transactions, &file);
         if (error) {
             goto error;
         }
@@ -513,7 +510,6 @@ struct ovsdb_file {
     long long int last_compact;
     long long int next_compact;
     unsigned int n_transactions;
-    off_t snapshot_size;
 };
 
 static const struct ovsdb_replica_class ovsdb_file_class;
@@ -521,8 +517,7 @@ static const struct ovsdb_replica_class ovsdb_file_class;
 static struct ovsdb_error *
 ovsdb_file_create(struct ovsdb *db, struct ovsdb_log *log,
                   const char *file_name,
-                  unsigned int n_transactions, off_t snapshot_size,
-                  struct ovsdb_file **filep)
+                  unsigned int n_transactions, struct ovsdb_file **filep)
 {
     struct ovsdb_file *file;
     char *deref_name;
@@ -546,7 +541,6 @@ ovsdb_file_create(struct ovsdb *db, struct ovsdb_log *log,
     file->file_name = abs_name;
     file->last_compact = time_msec();
     file->next_compact = file->last_compact + COMPACT_MIN_MSEC;
-    file->snapshot_size = snapshot_size;
     file->n_transactions = n_transactions;
     ovsdb_add_replica(db, &file->replica);
 
@@ -612,12 +606,9 @@ ovsdb_file_commit(struct ovsdb_replica *replica,
      * tried), and if there are at least 100 transactions in the database, and
      * if the database is at least 10 MB, and the database is at least 4x the
      * size of the previous snapshot, then compact the database. */
-    off_t log_size = ovsdb_log_get_offset(file->log);
     if (time_msec() >= file->next_compact
         && file->n_transactions >= 100
-        && log_size >= 10 * 1024 * 1024
-        && log_size / 4 >= file->snapshot_size)
-    {
+        && ovsdb_log_grew_lots(file->log)) {
         error = ovsdb_file_compact(file);
         if (error) {
             char *s = ovsdb_error_to_string_free(error);
@@ -663,10 +654,9 @@ ovsdb_file_compact(struct ovsdb_file *file)
     int retval;
 
     comment = xasprintf("compacting database online "
-                        "(%.3f seconds old, %u transactions, %llu bytes)",
+                        "(%.3f seconds old, %u transactions)",
                         (time_wall_msec() - file->last_compact) / 1000.0,
-                        file->n_transactions,
-                        (unsigned long long) ovsdb_log_get_offset(file->log));
+                        file->n_transactions);
     VLOG_INFO("%s: %s", file->file_name, comment);
 
     /* Commit the old version, so that we can be assured that we'll eventually
@@ -696,6 +686,7 @@ ovsdb_file_compact(struct ovsdb_file *file)
     if (error) {
         goto exit;
     }
+    ovsdb_log_mark_base(new_log);
 
     /* Replace original file by the temporary file.
      *
@@ -750,6 +741,7 @@ ovsdb_file_compact(struct ovsdb_file *file)
             ovs_fatal(0, "error reading database");
         }
         json_destroy(json);
+        ovsdb_log_mark_base(file->log);
     }
 
     /* Success! */

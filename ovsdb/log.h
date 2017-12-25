@@ -16,6 +16,25 @@
 #ifndef OVSDB_LOG_H
 #define OVSDB_LOG_H 1
 
+/* OVSDB log.
+ *
+ * A log consists of a series of records.  After opening or creating a log with
+ * ovsdb_log_open(), the client may use ovsdb_log_read() to read any existing
+ * records, one by one.  The client may also use ovsdb_log_write() to write new
+ * records (if some records have not yet been read at this point, then the
+ * first write truncates them).
+ *
+ * Log writes are atomic.  A client may use ovsdb_log_commit() to ensure that
+ * they are durable.
+ *
+ * Logs provide a mechansim to allow the client to tell when they have grown
+ * enough that compacting may be warranted.  After reading existing log
+ * contents, the client uses ovsdb_log_mark_base() to mark the "base" to be
+ * considered as the initial size of the log.  Thereafter, a client may call
+ * ovsdb_log_grew_lots() to get an indication whether the log has grown enough
+ * that compacting is advised.
+ */
+
 #include <sys/types.h>
 #include "compiler.h"
 
@@ -54,7 +73,8 @@ struct ovsdb_error *ovsdb_log_write(struct ovsdb_log *, const struct json *)
 struct ovsdb_error *ovsdb_log_commit(struct ovsdb_log *)
     OVS_WARN_UNUSED_RESULT;
 
-off_t ovsdb_log_get_offset(const struct ovsdb_log *);
+void ovsdb_log_mark_base(struct ovsdb_log *);
+bool ovsdb_log_grew_lots(const struct ovsdb_log *);
 
 struct ovsdb_error *ovsdb_log_replace(struct ovsdb_log *,
                                       struct json **entries, size_t n)

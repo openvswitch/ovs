@@ -76,6 +76,7 @@ struct ovsdb_log {
     char *magic;
     struct lockfile *lockfile;
     FILE *stream;
+    off_t base;
 };
 
 /* Whether the OS supports renaming open files.
@@ -105,6 +106,12 @@ static bool is_magic_ok(const char *needle, const char *haystack);
  * Whether the file will be locked using lockfile_lock() depends on 'locking':
  * use true to lock it, false not to lock it, or -1 to lock it only if
  * 'open_mode' is a mode that allows writing.
+ *
+ * A log consists of a series of records.  After opening or creating a log with
+ * this function, the client may use ovsdb_log_read() to read any existing
+ * records, one by one.  The client may also use ovsdb_log_write() to write new
+ * records (if some records have not yet been read at this point, then the
+ * first write truncates them).
  */
 struct ovsdb_error *
 ovsdb_log_open(const char *name, const char *magic,
@@ -245,6 +252,7 @@ ovsdb_log_open(const char *name, const char *magic,
     file->stream = stream;
     file->prev_offset = 0;
     file->offset = 0;
+    file->base = 0;
     *filep = file;
     return NULL;
 
@@ -519,7 +527,14 @@ ovsdb_log_compose_record(const struct json *json,
 }
 
 /* Writes log record 'json' to 'file'.  Returns NULL if successful or an error
- * (which the caller must eventually destroy) on failure. */
+ * (which the caller must eventually destroy) on failure.
+ *
+ * If the log contains some records that have not yet been read, then calling
+ * this function truncates them.
+ *
+ * Log writes are atomic.  A client may use ovsdb_log_commit() to ensure that
+ * they are durable.
+ */
 struct ovsdb_error *
 ovsdb_log_write(struct ovsdb_log *file, const struct json *json)
 {
@@ -599,13 +614,21 @@ ovsdb_log_commit(struct ovsdb_log *file)
     return NULL;
 }
 
-/* Returns the current offset into the file backing 'log', in bytes.  This
- * reflects the number of bytes that have been read or written in the file.  If
- * the whole file has been read, this is the file size. */
-off_t
-ovsdb_log_get_offset(const struct ovsdb_log *log)
+/* Sets the current position in 'log' as the "base", that is, the initial size
+ * of the log that ovsdb_log_grew_lots() uses to determine whether the log has
+ * grown enough to make compacting worthwhile. */
+void
+ovsdb_log_mark_base(struct ovsdb_log *log)
 {
-    return log->offset;
+    log->base = log->offset;
+}
+
+/* Returns true if 'log' has grown enough above the base that it's worthwhile
+ * to compact it, false otherwise. */
+bool
+ovsdb_log_grew_lots(const struct ovsdb_log *log)
+{
+    return log->offset > 10 * 1024 * 1024 && log->offset / 4 > log->base;
 }
 
 /* Attempts to atomically replace the contents of 'log', on disk, by the 'n'
@@ -631,6 +654,7 @@ ovsdb_log_replace(struct ovsdb_log *log, struct json **entries, size_t n)
             return error;
         }
     }
+    ovsdb_log_mark_base(new);
 
     return ovsdb_log_replace_commit(log, new);
 }
@@ -765,7 +789,8 @@ ovsdb_log_replace_commit(struct ovsdb_log *old, struct ovsdb_log *new)
     old->magic = new->magic;
     new->magic = NULL;
     /* Keep old->lockfile. */
-    /* stream was already replaced above. */
+    old->base = new->base;
+
     /* Free 'new'. */
     ovsdb_log_close(new);
 
