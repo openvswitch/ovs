@@ -613,7 +613,7 @@ bfd_put_packet(struct bfd *bfd, struct dp_packet *p,
     ip->ip_ihl_ver = IP_IHL_VER(5, 4);
     ip->ip_tot_len = htons(sizeof *ip + sizeof *udp + sizeof *msg);
     ip->ip_ttl = MAXTTL;
-    ip->ip_tos = IPTOS_LOWDELAY | IPTOS_THROUGHPUT;
+    ip->ip_tos = IPTOS_PREC_INTERNETCONTROL;
     ip->ip_proto = IPPROTO_UDP;
     put_16aligned_be32(&ip->ip_src, bfd->ip_src);
     put_16aligned_be32(&ip->ip_dst, bfd->ip_dst);
