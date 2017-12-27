@@ -66,7 +66,7 @@ This is the current list of active Open vSwitch committers:
    * - Justin Pettit
      - jpettit@ovn.org
    * - Pravin B Shelar
-     - pshelar@nicira.com
+     - pshelar@ovn.org
    * - Russell Bryant
      - russell@ovn.org
    * - Simon Horman
