@@ -311,7 +311,7 @@ bool %(s)s_is_updated(const struct %(s)s *, enum %(s)s_column_id);
     # Table indexes.
         print("struct %(s)s * %(s)s_index_init_row(struct ovsdb_idl *, const struct ovsdb_idl_table_class *);" % {'s': structName})
         print
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted(table.columns.items()):
             print('void %(s)s_index_set_%(c)s(const struct %(s)s *,' % {'s': structName, 'c': columnName})
             if column.type.is_smap():
                 args = ['const struct smap *']
@@ -1065,7 +1065,7 @@ void
 struct %(s)s *
 %(s)s_index_init_row(struct ovsdb_idl *idl, const struct ovsdb_idl_table_class *class_)
 {""" % {'s': structName, 't': tableName})
-        #for columnName, column in sorted(table.columns.iteritems()):
+        #for columnName, column in sorted(table.columns.items()):
         #    if column.type.is_smap():
         #        print "    smap_init(&row->%s);" % columnName
         print("    return (struct %(s)s *) ovsdb_idl_index_init_row(idl, class_);" % {'s': structName, 't': tableName})
@@ -1132,7 +1132,7 @@ struct %(s)s *
     return %(s)s_cast(ovsdb_idl_index_data(CONST_CAST(struct ovsdb_idl_index_cursor *, cursor)));
 }""" % { 's' : structName })
         # Indexes Set functions
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted(table.columns.items()):
             type = column.type
 
             comment, members = cMembers(prefix, tableName, columnName,
