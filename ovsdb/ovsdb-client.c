@@ -199,6 +199,7 @@ parse_options(int argc, char *argv[])
         {"version", no_argument, NULL, 'V'},
         {"timestamp", no_argument, NULL, OPT_TIMESTAMP},
         {"force", no_argument, NULL, OPT_FORCE},
+        {"timeout", required_argument, NULL, 't'},
         VLOG_LONG_OPTIONS,
         DAEMON_LONG_OPTIONS,
 #ifdef HAVE_OPENSSL
@@ -213,6 +214,7 @@ parse_options(int argc, char *argv[])
     table_style.format = TF_TABLE;
 
     for (;;) {
+        unsigned long int timeout;
         int c;
 
         c = getopt_long(argc, argv, short_options, long_options, NULL);
@@ -243,6 +245,16 @@ parse_options(int argc, char *argv[])
 
         case OPT_FORCE:
             force = true;
+            break;
+
+        case 't':
+            timeout = strtoul(optarg, NULL, 10);
+            if (timeout <= 0) {
+                ovs_fatal(0, "value %s on -t or --timeout is not at least 1",
+                          optarg);
+            } else {
+                time_alarm(timeout);
+            }
             break;
 
         case '?':

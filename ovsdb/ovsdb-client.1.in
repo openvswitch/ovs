@@ -274,6 +274,12 @@ table update.  Most output formats add the timestamp on a line of its own
 just above the table.  The JSON output format puts the timestamp in a
 member of the top-level JSON object named \fBtime\fR.
 .
+.IP "\fB\-t\fR"
+.IQ "\fB\-\-timeout=\fIsecs\fR"
+Limits \fBovsdb\-client\fR runtime to approximately \fIsecs\fR
+seconds.  If the timeout expires, \fBovsdb\-client\fR will exit with a
+\fBSIGALRM\fR signal.
+.
 .SS "Daemon Options"
 The daemon options apply only to the \fBmonitor\fR and \fBmonitor\-cond\fR commands.
 With any other command, they have no effect.
