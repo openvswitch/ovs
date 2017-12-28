@@ -1684,6 +1684,19 @@ ovsdb_datum_from_smap(struct ovsdb_datum *datum, const struct smap *smap)
     ovsdb_datum_sort_unique(datum, OVSDB_TYPE_STRING, OVSDB_TYPE_STRING);
 }
 
+struct ovsdb_error * OVS_WARN_UNUSED_RESULT
+ovsdb_datum_convert(struct ovsdb_datum *dst,
+                    const struct ovsdb_type *dst_type,
+                    const struct ovsdb_datum *src,
+                    const struct ovsdb_type *src_type)
+{
+    struct json *json = ovsdb_datum_to_json(src, src_type);
+    struct ovsdb_error *error = ovsdb_datum_from_json(dst, dst_type, json,
+                                                      NULL);
+    json_destroy(json);
+    return error;
+}
+
 static uint32_t
 hash_atoms(enum ovsdb_atomic_type type, const union ovsdb_atom *atoms,
            unsigned int n, uint32_t basis)

@@ -26,6 +26,11 @@ struct uuid;
 
 struct ovsdb_txn *ovsdb_txn_create(struct ovsdb *);
 void ovsdb_txn_abort(struct ovsdb_txn *);
+
+struct ovsdb_error *ovsdb_txn_start_commit(struct ovsdb_txn *)
+    OVS_WARN_UNUSED_RESULT;
+struct ovsdb_error *ovsdb_txn_finish_commit(struct ovsdb_txn *, bool durable)
+    OVS_WARN_UNUSED_RESULT;
 struct ovsdb_error *ovsdb_txn_commit(struct ovsdb_txn *, bool durable)
     OVS_WARN_UNUSED_RESULT;
 

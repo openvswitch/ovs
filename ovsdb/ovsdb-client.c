@@ -78,9 +78,14 @@ static bool timestamp;
 /* --db-change-aware, --no-db-change-aware: Enable db_change_aware feature for
  * "monitor" command?
  *
- * (This option is undocumented because it is expected to be useful only for
- * testing that the db_change_aware feature actually works.) */
-static int db_change_aware;
+ * -1 (default): Use db_change_aware if available.
+ * 0: Disable db_change_aware.
+ * 1: Require db_change_aware.
+ *
+ * (This option is undocumented because anything other than the default is
+ * expected to be useful only for testing that the db_change_aware feature
+ * actually works.) */
+static int db_change_aware = -1;
 
 /* --force: Ignore schema differences for "restore" command? */
 static bool force;
@@ -316,6 +321,10 @@ usage(void)
            "    DATABASE on SERVER.\n"
            "    COLUMNs may include !initial, !insert, !delete, !modify\n"
            "    to avoid seeing the specified kinds of changes.\n"
+           "\n  convert [SERVER] SCHEMA\n"
+           "    convert database on SERVER named in SCHEMA to SCHEMA.\n"
+           "\n  needs-conversion [SERVER] SCHEMA\n"
+           "    tests whether SCHEMA's db on SERVER needs conversion.\n"
            "\n  monitor [SERVER] [DATABASE] ALL\n"
            "    monitor all changes to all columns in all tables\n"
            "    in DATBASE on SERVER.\n"
@@ -570,10 +579,39 @@ do_list_columns(struct jsonrpc *rpc, const char *database,
     table_destroy(&t);
 }
 
+static void
+send_db_change_aware(struct jsonrpc *rpc)
+{
+    if (db_change_aware != 0) {
+        struct jsonrpc_msg *request = jsonrpc_create_request(
+            "set_db_change_aware",
+            json_array_create_1(json_boolean_create(true)),
+            NULL);
+        struct jsonrpc_msg *reply;
+        int error = jsonrpc_transact_block(rpc, request, &reply);
+        if (error) {
+            ovs_fatal(error, "%s: error setting db_change_aware",
+                      jsonrpc_get_name(rpc));
+        }
+        if (reply->type == JSONRPC_ERROR && db_change_aware == 1) {
+            ovs_fatal(0, "%s: set_db_change_aware failed (%s)",
+                      jsonrpc_get_name(rpc), json_to_string(reply->error, 0));
+        }
+        jsonrpc_msg_destroy(reply);
+    }
+}
+
 static struct json *
 do_transact__(struct jsonrpc *rpc, struct json *transaction)
 {
     struct jsonrpc_msg *request, *reply;
+
+    if (db_change_aware == 1) {
+        send_db_change_aware(rpc);
+    }
+    daemon_save_fd(STDOUT_FILENO);
+    daemon_save_fd(STDERR_FILENO);
+    daemonize();
 
     request = jsonrpc_create_request("transact", transaction, NULL);
     check_txn(jsonrpc_transact_block(rpc, request, &reply), &reply);
@@ -1053,6 +1091,7 @@ do_monitor__(struct jsonrpc *rpc, const char *database,
     ovs_assert(version < OVSDB_MONITOR_VERSION_MAX);
 
     daemon_save_fd(STDOUT_FILENO);
+    daemon_save_fd(STDERR_FILENO);
     daemonize_start(false);
     if (get_detach()) {
         int error;
@@ -1110,22 +1149,7 @@ do_monitor__(struct jsonrpc *rpc, const char *database,
         free(nodes);
     }
 
-    if (db_change_aware) {
-        struct jsonrpc_msg *request = jsonrpc_create_request(
-            "set_db_change_aware",
-            json_array_create_1(json_boolean_create(true)),
-            NULL);
-        struct jsonrpc_msg *reply;
-        int error = jsonrpc_transact_block(rpc, request, &reply);
-        if (error) {
-            ovs_fatal(error, "%s: error setting db_change_aware", server);
-        }
-        if (reply->type == JSONRPC_ERROR) {
-            ovs_fatal(0, "%s: set_db_change_aware failed (%s)",
-                      server, json_to_string(reply->error, 0));
-        }
-        jsonrpc_msg_destroy(reply);
-    }
+    send_db_change_aware(rpc);
 
     monitor = json_array_create_3(json_string_create(database),
                                   json_null_create(), monitor_requests);
@@ -1187,6 +1211,10 @@ do_monitor__(struct jsonrpc *rpc, const char *database,
                     monitor2_print(params->u.array.elems[1], mts, n_mts);
                     fflush(stdout);
                 }
+            } else if (msg->type == JSONRPC_NOTIFY
+                       && !strcmp(msg->method, "monitor_canceled")) {
+                ovs_fatal(0, "%s: %s database was removed",
+                          server, database);
             }
             jsonrpc_msg_destroy(msg);
         }
@@ -1240,6 +1268,35 @@ do_monitor_cond(struct jsonrpc *rpc, const char *database,
     ovsdb_condition_destroy(&cnd);
     do_monitor__(rpc, database, OVSDB_MONITOR_V2, --argc, ++argv, condition);
     ovsdb_schema_destroy(schema);
+}
+
+static void
+do_convert(struct jsonrpc *rpc, const char *database OVS_UNUSED,
+           int argc OVS_UNUSED, char *argv[])
+{
+    struct ovsdb_schema *new_schema;
+    check_ovsdb_error(ovsdb_schema_from_file(argv[0], &new_schema));
+
+    struct jsonrpc_msg *request, *reply;
+    request = jsonrpc_create_request(
+        "convert",
+        json_array_create_2(json_string_create(new_schema->name),
+                            ovsdb_schema_to_json(new_schema)), NULL);
+    check_txn(jsonrpc_transact_block(rpc, request, &reply), &reply);
+    jsonrpc_msg_destroy(reply);
+}
+
+static void
+do_needs_conversion(struct jsonrpc *rpc, const char *database OVS_UNUSED,
+                    int argc OVS_UNUSED, char *argv[])
+{
+    struct ovsdb_schema *schema1;
+    check_ovsdb_error(ovsdb_schema_from_file(argv[0], &schema1));
+
+    struct ovsdb_schema *schema2 = fetch_schema(rpc, schema1->name);
+    puts(ovsdb_schema_equal(schema1, schema2) ? "no" : "yes");
+    ovsdb_schema_destroy(schema1);
+    ovsdb_schema_destroy(schema2);
 }
 
 struct dump_table_aux {
@@ -1941,6 +1998,8 @@ static const struct ovsdb_client_command all_commands[] = {
     { "query",              NEED_RPC,      1, 1,       do_query },
     { "monitor",            NEED_DATABASE, 1, INT_MAX, do_monitor },
     { "monitor-cond",       NEED_DATABASE, 2, 3,       do_monitor_cond },
+    { "convert",            NEED_RPC,      1, 1,       do_convert },
+    { "needs-conversion",   NEED_RPC,      1, 1,       do_needs_conversion },
     { "dump",               NEED_DATABASE, 0, INT_MAX, do_dump },
     { "backup",             NEED_DATABASE, 0, 0,       do_backup },
     { "restore",            NEED_DATABASE, 0, 0,       do_restore },

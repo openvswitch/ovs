@@ -192,6 +192,12 @@ void ovsdb_datum_to_bare(const struct ovsdb_datum *,
 
 void ovsdb_datum_from_smap(struct ovsdb_datum *, const struct smap *);
 
+struct ovsdb_error *ovsdb_datum_convert(struct ovsdb_datum *dst,
+                                        const struct ovsdb_type *dst_type,
+                                        const struct ovsdb_datum *src,
+                                        const struct ovsdb_type *src_type)
+    OVS_WARN_UNUSED_RESULT;
+
 /* Comparison. */
 uint32_t ovsdb_datum_hash(const struct ovsdb_datum *,
                           const struct ovsdb_type *, uint32_t basis);

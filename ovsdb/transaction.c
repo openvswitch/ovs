@@ -806,8 +806,14 @@ update_version(struct ovsdb_txn *txn OVS_UNUSED, struct ovsdb_txn_row *txn_row)
     return NULL;
 }
 
-static struct ovsdb_error *
-ovsdb_txn_commit_(struct ovsdb_txn *txn, bool durable)
+static bool
+ovsdb_txn_is_empty(const struct ovsdb_txn *txn)
+{
+    return ovs_list_is_empty(&txn->txn_tables);
+}
+
+struct ovsdb_error * OVS_WARN_UNUSED_RESULT
+ovsdb_txn_start_commit(struct ovsdb_txn *txn)
 {
     struct ovsdb_error *error;
 
@@ -818,29 +824,25 @@ ovsdb_txn_commit_(struct ovsdb_txn *txn, bool durable)
         ovsdb_txn_abort(txn);
         return OVSDB_WRAP_BUG("can't happen", error);
     }
-    if (ovs_list_is_empty(&txn->txn_tables)) {
-        ovsdb_txn_abort(txn);
+    if (ovsdb_txn_is_empty(txn)) {
         return NULL;
     }
 
     /* Update reference counts and check referential integrity. */
     error = update_ref_counts(txn);
     if (error) {
-        ovsdb_txn_abort(txn);
         return error;
     }
 
     /* Delete unreferenced, non-root rows. */
     error = for_each_txn_row(txn, collect_garbage);
     if (error) {
-        ovsdb_txn_abort(txn);
         return OVSDB_WRAP_BUG("can't happen", error);
     }
 
     /* Check maximum rows table constraints. */
     error = check_max_rows(txn);
     if (error) {
-        ovsdb_txn_abort(txn);
         return error;
     }
 
@@ -848,14 +850,12 @@ ovsdb_txn_commit_(struct ovsdb_txn *txn, bool durable)
      * integrity. */
     error = for_each_txn_row(txn, assess_weak_refs);
     if (error) {
-        ovsdb_txn_abort(txn);
         return error;
     }
 
     /* Verify that the indexes will still be unique post-transaction. */
     error = for_each_txn_row(txn, check_index_uniqueness);
     if (error) {
-        ovsdb_txn_abort(txn);
         return error;
     }
 
@@ -865,14 +865,23 @@ ovsdb_txn_commit_(struct ovsdb_txn *txn, bool durable)
         return OVSDB_WRAP_BUG("can't happen", error);
     }
 
-    /* Commit to disk and send the commit to each replica. */
+    return NULL;
+}
+
+struct ovsdb_error *
+ovsdb_txn_finish_commit(struct ovsdb_txn *txn, bool durable)
+{
+    /* Commit to disk. */
     if (txn->db->file) {
-        error = ovsdb_file_commit(txn->db->file, txn, durable);
+        struct ovsdb_error *error = ovsdb_file_commit(txn->db->file, txn,
+                                                      durable);
         if (error) {
             ovsdb_txn_abort(txn);
             return error;
         }
     }
+
+    /* Send the transaction to each monitor. */
     ovsdb_monitors_commit(txn->db, txn);
 
     /* Finalize commit. */
@@ -887,10 +896,12 @@ ovsdb_txn_commit_(struct ovsdb_txn *txn, bool durable)
 struct ovsdb_error *
 ovsdb_txn_commit(struct ovsdb_txn *txn, bool durable)
 {
-   struct ovsdb_error *err;
-
-   PERF(__func__, err = ovsdb_txn_commit_(txn, durable));
-   return err;
+    struct ovsdb_error *error = ovsdb_txn_start_commit(txn);
+    if (error || ovsdb_txn_is_empty(txn)) {
+        ovsdb_txn_abort(txn);
+        return error;
+    }
+    return ovsdb_txn_finish_commit(txn, durable);
 }
 
 void

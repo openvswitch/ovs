@@ -111,10 +111,11 @@ static char *open_db(struct server_config *config, const char *filename);
 static void add_server_db(struct server_config *);
 static void close_db(struct db *db);
 
-static void parse_options(int *argc, char **argvp[],
-                          struct sset *remotes, char **unixctl_pathp,
-                          char **run_command, char **sync_from,
-                          char **sync_exclude, bool *is_backup);
+static void parse_options(int argc, char *argvp[],
+                          struct sset *db_filenames, struct sset *remotes,
+                          char **unixctl_pathp, char **run_command,
+                          char **sync_from, char **sync_exclude,
+                          bool *is_backup);
 OVS_NO_RETURN static void usage(void);
 
 static char *reconfigure_remotes(struct ovsdb_jsonrpc_server *,
@@ -202,7 +203,9 @@ main_loop(struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
 
         SHASH_FOR_EACH(node, all_dbs) {
             struct db *db = node->data;
-            ovsdb_trigger_run(db->db, time_msec());
+            if (ovsdb_trigger_run(db->db, time_msec())) {
+                ovsdb_jsonrpc_server_reconnect(jsonrpc, false);
+            }
         }
         if (run_process) {
             process_run();
@@ -265,7 +268,6 @@ main(int argc, char *argv[])
     struct shash all_dbs;
     struct shash_node *node, *next;
     char *error;
-    int i;
 
     ovs_cmdl_proctitle_init(argc, argv);
     set_program_name(argv[0]);
@@ -274,8 +276,8 @@ main(int argc, char *argv[])
     process_init();
 
     bool active = false;
-    parse_options(&argc, &argv, &remotes, &unixctl_path, &run_command,
-                  &sync_from, &sync_exclude, &active);
+    parse_options(argc, argv, &db_filenames, &remotes, &unixctl_path,
+                  &run_command, &sync_from, &sync_exclude, &active);
     is_backup = sync_from && !active;
 
     daemon_become_new_user(false);
@@ -288,17 +290,6 @@ main(int argc, char *argv[])
     config_tmpfile = tmpfile();
     if (!config_tmpfile) {
         ovs_fatal(errno, "failed to create temporary file");
-    }
-
-    sset_init(&db_filenames);
-    if (argc > 0) {
-        for (i = 0; i < argc; i++) {
-            sset_add(&db_filenames, argv[i]);
-         }
-    } else {
-        char *default_db = xasprintf("%s/conf.db", ovs_dbdir());
-        sset_add(&db_filenames, default_db);
-        free(default_db);
     }
 
     server_config.remotes = &remotes;
@@ -1477,8 +1468,9 @@ ovsdb_server_get_sync_status(struct unixctl_conn *conn, int argc OVS_UNUSED,
 }
 
 static void
-parse_options(int *argcp, char **argvp[],
-              struct sset *remotes, char **unixctl_pathp, char **run_command,
+parse_options(int argc, char *argv[],
+              struct sset *db_filenames, struct sset *remotes,
+              char **unixctl_pathp, char **run_command,
               char **sync_from, char **sync_exclude, bool *active)
 {
     enum {
@@ -1490,10 +1482,12 @@ parse_options(int *argcp, char **argvp[],
         OPT_SYNC_FROM,
         OPT_SYNC_EXCLUDE,
         OPT_ACTIVE,
+        OPT_NO_DBS,
         VLOG_OPTION_ENUMS,
         DAEMON_OPTION_ENUMS,
         SSL_OPTION_ENUMS,
     };
+
     static const struct option long_options[] = {
         {"remote",      required_argument, NULL, OPT_REMOTE},
         {"unixctl",     required_argument, NULL, OPT_UNIXCTL},
@@ -1510,14 +1504,15 @@ parse_options(int *argcp, char **argvp[],
         {"sync-from",   required_argument, NULL, OPT_SYNC_FROM},
         {"sync-exclude-tables", required_argument, NULL, OPT_SYNC_EXCLUDE},
         {"active", no_argument, NULL, OPT_ACTIVE},
+        {"no-dbs", no_argument, NULL, OPT_NO_DBS},
         {NULL, 0, NULL, 0},
     };
     char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
-    int argc = *argcp;
-    char **argv = *argvp;
+    bool add_default_db = true;
 
     *sync_from = NULL;
     *sync_exclude = NULL;
+    sset_init(db_filenames);
     sset_init(remotes);
     for (;;) {
         int c;
@@ -1596,6 +1591,10 @@ parse_options(int *argcp, char **argvp[],
             *active = true;
             break;
 
+        case OPT_NO_DBS:
+            add_default_db = false;
+            break;
+
         case '?':
             exit(EXIT_FAILURE);
 
@@ -1605,8 +1604,15 @@ parse_options(int *argcp, char **argvp[],
     }
     free(short_options);
 
-    *argcp -= optind;
-    *argvp += optind;
+    argc -= optind;
+    argv += optind;
+    if (argc > 0) {
+        for (int i = 0; i < argc; i++) {
+            sset_add(db_filenames, argv[i]);
+        }
+    } else if (add_default_db) {
+        sset_add_and_free(db_filenames, xasprintf("%s/conf.db", ovs_dbdir()));
+    }
 }
 
 static void

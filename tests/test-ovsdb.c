@@ -1522,14 +1522,14 @@ struct test_trigger {
 static void
 do_trigger_dump(struct test_trigger *t, long long int now, const char *title)
 {
-    struct json *result;
+    struct jsonrpc_msg *reply;
     char *s;
 
-    result = ovsdb_trigger_steal_result(&t->trigger);
-    s = json_to_string(result, JSSF_SORT);
+    reply = ovsdb_trigger_steal_reply(&t->trigger);
+    s = json_to_string(reply->result, JSSF_SORT);
     printf("t=%lld: trigger %d (%s): %s\n", now, t->number, title, s);
     free(s);
-    json_destroy(result);
+    jsonrpc_msg_destroy(reply);
     ovsdb_trigger_destroy(&t->trigger);
     free(t);
 }
@@ -1569,8 +1569,10 @@ do_trigger(struct ovs_cmdl_context *ctx)
             json_destroy(params);
         } else {
             struct test_trigger *t = xmalloc(sizeof *t);
-            ovsdb_trigger_init(&session, db, &t->trigger, params, now, false,
-                               NULL, NULL);
+            ovsdb_trigger_init(&session, db, &t->trigger,
+                               jsonrpc_create_request("transact", params,
+                                                      NULL),
+                               now, false, NULL, NULL);
             t->number = number++;
             if (ovsdb_trigger_is_complete(&t->trigger)) {
                 do_trigger_dump(t, now, "immediate");

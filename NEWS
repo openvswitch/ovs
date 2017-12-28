@@ -26,6 +26,8 @@ v2.9.0 - 19 Feb 2018
      * New high-level documentation in ovsdb(7).
      * New file format documentation for developers in ovsdb(5).
      * Protocol documentation moved from ovsdb-server(1) to ovsdb-server(7).
+     * ovsdb-server now supports online schema conversion via
+       "ovsdb-client convert".
      * ovsdb-server now always hosts a built-in database named _Server.  See
        ovsdb-server(5) for more details.
      * ovsdb-client: New "get-schema-cksum" and "query" commands.
