@@ -309,10 +309,11 @@ tnl_port_receive(const struct flow *flow) OVS_EXCLUDED(rwlock)
     tnl_port = tnl_find(flow);
     ofport = tnl_port ? tnl_port->ofport : NULL;
     if (!tnl_port) {
-        char *flow_str = flow_to_string(flow, NULL);
-
-        VLOG_WARN_RL(&rl, "receive tunnel port not found (%s)", flow_str);
-        free(flow_str);
+        if (!VLOG_DROP_WARN(&rl)) {
+            char *flow_str = flow_to_string(flow, NULL);
+            VLOG_WARN("receive tunnel port not found (%s)", flow_str);
+            free(flow_str);
+        }
         goto out;
     }
 
