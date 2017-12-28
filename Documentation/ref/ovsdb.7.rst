@@ -367,10 +367,17 @@ active-backup database, first stop the database server or servers, then use
 ``ovsdb-tool convert`` to convert it to the new schema, and then restart the
 database server.
 
+OVSDB also supports online database schema conversion.
+To convert a database online, use ``ovsdb-client convert``.
+The conversion is atomic, consistent, isolated, and durable.  ``ovsdb-server``
+disconnects any clients connected when the conversion takes place (except
+clients that use the ``set_db_change_aware`` Open vSwitch extension RPC).  Upon
+reconnection, clients will discover that the schema has changed.
+
 Schema versions and checksums (see Schemas_ above) can give hints about whether
 a database needs to be converted to a new schema.  If there is any question,
-though, the ``needs-conversion`` command on ``ovsdb-tool`` can provide a
-definitive answer.
+though, the ``needs-conversion`` command on ``ovsdb-tool`` and ``ovsdb-client``
+can provide a definitive answer.
 
 Working with Database History
 -----------------------------

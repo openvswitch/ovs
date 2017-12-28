@@ -414,6 +414,41 @@ The reply is always the same::
     "error": null
     "id": same "id" as request
 
+4.1.17 Schema Conversion
+------------------------
+
+Open vSwitch 2.9 adds a new JSON-RPC request to convert an online database from
+one schema to another.  The request contains the following members::
+
+    "method": "convert"
+    "params": [<db-name>, <database-schema>]
+    "id": <nonnull-json-value>
+
+Upon receipt, the server converts database <db-name> to schema
+<database-schema>.  The schema's name must be <db-name>.  The conversion is
+atomic, consistent, isolated, and durable.  The data in the database must be
+valid when interpreted under <database-schema>, with only one exception: data
+for tables and columns that do not exist in the new schema are ignored.
+Columns that exist in <database-schema> but not in the database are set to
+their default values.  All of the new schema's constraints apply in full.
+
+If the conversion is successful, the server notifies clients that use the
+``set_db_change_aware`` RPC introduced in Open vSwitch 2.9 and cancels their
+outstanding transactions and monitors.  The server disconnects other clients,
+enabling them to notice the change when they reconnect.  The server sends the
+following reply::
+
+    "result": {}
+    "error": null
+    "id": same "id" as request
+
+If the conversion fails, then the server sends an error reply in the following
+form::
+
+    "result": null
+    "error": [<error>]
+    "id": same "id" as request
+
 5.1 Notation
 ------------
 

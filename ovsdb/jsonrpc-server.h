@@ -79,7 +79,8 @@ const struct uuid *ovsdb_jsonrpc_server_get_uuid(
     const struct ovsdb_jsonrpc_server *);
 
 struct ovsdb_jsonrpc_monitor;
-void ovsdb_jsonrpc_monitor_destroy(struct ovsdb_jsonrpc_monitor *);
+void ovsdb_jsonrpc_monitor_destroy(struct ovsdb_jsonrpc_monitor *,
+                                   bool notify_cancellation);
 void ovsdb_jsonrpc_disable_monitor_cond(void);
 
 #endif /* ovsdb/jsonrpc-server.h */

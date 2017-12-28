@@ -570,23 +570,31 @@ ovsdb_file_txn_annotate(struct json *json, const char *comment)
     return json;
 }
 
+/* Returns 'txn' transformed into the JSON format that is used in OVSDB files.
+ * (But the caller must use ovsdb_file_txn_annotate() to add the _comment and
+ * _date members.)  If 'txn' doesn't actually change anything, returns NULL */
+static struct json *
+ovsdb_file_txn_to_json(const struct ovsdb_txn *txn)
+{
+    struct ovsdb_file_txn ftxn;
+
+    ovsdb_file_txn_init(&ftxn);
+    ovsdb_txn_for_each_change(txn, ovsdb_file_change_cb, &ftxn);
+    return ftxn.json;
+}
+
 struct ovsdb_error *
 ovsdb_file_commit(struct ovsdb_file *file,
                   const struct ovsdb_txn *txn, bool durable)
 {
-    struct ovsdb_file_txn ftxn;
-    struct ovsdb_error *error;
-    long long int current_time;
-
-    ovsdb_file_txn_init(&ftxn);
-    ovsdb_txn_for_each_change(txn, ovsdb_file_change_cb, &ftxn);
-    if (!ftxn.json) {
+    struct json *txn_json = ovsdb_file_txn_to_json(txn);
+    if (!txn_json) {
         /* Nothing to commit. */
         return NULL;
     }
 
-    error = ovsdb_file_txn_commit(ftxn.json, ovsdb_txn_get_comment(txn),
-                                  durable, file->log);
+    struct ovsdb_error *error = ovsdb_file_txn_commit(
+        txn_json, ovsdb_txn_get_comment(txn), durable, file->log);
     if (error) {
         return error;
     }
@@ -599,7 +607,7 @@ ovsdb_file_commit(struct ovsdb_file *file,
      * size of the previous snapshot, then compact the database. However, if
      * it has been over COMPACT_MAX_MSEC ms since the last compaction, the
      * database size is not taken into account. */
-    current_time = time_msec();
+    long long int current_time = time_msec();
     if (current_time >= file->next_compact
         && file->n_transactions >= 100
         && (current_time - file->last_compact >= COMPACT_MAX_MSEC
@@ -856,4 +864,116 @@ ovsdb_file_txn_commit(struct json *json, const char *comment,
     }
 
     return NULL;
+}
+
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
+ovsdb_convert_table(struct ovsdb_txn *txn,
+                    const struct ovsdb_table *src_table,
+                    struct ovsdb_table *dst_table)
+{
+    const struct ovsdb_row *src_row;
+    HMAP_FOR_EACH (src_row, hmap_node, &src_table->rows) {
+        struct ovsdb_row *dst_row = ovsdb_row_create(dst_table);
+        *ovsdb_row_get_uuid_rw(dst_row) = *ovsdb_row_get_uuid(src_row);
+
+        struct shash_node *node;
+        SHASH_FOR_EACH (node, &src_table->schema->columns) {
+            const struct ovsdb_column *src_column = node->data;
+            if (src_column->index == OVSDB_COL_UUID ||
+                src_column->index == OVSDB_COL_VERSION) {
+                continue;
+            }
+
+            const struct ovsdb_column *dst_column
+                = shash_find_data(&dst_table->schema->columns,
+                                  src_column->name);
+            if (!dst_column) {
+                continue;
+            }
+
+            struct ovsdb_error *error = ovsdb_datum_convert(
+                &dst_row->fields[dst_column->index], &dst_column->type,
+                &src_row->fields[src_column->index], &src_column->type);
+            if (error) {
+                ovsdb_row_destroy(dst_row);
+                return error;
+            }
+        }
+
+        ovsdb_txn_row_insert(txn, dst_row);
+    }
+    return NULL;
+}
+
+struct ovsdb_error * OVS_WARN_UNUSED_RESULT
+ovsdb_file_convert(const struct ovsdb_file *file,
+                   const struct ovsdb_schema *new_schema)
+{
+    struct ovsdb *new_db = ovsdb_create(ovsdb_schema_clone(new_schema));
+    struct ovsdb_txn *txn = ovsdb_txn_create(new_db);
+    struct ovsdb_error *error = NULL;
+
+    struct shash_node *node;
+    SHASH_FOR_EACH (node, &file->db->tables) {
+        const char *table_name = node->name;
+        const struct ovsdb_table *src_table = node->data;
+        struct ovsdb_table *dst_table = shash_find_data(&new_db->tables,
+                                                        table_name);
+        if (!dst_table) {
+            continue;
+        }
+
+        error = ovsdb_convert_table(txn, src_table, dst_table);
+        if (error) {
+            goto error;
+        }
+    }
+
+    error = ovsdb_txn_start_commit(txn);
+    if (error) {
+        goto error;
+    }
+
+    struct ovsdb_log *new;
+    error = ovsdb_log_replace_start(file->log, &new);
+    if (error) {
+        goto error;
+    }
+
+    /* Write schema. */
+    struct json *schema_json = ovsdb_schema_to_json(new_schema);
+    error = ovsdb_log_write(new, schema_json);
+    json_destroy(schema_json);
+    if (error) {
+        goto error;
+    }
+
+    /* Write data. */
+    struct json *txn_json = ovsdb_file_txn_to_json(txn);
+    if (txn_json) {
+        error = ovsdb_log_write(new, txn_json);
+        json_destroy(txn_json);
+        if (error) {
+            goto error;
+        }
+    }
+
+    error = ovsdb_log_replace_commit(file->log, new);
+    if (error) {
+        goto error;
+    }
+
+    error = ovsdb_txn_finish_commit(txn, true);
+    ovs_assert(!error);         /* Can't happen. */
+
+    ovsdb_replace(file->db, new_db);
+
+    return NULL;
+
+error:
+    ovsdb_destroy(new_db);
+    if (txn) {
+        ovsdb_txn_abort(txn);
+    }
+    return error;
 }

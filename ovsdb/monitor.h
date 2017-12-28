@@ -49,6 +49,8 @@ struct ovsdb_monitor *ovsdb_monitor_create(struct ovsdb *db,
 void ovsdb_monitors_remove(struct ovsdb *);
 void ovsdb_monitors_commit(struct ovsdb *, const struct ovsdb_txn *);
 
+void ovsdb_monitor_prereplace_db(struct ovsdb *);
+
 struct ovsdb_monitor *ovsdb_monitor_add(struct ovsdb_monitor *dbmon);
 
 void ovsdb_monitor_add_jsonrpc_monitor(struct ovsdb_monitor *dbmon,
