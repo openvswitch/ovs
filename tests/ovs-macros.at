@@ -122,6 +122,7 @@ if [ $? -eq 0 ]; then
     alias ovn-sbctl='OVS_SBCTL_TIMEOUT'
     alias ovn-nbctl='OVN_NBCTL_TIMEOUT'
     alias vtep-ctl='VTEP_CTL_TIMEOUT'
+    alias ovsdb-client='OVSDB_CLIENT_TIMEOUT'
     OVS_OFCTL_TIMEOUT () {
         command ovs-ofctl --timeout=$OVS_TIMEOUT "$@"
     }
@@ -136,6 +137,9 @@ if [ $? -eq 0 ]; then
     }
     VTEP_CTL_TIMEOUT () {
         command vtep-ctl --timeout=$OVS_TIMEOUT "$@"
+    }
+    OVSDB_CLIENT_TIMEOUT () {
+        command ovsdb-client --timeout=$OVS_TIMEOUT "$@"
     }
 fi
 
