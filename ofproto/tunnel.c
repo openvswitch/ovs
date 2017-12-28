@@ -37,6 +37,7 @@
 #include "tunnel.h"
 #include "openvswitch/vlog.h"
 #include "unaligned.h"
+#include "unixctl.h"
 #include "ofproto-dpif.h"
 #include "netdev-vport.h"
 
@@ -121,13 +122,18 @@ static struct tnl_port *tnl_find_ofport(const struct ofport_dpif *)
 
 static uint32_t tnl_hash(struct tnl_match *);
 static void tnl_match_fmt(const struct tnl_match *, struct ds *);
-static char *tnl_port_fmt(const struct tnl_port *) OVS_REQ_RDLOCK(rwlock);
+static char *tnl_port_to_string(const struct tnl_port *)
+    OVS_REQ_RDLOCK(rwlock);
+static void tnl_port_format(const struct tnl_port *, struct ds *)
+    OVS_REQ_RDLOCK(rwlock);
 static void tnl_port_mod_log(const struct tnl_port *, const char *action)
     OVS_REQ_RDLOCK(rwlock);
 static const char *tnl_port_get_name(const struct tnl_port *)
     OVS_REQ_RDLOCK(rwlock);
 static void tnl_port_del__(const struct ofport_dpif *, odp_port_t)
     OVS_REQ_WRLOCK(rwlock);
+
+static unixctl_cb_func tnl_unixctl_list;
 
 void
 ofproto_tunnel_init(void)
@@ -136,6 +142,8 @@ ofproto_tunnel_init(void)
 
     if (ovsthread_once_start(&once)) {
         fat_rwlock_init(&rwlock);
+        unixctl_command_register("ofproto/list-tunnels", "", 0, 0,
+                                 tnl_unixctl_list, NULL);
         ovsthread_once_done(&once);
     }
 }
@@ -318,7 +326,7 @@ tnl_port_receive(const struct flow *flow) OVS_EXCLUDED(rwlock)
 
     if (!VLOG_DROP_DBG(&dbg_rl)) {
         char *flow_str = flow_to_string(flow, NULL);
-        char *tnl_str = tnl_port_fmt(tnl_port);
+        char *tnl_str = tnl_port_to_string(tnl_port);
         VLOG_DBG("tunnel port %s receive from flow %s", tnl_str, flow_str);
         free(tnl_str);
         free(flow_str);
@@ -467,7 +475,7 @@ tnl_port_send(const struct ofport_dpif *ofport, struct flow *flow,
 
     if (pre_flow_str) {
         char *post_flow_str = flow_to_string(flow, NULL);
-        char *tnl_str = tnl_port_fmt(tnl_port);
+        char *tnl_str = tnl_port_to_string(tnl_port);
         VLOG_DBG("flow sent\n"
                  "%s"
                  " pre: %s\n"
@@ -642,53 +650,58 @@ tnl_port_mod_log(const struct tnl_port *tnl_port, const char *action)
     }
 }
 
-static char *
-tnl_port_fmt(const struct tnl_port *tnl_port) OVS_REQ_RDLOCK(rwlock)
+static void OVS_REQ_RDLOCK(rwlock)
+tnl_port_format(const struct tnl_port *tnl_port, struct ds *ds)
 {
     const struct netdev_tunnel_config *cfg =
         netdev_get_tunnel_config(tnl_port->netdev);
-    struct ds ds = DS_EMPTY_INITIALIZER;
 
-    ds_put_format(&ds, "port %"PRIu32": %s (%s: ", tnl_port->match.odp_port,
+    ds_put_format(ds, "port %"PRIu32": %s (%s: ", tnl_port->match.odp_port,
                   tnl_port_get_name(tnl_port),
                   netdev_get_type(tnl_port->netdev));
-    tnl_match_fmt(&tnl_port->match, &ds);
+    tnl_match_fmt(&tnl_port->match, ds);
 
     if (cfg->out_key != cfg->in_key ||
         cfg->out_key_present != cfg->in_key_present ||
         cfg->out_key_flow != cfg->in_key_flow) {
-        ds_put_cstr(&ds, ", out_key=");
+        ds_put_cstr(ds, ", out_key=");
         if (!cfg->out_key_present) {
-            ds_put_cstr(&ds, "none");
+            ds_put_cstr(ds, "none");
         } else if (cfg->out_key_flow) {
-            ds_put_cstr(&ds, "flow");
+            ds_put_cstr(ds, "flow");
         } else {
-            ds_put_format(&ds, "%#"PRIx64, ntohll(cfg->out_key));
+            ds_put_format(ds, "%#"PRIx64, ntohll(cfg->out_key));
         }
     }
 
     if (cfg->ttl_inherit) {
-        ds_put_cstr(&ds, ", ttl=inherit");
+        ds_put_cstr(ds, ", ttl=inherit");
     } else {
-        ds_put_format(&ds, ", ttl=%"PRIu8, cfg->ttl);
+        ds_put_format(ds, ", ttl=%"PRIu8, cfg->ttl);
     }
 
     if (cfg->tos_inherit) {
-        ds_put_cstr(&ds, ", tos=inherit");
+        ds_put_cstr(ds, ", tos=inherit");
     } else if (cfg->tos) {
-        ds_put_format(&ds, ", tos=%#"PRIx8, cfg->tos);
+        ds_put_format(ds, ", tos=%#"PRIx8, cfg->tos);
     }
 
     if (!cfg->dont_fragment) {
-        ds_put_cstr(&ds, ", df=false");
+        ds_put_cstr(ds, ", df=false");
     }
 
     if (cfg->csum) {
-        ds_put_cstr(&ds, ", csum=true");
+        ds_put_cstr(ds, ", csum=true");
     }
 
-    ds_put_cstr(&ds, ")\n");
+    ds_put_cstr(ds, ")\n");
+}
 
+static char * OVS_REQ_RDLOCK(rwlock)
+tnl_port_to_string(const struct tnl_port *tnl_port)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    tnl_port_format(tnl_port, &ds);
     return ds_steal_cstr(&ds);
 }
 
@@ -713,4 +726,27 @@ tnl_port_build_header(const struct ofport_dpif *ofport,
     fat_rwlock_unlock(&rwlock);
 
     return res;
+}
+
+static void
+tnl_unixctl_list(struct unixctl_conn *conn,
+                 int argc OVS_UNUSED, const char *argv[] OVS_UNUSED,
+                 void *aux OVS_UNUSED)
+{
+    struct ds reply = DS_EMPTY_INITIALIZER;
+
+    fat_rwlock_rdlock(&rwlock);
+    for (int i = 0; i < N_MATCH_TYPES; i++) {
+        struct hmap *map = tnl_match_maps[i];
+        if (map) {
+            struct tnl_port *tnl_port;
+            HMAP_FOR_EACH (tnl_port, match_node, map) {
+                tnl_port_format(tnl_port, &reply);
+            }
+        }
+    }
+    fat_rwlock_unlock(&rwlock);
+
+    unixctl_command_reply(conn, ds_cstr(&reply));
+    ds_destroy(&reply);
 }
