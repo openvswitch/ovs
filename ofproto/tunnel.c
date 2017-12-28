@@ -301,7 +301,6 @@ tnl_port_del(const struct ofport_dpif *ofport, odp_port_t odp_port)
 const struct ofport_dpif *
 tnl_port_receive(const struct flow *flow) OVS_EXCLUDED(rwlock)
 {
-    char *pre_flow_str = NULL;
     const struct ofport_dpif *ofport;
     struct tnl_port *tnl_port;
 
@@ -318,20 +317,11 @@ tnl_port_receive(const struct flow *flow) OVS_EXCLUDED(rwlock)
     }
 
     if (!VLOG_DROP_DBG(&dbg_rl)) {
-        pre_flow_str = flow_to_string(flow, NULL);
-    }
-
-    if (pre_flow_str) {
-        char *post_flow_str = flow_to_string(flow, NULL);
+        char *flow_str = flow_to_string(flow, NULL);
         char *tnl_str = tnl_port_fmt(tnl_port);
-        VLOG_DBG("flow received\n"
-                 "%s"
-                 " pre: %s\n"
-                 "post: %s",
-                 tnl_str, pre_flow_str, post_flow_str);
+        VLOG_DBG("tunnel port %s receive from flow %s", tnl_str, flow_str);
         free(tnl_str);
-        free(pre_flow_str);
-        free(post_flow_str);
+        free(flow_str);
     }
 
 out:
