@@ -140,6 +140,8 @@ static int ipgre_rcv(struct sk_buff *skb, const struct tnl_ptk_info *tpi)
 		__be64 tun_id;
 		int err;
 
+		if (iptunnel_pull_offloads(skb))
+			return PACKET_REJECT;
 
 		skb_pop_mac_header(skb);
 		flags = tpi->flags & (TUNNEL_CSUM | TUNNEL_KEY);
