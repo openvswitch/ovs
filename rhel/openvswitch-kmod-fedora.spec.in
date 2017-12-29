@@ -1,4 +1,4 @@
-# Spec file for Open vSwitch.
+# Spec file for Open vSwitch Kernel Modules.
 
 # Copyright (C) 2009, 2010, 2015 Nicira Networks, Inc.
 #
@@ -7,66 +7,84 @@
 # notice and this notice are preserved.  This file is offered as-is,
 # without warranty of any kind.
 
-%global debug_package %{nil}
+%define oname openvswitch
+# Uncomment when building for specific kernel version
+# %{!?kversion:%global kversion 3.10.0-327.36.3%{?dist}.%_target_cpu}
 
-#%define kernel 3.1.5-1.fc16.x86_64
-#define kernel %{kernel_source}
-%{?kversion:%define kernel %kversion}
-
-Name: openvswitch-kmod
-Summary: Open vSwitch Kernel Modules
-Group: System Environment/Daemons
-URL: http://www.openvswitch.org/
-Vendor: OpenSource Security Ralf Spenneberg <ralf@os-s.net>
+Name:    %{oname}-kmod
 Version: @VERSION@
-
-# The entire source code is ASL 2.0 except datapath/ which is GPLv2
-License: GPLv2
 Release: 1%{?dist}
-Source: openvswitch-%{version}.tar.gz
-#Source1: openvswitch-init
-Buildroot: /tmp/openvswitch-xen-rpm
+# Uncomment when building for specific kernel version
+# Release: 1_%(basename %kversion .%_target_cpu | tr '-' '_')
+Summary: Open vSwitch Kernel Modules
+
+Group:   System Environment/Daemons
+License: GPLv2
+URL:     http://openvswitch.org/
+Source0: %{oname}-%{version}.tar.gz
+Source1: %{oname}-kmod.files
+
+BuildRequires: openssl-devel
+BuildRequires: %kernel_module_package_buildreqs
 
 %description
 Open vSwitch provides standard network bridging functions augmented with
 support for the OpenFlow protocol for remote per-flow control of
 traffic. This package contains the kernel modules.
 
+# Without this we get an empty openvswitch-debuginfo package (whose name
+# conflicts with the openvswitch-debuginfo package for OVS userspace).
+%undefine _enable_debug_packages
+
+# Use -D 'kversion 2.6.32-131.6.1.el6.x86_64' to build package
+# for specified kernel version.
+%{?kversion:%define kernel_version %kversion}
+
+# Use -D 'kflavors default debug kdump' to build packages for
+# specified kernel variants.
+%{!?kflavors:%define kflavors default}
+
+%kernel_module_package -n %{oname} -f %{SOURCE1} %kflavors
+
 %prep
-%setup -q -n openvswitch-%{version}
+%setup -n %{oname}-%{version}
 
 %build
-%configure --with-linux=/lib/modules/%{kernel}/build --enable-ssl
-make %{_smp_mflags} -C datapath/linux
+for flavor in %flavors_to_build; do
+	mkdir _$flavor
+	(cd _$flavor && ../configure --with-linux="%{kernel_source $flavor}" --enable-ssl)
+	%{__make} -C _$flavor/datapath/linux %{?_smp_mflags}
+done
 
 %install
-rm -rf $RPM_BUILD_ROOT
-make INSTALL_MOD_PATH=$RPM_BUILD_ROOT -C datapath/linux modules_install
-mkdir -p $RPM_BUILD_ROOT/etc/depmod.d
-for module in $RPM_BUILD_ROOT/lib/modules/%{kernel}/extra/*.ko
-do
-    modname="$(basename ${module})"
-    echo "override ${modname%.ko} * extra" >> \
-        $RPM_BUILD_ROOT/etc/depmod.d/kmod-openvswitch.conf
-    echo "override ${modname%.ko} * weak-updates" >> \
-        $RPM_BUILD_ROOT/etc/depmod.d/kmod-openvswitch.conf
+export INSTALL_MOD_PATH=$RPM_BUILD_ROOT
+export INSTALL_MOD_DIR=extra/%{oname}
+
+for flavor in %flavors_to_build ; do
+	make -C %{kernel_source $flavor} modules_install M="`pwd`"/_$flavor/datapath/linux
+
+	# Cleanup unnecessary kernel-generated module dependency files.
+	find $INSTALL_MOD_PATH/lib/modules -iname 'modules.*' -exec rm {} \;
 done
+
+install -d %{buildroot}%{_sysconfdir}/depmod.d/
+for module in $(find %{buildroot}/lib/modules/%{kversion}/$INSTALL_MOD_DIR -iname '*.ko') ; do
+	modname="$(basename ${module})"
+	echo "override ${modname%.ko} * extra/%{oname}" >> %{oname}.conf
+	echo "override ${modname%.ko} * weak-updates/%{oname}" >> %{oname}.conf
+done
+install -m 644 %{oname}.conf %{buildroot}%{_sysconfdir}/depmod.d/
 
 %clean
 rm -rf $RPM_BUILD_ROOT
 
-%post
-# Ensure that modprobe will find our modules.
-depmod %{kernel}
-
-%files
-%defattr(0644,root,root)
-/lib/modules/%{kernel}/extra/*.ko
-/etc/depmod.d/kmod-openvswitch.conf
-%exclude /lib/modules/%{kernel}/modules.*
-
 %changelog
+* Fri Feb 17 2017 Mikhail Ushanov <gm.mephisto@gmail.com>
+- Updated for multi-flavor support
+- Fixed depmod config
+
 * Wed Sep 21 2011 Kyle Mestery <kmestery@cisco.com>
 - Updated for F15
+
 * Wed Jan 12 2011 Ralf Spenneberg <ralf@os-s.net>
 - First build on F14
