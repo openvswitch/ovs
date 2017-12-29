@@ -714,6 +714,9 @@ exit:
     return error;
 }
 
+/* Returns 'm' converted to JSON suitable for sending as a JSON-RPC message.
+ *
+ * Consumes and destroys 'm'. */
 struct json *
 jsonrpc_msg_to_json(struct jsonrpc_msg *m)
 {
