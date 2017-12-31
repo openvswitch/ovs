@@ -576,9 +576,9 @@ json_equal(const struct json *a, const struct json *b)
 {
     if (a == b) {
         return true;
-    }
-
-    if (a->type != b->type) {
+    } else if (!a || !b) {
+        return false;
+    } else if (a->type != b->type) {
         return false;
     }
 
