@@ -61,6 +61,19 @@ environments.
 \fIserver\fR may be an OVSDB active or passive connection method,
 e.g. \fBssl:192.168.10.5:6640\fR, as described in \fBovsdb\fR(7).
 .
+.IP "\fB\-\-leader\-only\fR"
+.IQ "\fB\-\-no\-leader\-only\fR"
+By default, or with \fB\-\-leader\-only\fR, when the database server
+is a clustered database, \fBovn\-sbctl\fR will avoid servers other
+than the cluster leader.  This ensures that any data that
+\fBovn\-sbctl\fR reads and reports is up-to-date.  With
+\fB\-\-no\-leader\-only\fR, \fBovn\-sbctl\fR will use any server in
+the cluster, which means that for read-only transactions it can report
+and act on stale data (transactions that modify the database are
+always serialized even with \fB\-\-no\-leader\-only\fR).  Refer to
+\fBUnderstanding Cluster Consistency\fR in \fBovsdb\fR(7) for more
+information.
+.
 .IP "\fB\-\-no\-syslog\fR"
 By default, \fBovn\-sbctl\fR logs its arguments and the details of any
 changes that it makes to the system log.  This option disables this

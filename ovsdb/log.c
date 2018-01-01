@@ -645,6 +645,14 @@ ovsdb_log_write(struct ovsdb_log *file, const struct json *json)
     return NULL;
 }
 
+struct ovsdb_error * OVS_WARN_UNUSED_RESULT
+ovsdb_log_write_and_free(struct ovsdb_log *log, struct json *json)
+{
+    struct ovsdb_error *error = ovsdb_log_write(log, json);
+    json_destroy(json);
+    return error;
+}
+
 /* Attempts to commit 'file' to disk.  Waits for the commit to succeed or fail.
  * Returns NULL if successful, otherwise the error that occurred. */
 struct ovsdb_error *

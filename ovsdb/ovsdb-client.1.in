@@ -48,6 +48,8 @@ ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 .br
 \fBovsdb\-client\fR [\fIoptions\fR] \fBmonitor\-cond\fR [\fIserver\fR] [\fIdatabase\fR] \fIconditions
 \fItable\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...]...
+.br
+\fBovsdb\-client \fR[\fIoptions\fR] \fBwait\fR \fR[\fIserver\fR] \fIdatabase\fR \fIstate\fR
 .IP "Testing Commands:"
 \fBovsdb\-client\fR [\fIoptions\fR] \fBlock\fR [\fIserver\fR] \fIlock\fR
 .br
@@ -57,6 +59,8 @@ ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 .br
 .IP "Other Commands:"
 \fBovsdb\-client help\fR
+.IP "Cluster Options:"
+[\fB\-\-no\-leader\-only\fR]
 .IP "Output formatting options:"
 [\fB\-\-format=\fIformat\fR]
 [\fB\-\-data=\fIformat\fR]
@@ -79,6 +83,14 @@ be an OVSDB active or passive connection method, as described in
 \fBovsdb\fR(7).  The default server is \fBunix:@RUNDIR@/db.sock\fR
 and
 the default \fIdatabase\fR is \fBOpen_vSwitch\fR.
+.PP
+\fBovsdb\-client\fR supports the
+\fImethod1\fB,\fImethod2\fB,\fR...\fB,\fImethodN\fR syntax described
+in \fBovsdb\fR(7) for connecting to a cluster.  When this syntax is
+used, \fBovsdb\-client\fR tries the cluster members in random order
+until it finds the cluster leader.  Specify the
+\fB\-\-no\-leader\-only\fR option to instead accept any server that is
+connected to the cluster.
 .PP
 For an introduction to OVSDB and its implementation in Open vSwitch,
 see \fBovsdb\fR(7).
@@ -197,12 +209,12 @@ is specified, only those columns are retrieved.
 .IP "\fBbackup\fR [\fIserver\fR] [\fIdatabase\fR] \fB> \fIsnapshot\fR"
 Connects to \fIserver\fR, retrieves a snapshot of the schema and data
 in \fIdatabase\fR, and prints it on stdout in the format used for
-OVSDB database files.  This is an appropriate
+OVSDB standalone and active-backup databases.  This is an appropriate
 way to back up any remote database.  The database snapshot that it
 outputs is suitable to be served up directly by \fBovsdb\-server\fR or
 used as the input to \fBovsdb\-client restore\fR.
 .IP
-Another way to back up a is to
+Another way to back up a standalone or active-backup database is to
 copy its database file, e.g. with \fBcp\fR.  This is safe even if the
 database is in use.
 .IP
@@ -220,8 +232,8 @@ transaction.
 .IP
 UUIDs for rows in the restored database will differ from those in
 \fIsnapshot\fR, because the OVSDB protocol does not allow clients to
-specify row UUIDs.  Another way to restore a database,
-which does also restore row UUIDs, is to stop
+specify row UUIDs.  Another way to restore a standalone or active-backup
+database, which does also restore row UUIDs, is to stop
 the server or servers, replace the database file by the snapshot, then
 restart the database.  Either way, ephemeral columns are not restored,
 since by design they do not survive across restarts of
@@ -279,6 +291,31 @@ prints the initial database contents.
 The \fBmonitor\fR command uses RFC 7047 "monitor" method to open a monitor
 session with the server.
 .
+.IP "\fBwait\fR \fR[\fIserver\fR] \fIdatabase state\fR"
+Waits for \fIdatabase\fR on \fIserver\fR to enter a desired \fIstate\fR,
+which may be one of:
+.RS
+.IP "\fBadded\fR"
+Waits until a database with the given name has been added to
+\fIserver\fR.
+.IP "\fBconnected\fR"
+Waits until a database with the given name has been added to
+\fIserver\fR.  Then, if \fIdatabase\fR is clustered, additionally
+waits until it has joined and connected to its cluster.
+.IP "\fBremoved\fR"
+Waits until \fIdatabase\fR has been removed from the database server.
+This can also be used to wait for a database to complete leaving its
+cluster, because \fBovsdb\-server\fR removes a database at that point.
+.RE
+.IP
+\fIdatabase\fR is mandatory for this command because it is often used
+to check for databases that have not yet been added to the server, so
+that the \fBovsdb\-client\fR semantics of acting on a default database
+do not work.
+.IP
+This command acts on a particular database server, not on a cluster,
+so \fIserver\fR must name a single server, not a comma-delimited list
+of servers.
 .SS "Testing commands"
 These commands are mostly of interest for testing the correctness
 of the OVSDB server.

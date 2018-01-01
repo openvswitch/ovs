@@ -302,6 +302,22 @@ _uuid                                name number
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
+AT_SETUP([ovsdb-tool unsupported cluster operations])
+AT_KEYWORDS([ovsdb file negative compact query transact convert])
+ordinal_schema > schema
+AT_CHECK([ovsdb-tool create-cluster db schema unix:s1.raft])
+AT_CHECK([ovsdb-tool compact db], [1], [], [ovsdb-tool: ovsdb error: db: cannot apply this operation to clustered database file
+])
+AT_CHECK([ovsdb-tool convert db schema], [1], [], [ovsdb-tool: ovsdb error: db: cannot apply this operation to clustered database file
+])
+AT_CHECK([ovsdb-tool needs-conversion db schema], [1], [], [ovsdb-tool: ovsdb error: db: cannot apply this operation to clustered database file
+])
+AT_CHECK([ovsdb-tool query db '[[]]'], [1], [], [ovsdb-tool: ovsdb error: db: cannot apply this operation to clustered database file
+])
+AT_CHECK([ovsdb-tool transact db '[[]]'], [1], [], [ovsdb-tool: ovsdb error: db: cannot apply this operation to clustered database file
+])
+AT_CLEANUP
+
 AT_SETUP([ovsdb-tool schema-version, schema-cksum, schema-name])
 AT_KEYWORDS([ovsdb file positive schema-version schema-cksum])
 ordinal_schema > schema
@@ -313,8 +329,8 @@ AT_CHECK([ovsdb-tool schema-name schema], [0], [ordinals
 ])
 AT_CLEANUP
 
-AT_SETUP([ovsdb-tool db-version, db-cksum, db-name])
-AT_KEYWORDS([ovsdb file positive db-version db-cksum])
+AT_SETUP([ovsdb-tool database inspection commands - standalone])
+AT_KEYWORDS([ovsdb file positive db-version db-cksum db-name db-cid db-sid db-local-address])
 ordinal_schema > schema
 touch .db.~lock~
 AT_CHECK([ovsdb-tool create db schema], [0], [], [ignore])
@@ -324,6 +340,61 @@ AT_CHECK([ovsdb-tool db-cksum db], [0], [12345678 9
 ])
 AT_CHECK([ovsdb-tool db-name db], [0], [ordinals
 ])
+AT_CHECK([ovsdb-tool db-cid db], [1], [], [ovsdb-tool: db: not a clustered database
+])
+AT_CHECK([ovsdb-tool db-sid db], [1], [], [ovsdb-tool: db: not a clustered database
+])
+AT_CHECK([ovsdb-tool db-local-address db], [1], [], [ovsdb-tool: db: not a clustered database
+])
+AT_CLEANUP
+
+AT_SETUP([ovsdb-tool database inspection commands - clustered])
+AT_KEYWORDS([ovsdb file negative db-version db-cksum db-name db-cid db-sid db-local-address cluster])
+ordinal_schema > schema
+touch .db.~lock~
+AT_CHECK([ovsdb-tool create-cluster db schema tcp:1.2.3.4:1234])
+AT_CHECK([ovsdb-tool db-version db], [1], [], [ovsdb-tool: ovsdb error: db: cannot apply this operation to clustered database file
+])
+AT_CHECK([ovsdb-tool db-cksum db], [1], [], [ovsdb-tool: ovsdb error: db: cannot apply this operation to clustered database file
+])
+AT_CHECK([ovsdb-tool db-name db], [0], [ordinals
+])
+AT_CHECK([(ovsdb-tool db-cid db; ovsdb-tool db-sid db) | uuidfilt], [0], [<0>
+<1>
+])
+AT_CHECK([ovsdb-tool db-local-address db], [0], [tcp:1.2.3.4:1234
+])
+AT_CLEANUP
+
+AT_SETUP([ovsdb-tool database inspection commands - joining a cluster])
+AT_KEYWORDS([ovsdb file positive db-version db-cksum db-name db-cid db-sid db-local-address cluster join joining])
+ordinal_schema > schema
+touch .db.~lock~
+for cid in '' 520cf525-3772-43cc-8268-23bf5b548cf4; do
+    if test -z "$cid"; then
+        cid_option=
+    else
+        cid_option=--cid=$cid
+    fi
+    AT_CHECK([rm -f db && ovsdb-tool $cid_option join-cluster db ordinals tcp:1.2.3.4:1234 tcp:2.3.4.5:1234], [0], [], [ignore])
+    AT_CHECK([ovsdb-tool db-version db], [1], [], [ovsdb-tool: ovsdb error: db: cannot apply this operation to clustered database file
+])
+    AT_CHECK([ovsdb-tool db-cksum db], [1], [], [ovsdb-tool: ovsdb error: db: cannot apply this operation to clustered database file
+])
+    AT_CHECK([ovsdb-tool db-name db], [0], [ordinals
+])
+    if test -z "$cid"; then
+        AT_CHECK([ovsdb-tool db-cid db], [2], [], [db: cluster ID not yet known
+])
+    else
+        AT_CHECK_UNQUOTED([ovsdb-tool db-cid db], [0], [$cid
+])
+    fi
+    AT_CHECK([ovsdb-tool db-sid db | uuidfilt], [0], [<0>
+])
+    AT_CHECK([ovsdb-tool db-local-address db], [0], [tcp:1.2.3.4:1234
+])
+done
 AT_CLEANUP
 
 AT_SETUP([ovsdb-tool needs-conversion (no conversion needed)])
@@ -344,4 +415,47 @@ sed 's/5\.1\.3/5.1.4/' < schema > schema2
 AT_CHECK([diff schema schema2], [1], [ignore])
 AT_CHECK([ovsdb-tool needs-conversion db schema2], [0], [yes
 ])
+AT_CLEANUP
+
+AT_SETUP([ovsdb-tool create-cluster with initial data])
+AT_KEYWORDS([ovsdb file positive])
+
+# Create a standalone database and put some data in it.
+ordinal_schema > schema
+ovsdb-tool create db1 schema
+AT_CHECK(
+  [[for pair in 'zero 0' 'one 1' 'two 2' 'three 3' 'four 4' 'five 5'; do
+      set -- $pair
+      ovsdb-tool transact db1 '
+	["ordinals",
+	 {"op": "insert",
+	  "table": "ordinals",
+	  "row": {"name": "'$1'", "number": '$2'}},
+	 {"op": "comment",
+	  "comment": "add row for '"$pair"'"}]'
+    done | uuidfilt]], [0],
+[[[{"uuid":["uuid","<0>"]},{}]
+[{"uuid":["uuid","<1>"]},{}]
+[{"uuid":["uuid","<2>"]},{}]
+[{"uuid":["uuid","<3>"]},{}]
+[{"uuid":["uuid","<4>"]},{}]
+[{"uuid":["uuid","<5>"]},{}]
+]], [ignore])
+
+# Dump the data.
+AT_CHECK([ovsdb-server -vfile -vvlog:off --monitor --detach --no-chdir --pidfile --log-file --remote=punix:db.sock db1])
+AT_CHECK([ovsdb-client dump > expout])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+# Create a clustered database from the standalone one.
+ovsdb-tool create-cluster db2 db1 unix:s1.raft
+
+# Dump the data.
+AT_CHECK([ovsdb-server -vconsole:off -vfile -vvlog:off --monitor --detach --no-chdir --pidfile --log-file --remote=punix:db.sock db2])
+AT_CHECK([ovsdb-client wait ordinals connected])
+AT_CHECK([ovsdb-client dump > dump2])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+# Make sure that the clustered data matched the standalone data.
+AT_CHECK([cat dump2], [0], [expout])
 AT_CLEANUP

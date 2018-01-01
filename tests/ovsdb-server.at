@@ -215,7 +215,7 @@ ovs-appctl: ovsdb-server: server returned an error
 ])
 else
   AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/add-db db2], 2, [],
-  [db2: already open
+  [ovsdb error: db2: already open
 ovs-appctl: ovsdb-server: server returned an error
 ])
 fi
@@ -289,7 +289,7 @@ AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db1 schema], [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
-AT_CHECK([ovsdb-server -v -vvlog:off --monitor --detach --no-chdir --pidfile --log-file --remote=punix:db.sock db1])
+AT_CHECK([ovsdb-server -vfile -vvlog:off --monitor --detach --no-chdir --pidfile --log-file --remote=punix:db.sock db1])
 
 # Add the second database.
 constraint_schema > schema2
@@ -322,7 +322,7 @@ AT_CHECK([ovsdb-tool create db1 schema], [0], [ignore], [ignore])
 constraint_schema > schema2
 AT_CHECK([ovsdb-tool create db2 schema2], [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
-AT_CHECK([ovsdb-server -v -vvlog:off --monitor --detach --no-chdir --pidfile --log-file --remote=punix:db.sock db1 db2])
+AT_CHECK([ovsdb-server -vfile -vvlog:off --monitor --detach --no-chdir --pidfile --log-file --remote=punix:db.sock db1 db2])
 
 # Remove the second database.
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/remove-db constraints])
@@ -466,7 +466,7 @@ AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
-AT_CHECK([ovsdb-server -v -vvlog:off --monitor --detach --no-chdir --pidfile --log-file db])
+AT_CHECK([ovsdb-server -vfile -vvlog:off --monitor --detach --no-chdir --pidfile --log-file db])
 
 # Add a remote.
 AT_CHECK([test ! -e socket1])
@@ -497,7 +497,7 @@ AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
-AT_CHECK([ovsdb-server -v -vvlog:off --monitor --detach --no-chdir --pidfile --log-file db])
+AT_CHECK([ovsdb-server -vfile -vvlog:off --monitor --detach --no-chdir --pidfile --log-file db])
 
 # Add a remote.
 AT_CHECK([test ! -e socket1])
@@ -643,53 +643,64 @@ AT_CHECK_UNQUOTED(
   [ignore])
 OVSDB_SERVER_SHUTDOWN
 AT_CLEANUP
+
+OVS_START_SHELL_HELPERS
+# ovsdb_check_online_compaction MODEL
+#
+# where MODEL is "standalone" or "cluster"
+ovsdb_check_online_compaction() {
+    local model=$1
 
-AT_SETUP([compacting online])
-AT_KEYWORDS([ovsdb server compact])
-ordinal_schema > schema
-dnl Make sure that "ovsdb-tool create" works with a dangling symlink for
-dnl the database and the lockfile, creating the target of each symlink rather
-dnl than replacing the symlinks with regular files.
-mkdir dir
-if test "$IS_WIN32" = "no"; then
-    ln -s dir/db db
-    ln -s dir/.db.~lock~ .db.~lock~
-    AT_SKIP_IF([test ! -h db || test ! -h .db.~lock~])
-fi
-AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
-dnl Start ovsdb-server.
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file="`pwd`"/ovsdb-server.log db], [0], [ignore], [ignore])
-AT_CAPTURE_FILE([ovsdb-server.log])
-dnl Do a bunch of random transactions that put crap in the database log.
-AT_CHECK(
-  [[for pair in 'zero 0' 'one 1' 'two 2' 'three 3' 'four 4' 'five 5'; do
-      set -- $pair
-      ovsdb-client transact unix:socket '
-        ["ordinals",
-         {"op": "insert",
-          "table": "ordinals",
-          "row": {"name": "'$1'", "number": '$2'}},
-         {"op": "comment",
-          "comment": "add row for '"$pair"'"}]'
-      ovsdb-client transact unix:socket '
-        ["ordinals",
-         {"op": "delete",
-          "table": "ordinals",
-          "where": [["number", "==", '$2']]},
-         {"op": "comment",
-          "comment": "delete row for '"$2"'"}]'
-      ovsdb-client transact unix:socket '
-        ["ordinals",
-         {"op": "insert",
-          "table": "ordinals",
-          "row": {"name": "'$1'", "number": '$2'}},
-         {"op": "comment",
-          "comment": "add back row for '"$pair"'"}]'
-    done]],
-  [0], [stdout], [ignore], [test ! -e pid || kill `cat pid`])
-dnl Check that all the crap is in fact in the database log.
-AT_CHECK([[uuidfilt db | grep -v ^OVSDB | sed 's/"_date":[0-9]*/"_date":0/' | ovstest test-json --multiple -]], [0],
-  [[{"cksum":"12345678 9","name":"ordinals","tables":{"ordinals":{"columns":{"name":{"type":"string"},"number":{"type":"integer"}},"indexes":[["number"]]}},"version":"5.1.3"}
+    ordinal_schema > schema
+    dnl Make sure that "ovsdb-tool create" works with a dangling symlink for
+    dnl the database and the lockfile, creating the target of each symlink rather
+    dnl than replacing the symlinks with regular files.
+    mkdir dir
+    if test "$IS_WIN32" = "no"; then
+	ln -s dir/db db
+	ln -s dir/.db.~lock~ .db.~lock~
+	AT_SKIP_IF([test ! -h db || test ! -h .db.~lock~])
+    fi
+    AT_CHECK([if test $model = standalone; then
+                  ovsdb-tool create db schema
+              else
+                  ovsdb-tool create-cluster db schema unix:s1.raft
+              fi])
+    dnl Start ovsdb-server.
+    AT_CHECK([ovsdb-server -vvlog:off -vconsole:off --detach --no-chdir --pidfile --remote=punix:socket --log-file db], [0])
+    AT_CHECK([ovsdb-client wait unix:socket ordinals connected])
+    AT_CAPTURE_FILE([ovsdb-server.log])
+    dnl Do a bunch of random transactions that put crap in the database log.
+    AT_CHECK(
+      [[for pair in 'zero 0' 'one 1' 'two 2' 'three 3' 'four 4' 'five 5'; do
+	  set -- $pair
+	  ovsdb-client transact unix:socket '
+	    ["ordinals",
+	     {"op": "insert",
+	      "table": "ordinals",
+	      "row": {"name": "'$1'", "number": '$2'}},
+	     {"op": "comment",
+	      "comment": "add row for '"$pair"'"}]'
+	  ovsdb-client transact unix:socket '
+	    ["ordinals",
+	     {"op": "delete",
+	      "table": "ordinals",
+	      "where": [["number", "==", '$2']]},
+	     {"op": "comment",
+	      "comment": "delete row for '"$2"'"}]'
+	  ovsdb-client transact unix:socket '
+	    ["ordinals",
+	     {"op": "insert",
+	      "table": "ordinals",
+	      "row": {"name": "'$1'", "number": '$2'}},
+	     {"op": "comment",
+	      "comment": "add back row for '"$pair"'"}]'
+	done]],
+      [0], [stdout])
+    if test $model = standalone; then
+	dnl Check that all the crap is in fact in the database log.
+	AT_CHECK([[uuidfilt db | grep -v ^OVSDB | sed 's/"_date":[0-9]*/"_date":0/' | ovstest test-json --multiple -]], [0],
+[[{"cksum":"12345678 9","name":"ordinals","tables":{"ordinals":{"columns":{"name":{"type":"string"},"number":{"type":"integer"}},"indexes":[["number"]]}},"version":"5.1.3"}
 {"_comment":"add row for zero 0","_date":0,"ordinals":{"<0>":{"name":"zero"}}}
 {"_comment":"delete row for 0","_date":0,"ordinals":{"<0>":null}}
 {"_comment":"add back row for zero 0","_date":0,"ordinals":{"<1>":{"name":"zero"}}}
@@ -708,11 +719,14 @@ AT_CHECK([[uuidfilt db | grep -v ^OVSDB | sed 's/"_date":[0-9]*/"_date":0/' | ov
 {"_comment":"add row for five 5","_date":0,"ordinals":{"<10>":{"name":"five","number":5}}}
 {"_comment":"delete row for 5","_date":0,"ordinals":{"<10>":null}}
 {"_comment":"add back row for five 5","_date":0,"ordinals":{"<11>":{"name":"five","number":5}}}
-]], [], [test ! -e pid || kill `cat pid`])
-dnl Dump out and check the actual database contents.
-AT_CHECK([[ovsdb-client dump unix:socket ordinals]],
-  [0], [stdout], [ignore])
-AT_CHECK([uuidfilt stdout], [0], [dnl
+]])
+    else
+        dnl Check that at least there's a lot of transactions.
+	AT_CHECK([test `wc -l < db` -gt 50])
+    fi
+    dnl Dump out and check the actual database contents.
+    AT_CHECK([ovsdb-client dump unix:socket ordinals], [0], [stdout])
+    AT_CHECK([uuidfilt stdout], [0], [dnl
 ordinals table
 _uuid                                name  number
 ------------------------------------ ----- ------
@@ -722,33 +736,38 @@ _uuid                                name  number
 <3> three 3
 <4> two   2
 <5> zero  0
-], [], [test ! -e pid || kill `cat pid`])
-dnl Now compact the database in-place.
-AT_CHECK([[ovs-appctl -t ovsdb-server ovsdb-server/compact]],
-  [0], [], [ignore], [test ! -e pid || kill `cat pid`])
-dnl Negative test.
-AT_CHECK([[ovs-appctl -t ovsdb-server ovsdb-server/compact _Server]],
-  [2], [], [cannot compact built-in databases
+])
+    cp db db.pre-compaction
+    dnl Now compact the database in-place.
+    AT_CHECK([[ovs-appctl -t ovsdb-server ovsdb-server/compact]],
+      [0], [], [ignore])
+    dnl Negative test.
+    AT_CHECK([[ovs-appctl -t ovsdb-server ovsdb-server/compact _Server]],
+      [2], [], [cannot compact built-in databases
 ovs-appctl: ovsdb-server: server returned an error
 ])
-dnl Make sure that "db" is still a symlink to dir/db instead of getting
-dnl replaced by a regular file, ditto for .db.~lock~.
-if test "$IS_WIN32" = "no"; then
-    AT_CHECK([test -h db])
-    AT_CHECK([test -h .db.~lock~])
-    AT_CHECK([test -f dir/db])
-    AT_CHECK([test -f dir/.db.~lock~])
-fi
-dnl We can't fully re-check the contents of the database log, because the
-dnl order of the records is not predictable, but there should only be 4 lines
-dnl in it now.
-AT_CAPTURE_FILE([db])
-AT_CHECK([test `wc -l < db` -eq 4], [0], [], [],
-  [test ! -e pid || kill `cat pid`])
-dnl And check that the dumped data is the same too:
-AT_CHECK([ovsdb-client dump unix:socket ordinals], [0], [stdout], [ignore],
-  [test ! -e pid || kill `cat pid`])
-AT_CHECK([uuidfilt stdout], [0], [dnl
+    dnl Make sure that "db" is still a symlink to dir/db instead of getting
+    dnl replaced by a regular file, ditto for .db.~lock~.
+    if test "$IS_WIN32" = "no"; then
+	AT_CHECK([test -h db])
+	AT_CHECK([test -h .db.~lock~])
+	AT_CHECK([test -f dir/db])
+	AT_CHECK([test -f dir/.db.~lock~])
+    fi
+
+    # We can't fully re-check the contents of the database log, because the
+    # order of the records is not predictable, but there should only be 4 lines
+    # in it now in the standalone case
+    AT_CAPTURE_FILE([db])
+    compacted_lines=`wc -l < db`
+    echo compacted_lines=$compacted_lines
+    if test $model = standalone; then
+        AT_CHECK([test $compacted_lines -eq 4])
+    fi
+
+    dnl And check that the dumped data is the same too:
+    AT_CHECK([ovsdb-client dump unix:socket ordinals], [0], [stdout])
+    AT_CHECK([uuidfilt stdout], [0], [dnl
 ordinals table
 _uuid                                name  number
 ------------------------------------ ----- ------
@@ -758,27 +777,34 @@ _uuid                                name  number
 <3> three 3
 <4> two   2
 <5> zero  0
-], [], [test ! -e pid || kill `cat pid`])
-dnl Now do some more transactions.
-AT_CHECK(
-  [[ovsdb-client transact unix:socket '
-     ["ordinals",
-      {"op": "delete",
-       "table": "ordinals",
-       "where": [["number", "<", 3]]}]']],
-  [0], [[[{"count":3}]
-]], [ignore], [test ! -e pid || kill `cat pid`])
-dnl There should be 6 lines in the log now.
-AT_CHECK([test `wc -l < db` -eq 6], [0], [], [],
-  [test ! -e pid || kill `cat pid`])
-dnl Then check that the dumped data is correct.  This time first kill
-dnl and restart the database server to ensure that the data is correct on
-dnl disk as well as in memory.
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file="`pwd`"/ovsdb-server.log db], [0], [ignore], [ignore])
-AT_CHECK([ovsdb-client dump unix:socket ordinals], [0], [stdout], [ignore],
-  [test ! -e pid || kill `cat pid`])
-AT_CHECK([uuidfilt stdout], [0], [dnl
+])
+    dnl Now do some more transactions.
+    AT_CHECK(
+      [[ovsdb-client transact unix:socket '
+	 ["ordinals",
+	  {"op": "delete",
+	   "table": "ordinals",
+	   "where": [["number", "<", 3]]}]']],
+      [0], [[[{"count":3}]
+]], [ignore])
+
+    dnl There should be 6 lines in the log now, for the standalone case,
+    dnl and for the clustered case the file should at least have grown.
+    updated_lines=`wc -l < db`
+    echo compacted_lines=$compacted_lines updated_lines=$updated_lines
+    if test $model = standalone; then
+        AT_CHECK([test $updated_lines -eq 6])
+    else
+        AT_CHECK([test $updated_lines -gt $compacted_lines])
+    fi
+
+    dnl Then check that the dumped data is correct.  This time first kill
+    dnl and restart the database server to ensure that the data is correct on
+    dnl disk as well as in memory.
+    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+    AT_CHECK([ovsdb-server -vvlog:off -vconsole:off --detach --no-chdir --pidfile --remote=punix:socket --log-file db])
+    AT_CHECK([ovsdb-client dump unix:socket ordinals], [0], [stdout])
+    AT_CHECK([uuidfilt stdout], [0], [dnl
 ordinals table
 _uuid                                name  number
 ------------------------------------ ----- ------
@@ -786,43 +812,67 @@ _uuid                                name  number
 <1> four  4
 <2> three 3
 ], [], [test ! -e pid || kill `cat pid`])
-OVSDB_SERVER_SHUTDOWN
+    OVSDB_SERVER_SHUTDOWN
+}
+OVS_END_SHELL_HELPERS
+
+AT_SETUP([compacting online - standalone])
+AT_KEYWORDS([ovsdb server compact])
+ovsdb_check_online_compaction standalone
 AT_CLEANUP
 
-AT_SETUP([schema conversion online])
-AT_KEYWORDS([ovsdb server convert needs-conversion])
-on_exit 'kill `cat *.pid`'
-ordinal_schema > schema
-AT_DATA([new-schema],
-  [[{"name": "ordinals",
+AT_SETUP([compacting online - cluster])
+AT_KEYWORDS([ovsdb server compact])
+ovsdb_check_online_compaction cluster
+AT_CLEANUP
+
+OVS_START_SHELL_HELPERS
+# ovsdb_check_online_conversion MODEL
+#
+# where MODEL is "standalone" or "cluster"
+ovsdb_check_online_conversion() {
+    local model=$1
+    on_exit 'kill `cat *.pid`'
+    ordinal_schema > schema
+    AT_DATA([new-schema],
+      [[{"name": "ordinals",
      "tables": {
        "ordinals": {
-         "columns": {
-           "number": {"type": "integer"}}}}}
+	 "columns": {
+	   "number": {"type": "integer"}}}}}
 ]])
-dnl Make sure that "ovsdb-tool create" works with a dangling symlink for
-dnl the database and the lockfile, creating the target of each symlink rather
-dnl than replacing the symlinks with regular files.
-mkdir dir
-if test "$IS_WIN32" = "no"; then
-    ln -s dir/db db
-    ln -s dir/.db.~lock~ .db.~lock~
-    AT_SKIP_IF([test ! -h db || test ! -h .db.~lock~])
-fi
-AT_CHECK([ovsdb-tool create db schema])
-dnl Put some data in the database.
-AT_CHECK(
-  [[for pair in 'zero 0' 'one 1' 'two 2' 'three 3' 'four 4' 'five 5'; do
-      set -- $pair
-      ovsdb-tool transact db '
-        ["ordinals",
-         {"op": "insert",
-          "table": "ordinals",
-          "row": {"name": "'$1'", "number": '$2'}},
-         {"op": "comment",
-          "comment": "add row for '"$pair"'"}]'
-    done | uuidfilt]], [0],
-[[[{"uuid":["uuid","<0>"]},{}]
+    dnl Make sure that "ovsdb-tool create" works with a dangling symlink for
+    dnl the database and the lockfile, creating the target of each symlink
+    dnl rather than replacing the symlinks with regular files.
+    mkdir dir
+    if test "$IS_WIN32" = "no"; then
+	ln -s dir/db db
+	ln -s dir/.db.~lock~ .db.~lock~
+	AT_SKIP_IF([test ! -h db || test ! -h .db.~lock~])
+    fi
+    AT_CHECK([if test $model = standalone; then
+                  ovsdb-tool create db schema
+              else
+                  ovsdb-tool create-cluster db schema unix:s1.raft
+              fi])
+
+    dnl Start the database server.
+    AT_CHECK([ovsdb-server -vfile -vvlog:off -vconsole:off --detach --no-chdir --pidfile --log-file --remote=punix:db.sock db], [0])
+    AT_CAPTURE_FILE([ovsdb-server.log])
+
+    dnl Put some data in the database.
+    AT_CHECK(
+      [[for pair in 'zero 0' 'one 1' 'two 2' 'three 3' 'four 4' 'five 5'; do
+	  set -- $pair
+	  ovsdb-client transact '
+	    ["ordinals",
+	     {"op": "insert",
+	      "table": "ordinals",
+	      "row": {"name": "'$1'", "number": '$2'}},
+	     {"op": "comment",
+	      "comment": "add row for '"$pair"'"}]'
+	done | uuidfilt]], [0],
+    [[[{"uuid":["uuid","<0>"]},{}]
 [{"uuid":["uuid","<1>"]},{}]
 [{"uuid":["uuid","<2>"]},{}]
 [{"uuid":["uuid","<3>"]},{}]
@@ -830,81 +880,77 @@ AT_CHECK(
 [{"uuid":["uuid","<5>"]},{}]
 ]], [ignore])
 
-dnl Start the database server.
-AT_CHECK([ovsdb-server -vfile -vvlog:off --detach --no-chdir --pidfile --log-file --remote=punix:db.sock db], [0])
-AT_CAPTURE_FILE([ovsdb-server.log])
-
-dnl Try "needs-conversion".
-AT_CHECK([ovsdb-client needs-conversion schema], [0], [no
+    dnl Try "needs-conversion".
+    AT_CHECK([ovsdb-client needs-conversion schema], [0], [no
 ])
-AT_CHECK([ovsdb-client needs-conversion new-schema], [0], [yes
+    AT_CHECK([ovsdb-client needs-conversion new-schema], [0], [yes
 ])
 
-dnl Start two monitors on the 'ordinals' db, one that is database
-dnl change aware and one that is not.
-AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --pidfile=monitor-ordinals-aware.pid --log-file=monitor-ordinals-aware.log --db-change-aware --no-headings monitor ordinals ordinals number name > monitor-ordinals-aware.stdout 2> monitor-ordinals-aware.stderr])
-AT_CAPTURE_FILE([monitor-ordinals-aware.stdout])
-AT_CAPTURE_FILE([monitor-ordinals-aware.log])
-AT_CAPTURE_FILE([monitor-ordinals-aware.stderr])
+    dnl Start two monitors on the 'ordinals' db, one that is database
+    dnl change aware and one that is not.
+    AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --pidfile=monitor-ordinals-aware.pid --log-file=monitor-ordinals-aware.log --db-change-aware --no-headings monitor ordinals ordinals number name > monitor-ordinals-aware.stdout 2> monitor-ordinals-aware.stderr])
+    AT_CAPTURE_FILE([monitor-ordinals-aware.stdout])
+    AT_CAPTURE_FILE([monitor-ordinals-aware.log])
+    AT_CAPTURE_FILE([monitor-ordinals-aware.stderr])
 
-AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --pidfile=monitor-ordinals-unaware.pid --log-file=monitor-ordinals-unaware.log --no-db-change-aware --no-headings monitor ordinals ordinals number name > monitor-ordinals-unaware.stdout 2> monitor-ordinals-unaware.stderr])
-AT_CAPTURE_FILE([monitor-ordinals-unaware.stdout])
-AT_CAPTURE_FILE([monitor-ordinals-unaware.log])
-AT_CAPTURE_FILE([monitor-ordinals-unaware.stderr])
+    AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --pidfile=monitor-ordinals-unaware.pid --log-file=monitor-ordinals-unaware.log --no-db-change-aware --no-headings monitor ordinals ordinals number name > monitor-ordinals-unaware.stdout 2> monitor-ordinals-unaware.stderr])
+    AT_CAPTURE_FILE([monitor-ordinals-unaware.stdout])
+    AT_CAPTURE_FILE([monitor-ordinals-unaware.log])
+    AT_CAPTURE_FILE([monitor-ordinals-unaware.stderr])
 
-dnl Start two monitors on the '_Server' db, one that is database
-dnl change aware and one that is not.
-AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --pidfile=monitor-server-aware.pid --log-file=monitor-server-aware.log --db-change-aware --no-headings monitor _Server Database name > monitor-server-aware.stdout 2> monitor-server-aware.stderr])
-AT_CAPTURE_FILE([monitor-server-aware.stdout])
-AT_CAPTURE_FILE([monitor-server-aware.log])
-AT_CAPTURE_FILE([monitor-server-aware.stderr])
+    dnl Start two monitors on the '_Server' db, one that is database
+    dnl change aware and one that is not.
+    AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --pidfile=monitor-server-aware.pid --log-file=monitor-server-aware.log --db-change-aware --no-headings monitor _Server Database name > monitor-server-aware.stdout 2> monitor-server-aware.stderr])
+    AT_CAPTURE_FILE([monitor-server-aware.stdout])
+    AT_CAPTURE_FILE([monitor-server-aware.log])
+    AT_CAPTURE_FILE([monitor-server-aware.stderr])
 
-AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --pidfile=monitor-server-unaware.pid --log-file=monitor-server-unaware.log --no-db-change-aware --no-headings monitor _Server Database name > monitor-server-unaware.stdout 2> monitor-server-unaware.stderr])
-AT_CAPTURE_FILE([monitor-server-unaware.stdout])
-AT_CAPTURE_FILE([monitor-server-unaware.log])
-AT_CAPTURE_FILE([monitor-server-unaware.stderr])
+    AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --pidfile=monitor-server-unaware.pid --log-file=monitor-server-unaware.log --no-db-change-aware --no-headings monitor _Server Database name > monitor-server-unaware.stdout 2> monitor-server-unaware.stderr])
+    AT_CAPTURE_FILE([monitor-server-unaware.stdout])
+    AT_CAPTURE_FILE([monitor-server-unaware.log])
+    AT_CAPTURE_FILE([monitor-server-unaware.stderr])
 
-dnl Start two long-running transactions (triggers) on the 'ordinals' db,
-dnl one that is database change aware and one that is not.
-ordinals_txn='[["ordinals",
-		{"op": "wait",
-		 "table": "ordinals",
-		 "where": [["name", "==", "seven"]],
-		 "columns": ["name", "number"],
-		 "rows": [],
-		 "until": "!="}]]'
-AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --pidfile=trigger-ordinals-aware.pid --log-file=trigger-ordinals-aware.log --db-change-aware transact "$ordinals_txn"  > trigger-ordinals-aware.stdout 2> trigger-ordinals-aware.stderr])
-AT_CAPTURE_FILE([trigger-ordinals-aware.stdout])
-AT_CAPTURE_FILE([trigger-ordinals-aware.log])
-AT_CAPTURE_FILE([trigger-ordinals-aware.stderr])
+    dnl Start two long-running transactions (triggers) on the 'ordinals' db,
+    dnl one that is database change aware and one that is not.
+    ordinals_txn='[["ordinals",
+		    {"op": "wait",
+		     "table": "ordinals",
+		     "where": [["name", "==", "seven"]],
+		     "columns": ["name", "number"],
+		     "rows": [],
+		     "until": "!="}]]'
+    AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --pidfile=trigger-ordinals-aware.pid --log-file=trigger-ordinals-aware.log --db-change-aware transact "$ordinals_txn"  > trigger-ordinals-aware.stdout 2> trigger-ordinals-aware.stderr])
+    AT_CAPTURE_FILE([trigger-ordinals-aware.stdout])
+    AT_CAPTURE_FILE([trigger-ordinals-aware.log])
+    AT_CAPTURE_FILE([trigger-ordinals-aware.stderr])
 
-AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --pidfile=trigger-ordinals-unaware.pid --log-file=trigger-ordinals-unaware.log --no-db-change-aware transact  "$ordinals_txn" > trigger-ordinals-unaware.stdout 2> trigger-ordinals-unaware.stderr])
-AT_CAPTURE_FILE([trigger-ordinals-unaware.stdout])
-AT_CAPTURE_FILE([trigger-ordinals-unaware.log])
-AT_CAPTURE_FILE([trigger-ordinals-unaware.stderr])
+    AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --pidfile=trigger-ordinals-unaware.pid --log-file=trigger-ordinals-unaware.log --no-db-change-aware transact  "$ordinals_txn" > trigger-ordinals-unaware.stdout 2> trigger-ordinals-unaware.stderr])
+    AT_CAPTURE_FILE([trigger-ordinals-unaware.stdout])
+    AT_CAPTURE_FILE([trigger-ordinals-unaware.log])
+    AT_CAPTURE_FILE([trigger-ordinals-unaware.stderr])
 
-dnl Start two long-running transactions (triggers) on the _Server db,
-dnl one that is database change aware and one that is not.
-server_txn='[["_Server",
-	      {"op": "wait",
-	       "table": "Database",
-	       "where": [["name", "==", "xyzzy"]],
-	       "columns": ["name"],
-	       "rows": [],
-	       "until": "!="}]]'
-AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --pidfile=trigger-server-aware.pid --log-file=trigger-server-aware.log --db-change-aware transact "$server_txn"  > trigger-server-aware.stdout 2> trigger-server-aware.stderr])
-AT_CAPTURE_FILE([trigger-server-aware.stdout])
-AT_CAPTURE_FILE([trigger-server-aware.log])
-AT_CAPTURE_FILE([trigger-server-aware.stderr])
+    dnl Start two long-running transactions (triggers) on the _Server db,
+    dnl one that is database change aware and one that is not.
+    server_txn='[["_Server",
+		  {"op": "wait",
+		   "table": "Database",
+		   "where": [["name", "==", "xyzzy"]],
+		   "columns": ["name"],
+		   "rows": [],
+		   "until": "!="}]]'
+    AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --pidfile=trigger-server-aware.pid --log-file=trigger-server-aware.log --db-change-aware transact "$server_txn"  > trigger-server-aware.stdout 2> trigger-server-aware.stderr])
+    AT_CAPTURE_FILE([trigger-server-aware.stdout])
+    AT_CAPTURE_FILE([trigger-server-aware.log])
+    AT_CAPTURE_FILE([trigger-server-aware.stderr])
 
-AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --pidfile=trigger-server-unaware.pid --log-file=trigger-server-unaware.log --no-db-change-aware transact  "$server_txn" > trigger-server-unaware.stdout 2> trigger-server-unaware.stderr])
-AT_CAPTURE_FILE([trigger-server-unaware.stdout])
-AT_CAPTURE_FILE([trigger-server-unaware.log])
-AT_CAPTURE_FILE([trigger-server-unaware.stderr])
+    AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --pidfile=trigger-server-unaware.pid --log-file=trigger-server-unaware.log --no-db-change-aware transact  "$server_txn" > trigger-server-unaware.stdout 2> trigger-server-unaware.stderr])
+    AT_CAPTURE_FILE([trigger-server-unaware.stdout])
+    AT_CAPTURE_FILE([trigger-server-unaware.log])
+    AT_CAPTURE_FILE([trigger-server-unaware.stderr])
 
-dnl Dump out and check the actual database contents.
-AT_CHECK([ovsdb-client dump unix:db.sock ordinals], [0], [stdout])
-AT_CHECK([uuidfilt stdout], [0], [dnl
+    dnl Dump out and check the actual database contents.
+    AT_CHECK([ovsdb-client dump unix:db.sock ordinals], [0], [stdout])
+    AT_CHECK([uuidfilt stdout], [0], [dnl
 ordinals table
 _uuid                                name  number
 ------------------------------------ ----- ------
@@ -916,76 +962,77 @@ _uuid                                name  number
 <5> zero  0
 ])
 
-dnl Convert the database.
-AT_CHECK([ovsdb-client convert new-schema])
+    dnl Convert the database.
+    AT_CHECK([ovsdb-client convert new-schema])
 
-dnl Try "needs-conversion".
-AT_CHECK([ovsdb-client needs-conversion schema], [0], [yes
+    dnl Try "needs-conversion".
+    AT_CHECK([ovsdb-client needs-conversion schema], [0], [yes
 ])
-AT_CHECK([ovsdb-client needs-conversion new-schema], [0], [no
+    AT_CHECK([ovsdb-client needs-conversion new-schema], [0], [no
 ])
 
-dnl Verify that the "ordinals" monitors behaved as they should have.
-dnl Both should have exited, for different reasons.
-dnl The db-aware _Server monitor should still be running, but not the unaware
-dnl one.
-for x in unaware aware; do
-    OVS_WAIT_WHILE([test -e monitor-ordinals-$x.pid])
-    AT_CHECK([sort -k 3 monitor-ordinals-$x.stdout | uuidfilt], [0],
-[<0> initial 0 zero
+    dnl Verify that the "ordinals" monitors behaved as they should have.
+    dnl Both should have exited, for different reasons.
+    for x in aware unaware; do
+	echo $x
+	OVS_WAIT_WHILE([test -e monitor-ordinals-$x.pid])
+	AT_CHECK([sort -k 3 monitor-ordinals-$x.stdout | uuidfilt], [0],
+    [<0> initial 0 zero
 <1> initial 1 one
 <2> initial 2 two
 <3> initial 3 three
 <4> initial 4 four
 <5> initial 5 five
 ])
-done
-AT_CHECK([sed 's/.*: //' monitor-ordinals-unaware.stderr], [0], [receive failed (End of file)
+    done
+    AT_CHECK([sed 's/.*: //' monitor-ordinals-unaware.stderr], [0], [receive failed (End of file)
 ])
-AT_CHECK([sed 's/.*: //' monitor-ordinals-aware.stderr], [0], [ordinals database was removed
+    AT_CHECK([sed 's/.*: //' monitor-ordinals-aware.stderr], [0], [ordinals database was removed
 ])
 
-dnl Verify that the _Server monitors behaved as they should have.
-dnl The db-aware monitor should still be running, but not the unaware one.
-for x in aware unaware; do
-    AT_CHECK([sort -k 3 monitor-server-$x.stdout | uuidfilt], [0],
-[<0> initial _Server
+    dnl Verify that the _Server monitors behaved as they should have.
+    dnl The db-aware monitor should still be running, but not the unaware one.
+    for x in aware unaware; do
+	AT_CHECK([sort -k 3 monitor-server-$x.stdout | uuidfilt], [0],
+    [<0> initial _Server
 <1> initial ordinals
 ])
-done
-OVS_WAIT_WHILE([test -e monitor-server-unaware.pid])
-AT_CHECK([sed 's/.*: //' monitor-ordinals-unaware.stderr], [0], [receive failed (End of file)
+    done
+    OVS_WAIT_WHILE([test -e monitor-server-unaware.pid])
+    AT_CHECK([sed 's/.*: //' monitor-ordinals-unaware.stderr], [0], [receive failed (End of file)
 ])
-AT_CHECK([test -e monitor-server-aware.pid])
+    AT_CHECK([test -e monitor-server-aware.pid])
 
-dnl Verify that the "ordinals" triggers behaved as they should have:
-dnl Both should have exited, for different reasons.
-for x in unaware aware; do
-    OVS_WAIT_WHILE([test -e trigger-ordinals-$x.pid])
-    AT_CHECK([cat trigger-ordinals-$x.stdout])
-done
-AT_CHECK([cat trigger-ordinals-unaware.stderr], [0], [ovsdb-client: transaction failed (End of file)
+    dnl Verify that the "ordinals" triggers behaved as they should have:
+    dnl Both should have exited, for different reasons.
+    for x in unaware aware; do
+	OVS_WAIT_WHILE([test -e trigger-ordinals-$x.pid])
+	AT_CHECK([cat trigger-ordinals-$x.stdout])
+    done
+    AT_CHECK([cat trigger-ordinals-unaware.stderr], [0], [ovsdb-client: transaction failed (End of file)
 ])
-AT_CHECK([cat trigger-ordinals-aware.stderr], [0], [ovsdb-client: transaction returned error: {"error":"canceled"}
+    AT_CHECK([cat trigger-ordinals-aware.stderr], [0], [ovsdb-client: transaction returned error: "canceled"
 ])
 
-dnl Verify that the _Server triggers behaved as they should have:
-dnl The db-aware trigger should still be waiting, but not the unaware one.
-for x in aware unaware; do
-    AT_CHECK([cat trigger-server-$x.stdout])
-done
-OVS_WAIT_WHILE([test -e trigger-server-unaware.pid])
-AT_CHECK([sed 's/.*: //' trigger-ordinals-unaware.stderr], [0], [transaction failed (End of file)
+    dnl Verify that the _Server triggers behaved as they should have:
+    dnl The db-aware trigger should still be waiting, but not the unaware one.
+    for x in aware unaware; do
+	AT_CHECK([cat trigger-server-$x.stdout])
+    done
+    OVS_WAIT_WHILE([test -e trigger-server-unaware.pid])
+    AT_CHECK([sed 's/.*: //' trigger-ordinals-unaware.stderr], [0], [transaction failed (End of file)
 ])
-AT_CHECK([test -e trigger-server-aware.pid])
+    AT_CHECK([test -e trigger-server-aware.pid])
 
-dnl We can't fully re-check the contents of the database log, because the
-dnl order of the records is not predictable, but there should only be 4 lines
-dnl in it now.
-AT_CAPTURE_FILE([db])
-AT_CHECK([test `wc -l < db` -eq 4])
-dnl And check that the dumped data is the same except for the removed column:
-AT_CHECK([ovsdb-client dump unix:db.sock ordinals | uuidfilt], [0], [dnl
+    AT_CAPTURE_FILE([db])
+    if test $model = standalone; then
+	dnl We can't fully re-check the contents of the database log, because the
+	dnl order of the records is not predictable, but there should only be 4 lines
+	dnl in it now.
+	AT_CHECK([test `wc -l < db` -eq 4])
+    fi
+    dnl Check that the dumped data is the same except for the removed column:
+    AT_CHECK([ovsdb-client dump unix:db.sock ordinals | uuidfilt], [0], [dnl
 ordinals table
 _uuid                                number
 ------------------------------------ ------
@@ -996,21 +1043,23 @@ _uuid                                number
 <4> 4
 <5> 5
 ])
-dnl Now check that the converted database is still online and can be modified,
-dnl then check that the database log has one more record and that the data
-dnl is as expected.
-AT_CHECK(
-  [[ovsdb-client transact '
-     ["ordinals",
-      {"op": "insert",
-       "table": "ordinals",
-       "row": {"number": 6}},
-      {"op": "comment",
-       "comment": "add row for 6"}]' | uuidfilt]], [0],
-  [[[{"uuid":["uuid","<0>"]},{}]
+    dnl Now check that the converted database is still online and can be modified,
+    dnl then check that the database log has one more record and that the data
+    dnl is as expected.
+    AT_CHECK(
+      [[ovsdb-client transact '
+	 ["ordinals",
+	  {"op": "insert",
+	   "table": "ordinals",
+	   "row": {"number": 6}},
+	  {"op": "comment",
+	   "comment": "add row for 6"}]' | uuidfilt]], [0],
+      [[[{"uuid":["uuid","<0>"]},{}]
 ]])
-AT_CHECK([test `wc -l < db` -eq 6])
-AT_CHECK([ovsdb-client dump unix:db.sock ordinals | uuidfilt], [0], [dnl
+    if test $model = standalone; then
+        AT_CHECK([test `wc -l < db` -eq 6])
+    fi
+    AT_CHECK([ovsdb-client dump unix:db.sock ordinals | uuidfilt], [0], [dnl
 ordinals table
 _uuid                                number
 ------------------------------------ ------
@@ -1022,12 +1071,12 @@ _uuid                                number
 <5> 5
 <6> 6
 ])
-dnl Now kill and restart the database server to ensure that the data is
-dnl correct on disk as well as in memory.
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-AT_CHECK([[ovsdb-server -vfile -vvlog:off --detach --no-chdir --pidfile --log-file --remote=punix:db.sock db]],
-  [0])
-AT_CHECK([ovsdb-client dump unix:db.sock ordinals | uuidfilt], [0], [dnl
+    dnl Now kill and restart the database server to ensure that the data is
+    dnl correct on disk as well as in memory.
+    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+    AT_CHECK([[ovsdb-server -vfile -vvlog:off -vconsole:off --detach --no-chdir --pidfile --log-file --remote=punix:db.sock db]],
+      [0])
+    AT_CHECK([ovsdb-client dump unix:db.sock ordinals | uuidfilt], [0], [dnl
 ordinals table
 _uuid                                number
 ------------------------------------ ------
@@ -1040,18 +1089,29 @@ _uuid                                number
 <6> 6
 ])
 
-dnl Make sure that "db" is still a symlink to dir/db instead of getting
-dnl replaced by a regular file, ditto for .db.~lock~.
-if test "$IS_WIN32" = "no"; then
-    AT_CHECK([test -h db])
-    AT_CHECK([test -h .db.~lock~])
-    AT_CHECK([test -f dir/db])
-    AT_CHECK([test -f dir/.db.~lock~])
-fi
+    dnl Make sure that "db" is still a symlink to dir/db instead of getting
+    dnl replaced by a regular file, ditto for .db.~lock~.
+    if test "$IS_WIN32" = "no"; then
+	AT_CHECK([test -h db])
+	AT_CHECK([test -h .db.~lock~])
+	AT_CHECK([test -f dir/db])
+	AT_CHECK([test -f dir/.db.~lock~])
+    fi
 
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+}
+OVS_END_SHELL_HELPERS
+
+AT_SETUP([schema conversion online - standalone])
+AT_KEYWORDS([ovsdb server convert needs-conversion standalone])
+ovsdb_check_online_conversion standalone
 AT_CLEANUP
 
+AT_SETUP([schema conversion online - clustered])
+AT_KEYWORDS([ovsdb server convert needs-conversion cluster])
+ovsdb_check_online_conversion cluster
+AT_CLEANUP
+
 AT_SETUP([ovsdb-server combines updates on backlogged connections])
 on_exit 'kill `cat *.pid`'
 

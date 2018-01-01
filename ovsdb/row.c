@@ -44,6 +44,9 @@ allocate_row(const struct ovsdb_table *table)
     return row;
 }
 
+/* Creates and returns a new row suitable for insertion into 'table'.  Does not
+ * actually insert the row into 'table' (use ovsdb_txn_row_insert()).  The
+ * caller must assign a UUID to the row. */
 struct ovsdb_row *
 ovsdb_row_create(const struct ovsdb_table *table)
 {

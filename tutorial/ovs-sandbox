@@ -17,6 +17,7 @@
 set -e
 
 run() {
+    echo "$@"
     (cd "$sandbox" && "$@") || exit 1
 }
 
@@ -70,6 +71,10 @@ ovn=false
 ovnsb_schema=
 ovnnb_schema=
 ovn_rbac=true
+nbdb_model=standalone
+nbdb_servers=3
+sbdb_model=backup
+sbdb_servers=3
 dummy=override
 
 for option; do
@@ -109,6 +114,8 @@ These options force ovs-sandbox to use a particular OVS build:
   -s, --srcdir=DIR     specify Open vSwitch source directory
 These options force ovs-sandbox to use an installed Open vSwitch:
   -i, --installed      use installed Open vSwitch
+
+General options:
   -g, --gdb-vswitchd   run ovs-vswitchd under gdb
   -d, --gdb-ovsdb      run ovsdb-server under gdb
   --gdb-ovn-northd     run ovn-northd under gdb
@@ -118,8 +125,14 @@ These options force ovs-sandbox to use an installed Open vSwitch:
   -R, --gdb-run        automatically start running the daemon in gdb
                        for any daemon set to run under gdb
   -S, --schema=FILE    use FILE as vswitch.ovsschema
+
+OVN options:
   -o, --ovn            enable OVN
   --no-ovn-rbac        disable role-based access control for OVN
+  --nbdb-model=standalone|backup|clustered    northbound database model
+  --nbdb-servers=N     number of servers in nbdb cluster (default: 3)
+  --sbdb-model=standalone|backup|clustered    southbound database model
+  --sbdb-servers=N     number of servers in sbdb cluster (default: 3)
 
 Other options:
   -h, --help           Print this usage message.
@@ -190,6 +203,34 @@ EOF
             ;;
         --no-ovn-rbac)
             ovn_rbac=false
+            ;;
+        --nbdb-s*=*)
+            nbdb_servers=$optarg
+            nbdb_model=clustered
+            ;;
+        --nbdb-s*)
+            prev=nbdb_servers
+            nbdb_model=clustered
+            ;;
+        --nbdb-m*=*)
+            nbdb_model=$optarg
+            ;;
+        --nbdb-m*)
+            prev=nbdb_model
+            ;;
+        --sbdb-s*=*)
+            sbdb_servers=$optarg
+            sbdb_model=clustered
+            ;;
+        --sbdb-s*)
+            prev=sbdb_servers
+            sbdb_model=clustered
+            ;;
+        --sbdb-m*=*)
+            sbdb_model=$optarg
+            ;;
+        --sbdb-m*)
+            prev=sbdb_model
             ;;
         -R|--gdb-run)
             gdb_vswitchd_ex=true
@@ -326,15 +367,10 @@ touch "$sandbox"/.conf.db.~lock~
 run ovsdb-tool create conf.db "$schema"
 ovsdb_server_args=
 if $ovn; then
-    touch "$sandbox"/.ovnsb.db.~lock~
     touch "$sandbox"/.ovnnb.db.~lock~
-    run ovsdb-tool create ovnsb.db "$ovnsb_schema"
-    run ovsdb-tool create ovnsb2.db "$ovnsb_schema"
     run ovsdb-tool create ovnnb.db "$ovnnb_schema"
     run ovsdb-tool create vtep.db "$vtep_schema"
     ovsdb_server_args="vtep.db conf.db"
-    ovsdb_sb_server_args="ovnsb.db"
-    ovsdb_sb_backup_server_args="ovnsb2.db"
     ovsdb_nb_server_args="ovnnb.db"
 
     if [ "$HAVE_OPENSSL" = yes ]; then
@@ -348,36 +384,85 @@ fi
 rungdb $gdb_ovsdb $gdb_ovsdb_ex ovsdb-server --detach --no-chdir --pidfile -vconsole:off --log-file \
     --remote=punix:"$sandbox"/db.sock $ovsdb_server_args
 if $ovn; then
-    rungdb $gdb_ovsdb $gdb_ovsdb_ex ovsdb-server --detach --no-chdir \
-        --pidfile="$sandbox"/ovnnb_db.pid -vconsole:off \
-        --log-file="$sandbox"/ovnnb_db.log \
-        --remote=db:OVN_Northbound,NB_Global,connections \
-        --private-key=db:OVN_Northbound,SSL,private_key \
-        --certificate=db:OVN_Northbound,SSL,certificate \
-        --ca-cert=db:OVN_Northbound,SSL,ca_cert \
-        --ssl-protocols=db:OVN_Northbound,SSL,ssl_protocols \
-        --ssl-ciphers=db:OVN_Northbound,SSL,ssl_ciphers \
-        --remote=punix:"$sandbox"/ovnnb_db.sock $ovsdb_nb_server_args
-    rungdb $gdb_ovsdb $gdb_ovsdb_ex ovsdb-server --detach --no-chdir \
-        --pidfile="$sandbox"/ovnsb_db.pid -vconsole:off \
-        --log-file="$sandbox"/ovnsb_db.log \
-        --remote=db:OVN_Southbound,SB_Global,connections \
-        --private-key=db:OVN_Southbound,SSL,private_key \
-        --certificate=db:OVN_Southbound,SSL,certificate \
-        --ca-cert=db:OVN_Southbound,SSL,ca_cert \
-        --ssl-protocols=db:OVN_Southbound,SSL,ssl_protocols \
-        --ssl-ciphers=db:OVN_Southbound,SSL,ssl_ciphers \
-        --remote=punix:"$sandbox"/ovnsb_db.sock $ovsdb_sb_server_args
-    # Start SB back up server
-    rungdb $gdb_ovsdb $gdb_ovsdb_ex ovsdb-server --detach --no-chdir \
-        --pidfile="$sandbox"/ovnsb_db2.pid  -vconsole:off \
-        --log-file="$sandbox"/ovnsb_db2.log \
-        --private-key=db:OVN_Southbound,SSL,private_key \
-        --certificate=db:OVN_Southbound,SSL,certificate \
-        --ca-cert=db:OVN_Southbound,SSL,ca_cert \
-        --remote=punix:"$sandbox"/ovnsb_db2.sock \
-        --unixctl="$sandbox"/sb_backup_unixctl \
-        --sync-from=unix:"$sandbox"/ovnsb_db.sock $ovsdb_sb_backup_server_args
+    ovn_start_db() {
+        local db=$1 model=$2 servers=$3 schema=$4
+        local DB=$(echo $db | tr a-z A-Z)
+        local schema_name=$(ovsdb-tool schema-name $schema)
+
+        case $model in
+            standalone | backup) ;;
+            clustered)
+                case $servers in
+                    [1-9] | [1-9][0-9]) ;;
+                    *) echo "${db}db servers must be between 1 and 99" >&2
+                       exit 1
+                       ;;
+                esac
+                ;;
+            *)
+                echo "unknown ${db}db model \"$model\"" >&2
+                exit 1
+                ;;
+        esac
+
+        ovn_start_ovsdb_server() {
+            local i=$1; shift
+            rungdb $gdb_ovsdb $gdb_ovsdb_ex ovsdb-server --detach --no-chdir \
+                   --pidfile=$db$i.pid -vconsole:off --log-file=$db$i.log \
+                   --remote=db:$schema_name,${DB}_Global,connections \
+                   --private-key=db:$schema_name,SSL,private_key \
+                   --certificate=db:$schema_name,SSL,certificate \
+                   --ca-cert=db:$schema_name,SSL,ca_cert \
+                   --ssl-protocols=db:$schema_name,SSL,ssl_protocols \
+                   --ssl-ciphers=db:$schema_name,SSL,ssl_ciphers \
+                   --unixctl=${db}$i --remote=punix:$db$i.ovsdb ${db}$i.db "$@"
+        }
+
+        case $model in
+            standalone)
+                run ovsdb-tool create ${db}1.db "$schema"
+                ovn_start_ovsdb_server 1
+                remote=unix:${db}1.ovsdb
+                ;;
+            backup)
+                for i in 1 2; do
+                    run ovsdb-tool create $db$i.db "$schema"
+                done
+                ovn_start_ovsdb_server 1 ${db}1.db
+                ovn_start_ovsdb_server 2 --sync-from=unix:${db}1.ovsdb
+                remote=unix:${db}1.ovsdb
+                backup_note="$backup_note
+The backup server of OVN $DB can be accessed by:
+* ovn-${db}ctl --db=unix:`pwd`/sandbox/${db}2.ovsdb
+* ovs-appctl -t `pwd`/sandbox/${db}2
+The backup database file is sandbox/${db}2.db
+"
+                ;;
+            clustered)
+                for i in $(seq $servers); do
+                    if test $i = 1; then
+                        run ovsdb-tool create-cluster ${db}1.db "$schema" unix:${db}1.raft;
+                    else
+                        run ovsdb-tool join-cluster $db$i.db $schema_name unix:$db$i.raft unix:${db}1.raft
+                    fi
+                    ovn_start_ovsdb_server $i
+                done
+                remote=unix:${db}1.ovsdb
+                for i in `seq 2 $n`; do
+                    remote=$remote,unix:$db$i.ovsdb
+                done
+                for i in $(seq $servers); do
+                    run ovsdb-client wait unix:$db$i.ovsdb $schema_name connected
+                done
+                ;;
+        esac
+        eval OVN_${DB}_DB=\$remote
+        eval export OVN_${DB}_DB
+    }
+
+    backup_note=
+    ovn_start_db nb "$nbdb_model" "$nbdb_servers" "$ovnnb_schema"
+    ovn_start_db sb "$sbdb_model" "$sbdb_servers" "$ovnsb_schema"
 fi
 
 #Add a small delay to allow ovsdb-server to launch.
@@ -420,7 +505,7 @@ if $ovn; then
         ovs-vsctl set open . external-ids:ovn-remote=ssl:127.0.0.1:6642
         OVN_CTRLR_PKI="-p $sandbox/chassis-1-privkey.pem -c $sandbox/chassis-1-cert.pem -C $sandbox/pki/switchca/cacert.pem"
     else
-        ovs-vsctl set open . external-ids:ovn-remote=unix:"$sandbox"/ovnsb_db.sock
+        ovs-vsctl set open . external-ids:ovn-remote=$OVN_SB_DB
         OVN_CTRLR_PKI=""
     fi
     rungdb $gdb_ovn_northd $gdb_ovn_northd_ex ovn-northd --detach \
@@ -447,13 +532,7 @@ EOF
 if $ovn; then cat << EOF
 This environment also has the OVN daemons and databases enabled.
 You can use ovn-nbctl and ovn-sbctl to interact with the OVN databases.
-
-The backup server of OVN SB can be accessed by:
-* ovn-sbctl --db=unix:`pwd`/sandbox/ovnsb_db2.sock
-* ovs-appctl -t `pwd`/sandbox/sb_backup_unixctl
-The backup database file is "sandbox"/ovnsb2.db
-
-
+$backup_note
 EOF
 fi
 cat <<EOF

@@ -18,41 +18,27 @@
 
 #include <stdbool.h>
 #include "compiler.h"
-#include "log.h"
 
 struct ovsdb;
-struct ovsdb_file;
 struct ovsdb_schema;
 struct ovsdb_txn;
 
-struct ovsdb_error *ovsdb_file_open(const char *file_name, bool read_only,
-                                    struct ovsdb **, struct ovsdb_file **)
-    OVS_WARN_UNUSED_RESULT;
-
-struct ovsdb_error *ovsdb_file_open_as_schema(const char *file_name,
-                                              const struct ovsdb_schema *,
-                                              struct ovsdb **)
-    OVS_WARN_UNUSED_RESULT;
-
-struct ovsdb_error *ovsdb_file_save_copy(const char *file_name, int locking,
-                                         const char *comment,
-                                         const struct ovsdb *)
-    OVS_WARN_UNUSED_RESULT;
-
-struct ovsdb_error *ovsdb_file_compact(struct ovsdb_file *);
-
-struct ovsdb_error *ovsdb_file_read_schema(const char *file_name,
-                                           struct ovsdb_schema **)
-    OVS_WARN_UNUSED_RESULT;
-
-struct ovsdb_error *ovsdb_file_commit(struct ovsdb_file *,
-                                      const struct ovsdb_txn *, bool durable);
-void ovsdb_file_destroy(struct ovsdb_file *);
-
+struct json *ovsdb_to_txn_json(const struct ovsdb *, const char *comment);
+struct json *ovsdb_file_txn_to_json(const struct ovsdb_txn *);
 struct json *ovsdb_file_txn_annotate(struct json *, const char *comment);
+struct ovsdb_error *ovsdb_file_txn_from_json(struct ovsdb *,
+                                             const struct json *,
+                                             bool converting,
+                                             struct ovsdb_txn **)
+    OVS_WARN_UNUSED_RESULT;
 
-struct ovsdb_error *ovsdb_file_convert(const struct ovsdb_file *,
-                                       const struct ovsdb_schema *)
+struct ovsdb *ovsdb_file_read(const char *filename, bool rw);
+struct ovsdb *ovsdb_file_read_as_schema(const char *filename,
+                                        struct ovsdb_schema *);
+
+struct ovsdb_error *ovsdb_convert(const struct ovsdb *src,
+                                  const struct ovsdb_schema *new_schema,
+                                  struct ovsdb **dstp)
     OVS_WARN_UNUSED_RESULT;
 
 #endif /* ovsdb/file.h */

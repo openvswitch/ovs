@@ -9,6 +9,9 @@
 /ofp-actions.inc2
 /ofp-errors.inc
 /ofp-msgs.inc
+/ovsdb-server-idl.c
+/ovsdb-server-idl.h
+/ovsdb-server-idl.ovsidl
 /ovs-fields.7
 /stdio.h
 /string.h

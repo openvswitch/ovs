@@ -28,7 +28,7 @@ struct ovsdb_jsonrpc_server *ovsdb_jsonrpc_server_create(bool read_only);
 bool ovsdb_jsonrpc_server_add_db(struct ovsdb_jsonrpc_server *,
                                  struct ovsdb *);
 void ovsdb_jsonrpc_server_remove_db(struct ovsdb_jsonrpc_server *,
-                                     struct ovsdb *);
+                                    struct ovsdb *, char *comment);
 void ovsdb_jsonrpc_server_destroy(struct ovsdb_jsonrpc_server *);
 
 /* Options for a remote. */
@@ -64,7 +64,8 @@ bool ovsdb_jsonrpc_server_get_remote_status(
 void ovsdb_jsonrpc_server_free_remote_status(
     struct ovsdb_jsonrpc_remote_status *);
 
-void ovsdb_jsonrpc_server_reconnect(struct ovsdb_jsonrpc_server *, bool force);
+void ovsdb_jsonrpc_server_reconnect(struct ovsdb_jsonrpc_server *, bool force,
+                                    char *comment);
 
 void ovsdb_jsonrpc_server_run(struct ovsdb_jsonrpc_server *);
 void ovsdb_jsonrpc_server_wait(struct ovsdb_jsonrpc_server *);

@@ -91,6 +91,7 @@ void smap_add_format(struct smap *, const char *key, const char *, ...)
     OVS_PRINTF_FORMAT(3, 4);
 void smap_add_ipv6(struct smap *, const char *, struct in6_addr *);
 void smap_replace(struct smap *, const char *, const char *);
+void smap_replace_nocopy(struct smap *, const char *, char *);
 
 void smap_remove(struct smap *, const char *);
 void smap_remove_node(struct smap *, struct smap_node *);

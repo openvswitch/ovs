@@ -40,6 +40,7 @@
 #include "ovsdb/query.h"
 #include "ovsdb/row.h"
 #include "ovsdb/server.h"
+#include "ovsdb/storage.h"
 #include "ovsdb/table.h"
 #include "ovsdb/transaction.h"
 #include "ovsdb/trigger.h"
@@ -1484,7 +1485,7 @@ do_execute__(struct ovs_cmdl_context *ctx, bool ro)
     json = parse_json(ctx->argv[1]);
     check_ovsdb_error(ovsdb_schema_from_json(json, &schema));
     json_destroy(json);
-    db = ovsdb_create(schema);
+    db = ovsdb_create(schema, ovsdb_storage_create_unbacked());
 
     for (i = 2; i < ctx->argc; i++) {
         struct json *params, *result;
@@ -1550,7 +1551,7 @@ do_trigger(struct ovs_cmdl_context *ctx)
     json = parse_json(ctx->argv[1]);
     check_ovsdb_error(ovsdb_schema_from_json(json, &schema));
     json_destroy(json);
-    db = ovsdb_create(schema);
+    db = ovsdb_create(schema, ovsdb_storage_create_unbacked());
 
     ovsdb_server_init(&server);
     ovsdb_server_add_db(&server, db);
@@ -1613,7 +1614,7 @@ static struct ovsdb_table *do_transact_table;
 static void
 do_transact_commit(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
-    ovsdb_error_destroy(ovsdb_txn_commit(do_transact_txn, false));
+    ovsdb_error_destroy(ovsdb_txn_replay_commit(do_transact_txn));
     do_transact_txn = NULL;
 }
 
@@ -1780,7 +1781,7 @@ do_transact(struct ovs_cmdl_context *ctx)
                       "       \"j\": {\"type\": \"integer\"}}}}}");
     check_ovsdb_error(ovsdb_schema_from_json(json, &schema));
     json_destroy(json);
-    do_transact_db = ovsdb_create(schema);
+    do_transact_db = ovsdb_create(schema, ovsdb_storage_create_unbacked());
     do_transact_table = ovsdb_get_table(do_transact_db, "mytable");
     ovs_assert(do_transact_table != NULL);
 

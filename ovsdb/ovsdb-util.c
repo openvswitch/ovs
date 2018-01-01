@@ -22,7 +22,7 @@
 
 VLOG_DEFINE_THIS_MODULE(ovsdb_util);
 
-static void
+void
 ovsdb_util_clear_column(struct ovsdb_row *row, const char *column_name)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
@@ -233,6 +233,15 @@ ovsdb_util_write_singleton(struct ovsdb_row *row, const char *column_name,
         datum->values = NULL;
     }
     ovsdb_atom_clone(&datum->keys[0], atom, type);
+}
+
+void
+ovsdb_util_write_integer_column(struct ovsdb_row *row,
+                                const char *column_name,
+                                long long int integer)
+{
+    const union ovsdb_atom atom = { .integer = integer };
+    ovsdb_util_write_singleton(row, column_name, &atom, OVSDB_TYPE_INTEGER);
 }
 
 void

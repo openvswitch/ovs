@@ -1,9 +1,21 @@
 {"name": "_Server",
- "version": "1.0.0",
- "cksum": "3931859656 185",
+ "version": "1.1.0",
+ "cksum": "3236486585 698",
  "tables": {
    "Database": {
      "columns": {
        "name": {"type": "string"},
-       "schema": {"type": "string"}},
+       "model": {
+         "type": {"key": {"type": "string",
+                          "enum": ["set", ["standalone", "clustered"]]}}},
+       "connected": {"type": "boolean"},
+       "leader": {"type": "boolean"},
+       "schema": {
+         "type": {"key": {"type": "string"}, "min": 0, "max": 1}},
+       "cid": {
+         "type": {"key": {"type": "uuid"}, "min": 0, "max": 1}},
+       "sid": {
+         "type": {"key": {"type": "uuid"}, "min": 0, "max": 1}},
+       "index": {
+         "type": {"key": {"type": "integer"}, "min": 0, "max": 1}}},
      "isRoot": true}}}

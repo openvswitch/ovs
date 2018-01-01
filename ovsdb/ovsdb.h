@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,13 +20,13 @@
 #include "openvswitch/hmap.h"
 #include "openvswitch/list.h"
 #include "openvswitch/shash.h"
+#include "openvswitch/uuid.h"
 
 struct json;
 struct ovsdb_log;
 struct ovsdb_session;
 struct ovsdb_txn;
 struct simap;
-struct uuid;
 
 /* Database schema. */
 struct ovsdb_schema {
@@ -52,11 +52,26 @@ struct json *ovsdb_schema_to_json(const struct ovsdb_schema *);
 
 bool ovsdb_schema_equal(const struct ovsdb_schema *,
                         const struct ovsdb_schema *);
+
+struct ovsdb_error *ovsdb_schema_check_for_ephemeral_columns(
+    const struct ovsdb_schema *) OVS_WARN_UNUSED_RESULT;
+void ovsdb_schema_persist_ephemeral_columns(struct ovsdb_schema *,
+                                            const char *filename);
+
+struct ovsdb_version {
+    unsigned int x;
+    unsigned int y;
+    unsigned int z;
+};
+bool ovsdb_parse_version(const char *, struct ovsdb_version *);
+bool ovsdb_is_valid_version(const char *);
 
 /* Database. */
 struct ovsdb {
+    char *name;
     struct ovsdb_schema *schema;
-    struct ovsdb_file *file;    /* If nonnull, log for transactions. */
+    struct ovsdb_storage *storage; /* If nonnull, log for transactions. */
+    struct uuid prereq;
     struct ovs_list monitors;   /* Contains "struct ovsdb_monitor"s. */
     struct shash tables;        /* Contains "struct ovsdb_table *"s. */
 
@@ -67,18 +82,27 @@ struct ovsdb {
     struct ovsdb_table *rbac_role;
 };
 
-struct ovsdb *ovsdb_create(struct ovsdb_schema *);
-void ovsdb_replace(struct ovsdb *dst, struct ovsdb *src);
+struct ovsdb *ovsdb_create(struct ovsdb_schema *, struct ovsdb_storage *);
 void ovsdb_destroy(struct ovsdb *);
 
 void ovsdb_get_memory_usage(const struct ovsdb *, struct simap *usage);
 
 struct ovsdb_table *ovsdb_get_table(const struct ovsdb *, const char *);
 
+struct ovsdb_txn *ovsdb_execute_compose(
+    struct ovsdb *, const struct ovsdb_session *, const struct json *params,
+    bool read_only, const char *role, const char *id,
+    long long int elapsed_msec, long long int *timeout_msec,
+    bool *durable, struct json **);
+
 struct json *ovsdb_execute(struct ovsdb *, const struct ovsdb_session *,
                            const struct json *params, bool read_only,
                            const char *role, const char *id,
                            long long int elapsed_msec,
                            long long int *timeout_msec);
+
+struct ovsdb_error *ovsdb_snapshot(struct ovsdb *) OVS_WARN_UNUSED_RESULT;
+
+void ovsdb_replace(struct ovsdb *dst, struct ovsdb *src);
 
 #endif /* ovsdb/ovsdb.h */

@@ -41,13 +41,16 @@
 #include "ovsdb.h"
 #include "ovsdb-data.h"
 #include "ovsdb-error.h"
+#include "ovsdb-session.h"
 #include "openvswitch/poll-loop.h"
 #include "row.h"
 #include "sort.h"
 #include "svec.h"
+#include "storage.h"
 #include "stream.h"
 #include "stream-ssl.h"
 #include "table.h"
+#include "transaction.h"
 #include "monitor.h"
 #include "condition.h"
 #include "timeval.h"
@@ -90,23 +93,156 @@ static int db_change_aware = -1;
 /* --force: Ignore schema differences for "restore" command? */
 static bool force;
 
+/* --leader-only, --no-leader-only: Only accept the leader in a cluster. */
+static bool leader_only = true;
+
 /* Format for table output. */
 static struct table_style table_style = TABLE_STYLE_DEFAULT;
 
 static const struct ovsdb_client_command *get_all_commands(void);
 
+static struct json *parse_json(const char *);
+
 OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[]);
 static struct jsonrpc *open_jsonrpc(const char *server);
 static void fetch_dbs(struct jsonrpc *, struct svec *dbs);
+static bool should_stay_connected(const char *server, const char *database,
+                                  const struct uuid *cid,
+                                  const struct jsonrpc_msg *reply);
+struct jsonrpc_msg *create_database_info_request(const char *database);
+
+static char *
+default_remote(void)
+{
+    return xasprintf("unix:%s/db.sock", ovs_rundir());
+}
+
+static int
+open_rpc(int min_args, enum args_needed need,
+         int argc, char *argv[], struct jsonrpc **rpcp, char **databasep)
+{
+    struct svec remotes = SVEC_EMPTY_INITIALIZER;
+    struct uuid cid = UUID_ZERO;
+
+    /* First figure out the remote(s).  If the first command-line argument has
+     * the form of a remote, use it, otherwise use the default. */
+    int argidx = 0;
+    if (argc > min_args && (isalpha((unsigned char) argv[0][0])
+                            && strchr(argv[0], ':'))) {
+        ovsdb_session_parse_remote(argv[argidx++], &remotes, &cid);
+    } else {
+        svec_add_nocopy(&remotes, default_remote());
+    }
+
+    /* Handle the case where there's one remote.  In this case, if we need a
+     * database name, we try to figure out a default if none was specified
+     * explicitly. */
+    char *database = *databasep;
+    if (remotes.n == 1) {
+        struct jsonrpc *rpc = open_jsonrpc(remotes.names[0]);
+        svec_destroy(&remotes);
+
+        if (need == NEED_DATABASE && !database) {
+            struct svec dbs;
+
+            svec_init(&dbs);
+            fetch_dbs(rpc, &dbs);
+            if (argc - argidx > min_args
+                && svec_contains(&dbs, argv[argidx])) {
+                database = xstrdup(argv[argidx++]);
+            } else if (svec_contains(&dbs, "Open_vSwitch")) {
+                database = xstrdup("Open_vSwitch");
+            } else {
+                size_t n = 0;
+                const char *best = NULL;
+                for (size_t i = 0; i < dbs.n; i++) {
+                    if (dbs.names[i][0] != '_') {
+                        best = dbs.names[i];
+                        n++;
+                    }
+                }
+                if (n != 1) {
+                    jsonrpc_close(rpc);
+                    ovs_fatal(0, "could not find a default database, "
+                              "please specify a database name");
+                }
+                database = xstrdup(best);
+            }
+            svec_destroy(&dbs);
+        }
+        *rpcp = rpc;
+        *databasep = database;
+
+        return argidx;
+    }
+
+    /* If there's more than one remote, and we need a database name, then it
+     * must be specified explicitly.  It's too likely to cause surprising
+     * behavior if we try to pick a default across several servers. */
+    if (!database && need == NEED_DATABASE) {
+        if (argc - argidx > min_args) {
+            database = xstrdup(argv[argidx++]);
+        } else {
+            ovs_fatal(0, "database name is required with multiple remotes");
+        }
+    }
+
+    /* We have multiple remotes.  Connect to them in a random order and choose
+     * the first one that is up and hosts the database we want (if any) in an
+     * acceptable state. */
+    struct jsonrpc_session *js = jsonrpc_session_open_multiple(
+        &remotes, false);
+    svec_destroy(&remotes);
+
+    unsigned int seqno = 0;
+    struct json *id = NULL;
+    for (;;) {
+        jsonrpc_session_run(js);
+        if (!jsonrpc_session_is_alive(js)) {
+            ovs_fatal(0, "no servers were available");
+        }
+
+        if (seqno != jsonrpc_session_get_seqno(js)
+            && jsonrpc_session_is_connected(js)) {
+            if (!database) {
+                break;
+            }
+
+            seqno = jsonrpc_session_get_seqno(js);
+            struct jsonrpc_msg *txn = create_database_info_request(database);
+            json_destroy(id);
+            id = json_clone(txn->id);
+            jsonrpc_session_send(js, txn);
+        }
+
+        struct jsonrpc_msg *reply = jsonrpc_session_recv(js);
+        if (reply && id && reply->id && json_equal(id, reply->id)) {
+            if (reply->type == JSONRPC_REPLY
+                && should_stay_connected(jsonrpc_session_get_name(js),
+                                         database, &cid, reply)) {
+                jsonrpc_msg_destroy(reply);
+                break;
+            }
+            jsonrpc_session_force_reconnect(js);
+        }
+        jsonrpc_msg_destroy(reply);
+
+        jsonrpc_session_recv_wait(js);
+        jsonrpc_session_wait(js);
+        poll_block();
+    }
+    json_destroy(id);
+
+    *rpcp = jsonrpc_session_steal(js);
+    *databasep = database;
+    return argidx;
+}
 
 int
 main(int argc, char *argv[])
 {
     const struct ovsdb_client_command *command;
-    char *database;
-    struct jsonrpc *rpc;
-
     ovs_cmdl_proctitle_init(argc, argv);
     set_program_name(argv[0]);
     service_start(&argc, &argv);
@@ -128,50 +264,13 @@ main(int argc, char *argv[])
     }
     optind++;
 
+    char *database = NULL;
+    struct jsonrpc *rpc = NULL;
     if (command->need != NEED_NONE) {
-        if (argc - optind > command->min_args
-            && (isalpha((unsigned char) argv[optind][0])
-                && strchr(argv[optind], ':'))) {
-            rpc = open_jsonrpc(argv[optind++]);
-        } else {
-            char *sock = xasprintf("unix:%s/db.sock", ovs_rundir());
-            rpc = open_jsonrpc(sock);
-            free(sock);
-        }
-    } else {
-        rpc = NULL;
+        optind += open_rpc(command->min_args, command->need,
+                           argc - optind, argv + optind, &rpc, &database);
     }
 
-    if (command->need == NEED_DATABASE) {
-        struct svec dbs;
-
-        svec_init(&dbs);
-        fetch_dbs(rpc, &dbs);
-        if (argc - optind > command->min_args
-            && svec_contains(&dbs, argv[optind])) {
-            database = xstrdup(argv[optind++]);
-        } else if (svec_contains(&dbs, "Open_vSwitch")) {
-            database = xstrdup("Open_vSwitch");
-        } else {
-            size_t n = 0;
-            const char *best = NULL;
-            for (size_t i = 0; i < dbs.n; i++) {
-                if (dbs.names[i][0] != '_') {
-                    best = dbs.names[i];
-                    n++;
-                }
-            }
-            if (n != 1) {
-                jsonrpc_close(rpc);
-                ovs_fatal(0, "no default database for `%s' command, please "
-                          "specify a database name", command->name);
-            }
-            database = xstrdup(best);
-        }
-        svec_destroy(&dbs);
-    } else {
-        database = NULL;
-    }
 
     if (argc - optind < command->min_args ||
         argc - optind > command->max_args) {
@@ -202,6 +301,8 @@ parse_options(int argc, char *argv[])
         OPT_BOOTSTRAP_CA_CERT = UCHAR_MAX + 1,
         OPT_TIMESTAMP,
         OPT_FORCE,
+        OPT_LEADER_ONLY,
+        OPT_NO_LEADER_ONLY,
         VLOG_OPTION_ENUMS,
         DAEMON_OPTION_ENUMS,
         TABLE_OPTION_ENUMS,
@@ -215,6 +316,8 @@ parse_options(int argc, char *argv[])
         {"timeout", required_argument, NULL, 't'},
         {"db-change-aware", no_argument, &db_change_aware, 1},
         {"no-db-change-aware", no_argument, &db_change_aware, 0},
+        {"leader-only", no_argument, NULL, OPT_LEADER_ONLY},
+        {"no-leader-only", no_argument, NULL, OPT_NO_LEADER_ONLY},
         VLOG_LONG_OPTIONS,
         DAEMON_LONG_OPTIONS,
 #ifdef HAVE_OPENSSL
@@ -272,6 +375,14 @@ parse_options(int argc, char *argv[])
             }
             break;
 
+        case OPT_LEADER_ONLY:
+            leader_only = true;
+            break;
+
+        case OPT_NO_LEADER_ONLY:
+            leader_only = false;
+            break;
+
         case '?':
             exit(EXIT_FAILURE);
 
@@ -327,6 +438,9 @@ usage(void)
            "    tests whether SCHEMA's db on SERVER needs conversion.\n"
            "\n  monitor [SERVER] [DATABASE] ALL\n"
            "    monitor all changes to all columns in all tables\n"
+           "\n  wait [SERVER] DATABASE STATE\n"
+           "    wait until DATABASE reaches STATE "
+           "(\"added\" or \"connected\" or \"removed\")\n"
            "    in DATBASE on SERVER.\n"
            "\n  dump [SERVER] [DATABASE]\n"
            "    dump contents of DATABASE on SERVER to stdout\n"
@@ -474,6 +588,141 @@ fetch_dbs(struct jsonrpc *rpc, struct svec *dbs)
     jsonrpc_msg_destroy(reply);
     svec_sort(dbs);
 }
+
+static const char *
+parse_string_column(const struct json *row, const char *column_name)
+{
+    const struct json *column = shash_find_data(json_object(row), column_name);
+    return column && column->type == JSON_STRING ? json_string(column) : "";
+}
+
+static int
+parse_boolean_column(const struct json *row, const char *column_name)
+{
+    const struct json *column = shash_find_data(json_object(row), column_name);
+    return (!column ? -1
+            : column->type == JSON_TRUE ? true
+            : column->type == JSON_FALSE ? false
+            : -1);
+}
+
+static struct uuid
+parse_uuid_column(const struct json *row, const char *column_name)
+{
+    const struct json *column = shash_find_data(json_object(row), column_name);
+    if (!column) {
+        return UUID_ZERO;
+    }
+
+    struct ovsdb_type type = { OVSDB_BASE_UUID_INIT, OVSDB_BASE_VOID_INIT,
+                               0, 1 };
+    struct ovsdb_datum datum;
+    struct ovsdb_error *error = ovsdb_datum_from_json(&datum, &type, column,
+                                                      NULL);
+    if (error) {
+        ovsdb_error_destroy(error);
+        return UUID_ZERO;
+    }
+    struct uuid uuid = datum.n > 0 ? datum.keys[0].uuid : UUID_ZERO;
+    ovsdb_datum_destroy(&datum, &type);
+    return uuid;
+}
+
+struct jsonrpc_msg *
+create_database_info_request(const char *database)
+{
+    struct json *op = json_object_create();
+    json_object_put_string(op, "op", "select");
+    json_object_put_string(op, "table", "Database");
+    struct json *condition = json_array_create_3(
+        json_string_create("name"),
+        json_string_create("=="),
+        json_string_create(database));
+    json_object_put(op, "where", json_array_create_1(condition));
+    struct json *txn = json_array_create_2(
+        json_string_create("_Server"), op);
+    return jsonrpc_create_request("transact", txn, NULL);
+}
+
+static const struct json *
+parse_database_info_reply(const struct jsonrpc_msg *reply, const char *server,
+                          const char *database, const struct uuid *cid)
+{
+    const struct json *result = reply->result;
+    if (result->type != JSON_ARRAY
+        || result->u.array.n != 1
+        || result->u.array.elems[0]->type != JSON_OBJECT) {
+        VLOG_WARN("%s: unexpected reply to _Server request for %s",
+                  server, database);
+        return NULL;
+    }
+
+    const struct json *op_result = result->u.array.elems[0];
+    const struct json *rows = shash_find_data(json_object(op_result), "rows");
+    if (!rows || rows->type != JSON_ARRAY) {
+        VLOG_WARN("%s: missing \"rows\" member in  _Server reply for %s",
+                  server, database);
+        return NULL;
+    }
+
+    for (size_t i = 0; i < rows->u.array.n; i++) {
+        const struct json *row = rows->u.array.elems[i];
+        if (row->type != JSON_OBJECT) {
+            VLOG_WARN("%s: bad row in  _Server reply for %s",
+                      server, database);
+            continue;
+        }
+
+        if (strcmp(parse_string_column(row, "name"), database)) {
+            continue;
+        }
+
+        if (cid && !uuid_is_zero(cid)) {
+            struct uuid cid2 = parse_uuid_column(row, "cid");
+            if (!uuid_equals(cid, &cid2)) {
+                continue;
+            }
+        }
+
+        return row;
+    }
+
+    /* No such database. */
+    return NULL;
+}
+
+/* Parses 'reply', a JSON-RPC reply to our request asking for the status of
+ * 'database' on 'server'.  Determines whether this server is acceptable for
+ * the transaction we want to make and returns true if so or false to
+ * disconnect and try a different server. */
+static bool
+should_stay_connected(const char *server, const char *database,
+                      const struct uuid *cid, const struct jsonrpc_msg *reply)
+{
+    const struct json *row = parse_database_info_reply(reply, server,
+                                                       database, cid);
+    if (!row) {
+        /* No such database. */
+        return false;
+    }
+
+    if (strcmp(parse_string_column(row, "model"), "clustered")) {
+        /* Always accept standalone databases. */
+        return true;
+    }
+
+    if (!parse_boolean_column(row, "connected")) {
+        /* Reject disconnected servers. */
+        return false;
+    }
+
+    if (leader_only && !parse_boolean_column(row, "leader")) {
+        /* Reject if not leader.. */
+        return false;
+    }
+
+    return true;
+}
 
 static void
 do_list_dbs(struct jsonrpc *rpc, const char *database OVS_UNUSED,
@@ -602,9 +851,19 @@ send_db_change_aware(struct jsonrpc *rpc)
 }
 
 static struct json *
-do_transact__(struct jsonrpc *rpc, struct json *transaction)
+do_transact__(int argc, char *argv[], struct json *transaction)
 {
     struct jsonrpc_msg *request, *reply;
+    if (transaction->type != JSON_ARRAY
+        || !transaction->u.array.n
+        || transaction->u.array.elems[0]->type != JSON_STRING) {
+        ovs_fatal(0, "not a valid OVSDB query");
+    }
+    const char *db_name = json_string(transaction->u.array.elems[0]);
+
+    struct jsonrpc *rpc;
+    char *database = CONST_CAST(char *, db_name);
+    open_rpc(1, NEED_DATABASE, argc, argv, &rpc, &database);
 
     if (db_change_aware == 1) {
         send_db_change_aware(rpc);
@@ -617,22 +876,23 @@ do_transact__(struct jsonrpc *rpc, struct json *transaction)
     check_txn(jsonrpc_transact_block(rpc, request, &reply), &reply);
     struct json *result = json_clone(reply->result);
     jsonrpc_msg_destroy(reply);
+    jsonrpc_close(rpc);
 
     return result;
 }
 
 static void
-do_transact(struct jsonrpc *rpc, const char *database OVS_UNUSED,
-            int argc OVS_UNUSED, char *argv[])
+do_transact(struct jsonrpc *rpc OVS_UNUSED, const char *database OVS_UNUSED,
+            int argc, char *argv[])
 {
-    print_and_free_json(do_transact__(rpc, parse_json(argv[0])));
+    print_and_free_json(do_transact__(argc, argv, parse_json(argv[argc - 1])));
 }
 
 static void
-do_query(struct jsonrpc *rpc, const char *database OVS_UNUSED,
-         int argc OVS_UNUSED, char *argv[])
+do_query(struct jsonrpc *rpc OVS_UNUSED, const char *database OVS_UNUSED,
+         int argc, char *argv[])
 {
-    struct json *transaction = parse_json(argv[0]);
+    struct json *transaction = parse_json(argv[argc - 1]);
 
     if (transaction->type != JSON_ARRAY) {
         ovs_fatal(0, "not a valid OVSDB query");
@@ -645,7 +905,7 @@ do_query(struct jsonrpc *rpc, const char *database OVS_UNUSED,
     size_t abort_idx = transaction->u.array.n - 2;
 
     /* Run query. */
-    struct json *result = do_transact__(rpc, transaction);
+    struct json *result = do_transact__(argc, argv, transaction);
 
     /* If the "abort" operation ended the transaction, remove its result. */
     if (result->type == JSON_ARRAY
@@ -1270,12 +1530,35 @@ do_monitor_cond(struct jsonrpc *rpc, const char *database,
     ovsdb_schema_destroy(schema);
 }
 
-static void
-do_convert(struct jsonrpc *rpc, const char *database OVS_UNUSED,
-           int argc OVS_UNUSED, char *argv[])
+static bool
+is_database_clustered(struct jsonrpc *rpc, const char *database)
 {
+    struct jsonrpc_msg *reply;
+    check_txn(jsonrpc_transact_block(rpc,
+                                     create_database_info_request(database),
+                                     &reply), &reply);
+
+    const struct json *row = parse_database_info_reply(
+        reply, jsonrpc_get_name(rpc), database, NULL);
+    return !strcmp(parse_string_column(row, "model"), "clustered");
+}
+
+static void
+do_convert(struct jsonrpc *rpc, const char *database_ OVS_UNUSED,
+           int argc, char *argv[])
+{
+    const char *schema_file_name = argv[argc - 1];
     struct ovsdb_schema *new_schema;
-    check_ovsdb_error(ovsdb_schema_from_file(argv[0], &new_schema));
+    check_ovsdb_error(ovsdb_schema_from_file(schema_file_name, &new_schema));
+
+    char *database = new_schema->name;
+    open_rpc(1, NEED_DATABASE, argc, argv, &rpc, &database);
+
+    if (is_database_clustered(rpc, database)) {
+        ovsdb_schema_persist_ephemeral_columns(new_schema, schema_file_name);
+    }
+
+    send_db_change_aware(rpc);
 
     struct jsonrpc_msg *request, *reply;
     request = jsonrpc_create_request(
@@ -1287,11 +1570,18 @@ do_convert(struct jsonrpc *rpc, const char *database OVS_UNUSED,
 }
 
 static void
-do_needs_conversion(struct jsonrpc *rpc, const char *database OVS_UNUSED,
+do_needs_conversion(struct jsonrpc *rpc, const char *database_ OVS_UNUSED,
                     int argc OVS_UNUSED, char *argv[])
 {
     struct ovsdb_schema *schema1;
     check_ovsdb_error(ovsdb_schema_from_file(argv[0], &schema1));
+
+    char *database = schema1->name;
+    open_rpc(1, NEED_DATABASE, argc, argv, &rpc, &database);
+
+    if (is_database_clustered(rpc, database)) {
+        ovsdb_schema_persist_ephemeral_columns(schema1, argv[0]);
+    }
 
     struct ovsdb_schema *schema2 = fetch_schema(rpc, schema1->name);
     puts(ovsdb_schema_equal(schema1, schema2) ? "no" : "yes");
@@ -1691,6 +1981,25 @@ do_backup(struct jsonrpc *rpc, const char *database,
 }
 
 static void
+check_transaction_reply(struct jsonrpc_msg *reply)
+{
+    if (reply->result->type != JSON_ARRAY) {
+        ovs_fatal(0, "result is not array");
+    }
+    for (size_t i = 0; i < json_array(reply->result)->n; i++) {
+        struct json *json = json_array(reply->result)->elems[i];
+        if (json->type != JSON_OBJECT) {
+            ovs_fatal(0, "result array element is not object");
+        }
+        struct shash *object = json_object(json);
+        if (shash_find(object, "error")) {
+            ovs_fatal(0, "server returned error reply: %s",
+                      json_to_string(json, JSSF_SORT));
+        }
+    }
+}
+
+static void
 do_restore(struct jsonrpc *rpc, const char *database,
            int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
@@ -1700,21 +2009,21 @@ do_restore(struct jsonrpc *rpc, const char *database,
     }
     set_binary_mode(stdin);
 
-    struct ovsdb *backup;
-    check_ovsdb_error(ovsdb_file_open("/dev/stdin", true, &backup, NULL));
+    struct ovsdb *backup = ovsdb_file_read("/dev/stdin", false);
+    ovsdb_storage_close(backup->storage);
+    backup->storage = NULL;
 
-    const struct ovsdb_schema *schema = backup->schema;
-    struct ovsdb_schema *schema2 = fetch_schema(rpc, database);
-    if (!ovsdb_schema_equal(schema, schema2)) {
+    struct ovsdb_schema *online_schema = fetch_schema(rpc, database);
+    if (!ovsdb_schema_equal(backup->schema, online_schema)) {
         struct ds s = DS_EMPTY_INITIALIZER;
-        if (strcmp(schema->version, schema2->version)) {
+        if (strcmp(backup->schema->version, online_schema->version)) {
             ds_put_format(&s, "backup schema has version \"%s\" but "
                           "database schema has version \"%s\"",
-                          schema->version, schema2->version);
+                          backup->schema->version, online_schema->version);
         } else {
             ds_put_format(&s, "backup schema and database schema are "
                           "both version %s but still differ",
-                          schema->version);
+                          backup->schema->version);
         }
         if (!force) {
             ovs_fatal(0, "%s (use --force to override differences, or "
@@ -1724,10 +2033,10 @@ do_restore(struct jsonrpc *rpc, const char *database,
         VLOG_INFO("%s", ds_cstr(&s));
         ds_destroy(&s);
     }
-    ovsdb_schema_destroy(schema2);
+    ovsdb_schema_destroy(online_schema);
 
     struct json *txn = json_array_create_empty();
-    json_array_add(txn, json_string_create(schema->name));
+    json_array_add(txn, json_string_create(backup->schema->name));
     struct shash_node *node;
     SHASH_FOR_EACH (node, &backup->tables) {
         const char *table_name = node->name;
@@ -1770,20 +2079,7 @@ do_restore(struct jsonrpc *rpc, const char *database,
     struct jsonrpc_msg *rq = jsonrpc_create_request("transact", txn, NULL);
     struct jsonrpc_msg *reply;
     check_txn(jsonrpc_transact_block(rpc, rq, &reply), &reply);
-    if (reply->result->type != JSON_ARRAY) {
-        ovs_fatal(0, "result is not array");
-    }
-    for (size_t i = 0; i < json_array(reply->result)->n; i++) {
-        struct json *json = json_array(reply->result)->elems[i];
-        if (json->type != JSON_OBJECT) {
-            ovs_fatal(0, "result array element is not object");
-        }
-        struct shash *object = json_object(json);
-        if (shash_find(object, "error")) {
-            ovs_fatal(0, "server returned error reply: %s",
-                      json_to_string(json, JSSF_SORT));
-        }
-    }
+    check_transaction_reply(reply);
     jsonrpc_msg_destroy(reply);
 }
 
@@ -1980,13 +2276,134 @@ do_lock_unlock(struct jsonrpc *rpc, const char *database OVS_UNUSED,
     do_lock(rpc, "unlock", argv[0]);
 }
 
-/* All command handlers (except for "help") are expected to take an optional
- * server socket name (e.g. "unix:...") as their first argument.  The socket
- * name argument must be included in max_args (but left out of min_args).  The
- * command name and socket name are not included in the arguments passed to the
- * handler: the argv[0] passed to the handler is the first argument after the
- * optional server socket name.  The connection to the server is available as
- * global variable 'rpc'. */
+enum ovsdb_client_wait_type {
+    WAIT_CONNECTED,
+    WAIT_ADDED,
+    WAIT_REMOVED
+};
+
+static struct jsonrpc_msg *
+compose_wait_transaction(enum ovsdb_client_wait_type type,
+                         const char *database)
+{
+    struct json *txn = json_array_create_empty();
+    json_array_add(txn, json_string_create("_Server"));
+
+    struct json *op = json_object_create();
+    json_array_add(txn, op);
+    json_object_put_string(op, "op", "wait");
+    json_object_put_string(op, "table", "Database");
+    json_object_put(op, "where",
+                    json_array_create_1(
+                        json_array_create_3(
+                            json_string_create("name"),
+                            json_string_create("=="),
+                            json_string_create(database))));
+
+    if (type == WAIT_CONNECTED) {
+        /* Wait until connected == true. */
+        json_object_put(op, "columns",
+                        json_array_create_1(json_string_create("connected")));
+        json_object_put_string(op, "until", "==");
+
+        struct json *row = json_object_create();
+        json_object_put(row, "connected", json_boolean_create(true));
+        json_object_put(op, "rows", json_array_create_1(row));
+    } else {
+        ovs_assert(type == WAIT_ADDED || type == WAIT_REMOVED);
+
+        /* Wait until such a row exists, or not, respectively.  */
+        json_object_put(op, "columns", json_array_create_empty());
+        json_object_put_string(op, "until", "==");
+        json_object_put(op, "rows",
+                        (type == WAIT_ADDED
+                         ? json_array_create_1(json_object_create())
+                         : json_array_create_empty()));
+    }
+    return jsonrpc_create_request("transact", txn, NULL);
+}
+
+static void
+do_wait(struct jsonrpc *rpc_unused OVS_UNUSED,
+        const char *database_unused OVS_UNUSED,
+        int argc, char *argv[])
+{
+    vlog_set_levels(NULL, VLF_CONSOLE, VLL_WARN);
+    vlog_set_levels_from_string_assert("reconnect:err");
+    vlog_set_levels_from_string_assert("jsonrpc:err");
+
+    const char *database = argv[argc - 2];
+    const char *state = argv[argc - 1];
+
+    enum ovsdb_client_wait_type type;
+    if (!strcmp(state, "connected")) {
+        type = WAIT_CONNECTED;
+    } else if (!strcmp(state, "added")) {
+        type = WAIT_ADDED;
+    } else if (!strcmp(state, "removed")) {
+        type = WAIT_REMOVED;
+    } else {
+        ovs_fatal(0, "%s: unknown state", state);
+    }
+
+    char *remote = argc > 2 ? xstrdup(argv[0]) : default_remote();
+    struct jsonrpc_session *js = jsonrpc_session_open(remote, true);
+    free(remote);
+
+    unsigned int seqno = 0;
+    struct json *sdca_id = NULL;
+    struct json *txn_id = NULL;
+    for (;;) {
+        jsonrpc_session_run(js);
+
+        if (seqno != jsonrpc_session_get_seqno(js)
+            && jsonrpc_session_is_connected(js)) {
+            seqno = jsonrpc_session_get_seqno(js);
+
+            /* Send set_db_change_aware request. */
+            struct jsonrpc_msg *rq = jsonrpc_create_request(
+                "set_db_change_aware",
+                json_array_create_1(json_boolean_create(true)),
+                NULL);
+            json_destroy(sdca_id);
+            sdca_id = json_clone(rq->id);
+            jsonrpc_session_send(js, rq);
+
+            /* Send transaction. */
+            rq = compose_wait_transaction(type, database);
+            json_destroy(txn_id);
+            txn_id = json_clone(rq->id);
+            jsonrpc_session_send(js, rq);
+        }
+
+        struct jsonrpc_msg *reply = jsonrpc_session_recv(js);
+        if (reply && reply->id) {
+            if (sdca_id && json_equal(sdca_id, reply->id)) {
+                if (reply->type == JSONRPC_ERROR) {
+                    ovs_fatal(0, "%s: set_db_change_aware failed (%s)",
+                              jsonrpc_session_get_name(js),
+                              json_to_string(reply->error, 0));
+                }
+            } else if (txn_id && json_equal(txn_id, reply->id)) {
+                check_transaction_reply(reply);
+                exit(0);
+            }
+        }
+        jsonrpc_msg_destroy(reply);
+
+        jsonrpc_session_recv_wait(js);
+        jsonrpc_session_wait(js);
+        poll_block();
+    }
+}
+
+/* Command handlers may take an optional server socket name (e.g. "unix:...")
+ * and an optional database name (e.g. Open_vSwitch) as their initial
+ * arguments.  The NEED_* element indicates what a particular command needs.
+ * These optional arguments should not be included in min_args or max_args, and
+ * they are not included in the argc and argv arguments passed to the handler:
+ * the argv[0] passed to the handler is the first argument after the optional
+ * server socket name. */
 static const struct ovsdb_client_command all_commands[] = {
     { "list-dbs",           NEED_RPC,      0, 0,       do_list_dbs },
     { "get-schema",         NEED_DATABASE, 0, 0,       do_get_schema },
@@ -1994,12 +2411,13 @@ static const struct ovsdb_client_command all_commands[] = {
     { "get-schema-cksum",   NEED_DATABASE, 0, 0,       do_get_schema_cksum },
     { "list-tables",        NEED_DATABASE, 0, 0,       do_list_tables },
     { "list-columns",       NEED_DATABASE, 0, 1,       do_list_columns },
-    { "transact",           NEED_RPC,      1, 1,       do_transact },
-    { "query",              NEED_RPC,      1, 1,       do_query },
+    { "transact",           NEED_NONE,     1, 2,       do_transact },
+    { "query",              NEED_NONE,     1, 2,       do_query },
     { "monitor",            NEED_DATABASE, 1, INT_MAX, do_monitor },
     { "monitor-cond",       NEED_DATABASE, 2, 3,       do_monitor_cond },
-    { "convert",            NEED_RPC,      1, 1,       do_convert },
-    { "needs-conversion",   NEED_RPC,      1, 1,       do_needs_conversion },
+    { "wait",               NEED_NONE,     2, 3,       do_wait },
+    { "convert",            NEED_NONE,     1, 2,       do_convert },
+    { "needs-conversion",   NEED_NONE,     1, 2,       do_needs_conversion },
     { "dump",               NEED_DATABASE, 0, INT_MAX, do_dump },
     { "backup",             NEED_DATABASE, 0, 0,       do_backup },
     { "restore",            NEED_DATABASE, 0, 0,       do_restore },
