@@ -43,14 +43,23 @@ union ofp_action;
 struct ofpact_set_field;
 struct vl_mff_map;
 
-/* Mapping between port numbers and names. */
-struct ofputil_port_map {
+/* Name-number mapping.
+ *
+ * This is not exported directly but only through specializations for port
+ * name-number and table name-number mappings. */
+struct ofputil_name_map {
     struct hmap by_name;
     struct hmap by_number;
 };
-
-#define OFPUTIL_PORT_MAP_INITIALIZER(MAP)  \
+#define OFPUTIL_NAME_MAP_INITIALIZER(MAP)  \
     { HMAP_INITIALIZER(&(MAP)->by_name), HMAP_INITIALIZER(&(MAP)->by_number) }
+
+/* Mapping between port numbers and names. */
+struct ofputil_port_map {
+    struct ofputil_name_map map;
+};
+#define OFPUTIL_PORT_MAP_INITIALIZER(MAP) \
+    { OFPUTIL_NAME_MAP_INITIALIZER(&(MAP)->map) }
 
 void ofputil_port_map_init(struct ofputil_port_map *);
 const char *ofputil_port_map_get_name(const struct ofputil_port_map *,
@@ -790,6 +799,22 @@ struct ofputil_table_mod_prop_vacancy {
     uint8_t vacancy_up;      /* Vacancy threshold when space increases (%). */
     uint8_t vacancy;         /* Current vacancy (%). */
 };
+
+/* Mapping between table numbers and names. */
+struct ofputil_table_map {
+    struct ofputil_name_map map;
+};
+#define OFPUTIL_TABLE_MAP_INITIALIZER(MAP) \
+    { OFPUTIL_NAME_MAP_INITIALIZER((MAP).map) }
+
+void ofputil_table_map_init(struct ofputil_table_map *);
+const char *ofputil_table_map_get_name(const struct ofputil_table_map *,
+                                       uint8_t);
+uint8_t ofputil_table_map_get_number(const struct ofputil_table_map *,
+                                     const char *name);
+void ofputil_table_map_put(struct ofputil_table_map *,
+                           uint8_t, const char *name);
+void ofputil_table_map_destroy(struct ofputil_table_map *);
 
 /* Abstract ofp_table_mod. */
 struct ofputil_table_mod {
