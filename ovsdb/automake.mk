@@ -24,6 +24,12 @@ ovsdb_libovsdb_la_SOURCES = \
 	ovsdb/monitor.h \
 	ovsdb/query.c \
 	ovsdb/query.h \
+	ovsdb/raft.c \
+	ovsdb/raft.h \
+	ovsdb/raft-private.c \
+	ovsdb/raft-private.h \
+	ovsdb/raft-rpc.c \
+	ovsdb/raft-rpc.h \
 	ovsdb/rbac.c \
 	ovsdb/rbac.h \
 	ovsdb/replication.c \
@@ -32,6 +38,8 @@ ovsdb_libovsdb_la_SOURCES = \
 	ovsdb/row.h \
 	ovsdb/server.c \
 	ovsdb/server.h \
+	ovsdb/storage.c \
+	ovsdb/storage.h \
 	ovsdb/table.c \
 	ovsdb/table.h \
 	ovsdb/trigger.c \
@@ -134,3 +142,5 @@ ovsdb/ovsdb-server.5: \
 		$(srcdir)/ovsdb/_server.ovsschema \
 		$(srcdir)/ovsdb/_server.xml > $@.tmp && \
 	mv $@.tmp $@
+
+EXTRA_DIST += ovsdb/TODO.rst

@@ -944,6 +944,21 @@
       default is unlikely to be useful outside of single-machine OVN test
       environments.
     </dd>
+
+    <dt><code>--leader-only</code></dt>
+    <dt><code>--no-leader-only</code></dt>
+    <dd>
+      By default, or with <code>--leader-only</code>, when the database server
+      is a clustered database, <code>ovn-nbctl</code> will avoid servers other
+      than the cluster leader.  This ensures that any data that
+      <code>ovn-nbctl</code> reads and reports is up-to-date.  With
+      <code>--no-leader-only</code>, <code>ovn-nbctl</code> will use any server
+      in the cluster, which means that for read-only transactions it can report
+      and act on stale data (transactions that modify the database are always
+      serialized even with <code>--no-leader-only</code>).  Refer to
+      <code>Understanding Cluster Consistency</code> in <code>ovsdb</code>(7)
+      for more information.
+    </dd>
     </dl>
 
     <h1>Logging options</h1>

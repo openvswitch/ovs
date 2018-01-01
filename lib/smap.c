@@ -108,9 +108,18 @@ smap_add_ipv6(struct smap *smap, const char *key, struct in6_addr *addr)
 }
 
 /* Searches for 'key' in 'smap'.  If it does not already exists, adds it.
- * Otherwise, changes its value to 'value'. */
+ * Otherwise, changes its value to 'value'.  The caller retains ownership of
+ * 'value'. */
 void
 smap_replace(struct smap *smap, const char *key, const char *value)
+{
+    smap_replace_nocopy(smap, key, xstrdup(value));
+}
+
+/* Searches for 'key' in 'smap'.  If it does not already exists, adds it.
+ * Otherwise, changes its value to 'value'.  Takes ownership of 'value'. */
+void
+smap_replace_nocopy(struct smap *smap, const char *key, char *value)
 {
     size_t  key_len = strlen(key);
     size_t hash = hash_bytes(key, key_len, 0);
@@ -120,9 +129,9 @@ smap_replace(struct smap *smap, const char *key, const char *value)
     node = smap_find__(smap, key, key_len, hash);
     if (node) {
         free(node->value);
-        node->value = xstrdup(value);
+        node->value = value;
     } else {
-        smap_add__(smap, xmemdup0(key, key_len), xstrdup(value), hash);
+        smap_add__(smap, xmemdup0(key, key_len), value, hash);
     }
 }
 

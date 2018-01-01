@@ -76,6 +76,9 @@ static struct ovsdb_idl *the_idl;
 static struct ovsdb_idl_txn *the_idl_txn;
 OVS_NO_RETURN static void nbctl_exit(int status);
 
+/* --leader-only, --no-leader-only: Only accept the leader in a cluster. */
+static int leader_only = true;
+
 static void nbctl_cmd_init(void);
 OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[], struct shash *local_options);
@@ -120,6 +123,7 @@ main(int argc, char *argv[])
 
     /* Initialize IDL. */
     idl = the_idl = ovsdb_idl_create(db, &nbrec_idl_class, true, false);
+    ovsdb_idl_set_leader_only(idl, leader_only);
     run_prerequisites(commands, n_commands, idl);
 
     /* Execute the commands.
@@ -182,6 +186,8 @@ parse_options(int argc, char *argv[], struct shash *local_options)
         {"help", no_argument, NULL, 'h'},
         {"commands", no_argument, NULL, OPT_COMMANDS},
         {"options", no_argument, NULL, OPT_OPTIONS},
+        {"leader-only", no_argument, &leader_only, true},
+        {"no-leader-only", no_argument, &leader_only, false},
         {"version", no_argument, NULL, 'V'},
         VLOG_LONG_OPTIONS,
         STREAM_SSL_LONG_OPTIONS,
@@ -300,6 +306,9 @@ parse_options(int argc, char *argv[], struct shash *local_options)
 
         default:
             abort();
+
+        case 0:
+            break;
         }
     }
     free(short_options);
@@ -464,6 +473,7 @@ Options:\n\
   --db=DATABASE               connect to DATABASE\n\
                               (default: %s)\n\
   --no-wait, --wait=none      do not wait for OVN reconfiguration (default)\n\
+  --no-leader-only            accept any cluster member, not just the leader\n\
   --wait=sb                   wait for southbound database update\n\
   --wait=hv                   wait for all chassis to catch up\n\
   -t, --timeout=SECS          wait at most SECS seconds\n\

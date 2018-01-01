@@ -22,7 +22,7 @@ v2.9.0 - 19 Feb 2018
      * Add ttl field.
      * Add a new action dec_nsh_ttl.
      * Enable NSH support in kernel datapath.
-   - OVSDB:
+   - OVSDB has new, experimental support for database clustering:
      * New high-level documentation in ovsdb(7).
      * New file format documentation for developers in ovsdb(5).
      * Protocol documentation moved from ovsdb-server(1) to ovsdb-server(7).
@@ -30,10 +30,13 @@ v2.9.0 - 19 Feb 2018
        "ovsdb-client convert".
      * ovsdb-server now always hosts a built-in database named _Server.  See
        ovsdb-server(5) for more details.
-     * ovsdb-client: New "get-schema-cksum" and "query" commands.
-     * ovsdb-client: New "backup" and "restore" commands.
-     * ovsdb-client: New --timeout option.
-     * ovsdb-tool: New "db-name" and "schema-name" commands.
+     * ovsdb-client: New "get-schema-cksum", "query", "backup", "restore",
+       and "wait" commands.  New --timeout option.
+     * ovsdb-tool: New "create-cluster", "join-cluster", "db-cid", "db-sid",
+       "db-local-address", "db-is-clustered", "db-is-standalone", "db-name",
+       "schema-name", "compare-versions", and "check-cluster" commands.
+     * ovsdb-server: New ovs-appctl commands for managing clusters.
+     * ovs-sandbox: New support for clustered databases.
    - ovs-vsctl and other commands that display data in tables now support a
      --max-column-width option to limit column width.
    - No longer slow-path traffic that sends to a controller.  Applications,
@@ -49,6 +52,7 @@ v2.9.0 - 19 Feb 2018
          action 'nd_ns' to resolve unknown next hop MAC addresses for the
          IPv6 packets.
      * ovn-ctl: New commands run_nb_ovsdb and run_sb_ovsdb.
+     * ovn-sbctl, ovn-nbctl: New options --leader-only, --no-leader-only.
    - OpenFlow:
      * ct_clear action is now backed by kernel datapath. Support is probed for
        when OVS starts.

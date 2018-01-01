@@ -17,6 +17,7 @@
 #define OVSDB_UTIL_H 1
 
 /* Database access utility functions. */
+void ovsdb_util_clear_column(struct ovsdb_row *, const char *column_name);
 struct ovsdb_datum *ovsdb_util_get_datum(struct ovsdb_row *row,
                                          const char *column_name,
                                          const enum ovsdb_atomic_type keytype,
@@ -35,6 +36,9 @@ const union ovsdb_atom *ovsdb_util_read_column(const struct ovsdb_row *row,
 bool ovsdb_util_read_integer_column(const struct ovsdb_row *row,
                                     const char *column_name,
                                     long long int *integerp);
+void ovsdb_util_write_integer_column(struct ovsdb_row *row,
+                                     const char *column_name,
+                                     long long int integer);
 bool ovsdb_util_read_string_column(const struct ovsdb_row *row,
                                    const char *column_name,
                                    const char **stringp);

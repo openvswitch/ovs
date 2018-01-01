@@ -25,12 +25,16 @@
 #include "openvswitch/hmap.h"
 #include "openvswitch/json.h"
 #include "openvswitch/list.h"
+#include "openvswitch/poll-loop.h"
+#include "openvswitch/vlog.h"
 #include "ovsdb-error.h"
 #include "ovsdb.h"
 #include "row.h"
+#include "storage.h"
 #include "table.h"
-#include "perf-counter.h"
 #include "uuid.h"
+
+VLOG_DEFINE_THIS_MODULE(transaction);
 
 struct ovsdb_txn {
     struct ovsdb *db;
@@ -812,8 +816,8 @@ ovsdb_txn_is_empty(const struct ovsdb_txn *txn)
     return ovs_list_is_empty(&txn->txn_tables);
 }
 
-struct ovsdb_error * OVS_WARN_UNUSED_RESULT
-ovsdb_txn_start_commit(struct ovsdb_txn *txn)
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
+ovsdb_txn_precommit(struct ovsdb_txn *txn)
 {
     struct ovsdb_error *error;
 
@@ -824,7 +828,7 @@ ovsdb_txn_start_commit(struct ovsdb_txn *txn)
         ovsdb_txn_abort(txn);
         return OVSDB_WRAP_BUG("can't happen", error);
     }
-    if (ovsdb_txn_is_empty(txn)) {
+    if (ovs_list_is_empty(&txn->txn_tables)) {
         return NULL;
     }
 
@@ -865,43 +869,193 @@ ovsdb_txn_start_commit(struct ovsdb_txn *txn)
         return OVSDB_WRAP_BUG("can't happen", error);
     }
 
-    return NULL;
+    return error;
 }
 
-struct ovsdb_error *
-ovsdb_txn_finish_commit(struct ovsdb_txn *txn, bool durable)
+/* Finalize commit. */
+void
+ovsdb_txn_complete(struct ovsdb_txn *txn)
 {
-    /* Commit to disk. */
-    if (txn->db->file) {
-        struct ovsdb_error *error = ovsdb_file_commit(txn->db->file, txn,
-                                                      durable);
-        if (error) {
-            ovsdb_txn_abort(txn);
+    if (!ovsdb_txn_is_empty(txn)) {
+        txn->db->run_triggers = true;
+        ovsdb_monitors_commit(txn->db, txn);
+        ovsdb_error_assert(for_each_txn_row(txn, ovsdb_txn_update_weak_refs));
+        ovsdb_error_assert(for_each_txn_row(txn, ovsdb_txn_row_commit));
+    }
+    ovsdb_txn_free(txn);
+}
+
+/* Applies 'txn' to the internal representation of the database.  This is for
+ * transactions that don't need to be written to storage; probably, they came
+ * from storage.  These transactions shouldn't ordinarily fail because storage
+ * should contain only consistent transactions.  (One exception is for database
+ * conversion in ovsdb_convert().) */
+struct ovsdb_error * OVS_WARN_UNUSED_RESULT
+ovsdb_txn_replay_commit(struct ovsdb_txn *txn)
+{
+    struct ovsdb_error *error = ovsdb_txn_precommit(txn);
+    if (error) {
+        ovsdb_txn_abort(txn);
+    } else {
+        ovsdb_txn_complete(txn);
+    }
+    return error;
+}
+
+/* If 'error' is nonnull, the transaction is complete, with the given error as
+ * the result.
+ *
+ * Otherwise, if 'write' is nonnull, then the transaction is waiting for
+ * 'write' to complete.
+ *
+ * Otherwise, if 'commit_index' is nonzero, then the transaction is waiting for
+ * 'commit_index' to be applied to the storage.
+ *
+ * Otherwise, the transaction is complete and successful. */
+struct ovsdb_txn_progress {
+    struct ovsdb_error *error;
+    struct ovsdb_write *write;
+    uint64_t commit_index;
+
+    struct ovsdb_storage *storage;
+};
+
+struct ovsdb_txn_progress *
+ovsdb_txn_propose_schema_change(struct ovsdb *db,
+                                const struct json *schema,
+                                const struct json *data)
+{
+    struct ovsdb_txn_progress *progress = xzalloc(sizeof *progress);
+    progress->storage = db->storage;
+
+    struct uuid next;
+    struct ovsdb_write *write = ovsdb_storage_write_schema_change(
+        db->storage, schema, data, &db->prereq, &next);
+    if (!ovsdb_write_is_complete(write)) {
+        progress->write = write;
+    } else {
+        progress->error = ovsdb_error_clone(ovsdb_write_get_error(write));
+        ovsdb_write_destroy(write);
+    }
+    return progress;
+}
+
+struct ovsdb_txn_progress *
+ovsdb_txn_propose_commit(struct ovsdb_txn *txn, bool durable)
+{
+    struct ovsdb_txn_progress *progress = xzalloc(sizeof *progress);
+    progress->storage = txn->db->storage;
+    progress->error = ovsdb_txn_precommit(txn);
+    if (progress->error) {
+        return progress;
+    }
+
+    /* Turn the commit into the format used for the storage logs.. */
+    struct json *txn_json = ovsdb_file_txn_to_json(txn);
+    if (!txn_json) {
+        /* Nothing to do, so success. */
+        return progress;
+    }
+    txn_json = ovsdb_file_txn_annotate(txn_json, ovsdb_txn_get_comment(txn));
+
+    struct uuid next;
+    struct ovsdb_write *write = ovsdb_storage_write(
+        txn->db->storage, txn_json, &txn->db->prereq, &next, durable);
+    json_destroy(txn_json);
+    if (!ovsdb_write_is_complete(write)) {
+        progress->write = write;
+    } else {
+        progress->error = ovsdb_error_clone(ovsdb_write_get_error(write));
+        ovsdb_write_destroy(write);
+    }
+    return progress;
+}
+
+/* Proposes 'txn' for commitment and then waits for the commit to succeed or
+ * fail.  Returns null if successful, otherwise the error.
+ *
+ * **In addition**, this function also completes or aborts the transaction if
+ * the transaction succeeded or failed, respectively. */
+struct ovsdb_error * OVS_WARN_UNUSED_RESULT
+ovsdb_txn_propose_commit_block(struct ovsdb_txn *txn, bool durable)
+{
+    struct ovsdb_txn_progress *p = ovsdb_txn_propose_commit(txn, durable);
+    for (;;) {
+        ovsdb_storage_run(p->storage);
+        if (ovsdb_txn_progress_is_complete(p)) {
+            struct ovsdb_error *error
+                = ovsdb_error_clone(ovsdb_txn_progress_get_error(p));
+            ovsdb_txn_progress_destroy(p);
+
+            if (error) {
+                ovsdb_txn_abort(txn);
+            } else {
+                ovsdb_txn_complete(txn);
+            }
+
             return error;
+        }
+        ovsdb_storage_wait(p->storage);
+        poll_block();
+    }
+}
+
+static void
+ovsdb_txn_progress_run(struct ovsdb_txn_progress *p)
+{
+    if (p->error) {
+        return;
+    }
+
+    if (p->write) {
+        if (!ovsdb_write_is_complete(p->write)) {
+            return;
+        }
+        p->error = ovsdb_error_clone(ovsdb_write_get_error(p->write));
+        p->commit_index = ovsdb_write_get_commit_index(p->write);
+        ovsdb_write_destroy(p->write);
+        p->write = NULL;
+
+        if (p->error) {
+            return;
         }
     }
 
-    /* Send the transaction to each monitor. */
-    ovsdb_monitors_commit(txn->db, txn);
-
-    /* Finalize commit. */
-    txn->db->run_triggers = true;
-    ovsdb_error_assert(for_each_txn_row(txn, ovsdb_txn_update_weak_refs));
-    ovsdb_error_assert(for_each_txn_row(txn, ovsdb_txn_row_commit));
-    ovsdb_txn_free(txn);
-
-    return NULL;
+    if (p->commit_index) {
+        if (ovsdb_storage_get_applied_index(p->storage) >= p->commit_index) {
+            p->commit_index = 0;
+        }
+    }
 }
 
-struct ovsdb_error *
-ovsdb_txn_commit(struct ovsdb_txn *txn, bool durable)
+static bool
+ovsdb_txn_progress_is_complete__(const struct ovsdb_txn_progress *p)
 {
-    struct ovsdb_error *error = ovsdb_txn_start_commit(txn);
-    if (error || ovsdb_txn_is_empty(txn)) {
-        ovsdb_txn_abort(txn);
-        return error;
+    return p->error || (!p->write && !p->commit_index);
+}
+
+bool
+ovsdb_txn_progress_is_complete(const struct ovsdb_txn_progress *p)
+{
+    ovsdb_txn_progress_run(CONST_CAST(struct ovsdb_txn_progress *, p));
+    return ovsdb_txn_progress_is_complete__(p);
+}
+
+const struct ovsdb_error *
+ovsdb_txn_progress_get_error(const struct ovsdb_txn_progress *p)
+{
+    ovs_assert(ovsdb_txn_progress_is_complete__(p));
+    return p->error;
+}
+
+void
+ovsdb_txn_progress_destroy(struct ovsdb_txn_progress *p)
+{
+    if (p) {
+        ovsdb_error_destroy(p->error);
+        ovsdb_write_destroy(p->write);
+        free(p);
     }
-    return ovsdb_txn_finish_commit(txn, durable);
 }
 
 void

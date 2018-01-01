@@ -562,6 +562,16 @@ jsonrpc_create_error(struct json *error, const struct json *id)
                            json_clone(id));
 }
 
+struct jsonrpc_msg *
+jsonrpc_msg_clone(const struct jsonrpc_msg *old)
+{
+    return jsonrpc_create(old->type, old->method,
+                          json_nullable_clone(old->params),
+                          json_nullable_clone(old->result),
+                          json_nullable_clone(old->error),
+                          json_nullable_clone(old->id));
+}
+
 const char *
 jsonrpc_msg_type_to_string(enum jsonrpc_msg_type type)
 {
@@ -753,6 +763,16 @@ jsonrpc_msg_to_json(struct jsonrpc_msg *m)
 
     return json;
 }
+
+char *
+jsonrpc_msg_to_string(const struct jsonrpc_msg *m)
+{
+    struct jsonrpc_msg *copy = jsonrpc_msg_clone(m);
+    struct json *json = jsonrpc_msg_to_json(copy);
+    char *s = json_to_string(json, JSSF_SORT);
+    json_destroy(json);
+    return s;
+}
 
 /* A JSON-RPC session with reconnection. */
 
@@ -875,6 +895,15 @@ jsonrpc_session_close(struct jsonrpc_session *s)
         svec_destroy(&s->remotes);
         free(s);
     }
+}
+
+struct jsonrpc *
+jsonrpc_session_steal(struct jsonrpc_session *s)
+{
+    struct jsonrpc *rpc = s->rpc;
+    s->rpc = NULL;
+    jsonrpc_session_close(s);
+    return rpc;
 }
 
 static void

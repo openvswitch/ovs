@@ -40,11 +40,20 @@ see \fBovsdb\fR(7).
 Each OVSDB file may be specified on the command line as \fIdatabase\fR.
 If none is specified, the default is \fB@DBDIR@/conf.db\fR.  The database
 files must already have been created and initialized using, for
-example, \fBovsdb\-tool create\fR.
+example, \fBovsdb\-tool\fR's \fBcreate\fR, \fBcreate\-cluster\fR, or
+\fBjoin\-cluster\fR command.
 .PP
-This OVSDB implementation supports standalone and active-backup
-databases, as well as database replication.
+This OVSDB implementation supports standalone, active-backup, and
+clustered database service models, as well as database replication.
 See the Service Models section of \fBovsdb\fR(7) for more information.
+.PP
+For clustered databases, when the \fB\-\-detach\fR option is used,
+\fBovsdb\-server\fR detaches without waiting for the server to
+successfully join a cluster (if the database file is freshly created
+with \fBovsdb\-tool join\-cluster\fR) or connect to a cluster that it
+has already joined.  Use \fBovsdb\-client wait\fR (see
+\fBovsdb\-client\fR(1)) to wait until the server has successfully
+joined and connected to a cluster.
 .PP
 In addition to user-specified databases, \fBovsdb\-server\fR version
 2.9 and later also always hosts a built-in database named
@@ -111,7 +120,10 @@ This option is not supported on Windows platform.
 .SS "Daemon Options"
 .ds DD \
 \fBovsdb\-server\fR detaches only after it starts listening on all \
-configured remotes.
+configured remotes.  At this point, all standalone and active-backup \
+databases are ready for use.  Clustered databases only become ready \
+for use after they finish joining their clusters (which could have \
+already happened in previous runs of \fBovsdb\-server\fR).
 .so lib/daemon.man
 .SS "Service Options"
 .so lib/service.man
@@ -119,7 +131,9 @@ configured remotes.
 .so lib/vlog.man
 .SS "Active-Backup Options"
 These options support the \fBovsdb\-server\fR active-backup service
-model and database replication.  By
+model and database replication.  These options apply only to databases
+in the format used for standalone and active-backup databases, which
+is the database format created by \fBovsdb\-tool create\fR.  By
 default, when it serves a database in this format, \fBovsdb\-server\fR
 runs as a standalone server.  These options can configure it for
 active-backup use:
@@ -294,6 +308,51 @@ can be either \fIconnecting\fR, \fIreplicating\fR or \fIerror\fR, are shown.
 When the connection is in \fIreplicating\fR state, further output shows
 the list of databases currently replicating, and the tables that are
 excluded.
+.
+.SS "Cluster Commands"
+These commands support the \fBovsdb\-server\fR clustered service model.
+They apply only to databases in the format used for clustered databases,
+which is the database format created by \fBovsdb\-tool create\-cluster\fR
+and \fBovsdb\-tool join\-cluster\fR.
+.
+.IP "\fBcluster/cid \fIdb\fR"
+Prints the cluster ID for \fIdb\fR, which is a UUID that identifies
+the cluster.  If \fIdb\fR is a database newly created by
+\fBovsdb\-tool cluster\-join\fR that has not yet successfully joined
+its cluster, and \fB\-\-cid\fR was not specified on the
+\fBcluster\-join\fR command line, then this command will report an
+error because the cluster ID is not yet known.
+.
+.IP "\fBcluster/sid \fIdb\fR"
+Prints the server ID for \fIdb\fR, which is a UUID that identifies
+this server within the cluster.
+.
+.IP "\fBcluster/status \fIdb\fR"
+Prints this server's status within the cluster and the status of its
+connections to other servers in the cluster.
+.
+.IP "\fBcluster/leave \fIdb\fR"
+This command starts the server gracefully
+removing itself from its cluster.  At least one server must remain,
+and the cluster must be healthy, that is, over half of the cluster's
+servers must be up.
+.IP
+When the server successfully leaves the cluster, it stops serving
+\fIdb\fR, as if \fBovsdb\-server/remove\-db \fIdb\fR had been
+executed.
+.IP
+Use \fBovsdb\-client wait\fR (see \fBovsdb\-client\fR(1)) to wait
+until the server has left the cluster.
+.
+.IP "\fBcluster/kick \fIdb server\fR"
+Start graceful removal of \fIserver\fR from \fIdb\fR's cluster, like
+\fBcluster/leave\fR (without \fB\-\-force\fR) except that it can
+remove any server, not just this one.
+.IP
+\fIserver\fR may be a server ID, as printed by \fBcluster/sid\fR, or
+the server's local network address as passed to \fBovsdb-tool\fR's
+\fBcreate\-cluster\fR or \fBjoin\-cluster\fR command.  Use
+\fBcluster/status\fR to see a list of cluster members.
 .
 .so lib/vlog-unixctl.man
 .so lib/memory-unixctl.man

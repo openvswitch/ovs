@@ -123,9 +123,13 @@ schema checksum from a schema or database file, respectively.
 Service Models
 ==============
 
-OVSDB supports two service models for databases: **standalone**, and
-**active-backup**.  The service models provide different compromises
-among consistency and availability.
+OVSDB supports three service models for databases: **standalone**,
+**active-backup**, and **clustered**.  The service models provide different
+compromises among consistency, availability, and partition tolerance.  They
+also differ in the number of servers required and in terms of performance.  The
+standalone and active-backup database service models share one on-disk format,
+and clustered databases use a different format, but the OVSDB programs work
+with both formats.  ``ovsdb(5)`` documents these file formats.
 
 RFC 7047, which specifies the OVSDB protocol, does not mandate or specify
 any particular service model.
@@ -146,6 +150,11 @@ server failure would take out both the database and the virtual switch.
 To set up a standalone database, use ``ovsdb-tool create`` to
 create a database file, then run ``ovsdb-server`` to start the
 database service.
+
+To configure a client, such as ``ovs-vswitchd`` or ``ovs-vsctl``, to use a
+standalone database, configure the server to listen on a "connection method"
+that the client can reach, then point the client to that connection method.
+See `Connection Methods`_ below for information about connection methods.
 
 Active-Backup Database Service Model
 ------------------------------------
@@ -189,9 +198,148 @@ for server pairs.
 
 Compared to a standalone server, the active-backup service model
 somewhat increases availability, at a risk of split-brain.  It adds
-generally insignificant performance overhead.
+generally insignificant performance overhead.  On the other hand, the
+clustered service model, discussed below, requires at least 3 servers
+and has greater performance overhead, but it avoids the need for
+external management software and eliminates the possibility of
+split-brain.
 
 Open vSwitch 2.6 introduced support for the active-backup service model.
+
+Clustered Database Service Model
+--------------------------------
+
+A **clustered** database runs across 3 or 5 or more database servers (the
+**cluster**) on different hosts.  Servers in a cluster automatically
+synchronize writes within the cluster.  A 3-server cluster can remain available
+in the face of at most 1 server failure; a 5-server cluster tolerates up to 2
+failures.  Clusters larger than 5 servers will also work, with every 2 added
+servers allowing the cluster to tolerate 1 more failure, but write performance
+decreases.  The number of servers should be odd: a 4- or 6-server cluster
+cannot tolerate more failures than a 3- or 5-server cluster, respectively.
+
+To set up a clustered database, first initialize it on a single node by running
+``ovsdb-tool create-cluster``, then start ``ovsdb-server``.  Depending on its
+arguments, the ``create-cluster`` command can create an empty database or copy
+a standalone database's contents into the new database.
+
+To configure a client, such as ``ovn-controller`` or ``ovn-sbctl``, to use a
+clustered database, first configure all of the servers to listen on a
+connection method that the client can reach, then point the client to all of
+the servers' connection methods, comma-separated.  See `Connection Methods`_,
+below, for more detail.
+
+Open vSwitch 2.9 introduced support for the clustered service model.
+
+How to Maintain a Clustered Database
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To add a server to a cluster, run ``ovsdb-tool join-cluster`` on the new server
+and start ``ovsdb-server``.  To remove a running server from a cluster, use
+``ovs-appctl`` to invoke the ``cluster/leave`` command.  When a server fails
+and cannot be recovered, e.g. because its hard disk crashed, or to otherwise
+remove a server that is down from a cluster, use ``ovs-appctl`` to invoke
+``cluster/kick`` to make the remaining servers kick it out of the cluster.
+
+The above methods for adding and removing servers only work for healthy
+clusters, that is, for clusters with no more failures than their maximum
+tolerance.  For example, in a 3-server cluster, the failure of 2 servers
+prevents servers joining or leaving the cluster (as well as database access).
+To prevent data loss or inconsistency, the preferred solution to this problem
+is to bring up enough of the failed servers to make the cluster healthy again,
+then if necessary remove any remaining failed servers and add new ones.  If
+this cannot be done, though, use ``ovs-appctl`` to invoke ``cluster/leave
+--force`` on a running server.  This command forces the server to which it is
+directed to leave its cluster and form a new single-node cluster that contains
+only itself.  The data in the new cluster may be inconsistent with the former
+cluster: transactions not yet replicated to the server will be lost, and
+transactions not yet applied to the cluster may be committed.  Afterward, any
+servers in its former cluster will regard the server to have failed.
+
+The servers in a cluster synchronize data over a cluster management protocol
+that is specific to Open vSwitch; it is not the same as the OVSDB protocol
+specified in RFC 7047.  For this purpose, a server in a cluster is tied to a
+particular IP address and TCP port, which is specified in the ``ovsdb-tool``
+command that creates or joins the cluster.  The TCP port used for clustering
+must be different from that used for OVSDB clients.  To change the port or
+address of a server in a cluster, first remove it from the cluster, then add it
+back with the new address.
+
+To upgrade the ``ovsdb-server`` processes in a cluster from one version of Open
+vSwitch to another, upgrading them one at a time will keep the cluster healthy
+during the upgrade process.  (This is different from upgrading a database
+schema, which is covered later under `Upgrading or Downgrading a Database`_.)
+
+Clustered OVSDB does not support the OVSDB "ephemeral columns" feature.
+``ovsdb-tool`` and ``ovsdb-client`` change ephemeral columns into persistent
+ones when they work with schemas for clustered databases.  Future versions of
+OVSDB might add support for this feature.
+
+Understanding Cluster Consistency
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To ensure consistency, clustered OVSDB uses the Raft algorithm described in
+Diego Ongaro's Ph.D. thesis, "Consensus: Bridging Theory and Practice".  In an
+operational Raft cluster, at any given time a single server is the "leader" and
+the other nodes are "followers".  Only the leader processes transactions, but a
+transaction is only committed when a majority of the servers confirm to the
+leader that they have written it to persistent storage.
+
+In most database systems, read and write access to the database happens through
+transactions.  In such a system, Raft allows a cluster to present a strongly
+consistent transactional interface.  OVSDB uses conventional transactions for
+writes, but clients often effectively do reads a different way, by asking the
+server to "monitor" a database or a subset of one on the client's behalf.
+Whenever monitored data changes, the server automatically tells the client what
+changed, which allows the client to maintain an accurate snapshot of the
+database in its memory.  Of course, at any given time, the snapshot may be
+somewhat dated since some of it could have changed without the change
+notification yet being received and processed by the client.
+
+Given this unconventional usage model, OVSDB also adopts an unconventional
+clustering model.  Each server in a cluster acts independently for the purpose
+of monitors and read-only transactions, without verifying that data is
+up-to-date with the leader.  Servers forward transactions that write to the
+database to the leader for execution, ensuring consistency.  This has the
+following consequences:
+
+* Transactions that involve writes, against any server in the cluster, are
+  linearizable if clients take care to use correct prerequisites, which is the
+  same condition required for linearizability in a standalone OVSDB.
+  (Actually, "at-least-once" consistency, because OVSDB does not have a session
+  mechanism to drop duplicate transactions if a connection drops after the
+  server commits it but before the client receives the result.)
+
+* Read-only transactions can yield results based on a stale version of the
+  database, if they are executed against a follower.  Transactions on the
+  leader always yield fresh results.  (With monitors, as explained above, a
+  client can always see stale data even without clustering, so clustering does
+  not change the consistency model for monitors.)
+
+* Monitor-based (or read-heavy) workloads scale well across a cluster, because
+  clustering OVSDB adds no additional work or communication for reads and
+  monitors.
+
+* A write-heavy client should connect to the leader, to avoid the overhead of
+  followers forwarding transactions to the leader.
+
+* When a client conducts a mix of read and write transactions across more than
+  one server in a cluster, it can see inconsistent results because a read
+  transaction might read stale data whose updates have not yet propagated from
+  the leader.  By default, ``ovn-sbctl`` and similar utilities connect to the
+  cluster leader to avoid this issue.
+
+  The same might occur for transactions against a single follower except that
+  the OVSDB server ensures that the results of a write forwarded to the leader
+  by a given server are visible at that server before it replies to the
+  requesting client.
+
+* If a client uses a database on one server in a cluster, then another server
+  in the cluster (perhaps because the first server failed), the client could
+  observe stale data.  Clustered OVSDB clients, however, can use a column in
+  the ``_Server`` database to detect that data on a server is older than data
+  that the client previously read.  The OVSDB client library in Open vSwitch
+  uses this feature to avoid servers with stale data.
 
 Database Replication
 ====================
@@ -244,6 +392,18 @@ unix:<file>
 
     On Windows, connect to a local named pipe that is represented by a file
     created in the path <file> to mimic the behavior of a Unix domain socket.
+
+<method1>,<method2>,...,<methodN>
+    For a clustered database service to be highly available, a client must be
+    able to connect to any of the servers in the cluster.  To do so, specify
+    connection methods for each of the servers separated by commas (and
+    optional spaces).
+
+    In theory, if machines go up and down and IP addresses change in the right
+    way, a client could talk to the wrong instance of a database.  To avoid
+    this possibility, add ``cid:<uuid>`` to the list of methods, where <uuid>
+    is the cluster ID of the desired database cluster, as printed by
+    ``ovsdb-tool get-cid``.  This feature is optional.
 
 OVSDB supports the following passive connection methods:
 
@@ -314,26 +474,41 @@ A more common backup strategy is to periodically take and store a snapshot.
 For the standalone and active-backup service models, making a copy of the
 database file, e.g. using ``cp``, effectively makes a snapshot, and because
 OVSDB database files are append-only, it works even if the database is being
-modified when the snapshot takes place.
+modified when the snapshot takes place.  This approach does not work for
+clustered databases.
 
-Another way to make a backup is to use ``ovsdb-client backup``, which
-connects to a running database server and outputs an atomic snapshot of its
-schema and content, in the same format used for on-disk databases.
+Another way to make a backup, which works with all OVSDB service models, is to
+use ``ovsdb-client backup``, which connects to a running database server and
+outputs an atomic snapshot of its schema and content, in the same format used
+for standalone and active-backup databases.
 
 Multiple options are also available when the time comes to restore a database
-from a backup.  One option is to stop the database server or servers, overwrite
-the database file with the backup (e.g. with ``cp``), and then restart the
-servers.  Another way is to use ``ovsdb-client restore``, which connects to a
-running database server and replaces the data in one of its databases by a
-provided snapshot.  The advantage of ``ovsdb-client restore`` is that it causes
-zero downtime for the database and its server.  It has the downside that UUIDs
-of rows in the restored database will differ from those in the snapshot,
-because the OVSDB protocol does not allow clients to specify row UUIDs.
+from a backup.  For the standalone and active-backup service models, one option
+is to stop the database server or servers, overwrite the database file with the
+backup (e.g. with ``cp``), and then restart the servers.  Another way, which
+works with any service model, is to use ``ovsdb-client restore``, which
+connects to a running database server and replaces the data in one of its
+databases by a provided snapshot.  The advantage of ``ovsdb-client restore`` is
+that it causes zero downtime for the database and its server.  It has the
+downside that UUIDs of rows in the restored database will differ from those in
+the snapshot, because the OVSDB protocol does not allow clients to specify row
+UUIDs.
 
 None of these approaches saves and restores data in columns that the schema
 designates as ephemeral.  This is by design: the designer of a schema only
 marks a column as ephemeral if it is acceptable for its data to be lost
 when a database server restarts.
+
+Clustering and backup serve different purposes.  Clustering increases
+availability, but it does not protect against data loss if, for example, a
+malicious or malfunctioning OVSDB client deletes or tampers with data.
+
+Changing Database Service Model
+-------------------------------
+
+Use ``ovsdb-tool create-cluster`` to create a clustered database from the
+contents of a standalone database.  Use ``ovsdb-tool backup`` to create a
+standalone database from the contents of a clustered database.
 
 Upgrading or Downgrading a Database
 -----------------------------------
@@ -367,8 +542,8 @@ active-backup database, first stop the database server or servers, then use
 ``ovsdb-tool convert`` to convert it to the new schema, and then restart the
 database server.
 
-OVSDB also supports online database schema conversion.
-To convert a database online, use ``ovsdb-client convert``.
+OVSDB also supports online database schema conversion for any of its database
+service models.  To convert a database online, use ``ovsdb-client convert``.
 The conversion is atomic, consistent, isolated, and durable.  ``ovsdb-server``
 disconnects any clients connected when the conversion takes place (except
 clients that use the ``set_db_change_aware`` Open vSwitch extension RPC).  Upon
@@ -405,9 +580,9 @@ First, ``ovsdb-tool compact`` can compact a standalone or active-backup
 database that is not currently being served by ``ovsdb-server`` (or otherwise
 locked for writing by another process).  To compact any database that is
 currently being served by ``ovsdb-server``, use ``ovs-appctl`` to send the
-``ovsdb-server/compact`` command.  Each server in an active-backup database
-maintains its database file independently, so to compact all of them, issue
-this command separately on each server.
+``ovsdb-server/compact`` command.  Each server in an active-backup or clustered
+database maintains its database file independently, so to compact all of them,
+issue this command separately on each server.
 
 Viewing History
 ---------------
@@ -421,8 +596,10 @@ client.  The comments can be helpful for quickly understanding a transaction;
 for example, ``ovs-vsctl`` adds its command line to the transactions that it
 makes.
 
-For active-backup databases, the sequence of transactions in each server's log
-will differ, even at points when they reflect the same data.
+The ``show-log`` command works with both OVSDB file formats, but the details of
+the output format differ.  For active-backup and clustered databases, the
+sequence of transactions in each server's log will differ, even at points when
+they reflect the same data.
 
 Truncating History
 ------------------
@@ -449,9 +626,9 @@ cryptography, it is acceptable for this purpose because it is not used to
 defend against malicious attackers.
 
 The first record in a standalone or active-backup database file specifies the
-schema.  ``ovsdb-server`` will refuse to work with a database whose first
-record is corrupted.  Delete and recreate such a database, or restore it from a
-backup.
+schema.  ``ovsdb-server`` will refuse to work with a database where this record
+is corrupted, or with a clustered database file with corruption in the first
+few records.  Delete and recreate such a database, or restore it from a backup.
 
 When ``ovsdb-server`` adds records to a database file in which it detected
 corruption, it first truncates the file just after the last good record.

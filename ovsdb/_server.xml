@@ -37,13 +37,13 @@
 
     <p>
       When a database is removed from the server, in addition to
-      <code>Database</code> table updates, the server sends <code>cancel</code>
-      messages, as described in RFC 7047 section 4.1.4, in reply to outstanding
-      transactions for the removed database.  The server also cancels any
-      outstanding monitoring initiated by <code>monitor</code> or
-      <code>monitor_cond</code> requested on the removed database, sending the
-      <code>monitor_canceled</code> RPC described in
-      <code>ovsdb-server</code>(7).  Only clients that disable disconnection
+      <code>Database</code> table updates, the server sends
+      <code>canceled</code> messages, as described in RFC 7047 section 4.1.4,
+      in reply to outstanding transactions for the removed database.  The
+      server also cancels any outstanding monitoring initiated by
+      <code>monitor</code> or <code>monitor_cond</code> requested on the
+      removed database, sending the <code>monitor_canceled</code> RPC described
+      in <code>ovsdb-server</code>(7).  Only clients that disable disconnection
       with <code>set_db_change_aware</code> receive these messages.
     </p>
 
@@ -58,8 +58,63 @@
       The database's name, as specified in its schema.
     </column>
 
-    <column name="schema">
-      The database schema, as a JSON string.
+    <column name="model">
+      The storage model: <code>standalone</code> for a standalone or
+      active-backup database, <code>clustered</code> for a clustered database.
     </column>
+
+    <column name="schema">
+      The database schema, as a JSON string.  In the case of a clustered
+      database, this is empty until it finishes joining its cluster.
+    </column>
+
+    <group title="Clustered Databases">
+      <p>
+        These columns are most interesting and in some cases only relevant for
+        clustered databases, that is, those where the <ref column="model"/>
+        column is <code>clustered</code>.
+      </p>
+
+      <column name="connected">
+        True if the database is connected to its storage.  A standalone or
+        active-backup database is always connected.  A clustered database is
+        connected if the server is in contact with a majority of its cluster.
+        An unconnected database cannot be modified and its data might be
+        unavailable or stale.
+      </column>
+
+      <column name="leader">
+        True if the database is the leader in its cluster.  For a standalone or
+        active-backup database, this is always true.
+      </column>
+
+      <column name="cid">
+        The cluster ID for this database, which is the same for all of the
+        servers that host this particular clustered database.  For a standalone
+        or active-backup database, this is empty.
+      </column>
+
+      <column name="sid">
+        The server ID for this database, different for each server that hosts a
+        particular clustered database.  A server that hosts more than one
+        clustered database will have a different <code>sid</code> in each one.
+        For a standalone or active-backup database, this is empty.
+      </column>
+
+      <column name="index">
+        <p>
+          For a clustered database, the index of the log entry currently
+          exposed to clients.  For a given server, this increases
+          monotonically.  When a client switches from one server to another in
+          a cluster, it can ensure that it never sees an older snapshot of data
+          by avoiding servers that have <ref column="index"/> less than the
+          largest value they have already observed.
+        </p>
+
+        <p>
+          For a standalone or active-backup database, this is empty.
+        </p>
+      </column>
+    </group>
   </table>
 </database>

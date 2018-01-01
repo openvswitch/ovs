@@ -30,6 +30,7 @@
 #include "ovsdb-error.h"
 #include "row.h"
 #include "socket-util.h"
+#include "storage.h"
 #include "table.h"
 #include "timeval.h"
 #include "transaction.h"
@@ -38,17 +39,6 @@
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ovsdb_file);
-
-/* Minimum number of milliseconds between database compactions. */
-#define COMPACT_MIN_MSEC        (10 * 60 * 1000) /* 10 minutes. */
-
-/* Minimum number of milliseconds between trying to compact the database if
- * compacting fails. */
-#define COMPACT_RETRY_MSEC      (60 * 1000)      /* 1 minute. */
-
-/* Maximum number of milliseconds before compacting the database regardless
- * of its size. */
-#define COMPACT_MAX_MSEC        (24 * 60 * 60 * 1000) /* 24 hours. */
 
 /* A transaction being converted to JSON for writing to a file. */
 struct ovsdb_file_txn {
@@ -62,215 +52,6 @@ static void ovsdb_file_txn_add_row(struct ovsdb_file_txn *,
                                    const struct ovsdb_row *old,
                                    const struct ovsdb_row *new,
                                    const unsigned long int *changed);
-static struct ovsdb_error *ovsdb_file_txn_commit(struct json *,
-                                                 const char *comment,
-                                                 bool durable,
-                                                 struct ovsdb_log *);
-
-static struct ovsdb_error *ovsdb_file_open__(const char *file_name,
-                                             const struct ovsdb_schema *,
-                                             bool read_only, struct ovsdb **,
-                                             struct ovsdb_file **);
-static struct ovsdb_error *ovsdb_file_txn_from_json(
-    struct ovsdb *, const struct json *, bool converting, struct ovsdb_txn **);
-static struct ovsdb_error *ovsdb_file_create(struct ovsdb *,
-                                             struct ovsdb_log *,
-                                             const char *file_name,
-                                             unsigned int n_transactions,
-                                             struct ovsdb_file **filep);
-
-/* Opens database 'file_name' and stores a pointer to the new database in
- * '*dbp'.  If 'read_only' is false, then the database will be locked and
- * changes to the database will be written to disk.  If 'read_only' is true,
- * the database will not be locked and changes to the database will persist
- * only as long as the "struct ovsdb".
- *
- * If 'filep' is nonnull and 'read_only' is false, then on success sets
- * '*filep' to an ovsdb_file that represents the open file.  This ovsdb_file
- * persists until '*dbp' is destroyed.
- *
- * On success, returns NULL.  On failure, returns an ovsdb_error (which the
- * caller must destroy) and sets '*dbp' and '*filep' to NULL. */
-struct ovsdb_error *
-ovsdb_file_open(const char *file_name, bool read_only,
-                struct ovsdb **dbp, struct ovsdb_file **filep)
-{
-    return ovsdb_file_open__(file_name, NULL, read_only, dbp, filep);
-}
-
-/* Opens database 'file_name' with an alternate schema.  The specified 'schema'
- * is used to interpret the data in 'file_name', ignoring the schema actually
- * stored in the file.  Data in the file for tables or columns that do not
- * exist in 'schema' are ignored, but the ovsdb file format must otherwise be
- * observed, including column constraints.
- *
- * This function can be useful for upgrading or downgrading databases to
- * "almost-compatible" formats.
- *
- * The database will not be locked.  Changes to the database will persist only
- * as long as the "struct ovsdb".
- *
- * On success, stores a pointer to the new database in '*dbp' and returns a
- * null pointer.  On failure, returns an ovsdb_error (which the caller must
- * destroy) and sets '*dbp' to NULL. */
-struct ovsdb_error *
-ovsdb_file_open_as_schema(const char *file_name,
-                          const struct ovsdb_schema *schema,
-                          struct ovsdb **dbp)
-{
-    return ovsdb_file_open__(file_name, schema, true, dbp, NULL);
-}
-
-static struct ovsdb_error *
-ovsdb_file_open_log(const char *file_name, enum ovsdb_log_open_mode open_mode,
-                    struct ovsdb_log **logp, struct ovsdb_schema **schemap)
-{
-    struct ovsdb_schema *schema = NULL;
-    struct ovsdb_log *log = NULL;
-    struct ovsdb_error *error;
-    struct json *json = NULL;
-
-    ovs_assert(logp || schemap);
-
-    error = ovsdb_log_open(file_name, OVSDB_MAGIC, open_mode, -1, &log);
-    if (error) {
-        goto error;
-    }
-
-    error = ovsdb_log_read(log, &json);
-    if (error) {
-        goto error;
-    } else if (!json) {
-        error = ovsdb_io_error(EOF, "%s: database file contains no schema",
-                               file_name);
-        goto error;
-    }
-
-    if (schemap) {
-        error = ovsdb_schema_from_json(json, &schema);
-        if (error) {
-            error = ovsdb_wrap_error(error,
-                                     "failed to parse \"%s\" as ovsdb schema",
-                                     file_name);
-            goto error;
-        }
-    }
-    json_destroy(json);
-
-    if (logp) {
-        *logp = log;
-    } else {
-        ovsdb_log_close(log);
-    }
-    if (schemap) {
-        *schemap = schema;
-    }
-    return NULL;
-
-error:
-    ovsdb_log_close(log);
-    json_destroy(json);
-    if (logp) {
-        *logp = NULL;
-    }
-    if (schemap) {
-        *schemap = NULL;
-    }
-    return error;
-}
-
-static struct ovsdb_error *
-ovsdb_file_open__(const char *file_name,
-                  const struct ovsdb_schema *alternate_schema,
-                  bool read_only, struct ovsdb **dbp,
-                  struct ovsdb_file **filep)
-{
-    enum ovsdb_log_open_mode open_mode;
-    struct ovsdb_schema *schema = NULL;
-    struct ovsdb_error *error;
-    struct ovsdb_log *log;
-    struct json *json;
-    struct ovsdb *db = NULL;
-
-    /* In read-only mode there is no ovsdb_file so 'filep' must be null. */
-    ovs_assert(!(read_only && filep));
-
-    open_mode = read_only ? OVSDB_LOG_READ_ONLY : OVSDB_LOG_READ_WRITE;
-    error = ovsdb_file_open_log(file_name, open_mode, &log,
-                                alternate_schema ? NULL : &schema);
-    if (error) {
-        goto error;
-    }
-
-    db = ovsdb_create(schema ? schema : ovsdb_schema_clone(alternate_schema));
-
-    /* When a log gets big, we compact it into a new log that initially has
-     * only a single transaction that represents the entire state of the
-     * database.  Thus, we consider the first transaction in the database to be
-     * the snapshot.  We measure its size to later influence the minimum log
-     * size before compacting again.
-     *
-     * The schema precedes the snapshot in the log; we could compensate for its
-     * size, but it's just not that important. */
-    unsigned int n_transactions = 0;
-    while ((error = ovsdb_log_read(log, &json)) == NULL && json) {
-        struct ovsdb_txn *txn;
-
-        error = ovsdb_file_txn_from_json(db, json, alternate_schema != NULL,
-                                         &txn);
-        json_destroy(json);
-        if (error) {
-            ovsdb_log_unread(log);
-            break;
-        }
-
-        n_transactions++;
-        error = ovsdb_txn_commit(txn, false);
-        if (error) {
-            ovsdb_log_unread(log);
-            break;
-        }
-
-        if (n_transactions == 1) {
-            ovsdb_log_mark_base(log);
-        }
-    }
-    if (error) {
-        /* Log error but otherwise ignore it.  Probably the database just got
-         * truncated due to power failure etc. and we should use its current
-         * contents. */
-        char *msg = ovsdb_error_to_string_free(error);
-        VLOG_ERR("%s", msg);
-        free(msg);
-    }
-
-    if (!read_only) {
-        struct ovsdb_file *file;
-
-        error = ovsdb_file_create(db, log, file_name, n_transactions, &file);
-        if (error) {
-            goto error;
-        }
-        if (filep) {
-            *filep = file;
-        }
-        db->file = file;
-    } else {
-        ovsdb_log_close(log);
-    }
-
-    *dbp = db;
-    return NULL;
-
-error:
-    *dbp = NULL;
-    if (filep) {
-        *filep = NULL;
-    }
-    ovsdb_destroy(db);
-    ovsdb_log_close(log);
-    return error;
-}
 
 static struct ovsdb_error *
 ovsdb_file_update_row_from_json(struct ovsdb_row *row, bool converting,
@@ -381,7 +162,7 @@ ovsdb_file_txn_table_from_json(struct ovsdb_txn *txn,
  * If 'converting' is true, then unknown table and column names are ignored
  * (which can ease upgrading and downgrading schemas); otherwise, they are
  * treated as errors. */
-static struct ovsdb_error *
+struct ovsdb_error *
 ovsdb_file_txn_from_json(struct ovsdb *db, const struct json *json,
                          bool converting, struct ovsdb_txn **txnp)
 {
@@ -429,123 +210,92 @@ error:
     return error;
 }
 
-static struct ovsdb_error *
-ovsdb_file_save_copy__(const char *file_name, int locking,
-                       const char *comment, const struct ovsdb *db,
-                       struct ovsdb_log **logp)
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
+ovsdb_convert_table(struct ovsdb_txn *txn,
+                    const struct ovsdb_table *src_table,
+                    struct ovsdb_table *dst_table)
 {
-    const struct shash_node *node;
-    struct ovsdb_file_txn ftxn;
-    struct ovsdb_error *error;
-    struct ovsdb_log *log;
-    struct json *json;
+    const struct ovsdb_row *src_row;
+    HMAP_FOR_EACH (src_row, hmap_node, &src_table->rows) {
+        struct ovsdb_row *dst_row = ovsdb_row_create(dst_table);
+        *ovsdb_row_get_uuid_rw(dst_row) = *ovsdb_row_get_uuid(src_row);
 
-    error = ovsdb_log_open(file_name, OVSDB_MAGIC,
-                           OVSDB_LOG_CREATE_EXCL, locking, &log);
-    if (error) {
-        return error;
-    }
+        struct shash_node *node;
+        SHASH_FOR_EACH (node, &src_table->schema->columns) {
+            const struct ovsdb_column *src_column = node->data;
+            if (src_column->index == OVSDB_COL_UUID ||
+                src_column->index == OVSDB_COL_VERSION) {
+                continue;
+            }
 
-    /* Write schema. */
-    json = ovsdb_schema_to_json(db->schema);
-    error = ovsdb_log_write(log, json);
-    json_destroy(json);
-    if (error) {
-        goto exit;
-    }
+            const struct ovsdb_column *dst_column
+                = shash_find_data(&dst_table->schema->columns,
+                                  src_column->name);
+            if (!dst_column) {
+                continue;
+            }
 
-    /* Write data. */
-    ovsdb_file_txn_init(&ftxn);
-    SHASH_FOR_EACH (node, &db->tables) {
-        const struct ovsdb_table *table = node->data;
-        const struct ovsdb_row *row;
-
-        HMAP_FOR_EACH (row, hmap_node, &table->rows) {
-            ovsdb_file_txn_add_row(&ftxn, NULL, row, NULL);
+            struct ovsdb_error *error = ovsdb_datum_convert(
+                &dst_row->fields[dst_column->index], &dst_column->type,
+                &src_row->fields[src_column->index], &src_column->type);
+            if (error) {
+                ovsdb_row_destroy(dst_row);
+                return error;
+            }
         }
+
+        ovsdb_txn_row_insert(txn, dst_row);
     }
-    error = ovsdb_file_txn_commit(ftxn.json, comment, true, log);
-
-exit:
-    if (logp) {
-        if (!error) {
-            *logp = log;
-            log = NULL;
-        } else {
-            *logp = NULL;
-        }
-    }
-    ovsdb_log_close(log);
-    if (error) {
-        remove(file_name);
-    }
-    return error;
-}
-
-/* Saves a snapshot of 'db''s current contents as 'file_name'.  If 'comment' is
- * nonnull, then it is added along with the data contents and can be viewed
- * with "ovsdb-tool show-log".
- *
- * 'locking' is passed along to ovsdb_log_open() untouched. */
-struct ovsdb_error *
-ovsdb_file_save_copy(const char *file_name, int locking,
-                     const char *comment, const struct ovsdb *db)
-{
-    return ovsdb_file_save_copy__(file_name, locking, comment, db, NULL);
-}
-
-/* Opens database 'file_name', reads its schema, and closes it.  On success,
- * stores the schema into '*schemap' and returns NULL; the caller then owns the
- * schema.  On failure, returns an ovsdb_error (which the caller must destroy)
- * and sets '*dbp' to NULL. */
-struct ovsdb_error *
-ovsdb_file_read_schema(const char *file_name, struct ovsdb_schema **schemap)
-{
-    ovs_assert(schemap != NULL);
-    return ovsdb_file_open_log(file_name, OVSDB_LOG_READ_ONLY, NULL, schemap);
-}
-
-struct ovsdb_file {
-    struct ovsdb *db;
-    struct ovsdb_log *log;
-    char *file_name;
-    long long int last_compact;
-    long long int next_compact;
-    unsigned int n_transactions;
-};
-
-static struct ovsdb_error *
-ovsdb_file_create(struct ovsdb *db, struct ovsdb_log *log,
-                  const char *file_name,
-                  unsigned int n_transactions, struct ovsdb_file **filep)
-{
-    struct ovsdb_file *file;
-    char *deref_name;
-    char *abs_name;
-
-    /* Use the absolute name of the file because ovsdb-server opens its
-     * database before daemonize() chdirs to "/". */
-    deref_name = follow_symlinks(file_name);
-    abs_name = abs_file_name(NULL, deref_name);
-    free(deref_name);
-    if (!abs_name) {
-        *filep = NULL;
-        return ovsdb_io_error(0, "could not determine current "
-                              "working directory");
-    }
-
-    file = xmalloc(sizeof *file);
-    file->db = db;
-    file->log = log;
-    file->file_name = abs_name;
-    file->last_compact = time_msec();
-    file->next_compact = file->last_compact + COMPACT_MIN_MSEC;
-    file->n_transactions = n_transactions;
-
-    *filep = file;
     return NULL;
 }
 
+/* Copies the data in 'src', converts it into the schema specified in
+ * 'new_schema', and puts it into a newly created, unbacked database, and
+ * stores a pointer to the new database in '*dstp'.  Returns null if
+ * successful, otherwise an error; on error, stores NULL in '*dstp'. */
+struct ovsdb_error * OVS_WARN_UNUSED_RESULT
+ovsdb_convert(const struct ovsdb *src, const struct ovsdb_schema *new_schema,
+              struct ovsdb **dstp)
+{
+    struct ovsdb *dst = ovsdb_create(ovsdb_schema_clone(new_schema),
+                                     ovsdb_storage_create_unbacked());
+    struct ovsdb_txn *txn = ovsdb_txn_create(dst);
+    struct ovsdb_error *error = NULL;
+
+    struct shash_node *node;
+    SHASH_FOR_EACH (node, &src->tables) {
+        const char *table_name = node->name;
+        struct ovsdb_table *src_table = node->data;
+        struct ovsdb_table *dst_table = shash_find_data(&dst->tables,
+                                                        table_name);
+        if (!dst_table) {
+            continue;
+        }
+
+        error = ovsdb_convert_table(txn, src_table, dst_table);
+        if (error) {
+            goto error;
+        }
+    }
+
+    error = ovsdb_txn_replay_commit(txn);
+    if (error) {
+        txn = NULL;            /* ovsdb_txn_replay_commit() already aborted. */
+        goto error;
+    }
+
+    *dstp = dst;
+    return NULL;
+
+error:
+    ovsdb_destroy(dst);
+    if (txn) {
+        ovsdb_txn_abort(txn);
+    }
+    *dstp = NULL;
+    return error;
+}
+
 static bool
 ovsdb_file_change_cb(const struct ovsdb_row *old,
                      const struct ovsdb_row *new,
@@ -555,6 +305,39 @@ ovsdb_file_change_cb(const struct ovsdb_row *old,
     struct ovsdb_file_txn *ftxn = ftxn_;
     ovsdb_file_txn_add_row(ftxn, old, new, changed);
     return true;
+}
+
+struct json *
+ovsdb_to_txn_json(const struct ovsdb *db, const char *comment)
+{
+    struct ovsdb_file_txn ftxn;
+
+    ovsdb_file_txn_init(&ftxn);
+
+    struct shash_node *node;
+    SHASH_FOR_EACH (node, &db->tables) {
+        const struct ovsdb_table *table = node->data;
+        const struct ovsdb_row *row;
+
+        HMAP_FOR_EACH (row, hmap_node, &table->rows) {
+            ovsdb_file_txn_add_row(&ftxn, NULL, row, NULL);
+        }
+    }
+
+    return ovsdb_file_txn_annotate(ftxn.json, comment);
+}
+
+/* Returns 'txn' transformed into the JSON format that is used in OVSDB files.
+ * (But the caller must use ovsdb_file_txn_annotate() to add the _comment and
+ * _date members.)  If 'txn' doesn't actually change anything, returns NULL */
+struct json *
+ovsdb_file_txn_to_json(const struct ovsdb_txn *txn)
+{
+    struct ovsdb_file_txn ftxn;
+
+    ovsdb_file_txn_init(&ftxn);
+    ovsdb_txn_for_each_change(txn, ovsdb_file_change_cb, &ftxn);
+    return ftxn.json;
 }
 
 struct json *
@@ -568,215 +351,6 @@ ovsdb_file_txn_annotate(struct json *json, const char *comment)
     }
     json_object_put(json, "_date", json_integer_create(time_wall_msec()));
     return json;
-}
-
-/* Returns 'txn' transformed into the JSON format that is used in OVSDB files.
- * (But the caller must use ovsdb_file_txn_annotate() to add the _comment and
- * _date members.)  If 'txn' doesn't actually change anything, returns NULL */
-static struct json *
-ovsdb_file_txn_to_json(const struct ovsdb_txn *txn)
-{
-    struct ovsdb_file_txn ftxn;
-
-    ovsdb_file_txn_init(&ftxn);
-    ovsdb_txn_for_each_change(txn, ovsdb_file_change_cb, &ftxn);
-    return ftxn.json;
-}
-
-struct ovsdb_error *
-ovsdb_file_commit(struct ovsdb_file *file,
-                  const struct ovsdb_txn *txn, bool durable)
-{
-    struct json *txn_json = ovsdb_file_txn_to_json(txn);
-    if (!txn_json) {
-        /* Nothing to commit. */
-        return NULL;
-    }
-
-    struct ovsdb_error *error = ovsdb_file_txn_commit(
-        txn_json, ovsdb_txn_get_comment(txn), durable, file->log);
-    if (error) {
-        return error;
-    }
-    file->n_transactions++;
-
-    /* If it has been at least COMPACT_MIN_MSEC ms since the last time we
-     * compacted (or at least COMPACT_RETRY_MSEC ms since the last time we
-     * tried), and if there are at least 100 transactions in the database, and
-     * if the database is at least 10 MB, and the database is at least 2x the
-     * size of the previous snapshot, then compact the database. However, if
-     * it has been over COMPACT_MAX_MSEC ms since the last compaction, the
-     * database size is not taken into account. */
-    long long int current_time = time_msec();
-    if (current_time >= file->next_compact
-        && file->n_transactions >= 100
-        && (current_time - file->last_compact >= COMPACT_MAX_MSEC
-            || ovsdb_log_grew_lots(file->log))) {
-        error = ovsdb_file_compact(file);
-        if (error) {
-            char *s = ovsdb_error_to_string_free(error);
-            VLOG_WARN("%s: compacting database failed (%s), retrying in "
-                      "%d seconds",
-                      file->file_name, s, COMPACT_RETRY_MSEC / 1000);
-            free(s);
-
-            file->next_compact = time_msec() + COMPACT_RETRY_MSEC;
-        }
-    }
-
-    return NULL;
-}
-
-/* Rename 'old' to 'new', replacing 'new' if it exists.  Returns NULL if
- * successful, otherwise an ovsdb_error that the caller must destroy. */
-static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
-ovsdb_rename(const char *old, const char *new)
-{
-#ifdef _WIN32
-    int error = (MoveFileEx(old, new, MOVEFILE_REPLACE_EXISTING
-                            | MOVEFILE_WRITE_THROUGH | MOVEFILE_COPY_ALLOWED)
-                 ? 0 : EACCES);
-#else
-    int error = rename(old, new) ? errno : 0;
-#endif
-
-    return (error
-            ? ovsdb_io_error(error, "failed to rename \"%s\" to \"%s\"",
-                             old, new)
-            : NULL);
-}
-
-struct ovsdb_error *
-ovsdb_file_compact(struct ovsdb_file *file)
-{
-    struct ovsdb_log *new_log = NULL;
-    struct lockfile *tmp_lock = NULL;
-    struct ovsdb_error *error;
-    char *tmp_name = NULL;
-    char *comment = NULL;
-    int retval;
-
-    comment = xasprintf("compacting database online "
-                        "(%.3f seconds old, %u transactions)",
-                        (time_msec() - file->last_compact) / 1000.0,
-                        file->n_transactions);
-    VLOG_INFO("%s: %s", file->file_name, comment);
-
-    /* Commit the old version, so that we can be assured that we'll eventually
-     * have either the old or the new version. */
-    error = ovsdb_log_commit_block(file->log);
-    if (error) {
-        goto exit;
-    }
-
-    /* Lock temporary file. */
-    tmp_name = xasprintf("%s.tmp", file->file_name);
-    retval = lockfile_lock(tmp_name, &tmp_lock);
-    if (retval) {
-        error = ovsdb_io_error(retval, "could not get lock on %s", tmp_name);
-        goto exit;
-    }
-
-    /* Remove temporary file.  (It might not exist.) */
-    if (unlink(tmp_name) < 0 && errno != ENOENT) {
-        error = ovsdb_io_error(errno, "failed to remove %s", tmp_name);
-        goto exit;
-    }
-
-    /* Save a copy. */
-    error = ovsdb_file_save_copy__(tmp_name, false, comment, file->db,
-                                   &new_log);
-    if (error) {
-        goto exit;
-    }
-    ovsdb_log_mark_base(new_log);
-
-    /* Replace original file by the temporary file.
-     *
-     * We support two strategies:
-     *
-     *     - The preferred strategy is to rename the temporary file over the
-     *       original one in-place, then close the original one.  This works on
-     *       Unix-like systems.  It does not work on Windows, which does not
-     *       allow open files to be renamed.  The approach has the advantage
-     *       that, at any point, we can drop back to something that already
-     *       works.
-     *
-     *     - Alternatively, we can close both files, rename, then open the new
-     *       file (which now has the original name).  This works on all
-     *       systems, but if reopening the file fails then we're stuck and have
-     *       to abort (XXX although it would be better to retry).
-     *
-     * We make the strategy a variable instead of an #ifdef to make it easier
-     * to test both strategies on Unix-like systems, and to make the code
-     * easier to read. */
-#ifdef _WIN32
-    bool rename_open_files = false;
-#else
-    bool rename_open_files = true;
-#endif
-    if (!rename_open_files) {
-        ovsdb_log_close(file->log);
-        ovsdb_log_close(new_log);
-        file->log = NULL;
-        new_log = NULL;
-    }
-    error = ovsdb_rename(tmp_name, file->file_name);
-    if (error) {
-        goto exit;
-    }
-    if (rename_open_files) {
-        fsync_parent_dir(file->file_name);
-        ovsdb_log_close(file->log);
-        file->log = new_log;
-    } else {
-        /* Re-open the log.  This skips past the schema log record. */
-        error = ovsdb_file_open_log(file->file_name, OVSDB_LOG_READ_WRITE,
-                                    &file->log, NULL);
-        if (error) {
-            ovs_fatal(0, "could not reopen database");
-        }
-
-        /* Skip past the data log reecord. */
-        struct json *json;
-        error = ovsdb_log_read(file->log, &json);
-        if (error) {
-            ovs_fatal(0, "error reading database");
-        }
-        json_destroy(json);
-        ovsdb_log_mark_base(file->log);
-    }
-
-    /* Success! */
-    file->last_compact = time_msec();
-    file->next_compact = file->last_compact + COMPACT_MIN_MSEC;
-    file->n_transactions = 1;
-
-exit:
-    if (error) {
-        ovsdb_log_close(new_log);
-        if (tmp_lock) {
-            unlink(tmp_name);
-        }
-    }
-
-    lockfile_unlock(tmp_lock);
-    free(tmp_name);
-    free(comment);
-
-    return error;
-}
-
-void
-ovsdb_file_destroy(struct ovsdb_file *file)
-{
-    if (!file) {
-        return;
-    }
-
-    ovsdb_log_close(file->log);
-    free(file->file_name);
-    free(file);
 }
 
 static void
@@ -842,138 +416,71 @@ ovsdb_file_txn_add_row(struct ovsdb_file_txn *ftxn,
         json_object_put(ftxn->table_json, uuid, row);
     }
 }
-
-static struct ovsdb_error *
-ovsdb_file_txn_commit(struct json *json, const char *comment,
-                      bool durable, struct ovsdb_log *log)
-{
-    struct ovsdb_error *error;
-
-    json = ovsdb_file_txn_annotate(json, comment);
-    error = ovsdb_log_write(log, json);
-    json_destroy(json);
-    if (error) {
-        return ovsdb_wrap_error(error, "writing transaction failed");
-    }
-
-    if (durable) {
-        error = ovsdb_log_commit_block(log);
-        if (error) {
-            return ovsdb_wrap_error(error, "committing transaction failed");
-        }
-    }
-
-    return NULL;
-}
 
-static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
-ovsdb_convert_table(struct ovsdb_txn *txn,
-                    const struct ovsdb_table *src_table,
-                    struct ovsdb_table *dst_table)
+static struct ovsdb *
+ovsdb_file_read__(const char *filename, bool rw,
+                  struct ovsdb_schema *new_schema)
 {
-    const struct ovsdb_row *src_row;
-    HMAP_FOR_EACH (src_row, hmap_node, &src_table->rows) {
-        struct ovsdb_row *dst_row = ovsdb_row_create(dst_table);
-        *ovsdb_row_get_uuid_rw(dst_row) = *ovsdb_row_get_uuid(src_row);
-
-        struct shash_node *node;
-        SHASH_FOR_EACH (node, &src_table->schema->columns) {
-            const struct ovsdb_column *src_column = node->data;
-            if (src_column->index == OVSDB_COL_UUID ||
-                src_column->index == OVSDB_COL_VERSION) {
-                continue;
-            }
-
-            const struct ovsdb_column *dst_column
-                = shash_find_data(&dst_table->schema->columns,
-                                  src_column->name);
-            if (!dst_column) {
-                continue;
-            }
-
-            struct ovsdb_error *error = ovsdb_datum_convert(
-                &dst_row->fields[dst_column->index], &dst_column->type,
-                &src_row->fields[src_column->index], &src_column->type);
-            if (error) {
-                ovsdb_row_destroy(dst_row);
-                return error;
-            }
+    struct ovsdb_storage *storage = ovsdb_storage_open_standalone(filename,
+                                                                  rw);
+    struct ovsdb_schema *schema = ovsdb_storage_read_schema(storage);
+    if (new_schema) {
+        ovsdb_schema_destroy(schema);
+        schema = new_schema;
+    }
+    struct ovsdb *ovsdb = ovsdb_create(schema, storage);
+    for (;;) {
+        /* Read a transaction.  Bail if end-of-file. */
+        struct json *txn_json;
+        struct ovsdb_schema *schema2;
+        struct ovsdb_error *error = ovsdb_storage_read(storage, &schema2,
+                                                       &txn_json, NULL);
+        if (error) {
+            ovs_fatal(0, "%s", ovsdb_error_to_string_free(error));
+        }
+        ovs_assert(!schema2);
+        if (!txn_json) {
+            break;
         }
 
-        ovsdb_txn_row_insert(txn, dst_row);
+        /* Apply transaction to database. */
+        struct ovsdb_txn *txn;
+        error = ovsdb_file_txn_from_json(ovsdb, txn_json, new_schema != NULL,
+                                         &txn);
+        if (error) {
+            ovs_fatal(0, "%s", ovsdb_error_to_string_free(error));
+        }
+        json_destroy(txn_json);
+
+        error = ovsdb_txn_replay_commit(txn);
+        if (error) {
+            ovsdb_storage_unread(storage);
+            break;
+        }
     }
-    return NULL;
+    return ovsdb;
 }
 
-struct ovsdb_error * OVS_WARN_UNUSED_RESULT
-ovsdb_file_convert(const struct ovsdb_file *file,
-                   const struct ovsdb_schema *new_schema)
+/* Reads 'filename' as a standalone database.  Returns the new database.  On
+ * error, prints a message on stderr and terminates the process.
+ *
+ * If 'rw' is true, opens the database for read/write access, otherwise
+ * read-only.
+ *
+ * Consumes 'schema'. */
+struct ovsdb *
+ovsdb_file_read(const char *filename, bool rw)
 {
-    struct ovsdb *new_db = ovsdb_create(ovsdb_schema_clone(new_schema));
-    struct ovsdb_txn *txn = ovsdb_txn_create(new_db);
-    struct ovsdb_error *error = NULL;
+    return ovsdb_file_read__(filename, rw, NULL);
+}
 
-    struct shash_node *node;
-    SHASH_FOR_EACH (node, &file->db->tables) {
-        const char *table_name = node->name;
-        const struct ovsdb_table *src_table = node->data;
-        struct ovsdb_table *dst_table = shash_find_data(&new_db->tables,
-                                                        table_name);
-        if (!dst_table) {
-            continue;
-        }
-
-        error = ovsdb_convert_table(txn, src_table, dst_table);
-        if (error) {
-            goto error;
-        }
-    }
-
-    error = ovsdb_txn_start_commit(txn);
-    if (error) {
-        goto error;
-    }
-
-    struct ovsdb_log *new;
-    error = ovsdb_log_replace_start(file->log, &new);
-    if (error) {
-        goto error;
-    }
-
-    /* Write schema. */
-    struct json *schema_json = ovsdb_schema_to_json(new_schema);
-    error = ovsdb_log_write(new, schema_json);
-    json_destroy(schema_json);
-    if (error) {
-        goto error;
-    }
-
-    /* Write data. */
-    struct json *txn_json = ovsdb_file_txn_to_json(txn);
-    if (txn_json) {
-        error = ovsdb_log_write(new, txn_json);
-        json_destroy(txn_json);
-        if (error) {
-            goto error;
-        }
-    }
-
-    error = ovsdb_log_replace_commit(file->log, new);
-    if (error) {
-        goto error;
-    }
-
-    error = ovsdb_txn_finish_commit(txn, true);
-    ovs_assert(!error);         /* Can't happen. */
-
-    ovsdb_replace(file->db, new_db);
-
-    return NULL;
-
-error:
-    ovsdb_destroy(new_db);
-    if (txn) {
-        ovsdb_txn_abort(txn);
-    }
-    return error;
+/* Reads 'filename' as a standalone database, using 'schema' in place of the
+ * schema embedded in the file.  Returns the new database.  On error,
+ * prints a message on stderr and terminates the process.
+ *
+ * Consumes 'schema'. */
+struct ovsdb *
+ovsdb_file_read_as_schema(const char *filename, struct ovsdb_schema *schema)
+{
+    return ovsdb_file_read__(filename, false, schema);
 }

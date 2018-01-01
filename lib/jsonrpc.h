@@ -90,12 +90,16 @@ struct jsonrpc_msg *jsonrpc_create_reply(struct json *result,
 struct jsonrpc_msg *jsonrpc_create_error(struct json *error,
                                          const struct json *id);
 
+struct jsonrpc_msg *jsonrpc_msg_clone(const struct jsonrpc_msg *);
+
 const char *jsonrpc_msg_type_to_string(enum jsonrpc_msg_type);
 char *jsonrpc_msg_is_valid(const struct jsonrpc_msg *);
 void jsonrpc_msg_destroy(struct jsonrpc_msg *);
 
 char *jsonrpc_msg_from_json(struct json *, struct jsonrpc_msg **);
 struct json *jsonrpc_msg_to_json(struct jsonrpc_msg *);
+
+char *jsonrpc_msg_to_string(const struct jsonrpc_msg *);
 
 /* A JSON-RPC session with reconnection. */
 
@@ -105,6 +109,8 @@ struct jsonrpc_session *jsonrpc_session_open_multiple(const struct svec *,
 struct jsonrpc_session *jsonrpc_session_open_unreliably(struct jsonrpc *,
                                                         uint8_t);
 void jsonrpc_session_close(struct jsonrpc_session *);
+
+struct jsonrpc *jsonrpc_session_steal(struct jsonrpc_session *);
 
 void jsonrpc_session_run(struct jsonrpc_session *);
 void jsonrpc_session_wait(struct jsonrpc_session *);

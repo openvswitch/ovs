@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,12 +27,23 @@ struct uuid;
 struct ovsdb_txn *ovsdb_txn_create(struct ovsdb *);
 void ovsdb_txn_abort(struct ovsdb_txn *);
 
-struct ovsdb_error *ovsdb_txn_start_commit(struct ovsdb_txn *)
+struct ovsdb_error *ovsdb_txn_replay_commit(struct ovsdb_txn *)
     OVS_WARN_UNUSED_RESULT;
-struct ovsdb_error *ovsdb_txn_finish_commit(struct ovsdb_txn *, bool durable)
+struct ovsdb_txn_progress *ovsdb_txn_propose_commit(struct ovsdb_txn *,
+                                                    bool durable)
     OVS_WARN_UNUSED_RESULT;
-struct ovsdb_error *ovsdb_txn_commit(struct ovsdb_txn *, bool durable)
+struct ovsdb_error *ovsdb_txn_propose_commit_block(struct ovsdb_txn *,
+                                                   bool durable)
     OVS_WARN_UNUSED_RESULT;
+void ovsdb_txn_complete(struct ovsdb_txn *);
+
+struct ovsdb_txn_progress *ovsdb_txn_propose_schema_change(
+    struct ovsdb *, const struct json *schema, const struct json *data);
+
+bool ovsdb_txn_progress_is_complete(const struct ovsdb_txn_progress *);
+const struct ovsdb_error *ovsdb_txn_progress_get_error(
+    const struct ovsdb_txn_progress *);
+void ovsdb_txn_progress_destroy(struct ovsdb_txn_progress *);
 
 struct ovsdb_row *ovsdb_txn_row_modify(struct ovsdb_txn *,
                                        const struct ovsdb_row *);

@@ -214,6 +214,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/ovsdb-condition.c \
 	lib/ovsdb-parser.c \
 	lib/ovsdb-parser.h \
+	lib/ovsdb-session.c \
+	lib/ovsdb-session.h \
 	lib/ovsdb-types.c \
 	lib/ovsdb-types.h \
 	lib/packets.c \
@@ -342,6 +344,8 @@ EXTRA_DIST += \
 
 nodist_lib_libopenvswitch_la_SOURCES = \
 	lib/dirs.c \
+	lib/ovsdb-server-idl.c \
+	lib/ovsdb-server-idl.h \
 	lib/vswitch-idl.c \
 	lib/vswitch-idl.h
 CLEANFILES += $(nodist_lib_libopenvswitch_la_SOURCES)
@@ -559,6 +563,12 @@ lib/ofp-msgs.inc: include/openvswitch/ofp-msgs.h $(srcdir)/build-aux/extract-ofp
 lib/ofp-msgs.lo: lib/ofp-msgs.inc
 CLEANFILES += lib/ofp-msgs.inc
 EXTRA_DIST += build-aux/extract-ofp-msgs
+
+# _server IDL
+OVSIDL_BUILT += lib/ovsdb-server-idl.c lib/ovsdb-server-idl.h lib/ovsdb-server-idl.ovsidl
+EXTRA_DIST += lib/ovsdb-server-idl.ann
+lib/ovsdb-server-idl.ovsidl: ovsdb/_server.ovsschema lib/ovsdb-server-idl.ann
+	$(AM_V_GEN)$(OVSDB_IDLC) annotate $(srcdir)/ovsdb/_server.ovsschema $(srcdir)/lib/ovsdb-server-idl.ann > $@.tmp && mv $@.tmp $@
 
 INSTALL_DATA_LOCAL += lib-install-data-local
 lib-install-data-local:

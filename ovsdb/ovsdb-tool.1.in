@@ -15,6 +15,9 @@ ovsdb\-tool \- Open vSwitch database management utility
 .IP "Database Creation Commands:"
 \fBovsdb\-tool \fR[\fIoptions\fR] \fBcreate \fR[\fIdb\fR [\fIschema\fR]]
 .br
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBcreate\-cluster \fIdb contents address\fR
+.br
+\fBovsdb\-tool \fR[\fIoptions\fR] [\fB\-\-cid=\fIuuid\fR] \fBjoin\-cluster\fI db name local remote\fR...
 .IP "Version Management Commands:"
 \fBovsdb\-tool \fR[\fIoptions\fR] \fBconvert \fR[\fIdb\fR [\fIschema
 \fR[\fItarget\fR]]]
@@ -28,6 +31,8 @@ ovsdb\-tool \- Open vSwitch database management utility
 \fBovsdb\-tool \fR[\fIoptions\fR] \fBdb\-cksum \fR[\fIdb\fR]
 .br
 \fBovsdb\-tool \fR[\fIoptions\fR] \fBschema\-cksum \fR[\fIschema\fR]
+.br
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBcompare-versions\fI a op b\fR
 .IP "Other commands:"
 \fBovsdb\-tool \fR[\fIoptions\fR] \fBcompact \fR[\fIdb\fR [\fItarget\fR]]
 .br
@@ -37,9 +42,17 @@ ovsdb\-tool \- Open vSwitch database management utility
 .br
 \fBovsdb\-tool \fR[\fIoptions\fR] [\fB\-m\fR | \fB\-\-more\fR]... \fBshow\-log \fR[\fIdb\fR]
 .br
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBcheck\-cluster \fIdb\fR...
+.br
 \fBovsdb\-tool \fR[\fIoptions\fR] \fBdb\-name \fR[\fIdb\fR]
 .br
 \fBovsdb\-tool \fR[\fIoptions\fR] \fBschema\-name \fR[\fIschema\fR]
+.br
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBdb\-cid\fI db\fR
+.br
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBdb\-sid\fI db\fR
+.br
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBdb\-local\-address db\fR
 .br
 \fBovsdb\-tool help\fR
 .so lib/vlog-syn.man
@@ -59,14 +72,17 @@ has a default file location if it is not specified..  The default
 \fB@pkgdatadir@/vswitch.ovsschema\fR.
 .PP
 This OVSDB implementation supports standalone and active-backup
-database service models with a common on-disk format  For a
-specification of this format, see \fBovsdb\fR(5).  For more
+database service models with one on-disk format and a clustered
+database service model with a different format.  \fBovsdb\-tool\fR
+supports both formats, but some commands are appropriate for only one
+format, as documented for individual commands below.  For a
+specification of these formats, see \fBovsdb\fR(5).  For more
 information on OVSDB service models, see the \fBService Models\fR
 section in \fBovsdb\fR(7).
 .
 .SS "Database Creation Commands"
-This command creates a new OVSDB database file.
-It will not overwrite an existing database file.  To
+These commands create a new OVSDB database file.
+They will not overwrite an existing database file.  To
 replace an existing database with a new one, first delete the old one.
 .
 .IP "\fBcreate \fR[\fIdb\fR [\fIschema\fR]]"
@@ -75,7 +91,66 @@ Use this command to create the database for controlling
 It creates database file \fIdb\fR with the given \fIschema\fR, which
 must be the name of a file that contains an OVSDB schema in JSON
 format, as specified in the OVSDB specification.  The new database is
-initially empty.
+initially empty.  (You can use \fBcp\fR to copy a database including
+both its schema and data.)
+.
+.IP "\fBcreate\-cluster\fI db contents local"
+Use this command to initialize the first server in a high-availability
+cluster of 3 (or more) database servers, e.g. for an OVN northbound or
+southbound database in an environment that cannot tolerate a single
+point of failure.  It creates clustered database file \fIdb\fR and
+configures the server to listen on \fIlocal\fR, which must take the
+form \fIprotocol\fB:\fIip\fB:\fIport\fR, where \fIprotocol\fR is
+\fBtcp\fR or \fBssl\fR, \fIip\fR is the server's IP (either an IPv4
+address or an IPv6 address enclosed in square brackets), and
+\fIport\fR is a TCP port number.  Only one address is specified, for
+the first server in the cluster, ordinarily the one for the server
+running \fBcreate\-cluster\fR.  The address is used for communication
+within the cluster, not for communicating with OVSDB clients, and must
+not use the same port used for the OVSDB protocol.
+.IP
+The new database is initialized with \fIcontents\fR, which must name a
+file that contains either an OVSDB schema in JSON format or a
+standalone OVSDB database.  If it is a schema file, the new database
+will initially be empty, with the given schema.  If it is a database
+file, the new database will have the same schema and contents.
+.
+.IP "[\fB\-\-cid=\fIuuid\fR] \fBjoin\-cluster\fI db name local remote\fR..."
+Use this command to initialize each server after the first one in an
+OVSDB high-availability cluster.  It creates clustered database file
+\fIdb\fR for a database named \fIname\fR, and
+configures the server to listen on \fIlocal\fR and to initially
+connect to \fIremote\fR, which must be a server that already belongs
+to the cluster.  \fIlocal\fR and \fIremote\fR use the same
+\fIprotocol\fB:\fIip\fB:\fIport\fR syntax as \fBcreate\-cluster\fR.
+.IP
+The \fIname\fR must be the name of the schema or database passed to
+\fBcreate\-cluster\fR.  For example, the name of the OVN Southbound
+database schema is \fBOVN_Southbound\fR.  Use \fBovsdb\-tool\fR's
+\fBschema\-name\fR or \fBdb\-name\fR command to find out the name of a
+schema or database, respectively.
+.IP
+This command does not do any network access, which means that it
+cannot actually join the new server to the cluster.  Instead, the
+\fIdb\fR file that it creates prepares the server to join the cluster
+the first time that \fBovsdb\-server\fR serves it.  As part of joining
+the cluster, the new server retrieves the database schema and obtains
+the list of all cluster members.  Only after that does it become a
+full member of the cluster.
+.IP
+Optionally, more than one \fIremote\fR may be specified; for example,
+in a cluster that already contains multiple servers, one could specify
+all the existing servers.  This is beneficial if some of the existing
+servers are down while the new server joins, but it is not otherwise
+needed.
+.IP
+By default, the \fIdb\fR created by \fBjoin\-cluster\fR will join any
+clustered database named \fIname\fR that is available at a
+\fIremote\fR.  In theory, if machines go up and down and IP addresses
+change in the right way, it could join the wrong database cluster.  To
+avoid this possibility, specify \fB\-\-cid=\fIuuid\fR, where
+\fIuuid\fR is the cluster ID of the cluster to join, as printed by
+\fBovsdb\-tool get\-cid\fR.
 .
 .SS "Version Management Commands"
 .so ovsdb/ovsdb-schemas.man
@@ -107,11 +182,19 @@ example, converting a database from a schema that has a given column
 or table to one that does not will delete all data in that column or
 table.  Back up critical databases before converting them.
 .IP
+This command is for standalone and active-backup databases only.  For
+clustered databases, use \fBovsdb\-client\fR's \fBconvert\fR command
+to convert them online.
+.
 .IP "\fBneeds\-conversion \fR[\fIdb\fR [\fIschema\fR]]"
 Reads the schema embedded in \fIdb\fR and the JSON schema from
 \fIschema\fR and compares them.  If the schemas are the same, prints
 \fBno\fR on stdout; if they differ, prints \fByes\fR.
 .IP
+This command is for standalone and active-backup databases only.  For
+clustered databases, use \fBovsdb\-client\fR's \fBneeds-conversion\fR
+command instead.
+.
 .IP "\fBdb\-version \fR[\fIdb\fR]"
 .IQ "\fBschema\-version \fR[\fIschema\fR]"
 Prints the version number in the schema embedded within the database
@@ -120,6 +203,10 @@ If \fIschema\fR or \fIdb\fR was created before schema versioning was
 introduced, then it will not have a version number and this command
 will print a blank line.
 .IP
+The \fBdb\-version\fR command is for standalone and active-backup
+databases only.  For clustered databases, use \fBovsdb\-client\fR's
+\fBschema\-version\fR command instead.
+.
 .IP "\fBdb\-cksum \fR[\fIdb\fR]"
 .IQ "\fBschema\-cksum \fR[\fIschema\fR]"
 Prints the checksum in the schema embedded within the database
@@ -128,6 +215,20 @@ If \fIschema\fR or \fIdb\fR was created before schema checksums were
 introduced, then it will not have a checksum and this command
 will print a blank line.
 .IP
+The \fBdb\-cksum\fR command is for standalone and active-backup
+databases only.  For clustered databases, use \fBovsdb\-client\fR's
+\fBschema\-cksum\fR command instead.
+.
+.IP "\fBcompare-versions\fI a op b\fR"
+Compares \fIa\fR and \fIb\fR according to \fIop\fR.  Both \fIa\fR and
+\fIb\fR must be OVSDB schema version numbers in the form
+\fIx\fB.\fIy\fB.\fIz\fR, as described in \fBovsdb\fR(7), and \fIop\fR
+must be one of \fB< <= == >= > !=\fR.  If the comparison is true,
+exits with status 0; if it is false, exits with status 2.  (Exit
+status 1 indicates an error, e.g. \fIa\fR or \fIb\fR is the wrong
+syntax for an OVSDB version or \fIop\fR is not a valid comparison
+operator.)
+.
 .SS "Other Commands"
 .
 .IP "\fBcompact \fR[\fIdb\fR [\fItarget\fR]]"
@@ -141,8 +242,10 @@ database that grows much larger than its minimum size.
 .IP
 This command does not work if \fIdb\fR is currently being served by
 \fBovsdb\-server\fR, or if it is otherwise locked for writing by
-another process.  Instead, send the \fBovsdb\-server/compact\fR
-command to \fBovsdb\-server\fR, via \fBovs\-appctl\fR).
+another process.  This command also does not work with clustered
+databases.  Instead, in either case, send the
+\fBovsdb\-server/compact\fR command to \fBovsdb\-server\fR, via
+\fBovs\-appctl\fR).
 .
 .IP "[\fB\-\-rbac\-role=\fIrole\fR] \fBquery \fR[\fIdb\fR] \fItransaction\fR"
 Opens \fIdb\fR, executes \fItransaction\fR on it, and prints the
@@ -158,6 +261,10 @@ may specify database modifications, but these will have no effect on
 .IP
 By default, the transaction is executed using the ``superuser'' RBAC
 role.  Use \fB\-\-rbac\-role\fR to specify a different role.
+.IP
+This command does not work with clustered databases.  Instead, use
+\fBovsdb-client\fR's \fBquery\fR command to send the query to
+\fBovsdb\-server\fR.
 .
 .IP "[\fB\-\-rbac\-role=\fIrole\fR] \fBtransact \fR[\fIdb\fR] \fItransaction\fR"
 Opens \fIdb\fR, executes \fItransaction\fR on it, prints the results,
@@ -167,8 +274,9 @@ JSON array in the format of the \fBparams\fR array for the JSON-RPC
 .IP
 This command does not work if \fIdb\fR is currently being served by
 \fBovsdb\-server\fR, or if it is otherwise locked for writing by
-another process.  Instead, use \fBovsdb\-client\fR's \fBtransact\fR
-command to send the query to \fBovsdb\-server\fR.
+another process.  This command also does not work with clustered
+databases.  Instead, in either case, use \fBovsdb\-client\fR's
+\fBtransact\fR command to send the query to \fBovsdb\-server\fR.
 .IP
 By default, the transaction is executed using the ``superuser'' RBAC
 role.  Use \fB\-\-rbac\-role\fR to specify a different role.
@@ -184,11 +292,54 @@ one or more times to the command line.  With one \fB\-m\fR,
 modified by each transaction.  With two \fB\-m\fRs, \fBshow\-log\fR
 also prints the values of the columns modified by each change to a
 record.
+.IP
+This command works with standalone and active-backup databases and
+with clustered databases, but the output formats are different.
+.
+.IP "\fBcheck\-cluster \fIdb\fR..."
+Reads all of the records in the supplied databases, which must be
+collected from different servers (and ideally all the servers) in a
+single cluster.  Checks each database for self-consistency and the set
+together for cross-consistency.  If \fBovsdb\-tool\fR detects unusual
+but not necessarily incorrect content, it prints a warning or warnings
+on stdout.  If \fBovsdb\-tool\fR find consistency errors, it prints an
+error on stderr and exits with status 1.  Errors typically indicate
+bugs in \fBovsdb\-server\fR; please consider reporting them to the
+Open vSwitch developers.
 .
 .IP "\fBdb\-name \fR[\fIdb\fR]"
 .IQ "\fBschema\-name \fR[\fIschema\fR]"
 Prints the name of the schema embedded within the database \fIdb\fR or
 in the JSON schema \fIschema\fR on stdout.
+.
+.IP "\fBdb\-cid\fI db\fR"
+Prints the cluster ID, which is a UUID that identifies the cluster,
+for \fIdb\fR.  If \fIdb\fR is a database newly created by
+\fBovsdb\-tool cluster\-join\fR that has not yet successfully joined
+its cluster, and \fB\-\-cid\fR was not specified on the
+\fBcluster\-join\fR command line, then this command will output an
+error, and exit with status 2, because the cluster ID is not yet
+known.  This command works only with clustered databases.
+.IP
+The all-zeros UUID is not a valid cluster ID.
+.
+.IP "\fBdb\-sid\fI db\fR"
+Prints the server ID, which is a UUID that identifies the server, for
+\fIdb\fR.  This command works only with clustered databases.  It works
+even if \fIdb\fR is a database newly created by \fBovsdb\-tool
+cluster\-join\fR that has not yet successfully joined its cluster.
+.
+.IP "\fBdb\-local\-address db\fR"
+Prints the local address used for database clustering for \fIdb\fR, in
+the same \fIprotocol\fB:\fIip\fB:\fIport\fR form used on
+\fBcreate\-cluster\fR and \fBjoin\-cluster\fR.
+.
+.IP "\fBdb\-is\-clustered\fI db\fR"
+.IQ "\fBdb\-is\-standalone\fI db\fR"
+Tests whether \fIdb\fR is a database file in clustered or standalone
+format, respectively.  If so, exits with status 0; if not, exits with
+status 2.  (Exit status 1 indicates an error, e.g. \fIdb\fR is not an
+OVSDB database or does not exist.)
 .
 .SH OPTIONS
 .SS "Logging Options"

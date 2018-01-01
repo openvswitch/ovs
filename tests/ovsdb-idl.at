@@ -831,7 +831,7 @@ test-ovsdb|ovsdb_idl|link1 table in idltest database lacks l2 column (database n
 # Check that ovsdb-idl sent on "monitor" request and that it didn't
 # mention that table or column, and (for paranoia) that it did mention another
 # table and column.
-AT_CHECK([grep -c '"monitor\|monitor_cond"' stderr], [0], [1
+AT_CHECK([grep -c '"monitor\|monitor_cond"' stderr], [0], [2
 ])
 AT_CHECK([grep '"monitor\|monitor_cond"' stderr | grep link2], [1])
 AT_CHECK([grep '"monitor\|monitor_cond"' stderr | grep l2], [1])
