@@ -1062,7 +1062,7 @@ netdev_dummy_rxq_drain(struct netdev_rxq *rxq_)
 
 static int
 netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
-                  struct dp_packet_batch *batch, bool may_steal,
+                  struct dp_packet_batch *batch,
                   bool concurrent_txq OVS_UNUSED)
 {
     struct netdev_dummy *dev = netdev_dummy_cast(netdev);
@@ -1071,7 +1071,7 @@ netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
     struct dp_packet *packet;
     DP_PACKET_BATCH_FOR_EACH(packet, batch) {
         const void *buffer = dp_packet_data(packet);
-        size_t size = dp_packet_get_send_len(packet);
+        size_t size = dp_packet_size(packet);
 
         if (batch->packets[i]->packet_type != htonl(PT_ETH)) {
             error = EPFNOSUPPORT;
@@ -1132,7 +1132,7 @@ netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
         ovs_mutex_unlock(&dev->mutex);
     }
 
-    dp_packet_delete_batch(batch, may_steal);
+    dp_packet_delete_batch(batch, true);
 
     return error;
 }

@@ -181,7 +181,7 @@ int netdev_rxq_drain(struct netdev_rxq *);
 
 /* Packet transmission. */
 int netdev_send(struct netdev *, int qid, struct dp_packet_batch *,
-                bool may_steal, bool concurrent_txq);
+                bool concurrent_txq);
 void netdev_send_wait(struct netdev *, int qid);
 
 /* Flow offloading. */

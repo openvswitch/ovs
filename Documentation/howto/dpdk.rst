@@ -531,16 +531,18 @@ Add test flows to forward packets betwen DPDK devices and VM ports::
 
 Create a VM using the following configuration:
 
-+----------------------+--------+-----------------+
-| configuration        | values | comments        |
-+----------------------+--------+-----------------+
-| qemu version         | 2.2.0  | n/a             |
-| qemu thread affinity | core 5 | taskset 0x20    |
-| memory               | 4GB    | n/a             |
-| cores                | 2      | n/a             |
-| Qcow2 image          | CentOS7| n/a             |
-| mrg_rxbuf            | off    | n/a             |
-+----------------------+--------+-----------------+
+.. table::
+
+    ===================== ======== ============
+        Configuration      Values    Comments
+    ===================== ======== ============
+    QEMU version          2.2.0    n/a
+    QEMU thread affinity  core 5   taskset 0x20
+    Memory                4GB      n/a
+    Cores                 2        n/a
+    Qcow2 image           CentOS7  n/a
+    mrg_rxbuf             off      n/a
+    ===================== ======== ============
 
 You can do this directly with QEMU via the ``qemu-system-x86_64`` application::
 

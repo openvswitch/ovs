@@ -27,6 +27,8 @@ Post-v2.8.0
    - DPDK:
      * Add support for DPDK v17.11
      * Add support for vHost IOMMU
+     * New debug appctl command 'netdev-dpdk/get-mempool-info'.
+     * All the netdev-dpdk appctl commands described in ovs-vswitchd man page.
    - vswitchd:
      * Datapath IDs may now be specified as 0x1 (etc.) instead of 16 digits.
 
