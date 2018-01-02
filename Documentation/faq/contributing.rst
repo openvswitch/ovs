@@ -45,11 +45,11 @@ Q: How do I implement a new OpenFlow message?
 
 Q: How do I add support for a new field or header?
 
-    A: Add new members for your field to ``struct flow`` in ``lib/flow.h``, and
-    add new enumerations for your new field to ``enum mf_field_id`` in
-    ``include/openvswitch/meta-flow.h``, following the existing pattern.  If
-    the field uses a new OXM class, add it to OXM_CLASSES in
-    ``build-aux/extract-ofp-fields``.  Also, add support to
+    A: Add new members for your field to ``struct flow`` in
+    ``include/openvswitch/flow.h``, and add new enumerations for your new field
+    to ``enum mf_field_id`` in ``include/openvswitch/meta-flow.h``, following
+    the existing pattern.  If the field uses a new OXM class, add it to
+    OXM_CLASSES in ``build-aux/extract-ofp-fields``.  Also, add support to
     ``miniflow_extract()`` in ``lib/flow.c`` for extracting your new field from
     a packet into struct miniflow, and to ``nx_put_raw()`` in
     ``lib/nx-match.c`` to output your new field in OXM matches.  Then recompile
