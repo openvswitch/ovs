@@ -614,6 +614,15 @@ print_lr(const struct nbrec_logical_router *lr, struct ds *s)
             }
             ds_put_cstr(s, "]\n");
         }
+
+        if (lrp->n_gateway_chassis) {
+            ds_put_cstr(s, "        gateway chassis: [");
+            for (size_t j = 0; j < lrp->n_gateway_chassis; j++) {
+                ds_put_format(s, "%s ", lrp->gateway_chassis[j]->chassis_name);
+            }
+            ds_chomp(s, ' ');
+            ds_put_cstr(s, "]\n");
+        }
     }
 
     for (size_t i = 0; i < lr->n_nat; i++) {
