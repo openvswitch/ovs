@@ -89,7 +89,7 @@ lex_token_strcpy(struct lex_token *token, const char *s, size_t length)
                 ? token->buffer
                 : xmalloc(length + 1));
     memcpy(token->s, s, length);
-    token->buffer[length] = '\0';
+    token->s[length] = '\0';
 }
 
 void
