@@ -60,7 +60,8 @@ void dpif_ipfix_bridge_sample(struct dpif_ipfix *, const struct dp_packet *,
                               odp_port_t, odp_port_t, const struct flow_tnl *,
                               const struct dpif_ipfix_actions *);
 void dpif_ipfix_flow_sample(struct dpif_ipfix *, const struct dp_packet *,
-                            const struct flow *, const union user_action_cookie *,
+                            const struct flow *,
+                            const struct user_action_cookie *,
                             odp_port_t, const struct flow_tnl *,
                             const struct dpif_ipfix_actions *);
 

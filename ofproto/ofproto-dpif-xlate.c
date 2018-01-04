@@ -2853,19 +2853,18 @@ xlate_normal(struct xlate_ctx *ctx)
 
 /* Appends a "sample" action for sFlow or IPFIX to 'ctx->odp_actions'.  The
  * 'probability' is the number of packets out of UINT32_MAX to sample.  The
- * 'cookie' (of length 'cookie_size' bytes) is passed back in the callback for
- * each sampled packet.  'tunnel_out_port', if not ODPP_NONE, is added as the
- * OVS_USERSPACE_ATTR_EGRESS_TUN_PORT attribute.  If 'include_actions', an
- * OVS_USERSPACE_ATTR_ACTIONS attribute is added.  If 'emit_set_tunnel',
- * sample(sampling_port=1) would translate into datapath sample action
- * set(tunnel(...)), sample(...) and it is used for sampling egress tunnel
- * information.
+ * 'cookie' is passed back in the callback for each sampled packet.
+ * 'tunnel_out_port', if not ODPP_NONE, is added as the
+ * OVS_USERSPACE_ATTR_EGRESS_TUN_PORT attribute.  If 'include_actions',
+ * an OVS_USERSPACE_ATTR_ACTIONS attribute is added.  If
+ * 'emit_set_tunnel', sample(sampling_port=1) would translate into
+ * datapath sample action set(tunnel(...)), sample(...) and it is used
+ * for sampling egress tunnel information.
  */
 static size_t
 compose_sample_action(struct xlate_ctx *ctx,
                       const uint32_t probability,
-                      const union user_action_cookie *cookie,
-                      const size_t cookie_size,
+                      const struct user_action_cookie *cookie,
                       const odp_port_t tunnel_out_port,
                       bool include_actions)
 {
@@ -2900,7 +2899,7 @@ compose_sample_action(struct xlate_ctx *ctx,
         ctx->xbridge, ctx->xin->flow.in_port.ofp_port);
     uint32_t pid = dpif_port_get_pid(ctx->xbridge->dpif, odp_port,
                                      flow_hash_5tuple(&ctx->xin->flow, 0));
-    int cookie_offset = odp_put_userspace_action(pid, cookie, cookie_size,
+    int cookie_offset = odp_put_userspace_action(pid, cookie, sizeof *cookie,
                                                  tunnel_out_port,
                                                  include_actions,
                                                  ctx->odp_actions);
@@ -2928,10 +2927,9 @@ compose_sflow_action(struct xlate_ctx *ctx)
         return 0;
     }
 
-    union user_action_cookie cookie = { .type = USER_ACTION_COOKIE_SFLOW };
+    struct user_action_cookie cookie = { .type = USER_ACTION_COOKIE_SFLOW };
     return compose_sample_action(ctx, dpif_sflow_get_probability(sflow),
-                                 &cookie, sizeof cookie.sflow, ODPP_NONE,
-                                 true);
+                                 &cookie, ODPP_NONE, true);
 }
 
 /* If flow IPFIX is enabled, make sure IPFIX flow sample action
@@ -2969,30 +2967,27 @@ compose_ipfix_action(struct xlate_ctx *ctx, odp_port_t output_odp_port)
         }
     }
 
-    union user_action_cookie cookie = {
-        .ipfix = {
-            .type = USER_ACTION_COOKIE_IPFIX,
-            .output_odp_port = output_odp_port,
-        }
+    struct user_action_cookie cookie = {
+        .type = USER_ACTION_COOKIE_IPFIX,
+        .ipfix.output_odp_port = output_odp_port,
     };
     compose_sample_action(ctx,
                           dpif_ipfix_get_bridge_exporter_probability(ipfix),
-                          &cookie, sizeof cookie.ipfix, tunnel_out_port,
-                          false);
+                          &cookie, tunnel_out_port, false);
 }
 
 /* Fix "sample" action according to data collected while composing ODP actions,
  * as described in compose_sflow_action().
  *
- * 'user_cookie_offset' must be the offset returned by add_sflow_action(). */
+ * 'user_cookie_offset' must be the offset returned by
+ * compose_sflow_action(). */
 static void
 fix_sflow_action(struct xlate_ctx *ctx, unsigned int user_cookie_offset)
 {
     const struct flow *base = &ctx->base_flow;
-    union user_action_cookie *cookie;
+    struct user_action_cookie *cookie;
 
-    cookie = ofpbuf_at(ctx->odp_actions, user_cookie_offset,
-                       sizeof cookie->sflow);
+    cookie = ofpbuf_at(ctx->odp_actions, user_cookie_offset, sizeof *cookie);
     ovs_assert(cookie->type == USER_ACTION_COOKIE_SFLOW);
 
     cookie->type = USER_ACTION_COOKIE_SFLOW;
@@ -5273,9 +5268,9 @@ xlate_sample_action(struct xlate_ctx *ctx,
         }
     }
 
-    union user_action_cookie cookie = {
+    struct user_action_cookie cookie = {
+        .type = USER_ACTION_COOKIE_FLOW_SAMPLE,
         .flow_sample = {
-            .type = USER_ACTION_COOKIE_FLOW_SAMPLE,
             .probability = os->probability,
             .collector_set_id = os->collector_set_id,
             .obs_domain_id = os->obs_domain_id,
@@ -5284,8 +5279,7 @@ xlate_sample_action(struct xlate_ctx *ctx,
             .direction = os->direction,
         }
     };
-    compose_sample_action(ctx, probability, &cookie, sizeof cookie.flow_sample,
-                          tunnel_out_port, false);
+    compose_sample_action(ctx, probability, &cookie, tunnel_out_port, false);
 }
 
 /* Determine if an datapath action translated from the openflow action

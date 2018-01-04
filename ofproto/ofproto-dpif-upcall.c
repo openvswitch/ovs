@@ -971,9 +971,6 @@ udpif_revalidator(void *arg)
 static enum upcall_type
 classify_upcall(enum dpif_upcall_type type, const struct nlattr *userdata)
 {
-    union user_action_cookie cookie;
-    size_t userdata_len;
-
     /* First look at the upcall type. */
     switch (type) {
     case DPIF_UC_ACTION:
@@ -993,26 +990,22 @@ classify_upcall(enum dpif_upcall_type type, const struct nlattr *userdata)
         VLOG_WARN_RL(&rl, "action upcall missing cookie");
         return BAD_UPCALL;
     }
-    userdata_len = nl_attr_get_size(userdata);
-    if (userdata_len < sizeof cookie.type
-        || userdata_len > sizeof cookie) {
+
+    struct user_action_cookie cookie;
+    size_t userdata_len = nl_attr_get_size(userdata);
+    if (userdata_len != sizeof cookie) {
         VLOG_WARN_RL(&rl, "action upcall cookie has unexpected size %"PRIuSIZE,
                      userdata_len);
         return BAD_UPCALL;
     }
-    memset(&cookie, 0, sizeof cookie);
-    memcpy(&cookie, nl_attr_get(userdata), userdata_len);
-    if (userdata_len == MAX(8, sizeof cookie.sflow)
-        && cookie.type == USER_ACTION_COOKIE_SFLOW) {
+    memcpy(&cookie, nl_attr_get(userdata), sizeof cookie);
+    if (cookie.type == USER_ACTION_COOKIE_SFLOW) {
         return SFLOW_UPCALL;
-    } else if (userdata_len == MAX(8, sizeof cookie.slow_path)
-               && cookie.type == USER_ACTION_COOKIE_SLOW_PATH) {
+    } else if (cookie.type == USER_ACTION_COOKIE_SLOW_PATH) {
         return MISS_UPCALL;
-    } else if (userdata_len == MAX(8, sizeof cookie.flow_sample)
-               && cookie.type == USER_ACTION_COOKIE_FLOW_SAMPLE) {
+    } else if (cookie.type == USER_ACTION_COOKIE_FLOW_SAMPLE) {
         return FLOW_SAMPLE_UPCALL;
-    } else if (userdata_len == MAX(8, sizeof cookie.ipfix)
-               && cookie.type == USER_ACTION_COOKIE_IPFIX) {
+    } else if (cookie.type == USER_ACTION_COOKIE_IPFIX) {
         return IPFIX_UPCALL;
     } else {
         VLOG_WARN_RL(&rl, "invalid user cookie of type %"PRIu16
@@ -1029,7 +1022,7 @@ compose_slow_path(struct udpif *udpif, struct xlate_out *xout,
                   struct ofpbuf *buf, uint32_t slowpath_meter_id,
                   uint32_t controller_meter_id)
 {
-    union user_action_cookie cookie;
+    struct user_action_cookie cookie;
     odp_port_t port;
     uint32_t pid;
 
@@ -1056,7 +1049,7 @@ compose_slow_path(struct udpif *udpif, struct xlate_out *xout,
         nl_msg_put_u32(buf, OVS_ACTION_ATTR_METER, meter_id);
     }
 
-    odp_put_userspace_action(pid, &cookie, sizeof cookie.slow_path,
+    odp_put_userspace_action(pid, &cookie, sizeof cookie,
                              ODPP_NONE, false, buf);
 
     if (meter_id != UINT32_MAX) {
@@ -1349,12 +1342,14 @@ process_upcall(struct udpif *udpif, struct upcall *upcall,
 
     case SFLOW_UPCALL:
         if (upcall->sflow) {
-            union user_action_cookie cookie;
+            struct user_action_cookie cookie;
             struct dpif_sflow_actions sflow_actions;
 
+            if (nl_attr_get_size(userdata) != sizeof cookie) {
+                return EINVAL;
+            }
+            memcpy(&cookie, nl_attr_get(userdata), sizeof cookie);
             memset(&sflow_actions, 0, sizeof sflow_actions);
-            memset(&cookie, 0, sizeof cookie);
-            memcpy(&cookie, nl_attr_get(userdata), sizeof cookie.sflow);
 
             actions_len = dpif_read_actions(udpif, upcall, flow, upcall_type,
                                             &sflow_actions);
@@ -1366,12 +1361,14 @@ process_upcall(struct udpif *udpif, struct upcall *upcall,
 
     case IPFIX_UPCALL:
         if (upcall->ipfix) {
-            union user_action_cookie cookie;
+            struct user_action_cookie cookie;
             struct flow_tnl output_tunnel_key;
             struct dpif_ipfix_actions ipfix_actions;
 
-            memset(&cookie, 0, sizeof cookie);
-            memcpy(&cookie, nl_attr_get(userdata), sizeof cookie.ipfix);
+            if (nl_attr_get_size(userdata) != sizeof cookie) {
+                return EINVAL;
+            }
+            memcpy(&cookie, nl_attr_get(userdata), sizeof cookie);
             memset(&ipfix_actions, 0, sizeof ipfix_actions);
 
             if (upcall->out_tun_key) {
@@ -1391,12 +1388,14 @@ process_upcall(struct udpif *udpif, struct upcall *upcall,
 
     case FLOW_SAMPLE_UPCALL:
         if (upcall->ipfix) {
-            union user_action_cookie cookie;
+            struct user_action_cookie cookie;
             struct flow_tnl output_tunnel_key;
             struct dpif_ipfix_actions ipfix_actions;
 
-            memset(&cookie, 0, sizeof cookie);
-            memcpy(&cookie, nl_attr_get(userdata), sizeof cookie.flow_sample);
+            if (nl_attr_get_size(userdata) != sizeof cookie) {
+                return EINVAL;
+            }
+            memcpy(&cookie, nl_attr_get(userdata), sizeof cookie);
             memset(&ipfix_actions, 0, sizeof ipfix_actions);
 
             if (upcall->out_tun_key) {

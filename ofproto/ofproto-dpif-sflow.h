@@ -70,13 +70,13 @@ void dpif_sflow_run(struct dpif_sflow *);
 void dpif_sflow_wait(struct dpif_sflow *);
 
 void dpif_sflow_read_actions(const struct flow *,
-			     const struct nlattr *actions, size_t actions_len,
-			     struct dpif_sflow_actions *);
+                             const struct nlattr *actions, size_t actions_len,
+                             struct dpif_sflow_actions *);
 
 void dpif_sflow_received(struct dpif_sflow *, const struct dp_packet *,
                          const struct flow *, odp_port_t odp_port,
-                         const union user_action_cookie *,
-			 const struct dpif_sflow_actions *);
+                         const struct user_action_cookie *,
+                         const struct dpif_sflow_actions *);
 
 int dpif_sflow_odp_port_to_ifindex(const struct dpif_sflow *,
                                    odp_port_t odp_port);

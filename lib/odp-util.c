@@ -437,31 +437,25 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr,
         const uint8_t *userdata = nl_attr_get(userdata_attr);
         size_t userdata_len = nl_attr_get_size(userdata_attr);
         bool userdata_unspec = true;
-        union user_action_cookie cookie;
+        struct user_action_cookie cookie;
 
-        if (userdata_len >= sizeof cookie.type
-            && userdata_len <= sizeof cookie) {
-
-            memset(&cookie, 0, sizeof cookie);
-            memcpy(&cookie, userdata, userdata_len);
+        if (userdata_len == sizeof cookie) {
+            memcpy(&cookie, userdata, sizeof cookie);
 
             userdata_unspec = false;
 
-            if (userdata_len == sizeof cookie.sflow
-                && cookie.type == USER_ACTION_COOKIE_SFLOW) {
+            if (cookie.type == USER_ACTION_COOKIE_SFLOW) {
                 ds_put_format(ds, ",sFlow("
                               "vid=%"PRIu16",pcp=%d,output=%"PRIu32")",
                               vlan_tci_to_vid(cookie.sflow.vlan_tci),
                               vlan_tci_to_pcp(cookie.sflow.vlan_tci),
                               cookie.sflow.output);
-            } else if (userdata_len == sizeof cookie.slow_path
-                       && cookie.type == USER_ACTION_COOKIE_SLOW_PATH) {
+            } else if (cookie.type == USER_ACTION_COOKIE_SLOW_PATH) {
                 ds_put_cstr(ds, ",slow_path(");
                 format_flags(ds, slow_path_reason_to_string,
                              cookie.slow_path.reason, ',');
                 ds_put_format(ds, ")");
-            } else if (userdata_len == sizeof cookie.flow_sample
-                       && cookie.type == USER_ACTION_COOKIE_FLOW_SAMPLE) {
+            } else if (cookie.type == USER_ACTION_COOKIE_FLOW_SAMPLE) {
                 ds_put_format(ds, ",flow_sample(probability=%"PRIu16
                               ",collector_set_id=%"PRIu32
                               ",obs_domain_id=%"PRIu32
@@ -479,8 +473,7 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr,
                     ds_put_cstr(ds, ",egress");
                 }
                 ds_put_char(ds, ')');
-            } else if (userdata_len >= sizeof cookie.ipfix
-                       && cookie.type == USER_ACTION_COOKIE_IPFIX) {
+            } else if (cookie.type == USER_ACTION_COOKIE_IPFIX) {
                 ds_put_format(ds, ",ipfix(output_port=");
                 odp_portno_name_format(portno_names,
                                        cookie.ipfix.output_odp_port, ds);
@@ -1111,7 +1104,7 @@ static int
 parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
 {
     uint32_t pid;
-    union user_action_cookie cookie;
+    struct user_action_cookie cookie;
     struct ofpbuf buf;
     odp_port_t tunnel_out_port;
     int n = -1;
@@ -1125,7 +1118,10 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
     }
 
     ofpbuf_init(&buf, 16);
+    memset(&cookie, 0, sizeof cookie);
 
+    user_data = &cookie;
+    user_data_size = sizeof cookie;
     {
         uint32_t output;
         uint32_t probability;
@@ -1148,8 +1144,6 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
             cookie.type = USER_ACTION_COOKIE_SFLOW;
             cookie.sflow.vlan_tci = htons(tci);
             cookie.sflow.output = output;
-            user_data = &cookie;
-            user_data_size = sizeof cookie.sflow;
         } else if (ovs_scan(&s[n], ",slow_path(%n",
                             &n1)) {
             n += n1;
@@ -1164,9 +1158,6 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
                 goto out;
             }
             n += res + 1;
-
-            user_data = &cookie;
-            user_data_size = sizeof cookie.slow_path;
         } else if (ovs_scan(&s[n], ",flow_sample(probability=%"SCNi32","
                             "collector_set_id=%"SCNi32","
                             "obs_domain_id=%"SCNi32","
@@ -1183,8 +1174,6 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
             cookie.flow_sample.obs_domain_id = obs_domain_id;
             cookie.flow_sample.obs_point_id = obs_point_id;
             cookie.flow_sample.output_odp_port = u32_to_odp(output);
-            user_data = &cookie;
-            user_data_size = sizeof cookie.flow_sample;
 
             if (ovs_scan(&s[n], ",ingress%n", &n1)) {
                 cookie.flow_sample.direction = NX_ACTION_SAMPLE_INGRESS;
@@ -1205,8 +1194,6 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
             n += n1;
             cookie.type = USER_ACTION_COOKIE_IPFIX;
             cookie.ipfix.output_odp_port = u32_to_odp(output);
-            user_data = &cookie;
-            user_data_size = sizeof cookie.ipfix;
         } else if (ovs_scan(&s[n], ",userdata(%n",
                             &n1)) {
             char *end;

@@ -2732,7 +2732,7 @@ dpif_ipfix_bridge_sample(struct dpif_ipfix *di, const struct dp_packet *packet,
 void
 dpif_ipfix_flow_sample(struct dpif_ipfix *di, const struct dp_packet *packet,
                        const struct flow *flow,
-                       const union user_action_cookie *cookie,
+                       const struct user_action_cookie *cookie,
                        odp_port_t input_odp_port,
                        const struct flow_tnl *output_tunnel_key,
                        const struct dpif_ipfix_actions *ipfix_actions)

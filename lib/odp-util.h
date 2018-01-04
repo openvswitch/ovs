@@ -300,37 +300,39 @@ enum user_action_cookie_type {
 };
 
 /* user_action_cookie is passed as argument to OVS_ACTION_ATTR_USERSPACE. */
-union user_action_cookie {
+struct user_action_cookie {
     uint16_t type;              /* enum user_action_cookie_type. */
 
-    struct {
-        uint16_t type;          /* USER_ACTION_COOKIE_SFLOW. */
-        ovs_be16 vlan_tci;      /* Destination VLAN TCI. */
-        uint32_t output;        /* SFL_FLOW_SAMPLE_TYPE 'output' value. */
-    } sflow;
+    union {
+        struct {
+            /* USER_ACTION_COOKIE_SFLOW. */
+            ovs_be16 vlan_tci;      /* Destination VLAN TCI. */
+            uint32_t output;        /* SFL_FLOW_SAMPLE_TYPE 'output' value. */
+        } sflow;
 
-    struct {
-        uint16_t type;          /* USER_ACTION_COOKIE_SLOW_PATH. */
-        uint16_t unused;
-        uint32_t reason;        /* enum slow_path_reason. */
-    } slow_path;
+        struct {
+            /* USER_ACTION_COOKIE_SLOW_PATH. */
+            uint16_t unused;
+            uint32_t reason;        /* enum slow_path_reason. */
+        } slow_path;
 
-    struct {
-        uint16_t type;          /* USER_ACTION_COOKIE_FLOW_SAMPLE. */
-        uint16_t probability;   /* Sampling probability. */
-        uint32_t collector_set_id; /* ID of IPFIX collector set. */
-        uint32_t obs_domain_id; /* Observation Domain ID. */
-        uint32_t obs_point_id;  /* Observation Point ID. */
-        odp_port_t output_odp_port; /* The output odp port. */
-        enum nx_action_sample_direction direction;
-    } flow_sample;
+        struct {
+            /* USER_ACTION_COOKIE_FLOW_SAMPLE. */
+            uint16_t probability;   /* Sampling probability. */
+            uint32_t collector_set_id; /* ID of IPFIX collector set. */
+            uint32_t obs_domain_id; /* Observation Domain ID. */
+            uint32_t obs_point_id;  /* Observation Point ID. */
+            odp_port_t output_odp_port; /* The output odp port. */
+            enum nx_action_sample_direction direction;
+        } flow_sample;
 
-    struct {
-        uint16_t   type;            /* USER_ACTION_COOKIE_IPFIX. */
-        odp_port_t output_odp_port; /* The output odp port. */
-    } ipfix;
+        struct {
+            /* USER_ACTION_COOKIE_IPFIX. */
+            odp_port_t output_odp_port; /* The output odp port. */
+        } ipfix;
+    };
 };
-BUILD_ASSERT_DECL(sizeof(union user_action_cookie) == 24);
+BUILD_ASSERT_DECL(sizeof(struct user_action_cookie) == 28);
 
 size_t odp_put_userspace_action(uint32_t pid,
                                 const void *userdata, size_t userdata_size,
