@@ -9175,6 +9175,9 @@ ofpact_decode_raw(enum ofp_version ofp_version,
         }
     }
 
+    VLOG_WARN_RL(&rl, "unknown %s action for vendor %#"PRIx32" and "
+                 "type %"PRIu16, ofputil_version_to_string(ofp_version),
+                 hdrs.vendor, hdrs.type);
     return (hdrs.vendor
             ? OFPERR_OFPBAC_BAD_VENDOR_TYPE
             : OFPERR_OFPBAC_BAD_TYPE);
