@@ -1361,27 +1361,6 @@ process_upcall(struct udpif *udpif, struct upcall *upcall,
         break;
 
     case IPFIX_UPCALL:
-        if (upcall->ipfix) {
-            struct flow_tnl output_tunnel_key;
-            struct dpif_ipfix_actions ipfix_actions;
-
-            memset(&ipfix_actions, 0, sizeof ipfix_actions);
-
-            if (upcall->out_tun_key) {
-                odp_tun_key_from_attr(upcall->out_tun_key, &output_tunnel_key);
-            }
-
-            actions_len = dpif_read_actions(udpif, upcall, flow,
-                                            upcall->type, &ipfix_actions);
-            dpif_ipfix_bridge_sample(upcall->ipfix, packet, flow,
-                                     flow->in_port.odp_port,
-                                     upcall->cookie.ipfix.output_odp_port,
-                                     upcall->out_tun_key ?
-                                         &output_tunnel_key : NULL,
-                                     actions_len > 0 ? &ipfix_actions: NULL);
-        }
-        break;
-
     case FLOW_SAMPLE_UPCALL:
         if (upcall->ipfix) {
             struct flow_tnl output_tunnel_key;
@@ -1395,13 +1374,23 @@ process_upcall(struct udpif *udpif, struct upcall *upcall,
 
             actions_len = dpif_read_actions(udpif, upcall, flow,
                                             upcall->type, &ipfix_actions);
-            /* The flow reflects exactly the contents of the packet.
-             * Sample the packet using it. */
-            dpif_ipfix_flow_sample(upcall->ipfix, packet, flow,
-                                   &upcall->cookie, flow->in_port.odp_port,
-                                   upcall->out_tun_key ?
-                                       &output_tunnel_key : NULL,
-                                   actions_len > 0 ? &ipfix_actions: NULL);
+            if (upcall->type == IPFIX_UPCALL) {
+                dpif_ipfix_bridge_sample(upcall->ipfix, packet, flow,
+                                         flow->in_port.odp_port,
+                                         upcall->cookie.ipfix.output_odp_port,
+                                         upcall->out_tun_key ?
+                                             &output_tunnel_key : NULL,
+                                         actions_len > 0 ?
+                                             &ipfix_actions: NULL);
+            } else {
+                /* The flow reflects exactly the contents of the packet.
+                 * Sample the packet using it. */
+                dpif_ipfix_flow_sample(upcall->ipfix, packet, flow,
+                                       &upcall->cookie, flow->in_port.odp_port,
+                                       upcall->out_tun_key ?
+                                           &output_tunnel_key : NULL,
+                                       actions_len > 0 ? &ipfix_actions: NULL);
+            }
         }
         break;
 
