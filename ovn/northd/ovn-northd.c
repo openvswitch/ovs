@@ -3272,7 +3272,6 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
                               "(!ct.est || (ct.est && ct_label.blocked == 1)) "
                               "&& (%s)",
                               acl->match);
-                ds_clear(&actions);
                 build_acl_log(&actions, acl);
                 ds_put_cstr(&actions, "/* drop */");
                 ovn_lflow_add_with_hint(lflows, od, stage,
@@ -3307,7 +3306,6 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
                 /* There are no stateful ACLs in use on this datapath,
                  * so a "drop" ACL is simply the "drop" logical flow action
                  * in all cases. */
-                ds_clear(&actions);
                 build_acl_log(&actions, acl);
                 ds_put_cstr(&actions, "/* drop */");
                 ovn_lflow_add_with_hint(lflows, od, stage,
