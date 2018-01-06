@@ -1165,8 +1165,8 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
                 match->wc.masks.nsh.spi);
     nxm_put_8m(&ctx, MFF_NSH_SI, oxm, flow->nsh.si, match->wc.masks.nsh.si);
     for (int i = 0; i < 4; i++) {
-        nxm_put_32m(&ctx, MFF_NSH_C1 + i, oxm, flow->nsh.c[i],
-                    match->wc.masks.nsh.c[i]);
+        nxm_put_32m(&ctx, MFF_NSH_C1 + i, oxm, flow->nsh.context[i],
+                    match->wc.masks.nsh.context[i]);
     }
 
     /* Registers. */

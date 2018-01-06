@@ -199,7 +199,7 @@ extern "C" {
  * @nshc<1-4>: NSH Contexts.
  */
 struct nsh_md1_ctx {
-    ovs_16aligned_be32 c[4];
+    ovs_16aligned_be32 context[4];
 };
 
 struct nsh_md2_tlv {
@@ -262,6 +262,12 @@ struct nsh_hdr {
 /* NSH MD Type 1 header Length. */
 #define NSH_M_TYPE1_LEN   24
 
+/* NSH header maximum Length. */
+#define NSH_HDR_MAX_LEN 256
+
+/* NSH context headers maximum Length. */
+#define NSH_CTX_HDRS_MAX_LEN 248
+
 static inline uint16_t
 nsh_hdr_len(const struct nsh_hdr *nsh)
 {
@@ -275,16 +281,22 @@ nsh_md_type(const struct nsh_hdr *nsh)
     return (nsh->md_type & NSH_MDTYPE_MASK) >> NSH_MDTYPE_SHIFT;
 }
 
-static inline struct nsh_md1_ctx *
-nsh_md1_ctx(struct nsh_hdr *nsh)
+static inline uint8_t
+nsh_get_ver(const struct nsh_hdr *nsh)
 {
-    return &nsh->md1;
+    return (ntohs(nsh->ver_flags_ttl_len) & NSH_VER_MASK) >> NSH_VER_SHIFT;
 }
 
-static inline struct nsh_md2_tlv *
-nsh_md2_ctx(struct nsh_hdr *nsh)
+static inline uint8_t
+nsh_get_flags(const struct nsh_hdr *nsh)
 {
-    return &nsh->md2;
+    return (ntohs(nsh->ver_flags_ttl_len) & NSH_FLAGS_MASK) >> NSH_FLAGS_SHIFT;
+}
+
+static inline void
+nsh_reset_ver_flags_ttl_len(struct nsh_hdr *nsh)
+{
+    nsh->ver_flags_ttl_len = 0;
 }
 
 #ifdef  __cplusplus

@@ -4387,8 +4387,8 @@ xlate_fixup_actions(struct ofpbuf *b, const struct nlattr *actions,
         case OVS_ACTION_ATTR_CT:
         case OVS_ACTION_ATTR_PUSH_ETH:
         case OVS_ACTION_ATTR_POP_ETH:
-        case OVS_ACTION_ATTR_ENCAP_NSH:
-        case OVS_ACTION_ATTR_DECAP_NSH:
+        case OVS_ACTION_ATTR_PUSH_NSH:
+        case OVS_ACTION_ATTR_POP_NSH:
         case OVS_ACTION_ATTR_METER:
             ofpbuf_put(b, a, nl_attr_len_pad(a, left));
             break;
@@ -5838,17 +5838,17 @@ rewrite_flow_encap_ethernet(struct xlate_ctx *ctx,
 
 /* For an MD2 NSH header returns a pointer to an ofpbuf with the encoded
  * MD2 TLVs provided as encap properties to the encap operation. This
- * will be stored as encap_data in the ctx and copied into the encap_nsh
+ * will be stored as encap_data in the ctx and copied into the push_nsh
  * action at the next commit. */
 static struct ofpbuf *
-rewrite_flow_encap_nsh(struct xlate_ctx *ctx,
-                       const struct ofpact_encap *encap,
-                       struct flow *flow,
-                       struct flow_wildcards *wc)
+rewrite_flow_push_nsh(struct xlate_ctx *ctx,
+                      const struct ofpact_encap *encap,
+                      struct flow *flow,
+                      struct flow_wildcards *wc)
 {
     ovs_be32 packet_type = flow->packet_type;
     const char *ptr = (char *) encap->props;
-    struct ofpbuf *buf = ofpbuf_new(OVS_ENCAP_NSH_MAX_MD_LEN);
+    struct ofpbuf *buf = ofpbuf_new(NSH_CTX_HDRS_MAX_LEN);
     uint8_t md_type = NSH_M_TYPE1;
     uint8_t np = 0;
     int i;
@@ -5888,7 +5888,7 @@ rewrite_flow_encap_nsh(struct xlate_ctx *ctx,
         }
         ptr += ROUND_UP(prop_ptr->len, 8);
     }
-    if (buf->size == 0 || buf->size > OVS_ENCAP_NSH_MAX_MD_LEN) {
+    if (buf->size == 0 || buf->size > NSH_CTX_HDRS_MAX_LEN) {
         ofpbuf_delete(buf);
         buf = NULL;
     }
@@ -5933,7 +5933,7 @@ rewrite_flow_encap_nsh(struct xlate_ctx *ctx,
 
     if (md_type == NSH_M_TYPE1) {
         flow->nsh.mdtype = NSH_M_TYPE1;
-        memset(flow->nsh.c, 0, sizeof flow->nsh.c);
+        memset(flow->nsh.context, 0, sizeof flow->nsh.context);
         if (buf) {
             /* Drop any MD2 context TLVs. */
             ofpbuf_delete(buf);
@@ -5964,7 +5964,7 @@ xlate_generic_encap_action(struct xlate_ctx *ctx,
             rewrite_flow_encap_ethernet(ctx, flow, wc);
             break;
         case PT_NSH:
-            encap_data = rewrite_flow_encap_nsh(ctx, encap, flow, wc);
+            encap_data = rewrite_flow_push_nsh(ctx, encap, flow, wc);
             break;
         default:
             /* New packet type was checked during decoding. */
@@ -6006,7 +6006,7 @@ xlate_generic_decap_action(struct xlate_ctx *ctx,
             }
             return false;
         case PT_NSH:
-            /* The decap_nsh action is generated at the commit executed as
+            /* The pop_nsh action is generated at the commit executed as
              * part of freezing the ctx for recirculation. Here we just set
              * the new packet type based on the NSH next protocol field. */
             switch (flow->nsh.np) {

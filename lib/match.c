@@ -1266,10 +1266,14 @@ format_nsh_masked(struct ds *s, const struct flow *f, const struct flow *m)
     format_be32_masked_hex(s, "nsh_spi", f->nsh.spi, m->nsh.spi);
     format_uint8_masked(s, "nsh_si", f->nsh.si, m->nsh.si);
     if (m->nsh.mdtype == UINT8_MAX && f->nsh.mdtype == NSH_M_TYPE1) {
-        format_be32_masked_hex(s, "nsh_c1", f->nsh.c[0], m->nsh.c[0]);
-        format_be32_masked_hex(s, "nsh_c2", f->nsh.c[1], m->nsh.c[1]);
-        format_be32_masked_hex(s, "nsh_c3", f->nsh.c[2], m->nsh.c[2]);
-        format_be32_masked_hex(s, "nsh_c4", f->nsh.c[3], m->nsh.c[3]);
+        format_be32_masked_hex(s, "nsh_c1", f->nsh.context[0],
+                               m->nsh.context[0]);
+        format_be32_masked_hex(s, "nsh_c2", f->nsh.context[1],
+                               m->nsh.context[1]);
+        format_be32_masked_hex(s, "nsh_c3", f->nsh.context[2],
+                               m->nsh.context[2]);
+        format_be32_masked_hex(s, "nsh_c4", f->nsh.context[3],
+                               m->nsh.context[3]);
     }
 }
 

@@ -105,7 +105,7 @@ bridge("br0")
 
 Final flow: in_port=1,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=11:22:33:44:55:66,dl_type=0x894f,nsh_flags=0,nsh_mdtype=1,nsh_np=3,nsh_spi=0x1234,nsh_si=255,nsh_c1=0x11223344,nsh_c2=0x0,nsh_c3=0x0,nsh_c4=0x0,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0
 Megaflow: recirc_id=0,eth,ip,in_port=1,dl_dst=66:77:88:99:aa:bb,nw_frag=no
-Datapath actions: encap_nsh(flags=0,mdtype=1,np=3,spi=0x1234,si=255,c1=0x11223344,c2=0x0,c3=0x0,c4=0x0),push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),pop_eth,decap_nsh(),set(eth(dst=11:22:33:44:55:66)),recirc(0x1)
+Datapath actions: push_nsh(flags=0,mdtype=1,np=3,spi=0x1234,si=255,c1=0x11223344,c2=0x0,c3=0x0,c4=0x0),push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),pop_eth,pop_nsh(),set(eth(dst=11:22:33:44:55:66)),recirc(0x1)
 ])
 
 AT_CHECK([
@@ -121,7 +121,7 @@ bridge("br0")
 
 Final flow: unchanged
 Megaflow: recirc_id=0,eth,in_port=4,dl_type=0x894f,nsh_mdtype=1,nsh_np=3,nsh_spi=0x1234,nsh_c1=0x11223344
-Datapath actions: pop_eth,decap_nsh(),recirc(0x2)
+Datapath actions: pop_eth,pop_nsh(),recirc(0x2)
 ])
 
 # Now send two real ICMP echo request packets in on port p1
@@ -139,7 +139,7 @@ ovs-appctl time/warp 1000
 AT_CHECK([
     ovs-appctl dpctl/dump-flows dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
 ], [0], [flow-dump from non-dpdk interfaces:
-recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(dst=1e:2c:e9:2a:66:9e),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:encap_nsh(flags=0,mdtype=1,np=3,spi=0x1234,si=255,c1=0x11223344,c2=0x0,c3=0x0,c4=0x0),push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),pop_eth,decap_nsh(),set(eth(dst=11:22:33:44:55:66)),recirc(0x3)
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(dst=1e:2c:e9:2a:66:9e),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:push_nsh(flags=0,mdtype=1,np=3,spi=0x1234,si=255,c1=0x11223344,c2=0x0,c3=0x0,c4=0x0),push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),pop_eth,pop_nsh(),set(eth(dst=11:22:33:44:55:66)),recirc(0x3)
 recirc_id(0x3),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:2
 ])
 
@@ -166,11 +166,13 @@ AT_CHECK([
 ], [0], [ignore])
 
 ovs-appctl time/warp 1000
+ovs-appctl time/warp 1000
+ovs-appctl time/warp 1000
 
 AT_CHECK([
     ovs-appctl dpctl/dump-flows dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
 ], [0], [flow-dump from non-dpdk interfaces:
-recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:push_vlan(vid=100,pcp=0),encap_nsh(flags=0,mdtype=1,np=3,spi=0x0,si=255,c1=0x0,c2=0x0,c3=0x0,c4=0x0),decap_nsh(),recirc(0x4)
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:push_vlan(vid=100,pcp=0),push_nsh(flags=0,mdtype=1,np=3,spi=0x0,si=255,c1=0x0,c2=0x0,c3=0x0,c4=0x0),pop_nsh(),recirc(0x4)
 recirc_id(0x4),in_port(1),packet_type(ns=0,id=0),eth_type(0x8100),vlan(vid=100,pcp=0),encap(eth_type(0x0800),ipv4(frag=no)), packets:1, bytes:102, used:0.0s, actions:2
 ])
 
@@ -195,7 +197,7 @@ ovs-vsctl set bridge br0 datapath_type=dummy \
         add-port br0 v4 -- set Interface v4 type=patch options:peer=v3 ofport_request=4])
 
 AT_DATA([flows.txt], [dnl
-    table=0,in_port=1,ip,actions=encap(nsh(md_type=2,tlv(0x1000,10,0x12345678))),set_field:0x1234->nsh_spi,encap(ethernet),set_field:11:22:33:44:55:66->dl_dst,3
+    table=0,in_port=1,ip,actions=encap(nsh(md_type=2,tlv(0x1000,10,0x12345678),tlv(0x2000,20,0xfedcba9876543210))),set_field:0x1234->nsh_spi,encap(ethernet),set_field:11:22:33:44:55:66->dl_dst,3
     table=0,in_port=4,dl_type=0x894f,nsh_mdtype=2,nsh_spi=0x1234,actions=decap(),decap(),2
 ])
 
@@ -205,7 +207,7 @@ AT_CHECK([
     ovs-ofctl -Oopenflow13 dump-flows br0 | ofctl_strip | sort | grep actions
 ], [0], [dnl
  in_port=4,dl_type=0x894f,nsh_mdtype=2,nsh_spi=0x1234 actions=decap(),decap(),output:2
- ip,in_port=1 actions=encap(nsh(md_type=2,tlv(0x1000,10,0x12345678))),set_field:0x1234->nsh_spi,encap(ethernet),set_field:11:22:33:44:55:66->eth_dst,output:3
+ ip,in_port=1 actions=encap(nsh(md_type=2,tlv(0x1000,10,0x12345678),tlv(0x2000,20,0xfedcba9876543210))),set_field:0x1234->nsh_spi,encap(ethernet),set_field:11:22:33:44:55:66->eth_dst,output:3
 ])
 
 AT_CHECK([
@@ -216,7 +218,7 @@ Flow: icmp,in_port=1,vlan_tci=0x0000,dl_src=00:11:22:33:44:55,dl_dst=66:77:88:99
 bridge("br0")
 -------------
  0. ip,in_port=1, priority 32768
-    encap(nsh(md_type=2,tlv(0x1000,10,0x12345678)))
+    encap(nsh(md_type=2,tlv(0x1000,10,0x12345678),tlv(0x2000,20,0xfedcba9876543210)))
     set_field:0x1234->nsh_spi
     encap(ethernet)
     set_field:11:22:33:44:55:66->eth_dst
@@ -230,7 +232,7 @@ bridge("br0")
 
 Final flow: in_port=1,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=11:22:33:44:55:66,dl_type=0x894f,nsh_flags=0,nsh_mdtype=2,nsh_np=3,nsh_spi=0x1234,nsh_si=255,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0
 Megaflow: recirc_id=0,eth,ip,in_port=1,dl_dst=66:77:88:99:aa:bb,nw_frag=no
-Datapath actions: encap_nsh(flags=0,mdtype=2,np=3,spi=0x1234,si=255,md2=0x10000a0412345678),push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),pop_eth,decap_nsh(),set(eth(dst=11:22:33:44:55:66)),recirc(0x1)
+Datapath actions: push_nsh(flags=0,mdtype=2,np=3,spi=0x1234,si=255,md2=0x10000a041234567820001408fedcba9876543210),push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),pop_eth,pop_nsh(),set(eth(dst=11:22:33:44:55:66)),recirc(0x1)
 ])
 
 AT_CHECK([
@@ -246,7 +248,7 @@ bridge("br0")
 
 Final flow: unchanged
 Megaflow: recirc_id=0,eth,in_port=4,dl_type=0x894f,nsh_mdtype=2,nsh_np=3,nsh_spi=0x1234
-Datapath actions: pop_eth,decap_nsh(),recirc(0x2)
+Datapath actions: pop_eth,pop_nsh(),recirc(0x2)
 ])
 
 # Now send two real ICMP echo request packets in on port p1
@@ -264,7 +266,7 @@ ovs-appctl time/warp 1000
 AT_CHECK([
     ovs-appctl dpctl/dump-flows dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
 ], [0], [flow-dump from non-dpdk interfaces:
-recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(dst=1e:2c:e9:2a:66:9e),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:encap_nsh(flags=0,mdtype=2,np=3,spi=0x1234,si=255,md2=0x10000a0412345678),push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),pop_eth,decap_nsh(),set(eth(dst=11:22:33:44:55:66)),recirc(0x3)
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(dst=1e:2c:e9:2a:66:9e),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:push_nsh(flags=0,mdtype=2,np=3,spi=0x1234,si=255,md2=0x10000a041234567820001408fedcba9876543210),push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),pop_eth,pop_nsh(),set(eth(dst=11:22:33:44:55:66)),recirc(0x3)
 recirc_id(0x3),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:2
 ])
 
@@ -577,8 +579,8 @@ ovs-appctl time/warp 1000
 AT_CHECK([
     ovs-appctl dpctl/dump-flows dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
 ], [0], [flow-dump from non-dpdk interfaces:
-recirc_id(0),in_port(4),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.30,frag=no), packets:1, bytes:98, used:0.0s, actions:pop_eth,encap_nsh(flags=0,mdtype=1,np=1,spi=0x3000,si=255,c1=0x0,c2=0x0,c3=0x0,c4=0x0),clone(tnl_push(tnl_port(4789),header(size=50,type=4,eth(dst=aa:55:00:00:00:03,src=aa:55:00:00:00:01,dl_type=0x0800),ipv4(src=10.0.0.1,dst=10.0.0.3,proto=17,tos=0,ttl=64,frag=0x4000),udp(src=0,dst=4789,csum=0x0),vxlan(flags=0xc000004,vni=0x0)),out_port(1)),set(ipv4(src=30.0.0.1,dst=30.0.0.3)),tnl_pop(4789))
-tunnel(tun_id=0x0,src=30.0.0.1,dst=30.0.0.3,flags(-df-csum+key)),recirc_id(0),in_port(4789),packet_type(ns=1,id=0x894f),nsh(np=1,spi=0x3000,si=255), packets:1, bytes:108, used:0.0s, actions:decap_nsh(),recirc(0x1)
+recirc_id(0),in_port(4),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.30,frag=no), packets:1, bytes:98, used:0.0s, actions:pop_eth,push_nsh(flags=0,mdtype=1,np=1,spi=0x3000,si=255,c1=0x0,c2=0x0,c3=0x0,c4=0x0),clone(tnl_push(tnl_port(4789),header(size=50,type=4,eth(dst=aa:55:00:00:00:03,src=aa:55:00:00:00:01,dl_type=0x0800),ipv4(src=10.0.0.1,dst=10.0.0.3,proto=17,tos=0,ttl=64,frag=0x4000),udp(src=0,dst=4789,csum=0x0),vxlan(flags=0xc000004,vni=0x0)),out_port(1)),set(ipv4(src=30.0.0.1,dst=30.0.0.3)),tnl_pop(4789))
+tunnel(tun_id=0x0,src=30.0.0.1,dst=30.0.0.3,flags(-df-csum+key)),recirc_id(0),in_port(4789),packet_type(ns=1,id=0x894f),nsh(np=1,spi=0x3000,si=255), packets:1, bytes:108, used:0.0s, actions:pop_nsh(),recirc(0x1)
 tunnel(tun_id=0x0,src=30.0.0.1,dst=30.0.0.3,flags(-df-csum+key)),recirc_id(0x1),in_port(4789),packet_type(ns=1,id=0x800),ipv4(frag=no), packets:1, bytes:84, used:0.0s, actions:push_eth(src=00:00:00:00:00:00,dst=aa:55:aa:55:00:03),6
 ])
 
@@ -631,9 +633,9 @@ ovs-appctl time/warp 1000
 AT_CHECK([
     ovs-appctl dpctl/dump-flows dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
 ], [0], [flow-dump from non-dpdk interfaces:
-recirc_id(0),in_port(4),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.20/255.255.255.248,frag=no), packets:1, bytes:98, used:0.0s, actions:pop_eth,encap_nsh(flags=0,mdtype=1,np=1,spi=0x3020,si=255,c1=0x0,c2=0x0,c3=0x0,c4=0x0),clone(tnl_push(tnl_port(4789),header(size=50,type=4,eth(dst=aa:55:00:00:00:02,src=aa:55:00:00:00:01,dl_type=0x0800),ipv4(src=10.0.0.1,dst=10.0.0.2,proto=17,tos=0,ttl=64,frag=0x4000),udp(src=0,dst=4789,csum=0x0),vxlan(flags=0xc000004,vni=0x0)),out_port(1)),set(ipv4(src=20.0.0.1,dst=20.0.0.2)),tnl_pop(4789))
+recirc_id(0),in_port(4),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(dst=192.168.10.20/255.255.255.248,frag=no), packets:1, bytes:98, used:0.0s, actions:pop_eth,push_nsh(flags=0,mdtype=1,np=1,spi=0x3020,si=255,c1=0x0,c2=0x0,c3=0x0,c4=0x0),clone(tnl_push(tnl_port(4789),header(size=50,type=4,eth(dst=aa:55:00:00:00:02,src=aa:55:00:00:00:01,dl_type=0x0800),ipv4(src=10.0.0.1,dst=10.0.0.2,proto=17,tos=0,ttl=64,frag=0x4000),udp(src=0,dst=4789,csum=0x0),vxlan(flags=0xc000004,vni=0x0)),out_port(1)),set(ipv4(src=20.0.0.1,dst=20.0.0.2)),tnl_pop(4789))
 tunnel(tun_id=0x0,src=20.0.0.1,dst=20.0.0.2,flags(-df-csum+key)),recirc_id(0),in_port(4789),packet_type(ns=1,id=0x894f),nsh(spi=0x3020,si=255), packets:1, bytes:108, used:0.0s, actions:push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),set(nsh(spi=0x3020,si=254)),pop_eth,clone(tnl_push(tnl_port(4789),header(size=50,type=4,eth(dst=aa:55:00:00:00:03,src=aa:55:00:00:00:02,dl_type=0x0800),ipv4(src=20.0.0.2,dst=20.0.0.3,proto=17,tos=0,ttl=64,frag=0x4000),udp(src=0,dst=4789,csum=0x0),vxlan(flags=0xc000004,vni=0x0)),out_port(2)),set(ipv4(src=30.0.0.2,dst=30.0.0.3)),tnl_pop(4789))
-tunnel(tun_id=0x0,src=30.0.0.2,dst=30.0.0.3,flags(-df-csum+key)),recirc_id(0),in_port(4789),packet_type(ns=1,id=0x894f),nsh(np=1,spi=0x3020,si=254), packets:1, bytes:108, used:0.0s, actions:decap_nsh(),recirc(0x2)
+tunnel(tun_id=0x0,src=30.0.0.2,dst=30.0.0.3,flags(-df-csum+key)),recirc_id(0),in_port(4789),packet_type(ns=1,id=0x894f),nsh(np=1,spi=0x3020,si=254), packets:1, bytes:108, used:0.0s, actions:pop_nsh(),recirc(0x2)
 tunnel(tun_id=0x0,src=30.0.0.2,dst=30.0.0.3,flags(-df-csum+key)),recirc_id(0x2),in_port(4789),packet_type(ns=1,id=0x800),ipv4(frag=no), packets:1, bytes:84, used:0.0s, actions:push_eth(src=00:00:00:00:00:00,dst=aa:55:aa:55:00:03),6
 ])
 

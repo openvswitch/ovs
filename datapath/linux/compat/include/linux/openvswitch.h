@@ -369,7 +369,7 @@ enum ovs_key_attr {
 #ifndef __KERNEL__
 	/* Only used within userspace data path. */
 	OVS_KEY_ATTR_PACKET_TYPE,  /* be32 packet type */
-	OVS_KEY_ATTR_NSH,	   /* struct ovs_key_nsh */
+	OVS_KEY_ATTR_NSH,	   /* Nested set of ovs_nsh_key_* */
 #endif
 
 	__OVS_KEY_ATTR_MAX
@@ -492,13 +492,28 @@ struct ovs_key_ct_labels {
 	};
 };
 
-struct ovs_key_nsh {
-    __u8 flags;
-    __u8 mdtype;
-    __u8 np;
-    __u8 pad;
-    __be32 path_hdr;
-    __be32 c[4];
+enum ovs_nsh_key_attr {
+	OVS_NSH_KEY_ATTR_UNSPEC,
+	OVS_NSH_KEY_ATTR_BASE,          /* struct ovs_nsh_key_base. */
+	OVS_NSH_KEY_ATTR_MD1,           /* struct ovs_nsh_key_md1. */
+	OVS_NSH_KEY_ATTR_MD2,           /* variable-length octets. */
+	__OVS_NSH_KEY_ATTR_MAX
+};
+
+#define OVS_NSH_KEY_ATTR_MAX (__OVS_NSH_KEY_ATTR_MAX - 1)
+
+struct ovs_nsh_key_base {
+	__u8 flags;
+	__u8 mdtype;
+	__u8 np;
+	__u8 pad;
+	__be32 path_hdr;
+};
+
+#define NSH_MD1_CONTEXT_SIZE 4
+
+struct ovs_nsh_key_md1 {
+	__be32 context[NSH_MD1_CONTEXT_SIZE];
 };
 
 /* OVS_KEY_ATTR_CT_STATE flags */
@@ -793,25 +808,6 @@ struct ovs_action_push_eth {
 	struct ovs_key_ethernet addresses;
 };
 
-#define OVS_ENCAP_NSH_MAX_MD_LEN 248
-/*
- * struct ovs_action_encap_nsh - %OVS_ACTION_ATTR_ENCAP_NSH
- * @flags: NSH header flags.
- * @mdtype: NSH metadata type.
- * @mdlen: Length of NSH metadata in bytes, including padding.
- * @np: NSH next_protocol: Inner packet type.
- * @path_hdr: NSH service path id and service index.
- * @metadata: NSH context metadata, padded to 4-bytes
- */
-struct ovs_action_encap_nsh {
-    uint8_t flags;
-    uint8_t mdtype;
-    uint8_t mdlen;
-    uint8_t np;
-    __be32 path_hdr;
-    uint8_t metadata[OVS_ENCAP_NSH_MAX_MD_LEN];
-};
-
 /**
  * enum ovs_nat_attr - Attributes for %OVS_CT_ATTR_NAT.
  *
@@ -887,8 +883,8 @@ enum ovs_nat_attr {
  * @OVS_ACTION_ATTR_PUSH_ETH: Push a new outermost Ethernet header onto the
  * packet.
  * @OVS_ACTION_ATTR_POP_ETH: Pop the outermost Ethernet header off the packet.
- * @OVS_ACTION_ATTR_ENCAP_NSH: encap NSH action to push NSH header.
- * @OVS_ACTION_ATTR_DECAP_NSH: decap NSH action to remove NSH header.
+ * @OVS_ACTION_ATTR_PUSH_NSH: push NSH header to the packet.
+ * @OVS_ACTION_ATTR_POP_NSH: pop the outermost NSH header off the packet.
  *
  * Only a single header can be set with a single %OVS_ACTION_ATTR_SET.  Not all
  * fields within a header are modifiable, e.g. the IPv4 protocol and fragment
@@ -930,8 +926,8 @@ enum ovs_action_attr {
 	OVS_ACTION_ATTR_TUNNEL_POP,    /* u32 port number. */
 	OVS_ACTION_ATTR_CLONE,         /* Nested OVS_CLONE_ATTR_*.  */
 	OVS_ACTION_ATTR_METER,         /* u32 meter number. */
-	OVS_ACTION_ATTR_ENCAP_NSH,    /* struct ovs_action_encap_nsh. */
-	OVS_ACTION_ATTR_DECAP_NSH,    /* No argument. */
+	OVS_ACTION_ATTR_PUSH_NSH,      /* Nested OVS_NSH_KEY_ATTR_*. */
+	OVS_ACTION_ATTR_POP_NSH,       /* No argument. */
 #endif
 	__OVS_ACTION_ATTR_MAX,	      /* Nothing past this will be accepted
 				       * from userspace. */

@@ -533,7 +533,6 @@ bool
 parse_nsh(const void **datap, size_t *sizep, struct flow_nsh *key)
 {
     const struct nsh_hdr *nsh = (const struct nsh_hdr *) *datap;
-    uint16_t ver_flags_len;
     uint8_t version, length, flags;
     uint32_t path_hdr;
 
@@ -544,16 +543,11 @@ parse_nsh(const void **datap, size_t *sizep, struct flow_nsh *key)
         return false;
     }
 
-    memset(key, 0, sizeof(struct flow_nsh));
+    version = nsh_get_ver(nsh);
+    flags = nsh_get_flags(nsh);
+    length = nsh_hdr_len(nsh);
 
-    ver_flags_len = ntohs(nsh->ver_flags_ttl_len);
-    version = (ver_flags_len & NSH_VER_MASK) >> NSH_VER_SHIFT;
-    flags = (ver_flags_len & NSH_FLAGS_MASK) >> NSH_FLAGS_SHIFT;
-
-    /* NSH header length is in 4 byte words. */
-    length = ((ver_flags_len & NSH_LEN_MASK) >> NSH_LEN_SHIFT) << 2;
-
-    if (length > *sizep || version != 0) {
+    if (OVS_UNLIKELY(length > *sizep || version != 0)) {
         return false;
     }
 
@@ -571,10 +565,17 @@ parse_nsh(const void **datap, size_t *sizep, struct flow_nsh *key)
                 return false;
             }
             for (size_t i = 0; i < 4; i++) {
-                key->c[i] = get_16aligned_be32(&nsh->md1.c[i]);
+                key->context[i] = get_16aligned_be32(&nsh->md1.context[i]);
             }
             break;
         case NSH_M_TYPE2:
+            /* Don't support MD type 2 metedata parsing yet */
+            if (length < NSH_BASE_HDR_LEN) {
+                return false;
+            }
+
+            memset(key->context, 0, sizeof(key->context));
+            break;
         default:
             /* We don't parse other context headers yet. */
             break;
@@ -878,16 +879,9 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
             struct flow_nsh nsh;
 
             if (OVS_LIKELY(parse_nsh(&data, &size, &nsh))) {
-                if (nsh.mdtype == NSH_M_TYPE1) {
-                    miniflow_push_words(mf, nsh, &nsh,
-                                        sizeof(struct flow_nsh) /
-                                        sizeof(uint64_t));
-                }
-                else if (nsh.mdtype == NSH_M_TYPE2) {
-                    /* parse_nsh has stopped it from arriving here for
-                     * MD type 2, will add MD type 2 support code here later
-                     */
-                }
+                miniflow_push_words(mf, nsh, &nsh,
+                                    sizeof(struct flow_nsh) /
+                                    sizeof(uint64_t));
             }
         }
         goto out;
@@ -1694,7 +1688,7 @@ flow_wildcards_init_for_packet(struct flow_wildcards *wc,
         WC_MASK_FIELD(wc, nsh.np);
         WC_MASK_FIELD(wc, nsh.spi);
         WC_MASK_FIELD(wc, nsh.si);
-        WC_MASK_FIELD(wc, nsh.c);
+        WC_MASK_FIELD(wc, nsh.context);
     } else {
         return; /* Unknown ethertype. */
     }
@@ -1828,7 +1822,7 @@ flow_wc_map(const struct flow *flow, struct flowmap *map)
         FLOWMAP_SET(map, nsh.np);
         FLOWMAP_SET(map, nsh.spi);
         FLOWMAP_SET(map, nsh.si);
-        FLOWMAP_SET(map, nsh.c);
+        FLOWMAP_SET(map, nsh.context);
     }
 }
 

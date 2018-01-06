@@ -274,20 +274,23 @@ odp_set_nd(struct dp_packet *packet, const struct ovs_key_nd *key,
 /* Set the NSH header. Assumes the NSH header is present and matches the
  * MD format of the key. The slow path must take case of that. */
 static void
-odp_set_nsh(struct dp_packet *packet, const struct ovs_key_nsh *key,
-            const struct ovs_key_nsh *mask)
+odp_set_nsh(struct dp_packet *packet, const struct flow_nsh *key,
+            const struct flow_nsh *mask)
 {
     struct nsh_hdr *nsh = dp_packet_l3(packet);
     uint8_t mdtype = nsh_md_type(nsh);
+    ovs_be32 path_hdr;
 
     if (!mask) {
         nsh->ver_flags_ttl_len = htons(key->flags << NSH_FLAGS_SHIFT) |
                 (nsh->ver_flags_ttl_len & ~htons(NSH_FLAGS_MASK));
-        put_16aligned_be32(&nsh->path_hdr, key->path_hdr);
+        path_hdr = htonl((ntohl(key->spi) << NSH_SPI_SHIFT) |
+                         key->si);
+        put_16aligned_be32(&nsh->path_hdr, path_hdr);
         switch (mdtype) {
             case NSH_M_TYPE1:
                 for (int i = 0; i < 4; i++) {
-                    put_16aligned_be32(&nsh->md1.c[i], key->c[i]);
+                    put_16aligned_be32(&nsh->md1.context[i], key->context[i]);
                 }
                 break;
             case NSH_M_TYPE2:
@@ -302,16 +305,24 @@ odp_set_nsh(struct dp_packet *packet, const struct ovs_key_nsh *key,
         nsh->ver_flags_ttl_len = htons(flags << NSH_FLAGS_SHIFT) |
                 (nsh->ver_flags_ttl_len & ~htons(NSH_FLAGS_MASK));
 
-        ovs_be32 path_hdr = get_16aligned_be32(&nsh->path_hdr);
-        path_hdr = key->path_hdr | (path_hdr & ~mask->path_hdr);
+        path_hdr = get_16aligned_be32(&nsh->path_hdr);
+        uint32_t spi = (ntohl(path_hdr) & NSH_SPI_MASK) >> NSH_SPI_SHIFT;
+        uint8_t si = (ntohl(path_hdr) & NSH_SI_MASK) >> NSH_SI_SHIFT;
+        uint32_t spi_mask = ntohl(mask->spi);
+        if (spi_mask == 0x00ffffff) {
+            spi_mask = UINT32_MAX;
+        }
+        spi = ntohl(key->spi) | (spi & ~spi_mask);
+        si = key->si | (si & ~mask->si);
+        path_hdr = htonl((spi << NSH_SPI_SHIFT) | si);
         put_16aligned_be32(&nsh->path_hdr, path_hdr);
         switch (mdtype) {
             case NSH_M_TYPE1:
                 for (int i = 0; i < 4; i++) {
-                    ovs_be32 p = get_16aligned_be32(&nsh->md1.c[i]);
-                    ovs_be32 k = key->c[i];
-                    ovs_be32 m = mask->c[i];
-                    put_16aligned_be32(&nsh->md1.c[i], k | (p & ~m));
+                    ovs_be32 p = get_16aligned_be32(&nsh->md1.context[i]);
+                    ovs_be32 k = key->context[i];
+                    ovs_be32 m = mask->context[i];
+                    put_16aligned_be32(&nsh->md1.context[i], k | (p & ~m));
                 }
                 break;
             case NSH_M_TYPE2:
@@ -347,9 +358,12 @@ odp_execute_set_action(struct dp_packet *packet, const struct nlattr *a)
         odp_eth_set_addrs(packet, nl_attr_get(a), NULL);
         break;
 
-    case OVS_KEY_ATTR_NSH:
-        odp_set_nsh(packet, nl_attr_get(a), NULL);
+    case OVS_KEY_ATTR_NSH: {
+        struct flow_nsh nsh;
+        odp_nsh_key_from_attr(a, &nsh);
+        odp_set_nsh(packet, &nsh, NULL);
         break;
+    }
 
     case OVS_KEY_ATTR_IPV4:
         ipv4_key = nl_attr_get_unspec(a, sizeof(struct ovs_key_ipv4));
@@ -475,10 +489,26 @@ odp_execute_masked_set_action(struct dp_packet *packet,
                           get_mask(a, struct ovs_key_ethernet));
         break;
 
-    case OVS_KEY_ATTR_NSH:
-        odp_set_nsh(packet, nl_attr_get(a),
-                    get_mask(a, struct ovs_key_nsh));
+    case OVS_KEY_ATTR_NSH: {
+        struct flow_nsh nsh, nsh_mask;
+        struct {
+            struct nlattr nla;
+            uint8_t data[sizeof(struct ovs_nsh_key_base) + NSH_CTX_HDRS_MAX_LEN
+                         + 2 * NLA_HDRLEN];
+        } attr, mask;
+        size_t size = nl_attr_get_size(a) / 2;
+
+        mask.nla.nla_type = attr.nla.nla_type = nl_attr_type(a);
+        mask.nla.nla_len = attr.nla.nla_len = NLA_HDRLEN + size;
+        memcpy(attr.data, (char *)(a + 1), size);
+        memcpy(mask.data, (char *)(a + 1) + size, size);
+
+        odp_nsh_key_from_attr(&attr.nla, &nsh);
+        odp_nsh_key_from_attr(&mask.nla, &nsh_mask);
+        odp_set_nsh(packet, &nsh, &nsh_mask);
+
         break;
+    }
 
     case OVS_KEY_ATTR_IPV4:
         odp_set_ipv4(packet, nl_attr_get(a),
@@ -654,8 +684,8 @@ requires_datapath_assistance(const struct nlattr *a)
     case OVS_ACTION_ATTR_PUSH_ETH:
     case OVS_ACTION_ATTR_POP_ETH:
     case OVS_ACTION_ATTR_CLONE:
-    case OVS_ACTION_ATTR_ENCAP_NSH:
-    case OVS_ACTION_ATTR_DECAP_NSH:
+    case OVS_ACTION_ATTR_PUSH_NSH:
+    case OVS_ACTION_ATTR_POP_NSH:
         return false;
 
     case OVS_ACTION_ATTR_UNSPEC:
@@ -833,19 +863,22 @@ odp_execute_actions(void *dp, struct dp_packet_batch *batch, bool steal,
             }
             break;
 
-        case OVS_ACTION_ATTR_ENCAP_NSH: {
-            const struct ovs_action_encap_nsh *enc_nsh = nl_attr_get(a);
+        case OVS_ACTION_ATTR_PUSH_NSH: {
+            uint32_t buffer[NSH_HDR_MAX_LEN / 4];
+            struct nsh_hdr *nsh_hdr = ALIGNED_CAST(struct nsh_hdr *, buffer);
+            nsh_reset_ver_flags_ttl_len(nsh_hdr);
+            odp_nsh_hdr_from_attr(nl_attr_get(a), nsh_hdr, NSH_HDR_MAX_LEN);
             DP_PACKET_BATCH_FOR_EACH (packet, batch) {
-                encap_nsh(packet, enc_nsh);
+                push_nsh(packet, nsh_hdr);
             }
             break;
         }
-        case OVS_ACTION_ATTR_DECAP_NSH: {
+        case OVS_ACTION_ATTR_POP_NSH: {
             size_t i;
             const size_t num = dp_packet_batch_size(batch);
 
             DP_PACKET_BATCH_REFILL_FOR_EACH (i, num, packet, batch) {
-                if (decap_nsh(packet)) {
+                if (pop_nsh(packet)) {
                     dp_packet_batch_refill(batch, packet, i);
                 } else {
                     dp_packet_delete(packet);
