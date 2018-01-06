@@ -816,6 +816,14 @@ void ofputil_table_map_put(struct ofputil_table_map *,
                            uint8_t, const char *name);
 void ofputil_table_map_destroy(struct ofputil_table_map *);
 
+/* Table numbers. */
+bool ofputil_table_from_string(const char *, const struct ofputil_table_map *,
+                               uint8_t *tablep);
+void ofputil_format_table(uint8_t table, const struct ofputil_table_map *,
+                         struct ds *);
+void ofputil_table_to_string(uint8_t, const struct ofputil_table_map *,
+                            char *namebuf, size_t bufsize);
+
 /* Abstract ofp_table_mod. */
 struct ofputil_table_mod {
     uint8_t table_id;         /* ID of the table, 0xff indicates all tables. */

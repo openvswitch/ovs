@@ -1734,11 +1734,9 @@ flush(struct ofproto *ofproto_)
 
 static void
 query_tables(struct ofproto *ofproto,
-             struct ofputil_table_features *features,
+             struct ofputil_table_features *features OVS_UNUSED,
              struct ofputil_table_stats *stats)
 {
-    strcpy(features->name, "classifier");
-
     if (stats) {
         int i;
 

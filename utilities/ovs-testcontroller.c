@@ -335,7 +335,7 @@ parse_options(int argc, char *argv[])
             break;
 
         case OPT_WITH_FLOWS:
-            error = parse_ofp_flow_mod_file(optarg, NULL, OFPFC_ADD,
+            error = parse_ofp_flow_mod_file(optarg, NULL, NULL, OFPFC_ADD,
                                             &default_flows, &n_default_flows,
                                             &usable_protocols);
             if (error) {

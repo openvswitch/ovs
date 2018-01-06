@@ -3221,7 +3221,7 @@ query_tables(struct ofproto *ofproto,
         struct ofputil_table_features *f = &features[i];
 
         f->table_id = i;
-        sprintf(f->name, "table%d", i);
+        f->name[0] = '\0';
         f->metadata_match = OVS_BE64_MAX;
         f->metadata_write = OVS_BE64_MAX;
         atomic_read_relaxed(&ofproto->tables[i].miss_config, &f->miss_config);

@@ -381,6 +381,7 @@ learn_parse_spec(const char *orig, char *name, char *value,
  * error.  The caller is responsible for freeing the returned string. */
 static char * OVS_WARN_UNUSED_RESULT
 learn_parse__(char *orig, char *arg, const struct ofputil_port_map *port_map,
+              const struct ofputil_table_map *table_map,
               struct ofpbuf *ofpacts)
 {
     struct ofpact_learn *learn;
@@ -396,8 +397,10 @@ learn_parse__(char *orig, char *arg, const struct ofputil_port_map *port_map,
     match_init_catchall(&match);
     while (ofputil_parse_key_value(&arg, &name, &value)) {
         if (!strcmp(name, "table")) {
-            learn->table_id = atoi(value);
-            if (learn->table_id == 255) {
+            if (!ofputil_table_from_string(value, table_map,
+                                           &learn->table_id)) {
+                return xasprintf("unknown table \"%s\"", value);
+            } else if (learn->table_id == 255) {
                 return xasprintf("%s: table id 255 not valid for `learn' "
                                  "action", orig);
             }
@@ -465,10 +468,11 @@ learn_parse__(char *orig, char *arg, const struct ofputil_port_map *port_map,
  * Modifies 'arg'. */
 char * OVS_WARN_UNUSED_RESULT
 learn_parse(char *arg, const struct ofputil_port_map *port_map,
+            const struct ofputil_table_map *table_map,
             struct ofpbuf *ofpacts)
 {
     char *orig = xstrdup(arg);
-    char *error = learn_parse__(orig, arg, port_map, ofpacts);
+    char *error = learn_parse__(orig, arg, port_map, table_map, ofpacts);
     free(orig);
     return error;
 }
@@ -477,16 +481,18 @@ learn_parse(char *arg, const struct ofputil_port_map *port_map,
  * describes. */
 void
 learn_format(const struct ofpact_learn *learn,
-             const struct ofputil_port_map *port_map, struct ds *s)
+             const struct ofputil_port_map *port_map,
+             const struct ofputil_table_map *table_map,
+             struct ds *s)
 {
     const struct ofpact_learn_spec *spec;
     struct match match;
 
     match_init_catchall(&match);
 
-    ds_put_format(s, "%slearn(%s%stable=%s%"PRIu8,
-                  colors.learn, colors.end, colors.special, colors.end,
-                  learn->table_id);
+    ds_put_format(s, "%slearn(%s%stable=%s",
+                  colors.learn, colors.end, colors.special, colors.end);
+    ofputil_format_table(learn->table_id, table_map, s);
     if (learn->idle_timeout != OFP_FLOW_PERMANENT) {
         ds_put_format(s, ",%sidle_timeout=%s%"PRIu16,
                       colors.param, colors.end, learn->idle_timeout);

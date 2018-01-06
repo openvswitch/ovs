@@ -1068,6 +1068,7 @@ uint32_t ofpacts_get_meter(const struct ofpact[], size_t ofpacts_len);
 struct ofpact_format_params {
     /* Input. */
     const struct ofputil_port_map *port_map;
+    const struct ofputil_table_map *table_map;
 
     /* Output. */
     struct ds *s;
@@ -1080,6 +1081,7 @@ const char *ofpact_name(enum ofpact_type);
 struct ofpact_parse_params {
     /* Input. */
     const struct ofputil_port_map *port_map;
+    const struct ofputil_table_map *table_map;
 
     /* Output. */
     struct ofpbuf *ofpacts;

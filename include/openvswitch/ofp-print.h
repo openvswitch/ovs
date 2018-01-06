@@ -31,6 +31,7 @@ struct ofp_header;
 struct ofputil_flow_stats;
 struct ofputil_port_map;
 struct ofputil_table_features;
+struct ofputil_table_map;
 struct ofputil_table_stats;
 struct dp_packet;
 
@@ -39,7 +40,7 @@ extern "C" {
 #endif
 
 void ofp_print(FILE *, const void *, size_t, const struct ofputil_port_map *,
-               int verbosity);
+               const struct ofputil_table_map *, int verbosity);
 void ofp_print_packet(FILE *stream, const void *data,
                       size_t len, ovs_be32 packet_type);
 void ofp_print_dp_packet(FILE *stream, const struct dp_packet *packet);
@@ -48,7 +49,7 @@ void ofp10_match_print(struct ds *, const struct ofp10_match *,
                        const struct ofputil_port_map *, int verbosity);
 
 char *ofp_to_string(const void *, size_t, const struct ofputil_port_map *,
-                    int verbosity);
+                    const struct ofputil_table_map *, int verbosity);
 char *ofp10_match_to_string(const struct ofp10_match *,
                             const struct ofputil_port_map *, int verbosity);
 char *ofp_packet_to_string(const void *data, size_t len, ovs_be32 packet_type);
@@ -59,10 +60,13 @@ void ofp_print_table_features(
     struct ds *, const struct ofputil_table_features *features,
     const struct ofputil_table_features *prev_features,
     const struct ofputil_table_stats *stats,
-    const struct ofputil_table_stats *prev_stats);
+    const struct ofputil_table_stats *prev_stats,
+    const struct ofputil_table_map *table_map);
 
 void ofp_print_flow_stats(struct ds *, const struct ofputil_flow_stats *,
-                          const struct ofputil_port_map *, bool show_stats);
+                          const struct ofputil_port_map *,
+                          const struct ofputil_table_map *,
+                          bool show_stats);
 
 #ifdef  __cplusplus
 }

@@ -45,26 +45,33 @@ enum ofputil_protocol;
 
 char *parse_ofp_str(struct ofputil_flow_mod *, int command, const char *str_,
                     const struct ofputil_port_map *,
+                    const struct ofputil_table_map *,
                     enum ofputil_protocol *usable_protocols)
     OVS_WARN_UNUSED_RESULT;
 
 char *parse_ofp_flow_mod_str(struct ofputil_flow_mod *, const char *string,
-                             const struct ofputil_port_map *, int command,
+                             const struct ofputil_port_map *,
+                             const struct ofputil_table_map *,
+                             int command,
                              enum ofputil_protocol *usable_protocols)
     OVS_WARN_UNUSED_RESULT;
 
 char *parse_ofp_packet_out_str(struct ofputil_packet_out *po, const char *str_,
                                const struct ofputil_port_map *,
+                               const struct ofputil_table_map *,
                                enum ofputil_protocol *usable_protocols)
     OVS_WARN_UNUSED_RESULT;
 
 char *parse_ofp_table_mod(struct ofputil_table_mod *,
                           const char *table_id, const char *flow_miss_handling,
+                          const struct ofputil_table_map *,
                           uint32_t *usable_versions)
     OVS_WARN_UNUSED_RESULT;
 
 char *parse_ofp_flow_mod_file(const char *file_name,
-                              const struct ofputil_port_map *, int command,
+                              const struct ofputil_port_map *,
+                              const struct ofputil_table_map *,
+                              int command,
                               struct ofputil_flow_mod **fms, size_t *n_fms,
                               enum ofputil_protocol *usable_protocols)
     OVS_WARN_UNUSED_RESULT;
@@ -72,6 +79,7 @@ char *parse_ofp_flow_mod_file(const char *file_name,
 char *parse_ofp_flow_stats_request_str(struct ofputil_flow_stats_request *,
                                        bool aggregate, const char *string,
                                        const struct ofputil_port_map *,
+                                       const struct ofputil_table_map *,
                                        enum ofputil_protocol *usable_protocols)
     OVS_WARN_UNUSED_RESULT;
 
@@ -86,12 +94,14 @@ char *parse_ofp_meter_mod_str(struct ofputil_meter_mod *, const char *string,
 
 char *parse_flow_monitor_request(struct ofputil_flow_monitor_request *,
                                  const char *,
-                                 const struct ofputil_port_map *port_map,
+                                 const struct ofputil_port_map *,
+                                 const struct ofputil_table_map *,
                                  enum ofputil_protocol *usable_protocols)
     OVS_WARN_UNUSED_RESULT;
 
 char *parse_ofp_group_mod_file(const char *file_name,
-                               const struct ofputil_port_map *, int command,
+                               const struct ofputil_port_map *,
+                               const struct ofputil_table_map *, int command,
                                struct ofputil_group_mod **gms, size_t *n_gms,
                                enum ofputil_protocol *usable_protocols)
     OVS_WARN_UNUSED_RESULT;
@@ -99,11 +109,13 @@ char *parse_ofp_group_mod_file(const char *file_name,
 char *parse_ofp_group_mod_str(struct ofputil_group_mod *, int command,
                               const char *string,
                               const struct ofputil_port_map *,
+                              const struct ofputil_table_map *,
                               enum ofputil_protocol *usable_protocols)
     OVS_WARN_UNUSED_RESULT;
 
 char *parse_ofp_bundle_file(const char *file_name,
                             const struct ofputil_port_map *,
+                            const struct ofputil_table_map *,
                             struct ofputil_bundle_msg **, size_t *n_bms,
                             enum ofputil_protocol *)
     OVS_WARN_UNUSED_RESULT;

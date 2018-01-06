@@ -4398,14 +4398,10 @@ parse_RESUBMIT(char *arg, const struct ofpact_parse_params *pp)
 
     table_s = strsep(&arg, ",");
     if (table_s && table_s[0]) {
-        uint32_t table_id = 0;
-        char *error;
-
-        error = str_to_u32(table_s, &table_id);
-        if (error) {
-            return error;
+        if (!ofputil_table_from_string(table_s, pp->table_map,
+                                       &resubmit->table_id)) {
+            return xasprintf("%s: resubmit to unknown table", table_s);
         }
-        resubmit->table_id = table_id;
     } else {
         resubmit->table_id = 255;
     }
@@ -4441,7 +4437,7 @@ format_RESUBMIT(const struct ofpact_resubmit *a,
         }
         ds_put_char(fp->s, ',');
         if (a->table_id != 255) {
-            ds_put_format(fp->s, "%"PRIu8, a->table_id);
+            ofputil_format_table(a->table_id, fp->table_map, fp->s);
         }
         if (a->with_ct_orig) {
             ds_put_cstr(fp->s, ",ct");
@@ -5024,14 +5020,14 @@ encode_LEARN(const struct ofpact_learn *learn,
 static char * OVS_WARN_UNUSED_RESULT
 parse_LEARN(char *arg, const struct ofpact_parse_params *pp)
 {
-    return learn_parse(arg, pp->port_map, pp->ofpacts);
+    return learn_parse(arg, pp->port_map, pp->table_map, pp->ofpacts);
 }
 
 static void
 format_LEARN(const struct ofpact_learn *a,
              const struct ofpact_format_params *fp)
 {
-    learn_format(a, fp->port_map, fp->s);
+    learn_format(a, fp->port_map, fp->table_map, fp->s);
 }
 
 /* Action structure for NXAST_CONJUNCTION. */
@@ -5372,10 +5368,11 @@ static void
 format_UNROLL_XLATE(const struct ofpact_unroll_xlate *a,
                     const struct ofpact_format_params *fp)
 {
-    ds_put_format(fp->s, "%sunroll_xlate(%s%stable=%s%"PRIu8
-                  ", %scookie=%s%"PRIu64"%s)%s",
+    ds_put_format(fp->s, "%sunroll_xlate(%s%stable=%s",
                   colors.paren,   colors.end,
-                  colors.special, colors.end, a->rule_table_id,
+                  colors.special, colors.end);
+    ofputil_format_table(a->rule_table_id, fp->table_map, fp->s);
+    ds_put_format(fp->s, ", %scookie=%s%"PRIu64"%s)%s",
                   colors.param,   colors.end, ntohll(a->rule_cookie),
                   colors.paren,   colors.end);
 }
@@ -6038,8 +6035,10 @@ parse_CT(char *arg, const struct ofpact_parse_params *pp)
         } else if (!strcmp(key, "force")) {
             oc->flags |= NX_CT_F_FORCE;
         } else if (!strcmp(key, "table")) {
-            error = str_to_u8(value, "recirc_table", &oc->recirc_table);
-            if (!error && oc->recirc_table == NX_CT_RECIRC_NONE) {
+            if (!ofputil_table_from_string(value, pp->table_map,
+                                           &oc->recirc_table)) {
+                error = xasprintf("unknown table %s", value);
+            } else if (oc->recirc_table == NX_CT_RECIRC_NONE) {
                 error = xasprintf("invalid table %#"PRIx8, oc->recirc_table);
             }
         } else if (!strcmp(key, "zone")) {
@@ -6125,8 +6124,9 @@ format_CT(const struct ofpact_conntrack *a,
         ds_put_format(fp->s, "%sforce%s,", colors.value, colors.end);
     }
     if (a->recirc_table != NX_CT_RECIRC_NONE) {
-        ds_put_format(fp->s, "%stable=%s%"PRIu8",",
-                      colors.special, colors.end, a->recirc_table);
+        ds_put_format(fp->s, "%stable=%s", colors.special, colors.end);
+        ofputil_format_table(a->recirc_table, fp->table_map, fp->s);
+        ds_put_char(fp->s, ',');
     }
     if (a->zone_src.field) {
         ds_put_format(fp->s, "%szone=%s", colors.param, colors.end);
@@ -6816,19 +6816,18 @@ static char * OVS_WARN_UNUSED_RESULT
 parse_GOTO_TABLE(char *arg, const struct ofpact_parse_params *pp)
 {
     struct ofpact_goto_table *ogt = ofpact_put_GOTO_TABLE(pp->ofpacts);
-    char *table_s = strsep(&arg, ",");
-    if (!table_s || !table_s[0]) {
-        return xstrdup("instruction goto-table needs table id");
+    if (!ofputil_table_from_string(arg, pp->table_map, &ogt->table_id)) {
+        return xasprintf("unknown table \"%s\"", arg);
     }
-    return str_to_u8(table_s, "table", &ogt->table_id);
+    return NULL;
 }
 
 static void
 format_GOTO_TABLE(const struct ofpact_goto_table *a,
                   const struct ofpact_format_params *fp)
 {
-    ds_put_format(fp->s, "%sgoto_table:%s%"PRIu8,
-                  colors.param, colors.end, a->table_id);
+    ds_put_format(fp->s, "%sgoto_table:%s", colors.param, colors.end);
+    ofputil_format_table(a->table_id, fp->table_map, fp->s);
 }
 
 static void

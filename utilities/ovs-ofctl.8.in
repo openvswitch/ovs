@@ -66,9 +66,12 @@ Prints to the console features for each of the flow tables used by
 \fBdump\-table\-desc \fIswitch\fR
 Prints to the console configuration for each of the flow tables used
 by \fIswitch\fR for OpenFlow 1.4+.
-.IP "\fBmod\-table \fIswitch\fR \fItable_id\fR \fIsetting\fR"
-This command configures flow table settings for OpenFlow table
-\fItable_id\fR within \fIswitch\fR.  The available settings depend on
+.IP "\fBmod\-table \fIswitch\fR \fItable\fR \fIsetting\fR"
+This command configures flow table settings in \fIswitch\fR for
+OpenFlow table \fItable\fR, which may be expressed as a number or
+(unless \fB\-\-no\-names\fR is specified) a name.
+.IP
+The available settings depend on
 the OpenFlow version in use.  In OpenFlow 1.1 and 1.2 (which must be
 enabled with the \fB\-O\fR option) only, \fBmod\-table\fR configures
 behavior when no flow is found when a packet is looked up in a flow
@@ -606,9 +609,11 @@ connection to the switch.  (These could only occur using the
 COMMANDS\fR.)
 .IP "\fB!actions\fR"
 Do not report actions as part of flow updates.
-.IP "\fBtable=\fInumber\fR"
-Limits the monitoring to the table with the given \fInumber\fR between
-0 and 254.  By default, all tables are monitored.
+.IP "\fBtable=\fItable\fR"
+Limits the monitoring to the table with the given \fItable\fR, which
+may be expressed as a number between 0 and 254 or (unless
+\fB\-\-no\-names\fR is specified) a name.  By default, all tables are
+monitored.
 .IP "\fBout_port=\fIport\fR"
 If set, only flows that output to \fIport\fR are monitored.  The
 \fIport\fR may be an OpenFlow port number or keyword
@@ -699,10 +704,11 @@ flows not in normal form.
 them.  In addition to match fields, commands that operate on flows
 accept a few additional key-value pairs:
 .
-.IP \fBtable=\fInumber\fR
-For flow dump commands, limits the flows dumped to those in the table
-with the given \fInumber\fR between 0 and 254.  If not specified (or if
-255 is specified as \fInumber\fR), then flows in all tables are
+.IP \fBtable=\fItable\fR
+For flow dump commands, limits the flows dumped to those in
+\fItable\fR, which may be expressed as a number between 0 and 255 or
+(unless \fB\-\-no\-names\fR is specified) a name.  If not specified
+(or if 255 is specified as \fItable\fR), then flows in all tables are
 dumped.
 .
 .IP
@@ -970,8 +976,8 @@ only known to be implemented by Open vSwitch:
 .IP \fBresubmit\fB:\fIport\fR
 .IQ \fBresubmit\fB(\fR[\fIport\fR]\fB,\fR[\fItable\fR]\fB)
 .IQ \fBresubmit\fB(\fR[\fIport\fR]\fB,\fR[\fItable\fR]\fB,ct)
-Re-searches this OpenFlow flow table (or the table whose number is
-specified by \fItable\fR) with the \fBin_port\fR field replaced by
+Re-searches this OpenFlow flow table (or table \fItable\fR, if
+specified) with the \fBin_port\fR field replaced by
 \fIport\fR (if \fIport\fR is specified) and the packet 5-tuple fields
 swapped with the corresponding conntrack original direction tuple
 fields (if \fBct\fR is specified, see \fBct_nw_src\fR above), and
@@ -979,6 +985,9 @@ executes the actions found, if any, in addition to any other actions
 in this flow entry.  The \fBin_port\fR and swapped 5-tuple fields are
 restored immediately after the search, before any actions are
 executed.
+.IP
+The \fItable\fR may be expressed as a number between 0 and 254 or
+(unless \fB\-\-no\-names\fR is specified) a name.
 .IP
 The \fBct\fR option requires a valid connection tracking state as a
 match prerequisite in the flow where this action is placed.  Examples
@@ -1057,12 +1066,14 @@ existing connection and start a new one in the current direction.
 This flag has no effect if the original direction of the connection is
 already the same as that of the current packet.
 .RE
-.IP \fBtable=\fInumber\fR
+.IP \fBtable=\fItable\fR
 Fork pipeline processing in two. The original instance of the packet will
 continue processing the current actions list as an untracked packet. An
 additional instance of the packet will be sent to the connection tracker, which
 will be re-injected into the OpenFlow pipeline to resume processing in table
-\fInumber\fR, with the \fBct_state\fR and other ct match fields set. If the
+\fInumber\fR (which may be specified as a number between 0 and 254 or,
+unless \fB\-\-no\-names\fR is specified, a name), with the
+\fBct_state\fR and other ct match fields set. If
 \fBtable\fR is not specified, then the packet which is submitted to the
 connection tracker is not re-injected into the OpenFlow pipeline. It is
 strongly recommended to specify a table later than the current table to prevent
@@ -1472,10 +1483,10 @@ flow syntax.
 Adds a \fBfin_timeout\fR action with the specified arguments to the
 new flow.  This feature was added in Open vSwitch 1.5.90.
 .
-.IP \fBtable=\fInumber\fR
+.IP \fBtable=\fItable\fR
 The table in which the new flow should be inserted.  Specify a decimal
-number between 0 and 254.  The default, if \fBtable\fR is unspecified,
-is table 1.
+number between 0 and 254 or (unless \fB\-\-no\-names\fR is specified)
+a name.  The default, if \fBtable\fR is unspecified, is table 1.
 .
 .IP \fBdelete_learned\fR
 This flag enables deletion of the learned flows when the flow with the
@@ -1547,12 +1558,6 @@ Add an \fBoutput\fR action to the new flow's actions, that outputs to
 the OpenFlow port taken from \fIfield\fB[\fIstart\fB..\fIend\fB]\fR,
 which must be an NXM field as described above.
 .RE
-.IP
-For best performance, segregate learned flows into a table (using
-\fBtable=\fInumber\fR) that is not used for any other flows except
-possibly for a lowest-priority ``catch-all'' flow, that is, a flow
-with no match criteria.  (This is why the default \fBtable\fR is 1, to
-keep the learned flows separate from the primary flow table 0.)
 .RE
 .
 .RS
@@ -1675,7 +1680,9 @@ band type. See the description of the \fBMeter Table Commands\fR, above,
 for more details.
 .
 .IP \fBgoto_table\fR:\fItable\fR
-Indicates the next table in the process pipeline.
+Jumps to \fItable\Fr as the next table in the process pipeline.  The
+\fItable\fR may be a number between 0 and 254 or (unless
+\fB\-\-no\-names\fR is specified) a name.
 .
 .IP "\fBfin_timeout(\fIargument\fR[\fB,\fIargument\fR]\fB)"
 This action changes the idle timeout or hard timeout, or both, of this
@@ -2286,21 +2293,24 @@ Uses strict matching when running flow modification commands.
 .
 .IP "\fB\-\-names\fR"
 .IQ "\fB\-\-no\-names\fR"
-Every OpenFlow port has a name and a number.  By default,
-\fBovs\-ofctl\fR commands accept both port names and numbers, and they
-display port names if \fBovs\-ofctl\fR is running on an interactive
-console, port numbers otherwise.  With \fB\-\-names\fR,
-\fBovs\-ofctl\fR commands both accept and display port names; with
-\fB\-\-no\-names\fR, commands neither accept nor display port names.
+Every OpenFlow port has a name and a number, and every OpenFlow flow
+table has a number and sometimes a name.  By default, \fBovs\-ofctl\fR
+commands accept both port and table names and numbers, and they
+display port and table names if \fBovs\-ofctl\fR is running on an
+interactive console, numbers otherwise.  With \fB\-\-names\fR,
+\fBovs\-ofctl\fR commands both accept and display port and table
+names; with \fB\-\-no\-names\fR, commands neither accept nor display
+port and table names.
 .IP
-If a port name contains special characters or might be confused with a
-keyword within a flow, it may be enclosed in double quotes (escaped
-from the shell).  If necessary, JSON-style escape sequences may be
-used inside quotes, as specified in RFC 7159.  When it displays port
-names, \fBovs\-ofctl\fR quotes any name that does not start with a
-letter followed by letters or digits.
+If a port or table name contains special characters or might be
+confused with a keyword within a flow, it may be enclosed in double
+quotes (escaped from the shell).  If necessary, JSON-style escape
+sequences may be used inside quotes, as specified in RFC 7159.  When
+it displays port and table names, \fBovs\-ofctl\fR quotes any name
+that does not start with a letter followed by letters or digits.
 .IP
-These options are new in Open vSwitch 2.8.  Earlier versions always
+Open vSwitch added support for port names and these options.  Open
+vSwitch 2.10 added support for table names.  Earlier versions always
 behaved as if \fB\-\-no\-names\fR were specified.
 .IP
 Open vSwitch does not place its own limit on the length of port names,
@@ -2312,6 +2322,8 @@ Truncation can also cause long names that are different to appear to
 be the same; when a switch has two ports with the same (truncated)
 name, \fBovs\-ofctl\fR refuses to display or accept the name, using
 the number instead.
+.IP
+OpenFlow and Open vSwitch limit table names to 32 bytes.
 .
 .IP "\fB\-\-stats\fR"
 .IQ "\fB\-\-no\-stats\fR"

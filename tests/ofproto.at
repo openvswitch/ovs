@@ -2174,7 +2174,7 @@ OVS_VSWITCHD_START
 # Check the default configuration.
 head_table() {
     printf 'OFPST_TABLE reply (xid=0x2):
-  table 0 ("%s"):
+  table 0%s:
     active=0, lookup=0, matched=0
     max_entries=1000000
     matching:
@@ -2191,14 +2191,14 @@ head_table() {
       tcp_src: exact match or wildcard
       tcp_dst: exact match or wildcard
 
-' $1
+' "$1"
 }
 ditto() {
     for i in `seq $1 $2`; do
-        printf '  table %d ("table%d"): ditto\n' $i $i
+        printf '  table %d: ditto\n' $i
     done
 }
-(head_table classifier; ditto 1 253) > expout
+(head_table; ditto 1 253) > expout
 AT_CHECK([ovs-ofctl dump-tables br0], [0], [expout])
 # Change the configuration.
 AT_CHECK(
@@ -2211,12 +2211,12 @@ AT_CHECK(
 <1>
 ])
 # Check that the configuration was updated.
-(head_table main; echo '  table 1 ("table1"):
+(head_table ' ("main")'; echo '  table 1:
     active=0, lookup=0, matched=0
     max_entries=1024
     (same matching)
 
-  table 2 ("table2"):
+  table 2:
     active=0, lookup=0, matched=0
     max_entries=1000000
     (same matching)
@@ -2250,7 +2250,7 @@ AT_CHECK([test `grep '240\.0\.0\.1' stdout | grep -v table_id= | wc -l` -gt 0])
 # Check that dump-tables doesn't count the hidden flows.
 head_table() {
     printf 'OFPST_TABLE reply:
-  table 0 ("%s"):
+  table 0:
     active=0, lookup=0, matched=0
     max_entries=1000000
     matching:
@@ -2267,14 +2267,14 @@ head_table() {
       tcp_src: exact match or wildcard
       tcp_dst: exact match or wildcard
 
-' $1
+'
 }
 ditto() {
     for i in `seq $1 $2`; do
-        printf '  table %d ("table%d"): ditto\n' $i $i
+        printf '  table %d: ditto\n' $i
     done
 }
-(head_table classifier; ditto 1 253) > expout
+(head_table; ditto 1 253) > expout
 AT_CHECK([ovs-ofctl dump-tables br0 | strip_xids], [0], [expout])
 OVS_VSWITCHD_STOP(["/240\.0\.0\.1/d"])
 AT_CLEANUP
@@ -2284,7 +2284,7 @@ OVS_VSWITCHD_START
 # Check the default configuration.
 head_table() {
     printf 'OFPST_TABLE reply (OF1.2) (xid=0x2):
-  table 0 ("%s"):
+  table 0%s:
     active=0, lookup=0, matched=0
     metadata: match=0xffffffffffffffff write=0xffffffffffffffff
     config=controller
@@ -2331,15 +2331,15 @@ head_table() {
       nd_sll: exact match or wildcard
       nd_tll: exact match or wildcard
 
-' $1
+' "$1"
 }
 ditto() {
     for i in `seq $1 $2`; do
-        printf '  table %d ("table%d"): ditto\n' $i $i
+        printf '  table %d: ditto\n' $i
     done
 }
 tail_table() {
-    printf '  table 253 ("table253"):
+    printf '  table 253:
     active=0, lookup=0, matched=0
     metadata: match=0xffffffffffffffff write=0xffffffffffffffff
     config=controller
@@ -2350,7 +2350,7 @@ tail_table() {
     (same matching)
 '
 }
-(head_table classifier; ditto 1 252; tail_table) > expout
+(head_table; ditto 1 252; tail_table) > expout
 AT_CHECK([ovs-ofctl -O OpenFlow12 dump-tables br0], [0], [expout])
 # Change the configuration.
 AT_CHECK(
@@ -2363,7 +2363,7 @@ AT_CHECK(
 <1>
 ])
 # Check that the configuration was updated.
-(head_table main; echo '  table 1 ("table1"):
+(head_table ' ("main")'; echo '  table 1:
     active=0, lookup=0, matched=0
     metadata: match=0xffffffffffffffff write=0xffffffffffffffff
     config=controller
@@ -2371,7 +2371,7 @@ AT_CHECK(
     (same instructions)
     (same matching)
 
-  table 2 ("table2"):
+  table 2:
     active=0, lookup=0, matched=0
     metadata: match=0xffffffffffffffff write=0xffffffffffffffff
     config=controller
@@ -2386,7 +2386,7 @@ AT_CLEANUP
 AT_SETUP([ofproto - table features (OpenFlow 1.3)])
 OVS_VSWITCHD_START
 head_table () {
-    printf '  table 0 ("%s"):
+    printf '  table 0%s:
     metadata: match=0xffffffffffffffff write=0xffffffffffffffff
     max_entries=1000000
     instructions (table miss and others):
@@ -2569,10 +2569,10 @@ metadata in_port in_port_oxm pkt_mark ct_mark ct_label reg0 reg1 reg2 reg3 reg4 
       nsh_c4: arbitrary mask
       nsh_ttl: exact match or wildcard
 
-' $1
+' "$1"
 }
 ditto() {
-    printf '  table %d ("%s"):
+    printf '  table %d:
     metadata: match=0xffffffffffffffff write=0xffffffffffffffff
     max_entries=%d
     instructions (table miss and others):
@@ -2581,10 +2581,10 @@ ditto() {
       (same actions)
     (same matching)
 
-' $1 $2 $3 `expr $1 + 1`
+' $1 $2 `expr $1 + 1`
 }
 tail_tables() {
-echo '  table 252 ("table252"):
+echo '  table 252:
     metadata: match=0xffffffffffffffff write=0xffffffffffffffff
     max_entries=1000000
     instructions (table miss and others):
@@ -2593,7 +2593,7 @@ echo '  table 252 ("table252"):
       (same actions)
     (same matching)
 
-  table 253 ("table253"):
+  table 253:
     metadata: match=0xffffffffffffffff write=0xffffffffffffffff
     max_entries=1000000
     instructions (table miss and others):
@@ -2602,9 +2602,9 @@ echo '  table 252 ("table252"):
     (same matching)
 '
 }
-(head_table classifier
+(head_table
  for i in `seq 1 251`; do
-     ditto $i table$i 1000000
+     ditto $i 1000000
  done
  tail_tables) > expout
 AT_CHECK([ovs-ofctl -O OpenFlow13 dump-table-features br0], [0], [expout])
@@ -2619,13 +2619,46 @@ AT_CHECK(
 <1>
 ])
 # Check that the configuration was updated.
-(head_table main
- ditto 1 table1 1024
+(head_table ' ("main")'
+ ditto 1 1024
  for i in `seq 2 251`; do
-     ditto $i table$i 1000000
+     ditto $i 1000000
  done
  tail_tables) > expout
 AT_CHECK([ovs-ofctl -O OpenFlow13 dump-table-features br0], [0], [expout])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - flow table names])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2
+AT_CHECK(
+  [ovs-vsctl \
+     -- --id=@t0 create Flow_Table name=zero \
+     -- --id=@t1 create Flow_Table name=one \
+     -- --id=@t2 create Flow_Table name=two \
+     -- set bridge br0 'flow_tables={0=@t0,1=@t1,2=@t2}' \
+   | uuidfilt],
+  [0], [<0>
+<1>
+<2>
+])
+AT_DATA([flows.txt], [dnl
+table=zero in_port=p2 actions=p1,resubmit(,one)
+table=one,in_port=p1,ip,actions=ct(table=two)
+table=one,in_port=p1,arp,actions=goto_table(two)
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl --names --no-stats dump-flows br0], [0], [dnl
+ table=zero, in_port=p2 actions=output:p1,resubmit(,one)
+ table=one, ip,in_port=p1 actions=ct(table=two)
+ table=one, arp,in_port=p1 actions=resubmit(,two)
+])
+AT_CHECK([ovs-ofctl --no-names --no-stats dump-flows br0], [0], [dnl
+ in_port=2 actions=output:1,resubmit(,1)
+ table=1, ip,in_port=1 actions=ct(table=2)
+ table=1, arp,in_port=1 actions=resubmit(,2)
+])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 

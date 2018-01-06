@@ -125,15 +125,18 @@ struct sort_criterion {
 static struct sort_criterion *criteria;
 static size_t n_criteria, allocated_criteria;
 
-/* --names, --no-names: Show port names in output and accept port numbers in
- * input.  (When neither is specified, the default is to accept port numbers
- * but, for backward compatibility, not to show them unless this is an
- * interactive console session.)  */
-static int use_port_names = -1;
+/* --names, --no-names: Show port and table names in output and accept them in
+ * input.  (When neither is specified, the default is to accept port names but,
+ * for backward compatibility, not to show them unless this is an interactive
+ * console session.)  */
+static int use_names = -1;
 static const struct ofputil_port_map *ports_to_accept(const char *vconn_name);
 static const struct ofputil_port_map *ports_to_show(const char *vconn_name);
-static bool should_accept_ports(void);
-static bool should_show_ports(void);
+static const struct ofputil_table_map *tables_to_accept(
+    const char *vconn_name);
+static const struct ofputil_table_map *tables_to_show(const char *vconn_name);
+static bool should_accept_names(void);
+static bool should_show_names(void);
 
 /* --stats, --no-stats: Show statistics in flow dumps? */
 static int show_stats = 1;
@@ -216,8 +219,8 @@ parse_options(int argc, char *argv[])
         {"timestamp", no_argument, NULL, OPT_TIMESTAMP},
         {"sort", optional_argument, NULL, OPT_SORT},
         {"rsort", optional_argument, NULL, OPT_RSORT},
-        {"names", no_argument, &use_port_names, 1},
-        {"no-names", no_argument, &use_port_names, 0},
+        {"names", no_argument, &use_names, 1},
+        {"no-names", no_argument, &use_names, 0},
         {"stats", no_argument, &show_stats, 1},
         {"no-stats", no_argument, &show_stats, 0},
         {"unixctl",     required_argument, NULL, OPT_UNIXCTL},
@@ -640,7 +643,9 @@ dump_transaction(struct vconn *vconn, struct ofpbuf *request)
                 enum ofpraw raw;
 
                 ofp_print(stdout, reply->data, reply->size,
-                          ports_to_show(vconn_get_name(vconn)), verbosity + 1);
+                          ports_to_show(vconn_get_name(vconn)),
+                          tables_to_show(vconn_get_name(vconn)),
+                          verbosity + 1);
 
                 ofpraw_decode(&raw, reply->data);
                 if (ofptype_from_ofpraw(raw) == OFPTYPE_ERROR) {
@@ -652,6 +657,7 @@ dump_transaction(struct vconn *vconn, struct ofpbuf *request)
                               ofp_to_string(
                                   reply->data, reply->size,
                                   ports_to_show(vconn_get_name(vconn)),
+                                  tables_to_show(vconn_get_name(vconn)),
                                   verbosity + 1));
                 }
             } else {
@@ -666,7 +672,9 @@ dump_transaction(struct vconn *vconn, struct ofpbuf *request)
         run(vconn_transact(vconn, request, &reply), "talking to %s",
             vconn_get_name(vconn));
         ofp_print(stdout, reply->data, reply->size,
-                  ports_to_show(vconn_get_name(vconn)), verbosity + 1);
+                  ports_to_show(vconn_get_name(vconn)),
+                  tables_to_show(vconn_get_name(vconn)),
+                  verbosity + 1);
         ofpbuf_delete(reply);
     }
 }
@@ -697,7 +705,9 @@ transact_multiple_noreply(struct vconn *vconn, struct ovs_list *requests)
         "talking to %s", vconn_get_name(vconn));
     if (reply) {
         ofp_print(stderr, reply->data, reply->size,
-                  ports_to_show(vconn_get_name(vconn)), verbosity + 2);
+                  ports_to_show(vconn_get_name(vconn)),
+                  tables_to_show(vconn_get_name(vconn)),
+                  verbosity + 2);
         exit(1);
     }
     ofpbuf_delete(reply);
@@ -743,7 +753,7 @@ bundle_print_errors(struct ovs_list *errors, struct ovs_list *requests,
             }
             fprintf(stderr, "Error %s for: ", ofperr_get_name(ofperr));
             ofp_print(stderr, ofp_msg, msg_len, ports_to_show(vconn_name),
-                      verbosity + 1);
+                      tables_to_show(vconn_name), verbosity + 1);
         }
         ofpbuf_uninit(&payload);
         ofpbuf_delete(error);
@@ -823,7 +833,7 @@ ofctl_show(struct ovs_cmdl_context *ctx)
     run(vconn_transact(vconn, request, &reply), "talking to %s", vconn_name);
 
     has_ports = ofputil_switch_features_has_ports(reply);
-    ofp_print(stdout, reply->data, reply->size, NULL, verbosity + 1);
+    ofp_print(stdout, reply->data, reply->size, NULL, NULL, verbosity + 1);
     ofpbuf_delete(reply);
 
     if (!has_ports) {
@@ -884,7 +894,7 @@ ofctl_dump_table_features(struct ovs_cmdl_context *ctx)
             if (error) {
                 ovs_fatal(0, "decode error: %s", ofperr_get_name(error));
             } else if (type == OFPTYPE_ERROR) {
-                ofp_print(stdout, reply->data, reply->size, NULL,
+                ofp_print(stdout, reply->data, reply->size, NULL, NULL,
                           verbosity + 1);
                 done = true;
             } else if (type == OFPTYPE_TABLE_FEATURES_STATS_REPLY) {
@@ -904,7 +914,8 @@ ofctl_dump_table_features(struct ovs_cmdl_context *ctx)
 
                     struct ds s = DS_EMPTY_INITIALIZER;
                     ofp_print_table_features(&s, &tf, n ? &prev : NULL,
-                                             NULL, NULL);
+                                             NULL, NULL,
+                                             tables_to_show(ctx->argv[1]));
                     puts(ds_cstr(&s));
                     ds_destroy(&s);
 
@@ -915,6 +926,7 @@ ofctl_dump_table_features(struct ovs_cmdl_context *ctx)
                 ovs_fatal(0, "received bad reply: %s",
                           ofp_to_string(reply->data, reply->size,
                                         ports_to_show(ctx->argv[1]),
+                                        tables_to_show(ctx->argv[1]),
                                         verbosity + 1));
             }
         } else {
@@ -1044,7 +1056,7 @@ port_iterator_next(struct port_iterator *pi, struct ofputil_phy_port *pp)
             } else if (retval != EOF) {
                 ovs_fatal(0, "received bad reply: %s",
                           ofp_to_string(pi->reply->data, pi->reply->size,
-                                        NULL, verbosity + 1));
+                                        NULL, NULL, verbosity + 1));
             }
         }
 
@@ -1066,7 +1078,7 @@ port_iterator_next(struct port_iterator *pi, struct ofputil_phy_port *pp)
             || type != OFPTYPE_PORT_DESC_STATS_REPLY) {
             ovs_fatal(0, "received bad reply: %s",
                       ofp_to_string(pi->reply->data, pi->reply->size, NULL,
-                                    verbosity + 1));
+                                    NULL, verbosity + 1));
         }
 
         pi->more = (ofpmp_flags(oh) & OFPSF_REPLY_MORE) != 0;
@@ -1163,33 +1175,189 @@ get_port_map(const char *vconn_name)
 static const struct ofputil_port_map *
 ports_to_accept(const char *vconn_name)
 {
-    return should_accept_ports() ? get_port_map(vconn_name) : NULL;
+    return should_accept_names() ? get_port_map(vconn_name) : NULL;
 }
 
 static const struct ofputil_port_map *
 ports_to_show(const char *vconn_name)
 {
-    return should_show_ports() ? get_port_map(vconn_name) : NULL;
+    return should_show_names() ? get_port_map(vconn_name) : NULL;
 }
 
-/* We accept port names unless the feature is turned off explicitly. */
-static bool
-should_accept_ports(void)
+struct table_iterator {
+    struct vconn *vconn;
+
+    enum { TI_STATS, TI_FEATURES } variant;
+    struct ofpbuf *reply;
+    ovs_be32 send_xid;
+    bool more;
+
+    struct ofputil_table_features features;
+};
+
+/* Initializes 'ti' to prepare for iterating through all of the tables on the
+ * OpenFlow switch to which 'vconn' is connected.
+ *
+ * During iteration, the client should not make other use of 'vconn', because
+ * that can cause other messages to be interleaved with the replies used by the
+ * iterator and thus some tables may be missed or a hang can occur. */
+static void
+table_iterator_init(struct table_iterator *ti, struct vconn *vconn)
 {
-    return use_port_names != 0;
+    memset(ti, 0, sizeof *ti);
+    ti->vconn = vconn;
+    ti->variant = (vconn_get_version(vconn) < OFP13_VERSION
+                   ? TI_STATS : TI_FEATURES);
+    ti->more = true;
+
+    enum ofpraw raw = (ti->variant == TI_STATS
+                       ? OFPRAW_OFPST_TABLE_REQUEST
+                       : OFPRAW_OFPST13_TABLE_FEATURES_REQUEST);
+    struct ofpbuf *rq = ofpraw_alloc(raw, vconn_get_version(vconn), 0);
+    ti->send_xid = ((struct ofp_header *) rq->data)->xid;
+    send_openflow_buffer(ti->vconn, rq);
 }
 
-/* We show port names only if the feature is turned on explicitly, or if we're
- * interacting with a user on the console. */
+/* Obtains the next table from 'ti'.  On success, returns the next table's
+ * features; on failure, returns NULL.  */
+static const struct ofputil_table_features *
+table_iterator_next(struct table_iterator *ti)
+{
+    for (;;) {
+        if (ti->reply) {
+            int retval;
+            if (ti->variant == TI_STATS) {
+                struct ofputil_table_stats ts;
+                retval = ofputil_decode_table_stats_reply(ti->reply,
+                                                          &ts, &ti->features);
+            } else {
+                ovs_assert(ti->variant == TI_FEATURES);
+                retval = ofputil_decode_table_features(ti->reply,
+                                                       &ti->features,
+                                                       true);
+            }
+            if (!retval) {
+                return &ti->features;
+            } else if (retval != EOF) {
+                ovs_fatal(0, "received bad reply: %s",
+                          ofp_to_string(ti->reply->data, ti->reply->size,
+                                        NULL, NULL, verbosity + 1));
+            }
+        }
+
+        if (!ti->more) {
+            return NULL;
+        }
+
+        ovs_be32 recv_xid;
+        do {
+            ofpbuf_delete(ti->reply);
+            run(vconn_recv_block(ti->vconn, &ti->reply),
+                "OpenFlow receive failed");
+            recv_xid = ((struct ofp_header *) ti->reply->data)->xid;
+        } while (ti->send_xid != recv_xid);
+
+        struct ofp_header *oh = ti->reply->data;
+        enum ofptype type;
+        if (ofptype_pull(&type, ti->reply)
+            || type != (ti->variant == TI_STATS
+                        ? OFPTYPE_TABLE_STATS_REPLY
+                        : OFPTYPE_TABLE_FEATURES_STATS_REPLY)) {
+            ovs_fatal(0, "received bad reply: %s",
+                      ofp_to_string(ti->reply->data, ti->reply->size, NULL,
+                                    NULL, verbosity + 1));
+        }
+
+        ti->more = (ofpmp_flags(oh) & OFPSF_REPLY_MORE) != 0;
+    }
+}
+
+/* Destroys iterator 'ti'. */
+static void
+table_iterator_destroy(struct table_iterator *ti)
+{
+    if (ti) {
+        while (ti->more) {
+            /* Drain vconn's queue of any other replies for this request. */
+            table_iterator_next(ti);
+        }
+
+        ofpbuf_delete(ti->reply);
+    }
+}
+
+static const struct ofputil_table_map *
+get_table_map(const char *vconn_name)
+{
+    static struct shash table_maps = SHASH_INITIALIZER(&table_maps);
+    struct ofputil_table_map *map = shash_find_data(&table_maps, vconn_name);
+    if (!map) {
+        map = xmalloc(sizeof *map);
+        ofputil_table_map_init(map);
+        shash_add(&table_maps, vconn_name, map);
+
+        if (!strchr(vconn_name, ':') || !vconn_verify_name(vconn_name)) {
+            /* For an active vconn (which includes a vconn constructed from a
+             * bridge name), connect to it and pull down the port name-number
+             * mapping. */
+            struct vconn *vconn;
+            open_vconn(vconn_name, &vconn);
+
+            struct table_iterator ti;
+            table_iterator_init(&ti, vconn);
+            for (;;) {
+                const struct ofputil_table_features *tf
+                    = table_iterator_next(&ti);
+                if (!tf) {
+                    break;
+                }
+                if (tf->name[0]) {
+                    ofputil_table_map_put(map, tf->table_id, tf->name);
+                }
+            }
+            table_iterator_destroy(&ti);
+
+            vconn_close(vconn);
+        } else {
+            /* Don't bother with passive vconns, since it could take a long
+             * time for the remote to try to connect to us.  Don't bother with
+             * invalid vconn names either. */
+        }
+    }
+    return map;
+}
+
+static const struct ofputil_table_map *
+tables_to_accept(const char *vconn_name)
+{
+    return should_accept_names() ? get_table_map(vconn_name) : NULL;
+}
+
+static const struct ofputil_table_map *
+tables_to_show(const char *vconn_name)
+{
+    return should_show_names() ? get_table_map(vconn_name) : NULL;
+}
+
+/* We accept port and table names unless the feature is turned off
+ * explicitly. */
 static bool
-should_show_ports(void)
+should_accept_names(void)
+{
+    return use_names != 0;
+}
+
+/* We show port and table names only if the feature is turned on explicitly, or
+ * if we're interacting with a user on the console. */
+static bool
+should_show_names(void)
 {
     static int interactive = -1;
     if (interactive == -1) {
         interactive = isatty(STDOUT_FILENO);
     }
 
-    return use_port_names > 0 || (use_port_names == -1 && interactive);
+    return use_names > 0 || (use_names == -1 && interactive);
 }
 
 /* Returns the port number corresponding to 'port_name' (which may be a port
@@ -1222,7 +1390,7 @@ try_set_protocol(struct vconn *vconn, enum ofputil_protocol want,
         run(vconn_transact_noreply(vconn, request, &reply),
             "talking to %s", vconn_get_name(vconn));
         if (reply) {
-            char *s = ofp_to_string(reply->data, reply->size, NULL, 2);
+            char *s = ofp_to_string(reply->data, reply->size, NULL, NULL, 2);
             VLOG_DBG("%s: failed to set protocol, switch replied: %s",
                      vconn_get_name(vconn), s);
             free(s);
@@ -1274,8 +1442,11 @@ prepare_dump_flows(int argc, char *argv[], bool aggregate,
     const char *match = argc > 2 ? argv[2] : "";
     const struct ofputil_port_map *port_map
         = *match ? ports_to_accept(vconn_name) : NULL;
+    const struct ofputil_table_map *table_map
+        = *match ? tables_to_accept(vconn_name) : NULL;
     error = parse_ofp_flow_stats_request_str(fsr, aggregate, match,
-                                             port_map, &usable_protocols);
+                                             port_map, table_map,
+                                             &usable_protocols);
     if (error) {
         ovs_fatal(0, "%s", error);
     }
@@ -1366,7 +1537,7 @@ compare_flows(const void *afs_, const void *bfs_)
 static void
 ofctl_dump_flows(struct ovs_cmdl_context *ctx)
 {
-    if (!n_criteria && !should_show_ports() && show_stats) {
+    if (!n_criteria && !should_show_names() && show_stats) {
         ofctl_dump_flows__(ctx->argc, ctx->argv, false);
         return;
     } else {
@@ -1388,7 +1559,7 @@ ofctl_dump_flows(struct ovs_cmdl_context *ctx)
         for (size_t i = 0; i < n_fses; i++) {
             ds_clear(&s);
             ofp_print_flow_stats(&s, &fses[i], ports_to_show(ctx->argv[1]),
-                                 show_stats);
+                                 tables_to_show(ctx->argv[1]), show_stats);
             printf(" %s\n", ds_cstr(&s));
         }
         ds_destroy(&s);
@@ -1579,7 +1750,8 @@ ofctl_flow_mod_file(int argc OVS_UNUSED, char *argv[], int command)
          * this is backwards compatible. */
         command = -2;
     }
-    error = parse_ofp_flow_mod_file(argv[2], ports_to_accept(argv[1]), command,
+    error = parse_ofp_flow_mod_file(argv[2], ports_to_accept(argv[1]),
+                                    tables_to_accept(argv[1]), command,
                                     &fms, &n_fms, &usable_protocols);
     if (error) {
         ovs_fatal(0, "%s", error);
@@ -1599,7 +1771,8 @@ ofctl_flow_mod(int argc, char *argv[], uint16_t command)
         enum ofputil_protocol usable_protocols;
 
         error = parse_ofp_flow_mod_str(&fm, argc > 2 ? argv[2] : "",
-                                       ports_to_accept(argv[1]), command,
+                                       ports_to_accept(argv[1]),
+                                       tables_to_accept(argv[1]), command,
                                        &usable_protocols);
         if (error) {
             ovs_fatal(0, "%s", error);
@@ -1649,7 +1822,7 @@ set_packet_in_format(struct vconn *vconn,
         run(vconn_transact_noreply(vconn, spif, &reply),
             "talking to %s", vconn_get_name(vconn));
         if (reply) {
-            char *s = ofp_to_string(reply->data, reply->size, NULL, 2);
+            char *s = ofp_to_string(reply->data, reply->size, NULL, NULL, 2);
             VLOG_DBG("%s: failed to set packet in format to nx_packet_in, "
                      "controller replied: %s.",
                      vconn_get_name(vconn), s);
@@ -1745,7 +1918,8 @@ ofctl_send(struct unixctl_conn *conn, int argc,
 
         fprintf(stderr, "send: ");
         ofp_print(stderr, msg->data, msg->size,
-                  ports_to_show(vconn_get_name(vconn)), verbosity);
+                  ports_to_show(vconn_get_name(vconn)),
+                  tables_to_show(vconn_get_name(vconn)), verbosity);
 
         error = vconn_send_block(vconn, msg);
         if (error) {
@@ -1781,7 +1955,7 @@ unixctl_packet_out(struct unixctl_conn *conn, int OVS_UNUSED argc,
 
     error_msg = parse_ofp_packet_out_str(
         &po, argv[1], ports_to_accept(vconn_get_name(vconn)),
-        &usable_protocols);
+        tables_to_accept(vconn_get_name(vconn)), &usable_protocols);
     if (error_msg) {
         ds_put_format(&reply, "%s\n", error_msg);
         free(error_msg);
@@ -1797,7 +1971,8 @@ unixctl_packet_out(struct unixctl_conn *conn, int OVS_UNUSED argc,
         struct ofpbuf *msg = ofputil_encode_packet_out(&po, protocol);
 
         ofp_print(stderr, msg->data, msg->size,
-                  ports_to_show(vconn_get_name(vconn)), verbosity);
+                  ports_to_show(vconn_get_name(vconn)),
+                  tables_to_show(vconn_get_name(vconn)), verbosity);
 
         int error = vconn_send_block(vconn, msg);
         if (error) {
@@ -1961,7 +2136,8 @@ monitor_vconn(struct vconn *vconn, bool reply_to_echo_requests,
 
             ofptype_decode(&type, b->data);
             ofp_print(stderr, b->data, b->size,
-                      ports_to_show(vconn_get_name(vconn)), verbosity + 2);
+                      ports_to_show(vconn_get_name(vconn)),
+                      tables_to_show(vconn_get_name(vconn)), verbosity + 2);
             fflush(stderr);
 
             switch ((int) type) {
@@ -2004,6 +2180,7 @@ monitor_vconn(struct vconn *vconn, bool reply_to_echo_requests,
                         fprintf(stderr, "send: ");
                         ofp_print(stderr, reply->data, reply->size,
                                   ports_to_show(vconn_get_name(vconn)),
+                                  tables_to_show(vconn_get_name(vconn)),
                                   verbosity + 2);
                         fflush(stderr);
 
@@ -2083,6 +2260,7 @@ ofctl_monitor(struct ovs_cmdl_context *ctx)
 
             error = parse_flow_monitor_request(&fmr, arg + 6,
                                                ports_to_accept(ctx->argv[1]),
+                                               tables_to_accept(ctx->argv[1]),
                                                &usable_protocols);
             if (error) {
                 ovs_fatal(0, "%s", error);
@@ -2200,6 +2378,7 @@ ofctl_packet_out(struct ovs_cmdl_context *ctx)
         ofpbuf_init(&ofpacts, 64);
         struct ofpact_parse_params pp = {
             .port_map = ports_to_accept(ctx->argv[1]),
+            .table_map = tables_to_accept(ctx->argv[1]),
             .ofpacts = &ofpacts,
             .usable_protocols = &usable_protocols
         };
@@ -2237,6 +2416,7 @@ ofctl_packet_out(struct ovs_cmdl_context *ctx)
     } else if (ctx->argc == 3) {
         error = parse_ofp_packet_out_str(&po, ctx->argv[2],
                                          ports_to_accept(ctx->argv[1]),
+                                         tables_to_accept(ctx->argv[1]),
                                          &usable_protocols);
         if (error) {
             ovs_fatal(0, "%s", error);
@@ -2343,7 +2523,7 @@ fetch_table_desc(struct vconn *vconn, struct ofputil_table_mod *tm,
             if (ofptype_pull(&type, &b)
                 || type != OFPTYPE_TABLE_DESC_REPLY) {
                 ovs_fatal(0, "received bad reply: %s",
-                          ofp_to_string(reply->data, reply->size, NULL,
+                          ofp_to_string(reply->data, reply->size, NULL, NULL,
                                         verbosity + 1));
             }
             uint16_t flags = ofpmp_flags(oh);
@@ -2386,6 +2566,7 @@ ofctl_mod_table(struct ovs_cmdl_context *ctx)
     int i;
 
     error = parse_ofp_table_mod(&tm, ctx->argv[2], ctx->argv[3],
+                                tables_to_accept(ctx->argv[1]),
                                 &usable_versions);
     if (error) {
         ovs_fatal(0, "%s", error);
@@ -2511,7 +2692,7 @@ ofctl_ofp_parse(struct ovs_cmdl_context *ctx)
             ovs_fatal(0, "%s: unexpected end of file mid-message", filename);
         }
 
-        ofp_print(stdout, b.data, b.size, NULL, verbosity + 2);
+        ofp_print(stdout, b.data, b.size, NULL, NULL, verbosity + 2);
     }
     ofpbuf_uninit(&b);
 
@@ -2599,7 +2780,7 @@ ofctl_ofp_parse_pcap(struct ovs_cmdl_context *ctx)
                            IP_ARGS(flow.nw_src), ntohs(flow.tp_src),
                            IP_ARGS(flow.nw_dst), ntohs(flow.tp_dst));
                     ofp_print(stdout, dp_packet_data(payload), length,
-                              NULL, verbosity + 1);
+                              NULL, NULL, verbosity + 1);
                     dp_packet_pull(payload, length);
                 }
             }
@@ -2644,9 +2825,10 @@ ofctl_ping(struct ovs_cmdl_context *ctx)
             || reply->size != payload
             || memcmp(request->msg, reply->msg, payload)) {
             printf("Reply does not match request.  Request:\n");
-            ofp_print(stdout, request, request->size, NULL, verbosity + 2);
+            ofp_print(stdout, request, request->size, NULL, NULL,
+                      verbosity + 2);
             printf("Reply:\n");
-            ofp_print(stdout, reply, reply->size, NULL, verbosity + 2);
+            ofp_print(stdout, reply, reply->size, NULL, NULL, verbosity + 2);
         }
         printf("%"PRIu32" bytes from %s: xid=%08"PRIx32" time=%.1f ms\n",
                reply->size, ctx->argv[1], ntohl(rpy_hdr->xid),
@@ -2809,6 +2991,7 @@ ofctl_group_mod_file(int argc OVS_UNUSED, char *argv[], int command)
         command = -2;
     }
     error = parse_ofp_group_mod_file(argv[2], ports_to_accept(argv[1]),
+                                     tables_to_accept(argv[1]),
                                      command, &gms, &n_gms, &usable_protocols);
     if (error) {
         ovs_fatal(0, "%s", error);
@@ -2829,6 +3012,7 @@ ofctl_group_mod(int argc, char *argv[], uint16_t command)
 
         error = parse_ofp_group_mod_str(&gm, command, argc > 2 ? argv[2] : "",
                                         ports_to_accept(argv[1]),
+                                        tables_to_accept(argv[1]),
                                         &usable_protocols);
         if (error) {
             ovs_fatal(0, "%s", error);
@@ -2889,6 +3073,7 @@ ofctl_dump_group_stats(struct ovs_cmdl_context *ctx)
     error = parse_ofp_group_mod_str(&gm, OFPGC11_DELETE,
                                     ctx->argc > 2 ? ctx->argv[2] : "",
                                     ports_to_accept(ctx->argv[1]),
+                                    tables_to_accept(ctx->argv[1]),
                                     &usable_protocols);
     if (error) {
         ovs_fatal(0, "%s", error);
@@ -2954,6 +3139,7 @@ ofctl_bundle(struct ovs_cmdl_context *ctx)
     char *error;
 
     error = parse_ofp_bundle_file(ctx->argv[2], ports_to_accept(ctx->argv[1]),
+                                  tables_to_accept(ctx->argv[1]),
                                   &bms, &n_bms, &usable_protocols);
     if (error) {
         ovs_fatal(0, "%s", error);
@@ -3126,9 +3312,11 @@ struct fte_state {
     /* The final metadata table that we have constructed. */
     struct tun_table *tun_tab;
 
-    /* Port map.  There is only one port map, not one per source, because it
-     * only makes sense to display a single name for a given port number. */
+    /* Port and table map.  There is only one of each, not one per source,
+     * because it only makes sense to display a single name for a given port
+     * or table number. */
     const struct ofputil_port_map *port_map;
+    const struct ofputil_table_map *table_map;
 };
 
 /* Frees 'version' and the data that it owns. */
@@ -3362,6 +3550,7 @@ fte_state_init(struct fte_state *state)
     ovs_list_init(&state->fte_pending_list);
     state->tun_tab = NULL;
     state->port_map = NULL;
+    state->table_map = NULL;
 }
 
 static void
@@ -3447,7 +3636,7 @@ read_flows_from_file(const char *filename, struct fte_state *state, int index)
         enum ofputil_protocol usable;
 
         error = parse_ofp_str(&fm, OFPFC_ADD, ds_cstr(&s), state->port_map,
-                              &usable);
+                              state->table_map, &usable);
         if (error) {
             ovs_fatal(0, "%s:%d: %s", filename, line_number, error);
         }
@@ -3568,6 +3757,7 @@ ofctl_replace_flows(struct ovs_cmdl_context *ctx)
 
     fte_state_init(&fte_state);
     fte_state.port_map = ports_to_accept(ctx->argv[1]);
+    fte_state.table_map = tables_to_accept(ctx->argv[1]);
     usable_protocols = read_flows_from_file(ctx->argv[2], &fte_state, FILE_IDX);
 
     protocol = open_vconn(ctx->argv[1], &vconn);
@@ -3819,7 +4009,7 @@ ofctl_parse_flows__(struct ofputil_flow_mod *fms, size_t n_fms,
         struct ofpbuf *msg;
 
         msg = ofputil_encode_flow_mod(fm, protocol);
-        ofp_print(stdout, msg->data, msg->size, NULL, verbosity);
+        ofp_print(stdout, msg->data, msg->size, NULL, NULL, verbosity);
         ofpbuf_delete(msg);
 
         free(CONST_CAST(struct ofpact *, fm->ofpacts));
@@ -3835,7 +4025,7 @@ ofctl_parse_flow(struct ovs_cmdl_context *ctx)
     struct ofputil_flow_mod fm;
     char *error;
 
-    error = parse_ofp_flow_mod_str(&fm, ctx->argv[1], NULL,
+    error = parse_ofp_flow_mod_str(&fm, ctx->argv[1], NULL, NULL,
                                    OFPFC_ADD, &usable_protocols);
     if (error) {
         ovs_fatal(0, "%s", error);
@@ -3853,7 +4043,7 @@ ofctl_parse_flows(struct ovs_cmdl_context *ctx)
     size_t n_fms = 0;
     char *error;
 
-    error = parse_ofp_flow_mod_file(ctx->argv[1], NULL, OFPFC_ADD,
+    error = parse_ofp_flow_mod_file(ctx->argv[1], NULL, NULL, OFPFC_ADD,
                                     &fms, &n_fms, &usable_protocols);
     if (error) {
         ovs_fatal(0, "%s", error);
@@ -4295,7 +4485,7 @@ ofctl_check_vlan(struct ovs_cmdl_context *ctx)
     string_s = match_to_string(&match, NULL, OFP_DEFAULT_PRIORITY);
     printf("%s -> ", string_s);
     fflush(stdout);
-    error_s = parse_ofp_str(&fm, -1, string_s, NULL, &usable_protocols);
+    error_s = parse_ofp_str(&fm, -1, string_s, NULL, NULL, &usable_protocols);
     if (error_s) {
         ovs_fatal(0, "%s", error_s);
     }
@@ -4464,7 +4654,7 @@ ofctl_ofp_print(struct ovs_cmdl_context *ctx)
     if (ofpbuf_put_hex(&packet, buffer, NULL)[0] != '\0') {
         ovs_fatal(0, "trailing garbage following hex bytes");
     }
-    ofp_print(stdout, packet.data, packet.size, NULL, verbosity);
+    ofp_print(stdout, packet.data, packet.size, NULL, NULL, verbosity);
     ofpbuf_uninit(&packet);
     ds_destroy(&line);
 }
@@ -4479,7 +4669,7 @@ ofctl_encode_hello(struct ovs_cmdl_context *ctx)
 
     hello = ofputil_encode_hello(bitmap);
     ovs_hex_dump(stdout, hello->data, hello->size, 0, false);
-    ofp_print(stdout, hello->data, hello->size, NULL, verbosity);
+    ofp_print(stdout, hello->data, hello->size, NULL, NULL, verbosity);
     ofpbuf_delete(hello);
 }
 

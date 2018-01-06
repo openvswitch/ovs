@@ -322,6 +322,7 @@ extract_actions(char *s)
 static char * OVS_WARN_UNUSED_RESULT
 parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
                 const struct ofputil_port_map *port_map,
+                const struct ofputil_table_map *table_map,
                 enum ofputil_protocol *usable_protocols)
 {
     enum {
@@ -450,7 +451,10 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
             }
 
             if (!strcmp(name, "table")) {
-                error = str_to_u8(value, "table", &fm->table_id);
+                if (!ofputil_table_from_string(value, table_map,
+                                               &fm->table_id)) {
+                    return xasprintf("unknown table \"%s\"", value);
+                }
                 if (fm->table_id != 0xff) {
                     *usable_protocols &= OFPUTIL_P_TID;
                 }
@@ -559,6 +563,7 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
         ofpbuf_init(&ofpacts, 32);
         struct ofpact_parse_params pp = {
             .port_map = port_map,
+            .table_map = table_map,
             .ofpacts = &ofpacts,
             .usable_protocols = &action_usable_protocols
         };
@@ -610,12 +615,14 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
 char * OVS_WARN_UNUSED_RESULT
 parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
               const struct ofputil_port_map *port_map,
+              const struct ofputil_table_map *table_map,
               enum ofputil_protocol *usable_protocols)
 {
     char *string = xstrdup(str_);
     char *error;
 
-    error = parse_ofp_str__(fm, command, string, port_map, usable_protocols);
+    error = parse_ofp_str__(fm, command, string, port_map, table_map,
+                            usable_protocols);
     if (error) {
         fm->ofpacts = NULL;
         fm->ofpacts_len = 0;
@@ -630,6 +637,7 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
 static char * OVS_WARN_UNUSED_RESULT
 parse_ofp_packet_out_str__(struct ofputil_packet_out *po, char *string,
                            const struct ofputil_port_map *port_map,
+                           const struct ofputil_table_map *table_map,
                            enum ofputil_protocol *usable_protocols)
 {
     enum ofputil_protocol action_usable_protocols;
@@ -719,6 +727,7 @@ parse_ofp_packet_out_str__(struct ofputil_packet_out *po, char *string,
     if (act_str) {
         struct ofpact_parse_params pp = {
             .port_map = port_map,
+            .table_map = table_map,
             .ofpacts = &ofpacts,
             .usable_protocols = &action_usable_protocols,
         };
@@ -750,12 +759,14 @@ out:
 char * OVS_WARN_UNUSED_RESULT
 parse_ofp_packet_out_str(struct ofputil_packet_out *po, const char *str_,
                          const struct ofputil_port_map *port_map,
+                         const struct ofputil_table_map *table_map,
                          enum ofputil_protocol *usable_protocols)
 {
     char *string = xstrdup(str_);
     char *error;
 
-    error = parse_ofp_packet_out_str__(po, string, port_map, usable_protocols);
+    error = parse_ofp_packet_out_str__(po, string, port_map, table_map,
+                                       usable_protocols);
     if (error) {
         po->ofpacts = NULL;
         po->ofpacts_len = 0;
@@ -996,6 +1007,7 @@ static char * OVS_WARN_UNUSED_RESULT
 parse_flow_monitor_request__(struct ofputil_flow_monitor_request *fmr,
                              const char *str_,
                              const struct ofputil_port_map *port_map,
+                             const struct ofputil_table_map *table_map,
                              char *string,
                              enum ofputil_protocol *usable_protocols)
 {
@@ -1040,7 +1052,10 @@ parse_flow_monitor_request__(struct ofputil_flow_monitor_request *fmr,
             }
 
             if (!strcmp(name, "table")) {
-                error = str_to_u8(value, "table", &fmr->table_id);
+                if (!ofputil_table_from_string(value, table_map,
+                                               &fmr->table_id)) {
+                    error = xasprintf("unknown table \"%s\"", value);
+                }
             } else if (!strcmp(name, "out_port")) {
                 fmr->out_port = u16_to_ofp(atoi(value));
             } else {
@@ -1064,11 +1079,12 @@ char * OVS_WARN_UNUSED_RESULT
 parse_flow_monitor_request(struct ofputil_flow_monitor_request *fmr,
                            const char *str_,
                            const struct ofputil_port_map *port_map,
+                           const struct ofputil_table_map *table_map,
                            enum ofputil_protocol *usable_protocols)
 {
     char *string = xstrdup(str_);
-    char *error = parse_flow_monitor_request__(fmr, str_, port_map, string,
-                                               usable_protocols);
+    char *error = parse_flow_monitor_request__(fmr, str_, port_map, table_map,
+                                               string, usable_protocols);
     free(string);
     return error;
 }
@@ -1084,10 +1100,12 @@ parse_flow_monitor_request(struct ofputil_flow_monitor_request *fmr,
  * error.  The caller is responsible for freeing the returned string. */
 char * OVS_WARN_UNUSED_RESULT
 parse_ofp_flow_mod_str(struct ofputil_flow_mod *fm, const char *string,
-                       const struct ofputil_port_map *port_map, int command,
+                       const struct ofputil_port_map *port_map,
+                       const struct ofputil_table_map *table_map,
+                       int command,
                        enum ofputil_protocol *usable_protocols)
 {
-    char *error = parse_ofp_str(fm, command, string, port_map,
+    char *error = parse_ofp_str(fm, command, string, port_map, table_map,
                                 usable_protocols);
 
     if (!error) {
@@ -1167,16 +1185,16 @@ exit:
  * error.  The caller is responsible for freeing the returned string. */
 char * OVS_WARN_UNUSED_RESULT
 parse_ofp_table_mod(struct ofputil_table_mod *tm, const char *table_id,
-                    const char *setting, uint32_t *usable_versions)
+                    const char *setting,
+                    const struct ofputil_table_map *table_map,
+                    uint32_t *usable_versions)
 {
     *usable_versions = 0;
     if (!strcasecmp(table_id, "all")) {
         tm->table_id = OFPTT_ALL;
-    } else {
-        char *error = str_to_u8(table_id, "table_id", &tm->table_id);
-        if (error) {
-            return error;
-        }
+    } else if (!ofputil_table_from_string(table_id, table_map,
+                                          &tm->table_id)) {
+        return xasprintf("unknown table \"%s\"", table_id);
     }
 
     tm->miss = OFPUTIL_TABLE_MISS_DEFAULT;
@@ -1240,7 +1258,9 @@ parse_ofp_table_mod(struct ofputil_table_mod *tm, const char *table_id,
  * error.  The caller is responsible for freeing the returned string. */
 char * OVS_WARN_UNUSED_RESULT
 parse_ofp_flow_mod_file(const char *file_name,
-                        const struct ofputil_port_map *port_map, int command,
+                        const struct ofputil_port_map *port_map,
+                        const struct ofputil_table_map *table_map,
+                        int command,
                         struct ofputil_flow_mod **fms, size_t *n_fms,
                         enum ofputil_protocol *usable_protocols)
 {
@@ -1271,7 +1291,7 @@ parse_ofp_flow_mod_file(const char *file_name,
             *fms = x2nrealloc(*fms, &allocated_fms, sizeof **fms);
         }
         error = parse_ofp_flow_mod_str(&(*fms)[*n_fms], ds_cstr(&s), port_map,
-                                       command, &usable);
+                                       table_map, command, &usable);
         if (error) {
             char *err_msg;
             size_t i;
@@ -1307,12 +1327,14 @@ char * OVS_WARN_UNUSED_RESULT
 parse_ofp_flow_stats_request_str(struct ofputil_flow_stats_request *fsr,
                                  bool aggregate, const char *string,
                                  const struct ofputil_port_map *port_map,
+                                 const struct ofputil_table_map *table_map,
                                  enum ofputil_protocol *usable_protocols)
 {
     struct ofputil_flow_mod fm;
     char *error;
 
-    error = parse_ofp_str(&fm, -1, string, port_map, usable_protocols);
+    error = parse_ofp_str(&fm, -1, string, port_map, table_map,
+                          usable_protocols);
     if (error) {
         return error;
     }
@@ -1438,8 +1460,9 @@ exit:
 
 static char * OVS_WARN_UNUSED_RESULT
 parse_bucket_str(struct ofputil_bucket *bucket, char *str_,
-                 const struct ofputil_port_map *port_map, uint8_t group_type,
-                 enum ofputil_protocol *usable_protocols)
+                 const struct ofputil_port_map *port_map,
+                 const struct ofputil_table_map *table_map,
+                 uint8_t group_type, enum ofputil_protocol *usable_protocols)
 {
     char *pos, *key, *value;
     struct ofpbuf ofpacts;
@@ -1497,6 +1520,7 @@ parse_bucket_str(struct ofputil_bucket *bucket, char *str_,
     ofpbuf_init(&ofpacts, 0);
     struct ofpact_parse_params pp = {
         .port_map = port_map,
+        .table_map = table_map,
         .ofpacts = &ofpacts,
         .usable_protocols = usable_protocols,
     };
@@ -1575,6 +1599,7 @@ static char * OVS_WARN_UNUSED_RESULT
 parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, int command,
                           char *string,
                           const struct ofputil_port_map *port_map,
+                          const struct ofputil_table_map *table_map,
                           enum ofputil_protocol *usable_protocols)
 {
     enum {
@@ -1828,7 +1853,7 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, int command,
         }
 
         bucket = xzalloc(sizeof(struct ofputil_bucket));
-        error = parse_bucket_str(bucket, bkt_str, port_map,
+        error = parse_bucket_str(bucket, bkt_str, port_map, table_map,
                                  gm->type, usable_protocols);
         if (error) {
             free(bucket);
@@ -1862,11 +1887,12 @@ char * OVS_WARN_UNUSED_RESULT
 parse_ofp_group_mod_str(struct ofputil_group_mod *gm, int command,
                         const char *str_,
                         const struct ofputil_port_map *port_map,
+                        const struct ofputil_table_map *table_map,
                         enum ofputil_protocol *usable_protocols)
 {
     char *string = xstrdup(str_);
-    char *error = parse_ofp_group_mod_str__(gm, command, string,
-                                            port_map, usable_protocols);
+    char *error = parse_ofp_group_mod_str__(gm, command, string, port_map,
+                                            table_map, usable_protocols);
     free(string);
     return error;
 }
@@ -1878,6 +1904,7 @@ parse_ofp_group_mod_str(struct ofputil_group_mod *gm, int command,
 char * OVS_WARN_UNUSED_RESULT
 parse_ofp_group_mod_file(const char *file_name,
                          const struct ofputil_port_map *port_map,
+                         const struct ofputil_table_map *table_map,
                          int command,
                          struct ofputil_group_mod **gms, size_t *n_gms,
                          enum ofputil_protocol *usable_protocols)
@@ -1915,7 +1942,7 @@ parse_ofp_group_mod_file(const char *file_name,
             *gms = new_gms;
         }
         error = parse_ofp_group_mod_str(&(*gms)[*n_gms], command, ds_cstr(&s),
-                                        port_map, &usable);
+                                        port_map, table_map, &usable);
         if (error) {
             size_t i;
 
@@ -1956,6 +1983,7 @@ parse_ofp_group_mod_file(const char *file_name,
 char * OVS_WARN_UNUSED_RESULT
 parse_ofp_bundle_file(const char *file_name,
                       const struct ofputil_port_map *port_map,
+                      const struct ofputil_table_map *table_map,
                       struct ofputil_bundle_msg **bms, size_t *n_bms,
                       enum ofputil_protocol *usable_protocols)
 {
@@ -2003,7 +2031,7 @@ parse_ofp_bundle_file(const char *file_name,
         if (!strncmp(s, "flow", len)) {
             s += len;
             error = parse_ofp_flow_mod_str(&(*bms)[*n_bms].fm, s, port_map,
-                                           -2, &usable);
+                                           table_map, -2, &usable);
             if (error) {
                 break;
             }
@@ -2011,7 +2039,7 @@ parse_ofp_bundle_file(const char *file_name,
         } else if (!strncmp(s, "group", len)) {
             s += len;
             error = parse_ofp_group_mod_str(&(*bms)[*n_bms].gm, -2, s,
-                                            port_map, &usable);
+                                            port_map, table_map, &usable);
             if (error) {
                 break;
             }
@@ -2019,7 +2047,7 @@ parse_ofp_bundle_file(const char *file_name,
         } else if (!strncmp(s, "packet-out", len)) {
             s += len;
             error = parse_ofp_packet_out_str(&(*bms)[*n_bms].po, s, port_map,
-                                             &usable);
+                                             table_map, &usable);
             if (error) {
                 break;
             }

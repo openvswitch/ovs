@@ -7378,16 +7378,16 @@ ofputil_port_get_reserved_name(ofp_port_t port)
     }
 }
 
-/* A port name doesn't need to be quoted if it is alphanumeric and starts with
- * a letter. */
+/* A table or port name doesn't need to be quoted if it is alphanumeric and
+ * starts with a letter. */
 static bool
-port_name_needs_quotes(const char *port_name)
+name_needs_quotes(const char *name)
 {
-    if (!isalpha((unsigned char) port_name[0])) {
+    if (!isalpha((unsigned char) name[0])) {
         return true;
     }
 
-    for (const char *p = port_name + 1; *p; p++) {
+    for (const char *p = name + 1; *p; p++) {
         if (!isalnum((unsigned char) *p)) {
             return true;
         }
@@ -7395,13 +7395,14 @@ port_name_needs_quotes(const char *port_name)
     return false;
 }
 
+/* Appends port or table 'name' to 's', quoting it if necessary. */
 static void
-put_port_name(const char *port_name, struct ds *s)
+put_name(const char *name, struct ds *s)
 {
-    if (port_name_needs_quotes(port_name)) {
-        json_string_escape(port_name, s);
+    if (name_needs_quotes(name)) {
+        json_string_escape(name, s);
     } else {
-        ds_put_cstr(s, port_name);
+        ds_put_cstr(s, name);
     }
 }
 
@@ -7420,7 +7421,7 @@ ofputil_format_port(ofp_port_t port, const struct ofputil_port_map *port_map,
 
     const char *port_name = ofputil_port_map_get_name(port_map, port);
     if (port_name) {
-        put_port_name(port_name, s);
+        put_name(port_name, s);
         return;
     }
 
@@ -7445,7 +7446,7 @@ ofputil_port_to_string(ofp_port_t port,
     const char *port_name = ofputil_port_map_get_name(port_map, port);
     if (port_name) {
         struct ds s = DS_EMPTY_INITIALIZER;
-        put_port_name(port_name, &s);
+        put_name(port_name, &s);
         ovs_strlcpy(namebuf, ds_cstr(&s), bufsize);
         ds_destroy(&s);
         return;
@@ -7642,6 +7643,92 @@ void
 ofputil_table_map_destroy(struct ofputil_table_map *map)
 {
     ofputil_name_map_destroy(&map->map);
+}
+
+/* Table numbers. */
+
+/* Stores the table number represented by 's' into '*tablep'.  's' may be an
+ * integer or, if 'table_map' is nonnull, a name (quoted or unquoted).
+ *
+ * Returns true if successful, false if 's' is not a valid OpenFlow table
+ * number or name.  The caller should issue an error message in this case,
+ * because this function usually does not.  (This gives the caller an
+ * opportunity to look up the table name another way, e.g. by contacting the
+ * switch and listing the names of all its tables). */
+bool
+ofputil_table_from_string(const char *s,
+                          const struct ofputil_table_map *table_map,
+                          uint8_t *tablep)
+{
+    *tablep = 0;
+    if (*s == '-') {
+        VLOG_WARN("Negative value %s is not a valid table number.", s);
+        return false;
+    }
+
+    unsigned int table;
+    if (str_to_uint(s, 10, &table)) {
+        if (table > 255) {
+            VLOG_WARN("table %u is outside the supported range 0 through 255",
+                      table);
+            return false;
+        }
+        *tablep = table;
+        return true;
+    } else {
+        if (s[0] != '"') {
+            table = ofputil_table_map_get_number(table_map, s);
+        } else {
+            size_t length = strlen(s);
+            char *name = NULL;
+            if (length > 1
+                && s[length - 1] == '"'
+                && json_string_unescape(s + 1, length - 2, &name)) {
+                table = ofputil_table_map_get_number(table_map, name);
+            }
+            free(name);
+        }
+        if (table != UINT8_MAX) {
+            *tablep = table;
+            return true;
+        }
+
+        return false;
+    }
+}
+
+/* Appends to 's' a string representation of the OpenFlow table number 'table',
+ * either the table number or a name drawn from 'table_map'. */
+void
+ofputil_format_table(uint8_t table, const struct ofputil_table_map *table_map,
+                     struct ds *s)
+{
+    const char *table_name = ofputil_table_map_get_name(table_map, table);
+    if (table_name) {
+        put_name(table_name, s);
+    } else {
+        ds_put_format(s, "%"PRIu8, table);
+    }
+}
+
+/* Puts in the 'bufsize' byte in 'namebuf' a null-terminated string
+ * representation of OpenFlow table number 'table', either the table's number
+ * or a name drawn from 'table_map'. */
+void
+ofputil_table_to_string(uint8_t table,
+                        const struct ofputil_table_map *table_map,
+                        char *namebuf, size_t bufsize)
+{
+    const char *table_name = ofputil_table_map_get_name(table_map, table);
+    if (table_name) {
+        struct ds s = DS_EMPTY_INITIALIZER;
+        put_name(table_name, &s);
+        ovs_strlcpy(namebuf, ds_cstr(&s), bufsize);
+        ds_destroy(&s);
+        return;
+    }
+
+    snprintf(namebuf, bufsize, "%"PRIu8, table);
 }
 
 /* Stores the group id represented by 's' into '*group_idp'.  's' may be an
