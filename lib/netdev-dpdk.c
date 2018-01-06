@@ -2436,6 +2436,7 @@ netdev_dpdk_policer_construct(uint32_t rate, uint32_t burst)
                                     &policer->app_srtcm_params);
     if (err) {
         VLOG_ERR("Could not create rte meter for ingress policer");
+        free(policer);
         return NULL;
     }
 
