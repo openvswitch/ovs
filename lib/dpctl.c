@@ -1725,6 +1725,27 @@ dpctl_ct_get_maxconns(int argc, const char *argv[],
     return error;
 }
 
+static int
+dpctl_ct_get_nconns(int argc, const char *argv[],
+                    struct dpctl_params *dpctl_p)
+{
+    struct dpif *dpif;
+    int error = dpctl_ct_open_dp(argc, argv, dpctl_p, &dpif, 2);
+    if (!error) {
+        uint32_t nconns;
+        error = ct_dpif_get_nconns(dpif, &nconns);
+
+        if (!error) {
+            dpctl_print(dpctl_p, "%u\n", nconns);
+        } else {
+            dpctl_error(dpctl_p, error, "nconns could not be retrieved");
+        }
+        dpif_close(dpif);
+    }
+
+    return error;
+}
+
 /* Undocumented commands for unit testing. */
 
 static int
@@ -2023,6 +2044,7 @@ static const struct dpctl_command all_commands[] = {
     { "ct-bkts", "[dp] [gt=N]", 0, 2, dpctl_ct_bkts, DP_RO },
     { "ct-set-maxconns", "[dp] maxconns", 1, 2, dpctl_ct_set_maxconns, DP_RW },
     { "ct-get-maxconns", "[dp]", 0, 1, dpctl_ct_get_maxconns, DP_RO },
+    { "ct-get-nconns", "[dp]", 0, 1, dpctl_ct_get_nconns, DP_RO },
     { "help", "", 0, INT_MAX, dpctl_help, DP_RO },
     { "list-commands", "", 0, INT_MAX, dpctl_list_commands, DP_RO },
 

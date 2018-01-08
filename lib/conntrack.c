@@ -2576,6 +2576,13 @@ conntrack_get_maxconns(struct conntrack *ct, uint32_t *maxconns)
     return 0;
 }
 
+int
+conntrack_get_nconns(struct conntrack *ct, uint32_t *nconns)
+{
+    *nconns = atomic_count_get(&ct->n_conn);
+    return 0;
+}
+
 /* This function must be called with the ct->resources read lock taken. */
 static struct alg_exp_node *
 expectation_lookup(struct hmap *alg_expectations,

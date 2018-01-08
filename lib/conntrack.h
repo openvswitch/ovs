@@ -116,6 +116,7 @@ int conntrack_dump_done(struct conntrack_dump *);
 int conntrack_flush(struct conntrack *, const uint16_t *zone);
 int conntrack_set_maxconns(struct conntrack *ct, uint32_t maxconns);
 int conntrack_get_maxconns(struct conntrack *ct, uint32_t *maxconns);
+int conntrack_get_nconns(struct conntrack *ct, uint32_t *nconns);
 
 /* 'struct ct_lock' is a wrapper for an adaptive mutex.  It's useful to try
  * different types of locks (e.g. spinlocks) */

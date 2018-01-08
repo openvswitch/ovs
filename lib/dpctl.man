@@ -263,3 +263,8 @@ datapath.
 \*(DX\fBct\-get\-maxconns\fR [\fIdp\fR]
 Read the maximum limit of connection tracker connections.
 Only supported for userspace datapath.
+.
+.TP
+\*(DX\fBct\-get\-nconns\fR [\fIdp\fR]
+Read the current number of connection tracker connections.
+Only supported for userspace datapath.

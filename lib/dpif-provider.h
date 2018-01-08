@@ -441,6 +441,8 @@ struct dpif_class {
     int (*ct_set_maxconns)(struct dpif *, uint32_t maxconns);
     /* Get max connections allowed. */
     int (*ct_get_maxconns)(struct dpif *, uint32_t *maxconns);
+    /* Get number of connections tracked. */
+    int (*ct_get_nconns)(struct dpif *, uint32_t *nconns);
 
     /* Meters */
 

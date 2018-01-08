@@ -156,6 +156,14 @@ ct_dpif_get_maxconns(struct dpif *dpif, uint32_t *maxconns)
             : EOPNOTSUPP);
 }
 
+int
+ct_dpif_get_nconns(struct dpif *dpif, uint32_t *nconns)
+{
+    return (dpif->dpif_class->ct_get_nconns
+            ? dpif->dpif_class->ct_get_nconns(dpif, nconns)
+            : EOPNOTSUPP);
+}
+
 void
 ct_dpif_entry_uninit(struct ct_dpif_entry *entry)
 {
