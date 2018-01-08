@@ -104,3 +104,22 @@ m4_define([CHECK_CONNTRACK_NAT])
 # feature. Will remove this check after both kernel and userspace datapath
 # support it.
 m4_define([CHECK_CT_DPIF_FLUSH_BY_CT_TUPLE])
+
+# CHECK_CT_DPIF_SET_GET_MAXCONNS()
+#
+# Perform requirements checks for running ovs-dpctl ct-set-maxconns or
+# ovs-dpctl ct-get-maxconns. The kernel datapath does not support this
+# feature.
+m4_define([CHECK_CT_DPIF_SET_GET_MAXCONNS],
+[
+    AT_SKIP_IF([:])
+])
+
+# CHECK_CT_DPIF_GET_NCONNS()
+#
+# Perform requirements checks for running ovs-dpctl ct-get-nconns. The
+# kernel datapath does not support this feature.
+m4_define([CHECK_CT_DPIF_GET_NCONNS],
+[
+    AT_SKIP_IF([:])
+])

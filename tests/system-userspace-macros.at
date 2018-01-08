@@ -109,3 +109,15 @@ m4_define([CHECK_CT_DPIF_FLUSH_BY_CT_TUPLE],
 [
     AT_SKIP_IF([:])
 ])
+
+# CHECK_CT_DPIF_SET_GET_MAXCONNS()
+#
+# Perform requirements checks for running ovs-dpctl ct-set-maxconns or
+# ovs-dpctl ct-get-maxconns. The userspace datapath does support this feature.
+m4_define([CHECK_CT_DPIF_SET_GET_MAXCONNS])
+
+# CHECK_CT_DPIF_GET_NCONNS()
+#
+# Perform requirements checks for running ovs-dpctl ct-get-nconns. The
+# userspace datapath does support this feature.
+m4_define([CHECK_CT_DPIF_GET_NCONNS])
