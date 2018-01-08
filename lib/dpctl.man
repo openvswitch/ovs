@@ -247,3 +247,19 @@ For each ConnTracker bucket, displays the number of connections used
 by \fIdp\fR.
 If \fBgt=\fIThreshold\fR is specified, bucket numbers are displayed when
 the number of connections in a bucket is greater than \fIThreshold\fR.
+.
+.TP
+\*(DX\fBct\-set\-maxconns\fR [\fIdp\fR] \fBparam\fR
+Set the maximum limit of connection tracker connections.
+Can be used to reduce the processing load on the system due to
+connection tracking or simply limiting connection tracking.
+If the number of connections is already beyond the new maximum limit
+request for the number of connections then the new maximum limit will
+be enforced when the number of connections decreases to that limit, which
+normally happens due to connection expiry.  Only supported for userspace
+datapath.
+.
+.TP
+\*(DX\fBct\-get\-maxconns\fR [\fIdp\fR]
+Read the maximum limit of connection tracker connections.
+Only supported for userspace datapath.

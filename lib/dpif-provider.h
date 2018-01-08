@@ -437,6 +437,10 @@ struct dpif_class {
      *     (zone 0). */
     int (*ct_flush)(struct dpif *, const uint16_t *zone,
                     const struct ct_dpif_tuple *tuple);
+    /* Set max connections allowed. */
+    int (*ct_set_maxconns)(struct dpif *, uint32_t maxconns);
+    /* Get max connections allowed. */
+    int (*ct_get_maxconns)(struct dpif *, uint32_t *maxconns);
 
     /* Meters */
 

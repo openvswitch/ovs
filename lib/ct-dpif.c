@@ -140,6 +140,22 @@ ct_dpif_flush(struct dpif *dpif, const uint16_t *zone,
             : EOPNOTSUPP);
 }
 
+int
+ct_dpif_set_maxconns(struct dpif *dpif, uint32_t maxconns)
+{
+    return (dpif->dpif_class->ct_set_maxconns
+            ? dpif->dpif_class->ct_set_maxconns(dpif, maxconns)
+            : EOPNOTSUPP);
+}
+
+int
+ct_dpif_get_maxconns(struct dpif *dpif, uint32_t *maxconns)
+{
+    return (dpif->dpif_class->ct_get_maxconns
+            ? dpif->dpif_class->ct_get_maxconns(dpif, maxconns)
+            : EOPNOTSUPP);
+}
+
 void
 ct_dpif_entry_uninit(struct ct_dpif_entry *entry)
 {

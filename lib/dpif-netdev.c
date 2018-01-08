@@ -5846,6 +5846,22 @@ dpif_netdev_ct_flush(struct dpif *dpif, const uint16_t *zone,
     return conntrack_flush(&dp->conntrack, zone);
 }
 
+static int
+dpif_netdev_ct_set_maxconns(struct dpif *dpif, uint32_t maxconns)
+{
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+
+    return conntrack_set_maxconns(&dp->conntrack, maxconns);
+}
+
+static int
+dpif_netdev_ct_get_maxconns(struct dpif *dpif, uint32_t *maxconns)
+{
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+
+    return conntrack_get_maxconns(&dp->conntrack, maxconns);
+}
+
 const struct dpif_class dpif_netdev_class = {
     "netdev",
     dpif_netdev_init,
@@ -5891,6 +5907,8 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_ct_dump_next,
     dpif_netdev_ct_dump_done,
     dpif_netdev_ct_flush,
+    dpif_netdev_ct_set_maxconns,
+    dpif_netdev_ct_get_maxconns,
     dpif_netdev_meter_get_features,
     dpif_netdev_meter_set,
     dpif_netdev_meter_get,

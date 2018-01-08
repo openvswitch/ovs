@@ -1655,6 +1655,76 @@ dpctl_ct_bkts(int argc, const char *argv[],
     return error;
 }
 
+static int
+dpctl_ct_open_dp(int argc, const char *argv[],
+                 struct dpctl_params *dpctl_p, struct dpif **dpif,
+                 uint8_t max_args)
+{
+    int error = 0;
+    /* The datapath name is not a mandatory parameter for this command.
+     * If it is not specified - so argc < max_args - we retrieve it from the
+     * current setup, assuming only one exists. */
+    char *dpname = argc >= max_args ? xstrdup(argv[1]) : get_one_dp(dpctl_p);
+    if (!dpname) {
+        error = EINVAL;
+        dpctl_error(dpctl_p, error, "datapath not found");
+    } else {
+        error = parsed_dpif_open(dpname, false, dpif);
+        free(dpname);
+        if (error) {
+            dpctl_error(dpctl_p, error, "opening datapath");
+        }
+    }
+    return error;
+}
+
+static int
+dpctl_ct_set_maxconns(int argc, const char *argv[],
+                      struct dpctl_params *dpctl_p)
+{
+    struct dpif *dpif;
+    int error = dpctl_ct_open_dp(argc, argv, dpctl_p, &dpif, 3);
+    if (!error) {
+        uint32_t maxconns;
+        if (ovs_scan(argv[argc - 1], "%"SCNu32, &maxconns)) {
+            error = ct_dpif_set_maxconns(dpif, maxconns);
+
+            if (!error) {
+                dpctl_print(dpctl_p, "setting maxconns successful");
+            } else {
+                dpctl_error(dpctl_p, error, "ct set maxconns failed");
+            }
+        } else {
+            error = EINVAL;
+            dpctl_error(dpctl_p, error, "maxconns missing or malformed");
+        }
+        dpif_close(dpif);
+    }
+
+    return error;
+}
+
+static int
+dpctl_ct_get_maxconns(int argc, const char *argv[],
+                    struct dpctl_params *dpctl_p)
+{
+    struct dpif *dpif;
+    int error = dpctl_ct_open_dp(argc, argv, dpctl_p, &dpif, 2);
+    if (!error) {
+        uint32_t maxconns;
+        error = ct_dpif_get_maxconns(dpif, &maxconns);
+
+        if (!error) {
+            dpctl_print(dpctl_p, "%u\n", maxconns);
+        } else {
+            dpctl_error(dpctl_p, error, "maxconns could not be retrieved");
+        }
+        dpif_close(dpif);
+    }
+
+    return error;
+}
+
 /* Undocumented commands for unit testing. */
 
 static int
@@ -1951,6 +2021,8 @@ static const struct dpctl_command all_commands[] = {
     { "ct-stats-show", "[dp] [zone=N] [verbose]",
       0, 3, dpctl_ct_stats_show, DP_RO },
     { "ct-bkts", "[dp] [gt=N]", 0, 2, dpctl_ct_bkts, DP_RO },
+    { "ct-set-maxconns", "[dp] maxconns", 1, 2, dpctl_ct_set_maxconns, DP_RW },
+    { "ct-get-maxconns", "[dp]", 0, 1, dpctl_ct_get_maxconns, DP_RO },
     { "help", "", 0, INT_MAX, dpctl_help, DP_RO },
     { "list-commands", "", 0, INT_MAX, dpctl_list_commands, DP_RO },
 
