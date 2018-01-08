@@ -251,6 +251,8 @@ static void delete_flows__(struct rule_collection *,
                            const struct openflow_mod_requester *)
     OVS_REQUIRES(ofproto_mutex);
 
+static void ofproto_group_delete_all__(struct ofproto *)
+    OVS_REQUIRES(ofproto_mutex);
 static bool ofproto_group_exists(const struct ofproto *, uint32_t group_id);
 static void handle_openflow(struct ofconn *, const struct ofpbuf *);
 static enum ofperr ofproto_flow_mod_init(struct ofproto *,
@@ -1566,6 +1568,8 @@ ofproto_flush__(struct ofproto *ofproto)
         }
         delete_flows__(&rules, OFPRR_DELETE, NULL);
     }
+    ofproto_group_delete_all__(ofproto);
+    meter_delete_all(ofproto);
     /* XXX: Concurrent handler threads may insert new learned flows based on
      * learn actions of the now deleted flows right after we release
      * 'ofproto_mutex'. */
@@ -1598,6 +1602,8 @@ ofproto_destroy__(struct ofproto *ofproto)
         oftable_destroy(table);
     }
     free(ofproto->tables);
+
+    hmap_destroy(&ofproto->meters);
 
     ovs_mutex_lock(&ofproto->vl_mff_map.mutex);
     mf_vl_mff_map_clear(&ofproto->vl_mff_map, true);
@@ -1636,9 +1642,6 @@ ofproto_destroy(struct ofproto *p, bool del)
     if (!p) {
         return;
     }
-
-    meter_delete_all(p);
-    hmap_destroy(&p->meters);
 
     ofproto_flush__(p);
     HMAP_FOR_EACH_SAFE (ofport, next_ofport, hmap_node, &p->ports) {
@@ -7365,20 +7368,30 @@ ofproto_group_mod_finish(struct ofproto *ofproto,
  *
  * This is intended for use within an ofproto provider's 'destruct'
  * function. */
+static void
+ofproto_group_delete_all__(struct ofproto *ofproto)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    struct ofproto_group_mod ogm;
+    ogm.gm.command = OFPGC11_DELETE;
+    ogm.gm.group_id = OFPG_ALL;
+    ogm.version = ofproto->tables_version + 1;
+
+    ofproto_group_mod_start(ofproto, &ogm);
+    ofproto_bump_tables_version(ofproto);
+    ofproto_group_mod_finish(ofproto, &ogm, NULL);
+}
+
+/* Delete all groups from 'ofproto'.
+ *
+ * This is intended for use within an ofproto provider's 'destruct'
+ * function. */
 void
 ofproto_group_delete_all(struct ofproto *ofproto)
     OVS_EXCLUDED(ofproto_mutex)
 {
-    struct ofproto_group_mod ogm;
-
-    ogm.gm.command = OFPGC11_DELETE;
-    ogm.gm.group_id = OFPG_ALL;
-
     ovs_mutex_lock(&ofproto_mutex);
-    ogm.version = ofproto->tables_version + 1;
-    ofproto_group_mod_start(ofproto, &ogm);
-    ofproto_bump_tables_version(ofproto);
-    ofproto_group_mod_finish(ofproto, &ogm, NULL);
+    ofproto_group_delete_all__(ofproto);
     ovs_mutex_unlock(&ofproto_mutex);
 }
 

@@ -766,12 +766,12 @@
 
         <p>
           If there are primary controllers, removing all of them clears the
-          flow table.  If there are no primary controllers, adding one also
-          clears the flow table.  Other changes to the set of controllers, such
-          as adding or removing a service controller, adding another primary
-          controller to supplement an existing primary controller, or removing
-          only one of two primary controllers, have no effect on the flow
-          table.
+          OpenFlow flow tables, group table, and meter table.  If there are no
+          primary controllers, adding one also clears these tables.  Other
+          changes to the set of controllers, such as adding or removing a
+          service controller, adding another primary controller to supplement
+          an existing primary controller, or removing only one of two primary
+          controllers, have no effect on these tables.
         </p>
       </column>
 
@@ -821,7 +821,8 @@
         configured controllers can be contacted.</p>
         <p>
           Changing <ref column="fail_mode"/> when no primary controllers are
-          configured clears the flow table.
+          configured clears the OpenFlow flow tables, group table, and meter
+          table.
         </p>
       </column>
 

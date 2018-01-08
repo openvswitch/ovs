@@ -6050,3 +6050,61 @@ OVS_VSWITCHD_STOP(["/NXFMFC_INVALID_TLV_FIELD/d
 /tun_metadata0/d
 /OFPBAC_BAD_SET_LEN/d"])
 AT_CLEANUP
+
+AT_SETUP([ofproto - flush flows, groups, and meters for controller change])
+AT_KEYWORDS([flow flows group group meter])
+OVS_VSWITCHD_START
+
+add_flow_group_and_meter () {
+    AT_CHECK([ovs-ofctl add-flow br0 in_port=1,actions=2])
+    AT_CHECK([ovs-ofctl -O OpenFlow11 add-group br0 group_id=1234,type=all,bucket=output:10
+    AT_CHECK([ovs-ofctl -O OpenFlow13 add-meter br0 'meter=1 pktps burst stats bands=type=drop rate=1 burst_size=1'])
+])
+}
+
+verify_added () {
+    AT_CHECK([ovs-ofctl --no-stats dump-flows br0], [0], [dnl
+ in_port=1 actions=output:2
+])
+    AT_CHECK([ovs-ofctl -O OpenFlow11 dump-groups br0], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.1) (xid=0x2):
+ group_id=1234,type=all,bucket=actions=output:10
+])
+    AT_CHECK([ovs-ofctl -O OpenFlow13 dump-meters br0], [0], [dnl
+OFPST_METER_CONFIG reply (OF1.3) (xid=0x2):
+meter=1 pktps burst stats bands=
+type=drop rate=1 burst_size=1
+])
+}
+
+verify_deleted () {
+    AT_CHECK([ovs-ofctl --no-stats dump-flows br0])
+    AT_CHECK([ovs-ofctl -O OpenFlow11 dump-groups br0], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.1) (xid=0x2):
+])
+    AT_CHECK([ovs-ofctl -O OpenFlow13 dump-meters br0], [0], [dnl
+OFPST_METER_CONFIG reply (OF1.3) (xid=0x2):
+])
+}
+
+# Add flow, group, meter and check that they're there, without a controller.
+add_flow_group_and_meter
+verify_added
+
+# Set up a controller and verify that the flow and group were deleted,
+# then add them back.
+AT_CHECK([ovs-vsctl set-controller br0 'tcp:<invalid>:6653'])
+verify_deleted
+add_flow_group_and_meter
+verify_added
+
+# Change the controller and verify that the flow and group are still there.
+AT_CHECK([ovs-vsctl set-controller br0 'tcp:<invalid2>:6653'])
+verify_added
+
+# Clear the controller and verify that the flow and group were deleted.
+AT_CHECK([ovs-vsctl del-controller br0])
+verify_deleted
+
+OVS_VSWITCHD_STOP(["/<invalid/d"])
+AT_CLEANUP
