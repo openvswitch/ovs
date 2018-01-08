@@ -203,6 +203,7 @@ Lili Huang                      huanglili.huang@huawei.com
 Linda Sun                       lsun@vmware.com
 Lior Neudorfer                  lior@guardicore.com
 Lorand Jakab                    lojakab@cisco.com
+Lorenzo Bianconi                lorenzo.bianconi@redhat.com
 Luca Giraudo                    lgiraudo@nicira.com
 Lucas Alvares Gomes             lucasagomes@gmail.com
 Lucian Petrut                   lpetrut@cloudbasesolutions.com
