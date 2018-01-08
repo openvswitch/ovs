@@ -26,7 +26,12 @@ INACTIVE_PROBE=${OCF_RESKEY_inactive_probe_interval:-${INACTIVE_PROBE_DEFAULT}}
 # a master is promoted and the IPAddr2 resource is started.
 INVALID_IP_ADDRESS=192.0.2.254
 
-host_name=$(ocf_local_nodename)
+host_name=$(ocf_attribute_target)
+if [ "x$host_name" = "x" ]; then
+    # function ocf_attribute_target may not be available if the pacemaker
+    # version is old. Fall back to ocf_local_nodename.
+    host_name=$(ocf_local_nodename)
+fi
 : ${slave_score=5}
 : ${master_score=10}
 
@@ -142,7 +147,7 @@ ovsdb_server_notify() {
     fi
 
     ocf_log debug "ovndb_server: notified of event $type_op"
-    if [ "x${OCF_RESKEY_CRM_meta_notify_promote_uname}" = "x${host_name}" ]; then
+    if [ "x$(ovsdb_server_last_known_master)" = "x${host_name}" ]; then
         # Record ourselves so that the agent has a better chance of doing
         # the right thing at startup
         ocf_log debug "ovndb_server: $host_name is the master"
@@ -220,31 +225,20 @@ ovsdb_server_find_active_master() {
     esac
 }
 
-ovsdb_server_find_active_peers() {
-    # Do we have any peers that are not stopping
-    for peer in ${OCF_RESKEY_CRM_meta_notify_slave_uname}; do
-        found=0
-        for old in ${OCF_RESKEY_CRM_meta_notify_stop_uname}; do
-            if [ $peer = $old ]; then
-                found=1
-            fi
-        done
-        if [ $found = 0 ]; then
-            # Rely on master-max=1
-            # Pacemaker will demote any additional ones it finds before starting new copies
-            echo "$peer"
-            return
-        fi
-    done
+ovsdb_server_last_known_master()
+{
+    if [ -z "$MASTER_HOST" ]; then
+        MASTER_HOST="$(${CRM_ATTR_REPL_INFO} --query  -q  2>/dev/null)"
+    fi
+    echo "$MASTER_HOST"
 }
 
 ovsdb_server_master_update() {
-
     case $1 in
         $OCF_SUCCESS)
-        $CRM_MASTER -v ${slave_score};;
+        $CRM_MASTER -N $host_name -v ${slave_score};;
         $OCF_RUNNING_MASTER)
-            $CRM_MASTER -v ${master_score};;
+            $CRM_MASTER -N $host_name -v ${master_score};;
         #*) $CRM_MASTER -D;;
     esac
 }
@@ -349,12 +343,17 @@ ovsdb_server_start() {
                 # When the start action is called, it is possible for the
                 # ovsdb-server's to be started as active. This could happen
                 # if the node owns the $MASTER_IP. At this point, pacemaker
-                # has not promoted this node yet. So return OCF_SUCCESS.
+                # has not promoted this node yet. Demote it and check for
+                # status again.
                 # Let pacemaker promote it in subsequent actions.
                 # As per the OCF guidelines, only monitor action should return
                 # OCF_RUNNING_MASTER.
                 # http://www.linux-ha.org/doc/dev-guides/_literal_ocf_running_master_literal_8.html
-                return $OCF_SUCCESS;;
+                ${OVN_CTL} demote_ovnnb \
+                --db-nb-sync-from-addr=${INVALID_IP_ADDRESS}
+                ${OVN_CTL} demote_ovnsb \
+                --db-sb-sync-from-addr=${INVALID_IP_ADDRESS}
+                ;;
             $OCF_ERR_GENERIC)    return $rc;;
             # Otherwise loop, waiting for the service to start, until
             # the cluster times the operation out
@@ -373,7 +372,11 @@ ovsdb_server_stop() {
 
     ovsdb_server_check_status ignore_northd
     case $? in
-        $OCF_NOT_RUNNING)    return ${OCF_SUCCESS};;
+        $OCF_NOT_RUNNING)
+          # Even if one server is down, check_status returns NOT_RUNNING.
+          # So before returning call stop_ovsdb to be sure.
+          ${OVN_CTL} stop_ovsdb
+          return ${OCF_SUCCESS};;
     esac
 
     ${OVN_CTL} stop_ovsdb
