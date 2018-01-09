@@ -132,8 +132,8 @@ void ofconn_send_error(const struct ofconn *, const struct ofp_header *request,
 struct ofp_bundle;
 
 struct ofp_bundle *ofconn_get_bundle(struct ofconn *, uint32_t id);
-enum ofperr ofconn_insert_bundle(struct ofconn *, struct ofp_bundle *);
-enum ofperr ofconn_remove_bundle(struct ofconn *, struct ofp_bundle *);
+void ofconn_insert_bundle(struct ofconn *, struct ofp_bundle *);
+void ofconn_remove_bundle(struct ofconn *, struct ofp_bundle *);
 
 /* Logging flow_mod summaries. */
 void ofconn_report_flow_mod(struct ofconn *, enum ofp_flow_mod_command);

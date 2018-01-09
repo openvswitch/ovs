@@ -7792,7 +7792,7 @@ do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
         if (error) {
             /* Send error referring to the original message. */
             if (error) {
-                ofconn_send_error(ofconn, &be->ofp_msg, error);
+                ofconn_send_error(ofconn, be->msg, error);
                 error = OFPERR_OFPBFC_MSG_FAILED;
             }
 
@@ -7834,8 +7834,7 @@ do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
                             ofproto, ofproto->tables_version);
                     }
 
-                    struct openflow_mod_requester req = { ofconn,
-                                                          &be->ofp_msg };
+                    struct openflow_mod_requester req = { ofconn, be->msg };
 
                     if (be->type == OFPTYPE_FLOW_MOD) {
                         ofproto_flow_mod_finish(ofproto, &be->ofm, &req);

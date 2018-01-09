@@ -35,17 +35,12 @@ struct ofp_bundle_entry {
     struct ovs_list   node;
     enum ofptype      type;  /* OFPTYPE_FLOW_MOD, OFPTYPE_PORT_MOD,
                               * OFPTYPE_GROUP_MOD, OFPTYPE_PACKET_OUT. */
+    struct ofp_header *msg;  /* Original request, for error reporting. */
     union {
         struct ofproto_flow_mod ofm;
         struct ofproto_port_mod opm;
         struct ofproto_group_mod ogm;
         struct ofproto_packet_out opo;
-    };
-
-    /* OpenFlow header and some of the message contents for error reporting. */
-    union {
-        struct ofp_header ofp_msg;
-        uint8_t ofp_msg_data[64];
     };
 };
 
@@ -60,15 +55,8 @@ struct ofp_bundle {
     uint32_t          id;
     uint16_t          flags;
     enum bundle_state state;
-
-    /* List of 'struct bundle_message's */
-    struct ovs_list   msg_list;
-
-    /* OpenFlow header and some of the message contents for error reporting. */
-    union {
-        struct ofp_header ofp_msg;
-        uint8_t ofp_msg_data[64];
-    };
+    struct ofp_header *msg;      /* Original request, for error reporting. */
+    struct ovs_list   msg_list;  /* List of 'struct bundle_message's */
 };
 
 static inline struct ofp_bundle_entry *ofp_bundle_entry_alloc(
@@ -91,10 +79,7 @@ ofp_bundle_entry_alloc(enum ofptype type, const struct ofp_header *oh)
     struct ofp_bundle_entry *entry = xmalloc(sizeof *entry);
 
     entry->type = type;
-
-    /* Max 64 bytes for error reporting. */
-    memcpy(entry->ofp_msg_data, oh,
-           MIN(ntohs(oh->length), sizeof entry->ofp_msg_data));
+    entry->msg = xmemdup(oh, ntohs(oh->length));
 
     return entry;
 }
@@ -110,6 +95,7 @@ ofp_bundle_entry_free(struct ofp_bundle_entry *entry)
         } else if (entry->type == OFPTYPE_PACKET_OUT) {
             ofproto_packet_out_uninit(&entry->opo);
         }
+        free(entry->msg);
         free(entry);
     }
 }

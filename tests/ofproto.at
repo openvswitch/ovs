@@ -590,6 +590,7 @@ AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,comman
 AT_CHECK([strip_xids < stderr | sed '/truncated/,$d'], [0], [dnl
 OFPT_ERROR (OF1.5): OFPGMFC_BUCKET_EXISTS
 OFPT_GROUP_MOD (OF1.5):
+ INSERT_BUCKET command_bucket_id:last,group_id=1234,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15
 ])
 
 
@@ -1032,18 +1033,9 @@ udp actions=group:1235
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-flow br0 'tcp actions=group:1234'])
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-flow br0 'tcp actions=group:1235'], [1], [], [stderr])
 
-# The output should look like this:
-#
-# 00000000  02 0e 00 98 00 00 00 02-00 00 00 00 00 00 00 00 |................|
-# 00000010  00 00 00 00 00 00 00 00-ff 00 00 00 00 00 80 00 |................|
-# 00000020  ff ff ff ff ff ff ff ff-ff ff ff ff 00 00 00 00 |................|
-# 00000030  00 00 00 58 00 00 00 00-00 00 03 d7 00 00 00 00 |...X............|
-#
-# This 'sed' command captures the error message but drops details.
-AT_CHECK([sed '/truncated/d
-/^000000.0/d' stderr | strip_xids], [0],
+AT_CHECK([strip_xids < stderr], [0],
   [OFPT_ERROR (OF1.1): OFPBAC_BAD_OUT_GROUP
-OFPT_FLOW_MOD (OF1.1):
+OFPT_FLOW_MOD (OF1.1): ADD tcp actions=group:1235
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -1057,16 +1049,7 @@ flow add udp actions=group:1235
 ])
 AT_CHECK([ovs-ofctl -vwarn bundle br0 bundle.txt], [1], [], [stderr])
 
-# The output should look like this:
-#
-# 00000000  02 0e 00 98 00 00 00 02-00 00 00 00 00 00 00 00 |................|
-# 00000010  00 00 00 00 00 00 00 00-ff 00 00 00 00 00 80 00 |................|
-# 00000020  ff ff ff ff ff ff ff ff-ff ff ff ff 00 00 00 00 |................|
-# 00000030  00 00 00 58 00 00 00 00-00 00 03 d7 00 00 00 00 |...X............|
-#
-# This 'sed' command captures the error message but drops details.
-AT_CHECK([sed '/truncated/d
-/^000000.0/d' stderr | ofctl_strip | sed '/talking to/,$d'], [0],
+AT_CHECK([ofctl_strip < stderr | sed '/talking to/,$d'], [0],
   [dnl
 Error OFPBAC_BAD_OUT_GROUP for: OFPT_FLOW_MOD (OF1.4): ADD udp actions=group:1235
 Error OFPBFC_MSG_FAILED for: OFPT_BUNDLE_CONTROL (OF1.4):
@@ -2696,13 +2679,15 @@ NXST_FLOW reply:
 ])
 # Adding another flow will be refused.
 AT_CHECK([ovs-ofctl add-flow br0 in_port=5,actions=drop], [1], [], [stderr])
-AT_CHECK([head -n 1 stderr | ofctl_strip], [0],
+AT_CHECK([ofctl_strip < stderr], [0],
   [OFPT_ERROR: OFPFMFC_TABLE_FULL
+OFPT_FLOW_MOD: ADD in_port=5 actions=drop
 ])
 # Also a mod-flow that would add a flow will be refused.
 AT_CHECK([ovs-ofctl mod-flows br0 in_port=5,actions=drop], [1], [], [stderr])
-AT_CHECK([head -n 1 stderr | ofctl_strip], [0],
+AT_CHECK([ofctl_strip < stderr], [0],
   [OFPT_ERROR: OFPFMFC_TABLE_FULL
+OFPT_FLOW_MOD: MOD in_port=5 actions=drop
 ])
 # Replacing or modifying an existing flow is allowed.
 AT_CHECK([ovs-ofctl add-flow br0 in_port=4,actions=normal])
@@ -2740,8 +2725,9 @@ OFPST_FLOW reply (OF1.2):
 ])
 # Adding another flow will be refused.
 AT_CHECK([ovs-ofctl -O OpenFlow12 add-flow br0 in_port=5,actions=drop], [1], [], [stderr])
-AT_CHECK([head -n 1 stderr | ofctl_strip], [0],
+AT_CHECK([ofctl_strip < stderr], [0],
   [OFPT_ERROR (OF1.2): OFPFMFC_TABLE_FULL
+OFPT_FLOW_MOD (OF1.2): ADD in_port=5 actions=drop
 ])
 # Replacing or modifying an existing flow is allowed.
 AT_CHECK([ovs-ofctl -O OpenFlow12 add-flow br0 in_port=4,actions=normal])
@@ -2801,8 +2787,9 @@ NXST_FLOW reply:
 # Flows with no timeouts at all cannot be evicted.
 AT_CHECK([ovs-ofctl add-flow br0 in_port=7,actions=normal])
 AT_CHECK([ovs-ofctl add-flow br0 in_port=8,actions=drop], [1], [], [stderr])
-AT_CHECK([head -n 1 stderr | ofctl_strip], [0],
+AT_CHECK([ofctl_strip < stderr], [0],
   [OFPT_ERROR: OFPFMFC_TABLE_FULL
+OFPT_FLOW_MOD: ADD in_port=8 actions=drop
 ])
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  in_port=4 actions=NORMAL
@@ -2860,8 +2847,9 @@ OFPST_FLOW reply (OF1.2):
 AT_CHECK([ovs-ofctl -O OpenFlow12 add-flow br0 in_port=6,actions=drop])
 AT_CHECK([ovs-ofctl -O OpenFlow12 add-flow br0 in_port=7,actions=normal])
 AT_CHECK([ovs-ofctl -O OpenFlow12 add-flow br0 in_port=8,actions=drop], [1], [], [stderr])
-AT_CHECK([head -n 1 stderr | ofctl_strip], [0],
+AT_CHECK([ofctl_strip < stderr], [0],
   [OFPT_ERROR (OF1.2): OFPFMFC_TABLE_FULL
+OFPT_FLOW_MOD (OF1.2): ADD in_port=8 actions=drop
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
  in_port=4 actions=NORMAL
@@ -2909,8 +2897,9 @@ OFPST_FLOW reply (OF1.4):
 AT_CHECK([ovs-ofctl -O OpenFlow14 mod-table br0 0 noevict])
 # Adding another flow will cause the system to give error for FULL TABLE.
 AT_CHECK([ovs-ofctl -O Openflow14 add-flow br0 hard_timeout=506,importance=36,priority=11,actions=drop],[1], [], [stderr])
-AT_CHECK([head -n 1 stderr | ofctl_strip], [0],
+AT_CHECK([ofctl_strip < stderr], [0],
  [OFPT_ERROR (OF1.4): OFPFMFC_TABLE_FULL
+OFPT_FLOW_MOD (OF1.4): ADD priority=11 hard:506 importance:36 actions=drop
 ])
 #Dump flows. It should show only the old values
 AT_CHECK([ovs-ofctl -O Openflow14 dump-flows br0 | ofctl_strip | sort], [0], [dnl
@@ -2931,8 +2920,9 @@ OFPST_FLOW reply (OF1.4):
 ])
 # Also a mod-flow that would add a flow will be refused.
 AT_CHECK([ovs-ofctl mod-flows br0 in_port=5,actions=drop], [1], [], [stderr])
-AT_CHECK([head -n 1 stderr | ofctl_strip], [0],
+AT_CHECK([ofctl_strip < stderr], [0],
   [OFPT_ERROR: OFPFMFC_TABLE_FULL
+OFPT_FLOW_MOD: MOD in_port=5 actions=drop
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

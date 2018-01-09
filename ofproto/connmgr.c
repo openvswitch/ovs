@@ -1139,8 +1139,7 @@ ofconn_send_replies(const struct ofconn *ofconn, struct ovs_list *replies)
     }
 }
 
-/* Sends 'error' on 'ofconn', as a reply to 'request'.  Only at most the
- * first 64 bytes of 'request' are used. */
+/* Sends 'error' on 'ofconn', as a reply to 'request'. */
 void
 ofconn_send_error(const struct ofconn *ofconn,
                   const struct ofp_header *request, enum ofperr error)
@@ -1222,20 +1221,16 @@ ofconn_get_bundle(struct ofconn *ofconn, uint32_t id)
     return NULL;
 }
 
-enum ofperr
+void
 ofconn_insert_bundle(struct ofconn *ofconn, struct ofp_bundle *bundle)
 {
     hmap_insert(&ofconn->bundles, &bundle->node, bundle_hash(bundle->id));
-
-    return 0;
 }
 
-enum ofperr
+void
 ofconn_remove_bundle(struct ofconn *ofconn, struct ofp_bundle *bundle)
 {
     hmap_remove(&ofconn->bundles, &bundle->node);
-
-    return 0;
 }
 
 static void
@@ -1256,7 +1251,7 @@ bundle_remove_expired(struct ofconn *ofconn, long long int now)
 
     HMAP_FOR_EACH_SAFE (b, next, node, &ofconn->bundles) {
         if (b->used <= limit) {
-            ofconn_send_error(ofconn, &b->ofp_msg, OFPERR_OFPBFC_TIMEOUT);
+            ofconn_send_error(ofconn, b->msg, OFPERR_OFPBFC_TIMEOUT);
             ofp_bundle_remove__(ofconn, b);
         }
     }

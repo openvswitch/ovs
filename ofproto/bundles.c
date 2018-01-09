@@ -51,12 +51,9 @@ ofp_bundle_create(uint32_t id, uint16_t flags, const struct ofp_header *oh)
     bundle->id = id;
     bundle->flags = flags;
     bundle->state = BS_OPEN;
+    bundle->msg = xmemdup(oh, ntohs(oh->length));
 
     ovs_list_init(&bundle->msg_list);
-
-    /* Max 64 bytes for error reporting. */
-    memcpy(bundle->ofp_msg_data, oh,
-           MIN(ntohs(oh->length), sizeof bundle->ofp_msg_data));
 
     return bundle;
 }
@@ -71,6 +68,7 @@ ofp_bundle_remove__(struct ofconn *ofconn, struct ofp_bundle *bundle)
     }
 
     ofconn_remove_bundle(ofconn, bundle);
+    free(bundle->msg);
     free(bundle);
 }
 
@@ -79,7 +77,6 @@ ofp_bundle_open(struct ofconn *ofconn, uint32_t id, uint16_t flags,
                 const struct ofp_header *oh)
 {
     struct ofp_bundle *bundle;
-    enum ofperr error;
 
     bundle = ofconn_get_bundle(ofconn, id);
 
@@ -91,12 +88,9 @@ ofp_bundle_open(struct ofconn *ofconn, uint32_t id, uint16_t flags,
     }
 
     bundle = ofp_bundle_create(id, flags, oh);
-    error = ofconn_insert_bundle(ofconn, bundle);
-    if (error) {
-        free(bundle);
-    }
+    ofconn_insert_bundle(ofconn, bundle);
 
-    return error;
+    return 0;
 }
 
 enum ofperr
@@ -150,14 +144,8 @@ ofp_bundle_add_message(struct ofconn *ofconn, uint32_t id, uint16_t flags,
     bundle = ofconn_get_bundle(ofconn, id);
 
     if (!bundle) {
-        enum ofperr error;
-
         bundle = ofp_bundle_create(id, flags, oh);
-        error = ofconn_insert_bundle(ofconn, bundle);
-        if (error) {
-            free(bundle);
-            return error;
-        }
+        ofconn_insert_bundle(ofconn, bundle);
     } else if (bundle->state == BS_CLOSED) {
         ofp_bundle_remove__(ofconn, bundle);
         return OFPERR_OFPBFC_BUNDLE_CLOSED;
