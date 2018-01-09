@@ -1330,7 +1330,7 @@ dpif_read_actions(struct udpif *udpif, struct upcall *upcall,
 
     switch (type) {
     case SFLOW_UPCALL:
-        dpif_sflow_read_actions(flow, actions, actions_len, upcall_data);
+        dpif_sflow_read_actions(flow, actions, actions_len, upcall_data, true);
         break;
     case FLOW_SAMPLE_UPCALL:
     case IPFIX_UPCALL:

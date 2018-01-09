@@ -71,7 +71,7 @@ void dpif_sflow_wait(struct dpif_sflow *);
 
 void dpif_sflow_read_actions(const struct flow *,
                              const struct nlattr *actions, size_t actions_len,
-                             struct dpif_sflow_actions *);
+                             struct dpif_sflow_actions *, bool capture_mpls);
 
 void dpif_sflow_received(struct dpif_sflow *, const struct dp_packet *,
                          const struct flow *, odp_port_t odp_port,
