@@ -82,9 +82,9 @@ struct alg_exp_node {
      * connection label and mark. */
     ovs_u128 master_label;
     uint32_t master_mark;
-    /* True if the expectation is for passive mode, as is
-     * one option for FTP. */
-    bool passive_mode;
+    /* True if for NAT application, the alg replaces the dest address;
+     * otherwise, the source address is replaced.  */
+    bool nat_rpl_dst;
 };
 
 struct conn {

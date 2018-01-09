@@ -71,6 +71,9 @@ enum ct_alg_ctl_type {
     CT_ALG_CTL_NONE,
     CT_ALG_CTL_FTP,
     CT_ALG_CTL_TFTP,
+    /* SIP is not enabled through Openflow and presently only used as
+     * an example of an alg that allows a wildcard src ip. */
+    CT_ALG_CTL_SIP,
 };
 
 static bool conn_key_extract(struct conntrack *, struct dp_packet *,
@@ -128,8 +131,8 @@ extract_l3_ipv6(struct conn_key *key, const void *data, size_t size,
                 const char **new_data);
 
 static struct alg_exp_node *
-expectation_lookup(struct hmap *alg_expectations,
-                   const struct conn_key *key, uint32_t basis);
+expectation_lookup(struct hmap *alg_expectations, const struct conn_key *key,
+                   uint32_t basis, bool src_ip_wc);
 
 static int
 repl_ftp_v4_addr(struct dp_packet *pkt, ovs_be32 v4_addr_rep,
@@ -168,7 +171,7 @@ handle_ftp_ctl(struct conntrack *ct, const struct conn_lookup_ctx *ctx,
 static void
 handle_tftp_ctl(struct conntrack *ct,
                 const struct conn_lookup_ctx *ctx OVS_UNUSED,
-                struct dp_packet *pkt OVS_UNUSED,
+                struct dp_packet *pkt,
                 const struct conn *conn_for_expectation,
                 long long now OVS_UNUSED,
                 enum ftp_ctl_pkt ftp_ctl OVS_UNUSED, bool nat OVS_UNUSED);
@@ -501,6 +504,15 @@ get_alg_ctl_type(const struct dp_packet *pkt, ovs_be16 tp_src, ovs_be16 tp_dst,
         return CT_ALG_CTL_FTP;
     }
     return CT_ALG_CTL_NONE;
+}
+
+static bool
+alg_src_ip_wc(enum ct_alg_ctl_type alg_ctl_type)
+{
+    if (alg_ctl_type == CT_ALG_CTL_SIP) {
+        return true;
+    }
+    return false;
 }
 
 static void
@@ -889,7 +901,7 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
             nc->nat_info = xmemdup(nat_action_info, sizeof *nc->nat_info);
 
             if (alg_exp) {
-                if (alg_exp->passive_mode) {
+                if (alg_exp->nat_rpl_dst) {
                     nc->rev_key.dst.addr = alg_exp->alg_nat_repl_addr;
                     nc->nat_info->nat_action = NAT_ACTION_SRC;
                 } else {
@@ -1249,7 +1261,8 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
 
         ct_rwlock_rdlock(&ct->resources_lock);
         alg_exp = expectation_lookup(&ct->alg_expectations, &ctx->key,
-                                     ct->hash_basis);
+                                     ct->hash_basis,
+                                     alg_src_ip_wc(ct_alg_ctl));
         if (alg_exp) {
             alg_exp_entry = *alg_exp;
             alg_exp = &alg_exp_entry;
@@ -2551,11 +2564,14 @@ conntrack_get_nconns(struct conntrack *ct, uint32_t *nconns)
 
 /* This function must be called with the ct->resources read lock taken. */
 static struct alg_exp_node *
-expectation_lookup(struct hmap *alg_expectations,
-                   const struct conn_key *key, uint32_t basis)
+expectation_lookup(struct hmap *alg_expectations, const struct conn_key *key,
+                   uint32_t basis, bool src_ip_wc)
 {
     struct conn_key check_key = *key;
     check_key.src.port = ALG_WC_SRC_PORT;
+    if (src_ip_wc) {
+        memset(&check_key.src.addr, 0, sizeof check_key.src.addr);
+    }
     struct alg_exp_node *alg_exp_node;
 
     uint32_t alg_exp_conn_key_hash = conn_key_hash(&check_key, basis);
@@ -2640,33 +2656,38 @@ expectation_clean(struct conntrack *ct, const struct conn_key *master_key,
 }
 
 static void
-expectation_create(struct conntrack *ct,
-                   ovs_be16 dst_port,
-                   enum ct_alg_mode mode,
-                   const struct conn *master_conn)
+expectation_create(struct conntrack *ct, ovs_be16 dst_port,
+                   const struct conn *master_conn, bool reply, bool src_ip_wc,
+                   bool skip_nat)
 {
     struct ct_addr src_addr;
     struct ct_addr dst_addr;
     struct ct_addr alg_nat_repl_addr;
+    struct alg_exp_node *alg_exp_node = xzalloc(sizeof *alg_exp_node);
 
-    switch (mode) {
-    case CT_FTP_MODE_ACTIVE:
-    case CT_TFTP_MODE:
-        src_addr = master_conn->rev_key.src.addr;
-        dst_addr = master_conn->rev_key.dst.addr;
-        alg_nat_repl_addr = master_conn->key.src.addr;
-        break;
-    case CT_FTP_MODE_PASSIVE:
+    if (reply) {
         src_addr = master_conn->key.src.addr;
         dst_addr = master_conn->key.dst.addr;
-        alg_nat_repl_addr = master_conn->rev_key.dst.addr;
-        break;
-    default:
-        OVS_NOT_REACHED();
+        if (skip_nat) {
+            alg_nat_repl_addr = dst_addr;
+        } else {
+            alg_nat_repl_addr = master_conn->rev_key.dst.addr;
+        }
+        alg_exp_node->nat_rpl_dst = true;
+    } else {
+        src_addr = master_conn->rev_key.src.addr;
+        dst_addr = master_conn->rev_key.dst.addr;
+        if (skip_nat) {
+            alg_nat_repl_addr = src_addr;
+        } else {
+            alg_nat_repl_addr = master_conn->key.src.addr;
+        }
+        alg_exp_node->nat_rpl_dst = false;
+    }
+    if (src_ip_wc) {
+        memset(&src_addr, 0, sizeof src_addr);
     }
 
-    struct alg_exp_node *alg_exp_node =
-        xzalloc(sizeof *alg_exp_node);
     alg_exp_node->key.dl_type = master_conn->key.dl_type;
     alg_exp_node->key.nw_proto = master_conn->key.nw_proto;
     alg_exp_node->key.zone = master_conn->key.zone;
@@ -2677,13 +2698,12 @@ expectation_create(struct conntrack *ct,
     alg_exp_node->master_mark = master_conn->mark;
     alg_exp_node->master_label = master_conn->label;
     alg_exp_node->master_key = master_conn->key;
-    alg_exp_node->passive_mode = mode == CT_FTP_MODE_PASSIVE;
     /* Take the write lock here because it is almost 100%
      * likely that the lookup will fail and
      * expectation_create() will be called below. */
     ct_rwlock_wrlock(&ct->resources_lock);
     struct alg_exp_node *alg_exp = expectation_lookup(
-        &ct->alg_expectations, &alg_exp_node->key, ct->hash_basis);
+        &ct->alg_expectations, &alg_exp_node->key, ct->hash_basis, src_ip_wc);
     if (alg_exp) {
         free(alg_exp_node);
         ct_rwlock_unlock(&ct->resources_lock);
@@ -2691,8 +2711,8 @@ expectation_create(struct conntrack *ct,
     }
 
     alg_exp_node->alg_nat_repl_addr = alg_nat_repl_addr;
-    uint32_t alg_exp_conn_key_hash =
-        conn_key_hash(&alg_exp_node->key, ct->hash_basis);
+    uint32_t alg_exp_conn_key_hash = conn_key_hash(&alg_exp_node->key,
+                                                   ct->hash_basis);
     hmap_insert(&ct->alg_expectations, &alg_exp_node->node,
                 alg_exp_conn_key_hash);
     expectation_ref_create(&ct->alg_expectation_refs, alg_exp_node,
@@ -2955,7 +2975,8 @@ process_ftp_ctl_v4(struct conntrack *ct,
         return CT_FTP_CTL_INVALID;
     }
 
-    expectation_create(ct, port, mode, conn_for_expectation);
+    expectation_create(ct, port, conn_for_expectation,
+                       !!(pkt->md.ct_state & CS_REPLY_DIR), false, false);
     return CT_FTP_CTL_INTEREST;
 }
 
@@ -3057,7 +3078,8 @@ process_ftp_ctl_v6(struct conntrack *ct,
         OVS_NOT_REACHED();
     }
 
-    expectation_create(ct, port, *mode, conn_for_expectation);
+    expectation_create(ct, port, conn_for_expectation,
+                       !!(pkt->md.ct_state & CS_REPLY_DIR), false, false);
     return CT_FTP_CTL_INTEREST;
 }
 
@@ -3230,12 +3252,13 @@ handle_ftp_ctl(struct conntrack *ct, const struct conn_lookup_ctx *ctx,
 static void
 handle_tftp_ctl(struct conntrack *ct,
                 const struct conn_lookup_ctx *ctx OVS_UNUSED,
-                struct dp_packet *pkt OVS_UNUSED,
+                struct dp_packet *pkt,
                 const struct conn *conn_for_expectation,
                 long long now OVS_UNUSED,
                 enum ftp_ctl_pkt ftp_ctl OVS_UNUSED, bool nat OVS_UNUSED)
 {
-    expectation_create(ct, conn_for_expectation->key.src.port, CT_TFTP_MODE,
-                       conn_for_expectation);
+    expectation_create(ct, conn_for_expectation->key.src.port,
+                       conn_for_expectation,
+                       !!(pkt->md.ct_state & CS_REPLY_DIR), false, false);
     return;
 }
