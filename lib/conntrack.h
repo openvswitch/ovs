@@ -28,6 +28,7 @@
 #include "ovs-atomic.h"
 #include "ovs-thread.h"
 #include "packets.h"
+#include "hindex.h"
 
 /* Userspace connection tracker
  * ============================
@@ -274,14 +275,17 @@ struct conntrack {
     /* Hash table for alg expectations. Expectations are created
      * by control connections to help create data connections. */
     struct hmap alg_expectations OVS_GUARDED;
+    /* Used to lookup alg expectations from the control context. */
+    struct hindex alg_expectation_refs OVS_GUARDED;
     /* Expiry list for alg expectations. */
     struct ovs_list alg_exp_list OVS_GUARDED;
     /* This lock is used during NAT connection creation and deletion;
      * it is taken after a bucket lock and given back before that
      * bucket unlock.
      * This lock is similarly used to guard alg_expectations and
-     * alg_exp_list. If a bucket lock is also held during the normal
-     * code flow, then is must be taken first first and released last.
+     * alg_expectation_refs. If a bucket lock is also held during
+     * the normal code flow, then is must be taken first and released
+     * last.
      */
     struct ct_rwlock resources_lock;
 

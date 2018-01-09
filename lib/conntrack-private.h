@@ -68,11 +68,10 @@ struct nat_conn_key_node {
  * connection. The expectation is created by the control
  * connection. */
 struct alg_exp_node {
+    /* Node in alg_expectations. */
     struct hmap_node node;
-    /* Expiry list node for an expectation. */
-    struct ovs_list exp_node;
-    /* The time when this expectation will expire. */
-    long long expiration;
+    /* Node in alg_expectation_refs. */
+    struct hindex_node node_ref;
     /* Key of data connection to be created. */
     struct conn_key key;
     /* Corresponding key of the control connection. */

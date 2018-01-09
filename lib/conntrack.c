@@ -140,13 +140,17 @@ static enum ftp_ctl_pkt
 process_ftp_ctl_v4(struct conntrack *ct,
                    struct dp_packet *pkt,
                    const struct conn *conn_for_expectation,
-                   long long now, ovs_be32 *v4_addr_rep,
+                   ovs_be32 *v4_addr_rep,
                    char **ftp_data_v4_start,
                    size_t *addr_offset_from_ftp_data_start);
 
 static enum ftp_ctl_pkt
 detect_ftp_ctl_type(const struct conn_lookup_ctx *ctx,
                     struct dp_packet *pkt);
+
+static void
+expectation_clean(struct conntrack *ct, const struct conn_key *master_key,
+                  uint32_t basis);
 
 static struct ct_l4_proto *l4_protos[] = {
     [IPPROTO_TCP] = &ct_proto_tcp,
@@ -166,8 +170,8 @@ handle_tftp_ctl(struct conntrack *ct,
                 const struct conn_lookup_ctx *ctx OVS_UNUSED,
                 struct dp_packet *pkt OVS_UNUSED,
                 const struct conn *conn_for_expectation,
-                long long now, enum ftp_ctl_pkt ftp_ctl OVS_UNUSED,
-                bool nat OVS_UNUSED);
+                long long now OVS_UNUSED,
+                enum ftp_ctl_pkt ftp_ctl OVS_UNUSED, bool nat OVS_UNUSED);
 
 typedef void (*alg_helper)(struct conntrack *ct,
                            const struct conn_lookup_ctx *ctx,
@@ -190,8 +194,6 @@ long long ct_timeout_val[] = {
 
 /* The maximum TCP or UDP port number. */
 #define CT_MAX_L4_PORT 65535
-/* Alg expectation timeout. */
-#define CT_ALG_EXP_TIMEOUT (30 * 1000)
 /* String buffer used for parsing FTP string messages.
  * This is sized about twice what is needed to leave some
  * margin of error. */
@@ -312,6 +314,7 @@ conntrack_init(struct conntrack *ct)
     ct_rwlock_wrlock(&ct->resources_lock);
     hmap_init(&ct->nat_conn_keys);
     hmap_init(&ct->alg_expectations);
+    hindex_init(&ct->alg_expectation_refs);
     ovs_list_init(&ct->alg_exp_list);
     ct_rwlock_unlock(&ct->resources_lock);
 
@@ -373,8 +376,10 @@ conntrack_destroy(struct conntrack *ct)
     HMAP_FOR_EACH_POP (alg_exp_node, node, &ct->alg_expectations) {
         free(alg_exp_node);
     }
+
     ovs_list_poison(&ct->alg_exp_list);
     hmap_destroy(&ct->alg_expectations);
+    hindex_destroy(&ct->alg_expectation_refs);
     ct_rwlock_unlock(&ct->resources_lock);
     ct_rwlock_destroy(&ct->resources_lock);
 }
@@ -509,16 +514,6 @@ handle_alg_ctl(struct conntrack *ct, const struct conn_lookup_ctx *ctx,
         alg_helpers[ct_alg_ctl](ct, ctx, pkt, conn_for_expectation, now,
                                 CT_FTP_CTL_INTEREST, nat);
     }
-}
-
-static void
-alg_exp_init_expiration(struct conntrack *ct,
-                        struct alg_exp_node *alg_exp_node,
-                        long long now)
-    OVS_REQ_WRLOCK(ct->resources_lock)
-{
-    alg_exp_node->expiration = now + CT_ALG_EXP_TIMEOUT;
-    ovs_list_push_back(&ct->alg_exp_list, &alg_exp_node->exp_node);
 }
 
 static void
@@ -809,6 +804,9 @@ conn_clean(struct conntrack *ct, struct conn *conn,
            struct conntrack_bucket *ctb)
     OVS_REQUIRES(ctb->lock)
 {
+    if (conn->alg) {
+        expectation_clean(ct, &conn->key, ct->hash_basis);
+    }
     ovs_list_remove(&conn->exp_node);
     hmap_remove(&ctb->connections, &conn->node);
     atomic_count_dec(&ct->n_conn);
@@ -1386,27 +1384,6 @@ sweep_bucket(struct conntrack *ct, struct conntrack_bucket *ctb,
             }
         }
     }
-
-    enum { MAX_ALG_EXP_TO_EXPIRE = 1000 };
-    size_t alg_exp_count = hmap_count(&ct->alg_expectations);
-    /* XXX: revisit this. */
-    size_t max_to_expire = MAX(alg_exp_count/10, MAX_ALG_EXP_TO_EXPIRE);
-    count = 0;
-    ct_rwlock_wrlock(&ct->resources_lock);
-    struct alg_exp_node *alg_exp_node, *alg_exp_node_next;
-    LIST_FOR_EACH_SAFE (alg_exp_node, alg_exp_node_next,
-                        exp_node, &ct->alg_exp_list) {
-        if (now < alg_exp_node->expiration || count >= max_to_expire) {
-            min_expiration = MIN(min_expiration, alg_exp_node->expiration);
-            break;
-        }
-        ovs_list_remove(&alg_exp_node->exp_node);
-        hmap_remove(&ct->alg_expectations, &alg_exp_node->node);
-        free(alg_exp_node);
-        count++;
-    }
-    ct_rwlock_unlock(&ct->resources_lock);
-
     return min_expiration;
 }
 
@@ -2548,17 +2525,6 @@ conntrack_flush(struct conntrack *ct, const uint16_t *zone)
         ct_lock_unlock(&ct->buckets[i].lock);
     }
 
-    ct_rwlock_wrlock(&ct->resources_lock);
-    struct alg_exp_node *alg_exp_node, *alg_exp_node_next;
-    HMAP_FOR_EACH_SAFE (alg_exp_node, alg_exp_node_next,
-                       node, &ct->alg_expectations) {
-        if (!zone || *zone == alg_exp_node->key.zone) {
-            ovs_list_remove(&alg_exp_node->exp_node);
-            hmap_remove(&ct->alg_expectations, &alg_exp_node->node);
-            free(alg_exp_node);
-        }
-    }
-    ct_rwlock_unlock(&ct->resources_lock);
     return 0;
 }
 
@@ -2603,10 +2569,79 @@ expectation_lookup(struct hmap *alg_expectations,
     return NULL;
 }
 
+/* This function must be called with the ct->resources write lock taken. */
+static void
+expectation_remove(struct hmap *alg_expectations,
+                   const struct conn_key *key, uint32_t basis)
+{
+    struct alg_exp_node *alg_exp_node;
+
+    HMAP_FOR_EACH_WITH_HASH (alg_exp_node, node, conn_key_hash(key, basis),
+                             alg_expectations) {
+        if (!conn_key_cmp(&alg_exp_node->key, key)) {
+            hmap_remove(alg_expectations, &alg_exp_node->node);
+            break;
+        }
+    }
+}
+
+/* This function must be called with the ct->resources read lock taken. */
+static struct alg_exp_node *
+expectation_ref_lookup_unique(const struct hindex *alg_expectation_refs,
+                              const struct conn_key *master_key,
+                              const struct conn_key *alg_exp_key,
+                              uint32_t basis)
+{
+    struct alg_exp_node *alg_exp_node;
+
+    HINDEX_FOR_EACH_WITH_HASH (alg_exp_node, node_ref,
+                               conn_key_hash(master_key, basis),
+                               alg_expectation_refs) {
+        if (!conn_key_cmp(&alg_exp_node->master_key, master_key) &&
+            !conn_key_cmp(&alg_exp_node->key, alg_exp_key)) {
+            return alg_exp_node;
+        }
+    }
+    return NULL;
+}
+
+/* This function must be called with the ct->resources write lock taken. */
+static void
+expectation_ref_create(struct hindex *alg_expectation_refs,
+                       struct alg_exp_node *alg_exp_node,
+                       uint32_t basis)
+{
+    if (!expectation_ref_lookup_unique(alg_expectation_refs,
+                                       &alg_exp_node->master_key,
+                                       &alg_exp_node->key, basis)) {
+        hindex_insert(alg_expectation_refs, &alg_exp_node->node_ref,
+                      conn_key_hash(&alg_exp_node->master_key, basis));
+    }
+}
+
+static void
+expectation_clean(struct conntrack *ct, const struct conn_key *master_key,
+                  uint32_t basis)
+{
+    ct_rwlock_wrlock(&ct->resources_lock);
+
+    struct alg_exp_node *node, *next;
+    HINDEX_FOR_EACH_WITH_HASH_SAFE (node, next, node_ref,
+                                    conn_key_hash(master_key, basis),
+                                    &ct->alg_expectation_refs) {
+        if (!conn_key_cmp(&node->master_key, master_key)) {
+            expectation_remove(&ct->alg_expectations, &node->key, basis);
+            hindex_remove(&ct->alg_expectation_refs, &node->node_ref);
+            free(node);
+        }
+    }
+
+    ct_rwlock_unlock(&ct->resources_lock);
+}
+
 static void
 expectation_create(struct conntrack *ct,
                    ovs_be16 dst_port,
-                   const long long now,
                    enum ct_alg_mode mode,
                    const struct conn *master_conn)
 {
@@ -2657,13 +2692,11 @@ expectation_create(struct conntrack *ct,
 
     alg_exp_node->alg_nat_repl_addr = alg_nat_repl_addr;
     uint32_t alg_exp_conn_key_hash =
-        conn_key_hash(&alg_exp_node->key,
-                      ct->hash_basis);
-    hmap_insert(&ct->alg_expectations,
-                &alg_exp_node->node,
+        conn_key_hash(&alg_exp_node->key, ct->hash_basis);
+    hmap_insert(&ct->alg_expectations, &alg_exp_node->node,
                 alg_exp_conn_key_hash);
-
-    alg_exp_init_expiration(ct, alg_exp_node, now);
+    expectation_ref_create(&ct->alg_expectation_refs, alg_exp_node,
+                           ct->hash_basis);
     ct_rwlock_unlock(&ct->resources_lock);
 }
 
@@ -2796,7 +2829,7 @@ static enum ftp_ctl_pkt
 process_ftp_ctl_v4(struct conntrack *ct,
                    struct dp_packet *pkt,
                    const struct conn *conn_for_expectation,
-                   long long now, ovs_be32 *v4_addr_rep,
+                   ovs_be32 *v4_addr_rep,
                    char **ftp_data_v4_start,
                    size_t *addr_offset_from_ftp_data_start)
 {
@@ -2922,7 +2955,7 @@ process_ftp_ctl_v4(struct conntrack *ct,
         return CT_FTP_CTL_INVALID;
     }
 
-    expectation_create(ct, port, now, mode, conn_for_expectation);
+    expectation_create(ct, port, mode, conn_for_expectation);
     return CT_FTP_CTL_INTEREST;
 }
 
@@ -2939,7 +2972,6 @@ static enum ftp_ctl_pkt
 process_ftp_ctl_v6(struct conntrack *ct,
                    struct dp_packet *pkt,
                    const struct conn *conn_for_expectation,
-                   long long now,
                    struct ct_addr *v6_addr_rep,
                    char **ftp_data_start,
                    size_t *addr_offset_from_ftp_data_start,
@@ -3025,7 +3057,7 @@ process_ftp_ctl_v6(struct conntrack *ct,
         OVS_NOT_REACHED();
     }
 
-    expectation_create(ct, port, now, *mode, conn_for_expectation);
+    expectation_create(ct, port, *mode, conn_for_expectation);
     return CT_FTP_CTL_INTEREST;
 }
 
@@ -3104,12 +3136,12 @@ handle_ftp_ctl(struct conntrack *ct, const struct conn_lookup_ctx *ctx,
         enum ftp_ctl_pkt rc;
         if (ctx->key.dl_type == htons(ETH_TYPE_IPV6)) {
             rc = process_ftp_ctl_v6(ct, pkt, conn_for_expectation,
-                                    now, &v6_addr_rep, &ftp_data_start,
+                                    &v6_addr_rep, &ftp_data_start,
                                     &addr_offset_from_ftp_data_start,
                                     &addr_size, &mode);
         } else {
             rc = process_ftp_ctl_v4(ct, pkt, conn_for_expectation,
-                                    now, &v4_addr_rep, &ftp_data_start,
+                                    &v4_addr_rep, &ftp_data_start,
                                     &addr_offset_from_ftp_data_start);
         }
         if (rc == CT_FTP_CTL_INVALID) {
@@ -3200,10 +3232,10 @@ handle_tftp_ctl(struct conntrack *ct,
                 const struct conn_lookup_ctx *ctx OVS_UNUSED,
                 struct dp_packet *pkt OVS_UNUSED,
                 const struct conn *conn_for_expectation,
-                long long now, enum ftp_ctl_pkt ftp_ctl OVS_UNUSED,
-                bool nat OVS_UNUSED)
+                long long now OVS_UNUSED,
+                enum ftp_ctl_pkt ftp_ctl OVS_UNUSED, bool nat OVS_UNUSED)
 {
-    expectation_create(ct, conn_for_expectation->key.src.port, now,
-                       CT_TFTP_MODE, conn_for_expectation);
+    expectation_create(ct, conn_for_expectation->key.src.port, CT_TFTP_MODE,
+                       conn_for_expectation);
     return;
 }
