@@ -1518,11 +1518,11 @@ extract_l3_ipv4(struct conn_key *key, const void *data, size_t size,
             return false;
         }
 
-        *new_data = (char *) data + ip_len;
-    }
+        if (IP_IS_FRAGMENT(ip->ip_frag_off)) {
+            return false;
+        }
 
-    if (IP_IS_FRAGMENT(ip->ip_frag_off)) {
-        return false;
+        *new_data = (char *) data + ip_len;
     }
 
     if (validate_checksum && csum(data, ip_len) != 0) {
@@ -1562,12 +1562,12 @@ extract_l3_ipv6(struct conn_key *key, const void *data, size_t size,
         return false;
     }
 
-    if (new_data) {
-        *new_data = data;
-    }
-
     if (nw_frag) {
         return false;
+    }
+
+    if (new_data) {
+        *new_data = data;
     }
 
     key->src.addr.ipv6 = ip6->ip6_src;
