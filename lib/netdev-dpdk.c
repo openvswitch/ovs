@@ -2134,7 +2134,18 @@ netdev_dpdk_set_mtu(struct netdev *netdev, int mtu)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
 
-    if (MTU_TO_FRAME_LEN(mtu) > NETDEV_DPDK_MAX_PKT_LEN
+    /* XXX: Ensure that the overall frame length of the requested MTU does not
+     * surpass the NETDEV_DPDK_MAX_PKT_LEN. DPDK device drivers differ in how
+     * the L2 frame length is calculated for a given MTU when
+     * rte_eth_dev_set_mtu(mtu) is called e.g. i40e driver includes 2 x vlan
+     * headers, the em driver includes 1 x vlan header, the ixgbe driver does
+     * not include vlan headers. As such we should use
+     * MTU_TO_MAX_FRAME_LEN(mtu) which includes an additional 2 x vlan headers
+     * (8 bytes) for comparison. This avoids a failure later with
+     * rte_eth_dev_set_mtu(). This approach should be used until DPDK provides
+     * a method to retrieve the upper bound MTU for a given device.
+     */
+    if (MTU_TO_MAX_FRAME_LEN(mtu) > NETDEV_DPDK_MAX_PKT_LEN
         || mtu < ETHER_MIN_MTU) {
         VLOG_WARN("%s: unsupported MTU %d\n", dev->up.name, mtu);
         return EINVAL;

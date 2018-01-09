@@ -643,6 +643,18 @@ Limitations
 
 .. _DPDK release notes: http://dpdk.org/doc/guides/rel_notes/release_17_11.html
 
+- Upper bound MTU: DPDK device drivers differ in how the L2 frame for a
+  given MTU value is calculated e.g. i40e driver includes 2 x vlan headers in
+  MTU overhead, em driver includes 1 x vlan header, ixgbe driver does not
+  include a vlan  header in overhead. Currently it is not possible for OVS
+  DPDK to know what upper bound MTU value is supported for a given device.
+  As such OVS DPDK must provision for the case where the L2 frame for a given
+  MTU includes 2 x vlan headers. This reduces the upper bound MTU value for
+  devices that do not include vlan headers in their L2 frames by 8 bytes e.g.
+  ixgbe devices upper bound MTU is reduced from 9710 to 9702. This work
+  around is temporary and is expected to be removed once a method is provided
+  by DPDK to query the upper bound MTU value for a given device.
+
 Reporting Bugs
 --------------
 
