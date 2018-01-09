@@ -620,9 +620,9 @@ ofctrl_add_flow(struct hmap *desired_flows,
 
     if (ovn_flow_lookup(desired_flows, f)) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
-        if (!VLOG_DROP_INFO(&rl)) {
+        if (!VLOG_DROP_DBG(&rl)) {
             char *s = ovn_flow_to_string(f);
-            VLOG_INFO("dropping duplicate flow: %s", s);
+            VLOG_DBG("dropping duplicate flow: %s", s);
             free(s);
         }
 
