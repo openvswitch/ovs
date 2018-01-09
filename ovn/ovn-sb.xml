@@ -634,7 +634,7 @@
           </p>
 
           <p>
-            Any use of a nominal field may specify a single bit or a range of
+            Any use of a ordinal field may specify a single bit or a range of
             bits, e.g. <code>vlan.tci[13..15]</code> refers to the PCP field
             within the VLAN TCI, and <code>eth.dst[40]</code> refers to the
             multicast bit in the Ethernet destination address.
