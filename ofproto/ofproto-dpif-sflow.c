@@ -961,7 +961,7 @@ sflow_read_set_action(const struct nlattr *attr,
         } else {
             dpif_sflow_read_actions(NULL,
                                     nl_attr_get(attr), nl_attr_get_size(attr),
-                                    sflow_actions);
+                                    sflow_actions, true);
         }
         break;
     case OVS_KEY_ATTR_PRIORITY:
@@ -1088,8 +1088,9 @@ dpif_sflow_capture_input_mpls(const struct flow *flow,
 
 void
 dpif_sflow_read_actions(const struct flow *flow,
-			const struct nlattr *actions, size_t actions_len,
-			struct dpif_sflow_actions *sflow_actions)
+                        const struct nlattr *actions, size_t actions_len,
+                        struct dpif_sflow_actions *sflow_actions,
+                        bool capture_mpls)
 {
     const struct nlattr *a;
     unsigned int left;
@@ -1099,7 +1100,7 @@ dpif_sflow_read_actions(const struct flow *flow,
 	return;
     }
 
-    if (flow != NULL) {
+    if (flow != NULL && capture_mpls == true) {
 	/* Make sure the MPLS output stack
 	 * is seeded with the input stack.
 	 */
@@ -1198,8 +1199,13 @@ dpif_sflow_read_actions(const struct flow *flow,
 	     * structure to report this.
 	     */
 	    break;
+    case OVS_ACTION_ATTR_CLONE:
+        if (flow != NULL) {
+            dpif_sflow_read_actions(flow, nl_attr_get(a), nl_attr_get_size(a),
+                                    sflow_actions, false);
+        }
+        break;
 	case OVS_ACTION_ATTR_SAMPLE:
-	case OVS_ACTION_ATTR_CLONE:
         case OVS_ACTION_ATTR_PUSH_NSH:
         case OVS_ACTION_ATTR_POP_NSH:
 	case OVS_ACTION_ATTR_UNSPEC:

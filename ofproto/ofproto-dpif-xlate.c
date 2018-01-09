@@ -3264,6 +3264,9 @@ native_tunnel_output(struct xlate_ctx *ctx, const struct xport *xport,
     char buf_sip6[INET6_ADDRSTRLEN];
     char buf_dip6[INET6_ADDRSTRLEN];
 
+    /* Store sFlow data. */
+    uint32_t sflow_n_outputs = ctx->sflow_n_outputs;
+
     /* Structures to backup Ethernet and IP of base_flow. */
     struct flow old_base_flow;
     struct flow old_flow;
@@ -3415,6 +3418,10 @@ native_tunnel_output(struct xlate_ctx *ctx, const struct xport *xport,
     /* Restore the flows after the translation. */
     memcpy(&ctx->xin->flow, &old_flow, sizeof ctx->xin->flow);
     memcpy(&ctx->base_flow, &old_base_flow, sizeof ctx->base_flow);
+
+    /* Restore sFlow data. */
+    ctx->sflow_n_outputs = sflow_n_outputs;
+
     return 0;
 }
 

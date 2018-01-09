@@ -6336,7 +6336,7 @@ AT_CHECK([ovs-appctl ovs/route/add 1.1.2.92/24 br0], [0], [OK
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
 
 dnl Prime ARP Cache for 1.1.2.92
-AT_CHECK([ovs-appctl netdev-dummy/receive br0 'recirc_id(0),in_port(100),eth(src=f8:bc:12:44:34:b6,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0806),arp(sip=1.1.2.92,tip=1.1.2.88,op=2,sha=f8:bc:12:44:34:b6,tha=00:00:00:00:00:00)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'recirc_id(0),in_port(1),eth(src=f8:bc:12:44:34:b6,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0806),arp(sip=1.1.2.92,tip=1.1.2.88,op=2,sha=f8:bc:12:44:34:b6,tha=00:00:00:00:00:00)'])
 
 dnl configure sflow on int-br only
 ovs-vsctl \
