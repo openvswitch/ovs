@@ -2853,6 +2853,7 @@ netdev_linux_update_flags(struct netdev *netdev_, enum netdev_flags off,
     netdev_linux_get_carrier_resets,                            \
     netdev_linux_set_miimon_interval,                           \
     GET_STATS,                                                  \
+    NULL,														\
                                                                 \
     GET_FEATURES,                                               \
     netdev_linux_set_advertisements,                            \

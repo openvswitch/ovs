@@ -311,12 +311,16 @@ performance of non-tunnel traffic, specifically for smaller size packet.
 
 .. _extended-statistics:
 
-Extended Statistics
--------------------
+Extended & Custom Statistics
+----------------------------
 
 DPDK Extended Statistics API allows PMD to expose unique set of statistics.
 The Extended statistics are implemented and supported only for DPDK physical
-and vHost ports.
+and vHost ports. Custom statistics are dynamic set of counters which can
+vary depenend on a driver. Those statistics are implemented
+for DPDK physical ports and contain all "dropped", "error" and "management"
+counters from XSTATS. XSTATS counters list can be found here:
+<https://wiki.opnfv.org/display/fastpath/Collectd+Metrics+and+Events>`__.
 
 To enable statistics, you have to enable OpenFlow 1.4 support for OVS.
 Configure bridge br0 to support OpenFlow version 1.4::
@@ -333,8 +337,9 @@ Query the port statistics by explicitly specifying -O OpenFlow14 option::
 
     $ ovs-ofctl -O OpenFlow14 dump-ports br0
 
-Note: vHost ports supports only partial statistics. RX packet size based
-counter are only supported and doesn't include TX packet size counters.
+Note about "Extended Statistics": vHost ports supports only partial
+statistics. RX packet size based counter are only supported and
+doesn't include TX packet size counters.
 
 .. _port-hotplug:
 

@@ -2347,6 +2347,11 @@ iface_refresh_cfm_stats(struct iface *iface)
 static void
 iface_refresh_stats(struct iface *iface)
 {
+    struct netdev_custom_stats custom_stats;
+    struct netdev_stats stats;
+    int n;
+    uint32_t i, counters_size;
+
 #define IFACE_STATS                             \
     IFACE_STAT(rx_packets,              "rx_packets")               \
     IFACE_STAT(tx_packets,              "tx_packets")               \
@@ -2385,15 +2390,16 @@ iface_refresh_stats(struct iface *iface)
 #define IFACE_STAT(MEMBER, NAME) + 1
     enum { N_IFACE_STATS = IFACE_STATS };
 #undef IFACE_STAT
-    int64_t values[N_IFACE_STATS];
-    const char *keys[N_IFACE_STATS];
-    int n;
-
-    struct netdev_stats stats;
 
     if (iface_is_synthetic(iface)) {
         return;
     }
+
+    netdev_get_custom_stats(iface->netdev, &custom_stats);
+
+    counters_size = custom_stats.size + N_IFACE_STATS;
+    int64_t *values = xmalloc(counters_size * sizeof(int64_t));
+    const char **keys = xmalloc(counters_size * sizeof(char *));
 
     /* Intentionally ignore return value, since errors will set 'stats' to
      * all-1s, and we will deal with that correctly below. */
@@ -2409,10 +2415,23 @@ iface_refresh_stats(struct iface *iface)
     }
     IFACE_STATS;
 #undef IFACE_STAT
-    ovs_assert(n <= N_IFACE_STATS);
+
+    /* Copy custom statistics into keys[] and values[]. */
+    if (custom_stats.size && custom_stats.counters) {
+        for (i = 0 ; i < custom_stats.size ; i++) {
+            values[n] = custom_stats.counters[i].value;
+            keys[n] = custom_stats.counters[i].name;
+            n++;
+        }
+    }
+
+    ovs_assert(n <= counters_size);
 
     ovsrec_interface_set_statistics(iface->cfg, keys, values, n);
 #undef IFACE_STATS
+
+    free(values);
+    free(keys);
 }
 
 static void

@@ -907,6 +907,7 @@ netdev_vport_get_ifindex(const struct netdev *netdev_)
     NULL,                       /* get_carrier_resets */    \
     NULL,                       /* get_miimon */            \
     get_stats,                                              \
+    NULL,                       /* get_custom_stats */      \
                                                             \
     NULL,                       /* get_features */          \
     NULL,                       /* set_advertisements */    \

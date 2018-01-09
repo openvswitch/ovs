@@ -3890,8 +3890,11 @@ append_port_stat(struct ofport *port, struct ovs_list *replies)
      * 'stats' to all-1s, which is correct for OpenFlow, and
      * netdev_get_stats() will log errors. */
     ofproto_port_get_stats(port, &ops.stats);
+    netdev_get_custom_stats(port->netdev, &ops.custom_stats);
 
     ofputil_append_port_stat(replies, &ops);
+
+    netdev_free_custom_stats_counters(&ops.custom_stats);
 }
 
 static void

@@ -27,6 +27,9 @@ extern "C" {
 
 struct netdev;
 
+/* Maximum name length for custom statistics counters */
+#define NETDEV_CUSTOM_STATS_NAME_SIZE 64
+
 /* Network device statistics.
  *
  * Values of unsupported statistics are set to all-1-bits (UINT64_MAX). */
@@ -85,6 +88,18 @@ struct netdev_stats {
     uint64_t rx_jabber_errors;
 };
 
+/* Structure representation of custom statistics counter */
+struct netdev_custom_counter {
+    uint64_t value;
+    char name[NETDEV_CUSTOM_STATS_NAME_SIZE];
+};
+
+/* Structure representation of custom statistics */
+struct netdev_custom_stats {
+    uint16_t size;
+    struct netdev_custom_counter *counters;
+};
+
 /* Features. */
 enum netdev_features {
     NETDEV_F_10MB_HD =    1 << 0,  /* 10 Mb half-duplex rate support. */
@@ -114,6 +129,8 @@ uint64_t netdev_features_to_bps(enum netdev_features features,
                                 uint64_t default_bps);
 bool netdev_features_is_full_duplex(enum netdev_features features);
 int netdev_set_advertisements(struct netdev *, enum netdev_features advertise);
+
+void netdev_free_custom_stats_counters(struct netdev_custom_stats *);
 
 #ifdef __cplusplus
 }

@@ -321,6 +321,19 @@ ovs_strzcpy(char *dst, const char *src, size_t size)
     }
 }
 
+/*
+ * Returns true if 'str' ends with given 'suffix'.
+ */
+int
+string_ends_with(const char *str, const char *suffix)
+{
+    int str_len = strlen(str);
+    int suffix_len = strlen(suffix);
+
+    return (str_len >= suffix_len) &&
+           (0 == strcmp(str + (str_len - suffix_len), suffix));
+}
+
 /* Prints 'format' on stderr, formatting it like printf() does.  If 'err_no' is
  * nonzero, then it is formatted with ovs_retval_to_string() and appended to
  * the message inside parentheses.  Then, terminates with abort().

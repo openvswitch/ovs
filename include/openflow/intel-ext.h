@@ -27,9 +27,11 @@
 
 enum intel_port_stats_subtype {
     INTEL_PORT_STATS_RFC2819 = 1,
+    INTEL_PORT_STATS_CUSTOM
 };
 
 #define INTEL_PORT_STATS_RFC2819_SIZE 184
+#define INTEL_PORT_STATS_CUSTOM_SIZE 16
 
 /* Struct implements custom property type based on
  * 'ofp_prop_experimenter'. */
@@ -69,5 +71,31 @@ struct intel_port_stats_rfc2819 {
 };
 OFP_ASSERT(sizeof (struct intel_port_stats_rfc2819) ==
            INTEL_PORT_STATS_RFC2819_SIZE);
+
+/* Structure implements custom property type based on
+ * 'ofp_prop_experimenter'. It contains custom
+ * statistics in dictionary format */
+struct intel_port_custom_stats {
+    ovs_be16 type;              /* OFPPSPT14_EXPERIMENTER. */
+    ovs_be16 length;            /* Length in bytes of this property excluding
+                                 * trailing padding. */
+    ovs_be32 experimenter;      /* INTEL_VENDOR_ID. */
+    ovs_be32 exp_type;          /* INTEL_PORT_STATS_*. */
+
+    uint8_t pad[2];
+    ovs_be16 stats_array_size;  /* number of counters. */
+
+    /* Followed by:
+     *   - Exactly 'stats_array_size' array elements of
+     *     dynamic structure which contains:
+     *     - "NAME SIZE" - counter name size (number of characters)
+     *     - "COUNTER NAME" - Exact number of characters
+     *       defined by "NAME SIZE".
+     *     - "COUNTER VALUE" -  ovs_be64 counter value,
+     *   - Zero or more bytes to fill out the
+     *     overall length in header.length. */
+};
+OFP_ASSERT(sizeof(struct intel_port_custom_stats) ==
+                                  INTEL_PORT_STATS_CUSTOM_SIZE);
 
 #endif /* openflow/intel-ext.h */

@@ -46,6 +46,8 @@
 
 VLOG_DEFINE_THIS_MODULE(netdev_dummy);
 
+#define C_STATS_SIZE 2
+
 struct reconnect;
 
 struct dummy_packet_stream {
@@ -109,6 +111,7 @@ struct netdev_dummy {
     struct eth_addr hwaddr OVS_GUARDED;
     int mtu OVS_GUARDED;
     struct netdev_stats stats OVS_GUARDED;
+    struct netdev_custom_counter custom_stats[C_STATS_SIZE] OVS_GUARDED;
     enum netdev_flags flags OVS_GUARDED;
     int ifindex OVS_GUARDED;
     int numa_id OVS_GUARDED;
@@ -686,6 +689,13 @@ netdev_dummy_construct(struct netdev *netdev_)
     netdev->requested_n_txq = netdev_->n_txq;
     netdev->numa_id = 0;
 
+    memset(&netdev->custom_stats, 0, sizeof(netdev->custom_stats));
+
+    ovs_strlcpy(netdev->custom_stats[0].name,
+                "rx_custom_packets_1", NETDEV_CUSTOM_STATS_NAME_SIZE);
+    ovs_strlcpy(netdev->custom_stats[1].name,
+                "rx_custom_packets_2", NETDEV_CUSTOM_STATS_NAME_SIZE);
+
     dummy_packet_conn_init(&netdev->conn);
 
     ovs_list_init(&netdev->rxes);
@@ -1021,6 +1031,8 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch)
     ovs_mutex_lock(&netdev->mutex);
     netdev->stats.rx_packets++;
     netdev->stats.rx_bytes += dp_packet_size(packet);
+    netdev->custom_stats[0].value++;
+    netdev->custom_stats[1].value++;
     ovs_mutex_unlock(&netdev->mutex);
 
     batch->packets[0] = packet;
@@ -1215,6 +1227,29 @@ netdev_dummy_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 }
 
 static int
+netdev_dummy_get_custom_stats(const struct netdev *netdev,
+                             struct netdev_custom_stats *custom_stats)
+{
+    int i;
+
+    struct netdev_dummy *dev = netdev_dummy_cast(netdev);
+
+    custom_stats->size = 2;
+    custom_stats->counters =
+            (struct netdev_custom_counter *) xcalloc(C_STATS_SIZE,
+                    sizeof(struct netdev_custom_counter));
+
+    for (i = 0 ; i < C_STATS_SIZE ; i++) {
+        custom_stats->counters[i].value = dev->custom_stats[i].value;
+        ovs_strlcpy(custom_stats->counters[i].name,
+                    dev->custom_stats[i].name,
+                    NETDEV_CUSTOM_STATS_NAME_SIZE);
+    }
+
+    return 0;
+}
+
+static int
 netdev_dummy_get_queue(const struct netdev *netdev OVS_UNUSED,
                        unsigned int queue_id, struct smap *details OVS_UNUSED)
 {
@@ -1383,6 +1418,7 @@ netdev_dummy_update_flags(struct netdev *netdev_,
     NULL,                       /* get_carrier_resets */        \
     NULL,                       /* get_miimon */                \
     netdev_dummy_get_stats,                                     \
+    netdev_dummy_get_custom_stats,                              \
                                                                 \
     NULL,                       /* get_features */              \
     NULL,                       /* set_advertisements */        \

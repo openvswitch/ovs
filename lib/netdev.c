@@ -1421,6 +1421,21 @@ netdev_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     return error;
 }
 
+/* Retrieves current device custom stats for 'netdev'. */
+int
+netdev_get_custom_stats(const struct netdev *netdev,
+                        struct netdev_custom_stats *custom_stats)
+{
+    int error;
+    memset(custom_stats, 0, sizeof *custom_stats);
+    error = (netdev->netdev_class->get_custom_stats
+             ? netdev->netdev_class->get_custom_stats(netdev, custom_stats)
+             : EOPNOTSUPP);
+
+    return error;
+}
+
+
 /* Attempts to set input rate limiting (policing) policy, such that up to
  * 'kbits_rate' kbps of traffic is accepted, with a maximum accumulative burst
  * size of 'kbits' kb. */
@@ -2374,6 +2389,18 @@ netdev_ports_flow_get(const struct dpif_class *dpif_class, struct match *match,
     }
     ovs_mutex_unlock(&netdev_hmap_mutex);
     return ENOENT;
+}
+
+void
+netdev_free_custom_stats_counters(struct netdev_custom_stats *custom_stats)
+{
+    if (custom_stats) {
+        if (custom_stats->counters) {
+            free(custom_stats->counters);
+            custom_stats->counters = NULL;
+            custom_stats->size = 0;
+        }
+    }
 }
 
 #ifdef __linux__

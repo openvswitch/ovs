@@ -111,6 +111,8 @@ OFPST_PORT reply (OF1.4): 1 ports
   port LOCAL: rx pkts=0, bytes=0, drop=?, errs=?, frame=?, over=?, crc=?
            tx pkts=0, bytes=0, drop=?, errs=?, coll=?
            duration=?s
+           CUSTOM Statistics
+                      rx_custom_packets_1=0, rx_custom_packets_2=0,
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

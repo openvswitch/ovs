@@ -32,6 +32,11 @@ Post-v2.8.0
      * Add support for vHost IOMMU
      * New debug appctl command 'netdev-dpdk/get-mempool-info'.
      * All the netdev-dpdk appctl commands described in ovs-vswitchd man page.
+     * Custom statistics:
+        - DPDK physical ports now return custom set of "dropped", "error" and
+          "management" statistics.
+        - ovs-ofctl dump-ports command now prints new of set custom statistics
+          if available (for OpenFlow 1.4+).
    - vswitchd:
      * Datapath IDs may now be specified as 0x1 (etc.) instead of 16 digits.
      * Configuring a controller, or unconfiguring all controllers, now deletes

@@ -1841,6 +1841,7 @@ ofp_print_ofpst_port_reply(struct ds *string, const struct ofp_header *oh,
                            const struct ofputil_port_map *port_map,
                            int verbosity)
 {
+    uint32_t i;
     ds_put_format(string, " %"PRIuSIZE" ports\n", ofputil_count_port_stats(oh));
     if (verbosity < 1) {
         return 0;
@@ -1949,6 +1950,25 @@ ofp_print_ofpst_port_reply(struct ds *string, const struct ofp_header *oh,
                           string_ext_stats.length);
             ds_put_cstr(string, "\n");
             ds_destroy(&string_ext_stats);
+        }
+
+        if (ps.custom_stats.size) {
+            ds_put_cstr(string, "           CUSTOM Statistics");
+            for (i = 0; i < ps.custom_stats.size; i++) {
+                /* 3 counters in the row */
+                if (ps.custom_stats.counters[i].name[0]) {
+                    if (i % 3 == 0) {
+                        ds_put_cstr(string, "\n");
+                        ds_put_cstr(string, "                      ");
+                    } else {
+                        ds_put_char(string, ' ');
+                    }
+                    ds_put_format(string, "%s=%"PRIu64",",
+                                  ps.custom_stats.counters[i].name,
+                                  ps.custom_stats.counters[i].value);
+                }
+            }
+            ds_put_cstr(string, "\n");
         }
     }
 }

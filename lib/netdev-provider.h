@@ -458,6 +458,19 @@ struct netdev_class {
      * (UINT64_MAX). */
     int (*get_stats)(const struct netdev *netdev, struct netdev_stats *);
 
+    /* Retrieves current device custom stats for 'netdev' into 'custom_stats'.
+     *
+     * A network device should return only available statistics (if any).
+     * If there are not statistics available, empty array should be
+     * returned.
+     *
+     * The caller initializes 'custom_stats' before calling this function.
+     * The caller takes ownership over allocated array of counters inside
+     * structure netdev_custom_stats.
+     * */
+    int (*get_custom_stats)(const struct netdev *netdev,
+                            struct netdev_custom_stats *custom_stats);
+
     /* Stores the features supported by 'netdev' into each of '*current',
      * '*advertised', '*supported', and '*peer'.  Each value is a bitmap of
      * NETDEV_F_* bits.
