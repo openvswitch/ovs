@@ -35,7 +35,7 @@ ovs-announce
 The `ovs-announce`__ mailing list is used to announce new versions of Open
 vSwitch and is extremely low-volume. `(subscribe)`__ `(archives)`__
 
-__ ovs-announce@openvwitch.org
+__ ovs-announce@openvswitch.org
 __ https://mail.openvswitch.org/mailman/listinfo/ovs-announce/
 __ https://mail.openvswitch.org/pipermail/ovs-announce/
 
@@ -46,7 +46,7 @@ The `ovs-discuss`__ mailing list is used to discuss plans and design decisions
 for Open vSwitch. It is also an appropriate place for user questions.
 `(subscribe)`__ `(archives)`__
 
-__ ovs-discuss@openvwitch.org
+__ ovs-discuss@openvswitch.org
 __ https://mail.openvswitch.org/mailman/listinfo/ovs-discuss/
 __ https://mail.openvswitch.org/pipermail/ovs-discuss/
 
@@ -56,7 +56,7 @@ ovs-dev
 The `ovs-dev`__ mailing list is used to discuss development and review code
 before being committed. `(subscribe)`__ `(archives)`__
 
-__ ovs-dev@openvwitch.org
+__ ovs-dev@openvswitch.org
 __ https://mail.openvswitch.org/mailman/listinfo/ovs-dev/
 __ https://mail.openvswitch.org/pipermail/ovs-dev/
 
@@ -66,7 +66,7 @@ ovs-git
 The `ovs-git`__ mailing list hooks into Open vSwitch's version control system
 to receive commits. `(subscribe)`__ `(archives)`__
 
-__ ovs-git@openvwitch.org
+__ ovs-git@openvswitch.org
 __ https://mail.openvswitch.org/mailman/listinfo/ovs-git/
 __ https://mail.openvswitch.org/pipermail/ovs-git/
 
@@ -76,7 +76,7 @@ ovs-build
 The `ovs-build`__ mailing list hooks into Open vSwitch's continuous integration
 system to receive build reports. `(subscribe)`__ `(archives)`__
 
-__ ovs-build@openvwitch.org
+__ ovs-build@openvswitch.org
 __ https://mail.openvswitch.org/mailman/listinfo/ovs-build/
 __ https://mail.openvswitch.org/pipermail/ovs-build/
 
