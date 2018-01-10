@@ -17,7 +17,7 @@
 -->
 
 <collect>
-  <files>
-    /proc/slabinfo
-  </files>
+    <files>
+        /proc/slabinfo
+    </files>
 </collect>

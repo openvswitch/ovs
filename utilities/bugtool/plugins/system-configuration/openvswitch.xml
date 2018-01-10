@@ -19,4 +19,29 @@
 <collect>
     <command label="timezone">date --rfc-3339=seconds</command>
     <command label="ovs-daemons-ver" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-daemons-ver</command>
+    <command label="dpif-show" filters="ovs">ovs-appctl dpif/show</command>
+    <command label="installed_openvswitch_debs" filters="ovs">dpkg -l | grep openvswitch</command>
+    <command label="installed_dpdk_debs" filters="ovs">dpkg -l | grep dpdk</command>
+    <command label="hugepages" filters="ovs">grep -H "" /sys/kernel/mm/hugepages/hugepages*/*</command>
+    <command label="hugepages_numa" filters="ovs">grep -H "" /sys/devices/system/node/node*/hugepages/hugepages*/*</command>
+    <command label="ovs_vswitchd_cmdline" filters="ovs">ps -C ovs-vswitchd -f</command>
+    <command label="ovsdb_server_cmdline" filters="ovs">ps -C ovsdb-server -f</command>
+    <command label="ovs_vswitchd_threads" filters="ovs">ps H -C ovs-vswitchd -o 'pid tid cmd comm'</command>
+    <command label="ovs_rundir_ls-la" filters="ovs">ls -la /var/run/openvswitch/</command>
+    <command label="open_files_lsof-U" filters="ovs">lsof -U</command>
+    <command label="ovs_version" filters="ovs">ovs-vsctl --version</command>
+    <command label="virsh_list" filters="ovs">virsh list --all</command>
+    <command label="pmd-rxq-show" filters="ovs">ovs-appctl dpif-netdev/pmd-rxq-show</command>
+    <command label="lscpu" filters="ovs">lscpu</command>
+    <command label="ovs_vswitchd_threads_affinity" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-ovs-vswitchd-threads-affinity</command>
+    <command label="ovs_bridge_datapath_type" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-ovs-bridge-datapath-type</command>
+    <command label="qos_configs" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-qos-configs</command>
+    <files filters="ovs">
+        /etc/default/openvswitch-switch
+        /etc/default/qemu-kvm
+        /etc/init/openvswitch-switch.conf
+        /etc/init/ovs-delay.conf
+        /etc/init.d/openvswitch-switch
+        /usr/share/openvswitch/scripts/ovs-ctl
+    </files>
 </collect>

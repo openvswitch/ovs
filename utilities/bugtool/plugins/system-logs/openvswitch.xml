@@ -17,6 +17,23 @@
 -->
 
 <collect>
-  <directory label="ovsdb-backups" filters="ovs" pattern=".*/conf.db.backup[0-9][^/]*$">/etc/openvswitch</directory>
-  <directory label="ovsdb-backups2" filters="ovs" pattern=".*/conf.db.backup[0-9][^/]*$">/var/lib/openvswitch</directory>
+    <directory label="ovsdb-backups" filters="ovs" pattern=".*/conf.db.backup[0-9][^/]*$">/etc/openvswitch</directory>
+    <directory label="ovsdb-backups2" filters="ovs" pattern=".*/conf.db.backup[0-9][^/]*$">/var/lib/openvswitch</directory>
+    <command label="system_memory_status" filters="ovs">df -h</command>
+    <command label="check_number_of_pmds" filters="ovs">ovs-appctl dpif-netdev/pmd-stats-show | grep pmd</command>
+    <command label="ovs-appctl-vlog-list" filters="ovs">ovs-appctl vlog/list</command>
+    <command label="journalctl" filters="ovs">journalctl</command>
+    <command label="user_limits" filters="ovs">ulimit -a</command>
+    <files filters="ovs">
+        /var/log/syslog
+        /var/log/daemon.log
+        /var/log/upstart/libvirt-bin.log
+        /var/log/upstart/ndevalarm.log
+        /var/log/upstart/nova-compute.log
+        /var/log/upstart/neutron-plugin-openvswitch-agent.log
+        /var/log/upstart/openvswitch-switch.log
+        /var/log/messages*
+        /var/log/secure
+        /var/log/dmesg*
+    </files>
 </collect>

@@ -1,0 +1,29 @@
+#! /bin/sh
+
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of version 2.1 of the GNU Lesser General
+# Public License as published by the Free Software Foundation.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
+# USA
+#
+# Copyright (C) 2017 Ericsson AB
+
+for br in `ovs-vsctl -- --real list-br`
+do
+    for iface in $(ovs-vsctl list-ifaces ${br})
+    do
+        echo "Rate limiting configuration for ${iface} (of ${br}):"
+        ovs-vsctl list interface ${iface} | grep ingress
+        echo "Interface options:"
+        ovs-vsctl get Interface ${iface} options
+        echo ""
+    done
+done

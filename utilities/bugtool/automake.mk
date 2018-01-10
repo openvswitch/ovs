@@ -18,7 +18,11 @@ bugtool_scripts = \
 	utilities/bugtool/ovs-bugtool-tc-class-show \
 	utilities/bugtool/ovs-bugtool-daemons-ver \
 	utilities/bugtool/ovs-bugtool-ovs-ofctl-loop-over-bridges \
-	utilities/bugtool/ovs-bugtool-ovs-appctl-dpif
+	utilities/bugtool/ovs-bugtool-ovs-appctl-dpif \
+	utilities/bugtool/ovs-bugtool-ovs-bridge-datapath-type \
+	utilities/bugtool/ovs-bugtool-ovs-vswitchd-threads-affinity \
+	utilities/bugtool/ovs-bugtool-qos-configs \
+	utilities/bugtool/ovs-bugtool-get-dpdk-nic-numa
 
 scripts_SCRIPTS += $(bugtool_scripts)
 
