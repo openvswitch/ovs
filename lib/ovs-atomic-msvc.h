@@ -124,8 +124,13 @@ atomic_signal_fence(memory_order order)
     }
 #elif _M_X64
 /* 64 bit writes are atomic on amd64 if 64 bit aligned. */
-#define atomic_store64(DST, SRC, ORDER)                                 \
-    atomic_storeX(64, DST, SRC, ORDER)
+#define atomic_store64(DST, SRC, ORDER)                                    \
+    if (ORDER == memory_order_seq_cst) {                                   \
+        InterlockedExchange64((int64_t volatile *) (DST),                  \
+                               (int64_t) (SRC));                           \
+    } else {                                                               \
+        *(DST) = (SRC);                                                    \
+    }
 #endif
 
 #define atomic_store8(DST, SRC, ORDER)                                     \
