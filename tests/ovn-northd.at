@@ -157,7 +157,7 @@ AT_SETUP([ovn -- check IPv6 RA config propagation to SBDB])
 ovn_start
 
 ovn-nbctl lr-add ro
-ovn-nbctl lrp-add ro ro-sw 00:00:00:00:00:01 aef0::1/64
+ovn-nbctl lrp-add ro ro-sw 00:00:00:00:00:01 aef0:0:0:0:0:0:0:1/64
 ovn-nbctl ls-add sw
 ovn-nbctl lsp-add sw sw-ro
 ovn-nbctl lsp-set-type sw-ro router
