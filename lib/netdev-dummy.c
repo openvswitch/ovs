@@ -1239,12 +1239,14 @@ netdev_dummy_get_custom_stats(const struct netdev *netdev,
             (struct netdev_custom_counter *) xcalloc(C_STATS_SIZE,
                     sizeof(struct netdev_custom_counter));
 
+    ovs_mutex_lock(&dev->mutex);
     for (i = 0 ; i < C_STATS_SIZE ; i++) {
         custom_stats->counters[i].value = dev->custom_stats[i].value;
         ovs_strlcpy(custom_stats->counters[i].name,
                     dev->custom_stats[i].name,
                     NETDEV_CUSTOM_STATS_NAME_SIZE);
     }
+    ovs_mutex_unlock(&dev->mutex);
 
     return 0;
 }
