@@ -4066,6 +4066,22 @@ xlate_group_bucket(struct xlate_ctx *ctx, struct ofputil_bucket *bucket,
      * the group bucket freezes translation, the actions after the group action
      * must continue processing with the original, not the frozen packet! */
     ctx->exit = false;
+
+    /* Context error in a bucket should not impact processing of other buckets
+     * or actions. This is similar to cloning a packet for group buckets.
+     * There is no need to restore the error back to old value due to the fact
+     * that we actually processed group action which can happen only when there
+     * is no previous context error.
+     *
+     * Exception to above is errors which are system limits to protect
+     * translation from running too long or occupy too much space. These errors
+     * should not be masked. XLATE_RECURSION_TOO_DEEP, XLATE_TOO_MANY_RESUBMITS
+     * and XLATE_STACK_TOO_DEEP fall in this category. */
+    if (ctx->error == XLATE_TOO_MANY_MPLS_LABELS ||
+        ctx->error == XLATE_UNSUPPORTED_PACKET_TYPE) {
+        /* reset the error and continue processing other buckets */
+        ctx->error = XLATE_OK;
+    }
 }
 
 static void
