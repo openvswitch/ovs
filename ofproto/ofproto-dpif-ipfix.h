@@ -38,8 +38,8 @@ struct dpif_ipfix *dpif_ipfix_create(void);
 struct dpif_ipfix *dpif_ipfix_ref(const struct dpif_ipfix *);
 void dpif_ipfix_unref(struct dpif_ipfix *);
 
-void dpif_ipfix_add_tunnel_port(struct dpif_ipfix *, struct ofport *, odp_port_t);
-void dpif_ipfix_del_tunnel_port(struct dpif_ipfix *, odp_port_t);
+void dpif_ipfix_add_port(struct dpif_ipfix *, struct ofport *, odp_port_t);
+void dpif_ipfix_del_port(struct dpif_ipfix *, odp_port_t);
 
 uint32_t dpif_ipfix_get_bridge_exporter_probability(const struct dpif_ipfix *);
 bool dpif_ipfix_get_bridge_exporter_tunnel_sampling(const struct dpif_ipfix *);
@@ -47,7 +47,7 @@ bool dpif_ipfix_get_bridge_exporter_input_sampling(const struct dpif_ipfix *);
 bool dpif_ipfix_get_bridge_exporter_output_sampling(const struct dpif_ipfix *);
 bool dpif_ipfix_get_flow_exporter_tunnel_sampling(const struct dpif_ipfix *,
                                                   const uint32_t);
-bool dpif_ipfix_get_tunnel_port(const struct dpif_ipfix *, odp_port_t);
+bool dpif_ipfix_is_tunnel_port(const struct dpif_ipfix *, odp_port_t);
 void dpif_ipfix_set_options(
     struct dpif_ipfix *,
     const struct ofproto_ipfix_bridge_exporter_options *,

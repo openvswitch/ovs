@@ -2964,7 +2964,7 @@ compose_ipfix_action(struct xlate_ctx *ctx, odp_port_t output_odp_port)
          * OVS_USERSPACE_ATTR_TUNNEL_OUT_PORT
          */
         if (dpif_ipfix_get_bridge_exporter_tunnel_sampling(ipfix) &&
-            dpif_ipfix_get_tunnel_port(ipfix, output_odp_port) ) {
+            dpif_ipfix_is_tunnel_port(ipfix, output_odp_port) ) {
            tunnel_out_port = output_odp_port;
         }
     }
@@ -5242,7 +5242,7 @@ xlate_sample_action(struct xlate_ctx *ctx,
 
         if (dpif_ipfix_get_flow_exporter_tunnel_sampling(ipfix,
                                                          os->collector_set_id)
-            && dpif_ipfix_get_tunnel_port(ipfix, output_odp_port)) {
+            && dpif_ipfix_is_tunnel_port(ipfix, output_odp_port)) {
             tunnel_out_port = output_odp_port;
             emit_set_tunnel = true;
         }

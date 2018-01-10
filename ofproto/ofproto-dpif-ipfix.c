@@ -115,11 +115,12 @@ struct dpif_ipfix_global_stats {
 };
 
 struct dpif_ipfix_port {
-    struct hmap_node hmap_node; /* In struct dpif_ipfix's "tunnel_ports" hmap. */
+    struct hmap_node hmap_node; /* In struct dpif_ipfix's "ports" hmap. */
     struct ofport *ofport;      /* To retrieve port stats. */
     odp_port_t odp_port;
     enum dpif_ipfix_tunnel_type tunnel_type;
     uint8_t tunnel_key_length;
+    uint32_t ifindex;
 };
 
 struct dpif_ipfix_exporter {
@@ -157,9 +158,9 @@ struct dpif_ipfix_flow_exporter_map_node {
 struct dpif_ipfix {
     struct dpif_ipfix_bridge_exporter bridge_exporter;
     struct hmap flow_exporter_map;  /* dpif_ipfix_flow_exporter_map_node. */
-    struct hmap tunnel_ports;       /* Contains "struct dpif_ipfix_port"s.
-                                     * It makes tunnel port lookups faster in
-                                     * sampling upcalls. */
+    struct hmap ports;              /* Contains "struct dpif_ipfix_port"s.
+                                     * It makes port lookups faster in sampling
+                                     * upcalls. */
     struct ovs_refcount ref_cnt;
 };
 
@@ -293,7 +294,8 @@ BUILD_ASSERT_DECL(sizeof(struct ipfix_template_field_specifier) == 8);
 /* Cf. IETF RFC 5102 Section 5.11.6. */
 enum ipfix_flow_direction {
     INGRESS_FLOW = 0x00,
-    EGRESS_FLOW = 0x01
+    EGRESS_FLOW = 0x01,
+    NUM_IPFIX_FLOW_DIRECTION
 };
 
 /* Part of data record flow key for common metadata and Ethernet entities. */
@@ -307,6 +309,18 @@ struct ipfix_data_record_flow_key_common {
     uint8_t ethernet_header_length;  /* ETHERNET_HEADER_LENGTH */
 });
 BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_flow_key_common) == 20);
+
+/* Part of data record flow key for interface information. Since some of the
+ * elements have variable length, members of this structure should be appended
+ * to the 'struct dp_packet' one by one. */
+struct ipfix_data_record_flow_key_iface {
+    ovs_be32 if_index;     /* (INGRESS | EGRESS)_INTERFACE */
+    ovs_be32 if_type;     /* (INGRESS | EGRESS)_INTERFACE_TYPE */
+    uint8_t if_name_len;   /* Variable length element: INTERFACE_NAME */
+    char *if_name;
+    uint8_t if_descr_len; /* Variable length element: INTERFACE_DESCRIPTION */
+    char *if_descr;
+};
 
 /* Part of data record flow key for VLAN entities. */
 OVS_PACKED(
@@ -745,7 +759,7 @@ dpif_ipfix_find_port(const struct dpif_ipfix *di,
     struct dpif_ipfix_port *dip;
 
     HMAP_FOR_EACH_IN_BUCKET (dip, hmap_node, hash_odp_port(odp_port),
-                             &di->tunnel_ports) {
+                             &di->ports) {
         if (dip->odp_port == odp_port) {
             return dip;
         }
@@ -754,82 +768,116 @@ dpif_ipfix_find_port(const struct dpif_ipfix *di,
 }
 
 static void
-dpif_ipfix_del_port(struct dpif_ipfix *di,
+dpif_ipfix_del_port__(struct dpif_ipfix *di,
                       struct dpif_ipfix_port *dip)
     OVS_REQUIRES(mutex)
 {
-    hmap_remove(&di->tunnel_ports, &dip->hmap_node);
+    hmap_remove(&di->ports, &dip->hmap_node);
     free(dip);
 }
 
+static enum dpif_ipfix_tunnel_type
+dpif_ipfix_tunnel_type(const struct ofport *ofport)
+{
+    const char *type = netdev_get_type(ofport->netdev);
+
+    if (type == NULL) {
+        return DPIF_IPFIX_TUNNEL_UNKNOWN;
+    }
+    if (strcmp(type, "gre") == 0) {
+        return DPIF_IPFIX_TUNNEL_GRE;
+    } else if (strcmp(type, "vxlan") == 0) {
+        return DPIF_IPFIX_TUNNEL_VXLAN;
+    } else if (strcmp(type, "lisp") == 0) {
+        return DPIF_IPFIX_TUNNEL_LISP;
+    } else if (strcmp(type, "geneve") == 0) {
+        return DPIF_IPFIX_TUNNEL_GENEVE;
+    } else if (strcmp(type, "stt") == 0) {
+        return DPIF_IPFIX_TUNNEL_STT;
+    }
+
+    return DPIF_IPFIX_TUNNEL_UNKNOWN;
+}
+
+static uint8_t
+dpif_ipfix_tunnel_key_length(enum dpif_ipfix_tunnel_type tunnel_type)
+{
+
+    switch (tunnel_type) {
+        case DPIF_IPFIX_TUNNEL_GRE:
+            /* 32-bit key gre */
+            return 4;
+        case DPIF_IPFIX_TUNNEL_VXLAN:
+        case DPIF_IPFIX_TUNNEL_LISP:
+        case DPIF_IPFIX_TUNNEL_GENEVE:
+            return 3;
+        case DPIF_IPFIX_TUNNEL_STT:
+            return 8;
+        case DPIF_IPFIX_TUNNEL_UNKNOWN:
+        case NUM_DPIF_IPFIX_TUNNEL:
+        default:
+            return 0;
+    }
+}
+
 void
-dpif_ipfix_add_tunnel_port(struct dpif_ipfix *di, struct ofport *ofport,
-                           odp_port_t odp_port) OVS_EXCLUDED(mutex)
+dpif_ipfix_add_port(struct dpif_ipfix *di, struct ofport *ofport,
+                    odp_port_t odp_port) OVS_EXCLUDED(mutex)
 {
     struct dpif_ipfix_port *dip;
-    const char *type;
+    int64_t ifindex;
 
     ovs_mutex_lock(&mutex);
     dip = dpif_ipfix_find_port(di, odp_port);
     if (dip) {
-        dpif_ipfix_del_port(di, dip);
+        dpif_ipfix_del_port__(di, dip);
     }
 
-    type = netdev_get_type(ofport->netdev);
-    if (type == NULL) {
-        goto out;
+    ifindex = netdev_get_ifindex(ofport->netdev);
+    if (ifindex < 0) {
+        ifindex = 0;
     }
 
-    /* Add to table of tunnel ports. */
+    /* Add to table of ports. */
     dip = xmalloc(sizeof *dip);
     dip->ofport = ofport;
     dip->odp_port = odp_port;
-    if (strcmp(type, "gre") == 0) {
-        /* 32-bit key gre */
-        dip->tunnel_type = DPIF_IPFIX_TUNNEL_GRE;
-        dip->tunnel_key_length = 4;
-    } else if (strcmp(type, "vxlan") == 0) {
-        dip->tunnel_type = DPIF_IPFIX_TUNNEL_VXLAN;
-        dip->tunnel_key_length = 3;
-    } else if (strcmp(type, "lisp") == 0) {
-        dip->tunnel_type = DPIF_IPFIX_TUNNEL_LISP;
-        dip->tunnel_key_length = 3;
-    } else if (strcmp(type, "geneve") == 0) {
-        dip->tunnel_type = DPIF_IPFIX_TUNNEL_GENEVE;
-        dip->tunnel_key_length = 3;
-    } else if (strcmp(type, "stt") == 0) {
-        dip->tunnel_type = DPIF_IPFIX_TUNNEL_STT;
-        dip->tunnel_key_length = 8;
-    } else {
-        free(dip);
-        goto out;
-    }
-    hmap_insert(&di->tunnel_ports, &dip->hmap_node, hash_odp_port(odp_port));
+    dip->tunnel_type = dpif_ipfix_tunnel_type(ofport);
+    dip->tunnel_key_length = dpif_ipfix_tunnel_key_length(dip->tunnel_type);
+    dip->ifindex = ifindex;
+    hmap_insert(&di->ports, &dip->hmap_node, hash_odp_port(odp_port));
 
-out:
     ovs_mutex_unlock(&mutex);
 }
 
 void
-dpif_ipfix_del_tunnel_port(struct dpif_ipfix *di, odp_port_t odp_port)
+dpif_ipfix_del_port(struct dpif_ipfix *di, odp_port_t odp_port)
     OVS_EXCLUDED(mutex)
 {
     struct dpif_ipfix_port *dip;
     ovs_mutex_lock(&mutex);
     dip = dpif_ipfix_find_port(di, odp_port);
     if (dip) {
-        dpif_ipfix_del_port(di, dip);
+        dpif_ipfix_del_port__(di, dip);
     }
     ovs_mutex_unlock(&mutex);
 }
 
+static struct dpif_ipfix_port *
+dpif_ipfix_find_tunnel_port(const struct dpif_ipfix *di, odp_port_t odp_port)
+    OVS_REQUIRES(mutex)
+{
+    struct dpif_ipfix_port *dip = dpif_ipfix_find_port(di, odp_port);
+    return (dip && dip->tunnel_type != DPIF_IPFIX_TUNNEL_UNKNOWN) ? dip : NULL;
+}
+
 bool
-dpif_ipfix_get_tunnel_port(const struct dpif_ipfix *di, odp_port_t odp_port)
+dpif_ipfix_is_tunnel_port(const struct dpif_ipfix *di, odp_port_t odp_port)
     OVS_EXCLUDED(mutex)
 {
     struct dpif_ipfix_port *dip;
     ovs_mutex_lock(&mutex);
-    dip = dpif_ipfix_find_port(di, odp_port);
+    dip = dpif_ipfix_find_tunnel_port(di, odp_port);
     ovs_mutex_unlock(&mutex);
     return dip != NULL;
 }
@@ -1065,7 +1113,7 @@ dpif_ipfix_create(void)
     di = xzalloc(sizeof *di);
     dpif_ipfix_bridge_exporter_init(&di->bridge_exporter);
     hmap_init(&di->flow_exporter_map);
-    hmap_init(&di->tunnel_ports);
+    hmap_init(&di->ports);
     ovs_refcount_init(&di->ref_cnt);
     return di;
 }
@@ -1159,8 +1207,8 @@ dpif_ipfix_clear(struct dpif_ipfix *di) OVS_REQUIRES(mutex)
         free(exp_node);
     }
 
-    HMAP_FOR_EACH_SAFE (dip, next, hmap_node, &di->tunnel_ports) {
-        dpif_ipfix_del_port(di, dip);
+    HMAP_FOR_EACH_SAFE (dip, next, hmap_node, &di->ports) {
+        dpif_ipfix_del_port__(di, dip);
     }
 }
 
@@ -1172,7 +1220,7 @@ dpif_ipfix_unref(struct dpif_ipfix *di) OVS_EXCLUDED(mutex)
         dpif_ipfix_clear(di);
         dpif_ipfix_bridge_exporter_destroy(&di->bridge_exporter);
         hmap_destroy(&di->flow_exporter_map);
-        hmap_destroy(&di->tunnel_ports);
+        hmap_destroy(&di->ports);
         free(di);
         ovs_mutex_unlock(&mutex);
     }
@@ -1211,13 +1259,15 @@ ipfix_send_msg(const struct collectors *collectors, struct dp_packet *msg)
 
 static uint16_t
 ipfix_get_template_id(enum ipfix_proto_l2 l2, enum ipfix_proto_l3 l3,
-                      enum ipfix_proto_l4 l4, enum ipfix_proto_tunnel tunnel)
+                      enum ipfix_proto_l4 l4, enum ipfix_proto_tunnel tunnel,
+                      enum ipfix_flow_direction flow_direction)
 {
     uint16_t template_id;
     template_id = l2;
     template_id = template_id * NUM_IPFIX_PROTO_L3 + l3;
     template_id = template_id * NUM_IPFIX_PROTO_L4 + l4;
     template_id = template_id * NUM_IPFIX_PROTO_TUNNEL + tunnel;
+    template_id = template_id * NUM_IPFIX_FLOW_DIRECTION + flow_direction;
     return IPFIX_TEMPLATE_ID_MIN + template_id;
 }
 
@@ -1229,7 +1279,8 @@ ipfix_get_options_template_id(enum ipfix_options_template opt_tmpl_type)
     uint16_t max_tmpl_id = ipfix_get_template_id(NUM_IPFIX_PROTO_L2,
                                                  NUM_IPFIX_PROTO_L3,
                                                  NUM_IPFIX_PROTO_L4,
-                                                 NUM_IPFIX_PROTO_TUNNEL);
+                                                 NUM_IPFIX_PROTO_TUNNEL,
+                                                 NUM_IPFIX_FLOW_DIRECTION);
 
     return max_tmpl_id + opt_tmpl_type;
 }
@@ -1324,7 +1375,9 @@ ipfix_def_options_template_fields(enum ipfix_options_template opt_tmpl_type,
 static uint16_t
 ipfix_define_template_fields(enum ipfix_proto_l2 l2, enum ipfix_proto_l3 l3,
                              enum ipfix_proto_l4 l4, enum ipfix_proto_tunnel tunnel,
-                             bool virtual_obs_id_set, size_t tmpl_hdr_offset,
+                             enum ipfix_flow_direction flow_direction,
+                             bool virtual_obs_id_set,
+                             size_t tmpl_hdr_offset,
                              struct dp_packet *msg)
 {
 
@@ -1341,6 +1394,19 @@ ipfix_define_template_fields(enum ipfix_proto_l2 l2, enum ipfix_proto_l3 l3,
     DEF(DESTINATION_MAC_ADDRESS);
     DEF(ETHERNET_TYPE);
     DEF(ETHERNET_HEADER_LENGTH);
+
+    /* Interface Information Elements */
+    DEF(INGRESS_INTERFACE);
+    DEF(INGRESS_INTERFACE_TYPE);
+    DEF(INTERFACE_NAME);
+    DEF(INTERFACE_DESCRIPTION);
+
+    if (flow_direction == EGRESS_FLOW) {
+        DEF(EGRESS_INTERFACE);
+        DEF(EGRESS_INTERFACE_TYPE);
+        DEF(INTERFACE_NAME);
+        DEF(INTERFACE_DESCRIPTION);
+    }
 
     if (l2 == IPFIX_PROTO_L2_VLAN) {
         DEF(VLAN_ID);
@@ -1543,6 +1609,24 @@ ipfix_send_options_template_msgs(struct dpif_ipfix_exporter *exporter,
 }
 
 static void
+ipfix_add_template_record(enum ipfix_proto_l2 l2, enum ipfix_proto_l3 l3,
+                          enum ipfix_proto_l4 l4,
+                          enum ipfix_proto_tunnel tunnel,
+                          enum ipfix_flow_direction flow_direction,
+                          bool virtual_obs_id_set,
+                          struct dp_packet *msg)
+{
+    struct ipfix_template_record_header *tmpl_hdr;
+    size_t tmpl_hdr_offset = dp_packet_size(msg);
+
+    tmpl_hdr = dp_packet_put_zeros(msg, sizeof *tmpl_hdr);
+    tmpl_hdr->template_id =
+        htons(ipfix_get_template_id(l2, l3, l4, tunnel, flow_direction));
+    ipfix_define_template_fields(l2, l3, l4, tunnel, flow_direction,
+                                 virtual_obs_id_set, tmpl_hdr_offset, msg);
+}
+
+static void
 ipfix_send_template_msgs(struct dpif_ipfix_exporter *exporter,
                          uint32_t export_time_sec, uint32_t obs_domain_id)
 {
@@ -1550,14 +1634,14 @@ ipfix_send_template_msgs(struct dpif_ipfix_exporter *exporter,
     struct dp_packet msg;
     dp_packet_use_stub(&msg, msg_stub, sizeof msg_stub);
 
-    size_t set_hdr_offset, tmpl_hdr_offset, error_pkts;
-    struct ipfix_template_record_header *tmpl_hdr;
+    size_t set_hdr_offset, error_pkts;
     size_t tx_packets = 0;
     size_t tx_errors = 0;
     enum ipfix_proto_l2 l2;
     enum ipfix_proto_l3 l3;
     enum ipfix_proto_l4 l4;
     enum ipfix_proto_tunnel tunnel;
+    enum ipfix_flow_direction flow_direction;
 
     ipfix_init_template_msg(export_time_sec, exporter->seq_number,
                             obs_domain_id, IPFIX_SET_ID_TEMPLATE, &msg,
@@ -1572,41 +1656,44 @@ ipfix_send_template_msgs(struct dpif_ipfix_exporter *exporter,
                     continue;
                 }
                 for (tunnel = 0; tunnel < NUM_IPFIX_PROTO_TUNNEL; tunnel++) {
-                    /* When the size of the template packet reaches
-                     * MAX_MESSAGE_LEN(1024), send it out.
-                     * And then reinitialize the msg to construct a new
-                     * packet for the following templates.
-                     */
-                    if (dp_packet_size(&msg) >= MAX_MESSAGE_LEN) {
-                        /* Send template message. */
-                        error_pkts = ipfix_send_template_msg(exporter->collectors,
-                                                             &msg, set_hdr_offset);
-                        tx_errors += error_pkts;
-                        tx_packets += collectors_count(exporter->collectors) - error_pkts;
+                    for (flow_direction = 0;
+                         flow_direction < NUM_IPFIX_FLOW_DIRECTION;
+                         flow_direction++) {
+                        /* When the size of the template packet reaches
+                         * MAX_MESSAGE_LEN(1024), send it out.
+                         * And then reinitialize the msg to construct a new
+                         * packet for the following templates.
+                         */
+                        if (dp_packet_size(&msg) >= MAX_MESSAGE_LEN) {
+                            /* Send template message. */
+                            error_pkts =
+                                ipfix_send_template_msg(exporter->collectors,
+                                                        &msg, set_hdr_offset);
+                            tx_errors += error_pkts;
+                            tx_packets +=
+                                collectors_count(exporter->collectors)
+                                - error_pkts;
 
-                        /* Reinitialize the template msg. */
-                        ipfix_init_template_msg(export_time_sec,
-                                                exporter->seq_number,
-                                                obs_domain_id,
-                                                IPFIX_SET_ID_TEMPLATE,
-                                                &msg,
-                                                &set_hdr_offset);
+                            /* Reinitialize the template msg. */
+                            ipfix_init_template_msg(export_time_sec,
+                                                    exporter->seq_number,
+                                                    obs_domain_id,
+                                                    IPFIX_SET_ID_TEMPLATE,
+                                                    &msg, &set_hdr_offset);
+                        }
+
+                        ipfix_add_template_record(l2, l3, l4, tunnel,
+                                flow_direction,
+                                exporter->virtual_obs_id != NULL, &msg);
                     }
-
-                    tmpl_hdr_offset = dp_packet_size(&msg);
-                    tmpl_hdr = dp_packet_put_zeros(&msg, sizeof *tmpl_hdr);
-                    tmpl_hdr->template_id = htons(
-                        ipfix_get_template_id(l2, l3, l4, tunnel));
-                    ipfix_define_template_fields(
-                        l2, l3, l4, tunnel, exporter->virtual_obs_id != NULL,
-                        tmpl_hdr_offset, &msg);
                 }
             }
         }
     }
 
     /* Send template message. */
-    error_pkts = ipfix_send_template_msg(exporter->collectors, &msg, set_hdr_offset);
+    error_pkts = ipfix_send_template_msg(exporter->collectors, &msg,
+                                         set_hdr_offset);
     tx_errors += error_pkts;
     tx_packets += collectors_count(exporter->collectors) - error_pkts;
 
@@ -1908,8 +1995,80 @@ ipfix_cache_update(struct dpif_ipfix_exporter *exporter,
     }
 }
 
+static void
+ipfix_destroy_iface_data_record(struct ipfix_data_record_flow_key_iface *data)
+{
+    free(data->if_descr);
+    free(data->if_name);
+}
+
+/* Fills '*data' structure based on port number 'port_no'.  Caller must destroy
+ * 'data' with ipfix_destroy_iface_data_record(). */
+static int
+ipfix_get_iface_data_record(const struct dpif_ipfix *di, odp_port_t port_no,
+                            struct ipfix_data_record_flow_key_iface *data)
+    OVS_REQUIRES(mutex)
+{
+    struct dpif_ipfix_port *port;
+    struct smap netdev_status;
+
+    port = dpif_ipfix_find_port(di, port_no);
+    if (!port) {
+        return -1;
+    }
+
+    smap_init(&netdev_status);
+    if (!netdev_get_status(port->ofport->netdev, &netdev_status)) {
+        data->if_type = htonl(smap_get_ullong(&netdev_status, "if_type", 0));
+        data->if_descr = nullable_xstrdup(smap_get(&netdev_status,
+                                                   "if_descr"));
+    } else {
+        data->if_type = 0;
+        data->if_descr = NULL;
+    }
+
+    smap_destroy(&netdev_status);
+    data->if_index = htonl(port->ifindex);
+    data->if_descr_len = data->if_descr ? strlen(data->if_descr) : 0;
+    data->if_name = nullable_xstrdup(netdev_get_name(port->ofport->netdev));
+    data->if_name_len = data->if_name ? strlen(data->if_name) : 0;
+
+    return 0;
+}
+
+static void
+ipfix_put_iface_data_record(const struct dpif_ipfix *di, odp_port_t port_no,
+                            struct dp_packet *msg)
+    OVS_REQUIRES(mutex)
+{
+    struct ipfix_data_record_flow_key_iface data;
+    int err;
+
+    memset(&data, 0, sizeof(struct ipfix_data_record_flow_key_iface));
+    err = ipfix_get_iface_data_record(di, port_no, &data);
+    if (err == 0) {
+        dp_packet_put(msg, &data.if_index, sizeof data.if_index);
+        dp_packet_put(msg, &data.if_type, sizeof data.if_type);
+        dp_packet_put(msg, &data.if_name_len, sizeof data.if_name_len);
+        if (data.if_name_len) {
+            dp_packet_put(msg, data.if_name, data.if_name_len);
+        }
+        dp_packet_put(msg, &data.if_descr_len, sizeof data.if_descr_len);
+        if (data.if_descr_len) {
+            dp_packet_put(msg, data.if_descr, data.if_descr_len);
+        }
+        ipfix_destroy_iface_data_record(&data);
+    } else {
+        dp_packet_put_zeros(msg, sizeof data.if_index);
+        dp_packet_put_zeros(msg, sizeof data.if_type);
+        dp_packet_put_zeros(msg, sizeof data.if_name_len);
+        dp_packet_put_zeros(msg, sizeof data.if_descr_len);
+    }
+}
+
 static enum ipfix_sampled_packet_type
-ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
+ipfix_cache_entry_init(const struct dpif_ipfix *di,
+                       struct ipfix_flow_cache_entry *entry,
                        const struct dp_packet *packet, const struct flow *flow,
                        uint64_t packet_delta_count, uint32_t obs_domain_id,
                        uint32_t obs_point_id, odp_port_t output_odp_port,
@@ -1918,6 +2077,7 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
                        const struct flow_tnl *tunnel_key,
                        struct dpif_ipfix_global_stats *stats,
                        const struct dpif_ipfix_actions *ipfix_actions)
+    OVS_REQUIRES(mutex)
 {
     struct ipfix_flow_key *flow_key;
     struct dp_packet msg;
@@ -1992,8 +2152,14 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
        tunnel = IPFIX_PROTO_TUNNELED;
     }
 
+    uint8_t flow_direction =
+        (direction == NX_ACTION_SAMPLE_INGRESS ? INGRESS_FLOW
+         : direction == NX_ACTION_SAMPLE_EGRESS ? EGRESS_FLOW
+         : output_odp_port == ODPP_NONE ? INGRESS_FLOW : EGRESS_FLOW);
+
     flow_key->obs_domain_id = obs_domain_id;
-    flow_key->template_id = ipfix_get_template_id(l2, l3, l4, tunnel);
+    flow_key->template_id = ipfix_get_template_id(l2, l3, l4, tunnel,
+                                                  flow_direction);
 
     /* The fields defined in the ipfix_data_record_* structs and sent
      * below must match exactly the templates defined in
@@ -2002,11 +2168,6 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
     ethernet_header_length = (l2 == IPFIX_PROTO_L2_VLAN)
         ? VLAN_ETH_HEADER_LEN : ETH_HEADER_LEN;
     ethernet_total_length = dp_packet_size(packet);
-
-    uint8_t flow_direction =
-        (direction == NX_ACTION_SAMPLE_INGRESS ? INGRESS_FLOW
-         : direction == NX_ACTION_SAMPLE_EGRESS ? EGRESS_FLOW
-         : output_odp_port == ODPP_NONE ? INGRESS_FLOW : EGRESS_FLOW);
 
     /* Common Ethernet entities. */
     {
@@ -2019,6 +2180,13 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
         data_common->destination_mac_address = flow->dl_dst;
         data_common->ethernet_type = flow->dl_type;
         data_common->ethernet_header_length = ethernet_header_length;
+    }
+
+    /* Interface Information Elements */
+    ipfix_put_iface_data_record(di, flow->in_port.odp_port, &msg);
+
+    if (flow_direction == EGRESS_FLOW) {
+        ipfix_put_iface_data_record(di, output_odp_port, &msg);
     }
 
     if (l2 == IPFIX_PROTO_L2_VLAN) {
@@ -2468,7 +2636,8 @@ ipfix_send_data_msg(struct dpif_ipfix_exporter *exporter,
 }
 
 static void
-dpif_ipfix_sample(struct dpif_ipfix_exporter *exporter,
+dpif_ipfix_sample(const struct dpif_ipfix *di,
+                  struct dpif_ipfix_exporter *exporter,
                   const struct dp_packet *packet, const struct flow *flow,
                   uint64_t packet_delta_count, uint32_t obs_domain_id,
                   uint32_t obs_point_id, odp_port_t output_odp_port,
@@ -2476,6 +2645,7 @@ dpif_ipfix_sample(struct dpif_ipfix_exporter *exporter,
                   const struct dpif_ipfix_port *tunnel_port,
                   const struct flow_tnl *tunnel_key,
                   const struct dpif_ipfix_actions *ipfix_actions)
+    OVS_REQUIRES(mutex)
 {
     struct ipfix_flow_cache_entry *entry;
     enum ipfix_sampled_packet_type sampled_packet_type;
@@ -2483,7 +2653,7 @@ dpif_ipfix_sample(struct dpif_ipfix_exporter *exporter,
     /* Create a flow cache entry from the sample. */
     entry = xmalloc(sizeof *entry);
     sampled_packet_type =
-            ipfix_cache_entry_init(entry, packet,
+            ipfix_cache_entry_init(di, entry, packet,
                                    flow, packet_delta_count,
                                    obs_domain_id, obs_point_id,
                                    output_odp_port, direction,
@@ -2541,16 +2711,16 @@ dpif_ipfix_bridge_sample(struct dpif_ipfix *di, const struct dp_packet *packet,
         if (output_odp_port == ODPP_NONE && flow->tunnel.ip_dst) {
             /* Input tunnel. */
             tunnel_key = &flow->tunnel;
-            tunnel_port = dpif_ipfix_find_port(di, input_odp_port);
+            tunnel_port = dpif_ipfix_find_tunnel_port(di, input_odp_port);
         }
         if (output_odp_port != ODPP_NONE && output_tunnel_key) {
             /* Output tunnel, output_tunnel_key must be valid. */
             tunnel_key = output_tunnel_key;
-            tunnel_port = dpif_ipfix_find_port(di, output_odp_port);
+            tunnel_port = dpif_ipfix_find_tunnel_port(di, output_odp_port);
         }
     }
 
-    dpif_ipfix_sample(&di->bridge_exporter.exporter, packet, flow,
+    dpif_ipfix_sample(di, &di->bridge_exporter.exporter, packet, flow,
                       packet_delta_count,
                       di->bridge_exporter.options->obs_domain_id,
                       di->bridge_exporter.options->obs_point_id,
@@ -2586,16 +2756,16 @@ dpif_ipfix_flow_sample(struct dpif_ipfix *di, const struct dp_packet *packet,
             if (output_odp_port == ODPP_NONE && flow->tunnel.ip_dst) {
                 /* Input tunnel. */
                 tunnel_key = &flow->tunnel;
-                tunnel_port = dpif_ipfix_find_port(di, input_odp_port);
+                tunnel_port = dpif_ipfix_find_tunnel_port(di, input_odp_port);
             }
             if (output_odp_port != ODPP_NONE && output_tunnel_key) {
                 /* Output tunnel, output_tunnel_key must be valid. */
                 tunnel_key = output_tunnel_key;
-                tunnel_port = dpif_ipfix_find_port(di, output_odp_port);
+                tunnel_port = dpif_ipfix_find_tunnel_port(di, output_odp_port);
             }
         }
 
-        dpif_ipfix_sample(&node->exporter.exporter, packet, flow,
+        dpif_ipfix_sample(di, &node->exporter.exporter, packet, flow,
                           packet_delta_count,
                           cookie->flow_sample.obs_domain_id,
                           cookie->flow_sample.obs_point_id,

@@ -1789,9 +1789,6 @@ port_construct(struct ofport *port_)
         }
 
         port->is_tunnel = true;
-        if (ofproto->ipfix) {
-           dpif_ipfix_add_tunnel_port(ofproto->ipfix, port_, port->odp_port);
-        }
     } else {
         /* Sanity-check that a mapping doesn't already exist.  This
          * shouldn't happen for non-tunnel ports. */
@@ -1811,6 +1808,9 @@ port_construct(struct ofport *port_)
 
     if (ofproto->sflow) {
         dpif_sflow_add_port(ofproto->sflow, port_, port->odp_port);
+    }
+    if (ofproto->ipfix) {
+       dpif_ipfix_add_port(ofproto->ipfix, port_, port->odp_port);
     }
 
     return 0;
@@ -1863,10 +1863,6 @@ port_destruct(struct ofport *port_, bool del)
         atomic_count_dec(&ofproto->backer->tnl_count);
     }
 
-    if (port->is_tunnel && ofproto->ipfix) {
-       dpif_ipfix_del_tunnel_port(ofproto->ipfix, port->odp_port);
-    }
-
     tnl_port_del(port, port->odp_port);
     sset_find_and_delete(&ofproto->ports, devname);
     sset_find_and_delete(&ofproto->ghost_ports, devname);
@@ -1880,6 +1876,9 @@ port_destruct(struct ofport *port_, bool del)
     set_rstp_port(port_, NULL);
     if (ofproto->sflow) {
         dpif_sflow_del_port(ofproto->sflow, port->odp_port);
+    }
+    if (ofproto->ipfix) {
+       dpif_ipfix_del_port(ofproto->ipfix, port->odp_port);
     }
 
     free(port->qdscp);
@@ -2006,13 +2005,11 @@ set_ipfix(
             di, bridge_exporter_options, flow_exporters_options,
             n_flow_exporters_options);
 
-        /* Add tunnel ports only when a new ipfix created */
+        /* Add ports only when a new ipfix created */
         if (new_di == true) {
             struct ofport_dpif *ofport;
             HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
-                if (ofport->is_tunnel == true) {
-                    dpif_ipfix_add_tunnel_port(di, &ofport->up, ofport->odp_port);
-                }
+                dpif_ipfix_add_port(di, &ofport->up, ofport->odp_port);
             }
         }
 
