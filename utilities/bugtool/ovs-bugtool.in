@@ -129,6 +129,7 @@ os.environ['PATH'] = '/usr/local/sbin:/usr/local/bin:' \
 ARP = 'arp'
 CAT = 'cat'
 CHKCONFIG = 'chkconfig'
+DATE = 'date'
 DF = 'df'
 DMESG = 'dmesg'
 DMIDECODE = 'dmidecode'
@@ -225,6 +226,8 @@ dbg = False
 log_days = 20
 log_last_mod_time = None
 free_disk_space = None
+# Default value for delay between repeated commands
+command_delay = 10
 
 
 def cap(key, pii=PII_MAYBE, min_size=-1, max_size=-1, min_time=-1,
@@ -266,7 +269,8 @@ def output_ts(x):
     output("[%s]  %s" % (time.strftime("%x %X %Z"), x))
 
 
-def cmd_output(cap, args, label=None, filter=None, binary=False):
+def cmd_output(cap, args, label=None, filter=None,
+               binary=False, repeat_count=1):
     if cap in entries:
         if not label:
             if isinstance(args, list):
@@ -276,7 +280,7 @@ def cmd_output(cap, args, label=None, filter=None, binary=False):
             else:
                 label = args
         data[label] = {'cap': cap, 'cmd_args': args, 'filter': filter,
-                       'binary': binary}
+                       'binary': binary, 'repeat_count': repeat_count}
 
 
 def file_output(cap, path_list, newest_first=False, last_mod_time=None):
@@ -338,18 +342,38 @@ def func_output(cap, label, func):
 
 
 def collect_data():
-    process_lists = {}
+    first_run = True
+
+    while True:
+        process_lists = {}
+
+        for (k, v) in data.items():
+            cap = v['cap']
+            if 'cmd_args' in v:
+                if 'output' not in v.keys():
+                    v['output'] = StringIOmtime()
+                if v['repeat_count'] > 0:
+                    if cap not in process_lists:
+                        process_lists[cap] = []
+                    process_lists[cap].append(
+                            ProcOutput(v['cmd_args'], caps[cap][MAX_TIME],
+                                       v['output'], v['filter'], v['binary']))
+                    v['repeat_count'] -= 1
+
+        if bool(process_lists):
+            if not first_run:
+                output_ts("Waiting %d sec between repeated commands" %
+                          command_delay)
+                time.sleep(command_delay)
+            else:
+                first_run = False
+            run_procs(process_lists.values())
+        else:
+            break
 
     for (k, v) in data.items():
         cap = v['cap']
-        if 'cmd_args' in v:
-            v['output'] = StringIOmtime()
-            if cap not in process_lists:
-                process_lists[cap] = []
-            process_lists[cap].append(
-                ProcOutput(v['cmd_args'], caps[cap][MAX_TIME], v['output'],
-                           v['filter'], v['binary']))
-        elif 'filename' in v and v['filename'].startswith('/proc/'):
+        if 'filename' in v and v['filename'].startswith('/proc/'):
             # proc files must be read into memory
             try:
                 f = open(v['filename'], 'r')
@@ -367,13 +391,11 @@ def collect_data():
             if check_space(cap, k, len(s)):
                 v['output'] = StringIOmtime(s)
 
-    run_procs(process_lists.values())
-
 
 def main(argv=None):
     global ANSWER_YES_TO_ALL, SILENT_MODE
     global entries, data, dbg, unlimited_data, free_disk_space
-    global log_days, log_last_mod_time
+    global log_days, log_last_mod_time, command_delay
 
     # Filter flags
     only_ovs_info = False
@@ -396,6 +418,7 @@ Options for categories of data to collect:
   --all                      collect all categories
   --ovs                      collect only directly OVS-related info
   --log-days=DAYS            collect DAYS worth of old logs
+  --delay=DELAY              set delay between repeated command
   -y, --yestoall             suppress prompts to confirm collection
   --capabilities             print categories as XML on stdout, then exit
 
@@ -424,7 +447,7 @@ Output options:
         (options, params) = getopt.gnu_getopt(
             argv, 'sy', ['capabilities', 'silent', 'yestoall', 'entries=',
                          'output=', 'outfd=', 'outfile=', 'all', 'unlimited',
-                         'debug', 'ovs', 'log-days='])
+                         'debug', 'ovs', 'log-days=', 'delay='])
     except getopt.GetoptError as opterr:
         print(opterr, file=sys.stderr)
         return 2
@@ -489,6 +512,9 @@ Output options:
 
         if k == '--log-days':
             log_days = int(v)
+
+        if k == '--delay':
+            command_delay = int(v)
 
     if len(params) != 1:
         print("Invalid additional arguments", str(params), file=sys.stderr)
@@ -960,8 +986,20 @@ def load_plugins(just_capabilities=False, filter=None):
                     if label == '':
                         label = None
                     binary = getBoolAttr(el, 'binary')
-                    cmd_output(dir,
-                               getText(el.childNodes), label, binary=binary)
+                    try:
+                        repeat_count = int(el.getAttribute("repeat"))
+                        if repeat_count > 1:
+                            cmd_output(dir,
+                                       DATE + ';' + getText(el.childNodes),
+                                       label, binary=binary,
+                                       repeat_count=repeat_count)
+                        else:
+                            cmd_output(dir, getText(el.childNodes),
+                                       label, binary=binary,
+                                       repeat_count=repeat_count)
+                    except:
+                        cmd_output(dir, getText(el.childNodes), label,
+                                   binary=binary)
 
 
 def make_tar(subdir, suffix, output_fd, output_file):
