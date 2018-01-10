@@ -1337,29 +1337,69 @@ netdev_dpdk_lookup_by_port_id(dpdk_port_t port_id)
 }
 
 static dpdk_port_t
-netdev_dpdk_process_devargs(struct netdev_dpdk *dev,
-                            const char *devargs, char **errp)
+netdev_dpdk_get_port_by_mac(const char *mac_str)
 {
-    /* Get the name up to the first comma. */
-    char *name = xmemdup0(devargs, strcspn(devargs, ","));
-    dpdk_port_t new_port_id = DPDK_ETH_PORT_ID_INVALID;
+    dpdk_port_t port_id;
+    struct eth_addr mac, port_mac;
 
-    if (rte_eth_dev_get_port_by_name(name, &new_port_id)
-            || !rte_eth_dev_is_valid_port(new_port_id)) {
-        /* Device not found in DPDK, attempt to attach it */
-        if (!rte_eth_dev_attach(devargs, &new_port_id)) {
-            /* Attach successful */
-            dev->attached = true;
-            VLOG_INFO("Device '%s' attached to DPDK", devargs);
-        } else {
-            /* Attach unsuccessful */
-            new_port_id = DPDK_ETH_PORT_ID_INVALID;
-            VLOG_WARN_BUF(errp, "Error attaching device '%s' to DPDK",
-                          devargs);
+    if (!eth_addr_from_string(mac_str, &mac)) {
+        VLOG_ERR("invalid mac: %s", mac_str);
+        return DPDK_ETH_PORT_ID_INVALID;
+    }
+
+    RTE_ETH_FOREACH_DEV (port_id) {
+        struct ether_addr ea;
+
+        rte_eth_macaddr_get(port_id, &ea);
+        memcpy(port_mac.ea, ea.addr_bytes, ETH_ADDR_LEN);
+        if (eth_addr_equals(mac, port_mac)) {
+            return port_id;
         }
     }
 
-    free(name);
+    return DPDK_ETH_PORT_ID_INVALID;
+}
+
+/*
+ * Normally, a PCI id is enough for identifying a specific DPDK port.
+ * However, for some NICs having multiple ports sharing the same PCI
+ * id, using PCI id won't work then.
+ *
+ * To fix that, here one more method is introduced: "class=eth,mac=$MAC".
+ *
+ * Note that the compatibility is fully kept: user can still use the
+ * PCI id for adding ports (when it's enough for them).
+ */
+static dpdk_port_t
+netdev_dpdk_process_devargs(struct netdev_dpdk *dev,
+                            const char *devargs, char **errp)
+{
+    char *name;
+    dpdk_port_t new_port_id = DPDK_ETH_PORT_ID_INVALID;
+
+    if (strncmp(devargs, "class=eth,mac=", 14) == 0) {
+        new_port_id = netdev_dpdk_get_port_by_mac(&devargs[14]);
+    } else {
+        name = xmemdup0(devargs, strcspn(devargs, ","));
+        if (rte_eth_dev_get_port_by_name(name, &new_port_id)
+                || !rte_eth_dev_is_valid_port(new_port_id)) {
+            /* Device not found in DPDK, attempt to attach it */
+            if (!rte_eth_dev_attach(devargs, &new_port_id)) {
+                /* Attach successful */
+                dev->attached = true;
+                VLOG_INFO("Device '%s' attached to DPDK", devargs);
+            } else {
+                /* Attach unsuccessful */
+                new_port_id = DPDK_ETH_PORT_ID_INVALID;
+            }
+        }
+        free(name);
+    }
+
+    if (new_port_id == DPDK_ETH_PORT_ID_INVALID) {
+        VLOG_WARN_BUF(errp, "Error attaching device '%s' to DPDK", devargs);
+    }
+
     return new_port_id;
 }
 
