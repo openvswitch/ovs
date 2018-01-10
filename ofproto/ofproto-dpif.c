@@ -4193,12 +4193,16 @@ check_mask(struct ofproto_dpif *ofproto, const struct miniflow *flow)
     support = &ofproto->backer->rt_support.odp;
     ct_state = MINIFLOW_GET_U8(flow, ct_state);
 
+    if (ct_state & CS_UNSUPPORTED_MASK) {
+        return OFPERR_OFPBMC_BAD_MASK;
+    }
+
     /* Do not bother dissecting the flow further if the datapath supports all
      * the features we know of. */
     if (support->ct_state && support->ct_zone && support->ct_mark
         && support->ct_label && support->ct_state_nat
         && support->ct_orig_tuple && support->ct_orig_tuple6) {
-        return ct_state & CS_UNSUPPORTED_MASK ? OFPERR_OFPBMC_BAD_MASK : 0;
+        return 0;
     }
 
     ct_zone = MINIFLOW_GET_U16(flow, ct_zone);
@@ -4206,31 +4210,30 @@ check_mask(struct ofproto_dpif *ofproto, const struct miniflow *flow)
     ct_label = MINIFLOW_GET_U128(flow, ct_label);
 
     if ((ct_state && !support->ct_state)
-        || (ct_state & CS_UNSUPPORTED_MASK)
         || ((ct_state & (CS_SRC_NAT | CS_DST_NAT)) && !support->ct_state_nat)
         || (ct_zone && !support->ct_zone)
         || (ct_mark && !support->ct_mark)
         || (!ovs_u128_is_zero(ct_label) && !support->ct_label)) {
-        return OFPERR_OFPBMC_BAD_MASK;
+        return OFPERR_NXBMC_CT_DATAPATH_SUPPORT;
     }
 
     if (!support->ct_orig_tuple && !support->ct_orig_tuple6
         && (MINIFLOW_GET_U8(flow, ct_nw_proto)
             || MINIFLOW_GET_U16(flow, ct_tp_src)
             || MINIFLOW_GET_U16(flow, ct_tp_dst))) {
-        return OFPERR_OFPBMC_BAD_MASK;
+        return OFPERR_NXBMC_CT_DATAPATH_SUPPORT;
     }
 
     if (!support->ct_orig_tuple
         && (MINIFLOW_GET_U32(flow, ct_nw_src)
             || MINIFLOW_GET_U32(flow, ct_nw_dst))) {
-        return OFPERR_OFPBMC_BAD_MASK;
+        return OFPERR_NXBMC_CT_DATAPATH_SUPPORT;
     }
 
     if (!support->ct_orig_tuple6
         && (!ovs_u128_is_zero(MINIFLOW_GET_U128(flow, ct_ipv6_src))
             || !ovs_u128_is_zero(MINIFLOW_GET_U128(flow, ct_ipv6_dst)))) {
-        return OFPERR_OFPBMC_BAD_MASK;
+        return OFPERR_NXBMC_CT_DATAPATH_SUPPORT;
     }
 
     return 0;
@@ -4261,11 +4264,11 @@ check_actions(const struct ofproto_dpif *ofproto,
 
             if (!support->ct_state) {
                 report_unsupported_act("ct", "ct action");
-                return OFPERR_OFPBAC_BAD_TYPE;
+                return OFPERR_NXBAC_CT_DATAPATH_SUPPORT;
             }
             if ((ct->zone_imm || ct->zone_src.field) && !support->ct_zone) {
                 report_unsupported_act("ct", "ct zones");
-                return OFPERR_OFPBAC_BAD_ARGUMENT;
+                return OFPERR_NXBAC_CT_DATAPATH_SUPPORT;
             }
             /* So far the force commit feature is implemented together with the
              * original direction tuple feature by all datapaths, so we use the
@@ -4273,7 +4276,7 @@ check_actions(const struct ofproto_dpif *ofproto,
              * force commit feature as well. */
             if ((ct->flags & NX_CT_F_FORCE) && !support->ct_orig_tuple) {
                 report_unsupported_act("ct", "force commit");
-                return OFPERR_OFPBAC_BAD_ARGUMENT;
+                return OFPERR_NXBAC_CT_DATAPATH_SUPPORT;
             }
 
             OFPACT_FOR_EACH(a, ct->actions, ofpact_ct_get_action_len(ct)) {
@@ -4284,12 +4287,12 @@ check_actions(const struct ofproto_dpif *ofproto,
                      * 'ct_state': assume that it doesn't support the NAT
                      * action. */
                     report_unsupported_act("ct", "nat");
-                    return OFPERR_OFPBAC_BAD_TYPE;
+                    return OFPERR_NXBAC_CT_DATAPATH_SUPPORT;
                 }
                 if (dst && ((dst->id == MFF_CT_MARK && !support->ct_mark) ||
                             (dst->id == MFF_CT_LABEL && !support->ct_label))) {
                     report_unsupported_act("ct", "setting mark and/or label");
-                    return OFPERR_OFPBAC_BAD_SET_ARGUMENT;
+                    return OFPERR_NXBAC_CT_DATAPATH_SUPPORT;
                 }
             }
         } else if (ofpact->type == OFPACT_RESUBMIT) {
@@ -4298,7 +4301,7 @@ check_actions(const struct ofproto_dpif *ofproto,
             if (resubmit->with_ct_orig && !support->ct_orig_tuple) {
                 report_unsupported_act("resubmit",
                                        "ct original direction tuple");
-                return OFPERR_OFPBAC_BAD_TYPE;
+                return OFPERR_NXBAC_CT_DATAPATH_SUPPORT;
             }
         }
     }

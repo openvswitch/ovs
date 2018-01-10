@@ -287,6 +287,12 @@ enum ofperr {
     /* NX1.3+(41).  Error in encap or decap property. */
     OFPERR_NXBAC_BAD_ED_PROP,
 
+    /* NX1.0-1.1(1,265), NX1.2+(42).  Action requires connection tracking or a
+     * particular connection-tracking based feature that the datapath in use
+     * does not support.  If a kernel-based datapath is in use, the kernel
+     * module may need to be upgraded. */
+    OFPERR_NXBAC_CT_DATAPATH_SUPPORT,
+
 /* ## --------------------- ## */
 /* ## OFPET_BAD_INSTRUCTION ## */
 /* ## --------------------- ## */
@@ -366,6 +372,12 @@ enum ofperr {
 
     /* OF1.2+(4,11).  Permissions error. */
     OFPERR_OFPBMC_EPERM,
+
+    /* NX1.0-1.1(1,264), NX1.2+(43).  Flow match requires connection tracking
+     * or a particular connection-tracking based feature that the datapath in
+     * use does not support.  If a kernel-based datapath is in use, the kernel
+     * module may need to be upgraded. */
+    OFPERR_NXBMC_CT_DATAPATH_SUPPORT,
 
 /* ## --------------------- ## */
 /* ## OFPET_FLOW_MOD_FAILED ## */
