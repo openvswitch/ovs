@@ -18,18 +18,18 @@
 
 <collect>
   <command label="tc-class-show" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-tc-class-show</command>
-  <command label="ovs-vsctl-show" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-vsctl-show</command>
-  <command label="dump-ovsdb" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-ovsdb-dump</command>
+  <command label="ovs-vsctl-show" filters="ovs">ovs-vsctl show</command>
+  <command label="dump-ovsdb" filters="ovs">ovsdb-client -f csv dump unix:/var/run/openvswitch/db.sock Open_vSwitch</command>
   <command label="ovs-appctl-fdb-show" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-fdb-show</command>
-  <command label="ovs-appctl-lacp-show" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-lacp-show</command>
-  <command label="ovs-appctl-cfm-show" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-cfm-show</command>
-  <command label="ovs-appctl-bfd-show" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-bfd-show</command>
-  <command label="ovs-appctl-conntrack-dump" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-conntrack-dump</command>
-  <command label="ovs-appctl-coverage-show" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-coverage-show</command>
-  <command label="ovs-appctl-bond-show" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-bond-show</command>
-  <command label="ovs-appctl-memory-show" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-memory-show</command>
+  <command label="ovs-appctl-lacp-show" filters="ovs">ovs-appctl lacp/show</command>
+  <command label="ovs-appctl-cfm-show" filters="ovs">ovs-appctl cfm/show</command>
+  <command label="ovs-appctl-bfd-show" filters="ovs">ovs-appctl bfd/show</command>
+  <command label="ovs-appctl-conntrack-dump" filters="ovs">ovs-appctl dpctl/dump-conntrack</command>
+  <command label="ovs-appctl-coverage-show" filters="ovs">ovs-appctl coverage/show</command>
+  <command label="ovs-appctl-bond-show" filters="ovs">ovs-appctl bond/show</command>
+  <command label="ovs-appctl-memory-show" filters="ovs">ovs-appctl memory/show</command>
   <command label="ovs-ofctl-show" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-ovs-ofctl-loop-over-bridges "show"</command>
   <command label="ovs-ofctl-dump-flows" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-ovs-ofctl-loop-over-bridges "dump-flows"</command>
   <command label="ovs-appctl-dpif" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-ovs-appctl-dpif</command>
-  <command label="ovs-appctl-list-dbs" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-list-dbs</command>
+  <command label="ovs-appctl-list-dbs" filters="ovs">ovs-appctl -t ovsdb-server ovsdb-server/list-dbs</command>
 </collect>
