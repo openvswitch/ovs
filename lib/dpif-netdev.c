@@ -4105,6 +4105,8 @@ reload:
        VLOG_DBG("Core %d processing port \'%s\' with queue-id %d\n",
                 pmd->core_id, netdev_rxq_get_name(poll_list[i].rxq->rx),
                 netdev_rxq_get_queue_id(poll_list[i].rxq->rx));
+       /* Reset the rxq current cycles counter. */
+       dp_netdev_rxq_set_cycles(poll_list[i].rxq, RXQ_CYCLES_PROC_CURR, 0);
     }
 
     if (!poll_cnt) {
