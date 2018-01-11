@@ -46,6 +46,7 @@ Post-v2.8.0
      * Datapath IDs may now be specified as 0x1 (etc.) instead of 16 digits.
      * Configuring a controller, or unconfiguring all controllers, now deletes
        all groups and meters (as well as all flows).
+   - New --enable-sparse configure option enables "sparse" checking by default.
 
 v2.8.0 - 31 Aug 2017
 --------------------

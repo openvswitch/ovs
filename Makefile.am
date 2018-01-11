@@ -129,6 +129,10 @@ check_SCRIPTS =
 pkgconfig_DATA =
 FLAKE8_PYFILES =
 
+if ENABLE_SPARSE_BY_DEFAULT
+C ?= 1
+endif
+
 scriptsdir = $(pkgdatadir)/scripts
 completiondir = $(sysconfdir)/bash_completion.d
 pkgconfigdir = $(libdir)/pkgconfig
