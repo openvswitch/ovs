@@ -32,7 +32,15 @@ AC_DEFUN([OVS_ENABLE_WERROR],
    else
      FLAKE8_WERROR=-
    fi
-   AC_SUBST([FLAKE8_WERROR])])
+   AC_SUBST([FLAKE8_WERROR])
+
+   # If --enable-Werror is specified, fail the build on sparse warnings.
+   if test "X$enable_Werror" = Xyes; then
+     SPARSE_WERROR=-Wsparse-error
+   else
+     SPARSE_WERROR=
+   fi
+   AC_SUBST([SPARSE_WERROR])])
 
 dnl OVS_CHECK_LINUX
 dnl
@@ -997,7 +1005,7 @@ AC_DEFUN([OVS_ENABLE_SPARSE],
    : ${SPARSE=sparse}
    AC_SUBST([SPARSE])
    AC_CONFIG_COMMANDS_PRE(
-     [CC='$(if $(C),env REAL_CC="'"$CC"'" CHECK="$(SPARSE) -I $(top_srcdir)/include/sparse $(SPARSEFLAGS) $(SPARSE_EXTRA_INCLUDES) " cgcc $(CGCCFLAGS),'"$CC"')'])])
+     [CC='$(if $(C),env REAL_CC="'"$CC"'" CHECK="$(SPARSE) $(SPARSE_WERROR) -I $(top_srcdir)/include/sparse $(SPARSEFLAGS) $(SPARSE_EXTRA_INCLUDES) " cgcc $(CGCCFLAGS),'"$CC"')'])])
 
 dnl OVS_CTAGS_IDENTIFIERS
 dnl
