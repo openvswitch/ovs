@@ -530,11 +530,10 @@ parse_ipv6_ext_hdrs(const void **datap, size_t *sizep, uint8_t *nw_proto,
 }
 
 bool
-parse_nsh(const void **datap, size_t *sizep, struct flow_nsh *key)
+parse_nsh(const void **datap, size_t *sizep, struct ovs_key_nsh *key)
 {
     const struct nsh_hdr *nsh = (const struct nsh_hdr *) *datap;
-    uint8_t version, length, flags;
-    uint32_t path_hdr;
+    uint8_t version, length, flags, ttl;
 
     /* Check if it is long enough for NSH header, doesn't support
      * MD type 2 yet
@@ -546,18 +545,17 @@ parse_nsh(const void **datap, size_t *sizep, struct flow_nsh *key)
     version = nsh_get_ver(nsh);
     flags = nsh_get_flags(nsh);
     length = nsh_hdr_len(nsh);
+    ttl = nsh_get_ttl(nsh);
 
     if (OVS_UNLIKELY(length > *sizep || version != 0)) {
         return false;
     }
 
     key->flags = flags;
+    key->ttl = ttl;
     key->mdtype = nsh->md_type;
     key->np = nsh->next_proto;
-
-    path_hdr = ntohl(get_16aligned_be32(&nsh->path_hdr));
-    key->si = (path_hdr & NSH_SI_MASK) >> NSH_SI_SHIFT;
-    key->spi = htonl((path_hdr & NSH_SPI_MASK) >> NSH_SPI_SHIFT);
+    key->path_hdr = nsh_get_path_hdr(nsh);
 
     switch (key->mdtype) {
         case NSH_M_TYPE1:
@@ -876,11 +874,11 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
                 miniflow_pad_to_64(mf, arp_tha);
             }
         } else if (dl_type == htons(ETH_TYPE_NSH)) {
-            struct flow_nsh nsh;
+            struct ovs_key_nsh nsh;
 
             if (OVS_LIKELY(parse_nsh(&data, &size, &nsh))) {
                 miniflow_push_words(mf, nsh, &nsh,
-                                    sizeof(struct flow_nsh) /
+                                    sizeof(struct ovs_key_nsh) /
                                     sizeof(uint64_t));
             }
         }
@@ -1684,10 +1682,10 @@ flow_wildcards_init_for_packet(struct flow_wildcards *wc,
         return;
     } else if (flow->dl_type == htons(ETH_TYPE_NSH)) {
         WC_MASK_FIELD(wc, nsh.flags);
+        WC_MASK_FIELD(wc, nsh.ttl);
         WC_MASK_FIELD(wc, nsh.mdtype);
         WC_MASK_FIELD(wc, nsh.np);
-        WC_MASK_FIELD(wc, nsh.spi);
-        WC_MASK_FIELD(wc, nsh.si);
+        WC_MASK_FIELD(wc, nsh.path_hdr);
         WC_MASK_FIELD(wc, nsh.context);
     } else {
         return; /* Unknown ethertype. */
@@ -1820,8 +1818,7 @@ flow_wc_map(const struct flow *flow, struct flowmap *map)
         FLOWMAP_SET(map, nsh.flags);
         FLOWMAP_SET(map, nsh.mdtype);
         FLOWMAP_SET(map, nsh.np);
-        FLOWMAP_SET(map, nsh.spi);
-        FLOWMAP_SET(map, nsh.si);
+        FLOWMAP_SET(map, nsh.path_hdr);
         FLOWMAP_SET(map, nsh.context);
     }
 }

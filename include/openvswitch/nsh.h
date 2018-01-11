@@ -299,6 +299,108 @@ nsh_reset_ver_flags_ttl_len(struct nsh_hdr *nsh)
     nsh->ver_flags_ttl_len = 0;
 }
 
+static inline uint8_t
+nsh_get_ttl(const struct nsh_hdr *nsh)
+{
+    return (ntohs(nsh->ver_flags_ttl_len) & NSH_TTL_MASK) >> NSH_TTL_SHIFT;
+}
+
+#ifndef __CHECKER__
+static inline ovs_be32
+nsh_16aligned_be32(const ovs_16aligned_be32 *x)
+{
+#ifdef WORDS_BIGENDIAN
+    return ((ovs_be32) x->hi << 16) | (ovs_be32) x->lo;
+#else
+    return ((ovs_be32) x->lo << 16) | (ovs_be32) x->hi;
+#endif
+}
+#else  /* __CHECKER__ */
+/* Making sparse happy with these functions also makes them unreadable, so
+ * don't bother to show it their implementations. */
+ovs_be32 nsh_16aligned_be32(const ovs_16aligned_be32 *x);
+#endif
+
+static inline ovs_be32
+nsh_get_path_hdr(const struct nsh_hdr *nsh)
+{
+    return nsh_16aligned_be32(&nsh->path_hdr);
+}
+
+static inline ovs_be32
+nsh_get_spi(const struct nsh_hdr *nsh)
+{
+    uint32_t path_hdr = ntohl(nsh_get_path_hdr(nsh));
+    return htonl((path_hdr & NSH_SPI_MASK) >> NSH_SPI_SHIFT);
+}
+
+static inline uint8_t
+nsh_get_si(const struct nsh_hdr *nsh)
+{
+    uint32_t path_hdr = ntohl(nsh_get_path_hdr(nsh));
+    return (path_hdr & NSH_SI_MASK) >> NSH_SI_SHIFT;
+}
+
+static inline ovs_be32
+nsh_path_hdr_to_spi(ovs_be32 path_hdr)
+{
+    return htonl((ntohl(path_hdr) & NSH_SPI_MASK) >> NSH_SPI_SHIFT);
+}
+
+static inline uint32_t
+nsh_path_hdr_to_spi_uint32(ovs_be32 path_hdr)
+{
+    return (ntohl(path_hdr) & NSH_SPI_MASK) >> NSH_SPI_SHIFT;
+}
+
+static inline uint8_t
+nsh_path_hdr_to_si(ovs_be32 path_hdr)
+{
+    return (ntohl(path_hdr) & NSH_SI_MASK) >> NSH_SI_SHIFT;
+}
+
+static inline ovs_be32
+nsh_spi_si_to_path_hdr(uint32_t spi, uint8_t si)
+{
+    return htonl((spi << NSH_SPI_SHIFT) | si);
+}
+
+static inline void
+nsh_set_flags_and_ttl(struct nsh_hdr *nsh, uint8_t flags, uint8_t ttl)
+{
+    nsh->ver_flags_ttl_len
+        = htons((ntohs(nsh->ver_flags_ttl_len)
+                 & ~(NSH_FLAGS_MASK | NSH_TTL_MASK))
+                | ((flags << NSH_FLAGS_SHIFT)& NSH_FLAGS_MASK)
+                | ((ttl << NSH_TTL_SHIFT) & NSH_TTL_MASK));
+}
+
+static inline void
+nsh_set_flags_ttl_len(struct nsh_hdr *nsh, uint8_t flags, uint8_t ttl,
+                      uint16_t len)
+{
+    nsh->ver_flags_ttl_len
+        = htons((ntohs(nsh->ver_flags_ttl_len)
+                 & ~(NSH_FLAGS_MASK | NSH_TTL_MASK | NSH_LEN_MASK))
+                | ((flags << NSH_FLAGS_SHIFT)& NSH_FLAGS_MASK)
+                | ((ttl << NSH_TTL_SHIFT) & NSH_TTL_MASK)
+                | (((len >> 2) << NSH_LEN_SHIFT) & NSH_LEN_MASK));
+}
+
+static inline void
+nsh_path_hdr_set_spi(ovs_be32 *path_hdr, ovs_be32 spi)
+{
+    *path_hdr = htonl((ntohl(*path_hdr) & ~NSH_SPI_MASK) |
+                      ((ntohl(spi) << NSH_SPI_SHIFT) & NSH_SPI_MASK));
+}
+
+static inline void
+nsh_path_hdr_set_si(ovs_be32 *path_hdr, uint8_t si)
+{
+    *path_hdr = htonl((ntohl(*path_hdr) & ~NSH_SI_MASK) |
+                      ((si << NSH_SI_SHIFT) & NSH_SI_MASK));
+}
+
 #ifdef  __cplusplus
 }
 #endif

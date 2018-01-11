@@ -1,6 +1,7 @@
 Post-v2.8.0
 --------------------
    - NSH implementation now conforms to latest draft (draft-ietf-sfc-nsh-28).
+     * Add ttl field.
    - OVSDB:
      * New high-level documentation in ovsdb(7).
      * New file format documentation for developers in ovsdb(5).

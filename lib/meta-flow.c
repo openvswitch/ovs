@@ -40,6 +40,7 @@
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/vlog.h"
 #include "vl-mff-map.h"
+#include "openvswitch/nsh.h"
 
 VLOG_DEFINE_THIS_MODULE(meta_flow);
 
@@ -361,14 +362,16 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
 
     case MFF_NSH_FLAGS:
         return !wc->masks.nsh.flags;
+    case MFF_NSH_TTL:
+        return !wc->masks.nsh.ttl;
     case MFF_NSH_MDTYPE:
         return !wc->masks.nsh.mdtype;
     case MFF_NSH_NP:
         return !wc->masks.nsh.np;
     case MFF_NSH_SPI:
-        return !wc->masks.nsh.spi;
+        return !(wc->masks.nsh.path_hdr & htonl(NSH_SPI_MASK));
     case MFF_NSH_SI:
-        return !wc->masks.nsh.si;
+        return !(wc->masks.nsh.path_hdr & htonl(NSH_SI_MASK));
     case MFF_NSH_C1:
     case MFF_NSH_C2:
     case MFF_NSH_C3:
@@ -606,6 +609,8 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
 
     case MFF_NSH_FLAGS:
         return true;
+    case MFF_NSH_TTL:
+        return (value->u8 <= 63);
     case MFF_NSH_MDTYPE:
         return (value->u8 == 1 || value->u8 == 2);
     case MFF_NSH_NP:
@@ -899,6 +904,9 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
     case MFF_NSH_FLAGS:
         value->u8 = flow->nsh.flags;
         break;
+    case MFF_NSH_TTL:
+        value->u8 = flow->nsh.ttl;
+        break;
     case MFF_NSH_MDTYPE:
         value->u8 = flow->nsh.mdtype;
         break;
@@ -906,10 +914,13 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         value->u8 = flow->nsh.np;
         break;
     case MFF_NSH_SPI:
-        value->be32 = flow->nsh.spi;
+        value->be32 = nsh_path_hdr_to_spi(flow->nsh.path_hdr);
+        if (value->be32 == htonl(NSH_SPI_MASK >> NSH_SPI_SHIFT)) {
+            value->be32 = OVS_BE32_MAX;
+        }
         break;
     case MFF_NSH_SI:
-        value->u8 = flow->nsh.si;
+        value->u8 = nsh_path_hdr_to_si(flow->nsh.path_hdr);
         break;
     case MFF_NSH_C1:
     case MFF_NSH_C2:
@@ -1214,6 +1225,9 @@ mf_set_value(const struct mf_field *mf,
     case MFF_NSH_FLAGS:
         MATCH_SET_FIELD_UINT8(match, nsh.flags, value->u8);
         break;
+    case MFF_NSH_TTL:
+        MATCH_SET_FIELD_UINT8(match, nsh.ttl, value->u8);
+        break;
     case MFF_NSH_MDTYPE:
         MATCH_SET_FIELD_UINT8(match, nsh.mdtype, value->u8);
         break;
@@ -1221,10 +1235,12 @@ mf_set_value(const struct mf_field *mf,
         MATCH_SET_FIELD_UINT8(match, nsh.np, value->u8);
         break;
     case MFF_NSH_SPI:
-        MATCH_SET_FIELD_BE32(match, nsh.spi, value->be32);
+        match->wc.masks.nsh.path_hdr |= htonl(NSH_SPI_MASK);
+        nsh_path_hdr_set_spi(&match->flow.nsh.path_hdr, value->be32);
         break;
     case MFF_NSH_SI:
-        MATCH_SET_FIELD_UINT8(match, nsh.si, value->u8);
+        match->wc.masks.nsh.path_hdr |= htonl(NSH_SI_MASK);
+        nsh_path_hdr_set_si(&match->flow.nsh.path_hdr, value->u8);
         break;
     case MFF_NSH_C1:
     case MFF_NSH_C2:
@@ -1606,6 +1622,9 @@ mf_set_flow_value(const struct mf_field *mf,
     case MFF_NSH_FLAGS:
         flow->nsh.flags = value->u8;
         break;
+    case MFF_NSH_TTL:
+        flow->nsh.ttl = value->u8;
+        break;
     case MFF_NSH_MDTYPE:
         flow->nsh.mdtype = value->u8;
         break;
@@ -1613,10 +1632,10 @@ mf_set_flow_value(const struct mf_field *mf,
         flow->nsh.np = value->u8;
         break;
     case MFF_NSH_SPI:
-        flow->nsh.spi = value->be32;
+        nsh_path_hdr_set_spi(&flow->nsh.path_hdr, value->be32);
         break;
     case MFF_NSH_SI:
-        flow->nsh.si = value->u8;
+        nsh_path_hdr_set_si(&flow->nsh.path_hdr, value->u8);
         break;
     case MFF_NSH_C1:
     case MFF_NSH_C2:
@@ -1752,6 +1771,7 @@ mf_is_pipeline_field(const struct mf_field *mf)
     case MFF_ND_SLL:
     case MFF_ND_TLL:
     case MFF_NSH_FLAGS:
+    case MFF_NSH_TTL:
     case MFF_NSH_MDTYPE:
     case MFF_NSH_NP:
     case MFF_NSH_SPI:
@@ -2097,6 +2117,9 @@ mf_set_wild(const struct mf_field *mf, struct match *match, char **err_str)
     case MFF_NSH_FLAGS:
         MATCH_SET_FIELD_MASKED(match, nsh.flags, 0, 0);
         break;
+    case MFF_NSH_TTL:
+        MATCH_SET_FIELD_MASKED(match, nsh.ttl, 0, 0);
+        break;
     case MFF_NSH_MDTYPE:
         MATCH_SET_FIELD_MASKED(match, nsh.mdtype, 0, 0);
         break;
@@ -2104,10 +2127,12 @@ mf_set_wild(const struct mf_field *mf, struct match *match, char **err_str)
         MATCH_SET_FIELD_MASKED(match, nsh.np, 0, 0);
         break;
     case MFF_NSH_SPI:
-        MATCH_SET_FIELD_MASKED(match, nsh.spi, htonl(0), htonl(0));
+        match->wc.masks.nsh.path_hdr &= ~htonl(NSH_SPI_MASK);
+        nsh_path_hdr_set_spi(&match->flow.nsh.path_hdr, htonl(0));
         break;
     case MFF_NSH_SI:
-        MATCH_SET_FIELD_MASKED(match, nsh.si, 0, 0);
+        match->wc.masks.nsh.path_hdr &= ~htonl(NSH_SI_MASK);
+        nsh_path_hdr_set_si(&match->flow.nsh.path_hdr, 0);
         break;
     case MFF_NSH_C1:
     case MFF_NSH_C2:
@@ -2357,6 +2382,9 @@ mf_set(const struct mf_field *mf,
     case MFF_NSH_FLAGS:
         MATCH_SET_FIELD_MASKED(match, nsh.flags, value->u8, mask->u8);
         break;
+    case MFF_NSH_TTL:
+        MATCH_SET_FIELD_MASKED(match, nsh.ttl, value->u8, mask->u8);
+        break;
     case MFF_NSH_MDTYPE:
         MATCH_SET_FIELD_MASKED(match, nsh.mdtype, value->u8, mask->u8);
         break;
@@ -2364,10 +2392,14 @@ mf_set(const struct mf_field *mf,
         MATCH_SET_FIELD_MASKED(match, nsh.np, value->u8, mask->u8);
         break;
     case MFF_NSH_SPI:
-        MATCH_SET_FIELD_MASKED(match, nsh.spi, value->be32, mask->be32);
+        match->wc.masks.nsh.path_hdr |= mask->be32;
+        nsh_path_hdr_set_spi(&match->flow.nsh.path_hdr,
+                             value->be32 & mask->be32);
         break;
     case MFF_NSH_SI:
-        MATCH_SET_FIELD_MASKED(match, nsh.si, value->u8, mask->u8);
+        match->wc.masks.nsh.path_hdr |= htonl(mask->u8);
+        nsh_path_hdr_set_si(&match->flow.nsh.path_hdr,
+                             value->u8 & mask->u8);
         break;
     case MFF_NSH_C1:
     case MFF_NSH_C2:

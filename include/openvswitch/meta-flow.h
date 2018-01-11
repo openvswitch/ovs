@@ -1833,6 +1833,20 @@ enum OVS_PACKED_ENUM mf_field_id {
     MFF_NSH_C3,
     MFF_NSH_C4,
 
+    /* "nsh_ttl".
+     *
+     * TTL field in NSH base header.
+     *
+     * Type: u8.
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: NSH.
+     * Access: read/write.
+     * NXM: none.
+     * OXM: NXOXM_NSH_TTL(10) since OF1.3 and v2.9.
+     */
+    MFF_NSH_TTL,
+
     MFF_N_IDS
 };
 

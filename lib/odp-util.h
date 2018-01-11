@@ -158,7 +158,7 @@ struct odputil_keybuf {
 enum odp_key_fitness odp_tun_key_from_attr(const struct nlattr *,
                                            struct flow_tnl *);
 enum odp_key_fitness odp_nsh_key_from_attr(const struct nlattr *,
-                                           struct flow_nsh *);
+                                           struct ovs_key_nsh *);
 enum odp_key_fitness odp_nsh_hdr_from_attr(const struct nlattr *,
                                            struct nsh_hdr *, size_t size);
 

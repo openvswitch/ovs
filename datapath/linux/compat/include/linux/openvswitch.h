@@ -504,9 +504,9 @@ enum ovs_nsh_key_attr {
 
 struct ovs_nsh_key_base {
 	__u8 flags;
+	__u8 ttl;
 	__u8 mdtype;
 	__u8 np;
-	__u8 pad;
 	__be32 path_hdr;
 };
 

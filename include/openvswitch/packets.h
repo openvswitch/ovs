@@ -74,21 +74,11 @@ union flow_vlan_hdr {
     };
 };
 
-/* Network Service Header keys */
-struct flow_nsh {
-    uint8_t flags;
-    uint8_t mdtype;
-    uint8_t np;
-    uint8_t si;
-    ovs_be32 spi;
-    ovs_be32 context[4];
-};
-
 struct ovs_key_nsh {
     uint8_t flags;
+    uint8_t ttl;
     uint8_t mdtype;
     uint8_t np;
-    uint8_t pad;
     ovs_be32 path_hdr;
     ovs_be32 context[4];
 };

@@ -146,7 +146,7 @@ struct flow {
     struct eth_addr arp_tha;    /* ARP/ND target hardware address. */
     ovs_be16 tcp_flags;         /* TCP flags. With L3 to avoid matching L4. */
     ovs_be16 pad2;              /* Pad to 64 bits. */
-    struct flow_nsh nsh;        /* Network Service Header keys */
+    struct ovs_key_nsh nsh;     /* Network Service Header keys */
 
     /* L4 (64-bit aligned) */
     ovs_be16 tp_src;            /* TCP/UDP/SCTP source port/ICMP type. */
@@ -159,13 +159,13 @@ struct flow {
 };
 BUILD_ASSERT_DECL(sizeof(struct flow) % sizeof(uint64_t) == 0);
 BUILD_ASSERT_DECL(sizeof(struct flow_tnl) % sizeof(uint64_t) == 0);
-BUILD_ASSERT_DECL(sizeof(struct flow_nsh) % sizeof(uint64_t) == 0);
+BUILD_ASSERT_DECL(sizeof(struct ovs_key_nsh) % sizeof(uint64_t) == 0);
 
 #define FLOW_U64S (sizeof(struct flow) / sizeof(uint64_t))
 
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
 BUILD_ASSERT_DECL(offsetof(struct flow, igmp_group_ip4) + sizeof(uint32_t)
-                  == sizeof(struct flow_tnl) + sizeof(struct flow_nsh) + 300
+                  == sizeof(struct flow_tnl) + sizeof(struct ovs_key_nsh) + 300
                   && FLOW_WC_SEQ == 40);
 
 /* Incremental points at which flow classification may be performed in

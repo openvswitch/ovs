@@ -5774,10 +5774,10 @@ rewrite_flow_push_nsh(struct xlate_ctx *ctx,
     /* Populate the flow with the new NSH header. */
     flow->packet_type = htonl(PT_NSH);
     flow->dl_type = htons(ETH_TYPE_NSH);
-    flow->nsh.flags = 0;    /* */
+    flow->nsh.flags = 0;
+    flow->nsh.ttl = 63;
     flow->nsh.np = np;
-    flow->nsh.spi = 0;
-    flow->nsh.si = 255;
+    flow->nsh.path_hdr = htonl(255);
 
     if (md_type == NSH_M_TYPE1) {
         flow->nsh.mdtype = NSH_M_TYPE1;
@@ -5790,6 +5790,7 @@ rewrite_flow_push_nsh(struct xlate_ctx *ctx,
     } else if (md_type == NSH_M_TYPE2) {
         flow->nsh.mdtype = NSH_M_TYPE2;
     }
+    flow->nsh.mdtype &= NSH_MDTYPE_MASK;
 
     return buf;
 }

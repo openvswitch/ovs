@@ -1309,27 +1309,6 @@ tcp,tp_src=0x07c0/0xfff0
     </field>
   </group>
 
-  <group title="Network Service Header">
-    <field id="MFF_NSH_FLAGS"
-        title="flags field (8 bits)"/>
-    <field id="MFF_NSH_MDTYPE"
-        title="mdtype field (8 bits)"/>
-    <field id="MFF_NSH_NP"
-        title="np (next protocol) field (8 bits)"/>
-    <field id="MFF_NSH_SPI"
-        title="spi (service path identifier) field (24 bits)"/>
-    <field id="MFF_NSH_SI"
-        title="si (service index) field (8 bits)"/>
-    <field id="MFF_NSH_C1"
-        title="c1 (Network Platform Context) field (32 bits)"/>
-    <field id="MFF_NSH_C2"
-        title="c2 (Network Shared Context) field (32 bits)"/>
-    <field id="MFF_NSH_C3"
-        title="c3 (Service Platform Context) field (32 bits)"/>
-    <field id="MFF_NSH_C4"
-        title="c4 (Service Shared Context) field (32 bits)"/>
-  </group>
-
   <group title="Tunnel">
     <p>
       The fields in this group relate to tunnels, which Open vSwitch
@@ -3964,7 +3943,7 @@ r r c c c.
       listen for <code>OFPR_INVALID_TTL</code> ``packet-in'' messages via
       OpenFlow.
     </field>
-    
+
     <field id="MFF_IP_FRAG" title="IPv4/v6 Fragment Bitmask">
       <p>
         Specifies what kinds of IP fragments or non-fragments to match.  The
@@ -4179,6 +4158,115 @@ r r c c c.
     <field id="MFF_ARP_SHA" title="ARP Source Ethernet Address"/>
     <field id="MFF_ARP_THA" title="ARP Target Ethernet Address"/>
   </group>
+
+  <group title="Layer 3: NSH">
+    <p>
+      Service functions are widely deployed and essential in many networks.
+      These service functions provide a range of features such as security,
+      WAN acceleration, and server load balancing.  Service functions may
+      be instantiated at different points in the network infrastructure
+      such as the wide area network, data center, and so forth.
+    </p>
+
+    <p>
+      Prior to development of the SFC architecture [RFC 7665] and the
+      protocol specified in this document, current service function
+      deployment models have been relatively static and bound to topology
+      for insertion and policy selection.  Furthermore, they do not adapt
+      well to elastic service environments enabled by virtualization.
+    </p>
+
+    <p>
+      New data center network and cloud architectures require more flexible
+      service function deployment models.  Additionally, the transition to
+      virtual platforms demands an agile service insertion model that
+      supports dynamic and elastic service delivery.  Specifically, the
+      following functions are necessary:
+    </p>
+
+    <p>
+      1.  The movement of service functions and application workloads in
+          the network.
+    </p>
+
+    <p>
+      2.  The ability to easily bind service policy to granular
+          information, such as per-subscriber state.
+    </p>
+
+    <p>
+      3.  The capability to steer traffic to the requisite service
+          function(s).
+    </p>
+
+    <p>
+      The Network Service Header (NSH) specification defines a new data
+      plane protocol, which is an encapsulation for service function
+      chains.  The NSH is designed to encapsulate an original packet or
+      frame, and in turn be encapsulated by an outer transport
+      encapsulation (which is used to deliver the NSH to NSH-aware network
+      elements), as shown in Figure 1:
+    </p>
+
+    <pre>
+
+                        +------------------------------+
+                        |    Transport Encapsulation   |
+                        +------------------------------+
+                        | Network Service Header (NSH) |
+                        +------------------------------+
+                        |    Original Packet / Frame   |
+                        +------------------------------+
+
+                 Figure 1: Network Service Header Encapsulation
+    </pre>
+
+    <p>
+      The NSH is composed of the following elements:
+    </p>
+
+    <p>
+      1.  Service Function Path identification.
+    </p>
+
+    <p>
+      2.  Indication of location within a Service Function Path.
+    </p>
+
+    <p>
+      3.  Optional, per packet metadata (fixed length or variable).
+    </p>
+
+    <p>
+      [RFC 7665] provides an overview of a service chaining architecture
+      that clearly defines the roles of the various elements and the scope
+      of a service function chaining encapsulation.  Figure 3 of [RFC 7665]
+      depicts the SFC architectural components after classification.  The
+      NSH is the SFC encapsulation referenced in [RFC 7665].
+    </p>
+
+    <field id="MFF_NSH_FLAGS"
+        title="flags field (2 bits)"/>
+    <field id="MFF_NSH_TTL"
+        title="TTL field (6 bits)"/>
+    <field id="MFF_NSH_MDTYPE"
+        title="mdtype field (8 bits)"/>
+    <field id="MFF_NSH_NP"
+        title="np (next protocol) field (8 bits)"/>
+    <field id="MFF_NSH_SPI"
+        title="spi (service path identifier) field (24 bits)"/>
+    <field id="MFF_NSH_SI"
+        title="si (service index) field (8 bits)"/>
+    <field id="MFF_NSH_C1"
+        title="c1 (Network Platform Context) field (32 bits)"/>
+    <field id="MFF_NSH_C2"
+        title="c2 (Network Shared Context) field (32 bits)"/>
+    <field id="MFF_NSH_C3"
+        title="c3 (Service Platform Context) field (32 bits)"/>
+    <field id="MFF_NSH_C4"
+        title="c4 (Service Shared Context) field (32 bits)"/>
+  </group>
+
 
   <group title="Layer 4: TCP, UDP, and SCTP">
     <p>
@@ -4565,6 +4653,13 @@ r r c c c.
       M. Bursell, and C. Wright, ``Virtual eXtensible Local Area Network
       (VXLAN): A Framework for Overlaying Virtualized Layer 2 Networks over
       Layer 3 Networks, '' <url href="https://tools.ietf.org/html/rfc7348"/>.
+    </dd>
+
+    <dt>RFC 7665</dt>
+    <dd>
+      J. Halpern, Ed. and C. Pignataro, Ed.,
+      ``Service Function Chaining (SFC) Architecture,''
+      <url href="https://tools.ietf.org/html/rfc7665"/>.
     </dd>
 
     <dt>Srinivasan</dt>
