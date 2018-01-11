@@ -948,6 +948,68 @@ format_odp_conntrack_action(struct ds *ds, const struct nlattr *attr)
     }
 }
 
+static const struct attr_len_tbl
+ovs_nsh_key_attr_lens[OVS_NSH_KEY_ATTR_MAX + 1] = {
+    [OVS_NSH_KEY_ATTR_BASE]     = { .len = 8 },
+    [OVS_NSH_KEY_ATTR_MD1]      = { .len = 16 },
+    [OVS_NSH_KEY_ATTR_MD2]      = { .len = ATTR_LEN_VARIABLE },
+};
+
+static void
+format_odp_set_nsh(struct ds *ds, const struct nlattr *attr)
+{
+    unsigned int left;
+    const struct nlattr *a;
+    struct ovs_key_nsh nsh;
+    struct ovs_key_nsh nsh_mask;
+
+    memset(&nsh, 0, sizeof nsh);
+    memset(&nsh_mask, 0xff, sizeof nsh_mask);
+
+    NL_NESTED_FOR_EACH (a, left, attr) {
+        enum ovs_nsh_key_attr type = nl_attr_type(a);
+        size_t len = nl_attr_get_size(a);
+
+        if (type >= OVS_NSH_KEY_ATTR_MAX) {
+            return;
+        }
+
+        int expected_len = ovs_nsh_key_attr_lens[type].len;
+        if ((expected_len != ATTR_LEN_VARIABLE) && (len != 2 * expected_len)) {
+            return;
+        }
+
+        switch (type) {
+        case OVS_NSH_KEY_ATTR_UNSPEC:
+            break;
+        case OVS_NSH_KEY_ATTR_BASE: {
+            const struct ovs_nsh_key_base *base = nl_attr_get(a);
+            const struct ovs_nsh_key_base *base_mask = base + 1;
+            memcpy(&nsh, base, sizeof(*base));
+            memcpy(&nsh_mask, base_mask, sizeof(*base_mask));
+            break;
+        }
+        case OVS_NSH_KEY_ATTR_MD1: {
+            const struct ovs_nsh_key_md1 *md1 = nl_attr_get(a);
+            const struct ovs_nsh_key_md1 *md1_mask = md1 + 1;
+            memcpy(&nsh.context, &md1->context, sizeof(*md1));
+            memcpy(&nsh_mask.context, &md1_mask->context, sizeof(*md1_mask));
+            break;
+        }
+        case OVS_NSH_KEY_ATTR_MD2:
+        case __OVS_NSH_KEY_ATTR_MAX:
+        default:
+            /* No support for matching other metadata formats yet. */
+            break;
+        }
+    }
+
+    ds_put_cstr(ds, "set(nsh(");
+    format_nsh_key_mask(ds, &nsh, &nsh_mask);
+    ds_put_cstr(ds, "))");
+}
+
+
 static void
 format_odp_action(struct ds *ds, const struct nlattr *a,
                   const struct hmap *portno_names)
@@ -998,6 +1060,11 @@ format_odp_action(struct ds *ds, const struct nlattr *a,
         break;
     case OVS_ACTION_ATTR_SET_MASKED:
         a = nl_attr_get(a);
+        /* OVS_KEY_ATTR_NSH is nested attribute, so it needs special process */
+        if (nl_attr_type(a) == OVS_KEY_ATTR_NSH) {
+            format_odp_set_nsh(ds, a);
+            break;
+        }
         size = nl_attr_get_size(a) / 2;
         ds_put_cstr(ds, "set(");
 
@@ -2299,13 +2366,6 @@ static const struct attr_len_tbl ovs_tun_key_attr_lens[OVS_TUNNEL_KEY_ATTR_MAX +
     [OVS_TUNNEL_KEY_ATTR_IPV6_DST]      = { .len = 16 },
 };
 
-static const struct attr_len_tbl
-ovs_nsh_key_attr_lens[OVS_NSH_KEY_ATTR_MAX + 1] = {
-    [OVS_NSH_KEY_ATTR_BASE]     = { .len = 8 },
-    [OVS_NSH_KEY_ATTR_MD1]      = { .len = 16 },
-    [OVS_NSH_KEY_ATTR_MD2]      = { .len = ATTR_LEN_VARIABLE },
-};
-
 const struct attr_len_tbl ovs_flow_key_attr_lens[OVS_KEY_ATTR_MAX + 1] = {
     [OVS_KEY_ATTR_ENCAP]     = { .len = ATTR_LEN_NESTED },
     [OVS_KEY_ATTR_PRIORITY]  = { .len = 4 },
@@ -2470,7 +2530,8 @@ odp_nsh_hdr_from_attr(const struct nlattr *attr,
 }
 
 enum odp_key_fitness
-odp_nsh_key_from_attr(const struct nlattr *attr, struct ovs_key_nsh *nsh)
+odp_nsh_key_from_attr(const struct nlattr *attr, struct ovs_key_nsh *nsh,
+                      struct ovs_key_nsh *nsh_mask)
 {
     unsigned int left;
     const struct nlattr *a;
@@ -2483,11 +2544,21 @@ odp_nsh_key_from_attr(const struct nlattr *attr, struct ovs_key_nsh *nsh)
         int expected_len = odp_key_attr_len(ovs_nsh_key_attr_lens,
                                             OVS_NSH_KEY_ATTR_MAX, type);
 
-        if (len != expected_len && expected_len >= 0) {
+        /* the attribute can have mask, len is 2 * expected_len for that case.
+         */
+        if ((len != expected_len) && (len != 2 * expected_len) &&
+            (expected_len >= 0)) {
+            return ODP_FIT_ERROR;
+        }
+
+        if ((nsh_mask && (expected_len >= 0) && (len != 2 * expected_len)) ||
+            (!nsh_mask && (expected_len >= 0) && (len == 2 * expected_len))) {
             return ODP_FIT_ERROR;
         }
 
         switch (type) {
+        case OVS_NSH_KEY_ATTR_UNSPEC:
+            break;
         case OVS_NSH_KEY_ATTR_BASE: {
             const struct ovs_nsh_key_base *base = nl_attr_get(a);
             nsh->flags = base->flags;
@@ -2495,12 +2566,25 @@ odp_nsh_key_from_attr(const struct nlattr *attr, struct ovs_key_nsh *nsh)
             nsh->mdtype = base->mdtype;
             nsh->np = base->np;
             nsh->path_hdr = base->path_hdr;
+            if (nsh_mask && (len == 2 * sizeof(*base))) {
+                const struct ovs_nsh_key_base *base_mask = base + 1;
+                nsh_mask->flags = base_mask->flags;
+                nsh_mask->ttl = base_mask->ttl;
+                nsh_mask->mdtype = base_mask->mdtype;
+                nsh_mask->np = base_mask->np;
+                nsh_mask->path_hdr = base_mask->path_hdr;
+            }
             break;
         }
         case OVS_NSH_KEY_ATTR_MD1: {
             const struct ovs_nsh_key_md1 *md1 = nl_attr_get(a);
             has_md1 = true;
             memcpy(nsh->context, md1->context, sizeof md1->context);
+            if (len == 2 * sizeof(*md1)) {
+                const struct ovs_nsh_key_md1 *md1_mask = md1 + 1;
+                memcpy(nsh_mask->context, md1_mask->context,
+                       sizeof(*md1_mask));
+            }
             break;
         }
         case OVS_NSH_KEY_ATTR_MD2:
@@ -5994,7 +6078,7 @@ parse_l2_5_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
             expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_NSH;
         }
         if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_NSH)) {
-            odp_nsh_key_from_attr(attrs[OVS_KEY_ATTR_NSH], &flow->nsh);
+            odp_nsh_key_from_attr(attrs[OVS_KEY_ATTR_NSH], &flow->nsh, NULL);
             if (is_mask) {
                 check_start = nl_attr_get(attrs[OVS_KEY_ATTR_NSH]);
                 check_len = nl_attr_get_size(attrs[OVS_KEY_ATTR_NSH]);
@@ -7105,24 +7189,28 @@ commit_nsh(const struct ovs_key_nsh * flow_nsh, bool use_masked_set,
         /* OVS_KEY_ATTR_NSH keys */
         nsh_key_ofs = nl_msg_start_nested(odp_actions, OVS_KEY_ATTR_NSH);
 
+        /* put value and mask for OVS_NSH_KEY_ATTR_BASE */
         char *data = nl_msg_put_unspec_uninit(odp_actions,
                                               OVS_NSH_KEY_ATTR_BASE,
-                                              sizeof(nsh_base));
+                                              2 * sizeof(nsh_base));
         const char *lkey = (char *)&nsh_base, *lmask = (char *)&nsh_base_mask;
         size_t lkey_size = sizeof(nsh_base);
 
         while (lkey_size--) {
             *data++ = *lkey++ & *lmask++;
         }
+        lmask = (char *)&nsh_base_mask;
+        memcpy(data, lmask, sizeof(nsh_base_mask));
 
         switch (key->mdtype) {
         case NSH_M_TYPE1:
             memcpy(md1.context, key->context, sizeof key->context);
             memcpy(md1_mask.context, mask->context, sizeof mask->context);
 
+            /* put value and mask for OVS_NSH_KEY_ATTR_MD1 */
             data = nl_msg_put_unspec_uninit(odp_actions,
                                             OVS_NSH_KEY_ATTR_MD1,
-                                            sizeof(md1));
+                                            2 * sizeof(md1));
             lkey = (char *)&md1;
             lmask = (char *)&md1_mask;
             lkey_size = sizeof(md1);
@@ -7130,26 +7218,6 @@ commit_nsh(const struct ovs_key_nsh * flow_nsh, bool use_masked_set,
             while (lkey_size--) {
                 *data++ = *lkey++ & *lmask++;
             }
-            break;
-        case NSH_M_TYPE2:
-        default:
-            /* No match support for other MD formats yet. */
-            break;
-        }
-
-        /* OVS_KEY_ATTR_NSH masks */
-        data = nl_msg_put_unspec_uninit(odp_actions,
-                                        OVS_NSH_KEY_ATTR_BASE,
-                                        sizeof(nsh_base_mask));
-        lmask = (char *)&nsh_base_mask;
-
-        memcpy(data, lmask, sizeof(nsh_base_mask));
-
-        switch (key->mdtype) {
-        case NSH_M_TYPE1:
-            data = nl_msg_put_unspec_uninit(odp_actions,
-                                            OVS_NSH_KEY_ATTR_MD1,
-                                            sizeof(md1_mask));
             lmask = (char *)&md1_mask;
             memcpy(data, lmask, sizeof(md1_mask));
             break;
@@ -7158,6 +7226,7 @@ commit_nsh(const struct ovs_key_nsh * flow_nsh, bool use_masked_set,
             /* No match support for other MD formats yet. */
             break;
         }
+
         nl_msg_end_nested(odp_actions, nsh_key_ofs);
 
         nl_msg_end_nested(odp_actions, offset);

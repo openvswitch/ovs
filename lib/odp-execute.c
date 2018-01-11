@@ -274,20 +274,26 @@ odp_set_nd(struct dp_packet *packet, const struct ovs_key_nd *key,
 /* Set the NSH header. Assumes the NSH header is present and matches the
  * MD format of the key. The slow path must take case of that. */
 static void
-odp_set_nsh(struct dp_packet *packet, const struct ovs_key_nsh *key,
-            const struct ovs_key_nsh *mask)
+odp_set_nsh(struct dp_packet *packet, const struct nlattr *a, bool has_mask)
 {
+    struct ovs_key_nsh key, mask;
     struct nsh_hdr *nsh = dp_packet_l3(packet);
     uint8_t mdtype = nsh_md_type(nsh);
     ovs_be32 path_hdr;
 
-    if (!mask) {
-        nsh_set_flags_and_ttl(nsh, key->flags, key->ttl);
-        put_16aligned_be32(&nsh->path_hdr, key->path_hdr);
+    if (has_mask) {
+        odp_nsh_key_from_attr(a, &key, &mask);
+    } else {
+        odp_nsh_key_from_attr(a, &key, NULL);
+    }
+
+    if (!has_mask) {
+        nsh_set_flags_and_ttl(nsh, key.flags, key.ttl);
+        put_16aligned_be32(&nsh->path_hdr, key.path_hdr);
         switch (mdtype) {
             case NSH_M_TYPE1:
                 for (int i = 0; i < 4; i++) {
-                    put_16aligned_be32(&nsh->md1.context[i], key->context[i]);
+                    put_16aligned_be32(&nsh->md1.context[i], key.context[i]);
                 }
                 break;
             case NSH_M_TYPE2:
@@ -299,19 +305,19 @@ odp_set_nsh(struct dp_packet *packet, const struct ovs_key_nsh *key,
         uint8_t flags = nsh_get_flags(nsh);
         uint8_t ttl = nsh_get_ttl(nsh);
 
-        flags = key->flags | (flags & ~mask->flags);
-        ttl = key->ttl | (ttl & ~mask->ttl);
+        flags = key.flags | (flags & ~mask.flags);
+        ttl = key.ttl | (ttl & ~mask.ttl);
         nsh_set_flags_and_ttl(nsh, flags, ttl);
 
         uint32_t spi = ntohl(nsh_get_spi(nsh));
         uint8_t si = nsh_get_si(nsh);
-        uint32_t spi_mask = nsh_path_hdr_to_spi_uint32(mask->path_hdr);
-        uint8_t si_mask = nsh_path_hdr_to_si(mask->path_hdr);
+        uint32_t spi_mask = nsh_path_hdr_to_spi_uint32(mask.path_hdr);
+        uint8_t si_mask = nsh_path_hdr_to_si(mask.path_hdr);
         if (spi_mask == 0x00ffffff) {
             spi_mask = UINT32_MAX;
         }
-        spi = nsh_path_hdr_to_spi_uint32(key->path_hdr) | (spi & ~spi_mask);
-        si = nsh_path_hdr_to_si(key->path_hdr) | (si & ~si_mask);
+        spi = nsh_path_hdr_to_spi_uint32(key.path_hdr) | (spi & ~spi_mask);
+        si = nsh_path_hdr_to_si(key.path_hdr) | (si & ~si_mask);
         path_hdr = nsh_get_path_hdr(nsh);
         nsh_path_hdr_set_spi(&path_hdr, htonl(spi));
         nsh_path_hdr_set_si(&path_hdr, si);
@@ -320,8 +326,8 @@ odp_set_nsh(struct dp_packet *packet, const struct ovs_key_nsh *key,
             case NSH_M_TYPE1:
                 for (int i = 0; i < 4; i++) {
                     ovs_be32 p = get_16aligned_be32(&nsh->md1.context[i]);
-                    ovs_be32 k = key->context[i];
-                    ovs_be32 m = mask->context[i];
+                    ovs_be32 k = key.context[i];
+                    ovs_be32 m = mask.context[i];
                     put_16aligned_be32(&nsh->md1.context[i], k | (p & ~m));
                 }
                 break;
@@ -359,9 +365,7 @@ odp_execute_set_action(struct dp_packet *packet, const struct nlattr *a)
         break;
 
     case OVS_KEY_ATTR_NSH: {
-        struct ovs_key_nsh nsh;
-        odp_nsh_key_from_attr(a, &nsh);
-        odp_set_nsh(packet, &nsh, NULL);
+        odp_set_nsh(packet, a, false);
         break;
     }
 
@@ -490,23 +494,7 @@ odp_execute_masked_set_action(struct dp_packet *packet,
         break;
 
     case OVS_KEY_ATTR_NSH: {
-        struct ovs_key_nsh nsh, nsh_mask;
-        struct {
-            struct nlattr nla;
-            uint8_t data[sizeof(struct ovs_nsh_key_base) + NSH_CTX_HDRS_MAX_LEN
-                         + 2 * NLA_HDRLEN];
-        } attr, mask;
-        size_t size = nl_attr_get_size(a) / 2;
-
-        mask.nla.nla_type = attr.nla.nla_type = nl_attr_type(a);
-        mask.nla.nla_len = attr.nla.nla_len = NLA_HDRLEN + size;
-        memcpy(attr.data, (char *)(a + 1), size);
-        memcpy(mask.data, (char *)(a + 1) + size, size);
-
-        odp_nsh_key_from_attr(&attr.nla, &nsh);
-        odp_nsh_key_from_attr(&mask.nla, &nsh_mask);
-        odp_set_nsh(packet, &nsh, &nsh_mask);
-
+        odp_set_nsh(packet, a, true);
         break;
     }
 

@@ -158,9 +158,10 @@ struct odputil_keybuf {
 enum odp_key_fitness odp_tun_key_from_attr(const struct nlattr *,
                                            struct flow_tnl *);
 enum odp_key_fitness odp_nsh_key_from_attr(const struct nlattr *,
+                                           struct ovs_key_nsh *,
                                            struct ovs_key_nsh *);
 enum odp_key_fitness odp_nsh_hdr_from_attr(const struct nlattr *,
-                                           struct nsh_hdr *, size_t size);
+                                           struct nsh_hdr *, size_t);
 
 int odp_ufid_from_string(const char *s_, ovs_u128 *ufid);
 void odp_format_ufid(const ovs_u128 *ufid, struct ds *);
