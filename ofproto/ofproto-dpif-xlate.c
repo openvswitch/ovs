@@ -4647,6 +4647,28 @@ compose_set_mpls_tc_action(struct xlate_ctx *ctx, uint8_t tc)
     }
 }
 
+static bool
+compose_dec_nsh_ttl_action(struct xlate_ctx *ctx)
+{
+    struct flow *flow = &ctx->xin->flow;
+
+    if ((flow->packet_type == htonl(PT_NSH)) ||
+        (flow->dl_type == htons(ETH_TYPE_NSH))) {
+        ctx->wc->masks.nsh.ttl = 0xff;
+        if (flow->nsh.ttl > 1) {
+            flow->nsh.ttl--;
+            return false;
+        } else {
+            xlate_controller_action(ctx, UINT16_MAX, OFPR_INVALID_TTL,
+                                    0, NULL, 0);
+        }
+    }
+
+    /* Stop processing for current table. */
+    xlate_report(ctx, OFT_WARN, "NSH decrement TTL exception");
+    return true;
+}
+
 static void
 compose_set_mpls_ttl_action(struct xlate_ctx *ctx, uint8_t ttl)
 {
@@ -5196,6 +5218,7 @@ reversible_actions(const struct ofpact *ofpacts, size_t ofpacts_len)
         case OFPACT_OUTPUT_TRUNC:
         case OFPACT_ENCAP:
         case OFPACT_DECAP:
+        case OFPACT_DEC_NSH_TTL:
             return false;
         }
     }
@@ -5423,6 +5446,7 @@ freeze_unroll_actions(const struct ofpact *a, const struct ofpact *end,
         case OFPACT_OUTPUT:
         case OFPACT_CONTROLLER:
         case OFPACT_DEC_MPLS_TTL:
+        case OFPACT_DEC_NSH_TTL:
         case OFPACT_DEC_TTL:
             /* These actions may generate asynchronous messages, which include
              * table ID and flow cookie information. */
@@ -5971,6 +5995,7 @@ recirc_for_mpls(const struct ofpact *a, struct xlate_ctx *ctx)
     case OFPACT_CLONE:
     case OFPACT_ENCAP:
     case OFPACT_DECAP:
+    case OFPACT_DEC_NSH_TTL:
     case OFPACT_UNROLL_XLATE:
     case OFPACT_CT:
     case OFPACT_CT_CLEAR:
@@ -6291,6 +6316,12 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
         case OFPACT_DEC_MPLS_TTL:
             if (compose_dec_mpls_ttl_action(ctx)) {
+                return;
+            }
+            break;
+
+        case OFPACT_DEC_NSH_TTL:
+            if (compose_dec_nsh_ttl_action(ctx)) {
                 return;
             }
             break;

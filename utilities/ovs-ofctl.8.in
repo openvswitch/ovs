@@ -1280,6 +1280,15 @@ Processing the current set of actions then stops.  However, if the current
 set of actions was reached through ``resubmit'' then remaining actions in
 outer levels resume processing.
 .
+.IP \fBdec_nsh_ttl\fR
+Decrement TTL of the outer NSH header of a packet.  If the TTL
+is initially zero or decrementing would make it so, no decrement occurs.
+Instead, a ``packet-in'' message with reason code \fBOFPR_INVALID_TTL\fR
+is sent to the main controller (id zero), if it has enabled receiving them.
+Processing the current set of actions then stops.  However, if the current
+set of actions was reached through ``resubmit'' then remaining actions in
+outer levels resume processing.
+.
 .IP \fBnote:\fR[\fIhh\fR]...
 Does nothing at all.  Any number of bytes represented as hex digits
 \fIhh\fR may be included.  Pairs of hex digits may be separated by
@@ -1587,6 +1596,8 @@ the action set, the one written later replaces the earlier action:
 \fBdec_ttl\fR
 .IQ
 \fBdec_mpls_ttl\fR
+.IQ
+\fBdec_nsh_ttl\fR
 .
 .IP 7.
 \fBload\fR
@@ -1647,7 +1658,7 @@ not visible.)
 .RE
 .IP
 Only the actions listed above may be written to the action set.
-\fBencap\fR and \fBdecap\fR actions are nonstandard.
+\fBencap\fR, \fBdecap\fR and \fBdec_nsh_ttl\fR actions are nonstandard.
 .
 .IP \fBwrite_metadata\fB:\fIvalue\fR[/\fImask\fR]
 Updates the metadata field for the flow. If \fImask\fR is omitted, the

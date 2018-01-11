@@ -350,6 +350,9 @@ enum ofp_raw_action_type {
     /* NX1.3+(47): struct nx_action_decap, ... */
     NXAST_RAW_DECAP,
 
+    /* NX1.3+(48): void. */
+    NXAST_RAW_DEC_NSH_TTL,
+
 /* ## ------------------ ## */
 /* ## Debugging actions. ## */
 /* ## ------------------ ## */
@@ -486,6 +489,7 @@ ofpact_next_flattened(const struct ofpact *ofpact)
     case OFPACT_NAT:
     case OFPACT_ENCAP:
     case OFPACT_DECAP:
+    case OFPACT_DEC_NSH_TTL:
         return ofpact_next(ofpact);
 
     case OFPACT_CLONE:
@@ -4336,6 +4340,39 @@ format_DECAP(const struct ofpact_decap *a,
     ds_put_format(s, "%s)%s", colors.paren, colors.end);
 }
 
+/* Action dec_nsh_ttl */
+
+static enum ofperr
+decode_NXAST_RAW_DEC_NSH_TTL(struct ofpbuf *out)
+{
+    ofpact_put_DEC_NSH_TTL(out);
+    return 0;
+}
+
+static void
+encode_DEC_NSH_TTL(const struct ofpact_null *null OVS_UNUSED,
+            enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *out)
+{
+    put_NXAST_DEC_NSH_TTL(out);
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+parse_DEC_NSH_TTL(char *arg OVS_UNUSED,
+           const struct ofputil_port_map *port_map OVS_UNUSED,
+           struct ofpbuf *ofpacts,
+           enum ofputil_protocol *usable_protocols OVS_UNUSED)
+{
+    ofpact_put_DEC_NSH_TTL(ofpacts);
+    return NULL;
+}
+
+static void
+format_DEC_NSH_TTL(const struct ofpact_null *a OVS_UNUSED,
+            const struct ofputil_port_map *port_map OVS_UNUSED, struct ds *s)
+{
+    ds_put_format(s, "%sdec_nsh_ttl%s", colors.special, colors.end);
+}
+
 
 /* Action structures for NXAST_RESUBMIT, NXAST_RESUBMIT_TABLE, and
  * NXAST_RESUBMIT_TABLE_CT.
@@ -7156,6 +7193,7 @@ ofpact_is_set_or_move_action(const struct ofpact *a)
     case OFPACT_SET_VLAN_VID:
     case OFPACT_ENCAP:
     case OFPACT_DECAP:
+    case OFPACT_DEC_NSH_TTL:
         return true;
     case OFPACT_BUNDLE:
     case OFPACT_CLEAR_ACTIONS:
@@ -7234,6 +7272,7 @@ ofpact_is_allowed_in_actions_set(const struct ofpact *a)
     case OFPACT_STRIP_VLAN:
     case OFPACT_ENCAP:
     case OFPACT_DECAP:
+    case OFPACT_DEC_NSH_TTL:
         return true;
 
     /* In general these actions are excluded because they are not part of
@@ -7348,6 +7387,7 @@ ofpacts_execute_action_set(struct ofpbuf *action_list,
     ofpacts_copy_last(action_list, action_set, OFPACT_PUSH_VLAN);
     ofpacts_copy_last(action_list, action_set, OFPACT_DEC_TTL);
     ofpacts_copy_last(action_list, action_set, OFPACT_DEC_MPLS_TTL);
+    ofpacts_copy_last(action_list, action_set, OFPACT_DEC_NSH_TTL);
     ofpacts_copy_all(action_list, action_set, ofpact_is_set_or_move_action);
     ofpacts_copy_last(action_list, action_set, OFPACT_SET_QUEUE);
 
@@ -7490,6 +7530,7 @@ ovs_instruction_type_from_ofpact_type(enum ofpact_type type)
     case OFPACT_NAT:
     case OFPACT_ENCAP:
     case OFPACT_DECAP:
+    case OFPACT_DEC_NSH_TTL:
     default:
         return OVSINST_OFPIT11_APPLY_ACTIONS;
     }
@@ -8177,6 +8218,13 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
         }
         return 0;
 
+    case OFPACT_DEC_NSH_TTL:
+        if ((flow->packet_type != htonl(PT_NSH)) &&
+            (flow->dl_type != htons(ETH_TYPE_NSH))) {
+            inconsistent_match(usable_protocols);
+        }
+        return 0;
+
     default:
         OVS_NOT_REACHED();
     }
@@ -8673,6 +8721,7 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, ofp_port_t port)
     case OFPACT_NAT:
     case OFPACT_ENCAP:
     case OFPACT_DECAP:
+    case OFPACT_DEC_NSH_TTL:
     default:
         return false;
     }

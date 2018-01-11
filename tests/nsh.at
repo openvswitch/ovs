@@ -542,7 +542,7 @@ AT_DATA([br-in2.txt], [dnl
     table=2,packet_type=(1,0x894f),nsh_spi=0x1020,nsh_si=255,actions=encap(ethernet),set_field:77:88:99:aa:bb:cc->dl_dst,goto_table:4
     table=2,packet_type=(1,0x894f),nsh_spi=0x1020,nsh_si=254,actions=output:2010
     table=4,dl_type=0x894f,dl_dst=11:22:33:44:55:66,actions=set_field:254->nsh_si,decap(),resubmit(,2)
-    table=4,dl_type=0x894f,dl_dst=77:88:99:aa:bb:cc,actions=set_field:254->nsh_si,decap(),resubmit(,2)
+    table=4,dl_type=0x894f,dl_dst=77:88:99:aa:bb:cc,actions=dec_nsh_ttl,decap(),resubmit(,2)
 ])
 
 # br-in3 is SFC classifier (table 1) and final SFF (tables 2,3)
@@ -607,7 +607,7 @@ AT_CHECK([
  table=2, packet_type=(1,0x894f),nsh_spi=0x3020,nsh_si=254 actions=output:2030
  table=2, packet_type=(1,0x894f),nsh_spi=0x3020,nsh_si=255 actions=encap(ethernet),set_field:11:22:33:44:55:66->eth_dst,goto_table:4
  table=4, dl_dst=11:22:33:44:55:66,dl_type=0x894f actions=set_field:254->nsh_si,decap(),resubmit(,2)
- table=4, dl_dst=77:88:99:aa:bb:cc,dl_type=0x894f actions=set_field:254->nsh_si,decap(),resubmit(,2)
+ table=4, dl_dst=77:88:99:aa:bb:cc,dl_type=0x894f actions=dec_nsh_ttl,decap(),resubmit(,2)
  ip,in_port=30 actions=decap(),goto_table:1
  n_packets=2, n_bytes=216, packet_type=(1,0x894f),in_port=3010 actions=goto_table:2
  packet_type=(1,0x800),in_port=30 actions=goto_table:1
@@ -661,7 +661,7 @@ AT_CHECK([
  table=2, n_packets=2, n_bytes=216, packet_type=(1,0x894f),nsh_spi=0x3020,nsh_si=255 actions=encap(ethernet),set_field:11:22:33:44:55:66->eth_dst,goto_table:4
  table=2, packet_type=(1,0x894f),nsh_spi=0x1020,nsh_si=254 actions=output:2010
  table=2, packet_type=(1,0x894f),nsh_spi=0x1020,nsh_si=255 actions=encap(ethernet),set_field:77:88:99:aa:bb:cc->eth_dst,goto_table:4
- table=4, dl_dst=77:88:99:aa:bb:cc,dl_type=0x894f actions=set_field:254->nsh_si,decap(),resubmit(,2)
+ table=4, dl_dst=77:88:99:aa:bb:cc,dl_type=0x894f actions=dec_nsh_ttl,decap(),resubmit(,2)
  table=4, n_packets=2, n_bytes=216, dl_dst=11:22:33:44:55:66,dl_type=0x894f actions=set_field:254->nsh_si,decap(),resubmit(,2)
  ip,in_port=30 actions=decap(),goto_table:1
  n_packets=2, n_bytes=216, packet_type=(1,0x894f),in_port=3010 actions=goto_table:2
