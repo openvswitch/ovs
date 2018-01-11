@@ -1152,7 +1152,7 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
         uint8_t continuation;
         uint16_t reason;
         uint32_t recirc_id;
-        ovs_be64 rule_cookie;
+        uint64_t rule_cookie;
         uint16_t controller_id;
         uint16_t max_len;
 
