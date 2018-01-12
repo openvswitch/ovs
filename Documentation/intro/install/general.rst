@@ -265,6 +265,12 @@ intrinsics can be used by passing ``-msse4.2``::
 
     $ ./configure CFLAGS="-g -O2 -msse4.2"`
 
+Also builtin popcnt instruction can be used to speedup the counting of the
+bits set in an integer. For example on X86_64 with POPCNT support, it can be
+enabled by passing ``-mpopcnt``::
+
+    $ ./configure CFLAGS="-g -O2 -mpopcnt"`
+
 If you are on a different processor and don't know what flags to choose, it is
 recommended to use ``-march=native`` settings::
 
