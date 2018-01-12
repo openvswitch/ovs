@@ -915,3 +915,125 @@ deafbeefbabeaa550000000208004500006c00004000402f26610a0000010a000002000008004500
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+
+AT_SETUP([ptap - recirculate after packet_type change])
+
+########################
+#      --<--+
+#     LOCAL |
+#        +--o------+
+#        |  int-br |
+#        +------o--+
+#               L3 tunnel (remote : 20.0.0.2/24)
+#        +--o------+
+#        |   br0   |  <- 20.0.0.1/24
+#        +------o--+
+#            p0 |
+#               +--<--
+
+OVS_VSWITCHD_START([dnl
+    -- set bridge br0 other-config:hwaddr=aa:bb:cc:00:00:01 \
+    -- add-port br0 p0 \
+    -- set interface p0 type=dummy other_config:hwaddr=aa:bb:cc:00:00:01 ofport_request=1 \
+    -- add-br int-br -- set bridge int-br datapath_type=dummy \
+    -- add-port int-br tunnel \
+    -- set interface tunnel type=gre options:packet_type=legacy_l3 options:remote_ip=20.0.0.2 ofport_request=2
+])
+
+### Verify datapath configuration
+AT_CHECK([
+    ovs-appctl dpif/show | grep -v hit | sed 's/\t/    /g' | sed 's./[[0-9]]\{1,\}..'
+], [0], [dnl
+    br0:
+        br0 65534: (dummy-internal)
+        p0 1: (dummy)
+    int-br:
+        int-br 65534: (dummy-internal)
+        tunnel 2: (gre: packet_type=legacy_l3, remote_ip=20.0.0.2)
+])
+
+AT_CHECK([
+    ovs-appctl netdev-dummy/ip4addr br0 20.0.0.1/24 &&
+    ovs-appctl ovs/route/add 20.0.0.2/24 br0 &&
+    ovs-appctl tnl/neigh/set br0 20.0.0.1 aa:bb:cc:00:00:01 &&
+    ovs-appctl tnl/neigh/set br0 20.0.0.2 aa:bb:cc:00:00:02
+], [0], [ignore])
+
+ovs-appctl time/warp 1000
+
+AT_CHECK([
+    ovs-appctl ovs/route/show | grep User
+],[0], [dnl
+User: 20.0.0.0/24 dev br0 SRC 20.0.0.1
+])
+
+AT_CHECK([
+    ovs-appctl tnl/neigh/show | grep br | tr -s ' ' | sort
+],[0], [dnl
+20.0.0.1 aa:bb:cc:00:00:01 br0
+20.0.0.2 aa:bb:cc:00:00:02 br0
+])
+
+# Goto_table after pop_mpls triggers recirculation.
+AT_CHECK([
+    ovs-ofctl del-flows br0 &&
+    ovs-ofctl del-flows int-br &&
+    ovs-ofctl add-flow br0 "actions=normal"
+    ovs-ofctl add-flow int-br "table=0,in_port=tunnel,actions=pop_mpls:0x800,goto_table:20" &&
+    ovs-ofctl add-flow int-br "table=20,actions=dec_ttl,output:LOCAL"
+], [0], [ignore])
+
+ovs-appctl time/warp 1000
+
+AT_CHECK([
+    ovs-ofctl dump-flows br0 -OOpenFlow13 | ofctl_strip | grep actions | sed 's/reset_counts //'
+], [0], [dnl
+ actions=NORMAL
+])
+
+AT_CHECK([
+    ovs-ofctl dump-flows int-br -OOpenFlow13 | ofctl_strip | grep actions | sed 's/reset_counts //'
+], [0], [dnl
+ in_port=2 actions=pop_mpls:0x0800,resubmit(,20)
+ table=20, actions=dec_ttl,LOCAL
+])
+
+# Receive MPLS over L3 GRE packet in underlay bridge.
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive p0 aabbcc000001aabbcc00000208004500007000004000402f125d140000021400000100008847003e71404500005470f5400040013445c0a80a14c0a80a0a08004e1adbfc0001566b575a00000000604f010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+    ovs-appctl netdev-dummy/receive p0 aabbcc000001aabbcc00000208004500007000004000402f125d140000021400000100008847003e71404500005470f5400040013445c0a80a14c0a80a0a08004e1adbfc0001566b575a00000000604f010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+], [0], [ignore])
+
+ovs-appctl time/warp 1000
+
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive p0 aabbcc000001aabbcc00000208004500007000004000402f125d140000021400000100008847003e71404500005470f5400040013445c0a80a14c0a80a0a08004e1adbfc0001566b575a00000000604f010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+    ovs-appctl netdev-dummy/receive p0 aabbcc000001aabbcc00000208004500007000004000402f125d140000021400000100008847003e71404500005470f5400040013445c0a80a14c0a80a0a08004e1adbfc0001566b575a00000000604f010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+], [0], [ignore])
+
+ovs-appctl time/warp 1000
+
+# After packet has been received on L3 port in overlay bridge, its packet_type changes to Ethernet.
+# Resubmit after pop_mpls recirculates the L2 packet.
+AT_CHECK([
+    ovs-appctl dpctl/dump-flows --names dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
+], [0], [flow-dump from non-dpdk interfaces:
+recirc_id(0),in_port(p0),packet_type(ns=0,id=0),eth(src=aa:bb:cc:00:00:02,dst=aa:bb:cc:00:00:01),eth_type(0x0800),ipv4(dst=20.0.0.1,proto=47,frag=no), packets:3, bytes:378, used:0.0s, actions:tnl_pop(gre_sys)
+tunnel(src=20.0.0.2,dst=20.0.0.1,flags(-df-csum)),recirc_id(0),in_port(gre_sys),packet_type(ns=1,id=0x8847),mpls(label=999/0x0,tc=0/0,ttl=64/0x0,bos=1/1), packets:3, bytes:264, used:0.0s, actions:push_eth(src=00:00:00:00:00:00,dst=00:00:00:00:00:00),pop_mpls(eth_type=0x800),recirc(0x1)
+tunnel(src=20.0.0.2,dst=20.0.0.1,flags(-df-csum)),recirc_id(0x1),in_port(gre_sys),packet_type(ns=0,id=0),eth(dst=00:00:00:00:00:00),eth_type(0x0800),ipv4(ttl=64,frag=no), packets:3, bytes:294, used:0.0s, actions:set(ipv4(ttl=63)),int-br
+])
+
+ovs-appctl time/warp 1000
+
+AT_CHECK([
+    ovs-ofctl dump-ports int-br
+], [0], [OFPST_PORT reply (xid=0x2): 2 ports
+  port LOCAL: rx pkts=0, bytes=0, drop=?, errs=?, frame=?, over=?, crc=?
+           tx pkts=4, bytes=392, drop=?, errs=?, coll=?
+  port  2: rx pkts=4, bytes=352, drop=?, errs=?, frame=?, over=?, crc=?
+           tx pkts=0, bytes=0, drop=?, errs=?, coll=?
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP

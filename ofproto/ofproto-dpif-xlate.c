@@ -561,6 +561,8 @@ static struct xbundle *xbundle_lookup(struct xlate_cfg *,
                                       const struct ofbundle *);
 static struct xport *xport_lookup(struct xlate_cfg *,
                                   const struct ofport_dpif *);
+static struct xport *xport_lookup_by_uuid(struct xlate_cfg *,
+                                          const struct uuid *);
 static struct xport *get_ofp_port(const struct xbridge *, ofp_port_t ofp_port);
 static struct skb_priority_to_dscp *get_skb_priority(const struct xport *,
                                                      uint32_t skb_priority);
@@ -1374,12 +1376,36 @@ xlate_lookup_ofproto_(const struct dpif_backer *backer, const struct flow *flow,
     struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
     const struct xport *xport;
 
+    /* If packet is recirculated, xport can be retrieved from frozen state. */
+    if (flow->recirc_id) {
+        const struct recirc_id_node *recirc_id_node;
+
+        recirc_id_node = recirc_id_node_find(flow->recirc_id);
+
+        if (OVS_UNLIKELY(!recirc_id_node)) {
+            return NULL;
+        }
+
+        /* If recirculation was initiated due to bond (in_port = OFPP_NONE)
+         * then frozen state is static and xport_uuid is not defined, so xport
+         * cannot be restored from frozen state. */
+        if (recirc_id_node->state.metadata.in_port != OFPP_NONE) {
+            struct uuid xport_uuid = recirc_id_node->state.xport_uuid;
+            xport = xport_lookup_by_uuid(xcfg, &xport_uuid);
+            if (xport && xport->xbridge && xport->xbridge->ofproto) {
+                goto out;
+            }
+        }
+    }
+
     xport = xport_lookup(xcfg, tnl_port_should_receive(flow)
                          ? tnl_port_receive(flow)
                          : odp_port_to_ofport(backer, flow->in_port.odp_port));
     if (OVS_UNLIKELY(!xport)) {
         return NULL;
     }
+
+out:
     *xportp = xport;
     if (ofp_in_port) {
         *ofp_in_port = xport->ofp_port;
@@ -1511,6 +1537,26 @@ xport_lookup(struct xlate_cfg *xcfg, const struct ofport_dpif *ofport)
     HMAP_FOR_EACH_IN_BUCKET (xport, hmap_node, hash_pointer(ofport, 0),
                              xports) {
         if (xport->ofport == ofport) {
+            return xport;
+        }
+    }
+    return NULL;
+}
+
+static struct xport *
+xport_lookup_by_uuid(struct xlate_cfg *xcfg, const struct uuid *uuid)
+{
+    struct hmap *xports;
+    struct xport *xport;
+
+    if (uuid_is_zero(uuid) || !xcfg) {
+        return NULL;
+    }
+
+    xports = &xcfg->xports_uuid;
+
+    HMAP_FOR_EACH_IN_BUCKET (xport, uuid_node, uuid_hash(uuid), xports) {
+        if (uuid_equals(&xport->uuid, uuid)) {
             return xport;
         }
     }
@@ -4492,6 +4538,7 @@ finish_freezing__(struct xlate_ctx *ctx, uint8_t table)
         .stack_size = ctx->stack.size,
         .mirrors = ctx->mirrors,
         .conntracked = ctx->conntracked,
+        .xport_uuid = ctx->xin->xport_uuid,
         .ofpacts = ctx->frozen_actions.data,
         .ofpacts_len = ctx->frozen_actions.size,
         .action_set = ctx->action_set.data,
@@ -6532,6 +6579,7 @@ xlate_in_init(struct xlate_in *xin, struct ofproto_dpif *ofproto,
     xin->odp_actions = odp_actions;
     xin->in_packet_out = false;
     xin->recirc_queue = NULL;
+    xin->xport_uuid = UUID_ZERO;
 
     /* Do recirc lookup. */
     xin->frozen_state = NULL;
@@ -6957,6 +7005,9 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
      * flow->in_port is the ultimate input port of the packet.) */
     struct xport *in_port = get_ofp_port(xbridge,
                                          ctx.base_flow.in_port.ofp_port);
+    if (in_port && !in_port->peer) {
+        ctx.xin->xport_uuid = in_port->uuid;
+    }
 
     if (flow->packet_type != htonl(PT_ETH) && in_port &&
         in_port->pt_mode == NETDEV_PT_LEGACY_L3 && ctx.table_id == 0) {
@@ -7196,6 +7247,7 @@ xlate_resume(struct ofproto_dpif *ofproto,
         .stack_size = pin->stack_size,
         .mirrors = pin->mirrors,
         .conntracked = pin->conntracked,
+        .xport_uuid = UUID_ZERO,
 
         /* When there are no actions, xlate_actions() will search the flow
          * table.  We don't want it to do that (we want it to resume), so

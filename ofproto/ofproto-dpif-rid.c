@@ -162,7 +162,8 @@ frozen_state_equal(const struct frozen_state *a, const struct frozen_state *b)
                              b->ofpacts, b->ofpacts_len)
             && ofpacts_equal(a->action_set, a->action_set_len,
                              b->action_set, b->action_set_len)
-            && !memcmp(a->userdata, b->userdata, a->userdata_len));
+            && !memcmp(a->userdata, b->userdata, a->userdata_len)
+            && uuid_equals(&a->xport_uuid, &b->xport_uuid));
 }
 
 /* Lockless RCU protected lookup.  If node is needed accross RCU quiescent
@@ -294,6 +295,8 @@ recirc_alloc_id(struct ofproto_dpif *ofproto)
             },
             .in_port = OFPP_NONE },
     };
+    /* In order to make sparse happy, xport_uuid needs to be set separately. */
+    state.xport_uuid = UUID_ZERO;
     return recirc_alloc_id__(&state, frozen_state_hash(&state))->id;
 }
 
