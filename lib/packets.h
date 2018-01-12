@@ -159,13 +159,18 @@ pkt_metadata_init(struct pkt_metadata *md, odp_port_t port)
 }
 
 /* This function prefetches the cachelines touched by pkt_metadata_init()
- * For performance reasons the two functions should be kept in sync. */
+ * and pkt_metadata_init_tnl().  For performance reasons the two functions
+ * should be kept in sync. */
 static inline void
 pkt_metadata_prefetch_init(struct pkt_metadata *md)
 {
     /* Prefetch cacheline0 as members till ct_state and odp_port will
      * be initialized later in pkt_metadata_init(). */
     OVS_PREFETCH(md->cacheline0);
+
+    /* Prefetch cacheline1 as members of this cacheline will be zeroed out
+     * in pkt_metadata_init_tnl(). */
+    OVS_PREFETCH(md->cacheline1);
 
     /* Prefetch cachline2 as ip_dst & ipv6_dst fields will be initialized. */
     OVS_PREFETCH(md->cacheline2);
