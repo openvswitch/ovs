@@ -61,7 +61,7 @@ if __name__ == "__main__":
             break
 
         m = regex.match(line)
-        if m is None or int(m.group(1)) == 0:
+        if m is None or int(m.group(1), 16) == 0:
             if packet != '':
                 print packet
             packet = ''
