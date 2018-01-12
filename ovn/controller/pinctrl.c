@@ -1371,6 +1371,7 @@ send_ipv6_ras(const struct controller_ctx *ctx, struct hmap *local_datapaths)
                 send_ipv6_ra_time = next_ra;
             }
         }
+        sbrec_port_binding_index_destroy_row(lpval);
     }
 
     /* Remove those that are no longer in the SB database */
