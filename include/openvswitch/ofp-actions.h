@@ -1064,18 +1064,32 @@ bool ofpacts_equal_stringwise(const struct ofpact a[], size_t a_len,
 const struct mf_field *ofpact_get_mf_dst(const struct ofpact *ofpact);
 uint32_t ofpacts_get_meter(const struct ofpact[], size_t ofpacts_len);
 
-/* Formatting and parsing ofpacts. */
+/* Formatting ofpacts. */
+struct ofpact_format_params {
+    /* Input. */
+    const struct ofputil_port_map *port_map;
+
+    /* Output. */
+    struct ds *s;
+};
 void ofpacts_format(const struct ofpact[], size_t ofpacts_len,
-                    const struct ofputil_port_map *, struct ds *);
-char *ofpacts_parse_actions(const char *, const struct ofputil_port_map *,
-                            struct ofpbuf *ofpacts,
-                            enum ofputil_protocol *usable_protocols)
-    OVS_WARN_UNUSED_RESULT;
-char *ofpacts_parse_instructions(const char *, const struct ofputil_port_map *,
-                                 struct ofpbuf *ofpacts,
-                                 enum ofputil_protocol *usable_protocols)
-    OVS_WARN_UNUSED_RESULT;
+                    const struct ofpact_format_params *);
 const char *ofpact_name(enum ofpact_type);
+
+/* Parsing ofpacts. */
+struct ofpact_parse_params {
+    /* Input. */
+    const struct ofputil_port_map *port_map;
+
+    /* Output. */
+    struct ofpbuf *ofpacts;
+    enum ofputil_protocol *usable_protocols;
+};
+char *ofpacts_parse_actions(const char *, const struct ofpact_parse_params *)
+    OVS_WARN_UNUSED_RESULT;
+char *ofpacts_parse_instructions(const char *,
+                                 const struct ofpact_parse_params *)
+    OVS_WARN_UNUSED_RESULT;
 
 /* Internal use by the helpers below. */
 void ofpact_init(struct ofpact *, enum ofpact_type, size_t len);

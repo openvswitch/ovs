@@ -205,15 +205,20 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
         ds_put_cstr(string, " continuation.conntracked=true\n");
     }
 
+    struct ofpact_format_params fp = {
+        .port_map = port_map,
+        .s = string,
+    };
+
     if (pin.actions_len) {
         ds_put_cstr(string, " continuation.actions=");
-        ofpacts_format(pin.actions, pin.actions_len, port_map, string);
+        ofpacts_format(pin.actions, pin.actions_len, &fp);
         ds_put_char(string, '\n');
     }
 
     if (pin.action_set_len) {
         ds_put_cstr(string, " continuation.action_set=");
-        ofpacts_format(pin.action_set, pin.action_set_len, port_map, string);
+        ofpacts_format(pin.action_set, pin.action_set_len, &fp);
         ds_put_char(string, '\n');
     }
 
@@ -252,7 +257,11 @@ ofp_print_packet_out(struct ds *string, const struct ofp_header *oh,
     match_format(&po.flow_metadata, port_map, string, OFP_DEFAULT_PRIORITY);
 
     ds_put_cstr(string, " actions=");
-    ofpacts_format(po.ofpacts, po.ofpacts_len, port_map, string);
+    struct ofpact_format_params fp = {
+        .port_map = port_map,
+        .s = string,
+    };
+    ofpacts_format(po.ofpacts, po.ofpacts_len, &fp);
 
     if (po.buffer_id == UINT32_MAX) {
         ds_put_format(string, " data_len=%"PRIuSIZE, po.packet_len);
@@ -916,7 +925,11 @@ ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh,
     ofp_print_flow_flags(s, fm.flags);
 
     ds_put_cstr(s, "actions=");
-    ofpacts_format(fm.ofpacts, fm.ofpacts_len, port_map, s);
+    struct ofpact_format_params fp = {
+        .port_map = port_map,
+        .s = s,
+    };
+    ofpacts_format(fm.ofpacts, fm.ofpacts_len, &fp);
     ofpbuf_uninit(&ofpacts);
 
     return 0;
@@ -1749,7 +1762,11 @@ ofp_print_flow_stats(struct ds *string, const struct ofputil_flow_stats *fs,
     }
 
     ds_put_format(string, "%sactions=%s", colors.actions, colors.end);
-    ofpacts_format(fs->ofpacts, fs->ofpacts_len, port_map, string);
+    struct ofpact_format_params fp = {
+        .port_map = port_map,
+        .s = string,
+    };
+    ofpacts_format(fs->ofpacts, fs->ofpacts_len, &fp);
 }
 
 static enum ofperr
@@ -2544,8 +2561,11 @@ ofp_print_nxst_flow_monitor_reply(struct ds *string,
                 ds_put_char(string, ' ');
             }
             ds_put_cstr(string, "actions=");
-            ofpacts_format(update.ofpacts, update.ofpacts_len, port_map,
-                           string);
+            struct ofpact_format_params fp = {
+                .port_map = port_map,
+                .s = string,
+            };
+            ofpacts_format(update.ofpacts, update.ofpacts_len, &fp);
         }
     }
 }
@@ -2676,7 +2696,11 @@ ofp_print_group(struct ds *s, uint32_t group_id, uint8_t type,
         }
 
         ds_put_cstr(s, "actions=");
-        ofpacts_format(bucket->ofpacts, bucket->ofpacts_len, port_map, s);
+        struct ofpact_format_params fp = {
+            .port_map = port_map,
+            .s = s,
+        };
+        ofpacts_format(bucket->ofpacts, bucket->ofpacts_len, &fp);
         ds_put_char(s, ',');
     }
 

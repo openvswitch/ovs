@@ -2198,9 +2198,12 @@ ofctl_packet_out(struct ovs_cmdl_context *ctx)
         int i;
 
         ofpbuf_init(&ofpacts, 64);
-        error = ofpacts_parse_actions(ctx->argv[3],
-                                      ports_to_accept(ctx->argv[1]), &ofpacts,
-                                      &usable_protocols);
+        struct ofpact_parse_params pp = {
+            .port_map = ports_to_accept(ctx->argv[1]),
+            .ofpacts = &ofpacts,
+            .usable_protocols = &usable_protocols
+        };
+        error = ofpacts_parse_actions(ctx->argv[3], &pp);
         if (error) {
             ovs_fatal(0, "%s", error);
         }
@@ -3185,8 +3188,11 @@ fte_version_format(const struct fte_state *fte_state, const struct fte *fte,
     }
 
     ds_put_cstr(s, " actions=");
-    ofpacts_format(version->ofpacts, version->ofpacts_len,
-                   fte_state->port_map, s);
+    struct ofpact_format_params fp = {
+        .port_map = fte_state->port_map,
+        .s = s,
+    };
+    ofpacts_format(version->ofpacts, version->ofpacts_len, &fp);
 
     ds_put_char(s, '\n');
 }
@@ -4042,7 +4048,8 @@ ofctl_parse_actions__(const char *version_s, bool instructions)
         /* Print cls_rule. */
         ds_init(&s);
         ds_put_cstr(&s, "actions=");
-        ofpacts_format(ofpacts.data, ofpacts.size, NULL, &s);
+        struct ofpact_format_params fp = { .s = &s };
+        ofpacts_format(ofpacts.data, ofpacts.size, &fp);
         puts(ds_cstr(&s));
         ds_destroy(&s);
 

@@ -4395,7 +4395,8 @@ flow_stats_ds(struct ofproto *ofproto, struct rule *rule, struct ds *results)
     ds_put_char(results, ',');
 
     ds_put_cstr(results, "actions=");
-    ofpacts_format(actions->ofpacts, actions->ofpacts_len, NULL, results);
+    struct ofpact_format_params fp = { .s = results };
+    ofpacts_format(actions->ofpacts, actions->ofpacts_len, &fp);
 
     ds_put_cstr(results, "\n");
 }

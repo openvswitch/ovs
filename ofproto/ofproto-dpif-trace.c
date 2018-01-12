@@ -506,8 +506,12 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
     ofpbuf_init(&ofpacts, 0);
 
     /* Parse actions. */
-    error = ofpacts_parse_actions(argv[--argc], NULL,
-                                  &ofpacts, &usable_protocols);
+    struct ofpact_parse_params pp = {
+        .port_map = NULL,
+        .ofpacts = &ofpacts,
+        .usable_protocols = &usable_protocols,
+    };
+    error = ofpacts_parse_actions(argv[--argc], &pp);
     if (error) {
         unixctl_command_reply_error(conn, error);
         free(error);

@@ -705,7 +705,8 @@ ovn_flow_to_string(const struct ovn_flow *f)
     ds_put_format(&s, "priority=%"PRIu16", ", f->priority);
     match_format(&f->match, NULL, &s, OFP_DEFAULT_PRIORITY);
     ds_put_cstr(&s, ", actions=");
-    ofpacts_format(f->ofpacts, f->ofpacts_len, NULL, &s);
+    struct ofpact_format_params fp = { .s = &s };
+    ofpacts_format(f->ofpacts, f->ofpacts_len, &fp);
     return ds_steal_cstr(&s);
 }
 

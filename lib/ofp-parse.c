@@ -557,8 +557,12 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
         char *error;
 
         ofpbuf_init(&ofpacts, 32);
-        error = ofpacts_parse_instructions(act_str, port_map, &ofpacts,
-                                           &action_usable_protocols);
+        struct ofpact_parse_params pp = {
+            .port_map = port_map,
+            .ofpacts = &ofpacts,
+            .usable_protocols = &action_usable_protocols
+        };
+        error = ofpacts_parse_instructions(act_str, &pp);
         *usable_protocols &= action_usable_protocols;
         if (!error) {
             enum ofperr err;
@@ -713,8 +717,12 @@ parse_ofp_packet_out_str__(struct ofputil_packet_out *po, char *string,
     }
 
     if (act_str) {
-        error = ofpacts_parse_actions(act_str, port_map, &ofpacts,
-                                      &action_usable_protocols);
+        struct ofpact_parse_params pp = {
+            .port_map = port_map,
+            .ofpacts = &ofpacts,
+            .usable_protocols = &action_usable_protocols,
+        };
+        error = ofpacts_parse_actions(act_str, &pp);
         *usable_protocols &= action_usable_protocols;
         if (error) {
             goto out;
@@ -1487,8 +1495,12 @@ parse_bucket_str(struct ofputil_bucket *bucket, char *str_,
     ds_chomp(&actions, ',');
 
     ofpbuf_init(&ofpacts, 0);
-    error = ofpacts_parse_actions(ds_cstr(&actions), port_map, &ofpacts,
-                                  usable_protocols);
+    struct ofpact_parse_params pp = {
+        .port_map = port_map,
+        .ofpacts = &ofpacts,
+        .usable_protocols = usable_protocols,
+    };
+    error = ofpacts_parse_actions(ds_cstr(&actions), &pp);
     ds_destroy(&actions);
     if (error) {
         ofpbuf_uninit(&ofpacts);
