@@ -1612,6 +1612,7 @@ do_restore(struct jsonrpc *rpc, const char *database,
         VLOG_INFO("%s", ds_cstr(&s));
         ds_destroy(&s);
     }
+    ovsdb_schema_destroy(schema2);
 
     struct json *txn = json_array_create_empty();
     json_array_add(txn, json_string_create(schema->name));
@@ -1653,6 +1654,7 @@ do_restore(struct jsonrpc *rpc, const char *database,
             json_array_add(txn, ins_op);
         }
     }
+    ovsdb_destroy(backup);
     struct jsonrpc_msg *rq = jsonrpc_create_request("transact", txn, NULL);
     struct jsonrpc_msg *reply;
     check_txn(jsonrpc_transact_block(rpc, rq, &reply), &reply);
