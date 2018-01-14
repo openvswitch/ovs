@@ -9312,7 +9312,7 @@ ovs-vsctl add-br br-phys
 ovn_attach n1 br-phys 192.168.0.3
 
 ovn-nbctl lr-add ro
-ovn-nbctl lrp-add ro ro-sw 00:00:00:00:00:01 aef0::1/64
+ovn-nbctl lrp-add ro ro-sw 00:00:00:00:00:01 aef0:0:0:0:0:0:0:1/64
 
 ovn-nbctl ls-add sw
 ovn-nbctl lsp-add sw sw-ro
@@ -9381,7 +9381,7 @@ construct_expected_ra() {
     local icmp=8600XXXX${ra}
 
     local ip_len=$(expr ${#icmp} / 2)
-    ip_len=$(printf "%0.4x" ${ip_len})
+    ip_len=$(echo "$ip_len" | awk '{printf "%0.4x\n", $0}')
 
     local ip=60000000${ip_len}3aff${src_addr}${dst_addr}${icmp}
     local eth=${dst_mac}${src_mac}86dd${ip}
