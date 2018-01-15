@@ -187,6 +187,7 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
 
         case 'V':
             ovs_print_version(0, 0);
+            print_dpdk_version();
             exit(EXIT_SUCCESS);
 
         case OPT_MLOCKALL:
