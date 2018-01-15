@@ -44,6 +44,7 @@
 #include "csum.h"
 #include "dp-packet.h"
 #include "dpif.h"
+#include "dpif-netdev-perf.h"
 #include "dpif-provider.h"
 #include "dummy.h"
 #include "fat-rwlock.h"
@@ -331,25 +332,6 @@ static struct dp_netdev_port *dp_netdev_lookup_port(const struct dp_netdev *dp,
                                                     odp_port_t)
     OVS_REQUIRES(dp->port_mutex);
 
-enum dp_stat_type {
-    DP_STAT_EXACT_HIT,          /* Packets that had an exact match (emc). */
-    DP_STAT_MASKED_HIT,         /* Packets that matched in the flow table. */
-    DP_STAT_MISS,               /* Packets that did not match. */
-    DP_STAT_LOST,               /* Packets not passed up to the client. */
-    DP_STAT_LOOKUP_HIT,         /* Number of subtable lookups for flow table
-                                   hits */
-    DP_STAT_SENT_PKTS,          /* Packets that has been sent. */
-    DP_STAT_SENT_BATCHES,       /* Number of batches sent. */
-    DP_N_STATS
-};
-
-enum pmd_cycles_counter_type {
-    PMD_CYCLES_IDLE,            /* Cycles spent idle or unsuccessful polling */
-    PMD_CYCLES_PROCESSING,      /* Cycles spent successfully polling and
-                                 * processing polled packets */
-    PMD_N_CYCLES
-};
-
 enum rxq_cycles_counter_type {
     RXQ_CYCLES_PROC_CURR,       /* Cycles spent successfully polling and
                                    processing packets during the current
@@ -499,21 +481,6 @@ struct dp_netdev_actions *dp_netdev_flow_get_actions(
     const struct dp_netdev_flow *);
 static void dp_netdev_actions_free(struct dp_netdev_actions *);
 
-/* Contained by struct dp_netdev_pmd_thread's 'stats' member.  */
-struct dp_netdev_pmd_stats {
-    /* Indexed by DP_STAT_*. */
-    atomic_ullong n[DP_N_STATS];
-};
-
-/* Contained by struct dp_netdev_pmd_thread's 'cycle' member.  */
-struct dp_netdev_pmd_cycles {
-    /* Indexed by PMD_CYCLES_*. */
-    atomic_ullong n[PMD_N_CYCLES];
-};
-
-static void dp_netdev_count_packet(struct dp_netdev_pmd_thread *,
-                                   enum dp_stat_type type, int cnt);
-
 struct polled_queue {
     struct dp_netdev_rxq *rxq;
     odp_port_t port_no;
@@ -595,12 +562,6 @@ struct dp_netdev_pmd_thread {
        are stored for each polled rxq. */
     long long int rxq_next_cycle_store;
 
-    /* Statistics. */
-    struct dp_netdev_pmd_stats stats;
-
-    /* Cycles counters */
-    struct dp_netdev_pmd_cycles cycles;
-
     /* Current context of the PMD thread. */
     struct dp_netdev_pmd_thread_ctx ctx;
 
@@ -638,12 +599,8 @@ struct dp_netdev_pmd_thread {
     struct hmap tnl_port_cache;
     struct hmap send_port_cache;
 
-    /* Only a pmd thread can write on its own 'cycles' and 'stats'.
-     * The main thread keeps 'stats_zero' and 'cycles_zero' as base
-     * values and subtracts them from 'stats' and 'cycles' before
-     * reporting to the user */
-    unsigned long long stats_zero[DP_N_STATS];
-    uint64_t cycles_zero[PMD_N_CYCLES];
+    /* Keep track of detailed PMD performance statistics. */
+    struct pmd_perf_stats perf_stats;
 
     /* Set to true if the pmd thread needs to be reloaded. */
     bool need_reload;
@@ -833,47 +790,10 @@ enum pmd_info_type {
 };
 
 static void
-pmd_info_show_stats(struct ds *reply,
-                    struct dp_netdev_pmd_thread *pmd,
-                    unsigned long long stats[DP_N_STATS],
-                    uint64_t cycles[PMD_N_CYCLES])
+format_pmd_thread(struct ds *reply, struct dp_netdev_pmd_thread *pmd)
 {
-    unsigned long long total_packets;
-    uint64_t total_cycles = 0;
-    double lookups_per_hit = 0, packets_per_batch = 0;
-    int i;
-
-    /* These loops subtracts reference values ('*_zero') from the counters.
-     * Since loads and stores are relaxed, it might be possible for a '*_zero'
-     * value to be more recent than the current value we're reading from the
-     * counter.  This is not a big problem, since these numbers are not
-     * supposed to be too accurate, but we should at least make sure that
-     * the result is not negative. */
-    for (i = 0; i < DP_N_STATS; i++) {
-        if (stats[i] > pmd->stats_zero[i]) {
-            stats[i] -= pmd->stats_zero[i];
-        } else {
-            stats[i] = 0;
-        }
-    }
-
-    /* Sum of all the matched and not matched packets gives the total.  */
-    total_packets = stats[DP_STAT_EXACT_HIT] + stats[DP_STAT_MASKED_HIT]
-                    + stats[DP_STAT_MISS];
-
-    for (i = 0; i < PMD_N_CYCLES; i++) {
-        if (cycles[i] > pmd->cycles_zero[i]) {
-           cycles[i] -= pmd->cycles_zero[i];
-        } else {
-            cycles[i] = 0;
-        }
-
-        total_cycles += cycles[i];
-    }
-
     ds_put_cstr(reply, (pmd->core_id == NON_PMD_CORE_ID)
                         ? "main thread" : "pmd thread");
-
     if (pmd->numa_id != OVS_NUMA_UNSPEC) {
         ds_put_format(reply, " numa_id %d", pmd->numa_id);
     }
@@ -881,23 +801,52 @@ pmd_info_show_stats(struct ds *reply,
         ds_put_format(reply, " core_id %u", pmd->core_id);
     }
     ds_put_cstr(reply, ":\n");
+}
 
-    if (stats[DP_STAT_MASKED_HIT] > 0) {
-        lookups_per_hit = stats[DP_STAT_LOOKUP_HIT]
-                          / (double) stats[DP_STAT_MASKED_HIT];
+static void
+pmd_info_show_stats(struct ds *reply,
+                    struct dp_netdev_pmd_thread *pmd)
+{
+    uint64_t stats[PMD_N_STATS];
+    uint64_t total_cycles, total_packets;
+    double passes_per_pkt = 0;
+    double lookups_per_hit = 0;
+    double packets_per_batch = 0;
+
+    pmd_perf_read_counters(&pmd->perf_stats, stats);
+    total_cycles = stats[PMD_CYCLES_ITER_IDLE]
+                         + stats[PMD_CYCLES_ITER_BUSY];
+    total_packets = stats[PMD_STAT_RECV];
+
+    format_pmd_thread(reply, pmd);
+
+    if (total_packets > 0) {
+        passes_per_pkt = (total_packets + stats[PMD_STAT_RECIRC])
+                            / (double) total_packets;
     }
-    if (stats[DP_STAT_SENT_BATCHES] > 0) {
-        packets_per_batch = stats[DP_STAT_SENT_PKTS]
-                            / (double) stats[DP_STAT_SENT_BATCHES];
+    if (stats[PMD_STAT_MASKED_HIT] > 0) {
+        lookups_per_hit = stats[PMD_STAT_MASKED_LOOKUP]
+                            / (double) stats[PMD_STAT_MASKED_HIT];
+    }
+    if (stats[PMD_STAT_SENT_BATCHES] > 0) {
+        packets_per_batch = stats[PMD_STAT_SENT_PKTS]
+                            / (double) stats[PMD_STAT_SENT_BATCHES];
     }
 
     ds_put_format(reply,
-                  "\temc hits:%llu\n\tmegaflow hits:%llu\n"
-                  "\tavg. subtable lookups per hit:%.2f\n"
-                  "\tmiss:%llu\n\tlost:%llu\n"
-                  "\tavg. packets per output batch: %.2f\n",
-                  stats[DP_STAT_EXACT_HIT], stats[DP_STAT_MASKED_HIT],
-                  lookups_per_hit, stats[DP_STAT_MISS], stats[DP_STAT_LOST],
+                  "\tpackets received: %"PRIu64"\n"
+                  "\tpacket recirculations: %"PRIu64"\n"
+                  "\tavg. datapath passes per packet: %.02f\n"
+                  "\temc hits: %"PRIu64"\n"
+                  "\tmegaflow hits: %"PRIu64"\n"
+                  "\tavg. subtable lookups per megaflow hit: %.02f\n"
+                  "\tmiss with success upcall: %"PRIu64"\n"
+                  "\tmiss with failed upcall: %"PRIu64"\n"
+                  "\tavg. packets per output batch: %.02f\n",
+                  total_packets, stats[PMD_STAT_RECIRC],
+                  passes_per_pkt, stats[PMD_STAT_EXACT_HIT],
+                  stats[PMD_STAT_MASKED_HIT], lookups_per_hit,
+                  stats[PMD_STAT_MISS], stats[PMD_STAT_LOST],
                   packets_per_batch);
 
     if (total_cycles == 0) {
@@ -905,48 +854,27 @@ pmd_info_show_stats(struct ds *reply,
     }
 
     ds_put_format(reply,
-                  "\tidle cycles:%"PRIu64" (%.02f%%)\n"
-                  "\tprocessing cycles:%"PRIu64" (%.02f%%)\n",
-                  cycles[PMD_CYCLES_IDLE],
-                  cycles[PMD_CYCLES_IDLE] / (double)total_cycles * 100,
-                  cycles[PMD_CYCLES_PROCESSING],
-                  cycles[PMD_CYCLES_PROCESSING] / (double)total_cycles * 100);
+                  "\tidle cycles: %"PRIu64" (%.02f%%)\n"
+                  "\tprocessing cycles: %"PRIu64" (%.02f%%)\n",
+                  stats[PMD_CYCLES_ITER_IDLE],
+                  stats[PMD_CYCLES_ITER_IDLE] / (double) total_cycles * 100,
+                  stats[PMD_CYCLES_ITER_BUSY],
+                  stats[PMD_CYCLES_ITER_BUSY] / (double) total_cycles * 100);
 
     if (total_packets == 0) {
         return;
     }
 
     ds_put_format(reply,
-                  "\tavg cycles per packet: %.02f (%"PRIu64"/%llu)\n",
-                  total_cycles / (double)total_packets,
+                  "\tavg cycles per packet: %.02f (%"PRIu64"/%"PRIu64")\n",
+                  total_cycles / (double) total_packets,
                   total_cycles, total_packets);
 
     ds_put_format(reply,
                   "\tavg processing cycles per packet: "
-                  "%.02f (%"PRIu64"/%llu)\n",
-                  cycles[PMD_CYCLES_PROCESSING] / (double)total_packets,
-                  cycles[PMD_CYCLES_PROCESSING], total_packets);
-}
-
-static void
-pmd_info_clear_stats(struct ds *reply OVS_UNUSED,
-                    struct dp_netdev_pmd_thread *pmd,
-                    unsigned long long stats[DP_N_STATS],
-                    uint64_t cycles[PMD_N_CYCLES])
-{
-    int i;
-
-    /* We cannot write 'stats' and 'cycles' (because they're written by other
-     * threads) and we shouldn't change 'stats' (because they're used to count
-     * datapath stats, which must not be cleared here).  Instead, we save the
-     * current values and subtract them from the values to be displayed in the
-     * future */
-    for (i = 0; i < DP_N_STATS; i++) {
-        pmd->stats_zero[i] = stats[i];
-    }
-    for (i = 0; i < PMD_N_CYCLES; i++) {
-        pmd->cycles_zero[i] = cycles[i];
-    }
+                  "%.02f (%"PRIu64"/%"PRIu64")\n",
+                  stats[PMD_CYCLES_ITER_BUSY] / (double) total_packets,
+                  stats[PMD_CYCLES_ITER_BUSY], total_packets);
 }
 
 static int
@@ -1106,23 +1034,37 @@ dpif_netdev_pmd_info(struct unixctl_conn *conn, int argc, const char *argv[],
     struct ds reply = DS_EMPTY_INITIALIZER;
     struct dp_netdev_pmd_thread **pmd_list;
     struct dp_netdev *dp = NULL;
-    size_t n;
     enum pmd_info_type type = *(enum pmd_info_type *) aux;
+    unsigned int core_id;
+    bool filter_on_pmd = false;
+    size_t n;
 
     ovs_mutex_lock(&dp_netdev_mutex);
 
-    if (argc == 2) {
-        dp = shash_find_data(&dp_netdevs, argv[1]);
-    } else if (shash_count(&dp_netdevs) == 1) {
-        /* There's only one datapath */
-        dp = shash_first(&dp_netdevs)->data;
+    while (argc > 1) {
+        if (!strcmp(argv[1], "-pmd") && argc >= 3) {
+            if (str_to_uint(argv[2], 10, &core_id)) {
+                filter_on_pmd = true;
+            }
+            argc -= 2;
+            argv += 2;
+        } else {
+            dp = shash_find_data(&dp_netdevs, argv[1]);
+            argc -= 1;
+            argv += 1;
+        }
     }
 
     if (!dp) {
-        ovs_mutex_unlock(&dp_netdev_mutex);
-        unixctl_command_reply_error(conn,
-                                    "please specify an existing datapath");
-        return;
+        if (shash_count(&dp_netdevs) == 1) {
+            /* There's only one datapath */
+            dp = shash_first(&dp_netdevs)->data;
+        } else {
+            ovs_mutex_unlock(&dp_netdev_mutex);
+            unixctl_command_reply_error(conn,
+                                        "please specify an existing datapath");
+            return;
+        }
     }
 
     sorted_poll_thread_list(dp, &pmd_list, &n);
@@ -1131,26 +1073,15 @@ dpif_netdev_pmd_info(struct unixctl_conn *conn, int argc, const char *argv[],
         if (!pmd) {
             break;
         }
-
+        if (filter_on_pmd && pmd->core_id != core_id) {
+            continue;
+        }
         if (type == PMD_INFO_SHOW_RXQ) {
             pmd_info_show_rxq(&reply, pmd);
-        } else {
-            unsigned long long stats[DP_N_STATS];
-            uint64_t cycles[PMD_N_CYCLES];
-
-            /* Read current stats and cycle counters */
-            for (size_t j = 0; j < ARRAY_SIZE(stats); j++) {
-                atomic_read_relaxed(&pmd->stats.n[j], &stats[j]);
-            }
-            for (size_t j = 0; j < ARRAY_SIZE(cycles); j++) {
-                atomic_read_relaxed(&pmd->cycles.n[j], &cycles[j]);
-            }
-
-            if (type == PMD_INFO_CLEAR_STATS) {
-                pmd_info_clear_stats(&reply, pmd, stats, cycles);
-            } else if (type == PMD_INFO_SHOW_STATS) {
-                pmd_info_show_stats(&reply, pmd, stats, cycles);
-            }
+        } else if (type == PMD_INFO_CLEAR_STATS) {
+            pmd_perf_stats_clear(&pmd->perf_stats);
+        } else if (type == PMD_INFO_SHOW_STATS) {
+            pmd_info_show_stats(&reply, pmd);
         }
     }
     free(pmd_list);
@@ -1168,14 +1099,14 @@ dpif_netdev_init(void)
                               clear_aux = PMD_INFO_CLEAR_STATS,
                               poll_aux = PMD_INFO_SHOW_RXQ;
 
-    unixctl_command_register("dpif-netdev/pmd-stats-show", "[dp]",
-                             0, 1, dpif_netdev_pmd_info,
+    unixctl_command_register("dpif-netdev/pmd-stats-show", "[-pmd core] [dp]",
+                             0, 3, dpif_netdev_pmd_info,
                              (void *)&show_aux);
-    unixctl_command_register("dpif-netdev/pmd-stats-clear", "[dp]",
-                             0, 1, dpif_netdev_pmd_info,
+    unixctl_command_register("dpif-netdev/pmd-stats-clear", "[-pmd core] [dp]",
+                             0, 3, dpif_netdev_pmd_info,
                              (void *)&clear_aux);
-    unixctl_command_register("dpif-netdev/pmd-rxq-show", "[dp]",
-                             0, 1, dpif_netdev_pmd_info,
+    unixctl_command_register("dpif-netdev/pmd-rxq-show", "[-pmd core] [dp]",
+                             0, 3, dpif_netdev_pmd_info,
                              (void *)&poll_aux);
     unixctl_command_register("dpif-netdev/pmd-rxq-rebalance", "[dp]",
                              0, 1, dpif_netdev_pmd_rebalance,
@@ -1511,20 +1442,16 @@ dpif_netdev_get_stats(const struct dpif *dpif, struct dpif_dp_stats *stats)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_pmd_thread *pmd;
+    uint64_t pmd_stats[PMD_N_STATS];
 
     stats->n_flows = stats->n_hit = stats->n_missed = stats->n_lost = 0;
     CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
-        unsigned long long n;
         stats->n_flows += cmap_count(&pmd->flow_table);
-
-        atomic_read_relaxed(&pmd->stats.n[DP_STAT_MASKED_HIT], &n);
-        stats->n_hit += n;
-        atomic_read_relaxed(&pmd->stats.n[DP_STAT_EXACT_HIT], &n);
-        stats->n_hit += n;
-        atomic_read_relaxed(&pmd->stats.n[DP_STAT_MISS], &n);
-        stats->n_missed += n;
-        atomic_read_relaxed(&pmd->stats.n[DP_STAT_LOST], &n);
-        stats->n_lost += n;
+        pmd_perf_read_counters(&pmd->perf_stats, pmd_stats);
+        stats->n_hit += pmd_stats[PMD_STAT_EXACT_HIT];
+        stats->n_hit += pmd_stats[PMD_STAT_MASKED_HIT];
+        stats->n_missed += pmd_stats[PMD_STAT_MISS];
+        stats->n_lost += pmd_stats[PMD_STAT_LOST];
     }
     stats->n_masks = UINT32_MAX;
     stats->n_mask_hit = UINT64_MAX;
@@ -3209,28 +3136,28 @@ cycles_count_start(struct dp_netdev_pmd_thread *pmd)
 /* Stop counting cycles and add them to the counter 'type' */
 static inline void
 cycles_count_end(struct dp_netdev_pmd_thread *pmd,
-                 enum pmd_cycles_counter_type type)
+                 enum pmd_stat_type type)
     OVS_RELEASES(&cycles_counter_fake_mutex)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     unsigned long long interval = cycles_counter() - pmd->ctx.last_cycles;
 
-    non_atomic_ullong_add(&pmd->cycles.n[type], interval);
+    pmd_perf_update_counter(&pmd->perf_stats, type, interval);
 }
 
 /* Calculate the intermediate cycle result and add to the counter 'type' */
 static inline void
 cycles_count_intermediate(struct dp_netdev_pmd_thread *pmd,
                           struct dp_netdev_rxq *rxq,
-                          enum pmd_cycles_counter_type type)
+                          enum pmd_stat_type type)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     unsigned long long new_cycles = cycles_counter();
     unsigned long long interval = new_cycles - pmd->ctx.last_cycles;
     pmd->ctx.last_cycles = new_cycles;
 
-    non_atomic_ullong_add(&pmd->cycles.n[type], interval);
-    if (rxq && (type == PMD_CYCLES_PROCESSING)) {
+    pmd_perf_update_counter(&pmd->perf_stats, type, interval);
+    if (rxq && (type == PMD_CYCLES_POLL_BUSY)) {
         /* Add to the amount of current processing cycles. */
         non_atomic_ullong_add(&rxq->cycles[RXQ_CYCLES_PROC_CURR], interval);
     }
@@ -3289,8 +3216,8 @@ dp_netdev_pmd_flush_output_on_port(struct dp_netdev_pmd_thread *pmd,
     netdev_send(p->port->netdev, tx_qid, &p->output_pkts, dynamic_txqs);
     dp_packet_batch_init(&p->output_pkts);
 
-    dp_netdev_count_packet(pmd, DP_STAT_SENT_PKTS, output_cnt);
-    dp_netdev_count_packet(pmd, DP_STAT_SENT_BATCHES, 1);
+    pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_SENT_PKTS, output_cnt);
+    pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_SENT_BATCHES, 1);
 }
 
 static void
@@ -3971,12 +3898,12 @@ dpif_netdev_run(struct dpif *dpif)
                                                    port->port_no);
                     cycles_count_intermediate(non_pmd, NULL,
                                               process_packets
-                                              ? PMD_CYCLES_PROCESSING
-                                              : PMD_CYCLES_IDLE);
+                                              ? PMD_CYCLES_POLL_BUSY
+                                              : PMD_CYCLES_POLL_IDLE);
                 }
             }
         }
-        cycles_count_end(non_pmd, PMD_CYCLES_IDLE);
+        cycles_count_end(non_pmd, PMD_CYCLES_POLL_IDLE);
         pmd_thread_ctx_time_update(non_pmd);
         dpif_netdev_xps_revalidate_pmd(non_pmd, false);
         ovs_mutex_unlock(&dp->non_pmd_mutex);
@@ -4121,6 +4048,7 @@ static void *
 pmd_thread_main(void *f_)
 {
     struct dp_netdev_pmd_thread *pmd = f_;
+    struct pmd_perf_stats *s = &pmd->perf_stats;
     unsigned int lc = 0;
     struct polled_queue *poll_list;
     bool exiting;
@@ -4156,13 +4084,17 @@ reload:
 
     cycles_count_start(pmd);
     for (;;) {
+        uint64_t iter_packets = 0;
+        pmd_perf_start_iteration(s, pmd->ctx.last_cycles);
         for (i = 0; i < poll_cnt; i++) {
             process_packets =
                 dp_netdev_process_rxq_port(pmd, poll_list[i].rxq->rx,
                                            poll_list[i].port_no);
             cycles_count_intermediate(pmd, poll_list[i].rxq,
-                                      process_packets ? PMD_CYCLES_PROCESSING
-                                                      : PMD_CYCLES_IDLE);
+                                      process_packets
+                                      ? PMD_CYCLES_POLL_BUSY
+                                      : PMD_CYCLES_POLL_IDLE);
+            iter_packets += process_packets;
         }
 
         if (lc++ > 1024) {
@@ -4183,10 +4115,12 @@ reload:
             if (reload) {
                 break;
             }
+            cycles_count_intermediate(pmd, NULL, PMD_CYCLES_OVERHEAD);
         }
+        pmd_perf_end_iteration(s, pmd->ctx.last_cycles, iter_packets);
     }
 
-    cycles_count_end(pmd, PMD_CYCLES_IDLE);
+    cycles_count_end(pmd, PMD_CYCLES_OVERHEAD);
 
     poll_cnt = pmd_load_queues_and_ports(pmd, &poll_list);
     exiting = latch_is_set(&pmd->exit_latch);
@@ -4638,6 +4572,7 @@ dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
         emc_cache_init(&pmd->flow_cache);
         pmd_alloc_static_tx_qid(pmd);
     }
+    pmd_perf_stats_init(&pmd->perf_stats);
     cmap_insert(&dp->poll_threads, CONST_CAST(struct cmap_node *, &pmd->node),
                 hash_int(core_id, 0));
 }
@@ -4838,13 +4773,6 @@ dp_netdev_flow_used(struct dp_netdev_flow *netdev_flow, int cnt, int size,
     atomic_store_relaxed(&netdev_flow->stats.tcp_flags, flags);
 }
 
-static void
-dp_netdev_count_packet(struct dp_netdev_pmd_thread *pmd,
-                       enum dp_stat_type type, int cnt)
-{
-    non_atomic_ullong_add(&pmd->stats.n[type], cnt);
-}
-
 static int
 dp_netdev_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet_,
                  struct flow *flow, struct flow_wildcards *wc, ovs_u128 *ufid,
@@ -5017,6 +4945,9 @@ emc_processing(struct dp_netdev_pmd_thread *pmd,
     int i;
 
     atomic_read_relaxed(&pmd->dp->emc_insert_min, &cur_min);
+    pmd_perf_update_counter(&pmd->perf_stats,
+                            md_is_valid ? PMD_STAT_RECIRC : PMD_STAT_RECV,
+                            cnt);
 
     DP_PACKET_BATCH_REFILL_FOR_EACH (i, cnt, packet, packets_) {
         struct dp_netdev_flow *flow;
@@ -5065,18 +4996,17 @@ emc_processing(struct dp_netdev_pmd_thread *pmd,
         }
     }
 
-    dp_netdev_count_packet(pmd, DP_STAT_EXACT_HIT,
-                           cnt - n_dropped - n_missed);
+    pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_EXACT_HIT,
+                            cnt - n_dropped - n_missed);
 
     return dp_packet_batch_size(packets_);
 }
 
-static inline void
+static inline int
 handle_packet_upcall(struct dp_netdev_pmd_thread *pmd,
                      struct dp_packet *packet,
                      const struct netdev_flow_key *key,
-                     struct ofpbuf *actions, struct ofpbuf *put_actions,
-                     int *lost_cnt)
+                     struct ofpbuf *actions, struct ofpbuf *put_actions)
 {
     struct ofpbuf *add_actions;
     struct dp_packet_batch b;
@@ -5096,8 +5026,7 @@ handle_packet_upcall(struct dp_netdev_pmd_thread *pmd,
                              put_actions);
     if (OVS_UNLIKELY(error && error != ENOSPC)) {
         dp_packet_delete(packet);
-        (*lost_cnt)++;
-        return;
+        return error;
     }
 
     /* The Netlink encoding of datapath flow keys cannot express
@@ -5137,6 +5066,7 @@ handle_packet_upcall(struct dp_netdev_pmd_thread *pmd,
         ovs_mutex_unlock(&pmd->flow_mutex);
         emc_probabilistic_insert(pmd, key, netdev_flow);
     }
+    return error;
 }
 
 static inline void
@@ -5158,7 +5088,7 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
     struct dpcls *cls;
     struct dpcls_rule *rules[PKT_ARRAY_SIZE];
     struct dp_netdev *dp = pmd->dp;
-    int miss_cnt = 0, lost_cnt = 0;
+    int upcall_ok_cnt = 0, upcall_fail_cnt = 0;
     int lookup_cnt = 0, add_lookup_cnt;
     bool any_miss;
     size_t i;
@@ -5200,9 +5130,14 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
                 continue;
             }
 
-            miss_cnt++;
-            handle_packet_upcall(pmd, packet, &keys[i], &actions,
-                                 &put_actions, &lost_cnt);
+            int error = handle_packet_upcall(pmd, packet, &keys[i],
+                                             &actions, &put_actions);
+
+            if (OVS_UNLIKELY(error)) {
+                upcall_fail_cnt++;
+            } else {
+                upcall_ok_cnt++;
+            }
         }
 
         ofpbuf_uninit(&actions);
@@ -5212,8 +5147,7 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
         DP_PACKET_BATCH_FOR_EACH (packet, packets_) {
             if (OVS_UNLIKELY(!rules[i])) {
                 dp_packet_delete(packet);
-                lost_cnt++;
-                miss_cnt++;
+                upcall_fail_cnt++;
             }
         }
     }
@@ -5231,10 +5165,14 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
         dp_netdev_queue_batches(packet, flow, &keys[i].mf, batches, n_batches);
     }
 
-    dp_netdev_count_packet(pmd, DP_STAT_MASKED_HIT, cnt - miss_cnt);
-    dp_netdev_count_packet(pmd, DP_STAT_LOOKUP_HIT, lookup_cnt);
-    dp_netdev_count_packet(pmd, DP_STAT_MISS, miss_cnt);
-    dp_netdev_count_packet(pmd, DP_STAT_LOST, lost_cnt);
+    pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_MASKED_HIT,
+                            cnt - upcall_ok_cnt - upcall_fail_cnt);
+    pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_MASKED_LOOKUP,
+                            lookup_cnt);
+    pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_MISS,
+                            upcall_ok_cnt);
+    pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_LOST,
+                            upcall_fail_cnt);
 }
 
 /* Packets enter the datapath from a port (or from recirculation) here.
