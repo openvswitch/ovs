@@ -497,6 +497,7 @@ struct tx_port {
     long long last_used;
     struct hmap_node node;
     struct dp_packet_batch output_pkts;
+    struct dp_netdev_rxq *output_pkts_rxqs[NETDEV_MAX_BURST];
 };
 
 /* A set of properties for the current processing loop that is not directly
@@ -506,6 +507,8 @@ struct tx_port {
 struct dp_netdev_pmd_thread_ctx {
     /* Latest measured time. See 'pmd_thread_ctx_time_update()'. */
     long long now;
+    /* RX queue from which last packet was received. */
+    struct dp_netdev_rxq *last_rxq;
 };
 
 /* PMD: Poll modes drivers.  PMD accesses devices via polling to eliminate
@@ -3151,9 +3154,14 @@ static void
 dp_netdev_pmd_flush_output_on_port(struct dp_netdev_pmd_thread *pmd,
                                    struct tx_port *p)
 {
+    int i;
     int tx_qid;
     int output_cnt;
     bool dynamic_txqs;
+    struct cycle_timer timer;
+    uint64_t cycles;
+
+    cycle_timer_start(&pmd->perf_stats, &timer);
 
     dynamic_txqs = p->port->dynamic_txqs;
     if (dynamic_txqs) {
@@ -3163,12 +3171,23 @@ dp_netdev_pmd_flush_output_on_port(struct dp_netdev_pmd_thread *pmd,
     }
 
     output_cnt = dp_packet_batch_size(&p->output_pkts);
+    ovs_assert(output_cnt > 0);
 
     netdev_send(p->port->netdev, tx_qid, &p->output_pkts, dynamic_txqs);
     dp_packet_batch_init(&p->output_pkts);
 
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_SENT_PKTS, output_cnt);
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_SENT_BATCHES, 1);
+
+    /* Distribute send cycles evenly among transmitted packets and assign to
+     * their respective rx queues. */
+    cycles = cycle_timer_stop(&pmd->perf_stats, &timer) / output_cnt;
+    for (i = 0; i < output_cnt; i++) {
+        if (p->output_pkts_rxqs[i]) {
+            dp_netdev_rxq_add_cycles(p->output_pkts_rxqs[i],
+                                     RXQ_CYCLES_PROC_CURR, cycles);
+        }
+    }
 }
 
 static void
@@ -3192,10 +3211,14 @@ dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
     struct cycle_timer timer;
     int error;
     int batch_cnt = 0;
+    uint64_t cycles;
 
     /* Measure duration for polling and processing rx burst. */
     cycle_timer_start(&pmd->perf_stats, &timer);
+
+    pmd->ctx.last_rxq = rxq;
     dp_packet_batch_init(&batch);
+
     error = netdev_rxq_recv(rxq->rx, &batch);
     if (!error) {
         /* At least one packet received. */
@@ -3204,12 +3227,12 @@ dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
 
         batch_cnt = batch.count;
         dp_netdev_input(pmd, &batch, port_no);
-        dp_netdev_pmd_flush_output_packets(pmd);
 
         /* Assign processing cycles to rx queue. */
-        uint64_t cycles = cycle_timer_stop(&pmd->perf_stats, &timer);
+        cycles = cycle_timer_stop(&pmd->perf_stats, &timer);
         dp_netdev_rxq_add_cycles(rxq, RXQ_CYCLES_PROC_CURR, cycles);
 
+        dp_netdev_pmd_flush_output_packets(pmd);
     } else {
         /* Discard cycles. */
         cycle_timer_stop(&pmd->perf_stats, &timer);
@@ -3220,6 +3243,8 @@ dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
                     netdev_rxq_get_name(rxq->rx), ovs_strerror(error));
         }
     }
+
+    pmd->ctx.last_rxq = NULL;
 
     return batch_cnt;
 }
@@ -4508,6 +4533,7 @@ dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
     ovs_mutex_init(&pmd->port_mutex);
     cmap_init(&pmd->flow_table);
     cmap_init(&pmd->classifiers);
+    pmd->ctx.last_rxq = NULL;
     pmd_thread_ctx_time_update(pmd);
     pmd->next_optimization = pmd->ctx.now + DPCLS_OPTIMIZATION_INTERVAL;
     pmd->rxq_next_cycle_store = pmd->ctx.now + PMD_RXQ_INTERVAL_LEN;
@@ -5385,6 +5411,8 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
                 dp_netdev_pmd_flush_output_on_port(pmd, p);
             }
             DP_PACKET_BATCH_FOR_EACH (packet, packets_) {
+                p->output_pkts_rxqs[dp_packet_batch_size(&p->output_pkts)] =
+                                                             pmd->ctx.last_rxq;
                 dp_packet_batch_add(&p->output_pkts, packet);
             }
             return;
