@@ -54,3 +54,8 @@ dpdk_vhost_iommu_enabled(void)
 {
     return false;
 }
+
+void
+print_dpdk_version(void)
+{
+}

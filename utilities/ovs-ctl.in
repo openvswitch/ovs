@@ -72,7 +72,7 @@ set_hostname () {
 set_system_ids () {
     set ovs_vsctl set Open_vSwitch .
 
-    OVS_VERSION=`ovs-vswitchd --version | sed 's/.*) //;1q'`
+    OVS_VERSION=`ovs-vswitchd --version | awk '/Open vSwitch/{print $NF}'`
     set "$@" ovs-version="$OVS_VERSION"
 
     case $SYSTEM_ID in
