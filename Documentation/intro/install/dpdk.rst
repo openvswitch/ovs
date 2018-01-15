@@ -568,6 +568,64 @@ not needed i.e. jumbo frames are not needed, it can be forced off by adding
 chains of descriptors it will make more individual virtio descriptors available
 for rx to the guest using dpdkvhost ports and this can improve performance.
 
+Output Packet Batching
+~~~~~~~~~~~~~~~~~~~~~~
+
+To make advantage of batched transmit functions, OVS collects packets in
+intermediate queues before sending when processing a batch of received packets.
+Even if packets are matched by different flows, OVS uses a single send
+operation for all packets destined to the same output port.
+
+Furthermore, OVS is able to buffer packets in these intermediate queues for a
+configurable amount of time to reduce the frequency of send bursts at medium
+load levels when the packet receive rate is high, but the receive batch size
+still very small. This is particularly beneficial for packets transmitted to
+VMs using an interrupt-driven virtio driver, where the interrupt overhead is
+significant for the OVS PMD, the host operating system and the guest driver.
+
+The ``tx-flush-interval`` parameter can be used to specify the time in
+microseconds OVS should wait between two send bursts to a given port (default
+is ``0``). When the intermediate queue fills up before that time is over, the
+buffered packet batch is sent immediately::
+
+    $ ovs-vsctl set Open_vSwitch . other_config:tx-flush-interval=50
+
+This parameter influences both throughput and latency, depending on the traffic
+load on the port. In general lower values decrease latency while higher values
+may be useful to achieve higher throughput.
+
+Low traffic (``packet rate < 1 / tx-flush-interval``) should not experience
+any significant latency or throughput increase as packets are forwarded
+immediately.
+
+At intermediate load levels
+(``1 / tx-flush-interval < packet rate < 32 / tx-flush-interval``) traffic
+should experience an average latency increase of up to
+``1 / 2 * tx-flush-interval`` and a possible throughput improvement.
+
+Very high traffic (``packet rate >> 32 / tx-flush-interval``) should experience
+the average latency increase equal to ``32 / (2 * packet rate)``. Most send
+batches in this case will contain the maximum number of packets (``32``).
+
+A ``tx-burst-interval`` value of ``50`` microseconds has shown to provide a
+good performance increase in a ``PHY-VM-PHY`` scenario on ``x86`` system for
+interrupt-driven guests while keeping the latency increase at a reasonable
+level:
+
+  https://mail.openvswitch.org/pipermail/ovs-dev/2017-December/341628.html
+
+.. note::
+  Throughput impact of this option significantly depends on the scenario and
+  the traffic patterns. For example: ``tx-burst-interval`` value of ``50``
+  microseconds shows performance degradation in ``PHY-VM-PHY`` with bonded PHY
+  scenario while testing with ``256 - 1024`` packet flows:
+
+    https://mail.openvswitch.org/pipermail/ovs-dev/2017-December/341700.html
+
+The average number of packets per output batch can be checked in PMD stats::
+
+    $ ovs-appctl dpif-netdev/pmd-stats-show
+
 Limitations
 ------------
 
