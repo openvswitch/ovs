@@ -176,12 +176,13 @@ struct emc_cache {
 
 /* Simple non-wildcarding single-priority classifier. */
 
-/* Time in ms between successive optimizations of the dpcls subtable vector */
-#define DPCLS_OPTIMIZATION_INTERVAL 1000
+/* Time in microseconds between successive optimizations of the dpcls
+ * subtable vector */
+#define DPCLS_OPTIMIZATION_INTERVAL 1000000LL
 
-/* Time in ms of the interval in which rxq processing cycles used in
- * rxq to pmd assignments is measured and stored. */
-#define PMD_RXQ_INTERVAL_LEN 10000
+/* Time in microseconds of the interval in which rxq processing cycles used
+ * in rxq to pmd assignments is measured and stored. */
+#define PMD_RXQ_INTERVAL_LEN 10000000LL
 
 /* Number of intervals for which cycles are stored
  * and used during rxq to pmd assignment. */
@@ -337,7 +338,7 @@ enum rxq_cycles_counter_type {
     RXQ_N_CYCLES
 };
 
-#define XPS_TIMEOUT_MS 500LL
+#define XPS_TIMEOUT 500000LL    /* In microseconds. */
 
 /* Contained by struct dp_netdev_port's 'rxqs' member.  */
 struct dp_netdev_rxq {
@@ -754,7 +755,7 @@ emc_cache_slow_sweep(struct emc_cache *flow_cache)
 static inline void
 pmd_thread_ctx_time_update(struct dp_netdev_pmd_thread *pmd)
 {
-    pmd->ctx.now = time_msec();
+    pmd->ctx.now = time_usec();
 }
 
 /* Returns true if 'dpif' is a netdev or dummy dpif, false otherwise. */
@@ -4141,7 +4142,7 @@ dp_netdev_run_meter(struct dp_netdev *dp, struct dp_packet_batch *packets_,
     memset(exceeded_rate, 0, cnt * sizeof *exceeded_rate);
 
     /* All packets will hit the meter at the same time. */
-    long_delta_t = (now - meter->used); /* msec */
+    long_delta_t = (now - meter->used) / 1000; /* msec */
 
     /* Make sure delta_t will not be too large, so that bucket will not
      * wrap around below. */
@@ -4297,7 +4298,7 @@ dpif_netdev_meter_set(struct dpif *dpif, ofproto_meter_id *meter_id,
         meter->flags = config->flags;
         meter->n_bands = config->n_bands;
         meter->max_delta_t = 0;
-        meter->used = time_msec();
+        meter->used = time_usec();
 
         /* set up bands */
         for (i = 0; i < config->n_bands; ++i) {
@@ -4839,7 +4840,7 @@ packet_batch_per_flow_execute(struct packet_batch_per_flow *batch,
     struct dp_netdev_flow *flow = batch->flow;
 
     dp_netdev_flow_used(flow, batch->array.count, batch->byte_count,
-                        batch->tcp_flags, pmd->ctx.now);
+                        batch->tcp_flags, pmd->ctx.now / 1000);
 
     actions = dp_netdev_flow_get_actions(flow);
 
@@ -5224,7 +5225,7 @@ dpif_netdev_xps_revalidate_pmd(const struct dp_netdev_pmd_thread *pmd,
             continue;
         }
         interval = pmd->ctx.now - tx->last_used;
-        if (tx->qid >= 0 && (purge || interval >= XPS_TIMEOUT_MS)) {
+        if (tx->qid >= 0 && (purge || interval >= XPS_TIMEOUT)) {
             port = tx->port;
             ovs_mutex_lock(&port->txq_used_mutex);
             port->txq_used[tx->qid]--;
@@ -5245,7 +5246,7 @@ dpif_netdev_xps_get_tx_qid(const struct dp_netdev_pmd_thread *pmd,
     interval = pmd->ctx.now - tx->last_used;
     tx->last_used = pmd->ctx.now;
 
-    if (OVS_LIKELY(tx->qid >= 0 && interval < XPS_TIMEOUT_MS)) {
+    if (OVS_LIKELY(tx->qid >= 0 && interval < XPS_TIMEOUT)) {
         return tx->qid;
     }
 
@@ -5624,7 +5625,7 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
         conntrack_execute(&dp->conntrack, packets_, aux->flow->dl_type, force,
                           commit, zone, setmark, setlabel, aux->flow->tp_src,
                           aux->flow->tp_dst, helper, nat_action_info_ref,
-                          pmd->ctx.now);
+                          pmd->ctx.now / 1000);
         break;
     }
 
