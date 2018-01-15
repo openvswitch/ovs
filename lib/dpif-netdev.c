@@ -32,10 +32,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#ifdef DPDK_NETDEV
-#include <rte_cycles.h>
-#endif
-
 #include "bitmap.h"
 #include "cmap.h"
 #include "conntrack.h"
@@ -509,8 +505,6 @@ struct tx_port {
 struct dp_netdev_pmd_thread_ctx {
     /* Latest measured time. See 'pmd_thread_ctx_time_update()'. */
     long long now;
-    /* Used to count cycles. See 'cycles_count_end()' */
-    unsigned long long last_cycles;
 };
 
 /* PMD: Poll modes drivers.  PMD accesses devices via polling to eliminate
@@ -3111,64 +3105,20 @@ dp_netdev_actions_free(struct dp_netdev_actions *actions)
     free(actions);
 }
 
-static inline unsigned long long
-cycles_counter(void)
-{
-#ifdef DPDK_NETDEV
-    return rte_get_tsc_cycles();
-#else
-    return 0;
-#endif
-}
-
-/* Fake mutex to make sure that the calls to cycles_count_* are balanced */
-extern struct ovs_mutex cycles_counter_fake_mutex;
-
-/* Start counting cycles.  Must be followed by 'cycles_count_end()' */
-static inline void
-cycles_count_start(struct dp_netdev_pmd_thread *pmd)
-    OVS_ACQUIRES(&cycles_counter_fake_mutex)
-    OVS_NO_THREAD_SAFETY_ANALYSIS
-{
-    pmd->ctx.last_cycles = cycles_counter();
-}
-
-/* Stop counting cycles and add them to the counter 'type' */
-static inline void
-cycles_count_end(struct dp_netdev_pmd_thread *pmd,
-                 enum pmd_stat_type type)
-    OVS_RELEASES(&cycles_counter_fake_mutex)
-    OVS_NO_THREAD_SAFETY_ANALYSIS
-{
-    unsigned long long interval = cycles_counter() - pmd->ctx.last_cycles;
-
-    pmd_perf_update_counter(&pmd->perf_stats, type, interval);
-}
-
-/* Calculate the intermediate cycle result and add to the counter 'type' */
-static inline void
-cycles_count_intermediate(struct dp_netdev_pmd_thread *pmd,
-                          struct dp_netdev_rxq *rxq,
-                          enum pmd_stat_type type)
-    OVS_NO_THREAD_SAFETY_ANALYSIS
-{
-    unsigned long long new_cycles = cycles_counter();
-    unsigned long long interval = new_cycles - pmd->ctx.last_cycles;
-    pmd->ctx.last_cycles = new_cycles;
-
-    pmd_perf_update_counter(&pmd->perf_stats, type, interval);
-    if (rxq && (type == PMD_CYCLES_POLL_BUSY)) {
-        /* Add to the amount of current processing cycles. */
-        non_atomic_ullong_add(&rxq->cycles[RXQ_CYCLES_PROC_CURR], interval);
-    }
-}
-
 static void
 dp_netdev_rxq_set_cycles(struct dp_netdev_rxq *rx,
                          enum rxq_cycles_counter_type type,
                          unsigned long long cycles)
 {
    atomic_store_relaxed(&rx->cycles[type], cycles);
+}
+
+static void
+dp_netdev_rxq_add_cycles(struct dp_netdev_rxq *rx,
+                         enum rxq_cycles_counter_type type,
+                         unsigned long long cycles)
+{
+    non_atomic_ullong_add(&rx->cycles[type], cycles);
 }
 
 static uint64_t
@@ -3234,27 +3184,40 @@ dp_netdev_pmd_flush_output_packets(struct dp_netdev_pmd_thread *pmd)
 
 static int
 dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
-                           struct netdev_rxq *rx,
+                           struct dp_netdev_rxq *rxq,
                            odp_port_t port_no)
 {
     struct dp_packet_batch batch;
+    struct cycle_timer timer;
     int error;
     int batch_cnt = 0;
 
+    /* Measure duration for polling and processing rx burst. */
+    cycle_timer_start(&pmd->perf_stats, &timer);
     dp_packet_batch_init(&batch);
-    error = netdev_rxq_recv(rx, &batch);
+    error = netdev_rxq_recv(rxq->rx, &batch);
     if (!error) {
+        /* At least one packet received. */
         *recirc_depth_get() = 0;
         pmd_thread_ctx_time_update(pmd);
 
         batch_cnt = batch.count;
         dp_netdev_input(pmd, &batch, port_no);
         dp_netdev_pmd_flush_output_packets(pmd);
-    } else if (error != EAGAIN && error != EOPNOTSUPP) {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
-        VLOG_ERR_RL(&rl, "error receiving data from %s: %s",
-                    netdev_rxq_get_name(rx), ovs_strerror(error));
+        /* Assign processing cycles to rx queue. */
+        uint64_t cycles = cycle_timer_stop(&pmd->perf_stats, &timer);
+        dp_netdev_rxq_add_cycles(rxq, RXQ_CYCLES_PROC_CURR, cycles);
+
+    } else {
+        /* Discard cycles. */
+        cycle_timer_stop(&pmd->perf_stats, &timer);
+        if (error != EAGAIN && error != EOPNOTSUPP) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+            VLOG_ERR_RL(&rl, "error receiving data from %s: %s",
+                    netdev_rxq_get_name(rxq->rx), ovs_strerror(error));
+        }
     }
 
     return batch_cnt;
@@ -3880,30 +3843,22 @@ dpif_netdev_run(struct dpif *dpif)
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_pmd_thread *non_pmd;
     uint64_t new_tnl_seq;
-    int process_packets = 0;
 
     ovs_mutex_lock(&dp->port_mutex);
     non_pmd = dp_netdev_get_pmd(dp, NON_PMD_CORE_ID);
     if (non_pmd) {
         ovs_mutex_lock(&dp->non_pmd_mutex);
-        cycles_count_start(non_pmd);
         HMAP_FOR_EACH (port, node, &dp->ports) {
             if (!netdev_is_pmd(port->netdev)) {
                 int i;
 
                 for (i = 0; i < port->n_rxq; i++) {
-                    process_packets =
-                        dp_netdev_process_rxq_port(non_pmd,
-                                                   port->rxqs[i].rx,
-                                                   port->port_no);
-                    cycles_count_intermediate(non_pmd, NULL,
-                                              process_packets
-                                              ? PMD_CYCLES_POLL_BUSY
-                                              : PMD_CYCLES_POLL_IDLE);
+                    dp_netdev_process_rxq_port(non_pmd,
+                                               &port->rxqs[i],
+                                               port->port_no);
                 }
             }
         }
-        cycles_count_end(non_pmd, PMD_CYCLES_POLL_IDLE);
         pmd_thread_ctx_time_update(non_pmd);
         dpif_netdev_xps_revalidate_pmd(non_pmd, false);
         ovs_mutex_unlock(&dp->non_pmd_mutex);
@@ -4082,18 +4037,14 @@ reload:
         lc = UINT_MAX;
     }
 
-    cycles_count_start(pmd);
+    cycles_counter_update(s);
     for (;;) {
         uint64_t iter_packets = 0;
-        pmd_perf_start_iteration(s, pmd->ctx.last_cycles);
+        pmd_perf_start_iteration(s);
         for (i = 0; i < poll_cnt; i++) {
             process_packets =
-                dp_netdev_process_rxq_port(pmd, poll_list[i].rxq->rx,
+                dp_netdev_process_rxq_port(pmd, poll_list[i].rxq,
                                            poll_list[i].port_no);
-            cycles_count_intermediate(pmd, poll_list[i].rxq,
-                                      process_packets
-                                      ? PMD_CYCLES_POLL_BUSY
-                                      : PMD_CYCLES_POLL_IDLE);
             iter_packets += process_packets;
         }
 
@@ -4115,12 +4066,9 @@ reload:
             if (reload) {
                 break;
             }
-            cycles_count_intermediate(pmd, NULL, PMD_CYCLES_OVERHEAD);
         }
-        pmd_perf_end_iteration(s, pmd->ctx.last_cycles, iter_packets);
+        pmd_perf_end_iteration(s, iter_packets);
     }
-
-    cycles_count_end(pmd, PMD_CYCLES_OVERHEAD);
 
     poll_cnt = pmd_load_queues_and_ports(pmd, &poll_list);
     exiting = latch_is_set(&pmd->exit_latch);

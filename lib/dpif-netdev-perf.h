@@ -23,6 +23,11 @@
 #include <string.h>
 #include <math.h>
 
+#ifdef DPDK_NETDEV
+#include <rte_config.h>
+#include <rte_cycles.h>
+#endif
+
 #include "openvswitch/vlog.h"
 #include "ovs-atomic.h"
 #include "timeval.h"
@@ -59,10 +64,6 @@ enum pmd_stat_type {
                              * recirculation. */
     PMD_STAT_SENT_PKTS,     /* Packets that have been sent. */
     PMD_STAT_SENT_BATCHES,  /* Number of batches sent. */
-    PMD_CYCLES_POLL_IDLE,   /* Cycles spent unsuccessful polling. */
-    PMD_CYCLES_POLL_BUSY,   /* Cycles spent successfully polling and
-                             * processing polled packets. */
-    PMD_CYCLES_OVERHEAD,    /* Cycles spent for other tasks. */
     PMD_CYCLES_ITER_IDLE,   /* Cycles spent in idle iterations. */
     PMD_CYCLES_ITER_BUSY,   /* Cycles spent in busy iterations. */
     PMD_N_STATS
@@ -85,10 +86,94 @@ struct pmd_counters {
 
 struct pmd_perf_stats {
     /* Start of the current PMD iteration in TSC cycles.*/
+    uint64_t start_it_tsc;
+    /* Latest TSC time stamp taken in PMD. */
     uint64_t last_tsc;
+    /* If non-NULL, outermost cycle timer currently running in PMD. */
+    struct cycle_timer *cur_timer;
     /* Set of PMD counters with their zero offsets. */
     struct pmd_counters counters;
 };
+
+/* Support for accurate timing of PMD execution on TSC clock cycle level.
+ * These functions are intended to be invoked in the context of pmd threads. */
+
+/* Read the TSC cycle register and cache it. Any function not requiring clock
+ * cycle accuracy should read the cached value using cycles_counter_get() to
+ * avoid the overhead of reading the TSC register. */
+
+static inline uint64_t
+cycles_counter_update(struct pmd_perf_stats *s)
+{
+#ifdef DPDK_NETDEV
+    return s->last_tsc = rte_get_tsc_cycles();
+#else
+    return s->last_tsc = 0;
+#endif
+}
+
+static inline uint64_t
+cycles_counter_get(struct pmd_perf_stats *s)
+{
+    return s->last_tsc;
+}
+
+/* A nestable timer for measuring execution time in TSC cycles.
+ *
+ * Usage:
+ * struct cycle_timer timer;
+ *
+ * cycle_timer_start(pmd, &timer);
+ * <Timed execution>
+ * uint64_t cycles = cycle_timer_stop(pmd, &timer);
+ *
+ * The caller must guarantee that a call to cycle_timer_start() is always
+ * paired with a call to cycle_stimer_stop().
+ *
+ * Is is possible to have nested cycles timers within the timed code. The
+ * execution time measured by the nested timers is excluded from the time
+ * measured by the embracing timer.
+ */
+
+struct cycle_timer {
+    uint64_t start;
+    uint64_t suspended;
+    struct cycle_timer *interrupted;
+};
+
+static inline void
+cycle_timer_start(struct pmd_perf_stats *s,
+                  struct cycle_timer *timer)
+{
+    struct cycle_timer *cur_timer = s->cur_timer;
+    uint64_t now = cycles_counter_update(s);
+
+    if (cur_timer) {
+        cur_timer->suspended = now;
+    }
+    timer->interrupted = cur_timer;
+    timer->start = now;
+    timer->suspended = 0;
+    s->cur_timer = timer;
+}
+
+static inline uint64_t
+cycle_timer_stop(struct pmd_perf_stats *s,
+                 struct cycle_timer *timer)
+{
+    /* Assert that this is the current cycle timer. */
+    ovs_assert(s->cur_timer == timer);
+    uint64_t now = cycles_counter_update(s);
+    struct cycle_timer *intr_timer = timer->interrupted;
+
+    if (intr_timer) {
+        /* Adjust the start offset by the suspended cycles. */
+        intr_timer->start += now - intr_timer->suspended;
+    }
+    /* Restore suspended timer, if any. */
+    s->cur_timer = intr_timer;
+    return now - timer->start;
+}
 
 void pmd_perf_stats_init(struct pmd_perf_stats *s);
 void pmd_perf_stats_clear(struct pmd_perf_stats *s);
@@ -115,16 +200,23 @@ pmd_perf_update_counter(struct pmd_perf_stats *s,
 }
 
 static inline void
-pmd_perf_start_iteration(struct pmd_perf_stats *s, uint64_t now_tsc)
+pmd_perf_start_iteration(struct pmd_perf_stats *s)
 {
-    s->last_tsc = now_tsc;
+    if (OVS_LIKELY(s->last_tsc)) {
+        /* We assume here that last_tsc was updated immediately prior at
+         * the end of the previous iteration, or just before the first
+         * iteration. */
+        s->start_it_tsc = s->last_tsc;
+    } else {
+        /* In case last_tsc has never been set before. */
+        s->start_it_tsc = cycles_counter_update(s);
+    }
 }
 
 static inline void
-pmd_perf_end_iteration(struct pmd_perf_stats *s, uint64_t now_tsc,
-                       int rx_packets)
+pmd_perf_end_iteration(struct pmd_perf_stats *s, int rx_packets)
 {
-    uint64_t cycles = now_tsc - s->last_tsc;
+    uint64_t cycles = cycles_counter_update(s) - s->start_it_tsc;
 
     if (rx_packets > 0) {
         pmd_perf_update_counter(s, PMD_CYCLES_ITER_BUSY, cycles);
