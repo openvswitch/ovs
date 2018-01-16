@@ -36,6 +36,8 @@ Requires: logrotate, hostname, python >= 2.7, python-six
 BuildRequires: python-six
 BuildRequires: openssl-devel
 BuildRequires: checkpolicy, selinux-policy-devel
+BuildRequires: autoconf, automake, libtool
+BuildRequires: python-sphinx
 
 %bcond_without check
 %bcond_with check_datapath_kernel
