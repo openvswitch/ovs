@@ -481,8 +481,8 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr,
                 ds_put_char(ds, ')');
             } else if (cookie.type == USER_ACTION_COOKIE_CONTROLLER) {
                 ds_put_format(ds, ",controller(reason=%"PRIu16
-                              ",dont_send=%"PRIu8
-                              ",continuation=%"PRIu8
+                              ",dont_send=%d"
+                              ",continuation=%d"
                               ",recirc_id=%"PRIu32
                               ",rule_cookie=%#"PRIx64
                               ",controller_id=%"PRIu16
