@@ -567,6 +567,11 @@ struct dp_netdev_pmd_thread {
        are stored for each polled rxq. */
     long long int rxq_next_cycle_store;
 
+    /* Last interval timestamp. */
+    uint64_t intrvl_tsc_prev;
+    /* Last interval cycles. */
+    atomic_ullong intrvl_cycles;
+
     /* Current context of the PMD thread. */
     struct dp_netdev_pmd_thread_ctx ctx;
 
@@ -932,9 +937,9 @@ static void
 pmd_info_show_rxq(struct ds *reply, struct dp_netdev_pmd_thread *pmd)
 {
     if (pmd->core_id != NON_PMD_CORE_ID) {
-        const char *prev_name = NULL;
         struct rxq_poll *list;
-        size_t i, n;
+        size_t n_rxq;
+        uint64_t total_cycles = 0;
 
         ds_put_format(reply,
                       "pmd thread numa_id %d core_id %u:\n\tisolated : %s\n",
@@ -942,22 +947,34 @@ pmd_info_show_rxq(struct ds *reply, struct dp_netdev_pmd_thread *pmd)
                                                   ? "true" : "false");
 
         ovs_mutex_lock(&pmd->port_mutex);
-        sorted_poll_list(pmd, &list, &n);
-        for (i = 0; i < n; i++) {
-            const char *name = netdev_rxq_get_name(list[i].rxq->rx);
+        sorted_poll_list(pmd, &list, &n_rxq);
 
-            if (!prev_name || strcmp(name, prev_name)) {
-                if (prev_name) {
-                    ds_put_cstr(reply, "\n");
-                }
-                ds_put_format(reply, "\tport: %s\tqueue-id:", name);
+        /* Get the total pmd cycles for an interval. */
+        atomic_read_relaxed(&pmd->intrvl_cycles, &total_cycles);
+        /* Estimate the cycles to cover all intervals. */
+        total_cycles *= PMD_RXQ_INTERVAL_MAX;
+
+        for (int i = 0; i < n_rxq; i++) {
+            struct dp_netdev_rxq *rxq = list[i].rxq;
+            const char *name = netdev_rxq_get_name(rxq->rx);
+            uint64_t proc_cycles = 0;
+
+            for (int j = 0; j < PMD_RXQ_INTERVAL_MAX; j++) {
+                proc_cycles += dp_netdev_rxq_get_intrvl_cycles(rxq, j);
             }
-            ds_put_format(reply, " %d",
+            ds_put_format(reply, "\tport: %-16s\tqueue-id: %2d", name,
                           netdev_rxq_get_queue_id(list[i].rxq->rx));
-            prev_name = name;
+            ds_put_format(reply, "\tpmd usage: ");
+            if (total_cycles) {
+                ds_put_format(reply, "%2"PRIu64"",
+                              proc_cycles * 100 / total_cycles);
+                ds_put_cstr(reply, " %");
+            } else {
+                ds_put_format(reply, "%s", "NOT AVAIL");
+            }
+            ds_put_cstr(reply, "\n");
         }
         ovs_mutex_unlock(&pmd->port_mutex);
-        ds_put_cstr(reply, "\n");
         free(list);
     }
 }
@@ -4117,6 +4134,8 @@ reload:
         lc = UINT_MAX;
     }
 
+    pmd->intrvl_tsc_prev = 0;
+    atomic_store_relaxed(&pmd->intrvl_cycles, 0);
     cycles_counter_update(s);
     for (;;) {
         uint64_t iter_packets = 0;
@@ -6116,6 +6135,7 @@ dp_netdev_pmd_try_optimize(struct dp_netdev_pmd_thread *pmd,
     struct dpcls *cls;
 
     if (pmd->ctx.now > pmd->rxq_next_cycle_store) {
+        uint64_t curr_tsc;
         /* Get the cycles that were used to process each queue and store. */
         for (unsigned i = 0; i < poll_cnt; i++) {
             uint64_t rxq_cyc_curr = dp_netdev_rxq_get_cycles(poll_list[i].rxq,
@@ -6124,6 +6144,13 @@ dp_netdev_pmd_try_optimize(struct dp_netdev_pmd_thread *pmd,
             dp_netdev_rxq_set_cycles(poll_list[i].rxq, RXQ_CYCLES_PROC_CURR,
                                      0);
         }
+        curr_tsc = cycles_counter_update(&pmd->perf_stats);
+        if (pmd->intrvl_tsc_prev) {
+            /* There is a prev timestamp, store a new intrvl cycle count. */
+            atomic_store_relaxed(&pmd->intrvl_cycles,
+                                 curr_tsc - pmd->intrvl_tsc_prev);
+        }
+        pmd->intrvl_tsc_prev = curr_tsc;
         /* Start new measuring interval */
         pmd->rxq_next_cycle_store = pmd->ctx.now + PMD_RXQ_INTERVAL_LEN;
     }

@@ -42,6 +42,7 @@ Post-v2.8.0
           "management" statistics.
         - ovs-ofctl dump-ports command now prints new of set custom statistics
           if available (for OpenFlow 1.4+).
+     * Add rxq utilization of pmd to appctl 'dpif-netdev/pmd-rxq-show'.
    - Userspace datapath:
      * Output packet batching support.
    - vswitchd:
