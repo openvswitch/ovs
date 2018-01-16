@@ -1,0 +1,70 @@
+---
+- hosts: all
+  become: true
+  name: builder
+  gather_facts: no
+  pre_tasks:
+    - name: 'install python2'
+      raw: sudo apt-get -y install python-simplejson
+  tasks:
+
+  - name: Create Ansible Local Facts Directory
+    file: path=/etc/ansible/facts.d state=directory
+
+  - name: Initiate Build Numbering
+    copy:
+        content: '{ "release":"1" }'
+        dest: "/etc/ansible/facts.d/builder.fact"
+        force: no
+
+  - name: Reload Ansible Local Facts
+    setup: filter=ansible_local
+
+  - name: Install "devscripts", "equivs", "apache2", "autoconf"
+    apt: update_cache=yes name={{item}} state=present
+    with_items:
+      - devscripts
+      - equivs
+      - apache2
+      - autoconf
+
+  - name: Remove untracked files from Open vSwitch GIT repository
+    command: chdir=/git/ovs/ git clean -xdf
+
+  - name: Reset Open vSwitch GIT repository to last comitted state
+    command: chdir=/git/ovs/ git reset --hard
+
+  - name: Parse out Open vSwitch version from "configure.ac"
+    command: chdir=/git/ovs autoconf -t AC_INIT:'$2'
+    register: version
+
+  - name: Concatenate full version
+    set_fact:
+        full_version: "{{version.stdout}}-{{ansible_local.builder.release}}"
+
+  - name: Update Open vSwitch version to {{full_version}}
+    command: chdir=/git/ovs/ dch -b -v {{full_version}} Vagrant Build
+
+  - name: Build debian package with Open vSwitch build dependencies
+    command: chdir=/git/ovs/ mk-build-deps -B debian/control
+
+  - name: Install Open vSwitch {{full_version}} build dependencies
+    apt: deb=/git/ovs/openvswitch-build-deps-depends_{{full_version}}_all.deb
+
+  - name: Build Open vSwitch {{full_version}} debian packages
+    shell: DEB_BUILD_OPTIONS='nocheck' fakeroot debian/rules binary
+    args:
+       chdir: /git/ovs/
+
+  - name: Move debian packages to /var/www/html
+    shell: mv /git/*.deb /var/www/html/
+
+  - name: Create Debian Package index file for repository
+    shell: dpkg-scanpackages . | gzip -9c > Packages.gz
+    args:
+       chdir: /var/www/html
+
+  - name: Bump up Build Number
+    copy:
+        content: '{ "release":"{{ansible_local.builder.release|int+1}}" }'
+        dest: "/etc/ansible/facts.d/builder.fact"

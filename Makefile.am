@@ -90,6 +90,9 @@ EXTRA_DIST = \
 	build-aux/sodepends.py \
 	build-aux/soexpand.py \
 	build-aux/xml2nroff \
+	poc/builders/Vagrantfile \
+	poc/playbook-centos-builder.yml \
+	poc/playbook-ubuntu-builder.yml \
 	$(MAN_FRAGMENTS) \
 	$(MAN_ROOTS) \
 	Vagrantfile \

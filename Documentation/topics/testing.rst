@@ -389,3 +389,59 @@ validate the suitability of different vSwitch implementations in a telco
 deployment environment. More information can be found on the `OPNFV wiki`_.
 
 .. _OPNFV wiki: https://wiki.opnfv.org/display/vsperf/VSperf+Home
+
+Proof of Concepts
+~~~~~~~~~~~~~~~~~
+
+Proof of Concepts are documentation materialized into Ansible recipes
+executed in VirtualBox or Libvirt environments orchastrated by Vagrant.
+Proof of Concepts allow developers to create small virtualized setups that
+demonstrate how certain Open vSwitch features are intended to work avoiding
+user introduced errors by overlooking instructions.  Proof of Concepts
+are also helpful when integrating with thirdparty software, because standard
+unit tests with make check are limited.
+
+Vagrant by default uses VirtualBox provider.  However, if Libvirt is your
+choice of virtualization technology, then you can use it by installing Libvirt
+plugin:
+
+    $ vagrant plugin install vagrant-libvirt
+
+And then appending  --provider=libvirt flag to vagrant commands.
+
+The host where Vagrant runs does not need to have any special software
+installed besides vagrant, virtualbox (or libvirt and libvirt-dev) and
+ansible.
+
+The following Proof of Concepts are supported:
+
+Builders
+++++++++
+
+This particular Proof of Concept demonsrtates integration with Debian and RPM
+packaging tools:
+
+    $ cd ./poc/builders
+
+    $ vagrant up
+
+Once that command finished you can get packages from /var/www/html
+directory.  Since those hosts are also configured as repositories then
+you can add them to /etc/apt/sources.list.d or /etc/yum.repos.d
+configuration files on another host to retrieve packages with yum or
+apt-get.
+
+hen you have made changes to OVS source code and want to rebuild packages run:
+    $ git commit -a
+    $ vagrant rsync && vagrant provision
+
+Whenever packages are rebuilt the Open vSwitch release number increases
+by one and you can simply upgrade Open vSwitch by running yum or apt-get
+update commands.
+
+Once you are done with experimenting you can tear down setup with:
+
+    $ vagrant destroy
+
+Sometimes deployment of Proof of Concept may fail, if, for example, VMs
+don't have network reachability to the Internet.

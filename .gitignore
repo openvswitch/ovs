@@ -16,6 +16,7 @@
 *.lib
 *.pdb
 *.pyc
+*.retry
 *.so
 *.suo
 **/*.sym
@@ -29,6 +30,7 @@
 .dirstamp
 .libs
 .tmp_versions
+.vagrant
 .gitattributes
 /Makefile
 /Makefile.in

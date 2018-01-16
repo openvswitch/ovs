@@ -1,0 +1,108 @@
+---
+- hosts: all
+  become: true
+  name: builder
+  tasks:
+
+  - name: Create Ansible Local Facts Directory
+    file: path=/etc/ansible/facts.d state=directory
+
+  - name: Initiate Build Numbering
+    copy:
+        content: '{ "release":"1" }'
+        dest: "/etc/ansible/facts.d/builder.fact"
+        force: no
+
+  - name: Set source directory for building
+    set_fact:
+        SOURCE: "/root/rpmbuild/SOURCES"
+
+  - name: Reload Ansible Local Facts
+    setup: filter=ansible_local
+
+  - name: Install "yum-utils", "rpmdevtools", "createrepo", "httpd", "git"
+    yum: update_cache=yes name={{item}} state=present
+    with_items:
+      - yum-utils
+      - rpmdevtools
+      - createrepo
+      - httpd
+      - git
+
+  - name: Remove untracked files from Open vSwitch GIT repository
+    command: chdir=/git/ovs/ git clean -xdf
+
+  - name: Reset Open vSwitch GIT repository to last comitted state
+    command: chdir=/git/ovs/ git reset --hard
+
+  - name: Generate spec files for easy build dependency retrieval
+    shell: sed -e 's/@VERSION@/0.0.1/' {{item}}.in > /tmp/{{item}}
+    args:
+        chdir: /git/ovs/rhel
+    with_items:
+      - openvswitch.spec
+      - openvswitch-kmod-rhel6.spec
+
+  - name: Install build dependencies specified from spec files
+    shell: echo "y" | yum-builddep /tmp/{{item}}
+    with_items:
+      - openvswitch.spec
+      - openvswitch-kmod-rhel6.spec
+
+  - name: Create rpm dev tree
+    command: rpmdev-setuptree
+
+  - name: Run "./boot.sh"
+    command: chdir=/git/ovs/ ./boot.sh
+
+  - name: Run "./configure"
+    command: chdir=/git/ovs/ ./configure
+
+  - name: Run "make dist"
+    command: chdir=/git/ovs/ make dist
+
+  - name: Parse out Open vSwitch version from "configure.ac"
+    command: chdir=/git/ovs autoconf -t AC_INIT:'$2'
+    register: version
+
+  - name: Copy source tarball to rpm dev tree
+    command: cp /git/ovs/openvswitch-{{version.stdout}}.tar.gz {{SOURCE}}
+
+  - name: Unarchive openvswitch source tarball
+    unarchive:
+       src: "{{SOURCE}}/openvswitch-{{version.stdout}}.tar.gz"
+       dest: "{{SOURCE}}"
+       remote_src: yes
+
+  - name: Update release number in spec files
+    lineinfile:
+      path: "{{SOURCE}}/openvswitch-{{version.stdout}}/rhel/{{item}}"
+      regexp: '^Release:'
+      line: "Release: {{ ansible_local.builder.release }}"
+    with_items:
+      - openvswitch.spec
+      - openvswitch-kmod-rhel6.spec
+
+  - name: Build Open vSwitch user space rpms
+    command: rpmbuild -bb --without check rhel/openvswitch.spec
+    args:
+        chdir: "{{SOURCE}}/openvswitch-{{version.stdout}}"
+
+  - name: Build Open vSwitch kmod rpms (only for currently loaded kernel)
+    command: rpmbuild -bb  --without check rhel/openvswitch-kmod-rhel6.spec
+    args:
+        chdir: "{{SOURCE}}/openvswitch-{{version.stdout}}"
+
+  - name: Copy RPM packages to /var/www/html
+    command: cp -r /root/rpmbuild/RPMS/ /var/www/html
+
+  - name: Create RPM Package index file for repository
+    command: chdir=/var/www/html createrepo /var/www/html
+
+  - name: Make sure Apache is running
+    systemd: state=started name=httpd
+
+  - name: Bump up Build Number
+    copy:
+        content: '{ "release":"{{ansible_local.builder.release|int+1}}" }'
+        dest: "/etc/ansible/facts.d/builder.fact"
