@@ -52,6 +52,7 @@ Post-v2.8.0
      * Configuring a controller, or unconfiguring all controllers, now deletes
        all groups and meters (as well as all flows).
    - New --enable-sparse configure option enables "sparse" checking by default.
+   - Added additional information to vhost-user status.
 
 v2.8.0 - 31 Aug 2017
 --------------------
