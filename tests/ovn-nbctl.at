@@ -43,15 +43,17 @@ AT_CHECK([ovn-nbctl ls-list | uuidfilt], [0], [dnl
 
 AT_CHECK([ovn-nbctl show ls0])
 AT_CHECK([ovn-nbctl ls-add ls0])
-AT_CHECK([ovn-nbctl show ls0 | uuidfilt], [0],
-  [switch <0> (ls0)
+AT_CHECK([ovn-nbctl show ls0 | uuidfilt], [0], [dnl
+switch <0> (ls0)
+total_ports_per_switch: 0
 ])
 AT_CHECK([ovn-nbctl ls-add ls0], [1], [],
   [ovn-nbctl: ls0: a switch with this name already exists
 ])
 AT_CHECK([ovn-nbctl --may-exist ls-add ls0])
-AT_CHECK([ovn-nbctl show ls0 | uuidfilt], [0],
-  [switch <0> (ls0)
+AT_CHECK([ovn-nbctl show ls0 | uuidfilt], [0], [dnl
+switch <0> (ls0)
+total_ports_per_switch: 0
 ])
 AT_CHECK([ovn-nbctl --add-duplicate ls-add ls0])
 AT_CHECK([ovn-nbctl --may-exist --add-duplicate ls-add ls0], [1], [],

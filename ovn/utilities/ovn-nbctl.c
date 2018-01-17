@@ -682,6 +682,7 @@ print_ls(const struct nbrec_logical_switch *ls, struct ds *s)
             ds_put_format(s, "        router-port: %s\n", router_port);
         }
     }
+    ds_put_format(s, "total_ports_per_switch: %u\n", ls->n_ports);
 }
 
 static void
