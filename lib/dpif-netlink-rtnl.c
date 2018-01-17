@@ -277,6 +277,15 @@ dpif_netlink_rtnl_create(const struct netdev_tunnel_config *tnl_cfg,
                          const char *name, enum ovs_vport_type type,
                          const char *kind, uint32_t flags)
 {
+    enum {
+        /* For performance, we want to use the largest MTU that the system
+         * supports.  Most existing tunnels will accept UINT16_MAX, treating it
+         * as the actual max MTU, but some do not.  Thus, we use a slightly
+         * smaller value, that should always be safe yet does not noticeably
+         * reduce performance. */
+        MAX_MTU = 65000
+    };
+
     size_t linkinfo_off, infodata_off;
     struct ifinfomsg *ifinfo;
     struct ofpbuf request;
@@ -287,7 +296,7 @@ dpif_netlink_rtnl_create(const struct netdev_tunnel_config *tnl_cfg,
     ifinfo = ofpbuf_put_zeros(&request, sizeof(struct ifinfomsg));
     ifinfo->ifi_change = ifinfo->ifi_flags = IFF_UP;
     nl_msg_put_string(&request, IFLA_IFNAME, name);
-    nl_msg_put_u32(&request, IFLA_MTU, UINT16_MAX);
+    nl_msg_put_u32(&request, IFLA_MTU, MAX_MTU);
     linkinfo_off = nl_msg_start_nested(&request, IFLA_LINKINFO);
     nl_msg_put_string(&request, IFLA_INFO_KIND, kind);
     infodata_off = nl_msg_start_nested(&request, IFLA_INFO_DATA);
