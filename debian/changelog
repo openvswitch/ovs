@@ -1,8 +1,8 @@
-openvswitch (2.8.90-1) unstable; urgency=medium
+openvswitch (2.9.0-1) unstable; urgency=low
 
-   - Nothing yet!  Try NEWS...
+   * New upstream version
 
- -- Open vSwitch team <dev@openvswitch.org>  Fri, 04 Aug 2017 15:00:00 -0700
+ -- Open vSwitch team <dev@openvswitch.org>  Wed, 17 Jan 2018 09:49:31 -0700
 
 openvswitch (2.8.0-1) unstable; urgency=medium
 
