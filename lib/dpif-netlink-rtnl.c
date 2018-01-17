@@ -338,6 +338,25 @@ dpif_netlink_rtnl_create(const struct netdev_tunnel_config *tnl_cfg,
     nl_msg_end_nested(&request, linkinfo_off);
 
     err = nl_transact(NETLINK_ROUTE, &request, NULL);
+    if (!err && type == OVS_VPORT_TYPE_GRE) {
+        /* Work around a bug in kernel GRE driver, which ignores IFLA_MTU in
+         * RTM_NEWLINK, by setting the MTU again.  See
+         * https://bugzilla.redhat.com/show_bug.cgi?id=1488484. */
+        ofpbuf_clear(&request);
+        nl_msg_put_nlmsghdr(&request, 0, RTM_SETLINK,
+                            NLM_F_REQUEST | NLM_F_ACK);
+        ofpbuf_put_zeros(&request, sizeof(struct ifinfomsg));
+        nl_msg_put_string(&request, IFLA_IFNAME, name);
+        nl_msg_put_u32(&request, IFLA_MTU, MAX_MTU);
+
+        int err2 = nl_transact(NETLINK_ROUTE, &request, NULL);
+        if (err2) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+            VLOG_WARN_RL(&rl, "setting MTU of tunnel %s failed (%s)",
+                         name, ovs_strerror(err2));
+        }
+    }
 
 exit:
     ofpbuf_uninit(&request);
