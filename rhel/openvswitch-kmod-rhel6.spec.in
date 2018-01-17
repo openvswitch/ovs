@@ -70,6 +70,31 @@ do
 done
 install -m 644 %{oname}.conf %{buildroot}%{_sysconfdir}/depmod.d/
 
+%post
+# Ensure that modprobe will find our modules.
+for k in $(cd /lib/modules && /bin/ls); do
+    [ -d "/lib/modules/$k/kernel/" ] && depmod -a "$k"
+done
+if [ -x "/sbin/weak-modules" ]; then
+    for m in openvswitch vport-gre vport-stt vport-geneve \
+             vport-lisp vport-vxlan; do
+        echo "/lib/modules/%{kernel}/extra/$m.ko"
+    done | /sbin/weak-modules --add-modules
+fi
+
+%postun
+for k in $(cd /lib/modules && /bin/ls); do
+    [ -d "/lib/modules/$k/kernel/" ] && depmod -a "$k"
+done
+if [ "$1" = 0 ]; then  # Erase, not upgrade
+    if [ -x "/sbin/weak-modules" ]; then
+        for m in openvswitch vport-gre vport-stt vport-geneve \
+                 vport-lisp vport-vxlan; do
+        echo "/lib/modules/%{kernel}/extra/$m.ko"
+    done | /sbin/weak-modules --remove-modules
+    fi
+fi
+
 %files
 %defattr(644,root,root)
 /etc/depmod.d/%{oname}.conf
