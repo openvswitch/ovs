@@ -2695,53 +2695,35 @@ flow_set_mpls_lse(struct flow *flow, int idx, ovs_be32 lse)
 static size_t
 flow_compose_l4(struct dp_packet *p, const struct flow *flow)
 {
-    size_t l4_len = 0;
+    size_t orig_len = dp_packet_size(p);
 
     if (!(flow->nw_frag & FLOW_NW_FRAG_ANY)
         || !(flow->nw_frag & FLOW_NW_FRAG_LATER)) {
         if (flow->nw_proto == IPPROTO_TCP) {
-            struct tcp_header *tcp;
-
-            l4_len = sizeof *tcp;
-            tcp = dp_packet_put_zeros(p, l4_len);
+            struct tcp_header *tcp = dp_packet_put_zeros(p, sizeof *tcp);
             tcp->tcp_src = flow->tp_src;
             tcp->tcp_dst = flow->tp_dst;
             tcp->tcp_ctl = TCP_CTL(ntohs(flow->tcp_flags), 5);
         } else if (flow->nw_proto == IPPROTO_UDP) {
-            struct udp_header *udp;
-
-            l4_len = sizeof *udp;
-            udp = dp_packet_put_zeros(p, l4_len);
+            struct udp_header *udp = dp_packet_put_zeros(p, sizeof *udp);
             udp->udp_src = flow->tp_src;
             udp->udp_dst = flow->tp_dst;
-            udp->udp_len = htons(l4_len);
+            udp->udp_len = htons(sizeof *udp);
         } else if (flow->nw_proto == IPPROTO_SCTP) {
-            struct sctp_header *sctp;
-
-            l4_len = sizeof *sctp;
-            sctp = dp_packet_put_zeros(p, l4_len);
+            struct sctp_header *sctp = dp_packet_put_zeros(p, sizeof *sctp);
             sctp->sctp_src = flow->tp_src;
             sctp->sctp_dst = flow->tp_dst;
         } else if (flow->nw_proto == IPPROTO_ICMP) {
-            struct icmp_header *icmp;
-
-            l4_len = sizeof *icmp;
-            icmp = dp_packet_put_zeros(p, l4_len);
+            struct icmp_header *icmp = dp_packet_put_zeros(p, sizeof *icmp);
             icmp->icmp_type = ntohs(flow->tp_src);
             icmp->icmp_code = ntohs(flow->tp_dst);
         } else if (flow->nw_proto == IPPROTO_IGMP) {
-            struct igmp_header *igmp;
-
-            l4_len = sizeof *igmp;
-            igmp = dp_packet_put_zeros(p, l4_len);
+            struct igmp_header *igmp = dp_packet_put_zeros(p, sizeof *igmp);
             igmp->igmp_type = ntohs(flow->tp_src);
             igmp->igmp_code = ntohs(flow->tp_dst);
             put_16aligned_be32(&igmp->group, flow->igmp_group_ip4);
         } else if (flow->nw_proto == IPPROTO_ICMPV6) {
-            struct icmp6_hdr *icmp;
-
-            l4_len = sizeof *icmp;
-            icmp = dp_packet_put_zeros(p, l4_len);
+            struct icmp6_hdr *icmp = dp_packet_put_zeros(p, sizeof *icmp);
             icmp->icmp6_type = ntohs(flow->tp_src);
             icmp->icmp6_code = ntohs(flow->tp_dst);
 
@@ -2751,19 +2733,16 @@ flow_compose_l4(struct dp_packet *p, const struct flow *flow)
                 struct in6_addr *nd_target;
                 struct ovs_nd_lla_opt *lla_opt;
 
-                l4_len += sizeof *nd_target;
                 nd_target = dp_packet_put_zeros(p, sizeof *nd_target);
                 *nd_target = flow->nd_target;
 
                 if (!eth_addr_is_zero(flow->arp_sha)) {
-                    l4_len += 8;
                     lla_opt = dp_packet_put_zeros(p, 8);
                     lla_opt->len = 1;
                     lla_opt->type = ND_OPT_SOURCE_LINKADDR;
                     lla_opt->mac = flow->arp_sha;
                 }
                 if (!eth_addr_is_zero(flow->arp_tha)) {
-                    l4_len += 8;
                     lla_opt = dp_packet_put_zeros(p, 8);
                     lla_opt->len = 1;
                     lla_opt->type = ND_OPT_TARGET_LINKADDR;
@@ -2772,7 +2751,8 @@ flow_compose_l4(struct dp_packet *p, const struct flow *flow)
             }
         }
     }
-    return l4_len;
+
+    return dp_packet_size(p) - orig_len;
 }
 
 static void
