@@ -138,6 +138,9 @@ static bool should_show_ports(void);
 /* --stats, --no-stats: Show statistics in flow dumps? */
 static int show_stats = 1;
 
+/* --pcap: Makes "compose-packet" print a pcap on stdout. */
+static int print_pcap = 0;
+
 static const struct ovs_cmdl_command *get_all_commands(void);
 
 OVS_NO_RETURN static void usage(void);
@@ -223,6 +226,7 @@ parse_options(int argc, char *argv[])
         {"bundle", no_argument, NULL, OPT_BUNDLE},
         {"color", optional_argument, NULL, OPT_COLOR},
         {"may-create", no_argument, NULL, OPT_MAY_CREATE},
+        {"pcap", no_argument, &print_pcap, 1},
         {"read-only", no_argument, NULL, OPT_READ_ONLY},
         DAEMON_LONG_OPTIONS,
         OFP_VERSION_LONG_OPTIONS,
@@ -4492,6 +4496,73 @@ ofctl_parse_key_value(struct ovs_cmdl_context *ctx)
     }
 }
 
+/* "compose-packet [--pcap] FLOW [L7]": Converts the OpenFlow flow
+ * specification FLOW to a packet with flow_compose() and prints the hex bytes
+ * in the packet on stdout.  Also verifies that the flow extracted from that
+ * packet matches the original FLOW.
+ *
+ * With --pcap, prints the packet to stdout instead as a pcap file, so that you
+ * can do something like "ovs-ofctl compose-packet udp | tcpdump -vvvv -r-" to
+ * use another tool to dump the packet contents.
+ *
+ * If L7 is specified, draws the L7 payload data from it, otherwise defaults to
+ * 64 bytes of payload. */
+static void
+ofctl_compose_packet(struct ovs_cmdl_context *ctx)
+{
+    if (print_pcap && isatty(STDOUT_FILENO)) {
+        ovs_fatal(1, "not writing pcap data to stdout; redirect to a file "
+                  "or pipe to tcpdump instead");
+    }
+
+    struct flow flow1;
+    char *error = parse_ofp_exact_flow(&flow1, NULL, NULL, ctx->argv[1], NULL);
+    if (error) {
+        ovs_fatal(0, "%s", error);
+    }
+
+    struct dp_packet p;
+    memset(&p, 0, sizeof p);
+    dp_packet_init(&p, 0);
+
+    void *l7 = NULL;
+    size_t l7_len = 64;
+    if (ctx->argc > 2) {
+        struct dp_packet payload;
+        memset(&payload, 0, sizeof payload);
+        dp_packet_init(&payload, 0);
+        if (dp_packet_put_hex(&payload, ctx->argv[2], NULL)[0] != '\0') {
+            ovs_fatal(0, "%s: trailing garbage in packet data", ctx->argv[2]);
+        }
+        l7_len = dp_packet_size(&payload);
+        l7 = dp_packet_steal_data(&payload);
+    }
+    flow_compose(&p, &flow1, l7, l7_len);
+    free(l7);
+
+    if (print_pcap) {
+        ovs_pcap_write_header(stdout);
+        ovs_pcap_write(stdout, &p);
+    } else {
+        ovs_hex_dump(stdout, dp_packet_data(&p), dp_packet_size(&p), 0, false);
+    }
+
+    struct flow flow2;
+    flow_extract(&p, &flow2);
+    flow2.in_port.ofp_port = OFPP_ANY;
+
+    dp_packet_uninit(&p);
+
+    if (!flow_equal(&flow1, &flow2)) {
+        fprintf(stderr, "specified and extracted flows differ:\n");
+        fputs("specified: ", stderr);
+        flow_print(stderr, &flow1, NULL);
+        fputs("\nextracted: ", stderr);
+        flow_print(stderr, &flow2, NULL);
+        exit(1);
+    }
+}
+
 static const struct ovs_cmdl_command all_commands[] = {
     { "show", "switch",
       1, 1, ofctl_show, OVS_RO },
@@ -4625,6 +4696,7 @@ static const struct ovs_cmdl_command all_commands[] = {
     { "ofp-print", NULL, 1, 2, ofctl_ofp_print, OVS_RW },
     { "encode-hello", NULL, 1, 1, ofctl_encode_hello, OVS_RW },
     { "parse-key-value", NULL, 1, INT_MAX, ofctl_parse_key_value, OVS_RW },
+    { "compose-packet", NULL, 1, 2, ofctl_compose_packet, OVS_RO },
 
     { NULL, NULL, 0, 0, NULL, OVS_RO },
 };
