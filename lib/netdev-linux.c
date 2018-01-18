@@ -502,6 +502,8 @@ struct netdev_linux {
 
     /* For devices of class netdev_tap_class only. */
     int tap_fd;
+    bool present;               /* If the device is present in the namespace */
+    uint64_t tx_dropped;        /* tap device can drop if the iface is down */
 };
 
 struct netdev_rxq_linux {
@@ -750,8 +752,10 @@ netdev_linux_update(struct netdev_linux *dev,
             dev->ifindex = change->if_index;
             dev->cache_valid |= VALID_IFINDEX;
             dev->get_ifindex_error = 0;
+            dev->present = true;
         } else {
             netdev_linux_changed(dev, change->ifi_flags, 0);
+            dev->present = false;
         }
     } else if (rtnetlink_type_is_rtnlgrp_addr(change->nlmsg_type)) {
         /* Invalidates in4, in6. */
@@ -1234,6 +1238,17 @@ netdev_linux_tap_batch_send(struct netdev *netdev_,
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     struct dp_packet *packet;
+
+    /* The Linux tap driver returns EIO if the device is not up,
+     * so if the device is not up, don't waste time sending it.
+     * However, if the device is in another network namespace
+     * then OVS can't retrieve the state. In that case, send the
+     * packets anyway. */
+    if (netdev->present && !(netdev->ifi_flags & IFF_UP)) {
+        netdev->tx_dropped += dp_packet_batch_size(batch);
+        return 0;
+    }
+
     DP_PACKET_BATCH_FOR_EACH (packet, batch) {
         size_t size = dp_packet_size(packet);
         ssize_t retval;
@@ -1825,6 +1840,7 @@ netdev_tap_get_stats(const struct netdev *netdev_, struct netdev_stats *stats)
         stats->multicast           += dev_stats.multicast;
         stats->collisions          += dev_stats.collisions;
     }
+    stats->tx_dropped += netdev->tx_dropped;
     ovs_mutex_unlock(&netdev->mutex);
 
     return error;

@@ -38,6 +38,8 @@ v2.9.0 - xx xxx xxxx
        connection tracking entry.
      * New "ct-set-maxconns", "ct-get-maxconns", and "ct-get-nconns" commands
        for userspace datapath.
+   - No longer send packets to the Linux TAP device if it's DOWN unless it is
+     in another networking namespace.
    - DPDK:
      * Add support for DPDK v17.11
      * Add support for vHost IOMMU
