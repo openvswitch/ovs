@@ -183,41 +183,11 @@ oftrace_node_print_details(struct ds *output,
     }
 }
 
-static char * OVS_WARN_UNUSED_RESULT
-parse_oftrace_options(int argc, const char *argv[],
-                      struct ovs_list *next_ct_states)
-{
-    int k;
-    struct ds ds = DS_EMPTY_INITIALIZER;
-
-    for (k = 0; k < argc; k++) {
-        if (!strncmp(argv[k], "--ct-next", 9)) {
-            if (k + 1 > argc) {
-                return xasprintf("Missing argument for option %s", argv[k]);
-            }
-
-            uint32_t ct_state;
-            if (!parse_ct_state(argv[++k], 0, &ct_state, &ds)) {
-                return ds_steal_cstr(&ds);
-            }
-            if (!validate_ct_state(ct_state, &ds)) {
-                return ds_steal_cstr(&ds);
-            }
-            oftrace_push_ct_state(next_ct_states, ct_state);
-        } else {
-            return xasprintf("Invalid option %s", argv[k]);
-        }
-    }
-
-    ds_destroy(&ds);
-    return NULL;
-}
-
 /* Parses the 'argc' elements of 'argv', ignoring argv[0].  The following
  * forms are supported:
  *
- *     - [dpname] odp_flow [OPTIONS] [-generate | packet]
- *     - bridge br_flow [OPTIONS] [-generate | packet]
+ *     - [options] [dpname] odp_flow [packet]
+ *     - [options] bridge br_flow [packet]
  *
  * On success, initializes '*ofprotop' and 'flow' and returns NULL.  On failure
  * returns a nonnull malloced error message. */
@@ -225,67 +195,109 @@ static char * OVS_WARN_UNUSED_RESULT
 parse_flow_and_packet(int argc, const char *argv[],
                       struct ofproto_dpif **ofprotop, struct flow *flow,
                       struct dp_packet **packetp,
-                      struct ovs_list *next_ct_states)
+                      struct ovs_list *next_ct_states,
+                      bool *consistent)
 {
     const struct dpif_backer *backer = NULL;
     const char *error = NULL;
     char *m_err = NULL;
     struct simap port_names = SIMAP_INITIALIZER(&port_names);
-    struct dp_packet *packet;
+    struct dp_packet *packet = NULL;
     struct ofpbuf odp_key;
     struct ofpbuf odp_mask;
-    int first_option;
 
     ofpbuf_init(&odp_key, 0);
     ofpbuf_init(&odp_mask, 0);
 
-    /* Handle "-generate" or a hex string as the last argument. */
-    if (!strcmp(argv[argc - 1], "-generate")) {
-        packet = dp_packet_new(0);
-        argc--;
-    } else {
-        error = eth_from_hex(argv[argc - 1], &packet);
+    const char *args[3];
+    int n_args = 0;
+    bool generate_packet = false;
+    if (consistent) {
+        *consistent = false;
+    }
+    for (int i = 1; i < argc; i++) {
+        const char *arg = argv[i];
+        if (!strcmp(arg, "-generate") || !strcmp(arg, "--generate")) {
+            generate_packet = true;
+        } else if (consistent
+                   && (!strcmp(arg, "-consistent") ||
+                       !strcmp(arg, "--consistent"))) {
+            *consistent = true;
+        } else if (!strcmp(arg, "--ct-next")) {
+            if (i + 1 >= argc) {
+                m_err = xasprintf("Missing argument for option %s", arg);
+                goto exit;
+            }
+
+            uint32_t ct_state;
+            struct ds ds = DS_EMPTY_INITIALIZER;
+            if (!parse_ct_state(argv[++i], 0, &ct_state, &ds)
+                || !validate_ct_state(ct_state, &ds)) {
+                m_err = ds_steal_cstr(&ds);
+                goto exit;
+            }
+            oftrace_push_ct_state(next_ct_states, ct_state);
+        } else if (arg[0] == '-') {
+            m_err = xasprintf("%s: unknown option", arg);
+            goto exit;
+        } else if (n_args >= ARRAY_SIZE(args)) {
+            m_err = xstrdup("too many arguments");
+            goto exit;
+        } else {
+            args[n_args++] = arg;
+        }
+    }
+
+    /* 'args' must now have one of the following forms:
+     *
+     *     odp_flow
+     *     dpname odp_flow
+     *     bridge br_flow
+     *     odp_flow packet
+     *     dpname odp_flow packet
+     *     bridge br_flow packet
+     *
+     * Parse the packet if it's there.  Note that:
+     *
+     *     - If there is one argument, there cannot be a packet.
+     *
+     *     - If there are three arguments, there must be a packet.
+     *
+     * If there is a packet, we strip it off.
+     */
+    if (!generate_packet && n_args > 1) {
+        error = eth_from_hex(args[n_args - 1], &packet);
         if (!error) {
-            argc--;
-        } else if (argc == 4) {
-            /* The 3-argument form must end in "-generate' or a hex string. */
+            n_args--;
+        } else if (n_args > 2) {
+            /* The 3-argument form must end in a hex string. */
             goto exit;
         }
         error = NULL;
     }
 
-    /* Parse options. */
-    if (argc >= 4) {
-        if (!strncmp(argv[2], "--", 2)) {
-            first_option = 2;
-        } else if (!strncmp(argv[3], "--", 2)) {
-            first_option = 3;
-        } else {
-            error = "Syntax error: invalid option";
-            goto exit;
-        }
-
-        m_err = parse_oftrace_options(argc - first_option, argv + first_option,
-                                      next_ct_states);
-        if (m_err) {
-            goto exit;
-        }
-        argc = first_option;
-    }
-
-    /* odp_flow can have its in_port specified as a name instead of port no.
-     * We do not yet know whether a given flow is a odp_flow or a br_flow.
-     * But, to know whether a flow is odp_flow through odp_flow_from_string(),
-     * we need to create a simap of name to port no. */
-    if (argc == 3) {
+    /* We stripped off the packet if there was one, so 'args' now has one of
+     * the following forms:
+     *
+     *     odp_flow
+     *     dpname odp_flow
+     *     bridge br_flow
+     *
+     * Before we parse the flow, try to identify the backer, then use that
+     * backer to assemble a collection of port names.  The port names are
+     * useful so that the user can specify ports by name instead of number in
+     * the flow. */
+    if (n_args == 2) {
+        /* args[0] might be dpname. */
         const char *dp_type;
-        if (!strncmp(argv[1], "ovs-", 4)) {
-            dp_type = argv[1] + 4;
+        if (!strncmp(args[0], "ovs-", 4)) {
+            dp_type = args[0] + 4;
         } else {
-            dp_type = argv[1];
+            dp_type = args[0];
         }
         backer = shash_find_data(&all_dpif_backers, dp_type);
-    } else if (argc == 2) {
+    } else if (n_args == 1) {
+        /* Pick default backer. */
         struct shash_node *node;
         if (shash_count(&all_dpif_backers) == 1) {
             node = shash_first(&all_dpif_backers);
@@ -308,7 +320,7 @@ parse_flow_and_packet(int argc, const char *argv[],
      * bridge is specified. If function odp_flow_key_from_string()
      * returns 0, the flow is a odp_flow. If function
      * parse_ofp_exact_flow() returns NULL, the flow is a br_flow. */
-    if (!odp_flow_from_string(argv[argc - 1], &port_names,
+    if (!odp_flow_from_string(args[n_args - 1], &port_names,
                               &odp_key, &odp_mask)) {
         if (!backer) {
             error = "Cannot find the datapath";
@@ -349,14 +361,14 @@ parse_flow_and_packet(int argc, const char *argv[],
     } else {
         char *err;
 
-        if (argc != 3) {
+        if (n_args != 2) {
             error = "Must specify bridge name";
             goto exit;
         }
 
-        *ofprotop = ofproto_dpif_lookup_by_name(argv[1]);
+        *ofprotop = ofproto_dpif_lookup_by_name(args[0]);
         if (!*ofprotop) {
-            error = "Unknown bridge name";
+            m_err = xasprintf("%s: unknown bridge", args[0]);
             goto exit;
         }
 
@@ -368,7 +380,7 @@ parse_flow_and_packet(int argc, const char *argv[],
         }
         err = parse_ofp_exact_flow(flow, NULL,
                                    ofproto_get_tun_tab(&(*ofprotop)->up),
-                                   argv[argc - 1], &map);
+                                   args[n_args - 1], &map);
         ofputil_port_map_destroy(&map);
         if (err) {
             m_err = xasprintf("Bad openflow flow syntax: %s", err);
@@ -377,16 +389,15 @@ parse_flow_and_packet(int argc, const char *argv[],
         }
     }
 
-    /* Generate a packet, if requested. */
-    if (packet) {
-        if (!dp_packet_size(packet)) {
-            flow_compose(packet, flow, 0);
-        } else {
-            /* Use the metadata from the flow and the packet argument
-             * to reconstruct the flow. */
-            pkt_metadata_from_flow(&packet->md, flow);
-            flow_extract(packet, flow);
-        }
+    if (generate_packet) {
+        /* Generate a packet, as requested. */
+        packet = dp_packet_new(0);
+        flow_compose(packet, flow, 0);
+    } else if (packet) {
+        /* Use the metadata from the flow and the packet argument to
+         * reconstruct the flow. */
+        pkt_metadata_from_flow(&packet->md, flow);
+        flow_extract(packet, flow);
     }
 
 exit:
@@ -423,7 +434,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
     struct ovs_list next_ct_states = OVS_LIST_INITIALIZER(&next_ct_states);
 
     error = parse_flow_and_packet(argc, argv, &ofproto, &flow, &packet,
-                                  &next_ct_states);
+                                  &next_ct_states, NULL);
     if (!error) {
         struct ds result;
 
@@ -471,19 +482,8 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
         goto exit;
     }
 
-    /* OpenFlow 1.1 and later suggest that the switch enforces certain forms of
-     * consistency between the flow and the actions.  With -consistent, we
-     * enforce consistency even for a flow supported in OpenFlow 1.0. */
-    if (!strcmp(argv[1], "-consistent")) {
-        enforce_consistency = true;
-        argv++;
-        argc--;
-    } else {
-        enforce_consistency = false;
-    }
-
     error = parse_flow_and_packet(argc, argv, &ofproto, &match.flow, &packet,
-                                  &next_ct_states);
+                                  &next_ct_states, &enforce_consistency);
     if (error) {
         unixctl_command_reply_error(conn, error);
         free(error);

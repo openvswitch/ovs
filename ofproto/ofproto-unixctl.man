@@ -6,10 +6,10 @@ These commands manage the core OpenFlow switch implementation (called
 Lists the names of the running ofproto instances.  These are the names
 that may be used on \fBofproto/trace\fR.
 .
-.IP "\fBofproto/trace\fR [\fIdpname\fR] \fIodp_flow\fR [\fIOPTIONS\fR] [\fB\-generate \fR| \fIpacket\fR]"
-.IQ "\fBofproto/trace\fR \fIbridge\fR \fIbr_flow\fR [\fIOPTIONS\fR] [\fB\-generate \fR| \fIpacket\fR]"
-.IQ "\fBofproto/trace\-packet\-out\fR [\fB\-consistent\fR] [\fIdpname\fR] \fIodp_flow\fR [\fIOPTIONS\fR] [\fB\-generate \fR| \fIpacket\fR] \fIactions\fR"
-.IQ "\fBofproto/trace\-packet\-out\fR [\fB\-consistent\fR] \fIbridge\fR \fIbr_flow\fR [\fIOPTIONS\fR] [\fB\-generate \fR| \fIpacket\fR] \fIactions\fR"
+.IP "\fBofproto/trace\fR [\fIoptions\fR] [\fIdpname\fR] \fIodp_flow\fR [\fIpacket\fR]
+.IQ "\fBofproto/trace\fR [\fIoptions\fR] \fIbridge\fR \fIbr_flow\fR [\fIpacket\fR]]
+.IQ "\fBofproto/trace\-packet\-out\fR [\fIoptions\fR] [\fIdpname\fR] \fIodp_flow\fR [\fIpacket\fR] \fIactions\fR"
+.IQ "\fBofproto/trace\-packet\-out\fR [\fIoptions\fR \fIbridge\fR \fIbr_flow\fR  [\fIpacket\fR] \fIactions\fR"
 Traces the path of an imaginary packet through \fIswitch\fR and
 reports the path that it took.  The initial treatment of the packet
 varies based on the command:
@@ -49,7 +49,21 @@ wildcards.)  \fIbridge\fR names of the bridge through which
 .
 .IP
 .RS
-\fBofproto/trace\fR supports the following options:
+These commands support the following options:
+.IP \fB\-\-generate\fR
+Generate a packet from the flow (see below for more information).
+.
+.IP \fB\-\-consistent\fR
+Accepted by \fBofproto\-trace\-packet\-out\fR only.  With this option,
+the command rejects \fIactions\fR that are inconsistent with the
+specified packet.  (An example of an inconsistency is attempting to
+strip the VLAN tag from a packet that does not have a VLAN tag.)  Open
+vSwitch ignores most forms of inconsistency in OpenFlow 1.0 and
+rejects inconsistencies in later versions of OpenFlow.  The option is
+necessary because the command does not ordinarily imply a particular
+OpenFlow version.  One exception is that, when \fIactions\fR includes
+an action that only OpenFlow 1.1 and later supports (such as
+\fBpush_vlan\fR), \fB\-\-consistent\fR is automatically enabled.
 .
 .IP "--ct-next \fIflags\fR"
 When the traced flow triggers conntrack actions, \fBofproto/trace\fR
@@ -124,12 +138,12 @@ If you wish to include a packet as part of a trace operation, there
 are two ways to do it:
 .
 .RS
-.IP \fB\-generate\fR
+.IP \fB\-\-generate\fR
 This option, added to one of the ways to specify a flow already
 described, causes Open vSwitch to internally generate a packet with
 the flow described and then to use that packet.  If your goal is to
-execute side effects, then \fB\-generate\fR is the easiest way to do
-it, but \fB\-generate\fR is not a good way to fill in incomplete
+execute side effects, then \fB\-\-generate\fR is the easiest way to do
+it, but \fB\-\-generate\fR is not a good way to fill in incomplete
 information, because it generates packets based on only the flow
 information, which means that the packets really do not have any more
 information than the flow.
@@ -169,18 +183,6 @@ The in_port value is kernel datapath port number for the first format
 and OpenFlow port number for the second format. The numbering of these
 two types of port usually differs and there is no relationship.
 .
-.IP
-\fBofproto\-trace\-packet\-out\fR accepts an additional
-\fB\-consistent\fR option.  With this option specified, the command
-rejects \fIactions\fR that are inconsistent with the specified packet.
-(An example of an inconsistency is attempting to strip the VLAN tag
-from a packet that does not have a VLAN tag.)  Open vSwitch ignores
-most forms of inconsistency in OpenFlow 1.0 and rejects
-inconsistencies in later versions of OpenFlow.  The option is
-necessary because the command does not ordinarily imply a particular
-OpenFlow version.  One exception is that, when \fIactions\fR includes
-an action that only OpenFlow 1.1 and later supports (such as
-\fBpush_vlan\fR), \fB\-consistent\fR is automatically enabled.
 .
 .IP "Usage examples:"
 .RS 4

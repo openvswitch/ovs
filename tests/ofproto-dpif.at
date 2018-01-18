@@ -5302,7 +5302,7 @@ m4_foreach(
 [AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$br_flow" option],
   [2], [], [stderr])
 AT_CHECK([tail -2 stderr], [0], [dnl
-Unknown bridge name
+ovs-dummy: unknown bridge
 ovs-appctl: ovs-vswitchd: server returned an error
 ])])
 
