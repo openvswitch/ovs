@@ -98,6 +98,7 @@ int conntrack_execute(struct conntrack *ct, struct dp_packet_batch *pkt_batch,
                       ovs_be16 tp_src, ovs_be16 tp_dst, const char *helper,
                       const struct nat_action_info_t *nat_action_info,
                       long long now);
+void conntrack_clear(struct dp_packet *packet);
 
 struct conntrack_dump {
     struct conntrack *ct;

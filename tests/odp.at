@@ -354,6 +354,7 @@ ct(force_commit,nat(src=fe80::20c:29ff:fe88:a18b,random))
 ct(force_commit,nat(src=fe80::20c:29ff:fe88:1-fe80::20c:29ff:fe88:a18b,random))
 ct(force_commit,nat(src=[[fe80::20c:29ff:fe88:1]]-[[fe80::20c:29ff:fe88:a18b]]:255-4096,random))
 ct(force_commit,helper=ftp,nat(src=10.1.1.240-10.1.1.255))
+ct_clear
 trunc(100)
 clone(1)
 clone(clone(push_vlan(vid=12,pcp=0),2),1)

@@ -173,7 +173,10 @@ struct group_dpif *group_dpif_lookup(struct ofproto_dpif *,
     DPIF_SUPPORT_FIELD(size_t, sample_nesting, "Sample nesting")            \
                                                                             \
     /* OVS_CT_ATTR_EVENTMASK supported by OVS_ACTION_ATTR_CT action. */     \
-    DPIF_SUPPORT_FIELD(bool, ct_eventmask, "Conntrack eventmask")
+    DPIF_SUPPORT_FIELD(bool, ct_eventmask, "Conntrack eventmask")           \
+                                                                            \
+    /* True if the datapath supports OVS_ACTION_ATTR_CT_CLEAR action. */    \
+    DPIF_SUPPORT_FIELD(bool, ct_clear, "Conntrack clear")
 
 /* Stores the various features which the corresponding backer supports. */
 struct dpif_backer_support {

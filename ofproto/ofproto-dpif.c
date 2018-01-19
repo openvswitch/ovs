@@ -1255,6 +1255,39 @@ check_ct_eventmask(struct dpif_backer *backer)
     return !error;
 }
 
+/* Tests whether 'backer''s datapath supports the OVS_ACTION_ATTR_CT_CLEAR
+ * action. */
+static bool
+check_ct_clear(struct dpif_backer *backer)
+{
+    struct odputil_keybuf keybuf;
+    uint8_t actbuf[NL_A_FLAG_SIZE];
+    struct ofpbuf actions;
+    struct ofpbuf key;
+    struct flow flow;
+    bool supported;
+
+    struct odp_flow_key_parms odp_parms = {
+        .flow = &flow,
+        .probe = true,
+    };
+
+    memset(&flow, 0, sizeof flow);
+    ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
+    odp_flow_key_from_flow(&odp_parms, &key);
+
+    ofpbuf_use_stack(&actions, &actbuf, sizeof actbuf);
+    nl_msg_put_flag(&actions, OVS_ACTION_ATTR_CT_CLEAR);
+
+    supported = dpif_probe_feature(backer->dpif, "ct_clear", &key,
+                                   &actions, NULL);
+
+    VLOG_INFO("%s: Datapath %s ct_clear action",
+              dpif_name(backer->dpif), (supported) ? "supports"
+                                                   : "does not support");
+    return supported;
+}
+
 #define CHECK_FEATURE__(NAME, SUPPORT, FIELD, VALUE, ETHTYPE)               \
 static bool                                                                 \
 check_##NAME(struct dpif_backer *backer)                                    \
@@ -1316,6 +1349,7 @@ check_support(struct dpif_backer *backer)
     backer->rt_support.clone = check_clone(backer);
     backer->rt_support.sample_nesting = check_max_sample_nesting(backer);
     backer->rt_support.ct_eventmask = check_ct_eventmask(backer);
+    backer->rt_support.ct_clear = check_ct_clear(backer);
 
     /* Flow fields. */
     backer->rt_support.odp.ct_state = check_ct_state(backer);
