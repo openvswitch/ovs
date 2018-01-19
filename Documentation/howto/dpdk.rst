@@ -139,6 +139,17 @@ Core 3: Q1 (80%) |
 Core 7: Q4 (70%) | Q5 (10%)
 core 8: Q3 (60%) | Q0 (30%)
 
+To see the current measured usage history of pmd core cycles for each rxq::
+
+    $ ovs-appctl dpif-netdev/pmd-rxq-show
+
+.. note::
+
+  A history of one minute is recorded and shown for each rxq to allow for
+  traffic pattern spikes. An rxq's pmd core cycles usage changes due to traffic
+  pattern or reconfig changes will take one minute before they are fully
+  reflected in the stats.
+
 Rxq to pmds assignment takes place whenever there are configuration changes
 or can be triggered by using::
 

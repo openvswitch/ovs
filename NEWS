@@ -47,11 +47,17 @@ v2.9.0 - xx xxx xxxx
           "management" statistics.
         - ovs-ofctl dump-ports command now prints new of set custom statistics
           if available (for OpenFlow 1.4+).
+     * New appctl command 'dpif-netdev/pmd-rxq-rebalance' to rebalance rxq to
+       pmd assignments.
+     * Add rxq utilization of pmd to appctl 'dpif-netdev/pmd-rxq-show'.
+   - Userspace datapath:
+     * Output packet batching support.
    - vswitchd:
      * Datapath IDs may now be specified as 0x1 (etc.) instead of 16 digits.
      * Configuring a controller, or unconfiguring all controllers, now deletes
        all groups and meters (as well as all flows).
    - New --enable-sparse configure option enables "sparse" checking by default.
+   - Added additional information to vhost-user status.
 
 v2.8.0 - 31 Aug 2017
 --------------------
