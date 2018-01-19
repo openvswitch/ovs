@@ -319,3 +319,7 @@ m4_define([OVS_CHECK_8021AD],
 # OVS_CHECK_IPROUTE_ENCAP()
 m4_define([OVS_CHECK_IPROUTE_ENCAP],
     [AT_SKIP_IF([! ip route help 2>&1 |grep encap >/dev/null])])
+
+# OVS_CHECK_CT_CLEAR()
+m4_define([OVS_CHECK_CT_CLEAR],
+    [AT_SKIP_IF([! grep -q "Datapath supports ct_clear action" ovs-vswitchd.log])])
