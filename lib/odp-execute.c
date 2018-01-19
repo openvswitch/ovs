@@ -35,6 +35,7 @@
 #include "unaligned.h"
 #include "util.h"
 #include "csum.h"
+#include "conntrack.h"
 
 /* Masked copy of an ethernet address. 'src' is already properly masked. */
 static void
@@ -674,6 +675,7 @@ requires_datapath_assistance(const struct nlattr *a)
     case OVS_ACTION_ATTR_CLONE:
     case OVS_ACTION_ATTR_PUSH_NSH:
     case OVS_ACTION_ATTR_POP_NSH:
+    case OVS_ACTION_ATTR_CT_CLEAR:
         return false;
 
     case OVS_ACTION_ATTR_UNSPEC:
@@ -874,6 +876,11 @@ odp_execute_actions(void *dp, struct dp_packet_batch *batch, bool steal,
             }
             break;
         }
+        case OVS_ACTION_ATTR_CT_CLEAR:
+            DP_PACKET_BATCH_FOR_EACH (packet, batch) {
+                conntrack_clear(packet);
+            }
+            break;
 
         case OVS_ACTION_ATTR_OUTPUT:
         case OVS_ACTION_ATTR_TUNNEL_PUSH:

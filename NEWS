@@ -1,7 +1,8 @@
 Post-v2.9.0
 --------------------
-    - Nothing yet.
-
+   - OpenFlow:
+     * ct_clear action is now backed by kernel datapath. Support is probed for
+       when OVS starts.
 
 v2.9.0 - xx xxx xxxx
 --------------------

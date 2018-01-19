@@ -2983,6 +2983,7 @@ dpif_ipfix_read_actions(const struct flow *flow,
         case OVS_ACTION_ATTR_TRUNC:
         case OVS_ACTION_ATTR_HASH:
         case OVS_ACTION_ATTR_CT:
+        case OVS_ACTION_ATTR_CT_CLEAR:
         case OVS_ACTION_ATTR_METER:
         case OVS_ACTION_ATTR_SET_MASKED:
         case OVS_ACTION_ATTR_SET:

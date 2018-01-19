@@ -1325,6 +1325,14 @@ conntrack_execute(struct conntrack *ct, struct dp_packet_batch *pkt_batch,
     return 0;
 }
 
+void
+conntrack_clear(struct dp_packet *packet)
+{
+    /* According to pkt_metadata_init(), ct_state == 0 is enough to make all of
+     * the conntrack fields invalid. */
+    packet->md.ct_state = 0;
+}
+
 static void
 set_mark(struct dp_packet *pkt, struct conn *conn, uint32_t val, uint32_t mask)
 {

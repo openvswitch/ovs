@@ -5687,6 +5687,17 @@ compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc,
 }
 
 static void
+compose_ct_clear_action(struct xlate_ctx *ctx)
+{
+    clear_conntrack(ctx);
+    /* This action originally existed without dpif support. So to preserve
+     * compatibility, only append it if the dpif supports it. */
+    if (ctx->xbridge->support.ct_clear) {
+        nl_msg_put_flag(ctx->odp_actions,  OVS_ACTION_ATTR_CT_CLEAR);
+    }
+}
+
+static void
 rewrite_flow_encap_ethernet(struct xlate_ctx *ctx,
                             struct flow *flow,
                             struct flow_wildcards *wc)
@@ -6442,7 +6453,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_CT_CLEAR:
-            clear_conntrack(ctx);
+            compose_ct_clear_action(ctx);
             break;
 
         case OFPACT_NAT:
