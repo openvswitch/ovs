@@ -4167,6 +4167,79 @@ ovs-ofctl -O OpenFlow15 dump-group-stats br0
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - floating IP])
+AT_SKIP_IF([test $HAVE_NC = no])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+OVS_CHECK_CT_CLEAR()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24", "f0:00:00:01:01:01") dnl FIP 10.254.254.1
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24", "f0:00:00:01:01:02") dnl FIP 10.254.254.2
+
+dnl Static ARPs
+NS_CHECK_EXEC([at_ns0], [ip neigh add 10.1.1.2 lladdr f0:00:00:01:01:02 dev p0])
+NS_CHECK_EXEC([at_ns1], [ip neigh add 10.1.1.1 lladdr f0:00:00:01:01:01 dev p1])
+
+dnl Static ARP and route entries for the FIP "gateway"
+NS_CHECK_EXEC([at_ns0], [ip neigh add 10.1.1.254 lladdr f0:00:00:01:01:FE dev p0])
+NS_CHECK_EXEC([at_ns1], [ip neigh add 10.1.1.254 lladdr f0:00:00:01:01:FE dev p1])
+NS_CHECK_EXEC([at_ns0], [ip route add default nexthop via 10.1.1.254])
+NS_CHECK_EXEC([at_ns1], [ip route add default nexthop via 10.1.1.254])
+
+NETNS_DAEMONIZE([at_ns0], [nc -l -k 1234 > /dev/null], [nc0.pid])
+
+AT_DATA([flows.txt], [dnl
+table=0,priority=10  ip action=ct(table=1)
+table=0,priority=1   action=drop
+dnl dst FIP
+table=1,priority=20  ip,ct_state=+trk+est,nw_dst=10.254.254.0/24 action=goto_table:10
+table=1,priority=20  ip,ct_state=+trk+new,nw_dst=10.254.254.0/24 action=ct(commit,table=10)
+dnl dst local
+table=1,priority=10  ip,ct_state=+trk+est action=goto_table:20
+table=1,priority=10  ip,ct_state=+trk+new action=ct(commit,table=20)
+table=1,priority=1   ip,ct_state=+trk+inv action=drop
+dnl
+dnl FIP translation (dst FIP, src local) --> (dst local, src FIP)
+table=10             ip,nw_dst=10.254.254.1 action=set_field:10.1.1.1->nw_dst,goto_table:11
+table=10             ip,nw_dst=10.254.254.2 action=set_field:10.1.1.2->nw_dst,goto_table:11
+table=11             ip,nw_src=10.1.1.1 action=set_field:10.254.254.1->nw_src,goto_table:12
+table=11             ip,nw_src=10.1.1.2 action=set_field:10.254.254.2->nw_src,goto_table:12
+dnl clear conntrack and do another lookup since we changed the tuple
+table=12,priority=10 ip action=ct_clear,ct(table=13)
+table=12,priority=1  action=drop
+table=13             ip,ct_state=+trk+est action=goto_table:20
+table=13             ip,ct_state=+trk+new action=ct(commit,table=20)
+table=13             ip,ct_state=+trk+inv action=drop
+dnl
+dnl Output
+table=20             ip,nw_src=10.1.1.1 action=set_field:f0:00:00:01:01:01->eth_src,goto_table:21
+table=20             ip,nw_src=10.1.1.2 action=set_field:f0:00:00:01:01:02->eth_src,goto_table:21
+table=20             ip,nw_src=10.254.254.0/24 action=set_field:f0:00:00:01:01:FE->eth_src,goto_table:21
+table=21             ip,nw_dst=10.1.1.1 action=set_field:f0:00:00:01:01:01->eth_dst,output:ovs-p0
+table=21             ip,nw_dst=10.1.1.2 action=set_field:f0:00:00:01:01:02->eth_dst,output:ovs-p1
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl non-FIP case
+NS_CHECK_EXEC([at_ns1], [echo "foobar" |nc $NC_EOF_OPT 10.1.1.1 1234])
+OVS_WAIT_UNTIL([[ovs-appctl dpctl/dump-conntrack | sed -e 's/port=[0-9]*/port=<cleared>/g' -e 's/id=[0-9]*/id=<cleared>/g' |
+grep "tcp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT)"
+]])
+
+dnl Check that the full session ends as expected (i.e. TIME_WAIT). Otherwise it
+dnl means the datapath didn't process the ct_clear action. Ending in SYN_RECV
+dnl (OVS maps to ESTABLISHED) means the initial frame was committed, but not a
+dnl second time after the FIP translation (because ct_clear didn't occur).
+NS_CHECK_EXEC([at_ns1], [echo "foobar" |nc $NC_EOF_OPT 10.254.254.1 1234])
+OVS_WAIT_UNTIL([[ovs-appctl dpctl/dump-conntrack | sed -e 's/port=[0-9]*/port=<cleared>/g' -e 's/id=[0-9]*/id=<cleared>/g' |
+grep "tcp,orig=(src=10.254.254.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.254.254.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT)"
+]])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_BANNER([802.1ad])
 
 AT_SETUP([802.1ad - vlan_limit])
