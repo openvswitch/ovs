@@ -2603,7 +2603,9 @@ xlate_normal_mcast_send_rports(struct xlate_ctx *ctx,
     xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
     LIST_FOR_EACH(rport, node, &ms->rport_list) {
         mcast_xbundle = xbundle_lookup(xcfg, rport->port);
-        if (mcast_xbundle && mcast_xbundle != in_xbundle) {
+        if (mcast_xbundle
+            && mcast_xbundle != in_xbundle
+            && mcast_xbundle->ofbundle != in_xbundle->ofbundle) {
             xlate_report(ctx, OFT_DETAIL,
                          "forwarding report to mcast flagged port");
             output_normal(ctx, mcast_xbundle, xvlan);
@@ -2625,6 +2627,7 @@ xlate_normal_flood(struct xlate_ctx *ctx, struct xbundle *in_xbundle,
 
     LIST_FOR_EACH (xbundle, list_node, &ctx->xbridge->xbundles) {
         if (xbundle != in_xbundle
+            && xbundle->ofbundle != in_xbundle->ofbundle
             && xbundle_includes_vlan(xbundle, xvlan)
             && xbundle->floodable
             && !xbundle_mirror_out(ctx->xbridge, xbundle)) {
@@ -2832,7 +2835,9 @@ xlate_normal(struct xlate_ctx *ctx)
         if (mac_port) {
             struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
             struct xbundle *mac_xbundle = xbundle_lookup(xcfg, mac_port);
-            if (mac_xbundle && mac_xbundle != in_xbundle) {
+            if (mac_xbundle
+                && mac_xbundle != in_xbundle
+                && mac_xbundle->ofbundle != in_xbundle->ofbundle) {
                 xlate_report(ctx, OFT_DETAIL, "forwarding to learned port");
                 output_normal(ctx, mac_xbundle, &xvlan);
             } else if (!mac_xbundle) {
