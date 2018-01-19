@@ -6,7 +6,15 @@ m4_divert_push([PREPARE_TESTS])
 # of every rxq (one per line) in the form:
 # port_name rxq_id numa_id core_id
 parse_pmd_rxq_show () {
-    awk '/pmd/ {numa=$4; core=substr($6, 1, length($6) - 1)} /\t/{for (i=4; i<=NF; i++) print  $2, $i, numa, core}' | sort
+    awk '/pmd thread/ {numa=$4; core=substr($6, 1, length($6) - 1)} /\tport:/ {print  $2, $4, numa, core}' | sort
+}
+
+# Given the output of `ovs-appctl dpif-netdev/pmd-rxq-show`,
+# and with queues for each core on one line, prints the rxqs
+# of the core on one line
+# 'port:' port_name 'queue_id:' rxq_id rxq_id rxq_id rxq_id
+parse_pmd_rxq_show_group () {
+   awk '/port:/ {print  $1, $2, $3, $4, $12, $20, $28}'
 }
 
 # Given the output of `ovs-appctl dpctl/dump-flows`, prints a list of flows
@@ -53,7 +61,7 @@ m4_define([CHECK_PMD_THREADS_CREATED], [
 ])
 
 m4_define([SED_NUMA_CORE_PATTERN], ["s/\(numa_id \)[[0-9]]*\( core_id \)[[0-9]]*:/\1<cleared>\2<cleared>:/"])
-m4_define([SED_NUMA_CORE_QUEUE_PATTERN], ["s/\(numa_id \)[[0-9]]*\( core_id \)[[0-9]]*:/\1<cleared>\2<cleared>:/;s/\(queue-id: \)1 2 5 6/\1<cleared>/;s/\(queue-id: \)0 3 4 7/\1<cleared>/"])
+m4_define([SED_NUMA_CORE_QUEUE_PATTERN], ["s/1 2 5 6/<group>/;s/0 3 4 7/<group>/"])
 m4_define([DUMMY_NUMA], [--dummy-numa="0,0,0,0"])
 
 AT_SETUP([PMD - creating a thread/add-port])
@@ -65,7 +73,7 @@ CHECK_PMD_THREADS_CREATED()
 AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed SED_NUMA_CORE_PATTERN], [0], [dnl
 pmd thread numa_id <cleared> core_id <cleared>:
 	isolated : false
-	port: p0	queue-id: 0
+	port: p0              	queue-id:  0	pmd usage: NOT AVAIL
 ])
 
 AT_CHECK([ovs-appctl dpif/show | sed 's/\(tx_queues=\)[[0-9]]*/\1<cleared>/g'], [0], [dnl
@@ -96,7 +104,14 @@ dummy@ovs-dummy: hit:0 missed:0
 AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed SED_NUMA_CORE_PATTERN], [0], [dnl
 pmd thread numa_id <cleared> core_id <cleared>:
 	isolated : false
-	port: p0	queue-id: 0 1 2 3 4 5 6 7
+	port: p0              	queue-id:  0	pmd usage: NOT AVAIL
+	port: p0              	queue-id:  1	pmd usage: NOT AVAIL
+	port: p0              	queue-id:  2	pmd usage: NOT AVAIL
+	port: p0              	queue-id:  3	pmd usage: NOT AVAIL
+	port: p0              	queue-id:  4	pmd usage: NOT AVAIL
+	port: p0              	queue-id:  5	pmd usage: NOT AVAIL
+	port: p0              	queue-id:  6	pmd usage: NOT AVAIL
+	port: p0              	queue-id:  7	pmd usage: NOT AVAIL
 ])
 
 OVS_VSWITCHD_STOP
@@ -120,20 +135,23 @@ dummy@ovs-dummy: hit:0 missed:0
 AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed SED_NUMA_CORE_PATTERN], [0], [dnl
 pmd thread numa_id <cleared> core_id <cleared>:
 	isolated : false
-	port: p0	queue-id: 0 1 2 3 4 5 6 7
+	port: p0              	queue-id:  0	pmd usage: NOT AVAIL
+	port: p0              	queue-id:  1	pmd usage: NOT AVAIL
+	port: p0              	queue-id:  2	pmd usage: NOT AVAIL
+	port: p0              	queue-id:  3	pmd usage: NOT AVAIL
+	port: p0              	queue-id:  4	pmd usage: NOT AVAIL
+	port: p0              	queue-id:  5	pmd usage: NOT AVAIL
+	port: p0              	queue-id:  6	pmd usage: NOT AVAIL
+	port: p0              	queue-id:  7	pmd usage: NOT AVAIL
 ])
 
 TMP=$(cat ovs-vswitchd.log | wc -l | tr -d [[:blank:]])
 AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x3])
 CHECK_PMD_THREADS_CREATED([2], [], [+$TMP])
 
-AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed SED_NUMA_CORE_QUEUE_PATTERN], [0], [dnl
-pmd thread numa_id <cleared> core_id <cleared>:
-	isolated : false
-	port: p0	queue-id: <cleared>
-pmd thread numa_id <cleared> core_id <cleared>:
-	isolated : false
-	port: p0	queue-id: <cleared>
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed ':a;/AVAIL$/{N;s/\n//;ba}' | parse_pmd_rxq_show_group | sed SED_NUMA_CORE_QUEUE_PATTERN], [0], [dnl
+port: p0 queue-id: <group>
+port: p0 queue-id: <group>
 ])
 
 TMP=$(cat ovs-vswitchd.log | wc -l | tr -d [[:blank:]])
@@ -143,7 +161,14 @@ CHECK_PMD_THREADS_CREATED([1], [], [+$TMP])
 AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed SED_NUMA_CORE_PATTERN], [0], [dnl
 pmd thread numa_id <cleared> core_id <cleared>:
 	isolated : false
-	port: p0	queue-id: 0 1 2 3 4 5 6 7
+	port: p0              	queue-id:  0	pmd usage: NOT AVAIL
+	port: p0              	queue-id:  1	pmd usage: NOT AVAIL
+	port: p0              	queue-id:  2	pmd usage: NOT AVAIL
+	port: p0              	queue-id:  3	pmd usage: NOT AVAIL
+	port: p0              	queue-id:  4	pmd usage: NOT AVAIL
+	port: p0              	queue-id:  5	pmd usage: NOT AVAIL
+	port: p0              	queue-id:  6	pmd usage: NOT AVAIL
+	port: p0              	queue-id:  7	pmd usage: NOT AVAIL
 ])
 
 OVS_VSWITCHD_STOP
@@ -170,13 +195,16 @@ dummy@ovs-dummy: hit:0 missed:0
 		p0 7/1: (dummy-pmd: configured_rx_queues=4, configured_tx_queues=<cleared>, requested_rx_queues=4, requested_tx_queues=<cleared>)
 ])
 
-AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | sed SED_NUMA_CORE_PATTERN | sed '/cycles/d' | grep pmd -A 5], [0], [dnl
+AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | sed SED_NUMA_CORE_PATTERN | sed '/cycles/d' | grep pmd -A 8], [0], [dnl
 pmd thread numa_id <cleared> core_id <cleared>:
-	emc hits:0
-	megaflow hits:0
-	avg. subtable lookups per hit:0.00
-	miss:0
-	lost:0
+	packets received: 0
+	packet recirculations: 0
+	avg. datapath passes per packet: 0.00
+	emc hits: 0
+	megaflow hits: 0
+	avg. subtable lookups per megaflow hit: 0.00
+	miss with success upcall: 0
+	miss with failed upcall: 0
 ])
 
 ovs-appctl time/stop
@@ -197,13 +225,16 @@ AT_CHECK([cat ovs-vswitchd.log | filter_flow_install | strip_xout], [0], [dnl
 recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:77,dst=50:54:00:00:01:78),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
 
-AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | sed SED_NUMA_CORE_PATTERN | sed '/cycles/d' | grep pmd -A 5], [0], [dnl
+AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | sed SED_NUMA_CORE_PATTERN | sed '/cycles/d' | grep pmd -A 8], [0], [dnl
 pmd thread numa_id <cleared> core_id <cleared>:
-	emc hits:19
-	megaflow hits:0
-	avg. subtable lookups per hit:0.00
-	miss:1
-	lost:0
+	packets received: 20
+	packet recirculations: 0
+	avg. datapath passes per packet: 1.00
+	emc hits: 19
+	megaflow hits: 0
+	avg. subtable lookups per megaflow hit: 0.00
+	miss with success upcall: 1
+	miss with failed upcall: 0
 ])
 
 OVS_VSWITCHD_STOP

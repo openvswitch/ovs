@@ -2436,6 +2436,7 @@ netdev_dpdk_policer_construct(uint32_t rate, uint32_t burst)
                                     &policer->app_srtcm_params);
     if (err) {
         VLOG_ERR("Could not create rte meter for ingress policer");
+        free(policer);
         return NULL;
     }
 
@@ -2612,6 +2613,64 @@ netdev_dpdk_update_flags(struct netdev *netdev,
     ovs_mutex_unlock(&dev->mutex);
 
     return error;
+}
+
+static int
+netdev_dpdk_vhost_user_get_status(const struct netdev *netdev,
+                                  struct smap *args)
+{
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+
+    ovs_mutex_lock(&dev->mutex);
+
+    bool client_mode = dev->vhost_driver_flags & RTE_VHOST_USER_CLIENT;
+    smap_add_format(args, "mode", "%s", client_mode ? "client" : "server");
+
+    int vid = netdev_dpdk_get_vid(dev);
+    if (vid < 0) {
+        smap_add_format(args, "status", "disconnected");
+        ovs_mutex_unlock(&dev->mutex);
+        return 0;
+    } else {
+        smap_add_format(args, "status", "connected");
+    }
+
+    char socket_name[PATH_MAX];
+    if (!rte_vhost_get_ifname(vid, socket_name, PATH_MAX)) {
+        smap_add_format(args, "socket", "%s", socket_name);
+    }
+
+    uint64_t features;
+    if (!rte_vhost_get_negotiated_features(vid, &features)) {
+        smap_add_format(args, "features", "0x%016"PRIx64, features);
+    }
+
+    uint16_t mtu;
+    if (!rte_vhost_get_mtu(vid, &mtu)) {
+        smap_add_format(args, "mtu", "%d", mtu);
+    }
+
+    int numa = rte_vhost_get_numa_node(vid);
+    if (numa >= 0) {
+        smap_add_format(args, "numa", "%d", numa);
+    }
+
+    uint16_t vring_num = rte_vhost_get_vring_num(vid);
+    if (vring_num) {
+        smap_add_format(args, "num_of_vrings", "%d", vring_num);
+    }
+
+    for (int i = 0; i < vring_num; i++) {
+        struct rte_vhost_vring vring;
+        char vhost_vring[16];
+
+        rte_vhost_get_vhost_vring(vid, i, &vring);
+        snprintf(vhost_vring, 16, "vring_%d_size", i);
+        smap_add_format(args, vhost_vring, "%d", vring.size);
+    }
+
+    ovs_mutex_unlock(&dev->mutex);
+    return 0;
 }
 
 static int
@@ -3698,7 +3757,7 @@ static const struct netdev_class dpdk_vhost_class =
         netdev_dpdk_vhost_get_stats,
         NULL,
         NULL,
-        NULL,
+        netdev_dpdk_vhost_user_get_status,
         netdev_dpdk_vhost_reconfigure,
         netdev_dpdk_vhost_rxq_recv);
 static const struct netdev_class dpdk_vhost_client_class =
@@ -3714,7 +3773,7 @@ static const struct netdev_class dpdk_vhost_client_class =
         netdev_dpdk_vhost_get_stats,
         NULL,
         NULL,
-        NULL,
+        netdev_dpdk_vhost_user_get_status,
         netdev_dpdk_vhost_client_reconfigure,
         netdev_dpdk_vhost_rxq_recv);
 
