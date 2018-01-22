@@ -156,7 +156,6 @@ main_loop(struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
     char *remotes_error, *ssl_error;
     struct shash_node *node;
     long long int status_timer = LLONG_MIN;
-    bool last_role = *is_backup;
 
     *exiting = false;
     ssl_error = NULL;
@@ -182,12 +181,7 @@ main_loop(struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
          * the set of remotes that reconfigure_remotes() uses. */
         unixctl_server_run(unixctl);
 
-        /* In ovsdb-server's role (active or backup) has changed, restart
-         * the ovsdb jsonrpc server.  */
-        if (last_role != *is_backup) {
-            bool read_only = last_role = *is_backup;
-            ovsdb_jsonrpc_server_reconnect(jsonrpc, read_only);
-        }
+        ovsdb_jsonrpc_server_set_read_only(jsonrpc, *is_backup);
 
         report_error_if_changed(
             reconfigure_remotes(jsonrpc, all_dbs, remotes),
@@ -1125,10 +1119,9 @@ ovsdb_server_disable_monitor_cond(struct unixctl_conn *conn,
                                   void *jsonrpc_)
 {
     struct ovsdb_jsonrpc_server *jsonrpc = jsonrpc_;
-    bool read_only = ovsdb_jsonrpc_server_is_read_only(jsonrpc);
 
     ovsdb_jsonrpc_disable_monitor_cond();
-    ovsdb_jsonrpc_server_reconnect(jsonrpc, read_only);
+    ovsdb_jsonrpc_server_reconnect(jsonrpc);
     unixctl_command_reply(conn, NULL);
 }
 
@@ -1186,9 +1179,7 @@ ovsdb_server_reconnect(struct unixctl_conn *conn, int argc OVS_UNUSED,
                        const char *argv[] OVS_UNUSED, void *jsonrpc_)
 {
     struct ovsdb_jsonrpc_server *jsonrpc = jsonrpc_;
-    bool read_only = ovsdb_jsonrpc_server_is_read_only(jsonrpc);
-
-    ovsdb_jsonrpc_server_reconnect(jsonrpc, read_only);
+    ovsdb_jsonrpc_server_reconnect(jsonrpc);
     unixctl_command_reply(conn, NULL);
 }
 
