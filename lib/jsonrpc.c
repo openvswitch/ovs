@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2009-2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@
 #include "openvswitch/poll-loop.h"
 #include "reconnect.h"
 #include "stream.h"
+#include "svec.h"
 #include "timeval.h"
 #include "openvswitch/vlog.h"
 
@@ -756,6 +757,9 @@ jsonrpc_msg_to_json(struct jsonrpc_msg *m)
 /* A JSON-RPC session with reconnection. */
 
 struct jsonrpc_session {
+    struct svec remotes;
+    size_t next_remote;
+
     struct reconnect *reconnect;
     struct jsonrpc *rpc;
     struct stream *stream;
@@ -764,6 +768,13 @@ struct jsonrpc_session {
     unsigned int seqno;
     uint8_t dscp;
 };
+
+static void
+jsonrpc_session_pick_remote(struct jsonrpc_session *s)
+{
+    reconnect_set_name(s->reconnect,
+                       s->remotes.names[s->next_remote++ % s->remotes.n]);
+}
 
 /* Creates and returns a jsonrpc_session to 'name', which should be a string
  * acceptable to stream_open() or pstream_open().
@@ -782,12 +793,27 @@ struct jsonrpc_session {
 struct jsonrpc_session *
 jsonrpc_session_open(const char *name, bool retry)
 {
+    const struct svec remotes = { .names = (char **) &name, .n = 1 };
+    return jsonrpc_session_open_multiple(&remotes, retry);
+}
+
+struct jsonrpc_session *
+jsonrpc_session_open_multiple(const struct svec *remotes, bool retry)
+{
     struct jsonrpc_session *s;
 
     s = xmalloc(sizeof *s);
+
+    /* Set 'n' remotes from 'names', shuffling them into random order. */
+    ovs_assert(remotes->n > 0);
+    svec_clone(&s->remotes, remotes);
+    svec_shuffle(&s->remotes);
+    s->next_remote = 0;
+
     s->reconnect = reconnect_create(time_msec());
-    reconnect_set_name(s->reconnect, name);
+    jsonrpc_session_pick_remote(s);
     reconnect_enable(s->reconnect, time_msec());
+    reconnect_set_backoff_free_tries(s->reconnect, remotes->n);
     s->rpc = NULL;
     s->stream = NULL;
     s->pstream = NULL;
@@ -795,10 +821,11 @@ jsonrpc_session_open(const char *name, bool retry)
     s->dscp = 0;
     s->last_error = 0;
 
+    const char *name = reconnect_get_name(s->reconnect);
     if (!pstream_verify_name(name)) {
         reconnect_set_passive(s->reconnect, true, time_msec());
     } else if (!retry) {
-        reconnect_set_max_tries(s->reconnect, 1);
+        reconnect_set_max_tries(s->reconnect, remotes->n);
         reconnect_set_backoff(s->reconnect, INT_MAX, INT_MAX);
     }
 
@@ -820,6 +847,9 @@ jsonrpc_session_open_unreliably(struct jsonrpc *jsonrpc, uint8_t dscp)
     struct jsonrpc_session *s;
 
     s = xmalloc(sizeof *s);
+    svec_init(&s->remotes);
+    svec_add(&s->remotes, jsonrpc_get_name(jsonrpc));
+    s->next_remote = 0;
     s->reconnect = reconnect_create(time_msec());
     reconnect_set_quiet(s->reconnect, true);
     reconnect_set_name(s->reconnect, jsonrpc_get_name(jsonrpc));
@@ -842,6 +872,7 @@ jsonrpc_session_close(struct jsonrpc_session *s)
         reconnect_destroy(s->reconnect);
         stream_close(s->stream);
         pstream_close(s->pstream);
+        svec_destroy(&s->remotes);
         free(s);
     }
 }
@@ -853,12 +884,15 @@ jsonrpc_session_disconnect(struct jsonrpc_session *s)
         jsonrpc_error(s->rpc, EOF);
         jsonrpc_close(s->rpc);
         s->rpc = NULL;
-        s->seqno++;
     } else if (s->stream) {
         stream_close(s->stream);
         s->stream = NULL;
-        s->seqno++;
+    } else {
+        return;
     }
+
+    s->seqno++;
+    jsonrpc_session_pick_remote(s);
 }
 
 static void
@@ -885,6 +919,7 @@ jsonrpc_session_connect(struct jsonrpc_session *s)
 
     if (error) {
         reconnect_connect_failed(s->reconnect, time_msec(), error);
+        jsonrpc_session_pick_remote(s);
     }
 }
 
@@ -949,6 +984,7 @@ jsonrpc_session_run(struct jsonrpc_session *s)
             s->seqno++;
         } else if (error != EAGAIN) {
             reconnect_connect_failed(s->reconnect, time_msec(), error);
+            jsonrpc_session_pick_remote(s);
             stream_close(s->stream);
             s->stream = NULL;
             s->last_error = error;
@@ -1017,6 +1053,12 @@ jsonrpc_session_get_id(const struct jsonrpc_session *s)
     } else {
         return NULL;
     }
+}
+
+size_t
+jsonrpc_session_get_n_remotes(const struct jsonrpc_session *s)
+{
+    return s->remotes.n;
 }
 
 /* Always takes ownership of 'msg', regardless of success. */
