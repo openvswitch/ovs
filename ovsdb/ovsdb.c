@@ -19,6 +19,7 @@
 
 #include "column.h"
 #include "file.h"
+#include "monitor.h"
 #include "openvswitch/json.h"
 #include "ovsdb-error.h"
 #include "ovsdb-parser.h"
@@ -330,7 +331,7 @@ ovsdb_create(struct ovsdb_schema *schema)
     db = xmalloc(sizeof *db);
     db->schema = schema;
     db->file = NULL;
-    ovs_list_init(&db->replicas);
+    ovs_list_init(&db->monitors);
     ovs_list_init(&db->triggers);
     db->run_triggers = false;
 
@@ -370,13 +371,8 @@ ovsdb_destroy(struct ovsdb *db)
             ovsdb_file_destroy(db->file);
         }
 
-        /* Remove all the replicas. */
-        while (!ovs_list_is_empty(&db->replicas)) {
-            struct ovsdb_replica *r
-                = CONTAINER_OF(ovs_list_pop_back(&db->replicas),
-                               struct ovsdb_replica, node);
-            ovsdb_remove_replica(db, r);
-        }
+        /* Remove all the monitors. */
+        ovsdb_monitors_remove(db);
 
         /* Delete all the tables.  This also deletes their schemas. */
         SHASH_FOR_EACH (node, &db->tables) {
@@ -418,24 +414,4 @@ struct ovsdb_table *
 ovsdb_get_table(const struct ovsdb *db, const char *name)
 {
     return shash_find_data(&db->tables, name);
-}
-
-void
-ovsdb_replica_init(struct ovsdb_replica *r,
-                   const struct ovsdb_replica_class *class)
-{
-    r->class = class;
-}
-
-void
-ovsdb_add_replica(struct ovsdb *db, struct ovsdb_replica *r)
-{
-    ovs_list_push_back(&db->replicas, &r->node);
-}
-
-void
-ovsdb_remove_replica(struct ovsdb *db OVS_UNUSED, struct ovsdb_replica *r)
-{
-    ovs_list_remove(&r->node);
-    (r->class->destroy)(r);
 }

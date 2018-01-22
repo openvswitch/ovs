@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Nicira, Inc.
+ * Copyright (c) 2015, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,14 @@
 #ifndef OVSDB_MONITOR_H
 #define OVSDB_MONITOR_H
 
+struct ovsdb;
+struct ovsdb_column;
 struct ovsdb_monitor;
 struct ovsdb_jsonrpc_monitor;
 struct ovsdb_monitor_session_condition;
 struct ovsdb_condition;
+struct ovsdb_txn;
+struct simap;
 
 enum ovsdb_monitor_selection {
     OJMS_NONE = 0,              /* None for this iteration */
@@ -42,6 +46,8 @@ enum ovsdb_monitor_version {
 
 struct ovsdb_monitor *ovsdb_monitor_create(struct ovsdb *db,
                        struct ovsdb_jsonrpc_monitor *jsonrpc_monitor);
+void ovsdb_monitors_remove(struct ovsdb *);
+void ovsdb_monitors_commit(struct ovsdb *, const struct ovsdb_txn *);
 
 struct ovsdb_monitor *ovsdb_monitor_add(struct ovsdb_monitor *dbmon);
 
