@@ -51,6 +51,8 @@ int reconnect_get_probe_interval(const struct reconnect *);
 
 void reconnect_set_max_tries(struct reconnect *, unsigned int max_tries);
 unsigned int reconnect_get_max_tries(struct reconnect *);
+void reconnect_set_backoff_free_tries(struct reconnect *,
+                                      unsigned int backoff_free_tries);
 
 void reconnect_set_backoff(struct reconnect *,
                            int min_backoff, int max_backoff);
@@ -65,6 +67,7 @@ void reconnect_enable(struct reconnect *, long long int now);
 void reconnect_disable(struct reconnect *, long long int now);
 
 void reconnect_force_reconnect(struct reconnect *, long long int now);
+void reconnect_skip_backoff(struct reconnect *);
 
 bool reconnect_is_connected(const struct reconnect *);
 unsigned int reconnect_get_last_connect_elapsed(const struct reconnect *,

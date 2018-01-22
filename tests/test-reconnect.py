@@ -104,6 +104,10 @@ def do_set_max_tries(arg):
     r.set_max_tries(int(arg))
 
 
+def do_set_backoff_free_tries(arg):
+    r.set_backoff_free_tries(int(arg))
+
+
 def diff_stats(old, new, delta):
     if (old.state != new.state or
         old.state_elapsed != new.state_elapsed or
@@ -173,6 +177,7 @@ def main():
         "advance": do_advance,
         "timeout": do_timeout,
         "set-max-tries": do_set_max_tries,
+        "set-backoff-free-tries": do_set_backoff_free_tries,
         "passive": do_set_passive,
         "listening": do_listening,
         "listen-error": do_listen_error
