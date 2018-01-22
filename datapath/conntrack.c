@@ -1170,6 +1170,21 @@ int ovs_ct_execute(struct net *net, struct sk_buff *skb,
 	return err;
 }
 
+int ovs_ct_clear(struct sk_buff *skb, struct sw_flow_key *key)
+{
+	if (skb_nfct(skb)) {
+		nf_conntrack_put(skb_nfct(skb));
+#ifdef HAVE_IP_CT_UNTRACKED
+		nf_ct_set(skb, NULL, IP_CT_UNTRACKED);
+#else
+		nf_ct_set(skb, NULL, 0);
+#endif
+		ovs_ct_fill_key(skb, key);
+	}
+
+	return 0;
+}
+
 static int ovs_ct_add_helper(struct ovs_conntrack_info *info, const char *name,
 			     const struct sw_flow_key *key, bool log)
 {
