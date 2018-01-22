@@ -165,7 +165,7 @@ ovsdb_jsonrpc_server_add_db(struct ovsdb_jsonrpc_server *svr, struct ovsdb *db)
      * If this is too big of a hammer in practice, we could be more selective,
      * e.g. disconnect only connections that actually tried to use a database
      * with 'db''s name. */
-    ovsdb_jsonrpc_server_reconnect(svr, svr->read_only);
+    ovsdb_jsonrpc_server_reconnect(svr);
 
     return ovsdb_server_add_db(&svr->up, db);
 }
@@ -182,7 +182,7 @@ ovsdb_jsonrpc_server_remove_db(struct ovsdb_jsonrpc_server *svr,
      *
      * If this is too big of a hammer in practice, we could be more selective,
      * e.g. disconnect only connections that actually reference 'db'. */
-    ovsdb_jsonrpc_server_reconnect(svr, svr->read_only);
+    ovsdb_jsonrpc_server_reconnect(svr);
 
     return ovsdb_server_remove_db(&svr->up, db);
 }
@@ -336,11 +336,10 @@ ovsdb_jsonrpc_server_free_remote_status(
 /* Forces all of the JSON-RPC sessions managed by 'svr' to disconnect and
  * reconnect. */
 void
-ovsdb_jsonrpc_server_reconnect(struct ovsdb_jsonrpc_server *svr, bool read_only)
+ovsdb_jsonrpc_server_reconnect(struct ovsdb_jsonrpc_server *svr)
 {
     struct shash_node *node;
 
-    svr->read_only = read_only;
     SHASH_FOR_EACH (node, &svr->remotes) {
         struct ovsdb_jsonrpc_remote *remote = node->data;
 
@@ -348,10 +347,14 @@ ovsdb_jsonrpc_server_reconnect(struct ovsdb_jsonrpc_server *svr, bool read_only)
     }
 }
 
-bool
-ovsdb_jsonrpc_server_is_read_only(struct ovsdb_jsonrpc_server *svr)
+void
+ovsdb_jsonrpc_server_set_read_only(struct ovsdb_jsonrpc_server *svr,
+                                   bool read_only)
 {
-    return svr->read_only;
+    if (svr->read_only != read_only) {
+        svr->read_only = read_only;
+        ovsdb_jsonrpc_server_reconnect(svr);
+    }
 }
 
 void

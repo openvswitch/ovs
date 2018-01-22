@@ -64,11 +64,13 @@ bool ovsdb_jsonrpc_server_get_remote_status(
 void ovsdb_jsonrpc_server_free_remote_status(
     struct ovsdb_jsonrpc_remote_status *);
 
-void ovsdb_jsonrpc_server_reconnect(struct ovsdb_jsonrpc_server *, bool read_only);
+void ovsdb_jsonrpc_server_reconnect(struct ovsdb_jsonrpc_server *);
 
 void ovsdb_jsonrpc_server_run(struct ovsdb_jsonrpc_server *);
 void ovsdb_jsonrpc_server_wait(struct ovsdb_jsonrpc_server *);
-bool ovsdb_jsonrpc_server_is_read_only(struct ovsdb_jsonrpc_server *);
+
+void ovsdb_jsonrpc_server_set_read_only(struct ovsdb_jsonrpc_server *,
+                                        bool read_only);
 
 void ovsdb_jsonrpc_server_get_memory_usage(const struct ovsdb_jsonrpc_server *,
                                            struct simap *usage);
