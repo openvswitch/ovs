@@ -1037,6 +1037,60 @@ timeout
 ])
 
 ######################################################################
+RECONNECT_CHECK([backoff-free tries work],
+  [set-backoff-free-tries 2
+enable
+
+# Connection fails quickly.
+run
+connect-failed ECONNREFUSED
+
+# No backoff.
+run
+timeout
+
+# Connection fails quickly again.
+run
+connect-failed ECONNREFUSED
+
+# Back off for 1000 ms.
+run
+timeout
+],
+   [### t=1000 ###
+set-backoff-free-tries 2
+enable
+  in BACKOFF for 0 ms (0 ms backoff)
+
+# Connection fails quickly.
+run
+  should connect
+connect-failed ECONNREFUSED
+  0 successful connections out of 1 attempts, seqno 0
+
+# No backoff.
+run
+  should connect
+timeout
+  advance 0 ms
+
+# Connection fails quickly again.
+run
+  should connect
+connect-failed ECONNREFUSED
+  in BACKOFF for 0 ms (1000 ms backoff)
+  0 successful connections out of 2 attempts, seqno 0
+
+# Back off for 1000 ms.
+run
+timeout
+  advance 1000 ms
+
+### t=2000 ###
+  in BACKOFF for 1000 ms (1000 ms backoff)
+])
+
+######################################################################
 RECONNECT_CHECK([max-tries of 1 honored],
   [set-max-tries 1
 enable
@@ -1090,7 +1144,7 @@ timeout
 run
   should disconnect
 disconnected
-  in VOID for 0 ms (1000 ms backoff)
+  in VOID for 0 ms (0 ms backoff)
   1 successful connections out of 1 attempts, seqno 2
   disconnected
   disconnected at 11000 ms (0 ms ago)

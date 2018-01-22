@@ -208,6 +208,12 @@ do_set_max_tries(struct ovs_cmdl_context *ctx)
 }
 
 static void
+do_set_backoff_free_tries(struct ovs_cmdl_context *ctx)
+{
+    reconnect_set_backoff_free_tries(reconnect, atoi(ctx->argv[1]));
+}
+
+static void
 diff_stats(const struct reconnect_stats *old,
            const struct reconnect_stats *new,
            int delta)
@@ -284,6 +290,8 @@ static const struct ovs_cmdl_command all_commands[] = {
     { "advance", NULL, 1, 1, do_advance, OVS_RO },
     { "timeout", NULL, 0, 0, do_timeout, OVS_RO },
     { "set-max-tries", NULL, 1, 1, do_set_max_tries, OVS_RO },
+    { "set-backoff-free-tries", NULL, 1, 1, do_set_backoff_free_tries,
+      OVS_RO },
     { "passive", NULL, 0, 0, do_set_passive, OVS_RO },
     { "listening", NULL, 0, 0, do_listening, OVS_RO },
     { "listen-error", NULL, 1, 1, do_listen_error, OVS_RO },
