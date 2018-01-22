@@ -46,6 +46,7 @@ void svec_sort(struct svec *);
 void svec_sort_unique(struct svec *);
 void svec_unique(struct svec *);
 void svec_compact(struct svec *);
+void svec_shuffle(struct svec *);
 void svec_diff(const struct svec *a, const struct svec *b,
                struct svec *a_only, struct svec *both, struct svec *b_only);
 bool svec_contains(const struct svec *, const char *);

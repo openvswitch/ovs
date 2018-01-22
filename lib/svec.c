@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "openvswitch/dynamic-string.h"
+#include "random.h"
 #include "util.h"
 #include "openvswitch/vlog.h"
 
@@ -172,6 +173,23 @@ svec_compact(struct svec *svec)
         }
     }
     svec->n = j;
+}
+
+static void
+swap_strings(char **a, char **b)
+{
+    char *tmp = *a;
+    *a = *b;
+    *b = tmp;
+}
+
+void
+svec_shuffle(struct svec *svec)
+{
+    for (size_t i = 0; i < svec->n; i++) {
+        size_t j = i + random_range(svec->n - i);
+        swap_strings(&svec->names[i], &svec->names[j]);
+    }
 }
 
 void
