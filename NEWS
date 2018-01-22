@@ -1,8 +1,6 @@
 Post-v2.9.0
 --------------------
-   - OpenFlow:
-     * ct_clear action is now backed by kernel datapath. Support is probed for
-       when OVS starts.
+
 
 v2.9.0 - xx xxx xxxx
 --------------------
@@ -31,6 +29,9 @@ v2.9.0 - xx xxx xxxx
          action 'nd_ns' to resolve unknown next hop MAC addresses for the
          IPv6 packets.
      * ovn-ctl: New commands run_nb_ovsdb and run_sb_ovsdb.
+   - OpenFlow:
+     * ct_clear action is now backed by kernel datapath. Support is probed for
+       when OVS starts.
    - Linux kernel 4.13
      * Add support for compiling OVS with the latest Linux 4.13 kernel
    - ovs-dpctl and related ovs-appctl commands:
