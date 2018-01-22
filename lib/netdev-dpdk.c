@@ -2410,6 +2410,8 @@ netdev_dpdk_get_custom_stats(const struct netdev *netdev,
              * reconfigured */
             netdev_dpdk_clear_xstats(dev);
         }
+
+        free(values);
     }
 
     ovs_mutex_unlock(&dev->mutex);
