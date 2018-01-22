@@ -21,6 +21,7 @@
 #include "openvswitch/dynamic-string.h"
 #include "file.h"
 #include "hash.h"
+#include "monitor.h"
 #include "openvswitch/hmap.h"
 #include "openvswitch/json.h"
 #include "openvswitch/list.h"
@@ -808,7 +809,6 @@ update_version(struct ovsdb_txn *txn OVS_UNUSED, struct ovsdb_txn_row *txn_row)
 static struct ovsdb_error *
 ovsdb_txn_commit_(struct ovsdb_txn *txn, bool durable)
 {
-    struct ovsdb_replica *replica;
     struct ovsdb_error *error;
 
     /* Figure out what actually changed, and abort early if the transaction
@@ -873,9 +873,7 @@ ovsdb_txn_commit_(struct ovsdb_txn *txn, bool durable)
             return error;
         }
     }
-    LIST_FOR_EACH (replica, node, &txn->db->replicas) {
-        replica->class->commit(replica, txn, durable);
-    }
+    ovsdb_monitors_commit(txn->db, txn);
 
     /* Finalize commit. */
     txn->db->run_triggers = true;

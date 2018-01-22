@@ -57,7 +57,7 @@ bool ovsdb_schema_equal(const struct ovsdb_schema *,
 struct ovsdb {
     struct ovsdb_schema *schema;
     struct ovsdb_file *file;    /* If nonnull, log for transactions. */
-    struct ovs_list replicas;   /* Contains "struct ovsdb_replica"s. */
+    struct ovs_list monitors;   /* Contains "struct ovsdb_monitor"s. */
     struct shash tables;        /* Contains "struct ovsdb_table *"s. */
 
     /* Triggers. */
@@ -79,24 +79,5 @@ struct json *ovsdb_execute(struct ovsdb *, const struct ovsdb_session *,
                            const char *role, const char *id,
                            long long int elapsed_msec,
                            long long int *timeout_msec);
-
-/* Database replication. */
-
-struct ovsdb_replica {
-    struct ovs_list node;       /* Element in "struct ovsdb" replicas list. */
-    const struct ovsdb_replica_class *class;
-};
-
-struct ovsdb_replica_class {
-    void (*commit)(struct ovsdb_replica *,
-                   const struct ovsdb_txn *, bool durable);
-    void (*destroy)(struct ovsdb_replica *);
-};
-
-void ovsdb_replica_init(struct ovsdb_replica *,
-                        const struct ovsdb_replica_class *);
-
-void ovsdb_add_replica(struct ovsdb *, struct ovsdb_replica *);
-void ovsdb_remove_replica(struct ovsdb *, struct ovsdb_replica *);
 
 #endif /* ovsdb/ovsdb.h */

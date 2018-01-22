@@ -41,7 +41,6 @@
 
 VLOG_DEFINE_THIS_MODULE(ovsdb_monitor);
 
-static const struct ovsdb_replica_class ovsdb_jsonrpc_replica_class;
 static struct hmap ovsdb_monitors = HMAP_INITIALIZER(&ovsdb_monitors);
 
 /* Keep state of session's conditions */
@@ -66,7 +65,7 @@ struct ovsdb_monitor_table_condition {
 
 /* A collection of tables being monitored. */
 struct ovsdb_monitor {
-    struct ovsdb_replica replica;
+    struct ovs_list list_node;  /* In struct ovsdb's "monitors" list. */
     struct shash tables;     /* Holds "struct ovsdb_monitor_table"s. */
     struct ovs_list jsonrpc_monitors;  /* Contains "jsonrpc_monitor_node"s. */
     struct ovsdb *db;
@@ -239,13 +238,6 @@ compare_ovsdb_monitor_column(const void *a_, const void *b_)
     return a->column < b->column ? -1 : a->column > b->column;
 }
 
-static struct ovsdb_monitor *
-ovsdb_monitor_cast(struct ovsdb_replica *replica)
-{
-    ovs_assert(replica->class == &ovsdb_jsonrpc_replica_class);
-    return CONTAINER_OF(replica, struct ovsdb_monitor, replica);
-}
-
 /* Finds and returns the ovsdb_monitor_row in 'mt->changes->rows' for the
  * given 'uuid', or NULL if there is no such row. */
 static struct ovsdb_monitor_row *
@@ -380,8 +372,7 @@ ovsdb_monitor_create(struct ovsdb *db,
 
     dbmon = xzalloc(sizeof *dbmon);
 
-    ovsdb_replica_init(&dbmon->replica, &ovsdb_jsonrpc_replica_class);
-    ovsdb_add_replica(db, &dbmon->replica);
+    ovs_list_push_back(&db->monitors, &dbmon->list_node);
     ovs_list_init(&dbmon->jsonrpc_monitors);
     dbmon->db = db;
     dbmon->n_transactions = 0;
@@ -1547,7 +1538,7 @@ ovsdb_monitor_destroy(struct ovsdb_monitor *dbmon)
 {
     struct shash_node *node;
 
-    ovs_list_remove(&dbmon->replica.node);
+    ovs_list_remove(&dbmon->list_node);
 
     if (!hmap_node_is_null(&dbmon->hmap_node)) {
         hmap_remove(&ovsdb_monitors, &dbmon->hmap_node);
@@ -1574,11 +1565,8 @@ ovsdb_monitor_destroy(struct ovsdb_monitor *dbmon)
 }
 
 static void
-ovsdb_monitor_commit(struct ovsdb_replica *replica,
-                     const struct ovsdb_txn *txn,
-                     bool durable OVS_UNUSED)
+ovsdb_monitor_commit(struct ovsdb_monitor *m, const struct ovsdb_txn *txn)
 {
-    struct ovsdb_monitor *m = ovsdb_monitor_cast(replica);
     struct ovsdb_monitor_aux aux;
 
     ovsdb_monitor_init_aux(&aux, m);
@@ -1603,17 +1591,29 @@ ovsdb_monitor_commit(struct ovsdb_replica *replica,
     }
 }
 
-static void
-ovsdb_monitor_destroy_callback(struct ovsdb_replica *replica)
+void
+ovsdb_monitors_commit(struct ovsdb *db, const struct ovsdb_txn *txn)
 {
-    struct ovsdb_monitor *dbmon = ovsdb_monitor_cast(replica);
-    struct jsonrpc_monitor_node *jm, *next;
+    struct ovsdb_monitor *m;
 
-    /* Delete all front end monitors. Removing the last front
-     * end monitor will also destroy the corresponding 'ovsdb_monitor'.
-     * ovsdb monitor will also be destroied.  */
-    LIST_FOR_EACH_SAFE(jm, next, node, &dbmon->jsonrpc_monitors) {
-        ovsdb_jsonrpc_monitor_destroy(jm->jsonrpc_monitor);
+    LIST_FOR_EACH (m, list_node, &db->monitors) {
+        ovsdb_monitor_commit(m, txn);
+    }
+}
+
+void
+ovsdb_monitors_remove(struct ovsdb *db)
+{
+    struct ovsdb_monitor *m, *next_m;
+
+    LIST_FOR_EACH_SAFE (m, next_m, list_node, &db->monitors) {
+        struct jsonrpc_monitor_node *jm, *next_jm;
+
+        /* Delete all front-end monitors.  Removing the last front-end monitor
+         * will also destroy the corresponding ovsdb_monitor. */
+        LIST_FOR_EACH_SAFE (jm, next_jm, node, &m->jsonrpc_monitors) {
+            ovsdb_jsonrpc_monitor_destroy(jm->jsonrpc_monitor);
+        }
     }
 }
 
@@ -1629,8 +1629,3 @@ ovsdb_monitor_get_memory_usage(struct simap *usage)
         simap_increase(usage, "json-caches", hmap_count(&dbmon->json_cache));
     }
 }
-
-static const struct ovsdb_replica_class ovsdb_jsonrpc_replica_class = {
-    ovsdb_monitor_commit,
-    ovsdb_monitor_destroy_callback,
-};
