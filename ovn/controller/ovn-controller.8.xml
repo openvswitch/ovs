@@ -150,6 +150,13 @@
         network interface card, enabling encapsulation checksum may incur
         performance loss. In such cases, encapsulation checksums can be disabled.
       </dd>
+
+      <dt><code>external_ids:ovn-cms-options</code></dt>
+      <dd>
+        A list of options that will be consumed by the CMS Plugin and which
+        specific to this particular chassis. An example would be:
+        <code>cms_option1,cms_option2:foo</code>.
+      </dd>
     </dl>
 
     <p>
