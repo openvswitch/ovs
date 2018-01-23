@@ -2432,6 +2432,7 @@ iface_refresh_stats(struct iface *iface)
 
     free(values);
     free(keys);
+    netdev_free_custom_stats_counters(&custom_stats);
 }
 
 static void
