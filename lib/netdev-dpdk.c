@@ -452,6 +452,8 @@ struct netdev_rxq_dpdk {
 static void netdev_dpdk_destruct(struct netdev *netdev);
 static void netdev_dpdk_vhost_destruct(struct netdev *netdev);
 
+static void netdev_dpdk_clear_xstats(struct netdev_dpdk *dev);
+
 int netdev_dpdk_get_vid(const struct netdev_dpdk *dev);
 
 struct ingress_policer *
@@ -1104,6 +1106,7 @@ netdev_dpdk_destruct(struct netdev *netdev)
         }
     }
 
+    netdev_dpdk_clear_xstats(dev);
     free(dev->devargs);
     common_destruct(dev);
 
@@ -1169,7 +1172,7 @@ netdev_dpdk_dealloc(struct netdev *netdev)
 }
 
 static void
-netdev_dpdk_clear_xstats(struct netdev_dpdk *dev) OVS_REQUIRES(dev->mutex)
+netdev_dpdk_clear_xstats(struct netdev_dpdk *dev)
 {
     /* If statistics are already allocated, we have to
      * reconfigure, as port_id could have been changed. */
