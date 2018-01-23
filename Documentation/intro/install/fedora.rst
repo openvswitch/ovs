@@ -64,10 +64,10 @@ The command below will create a temporary SPEC file::
 
 And to install specific dependencies, use the corresponding tool below.
 For some of the dependencies on RHEL you may need to add two additional
-repositories to help yum-builddep.
+repositories to help yum-builddep, e.g.::
 
-subscription-manager repos --enable=rhel-7-server-extras-rpms
-subscription-manager repos --enable=rhel-7-server-optional-rpms
+    $ subscription-manager repos --enable=rhel-7-server-extras-rpms
+    $ subscription-manager repos --enable=rhel-7-server-optional-rpms
 
 DNF::
 
