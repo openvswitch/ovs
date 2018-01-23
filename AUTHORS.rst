@@ -275,6 +275,7 @@ Robert Åkerblom-Andersson       Robert.nr1@gmail.com
 Robert Wojciechowicz            robertx.wojciechowicz@intel.com
 Rob Hoes                        rob.hoes@citrix.com
 Roi Dayan                       roid@mellanox.com
+Róbert Mulik                    robert.mulik@ericsson.com
 Romain Lenglet                  romain.lenglet@berabera.info
 Russell Bryant                  russell@ovn.org
 RYAN D. MOATS                   rmoats@us.ibm.com
