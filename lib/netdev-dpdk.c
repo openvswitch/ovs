@@ -1274,6 +1274,8 @@ netdev_dpdk_configure_xstats(struct netdev_dpdk *dev)
                     VLOG_WARN("Can't get XSTATS IDs for port: %"PRIu8,
                               dev->port_id);
                 }
+
+                free(rte_xstats);
             }
         }
     } else {
