@@ -1379,6 +1379,11 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
                 nl_msg_end_nested(request, act_offset);
             }
         }
+        if (flower->tunnel.tunnel) {
+            act_offset = nl_msg_start_nested(request, act_index++);
+            nl_msg_put_act_tunnel_key_release(request);
+            nl_msg_end_nested(request, act_offset);
+        }
         if (flower->set.set) {
             act_offset = nl_msg_start_nested(request, act_index++);
             nl_msg_put_act_tunnel_key_set(request, flower->set.id,
@@ -1387,11 +1392,6 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
                                           &flower->set.ipv6.ipv6_src,
                                           &flower->set.ipv6.ipv6_dst,
                                           flower->set.tp_dst);
-            nl_msg_end_nested(request, act_offset);
-        }
-        if (flower->tunnel.tunnel) {
-            act_offset = nl_msg_start_nested(request, act_index++);
-            nl_msg_put_act_tunnel_key_release(request);
             nl_msg_end_nested(request, act_offset);
         }
         if (flower->vlan_pop) {
