@@ -6210,6 +6210,11 @@ parse_l2_5_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
                 }
             }
         }
+    } else if (src_flow->nw_proto == IPPROTO_IGMP
+               && src_flow->dl_type == htons(ETH_TYPE_IP)) {
+        /* OVS userspace parses the IGMP type, code, and group, but its
+         * datapaths do not, so there is always missing information. */
+        return ODP_FIT_TOO_LITTLE;
     }
     if (is_mask && expected_bit != OVS_KEY_ATTR_UNSPEC) {
         if ((flow->tp_src || flow->tp_dst) && flow->nw_proto != 0xff) {
