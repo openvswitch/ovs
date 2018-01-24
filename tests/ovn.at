@@ -1082,6 +1082,18 @@ reg1[0] = dns_lookup();
 reg1[0] = dns_lookup("foo");
     dns_lookup doesn't take any parameters
 
+# set_meter
+set_meter(0);
+    Rate 0 for set_meter is not in valid.
+set_meter(1);
+    encodes as meter:1
+set_meter(100, 1000);
+    encodes as meter:2
+set_meter(100, 1000, );
+    Syntax error at `,' expecting `)'.
+set_meter(4294967295, 4294967295);
+    encodes as meter:3
+
 # put_nd_ra_opts
 reg1[0] = put_nd_ra_opts(addr_mode = "slaac", mtu = 1500, prefix = aef0::/64, slla = ae:01:02:03:04:05);
     encodes as controller(userdata=00.00.00.08.00.00.00.00.00.01.de.10.00.00.00.40.86.00.00.00.ff.00.ff.ff.00.00.00.00.00.00.00.00.05.01.00.00.00.00.05.dc.03.04.40.c0.ff.ff.ff.ff.ff.ff.ff.ff.00.00.00.00.ae.f0.00.00.00.00.00.00.00.00.00.00.00.00.00.00.01.01.ae.01.02.03.04.05,pause)
@@ -5953,7 +5965,7 @@ OVN_CLEANUP([hv])
 AT_CLEANUP
 
 
-AT_SETUP([ovn -- DSCP marking check])
+AT_SETUP([ovn -- DSCP marking and meter check])
 AT_KEYWORDS([ovn])
 ovn_start
 
@@ -6023,9 +6035,31 @@ check_tos 0
 qos_id=$(ovn-nbctl --wait=hv -- --id=@lp1-qos create QoS priority=100 action=dscp=48 match="inport\=\=\"lp1\"" direction="from-lport" -- set Logical_Switch lsw0 qos_rules=@lp1-qos)
 check_tos 48
 
+# check at hv without qos meter
+AT_CHECK([as hv ovs-ofctl dump-flows br-int -O OpenFlow13 | grep meter | wc -l], [0], [0
+])
+
+# Update the meter rate
+ovn-nbctl --wait=hv set QoS $qos_id bandwidth=rate=100
+
+# check at hv with a qos meter table
+AT_CHECK([as hv ovs-ofctl dump-meters br-int -O OpenFlow13 | grep rate=100 | wc -l], [0], [1
+])
+AT_CHECK([as hv ovs-ofctl dump-flows br-int -O OpenFlow13 | grep meter | wc -l], [0], [1
+])
+
 # Update the DSCP marking
 ovn-nbctl --wait=hv set QoS $qos_id action=dscp=63
 check_tos 63
+
+# Update the meter rate
+ovn-nbctl --wait=hv set QoS $qos_id bandwidth=rate=4294967295,burst=4294967295
+
+# check at hv with a qos meter table
+AT_CHECK([as hv ovs-ofctl dump-meters br-int -O OpenFlow13 | grep burst_size=4294967295 | wc -l], [0], [1
+])
+AT_CHECK([as hv ovs-ofctl dump-flows br-int -O OpenFlow13 | grep meter | wc -l], [0], [1
+])
 
 ovn-nbctl --wait=hv set QoS $qos_id match="outport\=\=\"lp2\"" direction="to-lport"
 check_tos 63
@@ -6033,6 +6067,10 @@ check_tos 63
 # Disable DSCP marking
 ovn-nbctl --wait=hv clear Logical_Switch lsw0 qos_rules
 check_tos 0
+
+# check at hv without qos meter
+AT_CHECK([as hv ovs-ofctl dump-flows br-int -O OpenFlow13 | grep meter | wc -l], [0], [0
+])
 
 OVN_CLEANUP([hv])
 AT_CLEANUP
@@ -8502,9 +8540,9 @@ AT_CHECK([as hv2 ovs-ofctl dump-flows br-int table=32 | grep active_backup | gre
 sleep 3 # let BFD sessions settle so we get the right flows on the right chassis
 
 # make sure that flows for handling the outside router port reside on gw1
-AT_CHECK([as gw1 ovs-ofctl dump-flows br-int table=23 | grep 00:00:02:01:02:04 | wc -l], [0], [[1
+AT_CHECK([as gw1 ovs-ofctl dump-flows br-int table=24 | grep 00:00:02:01:02:04 | wc -l], [0], [[1
 ]])
-AT_CHECK([as gw2 ovs-ofctl dump-flows br-int table=23 | grep 00:00:02:01:02:04 | wc -l], [0], [[0
+AT_CHECK([as gw2 ovs-ofctl dump-flows br-int table=24 | grep 00:00:02:01:02:04 | wc -l], [0], [[0
 ]])
 
 # make sure ARP responder flows for outside router port reside on gw1 too
@@ -8594,9 +8632,9 @@ AT_CHECK([ovs-vsctl --bare --columns bfd find Interface name=ovn-hv1-0],[0],
 sleep 3  # let BFD sessions settle so we get the right flows on the right chassis
 
 # make sure that flows for handling the outside router port reside on gw2 now
-AT_CHECK([as gw2 ovs-ofctl dump-flows br-int table=23 | grep 00:00:02:01:02:04 | wc -l], [0], [[1
+AT_CHECK([as gw2 ovs-ofctl dump-flows br-int table=24 | grep 00:00:02:01:02:04 | wc -l], [0], [[1
 ]])
-AT_CHECK([as gw1 ovs-ofctl dump-flows br-int table=23 | grep 00:00:02:01:02:04 | wc -l], [0], [[0
+AT_CHECK([as gw1 ovs-ofctl dump-flows br-int table=24 | grep 00:00:02:01:02:04 | wc -l], [0], [[0
 ]])
 
 # disconnect GW2 from the network, GW1 should take over
@@ -8608,9 +8646,9 @@ sleep 4
 bfd_dump
 
 # make sure that flows for handling the outside router port reside on gw2 now
-AT_CHECK([as gw1 ovs-ofctl dump-flows br-int table=23 | grep 00:00:02:01:02:04 | wc -l], [0], [[1
+AT_CHECK([as gw1 ovs-ofctl dump-flows br-int table=24 | grep 00:00:02:01:02:04 | wc -l], [0], [[1
 ]])
-AT_CHECK([as gw2 ovs-ofctl dump-flows br-int table=23 | grep 00:00:02:01:02:04 | wc -l], [0], [[0
+AT_CHECK([as gw2 ovs-ofctl dump-flows br-int table=24 | grep 00:00:02:01:02:04 | wc -l], [0], [[0
 ]])
 
 # check that the chassis redirect port has been reclaimed by the gw1 chassis

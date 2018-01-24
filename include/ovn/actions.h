@@ -75,7 +75,8 @@ struct ovn_extend_table;
     OVNACT(DNS_LOOKUP,        ovnact_dns_lookup)      \
     OVNACT(LOG,               ovnact_log)             \
     OVNACT(PUT_ND_RA_OPTS,    ovnact_put_opts)        \
-    OVNACT(ND_NS,             ovnact_nest)
+    OVNACT(ND_NS,             ovnact_nest)            \
+    OVNACT(SET_METER,         ovnact_set_meter)
 
 /* enum ovnact_type, with a member OVNACT_<ENUM> for each action. */
 enum OVS_PACKED_ENUM ovnact_type {
@@ -279,6 +280,13 @@ struct ovnact_log {
     uint8_t verdict;            /* One of LOG_VERDICT_*. */
     uint8_t severity;           /* One of LOG_SEVERITY_*. */
     char *name;
+};
+
+/* OVNACT_SET_METER. */
+struct ovnact_set_meter {
+    struct ovnact ovnact;
+    uint64_t rate;                   /* rate field, in kbps. */
+    uint64_t burst;                  /* burst rate field, in kbps. */
 };
 
 /* Internal use by the helpers below. */
@@ -489,6 +497,9 @@ struct ovnact_encode_params {
 
     /* A struct to figure out the group_id for group actions. */
     struct ovn_extend_table *group_table;
+
+    /* A struct to figure out the meter_id for meter actions. */
+    struct ovn_extend_table *meter_table;
 
     /* OVN maps each logical flow table (ltable), one-to-one, onto a physical
      * OpenFlow flow table (ptable).  A number of parameters describe this

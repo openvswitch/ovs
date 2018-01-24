@@ -1211,6 +1211,10 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
     struct ovn_extend_table group_table;
     ovn_extend_table_init(&group_table);
 
+    /* Initialize meter ids for QoS. */
+    struct ovn_extend_table meter_table;
+    ovn_extend_table_init(&meter_table);
+
     simap_init(&ports);
     simap_put(&ports, "eth0", 5);
     simap_put(&ports, "eth1", 6);
@@ -1250,6 +1254,7 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
                 .aux = &ports,
                 .is_switch = true,
                 .group_table = &group_table,
+                .meter_table = &meter_table,
 
                 .pipeline = OVNACT_P_INGRESS,
                 .ingress_ptable = 8,

@@ -31,7 +31,8 @@ struct ovsrec_bridge;
 struct shash;
 
 /* Interface for OVN main loop. */
-void ofctrl_init(struct ovn_extend_table *group_table);
+void ofctrl_init(struct ovn_extend_table *group_table,
+                 struct ovn_extend_table *meter_table);
 enum mf_field_id ofctrl_run(const struct ovsrec_bridge *br_int,
                             struct shash *pending_ct_zones);
 bool ofctrl_can_put(void);

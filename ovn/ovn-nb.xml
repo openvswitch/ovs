@@ -1264,6 +1264,22 @@
       </ul>
     </column>
 
+    <column name="bandwidth">
+      <p>
+         The bandwidth limit to be performed on the matched packet.
+         Currently only supported in the userspace by dpdk.
+      </p>
+      <ul>
+        <li>
+          <code>rate</code>: The value of rate limit in kbps.
+        </li>
+        <li>
+          <code>burst</code>: The value of burst rate limit in kbps.
+          This is optional and needs to specify the <code>rate</code> first.
+        </li>
+      </ul>
+    </column>
+
     <column name="external_ids">
       See <em>External IDs</em> at the beginning of this document.
     </column>
