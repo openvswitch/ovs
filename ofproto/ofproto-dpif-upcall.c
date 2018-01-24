@@ -2138,7 +2138,7 @@ revalidate_ukey__(struct udpif *udpif, const struct udpif_key *ukey,
      * but not the newly revalidated wildcard mask (wc), i.e., if revalidation
      * tells that the datapath flow is now too generic and must be narrowed
      * down.  Note that we do not know if the datapath has ignored any of the
-     * wildcarded bits, so we may be overtly conservative here. */
+     * wildcarded bits, so we may be overly conservative here. */
     if (flow_wildcards_has_extra(&dp_mask, ctx.wc)) {
         goto exit;
     }
