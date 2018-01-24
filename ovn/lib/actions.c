@@ -35,6 +35,7 @@
 #include "ovn/expr.h"
 #include "ovn/lex.h"
 #include "ovn/lib/acl-log.h"
+#include "ovn/lib/extend-table.h"
 #include "packets.h"
 #include "openvswitch/shash.h"
 #include "simap.h"
@@ -1026,8 +1027,7 @@ encode_CT_LB(const struct ovnact_ct_lb *cl,
         return;
     }
 
-    uint32_t group_id = 0, hash;
-    struct group_info *group_info;
+    uint32_t table_id = 0;
     struct ofpact_group *og;
     uint32_t zone_reg = ep->is_switch ? MFF_LOG_CT_ZONE - MFF_REG0
                             : MFF_LOG_DNAT_ZONE - MFF_REG0;
@@ -1059,59 +1059,15 @@ encode_CT_LB(const struct ovnact_ct_lb *cl,
                       recirc_table, zone_reg);
     }
 
-    hash = hash_string(ds_cstr(&ds), 0);
-
-    /* Check whether we have non installed but allocated group_id. */
-    HMAP_FOR_EACH_WITH_HASH (group_info, hmap_node, hash,
-                             &ep->group_table->desired_groups) {
-        if (!strcmp(ds_cstr(&group_info->group), ds_cstr(&ds))) {
-            group_id = group_info->group_id;
-            break;
-        }
-    }
-
-    if (!group_id) {
-        /* Check whether we already have an installed entry for this
-         * combination. */
-        HMAP_FOR_EACH_WITH_HASH (group_info, hmap_node, hash,
-                                 &ep->group_table->existing_groups) {
-            if (!strcmp(ds_cstr(&group_info->group), ds_cstr(&ds))) {
-                group_id = group_info->group_id;
-            }
-        }
-
-        bool new_group_id = false;
-        if (!group_id) {
-            /* Reserve a new group_id. */
-            group_id = bitmap_scan(ep->group_table->group_ids, 0, 1,
-                                   MAX_OVN_GROUPS + 1);
-            new_group_id = true;
-        }
-
-        if (group_id == MAX_OVN_GROUPS + 1) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-            VLOG_ERR_RL(&rl, "out of group ids");
-
-            ds_destroy(&ds);
-            return;
-        }
-        bitmap_set1(ep->group_table->group_ids, group_id);
-
-        group_info = xmalloc(sizeof *group_info);
-        group_info->group = ds;
-        group_info->group_id = group_id;
-        group_info->hmap_node.hash = hash;
-        group_info->new_group_id = new_group_id;
-
-        hmap_insert(&ep->group_table->desired_groups,
-                    &group_info->hmap_node, group_info->hmap_node.hash);
-    } else {
-        ds_destroy(&ds);
+    table_id = ovn_extend_table_assign_id(ep->group_table, &ds);
+    ds_destroy(&ds);
+    if (table_id == EXT_TABLE_ID_INVALID) {
+        return;
     }
 
     /* Create an action to set the group. */
     og = ofpact_put_GROUP(ofpacts);
-    og->group_id = group_id;
+    og->group_id = table_id;
 }
 
 static void

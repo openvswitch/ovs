@@ -36,6 +36,7 @@
 #include "openvswitch/vlog.h"
 #include "ovn-controller.h"
 #include "ovn/actions.h"
+#include "ovn/lib/extend-table.h"
 #include "openvswitch/poll-loop.h"
 #include "physical.h"
 #include "openvswitch/rconn.h"
@@ -131,7 +132,7 @@ static struct rconn_packet_counter *tx_counter;
 static struct hmap installed_flows;
 
 /* A reference to the group_table. */
-static struct group_table *groups;
+static struct ovn_extend_table *groups;
 
 /* MFF_* field ID for our Geneve option.  In S_TLV_TABLE_MOD_SENT, this is
  * the option we requested (we don't know whether we obtained it yet).  In
@@ -150,7 +151,7 @@ static void ovn_flow_table_destroy(struct hmap *flow_table);
 static void ofctrl_recv(const struct ofp_header *, enum ofptype);
 
 void
-ofctrl_init(struct group_table *group_table)
+ofctrl_init(struct ovn_extend_table *group_table)
 {
     swconn = rconn_create(5, 0, DSCP_DEFAULT, 1 << OFP13_VERSION);
     tx_counter = rconn_packet_counter_create();
@@ -385,7 +386,7 @@ run_S_CLEAR_FLOWS(void)
 
     /* Clear existing groups, to match the state of the switch. */
     if (groups) {
-        ovn_group_table_clear(groups, true);
+        ovn_extend_table_clear(groups, true);
     }
 
     /* All flow updates are irrelevant now. */
@@ -747,44 +748,6 @@ add_flow_mod(struct ofputil_flow_mod *fm, struct ovs_list *msgs)
 
 /* group_table. */
 
-/* Finds and returns a group_info in 'existing_groups' whose key is identical
- * to 'target''s key, or NULL if there is none. */
-static struct group_info *
-ovn_group_lookup(struct hmap *exisiting_groups,
-                 const struct group_info *target)
-{
-    struct group_info *e;
-
-    HMAP_FOR_EACH_WITH_HASH(e, hmap_node, target->hmap_node.hash,
-                            exisiting_groups) {
-        if (e->group_id == target->group_id) {
-            return e;
-        }
-   }
-    return NULL;
-}
-
-/* Clear either desired_groups or existing_groups in group_table. */
-void
-ovn_group_table_clear(struct group_table *group_table, bool existing)
-{
-    struct group_info *g, *next;
-    struct hmap *target_group = existing
-                                ? &group_table->existing_groups
-                                : &group_table->desired_groups;
-
-    HMAP_FOR_EACH_SAFE (g, next, hmap_node, target_group) {
-        hmap_remove(target_group, &g->hmap_node);
-        /* Don't unset bitmap for desired group_info if the group_id
-         * was not freshly reserved. */
-        if (existing || g->new_group_id) {
-            bitmap_set0(group_table->group_ids, g->group_id);
-        }
-        ds_destroy(&g->group);
-        free(g);
-    }
-}
-
 static struct ofpbuf *
 encode_group_mod(const struct ofputil_group_mod *gm)
 {
@@ -844,7 +807,7 @@ ofctrl_put(struct hmap *flow_table, struct shash *pending_ct_zones,
 {
     if (!ofctrl_can_put()) {
         ovn_flow_table_clear(flow_table);
-        ovn_group_table_clear(groups, false);
+        ovn_extend_table_clear(groups, false);
         return;
     }
 
@@ -864,31 +827,25 @@ ofctrl_put(struct hmap *flow_table, struct shash *pending_ct_zones,
 
     /* Iterate through all the desired groups. If there are new ones,
      * add them to the switch. */
-    struct group_info *desired;
-    HMAP_FOR_EACH(desired, hmap_node, &groups->desired_groups) {
-        if (!ovn_group_lookup(&groups->existing_groups, desired)) {
-            /* Create and install new group. */
-            struct ofputil_group_mod gm;
-            enum ofputil_protocol usable_protocols;
-            char *error;
-            struct ds group_string = DS_EMPTY_INITIALIZER;
-            ds_put_format(&group_string, "group_id=%u,%s",
-                          desired->group_id, ds_cstr(&desired->group));
-
-            error = parse_ofp_group_mod_str(&gm, OFPGC11_ADD,
-                                            ds_cstr(&group_string), NULL,
-                                            &usable_protocols);
-            if (!error) {
-                add_group_mod(&gm, &msgs);
-            } else {
-                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-                VLOG_ERR_RL(&rl, "new group %s %s", error,
-                         ds_cstr(&group_string));
-                free(error);
-            }
-            ds_destroy(&group_string);
-            ofputil_uninit_group_mod(&gm);
+    struct ovn_extend_table_info *desired;
+    EXTEND_TABLE_FOR_EACH_UNINSTALLED (desired, groups) {
+        /* Create and install new group. */
+        struct ofputil_group_mod gm;
+        enum ofputil_protocol usable_protocols;
+        char *group_string = xasprintf("group_id=%"PRIu32",%s",
+                                       desired->table_id,
+                                       ds_cstr(&desired->info));
+        char *error = parse_ofp_group_mod_str(&gm, OFPGC11_ADD, group_string,
+                                              NULL, &usable_protocols);
+        if (!error) {
+            add_group_mod(&gm, &msgs);
+        } else {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+            VLOG_ERR_RL(&rl, "new group %s %s", error, group_string);
+            free(error);
         }
+        free(group_string);
+        ofputil_uninit_group_mod(&gm);
     }
 
     /* Iterate through all of the installed flows.  If any of them are no
@@ -964,53 +921,31 @@ ofctrl_put(struct hmap *flow_table, struct shash *pending_ct_zones,
 
     /* Iterate through the installed groups from previous runs. If they
      * are not needed delete them. */
-    struct group_info *installed, *next_group;
-    HMAP_FOR_EACH_SAFE(installed, next_group, hmap_node,
-                       &groups->existing_groups) {
-        if (!ovn_group_lookup(&groups->desired_groups, installed)) {
-            /* Delete the group. */
-            struct ofputil_group_mod gm;
-            enum ofputil_protocol usable_protocols;
-            char *error;
-            struct ds group_string = DS_EMPTY_INITIALIZER;
-            ds_put_format(&group_string, "group_id=%u", installed->group_id);
-
-            error = parse_ofp_group_mod_str(&gm, OFPGC11_DELETE,
-                                            ds_cstr(&group_string), NULL,
-                                            &usable_protocols);
-            if (!error) {
-                add_group_mod(&gm, &msgs);
-            } else {
-                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-                VLOG_ERR_RL(&rl, "Error deleting group %d: %s",
-                         installed->group_id, error);
-                free(error);
-            }
-            ds_destroy(&group_string);
-            ofputil_uninit_group_mod(&gm);
-
-            /* Remove 'installed' from 'groups->existing_groups' */
-            hmap_remove(&groups->existing_groups, &installed->hmap_node);
-            ds_destroy(&installed->group);
-
-            /* Dealloc group_id. */
-            bitmap_set0(groups->group_ids, installed->group_id);
-            free(installed);
-        }
-    }
-
-    /* Move the contents of desired_groups to existing_groups. */
-    HMAP_FOR_EACH_SAFE(desired, next_group, hmap_node,
-                       &groups->desired_groups) {
-        hmap_remove(&groups->desired_groups, &desired->hmap_node);
-        if (!ovn_group_lookup(&groups->existing_groups, desired)) {
-            hmap_insert(&groups->existing_groups, &desired->hmap_node,
-                        desired->hmap_node.hash);
+    struct ovn_extend_table_info *installed, *next_group;
+    EXTEND_TABLE_FOR_EACH_INSTALLED (installed, next_group, groups) {
+        /* Delete the group. */
+        struct ofputil_group_mod gm;
+        enum ofputil_protocol usable_protocols;
+        char *group_string = xasprintf("group_id=%"PRIu32"",
+                                       installed->table_id);
+        char *error = parse_ofp_group_mod_str(&gm, OFPGC11_DELETE,
+                                              group_string, NULL,
+                                              &usable_protocols);
+        if (!error) {
+            add_group_mod(&gm, &msgs);
         } else {
-           ds_destroy(&desired->group);
-           free(desired);
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+            VLOG_ERR_RL(&rl, "Error deleting group %d: %s",
+                     installed->table_id, error);
+            free(error);
         }
+        free(group_string);
+        ofputil_uninit_group_mod(&gm);
+        ovn_extend_table_remove(groups, installed);
     }
+
+    /* Move the contents of groups->desired to groups->existing. */
+    ovn_extend_table_move(groups);
 
     if (!ovs_list_is_empty(&msgs)) {
         /* Add a barrier to the list of messages. */

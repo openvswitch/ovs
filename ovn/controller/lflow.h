@@ -37,7 +37,7 @@
 
 struct chassis_index;
 struct controller_ctx;
-struct group_table;
+struct ovn_extend_table;
 struct hmap;
 struct sbrec_chassis;
 struct simap;
@@ -66,7 +66,7 @@ void lflow_run(struct controller_ctx *,
                const struct sbrec_chassis *chassis,
                const struct chassis_index *,
                const struct hmap *local_datapaths,
-               struct group_table *group_table,
+               struct ovn_extend_table *group_table,
                const struct shash *addr_sets,
                struct hmap *flow_table,
                struct sset *active_tunnels,

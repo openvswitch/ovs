@@ -31,6 +31,7 @@ struct lexer;
 struct ofpbuf;
 struct shash;
 struct simap;
+struct ovn_extend_table;
 
 /* List of OVN logical actions.
  *
@@ -338,24 +339,6 @@ void *ovnact_put(struct ofpbuf *, enum ovnact_type, size_t len);
 OVNACTS
 #undef OVNACT
 
-#define MAX_OVN_GROUPS 65535
-
-struct group_table {
-    unsigned long *group_ids;  /* Used as a bitmap with value set
-                                * for allocated group ids in either
-                                * desired_groups or existing_groups. */
-    struct hmap desired_groups;
-    struct hmap existing_groups;
-};
-
-struct group_info {
-    struct hmap_node hmap_node;
-    struct ds group;
-    uint32_t group_id;
-    bool new_group_id;  /* 'True' if 'group_id' was reserved from
-                         * group_table's 'group_ids' bitmap. */
-};
-
 enum action_opcode {
     /* "arp { ...actions... }".
      *
@@ -505,7 +488,7 @@ struct ovnact_encode_params {
     bool is_gateway_router;
 
     /* A struct to figure out the group_id for group actions. */
-    struct group_table *group_table;
+    struct ovn_extend_table *group_table;
 
     /* OVN maps each logical flow table (ltable), one-to-one, onto a physical
      * OpenFlow flow table (ptable).  A number of parameters describe this
