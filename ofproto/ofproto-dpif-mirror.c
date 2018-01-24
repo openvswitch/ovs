@@ -387,12 +387,11 @@ mirror_update_stats(struct mbridge *mbridge, mirror_mask_t mirrors,
         m = mbridge->mirrors[raw_ctz(mirrors)];
 
         if (!m) {
-            /* In normal circumstances 'm' will not be NULL.  However,
-             * if mirrors are reconfigured, we can temporarily get out
-             * of sync in facet_revalidate().  We could "correct" the
-             * mirror list before reaching here, but doing that would
-             * not properly account the traffic stats we've currently
-             * accumulated for previous mirror configuration. */
+            /* In normal circumstances 'm' will not be NULL.  However, if
+             * mirrors are reconfigured, we can temporarily get out of sync.
+             * We could "correct" the mirror list before reaching here, but
+             * doing that would not properly account the traffic stats we've
+             * currently accumulated for previous mirror configuration. */
             continue;
         }
 

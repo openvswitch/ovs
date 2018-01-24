@@ -54,7 +54,7 @@ enum {
 #undef SPR
 };
 
-/* Reasons why a subfacet might not be fast-pathable.
+/* Reasons why a flow might not be fast-pathable.
  *
  * Each reason is a separate bit to allow reasons to be combined. */
 enum slow_path_reason {
