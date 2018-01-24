@@ -1888,6 +1888,10 @@ trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
         case OVNACT_LOG:
             execute_log(ovnact_get_LOG(a), uflow, super);
             break;
+
+        case OVNACT_SET_METER:
+            /* Nothing to do. */
+            break;
         }
 
     }

@@ -597,9 +597,13 @@ main(int argc, char *argv[])
     struct ovn_extend_table group_table;
     ovn_extend_table_init(&group_table);
 
+    /* Initialize meter ids for QoS. */
+    struct ovn_extend_table meter_table;
+    ovn_extend_table_init(&meter_table);
+
     daemonize_complete();
 
-    ofctrl_init(&group_table);
+    ofctrl_init(&group_table, &meter_table);
     pinctrl_init();
     lflow_init();
 
@@ -709,8 +713,8 @@ main(int argc, char *argv[])
                     struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
                     lflow_run(&ctx, chassis,
                               &chassis_index, &local_datapaths, &group_table,
-                              &addr_sets, &flow_table, &active_tunnels,
-                              &local_lport_ids);
+                              &meter_table, &addr_sets, &flow_table,
+                              &active_tunnels, &local_lport_ids);
 
                     if (chassis_id) {
                         bfd_run(&ctx, br_int, chassis, &local_datapaths,
@@ -844,6 +848,7 @@ main(int argc, char *argv[])
     shash_destroy(&pending_ct_zones);
 
     ovn_extend_table_destroy(&group_table);
+    ovn_extend_table_destroy(&meter_table);
 
     ovsdb_idl_loop_destroy(&ovs_idl_loop);
     ovsdb_idl_loop_destroy(&ovnsb_idl_loop);

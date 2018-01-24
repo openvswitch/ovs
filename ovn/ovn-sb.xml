@@ -1642,6 +1642,21 @@
             </code>
           </p>
         </dd>
+
+        <dt><code>set_meter(<var>rate</var>);</code></dt>
+        <dt><code>set_meter(<var>rate</var>, <var>burst</var>);</code></dt>
+        <dd>
+          <p>
+            <b>Parameters</b>: rate limit int field <var>rate</var> in kbps,
+            burst rate limits int field <var>burst</var> in kbps.
+          </p>
+
+          <p>
+            This action sets the rate limit for a flow.
+          </p>
+
+          <p><b>Example:</b> <code>set_meter(100, 1000);</code></p>
+        </dd>
       </dl>
 
       <dl>

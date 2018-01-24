@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
-    "version": "5.9.0",
-    "cksum": "1120419033 17249",
+    "version": "5.10.0",
+    "cksum": "626737541 17810",
     "tables": {
         "NB_Global": {
             "columns": {
@@ -164,7 +164,15 @@
                                             "enum": ["set", ["dscp"]]},
                                     "value": {"type": "integer",
                                               "minInteger": 0,
-                                              "maxInteger": 63}}},
+                                              "maxInteger": 63},
+                                    "min": 0, "max": "unlimited"}},
+                "bandwidth": {"type": {"key": {"type": "string",
+                                               "enum": ["set", ["rate",
+                                                                "burst"]]},
+                                       "value": {"type": "integer",
+                                                 "minInteger": 1,
+                                                 "maxInteger": 4294967295},
+                                       "min": 0, "max": "unlimited"}},
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}}},

@@ -2095,6 +2095,87 @@ ovnact_log_free(struct ovnact_log *log)
     free(log->name);
 }
 
+static void
+parse_set_meter_action(struct action_context *ctx)
+{
+    uint64_t rate = 0;
+    uint64_t burst = 0;
+
+    lexer_force_match(ctx->lexer, LEX_T_LPAREN); /* Skip '('. */
+    if (ctx->lexer->token.type == LEX_T_INTEGER
+        && ctx->lexer->token.format == LEX_F_DECIMAL) {
+        rate = ntohll(ctx->lexer->token.value.integer);
+    }
+    lexer_get(ctx->lexer);
+    if (lexer_match(ctx->lexer, LEX_T_COMMA)) {  /* Skip ','. */
+        if (ctx->lexer->token.type == LEX_T_INTEGER
+            && ctx->lexer->token.format == LEX_F_DECIMAL) {
+            burst = ntohll(ctx->lexer->token.value.integer);
+        }
+        lexer_get(ctx->lexer);
+    }
+    lexer_force_match(ctx->lexer, LEX_T_RPAREN); /* Skip ')'. */
+
+    if (!rate) {
+        lexer_error(ctx->lexer,
+                    "Rate %"PRId64" for set_meter is not in valid.",
+                    rate);
+        return;
+    }
+
+    struct ovnact_set_meter *cl = ovnact_put_SET_METER(ctx->ovnacts);
+    cl->rate = rate;
+    cl->burst = burst;
+}
+
+static void
+format_SET_METER(const struct ovnact_set_meter *cl, struct ds *s)
+{
+    if (cl->burst) {
+        ds_put_format(s, "set_meter(%"PRId64", %"PRId64");",
+                      cl->rate, cl->burst);
+    } else {
+        ds_put_format(s, "set_meter(%"PRId64");", cl->rate);
+    }
+}
+
+static void
+encode_SET_METER(const struct ovnact_set_meter *cl,
+                 const struct ovnact_encode_params *ep,
+                 struct ofpbuf *ofpacts)
+{
+    uint32_t table_id;
+    struct ofpact_meter *om;
+
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    if (cl->burst) {
+        ds_put_format(&ds,
+                      "kbps burst stats bands=type=drop rate=%"PRId64" "
+                      "burst_size=%"PRId64"",
+                      cl->rate, cl->burst);
+    } else {
+        ds_put_format(&ds, "kbps stats bands=type=drop rate=%"PRId64"",
+                      cl->rate);
+    }
+
+    table_id = ovn_extend_table_assign_id(ep->meter_table, &ds);
+    if (table_id == EXT_TABLE_ID_INVALID) {
+        ds_destroy(&ds);
+        return;
+    }
+
+    ds_destroy(&ds);
+
+    /* Create an action to set the meter. */
+    om = ofpact_put_METER(ofpacts);
+    om->meter_id = table_id;
+}
+
+static void
+ovnact_set_meter_free(struct ovnact_set_meter *ct OVS_UNUSED)
+{
+}
+
 /* Parses an assignment or exchange or put_dhcp_opts action. */
 static void
 parse_set_action(struct action_context *ctx)
@@ -2182,6 +2263,8 @@ parse_action(struct action_context *ctx)
         parse_SET_QUEUE(ctx);
     } else if (lexer_match_id(ctx->lexer, "log")) {
         parse_LOG(ctx);
+    } else if (lexer_match_id(ctx->lexer, "set_meter")) {
+        parse_set_meter_action(ctx);
     } else {
         lexer_syntax_error(ctx->lexer, "expecting action");
     }

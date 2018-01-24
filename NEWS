@@ -118,6 +118,7 @@ v2.8.0 - 31 Aug 2017
        gateway.
      * Add support for ACL logging.
      * ovn-northd now has native support for active-standby high availability.
+     * Add support for QoS bandwidth limt with DPDK.
    - Tracing with ofproto/trace now traces through recirculation.
    - OVSDB:
      * New support for role-based access control (see ovsdb-server(1)).
