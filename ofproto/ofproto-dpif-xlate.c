@@ -182,6 +182,7 @@ struct xlate_ctx {
     struct xlate_in *xin;
     struct xlate_out *xout;
 
+    struct xlate_cfg *xcfg;
     const struct xbridge *xbridge;
 
     /* Flow at the last commit. */
@@ -514,7 +515,6 @@ static struct xlate_cfg *new_xcfg = NULL;
 
 typedef void xlate_actions_handler(const struct ofpact *, size_t ofpacts_len,
                                    struct xlate_ctx *, bool);
-
 static bool may_receive(const struct xport *, struct xlate_ctx *);
 static void do_xlate_actions(const struct ofpact *, size_t ofpacts_len,
                              struct xlate_ctx *, bool);
@@ -1966,8 +1966,7 @@ mirror_packet(struct xlate_ctx *ctx, struct xbundle *xbundle,
 
         /* Send the packet to the mirror. */
         if (out) {
-            struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
-            struct xbundle *out_xbundle = xbundle_lookup(xcfg, out);
+            struct xbundle *out_xbundle = xbundle_lookup(ctx->xcfg, out);
             if (out_xbundle) {
                 output_normal(ctx, out_xbundle, &xvlan);
             }
@@ -2235,7 +2234,6 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
         xport = CONTAINER_OF(ovs_list_front(&out_xbundle->xports), struct xport,
                              bundle_node);
     } else {
-        struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
         struct flow_wildcards *wc = ctx->wc;
         struct ofport_dpif *ofport;
 
@@ -2257,7 +2255,7 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
 
         ofport = bond_choose_output_slave(out_xbundle->bond,
                                           &ctx->xin->flow, wc, vid);
-        xport = xport_lookup(xcfg, ofport);
+        xport = xport_lookup(ctx->xcfg, ofport);
 
         if (!xport) {
             /* No slaves enabled, so drop packet. */
@@ -2526,7 +2524,6 @@ update_mcast_snooping_table(const struct xlate_ctx *ctx,
                             const struct dp_packet *packet)
 {
     struct mcast_snooping *ms = ctx->xbridge->ms;
-    struct xlate_cfg *xcfg;
     struct xbundle *mcast_xbundle;
     struct mcast_port_bundle *fport;
 
@@ -2538,9 +2535,8 @@ update_mcast_snooping_table(const struct xlate_ctx *ctx,
     /* Don't learn from flood ports */
     mcast_xbundle = NULL;
     ovs_rwlock_wrlock(&ms->rwlock);
-    xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
     LIST_FOR_EACH(fport, node, &ms->fport_list) {
-        mcast_xbundle = xbundle_lookup(xcfg, fport->port);
+        mcast_xbundle = xbundle_lookup(ctx->xcfg, fport->port);
         if (mcast_xbundle == in_xbundle) {
             break;
         }
@@ -2567,13 +2563,11 @@ xlate_normal_mcast_send_group(struct xlate_ctx *ctx,
                               const struct xvlan *xvlan)
     OVS_REQ_RDLOCK(ms->rwlock)
 {
-    struct xlate_cfg *xcfg;
     struct mcast_group_bundle *b;
     struct xbundle *mcast_xbundle;
 
-    xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
     LIST_FOR_EACH(b, bundle_node, &grp->bundle_lru) {
-        mcast_xbundle = xbundle_lookup(xcfg, b->port);
+        mcast_xbundle = xbundle_lookup(ctx->xcfg, b->port);
         if (mcast_xbundle && mcast_xbundle != in_xbundle) {
             xlate_report(ctx, OFT_DETAIL, "forwarding to mcast group port");
             output_normal(ctx, mcast_xbundle, xvlan);
@@ -2595,13 +2589,11 @@ xlate_normal_mcast_send_mrouters(struct xlate_ctx *ctx,
                                  const struct xvlan *xvlan)
     OVS_REQ_RDLOCK(ms->rwlock)
 {
-    struct xlate_cfg *xcfg;
     struct mcast_mrouter_bundle *mrouter;
     struct xbundle *mcast_xbundle;
 
-    xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
     LIST_FOR_EACH(mrouter, mrouter_node, &ms->mrouter_lru) {
-        mcast_xbundle = xbundle_lookup(xcfg, mrouter->port);
+        mcast_xbundle = xbundle_lookup(ctx->xcfg, mrouter->port);
         if (mcast_xbundle && mcast_xbundle != in_xbundle
             && mrouter->vlan == xvlan->v[0].vid) {
             xlate_report(ctx, OFT_DETAIL, "forwarding to mcast router port");
@@ -2627,13 +2619,11 @@ xlate_normal_mcast_send_fports(struct xlate_ctx *ctx,
                                const struct xvlan *xvlan)
     OVS_REQ_RDLOCK(ms->rwlock)
 {
-    struct xlate_cfg *xcfg;
     struct mcast_port_bundle *fport;
     struct xbundle *mcast_xbundle;
 
-    xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
     LIST_FOR_EACH(fport, node, &ms->fport_list) {
-        mcast_xbundle = xbundle_lookup(xcfg, fport->port);
+        mcast_xbundle = xbundle_lookup(ctx->xcfg, fport->port);
         if (mcast_xbundle && mcast_xbundle != in_xbundle) {
             xlate_report(ctx, OFT_DETAIL, "forwarding to mcast flood port");
             output_normal(ctx, mcast_xbundle, xvlan);
@@ -2655,13 +2645,11 @@ xlate_normal_mcast_send_rports(struct xlate_ctx *ctx,
                                const struct xvlan *xvlan)
     OVS_REQ_RDLOCK(ms->rwlock)
 {
-    struct xlate_cfg *xcfg;
     struct mcast_port_bundle *rport;
     struct xbundle *mcast_xbundle;
 
-    xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
     LIST_FOR_EACH(rport, node, &ms->rport_list) {
-        mcast_xbundle = xbundle_lookup(xcfg, rport->port);
+        mcast_xbundle = xbundle_lookup(ctx->xcfg, rport->port);
         if (mcast_xbundle
             && mcast_xbundle != in_xbundle
             && mcast_xbundle->ofbundle != in_xbundle->ofbundle) {
@@ -2892,8 +2880,7 @@ xlate_normal(struct xlate_ctx *ctx)
         ovs_rwlock_unlock(&ctx->xbridge->ml->rwlock);
 
         if (mac_port) {
-            struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
-            struct xbundle *mac_xbundle = xbundle_lookup(xcfg, mac_port);
+            struct xbundle *mac_xbundle = xbundle_lookup(ctx->xcfg, mac_port);
             if (mac_xbundle
                 && mac_xbundle != in_xbundle
                 && mac_xbundle->ofbundle != in_xbundle->ofbundle) {
@@ -3141,13 +3128,13 @@ process_special(struct xlate_ctx *ctx, const struct xport *xport)
 }
 
 static int
-tnl_route_lookup_flow(const struct flow *oflow,
+tnl_route_lookup_flow(const struct xlate_ctx *ctx,
+                      const struct flow *oflow,
                       struct in6_addr *ip, struct in6_addr *src,
                       struct xport **out_port)
 {
     char out_dev[IFNAMSIZ];
     struct xbridge *xbridge;
-    struct xlate_cfg *xcfg;
     struct in6_addr gw;
     struct in6_addr dst;
 
@@ -3163,10 +3150,7 @@ tnl_route_lookup_flow(const struct flow *oflow,
         *ip = dst;
     }
 
-    xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
-    ovs_assert(xcfg);
-
-    HMAP_FOR_EACH (xbridge, hmap_node, &xcfg->xbridges) {
+    HMAP_FOR_EACH (xbridge, hmap_node, &ctx->xcfg->xbridges) {
         if (!strncmp(xbridge->name, out_dev, IFNAMSIZ)) {
             struct xport *port;
 
@@ -3335,7 +3319,7 @@ native_tunnel_output(struct xlate_ctx *ctx, const struct xport *xport,
     memcpy(&old_base_flow, &ctx->base_flow, sizeof old_base_flow);
     memcpy(&old_flow, &ctx->xin->flow, sizeof old_flow);
 
-    err = tnl_route_lookup_flow(flow, &d_ip6, &s_ip6, &out_dev);
+    err = tnl_route_lookup_flow(ctx, flow, &d_ip6, &s_ip6, &out_dev);
     if (err) {
         xlate_report(ctx, OFT_WARN, "native tunnel routing failed");
         return err;
@@ -6845,6 +6829,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .xout = xout,
         .base_flow = *flow,
         .orig_tunnel_ipv6_dst = flow_tnl_dst(&flow->tunnel),
+        .xcfg = xcfg,
         .xbridge = xbridge,
         .stack = OFPBUF_STUB_INITIALIZER(stack_stub),
         .rule = xin->rule,
