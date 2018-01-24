@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # Copyright (c) 2016, 2017 Red Hat, Inc.
+# Copyright (c) 2018 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -95,9 +96,11 @@ __regex_ends_with_bracket = \
     re.compile(r'[^\s]\) {(\s+/\*[\s\Sa-zA-Z0-9\.,\?\*/+-]*)?$')
 __regex_ptr_declaration_missing_whitespace = re.compile(r'[a-zA-Z0-9]\*[^*]')
 __regex_is_comment_line = re.compile(r'^\s*(/\*|\*\s)')
+__regex_has_comment = re.compile(r'.*(/\*|\*\s)')
 __regex_trailing_operator = re.compile(r'^[^ ]* [^ ]*[?:]$')
 __regex_conditional_else_bracing = re.compile(r'^\s*else\s*{?$')
 __regex_conditional_else_bracing2 = re.compile(r'^\s*}\selse\s*$')
+__regex_has_xxx_mark = re.compile(r'.*xxx.*', re.IGNORECASE)
 
 skip_leading_whitespace_check = False
 skip_trailing_whitespace_check = False
@@ -213,10 +216,18 @@ def is_comment_line(line):
     """Returns TRUE if the current line is part of a block comment."""
     return __regex_is_comment_line.match(line) is not None
 
+def has_comment(line):
+    """Returns TRUE if the current line contains a comment or is part of
+       a block comment."""
+    return __regex_has_comment.match(line) is not None
 
 def trailing_operator(line):
     """Returns TRUE if the current line ends with an operatorsuch as ? or :"""
     return __regex_trailing_operator.match(line) is not None
+
+def has_xxx_mark(line):
+    """Returns TRUE if the current line contains 'xxx'."""
+    return __regex_has_xxx_mark.match(line) is not None
 
 
 checks = [
@@ -257,6 +268,11 @@ checks = [
      'check': lambda x: trailing_operator(x),
      'print':
      lambda: print_error("Line has '?' or ':' operator at end of line")},
+
+    {'regex': '(\.c|\.h)(\.in)?$', 'match_name': None,
+     'prereq': lambda x: has_comment(x),
+     'check': lambda x: has_xxx_mark(x),
+     'print': lambda: print_warning("Comment with 'xxx' marker")},
 ]
 
 
