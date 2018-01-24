@@ -42,6 +42,7 @@
 #include "openvswitch/vlog.h"
 #include "ovn/actions.h"
 #include "ovn/lib/chassis-index.h"
+#include "ovn/lib/extend-table.h"
 #include "ovn/lib/ovn-sb-idl.h"
 #include "ovn/lib/ovn-util.h"
 #include "patch.h"
@@ -593,11 +594,8 @@ main(int argc, char *argv[])
     unixctl_command_register("exit", "", 0, 0, ovn_controller_exit, &exiting);
 
     /* Initialize group ids for loadbalancing. */
-    struct group_table group_table;
-    group_table.group_ids = bitmap_allocate(MAX_OVN_GROUPS);
-    bitmap_set1(group_table.group_ids, 0); /* Group id 0 is invalid. */
-    hmap_init(&group_table.desired_groups);
-    hmap_init(&group_table.existing_groups);
+    struct ovn_extend_table group_table;
+    ovn_extend_table_init(&group_table);
 
     daemonize_complete();
 
@@ -845,17 +843,7 @@ main(int argc, char *argv[])
     simap_destroy(&ct_zones);
     shash_destroy(&pending_ct_zones);
 
-    bitmap_free(group_table.group_ids);
-    hmap_destroy(&group_table.desired_groups);
-
-    struct group_info *installed, *next_group;
-    HMAP_FOR_EACH_SAFE(installed, next_group, hmap_node,
-                       &group_table.existing_groups) {
-        hmap_remove(&group_table.existing_groups, &installed->hmap_node);
-        ds_destroy(&installed->group);
-        free(installed);
-    }
-    hmap_destroy(&group_table.existing_groups);
+    ovn_extend_table_destroy(&group_table);
 
     ovsdb_idl_loop_destroy(&ovs_idl_loop);
     ovsdb_idl_loop_destroy(&ovnsb_idl_loop);

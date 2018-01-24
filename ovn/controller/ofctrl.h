@@ -23,7 +23,7 @@
 #include "ovsdb-idl.h"
 
 struct controller_ctx;
-struct group_table;
+struct ovn_extend_table;
 struct hmap;
 struct match;
 struct ofpbuf;
@@ -31,7 +31,7 @@ struct ovsrec_bridge;
 struct shash;
 
 /* Interface for OVN main loop. */
-void ofctrl_init(struct group_table *group_table);
+void ofctrl_init(struct ovn_extend_table *group_table);
 enum mf_field_id ofctrl_run(const struct ovsrec_bridge *br_int,
                             struct shash *pending_ct_zones);
 bool ofctrl_can_put(void);
@@ -54,8 +54,5 @@ void ofctrl_add_flow(struct hmap *desired_flows, uint8_t table_id,
                      const struct match *, const struct ofpbuf *ofpacts);
 
 void ofctrl_flow_table_clear(void);
-
-void ovn_group_table_clear(struct group_table *group_table,
-                           bool existing);
 
 #endif /* ovn/ofctrl.h */
