@@ -206,6 +206,7 @@ struct upcall {
      * dpif-netdev.  If a modification is absolutely necessary, a const cast
      * may be used with other datapaths. */
     const struct flow *flow;       /* Parsed representation of the packet. */
+    enum odp_key_fitness fitness;  /* Fitness of 'flow' relative to ODP key. */
     const ovs_u128 *ufid;          /* Unique identifier for 'flow'. */
     unsigned pmd_id;               /* Datapath poll mode driver id. */
     const struct dp_packet *packet;   /* Packet associated with this upcall. */
@@ -787,8 +788,9 @@ recv_upcalls(struct handler *handler)
             break;
         }
 
-        if (odp_flow_key_to_flow(dupcall->key, dupcall->key_len, flow)
-            == ODP_FIT_ERROR) {
+        upcall->fitness = odp_flow_key_to_flow(dupcall->key, dupcall->key_len,
+                                               flow);
+        if (upcall->fitness == ODP_FIT_ERROR) {
             goto free_dupcall;
         }
 
@@ -1174,6 +1176,9 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
 
     upcall->xout_initialized = true;
 
+    if (upcall->fitness == ODP_FIT_TOO_LITTLE) {
+        upcall->xout.slow |= SLOW_MATCH;
+    }
     if (!upcall->xout.slow) {
         ofpbuf_use_const(&upcall->put_actions,
                          odp_actions->data, odp_actions->size);
@@ -2029,10 +2034,12 @@ xlate_key(struct udpif *udpif, const struct nlattr *key, unsigned int len,
 {
     struct ofproto_dpif *ofproto;
     ofp_port_t ofp_in_port;
+    enum odp_key_fitness fitness;
     struct xlate_in xin;
     int error;
 
-    if (odp_flow_key_to_flow(key, len, &ctx->flow) == ODP_FIT_ERROR) {
+    fitness = odp_flow_key_to_flow(key, len, &ctx->flow);
+    if (fitness == ODP_FIT_ERROR) {
         return EINVAL;
     }
 
@@ -2051,6 +2058,9 @@ xlate_key(struct udpif *udpif, const struct nlattr *key, unsigned int len,
     }
     xin.xcache = ctx->xcache;
     xlate_actions(&xin, &ctx->xout);
+    if (fitness == ODP_FIT_TOO_LITTLE) {
+        ctx->xout.slow |= SLOW_MATCH;
+    }
 
     return 0;
 }
