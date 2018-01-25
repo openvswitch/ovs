@@ -19,6 +19,7 @@
 #include "ovs-rcu.h"
 #include "fatal-signal.h"
 #include "guarded-list.h"
+#include "latch.h"
 #include "openvswitch/list.h"
 #include "ovs-thread.h"
 #include "openvswitch/poll-loop.h"
@@ -57,6 +58,9 @@ static struct ovs_mutex ovsrcu_threads_mutex;
 
 static struct guarded_list flushed_cbsets;
 static struct seq *flushed_cbsets_seq;
+
+static struct latch postpone_exit;
+static struct ovs_barrier postpone_barrier;
 
 static void ovsrcu_init_module(void);
 static void ovsrcu_flush_cbset__(struct ovsrcu_perthread *, bool);
@@ -111,6 +115,8 @@ ovsrcu_quiesced(void)
     } else {
         static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
         if (ovsthread_once_start(&once)) {
+            latch_init(&postpone_exit);
+            ovs_barrier_init(&postpone_barrier, 2);
             ovs_thread_create("urcu", ovsrcu_postpone_thread, NULL);
             ovsthread_once_done(&once);
         }
@@ -232,6 +238,49 @@ ovsrcu_synchronize(void)
     ovsrcu_quiesce_end();
 }
 
+/* Waits until as many postponed callbacks as possible have executed.
+ *
+ * As a side effect, stops the background thread that calls the callbacks and
+ * prevents it from being restarted.  This means that this function should only
+ * be called soon before a process exits, as a mechanism for releasing memory
+ * to make memory leaks easier to detect, since any further postponed callbacks
+ * won't actually get called.
+ *
+ * This function can only wait for callbacks registered by the current thread
+ * and the background thread that calls the callbacks.  Thus, it will be most
+ * effective if other threads have already exited. */
+void
+ovsrcu_exit(void)
+{
+    /* Stop the postpone thread and wait for it to exit.  Otherwise, there's no
+     * way to wait for that thread to finish calling callbacks itself. */
+    if (!single_threaded()) {
+        ovsrcu_quiesced();      /* Ensure that the postpone thread exists. */
+        latch_set(&postpone_exit);
+        ovs_barrier_block(&postpone_barrier);
+    }
+
+    /* Repeatedly:
+     *
+     *    - Wait for a grace period.  One important side effect is to push the
+     *      running thread's cbset into 'flushed_cbsets' so that the next call
+     *      has something to call.
+     *
+     *    - Call all the callbacks in 'flushed_cbsets'.  If there aren't any,
+     *      we're done, otherwise the callbacks themselves might have requested
+     *      more deferred callbacks so we go around again.
+     *
+     * We limit the number of iterations just in case some bug causes an
+     * infinite loop.  This function is just for making memory leaks easier to
+     * spot so there's no point in breaking things on that basis. */
+    for (int i = 0; i < 8; i++) {
+        ovsrcu_synchronize();
+        if (!ovsrcu_call_postponed()) {
+            break;
+        }
+    }
+}
+
 /* Registers 'function' to be called, passing 'aux' as argument, after the
  * next grace period.
  *
@@ -303,15 +352,17 @@ ovsrcu_postpone_thread(void *arg OVS_UNUSED)
 {
     pthread_detach(pthread_self());
 
-    for (;;) {
+    while (!latch_is_set(&postpone_exit)) {
         uint64_t seqno = seq_read(flushed_cbsets_seq);
         if (!ovsrcu_call_postponed()) {
             seq_wait(flushed_cbsets_seq, seqno);
+            latch_wait(&postpone_exit);
             poll_block();
         }
     }
 
-    OVS_NOT_REACHED();
+    ovs_barrier_block(&postpone_barrier);
+    return NULL;
 }
 
 static void

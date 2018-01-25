@@ -308,4 +308,6 @@ bool ovsrcu_is_quiescent(void);
  * once.  This can block for a relatively long time. */
 void ovsrcu_synchronize(void);
 
+void ovsrcu_exit(void);
+
 #endif /* ovs-rcu.h */

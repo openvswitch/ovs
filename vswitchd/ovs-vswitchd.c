@@ -37,6 +37,7 @@
 #include "netdev.h"
 #include "openflow/openflow.h"
 #include "ovsdb-idl.h"
+#include "ovs-rcu.h"
 #include "openvswitch/poll-loop.h"
 #include "simap.h"
 #include "stream-ssl.h"
@@ -135,6 +136,7 @@ main(int argc, char *argv[])
     bridge_exit(cleanup);
     unixctl_server_destroy(unixctl);
     service_stop();
+    ovsrcu_exit();
 
     return 0;
 }
