@@ -300,7 +300,7 @@
  *     bool atomic_flag_test_and_set_explicit(atomic_flag *object,
  *                                            memory_order);
  *
- *         Atomically sets '*object', respsecting the given memory order (or
+ *         Atomically sets '*object', respecting the given memory order (or
  *         memory_order_seq_cst for atomic_flag_test_and_set()).  Returns the
  *         previous value of the flag (false for clear, true for set).
  *
