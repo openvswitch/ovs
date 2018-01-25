@@ -171,7 +171,7 @@ struct eth_addr {
 /* Ethernet address constant, e.g. ETH_ADDR_C(01,23,45,67,89,ab) is
  * 01:23:45:67:89:ab. */
 #define ETH_ADDR_C(A,B,C,D,E,F) \
-    { { .ea = { 0x##A, 0x##B, 0x##C, 0x##D, 0x##E, 0x##F } } }
+    { { { 0x##A, 0x##B, 0x##C, 0x##D, 0x##E, 0x##F } } }
 
 /* Similar to struct eth_addr, for EUI-64 addresses. */
 struct eth_addr64 {
@@ -184,8 +184,7 @@ struct eth_addr64 {
 /* EUI-64 address constant, e.g. ETH_ADDR_C(01,23,45,67,89,ab,cd,ef) is
  * 01:23:45:67:89:ab:cd:ef. */
 #define ETH_ADDR64_C(A,B,C,D,E,F,G,H) \
-    { { .ea64 = { 0x##A, 0x##B, 0x##C, 0x##D, \
-                  0x##E, 0x##F, 0x##G, 0x##H} } }
+    { { { 0x##A, 0x##B, 0x##C, 0x##D, 0x##E, 0x##F, 0x##G, 0x##H } } }
 
 #ifdef __cplusplus
 }
