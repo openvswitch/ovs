@@ -97,7 +97,7 @@ OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[], struct shash *local_options);
 static void run_prerequisites(struct ctl_command[], size_t n_commands,
                               struct ovsdb_idl *);
-static void do_vsctl(const char *args, struct ctl_command *, size_t n,
+static bool do_vsctl(const char *args, struct ctl_command *, size_t n,
                      struct ovsdb_idl *);
 
 /* post_db_reload_check frame work is to allow ovs-vsctl to do additional
@@ -181,7 +181,10 @@ main(int argc, char *argv[])
 
         if (seqno != ovsdb_idl_get_seqno(idl)) {
             seqno = ovsdb_idl_get_seqno(idl);
-            do_vsctl(args, commands, n_commands, idl);
+            if (do_vsctl(args, commands, n_commands, idl)) {
+                free(args);
+                exit(EXIT_SUCCESS);
+            }
         }
 
         if (seqno == ovsdb_idl_get_seqno(idl)) {
@@ -2482,7 +2485,7 @@ vsctl_parent_process_info(void)
 #endif
 }
 
-static void
+static bool
 do_vsctl(const char *args, struct ctl_command *commands, size_t n_commands,
          struct ovsdb_idl *idl)
 {
@@ -2666,7 +2669,7 @@ do_vsctl(const char *args, struct ctl_command *commands, size_t n_commands,
     ovsdb_idl_txn_destroy(txn);
     ovsdb_idl_destroy(idl);
 
-    exit(EXIT_SUCCESS);
+    return true;
 
 try_again:
     /* Our transaction needs to be rerun, or a prerequisite was not met.  Free
@@ -2682,6 +2685,7 @@ try_again:
         free(c->table);
     }
     free(error);
+    return false;
 }
 
 /* Frees the current transaction and the underlying IDL and then calls
