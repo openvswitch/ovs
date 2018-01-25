@@ -2961,10 +2961,11 @@ compose_sample_action(struct xlate_ctx *ctx,
         ctx->xbridge, ctx->xin->flow.in_port.ofp_port);
     uint32_t pid = dpif_port_get_pid(ctx->xbridge->dpif, odp_port,
                                      flow_hash_5tuple(&ctx->xin->flow, 0));
-    int cookie_offset = odp_put_userspace_action(pid, cookie, sizeof *cookie,
-                                                 tunnel_out_port,
-                                                 include_actions,
-                                                 ctx->odp_actions);
+    size_t cookie_offset = odp_put_userspace_action(pid, cookie,
+                                                    sizeof *cookie,
+                                                    tunnel_out_port,
+                                                    include_actions,
+                                                    ctx->odp_actions);
 
     if (is_sample) {
         nl_msg_end_nested(ctx->odp_actions, actions_offset);
