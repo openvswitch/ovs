@@ -15,3 +15,12 @@
    fun:set_up_timer
 }
 
+{
+   aio
+   Memcheck:Leak
+   fun:calloc
+   ...
+   fun:allocate_stack
+   ...
+   fun:__aio_create_helper_thread
+}

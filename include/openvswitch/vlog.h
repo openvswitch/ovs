@@ -146,6 +146,7 @@ void vlog_set_syslog_target(const char *target);
 /* Initialization. */
 void vlog_init(void);
 void vlog_enable_async(void);
+void vlog_disable_async(void);
 
 /* Functions for actual logging. */
 void vlog(const struct vlog_module *, enum vlog_level, const char *format, ...)

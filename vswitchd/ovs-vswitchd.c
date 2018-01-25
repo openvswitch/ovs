@@ -136,6 +136,7 @@ main(int argc, char *argv[])
     bridge_exit(cleanup);
     unixctl_server_destroy(unixctl);
     service_stop();
+    vlog_disable_async();
     ovsrcu_exit();
 
     return 0;
