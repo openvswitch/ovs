@@ -5140,15 +5140,13 @@ ofproto_flow_mod_learn(struct ofproto_flow_mod *ofm, bool keep_ref,
                 ofproto_flow_mod_learn_finish(ofm, NULL);
             }
         } else {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+            VLOG_INFO_RL(&rl, "Learn limit for flow %"PRIu64" reached.",
+                         rule->flow_cookie);
+
             ofproto_flow_mod_uninit(ofm);
         }
         ovs_mutex_unlock(&ofproto_mutex);
-
-        if (!below_limit) {
-            static struct vlog_rate_limit learn_rl = VLOG_RATE_LIMIT_INIT(1, 5);
-            VLOG_INFO_RL(&learn_rl, "Learn limit for flow %"PRIu64" reached.",
-                         rule->flow_cookie);
-        }
     }
 
     if (!keep_ref && below_limit) {
