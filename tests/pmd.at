@@ -266,8 +266,8 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 2])
 OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
-icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:f7ff
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=106 in_port=1 (via action) data_len=106 (unbuffered)
+icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:13fc
 ])
 
 AT_CHECK([ovs-vsctl set interface p1 options:n_rxq=4])
@@ -288,8 +288,8 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 2])
 OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
-icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:f7ff
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=106 in_port=1 (via action) data_len=106 (unbuffered)
+icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:13fc
 ])
 
 dnl Check resetting to default number of rx queues after removal from the db.
@@ -339,10 +339,10 @@ AT_CHECK([ovs-appctl dpctl/dump-flows | flow_dump_prepend_pmd], [0], [dnl
 ])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
-icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:f7ff
-NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
-icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:f7ff
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=106 in_port=1 (via action) data_len=106 (unbuffered)
+icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:13fc
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=106 in_port=1 (via action) data_len=106 (unbuffered)
+icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:13fc
 ])
 
 OVS_VSWITCHD_STOP
@@ -374,8 +374,8 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 2])
 OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
-icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:f7ff
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=106 in_port=1 (via action) data_len=106 (unbuffered)
+icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:13fc
 ])
 
 AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl --detach --no-chdir --pidfile 2> ofctl_monitor.log])
@@ -386,8 +386,8 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 2])
 OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=42 in_port=2 (via action) data_len=42 (unbuffered)
-icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:f7ff
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=106 in_port=2 (via action) data_len=106 (unbuffered)
+icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:13fc
 ])
 
 AT_CHECK([ovs-vsctl set Interface p2 options:numa_id=1])
@@ -407,8 +407,8 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 2])
 OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
-icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:f7ff
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=106 in_port=1 (via action) data_len=106 (unbuffered)
+icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:13fc
 ])
 
 AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl --detach --no-chdir --pidfile 2> ofctl_monitor.log])
@@ -419,8 +419,8 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 2])
 OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=42 in_port=2 (via action) data_len=42 (unbuffered)
-icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:f7ff
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=106 in_port=2 (via action) data_len=106 (unbuffered)
+icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:13fc
 ])
 
 OVS_VSWITCHD_STOP
@@ -448,8 +448,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p2 --qid 0 'in_port(1),eth(src=50:54:0
 OVS_WAIT_UNTIL([test `ovs-pcap br0.pcap | wc -l` -ge 2])
 
 AT_CHECK([ovs-pcap br0.pcap], [0], [dnl
-50540000000a50540000000908004500001c00000000400166df0a0000020a0000010800f7ff00000000
-50540000000a50540000000908004500001c00000000400166df0a0000020a0000010800f7ff00000000
+50540000000a50540000000908004500005c000000004001669f0a0000020a000001080013fc00000000000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f
+50540000000a50540000000908004500005c000000004001669f0a0000020a000001080013fc00000000000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f
 ])
 
 AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=2])
@@ -467,10 +467,10 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p2 --qid 0 'in_port(1),eth(src=50:54:0
 OVS_WAIT_UNTIL([test `ovs-pcap br0.pcap | wc -l` -ge 4])
 
 AT_CHECK([ovs-pcap br0.pcap], [0], [dnl
-50540000000a50540000000908004500001c00000000400166df0a0000020a0000010800f7ff00000000
-50540000000a50540000000908004500001c00000000400166df0a0000020a0000010800f7ff00000000
-50540000000a50540000000908004500001c00000000400166df0a0000020a0000010800f7ff00000000
-50540000000a50540000000908004500001c00000000400166df0a0000020a0000010800f7ff00000000
+50540000000a50540000000908004500005c000000004001669f0a0000020a000001080013fc00000000000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f
+50540000000a50540000000908004500005c000000004001669f0a0000020a000001080013fc00000000000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f
+50540000000a50540000000908004500005c000000004001669f0a0000020a000001080013fc00000000000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f
+50540000000a50540000000908004500005c000000004001669f0a0000020a000001080013fc00000000000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f
 ])
 
 OVS_VSWITCHD_STOP
@@ -498,8 +498,8 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 2])
 OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
-icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:f7ff
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=106 in_port=1 (via action) data_len=106 (unbuffered)
+icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:13fc
 ])
 
 AT_CHECK([ovs-vsctl del-port br0 p1])
@@ -513,8 +513,8 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 2])
 OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
-icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:f7ff
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=106 in_port=1 (via action) data_len=106 (unbuffered)
+icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:13fc
 ])
 
 OVS_VSWITCHD_STOP

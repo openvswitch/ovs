@@ -203,6 +203,8 @@ parse_flow_and_packet(int argc, const char *argv[],
     char *m_err = NULL;
     struct simap port_names = SIMAP_INITIALIZER(&port_names);
     struct dp_packet *packet = NULL;
+    uint8_t *l7 = NULL;
+    size_t l7_len = 64;
     struct ofpbuf odp_key;
     struct ofpbuf odp_mask;
 
@@ -219,6 +221,35 @@ parse_flow_and_packet(int argc, const char *argv[],
         const char *arg = argv[i];
         if (!strcmp(arg, "-generate") || !strcmp(arg, "--generate")) {
             generate_packet = true;
+        } else if (!strcmp(arg, "--l7")) {
+            if (i + 1 >= argc) {
+                m_err = xasprintf("Missing argument for option %s", arg);
+                goto exit;
+            }
+
+            struct dp_packet payload;
+            memset(&payload, 0, sizeof payload);
+            dp_packet_init(&payload, 0);
+            if (dp_packet_put_hex(&payload, argv[++i], NULL)[0] != '\0') {
+                dp_packet_uninit(&payload);
+                error = "Trailing garbage in packet data";
+                goto exit;
+            }
+            free(l7);
+            l7_len = dp_packet_size(&payload);
+            l7 = dp_packet_steal_data(&payload);
+        } else if (!strcmp(arg, "--l7-len")) {
+            if (i + 1 >= argc) {
+                m_err = xasprintf("Missing argument for option %s", arg);
+                goto exit;
+            }
+            free(l7);
+            l7 = NULL;
+            l7_len = atoi(argv[++i]);
+            if (l7_len > 64000) {
+                m_err = xasprintf("%s: too much L7 data", argv[i]);
+                goto exit;
+            }
         } else if (consistent
                    && (!strcmp(arg, "-consistent") ||
                        !strcmp(arg, "--consistent"))) {
@@ -392,7 +423,7 @@ parse_flow_and_packet(int argc, const char *argv[],
     if (generate_packet) {
         /* Generate a packet, as requested. */
         packet = dp_packet_new(0);
-        flow_compose(packet, flow, 0);
+        flow_compose(packet, flow, l7, l7_len);
     } else if (packet) {
         /* Use the metadata from the flow and the packet argument to
          * reconstruct the flow. */
@@ -412,6 +443,7 @@ exit:
     ofpbuf_uninit(&odp_key);
     ofpbuf_uninit(&odp_mask);
     simap_destroy(&port_names);
+    free(l7);
     return m_err;
 }
 

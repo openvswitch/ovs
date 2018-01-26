@@ -53,6 +53,11 @@ These commands support the following options:
 .IP \fB\-\-generate\fR
 Generate a packet from the flow (see below for more information).
 .
+.IP "\fB\-\-l7 \fIpayload\fR"
+.IQ "\fB\-\-l7\-len \fIlength\fR"
+Accepted only with \fB\-\-generate\fR (see below for more
+information).
+.
 .IP \fB\-\-consistent\fR
 Accepted by \fBofproto\-trace\-packet\-out\fR only.  With this option,
 the command rejects \fIactions\fR that are inconsistent with the
@@ -147,6 +152,11 @@ it, but \fB\-\-generate\fR is not a good way to fill in incomplete
 information, because it generates packets based on only the flow
 information, which means that the packets really do not have any more
 information than the flow.
+.IP
+By default, for protocols that allow arbitrary L7 payloads, the
+generated packet has 64 bytes of payload.  Use \fB\-\-l7\-len\fR to
+change the payload length, or \fB\-\-l7\fR to specify the exact
+contents of the payload.
 .
 .IP \fIpacket\fR
 This form supplies an explicit \fIpacket\fR as a sequence of hex

@@ -1166,7 +1166,7 @@ ofctrl_inject_pkt(const struct ovsrec_bridge *br_int, const char *flow_s,
     uint64_t packet_stub[128 / 8];
     struct dp_packet packet;
     dp_packet_use_stub(&packet, packet_stub, sizeof packet_stub);
-    flow_compose(&packet, &uflow, 0);
+    flow_compose(&packet, &uflow, NULL, 64);
 
     uint64_t ofpacts_stub[1024 / 8];
     struct ofpbuf ofpacts = OFPBUF_STUB_INITIALIZER(ofpacts_stub);

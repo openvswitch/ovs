@@ -1,5 +1,7 @@
 Post-v2.9.0
 --------------------
+    - ovs-vswitchd:
+      * New options --l7 and --l7-len to "ofproto/trace" command.
 
 
 v2.9.0 - xx xxx xxxx

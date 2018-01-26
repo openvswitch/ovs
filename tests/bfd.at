@@ -237,7 +237,7 @@ OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
                     set bridge br0 fail-mode=standalone])
 
 # by default check_tnl_key is false. so we should process a bfd packet with tun_id=1.
-AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0x1,src=2.2.2.2,dst=2.2.2.1,tos=0x0,ttl=64,tp_src=0,tp_dst=0,flags(key)),in_port(1),skb_mark(0/0),eth(src=00:11:22:33:44:55,dst=00:23:20:00:00:01),eth_type(0x0800),ipv4(src=169.254.1.0/0.0.0.0,dst=169.254.1.1/0.0.0.0,proto=17/0xff,tos=0/0,ttl=255/0,frag=no),udp(src=49152/0,dst=3784/0xffff)' -generate], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace --l7-len 0 ovs-dummy 'tunnel(tun_id=0x1,src=2.2.2.2,dst=2.2.2.1,tos=0x0,ttl=64,tp_src=0,tp_dst=0,flags(key)),in_port(1),skb_mark(0/0),eth(src=00:11:22:33:44:55,dst=00:23:20:00:00:01),eth_type(0x0800),ipv4(src=169.254.1.0/0.0.0.0,dst=169.254.1.1/0.0.0.0,proto=17/0xff,tos=0/0,ttl=255/0,frag=no),udp(src=49152/0,dst=3784/0xffff)' -generate], [0], [stdout])
 # check that the packet should be handled as BFD packet.
 AT_CHECK([tail -2 stdout], [0], [dnl
 This flow is handled by the userspace slow path because it:
@@ -254,7 +254,7 @@ Datapath actions: 100
 
 # set the tunnel key to 0.
 AT_CHECK([ovs-vsctl set interface p1 options:key=0])
-AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0x0,src=2.2.2.2,dst=2.2.2.1,tos=0x0,ttl=64,tp_src=0,tp_dst=0,flags(key)),in_port(1),skb_mark(0/0),eth(src=00:11:22:33:44:55,dst=00:23:20:00:00:01),eth_type(0x0800),ipv4(src=169.254.1.0/0.0.0.0,dst=169.254.1.1/0.0.0.0,proto=17/0xff,tos=0/0,ttl=255/0,frag=no),udp(src=49152/0,dst=3784/0xffff)' -generate], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace --l7-len 0 ovs-dummy 'tunnel(tun_id=0x0,src=2.2.2.2,dst=2.2.2.1,tos=0x0,ttl=64,tp_src=0,tp_dst=0,flags(key)),in_port(1),skb_mark(0/0),eth(src=00:11:22:33:44:55,dst=00:23:20:00:00:01),eth_type(0x0800),ipv4(src=169.254.1.0/0.0.0.0,dst=169.254.1.1/0.0.0.0,proto=17/0xff,tos=0/0,ttl=255/0,frag=no),udp(src=49152/0,dst=3784/0xffff)' -generate], [0], [stdout])
 # check that the packet should be handled as BFD packet.
 AT_CHECK([tail -2 stdout], [0], [dnl
 This flow is handled by the userspace slow path because it:

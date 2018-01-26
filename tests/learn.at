@@ -317,8 +317,8 @@ done
 # Check for the learning entry.
 ovs-appctl time/warp 1000
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0],
-[[ n_packets=1, n_bytes=54, actions=load:0x3->NXM_NX_REG0[0..15],learn(table=0,priority=65535,NXM_OF_ETH_SRC[],NXM_OF_VLAN_TCI[0..11],output:NXM_NX_REG0[0..15]),output:2
- n_packets=9, n_bytes=486, priority=65535,vlan_tci=0x0000/0x0fff,dl_src=50:54:00:00:00:05 actions=output:3
+[[ n_packets=1, n_bytes=118, actions=load:0x3->NXM_NX_REG0[0..15],learn(table=0,priority=65535,NXM_OF_ETH_SRC[],NXM_OF_VLAN_TCI[0..11],output:NXM_NX_REG0[0..15]),output:2
+ n_packets=9, n_bytes=1062, priority=65535,vlan_tci=0x0000/0x0fff,dl_src=50:54:00:00:00:05 actions=output:3
 NXST_FLOW reply:
 ]])
 
@@ -327,10 +327,10 @@ AT_CHECK(
   [(ovs-ofctl dump-ports br0 2; ovs-ofctl dump-ports br0 3) | strip_xids], [0],
   [OFPST_PORT reply: 1 ports
   port  2: rx pkts=0, bytes=0, drop=?, errs=?, frame=?, over=?, crc=?
-           tx pkts=1, bytes=54, drop=?, errs=?, coll=?
+           tx pkts=1, bytes=118, drop=?, errs=?, coll=?
 OFPST_PORT reply: 1 ports
   port  3: rx pkts=0, bytes=0, drop=?, errs=?, frame=?, over=?, crc=?
-           tx pkts=9, bytes=486, drop=?, errs=?, coll=?
+           tx pkts=9, bytes=1062, drop=?, errs=?, coll=?
 ])
 
 OVS_VSWITCHD_STOP
@@ -378,17 +378,17 @@ AT_CHECK(
   [(ovs-ofctl dump-ports br0 2; ovs-ofctl dump-ports br0 3) | strip_xids], [0],
   [OFPST_PORT reply: 1 ports
   port  2: rx pkts=0, bytes=0, drop=?, errs=?, frame=?, over=?, crc=?
-           tx pkts=2, bytes=108, drop=?, errs=?, coll=?
+           tx pkts=2, bytes=236, drop=?, errs=?, coll=?
 OFPST_PORT reply: 1 ports
   port  3: rx pkts=0, bytes=0, drop=?, errs=?, frame=?, over=?, crc=?
-           tx pkts=18, bytes=972, drop=?, errs=?, coll=?
+           tx pkts=18, bytes=2124, drop=?, errs=?, coll=?
 ])
 
 # Check for the learning entry.
 ovs-appctl time/warp 1000
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0],
-[[ n_packets=2, n_bytes=108, actions=load:0x3->NXM_NX_REG0[0..15],learn(table=0,idle_timeout=5,priority=65535,NXM_OF_ETH_SRC[],NXM_OF_VLAN_TCI[0..11],output:NXM_NX_REG0[0..15]),output:2
- n_packets=9, n_bytes=486, idle_timeout=5, priority=65535,vlan_tci=0x0000/0x0fff,dl_src=50:54:00:00:00:06 actions=output:3
+[[ n_packets=2, n_bytes=236, actions=load:0x3->NXM_NX_REG0[0..15],learn(table=0,idle_timeout=5,priority=65535,NXM_OF_ETH_SRC[],NXM_OF_VLAN_TCI[0..11],output:NXM_NX_REG0[0..15]),output:2
+ n_packets=9, n_bytes=1062, idle_timeout=5, priority=65535,vlan_tci=0x0000/0x0fff,dl_src=50:54:00:00:00:06 actions=output:3
 NXST_FLOW reply:
 ]])
 OVS_VSWITCHD_STOP
@@ -420,10 +420,10 @@ AT_CHECK(
   [(ovs-ofctl dump-ports br0 2; ovs-ofctl dump-ports br0 3) | strip_xids], [0],
   [OFPST_PORT reply: 1 ports
   port  2: rx pkts=0, bytes=0, drop=?, errs=?, frame=?, over=?, crc=?
-           tx pkts=1, bytes=54, drop=?, errs=?, coll=?
+           tx pkts=1, bytes=118, drop=?, errs=?, coll=?
 OFPST_PORT reply: 1 ports
   port  3: rx pkts=0, bytes=0, drop=?, errs=?, frame=?, over=?, crc=?
-           tx pkts=9, bytes=486, drop=?, errs=?, coll=?
+           tx pkts=9, bytes=1062, drop=?, errs=?, coll=?
 ])
 
 # Trace some packets arriving.  This is is a different flow from the previous.
@@ -476,18 +476,18 @@ AT_CHECK(
   [(ovs-ofctl dump-ports br0 2; ovs-ofctl dump-ports br0 3) | strip_xids], [0],
   [OFPST_PORT reply: 1 ports
   port  2: rx pkts=0, bytes=0, drop=?, errs=?, frame=?, over=?, crc=?
-           tx pkts=3, bytes=162, drop=?, errs=?, coll=?
+           tx pkts=3, bytes=354, drop=?, errs=?, coll=?
 OFPST_PORT reply: 1 ports
   port  3: rx pkts=0, bytes=0, drop=?, errs=?, frame=?, over=?, crc=?
-           tx pkts=17, bytes=918, drop=?, errs=?, coll=?
+           tx pkts=17, bytes=2006, drop=?, errs=?, coll=?
 ])
 
 # Check for the learning entry.
 ovs-appctl time/warp 1000
 sleep 1
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0],
-[[ n_packets=3, n_bytes=162, actions=load:0x3->NXM_NX_REG0[0..15],learn(table=0,hard_timeout=10,priority=65535,NXM_OF_ETH_SRC[],NXM_OF_VLAN_TCI[0..11],output:NXM_NX_REG0[0..15]),output:2
- n_packets=3, n_bytes=162, hard_timeout=10, priority=65535,vlan_tci=0x0000/0x0fff,dl_src=50:54:00:00:00:06 actions=output:3
+[[ n_packets=3, n_bytes=354, actions=load:0x3->NXM_NX_REG0[0..15],learn(table=0,hard_timeout=10,priority=65535,NXM_OF_ETH_SRC[],NXM_OF_VLAN_TCI[0..11],output:NXM_NX_REG0[0..15]),output:2
+ n_packets=3, n_bytes=354, hard_timeout=10, priority=65535,vlan_tci=0x0000/0x0fff,dl_src=50:54:00:00:00:06 actions=output:3
 NXST_FLOW reply:
 ]])
 OVS_VSWITCHD_STOP
@@ -728,17 +728,17 @@ done
 
 dnl Check successful counters:
 AT_CHECK([ovs-ofctl dump-flows br0 table=1,reg0=1 | ofctl_strip | sort], [0], [dnl
- cookie=0x1, table=1, n_packets=1, n_bytes=42, reg0=0x1,in_port=1 actions=drop
- cookie=0x2, table=1, n_packets=10, n_bytes=420, reg0=0x1,in_port=2 actions=drop
- cookie=0x3, table=1, n_packets=20, n_bytes=840, reg0=0x1,in_port=3 actions=drop
+ cookie=0x1, table=1, n_packets=1, n_bytes=106, reg0=0x1,in_port=1 actions=drop
+ cookie=0x2, table=1, n_packets=10, n_bytes=1060, reg0=0x1,in_port=2 actions=drop
+ cookie=0x3, table=1, n_packets=20, n_bytes=2120, reg0=0x1,in_port=3 actions=drop
 NXST_FLOW reply:
 ])
 
 dnl Check failed counters:
 AT_CHECK([ovs-ofctl dump-flows br0 table=1,reg0=0 | ofctl_strip | sort], [0], [dnl
- cookie=0x1, table=1, n_packets=29, n_bytes=1218, reg0=0,in_port=1 actions=drop
- cookie=0x2, table=1, n_packets=20, n_bytes=840, reg0=0,in_port=2 actions=drop
- cookie=0x3, table=1, n_packets=10, n_bytes=420, reg0=0,in_port=3 actions=drop
+ cookie=0x1, table=1, n_packets=29, n_bytes=3074, reg0=0,in_port=1 actions=drop
+ cookie=0x2, table=1, n_packets=20, n_bytes=2120, reg0=0,in_port=2 actions=drop
+ cookie=0x3, table=1, n_packets=10, n_bytes=1060, reg0=0,in_port=3 actions=drop
 NXST_FLOW reply:
 ])
 

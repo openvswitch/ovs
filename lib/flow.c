@@ -2692,8 +2692,24 @@ flow_set_mpls_lse(struct flow *flow, int idx, ovs_be32 lse)
     flow->mpls_lse[idx] = lse;
 }
 
+static void
+flow_compose_l7(struct dp_packet *p, const void *l7, size_t l7_len)
+{
+    if (l7_len) {
+        if (l7) {
+            dp_packet_put(p, l7, l7_len);
+        } else {
+            uint8_t *payload = dp_packet_put_uninit(p, l7_len);
+            for (size_t i = 0; i < l7_len; i++) {
+                payload[i] = i;
+            }
+        }
+    }
+}
+
 static size_t
-flow_compose_l4(struct dp_packet *p, const struct flow *flow)
+flow_compose_l4(struct dp_packet *p, const struct flow *flow,
+                const void *l7, size_t l7_len)
 {
     size_t orig_len = dp_packet_size(p);
 
@@ -2704,19 +2720,31 @@ flow_compose_l4(struct dp_packet *p, const struct flow *flow)
             tcp->tcp_src = flow->tp_src;
             tcp->tcp_dst = flow->tp_dst;
             tcp->tcp_ctl = TCP_CTL(ntohs(flow->tcp_flags), 5);
+            if (!(flow->tcp_flags & htons(TCP_SYN | TCP_FIN | TCP_RST))) {
+                flow_compose_l7(p, l7, l7_len);
+            }
         } else if (flow->nw_proto == IPPROTO_UDP) {
             struct udp_header *udp = dp_packet_put_zeros(p, sizeof *udp);
             udp->udp_src = flow->tp_src;
             udp->udp_dst = flow->tp_dst;
-            udp->udp_len = htons(sizeof *udp);
+            udp->udp_len = htons(sizeof *udp + l7_len);
+            flow_compose_l7(p, l7, l7_len);
         } else if (flow->nw_proto == IPPROTO_SCTP) {
             struct sctp_header *sctp = dp_packet_put_zeros(p, sizeof *sctp);
             sctp->sctp_src = flow->tp_src;
             sctp->sctp_dst = flow->tp_dst;
+            /* XXX Someone should figure out what L7 data to include. */
         } else if (flow->nw_proto == IPPROTO_ICMP) {
             struct icmp_header *icmp = dp_packet_put_zeros(p, sizeof *icmp);
             icmp->icmp_type = ntohs(flow->tp_src);
             icmp->icmp_code = ntohs(flow->tp_dst);
+            if ((icmp->icmp_type == ICMP4_ECHO_REQUEST ||
+                 icmp->icmp_type == ICMP4_ECHO_REPLY)
+                && icmp->icmp_code == 0) {
+                flow_compose_l7(p, l7, l7_len);
+            } else {
+                /* XXX Add inner IP packet for e.g. destination unreachable? */
+            }
         } else if (flow->nw_proto == IPPROTO_IGMP) {
             struct igmp_header *igmp = dp_packet_put_zeros(p, sizeof *igmp);
             igmp->igmp_type = ntohs(flow->tp_src);
@@ -2748,6 +2776,12 @@ flow_compose_l4(struct dp_packet *p, const struct flow *flow)
                     lla_opt->type = ND_OPT_TARGET_LINKADDR;
                     lla_opt->mac = flow->arp_tha;
                 }
+            } else if (icmp->icmp6_code == 0 &&
+                       (icmp->icmp6_type == ICMP6_ECHO_REQUEST ||
+                        icmp->icmp6_type == ICMP6_ECHO_REPLY)) {
+                flow_compose_l7(p, l7, l7_len);
+            } else {
+                /* XXX Add inner IP packet for e.g. destination unreachable? */
             }
         }
     }
@@ -2800,7 +2834,7 @@ flow_compose_l4_csum(struct dp_packet *p, const struct flow *flow,
  * ip/udp lengths and l3/l4 checksums.
  *
  * 'size' needs to be larger then the current packet size.  */
-static void
+void
 packet_expand(struct dp_packet *p, const struct flow *flow, size_t size)
 {
     size_t extra_size;
@@ -2850,10 +2884,19 @@ packet_expand(struct dp_packet *p, const struct flow *flow, size_t size)
  * (This is useful only for testing, obviously, and the packet isn't really
  * valid.  Lots of fields are just zeroed.)
  *
- * The created packet has minimal packet size, just big enough to hold
- * the packet header fields.  */
-static void
-flow_compose_minimal(struct dp_packet *p, const struct flow *flow)
+ * For packets whose protocols can encapsulate arbitrary L7 payloads, 'l7' and
+ * 'l7_len' determine that payload:
+ *
+ *    - If 'l7_len' is zero, no payload is included.
+ *
+ *    - If 'l7_len' is nonzero and 'l7' is null, an arbitrary payload 'l7_len'
+ *      bytes long is included.
+ *
+ *    - If 'l7_len' is nonzero and 'l7' is nonnull, the payload is copied
+ *      from 'l7'. */
+void
+flow_compose(struct dp_packet *p, const struct flow *flow,
+             const void *l7, size_t l7_len)
 {
     uint32_t pseudo_hdr_csum;
     size_t l4_len;
@@ -2893,7 +2936,7 @@ flow_compose_minimal(struct dp_packet *p, const struct flow *flow)
 
         dp_packet_set_l4(p, dp_packet_tail(p));
 
-        l4_len = flow_compose_l4(p, flow);
+        l4_len = flow_compose_l4(p, flow, l7, l7_len);
 
         ip = dp_packet_l3(p);
         ip->ip_tot_len = htons(p->l4_ofs - p->l3_ofs + l4_len);
@@ -2916,7 +2959,7 @@ flow_compose_minimal(struct dp_packet *p, const struct flow *flow)
 
         dp_packet_set_l4(p, dp_packet_tail(p));
 
-        l4_len = flow_compose_l4(p, flow);
+        l4_len = flow_compose_l4(p, flow, l7, l7_len);
 
         nh = dp_packet_l3(p);
         nh->ip6_plen = htons(l4_len);
@@ -2957,33 +3000,6 @@ flow_compose_minimal(struct dp_packet *p, const struct flow *flow)
             push_mpls(p, flow->dl_type, flow->mpls_lse[--n]);
         }
     }
-}
-
-/* Puts into 'p' a Ethernet frame of size 'size' that flow_extract() would
- * parse as having the given 'flow'.
- *
- * When 'size' is zero, 'p' is a minimal size packet that only big enough
- * to contains all packet headers.
- *
- * When 'size' is larger than the minimal packet size, the packet will
- * be expended to 'size' with the payload set to zero.
- *
- * Return 'true' if the packet is successfully created. 'false' otherwise.
- * Note, when 'size' is set to zero, this function always returns true.  */
-bool
-flow_compose(struct dp_packet *p, const struct flow *flow, size_t size)
-{
-    flow_compose_minimal(p, flow);
-
-    if (size && size < dp_packet_size(p)) {
-        return false;
-    }
-
-    if (size > dp_packet_size(p)) {
-        packet_expand(p, flow, size);
-    }
-
-    return true;
 }
 
 /* Compressed flow. */
