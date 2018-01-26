@@ -117,6 +117,42 @@
       </dd>
     </dl>
 
+    <h1>Logical Switch QoS Rule Commands</h1>
+    <dl>
+      <dt>[<code>--may-exist</code>] <code>qos-add</code> <var>switch</var> <var>direction</var> <var>priority</var> <var>match</var> <var>rate</var> <var>burst</var> <var>dscp</var></dt>
+      <dd>
+        <p>
+          Adds the specified QoS rule to <var>switch</var>.
+          <var>direction</var> must be either <code>from-lport</code> or
+          <code>to-lport</code>.  <var>priority</var> must be between
+          <code>0</code> and <code>32767</code>, inclusive. <var>dscp</var>
+          must be between <code>0</code> and <code>63</code>, inclusive.
+          <var>rate</var> and <var>burst</var> must be between <code>1</code>
+          and <code>4294967295</code>, inclusive. One of the rate or dscp
+          must be configured. A full description of the fields are in
+          <code>ovn-nb</code>(5). If <code>--may-exist</code> is specified,
+          adding a duplicated QoS rule succeeds but the QoS rule is not
+          really created. Without <code>--may-exist</code>, adding a
+          duplicated QoS rule results in error.
+        </p>
+      </dd>
+
+      <dt><code>qos-del</code> <var>switch</var> [<var>direction</var> [<var>priority</var> <var>match</var>]]</dt>
+      <dd>
+        Deletes QoS rules from <var>switch</var>.  If only
+        <var>switch</var> is supplied, all the QoS rules from the logical
+        switch are deleted.  If <var>direction</var> is also specified,
+        then all the flows in that direction will be deleted from the
+        logical switch.  If all the fields are given, then a single flow
+        that matches all the fields will be deleted.
+      </dd>
+
+      <dt><code>qos-list</code> <var>switch</var></dt>
+      <dd>
+        Lists the QoS rules on <var>switch</var>.
+      </dd>
+    </dl>
+
     <h1>Logical Switch Port Commands</h1>
     <dl>
       <dt>[<code>--may-exist</code>] <code>lsp-add</code> <var>switch</var> <var>port</var></dt>

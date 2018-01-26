@@ -6033,6 +6033,8 @@ check_tos 0
 
 # Mark DSCP with a valid value
 qos_id=$(ovn-nbctl --wait=hv -- --id=@lp1-qos create QoS priority=100 action=dscp=48 match="inport\=\=\"lp1\"" direction="from-lport" -- set Logical_Switch lsw0 qos_rules=@lp1-qos)
+AT_CHECK([as hv ovn-nbctl qos-list lsw0 | wc -l], [0], [1
+])
 check_tos 48
 
 # check at hv without qos meter
@@ -6065,7 +6067,9 @@ ovn-nbctl --wait=hv set QoS $qos_id match="outport\=\=\"lp2\"" direction="to-lpo
 check_tos 63
 
 # Disable DSCP marking
-ovn-nbctl --wait=hv clear Logical_Switch lsw0 qos_rules
+ovn-nbctl --wait=hv qos-del lsw0
+AT_CHECK([as hv ovn-nbctl qos-list lsw0 | wc -l], [0], [0
+])
 check_tos 0
 
 # check at hv without qos meter

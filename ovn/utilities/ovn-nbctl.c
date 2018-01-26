@@ -340,6 +340,13 @@ ACL commands:\n\
                             remove ACLs from SWITCH\n\
   acl-list SWITCH           print ACLs for SWITCH\n\
 \n\
+QoS commands:\n\
+  qos-add SWITCH DIRECTION PRIORITY MATCH [rate=RATE [burst=BURST]] [dscp=DSCP]\n\
+                            add an QoS rule to SWITCH\n\
+  qos-del SWITCH [DIRECTION [PRIORITY MATCH]]\n\
+                            remove QoS rules from SWITCH\n\
+  qos-list SWITCH           print QoS rules for SWITCH\n\
+\n\
 Logical switch port commands:\n\
   lsp-add SWITCH PORT       add logical port PORT on SWITCH\n\
   lsp-add SWITCH PORT PARENT TAG\n\
@@ -1388,6 +1395,26 @@ nbctl_acl_list(struct ctl_context *ctx)
     free(acls);
 }
 
+static int
+qos_cmp(const void *qos1_, const void *qos2_)
+{
+    const struct nbrec_qos *const *qos1p = qos1_;
+    const struct nbrec_qos *const *qos2p = qos2_;
+    const struct nbrec_qos *qos1 = *qos1p;
+    const struct nbrec_qos *qos2 = *qos2p;
+
+    int dir1 = dir_encode(qos1->direction);
+    int dir2 = dir_encode(qos2->direction);
+
+    if (dir1 != dir2) {
+        return dir1 < dir2 ? -1 : 1;
+    } else if (qos1->priority != qos2->priority) {
+        return qos1->priority > qos2->priority ? -1 : 1;
+    } else {
+        return strcmp(qos1->match, qos2->match);
+    }
+}
+
 static const char *
 parse_direction(const char *arg)
 {
@@ -1530,6 +1557,202 @@ nbctl_acl_del(struct ctl_context *ctx)
             nbrec_logical_switch_set_acls(ls, new_acls,
                                           ls->n_acls - 1);
             free(new_acls);
+            return;
+        }
+    }
+}
+
+static void
+nbctl_qos_list(struct ctl_context *ctx)
+{
+    const struct nbrec_logical_switch *ls;
+    const struct nbrec_qos **qos_rules;
+    size_t i;
+
+    ls = ls_by_name_or_uuid(ctx, ctx->argv[1], true);
+
+    qos_rules = xmalloc(sizeof *qos_rules * ls->n_qos_rules);
+    for (i = 0; i < ls->n_qos_rules; i++) {
+        qos_rules[i] = ls->qos_rules[i];
+    }
+
+    qsort(qos_rules, ls->n_qos_rules, sizeof *qos_rules, qos_cmp);
+
+    for (i = 0; i < ls->n_qos_rules; i++) {
+        const struct nbrec_qos *qos_rule = qos_rules[i];
+        ds_put_format(&ctx->output, "%10s %5"PRId64" (%s)",
+                      qos_rule->direction, qos_rule->priority,
+                      qos_rule->match);
+        for (size_t j = 0; j < qos_rule->n_bandwidth; j++) {
+            if (!strcmp(qos_rule->key_bandwidth[j], "rate")) {
+                ds_put_format(&ctx->output, " rate=%"PRId64"",
+                              qos_rule->value_bandwidth[j]);
+            }
+        }
+        for (size_t j = 0; j < qos_rule->n_bandwidth; j++) {
+            if (!strcmp(qos_rule->key_bandwidth[j], "burst")) {
+                ds_put_format(&ctx->output, " burst=%"PRId64"",
+                              qos_rule->value_bandwidth[j]);
+            }
+        }
+        for (size_t j = 0; j < qos_rule->n_action; j++) {
+            if (!strcmp(qos_rule->key_action[j], "dscp")) {
+                ds_put_format(&ctx->output, " dscp=%"PRId64"",
+                              qos_rule->value_action[j]);
+            }
+        }
+        ds_put_cstr(&ctx->output, "\n");
+    }
+
+    free(qos_rules);
+}
+
+static void
+nbctl_qos_add(struct ctl_context *ctx)
+{
+    const struct nbrec_logical_switch *ls
+        = ls_by_name_or_uuid(ctx, ctx->argv[1], true);
+    const char *direction = parse_direction(ctx->argv[2]);
+    int64_t priority = parse_priority(ctx->argv[3]);
+    int64_t dscp = -1;
+    int64_t rate = 0;
+    int64_t burst = 0;
+
+    for (int i = 5; i < ctx->argc; i++) {
+        if (!strncmp(ctx->argv[i], "dscp=", 5)) {
+            if (!ovs_scan(ctx->argv[i] + 5, "%"SCNd64, &dscp)
+                || dscp < 0 || dscp > 63) {
+                ctl_fatal("%s: dscp must in range 0...63.", ctx->argv[i] + 5);
+                return;
+            }
+        }
+        else if (!strncmp(ctx->argv[i], "rate=", 5)) {
+            if (!ovs_scan(ctx->argv[i] + 5, "%"SCNd64, &rate)
+                || rate < 1 || rate > UINT32_MAX) {
+                ctl_fatal("%s: rate must in range 1...4294967295.",
+                          ctx->argv[i] + 5);
+                return;
+            }
+        }
+        else if (!strncmp(ctx->argv[i], "burst=", 6)) {
+            if (!ovs_scan(ctx->argv[i] + 6, "%"SCNd64, &burst)
+                || burst < 1 || burst > UINT32_MAX) {
+                ctl_fatal("%s: burst must in range 1...4294967295.",
+                          ctx->argv[i] + 6);
+                return;
+            }
+        } else {
+            ctl_fatal("%s: must be start of \"dscp=\", \"rate=\", \"burst=\".",
+                      ctx->argv[i]);
+            return;
+        }
+    }
+
+    /* Validate rate and dscp. */
+    if (-1 == dscp && !rate) {
+        ctl_fatal("One of the rate or dscp must be configured.");
+        return;
+    }
+
+    /* Create the qos. */
+    struct nbrec_qos *qos = nbrec_qos_insert(ctx->txn);
+    nbrec_qos_set_priority(qos, priority);
+    nbrec_qos_set_direction(qos, direction);
+    nbrec_qos_set_match(qos, ctx->argv[4]);
+    if (-1 != dscp) {
+        const char *dscp_key = "dscp";
+        nbrec_qos_set_action(qos, &dscp_key, &dscp, 1);
+    }
+    if (rate) {
+        const char *bandwidth_key[2] = {"rate", "burst"};
+        const int64_t bandwidth_value[2] = {rate, burst};
+        size_t n_bandwidth = 1;
+        if (burst) {
+            n_bandwidth = 2;
+        }
+        nbrec_qos_set_bandwidth(qos, bandwidth_key, bandwidth_value,
+                                n_bandwidth);
+    }
+
+    /* Check if same qos rule already exists for the ls */
+    for (size_t i = 0; i < ls->n_qos_rules; i++) {
+        if (!qos_cmp(&ls->qos_rules[i], &qos)) {
+            bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
+            if (!may_exist) {
+                ctl_fatal("Same qos already existed on the ls %s.",
+                          ctx->argv[1]);
+            }
+            return;
+        }
+    }
+
+    /* Insert the qos rule the logical switch. */
+    nbrec_logical_switch_verify_qos_rules(ls);
+    struct nbrec_qos **new_qos_rules
+        = xmalloc(sizeof *new_qos_rules * (ls->n_qos_rules + 1));
+    nullable_memcpy(new_qos_rules,
+                    ls->qos_rules, sizeof *new_qos_rules * ls->n_qos_rules);
+    new_qos_rules[ls->n_qos_rules] = qos;
+    nbrec_logical_switch_set_qos_rules(ls, new_qos_rules,
+                                       ls->n_qos_rules + 1);
+    free(new_qos_rules);
+}
+
+static void
+nbctl_qos_del(struct ctl_context *ctx)
+{
+    const struct nbrec_logical_switch *ls
+        = ls_by_name_or_uuid(ctx, ctx->argv[1], true);
+
+    if (ctx->argc == 2) {
+        /* If direction, priority, and match are not specified, delete
+         * all QoS rules. */
+        nbrec_logical_switch_verify_qos_rules(ls);
+        nbrec_logical_switch_set_qos_rules(ls, NULL, 0);
+        return;
+    }
+
+    const char *direction = parse_direction(ctx->argv[2]);
+
+    /* If priority and match are not specified, delete all qos_rules with the
+     * specified direction. */
+    if (ctx->argc == 3) {
+        struct nbrec_qos **new_qos_rules
+            = xmalloc(sizeof *new_qos_rules * ls->n_qos_rules);
+
+        int n_qos_rules = 0;
+        for (size_t i = 0; i < ls->n_qos_rules; i++) {
+            if (strcmp(direction, ls->qos_rules[i]->direction)) {
+                new_qos_rules[n_qos_rules++] = ls->qos_rules[i];
+            }
+        }
+
+        nbrec_logical_switch_verify_qos_rules(ls);
+        nbrec_logical_switch_set_qos_rules(ls, new_qos_rules, n_qos_rules);
+        free(new_qos_rules);
+        return;
+    }
+
+    int64_t priority = parse_priority(ctx->argv[3]);
+
+    if (ctx->argc == 4) {
+        ctl_fatal("cannot specify priority without match");
+    }
+
+    /* Remove the matching rule. */
+    for (size_t i = 0; i < ls->n_qos_rules; i++) {
+        struct nbrec_qos *qos = ls->qos_rules[i];
+
+        if (priority == qos->priority && !strcmp(ctx->argv[4], qos->match) &&
+             !strcmp(direction, qos->direction)) {
+            struct nbrec_qos **new_qos_rules
+                = xmemdup(ls->qos_rules,
+                          sizeof *new_qos_rules * ls->n_qos_rules);
+            new_qos_rules[i] = ls->qos_rules[ls->n_qos_rules - 1];
+            nbrec_logical_switch_verify_qos_rules(ls);
+            nbrec_logical_switch_set_qos_rules(ls, new_qos_rules,
+                                          ls->n_qos_rules - 1);
+            free(new_qos_rules);
             return;
         }
     }
@@ -3722,6 +3945,14 @@ static const struct ctl_command_syntax nbctl_commands[] = {
     { "acl-del", 1, 4, "SWITCH [DIRECTION [PRIORITY MATCH]]", NULL,
       nbctl_acl_del, NULL, "", RW },
     { "acl-list", 1, 1, "SWITCH", NULL, nbctl_acl_list, NULL, "", RO },
+
+    /* qos commands. */
+    { "qos-add", 5, 7,
+      "SWITCH DIRECTION PRIORITY MATCH [rate=RATE [burst=BURST]] [dscp=DSCP]",
+      NULL, nbctl_qos_add, NULL, "--may-exist", RW },
+    { "qos-del", 1, 4, "SWITCH [DIRECTION [PRIORITY MATCH]]", NULL,
+      nbctl_qos_del, NULL, "", RW },
+    { "qos-list", 1, 1, "SWITCH", NULL, nbctl_qos_list, NULL, "", RO },
 
     /* logical switch port commands. */
     { "lsp-add", 2, 4, "SWITCH PORT [PARENT] [TAG]", NULL, nbctl_lsp_add,
