@@ -216,14 +216,17 @@ def is_comment_line(line):
     """Returns TRUE if the current line is part of a block comment."""
     return __regex_is_comment_line.match(line) is not None
 
+
 def has_comment(line):
     """Returns TRUE if the current line contains a comment or is part of
        a block comment."""
     return __regex_has_comment.match(line) is not None
 
+
 def trailing_operator(line):
     """Returns TRUE if the current line ends with an operatorsuch as ? or :"""
     return __regex_trailing_operator.match(line) is not None
+
 
 def has_xxx_mark(line):
     """Returns TRUE if the current line contains 'xxx'."""
