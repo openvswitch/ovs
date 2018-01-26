@@ -1874,7 +1874,10 @@ struct rule_criteria {
 /* flow_mod with execution context. */
 struct ofproto_flow_mod {
     /* Allocated by 'init' phase, may be freed after 'start' phase, as these
-     * are not needed for 'revert' nor 'finish'. */
+     * are not needed for 'revert' nor 'finish'.
+     *
+     * This structure owns a reference to 'temp_rule' (if it is nonnull) that
+     * must be eventually be released with ofproto_rule_unref().  */
     struct rule *temp_rule;
     struct rule_criteria criteria;
     struct cls_conjunction *conjs;
