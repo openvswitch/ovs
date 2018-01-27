@@ -4502,8 +4502,8 @@ ofctl_parse_key_value(struct ovs_cmdl_context *ctx)
  * packet matches the original FLOW.
  *
  * With --pcap, prints the packet to stdout instead as a pcap file, so that you
- * can do something like "ovs-ofctl compose-packet udp | tcpdump -vvvv -r-" to
- * use another tool to dump the packet contents.
+ * can do something like "ovs-ofctl --pcap compose-packet udp | tcpdump -vvvv
+ * -r-" to use another tool to dump the packet contents.
  *
  * If L7 is specified, draws the L7 payload data from it, otherwise defaults to
  * 64 bytes of payload. */
