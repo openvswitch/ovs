@@ -54,6 +54,4 @@ void ofctrl_add_flow(struct hmap *desired_flows, uint8_t table_id,
                      uint16_t priority, uint64_t cookie,
                      const struct match *, const struct ofpbuf *ofpacts);
 
-void ofctrl_flow_table_clear(void);
-
 #endif /* ovn/ofctrl.h */
