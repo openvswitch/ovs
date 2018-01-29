@@ -93,26 +93,23 @@ NTSTATUS OvsNatInit()
         sizeof(LIST_ENTRY) * NAT_HASH_TABLE_SIZE,
         OVS_CT_POOL_TAG);
     if (ovsNatTable == NULL) {
-        goto failNoMem;
+        return STATUS_INSUFFICIENT_RESOURCES;
     }
 
     ovsUnNatTable = OvsAllocateMemoryWithTag(
         sizeof(LIST_ENTRY) * NAT_HASH_TABLE_SIZE,
         OVS_CT_POOL_TAG);
     if (ovsUnNatTable == NULL) {
-        goto freeNatTable;
+        OvsFreeMemoryWithTag(ovsNatTable, OVS_CT_POOL_TAG);
+        return STATUS_INSUFFICIENT_RESOURCES;
     }
 
     for (int i = 0; i < NAT_HASH_TABLE_SIZE; i++) {
         InitializeListHead(&ovsNatTable[i]);
         InitializeListHead(&ovsUnNatTable[i]);
     }
-    return STATUS_SUCCESS;
 
-freeNatTable:
-    OvsFreeMemoryWithTag(ovsNatTable, OVS_CT_POOL_TAG);
-failNoMem:
-    return STATUS_INSUFFICIENT_RESOURCES;
+    return STATUS_SUCCESS;
 }
 
 /*

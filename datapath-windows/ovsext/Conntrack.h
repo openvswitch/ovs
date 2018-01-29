@@ -228,8 +228,4 @@ NDIS_STATUS OvsCtHandleFtp(PNET_BUFFER_LIST curNbl,
                            BOOLEAN request);
 
 UINT32 OvsHashCtKey(const OVS_CT_KEY *key);
-BOOLEAN OvsCtKeyAreSame(OVS_CT_KEY ctxKey, OVS_CT_KEY entryKey);
-POVS_CT_ENTRY OvsCtLookup(OvsConntrackKeyLookupCtx *ctx);
-
-
 #endif /* __OVS_CONNTRACK_H_ */

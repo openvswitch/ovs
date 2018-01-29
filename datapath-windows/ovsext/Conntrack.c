@@ -33,7 +33,7 @@ static PLIST_ENTRY ovsConntrackTable;
 static OVS_CT_THREAD_CTX ctThreadCtx;
 static PNDIS_RW_LOCK_EX ovsConntrackLockObj;
 extern POVS_SWITCH_CONTEXT gOvsSwitchContext;
-static UINT64 ctTotalEntries;
+static LONG ctTotalEntries;
 
 static __inline OvsCtFlush(UINT16 zone, struct ovs_key_ct_tuple_ipv4 *tuple);
 static __inline NDIS_STATUS
@@ -212,7 +212,7 @@ OvsCtAddEntry(POVS_CT_ENTRY entry, OvsConntrackKeyLookupCtx *ctx,
     InsertHeadList(&ovsConntrackTable[ctx->hash & CT_HASH_TABLE_MASK],
                    &entry->link);
 
-    ctTotalEntries++;
+    InterlockedIncrement((LONG volatile *)&ctTotalEntries);
     return TRUE;
 }
 
@@ -234,11 +234,6 @@ OvsCtEntryCreate(OvsForwardingContext *fwdCtx,
 
     *entryCreated = FALSE;
     state |= OVS_CS_F_NEW;
-
-    parentEntry = OvsCtRelatedLookup(ctx->key, currentTime);
-    if (parentEntry != NULL) {
-        state |= OVS_CS_F_RELATED;
-    }
 
     switch (ipProto) {
     case IPPROTO_TCP:
@@ -283,6 +278,11 @@ OvsCtEntryCreate(OvsForwardingContext *fwdCtx,
         break;
     }
 
+    parentEntry = OvsCtRelatedLookup(ctx->key, currentTime);
+    if (parentEntry != NULL && state != OVS_CS_F_INVALID) {
+        state |= OVS_CS_F_RELATED;
+    }
+
     if (state != OVS_CS_F_INVALID && commit) {
         if (entry) {
             entry->parent = parentEntry;
@@ -315,6 +315,7 @@ OvsCtUpdateEntry(OVS_CT_ENTRY* entry,
                  BOOLEAN reply,
                  UINT64 now)
 {
+    CT_UPDATE_RES status;
     switch (ipProto) {
     case IPPROTO_TCP:
     {
@@ -322,32 +323,23 @@ OvsCtUpdateEntry(OVS_CT_ENTRY* entry,
         const TCPHdr *tcp;
         tcp = OvsGetTcp(nbl, l4Offset, &tcpStorage);
         if (!tcp) {
-            return CT_UPDATE_INVALID;
+            status =  CT_UPDATE_INVALID;
+            break;
         }
-        return OvsConntrackUpdateTcpEntry(entry, tcp, nbl, reply, now);
+        status =  OvsConntrackUpdateTcpEntry(entry, tcp, nbl, reply, now);
+        break;
     }
     case IPPROTO_ICMP:
-        return OvsConntrackUpdateIcmpEntry(entry, reply, now);
+        status =  OvsConntrackUpdateIcmpEntry(entry, reply, now);
+        break;
     case IPPROTO_UDP:
-        return OvsConntrackUpdateOtherEntry(entry, reply, now);
+        status =  OvsConntrackUpdateOtherEntry(entry, reply, now);
+        break;
     default:
-        return CT_UPDATE_INVALID;
+        status =  CT_UPDATE_INVALID;
+        break;
     }
-}
-
-static __inline VOID
-OvsCtEntryDelete(POVS_CT_ENTRY entry)
-{
-    if (entry == NULL) {
-        return;
-    }
-    if (entry->natInfo.natAction) {
-        OvsNatDeleteKey(&entry->key);
-    }
-    OvsPostCtEventEntry(entry, OVS_EVENT_CT_DELETE);
-    RemoveEntryList(&entry->link);
-    OvsFreeMemoryWithTag(entry, OVS_CT_POOL_TAG);
-    ctTotalEntries--;
+    return status;
 }
 
 static __inline BOOLEAN
@@ -356,6 +348,24 @@ OvsCtEntryExpired(POVS_CT_ENTRY entry)
     UINT64 currentTime;
     NdisGetCurrentSystemTime((LARGE_INTEGER *)&currentTime);
     return entry->expiration < currentTime;
+}
+
+static __inline VOID
+OvsCtEntryDelete(POVS_CT_ENTRY entry, BOOLEAN forceDelete)
+{
+    if (entry == NULL) {
+        return;
+    }
+    if (forceDelete || OvsCtEntryExpired(entry)) {
+        if (entry->natInfo.natAction) {
+            OvsNatDeleteKey(&entry->key);
+        }
+        OvsPostCtEventEntry(entry, OVS_EVENT_CT_DELETE);
+        RemoveEntryList(&entry->link);
+        OvsFreeMemoryWithTag(entry, OVS_CT_POOL_TAG);
+        InterlockedDecrement((LONG volatile*)&ctTotalEntries);
+        return;
+    }
 }
 
 static __inline NDIS_STATUS
@@ -425,21 +435,20 @@ OvsCtLookup(OvsConntrackKeyLookupCtx *ctx)
         if (OvsCtKeyAreSame(ctx->key, entry->key)) {
             found = entry;
             reply = FALSE;
-            break;
         }
 
-        if (OvsCtKeyAreSame(revCtxKey, entry->key)) {
+        if (!found && OvsCtKeyAreSame(revCtxKey, entry->key)) {
             found = entry;
             reply = TRUE;
-            break;
         }
-    }
 
-    if (found) {
-        if (OvsCtEntryExpired(found)) {
-            found = NULL;
-        } else {
-            ctx->reply = reply;
+        if (found) {
+            if (OvsCtEntryExpired(found)) {
+                found = NULL;
+            } else {
+                ctx->reply = reply;
+            }
+            break;
         }
     }
 
@@ -613,7 +622,7 @@ OvsProcessConntrackEntry(OvsForwardingContext *fwdCtx,
             break;
         case CT_UPDATE_NEW:
             //Delete and update the Conntrack
-            OvsCtEntryDelete(ctx->entry);
+            OvsCtEntryDelete(ctx->entry, TRUE);
             ctx->entry = NULL;
             entry = OvsCtEntryCreate(fwdCtx, key->ipKey.nwProto, l4Offset,
                                      ctx, key, natInfo, commit, currentTime,
@@ -689,6 +698,41 @@ OvsConntrackSetLabels(OvsFlowKey *key,
                    sizeof(struct ovs_key_ct_labels));
 }
 
+static void
+OvsCtSetMarkLabel(OvsFlowKey *key,
+                       POVS_CT_ENTRY entry,
+                       MD_MARK *mark,
+                       MD_LABELS *labels,
+                       BOOLEAN *triggerUpdateEvent)
+{
+    if (mark) {
+        OvsConntrackSetMark(key, entry, mark->value, mark->mask,
+                            triggerUpdateEvent);
+    }
+
+    if (labels) {
+        OvsConntrackSetLabels(key, entry, &labels->value, &labels->mask,
+                              triggerUpdateEvent);
+    }
+}
+
+static __inline void
+OvsCtUpdateTuple(OvsFlowKey *key, OVS_CT_KEY *ctKey)
+{
+    key->ct.tuple_ipv4.ipv4_src = ctKey->src.addr.ipv4_aligned;
+    key->ct.tuple_ipv4.ipv4_dst = ctKey->dst.addr.ipv4_aligned;
+    key->ct.tuple_ipv4.ipv4_proto = ctKey->nw_proto;
+
+    /* Orig tuple Port is overloaded to take in ICMP-Type & Code */
+    /* This mimics the behavior in lib/conntrack.c*/
+    key->ct.tuple_ipv4.src_port = ctKey->nw_proto != IPPROTO_ICMP ?
+                                    ctKey->src.port :
+                                    htons(ctKey->src.icmp_type);
+    key->ct.tuple_ipv4.dst_port = ctKey->nw_proto != IPPROTO_ICMP ?
+                                    ctKey->dst.port :
+                                    htons(ctKey->src.icmp_code);
+}
+
 static __inline NDIS_STATUS
 OvsCtExecute_(OvsForwardingContext *fwdCtx,
               OvsFlowKey *key,
@@ -723,7 +767,7 @@ OvsCtExecute_(OvsForwardingContext *fwdCtx,
 
     /* Delete entry in reverse direction if 'force' is specified */
     if (entry && force && ctx.reply) {
-        OvsCtEntryDelete(entry);
+        OvsCtEntryDelete(entry, TRUE);
         entry = NULL;
     }
 
@@ -757,6 +801,9 @@ OvsCtExecute_(OvsForwardingContext *fwdCtx,
                                          &entryCreated);
     }
 
+    if (entry == NULL) {
+        return status;
+    }
     /*
      * Note that natInfo is not the same as entry->natInfo here. natInfo
      * is decided by action in the openflow rule, entry->natInfo is decided
@@ -764,23 +811,15 @@ OvsCtExecute_(OvsForwardingContext *fwdCtx,
      * NAT_ACTION_REVERSE, yet entry->natInfo is NAT_ACTION_SRC or
      * NAT_ACTION_DST without NAT_ACTION_REVERSE
      */
-    if (entry && natInfo->natAction != NAT_ACTION_NONE)
+    if (natInfo->natAction != NAT_ACTION_NONE)
     {
         OvsNatPacket(fwdCtx, entry, entry->natInfo.natAction,
                      key, ctx.reply);
     }
 
-    if (entry && mark) {
-        OvsConntrackSetMark(key, entry, mark->value, mark->mask,
-                            &triggerUpdateEvent);
-    }
+    OvsCtSetMarkLabel(key, entry, mark, labels, &triggerUpdateEvent);
 
-    if (entry && labels) {
-        OvsConntrackSetLabels(key, entry, &labels->value, &labels->mask,
-                              &triggerUpdateEvent);
-    }
-
-    if (entry && OvsDetectFtpPacket(key)) {
+    if (OvsDetectFtpPacket(key)) {
         /* FTP parser will always be loaded */
         UNREFERENCED_PARAMETER(helper);
 
@@ -792,33 +831,19 @@ OvsCtExecute_(OvsForwardingContext *fwdCtx,
     }
 
     /* Add original tuple information to flow Key */
-    if (entry && entry->key.dl_type == ntohs(ETH_TYPE_IPV4)) {
-        OVS_CT_KEY *ctKey;
+    if (entry->key.dl_type == ntohs(ETH_TYPE_IPV4)) {
         if (entry->parent != NULL) {
             POVS_CT_ENTRY parent = entry->parent;
-            ctKey = &parent->key;
+            OvsCtUpdateTuple(key, &parent->key);
         } else {
-            ctKey = &entry->key;
+            OvsCtUpdateTuple(key, &entry->key);
         }
-
-        key->ct.tuple_ipv4.ipv4_src = ctKey->src.addr.ipv4_aligned;
-        key->ct.tuple_ipv4.ipv4_dst = ctKey->dst.addr.ipv4_aligned;
-        key->ct.tuple_ipv4.ipv4_proto = ctKey->nw_proto;
-
-        /* Orig tuple Port is overloaded to take in ICMP-Type & Code */
-        /* This mimics the behavior in lib/conntrack.c*/
-        key->ct.tuple_ipv4.src_port = ctKey->nw_proto != IPPROTO_ICMP ?
-                                      ctKey->src.port :
-                                      htons(ctKey->src.icmp_type);
-        key->ct.tuple_ipv4.dst_port = ctKey->nw_proto != IPPROTO_ICMP ?
-                                      ctKey->dst.port :
-                                      htons(ctKey->src.icmp_code);
     }
 
-    if (entryCreated && entry) {
+    if (entryCreated) {
         OvsPostCtEventEntry(entry, OVS_EVENT_CT_NEW);
     }
-    if (postUpdateEvent && entry && !entryCreated && triggerUpdateEvent) {
+    if (postUpdateEvent && !entryCreated && triggerUpdateEvent) {
         OvsPostCtEventEntry(entry, OVS_EVENT_CT_UPDATE);
     }
 
@@ -1003,9 +1028,7 @@ OvsConntrackEntryCleaner(PVOID data)
             for (int i = 0; i < CT_HASH_TABLE_SIZE; i++) {
                 LIST_FORALL_SAFE(&ovsConntrackTable[i], link, next) {
                     entry = CONTAINING_RECORD(link, OVS_CT_ENTRY, link);
-                    if (entry && OvsCtEntryExpired(entry)) {
-                        OvsCtEntryDelete(entry);
-                    }
+                    OvsCtEntryDelete(entry, FALSE);
                 }
             }
         }
@@ -1033,7 +1056,7 @@ OvsCtFlush(UINT16 zone, struct ovs_key_ct_tuple_ipv4 *tuple)
     NdisAcquireRWLockWrite(ovsConntrackLockObj, &lockState, 0);
 
     if (ctTotalEntries) {
-        for (int i = 0; i < CT_HASH_TABLE_SIZE; i++) {
+        for (UINT32 i = 0; i < CT_HASH_TABLE_SIZE; i++) {
             LIST_FORALL_SAFE(&ovsConntrackTable[i], link, next) {
                 entry = CONTAINING_RECORD(link, OVS_CT_ENTRY, link);
                 if (tuple) {
@@ -1044,17 +1067,17 @@ OvsCtFlush(UINT16 zone, struct ovs_key_ct_tuple_ipv4 *tuple)
                         tuple->src_port == entry->key.src.port &&
                         tuple->dst_port == entry->key.dst.port &&
                         (zone ? entry->key.zone == zone: TRUE)) {
-                        OvsCtEntryDelete(entry);
+                        OvsCtEntryDelete(entry, TRUE);
                     } else if (tuple->ipv4_src == entry->key.src.addr.ipv4_aligned &&
                         tuple->ipv4_dst == entry->key.dst.addr.ipv4_aligned &&
                         tuple->ipv4_proto == entry->key.nw_proto &&
                         tuple->src_port == entry->key.src.icmp_type &&
                         tuple->dst_port == entry->key.src.icmp_code &&
                         (zone ? entry->key.zone == zone: TRUE)) {
-                        OvsCtEntryDelete(entry);
+                        OvsCtEntryDelete(entry, TRUE);
                     }
                 } else if (!zone || zone == entry->key.zone) {
-                    OvsCtEntryDelete(entry);
+                    OvsCtEntryDelete(entry, TRUE);
                 }
             }
         }
@@ -1434,6 +1457,7 @@ OvsCreateNlMsgFromCtEntry(POVS_CT_ENTRY entry,
     UINT16 nlmsgFlags = NLM_F_CREATE;
     NdisGetCurrentSystemTime((LARGE_INTEGER *)&currentTime);
     UINT8 nfgenFamily = 0;
+
     if (entry->key.dl_type == htons(ETH_TYPE_IPV4)) {
         nfgenFamily = AF_INET;
     } else if (entry->key.dl_type == htons(ETH_TYPE_IPV6)) {
