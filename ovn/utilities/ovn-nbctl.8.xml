@@ -280,7 +280,49 @@
 
       <dt><code>lsp-set-type</code> <var>port</var> <var>type</var></dt>
       <dd>
-        Set the type for the logical port.  No special types have been implemented yet.
+        <p>
+          Set the type for the logical port.  The type must be one of the following:
+        </p>
+
+        <dl>
+          <dt><code>(empty string)</code></dt>
+          <dd>
+            A VM (or VIF) interface.
+          </dd>
+
+          <dt><code>router</code></dt>
+          <dd>
+            A connection to a logical router.
+          </dd>
+
+          <dt><code>localnet</code></dt>
+          <dd>
+            A connection to a locally accessible network from each ovn-controller
+            instance. A logical switch can only have a single localnet port
+            attached. This is used to model direct connectivity to an existing
+            network.
+          </dd>
+
+          <dt><code>localport</code></dt>
+          <dd>
+            A connection to a local VIF. Traffic that arrives on a localport is
+            never forwarded over a tunnel to another chassis. These ports are
+            present on every chassis and have the same address in all of them.
+            This is used to model connectivity to local services that run on
+            every hypervisor.
+          </dd>
+
+          <dt><code>l2gateway</code></dt>
+          <dd>
+            A connection to a physical network.
+          </dd>
+
+          <dt><code>vtep</code></dt>
+          <dd>
+            A port to a logical switch on a VTEP gateway.
+          </dd>
+        </dl>
+
       </dd>
 
       <dt><code>lsp-get-type</code> <var>port</var></dt>
