@@ -32,6 +32,7 @@ KSTART_ROUTINE OvsConntrackEntryCleaner;
 static PLIST_ENTRY ovsConntrackTable;
 static OVS_CT_THREAD_CTX ctThreadCtx;
 static PNDIS_RW_LOCK_EX ovsConntrackLockObj;
+static PNDIS_RW_LOCK_EX ovsCtNatLockObj;
 extern POVS_SWITCH_CONTEXT gOvsSwitchContext;
 static LONG ctTotalEntries;
 
@@ -58,6 +59,13 @@ OvsInitConntrack(POVS_SWITCH_CONTEXT context)
         return STATUS_INSUFFICIENT_RESOURCES;
     }
 
+    ovsCtNatLockObj = NdisAllocateRWLock(context->NdisFilterHandle);
+    if (ovsCtNatLockObj == NULL) {
+        NdisFreeRWLock(ovsConntrackLockObj);
+        ovsConntrackLockObj = NULL;
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
     /* Init the Hash Buffer */
     ovsConntrackTable = OvsAllocateMemoryWithTag(sizeof(LIST_ENTRY)
                                                  * CT_HASH_TABLE_SIZE,
@@ -65,6 +73,8 @@ OvsInitConntrack(POVS_SWITCH_CONTEXT context)
     if (ovsConntrackTable == NULL) {
         NdisFreeRWLock(ovsConntrackLockObj);
         ovsConntrackLockObj = NULL;
+        NdisFreeRWLock(ovsCtNatLockObj);
+        ovsCtNatLockObj = NULL;
         return STATUS_INSUFFICIENT_RESOURCES;
     }
 
@@ -81,6 +91,9 @@ OvsInitConntrack(POVS_SWITCH_CONTEXT context)
     if (status != STATUS_SUCCESS) {
         NdisFreeRWLock(ovsConntrackLockObj);
         ovsConntrackLockObj = NULL;
+
+        NdisFreeRWLock(ovsCtNatLockObj);
+        ovsCtNatLockObj = NULL;
 
         OvsFreeMemoryWithTag(ovsConntrackTable, OVS_CT_POOL_TAG);
         ovsConntrackTable = NULL;
@@ -111,7 +124,7 @@ OvsInitConntrack(POVS_SWITCH_CONTEXT context)
 VOID
 OvsCleanupConntrack(VOID)
 {
-    LOCK_STATE_EX lockState;
+    LOCK_STATE_EX lockState, lockStateNat;
     NdisAcquireRWLockWrite(ovsConntrackLockObj, &lockState, 0);
     ctThreadCtx.exit = 1;
     KeSetEvent(&ctThreadCtx.event, 0, FALSE);
@@ -131,7 +144,11 @@ OvsCleanupConntrack(VOID)
 
     NdisFreeRWLock(ovsConntrackLockObj);
     ovsConntrackLockObj = NULL;
+    NdisAcquireRWLockWrite(ovsCtNatLockObj, &lockStateNat, 0);
     OvsNatCleanup();
+    NdisReleaseRWLock(ovsCtNatLockObj, &lockStateNat);
+    NdisFreeRWLock(ovsCtNatLockObj);
+    ovsCtNatLockObj = NULL;
 }
 
 static __inline VOID
@@ -197,15 +214,19 @@ OvsCtAddEntry(POVS_CT_ENTRY entry, OvsConntrackKeyLookupCtx *ctx,
     if (natInfo == NULL) {
         entry->natInfo.natAction = NAT_ACTION_NONE;
     } else {
+        LOCK_STATE_EX lockStateNat;
+        NdisAcquireRWLockWrite(ovsCtNatLockObj, &lockStateNat, 0);
         if (OvsIsForwardNat(natInfo->natAction)) {
             entry->natInfo = *natInfo;
             if (!OvsNatTranslateCtEntry(entry)) {
+                NdisReleaseRWLock(ovsCtNatLockObj, &lockStateNat);
                 return FALSE;
             }
             ctx->hash = OvsHashCtKey(&entry->key);
         } else {
             entry->natInfo.natAction = natInfo->natAction;
         }
+        NdisReleaseRWLock(ovsCtNatLockObj, &lockStateNat);
     }
 
     entry->timestampStart = now;
@@ -358,7 +379,10 @@ OvsCtEntryDelete(POVS_CT_ENTRY entry, BOOLEAN forceDelete)
     }
     if (forceDelete || OvsCtEntryExpired(entry)) {
         if (entry->natInfo.natAction) {
+            LOCK_STATE_EX lockStateNat;
+            NdisAcquireRWLockWrite(ovsCtNatLockObj, &lockStateNat, 0);
             OvsNatDeleteKey(&entry->key);
+            NdisReleaseRWLock(ovsCtNatLockObj, &lockStateNat);
         }
         OvsPostCtEventEntry(entry, OVS_EVENT_CT_DELETE);
         RemoveEntryList(&entry->link);
@@ -560,7 +584,10 @@ OvsCtSetupLookupCtx(OvsFlowKey *flowKey,
         return NDIS_STATUS_INVALID_PACKET;
     }
 
+    LOCK_STATE_EX lockStateNat;
+    NdisAcquireRWLockRead(ovsCtNatLockObj, &lockStateNat, 0);
     natEntry = OvsNatLookup(&ctx->key, TRUE);
+    NdisReleaseRWLock(ovsCtNatLockObj, &lockStateNat);
     if (natEntry) {
         /* Translate address first for reverse NAT */
         ctx->key = natEntry->ctEntry->key;
@@ -813,8 +840,11 @@ OvsCtExecute_(OvsForwardingContext *fwdCtx,
      */
     if (natInfo->natAction != NAT_ACTION_NONE)
     {
+        LOCK_STATE_EX lockStateNat;
+        NdisAcquireRWLockWrite(ovsCtNatLockObj, &lockStateNat, 0);
         OvsNatPacket(fwdCtx, entry, entry->natInfo.natAction,
                      key, ctx.reply);
+        NdisReleaseRWLock(ovsCtNatLockObj, &lockStateNat);
     }
 
     OvsCtSetMarkLabel(key, entry, mark, labels, &triggerUpdateEvent);
@@ -1052,7 +1082,7 @@ OvsCtFlush(UINT16 zone, struct ovs_key_ct_tuple_ipv4 *tuple)
     PLIST_ENTRY link, next;
     POVS_CT_ENTRY entry;
 
-    LOCK_STATE_EX lockState;
+    LOCK_STATE_EX lockState, lockStateNat;
     NdisAcquireRWLockWrite(ovsConntrackLockObj, &lockState, 0);
 
     if (ctTotalEntries) {
@@ -1083,7 +1113,9 @@ OvsCtFlush(UINT16 zone, struct ovs_key_ct_tuple_ipv4 *tuple)
         }
     }
 
+    NdisAcquireRWLockWrite(ovsCtNatLockObj, &lockStateNat, 0);
     OvsNatFlush(zone);
+    NdisReleaseRWLock(ovsCtNatLockObj, &lockStateNat);
     NdisReleaseRWLock(ovsConntrackLockObj, &lockState);
     return NDIS_STATUS_SUCCESS;
 }
