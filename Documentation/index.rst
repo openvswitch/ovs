@@ -64,7 +64,8 @@ vSwitch? Start here.
 - **Tutorials:** :doc:`tutorials/faucet` |
   :doc:`tutorials/ovs-advanced` |
   :doc:`tutorials/ovn-sandbox` |
-  :doc:`tutorials/ovn-openstack`
+  :doc:`tutorials/ovn-openstack` |
+  :doc:`tutorials/ovs-conntrack`
 
 Deeper Dive
 -----------
