@@ -167,12 +167,16 @@ OvsNatPacket(OvsForwardingContext *ovsFwdCtx,
 {
     UINT32 natFlag;
     const struct ct_endpoint* endpoint;
+    LOCK_STATE_EX lockState;
+    /* XXX: Move conntrack locks out of NAT after implementing lock in NAT. */
+    NdisAcquireRWLockRead(entry->lock, &lockState, 0);
     /* When it is NAT, only entry->rev_key contains NATTED address;
        When it is unNAT, only entry->key contains the UNNATTED address;*/
     const OVS_CT_KEY *ctKey = reverse ? &entry->key : &entry->rev_key;
     BOOLEAN isSrcNat;
 
     if (!(natAction & (NAT_ACTION_SRC | NAT_ACTION_DST))) {
+        NdisReleaseRWLock(entry->lock, &lockState);
         return;
     }
     isSrcNat = (((natAction & NAT_ACTION_SRC) && !reverse) ||
@@ -202,6 +206,7 @@ OvsNatPacket(OvsForwardingContext *ovsFwdCtx,
         }
     } else if (ctKey->dl_type == htons(ETH_TYPE_IPV6)){
         // XXX: IPv6 packet not supported yet.
+        NdisReleaseRWLock(entry->lock, &lockState);
         return;
     }
     if (natAction & (NAT_ACTION_SRC_PORT | NAT_ACTION_DST_PORT)) {
@@ -215,6 +220,7 @@ OvsNatPacket(OvsForwardingContext *ovsFwdCtx,
             }
         }
     }
+    NdisReleaseRWLock(entry->lock, &lockState);
 }
 
 
