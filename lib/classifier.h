@@ -284,7 +284,7 @@
  *
  * The classifier may safely be accessed by many reader threads concurrently
  * and by a single writer, or by multiple writers when they guarantee mutually
- * exlucive access to classifier modifications.
+ * exclusive access to classifier modifications.
  *
  * Since the classifier rules are RCU protected, the rule destruction after
  * removal from the classifier must be RCU postponed.  Also, when versioning is
