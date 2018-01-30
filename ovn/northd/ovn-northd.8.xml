@@ -54,8 +54,11 @@
     <xi:include href="lib/ssl.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
 
     <h2>Other Options</h2>
-
-    <xi:include href="lib/common.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
+    <xi:include href="lib/unixctl.xml"
+     xmlns:xi="http://www.w3.org/2003/XInclude"/>
+    <h3></h3>
+    <xi:include href="lib/common.xml"
+     xmlns:xi="http://www.w3.org/2003/XInclude"/>
 
     <h1>Runtime Management Commands</h1>
     <p>

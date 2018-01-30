@@ -455,7 +455,8 @@ EXTRA_DIST += \
 	lib/ssl.xml \
 	lib/ssl-bootstrap.xml \
 	lib/table.xml \
-	lib/vlog.xml
+	lib/vlog.xml \
+	lib/unixctl.xml
 
 MAN_FRAGMENTS += \
 	lib/colors.man \

@@ -262,3 +262,42 @@ AT_CHECK_UNQUOTED([ovn-sbctl get Port_Binding ${uuid} options:ipv6_ra_prefixes],
 ])
 
 AT_CLEANUP
+
+AT_SETUP([ovn -- test unixctl])
+ovn_init_db ovn-sb; ovn-sbctl init
+ovn_init_db ovn-nb; ovn-nbctl init
+
+# test unixctl option
+mkdir "$ovs_base"/northd
+as northd start_daemon ovn-northd --unixctl="$ovs_base"/northd/ovn-northd.ctl --ovnnb-db=unix:"$ovs_base"/ovn-nb/ovn-nb.sock --ovnsb-db=unix:"$ovs_base"/ovn-sb/ovn-sb.sock
+ovn-nbctl ls-add sw
+ovn-nbctl --wait=sb lsp-add sw p1
+# northd created with unixctl option successfully created port_binding entry
+AT_CHECK([ovn-sbctl --bare --columns datapath find port_binding logical_port="p1" | wc -l], [0], [1
+])
+AT_CHECK([ovn-nbctl --wait=sb lsp-del p1])
+
+# ovs-appctl exit with unixctl option
+OVS_APP_EXIT_AND_WAIT_BY_TARGET(["$ovs_base"/northd/ovn-northd.ctl], ["$ovs_base"/northd/ovn-northd.pid])
+
+# Check no port_binding entry for new port as ovn-northd is not running
+ovn-nbctl lsp-add sw p2
+ovn-nbctl --timeout=10 --wait=sb sync
+AT_CHECK([ovn-sbctl --bare --columns datapath find port_binding logical_port="p2" | wc -l], [0], [0
+])
+
+# test default unixctl path
+as northd start_daemon ovn-northd --ovnnb-db=unix:"$ovs_base"/ovn-nb/ovn-nb.sock --ovnsb-db=unix:"$ovs_base"/ovn-sb/ovn-sb.sock
+ovn-nbctl --wait=sb lsp-add sw p3
+# northd created with default unixctl path successfully created port_binding entry
+AT_CHECK([ovn-sbctl --bare --columns datapath find port_binding logical_port="p3" | wc -l], [0], [1
+])
+
+as ovn-sb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+as ovn-nb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+as northd
+OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
+AT_CLEANUP
