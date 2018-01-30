@@ -466,9 +466,8 @@ destroy_classifier(struct classifier *cls)
 
     classifier_defer(cls);
     CLS_FOR_EACH (rule, cls_rule, cls) {
-        if (classifier_remove(cls, &rule->cls_rule)) {
-            ovsrcu_postpone(free_rule, rule);
-        }
+        classifier_remove_assert(cls, &rule->cls_rule);
+        ovsrcu_postpone(free_rule, rule);
     }
     classifier_destroy(cls);
 }
@@ -816,7 +815,7 @@ test_single_rule(struct ovs_cmdl_context *ctx OVS_UNUSED)
         compare_classifiers(&cls, 0, OVS_VERSION_MIN, &tcls);
         check_tables(&cls, 1, 1, 0, 0, OVS_VERSION_MIN);
 
-        classifier_remove(&cls, &rule->cls_rule);
+        classifier_remove_assert(&cls, &rule->cls_rule);
         tcls_remove(&tcls, tcls_rule);
         assert(classifier_is_empty(&cls));
         assert(tcls_is_empty(&tcls));
@@ -864,7 +863,7 @@ test_rule_replacement(struct ovs_cmdl_context *ctx OVS_UNUSED)
         compare_classifiers(&cls, 0, OVS_VERSION_MIN, &tcls);
         check_tables(&cls, 1, 1, 0, 0, OVS_VERSION_MIN);
         classifier_defer(&cls);
-        classifier_remove(&cls, &rule2->cls_rule);
+        classifier_remove_assert(&cls, &rule2->cls_rule);
 
         tcls_destroy(&tcls);
         destroy_classifier(&cls);
@@ -1018,7 +1017,7 @@ test_many_rules_in_one_list (struct ovs_cmdl_context *ctx OVS_UNUSED)
                         n_invisible_rules++;
                         removable_rule = &rules[j]->cls_rule;
                     } else {
-                        classifier_remove(&cls, &rules[j]->cls_rule);
+                        classifier_remove_assert(&cls, &rules[j]->cls_rule);
                     }
                     tcls_remove(&tcls, tcls_rules[j]);
                     tcls_rules[j] = NULL;
@@ -1039,7 +1038,7 @@ test_many_rules_in_one_list (struct ovs_cmdl_context *ctx OVS_UNUSED)
                     /* Removable rule is no longer visible. */
                     assert(cls_match);
                     assert(!cls_match_visible_in_version(cls_match, version));
-                    classifier_remove(&cls, removable_rule);
+                    classifier_remove_assert(&cls, removable_rule);
                     n_invisible_rules--;
                 }
             }
@@ -1139,7 +1138,7 @@ test_many_rules_in_one_table(struct ovs_cmdl_context *ctx OVS_UNUSED)
                                                    version);
                 n_invisible_rules++;
             } else {
-                classifier_remove(&cls, &rules[i]->cls_rule);
+                classifier_remove_assert(&cls, &rules[i]->cls_rule);
             }
             compare_classifiers(&cls, n_invisible_rules, version, &tcls);
             check_tables(&cls, i < N_RULES - 1, N_RULES - (i + 1), 0,
@@ -1151,7 +1150,7 @@ test_many_rules_in_one_table(struct ovs_cmdl_context *ctx OVS_UNUSED)
 
         if (versioned) {
             for (i = 0; i < N_RULES; i++) {
-                classifier_remove(&cls, &rules[i]->cls_rule);
+                classifier_remove_assert(&cls, &rules[i]->cls_rule);
                 n_invisible_rules--;
 
                 compare_classifiers(&cls, n_invisible_rules, version, &tcls);
@@ -1250,7 +1249,7 @@ test_many_rules_in_n_tables(int n_tables)
 
             /* Remove rules that are no longer visible. */
             LIST_FOR_EACH_POP (rule, list_node, &list) {
-                classifier_remove(&cls, &rule->cls_rule);
+                classifier_remove_assert(&cls, &rule->cls_rule);
                 n_invisible_rules--;
 
                 compare_classifiers(&cls, n_invisible_rules, version,

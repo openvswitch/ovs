@@ -223,9 +223,8 @@ tnl_port_unref(const struct cls_rule *cr)
     struct tnl_port_in *p = tnl_port_cast(cr);
 
     if (cr && ovs_refcount_unref_relaxed(&p->ref_cnt) == 1) {
-        if (classifier_remove(&cls, cr)) {
-            ovsrcu_postpone(tnl_port_free, p);
-        }
+        classifier_remove_assert(&cls, cr);
+        ovsrcu_postpone(tnl_port_free, p);
     }
 }
 

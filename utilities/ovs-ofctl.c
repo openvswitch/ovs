@@ -3220,7 +3220,7 @@ fte_free_all(struct flow_tables *tables)
 
         classifier_defer(cls);
         CLS_FOR_EACH (fte, rule, cls) {
-            classifier_remove(cls, &fte->rule);
+            classifier_remove_assert(cls, &fte->rule);
             ovsrcu_postpone(fte_free, fte);
         }
         classifier_destroy(cls);

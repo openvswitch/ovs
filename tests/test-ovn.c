@@ -972,7 +972,7 @@ test_tree_shape_exhaustively(struct expr *expr, struct shash *symtab,
             struct test_rule *test_rule;
 
             CLS_FOR_EACH (test_rule, cr, &cls) {
-                classifier_remove(&cls, &test_rule->cr);
+                classifier_remove_assert(&cls, &test_rule->cr);
                 ovsrcu_postpone(free_rule, test_rule);
             }
             classifier_destroy(&cls);

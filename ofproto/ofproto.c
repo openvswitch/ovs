@@ -1520,10 +1520,8 @@ ofproto_rule_delete(struct ofproto *ofproto, struct rule *rule)
         /* Make sure there is no postponed removal of the rule. */
         ovs_assert(cls_rule_visible_in_version(&rule->cr, OVS_VERSION_MAX));
 
-        if (!classifier_remove(&rule->ofproto->tables[rule->table_id].cls,
-                               &rule->cr)) {
-            OVS_NOT_REACHED();
-        }
+        classifier_remove_assert(&rule->ofproto->tables[rule->table_id].cls,
+                                 &rule->cr);
         ofproto_rule_remove__(rule->ofproto, rule);
         if (ofproto->ofproto_class->rule_delete) {
             ofproto->ofproto_class->rule_delete(rule);
@@ -2885,9 +2883,7 @@ remove_rule_rcu__(struct rule *rule)
     struct oftable *table = &ofproto->tables[rule->table_id];
 
     ovs_assert(!cls_rule_visible_in_version(&rule->cr, OVS_VERSION_MAX));
-    if (!classifier_remove(&table->cls, &rule->cr)) {
-        OVS_NOT_REACHED();
-    }
+    classifier_remove_assert(&table->cls, &rule->cr);
     if (ofproto->ofproto_class->rule_delete) {
         ofproto->ofproto_class->rule_delete(rule);
     }
@@ -5231,9 +5227,7 @@ replace_rule_revert(struct ofproto *ofproto,
     }
 
     /* Remove the new rule immediately.  It was never visible to lookups. */
-    if (!classifier_remove(&table->cls, &new_rule->cr)) {
-        OVS_NOT_REACHED();
-    }
+    classifier_remove_assert(&table->cls, &new_rule->cr);
     ofproto_rule_remove__(ofproto, new_rule);
     ofproto_rule_unref(new_rule);
 }

@@ -387,8 +387,8 @@ const struct cls_rule *classifier_replace(struct classifier *,
                                           ovs_version_t,
                                           const struct cls_conjunction *,
                                           size_t n_conjunctions);
-const struct cls_rule *classifier_remove(struct classifier *,
-                                         const struct cls_rule *);
+bool classifier_remove(struct classifier *, const struct cls_rule *);
+void classifier_remove_assert(struct classifier *, const struct cls_rule *);
 static inline void classifier_defer(struct classifier *);
 static inline void classifier_publish(struct classifier *);
 

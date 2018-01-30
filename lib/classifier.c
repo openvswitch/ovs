@@ -695,15 +695,16 @@ classifier_insert(struct classifier *cls, const struct cls_rule *rule,
     ovs_assert(!displaced_rule);
 }
 
-/* Removes 'rule' from 'cls'.  It is the caller's responsibility to destroy
- * 'rule' with cls_rule_destroy(), freeing the memory block in which 'rule'
- * resides, etc., as necessary.
+/* If 'rule' is in 'cls', removes 'rule' from 'cls' and returns true.  It is
+ * the caller's responsibility to destroy 'rule' with cls_rule_destroy(),
+ * freeing the memory block in which 'rule' resides, etc., as necessary.
  *
- * Does nothing if 'rule' has been already removed, or was never inserted.
+ * If 'rule' is not in any classifier, returns false without making any
+ * changes.
  *
- * Returns the removed rule, or NULL, if it was already removed.
+ * 'rule' must not be in some classifier other than 'cls'.
  */
-const struct cls_rule *
+bool
 classifier_remove(struct classifier *cls, const struct cls_rule *cls_rule)
 {
     struct cls_match *rule, *prev, *next, *head;
@@ -716,7 +717,7 @@ classifier_remove(struct classifier *cls, const struct cls_rule *cls_rule)
 
     rule = get_cls_match_protected(cls_rule);
     if (!rule) {
-        return NULL;
+        return false;
     }
     /* Mark as removed. */
     ovsrcu_set(&CONST_CAST(struct cls_rule *, cls_rule)->cls_match, NULL);
@@ -820,7 +821,14 @@ check_priority:
     ovsrcu_postpone(cls_match_free_cb, rule);
     cls->n_rules--;
 
-    return cls_rule;
+    return true;
+}
+
+void
+classifier_remove_assert(struct classifier *cls,
+                         const struct cls_rule *cls_rule)
+{
+    ovs_assert(classifier_remove(cls, cls_rule));
 }
 
 /* Prefix tree context.  Valid when 'lookup_done' is true.  Can skip all
