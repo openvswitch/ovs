@@ -304,4 +304,7 @@ static inline void nsh_set_flags_ttl_len(struct nshhdr *nsh, u8 flags,
 			NSH_FLAGS_MASK | NSH_TTL_MASK | NSH_LEN_MASK);
 }
 
+int ovs_nsh_init(void);
+void ovs_nsh_cleanup(void);
+
 #endif /* __NET_NSH_H */
