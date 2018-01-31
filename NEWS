@@ -56,6 +56,7 @@ v2.9.0 - xx xxx xxxx
      * New appctl command 'dpif-netdev/pmd-rxq-rebalance' to rebalance rxq to
        pmd assignments.
      * Add rxq utilization of pmd to appctl 'dpif-netdev/pmd-rxq-show'.
+     * Add support for vHost dequeue zero copy (experimental)
    - Userspace datapath:
      * Output packet batching support.
    - vswitchd:
