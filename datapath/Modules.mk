@@ -26,13 +26,15 @@ openvswitch_sources = \
 	flow_table.c \
 	vport.c \
 	vport-internal_dev.c \
-	vport-netdev.c
+	vport-netdev.c \
+	nsh.c
 
 vport_geneve_sources = vport-geneve.c
 vport_vxlan_sources = vport-vxlan.c
 vport_gre_sources = vport-gre.c
 vport_lisp_sources = vport-lisp.c
 vport_stt_sources = vport-stt.c
+nsh_sources = nsh.c
 
 openvswitch_headers = \
 	compat.h \

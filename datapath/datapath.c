@@ -51,6 +51,7 @@
 #include <net/genetlink.h>
 #include <net/net_namespace.h>
 #include <net/netns/generic.h>
+#include <net/nsh.h>
 
 #include "datapath.h"
 #include "conntrack.h"
@@ -2408,6 +2409,7 @@ static int __init dp_init(void)
 
 	pr_info("Open vSwitch switching datapath %s\n", VERSION);
 
+	ovs_nsh_init();
 	err = action_fifos_init();
 	if (err)
 		goto error;
@@ -2463,6 +2465,7 @@ error_unreg_rtnl_link:
 error_action_fifos_exit:
 	action_fifos_exit();
 error:
+	ovs_nsh_cleanup();
 	return err;
 }
 
@@ -2478,6 +2481,7 @@ static void dp_cleanup(void)
 	ovs_flow_exit();
 	ovs_internal_dev_rtnl_link_unregister();
 	action_fifos_exit();
+	ovs_nsh_cleanup();
 }
 
 module_init(dp_init);
