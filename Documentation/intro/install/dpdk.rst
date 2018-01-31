@@ -518,6 +518,8 @@ The above command sets the number of rx queues for DPDK physical interface.
 The rx queues are assigned to pmd threads on the same NUMA node in a
 round-robin fashion.
 
+.. _dpdk-queues-sizes:
+
 DPDK Physical Port Queue Sizes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

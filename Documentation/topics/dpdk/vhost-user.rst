@@ -458,3 +458,76 @@ Sample XML
     </domain>
 
 .. _QEMU documentation: http://git.qemu-project.org/?p=qemu.git;a=blob;f=docs/specs/vhost-user.txt;h=7890d7169;hb=HEAD
+
+vhost-user Dequeue Zero Copy (experimental)
+-------------------------------------------
+
+Normally when dequeuing a packet from a vHost User device, a memcpy operation
+must be used to copy that packet from guest address space to host address
+space. This memcpy can be removed by enabling dequeue zero-copy like so::
+
+    $ ovs-vsctl add-port br0 dpdkvhostuserclient0 -- set Interface \
+        dpdkvhostuserclient0 type=dpdkvhostuserclient \
+        options:vhost-server-path=/tmp/dpdkvhostclient0 \
+        options:dq-zero-copy=true
+
+With this feature enabled, a reference (pointer) to the packet is passed to
+the host, instead of a copy of the packet. Removing this memcpy can give a
+performance improvement for some use cases, for example switching large packets
+between different VMs. However additional packet loss may be observed.
+
+Note that the feature is disabled by default and must be explicitly enabled
+by setting the ``dq-zero-copy`` option to ``true`` while specifying the
+``vhost-server-path`` option as above. If you wish to split out the command
+into multiple commands as below, ensure ``dq-zero-copy`` is set before
+``vhost-server-path``::
+
+    $ ovs-vsctl set Interface dpdkvhostuserclient0 options:dq-zero-copy=true
+    $ ovs-vsctl set Interface dpdkvhostuserclient0 \
+        options:vhost-server-path=/tmp/dpdkvhostclient0
+
+The feature is only available to ``dpdkvhostuserclient`` port types.
+
+A limitation exists whereby if packets from a vHost port with
+``dq-zero-copy=true`` are destined for a ``dpdk`` type port, the number of tx
+descriptors (``n_txq_desc``) for that port must be reduced to a smaller number,
+128 being the recommended value. This can be achieved by issuing the following
+command::
+
+    $ ovs-vsctl set Interface dpdkport options:n_txq_desc=128
+
+Note: The sum of the tx descriptors of all ``dpdk`` ports the VM will send to
+should not exceed 128. For example, in case of a bond over two physical ports
+in balance-tcp mode, one must divide 128 by the number of links in the bond.
+
+Refer to :ref:`dpdk-queues-sizes` for more information.
+
+The reason for this limitation is due to how the zero copy functionality is
+implemented. The vHost device's 'tx used vring', a virtio structure used for
+tracking used ie. sent descriptors, will only be updated when the NIC frees
+the corresponding mbuf. If we don't free the mbufs frequently enough, that
+vring will be starved and packets will no longer be processed. One way to
+ensure we don't encounter this scenario, is to configure ``n_txq_desc`` to a
+small enough number such that the 'mbuf free threshold' for the NIC will be hit
+more often and thus free mbufs more frequently. The value of 128 is suggested,
+but values of 64 and 256 have been tested and verified to work too, with
+differing performance characteristics. A value of 512 can be used too, if the
+virtio queue size in the guest is increased to 1024 (available to configure in
+QEMU versions v2.10 and greater). This value can be set like so::
+
+    $ qemu-system-x86_64 ... -chardev socket,id=char1,path=<sockpath>,server
+      -netdev type=vhost-user,id=mynet1,chardev=char1,vhostforce
+      -device virtio-net-pci,mac=00:00:00:00:00:01,netdev=mynet1,
+      tx_queue_size=1024
+
+Because of this limitation, this feature is considered 'experimental'.
+
+The feature currently does not fully work with QEMU >= v2.7 due to a bug in
+DPDK which will be addressed in an upcoming release. The patch to fix this
+issue can be found on
+`Patchwork
+<http://dpdk.org/dev/patchwork/patch/32198/>`__
+
+Further information can be found in the
+`DPDK documentation
+<http://dpdk.readthedocs.io/en/v17.05/prog_guide/vhost_lib.html>`__
