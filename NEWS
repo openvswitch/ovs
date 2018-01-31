@@ -17,6 +17,7 @@ v2.9.0 - xx xxx xxxx
    - NSH implementation now conforms to latest draft (draft-ietf-sfc-nsh-28).
      * Add ttl field.
      * Add a new action dec_nsh_ttl.
+     * Enable NSH support in kernel datapath.
    - OVSDB:
      * New high-level documentation in ovsdb(7).
      * New file format documentation for developers in ovsdb(5).

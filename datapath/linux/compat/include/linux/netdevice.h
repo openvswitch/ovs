@@ -284,4 +284,18 @@ static inline int skb_csum_hwoffload_help(struct sk_buff *skb,
 }
 #endif
 
+#ifndef HAVE_SKB_GSO_ERROR_UNWIND
+static inline void skb_gso_error_unwind(struct sk_buff *skb, __be16 protocol,
+					int pulled_hlen, u16 mac_offset,
+					int mac_len)
+{
+	skb->protocol = protocol;
+	skb->encapsulation = 1;
+	skb_push(skb, pulled_hlen);
+	skb_reset_transport_header(skb);
+	skb->mac_header = mac_offset;
+	skb->network_header = skb->mac_header + mac_len;
+	skb->mac_len = mac_len;
+}
+#endif
 #endif /* __LINUX_NETDEVICE_WRAPPER_H */
