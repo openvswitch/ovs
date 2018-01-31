@@ -6847,8 +6847,6 @@ commit_mpls_action(const struct flow *flow, struct flow *base,
             /* Otherwise, if there more LSEs in base than are common between
              * base and flow then pop the topmost one. */
             ovs_be16 dl_type;
-            bool popped;
-
             /* If all the LSEs are to be popped and this is not the outermost
              * LSE then use ETH_TYPE_MPLS as the ethertype parameter of the
              * POP_MPLS action instead of flow->dl_type.
@@ -6865,8 +6863,7 @@ commit_mpls_action(const struct flow *flow, struct flow *base,
                 dl_type = flow->dl_type;
             }
             nl_msg_put_be16(odp_actions, OVS_ACTION_ATTR_POP_MPLS, dl_type);
-            popped = flow_pop_mpls(base, base_n, flow->dl_type, NULL);
-            ovs_assert(popped);
+            ovs_assert(flow_pop_mpls(base, base_n, flow->dl_type, NULL));
             base_n--;
         }
     }

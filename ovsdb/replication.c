@@ -118,10 +118,9 @@ replication_init(const char *sync_from_, const char *exclude_tables,
 {
     free(sync_from);
     sync_from = xstrdup(sync_from_);
-    char *err = set_blacklist_tables(exclude_tables, false);
     /* Caller should have verified that the 'exclude_tables' is
      * parseable. An error here is unexpected. */
-    ovs_assert(!err);
+    ovs_assert(!set_blacklist_tables(exclude_tables, false));
 
     replication_dbs_destroy();
 

@@ -44,8 +44,11 @@ const char *ovs_get_program_version(void);
      : (X) <= UINT_MAX / (Y) ? (unsigned int) (X) * (unsigned int) (Y)  \
      : UINT_MAX)
 
-/* Like the standard assert macro, except writes the failure message to the
- * log. */
+/* Like the standard assert macro, except:
+ *
+ *    - Writes the failure message to the log.
+ *
+ *    - Always evaluates the condition, even with NDEBUG. */
 #ifndef NDEBUG
 #define ovs_assert(CONDITION)                                           \
     (OVS_LIKELY(CONDITION)                                              \

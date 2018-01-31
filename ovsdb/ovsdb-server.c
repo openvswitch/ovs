@@ -1291,11 +1291,9 @@ static void
 remove_db(struct server_config *config, struct shash_node *node)
 {
     struct db *db;
-    bool ok;
 
     db = node->data;
-    ok = ovsdb_jsonrpc_server_remove_db(config->jsonrpc, db->db);
-    ovs_assert(ok);
+    ovs_assert(ovsdb_jsonrpc_server_remove_db(config->jsonrpc, db->db));
 
     close_db(db);
     shash_delete(config->all_dbs, node);

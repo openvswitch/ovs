@@ -163,8 +163,7 @@ sset_add_and_free(struct sset *set, char *name)
 void
 sset_add_assert(struct sset *set, const char *name)
 {
-    bool added OVS_UNUSED = sset_add(set, name);
-    ovs_assert(added);
+    ovs_assert(sset_add(set, name));
 }
 
 /* Adds a copy of each of the 'n' names in 'names' to 'set'. */
@@ -214,8 +213,7 @@ sset_find_and_delete(struct sset *set, const char *name)
 void
 sset_find_and_delete_assert(struct sset *set, const char *name)
 {
-    bool deleted OVS_UNUSED = sset_find_and_delete(set, name);
-    ovs_assert(deleted);
+    ovs_assert(sset_find_and_delete(set, name));
 }
 
 /* Removes a string from 'set' and returns a copy of it.  The caller must free

@@ -198,10 +198,7 @@ odp_set_sctp(struct dp_packet *packet, const struct ovs_key_sctp *key,
 static void
 odp_set_tunnel_action(const struct nlattr *a, struct flow_tnl *tun_key)
 {
-    enum odp_key_fitness fitness;
-
-    fitness = odp_tun_key_from_attr(a, tun_key);
-    ovs_assert(fitness != ODP_FIT_ERROR);
+    ovs_assert(odp_tun_key_from_attr(a, tun_key) != ODP_FIT_ERROR);
 }
 
 static void

@@ -116,8 +116,7 @@ hmapx_add(struct hmapx *map, void *data)
 void
 hmapx_add_assert(struct hmapx *map, void *data)
 {
-    bool added OVS_UNUSED = hmapx_add(map, data);
-    ovs_assert(added);
+    ovs_assert(hmapx_add(map, data));
 }
 
 /* Removes all of the nodes from 'map'. */
@@ -156,8 +155,7 @@ hmapx_find_and_delete(struct hmapx *map, const void *data)
 void
 hmapx_find_and_delete_assert(struct hmapx *map, const void *data)
 {
-    bool deleted OVS_UNUSED = hmapx_find_and_delete(map, data);
-    ovs_assert(deleted);
+    ovs_assert(hmapx_find_and_delete(map, data));
 }
 
 /* Searches for 'data' in 'map'.  Returns its node, if found, otherwise a null

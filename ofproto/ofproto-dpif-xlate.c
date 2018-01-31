@@ -1942,10 +1942,9 @@ mirror_packet(struct xlate_ctx *ctx, struct xbundle *xbundle,
         int snaplen;
 
         /* Get the details of the mirror represented by the rightmost 1-bit. */
-        bool has_mirror = mirror_get(xbridge->mbridge, raw_ctz(mirrors),
-                                     &vlans, &dup_mirrors,
-                                     &out, &snaplen, &out_vlan);
-        ovs_assert(has_mirror);
+        ovs_assert(mirror_get(xbridge->mbridge, raw_ctz(mirrors),
+                              &vlans, &dup_mirrors,
+                              &out, &snaplen, &out_vlan));
 
 
         /* If this mirror selects on the basis of VLAN, and it does not select

@@ -843,11 +843,9 @@ cmap_replace(struct cmap *cmap, struct cmap_node *old_node,
     struct cmap_impl *impl = cmap_get_impl(cmap);
     uint32_t h1 = rehash(impl, hash);
     uint32_t h2 = other_hash(h1);
-    bool ok;
 
-    ok = cmap_replace__(impl, old_node, new_node, hash, h1)
-        || cmap_replace__(impl, old_node, new_node, hash, h2);
-    ovs_assert(ok);
+    ovs_assert(cmap_replace__(impl, old_node, new_node, hash, h1) ||
+               cmap_replace__(impl, old_node, new_node, hash, h2));
 
     if (!new_node) {
         impl->n--;

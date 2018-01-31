@@ -1948,10 +1948,8 @@ ovsdb_datum_union(struct ovsdb_datum *a, const struct ovsdb_datum *b,
         }
     }
     if (n != a->n) {
-        struct ovsdb_error *error;
         a->n = n;
-        error = ovsdb_datum_sort(a, type->key.type);
-        ovs_assert(!error);
+        ovs_assert(!ovsdb_datum_sort(a, type->key.type));
     }
 }
 

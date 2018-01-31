@@ -313,8 +313,7 @@ static void
 ofphdrs_decode_assert(struct ofphdrs *hdrs,
                       const struct ofp_header *oh, size_t length)
 {
-    enum ofperr error = ofphdrs_decode(hdrs, oh, length);
-    ovs_assert(!error);
+    ovs_assert(!ofphdrs_decode(hdrs, oh, length));
 }
 
 static bool
@@ -424,11 +423,8 @@ ofpraw_decode(enum ofpraw *raw, const struct ofp_header *oh)
 enum ofpraw
 ofpraw_decode_assert(const struct ofp_header *oh)
 {
-    enum ofperr error;
     enum ofpraw raw;
-
-    error = ofpraw_decode(&raw, oh);
-    ovs_assert(!error);
+    ovs_assert(!ofpraw_decode(&raw, oh));
     return raw;
 }
 
@@ -524,11 +520,8 @@ ofpraw_pull(enum ofpraw *rawp, struct ofpbuf *msg)
 enum ofpraw
 ofpraw_pull_assert(struct ofpbuf *msg)
 {
-    enum ofperr error;
     enum ofpraw raw;
-
-    error = ofpraw_pull(&raw, msg);
-    ovs_assert(!error);
+    ovs_assert(!ofpraw_pull(&raw, msg));
     return raw;
 }
 
@@ -633,11 +626,9 @@ ofpraw_alloc_stats_reply(const struct ofp_header *request,
 {
     enum ofpraw request_raw;
     enum ofpraw reply_raw;
-    enum ofperr error;
 
-    error = ofpraw_decode_partial(&request_raw, request,
-                                  ntohs(request->length));
-    ovs_assert(!error);
+    ovs_assert(!ofpraw_decode_partial(&request_raw, request,
+                                      ntohs(request->length)));
 
     reply_raw = ofpraw_stats_request_to_reply(request_raw, request->version);
     ovs_assert(reply_raw);
@@ -703,11 +694,9 @@ ofpraw_put_reply(enum ofpraw raw, const struct ofp_header *request,
 void
 ofpraw_put_stats_reply(const struct ofp_header *request, struct ofpbuf *buf)
 {
-    enum ofperr error;
     enum ofpraw raw;
 
-    error = ofpraw_decode_partial(&raw, request, ntohs(request->length));
-    ovs_assert(!error);
+    ovs_assert(!ofpraw_decode_partial(&raw, request, ntohs(request->length)));
 
     raw = ofpraw_stats_request_to_reply(raw, request->version);
     ovs_assert(raw);
@@ -801,7 +790,6 @@ ofpraw_stats_request_to_reply(enum ofpraw raw, uint8_t version)
     const struct raw_instance *instance = raw_instance_get(info, version);
     enum ofpraw reply_raw;
     struct ofphdrs hdrs;
-    enum ofperr error;
 
     hdrs = instance->hdrs;
     switch ((enum ofp_version)hdrs.version) {
@@ -822,8 +810,7 @@ ofpraw_stats_request_to_reply(enum ofpraw raw, uint8_t version)
         OVS_NOT_REACHED();
     }
 
-    error = ofpraw_from_ofphdrs(&reply_raw, &hdrs);
-    ovs_assert(!error);
+    ovs_assert(!ofpraw_from_ofphdrs(&reply_raw, &hdrs));
 
     return reply_raw;
 }
@@ -1016,11 +1003,8 @@ enum ofpraw
 ofpmp_decode_raw(struct ovs_list *replies)
 {
     struct ofpbuf *msg = ofpbuf_from_list(ovs_list_back(replies));
-    enum ofperr error;
     enum ofpraw raw;
-
-    error = ofpraw_decode_partial(&raw, msg->data, msg->size);
-    ovs_assert(!error);
+    ovs_assert(!ofpraw_decode_partial(&raw, msg->data, msg->size));
     return raw;
 }
 

@@ -143,8 +143,7 @@ shash_add_once(struct shash *sh, const char *name, const void *data)
 void
 shash_add_assert(struct shash *sh, const char *name, const void *data)
 {
-    bool added OVS_UNUSED = shash_add_once(sh, name, data);
-    ovs_assert(added);
+    ovs_assert(shash_add_once(sh, name, data));
 }
 
 /* Searches for 'name' in 'sh'.  If it does not already exist, adds it along

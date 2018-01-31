@@ -2453,12 +2453,11 @@ ofputil_start_queue_get_config_reply(const struct ofp_header *request,
                                      struct ovs_list *replies)
 {
     struct ofpbuf *reply;
-    enum ofperr error;
     ofp_port_t port;
     uint32_t queue;
 
-    error = ofputil_decode_queue_get_config_request(request, &port, &queue);
-    ovs_assert(!error);
+    ovs_assert(!ofputil_decode_queue_get_config_request(request, &port,
+                                                        &queue));
 
     enum ofpraw raw = ofpraw_decode_assert(request);
     switch ((int) raw) {
@@ -6227,8 +6226,7 @@ ofputil_decode_role_status(const struct ofp_header *oh,
                            struct ofputil_role_status *rs)
 {
     struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
-    enum ofpraw raw = ofpraw_pull_assert(&b);
-    ovs_assert(raw == OFPRAW_OFPT14_ROLE_STATUS);
+    ovs_assert(ofpraw_pull_assert(&b) == OFPRAW_OFPT14_ROLE_STATUS);
 
     const struct ofp14_role_status *r = b.msg;
     if (r->role != htonl(OFPCR12_ROLE_NOCHANGE) &&
@@ -6292,8 +6290,7 @@ ofputil_decode_requestforward(const struct ofp_header *outer,
     struct ofpbuf b = ofpbuf_const_initializer(outer, ntohs(outer->length));
 
     /* Skip past outer message. */
-    enum ofpraw outer_raw = ofpraw_pull_assert(&b);
-    ovs_assert(outer_raw == OFPRAW_OFPT14_REQUESTFORWARD);
+    ovs_assert(ofpraw_pull_assert(&b) == OFPRAW_OFPT14_REQUESTFORWARD);
 
     /* Validate inner message. */
     if (b.size < sizeof(struct ofp_header)) {
