@@ -68,11 +68,7 @@ struct ovs_router_entry {
 static struct ovs_router_entry *
 ovs_router_entry_cast(const struct cls_rule *cr)
 {
-    if (offsetof(struct ovs_router_entry, cr) == 0) {
-        return CONTAINER_OF(cr, struct ovs_router_entry, cr);
-    } else {
-        return cr ? CONTAINER_OF(cr, struct ovs_router_entry, cr) : NULL;
-    }
+    return cr ? CONTAINER_OF(cr, struct ovs_router_entry, cr) : NULL;
 }
 
 static bool
