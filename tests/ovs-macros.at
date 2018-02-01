@@ -204,11 +204,13 @@ uuidfilt () {
 m4_divert_pop([PREPARE_TESTS])
 
 m4_define([OVS_WAIT], [dnl
+AS_ECHO(["AS_ESCAPE([$3: waiting $4...])"]) >&AS_MESSAGE_LOG_FD
 ovs_wait_cond () {
     $1
 }
 if ovs_wait; then :
 else
+    AS_ECHO(["AS_ESCAPE([$3: wait failed])"]) >&AS_MESSAGE_LOG_FD
     $2
     AT_FAIL_IF([:])
 fi
@@ -220,7 +222,8 @@ dnl Executes shell COMMAND in a loop until it returns
 dnl zero return code.  If COMMAND did not return
 dnl zero code within reasonable time limit, then
 dnl the test fails.
-m4_define([OVS_WAIT_UNTIL], [OVS_WAIT([$1], [$2])])
+m4_define([OVS_WAIT_UNTIL],
+  [OVS_WAIT([$1], [$2], [AT_LINE], [until $1])])
 
 dnl OVS_WAIT_WHILE(COMMAND)
 dnl
@@ -229,7 +232,8 @@ dnl non-zero return code.  If COMMAND did not return
 dnl non-zero code within reasonable time limit, then
 dnl the test fails.
 m4_define([OVS_WAIT_WHILE],
-  [OVS_WAIT([if $1; then return 1; else return 0; fi], [$2])])
+  [OVS_WAIT([if $1; then return 1; else return 0; fi], [$2],
+            [AT_LINE], [while $1])])
 
 dnl OVS_APP_EXIT_AND_WAIT(DAEMON)
 dnl
