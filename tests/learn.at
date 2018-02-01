@@ -625,6 +625,44 @@ AT_CHECK([ovs-ofctl dump-flows br0 --no-stats | sort])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([learning action - delete_learned/limit with packet])
+OVS_VSWITCHD_START(
+    [add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1 --\
+     add-port br0 p2 -- set Interface p2 type=dummy ofport_request=2])
+
+# Add some initial flows and check that it was successful.
+AT_DATA([flows.txt], [dnl
+table=0 actions=set_field:0x2->reg7,set_field:0xabcdef01->metadata, resubmit(,1)
+table=1 actions=learn(table=10,delete_learned,cookie=0x123,limit=3,result_dst=NXM_NX_REG6[[0]],NXM_OF_ETH_DST[[]]=NXM_OF_ETH_SRC[[]],OXM_OF_METADATA[[]],output:NXM_NX_REG7)
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl dump-flows br0 --no-stats | sort], [0], [dnl
+ actions=load:0x2->NXM_NX_REG7[[]],load:0xabcdef01->OXM_OF_METADATA[[]],resubmit(,1)
+ table=1, actions=learn(table=10,delete_learned,cookie=0x123,limit=3,result_dst=NXM_NX_REG6[[0]],NXM_OF_ETH_DST[[]]=NXM_OF_ETH_SRC[[]],OXM_OF_METADATA[[]],output:NXM_NX_REG7[[]])
+])
+
+dnl Each packet will generate its own flow at table=10, except last one
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:01,dst=50:54:00:00:00:ff),eth_type(0x1234)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:02,dst=50:54:00:00:00:ff),eth_type(0x1234)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:03,dst=50:54:00:00:00:ff),eth_type(0x1234)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:04,dst=50:54:00:00:00:ff),eth_type(0x1234)'])
+
+AT_CHECK([ovs-ofctl dump-flows br0 table=10 --no-stats | sort], [0], [dnl
+ cookie=0x123, table=10, metadata=0xabcdef01,dl_dst=50:54:00:00:00:01 actions=output:2
+ cookie=0x123, table=10, metadata=0xabcdef01,dl_dst=50:54:00:00:00:02 actions=output:2
+ cookie=0x123, table=10, metadata=0xabcdef01,dl_dst=50:54:00:00:00:03 actions=output:2
+])
+
+ovs-appctl revalidator/wait
+
+AT_CHECK([ovs-ofctl del-flows br0 'table=1'])
+AT_CHECK([ovs-ofctl dump-flows br0 table=10 --no-stats | sort], [0], [dnl
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([learning action - limit])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
