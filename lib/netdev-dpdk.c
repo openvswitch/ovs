@@ -1564,6 +1564,12 @@ netdev_dpdk_vhost_client_set_config(struct netdev *netdev,
         path = smap_get(args, "vhost-server-path");
         if (path && strcmp(path, dev->vhost_id)) {
             strcpy(dev->vhost_id, path);
+            /* check zero copy configuration */
+            if (smap_get_bool(args, "dq-zero-copy", false)) {
+                dev->vhost_driver_flags |= RTE_VHOST_USER_DEQUEUE_ZERO_COPY;
+            } else {
+                dev->vhost_driver_flags &= ~RTE_VHOST_USER_DEQUEUE_ZERO_COPY;
+            }
             netdev_request_reconfigure(netdev);
         }
     }
@@ -3627,6 +3633,7 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     int err;
     uint64_t vhost_flags = 0;
+    bool zc_enabled;
 
     ovs_mutex_lock(&dev->mutex);
 
@@ -3644,6 +3651,14 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
         if (dpdk_vhost_iommu_enabled()) {
             vhost_flags |= RTE_VHOST_USER_IOMMU_SUPPORT;
         }
+
+        zc_enabled = dev->vhost_driver_flags
+                     & RTE_VHOST_USER_DEQUEUE_ZERO_COPY;
+        /* Enable zero copy flag, if requested */
+        if (zc_enabled) {
+            vhost_flags |= RTE_VHOST_USER_DEQUEUE_ZERO_COPY;
+        }
+
         err = rte_vhost_driver_register(dev->vhost_id, vhost_flags);
         if (err) {
             VLOG_ERR("vhost-user device setup failure for device %s\n",
@@ -3655,6 +3670,9 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
             VLOG_INFO("vHost User device '%s' created in 'client' mode, "
                       "using client socket '%s'",
                       dev->up.name, dev->vhost_id);
+            if (zc_enabled) {
+                VLOG_INFO("Zero copy enabled for vHost port %s", dev->up.name);
+            }
         }
 
         err = rte_vhost_driver_callback_register(dev->vhost_id,
