@@ -179,6 +179,7 @@ Joe Stringer                    joe@ovn.org
 Jonathan Vestin                 jonavest@kau.se
 Jorge Arturo Sauma Vargas       jorge.sauma@hpe.com
 Jun Nakajima                    jun.nakajima@intel.com
+JunhanYan                       juyan@redhat.com
 JunoZhu                         zhunatuzi@gmail.com
 Justin Pettit                   jpettit@ovn.org
 Kaige Fu                        fukaige@huawei.com
