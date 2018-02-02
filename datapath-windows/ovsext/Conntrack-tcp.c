@@ -444,12 +444,14 @@ BOOLEAN
 OvsConntrackValidateTcpPacket(const TCPHdr *tcp)
 {
     if (!tcp) {
+        OVS_LOG_TRACE("Invalid TCP packet detected, header cannot be NULL");
         return FALSE;
     }
 
     UINT16 tcp_flags = ntohs(tcp->flags);
 
     if (OvsCtInvalidTcpFlags(tcp_flags)) {
+        OVS_LOG_TRACE("Invalid TCP packet detected, tcp_flags %hu", tcp_flags);
         return FALSE;
     }
 
@@ -457,6 +459,8 @@ OvsConntrackValidateTcpPacket(const TCPHdr *tcp)
      * totally new connections (syn) or already established, not partially
      * open (syn+ack). */
     if ((tcp_flags & TCP_SYN) && (tcp_flags & TCP_ACK)) {
+        OVS_LOG_TRACE("Invalid TCP packet detected, SYN+ACK flags not allowed,"
+                      "tcp_flags %hu", tcp_flags);
         return FALSE;
     }
 

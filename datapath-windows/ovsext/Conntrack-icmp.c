@@ -61,6 +61,7 @@ BOOLEAN
 OvsConntrackValidateIcmpPacket(const ICMPHdr *icmp)
 {
     if (!icmp) {
+        OVS_LOG_TRACE("Invalid ICMP packet detected, header cannot be NULL");
         return FALSE;
     }
 

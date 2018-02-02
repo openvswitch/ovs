@@ -317,6 +317,10 @@ OvsCtEntryCreate(OvsForwardingContext *fwdCtx,
         const ICMPHdr *icmp;
         icmp = OvsGetIcmp(curNbl, l4Offset, &storage);
         if (!OvsConntrackValidateIcmpPacket(icmp)) {
+            if(icmp) {
+                OVS_LOG_TRACE("Invalid ICMP packet detected, icmp->type %u",
+                              icmp->type);
+            }
             state = OVS_CS_F_INVALID;
             break;
         }
@@ -334,6 +338,8 @@ OvsCtEntryCreate(OvsForwardingContext *fwdCtx,
         break;
     }
     default:
+        OVS_LOG_TRACE("Invalid packet detected, protocol not supported"
+                      " ipProto %u", ipProto);
         state = OVS_CS_F_INVALID;
         break;
     }
