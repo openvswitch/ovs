@@ -841,34 +841,21 @@ str_to_double(const char *s, double *d)
 
 /* Returns the value of 'c' as a hexadecimal digit. */
 int
-hexit_value(int c)
+hexit_value(unsigned char c)
 {
-    switch (c) {
-    case '0': case '1': case '2': case '3': case '4':
-    case '5': case '6': case '7': case '8': case '9':
-        return c - '0';
+    static const signed char tbl[UCHAR_MAX + 1] = {
+#define TBL(x)                                  \
+        (  x >= '0' && x <= '9' ? x - '0'       \
+         : x >= 'a' && x <= 'f' ? x - 'a' + 0xa \
+         : x >= 'A' && x <= 'F' ? x - 'A' + 0xa \
+         : -1)
+#define TBL0(x)  TBL(x),  TBL((x) + 1),   TBL((x) + 2),   TBL((x) + 3)
+#define TBL1(x) TBL0(x), TBL0((x) + 4),  TBL0((x) + 8),  TBL0((x) + 12)
+#define TBL2(x) TBL1(x), TBL1((x) + 16), TBL1((x) + 32), TBL1((x) + 48)
+        TBL2(0), TBL2(64), TBL2(128), TBL2(192)
+    };
 
-    case 'a': case 'A':
-        return 0xa;
-
-    case 'b': case 'B':
-        return 0xb;
-
-    case 'c': case 'C':
-        return 0xc;
-
-    case 'd': case 'D':
-        return 0xd;
-
-    case 'e': case 'E':
-        return 0xe;
-
-    case 'f': case 'F':
-        return 0xf;
-
-    default:
-        return -1;
-    }
+    return tbl[c];
 }
 
 /* Returns the integer value of the 'n' hexadecimal digits starting at 's', or

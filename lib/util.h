@@ -217,7 +217,7 @@ bool ovs_scan_len(const char *s, int *n, const char *format, ...);
 
 bool str_to_double(const char *, double *);
 
-int hexit_value(int c);
+int hexit_value(unsigned char c);
 uintmax_t hexits_value(const char *s, size_t n, bool *ok);
 
 int parse_int_string(const char *s, uint8_t *valuep, int field_width,
