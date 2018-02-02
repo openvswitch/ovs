@@ -274,26 +274,6 @@ Without \fB\-\-may\-exist\fR, attempting to create a port that exists
 is an error.  With \fB\-\-may\-exist\fR, this command does nothing if
 \fIport\fR already exists on \fIbridge\fR and is not a bonded port.
 .
-.IP "[\fB\-\-fake\-iface\fR] \fBadd\-bond \fIbridge port iface\fR\&... [\fIcolumn\fR[\fB:\fIkey\fR]\fR=\fIvalue\fR]\&...\fR"
-Creates on \fIbridge\fR a new port named \fIport\fR that bonds
-together the network devices given as each \fIiface\fR.  At least two
-interfaces must be named.  If the interfaces are DPDK enabled then
-the transaction will need to include operations to explicitly set the
-interface type to 'dpdk'.
-.IP
-Optional arguments set values of column in the Port record created by
-the command.  The syntax is the same as that for the \fBset\fR command
-(see \fBDatabase Commands\fR below).
-.IP
-With \fB\-\-fake\-iface\fR, a fake interface with the name \fIport\fR is
-created.  This should only be used for compatibility with legacy
-software that requires it.
-.IP
-Without \fB\-\-may\-exist\fR, attempting to create a port that exists
-is an error.  With \fB\-\-may\-exist\fR, this command does nothing if
-\fIport\fR already exists on \fIbridge\fR and bonds together exactly
-the specified interfaces.
-.
 .IP "[\fB\-\-if\-exists\fR] \fBdel\-port \fR[\fIbridge\fR] \fIport\fR"
 Deletes \fIport\fR.  If \fIbridge\fR is omitted, \fIport\fR is removed
 from whatever bridge contains it; if \fIbridge\fR is specified, it
@@ -317,6 +297,56 @@ no effect.
 .IP "\fBport\-to\-br \fIport\fR"
 Prints the name of the bridge that contains \fIport\fR on standard
 output.
+.
+.SS "Bond Commands"
+.
+These commands work with ports that have more than one interface,
+which Open vSwitch calls ``bonds.''
+.
+.IP "[\fB\-\-fake\-iface\fR] \fBadd\-bond \fIbridge port iface\fR\&... [\fIcolumn\fR[\fB:\fIkey\fR]\fR=\fIvalue\fR]\&...\fR"
+Creates on \fIbridge\fR a new port named \fIport\fR that bonds
+together the network devices given as each \fIiface\fR.  At least two
+interfaces must be named.  If the interfaces are DPDK enabled then
+the transaction will need to include operations to explicitly set the
+interface type to 'dpdk'.
+.IP
+Optional arguments set values of column in the Port record created by
+the command.  The syntax is the same as that for the \fBset\fR command
+(see \fBDatabase Commands\fR below).
+.IP
+With \fB\-\-fake\-iface\fR, a fake interface with the name \fIport\fR is
+created.  This should only be used for compatibility with legacy
+software that requires it.
+.IP
+Without \fB\-\-may\-exist\fR, attempting to create a port that exists
+is an error.  With \fB\-\-may\-exist\fR, this command does nothing if
+\fIport\fR already exists on \fIbridge\fR and bonds together exactly
+the specified interfaces.
+.
+.IP "[\fB\-\-may\-exist\fR] \fBadd\-bond\-iface \fIbond iface\fR"
+Adds \fIiface\fR as a new bond interface to the existing port
+\fIbond\fR.  If \fIbond\fR previously had only one port, this
+transforms it into a bond.
+.IP
+Without \fB\-\-may\-exist\fR, attempting to add an \fIiface\fR that is
+already part of \fIbond\fR is an error.  With \fB\-\-may\-exist\fR,
+this command does nothing if \fIiface\fR is already part of
+\fIbond\fR.  (It is still an error if \fIiface\fR is an interface of
+some other port or bond.)
+.
+.IP "[\fB\-\-if\-exists\fR] \fBdel\-bond\-iface\fR [\fIbond\fR] \fIiface\fR"
+Removes \fIiface\fR from its port.  If \fIbond\fR is omitted,
+\fIiface\fR is removed from whatever port contains it; if \fIbond\fR
+is specified, it must be the port that contains \fIbond\fR.
+.IP
+If removing \fIiface\fR causes its port to have only a single
+interface, then that port transforms from a bond into an ordinary
+port.  It is an error if \fIiface\fR is the only interface in its
+port.
+.IP
+Without \fB\-\-if\-exists\fR, attempting to delete an interface that
+does not exist is an error.  With \fB\-\-if\-exists\fR, attempting to
+delete an interface that does not exist has no effect.
 .
 .SS "Interface Commands"
 .

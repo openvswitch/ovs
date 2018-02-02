@@ -313,6 +313,66 @@ CHECK_IFACES([a], [a1], [a2], [a3])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
+AT_SETUP([add-bond-iface and del-bond-iface])
+AT_KEYWORDS([ovs-vsctl])
+OVS_VSCTL_SETUP
+
+# Create 2-interface bond.
+AT_CHECK([RUN_OVS_VSCTL(
+   [add-br a],
+   [add-bond a bond0 a1 a2])])
+CHECK_BRIDGES([a, a, 0])
+CHECK_PORTS([a], [bond0])
+CHECK_IFACES([a], [a1], [a2])
+
+# Add interface a3 to bond.
+AT_CHECK([RUN_OVS_VSCTL([add-bond-iface bond0 a3])])
+CHECK_BRIDGES([a, a, 0])
+CHECK_PORTS([a], [bond0])
+CHECK_IFACES([a], [a1], [a2], [a3])
+
+# Delete interface a2 from bond.
+AT_CHECK([RUN_OVS_VSCTL([del-bond-iface bond0 a2])])
+CHECK_BRIDGES([a, a, 0])
+CHECK_PORTS([a], [bond0])
+CHECK_IFACES([a], [a1], [a3])
+
+# Add interface a2 to bond.
+AT_CHECK([RUN_OVS_VSCTL([add-bond-iface bond0 a2])])
+CHECK_BRIDGES([a, a, 0])
+CHECK_PORTS([a], [bond0])
+CHECK_IFACES([a], [a1], [a2], [a3])
+
+# Delete interface a2 from bond.
+AT_CHECK([RUN_OVS_VSCTL([del-bond-iface a2])])
+CHECK_BRIDGES([a, a, 0])
+CHECK_PORTS([a], [bond0])
+CHECK_IFACES([a], [a1], [a3])
+
+AT_CHECK([RUN_OVS_VSCTL([--if-exists del-bond-iface bond0 a4])])
+AT_CHECK([RUN_OVS_VSCTL([del-bond-iface bond0 a4])], [1], [],
+  [ovs-vsctl: no interface named a4
+])
+AT_CHECK([RUN_OVS_VSCTL([del-bond-iface a4])], [1], [],
+  [ovs-vsctl: no interface named a4
+])
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER([add-port a a4], [del-bond-iface bond0 a4])], [1], [],
+  [ovs-vsctl: port bond0 does not have an interface a4
+])
+AT_CHECK([RUN_OVS_VSCTL([--may-exist add-bond-iface bond0 a3])])
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER([add-bond a bond1 b1 b2 b3], [--may-exist add-bond-iface bond1 a3])], [1], [],
+  [ovs-vsctl: "--may-exist add-bond-iface bond1 a3" but a3 is actually attached to port bond0
+])
+AT_CHECK([RUN_OVS_VSCTL([add-bond-iface bond0 a3])], [1], [],
+  [ovs-vsctl: cannot create an interface named a3 because an interface named a3 already exists on bridge a
+])
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER([del-bond-iface a1], [del-bond-iface a3])], [1], [],
+  [ovs-vsctl: cannot delete last interface from port bond0
+])
+
+OVS_VSCTL_CLEANUP
+AT_CLEANUP
+
 AT_SETUP([add-br a b, add-port a a1, add-port b b1, del-port a a1])
 AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP

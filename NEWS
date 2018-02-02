@@ -9,6 +9,7 @@ Post-v2.9.0
      * ovs-ofctl now accepts and display table names in place of numbers.  By
        default it always accepts names and in interactive use it displays them;
        use --names or --no-names to override.  See ovs-ofctl(8) for details.
+   - ovs-vsctl: New commands "add-bond-iface" and "del-bond-iface".
 
 
 v2.9.0 - xx xxx xxxx

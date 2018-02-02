@@ -1637,6 +1637,71 @@ cmd_add_bond(struct ctl_context *ctx)
 }
 
 static void
+cmd_add_bond_iface(struct ctl_context *ctx)
+{
+    vsctl_context_populate_cache(ctx);
+
+    struct vsctl_context *vsctl_ctx = vsctl_context_cast(ctx);
+    bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
+    struct vsctl_port *port = find_port(vsctl_ctx, ctx->argv[1], true);
+
+    const char *iface_name = ctx->argv[2];
+    if (may_exist) {
+        struct vsctl_iface *iface = find_iface(vsctl_ctx, iface_name, false);
+        if (iface) {
+            if (iface->port == port) {
+                return;
+            }
+            char *command = vsctl_context_to_string(ctx);
+            ctl_fatal("\"%s\" but %s is actually attached to port %s",
+                      command, iface_name, iface->port->port_cfg->name);
+        }
+    }
+    check_conflicts(vsctl_ctx, iface_name,
+                    xasprintf("cannot create an interface named %s",
+                              iface_name));
+
+    struct ovsrec_interface *iface = ovsrec_interface_insert(ctx->txn);
+    ovsrec_interface_set_name(iface, iface_name);
+    ovsrec_port_update_interfaces_addvalue(port->port_cfg, iface);
+    post_db_reload_expect_iface(iface);
+    add_iface_to_cache(vsctl_ctx, port, iface);
+}
+
+static void
+cmd_del_bond_iface(struct ctl_context *ctx)
+{
+    vsctl_context_populate_cache(ctx);
+
+    struct vsctl_context *vsctl_ctx = vsctl_context_cast(ctx);
+    const char *iface_name = ctx->argv[ctx->argc - 1];
+    bool must_exist = !shash_find(&ctx->options, "--if-exists");
+    struct vsctl_iface *iface = find_iface(vsctl_ctx, iface_name, must_exist);
+    if (!iface) {
+        ovs_assert(!must_exist);
+        return;
+    }
+
+    const char *port_name = ctx->argc > 2 ? ctx->argv[1] : NULL;
+    if (port_name) {
+        struct vsctl_port *port = find_port(vsctl_ctx, port_name, true);
+        if (iface->port != port) {
+            ctl_fatal("port %s does not have an interface %s",
+                      port_name, iface_name);
+        }
+    }
+
+    if (ovs_list_is_short(&iface->port->ifaces)) {
+        ctl_fatal("cannot delete last interface from port %s",
+                  iface->port->port_cfg->name);
+    }
+
+    ovsrec_port_update_interfaces_delvalue(iface->port->port_cfg,
+                                           iface->iface_cfg);
+    del_cached_iface(vsctl_ctx, iface);
+}
+
+static void
 cmd_del_port(struct ctl_context *ctx)
 {
     struct vsctl_context *vsctl_ctx = vsctl_context_cast(ctx);
@@ -2749,12 +2814,18 @@ static const struct ctl_command_syntax vsctl_commands[] = {
      RO},
     {"add-port", 2, INT_MAX, "BRIDGE NEW-PORT [COLUMN[:KEY]=VALUE]...",
      pre_get_info, cmd_add_port, NULL, "--may-exist", RW},
-    {"add-bond", 4, INT_MAX,
-     "BRIDGE NEW-BOND-PORT SYSIFACE... [COLUMN[:KEY]=VALUE]...", pre_get_info,
-     cmd_add_bond, NULL, "--may-exist,--fake-iface", RW},
     {"del-port", 1, 2, "[BRIDGE] PORT|IFACE", pre_get_info, cmd_del_port, NULL,
      "--if-exists,--with-iface", RW},
     {"port-to-br", 1, 1, "PORT", pre_get_info, cmd_port_to_br, NULL, "", RO},
+
+    /* Bond commands. */
+    {"add-bond", 4, INT_MAX,
+     "BRIDGE BOND IFACE... [COLUMN[:KEY]=VALUE]...", pre_get_info,
+     cmd_add_bond, NULL, "--may-exist,--fake-iface", RW},
+    {"add-bond-iface", 2, 2, "BOND IFACE", pre_get_info, cmd_add_bond_iface,
+     NULL, "--may-exist", RW},
+    {"del-bond-iface", 1, 2, "[BOND] IFACE", pre_get_info, cmd_del_bond_iface,
+     NULL, "--if-exists", RW},
 
     /* Interface commands. */
     {"list-ifaces", 1, 1, "BRIDGE", pre_get_info, cmd_list_ifaces, NULL, "",
