@@ -304,6 +304,53 @@
       </dd>
     </dl>
 
+    <h1>OVN Southbound Database Usage</h1>
+
+    <p>
+      <code>ovn-controller</code> reads from much of the
+      <code>OVN_Southbound</code> database to guide its operation.
+      <code>ovn-controller</code> also writes to the following tables:
+    </p>
+
+    <dl>
+      <dt><code>Chassis</code></dt>
+      <dd>
+        Upon startup, <code>ovn-controller</code> creates a row in this table
+        to represent its own chassis.  Upon graceful termination, e.g. with
+        <code>ovs-appctl -t ovn-controller exit</code> (but not
+        <code>SIGTERM</code>), <code>ovn-controller</code> removes its row.
+      </dd>
+
+      <dt><code>Encap</code></dt>
+      <dd>
+        Upon startup, <code>ovn-controller</code> creates a row or rows in this
+        table that represent the tunnel encapsulations by which its chassis can
+        be reached, and points its <code>Chassis</code> row to them.  Upon
+        graceful termination, <code>ovn-controller</code> removes these rows.
+      </dd>
+
+      <dt><code>Port_Binding</code></dt>
+      <dd>
+        At runtime, <code>ovn-controller</code> sets the <code>chassis</code>
+        columns of ports that are resident on its chassis to point to its
+        <code>Chassis</code> row, and, conversely, clears the
+        <code>chassis</code> column of ports that point to its
+        <code>Chassis</code> row but are no longer resident on its chassis.
+        The <code>chassis</code> column has a weak reference type, so when
+        <code>ovn-controller</code> gracefully exits and removes its
+        <code>Chassis</code> row, the database server automatically clears any
+        remaining references to that row.
+      </dd>
+
+      <dt><code>MAC_Binding</code></dt>
+      <dd>
+        At runtime, <code>ovn-controller</code> updates the
+        <code>MAC_Binding</code> table as instructed by <code>put_arp</code>
+        and <code>put_nd</code> logical actions.  These changes persist beyond
+        the lifetime of <code>ovn-controller</code>.
+      </dd>
+    </dl>
+
     <h1>Runtime Management Commands</h1>
     <p>
       <code>ovs-appctl</code> can send commands to a running
