@@ -36,49 +36,43 @@ dnl which must be in alphabetical order.  Also checks that each BRIDGE has the
 dnl specified PARENT and is on the given VLAN.
 m4_define([_CHECK_BRIDGE],
   [AT_CHECK([RUN_OVS_VSCTL([br-to-parent $1])], [0], [$2
-], [], [OVS_VSCTL_CLEANUP])
+])
 
    # Check br-to-vlan, without --oneline.
    AT_CHECK([RUN_OVS_VSCTL([br-to-vlan $1])], [0], [$3
-], [], [OVS_VSCTL_CLEANUP])
+])
    # Check br-to-vlan, with --oneline.
    # (This particular test is interesting with --oneline because it returns
    # an integer instead of a string and that can cause type mismatches inside
    # python if not done carefully.)
    AT_CHECK([RUN_OVS_VSCTL_ONELINE([br-to-vlan $1])], [0], [$3
-], [], [OVS_VSCTL_CLEANUP])
+])
 
    # Check multiple queries in a single run.
    AT_CHECK([RUN_OVS_VSCTL_TOGETHER([br-to-parent $1], [br-to-vlan $1])], [0],
 [$2
 $3
-], [], [OVS_VSCTL_CLEANUP])])
+])])
 m4_define([CHECK_BRIDGES],
   [dnl Check that the bridges appear on list-br, without --oneline.
    AT_CHECK(
      [RUN_OVS_VSCTL([list-br])],
      [0],
      [m4_foreach([brinfo], [$@], [m4_car(brinfo)
-])],
-     [],
-     [OVS_VSCTL_CLEANUP])
+])])
 
    dnl Check that the bridges appear on list-br, with --oneline.
    AT_CHECK(
      [RUN_OVS_VSCTL_ONELINE([list-br])],
      [0],
      [m4_join([\n], m4_foreach([brinfo], [$@], [m4_car(brinfo),]))
-],
-     [],
-     [OVS_VSCTL_CLEANUP])
+])
 
    dnl Check that each bridge exists according to br-exists and that
    dnl a bridge that should not exist does not.
    m4_foreach([brinfo], [$@],
-              [AT_CHECK([RUN_OVS_VSCTL([br-exists m4_car(brinfo)])], [0], [],
-                        [], [OVS_VSCTL_CLEANUP])])
-   AT_CHECK([RUN_OVS_VSCTL([br-exists nonexistent])], [2], [], [],
-            [OVS_VSCTL_CLEANUP])
+              [AT_CHECK([RUN_OVS_VSCTL([br-exists m4_car(brinfo)])])])
+   AT_CHECK([RUN_OVS_VSCTL([br-exists nonexistent])], [2])
 
    dnl Check that each bridge has the expected parent and VLAN.
    m4_map([_CHECK_BRIDGE], [$@])])
@@ -95,26 +89,21 @@ m4_define([CHECK_PORTS],
      [RUN_OVS_VSCTL([list-ports $1])],
      [0],
      [m4_foreach([port], m4_cdr($@), [port
-])],
-     [],
-     [OVS_VSCTL_CLEANUP])
+])])
 
    dnl Check ports with --oneline.
    AT_CHECK(
      [RUN_OVS_VSCTL_ONELINE([list-ports $1])],
      [0],
      [m4_join([\n], m4_shift($@))
-],
-     [],
-     [OVS_VSCTL_CLEANUP])
+])
    AT_CHECK([RUN_OVS_VSCTL([port-to-br $1])], [1], [],
             [ovs-vsctl: no port named $1
-],
-            [OVS_VSCTL_CLEANUP])
+])
    m4_foreach(
      [port], m4_cdr($@),
      [AT_CHECK([RUN_OVS_VSCTL([[port-to-br] port])], [0], [$1
-], [], [OVS_VSCTL_CLEANUP])])])
+])])])
 
 dnl CHECK_IFACES(BRIDGE, IFACE[, IFACE...])
 dnl
@@ -127,18 +116,14 @@ m4_define([CHECK_IFACES],
      [RUN_OVS_VSCTL([list-ifaces $1])],
      [0],
      [m4_foreach([iface], m4_cdr($@), [iface
-])],
-     [],
-     [OVS_VSCTL_CLEANUP])
+])])
    AT_CHECK([RUN_OVS_VSCTL([iface-to-br $1])], [1], [],
             [ovs-vsctl: no interface named $1
-],
-            [OVS_VSCTL_CLEANUP])
+])
    m4_foreach(
      [iface], m4_cdr($@),
      [AT_CHECK([RUN_OVS_VSCTL([[iface-to-br] iface])], [0], [$1
-],
-               [], [OVS_VSCTL_CLEANUP])])])
+])])])
 
 dnl ----------------------------------------------------------------------
 AT_BANNER([ovs-vsctl unit tests])
@@ -190,7 +175,7 @@ AT_BANNER([ovs-vsctl unit tests -- real bridges])
 AT_SETUP([add-br a])
 AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
-AT_CHECK([RUN_OVS_VSCTL([add-br a])], [0], [], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([add-br a])])
 CHECK_BRIDGES([a, a, 0])
 CHECK_PORTS([a])
 CHECK_IFACES([a])
@@ -200,25 +185,23 @@ AT_CLEANUP
 AT_SETUP([add-br a, add-br a])
 AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
-AT_CHECK([RUN_OVS_VSCTL([add-br a])], [0], [], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([add-br a])], [0])
 AT_CHECK([RUN_OVS_VSCTL([add-br a])], [1], [],
   [ovs-vsctl: cannot create a bridge named a because a bridge named a already exists
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([add-br ''])], [1], [],
   [ovs-vsctl: bridge name must not be empty string
-], [OVS_VSCTL_CLEANUP])
+])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
 AT_SETUP([add-br a, add-br b])
 AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
-AT_CHECK([RUN_OVS_VSCTL([add-br a], [add-br b])], [0], [], [],
-         [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([add-br a], [add-br b])])
 AT_CHECK([RUN_OVS_VSCTL([--may-exist add-br a b 9])], [1], [],
   [ovs-vsctl: "--may-exist add-br a b 9" but a is not a VLAN bridge
-],
-  [OVS_VSCTL_CLEANUP])
+])
 CHECK_BRIDGES([a, a, 0], [b, b, 0])
 CHECK_PORTS([a])
 CHECK_IFACES([a])
@@ -230,8 +213,7 @@ AT_CLEANUP
 AT_SETUP([add-br a, add-br b, del-br a])
 AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
-AT_CHECK([RUN_OVS_VSCTL([add-br a], [add-br b], [del-br a])], [0], [], [],
-         [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([add-br a], [add-br b], [del-br a])])
 CHECK_BRIDGES([b, b, 0])
 CHECK_PORTS([b])
 CHECK_IFACES([b])
@@ -251,7 +233,7 @@ AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
 
 
 value
-], [], [OVS_VSCTL_CLEANUP])
+])
 CHECK_BRIDGES([a, a, 0])
 CHECK_PORTS([a])
 CHECK_IFACES([a])
@@ -265,7 +247,7 @@ AT_CHECK([RUN_OVS_VSCTL(
    [add-br a],
    [--if-exists del-br b],
    [add-port a a1],
-   [add-port a a2])], [0], [], [], [OVS_VSCTL_CLEANUP])
+   [add-port a a2])])
 CHECK_BRIDGES([a, a, 0])
 CHECK_PORTS([a], [a1], [a2])
 CHECK_IFACES([a], [a1], [a2])
@@ -277,13 +259,13 @@ AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL(
    [add-br a],
-   [add-port a a1])], [0], [], [], [OVS_VSCTL_CLEANUP])
+   [add-port a a1])])
 AT_CHECK([RUN_OVS_VSCTL([add-port a a1])], [1], [],
   [ovs-vsctl: cannot create a port named a1 because a port named a1 already exists on bridge a
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([add-port a ''])], [1], [],
   [ovs-vsctl: port name must not be empty string
-], [OVS_VSCTL_CLEANUP])
+])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
@@ -302,7 +284,7 @@ AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
 
 
 
-], [], [OVS_VSCTL_CLEANUP])
+])
 CHECK_BRIDGES([b, b, 0])
 CHECK_PORTS([b], [b1])
 CHECK_IFACES([b], [b1])
@@ -314,19 +296,17 @@ AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL(
    [add-br a],
-   [add-bond a bond0 a1 a2 a3])], [0], [], [], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([--may-exist add-bond a bond0 a3 a1 a2])], [0], [], [],
-  [OVS_VSCTL_CLEANUP])
+   [add-bond a bond0 a1 a2 a3])])
+AT_CHECK([RUN_OVS_VSCTL([--may-exist add-bond a bond0 a3 a1 a2])])
 AT_CHECK([RUN_OVS_VSCTL([--may-exist add-bond a bond0 a2 a1])], [1], [],
   [ovs-vsctl: "--may-exist add-bond a bond0 a2 a1" but bond0 actually has interface(s) a1, a2, a3
-],
-  [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([add-bond a '' x y z])], [1], [],
   [ovs-vsctl: port name must not be empty string
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([add-bond a x '' y z])], [1], [],
   [ovs-vsctl: interface name must not be empty string
-], [OVS_VSCTL_CLEANUP])
+])
 CHECK_BRIDGES([a, a, 0])
 CHECK_PORTS([a], [bond0])
 CHECK_IFACES([a], [a1], [a2], [a3])
@@ -343,19 +323,15 @@ AT_CHECK([RUN_OVS_VSCTL(
   [get port a1 tag],
   [--may-exist add-port b b1],
   [del-port a a1])], [0], [9
-], [], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([--may-exist add-port b b1])], [0], [], [],
-  [OVS_VSCTL_CLEANUP])
+])
+AT_CHECK([RUN_OVS_VSCTL([--may-exist add-port b b1])])
 AT_CHECK([RUN_OVS_VSCTL([del-port a])], [1], [],
   [ovs-vsctl: cannot delete port a because it is the local port for bridge a (deleting this port requires deleting the entire bridge)
-],
-  [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([--if-exists del-port a])], [0], [], [],
-  [OVS_VSCTL_CLEANUP])
+])
+AT_CHECK([RUN_OVS_VSCTL([--if-exists del-port a])])
 AT_CHECK([RUN_OVS_VSCTL([--may-exist add-port a b1])], [1], [],
   [ovs-vsctl: "--may-exist add-port a b1" but b1 is actually attached to bridge b
-],
-  [OVS_VSCTL_CLEANUP])
+])
 CHECK_BRIDGES([a, a, 0], [b, b, 0])
 CHECK_PORTS([a])
 CHECK_IFACES([a])
@@ -375,7 +351,7 @@ AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
 
 9
 
-], [], [OVS_VSCTL_CLEANUP])
+])
 CHECK_BRIDGES([a, a, 0])
 CHECK_PORTS([a])
 OVS_VSCTL_CLEANUP
@@ -420,7 +396,7 @@ key0=othervalue
 {"key1"="value1"}
 {"key2"="value2", "key3"="value3"}
 {"key4"="value4"}
-], [], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
   [br-get-external-id a],
   [get port a1 external-ids],
@@ -430,7 +406,7 @@ AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
 {"key1"="value1"}
 {"key2"="value2", "key3"="value3"}
 {"key4"="value4"}
-], [], [OVS_VSCTL_CLEANUP])
+])
 CHECK_BRIDGES([a, a, 0])
 CHECK_PORTS([a], [a1], [bond0])
 CHECK_IFACES([a], [a1], [a2], [a3])
@@ -459,7 +435,7 @@ tcp:4.5.6.7
 
 
 tcp:5.4.3.2\ntcp:8.9.10.11
-], [], [OVS_VSCTL_CLEANUP])
+])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
@@ -474,8 +450,7 @@ m4_define([OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF],
         [--may-exist add-port xenbr0 eth0],
         [add-br xapi1 xenbr0 $1],
         [--may-exist add-br xapi1 xenbr0 $1],
-        [add-port xapi1 eth0.$1])],
-     [0], [], [], [OVS_VSCTL_CLEANUP])])
+        [add-port xapi1 eth0.$1])])])
 
 dnl OVS_VSCTL_FAKE_BRIDGE_TESTS([VLAN])
 m4_define([OVS_VSCTL_FAKE_BRIDGE_TESTS], [
@@ -487,16 +462,16 @@ OVS_VSCTL_SETUP
 OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF([$1])
 AT_CHECK([RUN_OVS_VSCTL([--may-exist add-br xapi1])], [1], [],
   [ovs-vsctl: "--may-exist add-br xapi1" but xapi1 is a VLAN bridge for VLAN $1
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([--may-exist add-br xapi1 xxx $1])], [1], [],
   [ovs-vsctl: "--may-exist add-br xapi1 xxx $1" but xapi1 has the wrong parent xenbr0
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([--may-exist add-br xapi1 xenbr0 10])], [1], [],
   [ovs-vsctl: "--may-exist add-br xapi1 xenbr0 10" but xapi1 is a VLAN bridge for the wrong VLAN $1
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([--may-exist add-br dup xenbr0 $1])], [1], [],
   [ovs-vsctl: bridge xenbr0 already has a child VLAN bridge xapi1 on VLAN $1
-], [OVS_VSCTL_CLEANUP])
+])
 CHECK_BRIDGES([xapi1, xenbr0, $1], [xenbr0, xenbr0, 0])
 CHECK_PORTS([xenbr0], [eth0])
 CHECK_IFACES([xenbr0], [eth0])
@@ -511,13 +486,13 @@ OVS_VSCTL_SETUP
 OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF([$1])
 AT_CHECK([RUN_OVS_VSCTL_ONELINE([-- list-br])], [0],
   [xapi1\nxenbr0
-], [], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL_ONELINE([-- --real list-br])], [0],
   [xenbr0
-], [], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL_ONELINE([-- --fake list-br])], [0],
   [xapi1
-], [], [OVS_VSCTL_CLEANUP])
+])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
@@ -525,7 +500,7 @@ AT_SETUP([simple fake bridge + del-br fake bridge (VLAN $1)])
 AT_KEYWORDS([ovs-vsctl fake-bridge])
 OVS_VSCTL_SETUP
 OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF([$1])
-AT_CHECK([RUN_OVS_VSCTL([del-br xapi1])], [0], [], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([del-br xapi1])])
 CHECK_BRIDGES([xenbr0, xenbr0, 0])
 CHECK_PORTS([xenbr0], [eth0])
 CHECK_IFACES([xenbr0], [eth0])
@@ -536,7 +511,7 @@ AT_SETUP([simple fake bridge + del-br real bridge (VLAN $1)])
 AT_KEYWORDS([ovs-vsctl fake-bridge])
 OVS_VSCTL_SETUP
 OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF([$1])
-AT_CHECK([RUN_OVS_VSCTL([del-br xenbr0])], [0], [], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([del-br xenbr0])])
 CHECK_BRIDGES
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
@@ -557,7 +532,7 @@ key0=value0
 value0
 key1=value1
 value1
-], [], [OVS_VSCTL_CLEANUP])
+])
 CHECK_BRIDGES([xapi1, xenbr0, $1], [xenbr0, xenbr0, 0])
 CHECK_PORTS([xenbr0], [eth0])
 CHECK_IFACES([xenbr0], [eth0])
@@ -577,8 +552,7 @@ m4_define([OVS_VSCTL_SETUP_BOND_FAKE_CONF],
         [add-br xapi1],
         [add-bond xapi1 bond0 eth0 eth1],
         [add-br xapi2 xapi1 $1],
-        [add-port xapi2 bond0.$1])],
-     [0], [], [], [OVS_VSCTL_CLEANUP])])
+        [add-port xapi2 bond0.$1])])])
 
 AT_SETUP([fake bridge on bond])
 AT_KEYWORDS([ovs-vsctl fake-bridge])
@@ -597,7 +571,7 @@ AT_KEYWORDS([ovs-vsctl fake-bridge])
 OVS_VSCTL_SETUP
 OVS_VSCTL_SETUP_BOND_FAKE_CONF([11])
 AT_CHECK([RUN_OVS_VSCTL_ONELINE([del-br xapi2])], [0], [
-], [], [OVS_VSCTL_CLEANUP])
+])
 CHECK_BRIDGES([xapi1, xapi1, 0])
 CHECK_PORTS([xapi1], [bond0])
 CHECK_IFACES([xapi1], [eth0], [eth1])
@@ -635,7 +609,7 @@ tcp:4.5.6.7
 tcp:5.4.3.2\ntcp:8.9.10.11
 
 
-], [], [OVS_VSCTL_CLEANUP])
+])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
@@ -649,10 +623,10 @@ AT_CHECK(
   [RUN_OVS_VSCTL_TOGETHER([--id=@br0 create bridge name=br123],
                           [set b br123 name=br0],
                           [set o . bridges=@br0])],
-  [0], [stdout], [], [OVS_VSCTL_CLEANUP])
+  [0], [stdout])
 cp stdout out1
 AT_CHECK([RUN_OVS_VSCTL([list bridge], [get bridge br0 _uuid])],
-  [0], [stdout], [], [OVS_VSCTL_CLEANUP])
+  [0], [stdout])
 cp stdout out2
 AT_CHECK([uuidfilt out1 out2], [0],
   [[<0>
@@ -701,7 +675,7 @@ AT_CHECK([
   RUN_OVS_VSCTL_TOGETHER([--id=@br1 create bridge name=br1 datapath_type="foo"],
                          [--id=@br2 create bridge name=br2 external-ids:bar=quux],
                          [add o . bridges @br1 @br2])],
-  [0], [stdout], [], [OVS_VSCTL_CLEANUP])
+  [0], [stdout])
 AT_CHECK(
   [RUN_OVS_VSCTL([--columns=name find bridge datapath_type!=foo])], [0], [stdout],
   [ignore])
@@ -715,43 +689,36 @@ AT_CHECK(
       'other_config:datapath_id="0123456789ab"' \
       'other_config:hwaddr="00:11:22:33:44:55"' \
       'external-ids={"uuids"="9c45f225-a7cf-439d-976d-83db6271fda1"}' -- \
-     add bridge br0 external_ids '"roles"="local; remote; cloud"'])],
-  [0], [], [], [OVS_VSCTL_CLEANUP])
+     add bridge br0 external_ids '"roles"="local; remote; cloud"'])])
 AT_CHECK([RUN_OVS_VSCTL_ONELINE([get bridge br0 other_config external-ids])],
   [0], [{datapath_id="0123456789ab", hwaddr="00:11:22:33:44:55"}\n{roles="local; remote; cloud", uuids="9c45f225-a7cf-439d-976d-83db6271fda1"}
-], [], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([get bridge br0 other_config:hwaddr -- --if-exists get bridge br0 other-config:nonexistent])],
   [0], ["00:11:22:33:44:55"
 
-], [], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([remove bridge br0 other_config hwaddr 'datapath_id=""' -- get bridge br0 other_config])],
   [0], [{datapath_id="0123456789ab"}
-], [], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([remove bridge br0 other_config 'datapath_id="0123456789ab"' -- get bridge br0 other_config])],
   [0], [{}
-], [], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([clear bridge br0 external-ids -- get bridge br0 external_ids])],
   [0], [{}
-], [], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL_TOGETHER([destroy bridge br0],
                                  [destroy bridge br1],
                                  [destroy bridge br2],
                                  [clear o . bridges])],
-  [0], [stdout], [], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([list bridge])],
-  [0], [], [], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([--if-exists get bridge x datapath_id])],
-  [0], [], [], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([--if-exists list bridge x])],
-  [0], [], [], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([--if-exists set controller x connection_mode=standalone])],
-  [0], [], [], [OVS_VSCTL_CLEANUP])
+  [0], [stdout])
+AT_CHECK([RUN_OVS_VSCTL([list bridge])])
+AT_CHECK([RUN_OVS_VSCTL([--if-exists get bridge x datapath_id])])
+AT_CHECK([RUN_OVS_VSCTL([--if-exists list bridge x])])
+AT_CHECK([RUN_OVS_VSCTL([--if-exists set controller x connection_mode=standalone])])
 AT_CHECK(
-  [RUN_OVS_VSCTL([--if-exists remove netflow x targets '"1.2.3.4:567"'])],
-  [0], [], [], [OVS_VSCTL_CLEANUP])
+  [RUN_OVS_VSCTL([--if-exists remove netflow x targets '"1.2.3.4:567"'])])
 AT_CHECK(
-  [RUN_OVS_VSCTL([--if-exists clear netflow x targets])],
-  [0], [], [], [OVS_VSCTL_CLEANUP])
+  [RUN_OVS_VSCTL([--if-exists clear netflow x targets])])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
@@ -761,30 +728,26 @@ OVS_VSCTL_SETUP
 
 AT_CHECK([ovs-vsctl --may-exist],
   [1], [ignore], [ovs-vsctl: missing command name (use --help for help)
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([ovs-vsctl --may-exist --],
   [1], [ignore], [ovs-vsctl: missing command name (use --help for help)
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([ovs-vsctl -- --may-exist],
   [1], [ignore], [ovs-vsctl: missing command name (use --help for help)
-], [OVS_VSCTL_CLEANUP])
+])
 
-AT_CHECK([RUN_OVS_VSCTL([add-br br0])],
-  [0], [ignore], [], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([add-br br1])],
-  [0], [ignore], [], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([set-controller br1 tcp:127.0.0.1])],
-  [0], [ignore], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([add-br br0])], [0], [ignore])
+AT_CHECK([RUN_OVS_VSCTL([add-br br1])], [0], [ignore])
+AT_CHECK([RUN_OVS_VSCTL([set-controller br1 tcp:127.0.0.1])], [0], [ignore])
 AT_CHECK([RUN_OVS_VSCTL([list netflow br0])], [1], [],
   [ovs-vsctl: no row "br0" in table NetFlow
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([
     RUN_OVS_VSCTL_TOGETHER([--id=@n create netflow targets='"1.2.3.4:567"'],
                            [set bridge br0 netflow=@n])],
-  [0], [stdout], [], [OVS_VSCTL_CLEANUP])
+  [0], [stdout])
 cp stdout netflow-uuid
-AT_CHECK([RUN_OVS_VSCTL([list netflow `cat netflow-uuid`])],
-  [0], [stdout], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([list netflow `cat netflow-uuid`])], [0], [stdout])
 AT_CHECK([uuidfilt netflow-uuid stdout], [0],
   [[<0>
 
@@ -798,88 +761,88 @@ targets             : ["1.2.3.4:567"]
 ]], [ignore])
 AT_CHECK([RUN_OVS_VSCTL([list interx x])],
   [1], [], [ovs-vsctl: unknown table "interx"
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([list bridge x])],
   [1], [], [ovs-vsctl: no row "x" in table Bridge
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([get bridge x datapath_id])],
   [1], [], [ovs-vsctl: no row "x" in table Bridge
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([get bridge br0 d])],
   [1], [], [ovs-vsctl: Bridge contains more than one column whose name matches "d"
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([get bridge br0 x])],
   [1], [], [ovs-vsctl: Bridge does not contain a column whose name matches "x"
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([get bridge br0 :y=z])],
   [1], [], [ovs-vsctl: :y=z: missing column name
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([get bridge br0 datapath_id:y=z])],
   [1], [], [ovs-vsctl: datapath_id:y=z: trailing garbage "=z" in argument
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([set bridge br0 'datapath_id:y>=z'])],
   [1], [], [ovs-vsctl: datapath_id:y>=z: argument does not end in "=" followed by a value.
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([set controller x connection_mode=standalone])],
   [1], [], [ovs-vsctl: no row "x" in table Controller
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([wait-until bridge br0 datapath_id:y,z])],
   [1], [], [ovs-vsctl: datapath_id:y,z: argument does not end in "=", "!=", "<", ">", "<=", ">=", "{=}", "{!=}", "{<}", "{>}", "{<=}", or "{>=}" followed by a value.
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([get bridge br0 datapath_id::])],
   [1], [], [ovs-vsctl: datapath_id::: trailing garbage ":" in argument
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([get bridge br0 datapath_id:x])],
   [1], [], [ovs-vsctl: cannot specify key to get for non-map column datapath_id
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([get bridge br0 external_ids:x])],
   [1], [], [ovs-vsctl: no key "x" in Bridge record "br0" column external_ids
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([set bridge br0 flood_vlans=-1])],
   [1], [], [ovs-vsctl: constraint violation: -1 is not in the valid range 0 to 4095 (inclusive)
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([set bridge br0 flood_vlans=4096])],
   [1], [], [ovs-vsctl: constraint violation: 4096 is not in the valid range 0 to 4095 (inclusive)
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([set c br1 'connection-mode=xyz'])],
   [1], [], [[ovs-vsctl: constraint violation: xyz is not one of the allowed values ([in-band, out-of-band])
-]], [OVS_VSCTL_CLEANUP])
+]])
 AT_CHECK([RUN_OVS_VSCTL([set c br1 connection-mode:x=y])],
   [1], [], [ovs-vsctl: cannot specify key to set for non-map column connection_mode
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([add bridge br1 datapath_id x y])],
   [1], [], [ovs-vsctl: "add" operation would put 2 values in column datapath_id of table Bridge but the maximum number is 1
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([remove netflow `cat netflow-uuid` targets '"1.2.3.4:567"'])],
   [1], [], [ovs-vsctl: "remove" operation would put 0 values in column targets of table NetFlow but the minimum number is 1
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([remove netflow x targets '"1.2.3.4:567"'])],
   [1], [], [ovs-vsctl: no row "x" in table NetFlow
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([clear netflow x targets])],
   [1], [], [ovs-vsctl: no row "x" in table NetFlow
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([clear netflow `cat netflow-uuid` targets])],
   [1], [], [ovs-vsctl: "clear" operation cannot be applied to column targets of table NetFlow, which is not allowed to be empty
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([destroy bridge br2])],
   [1], [], [ovs-vsctl: no row "br2" in table Bridge
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([add in br1 name x])],
   [1], [], [ovs-vsctl: cannot modify read-only column name in table Interface
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([set port br0 name=br2])],
   [1], [], [ovs-vsctl: cannot modify read-only column name in table Port
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([remove bridge br0 name br1])],
   [1], [], [ovs-vsctl: cannot modify read-only column name in table Bridge
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([remove bridge br1 flood-vlans true])],
   [1], [], [ovs-vsctl: "true" is not a valid integer or range
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL([clear bridge br1 name])],
   [1], [], [ovs-vsctl: cannot modify read-only column name in table Bridge
-], [OVS_VSCTL_CLEANUP])
+])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
@@ -1023,16 +986,11 @@ OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL(
     [add-br br0],
     [add-bond br0 bond0 eth0 eth1],
-    [set port bond0 bond_updelay=500 other-config:abc=def])],
-  [0], [], [], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([[wait-until Open_vSwitch . manager_options=[]]])],
-  [0], [], [], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([[wait-until Open_vSwitch . bridges!=[]]])],
-  [0], [], [], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([[wait-until Port bond0 other-config:abc=def]])],
-  [0], [], [], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([[wait-until port bond0 'bond_updelay>50' 'other-config:abc>d' 'other-config:abc<e']])],
-  [0], [], [], [OVS_VSCTL_CLEANUP])
+    [set port bond0 bond_updelay=500 other-config:abc=def])])
+AT_CHECK([RUN_OVS_VSCTL([[wait-until Open_vSwitch . manager_options=[]]])])
+AT_CHECK([RUN_OVS_VSCTL([[wait-until Open_vSwitch . bridges!=[]]])])
+AT_CHECK([RUN_OVS_VSCTL([[wait-until Port bond0 other-config:abc=def]])])
+AT_CHECK([RUN_OVS_VSCTL([[wait-until port bond0 'bond_updelay>50' 'other-config:abc>d' 'other-config:abc<e']])])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
@@ -1051,21 +1009,20 @@ OVS_VSCTL_SETUP
 sleep 1
 
 AT_CHECK([RUN_OVS_VSCTL([add-br br10 -- set bridge br10 other-config:abc=quux])
-RUN_OVS_VSCTL([add-br br1 -- set bridge br1 other-config:abc=def -- add-bond br1 bond0 eth0 eth1 -- set port bond0 bond_updelay=500])],
-  [0], [], [], [OVS_VSCTL_CLEANUP])
+RUN_OVS_VSCTL([add-br br1 -- set bridge br1 other-config:abc=def -- add-bond br1 bond0 eth0 eth1 -- set port bond0 bond_updelay=500])])
 
 # Wait for the ovs-vsctls to finish.
 wait
 
 # Check output
 AT_CHECK([cat stdout1], [0], [quux
-], [], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([cat stdout2], [0], [def
-], [], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([cat stdout3], [0], [{abc=def}
-], [], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([cat stdout4], [0], [500
-], [], [OVS_VSCTL_CLEANUP])
+])
 
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
@@ -1082,21 +1039,20 @@ AT_CHECK(
     [--id=@eth0 get port eth0],
     [--id=@eth1 get port eth1],
     [--id=@m create mirror name=mymirror select-dst-port=@eth0 select-src-port=@eth0 output-port=@eth1])],
-  [0], [stdout], [], [OVS_VSCTL_CLEANUP])
+  [0], [stdout])
 AT_CHECK(
   [uuidfilt stdout], [0], [dnl
 
 
 
 <0>
-],
-  [], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK(
   [RUN_OVS_VSCTL(
     [list port eth0 eth1],
     [list mirror],
     [list bridge br0])],
-  [0], [stdout], [], [OVS_VSCTL_CLEANUP])
+  [0], [stdout])
 AT_CHECK(
   [sed -n -e '/uuid/p' -e '/name/p' -e '/mirrors/p' -e '/select/p' -e '/output/p' < stdout | uuidfilt], [0], [dnl
 [_uuid               : <0>
@@ -1114,8 +1070,7 @@ select_vlan         : []
 _uuid               : <3>
 mirrors             : [<2>]
 name                : "br0"
-]],
-  [], [OVS_VSCTL_CLEANUP])
+]])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
@@ -1127,13 +1082,13 @@ AT_CHECK(
      -- create Bridge name=br0 | uuidfilt],
   [0], [<0>
 ], [db_ctl_base|WARN|applying "create" command to table Bridge without --id option will have no effect
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK(
   [ovs-vsctl -vPATTERN:console:'%c|%p|%m' --no-wait -vreconnect:emer --db=unix:socket \
      -- --id=@br0 create Bridge name=br0 | uuidfilt],
   [0], [<0>
 ], [vsctl|WARN|row id "@br0" was created but no reference to it was inserted, so it will not actually appear in the database
-], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK(
   [ovs-vsctl -vPATTERN:console:'%c|%p|%m' --no-wait -vreconnect:emer --db=unix:socket \
      -- --id=@eth0_iface create Interface name=eth0 \
@@ -1146,7 +1101,7 @@ AT_CHECK(
 <2>
 <3>
 ], [vsctl|WARN|row id "@eth0" was created but only a weak reference to it was inserted, so it will not actually appear in the database
-], [OVS_VSCTL_CLEANUP])
+])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
@@ -1157,7 +1112,7 @@ AT_SETUP([created row UUID is wrong in same execution])
 AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL([--id=@br0 create Bridge name=br0 -- add Open_vSwitch . bridges @br0 -- list bridge])],
-  [0], [stdout], [], [OVS_VSCTL_CLEANUP])
+  [0], [stdout])
 AT_CHECK([uuidfilt stdout], [0],
   [[<0>
 _uuid               : <1>
@@ -1196,7 +1151,7 @@ OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL(
    [add-br a],
    [add-port a a1],
-   [add-port a a2])], [0], [], [], [OVS_VSCTL_CLEANUP])
+   [add-port a a2])])
 CHECK_BRIDGES([a, a, 0])
 CHECK_PORTS([a], [a1], [a2])
 CHECK_IFACES([a], [a1], [a2])
@@ -1205,34 +1160,34 @@ AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
    [set Port a2 qos=@newqos],
    [--id=@newqos create QoS type=linux-htb other-config:max-rate=1000000000 queues=0=@q0,1=@q1],
    [--id=@q0 create Queue other-config:min-rate=100000000 other-config:max-rate=100000000],
-   [--id=@q1 create Queue other-config:min-rate=500000000])], [0], [ignore], [], [OVS_VSCTL_CLEANUP])
+   [--id=@q1 create Queue other-config:min-rate=500000000])], [0], [ignore])
 AT_CHECK([RUN_OVS_VSCTL(
    [--columns=other_config,type list Qos])], [0],
 [other_config        : {max-rate="1000000000"}
 type                : linux-htb
-], [], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL(
    [--columns=other_config list Queue | sort | sed '/^$/d'])], [0],
 [other_config        : {max-rate="100000000", min-rate="100000000"}
 other_config        : {min-rate="500000000"}
-], [], [OVS_VSCTL_CLEANUP])
+])
 AT_CHECK([RUN_OVS_VSCTL(
    [clear Port a1 qos],
-   [clear Port a2 qos])], [0], [], [], [OVS_VSCTL_CLEANUP])
+   [clear Port a2 qos])])
 AT_CHECK([RUN_OVS_VSCTL(
    [--columns=qos list Port a1 a2])], [0],
 [[qos                 : []
 
 qos                 : []
-]], [], [OVS_VSCTL_CLEANUP])
+]])
 AT_CHECK([RUN_OVS_VSCTL(
-   [--all destroy Qos])], [0], [], [], [OVS_VSCTL_CLEANUP])
+   [--all destroy Qos])])
 AT_CHECK([RUN_OVS_VSCTL(
-   [-- list Qos])], [0], [], [], [OVS_VSCTL_CLEANUP])
+   [-- list Qos])])
 AT_CHECK([RUN_OVS_VSCTL(
-   [--all destroy Queue])], [0], [], [], [OVS_VSCTL_CLEANUP])
+   [--all destroy Queue])])
 AT_CHECK([RUN_OVS_VSCTL(
-   [-- list Queue])], [0], [], [], [OVS_VSCTL_CLEANUP])
+   [-- list Queue])])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
