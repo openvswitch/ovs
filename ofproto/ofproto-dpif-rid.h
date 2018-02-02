@@ -143,6 +143,7 @@ struct frozen_state {
     size_t stack_size;
     mirror_mask_t mirrors;        /* Mirrors already output. */
     bool conntracked;             /* Conntrack occurred prior to freeze. */
+    struct uuid xport_uuid;       /* UUID of 1st port packet received on. */
 
     /* Actions to be translated when thawing. */
     struct ofpact *ofpacts;
