@@ -148,7 +148,7 @@ ro_shell = printf '\043 Generated automatically -- do not modify!    -*- buffer-
 
 SUFFIXES += .in
 .in:
-	$(AM_V_GEN)PYTHONPATH=$$PYTHONPATH:$(srcdir)/python $(PYTHON) $(srcdir)/build-aux/soexpand.py -I$(srcdir) < $< | \
+	$(AM_V_GEN)PYTHONPATH=$$PYTHONPATH$(psep)$(srcdir)/python $(PYTHON) $(srcdir)/build-aux/soexpand.py -I$(srcdir) < $< | \
 	  $(PYTHON) $(srcdir)/build-aux/dpdkstrip.py $(DPDKSTRIP_FLAGS) | \
 	  sed \
 	    -e 's,[@]PKIDIR[@],$(PKIDIR),g' \
@@ -398,7 +398,7 @@ CLEANFILES += flake8-check
 
 include $(srcdir)/manpages.mk
 $(srcdir)/manpages.mk: $(MAN_ROOTS) build-aux/sodepends.py python/build/soutil.py
-	@PYTHONPATH=$$PYTHONPATH:$(srcdir)/python $(PYTHON) $(srcdir)/build-aux/sodepends.py -I. -I$(srcdir) $(MAN_ROOTS) >$(@F).tmp
+	@PYTHONPATH=$$PYTHONPATH$(psep)$(srcdir)/python $(PYTHON) $(srcdir)/build-aux/sodepends.py -I. -I$(srcdir) $(MAN_ROOTS) >$(@F).tmp
 	@if cmp -s $(@F).tmp $@; then \
 	  touch $@; \
 	  rm -f $(@F).tmp; \
