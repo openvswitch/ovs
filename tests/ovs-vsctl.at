@@ -4,7 +4,7 @@ dnl Creates an empty database in the current directory and then starts
 dnl an ovsdb-server on it for ovs-vsctl to connect to.
 m4_define([OVS_VSCTL_SETUP],
   [OVSDB_INIT([db])
-   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket db >/dev/null 2>&1], [0], [ignore], [ignore])
+   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:db.sock db >/dev/null 2>&1], [0], [ignore], [ignore])
    on_exit 'kill `cat ovsdb-server.pid`'])
 
 dnl OVS_VSCTL_CLEANUP
@@ -16,17 +16,17 @@ dnl RUN_OVS_VSCTL(COMMAND, ...)
 dnl
 dnl Executes each ovs-vsctl COMMAND.
 m4_define([RUN_OVS_VSCTL],
-  [m4_foreach([command], [$@], [ovs-vsctl --no-wait -vreconnect:emer --db=unix:socket command
+  [m4_foreach([command], [$@], [ovs-vsctl --no-wait -vreconnect:emer command
 ])])
 m4_define([RUN_OVS_VSCTL_ONELINE],
-  [m4_foreach([command], [$@], [ovs-vsctl --no-wait -vreconnect:emer --db=unix:socket --oneline -- command
+  [m4_foreach([command], [$@], [ovs-vsctl --no-wait -vreconnect:emer --oneline -- command
 ])])
 
 dnl RUN_OVS_VSCTL_TOGETHER(COMMAND, ...)
 dnl
 dnl Executes each ovs-vsctl COMMAND in a single run of ovs-vsctl.
 m4_define([RUN_OVS_VSCTL_TOGETHER],
-  [ovs-vsctl --no-wait -vreconnect:emer --db=unix:socket --oneline dnl
+  [ovs-vsctl --no-wait -vreconnect:emer --oneline dnl
 m4_foreach([command], [$@], [ -- command])])
 
 dnl CHECK_BRIDGES([BRIDGE, PARENT, VLAN], ...)
@@ -875,7 +875,7 @@ AT_CHECK(
 
 ])
 m4_define([VSCTL_CHECK_FIND],
-  [AT_CHECK([echo `ovs-vsctl --bare --no-wait -vreconnect:emer --db=unix:socket -- --columns=name find bridge '$1' | sort`], [0], [$2
+  [AT_CHECK([echo `ovs-vsctl --bare --no-wait -vreconnect:emer -- --columns=name find bridge '$1' | sort`], [0], [$2
 ])])
 
 # Arithmetic relational operators without keys.
@@ -1078,19 +1078,19 @@ AT_SETUP([unreferenced record warnings])
 AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
 AT_CHECK(
-  [ovs-vsctl -vPATTERN:console:'%c|%p|%m' --no-wait -vreconnect:emer --db=unix:socket \
+  [ovs-vsctl -vPATTERN:console:'%c|%p|%m' --no-wait -vreconnect:emer \
      -- create Bridge name=br0 | uuidfilt],
   [0], [<0>
 ], [db_ctl_base|WARN|applying "create" command to table Bridge without --id option will have no effect
 ])
 AT_CHECK(
-  [ovs-vsctl -vPATTERN:console:'%c|%p|%m' --no-wait -vreconnect:emer --db=unix:socket \
+  [ovs-vsctl -vPATTERN:console:'%c|%p|%m' --no-wait -vreconnect:emer \
      -- --id=@br0 create Bridge name=br0 | uuidfilt],
   [0], [<0>
 ], [vsctl|WARN|row id "@br0" was created but no reference to it was inserted, so it will not actually appear in the database
 ])
 AT_CHECK(
-  [ovs-vsctl -vPATTERN:console:'%c|%p|%m' --no-wait -vreconnect:emer --db=unix:socket \
+  [ovs-vsctl -vPATTERN:console:'%c|%p|%m' --no-wait -vreconnect:emer \
      -- --id=@eth0_iface create Interface name=eth0 \
      -- --id=@eth0 create Port name=eth0 interfaces=@eth0_iface \
      -- --id=@m0 create Mirror name=m0 output_port=@eth0 \

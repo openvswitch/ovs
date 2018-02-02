@@ -19,7 +19,7 @@ mkdir var var/run
 touch var/run/xapi_init_complete.cookie
 
 ovs_vsctl () {
-    ovs-vsctl --no-wait -vreconnect:emer --db=unix:socket "$@"
+    ovs-vsctl --no-wait -vreconnect:emer "$@"
 }
 
 # Start ovsdb-server.
@@ -27,7 +27,7 @@ OVS_VSCTL_SETUP
 
 # Start ovs-xapi-sync.
 AT_CHECK([$PYTHON ./ovs-xapi-sync "--pidfile=ovs-xapi-sync.pid" \
-                  "--root-prefix=`pwd`" unix:socket >log 2>&1 &])
+                  "--root-prefix=`pwd`" unix:db.sock >log 2>&1 &])
 AT_CAPTURE_FILE([log])
 
 # Add bridges and check ovs-xapi-sync's work.
