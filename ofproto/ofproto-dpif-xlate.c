@@ -64,6 +64,7 @@
 #include "tnl-ports.h"
 #include "tunnel.h"
 #include "util.h"
+#include "uuid.h"
 
 COVERAGE_DEFINE(xlate_actions);
 COVERAGE_DEFINE(xlate_actions_oversize);
@@ -146,6 +147,9 @@ struct xport {
 
     struct hmap_node ofp_node;       /* Node in parent xbridge 'xports' map. */
     ofp_port_t ofp_port;             /* Key in parent xbridge 'xports' map. */
+
+    struct hmap_node uuid_node;      /* Node in global 'xports_uuid' map. */
+    struct uuid uuid;                /* Key in global 'xports_uuid' map. */
 
     odp_port_t odp_port;             /* Datapath port number or ODPP_NONE. */
 
@@ -503,6 +507,7 @@ struct xlate_cfg {
     struct hmap xbridges;
     struct hmap xbundles;
     struct hmap xports;
+    struct hmap xports_uuid;
 };
 static OVSRCU_TYPE(struct xlate_cfg *) xcfgp = OVSRCU_INITIALIZER(NULL);
 static struct xlate_cfg *new_xcfg = NULL;
@@ -815,6 +820,8 @@ xlate_xport_init(struct xlate_cfg *xcfg, struct xport *xport)
                 hash_pointer(xport->ofport, 0));
     hmap_insert(&xport->xbridge->xports, &xport->ofp_node,
                 hash_ofp_port(xport->ofp_port));
+    hmap_insert(&xcfg->xports_uuid, &xport->uuid_node,
+                uuid_hash(&xport->uuid));
 }
 
 static void
@@ -1003,6 +1010,7 @@ xlate_xport_copy(struct xbridge *xbridge, struct xbundle *xbundle,
     new_xport->ofport = xport->ofport;
     new_xport->ofp_port = xport->ofp_port;
     new_xport->xbridge = xbridge;
+    new_xport->uuid = xport->uuid;
     xlate_xport_init(new_xcfg, new_xport);
 
     xlate_xport_set(new_xport, xport->odp_port, xport->netdev, xport->cfm,
@@ -1073,6 +1081,7 @@ xlate_txn_start(void)
     hmap_init(&new_xcfg->xbridges);
     hmap_init(&new_xcfg->xbundles);
     hmap_init(&new_xcfg->xports);
+    hmap_init(&new_xcfg->xports_uuid);
 
     xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
     if (!xcfg) {
@@ -1101,6 +1110,7 @@ xlate_xcfg_free(struct xlate_cfg *xcfg)
     hmap_destroy(&xcfg->xbridges);
     hmap_destroy(&xcfg->xbundles);
     hmap_destroy(&xcfg->xports);
+    hmap_destroy(&xcfg->xports_uuid);
     free(xcfg);
 }
 
@@ -1262,6 +1272,7 @@ xlate_ofport_set(struct ofproto_dpif *ofproto, struct ofbundle *ofbundle,
         xport->ofport = ofport;
         xport->xbridge = xbridge_lookup(new_xcfg, ofproto);
         xport->ofp_port = ofp_port;
+        uuid_generate(&xport->uuid);
 
         xlate_xport_init(new_xcfg, xport);
     }
@@ -1326,6 +1337,7 @@ xlate_xport_remove(struct xlate_cfg *xcfg, struct xport *xport)
     hmap_destroy(&xport->skb_priorities);
 
     hmap_remove(&xcfg->xports, &xport->hmap_node);
+    hmap_remove(&xcfg->xports_uuid, &xport->uuid_node);
     hmap_remove(&xport->xbridge->xports, &xport->ofp_node);
 
     netdev_close(xport->netdev);
