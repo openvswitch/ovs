@@ -5972,8 +5972,10 @@ ovn_start
 ovn-nbctl ls-add lsw0
 ovn-nbctl --wait=sb lsp-add lsw0 lp1
 ovn-nbctl --wait=sb lsp-add lsw0 lp2
+ovn-nbctl --wait=sb lsp-add lsw0 lp3
 ovn-nbctl lsp-set-addresses lp1 f0:00:00:00:00:01
 ovn-nbctl lsp-set-addresses lp2 f0:00:00:00:00:02
+ovn-nbctl lsp-set-addresses lp3 f0:00:00:00:00:03
 ovn-nbctl lsp-set-port-security lp1 f0:00:00:00:00:01
 ovn-nbctl lsp-set-port-security lp2 f0:00:00:00:00:02
 ovn-nbctl --wait=sb sync
@@ -6032,7 +6034,7 @@ AT_CHECK([get_final_nw_tos], [0], [none
 check_tos 0
 
 # Mark DSCP with a valid value
-qos_id=$(ovn-nbctl --wait=hv -- --id=@lp1-qos create QoS priority=100 action=dscp=48 match="inport\=\=\"lp1\"" direction="from-lport" -- set Logical_Switch lsw0 qos_rules=@lp1-qos)
+qos_id=$(ovn-nbctl --wait=hv -- --id=@lp1-qos create QoS priority=100 action=dscp=48 match="inport\=\=\"lp1\"\ &&\ is_chassis_resident(\"lp1\")" direction="from-lport" -- set Logical_Switch lsw0 qos_rules=@lp1-qos)
 AT_CHECK([as hv ovn-nbctl qos-list lsw0 | wc -l], [0], [1
 ])
 check_tos 48
@@ -6074,6 +6076,17 @@ check_tos 0
 
 # check at hv without qos meter
 AT_CHECK([as hv ovs-ofctl dump-flows br-int -O OpenFlow13 | grep meter | wc -l], [0], [0
+])
+
+# check meter with chassis not resident
+ovn-nbctl qos-add lsw0 to-lport 1001 'inport=="lp3" && is_chassis_resident("lp3")' rate=11123 burst=111230
+AT_CHECK([as hv ovn-nbctl qos-list lsw0 | wc -l], [0], [1
+])
+
+# check no meter table
+AT_CHECK([as hv ovs-ofctl dump-flows br-int -O OpenFlow13 | grep meter | wc -l], [0], [0
+])
+AT_CHECK([as hv ovs-ofctl dump-meters br-int -O OpenFlow13 | grep rate=11123 | wc -l], [0], [0
 ])
 
 OVN_CLEANUP([hv])

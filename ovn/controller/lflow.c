@@ -254,31 +254,6 @@ consider_logical_flow(struct controller_ctx *ctx,
         return;
     }
 
-    /* Encode OVN logical actions into OpenFlow. */
-    uint64_t ofpacts_stub[1024 / 8];
-    struct ofpbuf ofpacts = OFPBUF_STUB_INITIALIZER(ofpacts_stub);
-    struct lookup_port_aux aux = {
-        .ovnsb_idl = ctx->ovnsb_idl,
-        .dp = lflow->logical_datapath
-    };
-    struct ovnact_encode_params ep = {
-        .lookup_port = lookup_port_cb,
-        .aux = &aux,
-        .is_switch = is_switch(ldp),
-        .is_gateway_router = is_gateway_router(ldp, local_datapaths),
-        .group_table = group_table,
-        .meter_table = meter_table,
-
-        .pipeline = ingress ? OVNACT_P_INGRESS : OVNACT_P_EGRESS,
-        .ingress_ptable = OFTABLE_LOG_INGRESS_PIPELINE,
-        .egress_ptable = OFTABLE_LOG_EGRESS_PIPELINE,
-        .output_ptable = output_ptable,
-        .mac_bind_ptable = OFTABLE_MAC_BINDING,
-    };
-    ovnacts_encode(ovnacts.data, ovnacts.size, &ep, &ofpacts);
-    ovnacts_free(ovnacts.data, ovnacts.size);
-    ofpbuf_uninit(&ovnacts);
-
     /* Translate OVN match into table of OpenFlow matches. */
     struct hmap matches;
     struct expr *expr;
@@ -296,11 +271,16 @@ consider_logical_flow(struct controller_ctx *ctx,
         VLOG_WARN_RL(&rl, "error parsing match \"%s\": %s",
                      lflow->match, error);
         expr_destroy(prereqs);
-        ofpbuf_uninit(&ofpacts);
         free(error);
+        ovnacts_free(ovnacts.data, ovnacts.size);
+        ofpbuf_uninit(&ovnacts);
         return;
     }
 
+    struct lookup_port_aux aux = {
+        .ovnsb_idl = ctx->ovnsb_idl,
+        .dp = lflow->logical_datapath
+    };
     struct condition_aux cond_aux = { ctx->ovnsb_idl, chassis, active_tunnels,
                                       chassis_index};
     expr = expr_simplify(expr, is_chassis_resident_cb, &cond_aux);
@@ -308,6 +288,34 @@ consider_logical_flow(struct controller_ctx *ctx,
     uint32_t n_conjs = expr_to_matches(expr, lookup_port_cb, &aux,
                                        &matches);
     expr_destroy(expr);
+
+    if (hmap_is_empty(&matches)) {
+        ovnacts_free(ovnacts.data, ovnacts.size);
+        ofpbuf_uninit(&ovnacts);
+        expr_matches_destroy(&matches);
+        return;
+    }
+
+    /* Encode OVN logical actions into OpenFlow. */
+    uint64_t ofpacts_stub[1024 / 8];
+    struct ofpbuf ofpacts = OFPBUF_STUB_INITIALIZER(ofpacts_stub);
+    struct ovnact_encode_params ep = {
+        .lookup_port = lookup_port_cb,
+        .aux = &aux,
+        .is_switch = is_switch(ldp),
+        .is_gateway_router = is_gateway_router(ldp, local_datapaths),
+        .group_table = group_table,
+        .meter_table = meter_table,
+
+        .pipeline = ingress ? OVNACT_P_INGRESS : OVNACT_P_EGRESS,
+        .ingress_ptable = OFTABLE_LOG_INGRESS_PIPELINE,
+        .egress_ptable = OFTABLE_LOG_EGRESS_PIPELINE,
+        .output_ptable = output_ptable,
+        .mac_bind_ptable = OFTABLE_MAC_BINDING,
+    };
+    ovnacts_encode(ovnacts.data, ovnacts.size, &ep, &ofpacts);
+    ovnacts_free(ovnacts.data, ovnacts.size);
+    ofpbuf_uninit(&ovnacts);
 
     /* Prepare the OpenFlow matches for adding to the flow table. */
     struct expr_match *m;
