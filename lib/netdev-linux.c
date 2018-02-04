@@ -747,6 +747,9 @@ netdev_linux_update(struct netdev_linux *dev,
                 dev->etheraddr = change->mac;
                 dev->cache_valid |= VALID_ETHERADDR;
                 dev->ether_addr_error = 0;
+
+                /* The mac addr has been changed, report it now. */
+                rtnetlink_report_link();
             }
 
             dev->ifindex = change->if_index;
