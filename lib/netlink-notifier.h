@@ -48,4 +48,5 @@ struct nln_notifier *nln_notifier_create(struct nln *, int multicast_group,
 void nln_notifier_destroy(struct nln_notifier *);
 void nln_run(struct nln *);
 void nln_wait(struct nln *);
+void nln_report(const struct nln *nln, void *change, int group);
 #endif /* netlink-notifier.h */

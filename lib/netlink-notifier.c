@@ -32,8 +32,6 @@ VLOG_DEFINE_THIS_MODULE(netlink_notifier);
 
 COVERAGE_DEFINE(nln_changed);
 
-static void nln_report(const struct nln *nln, void *change, int group);
-
 struct nln {
     struct nl_sock *notify_sock; /* Netlink socket. */
     struct ovs_list all_notifiers;   /* All nln notifiers. */
@@ -225,7 +223,7 @@ nln_wait(struct nln *nln)
     }
 }
 
-static void
+void
 nln_report(const struct nln *nln, void *change, int group)
 {
     struct nln_notifier *notifier;

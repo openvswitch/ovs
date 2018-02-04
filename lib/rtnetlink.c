@@ -180,3 +180,12 @@ rtnetlink_wait(void)
         nln_wait(nln);
     }
 }
+
+/* Report RTNLGRP_LINK netdev change events. */
+void
+rtnetlink_report_link(void)
+{
+    if (nln) {
+        nln_report(nln, NULL, RTNLGRP_LINK);
+    }
+}
