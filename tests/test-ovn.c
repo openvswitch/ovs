@@ -871,6 +871,7 @@ test_tree_shape_exhaustively(struct expr *expr, struct shash *symtab,
 
             if (operation >= OP_NORMALIZE) {
                 modified = expr_normalize(modified);
+                ovs_assert(expr_honors_invariants(modified));
                 ovs_assert(expr_is_normalized(modified));
             }
         }
