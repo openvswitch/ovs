@@ -2366,9 +2366,19 @@ crush_cmps(struct expr *expr, const struct expr_symbol *symbol)
     }
 }
 
+/* Applied to an EXPR_T_AND 'expr' whose subexpressions are in terms of only
+ * EXPR_T_CMP, EXPR_T_AND, and EXPR_T_OR, this takes ownership of 'expr' and
+ * returns a new expression in terms of EXPR_T_CMP, EXPR_T_AND, EXPR_T_OR, or
+ * EXPR_T_BOOLEAN.
+ *
+ * The function attempts to bring together and combine clauses of the original
+ * 'expr' that were in terms of a single variable.  For example, it combines
+ * (x[0] == 1 && x[1] == 1) into the single x[0..1] == 3. */
 static struct expr *
 expr_sort(struct expr *expr)
 {
+    ovs_assert(expr->type == EXPR_T_AND);
+
     size_t n = ovs_list_size(&expr->andor);
     struct expr_sort *subs = xmalloc(n * sizeof *subs);
     struct expr *sub;
@@ -2386,6 +2396,9 @@ expr_sort(struct expr *expr)
     qsort(subs, n, sizeof *subs, compare_expr_sort);
 
     ovs_list_init(&expr->andor);
+    free(expr);
+    expr = NULL;
+
     for (i = 0; i < n; ) {
         if (subs[i].symbol) {
             size_t j;
@@ -2438,11 +2451,8 @@ static struct expr *expr_normalize_or(struct expr *expr);
 static struct expr *
 expr_normalize_and(struct expr *expr)
 {
-    ovs_assert(expr->type == EXPR_T_AND);
-
     expr = expr_sort(expr);
     if (expr->type != EXPR_T_AND) {
-        ovs_assert(expr->type == EXPR_T_BOOLEAN);
         return expr;
     }
 
