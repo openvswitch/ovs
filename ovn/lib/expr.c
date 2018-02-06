@@ -1922,8 +1922,13 @@ expr_simplify(struct expr *expr,
     OVS_NOT_REACHED();
 }
 
+/* Tests whether 'expr' is an expression over exactly one symbol: that is,
+ * whether it is either a EXPR_T_CMP node or a tree of ANDs and ORs all over
+ * the same symbol.  If it is, returns the symbol in question.  If it is not
+ * (that is, if there is more than one symbol or no symbols at all), returns
+ * NULL. */
 static const struct expr_symbol *
-expr_is_cmp(const struct expr *expr)
+expr_get_unique_symbol(const struct expr *expr)
 {
     switch (expr->type) {
     case EXPR_T_CMP:
@@ -1935,7 +1940,7 @@ expr_is_cmp(const struct expr *expr)
         struct expr *sub;
 
         LIST_FOR_EACH (sub, node, &expr->andor) {
-            const struct expr_symbol *symbol = expr_is_cmp(sub);
+            const struct expr_symbol *symbol = expr_get_unique_symbol(sub);
             if (!symbol || (prev && symbol != prev)) {
                 return NULL;
             }
@@ -1955,7 +1960,7 @@ expr_is_cmp(const struct expr *expr)
 
 struct expr_sort {
     struct expr *expr;
-    const struct expr_symbol *relop;
+    const struct expr_symbol *symbol;
     enum expr_type type;
 };
 
@@ -1967,8 +1972,8 @@ compare_expr_sort(const void *a_, const void *b_)
 
     if (a->type != b->type) {
         return a->type < b->type ? -1 : 1;
-    } else if (a->relop) {
-        int cmp = strcmp(a->relop->name, b->relop->name);
+    } else if (a->symbol) {
+        int cmp = strcmp(a->symbol->name, b->symbol->name);
         if (cmp) {
             return cmp;
         }
@@ -2330,10 +2335,10 @@ crush_or(struct expr *expr, const struct expr_symbol *symbol)
     return expr_fix(expr);
 }
 
-/* Takes ownership of 'expr', which must be a cmp in the sense determined by
- * 'expr_is_cmp(expr)', where 'symbol' is the symbol returned by that function.
- * Returns an equivalent expression owned by the caller that is a single
- * EXPR_T_CMP or a disjunction of them or a EXPR_T_BOOLEAN. */
+/* Takes ownership of 'expr', which must have a unique symbol in the sense of
+ * 'expr_get_unique_symbol(expr)', where 'symbol' is the symbol returned by
+ * that function.  Returns an equivalent expression owned by the caller that is
+ * a single EXPR_T_CMP or a disjunction of them or a EXPR_T_BOOLEAN. */
 static struct expr *
 crush_cmps(struct expr *expr, const struct expr_symbol *symbol)
 {
@@ -2372,8 +2377,8 @@ expr_sort(struct expr *expr)
     i = 0;
     LIST_FOR_EACH (sub, node, &expr->andor) {
         subs[i].expr = sub;
-        subs[i].relop = expr_is_cmp(sub);
-        subs[i].type = subs[i].relop ? EXPR_T_CMP : sub->type;
+        subs[i].symbol = expr_get_unique_symbol(sub);
+        subs[i].type = subs[i].symbol ? EXPR_T_CMP : sub->type;
         i++;
     }
     ovs_assert(i == n);
@@ -2382,17 +2387,17 @@ expr_sort(struct expr *expr)
 
     ovs_list_init(&expr->andor);
     for (i = 0; i < n; ) {
-        if (subs[i].relop) {
+        if (subs[i].symbol) {
             size_t j;
             for (j = i + 1; j < n; j++) {
-                if (subs[i].relop != subs[j].relop) {
+                if (subs[i].symbol != subs[j].symbol) {
                     break;
                 }
             }
 
             struct expr *crushed;
             if (j == i + 1) {
-                crushed = crush_cmps(subs[i].expr, subs[i].relop);
+                crushed = crush_cmps(subs[i].expr, subs[i].symbol);
             } else {
                 struct expr *combined = subs[i].expr;
                 for (size_t k = i + 1; k < j; k++) {
@@ -2400,7 +2405,7 @@ expr_sort(struct expr *expr)
                                             subs[k].expr);
                 }
                 ovs_assert(!ovs_list_is_short(&combined->andor));
-                crushed = crush_cmps(combined, subs[i].relop);
+                crushed = crush_cmps(combined, subs[i].symbol);
             }
             if (crushed->type == EXPR_T_BOOLEAN) {
                 if (!crushed->boolean) {
@@ -2472,7 +2477,7 @@ expr_normalize_and(struct expr *expr)
         }
 
         ovs_assert(sub->type == EXPR_T_OR);
-        const struct expr_symbol *symbol = expr_is_cmp(sub);
+        const struct expr_symbol *symbol = expr_get_unique_symbol(sub);
         if (!symbol || symbol->must_crossproduct) {
             struct expr *or = expr_create_andor(EXPR_T_OR);
             struct expr *k;
@@ -2842,7 +2847,7 @@ expr_to_matches(const struct expr *expr,
         break;
 
     case EXPR_T_OR:
-        if (expr_is_cmp(expr)) {
+        if (expr_get_unique_symbol(expr)) {
             struct expr *sub;
 
             LIST_FOR_EACH (sub, node, &expr->andor) {
@@ -2966,7 +2971,7 @@ expr_is_normalized_and(const struct expr *expr)
     const struct expr *sub;
 
     LIST_FOR_EACH (sub, node, &expr->andor) {
-        if (!expr_is_cmp(sub)) {
+        if (!expr_get_unique_symbol(sub)) {
             return false;
         }
     }
@@ -2986,11 +2991,12 @@ expr_is_normalized(const struct expr *expr)
         return expr_is_normalized_and(expr);
 
     case EXPR_T_OR:
-        if (!expr_is_cmp(expr)) {
+        if (!expr_get_unique_symbol(expr)) {
             const struct expr *sub;
 
             LIST_FOR_EACH (sub, node, &expr->andor) {
-                if (!expr_is_cmp(sub) && !expr_is_normalized_and(sub)) {
+                if (!expr_get_unique_symbol(sub)
+                    && !expr_is_normalized_and(sub)) {
                     return false;
                 }
             }
