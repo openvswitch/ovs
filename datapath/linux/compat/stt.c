@@ -1315,7 +1315,7 @@ static bool validate_checksum(struct sk_buff *skb)
 static bool set_offloads(struct sk_buff *skb)
 {
 	struct stthdr *stth = stt_hdr(skb);
-	unsigned short gso_type = 0;
+	unsigned int gso_type = 0;
 	int l3_header_size;
 	int l4_header_size;
 	u16 csum_offset;

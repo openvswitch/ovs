@@ -341,7 +341,7 @@ static int queue_gso_packets(struct datapath *dp, struct sk_buff *skb,
 				 uint32_t cutlen)
 {
 #ifdef HAVE_SKB_GSO_UDP
-	unsigned short gso_type = skb_shinfo(skb)->gso_type;
+	unsigned int gso_type = skb_shinfo(skb)->gso_type;
 	struct sw_flow_key later_key;
 #endif
 	struct sk_buff *segs, *nskb;
