@@ -101,14 +101,36 @@ static inline bool netif_needs_gso(struct sk_buff *skb,
 #ifndef HAVE_NETDEV_MASTER_UPPER_DEV_LINK_RH
 static inline int rpl_netdev_master_upper_dev_link(struct net_device *dev,
 					       struct net_device *upper_dev,
-					       void *upper_priv, void *upper_info)
+					       void *upper_priv,
+					       void *upper_info, void *extack)
 {
 	return netdev_master_upper_dev_link(dev, upper_dev);
 }
 #define netdev_master_upper_dev_link rpl_netdev_master_upper_dev_link
-
-#endif
-#endif
+#else /* #ifndef HAVE_NETDEV_MASTER_UPPER_DEV_LINK_RH */
+static inline int rpl_netdev_master_upper_dev_link(struct net_device *dev,
+					       struct net_device *upper_dev,
+					       void *upper_priv,
+					       void *upper_info, void *extack)
+{
+	return netdev_master_upper_dev_link(dev, upper_dev,
+					    upper_priv, upper_info);
+}
+#define netdev_master_upper_dev_link rpl_netdev_master_upper_dev_link
+#endif /* #else HAVE_NETDEV_MASTER_UPPER_DEV_LINK_RH */
+#else  /* #ifndef HAVE_NETDEV_MASTER_UPPER_DEV_LINK_PRIV */
+#ifndef HAVE_UPPER_DEV_LINK_EXTACK
+static inline int rpl_netdev_master_upper_dev_link(struct net_device *dev,
+					       struct net_device *upper_dev,
+					       void *upper_priv,
+					       void *upper_info, void *extack)
+{
+	return netdev_master_upper_dev_link(dev, upper_dev, upper_priv,
+					    upper_info);
+}
+#define netdev_master_upper_dev_link rpl_netdev_master_upper_dev_link
+#endif /* #ifndef HAVE_UPPER_DEV_LINK_EXTACK */
+#endif /* #else HAVE_NETDEV_MASTER_UPPER_DEV_LINK_PRIV */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0)
 #define dev_queue_xmit rpl_dev_queue_xmit
