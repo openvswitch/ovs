@@ -805,6 +805,9 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/timekeeping.h],
                   [ktime_get_ts64],
                   [OVS_DEFINE([HAVE_KTIME_GET_TS64])])
+  OVS_GREP_IFELSE([$KSRC/include/net/net_namespace.h],
+                  [EXPORT_SYMBOL_GPL(peernet2id_alloc)],
+                  [OVS_DEFINE([HAVE_PEERNET2ID_ALLOC])])
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then
