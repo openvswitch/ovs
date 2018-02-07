@@ -12,6 +12,7 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#ifndef USE_UPSTREAM_TUNNEL
 #include <linux/capability.h>
 #include <linux/module.h>
 #include <linux/types.h>
@@ -52,7 +53,6 @@
 #include <net/gre.h>
 #include <net/dst_metadata.h>
 
-#ifndef USE_UPSTREAM_TUNNEL
 #if IS_ENABLED(CONFIG_IPV6)
 #include <net/ipv6.h>
 #include <net/ip6_fib.h>
