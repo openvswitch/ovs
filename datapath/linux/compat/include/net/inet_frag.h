@@ -30,6 +30,7 @@ static inline bool inet_frag_evicting(struct inet_frag_queue *q)
 #endif
 
 #ifndef HAVE_SUB_FRAG_MEM_LIMIT_ARG_STRUCT_NETNS_FRAGS
+#ifdef frag_percpu_counter_batch
 static inline void rpl_sub_frag_mem_limit(struct netns_frags *nf, int i)
 {
 	__percpu_counter_add(&nf->mem, -i, frag_percpu_counter_batch);
@@ -41,6 +42,19 @@ static inline void rpl_add_frag_mem_limit(struct netns_frags *nf, int i)
 	__percpu_counter_add(&nf->mem, i, frag_percpu_counter_batch);
 }
 #define add_frag_mem_limit rpl_add_frag_mem_limit
+#else /* !frag_percpu_counter_batch */
+static inline void rpl_sub_frag_mem_limit(struct netns_frags *nf, int i)
+{
+	atomic_sub(i, &nf->mem);
+}
+#define sub_frag_mem_limit rpl_sub_frag_mem_limit
+
+static inline void rpl_add_frag_mem_limit(struct netns_frags *nf, int i)
+{
+	atomic_add(i, &nf->mem);
+}
+#define add_frag_mem_limit rpl_add_frag_mem_limit
+#endif /* frag_percpu_counter_batch */
 #endif
 
 #ifdef HAVE_VOID_INET_FRAGS_INIT
