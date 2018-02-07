@@ -802,6 +802,9 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/compiler_types.h],
                   [__LINUX_COMPILER_TYPES_H],
                   [OVS_DEFINE([HAVE_LINUX_COMPILER_TYPES_H])])
+  OVS_GREP_IFELSE([$KSRC/include/linux/timekeeping.h],
+                  [ktime_get_ts64],
+                  [OVS_DEFINE([HAVE_KTIME_GET_TS64])])
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then

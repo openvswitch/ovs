@@ -41,6 +41,7 @@
 #include <linux/icmp.h>
 #include <linux/icmpv6.h>
 #include <linux/rculist.h>
+#include <linux/timekeeping.h>
 #include <net/ip.h>
 #include <net/ipv6.h>
 #include <net/mpls.h>
@@ -55,12 +56,12 @@
 
 u64 ovs_flow_used_time(unsigned long flow_jiffies)
 {
-	struct timespec cur_ts;
+	struct timespec64 cur_ts;
 	u64 cur_ms, idle_ms;
 
-	ktime_get_ts(&cur_ts);
+	ktime_get_ts64(&cur_ts);
 	idle_ms = jiffies_to_msecs(jiffies - flow_jiffies);
-	cur_ms = (u64)cur_ts.tv_sec * MSEC_PER_SEC +
+	cur_ms = (u64)(u32)cur_ts.tv_sec * MSEC_PER_SEC +
 		 cur_ts.tv_nsec / NSEC_PER_MSEC;
 
 	return cur_ms - idle_ms;
