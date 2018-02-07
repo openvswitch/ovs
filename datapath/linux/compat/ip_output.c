@@ -45,6 +45,7 @@
  *		Hirokazu Takahashi:	sendfile() on UDP works now.
  */
 
+#ifndef HAVE_CORRECT_MRU_HANDLING
 #include <asm/uaccess.h>
 #include <linux/module.h>
 #include <linux/types.h>
@@ -82,7 +83,6 @@
 #include <linux/netlink.h>
 #include <linux/tcp.h>
 
-#ifndef HAVE_CORRECT_MRU_HANDLING
 static inline void rpl_ip_options_fragment(struct sk_buff *skb)
 {
 	unsigned char *optptr = skb_network_header(skb) + sizeof(struct iphdr);
