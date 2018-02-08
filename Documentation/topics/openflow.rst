@@ -205,20 +205,6 @@ in OVS.
 
   (optional for OF1.4+)
 
-* Bad flow entry priority error
-
-  Probably not so useful to the software switch.
-
-  (EXT-236)
-
-  (optional for OF1.4+)
-
-* Set async config error
-
-  (EXT-237)
-
-  (optional for OF1.4+)
-
 * PBB UCA header field
 
   See comment on Provider Backbone Bridge in section about OpenFlow 1.3.
@@ -226,12 +212,6 @@ in OVS.
   (EXT-256)
 
   (optional for OF1.4+)
-
-* Multipart timeout error
-
-  (EXT-264)
-
-  (required for OF1.4+)
 
 OpenFlow 1.4 only
 -----------------
