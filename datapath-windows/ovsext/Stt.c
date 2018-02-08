@@ -424,8 +424,8 @@ OvsValidateTCPChecksum(PNET_BUFFER_LIST curNbl,
     NDIS_STATUS status;
 
     curMdl = NET_BUFFER_CURRENT_MDL(curNb);
-    buf = (PUINT8)MmGetSystemAddressForMdlSafe(curMdl, LowPagePriority)
-        + NET_BUFFER_CURRENT_MDL_OFFSET(curNb);
+    buf = (PUINT8)OvsGetMdlWithLowPriority(curMdl)
+          + NET_BUFFER_CURRENT_MDL_OFFSET(curNb);
     if (!buf) {
         status = NDIS_STATUS_INVALID_PACKET;
         return status;
