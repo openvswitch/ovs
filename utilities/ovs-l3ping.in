@@ -18,8 +18,10 @@ opening holes in the firewall for the XML RPC control connection.  This is
 achieved by tunneling the control connection inside the tunnel itself.
 """
 
+from __future__ import print_function
+
 import socket
-import xmlrpclib
+from six.moves import xmlrpc_client as xmlrpclib
 
 import ovstest.args as args
 import ovstest.tests as tests
@@ -64,13 +66,13 @@ if __name__ == '__main__':
             ps = get_packet_sizes(me, he, args.client[0])
             tests.do_direct_tests(me, he, bandwidth, interval, ps)
     except KeyboardInterrupt:
-        print "Terminating"
+        print("Terminating")
     except xmlrpclib.Fault:
-        print "Couldn't contact peer"
+        print("Couldn't contact peer")
     except socket.error:
-        print "Couldn't contact peer"
+        print("Couldn't contact peer")
     except xmlrpclib.ProtocolError:
-        print "XMLRPC control channel was abruptly terminated"
+        print("XMLRPC control channel was abruptly terminated")
     finally:
         if local_server is not None:
             local_server.terminate()

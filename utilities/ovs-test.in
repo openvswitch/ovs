@@ -16,6 +16,8 @@
 ovs test utility that allows to do tests between remote hosts
 """
 
+from __future__ import print_function
+
 import fcntl
 import math
 import os
@@ -25,7 +27,6 @@ import socket
 import subprocess
 import sys
 import time
-import xmlrpclib
 
 import argparse
 import twisted
@@ -35,6 +36,8 @@ import ovstest.rpcserver as rpcserver
 import ovstest.tests as tests
 import ovstest.util as util
 
+from six.moves import xmlrpc_client as xmlrpclib
+
 DEFAULT_TEST_BRIDGE = "ovstestbr0"
 DEFAULT_TEST_PORT = "ovstestport0"
 DEFAULT_TEST_TUN = "ovstestport1"
@@ -42,7 +45,7 @@ DEFAULT_TEST_TUN = "ovstestport1"
 
 def collect_information(node):
     """Print information about hosts that will do testing"""
-    print "Node %s:%u " % (node[0], node[1])
+    print("Node %s:%u " % (node[0], node[1]))
     server = util.rpc_client(node[0], node[1])
     interface_name = server.get_interface(node[0])
     phys_iface = None
@@ -50,8 +53,8 @@ def collect_information(node):
     mtu = 1500
 
     if not interface_name:
-        print ("Could not find interface that has %s IP address."
-               "Make sure that you specified correct Outer IP." % (node[0]))
+        print("Could not find interface that has %s IP address."
+              "Make sure that you specified correct Outer IP." % (node[0]))
     else:
         if server.is_ovs_bridge(interface_name):
             phys_iface = server.get_iface_from_bridge(interface_name)
@@ -62,18 +65,18 @@ def collect_information(node):
         driver = server.get_driver(phys_iface)
         mtu = server.get_interface_mtu(phys_iface)
 
-        print "Will be using %s (%s) with MTU %u" % (phys_iface, node[0],
-                                                    mtu)
+        print("Will be using %s (%s) with MTU %u" % (phys_iface, node[0],
+                                                     mtu))
         if not driver:
-            print "Unable to get driver information from ethtool."
+            print("Unable to get driver information from ethtool.")
         else:
-            print "On this host %s has %s." % (phys_iface, driver)
+            print("On this host %s has %s." % (phys_iface, driver))
 
     if not uname:
-        print "Unable to retrieve kernel information. Is this Linux?"
+        print("Unable to retrieve kernel information. Is this Linux?")
     else:
-        print "Running kernel %s." % uname
-    print "\n"
+        print("Running kernel %s." % uname)
+    print()
 
     return mtu
 
@@ -113,29 +116,29 @@ if __name__ == '__main__':
             tunnel_modes = ovs_args.tunnelModes
 
             if direct is not None:
-                print "Performing direct tests"
+                print("Performing direct tests")
                 tests.do_direct_tests(node2, node1, bandwidth, interval, ps)
 
             if vlan_tag is not None:
-                print "Performing VLAN tests"
+                print("Performing VLAN tests")
                 tests.do_vlan_tests(node2, node1, bandwidth, interval, ps,
                                     vlan_tag)
 
             for tmode in tunnel_modes:
-                print "Performing", tmode, "tests"
+                print("Performing", tmode, "tests")
                 tests.do_l3_tests(node2, node1, bandwidth, interval, ps,
                                   tmode)
 
     except KeyboardInterrupt:
         pass
     except xmlrpclib.Fault:
-        print "Couldn't establish XMLRPC control channel"
+        print("Couldn't establish XMLRPC control channel")
     except socket.error:
-        print "Couldn't establish XMLRPC control channel"
+        print("Couldn't establish XMLRPC control channel")
     except xmlrpclib.ProtocolError:
-        print "XMLRPC control channel was abruptly terminated"
+        print("XMLRPC control channel was abruptly terminated")
     except twisted.internet.error.CannotListenError:
-        print "Couldn't start XMLRPC server on port %u" % ovs_args.port
+        print("Couldn't start XMLRPC server on port %u" % ovs_args.port)
     finally:
         if local_server is not None:
             local_server.terminate()

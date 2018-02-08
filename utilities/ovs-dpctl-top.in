@@ -131,6 +131,8 @@ $ ovs-dpctl-top --script --flow-file dump-flows.log
 # pylint: disable-msg=R0913
 # pylint: disable-msg=R0914
 
+from __future__ import print_function
+
 import sys
 import os
 try:
@@ -418,7 +420,7 @@ def flow_line_iter(line):
             rc.append(element)
             element = ""
         else:
-            element += ch
+            element += str(ch)
 
     if (paren_count):
         raise ValueError(line)
@@ -467,7 +469,7 @@ def flow_line_split(line):
 
     """
 
-    results = re.split(', ', line)
+    results = re.split(b', ', line)
 
     (field, stats, action) = (results[0], results[1:-1], results[-1])
 
@@ -591,7 +593,7 @@ def flows_read(ihdl, flow_db):
 
         try:
             flow_db.flow_line_add(line)
-        except ValueError, arg:
+        except ValueError as arg:
             logging.error(arg)
 
     return flow_db
@@ -957,7 +959,7 @@ class FlowDB:
         change order of fields of the same flow.
         """
 
-        line = line.rstrip("\n")
+        line = line.rstrip(b"\n")
         (fields, stats, _) = flow_line_split(line)
 
         try:
@@ -987,7 +989,7 @@ class FlowDB:
 
             self.flow_event(fields_dict, stats_old_dict, stats_dict)
 
-        except ValueError, arg:
+        except ValueError as arg:
             logging.error(arg)
             self._error_count += 1
             raise
@@ -1191,7 +1193,7 @@ def flows_top(args):
                         flows_read(ihdl, flow_db)
                     finally:
                         ihdl.close()
-                except OSError, arg:
+                except OSError as arg:
                     logging.critical(arg)
                     break
 
@@ -1219,7 +1221,7 @@ def flows_top(args):
 
     # repeat output
     for (count, line) in lines:
-        print line
+        print(line)
 
 
 def flows_script(args):
@@ -1248,7 +1250,7 @@ def flows_script(args):
     render = Render(console_width, Render.FIELD_SELECT_SCRIPT)
 
     for line in render.format(flow_db):
-        print line
+        print(line)
 
 
 def main():

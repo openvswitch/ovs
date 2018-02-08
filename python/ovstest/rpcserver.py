@@ -16,26 +16,18 @@
 rpcserver is an XML RPC server that allows RPC client to initiate tests
 """
 
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 
 import sys
 
-import exceptions
-
 import six.moves.xmlrpc_client
-
-import tcp
 
 from twisted.internet import reactor
 from twisted.internet.error import CannotListenError
 from twisted.web import server
 from twisted.web import xmlrpc
 
-import udp
-
-import util
-
-import vswitch
+from . import tcp, udp, util, vswitch
 
 
 class TestArena(xmlrpc.XMLRPC):
@@ -213,7 +205,7 @@ class TestArena(xmlrpc.XMLRPC):
             (_, port) = self.__get_handle_resources(handle)
             port.loseConnection()
             self.__delete_handle(handle)
-        except exceptions.KeyError:
+        except KeyError:
             return -1
         return 0
 
@@ -225,7 +217,7 @@ class TestArena(xmlrpc.XMLRPC):
             (_, connector) = self.__get_handle_resources(handle)
             connector.disconnect()
             self.__delete_handle(handle)
-        except exceptions.KeyError:
+        except KeyError:
             return -1
         return 0
 

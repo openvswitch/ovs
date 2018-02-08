@@ -26,8 +26,6 @@ import socket
 import struct
 import subprocess
 
-import exceptions
-
 import six.moves.xmlrpc_client
 from six.moves import range
 
@@ -89,7 +87,7 @@ def start_process(args):
                              stderr=subprocess.PIPE)
         out, err = p.communicate()
         return (p.returncode, out, err)
-    except exceptions.OSError:
+    except OSError:
         return (-1, None, None)
 
 
