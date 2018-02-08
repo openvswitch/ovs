@@ -159,14 +159,6 @@ in OVS.
   (EXT-187)
   (optional for OF1.4+)
 
-* Role Status
-
-  Already implemented as a 1.4 feature.
-
-  (EXT-191)
-
-  (required for OF1.4+)
-
 * Flow entry eviction
 
   OVS has flow eviction functionality.  ``table_mod OFPTC_EVICTION``,

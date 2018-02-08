@@ -127,24 +127,21 @@ struct ofpbuf *
 ofputil_encode_role_status(const struct ofputil_role_status *status,
                            enum ofputil_protocol protocol)
 {
-    enum ofp_version version;
-
-    version = ofputil_protocol_to_ofp_version(protocol);
-    if (version >= OFP14_VERSION) {
-        struct ofp14_role_status *rstatus;
-        struct ofpbuf *buf;
-
-        buf = ofpraw_alloc_xid(OFPRAW_OFPT14_ROLE_STATUS, version, htonl(0),
-                               0);
-        rstatus = ofpbuf_put_zeros(buf, sizeof *rstatus);
-        rstatus->role = htonl(status->role);
-        rstatus->reason = status->reason;
-        rstatus->generation_id = htonll(status->generation_id);
-
-        return buf;
-    } else {
+    enum ofp_version version = ofputil_protocol_to_ofp_version(protocol);
+    if (version < OFP13_VERSION) {
         return NULL;
     }
+
+    enum ofpraw raw = (version >= OFP14_VERSION
+                       ? OFPRAW_OFPT14_ROLE_STATUS
+                       : OFPRAW_ONFT13_ROLE_STATUS);
+    struct ofpbuf *buf = ofpraw_alloc_xid(raw, version, htonl(0), 0);
+    struct ofp14_role_status *rstatus = ofpbuf_put_zeros(buf, sizeof *rstatus);
+    rstatus->role = htonl(status->role);
+    rstatus->reason = status->reason;
+    rstatus->generation_id = htonll(status->generation_id);
+
+    return buf;
 }
 
 enum ofperr
@@ -152,7 +149,9 @@ ofputil_decode_role_status(const struct ofp_header *oh,
                            struct ofputil_role_status *rs)
 {
     struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
-    ovs_assert(ofpraw_pull_assert(&b) == OFPRAW_OFPT14_ROLE_STATUS);
+    enum ofpraw raw = ofpraw_pull_assert(&b);
+    ovs_assert(raw == OFPRAW_OFPT14_ROLE_STATUS ||
+               raw == OFPRAW_ONFT13_ROLE_STATUS);
 
     const struct ofp14_role_status *r = b.msg;
     if (r->role != htonl(OFPCR12_ROLE_NOCHANGE) &&

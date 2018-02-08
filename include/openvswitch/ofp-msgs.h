@@ -262,6 +262,8 @@ enum ofpraw {
     /* OFPT 1.3+ (29): struct ofp13_meter_mod, uint8_t[8][]. */
     OFPRAW_OFPT13_METER_MOD,
 
+    /* ONFT 1.3 (1911): struct ofp14_role_status, uint8_t[8][]. */
+    OFPRAW_ONFT13_ROLE_STATUS,
     /* OFPT 1.4+ (30): struct ofp14_role_status, uint8_t[8][]. */
     OFPRAW_OFPT14_ROLE_STATUS,
 
@@ -615,7 +617,8 @@ enum ofptype {
     OFPTYPE_METER_MOD,            /* OFPRAW_OFPT13_METER_MOD. */
 
     /* Controller role change event messages. */
-    OFPTYPE_ROLE_STATUS,          /* OFPRAW_OFPT14_ROLE_STATUS. */
+    OFPTYPE_ROLE_STATUS,          /* OFPRAW_ONFT13_ROLE_STATUS.
+                                   * OFPRAW_OFPT14_ROLE_STATUS. */
 
     /* Request forwarding by the switch. */
     OFPTYPE_REQUESTFORWARD,       /* OFPRAW_OFPT14_REQUESTFORWARD. */
