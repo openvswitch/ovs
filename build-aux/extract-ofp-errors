@@ -247,7 +247,7 @@ def extract_ofp_errors(fn):
             expected_errors[m.group(1)] = (fileName, lineNumber)
             continue
 
-        m = re.match('((?:.(?!\.  ))+.)\.  (.*)$', comment)
+        m = re.match('((?:.(?!\.  ))+.)\.\s+(.*)$', comment)
         if not m:
             fatal("unexpected syntax between errors")
 
@@ -257,7 +257,7 @@ def extract_ofp_errors(fn):
         m = re.match('\s+(?:OFPERR_([A-Z0-9_]+))(\s*=\s*OFPERR_OFS)?,',
                      line)
         if not m:
-            fatal("syntax error expecting enum value")
+            fatal("syntax error expecting OFPERR_ enum value")
 
         enum = m.group(1)
         if enum in names:
