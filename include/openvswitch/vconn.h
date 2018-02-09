@@ -20,7 +20,7 @@
 #include <stdbool.h>
 #include "openvswitch/list.h"
 #include "openvswitch/types.h"
-#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofp-protocol.h"
 #include "openflow/openflow.h"
 
 #ifdef __cplusplus
@@ -28,6 +28,8 @@ extern "C" {
 #endif
 
 struct ofpbuf;
+struct ofputil_flow_stats;
+struct ofputil_flow_stats_request;
 struct pvconn;
 struct pvconn_class;
 struct vconn;

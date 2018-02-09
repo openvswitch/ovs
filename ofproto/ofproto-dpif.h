@@ -50,7 +50,6 @@
 #include "fail-open.h"
 #include "hmapx.h"
 #include "odp-util.h"
-#include "openvswitch/ofp-util.h"
 #include "id-pool.h"
 #include "ovs-thread.h"
 #include "ofproto-provider.h"

@@ -23,8 +23,8 @@
 #include <string.h>
 #include "classifier.h"
 #include "openflow/openflow.h"
+#include "openvswitch/ofp-match.h"
 #include "openvswitch/ofp-print.h"
-#include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
 #include "ovstest.h"

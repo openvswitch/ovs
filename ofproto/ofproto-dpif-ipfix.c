@@ -24,6 +24,7 @@
 #include "openvswitch/hmap.h"
 #include "netdev.h"
 #include "openvswitch/list.h"
+#include "openvswitch/ofp-ipfix.h"
 #include "openvswitch/ofpbuf.h"
 #include "ofproto.h"
 #include "ofproto-dpif.h"

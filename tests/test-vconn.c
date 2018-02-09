@@ -26,7 +26,6 @@
 #include "fatal-signal.h"
 #include "openflow/openflow.h"
 #include "openvswitch/ofp-msgs.h"
-#include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"

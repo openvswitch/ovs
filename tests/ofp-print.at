@@ -876,9 +876,9 @@ AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' ofp-print "\
 " 2], [0], [dnl
 OFPT_FLOW_MOD (xid=0x0): ADD priority=65535,arp,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,arp_spa=192.168.0.2,arp_tpa=192.168.0.1,arp_op=2 idle:5 buf:0x10e out_port:0 actions=output:3
 ], [dnl
-ofp_util|INFO|normalization changed ofp_match, details:
-ofp_util|INFO| pre: arp,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,arp_spa=192.168.0.2,arp_tpa=192.168.0.1,arp_op=2,nw_tos=0,tp_src=0,tp_dst=0
-ofp_util|INFO|post: arp,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,arp_spa=192.168.0.2,arp_tpa=192.168.0.1,arp_op=2
+ofp_match|INFO|normalization changed ofp_match, details:
+ofp_match|INFO| pre: arp,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,arp_spa=192.168.0.2,arp_tpa=192.168.0.1,arp_op=2,nw_tos=0,tp_src=0,tp_dst=0
+ofp_match|INFO|post: arp,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,arp_spa=192.168.0.2,arp_tpa=192.168.0.1,arp_op=2
 ])
 AT_CLEANUP
 
@@ -934,9 +934,9 @@ AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' ofp-print "\
 " 3], [0], [dnl
 OFPT_FLOW_MOD (xid=0x0): ADD arp,in_port=1,dl_vlan=65535,dl_vlan_pcp=0,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,nw_src=192.168.0.2,nw_dst=192.168.0.1,arp_op=2,nw_tos=0,tp_src=0,tp_dst=0 idle:5 pri:65535 buf:0x10e out_port:0 actions=output:3
 ], [dnl
-ofp_util|INFO|normalization changed ofp_match, details:
-ofp_util|INFO| pre: arp,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,arp_spa=192.168.0.2,arp_tpa=192.168.0.1,arp_op=2,nw_tos=0,tp_src=0,tp_dst=0
-ofp_util|INFO|post: arp,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,arp_spa=192.168.0.2,arp_tpa=192.168.0.1,arp_op=2
+ofp_match|INFO|normalization changed ofp_match, details:
+ofp_match|INFO| pre: arp,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,arp_spa=192.168.0.2,arp_tpa=192.168.0.1,arp_op=2,nw_tos=0,tp_src=0,tp_dst=0
+ofp_match|INFO|post: arp,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,arp_spa=192.168.0.2,arp_tpa=192.168.0.1,arp_op=2
 ])
 AT_CLEANUP
 
@@ -3617,7 +3617,7 @@ OFPT_BUNDLE_ADD_MESSAGE (OF1.4) (xid=0x0): ***decode error: OFPBFC_MSG_UNSUP***
 00000000  05 22 00 20 00 00 00 00-00 00 00 01 00 00 00 01 |.". ............|
 00000010  05 00 00 10 00 00 00 00-00 00 00 00 00 00 00 00 |................|
 ], [dnl
-ofp_util|WARN|OFPT_HELLO message not allowed inside OFPT14_BUNDLE_ADD_MESSAGE
+ofp_bundle|WARN|OFPT_HELLO message not allowed inside OFPT14_BUNDLE_ADD_MESSAGE
 ])
 AT_CLEANUP
 

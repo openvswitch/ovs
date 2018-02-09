@@ -10,14 +10,29 @@ openvswitchinclude_HEADERS = \
 	include/openvswitch/netdev.h \
 	include/openvswitch/match.h \
 	include/openvswitch/meta-flow.h \
+	include/openvswitch/namemap.h \
 	include/openvswitch/ofpbuf.h \
 	include/openvswitch/ofp-actions.h \
+	include/openvswitch/ofp-bundle.h \
+	include/openvswitch/ofp-connection.h \
 	include/openvswitch/ofp-ed-props.h \
 	include/openvswitch/ofp-errors.h \
+	include/openvswitch/ofp-flow.h \
+	include/openvswitch/ofp-group.h \
+	include/openvswitch/ofp-ipfix.h \
+	include/openvswitch/ofp-match.h \
+	include/openvswitch/ofp-meter.h \
+	include/openvswitch/ofp-monitor.h \
 	include/openvswitch/ofp-msgs.h \
+	include/openvswitch/ofp-packet.h \
 	include/openvswitch/ofp-parse.h \
+	include/openvswitch/ofp-port.h \
 	include/openvswitch/ofp-print.h \
 	include/openvswitch/ofp-prop.h \
+	include/openvswitch/ofp-protocol.h \
+	include/openvswitch/ofp-queue.h \
+	include/openvswitch/ofp-switch.h \
+	include/openvswitch/ofp-table.h \
 	include/openvswitch/ofp-util.h \
 	include/openvswitch/packets.h \
 	include/openvswitch/poll-loop.h \

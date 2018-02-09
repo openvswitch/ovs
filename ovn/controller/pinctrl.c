@@ -31,7 +31,9 @@
 #include "lib/sset.h"
 #include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofp-msgs.h"
+#include "openvswitch/ofp-packet.h"
 #include "openvswitch/ofp-print.h"
+#include "openvswitch/ofp-switch.h"
 #include "openvswitch/ofp-util.h"
 #include "openvswitch/vlog.h"
 

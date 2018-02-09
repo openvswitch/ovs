@@ -25,7 +25,6 @@
 #include "mac-learning.h"
 #include "odp-util.h"
 #include "openvswitch/ofp-actions.h"
-#include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"

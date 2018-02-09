@@ -23,7 +23,6 @@
 #include "byte-order.h"
 #include "openvswitch/dynamic-string.h"
 #include "odp-util.h"
-#include "openvswitch/ofp-util.h"
 #include "packets.h"
 #include "util.h"
 

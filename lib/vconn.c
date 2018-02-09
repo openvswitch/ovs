@@ -29,6 +29,7 @@
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
 #include "openvswitch/dynamic-string.h"
+#include "openvswitch/ofp-bundle.h"
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/ofp-msgs.h"
 #include "openvswitch/ofp-print.h"

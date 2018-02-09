@@ -24,7 +24,7 @@
 #include "openvswitch/ofpbuf.h"
 #include "ovstest.h"
 #include "util.h"
-#include "openvswitch/ofp-parse.h"
+#include "openvswitch/ofp-flow.h"
 #include "openvswitch/vlog.h"
 
 static int

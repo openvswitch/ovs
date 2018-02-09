@@ -18,10 +18,10 @@
 #include <errno.h>
 #include "byte-order.h"
 #include "openflow/openflow.h"
+#include "openflow/nicira-ext.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/ofp-msgs.h"
-#include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
 #include "util.h"

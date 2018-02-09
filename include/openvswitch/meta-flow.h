@@ -25,6 +25,7 @@
 #include <netinet/ip6.h>
 #include "openvswitch/flow.h"
 #include "openvswitch/ofp-errors.h"
+#include "openvswitch/ofp-protocol.h"
 #include "openvswitch/packets.h"
 #include "openvswitch/util.h"
 
@@ -2031,14 +2032,10 @@ struct mf_field {
      * the OpenFlow protocol version the field was introduced in.
      * Also, some field types are tranparently mapped to each other via the
      * struct flow (like vlan and dscp/tos fields), so each variant supports
-     * all protocols.
-     *
-     * These are combinations of OFPUTIL_P_*.  (They are not declared as type
-     * enum ofputil_protocol because that would give meta-flow.h and ofp-util.h
-     * a circular dependency.) */
-    uint32_t usable_protocols_exact;   /* Matching or setting whole field. */
-    uint32_t usable_protocols_cidr;    /* Matching a CIDR mask in field. */
-    uint32_t usable_protocols_bitwise; /* Matching arbitrary bits in field. */
+     * all protocols. */
+    enum ofputil_protocol usable_protocols_exact; /* Match/set whole field. */
+    enum ofputil_protocol usable_protocols_cidr;    /* Match CIDR mask. */
+    enum ofputil_protocol usable_protocols_bitwise; /* Match arbitrary bits. */
 
     int flow_be32ofs;  /* Field's be32 offset in "struct flow", if prefix tree
                         * lookup is supported for the field, or -1. */

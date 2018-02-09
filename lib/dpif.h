@@ -392,7 +392,7 @@
 #include "dp-packet.h"
 #include "netdev.h"
 #include "openflow/openflow.h"
-#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofp-meter.h"
 #include "ovs-numa.h"
 #include "packets.h"
 #include "util.h"

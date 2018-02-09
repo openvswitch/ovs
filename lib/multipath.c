@@ -27,7 +27,6 @@
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofp-errors.h"
-#include "openvswitch/ofp-util.h"
 #include "packets.h"
 #include "util.h"
 

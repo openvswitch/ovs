@@ -36,7 +36,6 @@
 #include "command-line.h"
 #include "fatal-signal.h"
 #include "flow.h"
-#include "openvswitch/ofp-util.h"
 #include "ovstest.h"
 #include "ovs-atomic.h"
 #include "ovs-thread.h"

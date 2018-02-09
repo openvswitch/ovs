@@ -42,8 +42,13 @@
 #include "ofproto/ofproto.h"
 #include "openvswitch/list.h"
 #include "openvswitch/ofp-actions.h"
-#include "openvswitch/ofp-util.h"
 #include "openvswitch/ofp-errors.h"
+#include "openvswitch/ofp-flow.h"
+#include "openvswitch/ofp-group.h"
+#include "openvswitch/ofp-meter.h"
+#include "openvswitch/ofp-port.h"
+#include "openvswitch/ofp-switch.h"
+#include "openvswitch/ofp-table.h"
 #include "ovs-atomic.h"
 #include "ovs-rcu.h"
 #include "ovs-thread.h"
@@ -56,6 +61,7 @@
 
 struct match;
 struct ofputil_flow_mod;
+struct ofputil_packet_in_private;
 struct bfd_cfg;
 struct meter;
 struct ofoperation;

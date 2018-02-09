@@ -34,7 +34,6 @@
 #include "odp-execute.h"
 #include "odp-util.h"
 #include "openvswitch/ofp-print.h"
-#include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
 #include "packets.h"
 #include "openvswitch/poll-loop.h"

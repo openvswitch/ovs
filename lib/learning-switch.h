@@ -20,7 +20,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
-#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofp-protocol.h"
 
 struct ofpbuf;
 struct rconn;

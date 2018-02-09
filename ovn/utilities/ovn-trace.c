@@ -28,6 +28,7 @@
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/json.h"
 #include "openvswitch/ofp-actions.h"
+#include "openvswitch/ofp-flow.h"
 #include "openvswitch/ofp-print.h"
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"

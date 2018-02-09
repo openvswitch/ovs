@@ -28,7 +28,7 @@ AT_CLEANUP
 AT_SETUP([learning action - parsing and formatting - illegal in_port_oxm])
 AT_CHECK([[ovs-ofctl parse-flow 'actions=learn(table=1, in_port_oxm=123456)']],
   [1], [], [stderr])
-AT_CHECK([sed -e 's/.*|ofp_util|WARN|//' < stderr], [0],
+AT_CHECK([sed -e 's/.*|ofp_port|WARN|//' < stderr], [0],
   [[port 123456 is outside the supported range 0 through ffff or 0xffffff00 through 0xffffffff
 ovs-ofctl: table=1, in_port_oxm=123456: in_port_oxm value 123456 cannot be parsed as a subfield (123456: unknown field `123456') or an immediate value (123456: port value out of range for in_port_oxm)
 ]], [[]])

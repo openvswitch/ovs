@@ -22,8 +22,8 @@
 #include "openflow/openflow.h"
 #include "openflow/nicira-ext.h"
 #include "openvswitch/meta-flow.h"
-#include "openvswitch/ofp-util.h"
 #include "openvswitch/ofp-errors.h"
+#include "openvswitch/ofp-protocol.h"
 #include "openvswitch/types.h"
 #include "openvswitch/ofp-ed-props.h"
 
