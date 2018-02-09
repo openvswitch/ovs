@@ -39,7 +39,6 @@ extern "C" {
 #endif
 
 struct ofpbuf;
-union ofp_action;
 struct ofpact_set_field;
 struct vl_mff_map;
 
@@ -1190,17 +1189,6 @@ struct ofpbuf *make_echo_reply(const struct ofp_header *rq);
 
 struct ofpbuf *ofputil_encode_barrier_request(enum ofp_version);
 
-/* Actions. */
-
-bool action_outputs_to_port(const union ofp_action *, ovs_be16 port);
-
-enum ofperr ofputil_pull_actions(struct ofpbuf *, unsigned int actions_len,
-                                 union ofp_action **, size_t *);
-
-bool ofputil_actions_equal(const union ofp_action *a, size_t n_a,
-                           const union ofp_action *b, size_t n_b);
-union ofp_action *ofputil_actions_clone(const union ofp_action *, size_t n);
-
 /* Handy utility for parsing flows and actions. */
 bool ofputil_parse_key_value(char **stringp, char **keyp, char **valuep);
 
