@@ -916,11 +916,18 @@ pinctrl_handle_dns_lookup(
     out_udp->udp_len = htons(new_l4_size);
     out_udp->udp_csum = 0;
 
-    struct ip_header *out_ip = dp_packet_l3(&pkt_out);
-    out_ip->ip_tot_len = htons(pkt_out.l4_ofs - pkt_out.l3_ofs + new_l4_size);
-    /* Checksum needs to be initialized to zero. */
-    out_ip->ip_csum = 0;
-    out_ip->ip_csum = csum(out_ip, sizeof *out_ip);
+    struct eth_header *eth = dp_packet_data(&pkt_out);
+    if (eth->eth_type == htons(ETH_TYPE_IP)) {
+        struct ip_header *out_ip = dp_packet_l3(&pkt_out);
+        out_ip->ip_tot_len = htons(pkt_out.l4_ofs - pkt_out.l3_ofs
+                                   + new_l4_size);
+        /* Checksum needs to be initialized to zero. */
+        out_ip->ip_csum = 0;
+        out_ip->ip_csum = csum(out_ip, sizeof *out_ip);
+    } else {
+        struct ovs_16aligned_ip6_hdr *nh = dp_packet_l3(&pkt_out);
+        nh->ip6_plen = htons(new_l4_size);
+    }
 
     pin->packet = dp_packet_data(&pkt_out);
     pin->packet_len = dp_packet_size(&pkt_out);

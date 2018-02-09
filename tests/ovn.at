@@ -6865,6 +6865,38 @@ test_dns() {
     as hv1 ovs-appctl netdev-dummy/receive hv1-vif$inport $request
 }
 
+test_dns6() {
+    local inport=$1 src_mac=$2 dst_mac=$3 src_ip=$4 dst_ip=$5 dns_reply=$6
+    local dns_query_data=$7
+    shift; shift; shift; shift; shift; shift; shift;
+    # Packet size => UDP header (8) +
+    #                DNS data (header + query)
+    ip_len=`expr 8 + ${#dns_query_data} / 2`
+    udp_len=$ip_len
+    ip_len=$(printf "%x" $ip_len)
+    udp_len=$(printf "%x" $udp_len)
+    local request=${dst_mac}${src_mac}86dd6000000000${ip_len}11ff${src_ip}${dst_ip}
+    request=${request}9234003500${udp_len}0000
+    #dns data
+    request=${request}${dns_query_data}
+
+    if test $dns_reply != 0; then
+        local dns_reply=$1
+        ip_len=`expr 8 + ${#dns_reply} / 2`
+        udp_len=$ip_len
+        ip_len=$(printf "%x" $ip_len)
+        udp_len=$(printf "%x" $udp_len)
+        local reply=${src_mac}${dst_mac}86dd6000000000${ip_len}11ff${dst_ip}${src_ip}
+        reply=${reply}0035923400${udp_len}0000${dns_reply}
+        echo $reply >> $inport.expected
+    else
+        for outport; do
+            echo $request >> $outport.expected
+        done
+    fi
+    as hv1 ovs-appctl netdev-dummy/receive hv1-vif$inport $request
+}
+
 AT_CAPTURE_FILE([ofctl_monitor0.log])
 as hv1 ovs-ofctl monitor br-int resume --detach --no-chdir \
 --pidfile=ovs-ofctl0.pid 2> ofctl_monitor0.log
@@ -7054,6 +7086,25 @@ AT_CHECK([cat 1.packets | cut -c -48], [0], [expout])
 # Skipping the IPv4 checksum.
 cat 1.expected | cut -c 53- > expout
 AT_CHECK([cat 1.packets | cut -c 53-], [0], [expout])
+
+reset_pcap_file hv1-vif1 hv1/vif1
+reset_pcap_file hv1-vif2 hv1/vif2
+rm -f 1.expected
+rm -f 2.expected
+
+# Try DNS query over IPv6
+set_dns_params vm1
+src_ip=aef00000000000000000000000000004
+dst_ip=aef00000000000000000000000000001
+dns_reply=1
+test_dns6 1 f00000000001 f000000000f0 $src_ip $dst_ip $dns_reply $dns_req_data $dns_resp_data
+
+# NXT_RESUMEs should be 9.
+OVS_WAIT_UNTIL([test 9 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif1-tx.pcap > 1.packets
+cat 1.expected > expout
+AT_CHECK([cat 1.packets], [0], [expout])
 
 reset_pcap_file hv1-vif1 hv1/vif1
 reset_pcap_file hv1-vif2 hv1/vif2
