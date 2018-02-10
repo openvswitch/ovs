@@ -31,9 +31,9 @@ ovsdb\-tool \- Open vSwitch database management utility
 .IP "Other commands:"
 \fBovsdb\-tool \fR[\fIoptions\fR] \fBcompact \fR[\fIdb\fR [\fItarget\fR]]
 .br
-\fBovsdb\-tool \fR[\fIoptions\fR] \fBquery \fR[\fIdb\fR] \fItransaction\fR
+\fBovsdb\-tool \fR[\fIoptions\fR] [\fB\-\-rbac\-role=\fIrole\fR] \fBquery \fR[\fIdb\fR] \fItransaction\fR
 .br
-\fBovsdb\-tool \fR[\fIoptions\fR] \fBtransact \fR[\fIdb\fR] \fItransaction\fR
+\fBovsdb\-tool \fR[\fIoptions\fR] [\fB\-\-rbac\-role=\fIrole\fR] \fBtransact \fR[\fIdb\fR] \fItransaction\fR
 .br
 \fBovsdb\-tool \fR[\fIoptions\fR] [\fB\-m\fR | \fB\-\-more\fR]... \fBshow\-log \fR[\fIdb\fR]
 .br
@@ -53,6 +53,11 @@ running Open vSwitch database servers (instead, use
 For an introduction to OVSDB and its implementation in Open vSwitch,
 see \fBovsdb\fR(7).
 .PP
+Each command that takes an optional \fIdb\fR or \fIschema\fR argument
+has a default file location if it is not specified..  The default
+\fIdb\fR is \fB@DBDIR@/conf.db\fR.  The default \fIschema\fR is
+\fB@pkgdatadir@/vswitch.ovsschema\fR.
+.PP
 This OVSDB implementation supports standalone and active-backup
 database service models with a common on-disk format  For a
 specification of this format, see \fBovsdb\fR(5).  For more
@@ -64,7 +69,7 @@ This command creates a new OVSDB database file.
 It will not overwrite an existing database file.  To
 replace an existing database with a new one, first delete the old one.
 .
-.IP "\fBcreate\fI db schema\fR"
+.IP "\fBcreate \fR[\fIdb\fR [\fIschema\fR]]"
 Use this command to create the database for controlling
 \fBovs\-vswitchd\fR or another standalone or active-backup database.
 It creates database file \fIdb\fR with the given \fIschema\fR, which
@@ -78,7 +83,7 @@ initially empty.
 These commands work with different versions of OVSDB schemas and
 databases.
 .
-.IP "\fBconvert\fI db schema \fR[\fItarget\fR]"
+.IP "\fBconvert \fR[\fIdb\fR [\fIschema \fR[\fItarget\fR]]]"
 Reads \fIdb\fR, translating it into to the schema specified in
 \fIschema\fR, and writes out the new interpretation.  If \fItarget\fR
 is specified, the translated version is written as a new file named
@@ -102,21 +107,21 @@ example, converting a database from a schema that has a given column
 or table to one that does not will delete all data in that column or
 table.  Back up critical databases before converting them.
 .IP
-.IP "\fBneeds\-conversion\fI db schema\fR"
+.IP "\fBneeds\-conversion \fR[\fIdb\fR [\fIschema\fR]]"
 Reads the schema embedded in \fIdb\fR and the JSON schema from
 \fIschema\fR and compares them.  If the schemas are the same, prints
 \fBno\fR on stdout; if they differ, prints \fByes\fR.
 .IP
-.IP "\fBdb\-version\fI db\fR"
-.IQ "\fBschema\-version\fI schema\fR"
+.IP "\fBdb\-version \fR[\fIdb\fR]"
+.IQ "\fBschema\-version \fR[\fIschema\fR]"
 Prints the version number in the schema embedded within the database
 \fIdb\fR or in the JSON schema \fIschema\fR on stdout.
 If \fIschema\fR or \fIdb\fR was created before schema versioning was
 introduced, then it will not have a version number and this command
 will print a blank line.
 .IP
-.IP "\fBdb\-cksum\fI db\fR"
-.IQ "\fBschema\-cksum\fI schema\fR"
+.IP "\fBdb\-cksum \fR[\fIdb\fR]"
+.IQ "\fBschema\-cksum \fR[\fIschema\fR]"
 Prints the checksum in the schema embedded within the database
 \fIdb\fR or of the JSON schema \fIschema\fR on stdout.
 If \fIschema\fR or \fIdb\fR was created before schema checksums were
@@ -125,7 +130,7 @@ will print a blank line.
 .IP
 .SS "Other Commands"
 .
-.IP "\fBcompact\fI db \fR[\fItarget\fR]"
+.IP "\fBcompact \fR[\fIdb\fR [\fItarget\fR]]"
 Reads \fIdb\fR and writes a compacted version.  If \fItarget\fR is
 specified, the compacted version is written as a new file named
 \fItarget\fR, which must not already exist.  If \fItarget\fR is
@@ -139,7 +144,7 @@ This command does not work if \fIdb\fR is currently being served by
 another process.  Instead, send the \fBovsdb\-server/compact\fR
 command to \fBovsdb\-server\fR, via \fBovs\-appctl\fR).
 .
-.IP "[\fB\-\-rbac\-role=\fIrole\fR] \fBquery\fI db transaction\fR"
+.IP "[\fB\-\-rbac\-role=\fIrole\fR] \fBquery \fR[\fIdb\fR] \fItransaction\fR"
 Opens \fIdb\fR, executes \fItransaction\fR on it, and prints the
 results.  The \fItransaction\fR must be a JSON array in the format of
 the \fBparams\fR array for the JSON-RPC \fBtransact\fR method, as
@@ -154,7 +159,7 @@ may specify database modifications, but these will have no effect on
 By default, the transaction is executed using the ``superuser'' RBAC
 role.  Use \fB\-\-rbac\-role\fR to specify a different role.
 .
-.IP "[\fR\-\-rbac\-role=\fIrole\fR] \fBtransact\fI db transaction\fR"
+.IP "[\fB\-\-rbac\-role=\fIrole\fR] \fBtransact \fR[\fIdb\fR] \fItransaction\fR"
 Opens \fIdb\fR, executes \fItransaction\fR on it, prints the results,
 and commits any changes to \fIdb\fR.  The \fItransaction\fR must be a
 JSON array in the format of the \fBparams\fR array for the JSON-RPC
@@ -168,7 +173,7 @@ command to send the query to \fBovsdb\-server\fR.
 By default, the transaction is executed using the ``superuser'' RBAC
 role.  Use \fB\-\-rbac\-role\fR to specify a different role.
 .
-.IP "\fBshow\-log\fI db\fR"
+.IP "[\fB\-m\fR | \fB\-\-more\fR]... \fBshow\-log \fR[\fIdb\fR]"
 Prints a summary of the records in \fIdb\fR's log, including the time
 and date at which each database change occurred and any associated
 comment.  This may be useful for debugging.
