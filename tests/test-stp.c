@@ -446,7 +446,7 @@ test_stp_main(int argc, char *argv[])
     vlog_set_levels(NULL, VLF_SYSLOG, VLL_OFF);
 
     if (argc != 2) {
-        ovs_fatal(0, "usage: test-stp INPUT.STP\n");
+        ovs_fatal(0, "usage: test-stp INPUT.STP");
     }
     file_name = argv[1];
 
