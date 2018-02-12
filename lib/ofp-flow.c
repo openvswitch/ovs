@@ -752,7 +752,7 @@ parse_ofp_flow_stats_request_str(struct ofputil_flow_stats_request *fsr,
  * of it.  'fs->ofpacts' will point into the 'ofpacts' buffer.
  *
  * Returns 0 if successful, EOF if no replies were left in this 'msg',
- * otherwise a positive errno value. */
+ * otherwise an OFPERR_* value. */
 int
 ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
                                 struct ofpbuf *msg,
@@ -783,20 +783,21 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
         if (!ofs) {
             VLOG_WARN_RL(&rl, "OFPST_FLOW reply has %"PRIu32" leftover "
                          "bytes at end", msg->size);
-            return EINVAL;
+            return OFPERR_OFPBRC_BAD_LEN;
         }
 
         length = ntohs(ofs->length);
         if (length < sizeof *ofs) {
             VLOG_WARN_RL(&rl, "OFPST_FLOW reply claims invalid "
                          "length %"PRIuSIZE, length);
-            return EINVAL;
+            return OFPERR_OFPBRC_BAD_LEN;
         }
 
-        if (ofputil_pull_ofp11_match(msg, NULL, NULL, &fs->match,
-                                     &padded_match_len)) {
+        error = ofputil_pull_ofp11_match(msg, NULL, NULL, &fs->match,
+                                         &padded_match_len);
+        if (error) {
             VLOG_WARN_RL(&rl, "OFPST_FLOW reply bad match");
-            return EINVAL;
+            return error;
         }
         instructions_len = length - sizeof *ofs - padded_match_len;
 
@@ -833,14 +834,14 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
         if (!ofs) {
             VLOG_WARN_RL(&rl, "OFPST_FLOW reply has %"PRIu32" leftover "
                          "bytes at end", msg->size);
-            return EINVAL;
+            return OFPERR_OFPBRC_BAD_LEN;
         }
 
         length = ntohs(ofs->length);
         if (length < sizeof *ofs) {
             VLOG_WARN_RL(&rl, "OFPST_FLOW reply claims invalid "
                          "length %"PRIuSIZE, length);
-            return EINVAL;
+            return OFPERR_OFPBRC_BAD_LEN;
         }
         instructions_len = length - sizeof *ofs;
 
@@ -866,7 +867,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
         if (!nfs) {
             VLOG_WARN_RL(&rl, "NXST_FLOW reply has %"PRIu32" leftover "
                          "bytes at end", msg->size);
-            return EINVAL;
+            return OFPERR_OFPBRC_BAD_LEN;
         }
 
         length = ntohs(nfs->length);
@@ -874,11 +875,12 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
         if (length < sizeof *nfs + ROUND_UP(match_len, 8)) {
             VLOG_WARN_RL(&rl, "NXST_FLOW reply with match_len=%"PRIuSIZE" "
                          "claims invalid length %"PRIuSIZE, match_len, length);
-            return EINVAL;
+            return OFPERR_OFPBRC_BAD_LEN;
         }
-        if (nx_pull_match(msg, match_len, &fs->match, NULL, NULL, false, NULL,
-                          NULL)) {
-            return EINVAL;
+        error = nx_pull_match(msg, match_len, &fs->match, NULL, NULL, false,
+                              NULL, NULL);
+        if (error) {
+            return error;
         }
         instructions_len = length - sizeof *nfs - ROUND_UP(match_len, 8);
 
@@ -907,10 +909,12 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
         OVS_NOT_REACHED();
     }
 
-    if (ofpacts_pull_openflow_instructions(msg, instructions_len, oh->version,
-                                           NULL, NULL, ofpacts)) {
+    error = ofpacts_pull_openflow_instructions(msg, instructions_len,
+                                               oh->version, NULL, NULL,
+                                               ofpacts);
+    if (error) {
         VLOG_WARN_RL(&rl, "OFPST_FLOW reply bad instructions");
-        return EINVAL;
+        return error;
     }
     fs->ofpacts = ofpacts->data;
     fs->ofpacts_len = ofpacts->size;
