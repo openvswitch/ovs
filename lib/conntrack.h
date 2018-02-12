@@ -109,6 +109,7 @@ struct conntrack_dump {
 };
 
 struct ct_dpif_entry;
+struct ct_dpif_tuple;
 
 int conntrack_dump_start(struct conntrack *, struct conntrack_dump *,
                          const uint16_t *pzone, int *);
@@ -116,6 +117,8 @@ int conntrack_dump_next(struct conntrack_dump *, struct ct_dpif_entry *);
 int conntrack_dump_done(struct conntrack_dump *);
 
 int conntrack_flush(struct conntrack *, const uint16_t *zone);
+int conntrack_flush_tuple(struct conntrack *, const struct ct_dpif_tuple *,
+                          uint16_t zone);
 int conntrack_set_maxconns(struct conntrack *ct, uint32_t maxconns);
 int conntrack_get_maxconns(struct conntrack *ct, uint32_t *maxconns);
 int conntrack_get_nconns(struct conntrack *ct, uint32_t *nconns);

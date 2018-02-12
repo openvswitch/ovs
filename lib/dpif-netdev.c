@@ -5842,7 +5842,7 @@ dpif_netdev_ct_flush(struct dpif *dpif, const uint16_t *zone,
     struct dp_netdev *dp = get_dp_netdev(dpif);
 
     if (tuple) {
-        return EOPNOTSUPP;
+        return conntrack_flush_tuple(&dp->conntrack, tuple, zone ? *zone : 0);
     }
     return conntrack_flush(&dp->conntrack, zone);
 }

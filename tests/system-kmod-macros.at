@@ -97,14 +97,6 @@ m4_define([CHECK_CONNTRACK_LOCAL_STACK])
 #
 m4_define([CHECK_CONNTRACK_NAT])
 
-# CHECK_CT_DPIF_FLUSH_BY_CT_TUPLE()
-#
-# Perform requirements checks for running ovs-dpctl flush-conntrack by
-# conntrack 5-tuple test. The kernel datapath does support this
-# feature. Will remove this check after both kernel and userspace datapath
-# support it.
-m4_define([CHECK_CT_DPIF_FLUSH_BY_CT_TUPLE])
-
 # CHECK_CT_DPIF_SET_GET_MAXCONNS()
 #
 # Perform requirements checks for running ovs-dpctl ct-set-maxconns or
