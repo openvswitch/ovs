@@ -12,6 +12,8 @@ Post-v2.9.0
    - ovs-vsctl: New commands "add-bond-iface" and "del-bond-iface".
    - OpenFlow:
      * OFPT_ROLE_STATUS is now available in OpenFlow 1.3.
+   - Linux kernel 4.14
+     * Add support for compiling OVS with the latest Linux 4.14 kernel
 
 
 v2.9.0 - xx xxx xxxx
