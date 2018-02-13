@@ -169,6 +169,15 @@ static inline int rpl_nla_parse_nested(struct nlattr *tb[], int maxtype,
 	return nla_parse_nested(tb, maxtype, nla, policy);
 }
 #define nla_parse_nested rpl_nla_parse_nested
+
+static inline int rpl_nla_parse(struct nlattr **tb, int maxtype,
+				const struct nlattr *head, int len,
+				const struct nla_policy *policy,
+				struct netlink_ext_ack *extack)
+{
+	return nla_parse(tb, maxtype, head, len, policy);
+}
+#define nla_parse rpl_nla_parse
 #endif
 
 #endif /* net/netlink.h */
