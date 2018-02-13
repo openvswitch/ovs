@@ -11,13 +11,15 @@ Restart=on-failure
 EnvironmentFile=/etc/openvswitch/default.conf
 EnvironmentFile=-/etc/sysconfig/openvswitch
 ExecStartPre=/usr/bin/chown ${OVS_USER_ID} /var/run/openvswitch
+ExecStartPre=/bin/sh -c 'rm -f /run/openvswitch/useropts; if [ "${OVS_USER_ID/:*/}" != "root" ]; then /usr/bin/echo "OVSUSER=--ovs-user=${OVS_USER_ID}" > /run/openvswitch/useropts; fi'
+EnvironmentFile=-/run/openvswitch/useropts
 ExecStart=/usr/share/openvswitch/scripts/ovs-ctl \
           --no-ovs-vswitchd --no-monitor --system-id=random \
-          --ovs-user=${OVS_USER_ID} \
+          ${OVSUSER} \
           start $OPTIONS
 ExecStop=/usr/share/openvswitch/scripts/ovs-ctl --no-ovs-vswitchd stop
 ExecReload=/usr/share/openvswitch/scripts/ovs-ctl --no-ovs-vswitchd \
-           --ovs-user=${OVS_USER_ID} \
+           ${OVSUSER} \
            --no-monitor restart $OPTIONS
 RuntimeDirectory=openvswitch
 RuntimeDirectoryMode=0755

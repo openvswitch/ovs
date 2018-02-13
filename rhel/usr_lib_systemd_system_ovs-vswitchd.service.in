@@ -13,17 +13,18 @@ Restart=on-failure
 Environment=HOME=/var/run/openvswitch
 EnvironmentFile=/etc/openvswitch/default.conf
 EnvironmentFile=-/etc/sysconfig/openvswitch
+EnvironmentFile=-/run/openvswitch/useropts
 @begin_dpdk@
-ExecStartPre=-/usr/bin/chown :hugetlbfs /dev/hugepages
+ExecStartPre=-/bin/sh -c '/usr/bin/chown :${OVS_USER_ID##*:} /dev/hugepages'
 ExecStartPre=-/usr/bin/chmod 0775 /dev/hugepages
 @end_dpdk@
 ExecStart=/usr/share/openvswitch/scripts/ovs-ctl \
           --no-ovsdb-server --no-monitor --system-id=random \
-          --ovs-user=${OVS_USER_ID} \
+          ${OVSUSER} \
           start $OPTIONS
 ExecStop=/usr/share/openvswitch/scripts/ovs-ctl --no-ovsdb-server stop
 ExecReload=/usr/share/openvswitch/scripts/ovs-ctl --no-ovsdb-server \
           --no-monitor --system-id=random \
-          --ovs-user=${OVS_USER_ID} \
+          ${OVSUSER} \
           restart $OPTIONS
 TimeoutSec=300
