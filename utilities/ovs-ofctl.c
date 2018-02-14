@@ -153,6 +153,9 @@ static int show_stats = 1;
 /* --pcap: Makes "compose-packet" print a pcap on stdout. */
 static int print_pcap = 0;
 
+/* --raw: Makes "ofp-print" read binary data from stdin. */
+static int raw = 0;
+
 static const struct ovs_cmdl_command *get_all_commands(void);
 
 OVS_NO_RETURN static void usage(void);
@@ -239,6 +242,7 @@ parse_options(int argc, char *argv[])
         {"color", optional_argument, NULL, OPT_COLOR},
         {"may-create", no_argument, NULL, OPT_MAY_CREATE},
         {"pcap", no_argument, &print_pcap, 1},
+        {"raw", no_argument, &raw, 1},
         {"read-only", no_argument, NULL, OPT_READ_ONLY},
         DAEMON_LONG_OPTIONS,
         OFP_VERSION_LONG_OPTIONS,
@@ -4629,43 +4633,49 @@ ofctl_encode_error_reply(struct ovs_cmdl_context *ctx)
     ofpbuf_delete(reply);
 }
 
-/* "ofp-print HEXSTRING [VERBOSITY]": Converts the hex digits in HEXSTRING into
- * binary data, interpreting them as an OpenFlow message, and prints the
- * OpenFlow message on stdout, at VERBOSITY (level 2 by default).
+/* Usage:
+ *    ofp-print HEXSTRING [VERBOSITY]
+ *    ofp-print - [VERBOSITY] < HEXSTRING_FILE
+ *    ofp-print --raw - [VERBOSITY] < RAW_FILE
  *
- * Alternative usage: "ofp-print [VERBOSITY] - < HEXSTRING_FILE", where
- * HEXSTRING_FILE contains the HEXSTRING. */
+ * Converts the hex digits in HEXSTRING into binary data, interpreting them as
+ * an OpenFlow message, and prints the OpenFlow message on stdout, at VERBOSITY
+ * (level 2 by default).  With -, hex data is read from HEXSTRING_FILE, and
+ * with --raw -, raw binary data is read from RAW_FILE. */
 static void
 ofctl_ofp_print(struct ovs_cmdl_context *ctx)
 {
+    int verbosity = ctx->argc > 2 ? atoi(ctx->argv[2]) : 2;
+
     struct ofpbuf packet;
-    char *buffer;
-    int verbosity = 2;
-    struct ds line;
+    ofpbuf_init(&packet, 0);
 
-    ds_init(&line);
-
-    if (!strcmp(ctx->argv[ctx->argc-1], "-")) {
-        if (ds_get_line(&line, stdin)) {
-           VLOG_FATAL("Failed to read stdin");
+    char *buffer = NULL;
+    if (!strcmp(ctx->argv[1], "-")) {
+        if (raw) {
+            for (;;) {
+                int c = getchar();
+                if (c == EOF) {
+                    break;
+                }
+                ofpbuf_put(&packet, &c, 1);
+            }
+        } else {
+            struct ds line = DS_EMPTY_INITIALIZER;
+            if (ds_get_line(&line, stdin)) {
+                VLOG_FATAL("Failed to read stdin");
+            }
+            buffer = ds_steal_cstr(&line);
         }
-
-        buffer = line.string;
-        verbosity = ctx->argc > 2 ? atoi(ctx->argv[1]) : verbosity;
-    } else if (ctx->argc > 2) {
-        buffer = ctx->argv[1];
-        verbosity = atoi(ctx->argv[2]);
-    } else {
-        buffer = ctx->argv[1];
+    } else  {
+        buffer = xstrdup(ctx->argv[1]);
     }
-
-    ofpbuf_init(&packet, strlen(buffer) / 2);
-    if (ofpbuf_put_hex(&packet, buffer, NULL)[0] != '\0') {
+    if (buffer && ofpbuf_put_hex(&packet, buffer, NULL)[0] != '\0') {
         ovs_fatal(0, "trailing garbage following hex bytes");
     }
+    free(buffer);
     ofp_print(stdout, packet.data, packet.size, NULL, NULL, verbosity);
     ofpbuf_uninit(&packet);
-    ds_destroy(&line);
 }
 
 /* "encode-hello BITMAP...": Encodes each BITMAP as an OpenFlow hello message
