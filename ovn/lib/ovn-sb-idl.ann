@@ -7,3 +7,23 @@
 
 s["idlPrefix"] = "sbrec_"
 s["idlHeader"] = "\"ovn/lib/ovn-sb-idl.h\""
+
+s["hDecls"] = '#include "ovn/lib/ovn-util.h"'
+
+# Adds an integer column named 'column' to 'table' in 's'.  The column
+# values is calculated with 'expression' based on the values of the columns
+# named in the array 'dependencies'.
+def synthesize_integer_column(s, table, column, dependencies, expression):
+    s["tables"][table]["columns"][column] = {
+        "type": "integer",
+        "extensions": {
+            "dependencies": dependencies,
+            "parse": "row->%s = %s;" % (column, expression),
+            "synthetic": True
+        }
+    }
+
+synthesize_integer_column(s, "Logical_Flow", "hash",
+                          ["logical_datapath", "table_id", "pipeline",
+                           "priority", "match", "actions"],
+                          "sbrec_logical_flow_hash(row)")
