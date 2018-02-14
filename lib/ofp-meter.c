@@ -98,12 +98,12 @@ ofputil_decode_meter_mod(const struct ofp_header *oh,
             mm->meter.flags & OFPMF13_PKTPS) {
             return OFPERR_OFPMMFC_BAD_FLAGS;
         }
-        mm->meter.bands = bands->data;
 
         error = ofputil_pull_bands(&b, b.size, &mm->meter.n_bands, bands);
         if (error) {
             return error;
         }
+        mm->meter.bands = bands->data;
     }
     return 0;
 }
