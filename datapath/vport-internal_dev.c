@@ -149,13 +149,6 @@ internal_get_stats(struct net_device *dev, struct rtnl_link_stats64 *stats)
 	}
 }
 
-#ifdef HAVE_IFF_PHONY_HEADROOM
-static void internal_set_rx_headroom(struct net_device *dev, int new_hr)
-{
-	dev->needed_headroom = new_hr < 0 ? 0 : new_hr;
-}
-#endif
-
 static const struct net_device_ops internal_dev_netdev_ops = {
 	.ndo_open = internal_dev_open,
 	.ndo_stop = internal_dev_stop,
@@ -165,13 +158,6 @@ static const struct net_device_ops internal_dev_netdev_ops = {
 	.ndo_change_mtu = internal_dev_change_mtu,
 #endif
 	.ndo_get_stats64 = (void *)internal_get_stats,
-#ifdef HAVE_IFF_PHONY_HEADROOM
-#ifndef HAVE_NET_DEVICE_OPS_WITH_EXTENDED
-	.ndo_set_rx_headroom = internal_set_rx_headroom,
-#else
-	.extended.ndo_set_rx_headroom = internal_set_rx_headroom,
-#endif
-#endif
 };
 
 static struct rtnl_link_ops internal_dev_link_ops __read_mostly = {
@@ -189,7 +175,7 @@ static void do_setup(struct net_device *netdev)
 
 	netdev->priv_flags &= ~IFF_TX_SKB_SHARING;
 	netdev->priv_flags |= IFF_LIVE_ADDR_CHANGE | IFF_OPENVSWITCH |
-			      IFF_PHONY_HEADROOM | IFF_NO_QUEUE;
+			      IFF_NO_QUEUE;
 #ifndef HAVE_NEEDS_FREE_NETDEV
 	netdev->destructor = internal_dev_destructor;
 #else
@@ -239,9 +225,6 @@ static struct vport *internal_dev_create(const struct vport_parms *parms)
 		goto error_free_netdev;
 	}
 
-#ifdef HAVE_IFF_PHONY_HEADROOM
-	vport->dev->needed_headroom = vport->dp->max_headroom;
-#endif
 	dev_net_set(vport->dev, ovs_dp_get_net(vport->dp));
 	internal_dev = internal_dev_priv(vport->dev);
 	internal_dev->vport = vport;
