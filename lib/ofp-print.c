@@ -2267,26 +2267,21 @@ ofp_print_role_status_message(struct ds *string, const struct ofp_header *oh)
 }
 
 static enum ofperr
-ofp_print_nxt_flow_mod_table_id(struct ds *string,
-                                const struct nx_flow_mod_table_id *nfmti)
+ofp_print_nxt_flow_mod_table_id(struct ds *string, const struct ofp_header *oh)
 {
-    ds_put_format(string, " %s", nfmti->set ? "enable" : "disable");
+    bool enable = ofputil_decode_nx_flow_mod_table_id(oh);
+    ds_put_format(string, " %s", enable ? "enable" : "disable");
     return 0;
 }
 
 static enum ofperr
-ofp_print_nxt_set_flow_format(struct ds *string,
-                              const struct nx_set_flow_format *nsff)
+ofp_print_nxt_set_flow_format(struct ds *string, const struct ofp_header *oh)
 {
-    uint32_t format = ntohl(nsff->format);
-
-    ds_put_cstr(string, " format=");
-    if (ofputil_nx_flow_format_is_valid(format)) {
-        ds_put_cstr(string, ofputil_nx_flow_format_to_string(format));
-    } else {
-        ds_put_format(string, "%"PRIu32, format);
-    }
-
+    enum ofputil_protocol p = ofputil_decode_nx_set_flow_format(oh);
+    ds_put_format(string, " format=%s",
+                  p == OFPUTIL_P_OF10_STD ? "openflow10"
+                  : p == OFPUTIL_P_OF10_NXM ? "nxm"
+                  : "(unknown)");
     return 0;
 }
 
@@ -3732,10 +3727,10 @@ ofp_to_string__(const struct ofp_header *oh,
         return ofp_print_ofpst_port_desc_reply(string, oh);
 
     case OFPTYPE_FLOW_MOD_TABLE_ID:
-        return ofp_print_nxt_flow_mod_table_id(string, ofpmsg_body(oh));
+        return ofp_print_nxt_flow_mod_table_id(string, oh);
 
     case OFPTYPE_SET_FLOW_FORMAT:
-        return ofp_print_nxt_set_flow_format(string, ofpmsg_body(oh));
+        return ofp_print_nxt_set_flow_format(string, oh);
 
     case OFPTYPE_SET_PACKET_IN_FORMAT:
         return ofp_print_nxt_set_packet_in_format(string, ofpmsg_body(oh));

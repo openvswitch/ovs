@@ -443,10 +443,10 @@ enum ofpraw {
  * Nicira extensions that correspond to standard OpenFlow messages are listed
  * alongside the standard versions above. */
 
-    /* NXT 1.0 (12): struct nx_set_flow_format. */
+    /* NXT 1.0 (12): ovs_be32. */
     OFPRAW_NXT_SET_FLOW_FORMAT,
 
-    /* NXT 1.0+ (15): struct nx_flow_mod_table_id. */
+    /* NXT 1.0+ (15): uint8_t[8]. */
     OFPRAW_NXT_FLOW_MOD_TABLE_ID,
 
     /* NXT 1.0+ (16): struct nx_set_packet_in_format. */

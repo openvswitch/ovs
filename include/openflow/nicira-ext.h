@@ -113,51 +113,6 @@ enum nx_hash_fields {
 
 };
 
-/* This command enables or disables an Open vSwitch extension that allows a
- * controller to specify the OpenFlow table to which a flow should be added,
- * instead of having the switch decide which table is most appropriate as
- * required by OpenFlow 1.0.  Because NXM was designed as an extension to
- * OpenFlow 1.0, the extension applies equally to ofp10_flow_mod and
- * nx_flow_mod.  By default, the extension is disabled.
- *
- * When this feature is enabled, Open vSwitch treats struct ofp10_flow_mod's
- * and struct nx_flow_mod's 16-bit 'command' member as two separate fields.
- * The upper 8 bits are used as the table ID, the lower 8 bits specify the
- * command as usual.  A table ID of 0xff is treated like a wildcarded table ID.
- *
- * The specific treatment of the table ID depends on the type of flow mod:
- *
- *    - OFPFC_ADD: Given a specific table ID, the flow is always placed in that
- *      table.  If an identical flow already exists in that table only, then it
- *      is replaced.  If the flow cannot be placed in the specified table,
- *      either because the table is full or because the table cannot support
- *      flows of the given type, the switch replies with an OFPFMFC_TABLE_FULL
- *      error.  (A controller can distinguish these cases by comparing the
- *      current and maximum number of entries reported in ofp_table_stats.)
- *
- *      If the table ID is wildcarded, the switch picks an appropriate table
- *      itself.  If an identical flow already exist in the selected flow table,
- *      then it is replaced.  The choice of table might depend on the flows
- *      that are already in the switch; for example, if one table fills up then
- *      the switch might fall back to another one.
- *
- *    - OFPFC_MODIFY, OFPFC_DELETE: Given a specific table ID, only flows
- *      within that table are matched and modified or deleted.  If the table ID
- *      is wildcarded, flows within any table may be matched and modified or
- *      deleted.
- *
- *    - OFPFC_MODIFY_STRICT, OFPFC_DELETE_STRICT: Given a specific table ID,
- *      only a flow within that table may be matched and modified or deleted.
- *      If the table ID is wildcarded and exactly one flow within any table
- *      matches, then it is modified or deleted; if flows in more than one
- *      table match, then none is modified or deleted.
- */
-struct nx_flow_mod_table_id {
-    uint8_t set;                /* Nonzero to enable, zero to disable. */
-    uint8_t pad[7];
-};
-OFP_ASSERT(sizeof(struct nx_flow_mod_table_id) == 8);
-
 enum nx_packet_in_format {
     NXPIF_STANDARD = 0,         /* OFPT_PACKET_IN for this OpenFlow version. */
     NXPIF_NXT_PACKET_IN = 1,    /* NXT_PACKET_IN (since OVS v1.1). */
@@ -618,17 +573,6 @@ OFP_ASSERT(sizeof(struct nx_async_config) == 24);
 /* ## Requests and replies. ## */
 /* ## --------------------- ## */
 
-enum nx_flow_format {
-    NXFF_OPENFLOW10 = 0,         /* Standard OpenFlow 1.0 compatible. */
-    NXFF_NXM = 2                 /* Nicira extended match. */
-};
-
-/* NXT_SET_FLOW_FORMAT request. */
-struct nx_set_flow_format {
-    ovs_be32 format;            /* One of NXFF_*. */
-};
-OFP_ASSERT(sizeof(struct nx_set_flow_format) == 4);
-
 /* NXT_FLOW_MOD (analogous to OFPT_FLOW_MOD).
  *
  * It is possible to limit flow deletions and modifications to certain
@@ -637,8 +581,8 @@ OFP_ASSERT(sizeof(struct nx_set_flow_format) == 4);
  */
 struct nx_flow_mod {
     ovs_be64 cookie;              /* Opaque controller-issued identifier. */
-    ovs_be16 command;             /* OFPFC_* + possibly a table ID (see comment
-                                   * on struct nx_flow_mod_table_id). */
+    ovs_be16 command;             /* OFPFC_*, and table ID if flow_mod_table_id
+                                   * is enabled. */
     ovs_be16 idle_timeout;        /* Idle time before discarding (seconds). */
     ovs_be16 hard_timeout;        /* Max time before discarding (seconds). */
     ovs_be16 priority;            /* Priority level of flow entry. */

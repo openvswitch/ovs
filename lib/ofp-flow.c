@@ -34,77 +34,7 @@
 VLOG_DEFINE_THIS_MODULE(ofp_flow);
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-
-/* Returns an NXT_SET_FLOW_FORMAT message that can be used to set the flow
- * format to 'nxff'.  */
-struct ofpbuf *
-ofputil_encode_nx_set_flow_format(enum nx_flow_format nxff)
-{
-    struct nx_set_flow_format *sff;
-    struct ofpbuf *msg;
-
-    ovs_assert(ofputil_nx_flow_format_is_valid(nxff));
-
-    msg = ofpraw_alloc(OFPRAW_NXT_SET_FLOW_FORMAT, OFP10_VERSION, 0);
-    sff = ofpbuf_put_zeros(msg, sizeof *sff);
-    sff->format = htonl(nxff);
-
-    return msg;
-}
-
-/* Returns the base protocol if 'flow_format' is a valid NXFF_* value, false
- * otherwise. */
-enum ofputil_protocol
-ofputil_nx_flow_format_to_protocol(enum nx_flow_format flow_format)
-{
-    switch (flow_format) {
-    case NXFF_OPENFLOW10:
-        return OFPUTIL_P_OF10_STD;
-
-    case NXFF_NXM:
-        return OFPUTIL_P_OF10_NXM;
-
-    default:
-        return 0;
-    }
-}
-
-/* Returns true if 'flow_format' is a valid NXFF_* value, false otherwise. */
-bool
-ofputil_nx_flow_format_is_valid(enum nx_flow_format flow_format)
-{
-    return ofputil_nx_flow_format_to_protocol(flow_format) != 0;
-}
-
-/* Returns a string version of 'flow_format', which must be a valid NXFF_*
- * value. */
-const char *
-ofputil_nx_flow_format_to_string(enum nx_flow_format flow_format)
-{
-    switch (flow_format) {
-    case NXFF_OPENFLOW10:
-        return "openflow10";
-    case NXFF_NXM:
-        return "nxm";
-    default:
-        OVS_NOT_REACHED();
-    }
-}
-
-/* Returns an OpenFlow message that can be used to turn the flow_mod_table_id
- * extension on or off (according to 'flow_mod_table_id'). */
-struct ofpbuf *
-ofputil_make_flow_mod_table_id(bool flow_mod_table_id)
-{
-    struct nx_flow_mod_table_id *nfmti;
-    struct ofpbuf *msg;
-
-    msg = ofpraw_alloc(OFPRAW_NXT_FLOW_MOD_TABLE_ID, OFP10_VERSION, 0);
-    nfmti = ofpbuf_put_zeros(msg, sizeof *nfmti);
-    nfmti->set = flow_mod_table_id;
-    return msg;
-}
-
+
 struct ofputil_flow_mod_flag {
     uint16_t raw_flag;
     enum ofp_version min_version, max_version;

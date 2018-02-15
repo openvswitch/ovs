@@ -162,10 +162,21 @@ enum ofputil_protocol ofputil_protocols_from_string(const char *s);
 const char *ofputil_version_to_string(enum ofp_version ofp_version);
 uint32_t ofputil_versions_from_string(const char *s);
 uint32_t ofputil_versions_from_strings(char ** const s, size_t count);
+
+/* Messages for changing the protocol. */
 
+/* Changing the protocol at a high level.  */
 struct ofpbuf *ofputil_encode_set_protocol(enum ofputil_protocol current,
                                            enum ofputil_protocol want,
                                            enum ofputil_protocol *next);
+
+/* Changing the protocol at a low level. */
+struct ofpbuf *ofputil_encode_nx_set_flow_format(enum ofputil_protocol);
+enum ofputil_protocol ofputil_decode_nx_set_flow_format(
+    const struct ofp_header *);
+
+struct ofpbuf *ofputil_encode_nx_flow_mod_table_id(bool enable);
+bool ofputil_decode_nx_flow_mod_table_id(const struct ofp_header *);
 
 #ifdef __cplusplus
 }

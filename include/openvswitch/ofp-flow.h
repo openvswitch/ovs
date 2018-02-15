@@ -31,15 +31,6 @@ struct ofputil_table_map;
 extern "C" {
 #endif
 
-/* nx_flow_format */
-struct ofpbuf *ofputil_encode_nx_set_flow_format(enum nx_flow_format);
-enum ofputil_protocol ofputil_nx_flow_format_to_protocol(enum nx_flow_format);
-bool ofputil_nx_flow_format_is_valid(enum nx_flow_format);
-const char *ofputil_nx_flow_format_to_string(enum nx_flow_format);
-
-/* NXT_FLOW_MOD_TABLE_ID extension. */
-struct ofpbuf *ofputil_make_flow_mod_table_id(bool flow_mod_table_id);
-
 /* Protocol-independent flow_mod flags. */
 enum ofputil_flow_mod_flags {
     /* Flags that are maintained with a flow as part of its state.

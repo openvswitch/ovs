@@ -19,10 +19,14 @@
 #include <ctype.h>
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/ofp-flow.h"
+#include "openvswitch/ofp-msgs.h"
+#include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
 #include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_protocol);
+
+static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 /* Protocols. */
 
@@ -555,7 +559,7 @@ ofputil_format_version_bitmap_names(struct ds *msg, uint32_t bitmap)
 {
     ofputil_format_version_bitmap__(msg, bitmap, ofputil_format_version_name);
 }
-
+
 /* Returns an OpenFlow message that, sent on an OpenFlow connection whose
  * protocol is 'current', at least partly transitions the protocol to 'want'.
  * Stores in '*next' the protocol that will be in effect on the OpenFlow
@@ -585,13 +589,10 @@ ofputil_encode_set_protocol(enum ofputil_protocol current,
     want_base = ofputil_protocol_to_base(want);
     if (cur_base != want_base) {
         *next = ofputil_protocol_set_base(current, want_base);
-
         switch (want_base) {
         case OFPUTIL_P_OF10_NXM:
-            return ofputil_encode_nx_set_flow_format(NXFF_NXM);
-
         case OFPUTIL_P_OF10_STD:
-            return ofputil_encode_nx_set_flow_format(NXFF_OPENFLOW10);
+            return ofputil_encode_nx_set_flow_format(want_base);
 
         case OFPUTIL_P_OF11_STD:
         case OFPUTIL_P_OF12_OXM:
@@ -613,11 +614,124 @@ ofputil_encode_set_protocol(enum ofputil_protocol current,
     want_tid = (want & OFPUTIL_P_TID) != 0;
     if (cur_tid != want_tid) {
         *next = ofputil_protocol_set_tid(current, want_tid);
-        return ofputil_make_flow_mod_table_id(want_tid);
+        return ofputil_encode_nx_flow_mod_table_id(want_tid);
     }
 
     ovs_assert(current == want);
 
     *next = current;
     return NULL;
+}
+
+enum nx_flow_format {
+    NXFF_OPENFLOW10 = 0,         /* Standard OpenFlow 1.0 compatible. */
+    NXFF_NXM = 2                 /* Nicira extended match. */
+};
+
+/* Returns an NXT_SET_FLOW_FORMAT message that can be used to set the flow
+ * format to 'protocol'.  */
+struct ofpbuf *
+ofputil_encode_nx_set_flow_format(enum ofputil_protocol protocol)
+{
+    struct ofpbuf *msg = ofpraw_alloc(OFPRAW_NXT_SET_FLOW_FORMAT,
+                                      OFP10_VERSION, 0);
+    ovs_be32 *nxff = ofpbuf_put_uninit(msg, sizeof *nxff);
+    if (protocol == OFPUTIL_P_OF10_STD) {
+        *nxff = htonl(NXFF_OPENFLOW10);
+    } else if (protocol == OFPUTIL_P_OF10_NXM) {
+        *nxff = htonl(NXFF_NXM);
+    } else {
+        OVS_NOT_REACHED();
+    }
+
+    return msg;
+}
+
+/* Returns the protocol specified in the NXT_SET_FLOW_FORMAT message at 'oh'
+ * (either OFPUTIL_P_OF10_STD or OFPUTIL_P_OF10_NXM) or 0 if the message is
+ * invalid. */
+enum ofputil_protocol
+ofputil_decode_nx_set_flow_format(const struct ofp_header *oh)
+{
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    ovs_assert(ofpraw_pull_assert(&b) == OFPRAW_NXT_SET_FLOW_FORMAT);
+
+    ovs_be32 *flow_formatp = ofpbuf_pull(&b, sizeof *flow_formatp);
+    uint32_t flow_format = ntohl(*flow_formatp);
+    switch (flow_format) {
+    case NXFF_OPENFLOW10:
+        return OFPUTIL_P_OF10_STD;
+
+    case NXFF_NXM:
+        return OFPUTIL_P_OF10_NXM;
+
+    default:
+        VLOG_WARN_RL(&rl, "NXT_SET_FLOW_FORMAT message specified invalid "
+                     "flow format %"PRIu32, flow_format);
+        return 0;
+    }
+}
+
+/* These functions work with the Open vSwitch extension feature called
+ * "flow_mod_table_id", which allows a controller to specify the OpenFlow table
+ * to which a flow should be added, instead of having the switch decide which
+ * table is most appropriate as required by OpenFlow 1.0.  Because NXM was
+ * designed as an extension to OpenFlow 1.0, the extension applies equally to
+ * ofp10_flow_mod and nx_flow_mod.  By default, the extension is disabled.
+ *
+ * When this feature is enabled, Open vSwitch treats struct ofp10_flow_mod's
+ * and struct nx_flow_mod's 16-bit 'command' member as two separate fields.
+ * The upper 8 bits are used as the table ID, the lower 8 bits specify the
+ * command as usual.  A table ID of 0xff is treated like a wildcarded table ID.
+ *
+ * The specific treatment of the table ID depends on the type of flow mod:
+ *
+ *    - OFPFC_ADD: Given a specific table ID, the flow is always placed in that
+ *      table.  If an identical flow already exists in that table only, then it
+ *      is replaced.  If the flow cannot be placed in the specified table,
+ *      either because the table is full or because the table cannot support
+ *      flows of the given type, the switch replies with an OFPFMFC_TABLE_FULL
+ *      error.  (A controller can distinguish these cases by comparing the
+ *      current and maximum number of entries reported in ofp_table_stats.)
+ *
+ *      If the table ID is wildcarded, the switch picks an appropriate table
+ *      itself.  If an identical flow already exist in the selected flow table,
+ *      then it is replaced.  The choice of table might depend on the flows
+ *      that are already in the switch; for example, if one table fills up then
+ *      the switch might fall back to another one.
+ *
+ *    - OFPFC_MODIFY, OFPFC_DELETE: Given a specific table ID, only flows
+ *      within that table are matched and modified or deleted.  If the table ID
+ *      is wildcarded, flows within any table may be matched and modified or
+ *      deleted.
+ *
+ *    - OFPFC_MODIFY_STRICT, OFPFC_DELETE_STRICT: Given a specific table ID,
+ *      only a flow within that table may be matched and modified or deleted.
+ *      If the table ID is wildcarded and exactly one flow within any table
+ *      matches, then it is modified or deleted; if flows in more than one
+ *      table match, then none is modified or deleted.
+ */
+
+/* Returns an OpenFlow message that can be used to turn the flow_mod_table_id
+ * extension on or off (according to 'enable'). */
+struct ofpbuf *
+ofputil_encode_nx_flow_mod_table_id(bool enable)
+{
+    struct ofpbuf *msg = ofpraw_alloc(OFPRAW_NXT_FLOW_MOD_TABLE_ID,
+                                      OFP10_VERSION, 0);
+    uint8_t *p = ofpbuf_put_zeros(msg, 8);
+    *p = enable;
+    return msg;
+}
+
+/* Decodes the NXT_FLOW_MOD_TABLE_ID message at 'oh'.  Returns the message's
+ * argument, that is, whether the flow_mod_table_id feature should be
+ * enabled. */
+bool
+ofputil_decode_nx_flow_mod_table_id(const struct ofp_header *oh)
+{
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    ovs_assert(ofpraw_pull_assert(&b) == OFPRAW_NXT_FLOW_MOD_TABLE_ID);
+    uint8_t *enable = ofpbuf_pull(&b, 8);
+    return *enable != 0;
 }
