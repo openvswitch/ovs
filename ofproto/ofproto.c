@@ -3193,7 +3193,7 @@ learned_cookies_flush(struct ofproto *ofproto, struct ovs_list *dead_cookies)
 static enum ofperr
 handle_echo_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
-    ofconn_send_reply(ofconn, make_echo_reply(oh));
+    ofconn_send_reply(ofconn, ofputil_encode_echo_reply(oh));
     return 0;
 }
 

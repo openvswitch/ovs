@@ -31,8 +31,8 @@ bool ofputil_decode_hello(const struct ofp_header *,
                           uint32_t *allowed_versions);
 struct ofpbuf *ofputil_encode_hello(uint32_t version_bitmap);
 
-struct ofpbuf *make_echo_request(enum ofp_version);
-struct ofpbuf *make_echo_reply(const struct ofp_header *);
+struct ofpbuf *ofputil_encode_echo_request(enum ofp_version);
+struct ofpbuf *ofputil_encode_echo_reply(const struct ofp_header *);
 
 struct ofpbuf *ofputil_encode_barrier_request(enum ofp_version);
 

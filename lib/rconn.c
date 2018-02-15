@@ -581,7 +581,7 @@ run_ACTIVE(struct rconn *rc)
          * anything.) */
         int version = rconn_get_version__(rc);
         if (version >= 0 && version <= 0xff) {
-            rconn_send__(rc, make_echo_request(version), NULL);
+            rconn_send__(rc, ofputil_encode_echo_request(version), NULL);
         }
 
         return;

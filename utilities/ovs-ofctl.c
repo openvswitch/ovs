@@ -2165,7 +2165,7 @@ monitor_vconn(struct vconn *vconn, bool reply_to_echo_requests,
                 if (reply_to_echo_requests) {
                     struct ofpbuf *reply;
 
-                    reply = make_echo_reply(b->data);
+                    reply = ofputil_encode_echo_reply(b->data);
                     retval = vconn_send_block(vconn, reply);
                     if (retval) {
                         ovs_fatal(retval, "failed to send echo reply");
@@ -2363,7 +2363,7 @@ ofctl_probe(struct ovs_cmdl_context *ctx)
     struct ofpbuf *reply;
 
     open_vconn(ctx->argv[1], &vconn);
-    request = make_echo_request(vconn_get_version(vconn));
+    request = ofputil_encode_echo_request(vconn_get_version(vconn));
     run(vconn_transact(vconn, request, &reply), "talking to %s", ctx->argv[1]);
     if (reply->size != sizeof(struct ofp_header)) {
         ovs_fatal(0, "reply does not match request");

@@ -618,7 +618,7 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
 static void
 process_echo_request(struct lswitch *sw, const struct ofp_header *rq)
 {
-    queue_tx(sw, make_echo_reply(rq));
+    queue_tx(sw, ofputil_encode_echo_reply(rq));
 }
 
 static ofp_port_t

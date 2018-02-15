@@ -176,7 +176,7 @@ ofputil_encode_hello(uint32_t allowed_versions)
 
 /* Creates and returns an OFPT_ECHO_REQUEST message with an empty payload. */
 struct ofpbuf *
-make_echo_request(enum ofp_version ofp_version)
+ofputil_encode_echo_request(enum ofp_version ofp_version)
 {
     return ofpraw_alloc_xid(OFPRAW_OFPT_ECHO_REQUEST, ofp_version,
                             htonl(0), 0);
@@ -185,7 +185,7 @@ make_echo_request(enum ofp_version ofp_version)
 /* Creates and returns an OFPT_ECHO_REPLY message matching the
  * OFPT_ECHO_REQUEST message in 'rq'. */
 struct ofpbuf *
-make_echo_reply(const struct ofp_header *rq)
+ofputil_encode_echo_reply(const struct ofp_header *rq)
 {
     struct ofpbuf rq_buf = ofpbuf_const_initializer(rq, ntohs(rq->length));
     ofpraw_pull_assert(&rq_buf);
