@@ -1073,27 +1073,29 @@ pinctrl_run(struct controller_ctx *ctx,
 
     rconn_run(swconn);
 
-    if (rconn_is_connected(swconn)) {
-        if (conn_seq_no != rconn_get_connection_seqno(swconn)) {
-            pinctrl_setup(swconn);
-            conn_seq_no = rconn_get_connection_seqno(swconn);
-            flush_put_mac_bindings();
+    if (!rconn_is_connected(swconn)) {
+        return;
+    }
+
+    if (conn_seq_no != rconn_get_connection_seqno(swconn)) {
+        pinctrl_setup(swconn);
+        conn_seq_no = rconn_get_connection_seqno(swconn);
+        flush_put_mac_bindings();
+    }
+
+    /* Process a limited number of messages per call. */
+    for (int i = 0; i < 50; i++) {
+        struct ofpbuf *msg = rconn_recv(swconn);
+        if (!msg) {
+            break;
         }
 
-        /* Process a limited number of messages per call. */
-        for (int i = 0; i < 50; i++) {
-            struct ofpbuf *msg = rconn_recv(swconn);
-            if (!msg) {
-                break;
-            }
+        const struct ofp_header *oh = msg->data;
+        enum ofptype type;
 
-            const struct ofp_header *oh = msg->data;
-            enum ofptype type;
-
-            ofptype_decode(&type, oh);
-            pinctrl_recv(oh, type, ctx);
-            ofpbuf_delete(msg);
-        }
+        ofptype_decode(&type, oh);
+        pinctrl_recv(oh, type, ctx);
+        ofpbuf_delete(msg);
     }
 
     run_put_mac_bindings(ctx);
