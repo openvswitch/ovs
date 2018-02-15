@@ -314,6 +314,7 @@ BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_flow_key_common) == 20);
 /* Part of data record flow key for interface information. Since some of the
  * elements have variable length, members of this structure should be appended
  * to the 'struct dp_packet' one by one. */
+OVS_PACKED(
 struct ipfix_data_record_flow_key_iface {
     ovs_be32 if_index;     /* (INGRESS | EGRESS)_INTERFACE */
     ovs_be32 if_type;     /* (INGRESS | EGRESS)_INTERFACE_TYPE */
@@ -321,7 +322,9 @@ struct ipfix_data_record_flow_key_iface {
     char *if_name;
     uint8_t if_descr_len; /* Variable length element: INTERFACE_DESCRIPTION */
     char *if_descr;
-};
+});
+BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_flow_key_iface) ==
+                  10 + 2 * sizeof(char *));
 
 /* Part of data record flow key for VLAN entities. */
 OVS_PACKED(
@@ -511,8 +514,21 @@ BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_aggregated_tcp) == 48);
  */
 #define MAX_TUNNEL_KEY_LEN 8
 
+#define MAX_IF_NAME_LEN 64
+#define MAX_IF_DESCR_LEN 128
+
+/*
+ * Calculate interface information length in flow key.
+ * This is used to calculate max flow key length.
+ */
+#define FLOW_KEY_IFACE_LEN                                      \
+    (sizeof(struct ipfix_data_record_flow_key_iface)            \
+     - 2 * sizeof(char *)                                       \
+     + MAX_IF_NAME_LEN + MAX_IF_DESCR_LEN)
+
 #define MAX_FLOW_KEY_LEN                                        \
     (sizeof(struct ipfix_data_record_flow_key_common)           \
+     + FLOW_KEY_IFACE_LEN                                       \
      + sizeof(struct ipfix_data_record_flow_key_vlan)           \
      + sizeof(struct ipfix_data_record_flow_key_ip)             \
      + MAX(sizeof(struct ipfix_data_record_flow_key_ipv4),      \
@@ -2030,9 +2046,11 @@ ipfix_get_iface_data_record(const struct dpif_ipfix *di, odp_port_t port_no,
 
     smap_destroy(&netdev_status);
     data->if_index = htonl(port->ifindex);
-    data->if_descr_len = data->if_descr ? strlen(data->if_descr) : 0;
+    data->if_descr_len = data->if_descr ? strnlen(data->if_descr,
+                                                  MAX_IF_DESCR_LEN) : 0;
     data->if_name = nullable_xstrdup(netdev_get_name(port->ofport->netdev));
-    data->if_name_len = data->if_name ? strlen(data->if_name) : 0;
+    data->if_name_len = data->if_name ? strnlen(data->if_name,
+                                                MAX_IF_NAME_LEN) : 0;
 
     return 0;
 }
