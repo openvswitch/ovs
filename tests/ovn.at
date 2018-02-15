@@ -3566,6 +3566,19 @@ AT_CHECK([ovs-vsctl add-port br-int localvif1 -- set Interface localvif1 externa
 echo "fffffffffffff0000000000108060001080006040001f00000000001c0a80102000000000000c0a80102" > expected
 OVN_CHECK_PACKETS([hv/snoopvif-tx.pcap], [expected])
 
+# Check GARP packet when restart openflow connection.
+as hv
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+
+OVS_WAIT_UNTIL([grep -c "waiting 4 seconds before reconnect" hv/ovn-controller.log])
+
+as hv
+start_daemon ovs-vswitchd --enable-dummy=system -vvconn -vofproto_dpif -vunixctl
+
+# Wait for packet to be received.
+echo "fffffffffffff0000000000108060001080006040001f00000000001c0a80102000000000000c0a80102" > expected
+OVN_CHECK_PACKETS([hv/snoopvif-tx.pcap], [expected])
+
 # Delete the localnet ports.
 AT_CHECK([ovs-vsctl del-port localvif1])
 AT_CHECK([ovn-nbctl lsp-del ln_port])
