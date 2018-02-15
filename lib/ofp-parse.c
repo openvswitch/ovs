@@ -249,36 +249,6 @@ ofp_extract_actions(char *s)
         return NULL;
     }
 }
-
-/* Parses 'string' as an OFPT_FLOW_MOD or NXT_FLOW_MOD with command 'command'
- * (one of OFPFC_*) into 'fm'.
- *
- * If 'command' is given as -2, 'string' may begin with a command name ("add",
- * "modify", "delete", "modify_strict", or "delete_strict").  A missing command
- * name is treated as "add".
- *
- * Returns NULL if successful, otherwise a malloc()'d string describing the
- * error.  The caller is responsible for freeing the returned string. */
-char * OVS_WARN_UNUSED_RESULT
-parse_ofp_flow_mod_str(struct ofputil_flow_mod *fm, const char *string,
-                       const struct ofputil_port_map *port_map,
-                       const struct ofputil_table_map *table_map,
-                       int command,
-                       enum ofputil_protocol *usable_protocols)
-{
-    char *error = parse_ofp_str(fm, command, string, port_map, table_map,
-                                usable_protocols);
-
-    if (!error) {
-        /* Normalize a copy of the match.  This ensures that non-normalized
-         * flows get logged but doesn't affect what gets sent to the switch, so
-         * that the switch can do whatever it likes with the flow. */
-        struct match match_copy = fm->match;
-        ofputil_normalize_match(&match_copy);
-    }
-
-    return error;
-}
 
 static size_t
 parse_value(const char *s, const char *delimiters)
