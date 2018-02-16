@@ -5890,16 +5890,12 @@ static enum ofperr
 handle_nxt_set_packet_in_format(struct ofconn *ofconn,
                                 const struct ofp_header *oh)
 {
-    const struct nx_set_packet_in_format *msg = ofpmsg_body(oh);
-    uint32_t format;
-
-    format = ntohl(msg->format);
-    if (!ofputil_packet_in_format_is_valid(format)) {
-        return OFPERR_OFPBRC_EPERM;
+    enum ofputil_packet_in_format format;
+    enum ofperr error = ofputil_decode_set_packet_in_format(oh, &format);
+    if (!error) {
+        ofconn_set_packet_in_format(ofconn, format);
     }
-
-    ofconn_set_packet_in_format(ofconn, format);
-    return 0;
+    return error;
 }
 
 static enum ofperr

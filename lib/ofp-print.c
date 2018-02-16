@@ -2287,18 +2287,15 @@ ofp_print_nxt_set_flow_format(struct ds *string, const struct ofp_header *oh)
 
 static enum ofperr
 ofp_print_nxt_set_packet_in_format(struct ds *string,
-                                   const struct nx_set_packet_in_format *nspf)
+                                   const struct ofp_header *oh)
 {
-    uint32_t format = ntohl(nspf->format);
-
-    ds_put_cstr(string, " format=");
-    if (ofputil_packet_in_format_is_valid(format)) {
-        ds_put_cstr(string, ofputil_packet_in_format_to_string(format));
-    } else {
-        ds_put_format(string, "%"PRIu32, format);
+    enum ofputil_packet_in_format format;
+    enum ofperr error = ofputil_decode_set_packet_in_format(oh, &format);
+    if (!error) {
+        ds_put_format(string, " format=%s",
+                      ofputil_packet_in_format_to_string(format));
     }
-
-    return 0;
+    return error;
 }
 
 /* Returns a string form of 'reason'.  The return value is either a statically
@@ -3733,7 +3730,7 @@ ofp_to_string__(const struct ofp_header *oh,
         return ofp_print_nxt_set_flow_format(string, oh);
 
     case OFPTYPE_SET_PACKET_IN_FORMAT:
-        return ofp_print_nxt_set_packet_in_format(string, ofpmsg_body(oh));
+        return ofp_print_nxt_set_packet_in_format(string, oh);
 
     case OFPTYPE_FLOW_AGE:
         break;

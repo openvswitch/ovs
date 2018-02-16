@@ -449,7 +449,7 @@ enum ofpraw {
     /* NXT 1.0+ (15): uint8_t[8]. */
     OFPRAW_NXT_FLOW_MOD_TABLE_ID,
 
-    /* NXT 1.0+ (16): struct nx_set_packet_in_format. */
+    /* NXT 1.0+ (16): ovs_be32. */
     OFPRAW_NXT_SET_PACKET_IN_FORMAT,
 
     /* NXT 1.0+ (18): void. */

@@ -112,8 +112,9 @@ void ofconn_set_role(struct ofconn *, enum ofp12_controller_role);
 enum ofputil_protocol ofconn_get_protocol(const struct ofconn *);
 void ofconn_set_protocol(struct ofconn *, enum ofputil_protocol);
 
-enum nx_packet_in_format ofconn_get_packet_in_format(struct ofconn *);
-void ofconn_set_packet_in_format(struct ofconn *, enum nx_packet_in_format);
+enum ofputil_packet_in_format ofconn_get_packet_in_format(struct ofconn *);
+void ofconn_set_packet_in_format(struct ofconn *,
+                                 enum ofputil_packet_in_format);
 
 void ofconn_set_controller_id(struct ofconn *, uint16_t controller_id);
 

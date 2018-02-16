@@ -113,31 +113,6 @@ enum nx_hash_fields {
 
 };
 
-enum nx_packet_in_format {
-    NXPIF_STANDARD = 0,         /* OFPT_PACKET_IN for this OpenFlow version. */
-    NXPIF_NXT_PACKET_IN = 1,    /* NXT_PACKET_IN (since OVS v1.1). */
-    NXPIF_NXT_PACKET_IN2 = 2,   /* NXT_PACKET_IN2 (since OVS v2.6). */
-};
-
-/* NXT_SET_PACKET_IN_FORMAT request.
- *
- * For any given OpenFlow version, Open vSwitch supports multiple formats for
- * "packet-in" messages.  The default is always the standard format for the
- * OpenFlow version in question, but NXT_SET_PACKET_IN_FORMAT can be used to
- * set an alternative format.
- *
- * From OVS v1.1 to OVS v2.5, this request was only honored for OpenFlow 1.0.
- * Requests to set format NXPIF_NXT_PACKET_IN were accepted for OF1.1+ but they
- * had no effect.  (Requests to set formats other than NXPIF_STANDARD or
- * NXPIF_NXT_PACKET_IN were rejected with OFPBRC_EPERM.)
- *
- * From OVS v2.6 onward, this request is honored for all OpenFlow versions.
- */
-struct nx_set_packet_in_format {
-    ovs_be32 format;            /* One of NXPIF_*. */
-};
-OFP_ASSERT(sizeof(struct nx_set_packet_in_format) == 4);
-
 /* NXT_PACKET_IN (analogous to OFPT_PACKET_IN).
  *
  * NXT_PACKET_IN is similar to the OpenFlow 1.2 OFPT_PACKET_IN.  The

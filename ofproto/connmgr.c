@@ -73,7 +73,7 @@ struct ofconn {
     /* OpenFlow state. */
     enum ofp12_controller_role role;           /* Role. */
     enum ofputil_protocol protocol; /* Current protocol variant. */
-    enum nx_packet_in_format packet_in_format; /* OFPT_PACKET_IN format. */
+    enum ofputil_packet_in_format packet_in_format;
 
     /* OFPT_PACKET_IN related data. */
     struct rconn_packet_counter *packet_in_counter; /* # queued on 'rconn'. */
@@ -1044,7 +1044,7 @@ ofconn_set_protocol(struct ofconn *ofconn, enum ofputil_protocol protocol)
  * NXPIF_*.
  *
  * The default, if no other format has been set, is NXPIF_STANDARD. */
-enum nx_packet_in_format
+enum ofputil_packet_in_format
 ofconn_get_packet_in_format(struct ofconn *ofconn)
 {
     return ofconn->packet_in_format;
@@ -1054,7 +1054,7 @@ ofconn_get_packet_in_format(struct ofconn *ofconn)
  * NXPIF_*). */
 void
 ofconn_set_packet_in_format(struct ofconn *ofconn,
-                            enum nx_packet_in_format packet_in_format)
+                            enum ofputil_packet_in_format packet_in_format)
 {
     ofconn->packet_in_format = packet_in_format;
 }
@@ -1303,7 +1303,7 @@ ofconn_flush(struct ofconn *ofconn)
 
     ofconn->role = OFPCR12_ROLE_EQUAL;
     ofconn_set_protocol(ofconn, OFPUTIL_P_NONE);
-    ofconn->packet_in_format = NXPIF_STANDARD;
+    ofconn->packet_in_format = OFPUTIL_PACKET_IN_STD;
 
     rconn_packet_counter_destroy(ofconn->packet_in_counter);
     ofconn->packet_in_counter = rconn_packet_counter_create();

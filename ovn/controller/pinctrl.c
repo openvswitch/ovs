@@ -130,8 +130,8 @@ pinctrl_setup(void)
                            rconn_get_version(swconn), 0));
 
     /* Set a packet-in format that supports userdata.  */
-    queue_msg(ofputil_make_set_packet_in_format(rconn_get_version(swconn),
-                                                NXPIF_NXT_PACKET_IN2));
+    queue_msg(ofputil_encode_set_packet_in_format(rconn_get_version(swconn),
+                                                  OFPUTIL_PACKET_IN_NXT2));
 }
 
 static void

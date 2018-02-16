@@ -30,12 +30,33 @@ extern "C" {
 
 struct vl_mff_map;
 struct ofputil_table_map;
+
+/* Packet-in format.
+ *
+ * For any given OpenFlow version, Open vSwitch supports multiple formats for
+ * "packet-in" messages.  The default is always the standard format for the
+ * OpenFlow version in question, but the Open vSwitch extension request
+ * NXT_SET_PACKET_IN_FORMAT can be used to set an alternative format.
+ *
+ * From OVS v1.1 to OVS v2.5, this request was only honored for OpenFlow 1.0.
+ * Requests to set format NXPIF_NXT_PACKET_IN were accepted for OF1.1+ but they
+ * had no effect.  (Requests to set formats other than NXPIF_STANDARD or
+ * NXPIF_NXT_PACKET_IN were rejected with OFPBRC_EPERM.)
+ *
+ * From OVS v2.6 onward, this request is honored for all OpenFlow versions.
+ */
+enum ofputil_packet_in_format {
+    OFPUTIL_PACKET_IN_STD = 0,  /* OFPT_PACKET_IN for this OpenFlow version. */
+    OFPUTIL_PACKET_IN_NXT = 1,  /* NXT_PACKET_IN (since OVS v1.1). */
+    OFPUTIL_PACKET_IN_NXT2 = 2, /* NXT_PACKET_IN2 (since OVS v2.6). */
+};
 
-bool ofputil_packet_in_format_is_valid(enum nx_packet_in_format);
 int ofputil_packet_in_format_from_string(const char *);
-const char *ofputil_packet_in_format_to_string(enum nx_packet_in_format);
-struct ofpbuf *ofputil_make_set_packet_in_format(enum ofp_version,
-                                                 enum nx_packet_in_format);
+const char *ofputil_packet_in_format_to_string(enum ofputil_packet_in_format);
+struct ofpbuf *ofputil_encode_set_packet_in_format(
+    enum ofp_version, enum ofputil_packet_in_format);
+enum ofperr ofputil_decode_set_packet_in_format(
+    const struct ofp_header *, enum ofputil_packet_in_format *);
 
 /* Abstract packet-in message.
  *
@@ -124,7 +145,7 @@ struct ofputil_packet_in_private {
 struct ofpbuf *ofputil_encode_packet_in_private(
     const struct ofputil_packet_in_private *,
     enum ofputil_protocol protocol,
-    enum nx_packet_in_format);
+    enum ofputil_packet_in_format);
 
 enum ofperr ofputil_decode_packet_in_private(
     const struct ofp_header *, bool loose,
