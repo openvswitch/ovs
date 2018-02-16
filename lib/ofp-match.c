@@ -39,7 +39,7 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
  * ..., 32 and higher wildcard the entire field.  This is the *opposite* of the
  * usual convention where e.g. /24 indicates that 8 bits (not 24 bits) are
  * wildcarded. */
-ovs_be32
+static ovs_be32
 ofputil_wcbits_to_netmask(int wcbits)
 {
     wcbits &= 0x3f;
@@ -52,7 +52,7 @@ ofputil_wcbits_to_netmask(int wcbits)
  *
  * If 'netmask' is not a CIDR netmask (see ip_is_cidr()), the return value will
  * still be in the valid range but isn't otherwise meaningful. */
-int
+static int
 ofputil_netmask_to_wcbits(ovs_be32 netmask)
 {
     return 32 - ip_count_cidr_bits(netmask);

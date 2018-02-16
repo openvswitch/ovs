@@ -30,11 +30,6 @@ struct tun_table;
 extern "C" {
 #endif
 
-/* Converting OFPFW10_NW_SRC_MASK and OFPFW10_NW_DST_MASK wildcard bit counts
- * to and from IP bitmasks. */
-ovs_be32 ofputil_wcbits_to_netmask(int wcbits);
-int ofputil_netmask_to_wcbits(ovs_be32 netmask);
-
 /* Work with ofp10_match. */
 void ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *);
 void ofputil_match_from_ofp10_match(const struct ofp10_match *,
