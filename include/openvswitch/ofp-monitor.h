@@ -29,6 +29,9 @@ extern "C" {
 
 struct ofputil_table_map;
 
+const char *ofp_flow_removed_reason_to_string(enum ofp_flow_removed_reason,
+                                              char *reasonbuf, size_t bufsize);
+
 /* Flow removed message, independent of protocol. */
 struct ofputil_flow_removed {
     struct match match;
@@ -48,6 +51,10 @@ enum ofperr ofputil_decode_flow_removed(struct ofputil_flow_removed *,
                                         const struct ofp_header *);
 struct ofpbuf *ofputil_encode_flow_removed(const struct ofputil_flow_removed *,
                                            enum ofputil_protocol);
+void ofputil_flow_removed_format(struct ds *,
+                                 const struct ofputil_flow_removed *,
+                                 const struct ofputil_port_map *,
+                                 const struct ofputil_table_map *);
 
 /* Abstract nx_flow_monitor_request. */
 struct ofputil_flow_monitor_request {
@@ -62,6 +69,10 @@ int ofputil_decode_flow_monitor_request(struct ofputil_flow_monitor_request *,
                                         struct ofpbuf *msg);
 void ofputil_append_flow_monitor_request(
     const struct ofputil_flow_monitor_request *, struct ofpbuf *msg);
+void ofputil_flow_monitor_request_format(
+    struct ds *, const struct ofputil_flow_monitor_request *,
+    const struct ofputil_port_map *, const struct ofputil_table_map *);
+
 char *parse_flow_monitor_request(struct ofputil_flow_monitor_request *,
                                  const char *,
                                  const struct ofputil_port_map *,
@@ -94,6 +105,10 @@ void ofputil_start_flow_update(struct ovs_list *replies);
 void ofputil_append_flow_update(const struct ofputil_flow_update *,
                                 struct ovs_list *replies,
                                 const struct tun_table *);
+void ofputil_flow_update_format(struct ds *,
+                                const struct ofputil_flow_update *,
+                                const struct ofputil_port_map *,
+                                const struct ofputil_table_map *);
 
 /* Abstract nx_flow_monitor_cancel. */
 uint32_t ofputil_decode_flow_monitor_cancel(const struct ofp_header *);
@@ -119,8 +134,6 @@ struct ofpbuf *ofputil_encode_requestforward(
 enum ofperr ofputil_decode_requestforward(const struct ofp_header *,
                                           struct ofputil_requestforward *);
 void ofputil_destroy_requestforward(struct ofputil_requestforward *);
-
-
 
 #ifdef __cplusplus
 }

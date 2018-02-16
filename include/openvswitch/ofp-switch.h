@@ -71,6 +71,8 @@ struct ofpbuf *ofputil_encode_switch_features(
     ovs_be32 xid);
 void ofputil_put_switch_features_port(const struct ofputil_phy_port *,
                                       struct ofpbuf *);
+void ofputil_switch_features_format(struct ds *,
+                                    const struct ofputil_switch_features *);
 bool ofputil_switch_features_has_ports(struct ofpbuf *b);
 
 enum ofputil_frag_handling {
@@ -107,6 +109,9 @@ enum ofperr ofputil_decode_set_config(const struct ofp_header *,
                                       struct ofputil_switch_config *);
 struct ofpbuf *ofputil_encode_set_config(
     const struct ofputil_switch_config *, enum ofp_version);
+
+void ofputil_switch_config_format(struct ds *,
+                                  const struct ofputil_switch_config *);
 
 #ifdef __cplusplus
 }

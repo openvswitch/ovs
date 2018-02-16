@@ -18,6 +18,7 @@
 #include "openvswitch/ofp-flow.h"
 #include <errno.h>
 #include "byte-order.h"
+#include "colors.h"
 #include "flow.h"
 #include "nx-match.h"
 #include "openvswitch/ofp-actions.h"
@@ -26,6 +27,7 @@
 #include "openvswitch/ofp-msgs.h"
 #include "openvswitch/ofp-parse.h"
 #include "openvswitch/ofp-port.h"
+#include "openvswitch/ofp-print.h"
 #include "openvswitch/ofp-table.h"
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
@@ -101,6 +103,32 @@ ofputil_encode_flow_mod_flags(enum ofputil_flow_mod_flags flags,
     }
 
     return htons(raw_flags);
+}
+
+void
+ofputil_flow_mod_flags_format(struct ds *s, enum ofputil_flow_mod_flags flags)
+{
+    if (flags & OFPUTIL_FF_SEND_FLOW_REM) {
+        ds_put_cstr(s, "send_flow_rem ");
+    }
+    if (flags & OFPUTIL_FF_CHECK_OVERLAP) {
+        ds_put_cstr(s, "check_overlap ");
+    }
+    if (flags & OFPUTIL_FF_RESET_COUNTS) {
+        ds_put_cstr(s, "reset_counts ");
+    }
+    if (flags & OFPUTIL_FF_NO_PKT_COUNTS) {
+        ds_put_cstr(s, "no_packet_counts ");
+    }
+    if (flags & OFPUTIL_FF_NO_BYT_COUNTS) {
+        ds_put_cstr(s, "no_byte_counts ");
+    }
+    if (flags & OFPUTIL_FF_HIDDEN_FIELDS) {
+        ds_put_cstr(s, "allow_hidden_fields ");
+    }
+    if (flags & OFPUTIL_FF_NO_READONLY) {
+        ds_put_cstr(s, "no_readonly_table ");
+    }
 }
 
 /* Converts an OFPT_FLOW_MOD or NXT_FLOW_MOD message 'oh' into an abstract
@@ -438,6 +466,133 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
     return msg;
 }
 
+enum ofperr
+ofputil_flow_mod_format(struct ds *s, const struct ofp_header *oh,
+                        const struct ofputil_port_map *port_map,
+                        const struct ofputil_table_map *table_map,
+                        int verbosity)
+{
+    struct ofputil_flow_mod fm;
+    struct ofpbuf ofpacts;
+    bool need_priority;
+    enum ofperr error;
+    enum ofpraw raw;
+    enum ofputil_protocol protocol;
+
+    protocol = ofputil_protocol_from_ofp_version(oh->version);
+    protocol = ofputil_protocol_set_tid(protocol, true);
+
+    ofpbuf_init(&ofpacts, 64);
+    error = ofputil_decode_flow_mod(&fm, oh, protocol, NULL, NULL, &ofpacts,
+                                    OFPP_MAX, 255);
+    if (error) {
+        ofpbuf_uninit(&ofpacts);
+        return error;
+    }
+
+    ds_put_char(s, ' ');
+    switch (fm.command) {
+    case OFPFC_ADD:
+        ds_put_cstr(s, "ADD");
+        break;
+    case OFPFC_MODIFY:
+        ds_put_cstr(s, "MOD");
+        break;
+    case OFPFC_MODIFY_STRICT:
+        ds_put_cstr(s, "MOD_STRICT");
+        break;
+    case OFPFC_DELETE:
+        ds_put_cstr(s, "DEL");
+        break;
+    case OFPFC_DELETE_STRICT:
+        ds_put_cstr(s, "DEL_STRICT");
+        break;
+    default:
+        ds_put_format(s, "cmd:%d", fm.command);
+    }
+    if (fm.table_id != 0
+        || ofputil_table_map_get_name(table_map, fm.table_id)) {
+        ds_put_format(s, " table:");
+        ofputil_format_table(fm.table_id, table_map, s);
+    }
+
+    ds_put_char(s, ' ');
+    ofpraw_decode(&raw, oh);
+    if (verbosity >= 3 && raw == OFPRAW_OFPT10_FLOW_MOD) {
+        const struct ofp10_flow_mod *ofm = ofpmsg_body(oh);
+        ofp10_match_print(s, &ofm->match, port_map, verbosity);
+
+        /* ofp_print_match() doesn't print priority. */
+        need_priority = true;
+    } else if (verbosity >= 3 && raw == OFPRAW_NXT_FLOW_MOD) {
+        const struct nx_flow_mod *nfm = ofpmsg_body(oh);
+        const void *nxm = nfm + 1;
+        char *nxm_s;
+
+        nxm_s = nx_match_to_string(nxm, ntohs(nfm->match_len));
+        ds_put_cstr(s, nxm_s);
+        free(nxm_s);
+
+        /* nx_match_to_string() doesn't print priority. */
+        need_priority = true;
+    } else {
+        match_format(&fm.match, port_map, s, fm.priority);
+
+        /* match_format() does print priority. */
+        need_priority = false;
+    }
+
+    if (ds_last(s) != ' ') {
+        ds_put_char(s, ' ');
+    }
+    if (fm.new_cookie != htonll(0) && fm.new_cookie != OVS_BE64_MAX) {
+        ds_put_format(s, "cookie:0x%"PRIx64" ", ntohll(fm.new_cookie));
+    }
+    if (fm.cookie_mask != htonll(0)) {
+        ds_put_format(s, "cookie:0x%"PRIx64"/0x%"PRIx64" ",
+                ntohll(fm.cookie), ntohll(fm.cookie_mask));
+    }
+    if (fm.idle_timeout != OFP_FLOW_PERMANENT) {
+        ds_put_format(s, "idle:%"PRIu16" ", fm.idle_timeout);
+    }
+    if (fm.hard_timeout != OFP_FLOW_PERMANENT) {
+        ds_put_format(s, "hard:%"PRIu16" ", fm.hard_timeout);
+    }
+    if (fm.importance != 0) {
+        ds_put_format(s, "importance:%"PRIu16" ", fm.importance);
+    }
+    if (fm.priority != OFP_DEFAULT_PRIORITY && need_priority) {
+        ds_put_format(s, "pri:%d ", fm.priority);
+    }
+    if (fm.buffer_id != UINT32_MAX) {
+        ds_put_format(s, "buf:0x%"PRIx32" ", fm.buffer_id);
+    }
+    if (fm.out_port != OFPP_ANY) {
+        ds_put_format(s, "out_port:");
+        ofputil_format_port(fm.out_port, port_map, s);
+        ds_put_char(s, ' ');
+    }
+
+    if (oh->version == OFP10_VERSION || oh->version == OFP11_VERSION) {
+        /* Don't print the reset_counts flag for OF1.0 and OF1.1 because those
+         * versions don't really have such a flag and printing one is likely to
+         * confuse people. */
+        fm.flags &= ~OFPUTIL_FF_RESET_COUNTS;
+    }
+    ofputil_flow_mod_flags_format(s, fm.flags);
+
+    ds_put_cstr(s, "actions=");
+    struct ofpact_format_params fp = {
+        .port_map = port_map,
+        .table_map = table_map,
+        .s = s,
+    };
+    ofpacts_format(fm.ofpacts, fm.ofpacts_len, &fp);
+    ofpbuf_uninit(&ofpacts);
+
+    return 0;
+}
+
 static enum ofperr
 ofputil_decode_ofpst10_flow_request(struct ofputil_flow_stats_request *fsr,
                                     const struct ofp10_flow_stats_request *ofsr,
@@ -627,6 +782,26 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
     }
 
     return msg;
+}
+
+void
+ofputil_flow_stats_request_format(struct ds *s,
+                                  const struct ofputil_flow_stats_request *fsr,
+                                  const struct ofputil_port_map *port_map,
+                                  const struct ofputil_table_map *table_map)
+{
+    if (fsr->table_id != 0xff) {
+        ds_put_format(s, " table=");
+        ofputil_format_table(fsr->table_id, table_map, s);
+    }
+
+    if (fsr->out_port != OFPP_ANY) {
+        ds_put_cstr(s, " out_port=");
+        ofputil_format_port(fsr->out_port, port_map, s);
+    }
+
+    ds_put_char(s, ' ');
+    match_format(&fsr->match, port_map, s, OFP_DEFAULT_PRIORITY);
 }
 
 char * OVS_WARN_UNUSED_RESULT
@@ -969,6 +1144,80 @@ ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
     fs_->match.flow.tunnel.metadata.tab = orig_tun_table;
 }
 
+/* Appends a textual form of 'fs' to 'string', translating port numbers to
+ * names using 'port_map' (if provided).  If 'show_stats' is true, the output
+ * includes the flow duration, packet and byte counts, and its idle and hard
+ * ages, otherwise they are omitted. */
+void
+ofputil_flow_stats_format(struct ds *string,
+                          const struct ofputil_flow_stats *fs,
+                          const struct ofputil_port_map *port_map,
+                          const struct ofputil_table_map *table_map,
+                          bool show_stats)
+{
+    if (show_stats || fs->cookie) {
+        ds_put_format(string, "%scookie=%s0x%"PRIx64", ",
+                      colors.param, colors.end, ntohll(fs->cookie));
+    }
+    if (show_stats) {
+        ds_put_format(string, "%sduration=%s", colors.param, colors.end);
+        ofp_print_duration(string, fs->duration_sec, fs->duration_nsec);
+        ds_put_cstr(string, ", ");
+    }
+
+    if (show_stats || fs->table_id
+        || ofputil_table_map_get_name(table_map, fs->table_id) != NULL) {
+        ds_put_format(string, "%stable=%s", colors.special, colors.end);
+        ofputil_format_table(fs->table_id, table_map, string);
+        ds_put_cstr(string, ", ");
+    }
+    if (show_stats) {
+        ds_put_format(string, "%sn_packets=%s%"PRIu64", ",
+                      colors.param, colors.end, fs->packet_count);
+        ds_put_format(string, "%sn_bytes=%s%"PRIu64", ",
+                      colors.param, colors.end, fs->byte_count);
+    }
+    if (fs->idle_timeout != OFP_FLOW_PERMANENT) {
+        ds_put_format(string, "%sidle_timeout=%s%"PRIu16", ",
+                      colors.param, colors.end, fs->idle_timeout);
+    }
+    if (fs->hard_timeout != OFP_FLOW_PERMANENT) {
+        ds_put_format(string, "%shard_timeout=%s%"PRIu16", ",
+                      colors.param, colors.end, fs->hard_timeout);
+    }
+    if (fs->flags) {
+        ofputil_flow_mod_flags_format(string, fs->flags);
+    }
+    if (fs->importance != 0) {
+        ds_put_format(string, "%simportance=%s%"PRIu16", ",
+                      colors.param, colors.end, fs->importance);
+    }
+    if (show_stats && fs->idle_age >= 0) {
+        ds_put_format(string, "%sidle_age=%s%d, ",
+                      colors.param, colors.end, fs->idle_age);
+    }
+    if (show_stats && fs->hard_age >= 0 && fs->hard_age != fs->duration_sec) {
+        ds_put_format(string, "%shard_age=%s%d, ",
+                      colors.param, colors.end, fs->hard_age);
+    }
+
+    /* Print the match, followed by a space (but omit the space if the match
+     * was an empty string). */
+    size_t length = string->length;
+    match_format(&fs->match, port_map, string, fs->priority);
+    if (string->length != length) {
+        ds_put_char(string, ' ');
+    }
+
+    ds_put_format(string, "%sactions=%s", colors.actions, colors.end);
+    struct ofpact_format_params fp = {
+        .port_map = port_map,
+        .table_map = table_map,
+        .s = string,
+    };
+    ofpacts_format(fs->ofpacts, fs->ofpacts_len, &fp);
+}
+
 /* Converts abstract ofputil_aggregate_stats 'stats' into an OFPST_AGGREGATE or
  * NXST_AGGREGATE reply matching 'request', and returns the message. */
 struct ofpbuf *
@@ -1015,6 +1264,14 @@ ofputil_decode_aggregate_stats_reply(struct ofputil_aggregate_stats *stats,
     return 0;
 }
 
+void
+ofputil_aggregate_stats_format(struct ds *s,
+                               const struct ofputil_aggregate_stats *as)
+{
+    ds_put_format(s, " packet_count=%"PRIu64, as->packet_count);
+    ds_put_format(s, " byte_count=%"PRIu64, as->byte_count);
+    ds_put_format(s, " flow_count=%"PRIu32, as->flow_count);
+}
 
 /* Parses 'str_value' as the value of subfield 'name', and updates
  * 'match' appropriately.  Restricts the set of usable protocols to ones

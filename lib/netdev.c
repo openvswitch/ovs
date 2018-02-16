@@ -45,6 +45,7 @@
 #include "odp-netlink.h"
 #include "openflow/openflow.h"
 #include "packets.h"
+#include "openvswitch/ofp-print.h"
 #include "openvswitch/poll-loop.h"
 #include "seq.h"
 #include "openvswitch/shash.h"
@@ -1093,6 +1094,40 @@ netdev_set_advertisements(struct netdev *netdev,
             ? netdev->netdev_class->set_advertisements(
                     netdev, advertise)
             : EOPNOTSUPP);
+}
+
+static const char *
+netdev_feature_to_name(uint32_t bit)
+{
+    enum netdev_features f = bit;
+
+    switch (f) {
+    case NETDEV_F_10MB_HD:    return "10MB-HD";
+    case NETDEV_F_10MB_FD:    return "10MB-FD";
+    case NETDEV_F_100MB_HD:   return "100MB-HD";
+    case NETDEV_F_100MB_FD:   return "100MB-FD";
+    case NETDEV_F_1GB_HD:     return "1GB-HD";
+    case NETDEV_F_1GB_FD:     return "1GB-FD";
+    case NETDEV_F_10GB_FD:    return "10GB-FD";
+    case NETDEV_F_40GB_FD:    return "40GB-FD";
+    case NETDEV_F_100GB_FD:   return "100GB-FD";
+    case NETDEV_F_1TB_FD:     return "1TB-FD";
+    case NETDEV_F_OTHER:      return "OTHER";
+    case NETDEV_F_COPPER:     return "COPPER";
+    case NETDEV_F_FIBER:      return "FIBER";
+    case NETDEV_F_AUTONEG:    return "AUTO_NEG";
+    case NETDEV_F_PAUSE:      return "AUTO_PAUSE";
+    case NETDEV_F_PAUSE_ASYM: return "AUTO_PAUSE_ASYM";
+    }
+
+    return NULL;
+}
+
+void
+netdev_features_format(struct ds *s, enum netdev_features features)
+{
+    ofp_print_bit_names(s, features, netdev_feature_to_name, ' ');
+    ds_put_char(s, '\n');
 }
 
 /* Assigns 'addr' as 'netdev''s IPv4 address and 'mask' as its netmask.  If

@@ -22,6 +22,7 @@
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/ofp-msgs.h"
 #include "openvswitch/ofp-port.h"
+#include "openvswitch/ofp-print.h"
 #include "util.h"
 
 /* ofputil_switch_features */
@@ -229,6 +230,53 @@ ofputil_put_switch_features_port(const struct ofputil_phy_port *pp,
     }
 }
 
+static const char *
+ofputil_capabilities_to_name(uint32_t bit)
+{
+    enum ofputil_capabilities capabilities = bit;
+
+    switch (capabilities) {
+    case OFPUTIL_C_FLOW_STATS:   return "FLOW_STATS";
+    case OFPUTIL_C_TABLE_STATS:  return "TABLE_STATS";
+    case OFPUTIL_C_PORT_STATS:   return "PORT_STATS";
+    case OFPUTIL_C_IP_REASM:     return "IP_REASM";
+    case OFPUTIL_C_QUEUE_STATS:  return "QUEUE_STATS";
+    case OFPUTIL_C_ARP_MATCH_IP: return "ARP_MATCH_IP";
+    case OFPUTIL_C_STP:          return "STP";
+    case OFPUTIL_C_GROUP_STATS:  return "GROUP_STATS";
+    case OFPUTIL_C_PORT_BLOCKED: return "PORT_BLOCKED";
+    case OFPUTIL_C_BUNDLES:      return "BUNDLES";
+    case OFPUTIL_C_FLOW_MONITORING: return "FLOW_MONITORING";
+    }
+
+    return NULL;
+}
+
+void
+ofputil_switch_features_format(struct ds *s,
+                               const struct ofputil_switch_features *features)
+{
+    ds_put_format(s, " dpid:%016"PRIx64"\n", features->datapath_id);
+
+    ds_put_format(s, "n_tables:%"PRIu8", n_buffers:%"PRIu32,
+                  features->n_tables, features->n_buffers);
+    if (features->auxiliary_id) {
+        ds_put_format(s, ", auxiliary_id:%"PRIu8, features->auxiliary_id);
+    }
+    ds_put_char(s, '\n');
+
+    ds_put_cstr(s, "capabilities: ");
+    ofp_print_bit_names(s, features->capabilities,
+                        ofputil_capabilities_to_name, ' ');
+    ds_put_char(s, '\n');
+
+    if (features->ofpacts) {
+        ds_put_cstr(s, "actions: ");
+        ofpact_bitmap_format(features->ofpacts, s);
+        ds_put_char(s, '\n');
+    }
+}
+
 const char *
 ofputil_frag_handling_to_string(enum ofputil_frag_handling frag)
 {
@@ -333,4 +381,18 @@ ofputil_encode_set_config(const struct ofputil_switch_config *config,
 {
     struct ofpbuf *b = ofpraw_alloc(OFPRAW_OFPT_SET_CONFIG, version, 0);
     return ofputil_put_switch_config(config, b);
+}
+
+void
+ofputil_switch_config_format(struct ds *s,
+                             const struct ofputil_switch_config *config)
+{
+    ds_put_format(s, " frags=%s",
+                  ofputil_frag_handling_to_string(config->frag));
+
+    if (config->invalid_ttl_to_controller > 0) {
+        ds_put_format(s, " invalid_ttl_to_controller");
+    }
+
+    ds_put_format(s, " miss_send_len=%"PRIu16"\n", config->miss_send_len);
 }

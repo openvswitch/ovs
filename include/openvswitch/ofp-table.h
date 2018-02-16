@@ -26,6 +26,8 @@
 extern "C" {
 #endif
 
+struct ofputil_table_stats;
+
 /* Abstract version of OFPTC11_TABLE_MISS_*.
  *
  * OpenFlow 1.0 always sends packets that miss to the next flow table, or to
@@ -52,6 +54,8 @@ enum ofputil_table_miss {
     OFPUTIL_TABLE_MISS_DROP,       /* Drop the packet. */
 };
 
+const char *ofputil_table_miss_to_string(enum ofputil_table_miss);
+
 /* Abstract version of OFPTC14_EVICTION.
  *
  * OpenFlow 1.0 through 1.3 don't know anything about eviction, so decoding a
@@ -63,6 +67,8 @@ enum ofputil_table_eviction {
     OFPUTIL_TABLE_EVICTION_OFF      /* Disable eviction. */
 };
 
+const char *ofputil_table_eviction_to_string(enum ofputil_table_eviction);
+
 /* Abstract version of OFPTC14_VACANCY_EVENTS.
  *
  * OpenFlow 1.0 through 1.3 don't know anything about vacancy events, so
@@ -73,6 +79,8 @@ enum ofputil_table_vacancy {
     OFPUTIL_TABLE_VACANCY_ON,      /* Enable vacancy events. */
     OFPUTIL_TABLE_VACANCY_OFF      /* Disable vacancy events. */
 };
+
+const char *ofputil_table_vacancy_to_string(enum ofputil_table_vacancy);
 
 /* Abstract version of OFPTMPT_VACANCY.
  *
@@ -141,6 +149,18 @@ struct ofputil_table_mod {
     struct ofputil_table_mod_prop_vacancy table_vacancy;
 };
 
+enum ofperr ofputil_decode_table_mod(const struct ofp_header *,
+                                    struct ofputil_table_mod *);
+struct ofpbuf *ofputil_encode_table_mod(const struct ofputil_table_mod *,
+                                       enum ofputil_protocol);
+void ofputil_table_mod_format(struct ds *, const struct ofputil_table_mod *,
+                              const struct ofputil_table_map *);
+char *parse_ofp_table_mod(struct ofputil_table_mod *,
+                          const char *table_id, const char *flow_miss_handling,
+                          const struct ofputil_table_map *,
+                          uint32_t *usable_versions)
+    OVS_WARN_UNUSED_RESULT;
+
 /* Abstract ofp14_table_desc. */
 struct ofputil_table_desc {
     uint8_t table_id;         /* ID of the table. */
@@ -150,15 +170,15 @@ struct ofputil_table_desc {
     struct ofputil_table_mod_prop_vacancy table_vacancy;
 };
 
-enum ofperr ofputil_decode_table_mod(const struct ofp_header *,
-                                    struct ofputil_table_mod *);
-struct ofpbuf *ofputil_encode_table_mod(const struct ofputil_table_mod *,
-                                       enum ofputil_protocol);
-char *parse_ofp_table_mod(struct ofputil_table_mod *,
-                          const char *table_id, const char *flow_miss_handling,
-                          const struct ofputil_table_map *,
-                          uint32_t *usable_versions)
-    OVS_WARN_UNUSED_RESULT;
+int ofputil_decode_table_desc(struct ofpbuf *,
+                              struct ofputil_table_desc *,
+                              enum ofp_version);
+void ofputil_append_table_desc_reply(const struct ofputil_table_desc *td,
+                                     struct ovs_list *replies,
+                                     enum ofp_version);
+void ofputil_table_desc_format(struct ds *,
+                               const struct ofputil_table_desc *,
+                               const struct ofputil_table_map *);
 
 /* Abstract ofp_table_features.
  *
@@ -244,10 +264,6 @@ struct ofputil_table_features {
 int ofputil_decode_table_features(struct ofpbuf *,
                                   struct ofputil_table_features *, bool loose);
 
-int ofputil_decode_table_desc(struct ofpbuf *,
-                              struct ofputil_table_desc *,
-                              enum ofp_version);
-
 struct ofpbuf *ofputil_encode_table_features_request(enum ofp_version);
 
 struct ofpbuf *ofputil_encode_table_desc_request(enum ofp_version);
@@ -255,9 +271,12 @@ struct ofpbuf *ofputil_encode_table_desc_request(enum ofp_version);
 void ofputil_append_table_features_reply(
     const struct ofputil_table_features *tf, struct ovs_list *replies);
 
-void ofputil_append_table_desc_reply(const struct ofputil_table_desc *td,
-                                     struct ovs_list *replies,
-                                     enum ofp_version);
+void ofputil_table_features_format(
+    struct ds *, const struct ofputil_table_features *features,
+    const struct ofputil_table_features *prev_features,
+    const struct ofputil_table_stats *stats,
+    const struct ofputil_table_stats *prev_stats,
+    const struct ofputil_table_map *table_map);
 
 /* Abstract table stats.
  *

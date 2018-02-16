@@ -22,6 +22,7 @@
 #include "openvswitch/json.h"
 #include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofp-msgs.h"
+#include "openvswitch/ofp-print.h"
 #include "openvswitch/ofp-prop.h"
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
@@ -40,6 +41,40 @@ static enum ofputil_table_vacancy ofputil_decode_table_vacancy(
 static enum ofputil_table_eviction ofputil_decode_table_eviction(
     ovs_be32 config, enum ofp_version);
 
+const char *
+ofputil_table_miss_to_string(enum ofputil_table_miss miss)
+{
+    switch (miss) {
+    case OFPUTIL_TABLE_MISS_DEFAULT: return "default";
+    case OFPUTIL_TABLE_MISS_CONTROLLER: return "controller";
+    case OFPUTIL_TABLE_MISS_CONTINUE: return "continue";
+    case OFPUTIL_TABLE_MISS_DROP: return "drop";
+    default: return "***error***";
+    }
+}
+
+const char *
+ofputil_table_eviction_to_string(enum ofputil_table_eviction eviction)
+{
+    switch (eviction) {
+    case OFPUTIL_TABLE_EVICTION_DEFAULT: return "default";
+    case OFPUTIL_TABLE_EVICTION_ON: return "on";
+    case OFPUTIL_TABLE_EVICTION_OFF: return "off";
+    default: return "***error***";
+    }
+}
+
+const char *
+ofputil_table_vacancy_to_string(enum ofputil_table_vacancy vacancy)
+{
+    switch (vacancy) {
+    case OFPUTIL_TABLE_VACANCY_DEFAULT: return "default";
+    case OFPUTIL_TABLE_VACANCY_ON: return "on";
+    case OFPUTIL_TABLE_VACANCY_OFF: return "off";
+    default: return "***error***";
+    }
+}
+
 /* ofputil_table_map.  */
 
 void
@@ -708,6 +743,57 @@ ofputil_append_table_desc_reply(const struct ofputil_table_desc *td,
     ofpmp_postappend(replies, start_otd);
 }
 
+static const char *
+ofputil_eviction_flag_to_string(uint32_t bit)
+{
+    enum ofp14_table_mod_prop_eviction_flag eviction_flag = bit;
+
+    switch (eviction_flag) {
+    case OFPTMPEF14_OTHER:      return "OTHER";
+    case OFPTMPEF14_IMPORTANCE: return "IMPORTANCE";
+    case OFPTMPEF14_LIFETIME:   return "LIFETIME";
+    }
+
+    return NULL;
+}
+
+/* Appends to 'string' a description of the bitmap of OFPTMPEF14_* values in
+ * 'eviction_flags'. */
+static void
+ofputil_put_eviction_flags(struct ds *string, uint32_t eviction_flags)
+{
+    if (eviction_flags != UINT32_MAX) {
+        ofp_print_bit_names(string, eviction_flags,
+                            ofputil_eviction_flag_to_string, '|');
+    } else {
+        ds_put_cstr(string, "(default)");
+    }
+}
+
+void
+ofputil_table_desc_format(struct ds *s, const struct ofputil_table_desc *td,
+                          const struct ofputil_table_map *table_map)
+{
+    ds_put_format(s, "\n  table ");
+    ofputil_format_table(td->table_id, table_map, s);
+    ds_put_cstr(s, ":\n");
+    ds_put_format(s, "   eviction=%s eviction_flags=",
+                  ofputil_table_eviction_to_string(td->eviction));
+    ofputil_put_eviction_flags(s, td->eviction_flags);
+    ds_put_char(s, '\n');
+    ds_put_format(s, "   vacancy=%s",
+                  ofputil_table_vacancy_to_string(td->vacancy));
+    if (td->vacancy == OFPUTIL_TABLE_VACANCY_ON) {
+        ds_put_format(s, " vacancy_down=%"PRIu8"%%",
+                      td->table_vacancy.vacancy_down);
+        ds_put_format(s, " vacancy_up=%"PRIu8"%%",
+                      td->table_vacancy.vacancy_up);
+        ds_put_format(s, " vacancy=%"PRIu8"%%",
+                      td->table_vacancy.vacancy);
+    }
+    ds_put_char(s, '\n');
+}
+
 /* This function parses Vacancy property, and decodes the
  * ofp14_table_mod_prop_vacancy in ofputil_table_mod.
  * Returns OFPERR_OFPBPC_BAD_VALUE error code when vacancy_down is
@@ -982,6 +1068,40 @@ ofputil_encode_table_mod(const struct ofputil_table_mod *tm,
     return b;
 }
 
+void
+ofputil_table_mod_format(struct ds *s, const struct ofputil_table_mod *tm,
+                         const struct ofputil_table_map *table_map)
+{
+    if (tm->table_id == 0xff) {
+        ds_put_cstr(s, " table_id: ALL_TABLES");
+    } else {
+        ds_put_format(s, " table_id=");
+        ofputil_format_table(tm->table_id, table_map, s);
+    }
+
+    if (tm->miss != OFPUTIL_TABLE_MISS_DEFAULT) {
+        ds_put_format(s, ", flow_miss_config=%s",
+                      ofputil_table_miss_to_string(tm->miss));
+    }
+    if (tm->eviction != OFPUTIL_TABLE_EVICTION_DEFAULT) {
+        ds_put_format(s, ", eviction=%s",
+                      ofputil_table_eviction_to_string(tm->eviction));
+    }
+    if (tm->eviction_flags != UINT32_MAX) {
+        ds_put_cstr(s, "eviction_flags=");
+        ofputil_put_eviction_flags(s, tm->eviction_flags);
+    }
+    if (tm->vacancy != OFPUTIL_TABLE_VACANCY_DEFAULT) {
+        ds_put_format(s, ", vacancy=%s",
+                      ofputil_table_vacancy_to_string(tm->vacancy));
+        if (tm->vacancy == OFPUTIL_TABLE_VACANCY_ON) {
+            ds_put_format(s, " vacancy:%"PRIu8""
+                          ",%"PRIu8"", tm->table_vacancy.vacancy_down,
+                          tm->table_vacancy.vacancy_up);
+        }
+    }
+}
+
 /* Convert 'setting' (as described for the "mod-table" command
  * in ovs-ofctl man page) into 'tm->table_vacancy->vacancy_up' and
  * 'tm->table_vacancy->vacancy_down' threshold values.
@@ -1106,6 +1226,272 @@ parse_ofp_table_mod(struct ofputil_table_mod *tm, const char *table_id,
     }
 
     return NULL;
+}
+
+static void
+print_table_action_features(struct ds *s,
+                            const struct ofputil_table_action_features *taf)
+{
+    if (taf->ofpacts) {
+        ds_put_cstr(s, "        actions: ");
+        ofpact_bitmap_format(taf->ofpacts, s);
+        ds_put_char(s, '\n');
+    }
+
+    if (!bitmap_is_all_zeros(taf->set_fields.bm, MFF_N_IDS)) {
+        int i;
+
+        ds_put_cstr(s, "        supported on Set-Field:");
+        BITMAP_FOR_EACH_1 (i, MFF_N_IDS, taf->set_fields.bm) {
+            ds_put_format(s, " %s", mf_from_id(i)->name);
+        }
+        ds_put_char(s, '\n');
+    }
+}
+
+static bool
+table_action_features_equal(const struct ofputil_table_action_features *a,
+                            const struct ofputil_table_action_features *b)
+{
+    return (a->ofpacts == b->ofpacts
+            && bitmap_equal(a->set_fields.bm, b->set_fields.bm, MFF_N_IDS));
+}
+
+static bool
+table_action_features_empty(const struct ofputil_table_action_features *taf)
+{
+    return !taf->ofpacts && bitmap_is_all_zeros(taf->set_fields.bm, MFF_N_IDS);
+}
+
+static void
+print_table_instruction_features(
+    struct ds *s,
+    const struct ofputil_table_instruction_features *tif,
+    const struct ofputil_table_instruction_features *prev_tif)
+{
+    int start, end;
+
+    if (!bitmap_is_all_zeros(tif->next, 255)) {
+        ds_put_cstr(s, "      next tables: ");
+        for (start = bitmap_scan(tif->next, 1, 0, 255); start < 255;
+             start = bitmap_scan(tif->next, 1, end, 255)) {
+            end = bitmap_scan(tif->next, 0, start + 1, 255);
+            if (end == start + 1) {
+                ds_put_format(s, "%d,", start);
+            } else {
+                ds_put_format(s, "%d-%d,", start, end - 1);
+            }
+        }
+        ds_chomp(s, ',');
+        if (ds_last(s) == ' ') {
+            ds_put_cstr(s, "none");
+        }
+        ds_put_char(s, '\n');
+    }
+
+    if (tif->instructions) {
+        if (prev_tif && tif->instructions == prev_tif->instructions) {
+            ds_put_cstr(s, "      (same instructions)\n");
+        } else {
+            ds_put_cstr(s, "      instructions: ");
+            int i;
+
+            for (i = 0; i < 32; i++) {
+                if (tif->instructions & (1u << i)) {
+                    const char *name = ovs_instruction_name_from_type(i);
+                    if (name) {
+                        ds_put_cstr(s, name);
+                    } else {
+                        ds_put_format(s, "%d", i);
+                    }
+                    ds_put_char(s, ',');
+                }
+            }
+            ds_chomp(s, ',');
+            ds_put_char(s, '\n');
+        }
+    }
+
+    if (prev_tif
+        && table_action_features_equal(&tif->write, &prev_tif->write)
+        && table_action_features_equal(&tif->apply, &prev_tif->apply)
+        && !bitmap_is_all_zeros(tif->write.set_fields.bm, MFF_N_IDS)) {
+        ds_put_cstr(s, "      (same actions)\n");
+    } else if (!table_action_features_equal(&tif->write, &tif->apply)) {
+        ds_put_cstr(s, "      Write-Actions features:\n");
+        print_table_action_features(s, &tif->write);
+        ds_put_cstr(s, "      Apply-Actions features:\n");
+        print_table_action_features(s, &tif->apply);
+    } else if (tif->write.ofpacts
+               || !bitmap_is_all_zeros(tif->write.set_fields.bm, MFF_N_IDS)) {
+        ds_put_cstr(s, "      Write-Actions and Apply-Actions features:\n");
+        print_table_action_features(s, &tif->write);
+    }
+}
+
+static bool
+table_instruction_features_equal(
+    const struct ofputil_table_instruction_features *a,
+    const struct ofputil_table_instruction_features *b)
+{
+    return (bitmap_equal(a->next, b->next, 255)
+            && a->instructions == b->instructions
+            && table_action_features_equal(&a->write, &b->write)
+            && table_action_features_equal(&a->apply, &b->apply));
+}
+
+static bool
+table_instruction_features_empty(
+    const struct ofputil_table_instruction_features *tif)
+{
+    return (bitmap_is_all_zeros(tif->next, 255)
+            && !tif->instructions
+            && table_action_features_empty(&tif->write)
+            && table_action_features_empty(&tif->apply));
+}
+
+static bool
+table_features_equal(const struct ofputil_table_features *a,
+                     const struct ofputil_table_features *b)
+{
+    return (a->metadata_match == b->metadata_match
+            && a->metadata_write == b->metadata_write
+            && a->miss_config == b->miss_config
+            && a->supports_eviction == b->supports_eviction
+            && a->supports_vacancy_events == b->supports_vacancy_events
+            && a->max_entries == b->max_entries
+            && table_instruction_features_equal(&a->nonmiss, &b->nonmiss)
+            && table_instruction_features_equal(&a->miss, &b->miss)
+            && bitmap_equal(a->match.bm, b->match.bm, MFF_N_IDS));
+}
+
+static bool
+table_features_empty(const struct ofputil_table_features *tf)
+{
+    return (!tf->metadata_match
+            && !tf->metadata_write
+            && tf->miss_config == OFPUTIL_TABLE_MISS_DEFAULT
+            && tf->supports_eviction < 0
+            && tf->supports_vacancy_events < 0
+            && !tf->max_entries
+            && table_instruction_features_empty(&tf->nonmiss)
+            && table_instruction_features_empty(&tf->miss)
+            && bitmap_is_all_zeros(tf->match.bm, MFF_N_IDS));
+}
+
+static bool
+table_stats_equal(const struct ofputil_table_stats *a,
+                  const struct ofputil_table_stats *b)
+{
+    return (a->active_count == b->active_count
+            && a->lookup_count == b->lookup_count
+            && a->matched_count == b->matched_count);
+}
+
+void
+ofputil_table_features_format(
+    struct ds *s,
+    const struct ofputil_table_features *features,
+    const struct ofputil_table_features *prev_features,
+    const struct ofputil_table_stats *stats,
+    const struct ofputil_table_stats *prev_stats,
+    const struct ofputil_table_map *table_map)
+{
+    int i;
+
+    ds_put_format(s, "  table ");
+    ofputil_format_table(features->table_id, table_map, s);
+    if (features->name[0]) {
+        ds_put_format(s, " (\"%s\")", features->name);
+    }
+    ds_put_char(s, ':');
+
+    bool same_stats = prev_stats && table_stats_equal(stats, prev_stats);
+    bool same_features = prev_features && table_features_equal(features,
+                                                               prev_features);
+    if ((!stats || same_stats) && same_features) {
+        ds_put_cstr(s, " ditto");
+        return;
+    }
+    ds_put_char(s, '\n');
+    if (stats) {
+        ds_put_format(s, "    active=%"PRIu32", ", stats->active_count);
+        ds_put_format(s, "lookup=%"PRIu64", ", stats->lookup_count);
+        ds_put_format(s, "matched=%"PRIu64"\n", stats->matched_count);
+    }
+    if (same_features) {
+        if (!table_features_empty(features)) {
+            ds_put_cstr(s, "    (same features)\n");
+        }
+        return;
+    }
+    if (features->metadata_match || features->metadata_write) {
+        ds_put_format(s, "    metadata: match=%#"PRIx64" write=%#"PRIx64"\n",
+                      ntohll(features->metadata_match),
+                      ntohll(features->metadata_write));
+    }
+
+    if (features->miss_config != OFPUTIL_TABLE_MISS_DEFAULT) {
+        ds_put_format(s, "    config=%s\n",
+                      ofputil_table_miss_to_string(features->miss_config));
+    }
+
+    if (features->supports_eviction >= 0) {
+        ds_put_format(s, "    eviction: %ssupported\n",
+                      features->supports_eviction ? "" : "not ");
+
+    }
+    if (features->supports_vacancy_events >= 0) {
+        ds_put_format(s, "    vacancy events: %ssupported\n",
+                      features->supports_vacancy_events ? "" : "not ");
+
+    }
+
+    if (features->max_entries) {
+        ds_put_format(s, "    max_entries=%"PRIu32"\n", features->max_entries);
+    }
+
+    const struct ofputil_table_instruction_features *prev_nonmiss
+        = prev_features ? &prev_features->nonmiss : NULL;
+    const struct ofputil_table_instruction_features *prev_miss
+        = prev_features ? &prev_features->miss : NULL;
+    if (prev_features
+        && table_instruction_features_equal(&features->nonmiss, prev_nonmiss)
+        && table_instruction_features_equal(&features->miss, prev_miss)) {
+        if (!table_instruction_features_empty(&features->nonmiss)) {
+            ds_put_cstr(s, "    (same instructions)\n");
+        }
+    } else if (!table_instruction_features_equal(&features->nonmiss,
+                                                 &features->miss)) {
+        ds_put_cstr(s, "    instructions (other than table miss):\n");
+        print_table_instruction_features(s, &features->nonmiss, prev_nonmiss);
+        ds_put_cstr(s, "    instructions (table miss):\n");
+        print_table_instruction_features(s, &features->miss, prev_miss);
+    } else if (!table_instruction_features_empty(&features->nonmiss)) {
+        ds_put_cstr(s, "    instructions (table miss and others):\n");
+        print_table_instruction_features(s, &features->nonmiss, prev_nonmiss);
+    }
+
+    if (!bitmap_is_all_zeros(features->match.bm, MFF_N_IDS)) {
+        if (prev_features
+            && bitmap_equal(features->match.bm, prev_features->match.bm,
+                            MFF_N_IDS)) {
+            ds_put_cstr(s, "    (same matching)\n");
+        } else {
+            ds_put_cstr(s, "    matching:\n");
+            BITMAP_FOR_EACH_1 (i, MFF_N_IDS, features->match.bm) {
+                const struct mf_field *f = mf_from_id(i);
+                bool mask = bitmap_is_set(features->mask.bm, i);
+                bool wildcard = bitmap_is_set(features->wildcard.bm, i);
+
+                ds_put_format(s, "      %s: %s\n",
+                              f->name,
+                              (mask ? "arbitrary mask"
+                               : wildcard ? "exact match or wildcard"
+                               : "must exact match"));
+            }
+        }
+    }
 }
 
 /* Table stats. */

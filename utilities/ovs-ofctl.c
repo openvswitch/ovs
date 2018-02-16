@@ -926,9 +926,9 @@ ofctl_dump_table_features(struct ovs_cmdl_context *ctx)
                     }
 
                     struct ds s = DS_EMPTY_INITIALIZER;
-                    ofp_print_table_features(&s, &tf, n ? &prev : NULL,
-                                             NULL, NULL,
-                                             tables_to_show(ctx->argv[1]));
+                    ofputil_table_features_format(
+                        &s, &tf, n ? &prev : NULL, NULL, NULL,
+                        tables_to_show(ctx->argv[1]));
                     puts(ds_cstr(&s));
                     ds_destroy(&s);
 
@@ -1571,8 +1571,10 @@ ofctl_dump_flows(struct ovs_cmdl_context *ctx)
         struct ds s = DS_EMPTY_INITIALIZER;
         for (size_t i = 0; i < n_fses; i++) {
             ds_clear(&s);
-            ofp_print_flow_stats(&s, &fses[i], ports_to_show(ctx->argv[1]),
-                                 tables_to_show(ctx->argv[1]), show_stats);
+            ofputil_flow_stats_format(&s, &fses[i],
+                                      ports_to_show(ctx->argv[1]),
+                                      tables_to_show(ctx->argv[1]),
+                                      show_stats);
             printf(" %s\n", ds_cstr(&s));
         }
         ds_destroy(&s);

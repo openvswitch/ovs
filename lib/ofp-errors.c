@@ -22,6 +22,7 @@
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/ofp-msgs.h"
+#include "openvswitch/ofp-print.h"
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
 #include "util.h"
@@ -238,6 +239,24 @@ ofperr_encode_hello(enum ofperr error, enum ofp_version ofp_version,
                     const char *s)
 {
     return ofperr_encode_msg__(error, ofp_version, htonl(0), s, strlen(s));
+}
+
+void
+ofperr_msg_format(struct ds *string, enum ofperr error,
+                  const struct ofpbuf *payload,
+                  const struct ofputil_port_map *port_map,
+                  const struct ofputil_table_map *table_map)
+{
+    ds_put_format(string, " %s\n", ofperr_get_name(error));
+
+    if (error == OFPERR_OFPHFC_INCOMPATIBLE || error == OFPERR_OFPHFC_EPERM) {
+        ds_put_printable(string, payload->data, payload->size);
+    } else {
+        char *s = ofp_to_string(payload->data, payload->size,
+                                port_map, table_map, 1);
+        ds_put_cstr(string, s);
+        free(s);
+    }
 }
 
 int

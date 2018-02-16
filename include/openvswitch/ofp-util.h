@@ -30,6 +30,7 @@ extern "C" {
 bool ofputil_decode_hello(const struct ofp_header *,
                           uint32_t *allowed_versions);
 struct ofpbuf *ofputil_encode_hello(uint32_t version_bitmap);
+void ofputil_hello_format(struct ds *, const struct ofp_header *);
 
 struct ofpbuf *ofputil_encode_echo_request(enum ofp_version);
 struct ofpbuf *ofputil_encode_echo_reply(const struct ofp_header *);

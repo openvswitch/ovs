@@ -173,6 +173,23 @@ ofputil_encode_hello(uint32_t allowed_versions)
 
     return msg;
 }
+
+void
+ofputil_hello_format(struct ds *string, const struct ofp_header *oh)
+{
+    uint32_t allowed_versions;
+    bool ok;
+
+    ok = ofputil_decode_hello(oh, &allowed_versions);
+
+    ds_put_cstr(string, "\n version bitmap: ");
+    ofputil_format_version_bitmap(string, allowed_versions);
+
+    if (!ok) {
+        ds_put_cstr(string, "\n unknown data in hello:\n");
+        ds_put_hex_dump(string, oh, ntohs(oh->length), 0, true);
+    }
+}
 
 /* Creates and returns an OFPT_ECHO_REQUEST message with an empty payload. */
 struct ofpbuf *

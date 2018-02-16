@@ -154,6 +154,12 @@ enum ofperr ofputil_decode_packet_in_private(
     struct ofputil_packet_in_private *,
     size_t *total_len, uint32_t *buffer_id);
 
+void ofputil_packet_in_private_format(
+    struct ds *, const struct ofputil_packet_in_private *,
+    size_t total_len, uint32_t buffer_id,
+    const struct ofputil_port_map *,
+    const struct ofputil_table_map *, int verbosity);
+
 void ofputil_packet_in_private_destroy(struct ofputil_packet_in_private *);
 
 /* Abstract packet-out message.
@@ -175,6 +181,11 @@ enum ofperr ofputil_decode_packet_out(struct ofputil_packet_out *,
                                       struct ofpbuf *ofpacts);
 struct ofpbuf *ofputil_encode_packet_out(const struct ofputil_packet_out *,
                                          enum ofputil_protocol protocol);
+
+void ofputil_packet_out_format(struct ds *, const struct ofputil_packet_out *,
+                               const struct ofputil_port_map *,
+                               const struct ofputil_table_map *,
+                               int verbosity);
 
 char *parse_ofp_packet_out_str(struct ofputil_packet_out *, const char *,
                                const struct ofputil_port_map *,

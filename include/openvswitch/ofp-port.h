@@ -19,6 +19,7 @@
 
 #include "openvswitch/hmap.h"
 #include "openvswitch/netdev.h"
+#include "openvswitch/ofp-errors.h"
 #include "openvswitch/ofp-protocol.h"
 #include "openvswitch/namemap.h"
 
@@ -71,6 +72,8 @@ enum ofputil_port_config {
     /* There are no OpenFlow 1.1-only bits. */
 };
 
+void ofputil_port_config_format(struct ds *, enum ofputil_port_config);
+
 enum ofputil_port_state {
     /* OpenFlow 1.0 and 1.1 share this values for these port state bits. */
     OFPUTIL_PS_LINK_DOWN   = 1 << 0, /* No physical link present. */
@@ -84,6 +87,8 @@ enum ofputil_port_state {
     OFPUTIL_PS_STP_BLOCK   = 3 << 8, /* Not part of spanning tree. */
     OFPUTIL_PS_STP_MASK    = 3 << 8  /* Bit mask for OFPPS10_STP_* values. */
 };
+
+void ofputil_port_state_format(struct ds *, enum ofputil_port_state);
 
 /* Abstract ofp10_phy_port, ofp11_port, ofp14_port, or ofp16_port. */
 struct ofputil_phy_port {
@@ -112,11 +117,13 @@ struct ofputil_phy_port {
     uint32_t max_speed;         /* Maximum supported speed, in kbps. */
 };
 
-/* phy_port helper functions. */
 void ofputil_put_phy_port(enum ofp_version,
                           const struct ofputil_phy_port *, struct ofpbuf *);
 int ofputil_pull_phy_port(enum ofp_version, struct ofpbuf *,
                           struct ofputil_phy_port *);
+void ofputil_phy_port_format(struct ds *, const struct ofputil_phy_port *);
+enum ofperr ofputil_phy_ports_format(struct ds *, uint8_t ofp_version,
+                                     struct ofpbuf *);
 
 /* Abstract ofp_port_status. */
 struct ofputil_port_status {
@@ -128,6 +135,8 @@ enum ofperr ofputil_decode_port_status(const struct ofp_header *,
                                        struct ofputil_port_status *);
 struct ofpbuf *ofputil_encode_port_status(const struct ofputil_port_status *,
                                           enum ofputil_protocol);
+void ofputil_port_status_format(struct ds *,
+                                const struct ofputil_port_status *);
 
 /* Abstract ofp_port_mod. */
 struct ofputil_port_mod {
@@ -143,6 +152,8 @@ enum ofperr ofputil_decode_port_mod(const struct ofp_header *,
                                     struct ofputil_port_mod *, bool loose);
 struct ofpbuf *ofputil_encode_port_mod(const struct ofputil_port_mod *,
                                        enum ofputil_protocol);
+void ofputil_port_mod_format(struct ds *, const struct ofputil_port_mod *,
+                             const struct ofputil_port_map *);
 
 struct ofputil_port_stats {
     ofp_port_t port_no;

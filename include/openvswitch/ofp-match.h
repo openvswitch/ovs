@@ -24,6 +24,7 @@
 struct vl_mff_map;
 struct flow_wildcards;
 struct match;
+struct ofputil_port_map;
 struct tun_table;
 
 #ifdef __cplusplus
@@ -37,6 +38,10 @@ void ofputil_match_from_ofp10_match(const struct ofp10_match *,
 void ofputil_normalize_match(struct match *);
 void ofputil_normalize_match_quiet(struct match *);
 void ofputil_match_to_ofp10_match(const struct match *, struct ofp10_match *);
+void ofp10_match_print(struct ds *, const struct ofp10_match *,
+                       const struct ofputil_port_map *, int verbosity);
+char *ofp10_match_to_string(const struct ofp10_match *,
+                            const struct ofputil_port_map *, int verbosity);
 
 /* Work with ofp11_match. */
 enum ofperr ofputil_pull_ofp11_match(struct ofpbuf *, const struct tun_table *,

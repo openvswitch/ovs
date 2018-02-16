@@ -29,6 +29,8 @@ extern "C" {
 
 struct ds;
 struct ofpbuf;
+struct ofputil_port_map;
+struct ofputil_table_map;
 
 /* Error codes.
  *
@@ -898,6 +900,10 @@ enum ofperr ofperr_decode_msg(const struct ofp_header *,
 struct ofpbuf *ofperr_encode_reply(enum ofperr, const struct ofp_header *);
 struct ofpbuf *ofperr_encode_hello(enum ofperr, enum ofp_version ofp_version,
                                    const char *);
+void ofperr_msg_format(struct ds *, enum ofperr, const struct ofpbuf *payload,
+                  const struct ofputil_port_map *,
+                  const struct ofputil_table_map *);
+
 int ofperr_get_vendor(enum ofperr, enum ofp_version);
 int ofperr_get_type(enum ofperr, enum ofp_version);
 int ofperr_get_code(enum ofperr, enum ofp_version);
