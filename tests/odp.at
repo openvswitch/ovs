@@ -30,9 +30,9 @@ in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x8848),mpl
 ])
 
 (echo '# Valid forms without tun_id or VLAN header.'
- set 's/^/skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),/' odp-base.txt
+ sed 's/^/skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),/' odp-base.txt
 
- set '
+ sed '
 s/^/skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),/
 ' odp-base.txt
 
