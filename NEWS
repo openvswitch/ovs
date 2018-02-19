@@ -33,8 +33,8 @@ v2.9.0 - 19 Feb 2018
    - OpenFlow:
      * ct_clear action is now backed by kernel datapath. Support is probed for
        when OVS starts.
-   - Linux kernel 4.13
-     * Add support for compiling OVS with the latest Linux 4.13 kernel
+   - Linux kernel 4.15
+     * Add support for compiling OVS with the latest Linux 4.15 kernel
    - ovs-dpctl and related ovs-appctl commands:
      * "flush-conntrack" now accept a 5-tuple to delete a specific
        connection tracking entry.
