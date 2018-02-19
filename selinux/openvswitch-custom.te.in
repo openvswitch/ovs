@@ -14,6 +14,7 @@ require {
         type hugetlbfs_t;
         type kernel_t;
         type svirt_image_t;
+        type svirt_tmpfs_t;
         type vfio_device_t;
 @end_dpdk@
 
@@ -26,6 +27,7 @@ require {
         class unix_stream_socket { write getattr read connectto connect setopt getopt sendto accept bind recvfrom acceptfrom };
 
 @begin_dpdk@
+        class sock_file { read write append getattr open };
         class tun_socket { relabelfrom relabelto create };
 @end_dpdk@
 }
@@ -50,5 +52,8 @@ allow openvswitch_t hugetlbfs_t:file { create unlink };
 allow openvswitch_t kernel_t:unix_stream_socket { write getattr read connectto connect setopt getopt sendto accept bind recvfrom acceptfrom };
 allow openvswitch_t self:tun_socket { relabelfrom relabelto create };
 allow openvswitch_t svirt_image_t:file { getattr read write };
+allow openvswitch_t svirt_tmpfs_t:file { read write };
+allow openvswitch_t svirt_tmpfs_t:sock_file { read write append getattr open };
+allow openvswitch_t svirt_t:unix_stream_socket { connectto read write getattr sendto recvfrom setopt };
 allow openvswitch_t vfio_device_t:chr_file { read write open ioctl getattr };
 @end_dpdk@
