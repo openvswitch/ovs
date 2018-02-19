@@ -239,9 +239,7 @@ build-aux/dpdkstrip.py \
 	> rhel/usr_lib_systemd_system_ovs-vswitchd.service
 
 make %{?_smp_mflags}
-make selinux/openvswitch-custom.te
-cd selinux
-make -f %{_datadir}/selinux/devel/Makefile
+make selinux-policy
 
 %install
 rm -rf $RPM_BUILD_ROOT

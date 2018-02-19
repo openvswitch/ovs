@@ -7,3 +7,8 @@
 
 EXTRA_DIST += \
         selinux/openvswitch-custom.te.in
+
+PHONY: selinux-policy
+
+selinux-policy: selinux/openvswitch-custom.te
+	$(MAKE) -C selinux/ -f /usr/share/selinux/devel/Makefile
