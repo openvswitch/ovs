@@ -15,8 +15,7 @@ Post-v2.9.0
    - Linux kernel 4.14
      * Add support for compiling OVS with the latest Linux 4.14 kernel
 
-
-v2.9.0 - xx xxx xxxx
+v2.9.0 - 19 Feb 2018
 --------------------
    - NSH implementation now conforms to latest draft (draft-ietf-sfc-nsh-28).
      * Add ttl field.
