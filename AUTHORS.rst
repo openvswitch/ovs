@@ -352,7 +352,7 @@ Yu Zhiguo                       yuzg@cn.fujitsu.com
 Yuanhan Liu                     yuanhan.liu@linux.intel.com
 Yunjian Wang                    wangyunjian@huawei.com
 ZhengLingyun                    konghuarukhr@163.com
-Zoltán Balogh                   zoltan.balogh@ericsson.com
+Zoltán Balogh                   zoltan.balogh.eth@gmail.com
 Zoltan Kiss                     zoltan.kiss@citrix.com
 Zongkai LI                      zealokii@gmail.com
 Zhi Yong Wu                     zwu.kernel@gmail.com
@@ -587,7 +587,6 @@ Yongqiang Liu                   liuyq7809@gmail.com
 ZHANG Zhiming                   zhangzhiming@yunshan.net.cn
 Zhangguanghui                   zhang.guanghui@h3c.com
 Ziyou Wang                      ziyouw@vmware.com
-Zoltán Balogh                   zoltan.balogh@ericsson.com
 ankur dwivedi                   ankurengg2003@gmail.com
 chen zhang                      3zhangchen9211@gmail.com
 james hopper                    jameshopper@email.com
