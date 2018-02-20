@@ -1125,6 +1125,16 @@ reg1[0] = put_nd_ra_opts(addr_mode = "slaac", mtu = "1500", slla = ae:01:02:03:0
 reg1[0] = put_nd_ra_opts(addr_mode = "slaac", mtu = 10.0.0.4, slla = ae:01:02:03:04:10);
     Invalid value for "mtu" option
 
+# icmp4
+icmp4 { eth.dst = ff:ff:ff:ff:ff:ff; output; }; output;
+    encodes as controller(userdata=00.00.00.0a.00.00.00.00.00.19.00.10.80.00.06.06.ff.ff.ff.ff.ff.ff.00.00.ff.ff.00.10.00.00.23.20.00.0e.ff.f8.40.00.00.00),resubmit(,64)
+    has prereqs ip4
+
+icmp4 { };
+    formats as icmp4 { drop; };
+    encodes as controller(userdata=00.00.00.0a.00.00.00.00)
+    has prereqs ip4
+
 # Contradictionary prerequisites (allowed but not useful):
 ip4.src = ip6.src[0..31];
     encodes as move:NXM_NX_IPV6_SRC[0..31]->NXM_OF_IP_SRC[]

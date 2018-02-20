@@ -1536,6 +1536,31 @@ execute_nd_ns(const struct ovnact_nest *on, const struct ovntrace_datapath *dp,
 }
 
 static void
+execute_icmp4(const struct ovnact_nest *on,
+              const struct ovntrace_datapath *dp,
+              const struct flow *uflow, uint8_t table_id,
+              enum ovnact_pipeline pipeline, struct ovs_list *super)
+{
+    struct flow icmp4_flow = *uflow;
+
+    /* Update fields for ICMP. */
+    icmp4_flow.dl_dst = uflow->dl_dst;
+    icmp4_flow.dl_src = uflow->dl_src;
+    icmp4_flow.nw_dst = uflow->nw_dst;
+    icmp4_flow.nw_src = uflow->nw_src;
+    icmp4_flow.nw_proto = IPPROTO_ICMP;
+    icmp4_flow.nw_ttl = 255;
+    icmp4_flow.tp_src = htons(ICMP4_DST_UNREACH); /* icmp type */
+    icmp4_flow.tp_dst = htons(1); /* icmp code */
+
+    struct ovntrace_node *node = ovntrace_node_append(
+        super, OVNTRACE_NODE_TRANSFORMATION, "icmp4");
+
+    trace_actions(on->nested, on->nested_len, dp, &icmp4_flow,
+                  table_id, pipeline, &node->subs);
+}
+
+static void
 execute_get_mac_bind(const struct ovnact_get_mac_bind *bind,
                      const struct ovntrace_datapath *dp,
                      struct flow *uflow, struct ovs_list *super)
@@ -1892,6 +1917,11 @@ trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
 
         case OVNACT_SET_METER:
             /* Nothing to do. */
+            break;
+
+        case OVNACT_ICMP4:
+            execute_icmp4(ovnact_get_ICMP4(a), dp, uflow, table_id, pipeline,
+                          super);
             break;
         }
 

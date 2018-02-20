@@ -1725,13 +1725,10 @@
           <ul>
             <li><code>ip.proto = 1</code> (ICMPv4)</li>
             <li><code>ip.frag = 0</code> (not a fragment)</li>
+            <li><code>ip.ttl = 255</code></li>
             <li><code>icmp4.type = 3</code> (destination unreachable)</li>
             <li><code>icmp4.code = 1</code> (host unreachable)</li>
           </ul>
-
-          <p>
-            Details TBD.
-          </p>
 
           <p><b>Prerequisite:</b> <code>ip4</code></p>
         </dd>
