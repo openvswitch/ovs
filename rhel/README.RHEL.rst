@@ -93,6 +93,11 @@ Note
   answers: File exists`` printed on the console. This comes from ifup-eth
   trying to add zeroconf route multiple times and is harmless.
 
+* ``ifup`` on OVSDPDKPort or OVSDPDKBond may result in change of bridge mac address.
+  Since OVS changes the device state to DOWN before changing its mac address this
+  result in loss of bridge configuration (e.g. routes). ``ifup-ovs`` perform post-up
+  operation on the bridge again to restore configuration.
+
 Examples
 --------
 
