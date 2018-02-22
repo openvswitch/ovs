@@ -46,14 +46,14 @@ def schemaToDot(schemaFile, arrows):
     print "\tnode [shape=box];"
     if not arrows:
         print "\tedge [dir=none, arrowhead=none, arrowtail=none];"
-    for tableName, table in schema.tables.iteritems():
+    for tableName, table in schema.tables.items():
         options = {}
         if table.is_root:
             options['style'] = 'bold'
         print "\t%s [%s];" % (
             tableName,
             ', '.join(['%s=%s' % (k,v) for k,v in options.items()]))
-        for columnName, column in table.columns.iteritems():
+        for columnName, column in table.columns.items():
             if column.type.value:
                 printEdge(tableName, column.type, column.type.key, "%s key" % columnName)
                 printEdge(tableName, column.type, column.type.value, "%s value" % columnName)
