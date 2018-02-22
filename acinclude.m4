@@ -818,7 +818,54 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/net/inet_frag.h],
                   frag_percpu_counter_batch[],
                   [OVS_DEFINE([HAVE_FRAG_PERCPU_COUNTER_BATCH])])
-
+  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h],
+                  [null_compute_pseudo],
+                  [OVS_DEFINE([HAVE_NULL_COMPUTE_PSEUDO])])
+  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h],
+                  [__skb_checksum_convert],
+                  [OVS_DEFINE([HAVE_SKB_CHECKSUM_CONVERT])])
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/netdevice.h], [net_device],
+                        [max_mtu],
+                        [OVS_DEFINE([HAVE_NET_DEVICE_MAX_MTU])])
+  OVS_GREP_IFELSE([$KSRC/include/net/erspan.h],
+                  [__LINUX_ERSPAN_H],
+                  [OVS_DEFINE([HAVE_LINUX_ERSPAN_H])])
+  OVS_FIND_PARAM_IFELSE([$KSRC/net/ipv6/ip6_gre.c],
+                        [ip6gre_tunnel_validate], [extack],
+                        [OVS_DEFINE([HAVE_IP6GRE_EXTACK])])
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/net/ip6_tunnel.h], [__ip6_tnl_parm],
+                        [erspan_ver],
+                        [OVS_DEFINE([HAVE_IP6_TNL_PARM_ERSPAN_VER])])
+  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h],
+                  [SKB_GSO_IPXIP6],
+                  [OVS_DEFINE([HAVE_SKB_GSO_IPXIP6])])
+  OVS_FIND_PARAM_IFELSE([$KSRC/include/net/ipv6.h],
+                        [ip6_make_flowlabel], [fl6],
+                        [OVS_DEFINE([HAVE_IP6_MAKE_FLOWLABEL_FL6])])
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/net/ipv6.h], [netns_sysctl_ipv6],
+                        [auto_flowlabels],
+                        [OVS_DEFINE([HAVE_NETNS_SYSCTL_IPV6_AUTO_FLOWLABELS])])
+  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h],
+                  [netif_keep_dst],
+                  [OVS_DEFINE([HAVE_NETIF_KEEP_DST])])
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/netdevice.h], [net_device_ops],
+                        [ndo_get_iflink],
+                        [OVS_DEFINE([HAVE_NDO_GET_IFLINK])])
+  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h],
+                  [skb_set_inner_ipproto],
+                  [OVS_DEFINE([HAVE_SKB_SET_INNER_IPPROTO])])
+  OVS_GREP_IFELSE([$KSRC/include/uapi/linux/if_tunnel.h],
+                  [tunnel_encap_types],
+                  [OVS_DEFINE([HAVE_TUNNEL_ENCAP_TYPES])])
+  OVS_GREP_IFELSE([$KSRC/include/uapi/linux/if_tunnel.h],
+                  [IFLA_IPTUN_ENCAP_TYPE],
+                  [OVS_DEFINE([HAVE_IFLA_IPTUN_ENCAP_TYPE])])
+  OVS_GREP_IFELSE([$KSRC/include/uapi/linux/if_tunnel.h],
+                  [IFLA_IPTUN_COLLECT_METADATA],
+                  [OVS_DEFINE([HAVE_IFLA_IPTUN_COLLECT_METADATA])])
+  OVS_GREP_IFELSE([$KSRC/net/ipv4/gre_demux.c],
+                  [parse_gre_header],
+                  [OVS_DEFINE([HAVE_DEMUX_PARSE_GRE_HEADER])])
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then

@@ -129,6 +129,47 @@ error:
 }
 EXPORT_SYMBOL_GPL(ovs_iptunnel_handle_offloads);
 
+struct sk_buff *rpl_iptunnel_handle_offloads(struct sk_buff *skb,
+					     bool csum_help,
+					     int gso_type_mask)
+{
+	int err;
+
+	if (likely(!skb->encapsulation)) {
+		skb_reset_inner_headers(skb);
+		skb->encapsulation = 1;
+	}
+
+	if (skb_is_gso(skb)) {
+		err = skb_unclone(skb, GFP_ATOMIC);
+		if (unlikely(err))
+			goto error;
+		skb_shinfo(skb)->gso_type |= gso_type_mask;
+		return skb;
+	}
+
+	/* If packet is not gso and we are resolving any partial checksum,
+ 	 * clear encapsulation flag. This allows setting CHECKSUM_PARTIAL
+ 	 * on the outer header without confusing devices that implement
+ 	 * NETIF_F_IP_CSUM with encapsulation.
+ 	 */
+	if (csum_help)
+		skb->encapsulation = 0;
+
+	if (skb->ip_summed == CHECKSUM_PARTIAL && csum_help) {
+		err = skb_checksum_help(skb);
+		if (unlikely(err))
+			goto error;
+	} else if (skb->ip_summed != CHECKSUM_PARTIAL)
+		skb->ip_summed = CHECKSUM_NONE;
+
+	return skb;
+error:
+	kfree_skb(skb);
+	return ERR_PTR(err);
+}
+EXPORT_SYMBOL_GPL(rpl_iptunnel_handle_offloads);
+
 int rpl___iptunnel_pull_header(struct sk_buff *skb, int hdr_len,
 			       __be16 inner_proto, bool raw_proto, bool xnet)
 {

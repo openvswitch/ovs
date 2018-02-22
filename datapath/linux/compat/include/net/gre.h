@@ -28,11 +28,7 @@ static inline struct net_device *rpl_gretap_fb_dev_create(
 #endif
 
 #else
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37) || \
-   defined(HAVE_GRE_CISCO_REGISTER)
 #include_next <net/gre.h>
-#endif
 
 #ifndef HAVE_GRE_CISCO_REGISTER
 
@@ -62,12 +58,20 @@ struct gre_base_hdr {
 
 #endif /* HAVE_GRE_CISCO_REGISTER */
 
+#define gre_build_header rpl_gre_build_header
+void rpl_gre_build_header(struct sk_buff *skb, const struct tnl_ptk_info *tpi,
+			  int hdr_len);
+
 int rpl_ipgre_init(void);
 void rpl_ipgre_fini(void);
 
 #define gretap_fb_dev_create rpl_gretap_fb_dev_create
 struct net_device *rpl_gretap_fb_dev_create(struct net *net, const char *name,
 					u8 name_assign_type);
+
+#define gre_parse_header rpl_gre_parse_header
+int rpl_gre_parse_header(struct sk_buff *skb, struct tnl_ptk_info *tpi,
+			 bool *csum_err, __be16 proto, int nhs);
 
 #define gre_fb_xmit rpl_gre_fb_xmit
 netdev_tx_t rpl_gre_fb_xmit(struct sk_buff *skb);
@@ -78,5 +82,6 @@ netdev_tx_t rpl_gre_fb_xmit(struct sk_buff *skb);
 
 #define gre_fill_metadata_dst ovs_gre_fill_metadata_dst
 int ovs_gre_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb);
+
 
 #endif
