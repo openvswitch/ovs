@@ -93,6 +93,9 @@ static __be32 tunnel_id_to_key(__be64 x)
 #endif
 }
 
+static void erspan_build_header(struct sk_buff *skb,
+				__be32 id, u32 index, bool truncate);
+
 /* Called with rcu_read_lock and BH disabled. */
 static int gre_err(struct sk_buff *skb, u32 info,
 		   const struct tnl_ptk_info *tpi)
@@ -187,7 +190,7 @@ static int erspan_rcv(struct sk_buff *skb, struct tnl_ptk_info *tpi,
 		      int gre_hdr_len)
 {
 	struct net *net = dev_net(skb->dev);
-	struct metadata_dst *tun_dst = NULL;
+	struct metadata_dst tun_dst;
 	struct ip_tunnel_net *itn;
 	struct ip_tunnel *tunnel;
 	struct erspanhdr *ershdr;
@@ -823,18 +826,17 @@ static int erspan_validate(struct nlattr *tb[], struct nlattr *data[])
 		return ret;
 
 	/* ERSPAN should only have GRE sequence and key flag */
-	flags |= nla_get_be16(data[IFLA_GRE_OFLAGS]);
-	flags |= nla_get_be16(data[IFLA_GRE_IFLAGS]);
-	if (flags != (GRE_SEQ | GRE_KEY))
+	if (data[IFLA_GRE_OFLAGS])
+		flags |= nla_get_be16(data[IFLA_GRE_OFLAGS]);
+	if (data[IFLA_GRE_IFLAGS])
+		flags |= nla_get_be16(data[IFLA_GRE_IFLAGS]);
+	if (!data[IFLA_GRE_COLLECT_METADATA] &&
+	    flags != (GRE_SEQ | GRE_KEY))
 		return -EINVAL;
 
 	/* ERSPAN Session ID only has 10-bit. Since we reuse
 	 * 32-bit key field as ID, check it's range.
 	 */
-	if (data[IFLA_GRE_IKEY] &&
-	    (ntohl(nla_get_be32(data[IFLA_GRE_IKEY])) & ~ID_MASK))
-		return -EINVAL;
-
 	if (data[IFLA_GRE_OKEY] &&
 	    (ntohl(nla_get_be32(data[IFLA_GRE_OKEY])) & ~ID_MASK))
 		return -EINVAL;
@@ -982,6 +984,11 @@ static netdev_tx_t erspan_xmit(struct sk_buff *skb,
 {
 	struct ip_tunnel *tunnel = netdev_priv(dev);
 	bool truncate = false;
+
+	if (tunnel->collect_md) {
+		erspan_fb_xmit(skb, dev, skb->protocol);
+		return NETDEV_TX_OK;
+	}
 
 	if (gre_handle_offloads(skb, false))
 		goto free_skb;

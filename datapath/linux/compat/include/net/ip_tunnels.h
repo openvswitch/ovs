@@ -74,14 +74,25 @@ void rpl_ip_tunnel_xmit(struct sk_buff *skb, struct net_device *dev,
 
 
 #ifndef TUNNEL_CSUM
-#define TUNNEL_CSUM	__cpu_to_be16(0x01)
-#define TUNNEL_ROUTING	__cpu_to_be16(0x02)
-#define TUNNEL_KEY	__cpu_to_be16(0x04)
-#define TUNNEL_SEQ	__cpu_to_be16(0x08)
-#define TUNNEL_STRICT	__cpu_to_be16(0x10)
-#define TUNNEL_REC	__cpu_to_be16(0x20)
-#define TUNNEL_VERSION	__cpu_to_be16(0x40)
-#define TUNNEL_NO_KEY	__cpu_to_be16(0x80)
+#define TUNNEL_CSUM		__cpu_to_be16(0x01)
+#define TUNNEL_ROUTING		__cpu_to_be16(0x02)
+#define TUNNEL_KEY		__cpu_to_be16(0x04)
+#define TUNNEL_SEQ		__cpu_to_be16(0x08)
+#define TUNNEL_STRICT		__cpu_to_be16(0x10)
+#define TUNNEL_REC		__cpu_to_be16(0x20)
+#define TUNNEL_VERSION		__cpu_to_be16(0x40)
+#define TUNNEL_NO_KEY		__cpu_to_be16(0x80)
+#define TUNNEL_DONT_FRAGMENT    __cpu_to_be16(0x0100)
+#define TUNNEL_OAM		__cpu_to_be16(0x0200)
+#define TUNNEL_CRIT_OPT		__cpu_to_be16(0x0400)
+#define TUNNEL_GENEVE_OPT	__cpu_to_be16(0x0800)
+#define TUNNEL_VXLAN_OPT	__cpu_to_be16(0x1000)
+#define TUNNEL_NOCACHE		__cpu_to_be16(0x2000)
+#define TUNNEL_ERSPAN_OPT	__cpu_to_be16(0x4000)
+
+#undef TUNNEL_OPTIONS_PRESENT
+#define TUNNEL_OPTIONS_PRESENT \
+		(TUNNEL_GENEVE_OPT | TUNNEL_VXLAN_OPT | TUNNEL_ERSPAN_OPT)
 
 struct tnl_ptk_info {
 	__be16 flags;
@@ -98,27 +109,6 @@ struct tnl_ptk_info {
 
 #define IP_TNL_HASH_BITS   7
 #define IP_TNL_HASH_SIZE   (1 << IP_TNL_HASH_BITS)
-
-#ifndef TUNNEL_DONT_FRAGMENT
-#define TUNNEL_DONT_FRAGMENT	__cpu_to_be16(0x0100)
-#endif
-
-#ifndef TUNNEL_OAM
-#define TUNNEL_OAM	__cpu_to_be16(0x0200)
-#define TUNNEL_CRIT_OPT	__cpu_to_be16(0x0400)
-#endif
-
-#ifndef TUNNEL_GENEVE_OPT
-#define TUNNEL_GENEVE_OPT	__cpu_to_be16(0x0800)
-#endif
-
-#ifndef TUNNEL_VXLAN_OPT
-#define TUNNEL_VXLAN_OPT	__cpu_to_be16(0x1000)
-#endif
-
-/* Older kernels defined TUNNEL_OPTIONS_PRESENT to GENEVE only */
-#undef TUNNEL_OPTIONS_PRESENT
-#define TUNNEL_OPTIONS_PRESENT (TUNNEL_GENEVE_OPT | TUNNEL_VXLAN_OPT)
 
 /* Keep error state on tunnel for 30 sec */
 #define IPTUNNEL_ERR_TIMEO	(30*HZ)
@@ -242,6 +232,7 @@ static inline void ip_tunnel_key_init(struct ip_tunnel_key *key,
 #define ip_tunnel_collect_metadata() true
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,6,0)
+#undef TUNNEL_NOCACHE
 #define TUNNEL_NOCACHE 0
 
 static inline bool
@@ -417,6 +408,25 @@ static inline void iptunnel_xmit_stats(struct net_device *dev, int pkt_len)
 			err_stats->tx_dropped++;
 		}
 	}
+}
+
+static inline __be64 key32_to_tunnel_id(__be32 key)
+{
+#ifdef __BIG_ENDIAN
+	return (__force __be64)key;
+#else
+	return (__force __be64)((__force u64)key << 32);
+#endif
+}
+
+/* Returns the least-significant 32 bits of a __be64. */
+static inline __be32 tunnel_id_to_key32(__be64 tun_id)
+{
+#ifdef __BIG_ENDIAN
+	return (__force __be32)tun_id;
+#else
+	return (__force __be32)((__force u64)tun_id >> 32);
+#endif
 }
 
 #define ip_tunnel_init rpl_ip_tunnel_init
