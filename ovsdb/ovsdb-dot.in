@@ -15,14 +15,14 @@ def printEdge(tableName, type, baseType, label):
         if type.n_min == 0:
             if type.n_max == 1:
                 arity = "?"
-            elif type.n_max == sys.maxint:
+            elif type.n_max == sys.maxsize:
                 arity = "*"
             else:
                 arity = "{,%d}" % type.n_max
         elif type.n_min == 1:
             if type.n_max == 1:
                 arity = ""
-            elif type.n_max == sys.maxint:
+            elif type.n_max == sys.maxsize:
                 arity = "+"
             else:
                 arity = "{1,%d}" % type.n_max
