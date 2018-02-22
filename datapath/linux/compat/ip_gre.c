@@ -488,6 +488,54 @@ static struct rtable *gre_get_rt(struct sk_buff *skb,
 	return ip_route_output_key(net, fl);
 }
 
+static struct rtable *prepare_fb_xmit(struct sk_buff *skb,
+				      struct net_device *dev,
+				      struct flowi4 *fl,
+				      int tunnel_hlen)
+{
+	struct ip_tunnel_info *tun_info;
+	const struct ip_tunnel_key *key;
+	struct rtable *rt = NULL;
+	int min_headroom;
+	bool use_cache;
+	int err;
+
+	tun_info = skb_tunnel_info(skb);
+	key = &tun_info->key;
+	use_cache = ip_tunnel_dst_cache_usable(skb, tun_info);
+
+	if (use_cache)
+		rt = dst_cache_get_ip4(&tun_info->dst_cache, &fl->saddr);
+	if (!rt) {
+		rt = gre_get_rt(skb, dev, fl, key);
+		if (IS_ERR(rt))
+			goto err_free_skb;
+		if (use_cache)
+			dst_cache_set_ip4(&tun_info->dst_cache, &rt->dst,
+					  fl->saddr);
+	}
+
+	min_headroom = LL_RESERVED_SPACE(rt->dst.dev) + rt->dst.header_len
+			+ tunnel_hlen + sizeof(struct iphdr);
+	if (skb_headroom(skb) < min_headroom || skb_header_cloned(skb)) {
+		int head_delta = SKB_DATA_ALIGN(min_headroom -
+						skb_headroom(skb) +
+						16);
+		err = pskb_expand_head(skb, max_t(int, head_delta, 0),
+				       0, GFP_ATOMIC);
+		if (unlikely(err))
+			goto err_free_rt;
+	}
+	return rt;
+
+err_free_rt:
+	ip_rt_put(rt);
+err_free_skb:
+	kfree_skb(skb);
+	dev->stats.tx_dropped++;
+	return NULL;
+}
+
 netdev_tx_t rpl_gre_fb_xmit(struct sk_buff *skb)
 {
 	struct net_device *dev = skb->dev;
