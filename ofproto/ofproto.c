@@ -1966,27 +1966,18 @@ ofproto_port_dump_done(struct ofproto_port_dump *dump)
     return dump->error == EOF ? 0 : dump->error;
 }
 
-/* Returns the type to pass to netdev_open() when a datapath of type
- * 'datapath_type' has a port of type 'port_type', for a few special
- * cases when a netdev type differs from a port type.  For example, when
- * using the userspace datapath, a port of type "internal" needs to be
- * opened as "tap".
+/* Returns the type to pass to netdev_open() when 'ofproto' has a port of type
+ * 'port_type', for a few special cases when a netdev type differs from a port
+ * type.  For example, when using the userspace datapath, a port of type
+ * "internal" needs to be opened as "tap".
  *
  * Returns either 'type' itself or a string literal, which must not be
  * freed. */
 const char *
-ofproto_port_open_type(const char *datapath_type, const char *port_type)
+ofproto_port_open_type(const struct ofproto *ofproto, const char *port_type)
 {
-    const struct ofproto_class *class;
-
-    datapath_type = ofproto_normalize_type(datapath_type);
-    class = ofproto_class_find__(datapath_type);
-    if (!class) {
-        return port_type;
-    }
-
-    return (class->port_open_type
-            ? class->port_open_type(datapath_type, port_type)
+    return (ofproto->ofproto_class->port_open_type
+            ? ofproto->ofproto_class->port_open_type(ofproto->type, port_type)
             : port_type);
 }
 
@@ -2728,10 +2719,9 @@ init_ports(struct ofproto *p)
 static bool
 ofport_is_internal_or_patch(const struct ofproto *p, const struct ofport *port)
 {
-    return !strcmp(netdev_get_type(port->netdev),
-                   ofproto_port_open_type(p->type, "internal")) ||
-           !strcmp(netdev_get_type(port->netdev),
-                   ofproto_port_open_type(p->type, "patch"));
+    const char *netdev_type = netdev_get_type(port->netdev);
+    return !strcmp(netdev_type, ofproto_port_open_type(p, "internal")) ||
+           !strcmp(netdev_type, ofproto_port_open_type(p, "patch"));
 }
 
 /* If 'port' is internal or patch and if the user didn't explicitly specify an
