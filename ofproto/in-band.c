@@ -428,7 +428,7 @@ in_band_create(struct ofproto *ofproto, const char *local_name,
     struct in_band *in_band;
     struct netdev *local_netdev;
     int error;
-    const char *type = ofproto_port_open_type(ofproto->type, "internal");
+    const char *type = ofproto_port_open_type(ofproto, "internal");
 
     *in_bandp = NULL;
     error = netdev_open(local_name, type, &local_netdev);
