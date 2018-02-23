@@ -2278,7 +2278,7 @@ struct ovn_lflow {
 static size_t
 ovn_lflow_hash(const struct ovn_lflow *lflow)
 {
-    return ovn_logical_flow_hash(&lflow->od->key,
+    return ovn_logical_flow_hash(&lflow->od->sb->header_.uuid,
                                  ovn_stage_get_table(lflow->stage),
                                  ovn_stage_get_pipeline_name(lflow->stage),
                                  lflow->priority, lflow->match,
