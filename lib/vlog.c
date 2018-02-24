@@ -952,7 +952,7 @@ format_log_message(const struct vlog_module *module, enum vlog_level level,
     for (p = pattern; *p != '\0'; ) {
         const char *subprogram_name;
         enum { LEFT, RIGHT } justify = RIGHT;
-        int pad = '0';
+        int pad = ' ';
         size_t length, field, used;
 
         if (*p != '%') {
