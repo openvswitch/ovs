@@ -3,14 +3,6 @@
 
 #include <linux/version.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
-#define CONFIG_NET_IPGRE_DEMUX 1
-#endif
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,1,0)
-#include_next <linux/kconfig.h>
-#endif
-
 #ifndef IS_ENABLED
 
 /*

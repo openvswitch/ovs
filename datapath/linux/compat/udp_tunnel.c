@@ -130,9 +130,7 @@ void rpl_setup_udp_tunnel_sock(struct net *net, struct socket *sock,
 
 	udp_sk(sk)->encap_type = cfg->encap_type;
 	udp_sk(sk)->encap_rcv = cfg->encap_rcv;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,9,0)
 	udp_sk(sk)->encap_destroy = cfg->encap_destroy;
-#endif
 #ifdef HAVE_UDP_TUNNEL_SOCK_CFG_GRO_RECEIVE
 	udp_sk(sk)->gro_receive = cfg->gro_receive;
 	udp_sk(sk)->gro_complete = cfg->gro_complete;

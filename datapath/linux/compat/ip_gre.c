@@ -365,16 +365,12 @@ static void __gre_tunnel_init(struct net_device *dev)
 	dev->mtu		= ETH_DATA_LEN - t_hlen - 4;
 
 	dev->features		|= GRE_FEATURES;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
 	dev->hw_features	|= GRE_FEATURES;
-#endif
 
 	if (!(tunnel->parms.o_flags & TUNNEL_SEQ)) {
 		/* TCP offload with GRE SEQ is not supported. */
 		dev->features    |= NETIF_F_GSO_SOFTWARE;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
 		dev->hw_features |= NETIF_F_GSO_SOFTWARE;
-#endif
 		/* Can use a lockless transmit, unless we generate
 		 * output sequences
 		 */
@@ -496,9 +492,7 @@ static const struct net_device_ops gre_tap_netdev_ops = {
 #else
 	.ndo_change_mtu		= ip_tunnel_change_mtu,
 #endif
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
 	.ndo_get_stats64	= ip_tunnel_get_stats64,
-#endif
 #ifdef HAVE_NDO_GET_IFLINK
 	.ndo_get_iflink		= ip_tunnel_get_iflink,
 #endif
@@ -515,13 +509,8 @@ static void ipgre_tap_setup(struct net_device *dev)
 	ip_tunnel_setup(dev, gre_tap_net_id);
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
 static int ipgre_newlink(struct net *src_net, struct net_device *dev,
 			 struct nlattr *tb[], struct nlattr *data[])
-#else
-static int ipgre_newlink(struct net_device *dev,
-			 struct nlattr *tb[], struct nlattr *data[])
-#endif
 {
 	struct ip_tunnel_parm p;
 	int err;

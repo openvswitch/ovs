@@ -168,11 +168,7 @@ static void ip_tunnel_dev_free(struct net_device *dev)
 	free_netdev(dev);
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
 void rpl_ip_tunnel_dellink(struct net_device *dev, struct list_head *head)
-#else
-void rpl_ip_tunnel_dellink(struct net_device *dev)
-#endif
 {
 	struct ip_tunnel *tunnel = netdev_priv(dev);
 	struct ip_tunnel_net *itn;
@@ -180,9 +176,7 @@ void rpl_ip_tunnel_dellink(struct net_device *dev)
 	itn = net_generic(tunnel->net, tunnel->ip_tnl_net_id);
 
 	ip_tunnel_del(itn, netdev_priv(dev));
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
-	unregister_netdevice_queue(dev, head);
-#endif
+        unregister_netdevice_queue(dev, head);
 }
 
 int rpl_ip_tunnel_init_net(struct net *net, int ip_tnl_net_id,

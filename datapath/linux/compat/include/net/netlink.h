@@ -16,21 +16,6 @@ static inline __be16 nla_get_be16(const struct nlattr *nla)
 }
 #endif  /* !HAVE_NLA_GET_BE16 */
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,34)
-/* This function was introduced in 2.6.31, but initially it performed an
- * unaligned access, so we replace it up to 2.6.34 where it was fixed.  */
-#define nla_get_be64 rpl_nla_get_be64
-static inline __be64 nla_get_be64(const struct nlattr *nla)
-{
-	__be64 tmp;
-
-	/* The additional cast is necessary because  */
-	nla_memcpy(&tmp, (struct nlattr *) nla, sizeof(tmp));
-
-	return tmp;
-}
-#endif
-
 #ifndef HAVE_NLA_PUT_BE16
 static inline int nla_put_be16(struct sk_buff *skb, int attrtype, __be16 value)
 {

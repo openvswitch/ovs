@@ -212,13 +212,6 @@ static inline int skb_orphan_frags(struct sk_buff *skb, gfp_t gfp_mask)
 #define skb_get_hash skb_get_rxhash
 #endif /* HAVE_SKB_GET_HASH */
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0)
-static inline void skb_tx_error(struct sk_buff *skb)
-{
-	return;
-}
-#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0) */
-
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
 #define skb_zerocopy_headlen rpl_skb_zerocopy_headlen
 unsigned int rpl_skb_zerocopy_headlen(const struct sk_buff *from);

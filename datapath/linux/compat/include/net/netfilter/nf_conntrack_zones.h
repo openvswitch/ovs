@@ -3,9 +3,7 @@
 
 #include <linux/version.h>
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,34)
 #include_next <net/netfilter/nf_conntrack_zones.h>
-#endif
 
 #ifndef HAVE_NF_CT_ZONE_INIT
 

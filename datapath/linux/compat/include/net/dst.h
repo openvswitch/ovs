@@ -4,13 +4,6 @@
 #include <linux/version.h>
 #include_next <net/dst.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,3,0) &&    \
-    LINUX_VERSION_CODE > KERNEL_VERSION(3,0,20)
-
-#define dst_get_neighbour_noref dst_get_neighbour
-
-#endif
-
 #ifndef HAVE_SKB_DST_ACCESSOR_FUNCS
 
 static inline void skb_dst_drop(struct sk_buff *skb)
@@ -30,31 +23,12 @@ static inline void skb_dst_drop(struct sk_buff *skb)
 #define DST_NOCOUNT		0
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,35)
-static inline void __skb_dst_copy(struct sk_buff *nskb, unsigned long refdst)
-{
-	nskb->_skb_dst = refdst;
-	dst_clone(skb_dst(nskb));
-}
-
-static inline void refdst_drop(unsigned long refdst) { }
-static inline void skb_dst_set_noref(struct sk_buff *skb,
-				     struct dst_entry *dst) { }
-static inline void dst_init_metrics(struct dst_entry *dst, const u32 *metrics,
-				    bool read_only) { }
-#elif !defined(HAVE___SKB_DST_COPY)
+#if !defined(HAVE___SKB_DST_COPY)
 static inline void __skb_dst_copy(struct sk_buff *nskb, unsigned long refdst)
 {
 	nskb->_skb_refdst = refdst;
 	if (!(nskb->_skb_refdst & SKB_DST_NOREF))
 		dst_clone(skb_dst(nskb));
-}
-#endif
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
-static inline void dst_entries_add(struct dst_ops *ops, int count)
-{
-	atomic_add(count, &ops->entries);
 }
 #endif
 

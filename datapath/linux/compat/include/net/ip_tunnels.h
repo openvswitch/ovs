@@ -301,11 +301,7 @@ int rpl_ip_tunnel_newlink(struct net_device *dev, struct nlattr *tb[],
 			  struct ip_tunnel_parm *p);
 
 #define ip_tunnel_dellink rpl_ip_tunnel_dellink
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
 void rpl_ip_tunnel_dellink(struct net_device *dev, struct list_head *head);
-#else
-void rpl_ip_tunnel_dellink(struct net_device *dev);
-#endif
 
 #define ip_tunnel_init_net rpl_ip_tunnel_init_net
 int rpl_ip_tunnel_init_net(struct net *net, int ip_tnl_net_id,

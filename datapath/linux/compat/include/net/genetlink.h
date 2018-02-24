@@ -6,17 +6,6 @@
 #include <net/net_namespace.h>
 #include_next <net/genetlink.h>
 
-/*
- * 15e473046cb6e5d18a4d0057e61d76315230382b renames pid to portid
- * the affected structures are
- * netlink_skb_parms::pid -> portid
- * genl_info::snd_pid -> snd_portid
- */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,7,0)
-#define snd_portid snd_pid
-#define portid pid
-#endif
-
 #ifndef HAVE_GENL_NOTIFY_TAKES_FAMILY
 struct rpl_genl_family {
 	struct genl_family	compat_family;

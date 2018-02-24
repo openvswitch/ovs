@@ -90,17 +90,6 @@ static inline struct sk_buff *vlan_hwaccel_push_inside(struct sk_buff *skb)
 }
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0)
-static inline struct sk_buff *rpl___vlan_hwaccel_put_tag(struct sk_buff *skb,
-						     __be16 vlan_proto,
-						     u16 vlan_tci)
-{
-	return __vlan_hwaccel_put_tag(skb, vlan_tci);
-}
-
-#define __vlan_hwaccel_put_tag rpl___vlan_hwaccel_put_tag
-#endif
-
 #ifndef HAVE_ETH_TYPE_VLAN
 /**
  * eth_type_vlan - check for valid vlan ether type.

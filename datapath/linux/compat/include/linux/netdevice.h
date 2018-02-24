@@ -37,11 +37,6 @@ struct net;
         alloc_netdev_mq(sizeof_priv, name, setup, 1)
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,33)
-#define unregister_netdevice_queue(dev, head)	unregister_netdevice(dev)
-#define unregister_netdevice_many(head)
-#endif
-
 #ifndef HAVE_DEV_DISABLE_LRO
 extern void dev_disable_lro(struct net_device *dev);
 #endif

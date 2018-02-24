@@ -1,18 +1,7 @@
 #ifndef __LINUX_NETDEV_FEATURES_WRAPPER_H
 #define __LINUX_NETDEV_FEATURES_WRAPPER_H
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,3,0)
 #include_next <linux/netdev_features.h>
-#endif
-
-#if RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(7,0)
-/* On RHEL 6, netdev features are defined in netdevice.h header. */
-#include <linux/netdevice.h>
-#endif
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0)
-#define NETIF_F_HW_VLAN_CTAG_TX NETIF_F_HW_VLAN_TX
-#endif
 
 #ifndef NETIF_F_GSO_GRE
 #define NETIF_F_GSO_GRE 0
@@ -79,14 +68,6 @@
 				 NETIF_F_GSO_UDP_TUNNEL |		\
 				 NETIF_F_GSO_UDP_TUNNEL_CSUM |		\
 				 NETIF_F_GSO_MPLS)
-#endif
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,9,0)
-#define SKB_GSO_GRE 0
-#endif
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0)
-#define SKB_GSO_UDP_TUNNEL 0
 #endif
 
 #ifndef HAVE_NETIF_F_GSO_GRE_CSUM
