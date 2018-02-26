@@ -1266,6 +1266,7 @@ upcall_cb(const struct dp_packet *packet, const struct flow *flow, ovs_u128 *ufi
         return error;
     }
 
+    upcall.fitness = ODP_FIT_PERFECT;
     error = process_upcall(udpif, &upcall, actions, wc);
     if (error) {
         goto out;
