@@ -455,6 +455,7 @@ SSL commands:\n\
 set the SSL configuration\n\
 \n\
 %s\
+%s\
 \n\
 Synchronization command (use with --wait=sb|hv):\n\
   sync                     wait even for earlier changes to take effect\n\
@@ -469,7 +470,7 @@ Options:\n\
   --dry-run                   do not commit changes to database\n\
   --oneline                   print exactly one line of output per command\n",
            program_name, program_name, ctl_get_db_cmd_usage(),
-           default_nb_db());
+           ctl_list_db_tables_usage(), default_nb_db());
     table_usage();
     vlog_usage();
     printf("\
@@ -4081,6 +4082,6 @@ static const struct ctl_command_syntax nbctl_commands[] = {
 static void
 nbctl_cmd_init(void)
 {
-    ctl_init(nbrec_table_classes, tables, NULL, nbctl_exit);
+    ctl_init(&nbrec_idl_class, nbrec_table_classes, tables, NULL, nbctl_exit);
     ctl_register_commands(nbctl_commands);
 }

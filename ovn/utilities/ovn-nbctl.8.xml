@@ -820,64 +820,11 @@
     additional ways to identify records.  Some commands also take
     <var>column</var> parameters that identify a particular field within the
     records in a table.</p>
-    <p>The following tables are currently defined:</p>
-    <dl>
-      <dt><code>Logical_Switch</code></dt>
-      <dd>
-        An L2 logical switch.  Records may be identified by name.
-      </dd>
 
-      <dt><code>Logical_Switch_Port</code></dt>
-      <dd>
-        A port within an L2 logical switch.  Records may be identified by name.
-      </dd>
-
-      <dt><code>ACL</code></dt>
-      <dd>
-        An ACL rule for a logical switch that points to it through its <var>acls</var> column.
-      </dd>
-
-      <dt><code>Logical_Router</code></dt>
-      <dd>
-        An L3 logical router.  Records may be identified by name.
-      </dd>
-
-      <dt><code>Logical_Router_Port</code></dt>
-      <dd>
-        A port within an L3 logical router.  Records may be identified by name.
-      </dd>
-
-      <dt><code>Logical_Router_Static_Route</code></dt>
-      <dd>
-        A static route belonging to an L3 logical router.
-      </dd>
-
-      <dt><code>Address_Set</code></dt>
-      <dd>
-        An address set that can be used in ACLs.
-      </dd>
-
-      <dt><code>Load_Balancer</code></dt>
-      <dd>
-        A load balancer for a logical switch that points to it through its <var>load_balancer</var> column.
-      </dd>
-
-      <dt><code>NAT</code></dt>
-      <dd>
-        A NAT rule for a Gateway router.
-      </dd>
-
-      <dt><code>DHCP_Options</code></dt>
-      <dd>
-        DHCP options.
-      </dd>
-
-      <dt><code>NB_Global</code></dt>
-      <dd>
-        North bound global configurations.
-      </dd>
-
-    </dl>
+    <p>
+      For a list of tables and their columns, see <code>ovn-nb</code>(5) or
+      see the table listing from the <code>--help</code> option.
+    </p>
 
     <p>
       Record names must be specified in full and with correct capitalization,

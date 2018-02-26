@@ -326,6 +326,7 @@ SSL commands:\n\
 set the SSL configuration\n\
 \n\
 %s\
+%s\
 \n\
 Options:\n\
   --db=DATABASE               connect to DATABASE\n\
@@ -334,7 +335,7 @@ Options:\n\
   --dry-run                   do not commit changes to database\n\
   --oneline                   print exactly one line of output per command\n",
            program_name, program_name, ctl_get_db_cmd_usage(),
-           default_sb_db());
+           ctl_list_db_tables_usage(), default_sb_db());
     table_usage();
     vlog_usage();
     printf("\
@@ -1442,6 +1443,7 @@ static const struct ctl_command_syntax sbctl_commands[] = {
 static void
 sbctl_cmd_init(void)
 {
-    ctl_init(sbrec_table_classes, tables, cmd_show_tables, sbctl_exit);
+    ctl_init(&sbrec_idl_class, sbrec_table_classes, tables,
+             cmd_show_tables, sbctl_exit);
     ctl_register_commands(sbctl_commands);
 }

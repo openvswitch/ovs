@@ -68,6 +68,11 @@ char *alloc_nat_zone_key(const struct uuid *key, const char *type);
 const char *default_nb_db(void);
 const char *default_sb_db(void);
 
+struct ovsdb_idl_table_class;
+const char *db_table_usage(struct ds *tables,
+                           const struct ovsdb_idl_table_class *class,
+                           int n_tables);
+
 bool ovn_is_known_nb_lsp_type(const char *type);
 
 uint32_t sbrec_logical_flow_hash(const struct sbrec_logical_flow *);

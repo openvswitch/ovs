@@ -530,55 +530,8 @@ additional ways to identify records.  Some commands also take
 \fIcolumn\fR parameters that identify a particular field within the
 records in a table.
 .PP
-The following tables are currently defined:
-.IP "\fBOpen_vSwitch\fR"
-Global configuration for an \fBovs\-vswitchd\fR.  This table contains
-exactly one record, identified by specifying \fB.\fR as the record
-name.
-.IP "\fBBridge\fR"
-Configuration for a bridge within an Open vSwitch.  Records may be
-identified by bridge name.
-.IP "\fBPort\fR"
-A bridge port.  Records may be identified by port name.
-.IP "\fBInterface\fR"
-A network device attached to a port.  Records may be identified by
-name.
-.IP "\fBFlow_Table\fR"
-Configuration for a particular OpenFlow flow table.  Records may be
-identified by name.
-.IP "\fBQoS\fR"
-Quality-of-service configuration for a \fBPort\fR.  Records may be
-identified by port name.
-.IP "\fBQueue\fR"
-Configuration for one queue within a \fBQoS\fR configuration.  Records
-may only be identified by UUID.
-.IP "\fBMirror\fR"
-A port mirroring configuration attached to a bridge.  Records may be
-identified by mirror name.
-.IP "\fBController\fR"
-Configuration for an OpenFlow controller.  A controller attached to a
-particular bridge may be identified by the bridge's name.
-.IP "\fBManager\fR"
-Configuration for an OVSDB connection.  Records may be identified
-by target (e.g. \fBtcp:1.2.3.4\fR).
-.IP "\fBNetFlow\fR"
-A NetFlow configuration attached to a bridge.  Records may be
-identified by bridge name.
-.IP "\fBSSL\fR"
-The global SSL configuration for \fBovs\-vswitchd\fR.  The record
-attached to the \fBOpen_vSwitch\fR table may be identified by
-specifying \fB.\fR as the record name.
-.IP "\fBsFlow\fR"
-An sFlow exporter configuration attached to a bridge.  Records may be
-identified by bridge name.
-.IP "\fBIPFIX\fR"
-An IPFIX exporter configuration attached to a bridge.  Records may be
-identified by bridge name.
-.IP "\fBFlow_Sample_Collector_Set\fR"
-An IPFIX exporter configuration attached to a bridge for sampling
-packets on a per-flow basis using OpenFlow \fBsample\fR actions.
-.IP "\fBAutoAttach\fR"
-Configuration for Auto Attach within a bridge.
+For a list of tables and their columns, see \fBovs-vswitchd.conf.db\fR(5) or
+see the table listing from the \fB--help\fR option.
 .PP
 Record names must be specified in full and with correct
 capitalization, except that UUIDs may be abbreviated to their first 4
