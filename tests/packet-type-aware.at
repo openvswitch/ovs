@@ -1027,10 +1027,12 @@ tunnel(src=20.0.0.2,dst=20.0.0.1,flags(-df-csum)),recirc_id(0x1),in_port(gre_sys
 ovs-appctl time/warp 1000
 
 AT_CHECK([
-    ovs-ofctl dump-ports int-br
-], [0], [OFPST_PORT reply (xid=0x2): 2 ports
+    ovs-ofctl dump-ports int-br LOCAL
+    ovs-ofctl dump-ports int-br 2
+], [0], [OFPST_PORT reply (xid=0x2): 1 ports
   port LOCAL: rx pkts=0, bytes=0, drop=?, errs=?, frame=?, over=?, crc=?
            tx pkts=4, bytes=392, drop=?, errs=?, coll=?
+OFPST_PORT reply (xid=0x2): 1 ports
   port  2: rx pkts=4, bytes=352, drop=?, errs=?, frame=?, over=?, crc=?
            tx pkts=0, bytes=0, drop=?, errs=?, coll=?
 ])
