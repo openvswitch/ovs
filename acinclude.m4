@@ -811,6 +811,10 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/timekeeping.h],
                   [ktime_get_ns],
                   [OVS_DEFINE([HAVE_KTIME_GET_NS])])
+  OVS_GREP_IFELSE([$KSRC/include/net/inet_frag.h],
+                  frag_percpu_counter_batch[],
+                  [OVS_DEFINE([HAVE_FRAG_PERCPU_COUNTER_BATCH])])
+
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then
