@@ -35,6 +35,7 @@
 #include "ovsdb-idl-provider.h"
 #include "openvswitch/shash.h"
 #include "sset.h"
+#include "svec.h"
 #include "string.h"
 #include "table.h"
 #include "util.h"
@@ -60,6 +61,9 @@ static const struct cmd_show_table *cmd_show_tables;
  */
 static void (*ctl_exit_func)(int status) = NULL;
 OVS_NO_RETURN static void ctl_exit(int status);
+
+/* IDL class. */
+static const struct ovsdb_idl_class *idl_class;
 
 /* Two arrays with 'n_classes' elements, which represent the tables in this
  * database and how the user can refer to their rows. */
@@ -2132,15 +2136,15 @@ ctl_register_commands(const struct ctl_command_syntax *commands)
 
 /* Registers the 'db_ctl_commands' to 'all_commands'. */
 void
-ctl_init__(const struct ovsdb_idl_table_class *idl_classes_,
+ctl_init__(const struct ovsdb_idl_class *idl_class_,
            const struct ctl_table_class *ctl_classes_,
-           size_t n_classes_,
            const struct cmd_show_table cmd_show_tables_[],
            void (*ctl_exit_func_)(int status))
 {
-    idl_classes = idl_classes_;
+    idl_class = idl_class_;
+    idl_classes = idl_class_->tables;
     ctl_classes = ctl_classes_;
-    n_classes = n_classes_;
+    n_classes = idl_class->n_tables;
     ctl_exit_func = ctl_exit_func_;
     ctl_register_commands(db_ctl_commands);
 
@@ -2168,6 +2172,63 @@ ctl_get_db_cmd_usage(void)
   destroy TBL REC             delete RECord from TBL\n\
   wait-until TBL REC [COL[:KEY]=VALUE]  wait until condition is true\n\
 Potentially unsafe database commands require --force option.\n";
+}
+
+const char *
+ctl_list_db_tables_usage(void)
+{
+    static struct ds s = DS_EMPTY_INITIALIZER;
+    if (s.length) {
+        return ds_cstr(&s);
+    }
+
+    ds_put_cstr(&s, "Database commands may reference a row in each table in the following ways:\n");
+    for (int i = 0; i < n_classes; i++) {
+        struct svec options = SVEC_EMPTY_INITIALIZER;
+
+        svec_add(&options, "by UUID");
+        if (idl_classes[i].is_singleton) {
+            svec_add(&options, "as \".\"");
+        }
+
+        for (int j = 0; j < ARRAY_SIZE(ctl_classes[i].row_ids); j++) {
+            const struct ctl_row_id *id = &ctl_classes[i].row_ids[j];
+            if (!id->name_column) {
+                continue;
+            }
+
+            struct ds o = DS_EMPTY_INITIALIZER;
+            if (id->uuid_column) {
+                ds_put_format(&o, "via \"%s\"", id->uuid_column->name);
+                const struct ovsdb_idl_table_class *referrer
+                    = ovsdb_idl_table_class_from_column(idl_class,
+                                                        id->uuid_column);
+                if (referrer != &idl_classes[i]) {
+                    ds_put_format(&o, " of %s", referrer->name);
+                }
+                if (id->key) {
+                    ds_put_format(&o, " with matching \"%s:%s\"",
+                                  id->name_column->name, id->key);
+                } else {
+                    ds_put_format(&o, " with matching \"%s\"", id->name_column->name);
+                }
+            } else if (id->key) {
+                ds_put_format(&o, "by \"%s:%s\"", id->name_column->name, id->key);
+            } else {
+                ds_put_format(&o, "by \"%s\"", id->name_column->name);
+            }
+            svec_add_nocopy(&options, ds_steal_cstr(&o));
+        }
+
+        ds_put_format(&s, "  %s:", idl_classes[i].name);
+        for (int j = 0; j < options.n; j++) {
+            ds_put_format(&s, "\n    %s", options.names[j]);
+        }
+        ds_put_char(&s, '\n');
+        svec_destroy(&options);
+    }
+
+    return ds_cstr(&s);
 }
 
 /* Initializes 'ctx' from 'command'. */

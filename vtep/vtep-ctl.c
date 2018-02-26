@@ -358,6 +358,7 @@ MAC binding commands:\n\
   list-remote-macs LS                 list remote mac entries\n\
 \n\
 %s\
+%s\
 \n\
 Options:\n\
   --db=DATABASE               connect to DATABASE\n\
@@ -365,7 +366,8 @@ Options:\n\
   -t, --timeout=SECS          wait at most SECS seconds\n\
   --dry-run                   do not commit changes to database\n\
   --oneline                   print exactly one line of output per command\n",
-           program_name, program_name, ctl_get_db_cmd_usage(), ctl_default_db());
+           program_name, program_name, ctl_get_db_cmd_usage(),
+           ctl_list_db_tables_usage(), ctl_default_db());
     table_usage();
     vlog_usage();
     printf("\
@@ -2495,6 +2497,7 @@ static const struct ctl_command_syntax vtep_commands[] = {
 static void
 vtep_ctl_cmd_init(void)
 {
-    ctl_init(vteprec_table_classes, tables, cmd_show_tables, vtep_ctl_exit);
+    ctl_init(&vteprec_idl_class, vteprec_table_classes, tables,
+             cmd_show_tables, vtep_ctl_exit);
     ctl_register_commands(vtep_commands);
 }

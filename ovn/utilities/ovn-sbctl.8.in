@@ -278,8 +278,9 @@ parameter may be the UUID for a record, and many tables offer
 additional ways to identify records.  Some commands also take
 \fIcolumn\fR parameters that identify a particular field within the
 records in a table.
-.\" It would be kind to list all the tables and their supported identifiers
-.\" here.
+.PP
+For a list of tables and their columns, see \fBovn\-sb\fR(5) or
+see the table listing from the \fB--help\fR option.
 .PP
 Record names must be specified in full and with correct
 capitalization, except that UUIDs may be abbreviated to their first 4

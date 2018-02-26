@@ -51,13 +51,11 @@ struct cmd_show_table;
 
 /* ctl_init() figures out the number of tables on its own and flags an error if
  * 'ctl_classes' was defined with the wrong number of elements. */
-#define ctl_init(idl_classes, ctl_classes, cmd_show_table, ctl_exit_func) \
-    (BUILD_ASSERT(ARRAY_SIZE(idl_classes) == ARRAY_SIZE(ctl_classes)),  \
-     ctl_init__(idl_classes, ctl_classes, ARRAY_SIZE(idl_classes),      \
-                cmd_show_table, ctl_exit_func))
-void ctl_init__(const struct ovsdb_idl_table_class *idl_classes,
-                const struct ctl_table_class *ctl_classes,
-                size_t n_classes,
+#define ctl_init(idl_class, table_classes, ctl_classes, cmd_show_table, \
+                 ctl_exit_func)                                         \
+    (BUILD_ASSERT(ARRAY_SIZE(table_classes) == ARRAY_SIZE(ctl_classes)),  \
+     ctl_init__(idl_class, ctl_classes, cmd_show_table, ctl_exit_func))
+void ctl_init__(const struct ovsdb_idl_class *, const struct ctl_table_class *,
                 const struct cmd_show_table *cmd_show_tables,
                 void (*ctl_exit_func)(int status));
 char *ctl_default_db(void);
@@ -159,6 +157,8 @@ struct ctl_command {
 
 bool ctl_might_write_to_db(char **argv);
 const char *ctl_get_db_cmd_usage(void);
+
+const char *ctl_list_db_tables_usage(void);
 void ctl_print_commands(void);
 void ctl_print_options(const struct option *);
 void ctl_add_cmd_options(struct option **, size_t *n_options_p,
