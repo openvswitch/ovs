@@ -116,6 +116,7 @@ static inline int rpl_netdev_master_upper_dev_link(struct net_device *dev,
 	return netdev_master_upper_dev_link(dev, upper_dev,
 					    upper_priv, upper_info);
 }
+#undef netdev_master_upper_dev_link
 #define netdev_master_upper_dev_link rpl_netdev_master_upper_dev_link
 #endif /* #else HAVE_NETDEV_MASTER_UPPER_DEV_LINK_RH */
 #else  /* #ifndef HAVE_NETDEV_MASTER_UPPER_DEV_LINK_PRIV */
