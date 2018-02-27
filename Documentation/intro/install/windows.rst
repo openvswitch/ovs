@@ -190,9 +190,12 @@ Finally, to the kernel module also:
        --sysconfdir="C:/openvswitch/etc" \
        --with-pthread="C:/pthread" \
        --enable-ssl --with-openssl="C:/OpenSSL-Win32" \
-       --with-vstudiotarget="<target type>"
+       --with-vstudiotarget="<target type>" \
+       --with-vstudiotargetver="<target versions>"
 
 Possible values for ``<target type>`` are: ``Debug`` and ``Release``
+Possible values for ``<target versions>`` is a comma separated list
+of target versions to compile among: ``Win8,Win8.1,Win10``
 
 .. note::
 
