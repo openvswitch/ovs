@@ -12,3 +12,9 @@ PHONY: selinux-policy
 
 selinux-policy: selinux/openvswitch-custom.te
 	$(MAKE) -C selinux/ -f /usr/share/selinux/devel/Makefile
+
+CLEANFILES += \
+	selinux/openvswitch-custom.te \
+	selinux/openvswitch-custom.pp \
+	selinux/openvswitch-custom.fc \
+	selinux/openvswitch-custom.if
