@@ -635,7 +635,6 @@ netdev_linux_run(const struct netdev_class *netdev_class OVS_UNUSED)
     }
 
     do {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
         uint64_t buf_stub[4096 / 8];
         struct ofpbuf buf;
 
@@ -686,7 +685,8 @@ netdev_linux_run(const struct netdev_class *netdev_class OVS_UNUSED)
             }
             shash_destroy(&device_shash);
         } else if (error != EAGAIN) {
-            VLOG_WARN_RL(&rl, "error reading or parsing netlink (%s)",
+            static struct vlog_rate_limit rll = VLOG_RATE_LIMIT_INIT(1, 5);
+            VLOG_WARN_RL(&rll, "error reading or parsing netlink (%s)",
                          ovs_strerror(error));
         }
         ofpbuf_uninit(&buf);
@@ -789,8 +789,8 @@ netdev_linux_common_construct(struct netdev *netdev_)
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     const char *name = netdev_->name;
     if (!strcmp(name, "default") || !strcmp(name, "all")) {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-        VLOG_WARN_RL(&rl, "%s: Linux forbids network device with this name",
+        static struct vlog_rate_limit rll = VLOG_RATE_LIMIT_INIT(1, 1);
+        VLOG_WARN_RL(&rll, "%s: Linux forbids network device with this name",
                      name);
         return EINVAL;
     }

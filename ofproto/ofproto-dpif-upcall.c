@@ -1252,7 +1252,6 @@ upcall_cb(const struct dp_packet *packet, const struct flow *flow, ovs_u128 *ufi
           const struct nlattr *userdata, struct ofpbuf *actions,
           struct flow_wildcards *wc, struct ofpbuf *put_actions, void *aux)
 {
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
     struct udpif *udpif = aux;
     struct upcall upcall;
     bool megaflow;
@@ -1287,7 +1286,8 @@ upcall_cb(const struct dp_packet *packet, const struct flow *flow, ovs_u128 *ufi
     }
 
     if (upcall.ukey && !ukey_install(udpif, upcall.ukey)) {
-        VLOG_WARN_RL(&rl, "upcall_cb failure: ukey installation fails");
+        static struct vlog_rate_limit rll = VLOG_RATE_LIMIT_INIT(1, 1);
+        VLOG_WARN_RL(&rll, "upcall_cb failure: ukey installation fails");
         error = ENOSPC;
     }
 out:
@@ -2355,9 +2355,8 @@ push_dp_ops(struct udpif *udpif, struct ukey_op *ops, size_t n_ops)
 
             error = xlate_key(udpif, key, key_len, push, &ctx);
             if (error) {
-                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-
-                VLOG_WARN_RL(&rl, "xlate_key failed (%s)!",
+                static struct vlog_rate_limit rll = VLOG_RATE_LIMIT_INIT(1, 5);
+                VLOG_WARN_RL(&rll, "xlate_key failed (%s)!",
                              ovs_strerror(error));
             } else {
                 xlate_out_uninit(&ctx.xout);
@@ -2390,13 +2389,15 @@ push_ukey_ops(struct udpif *udpif, struct umap *umap,
 static void
 log_unexpected_flow(const struct dpif_flow *flow, int error)
 {
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 60);
     struct ds ds = DS_EMPTY_INITIALIZER;
 
     ds_put_format(&ds, "Failed to acquire udpif_key corresponding to "
                   "unexpected flow (%s): ", ovs_strerror(error));
     odp_format_ufid(&flow->ufid, &ds);
-    VLOG_WARN_RL(&rl, "%s", ds_cstr(&ds));
+
+    static struct vlog_rate_limit rll = VLOG_RATE_LIMIT_INIT(10, 60);
+    VLOG_WARN_RL(&rll, "%s", ds_cstr(&ds));
+
     ds_destroy(&ds);
 }
 

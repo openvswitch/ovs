@@ -1318,7 +1318,7 @@ decode_bundle(bool load, const struct nx_action_bundle *nab,
               const struct vl_mff_map *vl_mff_map, uint64_t *tlv_bitmap,
               struct ofpbuf *ofpacts)
 {
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+    static struct vlog_rate_limit rll = VLOG_RATE_LIMIT_INIT(1, 5);
     struct ofpact_bundle *bundle;
     uint32_t slave_type;
     size_t slaves_size, i;
@@ -1335,20 +1335,20 @@ decode_bundle(bool load, const struct nx_action_bundle *nab,
 
     error = OFPERR_OFPBAC_BAD_ARGUMENT;
     if (!flow_hash_fields_valid(bundle->fields)) {
-        VLOG_WARN_RL(&rl, "unsupported fields %d", (int) bundle->fields);
+        VLOG_WARN_RL(&rll, "unsupported fields %d", (int) bundle->fields);
     } else if (bundle->n_slaves > BUNDLE_MAX_SLAVES) {
-        VLOG_WARN_RL(&rl, "too many slaves");
+        VLOG_WARN_RL(&rll, "too many slaves");
     } else if (bundle->algorithm != NX_BD_ALG_HRW
                && bundle->algorithm != NX_BD_ALG_ACTIVE_BACKUP) {
-        VLOG_WARN_RL(&rl, "unsupported algorithm %d", (int) bundle->algorithm);
+        VLOG_WARN_RL(&rll, "unsupported algorithm %d", (int) bundle->algorithm);
     } else if (slave_type != mf_nxm_header(MFF_IN_PORT)) {
-        VLOG_WARN_RL(&rl, "unsupported slave type %"PRIu32, slave_type);
+        VLOG_WARN_RL(&rll, "unsupported slave type %"PRIu32, slave_type);
     } else {
         error = 0;
     }
 
     if (!is_all_zeros(nab->zero, sizeof nab->zero)) {
-        VLOG_WARN_RL(&rl, "reserved field is nonzero");
+        VLOG_WARN_RL(&rll, "reserved field is nonzero");
         error = OFPERR_OFPBAC_BAD_ARGUMENT;
     }
 
@@ -1362,19 +1362,19 @@ decode_bundle(bool load, const struct nx_action_bundle *nab,
         }
 
         if (bundle->dst.n_bits < 16) {
-            VLOG_WARN_RL(&rl, "bundle_load action requires at least 16 bit "
+            VLOG_WARN_RL(&rll, "bundle_load action requires at least 16 bit "
                          "destination.");
             error = OFPERR_OFPBAC_BAD_ARGUMENT;
         }
     } else {
         if (nab->ofs_nbits || nab->dst) {
-            VLOG_WARN_RL(&rl, "bundle action has nonzero reserved fields");
+            VLOG_WARN_RL(&rll, "bundle action has nonzero reserved fields");
             error = OFPERR_OFPBAC_BAD_ARGUMENT;
         }
     }
 
     if (slaves_size < bundle->n_slaves * sizeof(ovs_be16)) {
-        VLOG_WARN_RL(&rl, "Nicira action %s only has %"PRIuSIZE" bytes "
+        VLOG_WARN_RL(&rll, "Nicira action %s only has %"PRIuSIZE" bytes "
                      "allocated for slaves.  %"PRIuSIZE" bytes are required "
                      "for %u slaves.",
                      load ? "bundle_load" : "bundle", slaves_size,

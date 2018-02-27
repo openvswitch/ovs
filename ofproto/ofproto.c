@@ -5131,8 +5131,8 @@ ofproto_flow_mod_learn(struct ofproto_flow_mod *ofm, bool keep_ref,
                 ofproto_flow_mod_learn_finish(ofm, NULL);
             }
         } else {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-            VLOG_INFO_RL(&rl, "Learn limit for flow %"PRIu64" reached.",
+            static struct vlog_rate_limit rll = VLOG_RATE_LIMIT_INIT(1, 5);
+            VLOG_INFO_RL(&rll, "Learn limit for flow %"PRIu64" reached.",
                          rule->flow_cookie);
 
             ofproto_flow_mod_uninit(ofm);

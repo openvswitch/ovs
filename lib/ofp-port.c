@@ -91,8 +91,8 @@ ofputil_port_from_ofp11(ovs_be32 ofp11_port, ofp_port_t *ofp10_port)
     } else {
         *ofp10_port = OFPP_NONE;
 
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-        VLOG_WARN_RL(&rl, "port %"PRIu32" is outside the supported "
+        static struct vlog_rate_limit rll = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rll, "port %"PRIu32" is outside the supported "
                      "range 0 through %d or 0x%"PRIx32" through 0x%"PRIx32,
                      ofp11_port_h, ofp_to_u16(OFPP_MAX) - 1,
                      ofp11_to_u32(OFPP11_MAX), UINT32_MAX);

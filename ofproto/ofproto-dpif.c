@@ -3210,7 +3210,6 @@ bundle_remove(struct ofport *port_)
 static void
 send_pdu_cb(void *port_, const void *pdu, size_t pdu_size)
 {
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 10);
     struct ofport_dpif *port = port_;
     struct eth_addr ea;
     int error;
@@ -3228,7 +3227,8 @@ send_pdu_cb(void *port_, const void *pdu, size_t pdu_size)
         ofproto_dpif_send_packet(port, false, &packet);
         dp_packet_uninit(&packet);
     } else {
-        VLOG_ERR_RL(&rl, "port %s: cannot obtain Ethernet address of iface "
+        static struct vlog_rate_limit rll = VLOG_RATE_LIMIT_INIT(1, 10);
+        VLOG_ERR_RL(&rll, "port %s: cannot obtain Ethernet address of iface "
                     "%s (%s)", port->bundle->name,
                     netdev_get_name(port->up.netdev), ovs_strerror(error));
     }
@@ -3275,8 +3275,8 @@ bundle_send_learning_packets(struct ofbundle *bundle)
     }
 
     if (n_errors) {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-        VLOG_WARN_RL(&rl, "bond %s: %d errors sending %d gratuitous learning "
+        static struct vlog_rate_limit rll = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rll, "bond %s: %d errors sending %d gratuitous learning "
                      "packets, last error was: %s",
                      bundle->name, n_errors, n_packets, ovs_strerror(error));
     } else {
@@ -4296,8 +4296,8 @@ check_mask(struct ofproto_dpif *ofproto, const struct miniflow *flow)
 static void
 report_unsupported_act(const char *action, const char *detail)
 {
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-    VLOG_WARN_RL(&rl, "Rejecting %s action because datapath does not support"
+    static struct vlog_rate_limit rll = VLOG_RATE_LIMIT_INIT(1, 5);
+    VLOG_WARN_RL(&rll, "Rejecting %s action because datapath does not support"
                  "%s%s (your kernel module may be out of date)",
                  action, detail ? " " : "", detail ? detail : "");
 }
