@@ -13,6 +13,7 @@ require {
 @begin_dpdk@
         type hugetlbfs_t;
         type kernel_t;
+        type svirt_t;
         type svirt_image_t;
         type svirt_tmpfs_t;
         type vfio_device_t;
