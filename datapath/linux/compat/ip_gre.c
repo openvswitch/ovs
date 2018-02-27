@@ -421,6 +421,7 @@ static bool is_gre_gso(struct sk_buff *skb)
 	return skb_is_gso(skb);
 }
 
+#define gre_handle_offloads rpl_gre_handle_offloads
 static int rpl_gre_handle_offloads(struct sk_buff *skb, bool gre_csum)
 {
 	int type = gre_csum ? SKB_GSO_GRE_CSUM : SKB_GSO_GRE;
