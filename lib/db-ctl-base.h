@@ -231,7 +231,7 @@ struct ctl_context {
     /* For implementation with a cache of the contents of the database,
      * this function will be called when the database is changed and the
      * change makes the cache no longer valid. */
-    void (*invalidate_cache)(struct ctl_context *);
+    void (*invalidate_cache_cb)(struct ctl_context *);
 
     /* A command may set this member to true if some prerequisite is not met
      * and the caller should wait for something to change and then retry. */

@@ -793,8 +793,8 @@ is_condition_satisfied(const struct ovsdb_idl_table_class *table,
 static void
 invalidate_cache(struct ctl_context *ctx)
 {
-    if (ctx->invalidate_cache) {
-        (ctx->invalidate_cache)(ctx);
+    if (ctx->invalidate_cache_cb) {
+        (ctx->invalidate_cache_cb)(ctx);
     }
 }
 
@@ -2250,7 +2250,7 @@ void
 ctl_context_init(struct ctl_context *ctx, struct ctl_command *command,
                  struct ovsdb_idl *idl, struct ovsdb_idl_txn *txn,
                  struct ovsdb_symbol_table *symtab,
-                 void (*invalidate_cache)(struct ctl_context *))
+                 void (*invalidate_cache_cb)(struct ctl_context *))
 {
     if (command) {
         ctl_context_init_command(ctx, command);
@@ -2258,7 +2258,7 @@ ctl_context_init(struct ctl_context *ctx, struct ctl_command *command,
     ctx->idl = idl;
     ctx->txn = txn;
     ctx->symtab = symtab;
-    ctx->invalidate_cache = invalidate_cache;
+    ctx->invalidate_cache_cb = invalidate_cache_cb;
 }
 
 /* Completes processing of 'command' within 'ctx'. */
