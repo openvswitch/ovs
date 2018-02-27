@@ -854,7 +854,7 @@ netdev_push_header(const struct netdev *netdev,
                    const struct ovs_action_push_tnl *data)
 {
     struct dp_packet *packet;
-    DP_PACKET_BATCH_FOR_EACH (packet, batch) {
+    DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
         netdev->netdev_class->push_header(packet, data);
         pkt_metadata_init(&packet->md, data->out_port);
     }

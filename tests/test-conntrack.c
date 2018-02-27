@@ -162,7 +162,7 @@ pcap_batch_execute_conntrack(struct conntrack *ct,
     /* pkt_batch contains packets with different 'dl_type'. We have to
      * call conntrack_execute() on packets with the same 'dl_type'. */
     struct dp_packet *packet;
-    DP_PACKET_BATCH_FOR_EACH (packet, pkt_batch) {
+    DP_PACKET_BATCH_FOR_EACH (i, packet, pkt_batch) {
         struct flow flow;
 
         /* This also initializes the l3 and l4 pointers. */
@@ -231,7 +231,7 @@ test_pcap(struct ovs_cmdl_context *ctx)
         }
         pcap_batch_execute_conntrack(&ct, batch);
 
-        DP_PACKET_BATCH_FOR_EACH (packet, batch) {
+        DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
             struct ds ds = DS_EMPTY_INITIALIZER;
 
             total_count++;

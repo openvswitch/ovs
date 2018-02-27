@@ -1081,7 +1081,7 @@ netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
     int error = 0;
 
     struct dp_packet *packet;
-    DP_PACKET_BATCH_FOR_EACH(packet, batch) {
+    DP_PACKET_BATCH_FOR_EACH(i, packet, batch) {
         const void *buffer = dp_packet_data(packet);
         size_t size = dp_packet_size(packet);
 

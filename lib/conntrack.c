@@ -1312,7 +1312,7 @@ conntrack_execute(struct conntrack *ct, struct dp_packet_batch *pkt_batch,
     struct dp_packet *packet;
     struct conn_lookup_ctx ctx;
 
-    DP_PACKET_BATCH_FOR_EACH (packet, pkt_batch) {
+    DP_PACKET_BATCH_FOR_EACH (i, packet, pkt_batch) {
         if (!conn_key_extract(ct, packet, dl_type, &ctx, zone)) {
             packet->md.ct_state = CS_INVALID;
             write_ct_md(packet, zone, NULL, NULL, NULL);
