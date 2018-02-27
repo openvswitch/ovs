@@ -30,6 +30,29 @@ static inline struct net_device *rpl_gretap_fb_dev_create(
 #else
 #include_next <net/gre.h>
 
+#define tnl_flags_to_gre_flags rpl_tnl_flags_to_gre_flags
+static inline __be16 tnl_flags_to_gre_flags(__be16 tflags)
+{
+	__be16 flags = 0;
+
+	if (tflags & TUNNEL_CSUM)
+		flags |= GRE_CSUM;
+	if (tflags & TUNNEL_ROUTING)
+		flags |= GRE_ROUTING;
+	if (tflags & TUNNEL_KEY)
+		flags |= GRE_KEY;
+	if (tflags & TUNNEL_SEQ)
+		flags |= GRE_SEQ;
+	if (tflags & TUNNEL_STRICT)
+		flags |= GRE_STRICT;
+	if (tflags & TUNNEL_REC)
+		flags |= GRE_REC;
+	if (tflags & TUNNEL_VERSION)
+		flags |= GRE_VERSION;
+
+	return flags;
+}
+
 #ifndef HAVE_GRE_CISCO_REGISTER
 
 /* GRE demux not available, implement our own demux. */
