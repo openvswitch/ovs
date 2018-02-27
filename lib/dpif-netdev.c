@@ -3536,7 +3536,7 @@ rxq_scheduling(struct dp_netdev *dp, bool pinned) OVS_REQUIRES(dp->port_mutex)
     struct rr_numa_list rr;
     struct rr_numa *non_local_numa = NULL;
     struct dp_netdev_rxq ** rxqs = NULL;
-    int i, n_rxqs = 0;
+    int n_rxqs = 0;
     struct rr_numa *numa = NULL;
     int numa_id;
 
@@ -3589,7 +3589,7 @@ rxq_scheduling(struct dp_netdev *dp, bool pinned) OVS_REQUIRES(dp->port_mutex)
 
     rr_numa_list_populate(dp, &rr);
     /* Assign the sorted queues to pmds in round robin. */
-    for (i = 0; i < n_rxqs; i++) {
+    for (int i = 0; i < n_rxqs; i++) {
         numa_id = netdev_get_numa_id(rxqs[i]->port->netdev);
         numa = rr_numa_list_lookup(&rr, numa_id);
         if (!numa) {

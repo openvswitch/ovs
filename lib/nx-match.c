@@ -1025,7 +1025,6 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
     ovs_be16 dl_type = get_dl_type(flow);
     ovs_be32 spi_mask;
     int match_len;
-    int i;
 
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 40);
 
@@ -1182,12 +1181,12 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
 
     /* Registers. */
     if (oxm < OFP15_VERSION) {
-        for (i = 0; i < FLOW_N_REGS; i++) {
+        for (int i = 0; i < FLOW_N_REGS; i++) {
             nxm_put_32m(&ctx, MFF_REG0 + i, oxm,
                         htonl(flow->regs[i]), htonl(match->wc.masks.regs[i]));
         }
     } else {
-        for (i = 0; i < FLOW_N_XREGS; i++) {
+        for (int i = 0; i < FLOW_N_XREGS; i++) {
             nxm_put_64m(&ctx, MFF_XREG0 + i, oxm,
                         htonll(flow_get_xreg(flow, i)),
                         htonll(flow_get_xreg(&match->wc.masks, i)));
