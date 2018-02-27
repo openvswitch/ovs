@@ -47,7 +47,7 @@ struct ovs_numa_info_numa {
 };
 
 void ovs_numa_init(void);
-void ovs_numa_set_dummy(const char *dummy_config);
+void ovs_numa_set_dummy(const char *config);
 bool ovs_numa_numa_id_is_valid(int numa_id);
 bool ovs_numa_core_id_is_valid(unsigned core_id);
 int ovs_numa_get_n_numas(void);
