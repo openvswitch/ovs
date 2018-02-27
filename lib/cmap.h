@@ -232,10 +232,19 @@ struct cmap_cursor {
 struct cmap_cursor cmap_cursor_start(const struct cmap *);
 void cmap_cursor_advance(struct cmap_cursor *);
 
-#define CMAP_FOR_EACH(NODE, MEMBER, CMAP)                       \
-    for (struct cmap_cursor cursor__ = cmap_cursor_start(CMAP); \
-         CMAP_CURSOR_FOR_EACH__(NODE, &cursor__, MEMBER);       \
+/* Generate a unique name for the cursor with the __COUNTER__ macro to
+ * allow nesting of CMAP_FOR_EACH loops. */
+#define CURSOR_JOIN2(x,y) x##y
+#define CURSOR_JOIN(x, y) CURSOR_JOIN2(x,y)
+
+#define CMAP_FOR_EACH__(NODE, MEMBER, CMAP, CURSOR_NAME)           \
+    for (struct cmap_cursor CURSOR_NAME = cmap_cursor_start(CMAP); \
+         CMAP_CURSOR_FOR_EACH__(NODE, &CURSOR_NAME, MEMBER);       \
         )
+
+#define CMAP_FOR_EACH(NODE, MEMBER, CMAP) \
+          CMAP_FOR_EACH__(NODE, MEMBER, CMAP, \
+                CURSOR_JOIN(cursor_, __COUNTER__))
 
 static inline struct cmap_node *cmap_first(const struct cmap *);
 
