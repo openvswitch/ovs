@@ -18,6 +18,7 @@ addons:
       - libnuma-dev
       - python-sphinx
       - libelf-dev
+      - selinux-policy-dev
 
 before_install: ./.travis/${TRAVIS_OS_NAME}-prepare.sh
 

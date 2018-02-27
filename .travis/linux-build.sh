@@ -98,6 +98,8 @@ fi
 
 configure_ovs $EXTRA_OPTS $*
 
+make selinux-policy
+
 # Only build datapath if we are testing kernel w/o running testsuite
 if [ "$KERNEL" ] && [ ! "$TESTSUITE" ] && [ ! "$DPDK" ]; then
     cd datapath
