@@ -218,7 +218,7 @@ Marcin Mirecki                  mmirecki@redhat.com
 Mario Cabrera                   mario.cabrera@hpe.com
 Mark D. Gray                    mark.d.gray@intel.com
 Mark Hamilton                   mhamilton@nicira.com
-Mark Kavanagh                   mark.b.kavanagh@intel.com
+Mark Kavanagh                   mark.b.kavanagh81@gmail.com
 Mark Maglana                    mmaglana@gmail.com
 Mark Michelson                  mmichels@redhat.com
 Markos Chandras                 mchandras@suse.de
