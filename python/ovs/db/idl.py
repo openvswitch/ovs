@@ -518,10 +518,8 @@ class Idl(object):
             if not row:
                 raise error.Error('Modify non-existing row')
 
-            old_row_diff_json = self.__apply_diff(table, row,
-                                                  row_update['modify'])
-            self.notify(ROW_UPDATE, row,
-                        Row.from_json(self, table, uuid, old_row_diff_json))
+            old_row = self.__apply_diff(table, row, row_update['modify'])
+            self.notify(ROW_UPDATE, row, Row(self, table, uuid, old_row))
             changed = True
         else:
             raise error.Error('<row-update> unknown operation',
@@ -584,7 +582,7 @@ class Idl(object):
                         row_update[column.name] = self.__column_name(column)
 
     def __apply_diff(self, table, row, row_diff):
-        old_row_diff_json = {}
+        old_row = {}
         for column_name, datum_diff_json in six.iteritems(row_diff):
             column = table.columns.get(column_name)
             if not column:
@@ -601,12 +599,12 @@ class Idl(object):
                           % (column_name, table.name, e))
                 continue
 
-            old_row_diff_json[column_name] = row._data[column_name].to_json()
+            old_row[column_name] = row._data[column_name].copy()
             datum = row._data[column_name].diff(datum_diff)
             if datum != row._data[column_name]:
                 row._data[column_name] = datum
 
-        return old_row_diff_json
+        return old_row
 
     def __row_update(self, table, row, row_json):
         changed = False
