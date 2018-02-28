@@ -587,9 +587,9 @@ static ovs_be32
 queue_msg(struct ofpbuf *msg)
 {
     const struct ofp_header *oh = msg->data;
-    ovs_be32 xid = oh->xid;
+    ovs_be32 xid_ = oh->xid;
     rconn_send(swconn, msg, tx_counter);
-    return xid;
+    return xid_;
 }
 
 static void
@@ -1038,7 +1038,7 @@ ofctrl_put(struct hmap *flow_table, struct shash *pending_ct_zones,
         /* Add a barrier to the list of messages. */
         struct ofpbuf *barrier = ofputil_encode_barrier_request(OFP13_VERSION);
         const struct ofp_header *oh = barrier->data;
-        ovs_be32 xid = oh->xid;
+        ovs_be32 xid_ = oh->xid;
         ovs_list_push_back(&msgs, &barrier->list_node);
 
         /* Queue the messages. */
@@ -1051,7 +1051,7 @@ ofctrl_put(struct hmap *flow_table, struct shash *pending_ct_zones,
         SHASH_FOR_EACH(iter, pending_ct_zones) {
             struct ct_zone_pending_entry *ctzpe = iter->data;
             if (ctzpe->state == CT_ZONE_OF_SENT && !ctzpe->of_xid) {
-                ctzpe->of_xid = xid;
+                ctzpe->of_xid = xid_;
             }
         }
 
@@ -1076,7 +1076,7 @@ ofctrl_put(struct hmap *flow_table, struct shash *pending_ct_zones,
                  * so that we don't send a notification that we're up-to-date
                  * until we're really caught up. */
                 VLOG_DBG("advanced xid target for nb_cfg=%"PRId64, nb_cfg);
-                fup->xid = xid;
+                fup->xid = xid_;
                 goto done;
             } else {
                 break;
@@ -1086,7 +1086,7 @@ ofctrl_put(struct hmap *flow_table, struct shash *pending_ct_zones,
         /* Add a flow update. */
         fup = xmalloc(sizeof *fup);
         ovs_list_push_back(&flow_updates, &fup->list_node);
-        fup->xid = xid;
+        fup->xid = xid_;
         fup->nb_cfg = nb_cfg;
     done:;
     } else if (!ovs_list_is_empty(&flow_updates)) {

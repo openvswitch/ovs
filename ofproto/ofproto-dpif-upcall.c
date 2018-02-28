@@ -534,18 +534,15 @@ udpif_stop_threads(struct udpif *udpif)
 /* Starts the handler and revalidator threads, must be enclosed in
  * ovsrcu quiescent state. */
 static void
-udpif_start_threads(struct udpif *udpif, size_t n_handlers,
-                    size_t n_revalidators)
+udpif_start_threads(struct udpif *udpif, size_t n_handlers_,
+                    size_t n_revalidators_)
 {
-    if (udpif && n_handlers && n_revalidators) {
-        size_t i;
-        bool enable_ufid;
-
-        udpif->n_handlers = n_handlers;
-        udpif->n_revalidators = n_revalidators;
+    if (udpif && n_handlers_ && n_revalidators_) {
+        udpif->n_handlers = n_handlers_;
+        udpif->n_revalidators = n_revalidators_;
 
         udpif->handlers = xzalloc(udpif->n_handlers * sizeof *udpif->handlers);
-        for (i = 0; i < udpif->n_handlers; i++) {
+        for (size_t i = 0; i < udpif->n_handlers; i++) {
             struct handler *handler = &udpif->handlers[i];
 
             handler->udpif = udpif;
@@ -554,8 +551,7 @@ udpif_start_threads(struct udpif *udpif, size_t n_handlers,
                 "handler", udpif_upcall_handler, handler);
         }
 
-        enable_ufid = udpif->backer->rt_support.ufid;
-        atomic_init(&udpif->enable_ufid, enable_ufid);
+        atomic_init(&udpif->enable_ufid, udpif->backer->rt_support.ufid);
         dpif_enable_upcall(udpif->dpif);
 
         ovs_barrier_init(&udpif->reval_barrier, udpif->n_revalidators);
@@ -564,7 +560,7 @@ udpif_start_threads(struct udpif *udpif, size_t n_handlers,
         udpif->pause = false;
         udpif->revalidators = xzalloc(udpif->n_revalidators
                                       * sizeof *udpif->revalidators);
-        for (i = 0; i < udpif->n_revalidators; i++) {
+        for (size_t i = 0; i < udpif->n_revalidators; i++) {
             struct revalidator *revalidator = &udpif->revalidators[i];
 
             revalidator->udpif = udpif;
@@ -598,33 +594,33 @@ udpif_resume_revalidators(struct udpif *udpif)
 }
 
 /* Tells 'udpif' how many threads it should use to handle upcalls.
- * 'n_handlers' and 'n_revalidators' can never be zero.  'udpif''s
+ * 'n_handlers_' and 'n_revalidators_' can never be zero.  'udpif''s
  * datapath handle must have packet reception enabled before starting
  * threads. */
 void
-udpif_set_threads(struct udpif *udpif, size_t n_handlers,
-                  size_t n_revalidators)
+udpif_set_threads(struct udpif *udpif, size_t n_handlers_,
+                  size_t n_revalidators_)
 {
     ovs_assert(udpif);
-    ovs_assert(n_handlers && n_revalidators);
+    ovs_assert(n_handlers_ && n_revalidators_);
 
     ovsrcu_quiesce_start();
-    if (udpif->n_handlers != n_handlers
-        || udpif->n_revalidators != n_revalidators) {
+    if (udpif->n_handlers != n_handlers_
+        || udpif->n_revalidators != n_revalidators_) {
         udpif_stop_threads(udpif);
     }
 
     if (!udpif->handlers && !udpif->revalidators) {
         int error;
 
-        error = dpif_handlers_set(udpif->dpif, n_handlers);
+        error = dpif_handlers_set(udpif->dpif, n_handlers_);
         if (error) {
             VLOG_ERR("failed to configure handlers in dpif %s: %s",
                      dpif_name(udpif->dpif), ovs_strerror(error));
             return;
         }
 
-        udpif_start_threads(udpif, n_handlers, n_revalidators);
+        udpif_start_threads(udpif, n_handlers_, n_revalidators_);
     }
     ovsrcu_quiesce_end();
 }
@@ -639,12 +635,12 @@ udpif_synchronize(struct udpif *udpif)
     /* This is stronger than necessary.  It would be sufficient to ensure
      * (somehow) that each handler and revalidator thread had passed through
      * its main loop once. */
-    size_t n_handlers = udpif->n_handlers;
-    size_t n_revalidators = udpif->n_revalidators;
+    size_t n_handlers_ = udpif->n_handlers;
+    size_t n_revalidators_ = udpif->n_revalidators;
 
     ovsrcu_quiesce_start();
     udpif_stop_threads(udpif);
-    udpif_start_threads(udpif, n_handlers, n_revalidators);
+    udpif_start_threads(udpif, n_handlers_, n_revalidators_);
     ovsrcu_quiesce_end();
 }
 
@@ -682,16 +678,14 @@ udpif_get_memory_usage(struct udpif *udpif, struct simap *usage)
 void
 udpif_flush(struct udpif *udpif)
 {
-    size_t n_handlers, n_revalidators;
-
-    n_handlers = udpif->n_handlers;
-    n_revalidators = udpif->n_revalidators;
+    size_t n_handlers_ = udpif->n_handlers;
+    size_t n_revalidators_ = udpif->n_revalidators;
 
     ovsrcu_quiesce_start();
 
     udpif_stop_threads(udpif);
     dpif_flow_flush(udpif->dpif);
-    udpif_start_threads(udpif, n_handlers, n_revalidators);
+    udpif_start_threads(udpif, n_handlers_, n_revalidators_);
 
     ovsrcu_quiesce_end();
 }

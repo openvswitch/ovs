@@ -119,9 +119,9 @@ queue_msg(struct ofpbuf *msg)
     return xid;
 }
 
-/* Sets up 'swconn', a newly (re)connected connection to a switch. */
+/* Sets up global 'swconn', a newly (re)connected connection to a switch. */
 static void
-pinctrl_setup(struct rconn *swconn)
+pinctrl_setup(void)
 {
     /* Fetch the switch configuration.  The response later will allow us to
      * change the miss_send_len to UINT16_MAX, so that we can enable
@@ -135,10 +135,10 @@ pinctrl_setup(struct rconn *swconn)
 }
 
 static void
-set_switch_config(struct rconn *swconn,
+set_switch_config(struct rconn *swconn_,
                   const struct ofputil_switch_config *config)
 {
-    enum ofp_version version = rconn_get_version(swconn);
+    enum ofp_version version = rconn_get_version(swconn_);
     struct ofpbuf *request = ofputil_encode_set_config(config, version);
     queue_msg(request);
 }
@@ -1078,7 +1078,7 @@ pinctrl_run(struct controller_ctx *ctx,
     }
 
     if (conn_seq_no != rconn_get_connection_seqno(swconn)) {
-        pinctrl_setup(swconn);
+        pinctrl_setup();
         conn_seq_no = rconn_get_connection_seqno(swconn);
         flush_put_mac_bindings();
     }

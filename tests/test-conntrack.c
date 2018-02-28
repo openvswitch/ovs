@@ -150,7 +150,7 @@ test_benchmark(struct ovs_cmdl_context *ctx)
 }
 
 static void
-pcap_batch_execute_conntrack(struct conntrack *ct,
+pcap_batch_execute_conntrack(struct conntrack *ct_,
                              struct dp_packet_batch *pkt_batch)
 {
     struct dp_packet_batch new_batch;
@@ -173,7 +173,7 @@ pcap_batch_execute_conntrack(struct conntrack *ct,
         }
 
         if (flow.dl_type != dl_type) {
-            conntrack_execute(ct, &new_batch, dl_type, false, true, 0,
+            conntrack_execute(ct_, &new_batch, dl_type, false, true, 0,
                               NULL, NULL, 0, 0, NULL, NULL, now);
             dp_packet_batch_init(&new_batch);
         }
@@ -181,7 +181,7 @@ pcap_batch_execute_conntrack(struct conntrack *ct,
     }
 
     if (!dp_packet_batch_is_empty(&new_batch)) {
-        conntrack_execute(ct, &new_batch, dl_type, false, true, 0, NULL, NULL,
+        conntrack_execute(ct_, &new_batch, dl_type, false, true, 0, NULL, NULL,
                           0, 0, NULL, NULL, now);
     }
 
@@ -190,7 +190,7 @@ pcap_batch_execute_conntrack(struct conntrack *ct,
 static void
 test_pcap(struct ovs_cmdl_context *ctx)
 {
-    size_t total_count, batch_size;
+    size_t total_count, batch_size_;
     FILE *pcap;
     int err = 0;
 
@@ -199,10 +199,10 @@ test_pcap(struct ovs_cmdl_context *ctx)
         return;
     }
 
-    batch_size = 1;
+    batch_size_ = 1;
     if (ctx->argc > 2) {
-        batch_size = strtoul(ctx->argv[2], NULL, 0);
-        if (batch_size == 0 || batch_size > NETDEV_MAX_BURST) {
+        batch_size_ = strtoul(ctx->argv[2], NULL, 0);
+        if (batch_size_ == 0 || batch_size_ > NETDEV_MAX_BURST) {
             ovs_fatal(0,
                       "batch_size must be between 1 and NETDEV_MAX_BURST(%u)",
                       NETDEV_MAX_BURST);
@@ -219,7 +219,7 @@ test_pcap(struct ovs_cmdl_context *ctx)
         struct dp_packet_batch *batch = &pkt_batch_;
 
         dp_packet_batch_init(batch);
-        for (int i = 0; i < batch_size; i++) {
+        for (int i = 0; i < batch_size_; i++) {
             err = ovs_pcap_read(pcap, &packet, NULL);
             if (err) {
                 break;

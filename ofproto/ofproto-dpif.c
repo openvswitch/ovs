@@ -5239,8 +5239,6 @@ dpif_set_support(struct dpif_backer_support *rt_support,
 #undef ODP_SUPPORT_FIELD
 
     if (!name) {
-        struct shash_node *node;
-
         SHASH_FOR_EACH (node, &all_fields) {
             display_support_field(node->name, node->data, ds);
         }

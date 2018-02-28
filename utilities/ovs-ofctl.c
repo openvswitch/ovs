@@ -653,17 +653,17 @@ dump_transaction(struct vconn *vconn, struct ofpbuf *request)
                 "OpenFlow packet receive failed");
             recv_xid = ((struct ofp_header *) reply->data)->xid;
             if (send_xid == recv_xid) {
-                enum ofpraw raw;
+                enum ofpraw ofpraw;
 
                 ofp_print(stdout, reply->data, reply->size,
                           ports_to_show(vconn_get_name(vconn)),
                           tables_to_show(vconn_get_name(vconn)),
                           verbosity + 1);
 
-                ofpraw_decode(&raw, reply->data);
-                if (ofptype_from_ofpraw(raw) == OFPTYPE_ERROR) {
+                ofpraw_decode(&ofpraw, reply->data);
+                if (ofptype_from_ofpraw(ofpraw) == OFPTYPE_ERROR) {
                     done = true;
-                } else if (raw == reply_raw) {
+                } else if (ofpraw == reply_raw) {
                     done = !ofpmp_more(reply->data);
                 } else {
                     ovs_fatal(0, "received bad reply: %s",
@@ -693,13 +693,13 @@ dump_transaction(struct vconn *vconn, struct ofpbuf *request)
 }
 
 static void
-dump_trivial_transaction(const char *vconn_name, enum ofpraw raw)
+dump_trivial_transaction(const char *vconn_name, enum ofpraw ofpraw)
 {
     struct ofpbuf *request;
     struct vconn *vconn;
 
     open_vconn(vconn_name, &vconn);
-    request = ofpraw_alloc(raw, vconn_get_version(vconn), 0);
+    request = ofpraw_alloc(ofpraw, vconn_get_version(vconn), 0);
     dump_transaction(vconn, request);
     vconn_close(vconn);
 }
@@ -1223,10 +1223,10 @@ table_iterator_init(struct table_iterator *ti, struct vconn *vconn)
                    ? TI_STATS : TI_FEATURES);
     ti->more = true;
 
-    enum ofpraw raw = (ti->variant == TI_STATS
-                       ? OFPRAW_OFPST_TABLE_REQUEST
-                       : OFPRAW_OFPST13_TABLE_FEATURES_REQUEST);
-    struct ofpbuf *rq = ofpraw_alloc(raw, vconn_get_version(vconn), 0);
+    enum ofpraw ofpraw = (ti->variant == TI_STATS
+                          ? OFPRAW_OFPST_TABLE_REQUEST
+                          : OFPRAW_OFPST13_TABLE_FEATURES_REQUEST);
+    struct ofpbuf *rq = ofpraw_alloc(ofpraw, vconn_get_version(vconn), 0);
     ti->send_xid = ((struct ofp_header *) rq->data)->xid;
     send_openflow_buffer(ti->vconn, rq);
 }
@@ -4645,7 +4645,7 @@ ofctl_encode_error_reply(struct ovs_cmdl_context *ctx)
 static void
 ofctl_ofp_print(struct ovs_cmdl_context *ctx)
 {
-    int verbosity = ctx->argc > 2 ? atoi(ctx->argv[2]) : 2;
+    int verbosity_ = ctx->argc > 2 ? atoi(ctx->argv[2]) : 2;
 
     struct ofpbuf packet;
     ofpbuf_init(&packet, 0);
@@ -4674,7 +4674,7 @@ ofctl_ofp_print(struct ovs_cmdl_context *ctx)
         ovs_fatal(0, "trailing garbage following hex bytes");
     }
     free(buffer);
-    ofp_print(stdout, packet.data, packet.size, NULL, NULL, verbosity);
+    ofp_print(stdout, packet.data, packet.size, NULL, NULL, verbosity_);
     ofpbuf_uninit(&packet);
 }
 

@@ -1247,12 +1247,12 @@ read_cert_file(const char *file_name, X509 ***certs, size_t *n_certs)
     }
 
     for (;;) {
-        X509 *certificate;
+        X509 *cert;
         int c;
 
         /* Read certificate from file. */
-        certificate = PEM_read_X509(file, NULL, NULL, NULL);
-        if (!certificate) {
+        cert = PEM_read_X509(file, NULL, NULL, NULL);
+        if (!cert) {
             size_t i;
 
             VLOG_ERR("PEM_read_X509 failed reading %s: %s",
@@ -1271,7 +1271,7 @@ read_cert_file(const char *file_name, X509 ***certs, size_t *n_certs)
         if (*n_certs >= allocated_certs) {
             *certs = x2nrealloc(*certs, &allocated_certs, sizeof **certs);
         }
-        (*certs)[(*n_certs)++] = certificate;
+        (*certs)[(*n_certs)++] = cert;
 
         /* Are there additional certificates in the file? */
         do {

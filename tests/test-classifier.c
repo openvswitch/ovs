@@ -1495,11 +1495,11 @@ benchmark(bool use_wc)
 static uint32_t
 random_value(void)
 {
-    static const uint32_t values[] =
+    static const uint32_t values_[] =
         { 0xffffffff, 0xaaaaaaaa, 0x55555555, 0x80000000,
           0x00000001, 0xface0000, 0x00d00d1e, 0xdeadbeef };
 
-    return values[random_range(ARRAY_SIZE(values))];
+    return values_[random_range(ARRAY_SIZE(values_))];
 }
 
 static bool
