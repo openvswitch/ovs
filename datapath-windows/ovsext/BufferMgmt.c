@@ -273,6 +273,7 @@ OvsInitNBLContext(POVS_BUFFER_CONTEXT ctx,
 static VOID
 OvsDumpForwardingDetails(PNET_BUFFER_LIST nbl)
 {
+#if OVS_DBG_DEFAULT >= OVS_DBG_LOUD
     PNDIS_SWITCH_FORWARDING_DETAIL_NET_BUFFER_LIST_INFO info;
     info = NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(nbl);
     if (info == NULL) {
@@ -284,12 +285,15 @@ OvsDumpForwardingDetails(PNET_BUFFER_LIST nbl)
                  info->SourceNicIndex,
                  info->IsPacketDataSafe ? "TRUE" : "FALSE",
                  info->IsPacketDataSafe ? 0 : info->SafePacketDataSize);
-
+#else
+    UNREFERENCED_PARAMETER(nbl);
+#endif
 }
 
 static VOID
 OvsDumpNBLContext(PNET_BUFFER_LIST nbl)
 {
+#if OVS_DBG_DEFAULT >= OVS_DBG_LOUD
     PNET_BUFFER_LIST_CONTEXT ctx = nbl->Context;
     if (ctx == NULL) {
         OVS_LOG_INFO("No Net Buffer List context");
@@ -300,6 +304,9 @@ OvsDumpNBLContext(PNET_BUFFER_LIST nbl)
                      nbl, ctx, ctx->Size, ctx->Offset);
         ctx = ctx->Next;
     }
+#else
+    UNREFERENCED_PARAMETER(nbl);
+#endif
 }
 
 
@@ -337,6 +344,7 @@ OvsDumpNetBuffer(PNET_BUFFER nb)
 static VOID
 OvsDumpNetBufferList(PNET_BUFFER_LIST nbl)
 {
+#if OVS_DBG_DEFAULT >= OVS_DBG_LOUD
     PNET_BUFFER nb;
     OVS_LOG_INFO("NBL: %p, parent: %p, SrcHandle: %p, ChildCount:%d "
                  "poolHandle: %p",
@@ -349,6 +357,9 @@ OvsDumpNetBufferList(PNET_BUFFER_LIST nbl)
         OvsDumpNetBuffer(nb);
         nb = NET_BUFFER_NEXT_NB(nb);
     }
+#else
+    UNREFERENCED_PARAMETER(nbl);
+#endif
 }
 
 /*
