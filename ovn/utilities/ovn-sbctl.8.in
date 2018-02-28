@@ -100,8 +100,6 @@ These options control the format of output from the \fBlist\fR and
 .
 .SS "Public Key Infrastructure Options"
 .so lib/ssl.man
-.so lib/ssl-bootstrap.man
-.so lib/ssl-peer-ca-cert.man
 .
 .SH COMMANDS
 The commands implemented by \fBovn\-sbctl\fR are described in the
