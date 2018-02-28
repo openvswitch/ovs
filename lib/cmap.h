@@ -189,13 +189,12 @@ unsigned long cmap_find_batch(const struct cmap *cmap, unsigned long map,
  *         int extra_data;
  *     };
  *
- *     struct cmap_cursor cursor;
- *     struct my_node *iter;
  *     struct cmap my_map;
+ *     struct my_node *my_node;
  *
- *     cmap_init(&cmap);
+ *     cmap_init(&my_map);
  *     ...add data...
- *     CMAP_FOR_EACH (my_node, cmap_node, &cursor, &cmap) {
+ *     CMAP_FOR_EACH (my_node, cmap_node, &my_map) {
  *         ...operate on my_node...
  *     }
  *
