@@ -5303,6 +5303,9 @@ clone_xlate_actions(const struct ofpact *actions, size_t actions_len,
     if (reversible_actions(actions, actions_len) || is_last_action) {
         old_flow = ctx->xin->flow;
         do_xlate_actions(actions, actions_len, ctx, is_last_action);
+        if (!ctx->freezing) {
+            xlate_action_set(ctx);
+        }
         if (ctx->freezing) {
             finish_freezing(ctx);
         }
@@ -5324,6 +5327,9 @@ clone_xlate_actions(const struct ofpact *actions, size_t actions_len,
         /* Use clone action as datapath clone. */
         offset = nl_msg_start_nested(ctx->odp_actions, OVS_ACTION_ATTR_CLONE);
         do_xlate_actions(actions, actions_len, ctx, true);
+        if (!ctx->freezing) {
+            xlate_action_set(ctx);
+        }
         if (ctx->freezing) {
             finish_freezing(ctx);
         }
@@ -5337,6 +5343,9 @@ clone_xlate_actions(const struct ofpact *actions, size_t actions_len,
         ac_offset = nl_msg_start_nested(ctx->odp_actions,
                                         OVS_SAMPLE_ATTR_ACTIONS);
         do_xlate_actions(actions, actions_len, ctx, true);
+        if (!ctx->freezing) {
+            xlate_action_set(ctx);
+        }
         if (ctx->freezing) {
             finish_freezing(ctx);
         }
