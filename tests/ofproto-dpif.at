@@ -8473,6 +8473,31 @@ AT_CHECK([grep -c 'over max translation depth 64' stdout],
 OVS_VSWITCHD_STOP(["/resubmit actions recursed/d"])
 AT_CLEANUP
 
+dnl Without using ofproto/trace, make sure the
+dnl ofproto trace is still logged
+AT_SETUP([ofproto-dpif - backward resubmit without trace])
+OVS_VSWITCHD_START
+(echo "table=0, actions=resubmit(,66)"
+ for i in `seq 2 66`; do
+    j=`expr $i - 1`
+    echo "table=$i, actions=resubmit(,$j)"
+ done
+ echo "table=1, actions=local") > flows
+AT_CHECK([ovs-ofctl add-flows br0 flows])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive br0 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x1234)'], [0], [stdout])
+
+OVS_WAIT_UNTIL([grep 'over max translation' ovs-vswitchd.log])
+
+dnl make sure the full ofproto trace dump is present
+AT_CHECK([grep -c "^ *resubmit" ovs-vswitchd.log],
+  [0], [66
+])
+
+OVS_VSWITCHD_STOP(["/over max translation depth/d
+/ofproto_dpif_upcall/d"])
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - exponential resubmit chain])
 OVS_VSWITCHD_START
 add_of_ports br0 1

@@ -23,11 +23,6 @@
 #include "ofproto-dpif-xlate.h"
 #include "unixctl.h"
 
-static void ofproto_trace(struct ofproto_dpif *, const struct flow *,
-                          const struct dp_packet *packet,
-                          const struct ofpact[], size_t ofpacts_len,
-                          struct ovs_list *next_ct_states,
-                          struct ds *);
 static void oftrace_node_destroy(struct oftrace_node *);
 
 /* Creates a new oftrace_node, populates it with the given 'type' and a copy of
@@ -661,7 +656,7 @@ ofproto_trace__(struct ofproto_dpif *ofproto, const struct flow *flow,
  *
  * If 'ofpacts' is nonnull then its 'ofpacts_len' bytes specify the actions to
  * trace, otherwise the actions are determined by a flow table lookup. */
-static void
+void
 ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
               const struct dp_packet *packet,
               const struct ofpact ofpacts[], size_t ofpacts_len,

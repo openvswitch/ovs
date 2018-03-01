@@ -34,6 +34,7 @@
 #include "ofproto-dpif-sflow.h"
 #include "ofproto-dpif-xlate.h"
 #include "ofproto-dpif-xlate-cache.h"
+#include "ofproto-dpif-trace.h"
 #include "ovs-rcu.h"
 #include "packets.h"
 #include "openvswitch/poll-loop.h"
@@ -1124,7 +1125,9 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
              struct ofpbuf *odp_actions, struct flow_wildcards *wc)
 {
     struct dpif_flow_stats stats;
+    enum xlate_error xerr;
     struct xlate_in xin;
+    struct ds output;
 
     stats.n_packets = 1;
     stats.n_bytes = dp_packet_size(upcall->packet);
@@ -1159,7 +1162,24 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
     upcall->dump_seq = seq_read(udpif->dump_seq);
     upcall->reval_seq = seq_read(udpif->reval_seq);
 
-    xlate_actions(&xin, &upcall->xout);
+    xerr = xlate_actions(&xin, &upcall->xout);
+
+    /* Translate again and log the ofproto trace for
+     * these two error types. */
+    if (xerr == XLATE_RECURSION_TOO_DEEP ||
+        xerr == XLATE_TOO_MANY_RESUBMITS) {
+        static struct vlog_rate_limit rll = VLOG_RATE_LIMIT_INIT(1, 1);
+
+        /* This is a huge log, so be conservative. */
+        if (!VLOG_DROP_WARN(&rll)) {
+            ds_init(&output);
+            ofproto_trace(upcall->ofproto, upcall->flow,
+                          upcall->packet, NULL, 0, NULL, &output);
+            VLOG_WARN("%s", ds_cstr(&output));
+            ds_destroy(&output);
+        }
+    }
+
     if (wc) {
         /* Convert the input port wildcard from OFP to ODP format. There's no
          * real way to do this for arbitrary bitmasks since the numbering spaces

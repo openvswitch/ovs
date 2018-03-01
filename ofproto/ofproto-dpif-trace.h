@@ -28,6 +28,8 @@
  * each action (OFT_ACTION) executed in the table.
  */
 
+#include "openvswitch/dynamic-string.h"
+#include "ofproto/ofproto-dpif.h"
 #include "openvswitch/compiler.h"
 #include "openvswitch/list.h"
 #include "flow.h"
@@ -79,6 +81,10 @@ struct oftrace_next_ct_state {
 };
 
 void ofproto_dpif_trace_init(void);
+void ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
+              const struct dp_packet *packet,
+              const struct ofpact *, size_t ofpacts_len,
+              struct ovs_list *next_ct_states, struct ds *output);
 
 struct oftrace_node *oftrace_report(struct ovs_list *, enum oftrace_node_type,
                                     const char *text);
