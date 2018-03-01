@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import codecs
 import errno
 import os
 import sys
@@ -262,6 +262,7 @@ class Connection(object):
         if self.status:
             return self.status, None
 
+        decoder = codecs.getincrementaldecoder('utf-8')()
         while True:
             if not self.input:
                 error, data = self.stream.recv(4096)
@@ -270,7 +271,7 @@ class Connection(object):
                 # data, so we convert it here as soon as possible.
                 if data and not error:
                     try:
-                        data = data.decode('utf-8')
+                        data = decoder.decode(data)
                     except UnicodeError:
                         error = errno.EILSEQ
                 if error:

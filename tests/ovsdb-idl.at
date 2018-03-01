@@ -328,6 +328,39 @@ OVSDB_CHECK_IDL([simple idl, writing via IDL with unicode],
 003: done
 ]])
 
+m4_define([OVSDB_CHECK_IDL_PYN_WITH_EXPOUT],
+  [AT_SETUP([$1])
+   AT_SKIP_IF([test $7 = no])
+   AT_KEYWORDS([ovsdb server idl positive Python $5])
+   AT_CHECK([ovsdb_start_idltest])
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
+   AT_CHECK([$8 $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket $3],
+            [0], [stdout], [ignore])
+   echo "$4" > expout
+   AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
+            [0], [expout])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+m4_define([OVSDB_CHECK_IDL_PY_WITH_EXPOUT],
+   [OVSDB_CHECK_IDL_PYN_WITH_EXPOUT([$1 - Python2], [$2], [$3], [$4], [$5], [$6],
+                                    [$HAVE_PYTHON], [$PYTHON])
+    OVSDB_CHECK_IDL_PYN_WITH_EXPOUT([$1 - Python3], [$2], [$3], [$4], [$5], [$6],
+                                    [$HAVE_PYTHON3], [$PYTHON3])])
+
+OVSDB_CHECK_IDL_PY_WITH_EXPOUT([simple idl, writing large data via IDL with unicode],
+  [['["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"s": "'$(printf "测试超过四千零九十六个字节的中文字符串以使解码出现问题。%.0s" {1..50})'"}}]']],
+  [['set 0 b 1, insert 1, set 1 s '$(printf "测试超过四千零九十六个字节的中文字符串以使解码出现问题。%.0s" {1..100})'']],
+  [[000: i=0 r=0 b=false s=$(printf "测试超过四千零九十六个字节的中文字符串以使解码出现问题。%.0s" {1..50}) u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+001: commit, status=success
+002: i=0 r=0 b=true s=$(printf "测试超过四千零九十六个字节的中文字符串以使解码出现问题。%.0s" {1..50}) u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+002: i=1 r=0 b=false s=$(printf "测试超过四千零九十六个字节的中文字符串以使解码出现问题。%.0s" {1..100}) u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
+003: done]])
+
 OVSDB_CHECK_IDL([simple idl, handling verification failure],
   [['["idltest",
       {"op": "insert",
