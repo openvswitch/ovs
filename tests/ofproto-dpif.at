@@ -371,6 +371,31 @@ AT_CHECK([tail -1 stdout], [0],
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - patch port with action set])
+OVS_VSWITCHD_START([ \
+    add-br br1 -- \
+    set bridge br1 datapath-type=dummy fail-mode=secure -- \
+    add-port br0 patch10 -- \
+    set interface patch10 type=patch options:peer=patch20 ofport_request=10 -- \
+    add-port br1 patch20 -- \
+    set interface patch20 type=patch options:peer=patch10 ofport_request=20
+    ])
+add_of_ports br0 1
+add_of_ports br1 2
+AT_CHECK([ovs-ofctl -O OpenFlow12 add-flow br1 'ip actions=write_actions(pop_vlan,output:2)'])
+AT_CHECK([ovs-ofctl -O OpenFlow12 add-flow br0 'ip actions=output:10'])
+AT_CHECK([ovs-appctl ofproto/trace br1 'in_port=20,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_vlan=100,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=1,nw_tos=0,nw_ttl=128,icmp_type=8,icmp_code=0'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: pop_vlan,2
+])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_vlan=100,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=1,nw_tos=0,nw_ttl=128,icmp_type=8,icmp_code=0'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: pop_vlan,2
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
 AT_SETUP([ofproto-dpif - select group])
 OVS_VSWITCHD_START
 add_of_ports br0 1 10 11
