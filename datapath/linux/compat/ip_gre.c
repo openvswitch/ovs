@@ -190,23 +190,26 @@ static int erspan_rcv(struct sk_buff *skb, struct tnl_ptk_info *tpi,
 		      int gre_hdr_len)
 {
 	struct net *net = dev_net(skb->dev);
-	struct metadata_dst tun_dst;
+	struct metadata_dst tun_dst = NULL;
+	struct erspan_base_hdr *ershdr;
+	struct erspan_metadata *pkt_md;
 	struct ip_tunnel_net *itn;
 	struct ip_tunnel *tunnel;
-	struct erspanhdr *ershdr;
 	const struct iphdr *iph;
-	__be32 index;
+	int ver;
 	int len;
 
 	itn = net_generic(net, erspan_net_id);
 	iph = ip_hdr(skb);
 	len = gre_hdr_len + sizeof(*ershdr);
 
+	/* Check based hdr len */
 	if (unlikely(!pskb_may_pull(skb, len)))
 		return -ENOMEM;
 
 	iph = ip_hdr(skb);
-	ershdr = (struct erspanhdr *)(skb->data + gre_hdr_len);
+	ershdr = (struct erspan_base_hdr *)(skb->data + gre_hdr_len);
+	ver = (ntohs(ershdr->ver_vlan) & VER_MASK) >> VER_OFFSET;
 
 	/* The original GRE header does not have key field,
 	 * Use ERSPAN 10-bit session ID as key.
@@ -218,8 +221,12 @@ static int erspan_rcv(struct sk_buff *skb, struct tnl_ptk_info *tpi,
 				  iph->saddr, iph->daddr, 0);
 
 	if (tunnel) {
+		len = gre_hdr_len + erspan_hdr_len(ver);
+		if (unlikely(!pskb_may_pull(skb, len)))
+			return -ENOMEM;
+
 		if (__iptunnel_pull_header(skb,
-					   gre_hdr_len + sizeof(*ershdr),
+					   len,
 					   htons(ETH_P_TEB),
 					   false, false) < 0)
 			goto drop;
@@ -1000,7 +1007,7 @@ static int erspan_tunnel_init(struct net_device *dev)
 	tunnel->tun_hlen = 8;
 	tunnel->parms.iph.protocol = IPPROTO_GRE;
 	tunnel->hlen = tunnel->tun_hlen + tunnel->encap_hlen +
-		       sizeof(struct erspanhdr);
+		       sizeof(struct erspan_base_hdr) + ERSPAN_V1_MDSIZE;
 	t_hlen = tunnel->hlen + sizeof(struct iphdr);
 
 	dev->needed_headroom = LL_MAX_HEADER + t_hlen + 4;
