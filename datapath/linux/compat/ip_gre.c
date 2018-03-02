@@ -367,6 +367,7 @@ static int gre_rcv(struct sk_buff *skb, const struct tnl_ptk_info *unused_tpi)
 	if (unlikely(tpi.proto == htons(ETH_P_ERSPAN))) {
 		if (erspan_rcv(skb, &tpi, hdr_len) == PACKET_RCVD)
 			return 0;
+		goto drop;
 	}
 
 	if (ipgre_rcv(skb, &tpi, hdr_len) == PACKET_RCVD)
@@ -390,7 +391,6 @@ static int gre_rcv(struct sk_buff *skb, const struct tnl_ptk_info *__tpi)
 
 	if (ipgre_rcv(skb, &tpi, 0) == PACKET_RCVD)
 		return 0;
-
 drop:
 
 	kfree_skb(skb);
@@ -1182,6 +1182,7 @@ static void ipgre_tunnel_setup(struct net_device *dev)
 static void ipgre_tap_setup(struct net_device *dev)
 {
 	ether_setup(dev);
+	dev->max_mtu = 0;
 	dev->netdev_ops		= &gre_tap_netdev_ops;
 	dev->priv_flags		|= IFF_LIVE_ADDR_CHANGE;
 	ip_tunnel_setup(dev, gre_tap_net_id);
