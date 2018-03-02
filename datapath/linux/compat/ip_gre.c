@@ -225,6 +225,9 @@ static int erspan_rcv(struct sk_buff *skb, struct tnl_ptk_info *tpi,
 		if (unlikely(!pskb_may_pull(skb, len)))
 			return PACKET_REJECT;
 
+		ershdr = (struct erspan_base_hdr *)skb->data;
+		pkt_md = (struct erspan_metadata *)(ershdr + 1);
+
 		if (__iptunnel_pull_header(skb,
 					   len,
 					   htons(ETH_P_TEB),
