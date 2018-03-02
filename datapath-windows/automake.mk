@@ -3,6 +3,7 @@ EXTRA_DIST += \
 	datapath-windows/Package/package.VcxProj.user \
 	datapath-windows/include/OvsDpInterfaceExt.h \
 	datapath-windows/include/OvsDpInterfaceCtExt.h \
+	datapath-windows/misc/DriverRecommendedRules.ruleset \
 	datapath-windows/misc/OVS.psm1 \
 	datapath-windows/misc/install.cmd \
 	datapath-windows/misc/uninstall.cmd \
@@ -86,5 +87,6 @@ EXTRA_DIST += \
 	datapath-windows/ovsext/resource.h
 
 datapath_windows_analyze: all
+	MSBuild.exe //nologo //maxcpucount datapath-windows/ovsext.sln /target:Build /property:Configuration="Win10Analyze"
 	MSBuild.exe //nologo //maxcpucount datapath-windows/ovsext.sln /target:Build /property:Configuration="Win8.1Analyze"
 	MSBuild.exe //nologo //maxcpucount datapath-windows/ovsext.sln /target:Build /property:Configuration="Win8Analyze"
