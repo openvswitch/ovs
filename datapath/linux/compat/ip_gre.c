@@ -195,7 +195,6 @@ static int erspan_rcv(struct sk_buff *skb, struct tnl_ptk_info *tpi,
 	struct ip_tunnel *tunnel;
 	struct erspanhdr *ershdr;
 	const struct iphdr *iph;
-	__be32 session_id;
 	__be32 index;
 	int len;
 
