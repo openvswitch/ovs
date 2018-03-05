@@ -11,4 +11,8 @@
 #define __rcu
 #endif
 
+#ifndef READ_ONCE
+#define READ_ONCE(x) (x)
+#endif
+
 #endif

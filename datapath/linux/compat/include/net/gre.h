@@ -15,6 +15,23 @@ static inline int rpl_ipgre_init(void)
 static inline void rpl_ipgre_fini(void)
 {}
 
+static inline int rpl_ip6gre_init(void)
+{
+	return 0;
+}
+
+static inline void rpl_ip6gre_fini(void)
+{}
+
+static inline int rpl_ip6_tunnel_init(void)
+{
+	return 0;
+}
+
+static inline void rpl_ip6_tunnel_cleanup(void)
+{
+}
+
 #define gre_fb_xmit dev_queue_xmit
 
 #ifdef CONFIG_INET
@@ -132,6 +149,10 @@ void rpl_gre_build_header(struct sk_buff *skb, const struct tnl_ptk_info *tpi,
 
 int rpl_ipgre_init(void);
 void rpl_ipgre_fini(void);
+int rpl_ip6gre_init(void);
+void rpl_ip6gre_fini(void);
+int rpl_ip6_tunnel_init(void);
+void rpl_ip6_tunnel_cleanup(void);
 
 #define gretap_fb_dev_create rpl_gretap_fb_dev_create
 struct net_device *rpl_gretap_fb_dev_create(struct net *net, const char *name,
@@ -147,6 +168,10 @@ netdev_tx_t rpl_gre_fb_xmit(struct sk_buff *skb);
 
 #define ipgre_init rpl_ipgre_init
 #define ipgre_fini rpl_ipgre_fini
+#define ip6gre_init rpl_ip6gre_init
+#define ip6gre_fini rpl_ip6gre_fini
+#define ip6_tunnel_init rpl_ip6_tunnel_init
+#define ip6_tunnel_cleanup rpl_ip6_tunnel_cleanup
 
 #define gre_fill_metadata_dst ovs_gre_fill_metadata_dst
 int ovs_gre_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb);

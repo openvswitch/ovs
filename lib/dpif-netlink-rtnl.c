@@ -90,6 +90,9 @@ vport_type_to_kind(enum ovs_vport_type type,
     case OVS_VPORT_TYPE_VXLAN:
         return "vxlan";
     case OVS_VPORT_TYPE_GRE:
+    case OVS_VPORT_TYPE_ERSPAN:
+    case OVS_VPORT_TYPE_IP6ERSPAN:
+    case OVS_VPORT_TYPE_IP6GRE:
         if (tnl_cfg->pt_mode == NETDEV_PT_LEGACY_L3) {
             return "gre";
         } else if (tnl_cfg->pt_mode == NETDEV_PT_LEGACY_L2) {
@@ -262,6 +265,9 @@ dpif_netlink_rtnl_verify(const struct netdev_tunnel_config *tnl_cfg,
     case OVS_VPORT_TYPE_INTERNAL:
     case OVS_VPORT_TYPE_LISP:
     case OVS_VPORT_TYPE_STT:
+    case OVS_VPORT_TYPE_ERSPAN:
+    case OVS_VPORT_TYPE_IP6ERSPAN:
+    case OVS_VPORT_TYPE_IP6GRE:
     case OVS_VPORT_TYPE_UNSPEC:
     case __OVS_VPORT_TYPE_MAX:
     default:
@@ -316,6 +322,9 @@ dpif_netlink_rtnl_create(const struct netdev_tunnel_config *tnl_cfg,
         nl_msg_put_be16(&request, IFLA_VXLAN_PORT, tnl_cfg->dst_port);
         break;
     case OVS_VPORT_TYPE_GRE:
+    case OVS_VPORT_TYPE_ERSPAN:
+    case OVS_VPORT_TYPE_IP6ERSPAN:
+    case OVS_VPORT_TYPE_IP6GRE:
         nl_msg_put_flag(&request, IFLA_GRE_COLLECT_METADATA);
         break;
     case OVS_VPORT_TYPE_GENEVE:
@@ -438,6 +447,9 @@ dpif_netlink_rtnl_port_destroy(const char *name, const char *type)
     case OVS_VPORT_TYPE_INTERNAL:
     case OVS_VPORT_TYPE_LISP:
     case OVS_VPORT_TYPE_STT:
+    case OVS_VPORT_TYPE_ERSPAN:
+    case OVS_VPORT_TYPE_IP6ERSPAN:
+    case OVS_VPORT_TYPE_IP6GRE:
     case OVS_VPORT_TYPE_UNSPEC:
     case __OVS_VPORT_TYPE_MAX:
     default:

@@ -196,6 +196,7 @@ static int erspan_rcv(struct sk_buff *skb, struct tnl_ptk_info *tpi,
 	struct ip_tunnel_net *itn;
 	struct ip_tunnel *tunnel;
 	const struct iphdr *iph;
+	struct erspan_md2 *md2;
 	int ver;
 	int len;
 

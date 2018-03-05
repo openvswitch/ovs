@@ -27,6 +27,10 @@
 #define ETH_P_ERSPAN	0x88BE		/* ERSPAN TYPE II */
 #endif
 
+#ifndef ETH_P_ERSPAN2
+#define ETH_P_ERSPAN2	0x22EB		/* ERSPAN version 2 (type III)	*/
+#endif
+
 #define inner_eth_hdr rpl_inner_eth_hdr
 static inline struct ethhdr *inner_eth_hdr(const struct sk_buff *skb)
 {

@@ -13,6 +13,8 @@ openvswitch_sources += \
 	linux/compat/ip_tunnel.c \
 	linux/compat/ip_tunnels_core.c \
 	linux/compat/ip6_output.c \
+	linux/compat/ip6_gre.c \
+	linux/compat/ip6_tunnel.c \
 	linux/compat/lisp.c \
 	linux/compat/netdevice.c \
 	linux/compat/nf_conntrack_core.c \

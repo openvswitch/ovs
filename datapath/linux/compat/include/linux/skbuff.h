@@ -421,4 +421,15 @@ static inline void *skb_put_zero(struct sk_buff *skb, unsigned int len)
 }
 #endif
 
+#ifndef HAVE_SKB_GSO_IPXIP6
+#define SKB_GSO_IPXIP6 (1 << 10)
+#endif
+
+#ifndef HAVE_SKB_SET_INNER_IPPROTO
+static inline void skb_set_inner_ipproto(struct sk_buff *skb,
+					 __u8 ipproto)
+{
+}
+#endif
+
 #endif

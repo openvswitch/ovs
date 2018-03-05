@@ -316,4 +316,11 @@ static inline void skb_gso_error_unwind(struct sk_buff *skb, __be16 protocol,
 	skb->mac_len = mac_len;
 }
 #endif
+
+#ifndef HAVE_NETIF_KEEP_DST
+static inline void netif_keep_dst(struct net_device *dev)
+{
+}
+#endif
+
 #endif /* __LINUX_NETDEVICE_WRAPPER_H */
