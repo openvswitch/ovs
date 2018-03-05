@@ -82,29 +82,6 @@ static __sum16 check_checksum(struct sk_buff *skb)
 	return csum;
 }
 
-#define gre_flags_to_tnl_flags rpl_gre_flags_to_tnl_flags
-static __be16 gre_flags_to_tnl_flags(__be16 flags)
-{
-	__be16 tflags = 0;
-
-	if (flags & GRE_CSUM)
-		tflags |= TUNNEL_CSUM;
-	if (flags & GRE_ROUTING)
-		tflags |= TUNNEL_ROUTING;
-	if (flags & GRE_KEY)
-		tflags |= TUNNEL_KEY;
-	if (flags & GRE_SEQ)
-		tflags |= TUNNEL_SEQ;
-	if (flags & GRE_STRICT)
-		tflags |= TUNNEL_STRICT;
-	if (flags & GRE_REC)
-		tflags |= TUNNEL_REC;
-	if (flags & GRE_VERSION)
-		tflags |= TUNNEL_VERSION;
-
-	return tflags;
-}
-
 static int parse_gre_header(struct sk_buff *skb, struct tnl_ptk_info *tpi,
 			    bool *csum_err)
 {

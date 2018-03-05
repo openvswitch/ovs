@@ -190,7 +190,7 @@ static int erspan_rcv(struct sk_buff *skb, struct tnl_ptk_info *tpi,
 		      int gre_hdr_len)
 {
 	struct net *net = dev_net(skb->dev);
-	struct metadata_dst tun_dst = NULL;
+	struct metadata_dst *tun_dst = NULL;
 	struct erspan_base_hdr *ershdr;
 	struct erspan_metadata *pkt_md;
 	struct ip_tunnel_net *itn;
@@ -200,16 +200,15 @@ static int erspan_rcv(struct sk_buff *skb, struct tnl_ptk_info *tpi,
 	int len;
 
 	itn = net_generic(net, erspan_net_id);
-	iph = ip_hdr(skb);
 	len = gre_hdr_len + sizeof(*ershdr);
 
 	/* Check based hdr len */
 	if (unlikely(!pskb_may_pull(skb, len)))
-		return -ENOMEM;
+		return PACKET_REJECT;
 
 	iph = ip_hdr(skb);
 	ershdr = (struct erspan_base_hdr *)(skb->data + gre_hdr_len);
-	ver = (ntohs(ershdr->ver_vlan) & VER_MASK) >> VER_OFFSET;
+	ver = ershdr->ver;
 
 	/* The original GRE header does not have key field,
 	 * Use ERSPAN 10-bit session ID as key.
@@ -1183,7 +1182,9 @@ static void ipgre_tunnel_setup(struct net_device *dev)
 static void ipgre_tap_setup(struct net_device *dev)
 {
 	ether_setup(dev);
+#ifdef HAVE_NET_DEVICE_MAX_MTU
 	dev->max_mtu = 0;
+#endif
 	dev->netdev_ops		= &gre_tap_netdev_ops;
 	dev->priv_flags		|= IFF_LIVE_ADDR_CHANGE;
 	ip_tunnel_setup(dev, gre_tap_net_id);
