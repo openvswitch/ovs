@@ -2149,6 +2149,11 @@ revalidate_ukey__(struct udpif *udpif, const struct udpif_key *ukey,
         ofproto = xlate_lookup_ofproto(udpif->backer, &ctx.flow, &ofp_in_port);
 
         ofpbuf_clear(odp_actions);
+
+        if (!ofproto) {
+            goto exit;
+        }
+
         compose_slow_path(udpif, xoutp, &ctx.flow, ctx.flow.in_port.odp_port,
                           ofp_in_port, odp_actions,
                           ofproto->up.slowpath_meter_id, &ofproto->uuid);
