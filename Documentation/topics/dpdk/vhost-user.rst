@@ -105,6 +105,9 @@ Once the vhost-user ports have been added to the switch, they must be added to
 the guest. There are two ways to do this: using QEMU directly, or using
 libvirt.
 
+.. note::
+   IOMMU is not supported with vhost-user ports.
+
 Adding vhost-user ports to the guest (QEMU)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
