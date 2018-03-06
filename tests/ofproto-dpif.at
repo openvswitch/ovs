@@ -8487,7 +8487,7 @@ AT_CHECK([ovs-ofctl add-flows br0 flows])
 
 AT_CHECK([ovs-appctl netdev-dummy/receive br0 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x1234)'], [0], [stdout])
 
-OVS_WAIT_UNTIL([grep 'over max translation' ovs-vswitchd.log])
+OVS_WAIT_UNTIL([grep 'packet is dropped' ovs-vswitchd.log])
 
 dnl make sure the full ofproto trace dump is present
 AT_CHECK([grep -c "^ *resubmit" ovs-vswitchd.log],
