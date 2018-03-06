@@ -14,6 +14,7 @@
 #     SSL_INCLUDES to the include directives required
 #     SSL_LIBS to the -l directives required
 #     SSL_LDFLAGS to the -L or -R flags required
+#     SSL_DIR to add it to various paths
 #
 #   and calls ACTION-IF-FOUND or ACTION-IF-NOT-FOUND appropriately
 #
@@ -81,8 +82,10 @@ AC_DEFUN([AX_CHECK_OPENSSL], [
                 SSL_LDFLAGS="-L$ssldir/lib"
                 if test "$WIN32" = "yes"; then
                     SSL_LIBS="-lssleay32 -llibeay32"
+                    SSL_DIR=/$(echo ${ssldir} | ${SED} -e 's/://')
                 else
                     SSL_LIBS="-lssl -lcrypto"
+                    SSL_DIR="$ssldir"
                 fi
                 found=true
                 AC_MSG_RESULT([yes])
@@ -126,4 +129,5 @@ AC_DEFUN([AX_CHECK_OPENSSL], [
     AC_SUBST([SSL_INCLUDES])
     AC_SUBST([SSL_LIBS])
     AC_SUBST([SSL_LDFLAGS])
+    AC_SUBST([SSL_DIR])
 ])
