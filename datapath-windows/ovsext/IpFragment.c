@@ -25,10 +25,10 @@
 #undef OVS_DBG_MOD
 #endif
 #define OVS_DBG_MOD OVS_DBG_IPFRAG
-/* Based on MIN_FRAGMENT_SIZE.*/
-#define MAX_FRAGMENTS 164
+
 #define MIN_FRAGMENT_SIZE 400
 #define MAX_IPDATAGRAM_SIZE 65535
+#define MAX_FRAGMENTS MAX_IPDATAGRAM_SIZE/MIN_FRAGMENT_SIZE + 1
 
 /* Function declarations */
 static KSTART_ROUTINE OvsIpFragmentEntryCleaner;
@@ -275,10 +275,7 @@ OvsProcessIpv4Fragment(POVS_SWITCH_CONTEXT switchContext,
     offset = ntohs(ipHdr->frag_off) & IP_OFFSET;
     offset <<= 3;
     flags = ntohs(ipHdr->frag_off) & IP_MF;
-    /* Only the last fragment can be of smaller size.*/
-    if (flags && ntohs(ipHdr->tot_len) < MIN_FRAGMENT_SIZE) {
-        return NDIS_STATUS_INVALID_LENGTH;
-    }
+
     /*Copy fragment specific fields. */
     fragKey.protocol = ipHdr->protocol;
     fragKey.id = ipHdr->id;
