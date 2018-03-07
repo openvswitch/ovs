@@ -655,7 +655,7 @@ ovsdb_file_compact(struct ovsdb_file *file)
 
     comment = xasprintf("compacting database online "
                         "(%.3f seconds old, %u transactions)",
-                        (time_wall_msec() - file->last_compact) / 1000.0,
+                        (time_msec() - file->last_compact) / 1000.0,
                         file->n_transactions);
     VLOG_INFO("%s: %s", file->file_name, comment);
 
