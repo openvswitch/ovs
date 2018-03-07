@@ -570,8 +570,8 @@ AT_CHECK(
   [stderr])
 cat stderr > output
 AT_CHECK_UNQUOTED(
-  [grep "failed to connect" output], [0],
-  [ovsdb-client: failed to connect to "ssl:127.0.0.1:$SSL_PORT" (Protocol error)
+  [sed -n "/failed to connect/s/ (.*)//p" output], [0],
+  [ovsdb-client: failed to connect to "ssl:127.0.0.1:$SSL_PORT"
 ], 
   [ignore])
 # Check that when ciphers are not compatible, that a negotiation
@@ -593,8 +593,8 @@ AT_CHECK(
   [stderr])
 cat stderr > output
 AT_CHECK_UNQUOTED(
-  [grep "failed to connect" output], [0],
-  [ovsdb-client: failed to connect to "ssl:127.0.0.1:$SSL_PORT" (Protocol error)
+  [sed -n "/failed to connect/s/ (.*)//p" output], [0],
+  [ovsdb-client: failed to connect to "ssl:127.0.0.1:$SSL_PORT"
 ], 
   [ignore])
 # The error message for being unable to negotiate a shared ciphersuite
