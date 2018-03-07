@@ -425,10 +425,11 @@ class Idl(object):
                         (table.name in self.readonly) and
                         (column not in self.readonly[table.name])):
                     columns.append(column)
-            monitor_requests[table.name] = {"columns": columns}
+            monitor_request = {"columns": columns}
             if method == "monitor_cond" and table.condition != [True]:
-                monitor_requests[table.name]["where"] = table.condition
+                monitor_request["where"] = table.condition
                 table.cond_change = False
+            monitor_requests[table.name] = [monitor_request]
 
         msg = ovs.jsonrpc.Message.create_request(
             method, [self._db.name, str(self.uuid), monitor_requests])
