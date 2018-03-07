@@ -929,6 +929,17 @@ pinctrl_handle_dns_lookup(
     } else {
         struct ovs_16aligned_ip6_hdr *nh = dp_packet_l3(&pkt_out);
         nh->ip6_plen = htons(new_l4_size);
+
+        /* IPv6 needs UDP checksum calculated */
+        uint32_t csum;
+        csum = packet_csum_pseudoheader6(nh);
+        csum = csum_continue(csum, out_udp, dp_packet_size(&pkt_out) -
+                             ((const unsigned char *)out_udp -
+                             (const unsigned char *)eth));
+        out_udp->udp_csum = csum_finish(csum);
+        if (!out_udp->udp_csum) {
+            out_udp->udp_csum = htons(0xffff);
+        }
     }
 
     pin->packet = dp_packet_data(&pkt_out);

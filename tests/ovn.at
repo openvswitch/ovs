@@ -7116,8 +7116,9 @@ test_dns6 1 f00000000001 f000000000f0 $src_ip $dst_ip $dns_reply $dns_req_data $
 OVS_WAIT_UNTIL([test 9 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
 
 $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif1-tx.pcap > 1.packets
-cat 1.expected > expout
-AT_CHECK([cat 1.packets], [0], [expout])
+# Skipping the UDP checksum.
+cat 1.expected | cut -c 1-120,125- > expout
+AT_CHECK([cat 1.packets | cut -c 1-120,125-], [0], [expout])
 
 reset_pcap_file hv1-vif1 hv1/vif1
 reset_pcap_file hv1-vif2 hv1/vif2
