@@ -4,7 +4,7 @@ m4_define([JSONRPC_REQ_REPLY_SUCCESS_PYN],
   [AT_SETUP([JSON-RPC request and successful reply - $1])
    AT_SKIP_IF([test $2 = no])
    AT_KEYWORDS([python jsonrpc])
-   AT_CHECK([$PYTHON $srcdir/test-jsonrpc.py --pidfile --detach listen punix:socket])
+   AT_CHECK([$3 $srcdir/test-jsonrpc.py --pidfile --detach listen punix:socket])
    on_exit 'kill `cat test-jsonrpc.py.pid`'
    AT_CHECK(
      [[$3 $srcdir/test-jsonrpc.py request unix:socket echo '[{"a": "b", "x": null}]']], [0],
@@ -19,7 +19,7 @@ m4_define([JSONRPC_REQ_REPLY_ERROR_PYN],
   [AT_SETUP([JSON-RPC request and error reply - $1])
    AT_SKIP_IF([test $2 = no])
    AT_KEYWORDS([python jsonrpc])
-   AT_CHECK([$PYTHON $srcdir/test-jsonrpc.py --pidfile --detach listen punix:socket])
+   AT_CHECK([$3 $srcdir/test-jsonrpc.py --pidfile --detach listen punix:socket])
    on_exit 'kill `cat test-jsonrpc.py.pid`'
    AT_CHECK(
      [[$3 $srcdir/test-jsonrpc.py request unix:socket bad-request '[]']], [0],
