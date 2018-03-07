@@ -1600,7 +1600,8 @@ ovsdb_idl_send_monitor_request__(struct ovsdb_idl *idl,
                 json_object_put(monitor_request, "where", where);
                 table->cond_changed = false;
             }
-            json_object_put(monitor_requests, tc->name, monitor_request);
+            json_object_put(monitor_requests, tc->name,
+                            json_array_create_1(monitor_request));
         }
     }
     free_schema(schema);

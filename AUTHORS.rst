@@ -389,6 +389,7 @@ André Ruß                       andre.russ@hybris.com
 Andreas Beckmann                debian@abeckmann.de
 Andrei Andone                   andrei.andone@softvision.ro
 Andrey Korolyov                 andrey@xdel.ru
+Anil Jangam                     anilj.mailing@gmail.com
 Anshuman Manral                 anshuman.manral@outlook.com
 Anton Matsiuk                   anton.matsiuk@gmail.com
 Anup Khadka                     khadka.py@gmail.com
