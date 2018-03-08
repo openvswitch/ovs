@@ -897,6 +897,25 @@ output;
       <code>to-lport</code> ACLs.
     </p>
 
+    <p>
+      In addition, the following flows are added.
+    </p>
+    <ul>
+      <li>
+        A priority 34000 logical flow is added for each logical port which
+        has DHCPv4 options defined to allow the DHCPv4 reply packet and which has
+        DHCPv6 options defined to allow the DHCPv6 reply packet from the
+        <code>Ingress Table 13: DHCP responses</code>.
+      </li>
+
+      <li>
+        A priority 34000 logical flow is added for each logical switch datapath
+        configured with DNS records with the match <code>udp.dst = 53</code>
+        to allow the DNS reply packet from the
+        <code>Ingress Table 15:DNS responses</code>.
+      </li>
+    </ul>
+
     <h3>Egress Table 5: <code>to-lport</code> QoS marking</h3>
 
     <p>
@@ -917,25 +936,6 @@ output;
       This is similar to ingress table <code>Stateful</code> except that
       there are no rules added for load balancing new connections.
     </p>
-
-    <p>
-      Also the following flows are added.
-    </p>
-    <ul>
-      <li>
-        A priority 34000 logical flow is added for each logical port which
-        has DHCPv4 options defined to allow the DHCPv4 reply packet and which has
-        DHCPv6 options defined to allow the DHCPv6 reply packet from the
-        <code>Ingress Table 13: DHCP responses</code>.
-      </li>
-
-      <li>
-        A priority 34000 logical flow is added for each logical switch datapath
-        configured with DNS records with the match <code>udp.dst = 53</code>
-        to allow the DNS reply packet from the
-        <code>Ingress Table 15:DNS responses</code>.
-      </li>
-    </ul>
 
     <h3>Egress Table 8: Egress Port Security - IP</h3>
 
