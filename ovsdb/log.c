@@ -657,7 +657,7 @@ ovsdb_log_mark_base(struct ovsdb_log *log)
 bool
 ovsdb_log_grew_lots(const struct ovsdb_log *log)
 {
-    return log->offset > 10 * 1024 * 1024 && log->offset / 4 > log->base;
+    return log->offset > 10 * 1024 * 1024 && log->offset / 2 > log->base;
 }
 
 /* Attempts to atomically replace the contents of 'log', on disk, by the 'n'
