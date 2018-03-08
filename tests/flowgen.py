@@ -14,7 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import socket
 import struct
 
@@ -201,8 +200,8 @@ def output(attrs):
     packets.write(packet)
 
 
-flows = os.fdopen(3, 'wb')
-packets = os.fdopen(4, 'wb')
+flows = open('flows', 'wb')
+packets = open('pcap', 'wb')
 
 # Print pcap file header.
 packets.write(struct.pack('>LHHLLLL',

@@ -1,7 +1,7 @@
 AT_BANNER([library unit tests])
 
 AT_SETUP([flow extractor])
-AT_CHECK([$PYTHON $srcdir/flowgen.py >/dev/null 3>flows 4>pcap])
+AT_CHECK([$PYTHON $srcdir/flowgen.py >/dev/null])
 AT_CHECK([ovstest test-flows flows pcap], [0], [checked 247 packets, 0 errors
 ])
 AT_CLEANUP
