@@ -184,10 +184,12 @@ Causes \fBovsdb\-server\fR to gracefully terminate.
 .IP "\fBovsdb\-server/compact\fR [\fIdb\fR]"
 Compacts database \fIdb\fR in-place.  If \fIdb\fR is not
 specified, compacts every database in-place.  A database is also
-compacted automatically when a transaction is logged if it is over 4
+compacted automatically when a transaction is logged if it is over 2
 times as large as its previous compacted size (and at least 10 MB),
 but not before 100 commits have been added or 10 minutes have elapsed
-since the last compaction.
+since the last compaction. It will also be compacted automatically
+after 24 hours since the last compaction if 100 commits were added
+regardless of its size.
 .
 .IP "\fBovsdb\-server/reconnect\fR"
 Makes \fBovsdb\-server\fR drop all of the JSON\-RPC
