@@ -364,7 +364,8 @@ static int gre_rcv(struct sk_buff *skb, const struct tnl_ptk_info *unused_tpi)
 	if (hdr_len < 0)
 		goto drop;
 
-	if (unlikely(tpi.proto == htons(ETH_P_ERSPAN))) {
+	if (unlikely(tpi.proto == htons(ETH_P_ERSPAN) ||
+		     tpi.proto == htons(ETH_P_ERSPAN2))) {
 		if (erspan_rcv(skb, &tpi, hdr_len) == PACKET_RCVD)
 			return 0;
 		goto drop;
@@ -819,9 +820,14 @@ enum {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,15,0)
 	IFLA_GRE_ERSPAN_INDEX = IFLA_GRE_FWMARK + 1,
 #endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,16,0)
+	IFLA_GRE_ERSPAN_VER = IFLA_GRE_ERSPAN_INDEX + 1,
+	IFLA_GRE_ERSPAN_DIR,
+	IFLA_GRE_ERSPAN_HWID,
+#endif
 };
 
-#define RPL_IFLA_GRE_MAX (IFLA_GRE_ERSPAN_INDEX + 1)
+#define RPL_IFLA_GRE_MAX (IFLA_GRE_ERSPAN_HWID + 1)
 
 static int erspan_validate(struct nlattr *tb[], struct nlattr *data[])
 {
@@ -966,8 +972,14 @@ static netdev_tx_t erspan_xmit(struct sk_buff *skb,
 	}
 
 	/* Push ERSPAN header */
-	erspan_build_header(skb, tunnel->parms.o_key, tunnel->index,
-			    truncate, true);
+	if (tunnel->erspan_ver == 1)
+		erspan_build_header(skb, tunnel->parms.o_key, tunnel->index,
+				    truncate, true);
+	else
+		erspan_build_header_v2(skb, tunnel->parms.o_key,
+				       tunnel->dir, tunnel->hwid,
+				       truncate, true);
+
 	tunnel->parms.o_flags &= ~TUNNEL_KEY;
 	__gre_xmit(skb, dev, &tunnel->parms.iph, htons(ETH_P_ERSPAN));
 	return NETDEV_TX_OK;
@@ -1011,7 +1023,7 @@ static int erspan_tunnel_init(struct net_device *dev)
 	tunnel->tun_hlen = 8;
 	tunnel->parms.iph.protocol = IPPROTO_GRE;
 	tunnel->hlen = tunnel->tun_hlen + tunnel->encap_hlen +
-		       sizeof(struct erspan_base_hdr) + ERSPAN_V1_MDSIZE;
+		       erspan_hdr_len(tunnel->erspan_ver);
 	t_hlen = tunnel->hlen + sizeof(struct iphdr);
 
 	dev->needed_headroom = LL_MAX_HEADER + t_hlen + 4;
@@ -1248,6 +1260,12 @@ static size_t ipgre_get_size(const struct net_device *dev)
 		nla_total_size(0) +
 		/* IFLA_GRE_ERSPAN_INDEX */
 		nla_total_size(4) +
+		/* IFLA_GRE_ERSPAN_VER */
+		nla_total_size(1) +
+		/* IFLA_GRE_ERSPAN_DIR */
+		nla_total_size(1) +
+		/* IFLA_GRE_ERSPAN_HWID */
+		nla_total_size(2) +
 		0;
 }
 
@@ -1269,9 +1287,18 @@ static int ipgre_fill_info(struct sk_buff *skb, const struct net_device *dev)
 		       !!(p->iph.frag_off & htons(IP_DF))))
 		goto nla_put_failure;
 
-	if (t->index)
-		if (nla_put_u32(skb, IFLA_GRE_ERSPAN_INDEX, t->index))
+	if (nla_put_u8(skb, IFLA_GRE_ERSPAN_VER, t->erspan_ver))
+		goto nla_put_failure;
+
+	if (t->erspan_ver == 1) {
+ 		if (nla_put_u32(skb, IFLA_GRE_ERSPAN_INDEX, t->index))
+ 			goto nla_put_failure;
+	} else if (t->erspan_ver == 2) {
+		if (nla_put_u8(skb, IFLA_GRE_ERSPAN_DIR, t->dir))
 			goto nla_put_failure;
+		if (nla_put_u16(skb, IFLA_GRE_ERSPAN_HWID, t->hwid))
+			goto nla_put_failure;
+	}
 
 	return 0;
 
@@ -1291,6 +1318,9 @@ static const struct nla_policy ipgre_policy[RPL_IFLA_GRE_MAX + 1] = {
 	[IFLA_GRE_TOS]		= { .type = NLA_U8 },
 	[IFLA_GRE_PMTUDISC]	= { .type = NLA_U8 },
 	[IFLA_GRE_ERSPAN_INDEX]	= { .type = NLA_U32 },
+	[IFLA_GRE_ERSPAN_VER]	= { .type = NLA_U8 },
+	[IFLA_GRE_ERSPAN_DIR]	= { .type = NLA_U8 },
+	[IFLA_GRE_ERSPAN_HWID]	= { .type = NLA_U16 },
 };
 
 static struct rtnl_link_ops ipgre_link_ops __read_mostly = {

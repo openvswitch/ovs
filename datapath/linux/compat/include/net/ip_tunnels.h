@@ -257,7 +257,7 @@ struct rpl_ip_tunnel_dst {
 };
 
 #define ip_tunnel rpl_ip_tunnel
-struct ip_tunnel {
+struct rpl_ip_tunnel {
 	struct ip_tunnel __rcu	*next;
 	struct hlist_node hash_node;
 	struct net_device	*dev;
@@ -301,7 +301,7 @@ struct ip_tunnel {
 };
 
 #define ip_tunnel_net rpl_ip_tunnel_net
-struct ip_tunnel_net {
+struct rpl_ip_tunnel_net {
 	struct net_device *fb_tunnel_dev;
 	struct hlist_head tunnels[IP_TNL_HASH_SIZE];
 	struct ip_tunnel __rcu *collect_md_tun;
@@ -368,8 +368,8 @@ struct rtnl_link_stats64 *rpl_ip_tunnel_get_stats64(struct net_device *dev,
 						    struct rtnl_link_stats64 *tot);
 
 #define ip_tunnel_get_dsfield rpl_ip_tunnel_get_dsfield
-static inline u8 ip_tunnel_get_dsfield(const struct iphdr *iph,
-		const struct sk_buff *skb)
+static inline u8 rpl_ip_tunnel_get_dsfield(const struct iphdr *iph,
+					   const struct sk_buff *skb)
 {
 	if (skb->protocol == htons(ETH_P_IP))
 		return iph->tos;
@@ -380,7 +380,7 @@ static inline u8 ip_tunnel_get_dsfield(const struct iphdr *iph,
 }
 
 #define ip_tunnel_ecn_encap rpl_ip_tunnel_ecn_encap
-static inline u8 ip_tunnel_ecn_encap(u8 tos, const struct iphdr *iph,
+static inline u8 rpl_ip_tunnel_ecn_encap(u8 tos, const struct iphdr *iph,
 		const struct sk_buff *skb)
 {
 	u8 inner = ip_tunnel_get_dsfield(iph, skb);
