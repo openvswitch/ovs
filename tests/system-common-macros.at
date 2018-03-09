@@ -179,12 +179,13 @@ m4_define([ADD_OVS_TUNNEL],
    ]
 )
 
-# ADD_OVS_TUNNEL6([type], [bridge], [port], [remote-addr], [overlay-addr])
+# ADD_OVS_TUNNEL6([type], [bridge], [port], [remote-addr], [overlay-addr],
+#                 [tunnel-args])
 #
 # Same as ADD_OVS_TUNNEL, but drops MTU enough for the IPv6 underlay.
 #
 m4_define([ADD_OVS_TUNNEL6],
-   [ADD_OVS_TUNNEL([$1], [$2], [$3], [$4], [$5])
+   [ADD_OVS_TUNNEL([$1], [$2], [$3], [$4], [$5], [$6])
     AT_CHECK([ip link set dev $2 mtu 1430])
    ]
 )
