@@ -314,7 +314,8 @@ struct netdev_class {
      * flow.  Push header is called for packet to build header specific to
      * a packet on actual transmit.  It uses partial header build by
      * build_header() which is passed as data. */
-    void (*push_header)(struct dp_packet *packet,
+    void (*push_header)(const struct netdev *,
+                        struct dp_packet *packet,
                         const struct ovs_action_push_tnl *data);
 
     /* Pop tunnel header from packet, build tunnel metadata and resize packet

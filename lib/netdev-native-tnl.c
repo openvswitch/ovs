@@ -215,7 +215,8 @@ udp_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
 
 
 void
-netdev_tnl_push_udp_header(struct dp_packet *packet,
+netdev_tnl_push_udp_header(const struct netdev *netdev OVS_UNUSED,
+                           struct dp_packet *packet,
                            const struct ovs_action_push_tnl *data)
 {
     struct udp_header *udp;
@@ -435,7 +436,8 @@ err:
 }
 
 void
-netdev_gre_push_header(struct dp_packet *packet,
+netdev_gre_push_header(const struct netdev *netdev OVS_UNUSED,
+                       struct dp_packet *packet,
                        const struct ovs_action_push_tnl *data)
 {
     struct gre_base_hdr *greh;

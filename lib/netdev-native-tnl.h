@@ -34,13 +34,15 @@ netdev_gre_build_header(const struct netdev *netdev,
                         const struct netdev_tnl_build_header_params *params);
 
 void
-netdev_gre_push_header(struct dp_packet *packet,
+netdev_gre_push_header(const struct netdev *netdev,
+                       struct dp_packet *packet,
                        const struct ovs_action_push_tnl *data);
 struct dp_packet *
 netdev_gre_pop_header(struct dp_packet *packet);
 
 void
-netdev_tnl_push_udp_header(struct dp_packet *packet,
+netdev_tnl_push_udp_header(const struct netdev *netdev,
+                           struct dp_packet *packet,
                            const struct ovs_action_push_tnl *data);
 int
 netdev_geneve_build_header(const struct netdev *netdev,
