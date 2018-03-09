@@ -123,7 +123,7 @@ netdev_tnl_ip_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
         tnl->ip_tos = ntohl(tc_flow) >> 20;
         tnl->ip_ttl = ip6->ip6_hlim;
 
-        *hlen += IPV6_HEADER_LEN;
+        *hlen += packet->l4_ofs - packet->l3_ofs;
 
     } else {
         VLOG_WARN_RL(&err_rl, "ipv4 packet has invalid version (%d)",
