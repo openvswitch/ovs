@@ -951,6 +951,15 @@
         "[fd0f::1]:8800".  Examples for value are "10.0.0.1, 10.0.0.2" and
         "20.0.0.10:8800, 20.0.0.11:8800".
       </p>
+      <p>
+        When the <code>Load_Balancer</code> is added to the
+        <code>logical_switch</code>, the VIP has to be in a different subnet
+        than the one used for the <code>logical_switch</code>.  Since VIP is
+        in a different subnet, you should connect your logical switch to
+        either a OVN logical router or a real router (this is because the
+        client can now send a packet with VIP as the destination IP address
+        and router's mac address as the destination MAC address).
+      </p>
     </column>
 
     <column name="protocol">
