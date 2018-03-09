@@ -973,10 +973,11 @@ static netdev_tx_t erspan_xmit(struct sk_buff *skb,
 
 	/* Push ERSPAN header */
 	if (tunnel->erspan_ver == 1)
-		erspan_build_header(skb, tunnel->parms.o_key, tunnel->index,
+		erspan_build_header(skb, ntohl(tunnel->parms.o_key),
+				    tunnel->index,
 				    truncate, true);
 	else
-		erspan_build_header_v2(skb, tunnel->parms.o_key,
+		erspan_build_header_v2(skb, ntohl(tunnel->parms.o_key),
 				       tunnel->dir, tunnel->hwid,
 				       truncate, true);
 
