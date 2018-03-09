@@ -3448,11 +3448,6 @@ bridge_del_ports(struct bridge *br, const struct shash *wanted_ports)
             if (iface) {
                 iface->cfg = cfg;
                 iface->type = type;
-            } else if (!strcmp(type, "null")) {
-                VLOG_WARN_ONCE("%s: The null interface type is deprecated and"
-                               " may be removed in February 2013. Please email"
-                               " dev@openvswitch.org with concerns.",
-                               cfg->name);
             } else {
                 /* We will add new interfaces later. */
             }
@@ -4074,11 +4069,7 @@ port_del_ifaces(struct port *port)
     /* Collect list of new interfaces. */
     sset_init(&new_ifaces);
     for (i = 0; i < port->cfg->n_interfaces; i++) {
-        const char *name = port->cfg->interfaces[i]->name;
-        const char *type = port->cfg->interfaces[i]->type;
-        if (strcmp(type, "null")) {
-            sset_add(&new_ifaces, name);
-        }
+        sset_add(&new_ifaces, port->cfg->interfaces[i]->name);
     }
 
     /* Get rid of deleted interfaces. */

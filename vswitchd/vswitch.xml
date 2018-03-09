@@ -2270,10 +2270,6 @@
           <dd>
             A pair of virtual devices that act as a patch cable.
           </dd>
-
-          <dt><code>null</code></dt>
-          <dd>An ignored interface. Deprecated and slated for removal in
-          February 2013.</dd>
         </dl>
       </column>
     </group>

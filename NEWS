@@ -5,6 +5,7 @@ Post-v2.9.0
      * Previous versions gave OpenFlow tables default names of the form
        "table#".  These are not helpful names for the purpose of accepting
        and displaying table names, so now tables by default have no names.
+     * The "null" interface type, deprecated since 2013, has been removed.
    - ovs-ofctl:
      * ovs-ofctl now accepts and display table names in place of numbers.  By
        default it always accepts names and in interactive use it displays them;
