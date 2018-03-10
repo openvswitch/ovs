@@ -590,7 +590,7 @@ ovsdb_file_commit(struct ovsdb_replica *replica,
     struct ovsdb_file *file = ovsdb_file_cast(replica);
     struct ovsdb_file_txn ftxn;
     struct ovsdb_error *error;
-    long long int next_compact_elapsed;
+    long long int current_time;
 
     ovsdb_file_txn_init(&ftxn);
     ovsdb_txn_for_each_change(txn, ovsdb_file_change_cb, &ftxn);
@@ -611,12 +611,12 @@ ovsdb_file_commit(struct ovsdb_replica *replica,
      * tried), and if there are at least 100 transactions in the database, and
      * if the database is at least 10 MB, and the database is at least 2x the
      * size of the previous snapshot, then compact the database. However, if
-     * it has been over COMPACT_MAX_MSEC ms, the database size is not taken
-     * into account. */
-    next_compact_elapsed = time_msec() - file->next_compact;
-    if (next_compact_elapsed >= 0
+     * it has been over COMPACT_MAX_MSEC ms since the last compaction, the
+     * database size is not taken into account. */
+    current_time = time_msec();
+    if (current_time >= file->next_compact
         && file->n_transactions >= 100
-        && (next_compact_elapsed >= COMPACT_MAX_MSEC
+        && (current_time - file->last_compact >= COMPACT_MAX_MSEC
             || ovsdb_log_grew_lots(file->log))) {
         error = ovsdb_file_compact(file);
         if (error) {
