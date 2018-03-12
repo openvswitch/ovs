@@ -428,6 +428,27 @@ parse_tc_flower_to_match(struct tc_flower *flower,
 
         match_set_nw_ttl_masked(match, key->ip_ttl, mask->ip_ttl);
 
+        if (mask->flags) {
+            uint8_t flags = 0;
+            uint8_t flags_mask = 0;
+
+            if (mask->flags & TCA_FLOWER_KEY_FLAGS_IS_FRAGMENT) {
+                if (key->flags & TCA_FLOWER_KEY_FLAGS_IS_FRAGMENT) {
+                    flags |= FLOW_NW_FRAG_ANY;
+                }
+                flags_mask |= FLOW_NW_FRAG_ANY;
+            }
+
+            if (mask->flags & TCA_FLOWER_KEY_FLAGS_FRAG_IS_FIRST) {
+                if (!(key->flags & TCA_FLOWER_KEY_FLAGS_FRAG_IS_FIRST)) {
+                    flags |= FLOW_NW_FRAG_LATER;
+                }
+                flags_mask |= FLOW_NW_FRAG_LATER;
+            }
+
+            match_set_nw_frag_masked(match, flags, flags_mask);
+        }
+
         match_set_nw_src_masked(match, key->ipv4.ipv4_src, mask->ipv4.ipv4_src);
         match_set_nw_dst_masked(match, key->ipv4.ipv4_dst, mask->ipv4.ipv4_dst);
 
@@ -780,11 +801,6 @@ test_key_and_mask(struct match *match)
         return EOPNOTSUPP;
     }
 
-    if (mask->nw_frag) {
-        VLOG_DBG_RL(&rl, "offloading attribute nw_frag isn't supported");
-        return EOPNOTSUPP;
-    }
-
     for (int i = 0; i < FLOW_MAX_MPLS_LABELS; i++) {
         if (mask->mpls_lse[i]) {
             VLOG_DBG_RL(&rl, "offloading attribute mpls_lse isn't supported");
@@ -932,6 +948,17 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         flower.key.ip_ttl = key->nw_ttl;
         flower.mask.ip_ttl = mask->nw_ttl;
 
+        if (mask->nw_frag) {
+            if (key->nw_frag & FLOW_NW_FRAG_ANY)
+                flower.key.flags |= TCA_FLOWER_KEY_FLAGS_IS_FRAGMENT;
+            if (!(key->nw_frag & FLOW_NW_FRAG_LATER))
+                flower.key.flags |= TCA_FLOWER_KEY_FLAGS_FRAG_IS_FIRST;
+
+            flower.mask.flags |= TCA_FLOWER_KEY_FLAGS_IS_FRAGMENT;
+            flower.mask.flags |= TCA_FLOWER_KEY_FLAGS_FRAG_IS_FIRST;
+            mask->nw_frag = 0;
+        }
+
         if (key->nw_proto == IPPROTO_TCP) {
             flower.key.tcp_dst = key->tp_dst;
             flower.mask.tcp_dst = mask->tp_dst;
@@ -958,7 +985,6 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
             mask->tp_dst = 0;
         }
 
-        mask->nw_frag = 0;
         mask->nw_tos = 0;
         mask->nw_proto = 0;
         mask->nw_ttl = 0;

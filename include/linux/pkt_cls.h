@@ -1,7 +1,7 @@
 #ifndef __LINUX_PKT_CLS_WRAPPER_H
 #define __LINUX_PKT_CLS_WRAPPER_H 1
 
-#if defined(__KERNEL__) || defined(HAVE_TCA_FLOWER_KEY_IP_TTL_MASK)
+#if defined(__KERNEL__) || defined(HAVE_TCA_FLOWER_KEY_FLAGS_FRAG_IS_FIRST)
 #include_next <linux/pkt_cls.h>
 #else
 
@@ -201,8 +201,9 @@ enum {
 
 enum {
 	TCA_FLOWER_KEY_FLAGS_IS_FRAGMENT = (1 << 0),
+	TCA_FLOWER_KEY_FLAGS_FRAG_IS_FIRST = (1 << 1),
 };
 
-#endif /* __KERNEL__ || !HAVE_TCA_FLOWER_KEY_IP_TTL_MASK */
+#endif /* __KERNEL__ || !HAVE_TCA_FLOWER_KEY_FLAGS_FRAG_IS_FIRST */
 
 #endif /* __LINUX_PKT_CLS_WRAPPER_H */

@@ -281,6 +281,8 @@ static const struct nl_policy tca_flower_policy[] = {
                                            .optional = true, },
     [TCA_FLOWER_KEY_ENC_UDP_DST_PORT] = { .type = NL_A_U16,
                                           .optional = true, },
+    [TCA_FLOWER_KEY_FLAGS] = { .type = NL_A_BE32, .optional = true, },
+    [TCA_FLOWER_KEY_FLAGS_MASK] = { .type = NL_A_BE32, .optional = true, },
     [TCA_FLOWER_KEY_IP_TTL] = { .type = NL_A_U8,
                                 .optional = true, },
     [TCA_FLOWER_KEY_IP_TTL_MASK] = { .type = NL_A_U8,
@@ -372,6 +374,11 @@ nl_parse_flower_ip(struct nlattr **attrs, struct tc_flower *flower) {
         ip_proto = nl_attr_get_u8(attrs[TCA_FLOWER_KEY_IP_PROTO]);
         key->ip_proto = ip_proto;
         mask->ip_proto = UINT8_MAX;
+    }
+
+    if (attrs[TCA_FLOWER_KEY_FLAGS_MASK]) {
+        key->flags = ntohl(nl_attr_get_u32(attrs[TCA_FLOWER_KEY_FLAGS]));
+        mask->flags = ntohl(nl_attr_get_u32(attrs[TCA_FLOWER_KEY_FLAGS_MASK]));
     }
 
     if (attrs[TCA_FLOWER_KEY_IPV4_SRC_MASK]) {
@@ -1493,6 +1500,13 @@ nl_msg_put_flower_options(struct ofpbuf *request, struct tc_flower *flower)
         if (flower->mask.ip_proto && flower->key.ip_proto) {
             nl_msg_put_u8(request, TCA_FLOWER_KEY_IP_PROTO,
                           flower->key.ip_proto);
+        }
+
+        if (flower->mask.flags) {
+            nl_msg_put_u32(request, TCA_FLOWER_KEY_FLAGS,
+                           htonl(flower->key.flags));
+            nl_msg_put_u32(request, TCA_FLOWER_KEY_FLAGS_MASK,
+                           htonl(flower->mask.flags));
         }
 
         if (flower->key.ip_proto == IPPROTO_UDP) {
