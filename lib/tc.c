@@ -809,6 +809,7 @@ nl_parse_single_action(struct nlattr *action, struct tc_flower *flower)
     struct nlattr *stats_attrs[ARRAY_SIZE(stats_policy)];
     struct ovs_flow_stats *stats = &flower->stats;
     const struct gnet_stats_basic *bs;
+    int err = 0;
 
     if (!nl_parse_nested(action, act_policy, action_attrs,
                          ARRAY_SIZE(act_policy))) {
@@ -821,20 +822,24 @@ nl_parse_single_action(struct nlattr *action, struct tc_flower *flower)
     act_cookie = action_attrs[TCA_ACT_COOKIE];
 
     if (!strcmp(act_kind, "gact")) {
-        nl_parse_act_drop(act_options, flower);
+        err = nl_parse_act_drop(act_options, flower);
     } else if (!strcmp(act_kind, "mirred")) {
-        nl_parse_act_mirred(act_options, flower);
+        err = nl_parse_act_mirred(act_options, flower);
     } else if (!strcmp(act_kind, "vlan")) {
-        nl_parse_act_vlan(act_options, flower);
+        err = nl_parse_act_vlan(act_options, flower);
     } else if (!strcmp(act_kind, "tunnel_key")) {
-        nl_parse_act_tunnel_key(act_options, flower);
+        err = nl_parse_act_tunnel_key(act_options, flower);
     } else if (!strcmp(act_kind, "pedit")) {
-        nl_parse_act_pedit(act_options, flower);
+        err = nl_parse_act_pedit(act_options, flower);
     } else if (!strcmp(act_kind, "csum")) {
         nl_parse_act_csum(act_options, flower);
     } else {
         VLOG_ERR_RL(&error_rl, "unknown tc action kind: %s", act_kind);
-        return EINVAL;
+        err = EINVAL;
+    }
+
+    if (err) {
+        return err;
     }
 
     if (act_cookie) {
