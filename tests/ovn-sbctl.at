@@ -134,3 +134,17 @@ options             : {vtep_logical_switch="l0", vtep_physical_switch="p0"}
 
 OVN_SBCTL_TEST_STOP
 AT_CLEANUP
+
+dnl ---------------------------------------------------------------------
+
+AT_SETUP([ovn-sbctl - connection])
+OVN_SBCTL_TEST_START
+
+AT_CHECK([ovn-sbctl --inactivity-probe=30000 set-connection ptcp:6641:127.0.0.1 punix:$OVS_RUNDIR/ovnsb_db.sock])
+AT_CHECK([ovn-sbctl list connection | grep inactivity_probe], [0], [dnl
+inactivity_probe    : 30000
+inactivity_probe    : 30000
+])
+
+OVN_SBCTL_TEST_STOP
+AT_CLEANUP

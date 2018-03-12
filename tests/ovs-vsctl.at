@@ -487,6 +487,9 @@ AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
   [get-controller br0],
 
   [set-controller br0 tcp:8.9.10.11 tcp:5.4.3.2],
+  [get-controller br0],
+
+  [--inactivity-probe=30000 set-controller br0 tcp:1.2.3.4],
   [get-controller br0])], [0], [
 
 
@@ -495,6 +498,8 @@ tcp:4.5.6.7
 
 
 tcp:5.4.3.2\ntcp:8.9.10.11
+
+tcp:1.2.3.4
 ])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
@@ -660,6 +665,8 @@ AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
   [get-manager],
   [set-manager tcp:8.9.10.11 tcp:5.4.3.2],
   [get-manager],
+  [--inactivity-probe=30000 set-manager tcp:1.2.3.4],
+  [get-manager],
   [del-manager],
   [get-manager])], [0], [
 
@@ -667,6 +674,8 @@ AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
 tcp:4.5.6.7
 
 tcp:5.4.3.2\ntcp:8.9.10.11
+
+tcp:1.2.3.4
 
 
 ])

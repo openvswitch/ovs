@@ -316,6 +316,7 @@ VTEP commands:\n\
 Manager commands:\n\
   get-manager                 print the managers\n\
   del-manager                 delete the managers\n\
+  [--inactivity-probe=MSECS]\n\
   set-manager TARGET...       set the list of managers to TARGET...\n\
 \n\
 Physical Switch commands:\n\
@@ -2097,6 +2098,7 @@ pre_manager(struct ctl_context *ctx)
 {
     ovsdb_idl_add_column(ctx->idl, &vteprec_global_col_managers);
     ovsdb_idl_add_column(ctx->idl, &vteprec_manager_col_target);
+    ovsdb_idl_add_column(ctx->idl, &vteprec_manager_col_inactivity_probe);
 }
 
 static void
@@ -2149,10 +2151,13 @@ cmd_del_manager(struct ctl_context *ctx)
 }
 
 static void
-insert_managers(struct vtep_ctl_context *vtepctl_ctx, char *targets[], size_t n)
+insert_managers(struct vtep_ctl_context *vtepctl_ctx, char *targets[],
+                size_t n, struct shash *options)
 {
     struct vteprec_manager **managers;
     size_t i;
+    const char *inactivity_probe = shash_find_data(options,
+                                                   "--inactivity-probe");
 
     /* Insert each manager in a new row in Manager table. */
     managers = xmalloc(n * sizeof *managers);
@@ -2162,6 +2167,10 @@ insert_managers(struct vtep_ctl_context *vtepctl_ctx, char *targets[], size_t n)
         }
         managers[i] = vteprec_manager_insert(vtepctl_ctx->base.txn);
         vteprec_manager_set_target(managers[i], targets[i]);
+        if (inactivity_probe) {
+            int64_t msecs = atoll(inactivity_probe);
+            vteprec_manager_set_inactivity_probe(managers[i], &msecs, 1);
+        }
     }
 
     /* Store uuids of new Manager rows in 'managers' column. */
@@ -2177,7 +2186,7 @@ cmd_set_manager(struct ctl_context *ctx)
 
     verify_managers(vtepctl_ctx->vtep_global);
     delete_managers(vtepctl_ctx);
-    insert_managers(vtepctl_ctx, &ctx->argv[1], n);
+    insert_managers(vtepctl_ctx, &ctx->argv[1], n, &ctx->options);
 }
 
 /* Parameter commands. */
@@ -2491,8 +2500,8 @@ static const struct ctl_command_syntax vtep_commands[] = {
     /* Manager commands. */
     {"get-manager", 0, 0, NULL, pre_manager, cmd_get_manager, NULL, "", RO},
     {"del-manager", 0, 0, NULL, pre_manager, cmd_del_manager, NULL, "", RW},
-    {"set-manager", 1, INT_MAX, NULL, pre_manager, cmd_set_manager, NULL, "",
-     RW},
+    {"set-manager", 1, INT_MAX, NULL, pre_manager, cmd_set_manager, NULL,
+     "--inactivity-probe=", RW},
 
     {NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, RO},
 };

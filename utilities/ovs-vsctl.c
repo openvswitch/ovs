@@ -392,6 +392,7 @@ Interface commands (a bond consists of multiple interfaces):\n\
 Controller commands:\n\
   get-controller BRIDGE      print the controllers for BRIDGE\n\
   del-controller BRIDGE      delete the controllers for BRIDGE\n\
+  [--inactivity-probe=MSECS]\n\
   set-controller BRIDGE TARGET...  set the controllers for BRIDGE\n\
   get-fail-mode BRIDGE       print the fail-mode for BRIDGE\n\
   del-fail-mode BRIDGE       delete the fail-mode for BRIDGE\n\
@@ -400,6 +401,7 @@ Controller commands:\n\
 Manager commands:\n\
   get-manager                print the managers\n\
   del-manager                delete the managers\n\
+  [--inactivity-probe=MSECS]\n\
   set-manager TARGET...      set the list of managers to TARGET...\n\
 \n\
 SSL commands:\n\
@@ -1855,6 +1857,7 @@ pre_controller(struct ctl_context *ctx)
     pre_get_info(ctx);
 
     ovsdb_idl_add_column(ctx->idl, &ovsrec_controller_col_target);
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_controller_col_inactivity_probe);
 }
 
 static void
@@ -1915,18 +1918,24 @@ cmd_del_controller(struct ctl_context *ctx)
 }
 
 static struct ovsrec_controller **
-insert_controllers(struct ovsdb_idl_txn *txn, char *targets[], size_t n)
+insert_controllers(struct ctl_context *ctx, char *targets[], size_t n)
 {
     struct ovsrec_controller **controllers;
     size_t i;
+    const char *inactivity_probe = shash_find_data(&ctx->options,
+                                                   "--inactivity-probe");
 
     controllers = xmalloc(n * sizeof *controllers);
     for (i = 0; i < n; i++) {
         if (vconn_verify_name(targets[i]) && pvconn_verify_name(targets[i])) {
             VLOG_WARN("target type \"%s\" is possibly erroneous", targets[i]);
         }
-        controllers[i] = ovsrec_controller_insert(txn);
+        controllers[i] = ovsrec_controller_insert(ctx->txn);
         ovsrec_controller_set_target(controllers[i], targets[i]);
+        if (inactivity_probe) {
+            int64_t msecs = atoll(inactivity_probe);
+            ovsrec_controller_set_inactivity_probe(controllers[i], &msecs, 1);
+        }
     }
 
     return controllers;
@@ -1948,7 +1957,7 @@ cmd_set_controller(struct ctl_context *ctx)
     delete_controllers(br->controller, br->n_controller);
 
     n = ctx->argc - 2;
-    controllers = insert_controllers(ctx->txn, &ctx->argv[2], n);
+    controllers = insert_controllers(ctx, &ctx->argv[2], n);
     ovsrec_bridge_set_controller(br, controllers, n);
     free(controllers);
 }
@@ -2024,6 +2033,7 @@ pre_manager(struct ctl_context *ctx)
 {
     ovsdb_idl_add_column(ctx->idl, &ovsrec_open_vswitch_col_manager_options);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_manager_col_target);
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_manager_col_inactivity_probe);
 }
 
 static void
@@ -2075,10 +2085,13 @@ cmd_del_manager(struct ctl_context *ctx)
 }
 
 static void
-insert_managers(struct vsctl_context *vsctl_ctx, char *targets[], size_t n)
+insert_managers(struct vsctl_context *vsctl_ctx, char *targets[], size_t n,
+                struct shash *options)
 {
     struct ovsrec_manager **managers;
     size_t i;
+    const char *inactivity_probe = shash_find_data(options,
+                                                   "--inactivity-probe");
 
     /* Insert each manager in a new row in Manager table. */
     managers = xmalloc(n * sizeof *managers);
@@ -2088,6 +2101,10 @@ insert_managers(struct vsctl_context *vsctl_ctx, char *targets[], size_t n)
         }
         managers[i] = ovsrec_manager_insert(vsctl_ctx->base.txn);
         ovsrec_manager_set_target(managers[i], targets[i]);
+        if (inactivity_probe) {
+            int64_t msecs = atoll(inactivity_probe);
+            ovsrec_manager_set_inactivity_probe(managers[i], &msecs, 1);
+        }
     }
 
     /* Store uuids of new Manager rows in 'manager_options' column. */
@@ -2103,7 +2120,7 @@ cmd_set_manager(struct ctl_context *ctx)
 
     verify_managers(vsctl_ctx->ovs);
     delete_managers(vsctl_ctx->ovs);
-    insert_managers(vsctl_ctx, &ctx->argv[1], n);
+    insert_managers(vsctl_ctx, &ctx->argv[1], n, &ctx->options);
 }
 
 static void
@@ -2842,7 +2859,7 @@ static const struct ctl_command_syntax vsctl_commands[] = {
     {"del-controller", 1, 1, "BRIDGE", pre_controller, cmd_del_controller,
      NULL, "", RW},
     {"set-controller", 1, INT_MAX, "BRIDGE TARGET...", pre_controller,
-     cmd_set_controller, NULL, "", RW},
+     cmd_set_controller, NULL, "--inactivity-probe=", RW},
     {"get-fail-mode", 1, 1, "BRIDGE", pre_get_info, cmd_get_fail_mode, NULL,
      "", RO},
     {"del-fail-mode", 1, 1, "BRIDGE", pre_get_info, cmd_del_fail_mode, NULL,
@@ -2854,7 +2871,7 @@ static const struct ctl_command_syntax vsctl_commands[] = {
     {"get-manager", 0, 0, "", pre_manager, cmd_get_manager, NULL, "", RO},
     {"del-manager", 0, 0, "", pre_manager, cmd_del_manager, NULL, "", RW},
     {"set-manager", 1, INT_MAX, "TARGET...", pre_manager, cmd_set_manager,
-     NULL, "", RW},
+     NULL, "--inactivity-probe=", RW},
 
     /* SSL commands. */
     {"get-ssl", 0, 0, "", pre_cmd_get_ssl, cmd_get_ssl, NULL, "", RO},

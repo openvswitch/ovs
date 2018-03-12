@@ -1345,3 +1345,17 @@ AT_CHECK([ovn-nbctl lsp-get-type lp0], [0], [dnl
 
 OVN_NBCTL_TEST_STOP
 AT_CLEANUP
+
+dnl ---------------------------------------------------------------------
+
+AT_SETUP([ovn-nbctl - connection])
+OVN_NBCTL_TEST_START
+
+AT_CHECK([ovn-nbctl --inactivity-probe=30000 set-connection ptcp:6641:127.0.0.1 punix:$OVS_RUNDIR/ovnnb_db.sock])
+AT_CHECK([ovn-nbctl list connection | grep inactivity_probe], [0], [dnl
+inactivity_probe    : 30000
+inactivity_probe    : 30000
+])
+
+OVN_NBCTL_TEST_STOP
+AT_CLEANUP

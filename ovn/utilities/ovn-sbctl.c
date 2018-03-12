@@ -326,6 +326,7 @@ Logical flow commands:\n\
 Connection commands:\n\
   get-connection             print the connections\n\
   del-connection             delete the connections\n\
+  [--inactivity-probe=MSECS]\n\
   set-connection TARGET...   set the list of connections to TARGET...\n\
 \n\
 SSL commands:\n\
@@ -964,6 +965,7 @@ pre_connection(struct ctl_context *ctx)
     ovsdb_idl_add_column(ctx->idl, &sbrec_connection_col_target);
     ovsdb_idl_add_column(ctx->idl, &sbrec_connection_col_read_only);
     ovsdb_idl_add_column(ctx->idl, &sbrec_connection_col_role);
+    ovsdb_idl_add_column(ctx->idl, &sbrec_connection_col_inactivity_probe);
 }
 
 static void
@@ -1026,6 +1028,8 @@ insert_connections(struct ctl_context *ctx, char *targets[], size_t n)
     size_t i, conns=0;
     bool read_only = false;
     char *role = "";
+    const char *inactivity_probe = shash_find_data(&ctx->options,
+                                                   "--inactivity-probe");
 
     /* Insert each connection in a new row in Connection table. */
     connections = xmalloc(n * sizeof *connections);
@@ -1048,6 +1052,11 @@ insert_connections(struct ctl_context *ctx, char *targets[], size_t n)
         sbrec_connection_set_target(connections[conns], targets[i]);
         sbrec_connection_set_read_only(connections[conns], read_only);
         sbrec_connection_set_role(connections[conns], role);
+        if (inactivity_probe) {
+            int64_t msecs = atoll(inactivity_probe);
+            sbrec_connection_set_inactivity_probe(connections[conns],
+                                                  &msecs, 1);
+        }
         conns++;
     }
 
@@ -1437,7 +1446,7 @@ static const struct ctl_command_syntax sbctl_commands[] = {
     {"get-connection", 0, 0, "", pre_connection, cmd_get_connection, NULL, "", RO},
     {"del-connection", 0, 0, "", pre_connection, cmd_del_connection, NULL, "", RW},
     {"set-connection", 1, INT_MAX, "TARGET...", pre_connection, cmd_set_connection,
-     NULL, "", RW},
+     NULL, "--inactivity-probe=", RW},
 
     /* SSL commands. */
     {"get-ssl", 0, 0, "", pre_cmd_get_ssl, cmd_get_ssl, NULL, "", RO},
