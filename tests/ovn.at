@@ -7307,6 +7307,11 @@ test_ip_packet()
 
     as ext1 ovs-appctl netdev-dummy/receive ext1-vif1 $arp_reply
 
+    OVS_WAIT_UNTIL([
+        test `as $active_gw ovs-ofctl dump-flows br-int | grep table=66 | \
+grep actions=mod_dl_dst:f0:00:00:01:02:04 | wc -l` -eq 1
+    ])
+
     # Packet to Expect at ext1 chassis, outside1 port
     src_mac="000002010203"
     dst_mac="f00000010204"
@@ -7507,6 +7512,11 @@ test_ip_packet()
     arp_reply=${src_mac}${reply_mac}08060001080006040002${reply_mac}${dst_ip}${src_mac}${src_ip}
 
     as ext1 ovs-appctl netdev-dummy/receive ext1-vif1 $arp_reply
+
+    OVS_WAIT_UNTIL([
+        test `as $active_gw ovs-ofctl dump-flows br-int | grep table=66 | \
+grep actions=mod_dl_dst:f0:00:00:01:02:04 | wc -l` -eq 1
+    ])
 
     # Packet to Expect at ext1 chassis, outside1 port
     src_mac="000002010203"
@@ -9052,9 +9062,12 @@ ovs-vsctl -- add-port br-int hv1-vif1 -- \
     ofport-request=1
 ovs-vsctl set open . external-ids:ovn-bridge-mappings=phys:br-phys
 
-# Allow some time for ovn-northd and ovn-controller to catch up.
-# XXX This should be more systematic.
-sleep 1
+OVS_WAIT_UNTIL([test x`ovn-nbctl lsp-get-up sw0_ip6-port1` = xup])
+cr_uuid=`ovn-sbctl find port_binding logical_port=cr-ip6_public | grep _uuid | cut -f2 -d ":"`
+
+# There is only one chassis.
+chassis_uuid=`ovn-sbctl list chassis | grep _uuid | cut -f2 -d ":"`
+OVS_WAIT_UNTIL([test $chassis_uuid = `ovn-sbctl get port_binding $cr_uuid chassis`])
 
 trim_zeros() {
     sed 's/\(00\)\{1,\}$//'
@@ -9090,6 +9103,9 @@ src_ip=aef0000000000000526400fffe000002
 # Send an IPv6 packet. Generated IPv6 Neighbor solicitation packet
 # should be received by the ports attached to br-phys.
 test_ipv6 1 $src_mac $dst_mac $src_ip 2
+
+OVS_WAIT_WHILE([test 24 = $(wc -c hv1/br-phys_n1-tx.pcap | cut -d " " -f1)])
+OVS_WAIT_WHILE([test 24 = $(wc -c hv1/br-phys-tx.pcap | cut -d " " -f1)])
 
 $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/br-phys_n1-tx.pcap | \
 trim_zeros > 1.packets
@@ -9247,17 +9263,17 @@ ovn-nbctl set Logical_Router_Port ro-sw ipv6_ra_configs:address_mode=slaac
 ovn-nbctl set Logical_Router_Port ro-sw ipv6_ra_configs:max_interval=4
 ovn-nbctl set Logical_Router_Port ro-sw ipv6_ra_configs:min_interval=3
 
-for i in hv1 hv2 ; do
-    as $i
-    ovs-vsctl -- add-port br-int $i-vif1 -- \
-        set interface $i-vif1 external-ids:iface-id=sw-p1 \
-        options:tx_pcap=$i/vif1-tx.pcap \
-        options:rxq_pcap=$i/vif1-rx.pcap \
+for i in 1 2 ; do
+    as hv$i
+    ovs-vsctl -- add-port br-int hv$i-vif1 -- \
+        set interface hv$i-vif1 external-ids:iface-id=sw-p$i \
+        options:tx_pcap=hv$i/vif1-tx.pcap \
+        options:rxq_pcap=hv$i/vif1-rx.pcap \
         ofport-request=1
 done
 
-# Allow time for ovn-northd and ovn-controller to catch up
-sleep 1
+OVS_WAIT_UNTIL([test x`ovn-nbctl lsp-get-up sw-p1` = xup])
+OVS_WAIT_UNTIL([test x`ovn-nbctl lsp-get-up sw-p2` = xup])
 
 reset_pcap_file() {
     local iface=$1
