@@ -197,7 +197,7 @@ struct weak_ref_table {
 struct cmd_show_table {
     const struct ovsdb_idl_table_class *table;
     const struct ovsdb_idl_column *name_column;
-    const struct ovsdb_idl_column *columns[3]; /* Seems like a good number. */
+    const struct ovsdb_idl_column *columns[4]; /* Seems like a good number. */
     const struct weak_ref_table wref_table;
 };
 
