@@ -774,7 +774,11 @@ class Row(object):
         assert self._changes is not None
         assert self._mutations is not None
 
-        column = self._table.columns[column_name]
+        try:
+            column = self._table.columns[column_name]
+        except KeyError:
+            raise AttributeError("%s instance has no attribute '%s'" %
+                                 (self.__class__.__name__, column_name))
         datum = self._changes.get(column_name)
         inserts = None
         if '_inserts' in self._mutations.keys():
