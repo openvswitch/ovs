@@ -71,15 +71,15 @@ def pipeline(size):
     pipeline = [l2, l3, l4, l2]
 
     flows = []
-    for stage in xrange(len(pipeline)):
+    for stage in range(len(pipeline)):
         action = resubmit(stage + 1)
-        flows += [pipeline[stage](stage, action) for _ in xrange(size)]
+        flows += [pipeline[stage](stage, action) for _ in range(size)]
         flows.append(flow_str(stage, "", action, priority=1))
 
     flows.append(flow_str(len(pipeline), "", "in_port"))
 
     for f in flows:
-        print f
+        print(f)
 
 
 def main():
