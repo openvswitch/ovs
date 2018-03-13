@@ -18,6 +18,7 @@ import random
 import sys
 import textwrap
 
+
 def flow_str(stage, match, action, priority=32768):
     mtd_match = "metadata=%d" % stage
     if match:
@@ -109,11 +110,10 @@ def main():
         """ % sys.argv[0])
 
     parser = argparse.ArgumentParser(description=description, epilog=epilog,
-                                     formatter_class=\
-                                     argparse.RawDescriptionHelpFormatter)
+            formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--size", dest="size", default=1000,
                         help="Size (rules) of each OpenFlow table.")
-    args=parser.parse_args()
+    args = parser.parse_args()
 
     pipeline(int(args.size))
 

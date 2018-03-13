@@ -146,6 +146,7 @@ endif
 
 FLAKE8_PYFILES += utilities/ovs-pcap.in \
 	utilities/checkpatch.py utilities/ovs-dev.py \
-	utilities/ovs-tcpdump.in
+	utilities/ovs-tcpdump.in \
+	utilities/ovs-pipegen.py
 
 include utilities/bugtool/automake.mk
