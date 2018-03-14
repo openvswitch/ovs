@@ -54,7 +54,7 @@ NetBSD's ``/usr/bin/make`` is not GNU make.  GNU make is installed as
 ``/usr/pkg/bin/gmake`` by the above mentioned ``gmake`` package.
 
 As all executables installed with pkgsrc are placed in ``/usr/pkg/bin/``
-directory, it might be a good idea to add it to your PATH. Or install ovs by
+directory, it might be a good idea to add it to your PATH. Or install OVS by
 ``gmake`` and ``gmake install``.
 
 Open vSwitch on NetBSD is currently "userspace switch" implementation in the

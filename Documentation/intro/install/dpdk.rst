@@ -395,7 +395,7 @@ Compiler Optimizations
 
 The default compiler optimization level is ``-O2``. Changing this to more
 aggressive compiler optimization such as ``-O3 -march=native`` with
-gcc (verified on 5.3.1) can produce performance gains though not siginificant.
+gcc (verified on 5.3.1) can produce performance gains though not significant.
 ``-march=native`` will produce optimized code on local machine and should be
 used when software compilation is done on Testbed.
 

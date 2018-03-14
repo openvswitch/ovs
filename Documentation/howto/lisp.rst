@@ -57,7 +57,7 @@ VMs), or have the hypervisor do proxy ARP.  In this scenario, the eth0
 interfaces need not be added to the br0 bridge in the examples below.
 
 On the receiving side, the packet arrives without the original MAC header.  The
-LISP tunneling code attaches a header with harcoded source and destination MAC
+LISP tunneling code attaches a header with hard-coded source and destination MAC
 address ``02:00:00:00:00:00``.  This address has all bits set to 0, except the
 locally administered bit, in order to avoid potential collisions with existing
 allocations.  In order for packets to reach their intended destination, the

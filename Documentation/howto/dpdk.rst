@@ -337,10 +337,10 @@ performance of non-tunnel traffic, specifically for smaller size packet.
 Extended & Custom Statistics
 ----------------------------
 
-DPDK Extended Statistics API allows PMD to expose unique set of statistics.
-The Extended statistics are implemented and supported only for DPDK physical
-and vHost ports. Custom statistics are dynamic set of counters which can
-vary depenend on a driver. Those statistics are implemented
+DPDK Extended Statistics API allows PMD to expose a unique set of statistics.
+The Extended Statistics are implemented and supported only for DPDK physical
+and vHost ports. Custom statistics are a dynamic set of counters which can
+vary depending on the driver. Those statistics are implemented
 for DPDK physical ports and contain all "dropped", "error" and "management"
 counters from XSTATS. XSTATS counters list can be found here:
 <https://wiki.opnfv.org/display/fastpath/Collectd+Metrics+and+Events>`__.
@@ -508,7 +508,7 @@ Add a userspace bridge and two ``dpdk`` (PHY) ports::
     $ ovs-vsctl add-port br0 phy1 -- set Interface phy1 type=dpdk
           options:dpdk-devargs=0000:01:00.1 ofport_request=2
 
-Add test flows to forward packets betwen DPDK port 0 and port 1::
+Add test flows to forward packets between DPDK port 0 and port 1::
 
     # Clear current flows
     $ ovs-ofctl del-flows br0
@@ -543,7 +543,7 @@ ports::
     $ ovs-vsctl add-port br0 dpdkvhostuser1 \
         -- set Interface dpdkvhostuser1 type=dpdkvhostuser ofport_request=4
 
-Add test flows to forward packets betwen DPDK devices and VM ports::
+Add test flows to forward packets between DPDK devices and VM ports::
 
     # Clear current flows
     $ ovs-ofctl del-flows br0

@@ -411,7 +411,7 @@ vSwitch documentation. These guidelines are based on the `IBM Style Guide
      * - To create a bridge, the user runs:
        - To create a bridge, run:
 
-- Keep sentences short and consise
+- Keep sentences short and concise
 
 - Eliminate needless politeness
 

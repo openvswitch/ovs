@@ -28,7 +28,7 @@ Expectations for Developers with Open vSwitch Repo Access
 Pre-requisites
 --------------
 
-Be familar with the guidlines and standards defined in
+Be familiar with the guidelines and standards defined in
 :doc:`contributing/index`.
 
 Review

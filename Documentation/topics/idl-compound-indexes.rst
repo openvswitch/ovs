@@ -117,7 +117,7 @@ the comparison functions (built-in and user provided) are FAST.
 
 Skiplists are used as the primary data structure for the implementation of
 indexes. Indexes therefore have an expected ``O(log(n))`` cost when
-inserting, deleting or modifiying a row, ``O(log(n))`` when retrieving
+inserting, deleting or modifying a row, ``O(log(n))`` when retrieving
 a row by key, and O(1) when retrieving the first or next row.
 
 Indexes are maintained incrementally in the replica as notifications of
@@ -155,7 +155,7 @@ Index Creation
 
 Each index must be created with the function ``ovsdb_idl_create_index()``.
 After an index has been created the user can add one or more columns to it,
-using ``ovsdb_idl_index_add_column``. All indexes must be created wiith all
+using ``ovsdb_idl_index_add_column``. All indexes must be created with all
 columns added BEFORE the first call to ovsdb\_idl\_run().
 
 Index Creation Example
@@ -240,7 +240,7 @@ between "from.col1 from.col2 ... from.coln" and "to.col1 to.col2 ...
 to.coln", *NOT the rows with a value in column 1 between from.col1 and
 to.col1, and so on*.
 
-The iterators are macros especific to each table. An example of the use
+The iterators are macros specific to each table. An example of the use of
 these iterators follows:
 
 ::

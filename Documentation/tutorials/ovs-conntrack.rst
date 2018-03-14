@@ -32,9 +32,9 @@ statefull and stateless protocols)
 
 This tutorial demonstrates how OVS can use the connection tracking system
 to match on the TCP segments from connection setup to connection teardown.
-It will use OVS with the linux kernel module as the datapath for this
-tutorial. (datapath which utilizes the openvswitch kernel module to do
-the packet processing in the linux kernel)
+It will use OVS with the Linux kernel module as the datapath for this
+tutorial. (The datapath that utilizes the openvswitch kernel module to do
+the packet processing in the Linux kernel)
 It was tested with the “master” branch of Open vSwitch.
 
 Definitions
@@ -44,7 +44,7 @@ Definitions
 inspection.
 
 **pipeline**: is the packet processing pipeline which is the path taken by
-the packet when traversing through the tables where the pakcet matches the
+the packet when traversing through the tables where the packet matches the
 match fields of a flow in the table and performs the actions present in
 the matched flow.
 

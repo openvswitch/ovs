@@ -2243,7 +2243,7 @@ The integer meter id of the meter.
 When this field is specified in \fBdel-meter\fR, \fBdump-meter\fR, or
 \fBmeter-stats\fR, the keyword "all" may be used to designate all meters.
 .
-This field is required, exept for \fBmeter-stats\fR, which dumps all stats
+This field is required, except for \fBmeter-stats\fR, which dumps all stats
 when this field is not specified.
 
 .IP \fBkbps\fR

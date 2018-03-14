@@ -74,7 +74,7 @@ DPDK. However, this functionality was removed because:
 - Support for IVSHMEM was never upstreamed to QEMU and has been publicly
   rejected by the QEMU community
 
-- :doc:`vhost-user interfaces <vhost-user>` are the defacto DPDK-based path to
+- :doc:`vhost-user interfaces <vhost-user>` are the de facto DPDK-based path to
   guests
 
 .. _DPDK documentation: https://dpdk.readthedocs.io/en/v17.11/prog_guide/ring_lib.html

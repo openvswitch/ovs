@@ -124,13 +124,13 @@ Install Requirements
 
   We require that you don't disable the "Allow management operating system to
   share this network adapter" under 'Virtual Switch Properties' > 'Connection
-  type: External network', in the HyperV virtual network switch configuration.
+  type: External network', in the Hyper-V virtual network switch configuration.
 
 * Checksum Offloads
 
   While there is some support for checksum/segmentation offloads in software,
   this is still a work in progress. Till the support is complete we recommend
-  disabling TX/RX offloads for both the VM's as well as the HyperV.
+  disabling TX/RX offloads for both the VM's as well as the Hyper-V.
 
 Bootstrapping
 -------------
@@ -515,7 +515,7 @@ Dumping the ports should show the additional ports that were just added:
 Add virtual interfaces (VIFs)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Adding VIFs to openvswitch is a two step procedure.  The first step is to
+Adding VIFs to Open vSwitch is a two step procedure.  The first step is to
 assign a 'OVS port name' which is a unique name across all VIFs on this
 Hyper-V.  The next step is to add the VIF to the ovsdb using its 'OVS port
 name' as key.
@@ -786,7 +786,7 @@ Windows CI Service
 ------------------
 
 `AppVeyor <www.appveyor.com>`__ provides a free Windows autobuild service for
-opensource projects.  Open vSwitch has integration with AppVeyor for continuous
+open source projects.  Open vSwitch has integration with AppVeyor for continuous
 build.  A developer can build test his changes for Windows by logging into
 appveyor.com using a github account, creating a new project by linking it to
 his development repository in github and triggering a new build.
@@ -798,5 +798,5 @@ TODO
 
 * Investigate and add the feature to provide QoS.
 
-* Sign the driver & create an MSI for installing the different OpenvSwitch
+* Sign the driver & create an MSI for installing the different Open vSwitch
   components on Windows.

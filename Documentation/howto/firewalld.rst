@@ -77,7 +77,7 @@ Variations
 
 When installing the XML service files, you have the choice of copying them to
 ``/etc/firewalld/services`` or ``/usr/lib/firewalld/services``. The former is
-recommened since the latter can be overwritten if firewalld is upgraded.
+recommend since the latter can be overwritten if firewalld is upgraded.
 
 The above commands assumed your underlay network interfaces are in the
 "public" firewalld zone. If your underlay network interfaces are in a separate

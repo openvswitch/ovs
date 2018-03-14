@@ -27,7 +27,7 @@
  * ovsrcu_postpone().
  *
  * The API is almost the same as for struct ovs_list, with the following
- * exeptions:
+ * exceptions:
  *
  * - The 'prev' pointer may not be accessed by the user.
  * - The 'next' pointer should be accessed via rculist_next() by readers, and

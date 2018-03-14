@@ -54,7 +54,7 @@ achieve this, the standby server acts as a client of the active server, in the
 sense that it sends a monitor request to keep up to date with the changes in
 the active server databases. When a notification from the active server
 arrives, the standby server executes the necessary set of operations so its
-databases reach the same state as the the active server databases. Below is the
+databases reach the same state as the active server databases. Below is the
 design represented as a diagram.::
 
     +--------------+    replication     +--------------+

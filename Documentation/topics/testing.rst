@@ -101,7 +101,7 @@ using the ``check-lcov`` target::
 
     $ make check-lcov
 
-All the same options are avaiable via TESTSUITEFLAGS. For example::
+All the same options are available via TESTSUITEFLAGS. For example::
 
     $ make check-lcov TESTSUITEFLAGS='-j8 -k ovn'
 
@@ -418,7 +418,7 @@ The following Proof of Concepts are supported:
 Builders
 ++++++++
 
-This particular Proof of Concept demonsrtates integration with Debian and RPM
+This particular Proof of Concept demonstrates integration with Debian and RPM
 packaging tools:
 
     $ cd ./poc/builders
@@ -431,7 +431,7 @@ you can add them to /etc/apt/sources.list.d or /etc/yum.repos.d
 configuration files on another host to retrieve packages with yum or
 apt-get.
 
-hen you have made changes to OVS source code and want to rebuild packages run:
+When you have made changes to OVS source code and want to rebuild packages run:
     $ git commit -a
     $ vagrant rsync && vagrant provision
 

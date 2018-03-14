@@ -236,7 +236,7 @@
  * The classifier supports versioning for two reasons:
  *
  *     1. Support for versioned modifications makes it possible to perform an
- *        arbitraty series of classifier changes as one atomic transaction,
+ *        arbitrary series of classifier changes as one atomic transaction,
  *        where intermediate versions of the classifier are not visible to any
  *        lookups.  Also, when a rule is added for a future version, or marked
  *        for removal after the current version, such modifications can be
@@ -293,7 +293,7 @@
  * ovsrcu_postpone() call to destruct the rule is called from the first RCU
  * callback that removes the rule.
  *
- * Rules that have never been visible to lookups are an exeption to the above
+ * Rules that have never been visible to lookups are an exception to the above
  * rule.  Such rules can be removed immediately, but their destruction must
  * still be RCU postponed, as the rule's visibility attribute may be examined
  * parallel to the rule's removal. */

@@ -61,7 +61,7 @@ You do not need to be the superuser to build the Debian packages.
    ``debian/control``. You can install these any way you like, e.g.  with
    ``apt-get install``.
 
-Check your work by running ``dpkg-checkbuilddeps`` in the top level of your ovs
+Check your work by running ``dpkg-checkbuilddeps`` in the top level of your OVS
 directory. If you've installed all the dependencies properly,
 ``dpkg-checkbuilddeps`` will exit without printing anything. If you forgot to
 install some dependencies, it will tell you which ones.

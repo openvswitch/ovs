@@ -80,7 +80,7 @@ should be running before proceeding.
 Configuration Steps
 -------------------
 
-Perform the folowing configuration on `host1`:
+Perform the following configuration on `host1`:
 
 #. Create a ``br-int`` bridge::
 

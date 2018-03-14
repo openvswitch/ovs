@@ -95,7 +95,7 @@ Where:
 
 ``<summary>``:
 
-  briefly describes the change.  Use the the imperative form,
+  briefly describes the change.  Use the imperative form,
   e.g. "Force SNAT for multiple gateway routers." or "Fix daemon exit
   for bad datapaths or flows."  Try to keep the summary short, about
   50 characters wide.
@@ -318,7 +318,7 @@ Developer's Certificate of Origin
 
 To help track the author of a patch as well as the submission chain, and be
 clear that the developer has authority to submit a patch for inclusion in
-openvswitch please sign off your work.  The sign off certifies the following:
+Open vSwitch please sign off your work.  The sign off certifies the following:
 
 ::
 
@@ -411,9 +411,9 @@ file describes the coding style used in most of Open vSwitch. Use Linux kernel
 coding style for Linux kernel code.
 
 If your code is non-datapath code, you may use the ``utilities/checkpatch.py``
-utility as a quick check for certain commonly occuring mistakes (improper
+utility as a quick check for certain commonly occurring mistakes (improper
 leading/trailing whitespace, missing signoffs, some improper formatted patch
-files).  For linux datapath code, it is a good idea to use the linux script
+files).  For Linux datapath code, it is a good idea to use the Linux script
 ``checkpatch.pl``.
 
 Example

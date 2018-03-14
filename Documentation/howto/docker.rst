@@ -43,7 +43,7 @@ Setup
 -----
 
 For multi-host networking with OVN and Docker, Docker has to be started with a
-destributed key-value store. For example, if you decide to use consul as your
+distributed key-value store. For example, if you decide to use consul as your
 distributed key-value store and your host IP address is ``$HOST_IP``, start
 your Docker daemon with::
 
@@ -120,7 +120,7 @@ The "overlay" mode
      The options are ``geneve`` or ``stt``. Your kernel must have support for
      your chosen ``$ENCAP_TYPE``. Both ``geneve`` and ``stt`` are part of the
      Open vSwitch kernel module that is compiled from this repo. If you use the
-     Open vSwitch kernel module from upstream Linux, you will need a minumum
+     Open vSwitch kernel module from upstream Linux, you will need a minimum
      kernel version of 3.18 for ``geneve``. There is no ``stt`` support in
      upstream Linux. You can verify whether you have the support in your kernel
      as follows::
@@ -322,5 +322,5 @@ The "underlay" mode
 From here-on you can use the same Docker commands as described in
 `docker-overlay`_.
 
-Refer the the ovs-architecture man pages (``man ovn-architecture``) to
+Refer to the ovs-architecture man pages (``man ovn-architecture``) to
 understand OVN's architecture in detail.

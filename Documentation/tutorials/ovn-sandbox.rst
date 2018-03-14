@@ -37,7 +37,7 @@ For some general information about ``ovs-sandbox``, see the "Getting Started"
 section of the tutorial_.
 
 ``ovs-sandbox`` does not include OVN support by default.  To enable OVN, you
-must pass the ``--ovn`` flag.  For example, if running it straight from the ovs
+must pass the ``--ovn`` flag.  For example, if running it straight from the OVS
 git tree you would run::
 
     $ make sandbox SANDBOXFLAGS="--ovn"

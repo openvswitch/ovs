@@ -161,7 +161,7 @@ Such network connectivity failure can be avoided if LACP can be configured on
 the OVS host before configuring the physical switch, and having the OVS host
 fall back to a bond mode (active-backup) till the physical switch LACP
 configuration is complete. An option "lacp-fallback-ab" exists to provide such
-behavior on openvswitch.
+behavior on Open vSwitch.
 
 Active Backup Bonding
 ~~~~~~~~~~~~~~~~~~~~~

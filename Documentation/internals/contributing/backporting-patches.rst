@@ -83,7 +83,7 @@ patch, for example:
 
 If a maintainer is backporting a change to older branches and the backport is
 not a trivial cherry-pick, then the maintainer may opt to submit the backport
-for the older branch on the mailinglist for further review. This should be done
+for the older branch on the mailing list for further review. This should be done
 in the same manner as described above.
 
 Changes to Linux kernel components

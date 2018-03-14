@@ -25,14 +25,14 @@
 Open vSwitch Windows Datapath Coding Style
 ==========================================
 
-The :doc:`coding style <coding-style>` guide gives the flexiblity for each
+The :doc:`coding style <coding-style>` guide gives the flexibility for each
 platform to use its own coding style for the kernel datapath.  This file
 describes the specific coding style used in most of the C files in the Windows
 kernel datapath of the Open vSwitch distribution.
 
 Most of the coding conventions applicable for the Open vSwitch distribution are
 applicable to the Windows kernel datapath as well.  There are some exceptions
-and new guidlines owing to the commonly followed practices in Windows
+and new guidelines owing to the commonly followed practices in Windows
 kernel/driver code.  They are noted as follows:
 
 Basics
@@ -61,7 +61,7 @@ Naming
 
 It is common practice to use camel casing for naming variables, functions and
 files in Windows.  For types, especially structures, unions and enums, using
-all upper case letters with words seprated by '_' is common. These practices
+all upper case letters with words separated by '_' is common. These practices
 can be used for OVS Windows datapath.  However, use the following guidelines:
 
 - Use lower case to begin the name of a variable.
@@ -119,7 +119,7 @@ Comments
 --------
 
 Comments should be written as full sentences that start with a capital letter
-and end with a period.  Putting two spaces between sentances is not necessary.
+and end with a period.  Putting two spaces between sentences is not necessary.
 
 ``//`` can be used for comments as long as the comment is a single line
 comment.  For block comments, use ``/* */`` comments
