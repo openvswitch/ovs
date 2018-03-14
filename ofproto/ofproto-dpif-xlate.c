@@ -5754,6 +5754,8 @@ compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc,
     /* The ct_* fields are only available in the scope of the 'recirc_table'
      * call chain. */
     flow_clear_conntrack(&ctx->xin->flow);
+    xlate_report(ctx, OFT_DETAIL, "Sets the packet to an untracked state, "
+                 "and clears all the conntrack fields.");
     ctx->conntracked = false;
 }
 
