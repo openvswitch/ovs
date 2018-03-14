@@ -581,9 +581,6 @@ case $command in
     stop_controller)
         stop_controller
         ;;
-    stop_controller)
-        stop_controller
-        ;;
     stop_controller_vtep)
         stop_controller_vtep
         ;;
