@@ -4008,6 +4008,7 @@ odp_flow_format(const struct nlattr *key, size_t key_len,
         const struct nlattr *a;
         unsigned int left;
         bool has_ethtype_key = false;
+        bool has_packet_type_key = false;
         struct ofpbuf ofp;
         bool first_field = true;
 
@@ -4028,6 +4029,8 @@ odp_flow_format(const struct nlattr *key, size_t key_len,
 
             if (attr_type == OVS_KEY_ATTR_ETHERTYPE) {
                 has_ethtype_key = true;
+            } else if (attr_type == OVS_KEY_ATTR_PACKET_TYPE) {
+                has_packet_type_key = true;
             }
 
             is_nested_attr = odp_key_attr_len(ovs_flow_key_attr_lens,
@@ -4050,6 +4053,34 @@ odp_flow_format(const struct nlattr *key, size_t key_len,
                 }
                 format_odp_key_attr__(a, ma, portno_names, ds, verbose);
                 first_field = false;
+            } else if (attr_type == OVS_KEY_ATTR_ETHERNET
+                       && !has_packet_type_key) {
+                /* This special case reflects differences between the kernel
+                 * and userspace datapaths regarding the root type of the
+                 * packet being matched (typically Ethernet but some tunnels
+                 * can encapsulate IPv4 etc.).  The kernel datapath does not
+                 * have an explicit way to indicate packet type; instead:
+                 *
+                 *   - If OVS_KEY_ATTR_ETHERNET is present, the packet is an
+                 *     Ethernet packet and OVS_KEY_ATTR_ETHERTYPE is the
+                 *     Ethertype encoded in the Ethernet header.
+                 *
+                 *   - If OVS_KEY_ATTR_ETHERNET is absent, then the packet's
+                 *     root type is that encoded in OVS_KEY_ATTR_ETHERTYPE
+                 *     (i.e. if OVS_KEY_ATTR_ETHERTYPE is 0x0800 then the
+                 *     packet is an IPv4 packet).
+                 *
+                 * Thus, if OVS_KEY_ATTR_ETHERNET is present, even if it is
+                 * all-wildcarded, it is important to print it.
+                 *
+                 * On the other hand, the userspace datapath supports
+                 * OVS_KEY_ATTR_PACKET_TYPE and uses it to indicate the packet
+                 * type.  Thus, if OVS_KEY_ATTR_PACKET_TYPE is present, we need
+                 * not print an all-wildcarded OVS_KEY_ATTR_ETHERNET. */
+                if (!first_field) {
+                    ds_put_char(ds, ',');
+                }
+                ds_put_cstr(ds, "eth()");
             }
             ofpbuf_clear(&ofp);
         }
