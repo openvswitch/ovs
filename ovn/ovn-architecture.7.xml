@@ -1550,9 +1550,7 @@
     <dt><code>Encap</code></dt>
     <dd>
       <p>
-        <code>Authorization</code>: disabled (all clients are considered
-        to be authorized. Future: add a "creating chassis name" column to
-        this table and use it for authorization checking.
+        <code>Authorization</code>: client ID must match the chassis name.
       </p>
       <p>
         <code>Insert/Delete</code>: row insertion and row deletion
