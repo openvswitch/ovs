@@ -1663,6 +1663,8 @@ minimatch_init(struct minimatch *dst, const struct match *src)
     miniflow_alloc(dst->flows, 2, &tmp);
     miniflow_init(dst->flow, &src->flow);
     minimask_init(dst->mask, &src->wc);
+
+    dst->tun_md = tun_metadata_allocation_clone(&src->tun_md);
 }
 
 /* Initializes 'dst' as a copy of 'src'.  The caller must eventually free 'dst'
@@ -1677,6 +1679,7 @@ minimatch_clone(struct minimatch *dst, const struct minimatch *src)
            miniflow_get_values(src->flow), data_size);
     memcpy(miniflow_values(&dst->mask->masks),
            miniflow_get_values(&src->mask->masks), data_size);
+    dst->tun_md = tun_metadata_allocation_clone(src->tun_md);
 }
 
 /* Initializes 'dst' with the data in 'src', destroying 'src'.  The caller must
@@ -1686,6 +1689,7 @@ minimatch_move(struct minimatch *dst, struct minimatch *src)
 {
     dst->flow = src->flow;
     dst->mask = src->mask;
+    dst->tun_md = src->tun_md;
 }
 
 /* Frees any memory owned by 'match'.  Does not free the storage in which
@@ -1694,6 +1698,7 @@ void
 minimatch_destroy(struct minimatch *match)
 {
     free(match->flow);
+    free(match->tun_md);
 }
 
 /* Initializes 'dst' as a copy of 'src'. */
@@ -1702,7 +1707,7 @@ minimatch_expand(const struct minimatch *src, struct match *dst)
 {
     miniflow_expand(src->flow, &dst->flow);
     minimask_expand(src->mask, &dst->wc);
-    memset(&dst->tun_md, 0, sizeof dst->tun_md);
+    tun_metadata_allocation_copy(&dst->tun_md, src->tun_md);
 }
 
 /* Returns true if 'a' and 'b' match the same packets, false otherwise.  */

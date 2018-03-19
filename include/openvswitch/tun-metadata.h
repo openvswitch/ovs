@@ -101,6 +101,11 @@ struct tun_metadata_allocation {
     bool valid;                 /* Set to true after any allocation occurs. */
 };
 
+struct tun_metadata_allocation *tun_metadata_allocation_clone(
+    const struct tun_metadata_allocation *);
+void tun_metadata_allocation_copy(struct tun_metadata_allocation *,
+                                  const struct tun_metadata_allocation *);
+
 #ifdef __cplusplus
 }
 #endif

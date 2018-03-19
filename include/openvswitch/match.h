@@ -242,6 +242,7 @@ struct minimatch {
         };
         struct miniflow *flows[2];
     };
+    struct tun_metadata_allocation *tun_md;
 };
 
 void minimatch_init(struct minimatch *, const struct match *);
