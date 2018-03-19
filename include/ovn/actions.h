@@ -507,9 +507,6 @@ struct ovnact_encode_params {
     /* 'true' if the flow is for a switch. */
     bool is_switch;
 
-    /* 'true' if the flow is for a gateway router. */
-    bool is_gateway_router;
-
     /* A struct to figure out the group_id for group actions. */
     struct ovn_extend_table *group_table;
 

@@ -1171,25 +1171,10 @@
           <p>
             <code>ct_snat</code> sends the packet through the SNAT zone to
             unSNAT any packet that was SNATed in the opposite direction.  The
-            behavior on gateway routers differs from the behavior on a
-            distributed router:
+            packet is automatically sent to the next tables as if followed by
+            the <code>next;</code> action.   The next tables will see the
+            changes in the packet caused by the connection tracker.
           </p>
-          <ul>
-            <li>
-              On a gateway router, if the packet needs to be sent to the next
-              tables, then it should be followed by a <code>next;</code>
-              action.  The next tables will not see the changes in the packet
-              caused by the connection tracker.
-            </li>
-            <li>
-              On a distributed router, if the connection tracker finds a
-              connection that was SNATed in the opposite direction, then the
-              destination IP address of the packet is UNSNATed.  The packet is
-              automatically sent to the next tables as if followed by the
-              <code>next;</code> action.  The next tables will see the changes
-              in the packet caused by the connection tracker.
-            </li>
-          </ul>
           <p>
             <code>ct_snat(<var>IP</var>)</code> sends the packet through the
             SNAT zone to change the source IP address of the packet to

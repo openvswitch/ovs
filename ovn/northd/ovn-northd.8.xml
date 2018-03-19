@@ -1428,14 +1428,14 @@ icmp4 {
           If the Gateway router has been configured to force SNAT any
           previously DNATted packets to <var>B</var>, a priority-110 flow
           matches <code>ip &amp;&amp; ip4.dst == <var>B</var></code> with
-          an action <code>ct_snat; next;</code>.
+          an action <code>ct_snat; </code>.
         </p>
 
         <p>
           If the Gateway router has been configured to force SNAT any
           previously load-balanced packets to <var>B</var>, a priority-100 flow
           matches <code>ip &amp;&amp; ip4.dst == <var>B</var></code> with
-          an action <code>ct_snat; next;</code>.
+          an action <code>ct_snat; </code>.
         </p>
 
         <p>
@@ -1443,7 +1443,7 @@ icmp4 {
           to change the source IP address of a packet from <var>A</var> to
           <var>B</var>, a priority-90 flow matches <code>ip &amp;&amp;
           ip4.dst == <var>B</var></code> with an action
-          <code>ct_snat; next;</code>.
+          <code>ct_snat; </code>.
         </p>
 
         <p>

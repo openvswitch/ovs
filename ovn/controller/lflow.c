@@ -132,15 +132,6 @@ is_switch(const struct sbrec_datapath_binding *ldp)
 
 }
 
-static bool
-is_gateway_router(const struct sbrec_datapath_binding *ldp,
-                  const struct hmap *local_datapaths)
-{
-    struct local_datapath *ld =
-        get_local_datapath(local_datapaths, ldp->tunnel_key);
-    return ld ? ld->has_local_l3gateway : false;
-}
-
 /* Adds the logical flows from the Logical_Flow table to flow tables. */
 static void
 add_logical_flows(struct controller_ctx *ctx,
@@ -307,7 +298,6 @@ consider_logical_flow(struct controller_ctx *ctx,
         .lookup_port = lookup_port_cb,
         .aux = &aux,
         .is_switch = is_switch(ldp),
-        .is_gateway_router = is_gateway_router(ldp, local_datapaths),
         .group_table = group_table,
         .meter_table = meter_table,
 
