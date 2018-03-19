@@ -855,6 +855,11 @@ ovn-nbctl set logical_router R2 load_balancer=$uuid
 # Config OVN load-balancer with another VIP (this time with ports).
 ovn-nbctl set load_balancer $uuid vips:'"30.0.0.2:8000"'='"192.168.1.2:80,192.168.2.2:80"'
 
+# Add SNAT rule to make sure that Load-balancing still works with a SNAT rule.
+ovn-nbctl -- --id=@nat create nat type="snat" logical_ip=192.168.2.2 \
+    external_ip=30.0.0.2 -- add logical_router R2 nat @nat
+
+
 # Wait for ovn-controller to catch up.
 ovn-nbctl --wait=hv sync
 OVS_WAIT_UNTIL([ovs-ofctl -O OpenFlow13 dump-groups br-int | \
