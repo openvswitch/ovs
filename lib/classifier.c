@@ -1223,6 +1223,25 @@ classifier_find_match_exactly(const struct classifier *cls,
     return retval;
 }
 
+/* Finds and returns a rule in 'cls' with priority 'priority' and exactly the
+ * same matching criteria as 'target', and that is visible in 'version'.
+ * Returns a null pointer if 'cls' doesn't contain an exact match visible in
+ * 'version'. */
+const struct cls_rule *
+classifier_find_minimatch_exactly(const struct classifier *cls,
+                              const struct minimatch *target, int priority,
+                              ovs_version_t version)
+{
+    const struct cls_rule *retval;
+    struct cls_rule cr;
+
+    cls_rule_init_from_minimatch(&cr, target, priority);
+    retval = classifier_find_rule_exactly(cls, &cr, version);
+    cls_rule_destroy(&cr);
+
+    return retval;
+}
+
 /* Checks if 'target' would overlap any other rule in 'cls' in 'version'.  Two
  * rules are considered to overlap if both rules have the same priority and a
  * packet could match both, and if both rules are visible in the same version.

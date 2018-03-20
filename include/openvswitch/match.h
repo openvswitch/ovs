@@ -246,6 +246,7 @@ struct minimatch {
 };
 
 void minimatch_init(struct minimatch *, const struct match *);
+void minimatch_init_catchall(struct minimatch *);
 void minimatch_clone(struct minimatch *, const struct minimatch *);
 void minimatch_move(struct minimatch *dst, struct minimatch *src);
 void minimatch_destroy(struct minimatch *);
@@ -253,6 +254,7 @@ void minimatch_destroy(struct minimatch *);
 void minimatch_expand(const struct minimatch *, struct match *);
 
 bool minimatch_equal(const struct minimatch *a, const struct minimatch *b);
+uint32_t minimatch_hash(const struct minimatch *, uint32_t basis);
 
 bool minimatch_matches_flow(const struct minimatch *, const struct flow *);
 
@@ -261,6 +263,8 @@ void minimatch_format(const struct minimatch *, const struct tun_table *,
                       struct ds *, int priority);
 char *minimatch_to_string(const struct minimatch *,
                           const struct ofputil_port_map *, int priority);
+
+bool minimatch_has_default_hidden_fields(const struct minimatch *);
 
 #ifdef __cplusplus
 }

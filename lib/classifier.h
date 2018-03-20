@@ -406,6 +406,10 @@ const struct cls_rule *classifier_find_match_exactly(const struct classifier *,
                                                      const struct match *,
                                                      int priority,
                                                      ovs_version_t);
+const struct cls_rule *classifier_find_minimatch_exactly(
+    const struct classifier *, const struct minimatch *,
+    int priority, ovs_version_t);
+
 bool classifier_is_empty(const struct classifier *);
 int classifier_count(const struct classifier *);
 

@@ -1667,6 +1667,15 @@ minimatch_init(struct minimatch *dst, const struct match *src)
     dst->tun_md = tun_metadata_allocation_clone(&src->tun_md);
 }
 
+/* Initializes 'match' as a "catch-all" match that matches every packet. */
+void
+minimatch_init_catchall(struct minimatch *match)
+{
+    match->flows[0] = xcalloc(2, sizeof *match->flow);
+    match->flows[1] = match->flows[0] + 1;
+    match->tun_md = NULL;
+}
+
 /* Initializes 'dst' as a copy of 'src'.  The caller must eventually free 'dst'
  * with minimatch_destroy(). */
 void
@@ -1716,6 +1725,16 @@ minimatch_equal(const struct minimatch *a, const struct minimatch *b)
 {
     return minimask_equal(a->mask, b->mask)
         && miniflow_equal(a->flow, b->flow);
+}
+
+/* Returns a hash value for the flow and wildcards in 'match', starting from
+ * 'basis'. */
+uint32_t
+minimatch_hash(const struct minimatch *match, uint32_t basis)
+{
+    size_t n_values = miniflow_n_values(match->flow);
+    size_t flow_size = sizeof *match->flow + MINIFLOW_VALUES_SIZE(n_values);
+    return hash_bytes(match->flow, 2 * flow_size, basis);
 }
 
 /* Returns true if 'target' satisifies 'match', that is, if each bit for which
@@ -1770,4 +1789,29 @@ minimatch_to_string(const struct minimatch *match,
 
     minimatch_expand(match, &megamatch);
     return match_to_string(&megamatch, port_map, priority);
+}
+
+static bool
+minimatch_has_default_recirc_id(const struct minimatch *m)
+{
+    uint32_t flow_recirc_id = miniflow_get_recirc_id(m->flow);
+    uint32_t mask_recirc_id = miniflow_get_recirc_id(&m->mask->masks);
+    return flow_recirc_id == 0 && (mask_recirc_id == UINT32_MAX ||
+                                   mask_recirc_id == 0);
+}
+
+static bool
+minimatch_has_default_dp_hash(const struct minimatch *m)
+{
+    return (!miniflow_get_dp_hash(m->flow)
+            && !miniflow_get_dp_hash(&m->mask->masks));
+}
+
+/* Return true if the hidden fields of the match are set to the default values.
+ * The default values equals to those set up by match_init_hidden_fields(). */
+bool
+minimatch_has_default_hidden_fields(const struct minimatch *m)
+{
+    return (minimatch_has_default_recirc_id(m)
+            && minimatch_has_default_dp_hash(m));
 }

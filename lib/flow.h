@@ -728,6 +728,11 @@ static inline ovs_be32 miniflow_get_be32(const struct miniflow *,
 static inline uint16_t miniflow_get_vid(const struct miniflow *, size_t);
 static inline uint16_t miniflow_get_tcp_flags(const struct miniflow *);
 static inline ovs_be64 miniflow_get_metadata(const struct miniflow *);
+static inline uint64_t miniflow_get_tun_metadata_present_map(
+    const struct miniflow *);
+static inline uint32_t miniflow_get_recirc_id(const struct miniflow *);
+static inline uint32_t miniflow_get_dp_hash(const struct miniflow *);
+static inline ovs_be32 miniflow_get_ports(const struct miniflow *);
 
 bool miniflow_equal(const struct miniflow *a, const struct miniflow *b);
 bool miniflow_equal_in_minimask(const struct miniflow *a,
@@ -857,6 +862,27 @@ miniflow_get_metadata(const struct miniflow *flow)
     return MINIFLOW_GET_BE64(flow, metadata);
 }
 
+/* Returns the bitmap that indicates which tunnel metadata fields are present
+ * in 'flow'. */
+static inline uint64_t
+miniflow_get_tun_metadata_present_map(const struct miniflow *flow)
+{
+    return MINIFLOW_GET_U64(flow, tunnel.metadata.present.map);
+}
+
+/* Returns the recirc_id in 'flow.' */
+static inline uint32_t
+miniflow_get_recirc_id(const struct miniflow *flow)
+{
+    return MINIFLOW_GET_U32(flow, recirc_id);
+}
+
+/* Returns the dp_hash in 'flow.' */
+static inline uint32_t
+miniflow_get_dp_hash(const struct miniflow *flow)
+{
+    return MINIFLOW_GET_U32(flow, dp_hash);
+}
 
 /* Returns the 'tp_src' and 'tp_dst' fields together as one piece of data. */
 static inline ovs_be32
@@ -864,6 +890,7 @@ miniflow_get_ports(const struct miniflow *flow)
 {
     return MINIFLOW_GET_TYPE__(flow, ovs_be32, tp_src);
 }
+
 /* Returns the mask for the OpenFlow 1.1+ "metadata" field in 'mask'.
  *
  * The return value is all-1-bits if 'mask' matches on the whole value of the
