@@ -466,6 +466,17 @@ consider_port_binding(struct controller_ctx *ctx,
     } else {
         ofport = u16_to_ofp(simap_get(&localvif_to_ofport,
                                       binding->logical_port));
+        const char *requested_chassis = smap_get(&binding->options,
+                                                 "requested-chassis");
+        if (ofport && requested_chassis && requested_chassis[0] &&
+            strcmp(requested_chassis, chassis->name) &&
+            strcmp(requested_chassis, chassis->hostname)) {
+            /* Even though there is an ofport for this port_binding, it is
+             * requested on a different chassis. So ignore this ofport.
+             */
+            ofport = 0;
+        }
+
         if ((!strcmp(binding->type, "localnet")
             || !strcmp(binding->type, "l2gateway"))
             && ofport && binding->tag) {
