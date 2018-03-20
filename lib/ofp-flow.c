@@ -139,6 +139,8 @@ ofputil_flow_mod_flags_format(struct ds *s, enum ofputil_flow_mod_flags flags)
  * The caller must initialize 'ofpacts' and retains ownership of it.
  * 'fm->ofpacts' will point into the 'ofpacts' buffer.
  *
+ * On success, the caller must eventually destroy fm->match.
+ *
  * Does not validate the flow_mod actions.  The caller should do that, with
  * ofpacts_check(). */
 enum ofperr
@@ -152,6 +154,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
 {
     ovs_be16 raw_flags;
     enum ofperr error;
+    struct match match;
     struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     enum ofpraw raw = ofpraw_pull_assert(&b);
     if (raw == OFPRAW_OFPT11_FLOW_MOD) {
@@ -160,7 +163,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
 
         ofm = ofpbuf_pull(&b, sizeof *ofm);
 
-        error = ofputil_pull_ofp11_match(&b, tun_table, vl_mff_map, &fm->match,
+        error = ofputil_pull_ofp11_match(&b, tun_table, vl_mff_map, &match,
                                          NULL);
         if (error) {
             return error;
@@ -228,8 +231,8 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
             ofm = ofpbuf_pull(&b, sizeof *ofm);
 
             /* Translate the rule. */
-            ofputil_match_from_ofp10_match(&ofm->match, &fm->match);
-            ofputil_normalize_match(&fm->match);
+            ofputil_match_from_ofp10_match(&ofm->match, &match);
+            ofputil_normalize_match(&match);
 
             /* OpenFlow 1.0 says that exact-match rules have to have the
              * highest possible priority. */
@@ -256,7 +259,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
             /* Dissect the message. */
             nfm = ofpbuf_pull(&b, sizeof *nfm);
             error = nx_pull_match(&b, ntohs(nfm->match_len),
-                                  &fm->match, &fm->cookie, &fm->cookie_mask,
+                                  &match, &fm->cookie, &fm->cookie_mask,
                                   false, tun_table, vl_mff_map);
             if (error) {
                 return error;
@@ -269,6 +272,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
                  * existing cookie. */
                 return OFPERR_NXBRC_NXM_INVALID;
             }
+            minimatch_init(&fm->match, &match);
             fm->priority = ntohs(nfm->priority);
             fm->new_cookie = nfm->cookie;
             fm->idle_timeout = ntohs(nfm->idle_timeout);
@@ -298,11 +302,11 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
 
     /* Check for mismatched conntrack original direction tuple address fields
      * w.r.t. the IP version of the match. */
-    if (((fm->match.wc.masks.ct_nw_src || fm->match.wc.masks.ct_nw_dst)
-         && fm->match.flow.dl_type != htons(ETH_TYPE_IP))
-        || ((ipv6_addr_is_set(&fm->match.wc.masks.ct_ipv6_src)
-             || ipv6_addr_is_set(&fm->match.wc.masks.ct_ipv6_dst))
-            && fm->match.flow.dl_type != htons(ETH_TYPE_IPV6))) {
+    if (((match.wc.masks.ct_nw_src || match.wc.masks.ct_nw_dst)
+         && match.flow.dl_type != htons(ETH_TYPE_IP))
+        || ((ipv6_addr_is_set(&match.wc.masks.ct_ipv6_src)
+             || ipv6_addr_is_set(&match.wc.masks.ct_ipv6_dst))
+            && match.flow.dl_type != htons(ETH_TYPE_IPV6))) {
         return OFPERR_OFPBAC_MATCH_INCONSISTENT;
     }
 
@@ -339,9 +343,13 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
                 : OFPERR_OFPFMFC_TABLE_FULL);
     }
 
-    return ofpacts_check_consistency(fm->ofpacts, fm->ofpacts_len,
-                                     &fm->match, max_port,
-                                     fm->table_id, max_table, protocol);
+    error = ofpacts_check_consistency(fm->ofpacts, fm->ofpacts_len,
+                                      &match, max_port,
+                                      fm->table_id, max_table, protocol);
+    if (!error) {
+        minimatch_init(&fm->match, &match);
+    }
+    return error;
 }
 
 static ovs_be16
@@ -362,6 +370,9 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
     enum ofp_version version = ofputil_protocol_to_ofp_version(protocol);
     ovs_be16 raw_flags = ofputil_encode_flow_mod_flags(fm->flags, version);
     struct ofpbuf *msg;
+
+    struct match match;
+    minimatch_expand(&fm->match, &match);
 
     switch (protocol) {
     case OFPUTIL_P_OF11_STD:
@@ -407,7 +418,7 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
         } else {
             ofm->importance = 0;
         }
-        ofputil_put_ofp11_match(msg, &fm->match, protocol);
+        ofputil_put_ofp11_match(msg, &match, protocol);
         ofpacts_put_openflow_instructions(fm->ofpacts, fm->ofpacts_len, msg,
                                           version);
         break;
@@ -420,7 +431,7 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
         msg = ofpraw_alloc(OFPRAW_OFPT10_FLOW_MOD, OFP10_VERSION,
                            fm->ofpacts_len);
         ofm = ofpbuf_put_zeros(msg, sizeof *ofm);
-        ofputil_match_to_ofp10_match(&fm->match, &ofm->match);
+        ofputil_match_to_ofp10_match(&match, &ofm->match);
         ofm->cookie = fm->new_cookie;
         ofm->command = ofputil_tid_command(fm, protocol);
         ofm->idle_timeout = htons(fm->idle_timeout);
@@ -444,7 +455,7 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
         nfm = ofpbuf_put_zeros(msg, sizeof *nfm);
         nfm->command = ofputil_tid_command(fm, protocol);
         nfm->cookie = fm->new_cookie;
-        match_len = nx_put_match(msg, &fm->match, fm->cookie, fm->cookie_mask);
+        match_len = nx_put_match(msg, &match, fm->cookie, fm->cookie_mask);
         nfm = msg->msg;
         nfm->idle_timeout = htons(fm->idle_timeout);
         nfm->hard_timeout = htons(fm->hard_timeout);
@@ -536,7 +547,9 @@ ofputil_flow_mod_format(struct ds *s, const struct ofp_header *oh,
         /* nx_match_to_string() doesn't print priority. */
         need_priority = true;
     } else {
-        match_format(&fm.match, port_map, s, fm.priority);
+        struct match match;
+        minimatch_expand(&fm.match, &match);
+        match_format(&match, port_map, s, fm.priority);
 
         /* match_format() does print priority. */
         need_priority = false;
@@ -589,6 +602,7 @@ ofputil_flow_mod_format(struct ds *s, const struct ofp_header *oh,
     };
     ofpacts_format(fm.ofpacts, fm.ofpacts_len, &fp);
     ofpbuf_uninit(&ofpacts);
+    minimatch_destroy(&fm.match);
 
     return 0;
 }
@@ -831,10 +845,13 @@ parse_ofp_flow_stats_request_str(struct ofputil_flow_stats_request *fsr,
     fsr->aggregate = aggregate;
     fsr->cookie = fm.cookie;
     fsr->cookie_mask = fm.cookie_mask;
-    fsr->match = fm.match;
+    minimatch_expand(&fm.match, &fsr->match);
     fsr->out_port = fm.out_port;
     fsr->out_group = fm.out_group;
     fsr->table_id = fm.table_id;
+
+    minimatch_destroy(&fm.match);
+
     return NULL;
 }
 
@@ -1393,7 +1410,6 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
     }
 
     *fm = (struct ofputil_flow_mod) {
-        .match = MATCH_CATCHALL_INITIALIZER,
         .priority = OFP_DEFAULT_PRIORITY,
         .table_id = 0xff,
         .command = command,
@@ -1413,19 +1429,20 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
         }
     }
 
+    struct match match = MATCH_CATCHALL_INITIALIZER;
     while (ofputil_parse_key_value(&string, &name, &value)) {
         const struct ofp_protocol *p;
         const struct mf_field *mf;
         char *error = NULL;
 
         if (ofp_parse_protocol(name, &p)) {
-            match_set_dl_type(&fm->match, htons(p->dl_type));
+            match_set_dl_type(&match, htons(p->dl_type));
             if (p->nw_proto) {
-                match_set_nw_proto(&fm->match, p->nw_proto);
+                match_set_nw_proto(&match, p->nw_proto);
             }
-            match_set_default_packet_type(&fm->match);
+            match_set_default_packet_type(&match);
         } else if (!strcmp(name, "eth")) {
-            match_set_packet_type(&fm->match, htonl(PT_ETH));
+            match_set_packet_type(&match, htonl(PT_ETH));
         } else if (fields & F_FLAGS && !strcmp(name, "send_flow_rem")) {
             fm->flags |= OFPUTIL_FF_SEND_FLOW_REM;
         } else if (fields & F_FLAGS && !strcmp(name, "check_overlap")) {
@@ -1444,9 +1461,9 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
              /* ignore these fields. */
         } else if ((mf = mf_from_name(name)) != NULL) {
             error = ofp_parse_field(mf, value, port_map,
-                                    &fm->match, usable_protocols);
+                                    &match, usable_protocols);
         } else if (strchr(name, '[')) {
-            error = parse_subfield(name, value, &fm->match, usable_protocols);
+            error = parse_subfield(name, value, &match, usable_protocols);
         } else {
             if (!*value) {
                 return xasprintf("field %s missing value", name);
@@ -1532,13 +1549,13 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
     }
     /* Copy ethertype to flow->dl_type for matches on packet_type
      * (OFPHTN_ETHERTYPE, ethertype). */
-    if (fm->match.wc.masks.packet_type == OVS_BE32_MAX &&
-            pt_ns(fm->match.flow.packet_type) == OFPHTN_ETHERTYPE) {
-        fm->match.flow.dl_type = pt_ns_type_be(fm->match.flow.packet_type);
+    if (match.wc.masks.packet_type == OVS_BE32_MAX &&
+            pt_ns(match.flow.packet_type) == OFPHTN_ETHERTYPE) {
+        match.flow.dl_type = pt_ns_type_be(match.flow.packet_type);
     }
     /* Check for usable protocol interdependencies between match fields. */
-    if (fm->match.flow.dl_type == htons(ETH_TYPE_IPV6)) {
-        const struct flow_wildcards *wc = &fm->match.wc;
+    if (match.flow.dl_type == htons(ETH_TYPE_IPV6)) {
+        const struct flow_wildcards *wc = &match.wc;
         /* Only NXM and OXM support matching L3 and L4 fields within IPv6.
          *
          * (IPv6 specific fields as well as arp_sha, arp_tha, nw_frag, and
@@ -1574,7 +1591,7 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
         if (!error) {
             enum ofperr err;
 
-            err = ofpacts_check(ofpacts.data, ofpacts.size, &fm->match,
+            err = ofpacts_check(ofpacts.data, ofpacts.size, &match,
                                 OFPP_MAX, fm->table_id, 255, usable_protocols);
             if (!err && !*usable_protocols) {
                 err = OFPERR_OFPBAC_MATCH_INCONSISTENT;
@@ -1596,6 +1613,7 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
         fm->ofpacts_len = 0;
         fm->ofpacts = NULL;
     }
+    minimatch_init(&fm->match, &match);
 
     return NULL;
 }
@@ -1613,7 +1631,10 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
  * name is treated as "add".
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
- * error.  The caller is responsible for freeing the returned string. */
+ * error.  The caller is responsible for freeing the returned string.
+ *
+ * On success, the caller is responsible for freeing fm->ofpacts and
+ * fm->match. */
 char * OVS_WARN_UNUSED_RESULT
 parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
               const struct ofputil_port_map *port_map,
@@ -1657,8 +1678,9 @@ parse_ofp_flow_mod_str(struct ofputil_flow_mod *fm, const char *string,
         /* Normalize a copy of the match.  This ensures that non-normalized
          * flows get logged but doesn't affect what gets sent to the switch, so
          * that the switch can do whatever it likes with the flow. */
-        struct match match_copy = fm->match;
-        ofputil_normalize_match(&match_copy);
+        struct match match;
+        minimatch_expand(&fm->match, &match);
+        ofputil_normalize_match(&match);
     }
 
     return error;
@@ -1716,6 +1738,7 @@ parse_ofp_flow_mod_file(const char *file_name,
 
             for (i = 0; i < *n_fms; i++) {
                 free(CONST_CAST(struct ofpact *, (*fms)[i].ofpacts));
+                minimatch_destroy(&(*fms)[i].match);
             }
             free(*fms);
             *fms = NULL;

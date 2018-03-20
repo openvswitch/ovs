@@ -33,6 +33,7 @@ ofputil_free_bundle_msgs(struct ofputil_bundle_msg *bms, size_t n_bms)
         switch ((int)bms[i].type) {
         case OFPTYPE_FLOW_MOD:
             free(CONST_CAST(struct ofpact *, bms[i].fm.ofpacts));
+            minimatch_destroy(&bms[i].fm.match);
             break;
         case OFPTYPE_GROUP_MOD:
             ofputil_uninit_group_mod(&bms[i].gm);

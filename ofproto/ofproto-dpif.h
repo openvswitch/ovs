@@ -335,7 +335,7 @@ struct ofport_dpif *ofp_port_to_ofport(const struct ofproto_dpif *,
                                        ofp_port_t);
 
 int ofproto_dpif_add_internal_flow(struct ofproto_dpif *,
-                                   const struct match *, int priority,
+                                   struct match *, int priority,
                                    uint16_t idle_timeout,
                                    const struct ofpbuf *ofpacts,
                                    struct rule **rulep);

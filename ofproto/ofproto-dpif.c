@@ -5582,9 +5582,11 @@ odp_port_to_ofp_port(const struct ofproto_dpif *ofproto, odp_port_t odp_port)
     }
 }
 
+/* 'match' is non-const to allow for temporary modifications.  Any changes are
+ * restored before returning. */
 int
 ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
-                               const struct match *match, int priority,
+                               struct match *match, int priority,
                                uint16_t idle_timeout,
                                const struct ofpbuf *ofpacts,
                                struct rule **rulep)
@@ -5595,7 +5597,6 @@ ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
 
     fm = (struct ofputil_flow_mod) {
         .buffer_id = UINT32_MAX,
-        .match = *match,
         .priority = priority,
         .table_id = TBL_INTERNAL,
         .command = OFPFC_ADD,
@@ -5604,8 +5605,10 @@ ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
         .ofpacts = ofpacts->data,
         .ofpacts_len = ofpacts->size,
     };
-
+    minimatch_init(&fm.match, match);
     error = ofproto_flow_mod(&ofproto->up, &fm);
+    minimatch_destroy(&fm.match);
+
     if (error) {
         VLOG_ERR_RL(&rl, "failed to add internal flow (%s)",
                     ofperr_to_string(error));
@@ -5615,8 +5618,7 @@ ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
 
     rule = rule_dpif_lookup_in_table(ofproto,
                                      ofproto_dpif_get_tables_version(ofproto),
-                                     TBL_INTERNAL, &fm.match.flow,
-                                     &fm.match.wc);
+                                     TBL_INTERNAL, &match->flow, &match->wc);
     if (rule) {
         *rulep = &rule->up;
     } else {
@@ -5634,7 +5636,6 @@ ofproto_dpif_delete_internal_flow(struct ofproto_dpif *ofproto,
 
     fm = (struct ofputil_flow_mod) {
         .buffer_id = UINT32_MAX,
-        .match = *match,
         .priority = priority,
         .table_id = TBL_INTERNAL,
         .out_port = OFPP_ANY,
@@ -5642,8 +5643,10 @@ ofproto_dpif_delete_internal_flow(struct ofproto_dpif *ofproto,
         .flags = OFPUTIL_FF_HIDDEN_FIELDS | OFPUTIL_FF_NO_READONLY,
         .command = OFPFC_DELETE_STRICT,
     };
-
+    minimatch_init(&fm.match, match);
     error = ofproto_flow_mod(&ofproto->up, &fm);
+    minimatch_destroy(&fm.match);
+
     if (error) {
         VLOG_ERR_RL(&rl, "failed to delete internal flow (%s)",
                     ofperr_to_string(error));

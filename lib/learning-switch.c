@@ -206,7 +206,6 @@ lswitch_handshake(struct lswitch *sw)
         output.max_len = OFP_DEFAULT_MISS_SEND_LEN;
 
         struct ofputil_flow_mod fm = {
-            .match = MATCH_CATCHALL_INITIALIZER,
             .priority = 0,
             .table_id = 0,
             .command = OFPFC_ADD,
@@ -216,8 +215,10 @@ lswitch_handshake(struct lswitch *sw)
             .ofpacts = &output.ofpact,
             .ofpacts_len = sizeof output,
         };
-
+        minimatch_init_catchall(&fm.match);
         msg = ofputil_encode_flow_mod(&fm, protocol);
+        minimatch_destroy(&fm.match);
+
         error = rconn_send(sw->rconn, msg, NULL);
         if (error) {
             VLOG_INFO_RL(&rl, "%s: failed to add default flow (%s)",
@@ -595,10 +596,15 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
             .ofpacts = ofpacts.data,
             .ofpacts_len = ofpacts.size,
         };
-        match_init(&fm.match, &flow, &sw->wc);
-        ofputil_normalize_match_quiet(&fm.match);
+
+        struct match match;
+        match_init(&match, &flow, &sw->wc);
+        ofputil_normalize_match_quiet(&match);
+        minimatch_init(&fm.match, &match);
 
         struct ofpbuf *buffer = ofputil_encode_flow_mod(&fm, sw->protocol);
+
+        minimatch_destroy(&fm.match);
 
         queue_tx(sw, buffer);
 

@@ -506,6 +506,7 @@ Marvin Pascual                  marvin@pascual.com.ph
 Maxime Brun                     m.brun@alphalink.fr
 Madhu Venugopal                 mavenugo@gmail.com
 Michael A. Collins              mike.a.collins@ark-net.org
+Michael Ben-Ami                 mbenami@digitalocean.com
 Michael Hu                      mhu@nicira.com
 Michael J. Smalley              michaeljsmalley@gmail.com
 Michael Mao                     mmao@nicira.com

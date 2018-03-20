@@ -1199,7 +1199,7 @@ struct ofproto_class {
      *
      * If this function is NULL then table 0 is always chosen. */
     enum ofperr (*rule_choose_table)(const struct ofproto *ofproto,
-                                     const struct match *match,
+                                     const struct minimatch *match,
                                      uint8_t *table_idp);
 
     /* Life-cycle functions for a "struct rule".

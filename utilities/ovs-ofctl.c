@@ -1747,6 +1747,7 @@ ofctl_flow_mod__(const char *remote, struct ofputil_flow_mod *fms,
 
         transact_noreply(vconn, ofputil_encode_flow_mod(fm, protocol));
         free(CONST_CAST(struct ofpact *, fm->ofpacts));
+        minimatch_destroy(&fm->match);
     }
     vconn_close(vconn);
 }
@@ -3309,7 +3310,7 @@ struct fte_version {
 /* A FTE entry that has been queued for later insertion after all
  * flows have been scanned to correctly allocation tunnel metadata. */
 struct fte_pending {
-    struct match *match;
+    struct minimatch match;
     int priority;
     struct fte_version *version;
     int index;
@@ -3442,14 +3443,14 @@ fte_free_all(struct flow_tables *tables)
  *
  * Takes ownership of 'version'. */
 static void
-fte_insert(struct flow_tables *tables, const struct match *match,
+fte_insert(struct flow_tables *tables, const struct minimatch *match,
            int priority, struct fte_version *version, int index)
 {
     struct classifier *cls = &tables->tables[version->table_id];
     struct fte *old, *fte;
 
     fte = xzalloc(sizeof *fte);
-    cls_rule_init(&fte->rule, match, priority);
+    cls_rule_init_from_minimatch(&fte->rule, match, priority);
     fte->versions[index] = version;
 
     old = fte_from_cls_rule(classifier_replace(cls, &fte->rule,
@@ -3498,40 +3499,45 @@ generate_tun_metadata(struct fte_state *state)
  * can just read the data from the match and rewrite it. On rewrite, it
  * will use the new table. */
 static void
-remap_match(struct fte_state *state, struct match *match)
+remap_match(struct fte_state *state, struct minimatch *minimatch)
 {
     int i;
 
-    if (!match->tun_md.valid) {
+    if (!minimatch->tun_md || !minimatch->tun_md->valid) {
         return;
     }
 
-    struct tun_metadata flow = match->flow.tunnel.metadata;
-    struct tun_metadata flow_mask = match->wc.masks.tunnel.metadata;
-    memset(&match->flow.tunnel.metadata, 0, sizeof match->flow.tunnel.metadata);
-    memset(&match->wc.masks.tunnel.metadata, 0,
-           sizeof match->wc.masks.tunnel.metadata);
-    match->tun_md.valid = false;
+    struct match match;
+    minimatch_expand(minimatch, &match);
 
-    match->flow.tunnel.metadata.tab = state->tun_tab;
-    match->wc.masks.tunnel.metadata.tab = match->flow.tunnel.metadata.tab;
+    struct tun_metadata flow = match.flow.tunnel.metadata;
+    struct tun_metadata flow_mask = match.wc.masks.tunnel.metadata;
+    memset(&match.flow.tunnel.metadata, 0, sizeof match.flow.tunnel.metadata);
+    memset(&match.wc.masks.tunnel.metadata, 0,
+           sizeof match.wc.masks.tunnel.metadata);
+    match.tun_md.valid = false;
+
+    match.flow.tunnel.metadata.tab = state->tun_tab;
+    match.wc.masks.tunnel.metadata.tab = match.flow.tunnel.metadata.tab;
 
     ULLONG_FOR_EACH_1 (i, flow_mask.present.map) {
         const struct mf_field *field = mf_from_id(MFF_TUN_METADATA0 + i);
-        int offset = match->tun_md.entry[i].loc.c.offset;
-        int len = match->tun_md.entry[i].loc.len;
+        int offset = match.tun_md.entry[i].loc.c.offset;
+        int len = match.tun_md.entry[i].loc.len;
         union mf_value value, mask;
 
         memset(&value, 0, field->n_bytes - len);
-        memset(&mask, match->tun_md.entry[i].masked ? 0 : 0xff,
+        memset(&mask, match.tun_md.entry[i].masked ? 0 : 0xff,
                field->n_bytes - len);
 
         memcpy(value.tun_metadata + field->n_bytes - len,
                flow.opts.u8 + offset, len);
         memcpy(mask.tun_metadata + field->n_bytes - len,
                flow_mask.opts.u8 + offset, len);
-        mf_set(field, &value, &mask, match, NULL);
+        mf_set(field, &value, &mask, &match, NULL);
     }
+    minimatch_destroy(minimatch);
+    minimatch_init(minimatch, &match);
 }
 
 /* In order to correctly handle tunnel metadata, we need to have
@@ -3578,25 +3584,26 @@ fte_state_destroy(struct fte_state *state)
  * fte_state_init(). fte_queue() is the first pass to be called as each
  * flow is read from its source. */
 static void
-fte_queue(struct fte_state *state, const struct match *match,
+fte_queue(struct fte_state *state, const struct minimatch *match,
           int priority, struct fte_version *version, int index)
 {
     struct fte_pending *pending = xmalloc(sizeof *pending);
     int i;
 
-    pending->match = xmemdup(match, sizeof *match);
+    minimatch_clone(&pending->match, match);
     pending->priority = priority;
     pending->version = version;
     pending->index = index;
     ovs_list_push_back(&state->fte_pending_list, &pending->list_node);
 
-    if (!match->tun_md.valid) {
+    if (!match->tun_md || !match->tun_md->valid) {
         return;
     }
 
-    ULLONG_FOR_EACH_1 (i, match->wc.masks.tunnel.metadata.present.map) {
-        if (match->tun_md.entry[i].loc.len > state->tun_metadata_size[i]) {
-            state->tun_metadata_size[i] = match->tun_md.entry[i].loc.len;
+    uint64_t map = miniflow_get_tun_metadata_present_map(&match->mask->masks);
+    ULLONG_FOR_EACH_1 (i, map) {
+        if (match->tun_md->entry[i].loc.len > state->tun_metadata_size[i]) {
+            state->tun_metadata_size[i] = match->tun_md->entry[i].loc.len;
         }
     }
 }
@@ -3615,10 +3622,10 @@ fte_fill(struct fte_state *state, struct flow_tables *tables)
     flow_tables_defer(tables);
 
     LIST_FOR_EACH_POP(pending, list_node, &state->fte_pending_list) {
-        remap_match(state, pending->match);
-        fte_insert(tables, pending->match, pending->priority, pending->version,
-                   pending->index);
-        free(pending->match);
+        remap_match(state, &pending->match);
+        fte_insert(tables, &pending->match, pending->priority,
+                   pending->version, pending->index);
+        minimatch_destroy(&pending->match);
         free(pending);
     }
 
@@ -3669,6 +3676,8 @@ read_flows_from_file(const char *filename, struct fte_state *state, int index)
         version->table_id = fm.table_id != OFPTT_ALL ? fm.table_id : 0;
 
         fte_queue(state, &fm.match, fm.priority, version, index);
+
+        minimatch_destroy(&fm.match);
     }
     ds_destroy(&s);
 
@@ -3714,7 +3723,10 @@ read_flows_from_switch(struct vconn *vconn,
         version->ofpacts = xmemdup(fs->ofpacts, fs->ofpacts_len);
         version->table_id = fs->table_id;
 
-        fte_queue(state, &fs->match, fs->priority, version, index);
+        struct minimatch match;
+        minimatch_init(&match, &fs->match);
+        fte_queue(state, &match, fs->priority, version, index);
+        minimatch_destroy(&match);
     }
 
     for (size_t i = 0; i < n_fses; i++) {
@@ -3744,7 +3756,7 @@ fte_make_flow_mod(const struct fte *fte, int index, uint16_t command,
         .out_group = OFPG_ANY,
         .flags = version->flags,
     };
-    minimatch_expand(&fte->rule.match, &fm.match);
+    minimatch_clone(&fm.match, &fte->rule.match);
     if (command == OFPFC_ADD || command == OFPFC_MODIFY ||
         command == OFPFC_MODIFY_STRICT) {
         fm.ofpacts = version->ofpacts;
@@ -3753,8 +3765,9 @@ fte_make_flow_mod(const struct fte *fte, int index, uint16_t command,
         fm.ofpacts = NULL;
         fm.ofpacts_len = 0;
     }
-
     ofm = ofputil_encode_flow_mod(&fm, protocol);
+    minimatch_destroy(&fm.match);
+
     ovs_list_push_back(packets, &ofm->list_node);
 }
 
@@ -4028,6 +4041,7 @@ ofctl_parse_flows__(struct ofputil_flow_mod *fms, size_t n_fms,
         ofpbuf_delete(msg);
 
         free(CONST_CAST(struct ofpact *, fm->ofpacts));
+        minimatch_destroy(&fm->match);
     }
 }
 
@@ -4504,10 +4518,13 @@ ofctl_check_vlan(struct ovs_cmdl_context *ctx)
     if (error_s) {
         ovs_fatal(0, "%s", error_s);
     }
+    struct match fm_match;
+    minimatch_expand(&fm.match, &fm_match);
     printf("%04"PRIx16"/%04"PRIx16"\n",
-           ntohs(fm.match.flow.vlans[0].tci),
-           ntohs(fm.match.wc.masks.vlans[0].tci));
+           ntohs(fm_match.flow.vlans[0].tci),
+           ntohs(fm_match.wc.masks.vlans[0].tci));
     free(string_s);
+    minimatch_destroy(&fm.match);
 
     /* Convert to and from NXM. */
     ofpbuf_init(&nxm, 0);

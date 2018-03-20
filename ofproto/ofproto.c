@@ -133,7 +133,7 @@ static void eviction_group_remove_rule(struct rule *)
     OVS_REQUIRES(ofproto_mutex);
 
 static void rule_criteria_init(struct rule_criteria *, uint8_t table_id,
-                               const struct match *match, int priority,
+                               const struct minimatch *match, int priority,
                                ovs_version_t version,
                                ovs_be64 cookie, ovs_be64 cookie_mask,
                                ofp_port_t out_port, uint32_t out_group);
@@ -2104,7 +2104,6 @@ flow_mod_init(struct ofputil_flow_mod *fm,
               enum ofp_flow_mod_command command)
 {
     *fm = (struct ofputil_flow_mod) {
-        .match = *match,
         .priority = priority,
         .table_id = 0,
         .command = command,
@@ -2114,6 +2113,7 @@ flow_mod_init(struct ofputil_flow_mod *fm,
         .ofpacts = CONST_CAST(struct ofpact *, ofpacts),
         .ofpacts_len = ofpacts_len,
     };
+    minimatch_init(&fm->match, match);
 }
 
 static int
@@ -2123,10 +2123,10 @@ simple_flow_mod(struct ofproto *ofproto,
                 enum ofp_flow_mod_command command)
 {
     struct ofputil_flow_mod fm;
-
     flow_mod_init(&fm, match, priority, ofpacts, ofpacts_len, command);
-
-    return handle_flow_mod__(ofproto, &fm, NULL);
+    enum ofperr error = handle_flow_mod__(ofproto, &fm, NULL);
+    minimatch_destroy(&fm.match);
+    return error;
 }
 
 /* Adds a flow to OpenFlow flow table 0 in 'p' that matches 'cls_rule' and
@@ -3173,12 +3173,12 @@ learned_cookies_flush(struct ofproto *ofproto, struct ovs_list *dead_cookies)
 {
     struct learned_cookie *c;
 
+    struct minimatch match;
+
+    minimatch_init_catchall(&match);
     LIST_FOR_EACH_POP (c, u.list_node, dead_cookies) {
         struct rule_criteria criteria;
         struct rule_collection rules;
-        struct match match;
-
-        match_init_catchall(&match);
         rule_criteria_init(&criteria, c->table_id, &match, 0, OVS_VERSION_MAX,
                            c->cookie, OVS_BE64_MAX, OFPP_ANY, OFPG_ANY);
         rule_criteria_require_rw(&criteria, false);
@@ -3188,6 +3188,7 @@ learned_cookies_flush(struct ofproto *ofproto, struct ovs_list *dead_cookies)
 
         free(c);
     }
+    minimatch_destroy(&match);
 }
 
 static enum ofperr
@@ -4051,13 +4052,13 @@ next_matching_table(const struct ofproto *ofproto,
  * supplied as 0. */
 static void
 rule_criteria_init(struct rule_criteria *criteria, uint8_t table_id,
-                   const struct match *match, int priority,
+                   const struct minimatch *match, int priority,
                    ovs_version_t version, ovs_be64 cookie,
                    ovs_be64 cookie_mask, ofp_port_t out_port,
                    uint32_t out_group)
 {
     criteria->table_id = table_id;
-    cls_rule_init(&criteria->cr, match, priority);
+    cls_rule_init_from_minimatch(&criteria->cr, match, priority);
     criteria->version = version;
     criteria->cookie = cookie;
     criteria->cookie_mask = cookie_mask;
@@ -4303,9 +4304,12 @@ handle_flow_stats_request(struct ofconn *ofconn,
         return error;
     }
 
-    rule_criteria_init(&criteria, fsr.table_id, &fsr.match, 0, OVS_VERSION_MAX,
+    struct minimatch match;
+    minimatch_init(&match, &fsr.match);
+    rule_criteria_init(&criteria, fsr.table_id, &match, 0, OVS_VERSION_MAX,
                        fsr.cookie, fsr.cookie_mask, fsr.out_port,
                        fsr.out_group);
+    minimatch_destroy(&match);
 
     ovs_mutex_lock(&ofproto_mutex);
     error = collect_rules_loose(ofproto, &criteria, &rules);
@@ -4470,9 +4474,12 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
         return error;
     }
 
-    rule_criteria_init(&criteria, request.table_id, &request.match, 0,
+    struct minimatch match;
+    minimatch_init(&match, &request.match);
+    rule_criteria_init(&criteria, request.table_id, &match, 0,
                        OVS_VERSION_MAX, request.cookie, request.cookie_mask,
                        request.out_port, request.out_group);
+    minimatch_destroy(&match);
 
     ovs_mutex_lock(&ofproto_mutex);
     error = collect_rules_loose(ofproto, &criteria, &rules);
@@ -4746,22 +4753,22 @@ add_flow_init(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
     }
 
     if (!(fm->flags & OFPUTIL_FF_HIDDEN_FIELDS)
-        && !match_has_default_hidden_fields(&fm->match)) {
+        && !minimatch_has_default_hidden_fields(&fm->match)) {
         VLOG_WARN_RL(&rl, "%s: (add_flow) only internal flows can set "
                      "non-default values to hidden fields", ofproto->name);
         return OFPERR_OFPBRC_EPERM;
     }
 
     if (!ofm->temp_rule) {
-        cls_rule_init(&cr, &fm->match, fm->priority);
+        cls_rule_init_from_minimatch(&cr, &fm->match, fm->priority);
 
         /* Allocate new rule.  Destroys 'cr'. */
+        uint64_t map = miniflow_get_tun_metadata_present_map(fm->match.flow);
         error = ofproto_rule_create(ofproto, &cr, table - ofproto->tables,
                                     fm->new_cookie, fm->idle_timeout,
                                     fm->hard_timeout, fm->flags,
                                     fm->importance, fm->ofpacts,
-                                    fm->ofpacts_len,
-                                    fm->match.flow.tunnel.metadata.present.map,
+                                    fm->ofpacts_len, map,
                                     fm->ofpacts_tlv_bitmap, &ofm->temp_rule);
         if (error) {
             return error;
@@ -4958,7 +4965,7 @@ ofproto_flow_mod_init_for_learn(struct ofproto *ofproto,
     struct oftable *table = &ofproto->tables[fm->table_id];
     struct rule *rule;
 
-    rule = rule_from_cls_rule(classifier_find_match_exactly(
+    rule = rule_from_cls_rule(classifier_find_minimatch_exactly(
                                   &table->cls, &fm->match, fm->priority,
                                   OVS_VERSION_MAX));
     if (rule) {
@@ -5108,12 +5115,14 @@ ofproto_flow_mod_learn(struct ofproto_flow_mod *ofm, bool keep_ref,
         if (limit) {
             struct rule_criteria criteria;
             struct rule_collection rules;
-            struct match match;
+            struct minimatch match;
 
-            match_init_catchall(&match);
+            minimatch_init_catchall(&match);
             rule_criteria_init(&criteria, rule->table_id, &match, 0,
                                OVS_VERSION_MAX, rule->flow_cookie,
                                OVS_BE64_MAX, OFPP_ANY, OFPG_ANY);
+            minimatch_destroy(&match);
+
             rule_criteria_require_rw(&criteria, false);
             collect_rules_loose(rule->ofproto, &criteria, &rules);
             if (rule_collection_n(&rules) >= limit) {
@@ -5797,6 +5806,7 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     if (!error) {
         struct openflow_mod_requester req = { ofconn, oh };
         error = handle_flow_mod__(ofproto, &fm, &req);
+        minimatch_destroy(&fm.match);
     }
 
     ofpbuf_uninit(&ofpacts);
@@ -7921,6 +7931,7 @@ handle_bundle_add(struct ofconn *ofconn, const struct ofp_header *oh)
                                         ofproto->n_tables);
         if (!error) {
             error = ofproto_flow_mod_init(ofproto, &bmsg->ofm, &fm, NULL);
+            minimatch_destroy(&fm.match);
         }
     } else if (type == OFPTYPE_GROUP_MOD) {
         error = ofputil_decode_group_mod(badd.msg, &bmsg->ogm.gm);

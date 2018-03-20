@@ -73,7 +73,7 @@ void ofputil_flow_mod_flags_format(struct ds *, enum ofputil_flow_mod_flags);
 struct ofputil_flow_mod {
     struct ovs_list list_node; /* For queuing flow_mods. */
 
-    struct match match;
+    struct minimatch match;
     int priority;
 
     /* Cookie matching.  The flow_mod affects only flows that have cookies that

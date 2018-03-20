@@ -58,7 +58,7 @@ struct ovn_flow {
     /* Key. */
     uint8_t table_id;
     uint16_t priority;
-    struct match match;
+    struct minimatch match;
 
     /* Data. */
     struct ofpact *ofpacts;
@@ -373,14 +373,16 @@ error:
 static void
 run_S_CLEAR_FLOWS(void)
 {
+    VLOG_DBG("clearing all flows");
+
     /* Send a flow_mod to delete all flows. */
     struct ofputil_flow_mod fm = {
-        .match = MATCH_CATCHALL_INITIALIZER,
         .table_id = OFPTT_ALL,
         .command = OFPFC_DELETE,
     };
+    minimatch_init_catchall(&fm.match);
     queue_msg(encode_flow_mod(&fm));
-    VLOG_DBG("clearing all flows");
+    minimatch_destroy(&fm.match);
 
     /* Clear installed_flows, to match the state of the switch. */
     ovn_flow_table_clear(&installed_flows);
@@ -630,13 +632,12 @@ ofctrl_recv(const struct ofp_header *oh, enum ofptype type)
 void
 ofctrl_add_flow(struct hmap *desired_flows,
                 uint8_t table_id, uint16_t priority, uint64_t cookie,
-                const struct match *match,
-                const struct ofpbuf *actions)
+                const struct match *match, const struct ofpbuf *actions)
 {
     struct ovn_flow *f = xmalloc(sizeof *f);
     f->table_id = table_id;
     f->priority = priority;
-    f->match = *match;
+    minimatch_init(&f->match, match);
     f->ofpacts = xmemdup(actions->data, actions->size);
     f->ofpacts_len = actions->size;
     f->hmap_node.hash = ovn_flow_hash(f);
@@ -665,7 +666,7 @@ static uint32_t
 ovn_flow_hash(const struct ovn_flow *f)
 {
     return hash_2words((f->table_id << 16) | f->priority,
-                       match_hash(&f->match, 0));
+                       minimatch_hash(&f->match, 0));
 
 }
 
@@ -676,7 +677,7 @@ ofctrl_dup_flow(struct ovn_flow *src)
     struct ovn_flow *dst = xmalloc(sizeof *dst);
     dst->table_id = src->table_id;
     dst->priority = src->priority;
-    dst->match = src->match;
+    minimatch_clone(&dst->match, &src->match);
     dst->ofpacts = xmemdup(src->ofpacts, src->ofpacts_len);
     dst->ofpacts_len = src->ofpacts_len;
     dst->hmap_node.hash = ovn_flow_hash(dst);
@@ -694,7 +695,7 @@ ovn_flow_lookup(struct hmap *flow_table, const struct ovn_flow *target)
                              flow_table) {
         if (f->table_id == target->table_id
             && f->priority == target->priority
-            && match_equal(&f->match, &target->match)) {
+            && minimatch_equal(&f->match, &target->match)) {
             return f;
         }
     }
@@ -707,7 +708,7 @@ ovn_flow_to_string(const struct ovn_flow *f)
     struct ds s = DS_EMPTY_INITIALIZER;
     ds_put_format(&s, "table_id=%"PRIu8", ", f->table_id);
     ds_put_format(&s, "priority=%"PRIu16", ", f->priority);
-    match_format(&f->match, NULL, &s, OFP_DEFAULT_PRIORITY);
+    minimatch_format(&f->match, NULL, NULL, &s, OFP_DEFAULT_PRIORITY);
     ds_put_cstr(&s, ", actions=");
     struct ofpact_format_params fp = { .s = &s };
     ofpacts_format(f->ofpacts, f->ofpacts_len, &fp);
@@ -728,6 +729,7 @@ static void
 ovn_flow_destroy(struct ovn_flow *f)
 {
     if (f) {
+        minimatch_destroy(&f->match);
         free(f->ofpacts);
         free(f);
     }

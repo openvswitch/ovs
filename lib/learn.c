@@ -91,14 +91,17 @@ learn_check(const struct ofpact_learn *learn, const struct match *src_match)
  * 'ofpacts' and retains ownership of it.  'fm->ofpacts' will point into the
  * 'ofpacts' buffer.
  *
+ * The caller must eventually destroy fm->match.
+ *
  * The caller has to actually execute 'fm'. */
 void
 learn_execute(const struct ofpact_learn *learn, const struct flow *flow,
               struct ofputil_flow_mod *fm, struct ofpbuf *ofpacts)
 {
     const struct ofpact_learn_spec *spec;
+    struct match match;
 
-    match_init_catchall(&fm->match);
+    match_init_catchall(&match);
     fm->priority = learn->priority;
     fm->cookie = htonll(0);
     fm->cookie_mask = htonll(0);
@@ -140,10 +143,10 @@ learn_execute(const struct ofpact_learn *learn, const struct flow *flow,
 
         switch (spec->dst_type) {
         case NX_LEARN_DST_MATCH:
-            mf_write_subfield(&spec->dst, &value, &fm->match);
-            match_add_ethernet_prereq(&fm->match, spec->dst.field);
+            mf_write_subfield(&spec->dst, &value, &match);
+            match_add_ethernet_prereq(&match, spec->dst.field);
             mf_vl_mff_set_tlv_bitmap(
-                spec->dst.field, &fm->match.flow.tunnel.metadata.present.map);
+                spec->dst.field, &match.flow.tunnel.metadata.present.map);
             break;
 
         case NX_LEARN_DST_LOAD:
@@ -173,6 +176,7 @@ learn_execute(const struct ofpact_learn *learn, const struct flow *flow,
         }
     }
 
+    minimatch_init(&fm->match, &match);
     fm->ofpacts = ofpacts->data;
     fm->ofpacts_len = ofpacts->size;
 }
