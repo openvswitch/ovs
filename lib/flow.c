@@ -2007,7 +2007,7 @@ miniflow_hash_5tuple(const struct miniflow *flow, uint32_t basis)
         }
 
         /* Add both ports at once. */
-        hash = hash_add(hash, MINIFLOW_GET_U32(flow, tp_src));
+        hash = hash_add(hash, (OVS_FORCE uint32_t) miniflow_get_ports(flow));
     }
 out:
     return hash_finish(hash, 42);

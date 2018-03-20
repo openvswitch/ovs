@@ -495,8 +495,8 @@ classifier_count(const struct classifier *cls)
 static inline ovs_be32 minimatch_get_ports(const struct minimatch *match)
 {
     /* Could optimize to use the same map if needed for fast path. */
-    return MINIFLOW_GET_BE32(match->flow, tp_src)
-        & MINIFLOW_GET_BE32(&match->mask->masks, tp_src);
+    return (miniflow_get_ports(match->flow)
+            & miniflow_get_ports(&match->mask->masks));
 }
 
 /* Inserts 'rule' into 'cls' in 'version'.  Until 'rule' is removed from 'cls',
@@ -1501,7 +1501,7 @@ insert_subtable(struct classifier *cls, const struct minimask *mask)
     /* Ports trie. */
     ovsrcu_set_hidden(&subtable->ports_trie, NULL);
     *CONST_CAST(int *, &subtable->ports_mask_len)
-        = 32 - ctz32(ntohl(MINIFLOW_GET_BE32(&mask->masks, tp_src)));
+        = 32 - ctz32(ntohl(miniflow_get_ports(&mask->masks)));
 
     /* List of rules. */
     rculist_init(&subtable->rules_list);
@@ -1696,7 +1696,7 @@ find_match_wc(const struct cls_subtable *subtable, ovs_version_t version,
         unsigned int mbits;
         ovs_be32 value, plens, mask;
 
-        mask = MINIFLOW_GET_BE32(&subtable->mask.masks, tp_src);
+        mask = miniflow_get_ports(&subtable->mask.masks);
         value = ((OVS_FORCE ovs_be32 *)flow)[TP_PORTS_OFS32] & mask;
         mbits = trie_lookup_value(&subtable->ports_trie, &value, &plens, 32);
 

@@ -2200,7 +2200,8 @@ dp_netdev_pmd_lookup_flow(struct dp_netdev_pmd_thread *pmd,
 {
     struct dpcls *cls;
     struct dpcls_rule *rule;
-    odp_port_t in_port = u32_to_odp(MINIFLOW_GET_U32(&key->mf, in_port));
+    odp_port_t in_port = u32_to_odp(MINIFLOW_GET_U32(&key->mf,
+                                                     in_port.odp_port));
     struct dp_netdev_flow *netdev_flow = NULL;
 
     cls = dp_netdev_pmd_lookup_dpcls(pmd, in_port);
