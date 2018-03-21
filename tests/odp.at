@@ -80,6 +80,16 @@ sed 's/^/skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),/' odp-base.txt | s
  echo
  echo '# Valid forms with IP later fragment.'
 sed 's/^/skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),/' odp-base.txt | sed -n 's/,frag=no),.*/,frag=later)/p'
+
+ echo
+ echo '# Valid forms with tunnel and ERSPAN v1 headers.'
+ sed
+ 's/^/skb_priority(0),tunnel(tun_id=0xfedcba9876543210,src=10.0.0.1,dst=10.0.0.2,ttl=128,erspan(ver=1,idx=0x7),flags(df|key)),skb_mark(0),recirc_id(0),dp_hash(0),/' odp-base.txt
+
+ echo
+ echo '# Valid forms with tunnel and ERSPAN v2 headers.'
+ sed
+ 's/^/skb_priority(0),tunnel(tun_id=0xfedcba9876543210,src=10.0.0.1,dst=10.0.0.2,ttl=128,erspan(ver=2,dir=0x1,hwid=0x7),flags(df|key)),skb_mark(0),recirc_id(0),dp_hash(0),/' odp-base.txt
 ) > odp-in.txt
 AT_CAPTURE_FILE([odp-in.txt])
 
@@ -172,7 +182,18 @@ sed -n 's/,frag=no),/,frag=first),/p' odp-base.txt
 
  echo
  echo '# Valid forms with IP later fragment.'
-sed -n 's/,frag=no),.*/,frag=later)/p' odp-base.txt) > odp.txt
+sed -n 's/,frag=no),.*/,frag=later)/p' odp-base.txt
+
+ echo
+ echo '# Valid forms with tunnel and ERSPAN v1 headers.'
+ sed
+ 's/^/skb_priority(0),tunnel(tun_id=0xfedcba9876543210,src=10.0.0.1,dst=10.0.0.2,ttl=128,erspan(ver=1/0,idx=0x7/0xf),flags(df|key)),skb_mark(0),recirc_id(0),dp_hash(0),/' odp-base.txt
+
+ echo
+ echo '# Valid forms with tunnel and ERSPAN v2 headers.'
+ sed
+ 's/^/skb_priority(0),tunnel(tun_id=0xfedcba9876543210,src=10.0.0.1,dst=10.0.0.2,ttl=128,erspan(ver=2,dir=0x1,hwid=0x7/0xf),flags(df|key)),skb_mark(0),recirc_id(0),dp_hash(0),/' odp-base.txt
+) > odp.txt
 AT_CAPTURE_FILE([odp.txt])
 AT_CHECK_UNQUOTED([ovstest test-odp parse-wc-keys < odp.txt], [0], [`cat odp.txt`
 ])
@@ -358,6 +379,8 @@ ct_clear
 trunc(100)
 clone(1)
 clone(clone(push_vlan(vid=12,pcp=0),2),1)
+set(tunnel(tun_id=0x1,dst=1.1.1.1,ttl=64,erspan(ver=1,idx=0x7),flags(df|key)))
+set(tunnel(tun_id=0x1,dst=1.1.1.1,ttl=64,erspan(ver=2,dir=1,hwid=0x1),flags(df|key)))
 ])
 AT_CHECK_UNQUOTED([ovstest test-odp parse-actions < actions.txt], [0],
   [`cat actions.txt`

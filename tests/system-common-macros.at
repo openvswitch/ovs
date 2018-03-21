@@ -297,6 +297,11 @@ m4_define([OVS_CHECK_GRE],
     [AT_SKIP_IF([! ip link add foo type gretap help 2>&1 | grep gretap >/dev/null])
      OVS_CHECK_FIREWALL()])
 
+# OVS_CHECK_ERSPAN()
+m4_define([OVS_CHECK_ERSPAN],
+    [AT_SKIP_IF([! ip link add foo type erspan help 2>&1 | grep erspan >/dev/null])
+     OVS_CHECK_FIREWALL()])
+
 # OVS_CHECK_GRE_L3()
 m4_define([OVS_CHECK_GRE_L3],
     [AT_SKIP_IF([! ip link add foo type gre help 2>&1 | grep "gre " >/dev/null])
