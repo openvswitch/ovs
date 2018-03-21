@@ -377,8 +377,9 @@ nl_parse_flower_ip(struct nlattr **attrs, struct tc_flower *flower) {
     }
 
     if (attrs[TCA_FLOWER_KEY_FLAGS_MASK]) {
-        key->flags = ntohl(nl_attr_get_u32(attrs[TCA_FLOWER_KEY_FLAGS]));
-        mask->flags = ntohl(nl_attr_get_u32(attrs[TCA_FLOWER_KEY_FLAGS_MASK]));
+        key->flags = ntohl(nl_attr_get_be32(attrs[TCA_FLOWER_KEY_FLAGS]));
+        mask->flags =
+                ntohl(nl_attr_get_be32(attrs[TCA_FLOWER_KEY_FLAGS_MASK]));
     }
 
     if (attrs[TCA_FLOWER_KEY_IPV4_SRC_MASK]) {
@@ -1503,9 +1504,9 @@ nl_msg_put_flower_options(struct ofpbuf *request, struct tc_flower *flower)
         }
 
         if (flower->mask.flags) {
-            nl_msg_put_u32(request, TCA_FLOWER_KEY_FLAGS,
+            nl_msg_put_be32(request, TCA_FLOWER_KEY_FLAGS,
                            htonl(flower->key.flags));
-            nl_msg_put_u32(request, TCA_FLOWER_KEY_FLAGS_MASK,
+            nl_msg_put_be32(request, TCA_FLOWER_KEY_FLAGS_MASK,
                            htonl(flower->mask.flags));
         }
 
