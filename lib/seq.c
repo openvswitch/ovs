@@ -38,8 +38,8 @@ struct seq {
 
 /* A thread waiting on a particular seq. */
 struct seq_waiter {
-    struct seq *seq OVS_GUARDED;            /* Seq being waited for. */
     struct hmap_node hmap_node OVS_GUARDED; /* In 'seq->waiters'. */
+    struct seq *seq OVS_GUARDED;            /* Seq being waited for. */
     unsigned int ovsthread_id OVS_GUARDED;  /* Key in 'waiters' hmap. */
 
     struct seq_thread *thread OVS_GUARDED;  /* Thread preparing to wait. */
