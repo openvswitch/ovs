@@ -166,6 +166,29 @@ shash_replace(struct shash *sh, const char *name, const void *data)
     }
 }
 
+/* Searches for 'name' in 'sh'.  If it does not already exist, adds it along
+ * with 'data' and returns NULL.  If it does already exist, replaces its data
+ * by 'data' and returns the data that it formerly contained.
+ *
+ * Takes ownership of 'name'. */
+void *
+shash_replace_nocopy(struct shash *sh, char *name, const void *data)
+{
+    size_t hash = hash_name(name);
+    struct shash_node *node;
+
+    node = shash_find__(sh, name, strlen(name), hash);
+    if (!node) {
+        shash_add_nocopy__(sh, name, data, hash);
+        return NULL;
+    } else {
+        free(name);
+        void *old_data = node->data;
+        node->data = CONST_CAST(void *, data);
+        return old_data;
+    }
+}
+
 /* Deletes 'node' from 'sh' and frees the node's name.  The caller is still
  * responsible for freeing the node's data, if necessary. */
 void

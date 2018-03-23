@@ -280,6 +280,12 @@ json_object_put(struct json *json, const char *name, struct json *value)
 }
 
 void
+json_object_put_nocopy(struct json *json, char *name, struct json *value)
+{
+    json_destroy(shash_replace_nocopy(json->u.object, name, value));
+}
+
+void
 json_object_put_string(struct json *json, const char *name, const char *value)
 {
     json_object_put(json, name, json_string_create(value));
@@ -1217,8 +1223,7 @@ json_parser_put_value(struct json_parser *p, struct json *value)
 {
     struct json_parser_node *node = json_parser_top(p);
     if (node->json->type == JSON_OBJECT) {
-        json_object_put(node->json, p->member_name, value);
-        free(p->member_name);
+        json_object_put_nocopy(node->json, p->member_name, value);
         p->member_name = NULL;
     } else if (node->json->type == JSON_ARRAY) {
         json_array_add(node->json, value);
