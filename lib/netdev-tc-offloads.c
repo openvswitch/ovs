@@ -948,14 +948,21 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         flower.key.ip_ttl = key->nw_ttl;
         flower.mask.ip_ttl = mask->nw_ttl;
 
-        if (mask->nw_frag) {
-            if (key->nw_frag & FLOW_NW_FRAG_ANY)
-                flower.key.flags |= TCA_FLOWER_KEY_FLAGS_IS_FRAGMENT;
-            if (!(key->nw_frag & FLOW_NW_FRAG_LATER))
-                flower.key.flags |= TCA_FLOWER_KEY_FLAGS_FRAG_IS_FIRST;
-
+        if (mask->nw_frag & FLOW_NW_FRAG_ANY) {
             flower.mask.flags |= TCA_FLOWER_KEY_FLAGS_IS_FRAGMENT;
-            flower.mask.flags |= TCA_FLOWER_KEY_FLAGS_FRAG_IS_FIRST;
+
+            if (key->nw_frag & FLOW_NW_FRAG_ANY) {
+                flower.key.flags |= TCA_FLOWER_KEY_FLAGS_IS_FRAGMENT;
+
+                if (mask->nw_frag & FLOW_NW_FRAG_LATER) {
+                    flower.mask.flags |= TCA_FLOWER_KEY_FLAGS_FRAG_IS_FIRST;
+
+                    if (!(key->nw_frag & FLOW_NW_FRAG_LATER)) {
+                        flower.key.flags |= TCA_FLOWER_KEY_FLAGS_FRAG_IS_FIRST;
+                    }
+                }
+            }
+
             mask->nw_frag = 0;
         }
 
