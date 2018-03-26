@@ -7113,8 +7113,6 @@ ofpact_is_set_or_move_action(const struct ofpact *a)
     case OFPACT_SET_TUNNEL:
     case OFPACT_SET_VLAN_PCP:
     case OFPACT_SET_VLAN_VID:
-    case OFPACT_ENCAP:
-    case OFPACT_DECAP:
         return true;
     case OFPACT_BUNDLE:
     case OFPACT_CLEAR_ACTIONS:
@@ -7151,6 +7149,8 @@ ofpact_is_set_or_move_action(const struct ofpact *a)
     case OFPACT_WRITE_ACTIONS:
     case OFPACT_WRITE_METADATA:
     case OFPACT_DEBUG_RECIRC:
+    case OFPACT_ENCAP:
+    case OFPACT_DECAP:
         return false;
     default:
         OVS_NOT_REACHED();
