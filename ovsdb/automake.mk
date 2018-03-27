@@ -120,7 +120,7 @@ OVSDB_DOT = $(run_python) $(srcdir)/ovsdb/ovsdb-dot.in
 
 EXTRA_DIST += ovsdb/_server.ovsschema
 CLEANFILES += ovsdb/_server.ovsschema.inc
-ovsdb/ovsdb-server.o: ovsdb/_server.ovsschema.inc
+ovsdb/ovsdb-server.$(OBJEXT): ovsdb/_server.ovsschema.inc
 ovsdb/_server.ovsschema.inc: ovsdb/_server.ovsschema $(srcdir)/build-aux/text2c
 	$(AM_V_GEN)$(run_python) $(srcdir)/build-aux/text2c < $< > $@.tmp
 	$(AM_V_at)mv $@.tmp $@
