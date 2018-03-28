@@ -57,6 +57,9 @@
 #include "stream.h"
 #include "unixctl.h"
 #include "util.h"
+#include "timeval.h"
+#include "timer.h"
+#include "stopwatch.h"
 
 VLOG_DEFINE_THIS_MODULE(main);
 
@@ -66,6 +69,8 @@ static unixctl_cb_func inject_pkt;
 
 #define DEFAULT_BRIDGE_NAME "br-int"
 #define DEFAULT_PROBE_INTERVAL_MSEC 5000
+
+#define CONTROLLER_LOOP_STOPWATCH_NAME "ovn-controller-flow-generation"
 
 static void update_probe_interval(struct controller_ctx *,
                                   const char *ovnsb_remote);
@@ -640,6 +645,7 @@ main(int argc, char *argv[])
     unixctl_command_register("inject-pkt", "MICROFLOW", 1, 1, inject_pkt,
                              &pending_pkt);
 
+    stopwatch_create(CONTROLLER_LOOP_STOPWATCH_NAME, SW_MS);
     /* Main loop. */
     exiting = false;
     while (!exiting) {
@@ -709,6 +715,9 @@ main(int argc, char *argv[])
                             ct_zone_bitmap, &pending_ct_zones);
             if (ctx.ovs_idl_txn) {
                 if (ofctrl_can_put()) {
+                    stopwatch_start(CONTROLLER_LOOP_STOPWATCH_NAME,
+                                    time_msec());
+
                     commit_ct_zones(br_int, &pending_ct_zones);
 
                     struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
@@ -725,6 +734,9 @@ main(int argc, char *argv[])
                                  br_int, chassis, &ct_zones,
                                  &flow_table, &local_datapaths, &local_lports,
                                  &chassis_index, &active_tunnels);
+
+                    stopwatch_stop(CONTROLLER_LOOP_STOPWATCH_NAME,
+                                   time_msec());
 
                     ofctrl_put(&flow_table, &pending_ct_zones,
                                get_nb_cfg(ctx.ovnsb_idl));
@@ -793,6 +805,7 @@ main(int argc, char *argv[])
             ofctrl_wait();
             pinctrl_wait(&ctx);
         }
+
         ovsdb_idl_loop_commit_and_wait(&ovnsb_idl_loop);
 
         if (ovsdb_idl_loop_commit_and_wait(&ovs_idl_loop) == 1) {
