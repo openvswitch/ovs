@@ -251,3 +251,8 @@ AT_CLEANUP
 AT_SETUP([rcu])
 AT_CHECK([ovstest test-rcu-quiesce], [0], [])
 AT_CLEANUP
+
+AT_SETUP([stopwatch module])
+AT_CHECK([ovstest test-stopwatch], [0], [......
+], [ignore])
+AT_CLEANUP

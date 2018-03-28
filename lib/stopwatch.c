@@ -245,7 +245,7 @@ stopwatch_get_stats_protected(const char *name,
         return false;
     }
 
-    stats->count = perf->samples;
+    stats->count = perf->n_samples;
     stats->unit = perf->units;
     stats->max = perf->max;
     stats->min = perf->min;
