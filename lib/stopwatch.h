@@ -51,4 +51,7 @@ void stopwatch_stop(const char *name, unsigned long long ts);
 /* Retrieve statistics calculated from collected samples */
 bool stopwatch_get_stats(const char *name, struct stopwatch_stats *stats);
 
+/* Block until all enqueued samples have been processed. */
+void stopwatch_sync(void);
+
 #endif /* stopwatch.h */

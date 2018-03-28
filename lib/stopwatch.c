@@ -66,6 +66,7 @@ struct stopwatch {
 enum stopwatch_op {
     OP_START_SAMPLE,
     OP_END_SAMPLE,
+    OP_SYNC,
     OP_RESET,
     OP_SHUTDOWN,
 };
@@ -78,6 +79,7 @@ struct stopwatch_packet {
 
 static struct shash stopwatches = SHASH_INITIALIZER(&stopwatches);
 static struct ovs_mutex stopwatches_lock = OVS_MUTEX_INITIALIZER;
+static pthread_cond_t stopwatches_sync = PTHREAD_COND_INITIALIZER;
 
 static int stopwatch_pipe[2];
 static pthread_t stopwatch_thread_id;
@@ -233,12 +235,12 @@ add_sample(struct stopwatch *sw, unsigned long long new_sample)
 }
 
 static bool
-performance_get_stats_protected(const char *name,
-                                struct performance_stats *stats)
+stopwatch_get_stats_protected(const char *name,
+                                struct stopwatch_stats *stats)
 {
-    struct performance *perf;
+    struct stopwatch *perf;
 
-    perf = shash_find_data(&performances, name);
+    perf = shash_find_data(&stopwatches, name);
     if (!perf) {
         return false;
     }
@@ -255,13 +257,13 @@ performance_get_stats_protected(const char *name,
 }
 
 bool
-performance_get_stats(const char *name, struct performance_stats *stats)
+stopwatch_get_stats(const char *name, struct stopwatch_stats *stats)
 {
     bool found = false;
 
-    ovs_mutex_lock(&performances_lock);
-    found = performance_get_stats_protected(name, stats);
-    ovs_mutex_unlock(&performances_lock);
+    ovs_mutex_lock(&stopwatches_lock);
+    found = stopwatch_get_stats_protected(name, stats);
+    ovs_mutex_unlock(&stopwatches_lock);
 
     return found;
 }
@@ -413,6 +415,9 @@ stopwatch_thread(void *ign OVS_UNUSED)
             case OP_END_SAMPLE:
                 stopwatch_end_sample_protected(&pkt);
                 break;
+            case OP_SYNC:
+                xpthread_cond_signal(&stopwatches_sync);
+                break;
             case OP_RESET:
                 stopwatch_reset_protected(&pkt);
                 break;
@@ -514,4 +519,17 @@ stopwatch_stop(const char *name, unsigned long long ts)
     };
     ovs_strlcpy(pkt.name, name, sizeof(pkt.name));
     write(stopwatch_pipe[1], &pkt, sizeof(pkt));
+}
+
+void
+stopwatch_sync(void)
+{
+    struct stopwatch_packet pkt = {
+        .op = OP_SYNC,
+    };
+
+    ovs_mutex_lock(&stopwatches_lock);
+    write(stopwatch_pipe[1], &pkt, sizeof(pkt));
+    ovs_mutex_cond_wait(&stopwatches_sync, &stopwatches_lock);
+    ovs_mutex_unlock(&stopwatches_lock);
 }
