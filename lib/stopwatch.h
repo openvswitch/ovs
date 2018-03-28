@@ -24,6 +24,16 @@ enum stopwatch_units {
     SW_NS,
 };
 
+struct stopwatch_stats {
+    unsigned long long count;    /* Total number of samples. */
+    enum stopwatch_units unit; /* Unit of following values. */
+    unsigned long long max;      /* Maximum value. */
+    unsigned long long min;      /* Minimum value. */
+    double pctl_95;              /* 95th percentile. */
+    double ewma_50;              /* Exponentially weighted moving average (alpha 0.50). */
+    double ewma_1;               /* Exponentially weighted moving average (alpha 0.01). */
+};
+
 /* Create a new stopwatch.
  * The "units" are not used for any calculations but are printed when
  * statistics are requested.
@@ -37,5 +47,8 @@ void stopwatch_start(const char *name, unsigned long long ts);
  * for this stopwatch.
  */
 void stopwatch_stop(const char *name, unsigned long long ts);
+
+/* Retrieve statistics calculated from collected samples */
+bool stopwatch_get_stats(const char *name, struct stopwatch_stats *stats);
 
 #endif /* stopwatch.h */

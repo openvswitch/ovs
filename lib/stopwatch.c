@@ -232,6 +232,40 @@ add_sample(struct stopwatch *sw, unsigned long long new_sample)
     calc_average(&sw->long_term, new_sample);
 }
 
+static bool
+performance_get_stats_protected(const char *name,
+                                struct performance_stats *stats)
+{
+    struct performance *perf;
+
+    perf = shash_find_data(&performances, name);
+    if (!perf) {
+        return false;
+    }
+
+    stats->count = perf->samples;
+    stats->unit = perf->units;
+    stats->max = perf->max;
+    stats->min = perf->min;
+    stats->pctl_95 = perf->pctl.percentile;
+    stats->ewma_50 = perf->short_term.average;
+    stats->ewma_1 = perf->long_term.average;
+
+    return true;
+}
+
+bool
+performance_get_stats(const char *name, struct performance_stats *stats)
+{
+    bool found = false;
+
+    ovs_mutex_lock(&performances_lock);
+    found = performance_get_stats_protected(name, stats);
+    ovs_mutex_unlock(&performances_lock);
+
+    return found;
+}
+
 static void
 stopwatch_print(struct stopwatch *sw, const char *name,
                   struct ds *s)
