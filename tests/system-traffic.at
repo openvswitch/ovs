@@ -4478,3 +4478,166 @@ NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
+
+
+AT_BANNER([nsh-datapath])
+
+AT_SETUP([nsh - encap header])
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "0.0.0.0")
+ADD_VETH(p1, at_ns1, br0, "0.0.0.0")
+
+dnl The flow will encap a nsh header to the TCP syn packet
+dnl eth/ip/tcp --> OVS --> eth/nsh/eth/ip/tcp
+AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,in_port=ovs-p0,ip,actions=encap(nsh(md_type=1)),set_field:0x1234->nsh_spi,set_field:0x11223344->nsh_c1,encap(ethernet),set_field:f2:ff:00:00:00:02->dl_dst,set_field:f2:ff:00:00:00:01->dl_src,ovs-p1"])
+
+rm ovs-p1.pcap
+tcpdump -U -i ovs-p1 -w ovs-p1.pcap &
+sleep 1
+
+dnl The hex dump is a TCP syn packet. pkt=eth/ip/tcp
+dnl The packet is sent from p0(at_ns0) interface directed to
+dnl p1(at_ns1) interface
+NS_CHECK_EXEC([at_ns0], [$PYTHON $srcdir/sendpkt.py p0 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
+
+sleep 1
+
+dnl Check the expected nsh encapsulated packet on the egress interface
+AT_CHECK([tcpdump -xx -r ovs-p1.pcap 2>&1 | egrep "0x0000: *f2ff *0000 *0002 *f2ff *0000 *0001 *894f *0fc6" 2>&1 1>/dev/null])
+AT_CHECK([tcpdump -xx -r ovs-p1.pcap 2>&1 | egrep "0x0010: *0103 *0012 *34ff *1122 *3344 *0000 *0000 *0000" 2>&1 1>/dev/null])
+AT_CHECK([tcpdump -xx -r ovs-p1.pcap 2>&1 | egrep "0x0020: *0000 *0000 *0000 *f200 *0000 *0002 *f200 *0000" 2>&1 1>/dev/null])
+AT_CHECK([tcpdump -xx -r ovs-p1.pcap 2>&1 | egrep "0x0030: *0001 *0800 *4500 *0028 *0001 *0000 *4006 *b013" 2>&1 1>/dev/null])
+AT_CHECK([tcpdump -xx -r ovs-p1.pcap 2>&1 | egrep "0x0040: *c0a8 *000a *0a00 *000a *0400 *0800 *0000 *00c8" 2>&1 1>/dev/null])
+AT_CHECK([tcpdump -xx -r ovs-p1.pcap 2>&1 | egrep "0x0050: *0000 *0000 *5002 *2000 *b85e *0000" 2>&1 1>/dev/null])
+
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([nsh - decap header])
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "0.0.0.0")
+ADD_VETH(p1, at_ns1, br0, "0.0.0.0")
+
+dnl The flow will decap a nsh header which in turn carries a TCP syn packet
+dnl eth/nsh/eth/ip/tcp --> OVS --> eth/ip/tcp
+AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,in_port=ovs-p0,dl_type=0x894f, actions=decap(),decap(), ovs-p1"])
+
+rm ovs-p1.pcap
+tcpdump -U -i ovs-p1 -w ovs-p1.pcap &
+sleep 1
+
+dnl The hex dump is NSH packet with TCP syn payload. pkt=eth/nsh/eth/ip/tcp
+dnl The packet is sent from p0(at_ns0) interface directed to
+dnl p1(at_ns1) interface
+NS_CHECK_EXEC([at_ns0], [$PYTHON $srcdir/sendpkt.py p0 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 02 06 01 03 00 00 64 03 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
+
+sleep 1
+
+dnl Check the expected de-capsulated TCP packet on the egress interface
+AT_CHECK([tcpdump -xx -r ovs-p1.pcap 2>&1 | egrep "0x0000: *f200 *0000 *0002 *f200 *0000 *0001 *0800 *4500" 2>&1 1>/dev/null])
+AT_CHECK([tcpdump -xx -r ovs-p1.pcap 2>&1 | egrep "0x0010: *0028 *0001 *0000 *4006 *b013 *c0a8 *000a *0a00" 2>&1 1>/dev/null])
+AT_CHECK([tcpdump -xx -r ovs-p1.pcap 2>&1 | egrep "0x0020: *000a *0400 *0800 *0000 *00c8 *0000 *0000 *5002" 2>&1 1>/dev/null])
+AT_CHECK([tcpdump -xx -r ovs-p1.pcap 2>&1 | egrep "0x0030: *2000 *b85e *0000" 2>&1 1>/dev/null])
+
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([nsh - replace header])
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "0.0.0.0")
+ADD_VETH(p1, at_ns1, br0, "0.0.0.0")
+
+dnl The flow will decap a nsh header and encap a new nsh header
+dnl eth/nsh-X/eth/ip/tcp --> OVS --> eth/nsh-Y/eth/ip/tcp
+dnl The flow will add another NSH header with nsh_spi=0x101, nsh_si=4,
+dnl nsh_ttl=7 and change the md1 context
+AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,in_port=ovs-p0,dl_type=0x894f,nsh_spi=0x100,nsh_si=0x03,actions=decap(),decap(),encap(nsh(md_type=1)),set_field:0x07->nsh_ttl,set_field:0x0101->nsh_spi,set_field:0x04->nsh_si,set_field:0x100f0e0d->nsh_c1,set_field:0x0c0b0a09->nsh_c2,set_field:0x08070605->nsh_c3,set_field:0x04030201->nsh_c4,encap(ethernet),set_field:f2:ff:00:00:00:02->dl_dst,set_field:f2:ff:00:00:00:01->dl_src,ovs-p1"])
+
+rm ovs-p1.pcap
+tcpdump -U -i ovs-p1 -w ovs-p1.pcap &
+sleep 1
+
+dnl The hex dump is NSH packet with TCP syn payload. pkt=eth/nsh/eth/ip/tcp
+dnl The nsh_ttl is 8, nsh_spi is 0x100 and nsh_si is 3
+dnl The packet is sent from p0(at_ns0) interface directed to
+dnl p1(at_ns1) interface
+NS_CHECK_EXEC([at_ns0], [$PYTHON $srcdir/sendpkt.py p0 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 02 06 01 03 00 01 00 03 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
+
+sleep 1
+
+dnl Check the expected NSH packet with new fields in the header
+AT_CHECK([tcpdump -xx -r ovs-p1.pcap 2>&1 | egrep "0x0000: *f2ff *0000 *0002 *f2ff *0000* 0001 *894f *01c6" 2>&1 1>/dev/null])
+AT_CHECK([tcpdump -xx -r ovs-p1.pcap 2>&1 | egrep "0x0010: *0103 *0001 *0104 *100f *0e0d *0c0b *0a09 *0807" 2>&1 1>/dev/null])
+AT_CHECK([tcpdump -xx -r ovs-p1.pcap 2>&1 | egrep "0x0020: *0605 *0403 *0201 *f200 *0000 *0002 *f200 *0000" 2>&1 1>/dev/null])
+AT_CHECK([tcpdump -xx -r ovs-p1.pcap 2>&1 | egrep "0x0030: *0001 *0800 *4500 *0028 *0001 *0000 *4006 *b013" 2>&1 1>/dev/null])
+AT_CHECK([tcpdump -xx -r ovs-p1.pcap 2>&1 | egrep "0x0040: *c0a8 *000a *0a00 *000a *0400 *0800 *0000 *00c8" 2>&1 1>/dev/null])
+AT_CHECK([tcpdump -xx -r ovs-p1.pcap 2>&1 | egrep "0x0050: *0000 *0000 *5002 *2000 *b85e *0000" 2>&1 1>/dev/null])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+
+AT_SETUP([nsh - forward])
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1, at_ns2)
+
+ADD_VETH(p0, at_ns0, br0, "0.0.0.0")
+ADD_VETH(p1, at_ns1, br0, "0.0.0.0")
+ADD_VETH(p2, at_ns2, br0, "0.0.0.0")
+
+dnl Push two flows to OVS. #1 will check on SPI=0X100, SI=2 and send the
+dnl packet to at_ns1. #2 will check on SPI=0X100, SI=1 and send the
+dnl packet to to at_ns2.
+AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,dl_type=0x894f,nsh_spi=0x100,nsh_si=0x02,actions=ovs-p1"])
+AT_CHECK([ovs-ofctl -Oopenflow13 add-flow br0 "table=0,priority=100,dl_type=0x894f,nsh_spi=0x100,nsh_si=0x01,actions=ovs-p2"])
+
+
+rm ovs-p1.pcap
+rm ovs-p2.pcap
+tcpdump -U -i ovs-p1 -w ovs-p1.pcap &
+tcpdump -U -i ovs-p2 -w ovs-p2.pcap &
+sleep 1
+
+dnl First send packet from at_ns0 --> OVS with SPI=0x100 and SI=2
+NS_CHECK_EXEC([at_ns0], [$PYTHON $srcdir/sendpkt.py p0 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 02 06 01 03 00 01 00 02 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
+
+sleep 1
+
+dnl Check for the above packet on ovs-p1 interface
+AT_CHECK([tcpdump -xx -r ovs-p1.pcap 2>&1 | egrep "0x0000: *f2ff *0000 *0002 *f2ff *0000 *0001 *894f *0206" 2>&1 1>/dev/null])
+AT_CHECK([tcpdump -xx -r ovs-p1.pcap 2>&1 | egrep "0x0010: *0103 *0001 *0002 *0102 *0304 *0506 *0708 *090a" 2>&1 1>/dev/null])
+AT_CHECK([tcpdump -xx -r ovs-p1.pcap 2>&1 | egrep "0x0020: *0b0c *0d0e *0f10 *f200 *0000 *0002 *f200 *0000" 2>&1 1>/dev/null])
+AT_CHECK([tcpdump -xx -r ovs-p1.pcap 2>&1 | egrep "0x0030: *0001 *0800 *4500 *0028 *0001 *0000 *4006 *b013" 2>&1 1>/dev/null])
+AT_CHECK([tcpdump -xx -r ovs-p1.pcap 2>&1 | egrep "0x0040: *c0a8 *000a *0a00 *000a *0400 *0800 *0000 *00c8" 2>&1 1>/dev/null])
+AT_CHECK([tcpdump -xx -r ovs-p1.pcap 2>&1 | egrep "0x0050: *0000 *0000 *5002 *2000 *b85e *0000" 2>&1 1>/dev/null])
+
+
+dnl Send the second packet from at_ns1 --> OVS with SPI=0x100 and SI=1
+NS_CHECK_EXEC([at_ns1], [$PYTHON $srcdir/sendpkt.py p1 f2 ff 00 00 00 02 f2 ff 00 00 00 01 89 4f 01 c6 01 03 00 01 00 01 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 f2 00 00 00 00 02 f2 00 00 00 00 01 08 00 45 00 00 28 00 01 00 00 40 06 b0 13 c0 a8 00 0a 0a 00 00 0a 04 00 08 00 00 00 00 c8 00 00 00 00 50 02 20 00 b8 5e 00 00 > /dev/null])
+
+sleep 1
+
+dnl Check for the above packet on ovs-p2 interface
+AT_CHECK([tcpdump -xx -r ovs-p2.pcap 2>&1 | egrep "0x0000: *f2ff *0000 *0002 *f2ff *0000 *0001 *894f *01c6" 2>&1 1>/dev/null])
+AT_CHECK([tcpdump -xx -r ovs-p2.pcap 2>&1 | egrep "0x0010: *0103 *0001 *0001 *0102 *0304 *0506 *0708 *090a" 2>&1 1>/dev/null])
+AT_CHECK([tcpdump -xx -r ovs-p2.pcap 2>&1 | egrep "0x0020: *0b0c *0d0e *0f10 *f200 *0000 *0002 *f200 *0000" 2>&1 1>/dev/null])
+AT_CHECK([tcpdump -xx -r ovs-p2.pcap 2>&1 | egrep "0x0030: *0001 *0800 *4500 *0028 *0001 *0000 *4006 *b013" 2>&1 1>/dev/null])
+AT_CHECK([tcpdump -xx -r ovs-p2.pcap 2>&1 | egrep "0x0040: *c0a8 *000a *0a00 *000a *0400 *0800 *0000 *00c8" 2>&1 1>/dev/null])
+AT_CHECK([tcpdump -xx -r ovs-p2.pcap 2>&1 | egrep "0x0050: *0000 *0000 *5002 *2000 *b85e *0000" 2>&1 1>/dev/null])
+
+
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP

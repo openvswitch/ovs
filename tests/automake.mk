@@ -401,7 +401,9 @@ CHECK_PYFILES = \
 	tests/test-unix-socket.py \
 	tests/test-unixctl.py \
 	tests/test-vlog.py \
-	tests/uuidfilt.py
+	tests/uuidfilt.py \
+	tests/sendpkt.py
+
 EXTRA_DIST += $(CHECK_PYFILES)
 PYCOV_CLEAN_FILES += $(CHECK_PYFILES:.py=.py,cover) .coverage
 
