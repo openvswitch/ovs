@@ -87,6 +87,9 @@ COVERAGE_DEFINE(netdev_get_ethtool);
 COVERAGE_DEFINE(netdev_set_ethtool);
 
 
+#ifndef IFLA_IF_NETNSID
+#define IFLA_IF_NETNSID 0x45
+#endif
 /* These were introduced in Linux 2.6.14, so they might be missing if we have
  * old headers. */
 #ifndef ADVERTISED_Pause
@@ -610,6 +613,14 @@ netdev_linux_netnsid_is_eq(struct netdev_linux *netdev, int nsid)
     return netnsid_eq(netdev->netnsid, nsid);
 }
 
+static bool
+netdev_linux_netnsid_is_remote(struct netdev_linux *netdev)
+{
+    netdev_linux_netnsid_update(netdev);
+    return netnsid_is_remote(netdev->netnsid);
+}
+
+static int netdev_linux_update_via_netlink(struct netdev_linux *);
 static void netdev_linux_update(struct netdev_linux *netdev, int,
                                 const struct rtnetlink_change *)
     OVS_REQUIRES(netdev->mutex);
@@ -1446,6 +1457,11 @@ netdev_linux_get_etheraddr(const struct netdev *netdev_, struct eth_addr *mac)
 
     ovs_mutex_lock(&netdev->mutex);
     if (!(netdev->cache_valid & VALID_ETHERADDR)) {
+        netdev_linux_update_via_netlink(netdev);
+    }
+
+    if (!(netdev->cache_valid & VALID_ETHERADDR)) {
+        /* Fall back to ioctl if netlink fails */
         netdev->ether_addr_error = get_etheraddr(netdev_get_name(netdev_),
                                                  &netdev->etheraddr);
         netdev->cache_valid |= VALID_ETHERADDR;
@@ -1466,6 +1482,11 @@ netdev_linux_get_mtu__(struct netdev_linux *netdev, int *mtup)
     int error;
 
     if (!(netdev->cache_valid & VALID_MTU)) {
+        netdev_linux_update_via_netlink(netdev);
+    }
+
+    if (!(netdev->cache_valid & VALID_MTU)) {
+        /* Fall back to ioctl if netlink fails */
         struct ifreq ifr;
 
         netdev->netdev_mtu_error = af_inet_ifreq_ioctl(
@@ -2879,12 +2900,21 @@ netdev_linux_update_flags(struct netdev *netdev_, enum netdev_flags off,
                           enum netdev_flags on, enum netdev_flags *old_flagsp)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-    int error;
+    int error = 0;
 
     ovs_mutex_lock(&netdev->mutex);
-    error = update_flags(netdev, off, on, old_flagsp);
+    if (on || off) {
+        /* Changing flags over netlink isn't support yet. */
+        error = update_flags(netdev, off, on, old_flagsp);
+    } else {
+        /* Try reading flags over netlink, or fall back to ioctl. */
+        if (!netdev_linux_update_via_netlink(netdev)) {
+            *old_flagsp = iff_to_nd_flags(netdev->ifi_flags);
+        } else {
+            error = update_flags(netdev, off, on, old_flagsp);
+        }
+    }
     ovs_mutex_unlock(&netdev->mutex);
-
     return error;
 }
 
@@ -5527,6 +5557,11 @@ get_ifindex(const struct netdev *netdev_, int *ifindexp)
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
     if (!(netdev->cache_valid & VALID_IFINDEX)) {
+        netdev_linux_update_via_netlink(netdev);
+    }
+
+    if (!(netdev->cache_valid & VALID_IFINDEX)) {
+        /* Fall back to ioctl if netlink fails */
         int ifindex = linux_get_ifindex(netdev_get_name(netdev_));
 
         if (ifindex < 0) {
@@ -5541,6 +5576,79 @@ get_ifindex(const struct netdev *netdev_, int *ifindexp)
 
     *ifindexp = netdev->ifindex;
     return netdev->get_ifindex_error;
+}
+
+static int
+netdev_linux_update_via_netlink(struct netdev_linux *netdev)
+{
+    struct ofpbuf request;
+    struct ofpbuf *reply;
+    struct rtnetlink_change chg;
+    struct rtnetlink_change *change = &chg;
+    int error;
+
+    ofpbuf_init(&request, 0);
+    nl_msg_put_nlmsghdr(&request,
+                        sizeof(struct ifinfomsg) + NL_ATTR_SIZE(IFNAMSIZ),
+                        RTM_GETLINK, NLM_F_REQUEST);
+    ofpbuf_put_zeros(&request, sizeof(struct ifinfomsg));
+
+    /* The correct identifiers for a Linux device are netnsid and ifindex,
+     * but ifindex changes as the port is moved to another network namespace
+     * and the interface name statically stored in ovsdb. */
+    nl_msg_put_string(&request, IFLA_IFNAME, netdev_get_name(&netdev->up));
+    if (netdev_linux_netnsid_is_remote(netdev)) {
+        nl_msg_push_u32(&request, IFLA_IF_NETNSID, netdev->netnsid);
+    }
+    error = nl_transact(NETLINK_ROUTE, &request, &reply);
+    ofpbuf_uninit(&request);
+    if (error) {
+        ofpbuf_delete(reply);
+        return error;
+    }
+
+    if (rtnetlink_parse(reply, change)
+        && change->nlmsg_type == RTM_NEWLINK) {
+        bool changed = false;
+        error = 0;
+
+        /* Update netdev from rtnl msg and increment its seq if needed. */
+        if ((change->ifi_flags ^ netdev->ifi_flags) & IFF_RUNNING) {
+            netdev->carrier_resets++;
+            changed = true;
+        }
+        if (change->ifi_flags != netdev->ifi_flags) {
+            netdev->ifi_flags = change->ifi_flags;
+            changed = true;
+        }
+        if (change->mtu && change->mtu != netdev->mtu) {
+            netdev->mtu = change->mtu;
+            netdev->cache_valid |= VALID_MTU;
+            netdev->netdev_mtu_error = 0;
+            changed = true;
+        }
+        if (!eth_addr_is_zero(change->mac)
+            && !eth_addr_equals(change->mac, netdev->etheraddr)) {
+            netdev->etheraddr = change->mac;
+            netdev->cache_valid |= VALID_ETHERADDR;
+            netdev->ether_addr_error = 0;
+            changed = true;
+        }
+        if (change->if_index != netdev->ifindex) {
+            netdev->ifindex = change->if_index;
+            netdev->cache_valid |= VALID_IFINDEX;
+            netdev->get_ifindex_error = 0;
+            changed = true;
+        }
+        if (changed) {
+            netdev_change_seq_changed(&netdev->up);
+        }
+    } else {
+        error = EINVAL;
+    }
+
+    ofpbuf_delete(reply);
+    return error;
 }
 
 static int
