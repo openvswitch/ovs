@@ -339,6 +339,7 @@ m4_define([_OVS_VSWITCHD_START],
 /vlog|INFO|opened log file/d
 /vswitchd|INFO|ovs-vswitchd (Open vSwitch)/d
 /reconnect|INFO|/d
+/dpif_netlink|INFO|Generic Netlink family .ovs_datapath. does not exist/d
 /ofproto|INFO|using datapath ID/d
 /netdev_linux|INFO|.*device has unknown hardware address family/d
 /ofproto|INFO|datapath ID changed to fedcba9876543210/d
