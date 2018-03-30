@@ -639,7 +639,7 @@ netdev_linux_run(const struct netdev_class *netdev_class OVS_UNUSED)
         struct ofpbuf buf;
 
         ofpbuf_use_stub(&buf, buf_stub, sizeof buf_stub);
-        error = nl_sock_recv(sock, &buf, false);
+        error = nl_sock_recv(sock, &buf, NULL, false);
         if (!error) {
             struct rtnetlink_change change;
 

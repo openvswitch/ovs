@@ -1288,7 +1288,7 @@ dpif_netlink_port_poll(const struct dpif *dpif_, char **devnamep)
         int error;
 
         ofpbuf_use_stub(&buf, buf_stub, sizeof buf_stub);
-        error = nl_sock_recv(dpif->port_notifier, &buf, false);
+        error = nl_sock_recv(dpif->port_notifier, &buf, NULL, false);
         if (!error) {
             struct dpif_netlink_vport vport;
 
@@ -2622,7 +2622,7 @@ dpif_netlink_recv_windows(struct dpif_netlink *dpif, uint32_t handler_id,
                 return EAGAIN;
             }
 
-            error = nl_sock_recv(sock_pool[i].nl_sock, buf, false);
+            error = nl_sock_recv(sock_pool[i].nl_sock, buf, NULL, false);
             if (error == ENOBUFS) {
                 /* ENOBUFS typically means that we've received so many
                  * packets that the buffer overflowed.  Try again
@@ -2697,7 +2697,7 @@ dpif_netlink_recv__(struct dpif_netlink *dpif, uint32_t handler_id,
                 return EAGAIN;
             }
 
-            error = nl_sock_recv(ch->sock, buf, false);
+            error = nl_sock_recv(ch->sock, buf, NULL, false);
             if (error == ENOBUFS) {
                 /* ENOBUFS typically means that we've received so many
                  * packets that the buffer overflowed.  Try again

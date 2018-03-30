@@ -59,7 +59,7 @@ main(int argc OVS_UNUSED, char *argv[])
 
     ofpbuf_use_stub(&buf, buf_stub, sizeof buf_stub);
     for (;;) {
-        error = nl_sock_recv(sock, &buf, false);
+        error = nl_sock_recv(sock, &buf, NULL, false);
         if (error == EAGAIN) {
             /* Nothing to do. */
         } else if (error == ENOBUFS) {

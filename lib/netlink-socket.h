@@ -221,7 +221,7 @@ int nl_sock_unsubscribe_packets(struct nl_sock *sock);
 int nl_sock_send(struct nl_sock *, const struct ofpbuf *, bool wait);
 int nl_sock_send_seq(struct nl_sock *, const struct ofpbuf *,
                      uint32_t nlmsg_seq, bool wait);
-int nl_sock_recv(struct nl_sock *, struct ofpbuf *, bool wait);
+int nl_sock_recv(struct nl_sock *, struct ofpbuf *, int *nsid, bool wait);
 
 int nl_sock_drain(struct nl_sock *);
 

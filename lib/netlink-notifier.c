@@ -185,7 +185,7 @@ nln_run(struct nln *nln)
         int error;
 
         ofpbuf_use_stub(&buf, buf_stub, sizeof buf_stub);
-        error = nl_sock_recv(nln->notify_sock, &buf, false);
+        error = nl_sock_recv(nln->notify_sock, &buf, NULL, false);
         if (!error) {
             int group = nln->parse(&buf, nln->change);
 
