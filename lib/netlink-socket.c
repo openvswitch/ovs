@@ -442,6 +442,33 @@ nl_sock_join_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
     return 0;
 }
 
+/* When 'enable' is true, it tries to enable 'sock' to receive netlink
+ * notifications form all network namespaces that have an nsid assigned
+ * into the network namespace where the socket has been opened. The
+ * running kernel needs to provide support for that. When 'enable' is
+ * false, it will receive netlink notifications only from the network
+ * namespace where the socket has been opened.
+ *
+ * Returns 0 if successful, otherwise a positive errno.  */
+int
+nl_sock_listen_all_nsid(struct nl_sock *sock, bool enable)
+{
+    int error;
+    int val = enable ? 1 : 0;
+
+#ifndef _WIN32
+    if (setsockopt(sock->fd, SOL_NETLINK, NETLINK_LISTEN_ALL_NSID, &val,
+                   sizeof val) < 0) {
+        error = errno;
+        VLOG_INFO("netlink: could not %s listening to all nsid (%s)",
+                  enable ? "enable" : "disable", ovs_strerror(error));
+        return errno;
+    }
+#endif
+
+    return 0;
+}
+
 #ifdef _WIN32
 int
 nl_sock_subscribe_packet__(struct nl_sock *sock, bool subscribe)

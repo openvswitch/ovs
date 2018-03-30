@@ -820,7 +820,8 @@ daemon_become_new_user_linux(bool access_datapath OVS_UNUSED)
 
             if (access_datapath && !ret) {
                 ret = capng_update(CAPNG_ADD, cap_sets, CAP_NET_ADMIN)
-                      || capng_update(CAPNG_ADD, cap_sets, CAP_NET_RAW);
+                      || capng_update(CAPNG_ADD, cap_sets, CAP_NET_RAW)
+                      || capng_update(CAPNG_ADD, cap_sets, CAP_NET_BROADCAST);
             }
         } else {
             ret = -1;

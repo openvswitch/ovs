@@ -107,10 +107,10 @@
       On Linux, daemons will be granted <code>CAP_IPC_LOCK</code> and
       <code>CAP_NET_BIND_SERVICES</code> before dropping root privileges.
       Daemons that interact with a datapath, such as
-      <code>ovs-vswitchd</code>, will be granted two additional
-      capabilities, namely <code>CAP_NET_ADMIN</code> and
-      <code>CAP_NET_RAW</code>.  The capability change will apply even
-      if the new user is root.
+      <code>ovs-vswitchd</code>, will be granted three additional
+      capabilities, namely <code>CAP_NET_ADMIN</code>,
+      <code>CAP_NET_BROADCAST</code> and <code>CAP_NET_RAW</code>.  The
+      capability change will apply even if the new user is root.
     </p>
 
     <p>

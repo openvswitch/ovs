@@ -213,6 +213,8 @@ void nl_sock_destroy(struct nl_sock *);
 int nl_sock_join_mcgroup(struct nl_sock *, unsigned int multicast_group);
 int nl_sock_leave_mcgroup(struct nl_sock *, unsigned int multicast_group);
 
+int nl_sock_listen_all_nsid(struct nl_sock *, bool enable);
+
 #ifdef _WIN32
 int nl_sock_subscribe_packets(struct nl_sock *sock);
 int nl_sock_unsubscribe_packets(struct nl_sock *sock);

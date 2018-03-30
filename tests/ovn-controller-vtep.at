@@ -43,6 +43,7 @@ m4_define([OVN_CONTROLLER_VTEP_START],
 /vswitchd|INFO|ovs-vswitchd (Open vSwitch)/d
 /reconnect|INFO|/d
 /ofproto|INFO|using datapath ID/d
+/netlink_socket|INFO|netlink: could not enable listening to all nsid/d
 /ofproto|INFO|datapath ID changed to fedcba9876543210/d']])
    AT_CHECK([ovs-vsctl -- add-br br-vtep \
               -- set bridge br-vtep datapath-type=dummy other-config:datapath-id=fedcba9876543210 other-config:hwaddr=aa:55:aa:55:00:00 protocols=[[OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13,OpenFlow14,OpenFlow15]] fail-mode=secure \
