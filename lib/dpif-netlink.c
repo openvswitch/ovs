@@ -45,6 +45,7 @@
 #include "netlink-notifier.h"
 #include "netlink-socket.h"
 #include "netlink.h"
+#include "netnsid.h"
 #include "odp-util.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/flow.h"
@@ -3072,6 +3073,7 @@ dpif_netlink_vport_from_ofpbuf(struct dpif_netlink_vport *vport,
         [OVS_VPORT_ATTR_STATS] = { NL_POLICY_FOR(struct ovs_vport_stats),
                                    .optional = true },
         [OVS_VPORT_ATTR_OPTIONS] = { .type = NL_A_NESTED, .optional = true },
+        [OVS_VPORT_ATTR_NETNSID] = { .type = NL_A_U32, .optional = true },
     };
 
     dpif_netlink_vport_init(vport);
@@ -3106,6 +3108,12 @@ dpif_netlink_vport_from_ofpbuf(struct dpif_netlink_vport *vport,
     if (a[OVS_VPORT_ATTR_OPTIONS]) {
         vport->options = nl_attr_get(a[OVS_VPORT_ATTR_OPTIONS]);
         vport->options_len = nl_attr_get_size(a[OVS_VPORT_ATTR_OPTIONS]);
+    }
+    if (a[OVS_VPORT_ATTR_NETNSID]) {
+        netnsid_set(&vport->netnsid,
+                    nl_attr_get_u32(a[OVS_VPORT_ATTR_NETNSID]));
+    } else {
+        netnsid_set_local(&vport->netnsid);
     }
     return 0;
 }

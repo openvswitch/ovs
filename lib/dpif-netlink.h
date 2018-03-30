@@ -32,6 +32,7 @@ struct dpif_netlink_vport {
 
     /* ovs_vport header. */
     int dp_ifindex;
+    int netnsid;                           /* Network Namespace ID. */
     odp_port_t port_no;                    /* ODPP_NONE if unknown. */
     enum ovs_vport_type type;
 
