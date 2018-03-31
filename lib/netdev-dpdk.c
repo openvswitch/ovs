@@ -144,6 +144,7 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
 /* DPDK library uses uint16_t for port_id. */
 typedef uint16_t dpdk_port_t;
+#define DPDK_PORT_ID_FMT "%"PRIu16
 
 #define VHOST_ENQ_RETRY_NUM 8
 #define IF_NAME_SZ (PATH_MAX > IFNAMSIZ ? PATH_MAX : IFNAMSIZ)
@@ -652,12 +653,14 @@ check_link_status(struct netdev_dpdk *dev)
         dev->link_reset_cnt++;
         dev->link = link;
         if (dev->link.link_status) {
-            VLOG_DBG_RL(&rl, "Port %"PRIu8" Link Up - speed %u Mbps - %s",
+            VLOG_DBG_RL(&rl,
+                        "Port "DPDK_PORT_ID_FMT" Link Up - speed %u Mbps - %s",
                         dev->port_id, (unsigned) dev->link.link_speed,
-                        (dev->link.link_duplex == ETH_LINK_FULL_DUPLEX) ?
-                         ("full-duplex") : ("half-duplex"));
+                        (dev->link.link_duplex == ETH_LINK_FULL_DUPLEX)
+                        ? "full-duplex" : "half-duplex");
         } else {
-            VLOG_DBG_RL(&rl, "Port %"PRIu8" Link Down", dev->port_id);
+            VLOG_DBG_RL(&rl, "Port "DPDK_PORT_ID_FMT" Link Down",
+                        dev->port_id);
         }
     }
 }
@@ -728,7 +731,7 @@ dpdk_eth_dev_queue_setup(struct netdev_dpdk *dev, int n_rxq, int n_txq)
             diag = rte_eth_tx_queue_setup(dev->port_id, i, dev->txq_size,
                                           dev->socket_id, NULL);
             if (diag) {
-                VLOG_INFO("Interface %s txq(%d) setup error: %s",
+                VLOG_INFO("Interface %s unable to setup txq(%d): %s",
                           dev->up.name, i, rte_strerror(-diag));
                 break;
             }
@@ -744,7 +747,7 @@ dpdk_eth_dev_queue_setup(struct netdev_dpdk *dev, int n_rxq, int n_txq)
             diag = rte_eth_rx_queue_setup(dev->port_id, i, dev->rxq_size,
                                           dev->socket_id, NULL, dev->mp);
             if (diag) {
-                VLOG_INFO("Interface %s rxq(%d) setup error: %s",
+                VLOG_INFO("Interface %s unable to setup rxq(%d): %s",
                           dev->up.name, i, rte_strerror(-diag));
                 break;
             }
@@ -769,7 +772,7 @@ static void
 dpdk_eth_flow_ctrl_setup(struct netdev_dpdk *dev) OVS_REQUIRES(dev->mutex)
 {
     if (rte_eth_dev_flow_ctrl_set(dev->port_id, &dev->fc_conf)) {
-        VLOG_WARN("Failed to enable flow control on device %"PRIu8,
+        VLOG_WARN("Failed to enable flow control on device "DPDK_PORT_ID_FMT,
                   dev->port_id);
     }
 }
@@ -791,8 +794,8 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev)
 
     if ((info.rx_offload_capa & rx_chksm_offload_capa) !=
             rx_chksm_offload_capa) {
-        VLOG_WARN("Rx checksum offload is not supported on port %"PRIu8,
-                        dev->port_id);
+        VLOG_WARN("Rx checksum offload is not supported on port "
+                  DPDK_PORT_ID_FMT, dev->port_id);
         dev->hw_ol_features &= ~NETDEV_RX_CHECKSUM_OFFLOAD;
     } else {
         dev->hw_ol_features |= NETDEV_RX_CHECKSUM_OFFLOAD;
@@ -820,8 +823,8 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev)
 
     memset(&eth_addr, 0x0, sizeof(eth_addr));
     rte_eth_macaddr_get(dev->port_id, &eth_addr);
-    VLOG_INFO_RL(&rl, "Port %"PRIu8": "ETH_ADDR_FMT,
-                    dev->port_id, ETH_ADDR_BYTES_ARGS(eth_addr.addr_bytes));
+    VLOG_INFO_RL(&rl, "Port "DPDK_PORT_ID_FMT": "ETH_ADDR_FMT,
+                 dev->port_id, ETH_ADDR_BYTES_ARGS(eth_addr.addr_bytes));
 
     memcpy(dev->hwaddr.ea, eth_addr.addr_bytes, ETH_ADDR_LEN);
     rte_eth_link_get_nowait(dev->port_id, &dev->link);
@@ -832,8 +835,8 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev)
     /* Get the Flow control configuration for DPDK-ETH */
     diag = rte_eth_dev_flow_ctrl_get(dev->port_id, &dev->fc_conf);
     if (diag) {
-        VLOG_DBG("cannot get flow control parameters on port=%"PRIu8", err=%d",
-                 dev->port_id, diag);
+        VLOG_DBG("cannot get flow control parameters on port "DPDK_PORT_ID_FMT
+                 ", err=%d", dev->port_id, diag);
     }
 
     return 0;
@@ -1222,7 +1225,8 @@ netdev_dpdk_configure_xstats(struct netdev_dpdk *dev)
                 rte_eth_xstats_get_names(dev->port_id, NULL, 0);
 
         if (dev->rte_xstats_names_size < 0) {
-            VLOG_WARN("Cannot get XSTATS for port: %"PRIu8, dev->port_id);
+            VLOG_WARN("Cannot get XSTATS for port: "DPDK_PORT_ID_FMT,
+                      dev->port_id);
             dev->rte_xstats_names_size = 0;
         } else {
             /* Reserve memory for xstats names and values */
@@ -1237,12 +1241,12 @@ netdev_dpdk_configure_xstats(struct netdev_dpdk *dev)
                                                  dev->rte_xstats_names_size);
 
                 if (rte_xstats_len < 0) {
-                    VLOG_WARN("Cannot get XSTATS names for port: %"PRIu8,
-                               dev->port_id);
+                    VLOG_WARN("Cannot get XSTATS names for port: "
+                              DPDK_PORT_ID_FMT, dev->port_id);
                     goto out;
                 } else if (rte_xstats_len != dev->rte_xstats_names_size) {
-                    VLOG_WARN("XSTATS size doesn't match for port: %"PRIu8,
-                              dev->port_id);
+                    VLOG_WARN("XSTATS size doesn't match for port: "
+                              DPDK_PORT_ID_FMT, dev->port_id);
                     goto out;
                 }
 
@@ -1274,8 +1278,8 @@ netdev_dpdk_configure_xstats(struct netdev_dpdk *dev)
                     dev->rte_xstats_ids_size = xstats_no;
                     ret = true;
                 } else {
-                    VLOG_WARN("Can't get XSTATS IDs for port: %"PRIu8,
-                              dev->port_id);
+                    VLOG_WARN("Can't get XSTATS IDs for port: "
+                              DPDK_PORT_ID_FMT, dev->port_id);
                 }
 
                 free(rte_xstats);
@@ -2318,7 +2322,8 @@ netdev_dpdk_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     int rte_xstats_len, rte_xstats_new_len, rte_xstats_ret;
 
     if (rte_eth_stats_get(dev->port_id, &rte_stats)) {
-        VLOG_ERR("Can't get ETH statistics for port: %"PRIu8, dev->port_id);
+        VLOG_ERR("Can't get ETH statistics for port: "DPDK_PORT_ID_FMT,
+                 dev->port_id);
         ovs_mutex_unlock(&dev->mutex);
         return EPROTO;
     }
@@ -2326,7 +2331,8 @@ netdev_dpdk_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     /* Get length of statistics */
     rte_xstats_len = rte_eth_xstats_get_names(dev->port_id, NULL, 0);
     if (rte_xstats_len < 0) {
-        VLOG_WARN("Cannot get XSTATS values for port: %"PRIu8, dev->port_id);
+        VLOG_WARN("Cannot get XSTATS values for port: "DPDK_PORT_ID_FMT,
+                  dev->port_id);
         goto out;
     }
     /* Reserve memory for xstats names and values */
@@ -2338,7 +2344,8 @@ netdev_dpdk_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
                                                   rte_xstats_names,
                                                   rte_xstats_len);
     if (rte_xstats_new_len != rte_xstats_len) {
-        VLOG_WARN("Cannot get XSTATS names for port: %"PRIu8, dev->port_id);
+        VLOG_WARN("Cannot get XSTATS names for port: "DPDK_PORT_ID_FMT,
+                  dev->port_id);
         goto out;
     }
     /* Retreive xstats values */
@@ -2349,7 +2356,8 @@ netdev_dpdk_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
         netdev_dpdk_convert_xstats(stats, rte_xstats, rte_xstats_names,
                                    rte_xstats_len);
     } else {
-        VLOG_WARN("Cannot get XSTATS values for port: %"PRIu8, dev->port_id);
+        VLOG_WARN("Cannot get XSTATS values for port: "DPDK_PORT_ID_FMT,
+                  dev->port_id);
     }
 
 out:
@@ -2413,7 +2421,7 @@ netdev_dpdk_get_custom_stats(const struct netdev *netdev,
                 custom_stats->counters[i].value = values[i];
             }
         } else {
-            VLOG_WARN("Cannot get XSTATS values for port: %"PRIu8,
+            VLOG_WARN("Cannot get XSTATS values for port: "DPDK_PORT_ID_FMT,
                       dev->port_id);
             custom_stats->counters = NULL;
             custom_stats->size = 0;
@@ -2751,7 +2759,7 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
     rte_eth_dev_info_get(dev->port_id, &dev_info);
     ovs_mutex_unlock(&dev->mutex);
 
-    smap_add_format(args, "port_no", "%d", dev->port_id);
+    smap_add_format(args, "port_no", DPDK_PORT_ID_FMT, dev->port_id);
     smap_add_format(args, "numa_id", "%d",
                            rte_eth_dev_socket_id(dev->port_id));
     smap_add_format(args, "driver_name", "%s", dev_info.driver_name);
