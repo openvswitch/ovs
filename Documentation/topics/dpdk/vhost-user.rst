@@ -105,6 +105,9 @@ Once the vhost-user ports have been added to the switch, they must be added to
 the guest. There are two ways to do this: using QEMU directly, or using
 libvirt.
 
+.. note::
+   IOMMU is not supported with vhost-user ports.
+
 Adding vhost-user ports to the guest (QEMU)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -320,9 +323,9 @@ To begin, instantiate a guest as described in :ref:`dpdk-vhost-user` or
 DPDK sources to VM and build DPDK::
 
     $ cd /root/dpdk/
-    $ wget http://fast.dpdk.org/rel/dpdk-17.11.tar.xz
-    $ tar xf dpdk-17.11.tar.xz
-    $ export DPDK_DIR=/root/dpdk/dpdk-17.11
+    $ wget http://fast.dpdk.org/rel/dpdk-17.11.1.tar.xz
+    $ tar xf dpdk-17.11.1.tar.xz
+    $ export DPDK_DIR=/root/dpdk/dpdk-stable-17.11.1
     $ export DPDK_TARGET=x86_64-native-linuxapp-gcc
     $ export DPDK_BUILD=$DPDK_DIR/$DPDK_TARGET
     $ cd $DPDK_DIR
@@ -354,28 +357,6 @@ Setup huge pages and DPDK devices using UIO::
 Finally, start the application::
 
     # TODO
-
-.. important::
-
-  DPDK v17.11 virtio PMD contains a bug in the vectorized Rx function that
-  affects testpmd/DPDK guest applications. As such, guest DPDK applications
-  should use a non-vectorized Rx function.
-
-The DPDK v17.11 virtio net driver contains a bug that prevents guest DPDK
-applications from receiving packets when the vectorized Rx function is used.
-This only occurs when guest-bound traffic is live before a DPDK application is
-started within the guest, and where two or more forwarding cores are used. As
-such, it is not recommended for guests which execute DPDK applications to use
-the virtio vectorized Rx function. A simple method of ensuring that a non-
-vectorized Rx function is used is to enable mergeable buffers for the guest,
-with the following QEMU command line option::
-
-    mrg_rxbuf=on
-
-Additional details regarding the virtio driver bug are available on the
-`DPDK mailing list`_.
-
-.. _DPDK mailing list: http://dpdk.org/ml/archives/dev/2017-December/082801.html
 
 .. _dpdk-vhost-user-xml:
 
@@ -428,7 +409,7 @@ Sample XML
         </disk>
         <disk type='dir' device='disk'>
           <driver name='qemu' type='fat'/>
-          <source dir='/usr/src/dpdk-stable-17.05.2'/>
+          <source dir='/usr/src/dpdk-stable-17.11.1'/>
           <target dev='vdb' bus='virtio'/>
           <readonly/>
         </disk>
@@ -530,4 +511,4 @@ issue can be found on
 
 Further information can be found in the
 `DPDK documentation
-<http://dpdk.readthedocs.io/en/v17.05/prog_guide/vhost_lib.html>`__
+<http://dpdk.readthedocs.io/en/v17.11/prog_guide/vhost_lib.html>`__

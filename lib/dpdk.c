@@ -272,20 +272,22 @@ static ssize_t
 dpdk_log_write(void *c OVS_UNUSED, const char *buf, size_t size)
 {
     char *str = xmemdup0(buf, size);
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(600, 600);
+    static struct vlog_rate_limit dbg_rl = VLOG_RATE_LIMIT_INIT(600, 600);
 
     switch (rte_log_cur_msg_loglevel()) {
         case RTE_LOG_DEBUG:
-            VLOG_DBG("%s", str);
+            VLOG_DBG_RL(&dbg_rl, "%s", str);
             break;
         case RTE_LOG_INFO:
         case RTE_LOG_NOTICE:
-            VLOG_INFO("%s", str);
+            VLOG_INFO_RL(&rl, "%s", str);
             break;
         case RTE_LOG_WARNING:
-            VLOG_WARN("%s", str);
+            VLOG_WARN_RL(&rl, "%s", str);
             break;
         case RTE_LOG_ERR:
-            VLOG_ERR("%s", str);
+            VLOG_ERR_RL(&rl, "%s", str);
             break;
         case RTE_LOG_CRIT:
         case RTE_LOG_ALERT:
