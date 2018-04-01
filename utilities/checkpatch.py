@@ -371,6 +371,11 @@ def run_checks(current_file, line, lineno):
 
 def ovs_checkpatch_parse(text, filename):
     global print_file_name, total_line, checking_file
+
+    PARSE_STATE_HEADING = 0
+    PARSE_STATE_DIFF_HEADER = 1
+    PARSE_STATE_CHANGE_BODY = 2
+
     lineno = 0
     signatures = []
     co_authors = []
@@ -400,18 +405,18 @@ def ovs_checkpatch_parse(text, filename):
             continue
 
         if checking_file:
-            parse = 2
+            parse = PARSE_STATE_CHANGE_BODY
 
-        if parse == 1:
+        if parse == PARSE_STATE_DIFF_HEADER:
             match = hunks.match(line)
             if match:
-                parse = parse + 1
+                parse = PARSE_STATE_CHANGE_BODY
                 current_file = match.group(2)[2:]
                 print_file_name = current_file
             continue
-        elif parse == 0:
+        elif parse == PARSE_STATE_HEADING:
             if scissors.match(line):
-                parse = parse + 1
+                parse = PARSE_STATE_DIFF_HEADER
                 if not skip_signoff_check:
                     if len(signatures) == 0:
                         print_error("No signatures found.")
@@ -430,7 +435,7 @@ def ovs_checkpatch_parse(text, filename):
                 print_error(
                     "Remove Gerrit Change-Id's before submitting upstream.")
                 print("%d: %s\n" % (lineno, line))
-        elif parse == 2:
+        elif parse == PARSE_STATE_CHANGE_BODY:
             newfile = hunks.match(line)
             if newfile:
                 current_file = newfile.group(2)[2:]
