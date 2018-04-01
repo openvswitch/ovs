@@ -149,7 +149,7 @@ TMP=$(cat ovs-vswitchd.log | wc -l | tr -d [[:blank:]])
 AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x3])
 CHECK_PMD_THREADS_CREATED([2], [], [+$TMP])
 
-AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed ':a;/AVAIL$/{N;s/\n//;ba}' | parse_pmd_rxq_show_group | sed SED_NUMA_CORE_QUEUE_PATTERN], [0], [dnl
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed ':a;/AVAIL$/{N;s/\n//;ba;}' | parse_pmd_rxq_show_group | sed SED_NUMA_CORE_QUEUE_PATTERN], [0], [dnl
 port: p0 queue-id: <group>
 port: p0 queue-id: <group>
 ])
