@@ -21,12 +21,66 @@ import os
 import re
 import sys
 
+try:
+    import enchant
+
+    extra_keywords = ['ovs', 'vswitch', 'vswitchd', 'ovs-vswitchd', 'netdev',
+                      'selinux', 'ovs-ctl', 'dpctl', 'ofctl', 'openvswitch',
+                      'dpdk', 'hugepage', 'hugepages', 'pmd', 'upcall',
+                      'vhost', 'rx', 'tx', 'vhostuser', 'openflow', 'qsort',
+                      'rxq', 'txq', 'perf', 'stats', 'struct', 'int',
+                      'char', 'bool', 'upcalls', 'nicira', 'bitmask', 'ipv4',
+                      'ipv6', 'tcp', 'tcp4', 'tcpv4', 'udp', 'udp4', 'udpv4',
+                      'icmp', 'icmp4', 'icmpv6', 'vlan', 'vxlan', 'cksum',
+                      'csum', 'checksum', 'ofproto', 'numa', 'mempool',
+                      'mempools', 'mbuf', 'mbufs', 'hmap', 'cmap', 'smap',
+                      'dhcpv4', 'dhcp', 'dhcpv6', 'opts', 'metadata',
+                      'geneve', 'mutex', 'netdev', 'netdevs', 'subtable',
+                      'virtio', 'qos', 'policer', 'datapath', 'tunctl',
+                      'attr', 'ethernet', 'ether', 'defrag', 'defragment',
+                      'loopback', 'sflow', 'acl', 'initializer', 'recirc',
+                      'xlated', 'unclosed', 'netlink', 'msec', 'usec',
+                      'nsec', 'ms', 'us', 'ns', 'kilobits', 'kbps',
+                      'kilobytes', 'megabytes', 'mbps', 'gigabytes', 'gbps',
+                      'megabits', 'gigabits', 'pkts', 'tuple', 'miniflow',
+                      'megaflow', 'conntrack', 'vlans', 'vxlans', 'arg',
+                      'tpid', 'xbundle', 'xbundles', 'mbundle', 'mbundles',
+                      'netflow', 'localnet', 'odp', 'pre', 'dst', 'dest',
+                      'src', 'ethertype', 'cvlan', 'ips', 'msg', 'msgs',
+                      'liveness', 'userspace', 'eventmask', 'datapaths',
+                      'slowpath', 'fastpath', 'multicast', 'unicast',
+                      'revalidation', 'namespace', 'qdisc', 'uuid', 'ofport',
+                      'subnet', 'revalidation', 'revalidator', 'revalidate',
+                      'l2', 'l3', 'l4', 'openssl', 'mtu', 'ifindex', 'enum',
+                      'enums', 'http', 'https', 'num', 'vconn', 'vconns',
+                      'conn', 'nat', 'memset', 'memcmp', 'strcmp',
+                      'strcasecmp', 'tc', 'ufid', 'api', 'ofpbuf', 'ofpbufs',
+                      'hashmaps', 'hashmap', 'deref', 'dereference', 'hw',
+                      'prio', 'sendmmsg', 'sendmsg', 'malloc', 'free', 'alloc',
+                      'pid', 'ppid', 'pgid', 'uid', 'gid', 'sid', 'utime',
+                      'stime', 'cutime', 'cstime', 'vsize', 'rss', 'rsslim',
+                      'whcan', 'gtime', 'eip', 'rip', 'cgtime', 'dbg', 'gw',
+                      'sbrec', 'bfd', 'sizeof', 'pmds', 'nic', 'nics', 'hwol',
+                      'encap', 'decap', 'tlv', 'tlvs', 'decapsulation', 'fd',
+                      'cacheline', 'xlate', 'skiplist', 'idl', 'comparator',
+                      'natting', 'alg', 'pasv', 'epasv', 'wildcard', 'nated',
+                      'amd64', 'x86_64', 'recirculation']
+
+    spell_check_dict = enchant.Dict("en_US")
+    for kw in extra_keywords:
+        spell_check_dict.add(kw)
+
+    no_spellcheck = False
+except:
+    no_spellcheck = True
+
 __errors = 0
 __warnings = 0
 print_file_name = None
 checking_file = False
 total_line = 0
 colors = False
+spellcheck_comments = False
 
 
 def get_color_end():
@@ -233,7 +287,7 @@ def has_xxx_mark(line):
     return __regex_has_xxx_mark.match(line) is not None
 
 
-def filter_comments(current_line):
+def filter_comments(current_line, keep=False):
     """remove all of the c-style comments in a line"""
     STATE_NORMAL = 0
     STATE_COMMENT_SLASH = 1
@@ -244,6 +298,9 @@ def filter_comments(current_line):
     sanitized_line = ''
     check_state = STATE_NORMAL
     only_whitespace = True
+
+    if keep:
+        check_state = STATE_COMMENT_CONTENTS
 
     for c in current_line:
         if c == '/':
@@ -285,6 +342,38 @@ def filter_comments(current_line):
         sanitized_line += c
 
     return sanitized_line
+
+
+def check_comment_spelling(line):
+    if no_spellcheck or not spellcheck_comments:
+        return False
+
+    comment_words = filter_comments(line, True).replace(':', ' ').split(' ')
+    for word in comment_words:
+        skip = False
+        strword = re.subn(r'\W+', '', word)[0].replace(',', '')
+        if len(strword) and not spell_check_dict.check(strword.lower()):
+            if any([check_char in word
+                    for check_char in ['=', '(', '-', '_', '/', '\'']]):
+                skip = True
+
+            # special case the '.'
+            if '.' in word and not word.endswith('.'):
+                skip = True
+
+            # skip proper nouns and references to macros
+            if strword.isupper() or (strword[0].isupper() and
+                                     strword[1:].islower()):
+                skip = True
+
+            # skip words that start with numbers
+            if strword.startswith(tuple('0123456789')):
+                skip = True
+
+            if not skip:
+                return True
+
+    return False
 
 
 checks = [
@@ -330,6 +419,11 @@ checks = [
      'prereq': lambda x: has_comment(x),
      'check': lambda x: has_xxx_mark(x),
      'print': lambda: print_warning("Comment with 'xxx' marker")},
+
+    {'regex': '(\.c|\.h)(\.in)?$', 'match_name': None,
+     'prereq': lambda x: has_comment(x),
+     'check': lambda x: check_comment_spelling(x),
+     'print': lambda: print_warning("Check for spelling mistakes")},
 ]
 
 
@@ -536,6 +630,7 @@ Check options:
 -b|--skip-block-whitespace     Skips the if/while/for whitespace tests
 -l|--skip-leading-whitespace   Skips the leading whitespace test
 -s|--skip-signoff-lines        Tolerate missing Signed-off-by line
+-S|--spellcheck-comments       Check C comments for possible spelling mistakes
 -t|--skip-trailing-whitespace  Skips the trailing whitespace test"""
           % sys.argv[0])
 
@@ -583,13 +678,14 @@ if __name__ == '__main__':
                                           sys.argv[1:])
         n_patches = int(numeric_options[-1][1:]) if numeric_options else 0
 
-        optlist, args = getopt.getopt(args, 'bhlstf',
+        optlist, args = getopt.getopt(args, 'bhlstfS',
                                       ["check-file",
                                        "help",
                                        "skip-block-whitespace",
                                        "skip-leading-whitespace",
                                        "skip-signoff-lines",
-                                       "skip-trailing-whitespace"])
+                                       "skip-trailing-whitespace",
+                                       "spellcheck-comments"])
     except:
         print("Unknown option encountered. Please rerun with -h for help.")
         sys.exit(-1)
@@ -608,6 +704,12 @@ if __name__ == '__main__':
             skip_trailing_whitespace_check = True
         elif o in ("-f", "--check-file"):
             checking_file = True
+        elif o in ("-S", "--spellcheck-comments"):
+            if no_spellcheck:
+                print("WARNING: The enchant library isn't availble.")
+                print("         Please install python enchant.")
+            else:
+                spellcheck_comments = True
         else:
             print("Unknown option '%s'" % o)
             sys.exit(-1)
