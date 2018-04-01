@@ -6333,7 +6333,7 @@ ovs-vsctl \
       set Interface p1 options:ifindex=1003 --			\
       set Bridge br0 sflow=@sf --				\
       --id=@sf create sflow targets=\"127.0.0.1:$SFLOW_PORT\"	\
-      header=128 sampling=1 polling=1
+      header=128 sampling=1 polling=1 agent=127.0.0.1
 
 dnl sleep long enough to get the sFlow datagram flushed out (may be delayed for up to 1 second)
 AT_CHECK([ovs-appctl time/warp 2000 100], [0], [ignore])
@@ -6382,7 +6382,7 @@ AT_CHECK([ovs-ofctl add-flow br0 action=3])
 dnl enable sflow
 ovs-vsctl \
    set Bridge br0 sflow=@sf -- \
-   --id=@sf create sflow targets=\"127.0.0.1:$SFLOW_PORT\" \
+   --id=@sf create sflow targets=\"127.0.0.1:$SFLOW_PORT\" agent=127.0.0.1 \
      header=128 sampling=1 polling=0
 
 dnl introduce a packet that will be flooded to the tunnel
@@ -6474,7 +6474,7 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p0 'recirc_id(0),in_port(1),eth(src=f8
 dnl configure sflow on int-br only
 ovs-vsctl \
    set Bridge int-br sflow=@sf -- \
-   --id=@sf create sflow targets=\"127.0.0.1:$SFLOW_PORT\" \
+   --id=@sf create sflow targets=\"127.0.0.1:$SFLOW_PORT\" agent=127.0.0.1 \
      header=128 sampling=1 polling=0
 
 dnl set up route to 192.168.1.2 via br0
@@ -6553,7 +6553,7 @@ ovs-appctl time/stop
 dnl configure sflow
 ovs-vsctl \
    set Bridge br0 sflow=@sf -- \
-   --id=@sf create sflow targets=\"127.0.0.1:$SFLOW_PORT\" \
+   --id=@sf create sflow targets=\"127.0.0.1:$SFLOW_PORT\" agent=127.0.0.1 \
      header=128 sampling=1 polling=0
 
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x8847),mpls(label=11,tc=3,ttl=64,bos=1)'])
