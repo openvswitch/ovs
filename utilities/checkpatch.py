@@ -233,6 +233,60 @@ def has_xxx_mark(line):
     return __regex_has_xxx_mark.match(line) is not None
 
 
+def filter_comments(current_line):
+    """remove all of the c-style comments in a line"""
+    STATE_NORMAL = 0
+    STATE_COMMENT_SLASH = 1
+    STATE_COMMENT_CONTENTS = 3
+    STATE_COMMENT_END_SLASH = 4
+
+    state = STATE_NORMAL
+    sanitized_line = ''
+    check_state = STATE_NORMAL
+    only_whitespace = True
+
+    for c in current_line:
+        if c == '/':
+            if state == STATE_NORMAL:
+                state = STATE_COMMENT_SLASH
+            elif state == STATE_COMMENT_SLASH:
+                # This is for c++ style comments.  We will warn later
+                return sanitized_line[:1]
+            elif state == STATE_COMMENT_END_SLASH:
+                c = ''
+                state = STATE_NORMAL
+        elif c == '*':
+            if only_whitespace:
+                # just assume this is a continuation from the previous line
+                # as a comment
+                state = STATE_COMMENT_END_SLASH
+            elif state == STATE_COMMENT_SLASH:
+                state = STATE_COMMENT_CONTENTS
+                sanitized_line = sanitized_line[:-1]
+            elif state == STATE_COMMENT_CONTENTS:
+                state = STATE_COMMENT_END_SLASH
+        elif state == STATE_COMMENT_END_SLASH:
+            # Need to re-introduce the star from the previous state, since
+            # it may have been clipped by the state check below.
+            c = '*' + c
+            state = STATE_COMMENT_CONTENTS
+        elif state == STATE_COMMENT_SLASH:
+            # Need to re-introduce the slash from the previous state, since
+            # it may have been clipped by the state check below.
+            c = '/' + c
+            state = STATE_NORMAL
+
+        if state != check_state:
+            c = ''
+
+        if not c.isspace():
+            only_whitespace = False
+
+        sanitized_line += c
+
+    return sanitized_line
+
+
 checks = [
     {'regex': None,
      'match_name':
@@ -315,7 +369,7 @@ checks += [
 
 def regex_operator_factory(operator):
     regex = re.compile(r'^[^#][^"\']*[^ "]%s[^ "\'][^"]*' % operator)
-    return lambda x: regex.search(x) is not None
+    return lambda x: regex.search(filter_comments(x)) is not None
 
 
 infix_operators = \
