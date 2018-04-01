@@ -38,6 +38,7 @@
 #include "openflow/openflow.h"
 #include "ovsdb-idl.h"
 #include "ovs-rcu.h"
+#include "ovs-router.h"
 #include "openvswitch/poll-loop.h"
 #include "simap.h"
 #include "stream-ssl.h"
@@ -219,6 +220,7 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
 
         case OPT_DISABLE_SYSTEM:
             dp_blacklist_provider("system");
+            ovs_router_disable_system_routing_table();
             break;
 
         case '?':
