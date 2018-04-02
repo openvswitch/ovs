@@ -170,6 +170,13 @@ find_command tcpdump
 
 CURL_OPT="-g -v --max-time 1 --retry 2 --retry-delay 1 --connect-timeout 1"
 
+# Determine whether "diff" supports "normal" diffs.  (busybox diff does not.)
+if echo xyzzy | diff /dev/null - | grep '^>' >/dev/null; then
+    DIFF_SUPPORTS_NORMAL_FORMAT=yes
+else
+    DIFF_SUPPORTS_NORMAL_FORMAT=no
+fi
+
 # Turn off proxies.
 unset http_proxy
 unset https_proxy

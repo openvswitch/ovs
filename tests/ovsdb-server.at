@@ -1455,6 +1455,7 @@ AT_BANNER([OVSDB -- ovsdb-server replication table-exclusion])
 m4_define([OVSDB_CHECK_REPLICATION],
    [AT_SETUP([$1])
    AT_KEYWORDS([ovsdb server tcp replication table-exclusion])
+   AT_SKIP_IF([test $DIFF_SUPPORTS_NORMAL_FORMAT = no])
    $2 > schema
    AT_CHECK([ovsdb-tool create db1 schema], [0], [stdout], [ignore])
    AT_CHECK([ovsdb-tool create db2 schema], [0], [stdout], [ignore])
@@ -1532,6 +1533,8 @@ AT_CLEANUP
 #ovsdb-server/set-sync-exclude-tables command
 AT_SETUP([ovsdb-server/set-sync-exclude-tables])
 AT_KEYWORDS([ovsdb server replication set-exclude-tables])
+AT_SKIP_IF([test $DIFF_SUPPORTS_NORMAL_FORMAT = no])
+
 replication_schema > schema
 AT_CHECK([ovsdb-tool create db1 schema], [0], [stdout], [ignore])
 AT_CHECK([ovsdb-tool create db2 schema], [0], [stdout], [ignore])
@@ -1619,6 +1622,8 @@ AT_CLEANUP
 #ovsdb-server/disconnect-active-server command
 AT_SETUP([ovsdb-server/disconnect-active-server])
 AT_KEYWORDS([ovsdb server replication disconnect-active-server])
+AT_SKIP_IF([test $DIFF_SUPPORTS_NORMAL_FORMAT = no])
+
 replication_schema > schema
 AT_CHECK([ovsdb-tool create db1 schema], [0], [stdout], [ignore])
 AT_CHECK([ovsdb-tool create db2 schema], [0], [stdout], [ignore])
