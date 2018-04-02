@@ -1,3 +1,5 @@
+# -*- sh -*-
+# vi:syntax=sh
 # This is a shell function library sourced by some Open vSwitch scripts.
 # It is not intended to be invoked on its own.
 
