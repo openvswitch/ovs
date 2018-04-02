@@ -145,6 +145,34 @@ send_bogus_packet_ins(struct fail_open *fo)
     dp_packet_uninit(&b);
 }
 
+static void
+fail_open_del_normal_flow(struct fail_open *fo)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    struct match match;
+
+    match_init_catchall(&match);
+    ofproto_delete_flow(fo->ofproto, &match, FAIL_OPEN_PRIORITY);
+}
+
+static void
+fail_open_add_normal_flow(struct fail_open *fo)
+{
+    struct ofpbuf ofpacts;
+    struct match match;
+
+    /* Set up a flow that matches every packet and directs them to
+     * OFPP_NORMAL. */
+    ofpbuf_init(&ofpacts, OFPACT_OUTPUT_SIZE);
+    ofpact_put_OUTPUT(&ofpacts)->port = OFPP_NORMAL;
+
+    match_init_catchall(&match);
+    ofproto_add_flow(fo->ofproto, &match, FAIL_OPEN_PRIORITY,
+            ofpacts.data, ofpacts.size);
+
+    ofpbuf_uninit(&ofpacts);
+}
+
 /* Enter fail-open mode if we should be in it. */
 void
 fail_open_run(struct fail_open *fo)
@@ -205,14 +233,11 @@ static void
 fail_open_recover(struct fail_open *fo)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct match match;
-
     VLOG_WARN("No longer in fail-open mode");
     fo->last_disconn_secs = 0;
     fo->next_bogus_packet_in = LLONG_MAX;
 
-    match_init_catchall(&match);
-    ofproto_delete_flow(fo->ofproto, &match, FAIL_OPEN_PRIORITY);
+    fail_open_del_normal_flow(fo);
 }
 
 void
@@ -230,19 +255,7 @@ fail_open_flushed(struct fail_open *fo)
     int disconn_secs = connmgr_failure_duration(fo->connmgr);
     bool open = disconn_secs >= trigger_duration(fo);
     if (open) {
-        struct ofpbuf ofpacts;
-        struct match match;
-
-        /* Set up a flow that matches every packet and directs them to
-         * OFPP_NORMAL. */
-        ofpbuf_init(&ofpacts, OFPACT_OUTPUT_SIZE);
-        ofpact_put_OUTPUT(&ofpacts)->port = OFPP_NORMAL;
-
-        match_init_catchall(&match);
-        ofproto_add_flow(fo->ofproto, &match, FAIL_OPEN_PRIORITY,
-                         ofpacts.data, ofpacts.size);
-
-        ofpbuf_uninit(&ofpacts);
+        fail_open_add_normal_flow(fo);
     }
     fo->fail_open_active = open;
 }
