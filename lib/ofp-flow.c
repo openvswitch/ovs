@@ -272,7 +272,6 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
                  * existing cookie. */
                 return OFPERR_NXBRC_NXM_INVALID;
             }
-            minimatch_init(&fm->match, &match);
             fm->priority = ntohs(nfm->priority);
             fm->new_cookie = nfm->cookie;
             fm->idle_timeout = ntohs(nfm->idle_timeout);
