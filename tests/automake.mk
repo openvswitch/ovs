@@ -141,7 +141,7 @@ AUTOTEST_PATH = utilities:vswitchd:ovsdb:vtep:tests:$(PTHREAD_WIN32_DIR_DLL):$(S
 
 check-local:
 	set $(SHELL) '$(TESTSUITE)' -C tests AUTOTEST_PATH=$(AUTOTEST_PATH) $(TESTSUITEFLAGS); \
-	"$$@" || (test X'$(RECHECK)' = Xyes && "$$@" --recheck)
+	"$$@" || (test X'$(RECHECK)' = Xyes && "$$@" -j1 --recheck)
 
 # Python Coverage support.
 # Requires coverage.py http://nedbatchelder.com/code/coverage/.
@@ -169,7 +169,7 @@ GENHTML_OPTS = -q --branch-coverage --num-spaces 4
 check-lcov: all $(check_DATA) clean-lcov
 	find . -name '*.gcda' | xargs -n1 rm -f
 	-set $(SHELL) '$(TESTSUITE)' -C tests AUTOTEST_PATH=$(AUTOTEST_PATH) $(TESTSUITEFLAGS); \
-	"$$@" || (test X'$(RECHECK)' = Xyes && "$$@" --recheck)
+	"$$@" || (test X'$(RECHECK)' = Xyes && "$$@" -j1 --recheck)
 	$(MKDIR_P) tests/lcov
 	lcov $(LCOV_OPTS) -o tests/lcov/coverage.info
 	genhtml $(GENHTML_OPTS) -o tests/lcov tests/lcov/coverage.info
