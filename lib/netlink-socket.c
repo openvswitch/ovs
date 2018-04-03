@@ -747,6 +747,7 @@ nl_sock_recv__(struct nl_sock *sock, struct ofpbuf *buf, int *nsid, bool wait)
          * namespace (no id). Latest kernels return a valid ID only if
          * available or nothing. */
         netnsid_set_local(nsid);
+#ifndef _WIN32
         cmsg = CMSG_FIRSTHDR(&msg);
         while (cmsg != NULL) {
             if (cmsg->cmsg_level == SOL_NETLINK
@@ -771,6 +772,7 @@ nl_sock_recv__(struct nl_sock *sock, struct ofpbuf *buf, int *nsid, bool wait)
 
             cmsg = CMSG_NXTHDR(&msg, cmsg);
         }
+#endif
     }
 
     log_nlmsg(__func__, 0, buf->data, buf->size, sock->protocol);
