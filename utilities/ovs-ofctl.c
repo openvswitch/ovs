@@ -514,6 +514,7 @@ usage(void)
            "  --sort[=field]              sort in ascending order\n"
            "  --rsort[=field]             sort in descending order\n"
            "  --names                     show port names instead of numbers\n"
+           "  --no-names                  show port numbers, but not names\n"
            "  --unixctl=SOCKET            set control socket name\n"
            "  --color[=always|never|auto] control use of color in output\n"
            "  -h, --help                  display this help message\n"
