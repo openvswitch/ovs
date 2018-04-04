@@ -55,9 +55,73 @@ AT_CHECK([cat p0.pcap.txt | grep 93aa55aa55000086dd6000000000203aff2001cafe | un
 ])
 
 dnl Check ARP Snoop
-AT_CHECK([ovs-appctl netdev-dummy/receive p0 'in_port(1),eth(src=f8:bc:12:44:34:b6,dst=aa:55:aa:55:00:00),eth_type(0x86dd),ipv6(src=2001:cafe::92,dst=2001:cafe::94,label=0,proto=58,tclass=0,hlimit=255,frag=no),icmpv6(type=136,code=0),nd(target=2001:cafe::92,sll=00:00:00:00:00:00,tll=f8:bc:12:44:34:b6)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'in_port(1),eth(src=f8:bc:12:44:34:c8,dst=aa:55:aa:55:00:00),eth_type(0x86dd),ipv6(src=2001:cafe::92,dst=2001:cafe::88,label=0,proto=58,tclass=0,hlimit=255,frag=no),icmpv6(type=136,code=0),nd(target=2001:cafe::92,sll=00:00:00:00:00:00,tll=f8:bc:12:44:34:c8)'])
 
-AT_CHECK([ovs-appctl netdev-dummy/receive p0 'in_port(1),eth(src=f8:bc:12:44:34:b7,dst=aa:55:aa:55:00:00),eth_type(0x86dd),ipv6(src=2001:cafe::93,dst=2001:cafe::94,label=0,proto=58,tclass=0,hlimit=255,frag=no),icmpv6(type=136,code=0),nd(target=2001:cafe::93,sll=00:00:00:00:00:00,tll=f8:bc:12:44:34:b7)'])
+ovs-appctl time/warp 1000
+ovs-appctl time/warp 1000
+
+AT_CHECK([ovs-appctl tnl/arp/show | tail -n+3 | sort], [0], [dnl
+2001:cafe::92                                 f8:bc:12:44:34:c8   br0
+])
+
+dnl Receiving Neighbor Advertisement with incorrect 'nw_dst' should not alter tunnel neighbor cache
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'in_port(1),eth(src=f8:bc:12:44:34:b6,dst=aa:55:aa:55:00:00),eth_type(0x86dd),ipv6(src=2001:cafe::92,dst=2001:cafe::99,label=0,proto=58,tclass=0,hlimit=255,frag=no),icmpv6(type=136,code=0),nd(target=2001:cafe::92,sll=00:00:00:00:00:00,tll=f8:bc:12:44:34:b6)'])
+
+ovs-appctl time/warp 1000
+ovs-appctl time/warp 1000
+
+AT_CHECK([ovs-appctl tnl/arp/show | tail -n+3 | sort], [0], [dnl
+2001:cafe::92                                 f8:bc:12:44:34:c8   br0
+])
+
+dnl Receiving Neighbot Advertisement with incorrect VLAN id should not alter tunnel neighbor cache
+AT_CHECK([ovs-vsctl set port br0 tag=10])
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'in_port(1),eth(src=f8:bc:12:44:34:b6,dst=aa:55:aa:55:00:00),eth_type(0x8100),vlan(vid=99,pcp=7),encap(eth_type(0x86dd),ipv6(src=2001:cafe::92,dst=2001:cafe::88,label=0,proto=58,tclass=0,hlimit=255,frag=no),icmpv6(type=136,code=0),nd(target=2001:cafe::92,sll=00:00:00:00:00:00,tll=f8:bc:12:44:34:b6))'])
+
+ovs-appctl time/warp 1000
+ovs-appctl time/warp 1000
+
+AT_CHECK([ovs-appctl tnl/arp/show | tail -n+3 | sort], [0], [dnl
+2001:cafe::92                                 f8:bc:12:44:34:c8   br0
+])
+
+dnl Receiving Neighbor Advertisement with correct VLAN id should alter tunnel neighbor cache
+AT_CHECK([ovs-vsctl set port br0 tag=10])
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'in_port(1),eth(src=f8:bc:12:44:34:b6,dst=aa:55:aa:55:00:00),eth_type(0x8100),vlan(vid=10,pcp=7),encap(eth_type(0x86dd),ipv6(src=2001:cafe::92,dst=2001:cafe::88,label=0,proto=58,tclass=0,hlimit=255,frag=no),icmpv6(type=136,code=0),nd(target=2001:cafe::92,sll=00:00:00:00:00:00,tll=f8:bc:12:44:34:b6))'])
+
+ovs-appctl time/warp 1000
+ovs-appctl time/warp 1000
+
+AT_CHECK([ovs-appctl tnl/arp/show | tail -n+3 | sort], [0], [dnl
+2001:cafe::92                                 f8:bc:12:44:34:b6   br0
+])
+
+dnl Receiving Neighbor Advertisement in overlay bridge should not alter tunnel neighbor cache
+AT_CHECK([ovs-vsctl add-port int-br p1 -- set interface p1 type=dummy ofport_request=200 other-config:hwaddr=aa:55:aa:55:00:99])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(200),eth(src=f8:bc:12:44:34:c8,dst=aa:55:aa:55:00:00),eth_type(0x86dd),ipv6(src=2001:cafe::92,dst=2001:cafe::99,label=0,proto=58,tclass=0,hlimit=255,frag=no),icmpv6(type=136,code=0),nd(target=2001:cafe::92,sll=00:00:00:00:00:00,tll=f8:bc:12:44:34:c8)'])
+
+ovs-appctl time/warp 1000
+ovs-appctl time/warp 1000
+
+AT_CHECK([ovs-appctl tnl/neigh/show | grep br | sort], [0], [dnl
+2001:cafe::92                                 f8:bc:12:44:34:b6   br0
+])
+
+dnl Receive Neighbor Advertisement without VLAN header
+AT_CHECK([ovs-vsctl set port br0 tag=0])
+AT_CHECK([ovs-appctl tnl/neigh/flush], [0], [OK
+])
+
+ovs-appctl time/warp 1000
+ovs-appctl time/warp 1000
+
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'in_port(1),eth(src=f8:bc:12:44:34:b6,dst=aa:55:aa:55:00:00),eth_type(0x86dd),ipv6(src=2001:cafe::92,dst=2001:cafe::88,label=0,proto=58,tclass=0,hlimit=255,frag=no),icmpv6(type=136,code=0),nd(target=2001:cafe::92,sll=00:00:00:00:00:00,tll=f8:bc:12:44:34:b6)'])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'in_port(1),eth(src=f8:bc:12:44:34:b7,dst=aa:55:aa:55:00:00),eth_type(0x86dd),ipv6(src=2001:cafe::93,dst=ff02::1:ff00:0088,label=0,proto=58,tclass=0,hlimit=255,frag=no),icmpv6(type=136,code=0),nd(target=2001:cafe::93,sll=00:00:00:00:00:00,tll=f8:bc:12:44:34:b7)'])
+
+ovs-appctl time/warp 1000
+ovs-appctl time/warp 1000
 
 AT_CHECK([ovs-appctl tnl/arp/show | tail -n+3 | sort], [0], [dnl
 2001:cafe::92                                 f8:bc:12:44:34:b6   br0

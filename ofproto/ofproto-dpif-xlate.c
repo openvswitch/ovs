@@ -91,6 +91,16 @@ VLOG_DEFINE_THIS_MODULE(ofproto_dpif_xlate);
  * recursive or not. */
 #define MAX_RESUBMITS (MAX_DEPTH * MAX_DEPTH)
 
+/* The structure holds an array of IP addresses assigned to a bridge and the
+ * number of elements in the array. These data are mutable and are evaluated
+ * when ARP or Neighbor Advertisement packets received on a native tunnel
+ * port are xlated. So 'ref_cnt' and RCU are used for synchronization. */
+struct xbridge_addr {
+    struct in6_addr *addr;        /* Array of IP addresses of xbridge. */
+    int n_addr;                   /* Number of IP addresses. */
+    struct ovs_refcount ref_cnt;
+};
+
 struct xbridge {
     struct hmap_node hmap_node;   /* Node in global 'xbridges' map. */
     struct ofproto_dpif *ofproto; /* Key in global 'xbridges' map. */
@@ -114,6 +124,8 @@ struct xbridge {
 
     /* Datapath feature support. */
     struct dpif_backer_support support;
+
+    struct xbridge_addr *addr;
 };
 
 struct xbundle {
@@ -584,7 +596,8 @@ static void xlate_xbridge_set(struct xbridge *, struct dpif *,
                               const struct dpif_ipfix *,
                               const struct netflow *,
                               bool forward_bpdu, bool has_in_band,
-                              const struct dpif_backer_support *);
+                              const struct dpif_backer_support *,
+                              const struct xbridge_addr *);
 static void xlate_xbundle_set(struct xbundle *xbundle,
                               enum port_vlan_mode vlan_mode,
                               uint16_t qinq_ethtype, int vlan,
@@ -838,6 +851,56 @@ xlate_xport_init(struct xlate_cfg *xcfg, struct xport *xport)
                 uuid_hash(&xport->uuid));
 }
 
+static struct xbridge_addr *
+xbridge_addr_create(struct xbridge *xbridge)
+{
+    struct xbridge_addr *xbridge_addr = xbridge->addr;
+    struct in6_addr *addr = NULL, *mask = NULL;
+    struct netdev *dev;
+    int err, n_addr = 0;
+
+    err = netdev_open(xbridge->name, NULL, &dev);
+    if (!err) {
+        err = netdev_get_addr_list(dev, &addr, &mask, &n_addr);
+        if (!err) {
+            if (!xbridge->addr ||
+                n_addr != xbridge->addr->n_addr ||
+                (xbridge->addr->addr && memcmp(addr, xbridge->addr->addr,
+                                               sizeof(*addr) * n_addr))) {
+                xbridge_addr = xzalloc(sizeof *xbridge_addr);
+                xbridge_addr->addr = addr;
+                xbridge_addr->n_addr = n_addr;
+                ovs_refcount_init(&xbridge_addr->ref_cnt);
+            } else {
+                free(addr);
+            }
+            free(mask);
+        }
+        netdev_close(dev);
+    }
+
+    return xbridge_addr;
+}
+
+static struct xbridge_addr *
+xbridge_addr_ref(const struct xbridge_addr *addr_)
+{
+    struct xbridge_addr *addr = CONST_CAST(struct xbridge_addr *, addr_);
+    if (addr) {
+        ovs_refcount_ref(&addr->ref_cnt);
+    }
+    return addr;
+}
+
+static void
+xbridge_addr_unref(struct xbridge_addr *addr)
+{
+    if (addr && ovs_refcount_unref_relaxed(&addr->ref_cnt) == 1) {
+        free(addr->addr);
+        free(addr);
+    }
+}
+
 static void
 xlate_xbridge_set(struct xbridge *xbridge,
                   struct dpif *dpif,
@@ -848,7 +911,8 @@ xlate_xbridge_set(struct xbridge *xbridge,
                   const struct dpif_ipfix *ipfix,
                   const struct netflow *netflow,
                   bool forward_bpdu, bool has_in_band,
-                  const struct dpif_backer_support *support)
+                  const struct dpif_backer_support *support,
+                  const struct xbridge_addr *addr)
 {
     if (xbridge->ml != ml) {
         mac_learning_unref(xbridge->ml);
@@ -888,6 +952,11 @@ xlate_xbridge_set(struct xbridge *xbridge,
     if (xbridge->netflow != netflow) {
         netflow_unref(xbridge->netflow);
         xbridge->netflow = netflow_ref(netflow);
+    }
+
+    if (xbridge->addr != addr) {
+        xbridge_addr_unref(xbridge->addr);
+        xbridge->addr = xbridge_addr_ref(addr);
     }
 
     xbridge->dpif = dpif;
@@ -983,7 +1052,7 @@ xlate_xbridge_copy(struct xbridge *xbridge)
                       xbridge->rstp, xbridge->ms, xbridge->mbridge,
                       xbridge->sflow, xbridge->ipfix, xbridge->netflow,
                       xbridge->forward_bpdu, xbridge->has_in_band,
-                      &xbridge->support);
+                      &xbridge->support, xbridge->addr);
     LIST_FOR_EACH (xbundle, list_node, &xbridge->xbundles) {
         xlate_xbundle_copy(new_xbridge, xbundle);
     }
@@ -1141,6 +1210,7 @@ xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
                   const struct dpif_backer_support *support)
 {
     struct xbridge *xbridge;
+    struct xbridge_addr *xbridge_addr, *old_addr;
 
     ovs_assert(new_xcfg);
 
@@ -1155,8 +1225,16 @@ xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
     free(xbridge->name);
     xbridge->name = xstrdup(name);
 
+    xbridge_addr = xbridge_addr_create(xbridge);
+    old_addr = xbridge->addr;
+
     xlate_xbridge_set(xbridge, dpif, ml, stp, rstp, ms, mbridge, sflow, ipfix,
-                      netflow, forward_bpdu, has_in_band, support);
+                      netflow, forward_bpdu, has_in_band, support,
+                      xbridge_addr);
+
+    if (xbridge_addr != old_addr) {
+        xbridge_addr_unref(xbridge_addr);
+    }
 }
 
 static void
@@ -1186,6 +1264,7 @@ xlate_xbridge_remove(struct xlate_cfg *xcfg, struct xbridge *xbridge)
     netflow_unref(xbridge->netflow);
     stp_unref(xbridge->stp);
     rstp_unref(xbridge->rstp);
+    xbridge_addr_unref(xbridge->addr);
     hmap_destroy(&xbridge->xports);
     free(xbridge->name);
     free(xbridge);
@@ -3710,6 +3789,54 @@ check_output_prerequisites(struct xlate_ctx *ctx,
     return true;
 }
 
+/* Function verifies if destination address of received Neighbor Advertisement
+ * message stored in 'flow' is correct. It should be either FF02::1:FFXX:XXXX
+ * where XX:XXXX stands for the last 24 bits of 'ipv6_addr' or it should match
+ * 'ipv6_addr'. */
+static bool
+is_nd_dst_correct(const struct flow *flow, const struct in6_addr *ipv6_addr)
+{
+    const uint8_t *flow_ipv6_addr = (uint8_t *) &flow->ipv6_dst;
+    const uint8_t *addr = (uint8_t *) ipv6_addr;
+
+    return (IN6_IS_ADDR_MC_LINKLOCAL(flow_ipv6_addr) &&
+            flow_ipv6_addr[11] == 0x01 &&
+            flow_ipv6_addr[12] == 0xff &&
+            flow_ipv6_addr[13] == addr[13] &&
+            flow_ipv6_addr[14] == addr[14] &&
+            flow_ipv6_addr[15] == addr[15]) ||
+            IN6_ARE_ADDR_EQUAL(&flow->ipv6_dst, ipv6_addr);
+}
+
+/* Function verifies if the ARP reply or Neighbor Advertisement represented by
+ * 'flow' addresses the 'xbridge' of 'ctx'. Returns true if the ARP TA or
+ * neighbor discovery destination is in the list of configured IP addresses of
+ * the bridge. Otherwise, it returns false. */
+static bool
+is_neighbor_reply_correct(const struct xlate_ctx *ctx, const struct flow *flow)
+{
+    bool ret = false;
+    int i;
+    struct xbridge_addr *xbridge_addr = xbridge_addr_ref(ctx->xbridge->addr);
+
+    /* Verify if 'nw_dst' of ARP or 'ipv6_dst' of ICMPV6 is in the list. */
+    for (i = 0; xbridge_addr && i < xbridge_addr->n_addr; i++) {
+        struct in6_addr *ip_addr = &xbridge_addr->addr[i];
+        if ((IN6_IS_ADDR_V4MAPPED(ip_addr) &&
+             flow->dl_type == htons(ETH_TYPE_ARP) &&
+             in6_addr_get_mapped_ipv4(ip_addr) == flow->nw_dst) ||
+            (!IN6_IS_ADDR_V4MAPPED(ip_addr) &&
+              is_nd_dst_correct(flow, ip_addr))) {
+            /* Found a match. */
+            ret = true;
+            break;
+        }
+    }
+
+    xbridge_addr_unref(xbridge_addr);
+    return ret;
+}
+
 static bool
 terminate_native_tunnel(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                         struct flow *flow, struct flow_wildcards *wc,
@@ -3722,6 +3849,15 @@ terminate_native_tunnel(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     if (ofp_port == OFPP_LOCAL &&
         ovs_native_tunneling_is_on(ctx->xbridge->ofproto)) {
         *tnl_port = tnl_port_map_lookup(flow, wc);
+
+        /* If no tunnel port was found and it's about an ARP or ICMPv6 packet,
+         * do tunnel neighbor snooping. */
+        if (*tnl_port == ODPP_NONE &&
+            (flow->dl_type == htons(ETH_TYPE_ARP) ||
+             flow->nw_proto == IPPROTO_ICMPV6) &&
+             is_neighbor_reply_correct(ctx, flow)) {
+            tnl_neigh_snoop(flow, wc, ctx->xbridge->name);
+        }
     }
 
     return *tnl_port != ODPP_NONE;
@@ -6143,9 +6279,6 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
     struct flow *flow = &ctx->xin->flow;
     const struct ofpact *a;
 
-    if (ovs_native_tunneling_is_on(ctx->xbridge->ofproto)) {
-        tnl_neigh_snoop(flow, wc, ctx->xbridge->name);
-    }
     /* dl_type already in the mask, not set below. */
 
     if (!ofpacts_len) {

@@ -123,6 +123,16 @@ struct sockaddr_in6 {
      (X)->s6_addr[10] == 0xff &&                \
      (X)->s6_addr[11] == 0xff)
 
+#define IN6_IS_ADDR_MC_LINKLOCAL(a)                 \
+    (((const uint8_t *) (a))[0] == 0xff &&          \
+     (((const uint8_t *) (a))[1] & 0xf) == 0x2)
+
+# define IN6_ARE_ADDR_EQUAL(a,b)                                          \
+    ((((const uint32_t *) (a))[0] == ((const uint32_t *) (b))[0]) &&      \
+     (((const uint32_t *) (a))[1] == ((const uint32_t *) (b))[1]) &&      \
+     (((const uint32_t *) (a))[2] == ((const uint32_t *) (b))[2]) &&      \
+     (((const uint32_t *) (a))[3] == ((const uint32_t *) (b))[3]))
+
 #define INET_ADDRSTRLEN 16
 #define INET6_ADDRSTRLEN 46
 

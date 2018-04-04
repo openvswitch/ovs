@@ -70,8 +70,70 @@ ffffffffffffaa55aa55000008060001080006040001aa55aa550000010102580000000000000101
 ])
 
 dnl Check ARP Snoop
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'recirc_id(0),in_port(1),eth(src=f8:bc:12:44:34:c8,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0806),arp(sip=1.1.2.92,tip=1.1.2.88,op=2,sha=f8:bc:12:44:34:c8,tha=00:00:00:00:00:00)'])
+
+ovs-appctl time/warp 1000
+ovs-appctl time/warp 1000
+
+AT_CHECK([ovs-appctl tnl/neigh/show | grep br0 | sort], [0], [dnl
+1.1.2.92                                      f8:bc:12:44:34:c8   br0
+])
+
+dnl Receiving ARP reply with incorrect 'tip' should not alter tunnel neighbor cache
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'recirc_id(0),in_port(1),eth(src=f8:bc:12:44:34:b8,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0806),arp(sip=1.1.2.92,tip=1.1.2.90,op=2,sha=f8:bc:12:44:34:b8,tha=00:00:00:00:00:00)'])
+
+ovs-appctl time/warp 1000
+ovs-appctl time/warp 1000
+
+AT_CHECK([ovs-appctl tnl/neigh/show | grep br0 | sort], [0], [dnl
+1.1.2.92                                      f8:bc:12:44:34:c8   br0
+])
+
+dnl Receiving ARP reply with incorrect VLAN id should not alter tunnel neighbor cache
+AT_CHECK([ovs-vsctl set port br0 tag=10])
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'recirc_id(0),in_port(1),eth(src=f8:bc:12:44:34:b6,dst=ff:ff:ff:ff:ff:ff),eth_type(0x8100),vlan(vid=99,pcp=7),encap(eth_type(0x0806),arp(sip=1.1.2.92,tip=1.1.2.88,op=2,sha=f8:bc:12:44:34:b6,tha=00:00:00:00:00:00))'])
+
+ovs-appctl time/warp 1000
+ovs-appctl time/warp 1000
+
+AT_CHECK([ovs-appctl tnl/neigh/show | grep br0 | sort], [0], [dnl
+1.1.2.92                                      f8:bc:12:44:34:c8   br0
+])
+
+dnl Receiving ARP reply with correct VLAN id should alter tunnel neighbor cache
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'recirc_id(0),in_port(1),eth(src=f8:bc:12:44:34:b6,dst=ff:ff:ff:ff:ff:ff),eth_type(0x8100),vlan(vid=10,pcp=7),encap(eth_type(0x0806),arp(sip=1.1.2.92,tip=1.1.2.88,op=2,sha=f8:bc:12:44:34:b6,tha=00:00:00:00:00:00))'])
+
+ovs-appctl time/warp 1000
+ovs-appctl time/warp 1000
+
+AT_CHECK([ovs-appctl tnl/neigh/show | grep br0 | sort], [0], [dnl
+1.1.2.92                                      f8:bc:12:44:34:b6   br0
+])
+
+dnl Receiving ARP reply in overlay bridge should not alter tunnel neighbor cache
+AT_CHECK([ovs-vsctl add-port int-br p1 -- set interface p1 type=dummy ofport_request=200 other-config:hwaddr=aa:55:aa:55:00:99])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'recirc_id(0),in_port(200),eth(src=f8:bc:12:44:34:c8,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0806),arp(sip=1.1.2.92,tip=1.1.2.88,op=2,sha=f8:bc:12:44:34:c8,tha=00:00:00:00:00:00)'])
+
+ovs-appctl time/warp 1000
+ovs-appctl time/warp 1000
+
+AT_CHECK([ovs-appctl tnl/neigh/show | grep br | sort], [0], [dnl
+1.1.2.92                                      f8:bc:12:44:34:b6   br0
+])
+
+dnl Receive ARP reply without VLAN header
+AT_CHECK([ovs-vsctl set port br0 tag=0])
+AT_CHECK([ovs-appctl tnl/neigh/flush], [0], [OK
+])
+
+ovs-appctl time/warp 1000
+ovs-appctl time/warp 1000
+
 AT_CHECK([ovs-appctl netdev-dummy/receive p0 'recirc_id(0),in_port(1),eth(src=f8:bc:12:44:34:b6,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0806),arp(sip=1.1.2.92,tip=1.1.2.88,op=2,sha=f8:bc:12:44:34:b6,tha=00:00:00:00:00:00)'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p0 'recirc_id(0),in_port(1),eth(src=f8:bc:12:44:34:b7,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0806),arp(sip=1.1.2.93,tip=1.1.2.88,op=2,sha=f8:bc:12:44:34:b7,tha=00:00:00:00:00:00)'])
+
+ovs-appctl time/warp 1000
+ovs-appctl time/warp 1000
 
 AT_CHECK([ovs-appctl tnl/neigh/show | tail -n+3 | sort], [0], [dnl
 1.1.2.92                                      f8:bc:12:44:34:b6   br0
@@ -190,9 +252,12 @@ AT_CHECK([ovs-ofctl dump-ports int-br | grep 'port  7'], [0], [dnl
 dnl Check GREL3 only accepts non-fragmented packets?
 AT_CHECK([ovs-appctl netdev-dummy/receive p0 'aa55aa550000001b213cab6408004500007e79464000402fba550101025c0101025820000800000001c8fe71d883724fbeb6f4e1494a080045000054ba200000400184861e0000011e00000200004227e75400030af3195500000000f265010000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637'])
 
+ovs-appctl time/warp 1000
+ovs-appctl time/warp 1000
+
 AT_CHECK([ovs-ofctl dump-ports int-br | grep 'port  [[37]]' | sort], [0], [dnl
   port  3: rx pkts=3, bytes=294, drop=?, errs=?, frame=?, over=?, crc=?
-  port  7: rx pkts=3, bytes=252, drop=?, errs=?, frame=?, over=?, crc=?
+  port  7: rx pkts=4, bytes=350, drop=?, errs=?, frame=?, over=?, crc=?
 ])
 
 dnl Check decapsulation of Geneve packet with options
