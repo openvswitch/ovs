@@ -64,7 +64,7 @@ def l4(stage, action):
         match += ",ip_dst=%s/%d" % rand_ip_mask()
 
     src_dst = "tp_src" if rand_bool() else "tp_dst"
-    match += ",%s=%d" % (src_dst, random.randint(1024, 2**16 - 1))
+    match += ",%s=%d" % (src_dst, random.randint(1024, 2 ** 16 - 1))
     return flow_str(stage, match, action)
 
 
