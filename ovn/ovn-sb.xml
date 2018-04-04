@@ -1752,11 +1752,7 @@ tcp.flags = RST;
 
           <p>
             Then, the action drops all TCP options and payload data, and
-            updates the TCP checksum.
-          </p>
-
-          <p>
-            Details TBD.
+            updates the TCP checksum. IP ttl is set to 255.
           </p>
 
           <p><b>Prerequisite:</b> <code>tcp</code></p>

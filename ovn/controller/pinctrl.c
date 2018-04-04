@@ -269,6 +269,78 @@ pinctrl_handle_icmp4(const struct flow *ip_flow, const struct match *md,
 }
 
 static void
+pinctrl_handle_tcp_reset(const struct flow *ip_flow, struct dp_packet *pkt_in,
+                         const struct match *md, struct ofpbuf *userdata)
+{
+    /* This action only works for TCP segments, and the switch should only send
+     * us TCP segments this way, but check here just to be sure. */
+    if (ip_flow->nw_proto != IPPROTO_TCP) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "TCP_RESET action on non-TCP packet");
+        return;
+    }
+
+    uint64_t packet_stub[128 / 8];
+    struct dp_packet packet;
+
+    dp_packet_use_stub(&packet, packet_stub, sizeof packet_stub);
+    dp_packet_clear(&packet);
+    packet.packet_type = htonl(PT_ETH);
+
+    struct eth_header *eh = dp_packet_put_zeros(&packet, sizeof *eh);
+    eh->eth_dst = ip_flow->dl_dst;
+    eh->eth_src = ip_flow->dl_src;
+
+    if (get_dl_type(ip_flow) == htons(ETH_TYPE_IPV6)) {
+        struct ip6_hdr *nh = dp_packet_put_zeros(&packet, sizeof *nh);
+
+        eh->eth_type = htons(ETH_TYPE_IPV6);
+        dp_packet_set_l3(&packet, nh);
+        nh->ip6_vfc = 0x60;
+        nh->ip6_nxt = IPPROTO_TCP;
+        nh->ip6_plen = htons(TCP_HEADER_LEN);
+        packet_set_ipv6(&packet, &ip_flow->ipv6_src, &ip_flow->ipv6_dst,
+                        ip_flow->nw_tos, ip_flow->ipv6_label, 255);
+    } else {
+        struct ip_header *nh = dp_packet_put_zeros(&packet, sizeof *nh);
+
+        eh->eth_type = htons(ETH_TYPE_IP);
+        dp_packet_set_l3(&packet, nh);
+        nh->ip_ihl_ver = IP_IHL_VER(5, 4);
+        nh->ip_tot_len = htons(IP_HEADER_LEN + TCP_HEADER_LEN);
+        nh->ip_proto = IPPROTO_TCP;
+        nh->ip_frag_off = htons(IP_DF);
+        packet_set_ipv4(&packet, ip_flow->nw_src, ip_flow->nw_dst,
+                        ip_flow->nw_tos, 255);
+    }
+
+    struct tcp_header *th = dp_packet_put_zeros(&packet, sizeof *th);
+    struct tcp_header *tcp_in = dp_packet_l4(pkt_in);
+    dp_packet_set_l4(&packet, th);
+    th->tcp_ctl = TCP_CTL(TCP_RST, 5);
+    if (ip_flow->tcp_flags & htons(TCP_ACK)) {
+        th->tcp_seq = tcp_in->tcp_ack;
+    } else {
+        uint32_t tcp_seq, ack_seq, tcp_len;
+
+        tcp_seq = ntohl(get_16aligned_be32(&tcp_in->tcp_seq));
+        tcp_len = TCP_OFFSET(tcp_in->tcp_ctl) * 4;
+        ack_seq = tcp_seq + dp_packet_l4_size(pkt_in) - tcp_len;
+        put_16aligned_be32(&th->tcp_ack, htonl(ack_seq));
+        put_16aligned_be32(&th->tcp_seq, 0);
+    }
+    packet_set_tcp_port(&packet, ip_flow->tp_dst, ip_flow->tp_src);
+
+    if (ip_flow->vlans[0].tci & htons(VLAN_CFI)) {
+        eth_push_vlan(&packet, htons(ETH_TYPE_VLAN_8021Q),
+                      ip_flow->vlans[0].tci);
+    }
+
+    set_actions_and_enqueue_msg(&packet, md, userdata);
+    dp_packet_uninit(&packet);
+}
+
+static void
 pinctrl_handle_put_dhcp_opts(
     struct dp_packet *pkt_in, struct ofputil_packet_in *pin,
     struct ofpbuf *userdata, struct ofpbuf *continuation)
@@ -1084,6 +1156,11 @@ process_packet_in(const struct ofp_header *msg, struct controller_ctx *ctx)
 
     case ACTION_OPCODE_ICMP4:
         pinctrl_handle_icmp4(&headers, &pin.flow_metadata, &userdata);
+        break;
+
+    case ACTION_OPCODE_TCP_RESET:
+        pinctrl_handle_tcp_reset(&headers, &packet, &pin.flow_metadata,
+                                 &userdata);
         break;
 
     default:
