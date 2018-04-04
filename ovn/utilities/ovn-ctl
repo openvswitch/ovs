@@ -93,84 +93,103 @@ promote_ovnsb() {
     ovs-appctl -t $rundir/ovnsb_db.ctl ovsdb-server/disconnect-active-ovsdb-server
 }
 
-start_nb_ovsdb() {
-    # Check and eventually start ovsdb-server for Northbound DB
-    if ! pidfile_is_running $DB_NB_PID; then
-        upgrade_db "$DB_NB_FILE" "$DB_NB_SCHEMA" 1>/dev/null 2>/dev/null
+start_ovsdb__() {
+    local DB=$1 db=$2 schema_name=$3 table_name=$4
+    eval local pid=\$DB_${DB}_PID
+    eval local cluster_local_addr=\$DB_${DB}_CLUSTER_LOCAL_ADDR
+    eval local cluster_local_port=\$DB_${DB}_CLUSTER_LOCAL_PORT
+    eval local cluster_local_proto=\$DB_${DB}_CLUSTER_LOCAL_PROTO
+    eval local cluster_remote_addr=\$DB_${DB}_CLUSTER_REMOTE_ADDR
+    eval local cluster_remote_port=\$DB_${DB}_CLUSTER_REMOTE_PORT
+    eval local cluster_remote_proto=\$DB_${DB}_CLUSTER_REMOTE_PROTO
+    eval local sync_from_proto=\$DB_${DB}_SYNC_FROM_PROTO
+    eval local sync_from_addr=\$DB_${DB}_SYNC_FROM_ADDR
+    eval local sync_from_port=\$DB_${DB}_SYNC_FROM_PORT
+    eval local file=\$DB_${DB}_FILE
+    eval local schema=\$DB_${DB}_SCHEMA
+    eval local logfile=\$OVN_${DB}_LOGFILE
+    eval local log=\$OVN_${DB}_LOG
+    eval local sock=\$DB_${DB}_SOCK
+    eval local detach=\$DB_${DB}_DETACH
+    eval local create_insecure_remote=\$DB_${DB}_CREATE_INSECURE_REMOTE
+    eval local port=\$DB_${DB}_PORT
+    eval local addr=\$DB_${DB}_ADDR
+    eval local active_conf_file=\$ovn${db}_active_conf_file
 
-        set ovsdb-server
+    # Check and eventually start ovsdb-server for DB
+    if pidfile_is_running $pid; then
+        return
+    fi
 
-        if test X"$DB_NB_DETACH" != Xno; then
-            set "$@" --detach --monitor
+    if test ! -z "$cluster_local_addr"; then
+        mode=cluster
+    elif test ! -z "$sync_from_addr"; then
+        mode=active_passive
+        echo "$sync_from_proto:$sync_from_addr:\
+$sync_from_port" > $active_conf_file
+    else
+        mode=standalone
+    fi
+
+    if test $mode = cluster; then
+        local local=$cluster_local_proto:$cluster_local_addr:\
+$cluster_local_port
+        local remote=$cluster_remote_proto:$cluster_remote_addr:\
+$cluster_remote_port
+        if test -n "$cluster_remote_addr"; then
+            join_cluster "$file" "$schema_name" "$local" "$remote"
         else
-            set exec "$@"
+            create_cluster "$file" "$schema" "$local"
         fi
+    else
+        upgrade_db "$file" "$schema"
+    fi
 
-        set "$@" $OVN_NB_LOG --log-file=$OVN_NB_LOGFILE
-        set "$@" --remote=punix:$DB_NB_SOCK --pidfile=$DB_NB_PID
-        set "$@" --remote=db:OVN_Northbound,NB_Global,connections
-        set "$@" --unixctl=ovnnb_db.ctl
-        set "$@" --private-key=db:OVN_Northbound,SSL,private_key
-        set "$@" --certificate=db:OVN_Northbound,SSL,certificate
-        set "$@" --ca-cert=db:OVN_Northbound,SSL,ca_cert
-        set "$@" --ssl-protocols=db:OVN_Northbound,SSL,ssl_protocols
-        set "$@" --ssl-ciphers=db:OVN_Northbound,SSL,ssl_ciphers
+    set ovsdb-server
+    set "$@" $log --log-file=$logfile
+    set "$@" --remote=punix:$sock --pidfile=$pid
+    set "$@" --unixctl=ovn${db}_db.ctl
 
-        if test X"$DB_NB_CREATE_INSECURE_REMOTE" = Xyes; then
-            set "$@" --remote=ptcp:$DB_NB_PORT:$DB_NB_ADDR
-        fi
+    if test X"$detach" != Xno; then
+        set "$@" --detach --monitor
+    else
+        set exec "$@"
+    fi
 
-        if test ! -z "$DB_NB_SYNC_FROM_ADDR"; then
-            echo "$DB_NB_SYNC_FROM_PROTO:$DB_NB_SYNC_FROM_ADDR:$DB_NB_SYNC_FROM_PORT" > $ovnnb_active_conf_file
-        fi
+    set "$@" --remote=db:$schema_name,$table_name,connections
+    set "$@" --private-key=db:$schema_name,SSL,private_key
+    set "$@" --certificate=db:$schema_name,SSL,certificate
+    set "$@" --ca-cert=db:$schema_name,SSL,ca_cert
+    set "$@" --ssl-protocols=db:$schema_name,SSL,ssl_protocols
+    set "$@" --ssl-ciphers=db:$schema_name,SSL,ssl_ciphers
 
-        if test -e $ovnnb_active_conf_file; then
-            set "$@" --sync-from=`cat $ovnnb_active_conf_file`
-        fi
+    if test X"$create_insecure_remote" = Xyes; then
+        set "$@" --remote=ptcp:$port:$addr
+    fi
 
-        $@ $DB_NB_FILE
+    if test $mode = active_passive; then
+        set "$@" --sync-from=`cat $active_conf_file`
+    fi
+
+    "$@" "$file"
+
+    # Initialize the database if it's running standalone,
+    # active-passive, or is the first server in a cluster.
+    if test -z "$cluster_remote_addr"; then
         ovn-nbctl init
+    fi
+
+    if test $mode = cluster; then
+        upgrade_cluster "$schema" "unix:$sock"
     fi
 }
 
+start_nb_ovsdb() {
+    start_ovsdb__ NB nb OVN_Northbound NB_Global
+}
+
 start_sb_ovsdb() {
-    # Check and eventually start ovsdb-server for Southbound DB
-    if ! pidfile_is_running $DB_SB_PID; then
-        upgrade_db "$DB_SB_FILE" "$DB_SB_SCHEMA" 1>/dev/null 2>/dev/null
-
-        set ovsdb-server
-
-        if test X"$DB_SB_DETACH" != Xno; then
-            set "$@" --detach --monitor
-        else
-            set exec "$@"
-        fi
-
-        set "$@" $OVN_SB_LOG --log-file=$OVN_SB_LOGFILE
-        set "$@" --remote=punix:$DB_SB_SOCK --pidfile=$DB_SB_PID
-        set "$@" --remote=db:OVN_Southbound,SB_Global,connections
-        set "$@" --unixctl=ovnsb_db.ctl
-        set "$@" --private-key=db:OVN_Southbound,SSL,private_key
-        set "$@" --certificate=db:OVN_Southbound,SSL,certificate
-        set "$@" --ca-cert=db:OVN_Southbound,SSL,ca_cert
-        set "$@" --ssl-protocols=db:OVN_Southbound,SSL,ssl_protocols
-        set "$@" --ssl-ciphers=db:OVN_Southbound,SSL,ssl_ciphers
-
-        if test X"$DB_SB_CREATE_INSECURE_REMOTE" = Xyes; then
-            set "$@" --remote=ptcp:$DB_SB_PORT:$DB_SB_ADDR
-        fi
-
-        if test ! -z "$DB_SB_SYNC_FROM_ADDR"; then
-            echo "$DB_SB_SYNC_FROM_PROTO:$DB_SB_SYNC_FROM_ADDR:$DB_SB_SYNC_FROM_PORT" > $ovnsb_active_conf_file
-        fi
-
-        if test -e $ovnsb_active_conf_file; then
-            set "$@" --sync-from=`cat $ovnsb_active_conf_file`
-        fi
-
-        $@ $DB_SB_FILE
-        ovn-sbctl init
-    fi
+    start_ovsdb__ SB sb OVN_Southbound SB_Global
 }
 
 start_ovsdb () {
@@ -236,7 +255,8 @@ start_northd () {
                 exit
             fi
         fi
-        ovn_northd_params="--ovnnb-db=unix:$DB_NB_SOCK --ovnsb-db=unix:$DB_SB_SOCK"
+        ovn_northd_params="--ovnnb-db=$OVN_NORTHD_NB_DB \
+        --ovnsb-db=$OVN_NORTHD_SB_DB"
     else
         ovn_northd_params="`cat $ovn_northd_db_conf_file`"
     fi
@@ -406,6 +426,23 @@ set_defaults () {
 
     DB_NB_DETACH="yes"
     DB_SB_DETACH="yes"
+
+    DB_NB_CLUSTER_LOCAL_ADDR=""
+    DB_NB_CLUSTER_LOCAL_PROTO="tcp"
+    DB_NB_CLUSTER_LOCAL_PORT=6643
+    DB_NB_CLUSTER_REMOTE_ADDR=""
+    DB_NB_CLUSTER_REMOTE_PROTO="tcp"
+    DB_NB_CLUSTER_REMOTE_PORT=6643
+
+    DB_SB_CLUSTER_LOCAL_ADDR=""
+    DB_SB_CLUSTER_LOCAL_PROTO="tcp"
+    DB_SB_CLUSTER_LOCAL_PORT=6644
+    DB_SB_CLUSTER_REMOTE_ADDR=""
+    DB_SB_CLUSTER_REMOTE_PROTO="tcp"
+    DB_SB_CLUSTER_REMOTE_PORT=6644
+
+    OVN_NORTHD_NB_DB="unix:$DB_NB_SOCK"
+    OVN_NORTHD_SB_DB="unix:$DB_SB_SOCK"
 }
 
 set_option () {
@@ -494,6 +531,32 @@ File location options:
   --db-sb-sync-from-port=ADDR OVN Southbound active db tcp port (default: $DB_SB_SYNC_FROM_PORT)
   --db-sb-sync-from-proto=PROTO OVN Southbound active db transport (default: $DB_SB_SYNC_FROM_PROTO)
   --db-sb-create-insecure-remote=yes|no Create ptcp OVN Southbound remote (default: $DB_SB_CREATE_INSECURE_REMOTE)
+  --db-nb-cluster-local-addr=ADDR OVN_Northbound cluster local address \
+  (default: $DB_NB_CLUSTER_LOCAL_ADDR)
+  --db-nb-cluster-local-port=PORT OVN_Northbound cluster local tcp port \
+  (default: $DB_NB_CLUSTER_LOCAL_PORT)
+  --db-nb-cluster-local-proto=PROTO OVN_Northbound cluster local db transport \
+  (default: $DB_NB_CLUSTER_LOCAL_PROTO)
+  --db-nb-cluster-remote-addr=ADDR OVN_Northbound cluster remote address \
+  (default: $DB_NB_CLUSTER_REMOTE_ADDR)
+  --db-nb-cluster-remote-port=PORT OVN_Northbound cluster remote tcp port \
+  (default: $DB_NB_CLUSTER_REMOTE_PORT)
+  --db-nb-cluster-remote-proto=PROTO OVN_Northbound cluster remote db \
+  transport (default: $DB_NB_CLUSTER_REMOTE_PROTO)
+  --db-sb-cluster-local-addr=ADDR OVN_Southbound cluster local address \
+  (default: $DB_SB_CLUSTER_LOCAL_ADDR)
+  --db-sb-cluster-local-port=PORT OVN_Southbound cluster local tcp port \
+  (default: $DB_SB_CLUSTER_LOCAL_PORT)
+  --db-sb-cluster-local-proto=PROTO OVN_Southbound cluster local db transport \
+  (default: $DB_SB_CLUSTER_LOCAL_PROTO)
+  --db-sb-cluster-remote-addr=ADDR OVN_Southbound cluster remote address \
+  (default: $DB_SB_CLUSTER_REMOTE_ADDR)
+  --db-sb-cluster-remote-port=PORT OVN_Southbound cluster remote tcp port \
+  (default: $DB_SB_CLUSTER_REMOTE_PORT)
+  --db-sb-cluster-remote-proto=PROTO OVN_Southbound cluster remote db \
+  transport (default: $DB_SB_CLUSTER_REMOTE_PROTO)
+  --ovn-northd-nb-db=NB DB address(es) (default: $OVN_NORTHD_NB_DB)
+  --ovn-northd-sb-db=SB DB address(es) (default: $OVN_NORTHD_SB_DB)
 
 Default directories with "configure" option and environment variable override:
   logs: /usr/local/var/log/openvswitch (--with-logdir, OVS_LOGDIR)

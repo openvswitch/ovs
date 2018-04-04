@@ -66,6 +66,31 @@
     <p><code>--db-sb-sync-from-addr=<var>IP ADDRESS</var></code></p>
     <p><code>--db-sb-sync-from-port=<var>PORT NUMBER</var></code></p>
     <p><code>--db-sb-sync-from-proto=<var>PROTO</var></code></p>
+    <p>
+      <code>
+        --ovn-northd-nb-db=<var>PROTO</var>:<var>IP ADDRESS</var>:
+        <var>PORT</var>..
+      </code>
+    </p>
+    <p>
+      <code>
+        --ovn-northd-sb-db=<var>PROTO</var>:<var>IP ADDRESS</var>:
+        <var>PORT</var>..
+      </code>
+    </p>
+    <h1> Clustering options </h1>
+    <p><code>--db-nb-cluster-local-addr=<var>IP ADDRESS</var></code></p>
+    <p><code>--db-nb-cluster-local-port=<var>PORT NUMBER</var></code></p>
+    <p><code>--db-nb-cluster-local-proto=<var>PROTO (tcp/ssl)</var></code></p>
+    <p><code>--db-nb-cluster-remote-addr=<var>IP ADDRESS</var></code></p>
+    <p><code>--db-nb-cluster-remote-port=<var>PORT NUMBER</var></code></p>
+    <p><code>--db-nb-cluster-remote-proto=<var>PROTO (tcp/ssl)</var></code></p>
+    <p><code>--db-sb-cluster-local-addr=<var>IP ADDRESS</var></code></p>
+    <p><code>--db-sb-cluster-local-port=<var>PORT NUMBER</var></code></p>
+    <p><code>--db-sb-cluster-local-proto=<var>PROTO (tcp/ssl)</var></code></p>
+    <p><code>--db-sb-cluster-remote-addr=<var>IP ADDRESS</var></code></p>
+    <p><code>--db-sb-cluster-remote-port=<var>PORT NUMBER</var></code></p>
+    <p><code>--db-sb-cluster-remote-proto=<var>PROTO (tcp/ssl)</var></code></p>
 
     <h1>Configuration files</h1>
     <p>Following are the optional configuration files. If present, it should be located in the etc dir</p>
@@ -125,4 +150,50 @@
     <p><code># ovn-ctl promote_ovnsb</code></p>
     <p><code># ovn-ctl --db-nb-sync-from-addr=x.x.x.x --db-nb-sync-from-port=6641 demote_ovnnb</code></p>
     <p><code># ovn-ctl --db-sb-sync-from-addr=x.x.x.x --db-sb-sync-from-port=6642 demote_ovnsb</code></p>
+
+    <h2>Creating a clustered db on 3 nodes with IPs x.x.x.x, y.y.y.y and z.z.z.z</h2>
+    <h3>Starting OVN ovsdb servers and ovn-northd on the node with IP x.x.x.x</h3>
+    <p>
+      <code>
+        # ovn-ctl --db-nb-addr=x.x.x.x --db-nb-create-insecure-remote=yes
+        --db-sb-addr=x.x.x.x --db-sb-create-insecure-remote=yes
+        --db-nb-cluster-local-addr=x.x.x.x
+        --db-sb-cluster-local-addr=x.x.x.x
+        --ovn-northd-nb-db=tcp:x.x.x.x:6641,tcp:y.y.y.y:6641,tcp:z.z.z.z:6641
+        --ovn-northd-sb-db=tcp:x.x.x.x:6642,tcp:y.y.y.y:6642,tcp:z.z.z.z:6642
+        start_northd
+      </code>
+    </p>
+
+    <h3>Starting OVN ovsdb-servers and ovn-northd on the node with IP y.y.y.y and joining the cluster started at x.x.x.x</h3>
+    <p>
+      <code>
+        # ovn-ctl --db-nb-addr=y.y.y.y --db-nb-create-insecure-remote=yes
+        --db-sb-addr=y.y.y.y --db-sb-create-insecure-remote=yes
+        --db-nb-cluster-local-addr=y.y.y.y
+        --db-sb-cluster-local-addr=y.y.y.y
+        --db-nb-cluster-remote-addr=x.x.x.x
+        --db-sb-cluster-remote-addr=x.x.x.x
+        --ovn-northd-nb-db=tcp:x.x.x.x:6641,tcp:y.y.y.y:6641,tcp:z.z.z.z:6641
+        --ovn-northd-sb-db=tcp:x.x.x.x:6642,tcp:y.y.y.y:6642,tcp:z.z.z.z:6642
+        start_northd
+      </code>
+    </p>
+
+    <h3>Starting OVN ovsdb-servers and ovn-northd on the node with IP z.z.z.z and joining the cluster started at x.x.x.x</h3>
+    <p>
+      <code>
+        # ovn-ctl --db-nb-addr=z.z.z.z
+          --db-nb-create-insecure-remote=yes
+          --db-nb-cluster-local-addr=z.z.z.z
+          --db-sb-addr=z.z.z.z
+          --db-sb-create-insecure-remote=yes
+          --db-sb-cluster-local-addr=z.z.z.z
+          --db-nb-cluster-remote-addr=x.x.x.x
+          --db-sb-cluster-remote-addr=x.x.x.x
+          --ovn-northd-nb-db=tcp:x.x.x.x:6641,tcp:y.y.y.y:6641,tcp:z.z.z.z:6641
+          --ovn-northd-sb-db=tcp:x.x.x.x:6642,tcp:y.y.y.y:6642,tcp:z.z.z.z:6642
+          start_northd
+      </code>
+    </p>
 </manpage>
