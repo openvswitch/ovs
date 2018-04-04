@@ -1512,7 +1512,7 @@ ovsdb_idl_send_cond_change(struct ovsdb_idl *idl)
     }
 }
 
-/* Turns off OVSDB_IDL_ALERT for 'column' in 'db'.
+/* Turns off OVSDB_IDL_ALERT and OVSDB_IDL_TRACK for 'column' in 'db'.
  *
  * This function should be called between ovsdb_idl_create() and the first call
  * to ovsdb_idl_run().
@@ -1521,10 +1521,10 @@ static void
 ovsdb_idl_db_omit_alert(struct ovsdb_idl_db *db,
                         const struct ovsdb_idl_column *column)
 {
-    *ovsdb_idl_db_get_mode(db, column) &= ~OVSDB_IDL_ALERT;
+    *ovsdb_idl_db_get_mode(db, column) &= ~(OVSDB_IDL_ALERT | OVSDB_IDL_TRACK);
 }
 
-/* Turns off OVSDB_IDL_ALERT for 'column' in 'idl'.
+/* Turns off OVSDB_IDL_ALERT and OVSDB_IDL_TRACK for 'column' in 'idl'.
  *
  * This function should be called between ovsdb_idl_create() and the first call
  * to ovsdb_idl_run().
