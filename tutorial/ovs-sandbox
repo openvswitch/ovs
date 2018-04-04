@@ -71,6 +71,7 @@ ovn=false
 ovnsb_schema=
 ovnnb_schema=
 ovn_rbac=true
+n_northds=1
 nbdb_model=standalone
 nbdb_servers=3
 sbdb_model=backup
@@ -129,6 +130,7 @@ General options:
 OVN options:
   -o, --ovn            enable OVN
   --no-ovn-rbac        disable role-based access control for OVN
+  --n-northds=NUMBER   run NUMBER copies of northd (default: 1)
   --nbdb-model=standalone|backup|clustered    northbound database model
   --nbdb-servers=N     number of servers in nbdb cluster (default: 3)
   --sbdb-model=standalone|backup|clustered    southbound database model
@@ -203,6 +205,12 @@ EOF
             ;;
         --no-ovn-rbac)
             ovn_rbac=false
+            ;;
+        --n-northd*=*)
+            n_northds=$optarg
+            ;;
+        --n-northd*)
+            prev=n_northds
             ;;
         --nbdb-s*=*)
             nbdb_servers=$optarg
@@ -508,9 +516,12 @@ if $ovn; then
         ovs-vsctl set open . external-ids:ovn-remote=$OVN_SB_DB
         OVN_CTRLR_PKI=""
     fi
-    rungdb $gdb_ovn_northd $gdb_ovn_northd_ex ovn-northd --detach \
-        --no-chdir --pidfile -vconsole:off --log-file \
-        --ovnsb-db="$OVN_SB_DB" --ovnnb-db="$OVN_NB_DB"
+    for i in $(seq $n_northds); do
+        rungdb $gdb_ovn_northd $gdb_ovn_northd_ex ovn-northd --detach \
+               --no-chdir --pidfile=ovn-northd$i.pid -vconsole:off \
+               --log-file=ovn-northd$i.log \
+               --ovnsb-db="$OVN_SB_DB" --ovnnb-db="$OVN_NB_DB"
+    done
     rungdb $gdb_ovn_controller $gdb_ovn_controller_ex ovn-controller \
         $OVN_CTRLR_PKI --detach --no-chdir --pidfile -vconsole:off --log-file
     rungdb $gdb_ovn_controller_vtep $gdb_ovn_controller_vtep_ex \
