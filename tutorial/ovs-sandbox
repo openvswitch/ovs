@@ -510,8 +510,7 @@ if $ovn; then
     fi
     rungdb $gdb_ovn_northd $gdb_ovn_northd_ex ovn-northd --detach \
         --no-chdir --pidfile -vconsole:off --log-file \
-        --ovnsb-db=unix:"$sandbox"/sb1.ovsdb \
-        --ovnnb-db=unix:"$sandbox"/nb1.ovsdb
+        --ovnsb-db="$OVN_SB_DB" --ovnnb-db="$OVN_NB_DB"
     rungdb $gdb_ovn_controller $gdb_ovn_controller_ex ovn-controller \
         $OVN_CTRLR_PKI --detach --no-chdir --pidfile -vconsole:off --log-file
     rungdb $gdb_ovn_controller_vtep $gdb_ovn_controller_vtep_ex \
