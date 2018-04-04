@@ -231,7 +231,6 @@ struct upcall {
     bool ukey_persists;            /* Set true to keep 'ukey' beyond the
                                       lifetime of this upcall. */
 
-    uint64_t dump_seq;             /* udpif->dump_seq at translation time. */
     uint64_t reval_seq;            /* udpif->reval_seq at translation time. */
 
     /* Not used by the upcall callback interface. */
@@ -1159,7 +1158,6 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
          * with pushing its stats eventually. */
     }
 
-    upcall->dump_seq = seq_read(udpif->dump_seq);
     upcall->reval_seq = seq_read(udpif->reval_seq);
 
     xerr = xlate_actions(&xin, &upcall->xout);
@@ -1633,7 +1631,7 @@ ukey_create__(const struct nlattr *key, size_t key_len,
               const struct nlattr *mask, size_t mask_len,
               bool ufid_present, const ovs_u128 *ufid,
               const unsigned pmd_id, const struct ofpbuf *actions,
-              uint64_t dump_seq, uint64_t reval_seq, long long int used,
+              uint64_t reval_seq, long long int used,
               uint32_t key_recirc_id, struct xlate_out *xout)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
@@ -1654,7 +1652,7 @@ ukey_create__(const struct nlattr *key, size_t key_len,
     ukey_set_actions(ukey, actions);
 
     ovs_mutex_init(&ukey->mutex);
-    ukey->dump_seq = dump_seq;
+    ukey->dump_seq = 0;     /* Not yet dumped */
     ukey->reval_seq = reval_seq;
     ukey->state = UKEY_CREATED;
     ukey->state_thread = ovsthread_id_self();
@@ -1704,8 +1702,7 @@ ukey_create_from_upcall(struct upcall *upcall, struct flow_wildcards *wc)
 
     return ukey_create__(keybuf.data, keybuf.size, maskbuf.data, maskbuf.size,
                          true, upcall->ufid, upcall->pmd_id,
-                         &upcall->put_actions, upcall->dump_seq,
-                         upcall->reval_seq, 0,
+                         &upcall->put_actions, upcall->reval_seq, 0,
                          upcall->have_recirc_ref ? upcall->recirc->id : 0,
                          &upcall->xout);
 }
@@ -1717,7 +1714,7 @@ ukey_create_from_dpif_flow(const struct udpif *udpif,
 {
     struct dpif_flow full_flow;
     struct ofpbuf actions;
-    uint64_t dump_seq, reval_seq;
+    uint64_t reval_seq;
     uint64_t stub[DPIF_FLOW_BUFSIZE / 8];
     const struct nlattr *a;
     unsigned int left;
@@ -1754,12 +1751,11 @@ ukey_create_from_dpif_flow(const struct udpif *udpif,
         }
     }
 
-    dump_seq = seq_read(udpif->dump_seq);
     reval_seq = seq_read(udpif->reval_seq) - 1; /* Ensure revalidation. */
     ofpbuf_use_const(&actions, &flow->actions, flow->actions_len);
     *ukey = ukey_create__(flow->key, flow->key_len,
                           flow->mask, flow->mask_len, flow->ufid_present,
-                          &flow->ufid, flow->pmd_id, &actions, dump_seq,
+                          &flow->ufid, flow->pmd_id, &actions,
                           reval_seq, flow->stats.used, 0, NULL);
 
     return 0;
