@@ -401,6 +401,14 @@ create_db () {
     action "Creating empty database $DB_FILE" ovsdb_tool create "$DB_FILE" "$DB_SCHEMA"
 }
 
+backup_db () {
+    # Back up the old version.
+    version=`ovsdb_tool db-version "$DB_FILE"`
+    cksum=`ovsdb_tool db-cksum "$DB_FILE" | awk '{print $1}'`
+    backup=$DB_FILE.backup$version-$cksum
+    action "Backing up database to $backup" cp "$DB_FILE" "$backup" || return 1
+}
+
 upgrade_db () {
     DB_FILE="$1"
     DB_SCHEMA="$2"
@@ -411,11 +419,7 @@ upgrade_db () {
         install_dir `dirname $DB_FILE`
         create_db "$DB_FILE" "$DB_SCHEMA"
     elif test X"`ovsdb_tool needs-conversion "$DB_FILE" "$DB_SCHEMA"`" = Xyes; then
-        # Back up the old version.
-        version=`ovsdb_tool db-version "$DB_FILE"`
-        cksum=`ovsdb_tool db-cksum "$DB_FILE" | awk '{print $1}'`
-        backup=$DB_FILE.backup$version-$cksum
-        action "Backing up database to $backup" cp "$DB_FILE" "$backup" || return 1
+        backup_db || return 1
 
         # Compact database.  This is important if the old schema did not enable
         # garbage collection (i.e. if it did not have any tables with "isRoot":
@@ -440,6 +444,54 @@ upgrade_db () {
             rm -f "$DB_FILE"
             create_db "$DB_FILE" "$DB_SCHEMA"
         fi
+    fi
+}
+
+upgrade_cluster () {
+    local DB_SCHEMA=$1 DB_SERVER=$2
+    local schema_name=$(ovsdb-tool schema-name $1) || return 1
+
+    action "Waiting for $schema_name to come up" ovsdb-client -t 30 wait "$DB_SERVER" "$schema_name" connected || return $?
+    local db_version=$(ovsdb-client -t 10 get-schema-version "$DB_SERVER" "$schema_name") || return $?
+    local target_version=$(ovsdb-tool schema-version "$DB_SCHEMA") || return $?
+
+    if ovsdb-tool compare-versions "$db_version" == "$target_version"; then
+        :
+    elif ovsdb-tool compare-versions "$db_version" ">" "$target_version"; then
+        log_warning_msg "Database $schema_name has newer schema version ($db_version) than our local schema ($target_version), possibly an upgrade is partially complete?"
+    else
+        action "Upgrading database $schema_name from schema version $db_version to $target_version" ovsdb-client -t 30 convert "$DB_SERVER" "$DB_SCHEMA"
+    fi
+}
+
+create_cluster () {
+    DB_FILE="$1"
+    DB_SCHEMA="$2"
+    LOCAL_ADDR="$3"
+
+    if test ! -e "$DB_FILE"; then
+        action "Creating cluster database $DB_FILE" ovsdb_tool create-cluster "$DB_FILE" "$DB_SCHEMA" "$LOCAL_ADDR"
+    elif ovsdb_tool db-is-standalone "$DB_FILE"; then
+        # Convert standalone database to clustered.
+        backup_db || return 1
+        action "Creating cluster database $DB_FILE from existing one" \
+               ovsdb_tool create-cluster "$DB_FILE" "$backup" "$LOCAL_ADDR"
+    fi
+}
+
+join_cluster() {
+    DB_FILE="$1"
+    SCHEMA_NAME="$2"
+    LOCAL_ADDR="$3"
+    REMOTE_ADDR="$4"
+
+    if test ! -e "$DB_FILE"; then
+        ovsdb_tool join-cluster "$DB_FILE" "$SCHEMA_NAME" "$LOCAL_ADDR" "$REMOTE_ADDR"
+    elif ovsdb_tool db-is-standalone "$DB_FILE"; then
+        # Backup standalone database and join cluster.
+        backup_db || return 1
+        action "Joining $DB_FILE to cluster" \
+               ovsdb_tool join-cluster "$DB_FILE" "$SCHEMA_NAME" "$LOCAL_ADDR"
     fi
 }
 
