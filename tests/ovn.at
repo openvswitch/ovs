@@ -9386,6 +9386,34 @@ test_ip_packet() {
     as hv$hv ovs-appctl netdev-dummy/receive vif$inport $packet
 }
 
+# test_tcp_syn_packet INPORT HV ETH_SRC ETH_DST IPV4_SRC IPV4_DST IP_CHKSUM TCP_SPORT TCP_DPORT TCP_CHKSUM EXP_IP_CHKSUM EXP_TCP_RST_CHKSUM
+#
+# Causes a packet to be received on INPORT of the hypervisor HV. The packet is an TCP syn segment with
+# ETH_SRC, ETH_DST, IPV4_SRC, IPV4_DST, IP_CHKSUM, TCP_SPORT, TCP_DPORT, TCP_CHKSUM  as specified.
+# EXP_IP_CHKSUM and EXP_TCP_RST_CHKSUM are the ip and tcp checksums of the tcp reset segment generated from ACL rule hit
+#
+# INPORT is an lport number, e.g. 11 for vif11.
+# HV is an hypervisor number
+# ETH_SRC and ETH_DST are each 12 hex digits.
+# IPV4_SRC and IPV4_DST are each 8 hex digits.
+# TCP_SPORT and TCP_DPORT are 4 hex digits.
+# IP_CHKSUM, TCP_CHKSUM, EXP_IP_CHSUM and EXP_TCP_RST_CHKSUM are each 4 hex digits
+test_tcp_syn_packet() {
+    local inport=$1 hv=$2 eth_src=$3 eth_dst=$4 ipv4_src=$5 ipv4_dst=$6 ip_chksum=$7
+    local tcp_sport=$8 tcp_dport=$9 tcp_chksum=${10}
+    local exp_ip_chksum=${11} exp_tcp_rst_chksum=${12}
+    shift 12
+
+    local ip_ttl=ff
+    local packet=${eth_dst}${eth_src}08004500002800004000${ip_ttl}06${ip_chksum}${ipv4_src}${ipv4_dst}${tcp_sport}${tcp_dport}000000010000000050027210${tcp_chksum}0000
+
+    local tcp_rst_ttl=ff
+    local reply=${eth_src}${eth_dst}08004500002800004000${tcp_rst_ttl}06${exp_ip_chksum}${ipv4_dst}${ipv4_src}${tcp_dport}${tcp_sport}000000000000000150040000${exp_tcp_rst_chksum}0000
+    echo $reply >> vif$inport.expected
+
+    as hv$hv ovs-appctl netdev-dummy/receive vif$inport $packet
+}
+
 # Create hypervisors hv[123].
 # Add vif1[123] to hv1, vif2[123] to hv2, vif3[123] to hv3.
 # Add all of the vifs to a single logical switch sw0.
@@ -9431,6 +9459,10 @@ OVS_WAIT_UNTIL([test 3 = $(ovn-sbctl lflow-list | grep 'icmp4 {' | wc -l)])
 test_ip_packet 11 1 000000000011 000000000021 $(ip_to_hex 192 168 1 11) $(ip_to_hex 192 168 1 21) 0000 7d8d fcfe
 test_ip_packet 21 2 000000000021 000000000011 $(ip_to_hex 192 168 1 21) $(ip_to_hex 192 168 1 11) 0000 7d8d fcfe
 test_ip_packet 31 3 000000000031 000000000012 $(ip_to_hex 192 168 1 31) $(ip_to_hex 192 168 1 12) 0000 7d82 fcfe
+
+test_tcp_syn_packet 11 1 000000000011 000000000021 $(ip_to_hex 192 168 1 11) $(ip_to_hex 192 168 1 21) 0000 8b40 3039 0000 7d8d 4486
+test_tcp_syn_packet 21 2 000000000021 000000000011 $(ip_to_hex 192 168 1 21) $(ip_to_hex 192 168 1 11) 0000 8b40 3039 0000 7d8d 4486
+test_tcp_syn_packet 31 3 000000000031 000000000012 $(ip_to_hex 192 168 1 31) $(ip_to_hex 192 168 1 12) 0000 8b40 3039 0000 7d82 4486
 
 for i in 1 2 3; do
     OVN_CHECK_PACKETS([hv$i/vif${i}1-tx.pcap], [vif${i}1.expected])
