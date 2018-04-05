@@ -151,8 +151,10 @@ static int
 tnl_arp_snoop(const struct flow *flow, struct flow_wildcards *wc,
               const char name[IFNAMSIZ])
 {
-    if (flow->dl_type != htons(ETH_TYPE_ARP)
-        || FLOW_WC_GET_AND_MASK_WC(flow, wc, nw_proto) != ARP_OP_REPLY
+    /* Snoop normal ARP replies and gratuitous ARP requests/replies only */
+    if (!is_arp(flow)
+        || (!is_garp(flow, wc) &&
+            FLOW_WC_GET_AND_MASK_WC(flow, wc, nw_proto) != ARP_OP_REPLY)
         || eth_addr_is_zero(FLOW_WC_GET_AND_MASK_WC(flow, wc, arp_sha))) {
         return EINVAL;
     }

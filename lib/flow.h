@@ -1118,6 +1118,22 @@ static inline bool is_nd(const struct flow *flow,
     return false;
 }
 
+static inline bool is_arp(const struct flow *flow)
+{
+    return (flow->dl_type == htons(ETH_TYPE_ARP));
+}
+
+static inline bool is_garp(const struct flow *flow,
+                           struct flow_wildcards *wc)
+{
+    if (is_arp(flow)) {
+        return (FLOW_WC_GET_AND_MASK_WC(flow, wc, nw_src) ==
+                FLOW_WC_GET_AND_MASK_WC(flow, wc, nw_dst));
+    }
+
+    return false;
+}
+
 static inline bool is_igmp(const struct flow *flow, struct flow_wildcards *wc)
 {
     if (get_dl_type(flow) == htons(ETH_TYPE_IP)) {
