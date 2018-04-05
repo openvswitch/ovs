@@ -231,6 +231,10 @@ lex_token_format(const struct lex_token *token, struct ds *s)
         ds_put_format(s, "$%s", token->s);
         break;
 
+    case LEX_T_PORT_GROUP:
+        ds_put_format(s, "@%s", token->s);
+        break;
+
     case LEX_T_LPAREN:
         ds_put_cstr(s, "(");
         break;
@@ -573,6 +577,18 @@ lex_parse_addr_set(const char *p, struct lex_token *token)
     return lex_parse_id(p, LEX_T_MACRO, token);
 }
 
+static const char *
+lex_parse_port_group(const char *p, struct lex_token *token)
+{
+    p++;
+    if (!lex_is_id1(*p)) {
+        lex_error(token, "`@' must be followed by a valid identifier.");
+        return p;
+    }
+
+    return lex_parse_id(p, LEX_T_PORT_GROUP, token);
+}
+
 /* Initializes 'token' and parses the first token from the beginning of
  * null-terminated string 'p' into 'token'.  Stores a pointer to the start of
  * the token (after skipping white space and comments, if any) into '*startp'.
@@ -745,6 +761,10 @@ next:
 
     case '$':
         p = lex_parse_addr_set(p, token);
+        break;
+
+    case '@':
+        p = lex_parse_port_group(p, token);
         break;
 
     case ':':

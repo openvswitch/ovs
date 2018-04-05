@@ -293,9 +293,22 @@ addr_sets_init(struct controller_ctx *ctx, struct shash *addr_sets)
 {
     const struct sbrec_address_set *as;
     SBREC_ADDRESS_SET_FOR_EACH (as, ctx->ovnsb_idl) {
-        expr_addr_sets_add(addr_sets, as->name,
-                           (const char *const *) as->addresses,
-                           as->n_addresses);
+        expr_const_sets_add(addr_sets, as->name,
+                            (const char *const *) as->addresses,
+                            as->n_addresses, true);
+    }
+}
+
+/* Iterate port groups in the southbound database.  Create and update the
+ * corresponding symtab entries as necessary. */
+static void
+port_groups_init(struct controller_ctx *ctx, struct shash *port_groups)
+{
+    const struct sbrec_port_group *pg;
+    SBREC_PORT_GROUP_FOR_EACH (pg, ctx->ovnsb_idl) {
+        expr_const_sets_add(port_groups, pg->name,
+                            (const char *const *) pg->ports,
+                            pg->n_ports, false);
     }
 }
 
@@ -703,6 +716,8 @@ main(int argc, char *argv[])
         if (br_int && chassis) {
             struct shash addr_sets = SHASH_INITIALIZER(&addr_sets);
             addr_sets_init(&ctx, &addr_sets);
+            struct shash port_groups = SHASH_INITIALIZER(&port_groups);
+            port_groups_init(&ctx, &port_groups);
 
             patch_run(&ctx, br_int, chassis);
 
@@ -723,8 +738,8 @@ main(int argc, char *argv[])
                     struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
                     lflow_run(&ctx, chassis,
                               &chassis_index, &local_datapaths, &group_table,
-                              &meter_table, &addr_sets, &flow_table,
-                              &active_tunnels, &local_lport_ids);
+                              &meter_table, &addr_sets, &port_groups,
+                              &flow_table, &active_tunnels, &local_lport_ids);
 
                     if (chassis_id) {
                         bfd_run(&ctx, br_int, chassis, &local_datapaths,
@@ -753,7 +768,7 @@ main(int argc, char *argv[])
 
             if (pending_pkt.conn) {
                 char *error = ofctrl_inject_pkt(br_int, pending_pkt.flow_s,
-                                                &addr_sets);
+                                                &port_groups, &addr_sets);
                 if (error) {
                     unixctl_command_reply_error(pending_pkt.conn, error);
                     free(error);
@@ -767,8 +782,10 @@ main(int argc, char *argv[])
             update_sb_monitors(ctx.ovnsb_idl, chassis,
                                &local_lports, &local_datapaths);
 
-            expr_addr_sets_destroy(&addr_sets);
+            expr_const_sets_destroy(&addr_sets);
             shash_destroy(&addr_sets);
+            expr_const_sets_destroy(&port_groups);
+            shash_destroy(&port_groups);
         }
 
         /* If we haven't handled the pending packet insertion

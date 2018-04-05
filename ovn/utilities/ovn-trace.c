@@ -418,6 +418,9 @@ static struct shash symtab;
 /* Address sets. */
 static struct shash address_sets;
 
+/* Port groups. */
+static struct shash port_groups;
+
 /* DHCP options. */
 static struct hmap dhcp_opts;   /* Contains "struct gen_opts_map"s. */
 static struct hmap dhcpv6_opts; /* Contains "struct gen_opts_map"s. */
@@ -697,9 +700,22 @@ read_address_sets(void)
 
     const struct sbrec_address_set *sbas;
     SBREC_ADDRESS_SET_FOR_EACH (sbas, ovnsb_idl) {
-        expr_addr_sets_add(&address_sets, sbas->name,
+        expr_const_sets_add(&address_sets, sbas->name,
                            (const char *const *) sbas->addresses,
-                           sbas->n_addresses);
+                           sbas->n_addresses, true);
+    }
+}
+
+static void
+read_port_groups(void)
+{
+    shash_init(&port_groups);
+
+    const struct sbrec_port_group *sbpg;
+    SBREC_PORT_GROUP_FOR_EACH (sbpg, ovnsb_idl) {
+        expr_const_sets_add(&port_groups, sbpg->name,
+                           (const char *const *) sbpg->ports,
+                           sbpg->n_ports, false);
     }
 }
 
@@ -796,7 +812,8 @@ read_flows(void)
 
         char *error;
         struct expr *match;
-        match = expr_parse_string(sblf->match, &symtab, &address_sets, &error);
+        match = expr_parse_string(sblf->match, &symtab, &address_sets,
+                                  &port_groups, &error);
         if (error) {
             VLOG_WARN("%s: parsing expression failed (%s)",
                       sblf->match, error);
@@ -937,6 +954,7 @@ read_db(void)
     read_ports();
     read_mcgroups();
     read_address_sets();
+    read_port_groups();
     read_gen_opts();
     read_flows();
     read_mac_bindings();
@@ -2100,7 +2118,8 @@ trace(const char *dp_s, const char *flow_s)
 
     struct flow uflow;
     char *error = expr_parse_microflow(flow_s, &symtab, &address_sets,
-                                       ovntrace_lookup_port, dp, &uflow);
+                                       &port_groups, ovntrace_lookup_port,
+                                       dp, &uflow);
     if (error) {
         char *s = xasprintf("error parsing flow: %s\n", error);
         free(error);

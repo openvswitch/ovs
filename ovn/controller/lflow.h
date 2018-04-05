@@ -69,6 +69,7 @@ void lflow_run(struct controller_ctx *,
                struct ovn_extend_table *group_table,
                struct ovn_extend_table *meter_table,
                const struct shash *addr_sets,
+               const struct shash *port_groups,
                struct hmap *flow_table,
                struct sset *active_tunnels,
                struct sset *local_lport_ids);

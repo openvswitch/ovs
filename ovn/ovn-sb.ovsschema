@@ -1,7 +1,7 @@
 {
     "name": "OVN_Southbound",
     "version": "1.15.0",
-    "cksum": "70426956 13327",
+    "cksum": "1839738004 13639",
     "tables": {
         "SB_Global": {
             "columns": {
@@ -53,6 +53,14 @@
                 "addresses": {"type": {"key": "string",
                                        "min": 0,
                                        "max": "unlimited"}}},
+            "indexes": [["name"]],
+            "isRoot": true},
+        "Port_Group": {
+            "columns": {
+                "name": {"type": "string"},
+                "ports": {"type": {"key": "string",
+                                   "min": 0,
+                                   "max": "unlimited"}}},
             "indexes": [["name"]],
             "isRoot": true},
         "Logical_Flow": {

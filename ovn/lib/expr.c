@@ -464,6 +464,7 @@ struct expr_context {
     struct lexer *lexer;           /* Lexer for pulling more tokens. */
     const struct shash *symtab;    /* Symbol table. */
     const struct shash *addr_sets; /* Address set table. */
+    const struct shash *port_groups; /* Port group table. */
     bool not;                    /* True inside odd number of NOT operators. */
 };
 
@@ -752,6 +753,36 @@ parse_addr_sets(struct expr_context *ctx, struct expr_constant_set *cs,
 }
 
 static bool
+parse_port_group(struct expr_context *ctx, struct expr_constant_set *cs,
+                 size_t *allocated_values)
+{
+    struct expr_constant_set *port_group
+        = (ctx->port_groups
+           ? shash_find_data(ctx->port_groups, ctx->lexer->token.s)
+           : NULL);
+    if (!port_group) {
+        lexer_syntax_error(ctx->lexer, "expecting port group name");
+        return false;
+    }
+
+    if (!assign_constant_set_type(ctx, cs, EXPR_C_STRING)) {
+        return false;
+    }
+
+    size_t n_values = cs->n_values + port_group->n_values;
+    if (n_values >= *allocated_values) {
+        cs->values = xrealloc(cs->values, n_values * sizeof *cs->values);
+        *allocated_values = n_values;
+    }
+    for (size_t i = 0; i < port_group->n_values; i++) {
+        cs->values[cs->n_values++].string =
+            xstrdup(port_group->values[i].string);
+    }
+
+    return true;
+}
+
+static bool
 parse_constant(struct expr_context *ctx, struct expr_constant_set *cs,
                size_t *allocated_values)
 {
@@ -784,6 +815,12 @@ parse_constant(struct expr_context *ctx, struct expr_constant_set *cs,
         return true;
     } else if (ctx->lexer->token.type == LEX_T_MACRO) {
         if (!parse_addr_sets(ctx, cs, allocated_values)) {
+            return false;
+        }
+        lexer_get(ctx->lexer);
+        return true;
+    } else if (ctx->lexer->token.type == LEX_T_PORT_GROUP) {
+        if (!parse_port_group(ctx, cs, allocated_values)) {
             return false;
         }
         lexer_get(ctx->lexer);
@@ -939,65 +976,74 @@ expr_constant_set_destroy(struct expr_constant_set *cs)
     }
 }
 
-/* Adds an address set named 'name' to 'addr_sets', replacing any existing
- * address set entry with the given name. */
+/* Adds an constant set named 'name' to 'const_sets', replacing any existing
+ * constant set entry with the given name. */
 void
-expr_addr_sets_add(struct shash *addr_sets, const char *name,
-                   const char *const *values, size_t n_values)
+expr_const_sets_add(struct shash *const_sets, const char *name,
+                    const char *const *values, size_t n_values,
+                    bool convert_to_integer)
 {
     /* Replace any existing entry for this name. */
-    expr_addr_sets_remove(addr_sets, name);
+    expr_const_sets_remove(const_sets, name);
 
     struct expr_constant_set *cs = xzalloc(sizeof *cs);
-    cs->type = EXPR_C_INTEGER;
     cs->in_curlies = true;
     cs->n_values = 0;
     cs->values = xmalloc(n_values * sizeof *cs->values);
-    for (size_t i = 0; i < n_values; i++) {
-        /* Use the lexer to convert each address set into the proper
-         * integer format. */
-        struct lexer lex;
-        lexer_init(&lex, values[i]);
-        lexer_get(&lex);
-        if (lex.token.type != LEX_T_INTEGER
-            && lex.token.type != LEX_T_MASKED_INTEGER) {
-            VLOG_WARN("Invalid address set entry: '%s', token type: %d",
-                      values[i], lex.token.type);
-        } else {
-            union expr_constant *c = &cs->values[cs->n_values++];
-            c->value = lex.token.value;
-            c->format = lex.token.format;
-            c->masked = lex.token.type == LEX_T_MASKED_INTEGER;
-            if (c->masked) {
-                c->mask = lex.token.mask;
+    if (convert_to_integer) {
+        cs->type = EXPR_C_INTEGER;
+        for (size_t i = 0; i < n_values; i++) {
+            /* Use the lexer to convert each constant set into the proper
+             * integer format. */
+            struct lexer lex;
+            lexer_init(&lex, values[i]);
+            lexer_get(&lex);
+            if (lex.token.type != LEX_T_INTEGER
+                && lex.token.type != LEX_T_MASKED_INTEGER) {
+                VLOG_WARN("Invalid constant set entry: '%s', token type: %d",
+                          values[i], lex.token.type);
+            } else {
+                union expr_constant *c = &cs->values[cs->n_values++];
+                c->value = lex.token.value;
+                c->format = lex.token.format;
+                c->masked = lex.token.type == LEX_T_MASKED_INTEGER;
+                if (c->masked) {
+                    c->mask = lex.token.mask;
+                }
             }
+            lexer_destroy(&lex);
         }
-        lexer_destroy(&lex);
+    } else {
+        cs->type = EXPR_C_STRING;
+        for (size_t i = 0; i < n_values; i++) {
+            union expr_constant *c = &cs->values[cs->n_values++];
+            c->string = xstrdup(values[i]);
+        }
     }
 
-    shash_add(addr_sets, name, cs);
+    shash_add(const_sets, name, cs);
 }
 
 void
-expr_addr_sets_remove(struct shash *addr_sets, const char *name)
+expr_const_sets_remove(struct shash *const_sets, const char *name)
 {
-    struct expr_constant_set *cs = shash_find_and_delete(addr_sets, name);
+    struct expr_constant_set *cs = shash_find_and_delete(const_sets, name);
     if (cs) {
         expr_constant_set_destroy(cs);
         free(cs);
     }
 }
 
-/* Destroy all contents of 'addr_sets'. */
+/* Destroy all contents of 'const_sets'. */
 void
-expr_addr_sets_destroy(struct shash *addr_sets)
+expr_const_sets_destroy(struct shash *const_sets)
 {
     struct shash_node *node, *next;
 
-    SHASH_FOR_EACH_SAFE (node, next, addr_sets) {
+    SHASH_FOR_EACH_SAFE (node, next, const_sets) {
         struct expr_constant_set *cs = node->data;
 
-        shash_delete(addr_sets, node);
+        shash_delete(const_sets, node);
         expr_constant_set_destroy(cs);
         free(cs);
     }
@@ -1214,11 +1260,13 @@ expr_parse__(struct expr_context *ctx)
  * lexer->error is NULL. */
 struct expr *
 expr_parse(struct lexer *lexer, const struct shash *symtab,
-           const struct shash *addr_sets)
+           const struct shash *addr_sets,
+           const struct shash *port_groups)
 {
     struct expr_context ctx = { .lexer = lexer,
                                 .symtab = symtab,
-                                .addr_sets = addr_sets };
+                                .addr_sets = addr_sets,
+                                .port_groups = port_groups };
     return lexer->error ? NULL : expr_parse__(&ctx);
 }
 
@@ -1230,13 +1278,15 @@ expr_parse(struct lexer *lexer, const struct shash *symtab,
  * error (with free()). */
 struct expr *
 expr_parse_string(const char *s, const struct shash *symtab,
-                  const struct shash *addr_sets, char **errorp)
+                  const struct shash *addr_sets,
+                  const struct shash *port_groups,
+                  char **errorp)
 {
     struct lexer lexer;
 
     lexer_init(&lexer, s);
     lexer_get(&lexer);
-    struct expr *expr = expr_parse(&lexer, symtab, addr_sets);
+    struct expr *expr = expr_parse(&lexer, symtab, addr_sets, port_groups);
     lexer_force_end(&lexer);
     *errorp = lexer_steal_error(&lexer);
     if (*errorp) {
@@ -1460,7 +1510,7 @@ expr_get_level(const struct expr *expr)
 static enum expr_level
 expr_parse_level(const char *s, const struct shash *symtab, char **errorp)
 {
-    struct expr *expr = expr_parse_string(s, symtab, NULL, errorp);
+    struct expr *expr = expr_parse_string(s, symtab, NULL, NULL, errorp);
     enum expr_level level = expr ? expr_get_level(expr) : EXPR_L_NOMINAL;
     expr_destroy(expr);
     return level;
@@ -1618,7 +1668,7 @@ parse_and_annotate(const char *s, const struct shash *symtab,
     char *error;
     struct expr *expr;
 
-    expr = expr_parse_string(s, symtab, NULL, &error);
+    expr = expr_parse_string(s, symtab, NULL, NULL, &error);
     if (expr) {
         expr = expr_annotate__(expr, symtab, nesting, &error);
     }
@@ -3277,6 +3327,7 @@ expr_parse_microflow__(struct lexer *lexer,
 char * OVS_WARN_UNUSED_RESULT
 expr_parse_microflow(const char *s, const struct shash *symtab,
                      const struct shash *addr_sets,
+                     const struct shash *port_groups,
                      bool (*lookup_port)(const void *aux,
                                          const char *port_name,
                                          unsigned int *portp),
@@ -3286,7 +3337,7 @@ expr_parse_microflow(const char *s, const struct shash *symtab,
     lexer_init(&lexer, s);
     lexer_get(&lexer);
 
-    struct expr *e = expr_parse(&lexer, symtab, addr_sets);
+    struct expr *e = expr_parse(&lexer, symtab, addr_sets, port_groups);
     lexer_force_end(&lexer);
 
     if (e) {

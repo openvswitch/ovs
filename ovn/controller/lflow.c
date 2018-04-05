@@ -70,6 +70,7 @@ static void consider_logical_flow(struct controller_ctx *ctx,
                                   struct hmap *nd_ra_opts,
                                   uint32_t *conj_id_ofs,
                                   const struct shash *addr_sets,
+                                  const struct shash *port_groups,
                                   struct hmap *flow_table,
                                   struct sset *active_tunnels,
                                   struct sset *local_lport_ids);
@@ -149,6 +150,7 @@ add_logical_flows(struct controller_ctx *ctx,
                   struct ovn_extend_table *meter_table,
                   const struct sbrec_chassis *chassis,
                   const struct shash *addr_sets,
+                  const struct shash *port_groups,
                   struct hmap *flow_table,
                   struct sset *active_tunnels,
                   struct sset *local_lport_ids)
@@ -179,8 +181,8 @@ add_logical_flows(struct controller_ctx *ctx,
                               lflow, local_datapaths,
                               group_table, meter_table, chassis,
                               &dhcp_opts, &dhcpv6_opts, &nd_ra_opts,
-                              &conj_id_ofs, addr_sets, flow_table,
-                              active_tunnels, local_lport_ids);
+                              &conj_id_ofs, addr_sets, port_groups,
+                              flow_table, active_tunnels, local_lport_ids);
     }
 
     dhcp_opts_destroy(&dhcp_opts);
@@ -201,6 +203,7 @@ consider_logical_flow(struct controller_ctx *ctx,
                       struct hmap *nd_ra_opts,
                       uint32_t *conj_id_ofs,
                       const struct shash *addr_sets,
+                      const struct shash *port_groups,
                       struct hmap *flow_table,
                       struct sset *active_tunnels,
                       struct sset *local_lport_ids)
@@ -258,7 +261,8 @@ consider_logical_flow(struct controller_ctx *ctx,
     struct hmap matches;
     struct expr *expr;
 
-    expr = expr_parse_string(lflow->match, &symtab, addr_sets, &error);
+    expr = expr_parse_string(lflow->match, &symtab, addr_sets, port_groups,
+                             &error);
     if (!error) {
         if (prereqs) {
             expr = expr_combine(EXPR_T_AND, expr, prereqs);
@@ -450,13 +454,15 @@ lflow_run(struct controller_ctx *ctx,
           struct ovn_extend_table *group_table,
           struct ovn_extend_table *meter_table,
           const struct shash *addr_sets,
+          const struct shash *port_groups,
           struct hmap *flow_table,
           struct sset *active_tunnels,
           struct sset *local_lport_ids)
 {
     add_logical_flows(ctx, chassis_index, local_datapaths,
-                      group_table, meter_table, chassis, addr_sets, flow_table,
-                      active_tunnels, local_lport_ids);
+                      group_table, meter_table, chassis, addr_sets,
+                      port_groups, flow_table, active_tunnels,
+                      local_lport_ids);
     add_neighbor_flows(ctx, flow_table);
 }
 

@@ -47,7 +47,8 @@ struct ovn_flow *ofctrl_dup_flow(struct ovn_flow *source);
 void ofctrl_ct_flush_zone(uint16_t zone_id);
 
 char *ofctrl_inject_pkt(const struct ovsrec_bridge *br_int,
-                        const char *flow_s, const struct shash *addr_sets);
+                        const char *flow_s, const struct shash *addr_sets,
+                        const struct shash *port_groups);
 
 /* Flow table interfaces to the rest of ovn-controller. */
 void ofctrl_add_flow(struct hmap *desired_flows, uint8_t table_id,

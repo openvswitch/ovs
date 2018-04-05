@@ -211,10 +211,24 @@ create_addr_sets(struct shash *addr_sets)
     };
     static const char *const addrs4[] = { NULL };
 
-    expr_addr_sets_add(addr_sets, "set1", addrs1, 3);
-    expr_addr_sets_add(addr_sets, "set2", addrs2, 3);
-    expr_addr_sets_add(addr_sets, "set3", addrs3, 3);
-    expr_addr_sets_add(addr_sets, "set4", addrs4, 0);
+    expr_const_sets_add(addr_sets, "set1", addrs1, 3, true);
+    expr_const_sets_add(addr_sets, "set2", addrs2, 3, true);
+    expr_const_sets_add(addr_sets, "set3", addrs3, 3, true);
+    expr_const_sets_add(addr_sets, "set4", addrs4, 0, true);
+}
+
+static void
+create_port_groups(struct shash *port_groups)
+{
+    shash_init(port_groups);
+
+    static const char *const pg1[] = {
+        "lsp1", "lsp2", "lsp3",
+    };
+    static const char *const pg2[] = { NULL };
+
+    expr_const_sets_add(port_groups, "pg1", pg1, 3, false);
+    expr_const_sets_add(port_groups, "pg_empty", pg2, 0, false);
 }
 
 static bool
@@ -245,23 +259,29 @@ test_parse_expr__(int steps)
 {
     struct shash symtab;
     struct shash addr_sets;
+    struct shash port_groups;
     struct simap ports;
     struct ds input;
 
     create_symtab(&symtab);
     create_addr_sets(&addr_sets);
+    create_port_groups(&port_groups);
 
     simap_init(&ports);
     simap_put(&ports, "eth0", 5);
     simap_put(&ports, "eth1", 6);
     simap_put(&ports, "LOCAL", ofp_to_u16(OFPP_LOCAL));
+    simap_put(&ports, "lsp1", 0x11);
+    simap_put(&ports, "lsp2", 0x12);
+    simap_put(&ports, "lsp3", 0x13);
 
     ds_init(&input);
     while (!ds_get_test_line(&input, stdin)) {
         struct expr *expr;
         char *error;
 
-        expr = expr_parse_string(ds_cstr(&input), &symtab, &addr_sets, &error);
+        expr = expr_parse_string(ds_cstr(&input), &symtab, &addr_sets,
+                                 &port_groups, &error);
         if (!error && steps > 0) {
             expr = expr_annotate(expr, &symtab, &error);
         }
@@ -298,8 +318,10 @@ test_parse_expr__(int steps)
     simap_destroy(&ports);
     expr_symtab_destroy(&symtab);
     shash_destroy(&symtab);
-    expr_addr_sets_destroy(&addr_sets);
+    expr_const_sets_destroy(&addr_sets);
     shash_destroy(&addr_sets);
+    expr_const_sets_destroy(&port_groups);
+    shash_destroy(&port_groups);
 }
 
 static void
@@ -373,7 +395,7 @@ test_evaluate_expr(struct ovs_cmdl_context *ctx)
     ovn_init_symtab(&symtab);
 
     struct flow uflow;
-    char *error = expr_parse_microflow(ctx->argv[1], &symtab, NULL,
+    char *error = expr_parse_microflow(ctx->argv[1], &symtab, NULL, NULL,
                                        lookup_atoi_cb, NULL, &uflow);
     if (error) {
         ovs_fatal(0, "%s", error);
@@ -383,7 +405,7 @@ test_evaluate_expr(struct ovs_cmdl_context *ctx)
     while (!ds_get_test_line(&input, stdin)) {
         struct expr *expr;
 
-        expr = expr_parse_string(ds_cstr(&input), &symtab, NULL, &error);
+        expr = expr_parse_string(ds_cstr(&input), &symtab, NULL, NULL, &error);
         if (!error) {
             expr = expr_annotate(expr, &symtab, &error);
         }
@@ -857,7 +879,8 @@ test_tree_shape_exhaustively(struct expr *expr, struct shash *symtab,
             expr_format(expr, &s);
 
             char *error;
-            modified = expr_parse_string(ds_cstr(&s), symtab, NULL, &error);
+            modified = expr_parse_string(ds_cstr(&s), symtab, NULL,
+                                         NULL, &error);
             if (error) {
                 fprintf(stderr, "%s fails to parse (%s)\n",
                         ds_cstr(&s), error);
@@ -1163,7 +1186,7 @@ test_expr_to_packets(struct ovs_cmdl_context *ctx OVS_UNUSED)
     while (!ds_get_test_line(&input, stdin)) {
         struct flow uflow;
         char *error = expr_parse_microflow(ds_cstr(&input), &symtab, NULL,
-                                           lookup_atoi_cb, NULL, &uflow);
+                                           NULL, lookup_atoi_cb, NULL, &uflow);
         if (error) {
             puts(error);
             free(error);

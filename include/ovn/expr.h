@@ -382,9 +382,11 @@ expr_from_node(const struct ovs_list *node)
 void expr_format(const struct expr *, struct ds *);
 void expr_print(const struct expr *);
 struct expr *expr_parse(struct lexer *, const struct shash *symtab,
-                        const struct shash *addr_sets);
+                        const struct shash *addr_sets,
+                        const struct shash *port_groups);
 struct expr *expr_parse_string(const char *, const struct shash *symtab,
                                const struct shash *addr_sets,
+                               const struct shash *port_groups,
                                char **errorp);
 
 struct expr *expr_clone(struct expr *);
@@ -404,6 +406,7 @@ bool expr_is_normalized(const struct expr *);
 
 char *expr_parse_microflow(const char *, const struct shash *symtab,
                            const struct shash *addr_sets,
+                           const struct shash *port_groups,
                            bool (*lookup_port)(const void *aux,
                                                const char *port_name,
                                                unsigned int *portp),
@@ -486,19 +489,22 @@ void expr_constant_set_format(const struct expr_constant_set *, struct ds *);
 void expr_constant_set_destroy(struct expr_constant_set *cs);
 
 
-/* Address sets.
+/* Constant sets.
  *
- * Instead of referring to a set of value as:
+ * For example, instead of referring to a set of IP addresses as:
  *    {addr1, addr2, ..., addrN}
  * You can register a set of values and refer to them as:
  *    $name
- * The address set entries should all have integer/masked-integer values.
- * The values that don't qualify are ignored.
+ *
+ * If convert_to_integer is true, the set must contain
+ * integer/masked-integer values. The values that don't qualify
+ * are ignored.
  */
 
-void expr_addr_sets_add(struct shash *addr_sets, const char *name,
-                        const char * const *values, size_t n_values);
-void expr_addr_sets_remove(struct shash *addr_sets, const char *name);
-void expr_addr_sets_destroy(struct shash *addr_sets);
+void expr_const_sets_add(struct shash *const_sets, const char *name,
+                         const char * const *values, size_t n_values,
+                         bool convert_to_integer);
+void expr_const_sets_remove(struct shash *const_sets, const char *name);
+void expr_const_sets_destroy(struct shash *const_sets);
 
 #endif /* ovn/expr.h */

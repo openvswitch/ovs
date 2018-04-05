@@ -1147,7 +1147,8 @@ ofctrl_lookup_port(const void *br_int_, const char *port_name,
  * must free(). */
 char *
 ofctrl_inject_pkt(const struct ovsrec_bridge *br_int, const char *flow_s,
-                  const struct shash *addr_sets)
+                  const struct shash *addr_sets,
+                  const struct shash *port_groups)
 {
     int version = rconn_get_version(swconn);
     if (version < 0) {
@@ -1156,7 +1157,8 @@ ofctrl_inject_pkt(const struct ovsrec_bridge *br_int, const char *flow_s,
 
     struct flow uflow;
     char *error = expr_parse_microflow(flow_s, &symtab, addr_sets,
-                                       ofctrl_lookup_port, br_int, &uflow);
+                                       port_groups, ofctrl_lookup_port,
+                                       br_int, &uflow);
     if (error) {
         return error;
     }

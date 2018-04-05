@@ -377,6 +377,18 @@
     <column name="addresses"/>
   </table>
 
+  <table name="Port_Group" title="Port Groups">
+    <p>
+      This table contains names for the logical switch ports in the
+      <ref db="OVN_Northbound"/> database that belongs to the same group
+      that is defined in <ref table="Port_Group" db="OVN_Northbound"/>
+      in the <ref db="OVN_Northbound"/> database.
+    </p>
+
+    <column name="name"/>
+    <column name="ports"/>
+  </table>
+
   <table name="Logical_Flow" title="Logical Network Flows">
     <p>
       Each row in this table represents one logical flow.
@@ -768,6 +780,14 @@
         table="Address_Set"/>.  An <ref table="Address_Set"/> with a name
         of <code>set1</code> can be referred to as
         <code>$set1</code>.
+      </p>
+
+      <p>
+        You may refer to a group of logical switch ports stored in the
+        <ref table="Port_Group"/> table by its <ref column="name"
+        table="Port_Group"/>.  An <ref table="Port_Group"/> with a name
+        of <code>port_group1</code> can be referred to as
+        <code>@port_group1</code>.
       </p>
 
       <p><em>Miscellaneous</em></p>

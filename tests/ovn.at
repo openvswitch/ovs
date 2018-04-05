@@ -304,6 +304,7 @@ inport = "eth0" => Syntax error at `=' expecting relational operator.
 123 == 123 => Syntax error at `123' expecting field name.
 
 $name => Syntax error at `$name' expecting address set name.
+@name => Syntax error at `@name' expecting port group name.
 
 123 == xyzzy => Syntax error at `xyzzy' expecting field name.
 xyzzy == 1 => Syntax error at `xyzzy' expecting field name.
@@ -654,6 +655,24 @@ ip,nw_src=32.0.0.0/32.0.0.0
 ip,nw_src=4.0.0.0/4.0.0.0
 ip,nw_src=64.0.0.0/64.0.0.0
 ip,nw_src=8.0.0.0/8.0.0.0
+])
+AT_CLEANUP
+
+AT_SETUP([ovn -- converting expressions to flows -- port groups])
+AT_KEYWORDS([expression])
+expr_to_flow () {
+    echo "$1" | ovstest test-ovn expr-to-flows | sort
+}
+AT_CHECK([expr_to_flow 'outport == @pg1'], [0], [dnl
+reg15=0x11
+reg15=0x12
+reg15=0x13
+])
+AT_CHECK([expr_to_flow 'outport == {@pg_empty}'], [0], [dnl
+(no flows)
+])
+AT_CHECK([expr_to_flow 'outport == {"lsp1", @pg_empty}'], [0], [dnl
+reg15=0x11
 ])
 AT_CLEANUP
 
@@ -1224,6 +1243,13 @@ ovn-nbctl acl-add lsw0 to-lport 1000 'eth.type == 0x1236 && outport == "lp33"' d
 ovn-nbctl create Address_Set name=set1 addresses=\"f0:00:00:00:00:11\",\"f0:00:00:00:00:21\",\"f0:00:00:00:00:31\"
 ovn-nbctl acl-add lsw0 to-lport 1000 'eth.type == 0x1237 && eth.src == $set1 && outport == "lp33"' drop
 
+get_lsp_uuid () {
+    ovn-nbctl lsp-list lsw0 | grep $1 | awk '{ print $1 }'
+}
+
+ovn-nbctl create Port_Group name=pg1 ports=`get_lsp_uuid lp22`,`get_lsp_uuid lp33`
+ovn-nbctl acl-add lsw0 to-lport 1000 'eth.type == 0x1238 && outport == @pg1' drop
+
 # Pre-populate the hypervisors' ARP tables so that we don't lose any
 # packets for ARP resolution (native tunneling doesn't queue packets
 # for ARP resolution).
@@ -1364,10 +1390,18 @@ for is in 1 2 3; do
                 else
                     acl4=$d
                 fi
+                if test $d = $s || test $d = 22 || test $d = 33; then
+                    # dest of 22 and 33 should be dropped
+                    # due to the 5th ACL that uses port_group(pg1).
+                    acl5=
+                else
+                    acl5=$d
+                fi
                 test_packet $s f000000000$d f000000000$s 1234        #7, acl1
                 test_packet $s f000000000$d f000000000$s 1235 $acl2  #7, acl2
                 test_packet $s f000000000$d f000000000$s 1236 $acl3  #7, acl3
                 test_packet $s f000000000$d f000000000$s 1237 $acl4  #7, acl4
+                test_packet $s f000000000$d f000000000$s 1238 $acl5  #7, acl5
 
                 test_packet $s f000000000$d f00000000055 810000091234      #4
                 test_packet $s f000000000$d 0100000000$s $s$d              #5
