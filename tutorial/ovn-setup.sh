@@ -35,5 +35,3 @@ printf "\n=== ovn-nbctl show with wait hv ===\n\n"
 ovn-nbctl --wait=hv show
 printf "\n=== ovn-sbctl show ===\n\n"
 ovn-sbctl show
-printf "\n=== ovn-sbctl show with wait hv ===\n\n"
-ovn-sbctl --wait=hv show
