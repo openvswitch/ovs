@@ -276,6 +276,149 @@ AT_CLEANUP
 
 
 ### -----------------------------------------------------------------
+###   Double NSH MD1 encapsulation using groups over veth link
+### -----------------------------------------------------------------
+
+AT_SETUP([nsh - double encap over veth link using groups])
+
+OVS_VSWITCHD_START([])
+
+AT_CHECK([
+ovs-vsctl set bridge br0 datapath_type=dummy \
+            protocols=OpenFlow10,OpenFlow13,OpenFlow14,OpenFlow15 -- \
+        add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1 -- \
+        add-port br0 p2 -- set Interface p2 type=dummy ofport_request=2 -- \
+        add-port br0 v3 -- set Interface v3 type=patch options:peer=v4 ofport_request=3 -- \
+        add-port br0 v4 -- set Interface v4 type=patch options:peer=v3 ofport_request=4])
+
+AT_DATA([flows.txt], [dnl
+    table=0,in_port=1,ip,actions=group:100
+    table=0,in_port=4,packet_type=(0,0),dl_type=0x894f,nsh_mdtype=1,nsh_spi=0x5678,nsh_c1=0x55667788,actions=decap(),goto_table:1
+    table=1,packet_type=(1,0x894f),nsh_mdtype=1,nsh_spi=0x5678,nsh_c1=0x55667788,actions=decap(),goto_table:2
+    table=2,packet_type=(1,0x894f),nsh_mdtype=1,nsh_spi=0x1234,nsh_c1=0x11223344,actions=decap(),output:2
+])
+
+AT_DATA([groups.txt], [dnl
+    add group_id=100,type=indirect,bucket=actions=encap(nsh(md_type=1)),set_field:0x1234->nsh_spi,set_field:0x11223344->nsh_c1,group:200
+    add group_id=200,type=indirect,bucket=actions=encap(nsh(md_type=1)),set_field:0x5678->nsh_spi,set_field:0x55667788->nsh_c1,group:300
+    add group_id=300,type=indirect,bucket=actions=encap(ethernet),set_field:11:22:33:44:55:66->dl_dst,3
+])
+
+AT_CHECK([
+    ovs-ofctl del-flows br0
+    ovs-ofctl -Oopenflow13 add-groups br0 groups.txt
+    ovs-ofctl -Oopenflow13 add-flows br0 flows.txt
+    ovs-ofctl -Oopenflow13 dump-flows br0 | ofctl_strip | sort | grep actions
+], [0], [dnl
+ in_port=4,dl_type=0x894f,nsh_mdtype=1,nsh_spi=0x5678,nsh_c1=0x55667788 actions=decap(),goto_table:1
+ ip,in_port=1 actions=group:100
+ table=1, packet_type=(1,0x894f),nsh_mdtype=1,nsh_spi=0x5678,nsh_c1=0x55667788 actions=decap(),goto_table:2
+ table=2, packet_type=(1,0x894f),nsh_mdtype=1,nsh_spi=0x1234,nsh_c1=0x11223344 actions=decap(),output:2
+])
+
+# TODO:
+# The fields nw_proto, nw_tos, nw_ecn, nw_ttl in final flow seem unnecessary. Can they be avoided?
+# The match on dl_dst=66:77:88:99:aa:bb in the Megaflow is a side effect of setting the dl_dst in the pushed outer
+# Ethernet header. It is a consequence of using wc->masks both for tracking matched and set bits and seems hard to
+# avoid except by using separate masks for both purposes.
+
+AT_CHECK([
+    ovs-appctl ofproto/trace br0 'in_port=1,icmp,dl_src=00:11:22:33:44:55,dl_dst=66:77:88:99:aa:bb,nw_dst=10.10.10.10,nw_src=20.20.20.20'
+], [0], [dnl
+Flow: icmp,in_port=1,vlan_tci=0x0000,dl_src=00:11:22:33:44:55,dl_dst=66:77:88:99:aa:bb,nw_src=20.20.20.20,nw_dst=10.10.10.10,nw_tos=0,nw_ecn=0,nw_ttl=0,icmp_type=0,icmp_code=0
+
+bridge("br0")
+-------------
+ 0. ip,in_port=1, priority 32768
+    group:100
+    encap(nsh(md_type=1))
+    set_field:0x1234->nsh_spi
+    set_field:0x11223344->nsh_c1
+    group:200
+    encap(nsh(md_type=1))
+    set_field:0x5678->nsh_spi
+    set_field:0x55667788->nsh_c1
+    group:300
+    encap(ethernet)
+    set_field:11:22:33:44:55:66->eth_dst
+    output:3
+
+bridge("br0")
+-------------
+ 0. in_port=4,dl_type=0x894f,nsh_mdtype=1,nsh_spi=0x5678,nsh_c1=0x55667788, priority 32768
+    decap()
+    goto_table:1
+ 1. packet_type=(1,0x894f),nsh_mdtype=1,nsh_spi=0x5678,nsh_c1=0x55667788, priority 32768
+    decap()
+
+Final flow: unchanged
+Megaflow: recirc_id=0,eth,ip,in_port=1,dl_dst=66:77:88:99:aa:bb,nw_frag=no
+Datapath actions: push_nsh(flags=0,ttl=63,mdtype=1,np=3,spi=0x1234,si=255,c1=0x11223344,c2=0x0,c3=0x0,c4=0x0),push_nsh(flags=0,ttl=63,mdtype=1,np=4,spi=0x5678,si=255,c1=0x55667788,c2=0x0,c3=0x0,c4=0x0),push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),pop_eth,pop_nsh(),recirc(0x1)
+])
+
+AT_CHECK([
+    ovs-appctl ofproto/trace br0 'recirc_id=1,in_port=4,packet_type=(1,0x894f),nsh_mdtype=1,nsh_np=3,nsh_spi=0x1234,nsh_c1=0x11223344'
+], [0], [dnl
+Flow: recirc_id=0x1,packet_type=(1,0x894f),in_port=4
+
+bridge("br0")
+-------------
+    thaw
+            Resuming from table 0
+        Restoring actions: goto_table:2
+    goto_table:2
+ 2. packet_type=(1,0x894f),nsh_mdtype=1,nsh_spi=0x1234,nsh_c1=0x11223344, priority 32768
+    decap()
+
+Final flow: recirc_id=0x1,eth,in_port=4,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x0000
+Megaflow: recirc_id=0x1,packet_type=(1,0x894f),in_port=4,nsh_mdtype=1,nsh_np=3,nsh_spi=0x1234,nsh_c1=0x11223344
+Datapath actions: pop_nsh(),recirc(0x2)
+])
+
+AT_CHECK([
+    ovs-appctl ofproto/trace br0 'recirc_id=2,in_port=4,ip'
+], [0], [dnl
+Flow: recirc_id=0x2,eth,ip,in_port=4,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,nw_src=0.0.0.0,nw_dst=0.0.0.0,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0
+
+bridge("br0")
+-------------
+    thaw
+            Resuming from table 0
+        Restoring actions: unroll_xlate(table=2, cookie=0),output:2
+    unroll_xlate(table=2, cookie=0)
+    restored state: table=2, cookie=0
+    output:2
+
+Final flow: unchanged
+Megaflow: recirc_id=0x2,eth,ip,in_port=4,nw_frag=no
+Datapath actions: 2
+])
+
+# Now send two real ICMP echo request packets in on port p1
+
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive p1 1e2ce92a669e3a6dd2099cab0800450000548a53400040011addc0a80a0ac0a80a1e08006f200a4d0001fc509a58000000002715020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+    ovs-appctl netdev-dummy/receive p1 1e2ce92a669e3a6dd2099cab0800450000548a83400040011aadc0a80a0ac0a80a1e0800b7170a4d0002fd509a5800000000de1c020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637
+], [0], [ignore])
+
+ovs-appctl time/warp 1000
+
+# A packet count of 1 in the megaflow entries means the first packet was processed by
+# the ofproto slow path and the second successfully by the datapath flow entry.
+
+AT_CHECK([
+    ovs-appctl dpctl/dump-flows dummy@ovs-dummy | strip_used | grep -v ipv6 | sort
+], [0], [flow-dump from non-dpdk interfaces:
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(dst=1e:2c:e9:2a:66:9e),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:push_nsh(flags=0,ttl=63,mdtype=1,np=3,spi=0x1234,si=255,c1=0x11223344,c2=0x0,c3=0x0,c4=0x0),push_nsh(flags=0,ttl=63,mdtype=1,np=4,spi=0x5678,si=255,c1=0x55667788,c2=0x0,c3=0x0,c4=0x0),push_eth(src=00:00:00:00:00:00,dst=11:22:33:44:55:66),pop_eth,pop_nsh(),recirc(0x3)
+recirc_id(0x3),in_port(1),packet_type(ns=1,id=0x894f),nsh(mdtype=1,np=3,spi=0x1234,c1=0x11223344), packets:1, bytes:122, used:0.0s, actions:pop_nsh(),recirc(0x4)
+recirc_id(0x4),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:98, used:0.0s, actions:2
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
+### -----------------------------------------------------------------
 ###   Triangle bridge setup with VXLAN-GPE tunnels
 ### -----------------------------------------------------------------
 
