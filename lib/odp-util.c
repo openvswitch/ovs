@@ -7446,17 +7446,13 @@ odp_put_push_nsh_action(struct ofpbuf *odp_actions,
 }
 
 static void
-commit_packet_type_change(const struct flow *flow,
+commit_encap_decap_action(const struct flow *flow,
                           struct flow *base_flow,
                           struct ofpbuf *odp_actions,
                           struct flow_wildcards *wc,
-                          bool pending_encap,
+                          bool pending_encap, bool pending_decap,
                           struct ofpbuf *encap_data)
 {
-    if (flow->packet_type == base_flow->packet_type) {
-        return;
-    }
-
     if (pending_encap) {
         switch (ntohl(flow->packet_type)) {
         case PT_ETH: {
@@ -7481,7 +7477,7 @@ commit_packet_type_change(const struct flow *flow,
              * The check is done at action translation. */
             OVS_NOT_REACHED();
         }
-    } else {
+    } else if (pending_decap || flow->packet_type != base_flow->packet_type) {
         /* This is an explicit or implicit decap case. */
         if (pt_ns(flow->packet_type) == OFPHTN_ETHERTYPE &&
             base_flow->packet_type == htonl(PT_ETH)) {
@@ -7520,14 +7516,14 @@ commit_packet_type_change(const struct flow *flow,
 enum slow_path_reason
 commit_odp_actions(const struct flow *flow, struct flow *base,
                    struct ofpbuf *odp_actions, struct flow_wildcards *wc,
-                   bool use_masked, bool pending_encap,
+                   bool use_masked, bool pending_encap, bool pending_decap,
                    struct ofpbuf *encap_data)
 {
     enum slow_path_reason slow1, slow2;
     bool mpls_done = false;
 
-    commit_packet_type_change(flow, base, odp_actions, wc,
-                              pending_encap, encap_data);
+    commit_encap_decap_action(flow, base, odp_actions, wc,
+                              pending_encap, pending_decap, encap_data);
     commit_set_ether_action(flow, base, odp_actions, wc, use_masked);
     /* Make packet a non-MPLS packet before committing L3/4 actions,
      * which would otherwise do nothing. */

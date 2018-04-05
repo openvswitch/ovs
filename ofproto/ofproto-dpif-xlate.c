@@ -243,6 +243,8 @@ struct xlate_ctx {
                                  * true. */
     bool pending_encap;         /* True when waiting to commit a pending
                                  * encap action. */
+    bool pending_decap;         /* True when waiting to commit a pending
+                                 * decap action. */
     struct ofpbuf *encap_data;  /* May contain a pointer to an ofpbuf with
                                  * context for the datapath encap action.*/
 
@@ -3477,8 +3479,9 @@ xlate_commit_actions(struct xlate_ctx *ctx)
     ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
                                           ctx->odp_actions, ctx->wc,
                                           use_masked, ctx->pending_encap,
-                                          ctx->encap_data);
+                                          ctx->pending_decap, ctx->encap_data);
     ctx->pending_encap = false;
+    ctx->pending_decap = false;
     ofpbuf_delete(ctx->encap_data);
     ctx->encap_data = NULL;
 }
@@ -5989,6 +5992,7 @@ xlate_generic_decap_action(struct xlate_ctx *ctx,
                 break;
             }
             ctx->wc->masks.nsh.np = UINT8_MAX;
+            ctx->pending_decap = true;
             /* Trigger recirculation. */
             return true;
         default:
@@ -6859,6 +6863,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .in_action_set = false,
         .in_packet_out = xin->in_packet_out,
         .pending_encap = false,
+        .pending_decap = false,
         .encap_data = NULL,
 
         .table_id = 0,
