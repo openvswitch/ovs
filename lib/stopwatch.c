@@ -24,6 +24,7 @@
 #include "ovs-thread.h"
 #include <unistd.h>
 #include "socket-util.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(stopwatch);
 
@@ -338,7 +339,7 @@ stopwatch_reset(struct unixctl_conn *conn, int argc OVS_UNUSED,
     if (argc > 1) {
         ovs_strlcpy(pkt.name, argv[1], sizeof pkt.name);
     }
-    write(stopwatch_pipe[1], &pkt, sizeof pkt);
+    ignore(write(stopwatch_pipe[1], &pkt, sizeof pkt));
     unixctl_command_reply(conn, "");
 }
 
@@ -445,7 +446,7 @@ stopwatch_exit(void)
         .op = OP_SHUTDOWN,
     };
 
-    write(stopwatch_pipe[1], &pkt, sizeof pkt);
+    ignore(write(stopwatch_pipe[1], &pkt, sizeof pkt));
     xpthread_join(stopwatch_thread_id, NULL);
 
     /* Process is exiting and we have joined the only
@@ -507,7 +508,7 @@ stopwatch_start(const char *name, unsigned long long ts)
         .time = ts,
     };
     ovs_strlcpy(pkt.name, name, sizeof pkt.name);
-    write(stopwatch_pipe[1], &pkt, sizeof pkt);
+    ignore(write(stopwatch_pipe[1], &pkt, sizeof pkt));
 }
 
 void
@@ -518,7 +519,7 @@ stopwatch_stop(const char *name, unsigned long long ts)
         .time = ts,
     };
     ovs_strlcpy(pkt.name, name, sizeof pkt.name);
-    write(stopwatch_pipe[1], &pkt, sizeof pkt);
+    ignore(write(stopwatch_pipe[1], &pkt, sizeof pkt));
 }
 
 void
@@ -529,7 +530,7 @@ stopwatch_sync(void)
     };
 
     ovs_mutex_lock(&stopwatches_lock);
-    write(stopwatch_pipe[1], &pkt, sizeof pkt);
+    ignore(write(stopwatch_pipe[1], &pkt, sizeof pkt));
     ovs_mutex_cond_wait(&stopwatches_sync, &stopwatches_lock);
     ovs_mutex_unlock(&stopwatches_lock);
 }
