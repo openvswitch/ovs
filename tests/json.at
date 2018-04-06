@@ -26,7 +26,8 @@ m4_define([JSON_CHECK_POSITIVE_UCS4PY],
   [AT_SETUP([$1])
    AT_KEYWORDS([json positive Python])
    AT_SKIP_IF([test $HAVE_PYTHON = no])
-   AT_XFAIL_IF([$PYTHON -c "exit(len(u'\U00010800'))"; test $? -ne 1])
+   AT_XFAIL_IF([test $HAVE_PYTHON = yes &&
+                $PYTHON -c "exit(len(u'\U00010800'))"; test $? -ne 1])
    AT_CHECK([printf %s "AS_ESCAPE([$2])" > input])
    AT_CAPTURE_FILE([input])
    AT_CHECK([$PYTHON $srcdir/test-json.py $4 input], [0], [stdout], [])
