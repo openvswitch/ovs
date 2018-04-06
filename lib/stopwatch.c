@@ -236,7 +236,7 @@ add_sample(struct stopwatch *sw, unsigned long long new_sample)
 
 static bool
 stopwatch_get_stats_protected(const char *name,
-                                struct stopwatch_stats *stats)
+                              struct stopwatch_stats *stats)
 {
     struct stopwatch *perf;
 
@@ -311,7 +311,7 @@ stopwatch_show_protected(int argc, const char *argv[], struct ds *s)
 
 static void
 stopwatch_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
-        const char *argv[], void *ignore OVS_UNUSED)
+               const char *argv[], void *aux OVS_UNUSED)
 {
     struct ds s = DS_EMPTY_INITIALIZER;
     bool success;
@@ -330,15 +330,15 @@ stopwatch_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
 static void
 stopwatch_reset(struct unixctl_conn *conn, int argc OVS_UNUSED,
-        const char *argv[], void *ignore OVS_UNUSED)
+                const char *argv[], void *aux OVS_UNUSED)
 {
     struct stopwatch_packet pkt = {
         .op = OP_RESET,
     };
     if (argc > 1) {
-        ovs_strlcpy(pkt.name, argv[1], sizeof(pkt.name));
+        ovs_strlcpy(pkt.name, argv[1], sizeof pkt.name);
     }
-    write(stopwatch_pipe[1], &pkt, sizeof(pkt));
+    write(stopwatch_pipe[1], &pkt, sizeof pkt);
     unixctl_command_reply(conn, "");
 }
 
@@ -406,7 +406,7 @@ stopwatch_thread(void *ign OVS_UNUSED)
 
     while (!should_exit) {
         struct stopwatch_packet pkt;
-        while (read(stopwatch_pipe[0], &pkt, sizeof(pkt)) > 0) {
+        while (read(stopwatch_pipe[0], &pkt, sizeof pkt) > 0) {
             ovs_mutex_lock(&stopwatches_lock);
             switch (pkt.op) {
             case OP_START_SAMPLE:
@@ -506,8 +506,8 @@ stopwatch_start(const char *name, unsigned long long ts)
         .op = OP_START_SAMPLE,
         .time = ts,
     };
-    ovs_strlcpy(pkt.name, name, sizeof(pkt.name));
-    write(stopwatch_pipe[1], &pkt, sizeof(pkt));
+    ovs_strlcpy(pkt.name, name, sizeof pkt.name);
+    write(stopwatch_pipe[1], &pkt, sizeof pkt);
 }
 
 void
@@ -517,8 +517,8 @@ stopwatch_stop(const char *name, unsigned long long ts)
         .op = OP_END_SAMPLE,
         .time = ts,
     };
-    ovs_strlcpy(pkt.name, name, sizeof(pkt.name));
-    write(stopwatch_pipe[1], &pkt, sizeof(pkt));
+    ovs_strlcpy(pkt.name, name, sizeof pkt.name);
+    write(stopwatch_pipe[1], &pkt, sizeof pkt);
 }
 
 void
@@ -529,7 +529,7 @@ stopwatch_sync(void)
     };
 
     ovs_mutex_lock(&stopwatches_lock);
-    write(stopwatch_pipe[1], &pkt, sizeof(pkt));
+    write(stopwatch_pipe[1], &pkt, sizeof pkt);
     ovs_mutex_cond_wait(&stopwatches_sync, &stopwatches_lock);
     ovs_mutex_unlock(&stopwatches_lock);
 }

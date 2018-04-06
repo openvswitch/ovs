@@ -26,12 +26,14 @@ enum stopwatch_units {
 
 struct stopwatch_stats {
     unsigned long long count;    /* Total number of samples. */
-    enum stopwatch_units unit; /* Unit of following values. */
+    enum stopwatch_units unit;   /* Unit of following values. */
     unsigned long long max;      /* Maximum value. */
     unsigned long long min;      /* Minimum value. */
     double pctl_95;              /* 95th percentile. */
-    double ewma_50;              /* Exponentially weighted moving average (alpha 0.50). */
-    double ewma_1;               /* Exponentially weighted moving average (alpha 0.01). */
+    double ewma_50;              /* Exponentially weighted moving average
+                                    (alpha 0.50). */
+    double ewma_1;               /* Exponentially weighted moving average
+                                    (alpha 0.01). */
 };
 
 /* Create a new stopwatch.
