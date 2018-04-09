@@ -53,9 +53,9 @@ with multiple ports. Using a PCI device like above won't work. Instead, below
 usage is suggested::
 
     $ ovs-vsctl add-port br0 dpdk-p0 -- set Interface dpdk-p0 type=dpdk \
-        options:dpdk-devargs="class=eth,mac=00:11:22:33:44:55:01"
+        options:dpdk-devargs="class=eth,mac=00:11:22:33:44:55"
     $ ovs-vsctl add-port br0 dpdk-p1 -- set Interface dpdk-p1 type=dpdk \
-        options:dpdk-devargs="class=eth,mac=00:11:22:33:44:55:02"
+        options:dpdk-devargs="class=eth,mac=00:11:22:33:44:56"
 
 Note: such syntax won't support hotplug. The hotplug is supposed to work with
 future DPDK release, v18.05.
