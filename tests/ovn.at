@@ -9412,6 +9412,24 @@ test_ip_packet() {
     as hv$hv ovs-appctl netdev-dummy/receive vif$inport $packet
 }
 
+# test_ipv6_packet INPORT HV ETH_SRC ETH_DST IPV4_SRC IPV4_DST EXP_ICMP_CHKSUM
+#
+# Causes a packet to be received on INPORT of the hypervisor HV. The packet is an IPv6 packet with
+# ETH_SRC, ETH_DST, IPV6_SRC, IPV6_DST as specified.
+# EXP_ICMP_CHKSUM is the icmp6 checksums of the icmp6 destination unreachable frame generated from ACL rule hit
+test_ipv6_packet() {
+    local inport=$1 hv=$2 eth_src=$3 eth_dst=$4 ipv6_src=$5 ipv6_dst=$6 exp_icmp_chksum=$7
+    shift 7
+
+    local ip6_hdr=6000000000083aff${ipv6_src}${ipv6_dst}
+    local packet=${eth_dst}${eth_src}86dd${ip6_hdr}0000000000000000
+
+    local reply=${eth_src}${eth_dst}86dd6000000000303aff${ipv6_dst}${ipv6_src}0101${exp_icmp_chksum}00000000${ip6_hdr}
+    echo $reply >> vif$inport.expected
+
+    as hv$hv ovs-appctl netdev-dummy/receive vif$inport $packet
+}
+
 # test_tcp_syn_packet INPORT HV ETH_SRC ETH_DST IPV4_SRC IPV4_DST IP_CHKSUM TCP_SPORT TCP_DPORT TCP_CHKSUM EXP_IP_CHKSUM EXP_TCP_RST_CHKSUM
 #
 # Causes a packet to be received on INPORT of the hypervisor HV. The packet is an TCP syn segment with
@@ -9485,6 +9503,8 @@ OVS_WAIT_UNTIL([test 3 = $(ovn-sbctl lflow-list | grep 'icmp4 {' | wc -l)])
 test_ip_packet 11 1 000000000011 000000000021 $(ip_to_hex 192 168 1 11) $(ip_to_hex 192 168 1 21) 0000 7d8d fcfe
 test_ip_packet 21 2 000000000021 000000000011 $(ip_to_hex 192 168 1 21) $(ip_to_hex 192 168 1 11) 0000 7d8d fcfe
 test_ip_packet 31 3 000000000031 000000000012 $(ip_to_hex 192 168 1 31) $(ip_to_hex 192 168 1 12) 0000 7d82 fcfe
+
+test_ipv6_packet 11 1 000000000011 000000000021 fe80000000000000020001fffe000001 fe80000000000000020001fffe000002 6183
 
 test_tcp_syn_packet 11 1 000000000011 000000000021 $(ip_to_hex 192 168 1 11) $(ip_to_hex 192 168 1 21) 0000 8b40 3039 0000 7d8d 4486
 test_tcp_syn_packet 21 2 000000000021 000000000011 $(ip_to_hex 192 168 1 21) $(ip_to_hex 192 168 1 11) 0000 8b40 3039 0000 7d8d 4486

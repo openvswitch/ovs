@@ -1061,7 +1061,8 @@
 
         <li>
           <code>reject</code>: Drop the packet, replying with a RST for TCP or
-          ICMP unreachable message for other IP-based protocols.
+          ICMPv4/ICMPv6 unreachable message for other IPv4/IPv6-based
+          protocols.
         </li>
       </ul>
     </column>

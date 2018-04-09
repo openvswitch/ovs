@@ -15,6 +15,10 @@ Post-v2.9.0
      * OFPT_ROLE_STATUS is now available in OpenFlow 1.3.
    - Linux kernel 4.14
      * Add support for compiling OVS with the latest Linux 4.14 kernel
+   - ovn:
+     * implemented icmp4/icmp6/tcp_reset actions in order to drop the packet
+       and reply with a RST for TCP or ICMPv4/ICMPv6 unreachable message for
+       other IPv4/IPv6-based protocols whenever a reject ACL rule is hit.
 
 v2.9.0 - 19 Feb 2018
 --------------------
