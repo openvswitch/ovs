@@ -1135,6 +1135,16 @@ icmp4 { };
     encodes as controller(userdata=00.00.00.0a.00.00.00.00)
     has prereqs ip4
 
+# icmp6
+icmp6 { eth.dst = ff:ff:ff:ff:ff:ff; output; }; output;
+    encodes as controller(userdata=00.00.00.0a.00.00.00.00.00.19.00.10.80.00.06.06.ff.ff.ff.ff.ff.ff.00.00.ff.ff.00.10.00.00.23.20.00.0e.ff.f8.40.00.00.00),resubmit(,64)
+    has prereqs ip6
+
+icmp6 { };
+    formats as icmp6 { drop; };
+    encodes as controller(userdata=00.00.00.0a.00.00.00.00)
+    has prereqs ip6
+
 # tcp_reset
 tcp_reset { eth.dst = ff:ff:ff:ff:ff:ff; output; }; output;
     encodes as controller(userdata=00.00.00.0b.00.00.00.00.00.19.00.10.80.00.06.06.ff.ff.ff.ff.ff.ff.00.00.ff.ff.00.10.00.00.23.20.00.0e.ff.f8.40.00.00.00),resubmit(,64)

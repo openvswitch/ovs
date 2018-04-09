@@ -220,15 +220,16 @@ pinctrl_handle_arp(const struct flow *ip_flow, const struct match *md,
 }
 
 static void
-pinctrl_handle_icmp4(const struct flow *ip_flow, const struct match *md,
-                     struct ofpbuf *userdata)
+pinctrl_handle_icmp(const struct flow *ip_flow, struct dp_packet *pkt_in,
+                    const struct match *md, struct ofpbuf *userdata)
 {
     /* This action only works for IP packets, and the switch should only send
      * us IP packets this way, but check here just to be sure. */
-    if (ip_flow->dl_type != htons(ETH_TYPE_IP)) {
+    if (ip_flow->dl_type != htons(ETH_TYPE_IP) &&
+        ip_flow->dl_type != htons(ETH_TYPE_IPV6)) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
         VLOG_WARN_RL(&rl,
-                     "ICMP4 action on non-IP packet (eth_type 0x%"PRIx16")",
+                     "ICMP action on non-IP packet (eth_type 0x%"PRIx16")",
                      ntohs(ip_flow->dl_type));
         return;
     }
@@ -243,21 +244,50 @@ pinctrl_handle_icmp4(const struct flow *ip_flow, const struct match *md,
     struct eth_header *eh = dp_packet_put_zeros(&packet, sizeof *eh);
     eh->eth_dst = ip_flow->dl_dst;
     eh->eth_src = ip_flow->dl_src;
-    eh->eth_type = htons(ETH_TYPE_IP);
 
-    struct ip_header *nh = dp_packet_put_zeros(&packet, sizeof *nh);
-    dp_packet_set_l3(&packet, nh);
-    nh->ip_ihl_ver = IP_IHL_VER(5, 4);
-    nh->ip_tot_len = htons(sizeof(struct ip_header) +
-                           sizeof(struct icmp_header));
-    nh->ip_proto = IPPROTO_ICMP;
-    nh->ip_frag_off = htons(IP_DF);
-    packet_set_ipv4(&packet, ip_flow->nw_src, ip_flow->nw_dst,
-                    ip_flow->nw_tos, 255);
+    if (get_dl_type(ip_flow) == htons(ETH_TYPE_IP)) {
+        struct ip_header *nh = dp_packet_put_zeros(&packet, sizeof *nh);
 
-    struct icmp_header *ih = dp_packet_put_zeros(&packet, sizeof *ih);
-    dp_packet_set_l4(&packet, ih);
-    packet_set_icmp(&packet, ICMP4_DST_UNREACH, 1);
+        eh->eth_type = htons(ETH_TYPE_IP);
+        dp_packet_set_l3(&packet, nh);
+        nh->ip_ihl_ver = IP_IHL_VER(5, 4);
+        nh->ip_tot_len = htons(sizeof(struct ip_header) +
+                               sizeof(struct icmp_header));
+        nh->ip_proto = IPPROTO_ICMP;
+        nh->ip_frag_off = htons(IP_DF);
+        packet_set_ipv4(&packet, ip_flow->nw_src, ip_flow->nw_dst,
+                        ip_flow->nw_tos, 255);
+
+        struct icmp_header *ih = dp_packet_put_zeros(&packet, sizeof *ih);
+        dp_packet_set_l4(&packet, ih);
+        packet_set_icmp(&packet, ICMP4_DST_UNREACH, 1);
+    } else {
+        struct ip6_hdr *nh = dp_packet_put_zeros(&packet, sizeof *nh);
+        struct icmp6_error_header *ih;
+        uint32_t icmpv6_csum;
+
+        eh->eth_type = htons(ETH_TYPE_IPV6);
+        dp_packet_set_l3(&packet, nh);
+        nh->ip6_vfc = 0x60;
+        nh->ip6_nxt = IPPROTO_ICMPV6;
+        nh->ip6_plen = htons(sizeof(*nh) + ICMP6_ERROR_HEADER_LEN);
+        packet_set_ipv6(&packet, &ip_flow->ipv6_src, &ip_flow->ipv6_dst,
+                        ip_flow->nw_tos, ip_flow->ipv6_label, 255);
+
+        ih = dp_packet_put_zeros(&packet, sizeof *ih);
+        dp_packet_set_l4(&packet, ih);
+        ih->icmp6_base.icmp6_type = ICMP6_DST_UNREACH;
+        ih->icmp6_base.icmp6_code = 1;
+        ih->icmp6_base.icmp6_cksum = 0;
+
+        uint8_t *data = dp_packet_put_zeros(&packet, sizeof *nh);
+        memcpy(data, dp_packet_l3(pkt_in), sizeof(*nh));
+
+        icmpv6_csum = packet_csum_pseudoheader6(dp_packet_l3(&packet));
+        ih->icmp6_base.icmp6_cksum = csum_finish(
+            csum_continue(icmpv6_csum, ih,
+                          sizeof(*nh) + ICMP6_ERROR_HEADER_LEN));
+    }
 
     if (ip_flow->vlans[0].tci & htons(VLAN_CFI)) {
         eth_push_vlan(&packet, htons(ETH_TYPE_VLAN_8021Q),
@@ -1154,8 +1184,9 @@ process_packet_in(const struct ofp_header *msg, struct controller_ctx *ctx)
         pinctrl_handle_nd_ns(&headers, &pin.flow_metadata, &userdata);
         break;
 
-    case ACTION_OPCODE_ICMP4:
-        pinctrl_handle_icmp4(&headers, &pin.flow_metadata, &userdata);
+    case ACTION_OPCODE_ICMP:
+        pinctrl_handle_icmp(&headers, &packet, &pin.flow_metadata,
+                            &userdata);
         break;
 
     case ACTION_OPCODE_TCP_RESET:

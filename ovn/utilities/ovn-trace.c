@@ -1561,6 +1561,31 @@ execute_icmp4(const struct ovnact_nest *on,
 }
 
 static void
+execute_icmp6(const struct ovnact_nest *on,
+              const struct ovntrace_datapath *dp,
+              const struct flow *uflow, uint8_t table_id,
+              enum ovnact_pipeline pipeline, struct ovs_list *super)
+{
+    struct flow icmp6_flow = *uflow;
+
+    /* Update fields for ICMPv6. */
+    icmp6_flow.dl_dst = uflow->dl_dst;
+    icmp6_flow.dl_src = uflow->dl_src;
+    icmp6_flow.ipv6_dst = uflow->ipv6_dst;
+    icmp6_flow.ipv6_src = uflow->ipv6_src;
+    icmp6_flow.nw_proto = IPPROTO_ICMPV6;
+    icmp6_flow.nw_ttl = 255;
+    icmp6_flow.tp_src = htons(ICMP6_DST_UNREACH); /* icmp type */
+    icmp6_flow.tp_dst = htons(1); /* icmp code */
+
+    struct ovntrace_node *node = ovntrace_node_append(
+        super, OVNTRACE_NODE_TRANSFORMATION, "icmp6");
+
+    trace_actions(on->nested, on->nested_len, dp, &icmp6_flow,
+                  table_id, pipeline, &node->subs);
+}
+
+static void
 execute_tcp_reset(const struct ovnact_nest *on,
                   const struct ovntrace_datapath *dp,
                   const struct flow *uflow, uint8_t table_id,
@@ -1947,6 +1972,11 @@ trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
 
         case OVNACT_ICMP4:
             execute_icmp4(ovnact_get_ICMP4(a), dp, uflow, table_id, pipeline,
+                          super);
+            break;
+
+        case OVNACT_ICMP6:
+            execute_icmp6(ovnact_get_ICMP6(a), dp, uflow, table_id, pipeline,
                           super);
             break;
 

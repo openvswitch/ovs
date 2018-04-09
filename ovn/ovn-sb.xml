@@ -1733,6 +1733,32 @@
           <p><b>Prerequisite:</b> <code>ip4</code></p>
         </dd>
 
+        <dt><code>icmp6 { <var>action</var>; </code>...<code> };</code></dt>
+        <dd>
+          <p>
+            Temporarily replaces the IPv6 packet being processed by an ICMPv6
+            packet and executes each nested <var>action</var> on the ICMPv6
+            packet. Actions following the <var>icmp6</var> action, if any,
+            apply to the original, unmodified packet.
+          </p>
+
+          <p>
+            The ICMPv6 packet that this action operates on is initialized based
+            on the IPv6 packet being processed, as follows. These are default
+            values that the nested actions will probably want to change.
+            Ethernet and IPv6 fields not listed here are not changed:
+          </p>
+
+          <ul>
+            <li><code>ip.proto = 58</code> (ICMPv6)</li>
+            <li><code>ip.ttl = 255</code></li>
+            <li><code>icmp6.type = 1</code> (destination unreachable)</li>
+            <li><code>icmp6.code = 1</code> (administratively prohibited)</li>
+          </ul>
+
+          <p><b>Prerequisite:</b> <code>ip6</code></p>
+        </dd>
+
         <dt><code>tcp_reset;</code></dt>
         <dd>
           <p>
