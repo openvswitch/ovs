@@ -393,18 +393,14 @@ parse_tc_flower_to_match(struct tc_flower *flower,
                          struct match *match,
                          struct nlattr **actions,
                          struct dpif_flow_stats *stats,
-                         struct ofpbuf *buf) {
+                         struct ofpbuf *buf)
+{
     size_t act_off;
     struct tc_flower_key *key = &flower->key;
     struct tc_flower_key *mask = &flower->mask;
     odp_port_t outport = 0;
-
-    if (flower->ifindex_out) {
-        outport = netdev_ifindex_to_odp_port(flower->ifindex_out);
-        if (!outport) {
-            return ENOENT;
-        }
-    }
+    struct tc_action *action;
+    int i;
 
     ofpbuf_clear(buf);
 
@@ -487,60 +483,71 @@ parse_tc_flower_to_match(struct tc_flower *flower,
 
     act_off = nl_msg_start_nested(buf, OVS_FLOW_ATTR_ACTIONS);
     {
-        if (flower->vlan_pop) {
-            nl_msg_put_flag(buf, OVS_ACTION_ATTR_POP_VLAN);
-        }
-
-        if (flower->vlan_push_id || flower->vlan_push_prio) {
-            struct ovs_action_push_vlan *push;
-            push = nl_msg_put_unspec_zero(buf, OVS_ACTION_ATTR_PUSH_VLAN,
-                                          sizeof *push);
-
-            push->vlan_tpid = htons(ETH_TYPE_VLAN);
-            push->vlan_tci = htons(flower->vlan_push_id
-                                   | (flower->vlan_push_prio << 13)
-                                   | VLAN_CFI);
-        }
-
-        if (flower->rewrite.rewrite) {
-            parse_flower_rewrite_to_netlink_action(buf, flower);
-        }
-
-        if (flower->set.set) {
-            size_t set_offset = nl_msg_start_nested(buf, OVS_ACTION_ATTR_SET);
-            size_t tunnel_offset =
-                nl_msg_start_nested(buf, OVS_KEY_ATTR_TUNNEL);
-
-            nl_msg_put_be64(buf, OVS_TUNNEL_KEY_ATTR_ID, flower->set.id);
-            if (flower->set.ipv4.ipv4_src) {
-                nl_msg_put_be32(buf, OVS_TUNNEL_KEY_ATTR_IPV4_SRC,
-                                flower->set.ipv4.ipv4_src);
+        action = flower->actions;
+        for (i = 0; i < flower->action_count; i++, action++) {
+            switch (action->type) {
+            case TC_ACT_VLAN_POP: {
+                nl_msg_put_flag(buf, OVS_ACTION_ATTR_POP_VLAN);
             }
-            if (flower->set.ipv4.ipv4_dst) {
-                nl_msg_put_be32(buf, OVS_TUNNEL_KEY_ATTR_IPV4_DST,
-                                flower->set.ipv4.ipv4_dst);
-            }
-            if (!is_all_zeros(&flower->set.ipv6.ipv6_src,
-                              sizeof flower->set.ipv6.ipv6_src)) {
-                nl_msg_put_in6_addr(buf, OVS_TUNNEL_KEY_ATTR_IPV6_SRC,
-                                    &flower->set.ipv6.ipv6_src);
-            }
-            if (!is_all_zeros(&flower->set.ipv6.ipv6_dst,
-                              sizeof flower->set.ipv6.ipv6_dst)) {
-                nl_msg_put_in6_addr(buf, OVS_TUNNEL_KEY_ATTR_IPV6_DST,
-                                    &flower->set.ipv6.ipv6_dst);
-            }
-            nl_msg_put_be16(buf, OVS_TUNNEL_KEY_ATTR_TP_DST,
-                            flower->set.tp_dst);
+            break;
+            case TC_ACT_VLAN_PUSH: {
+                struct ovs_action_push_vlan *push;
 
-            nl_msg_end_nested(buf, tunnel_offset);
-            nl_msg_end_nested(buf, set_offset);
+                push = nl_msg_put_unspec_zero(buf, OVS_ACTION_ATTR_PUSH_VLAN,
+                                              sizeof *push);
+                push->vlan_tpid = htons(ETH_TYPE_VLAN);
+                push->vlan_tci = htons(action->vlan.vlan_push_id
+                                       | (action->vlan.vlan_push_prio << 13)
+                                       | VLAN_CFI);
+            }
+            break;
+            case TC_ACT_PEDIT: {
+                parse_flower_rewrite_to_netlink_action(buf, flower);
+            }
+            break;
+            case TC_ACT_ENCAP: {
+                size_t set_offset = nl_msg_start_nested(buf, OVS_ACTION_ATTR_SET);
+                size_t tunnel_offset =
+                    nl_msg_start_nested(buf, OVS_KEY_ATTR_TUNNEL);
+
+                nl_msg_put_be64(buf, OVS_TUNNEL_KEY_ATTR_ID, action->encap.id);
+                if (action->encap.ipv4.ipv4_src) {
+                    nl_msg_put_be32(buf, OVS_TUNNEL_KEY_ATTR_IPV4_SRC,
+                                    action->encap.ipv4.ipv4_src);
+                }
+                if (action->encap.ipv4.ipv4_dst) {
+                    nl_msg_put_be32(buf, OVS_TUNNEL_KEY_ATTR_IPV4_DST,
+                                    action->encap.ipv4.ipv4_dst);
+                }
+                if (!is_all_zeros(&action->encap.ipv6.ipv6_src,
+                                  sizeof action->encap.ipv6.ipv6_src)) {
+                    nl_msg_put_in6_addr(buf, OVS_TUNNEL_KEY_ATTR_IPV6_SRC,
+                                        &action->encap.ipv6.ipv6_src);
+                }
+                if (!is_all_zeros(&action->encap.ipv6.ipv6_dst,
+                                  sizeof action->encap.ipv6.ipv6_dst)) {
+                    nl_msg_put_in6_addr(buf, OVS_TUNNEL_KEY_ATTR_IPV6_DST,
+                                        &action->encap.ipv6.ipv6_dst);
+                }
+                nl_msg_put_be16(buf, OVS_TUNNEL_KEY_ATTR_TP_DST,
+                                action->encap.tp_dst);
+
+                nl_msg_end_nested(buf, tunnel_offset);
+                nl_msg_end_nested(buf, set_offset);
+            }
+            break;
+            case TC_ACT_OUTPUT: {
+                if (action->ifindex_out) {
+                    outport = netdev_ifindex_to_odp_port(action->ifindex_out);
+                    if (!outport) {
+                        return ENOENT;
+                    }
+                }
+                nl_msg_put_u32(buf, OVS_ACTION_ATTR_OUTPUT, odp_to_u32(outport));
+            }
+            break;
+            }
         }
-
-        if (flower->ifindex_out > 0) {
-            nl_msg_put_u32(buf, OVS_ACTION_ATTR_OUTPUT, odp_to_u32(outport));
-        }
-
     }
     nl_msg_end_nested(buf, act_off);
 
@@ -597,6 +604,7 @@ netdev_tc_flow_dump_next(struct netdev_flow_dump *dump,
 
 static int
 parse_put_flow_set_masked_action(struct tc_flower *flower,
+                                 struct tc_action *action,
                                  const struct nlattr *set,
                                  size_t set_len,
                                  bool hasmask)
@@ -649,7 +657,11 @@ parse_put_flow_set_masked_action(struct tc_flower *flower,
     }
 
     if (!is_all_zeros(&flower->rewrite, sizeof flower->rewrite)) {
-        flower->rewrite.rewrite = true;
+        if (flower->rewrite.rewrite == false) {
+            flower->rewrite.rewrite = true;
+            action->type = TC_ACT_PEDIT;
+            flower->action_count++;
+        }
     }
 
     if (hasmask && !is_all_zeros(set_mask, size)) {
@@ -664,52 +676,53 @@ parse_put_flow_set_masked_action(struct tc_flower *flower,
 }
 
 static int
-parse_put_flow_set_action(struct tc_flower *flower, const struct nlattr *set,
-                          size_t set_len)
+parse_put_flow_set_action(struct tc_flower *flower, struct tc_action *action,
+                          const struct nlattr *set, size_t set_len)
 {
     const struct nlattr *tunnel;
     const struct nlattr *tun_attr;
     size_t tun_left, tunnel_len;
 
     if (nl_attr_type(set) != OVS_KEY_ATTR_TUNNEL) {
-            return parse_put_flow_set_masked_action(flower, set, set_len,
-                                                    false);
+            return parse_put_flow_set_masked_action(flower, action, set,
+                                                    set_len, false);
     }
 
     tunnel = nl_attr_get(set);
     tunnel_len = nl_attr_get_size(set);
 
-    flower->set.set = true;
+    action->type = TC_ACT_ENCAP;
+    flower->action_count++;
     NL_ATTR_FOR_EACH_UNSAFE(tun_attr, tun_left, tunnel, tunnel_len) {
         switch (nl_attr_type(tun_attr)) {
         case OVS_TUNNEL_KEY_ATTR_ID: {
-            flower->set.id = nl_attr_get_be64(tun_attr);
+            action->encap.id = nl_attr_get_be64(tun_attr);
         }
         break;
         case OVS_TUNNEL_KEY_ATTR_IPV4_SRC: {
-            flower->set.ipv4.ipv4_src = nl_attr_get_be32(tun_attr);
+            action->encap.ipv4.ipv4_src = nl_attr_get_be32(tun_attr);
         }
         break;
         case OVS_TUNNEL_KEY_ATTR_IPV4_DST: {
-            flower->set.ipv4.ipv4_dst = nl_attr_get_be32(tun_attr);
+            action->encap.ipv4.ipv4_dst = nl_attr_get_be32(tun_attr);
         }
         break;
         case OVS_TUNNEL_KEY_ATTR_IPV6_SRC: {
-            flower->set.ipv6.ipv6_src =
+            action->encap.ipv6.ipv6_src =
                 nl_attr_get_in6_addr(tun_attr);
         }
         break;
         case OVS_TUNNEL_KEY_ATTR_IPV6_DST: {
-            flower->set.ipv6.ipv6_dst =
+            action->encap.ipv6.ipv6_dst =
                 nl_attr_get_in6_addr(tun_attr);
         }
         break;
         case OVS_TUNNEL_KEY_ATTR_TP_SRC: {
-            flower->set.tp_src = nl_attr_get_be16(tun_attr);
+            action->encap.tp_src = nl_attr_get_be16(tun_attr);
         }
         break;
         case OVS_TUNNEL_KEY_ATTR_TP_DST: {
-            flower->set.tp_dst = nl_attr_get_be16(tun_attr);
+            action->encap.tp_dst = nl_attr_get_be16(tun_attr);
         }
         break;
         }
@@ -865,6 +878,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     const struct flow *key = &match->flow;
     struct flow *mask = &match->wc.masks;
     const struct flow_tnl *tnl = &match->flow.tunnel;
+    struct tc_action *action;
     struct nlattr *nla;
     size_t left;
     int prio = 0;
@@ -1019,34 +1033,46 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     }
 
     NL_ATTR_FOR_EACH(nla, left, actions, actions_len) {
+        if (flower.action_count >= TCA_ACT_MAX_PRIO) {
+            VLOG_DBG_RL(&rl, "Can only support %d actions", flower.action_count);
+            return EOPNOTSUPP;
+        }
+        action = &flower.actions[flower.action_count];
         if (nl_attr_type(nla) == OVS_ACTION_ATTR_OUTPUT) {
             odp_port_t port = nl_attr_get_odp_port(nla);
             struct netdev *outdev = netdev_ports_get(port, info->dpif_class);
 
-            flower.ifindex_out = netdev_get_ifindex(outdev);
-            flower.set.tp_dst = info->tp_dst_port;
+            action->ifindex_out = netdev_get_ifindex(outdev);
+            action->type = TC_ACT_OUTPUT;
+            flower.action_count++;
             netdev_close(outdev);
         } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_PUSH_VLAN) {
             const struct ovs_action_push_vlan *vlan_push = nl_attr_get(nla);
 
-            flower.vlan_push_id = vlan_tci_to_vid(vlan_push->vlan_tci);
-            flower.vlan_push_prio = vlan_tci_to_pcp(vlan_push->vlan_tci);
+            action->vlan.vlan_push_id = vlan_tci_to_vid(vlan_push->vlan_tci);
+            action->vlan.vlan_push_prio = vlan_tci_to_pcp(vlan_push->vlan_tci);
+            action->type = TC_ACT_VLAN_PUSH;
+            flower.action_count++;
         } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_POP_VLAN) {
-            flower.vlan_pop = 1;
+            action->type = TC_ACT_VLAN_POP;
+            flower.action_count++;
         } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_SET) {
             const struct nlattr *set = nl_attr_get(nla);
             const size_t set_len = nl_attr_get_size(nla);
 
-            err = parse_put_flow_set_action(&flower, set, set_len);
+            err = parse_put_flow_set_action(&flower, action, set, set_len);
             if (err) {
                 return err;
+            }
+            if (action->type == TC_ACT_ENCAP) {
+                action->encap.tp_dst = info->tp_dst_port;
             }
         } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_SET_MASKED) {
             const struct nlattr *set = nl_attr_get(nla);
             const size_t set_len = nl_attr_get_size(nla);
 
-            err = parse_put_flow_set_masked_action(&flower, set, set_len,
-                                                   true);
+            err = parse_put_flow_set_masked_action(&flower, action, set,
+                                                   set_len, true);
             if (err) {
                 return err;
             }

@@ -106,6 +106,41 @@ struct tc_flower_key {
     } ipv6;
 };
 
+enum tc_action_type {
+    TC_ACT_OUTPUT,
+    TC_ACT_ENCAP,
+    TC_ACT_PEDIT,
+    TC_ACT_VLAN_POP,
+    TC_ACT_VLAN_PUSH,
+};
+
+struct tc_action {
+    union {
+        int ifindex_out;
+
+        struct {
+            uint16_t vlan_push_id;
+            uint8_t vlan_push_prio;
+        } vlan;
+
+        struct {
+            ovs_be64 id;
+            ovs_be16 tp_src;
+            ovs_be16 tp_dst;
+            struct {
+                ovs_be32 ipv4_src;
+                ovs_be32 ipv4_dst;
+            } ipv4;
+            struct {
+                struct in6_addr ipv6_src;
+                struct in6_addr ipv6_dst;
+            } ipv6;
+        } encap;
+     };
+
+     enum tc_action_type type;
+};
+
 struct tc_flower {
     uint32_t handle;
     uint32_t prio;
@@ -113,11 +148,8 @@ struct tc_flower {
     struct tc_flower_key key;
     struct tc_flower_key mask;
 
-    uint8_t vlan_pop;
-    uint16_t vlan_push_id;
-    uint8_t vlan_push_prio;
-
-    int ifindex_out;
+    int action_count;
+    struct tc_action actions[TCA_ACT_MAX_PRIO];
 
     struct ovs_flow_stats stats;
     uint64_t lastused;
@@ -129,21 +161,6 @@ struct tc_flower {
     } rewrite;
 
     uint32_t csum_update_flags;
-
-    struct {
-        bool set;
-        ovs_be64 id;
-        ovs_be16 tp_src;
-        ovs_be16 tp_dst;
-        struct {
-            ovs_be32 ipv4_src;
-            ovs_be32 ipv4_dst;
-        } ipv4;
-        struct {
-            struct in6_addr ipv6_src;
-            struct in6_addr ipv6_dst;
-        } ipv6;
-    } set;
 
     struct {
         bool tunnel;
