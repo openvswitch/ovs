@@ -2081,7 +2081,6 @@ parse_flow_put(struct dpif_netlink *dpif, struct dpif_flow_put *put)
     odp_port_t in_port;
     const struct nlattr *nla;
     size_t left;
-    int outputs = 0;
     struct netdev *dev;
     struct offload_info info;
     ovs_be16 dst_port = 0;
@@ -2108,19 +2107,12 @@ parse_flow_put(struct dpif_netlink *dpif, struct dpif_flow_put *put)
         return EOPNOTSUPP;
     }
 
-    /* Get tunnel dst port and count outputs */
+    /* Get tunnel dst port */
     NL_ATTR_FOR_EACH(nla, left, put->actions, put->actions_len) {
         if (nl_attr_type(nla) == OVS_ACTION_ATTR_OUTPUT) {
             const struct netdev_tunnel_config *tnl_cfg;
             struct netdev *outdev;
             odp_port_t out_port;
-
-            outputs++;
-            if (outputs > 1) {
-                VLOG_DBG_RL(&rl, "offloading multiple ports isn't supported");
-                err = EOPNOTSUPP;
-                goto out;
-            }
 
             out_port = nl_attr_get_odp_port(nla);
             outdev = netdev_ports_get(out_port, dpif_class);

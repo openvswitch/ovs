@@ -1209,15 +1209,16 @@ nl_msg_put_act_drop(struct ofpbuf *request)
 }
 
 static void
-nl_msg_put_act_redirect(struct ofpbuf *request, int ifindex)
+nl_msg_put_act_mirred(struct ofpbuf *request, int ifindex, int action,
+                      int eaction)
 {
     size_t offset;
 
     nl_msg_put_string(request, TCA_ACT_KIND, "mirred");
     offset = nl_msg_start_nested(request, TCA_ACT_OPTIONS);
     {
-        struct tc_mirred m = { .action = TC_ACT_STOLEN,
-                               .eaction = TCA_EGRESS_REDIR,
+        struct tc_mirred m = { .action = action,
+                               .eaction = eaction,
                                .ifindex = ifindex };
 
         nl_msg_put_unspec(request, TCA_MIRRED_PARMS, &m, sizeof m);
@@ -1453,7 +1454,13 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
                     return EINVAL;
                 }
                 act_offset = nl_msg_start_nested(request, act_index++);
-                nl_msg_put_act_redirect(request, ifindex);
+                if (i == flower->action_count - 1) {
+                    nl_msg_put_act_mirred(request, ifindex, TC_ACT_STOLEN,
+                                          TCA_EGRESS_REDIR);
+                } else {
+                    nl_msg_put_act_mirred(request, ifindex, TC_ACT_PIPE,
+                                          TCA_EGRESS_MIRROR);
+                }
                 nl_msg_put_act_cookie(request, &flower->act_cookie);
                 nl_msg_end_nested(request, act_offset);
             }
