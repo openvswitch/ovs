@@ -75,6 +75,7 @@ char *describe_fd(int fd);
  * IPv6 address. */
 uint16_t ss_get_port(const struct sockaddr_storage *);
 void ss_format_address(const struct sockaddr_storage *, struct ds *);
+void ss_format_address_nobracks(const struct sockaddr_storage *, struct ds *);
 size_t ss_length(const struct sockaddr_storage *);
 const char *sock_strerror(int error);
 

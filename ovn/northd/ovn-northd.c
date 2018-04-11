@@ -2942,29 +2942,19 @@ ip_address_and_port_from_lb_key(const char *key, char **ip_address,
                                 uint16_t *port, int *addr_family)
 {
     struct sockaddr_storage ss;
-    char ip_addr_buf[INET6_ADDRSTRLEN];
-    char *error;
-
-    error = ipv46_parse(key, PORT_OPTIONAL, &ss);
-    if (error) {
+    if (!inet_parse_active(key, 0, &ss)) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
         VLOG_WARN_RL(&rl, "bad ip address or port for load balancer key %s",
                      key);
-        free(error);
         return;
     }
 
-    if (ss.ss_family == AF_INET) {
-        struct sockaddr_in *sin = ALIGNED_CAST(struct sockaddr_in *, &ss);
-        *port = sin->sin_port == 0 ? 0 : ntohs(sin->sin_port);
-        inet_ntop(AF_INET, &sin->sin_addr, ip_addr_buf, sizeof ip_addr_buf);
-    } else {
-        struct sockaddr_in6 *sin6 = ALIGNED_CAST(struct sockaddr_in6 *, &ss);
-        *port = sin6->sin6_port == 0 ? 0 : ntohs(sin6->sin6_port);
-        inet_ntop(AF_INET6, &sin6->sin6_addr, ip_addr_buf, sizeof ip_addr_buf);
-    }
+    struct ds s = DS_EMPTY_INITIALIZER;
+    ss_format_address_nobracks(&ss, &s);
+    *ip_address = ds_steal_cstr(&s);
 
-    *ip_address = xstrdup(ip_addr_buf);
+    *port = ss_get_port(&ss);
+
     *addr_family = ss.ss_family;
 }
 

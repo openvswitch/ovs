@@ -1000,10 +1000,10 @@ is_safe_name(const char *name)
     return true;
 }
 
-/* Formats the IPv4 or IPv6 address in 'ss' into 's'.  If 'ss' is an IPv6
- * address, puts square brackets around the address. */
-void
-ss_format_address(const struct sockaddr_storage *ss, struct ds *s)
+static void
+ss_format_address__(const struct sockaddr_storage *ss,
+                    const char *lbrack, const char *rbrack,
+                    struct ds *s)
 {
     if (ss->ss_family == AF_INET) {
         const struct sockaddr_in *sin
@@ -1014,7 +1014,7 @@ ss_format_address(const struct sockaddr_storage *ss, struct ds *s)
         const struct sockaddr_in6 *sin6
             = ALIGNED_CAST(const struct sockaddr_in6 *, ss);
 
-        ds_put_char(s, '[');
+        ds_put_cstr(s, lbrack);
         ds_reserve(s, s->length + INET6_ADDRSTRLEN);
         char *tail = &s->string[s->length];
         inet_ntop(AF_INET6, sin6->sin6_addr.s6_addr, tail, INET6_ADDRSTRLEN);
@@ -1034,10 +1034,26 @@ ss_format_address(const struct sockaddr_storage *ss, struct ds *s)
         }
 #endif
 
-        ds_put_char(s, ']');
+        ds_put_cstr(s, rbrack);
     } else {
         OVS_NOT_REACHED();
     }
+}
+
+/* Formats the IPv4 or IPv6 address in 'ss' into 's'.  If 'ss' is an IPv6
+ * address, puts square brackets around the address. */
+void
+ss_format_address(const struct sockaddr_storage *ss, struct ds *s)
+{
+    ss_format_address__(ss, "[", "]", s);
+}
+
+/* Formats the IPv4 or IPv6 address in 'ss' into 's'.  Does not add square
+ * brackets around IPv6 addresses. */
+void
+ss_format_address_nobracks(const struct sockaddr_storage *ss, struct ds *s)
+{
+    ss_format_address__(ss, "", "", s);
 }
 
 size_t
