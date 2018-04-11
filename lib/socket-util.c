@@ -698,6 +698,32 @@ error:
     return -error;
 }
 
+/* Parses 'target', which may be an IPv4 address or an IPv6 address
+ * enclosed in square brackets.
+ *
+ * On success, returns true and stores the parsed remote address into '*ss'.
+ * On failure, logs an error, stores zeros into '*ss', and returns false. */
+bool
+inet_parse_address(const char *target_, struct sockaddr_storage *ss)
+{
+    char *target = xstrdup(target_);
+    char *p = target;
+    char *host = inet_parse_token(&p);
+    bool ok = false;
+    if (!host) {
+        VLOG_ERR("%s: host must be specified", target_);
+    } else if (p && p[strspn(p, " \t\r\n")] != '\0') {
+        VLOG_ERR("%s: unexpected characters follow host", target_);
+    } else {
+        ok = parse_sockaddr_components(ss, host, NULL, 0, target_);
+    }
+    if (!ok) {
+        memset(ss, 0, sizeof *ss);
+    }
+    free(target);
+    return ok;
+}
+
 int
 read_fully(int fd, void *p_, size_t size, size_t *bytes_read)
 {
