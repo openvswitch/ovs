@@ -995,8 +995,7 @@ is_safe_name(const char *name)
 }
 
 /* Formats the IPv4 or IPv6 address in 'ss' into 's'.  If 'ss' is an IPv6
- * address, puts square brackets around the address.  'bufsize' should be at
- * least SS_NTOP_BUFSIZE. */
+ * address, puts square brackets around the address. */
 void
 ss_format_address(const struct sockaddr_storage *ss, struct ds *s)
 {
