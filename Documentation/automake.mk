@@ -40,6 +40,7 @@ DOC_SOURCE = \
 	Documentation/topics/high-availability.rst \
 	Documentation/topics/integration.rst \
 	Documentation/topics/language-bindings.rst \
+	Documentation/topics/networking-namespaces.rst \
 	Documentation/topics/openflow.rst \
 	Documentation/topics/ovn-news-2.8.rst \
 	Documentation/topics/ovsdb-replication.rst \

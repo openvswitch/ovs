@@ -42,6 +42,7 @@ OVS
    porting
    openflow
    bonding
+   networking-namespaces
    ovsdb-replication
    dpdk/index
    windows
