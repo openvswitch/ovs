@@ -960,7 +960,7 @@ parse_netlink_to_tc_flower(struct ofpbuf *reply, struct tc_flower *flower)
 
     kind = nl_attr_get_string(ta[TCA_KIND]);
     if (strcmp(kind, "flower")) {
-        VLOG_ERR_RL(&error_rl, "failed to parse filter: %s", kind);
+        VLOG_DBG_ONCE("Unsupported filter: %s", kind);
         return EPROTO;
     }
 
