@@ -747,8 +747,7 @@ pstream_open_with_default_port(const char *name_,
  *     - On error, function returns false and *ss contains garbage.
  */
 bool
-stream_parse_target_with_default_port(const char *target,
-                                      uint16_t default_port,
+stream_parse_target_with_default_port(const char *target, int default_port,
                                       struct sockaddr_storage *ss)
 {
     return ((!strncmp(target, "tcp:", 4) || !strncmp(target, "ssl:", 4))

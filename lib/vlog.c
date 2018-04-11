@@ -599,7 +599,7 @@ vlog_set_syslog_target(const char *target)
 {
     int new_fd;
 
-    inet_open_active(SOCK_DGRAM, target, 0, NULL, &new_fd, 0);
+    inet_open_active(SOCK_DGRAM, target, -1, NULL, &new_fd, 0);
 
     ovs_rwlock_wrlock(&pattern_rwlock);
     if (syslog_fd >= 0) {

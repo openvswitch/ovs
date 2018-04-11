@@ -53,7 +53,7 @@ tcp_open(const char *name, char *suffix, struct stream **streamp, uint8_t dscp)
 {
     int fd, error;
 
-    error = inet_open_active(SOCK_STREAM, suffix, 0, NULL, &fd, dscp);
+    error = inet_open_active(SOCK_STREAM, suffix, -1, NULL, &fd, dscp);
     if (fd >= 0) {
         return new_tcp_stream(xstrdup(name), fd, error, streamp);
     } else {

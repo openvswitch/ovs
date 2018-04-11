@@ -23,7 +23,7 @@
 struct collectors;
 struct sset;
 
-int collectors_create(const struct sset *targets, uint16_t default_port,
+int collectors_create(const struct sset *targets, int default_port,
                       struct collectors **);
 void collectors_destroy(struct collectors *);
 

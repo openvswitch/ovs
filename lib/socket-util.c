@@ -431,13 +431,13 @@ exit:
 
 /* Parses 'target', which should be a string in the format "<host>[:<port>]".
  * <host>, which is required, may be an IPv4 address or an IPv6 address
- * enclosed in square brackets.  If 'default_port' is nonzero then <port> is
- * optional and defaults to 'default_port'.
+ * enclosed in square brackets.  If 'default_port' is nonnegative then <port>
+ * is optional and defaults to 'default_port'.
  *
  * On success, returns true and stores the parsed remote address into '*ss'.
  * On failure, logs an error, stores zeros into '*ss', and returns false. */
 bool
-inet_parse_active(const char *target_, uint16_t default_port,
+inet_parse_active(const char *target_, int default_port,
                   struct sockaddr_storage *ss)
 {
     char *target = xstrdup(target_);
@@ -452,7 +452,7 @@ inet_parse_active(const char *target_, uint16_t default_port,
     if (!host) {
         VLOG_ERR("%s: host must be specified", target_);
         ok = false;
-    } else if (!port && !default_port) {
+    } else if (!port && default_port < 0) {
         VLOG_ERR("%s: port must be specified", target_);
         ok = false;
     } else if (p && p[strspn(p, " \t\r\n")] != '\0') {
@@ -472,8 +472,8 @@ inet_parse_active(const char *target_, uint16_t default_port,
 /* Opens a non-blocking IPv4 or IPv6 socket of the specified 'style' and
  * connects to 'target', which should be a string in the format
  * "<host>[:<port>]".  <host>, which is required, may be an IPv4 address or an
- * IPv6 address enclosed in square brackets.  If 'default_port' is nonzero then
- * <port> is optional and defaults to 'default_port'.
+ * IPv6 address enclosed in square brackets.  If 'default_port' is nonnegative
+ * then <port> is optional and defaults to 'default_port'.
  *
  * 'style' should be SOCK_STREAM (for TCP) or SOCK_DGRAM (for UDP).
  *
@@ -488,7 +488,7 @@ inet_parse_active(const char *target_, uint16_t default_port,
  * should be in the range [0, 63] and will automatically be shifted to the
  * appropriately place in the IP tos field. */
 int
-inet_open_active(int style, const char *target, uint16_t default_port,
+inet_open_active(int style, const char *target, int default_port,
                  struct sockaddr_storage *ssp, int *fdp, uint8_t dscp)
 {
     struct sockaddr_storage ss;
