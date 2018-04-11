@@ -1945,11 +1945,9 @@ static void
 lb_info_add_smap(const struct nbrec_load_balancer *lb,
                  struct smap *lbs, int vip_width)
 {
-    struct ds key = DS_EMPTY_INITIALIZER;
-    struct ds val = DS_EMPTY_INITIALIZER;
-
     const struct smap_node **nodes = smap_sort(&lb->vips);
     if (nodes) {
+        struct ds val = DS_EMPTY_INITIALIZER;
         for (int i = 0; i < smap_count(&lb->vips); i++) {
             const struct smap_node *node = nodes[i];
 
@@ -1971,11 +1969,8 @@ lb_info_add_smap(const struct nbrec_load_balancer *lb,
                         node->key, node->value);
         }
 
-        ds_put_format(&key, "%-20.16s", lb->name);
-        smap_add(lbs, ds_cstr(&key), ds_cstr(&val));
-
-        ds_destroy(&key);
-        ds_destroy(&val);
+        smap_add_nocopy(lbs, xasprintf("%-20.16s", lb->name),
+                        ds_steal_cstr(&val));
         free(nodes);
     }
 }
