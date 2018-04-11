@@ -401,7 +401,7 @@ Sample XML
       <on_reboot>restart</on_reboot>
       <on_crash>destroy</on_crash>
       <devices>
-        <emulator>/usr/bin/qemu-kvm</emulator>
+        <emulator>/usr/bin/qemu-system-x86_64</emulator>
         <disk type='file' device='disk'>
           <driver name='qemu' type='qcow2' cache='none'/>
           <source file='/root/CentOS7_x86_64.qcow2'/>
