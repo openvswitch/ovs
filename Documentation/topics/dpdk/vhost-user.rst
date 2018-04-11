@@ -187,20 +187,13 @@ where:
 Adding vhost-user ports to the guest (libvirt)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. TODO(stephenfin): This seems like something that wouldn't be acceptable in
-   production. Is this really required?
-
-To begin, you must change the user and group that libvirt runs under, configure
-access control policy and restart libvirtd.
+To begin, you must change the user and group that qemu runs under, and restart
+libvirtd.
 
 - In ``/etc/libvirt/qemu.conf`` add/edit the following lines::
 
       user = "root"
       group = "root"
-
-- Disable SELinux or set to permissive mode::
-
-      $ setenforce 0
 
 - Finally, restart the libvirtd process, For example, on Fedora::
 
@@ -406,12 +399,6 @@ Sample XML
           <driver name='qemu' type='qcow2' cache='none'/>
           <source file='/root/CentOS7_x86_64.qcow2'/>
           <target dev='vda' bus='virtio'/>
-        </disk>
-        <disk type='dir' device='disk'>
-          <driver name='qemu' type='fat'/>
-          <source dir='/usr/src/dpdk-stable-17.11.1'/>
-          <target dev='vdb' bus='virtio'/>
-          <readonly/>
         </disk>
         <interface type='vhostuser'>
           <mac address='00:00:00:00:00:01'/>
