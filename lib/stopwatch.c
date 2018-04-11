@@ -429,6 +429,7 @@ stopwatch_thread(void *ign OVS_UNUSED)
         struct ovs_list command_list;
         struct stopwatch_packet *pkt;
 
+        latch_poll(&stopwatch_latch);
         guarded_list_pop_all(&stopwatch_commands, &command_list);
         ovs_mutex_lock(&stopwatches_lock);
         LIST_FOR_EACH_POP (pkt, list_node, &command_list) {
