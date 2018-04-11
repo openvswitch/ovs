@@ -455,6 +455,9 @@ inet_parse_active(const char *target_, uint16_t default_port,
     } else if (!port && !default_port) {
         VLOG_ERR("%s: port must be specified", target_);
         ok = false;
+    } else if (p && p[strspn(p, " \t\r\n")] != '\0') {
+        VLOG_ERR("%s: unexpected characters follow host and port", target_);
+        ok = false;
     } else {
         ok = parse_sockaddr_components(ss, host, port, default_port, target_);
     }
@@ -578,6 +581,9 @@ inet_parse_passive(const char *target_, int default_port,
     host = inet_parse_token(&p);
     if (!port && default_port < 0) {
         VLOG_ERR("%s: port must be specified", target_);
+        ok = false;
+    } else if (p && p[strspn(p, " \t\r\n")] != '\0') {
+        VLOG_ERR("%s: unexpected characters follow port and host", target_);
         ok = false;
     } else {
         ok = parse_sockaddr_components(ss, host, port, default_port, target_);
