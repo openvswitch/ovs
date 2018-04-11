@@ -460,44 +460,44 @@ AT_SETUP([ovn-nbctl - LBs])
 OVN_NBCTL_TEST_START
 
 dnl Add two LBs.
-AT_CHECK([ovn-nbctl lb-add lb0 30.0.0.10:80a 192.168.10.10:80,192.168.10.20:80 tcp], [1], [],
+AT_CHECK([ovn-nbctl -vsocket_util:off lb-add lb0 30.0.0.10:80a 192.168.10.10:80,192.168.10.20:80 tcp], [1], [],
 [ovn-nbctl: 30.0.0.10:80a: should be an IP address (or an IP address and a port number with : as a separator).
 ])
 
-AT_CHECK([ovn-nbctl lb-add lb0 30.0.0.10:a80 192.168.10.10:80,192.168.10.20:80 tcp], [1], [],
+AT_CHECK([ovn-nbctl -vsocket_util:off lb-add lb0 30.0.0.10:a80 192.168.10.10:80,192.168.10.20:80 tcp], [1], [],
 [ovn-nbctl: 30.0.0.10:a80: should be an IP address (or an IP address and a port number with : as a separator).
 ])
 
-AT_CHECK([ovn-nbctl lb-add lb0 30.0.0.10: 192.168.10.10:80,192.168.10.20:80 tcp], [1], [],
-[ovn-nbctl: 30.0.0.10:: should be an IP address (or an IP address and a port number with : as a separator).
-])
-
-AT_CHECK([ovn-nbctl lb-add lb0 30.0.0.10:80 192.168.10.10:80,192.168.10.20 tcp], [1], [],
+AT_CHECK([ovn-nbctl -vsocket_util:off lb-add lb0 30.0.0.10:80 192.168.10.10:80,192.168.10.20 tcp], [1], [],
 [ovn-nbctl: 192.168.10.20: should be an IP address and a port number with : as a separator.
 ])
 
-AT_CHECK([ovn-nbctl lb-add lb0 30.0.0.1a 192.168.10.10:80,192.168.10.20:80], [1], [],
+AT_CHECK([ovn-nbctl -vsocket_util:off lb-add lb0 30.0.0.1a 192.168.10.10:80,192.168.10.20:80], [1], [],
 [ovn-nbctl: 30.0.0.1a: should be an IP address (or an IP address and a port number with : as a separator).
 ])
 
-AT_CHECK([ovn-nbctl lb-add lb0 30.0.0 192.168.10.10:80,192.168.10.20:80], [1], [],
-[ovn-nbctl: 192.168.10.10:80: should be an IP address.
+AT_CHECK([ovn-nbctl -vsocket_util:off lb-add lb0 30.0.0 192.168.10.10:80,192.168.10.20:80], [1], [],
+[ovn-nbctl: 30.0.0: should be an IP address (or an IP address and a port number with : as a separator).
 ])
 
-AT_CHECK([ovn-nbctl lb-add lb0 30.0.0.10 192.168.10.10,192.168.10.20:80], [1], [],
+AT_CHECK([ovn-nbctl -vsocket_util:off lb-add lb0 30.0.0.10 192.168.10.10,192.168.10.20:80], [1], [],
 [ovn-nbctl: 192.168.10.20:80: should be an IP address.
 ])
 
-AT_CHECK([ovn-nbctl lb-add lb0 30.0.0.10 192.168.10.10:a80], [1], [],
+AT_CHECK([ovn-nbctl -vsocket_util:off lb-add lb0 30.0.0.10 192.168.10.10:a80], [1], [],
 [ovn-nbctl: 192.168.10.10:a80: should be an IP address.
 ])
 
-AT_CHECK([ovn-nbctl lb-add lb0 30.0.0.10 192.168.10.10:], [1], [],
+AT_CHECK([ovn-nbctl -vsocket_util:off lb-add lb0 30.0.0.10 192.168.10.10:], [1], [],
 [ovn-nbctl: 192.168.10.10:: should be an IP address.
 ])
 
-AT_CHECK([ovn-nbctl lb-add lb0 30.0.0.10 192.168.10.1a], [1], [],
+AT_CHECK([ovn-nbctl -vsocket_util:off lb-add lb0 30.0.0.10 192.168.10.1a], [1], [],
 [ovn-nbctl: 192.168.10.1a: should be an IP address.
+])
+
+AT_CHECK([ovn-nbctl lb-add lb0 30.0.0.10: 192.168.10.10:80,192.168.10.20:80 tcp], [1], [],
+[ovn-nbctl: Protocol is unnecessary when no port of vip is given.
 ])
 
 AT_CHECK([ovn-nbctl lb-add lb0 30.0.0.10 192.168.10.10 tcp], [1], [],
@@ -685,53 +685,53 @@ AT_SETUP([ovn-nbctl - LBs IPv6])
 OVN_NBCTL_TEST_START
 
 dnl A bunch of commands that should fail
-AT_CHECK([ovn-nbctl lb-add lb0 [[ae0f::10]]:80a [[fd0f::10]]:80,[[fd0f::20]]:80 tcp], [1], [],
+AT_CHECK([ovn-nbctl -vsocket_util:off lb-add lb0 [[ae0f::10]]:80a [[fd0f::10]]:80,[[fd0f::20]]:80 tcp], [1], [],
 [ovn-nbctl: [[ae0f::10]]:80a: should be an IP address (or an IP address and a port number with : as a separator).
 ])
 
 
-AT_CHECK([ovn-nbctl lb-add lb0 [[ae0f::10]]:a80 [[fd0f::10]]:80,[[fd0f::20]]:80 tcp], [1], [],
+AT_CHECK([ovn-nbctl -vsocket_util:off lb-add lb0 [[ae0f::10]]:a80 [[fd0f::10]]:80,[[fd0f::20]]:80 tcp], [1], [],
 [ovn-nbctl: [[ae0f::10]]:a80: should be an IP address (or an IP address and a port number with : as a separator).
 ])
 
 
-AT_CHECK([ovn-nbctl lb-add lb0 [[ae0f::10]]: [[fd0f::10]]:80,[[fd0f::20]]:80 tcp], [1], [],
-[ovn-nbctl: [[ae0f::10]]:: should be an IP address (or an IP address and a port number with : as a separator).
-])
-
-
-AT_CHECK([ovn-nbctl lb-add lb0 [[ae0f::10]]:80 [[fd0f::10]]:80,fd0f::20 tcp], [1], [],
+AT_CHECK([ovn-nbctl -vsocket_util:off lb-add lb0 [[ae0f::10]]:80 [[fd0f::10]]:80,fd0f::20 tcp], [1], [],
 [ovn-nbctl: fd0f::20: should be an IP address and a port number with : as a separator.
 ])
 
 
-AT_CHECK([ovn-nbctl lb-add lb0 ae0f::10fff [[fd0f::10]]:80,fd0f::20 tcp], [1], [],
+AT_CHECK([ovn-nbctl -vsocket_util:off lb-add lb0 ae0f::10fff [[fd0f::10]]:80,fd0f::20 tcp], [1], [],
 [ovn-nbctl: ae0f::10fff: should be an IP address (or an IP address and a port number with : as a separator).
 ])
 
 
-AT_CHECK([ovn-nbctl lb-add lb0 ae0f::10 [[fd0f::10]]:80,[[fd0f::20]]:80], [1], [],
+AT_CHECK([ovn-nbctl -vsocket_util:off lb-add lb0 ae0f::10 [[fd0f::10]]:80,[[fd0f::20]]:80], [1], [],
 [ovn-nbctl: [[fd0f::10]]:80: should be an IP address.
 ])
 
 
-AT_CHECK([ovn-nbctl lb-add lb0 ae0f::10 fd0f::10,[[fd0f::20]]:80], [1], [],
+AT_CHECK([ovn-nbctl -vsocket_util:off lb-add lb0 ae0f::10 fd0f::10,[[fd0f::20]]:80], [1], [],
 [ovn-nbctl: [[fd0f::20]]:80: should be an IP address.
 ])
 
 
-AT_CHECK([ovn-nbctl lb-add lb0 ae0f::10 [[fd0f::10]]:a80], [1], [],
+AT_CHECK([ovn-nbctl -vsocket_util:off lb-add lb0 ae0f::10 [[fd0f::10]]:a80], [1], [],
 [ovn-nbctl: [[fd0f::10]]:a80: should be an IP address.
 ])
 
 
-AT_CHECK([ovn-nbctl lb-add lb0 ae0f::10 [[fd0f::10]]:], [1], [],
+AT_CHECK([ovn-nbctl -vsocket_util:off lb-add lb0 ae0f::10 [[fd0f::10]]:], [1], [],
 [ovn-nbctl: [[fd0f::10]]:: should be an IP address.
 ])
 
 
-AT_CHECK([ovn-nbctl lb-add lb0 ae0f::10 fd0f::1001a], [1], [],
+AT_CHECK([ovn-nbctl -vsocket_util:off lb-add lb0 ae0f::10 fd0f::1001a], [1], [],
 [ovn-nbctl: fd0f::1001a: should be an IP address.
+])
+
+
+AT_CHECK([ovn-nbctl -vsocket_util:off lb-add lb0 [[ae0f::10]]: [[fd0f::10]]:80,[[fd0f::20]]:80 tcp], [1], [],
+[ovn-nbctl: Protocol is unnecessary when no port of vip is given.
 ])
 
 

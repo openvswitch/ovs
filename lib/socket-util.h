@@ -46,7 +46,8 @@ int check_connection_completion(int fd);
 void drain_fd(int fd, size_t n_packets);
 ovs_be32 guess_netmask(ovs_be32 ip);
 
-char *inet_parse_token(char **);
+void inet_parse_host_port_tokens(char *s, char **hostp, char **portp);
+void inet_parse_port_host_tokens(char *s, char **portp, char **hostp);
 bool inet_parse_active(const char *target, int default_port,
                        struct sockaddr_storage *ssp);
 int inet_open_active(int style, const char *target, int default_port,

@@ -335,9 +335,8 @@ raft_make_address_passive(const char *address_)
         return xasprintf("p%s", address_);
     } else {
         char *address = xstrdup(address_);
-        char *p = strchr(address, ':') + 1;
-        char *host = inet_parse_token(&p);
-        char *port = inet_parse_token(&p);
+        char *host, *port;
+        inet_parse_host_port_tokens(strchr(address, ':') + 1, &host, &port);
 
         struct ds paddr = DS_EMPTY_INITIALIZER;
         ds_put_format(&paddr, "p%.3s:%s:", address, port);

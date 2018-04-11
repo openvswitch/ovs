@@ -1362,16 +1362,6 @@ struct in6_addr ipv6_create_mask(int mask);
 int ipv6_count_cidr_bits(const struct in6_addr *netmask);
 bool ipv6_is_cidr(const struct in6_addr *netmask);
 
-enum port_flags {
-    PORT_OPTIONAL,
-    PORT_REQUIRED,
-    PORT_FORBIDDEN,
-};
-
-char *ipv46_parse(const char *s, enum port_flags flags,
-                  struct sockaddr_storage *ss)
-    OVS_WARN_UNUSED_RESULT;
-
 bool ipv6_parse(const char *s, struct in6_addr *ip);
 char *ipv6_parse_masked(const char *s, struct in6_addr *ipv6,
                         struct in6_addr *mask);

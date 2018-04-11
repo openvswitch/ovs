@@ -333,37 +333,87 @@ guess_netmask(ovs_be32 ip_)
             : htonl(0));                          /* ??? */
 }
 
-/* This is like strsep() except:
- *
- *    - The separator string is ":".
- *
- *    - Square brackets [] quote ":" separators and are removed from the
- *      tokens. */
-char *
-inet_parse_token(char **pp)
+static char *
+unbracket(char *s)
 {
-    char *p = *pp;
+    if (*s == '[') {
+        s++;
 
-    if (p == NULL) {
-        return NULL;
-    } else if (*p == '\0') {
-        *pp = NULL;
-        return p;
-    } else if (*p == '[') {
-        char *start = p + 1;
-        char *end = start + strcspn(start, "]");
-        *pp = (*end == '\0' ? NULL
-               : end[1] == ':' ? end + 2
-               : end + 1);
-        *end = '\0';
-        return start;
-    } else {
-        char *start = p;
-        char *end = start + strcspn(start, ":");
-        *pp = *end == '\0' ? NULL : end + 1;
-        *end = '\0';
-        return start;
+        char *end = strchr(s, '\0');
+        if (end[-1] == ']') {
+            end[-1] = '\0';
+        }
     }
+    return s;
+}
+
+/* 'host_index' is 0 if the host precedes the port within 's', 1 otherwise. */
+static void
+inet_parse_tokens__(char *s, int host_index, char **hostp, char **portp)
+{
+    char *colon = NULL;
+    bool in_brackets = false;
+    int n_colons = 0;
+    for (char *p = s; *p; p++) {
+        if (*p == '[') {
+            in_brackets = true;
+        } else if (*p == ']') {
+            in_brackets = false;
+        } else if (*p == ':' && !in_brackets) {
+            n_colons++;
+            colon = p;
+        }
+    }
+
+    *hostp = *portp = NULL;
+    if (n_colons > 1) {
+        *hostp = s;
+    } else {
+        char **tokens[2];
+        tokens[host_index] = hostp;
+        tokens[!host_index] = portp;
+
+        if (colon) {
+            *colon = '\0';
+            *tokens[1] = unbracket(colon + 1);
+        }
+        *tokens[0] = unbracket(s);
+    }
+}
+
+/* Parses 's', a string in the form "<host>[:<port>]", into its (required) host
+ * and (optional) port components, and stores pointers to them in '*hostp' and
+ * '*portp' respectively.  Always sets '*hostp' nonnull, although possibly to
+ * an empty string empty string.  Can set '*portp' to the null string.
+ *
+ * Supports both IPv4 and IPv6.  IPv6 addresses may be quoted with square
+ * brackets.  Resolves ambiguous cases that might represent an IPv6 address or
+ * an IPv6 address and a port as representing just a host, e.g. "::1:2:3:4:80"
+ * is a host but "[::1:2:3:4]:80" is a host and a port.
+ *
+ * Modifies 's' and points '*hostp' and '*portp' (if nonnull) into it.
+ */
+void
+inet_parse_host_port_tokens(char *s, char **hostp, char **portp)
+{
+    inet_parse_tokens__(s, 0, hostp, portp);
+}
+
+/* Parses 's', a string in the form "<port>[:<host>]", into its port and host
+ * components, and stores pointers to them in '*portp' and '*hostp'
+ * respectively.  Both '*portp' and '*hostp' can end up null.
+ *
+ * Supports both IPv4 and IPv6.  IPv6 addresses may be quoted with square
+ * brackets.  Resolves ambiguous cases that might represent an IPv6 address or
+ * an IPv6 address and a port as representing just a host, e.g. "::1:2:3:4:80"
+ * is a host but "[::1:2:3:4]:80" is a host and a port.
+ *
+ * Modifies 's' and points '*hostp' and '*portp' (if nonnull) into it.
+ */
+void
+inet_parse_port_host_tokens(char *s, char **portp, char **hostp)
+{
+    inet_parse_tokens__(s, 1, hostp, portp);
 }
 
 static bool
@@ -441,22 +491,15 @@ inet_parse_active(const char *target_, int default_port,
                   struct sockaddr_storage *ss)
 {
     char *target = xstrdup(target_);
-    const char *port;
-    char *host;
-    char *p;
+    char *port, *host;
     bool ok;
 
-    p = target;
-    host = inet_parse_token(&p);
-    port = inet_parse_token(&p);
+    inet_parse_host_port_tokens(target, &host, &port);
     if (!host) {
         VLOG_ERR("%s: host must be specified", target_);
         ok = false;
     } else if (!port && default_port < 0) {
         VLOG_ERR("%s: port must be specified", target_);
-        ok = false;
-    } else if (p && p[strspn(p, " \t\r\n")] != '\0') {
-        VLOG_ERR("%s: unexpected characters follow host and port", target_);
         ok = false;
     } else {
         ok = parse_sockaddr_components(ss, host, port, default_port, target_);
@@ -571,19 +614,12 @@ inet_parse_passive(const char *target_, int default_port,
                    struct sockaddr_storage *ss)
 {
     char *target = xstrdup(target_);
-    const char *port;
-    char *host;
-    char *p;
+    char *port, *host;
     bool ok;
 
-    p = target;
-    port = inet_parse_token(&p);
-    host = inet_parse_token(&p);
+    inet_parse_port_host_tokens(target, &port, &host);
     if (!port && default_port < 0) {
         VLOG_ERR("%s: port must be specified", target_);
-        ok = false;
-    } else if (p && p[strspn(p, " \t\r\n")] != '\0') {
-        VLOG_ERR("%s: unexpected characters follow port and host", target_);
         ok = false;
     } else {
         ok = parse_sockaddr_components(ss, host, port, default_port, target_);
@@ -707,16 +743,8 @@ bool
 inet_parse_address(const char *target_, struct sockaddr_storage *ss)
 {
     char *target = xstrdup(target_);
-    char *p = target;
-    char *host = inet_parse_token(&p);
-    bool ok = false;
-    if (!host) {
-        VLOG_ERR("%s: host must be specified", target_);
-    } else if (p && p[strspn(p, " \t\r\n")] != '\0') {
-        VLOG_ERR("%s: unexpected characters follow host", target_);
-    } else {
-        ok = parse_sockaddr_components(ss, host, NULL, 0, target_);
-    }
+    char *host = unbracket(target);
+    bool ok = parse_sockaddr_components(ss, host, NULL, 0, target_);
     if (!ok) {
         memset(ss, 0, sizeof *ss);
     }

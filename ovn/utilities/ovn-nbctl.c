@@ -1798,10 +1798,7 @@ nbctl_lb_add(struct ctl_context *ctx)
     }
 
     struct sockaddr_storage ss_vip;
-    char *error;
-    error = ipv46_parse(lb_vip, PORT_OPTIONAL, &ss_vip);
-    if (error) {
-        free(error);
+    if (!inet_parse_active(lb_vip, 0, &ss_vip)) {
         ctl_fatal("%s: should be an IP address (or an IP address "
                   "and a port number with : as a separator).", lb_vip);
     }
@@ -1848,17 +1845,13 @@ nbctl_lb_add(struct ctl_context *ctx)
             token != NULL; token = strtok_r(NULL, ",", &save_ptr)) {
         struct sockaddr_storage ss_dst;
 
-        error = ipv46_parse(token, is_vip_with_port
-                ? PORT_REQUIRED
-                : PORT_FORBIDDEN,
-                &ss_dst);
-
-        if (error) {
-            free(error);
-            if (is_vip_with_port) {
+        if (is_vip_with_port) {
+            if (!inet_parse_active(token, -1, &ss_dst)) {
                 ctl_fatal("%s: should be an IP address and a port "
-                        "number with : as a separator.", token);
-            } else {
+                          "number with : as a separator.", token);
+            }
+        } else {
+            if (!inet_parse_address(token, &ss_dst)) {
                 ctl_fatal("%s: should be an IP address.", token);
             }
         }
@@ -1954,36 +1947,18 @@ lb_info_add_smap(const struct nbrec_load_balancer *lb,
 {
     struct ds key = DS_EMPTY_INITIALIZER;
     struct ds val = DS_EMPTY_INITIALIZER;
-    char *error, *protocol;
 
     const struct smap_node **nodes = smap_sort(&lb->vips);
     if (nodes) {
         for (int i = 0; i < smap_count(&lb->vips); i++) {
             const struct smap_node *node = nodes[i];
-            protocol = lb->protocol;
 
             struct sockaddr_storage ss;
-            error = ipv46_parse(node->key, PORT_OPTIONAL, &ss);
-            if (error) {
-                VLOG_WARN("%s", error);
-                free(error);
+            if (!inet_parse_active(node->key, 0, &ss)) {
                 continue;
             }
 
-            if (ss.ss_family == AF_INET) {
-                struct sockaddr_in *sin = ALIGNED_CAST(struct sockaddr_in *,
-                                                       &ss);
-                if (!sin->sin_port) {
-                    protocol = "tcp/udp";
-                }
-            } else {
-                struct sockaddr_in6 *sin6 = ALIGNED_CAST(struct sockaddr_in6 *,
-                                                         &ss);
-                if (!sin6->sin6_port) {
-                    protocol = "tcp/udp";
-                }
-            }
-
+            char *protocol = ss_get_port(&ss) ? lb->protocol : "tcp/udp";
             i == 0 ? ds_put_format(&val,
                         UUID_FMT "    %-20.16s%-11.7s%-*.*s%s",
                         UUID_ARGS(&lb->header_.uuid),
