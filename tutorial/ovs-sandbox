@@ -436,7 +436,7 @@ if $ovn; then
                 for i in 1 2; do
                     run ovsdb-tool create $db$i.db "$schema"
                 done
-                ovn_start_ovsdb_server 1 ${db}1.db
+                ovn_start_ovsdb_server 1
                 ovn_start_ovsdb_server 2 --sync-from=unix:${db}1.ovsdb
                 remote=unix:${db}1.ovsdb
                 backup_note="$backup_note
