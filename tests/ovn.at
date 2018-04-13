@@ -177,7 +177,7 @@ ct_state = NXM_NX_CT_STATE
 ]])
 AT_CLEANUP
 
-AT_SETUP([ovn -- compsition])
+AT_SETUP([ovn -- composition])
 AT_CHECK([ovstest test-ovn composition 2], [0], [ignore])
 AT_CLEANUP
 
