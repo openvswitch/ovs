@@ -10,9 +10,15 @@ ovstest_pyfiles = \
 
 ovs_pyfiles = \
 	python/ovs/__init__.py \
+	python/ovs/compat/__init__.py \
+	python/ovs/compat/sortedcontainers/__init__.py \
+	python/ovs/compat/sortedcontainers/sortedlist.py \
+	python/ovs/compat/sortedcontainers/sorteddict.py \
+	python/ovs/compat/sortedcontainers/sortedset.py \
 	python/ovs/daemon.py \
 	python/ovs/fcntl_win.py \
 	python/ovs/db/__init__.py \
+	python/ovs/db/custom_index.py \
 	python/ovs/db/data.py \
 	python/ovs/db/error.py \
 	python/ovs/db/idl.py \
@@ -36,7 +42,6 @@ ovs_pyfiles = \
 	python/ovs/version.py \
 	python/ovs/vlog.py \
 	python/ovs/winutils.py
-
 # These python files are used at build time but not runtime,
 # so they are not installed.
 EXTRA_DIST += \
@@ -46,6 +51,7 @@ EXTRA_DIST += \
 
 # PyPI support.
 EXTRA_DIST += \
+	python/ovs/compat/sortedcontainers/LICENSE \
 	python/README.rst \
 	python/setup.py
 
@@ -57,7 +63,7 @@ EXTRA_DIST += $(PYFILES)
 PYCOV_CLEAN_FILES += $(PYFILES:.py=.py,cover)
 
 FLAKE8_PYFILES += \
-	$(filter-out python/ovs/dirs.py,$(PYFILES)) \
+	$(filter-out python/ovs/compat/% python/ovs/dirs.py,$(PYFILES)) \
 	python/setup.py \
 	python/build/__init__.py \
 	python/build/nroff.py \
