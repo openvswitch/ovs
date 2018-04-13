@@ -1142,39 +1142,74 @@ netdev_set_in4(struct netdev *netdev, struct in_addr addr, struct in_addr mask)
             : EOPNOTSUPP);
 }
 
-/* Obtains ad IPv4 address from device name and save the address in
- * in4.  Returns 0 if successful, otherwise a positive errno value.
- */
+static int
+netdev_get_addresses_by_name(const char *device_name,
+                             struct in6_addr **addrsp, int *n_addrsp)
+{
+    struct netdev *netdev;
+    int error = netdev_open(device_name, NULL, &netdev);
+    if (error) {
+        *addrsp = NULL;
+        *n_addrsp = 0;
+        return error;
+    }
+
+    struct in6_addr *masks;
+    error = netdev_get_addr_list(netdev, addrsp, &masks, n_addrsp);
+    netdev_close(netdev);
+    free(masks);
+    return error;
+}
+
+/* Obtains an IPv4 address from 'device_name' and save the address in '*in4'.
+ * Returns 0 if successful, otherwise a positive errno value. */
 int
 netdev_get_in4_by_name(const char *device_name, struct in_addr *in4)
 {
-    struct in6_addr *mask, *addr6;
-    int err, n_in6, i;
-    struct netdev *dev;
+    struct in6_addr *addrs;
+    int n;
+    int error = netdev_get_addresses_by_name(device_name, &addrs, &n);
 
-    err = netdev_open(device_name, NULL, &dev);
-    if (err) {
-        return err;
-    }
-
-    err = netdev_get_addr_list(dev, &addr6, &mask, &n_in6);
-    if (err) {
-        goto out;
-    }
-
-    for (i = 0; i < n_in6; i++) {
-        if (IN6_IS_ADDR_V4MAPPED(&addr6[i])) {
-            in4->s_addr = in6_addr_get_mapped_ipv4(&addr6[i]);
-            goto out;
+    in4->s_addr = 0;
+    if (!error) {
+        error = ENOENT;
+        for (int i = 0; i < n; i++) {
+            if (IN6_IS_ADDR_V4MAPPED(&addrs[i])) {
+                in4->s_addr = in6_addr_get_mapped_ipv4(&addrs[i]);
+                error = 0;
+                break;
+            }
         }
     }
-    err = -ENOENT;
-out:
-    free(addr6);
-    free(mask);
-    netdev_close(dev);
-    return err;
+    free(addrs);
 
+    return error;
+}
+
+/* Obtains an IPv4 or IPv6 address from 'device_name' and save the address in
+ * '*ss', representing IPv4 addressse as v6-mapped.  Returns 0 if successful,
+ * otherwise a positive errno value. */
+int
+netdev_get_ip_by_name(const char *device_name, struct in6_addr *in6)
+{
+    struct in6_addr *addrs;
+    int n;
+    int error = netdev_get_addresses_by_name(device_name, &addrs, &n);
+
+    *in6 = in6addr_any;
+    if (!error) {
+        error = ENOENT;
+        for (int i = 0; i < n; i++) {
+            if (!in6_is_lla(&addrs[i])) {
+                *in6 = addrs[i];
+                error = 0;
+                break;
+            }
+        }
+    }
+    free(addrs);
+
+    return error;
 }
 
 /* Adds 'router' as a default IP gateway for the TCP/IP stack that corresponds

@@ -282,6 +282,7 @@ void netdev_restore_flags(struct netdev_saved_flags *);
 /* TCP/IP stack interface. */
 int netdev_set_in4(struct netdev *, struct in_addr addr, struct in_addr mask);
 int netdev_get_in4_by_name(const char *device_name, struct in_addr *in4);
+int netdev_get_ip_by_name(const char *device_name, struct in6_addr *);
 int netdev_get_addr_list(const struct netdev *netdev, struct in6_addr **addr,
                          struct in6_addr **mask, int *n_in6);
 
