@@ -446,43 +446,45 @@ sflow_choose_agent_address(const char *agent_device,
                            const char *control_ip,
                            SFLAddress *agent_addr)
 {
-    const char *target;
-    struct in_addr in4;
-
-    memset(agent_addr, 0, sizeof *agent_addr);
-    agent_addr->type = SFLADDRESSTYPE_IP_V4;
+    struct in6_addr ip;
 
     if (agent_device) {
-        if (!netdev_get_in4_by_name(agent_device, &in4)
-            || !lookup_ip(agent_device, &in4)) {
+        /* If 'agent_device' is the name of a network device, use its IP
+         * address. */
+        if (!netdev_get_ip_by_name(agent_device, &ip)) {
+            goto success;
+        }
+
+        /* If 'agent_device' is itself an IP address, use it. */
+        struct sockaddr_storage ss;
+        if (inet_parse_address(agent_device, &ss)) {
+            ip = ss_get_address(&ss);
             goto success;
         }
     }
 
+    /* Otherwise, use an appropriate local IP address for one of the
+     * collectors' remote IP addresses. */
+    const char *target;
     SSET_FOR_EACH (target, targets) {
-        union {
-            struct sockaddr_storage ss;
-            struct sockaddr_in sin;
-        } sa;
-        char name[IFNAMSIZ];
-
-        if (inet_parse_active(target, SFL_DEFAULT_COLLECTOR_PORT, &sa.ss)
-            && sa.ss.ss_family == AF_INET) {
-            struct in6_addr addr6, src, gw;
-
-            in6_addr_set_mapped_ipv4(&addr6, sa.sin.sin_addr.s_addr);
+        struct sockaddr_storage ss;
+        if (inet_parse_active(target, SFL_DEFAULT_COLLECTOR_PORT, &ss)) {
             /* sFlow only supports target in default routing table with
              * packet mark zero.
              */
-            if (ovs_router_lookup(0, &addr6, name, &src, &gw)) {
+            ip = ss_get_address(&ss);
 
-                in4.s_addr = in6_addr_get_mapped_ipv4(&src);
+            struct in6_addr src, gw;
+            char name[IFNAMSIZ];
+            if (ovs_router_lookup(0, &ip, name, &src, &gw)) {
                 goto success;
             }
         }
     }
 
-    if (control_ip && !lookup_ip(control_ip, &in4)) {
+    struct sockaddr_storage ss;
+    if (control_ip && inet_parse_address(control_ip, &ss)) {
+        ip = ss_get_address(&ss);
         goto success;
     }
 
@@ -490,7 +492,16 @@ sflow_choose_agent_address(const char *agent_device,
     return false;
 
 success:
-    agent_addr->address.ip_v4.addr = (OVS_FORCE uint32_t) in4.s_addr;
+    memset(agent_addr, 0, sizeof *agent_addr);
+    if (IN6_IS_ADDR_V4MAPPED(&ip)) {
+        agent_addr->type = SFLADDRESSTYPE_IP_V4;
+        agent_addr->address.ip_v4.addr
+            = (OVS_FORCE uint32_t) in6_addr_get_mapped_ipv4(&ip);
+    } else {
+        agent_addr->type = SFLADDRESSTYPE_IP_V6;
+        memcpy(agent_addr->address.ip_v6.addr, ip.s6_addr,
+               sizeof agent_addr->address.ip_v6.addr);
+    }
     return true;
 }
 
