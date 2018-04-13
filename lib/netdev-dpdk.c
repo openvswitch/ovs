@@ -590,32 +590,69 @@ dpdk_mp_create(int socket_id, int mtu)
     return NULL;
 }
 
+static int
+dpdk_mp_full(const struct rte_mempool *mp) OVS_REQUIRES(dpdk_mp_mutex)
+{
+    unsigned ring_count;
+    /* This logic is needed because rte_mempool_full() is not guaranteed to
+     * be atomic and mbufs could be moved from mempool cache --> mempool ring
+     * during the call. However, as no mbufs will be taken from the mempool
+     * at this time, we can work around it by also checking the ring entries
+     * separately and ensuring that they have not changed.
+     */
+    ring_count = rte_mempool_ops_get_count(mp);
+    if (rte_mempool_full(mp) && rte_mempool_ops_get_count(mp) == ring_count) {
+        return 1;
+    }
+
+    return 0;
+}
+
+/* Free unused mempools. */
+static void
+dpdk_mp_sweep(void) OVS_REQUIRES(dpdk_mp_mutex)
+{
+    struct dpdk_mp *dmp, *next;
+
+    LIST_FOR_EACH_SAFE (dmp, next, list_node, &dpdk_mp_list) {
+        if (!dmp->refcount && dpdk_mp_full(dmp->mp)) {
+            ovs_list_remove(&dmp->list_node);
+            rte_mempool_free(dmp->mp);
+            rte_free(dmp);
+        }
+    }
+}
+
 static struct dpdk_mp *
 dpdk_mp_get(int socket_id, int mtu)
 {
     struct dpdk_mp *dmp;
+    bool reuse = false;
 
     ovs_mutex_lock(&dpdk_mp_mutex);
     LIST_FOR_EACH (dmp, list_node, &dpdk_mp_list) {
         if (dmp->socket_id == socket_id && dmp->mtu == mtu) {
             dmp->refcount++;
-            goto out;
+            reuse = true;
+            break;
         }
     }
+    /* Sweep mempools after reuse or before create. */
+    dpdk_mp_sweep();
 
-    dmp = dpdk_mp_create(socket_id, mtu);
-    if (dmp) {
-        ovs_list_push_back(&dpdk_mp_list, &dmp->list_node);
+    if (!reuse) {
+        dmp = dpdk_mp_create(socket_id, mtu);
+        if (dmp) {
+            ovs_list_push_back(&dpdk_mp_list, &dmp->list_node);
+        }
     }
-
-out:
 
     ovs_mutex_unlock(&dpdk_mp_mutex);
 
     return dmp;
 }
 
-/* Release an existing mempool. */
+/* Decrement reference to a mempool. */
 static void
 dpdk_mp_put(struct dpdk_mp *dmp)
 {
@@ -625,12 +662,7 @@ dpdk_mp_put(struct dpdk_mp *dmp)
 
     ovs_mutex_lock(&dpdk_mp_mutex);
     ovs_assert(dmp->refcount);
-
-    if (!--dmp->refcount) {
-        ovs_list_remove(&dmp->list_node);
-        rte_mempool_free(dmp->mp);
-        rte_free(dmp);
-     }
+    dmp->refcount--;
     ovs_mutex_unlock(&dpdk_mp_mutex);
 }
 
