@@ -53,6 +53,9 @@ VLOG_DEFINE_THIS_MODULE(socket_util);
 
 static int getsockopt_int(int fd, int level, int option, const char *optname,
                           int *valuep);
+static struct sockaddr_in *sin_cast(const struct sockaddr *);
+static struct sockaddr_in6 *sin6_cast(const struct sockaddr *);
+static const struct sockaddr *sa_cast(const struct sockaddr_storage *);
 
 /* Sets 'fd' to non-blocking mode.  Returns 0 if successful, otherwise a
  * positive errno value. */
@@ -422,7 +425,7 @@ parse_sockaddr_components(struct sockaddr_storage *ss,
                           const char *port_s, uint16_t default_port,
                           const char *s)
 {
-    struct sockaddr_in *sin = ALIGNED_CAST(struct sockaddr_in *, ss);
+    struct sockaddr_in *sin = sin_cast(sa_cast(ss));
     int port;
 
     if (port_s && port_s[0]) {
@@ -436,9 +439,7 @@ parse_sockaddr_components(struct sockaddr_storage *ss,
 
     memset(ss, 0, sizeof *ss);
     if (host_s && strchr(host_s, ':')) {
-        struct sockaddr_in6 *sin6
-            = ALIGNED_CAST(struct sockaddr_in6 *, ss);
-
+        struct sockaddr_in6 *sin6 = sin6_cast(sa_cast(ss));
         char *addr = strsep(&host_s, "%");
 
         sin6->sin6_family = AF_INET6;
@@ -1017,25 +1018,47 @@ describe_fd(int fd)
 #endif /* _WIN32 */
     return ds_steal_cstr(&string);
 }
-
 
-/* sockaddr_storage helpers. */
+/* sockaddr helpers. */
 
-/* Returns the IPv4 or IPv6 port in 'ss'. */
-uint16_t
-ss_get_port(const struct sockaddr_storage *ss)
+static struct sockaddr_in *
+sin_cast(const struct sockaddr *sa)
 {
-    if (ss->ss_family == AF_INET) {
-        const struct sockaddr_in *sin
-            = ALIGNED_CAST(const struct sockaddr_in *, ss);
-        return ntohs(sin->sin_port);
-    } else if (ss->ss_family == AF_INET6) {
-        const struct sockaddr_in6 *sin6
-            = ALIGNED_CAST(const struct sockaddr_in6 *, ss);
-        return ntohs(sin6->sin6_port);
-    } else {
-        OVS_NOT_REACHED();
-    }
+    return ALIGNED_CAST(struct sockaddr_in *, sa);
+}
+
+static struct sockaddr_in6 *
+sin6_cast(const struct sockaddr *sa)
+{
+    return ALIGNED_CAST(struct sockaddr_in6 *, sa);
+}
+
+/* Returns true if 'sa' represents an IPv4 or IPv6 address, false otherwise. */
+bool
+sa_is_ip(const struct sockaddr *sa)
+{
+    return sa->sa_family == AF_INET || sa->sa_family == AF_INET6;
+}
+
+/* Returns the IPv4 or IPv6 address in 'sa'.  Returns IPv4 addresses as
+ * v6-mapped. */
+struct in6_addr
+sa_get_address(const struct sockaddr *sa)
+{
+    ovs_assert(sa_is_ip(sa));
+    return (sa->sa_family == AF_INET
+            ? in6_addr_mapped_ipv4(sin_cast(sa)->sin_addr.s_addr)
+            : sin6_cast(sa)->sin6_addr);
+}
+
+/* Returns the IPv4 or IPv6 port in 'sa'. */
+uint16_t
+sa_get_port(const struct sockaddr *sa)
+{
+    ovs_assert(sa_is_ip(sa));
+    return ntohs(sa->sa_family == AF_INET
+                 ? sin_cast(sa)->sin_port
+                 : sin6_cast(sa)->sin6_port);
 }
 
 /* Returns true if 'name' is safe to include inside a network address field.
@@ -1055,18 +1078,15 @@ is_safe_name(const char *name)
 }
 
 static void
-ss_format_address__(const struct sockaddr_storage *ss,
+sa_format_address__(const struct sockaddr *sa,
                     const char *lbrack, const char *rbrack,
                     struct ds *s)
 {
-    if (ss->ss_family == AF_INET) {
-        const struct sockaddr_in *sin
-            = ALIGNED_CAST(const struct sockaddr_in *, ss);
-
-        ds_put_format(s, IP_FMT, IP_ARGS(sin->sin_addr.s_addr));
-    } else if (ss->ss_family == AF_INET6) {
-        const struct sockaddr_in6 *sin6
-            = ALIGNED_CAST(const struct sockaddr_in6 *, ss);
+    ovs_assert(sa_is_ip(sa));
+    if (sa->sa_family == AF_INET) {
+        ds_put_format(s, IP_FMT, IP_ARGS(sin_cast(sa)->sin_addr.s_addr));
+    } else {
+        const struct sockaddr_in6 *sin6 = sin6_cast(sa);
 
         ds_put_cstr(s, lbrack);
         ds_reserve(s, s->length + INET6_ADDRSTRLEN);
@@ -1089,31 +1109,29 @@ ss_format_address__(const struct sockaddr_storage *ss,
 #endif
 
         ds_put_cstr(s, rbrack);
-    } else {
-        OVS_NOT_REACHED();
     }
 }
 
-/* Formats the IPv4 or IPv6 address in 'ss' into 's'.  If 'ss' is an IPv6
+/* Formats the IPv4 or IPv6 address in 'sa' into 's'.  If 'sa' is an IPv6
  * address, puts square brackets around the address. */
 void
-ss_format_address(const struct sockaddr_storage *ss, struct ds *s)
+sa_format_address(const struct sockaddr *sa, struct ds *s)
 {
-    ss_format_address__(ss, "[", "]", s);
+    sa_format_address__(sa, "[", "]", s);
 }
 
-/* Formats the IPv4 or IPv6 address in 'ss' into 's'.  Does not add square
+/* Formats the IPv4 or IPv6 address in 'sa' into 's'.  Does not add square
  * brackets around IPv6 addresses. */
 void
-ss_format_address_nobracks(const struct sockaddr_storage *ss, struct ds *s)
+sa_format_address_nobracks(const struct sockaddr *sa, struct ds *s)
 {
-    ss_format_address__(ss, "", "", s);
+    sa_format_address__(sa, "", "", s);
 }
 
 size_t
-ss_length(const struct sockaddr_storage *ss)
+sa_length(const struct sockaddr *sa)
 {
-    switch (ss->ss_family) {
+    switch (sa->sa_family) {
     case AF_INET:
         return sizeof(struct sockaddr_in);
 
@@ -1124,7 +1142,51 @@ ss_length(const struct sockaddr_storage *ss)
         OVS_NOT_REACHED();
     }
 }
+
+/* sockaddr_storage helpers.  */
 
+static const struct sockaddr *
+sa_cast(const struct sockaddr_storage *ss)
+{
+    return ALIGNED_CAST(const struct sockaddr *, ss);
+}
+
+bool
+ss_is_ip(const struct sockaddr_storage *ss)
+{
+    return sa_is_ip(sa_cast(ss));
+}
+
+uint16_t
+ss_get_port(const struct sockaddr_storage *ss)
+{
+    return sa_get_port(sa_cast(ss));
+}
+
+struct in6_addr
+ss_get_address(const struct sockaddr_storage *ss)
+{
+    return sa_get_address(sa_cast(ss));
+}
+
+void
+ss_format_address(const struct sockaddr_storage *ss, struct ds *s)
+{
+    sa_format_address(sa_cast(ss), s);
+}
+
+void
+ss_format_address_nobracks(const struct sockaddr_storage *ss, struct ds *s)
+{
+    sa_format_address_nobracks(sa_cast(ss), s);
+}
+
+size_t
+ss_length(const struct sockaddr_storage *ss)
+{
+    return sa_length(sa_cast(ss));
+}
+
 /* For Windows socket calls, 'errno' is not set.  One has to call
  * WSAGetLastError() to get the error number and then pass it to
  * this function to get the correct error string.

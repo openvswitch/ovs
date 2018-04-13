@@ -74,12 +74,24 @@ char *describe_fd(int fd);
  * in <netinet/ip.h> is used. */
 #define DSCP_DEFAULT (IPTOS_PREC_INTERNETCONTROL >> 2)
 
+/* Functions for working with sockaddr that might contain an IPv4 or
+ * IPv6 address. */
+bool sa_is_ip(const struct sockaddr *);
+uint16_t sa_get_port(const struct sockaddr *);
+struct in6_addr sa_get_address(const struct sockaddr *);
+void sa_format_address(const struct sockaddr *, struct ds *);
+void sa_format_address_nobracks(const struct sockaddr *, struct ds *);
+size_t sa_length(const struct sockaddr *);
+
 /* Functions for working with sockaddr_storage that might contain an IPv4 or
  * IPv6 address. */
+bool ss_is_ip(const struct sockaddr_storage *);
 uint16_t ss_get_port(const struct sockaddr_storage *);
+struct in6_addr ss_get_address(const struct sockaddr_storage *);
 void ss_format_address(const struct sockaddr_storage *, struct ds *);
 void ss_format_address_nobracks(const struct sockaddr_storage *, struct ds *);
 size_t ss_length(const struct sockaddr_storage *);
+
 const char *sock_strerror(int error);
 
 #ifndef _WIN32

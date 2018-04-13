@@ -50,6 +50,7 @@
 #include "seq.h"
 #include "openvswitch/shash.h"
 #include "smap.h"
+#include "socket-util.h"
 #include "sset.h"
 #include "svec.h"
 #include "openvswitch/vlog.h"
@@ -2034,29 +2035,13 @@ netdev_get_addrs(const char dev[], struct in6_addr **paddr,
     addr_array = xzalloc(sizeof *addr_array * cnt);
     mask_array = xzalloc(sizeof *mask_array * cnt);
     for (ifa = if_addr_list; ifa; ifa = ifa->ifa_next) {
-        int family;
-
-        if (!ifa->ifa_name || !ifa->ifa_addr || !ifa->ifa_netmask
-            || strncmp(ifa->ifa_name, dev, IFNAMSIZ)) {
-            continue;
-        }
-
-        family = ifa->ifa_addr->sa_family;
-        if (family == AF_INET) {
-            const struct sockaddr_in *sin;
-
-            sin = ALIGNED_CAST(const struct sockaddr_in *, ifa->ifa_addr);
-            in6_addr_set_mapped_ipv4(&addr_array[i], sin->sin_addr.s_addr);
-            sin = ALIGNED_CAST(const struct sockaddr_in *, ifa->ifa_netmask);
-            in6_addr_set_mapped_ipv4(&mask_array[i], sin->sin_addr.s_addr);
-            i++;
-        } else if (family == AF_INET6) {
-            const struct sockaddr_in6 *sin6;
-
-            sin6 = ALIGNED_CAST(const struct sockaddr_in6 *, ifa->ifa_addr);
-            memcpy(&addr_array[i], &sin6->sin6_addr, sizeof *addr_array);
-            sin6 = ALIGNED_CAST(const struct sockaddr_in6 *, ifa->ifa_netmask);
-            memcpy(&mask_array[i], &sin6->sin6_addr, sizeof *mask_array);
+        if (ifa->ifa_name
+            && ifa->ifa_addr
+            && ifa->ifa_netmask
+            && !strncmp(ifa->ifa_name, dev, IFNAMSIZ)
+            && sa_is_ip(ifa->ifa_addr)) {
+            addr_array[i] = sa_get_address(ifa->ifa_addr);
+            mask_array[i] = sa_get_address(ifa->ifa_netmask);
             i++;
         }
     }
