@@ -81,6 +81,7 @@ setup_args = dict(
     ext_modules=[setuptools.Extension("ovs._json", sources=["ovs/_json.c"],
                                       libraries=['openvswitch'])],
     cmdclass={'build_ext': try_build_ext},
+    install_requires=['sortedcontainers'],
 )
 
 try:
