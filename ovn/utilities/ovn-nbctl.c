@@ -1782,7 +1782,6 @@ nbctl_lb_add(struct ctl_context *ctx)
 
     const char *lb_proto;
     bool is_update_proto = false;
-    bool is_vip_with_port = true;
 
     if (ctx->argc == 4) {
         /* Default protocol. */
@@ -1803,38 +1802,17 @@ nbctl_lb_add(struct ctl_context *ctx)
                   "and a port number with : as a separator).", lb_vip);
     }
 
-    char lb_vip_normalized[INET6_ADDRSTRLEN + 8];
-    char normalized_ip[INET6_ADDRSTRLEN];
-    if (ss_vip.ss_family == AF_INET) {
-        struct sockaddr_in *sin = ALIGNED_CAST(struct sockaddr_in *, &ss_vip);
-        inet_ntop(AF_INET, &sin->sin_addr, normalized_ip,
-                  sizeof normalized_ip);
-        if (sin->sin_port) {
-            is_vip_with_port = true;
-            snprintf(lb_vip_normalized, sizeof lb_vip_normalized, "%s:%d",
-                     normalized_ip, ntohs(sin->sin_port));
-        } else {
-            is_vip_with_port = false;
-            ovs_strlcpy(lb_vip_normalized, normalized_ip,
-                        sizeof lb_vip_normalized);
-        }
+    struct ds lb_vip_normalized_ds = DS_EMPTY_INITIALIZER;
+    uint16_t lb_vip_port = ss_get_port(&ss_vip);
+    if (lb_vip_port) {
+        ss_format_address(&ss_vip, &lb_vip_normalized_ds);
+        ds_put_format(&lb_vip_normalized_ds, ":%d", lb_vip_port);
     } else {
-        struct sockaddr_in6 *sin6 = ALIGNED_CAST(struct sockaddr_in6 *,
-                                                 &ss_vip);
-        inet_ntop(AF_INET6, &sin6->sin6_addr, normalized_ip,
-                  sizeof normalized_ip);
-        if (sin6->sin6_port) {
-            is_vip_with_port = true;
-            snprintf(lb_vip_normalized, sizeof lb_vip_normalized, "[%s]:%d",
-                     normalized_ip, ntohs(sin6->sin6_port));
-        } else {
-            is_vip_with_port = false;
-            ovs_strlcpy(lb_vip_normalized, normalized_ip,
-                        sizeof lb_vip_normalized);
-        }
+        ss_format_address_nobracks(&ss_vip, &lb_vip_normalized_ds);
     }
+    const char *lb_vip_normalized = ds_cstr(&lb_vip_normalized_ds);
 
-    if (!is_vip_with_port && is_update_proto) {
+    if (!lb_vip_port && is_update_proto) {
         ctl_fatal("Protocol is unnecessary when no port of vip "
                   "is given.");
     }
@@ -1845,7 +1823,7 @@ nbctl_lb_add(struct ctl_context *ctx)
             token != NULL; token = strtok_r(NULL, ",", &save_ptr)) {
         struct sockaddr_storage ss_dst;
 
-        if (is_vip_with_port) {
+        if (lb_vip_port) {
             if (!inet_parse_active(token, -1, &ss_dst)) {
                 ctl_fatal("%s: should be an IP address and a port "
                           "number with : as a separator.", token);
@@ -1892,6 +1870,7 @@ nbctl_lb_add(struct ctl_context *ctx)
             nbrec_load_balancer_verify_vips(lb);
             nbrec_load_balancer_set_vips(lb, &lb->vips);
             ds_destroy(&lb_ips_new);
+            ds_destroy(&lb_vip_normalized_ds);
             return;
         }
     }
@@ -1904,6 +1883,8 @@ nbctl_lb_add(struct ctl_context *ctx)
             lb_vip_normalized, ds_cstr(&lb_ips_new));
     nbrec_load_balancer_set_vips(lb, &lb->vips);
     ds_destroy(&lb_ips_new);
+
+    ds_destroy(&lb_vip_normalized_ds);
 }
 
 static void
