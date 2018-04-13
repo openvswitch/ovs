@@ -296,6 +296,16 @@ static struct ovs_list dpdk_list OVS_GUARDED_BY(dpdk_mutex)
 static struct ovs_mutex dpdk_mp_mutex OVS_ACQ_AFTER(dpdk_mutex)
     = OVS_MUTEX_INITIALIZER;
 
+/* Contains all 'struct dpdk_mp's. */
+static struct ovs_list dpdk_mp_free_list OVS_GUARDED_BY(dpdk_mp_mutex)
+    = OVS_LIST_INITIALIZER(&dpdk_mp_free_list);
+
+/* Wrapper for a mempool released but not yet freed. */
+struct dpdk_mp {
+     struct rte_mempool *mp;
+     struct ovs_list list_node OVS_GUARDED_BY(dpdk_mp_mutex);
+ };
+
 /* There should be one 'struct dpdk_tx_queue' created for
  * each cpu core. */
 struct dpdk_tx_queue {
@@ -511,6 +521,58 @@ ovs_rte_pktmbuf_init(struct rte_mempool *mp OVS_UNUSED,
     dp_packet_init_dpdk((struct dp_packet *) pkt, pkt->buf_len);
 }
 
+static int
+dpdk_mp_full(const struct rte_mempool *mp) OVS_REQUIRES(dpdk_mp_mutex)
+{
+    unsigned ring_count;
+    /* This logic is needed because rte_mempool_full() is not guaranteed to
+     * be atomic and mbufs could be moved from mempool cache --> mempool ring
+     * during the call. However, as no mbufs will be taken from the mempool
+     * at this time, we can work around it by also checking the ring entries
+     * separately and ensuring that they have not changed.
+     */
+    ring_count = rte_mempool_ops_get_count(mp);
+    if (rte_mempool_full(mp) && rte_mempool_ops_get_count(mp) == ring_count) {
+        return 1;
+    }
+
+    return 0;
+}
+
+/* Free unused mempools. */
+static void
+dpdk_mp_sweep(void)
+{
+    struct dpdk_mp *dmp, *next;
+
+    ovs_mutex_lock(&dpdk_mp_mutex);
+    LIST_FOR_EACH_SAFE (dmp, next, list_node, &dpdk_mp_free_list) {
+        if (dpdk_mp_full(dmp->mp)) {
+            VLOG_DBG("Freeing mempool \"%s\"", dmp->mp->name);
+            ovs_list_remove(&dmp->list_node);
+            rte_mempool_free(dmp->mp);
+            rte_free(dmp);
+        }
+    }
+    ovs_mutex_unlock(&dpdk_mp_mutex);
+}
+
+/* Ensure a mempool will not be freed. */
+static void
+dpdk_mp_do_not_free(struct rte_mempool *mp) OVS_REQUIRES(dpdk_mp_mutex)
+{
+    struct dpdk_mp *dmp, *next;
+
+    LIST_FOR_EACH_SAFE (dmp, next, list_node, &dpdk_mp_free_list) {
+        if (dmp->mp == mp) {
+            VLOG_DBG("Removing mempool \"%s\" from free list", dmp->mp->name);
+            ovs_list_remove(&dmp->list_node);
+            rte_free(dmp);
+            break;
+        }
+    }
+}
+
 /* Returns a valid pointer when either of the following is true:
  *  - a new mempool was just created;
  *  - a matching mempool already exists. */
@@ -577,6 +639,8 @@ dpdk_mp_create(struct netdev_dpdk *dev, int mtu)
              * that's not the case we keep track of it. */
             VLOG_DBG("A mempool with name \"%s\" already exists at %p.",
                      mp_name, mp);
+            /* Ensure this reused mempool will not be freed. */
+            dpdk_mp_do_not_free(mp);
         } else {
             VLOG_ERR("Failed mempool \"%s\" create request of %u mbufs",
                      mp_name, n_mbufs);
@@ -589,15 +653,25 @@ dpdk_mp_create(struct netdev_dpdk *dev, int mtu)
 
 /* Release an existing mempool. */
 static void
-dpdk_mp_free(struct rte_mempool *mp)
+dpdk_mp_release(struct rte_mempool *mp)
 {
     if (!mp) {
         return;
     }
 
     ovs_mutex_lock(&dpdk_mp_mutex);
-    VLOG_DBG("Releasing \"%s\" mempool", mp->name);
-    rte_mempool_free(mp);
+    if (dpdk_mp_full(mp)) {
+        VLOG_DBG("Freeing mempool \"%s\"", mp->name);
+        rte_mempool_free(mp);
+    } else {
+        struct dpdk_mp *dmp;
+
+        dmp = dpdk_rte_mzalloc(sizeof *dmp);
+        if (dmp) {
+            dmp->mp = mp;
+            ovs_list_push_back(&dpdk_mp_free_list, &dmp->list_node);
+        }
+    }
     ovs_mutex_unlock(&dpdk_mp_mutex);
 }
 
@@ -615,6 +689,8 @@ netdev_dpdk_mempool_configure(struct netdev_dpdk *dev)
     struct rte_mempool *mp;
     int ret = 0;
 
+    dpdk_mp_sweep();
+
     mp = dpdk_mp_create(dev, FRAME_LEN_TO_MTU(buf_size));
     if (!mp) {
         VLOG_ERR("Failed to create memory pool for netdev "
@@ -627,7 +703,7 @@ netdev_dpdk_mempool_configure(struct netdev_dpdk *dev)
          * that is currently used, then the existing mempool is returned. */
         if (dev->mp != mp) {
             /* A new mempool was created, release the previous one. */
-            dpdk_mp_free(dev->mp);
+            dpdk_mp_release(dev->mp);
         } else {
             ret = EEXIST;
         }
@@ -1082,7 +1158,7 @@ common_destruct(struct netdev_dpdk *dev)
     OVS_EXCLUDED(dev->mutex)
 {
     rte_free(dev->tx_q);
-    dpdk_mp_free(dev->mp);
+    dpdk_mp_release(dev->mp);
 
     ovs_list_remove(&dev->list_node);
     free(ovsrcu_get_protected(struct ingress_policer *,
