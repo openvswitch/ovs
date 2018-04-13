@@ -616,6 +616,7 @@ dpdk_mp_sweep(void) OVS_REQUIRES(dpdk_mp_mutex)
 
     LIST_FOR_EACH_SAFE (dmp, next, list_node, &dpdk_mp_list) {
         if (!dmp->refcount && dpdk_mp_full(dmp->mp)) {
+            VLOG_DBG("Freeing mempool \"%s\"", dmp->mp->name);
             ovs_list_remove(&dmp->list_node);
             rte_mempool_free(dmp->mp);
             rte_free(dmp);
@@ -632,6 +633,7 @@ dpdk_mp_get(int socket_id, int mtu)
     ovs_mutex_lock(&dpdk_mp_mutex);
     LIST_FOR_EACH (dmp, list_node, &dpdk_mp_list) {
         if (dmp->socket_id == socket_id && dmp->mtu == mtu) {
+            VLOG_DBG("Reusing mempool \"%s\"", dmp->mp->name);
             dmp->refcount++;
             reuse = true;
             break;
