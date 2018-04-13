@@ -485,12 +485,10 @@ fi
 
 %files -n %{_py2}-openvswitch
 %{python2_sitelib}/ovs
-%doc COPYING
 
 %if 0%{?fedora} > 22 || %{with build_python3}
 %files -n python3-openvswitch
 %{python3_sitelib}/ovs
-%doc COPYING
 %endif
 
 %files test
@@ -584,7 +582,7 @@ fi
 %if %{with dpdk}
 %{_prefix}/lib/udev/rules.d/91-vfio.rules
 %endif
-%doc COPYING NOTICE README.rst NEWS rhel/README.RHEL.rst
+%doc NOTICE README.rst NEWS rhel/README.RHEL.rst
 /var/lib/openvswitch
 %attr(755,-,-) /var/log/openvswitch
 %ghost %attr(755,root,root) %{_rundir}/openvswitch
