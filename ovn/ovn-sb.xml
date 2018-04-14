@@ -368,9 +368,17 @@
 
   <table name="Address_Set" title="Address Sets">
     <p>
-      See the documentation for the <ref table="Address_Set"
+      This table contains address sets synced from the <ref table="Address_Set"
       db="OVN_Northbound"/> table in the <ref db="OVN_Northbound"/> database
-      for details.
+      and address sets generated from the <ref table="Port_Group"
+      db="OVN_Northbound"/> table in the <ref db="OVN_Northbound"/> database.
+    </p>
+
+    <p>
+      See the documentation for the <ref table="Address_Set"
+      db="OVN_Northbound"/> table and <ref table="Port_Group"
+      db="OVN_Northbound"/> table in the <ref db="OVN_Northbound"/>
+      database for details.
     </p>
 
     <column name="name"/>
@@ -788,6 +796,17 @@
         table="Port_Group"/>.  An <ref table="Port_Group"/> with a name
         of <code>port_group1</code> can be referred to as
         <code>@port_group1</code>.
+      </p>
+
+      <p>
+        Additionally, you may refer to the set of addresses belonging to a
+        group of logical switch ports stored in the <ref table="Port_Group"/>
+        table by its <ref column="name" table="Port_Group"/> followed by
+        a suffix '_ip4'/'_ip6'.  The IPv4 address set of a
+        <ref table="Port_Group"/> with a name of <code>port_group1</code>
+        can be referred to as <code>$port_group1_ip4</code>, and the IPv6
+        address set of the same <ref table="Port_Group"/> can be referred to
+        as <code>$port_group1_ip6</code>
       </p>
 
       <p><em>Miscellaneous</em></p>

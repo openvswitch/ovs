@@ -936,6 +936,24 @@
       db="OVN_Southbound"/> database.
     </p>
 
+    <p>
+      For each port group, there are two address sets generated to the
+      <ref table="Address_Set" db="OVN_Southbound"/> table of the
+      <ref db="OVN_Southbound"/> database, containing the IP addresses
+      of the group of ports, one for IPv4, and the other for IPv6, with
+      <ref column="name" table="Address_Set" db="OVN_Southbound"/> being
+      the <ref column="name" table="Port_Group" db="OVN_Northbound"/>
+      of the <ref table="Port_Group" db="OVN_Northbound"/> followed by
+      a suffix <code>_ip4</code> for IPv4 and <code>_ip6</code> for IPv6.
+      The generated address sets can be used in the same way as regular
+      address sets in the <ref column="match" table="ACL"/> column
+      of the <ref table="ACL"/> table. For syntax information, see the details
+      of the expression language used for the <ref column="match"
+      table="Logical_Flow" db="OVN_Southbound"/> column in the <ref
+      table="Logical_Flow" db="OVN_Southbound"/> table of the <ref
+      db="OVN_Southbound"/> database.
+    </p>
+
     <column name="name">
       A name for the port group.  Names are ASCII and must match
       <code>[a-zA-Z_.][a-zA-Z_.0-9]*</code>.

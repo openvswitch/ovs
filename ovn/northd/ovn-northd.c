@@ -6179,9 +6179,32 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
     hmap_destroy(&mcgroups);
 }
 
-/* OVN_Northbound and OVN_Southbound have an identical Address_Set table.
- * We always update OVN_Southbound to match the current data in
- * OVN_Northbound, so that the address sets used in Logical_Flows in
+static void
+sync_address_set(struct northd_context *ctx, const char *name,
+                 const char **addrs, size_t n_addrs,
+                 struct shash *sb_address_sets)
+{
+    const struct sbrec_address_set *sb_address_set;
+    sb_address_set = shash_find_and_delete(sb_address_sets,
+                                           name);
+    if (!sb_address_set) {
+        sb_address_set = sbrec_address_set_insert(ctx->ovnsb_txn);
+        sbrec_address_set_set_name(sb_address_set, name);
+    }
+
+    sbrec_address_set_set_addresses(sb_address_set,
+                                    addrs, n_addrs);
+}
+
+/* OVN_Southbound Address_Set table contains same records as in north
+ * bound, plus the records generated from Port_Group table in north bound.
+ *
+ * There are 2 records generated from each port group, one for IPv4, and
+ * one for IPv6, named in the format: <port group name>_ip4 and
+ * <port group name>_ip6 respectively. MAC addresses are ignored.
+ *
+ * We always update OVN_Southbound to match the Address_Set and Port_Group
+ * in OVN_Northbound, so that the address sets used in Logical_Flows in
  * OVN_Southbound is checked against the proper set.*/
 static void
 sync_address_sets(struct northd_context *ctx)
@@ -6193,19 +6216,67 @@ sync_address_sets(struct northd_context *ctx)
         shash_add(&sb_address_sets, sb_address_set->name, sb_address_set);
     }
 
+    /* sync port group generated address sets first */
+    const struct nbrec_port_group *nb_port_group;
+    NBREC_PORT_GROUP_FOR_EACH (nb_port_group, ctx->ovnnb_idl) {
+        char **ipv4_addrs = xcalloc(1, sizeof *ipv4_addrs);
+        size_t n_ipv4_addrs = 0;
+        size_t n_ipv4_addrs_buf = 1;
+        char **ipv6_addrs = xcalloc(1, sizeof *ipv6_addrs);
+        size_t n_ipv6_addrs = 0;
+        size_t n_ipv6_addrs_buf = 1;
+        for (size_t i = 0; i < nb_port_group->n_ports; i++) {
+            for (size_t j = 0; j < nb_port_group->ports[i]->n_addresses; j++) {
+                struct lport_addresses laddrs;
+                extract_lsp_addresses(nb_port_group->ports[i]->addresses[j],
+                                     &laddrs);
+                while (n_ipv4_addrs_buf < n_ipv4_addrs + laddrs.n_ipv4_addrs) {
+                    n_ipv4_addrs_buf *= 2;
+                    ipv4_addrs = xrealloc(ipv4_addrs,
+                            n_ipv4_addrs_buf * sizeof *ipv4_addrs);
+                }
+                for (size_t k = 0; k < laddrs.n_ipv4_addrs; k++) {
+                    ipv4_addrs[n_ipv4_addrs++] =
+                        xstrdup(laddrs.ipv4_addrs[k].addr_s);
+                }
+                while (n_ipv6_addrs_buf < n_ipv6_addrs + laddrs.n_ipv6_addrs) {
+                    n_ipv6_addrs_buf *= 2;
+                    ipv6_addrs = xrealloc(ipv6_addrs,
+                            n_ipv6_addrs_buf * sizeof *ipv6_addrs);
+                }
+                for (size_t k = 0; k < laddrs.n_ipv6_addrs; k++) {
+                    ipv6_addrs[n_ipv6_addrs++] =
+                        xstrdup(laddrs.ipv6_addrs[k].addr_s);
+                }
+                destroy_lport_addresses(&laddrs);
+            }
+        }
+        char *ipv4_addrs_name = xasprintf("%s_ip4", nb_port_group->name);
+        char *ipv6_addrs_name = xasprintf("%s_ip6", nb_port_group->name);
+        sync_address_set(ctx, ipv4_addrs_name, (const char **)ipv4_addrs,
+                         n_ipv4_addrs, &sb_address_sets);
+        sync_address_set(ctx, ipv6_addrs_name, (const char **)ipv6_addrs,
+                         n_ipv6_addrs, &sb_address_sets);
+        free(ipv4_addrs_name);
+        free(ipv6_addrs_name);
+        for (size_t i = 0; i < n_ipv4_addrs; i++) {
+            free(ipv4_addrs[i]);
+        }
+        free(ipv4_addrs);
+        for (size_t i = 0; i < n_ipv6_addrs; i++) {
+            free(ipv6_addrs[i]);
+        }
+        free(ipv6_addrs);
+    }
+
+    /* sync user defined address sets, which may overwrite port group
+     * generated address sets if same name is used */
     const struct nbrec_address_set *nb_address_set;
     NBREC_ADDRESS_SET_FOR_EACH (nb_address_set, ctx->ovnnb_idl) {
-        sb_address_set = shash_find_and_delete(&sb_address_sets,
-                                               nb_address_set->name);
-        if (!sb_address_set) {
-            sb_address_set = sbrec_address_set_insert(ctx->ovnsb_txn);
-            sbrec_address_set_set_name(sb_address_set, nb_address_set->name);
-        }
-
-        sbrec_address_set_set_addresses(sb_address_set,
-                /* "char **" is not compatible with "const char **" */
-                (const char **) nb_address_set->addresses,
-                nb_address_set->n_addresses);
+        sync_address_set(ctx, nb_address_set->name,
+            /* "char **" is not compatible with "const char **" */
+            (const char **)nb_address_set->addresses,
+            nb_address_set->n_addresses, &sb_address_sets);
     }
 
     struct shash_node *node, *next;
