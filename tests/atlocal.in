@@ -106,6 +106,15 @@ FreeBSD|NetBSD)
     ;;
 esac
 
+if test x"$PYTHON3" != x && test "$IS_WIN32" = yes; then
+    # enables legacy windows unicode printing needed for Python3 compatibility
+    # with the Python2 tests
+    PYTHONLEGACYWINDOWSFSENCODING=true
+    export PYTHONLEGACYWINDOWSFSENCODING
+    PYTHONLEGACYWINDOWSSTDIO=true
+    export PYTHONLEGACYWINDOWSSTDIO
+fi
+
 # Check whether to run IPv6 tests.
 if $PYTHON -c '
 import socket
