@@ -9377,7 +9377,7 @@ construct_expected_ra() {
         shift 2
     done
 
-    local ra=ff${ra_mo}00000000000000000000${slla}${mtu_opt}${prefix}
+    local ra=ff${ra_mo}ffff0000000000000000${slla}${mtu_opt}${prefix}
     local icmp=8600XXXX${ra}
 
     local ip_len=$(expr ${#icmp} / 2)

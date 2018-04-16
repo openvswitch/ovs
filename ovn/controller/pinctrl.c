@@ -1432,7 +1432,8 @@ ipv6_ra_send(struct ipv6_ra_state *ra)
     dp_packet_use_stub(&packet, packet_stub, sizeof packet_stub);
     compose_nd_ra(&packet, ra->config->eth_src, ra->config->eth_dst,
             &ra->config->ipv6_src, &ra->config->ipv6_dst,
-            255, ra->config->mo_flags, 0, 0, 0, ra->config->mtu);
+            255, ra->config->mo_flags, htons(IPV6_ND_RA_LIFETIME), 0, 0,
+            ra->config->mtu);
 
     for (int i = 0; i < ra->config->prefixes.n_ipv6_addrs; i++) {
         ovs_be128 addr;
