@@ -15,7 +15,7 @@ EnvironmentFile=/etc/openvswitch/default.conf
 EnvironmentFile=-/etc/sysconfig/openvswitch
 EnvironmentFile=-/run/openvswitch/useropts
 @begin_dpdk@
-ExecStartPre=-/bin/sh -c '/usr/bin/chown :${OVS_USER_ID##*:} /dev/hugepages'
+ExecStartPre=-/bin/sh -c '/usr/bin/chown :$${OVS_USER_ID##*:} /dev/hugepages'
 ExecStartPre=-/usr/bin/chmod 0775 /dev/hugepages
 @end_dpdk@
 ExecStart=/usr/share/openvswitch/scripts/ovs-ctl \
