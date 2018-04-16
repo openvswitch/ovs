@@ -83,6 +83,7 @@ DOC_SOURCE = \
 	Documentation/faq/general.rst \
 	Documentation/faq/issues.rst \
 	Documentation/faq/openflow.rst \
+	Documentation/faq/ovn.rst \
 	Documentation/faq/qos.rst \
 	Documentation/faq/releases.rst \
 	Documentation/faq/terminology.rst \
