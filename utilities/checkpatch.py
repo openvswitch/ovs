@@ -167,13 +167,13 @@ skip_signoff_check = False
 # name, as they may have legitimate reasons to have longer lines.
 #
 # Python isn't checked as flake8 performs these checks during build.
-line_length_blacklist = ['.am', '.at', 'etc', '.in', '.m4', '.mk', '.patch',
-                         '.py']
+line_length_blacklist = re.compile(
+    r'\.(am|at|etc|in|m4|mk|patch|py)$|debian/rules')
 
 # Don't enforce a requirement that leading whitespace be all spaces on
 # files that include these characters in their name, since these kinds
 # of files need lines with leading tabs.
-leading_whitespace_blacklist = ['.mk', '.am', '.at']
+leading_whitespace_blacklist = re.compile(r'\.(mk|am|at)$|debian/rules')
 
 
 def is_subtracted_line(line):
@@ -459,13 +459,13 @@ file_checks = [
 checks = [
     {'regex': None,
      'match_name':
-     lambda x: not any([fmt in x for fmt in line_length_blacklist]),
+     lambda x: not line_length_blacklist.match(x),
      'check': lambda x: line_length_check(x),
      'print': lambda: print_warning("Line length is >79-characters long")},
 
     {'regex': None,
      'match_name':
-     lambda x: not any([fmt in x for fmt in leading_whitespace_blacklist]),
+     lambda x: not leading_whitespace_blacklist.match(x),
      'check': lambda x: not leading_whitespace_is_spaces(x),
      'print': lambda: print_warning("Line has non-spaces leading whitespace")},
 
