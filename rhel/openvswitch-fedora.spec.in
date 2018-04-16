@@ -94,7 +94,7 @@ Requires: openssl hostname iproute module-init-tools
 
 Requires(post): /usr/bin/getent
 Requires(post): /usr/sbin/useradd
-Requires(post): /usr/bin/sed
+Requires(post): /bin/sed
 %if %{with dpdk}
 Requires(post): /usr/sbin/usermod
 Requires(post): /usr/sbin/groupadd
