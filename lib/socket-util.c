@@ -387,7 +387,7 @@ inet_parse_tokens__(char *s, int host_index, char **hostp, char **portp)
 /* Parses 's', a string in the form "<host>[:<port>]", into its (required) host
  * and (optional) port components, and stores pointers to them in '*hostp' and
  * '*portp' respectively.  Always sets '*hostp' nonnull, although possibly to
- * an empty string empty string.  Can set '*portp' to the null string.
+ * an empty string.  Can set '*portp' to the null string.
  *
  * Supports both IPv4 and IPv6.  IPv6 addresses may be quoted with square
  * brackets.  Resolves ambiguous cases that might represent an IPv6 address or
@@ -404,7 +404,7 @@ inet_parse_host_port_tokens(char *s, char **hostp, char **portp)
 
 /* Parses 's', a string in the form "<port>[:<host>]", into its port and host
  * components, and stores pointers to them in '*portp' and '*hostp'
- * respectively.  Both '*portp' and '*hostp' can end up null.
+ * respectively.  Either '*portp' and '*hostp' (but not both) can end up null.
  *
  * Supports both IPv4 and IPv6.  IPv6 addresses may be quoted with square
  * brackets.  Resolves ambiguous cases that might represent an IPv6 address or
