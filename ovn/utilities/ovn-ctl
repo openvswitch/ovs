@@ -95,26 +95,46 @@ promote_ovnsb() {
 
 start_ovsdb__() {
     local DB=$1 db=$2 schema_name=$3 table_name=$4
-    eval local pid=\$DB_${DB}_PID
-    eval local cluster_local_addr=\$DB_${DB}_CLUSTER_LOCAL_ADDR
-    eval local cluster_local_port=\$DB_${DB}_CLUSTER_LOCAL_PORT
-    eval local cluster_local_proto=\$DB_${DB}_CLUSTER_LOCAL_PROTO
-    eval local cluster_remote_addr=\$DB_${DB}_CLUSTER_REMOTE_ADDR
-    eval local cluster_remote_port=\$DB_${DB}_CLUSTER_REMOTE_PORT
-    eval local cluster_remote_proto=\$DB_${DB}_CLUSTER_REMOTE_PROTO
-    eval local sync_from_proto=\$DB_${DB}_SYNC_FROM_PROTO
-    eval local sync_from_addr=\$DB_${DB}_SYNC_FROM_ADDR
-    eval local sync_from_port=\$DB_${DB}_SYNC_FROM_PORT
-    eval local file=\$DB_${DB}_FILE
-    eval local schema=\$DB_${DB}_SCHEMA
-    eval local logfile=\$OVN_${DB}_LOGFILE
-    eval local log=\$OVN_${DB}_LOG
-    eval local sock=\$DB_${DB}_SOCK
-    eval local detach=\$DB_${DB}_DETACH
-    eval local create_insecure_remote=\$DB_${DB}_CREATE_INSECURE_REMOTE
-    eval local port=\$DB_${DB}_PORT
-    eval local addr=\$DB_${DB}_ADDR
-    eval local active_conf_file=\$ovn${db}_active_conf_file
+    local pid
+    local cluster_local_addr
+    local cluster_local_port
+    local cluster_local_proto
+    local cluster_remote_addr
+    local cluster_remote_port
+    local cluster_remote_proto
+    local sync_from_proto
+    local sync_from_addr
+    local sync_from_port
+    local file
+    local schema
+    local logfile
+    local log
+    local sock
+    local detach
+    local create_insecure_remote
+    local port
+    local addr
+    local active_conf_file
+    eval pid=\$DB_${DB}_PID
+    eval cluster_local_addr=\$DB_${DB}_CLUSTER_LOCAL_ADDR
+    eval cluster_local_port=\$DB_${DB}_CLUSTER_LOCAL_PORT
+    eval cluster_local_proto=\$DB_${DB}_CLUSTER_LOCAL_PROTO
+    eval cluster_remote_addr=\$DB_${DB}_CLUSTER_REMOTE_ADDR
+    eval cluster_remote_port=\$DB_${DB}_CLUSTER_REMOTE_PORT
+    eval cluster_remote_proto=\$DB_${DB}_CLUSTER_REMOTE_PROTO
+    eval sync_from_proto=\$DB_${DB}_SYNC_FROM_PROTO
+    eval sync_from_addr=\$DB_${DB}_SYNC_FROM_ADDR
+    eval sync_from_port=\$DB_${DB}_SYNC_FROM_PORT
+    eval file=\$DB_${DB}_FILE
+    eval schema=\$DB_${DB}_SCHEMA
+    eval logfile=\$OVN_${DB}_LOGFILE
+    eval log=\$OVN_${DB}_LOG
+    eval sock=\$DB_${DB}_SOCK
+    eval detach=\$DB_${DB}_DETACH
+    eval create_insecure_remote=\$DB_${DB}_CREATE_INSECURE_REMOTE
+    eval port=\$DB_${DB}_PORT
+    eval addr=\$DB_${DB}_ADDR
+    eval active_conf_file=\$ovn${db}_active_conf_file
 
     # Check and eventually start ovsdb-server for DB
     if pidfile_is_running $pid; then
