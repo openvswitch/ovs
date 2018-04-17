@@ -1187,7 +1187,7 @@ netdev_get_in4_by_name(const char *device_name, struct in_addr *in4)
 }
 
 /* Obtains an IPv4 or IPv6 address from 'device_name' and save the address in
- * '*ss', representing IPv4 addressse as v6-mapped.  Returns 0 if successful,
+ * '*in6', representing IPv4 addresses as v6-mapped.  Returns 0 if successful,
  * otherwise a positive errno value. */
 int
 netdev_get_ip_by_name(const char *device_name, struct in6_addr *in6)
