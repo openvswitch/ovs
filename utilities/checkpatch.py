@@ -155,6 +155,8 @@ __regex_trailing_operator = re.compile(r'^[^ ]* [^ ]*[?:]$')
 __regex_conditional_else_bracing = re.compile(r'^\s*else\s*{?$')
 __regex_conditional_else_bracing2 = re.compile(r'^\s*}\selse\s*$')
 __regex_has_xxx_mark = re.compile(r'.*xxx.*', re.IGNORECASE)
+__regex_added_doc_rst = re.compile(
+                    r'\ndiff .*Documentation/.*rst\nnew file mode')
 
 skip_leading_whitespace_check = False
 skip_trailing_whitespace_check = False
@@ -376,6 +378,84 @@ def check_comment_spelling(line):
     return False
 
 
+def __check_doc_is_listed(text, doctype, docdir, docfile):
+    if doctype == 'rst':
+        beginre = re.compile(r'\+\+\+.*{}/index.rst'.format(docdir))
+        docre = re.compile(r'\n\+.*{}'.format(docfile.replace('.rst', '')))
+    elif doctype == 'automake':
+        beginre = re.compile(r'\+\+\+.*Documentation/automake.mk')
+        docre = re.compile(r'\n\+\t{}/{}'.format(docdir, docfile))
+    else:
+        raise NotImplementedError("Invalid doctype: {}".format(doctype))
+
+    res = beginre.search(text)
+    if res is None:
+        return True
+
+    hunkstart = res.span()[1]
+    hunkre = re.compile(r'\n(---|\+\+\+) (\S+)')
+    res = hunkre.search(text[hunkstart:])
+    if res is None:
+        hunkend = len(text)
+    else:
+        hunkend = hunkstart + res.span()[0]
+
+    hunk = text[hunkstart:hunkend]
+    # find if the file is being added.
+    if docre.search(hunk) is not None:
+        return False
+
+    return True
+
+
+def __check_new_docs(text, doctype):
+    """Check if the documentation is listed properly. If doctype is 'rst' then
+       the index.rst is checked. If the doctype is 'automake' then automake.mk
+       is checked. Returns TRUE if the new file is not listed."""
+    failed = False
+    new_docs = __regex_added_doc_rst.findall(text)
+    for doc in new_docs:
+        docpathname = doc.split(' ')[2]
+        gitdocdir, docfile = os.path.split(docpathname.rstrip('\n'))
+        if docfile == "index.rst":
+            continue
+
+        if gitdocdir.startswith('a/'):
+            docdir = gitdocdir.replace('a/', '', 1)
+        else:
+            docdir = gitdocdir
+
+        if __check_doc_is_listed(text, doctype, docdir, docfile):
+            if doctype == 'rst':
+                print_warning("New doc {} not listed in {}/index.rst".format(
+                              docfile, docdir))
+            elif doctype == 'automake':
+                print_warning("New doc {} not listed in "
+                              "Documentation/automake.mk".format(docfile))
+            else:
+                raise NotImplementedError("Invalid doctype: {}".format(
+                                          doctype))
+
+            failed = True
+
+    return failed
+
+
+def check_doc_docs_automake(text):
+    return __check_new_docs(text, 'automake')
+
+
+def check_new_docs_index(text):
+    return __check_new_docs(text, 'rst')
+
+
+file_checks = [
+        {'regex': __regex_added_doc_rst,
+         'check': check_new_docs_index},
+        {'regex': __regex_added_doc_rst,
+         'check': check_doc_docs_automake}
+]
+
 checks = [
     {'regex': None,
      'match_name':
@@ -517,6 +597,13 @@ def run_checks(current_file, line, lineno):
         print("%s\n" % line)
 
 
+def run_file_checks(text):
+    """Runs the various checks for the text."""
+    for check in file_checks:
+        if check['regex'].search(text) is not None:
+            check['check'](text)
+
+
 def ovs_checkpatch_parse(text, filename):
     global print_file_name, total_line, checking_file
 
@@ -609,6 +696,8 @@ def ovs_checkpatch_parse(text, filename):
             if current_file.startswith('include/linux'):
                 continue
             run_checks(current_file, cmp_line, lineno)
+
+    run_file_checks(text)
     if __errors or __warnings:
         return -1
     return 0
