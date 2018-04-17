@@ -93,3 +93,31 @@ def ovs_fatal(*args, **kwargs):
 
     ovs_error(*args, **kwargs)
     sys.exit(1)
+
+
+def ovs_info(message, vlog=None):
+    """Prints 'message' on stdout and emits an INFO level log message to
+    'vlog' if supplied.
+
+    'message' should not end with a new-line, because this function will add
+    one itself."""
+
+    info_msg = "%s: %s" % (PROGRAM_NAME, message)
+
+    sys.stdout.write("%s\n" % info_msg)
+    if vlog:
+        vlog.info(info_msg)
+
+
+def ovs_warn(message, vlog=None):
+    """Prints 'message' on stdout and emits an WARN level log message to
+    'vlog' if supplied.
+
+    'message' should not end with a new-line, because this function will add
+    one itself."""
+
+    info_msg = "%s: %s" % (PROGRAM_NAME, message)
+
+    sys.stdout.write("%s\n" % info_msg)
+    if vlog:
+        vlog.warn(info_msg)
