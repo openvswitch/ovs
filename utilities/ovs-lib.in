@@ -616,6 +616,7 @@ force_reload_kmod () {
     for dp in `ovs-dpctl dump-dps`; do
         action "Removing datapath: $dp" ovs-dpctl del-dp "$dp"
     done
+    action "ovs-appctl dpctl/flush-conntrack"
 
     for vport in `awk '/^vport_/ { print $1 }' /proc/modules`; do
         action "Removing $vport module" rmmod $vport
