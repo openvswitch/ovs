@@ -848,7 +848,7 @@ def main(argv):
             sys.stderr.write("%s: \"%s\" requires at least %d arguments but "
                              "only %d provided\n"
                              % (ovs.util.PROGRAM_NAME, command_name,
-                                n_args, len(args)))
+                                n_args[0], len(args)))
             sys.exit(1)
     elif type(n_args) == int:
         if len(args) != n_args:
