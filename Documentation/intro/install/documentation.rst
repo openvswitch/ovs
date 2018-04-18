@@ -58,7 +58,7 @@ wish to install using ``pip``::
     $ source .venv/bin/activate
     $ pip install -r Documentation/requirements.txt
 
-__ http://www.sphinx-doc.org/install.html
+__ http://www.sphinx-doc.org/en/master/usage/installation.html
 
 Configuring
 -----------
@@ -86,4 +86,4 @@ Makefile targets::
 Once built, documentation is available in the ``/Documentation/_build`` folder.
 Open the root ``index.html`` to browse the documentation.
 
-__ http://www.sphinx-doc.org/config.html
+__ http://www.sphinx-doc.org/en/master/config.html

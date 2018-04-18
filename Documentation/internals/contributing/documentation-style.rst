@@ -442,4 +442,5 @@ Useful Links
 - `Quick reStructuredText
   <http://docutils.sourceforge.net/docs/user/rst/quickref.html>`__
 
-- `Sphinx Documentation <http://sphinx.readthedocs.io/en/latest/rest.html>`__
+- `Sphinx Documentation
+  <http://www.sphinx-doc.org/en/master/usage/restructuredtext/index.html>`__
