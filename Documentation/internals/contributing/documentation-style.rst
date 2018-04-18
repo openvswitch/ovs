@@ -358,8 +358,8 @@ Writing Style
 -------------
 
 Follow these guidelines to ensure readability and consistency of the Open
-vSwitch documentation. These guidelines are based on the `IBM Style Guide
-<http://www.redbooks.ibm.com/Redbooks.nsf/ibmpressisbn/9780132101301?Open>`__.
+vSwitch documentation. These guidelines are based on the `/*IBM Style Guide/*
+<https://www.ibm.com/developerworks/library/styleguidelines/>`__.
 
 - Use standard US English
 
