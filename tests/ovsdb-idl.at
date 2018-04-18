@@ -1233,16 +1233,7 @@ OVSDB_CHECK_IDL_PY([partial-set idl],
 ]])
 
 m4_define([OVSDB_CHECK_IDL_NOTIFY_PYN],
-  [AT_SETUP([$1])
-   AT_SKIP_IF([test $6 = no])
-   AT_KEYWORDS([ovsdb server idl Python notify $4])
-   AT_CHECK([ovsdb_start_idltest])
-   AT_CHECK([$7 $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket $2],
-            [0], [stdout], [ignore])
-   AT_CHECK([sort stdout | uuidfilt]m4_if([$5],,, [[| $5]]),
-            [0], [$3])
-   OVSDB_SERVER_SHUTDOWN
-   AT_CLEANUP])
+  [OVSDB_CHECK_IDL_PYN([$1], [], [$2], [$3], [notify $4], [$5], [$6], [$7])])
 
 m4_define([OVSDB_CHECK_IDL_NOTIFY_PY],
     [OVSDB_CHECK_IDL_NOTIFY_PYN([$1 - Python2], [$2], [$3], [$4], [$5],
