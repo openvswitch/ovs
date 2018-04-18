@@ -474,7 +474,7 @@ sflow_choose_agent_address(const char *agent_device,
              */
             ip = ss_get_address(&ss);
 
-            struct in6_addr src, gw;
+            struct in6_addr gw, src = in6addr_any;
             char name[IFNAMSIZ];
             if (ovs_router_lookup(0, &ip, name, &src, &gw)) {
                 goto success;

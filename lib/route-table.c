@@ -47,6 +47,7 @@ VLOG_DEFINE_THIS_MODULE(route_table);
 struct route_data {
     /* Copied from struct rtmsg. */
     unsigned char rtm_dst_len;
+    bool local;
 
     /* Extracted from Netlink attributes. */
     struct in6_addr rta_dst; /* 0 if missing. */
@@ -245,6 +246,7 @@ route_table_parse(struct ofpbuf *buf, struct route_table_msg *change)
         }
         change->nlmsg_type     = nlmsg->nlmsg_type;
         change->rd.rtm_dst_len = rtm->rtm_dst_len + (ipv4 ? 96 : 0);
+        change->rd.local = rtm->rtm_type == RTN_LOCAL;
         if (attrs[RTA_OIF]) {
             rta_oif = nl_attr_get_u32(attrs[RTA_OIF]);
 
@@ -307,7 +309,7 @@ route_table_handle_msg(const struct route_table_msg *change)
         const struct route_data *rd = &change->rd;
 
         ovs_router_insert(rd->mark, &rd->rta_dst, rd->rtm_dst_len,
-                          rd->ifname, &rd->rta_gw);
+                          rd->local, rd->ifname, &rd->rta_gw);
     }
 }
 

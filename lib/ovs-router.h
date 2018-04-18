@@ -31,7 +31,7 @@ bool ovs_router_lookup(uint32_t mark, const struct in6_addr *ip_dst,
                        struct in6_addr *src, struct in6_addr *gw);
 void ovs_router_init(void);
 void ovs_router_insert(uint32_t mark, const struct in6_addr *ip_dst,
-                       uint8_t plen,
+                       uint8_t plen, bool local,
                        const char output_bridge[], const struct in6_addr *gw);
 void ovs_router_flush(void);
 
