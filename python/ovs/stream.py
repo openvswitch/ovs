@@ -801,10 +801,6 @@ class SSLStream(Stream):
 
     def send(self, buf):
         try:
-            if isinstance(buf, six.text_type):
-                # Convert to byte stream if the buffer is string type/unicode.
-                # pyopenssl version 0.14 expects the buffer to be byte string.
-                buf = buf.encode('utf-8')
             return super(SSLStream, self).send(buf)
         except SSL.WantWriteError:
             return -errno.EAGAIN
