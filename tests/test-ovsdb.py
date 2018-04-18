@@ -552,6 +552,11 @@ def do_idl(schema_file, remote, *commands):
     track_notify = False
 
     if remote.startswith("ssl:"):
+        if len(commands) < 3:
+            sys.stderr.write("SSL connection requires private key, "
+                             "certificate for private key, and peer CA "
+                             "certificate as arguments\n")
+            sys.exit(1)
         ovs.stream.Stream.ssl_set_private_key_file(commands[0])
         ovs.stream.Stream.ssl_set_certificate_file(commands[1])
         ovs.stream.Stream.ssl_set_ca_cert_file(commands[2])
