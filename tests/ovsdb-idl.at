@@ -900,9 +900,9 @@ m4_define([OVSDB_CHECK_IDL_WO_MONITOR_COND_PYN],
    AT_CHECK([ovsdb_start_idltest])
    AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/disable-monitor-cond])
    AT_CHECK([$7 $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket $2],
-            [0], [stdout], [ignore], [kill `cat pid`])
+            [0], [stdout], [ignore])
    AT_CHECK([sort stdout | uuidfilt]m4_if([$5],,, [[| $5]]),
-            [0], [$3], [], [kill `cat pid`])
+            [0], [$3])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
 
@@ -1238,9 +1238,9 @@ m4_define([OVSDB_CHECK_IDL_NOTIFY_PYN],
    AT_KEYWORDS([ovsdb server idl Python notify $4])
    AT_CHECK([ovsdb_start_idltest])
    AT_CHECK([$7 $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket $2],
-            [0], [stdout], [ignore], [kill `cat pid`])
+            [0], [stdout], [ignore])
    AT_CHECK([sort stdout | uuidfilt]m4_if([$5],,, [[| $5]]),
-            [0], [$3], [], [kill `cat pid`])
+            [0], [$3])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
 
@@ -1273,9 +1273,9 @@ m4_define([OVSDB_CHECK_IDL_NOTIFY_SSL_PYN],
    AT_CHECK([$7 $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema \
              ssl:127.0.0.1:$TCP_PORT $PKIDIR/testpki-privkey.pem \
              $PKIDIR/testpki-cert.pem $PKIDIR/testpki-cacert.pem $2],
-            [0], [stdout], [ignore], [kill `cat pid`])
+            [0], [stdout], [ignore])
    AT_CHECK([sort stdout | uuidfilt]m4_if([$5],,, [[| $5]]),
-            [0], [$3], [], [kill `cat pid`])
+            [0], [$3])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
 
@@ -1389,26 +1389,26 @@ m4_define([OVSDB_CHECK_IDL_COMPOUND_INDEX_SINGLE_COLUMN_C],
    AT_KEYWORDS([ovsdb server idl compound_index_single_column compound_index positive $5])
    AT_CHECK([ovsdb_start_idltest])
    m4_if([$2], [], [],
-     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
 # Generate the data to be tested.
    AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl-compound-index unix:socket $3],
-            [0], [stdout], [ignore], [kill `cat pid`])
+            [0], [stdout], [ignore])
 # Filter the rows of data that corresponds to the string index eliminating the extra columns of data.
 # This is done to verifiy that the output data is in the correct and expected order.
    AT_CHECK([[cat stdout | grep -oh '[0-9]\{3\}: s=.*' | sed -e 's/ i=.*//g']],
-            [0], [$4], [], [kill `cat pid`])
+            [0], [$4])
 # Here, the data is filtered and sorted in order to have all the rows in the index and be
 # able to determined that all the involved rows are present.
    AT_CHECK([[cat stdout | grep -oh '[0-9]\{3\}: s=.*' | sort -k 1,1n -k 2,2 -k 3,3]],
-            [0], [$5], [], [kill `cat pid`])
+            [0], [$5])
 # Filter the rows of data that corresponds to the integer index eliminating the extra columns of data.
 # This is done to verifiy that the output data is in the correct and expected order.
    AT_CHECK([[cat stdout | grep -oh '[0-9]\{3\}: i=.*' | sed -e 's/ s=.*//g']],
-            [0], [$6], [], [kill `cat pid`])
+            [0], [$6])
 # Here again, the data is filtered and sorted in order to have all the rows in the index and be
 # able to determined that all the involved rows are present.
    AT_CHECK([[cat stdout | grep -oh '[0-9]\{3\}: i=.*' | sort -k 1,1n -k 2,2 -k 3,3]],
-            [0], [$7], [], [kill `cat pid`])
+            [0], [$7])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
 
@@ -1526,26 +1526,26 @@ m4_define([OVSDB_CHECK_IDL_COMPOUND_INDEX_DOUBLE_COLUMN_C],
    AT_KEYWORDS([ovsdb server idl compound_index_double_column compound_index positive $5])
    AT_CHECK([ovsdb_start_idltest])
    m4_if([$2], [], [],
-     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
 # Generate the data to be tested.
    AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl-compound-index unix:socket $3],
-            [0], [stdout], [ignore], [kill `cat pid`])
+            [0], [stdout], [ignore])
 # Filter the rows of data that corresponds to the string-integer index eliminating the extra columns of data.
 # This is done to verifiy that the output data is in the correct and expected order.
    AT_CHECK([[cat stdout | grep -oh '[0-9]\{3\}: s=.*' | sed -e 's/ b=.*//g']],
-            [0], [$4], [], [kill `cat pid`])
+            [0], [$4])
 # Here, the data is filtered and sorted in order to have all the rows in the index and be
 # able to determined that all the involved rows are present.
    AT_CHECK([[cat stdout | grep -oh '[0-9]\{3\}: s=.*' | sort -k 1,1n -k 2,2 -k 3,3]],
-            [0], [$5], [], [kill `cat pid`])
+            [0], [$5])
 # Filter the rows of data that corresponds to the integer index eliminating the extra columns of data.
 # This is done to verifiy that the output data is in the correct and expected order.
    AT_CHECK([[cat stdout | grep -oh '[0-9]\{3\}: i=.*' | sed -e 's/ b=.*//g']],
-            [0], [$6], [], [kill `cat pid`])
+            [0], [$6])
 # Here again, the data is filtered and sorted in order to have all the rows in the index and be
 # able to determined that all the involved rows are present.
    AT_CHECK([[cat stdout | grep -oh '[0-9]\{3\}: i=.*' | sort -k 1,1n -k 2,2 -k 3,3]],
-            [0], [$7], [], [kill `cat pid`])
+            [0], [$7])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
 
