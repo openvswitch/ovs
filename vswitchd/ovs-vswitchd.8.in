@@ -240,6 +240,12 @@ whether it is attached or detached, port id and priority, actor
 information, and partner information.  If \fIport\fR is not specified,
 then displays detailed information about all interfaces with CFM
 enabled.
+.
+.IP "\fBlacp/stats-show\fR [\fIport\fR]"
+Lists various stats about LACP PDUs (number of RX/TX PDUs, bad PDUs received)
+and slave state (number of time slave's state expired/defaulted and carrier
+status changed) for the given \fIport\fR.  If \fIport\fR is not specified,
+then displays stats of all interfaces with LACP enabled.
 .SS "DPCTL DATAPATH DEBUGGING COMMANDS"
 The primary way to configure \fBovs\-vswitchd\fR is through the Open
 vSwitch database, e.g. using \fBovs\-vsctl\fR(8).  These commands
