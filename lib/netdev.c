@@ -951,7 +951,7 @@ netdev_set_mtu(struct netdev *netdev, int mtu)
 
     error = class->set_mtu ? class->set_mtu(netdev, mtu) : EOPNOTSUPP;
     if (error && error != EOPNOTSUPP) {
-        VLOG_DBG_RL(&rl, "failed to set MTU for network device %s: %s",
+        VLOG_WARN_RL(&rl, "failed to set MTU for network device %s: %s",
                      netdev_get_name(netdev), ovs_strerror(error));
     }
 
