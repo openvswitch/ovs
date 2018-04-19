@@ -529,12 +529,6 @@ can be found in [Vhost Walkthrough].
              <source file='/root/CentOS7_x86_64.qcow2'/>
              <target dev='vda' bus='virtio'/>
            </disk>
-           <disk type='dir' device='disk'>
-             <driver name='qemu' type='fat'/>
-             <source dir='/usr/src/dpdk-stable-16.07.2'/>
-             <target dev='vdb' bus='virtio'/>
-             <readonly/>
-           </disk>
            <interface type='vhostuser'>
              <mac address='00:00:00:00:00:01'/>
              <source type='unix' path='/usr/local/var/run/openvswitch/dpdkvhostuser0' mode='client'/>
