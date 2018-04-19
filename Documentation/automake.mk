@@ -36,6 +36,7 @@ DOC_SOURCE = \
 	Documentation/topics/dpdk/index.rst \
 	Documentation/topics/dpdk/phy.rst \
 	Documentation/topics/dpdk/pmd.rst \
+	Documentation/topics/dpdk/qos.rst \
 	Documentation/topics/dpdk/ring.rst \
 	Documentation/topics/dpdk/vdev.rst \
 	Documentation/topics/dpdk/vhost-user.rst \

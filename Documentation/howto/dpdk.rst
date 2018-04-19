@@ -85,48 +85,6 @@ To stop ovs-vswitchd & delete bridge, run::
     $ ovs-appctl -t ovsdb-server exit
     $ ovs-vsctl del-br br0
 
-QoS
----
-
-Assuming you have a vhost-user port transmitting traffic consisting of packets
-of size 64 bytes, the following command would limit the egress transmission
-rate of the port to ~1,000,000 packets per second::
-
-    $ ovs-vsctl set port vhost-user0 qos=@newqos -- \
-        --id=@newqos create qos type=egress-policer other-config:cir=46000000 \
-        other-config:cbs=2048`
-
-To examine the QoS configuration of the port, run::
-
-    $ ovs-appctl -t ovs-vswitchd qos/show vhost-user0
-
-To clear the QoS configuration from the port and ovsdb, run::
-
-    $ ovs-vsctl destroy QoS vhost-user0 -- clear Port vhost-user0 qos
-
-Refer to vswitch.xml for more details on egress-policer.
-
-Rate Limiting
---------------
-
-Here is an example on Ingress Policing usage. Assuming you have a vhost-user
-port receiving traffic consisting of packets of size 64 bytes, the following
-command would limit the reception rate of the port to ~1,000,000 packets per
-second::
-
-    $ ovs-vsctl set interface vhost-user0 ingress_policing_rate=368000 \
-        ingress_policing_burst=1000`
-
-To examine the ingress policer configuration of the port::
-
-    $ ovs-vsctl list interface vhost-user0
-
-To clear the ingress policer configuration from the port::
-
-    $ ovs-vsctl set interface vhost-user0 ingress_policing_rate=0
-
-Refer to vswitch.xml for more details on ingress-policer.
-
 pdump
 -----
 

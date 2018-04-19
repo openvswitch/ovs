@@ -36,3 +36,4 @@ The DPDK Datapath
    /topics/dpdk/ring
    /topics/dpdk/vdev
    /topics/dpdk/pmd
+   /topics/dpdk/qos

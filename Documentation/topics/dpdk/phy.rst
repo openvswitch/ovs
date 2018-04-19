@@ -126,6 +126,8 @@ DPDK acceleration. It is possible to configure multiple Rx queues for ``dpdk``
 ports, thus ensuring this is not a bottleneck for performance. For information
 on configuring PMD threads, refer to :doc:`pmd`.
 
+.. _dpdk-phy-flow-control:
+
 Flow Control
 ------------
 
