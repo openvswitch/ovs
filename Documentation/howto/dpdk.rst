@@ -170,66 +170,6 @@ largest frame size supported by Fortville NIC using the DPDK i40e driver, but
 larger frames and other DPDK NIC drivers may be supported. These cases are
 common for use cases involving East-West traffic only.
 
-.. _extended-statistics:
-
-Extended & Custom Statistics
-----------------------------
-
-DPDK Extended Statistics API allows PMD to expose a unique set of statistics.
-The Extended Statistics are implemented and supported only for DPDK physical
-and vHost ports. Custom statistics are a dynamic set of counters which can
-vary depending on the driver. Those statistics are implemented
-for DPDK physical ports and contain all "dropped", "error" and "management"
-counters from XSTATS. XSTATS counters list can be found here:
-<https://wiki.opnfv.org/display/fastpath/Collectd+Metrics+and+Events>`__.
-
-To enable statistics, you have to enable OpenFlow 1.4 support for OVS.
-Configure bridge br0 to support OpenFlow version 1.4::
-
-    $ ovs-vsctl set bridge br0 datapath_type=netdev \
-      protocols=OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13,OpenFlow14
-
-Check the OVSDB protocols column in the bridge table if OpenFlow 1.4 support
-is enabled for OVS::
-
-    $ ovsdb-client dump Bridge protocols
-
-Query the port statistics by explicitly specifying -O OpenFlow14 option::
-
-    $ ovs-ofctl -O OpenFlow14 dump-ports br0
-
-Note about "Extended Statistics": vHost ports supports only partial
-statistics. RX packet size based counter are only supported and
-doesn't include TX packet size counters.
-
-EMC Insertion Probability
--------------------------
-By default 1 in every 100 flows are inserted into the Exact Match Cache (EMC).
-It is possible to change this insertion probability by setting the
-``emc-insert-inv-prob`` option::
-
-    $ ovs-vsctl --no-wait set Open_vSwitch . other_config:emc-insert-inv-prob=N
-
-where:
-
-``N``
-  is a positive integer representing the inverse probability of insertion ie.
-  on average 1 in every N packets with a unique flow will generate an EMC
-  insertion.
-
-If ``N`` is set to 1, an insertion will be performed for every flow. If set to
-0, no insertions will be performed and the EMC will effectively be disabled.
-
-With default ``N`` set to 100, higher megaflow hits will occur initially
-as observed with pmd stats::
-
-    $ ovs-appctl dpif-netdev/pmd-stats-show
-
-For certain traffic profiles with many parallel flows, it's recommended to set
-``N`` to '0' to achieve higher forwarding performance.
-
-For more information on the EMC refer to :doc:`/intro/install/dpdk` .
-
 .. _dpdk-ovs-in-guest:
 
 OVS with DPDK Inside VMs

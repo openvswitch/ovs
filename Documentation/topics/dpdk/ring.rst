@@ -36,6 +36,11 @@ The DPDK datapath provides DPDK-backed ring ports that are implemented using
 DPDK's ``librte_ring`` library. For more information on this library, refer to
 the `DPDK documentation`_.
 
+.. important::
+
+   To use any DPDK-backed interface, you must ensure your bridge is configured
+   correctly. For more information, refer to :doc:`bridge`.
+
 Quick Example
 -------------
 

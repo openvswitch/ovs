@@ -32,6 +32,11 @@ devices are added to OVS by specifying a valid PCI address in ``dpdk-devargs``.
 Virtual DPDK devices which do not have PCI addresses can be added using a
 different format for ``dpdk-devargs``.
 
+.. important::
+
+   To use any DPDK-backed interface, you must ensure your bridge is configured
+   correctly. For more information, refer to :doc:`bridge`.
+
 .. note::
 
     Not all DPDK virtual PMD drivers have been tested and verified to work.

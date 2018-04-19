@@ -31,6 +31,7 @@ The DPDK Datapath
 .. toctree::
    :maxdepth: 2
 
+   /topics/dpdk/bridge
    /topics/dpdk/phy
    /topics/dpdk/vhost-user
    /topics/dpdk/ring

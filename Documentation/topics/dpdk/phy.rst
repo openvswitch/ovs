@@ -30,6 +30,11 @@ DPDK Physical Ports
 The netdev datapath allows attaching of DPDK-backed physical interfaces in
 order to provide high-performance ingress/egress from the host.
 
+.. important::
+
+   To use any DPDK-backed interface, you must ensure your bridge is configured
+   correctly. For more information, refer to :doc:`bridge`.
+
 .. versionchanged:: 2.7.0
 
    Before Open vSwitch 2.7.0, it was necessary to prefix port names with a
