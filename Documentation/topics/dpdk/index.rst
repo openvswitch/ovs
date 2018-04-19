@@ -34,4 +34,5 @@ The DPDK Datapath
    /topics/dpdk/phy
    /topics/dpdk/vhost-user
    /topics/dpdk/ring
+   /topics/dpdk/vdev
    /topics/dpdk/pmd

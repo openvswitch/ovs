@@ -244,35 +244,6 @@ Note about "Extended Statistics": vHost ports supports only partial
 statistics. RX packet size based counter are only supported and
 doesn't include TX packet size counters.
 
-.. _vdev-support:
-
-Vdev Support
-------------
-
-DPDK provides drivers for both physical and virtual devices. Physical DPDK
-devices are added to OVS by specifying a valid PCI address in 'dpdk-devargs'.
-Virtual DPDK devices which do not have PCI addresses can be added using a
-different format for 'dpdk-devargs'.
-
-Typically, the format expected is 'eth_<driver_name><x>' where 'x' is a
-unique identifier of your choice for the given port.
-
-For example to add a dpdk port that uses the 'null' DPDK PMD driver::
-
-       $ ovs-vsctl add-port br0 null0 -- set Interface null0 type=dpdk \
-           options:dpdk-devargs=eth_null0
-
-Similarly, to add a dpdk port that uses the 'af_packet' DPDK PMD driver::
-
-       $ ovs-vsctl add-port br0 myeth0 -- set Interface myeth0 type=dpdk \
-           options:dpdk-devargs=eth_af_packet0,iface=eth0
-
-More information on the different types of virtual DPDK PMDs can be found in
-the `DPDK documentation
-<http://dpdk.org/doc/guides/nics/overview.html>`__.
-
-Note: Not all DPDK virtual PMD drivers have been tested and verified to work.
-
 EMC Insertion Probability
 -------------------------
 By default 1 in every 100 flows are inserted into the Exact Match Cache (EMC).
