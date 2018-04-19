@@ -175,6 +175,14 @@ struct pmd_perf_stats {
     struct history iterations;
     /* Millisecond history buffer. */
     struct history milliseconds;
+    /* Suspicious iteration log. */
+    uint32_t log_susp_it;
+    /* Start of iteration range to log. */
+    uint32_t log_begin_it;
+    /* End of iteration range to log. */
+    uint32_t log_end_it;
+    /* Reason for logging suspicious iteration. */
+    char *log_reason;
 };
 
 /* Support for accurate timing of PMD execution on TSC clock cycle level.
@@ -350,6 +358,16 @@ history_store(struct history *h, struct iter_stats *is)
     return history_next(h);
 }
 
+/* Data and function related to logging of suspicious iterations. */
+
+extern bool log_enabled;
+extern bool log_extend;
+extern uint32_t log_q_thr;
+extern uint64_t iter_cycle_threshold;
+
+void pmd_perf_set_log_susp_iteration(struct pmd_perf_stats *s, char *reason);
+void pmd_perf_log_susp_iteration_neighborhood(struct pmd_perf_stats *s);
+
 /* Functions recording PMD metrics per iteration. */
 
 void
@@ -375,6 +393,9 @@ void pmd_perf_format_iteration_history(struct ds *str,
                                        int n_iter);
 void pmd_perf_format_ms_history(struct ds *str, struct pmd_perf_stats *s,
                                 int n_ms);
+void pmd_perf_log_set_cmd(struct unixctl_conn *conn,
+                          int argc, const char *argv[],
+                          void *aux OVS_UNUSED);
 
 #ifdef  __cplusplus
 }

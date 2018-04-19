@@ -25,6 +25,24 @@
 
 VLOG_DEFINE_THIS_MODULE(pmd_perf);
 
+#define ITER_US_THRESHOLD 250   /* Warning threshold for iteration duration
+                                   in microseconds. */
+#define VHOST_QUEUE_FULL 128    /* Size of the virtio TX queue. */
+#define LOG_IT_BEFORE 5         /* Number of iterations to log before
+                                   suspicious iteration. */
+#define LOG_IT_AFTER 5          /* Number of iterations to log after
+                                   suspicious iteration. */
+
+bool log_enabled = false;
+bool log_extend = false;
+static uint32_t log_it_before = LOG_IT_BEFORE;
+static uint32_t log_it_after = LOG_IT_AFTER;
+static uint32_t log_us_thr = ITER_US_THRESHOLD;
+uint32_t log_q_thr = VHOST_QUEUE_FULL;
+uint64_t iter_cycle_threshold;
+
+static struct vlog_rate_limit latency_rl = VLOG_RATE_LIMIT_INIT(600, 600);
+
 #ifdef DPDK_NETDEV
 static uint64_t
 get_tsc_hz(void)
@@ -141,6 +159,10 @@ pmd_perf_stats_init(struct pmd_perf_stats *s)
     histogram_walls_set_log(&s->max_vhost_qfill, 0, 512);
     s->iteration_cnt = 0;
     s->start_ms = time_msec();
+    s->log_susp_it = UINT32_MAX;
+    s->log_begin_it = UINT32_MAX;
+    s->log_end_it = UINT32_MAX;
+    s->log_reason = NULL;
 }
 
 void
@@ -391,6 +413,10 @@ pmd_perf_stats_clear_lock(struct pmd_perf_stats *s)
     history_init(&s->milliseconds);
     s->start_ms = time_msec();
     s->milliseconds.sample[0].timestamp = s->start_ms;
+    s->log_susp_it = UINT32_MAX;
+    s->log_begin_it = UINT32_MAX;
+    s->log_end_it = UINT32_MAX;
+    s->log_reason = NULL;
     /* Clearing finished. */
     s->clear = false;
     ovs_mutex_unlock(&s->clear_mutex);
@@ -443,6 +469,7 @@ pmd_perf_end_iteration(struct pmd_perf_stats *s, int rx_packets,
     uint64_t now_tsc = cycles_counter_update(s);
     struct iter_stats *cum_ms;
     uint64_t cycles, cycles_per_pkt = 0;
+    char *reason = NULL;
 
     cycles = now_tsc - s->start_tsc;
     s->current.timestamp = s->iteration_cnt;
@@ -492,9 +519,30 @@ pmd_perf_end_iteration(struct pmd_perf_stats *s, int rx_packets,
     cum_ms->batches += s->current.batches;
     cum_ms->max_vhost_qfill += s->current.max_vhost_qfill;
 
+    if (log_enabled) {
+        /* Log suspicious iterations. */
+        if (cycles > iter_cycle_threshold) {
+            reason = "Excessive total cycles";
+        } else if (s->current.max_vhost_qfill >= log_q_thr) {
+            reason = "Vhost RX queue full";
+        }
+        if (OVS_UNLIKELY(reason)) {
+            pmd_perf_set_log_susp_iteration(s, reason);
+            cycles_counter_update(s);
+        }
+
+        /* Log iteration interval around suspicious iteration when reaching
+         * the end of the range to be logged. */
+        if (OVS_UNLIKELY(s->log_end_it == s->iterations.idx)) {
+            pmd_perf_log_susp_iteration_neighborhood(s);
+            cycles_counter_update(s);
+        }
+    }
+
     /* Store in iteration history. This advances the iteration idx and
      * clears the next slot in the iteration history. */
     history_store(&s->iterations, &s->current);
+
     if (now_tsc > s->next_check_tsc) {
         /* Check if ms is completed and store in milliseconds history. */
         uint64_t now = time_msec();
@@ -514,4 +562,179 @@ pmd_perf_end_iteration(struct pmd_perf_stats *s, int rx_packets,
         /* Do the next check after 10K cycles (4 us at 2.5 GHz TSC clock). */
         s->next_check_tsc = cycles_counter_update(s) + 10000;
     }
+}
+
+/* Delay logging of the suspicious iteration and the range of iterations
+ * around it until after the last iteration in the range to be logged.
+ * This avoids any distortion of the measurements through the cost of
+ * logging itself. */
+
+void
+pmd_perf_set_log_susp_iteration(struct pmd_perf_stats *s,
+                                char *reason)
+{
+    if (s->log_susp_it == UINT32_MAX) {
+        /* No logging scheduled yet. */
+        s->log_susp_it = s->iterations.idx;
+        s->log_reason = reason;
+        s->log_begin_it = history_sub(s->iterations.idx, log_it_before);
+        s->log_end_it = history_add(s->iterations.idx, log_it_after + 1);
+    } else if (log_extend) {
+        /* Logging was initiated earlier, we log the previous suspicious
+         * iteration now and extend the logging interval, if possible. */
+        struct iter_stats *susp = &s->iterations.sample[s->log_susp_it];
+        uint32_t new_end_it, old_range, new_range;
+
+        VLOG_WARN_RL(&latency_rl,
+                "Suspicious iteration (%s): iter=%"PRIu64
+                " duration=%"PRIu64" us\n",
+                s->log_reason,
+                susp->timestamp,
+                (1000000L * susp->cycles) / get_tsc_hz());
+
+        new_end_it = history_add(s->iterations.idx, log_it_after + 1);
+        new_range = history_sub(new_end_it, s->log_begin_it);
+        old_range = history_sub(s->log_end_it, s->log_begin_it);
+        if (new_range < old_range) {
+            /* Extended range exceeds history length. */
+            new_end_it = s->log_begin_it;
+        }
+        s->log_susp_it = s->iterations.idx;
+        s->log_reason = reason;
+        s->log_end_it = new_end_it;
+    }
+}
+
+void
+pmd_perf_log_susp_iteration_neighborhood(struct pmd_perf_stats *s)
+{
+    ovs_assert(s->log_reason != NULL);
+    ovs_assert(s->log_susp_it != UINT32_MAX);
+
+    struct ds log = DS_EMPTY_INITIALIZER;
+    struct iter_stats *susp = &s->iterations.sample[s->log_susp_it];
+    uint32_t range = history_sub(s->log_end_it, s->log_begin_it);
+
+    VLOG_WARN_RL(&latency_rl,
+                 "Suspicious iteration (%s): iter=%"PRIu64
+                 " duration=%"PRIu64" us\n",
+                 s->log_reason,
+                 susp->timestamp,
+                 (1000000L * susp->cycles) / get_tsc_hz());
+
+    pmd_perf_format_iteration_history(&log, s, range);
+    VLOG_WARN_RL(&latency_rl,
+                 "Neighborhood of suspicious iteration:\n"
+                 "%s", ds_cstr(&log));
+    ds_destroy(&log);
+    s->log_susp_it = s->log_end_it = s->log_begin_it = UINT32_MAX;
+    s->log_reason = NULL;
+
+    if (range > 100) {
+        /* Reset to safe default values to avoid disturbance. */
+        log_it_before = LOG_IT_BEFORE;
+        log_it_after = LOG_IT_AFTER;
+        log_extend = false;
+    }
+}
+
+void
+pmd_perf_log_set_cmd(struct unixctl_conn *conn,
+                 int argc, const char *argv[],
+                 void *aux OVS_UNUSED)
+{
+    unsigned int it_before, it_after, us_thr, q_thr;
+    bool on, extend;
+    bool usage = false;
+
+    on = log_enabled;
+    extend = log_extend;
+    it_before = log_it_before;
+    it_after = log_it_after;
+    q_thr = log_q_thr;
+    us_thr = log_us_thr;
+
+    while (argc > 1) {
+        if (!strcmp(argv[1], "on")) {
+            on = true;
+            argc--;
+            argv++;
+        } else if (!strcmp(argv[1], "off")) {
+            on = false;
+            argc--;
+            argv++;
+        } else if (!strcmp(argv[1], "-e")) {
+            extend = true;
+            argc--;
+            argv++;
+        } else if (!strcmp(argv[1], "-ne")) {
+            extend = false;
+            argc--;
+            argv++;
+        } else if (!strcmp(argv[1], "-a") && argc > 2) {
+            if (str_to_uint(argv[2], 10, &it_after)) {
+                if (it_after > HISTORY_LEN - 2) {
+                    it_after = HISTORY_LEN - 2;
+                }
+            } else {
+                usage = true;
+                break;
+            }
+            argc -= 2;
+            argv += 2;
+        } else if (!strcmp(argv[1], "-b") && argc > 2) {
+            if (str_to_uint(argv[2], 10, &it_before)) {
+                if (it_before > HISTORY_LEN - 2) {
+                    it_before = HISTORY_LEN - 2;
+                }
+            } else {
+                usage = true;
+                break;
+            }
+            argc -= 2;
+            argv += 2;
+        } else if (!strcmp(argv[1], "-q") && argc > 2) {
+            if (!str_to_uint(argv[2], 10, &q_thr)) {
+                usage = true;
+                break;
+            }
+            argc -= 2;
+            argv += 2;
+        } else if (!strcmp(argv[1], "-us") && argc > 2) {
+            if (!str_to_uint(argv[2], 10, &us_thr)) {
+                usage = true;
+                break;
+            }
+            argc -= 2;
+            argv += 2;
+        } else {
+            usage = true;
+            break;
+        }
+    }
+    if (it_before + it_after > HISTORY_LEN - 2) {
+        it_after = HISTORY_LEN - 2 - it_before;
+    }
+
+    if (usage) {
+        unixctl_command_reply_error(conn,
+                "Usage: ovs-appctl dpif-netdev/pmd-perf-log-set "
+                "[on|off] [-b before] [-a after] [-e|-ne] "
+                "[-us usec] [-q qlen]");
+        return;
+    }
+
+    VLOG_INFO("pmd-perf-log-set: %s, before=%d, after=%d, extend=%s, "
+              "us_thr=%d, q_thr=%d\n",
+              on ? "on" : "off", it_before, it_after,
+              extend ? "true" : "false", us_thr, q_thr);
+    log_enabled = on;
+    log_extend = extend;
+    log_it_before = it_before;
+    log_it_after = it_after;
+    log_q_thr = q_thr;
+    log_us_thr = us_thr;
+    iter_cycle_threshold = (log_us_thr * get_tsc_hz()) / 1000000L;
+
+    unixctl_command_reply(conn, "");
 }

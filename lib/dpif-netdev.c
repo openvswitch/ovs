@@ -1235,6 +1235,11 @@ dpif_netdev_init(void)
     unixctl_command_register("dpif-netdev/pmd-rxq-rebalance", "[dp]",
                              0, 1, dpif_netdev_pmd_rebalance,
                              NULL);
+    unixctl_command_register("dpif-netdev/pmd-perf-log-set",
+                             "on|off [-b before] [-a after] [-e|-ne] "
+                             "[-us usec] [-q qlen]",
+                             0, 10, pmd_perf_log_set_cmd,
+                             NULL);
     return 0;
 }
 

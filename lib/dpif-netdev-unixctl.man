@@ -149,6 +149,65 @@ reported by the \fBdpif-netdev/pmd-stats-show\fR command.
 To reset the counters and start a new measurement use
 \fBdpif-netdev/pmd-stats-clear\fR.
 .
+.IP "\fBdpif-netdev/pmd-perf-log-set\fR \fBon\fR|\fBoff\fR \
+[\fB-b\fR \fIbefore\fR] [\fB-a\fR \fIafter\fR] [\fB-e\fR|\fB-ne\fR] \
+[\fB-us\fR \fIusec\fR] [\fB-q\fR \fIqlen\fR]"
+.
+The userspace "netdev" datapath is able to supervise the PMD performance
+metrics and detect iterations with suspicious statistics according to the
+following criteria:
+.RS
+.IP \(em
+The iteration lasts longer than \fIusec\fR microseconds (default 250).
+This can be used to capture events where a PMD is blocked or interrupted for
+such a period of time that there is a risk for dropped packets on any of its Rx
+queues.
+.IP \(em
+The max vhost qlen exceeds a threshold \fIqlen\fR (default 128). This can be
+used to infer virtio queue overruns and dropped packets inside a VM, which are
+not visible in OVS otherwise.
+.RE
+.IP
+Such suspicious iterations can be logged together with their iteration
+statistics in the \fBovs-vswitchd.log\fR to be able to correlate them to
+packet drop or other events outside OVS.
+
+The above command enables (\fBon\fR) or disables (\fBoff\fR) supervision and
+logging at run-time and can be used to adjust the above thresholds for
+detecting suspicious iterations. By default supervision and logging is
+disabled.
+
+The command options are:
+.RS
+.IP "\fB-b\fR \fIbefore\fR"
+The number of iterations before the suspicious iteration to be logged
+(default 5).
+.IP "\fB-a\fR \fIafter\fR"
+The number of iterations after the suspicious iteration to be logged
+(default 5).
+.IP "\fB-e\fR"
+Extend logging interval if another suspicious iteration is detected
+before logging occurs.
+.IP "\fB-ne\fR"
+Do not extend logging interval if another suspicious iteration is detected
+before logging occurs (default).
+.IP "\fB-q\fR \fIqlen\fR"
+Suspicious vhost queue fill level threshold. Increase this to 512 if the Qemu
+supports 1024 virtio queue length (default 128).
+.IP "\fB-us\fR \fIusec\fR"
+Change the duration threshold for a suspicious iteration (default 250 us).
+.RE
+
+Note: Logging of suspicious iterations itself consumes a considerable amount
+of processing cycles of a PMD which may be visible in the iteration history.
+In the worst case this can lead OVS to detect another suspicious iteration
+caused by logging.
+
+If more than 100 iterations around a suspicious iteration have been logged
+once, OVS falls back to the safe default values (-b 5 -a 5 -ne) to avoid
+that logging itself continuously causes logging of further suspicious
+iterations.
+.
 .IP "\fBdpif-netdev/pmd-rxq-show\fR [\fB-pmd\fR \fIcore\fR] [\fIdp\fR]"
 For one or all pmd threads of the datapath \fIdp\fR show the list of queue-ids
 with port names, which this thread polls.
