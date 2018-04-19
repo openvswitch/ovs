@@ -125,3 +125,89 @@ utilize is a requirement in order to deliver the high-performance possible with
 DPDK acceleration. It is possible to configure multiple Rx queues for ``dpdk``
 ports, thus ensuring this is not a bottleneck for performance. For information
 on configuring PMD threads, refer to :doc:`pmd`.
+
+Flow Control
+------------
+
+Flow control can be enabled only on DPDK physical ports. To enable flow control
+support at Tx side while adding a port, run::
+
+    $ ovs-vsctl add-port br0 dpdk-p0 -- set Interface dpdk-p0 type=dpdk \
+        options:dpdk-devargs=0000:01:00.0 options:tx-flow-ctrl=true
+
+Similarly, to enable Rx flow control, run::
+
+    $ ovs-vsctl add-port br0 dpdk-p0 -- set Interface dpdk-p0 type=dpdk \
+        options:dpdk-devargs=0000:01:00.0 options:rx-flow-ctrl=true
+
+To enable flow control auto-negotiation, run::
+
+    $ ovs-vsctl add-port br0 dpdk-p0 -- set Interface dpdk-p0 type=dpdk \
+        options:dpdk-devargs=0000:01:00.0 options:flow-ctrl-autoneg=true
+
+To turn on the Tx flow control at run time for an existing port, run::
+
+    $ ovs-vsctl set Interface dpdk-p0 options:tx-flow-ctrl=true
+
+The flow control parameters can be turned off by setting ``false`` to the
+respective parameter. To disable the flow control at Tx side, run::
+
+    $ ovs-vsctl set Interface dpdk-p0 options:tx-flow-ctrl=false
+
+Rx Checksum Offload
+-------------------
+
+By default, DPDK physical ports are enabled with Rx checksum offload.
+
+Rx checksum offload can offer performance improvement only for tunneling
+traffic in OVS-DPDK because the checksum validation of tunnel packets is
+offloaded to the NIC. Also enabling Rx checksum may slightly reduce the
+performance of non-tunnel traffic, specifically for smaller size packet.
+
+.. _port-hotplug:
+
+Hotplugging
+-----------
+
+OVS supports port hotplugging, allowing the use of physical ports that were not
+bound to DPDK when ovs-vswitchd was started.
+
+.. warning::
+
+    This feature is not compatible with all NICs. Refer to vendor documentation
+    for more information.
+
+.. important::
+
+   Ports must be bound to DPDK. Refer to :ref:`dpdk-binding-nics` for more
+   information.
+
+To *hotplug* a port, simply add it like any other port::
+
+    $ ovs-vsctl add-port br0 dpdkx -- set Interface dpdkx type=dpdk \
+        options:dpdk-devargs=0000:01:00.0
+
+Ports can be detached using the ``del-port`` command::
+
+    $ ovs-vsctl del-port dpdkx
+
+This should both delete the port and detach the device. If successful, you
+should see an ``INFO`` log. For example::
+
+    INFO|Device '0000:04:00.1' has been detached
+
+If the log is not seen then the port can be detached like so::
+
+    $ ovs-appctl netdev-dpdk/detach 0000:01:00.0
+
+.. warning::
+
+    Detaching should not be done if a device is known to be non-detachable, as
+    this may cause the device to behave improperly when added back with
+    add-port. The Chelsio Terminator adapters which use the cxgbe driver seem
+    to be an example of this behavior; check the driver documentation if this
+    is suspected.
+
+For more information please refer to the `DPDK Port Hotplug Framework`__.
+
+__ http://dpdk.org/doc/guides/prog_guide/port_hotplug_framework.html#hotplug

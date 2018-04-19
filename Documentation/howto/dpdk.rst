@@ -57,8 +57,12 @@ usage is suggested::
     $ ovs-vsctl add-port br0 dpdk-p1 -- set Interface dpdk-p1 type=dpdk \
         options:dpdk-devargs="class=eth,mac=00:11:22:33:44:56"
 
-Note: such syntax won't support hotplug. The hotplug is supposed to work with
-future DPDK release, v18.05.
+.. important::
+
+    Hotplugging physical interfaces is not supported using the above syntax.
+    This is expected to change with the release of DPDK v18.05. For information
+    on hotplugging physical interfaces, you should instead refer to
+    :ref:`port-hotplug`.
 
 After the DPDK ports get added to switch, a polling thread continuously polls
 DPDK devices and consumes 100% of the core, as can be checked from ``top`` and
@@ -122,34 +126,6 @@ To clear the ingress policer configuration from the port::
     $ ovs-vsctl set interface vhost-user0 ingress_policing_rate=0
 
 Refer to vswitch.xml for more details on ingress-policer.
-
-Flow Control
-------------
-
-Flow control can be enabled only on DPDK physical ports. To enable flow control
-support at tx side while adding a port, run::
-
-    $ ovs-vsctl add-port br0 dpdk-p0 -- set Interface dpdk-p0 type=dpdk \
-        options:dpdk-devargs=0000:01:00.0 options:tx-flow-ctrl=true
-
-Similarly, to enable rx flow control, run::
-
-    $ ovs-vsctl add-port br0 dpdk-p0 -- set Interface dpdk-p0 type=dpdk \
-        options:dpdk-devargs=0000:01:00.0 options:rx-flow-ctrl=true
-
-To enable flow control auto-negotiation, run::
-
-    $ ovs-vsctl add-port br0 dpdk-p0 -- set Interface dpdk-p0 type=dpdk \
-        options:dpdk-devargs=0000:01:00.0 options:flow-ctrl-autoneg=true
-
-To turn ON the tx flow control at run time for an existing port, run::
-
-    $ ovs-vsctl set Interface dpdk-p0 options:tx-flow-ctrl=true
-
-The flow control parameters can be turned off by setting ``false`` to the
-respective parameter. To disable the flow control at tx side, run::
-
-    $ ovs-vsctl set Interface dpdk-p0 options:tx-flow-ctrl=false
 
 pdump
 -----
@@ -236,16 +212,6 @@ largest frame size supported by Fortville NIC using the DPDK i40e driver, but
 larger frames and other DPDK NIC drivers may be supported. These cases are
 common for use cases involving East-West traffic only.
 
-Rx Checksum Offload
--------------------
-
-By default, DPDK physical ports are enabled with Rx checksum offload.
-
-Rx checksum offload can offer performance improvement only for tunneling
-traffic in OVS-DPDK because the checksum validation of tunnel packets is
-offloaded to the NIC. Also enabling Rx checksum may slightly reduce the
-performance of non-tunnel traffic, specifically for smaller size packet.
-
 .. _extended-statistics:
 
 Extended & Custom Statistics
@@ -277,52 +243,6 @@ Query the port statistics by explicitly specifying -O OpenFlow14 option::
 Note about "Extended Statistics": vHost ports supports only partial
 statistics. RX packet size based counter are only supported and
 doesn't include TX packet size counters.
-
-.. _port-hotplug:
-
-Port Hotplug
-------------
-
-OVS supports port hotplugging, allowing the use of ports that were not bound
-to DPDK when vswitchd was started.
-In order to attach a port, it has to be bound to DPDK using the
-``dpdk_nic_bind.py`` script::
-
-    $ $DPDK_DIR/tools/dpdk_nic_bind.py --bind=igb_uio 0000:01:00.0
-
-Then it can be attached to OVS::
-
-    $ ovs-vsctl add-port br0 dpdkx -- set Interface dpdkx type=dpdk \
-        options:dpdk-devargs=0000:01:00.0
-
-Detaching will be performed while processing del-port command::
-
-    $ ovs-vsctl del-port dpdkx
-
-Sometimes, the del-port command may not detach the device.
-Detaching can be confirmed by the appearance of an INFO log.
-For example::
-
-    INFO|Device '0000:04:00.1' has been detached
-
-If the log is not seen, then the port can be detached using::
-
-$ ovs-appctl netdev-dpdk/detach 0000:01:00.0
-
-Detaching can be confirmed by console output::
-
-    Device '0000:04:00.1' has been detached
-
-.. warning::
-    Detaching should not be done if a device is known to be non-detachable, as
-    this may cause the device to behave improperly when added back with
-    add-port. The Chelsio Terminator adapters which use the cxgbe driver seem
-    to be an example of this behavior; check the driver documentation if this
-    is suspected.
-
-This feature does not work with some NICs.
-For more information please refer to the `DPDK Port Hotplug Framework
-<http://dpdk.org/doc/guides/prog_guide/port_hotplug_framework.html#hotplug>`__.
 
 .. _vdev-support:
 
@@ -653,3 +573,14 @@ devices to bridge ``br0``. Once complete, follow the below steps:
    Check traffic on multiple queues::
 
        $ cat /proc/interrupts | grep virtio
+
+Further Reading
+---------------
+
+More detailed information can be found in the :doc:`DPDK topics section
+</topics/dpdk/index>` of the documentation. These guides are listed below.
+
+.. NOTE(stephenfin): Remember to keep this in sync with topics/dpdk/index
+
+.. include:: ../topics/dpdk/index.rst
+   :start-line: 30

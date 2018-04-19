@@ -25,10 +25,13 @@
 The DPDK Datapath
 =================
 
+.. NOTE(stephenfin): Part of this doc is included in 'howto/dpdk'. Update that
+.. if you modify this document
+
 .. toctree::
    :maxdepth: 2
 
-   phy
-   vhost-user
-   ring
-   pmd
+   /topics/dpdk/phy
+   /topics/dpdk/vhost-user
+   /topics/dpdk/ring
+   /topics/dpdk/pmd
