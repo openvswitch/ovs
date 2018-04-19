@@ -28,5 +28,6 @@ The DPDK Datapath
 .. toctree::
    :maxdepth: 2
 
+   phy
    vhost-user
    ring

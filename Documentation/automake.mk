@@ -34,6 +34,7 @@ DOC_SOURCE = \
 	Documentation/topics/datapath.rst \
 	Documentation/topics/design.rst \
 	Documentation/topics/dpdk/index.rst \
+	Documentation/topics/dpdk/phy.rst \
 	Documentation/topics/dpdk/ring.rst \
 	Documentation/topics/dpdk/vhost-user.rst \
 	Documentation/topics/testing.rst \
