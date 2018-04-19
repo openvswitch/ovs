@@ -1896,13 +1896,13 @@ netdev_dpdk_vhost_update_rx_counters(struct netdev_stats *stats,
  */
 static int
 netdev_dpdk_vhost_rxq_recv(struct netdev_rxq *rxq,
-                           struct dp_packet_batch *batch)
+                           struct dp_packet_batch *batch, int *qfill)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(rxq->netdev);
     struct ingress_policer *policer = netdev_dpdk_get_ingress_policer(dev);
     uint16_t nb_rx = 0;
     uint16_t dropped = 0;
-    int qid = rxq->queue_id;
+    int qid = rxq->queue_id * VIRTIO_QNUM + VIRTIO_TXQ;
     int vid = netdev_dpdk_get_vid(dev);
 
     if (OVS_UNLIKELY(vid < 0 || !dev->vhost_reconfigured
@@ -1910,12 +1910,21 @@ netdev_dpdk_vhost_rxq_recv(struct netdev_rxq *rxq,
         return EAGAIN;
     }
 
-    nb_rx = rte_vhost_dequeue_burst(vid, qid * VIRTIO_QNUM + VIRTIO_TXQ,
-                                    dev->mp,
+    nb_rx = rte_vhost_dequeue_burst(vid, qid, dev->mp,
                                     (struct rte_mbuf **) batch->packets,
                                     NETDEV_MAX_BURST);
     if (!nb_rx) {
         return EAGAIN;
+    }
+
+    if (qfill) {
+        if (nb_rx == NETDEV_MAX_BURST) {
+            /* The DPDK API returns a uint32_t which often has invalid bits in
+             * the upper 16-bits. Need to restrict the value to uint16_t. */
+            *qfill = rte_vhost_rx_queue_count(vid, qid) & UINT16_MAX;
+        } else {
+            *qfill = 0;
+        }
     }
 
     if (policer) {
@@ -1938,7 +1947,8 @@ netdev_dpdk_vhost_rxq_recv(struct netdev_rxq *rxq,
 }
 
 static int
-netdev_dpdk_rxq_recv(struct netdev_rxq *rxq, struct dp_packet_batch *batch)
+netdev_dpdk_rxq_recv(struct netdev_rxq *rxq, struct dp_packet_batch *batch,
+                     int *qfill)
 {
     struct netdev_rxq_dpdk *rx = netdev_rxq_dpdk_cast(rxq);
     struct netdev_dpdk *dev = netdev_dpdk_cast(rxq->netdev);
@@ -1974,6 +1984,14 @@ netdev_dpdk_rxq_recv(struct netdev_rxq *rxq, struct dp_packet_batch *batch)
 
     batch->count = nb_rx;
     dp_packet_batch_init_packet_fields(batch);
+
+    if (qfill) {
+        if (nb_rx == NETDEV_MAX_BURST) {
+            *qfill = rte_eth_rx_queue_count(rx->port_id, rxq->queue_id);
+        } else {
+            *qfill = 0;
+        }
+    }
 
     return 0;
 }
@@ -3255,6 +3273,19 @@ vring_state_changed(int vid, uint16_t queue_id, int enable)
 
     return 0;
 }
+
+/*
+ * Retrieve the DPDK virtio device ID (vid) associated with a vhostuser
+ * or vhostuserclient netdev.
+ *
+ * Returns a value greater or equal to zero for a valid vid or '-1' if
+ * there is no valid vid associated. A vid of '-1' must not be used in
+ * rte_vhost_ APi calls.
+ *
+ * Once obtained and validated, a vid can be used by a PMD for multiple
+ * subsequent rte_vhost API calls until the PMD quiesces. A PMD should
+ * not fetch the vid again for each of a series of API calls.
+ */
 
 int
 netdev_dpdk_get_vid(const struct netdev_dpdk *dev)

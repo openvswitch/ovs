@@ -3277,7 +3277,7 @@ dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
     pmd->ctx.last_rxq = rxq;
     dp_packet_batch_init(&batch);
 
-    error = netdev_rxq_recv(rxq->rx, &batch);
+    error = netdev_rxq_recv(rxq->rx, &batch, NULL);
     if (!error) {
         /* At least one packet received. */
         *recirc_depth_get() = 0;
