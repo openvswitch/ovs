@@ -130,11 +130,10 @@ an additional set of parameters::
     -netdev type=vhost-user,id=mynet2,chardev=char2,vhostforce
     -device virtio-net-pci,mac=00:00:00:00:00:02,netdev=mynet2
 
-In addition,       QEMU must allocate the VM's memory on hugetlbfs. vhost-user
-ports access a virtio-net device's virtual rings and packet buffers mapping the
-VM's physical memory on hugetlbfs. To enable vhost-user ports to map the VM's
-memory into their process address space, pass the following parameters to
-QEMU::
+In addition, QEMU must allocate the VM's memory on hugetlbfs. vhost-user ports
+access a virtio-net device's virtual rings and packet buffers mapping the VM's
+physical memory on hugetlbfs. To enable vhost-user ports to map the VM's memory
+into their process address space, pass the following parameters to QEMU::
 
     -object memory-backend-file,id=mem,size=4096M,mem-path=/dev/hugepages,share=on
     -numa node,memdev=mem -mem-prealloc
@@ -154,18 +153,18 @@ where:
   The number of vectors, which is ``$q`` * 2 + 2
 
 The vhost-user interface will be automatically reconfigured with required
-number of rx and tx queues after connection of virtio device.  Manual
+number of Rx and Tx queues after connection of virtio device.  Manual
 configuration of ``n_rxq`` is not supported because OVS will work properly only
 if ``n_rxq`` will match number of queues configured in QEMU.
 
-A least 2 PMDs should be configured for the vswitch when using multiqueue.
+A least two PMDs should be configured for the vswitch when using multiqueue.
 Using a single PMD will cause traffic to be enqueued to the same vhost queue
 rather than being distributed among different vhost queues for a vhost-user
 interface.
 
 If traffic destined for a VM configured with multiqueue arrives to the vswitch
-via a physical DPDK port, then the number of rxqs should also be set to at
-least 2 for that physical DPDK port. This is required to increase the
+via a physical DPDK port, then the number of Rx queues should also be set to at
+least two for that physical DPDK port. This is required to increase the
 probability that a different PMD will handle the multiqueue transmission to the
 guest using a different vhost queue.
 

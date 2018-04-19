@@ -31,3 +31,4 @@ The DPDK Datapath
    phy
    vhost-user
    ring
+   pmd
