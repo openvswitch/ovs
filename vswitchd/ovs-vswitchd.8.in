@@ -328,7 +328,10 @@ replies for a switch defined time greater than 1s, it may send an
 ofp_error_msg with OFPET_BUNDLE_FAILED type and OFPBFC_TIMEOUT code.
 .
 .PP
-Open vSwitch implements idle bundle lifetime of 10 seconds.
+Open vSwitch implements default idle bundle lifetime of 10 seconds.
+(This is configurable via \fBother-config:bundle-idle-timeout\fR in
+the \fBOpen_vSwitch\fR table. See \fBovs-vswitchd.conf.db\fR(5)
+for details.)
 .
 .SH "LIMITS"
 .

@@ -86,6 +86,8 @@ void connmgr_get_memory_usage(const struct connmgr *, struct simap *usage);
 
 struct ofproto *ofconn_get_ofproto(const struct ofconn *);
 
+void connmgr_set_bundle_idle_timeout(unsigned timeout);
+
 void connmgr_retry(struct connmgr *);
 
 /* OpenFlow configuration. */

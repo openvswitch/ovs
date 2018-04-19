@@ -598,7 +598,8 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                                       OFPROTO_MAX_IDLE_DEFAULT));
     ofproto_set_vlan_limit(smap_get_int(&ovs_cfg->other_config, "vlan-limit",
                                        LEGACY_MAX_VLAN_HEADERS));
-
+    ofproto_set_bundle_idle_timeout(smap_get_int(&ovs_cfg->other_config,
+                                                 "bundle-idle-timeout", 0));
     ofproto_set_threads(
         smap_get_int(&ovs_cfg->other_config, "n-handler-threads", 0),
         smap_get_int(&ovs_cfg->other_config, "n-revalidator-threads", 0));

@@ -680,6 +680,13 @@ ofproto_set_in_band_queue(struct ofproto *ofproto, int queue_id)
     connmgr_set_in_band_queue(ofproto->connmgr, queue_id);
 }
 
+/* Sets the bundle max idle timeout */
+void
+ofproto_set_bundle_idle_timeout(unsigned timeout)
+{
+    connmgr_set_bundle_idle_timeout(timeout);
+}
+
 /* Sets the number of flows at which eviction from the kernel flow table
  * will occur. */
 void

@@ -450,6 +450,18 @@
           VLAN.
         </p>
       </column>
+      <column name="other_config" key="bundle-idle-timeout"
+              type='{"type": "integer", "minInteger": 1}'>
+        <p>
+          The maximum time (in seconds) that idle bundles will wait
+          to be expired since it was either opened, modified or closed.
+        </p>
+        <p>
+          OpenFlow specification mandates the timeout to be at least one
+          second. The default is 10 seconds.
+        </p>
+    </column>
+
     </group>
 
     <group title="Status">

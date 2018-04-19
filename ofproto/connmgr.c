@@ -37,6 +37,7 @@
 #include "openvswitch/poll-loop.h"
 #include "openvswitch/rconn.h"
 #include "openvswitch/shash.h"
+#include "sat-math.h"
 #include "simap.h"
 #include "stream.h"
 #include "timeval.h"
@@ -138,10 +139,11 @@ struct ofconn {
 
 /* vswitchd/ovs-vswitchd.8.in documents the value of BUNDLE_IDLE_LIFETIME in
  * seconds.  That documentation must be kept in sync with the value below. */
-enum {
-    BUNDLE_EXPIRY_INTERVAL = 1000,  /* Check bundle expiry every 1 sec. */
-    BUNDLE_IDLE_TIMEOUT = 10000,    /* Expire idle bundles after 10 seconds. */
-};
+#define BUNDLE_EXPIRY_INTERVAL 1000     /* Check bundle expiry every 1 sec. */
+#define BUNDLE_IDLE_TIMEOUT_DEFAULT 10000   /* Expire idle bundles after
+                                             * 10 seconds. */
+
+static unsigned int bundle_idle_timeout = BUNDLE_IDLE_TIMEOUT_DEFAULT;
 
 static struct ofconn *ofconn_create(struct connmgr *, struct rconn *,
                                     enum ofconn_type, bool enable_async_msgs)
@@ -468,6 +470,18 @@ struct ofproto *
 ofconn_get_ofproto(const struct ofconn *ofconn)
 {
     return ofconn->connmgr->ofproto;
+}
+
+/* Sets the bundle idle timeout to 'timeout' seconds, interpreting 0 as
+ * requesting the default timeout.
+ *
+ * The OpenFlow spec mandates the timeout to be at least one second; . */
+void
+connmgr_set_bundle_idle_timeout(unsigned timeout)
+{
+    bundle_idle_timeout = (timeout
+                           ? sat_mul(timeout, 1000)
+                           : BUNDLE_IDLE_TIMEOUT_DEFAULT);
 }
 
 /* OpenFlow configuration. */
@@ -1247,7 +1261,7 @@ static void
 bundle_remove_expired(struct ofconn *ofconn, long long int now)
 {
     struct ofp_bundle *b, *next;
-    long long int limit = now - BUNDLE_IDLE_TIMEOUT;
+    long long int limit = now - bundle_idle_timeout;
 
     HMAP_FOR_EACH_SAFE (b, next, node, &ofconn->bundles) {
         if (b->used <= limit) {

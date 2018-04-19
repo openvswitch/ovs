@@ -5456,6 +5456,135 @@ OFPT_BARRIER_REPLY (OF1.4):
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto - bundle custom timeout (OpenFlow 1.4)])
+AT_KEYWORDS([monitor])
+OVS_VSWITCHD_START
+
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:bundle-idle-timeout=4])
+
+# Start a monitor, use the required protocol version
+ovs-ofctl -O OpenFlow14 monitor br0 --detach --no-chdir --pidfile >monitor.log 2>&1
+AT_CAPTURE_FILE([monitor.log])
+
+ovs-appctl time/stop
+
+# Send an OpenFlow14 message (05), OFPT_BUNDLE_CONTROL (21), length (10), xid (01)
+ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 01 00 00 00 01 00 00 00 03"
+ovs-appctl time/warp 2000
+# Send a bundle flow mod, it should keep the bundle alive.
+ovs-appctl -t ovs-ofctl ofctl/send "05 22 00 a0 00 00 00 02 00 00 00 01 00 00 00 03 \
+05 0e 00 90 00 00 00 02 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 01 00 00 00 00 00 ff ff \
+ff ff ff ff ff ff ff ff ff ff ff ff 00 00 00 00 \
+00 01 00 42 80 00 00 04 00 00 00 01 80 00 08 06 \
+50 54 00 00 00 06 80 00 06 06 50 54 00 00 00 05 \
+80 00 0a 02 08 06 80 00 0c 02 00 00 80 00 2a 02 \
+00 02 80 00 2c 04 c0 a8 00 02 80 00 2e 04 c0 a8 \
+00 01 00 00 00 00 00 00 00 04 00 18 00 00 00 00 \
+00 00 00 10 00 00 00 03 00 00 00 00 00 00 00 00 \
+"
+ovs-appctl time/warp 2000
+# Send a bundle close, it should keep the bundle alive.
+ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 03 00 00 00 01 00 02 00 03"
+ovs-appctl time/warp 4000
+# Make sure that timeouts are processed after the expiry, but still before the
+# current timeout of 4s.
+ovs-appctl time/warp 1000
+# Send a Commit, but too late.
+ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 04 00 00 00 01 00 04 00 03"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
+
+AT_CHECK([ofctl_strip < monitor.log], [], [dnl
+send: OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=OPEN_REQUEST flags=atomic ordered
+OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=OPEN_REPLY flags=0
+send: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
+ bundle_id=0x1 flags=atomic ordered
+OFPT_FLOW_MOD (OF1.4): ADD table:1 priority=65535,arp,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,arp_spa=192.168.0.2,arp_tpa=192.168.0.1,arp_op=2 actions=output:3
+send: OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=CLOSE_REQUEST flags=atomic ordered
+OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=CLOSE_REPLY flags=0
+OFPT_ERROR (OF1.4): OFPBFC_TIMEOUT
+OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=OPEN_REQUEST flags=atomic ordered
+send: OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=COMMIT_REQUEST flags=atomic ordered
+OFPT_ERROR (OF1.4): OFPBFC_BAD_ID
+OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=COMMIT_REQUEST flags=atomic ordered
+OFPT_BARRIER_REPLY (OF1.4):
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - bundle reset timeout to default (OpenFlow 1.4)])
+AT_KEYWORDS([monitor])
+OVS_VSWITCHD_START
+
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:bundle-idle-timeout=15])
+AT_CHECK([ovs-vsctl remove Open_vSwitch . other_config bundle-idle-timeout])
+
+# Start a monitor, use the required protocol version
+ovs-ofctl -O OpenFlow14 monitor br0 --detach --no-chdir --pidfile >monitor.log 2>&1
+AT_CAPTURE_FILE([monitor.log])
+
+ovs-appctl time/stop
+
+# Send an OpenFlow14 message (05), OFPT_BUNDLE_CONTROL (21), length (10), xid (01)
+ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 01 00 00 00 01 00 00 00 03"
+ovs-appctl time/warp 8000
+# Send a bundle flow mod, it should keep the bundle alive.
+ovs-appctl -t ovs-ofctl ofctl/send "05 22 00 a0 00 00 00 02 00 00 00 01 00 00 00 03 \
+05 0e 00 90 00 00 00 02 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 01 00 00 00 00 00 ff ff \
+ff ff ff ff ff ff ff ff ff ff ff ff 00 00 00 00 \
+00 01 00 42 80 00 00 04 00 00 00 01 80 00 08 06 \
+50 54 00 00 00 06 80 00 06 06 50 54 00 00 00 05 \
+80 00 0a 02 08 06 80 00 0c 02 00 00 80 00 2a 02 \
+00 02 80 00 2c 04 c0 a8 00 02 80 00 2e 04 c0 a8 \
+00 01 00 00 00 00 00 00 00 04 00 18 00 00 00 00 \
+00 00 00 10 00 00 00 03 00 00 00 00 00 00 00 00 \
+"
+ovs-appctl time/warp 8000
+# Send a bundle close, it should keep the bundle alive.
+ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 03 00 00 00 01 00 02 00 03"
+ovs-appctl time/warp 11000
+# Make sure that timeouts are processed after the expiry
+ovs-appctl time/warp 1000
+# Send a Commit, but too late.
+ovs-appctl -t ovs-ofctl ofctl/send "05 21 00 10 00 00 00 04 00 00 00 01 00 04 00 03"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
+
+AT_CHECK([ofctl_strip < monitor.log], [], [dnl
+send: OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=OPEN_REQUEST flags=atomic ordered
+OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=OPEN_REPLY flags=0
+send: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
+ bundle_id=0x1 flags=atomic ordered
+OFPT_FLOW_MOD (OF1.4): ADD table:1 priority=65535,arp,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,arp_spa=192.168.0.2,arp_tpa=192.168.0.1,arp_op=2 actions=output:3
+send: OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=CLOSE_REQUEST flags=atomic ordered
+OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=CLOSE_REPLY flags=0
+OFPT_ERROR (OF1.4): OFPBFC_TIMEOUT
+OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=OPEN_REQUEST flags=atomic ordered
+send: OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=COMMIT_REQUEST flags=atomic ordered
+OFPT_ERROR (OF1.4): OFPBFC_BAD_ID
+OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0x1 type=COMMIT_REQUEST flags=atomic ordered
+OFPT_BARRIER_REPLY (OF1.4):
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
 
 AT_SETUP([ofproto - bundle open (OpenFlow 1.3)])
 AT_KEYWORDS([monitor])
