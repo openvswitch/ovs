@@ -38,3 +38,4 @@ The DPDK Datapath
    /topics/dpdk/vdev
    /topics/dpdk/pmd
    /topics/dpdk/qos
+   /topics/dpdk/pdump
