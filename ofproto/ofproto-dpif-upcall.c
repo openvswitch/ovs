@@ -1621,8 +1621,13 @@ ukey_get_actions(struct udpif_key *ukey, const struct nlattr **actions, size_t *
 static void
 ukey_set_actions(struct udpif_key *ukey, const struct ofpbuf *actions)
 {
-    ovsrcu_postpone(ofpbuf_delete,
-                    ovsrcu_get_protected(struct ofpbuf *, &ukey->actions));
+    struct ofpbuf *old_actions = ovsrcu_get_protected(struct ofpbuf *,
+                                                      &ukey->actions);
+
+    if (old_actions) {
+        ovsrcu_postpone(ofpbuf_delete, old_actions);
+    }
+
     ovsrcu_set(&ukey->actions, ofpbuf_clone(actions));
 }
 
