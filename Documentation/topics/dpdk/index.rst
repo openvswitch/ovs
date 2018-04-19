@@ -39,3 +39,4 @@ The DPDK Datapath
    /topics/dpdk/pmd
    /topics/dpdk/qos
    /topics/dpdk/pdump
+   /topics/dpdk/jumbo-frames

@@ -218,3 +218,9 @@ If the log is not seen then the port can be detached like so::
 For more information please refer to the `DPDK Port Hotplug Framework`__.
 
 __ http://dpdk.org/doc/guides/prog_guide/port_hotplug_framework.html#hotplug
+
+Jumbo Frames
+------------
+
+DPDK physical ports can be configured to use Jumbo Frames. For more
+information, refer to :doc:`jumbo-frames`.

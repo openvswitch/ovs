@@ -48,9 +48,9 @@ number of dpdk devices found in the log file::
     $ ovs-vsctl add-port br0 dpdk-p1 -- set Interface dpdk-p1 type=dpdk \
         options:dpdk-devargs=0000:01:00.1
 
-Some NICs (i.e. Mellanox ConnectX-3) have only one PCI address associated
-with multiple ports. Using a PCI device like above won't work. Instead, below
-usage is suggested::
+Some NICs (i.e. Mellanox ConnectX-3) have only one PCI address associated with
+multiple ports. Using a PCI device like above won't work. Instead, below usage
+is suggested::
 
     $ ovs-vsctl add-port br0 dpdk-p0 -- set Interface dpdk-p0 type=dpdk \
         options:dpdk-devargs="class=eth,mac=00:11:22:33:44:55"
@@ -84,52 +84,6 @@ To stop ovs-vswitchd & delete bridge, run::
     $ ovs-appctl -t ovs-vswitchd exit
     $ ovs-appctl -t ovsdb-server exit
     $ ovs-vsctl del-br br0
-
-Jumbo Frames
-------------
-
-By default, DPDK ports are configured with standard Ethernet MTU (1500B). To
-enable Jumbo Frames support for a DPDK port, change the Interface's
-``mtu_request`` attribute to a sufficiently large value. For example, to add a
-DPDK Phy port with MTU of 9000::
-
-    $ ovs-vsctl add-port br0 dpdk-p0 -- set Interface dpdk-p0 type=dpdk \
-          options:dpdk-devargs=0000:01:00.0 mtu_request=9000
-
-Similarly, to change the MTU of an existing port to 6200::
-
-    $ ovs-vsctl set Interface dpdk-p0 mtu_request=6200
-
-Some additional configuration is needed to take advantage of jumbo frames with
-vHost ports:
-
-1. *mergeable buffers* must be enabled for vHost ports, as demonstrated in the
-   QEMU command line snippet below::
-
-       -netdev type=vhost-user,id=mynet1,chardev=char0,vhostforce \
-       -device virtio-net-pci,mac=00:00:00:00:00:01,netdev=mynet1,mrg_rxbuf=on
-
-2. Where virtio devices are bound to the Linux kernel driver in a guest
-   environment (i.e. interfaces are not bound to an in-guest DPDK driver), the
-   MTU of those logical network interfaces must also be increased to a
-   sufficiently large value. This avoids segmentation of Jumbo Frames received
-   in the guest. Note that 'MTU' refers to the length of the IP packet only,
-   and not that of the entire frame.
-
-   To calculate the exact MTU of a standard IPv4 frame, subtract the L2 header
-   and CRC lengths (i.e. 18B) from the max supported frame size.  So, to set
-   the MTU for a 9018B Jumbo Frame::
-
-       $ ip link set eth1 mtu 9000
-
-When Jumbo Frames are enabled, the size of a DPDK port's mbuf segments are
-increased, such that a full Jumbo Frame of a specific size may be accommodated
-within a single mbuf segment.
-
-Jumbo frame support has been validated against 9728B frames, which is the
-largest frame size supported by Fortville NIC using the DPDK i40e driver, but
-larger frames and other DPDK NIC drivers may be supported. These cases are
-common for use cases involving East-West traffic only.
 
 .. _dpdk-ovs-in-guest:
 

@@ -431,6 +431,12 @@ Sample XML
 
 .. _QEMU documentation: http://git.qemu-project.org/?p=qemu.git;a=blob;f=docs/specs/vhost-user.txt;h=7890d7169;hb=HEAD
 
+Jumbo Frames
+------------
+
+DPDK vHost User ports can be configured to use Jumbo Frames. For more
+information, refer to :doc:`jumbo-frames`.
+
 vhost-user Dequeue Zero Copy (experimental)
 -------------------------------------------
 
