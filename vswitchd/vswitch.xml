@@ -375,6 +375,18 @@
         </p>
       </column>
 
+      <column name="other_config" key="pmd-perf-metrics"
+              type='{"type": "boolean"}'>
+        <p>
+          Enables recording of detailed PMD performance metrics for analysis
+          and trouble-shooting. This can have a performance impact in the
+          order of 1%.
+        </p>
+        <p>
+          Defaults to false but can be changed at any time.
+        </p>
+      </column>
+
       <column name="other_config" key="n-handler-threads"
               type='{"type": "integer", "minInteger": 1}'>
         <p>

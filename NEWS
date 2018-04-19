@@ -27,6 +27,10 @@ Post-v2.9.0
    - DPDK:
      * New 'check-dpdk' Makefile target to run a new system testsuite.
        See Testing topic for the details.
+   - Userspace datapath:
+     * Commands ovs-appctl dpif-netdev/pmd-*-show can now work on a single PMD
+     * Detailed PMD performance metrics available with new command
+         ovs-appctl dpif-netdev/pmd-perf-show
 
 v2.9.0 - 19 Feb 2018
 --------------------
