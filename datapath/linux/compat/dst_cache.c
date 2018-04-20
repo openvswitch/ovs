@@ -9,6 +9,7 @@
  * (at your option) any later version.
  */
 
+#ifndef USE_BUILTIN_DST_CACHE
 #include <linux/kernel.h>
 #include <linux/percpu.h>
 #include <net/dst_cache.h>
@@ -169,3 +170,4 @@ void rpl_dst_cache_destroy(struct dst_cache *dst_cache)
 }
 EXPORT_SYMBOL_GPL(rpl_dst_cache_destroy);
 #endif /*USE_UPSTREAM_TUNNEL */
+#endif /* USE_BUILTIN_DST_CACHE */

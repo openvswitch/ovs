@@ -533,6 +533,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                         [OVS_GREP_IFELSE([$KSRC/include/net/dst_cache.h], [dst_cache],
                                          [OVS_DEFINE([USE_UPSTREAM_TUNNEL])])])])
 
+  OVS_GREP_IFELSE([$KSRC/include/net/dst_cache.h], [dst_cache],
+                  [OVS_DEFINE([USE_BUILTIN_DST_CACHE])])
   OVS_GREP_IFELSE([$KSRC/include/net/mpls.h], [mpls_hdr],
                   [OVS_DEFINE([MPLS_HEADER_IS_L3])])
   OVS_GREP_IFELSE([$KSRC/include/linux/net.h], [sock_create_kern.*net],
