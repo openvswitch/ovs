@@ -490,7 +490,7 @@ Options:\n\
 Other options:\n\
   -h, --help                  display this help message\n\
   -V, --version               display version information\n");
-    stream_usage("database", true, true, false);
+    stream_usage("database", true, true, true);
     exit(EXIT_SUCCESS);
 }
 
