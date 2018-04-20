@@ -1,6 +1,10 @@
 #ifndef _NET_DST_CACHE_WRAPPER_H
 #define _NET_DST_CACHE_WRAPPER_H
 
+#ifdef USE_BUILTIN_DST_CACHE
+#include_next <net/dst_cache.h>
+#else
+
 #include <linux/jiffies.h>
 #include <net/dst.h>
 #if IS_ENABLED(CONFIG_IPV6)
@@ -106,4 +110,5 @@ int rpl_dst_cache_init(struct dst_cache *dst_cache, gfp_t gfp);
 void rpl_dst_cache_destroy(struct dst_cache *dst_cache);
 
 #endif /* USE_UPSTREAM_TUNNEL */
+#endif /* USE_BUILTIN_DST_CACHE */
 #endif
