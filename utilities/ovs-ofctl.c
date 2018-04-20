@@ -2326,6 +2326,11 @@ ofctl_snoop(struct ovs_cmdl_context *ctx)
 {
     struct vconn *vconn;
 
+    /* We can't use the snoop vconn to send table features request or port
+     * description request messages to show names, because ovs-vswitchd will
+     * not respond to these messages on snoop vconn. */
+    use_names = 0;
+
     open_vconn__(ctx->argv[1], SNOOP, &vconn);
     monitor_vconn(vconn, false, false);
 }
