@@ -3310,6 +3310,7 @@ propagate_tunnel_data_to_flow__(struct flow *dst_flow,
     dst_flow->ipv6_dst = src_flow->tunnel.ipv6_dst;
     dst_flow->ipv6_src = src_flow->tunnel.ipv6_src;
 
+    dst_flow->nw_frag = 0; /* Tunnel packets are unfragmented. */
     dst_flow->nw_tos = src_flow->tunnel.ip_tos;
     dst_flow->nw_ttl = src_flow->tunnel.ip_ttl;
     dst_flow->tp_dst = src_flow->tunnel.tp_dst;
