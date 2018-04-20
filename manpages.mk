@@ -12,12 +12,14 @@ ovn/utilities/ovn-sbctl.8: \
 	ovn/utilities/ovn-sbctl.8.in \
 	lib/common.man \
 	lib/db-ctl-base.man \
+	lib/ssl-bootstrap.man \
 	lib/ssl.man \
 	lib/table.man \
 	lib/vlog.man
 ovn/utilities/ovn-sbctl.8.in:
 lib/common.man:
 lib/db-ctl-base.man:
+lib/ssl-bootstrap.man:
 lib/ssl.man:
 lib/table.man:
 lib/vlog.man:

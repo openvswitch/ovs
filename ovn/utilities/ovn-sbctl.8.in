@@ -112,6 +112,7 @@ These options control the format of output from the \fBlist\fR and
 .so lib/table.man
 .
 .SS "Public Key Infrastructure Options"
+.so lib/ssl-bootstrap.man
 .so lib/ssl.man
 .
 .SH COMMANDS
