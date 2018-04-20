@@ -148,14 +148,17 @@ or can be triggered by using::
 
     $ ovs-appctl dpif-netdev/pmd-rxq-rebalance
 
-.. versionchanged:: 2.8.0
+.. versionchanged:: 2.6.0
 
-   Automatic assignment of Rx queues to PMDs and the two related commands,
-   ``pmd-rxq-show`` and ``pmd-rxq-rebalance``, were added in OVS 2.8.0. Prior
-   to this, behavior was round-robin and processing cycles were not taken into
-   consideration. Tracking for stats was not available.
+   The ``pmd-rxq-show`` command was added in OVS 2.6.0.
 
 .. versionchanged:: 2.9.0
 
-   The output of ``pmd-rxq-show`` was modified to include utilization as a
-   percentage.
+   Utilization-based allocation of Rx queues to PMDs and the
+   ``pmd-rxq-rebalance`` command were added in OVS 2.9.0. Prior to this,
+   allocation was round-robin and processing cycles were not taken into
+   consideration.
+
+   In addition, the output of ``pmd-rxq-show`` was modified to include
+   Rx queue utilization of the PMD as a percentage. Prior to this, tracking of
+   stats was not available.
