@@ -297,6 +297,29 @@ To invoke the datapath testsuite with the userspace datapath, run::
 
 The results of the testsuite are in ``tests/system-userspace-testsuite.dir``.
 
+DPDK datapath
+'''''''''''''
+
+To test :doc:`/intro/install/dpdk` (i.e., the build was configured with
+``--with-dpdk``, the DPDK is installed), run the testsuite and generate
+a report by using the ``check-dpdk`` target::
+
+    # make check-dpdk
+
+or if you are not a root, but a sudo user::
+
+    $ sudo -E make check-dpdk
+
+To see a list of all the available tests, run::
+
+    # make check-dpdk TESTSUITEFLAGS=--list
+
+These tests require a `DPDK supported NIC`_ and proper DPDK variables
+(``DPDK_DIR`` and ``DPDK_BUILD``). Moreover you need to have root privileges,
+load the required modules and bind the NIC to the DPDK-compatible driver.
+
+.. _DPDK supported NIC: http://dpdk.org/doc/nics
+
 Kernel datapath
 '''''''''''''''
 

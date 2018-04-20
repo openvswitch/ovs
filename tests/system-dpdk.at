@@ -1,0 +1,67 @@
+AT_BANNER([OVS-DPDK unit tests])
+
+dnl --------------------------------------------------------------------------
+dnl Check if EAL init is successfull
+AT_SETUP([OVS-DPDK datapath - EAL init])
+AT_KEYWORDS([dpdk])
+dnl OVS_DPDK_PRE_CHECK()
+OVS_DPDK_START()
+AT_CHECK([grep "DPDK Enabled - initializing..." ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "EAL" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "DPDK Enabled - initialized" ovs-vswitchd.log], [], [stdout])
+OVS_VSWITCHD_STOP("/Global register is changed during/d")
+AT_CLEANUP
+dnl --------------------------------------------------------------------------
+
+
+
+dnl --------------------------------------------------------------------------
+dnl Add standard DPDK PHY port
+AT_SETUP([OVS-DPDK datapath - add standard DPDK port])
+AT_KEYWORDS([dpdk])
+
+OVS_DPDK_PRE_CHECK()
+OVS_DPDK_START()
+
+dnl Add userspace bridge and attach it to OVS
+AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
+AT_CHECK([ovs-vsctl add-port br10 phy0 -- set Interface phy0 type=dpdk options:dpdk-devargs=$(cat PCI_ADDR)], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl show], [], [stdout])
+sleep 2
+
+dnl Clean up
+AT_CHECK([ovs-vsctl del-port br10 phy0], [], [stdout], [stderr])
+OVS_VSWITCHD_STOP("/does not exist. The Open vSwitch kernel module is probably not loaded./d
+/Failed to enable flow control/d
+/Global register is changed during/d")
+AT_CLEANUP
+dnl --------------------------------------------------------------------------
+
+
+
+dnl --------------------------------------------------------------------------
+dnl Add vhost-user-client port
+AT_SETUP([OVS-DPDK datapath - add vhost-user-client port])
+AT_KEYWORDS([dpdk])
+
+OVS_DPDK_START()
+
+dnl Add userspace bridge and attach it to OVS
+AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
+AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuserclient0 -- set Interface dpdkvhostuserclient0 type=dpdkvhostuserclient options:vhost-server-path=/tmp/dpdkvhostclient0], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl show], [], [stdout])
+sleep 2
+
+dnl Parse log file
+AT_CHECK([grep "VHOST_CONFIG: vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: /tmp/dpdkvhostclient0: reconnecting..." ovs-vswitchd.log], [], [stdout])
+
+dnl Clean up
+AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
+OVS_VSWITCHD_STOP("/does not exist. The Open vSwitch kernel module is probably not loaded./d
+/Failed to enable flow control/d
+/failed to connect to \/tmp\/dpdkvhostclient0: No such file or directory/d
+/Global register is changed during/d")
+AT_CLEANUP
+dnl --------------------------------------------------------------------------
