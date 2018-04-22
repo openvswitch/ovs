@@ -963,6 +963,12 @@
       The logical switch ports belonging to the group in uuids.
     </column>
 
+    <column name="acls">
+      Access control rules that apply to the port group. Applying an ACL
+      to a port group has the same effect as applying the ACL to all logical
+      lswitches that the ports of the port group belong to.
+    </column>
+
     <group title="Common Columns">
       <column name="external_ids">
         See <em>External IDs</em> at the beginning of this document.
@@ -1030,12 +1036,13 @@
   <table name="ACL" title="Access Control List (ACL) rule">
     <p>
       Each row in this table represents one ACL rule for a logical switch
-      that points to it through its <ref column="acls"/> column.  The <ref
-      column="action"/> column for the highest-<ref column="priority"/>
-      matching row in this table determines a packet's treatment.  If no row
-      matches, packets are allowed by default.  (Default-deny treatment is
-      possible: add a rule with <ref column="priority"/> 0, <code>0</code> as
-      <ref column="match"/>, and <code>deny</code> as <ref column="action"/>.)
+      or a port group that points to it through its <ref column="acls"/>
+      column.  The <ref column="action"/> column for the
+      highest-<ref column="priority"/> matching row in this table determines a
+      packet's treatment.  If no row matches, packets are allowed by default.
+      (Default-deny treatment is possible: add a rule with
+      <ref column="priority"/> 0, <code>0</code> as <ref column="match"/>,
+      and <code>deny</code> as <ref column="action"/>.)
     </p>
 
     <column name="priority">

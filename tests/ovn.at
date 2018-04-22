@@ -9801,3 +9801,232 @@ done
 # Gracefully terminate daemons
 OVN_CLEANUP([hv1], [hv2], [hv3])
 AT_CLEANUP
+
+AT_SETUP([ovn -- ACLs on Port Groups])
+AT_KEYWORDS([ovnpg_acl])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# Logical network:
+#
+# Three logical switches ls1, ls2, ls3.
+# One logical router lr0 connected to ls[123],
+# with nine subnets, three per logical switch:
+#
+#    lrp11 on ls1 for subnet 192.168.11.0/24
+#    lrp12 on ls1 for subnet 192.168.12.0/24
+#    lrp13 on ls1 for subnet 192.168.13.0/24
+#    ...
+#    lrp33 on ls3 for subnet 192.168.33.0/24
+#
+# 27 VIFs, 9 per LS, 3 per subnet: lp[123][123][123], where the first two
+# digits are the subnet and the last digit distinguishes the VIF.
+#
+# This test will create two port groups and ACLs will be applied on them.
+
+get_lsp_uuid () {
+    ovn-nbctl lsp-list ls${1%??} | grep lp$1 | awk '{ print $1 }'
+}
+
+pg1_ports=
+pg2_ports=
+for i in 1 2 3; do
+    ovn-nbctl ls-add ls$i
+    for j in 1 2 3; do
+        for k in 1 2 3; do
+            ovn-nbctl \
+                -- lsp-add ls$i lp$i$j$k \
+                -- lsp-set-addresses lp$i$j$k "f0:00:00:00:0$i:$j$k \
+                   192.168.$i$j.$k"
+            # logical ports lp[12]?1 belongs to port group pg1
+            if test $i != 3 && test $k == 1; then
+                pg1_ports="$pg1_ports `get_lsp_uuid $i$j$k`"
+            fi
+            # logical ports lp[23]?2 belongs to port group pg2
+            if test $i != 1 && test $k == 2; then
+                pg2_ports="$pg2_ports `get_lsp_uuid $i$j$k`"
+            fi
+        done
+    done
+done
+
+ovn-nbctl lr-add lr0
+for i in 1 2 3; do
+    for j in 1 2 3; do
+        ovn-nbctl lrp-add lr0 lrp$i$j 00:00:00:00:ff:$i$j 192.168.$i$j.254/24
+        ovn-nbctl \
+            -- lsp-add ls$i lrp$i$j-attachment \
+            -- set Logical_Switch_Port lrp$i$j-attachment type=router \
+                             options:router-port=lrp$i$j \
+                             addresses='"00:00:00:00:ff:'$i$j'"'
+    done
+done
+
+pg1_uuid=`ovn-nbctl create Port_Group name=pg1 ports="$pg1_ports"`
+ovn-nbctl create Port_Group name=pg2 ports="$pg2_ports"
+
+# create ACLs on pg1 to drop traffic from pg2 to pg1
+ovn-nbctl --id=@acl1 create acl priority=1001 direction=to-lport \
+        match='"outport == @pg1"' action=drop \
+        -- add port_group $pg1_uuid acls @acl1
+ovn-nbctl --id=@acl2 create acl priority=1002 direction=to-lport \
+        match='"outport == @pg1 && ip4.src == $pg2_ip4"' action=allow-related \
+        -- add port_group $pg1_uuid acls @acl2
+
+# Physical network:
+#
+# Three hypervisors hv[123].
+# lp?1[123] spread across hv[123]: lp?11 on hv1, lp?12 on hv2, lp?13 on hv3.
+# lp?2[123] spread across hv[23]: lp?21 and lp?22 on hv2, lp?23 on hv3.
+# lp?3[123] all on hv3.
+
+# Given the name of a logical port, prints the name of the hypervisor
+# on which it is located.
+vif_to_hv() {
+    case $1 in dnl (
+        ?11) echo 1 ;; dnl (
+        ?12 | ?21 | ?22) echo 2 ;; dnl (
+        ?13 | ?23 | ?3?) echo 3 ;;
+    esac
+}
+
+# Given the name of a logical port, prints the name of its logical router
+# port, e.g. "vif_to_lrp 123" yields 12.
+vif_to_lrp() {
+    echo ${1%?}
+}
+
+# Given the name of a logical port, prints the name of its logical
+# switch, e.g. "vif_to_ls 123" yields 1.
+vif_to_ls() {
+    echo ${1%??}
+}
+
+net_add n1
+for i in 1 2 3; do
+    sim_add hv$i
+    as hv$i
+    ovs-vsctl add-br br-phys
+    ovn_attach n1 br-phys 192.168.0.$i
+done
+for i in 1 2 3; do
+    for j in 1 2 3; do
+        for k in 1 2 3; do
+            hv=`vif_to_hv $i$j$k`
+                as hv$hv ovs-vsctl \
+                -- add-port br-int vif$i$j$k \
+                -- set Interface vif$i$j$k \
+                    external-ids:iface-id=lp$i$j$k \
+                    options:tx_pcap=hv$hv/vif$i$j$k-tx.pcap \
+                    options:rxq_pcap=hv$hv/vif$i$j$k-rx.pcap \
+                    ofport-request=$i$j$k
+        done
+    done
+done
+
+# Pre-populate the hypervisors' ARP tables so that we don't lose any
+# packets for ARP resolution (native tunneling doesn't queue packets
+# for ARP resolution).
+OVN_POPULATE_ARP
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
+
+# test_ip INPORT SRC_MAC DST_MAC SRC_IP DST_IP OUTPORT...
+#
+# This shell function causes a packet to be received on INPORT.  The packet's
+# content has Ethernet destination DST and source SRC (each exactly 12 hex
+# digits) and Ethernet type ETHTYPE (4 hex digits).  The OUTPORTs (zero or
+# more) list the VIFs on which the packet should be received.  INPORT and the
+# OUTPORTs are specified as logical switch port numbers, e.g. 123 for vif123.
+for i in 1 2 3; do
+    for j in 1 2 3; do
+        for k in 1 2 3; do
+            : > $i$j$k.expected
+        done
+    done
+done
+test_ip() {
+    # This packet has bad checksums but logical L3 routing doesn't check.
+    local inport=$1 src_mac=$2 dst_mac=$3 src_ip=$4 dst_ip=$5
+    local packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
+    shift; shift; shift; shift; shift
+    hv=hv`vif_to_hv $inport`
+    as $hv ovs-appctl netdev-dummy/receive vif$inport $packet
+    #as $hv ovs-appctl ofproto/trace br-int in_port=$inport $packet
+    in_ls=`vif_to_ls $inport`
+    in_lrp=`vif_to_lrp $inport`
+    for outport; do
+        out_ls=`vif_to_ls $outport`
+        if test $in_ls = $out_ls; then
+            # Ports on the same logical switch receive exactly the same packet.
+            echo $packet
+        else
+            # Routing decrements TTL and updates source and dest MAC
+            # (and checksum).
+            out_lrp=`vif_to_lrp $outport`
+            echo f00000000${outport}00000000ff${out_lrp}08004500001c00000000"3f1101"00${src_ip}${dst_ip}0035111100080000
+        fi >> $outport.expected
+    done
+}
+
+as hv1 ovs-vsctl --columns=name,ofport list interface
+as hv1 ovn-sbctl list port_binding
+as hv1 ovn-sbctl list datapath_binding
+as hv1 ovn-sbctl list port_group
+as hv1 ovn-sbctl list address_set
+as hv1 ovn-sbctl dump-flows
+as hv1 ovs-ofctl dump-flows br-int
+
+# Send IP packets between all pairs of source and destination ports,
+# packets matches ACL1 but not ACL2 should be dropped
+ip_to_hex() {
+    printf "%02x%02x%02x%02x" "$@"
+}
+for is in 1 2 3; do
+  for js in 1 2 3; do
+    for ks in 1 2 3; do
+      bcast=
+      s=$is$js$ks
+      smac=f00000000$s
+      sip=`ip_to_hex 192 168 $is$js $ks`
+      for id in 1 2 3; do
+          for jd in 1 2 3; do
+              for kd in 1 2 3; do
+                d=$id$jd$kd
+                dip=`ip_to_hex 192 168 $id$jd $kd`
+                if test $is = $id; then dmac=f00000000$d; else dmac=00000000ff$is$js; fi
+                if test $d != $s; then unicast=$d; else unicast=; fi
+
+                # packets matches ACL1 but not ACL2 should be dropped
+                if test $id != 3 && test $kd == 1; then
+                    if test $is == 1 || test $ks != 2; then
+                        unicast=
+                    fi
+                fi
+                test_ip $s $smac $dmac $sip $dip $unicast #1
+              done
+          done
+        done
+      done
+  done
+done
+
+# Allow some time for packet forwarding.
+# XXX This can be improved.
+sleep 1
+
+# Now check the packets actually received against the ones expected.
+for i in 1 2 3; do
+    for j in 1 2 3; do
+        for k in 1 2 3; do
+            OVN_CHECK_PACKETS([hv`vif_to_hv $i$j$k`/vif$i$j$k-tx.pcap],
+                              [$i$j$k.expected])
+        done
+    done
+done
+
+# Gracefully terminate daemons
+OVN_CLEANUP([hv1], [hv2], [hv3])
+AT_CLEANUP

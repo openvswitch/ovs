@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
-    "version": "5.10.0",
-    "cksum": "222987318 18430",
+    "version": "5.11.0",
+    "cksum": "1149260021 18713",
     "tables": {
         "NB_Global": {
             "columns": {
@@ -122,6 +122,11 @@
                                            "refType": "weak"},
                                    "min": 0,
                                    "max": "unlimited"}},
+                "acls": {"type": {"key": {"type": "uuid",
+                                          "refTable": "ACL",
+                                          "refType": "strong"},
+                                  "min": 0,
+                                  "max": "unlimited"}},
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}}},

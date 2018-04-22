@@ -3162,7 +3162,259 @@ build_reject_acl_rules(struct ovn_datapath *od, struct hmap *lflows,
 }
 
 static void
-build_acls(struct ovn_datapath *od, struct hmap *lflows)
+consider_acl(struct hmap *lflows, struct ovn_datapath *od,
+             struct nbrec_acl *acl, bool has_stateful)
+{
+    bool ingress = !strcmp(acl->direction, "from-lport") ? true :false;
+    enum ovn_stage stage = ingress ? S_SWITCH_IN_ACL : S_SWITCH_OUT_ACL;
+
+    char *stage_hint = xasprintf("%08x", acl->header_.uuid.parts[0]);
+    if (!strcmp(acl->action, "allow")
+        || !strcmp(acl->action, "allow-related")) {
+        /* If there are any stateful flows, we must even commit "allow"
+         * actions.  This is because, while the initiater's
+         * direction may not have any stateful rules, the server's
+         * may and then its return traffic would not have an
+         * associated conntrack entry and would return "+invalid". */
+        if (!has_stateful) {
+            struct ds actions = DS_EMPTY_INITIALIZER;
+            build_acl_log(&actions, acl);
+            ds_put_cstr(&actions, "next;");
+            ovn_lflow_add_with_hint(lflows, od, stage,
+                                    acl->priority + OVN_ACL_PRI_OFFSET,
+                                    acl->match, ds_cstr(&actions),
+                                    stage_hint);
+            ds_destroy(&actions);
+        } else {
+            struct ds match = DS_EMPTY_INITIALIZER;
+            struct ds actions = DS_EMPTY_INITIALIZER;
+
+            /* Commit the connection tracking entry if it's a new
+             * connection that matches this ACL.  After this commit,
+             * the reply traffic is allowed by a flow we create at
+             * priority 65535, defined earlier.
+             *
+             * It's also possible that a known connection was marked for
+             * deletion after a policy was deleted, but the policy was
+             * re-added while that connection is still known.  We catch
+             * that case here and un-set ct_label.blocked (which will be done
+             * by ct_commit in the "stateful" stage) to indicate that the
+             * connection should be allowed to resume.
+             */
+            ds_put_format(&match, "((ct.new && !ct.est)"
+                                  " || (!ct.new && ct.est && !ct.rpl "
+                                       "&& ct_label.blocked == 1)) "
+                                  "&& (%s)", acl->match);
+            ds_put_cstr(&actions, REGBIT_CONNTRACK_COMMIT" = 1; ");
+            build_acl_log(&actions, acl);
+            ds_put_cstr(&actions, "next;");
+            ovn_lflow_add_with_hint(lflows, od, stage,
+                                    acl->priority + OVN_ACL_PRI_OFFSET,
+                                    ds_cstr(&match),
+                                    ds_cstr(&actions),
+                                    stage_hint);
+
+            /* Match on traffic in the request direction for an established
+             * connection tracking entry that has not been marked for
+             * deletion.  There is no need to commit here, so we can just
+             * proceed to the next table. We use this to ensure that this
+             * connection is still allowed by the currently defined
+             * policy. */
+            ds_clear(&match);
+            ds_clear(&actions);
+            ds_put_format(&match,
+                          "!ct.new && ct.est && !ct.rpl"
+                          " && ct_label.blocked == 0 && (%s)",
+                          acl->match);
+
+            build_acl_log(&actions, acl);
+            ds_put_cstr(&actions, "next;");
+            ovn_lflow_add_with_hint(lflows, od, stage,
+                                    acl->priority + OVN_ACL_PRI_OFFSET,
+                                    ds_cstr(&match), ds_cstr(&actions),
+                                    stage_hint);
+
+            ds_destroy(&match);
+            ds_destroy(&actions);
+        }
+    } else if (!strcmp(acl->action, "drop")
+               || !strcmp(acl->action, "reject")) {
+        struct ds match = DS_EMPTY_INITIALIZER;
+        struct ds actions = DS_EMPTY_INITIALIZER;
+
+        /* The implementation of "drop" differs if stateful ACLs are in
+         * use for this datapath.  In that case, the actions differ
+         * depending on whether the connection was previously committed
+         * to the connection tracker with ct_commit. */
+        if (has_stateful) {
+            /* If the packet is not part of an established connection, then
+             * we can simply reject/drop it. */
+            ds_put_cstr(&match,
+                        "(!ct.est || (ct.est && ct_label.blocked == 1))");
+            if (!strcmp(acl->action, "reject")) {
+                build_reject_acl_rules(od, lflows, stage, acl, &match,
+                                       &actions);
+            } else {
+                ds_put_format(&match, " && (%s)", acl->match);
+                build_acl_log(&actions, acl);
+                ds_put_cstr(&actions, "/* drop */");
+                ovn_lflow_add(lflows, od, stage,
+                              acl->priority + OVN_ACL_PRI_OFFSET,
+                              ds_cstr(&match), ds_cstr(&actions));
+            }
+            /* For an existing connection without ct_label set, we've
+             * encountered a policy change. ACLs previously allowed
+             * this connection and we committed the connection tracking
+             * entry.  Current policy says that we should drop this
+             * connection.  First, we set bit 0 of ct_label to indicate
+             * that this connection is set for deletion.  By not
+             * specifying "next;", we implicitly drop the packet after
+             * updating conntrack state.  We would normally defer
+             * ct_commit() to the "stateful" stage, but since we're
+             * rejecting/dropping the packet, we go ahead and do it here.
+             */
+            ds_clear(&match);
+            ds_clear(&actions);
+            ds_put_cstr(&match, "ct.est && ct_label.blocked == 0");
+            ds_put_cstr(&actions, "ct_commit(ct_label=1/1); ");
+            if (!strcmp(acl->action, "reject")) {
+                build_reject_acl_rules(od, lflows, stage, acl, &match,
+                                       &actions);
+            } else {
+                ds_put_format(&match, " && (%s)", acl->match);
+                build_acl_log(&actions, acl);
+                ds_put_cstr(&actions, "/* drop */");
+                ovn_lflow_add(lflows, od, stage,
+                              acl->priority + OVN_ACL_PRI_OFFSET,
+                              ds_cstr(&match), ds_cstr(&actions));
+            }
+        } else {
+            /* There are no stateful ACLs in use on this datapath,
+             * so a "reject/drop" ACL is simply the "reject/drop"
+             * logical flow action in all cases. */
+            if (!strcmp(acl->action, "reject")) {
+                build_reject_acl_rules(od, lflows, stage, acl, &match,
+                                       &actions);
+            } else {
+                build_acl_log(&actions, acl);
+                ds_put_cstr(&actions, "/* drop */");
+                ovn_lflow_add(lflows, od, stage,
+                              acl->priority + OVN_ACL_PRI_OFFSET,
+                              acl->match, ds_cstr(&actions));
+            }
+        }
+        ds_destroy(&match);
+        ds_destroy(&actions);
+    }
+    free(stage_hint);
+}
+
+struct ovn_port_group_ls {
+    struct hmap_node key_node;  /* Index on 'key'. */
+    struct uuid key;            /* nb_ls->header_.uuid. */
+    const struct nbrec_logical_switch *nb_ls;
+};
+
+struct ovn_port_group {
+    struct hmap_node key_node;  /* Index on 'key'. */
+    struct uuid key;            /* nb_pg->header_.uuid. */
+    const struct nbrec_port_group *nb_pg;
+    struct hmap nb_lswitches;   /* NB lswitches related to the port group */
+    size_t n_acls;              /* Number of ACLs applied to the port group */
+    struct nbrec_acl **acls;    /* ACLs applied to the port group */
+};
+
+static struct ovn_port_group *
+ovn_port_group_create(struct hmap *pgs,
+                      const struct nbrec_port_group *nb_pg)
+{
+    struct ovn_port_group *pg = xzalloc(sizeof *pg);
+    pg->key = nb_pg->header_.uuid;
+    pg->nb_pg = nb_pg;
+    pg->n_acls = nb_pg->n_acls;
+    pg->acls = nb_pg->acls;
+    hmap_init(&pg->nb_lswitches);
+    hmap_insert(pgs, &pg->key_node, uuid_hash(&pg->key));
+    return pg;
+}
+
+static void
+ovn_port_group_ls_add(struct ovn_port_group *pg,
+                      const struct nbrec_logical_switch *nb_ls)
+{
+    struct ovn_port_group_ls *pg_ls = xzalloc(sizeof *pg_ls);
+    pg_ls->key = nb_ls->header_.uuid;
+    pg_ls->nb_ls = nb_ls;
+    hmap_insert(&pg->nb_lswitches, &pg_ls->key_node, uuid_hash(&pg_ls->key));
+}
+
+static struct ovn_port_group_ls *
+ovn_port_group_ls_find(struct ovn_port_group *pg, const struct uuid *ls_uuid)
+{
+    struct ovn_port_group_ls *pg_ls;
+
+    HMAP_FOR_EACH_WITH_HASH (pg_ls, key_node, uuid_hash(ls_uuid),
+                             &pg->nb_lswitches) {
+        if (uuid_equals(ls_uuid, &pg_ls->key)) {
+            return pg_ls;
+        }
+    }
+    return NULL;
+}
+
+static void
+ovn_port_group_destroy(struct hmap *pgs, struct ovn_port_group *pg)
+{
+    if (pg) {
+        hmap_remove(pgs, &pg->key_node);
+        struct ovn_port_group_ls *ls;
+        HMAP_FOR_EACH_POP (ls, key_node, &pg->nb_lswitches) {
+            free(ls);
+        }
+        hmap_destroy(&pg->nb_lswitches);
+        free(pg);
+    }
+}
+
+static void
+build_port_group_lswitches(struct northd_context *ctx, struct hmap *pgs,
+                           struct hmap *ports)
+{
+    hmap_init(pgs);
+
+    const struct nbrec_port_group *nb_pg;
+    NBREC_PORT_GROUP_FOR_EACH (nb_pg, ctx->ovnnb_idl) {
+        struct ovn_port_group *pg = ovn_port_group_create(pgs, nb_pg);
+        for (size_t i = 0; i < nb_pg->n_ports; i++) {
+            struct ovn_port *op = ovn_port_find(ports, nb_pg->ports[i]->name);
+            if (!op) {
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+                VLOG_ERR_RL(&rl, "lport %s in port group %s not found.",
+                            nb_pg->ports[i]->name,
+                            nb_pg->name);
+                continue;
+            }
+
+            if (!op->od->nbs) {
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+                VLOG_WARN_RL(&rl, "lport %s in port group %s has no lswitch.",
+                             nb_pg->ports[i]->name,
+                             nb_pg->name);
+                continue;
+            }
+
+            struct ovn_port_group_ls *pg_ls =
+                ovn_port_group_ls_find(pg, &op->od->nbs->header_.uuid);
+            if (!pg_ls) {
+                ovn_port_group_ls_add(pg, op->od->nbs);
+            }
+        }
+    }
+}
+
+static void
+build_acls(struct ovn_datapath *od, struct hmap *lflows,
+           struct hmap *port_groups)
 {
     bool has_stateful = has_stateful_acl(od);
 
@@ -3263,148 +3515,15 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
     /* Ingress or Egress ACL Table (Various priorities). */
     for (size_t i = 0; i < od->nbs->n_acls; i++) {
         struct nbrec_acl *acl = od->nbs->acls[i];
-        bool ingress = !strcmp(acl->direction, "from-lport") ? true :false;
-        enum ovn_stage stage = ingress ? S_SWITCH_IN_ACL : S_SWITCH_OUT_ACL;
-
-        char *stage_hint = xasprintf("%08x", acl->header_.uuid.parts[0]);
-        if (!strcmp(acl->action, "allow")
-            || !strcmp(acl->action, "allow-related")) {
-            /* If there are any stateful flows, we must even commit "allow"
-             * actions.  This is because, while the initiater's
-             * direction may not have any stateful rules, the server's
-             * may and then its return traffic would not have an
-             * associated conntrack entry and would return "+invalid". */
-            if (!has_stateful) {
-                struct ds actions = DS_EMPTY_INITIALIZER;
-                build_acl_log(&actions, acl);
-                ds_put_cstr(&actions, "next;");
-                ovn_lflow_add_with_hint(lflows, od, stage,
-                                        acl->priority + OVN_ACL_PRI_OFFSET,
-                                        acl->match, ds_cstr(&actions),
-                                        stage_hint);
-                ds_destroy(&actions);
-            } else {
-                struct ds match = DS_EMPTY_INITIALIZER;
-                struct ds actions = DS_EMPTY_INITIALIZER;
-
-                /* Commit the connection tracking entry if it's a new
-                 * connection that matches this ACL.  After this commit,
-                 * the reply traffic is allowed by a flow we create at
-                 * priority 65535, defined earlier.
-                 *
-                 * It's also possible that a known connection was marked for
-                 * deletion after a policy was deleted, but the policy was
-                 * re-added while that connection is still known.  We catch
-                 * that case here and un-set ct_label.blocked (which will be done
-                 * by ct_commit in the "stateful" stage) to indicate that the
-                 * connection should be allowed to resume.
-                 */
-                ds_put_format(&match, "((ct.new && !ct.est)"
-                                      " || (!ct.new && ct.est && !ct.rpl "
-                                           "&& ct_label.blocked == 1)) "
-                                      "&& (%s)", acl->match);
-                ds_put_cstr(&actions, REGBIT_CONNTRACK_COMMIT" = 1; ");
-                build_acl_log(&actions, acl);
-                ds_put_cstr(&actions, "next;");
-                ovn_lflow_add_with_hint(lflows, od, stage,
-                                        acl->priority + OVN_ACL_PRI_OFFSET,
-                                        ds_cstr(&match),
-                                        ds_cstr(&actions),
-                                        stage_hint);
-
-                /* Match on traffic in the request direction for an established
-                 * connection tracking entry that has not been marked for
-                 * deletion.  There is no need to commit here, so we can just
-                 * proceed to the next table. We use this to ensure that this
-                 * connection is still allowed by the currently defined
-                 * policy. */
-                ds_clear(&match);
-                ds_clear(&actions);
-                ds_put_format(&match,
-                              "!ct.new && ct.est && !ct.rpl"
-                              " && ct_label.blocked == 0 && (%s)",
-                              acl->match);
-
-                build_acl_log(&actions, acl);
-                ds_put_cstr(&actions, "next;");
-                ovn_lflow_add_with_hint(lflows, od, stage,
-                                        acl->priority + OVN_ACL_PRI_OFFSET,
-                                        ds_cstr(&match), ds_cstr(&actions),
-                                        stage_hint);
-
-                ds_destroy(&match);
-                ds_destroy(&actions);
+        consider_acl(lflows, od, acl, has_stateful);
+    }
+    struct ovn_port_group *pg;
+    HMAP_FOR_EACH (pg, key_node, port_groups) {
+        if (ovn_port_group_ls_find(pg, &od->nbs->header_.uuid)) {
+            for (size_t i = 0; i < pg->n_acls; i++) {
+                consider_acl(lflows, od, pg->acls[i], has_stateful);
             }
-        } else if (!strcmp(acl->action, "drop")
-                   || !strcmp(acl->action, "reject")) {
-            struct ds match = DS_EMPTY_INITIALIZER;
-            struct ds actions = DS_EMPTY_INITIALIZER;
-
-            /* The implementation of "drop" differs if stateful ACLs are in
-             * use for this datapath.  In that case, the actions differ
-             * depending on whether the connection was previously committed
-             * to the connection tracker with ct_commit. */
-            if (has_stateful) {
-                /* If the packet is not part of an established connection, then
-                 * we can simply reject/drop it. */
-                ds_put_cstr(&match,
-                            "(!ct.est || (ct.est && ct_label.blocked == 1))");
-                if (!strcmp(acl->action, "reject")) {
-                    build_reject_acl_rules(od, lflows, stage, acl, &match,
-                                           &actions);
-                } else {
-                    ds_put_format(&match, " && (%s)", acl->match);
-                    build_acl_log(&actions, acl);
-                    ds_put_cstr(&actions, "/* drop */");
-                    ovn_lflow_add(lflows, od, stage,
-                                  acl->priority + OVN_ACL_PRI_OFFSET,
-                                  ds_cstr(&match), ds_cstr(&actions));
-                }
-                /* For an existing connection without ct_label set, we've
-                 * encountered a policy change. ACLs previously allowed
-                 * this connection and we committed the connection tracking
-                 * entry.  Current policy says that we should drop this
-                 * connection.  First, we set bit 0 of ct_label to indicate
-                 * that this connection is set for deletion.  By not
-                 * specifying "next;", we implicitly drop the packet after
-                 * updating conntrack state.  We would normally defer
-                 * ct_commit() to the "stateful" stage, but since we're
-                 * rejecting/dropping the packet, we go ahead and do it here.
-                 */
-                ds_clear(&match);
-                ds_clear(&actions);
-                ds_put_cstr(&match, "ct.est && ct_label.blocked == 0");
-                ds_put_cstr(&actions, "ct_commit(ct_label=1/1); ");
-                if (!strcmp(acl->action, "reject")) {
-                    build_reject_acl_rules(od, lflows, stage, acl, &match,
-                                           &actions);
-                } else {
-                    ds_put_format(&match, " && (%s)", acl->match);
-                    build_acl_log(&actions, acl);
-                    ds_put_cstr(&actions, "/* drop */");
-                    ovn_lflow_add(lflows, od, stage,
-                                  acl->priority + OVN_ACL_PRI_OFFSET,
-                                  ds_cstr(&match), ds_cstr(&actions));
-                }
-            } else {
-                /* There are no stateful ACLs in use on this datapath,
-                 * so a "reject/drop" ACL is simply the "reject/drop"
-                 * logical flow action in all cases. */
-                if (!strcmp(acl->action, "reject")) {
-                    build_reject_acl_rules(od, lflows, stage, acl, &match,
-                                           &actions);
-                } else {
-                    build_acl_log(&actions, acl);
-                    ds_put_cstr(&actions, "/* drop */");
-                    ovn_lflow_add(lflows, od, stage,
-                                  acl->priority + OVN_ACL_PRI_OFFSET,
-                                  acl->match, ds_cstr(&actions));
-                }
-            }
-            ds_destroy(&match);
-            ds_destroy(&actions);
         }
-        free(stage_hint);
     }
 
     /* Add 34000 priority flow to allow DHCP reply from ovn-controller to all
@@ -3633,7 +3752,8 @@ build_stateful(struct ovn_datapath *od, struct hmap *lflows)
 
 static void
 build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
-                    struct hmap *lflows, struct hmap *mcgroups)
+                    struct hmap *port_groups, struct hmap *lflows,
+                    struct hmap *mcgroups)
 {
     /* This flow table structure is documented in ovn-northd(8), so please
      * update ovn-northd.8.xml if you change anything. */
@@ -3652,7 +3772,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         build_pre_acls(od, lflows);
         build_pre_lb(od, lflows);
         build_pre_stateful(od, lflows);
-        build_acls(od, lflows);
+        build_acls(od, lflows, port_groups);
         build_qos(od, lflows);
         build_lb(od, lflows);
         build_stateful(od, lflows);
@@ -6069,12 +6189,12 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
  * constructing their contents based on the OVN_NB database. */
 static void
 build_lflows(struct northd_context *ctx, struct hmap *datapaths,
-             struct hmap *ports)
+             struct hmap *ports, struct hmap *port_groups)
 {
     struct hmap lflows = HMAP_INITIALIZER(&lflows);
     struct hmap mcgroups = HMAP_INITIALIZER(&mcgroups);
 
-    build_lswitch_flows(datapaths, ports, &lflows, &mcgroups);
+    build_lswitch_flows(datapaths, ports, port_groups, &lflows, &mcgroups);
     build_lrouter_flows(datapaths, ports, &lflows);
 
     /* Push changes to the Logical_Flow table to database. */
@@ -6421,6 +6541,7 @@ sync_dns_entries(struct northd_context *ctx, struct hmap *datapaths)
     hmap_destroy(&dns_map);
 }
 
+
 
 static void
 ovnnb_db_run(struct northd_context *ctx, struct chassis_index *chassis_index,
@@ -6429,15 +6550,22 @@ ovnnb_db_run(struct northd_context *ctx, struct chassis_index *chassis_index,
     if (!ctx->ovnsb_txn || !ctx->ovnnb_txn) {
         return;
     }
-    struct hmap datapaths, ports;
+    struct hmap datapaths, ports, port_groups;
     build_datapaths(ctx, &datapaths);
     build_ports(ctx, &datapaths, chassis_index, &ports);
     build_ipam(&datapaths, &ports);
-    build_lflows(ctx, &datapaths, &ports);
+    build_port_group_lswitches(ctx, &port_groups, &ports);
+    build_lflows(ctx, &datapaths, &ports, &port_groups);
 
     sync_address_sets(ctx);
     sync_port_groups(ctx);
     sync_dns_entries(ctx, &datapaths);
+
+    struct ovn_port_group *pg, *next_pg;
+    HMAP_FOR_EACH_SAFE (pg, next_pg, key_node, &port_groups) {
+        ovn_port_group_destroy(&port_groups, pg);
+    }
+    hmap_destroy(&port_groups);
 
     struct ovn_datapath *dp, *next_dp;
     HMAP_FOR_EACH_SAFE (dp, next_dp, key_node, &datapaths) {
