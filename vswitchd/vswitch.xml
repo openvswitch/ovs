@@ -3662,6 +3662,23 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
       </column>
     </group>
 
+    <group title="Link State Change detection mode">
+      <column name="options" key="dpdk-lsc-interrupt"
+              type='{"type": "boolean"}'>
+        <p>
+          Set this value to <code>true</code> to configure interrupt mode for
+          Link State Change (LSC) detection instead of poll mode for the DPDK
+          interface.
+        </p>
+        <p>
+          If this value is not set, poll mode is configured.
+        </p>
+        <p>
+          This parameter has an effect only on netdev dpdk interfaces.
+        </p>
+      </column>
+    </group>
+
     <group title="Common Columns">
       The overall purpose of these columns is described under <code>Common
       Columns</code> at the beginning of this document.

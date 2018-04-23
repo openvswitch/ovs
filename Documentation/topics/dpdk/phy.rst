@@ -224,3 +224,27 @@ Jumbo Frames
 
 DPDK physical ports can be configured to use Jumbo Frames. For more
 information, refer to :doc:`jumbo-frames`.
+
+Link State Change (LSC) detection configuration
+-----------------------------------------------
+
+There are two methods to get the information when Link State Change (LSC)
+happens on a network interface: by polling or interrupt.
+
+Configuring the lsc detection mode has no direct effect on OVS itself,
+instead it configures the NIC how it should handle link state changes.
+Processing the link state update request triggered by OVS takes less time
+using interrupt mode, since the NIC updates its link state in the
+background, while in polling mode the link state has to be fetched from
+the firmware every time to fulfil this request.
+
+Note that not all PMD drivers support LSC interrupts.
+
+The default configuration is polling mode. To set interrupt mode, option
+``dpdk-lsc-interrupt`` has to be set to ``true``.
+
+Command to set interrupt mode for a specific interface::
+    $ ovs-vsctl set interface <iface_name> options:dpdk-lsc-interrupt=true
+
+Command to set polling mode for a specific interface::
+    $ ovs-vsctl set interface <iface_name> options:dpdk-lsc-interrupt=false
