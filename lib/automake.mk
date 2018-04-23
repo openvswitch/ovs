@@ -476,6 +476,7 @@ EXTRA_DIST += \
 	lib/db-ctl-base.xml \
 	lib/ssl.xml \
 	lib/ssl-bootstrap.xml \
+	lib/ssl-peer-ca-cert.xml \
 	lib/table.xml \
 	lib/vlog.xml \
 	lib/unixctl.xml
