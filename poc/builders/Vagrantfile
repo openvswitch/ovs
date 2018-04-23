@@ -30,4 +30,16 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     end
   end
 
+  # Fedora builder host
+  config.vm.define "fedorabuilder" do |builder|
+    builder.vm.hostname = "fedoraubuilder.dev"
+    builder.vm.box = "fedora/27-cloud-base"
+    builder.vm.synced_folder "../../", "/git/ovs", type: "rsync",
+                             rsync__args: ["--archive", "--delete", "-z"]
+    builder.vm.provision "builder", type: "ansible" do |ansible|
+      ansible.playbook = "../playbook-fedora-builder.yml"
+      ansible.sudo = true
+    end
+  end
+
 end
