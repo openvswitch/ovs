@@ -97,6 +97,7 @@ configuration.
 .SS "Public Key Infrastructure Options"
 .so lib/ssl.man
 .so lib/ssl-bootstrap.man
+.so lib/ssl-peer-ca-cert.man
 .SS "Logging Options"
 .so lib/vlog.man
 .SS "Other Options"

@@ -19,6 +19,15 @@
       database (see <code>vtep</code>(5)) over the OVSDB protocol.
     </p>
 
+    <h2>PKI Options</h2>
+    <p>
+      PKI configuration is required in order to use SSL for the connections to
+      the VTEP and Southbound databases.
+    </p>
+    <xi:include href="lib/ssl.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
+    <xi:include href="lib/ssl-bootstrap.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
+    <xi:include href="lib/ssl-peer-ca-cert.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
+
     <h1>Configuration</h1>
     <p>
       <code>ovn-controller-vtep</code> retrieves its configuration

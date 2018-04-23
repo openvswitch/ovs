@@ -256,6 +256,7 @@ vswitchd/ovs-vswitchd.8: \
 	lib/netdev-dpdk-unixctl.man \
 	lib/service.man \
 	lib/ssl-bootstrap.man \
+	lib/ssl-peer-ca-cert.man \
 	lib/ssl.man \
 	lib/unixctl.man \
 	lib/vlog-unixctl.man \

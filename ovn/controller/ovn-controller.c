@@ -971,7 +971,7 @@ usage(void)
            "usage %s [OPTIONS] [OVS-DATABASE]\n"
            "where OVS-DATABASE is a socket on which the OVS OVSDB server is listening.\n",
                program_name, program_name);
-    stream_usage("OVS-DATABASE", true, false, false);
+    stream_usage("OVS-DATABASE", true, false, true);
     daemon_usage();
     vlog_usage();
     printf("\nOther options:\n"
