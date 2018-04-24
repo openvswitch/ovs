@@ -403,11 +403,11 @@ unit tests with make check are limited.
 
 Vagrant by default uses VirtualBox provider.  However, if Libvirt is your
 choice of virtualization technology, then you can use it by installing Libvirt
-plugin:
+plugin::
 
     $ vagrant plugin install vagrant-libvirt
 
-And then appending  --provider=libvirt flag to vagrant commands.
+And then appending ``--provider=libvirt`` flag to vagrant commands.
 
 The host where Vagrant runs does not need to have any special software
 installed besides vagrant, virtualbox (or libvirt and libvirt-dev) and
@@ -419,27 +419,28 @@ Builders
 ++++++++
 
 This particular Proof of Concept demonstrates integration with Debian and RPM
-packaging tools:
+packaging tools::
 
     $ cd ./poc/builders
-
     $ vagrant up
 
-Once that command finished you can get packages from /var/www/html
+Once that command finished you can get packages from ``/var/www/html``
 directory.  Since those hosts are also configured as repositories then
-you can add them to /etc/apt/sources.list.d or /etc/yum.repos.d
+you can add them to ``/etc/apt/sources.list.d`` or ``/etc/yum.repos.d``
 configuration files on another host to retrieve packages with yum or
 apt-get.
 
-When you have made changes to OVS source code and want to rebuild packages run:
+When you have made changes to OVS source code and want to rebuild packages
+run::
+
     $ git commit -a
     $ vagrant rsync && vagrant provision
 
 Whenever packages are rebuilt the Open vSwitch release number increases
-by one and you can simply upgrade Open vSwitch by running yum or apt-get
-update commands.
+by one and you can simply upgrade Open vSwitch by running ``yum`` or
+``apt-get`` update commands.
 
-Once you are done with experimenting you can tear down setup with:
+Once you are done with experimenting you can tear down setup with::
 
     $ vagrant destroy
 
