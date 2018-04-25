@@ -483,7 +483,9 @@ exit:
 /* Parses 'target', which should be a string in the format "<host>[:<port>]".
  * <host>, which is required, may be an IPv4 address or an IPv6 address
  * enclosed in square brackets.  If 'default_port' is nonnegative then <port>
- * is optional and defaults to 'default_port'.
+ * is optional and defaults to 'default_port' (use 0 to make the kernel choose
+ * an available port, although this isn't usually appropriate for active
+ * connections).  If 'default_port' is negative, then <port> is required.
  *
  * On success, returns true and stores the parsed remote address into '*ss'.
  * On failure, logs an error, stores zeros into '*ss', and returns false. */
