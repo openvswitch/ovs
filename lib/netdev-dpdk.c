@@ -373,11 +373,10 @@ struct netdev_dpdk {
         int max_packet_len;
         enum dpdk_dev_type type;
         enum netdev_flags flags;
+        int link_reset_cnt;
         char *devargs;  /* Device arguments for dpdk ports */
         struct dpdk_tx_queue *tx_q;
         struct rte_eth_link link;
-        int link_reset_cnt;
-        /* 4 pad bytes here. */
     );
 
     PADDED_MEMBERS_CACHELINE_MARKER(CACHE_LINE_SIZE, cacheline1,
