@@ -74,7 +74,7 @@ static unixctl_cb_func inject_pkt;
 
 static void update_probe_interval(struct controller_ctx *,
                                   const char *ovnsb_remote);
-static void parse_options(int argc, char *argv[]);
+static char *parse_options(int argc, char *argv[]);
 OVS_NO_RETURN static void usage(void);
 
 /* Pending packet to be injected into connected OVS. */
@@ -83,8 +83,6 @@ struct pending_pkt {
     struct unixctl_conn *conn;
     char *flow_s;
 };
-
-static char *ovs_remote;
 
 struct local_datapath *
 get_local_datapath(const struct hmap *local_datapaths, uint32_t tunnel_key)
@@ -600,7 +598,7 @@ main(int argc, char *argv[])
     ovs_cmdl_proctitle_init(argc, argv);
     set_program_name(argv[0]);
     service_start(&argc, &argv);
-    parse_options(argc, argv);
+    char *ovs_remote = parse_options(argc, argv);
     fatal_ignore_sigpipe();
 
     daemonize_start(false);
@@ -891,7 +889,7 @@ main(int argc, char *argv[])
     exit(retval);
 }
 
-static void
+static char *
 parse_options(int argc, char *argv[])
 {
     enum {
@@ -954,6 +952,7 @@ parse_options(int argc, char *argv[])
     argc -= optind;
     argv += optind;
 
+    char *ovs_remote;
     if (argc == 0) {
         ovs_remote = xasprintf("unix:%s/db.sock", ovs_rundir());
     } else if (argc == 1) {
@@ -962,6 +961,7 @@ parse_options(int argc, char *argv[])
         VLOG_FATAL("exactly zero or one non-option argument required; "
                    "use --help for usage");
     }
+    return ovs_remote;
 }
 
 static void
