@@ -30,12 +30,11 @@ ovsdb
 Description
 ===========
 
-OVSDB, the Open vSwitch Database, is a network database system.  Schemas in
-OVSDB specify the tables in a database and their columns' types and can
-include data, uniqueness, and referential integrity constraints.  OVSDB
-offers atomic, consistent, isolated, durable transactions.  RFC 7047
-specifies the JSON-RPC based protocol that OVSDB clients and servers use to
-communicate.
+OVSDB, the Open vSwitch Database, is a network-accessible database system.
+Schemas in OVSDB specify the tables in a database and their columns' types and
+can include data, uniqueness, and referential integrity constraints.  OVSDB
+offers atomic, consistent, isolated, durable transactions.  RFC 7047 specifies
+the JSON-RPC based protocol that OVSDB clients and servers use to communicate.
 
 The OVSDB protocol is well suited for state synchronization because it
 allows each client to monitor the contents of a whole database or a subset
