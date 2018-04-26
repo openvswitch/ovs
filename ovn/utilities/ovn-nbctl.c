@@ -607,6 +607,38 @@ print_alias(const struct smap *external_ids, const char *key, struct ds *s)
     }
 }
 
+/* gateway_chassis ordering
+ *  */
+static int
+compare_chassis_prio_(const void *gc1_, const void *gc2_)
+{
+    const struct nbrec_gateway_chassis *const *gc1p = gc1_;
+    const struct nbrec_gateway_chassis *const *gc2p = gc2_;
+    const struct nbrec_gateway_chassis *gc1 = *gc1p;
+    const struct nbrec_gateway_chassis *gc2 = *gc2p;
+
+    int prio_diff = gc2->priority - gc1->priority;
+    if (!prio_diff) {
+        return strcmp(gc2->name, gc1->name);
+    }
+    return prio_diff;
+}
+
+static const struct nbrec_gateway_chassis **
+get_ordered_gw_chassis_prio_list(const struct nbrec_logical_router_port *lrp)
+{
+    const struct nbrec_gateway_chassis **gcs;
+    int i;
+
+    gcs = xmalloc(sizeof *gcs * lrp->n_gateway_chassis);
+    for (i = 0; i < lrp->n_gateway_chassis; i++) {
+        gcs[i] = lrp->gateway_chassis[i];
+    }
+
+    qsort(gcs, lrp->n_gateway_chassis, sizeof *gcs, compare_chassis_prio_);
+    return gcs;
+}
+
 /* Given pointer to logical router, this routine prints the router
  * information.  */
 static void
@@ -635,12 +667,17 @@ print_lr(const struct nbrec_logical_router *lr, struct ds *s)
         }
 
         if (lrp->n_gateway_chassis) {
+            const struct nbrec_gateway_chassis **gcs;
+
+            gcs = get_ordered_gw_chassis_prio_list(lrp);
             ds_put_cstr(s, "        gateway chassis: [");
             for (size_t j = 0; j < lrp->n_gateway_chassis; j++) {
-                ds_put_format(s, "%s ", lrp->gateway_chassis[j]->chassis_name);
+                const struct nbrec_gateway_chassis *gc = gcs[j];
+                ds_put_format(s, "%s ", gc->chassis_name);
             }
             ds_chomp(s, ' ');
             ds_put_cstr(s, "]\n");
+            free(gcs);
         }
     }
 
@@ -3021,23 +3058,6 @@ nbctl_lrp_del_gateway_chassis(struct ctl_context *ctx)
               chassis_name, ctx->argv[1]);
 }
 
-/* gateway_chassis ordering
- *  */
-static int
-compare_chassis_prio_(const void *gc1_, const void *gc2_)
-{
-    const struct nbrec_gateway_chassis *const *gc1p = gc1_;
-    const struct nbrec_gateway_chassis *const *gc2p = gc2_;
-    const struct nbrec_gateway_chassis *gc1 = *gc1p;
-    const struct nbrec_gateway_chassis *gc2 = *gc2p;
-
-    int prio_diff = gc2->priority - gc1->priority;
-    if (!prio_diff) {
-        return strcmp(gc2->name, gc1->name);
-    }
-    return prio_diff;
-}
-
 /* Print a list of gateway chassis. */
 static void
 nbctl_lrp_get_gateway_chassis(struct ctl_context *ctx)
@@ -3048,13 +3068,7 @@ nbctl_lrp_get_gateway_chassis(struct ctl_context *ctx)
     size_t i;
 
     lrp = lrp_by_name_or_uuid(ctx, id, true);
-
-    gcs = xmalloc(sizeof *gcs * lrp->n_gateway_chassis);
-    for (i = 0; i < lrp->n_gateway_chassis; i++) {
-        gcs[i] = lrp->gateway_chassis[i];
-    }
-
-    qsort(gcs, lrp->n_gateway_chassis, sizeof *gcs, compare_chassis_prio_);
+    gcs = get_ordered_gw_chassis_prio_list(lrp);
 
     for (i = 0; i < lrp->n_gateway_chassis; i++) {
         const struct nbrec_gateway_chassis *gc = gcs[i];

@@ -1127,6 +1127,15 @@ lrp0-chassis2     5
 AT_CHECK([ovn-nbctl lrp-del-gateway-chassis lrp0 chassis2])
 AT_CHECK([ovn-nbctl lrp-get-gateway-chassis lrp0])
 
+AT_CHECK([ovn-nbctl lrp-set-gateway-chassis lrp0 chassis1 1])
+AT_CHECK([ovn-nbctl lrp-set-gateway-chassis lrp0 chassis2 10])
+AT_CHECK([ovn-nbctl lrp-set-gateway-chassis lrp0 chassis3 5])
+AT_CHECK([ovn-nbctl lrp-get-gateway-chassis lrp0], [0], [dnl
+lrp0-chassis2    10
+lrp0-chassis3     5
+lrp0-chassis1     1
+])
+
 OVN_NBCTL_TEST_STOP
 AT_CLEANUP
 
