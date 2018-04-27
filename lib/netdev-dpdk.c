@@ -770,11 +770,19 @@ dpdk_eth_dev_queue_setup(struct netdev_dpdk *dev, int n_rxq, int n_txq)
     int diag = 0;
     int i;
     struct rte_eth_conf conf = port_conf;
+    struct rte_eth_dev_info info;
 
-    /* For some NICs (e.g. Niantic), scatter_rx mode needs to be explicitly
-     * enabled. */
+    /* As of DPDK 17.11.1 a few PMDs require to explicitly enable
+     * scatter to support jumbo RX. Checking the offload capabilities
+     * is not an option as PMDs are not required yet to report
+     * them. The only reliable info is the driver name and knowledge
+     * (testing or code review). Listing all such PMDs feels harder
+     * than highlighting the one known not to need scatter */
     if (dev->mtu > ETHER_MTU) {
-        conf.rxmode.enable_scatter = 1;
+        rte_eth_dev_info_get(dev->port_id, &info);
+        if (strncmp(info.driver_name, "net_nfp", 6)) {
+            conf.rxmode.enable_scatter = 1;
+        }
     }
 
     conf.rxmode.hw_ip_checksum = (dev->hw_ol_features &
