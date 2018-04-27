@@ -886,10 +886,11 @@ OvsCtExecute_(OvsForwardingContext *fwdCtx,
         return NDIS_STATUS_RESOURCES;
     }
 
-    /* Increment the counters soon after the lookup, since we set ct.state
-     * to OVS_CS_F_TRACKED after processing the ct entry.
+    /* Increment stats for the entry if it wasn't tracked previously or
+     * if they are on different zones
      */
-    if (entry && (!(key->ct.state & OVS_CS_F_TRACKED))) {
+    if (entry && (entry->key.zone != key->ct.zone ||
+           (!(key->ct.state & OVS_CS_F_TRACKED)))) {
         OvsCtIncrementCounters(entry, ctx.reply, curNbl);
     }
 
