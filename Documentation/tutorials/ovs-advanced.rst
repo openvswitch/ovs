@@ -726,7 +726,7 @@ which ought to show roughly the following, with extraneous details removed::
 
 The other way is to inject a packet to take advantage of the learning entry.
 For example, we can inject a packet on p2 whose destination is the MAC address
-that we just learned on p1:
+that we just learned on p1::
 
     $ ovs-appctl ofproto/trace br0 \
         in_port=2,dl_src=90:00:00:00:00:01,dl_dst=f0:00:00:00:00:01 -generate
@@ -763,7 +763,7 @@ the learned port ``p1`` into register ``0``::
 
 If you read the commands above carefully, then you might have noticed that they
 simply have the Ethernet source and destination addresses exchanged.  That
-means that if we now rerun the first ``ovs-appctl`` command above, e.g.:
+means that if we now rerun the first ``ovs-appctl`` command above, e.g.::
 
     $ ovs-appctl ofproto/trace br0 \
         in_port=1,dl_vlan=20,dl_src=f0:00:00:00:00:01,dl_dst=90:00:00:00:00:01 \
@@ -926,7 +926,7 @@ Now, if we rerun our first command::
         -generate
 
 ...we can see that the result is no longer a flood but to the specified learned
-destination port ``p4``:
+destination port ``p4``::
 
     Datapath actions: pop_vlan,4
 
