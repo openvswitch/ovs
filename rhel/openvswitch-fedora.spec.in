@@ -92,6 +92,7 @@ Requires: openssl hostname iproute module-init-tools
 #Upstream kernel commit 4f647e0a3c37b8d5086214128614a136064110c3
 #Requires: kernel >= 3.15.0-0
 
+Requires(pre): shadow-utils
 Requires(post): /usr/bin/getent
 Requires(post): /usr/sbin/useradd
 Requires(post): /bin/sed
@@ -384,11 +385,15 @@ rm -rf $RPM_BUILD_ROOT
     fi
 %endif
 
+%pre
+getent group openvswitch >/dev/null || groupadd -r openvswitch
+getent passwd openvswitch >/dev/null || \
+    useradd -r -g openvswitch -d / -s /sbin/nologin \
+    -c "Open vSwitch Daemons" openvswitch
+exit 0
+
 %post
 if [ $1 -eq 1 ]; then
-    getent passwd openvswitch >/dev/null || \
-        useradd -r -d / -s /sbin/nologin -c "Open vSwitch Daemons" openvswitch
-
     sed -i 's:^#OVS_USER_ID=:OVS_USER_ID=:' /etc/sysconfig/openvswitch
 
 %if %{with dpdk}
