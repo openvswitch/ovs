@@ -308,7 +308,7 @@ windows_send(struct stream *stream, const void *buffer, size_t n)
                        || last_error == ERROR_NO_DATA
                        || last_error == ERROR_BROKEN_PIPE) {
                 /* If the pipe was disconnected, return connection reset. */
-                return -WSAECONNRESET;
+                return -EPIPE;
             } else {
                 VLOG_ERR_RL(&rl, "Could not send data on named pipe. Last "
                             "error: %s", ovs_lasterror_to_string());
@@ -321,7 +321,7 @@ windows_send(struct stream *stream, const void *buffer, size_t n)
 
     result = WriteFile(s->fd, buffer, n, &(DWORD)retval, ov);
     last_error = GetLastError();
-    if (!result && GetLastError() == ERROR_IO_PENDING) {
+    if (!result && last_error == ERROR_IO_PENDING) {
         /* Mark the send operation as pending. */
         s->write_pending = true;
         return -EAGAIN;
@@ -330,7 +330,7 @@ windows_send(struct stream *stream, const void *buffer, size_t n)
                            || last_error == ERROR_NO_DATA
                            || last_error == ERROR_BROKEN_PIPE)) {
         /* If the pipe was disconnected, return connection reset. */
-        return -WSAECONNRESET;
+        return -EPIPE;
     } else if (!result) {
         VLOG_ERR_RL(&rl, "Could not send data on synchronous named pipe. Last "
                     "error: %s", ovs_lasterror_to_string());

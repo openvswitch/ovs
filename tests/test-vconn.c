@@ -163,11 +163,7 @@ test_refuse_connection(struct ovs_cmdl_context *ctx)
                       error, ovs_strerror(error));
         }
     } else if (!strcmp(type, "unix")) {
-#ifndef _WIN32
         CHECK_ERRNO(error, EPIPE);
-#else
-        CHECK_ERRNO(error, WSAECONNRESET);
-#endif
     } else if (!strcmp(type, "ssl")) {
         if (error != EPROTO && error != ECONNRESET) {
             ovs_fatal(0, "unexpected vconn_connect() return value %d (%s)",
