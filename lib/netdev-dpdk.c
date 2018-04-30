@@ -462,6 +462,39 @@ ovs_rte_pktmbuf_init(struct rte_mempool *mp,
     dp_packet_init_dpdk((struct dp_packet *) m, m->buf_len);
 }
 
+static int
+dpdk_mp_full(const struct rte_mempool *mp) OVS_REQUIRES(dpdk_mutex)
+{
+    unsigned ring_count;
+    /* This logic is needed because rte_mempool_full() is not guaranteed to
+     * be atomic and mbufs could be moved from mempool cache --> mempool ring
+     * during the call. However, as no mbufs will be taken from the mempool
+     * at this time, we can work around it by also checking the ring entries
+     * separately and ensuring that they have not changed.
+     */
+    ring_count = rte_mempool_ops_get_count(mp);
+    if (rte_mempool_full(mp) && rte_mempool_ops_get_count(mp) == ring_count) {
+        return 1;
+    }
+
+    return 0;
+}
+
+/* Free unused mempools. */
+static void
+dpdk_mp_sweep(void) OVS_REQUIRES(dpdk_mutex)
+{
+    struct dpdk_mp *dmp, *next;
+
+    LIST_FOR_EACH_SAFE (dmp, next, list_node, &dpdk_mp_list) {
+        if (!dmp->refcount && dpdk_mp_full(dmp->mp)) {
+            ovs_list_remove(&dmp->list_node);
+            rte_mempool_free(dmp->mp);
+            rte_free(dmp);
+        }
+    }
+}
+
 static struct dpdk_mp *
 dpdk_mp_get(int socket_id, int mtu) OVS_REQUIRES(dpdk_mutex)
 {
@@ -469,12 +502,21 @@ dpdk_mp_get(int socket_id, int mtu) OVS_REQUIRES(dpdk_mutex)
     char mp_name[RTE_MEMPOOL_NAMESIZE];
     unsigned mp_size;
     struct rte_pktmbuf_pool_private mbp_priv;
+    bool reuse = false;
 
     LIST_FOR_EACH (dmp, list_node, &dpdk_mp_list) {
         if (dmp->socket_id == socket_id && dmp->mtu == mtu) {
             dmp->refcount++;
-            return dmp;
+            reuse = true;
+            break;
         }
+    }
+
+    /* Sweep mempools after reuse or before create. */
+    dpdk_mp_sweep();
+
+    if (reuse) {
+        return dmp;
     }
 
     dmp = dpdk_rte_mzalloc(sizeof *dmp);
@@ -523,20 +565,15 @@ fail:
     return NULL;
 }
 
+/* Decrement reference to a mempool. */
 static void
 dpdk_mp_put(struct dpdk_mp *dmp) OVS_REQUIRES(dpdk_mutex)
 {
     if (!dmp) {
         return;
     }
-
     ovs_assert(dmp->refcount);
-
-    if (!--dmp->refcount) {
-        ovs_list_remove(&dmp->list_node);
-        rte_mempool_free(dmp->mp);
-        rte_free(dmp);
-    }
+    dmp->refcount--;
 }
 
 /* Tries to allocate new mempool on requested_socket_id with
@@ -650,7 +687,7 @@ dpdk_eth_dev_queue_setup(struct netdev_dpdk *dev, int n_rxq, int n_txq)
             diag = rte_eth_tx_queue_setup(dev->port_id, i, NIC_PORT_TX_Q_SIZE,
                                           dev->socket_id, NULL);
             if (diag) {
-                VLOG_INFO("Interface %s txq(%d) setup error: %s",
+                VLOG_INFO("Interface %s unable to setup txq(%d): %s",
                           dev->up.name, i, rte_strerror(-diag));
                 break;
             }
@@ -667,7 +704,7 @@ dpdk_eth_dev_queue_setup(struct netdev_dpdk *dev, int n_rxq, int n_txq)
                                           dev->socket_id, NULL,
                                           dev->dpdk_mp->mp);
             if (diag) {
-                VLOG_INFO("Interface %s rxq(%d) setup error: %s",
+                VLOG_INFO("Interface %s unable to setup rxq(%d): %s",
                           dev->up.name, i, rte_strerror(-diag));
                 break;
             }

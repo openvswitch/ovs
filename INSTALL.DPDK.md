@@ -523,17 +523,11 @@ can be found in [Vhost Walkthrough].
          <on_reboot>restart</on_reboot>
          <on_crash>destroy</on_crash>
          <devices>
-           <emulator>/usr/bin/qemu-kvm</emulator>
+           <emulator>/usr/bin/qemu-system-x86_64</emulator>
            <disk type='file' device='disk'>
              <driver name='qemu' type='qcow2' cache='none'/>
              <source file='/root/CentOS7_x86_64.qcow2'/>
              <target dev='vda' bus='virtio'/>
-           </disk>
-           <disk type='dir' device='disk'>
-             <driver name='qemu' type='fat'/>
-             <source dir='/usr/src/dpdk-stable-16.07.2'/>
-             <target dev='vdb' bus='virtio'/>
-             <readonly/>
            </disk>
            <interface type='vhostuser'>
              <mac address='00:00:00:00:00:01'/>
