@@ -7064,7 +7064,7 @@ rm -f 2.expected
 
 # Test IPv6 (AAAA records) using IPv4 packet.
 # Add back the DNS options for ls1-lp1.
-ovn-nbctl set DNS $DNS1 records:vm1.ovn.org="10.0.0.4 aef0::4"
+ovn-nbctl --wait=hv set DNS $DNS1 records:vm1.ovn.org="10.0.0.4 aef0::4"
 
 set_dns_params vm1_ipv6_only
 src_ip=`ip_to_hex 10 0 0 6`
