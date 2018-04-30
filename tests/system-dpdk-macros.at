@@ -1,0 +1,56 @@
+# OVS_DPDK_PRE_CHECK()
+#
+# Check prerequisites for DPDK tests. Following settings are checked:
+#  - Hugepages
+#  - UIO driver
+#
+m4_define([OVS_DPDK_PRE_CHECK],
+  [dnl Check Hugepages
+   AT_CHECK([cat /proc/meminfo], [], [stdout])
+   AT_CHECK([grep HugePages_ stdout], [], [stdout])
+   AT_CHECK([mount], [], [stdout])
+   AT_CHECK([grep 'hugetlbfs' stdout], [], [stdout], [])
+
+   dnl Check if VFIO or UIO driver is loaded
+   AT_CHECK([lsmod | grep -E "igb_uio|vfio"], [], [stdout])
+
+   dnl Find PCI address candidate, skip if there is no DPDK-compatible NIC
+   AT_CHECK([$DPDK_DIR/usertools/dpdk-devbind.py -s | head -n +4 | tail -1], [], [stdout])
+   AT_CHECK([cat stdout | cut -d" " -s -f1 > PCI_ADDR])
+   AT_CHECK([test -s PCI_ADDR || exit 77])
+])
+
+
+# OVS_DPDK_START()
+#
+# Create an empty database and start ovsdb-server. Add special configuration
+# dpdk-init to enable DPDK functionality. Start ovs-vswitchd connected to that
+# database using system devices (no dummies).
+#
+m4_define([OVS_DPDK_START],
+  [dnl Create database.
+   AT_CHECK([touch .conf.db.~lock~])
+   AT_CHECK([ovsdb-tool create conf.db $abs_top_srcdir/vswitchd/vswitch.ovsschema])
+
+   dnl Start ovsdb-server.
+   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --log-file --remote=punix:$OVS_RUNDIR/db.sock], [0], [stdout], [stderr])
+   on_exit "kill `cat ovsdb-server.pid`"
+   AT_CHECK([[sed < stderr '
+/vlog|INFO|opened log file/d
+/ovsdb_server|INFO|ovsdb-server (Open vSwitch)/d']])
+   AT_CAPTURE_FILE([ovsdb-server.log])
+
+   dnl Initialize database.
+   AT_CHECK([ovs-vsctl --no-wait init])
+
+   dnl Enable DPDK functionality
+   AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-init=true])
+   AT_CHECK([lscpu], [], [stdout])
+   AT_CHECK([cat stdout | grep "NUMA node(s)" | awk '{c=1; while (c++<$(3)) {printf "1024,"}; print "1024"}' > SOCKET_MEM])
+   AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-socket-mem="$(cat SOCKET_MEM)"])
+
+   dnl Start ovs-vswitchd.
+   AT_CHECK([ovs-vswitchd --detach --no-chdir --pidfile --log-file -vvconn -vofproto_dpif -vunixctl], [0], [stdout], [stderr])
+   AT_CAPTURE_FILE([ovs-vswitchd.log])
+   on_exit "kill_ovs_vswitchd `cat ovs-vswitchd.pid`"
+])

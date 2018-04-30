@@ -5,10 +5,12 @@ EXTRA_DIST += \
 	$(SYSTEM_KMOD_TESTSUITE_AT) \
 	$(SYSTEM_USERSPACE_TESTSUITE_AT) \
 	$(SYSTEM_OFFLOADS_TESTSUITE_AT) \
+	$(SYSTEM_DPDK_TESTSUITE_AT) \
 	$(TESTSUITE) \
 	$(SYSTEM_KMOD_TESTSUITE) \
 	$(SYSTEM_USERSPACE_TESTSUITE) \
 	$(SYSTEM_OFFLOADS_TESTSUITE) \
+	$(SYSTEM_DPDK_TESTSUITE) \
 	tests/atlocal.in \
 	$(srcdir)/package.m4 \
 	$(srcdir)/tests/testsuite \
@@ -128,6 +130,12 @@ SYSTEM_OFFLOADS_TESTSUITE_AT = \
 	tests/system-offloads-traffic.at \
 	tests/system-offloads-testsuite.at
 
+SYSTEM_DPDK_TESTSUITE_AT = \
+	tests/system-common-macros.at \
+	tests/system-dpdk-macros.at \
+	tests/system-dpdk-testsuite.at \
+	tests/system-dpdk.at
+
 check_SCRIPTS += tests/atlocal
 
 TESTSUITE = $(srcdir)/tests/testsuite
@@ -135,6 +143,7 @@ TESTSUITE_PATCH = $(srcdir)/tests/testsuite.patch
 SYSTEM_KMOD_TESTSUITE = $(srcdir)/tests/system-kmod-testsuite
 SYSTEM_USERSPACE_TESTSUITE = $(srcdir)/tests/system-userspace-testsuite
 SYSTEM_OFFLOADS_TESTSUITE = $(srcdir)/tests/system-offloads-testsuite
+SYSTEM_DPDK_TESTSUITE = $(srcdir)/tests/system-dpdk-testsuite
 DISTCLEANFILES += tests/atconfig tests/atlocal
 
 AUTOTEST_PATH = utilities:vswitchd:ovsdb:vtep:tests:$(PTHREAD_WIN32_DIR_DLL):$(SSL_DIR):ovn/controller-vtep:ovn/northd:ovn/utilities:ovn/controller
@@ -258,6 +267,10 @@ check-offloads: all
 	set $(SHELL) '$(SYSTEM_OFFLOADS_TESTSUITE)' -C tests  AUTOTEST_PATH='$(AUTOTEST_PATH)' $(TESTSUITEFLAGS) -j1; \
 	"$$@" || (test X'$(RECHECK)' = Xyes && "$$@" --recheck)
 
+check-dpdk: all
+	set $(SHELL) '$(SYSTEM_DPDK_TESTSUITE)' -C tests  AUTOTEST_PATH='$(AUTOTEST_PATH)' $(TESTSUITEFLAGS) -j1; \
+	"$$@" || (test X'$(RECHECK)' = Xyes && "$$@" --recheck)
+
 clean-local:
 	test ! -f '$(TESTSUITE)' || $(SHELL) '$(TESTSUITE)' -C tests --clean
 
@@ -283,6 +296,10 @@ $(SYSTEM_USERSPACE_TESTSUITE): package.m4 $(SYSTEM_TESTSUITE_AT) $(SYSTEM_USERSP
 	$(AM_V_at)mv $@.tmp $@
 
 $(SYSTEM_OFFLOADS_TESTSUITE): package.m4 $(SYSTEM_TESTSUITE_AT) $(SYSTEM_OFFLOADS_TESTSUITE_AT) $(COMMON_MACROS_AT)
+	$(AM_V_GEN)$(AUTOTEST) -I '$(srcdir)' -o $@.tmp $@.at
+	$(AM_V_at)mv $@.tmp $@
+
+$(SYSTEM_DPDK_TESTSUITE): package.m4 $(SYSTEM_TESTSUITE_AT) $(SYSTEM_DPDK_TESTSUITE_AT) $(COMMON_MACROS_AT)
 	$(AM_V_GEN)$(AUTOTEST) -I '$(srcdir)' -o $@.tmp $@.at
 	$(AM_V_at)mv $@.tmp $@
 

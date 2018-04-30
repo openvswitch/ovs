@@ -25,8 +25,18 @@
 The DPDK Datapath
 =================
 
+.. NOTE(stephenfin): Part of this doc is included in 'howto/dpdk'. Update that
+.. if you modify this document
+
 .. toctree::
    :maxdepth: 2
 
-   vhost-user
-   ring
+   /topics/dpdk/bridge
+   /topics/dpdk/phy
+   /topics/dpdk/vhost-user
+   /topics/dpdk/ring
+   /topics/dpdk/vdev
+   /topics/dpdk/pmd
+   /topics/dpdk/qos
+   /topics/dpdk/pdump
+   /topics/dpdk/jumbo-frames
