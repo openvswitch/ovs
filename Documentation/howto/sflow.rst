@@ -166,6 +166,9 @@ This document is heavily based on content from Neil McKee at InMon:
 - `https://mail.openvswitch.org/pipermail/ovs-dev/2010-July/165245.html
   <https://mail.openvswitch.org/pipermail/ovs-dev/2010-July/165245.html>`__
 
-- `http://blog.sflow.com/2010/01/open-vswitch.html
-  <http://blog.sflow.com/2010/01/open-vswitch.html>`__ (note: the configuration
-  syntax is out of date, but the high-level descriptions are correct)
+- `https://blog.sflow.com/2010/01/open-vswitch.html
+  <https://blog.sflow.com/2010/01/open-vswitch.html>`__
+
+.. note::
+  The configuration syntax is out of date, but the high-level
+  descriptions are correct.
