@@ -1661,9 +1661,9 @@ cmd_del_port(struct ctl_context *ctx)
             if (port->bridge != bridge) {
                 if (port->bridge->parent == bridge) {
                     ctl_fatal("bridge %s does not have a port %s (although "
-                                "its parent bridge %s does)",
+                                "its child bridge %s does)",
                                 ctx->argv[1], ctx->argv[2],
-                                bridge->parent->name);
+                                port->bridge->name);
                 } else {
                     ctl_fatal("bridge %s does not have a port %s",
                                 ctx->argv[1], ctx->argv[2]);
