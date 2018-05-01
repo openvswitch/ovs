@@ -1,13 +1,5 @@
 v2.9.1 - xx xxx xxxx
 --------------------
-
-
-v2.9.0 - 19 Feb 2018
---------------------
-   - NSH implementation now conforms to latest draft (draft-ietf-sfc-nsh-28).
-     * Add ttl field.
-     * Add a new action dec_nsh_ttl.
-     * Enable NSH support in kernel datapath.
    - OVSDB has new, experimental support for database clustering:
      * New high-level documentation in ovsdb(7).
      * New file format documentation for developers in ovsdb(5).
@@ -23,6 +15,16 @@ v2.9.0 - 19 Feb 2018
        "schema-name", "compare-versions", and "check-cluster" commands.
      * ovsdb-server: New ovs-appctl commands for managing clusters.
      * ovs-sandbox: New support for clustered databases.
+   - OVN:
+     * ovn-sbctl, ovn-nbctl: New options --leader-only, --no-leader-only.
+
+
+v2.9.0 - 19 Feb 2018
+--------------------
+   - NSH implementation now conforms to latest draft (draft-ietf-sfc-nsh-28).
+     * Add ttl field.
+     * Add a new action dec_nsh_ttl.
+     * Enable NSH support in kernel datapath.
    - ovs-vsctl and other commands that display data in tables now support a
      --max-column-width option to limit column width.
    - No longer slow-path traffic that sends to a controller.  Applications,
@@ -38,7 +40,6 @@ v2.9.0 - 19 Feb 2018
          action 'nd_ns' to resolve unknown next hop MAC addresses for the
          IPv6 packets.
      * ovn-ctl: New commands run_nb_ovsdb and run_sb_ovsdb.
-     * ovn-sbctl, ovn-nbctl: New options --leader-only, --no-leader-only.
    - OpenFlow:
      * ct_clear action is now backed by kernel datapath. Support is probed for
        when OVS starts.
