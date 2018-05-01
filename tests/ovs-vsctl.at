@@ -565,6 +565,23 @@ CHECK_PORTS([xapi1], [eth0.$1])
 CHECK_IFACES([xapi1], [eth0.$1])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
+
+AT_SETUP([simple fake bridge + del-port from parent (VLAN $1)])
+AT_KEYWORDS([ovs-vsctl fake-bridge del-port])
+OVS_VSCTL_SETUP
+OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF([$1])
+AT_CHECK([RUN_OVS_VSCTL([del-port xenbr0 eth0.$1])], [1], [],
+ [ovs-vsctl: bridge xenbr0 does not have a port eth0.$1 (although its child bridge xapi1 does)
+])
+CHECK_PORTS([xenbr0], [eth0])
+CHECK_IFACES([xenbr0], [eth0])
+CHECK_PORTS([xapi1], [eth0.$1])
+CHECK_IFACES([xapi1], [eth0.$1])
+AT_CHECK([RUN_OVS_VSCTL([del-port xapi1 eth0.$1])])
+CHECK_PORTS([xenbr0], [eth0])
+CHECK_IFACES([xenbr0], [eth0])
+OVS_VSCTL_CLEANUP
+AT_CLEANUP
 ]) # OVS_VSCTL_FAKE_BRIDGE_TESTS
 
 OVS_VSCTL_FAKE_BRIDGE_TESTS([9])
