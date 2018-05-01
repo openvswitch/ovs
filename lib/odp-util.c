@@ -6962,6 +6962,11 @@ commit_set_ipv4_action(const struct flow *flow, struct flow *base_flow,
     mask.ipv4_proto = 0;        /* Not writeable. */
     mask.ipv4_frag = 0;         /* Not writable. */
 
+    if (flow_tnl_dst_is_set(&base_flow->tunnel) &&
+        ((base_flow->nw_tos ^ flow->nw_tos) & IP_ECN_MASK) == 0) {
+        mask.ipv4_tos &= ~IP_ECN_MASK;
+    }
+
     if (commit(OVS_KEY_ATTR_IPV4, use_masked, &key, &base, &mask, sizeof key,
                odp_actions)) {
         put_ipv4_key(&base, base_flow, false);
@@ -7011,6 +7016,11 @@ commit_set_ipv6_action(const struct flow *flow, struct flow *base_flow,
     get_ipv6_key(&wc->masks, &mask, true);
     mask.ipv6_proto = 0;        /* Not writeable. */
     mask.ipv6_frag = 0;         /* Not writable. */
+
+    if (flow_tnl_dst_is_set(&base_flow->tunnel) &&
+        ((base_flow->nw_tos ^ flow->nw_tos) & IP_ECN_MASK) == 0) {
+        mask.ipv6_tclass &= ~IP_ECN_MASK;
+    }
 
     if (commit(OVS_KEY_ATTR_IPV6, use_masked, &key, &base, &mask, sizeof key,
                odp_actions)) {
