@@ -1069,6 +1069,7 @@ static netdev_tx_t ip6erspan_tunnel_xmit(struct sk_buff *skb,
 	int err = -EINVAL;
 	__be32 tun_id;
 	__u32 mtu;
+	int nhoff;
 
 
 	/* OVS doesn't support native mode ip6 tunnel traffic so
@@ -1086,6 +1087,11 @@ static netdev_tx_t ip6erspan_tunnel_xmit(struct sk_buff *skb,
 		pskb_trim(skb, dev->mtu + dev->hard_header_len);
 		truncate = true;
 	}
+
+	nhoff = skb_network_header(skb) - skb_mac_header(skb);
+	if (skb->protocol == htons(ETH_P_IP) &&
+	    (ntohs(ip_hdr(skb)->tot_len) > skb->len - nhoff))
+		truncate = true;
 
 	t->parms.o_flags &= ~TUNNEL_KEY;
 	IPCB(skb)->flags = 0;
