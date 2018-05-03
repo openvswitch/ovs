@@ -9,7 +9,9 @@ OVS_DPDK_START()
 AT_CHECK([grep "DPDK Enabled - initializing..." ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "EAL" ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "DPDK Enabled - initialized" ovs-vswitchd.log], [], [stdout])
-OVS_VSWITCHD_STOP("/Global register is changed during/d")
+OVS_VSWITCHD_STOP("/Global register is changed during/d
+/EAL: No free hugepages reported in hugepages-1048576kB/d
+")
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -33,7 +35,9 @@ dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 phy0], [], [stdout], [stderr])
 OVS_VSWITCHD_STOP("/does not exist. The Open vSwitch kernel module is probably not loaded./d
 /Failed to enable flow control/d
-/Global register is changed during/d")
+/Global register is changed during/d
+/EAL: No free hugepages reported in hugepages-1048576kB/d
+")
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
 
@@ -62,6 +66,8 @@ AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
 OVS_VSWITCHD_STOP("/does not exist. The Open vSwitch kernel module is probably not loaded./d
 /Failed to enable flow control/d
 /failed to connect to \/tmp\/dpdkvhostclient0: No such file or directory/d
-/Global register is changed during/d")
+/Global register is changed during/d
+/EAL: No free hugepages reported in hugepages-1048576kB/d
+")
 AT_CLEANUP
 dnl --------------------------------------------------------------------------
