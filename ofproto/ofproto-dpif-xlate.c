@@ -7138,10 +7138,14 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             ctx.error = XLATE_INVALID_TUNNEL_METADATA;
             goto exit;
         }
-    } else if (!flow->tunnel.metadata.tab) {
+    } else if (!flow->tunnel.metadata.tab || xin->frozen_state) {
         /* If the original flow did not come in on a tunnel, then it won't have
          * FLOW_TNL_F_UDPIF set. However, we still need to have a metadata
          * table in case we generate tunnel actions. */
+        /* If the translation is from a frozen state, we use the latest
+         * TLV map to avoid segmentation fault in case the old TLV map is
+         * replaced by a new one.
+         * XXX: It is better to abort translation if the table is changed. */
         flow->tunnel.metadata.tab = ofproto_get_tun_tab(
             &ctx.xbridge->ofproto->up);
     }
