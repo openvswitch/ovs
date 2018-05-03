@@ -490,6 +490,11 @@
         configuration changes.
       </column>
 
+      <column name="dpdk_initialized">
+        True if <ref column="other_config" key="dpdk-init"/> is set to
+        true and the DPDK library is successfully initialized.
+      </column>
+
       <group title="Statistics">
         <p>
           The <code>statistics</code> column contains key-value pairs that
@@ -670,6 +675,12 @@
         <p>
           System integrators are responsible for choosing and setting an
           appropriate value for this column.
+        </p>
+      </column>
+
+      <column name="dpdk_version">
+        <p>
+          The version of the linked DPDK library.
         </p>
       </column>
 

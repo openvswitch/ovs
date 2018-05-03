@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "7.15.1",
- "cksum": "3682332033 23608",
+ "version": "7.16.0",
+ "cksum": "2403910601 23776",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -47,7 +47,12 @@
                   "min": 0, "max": "unlimited"}},
        "iface_types": {
          "type": {"key": {"type": "string"},
-                  "min": 0, "max": "unlimited"}}},
+                  "min": 0, "max": "unlimited"}},
+       "dpdk_initialized": {
+         "type": "boolean"},
+       "dpdk_version": {
+         "type": {"key": {"type": "string"},
+                  "min": 0, "max": 1}}},
      "isRoot": true,
      "maxRows": 1},
    "Bridge": {

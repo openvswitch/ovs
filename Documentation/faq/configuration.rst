@@ -102,9 +102,11 @@ Q: How do I configure a DPDK port as an access port?
 
     A: Firstly, you must have a DPDK-enabled version of Open vSwitch.
 
-    If your version is DPDK-enabled it will support the other-config:dpdk-init
-    configuration in the database and will display lines with "EAL:..." during
-    startup when other_config:dpdk-init is set to 'true'.
+    If your version is DPDK-enabled it may support the dpdk_version and
+    dpdk_initialized keys in the configuration database.  Earlier versions
+    of Open vSwitch only supported the other-config:dpdk-init key in the
+    configuration in the database.  All versions will display lines with
+    "EAL:..." during startup when other_config:dpdk-init is set to 'true'.
 
     Secondly, when adding a DPDK port, unlike a system port, the type for the
     interface and valid dpdk-devargs must be specified. For example::

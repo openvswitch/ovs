@@ -37,6 +37,7 @@
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/vlog.h"
 #include "smap.h"
+#include "vswitch-idl.h"
 
 VLOG_DEFINE_THIS_MODULE(dpdk);
 
@@ -44,6 +45,8 @@ static FILE *log_stream = NULL;       /* Stream for DPDK log redirection */
 
 static char *vhost_sock_dir = NULL;   /* Location of vhost-user sockets */
 static bool vhost_iommu_enabled = false; /* Status of vHost IOMMU support */
+static bool dpdk_initialized = false; /* Indicates successful initialization
+                                       * of DPDK. */
 
 static int
 process_vhost_flags(char *flag, const char *default_val, int size,
@@ -474,7 +477,11 @@ dpdk_init(const struct smap *ovs_other_config)
         return;
     }
 
-    if (smap_get_bool(ovs_other_config, "dpdk-init", false)) {
+    const char *dpdk_init_val = smap_get_def(ovs_other_config, "dpdk-init",
+                                             "false");
+
+    bool try_only = !strcmp(dpdk_init_val, "try");
+    if (!strcmp(dpdk_init_val, "true") || try_only) {
         static struct ovsthread_once once_enable = OVSTHREAD_ONCE_INITIALIZER;
 
         if (ovsthread_once_start(&once_enable)) {
@@ -483,7 +490,7 @@ dpdk_init(const struct smap *ovs_other_config)
             enabled = dpdk_init__(ovs_other_config);
             if (enabled) {
                 VLOG_INFO("DPDK Enabled - initialized");
-            } else {
+            } else if (!try_only) {
                 ovs_abort(rte_errno, "Cannot init EAL");
             }
             ovsthread_once_done(&once_enable);
@@ -493,6 +500,7 @@ dpdk_init(const struct smap *ovs_other_config)
     } else {
         VLOG_INFO_ONCE("DPDK Disabled - Use other_config:dpdk-init to enable");
     }
+    dpdk_initialized = enabled;
 }
 
 const char *
@@ -519,4 +527,13 @@ void
 print_dpdk_version(void)
 {
     puts(rte_version());
+}
+
+void
+dpdk_status(const struct ovsrec_open_vswitch *cfg)
+{
+    if (cfg) {
+        ovsrec_open_vswitch_set_dpdk_initialized(cfg, dpdk_initialized);
+        ovsrec_open_vswitch_set_dpdk_version(cfg, rte_version());
+    }
 }

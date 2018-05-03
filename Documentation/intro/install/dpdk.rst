@@ -208,7 +208,8 @@ Open vSwitch should be started as described in :doc:`general` with the
 exception of ovs-vswitchd, which requires some special configuration to enable
 DPDK functionality. DPDK configuration arguments can be passed to ovs-vswitchd
 via the ``other_config`` column of the ``Open_vSwitch`` table. At a minimum,
-the ``dpdk-init`` option must be set to ``true``. For example::
+the ``dpdk-init`` option must be set to either ``true`` or ``try``.
+For example::
 
     $ export PATH=$PATH:/usr/local/share/openvswitch/scripts
     $ export DB_SOCK=/usr/local/var/run/openvswitch/db.sock
@@ -219,8 +220,12 @@ There are many other configuration options, the most important of which are
 listed below. Defaults will be provided for all values not explicitly set.
 
 ``dpdk-init``
-  Specifies whether OVS should initialize and support DPDK ports. This is a
-  boolean, and defaults to false.
+  Specifies whether OVS should initialize and support DPDK ports. This field
+  can either be ``true`` or ``try``.
+  A value of ``true`` will cause the ovs-vswitchd process to abort on
+  initialization failure.
+  A value of ``try`` will imply that the ovs-vswitchd process should
+  continue running even if the EAL initialization fails.
 
 ``dpdk-lcore-mask``
   Specifies the CPU cores on which dpdk lcore threads should be spawned and
@@ -256,6 +261,22 @@ See the section ``Performance Tuning`` for important DPDK customizations.
 
 Validating
 ----------
+
+DPDK support can be confirmed by validating the ``dpdk_initialized`` boolean
+value from the ovsdb.  A value of ``true`` means that the DPDK EAL
+initialization succeeded::
+
+  $ ovs-vsctl get Open_vSwitch . dpdk_initialized
+  true
+
+Additionally, the library version linked to ovs-vswitchd can be confirmed
+with either the ovs-vswitchd logs, or by running either of the commands::
+
+  $ ovs-vswitchd --version
+  ovs-vswitchd (Open vSwitch) 2.9.0
+  DPDK 17.11.0
+  $ ovs-vsctl get Open_vSwitch . dpdk_version
+  "DPDK 17.11.0"
 
 At this point you can use ovs-vsctl to set up bridges and other Open vSwitch
 features. Seeing as we've configured the DPDK datapath, we will use DPDK-type

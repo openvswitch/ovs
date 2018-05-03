@@ -407,6 +407,8 @@ bridge_init(const char *remote)
     ovsdb_idl_omit(idl, &ovsrec_open_vswitch_col_db_version);
     ovsdb_idl_omit(idl, &ovsrec_open_vswitch_col_system_type);
     ovsdb_idl_omit(idl, &ovsrec_open_vswitch_col_system_version);
+    ovsdb_idl_omit_alert(idl, &ovsrec_open_vswitch_col_dpdk_version);
+    ovsdb_idl_omit_alert(idl, &ovsrec_open_vswitch_col_dpdk_initialized);
 
     ovsdb_idl_omit_alert(idl, &ovsrec_bridge_col_datapath_id);
     ovsdb_idl_omit_alert(idl, &ovsrec_bridge_col_datapath_version);
@@ -2837,10 +2839,13 @@ run_status_update(void)
          * previous one is not done. */
         seq = seq_read(connectivity_seq_get());
         if (seq != connectivity_seqno || status_txn_try_again) {
+            const struct ovsrec_open_vswitch *cfg =
+                ovsrec_open_vswitch_first(idl);
             struct bridge *br;
 
             connectivity_seqno = seq;
             status_txn = ovsdb_idl_txn_create(idl);
+            dpdk_status(cfg);
             HMAP_FOR_EACH (br, node, &all_bridges) {
                 struct port *port;
 

@@ -30,6 +30,7 @@ Post-v2.9.0
      * New 'check-dpdk' Makefile target to run a new system testsuite.
        See Testing topic for the details.
      * Add LSC interrupt support for DPDK physical devices.
+     * Allow init to fail and record DPDK status/version in OVS database.
    - Userspace datapath:
      * Commands ovs-appctl dpif-netdev/pmd-*-show can now work on a single PMD
      * Detailed PMD performance metrics available with new command
