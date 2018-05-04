@@ -94,10 +94,6 @@ Requires: openssl hostname iproute module-init-tools
 
 Requires(pre): shadow-utils
 Requires(post): /bin/sed
-%if %{with dpdk}
-Requires(post): /usr/sbin/usermod
-Requires(post): /usr/sbin/groupadd
-%endif
 Requires(post): systemd-units
 Requires(preun): systemd-units
 Requires(postun): systemd-units
