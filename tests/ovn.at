@@ -8410,7 +8410,7 @@ packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111
 # mac_bindings table.
 as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
 OVS_WAIT_UNTIL([test `ovn-sbctl find mac_binding ip="10.0.0.2" | wc -l` -gt 0])
-
+ovn-nbctl --wait=hv sync
 # Send the second packet to reach the destination.
 as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
 
