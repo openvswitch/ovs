@@ -817,8 +817,6 @@ netdev_to_ovs_vport_type(const char *type)
         return OVS_VPORT_TYPE_STT;
     } else if (!strcmp(type, "geneve")) {
         return OVS_VPORT_TYPE_GENEVE;
-    } else if (strstr(type, "gre")) {
-        return OVS_VPORT_TYPE_GRE;
     } else if (!strcmp(type, "vxlan")) {
         return OVS_VPORT_TYPE_VXLAN;
     } else if (!strcmp(type, "lisp")) {
@@ -829,6 +827,8 @@ netdev_to_ovs_vport_type(const char *type)
         return OVS_VPORT_TYPE_IP6ERSPAN;
     } else if (!strcmp(type, "ip6gre")) {
         return OVS_VPORT_TYPE_IP6GRE;
+    } else if (!strcmp(type, "gre")) {
+        return OVS_VPORT_TYPE_GRE;
     } else {
         return OVS_VPORT_TYPE_UNSPEC;
     }
