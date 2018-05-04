@@ -1042,6 +1042,10 @@ netdev_vport_tunnel_register(void)
                                                    netdev_erspan_push_header,
                                                    netdev_erspan_pop_header,
                                                    NULL),
+        TUNNEL_CLASS("ip6gre", "ip6gre_sys", netdev_gre_build_header,
+                                             netdev_gre_push_header,
+                                             netdev_gre_pop_header,
+                                             NULL),
     };
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
 

@@ -513,7 +513,11 @@ netdev_gre_build_header(const struct netdev *netdev,
     hlen = (uint8_t *) options - (uint8_t *) greh;
 
     data->header_len += hlen;
-    data->tnl_type = OVS_VPORT_TYPE_GRE;
+    if (!params->is_ipv6) {
+        data->tnl_type = OVS_VPORT_TYPE_GRE;
+    } else {
+        data->tnl_type = OVS_VPORT_TYPE_IP6GRE;
+    }
     return 0;
 }
 
@@ -552,7 +556,7 @@ netdev_erspan_pop_header(struct dp_packet *packet)
     }
 
     ersh = ERSPAN_HDR(greh);
-    tnl->tun_id = be32_to_be64(be16_to_be32(htons(get_sid(ersh))));
+    tnl->tun_id = be16_to_be64(htons(get_sid(ersh)));
     tnl->erspan_ver = ersh->ver;
 
     if (ersh->ver == 1) {

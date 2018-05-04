@@ -690,7 +690,8 @@ format_odp_tnl_push_header(struct ds *ds, struct ovs_action_push_tnl *data)
         }
 
         ds_put_char(ds, ')');
-    } else if (data->tnl_type == OVS_VPORT_TYPE_GRE) {
+    } else if (data->tnl_type == OVS_VPORT_TYPE_GRE ||
+               data->tnl_type == OVS_VPORT_TYPE_IP6GRE) {
         const struct gre_base_hdr *greh;
         ovs_16aligned_be32 *options;
 
@@ -1559,7 +1560,11 @@ ovs_parse_tnl_push(const char *s, struct ovs_action_push_tnl *data)
     } else if (ovs_scan_len(s, &n, "gre((flags=0x%"SCNx16",proto=0x%"SCNx16")",
                             &gre_flags, &gre_proto)){
 
-        tnl_type = OVS_VPORT_TYPE_GRE;
+        if (eth->eth_type == htons(ETH_TYPE_IP)) {
+            tnl_type = OVS_VPORT_TYPE_GRE;
+        } else {
+            tnl_type = OVS_VPORT_TYPE_IP6GRE;
+        }
         greh->flags = htons(gre_flags);
         greh->protocol = htons(gre_proto);
         ovs_16aligned_be32 *options = (ovs_16aligned_be32 *) (greh + 1);

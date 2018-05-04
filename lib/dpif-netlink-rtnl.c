@@ -104,6 +104,7 @@ vport_type_to_kind(enum ovs_vport_type type,
     case OVS_VPORT_TYPE_IP6ERSPAN:
         return "ip6erspan";
     case OVS_VPORT_TYPE_IP6GRE:
+        return "ip6gre";
     case OVS_VPORT_TYPE_NETDEV:
     case OVS_VPORT_TYPE_INTERNAL:
     case OVS_VPORT_TYPE_LISP:
@@ -349,7 +350,8 @@ dpif_netlink_rtnl_create(const struct netdev_tunnel_config *tnl_cfg,
     nl_msg_end_nested(&request, linkinfo_off);
 
     err = nl_transact(NETLINK_ROUTE, &request, NULL);
-    if (!err && type == OVS_VPORT_TYPE_GRE) {
+    if (!err && (type == OVS_VPORT_TYPE_GRE ||
+                 type == OVS_VPORT_TYPE_IP6GRE)) {
         /* Work around a bug in kernel GRE driver, which ignores IFLA_MTU in
          * RTM_NEWLINK, by setting the MTU again.  See
          * https://bugzilla.redhat.com/show_bug.cgi?id=1488484. */
