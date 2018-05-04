@@ -1,3 +1,6 @@
+Do not use commands to add or remove or modify datapaths if
+\fBovs\-vswitchd\fR is running because this interferes with
+\fBovs\-vswitchd\fR's own datapath management.
 .TP
 \*(DX\fBadd\-dp \fIdp\fR [\fInetdev\fR[\fB,\fIoption\fR]...]
 Creates datapath \fIdp\fR, with a local port also named \fIdp\fR.
@@ -89,8 +92,10 @@ The following commands are primarily useful for debugging Open
 vSwitch.  The flow table entries (both matches and actions) that they
 work with are not OpenFlow flow entries.  Instead, they are different
 and considerably simpler flows maintained by the Open vSwitch kernel
-module.  Use \fBovs\-ofctl\fR(8), instead, to work with OpenFlow flow
-entries.
+module.  Do not use commands to add or remove or modify datapath flows
+if \fBovs\-vswitchd\fR is running because it interferes with
+\fBovs\-vswitchd\fR's own datapath flow management.  Use
+\fBovs\-ofctl\fR(8), instead, to work with OpenFlow flow entries.
 .
 .PP
 The \fIdp\fR argument to each of these commands is optional when

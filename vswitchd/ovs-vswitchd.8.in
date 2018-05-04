@@ -59,11 +59,12 @@ Only a single instance of \fBovs\-vswitchd\fR is intended to run at a time.
 A single \fBovs\-vswitchd\fR can manage any number of switch instances, up
 to the maximum number of supported Open vSwitch datapaths.
 .PP
-\fBovs\-vswitchd\fR does all the necessary management of Open vSwitch datapaths
-itself.  Thus, external tools, such \fBovs\-dpctl\fR(8), are not needed for
-managing datapaths in conjunction with \fBovs\-vswitchd\fR, and their use
-to modify datapaths when \fBovs\-vswitchd\fR is running can interfere with
-its operation.  (\fBovs\-dpctl\fR may still be useful for diagnostics.)
+\fBovs\-vswitchd\fR does all the necessary management of Open vSwitch
+datapaths itself.  Thus, \fBovs\-dpctl\fR(8) (and its userspace
+datapath counterparts accessible via \fBovs\-appctl
+dpctl/\fIcommand\fR) are not needed with \fBovs\-vswitchd\fR and should
+not be used because they can interfere with its operation.  These
+tools are still useful for diagnostics.
 .PP
 An Open vSwitch datapath kernel module must be loaded for \fBovs\-vswitchd\fR
 to be useful.  Refer to the documentation for instructions on how to build and
