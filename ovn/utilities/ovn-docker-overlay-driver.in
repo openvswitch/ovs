@@ -110,6 +110,7 @@ def prepare():
         fo = open(PLUGIN_FILE, "w")
         fo.write("tcp://0.0.0.0:5000")
         fo.close()
+        ovs.util.ovs_info("configuration file: %s" % (PLUGIN_FILE), vlog)
     except Exception as e:
         ovs.util.ovs_fatal(0, "Failed to write to spec file (%s)" % str(e),
                            vlog)
@@ -434,6 +435,19 @@ def network_leave():
     except Exception as e:
         error = "network_leave: failed to delete port (%s)" % (str(e))
         return jsonify({'Err': error})
+
+    return jsonify({})
+
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def unsupported_libnetwork_call(path):
+    '''
+    This function handles any new endpoints that are being added to
+    Docker libnetwork remote network plugin API. If this function receives
+    a request and that request is valid, there is a need to refactor
+    this plugin, because a new functionality is being introduced.
+    '''
+    ovs.util.ovs_warn("received unsupported libnetwork %s request to: %s, with payload: %s" % (request.method, request.path, request.data), vlog)
 
     return jsonify({})
 
