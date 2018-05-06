@@ -346,6 +346,7 @@ m4_define([_OVS_VSWITCHD_START],
 /dpdk|INFO|DPDK Disabled - Use other_config:dpdk-init to enable/d
 /netlink_socket|INFO|netlink: could not enable listening to all nsid/d
 /netdev: Flow API/d
+/probe tc:/d
 /tc: Using policy/d']])
 ])
 

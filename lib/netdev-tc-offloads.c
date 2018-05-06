@@ -43,6 +43,7 @@ VLOG_DEFINE_THIS_MODULE(netdev_tc_offloads);
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(60, 5);
 
 static struct hmap ufid_tc = HMAP_INITIALIZER(&ufid_tc);
+static bool multi_mask_per_prio = false;
 
 struct netlink_field {
     int offset;
@@ -264,17 +265,21 @@ get_prio_for_tc_flower(struct tc_flower *flower)
     static struct ovs_mutex prios_lock = OVS_MUTEX_INITIALIZER;
     static uint16_t last_prio = 0;
     size_t key_len = sizeof(struct tc_flower_key);
-    size_t hash = hash_bytes(&flower->mask, key_len,
-                             (OVS_FORCE uint32_t) flower->key.eth_type);
+    size_t hash = hash_int((OVS_FORCE uint32_t) flower->key.eth_type, 0);
     struct prio_map_data *data;
     struct prio_map_data *new_data;
 
+    if (!multi_mask_per_prio) {
+        hash = hash_bytes(&flower->mask, key_len, hash);
+    }
+
     /* We can use the same prio for same mask/eth combination but must have
      * different prio if not. Flower classifier will reject same prio for
-     * different mask/eth combination. */
+     * different mask combination unless multi mask per prio is supported. */
     ovs_mutex_lock(&prios_lock);
     HMAP_FOR_EACH_WITH_HASH(data, node, hash, &prios) {
-        if (!memcmp(&flower->mask, &data->mask, key_len)
+        if ((multi_mask_per_prio
+             || !memcmp(&flower->mask, &data->mask, key_len))
             && data->protocol == flower->key.eth_type) {
             ovs_mutex_unlock(&prios_lock);
             return data->prio;
@@ -1199,9 +1204,44 @@ netdev_tc_flow_del(struct netdev *netdev OVS_UNUSED,
     return error;
 }
 
+static void
+probe_multi_mask_per_prio(int ifindex)
+{
+    struct tc_flower flower;
+    int error;
+
+    memset(&flower, 0, sizeof flower);
+
+    flower.key.eth_type = htons(ETH_P_IP);
+    flower.mask.eth_type = 0xfff;
+    memset(&flower.key.dst_mac, 0x11, sizeof flower.key.dst_mac);
+    memset(&flower.mask.dst_mac, 0xff, sizeof flower.mask.dst_mac);
+
+    error = tc_replace_flower(ifindex, 1, 1, &flower);
+    if (error) {
+        return;
+    }
+
+    memset(&flower.key.src_mac, 0x11, sizeof flower.key.src_mac);
+    memset(&flower.mask.src_mac, 0xff, sizeof flower.mask.src_mac);
+
+    error = tc_replace_flower(ifindex, 1, 2, &flower);
+    tc_del_filter(ifindex, 1, 1);
+
+    if (error) {
+        return;
+    }
+
+    tc_del_filter(ifindex, 1, 2);
+
+    multi_mask_per_prio = true;
+    VLOG_INFO("probe tc: multiple masks on single tc prio is supported.");
+}
+
 int
 netdev_tc_init_flow_api(struct netdev *netdev)
 {
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
     int ifindex;
     int error;
 
@@ -1221,6 +1261,11 @@ netdev_tc_init_flow_api(struct netdev *netdev)
     }
 
     VLOG_INFO("added ingress qdisc to %s", netdev_get_name(netdev));
+
+    if (ovsthread_once_start(&once)) {
+        probe_multi_mask_per_prio(ifindex);
+        ovsthread_once_done(&once);
+    }
 
     return 0;
 }
