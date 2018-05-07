@@ -3653,13 +3653,6 @@ native_tunnel_output(struct xlate_ctx *ctx, const struct xport *xport,
             nl_msg_end_non_empty_nested(ctx->odp_actions, clone_ofs);
         } else {
             nl_msg_cancel_nested(ctx->odp_actions, clone_ofs);
-            /* XXX : There is no real use-case for a tunnel push without
-             * any post actions. However keeping it now
-             * as is to make the 'make check' happy. Should remove when all the
-             * make check tunnel test case does something meaningful on a
-             * tunnel encap packets.
-             */
-            odp_put_tnl_push_action(ctx->odp_actions, &tnl_push_data);
         }
 
         /* Restore context status. */
