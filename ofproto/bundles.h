@@ -58,8 +58,6 @@ struct ofp_bundle {
     struct ovs_list   msg_list;  /* List of 'struct bundle_message's */
 };
 
-static inline struct ofp_bundle_entry *ofp_bundle_entry_alloc(
-    enum ofptype type, const struct ofp_header *oh);
 static inline void ofp_bundle_entry_free(struct ofp_bundle_entry *);
 
 enum ofperr ofp_bundle_open(struct ofconn *, uint32_t id, uint16_t flags,
@@ -72,17 +70,6 @@ enum ofperr ofp_bundle_add_message(struct ofconn *, uint32_t id,
 
 void ofp_bundle_remove__(struct ofconn *, struct ofp_bundle *);
 
-static inline struct ofp_bundle_entry *
-ofp_bundle_entry_alloc(enum ofptype type, const struct ofp_header *oh)
-{
-    struct ofp_bundle_entry *entry = xmalloc(sizeof *entry);
-
-    entry->type = type;
-    entry->msg = xmemdup(oh, ntohs(oh->length));
-
-    return entry;
-}
-
 static inline void
 ofp_bundle_entry_free(struct ofp_bundle_entry *entry)
 {
