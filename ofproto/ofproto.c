@@ -7914,7 +7914,6 @@ handle_bundle_add(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     enum ofperr error;
     struct ofputil_bundle_add_msg badd;
-    struct ofp_bundle_entry *bmsg;
     enum ofptype type;
 
     error = reject_slave_controller(ofconn);
@@ -7927,7 +7926,8 @@ handle_bundle_add(struct ofconn *ofconn, const struct ofp_header *oh)
         return error;
     }
 
-    bmsg = ofp_bundle_entry_alloc(type, badd.msg);
+    /* Allocate bundle entry and decode the embedded message. */
+    struct ofp_bundle_entry *bmsg = xmalloc(sizeof *bmsg);
 
     struct ofpbuf ofpacts;
     uint64_t ofpacts_stub[1024 / 8];
@@ -7965,18 +7965,23 @@ handle_bundle_add(struct ofconn *ofconn, const struct ofp_header *oh)
     } else {
         OVS_NOT_REACHED();
     }
-
     ofpbuf_uninit(&ofpacts);
-
-    if (!error) {
-        error = ofp_bundle_add_message(ofconn, badd.bundle_id, badd.flags,
-                                       bmsg, oh);
+    if (error) {
+        free(bmsg);
+        return error;
     }
 
+    /* Now that the embedded message has been successfully decoded, finish up
+     * initializing the bundle entry. */
+    bmsg->type = type;
+    bmsg->msg = xmemdup(oh, ntohs(oh->length));
+
+    /* Add bundle entry to bundle. */
+    error = ofp_bundle_add_message(ofconn, badd.bundle_id, badd.flags,
+                                   bmsg, oh);
     if (error) {
         ofp_bundle_entry_free(bmsg);
     }
-
     return error;
 }
 
