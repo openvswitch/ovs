@@ -390,7 +390,9 @@ if $ovn; then
     fi
 fi
 rungdb $gdb_ovsdb $gdb_ovsdb_ex ovsdb-server --detach --no-chdir --pidfile -vconsole:off --log-file \
-    --remote=punix:"$sandbox"/db.sock $ovsdb_server_args
+       --remote=punix:"$sandbox"/db.sock \
+       --remote=db:Open_vSwitch,Open_vSwitch,manager_options \
+       $ovsdb_server_args
 if $ovn; then
     ovn_start_db() {
         local db=$1 model=$2 servers=$3 schema=$4
