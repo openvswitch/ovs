@@ -687,10 +687,20 @@
       </p>
 
       <column name="manager_options">
-        Database clients to which the Open vSwitch database server should
-        connect or to which it should listen, along with options for how these
-        connection should be configured.  See the <ref table="Manager"/> table
-        for more information.
+        <p>
+          Database clients to which the Open vSwitch database server should
+          connect or to which it should listen, along with options for how
+          these connections should be configured.  See the <ref
+          table="Manager"/> table for more information.
+        </p>
+
+        <p>
+          For this column to serve its purpose, <code>ovsdb-server</code> must
+          be configured to honor it.  The easiest way to do this is to invoke
+          <code>ovsdb-server</code> with the option
+          <option>--remote=db:Open_vSwitch,Open_vSwitch,manager_options</option>
+          The startup scripts that accompany Open vSwitch do this by default.
+        </p>
       </column>
     </group>
 
