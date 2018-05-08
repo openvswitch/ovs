@@ -9199,6 +9199,8 @@ ovn-nbctl lsp-set-options lsp0 requested-chassis=hv1
 ovn-nbctl --wait=hv --timeout=3 sync
 
 # Retrieve hv1 and hv2 chassis UUIDs from southbound database
+ovn-sbctl wait-until chassis hv1
+ovn-sbctl wait-until chassis hv2
 hv1_uuid=$(ovn-sbctl --bare --columns _uuid find chassis name=hv1)
 hv2_uuid=$(ovn-sbctl --bare --columns _uuid find chassis name=hv2)
 
@@ -9220,7 +9222,7 @@ as hv1
 ovs-vsctl set interface hv1-vif0 external-ids:iface-id=lsp0
 
 OVS_WAIT_UNTIL([test 1 = $(grep -c "Claiming lport lsp0" hv1/ovn-controller.log)])
-AT_CHECK([test $(ovn-sbctl --bare --columns chassis find port_binding logical_port=lsp0) = "$hv1_uuid"], [0], [])
+AT_CHECK([test x$(ovn-sbctl --bare --columns chassis find port_binding logical_port=lsp0) = x"$hv1_uuid"], [0], [])
 
 # (4) Chassis hv1 should add flows in OFTABLE_PHY_TO_LOG and OFTABLE_LOG_TO_PHY tables.
 as hv1 ovs-ofctl dump-flows br-int
@@ -9233,7 +9235,7 @@ echo "verifying that lsp0 binding moves when requested-chassis is changed"
 
 ovn-nbctl lsp-set-options lsp0 requested-chassis=hv2
 OVS_WAIT_UNTIL([test 1 = $(grep -c "Releasing lport lsp0 from this chassis" hv1/ovn-controller.log)])
-OVS_WAIT_UNTIL([test $(ovn-sbctl --bare --columns chassis find port_binding logical_port=lsp0) = "$hv2_uuid"])
+OVS_WAIT_UNTIL([test x$(ovn-sbctl --bare --columns chassis find port_binding logical_port=lsp0) = x"$hv2_uuid"])
 
 # (6) Chassis hv2 should add flows and hv1 should not.
 AT_CHECK([as hv2 ovs-ofctl dump-flows br-int table=0 | grep in_port=1], [0], [ignore])
