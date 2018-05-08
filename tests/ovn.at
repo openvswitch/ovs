@@ -8866,7 +8866,7 @@ AT_CHECK([ovn-nbctl lsp-set-type ln_port localnet])
 AT_CHECK([ovn-nbctl lsp-set-options ln_port network_name=physnet1])
 
 # wait for earlier changes to take effect
-AT_CHECK([ovn-nbctl --timeout=3 --wait=sb sync], [0], [ignore])
+AT_CHECK([ovn-nbctl --timeout=3 --wait=hv sync], [0], [ignore])
 
 reset_pcap_file() {
     local iface=$1
@@ -8882,7 +8882,7 @@ as hv1 reset_pcap_file snoopvif hv1/snoopvif
 as hv2 reset_pcap_file br-phys_n1 hv2/br-phys_n1
 as hv3 reset_pcap_file br-phys_n1 hv3/br-phys_n1
 # add nat-addresses option
-ovn-nbctl --wait=sb lsp-set-options lrp0-rp router-port=lrp0 nat-addresses="router"
+ovn-nbctl --wait=hv lsp-set-options lrp0-rp router-port=lrp0 nat-addresses="router"
 
 # Wait for packets to be received through hv2.
 OVS_WAIT_UNTIL([test `wc -c < "hv1/snoopvif-tx.pcap"` -ge 100])
@@ -8942,11 +8942,11 @@ AT_CHECK([grep $garp hv2_br_phys_tx | sort], [0], [])
 AT_CHECK([ovn-nbctl set Logical_Switch_Port ln_port tag=2014])
 
 # wait for earlier changes to take effect
-AT_CHECK([ovn-nbctl --timeout=3 --wait=sb sync], [0], [ignore])
+AT_CHECK([ovn-nbctl --timeout=3 --wait=hv sync], [0], [ignore])
 
 # update nat-addresses option
-ovn-nbctl --wait=sb lsp-set-options lrp0-rp router-port=lrp0
-ovn-nbctl --wait=sb lsp-set-options lrp0-rp router-port=lrp0 nat-addresses="router"
+ovn-nbctl --wait=hv lsp-set-options lrp0-rp router-port=lrp0
+ovn-nbctl --wait=hv lsp-set-options lrp0-rp router-port=lrp0 nat-addresses="router"
 
 as hv1 reset_pcap_file snoopvif hv1/snoopvif
 as hv2 reset_pcap_file br-phys_n1 hv2/br-phys_n1
