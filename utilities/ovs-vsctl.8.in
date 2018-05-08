@@ -425,8 +425,9 @@ These commands manipulate the \fBmanager_options\fR column in the
 \fBOpen_vSwitch\fR table and rows in the \fBManagers\fR table.  When
 \fBovsdb\-server\fR is configured to use the \fBmanager_options\fR column for
 OVSDB connections (as described in the startup scripts provided with
-Open vSwitch), this allows the administrator to use \fBovs\-vsctl\fR to
-configure database connections.
+Open vSwitch; the corresponding \fBovsdb\-server\fR command option is
+\fB--remote=db:Open_vSwitch,Open_vSwitch,manager_options\fR), this allows the
+administrator to use \fBovs\-vsctl\fR to configure database connections.
 .
 .IP "\fBget\-manager\fR"
 Prints the configured manager(s).
