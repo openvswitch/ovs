@@ -9260,6 +9260,7 @@ ovs-vsctl add-br br-phys
 ovn_attach n1 br-phys 192.168.0.11
 ovs-vsctl -- add-port br-int hv1-vif0 -- set Interface hv1-vif0 ofport-request=1
 
+ovn-sbctl wait-until chassis hv1
 hv1_hostname=$(ovn-sbctl --bare --columns hostname find Chassis name=hv1)
 echo "hv1_hostname=${hv1_hostname}"
 ovn-nbctl --wait=hv --timeout=3 lsp-set-options lsp0 requested-chassis=${hv1_hostname}
