@@ -2324,6 +2324,7 @@ static struct rtnl_link_ops ip6gre_tap_ops __read_mostly = {
 	.validate	= ip6gre_tap_validate,
 	.newlink	= ip6gre_newlink,
 	.changelink	= ip6gre_changelink,
+	.dellink	= ip6gre_dellink,
 	.get_size	= ip6gre_get_size,
 	.fill_info	= ip6gre_fill_info,
 #ifdef HAVE_GET_LINK_NET
@@ -2340,6 +2341,7 @@ static struct rtnl_link_ops ip6erspan_tap_ops __read_mostly = {
 	.validate	= ip6erspan_tap_validate,
 	.newlink	= ip6gre_newlink,
 	.changelink	= ip6gre_changelink,
+	.dellink	= ip6gre_dellink,
 	.get_size	= ip6gre_get_size,
 	.fill_info	= ip6gre_fill_info,
 #ifdef HAVE_GET_LINK_NET
