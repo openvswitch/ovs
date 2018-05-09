@@ -264,6 +264,8 @@ def pointer_whitespace_check(line):
 def line_length_check(line):
     """Return TRUE if the line length is too long"""
     if len(line) > 79:
+        print_warning("Line is %d characters long (recommended limit is 79)"
+                      % len(line))
         return True
     return False
 
@@ -373,6 +375,8 @@ def check_comment_spelling(line):
                 skip = True
 
             if not skip:
+                print_warning("Check for spelling mistakes (e.g. \"%s\")"
+                              % strword)
                 return True
 
     return False
@@ -459,8 +463,7 @@ file_checks = [
 checks = [
     {'regex': None,
      'match_name': lambda x: not line_length_blacklist.search(x),
-     'check': lambda x: line_length_check(x),
-     'print': lambda: print_warning("Line length is >79-characters long")},
+     'check': lambda x: line_length_check(x)},
 
     {'regex': None,
      'match_name': lambda x: not leading_whitespace_blacklist.search(x),
@@ -500,8 +503,7 @@ checks = [
 
     {'regex': '(\.c|\.h)(\.in)?$', 'match_name': None,
      'prereq': lambda x: has_comment(x),
-     'check': lambda x: check_comment_spelling(x),
-     'print': lambda: print_warning("Check for spelling mistakes")},
+     'check': lambda x: check_comment_spelling(x)},
 ]
 
 
@@ -584,7 +586,8 @@ def run_checks(current_file, line, lineno):
         if 'prereq' in check and not check['prereq'](line):
             continue
         if check['check'](line):
-            check['print']()
+            if 'print' in check:
+                check['print']()
             print_line = True
 
     if print_line:
