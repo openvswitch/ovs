@@ -458,14 +458,12 @@ file_checks = [
 
 checks = [
     {'regex': None,
-     'match_name':
-     lambda x: not line_length_blacklist.match(x),
+     'match_name': lambda x: not line_length_blacklist.search(x),
      'check': lambda x: line_length_check(x),
      'print': lambda: print_warning("Line length is >79-characters long")},
 
     {'regex': None,
-     'match_name':
-     lambda x: not leading_whitespace_blacklist.match(x),
+     'match_name': lambda x: not leading_whitespace_blacklist.search(x),
      'check': lambda x: not leading_whitespace_is_spaces(x),
      'print': lambda: print_warning("Line has non-spaces leading whitespace")},
 
