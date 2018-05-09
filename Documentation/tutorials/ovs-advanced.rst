@@ -145,6 +145,10 @@ can be passed via the ``SANDBOXFLAGS`` environment variable.  ``make sandbox
 SANDBOXFLAGS=-g`` will start the sandbox with ovs-vswitchd running under GDB in
 its own xterm if X is available.
 
+In addition, a set of GDB macros are available in ``utilities/gdb/ovs_gdb.py``.
+Which are able to dump various internal data structures. See the header of the
+file itself for some more details and an example.
+
 Motivation
 ----------
 
