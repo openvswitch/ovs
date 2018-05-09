@@ -603,8 +603,7 @@ static int ip6gre_rcv(struct sk_buff *skb, const struct tnl_ptk_info *tpi)
 
 		}
 
-		skb_reset_mac_header(skb);
-		ovs_ip_tunnel_rcv(tunnel->dev, skb, tun_dst);
+		ip6_tnl_rcv(tunnel, skb, tpi, tun_dst, false);
 		kfree(tun_dst);
 		return PACKET_RCVD;
 	}
