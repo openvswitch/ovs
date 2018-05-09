@@ -482,7 +482,9 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                                          [iptunnel_pull_offloads],
 			[OVS_GREP_IFELSE([$KSRC/include/net/dst_cache.h], [dst_cache],
                                          [OVS_DEFINE([USE_UPSTREAM_TUNNEL])])])])
-
+  OVS_GREP_IFELSE([$KSRC/include/net/dst_cache.h], [dst_cache],
+                  [OVS_DEFINE([USE_BUILTIN_DST_CACHE])])
+ 
   OVS_GREP_IFELSE([$KSRC/include/linux/net.h], [sock_create_kern.*net],
                   [OVS_DEFINE([HAVE_SOCK_CREATE_KERN_NET])])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [ndo_fill_metadata_dst])
