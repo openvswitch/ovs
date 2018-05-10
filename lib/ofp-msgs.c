@@ -894,11 +894,25 @@ ofpmsg_body(const struct ofp_header *oh)
     return (const uint8_t *) oh + ofphdrs_len(&hdrs);
 }
 
-/* Return if it's a stat/multipart (OFPST) request message. */
+/* Return if 'oh' is a stat/multipart (OFPST) request message. */
 bool
 ofpmsg_is_stat_request(const struct ofp_header *oh)
 {
     return ofp_is_stat_request(oh->version, oh->type);
+}
+
+/* Return if 'oh' is a stat/multipart (OFPST) reply message. */
+bool
+ofpmsg_is_stat_reply(const struct ofp_header *oh)
+{
+    return ofp_is_stat_reply(oh->version, oh->type);
+}
+
+/* Return if 'oh' is a stat/multipart (OFPST) request or reply message. */
+bool
+ofpmsg_is_stat(const struct ofp_header *oh)
+{
+    return ofp_is_stat(oh->version, oh->type);
 }
 
 static ovs_be16 *ofpmp_flags__(const struct ofp_header *);

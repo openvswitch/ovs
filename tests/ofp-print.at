@@ -2725,7 +2725,7 @@ f5 f6 f7 f8 f9 fa fb fc fd 00 00 00 00 00 00 00 \
 00 01 3a 01 80 00 2a 02 80 00 2c 04 80 00 2e 04 \
 80 00 30 06 80 00 32 06 80 00 1a 02 80 00 1c 02 \
 80 00 1e 02 80 00 20 02 80 00 22 02 80 00 24 02 \
-"], [0], [OFPST_TABLE_FEATURES reply (OF1.3) (xid=0xd5):
+"], [0], [OFPST_TABLE_FEATURES reply (OF1.3) (xid=0xd5): flags=[[more]]
   table 0 ("table0"):
     metadata: match=0xffffffffffffffff write=0xffffffffffffffff
     max_entries=1000000
