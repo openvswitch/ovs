@@ -1402,6 +1402,7 @@ AT_CHECK([ovs-ofctl -O OpenFlow14 dump-flows br0 | ofctl_strip], [0], [dnl
 OFPST_FLOW reply (OF1.4):
  check_overlap reset_counts in_port=1 actions=drop
 ])
+# OF1.5 makes the flags invisible.
 AT_CHECK([ovs-ofctl -O OpenFlow15 dump-flows br0 | ofctl_strip], [0], [dnl
 OFPST_FLOW reply (OF1.5):
  check_overlap reset_counts in_port=1 actions=drop

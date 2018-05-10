@@ -39,8 +39,8 @@ struct ofputil_flow_removed {
     uint16_t priority;
     uint8_t reason;             /* One of OFPRR_*. */
     uint8_t table_id;           /* 255 if message didn't include table ID. */
-    uint32_t duration_sec;
-    uint32_t duration_nsec;
+    uint32_t duration_sec;      /* Duration in sec, UINT32_MAX if unknown. */
+    uint32_t duration_nsec;     /* Fractional duration in nsec. */
     uint16_t idle_timeout;
     uint16_t hard_timeout;
     uint64_t packet_count;      /* Packet count, UINT64_MAX if unknown. */

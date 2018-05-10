@@ -32,6 +32,7 @@
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
 #include "util.h"
+#include "ox-stat.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_flow);
 
@@ -707,6 +708,10 @@ ofputil_decode_flow_stats_request(struct ofputil_flow_stats_request *fsr,
         return ofputil_decode_ofpst11_flow_request(fsr, &b, true, tun_table,
                                                    vl_mff_map);
 
+    case OFPRAW_OFPST15_AGGREGATE_REQUEST:
+       return ofputil_decode_ofpst11_flow_request(fsr, &b, true,
+                                                  tun_table, vl_mff_map);
+
     case OFPRAW_NXST_FLOW_REQUEST:
         return ofputil_decode_nxst_flow_request(fsr, &b, false, tun_table,
                                                 vl_mff_map);
@@ -740,9 +745,15 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
     case OFPUTIL_P_OF16_OXM: {
         struct ofp11_flow_stats_request *ofsr;
 
-        raw = (fsr->aggregate
-               ? OFPRAW_OFPST11_AGGREGATE_REQUEST
-               : OFPRAW_OFPST11_FLOW_REQUEST);
+        if (protocol > OFPUTIL_P_OF14_OXM) {
+            raw = (fsr->aggregate
+                   ? OFPRAW_OFPST15_AGGREGATE_REQUEST
+                   : OFPRAW_OFPST11_FLOW_REQUEST);
+        } else {
+            raw = (fsr->aggregate
+                   ? OFPRAW_OFPST11_AGGREGATE_REQUEST
+                   : OFPRAW_OFPST11_FLOW_REQUEST);
+        }
         msg = ofpraw_alloc(raw, ofputil_protocol_to_ofp_version(protocol),
                            ofputil_match_typical_len(protocol));
         ofsr = ofpbuf_put_zeros(msg, sizeof *ofsr);
@@ -894,6 +905,58 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
 
     if (!msg->size) {
         return EOF;
+    } else if (raw == OFPRAW_OFPST15_FLOW_REPLY) {
+        const struct ofp15_flow_desc *ofd;
+        size_t length;
+        uint16_t padded_match_len;
+        uint16_t stat_len;
+        uint8_t oxs_field_set;
+
+        ofd = ofpbuf_try_pull(msg, sizeof *ofd);
+        if (!ofd) {
+            VLOG_WARN_RL(&rl, "OFPST_FLOW reply has %" PRIu32
+                         " leftover " "bytes at end", msg->size);
+            return EINVAL;
+        }
+
+        length = ntohs(ofd->length);
+        if (length < sizeof *ofd) {
+            VLOG_WARN_RL(&rl, "OFPST_FLOW reply claims invalid "
+                         "length %" PRIuSIZE, length);
+            return EINVAL;
+        }
+
+        if (ofputil_pull_ofp11_match(msg, NULL, NULL, &fs->match,
+                                     &padded_match_len)) {
+            VLOG_WARN_RL(&rl, "OFPST_FLOW reply bad match");
+            return EINVAL;
+        }
+
+        fs->priority = ntohs(ofd->priority);
+        fs->table_id = ofd->table_id;
+        fs->cookie = ofd->cookie;
+        fs->idle_timeout = ntohs(ofd->idle_timeout);
+        fs->hard_timeout = ntohs(ofd->hard_timeout);
+        fs->importance = ntohs(ofd->importance);
+
+        error = ofputil_decode_flow_mod_flags(ofd->flags, -1, oh->version,
+                                                &fs->flags);
+        if (error) {
+            return error;
+        }
+
+        struct oxs_stats oxs;
+        if (oxs_pull_stat(msg, &oxs, &stat_len, &oxs_field_set)) {
+            VLOG_WARN_RL(&rl, "OXS OFPST_FLOW reply bad stats");
+            return EINVAL;
+        }
+        fs->duration_sec = oxs.duration_sec;
+        fs->duration_nsec = oxs.duration_nsec;
+        fs->packet_count = oxs.packet_count;
+        fs->byte_count = oxs.byte_count;
+        fs->idle_age = oxs.idle_age == UINT32_MAX ? -1 : oxs.idle_age;
+
+        instructions_len = length - sizeof *ofd - padded_match_len - stat_len;
     } else if (raw == OFPRAW_OFPST11_FLOW_REPLY
                || raw == OFPRAW_OFPST13_FLOW_REPLY) {
         const struct ofp11_flow_stats *ofs;
@@ -1072,7 +1135,38 @@ ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
     orig_tun_table = fs->match.flow.tunnel.metadata.tab;
     fs_->match.flow.tunnel.metadata.tab = tun_table;
 
-    if (raw == OFPRAW_OFPST11_FLOW_REPLY || raw == OFPRAW_OFPST13_FLOW_REPLY) {
+    if (raw == OFPRAW_OFPST15_FLOW_REPLY) {
+        struct ofp15_flow_desc *ofd;
+
+        ofpbuf_put_uninit(reply, sizeof *ofd);
+        oxm_put_match(reply, &fs->match, version);
+
+        struct oxs_stats oxs = {
+            .duration_sec = fs->duration_sec,
+            .duration_nsec = fs->duration_nsec,
+            .idle_age = fs->idle_age >= 0 ? fs->idle_age : UINT32_MAX,
+            .packet_count = fs->packet_count,
+            .byte_count = fs->byte_count,
+            .flow_count = UINT32_MAX,
+        };
+        oxs_put_stats(reply, &oxs);
+
+        ofpacts_put_openflow_instructions(fs->ofpacts, fs->ofpacts_len, reply,
+                                      version);
+
+        ofd = ofpbuf_at_assert(reply, start_ofs, sizeof *ofd);
+        ofd->length = htons(reply->size - start_ofs);
+        ofd->table_id = fs->table_id;
+        ofd->priority = htons(fs->priority);
+        ofd->idle_timeout = htons(fs->idle_timeout);
+        ofd->hard_timeout = htons(fs->hard_timeout);
+        ofd->cookie = fs->cookie;
+        memset(ofd->pad2, 0, sizeof ofd->pad2);
+        ofd->pad = 0;
+        ofd->importance = htons(fs->importance);
+        ofd->flags = ofputil_encode_flow_mod_flags(fs->flags, version);
+    } else if (raw == OFPRAW_OFPST11_FLOW_REPLY ||
+               raw == OFPRAW_OFPST13_FLOW_REPLY) {
         struct ofp11_flow_stats *ofs;
 
         ofpbuf_put_uninit(reply, sizeof *ofs);
@@ -1160,6 +1254,18 @@ ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
     fs_->match.flow.tunnel.metadata.tab = orig_tun_table;
 }
 
+static void
+print_flow_stat(struct ds *string, const char *leader, uint64_t stat)
+{
+    ds_put_format(string, "%s%s=%s", colors.param, leader, colors.end);
+    if (stat != UINT64_MAX) {
+        ds_put_format(string, "%"PRIu64, stat);
+    } else {
+        ds_put_char(string, '?');
+    }
+    ds_put_cstr(string, ", ");
+}
+
 /* Appends a textual form of 'fs' to 'string', translating port numbers to
  * names using 'port_map' (if provided).  If 'show_stats' is true, the output
  * includes the flow duration, packet and byte counts, and its idle and hard
@@ -1188,10 +1294,8 @@ ofputil_flow_stats_format(struct ds *string,
         ds_put_cstr(string, ", ");
     }
     if (show_stats) {
-        ds_put_format(string, "%sn_packets=%s%"PRIu64", ",
-                      colors.param, colors.end, fs->packet_count);
-        ds_put_format(string, "%sn_bytes=%s%"PRIu64", ",
-                      colors.param, colors.end, fs->byte_count);
+        print_flow_stat(string, "n_packets", fs->packet_count);
+        print_flow_stat(string, "n_bytes", fs->byte_count);
     }
     if (fs->idle_timeout != OFP_FLOW_PERMANENT) {
         ds_put_format(string, "%sidle_timeout=%s%"PRIu16", ",
@@ -1248,20 +1352,33 @@ ofputil_encode_aggregate_stats_reply(
     enum ofpraw raw;
 
     ofpraw_decode(&raw, request);
-    if (raw == OFPRAW_OFPST10_AGGREGATE_REQUEST) {
-        packet_count = unknown_to_zero(stats->packet_count);
-        byte_count = unknown_to_zero(stats->byte_count);
+    if (raw == OFPRAW_OFPST15_AGGREGATE_REQUEST) {
+        msg = ofpraw_alloc_stats_reply(request, 0);
+
+        struct oxs_stats oxs = {
+            .duration_sec = UINT32_MAX,
+            .duration_nsec = UINT32_MAX,
+            .idle_age = UINT32_MAX,
+            .packet_count = stats->packet_count,
+            .byte_count = stats->byte_count,
+            .flow_count = stats->flow_count,
+        };
+        oxs_put_stats(msg, &oxs);
     } else {
-        packet_count = stats->packet_count;
-        byte_count = stats->byte_count;
+        if (raw == OFPRAW_OFPST10_AGGREGATE_REQUEST) {
+            packet_count = unknown_to_zero(stats->packet_count);
+            byte_count = unknown_to_zero(stats->byte_count);
+        } else {
+            packet_count = stats->packet_count;
+            byte_count = stats->byte_count;
+        }
+
+        msg = ofpraw_alloc_stats_reply(request, 0);
+        asr = ofpbuf_put_zeros(msg, sizeof *asr);
+        put_32aligned_be64(&asr->packet_count, htonll(packet_count));
+        put_32aligned_be64(&asr->byte_count, htonll(byte_count));
+        asr->flow_count = htonl(stats->flow_count);
     }
-
-    msg = ofpraw_alloc_stats_reply(request, 0);
-    asr = ofpbuf_put_zeros(msg, sizeof *asr);
-    put_32aligned_be64(&asr->packet_count, htonll(packet_count));
-    put_32aligned_be64(&asr->byte_count, htonll(byte_count));
-    asr->flow_count = htonl(stats->flow_count);
-
     return msg;
 }
 
@@ -1270,12 +1387,27 @@ ofputil_decode_aggregate_stats_reply(struct ofputil_aggregate_stats *stats,
                                      const struct ofp_header *reply)
 {
     struct ofpbuf msg = ofpbuf_const_initializer(reply, ntohs(reply->length));
-    ofpraw_pull_assert(&msg);
+    enum ofpraw raw;
 
-    struct ofp_aggregate_stats_reply *asr = msg.msg;
-    stats->packet_count = ntohll(get_32aligned_be64(&asr->packet_count));
-    stats->byte_count = ntohll(get_32aligned_be64(&asr->byte_count));
-    stats->flow_count = ntohl(asr->flow_count);
+    raw = ofpraw_pull_assert(&msg);
+    if (raw == OFPRAW_OFPST15_AGGREGATE_REPLY) {
+        struct oxs_stats oxs;
+        uint16_t statlen;
+        uint8_t oxs_field_set;
+        enum ofperr error = oxs_pull_stat(&msg, &oxs, &statlen,
+                                          &oxs_field_set);
+        if (error) {
+            return error;
+        }
+        stats->packet_count = oxs.packet_count;
+        stats->byte_count = oxs.byte_count;
+        stats->flow_count = oxs.flow_count;
+    } else {
+        struct ofp_aggregate_stats_reply *asr = msg.msg;
+        stats->packet_count = ntohll(get_32aligned_be64(&asr->packet_count));
+        stats->byte_count = ntohll(get_32aligned_be64(&asr->byte_count));
+        stats->flow_count = ntohl(asr->flow_count);
+    }
 
     return 0;
 }

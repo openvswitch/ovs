@@ -638,6 +638,22 @@ OFPT_FLOW_REMOVED (OF1.3) (xid=0x0): dl_vlan=9 reason=hard table_id=5 cookie:0xf
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPT_FLOW_REMOVED - OF1.5])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+06 0b 00 80 00 00 00 02 01 00 00 00 11 00 22 00 \
+00 00 00 00 00 00 00 01 00 01 00 2d 80 00 00 04 \
+00 00 00 02 80 00 06 06 52 54 00 c3 00 89 80 00 \
+0a 02 08 00 80 00 10 01 00 80 00 04 08 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 34 80 02 00 08 \
+00 00 00 98 29 e6 ed c0 80 02 02 08 00 00 00 98 \
+00 00 00 00 80 02 08 08 00 00 00 00 00 00 00 02 \
+80 02 0a 08 00 00 00 00 00 00 00 80 00 00 00 00 \
+"], [0], [dnl
+OFPT_FLOW_REMOVED (OF1.5) (xid=0x2): priority=0,ip,metadata=0,in_port=2,dl_dst=52:54:00:c3:00:89,nw_tos=0 reason=idle table_id=1 cookie:0x1 duration152.703s idle4352 hard8704 pkts2 bytes128
+])
+AT_CLEANUP
+
 AT_SETUP([OFPT_PORT_STATUS - OF1.0])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
@@ -1392,6 +1408,18 @@ OFPST_FLOW request (OF1.3) (xid=0x2):
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPST_FLOW request - OF1.5])
+AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
+AT_CHECK([ovs-ofctl ofp-print "\
+06 12 00 38 00 00 00 04 00 01 00 00 00 00 00 00 \
+ff 00 00 00 ff ff ff ff ff ff ff ff 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 01 00 04 00 00 00 00 \
+"], [0], [dnl
+OFPST_FLOW request (OF1.5) (xid=0x4):
+])
+AT_CLEANUP
+
 AT_SETUP([OFPST_FLOW reply - OF1.0])
 AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
 AT_CHECK([ovs-ofctl ofp-print "\
@@ -1471,6 +1499,32 @@ OFPST_FLOW reply (OF1.2) (xid=0x2):
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPST_FLOW reply - OF1.5])
+AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
+AT_CHECK([ovs-ofctl ofp-print "\
+06 13 01 00 00 00 00 04 00 01 00 00 00 00 00 00 \
+00 78 00 00 00 00 80 00 00 00 00 00 00 05 00 00 \
+00 00 00 00 00 00 00 00 00 01 00 0c 80 00 00 04 \
+00 00 00 02 00 00 00 00 00 00 00 34 80 02 00 08 \
+00 00 00 c4 0b 06 e0 40 80 02 02 08 00 00 00 c4 \
+00 00 00 00 80 02 08 08 00 00 00 00 00 00 00 02 \
+80 02 0a 08 00 00 00 00 00 00 00 80 00 00 00 00 \
+00 04 00 18 00 00 00 00 00 00 00 10 ff ff ff fa \
+00 00 00 00 00 00 00 00 00 78 00 00 00 00 0f a0 \
+00 00 00 00 00 05 00 00 00 00 00 00 00 00 00 00 \
+00 01 00 0c 80 00 00 04 00 00 00 03 00 00 00 00 \
+00 00 00 34 80 02 00 08 00 00 00 b3 25 40 be 40 \
+80 02 02 08 00 00 00 b3 00 00 00 00 80 02 08 08 \
+00 00 00 00 00 00 00 02 80 02 0a 08 00 00 00 00 \
+00 00 00 80 00 00 00 00 00 04 00 18 00 00 00 00 \
+00 00 00 10 ff ff ff fa 00 00 00 00 00 00 00 00 \
+"], [0], [dnl
+OFPST_FLOW reply (OF1.5) (xid=0x4):
+ cookie=0x0, duration=196.185s, table=0, n_packets=2, n_bytes=128, send_flow_rem reset_counts idle_age=196, in_port=2 actions=NORMAL
+ cookie=0x0, duration=179.625s, table=0, n_packets=2, n_bytes=128, send_flow_rem reset_counts idle_age=179, priority=4000,in_port=3 actions=NORMAL
+])
+AT_CLEANUP
+
 AT_SETUP([OFPST_AGGREGATE request - OF1.0])
 AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
 AT_CHECK([ovs-ofctl ofp-print "\
@@ -1507,6 +1561,20 @@ OFPST_AGGREGATE request (OF1.3) (xid=0x2):
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPST_AGGREGATE request - OF1.5])
+AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
+AT_CHECK([ovs-ofctl ofp-print "\
+06 12 00 60 00 00 00 04 00 02 00 00 00 00 00 00 \
+ff 00 00 00 ff ff ff ff ff ff ff ff 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 01 00 04 00 00 00 00 00 00 00 24 80 02 06 04 \
+00 00 00 00 80 02 08 08 00 00 00 00 00 00 00 00 \
+80 02 0a 08 00 00 00 00 00 00 00 00 00 00 00 00 \
+"], [0], [dnl
+OFPST_AGGREGATE request (OF1.5) (xid=0x4):
+])
+AT_CLEANUP
+
 AT_SETUP([OFPST_AGGREGATE reply - OF1.0])
 AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
 AT_CHECK([ovs-ofctl ofp-print "\
@@ -1537,6 +1605,18 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 00 00 03 00 00 00 00 \
 "], [0], [dnl
 OFPST_AGGREGATE reply (OF1.3) (xid=0x2): packet_count=121 byte_count=19279 flow_count=3
+])
+AT_CLEANUP
+
+AT_SETUP([OFPST_AGGREGATE reply - OF1.5])
+AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
+AT_CHECK([ovs-ofctl ofp-print "\
+06 13 00 38 00 00 00 04 00 02 00 00 00 00 00 00 \
+00 00 00 24 80 02 06 04 00 00 00 03 80 02 08 08 \
+00 00 00 00 00 00 00 79 80 02 0a 08 00 00 00 00 \
+00 00 4b 4f 00 00 00 00 \
+"], [0], [dnl
+OFPST_AGGREGATE reply (OF1.5) (xid=0x4): packet_count=121 byte_count=19279 flow_count=3
 ])
 AT_CLEANUP
 

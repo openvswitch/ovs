@@ -219,7 +219,7 @@ void ofputil_flow_stats_format(struct ds *, const struct ofputil_flow_stats *,
 struct ofputil_aggregate_stats {
     uint64_t packet_count;      /* Packet count, UINT64_MAX if unknown. */
     uint64_t byte_count;        /* Byte count, UINT64_MAX if unknown. */
-    uint32_t flow_count;
+    uint32_t flow_count;        /* Number of flows, UINT32_MAX if unknown. */
 };
 
 struct ofpbuf *ofputil_encode_aggregate_stats_reply(

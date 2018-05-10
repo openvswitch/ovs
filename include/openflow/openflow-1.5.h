@@ -163,4 +163,55 @@ struct ofp15_packet_out {
 };
 OFP_ASSERT(sizeof(struct ofp15_packet_out) == 8);
 
+/* Body of reply to OFPMP_FLOW_DESC request. */
+struct ofp15_flow_desc {
+    ovs_be16 length;          /* Length of this entry. */
+    uint8_t pad2[2];          /* Align to 64 bits. */
+    uint8_t table_id;         /* ID of table flow came from. */
+    uint8_t pad;
+    ovs_be16 priority;        /* Priority of the entry. */
+    ovs_be16 idle_timeout;    /* Number of seconds
+                                 idle before expiration. */
+    ovs_be16 hard_timeout;    /* Number of seconds
+                                 before expiration. */
+    ovs_be16 flags;           /* Bitmap of OFPFF_*. flags. */
+    ovs_be16 importance;      /* Eviction precedence. */
+    ovs_be64 cookie;          /* Opaque controller issued identifier. */
+};
+
+OFP_ASSERT(sizeof(struct ofp15_flow_desc) == 24);
+
+/* Body of reply to OFPMP_FLOW_STATS request
+ * and body for OFPIT_STAT_TRIGGER generated status. */
+struct ofp15_flow_stats_reply {
+    ovs_be16 length;            /* Length of this entry.  */
+    uint8_t pad2[2];            /* Align to 64 bits.  */
+    uint8_t table_id;           /* ID of table flow came from. */
+    uint8_t reason;             /* One of OFPFSR_*.  */
+    ovs_be16 priority;          /* Priority of the entry.  */
+};
+
+OFP_ASSERT(sizeof(struct ofp15_flow_stats_reply) == 8);
+
+/* OXS flow stat field types for OpenFlow basic class. */
+enum oxs_ofb_stat_fields {
+    OFPXST_OFB_DURATION = 0,     /* Time flow entry has been alive.  */
+    OFPXST_OFB_IDLE_TIME = 1,    /* Time flow entry has been idle.  */
+    OFPXST_OFB_FLOW_COUNT = 3,   /* Number of aggregated flow entries. */
+    OFPXST_OFB_PACKET_COUNT = 4, /* Number of packets in flow entry.  */
+    OFPXST_OFB_BYTE_COUNT = 5,   /* Number of bytes in flow entry.  */
+};
+
+/* Flow removed (datapath -> controller). */
+struct ofp15_flow_removed {
+    uint8_t table_id;           /* ID of the table */
+    uint8_t reason;             /* One of OFPRR_*. */
+    ovs_be16 priority;          /* Priority level of flow entry. */
+    ovs_be16 idle_timeout;      /* Idle timeout from original flow mod. */
+    ovs_be16 hard_timeout;      /* Hard timeout from original flow mod. */
+    ovs_be64 cookie;            /* Opaque controller issued identifier. */
+};
+
+OFP_ASSERT(sizeof (struct ofp15_flow_removed) == 16);
+
 #endif /* openflow/openflow-1.5.h */

@@ -29,6 +29,7 @@
 #include "openvswitch/ofp-print.h"
 #include "openvswitch/ofp-table.h"
 #include "openvswitch/vlog.h"
+#include "ox-stat.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_monitor);
 
@@ -71,7 +72,36 @@ ofputil_decode_flow_removed(struct ofputil_flow_removed *fr,
 {
     struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     enum ofpraw raw = ofpraw_pull_assert(&b);
-    if (raw == OFPRAW_OFPT11_FLOW_REMOVED) {
+    if (raw == OFPRAW_OFPT15_FLOW_REMOVED) {
+        const struct ofp15_flow_removed *ofr;
+        enum ofperr error;
+
+        ofr = ofpbuf_pull(&b, sizeof *ofr);
+
+        error = ofputil_pull_ofp11_match(&b, NULL, NULL,  &fr->match, NULL);
+        if (error) {
+            return error;
+        }
+
+        struct oxs_stats stats;
+        uint16_t statlen;
+        uint8_t oxs_field_set;
+        error = oxs_pull_stat(&b, &stats, &statlen, &oxs_field_set);
+        if (error) {
+            return error;
+        }
+
+        fr->cookie = ofr->cookie;
+        fr->priority = ntohs(ofr->priority);
+        fr->reason = ofr->reason;
+        fr->table_id = ofr->table_id;
+        fr->duration_sec = stats.duration_sec;
+        fr->duration_nsec = stats.duration_nsec;
+        fr->idle_timeout = ntohs(ofr->idle_timeout);
+        fr->hard_timeout = ntohs(ofr->hard_timeout);
+        fr->packet_count = stats.packet_count;
+        fr->byte_count = stats.byte_count;
+    } else if (raw == OFPRAW_OFPT11_FLOW_REMOVED) {
         const struct ofp12_flow_removed *ofr;
         enum ofperr error;
 
@@ -167,9 +197,7 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
     case OFPUTIL_P_OF11_STD:
     case OFPUTIL_P_OF12_OXM:
     case OFPUTIL_P_OF13_OXM:
-    case OFPUTIL_P_OF14_OXM:
-    case OFPUTIL_P_OF15_OXM:
-    case OFPUTIL_P_OF16_OXM: {
+    case OFPUTIL_P_OF14_OXM: {
         struct ofp12_flow_removed *ofr;
 
         msg = ofpraw_alloc_xid(OFPRAW_OFPT11_FLOW_REMOVED,
@@ -190,7 +218,34 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
         ofputil_put_ofp11_match(msg, &fr->match, protocol);
         break;
     }
+    case OFPUTIL_P_OF15_OXM:
+    case OFPUTIL_P_OF16_OXM: {
+        struct ofp15_flow_removed *ofr;
 
+        msg = ofpraw_alloc_xid(OFPRAW_OFPT15_FLOW_REMOVED,
+                               ofputil_protocol_to_ofp_version(protocol),
+                               htonl(0),
+                               ofputil_match_typical_len(protocol));
+        ofr = ofpbuf_put_zeros(msg, sizeof *ofr);
+        ofr->cookie = fr->cookie;
+        ofr->priority = htons(fr->priority);
+        ofr->reason = reason;
+        ofr->table_id = fr->table_id;
+        ofr->idle_timeout = htons(fr->idle_timeout);
+        ofr->hard_timeout = htons(fr->hard_timeout);
+        ofputil_put_ofp11_match(msg, &fr->match, protocol);
+
+        const struct oxs_stats oxs = {
+            .duration_sec = fr->duration_sec,
+            .duration_nsec = fr->duration_nsec,
+            .idle_age = UINT32_MAX,
+            .packet_count = fr->packet_count,
+            .byte_count = fr->byte_count,
+            .flow_count = UINT32_MAX,
+        };
+        oxs_put_stats(msg, &oxs);
+        break;
+    }
     case OFPUTIL_P_OF10_STD:
     case OFPUTIL_P_OF10_STD_TID: {
         struct ofp10_flow_removed *ofr;
