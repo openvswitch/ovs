@@ -7212,6 +7212,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
          *
          * We do not perform special processing on thawed packets, since that
          * was done before they were frozen and should not be redone. */
+        mirror_ingress_packet(&ctx);
     } else if (in_port && in_port->xbundle
                && xbundle_mirror_out(xbridge, in_port->xbundle)) {
         xlate_report_error(&ctx, "dropping packet received on port "
