@@ -1375,18 +1375,13 @@ oxm_put_field_array(struct ofpbuf *b, const struct field_array *fa,
 {
     size_t start_len = b->size;
 
-    /* Field arrays are only used with the group selection method
-     * property and group properties are only available in OpenFlow 1.5+.
-     * So the following assertion should never fail.
-     *
-     * If support for older OpenFlow versions is desired then some care
-     * will need to be taken of different TLVs that handle the same
-     * flow fields. In particular:
+    /* XXX Some care might need to be taken of different TLVs that handle the
+     * same flow fields. In particular:
+
      * - VLAN_TCI, VLAN_VID and MFF_VLAN_PCP
      * - IP_DSCP_MASK and DSCP_SHIFTED
      * - REGS and XREGS
      */
-    ovs_assert(version >= OFP15_VERSION);
 
     size_t i, offset = 0;
 

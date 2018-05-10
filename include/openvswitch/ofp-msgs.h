@@ -195,6 +195,8 @@ enum ofpraw {
     /* NXT 1.0+ (13): struct nx_flow_mod, uint8_t[8][]. */
     OFPRAW_NXT_FLOW_MOD,
 
+    /* NXT 1.0 (31): struct ofp15_group_mod, uint8_t[8][]. */
+    OFPRAW_NXT_GROUP_MOD,
     /* OFPT 1.1-1.4 (15): struct ofp11_group_mod, uint8_t[8][]. */
     OFPRAW_OFPT11_GROUP_MOD,
     /* OFPT 1.5+ (15): struct ofp15_group_mod, uint8_t[8][]. */
@@ -367,25 +369,37 @@ enum ofpraw {
     /* OFPST 1.4+ (5): uint8_t[8][]. */
     OFPRAW_OFPST14_QUEUE_REPLY,
 
+    /* NXST 1.0 (7): struct ofp11_group_stats_request. */
+    OFPRAW_NXST_GROUP_REQUEST,
     /* OFPST 1.1+ (6): struct ofp11_group_stats_request. */
     OFPRAW_OFPST11_GROUP_REQUEST,
 
+    /* NXST 1.0 (7): uint8_t[8][]. */
+    OFPRAW_NXST_GROUP_REPLY,
     /* OFPST 1.1-1.2 (6): uint8_t[8][]. */
     OFPRAW_OFPST11_GROUP_REPLY,
     /* OFPST 1.3+ (6): uint8_t[8][]. */
     OFPRAW_OFPST13_GROUP_REPLY,
 
+    /* NXST 1.0 (8): struct ofp15_group_desc_request. */
+    OFPRAW_NXST_GROUP_DESC_REQUEST,
     /* OFPST 1.1-1.4 (7): void. */
     OFPRAW_OFPST11_GROUP_DESC_REQUEST,
     /* OFPST 1.5+ (7): struct ofp15_group_desc_request. */
     OFPRAW_OFPST15_GROUP_DESC_REQUEST,
 
+    /* NXST 1.0 (8): uint8_t[8][]. */
+    OFPRAW_NXST_GROUP_DESC_REPLY,
     /* OFPST 1.1+ (7): uint8_t[8][]. */
     OFPRAW_OFPST11_GROUP_DESC_REPLY,
 
+    /* NXST 1.0-1.1 (9): void. */
+    OFPRAW_NXST_GROUP_FEATURES_REQUEST,
     /* OFPST 1.2+ (8): void. */
     OFPRAW_OFPST12_GROUP_FEATURES_REQUEST,
 
+    /* NXST 1.0-1.1 (9): struct ofp12_group_features_stats. */
+    OFPRAW_NXST_GROUP_FEATURES_REPLY,
     /* OFPST 1.2+ (8): struct ofp12_group_features_stats. */
     OFPRAW_OFPST12_GROUP_FEATURES_REPLY,
 
@@ -583,7 +597,8 @@ enum ofptype {
     OFPTYPE_FLOW_MOD,            /* OFPRAW_OFPT10_FLOW_MOD.
                                   * OFPRAW_OFPT11_FLOW_MOD.
                                   * OFPRAW_NXT_FLOW_MOD. */
-    OFPTYPE_GROUP_MOD,           /* OFPRAW_OFPT11_GROUP_MOD.
+    OFPTYPE_GROUP_MOD,           /* OFPRAW_NXT_GROUP_MOD.
+                                  * OFPRAW_OFPT11_GROUP_MOD.
                                   * OFPRAW_OFPT15_GROUP_MOD. */
     OFPTYPE_PORT_MOD,            /* OFPRAW_OFPT10_PORT_MOD.
                                   * OFPRAW_OFPT11_PORT_MOD.
@@ -677,19 +692,25 @@ enum ofptype {
                                       * OFPRAW_OFPST13_QUEUE_REPLY.
                                       * OFPRAW_OFPST14_QUEUE_REPLY. */
 
-    OFPTYPE_GROUP_STATS_REQUEST,     /* OFPRAW_OFPST11_GROUP_REQUEST. */
+    OFPTYPE_GROUP_STATS_REQUEST,     /* OFPRAW_NXST_GROUP_REQUEST.
+                                      * OFPRAW_OFPST11_GROUP_REQUEST. */
 
-    OFPTYPE_GROUP_STATS_REPLY,       /* OFPRAW_OFPST11_GROUP_REPLY.
+    OFPTYPE_GROUP_STATS_REPLY,       /* OFPRAW_NXST_GROUP_REPLY.
+                                      * OFPRAW_OFPST11_GROUP_REPLY.
                                       * OFPRAW_OFPST13_GROUP_REPLY. */
 
-    OFPTYPE_GROUP_DESC_STATS_REQUEST, /* OFPRAW_OFPST11_GROUP_DESC_REQUEST.
+    OFPTYPE_GROUP_DESC_STATS_REQUEST, /* OFPRAW_NXST_GROUP_DESC_REQUEST.
+                                       * OFPRAW_OFPST11_GROUP_DESC_REQUEST.
                                        * OFPRAW_OFPST15_GROUP_DESC_REQUEST. */
 
-    OFPTYPE_GROUP_DESC_STATS_REPLY,  /* OFPRAW_OFPST11_GROUP_DESC_REPLY. */
+    OFPTYPE_GROUP_DESC_STATS_REPLY,  /* OFPRAW_NXST_GROUP_DESC_REPLY.
+                                      * OFPRAW_OFPST11_GROUP_DESC_REPLY. */
 
-    OFPTYPE_GROUP_FEATURES_STATS_REQUEST, /* OFPRAW_OFPST12_GROUP_FEATURES_REQUEST. */
+    OFPTYPE_GROUP_FEATURES_STATS_REQUEST, /* OFPRAW_NXST_GROUP_FEATURES_REQUEST.
+                                           * OFPRAW_OFPST12_GROUP_FEATURES_REQUEST. */
 
-    OFPTYPE_GROUP_FEATURES_STATS_REPLY, /* OFPRAW_OFPST12_GROUP_FEATURES_REPLY. */
+    OFPTYPE_GROUP_FEATURES_STATS_REPLY, /* OFPRAW_NXST_GROUP_FEATURES_REPLY.
+                                         * OFPRAW_OFPST12_GROUP_FEATURES_REPLY. */
 
     OFPTYPE_METER_STATS_REQUEST,     /* OFPRAW_OFPST13_METER_REQUEST. */
 

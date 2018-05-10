@@ -254,7 +254,7 @@ enum ofperr {
     /* OF1.0+(2,8).  Problem validating output queue. */
     OFPERR_OFPBAC_BAD_QUEUE,
 
-    /* OF1.1+(2,9).  Invalid group id in output action. */
+    /* NX1.0(2,9), OF1.1+(2,9).  Invalid group id in output action. */
     OFPERR_OFPBAC_BAD_OUT_GROUP,
 
     /* NX1.0(1,522), OF1.1+(2,10).  Action can't apply for this match or a
@@ -460,63 +460,65 @@ enum ofperr {
 /* ## OFPET_GROUP_MOD_FAILED ## */
 /* ## ---------------------- ## */
 
-    /* OF1.1+(6,0).  Group not added because a group ADD attempted to replace
-     * an already-present group. */
+    /* NX1.0(6,0), OF1.1+(6,0).  Group not added because a group ADD attempted
+     * to replace an already-present group. */
     OFPERR_OFPGMFC_GROUP_EXISTS,
 
-    /* OF1.1+(6,1).  Group not added because Group specified is invalid. */
+    /* NX1.0(6,1), OF1.1+(6,1).  Group not added because Group specified is
+     * invalid. */
     OFPERR_OFPGMFC_INVALID_GROUP,
 
-    /* OF1.1+(6,2).  Switch does not support unequal load sharing with select
-     * groups. */
+    /* NX1.0(6,2), OF1.1+(6,2).  Switch does not support unequal load sharing
+     * with select groups. */
     OFPERR_OFPGMFC_WEIGHT_UNSUPPORTED,
 
-    /* OF1.1+(6,3).  The group table is full. */
+    /* NX1.0(6,3), OF1.1+(6,3).  The group table is full. */
     OFPERR_OFPGMFC_OUT_OF_GROUPS,
 
-    /* OF1.1+(6,4).  The maximum number of action buckets for a group has been
-     * exceeded. */
+    /* NX1.0(6,4), OF1.1+(6,4).  The maximum number of action buckets for a
+     * group has been exceeded. */
     OFPERR_OFPGMFC_OUT_OF_BUCKETS,
 
-    /* OF1.1+(6,5).  Switch does not support groups that forward to groups. */
+    /* NX1.0(6,5), OF1.1+(6,5).  Switch does not support groups that forward to
+     * groups. */
     OFPERR_OFPGMFC_CHAINING_UNSUPPORTED,
 
-    /* OF1.1+(6,6).  This group cannot watch the watch_port or watch_group
-     * specified. */
+    /* NX1.0(6,6), OF1.1+(6,6).  This group cannot watch the watch_port or
+     * watch_group specified. */
     OFPERR_OFPGMFC_WATCH_UNSUPPORTED,
 
-    /* OF1.1+(6,7).  Group entry would cause a loop. */
+    /* NX1.0(6,7), OF1.1+(6,7).  Group entry would cause a loop. */
     OFPERR_OFPGMFC_LOOP,
 
-    /* OF1.1+(6,8).  Group not modified because a group MODIFY attempted to
-     * modify a non-existent group. */
+    /* NX1.0(6,8), OF1.1+(6,8).  Group not modified because a group MODIFY
+     * attempted to modify a non-existent group. */
     OFPERR_OFPGMFC_UNKNOWN_GROUP,
 
-    /* OF1.2+(6,9).  Group not deleted because another
-                    group is forwarding to it. */
+    /* NX1.0(6,9), OF1.2+(6,9).  Group not deleted because another group is
+     * forwarding to it. */
     OFPERR_OFPGMFC_CHAINED_GROUP,
 
-    /* OF1.2+(6,10).  Unsupported or unknown group type. */
+    /* NX1.0(6,10), OF1.2+(6,10).  Unsupported or unknown group type. */
     OFPERR_OFPGMFC_BAD_TYPE,
 
-    /* OF1.2+(6,11).  Unsupported or unknown command. */
+    /* NX1.0(6,11), OF1.2+(6,11).  Unsupported or unknown command. */
     OFPERR_OFPGMFC_BAD_COMMAND,
 
-    /* OF1.2+(6,12).  Error in bucket. */
+    /* NX1.0(6,12), OF1.2+(6,12).  Error in bucket. */
     OFPERR_OFPGMFC_BAD_BUCKET,
 
-    /* OF1.2+(6,13).  Error in watch port/group. */
+    /* NX1.0(6,13), OF1.2+(6,13).  Error in watch port/group. */
     OFPERR_OFPGMFC_BAD_WATCH,
 
-    /* OF1.2+(6,14).  Permissions error. */
+    /* NX1.0(6,14), OF1.2+(6,14).  Permissions error. */
     OFPERR_OFPGMFC_EPERM,
 
-    /* OF1.5+(6,15).  Invalid bucket identifier used in
-     * INSERT BUCKET or REMOVE BUCKET command. */
+    /* NX1.0(6,15), OF1.5+(6,15).  Invalid bucket identifier used in INSERT
+     * BUCKET or REMOVE BUCKET command. */
     OFPERR_OFPGMFC_UNKNOWN_BUCKET,
 
-    /* OF1.5+(6,16).  Can't insert bucket because a bucket
-     * already exist with that bucket-id. */
+    /* NX1.0(6,16), OF1.5+(6,16).  Can't insert bucket because a bucket already
+     * exist with that bucket-id. */
     OFPERR_OFPGMFC_BUCKET_EXISTS,
 
 /* ## --------------------- ## */

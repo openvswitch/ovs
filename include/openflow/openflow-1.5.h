@@ -77,12 +77,11 @@ struct ofp15_bucket {
                                        64-bit aligned. */
     ovs_be16 action_array_len;      /* Length of all actions in bytes. */
     ovs_be32 bucket_id;             /* Bucket Id used to identify bucket*/
-    /* Followed by exactly len - 8 bytes of group bucket properties. */
     /* Followed by:
      *   - Exactly 'action_array_len' bytes containing an array of
      *     struct ofp_action_*.
      *   - Zero or more bytes of group bucket properties to fill out the
-     *     overall length in header.length. */
+     *     overall length in 'len'. */
 };
 OFP_ASSERT(sizeof(struct ofp15_bucket) == 8);
 

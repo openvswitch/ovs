@@ -364,7 +364,7 @@ Connects to \fIswitch\fR and instructs it to execute the
 \fIpacket-out\fR OpenFlow message, specified as defined in
 \fBPacket\-Out Syntax\fR section.
 .
-.SS "OpenFlow 1.1+ Switch Group Table Commands"
+.SS "Group Table Commands"
 .
 These commands manage the group table in an OpenFlow switch.  In each
 case, \fIgroup\fR specifies a group entry in the format described in
@@ -373,12 +373,12 @@ zero or more groups in the same syntax, one per line, and the optional
 \fB\-\-bundle\fR option operates the command as a single atomic
 transation, see option \fB\-\-bundle\fR, below.
 .PP
-The group commands work only with switches that support OpenFlow 1.1 or
-later.  It is necessary to explicitly enable these protocol versions in
-\fBovs\-ofctl\fR (using \fB\-O\fR) and in the switch itself (with the
-\fBprotocols\fR column in the \fBBridge\fR table).  For more
-information, see ``Q: What versions of OpenFlow does Open vSwitch
-support?'' in the Open vSwitch FAQ.
+The group commands work only with switches that support OpenFlow 1.1
+or later or the Open vSwitch group extensions to OpenFlow 1.0 (added
+in Open vSwitch 2.9.90).  For OpenFlow 1.1 or later, it is necessary
+to explicitly enable these protocol versions in \fBovs\-ofctl\fR
+(using \fB\-O\fR).  For more information, see ``Q: What versions of
+OpenFlow does Open vSwitch support?'' in the Open vSwitch FAQ.
 .
 .IP "[\fB\-\-bundle\fR] \fBadd\-group \fIswitch group\fR"
 .IQ "[\fB\-\-bundle\fR] \fBadd\-group \fIswitch \fB\- < \fIfile\fR"

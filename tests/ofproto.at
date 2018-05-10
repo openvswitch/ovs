@@ -357,19 +357,41 @@ AT_CLEANUP
 dnl This is really bare-bones.
 dnl It at least checks request and reply serialization and deserialization.
 dnl Actions definition listed in both supported formats (w/ actions=)
-AT_SETUP([ofproto - no group support (OpenFlow 1.0)])
+AT_SETUP([ofproto - del group (OpenFlow 1.0 extension)])
 OVS_VSWITCHD_START
 AT_DATA([groups.txt], [dnl
-group_id=1234,type=all,bucket=output:10
-group_id=1235,type=all,bucket=actions=output:10
+group_id=1233,type=select,selection_method=hash,bucket=output:10,bucket=output:11
+group_id=1234,type=select,selection_method=hash,fields(eth_dst,ip_dst,tcp_dst),bucket=output:10,bucket=output:11
+group_id=1235,type=all,bucket=actions=output:12,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
+group_id=1236,type=select,selection_method=dp_hash,bucket=output:10,bucket=output:11
 ])
-AT_DATA([stderr], [dnl
-ovs-ofctl: none of the usable flow formats (OXM,OpenFlow11) is among the allowed flow formats (OpenFlow10,NXM)
+AT_CHECK([ovs-ofctl -O OpenFlow10 -vwarn add-groups br0 groups.txt])
+AT_CHECK([ovs-ofctl -O OpenFlow10 -vwarn dump-groups br0 1234], [0], [stdout])
+AT_CHECK([strip_xids < stdout], [0], [dnl
+NXST_GROUP_DESC reply:
+ group_id=1234,type=select,selection_method=hash,fields(eth_dst,ip_dst,tcp_dst),bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
 ])
-AT_CHECK([ovs-ofctl -O OpenFlow10 -vwarn add-groups br0 groups.txt], [1], ,[stderr])
-AT_CHECK([ovs-ofctl -O OpenFlow10 -vwarn mod-group br0 'group_id=1234,type=all,bucket=output:10'], [1], ,[stderr])
-AT_CHECK([ovs-ofctl -O OpenFlow10 -vwarn del-groups br0], [1], ,[stderr])
-AT_CHECK([ovs-ofctl -O OpenFlow10 -vwarn dump-groups br0 ], [1], ,[stderr])
+AT_CHECK([ovs-ofctl -O OpenFlow10 -vwarn del-groups br0 group_id=1234])
+AT_CHECK([ovs-ofctl -O OpenFlow10 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([strip_xids < stdout | sort], [0], [dnl
+ group_id=1233,type=select,selection_method=hash,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
+ group_id=1235,type=all,bucket=bucket_id:2,actions=output:12,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
+ group_id=1236,type=select,selection_method=dp_hash,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
+NXST_GROUP_DESC reply:
+])
+AT_CHECK([ovs-ofctl -O OpenFlow10 -vwarn del-groups br0 group_id=1234])
+AT_CHECK([ovs-ofctl -O OpenFlow10 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([strip_xids < stdout | sort], [0], [dnl
+ group_id=1233,type=select,selection_method=hash,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
+ group_id=1235,type=all,bucket=bucket_id:2,actions=output:12,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
+ group_id=1236,type=select,selection_method=dp_hash,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
+NXST_GROUP_DESC reply:
+])
+AT_CHECK([ovs-ofctl -O OpenFlow10 -vwarn del-groups br0], [0])
+AT_CHECK([ovs-ofctl -O OpenFlow10 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([strip_xids < stdout], [0], [dnl
+NXST_GROUP_DESC reply:
+])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -711,7 +733,7 @@ OFPT_GROUP_MOD (OF1.5):
 ])
 # Negative test.
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn remove-buckets br0 group_id=1234,command_bucket_id=last], [1], [],
-  [ovs-ofctl: remove-bucket needs OpenFlow 1.5 or later ('-O OpenFlow15')
+  [ovs-ofctl: none of the usable flow formats (OpenFlow10,NXM,OXM-OpenFlow15,OXM-OpenFlow16) is among the allowed flow formats (OpenFlow11)
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -1018,7 +1040,7 @@ Error OFPBFC_MSG_FAILED for: OFPT_BUNDLE_CONTROL (OF1.5):
 ])
 # Negative test.
 AT_CHECK([ovs-ofctl --bundle -O OpenFlow11 -vwarn remove-buckets br0 group_id=1234,command_bucket_id=last], [1], [],
-  [ovs-ofctl: remove-bucket needs OpenFlow 1.5 or later ('-O OpenFlow15')
+  [ovs-ofctl: none of the usable flow formats (OXM-OpenFlow15,OXM-OpenFlow16) is among the allowed flow formats (OXM-OpenFlow14)
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -1075,20 +1097,33 @@ AT_CLEANUP
 
 dnl This is really bare-bones.
 dnl It at least checks request and reply serialization and deserialization.
-AT_SETUP([ofproto - group description])
+AT_SETUP([ofproto - group features (OpenFlow 1.0 extension)])
 OVS_VSWITCHD_START
-AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-group br0 group_id=1234,type=all,bucket=output:10])
-AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([ovs-ofctl -O OpenFlow10 -vwarn dump-group-features br0], [0], [stdout])
 AT_CHECK([strip_xids < stdout], [0], [dnl
-OFPST_GROUP_DESC reply (OF1.1):
- group_id=1234,type=all,bucket=actions=output:10
+NXST_GROUP_FEATURES reply:
+ Group table:
+    Types:  0xf
+    Capabilities:  0x7
+    all group:
+       max_groups=0xffffff00
+       actions: output enqueue set_vlan_vid set_vlan_pcp strip_vlan mod_dl_src mod_dl_dst mod_nw_src mod_nw_dst mod_nw_tos mod_tp_src mod_tp_dst
+    select group:
+       max_groups=0xffffff00
+       actions: output enqueue set_vlan_vid set_vlan_pcp strip_vlan mod_dl_src mod_dl_dst mod_nw_src mod_nw_dst mod_nw_tos mod_tp_src mod_tp_dst
+    indirect group:
+       max_groups=0xffffff00
+       actions: output enqueue set_vlan_vid set_vlan_pcp strip_vlan mod_dl_src mod_dl_dst mod_nw_src mod_nw_dst mod_nw_tos mod_tp_src mod_tp_dst
+    fast failover group:
+       max_groups=0xffffff00
+       actions: output enqueue set_vlan_vid set_vlan_pcp strip_vlan mod_dl_src mod_dl_dst mod_nw_src mod_nw_dst mod_nw_tos mod_tp_src mod_tp_dst
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 dnl This is really bare-bones.
 dnl It at least checks request and reply serialization and deserialization.
-AT_SETUP([ofproto - group features])
+AT_SETUP([ofproto - group features (OpenFlow 1.2)])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -O OpenFlow12 -vwarn dump-group-features br0], [0], [stdout])
 AT_CHECK([strip_xids < stdout], [0], [dnl
@@ -1108,6 +1143,30 @@ OFPST_GROUP_FEATURES reply (OF1.2):
     fast failover group:
        max_groups=0xffffff00
        actions: output group set_field strip_vlan push_vlan mod_nw_ttl dec_ttl set_mpls_ttl dec_mpls_ttl push_mpls pop_mpls set_queue
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl This is really bare-bones.
+dnl It at least checks request and reply serialization and deserialization.
+AT_SETUP([ofproto - group stats (OpenFlow 1.0 extension)])
+OVS_VSWITCHD_START
+AT_DATA([groups.txt], [dnl
+group_id=1234,type=all,bucket=output:10
+group_id=1235,type=all,bucket=output:10
+])
+AT_CHECK([ovs-ofctl -O OpenFlow10 -vwarn add-groups br0 groups.txt])
+AT_CHECK([ovs-ofctl -O OpenFlow10 -vwarn add-flow br0 'tcp actions=group:1234'])
+AT_CHECK([ovs-ofctl -O OpenFlow10 -vwarn dump-group-stats br0 group_id=1234], [0], [stdout])
+AT_CHECK([strip_xids < stdout | sed 's/duration=[[0-9.]]*s/duration=?s/' | sort], [0], [dnl
+ group_id=1234,duration=?s,ref_count=1,packet_count=0,byte_count=0,bucket0:packet_count=0,byte_count=0
+NXST_GROUP reply:
+])
+AT_CHECK([ovs-ofctl -O OpenFlow10 -vwarn dump-group-stats br0], [0], [stdout])
+AT_CHECK([strip_xids < stdout | sed 's/duration=[[0-9.]]*s/duration=?s/' | sort], [0], [dnl
+ group_id=1234,duration=?s,ref_count=1,packet_count=0,byte_count=0,bucket0:packet_count=0,byte_count=0
+ group_id=1235,duration=?s,ref_count=0,packet_count=0,byte_count=0,bucket0:packet_count=0,byte_count=0
+NXST_GROUP reply:
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

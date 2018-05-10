@@ -215,29 +215,14 @@ struct ofpbuf *
 ofputil_encode_group_stats_request(enum ofp_version ofp_version,
                                    uint32_t group_id)
 {
-    struct ofpbuf *request;
+    struct ofpbuf *msg = ofpraw_alloc((ofp_version == OFP10_VERSION
+                                       ? OFPRAW_NXST_GROUP_REQUEST
+                                       : OFPRAW_OFPST11_GROUP_REQUEST),
+                                      ofp_version, 0);
+    struct ofp11_group_stats_request *req = ofpbuf_put_zeros(msg, sizeof *req);
+    req->group_id = htonl(group_id);
 
-    switch (ofp_version) {
-    case OFP10_VERSION:
-        ovs_fatal(0, "dump-group-stats needs OpenFlow 1.1 or later "
-                     "(\'-O OpenFlow11\')");
-    case OFP11_VERSION:
-    case OFP12_VERSION:
-    case OFP13_VERSION:
-    case OFP14_VERSION:
-    case OFP15_VERSION:
-    case OFP16_VERSION: {
-        struct ofp11_group_stats_request *req;
-        request = ofpraw_alloc(OFPRAW_OFPST11_GROUP_REQUEST, ofp_version, 0);
-        req = ofpbuf_put_zeros(request, sizeof *req);
-        req->group_id = htonl(group_id);
-        break;
-    }
-    default:
-        OVS_NOT_REACHED();
-    }
-
-    return request;
+    return msg;
 }
 
 void
@@ -257,7 +242,8 @@ ofputil_decode_group_desc_request(const struct ofp_header *oh)
     enum ofpraw raw = ofpraw_pull_assert(&request);
     if (raw == OFPRAW_OFPST11_GROUP_DESC_REQUEST) {
         return OFPG_ALL;
-    } else if (raw == OFPRAW_OFPST15_GROUP_DESC_REQUEST) {
+    } else if (raw == OFPRAW_NXST_GROUP_DESC_REQUEST ||
+               raw == OFPRAW_OFPST15_GROUP_DESC_REQUEST) {
         ovs_be32 *group_id = ofpbuf_pull(&request, sizeof *group_id);
         return ntohl(*group_id);
     } else {
@@ -279,9 +265,6 @@ ofputil_encode_group_desc_request(enum ofp_version ofp_version,
     struct ofpbuf *request;
 
     switch (ofp_version) {
-    case OFP10_VERSION:
-        ovs_fatal(0, "dump-groups needs OpenFlow 1.1 or later "
-                     "(\'-O OpenFlow11\')");
     case OFP11_VERSION:
     case OFP12_VERSION:
     case OFP13_VERSION:
@@ -289,10 +272,13 @@ ofputil_encode_group_desc_request(enum ofp_version ofp_version,
         request = ofpraw_alloc(OFPRAW_OFPST11_GROUP_DESC_REQUEST,
                                ofp_version, 0);
         break;
+    case OFP10_VERSION:
     case OFP15_VERSION:
     case OFP16_VERSION: {
         struct ofp15_group_desc_request *req;
-        request = ofpraw_alloc(OFPRAW_OFPST15_GROUP_DESC_REQUEST,
+        request = ofpraw_alloc((ofp_version == OFP10_VERSION
+                                ? OFPRAW_NXST_GROUP_DESC_REQUEST
+                                : OFPRAW_OFPST15_GROUP_DESC_REQUEST),
                                ofp_version, 0);
         req = ofpbuf_put_zeros(request, sizeof *req);
         req->group_id = htonl(group_id);
@@ -367,6 +353,7 @@ ofputil_append_group_stats(struct ovs_list *replies,
             break;
         }
 
+    case OFP10_VERSION:
     case OFP13_VERSION:
     case OFP14_VERSION:
     case OFP15_VERSION:
@@ -380,7 +367,6 @@ ofputil_append_group_stats(struct ovs_list *replies,
             break;
         }
 
-    case OFP10_VERSION:
     default:
         OVS_NOT_REACHED();
     }
@@ -390,26 +376,10 @@ ofputil_append_group_stats(struct ovs_list *replies,
 struct ofpbuf *
 ofputil_encode_group_features_request(enum ofp_version ofp_version)
 {
-    struct ofpbuf *request = NULL;
-
-    switch (ofp_version) {
-    case OFP10_VERSION:
-    case OFP11_VERSION:
-        ovs_fatal(0, "dump-group-features needs OpenFlow 1.2 or later "
-                     "(\'-O OpenFlow12\')");
-    case OFP12_VERSION:
-    case OFP13_VERSION:
-    case OFP14_VERSION:
-    case OFP15_VERSION:
-    case OFP16_VERSION:
-        request = ofpraw_alloc(OFPRAW_OFPST12_GROUP_FEATURES_REQUEST,
-                               ofp_version, 0);
-        break;
-    default:
-        OVS_NOT_REACHED();
-    }
-
-    return request;
+    return ofpraw_alloc((ofp_version < OFP12_VERSION
+                         ? OFPRAW_NXST_GROUP_FEATURES_REQUEST
+                         : OFPRAW_OFPST12_GROUP_FEATURES_REQUEST),
+                        ofp_version, 0);
 }
 
 /* Returns a OpenFlow message that encodes 'features' properly as a reply to
@@ -419,16 +389,12 @@ ofputil_encode_group_features_reply(
     const struct ofputil_group_features *features,
     const struct ofp_header *request)
 {
-    struct ofp12_group_features_stats *ogf;
-    struct ofpbuf *reply;
-    int i;
-
-    reply = ofpraw_alloc_xid(OFPRAW_OFPST12_GROUP_FEATURES_REPLY,
-                             request->version, request->xid, 0);
-    ogf = ofpbuf_put_zeros(reply, sizeof *ogf);
+    struct ofpbuf *reply = ofpraw_alloc_stats_reply(request, 0);
+    struct ofp12_group_features_stats *ogf
+        = ofpbuf_put_zeros(reply, sizeof *ogf);
     ogf->types = htonl(features->types);
     ogf->capabilities = htonl(features->capabilities);
-    for (i = 0; i < OFPGT12_N_TYPES; i++) {
+    for (int i = 0; i < OFPGT12_N_TYPES; i++) {
         ogf->max_groups[i] = htonl(features->max_groups[i]);
         ogf->actions[i] = ofpact_bitmap_to_openflow(features->ofpacts[i],
                                                     request->version);
@@ -504,7 +470,8 @@ ofputil_decode_group_stats_reply(struct ofpbuf *msg,
         base_len = sizeof *ogs11;
         ogs11 = ofpbuf_try_pull(msg, sizeof *ogs11);
         gs->duration_sec = gs->duration_nsec = UINT32_MAX;
-    } else if (raw == OFPRAW_OFPST13_GROUP_REPLY) {
+    } else if (raw == OFPRAW_NXST_GROUP_REPLY ||
+               raw == OFPRAW_OFPST13_GROUP_REPLY) {
         struct ofp13_group_stats *ogs13;
 
         base_len = sizeof *ogs13;
@@ -595,7 +562,7 @@ parse_bucket_str(struct ofputil_bucket *bucket, char *str_,
                 error = xasprintf("invalid bucket_id id %"PRIu32,
                                   bucket->bucket_id);
             }
-            *usable_protocols &= OFPUTIL_P_OF15_UP;
+            *usable_protocols &= OFPUTIL_P_OF10_ANY | OFPUTIL_P_OF15_UP;
         } else if (!strcasecmp(key, "action") || !strcasecmp(key, "actions")) {
             ds_put_format(&actions, "%s,", value);
         } else {
@@ -713,7 +680,7 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, int command,
     struct ofputil_bucket *bucket;
     char *error = NULL;
 
-    *usable_protocols = OFPUTIL_P_OF11_UP;
+    *usable_protocols = OFPUTIL_P_ANY;
 
     if (command == -2) {
         size_t len;
@@ -759,12 +726,12 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, int command,
 
     case OFPGC15_INSERT_BUCKET:
         fields = F_BUCKETS | F_COMMAND_BUCKET_ID;
-        *usable_protocols &= OFPUTIL_P_OF15_UP;
+        *usable_protocols &= OFPUTIL_P_OF10_ANY | OFPUTIL_P_OF15_UP;
         break;
 
     case OFPGC15_REMOVE_BUCKET:
         fields = F_COMMAND_BUCKET_ID | F_COMMAND_BUCKET_ID_ALL;
-        *usable_protocols &= OFPUTIL_P_OF15_UP;
+        *usable_protocols &= OFPUTIL_P_OF10_ANY | OFPUTIL_P_OF15_UP;
         break;
 
     default:
@@ -780,8 +747,6 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, int command,
         gm->group_id = OFPG_ALL;
         return NULL;
     }
-
-    *usable_protocols = OFPUTIL_P_OF11_UP;
 
     /* Strip the buckets off the end of 'string', if there are any, saving a
      * pointer for later.  We want to parse the buckets last because the bucket
@@ -877,7 +842,7 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, int command,
             memset(gm->props.selection_method, '\0',
                    NTR_MAX_SELECTION_METHOD_LEN);
             strcpy(gm->props.selection_method, value);
-            *usable_protocols &= OFPUTIL_P_OF15_UP;
+            *usable_protocols &= OFPUTIL_P_OF10_ANY | OFPUTIL_P_OF15_UP;
         } else if (!strcmp(name, "selection_method_param")) {
             if (!(fields & F_GROUP_TYPE)) {
                 error = xstrdup("selection method param is not needed");
@@ -887,7 +852,7 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, int command,
             if (error) {
                 goto out;
             }
-            *usable_protocols &= OFPUTIL_P_OF15_UP;
+            *usable_protocols &= OFPUTIL_P_OF10_ANY | OFPUTIL_P_OF15_UP;
         } else if (!strcmp(name, "fields")) {
             if (!(fields & F_GROUP_TYPE)) {
                 error = xstrdup("fields are not needed");
@@ -899,7 +864,7 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, int command,
             if (error) {
                 goto out;
             }
-            *usable_protocols &= OFPUTIL_P_OF15_UP;
+            *usable_protocols &= OFPUTIL_P_OF10_ANY | OFPUTIL_P_OF15_UP;
         } else {
             error = xasprintf("unknown keyword %s", name);
             goto out;
@@ -1028,7 +993,7 @@ parse_ofp_group_mod_file(const char *file_name,
     allocated_gms = *n_gms;
     ds_init(&s);
     line_number = 0;
-    *usable_protocols = OFPUTIL_P_OF11_UP;
+    *usable_protocols = OFPUTIL_P_ANY;
     while (!ds_get_preprocessed_line(&s, stream, &line_number)) {
         enum ofputil_protocol usable;
         char *error;
@@ -1223,12 +1188,12 @@ ofputil_append_group_desc_reply(const struct ofputil_group_desc *gds,
         ofputil_append_ofp11_group_desc_reply(gds, buckets, replies, version);
         break;
 
+    case OFP10_VERSION:
     case OFP15_VERSION:
     case OFP16_VERSION:
         ofputil_append_ofp15_group_desc_reply(gds, buckets, replies, version);
         break;
 
-    case OFP10_VERSION:
     default:
         OVS_NOT_REACHED();
     }
@@ -1307,8 +1272,6 @@ ofputil_pull_ofp15_buckets(struct ofpbuf *msg, size_t buckets_length,
                            enum ofp_version version, uint8_t group_type,
                            struct ovs_list *buckets)
 {
-    struct ofp15_bucket *ob;
-
     ovs_list_init(buckets);
     while (buckets_length > 0) {
         struct ofputil_bucket *bucket = NULL;
@@ -1321,7 +1284,7 @@ ofputil_pull_ofp15_buckets(struct ofpbuf *msg, size_t buckets_length,
 
         ofpbuf_init(&ofpacts, 0);
 
-        ob = ofpbuf_try_pull(msg, sizeof *ob);
+        struct ofp15_bucket *ob = ofpbuf_try_pull(msg, sizeof *ob);
         if (!ob) {
             VLOG_WARN_RL(&rl, "buckets end with %"PRIuSIZE
                          " leftover bytes", buckets_length);
@@ -1694,11 +1657,11 @@ ofputil_decode_group_desc_reply(struct ofputil_group_desc *gd,
     case OFP14_VERSION:
         return ofputil_decode_ofp11_group_desc_reply(gd, msg, version);
 
+    case OFP10_VERSION:
     case OFP15_VERSION:
     case OFP16_VERSION:
         return ofputil_decode_ofp15_group_desc_reply(gd, msg, version);
 
-    case OFP10_VERSION:
     default:
         OVS_NOT_REACHED();
     }
@@ -1745,7 +1708,9 @@ ofputil_encode_ofp15_group_mod(enum ofp_version ofp_version,
     struct ofputil_bucket *bucket;
     struct id_pool *bucket_ids = NULL;
 
-    b = ofpraw_alloc(OFPRAW_OFPT15_GROUP_MOD, ofp_version, 0);
+    b = ofpraw_alloc((ofp_version == OFP10_VERSION
+                      ? OFPRAW_NXT_GROUP_MOD
+                      : OFPRAW_OFPT15_GROUP_MOD), ofp_version, 0);
     start_ogm = b->size;
     ofpbuf_put_zeros(b, sizeof *ogm);
 
@@ -1861,10 +1826,6 @@ ofputil_encode_group_mod(enum ofp_version ofp_version,
 {
 
     switch (ofp_version) {
-    case OFP10_VERSION:
-        bad_group_cmd(gm->command);
-        /* fall through */
-
     case OFP11_VERSION:
     case OFP12_VERSION:
     case OFP13_VERSION:
@@ -1874,6 +1835,7 @@ ofputil_encode_group_mod(enum ofp_version ofp_version,
         }
         return ofputil_encode_ofp11_group_mod(ofp_version, gm);
 
+    case OFP10_VERSION:
     case OFP15_VERSION:
     case OFP16_VERSION:
         return ofputil_encode_ofp15_group_mod(ofp_version, gm);
@@ -2059,12 +2021,12 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
         err = ofputil_pull_ofp11_group_mod(&msg, ofp_version, gm);
         break;
 
+    case OFP10_VERSION:
     case OFP15_VERSION:
     case OFP16_VERSION:
         err = ofputil_pull_ofp15_group_mod(&msg, ofp_version, gm);
         break;
 
-    case OFP10_VERSION:
     default:
         OVS_NOT_REACHED();
     }
