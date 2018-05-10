@@ -25,6 +25,7 @@
 #include "openvswitch/ofp-msgs.h"
 #include "openvswitch/ofp-parse.h"
 #include "openvswitch/ofp-port.h"
+#include "openvswitch/ofp-print.h"
 #include "openvswitch/ofp-prop.h"
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
@@ -291,6 +292,18 @@ ofputil_encode_group_desc_request(enum ofp_version ofp_version,
     return request;
 }
 
+
+enum ofperr
+ofputil_group_desc_request_format(struct ds *string,
+                                   const struct ofp_header *oh)
+{
+    uint32_t group_id = ofputil_decode_group_desc_request(oh);
+    ds_put_cstr(string, " group_id=");
+    ofputil_format_group(group_id, string);
+
+    return 0;
+}
+
 static void
 ofputil_group_bucket_counters_to_ofp11(const struct ofputil_group_stats *gs,
                                     struct ofp11_bucket_counter bucket_cnts[])
@@ -371,6 +384,7 @@ ofputil_append_group_stats(struct ovs_list *replies,
         OVS_NOT_REACHED();
     }
 }
+
 /* Returns an OpenFlow group features request for OpenFlow version
  * 'ofp_version'. */
 struct ofpbuf *
@@ -418,6 +432,45 @@ ofputil_decode_group_features_reply(const struct ofp_header *oh,
         features->ofpacts[i] = ofpact_bitmap_from_openflow(
             ogf->actions[i], oh->version);
     }
+}
+
+static const char *
+group_type_to_string(enum ofp11_group_type type)
+{
+    switch (type) {
+    case OFPGT11_ALL: return "all";
+    case OFPGT11_SELECT: return "select";
+    case OFPGT11_INDIRECT: return "indirect";
+    case OFPGT11_FF: return "fast failover";
+    default: OVS_NOT_REACHED();
+    }
+}
+
+enum ofperr
+ofputil_group_features_format(struct ds *string, const struct ofp_header *oh)
+{
+    struct ofputil_group_features features;
+    int i;
+
+    ofputil_decode_group_features_reply(oh, &features);
+
+    ds_put_format(string, "\n Group table:\n");
+    ds_put_format(string, "    Types:  0x%"PRIx32"\n", features.types);
+    ds_put_format(string, "    Capabilities:  0x%"PRIx32"\n",
+                  features.capabilities);
+
+    for (i = 0; i < OFPGT12_N_TYPES; i++) {
+        if (features.types & (1u << i)) {
+            ds_put_format(string, "    %s group:\n", group_type_to_string(i));
+            ds_put_format(string, "       max_groups=%#"PRIx32"\n",
+                          features.max_groups[i]);
+            ds_put_format(string, "       actions: ");
+            ofpact_bitmap_format(features.ofpacts[i], string);
+            ds_put_char(string, '\n');
+        }
+    }
+
+    return 0;
 }
 
 /* Parse a group status request message into a 32 bit OpenFlow 1.1
@@ -518,6 +571,68 @@ ofputil_decode_group_stats_reply(struct ofpbuf *msg,
         gs->bucket_stats[i].byte_count = ntohll(obc[i].byte_count);
     }
 
+    return 0;
+}
+
+
+enum ofperr
+ofputil_group_stats_request_format(struct ds *string,
+                                   const struct ofp_header *oh)
+{
+    enum ofperr error;
+    uint32_t group_id;
+
+    error = ofputil_decode_group_stats_request(oh, &group_id);
+    if (error) {
+        return error;
+    }
+
+    ds_put_cstr(string, " group_id=");
+    ofputil_format_group(group_id, string);
+    return 0;
+}
+
+enum ofperr
+ofputil_group_stats_format(struct ds *s, const struct ofp_header *oh)
+{
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    for (;;) {
+        struct ofputil_group_stats gs;
+        int retval;
+
+        retval = ofputil_decode_group_stats_reply(&b, &gs);
+        if (retval) {
+            if (retval != EOF) {
+                ds_put_cstr(s, " ***parse error***");
+                return retval;
+            }
+            break;
+        }
+
+        ds_put_char(s, '\n');
+
+        ds_put_char(s, ' ');
+        ds_put_format(s, "group_id=%"PRIu32",", gs.group_id);
+
+        if (gs.duration_sec != UINT32_MAX) {
+            ds_put_cstr(s, "duration=");
+            ofp_print_duration(s, gs.duration_sec, gs.duration_nsec);
+            ds_put_char(s, ',');
+        }
+        ds_put_format(s, "ref_count=%"PRIu32",", gs.ref_count);
+        ds_put_format(s, "packet_count=%"PRIu64",", gs.packet_count);
+        ds_put_format(s, "byte_count=%"PRIu64"", gs.byte_count);
+
+        for (uint32_t bucket_i = 0; bucket_i < gs.n_buckets; bucket_i++) {
+            if (gs.bucket_stats[bucket_i].packet_count != UINT64_MAX) {
+                ds_put_format(s, ",bucket%"PRIu32":", bucket_i);
+                ds_put_format(s, "packet_count=%"PRIu64",", gs.bucket_stats[bucket_i].packet_count);
+                ds_put_format(s, "byte_count=%"PRIu64"", gs.bucket_stats[bucket_i].byte_count);
+            }
+        }
+
+        free(gs.bucket_stats);
+    }
     return 0;
 }
 
@@ -1667,6 +1782,128 @@ ofputil_decode_group_desc_reply(struct ofputil_group_desc *gd,
     }
 }
 
+static void
+ofp_print_bucket_id(struct ds *s, const char *label, uint32_t bucket_id,
+                    enum ofp_version ofp_version)
+{
+    if (ofp_version > OFP10_VERSION && ofp_version < OFP15_VERSION) {
+        return;
+    }
+
+    ds_put_cstr(s, label);
+
+    switch (bucket_id) {
+    case OFPG15_BUCKET_FIRST:
+        ds_put_cstr(s, "first");
+        break;
+    case OFPG15_BUCKET_LAST:
+        ds_put_cstr(s, "last");
+        break;
+    case OFPG15_BUCKET_ALL:
+        ds_put_cstr(s, "all");
+        break;
+    default:
+        ds_put_format(s, "%"PRIu32, bucket_id);
+        break;
+    }
+
+    ds_put_char(s, ',');
+}
+
+static void
+ofp_print_group(struct ds *s, uint32_t group_id, uint8_t type,
+                const struct ovs_list *p_buckets,
+                const struct ofputil_group_props *props,
+                enum ofp_version ofp_version, bool suppress_type,
+                const struct ofputil_port_map *port_map,
+                const struct ofputil_table_map *table_map)
+{
+    struct ofputil_bucket *bucket;
+
+    ds_put_format(s, "group_id=%"PRIu32, group_id);
+
+    if (!suppress_type) {
+        static const char *type_str[] = { "all", "select", "indirect",
+                                          "ff", "unknown" };
+        ds_put_format(s, ",type=%s", type_str[type > 4 ? 4 : type]);
+    }
+
+    if (props->selection_method[0]) {
+        ds_put_format(s, ",selection_method=%s", props->selection_method);
+        if (props->selection_method_param) {
+            ds_put_format(s, ",selection_method_param=%"PRIu64,
+                          props->selection_method_param);
+        }
+
+        size_t n = bitmap_count1(props->fields.used.bm, MFF_N_IDS);
+        if (n == 1) {
+            ds_put_cstr(s, ",fields=");
+            oxm_format_field_array(s, &props->fields);
+        } else if (n > 1) {
+            ds_put_cstr(s, ",fields(");
+            oxm_format_field_array(s, &props->fields);
+            ds_put_char(s, ')');
+        }
+    }
+
+    if (!p_buckets) {
+        return;
+    }
+
+    ds_put_char(s, ',');
+
+    LIST_FOR_EACH (bucket, list_node, p_buckets) {
+        ds_put_cstr(s, "bucket=");
+
+        ofp_print_bucket_id(s, "bucket_id:", bucket->bucket_id, ofp_version);
+        if (bucket->weight != (type == OFPGT11_SELECT ? 1 : 0)) {
+            ds_put_format(s, "weight:%"PRIu16",", bucket->weight);
+        }
+        if (bucket->watch_port != OFPP_NONE) {
+            ds_put_cstr(s, "watch_port:");
+            ofputil_format_port(bucket->watch_port, port_map, s);
+            ds_put_char(s, ',');
+        }
+        if (bucket->watch_group != OFPG_ANY) {
+            ds_put_format(s, "watch_group:%"PRIu32",", bucket->watch_group);
+        }
+
+        ds_put_cstr(s, "actions=");
+        struct ofpact_format_params fp = {
+            .port_map = port_map,
+            .table_map = table_map,
+            .s = s,
+        };
+        ofpacts_format(bucket->ofpacts, bucket->ofpacts_len, &fp);
+        ds_put_char(s, ',');
+    }
+
+    ds_chomp(s, ',');
+}
+
+enum ofperr
+ofputil_group_desc_format(struct ds *s, const struct ofp_header *oh,
+                          const struct ofputil_port_map *port_map,
+                          const struct ofputil_table_map *table_map)
+{
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    for (;;) {
+        struct ofputil_group_desc gd;
+        int retval;
+
+        retval = ofputil_decode_group_desc_reply(&gd, &b, oh->version);
+        if (retval) {
+            return retval != EOF ? retval : 0;
+        }
+
+        ds_put_char(s, '\n');
+        ds_put_char(s, ' ');
+        ofp_print_group(s, gd.group_id, gd.type, &gd.buckets, &gd.props,
+                        oh->version, false, port_map, table_map);
+        ofputil_uninit_group_desc(&gd);
+     }
+}
+
 void
 ofputil_uninit_group_mod(struct ofputil_group_mod *gm)
 {
@@ -2039,4 +2276,73 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
         ofputil_uninit_group_mod(gm);
     }
     return err;
+}
+
+void
+ofputil_group_mod_format__(struct ds *s, enum ofp_version ofp_version,
+                           const struct ofputil_group_mod *gm,
+                           const struct ofputil_port_map *port_map,
+                           const struct ofputil_table_map *table_map)
+{
+    bool bucket_command = false;
+
+    ds_put_char(s, '\n');
+
+    ds_put_char(s, ' ');
+    switch (gm->command) {
+    case OFPGC11_ADD:
+        ds_put_cstr(s, "ADD");
+        break;
+
+    case OFPGC11_MODIFY:
+        ds_put_cstr(s, "MOD");
+        break;
+
+    case OFPGC11_ADD_OR_MOD:
+        ds_put_cstr(s, "ADD_OR_MOD");
+        break;
+
+    case OFPGC11_DELETE:
+        ds_put_cstr(s, "DEL");
+        break;
+
+    case OFPGC15_INSERT_BUCKET:
+        ds_put_cstr(s, "INSERT_BUCKET");
+        bucket_command = true;
+        break;
+
+    case OFPGC15_REMOVE_BUCKET:
+        ds_put_cstr(s, "REMOVE_BUCKET");
+        bucket_command = true;
+        break;
+
+    default:
+        ds_put_format(s, "cmd:%"PRIu16"", gm->command);
+    }
+    ds_put_char(s, ' ');
+
+    if (bucket_command) {
+        ofp_print_bucket_id(s, "command_bucket_id:",
+                            gm->command_bucket_id, ofp_version);
+    }
+
+    ofp_print_group(s, gm->group_id, gm->type, &gm->buckets, &gm->props,
+                    ofp_version, bucket_command, port_map, table_map);
+}
+
+enum ofperr
+ofputil_group_mod_format(struct ds *s, const struct ofp_header *oh,
+                         const struct ofputil_port_map *port_map,
+                         const struct ofputil_table_map *table_map)
+{
+    struct ofputil_group_mod gm;
+    int error;
+
+    error = ofputil_decode_group_mod(oh, &gm);
+    if (error) {
+        return error;
+    }
+    ofputil_group_mod_format__(s, oh->version, &gm, port_map, table_map);
+    ofputil_uninit_group_mod(&gm);
+    return 0;
 }

@@ -108,6 +108,14 @@ struct ofpbuf *ofputil_encode_group_mod(enum ofp_version ofp_version,
 enum ofperr ofputil_decode_group_mod(const struct ofp_header *,
                                      struct ofputil_group_mod *);
 
+void ofputil_group_mod_format__(struct ds *, enum ofp_version,
+                                const struct ofputil_group_mod *,
+                                const struct ofputil_port_map *,
+                                const struct ofputil_table_map *);
+enum ofperr ofputil_group_mod_format(struct ds *, const struct ofp_header *,
+                                     const struct ofputil_port_map *,
+                                     const struct ofputil_table_map *);
+
 char *parse_ofp_group_mod_file(const char *file_name,
                                const struct ofputil_port_map *,
                                const struct ofputil_table_map *, int command,
@@ -140,9 +148,12 @@ enum ofperr ofputil_decode_group_stats_request(
     const struct ofp_header *request, uint32_t *group_id);
 void ofputil_append_group_stats(struct ovs_list *replies,
                                 const struct ofputil_group_stats *);
+enum ofperr ofputil_group_stats_request_format(struct ds *,
+                                               const struct ofp_header *);
 
 int ofputil_decode_group_stats_reply(struct ofpbuf *,
                                      struct ofputil_group_stats *);
+enum ofperr ofputil_group_stats_format(struct ds *, const struct ofp_header *);
 
 /* Group features reply, independent of protocol.
  *
@@ -172,13 +183,19 @@ void ofputil_uninit_group_desc(struct ofputil_group_desc *gd);
 uint32_t ofputil_decode_group_desc_request(const struct ofp_header *);
 struct ofpbuf *ofputil_encode_group_desc_request(enum ofp_version,
                                                  uint32_t group_id);
+enum ofperr ofputil_group_desc_request_format(struct ds *,
+                                              const struct ofp_header *);
 
 int ofputil_decode_group_desc_reply(struct ofputil_group_desc *,
                                     struct ofpbuf *, enum ofp_version);
-
 void ofputil_append_group_desc_reply(const struct ofputil_group_desc *,
                                      const struct ovs_list *buckets,
                                      struct ovs_list *replies);
+enum ofperr ofputil_group_desc_format(struct ds *, const struct ofp_header *,
+                                      const struct ofputil_port_map *,
+                                      const struct ofputil_table_map *);
+enum ofperr ofputil_group_features_format(struct ds *,
+                                          const struct ofp_header *);
 
 #ifdef __cplusplus
 }
