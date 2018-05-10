@@ -342,12 +342,15 @@ Logical switch commands:\n\
   ls-list                   print the names of all logical switches\n\
 \n\
 ACL commands:\n\
-  [--log] [--severity=SEVERITY] [--name=NAME] [--may-exist]\n\
-  acl-add SWITCH DIRECTION PRIORITY MATCH ACTION\n\
-                            add an ACL to SWITCH\n\
-  acl-del SWITCH [DIRECTION [PRIORITY MATCH]]\n\
-                            remove ACLs from SWITCH\n\
-  acl-list SWITCH           print ACLs for SWITCH\n\
+  [--type={switch | port-group}] [--log] [--severity=SEVERITY] [--name=NAME] [--may-exist]\n\
+  acl-add {SWITCH | PORTGROUP} DIRECTION PRIORITY MATCH ACTION\n\
+                            add an ACL to SWITCH/PORTGROUP\n\
+  [--type={switch | port-group}]\n\
+  acl-del {SWITCH | PORTGROUP} [DIRECTION [PRIORITY MATCH]]\n\
+                            remove ACLs from SWITCH/PORTGROUP\n\
+  [--type={switch | port-group}]\n\
+  acl-list {SWITCH | PORTGROUP}\n\
+                            print ACLs for SWITCH\n\
 \n\
 QoS commands:\n\
   qos-add SWITCH DIRECTION PRIORITY MATCH [rate=RATE [burst=BURST]] [dscp=DSCP]\n\
@@ -598,6 +601,36 @@ lb_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist)
     return lb;
 }
 
+static const struct nbrec_port_group *
+pg_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist)
+{
+    const struct nbrec_port_group *pg = NULL;
+
+    struct uuid pg_uuid;
+    bool is_uuid = uuid_from_string(&pg_uuid, id);
+    if (is_uuid) {
+        pg = nbrec_port_group_get_for_uuid(ctx->idl, &pg_uuid);
+    }
+
+    if (!pg) {
+        const struct nbrec_port_group *iter;
+
+        NBREC_PORT_GROUP_FOR_EACH (iter, ctx->idl) {
+            if (!strcmp(iter->name, id)) {
+                pg = iter;
+                break;
+            }
+        }
+    }
+
+    if (!pg && must_exist) {
+        ctl_fatal("%s: port group %s not found", id,
+                  is_uuid ? "UUID" : "name");
+    }
+
+    return pg;
+}
+
 static void
 print_alias(const struct smap *external_ids, const char *key, struct ds *s)
 {
@@ -845,19 +878,19 @@ static void
 nbctl_ls_list(struct ctl_context *ctx)
 {
     const struct nbrec_logical_switch *ls;
-    struct smap lswitches;
+    struct smap switches;
 
-    smap_init(&lswitches);
+    smap_init(&switches);
     NBREC_LOGICAL_SWITCH_FOR_EACH(ls, ctx->idl) {
-        smap_add_format(&lswitches, ls->name, UUID_FMT " (%s)",
+        smap_add_format(&switches, ls->name, UUID_FMT " (%s)",
                         UUID_ARGS(&ls->header_.uuid), ls->name);
     }
-    const struct smap_node **nodes = smap_sort(&lswitches);
-    for (size_t i = 0; i < smap_count(&lswitches); i++) {
+    const struct smap_node **nodes = smap_sort(&switches);
+    for (size_t i = 0; i < smap_count(&switches); i++) {
         const struct smap_node *node = nodes[i];
         ds_put_format(&ctx->output, "%s\n", node->value);
     }
-    smap_destroy(&lswitches);
+    smap_destroy(&switches);
     free(nodes);
 }
 
@@ -1407,22 +1440,54 @@ acl_cmp(const void *acl1_, const void *acl2_)
 }
 
 static void
+acl_cmd_get_pg_or_ls(struct ctl_context *ctx,
+                     const struct nbrec_logical_switch **ls,
+                     const struct nbrec_port_group **pg)
+{
+    const char *opt_type = shash_find_data(&ctx->options, "--type");
+    if (!opt_type) {
+        *pg = pg_by_name_or_uuid(ctx, ctx->argv[1], false);
+        *ls = ls_by_name_or_uuid(ctx, ctx->argv[1], false);
+        if (*pg && *ls) {
+            ctl_fatal("Same name '%s' exists in both port-groups and "
+                      "logical switches. Specify --type=port-group or "
+                      "switch, or use a UUID.", ctx->argv[1]);
+        }
+        if (!*pg && !*ls) {
+            ctl_fatal("'%s' is not found for port-group or switch.",
+                      ctx->argv[1]);
+        }
+    } else if (!strcmp(opt_type, "port-group")) {
+        *pg = pg_by_name_or_uuid(ctx, ctx->argv[1], true);
+        *ls = NULL;
+    } else if (!strcmp(opt_type, "switch")) {
+        *ls = ls_by_name_or_uuid(ctx, ctx->argv[1], true);
+        *pg = NULL;
+    } else {
+        ctl_fatal("Invalid value '%s' for option --type", opt_type);
+    }
+}
+
+static void
 nbctl_acl_list(struct ctl_context *ctx)
 {
-    const struct nbrec_logical_switch *ls;
+    const struct nbrec_logical_switch *ls = NULL;
+    const struct nbrec_port_group *pg = NULL;
     const struct nbrec_acl **acls;
     size_t i;
 
-    ls = ls_by_name_or_uuid(ctx, ctx->argv[1], true);
+    acl_cmd_get_pg_or_ls(ctx, &ls, &pg);
+    size_t n_acls = pg ? pg->n_acls : ls->n_acls;
+    struct nbrec_acl **nb_acls = pg ? pg->acls : ls->acls;
 
-    acls = xmalloc(sizeof *acls * ls->n_acls);
-    for (i = 0; i < ls->n_acls; i++) {
-        acls[i] = ls->acls[i];
+    acls = xmalloc(sizeof *acls * n_acls);
+    for (i = 0; i < n_acls; i++) {
+        acls[i] = nb_acls[i];
     }
 
-    qsort(acls, ls->n_acls, sizeof *acls, acl_cmp);
+    qsort(acls, n_acls, sizeof *acls, acl_cmp);
 
-    for (i = 0; i < ls->n_acls; i++) {
+    for (i = 0; i < n_acls; i++) {
         const struct nbrec_acl *acl = acls[i];
         ds_put_format(&ctx->output, "%10s %5"PRId64" (%s) %s",
                       acl->direction, acl->priority, acl->match,
@@ -1492,10 +1557,11 @@ parse_priority(const char *arg)
 static void
 nbctl_acl_add(struct ctl_context *ctx)
 {
-    const struct nbrec_logical_switch *ls;
+    const struct nbrec_logical_switch *ls = NULL;
+    const struct nbrec_port_group *pg = NULL;
     const char *action = ctx->argv[5];
 
-    ls = ls_by_name_or_uuid(ctx, ctx->argv[1], true);
+    acl_cmd_get_pg_or_ls(ctx, &ls, &pg);
 
     const char *direction = parse_direction(ctx->argv[2]);
     int64_t priority = parse_priority(ctx->argv[3]);
@@ -1532,9 +1598,11 @@ nbctl_acl_add(struct ctl_context *ctx)
         nbrec_acl_set_name(acl, name);
     }
 
-    /* Check if same acl already exists for the ls */
-    for (size_t i = 0; i < ls->n_acls; i++) {
-        if (!acl_cmp(&ls->acls[i], &acl)) {
+    /* Check if same acl already exists for the ls/portgroup */
+    size_t n_acls = pg ? pg->n_acls : ls->n_acls;
+    struct nbrec_acl **acls = pg ? pg->acls : ls->acls;
+    for (size_t i = 0; i < n_acls; i++) {
+        if (!acl_cmp(&acls[i], &acl)) {
             bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
             if (!may_exist) {
                 ctl_fatal("Same ACL already existed on the ls %s.",
@@ -1544,45 +1612,64 @@ nbctl_acl_add(struct ctl_context *ctx)
         }
     }
 
-    /* Insert the acl into the logical switch. */
-    nbrec_logical_switch_verify_acls(ls);
-    struct nbrec_acl **new_acls = xmalloc(sizeof *new_acls * (ls->n_acls + 1));
-    nullable_memcpy(new_acls, ls->acls, sizeof *new_acls * ls->n_acls);
-    new_acls[ls->n_acls] = acl;
-    nbrec_logical_switch_set_acls(ls, new_acls, ls->n_acls + 1);
+    /* Insert the acl into the logical switch/port group. */
+    struct nbrec_acl **new_acls = xmalloc(sizeof *new_acls * (n_acls + 1));
+    nullable_memcpy(new_acls, acls, sizeof *new_acls * n_acls);
+    new_acls[n_acls] = acl;
+    if (pg) {
+        nbrec_port_group_verify_acls(pg);
+        nbrec_port_group_set_acls(pg, new_acls, n_acls + 1);
+    } else {
+        nbrec_logical_switch_verify_acls(ls);
+        nbrec_logical_switch_set_acls(ls, new_acls, n_acls + 1);
+    }
     free(new_acls);
 }
 
 static void
 nbctl_acl_del(struct ctl_context *ctx)
 {
-    const struct nbrec_logical_switch *ls;
-    ls = ls_by_name_or_uuid(ctx, ctx->argv[1], true);
+    const struct nbrec_logical_switch *ls = NULL;
+    const struct nbrec_port_group *pg = NULL;
+
+    acl_cmd_get_pg_or_ls(ctx, &ls, &pg);
 
     if (ctx->argc == 2) {
         /* If direction, priority, and match are not specified, delete
          * all ACLs. */
-        nbrec_logical_switch_verify_acls(ls);
-        nbrec_logical_switch_set_acls(ls, NULL, 0);
+        if (pg) {
+            nbrec_port_group_verify_acls(pg);
+            nbrec_port_group_set_acls(pg, NULL, 0);
+        } else {
+            nbrec_logical_switch_verify_acls(ls);
+            nbrec_logical_switch_set_acls(ls, NULL, 0);
+        }
         return;
     }
 
     const char *direction = parse_direction(ctx->argv[2]);
 
+    size_t n_acls = pg ? pg->n_acls : ls->n_acls;
+    struct nbrec_acl **acls = pg ? pg->acls : ls->acls;
     /* If priority and match are not specified, delete all ACLs with the
      * specified direction. */
     if (ctx->argc == 3) {
-        struct nbrec_acl **new_acls = xmalloc(sizeof *new_acls * ls->n_acls);
+        struct nbrec_acl **new_acls = xmalloc(sizeof *new_acls * n_acls);
 
-        int n_acls = 0;
-        for (size_t i = 0; i < ls->n_acls; i++) {
-            if (strcmp(direction, ls->acls[i]->direction)) {
-                new_acls[n_acls++] = ls->acls[i];
+        int n_new_acls = 0;
+        for (size_t i = 0; i < n_acls; i++) {
+            if (strcmp(direction, acls[i]->direction)) {
+                new_acls[n_new_acls++] = acls[i];
             }
         }
 
-        nbrec_logical_switch_verify_acls(ls);
-        nbrec_logical_switch_set_acls(ls, new_acls, n_acls);
+        if (pg) {
+            nbrec_port_group_verify_acls(pg);
+            nbrec_port_group_set_acls(pg, new_acls, n_new_acls);
+        } else {
+            nbrec_logical_switch_verify_acls(ls);
+            nbrec_logical_switch_set_acls(ls, new_acls, n_new_acls);
+        }
         free(new_acls);
         return;
     }
@@ -1594,17 +1681,23 @@ nbctl_acl_del(struct ctl_context *ctx)
     }
 
     /* Remove the matching rule. */
-    for (size_t i = 0; i < ls->n_acls; i++) {
-        struct nbrec_acl *acl = ls->acls[i];
+    for (size_t i = 0; i < n_acls; i++) {
+        struct nbrec_acl *acl = acls[i];
 
         if (priority == acl->priority && !strcmp(ctx->argv[4], acl->match) &&
              !strcmp(direction, acl->direction)) {
             struct nbrec_acl **new_acls
-                = xmemdup(ls->acls, sizeof *new_acls * ls->n_acls);
-            new_acls[i] = ls->acls[ls->n_acls - 1];
-            nbrec_logical_switch_verify_acls(ls);
-            nbrec_logical_switch_set_acls(ls, new_acls,
-                                          ls->n_acls - 1);
+                = xmemdup(acls, sizeof *new_acls * n_acls);
+            new_acls[i] = acls[n_acls - 1];
+            if (pg) {
+                nbrec_port_group_verify_acls(pg);
+                nbrec_port_group_set_acls(pg, new_acls,
+                                          n_acls - 1);
+            } else {
+                nbrec_logical_switch_verify_acls(ls);
+                nbrec_logical_switch_set_acls(ls, new_acls,
+                                              n_acls - 1);
+            }
             free(new_acls);
             return;
         }
@@ -3925,11 +4018,13 @@ static const struct ctl_command_syntax nbctl_commands[] = {
     { "ls-list", 0, 0, "", NULL, nbctl_ls_list, NULL, "", RO },
 
     /* acl commands. */
-    { "acl-add", 5, 6, "SWITCH DIRECTION PRIORITY MATCH ACTION", NULL,
-      nbctl_acl_add, NULL, "--log,--may-exist,--name=,--severity=", RW },
-    { "acl-del", 1, 4, "SWITCH [DIRECTION [PRIORITY MATCH]]", NULL,
-      nbctl_acl_del, NULL, "", RW },
-    { "acl-list", 1, 1, "SWITCH", NULL, nbctl_acl_list, NULL, "", RO },
+    { "acl-add", 5, 6, "{SWITCH | PORTGROUP} DIRECTION PRIORITY MATCH ACTION",
+      NULL, nbctl_acl_add, NULL,
+      "--log,--may-exist,--type=,--name=,--severity=", RW },
+    { "acl-del", 1, 4, "{SWITCH | PORTGROUP} [DIRECTION [PRIORITY MATCH]]",
+      NULL, nbctl_acl_del, NULL, "--type=", RW },
+    { "acl-list", 1, 1, "{SWITCH | PORTGROUP}",
+      NULL, nbctl_acl_list, NULL, "--type=", RO },
 
     /* qos commands. */
     { "qos-add", 5, 7,

@@ -74,19 +74,27 @@
       </dd>
     </dl>
 
-    <h1>Logical Switch ACL Commands</h1>
+    <h1>ACL Commands</h1>
+    <p>
+      These commands operates on ACL objects for a given <var>entity</var>.
+      The <var>entity</var> can be either a logical switch or a port group.
+      The <var>entity</var> can be specified as uuid or name.  The
+      <code>--type</code> option can be used to specify the type of the
+      <var>entity</var>, in case both a logical switch and a port groups exist
+      with the same name specified for <var>entity</var>.  <code>type</code>
+      must be either <code>switch</code> or <code>port-group</code>.
+    </p>
     <dl>
-      <dt>[<code>--log</code>] [<code>--severity=</code><var>severity</var>] [<code>--name=</code><var>name</var>] [<code>--may-exist</code>] <code>acl-add</code> <var>switch</var> <var>direction</var> <var>priority</var> <var>match</var> <var>verdict</var></dt>
+      <dt>[<code>--type=</code>{<code>switch</code> | <code>port-group</code>}] [<code>--log</code>] [<code>--severity=</code><var>severity</var>] [<code>--name=</code><var>name</var>] [<code>--may-exist</code>] <code>acl-add</code> <var>entity</var> <var>direction</var> <var>priority</var> <var>match</var> <var>verdict</var></dt>
       <dd>
         <p>
-          Adds the specified ACL to <var>switch</var>.
-          <var>direction</var> must be either <code>from-lport</code> or
-          <code>to-lport</code>.  <var>priority</var> must be between
-          <code>0</code> and <code>32767</code>, inclusive.  A full
-          description of the fields are in <code>ovn-nb</code>(5).  If
-          <code>--may-exist</code> is specified, adding a duplicated ACL
-          succeeds but the ACL is not really created. Without
-          <code>--may-exist</code>, adding a duplicated ACL results in
+          Adds the specified ACL to <var>entity</var>.  <var>direction</var>
+          must be either <code>from-lport</code> or <code>to-lport</code>.
+          <var>priority</var> must be between <code>0</code> and
+          <code>32767</code>, inclusive.  A full description of the fields are
+          in <code>ovn-nb</code>(5).  If <code>--may-exist</code> is specified,
+          adding a duplicated ACL succeeds but the ACL is not really created.
+          Without <code>--may-exist</code>, adding a duplicated ACL results in
           error.
         </p>
 
@@ -101,19 +109,19 @@
         </p>
       </dd>
 
-      <dt><code>acl-del</code> <var>switch</var> [<var>direction</var> [<var>priority</var> <var>match</var>]]</dt>
+      <dt>[<code>--type=</code>{<code>switch</code> | <code>port-group</code>}] <code>acl-del</code> <var>entity</var> [<var>direction</var> [<var>priority</var> <var>match</var>]]</dt>
       <dd>
-        Deletes ACLs from <var>switch</var>.  If only
-        <var>switch</var> is supplied, all the ACLs from the logical
-        switch are deleted.  If <var>direction</var> is also specified,
-        then all the flows in that direction will be deleted from the
-        logical switch.  If all the fields are given, then a single flow
-        that matches all the fields will be deleted.
+        Deletes ACLs from <var>entity</var>.  If only <var>entity</var> is
+        supplied, all the ACLs from the <var>entity</var> are deleted.  If
+        <var>direction</var> is also specified, then all the flows in that
+        direction will be deleted from the <var>entity</var>.  If all the
+        fields are given, then a single flow that matches all the fields will
+        be deleted.
       </dd>
 
-      <dt><code>acl-list</code> <var>switch</var></dt>
+      <dt>[<code>--type=</code>{<code>switch</code> | <code>port-group</code>}] <code>acl-list</code> <var>entity</var> </dt>
       <dd>
-        Lists the ACLs on <var>switch</var>.
+        Lists the ACLs on <var>entity</var>.
       </dd>
     </dl>
 

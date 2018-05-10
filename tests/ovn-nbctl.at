@@ -178,22 +178,19 @@ AT_CLEANUP
 
 dnl ---------------------------------------------------------------------
 
-AT_SETUP([ovn-nbctl - ACLs])
-OVN_NBCTL_TEST_START
+m4_define([OVN_NBCTL_TEST_ACL],
+  [AT_CHECK([ovn-nbctl $2 --log acl-add $1 from-lport 600 udp drop])
+   AT_CHECK([ovn-nbctl $2 --log --name=test --severity=info acl-add $1 to-lport 500 udp drop])
+   AT_CHECK([ovn-nbctl $2 acl-add $1 from-lport 400 tcp drop])
+   AT_CHECK([ovn-nbctl $2 acl-add $1 to-lport 300 tcp drop])
+   AT_CHECK([ovn-nbctl $2 acl-add $1 from-lport 200 ip drop])
+   AT_CHECK([ovn-nbctl $2 acl-add $1 to-lport 100 ip drop])
+   dnl Add duplicated ACL
+   AT_CHECK([ovn-nbctl $2 acl-add $1 to-lport 100 ip drop], [1], [], [stderr])
+   AT_CHECK([grep 'already existed' stderr], [0], [ignore])
+   AT_CHECK([ovn-nbctl $2 --may-exist acl-add $1 to-lport 100 ip drop])
 
-AT_CHECK([ovn-nbctl ls-add ls0])
-AT_CHECK([ovn-nbctl --log acl-add ls0 from-lport 600 udp drop])
-AT_CHECK([ovn-nbctl --log --name=test --severity=info acl-add ls0 to-lport 500 udp drop])
-AT_CHECK([ovn-nbctl acl-add ls0 from-lport 400 tcp drop])
-AT_CHECK([ovn-nbctl acl-add ls0 to-lport 300 tcp drop])
-AT_CHECK([ovn-nbctl acl-add ls0 from-lport 200 ip drop])
-AT_CHECK([ovn-nbctl acl-add ls0 to-lport 100 ip drop])
-dnl Add duplicated ACL
-AT_CHECK([ovn-nbctl acl-add ls0 to-lport 100 ip drop], [1], [], [stderr])
-AT_CHECK([grep 'already existed' stderr], [0], [ignore])
-AT_CHECK([ovn-nbctl --may-exist acl-add ls0 to-lport 100 ip drop])
-
-AT_CHECK([ovn-nbctl acl-list ls0], [0], [dnl
+   AT_CHECK([ovn-nbctl $2 acl-list $1], [0], [dnl
 from-lport   600 (udp) drop log()
 from-lport   400 (tcp) drop
 from-lport   200 (ip) drop
@@ -202,29 +199,46 @@ from-lport   200 (ip) drop
   to-lport   100 (ip) drop
 ])
 
-dnl Delete in one direction.
-AT_CHECK([ovn-nbctl acl-del ls0 to-lport])
-AT_CHECK([ovn-nbctl acl-list ls0], [0], [dnl
+   dnl Delete in one direction.
+   AT_CHECK([ovn-nbctl $2 acl-del $1 to-lport])
+   AT_CHECK([ovn-nbctl $2 acl-list $1], [0], [dnl
 from-lport   600 (udp) drop log()
 from-lport   400 (tcp) drop
 from-lport   200 (ip) drop
 ])
 
-dnl Delete all ACLs.
-AT_CHECK([ovn-nbctl acl-del ls0])
-AT_CHECK([ovn-nbctl acl-list ls0], [0], [dnl
+   dnl Delete all ACLs.
+   AT_CHECK([ovn-nbctl $2 acl-del $1])
+   AT_CHECK([ovn-nbctl $2 acl-list $1], [0], [dnl
 ])
 
-AT_CHECK([ovn-nbctl acl-add ls0 from-lport 600 udp drop])
-AT_CHECK([ovn-nbctl acl-add ls0 from-lport 400 tcp drop])
-AT_CHECK([ovn-nbctl acl-add ls0 from-lport 200 ip drop])
+   AT_CHECK([ovn-nbctl $2 acl-add $1 from-lport 600 udp drop])
+   AT_CHECK([ovn-nbctl $2 acl-add $1 from-lport 400 tcp drop])
+   AT_CHECK([ovn-nbctl $2 acl-add $1 from-lport 200 ip drop])
 
-dnl Delete a single flow.
-AT_CHECK([ovn-nbctl acl-del ls0 from-lport 400 tcp])
-AT_CHECK([ovn-nbctl acl-list ls0], [0], [dnl
+   dnl Delete a single flow.
+   AT_CHECK([ovn-nbctl $2 acl-del $1 from-lport 400 tcp])
+   AT_CHECK([ovn-nbctl $2 acl-list $1], [0], [dnl
 from-lport   600 (udp) drop
 from-lport   200 (ip) drop
 ])
+])
+
+AT_SETUP([ovn-nbctl - ACLs])
+OVN_NBCTL_TEST_START
+
+AT_CHECK([ovn-nbctl ls-add ls0])
+OVN_NBCTL_TEST_ACL([ls0])
+AT_CHECK([ovn-nbctl ls-add ls1])
+OVN_NBCTL_TEST_ACL([ls1], [--type=switch])
+AT_CHECK([ovn-nbctl create port_group name=pg0], [0], [ignore])
+OVN_NBCTL_TEST_ACL([pg0], [--type=port-group])
+
+dnl Test when same name exists in logical switches and portgroups
+AT_CHECK([ovn-nbctl create port_group name=ls0], [0], [ignore])
+AT_CHECK([ovn-nbctl acl-add ls0 to-lport 100 ip drop], [1], [], [stderr])
+AT_CHECK([grep 'exists in both' stderr], [0], [ignore])
+AT_CHECK([ovn-nbctl --type=port-group acl-add ls0 to-lport 100 ip drop], [0], [ignore])
 
 OVN_NBCTL_TEST_STOP
 AT_CLEANUP
