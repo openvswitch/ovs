@@ -49,6 +49,7 @@ oftrace_node_type_is_terminal(enum oftrace_node_type type)
     case OFT_DETAIL:
     case OFT_WARN:
     case OFT_ERROR:
+    case OFT_BUCKET:
         return true;
 
     case OFT_BRIDGE:
@@ -167,6 +168,7 @@ oftrace_node_print_details(struct ds *output,
             ds_put_char(output, '\n');
             break;
         case OFT_TABLE:
+        case OFT_BUCKET:
         case OFT_THAW:
         case OFT_ACTION:
             ds_put_format(output, "%s\n", sub->text);

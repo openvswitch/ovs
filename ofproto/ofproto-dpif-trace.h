@@ -39,6 +39,7 @@ enum oftrace_node_type {
     /* Nodes that may have children (nonterminal nodes). */
     OFT_BRIDGE,                 /* Packet travel through an OpenFlow switch. */
     OFT_TABLE,                  /* Packet travel through a flow table. */
+    OFT_BUCKET,                 /* Executing a bucket in an OpenFlow group. */
     OFT_THAW,                   /* Thawing a frozen state. */
 
     /* Nodes that never have children (terminal nodes). */

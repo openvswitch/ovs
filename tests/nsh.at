@@ -331,25 +331,28 @@ bridge("br0")
 -------------
  0. ip,in_port=1, priority 32768
     group:100
-    encap(nsh(md_type=1))
-    set_field:0x1234->nsh_spi
-    set_field:0x11223344->nsh_c1
-    group:200
-    encap(nsh(md_type=1))
-    set_field:0x5678->nsh_spi
-    set_field:0x55667788->nsh_c1
-    group:300
-    encap(ethernet)
-    set_field:11:22:33:44:55:66->eth_dst
-    output:3
+    bucket 0
+            encap(nsh(md_type=1))
+            set_field:0x1234->nsh_spi
+            set_field:0x11223344->nsh_c1
+            group:200
+            bucket 0
+                    encap(nsh(md_type=1))
+                    set_field:0x5678->nsh_spi
+                    set_field:0x55667788->nsh_c1
+                    group:300
+                    bucket 0
+                            encap(ethernet)
+                            set_field:11:22:33:44:55:66->eth_dst
+                            output:3
 
-bridge("br0")
--------------
- 0. in_port=4,dl_type=0x894f,nsh_mdtype=1,nsh_spi=0x5678,nsh_c1=0x55667788, priority 32768
-    decap()
-    goto_table:1
- 1. packet_type=(1,0x894f),nsh_mdtype=1,nsh_spi=0x5678,nsh_c1=0x55667788, priority 32768
-    decap()
+                        bridge("br0")
+                        -------------
+                         0. in_port=4,dl_type=0x894f,nsh_mdtype=1,nsh_spi=0x5678,nsh_c1=0x55667788, priority 32768
+                            decap()
+                            goto_table:1
+                         1. packet_type=(1,0x894f),nsh_mdtype=1,nsh_spi=0x5678,nsh_c1=0x55667788, priority 32768
+                            decap()
 
 Final flow: unchanged
 Megaflow: recirc_id=0,eth,ip,in_port=1,dl_dst=66:77:88:99:aa:bb,nw_frag=no

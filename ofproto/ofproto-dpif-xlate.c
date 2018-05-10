@@ -1829,6 +1829,30 @@ bucket_is_alive(const struct xlate_ctx *ctx,
                && group_is_alive(ctx, bucket->watch_group, depth + 1)));
 }
 
+static void
+xlate_report_bucket_not_live(const struct xlate_ctx *ctx,
+                             const struct ofputil_bucket *bucket)
+{
+    if (OVS_UNLIKELY(ctx->xin->trace)) {
+        struct ds s = DS_EMPTY_INITIALIZER;
+        if (bucket->watch_port != OFPP_ANY) {
+            ds_put_cstr(&s, "port ");
+            ofputil_format_port(bucket->watch_port, NULL, &s);
+        }
+        if (bucket->watch_group != OFPG_ANY) {
+            if (s.length) {
+                ds_put_cstr(&s, " and ");
+            }
+            ds_put_format(&s, "port %"PRIu32, bucket->watch_group);
+        }
+
+        xlate_report(ctx, OFT_DETAIL, "bucket %"PRIu32": not live due to %s",
+                     bucket->bucket_id, ds_cstr(&s));
+
+        ds_destroy(&s);
+    }
+}
+
 static struct ofputil_bucket *
 group_first_live_bucket(const struct xlate_ctx *ctx,
                         const struct group_dpif *group, int depth)
@@ -1838,6 +1862,7 @@ group_first_live_bucket(const struct xlate_ctx *ctx,
         if (bucket_is_alive(ctx, bucket, depth)) {
             return bucket;
         }
+        xlate_report_bucket_not_live(ctx, bucket);
     }
 
     return NULL;
@@ -1860,6 +1885,10 @@ group_best_live_bucket(const struct xlate_ctx *ctx,
                 best_bucket = bucket;
                 best_score = score;
             }
+            xlate_report(ctx, OFT_DETAIL, "bucket %"PRIu32": score %"PRIu32,
+                         bucket->bucket_id, score);
+        } else {
+            xlate_report_bucket_not_live(ctx, bucket);
         }
     }
 
@@ -4225,6 +4254,14 @@ static void
 xlate_group_bucket(struct xlate_ctx *ctx, struct ofputil_bucket *bucket,
                    bool is_last_action)
 {
+    struct ovs_list *old_trace = ctx->xin->trace;
+    if (OVS_UNLIKELY(ctx->xin->trace)) {
+        char *s = xasprintf("bucket %"PRIu32, bucket->bucket_id);
+        ctx->xin->trace = &oftrace_report(ctx->xin->trace, OFT_BUCKET,
+                                          s)->subs;
+        free(s);
+    }
+
     uint64_t action_list_stub[1024 / 8];
     struct ofpbuf action_list = OFPBUF_STUB_INITIALIZER(action_list_stub);
     struct ofpbuf action_set = ofpbuf_const_initializer(bucket->ofpacts,
@@ -4286,6 +4323,7 @@ xlate_group_bucket(struct xlate_ctx *ctx, struct ofputil_bucket *bucket,
         ctx->error = XLATE_OK;
     }
 
+    ctx->xin->trace = old_trace;
 }
 
 static struct ofputil_bucket *
@@ -4418,11 +4456,17 @@ xlate_group_action__(struct xlate_ctx *ctx, struct group_dpif *group,
         } else {
             OVS_NOT_REACHED();
         }
+
         if (bucket) {
+            xlate_report(ctx, OFT_DETAIL, "using bucket %"PRIu32,
+                         bucket->bucket_id);
             xlate_group_bucket(ctx, bucket, is_last_action);
             xlate_group_stats(ctx, group, bucket);
-        } else if (ctx->xin->xcache) {
-            ofproto_group_unref(&group->up);
+        } else {
+            xlate_report(ctx, OFT_DETAIL, "no live bucket");
+            if (ctx->xin->xcache) {
+                ofproto_group_unref(&group->up);
+            }
         }
     }
 
