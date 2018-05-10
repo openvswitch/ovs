@@ -4285,57 +4285,26 @@ xlate_group_bucket(struct xlate_ctx *ctx, struct ofputil_bucket *bucket,
         /* reset the error and continue processing other buckets */
         ctx->error = XLATE_OK;
     }
+
 }
 
-static void
-xlate_all_group(struct xlate_ctx *ctx, struct group_dpif *group,
-                bool is_last_action)
+static struct ofputil_bucket *
+pick_ff_group(struct xlate_ctx *ctx, struct group_dpif *group)
 {
-    struct ofputil_bucket *bucket;
-    LIST_FOR_EACH (bucket, list_node, &group->up.buckets) {
-        bool last = is_last_action && !bucket->list_node.next;
-        xlate_group_bucket(ctx, bucket, last);
-    }
-    xlate_group_stats(ctx, group, NULL);
+    return group_first_live_bucket(ctx, group, 0);
 }
 
-static void
-xlate_ff_group(struct xlate_ctx *ctx, struct group_dpif *group,
-               bool is_last_action)
+static struct ofputil_bucket *
+pick_default_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
 {
-    struct ofputil_bucket *bucket;
-
-    bucket = group_first_live_bucket(ctx, group, 0);
-    if (bucket) {
-        xlate_group_bucket(ctx, bucket, is_last_action);
-        xlate_group_stats(ctx, group, bucket);
-    } else if (ctx->xin->xcache) {
-        ofproto_group_unref(&group->up);
-    }
+    flow_mask_hash_fields(&ctx->xin->flow, ctx->wc,
+                          NX_HASH_FIELDS_SYMMETRIC_L4);
+    return group_best_live_bucket(ctx, group,
+                                  flow_hash_symmetric_l4(&ctx->xin->flow, 0));
 }
 
-static void
-xlate_default_select_group(struct xlate_ctx *ctx, struct group_dpif *group,
-                           bool is_last_action)
-{
-    struct flow_wildcards *wc = ctx->wc;
-    struct ofputil_bucket *bucket;
-    uint32_t basis;
-
-    basis = flow_hash_symmetric_l4(&ctx->xin->flow, 0);
-    flow_mask_hash_fields(&ctx->xin->flow, wc, NX_HASH_FIELDS_SYMMETRIC_L4);
-    bucket = group_best_live_bucket(ctx, group, basis);
-    if (bucket) {
-        xlate_group_bucket(ctx, bucket, is_last_action);
-        xlate_group_stats(ctx, group, bucket);
-    } else if (ctx->xin->xcache) {
-        ofproto_group_unref(&group->up);
-    }
-}
-
-static void
-xlate_hash_fields_select_group(struct xlate_ctx *ctx, struct group_dpif *group,
-                               bool is_last_action)
+static struct ofputil_bucket *
+pick_hash_fields_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
 {
     const struct field_array *fields = &group->up.props.fields;
     const uint8_t *mask_values = fields->values;
@@ -4371,21 +4340,12 @@ xlate_hash_fields_select_group(struct xlate_ctx *ctx, struct group_dpif *group,
         mf_mask_field_masked(mf, &mask, ctx->wc);
     }
 
-    struct ofputil_bucket *bucket = group_best_live_bucket(ctx, group, basis);
-    if (bucket) {
-        xlate_group_bucket(ctx, bucket, is_last_action);
-        xlate_group_stats(ctx, group, bucket);
-    } else if (ctx->xin->xcache) {
-        ofproto_group_unref(&group->up);
-    }
+    return group_best_live_bucket(ctx, group, basis);
 }
 
-static void
-xlate_dp_hash_select_group(struct xlate_ctx *ctx, struct group_dpif *group,
-                           bool is_last_action)
+static struct ofputil_bucket *
+pick_dp_hash_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
 {
-    struct ofputil_bucket *bucket;
-
     /* dp_hash value 0 is special since it means that the dp_hash has not been
      * computed, as all computed dp_hash values are non-zero.  Therefore
      * compare to zero can be used to decide if the dp_hash value is valid
@@ -4394,9 +4354,7 @@ xlate_dp_hash_select_group(struct xlate_ctx *ctx, struct group_dpif *group,
         uint64_t param = group->up.props.selection_method_param;
 
         ctx_trigger_recirculate_with_hash(ctx, param >> 32, (uint32_t)param);
-        if (ctx->xin->xcache) {
-            ofproto_group_unref(&group->up);
-        }
+        return NULL;
     } else {
         uint32_t n_buckets = group->up.n_buckets;
         if (n_buckets) {
@@ -4407,23 +4365,15 @@ xlate_dp_hash_select_group(struct xlate_ctx *ctx, struct group_dpif *group,
             uint32_t basis = 0xc2b73583 * (ctx->xin->flow.dp_hash & mask);
 
             ctx->wc->masks.dp_hash |= mask;
-            bucket = group_best_live_bucket(ctx, group, basis);
-            if (bucket) {
-                xlate_group_bucket(ctx, bucket, is_last_action);
-                xlate_group_stats(ctx, group, bucket);
-            } else if (ctx->xin->xcache) {
-                ofproto_group_unref(&group->up);
-            }
+            return group_best_live_bucket(ctx, group, basis);
         }
+        return NULL;
     }
 }
 
-static void
-xlate_select_group(struct xlate_ctx *ctx, struct group_dpif *group,
-                   bool is_last_action)
+static struct ofputil_bucket *
+pick_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
 {
-    const char *selection_method = group->up.props.selection_method;
-
     /* Select groups may access flow keys beyond L2 in order to
      * select a bucket. Recirculate as appropriate to make this possible.
      */
@@ -4431,12 +4381,13 @@ xlate_select_group(struct xlate_ctx *ctx, struct group_dpif *group,
         ctx_trigger_freeze(ctx);
     }
 
+    const char *selection_method = group->up.props.selection_method;
     if (selection_method[0] == '\0') {
-        xlate_default_select_group(ctx, group, is_last_action);
+        return pick_default_select_group(ctx, group);
     } else if (!strcasecmp("hash", selection_method)) {
-        xlate_hash_fields_select_group(ctx, group, is_last_action);
+        return pick_hash_fields_select_group(ctx, group);
     } else if (!strcasecmp("dp_hash", selection_method)) {
-        xlate_dp_hash_select_group(ctx, group, is_last_action);
+        return pick_dp_hash_select_group(ctx, group);
     } else {
         /* Parsing of groups should ensure this never happens */
         OVS_NOT_REACHED();
@@ -4450,19 +4401,29 @@ xlate_group_action__(struct xlate_ctx *ctx, struct group_dpif *group,
     bool was_in_group = ctx->in_group;
     ctx->in_group = true;
 
-    switch (group->up.type) {
-    case OFPGT11_ALL:
-    case OFPGT11_INDIRECT:
-        xlate_all_group(ctx, group, is_last_action);
-        break;
-    case OFPGT11_SELECT:
-        xlate_select_group(ctx, group, is_last_action);
-        break;
-    case OFPGT11_FF:
-        xlate_ff_group(ctx, group, is_last_action);
-        break;
-    default:
-        OVS_NOT_REACHED();
+    if (group->up.type == OFPGT11_ALL || group->up.type == OFPGT11_INDIRECT) {
+        struct ovs_list *last_bucket = ovs_list_back(&group->up.buckets);
+        struct ofputil_bucket *bucket;
+        LIST_FOR_EACH (bucket, list_node, &group->up.buckets) {
+            bool is_last_bucket = &bucket->list_node == last_bucket;
+            xlate_group_bucket(ctx, bucket, is_last_action && is_last_bucket);
+        }
+        xlate_group_stats(ctx, group, NULL);
+    } else {
+        struct ofputil_bucket *bucket;
+        if (group->up.type == OFPGT11_SELECT) {
+            bucket = pick_select_group(ctx, group);
+        } else if (group->up.type == OFPGT11_FF) {
+            bucket = pick_ff_group(ctx, group);
+        } else {
+            OVS_NOT_REACHED();
+        }
+        if (bucket) {
+            xlate_group_bucket(ctx, bucket, is_last_action);
+            xlate_group_stats(ctx, group, bucket);
+        } else if (ctx->xin->xcache) {
+            ofproto_group_unref(&group->up);
+        }
     }
 
     ctx->in_group = was_in_group;
