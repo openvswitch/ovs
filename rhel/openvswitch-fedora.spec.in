@@ -222,7 +222,13 @@ Docker network plugins for OVN.
 	--with-dpdk=$(dirname %{_datadir}/dpdk/*/.config) \
 %endif
 	--enable-ssl \
-	--with-pkidir=%{_sharedstatedir}/openvswitch/pki
+	--with-pkidir=%{_sharedstatedir}/openvswitch/pki \
+%if 0%{?fedora} > 22 || %{with build_python3}
+	PYTHON3=%{__python3} \
+	PYTHON=%{__python2}
+%else
+	PYTHON=%{__python}
+%endif
 
 build-aux/dpdkstrip.py \
 %if %{with dpdk}
