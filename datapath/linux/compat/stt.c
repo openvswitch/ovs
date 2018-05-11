@@ -1857,7 +1857,11 @@ static const struct net_device_ops stt_netdev_ops = {
 	.ndo_stop               = stt_stop,
 	.ndo_start_xmit         = stt_dev_xmit,
 	.ndo_get_stats64        = ip_tunnel_get_stats64,
+#ifdef  HAVE_RHEL7_MAX_MTU
+	.extended.ndo_change_mtu = stt_change_mtu,
+#else
 	.ndo_change_mtu         = stt_change_mtu,
+#endif
 	.ndo_validate_addr      = eth_validate_addr,
 	.ndo_set_mac_address    = eth_mac_addr,
 #ifdef USE_UPSTREAM_TUNNEL

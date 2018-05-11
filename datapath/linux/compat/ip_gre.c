@@ -491,7 +491,11 @@ static const struct net_device_ops gre_tap_netdev_ops = {
 	.ndo_start_xmit		= gre_dev_xmit,
 	.ndo_set_mac_address	= eth_mac_addr,
 	.ndo_validate_addr	= eth_validate_addr,
+#ifdef	HAVE_RHEL7_MAX_MTU
+	.extended.ndo_change_mtu = ip_tunnel_change_mtu,
+#else
 	.ndo_change_mtu		= ip_tunnel_change_mtu,
+#endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
 	.ndo_get_stats64	= ip_tunnel_get_stats64,
 #endif
