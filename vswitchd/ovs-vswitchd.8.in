@@ -264,32 +264,7 @@ type).
 ..
 .so lib/dpctl.man
 .
-.SS "DPIF-NETDEV COMMANDS"
-These commands are used to expose internal information (mostly statistics)
-about the ``dpif-netdev'' userspace datapath. If there is only one datapath
-(as is often the case, unless \fBdpctl/\fR commands are used), the \fIdp\fR
-argument can be omitted.
-.IP "\fBdpif-netdev/pmd-stats-show\fR [\fIdp\fR]"
-Shows performance statistics for each pmd thread of the datapath \fIdp\fR.
-The special thread ``main'' sums up the statistics of every non pmd thread.
-The sum of ``emc hits'', ``masked hits'' and ``miss'' is the number of
-packets received by the datapath.  Cycles are counted using the TSC or similar
-facilities (when available on the platform).  To reset these counters use
-\fBdpif-netdev/pmd-stats-clear\fR. The duration of one cycle depends on the
-measuring infrastructure. ``idle cycles'' refers to cycles spent polling
-devices but not receiving any packets. ``processing cycles'' refers to cycles
-spent polling devices and successfully receiving packets, plus the cycles
-spent processing said packets.
-.IP "\fBdpif-netdev/pmd-stats-clear\fR [\fIdp\fR]"
-Resets to zero the per pmd thread performance numbers shown by the
-\fBdpif-netdev/pmd-stats-show\fR command.  It will NOT reset datapath or
-bridge statistics, only the values shown by the above command.
-.IP "\fBdpif-netdev/pmd-rxq-show\fR [\fIdp\fR]"
-For each pmd thread of the datapath \fIdp\fR shows list of queue-ids with
-port names, which this thread polls.
-.IP "\fBdpif-netdev/pmd-rxq-rebalance\fR [\fIdp\fR]"
-Reassigns rxqs to pmds in the datapath \fIdp\fR based on their current usage.
-.
+.so lib/dpif-netdev-unixctl.man
 .so lib/netdev-dpdk-unixctl.man
 .so ofproto/ofproto-dpif-unixctl.man
 .so ofproto/ofproto-unixctl.man

@@ -1196,7 +1196,8 @@ netdev_linux_rxq_recv_tap(int fd, struct dp_packet *buffer)
 }
 
 static int
-netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch)
+netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch,
+                      int *qfill)
 {
     struct netdev_rxq_linux *rx = netdev_rxq_linux_cast(rxq_);
     struct netdev *netdev = rx->up.netdev;
@@ -1223,6 +1224,10 @@ netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch)
         dp_packet_delete(buffer);
     } else {
         dp_packet_batch_init_packet(batch, buffer);
+    }
+
+    if (qfill) {
+        *qfill = -ENOTSUP;
     }
 
     return retval;

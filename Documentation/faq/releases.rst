@@ -163,10 +163,26 @@ Q: What DPDK version does each Open vSwitch release work with?
     2.4.x        2.0
     2.5.x        2.2
     2.6.x        16.07.2
-    2.7.x        16.11.5
+    2.7.x        16.11.6
     2.8.x        17.05.2
-    2.9.x        17.11.1
+    2.9.x        17.11.2
     ============ =======
+
+Q: Are all the DPDK releases that OVS versions work with maintained?
+
+    No. DPDK follows YY.MM.n (Year.Month.Number) versioning.
+
+    Typically, all DPDK releases get a stable YY.MM.1 update with bugfixes 3
+    months after the YY.MM.0 release. In some cases there may also be a
+    YY.MM.2 release.
+
+    DPDK LTS releases start once a year at YY.11.0 and are maintained for
+    two years, with YY.MM.n+1 releases around every 3 months.
+
+    The latest information about DPDK stable and LTS releases can be found
+    at `DPDK stable`_.
+
+.. _DPDK stable: http://dpdk.org/doc/guides/contributing/stable.html
 
 Q: I get an error like this when I configure Open vSwitch:
 

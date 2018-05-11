@@ -1,0 +1,216 @@
+.SS "DPIF-NETDEV COMMANDS"
+These commands are used to expose internal information (mostly statistics)
+about the "dpif-netdev" userspace datapath. If there is only one datapath
+(as is often the case, unless \fBdpctl/\fR commands are used), the \fIdp\fR
+argument can be omitted. By default the commands present data for all pmd
+threads in the datapath. By specifying the "-pmd Core" option one can filter
+the output for a single pmd in the datapath.
+.
+.IP "\fBdpif-netdev/pmd-stats-show\fR [\fB-pmd\fR \fIcore\fR] [\fIdp\fR]"
+Shows performance statistics for one or all pmd threads of the datapath
+\fIdp\fR. The special thread "main" sums up the statistics of every non pmd
+thread.
+
+The sum of "emc hits", "masked hits" and "miss" is the number of
+packet lookups performed by the datapath. Beware that a recirculated packet
+experiences one additional lookup per recirculation, so there may be
+more lookups than forwarded packets in the datapath.
+
+Cycles are counted using the TSC or similar facilities (when available on
+the platform). The duration of one cycle depends on the processing platform.
+
+"idle cycles" refers to cycles spent in PMD iterations not forwarding any
+any packets. "processing cycles" refers to cycles spent in PMD iterations
+forwarding at least one packet, including the cost for polling, processing and
+transmitting said packets.
+
+To reset these counters use \fBdpif-netdev/pmd-stats-clear\fR.
+.
+.IP "\fBdpif-netdev/pmd-stats-clear\fR [\fIdp\fR]"
+Resets to zero the per pmd thread performance numbers shown by the
+\fBdpif-netdev/pmd-stats-show\fR and \fBdpif-netdev/pmd-perf-show\fR commands.
+It will NOT reset datapath or bridge statistics, only the values shown by
+the above commands.
+.
+.IP "\fBdpif-netdev/pmd-perf-show\fR [\fB-nh\fR] [\fB-it\fR \fIiter_len\fR] \
+[\fB-ms\fR \fIms_len\fR] [\fB-pmd\fR \fIcore\fR] [\fIdp\fR]"
+Shows detailed performance metrics for one or all pmds threads of the
+user space datapath.
+
+The collection of detailed statistics can be controlled by a new
+configuration parameter "other_config:pmd-perf-metrics". By default it
+is disabled. The run-time overhead, when enabled, is in the order of 1%.
+
+.RS
+.IP
+.PD .4v
+.IP \(em
+used cycles
+.IP \(em
+forwared packets
+.IP \(em
+number of rx batches
+.IP \(em
+packets/rx batch
+.IP \(em
+max. vhostuser queue fill level
+.IP \(em
+number of upcalls
+.IP \(em
+cycles spent in upcalls
+.PD
+.RE
+.IP
+This raw recorded data is used threefold:
+
+.RS
+.IP
+.PD .4v
+.IP 1.
+In histograms for each of the following metrics:
+.RS
+.IP \(em
+cycles/iteration (logarithmic)
+.IP \(em
+packets/iteration (logarithmic)
+.IP \(em
+cycles/packet
+.IP \(em
+packets/batch
+.IP \(em
+max. vhostuser qlen (logarithmic)
+.IP \(em
+upcalls
+.IP \(em
+cycles/upcall (logarithmic)
+The histograms bins are divided linear or logarithmic.
+.RE
+.IP 2.
+A cyclic history of the above metrics for 1024 iterations
+.IP 3.
+A cyclic history of the cummulative/average values per millisecond wall
+clock for the last 1024 milliseconds:
+.RS
+.IP \(em
+number of iterations
+.IP \(em
+avg. cycles/iteration
+.IP \(em
+packets (Kpps)
+.IP \(em
+avg. packets/batch
+.IP \(em
+avg. max vhost qlen
+.IP \(em
+upcalls
+.IP \(em
+avg. cycles/upcall
+.RE
+.PD
+.RE
+.IP
+.
+The command options are:
+.RS
+.IP "\fB-nh\fR"
+Suppress the histograms
+.IP "\fB-it\fR \fIiter_len\fR"
+Display the last iter_len iteration stats
+.IP "\fB-ms\fR \fIms_len\fR"
+Display the last ms_len millisecond stats
+.RE
+.IP
+The output always contains the following global PMD statistics:
+.RS
+.IP
+Time: 15:24:55.270 .br
+Measurement duration: 1.008 s
+
+pmd thread numa_id 0 core_id 1:
+
+  Cycles:            2419034712  (2.40 GHz)
+  Iterations:            572817  (1.76 us/it)
+  - idle:                486808  (15.9 % cycles)
+  - busy:                 86009  (84.1 % cycles)
+  Rx packets:           2399607  (2381 Kpps, 848 cycles/pkt)
+  Datapath passes:      3599415  (1.50 passes/pkt)
+  - EMC hits:            336472  ( 9.3 %)
+  - Megaflow hits:      3262943  (90.7 %, 1.00 subtbl lookups/hit)
+  - Upcalls:                  0  ( 0.0 %, 0.0 us/upcall)
+  - Lost upcalls:             0  ( 0.0 %)
+  Tx packets:           2399607  (2381 Kpps)
+  Tx batches:            171400  (14.00 pkts/batch)
+.RE
+.IP
+Here "Rx packets" actually reflects the number of packets forwarded by the
+datapath. "Datapath passes" matches the number of packet lookups as
+reported by the \fBdpif-netdev/pmd-stats-show\fR command.
+
+To reset the counters and start a new measurement use
+\fBdpif-netdev/pmd-stats-clear\fR.
+.
+.IP "\fBdpif-netdev/pmd-perf-log-set\fR \fBon\fR|\fBoff\fR \
+[\fB-b\fR \fIbefore\fR] [\fB-a\fR \fIafter\fR] [\fB-e\fR|\fB-ne\fR] \
+[\fB-us\fR \fIusec\fR] [\fB-q\fR \fIqlen\fR]"
+.
+The userspace "netdev" datapath is able to supervise the PMD performance
+metrics and detect iterations with suspicious statistics according to the
+following criteria:
+.RS
+.IP \(em
+The iteration lasts longer than \fIusec\fR microseconds (default 250).
+This can be used to capture events where a PMD is blocked or interrupted for
+such a period of time that there is a risk for dropped packets on any of its Rx
+queues.
+.IP \(em
+The max vhost qlen exceeds a threshold \fIqlen\fR (default 128). This can be
+used to infer virtio queue overruns and dropped packets inside a VM, which are
+not visible in OVS otherwise.
+.RE
+.IP
+Such suspicious iterations can be logged together with their iteration
+statistics in the \fBovs-vswitchd.log\fR to be able to correlate them to
+packet drop or other events outside OVS.
+
+The above command enables (\fBon\fR) or disables (\fBoff\fR) supervision and
+logging at run-time and can be used to adjust the above thresholds for
+detecting suspicious iterations. By default supervision and logging is
+disabled.
+
+The command options are:
+.RS
+.IP "\fB-b\fR \fIbefore\fR"
+The number of iterations before the suspicious iteration to be logged
+(default 5).
+.IP "\fB-a\fR \fIafter\fR"
+The number of iterations after the suspicious iteration to be logged
+(default 5).
+.IP "\fB-e\fR"
+Extend logging interval if another suspicious iteration is detected
+before logging occurs.
+.IP "\fB-ne\fR"
+Do not extend logging interval if another suspicious iteration is detected
+before logging occurs (default).
+.IP "\fB-q\fR \fIqlen\fR"
+Suspicious vhost queue fill level threshold. Increase this to 512 if the Qemu
+supports 1024 virtio queue length (default 128).
+.IP "\fB-us\fR \fIusec\fR"
+Change the duration threshold for a suspicious iteration (default 250 us).
+.RE
+
+Note: Logging of suspicious iterations itself consumes a considerable amount
+of processing cycles of a PMD which may be visible in the iteration history.
+In the worst case this can lead OVS to detect another suspicious iteration
+caused by logging.
+
+If more than 100 iterations around a suspicious iteration have been logged
+once, OVS falls back to the safe default values (-b 5 -a 5 -ne) to avoid
+that logging itself continuously causes logging of further suspicious
+iterations.
+.
+.IP "\fBdpif-netdev/pmd-rxq-show\fR [\fB-pmd\fR \fIcore\fR] [\fIdp\fR]"
+For one or all pmd threads of the datapath \fIdp\fR show the list of queue-ids
+with port names, which this thread polls.
+.
+.IP "\fBdpif-netdev/pmd-rxq-rebalance\fR [\fIdp\fR]"
+Reassigns rxqs to pmds in the datapath \fIdp\fR based on their current usage.

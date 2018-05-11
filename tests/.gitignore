@@ -10,6 +10,7 @@
 /test-dpdkr
 /ovs-pki.log
 /pki/
+/system-dpdk-testsuite
 /system-kmod-testsuite
 /system-userspace-testsuite
 /system-offloads-testsuite

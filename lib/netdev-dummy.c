@@ -992,7 +992,8 @@ netdev_dummy_rxq_dealloc(struct netdev_rxq *rxq_)
 }
 
 static int
-netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch)
+netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch,
+                      int *qfill)
 {
     struct netdev_rxq_dummy *rx = netdev_rxq_dummy_cast(rxq_);
     struct netdev_dummy *netdev = netdev_dummy_cast(rx->up.netdev);
@@ -1037,6 +1038,11 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch)
 
     batch->packets[0] = packet;
     batch->count = 1;
+
+    if (qfill) {
+        *qfill = -ENOTSUP;
+    }
+
     return 0;
 }
 

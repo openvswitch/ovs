@@ -696,11 +696,12 @@ netdev_rxq_close(struct netdev_rxq *rx)
  * Returns EAGAIN immediately if no packet is ready to be received or another
  * positive errno value if an error was encountered. */
 int
-netdev_rxq_recv(struct netdev_rxq *rx, struct dp_packet_batch *batch)
+netdev_rxq_recv(struct netdev_rxq *rx, struct dp_packet_batch *batch,
+                int *qfill)
 {
     int retval;
 
-    retval = rx->netdev->netdev_class->rxq_recv(rx, batch);
+    retval = rx->netdev->netdev_class->rxq_recv(rx, batch, qfill);
     if (!retval) {
         COVERAGE_INC(netdev_received);
     } else {

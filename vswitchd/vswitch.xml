@@ -375,6 +375,18 @@
         </p>
       </column>
 
+      <column name="other_config" key="pmd-perf-metrics"
+              type='{"type": "boolean"}'>
+        <p>
+          Enables recording of detailed PMD performance metrics for analysis
+          and trouble-shooting. This can have a performance impact in the
+          order of 1%.
+        </p>
+        <p>
+          Defaults to false but can be changed at any time.
+        </p>
+      </column>
+
       <column name="other_config" key="n-handler-threads"
               type='{"type": "integer", "minInteger": 1}'>
         <p>
@@ -3647,6 +3659,23 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
               type='{"type": "boolean"}'>
         Set to <code>true</code> to enable flow control auto negotiation on
         physical ports. By default, auto-neg is disabled.
+      </column>
+    </group>
+
+    <group title="Link State Change detection mode">
+      <column name="options" key="dpdk-lsc-interrupt"
+              type='{"type": "boolean"}'>
+        <p>
+          Set this value to <code>true</code> to configure interrupt mode for
+          Link State Change (LSC) detection instead of poll mode for the DPDK
+          interface.
+        </p>
+        <p>
+          If this value is not set, poll mode is configured.
+        </p>
+        <p>
+          This parameter has an effect only on netdev dpdk interfaces.
+        </p>
       </column>
     </group>
 

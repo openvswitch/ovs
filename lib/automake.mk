@@ -492,6 +492,7 @@ MAN_FRAGMENTS += \
 	lib/dpctl.man \
 	lib/memory-unixctl.man \
 	lib/netdev-dpdk-unixctl.man \
+	lib/dpif-netdev-unixctl.man \
 	lib/ofp-version.man \
 	lib/ovs.tmac \
 	lib/service.man \
