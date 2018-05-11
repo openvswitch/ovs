@@ -1,6 +1,7 @@
 ### Configuration options for openvswitch
 #
-# Enable core files:
+# Enable core files.
+# This option should be set to "yes" or "no".  The default is "yes".
 # --force-corefiles=yes
 #
 # Set "nice" priority at which to run ovsdb-server:
