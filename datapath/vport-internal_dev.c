@@ -88,7 +88,7 @@ static const struct ethtool_ops internal_dev_ethtool_ops = {
 	.get_link	= ethtool_op_get_link,
 };
 
-#ifndef HAVE_NET_DEVICE_WITH_MAX_MTU
+#if	!defined(HAVE_NET_DEVICE_WITH_MAX_MTU) && !defined(HAVE_RHEL7_MAX_MTU)
 static int internal_dev_change_mtu(struct net_device *dev, int new_mtu)
 {
 	if (new_mtu < ETH_MIN_MTU) {
@@ -153,7 +153,7 @@ static const struct net_device_ops internal_dev_netdev_ops = {
 	.ndo_stop = internal_dev_stop,
 	.ndo_start_xmit = internal_dev_xmit,
 	.ndo_set_mac_address = eth_mac_addr,
-#ifndef HAVE_NET_DEVICE_WITH_MAX_MTU
+#if	!defined(HAVE_NET_DEVICE_WITH_MAX_MTU) && !defined(HAVE_RHEL7_MAX_MTU)
 	.ndo_change_mtu = internal_dev_change_mtu,
 #endif
 	.ndo_get_stats64 = (void *)internal_get_stats,

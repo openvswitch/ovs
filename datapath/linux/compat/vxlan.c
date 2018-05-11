@@ -1481,7 +1481,11 @@ static const struct net_device_ops vxlan_netdev_ether_ops = {
 	.ndo_start_xmit		= vxlan_dev_xmit,
 	.ndo_get_stats64	= ip_tunnel_get_stats64,
 	.ndo_set_rx_mode	= vxlan_set_multicast_list,
+#ifdef	HAVE_RHEL7_MAX_MTU
+	.extended.ndo_change_mtu = vxlan_change_mtu,
+#else
 	.ndo_change_mtu		= vxlan_change_mtu,
+#endif
 	.ndo_validate_addr	= eth_validate_addr,
 	.ndo_set_mac_address	= eth_mac_addr,
 #ifdef HAVE_NDO_FILL_METADATA_DST
@@ -1496,7 +1500,11 @@ static const struct net_device_ops vxlan_netdev_raw_ops = {
 	.ndo_stop		= vxlan_stop,
 	.ndo_start_xmit		= vxlan_dev_xmit,
 	.ndo_get_stats64	= ip_tunnel_get_stats64,
+#ifdef	HAVE_RHEL7_MAX_MTU
+	.extended.ndo_change_mtu = vxlan_change_mtu,
+#else
 	.ndo_change_mtu		= vxlan_change_mtu,
+#endif
 #ifdef HAVE_NDO_FILL_METADATA_DST
 	.ndo_fill_metadata_dst	= ovs_vxlan_fill_metadata_dst,
 #endif

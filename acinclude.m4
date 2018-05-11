@@ -576,6 +576,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
 
   OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/netdevice.h], [net_device],
                         [max_mtu])
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/netdevice.h], [net_device_ops_extended],
+                        [ndo_change_mtu], [OVS_DEFINE([HAVE_RHEL7_MAX_MTU])])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/netfilter.h], [nf_hook_state])
   OVS_GREP_IFELSE([$KSRC/include/linux/netfilter.h], [nf_register_net_hook])
