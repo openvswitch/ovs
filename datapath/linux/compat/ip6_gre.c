@@ -1136,6 +1136,8 @@ static netdev_tx_t ip6erspan_tunnel_xmit(struct sk_buff *skb,
 				truncate, false);
 		tpi.hdr_len = ERSPAN_V2_MDSIZE;
 		tpi.proto = htons(ETH_P_ERSPAN2);
+	} else {
+		goto tx_err;
 	}
 
 	tpi.flags = TUNNEL_SEQ;
