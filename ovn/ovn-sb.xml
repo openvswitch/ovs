@@ -1367,6 +1367,47 @@
           </p>
         </dd>
 
+        <dt>
+          <code>nd_na_router { <var>action</var>; </code>...<code> };</code>
+        </dt>
+
+        <dd>
+          <p>
+            Temporarily replaces the IPv6 neighbor solicitation packet
+            being processed by an IPv6 neighbor advertisement (NA)
+            packet, sets ND_NSO_ROUTER in the RSO flags and executes each
+            nested <var>action</var> on the NA packet.  Actions following
+            the <code>nd_na_router</code> action, if any, apply to the
+            original, unmodified packet.
+          </p>
+
+          <p>
+            The NA packet that this action operates on is initialized based on
+            the IPv6 packet being processed, as follows. These are default
+            values that the nested actions will probably want to change:
+          </p>
+
+          <ul>
+            <li><code>eth.dst</code> exchanged with <code>eth.src</code></li>
+            <li><code>eth.type = 0x86dd</code></li>
+            <li><code>ip6.dst</code> copied from <code>ip6.src</code></li>
+            <li><code>ip6.src</code> copied from <code>nd.target</code></li>
+            <li><code>icmp6.type = 136</code> (Neighbor Advertisement)</li>
+            <li><code>nd.target</code> unchanged</li>
+            <li><code>nd.sll = 00:00:00:00:00:00</code></li>
+            <li><code>nd.tll</code> copied from <code>eth.dst</code></li>
+          </ul>
+
+          <p>
+            The ND packet has the same VLAN header, if any, as the IPv6 packet
+            it replaces.
+          </p>
+
+          <p>
+            <b>Prerequisite:</b> <code>nd_ns</code>
+          </p>
+        </dd>
+
         <dt><code>get_nd(<var>P</var>, <var>A</var>);</code></dt>
 
         <dd>

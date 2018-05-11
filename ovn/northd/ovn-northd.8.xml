@@ -1230,10 +1230,36 @@ arp.sha = <var>external_mac</var>;
           Reply to IPv6 Neighbor Solicitations.  These flows reply to
           Neighbor Solicitation requests for the router's own IPv6
           address and load balancing IPv6 VIPs and populate the logical
-          router's mac binding table. For each router port <var>P</var> that
-          owns IPv6 address or has load balancing VIP <var>A</var>, solicited
-          node address <var>S</var>, and Ethernet address <var>E</var>, a
-          priority-90 flow matches <code>inport == <var>P</var> &amp;&amp;
+          router's mac binding table.
+        </p>
+
+        <p>
+          For each router port <var>P</var> that
+          owns IPv6 address <var>A</var>, solicited node address <var>S</var>,
+          and Ethernet address <var>E</var>, a priority-90 flow matches
+          <code>inport == <var>P</var> &amp;&amp;
+          nd_ns &amp;&amp; ip6.dst == {<var>A</var>, <var>E</var>} &amp;&amp;
+          nd.target == <var>A</var></code> with the following actions:
+        </p>
+
+        <pre>
+put_nd(inport, ip6.src, nd.sll);
+nd_na_router {
+    eth.src = <var>E</var>;
+    ip6.src = <var>A</var>;
+    nd.target = <var>A</var>;
+    nd.tll = <var>E</var>;
+    outport = inport;
+    flags.loopback = 1;
+    output;
+};
+        </pre>
+
+        <p>
+          For each router port <var>P</var> that has load balancing VIP
+          <var>A</var>, solicited node address <var>S</var>, and Ethernet
+          address <var>E</var>, a priority-90 flow matches
+          <code>inport == <var>P</var> &amp;&amp;
           nd_ns &amp;&amp; ip6.dst == {<var>A</var>, <var>E</var>} &amp;&amp;
           nd.target == <var>A</var></code> with the following actions:
         </p>
