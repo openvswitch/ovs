@@ -1213,7 +1213,7 @@ probe_multi_mask_per_prio(int ifindex)
     memset(&flower, 0, sizeof flower);
 
     flower.key.eth_type = htons(ETH_P_IP);
-    flower.mask.eth_type = 0xfff;
+    flower.mask.eth_type = OVS_BE16_MAX;
     memset(&flower.key.dst_mac, 0x11, sizeof flower.key.dst_mac);
     memset(&flower.mask.dst_mac, 0xff, sizeof flower.mask.dst_mac);
 
