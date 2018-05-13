@@ -268,7 +268,7 @@ static inline void erspan_build_header_v2(struct sk_buff *skb,
 	} *qp;
 	u16 vlan_tci = 0;
 	u8 gra = 0; /* 100 usec */
-	u8 bso = 0; /* Bad/Short/Oversized */
+	u8 bso = truncate; /* Bad/Short/Oversized */
 	u8 sgt = 0;
 	u8 tos;
 
