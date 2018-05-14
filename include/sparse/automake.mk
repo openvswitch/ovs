@@ -1,5 +1,6 @@
 noinst_HEADERS += \
         include/sparse/arpa/inet.h \
+        include/sparse/bits/floatn.h \
         include/sparse/assert.h \
         include/sparse/bmi2intrin.h \
         include/sparse/emmintrin.h \
@@ -13,5 +14,6 @@ noinst_HEADERS += \
         include/sparse/rte_memcpy.h \
         include/sparse/rte_vect.h \
         include/sparse/sys/socket.h \
+        include/sparse/sys/sysmacros.h \
         include/sparse/sys/types.h \
         include/sparse/sys/wait.h
