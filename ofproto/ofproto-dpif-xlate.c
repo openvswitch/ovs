@@ -3951,8 +3951,12 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
             xlate_report(ctx, OFT_DETAIL, "output to native tunnel");
             is_native_tunnel = true;
         } else {
+            const char *tnl_type;
+
             xlate_report(ctx, OFT_DETAIL, "output to kernel tunnel");
-            commit_odp_tunnel_action(flow, &ctx->base_flow, ctx->odp_actions);
+            tnl_type = tnl_port_get_type(xport->ofport);
+            commit_odp_tunnel_action(flow, &ctx->base_flow,
+                                     ctx->odp_actions, tnl_type);
             flow->tunnel = flow_tnl; /* Restore tunnel metadata */
         }
     } else {
@@ -5325,9 +5329,11 @@ xlate_sample_action(struct xlate_ctx *ctx,
             tnl_port_send(xport->ofport, flow, ctx->wc);
             if (!ovs_native_tunneling_is_on(ctx->xbridge->ofproto)) {
                 struct flow_tnl flow_tnl = flow->tunnel;
+                const char *tnl_type;
 
+                tnl_type = tnl_port_get_type(xport->ofport);
                 commit_odp_tunnel_action(flow, &ctx->base_flow,
-                                         ctx->odp_actions);
+                                         ctx->odp_actions, tnl_type);
                 flow->tunnel = flow_tnl;
             }
         } else {

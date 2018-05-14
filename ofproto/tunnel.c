@@ -712,6 +712,16 @@ tnl_port_get_name(const struct tnl_port *tnl_port) OVS_REQ_RDLOCK(rwlock)
     return netdev_get_name(tnl_port->netdev);
 }
 
+const char *
+tnl_port_get_type(const struct ofport_dpif *ofport) OVS_REQ_RDLOCK(rwlock)
+{
+    struct tnl_port *tnl_port;
+
+    tnl_port = tnl_find_ofport(ofport);
+    return !tnl_port ? NULL :
+                       netdev_get_type(tnl_port->netdev);
+}
+
 int
 tnl_port_build_header(const struct ofport_dpif *ofport,
                       struct ovs_action_push_tnl *data,

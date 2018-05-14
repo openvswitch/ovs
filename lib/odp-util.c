@@ -2726,7 +2726,7 @@ odp_tun_key_from_attr(const struct nlattr *attr, struct flow_tnl *tun)
 static void
 tun_key_to_attr(struct ofpbuf *a, const struct flow_tnl *tun_key,
                 const struct flow_tnl *tun_flow_key,
-                const struct ofpbuf *key_buf)
+                const struct ofpbuf *key_buf, const char *tnl_type)
 {
     size_t tun_key_ofs;
 
@@ -2767,7 +2767,14 @@ tun_key_to_attr(struct ofpbuf *a, const struct flow_tnl *tun_key,
     if (tun_key->flags & FLOW_TNL_F_OAM) {
         nl_msg_put_flag(a, OVS_TUNNEL_KEY_ATTR_OAM);
     }
-    if (tun_key->gbp_flags || tun_key->gbp_id) {
+
+    /* If tnl_type is set to a particular type of output tunnel,
+     * only put its relevant tunnel metadata to the nlattr.
+     * If tnl_type is NULL, put tunnel metadata according to the
+     * 'tun_key'.
+     */
+    if ((!tnl_type || !strcmp(tnl_type, "vxlan")) &&
+        (tun_key->gbp_flags || tun_key->gbp_id)) {
         size_t vxlan_opts_ofs;
 
         vxlan_opts_ofs = nl_msg_start_nested(a, OVS_TUNNEL_KEY_ATTR_VXLAN_OPTS);
@@ -2775,7 +2782,10 @@ tun_key_to_attr(struct ofpbuf *a, const struct flow_tnl *tun_key,
                        (tun_key->gbp_flags << 16) | ntohs(tun_key->gbp_id));
         nl_msg_end_nested(a, vxlan_opts_ofs);
     }
-    tun_metadata_to_geneve_nlattr(tun_key, tun_flow_key, key_buf, a);
+
+    if (!tnl_type || !strcmp(tnl_type, "geneve")) {
+        tun_metadata_to_geneve_nlattr(tun_key, tun_flow_key, key_buf, a);
+    }
 
     nl_msg_end_nested(a, tun_key_ofs);
 }
@@ -5409,7 +5419,7 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
 
     if (flow_tnl_dst_is_set(&flow->tunnel) || export_mask) {
         tun_key_to_attr(buf, &data->tunnel, &parms->flow->tunnel,
-                        parms->key_buf);
+                        parms->key_buf, NULL);
     }
 
     nl_msg_put_u32(buf, OVS_KEY_ATTR_SKB_MARK, data->pkt_mark);
@@ -5661,7 +5671,7 @@ odp_key_from_dp_packet(struct ofpbuf *buf, const struct dp_packet *packet)
     nl_msg_put_u32(buf, OVS_KEY_ATTR_PRIORITY, md->skb_priority);
 
     if (flow_tnl_dst_is_set(&md->tunnel)) {
-        tun_key_to_attr(buf, &md->tunnel, &md->tunnel, NULL);
+        tun_key_to_attr(buf, &md->tunnel, &md->tunnel, NULL, NULL);
     }
 
     nl_msg_put_u32(buf, OVS_KEY_ATTR_SKB_MARK, md->pkt_mark);
@@ -6697,10 +6707,10 @@ odp_put_push_eth_action(struct ofpbuf *odp_actions,
 
 void
 odp_put_tunnel_action(const struct flow_tnl *tunnel,
-                      struct ofpbuf *odp_actions)
+                      struct ofpbuf *odp_actions, const char *tnl_type)
 {
     size_t offset = nl_msg_start_nested(odp_actions, OVS_ACTION_ATTR_SET);
-    tun_key_to_attr(odp_actions, tunnel, tunnel, NULL);
+    tun_key_to_attr(odp_actions, tunnel, tunnel, NULL, tnl_type);
     nl_msg_end_nested(odp_actions, offset);
 }
 
@@ -6755,7 +6765,7 @@ commit_masked_set_action(struct ofpbuf *odp_actions,
  * only on tunneling information. */
 void
 commit_odp_tunnel_action(const struct flow *flow, struct flow *base,
-                         struct ofpbuf *odp_actions)
+                         struct ofpbuf *odp_actions, const char *tnl_type)
 {
     /* A valid IPV4_TUNNEL must have non-zero ip_dst; a valid IPv6 tunnel
      * must have non-zero ipv6_dst. */
@@ -6764,7 +6774,7 @@ commit_odp_tunnel_action(const struct flow *flow, struct flow *base,
             return;
         }
         memcpy(&base->tunnel, &flow->tunnel, sizeof base->tunnel);
-        odp_put_tunnel_action(&base->tunnel, odp_actions);
+        odp_put_tunnel_action(&base->tunnel, odp_actions, tnl_type);
     }
 }
 

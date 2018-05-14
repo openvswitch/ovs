@@ -708,5 +708,23 @@ AT_CHECK([tail -2 stdout], [0],
 Datapath actions: set(tunnel(tun_id=0x7b,dst=2.2.2.2,ttl=64,flags(df|key))),1
 ])
 
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=0,len=4}->tun_metadata0"])
+AT_CHECK([ovs-ofctl del-flows br0])
+
+AT_DATA([flows2.txt], [dnl
+priority=1,in_port=1,tun_metadata0=0x123, actions=3
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows2.txt])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'recirc_id(0),tunnel(tun_id=0x0,src=1.1.1.1,dst=1.1.1.2,ttl=64,geneve({class=0xffff,type=0,len=4,0x123}),flags(csum|key)),in_port(6081),skb_mark(0),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(frag=no)'], [0], [stdout])
+AT_CHECK([tail -2 stdout], [0],
+  [Megaflow: recirc_id=0,eth,ip,tun_id=0,tun_src=1.1.1.1,tun_dst=1.1.1.2,tun_tos=0,tun_flags=-df+csum+key,tun_metadata0=0x123,in_port=1,nw_ecn=0,nw_frag=no
+Datapath actions: set(tunnel(tun_id=0x7b,dst=2.2.2.2,ttl=64,flags(df|key))),1
+])
+
+dnl without the fix, the actions have geneve options:
+dnl set(tunnel(tun_id=0x7b,dst=2.2.2.2,ttl=64,geneve({class=0xffff,type=0,len=4,0x123}),flags(df|key))),1
+dnl which is not correct
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP

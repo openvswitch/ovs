@@ -273,7 +273,8 @@ int parse_key_and_mask_to_match(const struct nlattr *key, size_t key_len,
 const char *odp_key_fitness_to_string(enum odp_key_fitness);
 
 void commit_odp_tunnel_action(const struct flow *, struct flow *base,
-                              struct ofpbuf *odp_actions);
+                              struct ofpbuf *odp_actions,
+                              const char *tnl_type);
 void commit_masked_set_action(struct ofpbuf *odp_actions,
                               enum ovs_key_attr key_type, const void *key,
                               const void *mask, size_t key_size);
@@ -356,7 +357,8 @@ size_t odp_put_userspace_action(uint32_t pid,
                                 bool include_actions,
                                 struct ofpbuf *odp_actions);
 void odp_put_tunnel_action(const struct flow_tnl *tunnel,
-                           struct ofpbuf *odp_actions);
+                           struct ofpbuf *odp_actions,
+                           const char *tnl_type);
 
 void odp_put_tnl_push_action(struct ofpbuf *odp_actions,
                              struct ovs_action_push_tnl *data);

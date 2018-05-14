@@ -44,6 +44,7 @@ void tnl_wc_init(struct flow *, struct flow_wildcards *);
 bool tnl_process_ecn(struct flow *);
 odp_port_t tnl_port_send(const struct ofport_dpif *, struct flow *,
                          struct flow_wildcards *wc);
+const char *tnl_port_get_type(const struct ofport_dpif *tnl_port);
 
 /* Returns true if 'flow' should be submitted to tnl_port_receive(). */
 static inline bool
