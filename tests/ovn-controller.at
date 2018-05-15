@@ -158,7 +158,8 @@ OVS_WAIT_UNTIL([check_datapath_type bar])
 ovs-vsctl set Bridge br-int datapath-type=\"\"
 OVS_WAIT_UNTIL([check_datapath_type ""])
 
-expected_iface_types=$(ovs-vsctl get Open_vSwitch . iface_types|sed 's/[[]][[ ]]//g')
+expected_iface_types=$(ovs-vsctl get Open_vSwitch . iface_types | tr -d '[[]] ""')
+echo "expected_iface_types = ${expected_iface_types}"
 chassis_iface_types=$(ovn-sbctl get Chassis ${sysid} external_ids:iface-types | sed -e 's/\"//g')
 echo "chassis_iface_types = ${chassis_iface_types}"
 AT_CHECK([test "${expected_iface_types}" = "${chassis_iface_types}"])

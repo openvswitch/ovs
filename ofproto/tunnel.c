@@ -474,6 +474,19 @@ tnl_port_send(const struct ofport_dpif *ofport, struct flow *flow,
         wc->masks.pkt_mark = UINT32_MAX;
     }
 
+    if (cfg->erspan_ver) {
+        flow->tunnel.erspan_ver = cfg->erspan_ver;
+    }
+    if (cfg->erspan_idx) {
+        flow->tunnel.erspan_idx = cfg->erspan_idx;
+    }
+    if (cfg->erspan_dir) {
+        flow->tunnel.erspan_dir = cfg->erspan_dir;
+    }
+    if (cfg->erspan_hwid) {
+        flow->tunnel.erspan_hwid = cfg->erspan_hwid;
+    }
+
     if (pre_flow_str) {
         char *post_flow_str = flow_to_string(flow, NULL);
         char *tnl_str = tnl_port_to_string(tnl_port);

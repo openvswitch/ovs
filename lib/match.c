@@ -320,6 +320,61 @@ match_set_tun_gbp_flags(struct match *match, uint8_t flags)
 }
 
 void
+match_set_tun_erspan_ver_masked(struct match *match, uint8_t ver, uint8_t mask)
+{
+    match->wc.masks.tunnel.erspan_ver = ver;
+    match->flow.tunnel.erspan_ver = ver & mask;
+}
+
+void
+match_set_tun_erspan_ver(struct match *match, uint8_t ver)
+{
+    match_set_tun_erspan_ver_masked(match, ver, UINT8_MAX);
+}
+
+void
+match_set_tun_erspan_idx_masked(struct match *match, uint32_t erspan_idx,
+                                uint32_t mask)
+{
+    match->wc.masks.tunnel.erspan_idx = mask;
+    match->flow.tunnel.erspan_idx = erspan_idx & mask;
+}
+
+void
+match_set_tun_erspan_idx(struct match *match, uint32_t erspan_idx)
+{
+    match_set_tun_erspan_idx_masked(match, erspan_idx, UINT32_MAX);
+}
+
+void
+match_set_tun_erspan_dir_masked(struct match *match, uint8_t dir,
+                                uint8_t mask)
+{
+    match->wc.masks.tunnel.erspan_dir = dir;
+    match->flow.tunnel.erspan_dir = dir & mask;
+}
+
+void
+match_set_tun_erspan_dir(struct match *match, uint8_t dir)
+{
+    match_set_tun_erspan_dir_masked(match, dir, UINT8_MAX);
+}
+
+void
+match_set_tun_erspan_hwid_masked(struct match *match, uint8_t hwid,
+                                 uint8_t mask)
+{
+    match->wc.masks.tunnel.erspan_hwid = hwid;
+    match->flow.tunnel.erspan_hwid = hwid & mask;
+}
+
+void
+match_set_tun_erspan_hwid(struct match *match, uint8_t hwid)
+{
+    match_set_tun_erspan_hwid_masked(match, hwid, UINT8_MAX);
+}
+
+void
 match_set_in_port(struct match *match, ofp_port_t ofp_port)
 {
     match->wc.masks.in_port.ofp_port = u16_to_ofp(UINT16_MAX);
@@ -1232,6 +1287,18 @@ format_flow_tunnel(struct ds *s, const struct match *match)
     if (wc->masks.tunnel.ip_ttl) {
         ds_put_format(s, "tun_ttl=%"PRIu8",", tnl->ip_ttl);
     }
+    if (wc->masks.tunnel.erspan_ver) {
+        ds_put_format(s, "tun_erspan_ver=%"PRIu8",", tnl->erspan_ver);
+    }
+    if (wc->masks.tunnel.erspan_idx && tnl->erspan_ver == 1) {
+       ds_put_format(s, "tun_erspan_idx=%#"PRIx32",", tnl->erspan_idx); 
+    }
+    if (wc->masks.tunnel.erspan_dir && tnl->erspan_ver == 2) {
+        ds_put_format(s, "tun_erspan_dir=%"PRIu8",", tnl->erspan_dir);
+    }
+    if (wc->masks.tunnel.erspan_hwid && tnl->erspan_ver == 2) {
+        ds_put_format(s, "tun_erspan_hwid=%#"PRIx8",", tnl->erspan_hwid);
+    }
     if (wc->masks.tunnel.flags & FLOW_TNL_F_MASK) {
         format_flags_masked(s, "tun_flags", flow_tun_flag_to_string,
                             tnl->flags & FLOW_TNL_F_MASK,
@@ -1303,7 +1370,7 @@ match_format(const struct match *match,
     bool is_megaflow = false;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 40);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 41);
 
     if (priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "%spriority=%s%d,",

@@ -2633,6 +2633,40 @@
       </group>
     </group>
 
+    <group title="Tunnel Options: erspan only">
+      <p>
+        Only <code>erspan</code> interfaces support these options.
+      </p>
+      <column name="options" key="erspan_idx">
+        <p>
+          20 bit index/port number associated with the ERSPAN traffic's
+          source port and direction (ingress/egress).  This field is
+          platform dependent.
+        </p>
+      </column>
+
+      <column name="options" key="erspan_ver">
+        <p>
+          ERSPAN version: 1 for version 1 (type II)
+          or 2 for version 2 (type III).
+        </p>
+      </column>
+
+      <column name="options" key="erspan_dir">
+        <p>
+          Specifies the ERSPAN v2 mirrored traffic's direction.
+          1 for egress traffic, and 0 for ingress traffic.
+        </p>
+      </column>
+
+      <column name="options" key="erspan_hwid">
+        <p>
+          ERSPAN hardware ID is a 6-bit unique identifier of an
+          ERSPAN v2 engine within a system.
+        </p>
+      </column>
+    </group>
+
     <group title="Patch Options">
       <p>
         These options apply only to <dfn>patch ports</dfn>, that is, interfaces

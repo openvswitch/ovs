@@ -959,7 +959,7 @@ static inline void
 pkt_metadata_from_flow(struct pkt_metadata *md, const struct flow *flow)
 {
     /* Update this function whenever struct flow changes. */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 40);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 41);
 
     md->recirc_id = flow->recirc_id;
     md->dp_hash = flow->dp_hash;

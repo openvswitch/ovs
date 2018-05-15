@@ -32,6 +32,7 @@
 #include "tun-metadata.h"
 #include "unaligned.h"
 #include "util.h"
+#include "timeval.h"
 
 struct dp_packet;
 struct ds;
@@ -404,6 +405,8 @@ ovs_be32 set_mpls_lse_values(uint8_t ttl, uint8_t tc, uint8_t bos,
 #define ETH_TYPE_MPLS          0x8847
 #define ETH_TYPE_MPLS_MCAST    0x8848
 #define ETH_TYPE_NSH           0x894f
+#define ETH_TYPE_ERSPAN1       0x88be   /* version 1 type II */
+#define ETH_TYPE_ERSPAN2       0x22eb   /* version 2 type III */
 
 static inline bool eth_type_mpls(ovs_be16 eth_type)
 {
@@ -1245,6 +1248,129 @@ struct gre_base_hdr {
 #define GRE_REC         0x0700
 #define GRE_FLAGS       0x00F8
 #define GRE_VERSION     0x0007
+
+/*
+ * ERSPAN protocol header and metadata
+ *
+ * Version 1 (Type II) header (8 octets [42:49])
+ *  0                   1                   2                   3
+ *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |  Ver  |          VLAN         | COS | En|T|    Session ID     |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |      Reserved         |                  Index                |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ *
+ *  ERSPAN Version 2 (Type III) header (12 octets [42:49])
+ *  0                   1                   2                   3
+ *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |  Ver  |          VLAN         | COS |BSO|T|     Session ID    |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |                          Timestamp                            |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ * |             SGT               |P|    FT   |   Hw ID   |D|Gra|O|
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *
+ */
+
+/* ERSPAN has fixed 8-byte GRE header */
+#define ERSPAN_GREHDR_LEN   8
+#define ERSPAN_HDR(gre_base_hdr) \
+    ((struct erspan_base_hdr *)((char *)gre_base_hdr + ERSPAN_GREHDR_LEN))
+
+#define ERSPAN_V1_MDSIZE    4
+#define ERSPAN_V2_MDSIZE    8
+
+#define ERSPAN_SID_MASK     0x03ff  /* 10-bit Session ID. */
+#define ERSPAN_IDX_MASK     0xfffff /* v1 Index */
+#define ERSPAN_HWID_MASK    0x03f0
+#define ERSPAN_DIR_MASK     0x0008
+
+struct erspan_base_hdr {
+    uint8_t vlan_upper:4,
+            ver:4;
+    uint8_t vlan:8;
+    uint8_t session_id_upper:2,
+            t:1,
+            en:2,
+            cos:3;
+    uint8_t session_id:8;
+};
+
+struct erspan_md2 {
+    ovs_16aligned_be32 timestamp;
+    ovs_be16 sgt;
+    uint8_t hwid_upper:2,
+            ft:5,
+            p:1;
+    uint8_t o:1,
+            gra:2,
+            dir:1,
+            hwid:4;
+};
+
+struct erspan_metadata {
+    int version;
+    union {
+        ovs_be32 index;         /* Version 1 (type II)*/
+        struct erspan_md2 md2;  /* Version 2 (type III) */
+    } u;
+};
+
+static inline uint16_t get_sid(const struct erspan_base_hdr *ershdr)
+{
+    return (ershdr->session_id_upper << 8) + ershdr->session_id;
+}
+
+static inline void set_sid(struct erspan_base_hdr *ershdr, uint16_t id)
+{
+    ershdr->session_id = id & 0xff;
+    ershdr->session_id_upper = (id >> 8) &0x3;
+}
+
+static inline uint8_t get_hwid(const struct erspan_md2 *md2)
+{
+    return (md2->hwid_upper << 4) + md2->hwid;
+}
+
+static inline void set_hwid(struct erspan_md2 *md2, uint8_t hwid)
+{
+    md2->hwid = hwid & 0xf;
+    md2->hwid_upper = (hwid >> 4) & 0x3;
+}
+
+/* ERSPAN timestamp granularity
+ *   00b --> granularity = 100 microseconds
+ *   01b --> granularity = 100 nanoseconds
+ *   10b --> granularity = IEEE 1588
+ * Here we only support 100 microseconds.
+ */
+enum erspan_ts_gra {
+    ERSPAN_100US,
+    ERSPAN_100NS,
+    ERSPAN_IEEE1588,
+};
+
+static inline ovs_be32 get_erspan_ts(enum erspan_ts_gra gra)
+{
+    ovs_be32 ts = 0;
+
+    switch (gra) {
+    case ERSPAN_100US:
+        ts = htonl((uint32_t)(time_wall_usec() / 100));
+        break;
+    case ERSPAN_100NS:
+        /* fall back */
+    case ERSPAN_IEEE1588:
+        /* fall back */
+    default:
+        OVS_NOT_REACHED();
+        break;
+    }
+    return ts;
+}
 
 /* VXLAN protocol header */
 struct vxlanhdr {

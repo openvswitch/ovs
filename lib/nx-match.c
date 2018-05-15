@@ -1026,7 +1026,7 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
     ovs_be32 spi_mask;
     int match_len;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 40);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 41);
 
     struct nxm_put_ctx ctx = { .output = b, .implied_ethernet = false };
 
@@ -1154,6 +1154,17 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
     nxm_put_8m(&ctx, MFF_TUN_GBP_FLAGS, oxm,
                flow->tunnel.gbp_flags, match->wc.masks.tunnel.gbp_flags);
     tun_metadata_to_nx_match(b, oxm, match);
+
+    /* ERSPAN */
+    nxm_put_32m(&ctx, MFF_TUN_ERSPAN_IDX, oxm,
+                htonl(flow->tunnel.erspan_idx),
+                htonl(match->wc.masks.tunnel.erspan_idx));
+    nxm_put_8m(&ctx, MFF_TUN_ERSPAN_VER, oxm,
+                flow->tunnel.erspan_ver, match->wc.masks.tunnel.erspan_ver);
+    nxm_put_8m(&ctx, MFF_TUN_ERSPAN_DIR, oxm,
+                flow->tunnel.erspan_dir, match->wc.masks.tunnel.erspan_dir);
+    nxm_put_8m(&ctx, MFF_TUN_ERSPAN_HWID, oxm,
+                flow->tunnel.erspan_hwid, match->wc.masks.tunnel.erspan_hwid);
 
     /* Network Service Header */
     nxm_put_8m(&ctx, MFF_NSH_FLAGS, oxm, flow->nsh.flags,

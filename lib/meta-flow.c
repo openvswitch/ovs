@@ -231,6 +231,14 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
         return !wc->masks.tunnel.gbp_id;
     case MFF_TUN_GBP_FLAGS:
         return !wc->masks.tunnel.gbp_flags;
+    case MFF_TUN_ERSPAN_VER:
+        return !wc->masks.tunnel.erspan_ver;
+    case MFF_TUN_ERSPAN_IDX:
+        return !wc->masks.tunnel.erspan_idx;
+    case MFF_TUN_ERSPAN_DIR:
+        return !wc->masks.tunnel.erspan_dir;
+    case MFF_TUN_ERSPAN_HWID:
+        return !wc->masks.tunnel.erspan_hwid;
     CASE_MFF_TUN_METADATA:
         return !ULLONG_GET(wc->masks.tunnel.metadata.present.map,
                            mf->id - MFF_TUN_METADATA0);
@@ -513,6 +521,10 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_TUN_TTL:
     case MFF_TUN_GBP_ID:
     case MFF_TUN_GBP_FLAGS:
+    case MFF_TUN_ERSPAN_IDX:
+    case MFF_TUN_ERSPAN_VER:
+    case MFF_TUN_ERSPAN_DIR:
+    case MFF_TUN_ERSPAN_HWID:
     CASE_MFF_TUN_METADATA:
     case MFF_METADATA:
     case MFF_IN_PORT:
@@ -679,6 +691,18 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         break;
     case MFF_TUN_TOS:
         value->u8 = flow->tunnel.ip_tos;
+        break;
+    case MFF_TUN_ERSPAN_VER:
+        value->u8 = flow->tunnel.erspan_ver;
+        break;
+    case MFF_TUN_ERSPAN_IDX:
+        value->be32 = htonl(flow->tunnel.erspan_idx);
+        break;
+    case MFF_TUN_ERSPAN_DIR:
+        value->u8 = flow->tunnel.erspan_dir;
+        break;
+    case MFF_TUN_ERSPAN_HWID:
+        value->u8 = flow->tunnel.erspan_hwid;
         break;
     CASE_MFF_TUN_METADATA:
         tun_metadata_read(&flow->tunnel, mf, value);
@@ -993,6 +1017,18 @@ mf_set_value(const struct mf_field *mf,
         break;
     case MFF_TUN_TTL:
         match_set_tun_ttl(match, value->u8);
+        break;
+    case MFF_TUN_ERSPAN_VER:
+        match_set_tun_erspan_ver(match, value->u8);
+        break;
+    case MFF_TUN_ERSPAN_IDX:
+        match_set_tun_erspan_idx(match, ntohl(value->be32));
+        break;
+    case MFF_TUN_ERSPAN_DIR:
+        match_set_tun_erspan_dir(match, value->u8);
+        break;
+    case MFF_TUN_ERSPAN_HWID:
+        match_set_tun_erspan_hwid(match, value->u8);
         break;
     CASE_MFF_TUN_METADATA:
         tun_metadata_set_match(mf, value, NULL, match, err_str);
@@ -1391,6 +1427,18 @@ mf_set_flow_value(const struct mf_field *mf,
     case MFF_TUN_TTL:
         flow->tunnel.ip_ttl = value->u8;
         break;
+    case MFF_TUN_ERSPAN_VER:
+        flow->tunnel.erspan_ver = value->u8;
+        break;
+    case MFF_TUN_ERSPAN_IDX:
+        flow->tunnel.erspan_idx = ntohl(value->be32);
+        break;
+    case MFF_TUN_ERSPAN_DIR:
+        flow->tunnel.erspan_dir = value->u8;
+        break;
+    case MFF_TUN_ERSPAN_HWID:
+        flow->tunnel.erspan_hwid = value->u8;
+        break;
     CASE_MFF_TUN_METADATA:
         tun_metadata_write(&flow->tunnel, mf, value);
         break;
@@ -1700,6 +1748,10 @@ mf_is_pipeline_field(const struct mf_field *mf)
     case MFF_TUN_FLAGS:
     case MFF_TUN_GBP_ID:
     case MFF_TUN_GBP_FLAGS:
+    case MFF_TUN_ERSPAN_VER:
+    case MFF_TUN_ERSPAN_IDX:
+    case MFF_TUN_ERSPAN_DIR:
+    case MFF_TUN_ERSPAN_HWID:
     CASE_MFF_TUN_METADATA:
     case MFF_METADATA:
     case MFF_IN_PORT:
@@ -1875,6 +1927,18 @@ mf_set_wild(const struct mf_field *mf, struct match *match, char **err_str)
         break;
     case MFF_TUN_TTL:
         match_set_tun_ttl_masked(match, 0, 0);
+        break;
+    case MFF_TUN_ERSPAN_VER:
+        match_set_tun_erspan_ver_masked(match, 0, 0);
+        break;
+    case MFF_TUN_ERSPAN_IDX:
+        match_set_tun_erspan_idx_masked(match, 0, 0);
+        break;
+    case MFF_TUN_ERSPAN_DIR:
+        match_set_tun_erspan_dir_masked(match, 0, 0);
+        break;
+    case MFF_TUN_ERSPAN_HWID:
+        match_set_tun_erspan_hwid_masked(match, 0, 0);
         break;
     CASE_MFF_TUN_METADATA:
         tun_metadata_set_match(mf, NULL, NULL, match, err_str);
@@ -2255,6 +2319,19 @@ mf_set(const struct mf_field *mf,
         break;
     case MFF_TUN_TOS:
         match_set_tun_tos_masked(match, value->u8, mask->u8);
+        break;
+    case MFF_TUN_ERSPAN_VER:
+        match_set_tun_erspan_ver_masked(match, value->u8, mask->u8);
+        break;
+    case MFF_TUN_ERSPAN_IDX:
+        match_set_tun_erspan_idx_masked(match, ntohl(value->be32),
+                                        ntohl(mask->be32));
+        break;
+    case MFF_TUN_ERSPAN_DIR:
+        match_set_tun_erspan_dir_masked(match, value->u8, mask->u8);
+        break;
+    case MFF_TUN_ERSPAN_HWID:
+        match_set_tun_erspan_hwid_masked(match, value->u8, mask->u8);
         break;
     CASE_MFF_TUN_METADATA:
         tun_metadata_set_match(mf, value, mask, match, err_str);

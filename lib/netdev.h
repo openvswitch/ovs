@@ -130,6 +130,10 @@ struct netdev_tunnel_config {
 
     bool set_seq;
     uint32_t seqno;
+    uint32_t erspan_idx;
+    uint8_t erspan_ver;
+    uint8_t erspan_dir;
+    uint8_t erspan_hwid;
 };
 
 void netdev_run(void);

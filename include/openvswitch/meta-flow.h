@@ -450,6 +450,62 @@ enum OVS_PACKED_ENUM mf_field_id {
      */
     MFF_TUN_GBP_FLAGS,
 
+    /* "tun_erspan_idx".
+     *
+     * ERSPAN index (direction/port number)
+     *
+     * Type: be32 (low 20 bits).
+     * Maskable: bitwise.
+     * Formatting: hexadecimal.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: none.
+     * OXM: NXOXM_ET_ERSPAN_IDX(11) since OF1.5 and v2.10.
+     */
+    MFF_TUN_ERSPAN_IDX,
+
+    /* "tun_erspan_ver".
+     *
+     * ERSPAN version (v1 / v2)
+     *
+     * Type: u8 (low 4 bits).
+     * Maskable: bitwise.
+     * Formatting: decimal.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: none.
+     * OXM: NXOXM_ET_ERSPAN_VER(12) since OF1.5 and v2.10.
+     */
+    MFF_TUN_ERSPAN_VER,
+
+    /* "tun_erspan_dir".
+     *
+     * ERSPAN mirrored traffic's direction
+     *
+     * Type: u8 (low 1 bits).
+     * Maskable: bitwise.
+     * Formatting: decimal.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: none.
+     * OXM: NXOXM_ET_ERSPAN_DIR(13) since OF1.5 and v2.10.
+     */
+    MFF_TUN_ERSPAN_DIR,
+
+    /* "tun_erspan_hwid".
+     *
+     * ERSPAN Hardware ID
+     *
+     * Type: u8 (low 6 bits).
+     * Maskable: bitwise.
+     * Formatting: hexadecimal.
+     * Prerequisites: none.
+     * Access: read/write.
+     * NXM: none.
+     * OXM: NXOXM_ET_ERSPAN_HWID(14) since OF1.5 and v2.10.
+     */
+    MFF_TUN_ERSPAN_HWID,
+
 #if TUN_METADATA_NUM_OPTS == 64
     /* "tun_metadata<N>".
      *

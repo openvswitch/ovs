@@ -109,6 +109,18 @@ void match_set_tun_gbp_id_masked(struct match *match, ovs_be16 gbp_id, ovs_be16 
 void match_set_tun_gbp_id(struct match *match, ovs_be16 gbp_id);
 void match_set_tun_gbp_flags_masked(struct match *match, uint8_t flags, uint8_t mask);
 void match_set_tun_gbp_flags(struct match *match, uint8_t flags);
+void match_set_tun_erspan_ver(struct match *match, uint8_t ver);
+void match_set_tun_erspan_ver_masked(struct match *match, uint8_t ver,
+                                     uint8_t mask);
+void match_set_tun_erspan_idx(struct match *match, uint32_t idx);
+void match_set_tun_erspan_idx_masked(struct match *match, uint32_t idx,
+                                     uint32_t mask);
+void match_set_tun_erspan_dir(struct match *match, uint8_t dir);
+void match_set_tun_erspan_dir_masked(struct match *match, uint8_t dir,
+                                     uint8_t mask);
+void match_set_tun_erspan_hwid(struct match *match, uint8_t hwid);
+void match_set_tun_erspan_hwid_masked(struct match *match, uint8_t hwid,
+                                      uint8_t mask);
 void match_set_in_port(struct match *, ofp_port_t ofp_port);
 void match_set_pkt_mark(struct match *, uint32_t pkt_mark);
 void match_set_pkt_mark_masked(struct match *, uint32_t pkt_mark, uint32_t mask);

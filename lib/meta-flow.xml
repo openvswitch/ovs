@@ -1456,6 +1456,7 @@ ovs-ofctl add-flow br-int 'in_port=3,tun_src=192.168.1.1,tun_id=5001 actions=1'
 	<li>LISP has a 24-bit instance ID.</li>
 	<li>GRE has an optional 32-bit key.</li>
 	<li>STT has a 64-bit key.</li>
+    <li>ERSPAN has a 10-bit key (Session ID).</li>
       </ul>
 
       <p>
@@ -1713,6 +1714,87 @@ ovs-ofctl add-flow br-int 'in_port=3,tun_src=192.168.1.1,tun_id=5001 actions=1'
           this packet.  Devices must not apply policies when the A bit is set.
         </dd>
       </dl>
+    </field>
+
+    <h2>ERSPAN Metadata Fields</h2>
+    <p>
+      These fields provide access to features in the ERSPAN tunneling protocol
+      [ERSPAN], which has two major versions: version 1 (aka type II) and
+      version 2 (aka type III).
+    </p>
+
+    <p>
+      Regardless of version, ERSPAN is encapsulated within a fixed 8-byte GRE
+      header that consists of a 4-byte GRE base header and a 4-byte sequence
+      number.  The ERSPAN version 1 header format is:
+    </p>
+
+    <diagram>
+      <header name="GRE">
+        <bits name="..." above="16" width="0.4"/>
+        <bits name="type" above="16" below="0x88be" width="0.4"/>
+        <bits name="seq" above="32" width=".4"/>
+      </header>
+      <header name="ERSPAN v1">
+        <bits name="ver" above="4" below="1" width="0.4"/>
+        <bits name="..." above="18" width="0.4"/>
+        <bits name="session" above="10" below="tun_id" width="0.5"/>
+        <bits name="..." above="12" width="0.4"/>
+        <bits name="idx" above="20" width="0.6"/>
+      </header>
+      <header name="Ethernet">
+        <bits name="dst" above="48" width="0.4"/>
+        <bits name="src" above="48" width="0.4"/>
+        <bits name="type" above="16" width="0.4"/>
+        </header>
+      <dots/>
+    </diagram>
+
+    <p>
+      The ERSPAN version 2 header format is:
+    </p>
+
+    <diagram>
+      <header name="GRE">
+        <bits name="..." above="16" width="0.4"/>
+        <bits name="type" above="16" below="0x22eb" width="0.4"/>
+        <bits name="seq" above="32" width=".4"/>
+      </header>
+      <header name="ERSPAN v2">
+        <bits name="ver" above="4" below="2" width="0.4"/>
+        <bits name="..." above="18" width="0.4"/>
+        <bits name="session" above="10" below="tun_id" width="0.5"/>
+        <bits name="timestamp" above="32" width=".7"/>
+        <bits name="..." above="22" width="0.4"/>
+        <bits name="hwid" above="6" width="0.4"/>
+        <bits name="dir" above="1" below="0/1" width="0.4"/>
+        <bits name="..." above="3" width="0.4"/>
+      </header>
+      <header name="Ethernet">
+        <bits name="dst" above="48" width="0.4"/>
+        <bits name="src" above="48" width="0.4"/>
+        <bits name="type" above="16" width="0.4"/>
+      </header>
+      <dots/>
+    </diagram>
+
+    <field id="MFF_TUN_ERSPAN_VER" title="ERSPAN Version">
+      ERSPAN version number: 1 for version 1, or 2 for version 2.
+    </field>
+
+    <field id="MFF_TUN_ERSPAN_IDX" title="ERSPAN Index">
+      This field is a 20-bit index/port number associated with the ERSPAN
+      traffic's source port and direction (ingress/egress).  This field is
+      platform dependent.
+    </field>
+
+    <field id="MFF_TUN_ERSPAN_DIR" title="ERSPAN Direction">
+      For ERSPAN v2, the mirrored traffic's direction: 0 for ingress traffic, 1
+      for egress traffic.
+    </field>
+
+    <field id="MFF_TUN_ERSPAN_HWID" title="ERSPAN Hardware ID">
+      A 6-bit unique identifier of an ERSPAN v2 engine within a system.
     </field>
 
     <h2>Geneve Fields</h2>
@@ -4518,6 +4600,13 @@ r r c c c.
       M. Casado, M. J. Freedman, J. Pettit, J. Luo, N. McKeown, and
       S. Shenker, ``Ethane: Taking Control of the Enterprise,''
       Computer Communications Review, October 2007.
+    </dd>
+
+    <dt>ERSPAN</dt>
+    <dd>
+      M. Foschiano, K. Ghosh, M. Mehta, ``Cisco Systems' Encapsulated Remote
+      Switch Port Analyzer (ERSPAN),'' <url
+      href="https://tools.ietf.org/html/draft-foschiano-erspan-03"/>.
     </dd>
 
     <dt>EXT-56</dt>
