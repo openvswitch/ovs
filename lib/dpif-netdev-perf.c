@@ -440,7 +440,7 @@ pmd_perf_stats_clear(struct pmd_perf_stats *s)
 
 /* Functions recording PMD metrics per iteration. */
 
-inline void
+void
 pmd_perf_start_iteration(struct pmd_perf_stats *s)
 OVS_REQUIRES(s->stats_mutex)
 {
@@ -462,7 +462,7 @@ OVS_REQUIRES(s->stats_mutex)
     }
 }
 
-inline void
+void
 pmd_perf_end_iteration(struct pmd_perf_stats *s, int rx_packets,
                        int tx_packets, bool full_metrics)
 {
