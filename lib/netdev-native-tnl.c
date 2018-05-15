@@ -436,10 +436,12 @@ err:
 }
 
 void
-netdev_gre_push_header(const struct netdev *netdev OVS_UNUSED,
+netdev_gre_push_header(const struct netdev *netdev,
                        struct dp_packet *packet,
                        const struct ovs_action_push_tnl *data)
 {
+    struct netdev_vport *dev = netdev_vport_cast(netdev);
+    struct netdev_tunnel_config *tnl_cfg;
     struct gre_base_hdr *greh;
     int ip_tot_size;
 
@@ -448,6 +450,15 @@ netdev_gre_push_header(const struct netdev *netdev OVS_UNUSED,
     if (greh->flags & htons(GRE_CSUM)) {
         ovs_be16 *csum_opt = (ovs_be16 *) (greh + 1);
         *csum_opt = csum(greh, ip_tot_size);
+    }
+
+    if (greh->flags & htons(GRE_SEQ)) {
+        /* Last 4 byte is GRE seqno */
+        int seq_ofs = gre_header_len(greh->flags) - 4;
+        ovs_16aligned_be32 *seq_opt =
+            ALIGNED_CAST(ovs_16aligned_be32 *, (char *)greh + seq_ofs);
+        tnl_cfg = &dev->tnl_cfg;
+        put_16aligned_be32(seq_opt, htonl(tnl_cfg->seqno++));
     }
 }
 
@@ -488,6 +499,12 @@ netdev_gre_build_header(const struct netdev *netdev,
     if (tnl_cfg->out_key_present) {
         greh->flags |= htons(GRE_KEY);
         put_16aligned_be32(options, be64_to_be32(params->flow->tunnel.tun_id));
+        options++;
+    }
+
+    if (tnl_cfg->set_seq) {
+        greh->flags |= htons(GRE_SEQ);
+        /* seqno is updated at push header */
         options++;
     }
 

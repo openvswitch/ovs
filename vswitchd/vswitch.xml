@@ -2596,6 +2596,13 @@
             </li>
           </ul>
         </column>
+        <column name="options" key="seq" type='{"type": "boolean"}'>
+          <p>
+            Optional.  A 4-byte sequence number field for GRE tunnel only.
+            Default is disabled, set to <code>true</code> to enable.
+            Sequence number is incremented by one on each outgoing packet.
+          </p>
+        </column>
       </group>
 
       <group title="Tunnel Options: gre, geneve, and vxlan">

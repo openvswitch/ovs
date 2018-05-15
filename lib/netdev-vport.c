@@ -428,7 +428,7 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
     const char *name = netdev_get_name(dev_);
     const char *type = netdev_get_type(dev_);
     struct ds errors = DS_EMPTY_INITIALIZER;
-    bool needs_dst_port, has_csum;
+    bool needs_dst_port, has_csum, has_seq;
     uint16_t dst_proto = 0, src_proto = 0;
     struct netdev_tunnel_config tnl_cfg;
     struct smap_node *node;
@@ -436,6 +436,7 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
 
     has_csum = strstr(type, "gre") || strstr(type, "geneve") ||
                strstr(type, "stt") || strstr(type, "vxlan");
+    has_seq = strstr(type, "gre");
     memset(&tnl_cfg, 0, sizeof tnl_cfg);
 
     /* Add a default destination port for tunnel ports if none specified. */
@@ -505,6 +506,10 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
         } else if (!strcmp(node->key, "csum") && has_csum) {
             if (!strcmp(node->value, "true")) {
                 tnl_cfg.csum = true;
+            }
+        } else if (!strcmp(node->key, "seq") && has_seq) {
+            if (!strcmp(node->value, "true")) {
+                tnl_cfg.set_seq = true;
             }
         } else if (!strcmp(node->key, "df_default")) {
             if (!strcmp(node->value, "false")) {
@@ -707,6 +712,10 @@ get_tunnel_config(const struct netdev *dev, struct smap *args)
 
     if (tnl_cfg.csum) {
         smap_add(args, "csum", "true");
+    }
+
+    if (tnl_cfg.set_seq) {
+        smap_add(args, "seq", "true");
     }
 
     enum tunnel_layers layers = tunnel_supported_layers(type, &tnl_cfg);

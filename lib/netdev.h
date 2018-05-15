@@ -127,6 +127,9 @@ struct netdev_tunnel_config {
     bool csum;
     bool dont_fragment;
     enum netdev_pt_mode pt_mode;
+
+    bool set_seq;
+    uint32_t seqno;
 };
 
 void netdev_run(void);
