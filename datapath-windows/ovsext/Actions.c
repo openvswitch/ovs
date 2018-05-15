@@ -2023,6 +2023,7 @@ OvsDoExecuteActions(POVS_SWITCH_CONTEXT switchContext,
                  vlan = (struct ovs_action_push_vlan *)NlAttrGet((const PNL_ATTR)a);
                  vlanTag->TagHeader.VlanId = ntohs(vlan->vlan_tci) & 0xfff;
                  vlanTag->TagHeader.UserPriority = ntohs(vlan->vlan_tci) >> 13;
+                 vlanTag->TagHeader.CanonicalFormatId = (ntohs(vlan->vlan_tci) >> 12) & 0x1;
 
                  NET_BUFFER_LIST_INFO(ovsFwdCtx.curNbl,
                                       Ieee8021QNetBufferListInfo) = vlanTagValue;

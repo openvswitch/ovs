@@ -1000,11 +1000,12 @@ OvsCreateQueueNlPacket(PVOID userData,
                        POVS_PACKET_HDR_INFO hdrInfo)
 {
 #define VLAN_TAG_SIZE 4
-    UINT32 allocLen, dataLen, extraLen;
+    UINT32 allocLen, dataLen, extraLen = 0;
     POVS_PACKET_QUEUE_ELEM elem;
     UINT8 *src, *dst;
     NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo;
-    NDIS_NET_BUFFER_LIST_8021Q_INFO vlanInfo;
+    PNDIS_NET_BUFFER_LIST_8021Q_INFO vlanInfo = NULL;
+    PVOID vlanTag;
     OvsIPv4TunnelKey *tunnelKey = (OvsIPv4TunnelKey *)&key->tunKey;
     UINT32 pid;
     UINT32 nlMsgSize;
@@ -1037,8 +1038,13 @@ OvsCreateQueueNlPacket(PVOID userData,
         return NULL;
     }
 
-    vlanInfo.Value = NET_BUFFER_LIST_INFO(nbl, Ieee8021QNetBufferListInfo);
-    extraLen = vlanInfo.TagHeader.VlanId ? VLAN_TAG_SIZE : 0;
+    vlanTag = NET_BUFFER_LIST_INFO(nbl, Ieee8021QNetBufferListInfo);
+    if (vlanTag) {
+        vlanInfo = (PNDIS_NET_BUFFER_LIST_8021Q_INFO)(PVOID *)&vlanTag;
+        if (vlanInfo->Value) {
+            extraLen = VLAN_TAG_SIZE;
+        }
+    }
 
     dataLen = NET_BUFFER_DATA_LENGTH(nb);
 
@@ -1148,8 +1154,9 @@ OvsCreateQueueNlPacket(PVOID userData,
         ((UINT32 *)dst)[2] = ((UINT32 *)src)[2];
         dst += 12;
         ((UINT16 *)dst)[0] = htons(0x8100);
-        ((UINT16 *)dst)[1] = htons(vlanInfo.TagHeader.VlanId |
-            (vlanInfo.TagHeader.UserPriority << 13));
+        ((UINT16 *)dst)[1] = htons(vlanInfo->TagHeader.VlanId |
+            (vlanInfo->TagHeader.CanonicalFormatId << 12) |
+            (vlanInfo->TagHeader.UserPriority << 13));
         elem->hdrInfo.l3Offset += VLAN_TAG_SIZE;
         elem->hdrInfo.l4Offset += VLAN_TAG_SIZE;
         ovsUserStats.vlanInsert++;
