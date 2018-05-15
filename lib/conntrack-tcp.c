@@ -160,7 +160,6 @@ tcp_conn_update(struct conn *conn_, struct conntrack_bucket *ctb,
     uint16_t win = ntohs(tcp->tcp_winsz);
     uint32_t ack, end, seq, orig_seq;
     uint32_t p_len = tcp_payload_length(pkt);
-    int ackskew;
 
     if (tcp_invalid_flags(tcp_flags)) {
         return CT_UPDATE_INVALID;
@@ -195,6 +194,7 @@ tcp_conn_update(struct conn *conn_, struct conntrack_bucket *ctb,
      */
 
     orig_seq = seq = ntohl(get_16aligned_be32(&tcp->tcp_seq));
+    bool check_ackskew = true;
     if (src->state < CT_DPIF_TCPS_SYN_SENT) {
         /* First packet from this end. Set its state */
 
@@ -232,6 +232,11 @@ tcp_conn_update(struct conn *conn_, struct conntrack_bucket *ctb,
         if (src->seqhi == 1
                 || SEQ_GEQ(end + MAX(1, dst->max_win << dws), src->seqhi)) {
             src->seqhi = end + MAX(1, dst->max_win << dws);
+            /* We are either picking up a new connection or a connection which
+             * was already in place.  We are more permissive in terms of
+             * ackskew checking in these cases.
+             */
+            check_ackskew = false;
         }
         if (win > src->max_win) {
             src->max_win = win;
@@ -265,7 +270,7 @@ tcp_conn_update(struct conn *conn_, struct conntrack_bucket *ctb,
         end = seq;
     }
 
-    ackskew = dst->seqlo - ack;
+    int ackskew = check_ackskew ? dst->seqlo - ack : 0;
 #define MAXACKWINDOW (0xffff + 1500)    /* 1500 is an arbitrary fudge factor */
     if (SEQ_GEQ(src->seqhi, end)
         /* Last octet inside other's window space */
