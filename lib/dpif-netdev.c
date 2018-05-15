@@ -5506,12 +5506,23 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
         break;
 
     case OVS_ACTION_ATTR_TUNNEL_PUSH:
-        if (*depth < MAX_RECIRC_DEPTH) {
-            dp_packet_batch_apply_cutlen(packets_);
-            push_tnl_action(pmd, a, packets_);
-            return;
+        /*
+         * XXX: 'may_steal' concept is broken here, because we're
+         *      unconditionally changing the packets just like for other PUSH_*
+         *      actions in 'odp_execute()'. 'false' value could be ignored,
+         *      because we could reach here only after clone, but we still need
+         *      to free the packets in case 'may_steal == true'.
+         */
+        if (may_steal) {
+            /* We're requested to push tunnel header, but also we need to take
+             * the ownership of these packets. Thus, we can avoid performing
+             * the action, because the caller will not use the result anyway.
+             * Just break to free the batch. */
+            break;
         }
-        break;
+        dp_packet_batch_apply_cutlen(packets_);
+        push_tnl_action(pmd, a, packets_);
+        return;
 
     case OVS_ACTION_ATTR_TUNNEL_POP:
         if (*depth < MAX_RECIRC_DEPTH) {
