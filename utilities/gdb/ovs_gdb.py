@@ -23,8 +23,10 @@
 #    - ovs_dump_bridge [ports|wanted]
 #    - ovs_dump_bridge_ports <struct bridge *>
 #    - ovs_dump_dp_netdev [ports]
+#    - ovs_dump_dp_netdev_poll_threads <struct dp_netdev *>
 #    - ovs_dump_dp_netdev_ports <struct dp_netdev *>
 #    - ovs_dump_netdev
+#    - ovs_dump_ovs_list <struct ovs_list *> {[<structure>] [<member>] {dump}]}
 #
 #  Example:
 #    $ gdb $(which ovs-vswitchd) $(pidof ovs-vswitchd)
@@ -101,6 +103,63 @@ def offset_of(typeobj, field):
 def container_of(ptr, typeobj, member):
     return (ptr.cast(get_long_type()) -
             offset_of(typeobj, member)).cast(typeobj)
+
+
+#
+# Class that will provide an iterator over an OVS cmap.
+#
+class ForEachCMAP(object):
+    def __init__(self, cmap, typeobj=None, member='node'):
+        self.cmap = cmap
+        self.first = True
+        self.typeobj = typeobj
+        self.member = member
+        # Cursor values
+        self.node = 0
+        self.bucket_idx = 0
+        self.entry_idx = 0
+
+    def __iter__(self):
+        return self
+
+    def __get_CMAP_K(self):
+        ptr_type = gdb.lookup_type("void").pointer()
+        return (64 - 4) / (4 + ptr_type.sizeof)
+
+    def __next(self):
+        ipml = self.cmap['impl']['p']
+
+        if self.node != 0:
+            self.node = self.node['next']['p']
+            if self.node != 0:
+                return
+
+        while self.bucket_idx <= ipml['mask']:
+            buckets = ipml['buckets'][self.bucket_idx]
+            while self.entry_idx < self.__get_CMAP_K():
+                self.node = buckets['nodes'][self.entry_idx]['next']['p']
+                self.entry_idx += 1
+                if self.node != 0:
+                    return
+
+            self.bucket_idx += 1
+            self.entry_idx = 0
+
+        raise StopIteration
+
+    def next(self):
+        ipml = self.cmap['impl']['p']
+        if ipml['n'] == 0:
+            raise StopIteration
+
+        self.__next()
+
+        if self.typeobj is None:
+            return self.node
+
+        return container_of(self.node,
+                            gdb.lookup_type(self.typeobj).pointer(),
+                            self.member)
 
 
 #
@@ -328,6 +387,39 @@ class CmdDumpDpNetdev(gdb.Command):
 
 
 #
+# Implements the GDB "ovs_dump_dp_netdev_poll_threads" command
+#
+class CmdDumpDpNetdevPollThreads(gdb.Command):
+    """Dump all poll_thread info added to a specific struct dp_netdev*.
+    Usage: ovs_dump_dp_netdev_poll_threads <struct dp_netdev *>
+    """
+    def __init__(self):
+        super(CmdDumpDpNetdevPollThreads, self).__init__(
+            "ovs_dump_dp_netdev_poll_threads",
+            gdb.COMMAND_DATA)
+
+    @staticmethod
+    def display_single_poll_thread(pmd_thread, indent=0):
+        indent = " " * indent
+        print("{}(struct dp_netdev_pmd_thread *) {}: core_id = {:s}, "
+              "numa_id {}".format(indent,
+                                  pmd_thread, pmd_thread['core_id'],
+                                  pmd_thread['numa_id']))
+
+    def invoke(self, arg, from_tty):
+        arg_list = gdb.string_to_argv(arg)
+        if len(arg_list) != 1:
+            print("usage: ovs_dump_dp_netdev_poll_threads "
+                  "<struct dp_netdev *>")
+            return
+        dp_netdev = gdb.parse_and_eval(arg_list[0]).cast(
+            gdb.lookup_type('struct dp_netdev').pointer())
+        for node in ForEachCMAP(dp_netdev['poll_threads'],
+                                "struct dp_netdev_pmd_thread", "node"):
+            self.display_single_poll_thread(node)
+
+
+#
 # Implements the GDB "ovs_dump_dp_netdev_ports" command
 #
 class CmdDumpDpNetdevPorts(gdb.Command):
@@ -396,10 +488,85 @@ class CmdDumpNetdev(gdb.Command):
 
 
 #
+# Implements the GDB "ovs_dump_ovs_list" command
+#
+class CmdDumpOvsList(gdb.Command):
+    """Dump all nodes of an ovs_list give
+    Usage: ovs_dump_ovs_list <struct ovs_list *> {[<structure>] [<member>] {dump}]}
+
+    For example dump all the none quiescent OvS RCU threads:
+
+      (gdb) ovs_dump_ovs_list &ovsrcu_threads
+      (struct ovs_list *) 0x7f2a14000900
+      (struct ovs_list *) 0x7f2acc000900
+      (struct ovs_list *) 0x7f2a680668d0
+
+    This is not very useful, so please use this with the container_of mode:
+
+      (gdb) ovs_dump_ovs_list &ovsrcu_threads 'struct ovsrcu_perthread' list_node
+      (struct ovsrcu_perthread *) 0x7f2a14000900
+      (struct ovsrcu_perthread *) 0x7f2acc000900
+      (struct ovsrcu_perthread *) 0x7f2a680668d0
+
+    Now you can manually use the print command to show the content, or use the
+    dump option to dump the structure for all nodes:
+
+      (gdb) ovs_dump_ovs_list &ovsrcu_threads 'struct ovsrcu_perthread' list_node dump
+      (struct ovsrcu_perthread *) 0x7f2a14000900 =
+        {list_node = {prev = 0xf48e80 <ovsrcu_threads>, next = 0x7f2acc000900}, mutex...
+
+      (struct ovsrcu_perthread *) 0x7f2acc000900 =
+        {list_node = {prev = 0x7f2a14000900, next = 0x7f2a680668d0}, mutex ...
+
+      (struct ovsrcu_perthread *) 0x7f2a680668d0 =
+        {list_node = {prev = 0x7f2acc000900, next = 0xf48e80 <ovsrcu_threads>}, ...
+    """
+    def __init__(self):
+        super(CmdDumpOvsList, self).__init__("ovs_dump_ovs_list",
+                                             gdb.COMMAND_DATA)
+
+    def invoke(self, arg, from_tty):
+        arg_list = gdb.string_to_argv(arg)
+        typeobj = None
+        member = None
+        dump = False
+
+        if len(arg_list) != 1 and len(arg_list) != 3 and len(arg_list) != 4:
+            print("usage: ovs_dump_ovs_list <struct ovs_list *> "
+                  "{[<structure>] [<member>] {dump}]}")
+            return
+
+        header = gdb.parse_and_eval(arg_list[0]).cast(
+            gdb.lookup_type('struct ovs_list').pointer())
+
+        if len(arg_list) >= 3:
+            typeobj = arg_list[1]
+            member = arg_list[2]
+            if len(arg_list) == 4 and arg_list[3] == "dump":
+                dump = True
+
+        for node in ForEachLIST(header.dereference()):
+            if typeobj is None or member is None:
+                print("(struct ovs_list *) {}".format(node))
+            else:
+                print("({} *) {} =".format(
+                    typeobj,
+                    container_of(node,
+                                 gdb.lookup_type(typeobj).pointer(), member)))
+                if dump:
+                    print("  {}\n".format(container_of(
+                        node,
+                        gdb.lookup_type(typeobj).pointer(),
+                        member).dereference()))
+
+
+#
 # Initialize all GDB commands
 #
 CmdDumpBridge()
 CmdDumpBridgePorts()
 CmdDumpDpNetdev()
+CmdDumpDpNetdevPollThreads()
 CmdDumpDpNetdevPorts()
 CmdDumpNetdev()
+CmdDumpOvsList()
