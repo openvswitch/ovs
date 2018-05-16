@@ -531,7 +531,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                         [OVS_GREP_IFELSE([$KSRC/include/net/ip_tunnels.h],
                                          [iptunnel_pull_offloads],
                         [OVS_GREP_IFELSE([$KSRC/include/net/dst_cache.h], [dst_cache],
-                                         [OVS_DEFINE([USE_UPSTREAM_TUNNEL])])])])
+                        [OVS_GREP_IFELSE([$KSRC/include/net/erspan.h], [erspan_md2],
+                                         [OVS_DEFINE([USE_UPSTREAM_TUNNEL])])])])])
 
   OVS_GREP_IFELSE([$KSRC/include/net/dst_cache.h], [dst_cache],
                   [OVS_DEFINE([USE_BUILTIN_DST_CACHE])])
@@ -866,6 +867,18 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/net/ipv4/gre_demux.c],
                   [parse_gre_header],
                   [OVS_DEFINE([HAVE_DEMUX_PARSE_GRE_HEADER])])
+  OVS_GREP_IFELSE([$KSRC/include/uapi/linux/if_tunnel.h],
+                  [IFLA_GRE_ENCAP_DPORT])
+  OVS_GREP_IFELSE([$KSRC/include/uapi/linux/if_tunnel.h],
+                  [IFLA_GRE_COLLECT_METADATA])
+  OVS_GREP_IFELSE([$KSRC/include/uapi/linux/if_tunnel.h],
+                  [IFLA_GRE_IGNORE_DF])
+  OVS_GREP_IFELSE([$KSRC/include/uapi/linux/if_tunnel.h],
+                  [IFLA_GRE_FWMARK])
+  OVS_GREP_IFELSE([$KSRC/include/uapi/linux/if_tunnel.h],
+                  [IFLA_GRE_ERSPAN_INDEX])
+  OVS_GREP_IFELSE([$KSRC/include/uapi/linux/if_tunnel.h],
+                  [IFLA_GRE_ERSPAN_HWID])
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then
