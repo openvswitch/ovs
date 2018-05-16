@@ -288,71 +288,6 @@ Flushes the connection tracking entries in \fIzone\fR on \fIswitch\fR.
 This command uses an Open vSwitch extension that is only in Open
 vSwitch 2.6 and later.
 .
-.SS "OpenFlow 1.1+ Group Table Commands"
-.
-The following commands work only with switches that support OpenFlow
-1.1 or later.  Because support for OpenFlow 1.1 and later is still
-experimental in Open vSwitch, it is necessary to explicitly enable
-these protocol versions in \fBovs\-ofctl\fR (using \fB\-O\fR) and in
-the switch itself (with the \fBprotocols\fR column in the \fBBridge\fR
-table).  For more information, see ``Q: What versions of OpenFlow does
-Open vSwitch support?'' in the Open vSwitch FAQ.
-.
-.IP "\fBdump\-groups \fIswitch\fR [\fIgroup\fR]"
-Prints group entries in \fIswitch\fR's tables to console.  To dump
-only a specific group, specify its number as \fIgroup\fR.  Otherwise,
-if \fIgroup\fR is omitted, or if it is specified as \fBALL\fR, then
-all groups are printed.  Each line of output is a group entry as
-described in \fBGroup Syntax\fR below.
-.IP
-Only OpenFlow 1.5 and later support dumping a specific group.  Earlier
-versions of OpenFlow always dump all groups.
-.
-.IP "\fBdump\-group\-features \fIswitch"
-Prints to the console the group features of the \fIswitch\fR.
-.
-.IP "\fBdump\-group-stats \fIswitch \fR[\fIgroups\fR]"
-Prints to the console statistics for the specified \fIgroups in the
-\fIswitch\fR's tables.  If \fIgroups\fR is omitted then statistics for all
-groups are printed.  See \fBGroup Syntax\fR, below, for the syntax of
-\fIgroups\fR.
-.
-.SS "OpenFlow 1.3+ Switch Meter Table Commands"
-.
-These commands manage the meter table in an OpenFlow switch.  In each
-case, \fImeter\fR specifies a meter entry in the format described in
-\fBMeter Syntax\fR, below.
-.
-.PP
-OpenFlow 1.3 introduced support for meters, so these commands only
-work with switches that support OpenFlow 1.3 or later.  The caveats
-described for groups in the previous section also apply to meters.
-.
-.IP "\fBadd\-meter \fIswitch meter\fR"
-Add a meter entry to \fIswitch\fR's tables. The \fImeter\fR syntax is
-described in section \fBMeter Syntax\fR, below.
-.
-.IP "\fBmod\-meter \fIswitch meter\fR"
-Modify an existing meter.
-.
-.IP "\fBdel\-meters \fIswitch\fR"
-.IQ "\fBdel\-meter \fIswitch\fR [\fImeter\fR]"
-Delete entries from \fIswitch\fR's meter table.  \fImeter\fR can specify
-a single meter with syntax \fBmeter=\fIid\fR, or all meters with syntax
-\fBmeter=all\fR.
-.
-.IP "\fBdump\-meters \fIswitch\fR"
-.IQ "\fBdump\-meter \fIswitch\fR [\fImeter\fR]"
-Print meter configuration.  \fImeter\fR can specify a single meter with
-syntax \fBmeter=\fIid\fR, or all meters with syntax \fBmeter=all\fR.
-.
-.IP "\fBmeter\-stats \fIswitch\fR [\fImeter\fR]"
-Print meter statistics.  \fImeter\fR can specify a single meter with
-syntax \fBmeter=\fIid\fR, or all meters with syntax \fBmeter=all\fR.
-.
-.IP "\fBmeter\-features \fIswitch\fR"
-Print meter features.
-.
 .SS "OpenFlow Switch Flow Table Commands"
 .
 These commands manage the flow table in an OpenFlow switch.  In each
@@ -429,7 +364,7 @@ Connects to \fIswitch\fR and instructs it to execute the
 \fIpacket-out\fR OpenFlow message, specified as defined in
 \fBPacket\-Out Syntax\fR section.
 .
-.SS "OpenFlow Switch Group Table Commands"
+.SS "OpenFlow 1.1+ Switch Group Table Commands"
 .
 These commands manage the group table in an OpenFlow switch.  In each
 case, \fIgroup\fR specifies a group entry in the format described in
@@ -437,7 +372,14 @@ case, \fIgroup\fR specifies a group entry in the format described in
 zero or more groups in the same syntax, one per line, and the optional
 \fB\-\-bundle\fR option operates the command as a single atomic
 transation, see option \fB\-\-bundle\fR, below.
-
+.PP
+The group commands work only with switches that support OpenFlow 1.1 or
+later.  It is necessary to explicitly enable these protocol versions in
+\fBovs\-ofctl\fR (using \fB\-O\fR) and in the switch itself (with the
+\fBprotocols\fR column in the \fBBridge\fR table).  For more
+information, see ``Q: What versions of OpenFlow does Open vSwitch
+support?'' in the Open vSwitch FAQ.
+.
 .IP "[\fB\-\-bundle\fR] \fBadd\-group \fIswitch group\fR"
 .IQ "[\fB\-\-bundle\fR] \fBadd\-group \fIswitch \fB\- < \fIfile\fR"
 .IQ "[\fB\-\-bundle\fR] \fBadd\-groups \fIswitch file\fR"
@@ -478,6 +420,62 @@ buckets of the group are removed.
 Remove buckets to an existing group present in the \fIswitch\fR's group table.
 If no \fIcommand_bucket_id\fR is present in the group specification then all
 buckets of the group are removed.
+.
+.IP "\fBdump\-groups \fIswitch\fR [\fIgroup\fR]"
+Prints group entries in \fIswitch\fR's tables to console.  To dump
+only a specific group, specify its number as \fIgroup\fR.  Otherwise,
+if \fIgroup\fR is omitted, or if it is specified as \fBALL\fR, then
+all groups are printed.
+.IP
+Only OpenFlow 1.5 and later support dumping a specific group.  Earlier
+versions of OpenFlow always dump all groups.
+.
+.IP "\fBdump\-group\-features \fIswitch"
+Prints to the console the group features of the \fIswitch\fR.
+.
+.IP "\fBdump\-group\-stats \fIswitch \fR[\fIgroup\fR]"
+Prints to the console statistics for the specified \fIgroup\fR in
+\fIswitch\fR's tables.  If \fIgroup\fR is omitted then statistics for all
+groups are printed.
+.
+.SS "OpenFlow 1.3+ Switch Meter Table Commands"
+.
+These commands manage the meter table in an OpenFlow switch.  In each
+case, \fImeter\fR specifies a meter entry in the format described in
+\fBMeter Syntax\fR, below.
+.
+.PP
+OpenFlow 1.3 introduced support for meters, so these commands only work
+with switches that support OpenFlow 1.3 or later.  It is necessary to
+explicitly enable these protocol versions in \fBovs\-ofctl\fR (using
+\fB\-O\fR) and in the switch itself (with the \fBprotocols\fR column in
+the \fBBridge\fR table).  For more information, see ``Q: What versions
+of OpenFlow does Open vSwitch support?'' in the Open vSwitch FAQ.
+.
+.IP "\fBadd\-meter \fIswitch meter\fR"
+Add a meter entry to \fIswitch\fR's tables. The \fImeter\fR syntax is
+described in section \fBMeter Syntax\fR, below.
+.
+.IP "\fBmod\-meter \fIswitch meter\fR"
+Modify an existing meter.
+.
+.IP "\fBdel\-meters \fIswitch\fR"
+.IQ "\fBdel\-meter \fIswitch\fR [\fImeter\fR]"
+Delete entries from \fIswitch\fR's meter table.  \fImeter\fR can specify
+a single meter with syntax \fBmeter=\fIid\fR, or all meters with syntax
+\fBmeter=all\fR.
+.
+.IP "\fBdump\-meters \fIswitch\fR"
+.IQ "\fBdump\-meter \fIswitch\fR [\fImeter\fR]"
+Print meter configuration.  \fImeter\fR can specify a single meter with
+syntax \fBmeter=\fIid\fR, or all meters with syntax \fBmeter=all\fR.
+.
+.IP "\fBmeter\-stats \fIswitch\fR [\fImeter\fR]"
+Print meter statistics.  \fImeter\fR can specify a single meter with
+syntax \fBmeter=\fIid\fR, or all meters with syntax \fBmeter=all\fR.
+.
+.IP "\fBmeter\-features \fIswitch\fR"
+Print meter features.
 .
 .SS OpenFlow Switch Bundle Command
 .
