@@ -1907,6 +1907,26 @@ print_idl_row_updated_link2(const struct idltest_link2 *l2, int step)
 }
 
 static void
+print_idl_row_updated_singleton(const struct idltest_singleton *sng, int step)
+{
+    size_t i;
+    bool updated = false;
+
+    for (i = 0; i < IDLTEST_SINGLETON_N_COLUMNS; i++) {
+        if (idltest_singleton_is_updated(sng, i)) {
+            if (!updated) {
+                printf("%03d: updated columns:", step);
+                updated = true;
+            }
+            printf(" %s", idltest_singleton_columns[i].name);
+        }
+    }
+    if (updated) {
+        printf("\n");
+    }
+}
+
+static void
 print_idl_row_simple(const struct idltest_simple *s, int step)
 {
     size_t i;
@@ -1974,11 +1994,20 @@ print_idl_row_link2(const struct idltest_link2 *l2, int step)
 }
 
 static void
+print_idl_row_singleton(const struct idltest_singleton *sng, int step)
+{
+    printf("%03d: name=%s", step, sng->name);
+    printf(" uuid="UUID_FMT"\n", UUID_ARGS(&sng->header_.uuid));
+    print_idl_row_updated_singleton(sng, step);
+}
+
+static void
 print_idl(struct ovsdb_idl *idl, int step)
 {
     const struct idltest_simple *s;
     const struct idltest_link1 *l1;
     const struct idltest_link2 *l2;
+    const struct idltest_singleton *sng;
     int n = 0;
 
     IDLTEST_SIMPLE_FOR_EACH (s, idl) {
@@ -1991,6 +2020,10 @@ print_idl(struct ovsdb_idl *idl, int step)
     }
     IDLTEST_LINK2_FOR_EACH (l2, idl) {
         print_idl_row_link2(l2, step);
+        n++;
+    }
+    IDLTEST_SINGLETON_FOR_EACH (sng, idl) {
+        print_idl_row_singleton(sng, step);
         n++;
     }
     if (!n) {

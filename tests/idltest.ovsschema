@@ -170,6 +170,15 @@
         }
       },
       "isRoot" : false
+    },
+    "singleton" : {
+      "columns" : {
+        "name" : {
+          "type": "string"
+        }
+      },
+      "isRoot" : true,
+      "maxRows" : 1
     }
   }
 }

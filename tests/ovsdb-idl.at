@@ -70,7 +70,7 @@ m4_define([OVSDB_CHECK_IDL_REGISTER_COLUMNS_PYN],
    AT_CHECK([ovsdb_start_idltest])
    m4_if([$2], [], [],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
-   AT_CHECK([$8 $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket ?simple:b,ba,i,ia,r,ra,s,sa,u,ua?link1:i,k,ka,l2?link2:i,l1 $3],
+   AT_CHECK([$8 $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket ?simple:b,ba,i,ia,r,ra,s,sa,u,ua?link1:i,k,ka,l2?link2:i,l1?singleton:name $3],
             [0], [stdout], [ignore])
    AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
             [0], [$4])
@@ -776,6 +776,32 @@ OVSDB_CHECK_IDL([external-linking idl, consistent ops],
 003: done
 ]])
 
+OVSDB_CHECK_IDL([singleton idl, constraints],
+  [],
+  [['["idltest",
+      {"op": "insert",
+       "table": "singleton",
+       "row": {"name": "foo"}}]' \
+    '["idltest",
+      {"op": "insert",
+       "table": "singleton",
+       "row": {"name": "bar"}}]' \
+    '+["idltest",
+      {"op": "delete",
+       "table": "singleton",
+       "where": [["_uuid", "==", ["uuid", "#0#"]]]},
+      {"op": "insert",
+       "table": "singleton",
+       "row": {"name": "bar"}}]']],
+  [[000: empty
+001: {"error":null,"result":[{"uuid":["uuid","<0>"]}]}
+002: name=foo uuid=<0>
+003: {"error":null,"result":[{"uuid":["uuid","<1>"]},{"details":"transaction causes \"singleton\" table to contain 2 rows, greater than the schema-defined limit of 1 row(s)","error":"constraint violation"}]}
+004: {"error":null,"result":[{"count":1},{"uuid":["uuid","<2>"]}]}
+005: name=bar uuid=<2>
+006: done
+]])
+
 OVSDB_CHECK_IDL_PY([external-linking idl, insert ops],
   [],
   [['linktest']],
@@ -867,6 +893,7 @@ AT_CHECK([sort stdout | uuidfilt], [0],
 # Check that ovsdb-idl figured out that table link2 and column l2 are missing.
 AT_CHECK([grep ovsdb_idl stderr | sort], [0], [dnl
 test-ovsdb|ovsdb_idl|idltest database lacks link2 table (database needs upgrade?)
+test-ovsdb|ovsdb_idl|idltest database lacks singleton table (database needs upgrade?)
 test-ovsdb|ovsdb_idl|link1 table in idltest database lacks l2 column (database needs upgrade?)
 ])
 

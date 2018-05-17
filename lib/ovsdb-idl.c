@@ -3824,6 +3824,39 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
 
     /* Add updates. */
     any_updates = false;
+
+    /* For tables constrained to have only a single row (a fairly common OVSDB
+     * pattern for storing global data), identify whether we're inserting a
+     * row.  If so, then verify that the table is empty before inserting the
+     * row.  This gives us a clear verification-related failure if there was an
+     * insertion race with another client. */
+    for (size_t i = 0; i < txn->db->class_->n_tables; i++) {
+        struct ovsdb_idl_table *table = &txn->db->tables[i];
+        if (table->class_->is_singleton) {
+            /* Count the number of rows in the table before and after our
+             * transaction commits.  This is O(n) in the number of rows in the
+             * table, but that's OK since we know that the table should only
+             * have one row. */
+            size_t initial_rows = 0;
+            size_t final_rows = 0;
+            HMAP_FOR_EACH (row, hmap_node, &table->rows) {
+                initial_rows += row->old_datum != NULL;
+                final_rows += row->new_datum != NULL;
+            }
+
+            if (initial_rows == 0 && final_rows == 1) {
+                struct json *op = json_object_create();
+                json_array_add(operations, op);
+                json_object_put_string(op, "op", "wait");
+                json_object_put_string(op, "table", table->class_->name);
+                json_object_put(op, "where", json_array_create_empty());
+                json_object_put(op, "timeout", json_integer_create(0));
+                json_object_put_string(op, "until", "==");
+                json_object_put(op, "rows", json_array_create_empty());
+            }
+        }
+    }
+
     HMAP_FOR_EACH (row, txn_node, &txn->txn_rows) {
         const struct ovsdb_idl_table_class *class = row->table->class_;
 
@@ -3841,23 +3874,6 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
         } else if (row->old_datum != row->new_datum) {
             struct json *row_json;
             size_t idx;
-
-            if (!row->old_datum && class->is_singleton) {
-                /* We're inserting a row into a table that allows only a
-                 * single row.  (This is a fairly common OVSDB pattern for
-                 * storing global data.)  Verify that the table is empty
-                 * before inserting the row, so that we get a clear
-                 * verification-related failure if there was an insertion
-                 * race with another client. */
-                struct json *op = json_object_create();
-                json_array_add(operations, op);
-                json_object_put_string(op, "op", "wait");
-                json_object_put_string(op, "table", class->name);
-                json_object_put(op, "where", json_array_create_empty());
-                json_object_put(op, "timeout", json_integer_create(0));
-                json_object_put_string(op, "until", "==");
-                json_object_put(op, "rows", json_array_create_empty());
-            }
 
             struct json *op = json_object_create();
             json_object_put_string(op, "op",

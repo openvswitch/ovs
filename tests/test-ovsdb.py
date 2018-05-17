@@ -240,6 +240,16 @@ def print_idl(idl, step):
             print(''.join(s))
             n += 1
 
+    if "singleton" in idl.tables:
+        sng = idl.tables["singleton"].rows
+        for row in six.itervalues(sng):
+            s = ["%03d:" % step]
+            s.append(" name=%s" % row.name)
+            if hasattr(row, "uuid"):
+                s.append(" uuid=%s" % row.uuid)
+            print(''.join(s))
+            n += 1
+
     if not n:
         print("%03d: empty" % step)
     sys.stdout.flush()
