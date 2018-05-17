@@ -311,7 +311,7 @@ export -f ovn_attach
 # Easy access to OVS manpages.
 mkdir $sim_base/man
 mandir=`cd $sim_base/man && pwd`
-(cd "$sim_builddir" && ${MAKE-make} install-man mandir=$mandir >/dev/null)
+(cd "$sim_builddir" && ${MAKE-make} install-man install-man-rst mandir=$mandir >/dev/null)
 MANPATH=$mandir:; export MANPATH
 
 export scripts
