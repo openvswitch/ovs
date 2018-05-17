@@ -272,7 +272,7 @@ struct dpdk_qos_ops {
      * For all QoS implementations it should always be non-null.
      */
     int (*qos_run)(struct qos_conf *qos_conf, struct rte_mbuf **pkts,
-                   int pkt_cnt, bool may_steal);
+                   int pkt_cnt, bool should_steal);
 };
 
 /* dpdk_qos_ops for each type of user space QoS implementation */
@@ -1803,7 +1803,7 @@ netdev_dpdk_policer_pkt_handle(struct rte_meter_srtcm *meter,
 static int
 netdev_dpdk_policer_run(struct rte_meter_srtcm *meter,
                         struct rte_mbuf **pkts, int pkt_cnt,
-                        bool may_steal)
+                        bool should_steal)
 {
     int i = 0;
     int cnt = 0;
@@ -1819,7 +1819,7 @@ netdev_dpdk_policer_run(struct rte_meter_srtcm *meter,
             }
             cnt++;
         } else {
-            if (may_steal) {
+            if (should_steal) {
                 rte_pktmbuf_free(pkt);
             }
         }
@@ -1830,13 +1830,13 @@ netdev_dpdk_policer_run(struct rte_meter_srtcm *meter,
 
 static int
 ingress_policer_run(struct ingress_policer *policer, struct rte_mbuf **pkts,
-                    int pkt_cnt, bool may_steal)
+                    int pkt_cnt, bool should_steal)
 {
     int cnt = 0;
 
     rte_spinlock_lock(&policer->policer_lock);
     cnt = netdev_dpdk_policer_run(&policer->in_policer, pkts,
-                                  pkt_cnt, may_steal);
+                                  pkt_cnt, should_steal);
     rte_spinlock_unlock(&policer->policer_lock);
 
     return cnt;
@@ -2016,13 +2016,13 @@ netdev_dpdk_rxq_recv(struct netdev_rxq *rxq, struct dp_packet_batch *batch,
 
 static inline int
 netdev_dpdk_qos_run(struct netdev_dpdk *dev, struct rte_mbuf **pkts,
-                    int cnt, bool may_steal)
+                    int cnt, bool should_steal)
 {
     struct qos_conf *qos_conf = ovsrcu_get(struct qos_conf *, &dev->qos_conf);
 
     if (qos_conf) {
         rte_spinlock_lock(&qos_conf->lock);
-        cnt = qos_conf->ops->qos_run(qos_conf, pkts, cnt, may_steal);
+        cnt = qos_conf->ops->qos_run(qos_conf, pkts, cnt, should_steal);
         rte_spinlock_unlock(&qos_conf->lock);
     }
 
@@ -3655,14 +3655,14 @@ egress_policer_qos_is_equal(const struct qos_conf *conf,
 
 static int
 egress_policer_run(struct qos_conf *conf, struct rte_mbuf **pkts, int pkt_cnt,
-                   bool may_steal)
+                   bool should_steal)
 {
     int cnt = 0;
     struct egress_policer *policer =
         CONTAINER_OF(conf, struct egress_policer, qos_conf);
 
     cnt = netdev_dpdk_policer_run(&policer->egress_meter, pkts,
-                                  pkt_cnt, may_steal);
+                                  pkt_cnt, should_steal);
 
     return cnt;
 }

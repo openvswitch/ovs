@@ -713,9 +713,9 @@ odp_execute_actions(void *dp, struct dp_packet_batch *batch, bool steal,
             if (dp_execute_action) {
                 /* Allow 'dp_execute_action' to steal the packet data if we do
                  * not need it any more. */
-                bool may_steal = steal && last_action;
+                bool should_steal = steal && last_action;
 
-                dp_execute_action(dp, batch, a, may_steal);
+                dp_execute_action(dp, batch, a, should_steal);
 
                 if (last_action || batch->count == 0) {
                     /* We do not need to free the packets.

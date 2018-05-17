@@ -647,7 +647,8 @@ static int dpif_netdev_open(const struct dpif_class *, const char *name,
                             bool create, struct dpif **);
 static void dp_netdev_execute_actions(struct dp_netdev_pmd_thread *pmd,
                                       struct dp_packet_batch *,
-                                      bool may_steal, const struct flow *flow,
+                                      bool should_steal,
+                                      const struct flow *flow,
                                       const struct nlattr *actions,
                                       size_t actions_len);
 static void dp_netdev_input(struct dp_netdev_pmd_thread *,
@@ -5594,7 +5595,7 @@ error:
 
 static void
 dp_execute_userspace_action(struct dp_netdev_pmd_thread *pmd,
-                            struct dp_packet *packet, bool may_steal,
+                            struct dp_packet *packet, bool should_steal,
                             struct flow *flow, ovs_u128 *ufid,
                             struct ofpbuf *actions,
                             const struct nlattr *userdata)
@@ -5609,16 +5610,16 @@ dp_execute_userspace_action(struct dp_netdev_pmd_thread *pmd,
                              NULL);
     if (!error || error == ENOSPC) {
         dp_packet_batch_init_packet(&b, packet);
-        dp_netdev_execute_actions(pmd, &b, may_steal, flow,
+        dp_netdev_execute_actions(pmd, &b, should_steal, flow,
                                   actions->data, actions->size);
-    } else if (may_steal) {
+    } else if (should_steal) {
         dp_packet_delete(packet);
     }
 }
 
 static void
 dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
-              const struct nlattr *a, bool may_steal)
+              const struct nlattr *a, bool should_steal)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct dp_netdev_execute_aux *aux = aux_;
@@ -5635,7 +5636,7 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
             struct dp_packet *packet;
             struct dp_packet_batch out;
 
-            if (!may_steal) {
+            if (!should_steal) {
                 dp_packet_batch_clone(&out, packets_);
                 dp_packet_batch_reset_cutlen(packets_);
                 packets_ = &out;
@@ -5688,7 +5689,7 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
             if (p) {
                 struct dp_packet_batch tnl_pkt;
 
-                if (!may_steal) {
+                if (!should_steal) {
                     dp_packet_batch_clone(&tnl_pkt, packets_);
                     packets_ = &tnl_pkt;
                     dp_packet_batch_reset_cutlen(orig_packets_);
@@ -5728,7 +5729,7 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
             ofpbuf_init(&actions, 0);
 
             if (packets_->trunc) {
-                if (!may_steal) {
+                if (!should_steal) {
                     dp_packet_batch_clone(&usr_pkt, packets_);
                     packets_ = &usr_pkt;
                     clone = true;
@@ -5742,7 +5743,7 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
             DP_PACKET_BATCH_FOR_EACH (i, packet, packets_) {
                 flow_extract(packet, &flow);
                 dpif_flow_hash(dp->dpif, &flow, sizeof flow, &ufid);
-                dp_execute_userspace_action(pmd, packet, may_steal, &flow,
+                dp_execute_userspace_action(pmd, packet, should_steal, &flow,
                                             &ufid, &actions, userdata);
             }
 
@@ -5761,7 +5762,7 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
         if (*depth < MAX_RECIRC_DEPTH) {
             struct dp_packet_batch recirc_pkts;
 
-            if (!may_steal) {
+            if (!should_steal) {
                dp_packet_batch_clone(&recirc_pkts, packets_);
                packets_ = &recirc_pkts;
             }
@@ -5934,18 +5935,18 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
         OVS_NOT_REACHED();
     }
 
-    dp_packet_delete_batch(packets_, may_steal);
+    dp_packet_delete_batch(packets_, should_steal);
 }
 
 static void
 dp_netdev_execute_actions(struct dp_netdev_pmd_thread *pmd,
                           struct dp_packet_batch *packets,
-                          bool may_steal, const struct flow *flow,
+                          bool should_steal, const struct flow *flow,
                           const struct nlattr *actions, size_t actions_len)
 {
     struct dp_netdev_execute_aux aux = { pmd, flow };
 
-    odp_execute_actions(&aux, packets, may_steal, actions,
+    odp_execute_actions(&aux, packets, should_steal, actions,
                         actions_len, dp_execute_cb);
 }
 

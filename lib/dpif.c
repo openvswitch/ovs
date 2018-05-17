@@ -1162,7 +1162,7 @@ struct dpif_execute_helper_aux {
  * meaningful. */
 static void
 dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
-                       const struct nlattr *action, bool may_steal)
+                       const struct nlattr *action, bool should_steal)
 {
     struct dpif_execute_helper_aux *aux = aux_;
     int type = nl_attr_type(action);
@@ -1234,7 +1234,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
                         || type == OVS_ACTION_ATTR_TUNNEL_POP
                         || type == OVS_ACTION_ATTR_USERSPACE)) {
             dp_packet_reset_cutlen(packet);
-            if (!may_steal) {
+            if (!should_steal) {
                 packet = clone = dp_packet_clone(packet);
             }
             dp_packet_set_size(packet, dp_packet_size(packet) - cutlen);
@@ -1279,7 +1279,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
     case __OVS_ACTION_ATTR_MAX:
         OVS_NOT_REACHED();
     }
-    dp_packet_delete_batch(packets_, may_steal);
+    dp_packet_delete_batch(packets_, should_steal);
 }
 
 /* Executes 'execute' by performing most of the actions in userspace and

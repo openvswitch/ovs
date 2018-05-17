@@ -792,9 +792,9 @@ dp_packet_batch_clone(struct dp_packet_batch *dst,
 }
 
 static inline void
-dp_packet_delete_batch(struct dp_packet_batch *batch, bool may_steal)
+dp_packet_delete_batch(struct dp_packet_batch *batch, bool should_steal)
 {
-    if (may_steal) {
+    if (should_steal) {
         struct dp_packet *packet;
 
         DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
