@@ -547,6 +547,7 @@ static const struct net_device_ops lisp_netdev_ops = {
 	.ndo_stop               = lisp_stop,
 	.ndo_start_xmit         = lisp_dev_xmit,
 #ifdef  HAVE_RHEL7_MAX_MTU
+	.ndo_size		= sizeof(struct net_device_ops),
 	.extended.ndo_change_mtu = lisp_change_mtu,
 #else
 	.ndo_change_mtu         = lisp_change_mtu,

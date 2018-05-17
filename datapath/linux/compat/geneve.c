@@ -1272,6 +1272,7 @@ static const struct net_device_ops geneve_netdev_ops = {
 	.ndo_start_xmit		= geneve_dev_xmit,
 	.ndo_get_stats64	= ip_tunnel_get_stats64,
 #ifdef	HAVE_RHEL7_MAX_MTU
+	.ndo_size		= sizeof(struct net_device_ops),
 	.extended.ndo_change_mtu = geneve_change_mtu,
 #else
 	.ndo_change_mtu		= geneve_change_mtu,
