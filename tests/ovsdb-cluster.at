@@ -149,9 +149,9 @@ ovsdb|WARN|schema: changed 2 columns in 'OVN_Southbound' database from ephemeral
     sleep 2
 
     echo "waiting for ovn-sbctl processes to exit..."
-    i=0
     phase=0
-    while :; do
+    i=0
+    (while :; do echo; sleep 1; done) | while read; do
         printf "t=%2d s:" $i
 	done=0
         for j in $(seq 0 $(expr $n1 - 1)); do
@@ -190,7 +190,6 @@ ovsdb|WARN|schema: changed 2 columns in 'OVN_Southbound' database from ephemeral
 	    ;;
 	esac
 
-        sleep 1
 	i=$(expr $i + 1)
     done
     echo "...done"
