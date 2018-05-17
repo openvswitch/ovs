@@ -690,8 +690,12 @@ requires_datapath_assistance(const struct nlattr *a)
  * Some actions (e.g. output actions) can only be executed by a datapath.  This
  * function implements those actions by passing the action and the packets to
  * 'dp_execute_action' (along with 'dp').  If 'dp_execute_action' is passed a
- * true 'may_steal' parameter then it may possibly modify and must definitely
- * free the packets passed into it, otherwise it must leave them unchanged. */
+ * true 'steal' parameter then it must definitely free the packets passed into
+ * it.  The packet can be modified whether 'steal' is false or true.  If a
+ * packet is removed from the batch, then the fate of the packet is determined
+ * by the code that does this removal, irrespective of the value of 'steal'.
+ * Otherwise, if the packet is not removed from the batch and 'steal' is false
+ * then the packet could either be cloned or not. */
 void
 odp_execute_actions(void *dp, struct dp_packet_batch *batch, bool steal,
                     const struct nlattr *actions, size_t actions_len,
