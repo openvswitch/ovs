@@ -66,7 +66,7 @@ int ovs_vport_init(void)
 		goto err_lisp;
 	err = ipgre_init();
 	if (err)
-		goto err_gre;
+		goto err_ipgre;
 	err = ip6gre_init();
 	if (err)
 		goto err_ip6gre;
@@ -76,15 +76,19 @@ int ovs_vport_init(void)
 	err = geneve_init_module();
 	if (err)
 		goto err_geneve;
-
 	err = vxlan_init_module();
 	if (err)
 		goto err_vxlan;
 	err = ovs_stt_init_module();
 	if (err)
 		goto err_stt;
-	return 0;
+	err = gre_init();
+	if (err)
+		goto err_gre;
 
+	return 0;
+err_gre:
+	ovs_stt_cleanup_module();
 err_stt:
 	vxlan_cleanup_module();
 err_vxlan:
@@ -95,7 +99,7 @@ err_ip6_tunnel:
 	ip6gre_fini();
 err_ip6gre:
 	ipgre_fini();
-err_gre:
+err_ipgre:
 	lisp_cleanup_module();
 err_lisp:
 	kfree(dev_table);
@@ -109,6 +113,7 @@ err_lisp:
  */
 void ovs_vport_exit(void)
 {
+	gre_exit();
 	ovs_stt_cleanup_module();
 	vxlan_cleanup_module();
 	geneve_cleanup_module();

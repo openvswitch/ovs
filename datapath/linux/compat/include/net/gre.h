@@ -32,6 +32,15 @@ static inline void rpl_ip6_tunnel_cleanup(void)
 {
 }
 
+static inline int rpl_gre_init(void)
+{
+	return 0;
+}
+
+static inline void rpl_gre_exit(void)
+{
+}
+
 #define gre_fb_xmit dev_queue_xmit
 
 #ifdef CONFIG_INET
@@ -153,6 +162,8 @@ int rpl_ip6gre_init(void);
 void rpl_ip6gre_fini(void);
 int rpl_ip6_tunnel_init(void);
 void rpl_ip6_tunnel_cleanup(void);
+int rpl_gre_init(void);
+void rpl_gre_exit(void);
 
 #define gretap_fb_dev_create rpl_gretap_fb_dev_create
 struct net_device *rpl_gretap_fb_dev_create(struct net *net, const char *name,
@@ -164,6 +175,11 @@ int rpl_gre_parse_header(struct sk_buff *skb, struct tnl_ptk_info *tpi,
 
 #define gre_fb_xmit rpl_gre_fb_xmit
 netdev_tx_t rpl_gre_fb_xmit(struct sk_buff *skb);
+
+#define gre_add_protocol rpl_gre_add_protocol
+int rpl_gre_add_protocol(const struct gre_protocol *proto, u8 version);
+#define gre_del_protocol rpl_gre_del_protocol
+int rpl_gre_del_protocol(const struct gre_protocol *proto, u8 version);
 #endif /* USE_UPSTREAM_TUNNEL */
 
 #define ipgre_init rpl_ipgre_init
@@ -172,6 +188,8 @@ netdev_tx_t rpl_gre_fb_xmit(struct sk_buff *skb);
 #define ip6gre_fini rpl_ip6gre_fini
 #define ip6_tunnel_init rpl_ip6_tunnel_init
 #define ip6_tunnel_cleanup rpl_ip6_tunnel_cleanup
+#define gre_init rpl_gre_init
+#define gre_exit rpl_gre_exit
 
 #define gre_fill_metadata_dst ovs_gre_fill_metadata_dst
 int ovs_gre_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb);

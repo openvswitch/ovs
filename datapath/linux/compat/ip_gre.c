@@ -96,13 +96,14 @@ static __be32 tunnel_id_to_key(__be64 x)
 #endif
 }
 
+#ifdef HAVE_DEMUX_PARSE_GRE_HEADER
 /* Called with rcu_read_lock and BH disabled. */
 static int gre_err(struct sk_buff *skb, u32 info,
 		   const struct tnl_ptk_info *tpi)
 {
 	return PACKET_REJECT;
 }
-
+#endif
 static struct dst_ops md_dst_ops = {
 	.family =		AF_UNSPEC,
 };
@@ -746,10 +747,27 @@ static void __gre_tunnel_init(struct net_device *dev)
 	}
 }
 
-static struct gre_cisco_protocol ipgre_protocol = {
+#ifdef HAVE_DEMUX_PARSE_GRE_HEADER
+static struct gre_cisco_protocol ipgre_cisco_protocol = {
 	.handler        = gre_rcv,
 	.err_handler    = gre_err,
 	.priority       = 1,
+};
+#endif
+
+static int __gre_rcv(struct sk_buff *skb)
+{
+	return gre_rcv(skb, NULL);
+}
+
+void __gre_err(struct sk_buff *skb, u32 info)
+{
+	pr_warn("%s: GRE receive error\n", __func__);
+}
+
+static const struct gre_protocol ipgre_protocol = {
+	.handler     = __gre_rcv,
+	.err_handler = __gre_err,
 };
 
 static int __net_init ipgre_init_net(struct net *net)
@@ -1631,11 +1649,19 @@ int rpl_ipgre_init(void)
 	if (err < 0)
 		goto pnet_ipgre_failed;
 
-	err = gre_cisco_register(&ipgre_protocol);
+#ifdef HAVE_DEMUX_PARSE_GRE_HEADER
+	err = gre_cisco_register(&ipgre_cisco_protocol);
 	if (err < 0) {
 		pr_info("%s: can't add protocol\n", __func__);
 		goto add_proto_failed;
 	}
+#else
+	err = gre_add_protocol(&ipgre_protocol, GREPROTO_CISCO);
+	if (err < 0) {
+		pr_info("%s: can't add protocol\n", __func__);
+		goto add_proto_failed;
+	}
+#endif
 
 	pr_info("GRE over IPv4 tunneling driver\n");
 	
@@ -1658,7 +1684,11 @@ void rpl_ipgre_fini(void)
 {
 	ovs_vport_ops_unregister(&ovs_erspan_vport_ops);
 	ovs_vport_ops_unregister(&ovs_ipgre_vport_ops);
-	gre_cisco_unregister(&ipgre_protocol);
+#ifdef HAVE_DEMUX_PARSE_GRE_HEADER
+	gre_cisco_unregister(&ipgre_cisco_protocol);
+#else
+	gre_del_protocol(&ipgre_protocol, GREPROTO_CISCO);
+#endif
 	unregister_pernet_device(&ipgre_net_ops);
 	unregister_pernet_device(&erspan_net_ops);
 	unregister_pernet_device(&ipgre_tap_net_ops);
