@@ -2046,12 +2046,10 @@ ctl_default_db(void)
  * database, otherwise false.  (Not very smart, so it's prone to false
  * positives.) */
 bool
-ctl_might_write_to_db(char **argv)
+ctl_might_write_to_db(const struct ctl_command *commands, size_t n)
 {
-    for (; *argv; argv++) {
-        const struct ctl_command_syntax *p = shash_find_data(&all_commands,
-                                                             *argv);
-        if (p && p->mode == RW) {
+    for (size_t i = 0; i < n; i++) {
+        if (commands[i].syntax->mode == RW) {
             return true;
         }
     }
