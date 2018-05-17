@@ -31,8 +31,7 @@ check_SCRIPTS += \
 	utilities/ovs-appctl-bashcomp.bash \
 	utilities/ovs-vsctl-bashcomp.bash
 
-EXTRA_DIST += utilities/ovs-sim.in utilities/ovs-sim.1.xml
-noinst_man_MANS += utilities/ovs-sim.1
+EXTRA_DIST += utilities/ovs-sim.in
 noinst_SCRIPTS += utilities/ovs-sim
 
 utilities/ovs-lib: $(top_builddir)/config.status
@@ -92,7 +91,6 @@ CLEANFILES += \
 	utilities/ovs-pki \
 	utilities/ovs-pki.8 \
 	utilities/ovs-sim \
-	utilities/ovs-sim.1 \
 	utilities/ovs-tcpdump \
 	utilities/ovs-tcpdump.8 \
 	utilities/ovs-tcpundump \

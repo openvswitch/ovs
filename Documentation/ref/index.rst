@@ -39,6 +39,7 @@ time:
 .. toctree::
    :maxdepth: 3
 
+   ovs-sim.1
    ovs-test.8
    ovs-vlan-test.8
    ovsdb-server.7

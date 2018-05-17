@@ -158,7 +158,8 @@ RST_MANPAGES = \
 	ovs-vlan-test.8.rst \
 	ovsdb-server.7.rst \
 	ovsdb.5.rst \
-	ovsdb.7.rst
+	ovsdb.7.rst \
+	ovs-sim.1.rst
 
 # The GNU standards say that these variables should control
 # installation directories for manpages in each section.  Automake

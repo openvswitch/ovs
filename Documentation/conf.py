@@ -114,6 +114,8 @@ html_static_path = ['_static']
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 _man_pages = [
+    ('ovs-sim.1',
+     u'Open vSwitch simulator environment'),
     ('ovs-test.8',
      u'Check Linux drivers for performance, vlan and L3 tunneling problems'),
     ('ovs-vlan-test.8',
