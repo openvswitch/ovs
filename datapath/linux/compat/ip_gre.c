@@ -1189,6 +1189,7 @@ static const struct net_device_ops gre_tap_netdev_ops = {
 	.ndo_set_mac_address	= eth_mac_addr,
 	.ndo_validate_addr	= eth_validate_addr,
 #ifdef	HAVE_RHEL7_MAX_MTU
+	.ndo_size		= sizeof(struct net_device_ops),
 	.extended.ndo_change_mtu = ip_tunnel_change_mtu,
 #else
 	.ndo_change_mtu		= ip_tunnel_change_mtu,

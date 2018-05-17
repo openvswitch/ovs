@@ -1852,6 +1852,7 @@ static const struct net_device_ops stt_netdev_ops = {
 	.ndo_start_xmit         = stt_dev_xmit,
 	.ndo_get_stats64        = ip_tunnel_get_stats64,
 #ifdef  HAVE_RHEL7_MAX_MTU
+	.ndo_size		= sizeof(struct net_device_ops),
 	.extended.ndo_change_mtu = stt_change_mtu,
 #else
 	.ndo_change_mtu         = stt_change_mtu,
