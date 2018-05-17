@@ -226,14 +226,6 @@ print_and_free_json(struct json *json)
     free(string);
 }
 
-static struct ovsdb_error *
-write_and_free_json(struct ovsdb_log *log, struct json *json)
-{
-    struct ovsdb_error *error = ovsdb_log_write(log, json);
-    json_destroy(json);
-    return error;
-}
-
 static void
 check_ovsdb_error(struct ovsdb_error *error)
 {
@@ -270,7 +262,7 @@ do_create(struct ovs_cmdl_context *ctx)
     /* Create database file. */
     check_ovsdb_error(ovsdb_log_open(db_file_name, OVSDB_MAGIC,
                                      OVSDB_LOG_CREATE_EXCL, -1, &log));
-    check_ovsdb_error(write_and_free_json(log, json));
+    check_ovsdb_error(ovsdb_log_write_and_free(log, json));
     check_ovsdb_error(ovsdb_log_commit_block(log));
     ovsdb_log_close(log);
 }
@@ -348,9 +340,9 @@ write_standalone_db(const char *file_name, const char *comment,
         return error;
     }
 
-    error = write_and_free_json(log, ovsdb_schema_to_json(db->schema));
+    error = ovsdb_log_write_and_free(log, ovsdb_schema_to_json(db->schema));
     if (!error) {
-        error = write_and_free_json(log, ovsdb_to_txn_json(db, comment));
+        error = ovsdb_log_write_and_free(log, ovsdb_to_txn_json(db, comment));
     }
     ovsdb_log_close(log);
 

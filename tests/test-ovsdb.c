@@ -378,8 +378,7 @@ do_log_io(struct ovs_cmdl_context *ctx)
             }
         } else if (!strncmp(command, "write:", 6)) {
             struct json *json = parse_json(command + 6);
-            error = ovsdb_log_write(target, json);
-            json_destroy(json);
+            error = ovsdb_log_write_and_free(target, json);
         } else if (!strcmp(command, "commit")) {
             error = ovsdb_log_commit_block(target);
         } else if (!strcmp(command, "replace_start")) {
