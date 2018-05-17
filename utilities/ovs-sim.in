@@ -235,38 +235,189 @@ EOF
 }
 export -f net_attach
 
+ovn_start_db() {
+    local db=$1 model=$2 servers=$3 schema=$4
+    local DB=$(echo $db | tr a-z A-Z)
+    local schema_name=$(ovsdb-tool schema-name $schema)
+
+    case $model in
+	standalone | backup) ;;
+	clustered)
+	    case $servers in
+		[1-9] | [1-9][0-9]) ;;
+		*) echo "${db}db servers must be between 1 and 99" >&2
+		   exit 1
+		   ;;
+	    esac
+	    ;;
+	*)
+	    echo "unknown ${db}db model \"$model\"" >&2
+	    exit 1
+	    ;;
+    esac
+
+    ovn_start_ovsdb_server() {
+	local i=$1; shift
+	as ${db}$i ovsdb-server --detach --no-chdir --pidfile=$db.pid \
+	   -vsyslog:off -vconsole:off --log-file="$sim_base"/$db$i/$db.log \
+	   --remote=db:$schema_name,${DB}_Global,connections \
+	   --private-key=db:$schema_name,SSL,private_key \
+	   --certificate=db:$schema_name,SSL,certificate \
+	   --ca-cert=db:$schema_name,SSL,ca_cert \
+	   --ssl-protocols=db:$schema_name,SSL,ssl_protocols \
+	   --ssl-ciphers=db:$schema_name,SSL,ssl_ciphers \
+	   --unixctl=${db} --remote=punix:$db.ovsdb \
+	   "$sim_base"/$db$i/$db.db "$@"
+    }
+
+    ovn_prep_db() {
+	local i=$1
+	mkdir "$sim_base"/${db}$i
+	touch "$sim_base"/${db}$i/.$db.db.~lock~
+    }
+
+    local n_remotes=1
+    case $model in
+	standalone)
+	    ovn_prep_db 1
+	    ovsdb-tool create "$sim_base"/${db}1/$db.db "$schema"
+	    ovn_start_ovsdb_server 1
+	    ;;
+	backup)
+	    for i in 1 2; do
+		ovn_prep_db $i
+		ovsdb-tool create "$sim_base"/$db$i/$db.db "$schema"
+	    done
+	    ovn_start_ovsdb_server 1
+	    ovn_start_ovsdb_server 2 --sync-from=unix:"$sim_base"/${db}1/$db.ovsdb
+	    cat <<EOF
+The backup server of OVN $DB can be accessed by:
+* ovn-${db}ctl --db=unix:$sim_base/${db}2/$db.ovsdb
+* ovs-appctl -t $sim_base/${db}2/${db}
+The backup database file is $sim_base/${db}2/$db.db
+EOF
+	    ;;
+	clustered)
+	    n_remotes=$servers
+	    for i in $(seq $servers); do
+		ovn_prep_db $i
+		if test $i = 1; then
+		    ovsdb-tool create-cluster "$sim_base"/$db$i/$db.db "$schema" unix:"$sim_base"/$db$i/db.raft
+		else
+		    ovsdb-tool join-cluster "$sim_base"/$db$i/$db.db $schema_name unix:"$sim_base"/$db$i/db.raft unix:"$sim_base"/${db}1/db.raft
+		fi
+		ovn_start_ovsdb_server $i
+	    done
+	    for i in $(seq $servers); do
+		ovsdb-client wait unix:"$sim_base"/${db}$i/$db.ovsdb $schema_name connected
+	    done
+	    ;;
+    esac
+
+    remote=unix:"$sim_base"/${db}1/$db.ovsdb
+    for i in `seq 2 $n_remotes`; do
+	remote=$remote,unix:"$sim_base"/${db}$i/$db.ovsdb
+    done
+    eval OVN_${DB}_DB=\$remote
+    eval export OVN_${DB}_DB
+}
+export -f ovn_start_db
+
 ovn_start() {
-    if test "$1" == --help; then
-        cat <<EOF
+    local nbdb_model=standalone
+    local nbdb_servers=3
+    local sbdb_model=standalone
+    local sbdb_servers=3
+    local prev=
+    for option; do
+	# This option-parsing mechanism borrowed from a Autoconf-generated
+	# configure script under the following license:
+
+	# Copyright (C) 1992, 1993, 1994, 1995, 1996, 1998, 1999, 2000, 2001,
+	# 2002, 2003, 2004, 2005, 2006, 2009, 2013 Free Software Foundation, Inc.
+	# This configure script is free software; the Free Software Foundation
+	# gives unlimited permission to copy, distribute and modify it.
+
+	# If the previous option needs an argument, assign it.
+	if test -n "$prev"; then
+            eval $prev=\$option
+            prev=
+            continue
+	fi
+	case $option in
+            *=*) optarg=`expr "X$option" : '[^=]*=\(.*\)'` ;;
+            *) optarg=yes ;;
+	esac
+
+	case $dashdash$option in
+            --)
+		dashdash=yes ;;
+            -h|--help)
+		cat <<EOF
 $FUNCNAME: start OVN central databases and daemons
-usage: $FUNCNAME
+usage: $FUNCNAME [OPTION...]
 
 This creates and initializes the central OVN databases (northbound and
 southbound), starts their ovsdb-server daemons, and starts the ovn-northd
 daemon.
+
+Options:
+  --nbdb-model=standalone|backup|clustered    northbound database model
+  --nbdb-servers=N     number of servers in nbdb cluster (default: 3)
+  --sbdb-model=standalone|backup|clustered    southbound database model
+  --sbdb-servers=N     number of servers in sbdb cluster (default: 3)
+  -h, --help           Print this usage message.
 EOF
-        return 0
-    fi
-    if test $# != 0; then
-        echo >&2 "$FUNCNAME: no arguments accepted (use --help for help)"
-        return 1
-    fi
+		return
+		;;
+
+            --nbdb-s*=*)
+		nbdb_servers=$optarg
+		nbdb_model=clustered
+		;;
+            --nbdb-s*)
+		prev=nbdb_servers
+		nbdb_model=clustered
+		;;
+            --nbdb-m*=*)
+		nbdb_model=$optarg
+		;;
+            --nbdb-m*)
+		prev=nbdb_model
+		;;
+            --sbdb-s*=*)
+		sbdb_servers=$optarg
+		sbdb_model=clustered
+		;;
+            --sbdb-s*)
+		prev=sbdb_servers
+		sbdb_model=clustered
+		;;
+            --sbdb-m*=*)
+		sbdb_model=$optarg
+		;;
+            --sbdb-m*)
+		prev=sbdb_model
+		;;
+            -*)
+		echo "unrecognized option $option (use --help for help)" >&2
+		return 1
+		;;
+            *)
+		echo "$option: non-option arguments not supported (use --help for help)" >&2
+		return 1
+		;;
+	esac
+	shift
+    done
 
     if test -d ovn-sb || test -d ovn-nb; then
         echo >&2 "OVN already started"
-        exit 1
+        return 1
     fi
 
-    daemon_opts="--detach --no-chdir --pidfile -vconsole:off -vsyslog:off --log-file"
-    for db in ovn-sb ovn-nb; do
-        mkdir "$sim_base"/$db
-        touch "$sim_base"/$db/.$db.db.~lock~
-        as $db ovsdb-tool create "$sim_base"/$db/$db.db "$sim_srcdir"/ovn/$db.ovsschema
-        as $db ovsdb-server --remote=punix:"$sim_base"/$db/$db.sock "$sim_base"/$db/$db.db $daemon_opts
-    done
-
-    OVN_NB_DB=unix:$sim_base/ovn-nb/ovn-nb.sock; export OVN_NB_DB
-    OVN_SB_DB=unix:$sim_base/ovn-sb/ovn-sb.sock; export OVN_SB_DB
+    ovn_start_db nb "$nbdb_model" "$nbdb_servers" "$sim_srcdir"/ovn/ovn-nb.ovsschema
+    ovn_start_db sb "$sbdb_model" "$sbdb_servers" "$sim_srcdir"/ovn/ovn-sb.ovsschema
 
     ovn-nbctl init
     ovn-sbctl init
@@ -303,7 +454,7 @@ EOF
     ovs-appctl ovs/route/add $ip/$masklen $bridge > /dev/null
     ovs-vsctl \
         -- set Open_vSwitch . external-ids:system-id=$sandbox \
-        -- set Open_vSwitch . external-ids:ovn-remote=unix:$sim_base/ovn-sb/ovn-sb.sock \
+        -- set Open_vSwitch . external-ids:ovn-remote=$OVN_SB_DB \
         -- set Open_vSwitch . external-ids:ovn-encap-type=geneve \
         -- set Open_vSwitch . external-ids:ovn-encap-ip=$ip\
         -- add-br br-int \

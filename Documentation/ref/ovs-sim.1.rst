@@ -147,11 +147,31 @@ OVN Commands
 
 These commands interact with OVN, the Open Virtual Network.
 
-``ovn_start``
+``ovn_start`` [*options*]
     Creates and initializes the central OVN databases (both
     ``ovn-sb(5)`` and ``ovn-nb(5)``) and starts an instance of
     ``ovsdb-server`` for each one.  Also starts an instance of
     ``ovn-northd``.
+
+    The following options are available:
+
+       ``--nbdb-model`` *model*
+           Uses the given database model for the northbound database.
+           The *model* may be ``standalone`` (the default), ``backup``,
+           or ``clustered``.
+
+       ``--nbdb-servers`` *n*
+           For a clustered northbound database, the number of servers in
+           the cluster.  The default is 3.
+
+       ``--sbdb-model`` *model*
+           Uses the given database model for the southbound database.
+           The *model* may be ``standalone`` (the default), ``backup``,
+           or ``clustered``.
+
+       ``--sbdb-servers`` *n*
+           For a clustered southbound database, the number of servers in
+           the cluster.  The default is 3.
 
 ``ovn_attach`` *network* *bridge* *ip* [*masklen*]
     First, this command attaches bridge to interconnection network
@@ -195,7 +215,7 @@ Here’s a primitive OVN "scale test" (adjust the scale by changing
 ``n`` in the first line::
 
     n=200; export n
-    ovn_start
+    ovn_start --sbdb-model=clustered
     net_add n1
     ovn-nbctl ls-add br0
     for i in `seq $n`; do
