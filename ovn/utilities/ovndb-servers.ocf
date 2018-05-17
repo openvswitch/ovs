@@ -409,7 +409,7 @@ ovsdb_server_promote() {
     rc=$?
     case $rc in
         ${OCF_SUCCESS}) ;;
-        ${OCF_RUNNING_MASTER}) return ${OCF_SUCCESS};;
+        ${OCF_RUNNING_MASTER}) ;;
         *)
             ovsdb_server_master_update $OCF_RUNNING_MASTER
             return ${rc}
