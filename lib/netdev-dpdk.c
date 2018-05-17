@@ -788,7 +788,7 @@ dpdk_eth_dev_port_config(struct netdev_dpdk *dev, int n_rxq, int n_txq)
      * than highlighting the one known not to need scatter */
     if (dev->mtu > ETHER_MTU) {
         rte_eth_dev_info_get(dev->port_id, &info);
-        if (strncmp(info.driver_name, "net_nfp", 6)) {
+        if (strncmp(info.driver_name, "net_nfp", 7)) {
             conf.rxmode.enable_scatter = 1;
         }
     }
