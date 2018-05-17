@@ -100,6 +100,11 @@ sim_setvars() {
 }
 export -f sim_setvars
 
+ovs-vsctl () { command ovs-vsctl -vsyslog:off "$@"; }; export -f ovs-vsctl
+ovs-nbctl () { command ovs-nbctl -vsyslog:off "$@"; }; export -f ovs-nbctl
+ovs-sbctl () { command ovs-sbctl -vsyslog:off "$@"; }; export -f ovs-sbctl
+vtep-ctl () { command vtep-ctl -vsyslog:off "$@"; }; export -f vtep-ctl
+
 as() {
     case $# in
         0)
@@ -160,18 +165,18 @@ EOF
     # Create sandbox.
     mkdir "$sim_base"/$1 || return 1
 
-    daemon_opts="--detach --no-chdir --pidfile -vconsole:off --log-file"
+    daemon_opts="--detach --no-chdir --pidfile -vconsole:off -vsyslog:off --log-file"
 
     # Create database and start ovsdb-server.
     touch $sim_base/$1/.conf.db.~lock~
     as $1 ovsdb-tool create $sim_base/$1/conf.db "$sim_srcdir/vswitchd/vswitch.ovsschema"
-    as $1 ovsdb-server $daemon_opts --remote=punix:"$sim_base"/$1/db.sock
+    as $1 ovsdb-server --remote=punix:"$sim_base"/$1/db.sock $daemon_opts
 
     # Initialize database.
     as $1 ovs-vsctl --no-wait -- init
 
     # Start ovs-vswitchd.
-    as $1 ovs-vswitchd $daemon_opts --enable-dummy=system -vvconn -vnetdev_dummy
+    as $1 ovs-vswitchd --enable-dummy=system -vvconn -vnetdev_dummy $daemon_opts
 }
 export -f sim_add
 
@@ -252,12 +257,12 @@ EOF
         exit 1
     fi
 
-    daemon_opts="--detach --no-chdir --pidfile -vconsole:off --log-file"
+    daemon_opts="--detach --no-chdir --pidfile -vconsole:off -vsyslog:off --log-file"
     for db in ovn-sb ovn-nb; do
         mkdir "$sim_base"/$db
         touch "$sim_base"/$db/.$db.db.~lock~
         as $db ovsdb-tool create "$sim_base"/$db/$db.db "$sim_srcdir"/ovn/$db.ovsschema
-        as $db ovsdb-server $daemon_opts --remote=punix:"$sim_base"/$db/$db.sock "$sim_base"/$db/$db.db
+        as $db ovsdb-server --remote=punix:"$sim_base"/$db/$db.sock "$sim_base"/$db/$db.db $daemon_opts
     done
 
     OVN_NB_DB=unix:$sim_base/ovn-nb/ovn-nb.sock; export OVN_NB_DB
@@ -267,9 +272,8 @@ EOF
     ovn-sbctl init
 
     mkdir "$sim_base"/northd
-    as northd ovn-northd $daemon_opts \
-               --ovnnb-db="$OVN_NB_DB" \
-               --ovnsb-db="$OVN_SB_DB"
+    as northd ovn-northd --ovnnb-db="$OVN_NB_DB" --ovnsb-db="$OVN_SB_DB" \
+       $daemon_opts
 }
 export -f ovn_start
 
@@ -304,7 +308,7 @@ EOF
         -- set Open_vSwitch . external-ids:ovn-encap-ip=$ip\
         -- add-br br-int \
         -- set bridge br-int fail-mode=secure other-config:disable-in-band=true
-    ovn-controller --detach --no-chdir --pidfile -vconsole:off --log-file
+    ovn-controller --detach --no-chdir --pidfile -vconsole:off -vsyslog:off --log-file
 }
 export -f ovn_attach
 
@@ -347,6 +351,7 @@ rc='
 EOF
 '
 
+set +e
 status=0; bash --rcfile <(echo "$rc") || status=$?
 
 if $interactive; then
