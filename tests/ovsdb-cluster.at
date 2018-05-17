@@ -196,12 +196,12 @@ ovsdb|WARN|schema: changed 2 columns in 'OVN_Southbound' database from ephemeral
     echo "...done"
     AT_CHECK([if test $phase != 2; then exit 77; fi])
 
-    for i in `seq 0 9`; do
-	for j in `seq 5`; do
-	    echo "$i-$j=$i-$j"
-	done
-    done > expout
-    AT_CHECK([ovn-sbctl --timeout=30 --log-file=finalize.log -vtimeval:off -vfile -vsyslog:off --bare get SB_Global . external-ids | sed 's/, /\n/g; s/[[{}""]]//g;'], [0], [expout])
+    for i in $(seq 0 $(expr $n1 - 1) ); do
+        for j in `seq $n2`; do
+            echo "$i-$j=$i-$j"
+        done
+    done | sort > expout
+    AT_CHECK([ovn-sbctl --timeout=30 --log-file=finalize.log -vtimeval:off -vfile -vsyslog:off --bare get SB_Global . external-ids | sed 's/, /\n/g; s/[[{}""]]//g;' | sort], [0], [expout])
 
     for i in `seq $n`; do
 	if test $i != $victim || test $phase != 1; then
