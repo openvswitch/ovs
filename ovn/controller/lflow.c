@@ -14,8 +14,9 @@
  */
 
 #include <config.h>
-#include "gchassis.h"
 #include "lflow.h"
+#include "coverage.h"
+#include "gchassis.h"
 #include "lport.h"
 #include "ofctrl.h"
 #include "openvswitch/dynamic-string.h"
@@ -34,6 +35,8 @@
 #include "sset.h"
 
 VLOG_DEFINE_THIS_MODULE(lflow);
+
+COVERAGE_DEFINE(lflow_run);
 
 /* Symbol table. */
 
@@ -449,6 +452,8 @@ lflow_run(struct controller_ctx *ctx,
           struct sset *active_tunnels,
           struct sset *local_lport_ids)
 {
+    COVERAGE_INC(lflow_run);
+
     add_logical_flows(ctx, chassis_index, local_datapaths,
                       group_table, meter_table, chassis, addr_sets,
                       port_groups, flow_table, active_tunnels,
