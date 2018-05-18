@@ -1,4 +1,4 @@
-v2.9.1 - xx xxx xxxx
+v2.9.1 - 18 May 2018
 --------------------
    - OVSDB has new, experimental support for database clustering:
      * New high-level documentation in ovsdb(7).
@@ -17,7 +17,7 @@ v2.9.1 - xx xxx xxxx
      * ovs-sandbox: New support for clustered databases.
    - OVN:
      * ovn-sbctl, ovn-nbctl: New options --leader-only, --no-leader-only.
-
+   - Bug fixes
 
 v2.9.0 - 19 Feb 2018
 --------------------
