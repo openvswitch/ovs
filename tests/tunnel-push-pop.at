@@ -9,6 +9,12 @@ AT_CHECK([ovs-vsctl add-port int-br t1 -- set Interface t1 type=erspan \
                     -- add-port int-br t2 -- set Interface t2 type=erspan \
                        options:remote_ip=1.1.2.92 options:key=567 options:erspan_ver=2 \
                        options:erspan_dir=1 options:erspan_hwid=0x7 ofport_request=3\
+                    -- add-port int-br t3 -- set Interface t3 type=erspan \
+                       options:remote_ip=flow options:erspan_ver=2 options:key=456 \
+                       options:erspan_hwid=flow options:erspan_dir=flow ofport_request=4\
+                    -- add-port int-br t4 -- set Interface t4 type=erspan \
+                       options:remote_ip=flow options:erspan_ver=2 options:key=56 \
+                       options:erspan_ver=flow ofport_request=5\
                        ], [0])
 
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
@@ -20,6 +26,8 @@ dummy@ovs-dummy: hit:0 missed:0
 		int-br 65534/2: (dummy-internal)
 		t1 2/3: (erspan: erspan_idx=0x3, erspan_ver=1, key=123, remote_ip=1.1.2.92)
 		t2 3/3: (erspan: erspan_dir=1, erspan_hwid=0x7, erspan_ver=2, key=567, remote_ip=1.1.2.92)
+		t3 4/3: (erspan: erspan_dir=flow, erspan_hwid=flow, erspan_ver=2, key=456, remote_ip=flow)
+		t4 5/3: (erspan: erspan_dir=flow, erspan_hwid=flow, erspan_idx=flow, erspan_ver=flow, key=56, remote_ip=flow)
 ])
 
 dnl First setup dummy interface IP address, then add the route
@@ -69,7 +77,7 @@ AT_CHECK([ovs-appctl tnl/neigh/show | tail -n+3 | sort], [0], [dnl
 
 AT_CHECK([ovs-appctl tnl/ports/show |sort], [0], [dnl
 Listening ports:
-erspan_sys (3) ref_cnt=2
+erspan_sys (3) ref_cnt=4
 ])
 
 dnl Check ERSPAN v1 tunnel push

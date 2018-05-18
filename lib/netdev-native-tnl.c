@@ -628,6 +628,7 @@ netdev_erspan_build_header(const struct netdev *netdev,
     struct erspan_base_hdr *ersh;
     unsigned int hlen;
     uint32_t tun_id;
+    int erspan_ver;
     uint16_t sid;
 
     /* XXX: RCUfy tnl_cfg. */
@@ -645,7 +646,15 @@ netdev_erspan_build_header(const struct netdev *netdev,
         sid = (uint16_t) tun_id;
     }
 
-    if (tnl_cfg->erspan_ver == 1) {
+    if (tnl_cfg->erspan_ver_flow) {
+        erspan_ver = params->flow->tunnel.erspan_ver;
+    } else {
+        erspan_ver = tnl_cfg->erspan_ver;
+    }
+
+    if (erspan_ver == 1) {
+        ovs_be32 *index;
+
         greh->protocol = htons(ETH_TYPE_ERSPAN1);
         greh->flags = htons(GRE_SEQ);
         ersh->ver = 1;
@@ -654,19 +663,38 @@ netdev_erspan_build_header(const struct netdev *netdev,
         put_16aligned_be32(ALIGNED_CAST(ovs_16aligned_be32 *, ersh + 1),
                            htonl(tnl_cfg->erspan_idx));
 
+        index = (ovs_be32 *)(ersh + 1);
+
+        if (tnl_cfg->erspan_idx_flow) {
+            *index = htonl(params->flow->tunnel.erspan_idx);
+        } else {
+            *index = htonl(tnl_cfg->erspan_idx);
+        }
+
         hlen = ERSPAN_GREHDR_LEN + sizeof *ersh + ERSPAN_V1_MDSIZE;
-    } else if (tnl_cfg->erspan_ver == 2) {
+    } else if (erspan_ver == 2) {
+        struct erspan_md2 *md2 = ALIGNED_CAST(struct erspan_md2 *, ersh + 1);
+
         greh->protocol = htons(ETH_TYPE_ERSPAN2);
         greh->flags = htons(GRE_SEQ);
         ersh->ver = 2;
         set_sid(ersh, sid);
 
-        struct erspan_md2 *md2 = ALIGNED_CAST(struct erspan_md2 *, ersh + 1);
         md2->sgt = 0; /* security group tag */
         md2->gra = 0;
         put_16aligned_be32(&md2->timestamp, 0);
-        set_hwid(md2, tnl_cfg->erspan_hwid);
-        md2->dir = tnl_cfg->erspan_dir;
+
+        if (tnl_cfg->erspan_hwid_flow) {
+            set_hwid(md2, params->flow->tunnel.erspan_hwid);
+        } else {
+            set_hwid(md2, tnl_cfg->erspan_hwid);
+        }
+
+        if (tnl_cfg->erspan_dir_flow) {
+            md2->dir = params->flow->tunnel.erspan_dir;
+        } else {
+            md2->dir = tnl_cfg->erspan_dir;
+        }
 
         hlen = ERSPAN_GREHDR_LEN + sizeof *ersh + ERSPAN_V2_MDSIZE;
     } else {

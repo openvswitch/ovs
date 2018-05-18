@@ -134,6 +134,11 @@ struct netdev_tunnel_config {
     uint8_t erspan_ver;
     uint8_t erspan_dir;
     uint8_t erspan_hwid;
+
+    bool erspan_ver_flow;
+    bool erspan_idx_flow;
+    bool erspan_dir_flow;
+    bool erspan_hwid_flow;
 };
 
 void netdev_run(void);

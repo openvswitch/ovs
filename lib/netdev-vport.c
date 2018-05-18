@@ -545,36 +545,63 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
             tnl_cfg.egress_pkt_mark = strtoul(node->value, NULL, 10);
             tnl_cfg.set_egress_pkt_mark = true;
         } else if (!strcmp(node->key, "erspan_idx")) {
-            tnl_cfg.erspan_idx = strtol(node->value, NULL, 16);
-            if (tnl_cfg.erspan_idx & ~ERSPAN_IDX_MASK) {
-                ds_put_format(&errors, "%s: invalid erspan index: %s\n",
-                              name, node->value);
-                err = EINVAL;
-                goto out;
+            if (!strcmp(node->value, "flow")) {
+                tnl_cfg.erspan_idx_flow = true;
+            } else {
+                tnl_cfg.erspan_idx_flow = false;
+                tnl_cfg.erspan_idx = strtol(node->value, NULL, 16);
+
+                if (tnl_cfg.erspan_idx & ~ERSPAN_IDX_MASK) {
+                    ds_put_format(&errors, "%s: invalid erspan index: %s\n",
+                                  name, node->value);
+                    err = EINVAL;
+                    goto out;
+                }
             }
         } else if (!strcmp(node->key, "erspan_ver")) {
-            tnl_cfg.erspan_ver = atoi(node->value);
-            if (tnl_cfg.erspan_ver != 1 && tnl_cfg.erspan_ver != 2) {
-                ds_put_format(&errors, "%s: invalid erspan version: %s\n",
-                              name, node->value);
-                err = EINVAL;
-                goto out;
+            if (!strcmp(node->value, "flow")) {
+                tnl_cfg.erspan_ver_flow = true;
+                tnl_cfg.erspan_idx_flow = true;
+                tnl_cfg.erspan_dir_flow = true;
+                tnl_cfg.erspan_hwid_flow = true;
+            } else {
+                tnl_cfg.erspan_ver_flow = false;
+                tnl_cfg.erspan_ver = atoi(node->value);
+
+                if (tnl_cfg.erspan_ver != 1 && tnl_cfg.erspan_ver != 2) {
+                    ds_put_format(&errors, "%s: invalid erspan version: %s\n",
+                                  name, node->value);
+                    err = EINVAL;
+                    goto out;
+                }
             }
         } else if (!strcmp(node->key, "erspan_dir")) {
-            tnl_cfg.erspan_dir = atoi(node->value);
-            if (tnl_cfg.erspan_dir != 0 && tnl_cfg.erspan_dir != 1) {
-                ds_put_format(&errors, "%s: invalid erspan direction: %s\n",
-                              name, node->value);
-                err = EINVAL;
-                goto out;
+            if (!strcmp(node->value, "flow")) {
+                tnl_cfg.erspan_dir_flow = true;
+            } else {
+                tnl_cfg.erspan_dir_flow = false;
+                tnl_cfg.erspan_dir = atoi(node->value);
+
+                if (tnl_cfg.erspan_dir != 0 && tnl_cfg.erspan_dir != 1) {
+                    ds_put_format(&errors, "%s: invalid erspan direction: %s\n",
+                                  name, node->value);
+                    err = EINVAL;
+                    goto out;
+                }
             }
         } else if (!strcmp(node->key, "erspan_hwid")) {
-            tnl_cfg.erspan_hwid = strtol(node->value, NULL, 16);
-            if (tnl_cfg.erspan_hwid & ~(ERSPAN_HWID_MASK >> 4)) {
-                ds_put_format(&errors, "%s: invalid erspan hardware ID: %s\n",
-                              name, node->value);
-                err = EINVAL;
-                goto out;
+            if (!strcmp(node->value, "flow")) {
+                tnl_cfg.erspan_hwid_flow = true;
+            } else {
+                tnl_cfg.erspan_hwid_flow = false;
+                tnl_cfg.erspan_hwid = strtol(node->value, NULL, 16);
+
+                if (tnl_cfg.erspan_hwid & ~(ERSPAN_HWID_MASK >> 4)) {
+                    ds_put_format(&errors, "%s: invalid erspan hardware ID: %s\n",
+                                  name, node->value);
+                    err = EINVAL;
+                    goto out;
+                }
             }
         } else {
             ds_put_format(&errors, "%s: unknown %s argument '%s'\n", name,
@@ -767,17 +794,40 @@ get_tunnel_config(const struct netdev *dev, struct smap *args)
                         "%"PRIu32, tnl_cfg.egress_pkt_mark);
     }
 
-    if (tnl_cfg.erspan_idx) {
-        smap_add_format(args, "erspan_idx", "0x%x", tnl_cfg.erspan_idx);
-    }
-    if (tnl_cfg.erspan_ver) {
-        smap_add_format(args, "erspan_ver", "%d", tnl_cfg.erspan_ver);
-    }
-    if (tnl_cfg.erspan_dir) {
-        smap_add_format(args, "erspan_dir", "%d", tnl_cfg.erspan_dir);
-    }
-    if (tnl_cfg.erspan_hwid) {
-        smap_add_format(args, "erspan_hwid", "0x%x", tnl_cfg.erspan_hwid);
+    if (!strcmp("erspan", type) || !strcmp("ip6erspan", type)) {
+        if (tnl_cfg.erspan_ver_flow) {
+            /* since version number is not determined,
+             * assume print all other as flow
+             */
+            smap_add(args, "erspan_ver", "flow");
+            smap_add(args, "erspan_idx", "flow");
+            smap_add(args, "erspan_dir", "flow");
+            smap_add(args, "erspan_hwid", "flow");
+        } else {
+            smap_add_format(args, "erspan_ver", "%d", tnl_cfg.erspan_ver);
+
+            if (tnl_cfg.erspan_ver == 1) {
+                if (tnl_cfg.erspan_idx_flow) {
+                    smap_add(args, "erspan_idx", "flow");
+                } else {
+                    smap_add_format(args, "erspan_idx", "0x%x",
+                                    tnl_cfg.erspan_idx);
+                }
+            } else if (tnl_cfg.erspan_ver == 2) {
+                if (tnl_cfg.erspan_dir_flow) {
+                    smap_add(args, "erspan_dir", "flow");
+                } else {
+                    smap_add_format(args, "erspan_dir", "%d",
+                                    tnl_cfg.erspan_dir);
+                }
+                if (tnl_cfg.erspan_hwid_flow) {
+                    smap_add(args, "erspan_hwid", "flow");
+                } else {
+                    smap_add_format(args, "erspan_hwid", "0x%x",
+                                    tnl_cfg.erspan_hwid);
+                }
+            }
+        }
     }
 
     return 0;
