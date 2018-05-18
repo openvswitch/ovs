@@ -65,20 +65,19 @@ PREREQS = {"none": "MFP_NONE",
 #      - Experimenter OXM classes are written as (<oxm_vender>, 0xffff)
 #
 # If a name matches more than one prefix, the longest one is used.
-OXM_CLASSES = {"NXM_OF_":        (0,          0x0000),
-               "NXM_NX_":        (0,          0x0001),
-               "NXOXM_NSH_":     (0x005ad650, 0xffff),
-               "OXM_OF_":        (0,          0x8000),
-               "OXM_OF_PKT_REG": (0,          0x8001),
-               "ONFOXM_ET_":     (0x4f4e4600, 0xffff),
+OXM_CLASSES = {"NXM_OF_":        (0,          0x0000, 'extension'),
+               "NXM_NX_":        (0,          0x0001, 'extension'),
+               "NXOXM_NSH_":     (0x005ad650, 0xffff, 'extension'),
+               "OXM_OF_":        (0,          0x8000, 'standard'),
+               "OXM_OF_PKT_REG": (0,          0x8001, 'standard'),
+               "ONFOXM_ET_":     (0x4f4e4600, 0xffff, 'standard'),
 
                # This is the experimenter OXM class for Nicira, which is the
                # one that OVS would be using instead of NXM_OF_ and NXM_NX_
                # if OVS didn't have those grandfathered in.  It is currently
                # used only to test support for experimenter OXM, since there
                # are barely any real uses of experimenter OXM in the wild.
-               "NXOXM_ET_":      (0x00002320, 0xffff)}
-
+               "NXOXM_ET_":      (0x00002320, 0xffff, 'extension')}
 
 def oxm_name_to_class(name):
     prefix = ''
@@ -88,6 +87,11 @@ def oxm_name_to_class(name):
             prefix = p
             class_ = c
     return class_
+
+
+def is_standard_oxm(name):
+    oxm_vendor, oxm_class, oxm_class_type = oxm_name_to_class(name)
+    return oxm_class_type == 'standard'
 
 
 def decode_version_range(range):
@@ -167,7 +171,7 @@ def parse_oxm(s, prefix, n_bytes):
     class_ = oxm_name_to_class(name)
     if class_ is None:
         fatal("unknown OXM class for %s" % name)
-    oxm_vendor, oxm_class = class_
+    oxm_vendor, oxm_class, oxm_class_type = class_
 
     if class_ in match_types:
         if oxm_type in match_types[class_]:
@@ -186,14 +190,16 @@ def parse_oxm(s, prefix, n_bytes):
     header = (oxm_vendor, oxm_class, int(oxm_type), oxm_length)
 
     if of_version:
+        if oxm_class_type == 'extension':
+            fatal("%s: OXM extension can't have OpenFlow version" % name)
         if of_version not in VERSION:
             fatal("%s: unknown OpenFlow version %s" % (name, of_version))
         of_version_nr = VERSION[of_version]
         if of_version_nr < VERSION['1.2']:
             fatal("%s: claimed version %s predates OXM" % (name, of_version))
-    elif prefix == 'OXM':
-        fatal("%s: missing OpenFlow version number" % name)
     else:
+        if oxm_class_type == 'standard':
+            fatal("%s: missing OpenFlow version number" % name)
         of_version_nr = 0
 
     return (header, name, of_version_nr, ovs_version)
@@ -539,7 +545,7 @@ def field_to_xml(field_node, f, body, summary):
     min_of_version = None
     min_ovs_version = None
     for header, name, of_version_nr, ovs_version_s in f['OXM']:
-        if (not name.startswith('NXM')
+        if (is_standard_oxm(name)
             and (min_ovs_version is None or of_version_nr < min_of_version)):
             min_of_version = of_version_nr
         ovs_version = [int(x) for x in ovs_version_s.split('.')]
@@ -612,7 +618,7 @@ l lx.
     body += ["OpenFlow 1.1:;%s\n" % of11[f["OF1.1"]]]
 
     oxms = []
-    for header, name, of_version_nr, ovs_version in [x for x in sorted(f['OXM'], key=lambda x: x[2]) if not x[1].startswith('NXM')]:
+    for header, name, of_version_nr, ovs_version in [x for x in sorted(f['OXM'], key=lambda x: x[2]) if is_standard_oxm(x[1])]:
         of_version = VERSION_REVERSE[of_version_nr]
         oxms += [r"\fB%s\fR (%d) since OpenFlow %s and Open vSwitch %s" % (name, header[2], of_version, ovs_version)]
     if not oxms:
@@ -620,7 +626,7 @@ l lx.
     body += ['OXM:;T{\n%s\nT}\n' % r'\[char59] '.join(oxms)]
 
     nxms = []
-    for header, name, of_version_nr, ovs_version in [x for x in sorted(f['OXM'], key=lambda x: x[2]) if x[1].startswith('NXM')]:
+    for header, name, of_version_nr, ovs_version in [x for x in sorted(f['OXM'], key=lambda x: x[2]) if not is_standard_oxm(x[1])]:
         nxms += [r"\fB%s\fR (%d) since Open vSwitch %s" % (name, header[2], ovs_version)]
     if not nxms:
         nxms = ['none']
@@ -664,7 +670,7 @@ Prefix;Vendor;Class
 \_;\_;\_
 '''
     for key in sorted(OXM_CLASSES, key=OXM_CLASSES.get):
-        vendor, class_ = OXM_CLASSES.get(key)
+        vendor, class_, class_type = OXM_CLASSES.get(key)
         s += r"\fB%s\fR;" % key.rstrip('_')
         if vendor:
             s += r"\fL0x%08x\fR;" % vendor
