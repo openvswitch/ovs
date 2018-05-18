@@ -4266,20 +4266,21 @@ r r c c c.
       following functions are necessary:
     </p>
 
-    <p>
-      1.  The movement of service functions and application workloads in
-          the network.
-    </p>
+    <ol>
+      <li>
+        The movement of service functions and application workloads in
+        the network.
+      </li>
 
-    <p>
-      2.  The ability to easily bind service policy to granular
-          information, such as per-subscriber state.
-    </p>
+      <li>
+        The ability to easily bind service policy to granular information, such
+        as per-subscriber state.
+      </li>
 
-    <p>
-      3.  The capability to steer traffic to the requisite service
-          function(s).
-    </p>
+      <li>
+        The capability to steer traffic to the requisite service function(s).
+      </li>
+    </ol>
 
     <p>
       The Network Service Header (NSH) specification defines a new data
@@ -4287,37 +4288,32 @@ r r c c c.
       chains.  The NSH is designed to encapsulate an original packet or
       frame, and in turn be encapsulated by an outer transport
       encapsulation (which is used to deliver the NSH to NSH-aware network
-      elements), as shown in Figure 1:
+      elements), as shown below:
     </p>
 
-    <pre>
-
-                        +------------------------------+
-                        |    Transport Encapsulation   |
-                        +------------------------------+
-                        | Network Service Header (NSH) |
-                        +------------------------------+
-                        |    Original Packet / Frame   |
-                        +------------------------------+
-
-                 Figure 1: Network Service Header Encapsulation
-    </pre>
+    <diagram>
+      <header>
+        <bits name="Transport Encapsulation" width="1.8"/>
+      </header>
+      <nospace/>
+      <header>
+        <bits name="Network Service Header (NSH)" width="2.0"/>
+      </header>
+      <nospace/>
+      <header>
+        <bits name="Original Packet/Frame" width="1.8"/>
+      </header>
+    </diagram>
 
     <p>
       The NSH is composed of the following elements:
     </p>
 
-    <p>
-      1.  Service Function Path identification.
-    </p>
-
-    <p>
-      2.  Indication of location within a Service Function Path.
-    </p>
-
-    <p>
-      3.  Optional, per packet metadata (fixed length or variable).
-    </p>
+    <ol>
+      <li>Service Function Path identification.</li>
+      <li>Indication of location within a Service Function Path.</li>
+      <li>Optional, per packet metadata (fixed length or variable).</li>
+    </ol>
 
     <p>
       [RFC 7665] provides an overview of a service chaining architecture
