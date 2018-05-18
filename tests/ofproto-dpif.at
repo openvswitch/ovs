@@ -9059,7 +9059,8 @@ OVS_VSWITCHD_START(
   [add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1])
 AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
 
-AT_CHECK([ovs-ofctl del-flows br0])
+# Always drop misses
+AT_CHECK([ovs-ofctl -O OpenFlow11 mod-table br0 all drop])
 AT_CHECK([ovs-ofctl add-flow br0 in_port=1,actions=output:local])
 
 ovs-appctl vlog/set PATTERN:ANY:'%c|%p|%m'
