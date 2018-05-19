@@ -9562,7 +9562,9 @@ done
 ovn-nbctl --log acl-add sw0 to-lport 1000 "outport == \"sw0-p12\"" reject
 ovn-nbctl --log acl-add sw0 from-lport 1000 "inport == \"sw0-p11\"" reject
 ovn-nbctl --log acl-add sw0 from-lport 1000 "inport == \"sw0-p21\"" reject
-OVS_WAIT_UNTIL([test 3 = $(ovn-sbctl lflow-list | grep 'icmp4 {' | wc -l)])
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+ovn-nbctl --timeout=3 --wait=hv sync
 
 test_ip_packet 11 1 000000000011 000000000021 $(ip_to_hex 192 168 1 11) $(ip_to_hex 192 168 1 21) 0000 7d8d fcfe
 test_ip_packet 21 2 000000000021 000000000011 $(ip_to_hex 192 168 1 21) $(ip_to_hex 192 168 1 11) 0000 7d8d fcfe
