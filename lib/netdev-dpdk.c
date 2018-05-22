@@ -386,6 +386,12 @@ struct netdev_dpdk {
 
     /* DPDK-ETH Flow control */
     struct rte_eth_fc_conf fc_conf;
+
+    /* Properties for link state change detection mode.
+     * If lsc_interrupt_mode is set to false, poll mode is used,
+     * otherwise interrupt mode is used. */
+    bool requested_lsc_interrupt_mode;
+    bool lsc_interrupt_mode;
 };
 
 struct netdev_rxq_dpdk {
@@ -653,7 +659,7 @@ dpdk_watchdog(void *dummy OVS_UNUSED)
 }
 
 static int
-dpdk_eth_dev_queue_setup(struct netdev_dpdk *dev, int n_rxq, int n_txq)
+dpdk_eth_dev_port_config(struct netdev_dpdk *dev, int n_rxq, int n_txq)
 {
     int diag = 0;
     int i;
@@ -666,6 +672,9 @@ dpdk_eth_dev_queue_setup(struct netdev_dpdk *dev, int n_rxq, int n_txq)
         conf.rxmode.jumbo_frame = 0;
         conf.rxmode.max_rx_pkt_len = 0;
     }
+
+    conf.intr_conf.lsc = dev->lsc_interrupt_mode;
+
     /* A device may report more queues than it makes available (this has
      * been observed for Intel xl710, which reserves some of them for
      * SRIOV):  rte_eth_*_queue_setup will fail if a queue is not
@@ -751,10 +760,12 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev) OVS_REQUIRES(dpdk_mutex)
     n_rxq = MIN(info.max_rx_queues, dev->up.n_rxq);
     n_txq = MIN(info.max_tx_queues, dev->up.n_txq);
 
-    diag = dpdk_eth_dev_queue_setup(dev, n_rxq, n_txq);
+    diag = dpdk_eth_dev_port_config(dev, n_rxq, n_txq);
     if (diag) {
-        VLOG_ERR("Interface %s(rxq:%d txq:%d) configure error: %s",
-                 dev->up.name, n_rxq, n_txq, rte_strerror(-diag));
+        VLOG_ERR("Interface %s(rxq:%d txq:%d lsc interrupt mode:%s) "
+                 "configure error: %s", dev->up.name, n_rxq, n_txq,
+                 dev->lsc_interrupt_mode ? "true" : "false",
+                 rte_strerror(-diag));
         return -diag;
     }
 
@@ -853,6 +864,7 @@ netdev_dpdk_init(struct netdev *netdev, unsigned int port_no,
     dev->type = type;
     dev->flags = 0;
     dev->requested_mtu = dev->mtu = ETHER_MTU;
+    dev->requested_lsc_interrupt_mode = 0;
     dev->max_packet_len = MTU_TO_FRAME_LEN(dev->mtu);
     ovsrcu_index_init(&dev->vid, -1);
     dev->vhost_reconfigured = false;
@@ -1096,6 +1108,8 @@ netdev_dpdk_get_config(const struct netdev *netdev, struct smap *args)
     smap_add_format(args, "requested_tx_queues", "%d", dev->requested_n_txq);
     smap_add_format(args, "configured_tx_queues", "%d", netdev->n_txq);
     smap_add_format(args, "mtu", "%d", dev->mtu);
+    smap_add(args, "lsc_interrupt_mode",
+             dev->lsc_interrupt_mode ? "true" : "false");
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
@@ -1125,10 +1139,18 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args)
     /* Flow control support is only available for DPDK Ethernet ports. */
     bool rx_fc_en = false;
     bool tx_fc_en = false;
+    bool lsc_interrupt_mode = false;
     enum rte_eth_fc_mode fc_mode_set[2][2] =
                                        {{RTE_FC_NONE, RTE_FC_TX_PAUSE},
                                         {RTE_FC_RX_PAUSE, RTE_FC_FULL}
                                        };
+
+    lsc_interrupt_mode = smap_get_bool(args, "dpdk-lsc-interrupt", false);
+    if (dev->requested_lsc_interrupt_mode != lsc_interrupt_mode) {
+        dev->requested_lsc_interrupt_mode = lsc_interrupt_mode;
+        netdev_request_reconfigure(netdev);
+    }
+
     rx_fc_en = smap_get_bool(args, "rx-flow-ctrl", false);
     tx_fc_en = smap_get_bool(args, "tx-flow-ctrl", false);
     dev->fc_conf.autoneg = smap_get_bool(args, "flow-ctrl-autoneg", false);
@@ -3018,7 +3040,8 @@ netdev_dpdk_reconfigure(struct netdev *netdev)
 
     if (netdev->n_txq == dev->requested_n_txq
         && netdev->n_rxq == dev->requested_n_rxq
-        && dev->mtu == dev->requested_mtu) {
+        && dev->mtu == dev->requested_mtu
+        && dev->lsc_interrupt_mode == dev->requested_lsc_interrupt_mode) {
         /* Reconfiguration is unnecessary */
 
         goto out;
@@ -3029,6 +3052,8 @@ netdev_dpdk_reconfigure(struct netdev *netdev)
     if (dev->mtu != dev->requested_mtu) {
         netdev_dpdk_mempool_configure(dev);
     }
+
+    dev->lsc_interrupt_mode = dev->requested_lsc_interrupt_mode;
 
     netdev->n_txq = dev->requested_n_txq;
     netdev->n_rxq = dev->requested_n_rxq;

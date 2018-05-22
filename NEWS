@@ -1,6 +1,7 @@
 v2.6.3 - xx xxx xxxx
 ---------------------
-
+   - DPDK:
+     * Add LSC interrupt support for DPDK physical devices.
 
 v2.6.2 - 18 May 2018
 ---------------------
