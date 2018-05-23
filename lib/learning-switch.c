@@ -305,7 +305,7 @@ lswitch_run(struct lswitch *sw)
     rconn_run(sw->rconn);
 
     if (sw->state == S_CONNECTING) {
-        if (rconn_get_version(sw->rconn) != -1) {
+        if (rconn_is_connected(sw->rconn)) {
             lswitch_handshake(sw);
             sw->state = S_FEATURES_REPLY;
         }

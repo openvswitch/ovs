@@ -571,6 +571,7 @@ vconn_connect(struct vconn *vconn)
             break;
 
         case VCS_DISCONNECTED:
+            ovs_assert(vconn->error != 0);
             return vconn->error;
 
         default:
