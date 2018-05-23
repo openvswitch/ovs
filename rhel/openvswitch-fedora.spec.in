@@ -591,7 +591,7 @@ fi
 %endif
 %doc NOTICE README.rst NEWS rhel/README.RHEL.rst
 /var/lib/openvswitch
-%attr(755,-,-) /var/log/openvswitch
+%attr(750,openvswitch,openvswitch) /var/log/openvswitch
 %ghost %attr(755,root,root) %{_rundir}/openvswitch
 
 %files ovn-docker
