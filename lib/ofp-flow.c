@@ -955,6 +955,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
         fs->packet_count = oxs.packet_count;
         fs->byte_count = oxs.byte_count;
         fs->idle_age = oxs.idle_age == UINT32_MAX ? -1 : oxs.idle_age;
+        fs->hard_age = -1;
 
         instructions_len = length - sizeof *ofd - padded_match_len - stat_len;
     } else if (raw == OFPRAW_OFPST11_FLOW_REPLY
