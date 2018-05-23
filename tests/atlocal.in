@@ -116,14 +116,22 @@ if test x"$PYTHON3" != x && test "$IS_WIN32" = yes; then
 fi
 
 # Check whether to run IPv6 tests.
-if $PYTHON -c '
+$PYTHON -c '
+import errno
 import socket
-socket.socket(family=socket.AF_INET6).bind(("::1", 0, 0, 0))
-'; then
-    HAVE_IPV6=yes
-else
-    HAVE_IPV6=no
-fi
+import sys
+try:
+    socket.socket(family=socket.AF_INET6).bind(("::1", 0, 0, 0))
+except socket.error as e:
+    if e.errno == errno.EAFNOSUPPORT:
+        sys.exit(2)
+    raise
+'
+case $? in
+    0) HAVE_IPV6=yes ;;
+    2) HAVE_IPV6=no ;;
+    *) echo "$0: unexpected error probing $PYTHON for IPv6 support" >&2 ;;
+esac
 
 # Look for a python L7 library 'LIB' in the system. If it is found, defines
 # HAVE_LIB="yes", otherwise HAVE_LIB="no"
