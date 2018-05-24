@@ -61,6 +61,7 @@ struct ofproto_async_msg;
 struct ofproto_dpif;
 struct uuid;
 struct xlate_cache;
+struct xlate_ctx;
 
 /* Number of implemented OpenFlow tables. */
 enum { N_TABLES = 255 };

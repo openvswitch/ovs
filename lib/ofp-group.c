@@ -1600,12 +1600,17 @@ parse_group_prop_ntr_selection_method(struct ofpbuf *payload,
         return OFPERR_OFPBPC_BAD_VALUE;
     }
 
-    error = oxm_pull_field_array(payload->data, fields_len,
-                                 &gp->fields);
-    if (error) {
-        OFPPROP_LOG(&rl, false,
+    if (fields_len > 0) {
+        error = oxm_pull_field_array(payload->data, fields_len,
+                &gp->fields);
+        if (error) {
+            OFPPROP_LOG(&rl, false,
                     "ntr selection method fields are invalid");
-        return error;
+            return error;
+        }
+    } else {
+        /* Selection_method "hash: w/o fields means default hash method. */
+        gp->fields.values_size = 0;
     }
 
     return 0;

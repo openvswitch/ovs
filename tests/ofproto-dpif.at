@@ -337,10 +337,18 @@ OVS_VSWITCHD_START
 add_of_ports br0 1 10
 AT_CHECK([ovs-ofctl -O OpenFlow12 add-group br0 'group_id=1234,type=select,bucket=set_field:192.168.3.90->ip_src,output:10'])
 AT_CHECK([ovs-ofctl -O OpenFlow12 add-flow br0 'ip actions=group:1234,output:10'])
-AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=1,nw_tos=0,nw_ttl=128,icmp_type=8,icmp_code=0'], [0], [stdout])
-AT_CHECK([tail -1 stdout], [0],
-  [Datapath actions: set(ipv4(src=192.168.3.90,dst=192.168.0.2)),10,set(ipv4(src=192.168.0.1,dst=192.168.0.2)),10
+
+for d in 0 1 2 3; do
+    pkt="in_port(1),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:1),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.1.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+    AT_CHECK([ovs-appctl netdev-dummy/receive p1 $pkt])
+done
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/dp_hash(.*\/0xf)/dp_hash(0xXXXX\/0xf)/' |  sed 's/packets.*actions:/actions:/' | strip_ufid | strip_used | sort], [0], [dnl
+flow-dump from non-dpdk interfaces:
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions:hash(sym_l4(0)),recirc(0x1)
+recirc_id(0x1),dp_hash(0xXXXX/0xf),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(src=192.168.0.1,frag=no), actions:set(ipv4(src=192.168.3.90)),10,set(ipv4(src=192.168.0.1)),10
 ])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -397,81 +405,265 @@ AT_CLEANUP
 
 
 AT_SETUP([ofproto-dpif - select group])
+
+# Helper function to check the spread of dp_hash flows over buckets in the datapath
+check_dpflow_stats () {
+    min_flows=$1
+    min_buckets=$2
+    read -d '' dpflows
+    hash_flow=`echo "$dpflows" | grep "actions:hash"`
+    n_flows=`echo "$dpflows" | grep -c dp_hash`
+    n_buckets=`echo "$dpflows" | grep dp_hash | grep -o "actions:[[0-9]]*" | sort | uniq -c | wc -l`
+    if [[ $n_flows -ge $min_flows ]]; then flows=ok; else flows=nok; fi
+    if [[ $n_buckets -ge $min_buckets ]]; then buckets=ok; else buckets=nok; fi
+    echo $hash_flow
+    echo "n_flows=$flows n_buckets=$buckets"
+}
+
 OVS_VSWITCHD_START
 add_of_ports br0 1 10 11
+
+ovs-appctl vlog/set ofproto_dpif:file:dbg
 AT_CHECK([ovs-ofctl -O OpenFlow12 add-group br0 'group_id=1234,type=select,bucket=output:10,bucket=output:11'])
+AT_CHECK([grep -A6 "Constructing select group 1234" ovs-vswitchd.log | sed 's/^.*ofproto_dpif/ofproto_dpif/'], [0], [dnl
+ofproto_dpif|DBG|Constructing select group 1234
+ofproto_dpif|DBG|No selection method specified. Trying dp_hash.
+ofproto_dpif|DBG|  Minimum weight: 1, total weight: 2
+ofproto_dpif|DBG|  Using 16 hash values:
+ofproto_dpif|DBG|  Bucket 0: weight=1, target=8.00 hits=8
+ofproto_dpif|DBG|  Bucket 1: weight=1, target=8.00 hits=8
+ofproto_dpif|DBG|Use dp_hash with 16 hash values using algorithm 1.
+])
 AT_CHECK([ovs-ofctl -O OpenFlow12 add-flow br0 'ip actions=write_actions(group:1234)'])
 
 # Try a bunch of different flows and make sure that they get distributed
-# at least somewhat.
-for d in 0 1 2 3 4 5 6 7 8 9 a b c d e f; do
-    AT_CHECK([ovs-appctl ofproto/trace br0 "in_port=1,dl_src=50:54:00:00:00:07,dl_dst=50:54:00:00:00:0$d,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=1,nw_tos=0,nw_ttl=128,icmp_type=8,icmp_code=0"], [0], [stdout])
-    tail -1 stdout >> results
+# # at least somewhat.
+for d in 0 1 2 3; do
+    for s in 1 2 3 4 ; do
+        pkt="in_port(1),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:1),eth_type(0x0800),ipv4(src=192.168.0.$s,dst=192.168.1.$d,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+        AT_CHECK([ovs-appctl netdev-dummy/receive p1 $pkt])
+    done
 done
-sort results | uniq -c
-AT_CHECK([sort results | uniq], [0],
-  [Datapath actions: 10
-Datapath actions: 11
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | sort | strip_ufid | strip_used | check_dpflow_stats 5 2], [0], [dnl
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:15, bytes:1590, used:0.0s, actions:hash(sym_l4(0)),recirc(0x1)
+n_flows=ok n_buckets=ok
 ])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - select group with watch port])
+
 OVS_VSWITCHD_START
 add_of_ports br0 1 10 11
 AT_CHECK([ovs-ofctl -O OpenFlow12 add-group br0 'group_id=1234,type=select,bucket=watch_port:10,output:10,bucket=output:11'])
 AT_CHECK([ovs-ofctl -O OpenFlow12 add-flow br0 'ip actions=write_actions(group:1234)'])
-AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:07,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=1,nw_tos=0,nw_ttl=128,icmp_type=8,icmp_code=0'], [0], [stdout])
-AT_CHECK([tail -1 stdout], [0],
-  [Datapath actions: 11
+
+for d in 0 1 2 3; do
+        pkt="in_port(1),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:1),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+        AT_CHECK([ovs-appctl netdev-dummy/receive p1 $pkt])
+done
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | sort| sed 's/dp_hash(.*\/0xf)/dp_hash(0xXXXX\/0xf)/' | strip_ufid | strip_used], [0], [dnl
+flow-dump from non-dpdk interfaces:
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:3, bytes:318, used:0.0s, actions:hash(sym_l4(0)),recirc(0x1)
+recirc_id(0x1),dp_hash(0xXXXX/0xf),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:3, bytes:318, used:0.0s, actions:11
 ])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([ofproto-dpif - select group with weight])
+AT_SETUP([ofproto-dpif - select group with weights])
+
+# Helper function to check the spread of dp_hash flows over buckets in the datapath
+check_dpflow_stats () {
+    min_flows=$1
+    min_buckets=$2
+    read -d '' dpflows
+    hash_flow=`echo "$dpflows" | grep "actions:hash"`
+    n_flows=`echo "$dpflows" | grep -c dp_hash`
+    n_buckets=`echo "$dpflows" | grep dp_hash | grep -o "actions:[[0-9]]*" | sort | uniq -c | wc -l`
+    if [[ $n_flows -ge $min_flows ]]; then flows=ok; else flows=nok; fi
+    if [[ $n_buckets -ge $min_buckets ]]; then buckets=ok; else buckets=nok; fi
+    echo $hash_flow
+    echo "n_flows=$flows n_buckets=$buckets"
+}
+
+# Helper function to check the accuracy of distribution of packets over buckets
+check_group_stats () {
+    min=($1 $2 $3 $4)
+    buckets=`grep -o 'packet_count=[[0-9]]*' | cut -d'=' -f2 | tail -n +2`
+    i=0
+    for bucket in $buckets; do
+        if [[ $bucket -ge ${min[i]} ]]; then
+            echo "bucket$i >= ${min[[$i]]}"
+        else
+            echo "bucket$i < ${min[[$i]]}"
+        fi
+        (( i++ ))
+        if [[ $i -ge 4 ]]; then break; fi
+    done
+}
+
 OVS_VSWITCHD_START
-add_of_ports br0 1 10 11 12
-AT_CHECK([ovs-ofctl -O OpenFlow12 add-group br0 'group_id=1234,type=select,bucket=output:10,bucket=output:11,weight=2000,bucket=output:12,weight=0'])
-AT_CHECK([ovs-ofctl -O OpenFlow12 add-flow br0 'ip actions=write_actions(group:1234)'])
-AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:07,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=1,nw_tos=0,nw_ttl=128,icmp_type=8,icmp_code=0'], [0], [stdout])
-AT_CHECK([tail -1 stdout], [0],
-  [Datapath actions: 11
+add_of_ports br0 1 10 11 12 13 14
+
+ovs-appctl vlog/set ofproto_dpif:file:dbg
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-group br0 'group_id=1234,type=select,bucket=weight:5,output:10,bucket=weight:10,output:11,bucket=weight:25,output:12,bucket=weight:60,output:13,bucket=weight:0,output:14'])
+AT_CHECK([grep -A9 "Constructing select group 1234" ovs-vswitchd.log | sed 's/^.*ofproto_dpif/ofproto_dpif/'], [0], [dnl
+ofproto_dpif|DBG|Constructing select group 1234
+ofproto_dpif|DBG|No selection method specified. Trying dp_hash.
+ofproto_dpif|DBG|  Minimum weight: 5, total weight: 100
+ofproto_dpif|DBG|  Using 32 hash values:
+ofproto_dpif|DBG|  Bucket 0: weight=5, target=1.60 hits=2
+ofproto_dpif|DBG|  Bucket 1: weight=10, target=3.20 hits=3
+ofproto_dpif|DBG|  Bucket 2: weight=25, target=8.00 hits=8
+ofproto_dpif|DBG|  Bucket 3: weight=60, target=19.20 hits=19
+ofproto_dpif|DBG|  Bucket 4: weight=0, target=0.00 hits=0
+ofproto_dpif|DBG|Use dp_hash with 32 hash values using algorithm 1.
 ])
+AT_CHECK([ovs-ofctl -O OpenFlow12 add-flow br0 'ip actions=write_actions(group:1234)'])
+
+# Try 1000 different flows and make sure that they get distributed according to weights
+for d1 in 0 1 2 3 4 5 6 7 8 9 ; do
+  for d2 in 0 1 2 3 4 5 6 7 8 9 ; do
+    for s in 0 1 2 3 4 5 6 7 8 9 ; do
+      pkt="in_port(1),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:1),eth_type(0x0800),ipv4(src=192.168.1.$s,dst=192.168.$d1.$d2,proto=6,tos=0,ttl=128,frag=no),tcp(src=1000$s,dst=1000)"
+      AT_CHECK([ovs-appctl netdev-dummy/receive p1 $pkt])
+    done
+  done
+done
+
+# Check balanced distribution over 32 dp_hash values
+AT_CHECK([ovs-appctl dpctl/dump-flows | sort | strip_ufid | strip_used | check_dpflow_stats 32 4 ], [0], [dnl
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:999, bytes:117882, used:0.0s, actions:hash(sym_l4(0)),recirc(0x1)
+n_flows=ok n_buckets=ok
+])
+
+# Check that actual distribution over the buckets is reasonably accurate:
+                ideal weights       dp_hash values
+#   bucket0:    5%*1000 = 50        2/32*1000 = 63
+#   bucket1:    10%*1000 = 100      3/32*1000 = 94
+#   bucket2:    25%*1000 = 250      8/32*1000 = 250
+#   bucket3:    60%*1000 = 600      19/32*1000 = 594
+#   bucket4:    0                   0
+
+ovs-appctl time/warp 1000
+AT_CHECK([ovs-ofctl -O OpenFlow13 dump-group-stats br0 | sed 's/duration=[[0-9]]\.[[0-9]]*s,//' | check_group_stats 40 80 200 500],
+[0], [dnl
+bucket0 >= 40
+bucket1 >= 80
+bucket2 >= 200
+bucket3 >= 500
+])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([ofproto-dpif - select group with hash selection method])
+AT_SETUP([ofproto-dpif - select group with explicit dp_hash selection method])
+
 OVS_VSWITCHD_START
 add_of_ports br0 1 10 11
+
+ovs-appctl vlog/set ofproto_dpif:file:dbg
+AT_CHECK([ovs-ofctl -O OpenFlow15 add-group br0 'group_id=1234,type=select,selection_method=dp_hash,bucket=output:10,bucket=output:11'])
+AT_CHECK([grep -A6 "Constructing select group 1234" ovs-vswitchd.log | sed 's/^.*ofproto_dpif/ofproto_dpif/'], [0], [dnl
+ofproto_dpif|DBG|Constructing select group 1234
+ofproto_dpif|DBG|Selection method specified: dp_hash.
+ofproto_dpif|DBG|  Minimum weight: 1, total weight: 2
+ofproto_dpif|DBG|  Using 16 hash values:
+ofproto_dpif|DBG|  Bucket 0: weight=1, target=8.00 hits=8
+ofproto_dpif|DBG|  Bucket 1: weight=1, target=8.00 hits=8
+ofproto_dpif|DBG|Use dp_hash with 16 hash values using algorithm 0.
+])
+
+# Fall back to legacy hash with zero buckets
+AT_CHECK([ovs-ofctl -O OpenFlow15 add-group br0 'group_id=1235,type=select,selection_method=dp_hash'])
+AT_CHECK([grep -A3 "Constructing select group 1235" ovs-vswitchd.log | sed 's/^.*ofproto_dpif/ofproto_dpif/'], [0], [dnl
+ofproto_dpif|DBG|Constructing select group 1235
+ofproto_dpif|DBG|Selection method specified: dp_hash.
+ofproto_dpif|DBG|  Don't apply dp_hash method without buckets.
+ofproto_dpif|DBG|Falling back to default hash method.
+])
+
+# Fall back to legacy hash with zero buckets
+AT_CHECK([ovs-ofctl -O OpenFlow15 add-group br0 'group_id=1236,type=select,selection_method=dp_hash,bucket=weight=1,output:10,bucket=weight=1000,output:11'])
+AT_CHECK([grep -A4 "Constructing select group 1236" ovs-vswitchd.log | sed 's/^.*ofproto_dpif/ofproto_dpif/'], [0], [dnl
+ofproto_dpif|DBG|Constructing select group 1236
+ofproto_dpif|DBG|Selection method specified: dp_hash.
+ofproto_dpif|DBG|  Minimum weight: 1, total weight: 1001
+ofproto_dpif|DBG|  Too many hash values required: 1024
+ofproto_dpif|DBG|Falling back to default hash method.
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - select group with legacy hash selection method])
+
+# Helper function to check the spread of dp_hash flows over buckets in the datapath
+check_dpflow_stats () {
+    min_flows=$1
+    min_buckets=$2
+    read -d '' dpflows
+    n_flows=`echo "$dpflows" | wc -l`
+    n_buckets=`echo "$dpflows" | grep -o "actions:[[0-9]]*" | sort | uniq -c | wc -l`
+    if [[ $n_flows -ge $min_flows ]]; then flows=ok; else flows=nok; fi
+    if [[ $n_buckets -ge $min_buckets ]]; then buckets=ok; else buckets=nok; fi
+    echo "n_flows=$flows n_buckets=$buckets"
+}
+
+OVS_VSWITCHD_START
+add_of_ports br0 1 10 11
+
+ovs-appctl vlog/set ofproto_dpif:file:dbg
+AT_CHECK([ovs-ofctl -O OpenFlow15 add-group br0 'group_id=1234,type=select,selection_method=hash,bucket=output:10,bucket=output:11'])
+AT_CHECK([grep -A2 "Constructing select group 1234" ovs-vswitchd.log | sed 's/^.*ofproto_dpif/ofproto_dpif/'], [0], [dnl
+ofproto_dpif|DBG|Constructing select group 1234
+ofproto_dpif|DBG|Selection method specified: hash.
+ofproto_dpif|DBG|No hash fields. Falling back to default hash method.
+])
+
+AT_CHECK([ovs-ofctl -O OpenFlow15 add-flow br0 'ip actions=write_actions(group:1234)'])
+
+# Try 16 flows with differing default hash values.
+for d in 0 1 2 3; do
+    for s in 1 2 3 4 ; do
+        pkt="in_port(1),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:1),eth_type(0x0800),ipv4(src=192.168.0.$s,dst=192.168.1.$d,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+        AT_CHECK([ovs-appctl netdev-dummy/receive p1 $pkt])
+    done
+done
+
+# Check that the packets installed 16 data path flows and each of the two
+# buckets is hit at least once.
+AT_CHECK([ovs-appctl dpctl/dump-flows | strip_ufid | strip_used | sort | check_dpflow_stats 16 2], [0], [dnl
+n_flows=ok n_buckets=ok
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - select group with custom hash selection method])
+
+# Helper function to check the spread of dp_hash flows over buckets in the datapath
+check_dpflow_stats () {
+    min_flows=$1
+    min_buckets=$2
+    read -d '' dpflows
+    n_flows=`echo "$dpflows" | wc -l`
+    n_buckets=`echo "$dpflows" | grep -o "actions:[[0-9]]*" | sort | uniq -c | wc -l`
+    if [[ $n_flows -ge $min_flows ]]; then flows=ok; else flows=nok; fi
+    if [[ $n_buckets -ge $min_buckets ]]; then buckets=ok; else buckets=nok; fi
+    echo "n_flows=$flows n_buckets=$buckets"
+}
+
+OVS_VSWITCHD_START
+add_of_ports br0 1 10 11
+
 # Check that parse failures after 'fields' parsing work
 AT_CHECK([ovs-ofctl -O OpenFlow10 add-group br0 'group_id=1,type=select,fields(eth_dst),bukket=output:10'], [1], ,[dnl
 ovs-ofctl: unknown keyword bukket
-])
-AT_CHECK([ovs-ofctl -O OpenFlow15 add-group br0 'group_id=1234,type=select,selection_method=hash,fields(eth_dst,ip_dst,tcp_dst),bucket=output:10,bucket=output:11'])
-AT_CHECK([ovs-ofctl -O OpenFlow15 add-flow br0 'ip actions=write_actions(group:1234)'])
-
-# Try a bunch of different flows and make sure that they get distributed
-# at least somewhat.
-for d in 0 1 2 3 4 5 6 7 8 9 a b c d e f; do
-    AT_CHECK([ovs-appctl ofproto/trace br0 "in_port=1,dl_src=50:54:00:00:00:07,dl_dst=50:54:00:00:00:0$d,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=1,nw_tos=0,nw_ttl=128,icmp_type=8,icmp_code=0"], [0], [stdout])
-    tail -1 stdout >> results
-done
-sort results | uniq -c
-AT_CHECK([sort results | uniq], [0],
-  [Datapath actions: 10
-Datapath actions: 11
-])
-
-> results
-# Try a bunch of different flows and make sure that they are not distributed
-# as they only vary a field that is not hashed
-for d in 0 1 2 3 4 5 6 7 8 9 a b c d e f; do
-    AT_CHECK([ovs-appctl ofproto/trace br0 "in_port=1,dl_src=50:54:00:00:00:0$d,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=1,nw_tos=0,nw_ttl=128,icmp_type=8,icmp_code=0"], [0], [stdout])
-    tail -1 stdout >> results
-done
-sort results | uniq -c
-AT_CHECK([sort results | uniq | sed 's/1[[01]]/1?/'], [0],
-  [Datapath actions: 1?
 ])
 
 # Check that fields are rejected without "selection_method=hash".
@@ -484,43 +676,31 @@ AT_CHECK([ovs-ofctl -O OpenFlow15 add-group br0 'group_id=1235,type=select,selec
 ovs-ofctl: selection_method_param is only allowed with "selection_method"
 ])
 
-OVS_VSWITCHD_STOP
-AT_CLEANUP
+AT_CHECK([ovs-ofctl -O OpenFlow15 add-group br0 'group_id=1234,type=select,selection_method=hash,fields(eth_dst,ip_dst,tcp_dst),bucket=output:10,bucket=output:11'])
+AT_CHECK([ovs-ofctl -O OpenFlow15 add-flow br0 'ip actions=write_actions(group:1234)'])
 
-AT_SETUP([ofproto-dpif - select group with dp_hash selection method])
-OVS_VSWITCHD_START
-add_of_ports br0 1 10 11
-AT_CHECK([ovs-ofctl -O OpenFlow15 add-group br0 'group_id=1234,type=select,selection_method=dp_hash,bucket=output:10,bucket=output:11'])
-AT_CHECK([ovs-ofctl -O OpenFlow15 add-flow br0 'ip,nw_src=192.168.0.1 actions=group:1234'])
-
-# Try a bunch of different flows and make sure that they get distributed
-# at least somewhat.
-for d in 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
-    pkt="in_port(1),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:01),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.1.$d,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+# Try 16 flows with differing custom hash and check that they give rise to
+# 16 data path flows and each of the two buckets is hit at least once
+for d in 0 1 2 3 4 5 6 7 8 9 a b c d e f; do
+    pkt="in_port(1),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:$d),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
     AT_CHECK([ovs-appctl netdev-dummy/receive p1 $pkt])
 done
 
-AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/dp_hash(.*\/0xf)/dp_hash(0xXXXX\/0xf)/' | sed 's/packets.*actions:1/actions:1/' | \
-          strip_ufid | strip_used | sort | uniq], [0], [dnl
-flow-dump from non-dpdk interfaces:
-recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(src=192.168.0.1,frag=no), packets:15, bytes:1590, used:0.0s, actions:hash(l4(0)),recirc(0x1)
-recirc_id(0x1),dp_hash(0xXXXX/0xf),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions:10
-recirc_id(0x1),dp_hash(0xXXXX/0xf),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions:11
+AT_CHECK([ovs-appctl dpctl/dump-flows | strip_ufid | strip_used | sort | check_dpflow_stats 16 2], [0], [dnl
+n_flows=ok n_buckets=ok
 ])
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 
-# Try a bunch of different flows and make sure that they are not distributed
-# as they only vary a field that is not hashed
+# Try 16 flows that differ only in fields that are not part of the custom
+# hash and check that there is only a single datapath flow
 for d in 0 1 2 3 4 5 6 7 8 9 a b c d e f; do
     pkt="in_port(1),eth(src=50:54:00:00:00:$d,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
     AT_CHECK([ovs-appctl netdev-dummy/receive p1 $pkt])
 done
 
-AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/dp_hash(.*\/0xf)/dp_hash(0xXXXX\/0xf)/' | sed 's/\(actions:1\)[[01]]/\1X/' | strip_ufid | strip_used | sort], [0], [dnl
-flow-dump from non-dpdk interfaces:
-recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(src=192.168.0.1,frag=no), packets:15, bytes:1590, used:0.0s, actions:hash(l4(0)),recirc(0x2)
-recirc_id(0x2),dp_hash(0xXXXX/0xf),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:15, bytes:1590, used:0.0s, actions:1X
+AT_CHECK([ovs-appctl dpctl/dump-flows | grep -c recirc_id], [0], [dnl
+1
 ])
 
 OVS_VSWITCHD_STOP

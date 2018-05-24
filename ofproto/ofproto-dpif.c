@@ -1,5 +1,4 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -4787,7 +4786,7 @@ group_setup_dp_hash_table(struct group_dpif *group, size_t max_hash)
     } *webster;
 
     if (n_buckets == 0) {
-        VLOG_DBG("  Don't apply dp_hash method without buckets");
+        VLOG_DBG("  Don't apply dp_hash method without buckets.");
         return false;
     }
 
@@ -4862,9 +4861,24 @@ group_set_selection_method(struct group_dpif *group)
     const struct ofputil_group_props *props = &group->up.props;
     const char *selection_method = props->selection_method;
 
+    VLOG_DBG("Constructing select group %"PRIu32, group->up.group_id);
     if (selection_method[0] == '\0') {
-        VLOG_DBG("No selection method specified.");
-        group->selection_method = SEL_METHOD_DEFAULT;
+        VLOG_DBG("No selection method specified. Trying dp_hash.");
+        /* If the controller has not specified a selection method, check if
+         * the dp_hash selection method with max 64 hash values is appropriate
+         * for the given bucket configuration. */
+        if (group_setup_dp_hash_table(group, 64)) {
+            /* Use dp_hash selection method with symmetric L4 hash. */
+            group->selection_method = SEL_METHOD_DP_HASH;
+            group->hash_alg = OVS_HASH_ALG_SYM_L4;
+            group->hash_basis = 0;
+            VLOG_DBG("Use dp_hash with %d hash values using algorithm %d.",
+                     group->hash_mask + 1, group->hash_alg);
+        } else {
+            /* Fall back to original default hashing in slow path. */
+            VLOG_DBG("Falling back to default hash method.");
+            group->selection_method = SEL_METHOD_DEFAULT;
+        }
     } else if (!strcmp(selection_method, "dp_hash")) {
         VLOG_DBG("Selection method specified: dp_hash.");
         /* Try to use dp_hash if possible at all. */
@@ -4872,7 +4886,7 @@ group_set_selection_method(struct group_dpif *group)
             group->selection_method = SEL_METHOD_DP_HASH;
             group->hash_alg = props->selection_method_param >> 32;
             if (group->hash_alg >= __OVS_HASH_MAX) {
-                VLOG_DBG("  Invalid dp_hash algorithm %d. "
+                VLOG_DBG("Invalid dp_hash algorithm %d. "
                          "Defaulting to OVS_HASH_ALG_L4", group->hash_alg);
                 group->hash_alg = OVS_HASH_ALG_L4;
             }
@@ -4881,7 +4895,7 @@ group_set_selection_method(struct group_dpif *group)
                      group->hash_mask + 1, group->hash_alg);
         } else {
             /* Fall back to original default hashing in slow path. */
-            VLOG_DBG("  Falling back to default hash method.");
+            VLOG_DBG("Falling back to default hash method.");
             group->selection_method = SEL_METHOD_DEFAULT;
         }
     } else if (!strcmp(selection_method, "hash")) {
@@ -4890,12 +4904,12 @@ group_set_selection_method(struct group_dpif *group)
             /* Controller has specified hash fields. */
             struct ds s = DS_EMPTY_INITIALIZER;
             oxm_format_field_array(&s, &props->fields);
-            VLOG_DBG("  Hash fields: %s", ds_cstr(&s));
+            VLOG_DBG("Hash fields: %s", ds_cstr(&s));
             ds_destroy(&s);
             group->selection_method = SEL_METHOD_HASH;
         } else {
             /* No hash fields. Fall back to original default hashing. */
-            VLOG_DBG("  No hash fields. Falling back to default hash method.");
+            VLOG_DBG("No hash fields. Falling back to default hash method.");
             group->selection_method = SEL_METHOD_DEFAULT;
         }
     } else {

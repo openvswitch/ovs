@@ -300,6 +300,11 @@ strip_used () {
     sed 's/used:[[0-9]]\.[[0-9]]*/used:0.0/'
 }
 
+# Removes all 'duration=...' to make output easier to compare.
+strip_duration () {
+    sed 's/duration=[[0-9]]*\.[[0-9]]*s,//'
+}
+
 # Strips 'ufid:...' from output, to make it easier to compare.
 # (ufids are random.)
 strip_ufid () {

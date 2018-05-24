@@ -25,7 +25,7 @@ dummy@ovs-dummy: hit:0 missed:0
 ])
 
 dnl Setup single MPLS tags.
-AT_CHECK([ovs-ofctl -O OpenFlow13 add-group br0 group_id=1232,type=select,bucket=output:LOCAL])
+AT_CHECK([ovs-ofctl -O OpenFlow15 add-group br0 group_id=1232,type=select,selection_method=hash,bucket=output:LOCAL])
 AT_CHECK([ovs-ofctl -O OpenFlow13 add-group br0 group_id=1233,type=all,bucket=output:LOCAL])
 AT_CHECK([ovs-ofctl -O OpenFlow13 add-group br0 group_id=1234,type=all,bucket=dec_ttl,output:LOCAL])
 AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br0 in_port=local,dl_type=0x0800,action=push_mpls:0x8847,set_field:10-\>mpls_label,output:1])
@@ -71,9 +71,15 @@ AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: pop_mpls(eth_type=0x800),recirc(0x2)
 ])
 
-AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'recirc_id(2),in_port(1),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x0800),ipv4(src=1.1.2.92,dst=1.1.2.88,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
-AT_CHECK([tail -1 stdout], [0],
-  [Datapath actions: 100
+for d in 0 1 2 3; do
+    pkt="in_port(1),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x8847),mpls(label=22,tc=0,ttl=64,bos=1)"
+    AT_CHECK([ovs-appctl netdev-dummy/receive p0 $pkt])
+done
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/packets.*actions:1/actions:1/' | strip_used | strip_ufid | sort], [0], [dnl
+flow-dump from non-dpdk interfaces:
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x8847),mpls(label=22/0xfffff,tc=0/0,ttl=64/0x0,bos=1/1), packets:3, bytes:54, used:0.0s, actions:pop_mpls(eth_type=0x800),recirc(0x3)
+recirc_id(0x3),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions:100
 ])
 
 dnl Test MPLS pop then all group output (bucket actions do not trigger recirculation)
@@ -85,10 +91,10 @@ AT_CHECK([tail -1 stdout], [0],
 dnl Test MPLS pop then all group output (bucket actions trigger recirculation)
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x8847),mpls(label=24,tc=0,ttl=64,bos=1)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
-  [Datapath actions: pop_mpls(eth_type=0x800),recirc(0x3)
+  [Datapath actions: pop_mpls(eth_type=0x800),recirc(0x4)
 ])
 
-AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'recirc_id(3),in_port(1),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x0800),ipv4(src=1.1.2.92,dst=1.1.2.88,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'recirc_id(4),in_port(1),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x0800),ipv4(src=1.1.2.92,dst=1.1.2.88,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: set(ipv4(ttl=63)),100
 ])
@@ -96,10 +102,10 @@ AT_CHECK([tail -1 stdout], [0],
 dnl Test MPLS pop then all output to patch port
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x8847),mpls(label=25,tc=0,ttl=64,bos=1)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
-  [Datapath actions: pop_mpls(eth_type=0x800),recirc(0x4)
+  [Datapath actions: pop_mpls(eth_type=0x800),recirc(0x5)
 ])
 
-AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'recirc_id(4),in_port(1),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x0800),ipv4(src=1.1.2.92,dst=1.1.2.88,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'recirc_id(5),in_port(1),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x0800),ipv4(src=1.1.2.92,dst=1.1.2.88,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: 101
 ])
@@ -124,10 +130,10 @@ AT_CHECK([tail -1 stdout], [0],
 dnl Double MPLS pop
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x8847),mpls(label=60,tc=0,ttl=64,bos=0,label=50,tc=0,ttl=64,bos=1)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
-  [Datapath actions: pop_mpls(eth_type=0x8847),pop_mpls(eth_type=0x800),recirc(0x5)
+  [Datapath actions: pop_mpls(eth_type=0x8847),pop_mpls(eth_type=0x800),recirc(0x7)
 ])
 
-AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'recirc_id(5),in_port(1),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x0800),ipv4(src=1.1.2.92,dst=1.1.2.88,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'recirc_id(7),in_port(1),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x0800),ipv4(src=1.1.2.92,dst=1.1.2.88,proto=47,tos=0,ttl=64,frag=no)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: set(ipv4(ttl=10)),100
 ])

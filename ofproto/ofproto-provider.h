@@ -572,7 +572,7 @@ struct ofgroup {
     const struct ovs_list buckets;    /* Contains "struct ofputil_bucket"s. */
     const uint32_t n_buckets;
 
-    const struct ofputil_group_props props;
+    struct ofputil_group_props props;
 
     struct rule_collection rules OVS_GUARDED;   /* Referring rules. */
 };
