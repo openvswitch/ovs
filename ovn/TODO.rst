@@ -25,16 +25,8 @@
 OVN To-do List
 ==============
 
-* Work out database for clustering or HA properly.
-
 * Get incremental updates in ovn-controller and ovn-northd in some
   sensible way.
-
-* Self-managing HA for ovn-northd (avoiding the need to set up
-  independent tooling for fail-over).
-
-  Russell Bryant: "For bonus points, increasing N would scale out ovn-northd if
-  it was under too much load, but that's a secondary concern."
 
 * Live migration.
 
@@ -60,12 +52,6 @@ OVN To-do List
 * Hitless upgrade, especially for data plane.
 
 * Use OpenFlow "bundles" for transactional data plane updates.
-
-* L3 support
-
-  * Logical routers should send RST replies to TCP packets.
-
-  * IPv6 router ports should periodically send ND Router Advertisements.
 
 * Dynamic IP to MAC binding enhancements.
 
@@ -113,18 +99,6 @@ OVN To-do List
     adequately, we can multithread ovsdb-server.  Initially one might
     only break protocol handling into separate threads, leaving the
     actual database work serialized through a lock.
-
-  * Increasing availability.
-
-    Database availability might become an issue.  The OVN system shouldn't
-    grind to a halt if the database becomes unavailable, but it would become
-    impossible to bring VIFs up or down, etc.
-
-    My current thought on how to increase availability is to add clustering to
-    ovsdb-server, probably via the Raft consensus algorithm.  As an experiment,
-    I wrote an implementation of Raft for Open vSwitch that you can clone from:
-
-       https://github.com/blp/ovs-reviews.git raft
 
   * Reducing startup time.
 
