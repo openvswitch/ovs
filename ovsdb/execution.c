@@ -121,9 +121,9 @@ ovsdb_execute_compose(struct ovsdb *db, const struct ovsdb_session *session,
 
     *durable = false;
     if (params->type != JSON_ARRAY
-        || !params->u.array.n
-        || params->u.array.elems[0]->type != JSON_STRING
-        || strcmp(params->u.array.elems[0]->u.string, db->schema->name)) {
+        || !params->array.n
+        || params->array.elems[0]->type != JSON_STRING
+        || strcmp(params->array.elems[0]->string, db->schema->name)) {
         if (params->type != JSON_ARRAY) {
             error = ovsdb_syntax_error(params, NULL, "array expected");
         } else {
@@ -147,10 +147,10 @@ ovsdb_execute_compose(struct ovsdb *db, const struct ovsdb_session *session,
     results = NULL;
 
     results = json_array_create_empty();
-    n_operations = params->u.array.n - 1;
+    n_operations = params->array.n - 1;
     error = NULL;
     for (i = 1; i <= n_operations; i++) {
-        struct json *operation = params->u.array.elems[i];
+        struct json *operation = params->array.elems[i];
         struct ovsdb_error *parse_error;
         struct ovsdb_parser parser;
         struct json *result;
@@ -735,11 +735,11 @@ ovsdb_execute_wait(struct ovsdb_execution *x, struct ovsdb_parser *parser,
     if (!error) {
         /* Parse "rows" into 'expected'. */
         ovsdb_row_hash_init(&expected, &columns);
-        for (i = 0; i < rows->u.array.n; i++) {
+        for (i = 0; i < rows->array.n; i++) {
             struct ovsdb_row *row;
 
             row = ovsdb_row_create(table);
-            error = ovsdb_row_from_json(row, rows->u.array.elems[i], x->symtab,
+            error = ovsdb_row_from_json(row, rows->array.elems[i], x->symtab,
                                         NULL);
             if (error) {
                 ovsdb_row_destroy(row);

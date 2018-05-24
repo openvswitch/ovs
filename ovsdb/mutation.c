@@ -85,9 +85,9 @@ ovsdb_mutation_from_json(const struct ovsdb_table_schema *ts,
     const char *column_name;
 
     if (json->type != JSON_ARRAY
-        || json->u.array.n != 3
-        || json->u.array.elems[0]->type != JSON_STRING
-        || json->u.array.elems[1]->type != JSON_STRING) {
+        || json->array.n != 3
+        || json->array.elems[0]->type != JSON_STRING
+        || json->array.elems[1]->type != JSON_STRING) {
         return ovsdb_syntax_error(json, NULL, "Parse error in mutation.");
     }
     array = json_array(json);

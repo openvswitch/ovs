@@ -165,15 +165,15 @@ ovsdb_column_set_from_json(const struct json *json,
         }
 
         /* XXX this is O(n**2) */
-        for (i = 0; i < json->u.array.n; i++) {
+        for (i = 0; i < json->array.n; i++) {
             const struct ovsdb_column *column;
             const char *s;
 
-            if (json->u.array.elems[i]->type != JSON_STRING) {
+            if (json->array.elems[i]->type != JSON_STRING) {
                 goto error;
             }
 
-            s = json->u.array.elems[i]->u.string;
+            s = json->array.elems[i]->string;
             column = shash_find_data(&schema->columns, s);
             if (!column) {
                 error = ovsdb_syntax_error(json, NULL, "%s is not a valid "

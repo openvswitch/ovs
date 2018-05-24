@@ -1923,7 +1923,7 @@ dpif_netlink_operate__(struct dpif_netlink *dpif,
 
         switch (op->type) {
         case DPIF_OP_FLOW_PUT:
-            put = &op->u.flow_put;
+            put = &op->flow_put;
             dpif_netlink_init_flow_put(dpif, put, &flow);
             if (put->stats) {
                 flow.nlmsg_flags |= NLM_F_ECHO;
@@ -1933,7 +1933,7 @@ dpif_netlink_operate__(struct dpif_netlink *dpif,
             break;
 
         case DPIF_OP_FLOW_DEL:
-            del = &op->u.flow_del;
+            del = &op->flow_del;
             dpif_netlink_init_flow_del(dpif, del, &flow);
             if (del->stats) {
                 flow.nlmsg_flags |= NLM_F_ECHO;
@@ -1945,26 +1945,26 @@ dpif_netlink_operate__(struct dpif_netlink *dpif,
         case DPIF_OP_EXECUTE:
             /* Can't execute a packet that won't fit in a Netlink attribute. */
             if (OVS_UNLIKELY(nl_attr_oversized(
-                                 dp_packet_size(op->u.execute.packet)))) {
+                                 dp_packet_size(op->execute.packet)))) {
                 /* Report an error immediately if this is the first operation.
                  * Otherwise the easiest thing to do is to postpone to the next
                  * call (when this will be the first operation). */
                 if (i == 0) {
                     VLOG_ERR_RL(&error_rl,
                                 "dropping oversized %"PRIu32"-byte packet",
-                                dp_packet_size(op->u.execute.packet));
+                                dp_packet_size(op->execute.packet));
                     op->error = ENOBUFS;
                     return 1;
                 }
                 n_ops = i;
             } else {
-                dpif_netlink_encode_execute(dpif->dp_ifindex, &op->u.execute,
+                dpif_netlink_encode_execute(dpif->dp_ifindex, &op->execute,
                                             &aux->request);
             }
             break;
 
         case DPIF_OP_FLOW_GET:
-            get = &op->u.flow_get;
+            get = &op->flow_get;
             dpif_netlink_init_flow_get(dpif, get, &flow);
             aux->txn.reply = get->buffer;
             dpif_netlink_flow_to_ofpbuf(&flow, &aux->request);
@@ -1992,7 +1992,7 @@ dpif_netlink_operate__(struct dpif_netlink *dpif,
 
         switch (op->type) {
         case DPIF_OP_FLOW_PUT:
-            put = &op->u.flow_put;
+            put = &op->flow_put;
             if (put->stats) {
                 if (!op->error) {
                     struct dpif_netlink_flow reply;
@@ -2007,7 +2007,7 @@ dpif_netlink_operate__(struct dpif_netlink *dpif,
             break;
 
         case DPIF_OP_FLOW_DEL:
-            del = &op->u.flow_del;
+            del = &op->flow_del;
             if (del->stats) {
                 if (!op->error) {
                     struct dpif_netlink_flow reply;
@@ -2025,7 +2025,7 @@ dpif_netlink_operate__(struct dpif_netlink *dpif,
             break;
 
         case DPIF_OP_FLOW_GET:
-            get = &op->u.flow_get;
+            get = &op->flow_get;
             if (!op->error) {
                 struct dpif_netlink_flow reply;
 
@@ -2157,12 +2157,12 @@ parse_flow_put(struct dpif_netlink *dpif, struct dpif_flow_put *put)
             struct dpif_op op;
 
             op.type = DPIF_OP_FLOW_DEL;
-            op.u.flow_del.key = put->key;
-            op.u.flow_del.key_len = put->key_len;
-            op.u.flow_del.ufid = put->ufid;
-            op.u.flow_del.pmd_id = put->pmd_id;
-            op.u.flow_del.stats = NULL;
-            op.u.flow_del.terse = false;
+            op.flow_del.key = put->key;
+            op.flow_del.key_len = put->key_len;
+            op.flow_del.ufid = put->ufid;
+            op.flow_del.pmd_id = put->pmd_id;
+            op.flow_del.stats = NULL;
+            op.flow_del.terse = false;
 
             opp = &op;
             dpif_netlink_operate__(dpif, &opp, 1);
@@ -2203,7 +2203,7 @@ try_send_to_netdev(struct dpif_netlink *dpif, struct dpif_op *op)
 
     switch (op->type) {
     case DPIF_OP_FLOW_PUT: {
-        struct dpif_flow_put *put = &op->u.flow_put;
+        struct dpif_flow_put *put = &op->flow_put;
 
         if (!put->ufid) {
             break;
@@ -2214,7 +2214,7 @@ try_send_to_netdev(struct dpif_netlink *dpif, struct dpif_op *op)
         break;
     }
     case DPIF_OP_FLOW_DEL: {
-        struct dpif_flow_del *del = &op->u.flow_del;
+        struct dpif_flow_del *del = &op->flow_del;
 
         if (!del->ufid) {
             break;
@@ -2226,9 +2226,9 @@ try_send_to_netdev(struct dpif_netlink *dpif, struct dpif_op *op)
         break;
     }
     case DPIF_OP_FLOW_GET: {
-        struct dpif_flow_get *get = &op->u.flow_get;
+        struct dpif_flow_get *get = &op->flow_get;
 
-        if (!op->u.flow_get.ufid) {
+        if (!op->flow_get.ufid) {
             break;
         }
 

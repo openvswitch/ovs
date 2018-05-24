@@ -147,8 +147,8 @@ replication_add_local_db(const char *database, struct ovsdb *db)
 static void
 send_schema_requests(const struct json *result)
 {
-    for (size_t i = 0; i < result->u.array.n; i++) {
-        const struct json *name = result->u.array.elems[i];
+    for (size_t i = 0; i < result->array.n; i++) {
+        const struct json *name = result->array.elems[i];
         if (name->type == JSON_STRING) {
             /* Send one schema request for each remote DB. */
             const char *db_name = json_string(name);
@@ -203,13 +203,13 @@ replication_run(void)
         if (msg->type == JSONRPC_NOTIFY && state != RPL_S_ERR
             && !strcmp(msg->method, "update")) {
             if (msg->params->type == JSON_ARRAY
-                && msg->params->u.array.n == 2
-                && msg->params->u.array.elems[0]->type == JSON_STRING) {
-                char *db_name = msg->params->u.array.elems[0]->u.string;
+                && msg->params->array.n == 2
+                && msg->params->array.elems[0]->type == JSON_STRING) {
+                char *db_name = msg->params->array.elems[0]->string;
                 struct ovsdb *db = find_db(db_name);
                 if (db) {
                     struct ovsdb_error *error;
-                    error = process_notification(msg->params->u.array.elems[1],
+                    error = process_notification(msg->params->array.elems[1],
                                                  db);
                     if (error) {
                         ovsdb_error_assert(error);

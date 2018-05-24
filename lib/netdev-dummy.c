@@ -84,7 +84,7 @@ struct dummy_packet_conn {
     union {
         struct dummy_packet_pconn pconn;
         struct dummy_packet_rconn rconn;
-    } u;
+    };
 };
 
 struct pkt_list_node {
@@ -307,11 +307,11 @@ dummy_packet_conn_get_config(struct dummy_packet_conn *conn, struct smap *args)
 
     switch (conn->type) {
     case PASSIVE:
-        smap_add(args, "pstream", pstream_get_name(conn->u.pconn.pstream));
+        smap_add(args, "pstream", pstream_get_name(conn->pconn.pstream));
         break;
 
     case ACTIVE:
-        smap_add(args, "stream", stream_get_name(conn->u.rconn.rstream->stream));
+        smap_add(args, "stream", stream_get_name(conn->rconn.rstream->stream));
         break;
 
     case NONE:
@@ -324,8 +324,8 @@ static void
 dummy_packet_conn_close(struct dummy_packet_conn *conn)
 {
     int i;
-    struct dummy_packet_pconn *pconn = &conn->u.pconn;
-    struct dummy_packet_rconn *rconn = &conn->u.rconn;
+    struct dummy_packet_pconn *pconn = &conn->pconn;
+    struct dummy_packet_rconn *rconn = &conn->rconn;
 
     switch (conn->type) {
     case PASSIVE:
@@ -372,14 +372,14 @@ dummy_packet_conn_set_config(struct dummy_packet_conn *conn,
     switch (conn->type) {
     case PASSIVE:
         if (pstream &&
-            !strcmp(pstream_get_name(conn->u.pconn.pstream), pstream)) {
+            !strcmp(pstream_get_name(conn->pconn.pstream), pstream)) {
             return;
         }
         dummy_packet_conn_close(conn);
         break;
     case ACTIVE:
         if (stream &&
-            !strcmp(stream_get_name(conn->u.rconn.rstream->stream), stream)) {
+            !strcmp(stream_get_name(conn->rconn.rstream->stream), stream)) {
             return;
         }
         dummy_packet_conn_close(conn);
@@ -392,7 +392,7 @@ dummy_packet_conn_set_config(struct dummy_packet_conn *conn,
     if (pstream) {
         int error;
 
-        error = pstream_open(pstream, &conn->u.pconn.pstream, DSCP_DEFAULT);
+        error = pstream_open(pstream, &conn->pconn.pstream, DSCP_DEFAULT);
         if (error) {
             VLOG_WARN("%s: open failed (%s)", pstream, ovs_strerror(error));
         } else {
@@ -411,11 +411,11 @@ dummy_packet_conn_set_config(struct dummy_packet_conn *conn,
         reconnect_enable(reconnect, time_msec());
         reconnect_set_backoff(reconnect, 100, INT_MAX);
         reconnect_set_probe_interval(reconnect, 0);
-        conn->u.rconn.reconnect = reconnect;
+        conn->rconn.reconnect = reconnect;
         conn->type = ACTIVE;
 
         error = stream_open(stream, &active_stream, DSCP_DEFAULT);
-        conn->u.rconn.rstream = dummy_packet_stream_create(active_stream);
+        conn->rconn.rstream = dummy_packet_stream_create(active_stream);
 
         switch (error) {
         case 0:
@@ -429,7 +429,7 @@ dummy_packet_conn_set_config(struct dummy_packet_conn *conn,
         default:
             reconnect_connect_failed(reconnect, time_msec(), error);
             stream_close(active_stream);
-            conn->u.rconn.rstream->stream = NULL;
+            conn->rconn.rstream->stream = NULL;
             break;
         }
     }
@@ -440,7 +440,7 @@ dummy_pconn_run(struct netdev_dummy *dev)
     OVS_REQUIRES(dev->mutex)
 {
     struct stream *new_stream;
-    struct dummy_packet_pconn *pconn = &dev->conn.u.pconn;
+    struct dummy_packet_pconn *pconn = &dev->conn.pconn;
     int error;
     size_t i;
 
@@ -483,7 +483,7 @@ static void
 dummy_rconn_run(struct netdev_dummy *dev)
 OVS_REQUIRES(dev->mutex)
 {
-    struct dummy_packet_rconn *rconn = &dev->conn.u.rconn;
+    struct dummy_packet_rconn *rconn = &dev->conn.rconn;
 
     switch (reconnect_run(rconn->reconnect, time_msec())) {
     case RECONNECT_CONNECT:
@@ -559,15 +559,15 @@ dummy_packet_conn_wait(struct dummy_packet_conn *conn)
     int i;
     switch (conn->type) {
     case PASSIVE:
-        pstream_wait(conn->u.pconn.pstream);
-        for (i = 0; i < conn->u.pconn.n_streams; i++) {
-            struct dummy_packet_stream *s = conn->u.pconn.streams[i];
+        pstream_wait(conn->pconn.pstream);
+        for (i = 0; i < conn->pconn.n_streams; i++) {
+            struct dummy_packet_stream *s = conn->pconn.streams[i];
             dummy_packet_stream_wait(s);
         }
         break;
     case ACTIVE:
-        if (reconnect_is_connected(conn->u.rconn.reconnect)) {
-            dummy_packet_stream_wait(conn->u.rconn.rstream);
+        if (reconnect_is_connected(conn->rconn.reconnect)) {
+            dummy_packet_stream_wait(conn->rconn.rstream);
         }
         break;
 
@@ -585,18 +585,18 @@ dummy_packet_conn_send(struct dummy_packet_conn *conn,
 
     switch (conn->type) {
     case PASSIVE:
-        for (i = 0; i < conn->u.pconn.n_streams; i++) {
-            struct dummy_packet_stream *s = conn->u.pconn.streams[i];
+        for (i = 0; i < conn->pconn.n_streams; i++) {
+            struct dummy_packet_stream *s = conn->pconn.streams[i];
 
             dummy_packet_stream_send(s, buffer, size);
-            pstream_wait(conn->u.pconn.pstream);
+            pstream_wait(conn->pconn.pstream);
         }
         break;
 
     case ACTIVE:
-        if (reconnect_is_connected(conn->u.rconn.reconnect)) {
-            dummy_packet_stream_send(conn->u.rconn.rstream, buffer, size);
-            dummy_packet_stream_wait(conn->u.rconn.rstream);
+        if (reconnect_is_connected(conn->rconn.reconnect)) {
+            dummy_packet_stream_send(conn->rconn.rstream, buffer, size);
+            dummy_packet_stream_wait(conn->rconn.rstream);
         }
         break;
 
@@ -612,7 +612,7 @@ dummy_netdev_get_conn_state(struct dummy_packet_conn *conn)
     enum dummy_netdev_conn_state state;
 
     if (conn->type == ACTIVE) {
-        if (reconnect_is_connected(conn->u.rconn.reconnect)) {
+        if (reconnect_is_connected(conn->rconn.reconnect)) {
             state = CONN_STATE_CONNECTED;
         } else {
             state = CONN_STATE_NOT_CONNECTED;

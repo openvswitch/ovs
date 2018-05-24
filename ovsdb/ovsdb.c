@@ -118,16 +118,16 @@ ovsdb_schema_check_ref_table(struct ovsdb_column *column,
 {
     struct ovsdb_table_schema *refTable;
 
-    if (base->type != OVSDB_TYPE_UUID || !base->u.uuid.refTableName) {
+    if (base->type != OVSDB_TYPE_UUID || !base->uuid.refTableName) {
         return NULL;
     }
 
-    refTable = shash_find_data(tables, base->u.uuid.refTableName);
+    refTable = shash_find_data(tables, base->uuid.refTableName);
     if (!refTable) {
         return ovsdb_syntax_error(NULL, NULL,
                                   "column %s %s refers to undefined table %s",
                                   column->name, base_name,
-                                  base->u.uuid.refTableName);
+                                  base->uuid.refTableName);
     }
 
     if (ovsdb_base_type_is_strong_ref(base) && !refTable->is_root) {
@@ -388,11 +388,11 @@ static void
 ovsdb_set_ref_table(const struct shash *tables,
                     struct ovsdb_base_type *base)
 {
-    if (base->type == OVSDB_TYPE_UUID && base->u.uuid.refTableName) {
+    if (base->type == OVSDB_TYPE_UUID && base->uuid.refTableName) {
         struct ovsdb_table *table;
 
-        table = shash_find_data(tables, base->u.uuid.refTableName);
-        base->u.uuid.refTable = table;
+        table = shash_find_data(tables, base->uuid.refTableName);
+        base->uuid.refTable = table;
     }
 }
 

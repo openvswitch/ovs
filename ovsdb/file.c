@@ -135,7 +135,7 @@ ovsdb_file_txn_table_from_json(struct ovsdb_txn *txn,
         return ovsdb_syntax_error(json, NULL, "object expected");
     }
 
-    SHASH_FOR_EACH (node, json->u.object) {
+    SHASH_FOR_EACH (node, json->object) {
         const char *uuid_string = node->name;
         struct json *txn_row_json = node->data;
         struct ovsdb_error *error;
@@ -177,7 +177,7 @@ ovsdb_file_txn_from_json(struct ovsdb *db, const struct json *json,
     }
 
     txn = ovsdb_txn_create(db);
-    SHASH_FOR_EACH (node, json->u.object) {
+    SHASH_FOR_EACH (node, json->object) {
         const char *table_name = node->name;
         struct json *node_json = node->data;
         struct ovsdb_table *table;

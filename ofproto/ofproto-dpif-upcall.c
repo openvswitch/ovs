@@ -1553,15 +1553,15 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
             op = &ops[n_ops++];
             op->ukey = NULL;
             op->dop.type = DPIF_OP_EXECUTE;
-            op->dop.u.execute.packet = CONST_CAST(struct dp_packet *, packet);
-            op->dop.u.execute.flow = upcall->flow;
+            op->dop.execute.packet = CONST_CAST(struct dp_packet *, packet);
+            op->dop.execute.flow = upcall->flow;
             odp_key_to_dp_packet(upcall->key, upcall->key_len,
-                                 op->dop.u.execute.packet);
-            op->dop.u.execute.actions = upcall->odp_actions.data;
-            op->dop.u.execute.actions_len = upcall->odp_actions.size;
-            op->dop.u.execute.needs_help = (upcall->xout.slow & SLOW_ACTION) != 0;
-            op->dop.u.execute.probe = false;
-            op->dop.u.execute.mtu = upcall->mru;
+                                 op->dop.execute.packet);
+            op->dop.execute.actions = upcall->odp_actions.data;
+            op->dop.execute.actions_len = upcall->odp_actions.size;
+            op->dop.execute.needs_help = (upcall->xout.slow & SLOW_ACTION) != 0;
+            op->dop.execute.probe = false;
+            op->dop.execute.mtu = upcall->mru;
         }
     }
 
@@ -2265,12 +2265,12 @@ delete_op_init__(struct udpif *udpif, struct ukey_op *op,
 {
     op->ukey = NULL;
     op->dop.type = DPIF_OP_FLOW_DEL;
-    op->dop.u.flow_del.key = flow->key;
-    op->dop.u.flow_del.key_len = flow->key_len;
-    op->dop.u.flow_del.ufid = flow->ufid_present ? &flow->ufid : NULL;
-    op->dop.u.flow_del.pmd_id = flow->pmd_id;
-    op->dop.u.flow_del.stats = &op->stats;
-    op->dop.u.flow_del.terse = udpif_use_ufid(udpif);
+    op->dop.flow_del.key = flow->key;
+    op->dop.flow_del.key_len = flow->key_len;
+    op->dop.flow_del.ufid = flow->ufid_present ? &flow->ufid : NULL;
+    op->dop.flow_del.pmd_id = flow->pmd_id;
+    op->dop.flow_del.stats = &op->stats;
+    op->dop.flow_del.terse = udpif_use_ufid(udpif);
 }
 
 static void
@@ -2278,12 +2278,12 @@ delete_op_init(struct udpif *udpif, struct ukey_op *op, struct udpif_key *ukey)
 {
     op->ukey = ukey;
     op->dop.type = DPIF_OP_FLOW_DEL;
-    op->dop.u.flow_del.key = ukey->key;
-    op->dop.u.flow_del.key_len = ukey->key_len;
-    op->dop.u.flow_del.ufid = ukey->ufid_present ? &ukey->ufid : NULL;
-    op->dop.u.flow_del.pmd_id = ukey->pmd_id;
-    op->dop.u.flow_del.stats = &op->stats;
-    op->dop.u.flow_del.terse = udpif_use_ufid(udpif);
+    op->dop.flow_del.key = ukey->key;
+    op->dop.flow_del.key_len = ukey->key_len;
+    op->dop.flow_del.ufid = ukey->ufid_present ? &ukey->ufid : NULL;
+    op->dop.flow_del.pmd_id = ukey->pmd_id;
+    op->dop.flow_del.stats = &op->stats;
+    op->dop.flow_del.terse = udpif_use_ufid(udpif);
 }
 
 static void
@@ -2292,16 +2292,16 @@ put_op_init(struct ukey_op *op, struct udpif_key *ukey,
 {
     op->ukey = ukey;
     op->dop.type = DPIF_OP_FLOW_PUT;
-    op->dop.u.flow_put.flags = flags;
-    op->dop.u.flow_put.key = ukey->key;
-    op->dop.u.flow_put.key_len = ukey->key_len;
-    op->dop.u.flow_put.mask = ukey->mask;
-    op->dop.u.flow_put.mask_len = ukey->mask_len;
-    op->dop.u.flow_put.ufid = ukey->ufid_present ? &ukey->ufid : NULL;
-    op->dop.u.flow_put.pmd_id = ukey->pmd_id;
-    op->dop.u.flow_put.stats = NULL;
-    ukey_get_actions(ukey, &op->dop.u.flow_put.actions,
-                     &op->dop.u.flow_put.actions_len);
+    op->dop.flow_put.flags = flags;
+    op->dop.flow_put.key = ukey->key;
+    op->dop.flow_put.key_len = ukey->key_len;
+    op->dop.flow_put.mask = ukey->mask;
+    op->dop.flow_put.mask_len = ukey->mask_len;
+    op->dop.flow_put.ufid = ukey->ufid_present ? &ukey->ufid : NULL;
+    op->dop.flow_put.pmd_id = ukey->pmd_id;
+    op->dop.flow_put.stats = NULL;
+    ukey_get_actions(ukey, &op->dop.flow_put.actions,
+                     &op->dop.flow_put.actions_len);
 }
 
 /* Executes datapath operations 'ops' and attributes stats retrieved from the
@@ -2322,7 +2322,7 @@ push_dp_ops(struct udpif *udpif, struct ukey_op *ops, size_t n_ops)
         struct ukey_op *op = &ops[i];
         struct dpif_flow_stats *push, *stats, push_buf;
 
-        stats = op->dop.u.flow_del.stats;
+        stats = op->dop.flow_del.stats;
         push = &push_buf;
 
         if (op->dop.type != DPIF_OP_FLOW_DEL) {
@@ -2353,8 +2353,8 @@ push_dp_ops(struct udpif *udpif, struct ukey_op *ops, size_t n_ops)
         }
 
         if (push->n_packets || netflow_exists()) {
-            const struct nlattr *key = op->dop.u.flow_del.key;
-            size_t key_len = op->dop.u.flow_del.key_len;
+            const struct nlattr *key = op->dop.flow_del.key;
+            size_t key_len = op->dop.flow_del.key_len;
             struct netflow *netflow;
             struct reval_context ctx = {
                 .netflow = &netflow,

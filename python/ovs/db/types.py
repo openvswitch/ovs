@@ -419,7 +419,7 @@ class BaseType(object):
                 high = "INT64_MAX"
             else:
                 high = "INT64_C(%d)" % self.max
-            init.append(".u.integer = { .min = %s, .max = %s }," % (low, high))
+            init.append(".integer = { .min = %s, .max = %s }," % (low, high))
         elif self.type == RealType:
             if self.min is None:
                 low = "-DBL_MAX"
@@ -429,7 +429,7 @@ class BaseType(object):
                 high = "DBL_MAX"
             else:
                 high = self.max
-            init.append(".u.real = { .min = %s, .max = %s }," % (low, high))
+            init.append(".real = { .min = %s, .max = %s }," % (low, high))
         elif self.type == StringType:
             if self.min is None:
                 low = 0
@@ -439,11 +439,11 @@ class BaseType(object):
                 high = "UINT_MAX"
             else:
                 high = self.max_length
-            init.append(".u.string = { .minLen = %s, .maxLen = %s }," % (
+            init.append(".string = { .minLen = %s, .maxLen = %s }," % (
                 low, high))
         elif self.type == UuidType:
             if self.ref_table_name is not None:
-                init.append(".u.uuid = { .refTableName = \"%s\", "
+                init.append(".uuid = { .refTableName = \"%s\", "
                             ".refType = OVSDB_REF_%s }," % (
                                 escapeCString(self.ref_table_name),
                                 self.ref_type.upper()))

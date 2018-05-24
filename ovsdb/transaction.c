@@ -225,7 +225,7 @@ ovsdb_txn_adjust_atom_refs(struct ovsdb_txn *txn, const struct ovsdb_row *r,
         return NULL;
     }
 
-    table = base->u.uuid.refTable;
+    table = base->uuid.refTable;
     for (i = 0; i < n; i++) {
         const struct uuid *uuid = &atoms[i].uuid;
         struct ovsdb_txn_row *txn_row;
@@ -322,7 +322,7 @@ delete_row_refs(struct ovsdb_txn *txn, const struct ovsdb_row *row,
         return NULL;
     }
 
-    table = base->u.uuid.refTable;
+    table = base->uuid.refTable;
     for (i = 0; i < n; i++) {
         const struct uuid *uuid = &atoms[i].uuid;
         struct ovsdb_txn_row *txn_row;
@@ -549,7 +549,7 @@ assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
             for (i = 0; i < datum->n; ) {
                 const struct ovsdb_row *row;
 
-                row = ovsdb_table_get_row(column->type.key.u.uuid.refTable,
+                row = ovsdb_table_get_row(column->type.key.uuid.refTable,
                                           &datum->keys[i].uuid);
                 if (row) {
                     add_weak_ref(txn_row->new, row);
@@ -567,7 +567,7 @@ assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
             for (i = 0; i < datum->n; ) {
                 const struct ovsdb_row *row;
 
-                row = ovsdb_table_get_row(column->type.value.u.uuid.refTable,
+                row = ovsdb_table_get_row(column->type.value.uuid.refTable,
                                           &datum->values[i].uuid);
                 if (row) {
                     add_weak_ref(txn_row->new, row);

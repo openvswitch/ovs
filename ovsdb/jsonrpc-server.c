@@ -772,7 +772,7 @@ ovsdb_jsonrpc_lookup_db(const struct ovsdb_jsonrpc_session *s,
         goto error;
     }
 
-    db_name = params->elems[0]->u.string;
+    db_name = params->elems[0]->string;
     db = shash_find_data(&s->up.server->dbs, db_name);
     if (!db) {
         error = ovsdb_syntax_error(
@@ -1054,7 +1054,7 @@ execute_cancel(struct ovsdb_jsonrpc_session *s, struct jsonrpc_msg *request)
         struct ovsdb_jsonrpc_trigger *t;
         struct json *id;
 
-        id = request->params->u.array.elems[0];
+        id = request->params->array.elems[0];
         t = ovsdb_jsonrpc_trigger_find(s, id, json_hash(id, 0));
         if (t) {
             ovsdb_jsonrpc_trigger_complete(t);
@@ -1303,16 +1303,16 @@ ovsdb_jsonrpc_parse_monitor_request(
                                       "array of column names expected");
         }
 
-        for (i = 0; i < columns->u.array.n; i++) {
+        for (i = 0; i < columns->array.n; i++) {
             const struct ovsdb_column *column;
             const char *s;
 
-            if (columns->u.array.elems[i]->type != JSON_STRING) {
+            if (columns->array.elems[i]->type != JSON_STRING) {
                 return ovsdb_syntax_error(columns, NULL,
                                           "array of column names expected");
             }
 
-            s = columns->u.array.elems[i]->u.string;
+            s = columns->array.elems[i]->string;
             column = shash_find_data(&table->schema->columns, s);
             if (!column) {
                 return ovsdb_syntax_error(columns, NULL, "%s is not a valid "
@@ -1367,8 +1367,8 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
         error = ovsdb_syntax_error(params, NULL, "invalid parameters");
         goto error;
     }
-    monitor_id = params->u.array.elems[1];
-    monitor_requests = params->u.array.elems[2];
+    monitor_id = params->array.elems[1];
+    monitor_requests = params->array.elems[2];
     if (monitor_requests->type != JSON_OBJECT) {
         error = ovsdb_syntax_error(monitor_requests, NULL,
                                    "monitor-requests must be object");
@@ -1409,7 +1409,7 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
         /* Parse columns. */
         mr_value = node->data;
         if (mr_value->type == JSON_ARRAY) {
-            const struct json_array *array = &mr_value->u.array;
+            const struct json_array *array = &mr_value->array;
 
             for (i = 0; i < array->n; i++) {
                 error = ovsdb_jsonrpc_parse_monitor_request(m->dbmon,
@@ -1503,14 +1503,14 @@ ovsdb_jsonrpc_monitor_cond_change(struct ovsdb_jsonrpc_session *s,
         goto error;
     }
 
-    m = ovsdb_jsonrpc_monitor_find(s, params->u.array.elems[0]);
+    m = ovsdb_jsonrpc_monitor_find(s, params->array.elems[0]);
     if (!m) {
-        error = ovsdb_syntax_error(params->u.array.elems[0], NULL,
+        error = ovsdb_syntax_error(params->array.elems[0], NULL,
                                    "unknown monitor session");
         goto error;
     }
 
-    const struct json *new_monitor_id = params->u.array.elems[1];
+    const struct json *new_monitor_id = params->array.elems[1];
     bool changing_id = !json_equal(m->monitor_id, new_monitor_id);
     if (changing_id && ovsdb_jsonrpc_monitor_find(s, new_monitor_id)) {
         error = ovsdb_syntax_error(new_monitor_id, NULL,
@@ -1518,7 +1518,7 @@ ovsdb_jsonrpc_monitor_cond_change(struct ovsdb_jsonrpc_session *s,
         goto error;
     }
 
-    monitor_cond_change_reqs = params->u.array.elems[2];
+    monitor_cond_change_reqs = params->array.elems[2];
     if (monitor_cond_change_reqs->type != JSON_OBJECT) {
         error =
             ovsdb_syntax_error(NULL, NULL,
@@ -1546,7 +1546,7 @@ ovsdb_jsonrpc_monitor_cond_change(struct ovsdb_jsonrpc_session *s,
 
         mr_value = node->data;
         if (mr_value->type == JSON_ARRAY) {
-            const struct json_array *array = &mr_value->u.array;
+            const struct json_array *array = &mr_value->array;
 
             for (i = 0; i < array->n; i++) {
                 error = ovsdb_jsonrpc_parse_monitor_cond_change_request(

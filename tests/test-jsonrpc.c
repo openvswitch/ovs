@@ -124,7 +124,7 @@ parse_json(const char *s)
 {
     struct json *json = json_from_string(s);
     if (json->type == JSON_STRING) {
-        ovs_fatal(0, "\"%s\": %s", s, json->u.string);
+        ovs_fatal(0, "\"%s\": %s", s, json->string);
     }
     return json;
 }

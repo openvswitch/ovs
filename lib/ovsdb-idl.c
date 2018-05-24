@@ -995,7 +995,7 @@ add_row_references(const struct ovsdb_base_type *type,
                    struct uuid **dstsp, size_t *n_dstsp,
                    size_t *allocated_dstsp)
 {
-    if (type->type != OVSDB_TYPE_UUID || !type->u.uuid.refTableName) {
+    if (type->type != OVSDB_TYPE_UUID || !type->uuid.refTableName) {
         return;
     }
 
@@ -1123,15 +1123,15 @@ ovsdb_idl_db_get_mode(struct ovsdb_idl_db *db,
 static void
 add_ref_table(struct ovsdb_idl_db *db, const struct ovsdb_base_type *base)
 {
-    if (base->type == OVSDB_TYPE_UUID && base->u.uuid.refTableName) {
+    if (base->type == OVSDB_TYPE_UUID && base->uuid.refTableName) {
         struct ovsdb_idl_table *table;
 
-        table = shash_find_data(&db->table_by_name, base->u.uuid.refTableName);
+        table = shash_find_data(&db->table_by_name, base->uuid.refTableName);
         if (table) {
             table->need_table = true;
         } else {
             VLOG_WARN("%s IDL class missing referenced table %s",
-                      db->class_->database, base->u.uuid.refTableName);
+                      db->class_->database, base->uuid.refTableName);
         }
     }
 }
@@ -1993,9 +1993,9 @@ ovsdb_idl_db_parse_update_rpc(struct ovsdb_idl_db *db,
         bool is_update2 = !strcmp(msg->method, "update2");
         if ((is_update || is_update2)
             && msg->params->type == JSON_ARRAY
-            && msg->params->u.array.n == 2
-            && json_equal(msg->params->u.array.elems[0], db->monitor_id)) {
-            ovsdb_idl_db_parse_update(db, msg->params->u.array.elems[1],
+            && msg->params->array.n == 2
+            && json_equal(msg->params->array.elems[0], db->monitor_id)) {
+            ovsdb_idl_db_parse_update(db, msg->params->array.elems[1],
                                       is_update2);
             return true;
         }
@@ -2011,8 +2011,8 @@ ovsdb_idl_handle_monitor_canceled(struct ovsdb_idl *idl,
     if (msg->type != JSONRPC_NOTIFY
         || strcmp(msg->method, "monitor_canceled")
         || msg->params->type != JSON_ARRAY
-        || msg->params->u.array.n != 1
-        || !json_equal(msg->params->u.array.elems[0], db->monitor_id)) {
+        || msg->params->array.n != 1
+        || !json_equal(msg->params->array.elems[0], db->monitor_id)) {
         return false;
     }
 
@@ -3549,11 +3549,11 @@ substitute_uuids(struct json *json, const struct ovsdb_idl_txn *txn)
         struct uuid uuid;
         size_t i;
 
-        if (json->u.array.n == 2
-            && json->u.array.elems[0]->type == JSON_STRING
-            && json->u.array.elems[1]->type == JSON_STRING
-            && !strcmp(json->u.array.elems[0]->u.string, "uuid")
-            && uuid_from_string(&uuid, json->u.array.elems[1]->u.string)) {
+        if (json->array.n == 2
+            && json->array.elems[0]->type == JSON_STRING
+            && json->array.elems[1]->type == JSON_STRING
+            && !strcmp(json->array.elems[0]->string, "uuid")
+            && uuid_from_string(&uuid, json->array.elems[1]->string)) {
             const struct ovsdb_idl_row *row;
 
             row = ovsdb_idl_txn_get_row(txn, &uuid);
@@ -3566,8 +3566,8 @@ substitute_uuids(struct json *json, const struct ovsdb_idl_txn *txn)
             }
         }
 
-        for (i = 0; i < json->u.array.n; i++) {
-            json->u.array.elems[i] = substitute_uuids(json->u.array.elems[i],
+        for (i = 0; i < json->array.n; i++) {
+            json->array.elems[i] = substitute_uuids(json->array.elems[i],
                                                       txn);
         }
     } else if (json->type == JSON_OBJECT) {
@@ -3981,7 +3981,7 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
 
                 insert = xmalloc(sizeof *insert);
                 insert->dummy = row->uuid;
-                insert->op_index = operations->u.array.n - 1;
+                insert->op_index = operations->array.n - 1;
                 uuid_zero(&insert->real);
                 hmap_insert(&txn->inserted_rows, &insert->hmap_node,
                             uuid_hash(&insert->dummy));
@@ -4051,7 +4051,7 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
     /* Add increment. */
     if (txn->inc_table && (any_updates || txn->inc_force)) {
         any_updates = true;
-        txn->inc_index = operations->u.array.n - 1;
+        txn->inc_index = operations->array.n - 1;
 
         struct json *op = json_object_create();
         json_object_put_string(op, "op", "mutate");
@@ -4544,10 +4544,10 @@ ovsdb_idl_txn_process_inc_reply(struct ovsdb_idl_txn *txn,
     if (!check_json_type(count, JSON_INTEGER, "\"mutate\" reply \"count\"")) {
         return false;
     }
-    if (count->u.integer != 1) {
+    if (count->integer != 1) {
         VLOG_WARN_RL(&syntax_rl,
                      "\"mutate\" reply \"count\" is %lld instead of 1",
-                     count->u.integer);
+                     count->integer);
         return false;
     }
 
@@ -4556,13 +4556,13 @@ ovsdb_idl_txn_process_inc_reply(struct ovsdb_idl_txn *txn,
     if (!check_json_type(rows, JSON_ARRAY, "\"select\" reply \"rows\"")) {
         return false;
     }
-    if (rows->u.array.n != 1) {
+    if (rows->array.n != 1) {
         VLOG_WARN_RL(&syntax_rl, "\"select\" reply \"rows\" has %"PRIuSIZE" elements "
                      "instead of 1",
-                     rows->u.array.n);
+                     rows->array.n);
         return false;
     }
-    row = rows->u.array.elems[0];
+    row = rows->array.elems[0];
     if (!check_json_type(row, JSON_OBJECT, "\"select\" reply row")) {
         return false;
     }
@@ -4571,7 +4571,7 @@ ovsdb_idl_txn_process_inc_reply(struct ovsdb_idl_txn *txn,
                          "\"select\" reply inc column")) {
         return false;
     }
-    txn->inc_new_value = column->u.integer;
+    txn->inc_new_value = column->integer;
     return true;
 }
 
@@ -4643,7 +4643,7 @@ ovsdb_idl_db_txn_process_reply(struct ovsdb_idl_db *db,
         status = TXN_ERROR;
         ovsdb_idl_txn_set_error_json(txn, msg->result);
     } else {
-        struct json_array *ops = &msg->result->u.array;
+        struct json_array *ops = &msg->result->array;
         int hard_errors = 0;
         int soft_errors = 0;
         int lock_errors = 0;
@@ -4662,14 +4662,14 @@ ovsdb_idl_db_txn_process_reply(struct ovsdb_idl_db *db,
                 error = shash_find_data(json_object(op), "error");
                 if (error) {
                     if (error->type == JSON_STRING) {
-                        if (!strcmp(error->u.string, "timed out")) {
+                        if (!strcmp(error->string, "timed out")) {
                             soft_errors++;
-                        } else if (!strcmp(error->u.string, "not owner")) {
+                        } else if (!strcmp(error->string, "not owner")) {
                             lock_errors++;
-                        } else if (!strcmp(error->u.string, "not allowed")) {
+                        } else if (!strcmp(error->string, "not allowed")) {
                             hard_errors++;
                             ovsdb_idl_txn_set_error_json(txn, op);
-                        } else if (strcmp(error->u.string, "aborted")) {
+                        } else if (strcmp(error->string, "aborted")) {
                             hard_errors++;
                             ovsdb_idl_txn_set_error_json(txn, op);
                             VLOG_WARN_RL(&other_rl,

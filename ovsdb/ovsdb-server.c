@@ -943,9 +943,9 @@ query_db_remotes(const char *name, const struct shash *all_dbs,
             }
         }
     } else if (column->type.key.type == OVSDB_TYPE_UUID
-               && column->type.key.u.uuid.refTable
+               && column->type.key.uuid.refTable
                && column->type.value.type == OVSDB_TYPE_VOID) {
-        const struct ovsdb_table *ref_table = column->type.key.u.uuid.refTable;
+        const struct ovsdb_table *ref_table = column->type.key.uuid.refTable;
         HMAP_FOR_EACH (row, hmap_node, &table->rows) {
             const struct ovsdb_datum *datum;
             size_t i;
@@ -1050,12 +1050,12 @@ update_remote_rows(const struct shash *all_dbs, const struct db *db_,
 
     if (db != db_
         || column->type.key.type != OVSDB_TYPE_UUID
-        || !column->type.key.u.uuid.refTable
+        || !column->type.key.uuid.refTable
         || column->type.value.type != OVSDB_TYPE_VOID) {
         return;
     }
 
-    ref_table = column->type.key.u.uuid.refTable;
+    ref_table = column->type.key.uuid.refTable;
 
     HMAP_FOR_EACH (row, hmap_node, &table->rows) {
         const struct ovsdb_datum *datum;
@@ -1903,8 +1903,8 @@ sset_from_json(struct sset *sset, const struct json *array)
     sset_clear(sset);
 
     ovs_assert(array->type == JSON_ARRAY);
-    for (i = 0; i < array->u.array.n; i++) {
-        const struct json *elem = array->u.array.elems[i];
+    for (i = 0; i < array->array.n; i++) {
+        const struct json *elem = array->array.elems[i];
         sset_add(sset, json_string(elem));
     }
 }

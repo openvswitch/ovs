@@ -230,14 +230,14 @@ ovsdb_trigger_try(struct ovsdb_trigger *t, long long int now)
 
             /* Validate parameters. */
             const struct json *params = t->request->params;
-            if (params->type != JSON_ARRAY || params->u.array.n != 2) {
+            if (params->type != JSON_ARRAY || params->array.n != 2) {
                 trigger_convert_error(t, ovsdb_syntax_error(params, NULL,
                                                             "array expected"));
                 return false;
             }
 
             /* Parse new schema and make a converted copy. */
-            const struct json *new_schema_json = params->u.array.elems[1];
+            const struct json *new_schema_json = params->array.elems[1];
             struct ovsdb_schema *new_schema;
             struct ovsdb_error *error
                 = ovsdb_schema_from_json(new_schema_json, &new_schema);

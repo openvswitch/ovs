@@ -71,7 +71,7 @@ struct json {
         long long int integer;
         double real;
         char *string;
-    } u;
+    };
 };
 
 struct json *json_null_create(void);

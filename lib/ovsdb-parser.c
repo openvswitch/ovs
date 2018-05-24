@@ -83,7 +83,7 @@ ovsdb_parser_member(struct ovsdb_parser *parser, const char *name,
     if (((int) value->type >= 0 && value->type < JSON_N_TYPES
          && types & (1u << value->type))
         || (types & OP_ID && value->type == JSON_STRING
-            && ovsdb_parser_is_id(value->u.string)))
+            && ovsdb_parser_is_id(value->string)))
     {
         sset_add(&parser->used, name);
         return value;

@@ -387,6 +387,7 @@ bool %(s)s_is_updated(const struct %(s)s *, enum %(s)s_column_id);
 #endif''')
     print("\n#endif /* %(prefix)sIDL_HEADER */" % {'prefix': prefix.upper()})
 
+
 def printEnum(type, members):
     if len(members) == 0:
         return

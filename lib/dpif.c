@@ -998,16 +998,16 @@ dpif_flow_get(struct dpif *dpif,
     struct dpif_op op;
 
     op.type = DPIF_OP_FLOW_GET;
-    op.u.flow_get.key = key;
-    op.u.flow_get.key_len = key_len;
-    op.u.flow_get.ufid = ufid;
-    op.u.flow_get.pmd_id = pmd_id;
-    op.u.flow_get.buffer = buf;
+    op.flow_get.key = key;
+    op.flow_get.key_len = key_len;
+    op.flow_get.ufid = ufid;
+    op.flow_get.pmd_id = pmd_id;
+    op.flow_get.buffer = buf;
 
     memset(flow, 0, sizeof *flow);
-    op.u.flow_get.flow = flow;
-    op.u.flow_get.flow->key = key;
-    op.u.flow_get.flow->key_len = key_len;
+    op.flow_get.flow = flow;
+    op.flow_get.flow->key = key;
+    op.flow_get.flow->key_len = key_len;
 
     opp = &op;
     dpif_operate(dpif, &opp, 1);
@@ -1028,16 +1028,16 @@ dpif_flow_put(struct dpif *dpif, enum dpif_flow_put_flags flags,
     struct dpif_op op;
 
     op.type = DPIF_OP_FLOW_PUT;
-    op.u.flow_put.flags = flags;
-    op.u.flow_put.key = key;
-    op.u.flow_put.key_len = key_len;
-    op.u.flow_put.mask = mask;
-    op.u.flow_put.mask_len = mask_len;
-    op.u.flow_put.actions = actions;
-    op.u.flow_put.actions_len = actions_len;
-    op.u.flow_put.ufid = ufid;
-    op.u.flow_put.pmd_id = pmd_id;
-    op.u.flow_put.stats = stats;
+    op.flow_put.flags = flags;
+    op.flow_put.key = key;
+    op.flow_put.key_len = key_len;
+    op.flow_put.mask = mask;
+    op.flow_put.mask_len = mask_len;
+    op.flow_put.actions = actions;
+    op.flow_put.actions_len = actions_len;
+    op.flow_put.ufid = ufid;
+    op.flow_put.pmd_id = pmd_id;
+    op.flow_put.stats = stats;
 
     opp = &op;
     dpif_operate(dpif, &opp, 1);
@@ -1055,12 +1055,12 @@ dpif_flow_del(struct dpif *dpif,
     struct dpif_op op;
 
     op.type = DPIF_OP_FLOW_DEL;
-    op.u.flow_del.key = key;
-    op.u.flow_del.key_len = key_len;
-    op.u.flow_del.ufid = ufid;
-    op.u.flow_del.pmd_id = pmd_id;
-    op.u.flow_del.stats = stats;
-    op.u.flow_del.terse = false;
+    op.flow_del.key = key;
+    op.flow_del.key_len = key_len;
+    op.flow_del.ufid = ufid;
+    op.flow_del.pmd_id = pmd_id;
+    op.flow_del.stats = stats;
+    op.flow_del.terse = false;
 
     opp = &op;
     dpif_operate(dpif, &opp, 1);
@@ -1317,7 +1317,7 @@ dpif_execute(struct dpif *dpif, struct dpif_execute *execute)
         struct dpif_op op;
 
         op.type = DPIF_OP_EXECUTE;
-        op.u.execute = *execute;
+        op.execute = *execute;
 
         opp = &op;
         dpif_operate(dpif, &opp, 1);
@@ -1345,7 +1345,7 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
             struct dpif_op *op = ops[chunk];
 
             if (op->type == DPIF_OP_EXECUTE
-                && dpif_execute_needs_help(&op->u.execute)) {
+                && dpif_execute_needs_help(&op->execute)) {
                 break;
             }
         }
@@ -1363,7 +1363,7 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
 
                 switch (op->type) {
                 case DPIF_OP_FLOW_PUT: {
-                    struct dpif_flow_put *put = &op->u.flow_put;
+                    struct dpif_flow_put *put = &op->flow_put;
 
                     COVERAGE_INC(dpif_flow_put);
                     log_flow_put_message(dpif, &this_module, put, error);
@@ -1374,7 +1374,7 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
                 }
 
                 case DPIF_OP_FLOW_GET: {
-                    struct dpif_flow_get *get = &op->u.flow_get;
+                    struct dpif_flow_get *get = &op->flow_get;
 
                     COVERAGE_INC(dpif_flow_get);
                     if (error) {
@@ -1386,7 +1386,7 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
                 }
 
                 case DPIF_OP_FLOW_DEL: {
-                    struct dpif_flow_del *del = &op->u.flow_del;
+                    struct dpif_flow_del *del = &op->flow_del;
 
                     COVERAGE_INC(dpif_flow_del);
                     log_flow_del_message(dpif, &this_module, del, error);
@@ -1398,7 +1398,7 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
 
                 case DPIF_OP_EXECUTE:
                     COVERAGE_INC(dpif_execute);
-                    log_execute_message(dpif, &this_module, &op->u.execute,
+                    log_execute_message(dpif, &this_module, &op->execute,
                                         false, error);
                     break;
                 }
@@ -1411,7 +1411,7 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
             struct dpif_op *op = ops[0];
 
             COVERAGE_INC(dpif_execute);
-            op->error = dpif_execute_with_help(dpif, &op->u.execute);
+            op->error = dpif_execute_with_help(dpif, &op->execute);
             ops++;
             n_ops--;
         }

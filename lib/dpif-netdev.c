@@ -3061,19 +3061,19 @@ dpif_netdev_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
 
         switch (op->type) {
         case DPIF_OP_FLOW_PUT:
-            op->error = dpif_netdev_flow_put(dpif, &op->u.flow_put);
+            op->error = dpif_netdev_flow_put(dpif, &op->flow_put);
             break;
 
         case DPIF_OP_FLOW_DEL:
-            op->error = dpif_netdev_flow_del(dpif, &op->u.flow_del);
+            op->error = dpif_netdev_flow_del(dpif, &op->flow_del);
             break;
 
         case DPIF_OP_EXECUTE:
-            op->error = dpif_netdev_execute(dpif, &op->u.execute);
+            op->error = dpif_netdev_execute(dpif, &op->execute);
             break;
 
         case DPIF_OP_FLOW_GET:
-            op->error = dpif_netdev_flow_get(dpif, &op->u.flow_get);
+            op->error = dpif_netdev_flow_get(dpif, &op->flow_get);
             break;
         }
     }

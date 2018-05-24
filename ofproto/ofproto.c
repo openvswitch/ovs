@@ -152,7 +152,7 @@ struct learned_cookie {
 
         /* In 'dead_cookies' list when removed from hmap. */
         struct ovs_list list_node;
-    } u;
+    };
 
     /* Key. */
     ovs_be64 cookie OVS_GUARDED_BY(ofproto_mutex);
@@ -3099,14 +3099,14 @@ learned_cookies_update_one__(struct ofproto *ofproto,
     uint32_t hash = hash_learned_cookie(learn->cookie, learn->table_id);
     struct learned_cookie *c;
 
-    HMAP_FOR_EACH_WITH_HASH (c, u.hmap_node, hash, &ofproto->learned_cookies) {
+    HMAP_FOR_EACH_WITH_HASH (c, hmap_node, hash, &ofproto->learned_cookies) {
         if (c->cookie == learn->cookie && c->table_id == learn->table_id) {
             c->n += delta;
             ovs_assert(c->n >= 0);
 
             if (!c->n) {
-                hmap_remove(&ofproto->learned_cookies, &c->u.hmap_node);
-                ovs_list_push_back(dead_cookies, &c->u.list_node);
+                hmap_remove(&ofproto->learned_cookies, &c->hmap_node);
+                ovs_list_push_back(dead_cookies, &c->list_node);
             }
 
             return;
@@ -3115,7 +3115,7 @@ learned_cookies_update_one__(struct ofproto *ofproto,
 
     ovs_assert(delta > 0);
     c = xmalloc(sizeof *c);
-    hmap_insert(&ofproto->learned_cookies, &c->u.hmap_node, hash);
+    hmap_insert(&ofproto->learned_cookies, &c->hmap_node, hash);
     c->cookie = learn->cookie;
     c->table_id = learn->table_id;
     c->n = delta;
@@ -3183,7 +3183,7 @@ learned_cookies_flush(struct ofproto *ofproto, struct ovs_list *dead_cookies)
     struct minimatch match;
 
     minimatch_init_catchall(&match);
-    LIST_FOR_EACH_POP (c, u.list_node, dead_cookies) {
+    LIST_FOR_EACH_POP (c, list_node, dead_cookies) {
         struct rule_criteria criteria;
         struct rule_collection rules;
         rule_criteria_init(&criteria, c->table_id, &match, 0, OVS_VERSION_MAX,

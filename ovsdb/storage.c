@@ -246,12 +246,12 @@ ovsdb_storage_read(struct ovsdb_storage *storage,
             raft_next_entry(storage->raft, txnid, &is_snapshot));
         if (!json) {
             return NULL;
-        } else if (json->type != JSON_ARRAY || json->u.array.n != 2) {
+        } else if (json->type != JSON_ARRAY || json->array.n != 2) {
             json_destroy(json);
             return ovsdb_error(NULL, "invalid commit format");
         }
 
-        struct json **e = json->u.array.elems;
+        struct json **e = json->array.elems;
         schema_json = e[0]->type != JSON_NULL ? e[0] : NULL;
         txn_json = e[1]->type != JSON_NULL ? e[1] : NULL;
     } else if (storage->log) {

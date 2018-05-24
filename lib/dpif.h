@@ -760,7 +760,7 @@ struct dpif_op {
         struct dpif_flow_del flow_del;
         struct dpif_execute execute;
         struct dpif_flow_get flow_get;
-    } u;
+    };
 };
 
 void dpif_operate(struct dpif *, struct dpif_op **ops, size_t n_ops);

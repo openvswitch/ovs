@@ -135,7 +135,7 @@ ovsdb_util_read_map_string_uuid_column(const struct ovsdb_row *row,
         return NULL;
     }
 
-    const struct ovsdb_table *ref_table = column->type.value.u.uuid.refTable;
+    const struct ovsdb_table *ref_table = column->type.value.uuid.refTable;
     if (!ref_table) {
         return NULL;
     }
