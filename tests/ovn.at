@@ -681,6 +681,107 @@ reg15=0x11
 ])
 AT_CLEANUP
 
+AT_SETUP([ovn -- converting expressions to flows -- conjunction])
+AT_KEYWORDS([conjunction])
+expr_to_flow () {
+    echo "$1" | ovstest test-ovn expr-to-flows | sort
+}
+
+lflow="ip4.src == {10.0.0.1, 10.0.0.2, 10.0.0.3} && \
+ip4.dst == {20.0.0.1, 20.0.0.2, 20.0.0.3}"
+AT_CHECK([expr_to_flow "$lflow"], [0], [dnl
+conj_id=1,ip
+ip,nw_dst=20.0.0.1: conjunction(1, 0/2)
+ip,nw_dst=20.0.0.2: conjunction(1, 0/2)
+ip,nw_dst=20.0.0.3: conjunction(1, 0/2)
+ip,nw_src=10.0.0.1: conjunction(1, 1/2)
+ip,nw_src=10.0.0.2: conjunction(1, 1/2)
+ip,nw_src=10.0.0.3: conjunction(1, 1/2)
+])
+
+lflow="ip && (!ct.est || (ct.est && ct_label.blocked == 1))"
+AT_CHECK([expr_to_flow "$lflow"], [0], [dnl
+ct_state=+est+trk,ct_label=0x1/0x1,ip
+ct_state=+est+trk,ct_label=0x1/0x1,ipv6
+ct_state=-est+trk,ip
+ct_state=-est+trk,ipv6
+])
+
+lflow="ip4.src == {10.0.0.1, 10.0.0.2, 10.0.0.3} && \
+ip4.dst == {20.0.0.1, 20.0.0.2}"
+AT_CHECK([expr_to_flow "$lflow"], [0], [dnl
+conj_id=1,ip
+ip,nw_dst=20.0.0.1: conjunction(1, 0/2)
+ip,nw_dst=20.0.0.2: conjunction(1, 0/2)
+ip,nw_src=10.0.0.1: conjunction(1, 1/2)
+ip,nw_src=10.0.0.2: conjunction(1, 1/2)
+ip,nw_src=10.0.0.3: conjunction(1, 1/2)
+])
+
+lflow="ip4 && ip4.src == {10.0.0.1, 10.0.0.2, 10.0.0.3} && \
+ip4.dst == {20.0.0.1, 20.0.0.2, 20.0.0.3} && \
+tcp.dst >= 1000 && tcp.dst <= 1010"
+
+AT_CHECK([expr_to_flow "$lflow"], [0], [dnl
+conj_id=1,tcp
+tcp,nw_dst=20.0.0.1: conjunction(1, 0/3)
+tcp,nw_dst=20.0.0.2: conjunction(1, 0/3)
+tcp,nw_dst=20.0.0.3: conjunction(1, 0/3)
+tcp,nw_src=10.0.0.1: conjunction(1, 1/3)
+tcp,nw_src=10.0.0.2: conjunction(1, 1/3)
+tcp,nw_src=10.0.0.3: conjunction(1, 1/3)
+tcp,tp_dst=0x3ea/0xfffe: conjunction(1, 2/3)
+tcp,tp_dst=0x3ec/0xfffc: conjunction(1, 2/3)
+tcp,tp_dst=0x3f0/0xfffe: conjunction(1, 2/3)
+tcp,tp_dst=1000: conjunction(1, 2/3)
+tcp,tp_dst=1001: conjunction(1, 2/3)
+tcp,tp_dst=1010: conjunction(1, 2/3)
+])
+
+lflow="ip4 && ip4.src == {10.0.0.4, 10.0.0.5, 10.0.0.6} && \
+((ip4.dst == {20.0.0.4, 20.0.0.7, 20.0.0.8} && tcp.dst >= 1000 && \
+tcp.dst <= 2000 && tcp.src >=1000 && tcp.src <= 2000) \
+|| ip4.dst == 20.0.0.5 || ip4.dst == 20.0.0.6)"
+
+AT_CHECK([expr_to_flow "$lflow"], [0], [dnl
+conj_id=1,tcp
+ip,nw_src=10.0.0.4,nw_dst=20.0.0.5
+ip,nw_src=10.0.0.4,nw_dst=20.0.0.6
+ip,nw_src=10.0.0.5,nw_dst=20.0.0.5
+ip,nw_src=10.0.0.5,nw_dst=20.0.0.6
+ip,nw_src=10.0.0.6,nw_dst=20.0.0.5
+ip,nw_src=10.0.0.6,nw_dst=20.0.0.6
+tcp,nw_dst=20.0.0.4: conjunction(1, 0/4)
+tcp,nw_dst=20.0.0.7: conjunction(1, 0/4)
+tcp,nw_dst=20.0.0.8: conjunction(1, 0/4)
+tcp,nw_src=10.0.0.4: conjunction(1, 1/4)
+tcp,nw_src=10.0.0.5: conjunction(1, 1/4)
+tcp,nw_src=10.0.0.6: conjunction(1, 1/4)
+tcp,tp_dst=0x3ea/0xfffe: conjunction(1, 2/4)
+tcp,tp_dst=0x3ec/0xfffc: conjunction(1, 2/4)
+tcp,tp_dst=0x3f0/0xfff0: conjunction(1, 2/4)
+tcp,tp_dst=0x400/0xfe00: conjunction(1, 2/4)
+tcp,tp_dst=0x600/0xff00: conjunction(1, 2/4)
+tcp,tp_dst=0x700/0xff80: conjunction(1, 2/4)
+tcp,tp_dst=0x780/0xffc0: conjunction(1, 2/4)
+tcp,tp_dst=0x7c0/0xfff0: conjunction(1, 2/4)
+tcp,tp_dst=1000: conjunction(1, 2/4)
+tcp,tp_dst=1001: conjunction(1, 2/4)
+tcp,tp_dst=2000: conjunction(1, 2/4)
+tcp,tp_src=0x3ea/0xfffe: conjunction(1, 3/4)
+tcp,tp_src=0x3ec/0xfffc: conjunction(1, 3/4)
+tcp,tp_src=0x3f0/0xfff0: conjunction(1, 3/4)
+tcp,tp_src=0x400/0xfe00: conjunction(1, 3/4)
+tcp,tp_src=0x600/0xff00: conjunction(1, 3/4)
+tcp,tp_src=0x700/0xff80: conjunction(1, 3/4)
+tcp,tp_src=0x780/0xffc0: conjunction(1, 3/4)
+tcp,tp_src=0x7c0/0xfff0: conjunction(1, 3/4)
+tcp,tp_src=1000: conjunction(1, 3/4)
+tcp,tp_src=1001: conjunction(1, 3/4)
+tcp,tp_src=2000: conjunction(1, 3/4)
+])
+AT_CLEANUP
+
 AT_SETUP([ovn -- action parsing])
 dnl Unindented text is input (a set of OVN logical actions).
 dnl Indented text is expected output.
@@ -10038,4 +10139,131 @@ done
 
 # Gracefully terminate daemons
 OVN_CLEANUP([hv1], [hv2], [hv3])
+AT_CLEANUP
+
+AT_SETUP([ovn -- ACL conjunction])
+ovn_start
+
+ovn-nbctl ls-add ls1
+
+ovn-nbctl lsp-add ls1 ls1-lp1 \
+-- lsp-set-addresses ls1-lp1 "f0:00:00:00:00:01 10.0.0.4"
+
+ovn-nbctl lsp-set-port-security ls1-lp1 "f0:00:00:00:00:01 10.0.0.4"
+
+ovn-nbctl lsp-add ls1 ls1-lp2 \
+-- lsp-set-addresses ls1-lp2 "f0:00:00:00:00:02 10.0.0.6"
+
+ovn-nbctl lsp-set-port-security ls1-lp2 "f0:00:00:00:00:02 10.0.0.6"
+
+net_add n1
+sim_add hv1
+
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl -- add-port br-int hv1-vif1 -- \
+    set interface hv1-vif1 external-ids:iface-id=ls1-lp1 \
+    options:tx_pcap=hv1/vif1-tx.pcap \
+    options:rxq_pcap=hv1/vif1-rx.pcap \
+    ofport-request=1
+
+ovs-vsctl -- add-port br-int hv1-vif2 -- \
+    set interface hv1-vif2 external-ids:iface-id=ls1-lp2 \
+    options:tx_pcap=hv1/vif2-tx.pcap \
+    options:rxq_pcap=hv1/vif2-rx.pcap \
+    ofport-request=2
+
+ovn-nbctl create Address_Set name=set1 \
+addresses=\"10.0.0.4\",\"10.0.0.5\",\"10.0.0.6\"
+ovn-nbctl create Address_Set name=set2 \
+addresses=\"10.0.0.7\",\"10.0.0.8\",\"10.0.0.9\"
+ovn-nbctl acl-add ls1 to-lport 1002 \
+'ip4 && ip4.src == $set1 && ip4.dst == $set1' allow
+ovn-nbctl acl-add ls1 to-lport 1001 \
+'ip4 && ip4.src == $set1 && ip4.dst == $set2' drop
+
+# test_ip INPORT SRC_MAC DST_MAC SRC_IP DST_IP OUTPORT...
+#
+# This shell function causes an ip packet to be received on INPORT.
+# The packet's content has Ethernet destination DST and source SRC
+# (each exactly 12 hex digits) and Ethernet type ETHTYPE (4 hex digits).
+# The OUTPORTs (zero or more) list the VIFs on which the packet should
+# be received.  INPORT and the OUTPORTs are specified as logical switch
+# port numbers, e.g. 11 for vif11.
+test_ip() {
+    # This packet has bad checksums but logical L3 routing doesn't check.
+    local inport=$1 src_mac=$2 dst_mac=$3 src_ip=$4 dst_ip=$5
+    local packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}\
+${dst_ip}0035111100080000
+    shift; shift; shift; shift; shift
+    as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
+    for outport; do
+        echo $packet >> $outport.expected
+    done
+}
+
+ip_to_hex() {
+    printf "%02x%02x%02x%02x" "$@"
+}
+
+reset_pcap_file() {
+    local iface=$1
+    local pcap_file=$2
+    ovs-vsctl -- set Interface $iface options:tx_pcap=dummy-tx.pcap \
+options:rxq_pcap=dummy-rx.pcap
+    rm -f ${pcap_file}*.pcap
+    ovs-vsctl -- set Interface $iface options:tx_pcap=${pcap_file}-tx.pcap \
+options:rxq_pcap=${pcap_file}-rx.pcap
+}
+
+
+sip=`ip_to_hex 10 0 0 4`
+dip=`ip_to_hex 10 0 0 6`
+
+test_ip 1 f00000000001 f00000000002 $sip $dip 2
+
+cat 2.expected > expout
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap > 2.packets
+AT_CHECK([cat 2.packets], [0], [expout])
+
+# There should be total of 12 flows present with conjunction action and 2 flows
+# with conj match. Eg.
+# table=44, priority=2002,conj_id=2,metadata=0x1 actions=resubmit(,45)
+# table=44, priority=2001,conj_id=3,metadata=0x1 actions=drop
+# priority=2002,ip,metadata=0x1,nw_dst=10.0.0.6 actions=conjunction(2,2/2)
+# priority=2002,ip,metadata=0x1,nw_dst=10.0.0.4 actions=conjunction(2,2/2)
+# priority=2002,ip,metadata=0x1,nw_dst=10.0.0.5 actions=conjunction(2,2/2)
+# priority=2001,ip,metadata=0x1,nw_dst=10.0.0.7 actions=conjunction(3,2/2)
+# priority=2001,ip,metadata=0x1,nw_dst=10.0.0.9 actions=conjunction(3,2/2)
+# priority=2001,ip,metadata=0x1,nw_dst=10.0.0.8 actions=conjunction(3,2/2)
+# priority=2002,ip,metadata=0x1,nw_src=10.0.0.6 actions=conjunction(2,1/2)
+# priority=2002,ip,metadata=0x1,nw_src=10.0.0.4 actions=conjunction(2,1/2)
+# priority=2002,ip,metadata=0x1,nw_src=10.0.0.5 actions=conjunction(2,1/2)
+# priority=2001,ip,metadata=0x1,nw_src=10.0.0.6 actions=conjunction(3,1/2)
+# priority=2001,ip,metadata=0x1,nw_src=10.0.0.4 actions=conjunction(3,1/2)
+# priority=2001,ip,metadata=0x1,nw_src=10.0.0.5 actions=conjunction(3,1/2)
+
+OVS_WAIT_UNTIL([test 12 = `as hv1 ovs-ofctl dump-flows br-int | \
+grep conjunction | wc -l`])
+OVS_WAIT_UNTIL([test 2 = `as hv1 ovs-ofctl dump-flows br-int | \
+grep conj_id | wc -l`])
+
+as hv1 ovs-ofctl dump-flows br-int
+
+# Set the ip address for ls1-lp2 from set2 so that the drop ACL flow is hit.
+ovn-nbctl lsp-set-addresses ls1-lp2 "f0:00:00:00:00:02 10.0.0.7 20.0.0.4"
+ovn-nbctl lsp-set-port-security ls1-lp2 "f0:00:00:00:00:02 10.0.0.7 20.0.0.4"
+
+reset_pcap_file hv1-vif2 hv1/vif2
+
+rm -f 2.packets
+
+sip=`ip_to_hex 10 0 0 4`
+dip=`ip_to_hex 10 0 0 7`
+
+test_ip 1 f00000000001 f00000000002 $sip $dip
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap > 2.packets
+AT_CHECK([cat 2.packets], [0], [])
+
 AT_CLEANUP
