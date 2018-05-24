@@ -361,12 +361,17 @@ AT_CLEANUP
 
 AT_SETUP([ovn -- expression annotation])
 dnl Input precedes =>, expected output follows =>.
+dnl Empty lines and lines starting with # are ignored.
 AT_DATA([test-cases.txt], [[
 ip4.src == 1.2.3.4 => ip4.src == 0x1020304 && eth.type == 0x800
 ip4.src != 1.2.3.4 => ip4.src != 0x1020304 && eth.type == 0x800
 ip.proto == 123 => ip.proto == 0x7b && (eth.type == 0x800 || eth.type == 0x86dd)
-ip.proto == {123, 234} => (ip.proto == 0x7b && (eth.type == 0x800 || eth.type == 0x86dd)) || (ip.proto == 0xea && (eth.type == 0x800 || eth.type == 0x86dd))
+ip.proto == {123, 234} => (ip.proto == 0x7b || ip.proto == 0xea) && (eth.type == 0x800 || eth.type == 0x86dd)
 ip4.src == 1.2.3.4 && ip4.dst == 5.6.7.8 => ip4.src == 0x1020304 && eth.type == 0x800 && ip4.dst == 0x5060708 && eth.type == 0x800
+
+# Nested expressions over a single symbol should be annotated with symbol's
+# prerequisites only once, at the top level.
+tcp.dst == 1 || (tcp.dst >= 2 && tcp.dst <= 3) => (tcp.dst == 0x1 || (tcp.dst >= 0x2 && tcp.dst <= 0x3)) && ip.proto == 0x6 && (eth.type == 0x800 || eth.type == 0x86dd)
 
 ip => eth.type == 0x800 || eth.type == 0x86dd
 ip == 1 => eth.type == 0x800 || eth.type == 0x86dd
@@ -1065,7 +1070,7 @@ get_nd(xxreg0, ip6.dst);
 # put_nd
 put_nd(inport, nd.target, nd.sll);
     encodes as push:NXM_NX_XXREG0[],push:NXM_OF_ETH_SRC[],push:NXM_NX_ND_SLL[],push:NXM_NX_ND_TARGET[],pop:NXM_NX_XXREG0[],pop:NXM_OF_ETH_SRC[],controller(userdata=00.00.00.04.00.00.00.00),pop:NXM_OF_ETH_SRC[],pop:NXM_NX_XXREG0[]
-    has prereqs ((icmp6.type == 0x87 && eth.type == 0x86dd && ip.proto == 0x3a && (eth.type == 0x800 || eth.type == 0x86dd)) || (icmp6.type == 0x88 && eth.type == 0x86dd && ip.proto == 0x3a && (eth.type == 0x800 || eth.type == 0x86dd))) && icmp6.code == 0 && eth.type == 0x86dd && ip.proto == 0x3a && (eth.type == 0x800 || eth.type == 0x86dd) && ip.ttl == 0xff && (eth.type == 0x800 || eth.type == 0x86dd) && icmp6.type == 0x87 && eth.type == 0x86dd && ip.proto == 0x3a && (eth.type == 0x800 || eth.type == 0x86dd) && icmp6.code == 0 && eth.type == 0x86dd && ip.proto == 0x3a && (eth.type == 0x800 || eth.type == 0x86dd) && ip.ttl == 0xff && (eth.type == 0x800 || eth.type == 0x86dd)
+    has prereqs (icmp6.type == 0x87 || icmp6.type == 0x88) && eth.type == 0x86dd && ip.proto == 0x3a && (eth.type == 0x800 || eth.type == 0x86dd) && icmp6.code == 0 && eth.type == 0x86dd && ip.proto == 0x3a && (eth.type == 0x800 || eth.type == 0x86dd) && ip.ttl == 0xff && (eth.type == 0x800 || eth.type == 0x86dd) && icmp6.type == 0x87 && eth.type == 0x86dd && ip.proto == 0x3a && (eth.type == 0x800 || eth.type == 0x86dd) && icmp6.code == 0 && eth.type == 0x86dd && ip.proto == 0x3a && (eth.type == 0x800 || eth.type == 0x86dd) && ip.ttl == 0xff && (eth.type == 0x800 || eth.type == 0x86dd)
 
 # put_dhcpv6_opts
 reg1[0] = put_dhcpv6_opts(ia_addr = ae70::4, server_id = 00:00:00:00:10:02);

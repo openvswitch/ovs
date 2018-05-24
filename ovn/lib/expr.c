@@ -1658,8 +1658,8 @@ struct annotation_nesting {
     const struct expr_symbol *symbol;
 };
 
-struct expr *expr_annotate__(struct expr *, const struct shash *symtab,
-                             struct ovs_list *nesting, char **errorp);
+static struct expr *expr_annotate_(struct expr *, const struct shash *symtab,
+                                   struct ovs_list *nesting, char **errorp);
 
 static struct expr *
 parse_and_annotate(const char *s, const struct shash *symtab,
@@ -1670,7 +1670,7 @@ parse_and_annotate(const char *s, const struct shash *symtab,
 
     expr = expr_parse_string(s, symtab, NULL, NULL, &error);
     if (expr) {
-        expr = expr_annotate__(expr, symtab, nesting, &error);
+        expr = expr_annotate_(expr, symtab, nesting, &error);
     }
     if (expr) {
         *errorp = NULL;
@@ -1685,7 +1685,7 @@ parse_and_annotate(const char *s, const struct shash *symtab,
 
 static struct expr *
 expr_annotate_cmp(struct expr *expr, const struct shash *symtab,
-                  struct ovs_list *nesting, char **errorp)
+                  bool append_prereqs, struct ovs_list *nesting, char **errorp)
 {
     const struct expr_symbol *symbol = expr->cmp.symbol;
     const struct annotation_nesting *iter;
@@ -1703,7 +1703,7 @@ expr_annotate_cmp(struct expr *expr, const struct shash *symtab,
     ovs_list_push_back(nesting, &an.node);
 
     struct expr *prereqs = NULL;
-    if (symbol->prereqs) {
+    if (append_prereqs && symbol->prereqs) {
         prereqs = parse_and_annotate(symbol->prereqs, symtab, nesting, errorp);
         if (!prereqs) {
             goto error;
@@ -1744,21 +1744,65 @@ error:
     return NULL;
 }
 
-struct expr *
+/* Append (logical AND) prerequisites for given symbol to the expression. */
+static struct expr *
+expr_append_prereqs(struct expr *expr, const struct expr_symbol *symbol,
+                    const struct shash *symtab, struct ovs_list *nesting,
+                    char **errorp)
+{
+    struct expr *prereqs = NULL;
+
+    if (symbol->prereqs) {
+        prereqs = parse_and_annotate(symbol->prereqs, symtab, nesting, errorp);
+        if (!prereqs) {
+            expr_destroy(expr);
+            return NULL;
+        }
+    }
+
+    return prereqs ? expr_combine(EXPR_T_AND, expr, prereqs) : expr;
+}
+
+static const struct expr_symbol *expr_get_unique_symbol(
+    const struct expr *expr);
+
+/* Ordinarily, annotation adds prerequisites to the expression, and that's what
+ * this function does if 'append_prereqs' is true.  If 'append_prereqs' is
+ * false, this function ignores prerequisites (in which case the caller must
+ * have arranged to deal with them). */
+static struct expr *
 expr_annotate__(struct expr *expr, const struct shash *symtab,
-                struct ovs_list *nesting, char **errorp)
+                bool append_prereqs, struct ovs_list *nesting, char **errorp)
 {
     switch (expr->type) {
     case EXPR_T_CMP:
-        return expr_annotate_cmp(expr, symtab, nesting, errorp);
+        return expr_annotate_cmp(expr, symtab, append_prereqs, nesting,
+                                 errorp);
 
     case EXPR_T_AND:
     case EXPR_T_OR: {
         struct expr *sub, *next;
 
+        /* Detect whether every term in 'expr' mentions the same symbol.  If
+         * so, then suppress prerequisites for that symbol for those terms and
+         * instead apply them once at our higher level.
+         *
+         * If 'append_prereqs' is false, though, we're not supposed to handle
+         * prereqs at all (because our caller is already doing it). */
+        if (append_prereqs) {
+            const struct expr_symbol *sym = expr_get_unique_symbol(expr);
+            if (sym) {
+                append_prereqs = false;
+                expr = expr_append_prereqs(expr, sym, symtab, nesting, errorp);
+                if (!expr) {
+                    return NULL;
+                }
+            }
+        }
+
         LIST_FOR_EACH_SAFE (sub, next, node, &expr->andor) {
             ovs_list_remove(&sub->node);
-            struct expr *new_sub = expr_annotate__(sub, symtab,
+            struct expr *new_sub = expr_annotate__(sub, symtab, append_prereqs,
                                                    nesting, errorp);
             if (!new_sub) {
                 expr_destroy(expr);
@@ -1778,6 +1822,17 @@ expr_annotate__(struct expr *expr, const struct shash *symtab,
     default:
         OVS_NOT_REACHED();
     }
+}
+
+/* Same interface and purpose as expr_annotate(), with an additional parameter
+ * for internal bookkeeping.
+ *
+ * Uses 'nesting' to ensure that a given symbol is not recursively expanded. */
+static struct expr *
+expr_annotate_(struct expr *expr, const struct shash *symtab,
+               struct ovs_list *nesting, char **errorp)
+{
+    return expr_annotate__(expr, symtab, true, nesting, errorp);
 }
 
 /* "Annotates" 'expr', which does the following:
@@ -1802,7 +1857,7 @@ struct expr *
 expr_annotate(struct expr *expr, const struct shash *symtab, char **errorp)
 {
     struct ovs_list nesting = OVS_LIST_INITIALIZER(&nesting);
-    return expr_annotate__(expr, symtab, &nesting, errorp);
+    return expr_annotate_(expr, symtab, &nesting, errorp);
 }
 
 static struct expr *
