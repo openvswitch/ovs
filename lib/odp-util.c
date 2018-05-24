@@ -595,7 +595,9 @@ format_odp_hash_action(struct ds *ds, const struct ovs_action_hash *hash_act)
     ds_put_format(ds, "hash(");
 
     if (hash_act->hash_alg == OVS_HASH_ALG_L4) {
-        ds_put_format(ds, "hash_l4(%"PRIu32")", hash_act->hash_basis);
+        ds_put_format(ds, "l4(%"PRIu32")", hash_act->hash_basis);
+    } else if (hash_act->hash_alg == OVS_HASH_ALG_SYM_L4) {
+        ds_put_format(ds, "sym_l4(%"PRIu32")", hash_act->hash_basis);
     } else {
         ds_put_format(ds, "Unknown hash algorithm(%"PRIu32")",
                       hash_act->hash_alg);

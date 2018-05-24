@@ -119,6 +119,12 @@ rule_dpif_is_internal(const struct rule_dpif *rule)
 
 /* Groups. */
 
+enum group_selection_method {
+    SEL_METHOD_DEFAULT,
+    SEL_METHOD_DP_HASH,
+    SEL_METHOD_HASH,
+};
+
 struct group_dpif {
     struct ofgroup up;
 
@@ -129,6 +135,12 @@ struct group_dpif {
     struct ovs_mutex stats_mutex;
     uint64_t packet_count OVS_GUARDED;  /* Number of packets received. */
     uint64_t byte_count OVS_GUARDED;    /* Number of bytes received. */
+
+    enum group_selection_method selection_method;
+    enum ovs_hash_alg hash_alg;         /* dp_hash algorithm to be applied. */
+    uint32_t hash_basis;                /* Basis for dp_hash. */
+    uint32_t hash_mask;                 /* Used to mask dp_hash (2^N - 1).*/
+    struct ofputil_bucket **hash_map;   /* Map hash values to buckets. */
 };
 
 void group_dpif_credit_stats(struct group_dpif *,
@@ -137,6 +149,7 @@ void group_dpif_credit_stats(struct group_dpif *,
 struct group_dpif *group_dpif_lookup(struct ofproto_dpif *,
                                      uint32_t group_id, ovs_version_t version,
                                      bool take_ref);
+
 
 /* Backers.
  *

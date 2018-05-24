@@ -500,11 +500,12 @@ for d in 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
     AT_CHECK([ovs-appctl netdev-dummy/receive p1 $pkt])
 done
 
-AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/dp_hash(.*\/0x1)/dp_hash(0xXXXX\/0x1)/' | sed 's/packets.*actions:1/actions:1/' | strip_ufid | strip_used | sort], [0], [dnl
+AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/dp_hash(.*\/0xf)/dp_hash(0xXXXX\/0xf)/' | sed 's/packets.*actions:1/actions:1/' | \
+          strip_ufid | strip_used | sort | uniq], [0], [dnl
 flow-dump from non-dpdk interfaces:
-recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(src=192.168.0.1,frag=no), packets:15, bytes:1590, used:0.0s, actions:hash(hash_l4(0)),recirc(0x1)
-recirc_id(0x1),dp_hash(0xXXXX/0x1),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions:10
-recirc_id(0x1),dp_hash(0xXXXX/0x1),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions:11
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(src=192.168.0.1,frag=no), packets:15, bytes:1590, used:0.0s, actions:hash(l4(0)),recirc(0x1)
+recirc_id(0x1),dp_hash(0xXXXX/0xf),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions:10
+recirc_id(0x1),dp_hash(0xXXXX/0xf),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions:11
 ])
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
@@ -516,10 +517,10 @@ for d in 0 1 2 3 4 5 6 7 8 9 a b c d e f; do
     AT_CHECK([ovs-appctl netdev-dummy/receive p1 $pkt])
 done
 
-AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/dp_hash(.*\/0x1)/dp_hash(0xXXXX\/0x1)/' | sed 's/\(actions:1\)[[01]]/\1X/' | strip_ufid | strip_used | sort], [0], [dnl
+AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/dp_hash(.*\/0xf)/dp_hash(0xXXXX\/0xf)/' | sed 's/\(actions:1\)[[01]]/\1X/' | strip_ufid | strip_used | sort], [0], [dnl
 flow-dump from non-dpdk interfaces:
-recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(src=192.168.0.1,frag=no), packets:15, bytes:1590, used:0.0s, actions:hash(hash_l4(0)),recirc(0x2)
-recirc_id(0x2),dp_hash(0xXXXX/0x1),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:15, bytes:1590, used:0.0s, actions:1X
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(src=192.168.0.1,frag=no), packets:15, bytes:1590, used:0.0s, actions:hash(l4(0)),recirc(0x2)
+recirc_id(0x2),dp_hash(0xXXXX/0xf),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:15, bytes:1590, used:0.0s, actions:1X
 ])
 
 OVS_VSWITCHD_STOP
