@@ -2124,6 +2124,45 @@ flow_hash_symmetric_l4(const struct flow *flow, uint32_t basis)
     return jhash_bytes(&fields, sizeof fields, basis);
 }
 
+/* Symmetrically Hashes non-IP 'flow' based on its L2 headers. */
+uint32_t
+flow_hash_symmetric_l2(const struct flow *flow, uint32_t basis)
+{
+    union {
+        struct {
+            ovs_be16 eth_type;
+            ovs_be16 vlan_tci;
+            struct eth_addr eth_addr;
+            ovs_be16 pad;
+        };
+        uint32_t word[3];
+    } fields;
+
+    uint32_t hash = basis;
+    int i;
+
+    if (flow->packet_type != htonl(PT_ETH)) {
+        /* Cannot hash non-Ethernet flows */
+        return 0;
+    }
+
+    for (i = 0; i < ARRAY_SIZE(fields.eth_addr.be16); i++) {
+        fields.eth_addr.be16[i] =
+                flow->dl_src.be16[i] ^ flow->dl_dst.be16[i];
+    }
+    fields.vlan_tci = 0;
+    for (i = 0; i < FLOW_MAX_VLAN_HEADERS; i++) {
+        fields.vlan_tci ^= flow->vlans[i].tci & htons(VLAN_VID_MASK);
+    }
+    fields.eth_type = flow->dl_type;
+    fields.pad = 0;
+
+    hash = hash_add(hash, fields.word[0]);
+    hash = hash_add(hash, fields.word[1]);
+    hash = hash_add(hash, fields.word[2]);
+    return hash_finish(hash, basis);
+}
+
 /* Hashes 'flow' based on its L3 through L4 protocol information */
 uint32_t
 flow_hash_symmetric_l3l4(const struct flow *flow, uint32_t basis,
@@ -2144,8 +2183,8 @@ flow_hash_symmetric_l3l4(const struct flow *flow, uint32_t basis,
             hash = hash_add64(hash, a[i] ^ b[i]);
         }
     } else {
-        /* Cannot hash non-IP flows */
-        return 0;
+        /* Revert to hashing L2 headers */
+        return flow_hash_symmetric_l2(flow, basis);
     }
 
     hash = hash_add(hash, flow->nw_proto);

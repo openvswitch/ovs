@@ -175,7 +175,10 @@ struct group_dpif *group_dpif_lookup(struct ofproto_dpif *,
     DPIF_SUPPORT_FIELD(bool, ct_eventmask, "Conntrack eventmask")           \
                                                                             \
     /* True if the datapath supports OVS_ACTION_ATTR_CT_CLEAR action. */    \
-    DPIF_SUPPORT_FIELD(bool, ct_clear, "Conntrack clear")
+    DPIF_SUPPORT_FIELD(bool, ct_clear, "Conntrack clear")                   \
+                                                                            \
+    /* Highest supported dp_hash algorithm. */                              \
+    DPIF_SUPPORT_FIELD(size_t, max_hash_alg, "Max dp_hash algorithm")
 
 /* Stores the various features which the corresponding backer supports. */
 struct dpif_backer_support {

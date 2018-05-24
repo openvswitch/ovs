@@ -1291,6 +1291,50 @@ check_ct_clear(struct dpif_backer *backer)
     return supported;
 }
 
+/* Probe the highest dp_hash algorithm supported by the datapath. */
+static size_t
+check_max_dp_hash_alg(struct dpif_backer *backer)
+{
+    struct odputil_keybuf keybuf;
+    struct ofpbuf key;
+    struct flow flow;
+    struct ovs_action_hash *hash;
+    int max_alg = 0;
+
+    struct odp_flow_key_parms odp_parms = {
+        .flow = &flow,
+        .probe = true,
+    };
+
+    memset(&flow, 0, sizeof flow);
+    ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
+    odp_flow_key_from_flow(&odp_parms, &key);
+
+    /* All datapaths support algortithm 0 (OVS_HASH_ALG_L4). */
+    for (int alg = 1; alg < __OVS_HASH_MAX; alg++) {
+        struct ofpbuf actions;
+        bool ok;
+
+        ofpbuf_init(&actions, 300);
+        hash = nl_msg_put_unspec_uninit(&actions,
+                                        OVS_ACTION_ATTR_HASH, sizeof *hash);
+        hash->hash_basis = 0;
+        hash->hash_alg = alg;
+        ok = dpif_probe_feature(backer->dpif, "Max dp_hash algorithm", &key,
+                                &actions, NULL);
+        ofpbuf_uninit(&actions);
+        if (ok) {
+            max_alg = alg;
+        } else {
+            break;
+        }
+    }
+
+    VLOG_INFO("%s: Max dp_hash algorithm probed to be %d",
+            dpif_name(backer->dpif), max_alg);
+    return max_alg;
+}
+
 #define CHECK_FEATURE__(NAME, SUPPORT, FIELD, VALUE, ETHTYPE)               \
 static bool                                                                 \
 check_##NAME(struct dpif_backer *backer)                                    \
@@ -1353,6 +1397,7 @@ check_support(struct dpif_backer *backer)
     backer->rt_support.sample_nesting = check_max_sample_nesting(backer);
     backer->rt_support.ct_eventmask = check_ct_eventmask(backer);
     backer->rt_support.ct_clear = check_ct_clear(backer);
+    backer->rt_support.max_hash_alg = check_max_dp_hash_alg(backer);
 
     /* Flow fields. */
     backer->rt_support.odp.ct_state = check_ct_state(backer);

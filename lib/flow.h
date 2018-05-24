@@ -236,6 +236,7 @@ hash_odp_port(odp_port_t odp_port)
 
 uint32_t flow_hash_5tuple(const struct flow *flow, uint32_t basis);
 uint32_t flow_hash_symmetric_l4(const struct flow *flow, uint32_t basis);
+uint32_t flow_hash_symmetric_l2(const struct flow *flow, uint32_t basis);
 uint32_t flow_hash_symmetric_l3l4(const struct flow *flow, uint32_t basis,
                          bool inc_udp_ports );
 

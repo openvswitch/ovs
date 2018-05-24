@@ -730,14 +730,16 @@ odp_execute_actions(void *dp, struct dp_packet_batch *batch, bool steal,
         }
 
         switch ((enum ovs_action_attr) type) {
+
         case OVS_ACTION_ATTR_HASH: {
             const struct ovs_action_hash *hash_act = nl_attr_get(a);
 
-            /* Calculate a hash value directly.  This might not match the
+            /* Calculate a hash value directly. This might not match the
              * value computed by the datapath, but it is much less expensive,
              * and the current use case (bonding) does not require a strict
              * match to work properly. */
-            if (hash_act->hash_alg == OVS_HASH_ALG_L4) {
+            switch (hash_act->hash_alg) {
+            case OVS_HASH_ALG_L4: {
                 struct flow flow;
                 uint32_t hash;
 
@@ -753,7 +755,22 @@ odp_execute_actions(void *dp, struct dp_packet_batch *batch, bool steal,
                     }
                     packet->md.dp_hash = hash;
                 }
-            } else {
+                break;
+            }
+            case OVS_HASH_ALG_SYM_L4: {
+                struct flow flow;
+                uint32_t hash;
+
+                DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
+                    flow_extract(packet, &flow);
+                    hash = flow_hash_symmetric_l3l4(&flow,
+                                                    hash_act->hash_basis,
+                                                    false);
+                    packet->md.dp_hash = hash;
+                }
+                break;
+            }
+            default:
                 /* Assert on unknown hash algorithm.  */
                 OVS_NOT_REACHED();
             }

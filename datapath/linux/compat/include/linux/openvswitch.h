@@ -724,6 +724,10 @@ struct ovs_action_push_vlan {
  */
 enum ovs_hash_alg {
 	OVS_HASH_ALG_L4,
+#ifndef __KERNEL__
+	OVS_HASH_ALG_SYM_L4,
+#endif
+	__OVS_HASH_MAX
 };
 
 /*

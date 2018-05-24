@@ -4005,10 +4005,15 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
             struct ovs_action_hash *act_hash;
 
             /* Hash action. */
+            enum ovs_hash_alg hash_alg = xr->hash_alg;
+            if (hash_alg > ctx->xbridge->support.max_hash_alg) {
+                /* Algorithm supported by all datapaths. */
+                hash_alg = OVS_HASH_ALG_L4;
+            }
             act_hash = nl_msg_put_unspec_uninit(ctx->odp_actions,
                                                 OVS_ACTION_ATTR_HASH,
                                                 sizeof *act_hash);
-            act_hash->hash_alg = xr->hash_alg;
+            act_hash->hash_alg = hash_alg;
             act_hash->hash_basis = xr->hash_basis;
 
             /* Recirc action. */
