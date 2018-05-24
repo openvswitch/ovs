@@ -653,23 +653,16 @@ netdev_erspan_build_header(const struct netdev *netdev,
     }
 
     if (erspan_ver == 1) {
-        ovs_be32 *index;
-
         greh->protocol = htons(ETH_TYPE_ERSPAN1);
         greh->flags = htons(GRE_SEQ);
         ersh->ver = 1;
         set_sid(ersh, sid);
 
+        uint32_t erspan_idx = (tnl_cfg->erspan_idx_flow
+                          ? params->flow->tunnel.erspan_idx
+                          : tnl_cfg->erspan_idx);
         put_16aligned_be32(ALIGNED_CAST(ovs_16aligned_be32 *, ersh + 1),
-                           htonl(tnl_cfg->erspan_idx));
-
-        index = (ovs_be32 *)(ersh + 1);
-
-        if (tnl_cfg->erspan_idx_flow) {
-            *index = htonl(params->flow->tunnel.erspan_idx);
-        } else {
-            *index = htonl(tnl_cfg->erspan_idx);
-        }
+                           htonl(erspan_idx));
 
         hlen = ERSPAN_GREHDR_LEN + sizeof *ersh + ERSPAN_V1_MDSIZE;
     } else if (erspan_ver == 2) {
