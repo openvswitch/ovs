@@ -72,6 +72,7 @@ ovnsb_schema=
 ovnnb_schema=
 ovn_rbac=true
 n_northds=1
+n_controllers=1
 nbdb_model=standalone
 nbdb_servers=3
 sbdb_model=backup
@@ -211,6 +212,12 @@ EOF
             ;;
         --n-northd*)
             prev=n_northds
+            ;;
+        --n-controller*=*)
+            n_controllers=$optarg
+            ;;
+        --n-controller*)
+            prev=n_controllers
             ;;
         --nbdb-s*=*)
             nbdb_servers=$optarg
@@ -386,7 +393,9 @@ if $ovn; then
         $OVS_PKI -B 1024 init
         $OVS_PKI -B 1024 req+sign ovnsb switch
         $OVS_PKI -B 1024 req+sign ovnnb switch
-        $OVS_PKI -B 1024 -u req+sign chassis-1 switch
+	for i in $(seq $n_controllers); do
+            $OVS_PKI -B 1024 -u req+sign chassis-$i switch
+	done
     fi
 fi
 rungdb $gdb_ovsdb $gdb_ovsdb_ex ovsdb-server --detach --no-chdir --pidfile -vconsole:off --log-file \
@@ -524,8 +533,11 @@ if $ovn; then
                --log-file=ovn-northd$i.log \
                --ovnsb-db="$OVN_SB_DB" --ovnnb-db="$OVN_NB_DB"
     done
-    rungdb $gdb_ovn_controller $gdb_ovn_controller_ex ovn-controller \
-        $OVN_CTRLR_PKI --detach --no-chdir --pidfile -vconsole:off --log-file
+    for i in $(seq $n_controllers); do
+	rungdb $gdb_ovn_controller $gdb_ovn_controller_ex ovn-controller \
+               $OVN_CTRLR_PKI --detach --no-chdir \
+	       --pidfile=ovn-controller$i.pid -vconsole:off --log-file
+    done
     rungdb $gdb_ovn_controller_vtep $gdb_ovn_controller_vtep_ex \
         ovn-controller-vtep --detach --no-chdir --pidfile -vconsole:off \
         $OVN_CTRLR_PKI --log-file --ovnsb-db=unix:"$sandbox"/ovnsb_db.sock
