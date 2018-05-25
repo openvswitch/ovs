@@ -6627,8 +6627,8 @@ AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
 AT_CHECK([ovs-vsctl add-br int-br -- set bridge int-br datapath_type=dummy], [0])
 AT_CHECK([ovs-vsctl -- add-port int-br t1 -- set Interface t1 type=gre \
                        options:remote_ip=1.1.2.92 options:key=456 ofport_request=4\
-		    -- add-port int-br vm1 -- set Interface vm1 type=dummy \
-		       options:ifindex=2011 ofport_request=5
+                    -- add-port int-br vm1 -- set Interface vm1 type=dummy \
+                       options:ifindex=2011 ofport_request=5
                        ], [0])
 
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl

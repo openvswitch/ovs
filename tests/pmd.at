@@ -681,11 +681,11 @@ p1 0 0 0
 
 AT_CHECK([ovs-appctl dpctl/show dummy@dp0], [0], [dnl
 dummy@dp0:
-	lookups: hit:0 missed:0 lost:0
-	flows: 0
-	port 0: dp0 (dummy-internal)
-	port 1: p1 (dummy-pmd: configured_rx_queues=1, configured_tx_queues=1, requested_rx_queues=1, requested_tx_queues=1)
-	port 2: p2 (dummy)
+  lookups: hit:0 missed:0 lost:0
+  flows: 0
+  port 0: dp0 (dummy-internal)
+  port 1: p1 (dummy-pmd: configured_rx_queues=1, configured_tx_queues=1, requested_rx_queues=1, requested_tx_queues=1)
+  port 2: p2 (dummy)
 ])
 
 AT_CHECK([ovs-appctl dpctl/add-flow dummy@dp0 'in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:02),eth_type(0x1234)' 2], [0], [dnl

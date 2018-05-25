@@ -21,17 +21,17 @@ OVS_VSWITCHD_START([], [], [=override])
 AT_CHECK([ovs-appctl dpctl/add-dp dummy@br0])
 AT_CHECK([ovs-appctl dpctl/show dummy@br0], [0], [dnl
 dummy@br0:
-	lookups: hit:0 missed:0 lost:0
-	flows: 0
-	port 0: br0 (dummy-internal)
+  lookups: hit:0 missed:0 lost:0
+  flows: 0
+  port 0: br0 (dummy-internal)
 ])
 AT_CHECK([ovs-appctl dpctl/add-if dummy@br0 vif1.0,type=dummy,port_no=5])
 AT_CHECK([ovs-appctl dpctl/show dummy@br0], [0], [dnl
 dummy@br0:
-	lookups: hit:0 missed:0 lost:0
-	flows: 0
-	port 0: br0 (dummy-internal)
-	port 5: vif1.0 (dummy)
+  lookups: hit:0 missed:0 lost:0
+  flows: 0
+  port 0: br0 (dummy-internal)
+  port 5: vif1.0 (dummy)
 ])
 AT_CHECK([ovs-appctl dpctl/add-if dummy@br0 vif1.0,type=dummy], [2], [],
   [stderr])
@@ -52,9 +52,9 @@ ovs-appctl: ovs-vswitchd: server returned an error
 AT_CHECK([ovs-appctl dpctl/del-if dummy@br0 vif1.0])
 AT_CHECK([ovs-appctl dpctl/show dummy@br0], [0], [dnl
 dummy@br0:
-	lookups: hit:0 missed:0 lost:0
-	flows: 0
-	port 0: br0 (dummy-internal)
+  lookups: hit:0 missed:0 lost:0
+  flows: 0
+  port 0: br0 (dummy-internal)
 ])
 AT_CHECK([ovs-appctl dpctl/del-if dummy@br0 vif1.0], [2], [],
   [ovs-vswitchd: no port named vif1.0
@@ -62,9 +62,9 @@ ovs-appctl: ovs-vswitchd: server returned an error
 ])
 AT_CHECK([ovs-appctl dpctl/show dummy@br0], [0], [dnl
 dummy@br0:
-	lookups: hit:0 missed:0 lost:0
-	flows: 0
-	port 0: br0 (dummy-internal)
+  lookups: hit:0 missed:0 lost:0
+  flows: 0
+  port 0: br0 (dummy-internal)
 ])
 AT_CHECK([ovs-appctl dpctl/del-if dummy@br0 nonexistent], [2], [],
   [ovs-vswitchd: no port named nonexistent

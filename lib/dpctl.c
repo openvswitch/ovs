@@ -535,14 +535,14 @@ show_dpif(struct dpif *dpif, struct dpctl_params *dpctl_p)
 
     dpctl_print(dpctl_p, "%s:\n", dpif_name(dpif));
     if (!dpif_get_dp_stats(dpif, &stats)) {
-        dpctl_print(dpctl_p, "\tlookups: hit:%"PRIu64" missed:%"PRIu64
-                             " lost:%"PRIu64"\n\tflows: %"PRIu64"\n",
+        dpctl_print(dpctl_p, "  lookups: hit:%"PRIu64" missed:%"PRIu64
+                             " lost:%"PRIu64"\n  flows: %"PRIu64"\n",
                     stats.n_hit, stats.n_missed, stats.n_lost, stats.n_flows);
         if (stats.n_masks != UINT32_MAX) {
             uint64_t n_pkts = stats.n_hit + stats.n_missed;
             double avg = n_pkts ? (double) stats.n_mask_hit / n_pkts : 0.0;
 
-            dpctl_print(dpctl_p, "\tmasks: hit:%"PRIu64" total:%"PRIu32
+            dpctl_print(dpctl_p, "  masks: hit:%"PRIu64" total:%"PRIu32
                                  " hit/pkt:%.2f\n",
                         stats.n_mask_hit, stats.n_masks, avg);
         }
@@ -569,7 +569,7 @@ show_dpif(struct dpif *dpif, struct dpctl_params *dpctl_p)
             continue;
         }
 
-        dpctl_print(dpctl_p, "\tport %u: %s",
+        dpctl_print(dpctl_p, "  port %u: %s",
                     dpif_port.port_no, dpif_port.name);
 
         if (strcmp(dpif_port.type, "system")) {
@@ -620,24 +620,24 @@ show_dpif(struct dpif *dpif, struct dpctl_params *dpctl_p)
             error = netdev_get_stats(netdev, &s);
             if (!error) {
                 netdev_close(netdev);
-                print_stat(dpctl_p, "\t\tRX packets:", s.rx_packets);
+                print_stat(dpctl_p, "    RX packets:", s.rx_packets);
                 print_stat(dpctl_p, " errors:", s.rx_errors);
                 print_stat(dpctl_p, " dropped:", s.rx_dropped);
                 print_stat(dpctl_p, " overruns:", s.rx_over_errors);
                 print_stat(dpctl_p, " frame:", s.rx_frame_errors);
                 dpctl_print(dpctl_p, "\n");
 
-                print_stat(dpctl_p, "\t\tTX packets:", s.tx_packets);
+                print_stat(dpctl_p, "    TX packets:", s.tx_packets);
                 print_stat(dpctl_p, " errors:", s.tx_errors);
                 print_stat(dpctl_p, " dropped:", s.tx_dropped);
                 print_stat(dpctl_p, " aborted:", s.tx_aborted_errors);
                 print_stat(dpctl_p, " carrier:", s.tx_carrier_errors);
                 dpctl_print(dpctl_p, "\n");
 
-                print_stat(dpctl_p, "\t\tcollisions:", s.collisions);
+                print_stat(dpctl_p, "    collisions:", s.collisions);
                 dpctl_print(dpctl_p, "\n");
 
-                print_stat(dpctl_p, "\t\tRX bytes:", s.rx_bytes);
+                print_stat(dpctl_p, "    RX bytes:", s.rx_bytes);
                 print_human_size(dpctl_p, s.rx_bytes);
                 print_stat(dpctl_p, "  TX bytes:", s.tx_bytes);
                 print_human_size(dpctl_p, s.tx_bytes);
@@ -1510,9 +1510,9 @@ dpctl_ct_stats_show(int argc, const char *argv[],
 
     dpctl_print(dpctl_p, "Connections Stats:\n    Total: %d\n", tot_conn);
     if (proto_stats[CT_STATS_TCP]) {
-        dpctl_print(dpctl_p, "\tTCP: %d\n", proto_stats[CT_STATS_TCP]);
+        dpctl_print(dpctl_p, "  TCP: %d\n", proto_stats[CT_STATS_TCP]);
         if (verbose) {
-            dpctl_print(dpctl_p, "\t  Conn per TCP states:\n");
+            dpctl_print(dpctl_p, "    Conn per TCP states:\n");
             for (int i = 0; i < CT_DPIF_TCPS_MAX_NUM; i++) {
                 if (tcp_conn_per_states[i]) {
                     struct ds s = DS_EMPTY_INITIALIZER;
@@ -1524,25 +1524,25 @@ dpctl_ct_stats_show(int argc, const char *argv[],
         }
     }
     if (proto_stats[CT_STATS_UDP]) {
-        dpctl_print(dpctl_p, "\tUDP: %d\n", proto_stats[CT_STATS_UDP]);
+        dpctl_print(dpctl_p, "  UDP: %d\n", proto_stats[CT_STATS_UDP]);
     }
     if (proto_stats[CT_STATS_UDPLITE]) {
-        dpctl_print(dpctl_p, "\tUDPLITE: %d\n", proto_stats[CT_STATS_UDPLITE]);
+        dpctl_print(dpctl_p, "  UDPLITE: %d\n", proto_stats[CT_STATS_UDPLITE]);
     }
     if (proto_stats[CT_STATS_SCTP]) {
-        dpctl_print(dpctl_p, "\tSCTP: %d\n", proto_stats[CT_STATS_SCTP]);
+        dpctl_print(dpctl_p, "  SCTP: %d\n", proto_stats[CT_STATS_SCTP]);
     }
     if (proto_stats[CT_STATS_ICMP]) {
-        dpctl_print(dpctl_p, "\tICMP: %d\n", proto_stats[CT_STATS_ICMP]);
+        dpctl_print(dpctl_p, "  ICMP: %d\n", proto_stats[CT_STATS_ICMP]);
     }
     if (proto_stats[CT_STATS_DCCP]) {
-        dpctl_print(dpctl_p, "\tDCCP: %d\n", proto_stats[CT_STATS_DCCP]);
+        dpctl_print(dpctl_p, "  DCCP: %d\n", proto_stats[CT_STATS_DCCP]);
     }
     if (proto_stats[CT_STATS_IGMP]) {
-        dpctl_print(dpctl_p, "\tIGMP: %d\n", proto_stats[CT_STATS_IGMP]);
+        dpctl_print(dpctl_p, "  IGMP: %d\n", proto_stats[CT_STATS_IGMP]);
     }
     if (proto_stats[CT_STATS_OTHER]) {
-        dpctl_print(dpctl_p, "\tOther: %d\n", proto_stats[CT_STATS_OTHER]);
+        dpctl_print(dpctl_p, "  Other: %d\n", proto_stats[CT_STATS_OTHER]);
     }
 
     ct_dpif_dump_done(dump);
