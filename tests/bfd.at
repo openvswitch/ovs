@@ -3,34 +3,34 @@ AT_BANNER([bfd])
 m4_define([BFD_CHECK], [
 AT_CHECK([ovs-appctl bfd/show $1 | sed -e '/Time:/d' | sed -e '/Discriminator/d' | sed -e '/Interval:/d'| sed -e '/Multiplier/d'],[0],
 [dnl
-	Forwarding: $2
-	Concatenated Path Down: $3
+  Forwarding: $2
+  Concatenated Path Down: $3
 
-	Local Flags: $4
-	Local Session State: $5
-	Local Diagnostic: $6
+  Local Flags: $4
+  Local Session State: $5
+  Local Diagnostic: $6
 
-	Remote Flags: $7
-	Remote Session State: $8
-	Remote Diagnostic: $9
+  Remote Flags: $7
+  Remote Session State: $8
+  Remote Diagnostic: $9
 ])
 ])
 
 m4_define([BFD_CHECK_TX], [
 AT_CHECK([ovs-appctl bfd/show $1 | sed -n '/TX Interval/p'],[0],
 [dnl
-	TX Interval: Approx $2
-	Local Minimum TX Interval: $3
-	Remote Minimum TX Interval: $4
+  TX Interval: Approx $2
+  Local Minimum TX Interval: $3
+  Remote Minimum TX Interval: $4
 ])
 ])
 
 m4_define([BFD_CHECK_RX], [
 AT_CHECK([ovs-appctl bfd/show $1 | sed -n '/RX Interval/p'],[0],
 [dnl
-	RX Interval: Approx $2
-	Local Minimum RX Interval: $3
-	Remote Minimum RX Interval: $4
+  RX Interval: Approx $2
+  Local Minimum RX Interval: $3
+  Remote Minimum RX Interval: $4
 ])
 ])
 
@@ -44,8 +44,8 @@ $3
 m4_define([BFD_CHECK_MULT], [
 AT_CHECK([ovs-appctl bfd/show $1 | sed -n '/Detect Multiplier/p'],[0],
 [dnl
-	Detect Multiplier: $2
-	Remote Detect Multiplier: $3
+  Detect Multiplier: $2
+  Remote Detect Multiplier: $3
 ])
 ])
 

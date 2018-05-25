@@ -8594,10 +8594,10 @@ AT_CHECK([ovs-appctl cfm/show | sed -n '/^.*fault:.*/p'], [0], [dnl
 ])
 # bfd/show should show 'up'.
 AT_CHECK([ovs-appctl bfd/show | sed -n '/^.*Session State:.*/p'], [0], [dnl
-	Local Session State: up
-	Remote Session State: up
-	Local Session State: up
-	Remote Session State: up
+  Local Session State: up
+  Remote Session State: up
+  Local Session State: up
+  Remote Session State: up
 ])
 # bond/show should show 'may-enable: true' for all slaves.
 AT_CHECK([ovs-appctl bond/show | sed -n '/^.*may_enable:.*/p'], [0], [dnl
@@ -8617,8 +8617,8 @@ AT_CHECK([ovs-appctl cfm/show | sed -n '/^.*fault:.*/p'], [0], [dnl
 ])
 # bfd/show should show 'down'.
 AT_CHECK([ovs-appctl bfd/show | sed -n '/^.*Session State:.*/p'], [0], [dnl
-	Local Session State: down
-	Remote Session State: down
+  Local Session State: down
+  Remote Session State: down
 ])
 # bond/show should show 'may-enable: false' for p0.
 AT_CHECK([ovs-appctl bond/show br0bond | sed -n '/^.*may_enable:.*/p'], [0], [dnl
@@ -8637,8 +8637,8 @@ AT_CHECK([ovs-appctl cfm/show | sed -n '/^.*fault:.*/p'], [0], [dnl
 ])
 # bfd/show should show 'down'.
 AT_CHECK([ovs-appctl bfd/show | sed -n '/^.*Session State:.*/p'], [0], [dnl
-	Local Session State: down
-	Remote Session State: down
+  Local Session State: down
+  Remote Session State: down
 ])
 # bond/show should show 'may-enable: false' for p0 and p1.
 AT_CHECK([ovs-appctl bond/show | sed -n '/^.*may_enable:.*/p'], [0], [dnl
