@@ -193,8 +193,24 @@ Q: How do I configure mirroring of all traffic to a GRE tunnel?
 
 Q: Does Open vSwitch support ERSPAN?
 
-    A: No.  As an alternative, Open vSwitch supports mirroring to a GRE tunnel
-    (see above).
+    A: Yes. ERSPAN version I and version II over IPv4 GRE and
+    IPv6 GRE tunnel are supported.  See ovs-fields(7) for matching
+    and setting ERSPAN fields.
+
+    ::
+
+        $ ovs-vsctl add-br br0
+        $ #For ERSPAN type 2 (version I)
+        $ ovs-vsctl add-port br0 at_erspan0 -- \
+                set int at_erspan0 type=erspan options:key=1 \
+                options:remote_ip=172.31.1.1 \
+                options:erspan_ver=1 options:erspan_idx=1
+        $ #For ERSPAN type 3 (version II)
+        $ ovs-vsctl add-port br0 at_erspan0 -- \
+                set int at_erspan0 type=erspan options:key=1 \
+                options:remote_ip=172.31.1.1 \
+                options:erspan_ver=2 options:erspan_dir=1 \
+                options:erspan_hwid=4
 
 Q: How do I connect two bridges?
 

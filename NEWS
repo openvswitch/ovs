@@ -37,6 +37,11 @@ Post-v2.9.0
          ovs-appctl dpif-netdev/pmd-perf-show
      * Supervision of PMD performance metrics and logging of suspicious
        iterations
+   - ERSPAN:
+     * Implemented ERSPAN protocol (draft-foschiano-erspan-00.txt) for
+       both kernel datapath and userspace datapath.
+     * Added port-based and flow-based ERSPAN tunnel port support, added
+       OpenFlow rules matching ERSPAN fields. See ovs-fields(7).
 
 v2.9.0 - 19 Feb 2018
 --------------------
