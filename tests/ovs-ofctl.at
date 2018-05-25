@@ -942,6 +942,12 @@ NXM_OF_ETH_TYPE(0800) NXM_NX_CT_LABEL_W(10203040506070809000a0b0c0d0e0f0/f1f2f3f
 NXM_NX_DP_HASH(01234567)
 NXOXM_ET_DP_HASH(01234567)
 
+# ERSPAN (testing experimenter OXM).
+NXOXM_ET_ERSPAN_VER(01)
+NXOXM_ET_ERSPAN_IDX(01020304)
+NXOXM_ET_ERSPAN_DIR(01)
+NXOXM_ET_ERSPAN_HWID(12)
+
 # Invalid field number.
 01020304(1111/3333)
 
@@ -1237,6 +1243,12 @@ NXM_OF_ETH_TYPE(0800), NXM_NX_CT_LABEL_W(10203040506070809000a0b0c0d0e0f0/f1f2f3
 # dp_hash (testing experimenter OXM).
 NXM_NX_DP_HASH(01234567)
 NXM_NX_DP_HASH(01234567)
+
+# ERSPAN (testing experimenter OXM).
+NXOXM_ET_ERSPAN_VER_W(01/01)
+NXOXM_ET_ERSPAN_IDX(01020304)
+NXOXM_ET_ERSPAN_DIR_W(01/01)
+NXOXM_ET_ERSPAN_HWID_W(12/12)
 
 # Invalid field number.
 nx_pull_match() returned error OFPBMC_BAD_FIELD
@@ -2425,48 +2437,49 @@ AT_CLEANUP
 
 AT_SETUP([experimenter OXM encoding])
 AT_DATA([oxm.txt], [dnl
-NXM_NX_DP_HASH(01234567)
-NXOXM_ET_DP_HASH(01234567)
+NXOXM_ET_ERSPAN_VER(01)
 
-NXM_NX_DP_HASH_W(01234567/0fffffff)
-NXOXM_ET_DP_HASH_W(01234567/0fffffff)
+NXOXM_ET_ERSPAN_IDX(01020304)
+NXOXM_ET_ERSPAN_IDX_W(01020304/0fffffff)
+
+NXOXM_ET_ERSPAN_DIR(01)
+
+NXOXM_ET_ERSPAN_HWID(12)
 ])
 
-# To allow for testing experimenter OXM, which doesn't really have many
-# examples in the wild, we've defined a variant of NXM_NX_DP_HASH that uses
-# the experimenter OXM mechanism, called NXOXM_ET_DP_HASH.  We've defined
-# it as if it were introduced with OpenFlow 1.5, which gives us the
-# opportunity to see that both forms are accepted in all OpenFlow versions
-# but the experimenter form is used for encoding in OF1.5+.
-#
-# First verify that both forms are accepted and NXOXM_ET_DP_HASH is encoded
-# in OF1.5.
+# Test experimenter OXM encoding.
 AT_CHECK([ovs-ofctl -m --strict parse-oxm OpenFlow15 < oxm.txt], [0], [dnl
-NXOXM_ET_DP_HASH(01234567)
-00000000  00 01 00 10 ff ff 00 08-00 00 23 20 01 23 45 67
-NXOXM_ET_DP_HASH(01234567)
-00000000  00 01 00 10 ff ff 00 08-00 00 23 20 01 23 45 67
+NXOXM_ET_ERSPAN_VER_W(01/01)
+00000000  00 01 00 0e ff ff 19 06-00 00 23 20 01 01 00 00
 
-NXOXM_ET_DP_HASH_W(01234567/0fffffff)
-00000000  00 01 00 14 ff ff 01 0c-00 00 23 20 01 23 45 67
+NXOXM_ET_ERSPAN_IDX(01020304)
+00000000  00 01 00 10 ff ff 16 08-00 00 23 20 01 02 03 04
+NXOXM_ET_ERSPAN_IDX_W(01020304/0fffffff)
+00000000  00 01 00 14 ff ff 17 0c-00 00 23 20 01 02 03 04
 00000010  0f ff ff ff 00 00 00 00
-NXOXM_ET_DP_HASH_W(01234567/0fffffff)
-00000000  00 01 00 14 ff ff 01 0c-00 00 23 20 01 23 45 67
-00000010  0f ff ff ff 00 00 00 00
+
+NXOXM_ET_ERSPAN_DIR_W(01/01)
+00000000  00 01 00 0e ff ff 1b 06-00 00 23 20 01 01 00 00
+
+NXOXM_ET_ERSPAN_HWID_W(12/12)
+00000000  00 01 00 0e ff ff 1d 06-00 00 23 20 12 12 00 00
 ])
 
-# Then verify that both forms are accepted and NXM_NX_DP_HASH is encoded
-# in OF1.2.
 AT_CHECK([ovs-ofctl -m --strict parse-oxm OpenFlow12 < oxm.txt], [0], [dnl
-NXM_NX_DP_HASH(01234567)
-00000000  00 01 00 0c 00 01 46 04-01 23 45 67 00 00 00 00
-NXM_NX_DP_HASH(01234567)
-00000000  00 01 00 0c 00 01 46 04-01 23 45 67 00 00 00 00
+NXOXM_ET_ERSPAN_VER_W(01/01)
+00000000  00 01 00 0e ff ff 19 06-00 00 23 20 01 01 00 00
 
-NXM_NX_DP_HASH_W(01234567/0fffffff)
-00000000  00 01 00 10 00 01 47 08-01 23 45 67 0f ff ff ff
-NXM_NX_DP_HASH_W(01234567/0fffffff)
-00000000  00 01 00 10 00 01 47 08-01 23 45 67 0f ff ff ff
+NXOXM_ET_ERSPAN_IDX(01020304)
+00000000  00 01 00 10 ff ff 16 08-00 00 23 20 01 02 03 04
+NXOXM_ET_ERSPAN_IDX_W(01020304/0fffffff)
+00000000  00 01 00 14 ff ff 17 0c-00 00 23 20 01 02 03 04
+00000010  0f ff ff ff 00 00 00 00
+
+NXOXM_ET_ERSPAN_DIR_W(01/01)
+00000000  00 01 00 0e ff ff 1b 06-00 00 23 20 01 01 00 00
+
+NXOXM_ET_ERSPAN_HWID_W(12/12)
+00000000  00 01 00 0e ff ff 1d 06-00 00 23 20 12 12 00 00
 ])
 AT_CLEANUP
 
