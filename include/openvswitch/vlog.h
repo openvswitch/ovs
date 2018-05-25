@@ -251,9 +251,15 @@ void vlog_rate_limit(const struct vlog_module *, enum vlog_level,
         case 'v':                               \
             vlog_set_verbosity(optarg);         \
             break;                              \
-        case OPT_LOG_FILE:                      \
-            vlog_set_log_file(optarg);          \
+        case OPT_LOG_FILE: {                    \
+            int err = vlog_set_log_file(optarg);\
+            /* Exit if logfile explicitly given \
+             * but cannot be opened. */         \
+            if (err && optarg) {                \
+                exit(EXIT_FAILURE);             \
+            }                                   \
             break;                              \
+        }                                       \
         case OPT_SYSLOG_IMPL:                   \
             vlog_set_syslog_method(optarg);     \
             break;                              \
