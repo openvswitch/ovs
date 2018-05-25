@@ -1644,16 +1644,17 @@ stp_bridge_id_details(struct ds *ds, const stp_identifier bridge_id,
     OVS_REQUIRES(mutex)
 {
     uint16_t priority = bridge_id >> 48;
-    ds_put_format(ds, "\tstp-priority\t%"PRIu16"\n", priority);
+    ds_put_format(ds, "  stp-priority  %"PRIu16"\n", priority);
 
     struct eth_addr mac;
     const uint64_t mac_bits = (UINT64_C(1) << 48) - 1;
     eth_addr_from_uint64(bridge_id & mac_bits, &mac);
-    ds_put_format(ds, "\tstp-system-id\t"ETH_ADDR_FMT"\n", ETH_ADDR_ARGS(mac));
-    ds_put_format(ds, "\tstp-hello-time\t%ds\n",
+    ds_put_format(ds, "  stp-system-id   "ETH_ADDR_FMT"\n",
+                  ETH_ADDR_ARGS(mac));
+    ds_put_format(ds, "  stp-hello-time  %ds\n",
                   timer_to_ms(hello_time) / 1000);
-    ds_put_format(ds, "\tstp-max-age\t%ds\n", timer_to_ms(max_age) / 1000);
-    ds_put_format(ds, "\tstp-fwd-delay\t%ds\n",
+    ds_put_format(ds, "  stp-max-age     %ds\n", timer_to_ms(max_age) / 1000);
+    ds_put_format(ds, "  stp-fwd-delay   %ds\n",
                   timer_to_ms(forward_delay) / 1000);
 }
 
@@ -1670,10 +1671,10 @@ stp_print_details(struct ds *ds, const struct stp *stp)
                           stp->bridge_max_age, stp->bridge_forward_delay);
 
     if (stp_is_root_bridge(stp)) {
-        ds_put_cstr(ds, "\tThis bridge is the root\n");
+        ds_put_cstr(ds, "  This bridge is the root\n");
     } else {
-        ds_put_format(ds, "\troot-port\t%s\n", stp->root_port->port_name);
-        ds_put_format(ds, "\troot-path-cost\t%u\n", stp->root_path_cost);
+        ds_put_format(ds, "  root-port       %s\n", stp->root_port->port_name);
+        ds_put_format(ds, "  root-path-cost  %u\n", stp->root_path_cost);
     }
 
     ds_put_cstr(ds, "\n");
@@ -1685,11 +1686,11 @@ stp_print_details(struct ds *ds, const struct stp *stp)
     ds_put_cstr(ds, "\n");
 
     const struct stp_port *p;
-    ds_put_format(ds, "\t%-11.10s%-11.10s%-11.10s%-6.5s%-8.7s\n",
+    ds_put_format(ds, "  %-11.10s%-11.10s%-11.10s%-6.5s%-8.7s\n",
                   "Interface", "Role", "State", "Cost", "Pri.Nbr");
-    ds_put_cstr(ds, "\t---------- ---------- ---------- ----- -------\n");
+    ds_put_cstr(ds, "  ---------- ---------- ---------- ----- -------\n");
     FOR_EACH_ENABLED_PORT (p, stp) {
-        ds_put_format(ds, "\t%-11.10s", p->port_name);
+        ds_put_format(ds, "  %-11.10s", p->port_name);
         ds_put_format(ds, "%-11.10s", stp_role_name(stp_port_get_role(p)));
         ds_put_format(ds, "%-11.10s", stp_state_name(p->state));
         ds_put_format(ds, "%-6d", p->path_cost);

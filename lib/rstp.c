@@ -1583,15 +1583,15 @@ rstp_bridge_id_details(struct ds *ds, const rstp_identifier bridge_id,
     OVS_REQUIRES(rstp_mutex)
 {
     uint16_t priority = bridge_id >> 48;
-    ds_put_format(ds, "\tstp-priority\t%"PRIu16"\n", priority);
+    ds_put_format(ds, "  stp-priority    %"PRIu16"\n", priority);
 
     struct eth_addr mac;
     const uint64_t mac_bits = (UINT64_C(1) << 48) - 1;
     eth_addr_from_uint64(bridge_id & mac_bits, &mac);
-    ds_put_format(ds, "\tstp-system-id\t"ETH_ADDR_FMT"\n", ETH_ADDR_ARGS(mac));
-    ds_put_format(ds, "\tstp-hello-time\t%"PRIu16"s\n", hello_time);
-    ds_put_format(ds, "\tstp-max-age\t%"PRIu16"s\n", max_age);
-    ds_put_format(ds, "\tstp-fwd-delay\t%"PRIu16"s\n", forward_delay);
+    ds_put_format(ds, "  stp-system-id   "ETH_ADDR_FMT"\n", ETH_ADDR_ARGS(mac));
+    ds_put_format(ds, "  stp-hello-time  %"PRIu16"s\n", hello_time);
+    ds_put_format(ds, "  stp-max-age     %"PRIu16"s\n", max_age);
+    ds_put_format(ds, "  stp-fwd-delay   %"PRIu16"s\n", forward_delay);
 }
 
 static void
@@ -1606,7 +1606,7 @@ rstp_print_details(struct ds *ds, const struct rstp *rstp)
                                rstp->bridge_hello_time,
                                rstp->bridge_max_age,
                                rstp->bridge_forward_delay);
-        ds_put_cstr(ds, "\tThis bridge is the root\n");
+        ds_put_cstr(ds, "  This bridge is the root\n");
     } else {
         struct rstp_port *root_port = rstp_get_root_port__(rstp);
         if (!root_port) {
@@ -1618,8 +1618,8 @@ rstp_print_details(struct ds *ds, const struct rstp *rstp)
                                root_port->designated_times.hello_time,
                                root_port->designated_times.max_age,
                                root_port->designated_times.forward_delay);
-        ds_put_format(ds, "\troot-port\t%s\n", root_port->port_name);
-        ds_put_format(ds, "\troot-path-cost\t%u\n",
+        ds_put_format(ds, "  root-port       %s\n", root_port->port_name);
+        ds_put_format(ds, "  root-path-cost  %u\n",
                       rstp_get_root_path_cost__(rstp));
     }
     ds_put_cstr(ds, "\n");
@@ -1631,14 +1631,14 @@ rstp_print_details(struct ds *ds, const struct rstp *rstp)
                            rstp->bridge_forward_delay);
     ds_put_cstr(ds, "\n");
 
-    ds_put_format(ds, "\t%-11.10s%-11.10s%-11.10s%-9.8s%-8.7s\n",
+    ds_put_format(ds, "  %-11.10s%-11.10s%-11.10s%-9.8s%-8.7s\n",
                   "Interface", "Role", "State", "Cost", "Pri.Nbr");
-    ds_put_cstr(ds, "\t---------- ---------- ---------- -------- -------\n");
+    ds_put_cstr(ds, "  ---------- ---------- ---------- -------- -------\n");
 
     struct rstp_port *p;
     HMAP_FOR_EACH (p, node, &rstp->ports) {
         if (p->rstp_state != RSTP_DISABLED) {
-            ds_put_format(ds, "\t%-11.10s",
+            ds_put_format(ds, "  %-11.10s",
                           p->port_name ? p->port_name : "null");
             ds_put_format(ds, "%-11.10s", rstp_port_role_name(p->role));
             ds_put_format(ds, "%-11.10s", rstp_state_name(p->rstp_state));

@@ -617,10 +617,10 @@ ovs-appctl time/stop
 ovs-appctl time/warp 31000 1000
 
 AT_CHECK([ovs-appctl stp/show br0 | grep p1], [0], [dnl
-	p1         designated forwarding 19    128.1
+  p1         designated forwarding 19    128.1
 ])
 AT_CHECK([ovs-appctl stp/show br0 | grep p2], [0], [dnl
-	p2         designated forwarding 19    128.2
+  p2         designated forwarding 19    128.2
 ])
 
 # add a stp port
@@ -634,10 +634,10 @@ ovs-appctl netdev-dummy/set-admin-state p3 down
 
 # We should not show the p3 because its link-state is down
 AT_CHECK([ovs-appctl stp/show br0 | grep p1], [0], [dnl
-	p1         designated forwarding 19    128.1
+  p1         designated forwarding 19    128.1
 ])
 AT_CHECK([ovs-appctl stp/show br0 | grep p2], [0], [dnl
-	p2         designated forwarding 19    128.2
+  p2         designated forwarding 19    128.2
 ])
 AT_CHECK([ovs-appctl stp/show br0 | grep p3], [1], [dnl
 ])
@@ -645,13 +645,13 @@ AT_CHECK([ovs-appctl stp/show br0 | grep p3], [1], [dnl
 ovs-appctl netdev-dummy/set-admin-state p3 up
 
 AT_CHECK([ovs-appctl stp/show br0 | grep p1], [0], [dnl
-	p1         designated forwarding 19    128.1
+  p1         designated forwarding 19    128.1
 ])
 AT_CHECK([ovs-appctl stp/show br0 | grep p2], [0], [dnl
-	p2         designated forwarding 19    128.2
+  p2         designated forwarding 19    128.2
 ])
 AT_CHECK([ovs-appctl stp/show br0 | grep p3], [0], [dnl
-	p3         designated listening  19    128.3
+  p3         designated listening  19    128.3
 ])
 
 
