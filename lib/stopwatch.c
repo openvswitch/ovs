@@ -280,14 +280,14 @@ stopwatch_print(struct stopwatch *sw, const char *name,
     ds_put_format(s, "Statistics for '%s'\n", name);
 
     const char *units = unit_name[sw->units];
-    ds_put_format(s, "\t Total samples: %llu\n", sw->n_samples);
-    ds_put_format(s, "\t Maximum: %llu %s\n", sw->max, units);
-    ds_put_format(s, "\t Minimum: %llu %s\n", sw->min, units);
-    ds_put_format(s, "\t 95th percentile: %f %s\n",
+    ds_put_format(s, "  Total samples: %llu\n", sw->n_samples);
+    ds_put_format(s, "  Maximum: %llu %s\n", sw->max, units);
+    ds_put_format(s, "  Minimum: %llu %s\n", sw->min, units);
+    ds_put_format(s, "  95th percentile: %f %s\n",
                   sw->pctl.percentile, units);
-    ds_put_format(s, "\t Short term average: %f %s\n",
+    ds_put_format(s, "  Short term average: %f %s\n",
                   sw->short_term.average, units);
-    ds_put_format(s, "\t Long term average: %f %s\n",
+    ds_put_format(s, "  Long term average: %f %s\n",
                   sw->long_term.average, units);
 }
 
