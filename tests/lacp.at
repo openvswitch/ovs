@@ -128,10 +128,10 @@ lacp_fallback_ab: false
 active slave mac: 00:00:00:00:00:00(none)
 
 slave p1: disabled
-	may_enable: false
+  may_enable: false
 
 slave p2: disabled
-	may_enable: false
+  may_enable: false
 
 ])
 OVS_VSWITCHD_STOP
@@ -292,10 +292,10 @@ lacp_status: negotiated
 lacp_fallback_ab: false
 
 slave p0: enabled
-	may_enable: true
+  may_enable: true
 
 slave p1: enabled
-	may_enable: true
+  may_enable: true
 
 ---- bond1 ----
 bond_mode: balance-tcp
@@ -307,15 +307,15 @@ lacp_status: negotiated
 lacp_fallback_ab: false
 
 slave p2: enabled
-	may_enable: true
+  may_enable: true
 
 slave p3: enabled
-	may_enable: true
+  may_enable: true
 
 ])
 AT_CHECK([grep 'active slave$' stdout], [0], [dnl
-	active slave
-	active slave
+  active slave
+  active slave
 ])
 
 # Redirect the patch link between p0 and p2 so that no packets get
@@ -430,11 +430,11 @@ lacp_fallback_ab: false
 <active slave mac del>
 
 slave p0: disabled
-	may_enable: false
+  may_enable: false
 
 slave p1: enabled
-	active slave
-	may_enable: true
+  active slave
+  may_enable: true
 
 ---- bond1 ----
 bond_mode: balance-tcp
@@ -447,11 +447,11 @@ lacp_fallback_ab: false
 <active slave mac del>
 
 slave p2: disabled
-	may_enable: false
+  may_enable: false
 
 slave p3: enabled
-	active slave
-	may_enable: true
+  active slave
+  may_enable: true
 
 ])
 
@@ -562,11 +562,11 @@ lacp_fallback_ab: false
 <active slave mac del>
 
 slave p0: disabled
-	may_enable: false
+  may_enable: false
 
 slave p1: enabled
-	active slave
-	may_enable: true
+  active slave
+  may_enable: true
 
 ---- bond1 ----
 bond_mode: balance-tcp
@@ -579,11 +579,11 @@ lacp_fallback_ab: false
 <active slave mac del>
 
 slave p2: disabled
-	may_enable: false
+  may_enable: false
 
 slave p3: enabled
-	active slave
-	may_enable: true
+  active slave
+  may_enable: true
 
 ])
 
@@ -699,11 +699,11 @@ lacp_fallback_ab: false
 <active slave mac del>
 
 slave p0: enabled
-	may_enable: true
+  may_enable: true
 
 slave p1: enabled
-	active slave
-	may_enable: true
+  active slave
+  may_enable: true
 
 ---- bond1 ----
 bond_mode: balance-tcp
@@ -716,11 +716,11 @@ lacp_fallback_ab: false
 <active slave mac del>
 
 slave p2: enabled
-	may_enable: true
+  may_enable: true
 
 slave p3: enabled
-	active slave
-	may_enable: true
+  active slave
+  may_enable: true
 
 ])
 

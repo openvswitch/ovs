@@ -8601,10 +8601,10 @@ AT_CHECK([ovs-appctl bfd/show | sed -n '/^.*Session State:.*/p'], [0], [dnl
 ])
 # bond/show should show 'may-enable: true' for all slaves.
 AT_CHECK([ovs-appctl bond/show | sed -n '/^.*may_enable:.*/p'], [0], [dnl
-	may_enable: true
-	may_enable: true
-	may_enable: true
-	may_enable: true
+  may_enable: true
+  may_enable: true
+  may_enable: true
+  may_enable: true
 ])
 
 # now disable the bfd on p1.
@@ -8622,8 +8622,8 @@ AT_CHECK([ovs-appctl bfd/show | sed -n '/^.*Session State:.*/p'], [0], [dnl
 ])
 # bond/show should show 'may-enable: false' for p0.
 AT_CHECK([ovs-appctl bond/show br0bond | sed -n '/^.*may_enable:.*/p'], [0], [dnl
-	may_enable: false
-	may_enable: true
+  may_enable: false
+  may_enable: true
 ])
 
 # now enable the bfd on p1 and disable bfd on p0.
@@ -8642,10 +8642,10 @@ AT_CHECK([ovs-appctl bfd/show | sed -n '/^.*Session State:.*/p'], [0], [dnl
 ])
 # bond/show should show 'may-enable: false' for p0 and p1.
 AT_CHECK([ovs-appctl bond/show | sed -n '/^.*may_enable:.*/p'], [0], [dnl
-	may_enable: false
-	may_enable: true
-	may_enable: false
-	may_enable: true
+  may_enable: false
+  may_enable: true
+  may_enable: false
+  may_enable: true
 ])
 
 OVS_VSWITCHD_STOP

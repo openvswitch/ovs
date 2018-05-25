@@ -1374,15 +1374,15 @@ bond_print_details(struct ds *ds, const struct bond *bond)
         ds_put_format(ds, "\nslave %s: %s\n",
                       slave->name, slave->enabled ? "enabled" : "disabled");
         if (slave == bond->active_slave) {
-            ds_put_cstr(ds, "\tactive slave\n");
+            ds_put_cstr(ds, "  active slave\n");
         }
         if (slave->delay_expires != LLONG_MAX) {
-            ds_put_format(ds, "\t%s expires in %lld ms\n",
+            ds_put_format(ds, "  %s expires in %lld ms\n",
                           slave->enabled ? "downdelay" : "updelay",
                           slave->delay_expires - time_msec());
         }
 
-        ds_put_format(ds, "\tmay_enable: %s\n",
+        ds_put_format(ds, "  may_enable: %s\n",
                       slave->may_enable ? "true" : "false");
 
         if (!bond_is_balanced(bond)) {
@@ -1400,7 +1400,7 @@ bond_print_details(struct ds *ds, const struct bond *bond)
 
             be_tx_k = be->tx_bytes / 1024;
             if (be_tx_k) {
-                ds_put_format(ds, "\thash %d: %"PRIu64" kB load\n",
+                ds_put_format(ds, "  hash %d: %"PRIu64" kB load\n",
                           hash, be_tx_k);
             }
 
