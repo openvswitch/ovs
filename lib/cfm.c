@@ -1032,30 +1032,30 @@ cfm_print_details(struct ds *ds, struct cfm *cfm) OVS_REQUIRES(mutex)
 
     fault = cfm_get_fault__(cfm);
     if (fault) {
-        ds_put_cstr(ds, "\tfault: ");
+        ds_put_cstr(ds, "  fault: ");
         ds_put_cfm_fault(ds, fault);
         ds_put_cstr(ds, "\n");
     }
 
     if (cfm->health == -1) {
-        ds_put_format(ds, "\taverage health: undefined\n");
+        ds_put_format(ds, "  average health: undefined\n");
     } else {
-        ds_put_format(ds, "\taverage health: %d\n", cfm->health);
+        ds_put_format(ds, "  average health: %d\n", cfm->health);
     }
-    ds_put_format(ds, "\topstate: %s\n", cfm->opup ? "up" : "down");
-    ds_put_format(ds, "\tremote_opstate: %s\n",
+    ds_put_format(ds, "  opstate: %s\n", cfm->opup ? "up" : "down");
+    ds_put_format(ds, "  remote_opstate: %s\n",
                   cfm->remote_opup ? "up" : "down");
-    ds_put_format(ds, "\tinterval: %dms\n", cfm->ccm_interval_ms);
-    ds_put_format(ds, "\tnext CCM tx: %lldms\n",
+    ds_put_format(ds, "  interval: %dms\n", cfm->ccm_interval_ms);
+    ds_put_format(ds, "  next CCM tx: %lldms\n",
                   timer_msecs_until_expired(&cfm->tx_timer));
-    ds_put_format(ds, "\tnext fault check: %lldms\n",
+    ds_put_format(ds, "  next fault check: %lldms\n",
                   timer_msecs_until_expired(&cfm->fault_timer));
 
     HMAP_FOR_EACH (rmp, node, &cfm->remote_mps) {
         ds_put_format(ds, "Remote MPID %"PRIu64"\n", rmp->mpid);
-        ds_put_format(ds, "\trecv since check: %s\n",
+        ds_put_format(ds, "  recv since check: %s\n",
                       rmp->recv ? "true" : "false");
-        ds_put_format(ds, "\topstate: %s\n", rmp->opup? "up" : "down");
+        ds_put_format(ds, "  opstate: %s\n", rmp->opup? "up" : "down");
     }
 }
 

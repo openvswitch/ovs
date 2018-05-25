@@ -8590,7 +8590,7 @@ ovs-appctl time/stop
 ovs-appctl time/warp 5000 100
 # cfm/show should show 'recv' fault.
 AT_CHECK([ovs-appctl cfm/show | sed -n '/^.*fault:.*/p'], [0], [dnl
-	fault: recv
+  fault: recv
 ])
 # bfd/show should show 'up'.
 AT_CHECK([ovs-appctl bfd/show | sed -n '/^.*Session State:.*/p'], [0], [dnl
@@ -8613,7 +8613,7 @@ AT_CHECK([ovs-vsctl set Interface p1 bfd:enable=false])
 ovs-appctl time/warp 5000 100
 # cfm/show should show 'recv' fault.
 AT_CHECK([ovs-appctl cfm/show | sed -n '/^.*fault:.*/p'], [0], [dnl
-	fault: recv
+  fault: recv
 ])
 # bfd/show should show 'down'.
 AT_CHECK([ovs-appctl bfd/show | sed -n '/^.*Session State:.*/p'], [0], [dnl
@@ -8633,7 +8633,7 @@ AT_CHECK([ovs-vsctl set Interface p0 bfd:enable=false])
 ovs-appctl time/warp 5000 100
 # cfm/show should show 'recv' fault.
 AT_CHECK([ovs-appctl cfm/show | sed -n '/^.*fault:.*/p'], [0], [dnl
-	fault: recv
+  fault: recv
 ])
 # bfd/show should show 'down'.
 AT_CHECK([ovs-appctl bfd/show | sed -n '/^.*Session State:.*/p'], [0], [dnl

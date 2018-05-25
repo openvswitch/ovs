@@ -5,12 +5,12 @@ AT_CHECK([ovs-appctl cfm/show $1 | sed -e '/next CCM tx:/d' | sed -e '/next faul
 [dnl
 ---- $1 ----
 MPID $2: extended
-	average health: $3
-	opstate: $4
-	remote_opstate: $5
-	interval: $6
+  average health: $3
+  opstate: $4
+  remote_opstate: $5
+  interval: $6
 Remote MPID $7
-	opstate: $8
+  opstate: $8
 ])
 ])
 
@@ -19,11 +19,11 @@ AT_CHECK([ovs-appctl cfm/show $1 | sed -e '/next CCM tx:/d' | sed -e '/next faul
 [dnl
 ---- $1 ----
 MPID $2: extended
-	fault: $3
-	average health: $4
-	opstate: $5
-	remote_opstate: $6
-	interval: $7
+  fault: $3
+  average health: $4
+  opstate: $5
+  remote_opstate: $6
+  interval: $7
 ])
 ])
 
