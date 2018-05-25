@@ -180,16 +180,16 @@ aa_print_lldp_and_aa_stats(struct ds *ds, struct lldp *lldp)
     }
 
     LIST_FOR_EACH (hw, h_entries, &lldp->lldpd->g_hardware) {
-        ds_put_format(ds, "\ttx cnt: %"PRIu64"\n", hw->h_tx_cnt);
-        ds_put_format(ds, "\trx cnt: %"PRIu64"\n", hw->h_rx_cnt);
-        ds_put_format(ds, "\trx discarded cnt: %"PRIu64"\n",
+        ds_put_format(ds, "  tx cnt: %"PRIu64"\n", hw->h_tx_cnt);
+        ds_put_format(ds, "  rx cnt: %"PRIu64"\n", hw->h_rx_cnt);
+        ds_put_format(ds, "  rx discarded cnt: %"PRIu64"\n",
                       hw->h_rx_discarded_cnt);
-        ds_put_format(ds, "\trx unrecognized cnt: %"PRIu64"\n",
+        ds_put_format(ds, "  rx unrecognized cnt: %"PRIu64"\n",
                       hw->h_rx_unrecognized_cnt);
-        ds_put_format(ds, "\tageout cnt: %"PRIu64"\n", hw->h_ageout_cnt);
-        ds_put_format(ds, "\tinsert cnt: %"PRIu64"\n", hw->h_insert_cnt);
-        ds_put_format(ds, "\tdelete cnt: %"PRIu64"\n", hw->h_delete_cnt);
-        ds_put_format(ds, "\tdrop cnt: %"PRIu64"\n", hw->h_drop_cnt);
+        ds_put_format(ds, "  ageout cnt: %"PRIu64"\n", hw->h_ageout_cnt);
+        ds_put_format(ds, "  insert cnt: %"PRIu64"\n", hw->h_insert_cnt);
+        ds_put_format(ds, "  delete cnt: %"PRIu64"\n", hw->h_delete_cnt);
+        ds_put_format(ds, "  drop cnt: %"PRIu64"\n", hw->h_drop_cnt);
     }
 }
 
@@ -219,11 +219,11 @@ aa_print_element_status_port(struct ds *ds, struct lldpd_hardware *hw)
             chassisid_to_string((uint8_t *) &port->p_element.system_id,
                 sizeof port->p_element.system_id, &system);
 
-            ds_put_format(ds, "\tAuto Attach Primary Server Id: %s\n",
+            ds_put_format(ds, "  Auto Attach Primary Server Id: %s\n",
                           id ? id : none_str);
-            ds_put_format(ds, "\tAuto Attach Primary Server Descr: %s\n",
+            ds_put_format(ds, "  Auto Attach Primary Server Descr: %s\n",
                           descr ? descr : none_str);
-            ds_put_format(ds, "\tAuto Attach Primary Server System Id: %s\n",
+            ds_put_format(ds, "  Auto Attach Primary Server System Id: %s\n",
                           system);
 
             free(id);
@@ -391,7 +391,7 @@ update_mapping_on_lldp(struct lldp *lldp, struct lldpd_hardware *hardware,
 {
     struct lldpd_aa_isid_vlan_maps_tlv *lm = xzalloc(sizeof *lm);
 
-    VLOG_INFO("\t\t hardware->h_ifname=%s", hardware->h_ifname);
+    VLOG_INFO("     hardware->h_ifname=%s", hardware->h_ifname);
 
     lm->isid_vlan_data.isid = m->isid;
     lm->isid_vlan_data.vlan = m->vlan;
@@ -526,7 +526,7 @@ aa_mapping_register(void *aux, const struct aa_mapping_settings *s)
         struct lldpd_hardware *hw;
         struct aa_mapping_internal *m;
 
-        VLOG_INFO("\t lldp->name=%s", lldp->name);
+        VLOG_INFO("   lldp->name=%s", lldp->name);
 
         if (mapping_find_by_isid(lldp, s->isid)) {
             continue;
@@ -566,7 +566,7 @@ aa_mapping_unregister_mapping(struct lldp *lldp,
         uint32_t isid = lm->isid_vlan_data.isid;
 
         if (isid == m->isid) {
-            VLOG_INFO("\t\t Removing lport, isid=%u, vlan=%u",
+            VLOG_INFO("     Removing lport, isid=%u, vlan=%u",
                       isid,
                       lm->isid_vlan_data.vlan);
 
@@ -609,7 +609,7 @@ aa_mapping_unregister(void *aux)
             uint16_t vlan = m->vlan;
             struct aa_mapping_internal *p = mapping_find_by_isid(lldp, isid);
 
-            VLOG_INFO("\t Removing mapping ISID=%"PRIu32", VLAN=%"PRIu16
+            VLOG_INFO("   Removing mapping ISID=%"PRIu32", VLAN=%"PRIu16
                       " (lldp->name=%s)", isid, vlan, lldp->name);
 
             if (p) {
@@ -620,7 +620,7 @@ aa_mapping_unregister(void *aux)
 
             /* Remove from all the lldp instances */
             LIST_FOR_EACH (hw, h_entries, &lldp->lldpd->g_hardware) {
-                VLOG_INFO("\t\t hardware->h_ifname=%s", hw->h_ifname);
+                VLOG_INFO("     hardware->h_ifname=%s", hw->h_ifname);
                 aa_mapping_unregister_mapping(lldp, hw, m);
             }
             free(m);
