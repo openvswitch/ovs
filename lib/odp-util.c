@@ -2781,17 +2781,14 @@ odp_tun_key_from_attr__(const struct nlattr *attr, bool is_mask,
             tun_metadata_from_geneve_nlattr(a, is_mask, tun);
             break;
         case OVS_TUNNEL_KEY_ATTR_ERSPAN_OPTS: {
-            int attr_len = nl_attr_get_size(a);
-            struct erspan_metadata opts;
+            const struct erspan_metadata *opts = nl_attr_get(a);
 
-            memcpy(&opts, nl_attr_get(a), attr_len);
-
-            tun->erspan_ver = opts.version;
+            tun->erspan_ver = opts->version;
             if (tun->erspan_ver == 1) {
-                tun->erspan_idx = ntohl(opts.u.index);
+                tun->erspan_idx = ntohl(opts->u.index);
             } else if (tun->erspan_ver == 2) {
-                tun->erspan_dir = opts.u.md2.dir;
-                tun->erspan_hwid = get_hwid(&opts.u.md2);
+                tun->erspan_dir = opts->u.md2.dir;
+                tun->erspan_hwid = get_hwid(&opts->u.md2);
             } else {
                 VLOG_WARN("%s invalid erspan version\n", __func__);
             }
