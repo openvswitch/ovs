@@ -2725,11 +2725,11 @@ upcall_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
         ufid_enabled = udpif_use_ufid(udpif);
 
         ds_put_format(&ds, "%s:\n", dpif_name(udpif->dpif));
-        ds_put_format(&ds, "\tflows         : (current %lu)"
+        ds_put_format(&ds, "  flows         : (current %lu)"
             " (avg %u) (max %u) (limit %u)\n", udpif_get_n_flows(udpif),
             udpif->avg_n_flows, udpif->max_n_flows, flow_limit);
-        ds_put_format(&ds, "\tdump duration : %lldms\n", udpif->dump_duration);
-        ds_put_format(&ds, "\tufid enabled : ");
+        ds_put_format(&ds, "  dump duration : %lldms\n", udpif->dump_duration);
+        ds_put_format(&ds, "  ufid enabled : ");
         if (ufid_enabled) {
             ds_put_format(&ds, "true\n");
         } else {
@@ -2744,7 +2744,7 @@ upcall_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
             for (j = i; j < N_UMAPS; j += n_revalidators) {
                 elements += cmap_count(&udpif->ukeys[j].cmap);
             }
-            ds_put_format(&ds, "\t%u: (keys %d)\n", revalidator->id, elements);
+            ds_put_format(&ds, "  %u: (keys %d)\n", revalidator->id, elements);
         }
     }
 
