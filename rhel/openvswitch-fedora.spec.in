@@ -214,30 +214,30 @@ Docker network plugins for OVN.
 %build
 %configure \
 %if %{with libcapng}
-	--enable-libcapng \
+        --enable-libcapng \
 %else
-	--disable-libcapng \
+        --disable-libcapng \
 %endif
 %if %{with dpdk}
-	--with-dpdk=$(dirname %{_datadir}/dpdk/*/.config) \
+        --with-dpdk=$(dirname %{_datadir}/dpdk/*/.config) \
 %endif
-	--enable-ssl \
-	--with-pkidir=%{_sharedstatedir}/openvswitch/pki \
+        --enable-ssl \
+        --with-pkidir=%{_sharedstatedir}/openvswitch/pki \
 %if 0%{?fedora} > 22 || %{with build_python3}
-	PYTHON3=%{__python3} \
-	PYTHON=%{__python2}
+        PYTHON3=%{__python3} \
+        PYTHON=%{__python2}
 %else
-	PYTHON=%{__python}
+        PYTHON=%{__python}
 %endif
 
 build-aux/dpdkstrip.py \
 %if %{with dpdk}
-	--dpdk \
+        --dpdk \
 %else
-	--nodpdk \
+        --nodpdk \
 %endif
-	< rhel/usr_lib_systemd_system_ovs-vswitchd.service.in \
-	> rhel/usr_lib_systemd_system_ovs-vswitchd.service
+        < rhel/usr_lib_systemd_system_ovs-vswitchd.service.in \
+        > rhel/usr_lib_systemd_system_ovs-vswitchd.service
 
 make %{?_smp_mflags}
 make selinux-policy
@@ -259,10 +259,10 @@ install -p -D -m 0644 \
         rhel/usr_share_openvswitch_scripts_systemd_sysconfig.template \
         $RPM_BUILD_ROOT/%{_sysconfdir}/sysconfig/openvswitch
 for service in openvswitch ovsdb-server ovs-vswitchd ovs-delete-transient-ports \
-		ovn-controller ovn-controller-vtep ovn-northd; do
-	install -p -D -m 0644 \
-			rhel/usr_lib_systemd_system_${service}.service \
-			$RPM_BUILD_ROOT%{_unitdir}/${service}.service
+                ovn-controller ovn-controller-vtep ovn-northd; do
+        install -p -D -m 0644 \
+                        rhel/usr_lib_systemd_system_${service}.service \
+                        $RPM_BUILD_ROOT%{_unitdir}/${service}.service
 done
 install -m 0755 rhel/etc_init.d_openvswitch \
         $RPM_BUILD_ROOT%{_datadir}/openvswitch/scripts/openvswitch.init

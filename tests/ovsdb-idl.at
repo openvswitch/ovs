@@ -844,7 +844,7 @@ AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl uni
        "table": "link1",
        "where": [],
        "row": {"k": ["uuid", "#0#"]}}]']],
-	 [0], [stdout], [stderr])
+         [0], [stdout], [stderr])
 AT_CHECK([sort stdout | uuidfilt], [0],
     [[000: empty
 001: {"error":null,"result":[{"uuid":["uuid","<0>"]}]}

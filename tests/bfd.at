@@ -846,12 +846,12 @@ check_liveness () {
     printf '\n\n--- check_liveness %d ---\n\n\n' $1
     shift
 
-	echo >>expout "OFPT_PORT_STATUS (OF1.3): MOD: 1(p0): addr:
+        echo >>expout "OFPT_PORT_STATUS (OF1.3): MOD: 1(p0): addr:
      config:     0
      state:      $1
      speed: 0 Mbps now, 0 Mbps max"
 
-	AT_CHECK(
+        AT_CHECK(
       [[sed '
 s/ (xid=0x[0-9a-fA-F]*)//
 s/ *duration.*//
@@ -917,12 +917,12 @@ check_liveness () {
     printf '\n\n--- check_liveness %d ---\n\n\n' $1
     shift
 
-	echo >>expout "OFPT_PORT_STATUS (OF1.4): MOD: 1(p0): addr:
+        echo >>expout "OFPT_PORT_STATUS (OF1.4): MOD: 1(p0): addr:
      config:     0
      state:      $1
      speed: 0 Mbps now, 0 Mbps max"
 
-	AT_CHECK(
+        AT_CHECK(
       [[sed '
 s/ (xid=0x[0-9a-fA-F]*)//
 s/ *duration.*//
@@ -988,12 +988,12 @@ check_liveness () {
     printf '\n\n--- check_liveness %d ---\n\n\n' $1
     shift
 
-	echo >>expout "OFPT_PORT_STATUS (OF1.5): MOD: 1(p0): addr:
+        echo >>expout "OFPT_PORT_STATUS (OF1.5): MOD: 1(p0): addr:
      config:     0
      state:      $1
      speed: 0 Mbps now, 0 Mbps max"
 
-	AT_CHECK(
+        AT_CHECK(
       [[sed '
 s/ (xid=0x[0-9a-fA-F]*)//
 s/ *duration.*//

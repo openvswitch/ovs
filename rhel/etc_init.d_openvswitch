@@ -36,16 +36,16 @@ start () {
     set ovs_ctl ${1-start}
     set "$@" --system-id=random
     if test X"$FORCE_COREFILES" != X; then
-	set "$@" --force-corefiles="$FORCE_COREFILES"
+        set "$@" --force-corefiles="$FORCE_COREFILES"
     fi
     if test X"$OVSDB_SERVER_PRIORITY" != X; then
-	set "$@" --ovsdb-server-priority="$OVSDB_SERVER_PRIORITY"
+        set "$@" --ovsdb-server-priority="$OVSDB_SERVER_PRIORITY"
     fi
     if test X"$VSWITCHD_PRIORITY" != X; then
-	set "$@" --ovs-vswitchd-priority="$VSWITCHD_PRIORITY"
+        set "$@" --ovs-vswitchd-priority="$VSWITCHD_PRIORITY"
     fi
     if test X"$VSWITCHD_MLOCKALL" != X; then
-	set "$@" --mlockall="$VSWITCHD_MLOCKALL"
+        set "$@" --mlockall="$VSWITCHD_MLOCKALL"
     fi
     set "$@" $OVS_CTL_OPTS
     "$@"

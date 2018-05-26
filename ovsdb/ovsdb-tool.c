@@ -677,7 +677,7 @@ print_db_changes(struct shash *tables, struct smap *names,
                 }
             }
 
-            printf("\ttable %s", table);
+            printf("  table %s", table);
 
             if (!old_name) {
                 if (new_name) {
@@ -722,7 +722,7 @@ print_db_changes(struct shash *tables, struct smap *names,
                         if (!value_string) {
                             value_string = json_to_string(value, JSSF_SORT);
                         }
-                        printf("\t\t%s=%s\n", column, value_string);
+                        printf("    %s=%s\n", column, value_string);
                         free(value_string);
                     }
                 }
@@ -735,7 +735,7 @@ print_db_changes(struct shash *tables, struct smap *names,
                                     xmemdup0(row_uuid, 8));
                 }
             } else if (columns->type == JSON_NULL) {
-                printf("\t\tdelete row\n");
+                printf("    delete row\n");
                 smap_remove(names, row_uuid);
             }
 

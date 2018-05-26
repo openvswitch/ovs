@@ -190,7 +190,7 @@ Q: Can I configure an IP address on a VLAN?
         $ ovs-vsctl add-port br0 eth0
         $ ovs-vsctl add-port br0 vlan9 tag=9 \
             -- set interface vlan9 type=internal
-	$ ip addr add 192.168.0.7/24 dev vlan9
+        $ ip addr add 192.168.0.7/24 dev vlan9
         $ ip link set vlan0 up
 
     See also the following question.

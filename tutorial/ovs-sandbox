@@ -393,9 +393,9 @@ if $ovn; then
         $OVS_PKI -B 1024 init
         $OVS_PKI -B 1024 req+sign ovnsb switch
         $OVS_PKI -B 1024 req+sign ovnnb switch
-	for i in $(seq $n_controllers); do
+        for i in $(seq $n_controllers); do
             $OVS_PKI -B 1024 -u req+sign chassis-$i switch
-	done
+        done
     fi
 fi
 rungdb $gdb_ovsdb $gdb_ovsdb_ex ovsdb-server --detach --no-chdir --pidfile -vconsole:off --log-file -vsyslog:off \
@@ -428,7 +428,7 @@ if $ovn; then
             local i=$1; shift
             rungdb $gdb_ovsdb $gdb_ovsdb_ex ovsdb-server --detach --no-chdir \
                    --pidfile=$db$i.pid -vconsole:off --log-file=$db$i.log \
-		   -vsyslog:off \
+                   -vsyslog:off \
                    --remote=db:$schema_name,${DB}_Global,connections \
                    --private-key=db:$schema_name,SSL,private_key \
                    --certificate=db:$schema_name,SSL,certificate \
@@ -535,14 +535,14 @@ if $ovn; then
                --ovnsb-db="$OVN_SB_DB" --ovnnb-db="$OVN_NB_DB"
     done
     for i in $(seq $n_controllers); do
-	rungdb $gdb_ovn_controller $gdb_ovn_controller_ex ovn-controller \
+        rungdb $gdb_ovn_controller $gdb_ovn_controller_ex ovn-controller \
                $OVN_CTRLR_PKI --detach --no-chdir -vsyslog:off \
-	       --pidfile=ovn-controller$i.pid -vconsole:off --log-file
+               --pidfile=ovn-controller$i.pid -vconsole:off --log-file
     done
     rungdb $gdb_ovn_controller_vtep $gdb_ovn_controller_vtep_ex \
         ovn-controller-vtep --detach --no-chdir --pidfile -vconsole:off \
         $OVN_CTRLR_PKI --log-file -vsyslog:off \
-	--ovnsb-db=unix:"$sandbox"/ovnsb_db.sock
+        --ovnsb-db=unix:"$sandbox"/ovnsb_db.sock
 fi
 
 cat <<EOF

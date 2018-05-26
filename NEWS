@@ -933,7 +933,7 @@ v1.8.0 - 26 Feb 2013
         were allowed.)
       - Allow support for arbitrary Ethernet masks.  (Previously, only
         the multicast bit in the destination address could be individually
-	masked.)
+        masked.)
       - New field OXM_OF_METADATA, to align with OpenFlow 1.1.
       - The OFPST_QUEUE request now reports an error if a specified port or
         queue does not exist, or for requests for a specific queue on all

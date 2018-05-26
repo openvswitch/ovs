@@ -60,17 +60,17 @@ dnl Immutable weak references are forced to be mutable.
 OVSDB_CHECK_POSITIVE_CPY([schema with immutable weak references],
   [[parse-schema \
       '{"name": "mydb",
-	"version": "4.2.1",
-	"tables": {
-	  "a": {
-	    "columns": {
-	      "x": {
-		"type": {
-		  "key": {
-		    "type": "uuid",
-		    "refTable": "a",
-		    "refType": "weak"}},
-		"mutable": false}}}}}']],
+        "version": "4.2.1",
+        "tables": {
+          "a": {
+            "columns": {
+              "x": {
+                "type": {
+                  "key": {
+                    "type": "uuid",
+                    "refTable": "a",
+                    "refType": "weak"}},
+                "mutable": false}}}}}']],
   [[{"name":"mydb","tables":{"a":{"columns":{"x":{"type":{"key":{"refTable":"a","refType":"weak","type":"uuid"}}}}}},"version":"4.2.1"}]])
 
 dnl Schemas without version numbers are accepted for backward

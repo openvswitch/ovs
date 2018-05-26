@@ -118,9 +118,9 @@ AT_CHECK([[uuidfilt db | grep -v ^OVSDB | sed 's/"_date":[0-9]*/"_date":0/' | ov
 dnl Dump out and check the actual database contents.
 on_exit 'kill `cat ovsdb-server.pid`'
 AT_CHECK([[ovsdb-server --detach --pidfile --no-chdir --remote=punix:socket db]],
-	 [0], [stdout], [ignore])
+         [0], [stdout], [ignore])
 AT_CHECK([[ovsdb-client dump unix:socket ordinals]],
-	 [0], [stdout], [ignore])
+         [0], [stdout], [ignore])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 
 AT_CHECK([uuidfilt stdout], [0], [dnl
@@ -151,9 +151,9 @@ AT_CAPTURE_FILE([db])
 AT_CHECK([test `wc -l < db` -eq 4])
 dnl And check that the dumped data is the same too:
 AT_CHECK([[ovsdb-server --detach --pidfile --no-chdir --remote=punix:socket db]],
-	 [0], [stdout], [ignore])
+         [0], [stdout], [ignore])
 AT_CHECK([[ovsdb-client dump unix:socket ordinals]],
-	 [0], [stdout], [ignore])
+         [0], [stdout], [ignore])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 
 AT_CHECK([uuidfilt stdout], [0], [dnl
@@ -427,12 +427,12 @@ AT_CHECK(
   [[for pair in 'zero 0' 'one 1' 'two 2' 'three 3' 'four 4' 'five 5'; do
       set -- $pair
       ovsdb-tool transact db1 '
-	["ordinals",
-	 {"op": "insert",
-	  "table": "ordinals",
-	  "row": {"name": "'$1'", "number": '$2'}},
-	 {"op": "comment",
-	  "comment": "add row for '"$pair"'"}]'
+        ["ordinals",
+         {"op": "insert",
+          "table": "ordinals",
+          "row": {"name": "'$1'", "number": '$2'}},
+         {"op": "comment",
+          "comment": "add row for '"$pair"'"}]'
     done | uuidfilt]], [0],
 [[[{"uuid":["uuid","<0>"]},{}]
 [{"uuid":["uuid","<1>"]},{}]

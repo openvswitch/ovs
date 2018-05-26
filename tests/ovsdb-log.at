@@ -85,14 +85,14 @@ for option in '' --no-rename-open-files; do
     rm -f file
     AT_CHECK(
       [[test-ovsdb $option log-io file create \
-	  'write:{"x":0}' \
-	  'replace_start' \
-	  'new-write:{"x":1}' \
-	  'new-write:{"x":2}' \
-	  'old-write:{"x":4}' \
-	  'replace_commit' \
-	  'read' \
-	  'write:{"x":3}']], [0],
+          'write:{"x":0}' \
+          'replace_start' \
+          'new-write:{"x":1}' \
+          'new-write:{"x":2}' \
+          'old-write:{"x":4}' \
+          'replace_commit' \
+          'read' \
+          'write:{"x":3}']], [0],
       [[file: open successful
 file: write:{"x":0} successful
 file: replace_start successful
@@ -122,14 +122,14 @@ for option in '' --no-rename-open-files; do
     rm -f file
     AT_CHECK(
       [[test-ovsdb $option log-io file create \
-	  'write:{"x":0}' \
-	  'replace_start' \
-	  'new-write:{"x":1}' \
-	  'new-write:{"x":2}' \
-	  'old-write:{"x":4}' \
-	  'replace_abort' \
-	  'read' \
-	  'write:{"x":3}']], [0],
+          'write:{"x":0}' \
+          'replace_start' \
+          'new-write:{"x":1}' \
+          'new-write:{"x":2}' \
+          'old-write:{"x":4}' \
+          'replace_abort' \
+          'read' \
+          'write:{"x":3}']], [0],
       [[file: open successful
 file: write:{"x":0} successful
 file: replace_start successful

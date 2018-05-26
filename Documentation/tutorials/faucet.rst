@@ -302,14 +302,14 @@ information, run ``man ovs-vswitchd.conf.db`` and search for
 ``connection_mode``)::
 
   $ ovs-vsctl add-br br0 \
-	   -- set bridge br0 other-config:datapath-id=0000000000000001 \
-	   -- add-port br0 p1 -- set interface p1 ofport_request=1 \
-	   -- add-port br0 p2 -- set interface p2 ofport_request=2 \
-	   -- add-port br0 p3 -- set interface p3 ofport_request=3 \
-	   -- add-port br0 p4 -- set interface p4 ofport_request=4 \
-	   -- add-port br0 p5 -- set interface p5 ofport_request=5 \
-	   -- set-controller br0 tcp:127.0.0.1:6653 \
-	   -- set controller br0 connection-mode=out-of-band
+           -- set bridge br0 other-config:datapath-id=0000000000000001 \
+           -- add-port br0 p1 -- set interface p1 ofport_request=1 \
+           -- add-port br0 p2 -- set interface p2 ofport_request=2 \
+           -- add-port br0 p3 -- set interface p3 ofport_request=3 \
+           -- add-port br0 p4 -- set interface p4 ofport_request=4 \
+           -- add-port br0 p5 -- set interface p5 ofport_request=5 \
+           -- set-controller br0 tcp:127.0.0.1:6653 \
+           -- set controller br0 connection-mode=out-of-band
 
 .. note::
 
@@ -1290,40 +1290,40 @@ the ways that OVS tries to optimize megaflows.  Update
 
   dps:
       switch-1:
-	  dp_id: 0x1
-	  timeout: 3600
-	  arp_neighbor_timeout: 3600
-	  interfaces:
-	      1:
-		  native_vlan: 100
-		  acl_in: 1
-	      2:
-		  native_vlan: 100
-	      3:
-		  native_vlan: 100
-	      4:
-		  native_vlan: 200
-	      5:
-		  native_vlan: 200
+          dp_id: 0x1
+          timeout: 3600
+          arp_neighbor_timeout: 3600
+          interfaces:
+              1:
+                  native_vlan: 100
+                  acl_in: 1
+              2:
+                  native_vlan: 100
+              3:
+                  native_vlan: 100
+              4:
+                  native_vlan: 200
+              5:
+                  native_vlan: 200
   vlans:
       100:
-	  faucet_vips: ["10.100.0.254/24"]
+          faucet_vips: ["10.100.0.254/24"]
       200:
-	  faucet_vips: ["10.200.0.254/24"]
+          faucet_vips: ["10.200.0.254/24"]
   routers:
       router-1:
-	  vlans: [100, 200]
+          vlans: [100, 200]
   acls:
       1:
-	  - rule:
-	      dl_type: 0x800
-	      nw_proto: 6
-	      tcp_dst: 8080
-	      actions:
-		  allow: 0
-	  - rule:
-	      actions:
-		  allow: 1
+          - rule:
+              dl_type: 0x800
+              nw_proto: 6
+              tcp_dst: 8080
+              actions:
+                  allow: 0
+          - rule:
+              actions:
+                  allow: 1
 
 Then restart Faucet::
 

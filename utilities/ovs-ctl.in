@@ -539,7 +539,7 @@ case $command in
         done
         ;;
     force-reload-kmod)
-	    force_reload_kmod
+            force_reload_kmod
         ;;
     load-kmod)
         insert_mod_if_required

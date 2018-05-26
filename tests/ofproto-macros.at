@@ -421,11 +421,11 @@ add_of_br () {
     local mac=aa:55:aa:55:00:0$brnum
     ovs-vsctl --timeout=20 \
         -- add-br $br \
-	-- set bridge $br datapath-type=dummy \
-			  fail-mode=secure \
-			  other-config:datapath-id=$dpid \
-			  other-config:hwaddr=$mac \
-			  protocols="[[OpenFlow10,OpenFlow11,OpenFlow12,\
+        -- set bridge $br datapath-type=dummy \
+                          fail-mode=secure \
+                          other-config:datapath-id=$dpid \
+                          other-config:hwaddr=$mac \
+                          protocols="[[OpenFlow10,OpenFlow11,OpenFlow12,\
                                        OpenFlow13,OpenFlow14,OpenFlow15,\
                                        OpenFlow16]]" \
         -- "$@"
@@ -497,7 +497,7 @@ m4_define([OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP],
 m4_define([WAIT_FOR_DUMMY_PORTS], \
   [m4_foreach([dummy_port], [$@],
       [  \
-	 OVS_WAIT_WHILE([ovs-appctl netdev-dummy/conn-state dummy_port \
+         OVS_WAIT_WHILE([ovs-appctl netdev-dummy/conn-state dummy_port \
                   | grep 'unknown\|disconnected'])])])
 
 

@@ -20,15 +20,15 @@ $bootstrap_debian = <<SCRIPT
 aptitude -y update
 aptitude -y upgrade
 aptitude -y install -R \
-		build-essential dpkg-dev lintian devscripts fakeroot \
-		debhelper dh-autoreconf uuid-runtime \
-		autoconf automake libtool \
-		python-all python-twisted-core python-twisted-conch \
-		xdg-utils groff graphviz netcat curl \
-		wget python-six ethtool \
-		libcap-ng-dev libssl-dev python-dev openssl \
-		python-pyftpdlib python-flake8 python-tftpy \
-		linux-headers-`uname -r`
+                build-essential dpkg-dev lintian devscripts fakeroot \
+                debhelper dh-autoreconf uuid-runtime \
+                autoconf automake libtool \
+                python-all python-twisted-core python-twisted-conch \
+                xdg-utils groff graphviz netcat curl \
+                wget python-six ethtool \
+                libcap-ng-dev libssl-dev python-dev openssl \
+                python-pyftpdlib python-flake8 python-tftpy \
+                linux-headers-`uname -r`
 SCRIPT
 
 $bootstrap_centos = <<SCRIPT

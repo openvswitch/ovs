@@ -1873,10 +1873,10 @@ done
 # Prints the name of the logical switch that contains LSP.
 lsp_to_ls () {
     case $1 in dnl (
-	lp?[[12]]) echo ls1 ;; dnl (
-	lp?[[34]]) echo ls2 ;; dnl (
-	lp?5) echo ls3 ;; dnl (
-	*) AT_FAIL_IF([:]) ;;
+        lp?[[12]]) echo ls1 ;; dnl (
+        lp?[[34]]) echo ls2 ;; dnl (
+        lp?5) echo ls3 ;; dnl (
+        *) AT_FAIL_IF([:]) ;;
     esac
 }
 
@@ -1896,7 +1896,7 @@ for i in 1 2; do
                                   ofport-request=$i$j
 
         lsp_name=lp$i$j
-	ls_name=$(lsp_to_ls $lsp_name)
+        ls_name=$(lsp_to_ls $lsp_name)
 
         ovn-nbctl lsp-add $ls_name $lsp_name
         ovn-nbctl lsp-set-addresses $lsp_name f0:00:00:00:00:$i$j
@@ -6191,7 +6191,7 @@ get_final_nw_tos() {
     tos=$(echo "$flow" | sed -n 's/.*nw_tos=\([[0-9]]\{1,\}\).*/\1/p')
     case $tos in
         '') echo none ;;
-	*) echo $tos ;;
+        *) echo $tos ;;
     esac
 }
 

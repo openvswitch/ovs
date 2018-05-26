@@ -3692,10 +3692,10 @@ OFPT_PORT_STATUS (OF1.4): MOD: ${INDEX}(test): addr:aa:55:aa:55:00:0x
     if test X"$1" = X"OFPTR_VACANCY_UP"; then shift;
         ovs-vsctl -- --id=@t1 create Flow_Table flow-limit=10 -- set bridge br0 flow_tables:1=@t1
 
-	# Turn on vacancy events, then add flows until we're full.
-	# With initial vacancy of 100% and vacancy_up of 80%, so that
-	# vacancy >= vacancy_up, this enables VACANY_DOWN events, so
-	# we get a single such message when vacancy dips below 20%.
+        # Turn on vacancy events, then add flows until we're full.
+        # With initial vacancy of 100% and vacancy_up of 80%, so that
+        # vacancy >= vacancy_up, this enables VACANY_DOWN events, so
+        # we get a single such message when vacancy dips below 20%.
         ovs-ofctl -O OpenFlow14 mod-table br0 1 vacancy:20,80
         ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=1,actions=2
         ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=2,actions=2
@@ -3713,8 +3713,8 @@ table_desc:-
    eviction=off eviction_flags=OTHER|IMPORTANCE|LIFETIME
    vacancy=on vacancy_down=20% vacancy_up=80% vacancy=10%"
         # Then delete flows until we're empty.  Sending the
-	# VACANCY_DOWN message enabled VACANCY_UP events, so we get a
-	# single such message when vacancy rises above 80%.
+        # VACANCY_DOWN message enabled VACANCY_UP events, so we get a
+        # single such message when vacancy rises above 80%.
         ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=1
         ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=2
         ovs-ofctl -O OpenFlow14 del-flows br0 table=1,in_port=3
@@ -3732,11 +3732,11 @@ table_desc:-
    vacancy=on vacancy_down=20% vacancy_up=80% vacancy=90%"
 
         # Now approach vacancy from the other direction.  First
-	# disable vacancy events.  With initial vacancy of 70%, so
-	# that vacancy < vacancy_up, this enables VACANCY_UP events.
-	# That means that filling up the table generates no message,
-	# but deleting all the flows generates VACANCY_UP at the point
-	# vacancy rises above 80%.
+        # disable vacancy events.  With initial vacancy of 70%, so
+        # that vacancy < vacancy_up, this enables VACANCY_UP events.
+        # That means that filling up the table generates no message,
+        # but deleting all the flows generates VACANCY_UP at the point
+        # vacancy rises above 80%.
         ovs-ofctl -O OpenFlow14 mod-table br0 1 novacancy
         ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=1,actions=2
         ovs-ofctl -O OpenFlow14 add-flow br0 table=1,in_port=2,actions=2
@@ -4924,11 +4924,11 @@ add_of_ports br0 1 2 3
 
 set_and_check_specific_ofports () {
     ovs-vsctl set Interface p1 ofport_request="$1" -- \
-	      set Interface p2 ofport_request="$2" -- \
-	      set Interface p3 ofport_request="$3"
+              set Interface p2 ofport_request="$2" -- \
+              set Interface p3 ofport_request="$3"
     ofports=`ovs-vsctl get Interface p1 ofport -- \
-		       get Interface p2 ofport -- \
-		       get Interface p3 ofport`
+                       get Interface p2 ofport -- \
+                       get Interface p3 ofport`
     AT_CHECK_UNQUOTED([echo $ofports], [0], [$1 $2 $3
 ])
 }
@@ -4936,8 +4936,8 @@ for pre in      '1 2 3' '1 3 2' '2 1 3' '2 3 1' '3 1 2' '3 2 1'; do
     for post in '1 2 3' '1 3 2' '2 1 3' '2 3 1' '3 1 2' '3 2 1'; do
         echo -----------------------------------------------------------
         echo "Check changing port numbers from $pre to $post"
-	set_and_check_specific_ofports $pre
-	set_and_check_specific_ofports $post
+        set_and_check_specific_ofports $pre
+        set_and_check_specific_ofports $post
     done
 done
 
@@ -4945,7 +4945,7 @@ ovs-vsctl del-port p3
 
 set_and_check_poorly_specified_ofports () {
     ovs-vsctl set Interface p1 ofport_request="$1" -- \
-	      set Interface p2 ofport_request="$2"
+              set Interface p2 ofport_request="$2"
     p1=`ovs-vsctl get Interface p1 ofport`
     p2=`ovs-vsctl get Interface p2 ofport`
     echo $p1 $p2
@@ -4953,8 +4953,8 @@ set_and_check_poorly_specified_ofports () {
     AT_CHECK([test "$p1" != "$p2"])
     if test "$1" = "$2" && test "$1" != '[[]]'; then
         # One port number must be the requested one.
-	AT_CHECK([test "$p1" = "$1" || test "$p2" = "$1"])
-	# The other port number must be different (already tested above).
+        AT_CHECK([test "$p1" = "$1" || test "$p2" = "$1"])
+        # The other port number must be different (already tested above).
     else
         AT_CHECK([test "$1" = '[[]]' || test "$p1" = "$1"])
         AT_CHECK([test "$2" = '[[]]' || test "$p2" = "$2"])

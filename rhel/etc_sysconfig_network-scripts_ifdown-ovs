@@ -36,36 +36,36 @@ fi
 
 SERVICE_UNIT=/usr/lib/systemd/system/ovsdb-server.service
 if [ -f $SERVICE_UNIT ] && [ -x /usr/bin/systemctl ]; then
-	if ! systemctl --quiet is-active ovsdb-server.service; then
-		systemctl start ovsdb-server.service
-	fi
+        if ! systemctl --quiet is-active ovsdb-server.service; then
+                systemctl start ovsdb-server.service
+        fi
 else
-	if [ ! -f /var/lock/subsys/openvswitch ]; then
-		/sbin/service openvswitch start
-	fi
+        if [ ! -f /var/lock/subsys/openvswitch ]; then
+                /sbin/service openvswitch start
+        fi
 fi
 
 case "$TYPE" in
-	OVSBridge|OVSUserBridge)
-		${OTHERSCRIPT} ${CONFIG} $2
-		retval=$?
-		ovs-vsctl -t ${TIMEOUT} -- --if-exists del-br "$DEVICE"
-		;;
-	OVSPort|OVSIntPort|OVSBond)
-		${OTHERSCRIPT} ${CONFIG} $2
-		retval=$?
-		ovs-vsctl -t ${TIMEOUT} -- --if-exists del-port "$OVS_BRIDGE" "$DEVICE"
-		;;
-	OVSPatchPort|OVSTunnel)
-		ovs-vsctl -t ${TIMEOUT} -- --if-exists del-port "$OVS_BRIDGE" "$DEVICE"
-		;;
-	OVSDPDKPort|OVSDPDKRPort|OVSDPDKVhostUserPort|OVSDPDKBond)
-		ovs-vsctl -t ${TIMEOUT} -- --if-exists del-port "$OVS_BRIDGE" "$DEVICE"
-		;;
-	*)
-		echo $"Invalid OVS interface type $TYPE"
-		exit 1
-		;;
+        OVSBridge|OVSUserBridge)
+                ${OTHERSCRIPT} ${CONFIG} $2
+                retval=$?
+                ovs-vsctl -t ${TIMEOUT} -- --if-exists del-br "$DEVICE"
+                ;;
+        OVSPort|OVSIntPort|OVSBond)
+                ${OTHERSCRIPT} ${CONFIG} $2
+                retval=$?
+                ovs-vsctl -t ${TIMEOUT} -- --if-exists del-port "$OVS_BRIDGE" "$DEVICE"
+                ;;
+        OVSPatchPort|OVSTunnel)
+                ovs-vsctl -t ${TIMEOUT} -- --if-exists del-port "$OVS_BRIDGE" "$DEVICE"
+                ;;
+        OVSDPDKPort|OVSDPDKRPort|OVSDPDKVhostUserPort|OVSDPDKBond)
+                ovs-vsctl -t ${TIMEOUT} -- --if-exists del-port "$OVS_BRIDGE" "$DEVICE"
+                ;;
+        *)
+                echo $"Invalid OVS interface type $TYPE"
+                exit 1
+                ;;
 esac
 
 exit $retval

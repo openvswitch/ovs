@@ -36,8 +36,8 @@ filter_flow_install () {
 
 filter_flow_dump () {
     grep 'flow_dump ' | sed '
-	s/.*flow_dump //
-	s/used:[0-9]*\.[0-9]*/used:0.0/
+        s/.*flow_dump //
+        s/used:[0-9]*\.[0-9]*/used:0.0/
     ' | sort | uniq
 }
 

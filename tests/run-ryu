@@ -81,7 +81,7 @@ do
         -- set controller $bridge connection-mode=out-of-band \
                                   max-backoff=1000 \
         -- add-port $bridge $port1 \
-	-- set interface $port1 ofport_request=1 type=dummy \
+        -- set interface $port1 ofport_request=1 type=dummy \
                                 options:${stream_mode}:"$sandbox"/p1.sock \
         -- add-port $bridge $port2 \
         -- set interface $port2 ofport_request=2 type=dummy \
@@ -144,7 +144,7 @@ cat <<EOF
 
 ----------------------------------------------------------------------
 Logs may be found under $sandbox, e.g.:$logs
-	$sandbox/ovs-vswitchd.log
-	$sandbox/ovsdb-server.log
+        $sandbox/ovs-vswitchd.log
+        $sandbox/ovsdb-server.log
 ----------------------------------------------------------------------
 EOF

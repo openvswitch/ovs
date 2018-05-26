@@ -1634,12 +1634,12 @@ print_tlv_table(struct ds *s, struct ovs_list *mappings)
     struct ofputil_tlv_map *map;
 
     ds_put_cstr(s, " mapping table:\n");
-    ds_put_cstr(s, " class\ttype\tlength\tmatch field\n");
-    ds_put_cstr(s, " -----\t----\t------\t-----------");
+    ds_put_cstr(s, "  class  type  length  match field\n");
+    ds_put_cstr(s, " ------  ----  ------  --------------");
 
     LIST_FOR_EACH (map, list_node, mappings) {
-        ds_put_char(s, '\n');
-        ds_put_format(s, " 0x%"PRIx16"\t0x%"PRIx8"\t%"PRIu8"\ttun_metadata%"PRIu16,
+        ds_put_format(s, "\n %#6"PRIx16"  %#4"PRIx8"  %6"PRIu8"  "
+                      "tun_metadata%"PRIu16,
                       map->option_class, map->option_type, map->option_len,
                       map->index);
     }

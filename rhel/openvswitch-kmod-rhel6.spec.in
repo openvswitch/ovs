@@ -46,9 +46,9 @@ Open vSwitch Linux kernel module.
 
 %build
 for flavor in %flavors_to_build; do
-	mkdir _$flavor
-	(cd _$flavor && ../configure --with-linux="%{kernel_source $flavor}")
-	%{__make} -C _$flavor/datapath/linux %{?_smp_mflags}
+        mkdir _$flavor
+        (cd _$flavor && ../configure --with-linux="%{kernel_source $flavor}")
+        %{__make} -C _$flavor/datapath/linux %{?_smp_mflags}
 done
 
 %install

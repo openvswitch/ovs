@@ -60,10 +60,10 @@ while test ${#} -ge 4; do
        test X"${2}" = Xinterface && \
        test X"${4}" = Xofport; then
           if test X"${3}" = Xeth2; then
-	      echo 5
-	  else
-	      echo -1
-	  fi
+              echo 5
+          else
+              echo -1
+          fi
     fi
 
     shift
@@ -109,566 +109,566 @@ EOF
         cat > var/xapi/network.dbcache <<'EOF'
 <?xml version="1.0" ?>
 <xenserver-network-configuration>
-	<pif ref="OpaqueRef:e0955887-571f-17fc-a971-61c1ec7d81b6">
-		<VLAN_slave_of/>
+        <pif ref="OpaqueRef:e0955887-571f-17fc-a971-61c1ec7d81b6">
+                <VLAN_slave_of/>
                 <tunnel_access_PIF_of/>
-		<management>
-			False
-		</management>
-		<bond_slave_of>
-			OpaqueRef:86d81bcf-0d25-90b2-cb11-af2007bd586e
-		</bond_slave_of>
-		<uuid>
-			bd62a141-091f-3909-e334-0334f67ff3be
-		</uuid>
-		<IP>
-			
-		</IP>
-		<VLAN_master_of>
-			OpaqueRef:NULL
-		</VLAN_master_of>
-		<VLAN>
-			-1
-		</VLAN>
-		<netmask>
-			
-		</netmask>
-		<other_config/>
-		<MAC>
-			00:22:19:22:4b:af
-		</MAC>
-		<ip_configuration_mode>
-			None
-		</ip_configuration_mode>
-		<DNS>
-			
-		</DNS>
-		<device>
-			eth0
-		</device>
-		<bond_master_of/>
-		<currently_attached>
-			False
-		</currently_attached>
-		<gateway>
-			
-		</gateway>
-		<network>
-			OpaqueRef:83e4a934-aeb5-e6f0-a743-d1c7ef7364c5
-		</network>
-	</pif>
-	<pif ref="OpaqueRef:eea8da94-a5e6-18fc-34a7-5e9b5a235806">
-		<VLAN_slave_of/>
+                <management>
+                        False
+                </management>
+                <bond_slave_of>
+                        OpaqueRef:86d81bcf-0d25-90b2-cb11-af2007bd586e
+                </bond_slave_of>
+                <uuid>
+                        bd62a141-091f-3909-e334-0334f67ff3be
+                </uuid>
+                <IP>
+                        
+                </IP>
+                <VLAN_master_of>
+                        OpaqueRef:NULL
+                </VLAN_master_of>
+                <VLAN>
+                        -1
+                </VLAN>
+                <netmask>
+                        
+                </netmask>
+                <other_config/>
+                <MAC>
+                        00:22:19:22:4b:af
+                </MAC>
+                <ip_configuration_mode>
+                        None
+                </ip_configuration_mode>
+                <DNS>
+                        
+                </DNS>
+                <device>
+                        eth0
+                </device>
+                <bond_master_of/>
+                <currently_attached>
+                        False
+                </currently_attached>
+                <gateway>
+                        
+                </gateway>
+                <network>
+                        OpaqueRef:83e4a934-aeb5-e6f0-a743-d1c7ef7364c5
+                </network>
+        </pif>
+        <pif ref="OpaqueRef:eea8da94-a5e6-18fc-34a7-5e9b5a235806">
+                <VLAN_slave_of/>
                 <tunnel_access_PIF_of/>
-		<management>
-			False
-		</management>
-		<bond_slave_of>
-			OpaqueRef:NULL
-		</bond_slave_of>
-		<uuid>
-			df8d35c2-cc3a-a623-7065-d987a29feb75
-		</uuid>
-		<IP>
-			
-		</IP>
-		<VLAN_master_of>
-			OpaqueRef:NULL
-		</VLAN_master_of>
-		<VLAN>
-			-1
-		</VLAN>
-		<netmask>
-			
-		</netmask>
-		<other_config/>
-		<MAC>
-			00:1b:21:29:ce:51
-		</MAC>
-		<ip_configuration_mode>
-			None
-		</ip_configuration_mode>
-		<DNS>
-			
-		</DNS>
-		<device>
-			eth4
-		</device>
-		<bond_master_of/>
-		<currently_attached>
-			False
-		</currently_attached>
-		<gateway>
-			
-		</gateway>
-		<network>
-			OpaqueRef:bf51b4d3-7bdc-ea55-ba21-539b150b0531
-		</network>
-	</pif>
-	<pif ref="OpaqueRef:2956e6c8-487e-981c-85ff-c84796418768">
-		<VLAN_slave_of/>
+                <management>
+                        False
+                </management>
+                <bond_slave_of>
+                        OpaqueRef:NULL
+                </bond_slave_of>
+                <uuid>
+                        df8d35c2-cc3a-a623-7065-d987a29feb75
+                </uuid>
+                <IP>
+                        
+                </IP>
+                <VLAN_master_of>
+                        OpaqueRef:NULL
+                </VLAN_master_of>
+                <VLAN>
+                        -1
+                </VLAN>
+                <netmask>
+                        
+                </netmask>
+                <other_config/>
+                <MAC>
+                        00:1b:21:29:ce:51
+                </MAC>
+                <ip_configuration_mode>
+                        None
+                </ip_configuration_mode>
+                <DNS>
+                        
+                </DNS>
+                <device>
+                        eth4
+                </device>
+                <bond_master_of/>
+                <currently_attached>
+                        False
+                </currently_attached>
+                <gateway>
+                        
+                </gateway>
+                <network>
+                        OpaqueRef:bf51b4d3-7bdc-ea55-ba21-539b150b0531
+                </network>
+        </pif>
+        <pif ref="OpaqueRef:2956e6c8-487e-981c-85ff-c84796418768">
+                <VLAN_slave_of/>
                 <tunnel_access_PIF_of/>
-		<management>
-			False
-		</management>
-		<bond_slave_of>
-			OpaqueRef:86d81bcf-0d25-90b2-cb11-af2007bd586e
-		</bond_slave_of>
-		<uuid>
-			2f87fc95-5ab4-571a-2487-3f4ac1985663
-		</uuid>
-		<IP>
-			
-		</IP>
-		<VLAN_master_of>
-			OpaqueRef:NULL
-		</VLAN_master_of>
-		<VLAN>
-			-1
-		</VLAN>
-		<netmask>
-			
-		</netmask>
-		<other_config/>
-		<MAC>
-			00:22:19:22:4b:b1
-		</MAC>
-		<ip_configuration_mode>
-			None
-		</ip_configuration_mode>
-		<DNS>
-			
-		</DNS>
-		<device>
-			eth1
-		</device>
-		<bond_master_of/>
-		<currently_attached>
-			False
-		</currently_attached>
-		<gateway>
-			
-		</gateway>
-		<network>
-			OpaqueRef:92b41bf6-aa21-45d3-1c86-c87a5fa98f7d
-		</network>
-	</pif>
-	<pif ref="OpaqueRef:d2d1e51e-4da9-3163-8f57-bb683429335e">
-		<VLAN_slave_of/>
+                <management>
+                        False
+                </management>
+                <bond_slave_of>
+                        OpaqueRef:86d81bcf-0d25-90b2-cb11-af2007bd586e
+                </bond_slave_of>
+                <uuid>
+                        2f87fc95-5ab4-571a-2487-3f4ac1985663
+                </uuid>
+                <IP>
+                        
+                </IP>
+                <VLAN_master_of>
+                        OpaqueRef:NULL
+                </VLAN_master_of>
+                <VLAN>
+                        -1
+                </VLAN>
+                <netmask>
+                        
+                </netmask>
+                <other_config/>
+                <MAC>
+                        00:22:19:22:4b:b1
+                </MAC>
+                <ip_configuration_mode>
+                        None
+                </ip_configuration_mode>
+                <DNS>
+                        
+                </DNS>
+                <device>
+                        eth1
+                </device>
+                <bond_master_of/>
+                <currently_attached>
+                        False
+                </currently_attached>
+                <gateway>
+                        
+                </gateway>
+                <network>
+                        OpaqueRef:92b41bf6-aa21-45d3-1c86-c87a5fa98f7d
+                </network>
+        </pif>
+        <pif ref="OpaqueRef:d2d1e51e-4da9-3163-8f57-bb683429335e">
+                <VLAN_slave_of/>
                 <tunnel_access_PIF_of/>
-		<management>
-			False
-		</management>
-		<bond_slave_of>
-			OpaqueRef:NULL
-		</bond_slave_of>
-		<uuid>
-			d2dfdab3-daf4-afea-f055-a25a0d24d714
-		</uuid>
-		<IP>
-			
-		</IP>
-		<VLAN_master_of>
-			OpaqueRef:4c0eb823-4d96-da1d-e75f-411b85badb0c
-		</VLAN_master_of>
-		<VLAN>
-			4
-		</VLAN>
-		<netmask>
-			
-		</netmask>
-		<other_config/>
-		<MAC>
-			fe:ff:ff:ff:ff:ff
-		</MAC>
-		<ip_configuration_mode>
-			None
-		</ip_configuration_mode>
-		<DNS>
-			
-		</DNS>
-		<device>
-			bond0
-		</device>
-		<bond_master_of/>
-		<currently_attached>
-			True
-		</currently_attached>
-		<gateway>
-			
-		</gateway>
-		<network>
-			OpaqueRef:a63afad0-fb4c-b4a4-3696-cbb3d88afc47
-		</network>
-	</pif>
-	<pif ref="OpaqueRef:2bc0fab5-523a-4125-609d-212391f5f6fc">
-		<VLAN_slave_of>
-			<master>
-				OpaqueRef:e623e1d6-cd02-be8d-820d-49d65c710297
-			</master>
-		</VLAN_slave_of>
+                <management>
+                        False
+                </management>
+                <bond_slave_of>
+                        OpaqueRef:NULL
+                </bond_slave_of>
+                <uuid>
+                        d2dfdab3-daf4-afea-f055-a25a0d24d714
+                </uuid>
+                <IP>
+                        
+                </IP>
+                <VLAN_master_of>
+                        OpaqueRef:4c0eb823-4d96-da1d-e75f-411b85badb0c
+                </VLAN_master_of>
+                <VLAN>
+                        4
+                </VLAN>
+                <netmask>
+                        
+                </netmask>
+                <other_config/>
+                <MAC>
+                        fe:ff:ff:ff:ff:ff
+                </MAC>
+                <ip_configuration_mode>
+                        None
+                </ip_configuration_mode>
+                <DNS>
+                        
+                </DNS>
+                <device>
+                        bond0
+                </device>
+                <bond_master_of/>
+                <currently_attached>
+                        True
+                </currently_attached>
+                <gateway>
+                        
+                </gateway>
+                <network>
+                        OpaqueRef:a63afad0-fb4c-b4a4-3696-cbb3d88afc47
+                </network>
+        </pif>
+        <pif ref="OpaqueRef:2bc0fab5-523a-4125-609d-212391f5f6fc">
+                <VLAN_slave_of>
+                        <master>
+                                OpaqueRef:e623e1d6-cd02-be8d-820d-49d65c710297
+                        </master>
+                </VLAN_slave_of>
                 <tunnel_access_PIF_of/>
-		<management>
-			False
-		</management>
-		<bond_slave_of>
-			OpaqueRef:NULL
-		</bond_slave_of>
-		<uuid>
-			f4ba396e-a993-a592-5fbc-a1d566afb59e
-		</uuid>
-		<IP>
-			10.0.0.188
-		</IP>
-		<VLAN_master_of>
-			OpaqueRef:NULL
-		</VLAN_master_of>
-		<VLAN>
-			-1
-		</VLAN>
-		<netmask>
-			255.0.0.0
-		</netmask>
-		<other_config/>
-		<MAC>
-			00:15:17:a0:29:81
-		</MAC>
-		<ip_configuration_mode>
-			Static
-		</ip_configuration_mode>
-		<DNS>
-			
-		</DNS>
-		<device>
-			eth3
-		</device>
-		<bond_master_of/>
-		<currently_attached>
-			True
-		</currently_attached>
-		<gateway>
-			
-		</gateway>
-		<network>
-			OpaqueRef:d9189da2-d00b-61ba-8a6d-ac42cc868e32
-		</network>
-	</pif>
-	<pif ref="OpaqueRef:205d1186-2cd1-d5e6-45e4-ea1698ea6e15">
-		<VLAN_slave_of/>
+                <management>
+                        False
+                </management>
+                <bond_slave_of>
+                        OpaqueRef:NULL
+                </bond_slave_of>
+                <uuid>
+                        f4ba396e-a993-a592-5fbc-a1d566afb59e
+                </uuid>
+                <IP>
+                        10.0.0.188
+                </IP>
+                <VLAN_master_of>
+                        OpaqueRef:NULL
+                </VLAN_master_of>
+                <VLAN>
+                        -1
+                </VLAN>
+                <netmask>
+                        255.0.0.0
+                </netmask>
+                <other_config/>
+                <MAC>
+                        00:15:17:a0:29:81
+                </MAC>
+                <ip_configuration_mode>
+                        Static
+                </ip_configuration_mode>
+                <DNS>
+                        
+                </DNS>
+                <device>
+                        eth3
+                </device>
+                <bond_master_of/>
+                <currently_attached>
+                        True
+                </currently_attached>
+                <gateway>
+                        
+                </gateway>
+                <network>
+                        OpaqueRef:d9189da2-d00b-61ba-8a6d-ac42cc868e32
+                </network>
+        </pif>
+        <pif ref="OpaqueRef:205d1186-2cd1-d5e6-45e4-ea1698ea6e15">
+                <VLAN_slave_of/>
                 <tunnel_access_PIF_of/>
-		<management>
-			True
-		</management>
-		<bond_slave_of>
-			OpaqueRef:NULL
-		</bond_slave_of>
-		<uuid>
-			646ca9a1-36ad-e2f9-3ecc-1e5622c201c2
-		</uuid>
-		<IP>
-			172.18.3.188
-		</IP>
-		<VLAN_master_of>
-			OpaqueRef:NULL
-		</VLAN_master_of>
-		<VLAN>
-			-1
-		</VLAN>
-		<netmask>
-			255.255.0.0
-		</netmask>
-		<other_config/>
-		<MAC>
-			00:15:17:a0:29:80
-		</MAC>
-		<ip_configuration_mode>
-			DHCP
-		</ip_configuration_mode>
-		<DNS>
-			
-		</DNS>
-		<device>
-			eth2
-		</device>
-		<bond_master_of/>
-		<currently_attached>
-			True
-		</currently_attached>
-		<gateway>
-			
-		</gateway>
-		<network>
-			OpaqueRef:6e7c6e81-6b5e-b91f-e1f9-9e028567bdfe
-		</network>
-	</pif>
-	<pif ref="OpaqueRef:8e3e37e6-ebb9-087e-0201-f6a56bf554c3">
-		<VLAN_slave_of/>
+                <management>
+                        True
+                </management>
+                <bond_slave_of>
+                        OpaqueRef:NULL
+                </bond_slave_of>
+                <uuid>
+                        646ca9a1-36ad-e2f9-3ecc-1e5622c201c2
+                </uuid>
+                <IP>
+                        172.18.3.188
+                </IP>
+                <VLAN_master_of>
+                        OpaqueRef:NULL
+                </VLAN_master_of>
+                <VLAN>
+                        -1
+                </VLAN>
+                <netmask>
+                        255.255.0.0
+                </netmask>
+                <other_config/>
+                <MAC>
+                        00:15:17:a0:29:80
+                </MAC>
+                <ip_configuration_mode>
+                        DHCP
+                </ip_configuration_mode>
+                <DNS>
+                        
+                </DNS>
+                <device>
+                        eth2
+                </device>
+                <bond_master_of/>
+                <currently_attached>
+                        True
+                </currently_attached>
+                <gateway>
+                        
+                </gateway>
+                <network>
+                        OpaqueRef:6e7c6e81-6b5e-b91f-e1f9-9e028567bdfe
+                </network>
+        </pif>
+        <pif ref="OpaqueRef:8e3e37e6-ebb9-087e-0201-f6a56bf554c3">
+                <VLAN_slave_of/>
                 <tunnel_access_PIF_of/>
-		<management>
-			False
-		</management>
-		<bond_slave_of>
-			OpaqueRef:NULL
-		</bond_slave_of>
-		<uuid>
-			3941edd2-865b-8dd8-61f0-199f5e1fa652
-		</uuid>
-		<IP>
-			
-		</IP>
-		<VLAN_master_of>
-			OpaqueRef:e623e1d6-cd02-be8d-820d-49d65c710297
-		</VLAN_master_of>
-		<VLAN>
-			123
-		</VLAN>
-		<netmask>
-			
-		</netmask>
-		<other_config/>
-		<MAC>
-			fe:ff:ff:ff:ff:ff
-		</MAC>
-		<ip_configuration_mode>
-			None
-		</ip_configuration_mode>
-		<DNS>
-			
-		</DNS>
-		<device>
-			eth3
-		</device>
-		<bond_master_of/>
-		<currently_attached>
-			True
-		</currently_attached>
-		<gateway>
-			
-		</gateway>
-		<network>
-			OpaqueRef:240fb5f8-addc-6ea3-f921-2a42b42acd17
-		</network>
-	</pif>
-	<pif ref="OpaqueRef:69c904bb-8da9-3424-485b-8b47c2d3ef11">
-		<VLAN_slave_of>
-			<master>
-				OpaqueRef:4c0eb823-4d96-da1d-e75f-411b85badb0c
-			</master>
-		</VLAN_slave_of>
+                <management>
+                        False
+                </management>
+                <bond_slave_of>
+                        OpaqueRef:NULL
+                </bond_slave_of>
+                <uuid>
+                        3941edd2-865b-8dd8-61f0-199f5e1fa652
+                </uuid>
+                <IP>
+                        
+                </IP>
+                <VLAN_master_of>
+                        OpaqueRef:e623e1d6-cd02-be8d-820d-49d65c710297
+                </VLAN_master_of>
+                <VLAN>
+                        123
+                </VLAN>
+                <netmask>
+                        
+                </netmask>
+                <other_config/>
+                <MAC>
+                        fe:ff:ff:ff:ff:ff
+                </MAC>
+                <ip_configuration_mode>
+                        None
+                </ip_configuration_mode>
+                <DNS>
+                        
+                </DNS>
+                <device>
+                        eth3
+                </device>
+                <bond_master_of/>
+                <currently_attached>
+                        True
+                </currently_attached>
+                <gateway>
+                        
+                </gateway>
+                <network>
+                        OpaqueRef:240fb5f8-addc-6ea3-f921-2a42b42acd17
+                </network>
+        </pif>
+        <pif ref="OpaqueRef:69c904bb-8da9-3424-485b-8b47c2d3ef11">
+                <VLAN_slave_of>
+                        <master>
+                                OpaqueRef:4c0eb823-4d96-da1d-e75f-411b85badb0c
+                        </master>
+                </VLAN_slave_of>
                 <tunnel_access_PIF_of/>
-		<management>
-			False
-		</management>
-		<bond_slave_of>
-			OpaqueRef:NULL
-		</bond_slave_of>
-		<uuid>
-			6c0327a9-afa3-fc19-6798-a1bfe20095ed
-		</uuid>
-		<IP>
-			
-		</IP>
-		<VLAN_master_of>
-			OpaqueRef:NULL
-		</VLAN_master_of>
-		<VLAN>
-			-1
-		</VLAN>
-		<netmask>
-			
-		</netmask>
-		<other_config/>
-		<MAC>
-			00:22:19:22:4b:af
-		</MAC>
-		<ip_configuration_mode>
-			None
-		</ip_configuration_mode>
-		<DNS>
-			
-		</DNS>
-		<device>
-			bond0
-		</device>
-		<bond_master_of>
-			<slave>
-				OpaqueRef:86d81bcf-0d25-90b2-cb11-af2007bd586e
-			</slave>
-		</bond_master_of>
-		<currently_attached>
-			True
-		</currently_attached>
-		<gateway>
-			
-		</gateway>
-		<network>
-			OpaqueRef:ec1e5037-60ea-97e5-54b8-39bdb43c071a
-		</network>
-	</pif>
-	<bond ref="OpaqueRef:86d81bcf-0d25-90b2-cb11-af2007bd586e">
-		<master>
-			OpaqueRef:69c904bb-8da9-3424-485b-8b47c2d3ef11
-		</master>
-		<uuid>
-			dad825f1-6d81-386e-849c-5589281e53e1
-		</uuid>
-		<slaves>
-			<slave>
-				OpaqueRef:e0955887-571f-17fc-a971-61c1ec7d81b6
-			</slave>
-			<slave>
-				OpaqueRef:2956e6c8-487e-981c-85ff-c84796418768
-			</slave>
-		</slaves>
-	</bond>
-	<vlan ref="OpaqueRef:4c0eb823-4d96-da1d-e75f-411b85badb0c">
-		<tagged_PIF>
-			OpaqueRef:69c904bb-8da9-3424-485b-8b47c2d3ef11
-		</tagged_PIF>
-		<uuid>
-			841814da-d0d2-9da4-0b2e-b6143480bbfb
-		</uuid>
-		<untagged_PIF>
-			OpaqueRef:d2d1e51e-4da9-3163-8f57-bb683429335e
-		</untagged_PIF>
-	</vlan>
-	<vlan ref="OpaqueRef:e623e1d6-cd02-be8d-820d-49d65c710297">
-		<tagged_PIF>
-			OpaqueRef:2bc0fab5-523a-4125-609d-212391f5f6fc
-		</tagged_PIF>
-		<uuid>
-			399279a2-5ccd-5368-9af3-8622a1f1ac82
-		</uuid>
-		<untagged_PIF>
-			OpaqueRef:8e3e37e6-ebb9-087e-0201-f6a56bf554c3
-		</untagged_PIF>
-	</vlan>
-	<network ref="OpaqueRef:a63afad0-fb4c-b4a4-3696-cbb3d88afc47">
-		<PIFs>
-			<PIF>
-				OpaqueRef:d2d1e51e-4da9-3163-8f57-bb683429335e
-			</PIF>
-		</PIFs>
-		<bridge>
-			xapi2
-		</bridge>
-		<other_config/>
-		<uuid>
-			99be2da4-6c33-6f8e-49ea-3bc592fe3c85
-		</uuid>
-	</network>
-	<network ref="OpaqueRef:d9189da2-d00b-61ba-8a6d-ac42cc868e32">
-		<PIFs>
-			<PIF>
-				OpaqueRef:2bc0fab5-523a-4125-609d-212391f5f6fc
-			</PIF>
-		</PIFs>
-		<bridge>
-			xenbr3
-		</bridge>
-		<other_config/>
-		<uuid>
-			2902ae1b-8013-897a-b697-0b200ea3aaa5
-		</uuid>
-	</network>
-	<network ref="OpaqueRef:ec1e5037-60ea-97e5-54b8-39bdb43c071a">
-		<PIFs>
-			<PIF>
-				OpaqueRef:69c904bb-8da9-3424-485b-8b47c2d3ef11
-			</PIF>
-		</PIFs>
-		<bridge>
-			xapi1
-		</bridge>
-		<other_config/>
-		<uuid>
-			45cbbb43-113d-a712-3231-c6463f253cef
-		</uuid>
-	</network>
-	<network ref="OpaqueRef:92b41bf6-aa21-45d3-1c86-c87a5fa98f7d">
-		<PIFs>
-			<PIF>
-				OpaqueRef:2956e6c8-487e-981c-85ff-c84796418768
-			</PIF>
-		</PIFs>
-		<bridge>
-			xenbr1
-		</bridge>
-		<other_config/>
-		<uuid>
-			99f8771a-645a-26a3-e06c-30a401f1d009
-		</uuid>
-	</network>
-	<network ref="OpaqueRef:6e7c6e81-6b5e-b91f-e1f9-9e028567bdfe">
-		<PIFs>
-			<PIF>
-				OpaqueRef:205d1186-2cd1-d5e6-45e4-ea1698ea6e15
-			</PIF>
-		</PIFs>
-		<bridge>
-			xenbr2
-		</bridge>
-		<other_config/>
-		<uuid>
-			d08c8749-0c8f-9e8d-ce25-fd364661ee99
-		</uuid>
-	</network>
-	<network ref="OpaqueRef:83e4a934-aeb5-e6f0-a743-d1c7ef7364c5">
-		<PIFs>
-			<PIF>
-				OpaqueRef:e0955887-571f-17fc-a971-61c1ec7d81b6
-			</PIF>
-		</PIFs>
-		<bridge>
-			xenbr0
-		</bridge>
-		<other_config>
-			<vswitch-disable-in-band>
-				true
-			</vswitch-disable-in-band>
-		</other_config>
-		<uuid>
-			c9eecb03-560d-61de-b6a8-56dfc766f67e
-		</uuid>
-	</network>
-	<network ref="OpaqueRef:bf51b4d3-7bdc-ea55-ba21-539b150b0531">
-		<PIFs>
-			<PIF>
-				OpaqueRef:eea8da94-a5e6-18fc-34a7-5e9b5a235806
-			</PIF>
-		</PIFs>
-		<bridge>
-			xenbr4
-		</bridge>
-		<other_config/>
-		<uuid>
-			d2c14c89-29cc-51d4-7664-633eff02b2ad
-		</uuid>
-	</network>
-	<network ref="OpaqueRef:0b7354a4-8f4b-aa08-2f16-a22c117e4211">
-		<PIFs/>
-		<bridge>
-			xapi0
-		</bridge>
-		<other_config/>
-		<uuid>
-			dc0f0632-c2aa-1b78-2fea-0d3a23c51740
-		</uuid>
-	</network>
-	<network ref="OpaqueRef:240fb5f8-addc-6ea3-f921-2a42b42acd17">
-		<PIFs>
-			<PIF>
-				OpaqueRef:8e3e37e6-ebb9-087e-0201-f6a56bf554c3
-			</PIF>
-		</PIFs>
-		<bridge>
-			xapi3
-		</bridge>
-		<other_config/>
-		<uuid>
-			db7bdc03-074d-42ae-fc73-9b06de1d57f6
-		</uuid>
-	</network>
+                <management>
+                        False
+                </management>
+                <bond_slave_of>
+                        OpaqueRef:NULL
+                </bond_slave_of>
+                <uuid>
+                        6c0327a9-afa3-fc19-6798-a1bfe20095ed
+                </uuid>
+                <IP>
+                        
+                </IP>
+                <VLAN_master_of>
+                        OpaqueRef:NULL
+                </VLAN_master_of>
+                <VLAN>
+                        -1
+                </VLAN>
+                <netmask>
+                        
+                </netmask>
+                <other_config/>
+                <MAC>
+                        00:22:19:22:4b:af
+                </MAC>
+                <ip_configuration_mode>
+                        None
+                </ip_configuration_mode>
+                <DNS>
+                        
+                </DNS>
+                <device>
+                        bond0
+                </device>
+                <bond_master_of>
+                        <slave>
+                                OpaqueRef:86d81bcf-0d25-90b2-cb11-af2007bd586e
+                        </slave>
+                </bond_master_of>
+                <currently_attached>
+                        True
+                </currently_attached>
+                <gateway>
+                        
+                </gateway>
+                <network>
+                        OpaqueRef:ec1e5037-60ea-97e5-54b8-39bdb43c071a
+                </network>
+        </pif>
+        <bond ref="OpaqueRef:86d81bcf-0d25-90b2-cb11-af2007bd586e">
+                <master>
+                        OpaqueRef:69c904bb-8da9-3424-485b-8b47c2d3ef11
+                </master>
+                <uuid>
+                        dad825f1-6d81-386e-849c-5589281e53e1
+                </uuid>
+                <slaves>
+                        <slave>
+                                OpaqueRef:e0955887-571f-17fc-a971-61c1ec7d81b6
+                        </slave>
+                        <slave>
+                                OpaqueRef:2956e6c8-487e-981c-85ff-c84796418768
+                        </slave>
+                </slaves>
+        </bond>
+        <vlan ref="OpaqueRef:4c0eb823-4d96-da1d-e75f-411b85badb0c">
+                <tagged_PIF>
+                        OpaqueRef:69c904bb-8da9-3424-485b-8b47c2d3ef11
+                </tagged_PIF>
+                <uuid>
+                        841814da-d0d2-9da4-0b2e-b6143480bbfb
+                </uuid>
+                <untagged_PIF>
+                        OpaqueRef:d2d1e51e-4da9-3163-8f57-bb683429335e
+                </untagged_PIF>
+        </vlan>
+        <vlan ref="OpaqueRef:e623e1d6-cd02-be8d-820d-49d65c710297">
+                <tagged_PIF>
+                        OpaqueRef:2bc0fab5-523a-4125-609d-212391f5f6fc
+                </tagged_PIF>
+                <uuid>
+                        399279a2-5ccd-5368-9af3-8622a1f1ac82
+                </uuid>
+                <untagged_PIF>
+                        OpaqueRef:8e3e37e6-ebb9-087e-0201-f6a56bf554c3
+                </untagged_PIF>
+        </vlan>
+        <network ref="OpaqueRef:a63afad0-fb4c-b4a4-3696-cbb3d88afc47">
+                <PIFs>
+                        <PIF>
+                                OpaqueRef:d2d1e51e-4da9-3163-8f57-bb683429335e
+                        </PIF>
+                </PIFs>
+                <bridge>
+                        xapi2
+                </bridge>
+                <other_config/>
+                <uuid>
+                        99be2da4-6c33-6f8e-49ea-3bc592fe3c85
+                </uuid>
+        </network>
+        <network ref="OpaqueRef:d9189da2-d00b-61ba-8a6d-ac42cc868e32">
+                <PIFs>
+                        <PIF>
+                                OpaqueRef:2bc0fab5-523a-4125-609d-212391f5f6fc
+                        </PIF>
+                </PIFs>
+                <bridge>
+                        xenbr3
+                </bridge>
+                <other_config/>
+                <uuid>
+                        2902ae1b-8013-897a-b697-0b200ea3aaa5
+                </uuid>
+        </network>
+        <network ref="OpaqueRef:ec1e5037-60ea-97e5-54b8-39bdb43c071a">
+                <PIFs>
+                        <PIF>
+                                OpaqueRef:69c904bb-8da9-3424-485b-8b47c2d3ef11
+                        </PIF>
+                </PIFs>
+                <bridge>
+                        xapi1
+                </bridge>
+                <other_config/>
+                <uuid>
+                        45cbbb43-113d-a712-3231-c6463f253cef
+                </uuid>
+        </network>
+        <network ref="OpaqueRef:92b41bf6-aa21-45d3-1c86-c87a5fa98f7d">
+                <PIFs>
+                        <PIF>
+                                OpaqueRef:2956e6c8-487e-981c-85ff-c84796418768
+                        </PIF>
+                </PIFs>
+                <bridge>
+                        xenbr1
+                </bridge>
+                <other_config/>
+                <uuid>
+                        99f8771a-645a-26a3-e06c-30a401f1d009
+                </uuid>
+        </network>
+        <network ref="OpaqueRef:6e7c6e81-6b5e-b91f-e1f9-9e028567bdfe">
+                <PIFs>
+                        <PIF>
+                                OpaqueRef:205d1186-2cd1-d5e6-45e4-ea1698ea6e15
+                        </PIF>
+                </PIFs>
+                <bridge>
+                        xenbr2
+                </bridge>
+                <other_config/>
+                <uuid>
+                        d08c8749-0c8f-9e8d-ce25-fd364661ee99
+                </uuid>
+        </network>
+        <network ref="OpaqueRef:83e4a934-aeb5-e6f0-a743-d1c7ef7364c5">
+                <PIFs>
+                        <PIF>
+                                OpaqueRef:e0955887-571f-17fc-a971-61c1ec7d81b6
+                        </PIF>
+                </PIFs>
+                <bridge>
+                        xenbr0
+                </bridge>
+                <other_config>
+                        <vswitch-disable-in-band>
+                                true
+                        </vswitch-disable-in-band>
+                </other_config>
+                <uuid>
+                        c9eecb03-560d-61de-b6a8-56dfc766f67e
+                </uuid>
+        </network>
+        <network ref="OpaqueRef:bf51b4d3-7bdc-ea55-ba21-539b150b0531">
+                <PIFs>
+                        <PIF>
+                                OpaqueRef:eea8da94-a5e6-18fc-34a7-5e9b5a235806
+                        </PIF>
+                </PIFs>
+                <bridge>
+                        xenbr4
+                </bridge>
+                <other_config/>
+                <uuid>
+                        d2c14c89-29cc-51d4-7664-633eff02b2ad
+                </uuid>
+        </network>
+        <network ref="OpaqueRef:0b7354a4-8f4b-aa08-2f16-a22c117e4211">
+                <PIFs/>
+                <bridge>
+                        xapi0
+                </bridge>
+                <other_config/>
+                <uuid>
+                        dc0f0632-c2aa-1b78-2fea-0d3a23c51740
+                </uuid>
+        </network>
+        <network ref="OpaqueRef:240fb5f8-addc-6ea3-f921-2a42b42acd17">
+                <PIFs>
+                        <PIF>
+                                OpaqueRef:8e3e37e6-ebb9-087e-0201-f6a56bf554c3
+                        </PIF>
+                </PIFs>
+                <bridge>
+                        xapi3
+                </bridge>
+                <other_config/>
+                <uuid>
+                        db7bdc03-074d-42ae-fc73-9b06de1d57f6
+                </uuid>
+        </network>
         <pool ref="OpaqueRef:a765d06c-fc82-cc67-8f6c-fd8db45f6a84">
                 <other_config>
                         <vswitch-controller-fail-mode>

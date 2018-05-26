@@ -3141,24 +3141,24 @@ qos_unixctl_show_queue(unsigned int queue_id,
     }
 
     SMAP_FOR_EACH (node, details) {
-        ds_put_format(ds, "\t%s: %s\n", node->key, node->value);
+        ds_put_format(ds, "  %s: %s\n", node->key, node->value);
     }
 
     error = netdev_get_queue_stats(iface->netdev, queue_id, &stats);
     if (!error) {
         if (stats.tx_packets != UINT64_MAX) {
-            ds_put_format(ds, "\ttx_packets: %"PRIu64"\n", stats.tx_packets);
+            ds_put_format(ds, "  tx_packets: %"PRIu64"\n", stats.tx_packets);
         }
 
         if (stats.tx_bytes != UINT64_MAX) {
-            ds_put_format(ds, "\ttx_bytes: %"PRIu64"\n", stats.tx_bytes);
+            ds_put_format(ds, "  tx_bytes: %"PRIu64"\n", stats.tx_bytes);
         }
 
         if (stats.tx_errors != UINT64_MAX) {
-            ds_put_format(ds, "\ttx_errors: %"PRIu64"\n", stats.tx_errors);
+            ds_put_format(ds, "  tx_errors: %"PRIu64"\n", stats.tx_errors);
         }
     } else {
-        ds_put_format(ds, "\tFailed to get statistics for queue %u: %s",
+        ds_put_format(ds, "  Failed to get statistics for queue %u: %s",
                       queue_id, ovs_strerror(error));
     }
 }

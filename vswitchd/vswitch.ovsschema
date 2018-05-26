@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "7.16.0",
- "cksum": "2403910601 23776",
+ "version": "7.16.1",
+ "cksum": "1452282319 23860",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -106,7 +106,7 @@
                             "OpenFlow14",
                             "OpenFlow15",
                             "OpenFlow16"]]},
-	   "min": 0, "max": "unlimited"}},
+           "min": 0, "max": "unlimited"}},
        "fail_mode": {
          "type": {"key": {"type": "string",
                           "enum": ["set", ["standalone", "secure"]]},
@@ -363,16 +363,16 @@
    "Flow_Table": {
      "columns": {
        "name": {
-	 "type": {"key": "string", "min": 0, "max": 1}},
+         "type": {"key": "string", "min": 0, "max": 1}},
        "flow_limit": {
-	 "type": {"key": {"type": "integer", "minInteger": 0},
-		  "min": 0, "max": 1}},
+         "type": {"key": {"type": "integer", "minInteger": 0},
+                  "min": 0, "max": 1}},
        "overflow_policy": {
-	 "type": {"key": {"type": "string",
-			  "enum": ["set", ["refuse", "evict"]]},
-		  "min": 0, "max": 1}},
+         "type": {"key": {"type": "string",
+                          "enum": ["set", ["refuse", "evict"]]},
+                  "min": 0, "max": 1}},
        "groups": {
-	 "type": {"key": "string", "min": 0, "max": "unlimited"}},
+         "type": {"key": "string", "min": 0, "max": "unlimited"}},
        "prefixes": {
          "type": {"key": "string", "min": 0, "max": 3}},
        "external_ids": {

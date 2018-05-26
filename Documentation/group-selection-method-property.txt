@@ -56,7 +56,7 @@ NTR_VENDOR_ID = 0x0000154d
 The following group property experimenter type defined by this extension.
 
 enum ntr_group_mod_subtype {
-	NTRT_SELECTION_METHOD = 1,
+        NTRT_SELECTION_METHOD = 1,
 };
 
 

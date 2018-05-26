@@ -143,14 +143,14 @@
     <dt><dfn>Exact match</dfn>, e.g. <code>nw_src=10.1.2.3</code></dt>
     <dd>
       <p>
-	Only a particular value of the field is matched; for example, only one
-	particular source IP address.  Exact matches are written as
-	<code><var>field</var>=<var>value</var></code>.  The forms accepted for
-	<var>value</var> depend on the field.
+        Only a particular value of the field is matched; for example, only one
+        particular source IP address.  Exact matches are written as
+        <code><var>field</var>=<var>value</var></code>.  The forms accepted for
+        <var>value</var> depend on the field.
       </p>
 
       <p>
-	All fields support exact matches.
+        All fields support exact matches.
       </p>
     </dd>
 
@@ -159,14 +159,14 @@
     </dt>
     <dd>
       <p>
-	Specific bits in the field must have specified values; for example,
-	only source IP addresses in a particular subnet.  Bitwise matches are
-	written as
-	<code><var>field</var>=<var>value</var>/<var>mask</var></code>, where
-	<var>value</var> and <var>mask</var> take one of the forms accepted for
-	an exact match on <var>field</var>.  Some fields accept other forms for
-	bitwise matches; for example, <code>nw_src=10.1.0.0/255.255.0.0</code>
-	may also be written <code>nw_src=10.1.0.0/16</code>.
+        Specific bits in the field must have specified values; for example,
+        only source IP addresses in a particular subnet.  Bitwise matches are
+        written as
+        <code><var>field</var>=<var>value</var>/<var>mask</var></code>, where
+        <var>value</var> and <var>mask</var> take one of the forms accepted for
+        an exact match on <var>field</var>.  Some fields accept other forms for
+        bitwise matches; for example, <code>nw_src=10.1.0.0/255.255.0.0</code>
+        may also be written <code>nw_src=10.1.0.0/16</code>.
       </p>
 
       <p>
@@ -186,17 +186,17 @@
     <dt><dfn>Wildcard</dfn>, e.g. ``any <code>nw_src</code>''</dt>
     <dd>
       <p>
-	The value of the field is not constrained.  Wildcarded fields may be
-	written as <code><var>field</var>=*</code>, although it is unusual to
-	mention them at all.  (When specifying a wildcard explicitly in a
-	command invocation, be sure to using quoting to protect against shell
-	expansion.)
+        The value of the field is not constrained.  Wildcarded fields may be
+        written as <code><var>field</var>=*</code>, although it is unusual to
+        mention them at all.  (When specifying a wildcard explicitly in a
+        command invocation, be sure to using quoting to protect against shell
+        expansion.)
       </p>
 
       <p>
-	There is a tiny difference between wildcarding a field and not
-	specifying any match on a field: wildcarding a field requires
-	satisfying the field's prerequisites.
+        There is a tiny difference between wildcarding a field and not
+        specifying any match on a field: wildcarding a field requires
+        satisfying the field's prerequisites.
       </p>
     </dd>
   </dl>
@@ -211,13 +211,13 @@
     8080}''</dt>
     <dd>
       <p>
-	The value of a field is one of a specified set of values; for
-	example, the TCP destination port is 80, 443, or 8080.
+        The value of a field is one of a specified set of values; for
+        example, the TCP destination port is 80, 443, or 8080.
       </p>
 
       <p>
-	For matches used in flows (see <cite>Flows</cite>, below), multiple
-	flows can simulate set matches.
+        For matches used in flows (see <cite>Flows</cite>, below), multiple
+        flows can simulate set matches.
       </p>
     </dd>
 
@@ -225,14 +225,14 @@
     1999''</dt>
     <dd>
       <p>
-	The value of the field must lie within a numerical range, for
-	example, TCP destination ports between 1000 and 1999.
+        The value of the field must lie within a numerical range, for
+        example, TCP destination ports between 1000 and 1999.
       </p>
 
       <p>
-	Range matches can be expressed as a collection of bitwise matches.  For
-	example, suppose that the goal is to match TCP source ports 1000 to
-	1999, inclusive.  The binary representations of 1000 and 1999 are:
+        Range matches can be expressed as a collection of bitwise matches.  For
+        example, suppose that the goal is to match TCP source ports 1000 to
+        1999, inclusive.  The binary representations of 1000 and 1999 are:
       </p>
 
       <pre fixed="yes">
@@ -241,8 +241,8 @@
       </pre>
 
       <p>
-	The following series of bitwise matches will match 1000 and
-	1999 and all the values in between:
+        The following series of bitwise matches will match 1000 and
+        1999 and all the values in between:
       </p>
 
       <pre fixed="yes">
@@ -256,7 +256,7 @@
       </pre>
 
       <p>
-	which can be written as the following matches:
+        which can be written as the following matches:
       </p>
 
       <pre>
@@ -273,8 +273,8 @@ tcp,tp_src=0x07c0/0xfff0
     <dt><dfn>Inequality match</dfn>, e.g. ``<code>tcp_dst</code> ≠ 80''</dt>
     <dd>
       <p>
-	The value of the field differs from a specified value, for
-	example, all TCP destination ports except 80.
+        The value of the field differs from a specified value, for
+        example, all TCP destination ports except 80.
       </p>
 
       <p>
@@ -1328,28 +1328,28 @@ tcp,tp_src=0x07c0/0xfff0
     <dl>
       <dt>``Port-based'' tunnels</dt>
       <dd>
-	<p>
-	  In this model, an OpenFlow port represents one tunnel: it matches a
-	  particular type of tunnel traffic between two IP endpoints, with a
-	  particular tunnel key (if keys are in use).  In this situation, <ref
-	  field="in_port"/> suffices to distinguish one tunnel from another, so
-	  the tunnel header fields have little importance for OpenFlow
-	  processing.  (They are still populated and may be used if it is
-	  convenient.)  The tunnel header fields play no role in sending
-	  packets out such an OpenFlow port, either, because the OpenFlow port
-	  itself fully specifies the tunnel headers.
-	</p>
+        <p>
+          In this model, an OpenFlow port represents one tunnel: it matches a
+          particular type of tunnel traffic between two IP endpoints, with a
+          particular tunnel key (if keys are in use).  In this situation, <ref
+          field="in_port"/> suffices to distinguish one tunnel from another, so
+          the tunnel header fields have little importance for OpenFlow
+          processing.  (They are still populated and may be used if it is
+          convenient.)  The tunnel header fields play no role in sending
+          packets out such an OpenFlow port, either, because the OpenFlow port
+          itself fully specifies the tunnel headers.
+        </p>
 
-	<p>
-	  The following Open vSwitch commands create a bridge
-	  <code>br-int</code>, add port <code>tap0</code> to the bridge as
-	  OpenFlow port 1, establish a port-based GRE tunnel between the local
-	  host and remote IP 192.168.1.1 using GRE key 5001 as OpenFlow port 2,
-	  and arranges to forward all traffic from <code>tap0</code> to the
-	  tunnel and vice versa:
-	</p>
+        <p>
+          The following Open vSwitch commands create a bridge
+          <code>br-int</code>, add port <code>tap0</code> to the bridge as
+          OpenFlow port 1, establish a port-based GRE tunnel between the local
+          host and remote IP 192.168.1.1 using GRE key 5001 as OpenFlow port 2,
+          and arranges to forward all traffic from <code>tap0</code> to the
+          tunnel and vice versa:
+        </p>
 
-	<pre>
+        <pre>
 ovs-vsctl add-br br-int
 ovs-vsctl add-port br-int tap0 -- set interface tap0 ofport_request=1
 ovs-vsctl add-port br-int gre0 --
@@ -1357,32 +1357,32 @@ ovs-vsctl add-port br-int gre0 --
                        options:remote_ip=192.168.1.1 options:key=5001
 ovs-ofctl add-flow br-int in_port=1,actions=2
 ovs-ofctl add-flow br-int in_port=2,actions=1
-	</pre>
+        </pre>
       </dd>
 
       <dt>``Flow-based'' tunnels</dt>
       <dd>
-	<p>
-	  In this model, one OpenFlow port represents all possible tunnels of a
-	  given type with an endpoint on the current host, for example, all GRE
-	  tunnels.  In this situation, <ref field="in_port"/> only indicates
-	  that traffic was received on the particular kind of tunnel.  This is
-	  where the tunnel header fields are most important: they allow the
-	  OpenFlow tables to discriminate among tunnels based on their IP
-	  endpoints or keys.  Tunnel header fields also determine the IP
-	  endpoints and keys of packets sent out such a tunnel port.
-	</p>
+        <p>
+          In this model, one OpenFlow port represents all possible tunnels of a
+          given type with an endpoint on the current host, for example, all GRE
+          tunnels.  In this situation, <ref field="in_port"/> only indicates
+          that traffic was received on the particular kind of tunnel.  This is
+          where the tunnel header fields are most important: they allow the
+          OpenFlow tables to discriminate among tunnels based on their IP
+          endpoints or keys.  Tunnel header fields also determine the IP
+          endpoints and keys of packets sent out such a tunnel port.
+        </p>
 
-	<p>
-	  The following Open vSwitch commands create a bridge
-	  <code>br-int</code>, add port <code>tap0</code> to the
-	  bridge as OpenFlow port 1, establish a flow-based GRE tunnel
-	  port 3, and arranges to forward all traffic from
-	  <code>tap0</code> to remote IP 192.168.1.1 over a GRE tunnel
-	  with key 5001 and vice versa:
-	</p>
+        <p>
+          The following Open vSwitch commands create a bridge
+          <code>br-int</code>, add port <code>tap0</code> to the
+          bridge as OpenFlow port 1, establish a flow-based GRE tunnel
+          port 3, and arranges to forward all traffic from
+          <code>tap0</code> to remote IP 192.168.1.1 over a GRE tunnel
+          with key 5001 and vice versa:
+        </p>
 
-	<pre>
+        <pre>
 ovs-vsctl add-br br-int
 ovs-vsctl add-port br-int tap0 -- set interface tap0 ofport_request=1
 ovs-vsctl add-port br-int allgre --
@@ -1391,42 +1391,42 @@ ovs-vsctl add-port br-int allgre --
 ovs-ofctl add-flow br-int \
     'in_port=1 actions=set_tunnel:5001,set_field:192.168.1.1->tun_dst,3'
 ovs-ofctl add-flow br-int 'in_port=3,tun_src=192.168.1.1,tun_id=5001 actions=1'
-	</pre>
+        </pre>
       </dd>
 
       <dt>Mixed models.</dt>
       <dd>
-	<p>
-	  One may define both flow-based and port-based tunnels at the
-	  same time.  For example, it is valid and possibly useful to
-	  create and configure both <code>gre0</code> and
-	  <code>allgre</code> tunnel ports described above.
-	</p>
+        <p>
+          One may define both flow-based and port-based tunnels at the
+          same time.  For example, it is valid and possibly useful to
+          create and configure both <code>gre0</code> and
+          <code>allgre</code> tunnel ports described above.
+        </p>
 
-	<p>
-	  Traffic is attributed on ingress to the most specific
-	  matching tunnel.  For example, <code>gre0</code> is more
-	  specific than <code>allgre</code>.  Therefore, if both
-	  exist, then <code>gre0</code> will be the ingress port for any
-	  GRE traffic received from 192.168.1.1 with key 5001.
-	</p>
+        <p>
+          Traffic is attributed on ingress to the most specific
+          matching tunnel.  For example, <code>gre0</code> is more
+          specific than <code>allgre</code>.  Therefore, if both
+          exist, then <code>gre0</code> will be the ingress port for any
+          GRE traffic received from 192.168.1.1 with key 5001.
+        </p>
 
-	<p>
-	  On egress, traffic may be directed to any appropriate tunnel
-	  port.  If both <code>gre0</code> and <code>allgre</code> are
-	  configured as already described, then the actions
-	  <code>2</code> and
-	  <code>set_tunnel:5001,set_field:192.168.1.1->tun_dst,3</code>
-	  send the same tunnel traffic.
-	</p>
+        <p>
+          On egress, traffic may be directed to any appropriate tunnel
+          port.  If both <code>gre0</code> and <code>allgre</code> are
+          configured as already described, then the actions
+          <code>2</code> and
+          <code>set_tunnel:5001,set_field:192.168.1.1->tun_dst,3</code>
+          send the same tunnel traffic.
+        </p>
       </dd>
 
       <dt>Intermediate models.</dt>
       <dd>
-	Ports may be configured as partially flow-based.  For example,
-	one may define an OpenFlow port that represents tunnels
-	between a pair of endpoints but leaves the flow table to
-	discriminate on the flow key.
+        Ports may be configured as partially flow-based.  For example,
+        one may define an OpenFlow port that represents tunnels
+        between a pair of endpoints but leaves the flow table to
+        discriminate on the flow key.
       </dd>
     </dl>
 
@@ -1446,155 +1446,155 @@ ovs-ofctl add-flow br-int 'in_port=3,tun_src=192.168.1.1,tun_id=5001 actions=1'
 
     <field id="MFF_TUN_ID" title="Tunnel ID">
       <p>
-	Many kinds of tunnels support a tunnel ID:
+        Many kinds of tunnels support a tunnel ID:
       </p>
 
       <ul>
-	<li>
+        <li>
           VXLAN and Geneve have a 24-bit virtual network identifier (VNI).
         </li>
-	<li>LISP has a 24-bit instance ID.</li>
-	<li>GRE has an optional 32-bit key.</li>
-	<li>STT has a 64-bit key.</li>
+        <li>LISP has a 24-bit instance ID.</li>
+        <li>GRE has an optional 32-bit key.</li>
+        <li>STT has a 64-bit key.</li>
     <li>ERSPAN has a 10-bit key (Session ID).</li>
       </ul>
 
       <p>
-	When a packet is received from a tunnel, this field holds the
-	tunnel ID in its least significant bits, zero-extended to fit.
-	This field is zero if the tunnel does not support an ID, or if
-	no ID is in use for a tunnel type that has an optional ID, or
-	if an ID of zero received, or if the packet was not received
-	over a tunnel.
+        When a packet is received from a tunnel, this field holds the
+        tunnel ID in its least significant bits, zero-extended to fit.
+        This field is zero if the tunnel does not support an ID, or if
+        no ID is in use for a tunnel type that has an optional ID, or
+        if an ID of zero received, or if the packet was not received
+        over a tunnel.
       </p>
 
       <p>
-	When a packet is output to a tunnel port, the tunnel
-	configuration determines whether the tunnel ID is taken from
-	this field or bound to a fixed value.  See the earlier
-	description of ``port-based'' and ``flow-based'' tunnels for
-	more information.
+        When a packet is output to a tunnel port, the tunnel
+        configuration determines whether the tunnel ID is taken from
+        this field or bound to a fixed value.  See the earlier
+        description of ``port-based'' and ``flow-based'' tunnels for
+        more information.
       </p>
 
       <p>
-	The following diagram shows the origin of this field in a
-	typical keyed GRE tunnel:
+        The following diagram shows the origin of this field in a
+        typical keyed GRE tunnel:
       </p>
 
       <diagram>
-	<header name="Ethernet">
-	  <bits name="dst" above="48" width="0.4"/>
-	  <bits name="src" above="48" width="0.4"/>
-	  <bits name="type" above="16" below="0x800" width="0.4"/>
-	</header>
-	<header name="IPv4">
-	  <bits name="..." width="0.4"/>
-	  <bits name="proto" above="8" below="47" width="0.4"/>
-	  <bits name="src" above="32" width="0.4"/>
-	  <bits name="dst" above="32" width="0.4"/>
-	</header>
-	<header name="GRE">
-	  <bits name="..." above="16" width="0.4"/>
-	  <bits name="type" above="16" below="0x6558" width="0.4"/>
-	  <bits name="key" above="32" width=".4" fill="yes"/>
-	</header>
-	<header name="Ethernet">
-	  <bits name="dst" above="48" width="0.4"/>
-	  <bits name="src" above="48" width="0.4"/>
-	  <bits name="type" above="16" width="0.4"/>
-	</header>
-	<dots/>
+        <header name="Ethernet">
+          <bits name="dst" above="48" width="0.4"/>
+          <bits name="src" above="48" width="0.4"/>
+          <bits name="type" above="16" below="0x800" width="0.4"/>
+        </header>
+        <header name="IPv4">
+          <bits name="..." width="0.4"/>
+          <bits name="proto" above="8" below="47" width="0.4"/>
+          <bits name="src" above="32" width="0.4"/>
+          <bits name="dst" above="32" width="0.4"/>
+        </header>
+        <header name="GRE">
+          <bits name="..." above="16" width="0.4"/>
+          <bits name="type" above="16" below="0x6558" width="0.4"/>
+          <bits name="key" above="32" width=".4" fill="yes"/>
+        </header>
+        <header name="Ethernet">
+          <bits name="dst" above="48" width="0.4"/>
+          <bits name="src" above="48" width="0.4"/>
+          <bits name="type" above="16" width="0.4"/>
+        </header>
+        <dots/>
       </diagram>
     </field>
 
     <field id="MFF_TUN_SRC" title="Tunnel IPv4 Source">
       <p>
-	When a packet is received from a tunnel, this field is the
-	source address in the outer IP header of the tunneled packet.
-	This field is zero if the packet was not received over a
-	tunnel.
+        When a packet is received from a tunnel, this field is the
+        source address in the outer IP header of the tunneled packet.
+        This field is zero if the packet was not received over a
+        tunnel.
       </p>
 
       <p>
-	When a packet is output to a flow-based tunnel port, this
-	field influences the IPv4 source address used to send the
-	packet.  If it is zero, then the kernel chooses an appropriate
-	IP address based using the routing table.
+        When a packet is output to a flow-based tunnel port, this
+        field influences the IPv4 source address used to send the
+        packet.  If it is zero, then the kernel chooses an appropriate
+        IP address based using the routing table.
       </p>
 
       <p>
-	The following diagram shows the origin of this field in a
-	typical keyed GRE tunnel:
+        The following diagram shows the origin of this field in a
+        typical keyed GRE tunnel:
       </p>
 
       <diagram>
-	<header name="Ethernet">
-	  <bits name="dst" above="48" width="0.4"/>
-	  <bits name="src" above="48" width="0.4"/>
-	  <bits name="type" above="16" below="0x800" width="0.4"/>
-	</header>
-	<header name="IPv4">
-	  <bits name="..." width="0.4"/>
-	  <bits name="proto" above="8" below="47" width="0.4"/>
-	  <bits name="src" above="32" width="0.4" fill="yes"/>
-	  <bits name="dst" above="32" width="0.4"/>
-	</header>
-	<header name="GRE">
-	  <bits name="..." above="16" width="0.4"/>
-	  <bits name="type" above="16" below="0x6558" width="0.4"/>
-	  <bits name="key" above="32" width=".4"/>
-	</header>
-	<header name="Ethernet">
-	  <bits name="dst" above="48" width="0.4"/>
-	  <bits name="src" above="48" width="0.4"/>
-	  <bits name="type" above="16" width="0.4"/>
-	</header>
-	<dots/>
+        <header name="Ethernet">
+          <bits name="dst" above="48" width="0.4"/>
+          <bits name="src" above="48" width="0.4"/>
+          <bits name="type" above="16" below="0x800" width="0.4"/>
+        </header>
+        <header name="IPv4">
+          <bits name="..." width="0.4"/>
+          <bits name="proto" above="8" below="47" width="0.4"/>
+          <bits name="src" above="32" width="0.4" fill="yes"/>
+          <bits name="dst" above="32" width="0.4"/>
+        </header>
+        <header name="GRE">
+          <bits name="..." above="16" width="0.4"/>
+          <bits name="type" above="16" below="0x6558" width="0.4"/>
+          <bits name="key" above="32" width=".4"/>
+        </header>
+        <header name="Ethernet">
+          <bits name="dst" above="48" width="0.4"/>
+          <bits name="src" above="48" width="0.4"/>
+          <bits name="type" above="16" width="0.4"/>
+        </header>
+        <dots/>
       </diagram>
     </field>
 
     <field id="MFF_TUN_DST" title="Tunnel IPv4 Destination">
       <p>
-	When a packet is received from a tunnel, this field is the
-	destination address in the outer IP header of the tunneled
-	packet.  This field is zero if the packet was not received
-	over a tunnel.
+        When a packet is received from a tunnel, this field is the
+        destination address in the outer IP header of the tunneled
+        packet.  This field is zero if the packet was not received
+        over a tunnel.
       </p>
 
       <p>
-	When a packet is output to a flow-based tunnel port, this
-	field specifies the destination to which the tunnel packet is
-	sent.
+        When a packet is output to a flow-based tunnel port, this
+        field specifies the destination to which the tunnel packet is
+        sent.
       </p>
 
       <p>
-	The following diagram shows the origin of this field in a
-	typical keyed GRE tunnel:
+        The following diagram shows the origin of this field in a
+        typical keyed GRE tunnel:
       </p>
 
       <diagram>
-	<header name="Ethernet">
-	  <bits name="dst" above="48" width="0.4"/>
-	  <bits name="src" above="48" width="0.4"/>
-	  <bits name="type" above="16" below="0x800" width="0.4"/>
-	</header>
-	<header name="IPv4">
-	  <bits name="..." width="0.4"/>
-	  <bits name="proto" above="8" below="47" width="0.4"/>
-	  <bits name="src" above="32" width="0.4"/>
-	  <bits name="dst" above="32" width="0.4" fill="yes"/>
-	</header>
-	<header name="GRE">
-	  <bits name="..." above="16" width="0.4"/>
-	  <bits name="type" above="16" below="0x6558" width="0.4"/>
-	  <bits name="key" above="32" width=".4"/>
-	</header>
-	<header name="Ethernet">
-	  <bits name="dst" above="48" width="0.4"/>
-	  <bits name="src" above="48" width="0.4"/>
-	  <bits name="type" above="16" width="0.4"/>
-	</header>
-	<dots/>
+        <header name="Ethernet">
+          <bits name="dst" above="48" width="0.4"/>
+          <bits name="src" above="48" width="0.4"/>
+          <bits name="type" above="16" below="0x800" width="0.4"/>
+        </header>
+        <header name="IPv4">
+          <bits name="..." width="0.4"/>
+          <bits name="proto" above="8" below="47" width="0.4"/>
+          <bits name="src" above="32" width="0.4"/>
+          <bits name="dst" above="32" width="0.4" fill="yes"/>
+        </header>
+        <header name="GRE">
+          <bits name="..." above="16" width="0.4"/>
+          <bits name="type" above="16" below="0x6558" width="0.4"/>
+          <bits name="key" above="32" width=".4"/>
+        </header>
+        <header name="Ethernet">
+          <bits name="dst" above="48" width="0.4"/>
+          <bits name="src" above="48" width="0.4"/>
+          <bits name="type" above="16" width="0.4"/>
+        </header>
+        <dots/>
       </diagram>
     </field>
 
@@ -1822,16 +1822,16 @@ ovs-ofctl add-flow br-int 'in_port=3,tun_src=192.168.1.1,tun_id=5001 actions=1'
       </p>
 
       <diagram>
-	<header name="header">
-	  <bits name="class" above="16" width="0.6"/>
-	  <bits name="type" above="8" width="0.5"/>
-	  <bits name="res" above="3" below="0" width="0.25"/>
-	  <bits name="length" above="5" width="0.4"/>
-	</header>
+        <header name="header">
+          <bits name="class" above="16" width="0.6"/>
+          <bits name="type" above="8" width="0.5"/>
+          <bits name="res" above="3" below="0" width="0.25"/>
+          <bits name="length" above="5" width="0.4"/>
+        </header>
         <nospace/>
-	<header name="body">
-	  <bits name="value" above="4×(length - 1) bytes" width="1.7"/>
-	</header>
+        <header name="body">
+          <bits name="value" above="4×(length - 1) bytes" width="1.7"/>
+        </header>
       </diagram>
 
       <p>
@@ -1996,167 +1996,167 @@ ovs-ofctl add-flow br0 tun_metadata0=1234,actions=controller
 
     <field id="MFF_IN_PORT" title="Ingress Port">
       <p>
-	The OpenFlow port on which the packet being processed arrived.
-	This is a 16-bit field that holds an OpenFlow 1.0 port number.
-	For receiving a packet, the only values that appear in this
-	field are:
+        The OpenFlow port on which the packet being processed arrived.
+        This is a 16-bit field that holds an OpenFlow 1.0 port number.
+        For receiving a packet, the only values that appear in this
+        field are:
       </p>
 
       <dl>
-	<dt>1 through <code>0xfeff</code> (65,279), inclusive.</dt>
-	<dd>
-	  Conventional OpenFlow port numbers.
-	</dd>
+        <dt>1 through <code>0xfeff</code> (65,279), inclusive.</dt>
+        <dd>
+          Conventional OpenFlow port numbers.
+        </dd>
 
-	<dt><code>OFPP_LOCAL</code> (<code>0xfffe</code> or 65,534).</dt>
-	<dd>
-	  <p>
-	    The ``local'' port, which in Open vSwitch is always named
-	    the same as the bridge itself.  This represents a
-	    connection between the switch and the local TCP/IP stack.
-	    This port is where an IP address is most commonly
-	    configured on an Open vSwitch switch.
-	  </p>
+        <dt><code>OFPP_LOCAL</code> (<code>0xfffe</code> or 65,534).</dt>
+        <dd>
+          <p>
+            The ``local'' port, which in Open vSwitch is always named
+            the same as the bridge itself.  This represents a
+            connection between the switch and the local TCP/IP stack.
+            This port is where an IP address is most commonly
+            configured on an Open vSwitch switch.
+          </p>
 
-	  <p>
-	    OpenFlow does not require a switch to have a local port,
-	    but all existing versions of Open vSwitch have always
-	    included a local port.  <b>Future Directions:</b> Future
-	    versions of Open vSwitch might be able to optionally omit
-	    the local port, if someone submits code to implement such
-	    a feature.
-	  </p>
-	</dd>
+          <p>
+            OpenFlow does not require a switch to have a local port,
+            but all existing versions of Open vSwitch have always
+            included a local port.  <b>Future Directions:</b> Future
+            versions of Open vSwitch might be able to optionally omit
+            the local port, if someone submits code to implement such
+            a feature.
+          </p>
+        </dd>
 
-	<dt><code>OFPP_NONE</code> (OpenFlow 1.0) or <code>OFPP_ANY</code> (OpenFlow 1.1+) (<code>0xffff</code> or 65,535).</dt>
-	<dt><code>OFPP_CONTROLLER</code> (<code>0xfffd</code> or 65,533).</dt>
-	<dd>
-	  <p>
-	    When a controller injects a packet into an OpenFlow switch
-	    with a ``packet-out'' request, it can specify one of these
-	    ingress ports to indicate that the packet was generated
-	    internally rather than having been received on some port.
-	  </p>
+        <dt><code>OFPP_NONE</code> (OpenFlow 1.0) or <code>OFPP_ANY</code> (OpenFlow 1.1+) (<code>0xffff</code> or 65,535).</dt>
+        <dt><code>OFPP_CONTROLLER</code> (<code>0xfffd</code> or 65,533).</dt>
+        <dd>
+          <p>
+            When a controller injects a packet into an OpenFlow switch
+            with a ``packet-out'' request, it can specify one of these
+            ingress ports to indicate that the packet was generated
+            internally rather than having been received on some port.
+          </p>
 
-	  <p>
-	    OpenFlow 1.0 specified <code>OFPP_NONE</code> for this
-	    purpose.  Despite that, some controllers used
-	    <code>OFPP_CONTROLLER</code>, and some switches only
-	    accepted <code>OFPP_CONTROLLER</code>, so OpenFlow 1.0.2
-	    required support for both ports.  OpenFlow 1.1 and later
-	    were more clearly drafted to allow only
-	    <code>OFPP_CONTROLLER</code>.  For maximum compatibility,
-	    Open vSwitch allows both ports with all OpenFlow versions.
-	  </p>
-	</dd>
+          <p>
+            OpenFlow 1.0 specified <code>OFPP_NONE</code> for this
+            purpose.  Despite that, some controllers used
+            <code>OFPP_CONTROLLER</code>, and some switches only
+            accepted <code>OFPP_CONTROLLER</code>, so OpenFlow 1.0.2
+            required support for both ports.  OpenFlow 1.1 and later
+            were more clearly drafted to allow only
+            <code>OFPP_CONTROLLER</code>.  For maximum compatibility,
+            Open vSwitch allows both ports with all OpenFlow versions.
+          </p>
+        </dd>
       </dl>
 
       <p>
-	Values not mentioned above will never appear when receiving a
-	packet, including the following notable values:
+        Values not mentioned above will never appear when receiving a
+        packet, including the following notable values:
       </p>
 
       <dl>
-	<dt>0</dt>
-	<dd>
-	  Zero is not a valid OpenFlow port number.
-	</dd>
+        <dt>0</dt>
+        <dd>
+          Zero is not a valid OpenFlow port number.
+        </dd>
 
-	<dt><code>OFPP_MAX</code> (<code>0xff00</code> or 65,280).</dt>
-	<dd>
-	  This value has only been clearly specified as a valid port
-	  number as of OpenFlow 1.3.3.  Before that, its status was
-	  unclear, and so Open vSwitch has never allowed
-	  <code>OFPP_MAX</code> to be used as a port number, so
-	  packets will never be received on this port.  (Other
-	  OpenFlow switches, of course, might use it.)
-	</dd>
+        <dt><code>OFPP_MAX</code> (<code>0xff00</code> or 65,280).</dt>
+        <dd>
+          This value has only been clearly specified as a valid port
+          number as of OpenFlow 1.3.3.  Before that, its status was
+          unclear, and so Open vSwitch has never allowed
+          <code>OFPP_MAX</code> to be used as a port number, so
+          packets will never be received on this port.  (Other
+          OpenFlow switches, of course, might use it.)
+        </dd>
 
         <dt><code>OFPP_UNSET</code> (<code>0xfff7</code> or 65,527)</dt>
-	<dt><code>OFPP_IN_PORT</code> (<code>0xfff8</code> or 65,528)</dt>
-	<dt><code>OFPP_TABLE</code> (<code>0xfff9</code> or 65,529)</dt>
-	<dt><code>OFPP_NORMAL</code> (<code>0xfffa</code> or 65,530)</dt>
-	<dt><code>OFPP_FLOOD</code> (<code>0xfffb</code> or 65,531)</dt>
-	<dt><code>OFPP_ALL</code> (<code>0xfffc</code> or 65,532)</dt>
-	<dd>
+        <dt><code>OFPP_IN_PORT</code> (<code>0xfff8</code> or 65,528)</dt>
+        <dt><code>OFPP_TABLE</code> (<code>0xfff9</code> or 65,529)</dt>
+        <dt><code>OFPP_NORMAL</code> (<code>0xfffa</code> or 65,530)</dt>
+        <dt><code>OFPP_FLOOD</code> (<code>0xfffb</code> or 65,531)</dt>
+        <dt><code>OFPP_ALL</code> (<code>0xfffc</code> or 65,532)</dt>
+        <dd>
           <p>
-	    These port numbers are used only in output actions and never
-	    appear as ingress ports.
+            These port numbers are used only in output actions and never
+            appear as ingress ports.
           </p>
 
           <p>
             Most of these port numbers were defined in OpenFlow 1.0, but
             <code>OFPP_UNSET</code> was only introduced in OpenFlow 1.5.
           </p>
-	</dd>
+        </dd>
       </dl>
 
       <p>
-	Values that will never appear when receiving a packet may
-	still be matched against in the flow table.  There are still
-	circumstances in which those flows can be matched:
+        Values that will never appear when receiving a packet may
+        still be matched against in the flow table.  There are still
+        circumstances in which those flows can be matched:
       </p>
 
       <ul>
-	<li>
-	  The <code>resubmit</code> Open vSwitch extension action allows a
-	  flow table lookup with an arbitrary ingress port.
-	</li>
+        <li>
+          The <code>resubmit</code> Open vSwitch extension action allows a
+          flow table lookup with an arbitrary ingress port.
+        </li>
 
-	<li>
-	  An action that modifies the ingress port field (see below),
-	  such as e.g. <code>load</code> or <code>set_field</code>,
-	  followed by an action or instruction that performs another
-	  flow table lookup, such as <code>resubmit</code> or
-	  <code>goto_table</code>.
-	</li>
+        <li>
+          An action that modifies the ingress port field (see below),
+          such as e.g. <code>load</code> or <code>set_field</code>,
+          followed by an action or instruction that performs another
+          flow table lookup, such as <code>resubmit</code> or
+          <code>goto_table</code>.
+        </li>
       </ul>
 
       <p>
-	This field is heavily used for matching in OpenFlow tables,
-	but for packet egress, it has only very limited roles:
+        This field is heavily used for matching in OpenFlow tables,
+        but for packet egress, it has only very limited roles:
       </p>
 
       <ul>
-	<li>
-	  <p>
-	    OpenFlow requires suppressing output actions to <ref
-	    field="in_port"/>.  That is, the following two flows both drop all
-	    packets that arrive on port 1:
-	  </p>
+        <li>
+          <p>
+            OpenFlow requires suppressing output actions to <ref
+            field="in_port"/>.  That is, the following two flows both drop all
+            packets that arrive on port 1:
+          </p>
 
-	  <pre>
+          <pre>
 in_port=1,actions=1
 in_port=1,actions=drop
-	  </pre>
+          </pre>
 
-	  <p>
-	    (This behavior is occasionally useful for flooding to a
-	    subset of ports.  Specifying <code>actions=1,2,3,4</code>,
-	    for example, outputs to ports 1, 2, 3, and 4, omitting the
-	    ingress port.)
-	  </p>
-	</li>
+          <p>
+            (This behavior is occasionally useful for flooding to a
+            subset of ports.  Specifying <code>actions=1,2,3,4</code>,
+            for example, outputs to ports 1, 2, 3, and 4, omitting the
+            ingress port.)
+          </p>
+        </li>
 
-	<li>
-	  OpenFlow has a special port <code>OFPP_IN_PORT</code> (with
-	  value 0xfff8) that outputs to the ingress port.  For example,
-	  in a switch that has four ports numbered 1 through 4,
-	  <code>actions=1,2,3,4,in_port</code> outputs to ports 1, 2,
-	  3, and 4, including the ingress port.
-	</li>
+        <li>
+          OpenFlow has a special port <code>OFPP_IN_PORT</code> (with
+          value 0xfff8) that outputs to the ingress port.  For example,
+          in a switch that has four ports numbered 1 through 4,
+          <code>actions=1,2,3,4,in_port</code> outputs to ports 1, 2,
+          3, and 4, including the ingress port.
+        </li>
       </ul>
 
       <p>
-	Because the ingress port field has so little influence on packet
-	processing, it does not ordinarily make sense to modify the
-	ingress port field.  The field is writable only to support the
-	occasional use case where the ingress port's roles in packet
-	egress, described above, become troublesome.  For example,
-	<code>actions=load:0-&gt;NXM_OF_IN_PORT[],output:123</code>
-	will output to port 123 regardless of whether it is in the
-	ingress port.  If the ingress port is important, then one may save
-	and restore it on the stack:
+        Because the ingress port field has so little influence on packet
+        processing, it does not ordinarily make sense to modify the
+        ingress port field.  The field is writable only to support the
+        occasional use case where the ingress port's roles in packet
+        egress, described above, become troublesome.  For example,
+        <code>actions=load:0-&gt;NXM_OF_IN_PORT[],output:123</code>
+        will output to port 123 regardless of whether it is in the
+        ingress port.  If the ingress port is important, then one may save
+        and restore it on the stack:
       </p>
 
       <pre>
@@ -2173,154 +2173,154 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
       </pre>
 
       <p>
-	The ability to modify the ingress port is an Open vSwitch
-	extension to OpenFlow.
+        The ability to modify the ingress port is an Open vSwitch
+        extension to OpenFlow.
       </p>
     </field>
 
     <field id="MFF_IN_PORT_OXM" title="OXM Ingress Port">
       <p>
-	OpenFlow 1.1 and later use a 32-bit port number, so this field
-	supplies a 32-bit view of the ingress port.  Current versions of
-	Open vSwitch support only a 16-bit range of ports:
+        OpenFlow 1.1 and later use a 32-bit port number, so this field
+        supplies a 32-bit view of the ingress port.  Current versions of
+        Open vSwitch support only a 16-bit range of ports:
       </p>
 
       <ul>
-	<li>
-	  OpenFlow 1.0 ports <code>0x0000</code> to
-	  <code>0xfeff</code>, inclusive, map to OpenFlow 1.1
-	  port numbers with the same values.
-	</li>
+        <li>
+          OpenFlow 1.0 ports <code>0x0000</code> to
+          <code>0xfeff</code>, inclusive, map to OpenFlow 1.1
+          port numbers with the same values.
+        </li>
 
-	<li>
-	  OpenFlow 1.0 ports <code>0xff00</code> to
-	  <code>0xffff</code>, inclusive, map to OpenFlow 1.1 port
-	  numbers <code>0xffffff00</code> to <code>0xffffffff</code>.
-	</li>
+        <li>
+          OpenFlow 1.0 ports <code>0xff00</code> to
+          <code>0xffff</code>, inclusive, map to OpenFlow 1.1 port
+          numbers <code>0xffffff00</code> to <code>0xffffffff</code>.
+        </li>
 
-	<li>
-	  OpenFlow 1.1 ports <code>0x0000ff00</code> to
-	  <code>0xfffffeff</code> are not mapped and not supported.
-	</li>
+        <li>
+          OpenFlow 1.1 ports <code>0x0000ff00</code> to
+          <code>0xfffffeff</code> are not mapped and not supported.
+        </li>
       </ul>
 
       <p>
-	<ref field="in_port"/> and <ref field="in_port_oxm"/> are two views of
-	the same information, so all of the comments on <ref field="in_port"/>
-	apply to <ref field="in_port_oxm"/> too.  Modifying <ref
-	field="in_port"/> changes <ref field="in_port_oxm"/>, and vice versa.
+        <ref field="in_port"/> and <ref field="in_port_oxm"/> are two views of
+        the same information, so all of the comments on <ref field="in_port"/>
+        apply to <ref field="in_port_oxm"/> too.  Modifying <ref
+        field="in_port"/> changes <ref field="in_port_oxm"/>, and vice versa.
       </p>
 
       <p>
-	Setting <ref field="in_port_oxm"/> to an unsupported value yields
-	unspecified behavior.
+        Setting <ref field="in_port_oxm"/> to an unsupported value yields
+        unspecified behavior.
       </p>
     </field>
 
     <field id="MFF_SKB_PRIORITY" title="Output Queue">
       <p>
-	<b>Future Directions:</b> Open vSwitch implements the output queue as a
-	field, but does not currently expose it through OXM or NXM for matching
-	purposes.  If this turns out to be a useful feature, it could be
-	implemented in future versions.  Only the <code>set_queue</code>,
-	<code>enqueue</code>, and <code>pop_queue</code> actions currently
-	influence the output queue.
+        <b>Future Directions:</b> Open vSwitch implements the output queue as a
+        field, but does not currently expose it through OXM or NXM for matching
+        purposes.  If this turns out to be a useful feature, it could be
+        implemented in future versions.  Only the <code>set_queue</code>,
+        <code>enqueue</code>, and <code>pop_queue</code> actions currently
+        influence the output queue.
       </p>
 
       <p>
-	This field influences how packets in the flow will be queued,
-	for quality of service (QoS) purposes, when they egress the
-	switch.  Its range of meaningful values, and their meanings,
-	varies greatly from one OpenFlow implementation to another.
-	Even within a single implementation, there is no guarantee
-	that all OpenFlow ports have the same queues configured or
-	that all OpenFlow ports in an implementation can be configured
-	the same way queue-wise.
+        This field influences how packets in the flow will be queued,
+        for quality of service (QoS) purposes, when they egress the
+        switch.  Its range of meaningful values, and their meanings,
+        varies greatly from one OpenFlow implementation to another.
+        Even within a single implementation, there is no guarantee
+        that all OpenFlow ports have the same queues configured or
+        that all OpenFlow ports in an implementation can be configured
+        the same way queue-wise.
       </p>
 
       <p>
-	Configuring queues on OpenFlow is not well standardized.  On
-	Linux, Open vSwitch supports queue configuration via OVSDB,
-	specifically the <code>QoS</code> and <code>Queue</code>
-	tables (see <code>ovs-vswitchd.conf.db(5)</code> for details).
-	Ports of Open vSwitch to other platforms might require queue
-	configuration through some separate protocol (such as a CLI).
-	Even on Linux, Open vSwitch exposes only a fraction of the
-	kernel's queuing features through OVSDB, so advanced or
-	unusual uses might require use of separate utilities
-	(e.g. <code>tc</code>).  OpenFlow switches other than Open
-	vSwitch might use OF-CONFIG or any of the configuration
-	methods mentioned above.  Finally, some OpenFlow switches have
-	a fixed number of fixed-function queues (e.g. eight queues
-	with strictly defined priorities) and others do not support
-	any control over queuing.
+        Configuring queues on OpenFlow is not well standardized.  On
+        Linux, Open vSwitch supports queue configuration via OVSDB,
+        specifically the <code>QoS</code> and <code>Queue</code>
+        tables (see <code>ovs-vswitchd.conf.db(5)</code> for details).
+        Ports of Open vSwitch to other platforms might require queue
+        configuration through some separate protocol (such as a CLI).
+        Even on Linux, Open vSwitch exposes only a fraction of the
+        kernel's queuing features through OVSDB, so advanced or
+        unusual uses might require use of separate utilities
+        (e.g. <code>tc</code>).  OpenFlow switches other than Open
+        vSwitch might use OF-CONFIG or any of the configuration
+        methods mentioned above.  Finally, some OpenFlow switches have
+        a fixed number of fixed-function queues (e.g. eight queues
+        with strictly defined priorities) and others do not support
+        any control over queuing.
       </p>
 
       <p>
-	The only output queue that all OpenFlow implementations must
-	support is zero, to identify a default queue, whose properties
-	are implementation-defined.  Outputting a packet to a queue
-	that does not exist on the output port yields unpredictable
-	behavior: among the possibilities are that the packet might be
-	dropped or transmitted with a very high or very low priority.
+        The only output queue that all OpenFlow implementations must
+        support is zero, to identify a default queue, whose properties
+        are implementation-defined.  Outputting a packet to a queue
+        that does not exist on the output port yields unpredictable
+        behavior: among the possibilities are that the packet might be
+        dropped or transmitted with a very high or very low priority.
       </p>
 
       <p>
-	OpenFlow 1.0 only allowed output queues to be specified as part of an
-	<code>enqueue</code> action that specified both a queue and an output
-	port.  That is, OpenFlow 1.0 treats the queue as an argument to an
-	action, not as a field.
+        OpenFlow 1.0 only allowed output queues to be specified as part of an
+        <code>enqueue</code> action that specified both a queue and an output
+        port.  That is, OpenFlow 1.0 treats the queue as an argument to an
+        action, not as a field.
       </p>
 
       <p>
-	To increase flexibility, OpenFlow 1.1 added an action to set the output
-	queue.  This model was carried forward, without change, through
-	OpenFlow 1.5.
+        To increase flexibility, OpenFlow 1.1 added an action to set the output
+        queue.  This model was carried forward, without change, through
+        OpenFlow 1.5.
       </p>
 
       <p>
-	Open vSwitch implements the native queuing model of each
-	OpenFlow version it supports.  Open vSwitch also includes an
-	extension for setting the output queue as an action in
-	OpenFlow 1.0.
+        Open vSwitch implements the native queuing model of each
+        OpenFlow version it supports.  Open vSwitch also includes an
+        extension for setting the output queue as an action in
+        OpenFlow 1.0.
       </p>
 
       <p>
-	When a packet ingresses into an OpenFlow switch, the output
-	queue is ordinarily set to 0, indicating the default queue.
-	However, Open vSwitch supports various ways to forward a
-	packet from one OpenFlow switch to another within a single
-	host.  In these cases, Open vSwitch maintains the output queue
-	across the forwarding step.  For example:
+        When a packet ingresses into an OpenFlow switch, the output
+        queue is ordinarily set to 0, indicating the default queue.
+        However, Open vSwitch supports various ways to forward a
+        packet from one OpenFlow switch to another within a single
+        host.  In these cases, Open vSwitch maintains the output queue
+        across the forwarding step.  For example:
       </p>
 
       <ul>
-	<li>
-	  A hop across an Open vSwitch ``patch port'' (which does not
-	  actually involve queuing) preserves the output queue.
-	</li>
+        <li>
+          A hop across an Open vSwitch ``patch port'' (which does not
+          actually involve queuing) preserves the output queue.
+        </li>
 
-	<li>
-	  <p>
-	    When a flow sets the output queue then outputs to an
-	    OpenFlow tunnel port, the encapsulation preserves the
-	    output queue.  If the kernel TCP/IP stack routes the
-	    encapsulated packet directly to a physical interface, then
-	    that output honors the output queue.  Alternatively, if
-	    the kernel routes the encapsulated packet to another Open
-	    vSwitch bridge, then the output queue set previously
-	    becomes the initial output queue on ingress to the second
-	    bridge and will thus be used for further output actions
-	    (unless overridden by a new ``set queue'' action).
-	  </p>
+        <li>
+          <p>
+            When a flow sets the output queue then outputs to an
+            OpenFlow tunnel port, the encapsulation preserves the
+            output queue.  If the kernel TCP/IP stack routes the
+            encapsulated packet directly to a physical interface, then
+            that output honors the output queue.  Alternatively, if
+            the kernel routes the encapsulated packet to another Open
+            vSwitch bridge, then the output queue set previously
+            becomes the initial output queue on ingress to the second
+            bridge and will thus be used for further output actions
+            (unless overridden by a new ``set queue'' action).
+          </p>
 
-	  <p>
-	    (This description reflects the current behavior of Open
-	    vSwitch on Linux.  This behavior relies on details of the
-	    Linux TCP/IP stack.  It could be difficult to make ports
-	    to other operating systems behave the same way.)
-	  </p>
-	</li>
+          <p>
+            (This description reflects the current behavior of Open
+            vSwitch on Linux.  This behavior relies on details of the
+            Linux TCP/IP stack.  It could be difficult to make ports
+            to other operating systems behave the same way.)
+          </p>
+        </li>
       </ul>
     </field>
 
@@ -2341,31 +2341,31 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
       </p>
 
       <p>
-	Packet mark is an attempt at a generalization of the
-	<code>skb_mark</code> concept beyond Linux, at least through more
-	generic naming.  Like <ref field="skb_priority"/>, packet mark is
-	preserved across forwarding steps within a machine.  Unlike <ref
-	field="skb_priority"/>, packet mark has no direct effect on packet
-	forwarding: the value set in packet mark does not matter unless some
-	later OpenFlow table or switch matches on packet mark, or unless the
-	packet passes through some other kernel subsystem that has been
-	configured to interpret packet mark in specific ways, e.g. through
-	<code>iptables</code> configuration mentioned above.
+        Packet mark is an attempt at a generalization of the
+        <code>skb_mark</code> concept beyond Linux, at least through more
+        generic naming.  Like <ref field="skb_priority"/>, packet mark is
+        preserved across forwarding steps within a machine.  Unlike <ref
+        field="skb_priority"/>, packet mark has no direct effect on packet
+        forwarding: the value set in packet mark does not matter unless some
+        later OpenFlow table or switch matches on packet mark, or unless the
+        packet passes through some other kernel subsystem that has been
+        configured to interpret packet mark in specific ways, e.g. through
+        <code>iptables</code> configuration mentioned above.
       </p>
 
       <p>
-	Preserving packet mark across kernel forwarding steps relies
-	heavily on kernel support, which ports to non-Linux operating
-	systems may not have.  Regardless of operating system support,
-	Open vSwitch supports packet mark within a single bridge and
-	across patch ports.
+        Preserving packet mark across kernel forwarding steps relies
+        heavily on kernel support, which ports to non-Linux operating
+        systems may not have.  Regardless of operating system support,
+        Open vSwitch supports packet mark within a single bridge and
+        across patch ports.
       </p>
 
       <p>
-	The value of packet mark when a packet ingresses into the
-	first Open vSwich bridge is typically zero, but it could be
-	nonzero if its value was previously set by some kernel
-	subsystem.
+        The value of packet mark when a packet ingresses into the
+        first Open vSwich bridge is typically zero, but it could be
+        nonzero if its value was previously set by some kernel
+        subsystem.
       </p>
     </field>
 
@@ -2395,11 +2395,11 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
       </p>
 
       <diagram>
-	<header name="Packet type">
-	  <bits name="ns" above="16" width=".75"/>
-	  <bits name="ns_type" above="16" width=".75"/>
-	</header>
-	<dots/>
+        <header name="Packet type">
+          <bits name="ns" above="16" width=".75"/>
+          <bits name="ns_type" above="16" width=".75"/>
+        </header>
+        <dots/>
       </diagram>
 
       <p>
@@ -2443,18 +2443,18 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
       </p>
 
       <diagram>
-	<header name="Ethernet">
-	  <bits name="dst" above="48" width="0.4"/>
-	  <bits name="src" above="48" width="0.4"/>
-	  <bits name="type" above="16" below="0x800" width="0.4"/>
-	</header>
-	<header name="IPv4">
-	  <bits name="..." width="0.4"/>
-	  <bits name="proto" above="8" width="0.4"/>
-	  <bits name="src" above="32" width="0.4"/>
-	  <bits name="dst" above="32" width="0.4"/>
-	</header>
-	<dots/>
+        <header name="Ethernet">
+          <bits name="dst" above="48" width="0.4"/>
+          <bits name="src" above="48" width="0.4"/>
+          <bits name="type" above="16" below="0x800" width="0.4"/>
+        </header>
+        <header name="IPv4">
+          <bits name="..." width="0.4"/>
+          <bits name="proto" above="8" width="0.4"/>
+          <bits name="src" above="32" width="0.4"/>
+          <bits name="dst" above="32" width="0.4"/>
+        </header>
+        <dots/>
       </diagram>
 
       <p>
@@ -2463,13 +2463,13 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
       </p>
 
       <diagram>
-	<header name="IPv4">
-	  <bits name="..." width="0.4"/>
-	  <bits name="proto" above="8" width="0.4"/>
-	  <bits name="src" above="32" width="0.4"/>
-	  <bits name="dst" above="32" width="0.4"/>
-	</header>
-	<dots/>
+        <header name="IPv4">
+          <bits name="..." width="0.4"/>
+          <bits name="proto" above="8" width="0.4"/>
+          <bits name="src" above="32" width="0.4"/>
+          <bits name="dst" above="32" width="0.4"/>
+        </header>
+        <dots/>
       </diagram>
 
       <p>
@@ -2796,23 +2796,23 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
 
     <field id="MFF_METADATA" title="OpenFlow Metadata">
       <p>
-	This field is the oldest standardized OpenFlow register field,
-	introduced in OpenFlow 1.1.  It was introduced to model the limited
-	number of user-defined bits that some ASIC-based switches can carry
-	through their pipelines.  Because of hardware limitations, OpenFlow
-	allows switches to support writing and masking only an
-	implementation-defined subset of bits, even no bits at all.  The Open
-	vSwitch software switch always supports all 64 bits, but of course an
-	Open vSwitch port to an ASIC would have the same restriction as the
-	ASIC itself.
+        This field is the oldest standardized OpenFlow register field,
+        introduced in OpenFlow 1.1.  It was introduced to model the limited
+        number of user-defined bits that some ASIC-based switches can carry
+        through their pipelines.  Because of hardware limitations, OpenFlow
+        allows switches to support writing and masking only an
+        implementation-defined subset of bits, even no bits at all.  The Open
+        vSwitch software switch always supports all 64 bits, but of course an
+        Open vSwitch port to an ASIC would have the same restriction as the
+        ASIC itself.
       </p>
 
       <p>
-	This field has an OXM code point, but OpenFlow 1.4 and earlier allow it
-	to be modified only with a specialized instruction, not with a
-	``set-field'' action.  OpenFlow 1.5 removes this restriction.  Open
-	vSwitch does not enforce this restriction, regardless of OpenFlow
-	version.
+        This field has an OXM code point, but OpenFlow 1.4 and earlier allow it
+        to be modified only with a specialized instruction, not with a
+        ``set-field'' action.  OpenFlow 1.5 removes this restriction.  Open
+        vSwitch does not enforce this restriction, regardless of OpenFlow
+        version.
       </p>
     </field>
 
@@ -2910,27 +2910,27 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
       </p>
 
       <diagram>
-	<header name="Ethernet">
-	  <bits name="dst" above="48" width=".75"/>
-	  <bits name="src" above="48" width=".75" fill="yes"/>
-	  <bits name="type" above="16" width="0.4"/>
-	</header>
-	<dots/>
+        <header name="Ethernet">
+          <bits name="dst" above="48" width=".75"/>
+          <bits name="src" above="48" width=".75" fill="yes"/>
+          <bits name="type" above="16" width="0.4"/>
+        </header>
+        <dots/>
       </diagram>
     </field>
 
     <field id="MFF_ETH_DST" title="Ethernet Destination">
       <p>
-	The Ethernet destination address:
+        The Ethernet destination address:
       </p>
 
       <diagram>
-	<header name="Ethernet">
-	  <bits name="dst" above="48" width=".75" fill="yes"/>
-	  <bits name="src" above="48" width=".75"/>
-	  <bits name="type" above="16" width="0.4"/>
-	</header>
-	<dots/>
+        <header name="Ethernet">
+          <bits name="dst" above="48" width=".75" fill="yes"/>
+          <bits name="src" above="48" width=".75"/>
+          <bits name="type" above="16" width="0.4"/>
+        </header>
+        <dots/>
       </diagram>
 
       <p>
@@ -2969,108 +2969,108 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
 
     <field id="MFF_ETH_TYPE" title="Ethernet Type">
       <p>
-	The most commonly seen Ethernet frames today use a format
-	called ``Ethernet II,'' in which the last two bytes of the
-	Ethernet header specify the Ethertype.  For such a frame, this
-	field is copied from those bytes of the header, like so:
+        The most commonly seen Ethernet frames today use a format
+        called ``Ethernet II,'' in which the last two bytes of the
+        Ethernet header specify the Ethertype.  For such a frame, this
+        field is copied from those bytes of the header, like so:
       </p>
 
       <diagram>
-	<header name="Ethernet">
-	  <bits name="dst" above="48" width=".75"/>
-	  <bits name="src" above="48" width=".75"/>
-	  <bits name="type" above="16" below="\[&gt;=]0x600" width="0.4" fill="yes"/>
-	</header>
-	<dots/>
+        <header name="Ethernet">
+          <bits name="dst" above="48" width=".75"/>
+          <bits name="src" above="48" width=".75"/>
+          <bits name="type" above="16" below="\[&gt;=]0x600" width="0.4" fill="yes"/>
+        </header>
+        <dots/>
       </diagram>
 
       <p>
-	Every Ethernet type has a value 0x600 (1,536) or greater.
-	When the last two bytes of the Ethernet header have a value
-	too small to be an Ethernet type, then the value found there
-	is the total length of the frame in bytes, excluding the
-	Ethernet header.  An 802.2 LLC header typically follows the
-	Ethernet header.  OpenFlow and Open vSwitch only support LLC
-	headers with DSAP and SSAP <code>0xaa</code> and control byte
-	<code>0x03</code>, which indicate that a SNAP header follows
-	the LLC header.  In turn, OpenFlow and Open vSwitch only
-	support a SNAP header with organization <code>0x000000</code>.
-	In such a case, this field is copied from the type field in
-	the SNAP header, like this:
+        Every Ethernet type has a value 0x600 (1,536) or greater.
+        When the last two bytes of the Ethernet header have a value
+        too small to be an Ethernet type, then the value found there
+        is the total length of the frame in bytes, excluding the
+        Ethernet header.  An 802.2 LLC header typically follows the
+        Ethernet header.  OpenFlow and Open vSwitch only support LLC
+        headers with DSAP and SSAP <code>0xaa</code> and control byte
+        <code>0x03</code>, which indicate that a SNAP header follows
+        the LLC header.  In turn, OpenFlow and Open vSwitch only
+        support a SNAP header with organization <code>0x000000</code>.
+        In such a case, this field is copied from the type field in
+        the SNAP header, like this:
       </p>
 
       <diagram>
-	<header name="Ethernet">
-	  <bits name="dst" above="48" width=".75"/>
-	  <bits name="src" above="48" width=".75"/>
-	  <bits name="type" above="16" below="&lt;0x600" width="0.4"/>
-	</header>
-	<header name="LLC">
-	  <bits name="DSAP" above="8" below="0xaa" width=".4"/>
-	  <bits name="SSAP" above="8" below="0xaa" width=".4"/>
-	  <bits name="cntl" above="8" below="0x03" width=".4"/>
-	</header>
-	<header name="SNAP">
-	  <bits name="org" above="24" below="0x000000" width=".75"/>
-	  <bits name="type" above="16" below="\[&gt;=]0x600" width=".4" fill="yes"/>
-	</header>
-	<dots/>
+        <header name="Ethernet">
+          <bits name="dst" above="48" width=".75"/>
+          <bits name="src" above="48" width=".75"/>
+          <bits name="type" above="16" below="&lt;0x600" width="0.4"/>
+        </header>
+        <header name="LLC">
+          <bits name="DSAP" above="8" below="0xaa" width=".4"/>
+          <bits name="SSAP" above="8" below="0xaa" width=".4"/>
+          <bits name="cntl" above="8" below="0x03" width=".4"/>
+        </header>
+        <header name="SNAP">
+          <bits name="org" above="24" below="0x000000" width=".75"/>
+          <bits name="type" above="16" below="\[&gt;=]0x600" width=".4" fill="yes"/>
+        </header>
+        <dots/>
       </diagram>
 
       <p>
-	When an 802.1Q header is inserted after the Ethernet source
-	and destination, this field is populated with the encapsulated
-	Ethertype, not the 802.1Q Ethertype.  With an Ethernet II
-	inner frame, the result looks like this:
+        When an 802.1Q header is inserted after the Ethernet source
+        and destination, this field is populated with the encapsulated
+        Ethertype, not the 802.1Q Ethertype.  With an Ethernet II
+        inner frame, the result looks like this:
       </p>
 
       <diagram>
-	<header name="Ethernet">
-	  <bits name="dst" above="48" width=".75"/>
-	  <bits name="src" above="48" width=".75"/>
-	</header>
-	<header name="802.1Q">
-	  <bits name="TPID" above="16" below="0x8100" width=".4"/>
-	  <bits name="TCI" above="16" width=".4"/>
-	</header>
-	<header name="Ethertype">
-	  <bits name="type" above="16" below="\[&gt;=]0x600" width=".4" fill="yes"/>
-	</header>
-	<dots/>
+        <header name="Ethernet">
+          <bits name="dst" above="48" width=".75"/>
+          <bits name="src" above="48" width=".75"/>
+        </header>
+        <header name="802.1Q">
+          <bits name="TPID" above="16" below="0x8100" width=".4"/>
+          <bits name="TCI" above="16" width=".4"/>
+        </header>
+        <header name="Ethertype">
+          <bits name="type" above="16" below="\[&gt;=]0x600" width=".4" fill="yes"/>
+        </header>
+        <dots/>
       </diagram>
 
       <p>
-	LLC and SNAP encapsulation look like this with an 802.1Q header:
+        LLC and SNAP encapsulation look like this with an 802.1Q header:
       </p>
 
       <diagram>
-	<header name="Ethernet">
-	  <bits name="dst" above="48" width=".75"/>
-	  <bits name="src" above="48" width=".75"/>
-	</header>
-	<header name="802.1Q">
-	  <bits name="TPID" above="16" below="0x8100" width=".4"/>
-	  <bits name="TCI" above="16" width=".4"/>
-	</header>
-	<header name="Ethertype">
-	  <bits name="type" above="16" below="&lt;0x600" width="0.4"/>
-	</header>
-	<header name="LLC">
-	  <bits name="DSAP" above="8" below="0xaa" width=".4"/>
-	  <bits name="SSAP" above="8" below="0xaa" width=".4"/>
-	  <bits name="cntl" above="8" below="0x03" width=".4"/>
-	</header>
-	<header name="SNAP">
-	  <bits name="org" above="24" below="0x000000" width=".75"/>
-	  <bits name="type" above="16" below="\[&gt;=]0x600" width=".4" fill="yes"/>
-	</header>
-	<dots/>
+        <header name="Ethernet">
+          <bits name="dst" above="48" width=".75"/>
+          <bits name="src" above="48" width=".75"/>
+        </header>
+        <header name="802.1Q">
+          <bits name="TPID" above="16" below="0x8100" width=".4"/>
+          <bits name="TCI" above="16" width=".4"/>
+        </header>
+        <header name="Ethertype">
+          <bits name="type" above="16" below="&lt;0x600" width="0.4"/>
+        </header>
+        <header name="LLC">
+          <bits name="DSAP" above="8" below="0xaa" width=".4"/>
+          <bits name="SSAP" above="8" below="0xaa" width=".4"/>
+          <bits name="cntl" above="8" below="0x03" width=".4"/>
+        </header>
+        <header name="SNAP">
+          <bits name="org" above="24" below="0x000000" width=".75"/>
+          <bits name="type" above="16" below="\[&gt;=]0x600" width=".4" fill="yes"/>
+        </header>
+        <dots/>
       </diagram>
 
       <p>
-	When a packet doesn't match any of the header formats described
-	above, Open vSwitch and OpenFlow set this field to
-	<code>0x5ff</code> (<code>OFP_DL_TYPE_NOT_ETH_TYPE</code>).
+        When a packet doesn't match any of the header formats described
+        above, Open vSwitch and OpenFlow set this field to
+        <code>0x5ff</code> (<code>OFP_DL_TYPE_NOT_ETH_TYPE</code>).
       </p>
     </field>
   </group>
@@ -3091,13 +3091,13 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
 
     <diagram>
       <header name="TPID">
-	<bits name="Ethertype" above="16" below="0x8100" width="1.8"/>
+        <bits name="Ethertype" above="16" below="0x8100" width="1.8"/>
       </header>
       <nospace/>
       <header name="TCI">
-	<bits name="PCP" above="3" width=".6"/>
-	<bits name="CFI" above="1" below="0" width=".3"/>
-	<bits name="VID" above="12" width=".9"/>
+        <bits name="PCP" above="3" width=".6"/>
+        <bits name="CFI" above="1" below="0" width=".3"/>
+        <bits name="VID" above="12" width=".9"/>
       </header>
     </diagram>
 
@@ -3123,28 +3123,28 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
 
     <ul>
       <li>
-	<dfn>PCP</dfn> (Priority Control Point), is a 3-bit 802.1p
-	<dfn>priority</dfn>.  The lowest priority is value 1, the
-	second-lowest is value 0, and priority increases from 2 up to
-	highest priority 7.
+        <dfn>PCP</dfn> (Priority Control Point), is a 3-bit 802.1p
+        <dfn>priority</dfn>.  The lowest priority is value 1, the
+        second-lowest is value 0, and priority increases from 2 up to
+        highest priority 7.
       </li>
 
       <li>
         <p>
-	  <dfn>CFI</dfn> (Canonical Format Indicator), is a 1-bit field.  On an
-	  Ethernet network, its value is always 0.  This led to it later being
-	  repurposed under the name <dfn>DEI</dfn> (Drop Eligibility
-	  Indicator).  By either name, OpenFlow and Open vSwitch don't provide
-	  any way to match or set this bit.
+          <dfn>CFI</dfn> (Canonical Format Indicator), is a 1-bit field.  On an
+          Ethernet network, its value is always 0.  This led to it later being
+          repurposed under the name <dfn>DEI</dfn> (Drop Eligibility
+          Indicator).  By either name, OpenFlow and Open vSwitch don't provide
+          any way to match or set this bit.
         </p>
       </li>
 
       <li>
-	<dfn>VID</dfn> (VLAN IDentifier), is a 12-bit VLAN.  If the
-	VID is 0, then the frame is not part of a VLAN.  In that case,
-	the VLAN header is called a <dfn>priority tag</dfn> because it
-	is only meaningful for assigning the frame a priority.  VID
-	<code>0xfff</code> (4,095) is reserved.
+        <dfn>VID</dfn> (VLAN IDentifier), is a 12-bit VLAN.  If the
+        VID is 0, then the frame is not part of a VLAN.  In that case,
+        the VLAN header is called a <dfn>priority tag</dfn> because it
+        is only meaningful for assigning the frame a priority.  VID
+        <code>0xfff</code> (4,095) is reserved.
       </li>
     </ul>
 
@@ -3190,9 +3190,9 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
 
     <ul>
       <li>
-	When both <code>dl_vlan</code> and <code>dl_vlan_pcp</code> are
-	wildcarded, the flow matches packets without an 802.1Q header or
-	with any 802.1Q header.
+        When both <code>dl_vlan</code> and <code>dl_vlan_pcp</code> are
+        wildcarded, the flow matches packets without an 802.1Q header or
+        with any 802.1Q header.
       </li>
 
       <li>
@@ -3204,27 +3204,27 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
       </li>
 
       <li>
-	<p>
-	  Otherwise, the flow matches only packets with an 802.1Q
-	  header.  If <code>dl_vlan</code> is not wildcarded, then the
-	  flow only matches packets with the VLAN ID specified in
-	  <code>dl_vlan</code>'s low 12 bits.  If
-	  <code>dl_vlan_pcp</code> is not wildcarded, then the flow
-	  only matches packets with the priority specified in
-	  <code>dl_vlan_pcp</code>'s low 3 bits.
-	</p>
+        <p>
+          Otherwise, the flow matches only packets with an 802.1Q
+          header.  If <code>dl_vlan</code> is not wildcarded, then the
+          flow only matches packets with the VLAN ID specified in
+          <code>dl_vlan</code>'s low 12 bits.  If
+          <code>dl_vlan_pcp</code> is not wildcarded, then the flow
+          only matches packets with the priority specified in
+          <code>dl_vlan_pcp</code>'s low 3 bits.
+        </p>
 
-	<p>
-	  OpenFlow does not specify how to interpret the high 4 bits of
-	  <code>dl_vlan</code> or the high 5 bits of <code>dl_vlan_pcp</code>.
-	  Open vSwitch ignores them.
-	</p>
+        <p>
+          OpenFlow does not specify how to interpret the high 4 bits of
+          <code>dl_vlan</code> or the high 5 bits of <code>dl_vlan_pcp</code>.
+          Open vSwitch ignores them.
+        </p>
       </li>
     </ul>
 
     <field id="MFF_DL_VLAN" title="OpenFlow 1.0 VLAN ID" hidden="yes"/>
     <field id="MFF_DL_VLAN_PCP" title="OpenFlow 1.0 VLAN Priority"
-	   hidden="yes"/>
+           hidden="yes"/>
 
     <h2>OpenFlow 1.1 VLAN Fields</h2>
 
@@ -3257,88 +3257,88 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
 
     <field id="MFF_VLAN_VID" title="OpenFlow 1.2+ VLAN ID">
       <p>
-	The OpenFlow standard describes this field as consisting of
-	``12+1'' bits.  On ingress, its value is 0 if no 802.1Q header
-	is present, and otherwise it holds the VLAN VID in its least
-	significant 12 bits, with bit 12 (<code>0x1000</code> aka
-	<code>OFPVID_PRESENT</code>) also set to 1.  The three most
-	significant bits are always zero:
+        The OpenFlow standard describes this field as consisting of
+        ``12+1'' bits.  On ingress, its value is 0 if no 802.1Q header
+        is present, and otherwise it holds the VLAN VID in its least
+        significant 12 bits, with bit 12 (<code>0x1000</code> aka
+        <code>OFPVID_PRESENT</code>) also set to 1.  The three most
+        significant bits are always zero:
       </p>
 
       <diagram>
-	<header name="OXM_OF_VLAN_VID">
-	  <bits name="" above="3" below="0" width=".6"/>
-	  <bits name="P" above="1" width=".1"/>
-	  <bits name="VLAN ID" above="12" width=".9"/>
-	</header>
+        <header name="OXM_OF_VLAN_VID">
+          <bits name="" above="3" below="0" width=".6"/>
+          <bits name="P" above="1" width=".1"/>
+          <bits name="VLAN ID" above="12" width=".9"/>
+        </header>
       </diagram>
 
       <p>
-	As a consequence of this field's format, one may use it to match the
-	VLAN ID in all of the ways available with the OpenFlow 1.0 and 1.1
-	formats, and a few new ways:
+        As a consequence of this field's format, one may use it to match the
+        VLAN ID in all of the ways available with the OpenFlow 1.0 and 1.1
+        formats, and a few new ways:
       </p>
 
       <dl>
-	<dt>Fully wildcarded</dt>
-	<dd>
-	  Matches any packet, that is, one without an 802.1Q header or
-	  with an 802.1Q header with any TCI value.
-	</dd>
+        <dt>Fully wildcarded</dt>
+        <dd>
+          Matches any packet, that is, one without an 802.1Q header or
+          with an 802.1Q header with any TCI value.
+        </dd>
 
-	<dt>
-	  Value <code>0x0000</code> (<code>OFPVID_NONE</code>), mask
-	  <code>0xffff</code> (or no mask)
-	</dt>
-	<dd>
-	  Matches only packets without an 802.1Q header.
-	</dd>
+        <dt>
+          Value <code>0x0000</code> (<code>OFPVID_NONE</code>), mask
+          <code>0xffff</code> (or no mask)
+        </dt>
+        <dd>
+          Matches only packets without an 802.1Q header.
+        </dd>
 
-	<dt>
-	  Value <code>0x1000</code>, mask <code>0x1000</code>
-	</dt>
-	<dd>
-	  Matches any packet with an 802.1Q header, regardless of VLAN
-	  ID.
-	</dd>
+        <dt>
+          Value <code>0x1000</code>, mask <code>0x1000</code>
+        </dt>
+        <dd>
+          Matches any packet with an 802.1Q header, regardless of VLAN
+          ID.
+        </dd>
 
-	<dt>
-	  Value <code>0x1009</code>, mask <code>0xffff</code> (or no mask)
-	</dt>
-	<dd>
-	  Match only packets with an 802.1Q header with VLAN ID 9.
-	</dd>
+        <dt>
+          Value <code>0x1009</code>, mask <code>0xffff</code> (or no mask)
+        </dt>
+        <dd>
+          Match only packets with an 802.1Q header with VLAN ID 9.
+        </dd>
 
-	<dt>Value <code>0x1001</code>, mask <code>0x1001</code></dt>
-	<dd>
-	  Matches only packets that have an 802.1Q header with an
-	  odd-numbered VLAN ID.  (This is just an example; one can
-	  match on any desired VLAN ID bit pattern.)
-	</dd>
+        <dt>Value <code>0x1001</code>, mask <code>0x1001</code></dt>
+        <dd>
+          Matches only packets that have an 802.1Q header with an
+          odd-numbered VLAN ID.  (This is just an example; one can
+          match on any desired VLAN ID bit pattern.)
+        </dd>
       </dl>
     </field>
 
     <field id="MFF_VLAN_PCP" title="OpenFlow 1.2+ VLAN Priority">
       <p>
-	The 3 least significant bits may be used to match the PCP bits
-	in an 802.1Q header.  Other bits are always zero:
+        The 3 least significant bits may be used to match the PCP bits
+        in an 802.1Q header.  Other bits are always zero:
       </p>
 
       <diagram>
-	<header name="OXM_OF_VLAN_VID">
-	  <bits name="zero" above="5" below="0" width="1.0"/>
-	  <bits name="PCP" above="3" width=".6"/>
-	</header>
+        <header name="OXM_OF_VLAN_VID">
+          <bits name="zero" above="5" below="0" width="1.0"/>
+          <bits name="PCP" above="3" width=".6"/>
+        </header>
       </diagram>
 
       <p>
-	This field may only be used when <ref field="vlan_vid"/> is not
-	wildcarded and does not exact match on 0 (which only matches
-	when there is no 802.1Q header).
+        This field may only be used when <ref field="vlan_vid"/> is not
+        wildcarded and does not exact match on 0 (which only matches
+        when there is no 802.1Q header).
       </p>
 
       <p>
-	See <cite>VLAN Comparison Chart</cite>, below, for some examples.
+        See <cite>VLAN Comparison Chart</cite>, below, for some examples.
       </p>
     </field>
 
@@ -3352,19 +3352,19 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
 
     <field id="MFF_VLAN_TCI" title="VLAN TCI">
       <p>
-	For a packet without an 802.1Q header, this field is zero.  For a
-	packet with an 802.1Q header, this field is the TCI with the bit in
-	CFI's position (marked <code>P</code> for ``present'' below) forced to
-	1.  Thus, for a packet in VLAN 9 with priority 7, it has the value
-	<code>0xf009</code>:
+        For a packet without an 802.1Q header, this field is zero.  For a
+        packet with an 802.1Q header, this field is the TCI with the bit in
+        CFI's position (marked <code>P</code> for ``present'' below) forced to
+        1.  Thus, for a packet in VLAN 9 with priority 7, it has the value
+        <code>0xf009</code>:
       </p>
 
       <diagram>
-	<header name="NXM_VLAN_TCI">
-	  <bits name="PCP" above="3" below="7" width=".6"/>
-	  <bits name="P" above="1" below="1" width=".2"/>
-	  <bits name="VID" above="12" below="9" width=".9"/>
-	  </header>
+        <header name="NXM_VLAN_TCI">
+          <bits name="PCP" above="3" below="7" width=".6"/>
+          <bits name="P" above="1" below="1" width=".2"/>
+          <bits name="VID" above="12" below="9" width=".9"/>
+          </header>
       </diagram>
 
       <p>
@@ -3417,7 +3417,7 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
       </dl>
 
       <p>
-	See <cite>VLAN Comparison Chart</cite>, below, for more examples.
+        See <cite>VLAN Comparison Chart</cite>, below, for more examples.
       </p>
     </field>
 
@@ -3431,22 +3431,22 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
 
     <tbl>
 r r r r r.
-Criteria	OpenFlow 1.0	OpenFlow 1.1	OpenFlow 1.2+	NXM
-\_	\_	\_	\_	\_
-[1]	\fL????\fR/\fL1\fR,\fL??\fR/\fL?\fR	\fL????\fR/\fL1\fR,\fL??\fR/\fL?\fR	\fL0000\fR/\fL0000\fR,\fL--\fR	\fL0000\fR/\fL0000\fR
-[2]	\fLffff\fR/\fL0\fR,\fL??\fR/\fL?\fR	\fLffff\fR/\fL0\fR,\fL??\fR/\fL?\fR	\fL0000\fR/\fLffff\fR,\fL--\fR	\fL0000\fR/\fLffff\fR
-[3]	\fL0xxx\fR/\fL0\fR,\fL??\fR/\fL1\fR	\fL0xxx\fR/\fL0\fR,\fL??\fR/\fL1\fR	\fL1xxx\fR/\fLffff\fR,\fL--\fR	\fL1xxx\fR/\fL1fff\fR
-[4]	\fL????\fR/\fL1\fR,\fL0y\fR/\fL0\fR	\fLfffe\fR/\fL0\fR,\fL0y\fR/\fL0\fR	\fL1000\fR/\fL1000\fR,\fL0y\fR	\fLz000\fR/\fLf000\fR
-[5]	\fL0xxx\fR/\fL0\fR,\fL0y\fR/\fL0\fR	\fL0xxx\fR/\fL0\fR,\fL0y\fR/\fL0\fR	\fL1xxx\fR/\fLffff\fR,\fL0y\fR	\fLzxxx\fR/\fLffff\fR
+Criteria        OpenFlow 1.0    OpenFlow 1.1    OpenFlow 1.2+   NXM
+\_      \_      \_      \_      \_
+[1]     \fL????\fR/\fL1\fR,\fL??\fR/\fL?\fR     \fL????\fR/\fL1\fR,\fL??\fR/\fL?\fR     \fL0000\fR/\fL0000\fR,\fL--\fR  \fL0000\fR/\fL0000\fR
+[2]     \fLffff\fR/\fL0\fR,\fL??\fR/\fL?\fR     \fLffff\fR/\fL0\fR,\fL??\fR/\fL?\fR     \fL0000\fR/\fLffff\fR,\fL--\fR  \fL0000\fR/\fLffff\fR
+[3]     \fL0xxx\fR/\fL0\fR,\fL??\fR/\fL1\fR     \fL0xxx\fR/\fL0\fR,\fL??\fR/\fL1\fR     \fL1xxx\fR/\fLffff\fR,\fL--\fR  \fL1xxx\fR/\fL1fff\fR
+[4]     \fL????\fR/\fL1\fR,\fL0y\fR/\fL0\fR     \fLfffe\fR/\fL0\fR,\fL0y\fR/\fL0\fR     \fL1000\fR/\fL1000\fR,\fL0y\fR  \fLz000\fR/\fLf000\fR
+[5]     \fL0xxx\fR/\fL0\fR,\fL0y\fR/\fL0\fR     \fL0xxx\fR/\fL0\fR,\fL0y\fR/\fL0\fR     \fL1xxx\fR/\fLffff\fR,\fL0y\fR  \fLzxxx\fR/\fLffff\fR
 .T&amp;
 r r c c r.
-[6]	(none)	(none)	\fL1001\fR/\fL1001\fR,\fL--\fR	\fL1001\fR/\fL1001\fR
+[6]     (none)  (none)  \fL1001\fR/\fL1001\fR,\fL--\fR  \fL1001\fR/\fL1001\fR
 .T&amp;
 r r c c c.
-[7]	(none)	(none)	(none)	\fL3000\fR/\fL3000\fR
-[8]	(none)	(none)	(none)	\fL0000\fR/\fL0fff\fR
-[9]	(none)	(none)	(none)	\fL0000\fR/\fLf000\fR
-[10]	(none)	(none)	(none)	\fL0000\fR/\fLefff\fR
+[7]     (none)  (none)  (none)  \fL3000\fR/\fL3000\fR
+[8]     (none)  (none)  (none)  \fL0000\fR/\fL0fff\fR
+[9]     (none)  (none)  (none)  \fL0000\fR/\fLf000\fR
+[10]    (none)  (none)  (none)  \fL0000\fR/\fLefff\fR
     </tbl>
 
     <p>
@@ -3461,32 +3461,32 @@ r r c c c.
       <dt>OpenFlow 1.0</dt>
       <dt>OpenFlow 1.1</dt>
       <dd>
-	<literal>wwww/x,yy/z</literal> means VLAN ID match value
-	<literal>wwww</literal> with wildcard bit <literal>x</literal>
-	and VLAN PCP match value <literal>yy</literal> with wildcard
-	bit <literal>z</literal>.  <literal>?</literal> means that the
-	given bits are ignored (and conventionally
-	<literal>0</literal> for <literal>wwww</literal> or
-	<literal>yy</literal>, conventionally <literal>1</literal> for
-	<literal>x</literal> or <literal>z</literal>).  ``(none)''
-	means that OpenFlow 1.0 (or 1.1) cannot match with these
-	criteria.
+        <literal>wwww/x,yy/z</literal> means VLAN ID match value
+        <literal>wwww</literal> with wildcard bit <literal>x</literal>
+        and VLAN PCP match value <literal>yy</literal> with wildcard
+        bit <literal>z</literal>.  <literal>?</literal> means that the
+        given bits are ignored (and conventionally
+        <literal>0</literal> for <literal>wwww</literal> or
+        <literal>yy</literal>, conventionally <literal>1</literal> for
+        <literal>x</literal> or <literal>z</literal>).  ``(none)''
+        means that OpenFlow 1.0 (or 1.1) cannot match with these
+        criteria.
       </dd>
 
       <dt>OpenFlow 1.2+</dt>
       <dd>
-	<literal>xxxx/yyyy,zz</literal> means <ref field="vlan_vid"/> with
-	value <literal>xxxx</literal> and mask <literal>yyyy</literal>, and
-	<ref field="vlan_pcp"/> (which is not maskable) with value
-	<literal>zz</literal>.  <literal>--</literal> means that <ref
-	field="vlan_pcp"/> is omitted.  ``(none)'' means that OpenFlow 1.2
-	cannot match with these criteria.
+        <literal>xxxx/yyyy,zz</literal> means <ref field="vlan_vid"/> with
+        value <literal>xxxx</literal> and mask <literal>yyyy</literal>, and
+        <ref field="vlan_pcp"/> (which is not maskable) with value
+        <literal>zz</literal>.  <literal>--</literal> means that <ref
+        field="vlan_pcp"/> is omitted.  ``(none)'' means that OpenFlow 1.2
+        cannot match with these criteria.
       </dd>
 
       <dt>NXM</dt>
       <dd>
-	<literal>xxxx/yyyy</literal> means <ref field="vlan_tci"/> with value
-	<literal>xxxx</literal> and mask <literal>yyyy</literal>.
+        <literal>xxxx/yyyy</literal> means <ref field="vlan_tci"/> with value
+        <literal>xxxx</literal> and mask <literal>yyyy</literal>.
       </dd>
     </dl>
 
@@ -3497,111 +3497,111 @@ r r c c c.
     <dl>
       <dt>[1]</dt>
       <dd>
-	Matches any packet, that is, one without an 802.1Q header or
-	with an 802.1Q header with any TCI value.
+        Matches any packet, that is, one without an 802.1Q header or
+        with an 802.1Q header with any TCI value.
       </dd>
 
       <dt>[2]</dt>
       <dd>
-	<p>
-	  Matches only packets without an 802.1Q header.
-	</p>
+        <p>
+          Matches only packets without an 802.1Q header.
+        </p>
 
-	<p>
-	  OpenFlow 1.0 doesn't define the behavior if <ref field="dl_vlan"/> is
-	  set to <code>0xffff</code> and <ref field="dl_vlan_pcp"/> is not
-	  wildcarded.  (Open vSwitch always ignores <ref field="dl_vlan_pcp"/>
-	  when <ref field="dl_vlan"/> is set to <code>0xffff</code>.)
-	</p>
+        <p>
+          OpenFlow 1.0 doesn't define the behavior if <ref field="dl_vlan"/> is
+          set to <code>0xffff</code> and <ref field="dl_vlan_pcp"/> is not
+          wildcarded.  (Open vSwitch always ignores <ref field="dl_vlan_pcp"/>
+          when <ref field="dl_vlan"/> is set to <code>0xffff</code>.)
+        </p>
 
-	<p>
-	  OpenFlow 1.1 says explicitly to ignore <ref field="dl_vlan_pcp"/>
-	  when <ref field="dl_vlan"/> is set to <code>0xffff</code>.
-	</p>
+        <p>
+          OpenFlow 1.1 says explicitly to ignore <ref field="dl_vlan_pcp"/>
+          when <ref field="dl_vlan"/> is set to <code>0xffff</code>.
+        </p>
 
-	<p>
-	  OpenFlow 1.2 doesn't say how to interpret a match with <ref
-	  field="vlan_vid"/> value 0 and a mask with
-	  <code>OFPVID_PRESENT</code> (<code>0x1000</code>) set to 1 and some
-	  other bits in the mask set to 1 also.  Open vSwitch interprets it the
-	  same way as a mask of <code>0x1000</code>.
-	</p>
+        <p>
+          OpenFlow 1.2 doesn't say how to interpret a match with <ref
+          field="vlan_vid"/> value 0 and a mask with
+          <code>OFPVID_PRESENT</code> (<code>0x1000</code>) set to 1 and some
+          other bits in the mask set to 1 also.  Open vSwitch interprets it the
+          same way as a mask of <code>0x1000</code>.
+        </p>
 
-	<p>
-	  Any NXM match with <ref field="vlan_tci"/> value 0 and the CFI bit
-	  set to 1 in the mask is equivalent to the one listed in the table.
-	</p>
+        <p>
+          Any NXM match with <ref field="vlan_tci"/> value 0 and the CFI bit
+          set to 1 in the mask is equivalent to the one listed in the table.
+        </p>
       </dd>
 
       <dt>[3]</dt>
       <dd>
-	Matches only packets that have an 802.1Q header with VID
-	<literal>xxx</literal> (and any PCP).
+        Matches only packets that have an 802.1Q header with VID
+        <literal>xxx</literal> (and any PCP).
       </dd>
 
       <dt>[4]</dt>
       <dd>
-	<p>
-	  Matches only packets that have an 802.1Q header with PCP
-	  <literal>y</literal> (and any VID).
-	</p>
+        <p>
+          Matches only packets that have an 802.1Q header with PCP
+          <literal>y</literal> (and any VID).
+        </p>
 
-	<p>
-	  OpenFlow 1.0 doesn't clearly define the behavior for this
-	  case.  Open vSwitch implements it this way.
-	</p>
+        <p>
+          OpenFlow 1.0 doesn't clearly define the behavior for this
+          case.  Open vSwitch implements it this way.
+        </p>
 
-	<p>
-	  In the NXM value, <literal>z</literal> equals
-	  (<literal>y</literal> &lt;&lt; 1) | 1.
-	</p>
+        <p>
+          In the NXM value, <literal>z</literal> equals
+          (<literal>y</literal> &lt;&lt; 1) | 1.
+        </p>
       </dd>
 
       <dt>[5]</dt>
       <dd>
-	<p>
-	  Matches only packets that have an 802.1Q header with VID
-	  <literal>xxx</literal> and PCP <literal>y</literal>.
-	</p>
+        <p>
+          Matches only packets that have an 802.1Q header with VID
+          <literal>xxx</literal> and PCP <literal>y</literal>.
+        </p>
 
-	<p>
-	  In the NXM value, <literal>z</literal> equals
-	  (<literal>y</literal> &lt;&lt; 1) | 1.
-	</p>
+        <p>
+          In the NXM value, <literal>z</literal> equals
+          (<literal>y</literal> &lt;&lt; 1) | 1.
+        </p>
       </dd>
 
       <dt>[6]</dt>
       <dd>
-	Matches only packets that have an 802.1Q header with an
-	odd-numbered VID (and any PCP).  Only possible with OpenFlow
-	1.2 and NXM.  (This is just an example; one can match on any
-	desired VID bit pattern.)
+        Matches only packets that have an 802.1Q header with an
+        odd-numbered VID (and any PCP).  Only possible with OpenFlow
+        1.2 and NXM.  (This is just an example; one can match on any
+        desired VID bit pattern.)
       </dd>
 
       <dt>[7]</dt>
       <dd>
-	Matches only packets that have an 802.1Q header with an
-	odd-numbered PCP (and any VID).  Only possible with NXM.
-	(This is just an example; one can match on any desired VID bit
-	pattern.)
+        Matches only packets that have an 802.1Q header with an
+        odd-numbered PCP (and any VID).  Only possible with NXM.
+        (This is just an example; one can match on any desired VID bit
+        pattern.)
       </dd>
 
       <dt>[8]</dt>
       <dd>
-	Matches packets with no 802.1Q header or with an 802.1Q header
-	with a VID of 0.  Only possible with NXM.
+        Matches packets with no 802.1Q header or with an 802.1Q header
+        with a VID of 0.  Only possible with NXM.
       </dd>
 
       <dt>[9]</dt>
       <dd>
-	Matches packets with no 802.1Q header or with an 802.1Q header
-	with a PCP of 0.  Only possible with NXM.
+        Matches packets with no 802.1Q header or with an 802.1Q header
+        with a PCP of 0.  Only possible with NXM.
       </dd>
 
       <dt>[10]</dt>
       <dd>
-	Matches packets with no 802.1Q header or with an 802.1Q header
-	with both VID and PCP of 0.  Only possible with NXM.
+        Matches packets with no 802.1Q header or with an 802.1Q header
+        with both VID and PCP of 0.  Only possible with NXM.
       </dd>
     </dl>
   </group>
@@ -3625,15 +3625,15 @@ r r c c c.
 
     <diagram>
       <header name="Ethernet">
-	<bits name="dst" above="48" width="0.75"/>
-	<bits name="src" above="48" width="0.75"/>
-	<bits name="type" above="16" below="0x8847" width="0.4"/>
+        <bits name="dst" above="48" width="0.75"/>
+        <bits name="src" above="48" width="0.75"/>
+        <bits name="type" above="16" below="0x8847" width="0.4"/>
       </header>
       <header name="MPLS">
-	<bits name="label" above="20" width=".6"/>
-	<bits name="TC" above="3" width=".3"/>
-	<bits name="S" above="1" width=".1"/>
-	<bits name="TTL" above="8" width=".4"/>
+        <bits name="label" above="20" width=".6"/>
+        <bits name="TC" above="3" width=".3"/>
+        <bits name="S" above="1" width=".1"/>
+        <bits name="TTL" above="8" width=".4"/>
       </header>
       <dots/>
     </diagram>
@@ -3645,21 +3645,21 @@ r r c c c.
 
     <diagram>
       <header name="Ethernet">
-	<bits name="dst" above="48" width=".75"/>
-	<bits name="src" above="48" width=".75"/>
+        <bits name="dst" above="48" width=".75"/>
+        <bits name="src" above="48" width=".75"/>
       </header>
       <header name="802.1Q">
-	<bits name="TPID" above="16" below="0x8100" width=".4"/>
-	<bits name="TCI" above="16" width=".4"/>
+        <bits name="TPID" above="16" below="0x8100" width=".4"/>
+        <bits name="TCI" above="16" width=".4"/>
       </header>
       <header name="Ethertype">
-	<bits name="type" above="16" below="0x8847" width=".4"/>
+        <bits name="type" above="16" below="0x8847" width=".4"/>
       </header>
       <header name="MPLS">
-	<bits name="label" above="20" width=".6"/>
-	<bits name="TC" above="3" width=".3"/>
-	<bits name="S" above="1" width=".1"/>
-	<bits name="TTL" above="8" width=".4"/>
+        <bits name="label" above="20" width=".6"/>
+        <bits name="TC" above="3" width=".3"/>
+        <bits name="S" above="1" width=".1"/>
+        <bits name="TTL" above="8" width=".4"/>
       </header>
       <dots/>
     </diagram>
@@ -3671,38 +3671,38 @@ r r c c c.
     <dl>
       <dt>Label, 20 bits.</dt>
       <dd>
-	An identifier.
+        An identifier.
       </dd>
 
       <dt>Traffic control (TC), 3 bits.</dt>
       <dd>
-	Used for quality of service.
+        Used for quality of service.
       </dd>
 
       <dt>Bottom of stack (BOS), 1 bit (labeled just ``S'' above).</dt>
       <dd>
-	<p>
-	  0 indicates that another MPLS label follows this one.
-	</p>
+        <p>
+          0 indicates that another MPLS label follows this one.
+        </p>
 
-	<p>
-	  1 indicates that this MPLS label is the last one in the
-	  stack, so that some other protocol follows this one.
-	</p>
+        <p>
+          1 indicates that this MPLS label is the last one in the
+          stack, so that some other protocol follows this one.
+        </p>
       </dd>
 
       <dt>Time to live (TTL), 8 bits.</dt>
       <dd>
-	<p>
-	  Each hop across an MPLS network decrements the TTL by 1.  If
-	  it reaches 0, the packet is discarded.
-	</p>
+        <p>
+          Each hop across an MPLS network decrements the TTL by 1.  If
+          it reaches 0, the packet is discarded.
+        </p>
 
-	<p>
-	  OpenFlow does not make the MPLS TTL available as a match field, but
-	  actions are available to set and decrement the TTL.  Open vSwitch 2.6
-	  and later makes the MPLS TTL available as an extension.
-	</p>
+        <p>
+          OpenFlow does not make the MPLS TTL available as a match field, but
+          actions are available to set and decrement the TTL.  Open vSwitch 2.6
+          and later makes the MPLS TTL available as an extension.
+        </p>
       </dd>
     </dl>
 
@@ -3736,28 +3736,28 @@ r r c c c.
 
     <ul>
       <li>
-	A few reserved label values do indicate an inner protocol.
-	Label 0, the ``IPv4 Explicit NULL Label,'' indicates inner
-	IPv4.  Label 2, the ``IPv6 Explicit NULL Label,'' indicates
-	inner IPv6.
+        A few reserved label values do indicate an inner protocol.
+        Label 0, the ``IPv4 Explicit NULL Label,'' indicates inner
+        IPv4.  Label 2, the ``IPv6 Explicit NULL Label,'' indicates
+        inner IPv6.
       </li>
 
       <li>
-	Some deployments use a single inner protocol consistently.
+        Some deployments use a single inner protocol consistently.
       </li>
 
       <li>
-	In some deployments, the inner protocol must be inferred from
-	the innermost label.
+        In some deployments, the inner protocol must be inferred from
+        the innermost label.
       </li>
 
       <li>
-	In some deployments, the inner protocol must be inferred from
-	the innermost label and the encapsulated data, e.g. to
-	distinguish between inner IPv4 and IPv6 based on whether the
-	first nibble of the inner protocol data are <code>4</code> or
-	<code>6</code>.  OpenFlow and Open vSwitch do not currently
-	support these cases.
+        In some deployments, the inner protocol must be inferred from
+        the innermost label and the encapsulated data, e.g. to
+        distinguish between inner IPv4 and IPv6 based on whether the
+        first nibble of the inner protocol data are <code>4</code> or
+        <code>6</code>.  OpenFlow and Open vSwitch do not currently
+        support these cases.
       </li>
     </ul>
 
@@ -3772,82 +3772,82 @@ r r c c c.
 
     <field id="MFF_MPLS_LABEL" title="MPLS Label">
       <p>
-	The least significant 20 bits hold the ``label'' field from
-	the MPLS label.  Other bits are zero:
+        The least significant 20 bits hold the ``label'' field from
+        the MPLS label.  Other bits are zero:
       </p>
 
       <diagram>
-	<header name="OXM_OF_MPLS_LABEL">
-	  <bits name="zero" above="12" below="0" width=".6"/>
-	  <bits name="label" above="20" width="1.0"/>
-	</header>
+        <header name="OXM_OF_MPLS_LABEL">
+          <bits name="zero" above="12" below="0" width=".6"/>
+          <bits name="label" above="20" width="1.0"/>
+        </header>
       </diagram>
 
       <p>
-	Most label values are available for any use by deployments.
-	Values under 16 are reserved.
+        Most label values are available for any use by deployments.
+        Values under 16 are reserved.
       </p>
     </field>
 
     <field id="MFF_MPLS_TC" title="MPLS Traffic Class">
       <p>
-	The least significant 3 bits hold the TC field from the MPLS
-	label.  Other bits are zero:
+        The least significant 3 bits hold the TC field from the MPLS
+        label.  Other bits are zero:
       </p>
 
       <diagram>
-	<header name="OXM_OF_MPLS_TC">
-	  <bits name="zero" above="5" below="0" width="1.0"/>
-	  <bits name="TC" above="3" width=".6"/>
-	</header>
+        <header name="OXM_OF_MPLS_TC">
+          <bits name="zero" above="5" below="0" width="1.0"/>
+          <bits name="TC" above="3" width=".6"/>
+        </header>
       </diagram>
 
       <p>
-	This field is intended for use for Quality of Service (QoS)
-	and Explicit Congestion Notification purposes, but its
-	particular interpretation is deployment specific.
+        This field is intended for use for Quality of Service (QoS)
+        and Explicit Congestion Notification purposes, but its
+        particular interpretation is deployment specific.
       </p>
 
       <p>
-	Before 2009, this field was named EXP and reserved for
-	experimental use [RFC 5462].
+        Before 2009, this field was named EXP and reserved for
+        experimental use [RFC 5462].
       </p>
     </field>
 
     <field id="MFF_MPLS_BOS" title="MPLS Bottom of Stack">
       <p>
-	The least significant bit holds the BOS field from the MPLS
-	label.  Other bits are zero:
+        The least significant bit holds the BOS field from the MPLS
+        label.  Other bits are zero:
       </p>
 
       <diagram>
-	<header name="OXM_OF_MPLS_BOS">
-	  <bits name="zero" above="7" below="0" width="1.3"/>
-	  <bits name="BOS" above="1" width=".3"/>
-	</header>
+        <header name="OXM_OF_MPLS_BOS">
+          <bits name="zero" above="7" below="0" width="1.3"/>
+          <bits name="BOS" above="1" width=".3"/>
+        </header>
       </diagram>
 
       <p>
-	This field is useful as part of processing a series of incoming MPLS
-	labels.  A flow that includes a <code>pop_mpls</code> action should
-	generally match on <ref field="mpls_bos"/>:
+        This field is useful as part of processing a series of incoming MPLS
+        labels.  A flow that includes a <code>pop_mpls</code> action should
+        generally match on <ref field="mpls_bos"/>:
       </p>
 
       <ul>
-	<li>
-	  When <ref field="mpls_bos"/> is 1, there is another MPLS label
-	  following this one, so the Ethertype passed to <code>pop_mpls</code>
-	  should be an MPLS Ethertype.  For example: <code>table=0,
-	  dl_type=0x8847, mpls_bos=1, actions=pop_mpls:0x8847,
-	  goto_table:1</code>
-	</li>
+        <li>
+          When <ref field="mpls_bos"/> is 1, there is another MPLS label
+          following this one, so the Ethertype passed to <code>pop_mpls</code>
+          should be an MPLS Ethertype.  For example: <code>table=0,
+          dl_type=0x8847, mpls_bos=1, actions=pop_mpls:0x8847,
+          goto_table:1</code>
+        </li>
 
-	<li>
-	  When <ref field="mpls_bos"/> is 0, this MPLS label is the last one,
-	  so the Ethertype passed to <code>pop_mpls</code> should be a non-MPLS
-	  Ethertype such as IPv4.  For example: <code>table=1, dl_type=0x8847,
-	  mpls_bos=0, actions=pop_mpls:0x0800, goto_table:2</code>
-	</li>
+        <li>
+          When <ref field="mpls_bos"/> is 0, this MPLS label is the last one,
+          so the Ethertype passed to <code>pop_mpls</code> should be a non-MPLS
+          Ethertype such as IPv4.  For example: <code>table=1, dl_type=0x8847,
+          mpls_bos=0, actions=pop_mpls:0x0800, goto_table:2</code>
+        </li>
       </ul>
     </field>
 
@@ -3857,9 +3857,9 @@ r r c c c.
       </p>
 
       <diagram>
-	<header name="NXM_NX_MPLS_TTL">
-	  <bits name="TTL" above="8" width=".4"/>
-	</header>
+        <header name="NXM_NX_MPLS_TTL">
+          <bits name="TTL" above="8" width=".4"/>
+        </header>
       </diagram>
     </field>
   </group>
@@ -3878,18 +3878,18 @@ r r c c c.
       </p>
 
       <diagram>
-	<header name="Ethernet">
-	  <bits name="dst" above="48" width="0.4"/>
-	  <bits name="src" above="48" width="0.4"/>
-	  <bits name="type" above="16" below="0x800" width="0.4"/>
-	</header>
-	<header name="IPv4">
-	  <bits name="..." width="0.4"/>
-	  <bits name="proto" above="8" width="0.4"/>
-	  <bits name="src" above="32" width="0.4" fill="yes"/>
-	  <bits name="dst" above="32" width="0.4"/>
-	</header>
-	<dots/>
+        <header name="Ethernet">
+          <bits name="dst" above="48" width="0.4"/>
+          <bits name="src" above="48" width="0.4"/>
+          <bits name="type" above="16" below="0x800" width="0.4"/>
+        </header>
+        <header name="IPv4">
+          <bits name="..." width="0.4"/>
+          <bits name="proto" above="8" width="0.4"/>
+          <bits name="src" above="32" width="0.4" fill="yes"/>
+          <bits name="dst" above="32" width="0.4"/>
+        </header>
+        <dots/>
       </diagram>
 
       <p>
@@ -3904,18 +3904,18 @@ r r c c c.
       </p>
 
       <diagram>
-	<header name="Ethernet">
-	  <bits name="dst" above="48" width="0.4"/>
-	  <bits name="src" above="48" width="0.4"/>
-	  <bits name="type" above="16" below="0x800" width="0.4"/>
-	</header>
-	<header name="IPv4">
-	  <bits name="..." width="0.4"/>
-	  <bits name="proto" above="8" width="0.4"/>
-	  <bits name="src" above="32" width="0.4"/>
-	  <bits name="dst" above="32" width="0.4" fill="yes"/>
-	</header>
-	<dots/>
+        <header name="Ethernet">
+          <bits name="dst" above="48" width="0.4"/>
+          <bits name="src" above="48" width="0.4"/>
+          <bits name="type" above="16" below="0x800" width="0.4"/>
+        </header>
+        <header name="IPv4">
+          <bits name="..." width="0.4"/>
+          <bits name="proto" above="8" width="0.4"/>
+          <bits name="src" above="32" width="0.4"/>
+          <bits name="dst" above="32" width="0.4" fill="yes"/>
+        </header>
+        <dots/>
       </diagram>
 
       <p>
@@ -3937,18 +3937,18 @@ r r c c c.
       </p>
 
       <diagram>
-	<header name="Ethernet">
-	  <bits name="dst" above="48" width="0.4"/>
-	  <bits name="src" above="48" width="0.4"/>
-	  <bits name="type" above="16" below="0x86dd" width="0.4"/>
-	</header>
-	<header name="IPv6">
-	  <bits name="..." width="0.4"/>
-	  <bits name="next" above="8" width="0.3"/>
-	  <bits name="src" above="128" width="0.8" fill="yes"/>
-	  <bits name="dst" above="128" width="0.8"/>
-	</header>
-	<dots/>
+        <header name="Ethernet">
+          <bits name="dst" above="48" width="0.4"/>
+          <bits name="src" above="48" width="0.4"/>
+          <bits name="type" above="16" below="0x86dd" width="0.4"/>
+        </header>
+        <header name="IPv6">
+          <bits name="..." width="0.4"/>
+          <bits name="next" above="8" width="0.3"/>
+          <bits name="src" above="128" width="0.8" fill="yes"/>
+          <bits name="dst" above="128" width="0.8"/>
+        </header>
+        <dots/>
       </diagram>
 
       <p>
@@ -3961,18 +3961,18 @@ r r c c c.
         The destination address from the IPv6 header:
       </p>
       <diagram>
-	<header name="Ethernet">
-	  <bits name="dst" above="48" width="0.4"/>
-	  <bits name="src" above="48" width="0.4"/>
-	  <bits name="type" above="16" below="0x86dd" width="0.4"/>
-	</header>
-	<header name="IPv6">
-	  <bits name="..." width="0.4"/>
-	  <bits name="next" above="8" width="0.3"/>
-	  <bits name="src" above="128" width="0.8"/>
-	  <bits name="dst" above="128" width="0.8" fill="yes"/>
-	</header>
-	<dots/>
+        <header name="Ethernet">
+          <bits name="dst" above="48" width="0.4"/>
+          <bits name="src" above="48" width="0.4"/>
+          <bits name="type" above="16" below="0x86dd" width="0.4"/>
+        </header>
+        <header name="IPv6">
+          <bits name="..." width="0.4"/>
+          <bits name="next" above="8" width="0.3"/>
+          <bits name="src" above="128" width="0.8"/>
+          <bits name="dst" above="128" width="0.8" fill="yes"/>
+        </header>
+        <dots/>
       </diagram>
 
       <p>
@@ -3982,15 +3982,15 @@ r r c c c.
     </field>
     <field id="MFF_IPV6_LABEL" title="IPv6 Flow Label">
       <p>
-	The least significant 20 bits hold the flow label field from
-	the IPv6 header.  Other bits are zero:
+        The least significant 20 bits hold the flow label field from
+        the IPv6 header.  Other bits are zero:
       </p>
 
       <diagram>
-	<header name="OXM_OF_IPV6_FLABEL">
-	  <bits name="zero" above="12" below="0" width=".6"/>
-	  <bits name="label" above="20" width="1.0"/>
-	</header>
+        <header name="OXM_OF_IPV6_FLABEL">
+          <bits name="zero" above="12" below="0" width=".6"/>
+          <bits name="label" above="20" width="1.0"/>
+        </header>
       </diagram>
     </field>
 
@@ -4067,11 +4067,11 @@ r r c c c.
       </p>
 
       <diagram>
-	<header name="NXM_NX_IP_FRAG">
-	  <bits name="zero" above="6" below="0" width=".9"/>
-	  <bits name="later" above="1" width=".3"/>
-	  <bits name="any" above="1" width=".3"/>
-	</header>
+        <header name="NXM_NX_IP_FRAG">
+          <bits name="zero" above="6" below="0" width=".9"/>
+          <bits name="later" above="1" width=".3"/>
+          <bits name="any" above="1" width=".3"/>
+        </header>
       </diagram>
 
       <p>
@@ -4149,8 +4149,8 @@ r r c c c.
 
     <diagram>
       <header name="type of service">
-	<bits name="DSCP" above="6" width=".9"/>
-	<bits name="ECN" above="2" width=".3"/>
+        <bits name="DSCP" above="6" width=".9"/>
+        <bits name="ECN" above="2" width=".3"/>
       </header>
     </diagram>
 
@@ -4160,10 +4160,10 @@ r r c c c.
       </p>
 
       <diagram>
-	<header name="NXM_OF_IP_TOS">
-	  <bits name="DSCP" above="6" width=".9"/>
-	  <bits name="zero" above="2" below="0" width=".3"/>
-	</header>
+        <header name="NXM_OF_IP_TOS">
+          <bits name="DSCP" above="6" width=".9"/>
+          <bits name="zero" above="2" below="0" width=".3"/>
+        </header>
       </diagram>
     </field>
     <field id="MFF_IP_DSCP_SHIFTED" title="IPv4/v6 DSCP (Bits 0-5)">
@@ -4173,10 +4173,10 @@ r r c c c.
       </p>
 
       <diagram>
-	<header name="OXM_OF_IP_DSCP">
-	  <bits name="zero" above="2" below="0" width=".3"/>
-	  <bits name="DSCP" above="6" width=".9"/>
-	</header>
+        <header name="OXM_OF_IP_DSCP">
+          <bits name="zero" above="2" below="0" width=".3"/>
+          <bits name="DSCP" above="6" width=".9"/>
+        </header>
       </diagram>
     </field>
     <field id="MFF_IP_ECN" title="IPv4/v6 ECN">
@@ -4185,10 +4185,10 @@ r r c c c.
       </p>
 
       <diagram>
-	<header name="OXM_OF_IP_ECN">
-	  <bits name="zero" above="6" below="0" width=".9"/>
-	  <bits name="ECN" above="2" width=".35"/>
-	</header>
+        <header name="OXM_OF_IP_ECN">
+          <bits name="zero" above="6" below="0" width=".9"/>
+          <bits name="ECN" above="2" width=".35"/>
+        </header>
       </diagram>
     </field>
 
@@ -4207,20 +4207,20 @@ r r c c c.
 
     <diagram>
       <header name="Ethernet">
-	<bits name="dst" above="48" width="0.4"/>
-	<bits name="src" above="48" width="0.4"/>
-	<bits name="type" above="16" below="0x806" width="0.4"/>
+        <bits name="dst" above="48" width="0.4"/>
+        <bits name="src" above="48" width="0.4"/>
+        <bits name="type" above="16" below="0x806" width="0.4"/>
       </header>
       <header name="ARP">
-	<bits name="hrd" above="16" below="1" width=".3"/>
-	<bits name="pro" above="16" below="0x800" width=".3"/>
-	<bits name="hln" above="8" below="6" width=".2"/>
-	<bits name="pln" above="8" below="4" width=".2"/>
-	<bits name="op" above="16" width=".2" fill="yes"/>
-	<bits name="sha" above="48" width="0.5" fill="yes"/>
-	<bits name="spa" above="16" width="0.3" fill="yes"/>
-	<bits name="tha" above="48" width="0.5" fill="yes"/>
-	<bits name="tpa" above="16" width="0.3" fill="yes"/>
+        <bits name="hrd" above="16" below="1" width=".3"/>
+        <bits name="pro" above="16" below="0x800" width=".3"/>
+        <bits name="hln" above="8" below="6" width=".2"/>
+        <bits name="pln" above="8" below="4" width=".2"/>
+        <bits name="op" above="16" width=".2" fill="yes"/>
+        <bits name="sha" above="48" width="0.5" fill="yes"/>
+        <bits name="spa" above="16" width="0.3" fill="yes"/>
+        <bits name="tha" above="48" width="0.5" fill="yes"/>
+        <bits name="tpa" above="16" width="0.3" fill="yes"/>
       </header>
     </diagram>
 
@@ -4362,22 +4362,22 @@ r r c c c.
 
     <diagram>
       <header name="Ethernet">
-	<bits name="dst" above="48" width="0.4"/>
-	<bits name="src" above="48" width="0.4"/>
-	<bits name="type" above="16" below="0x800" width="0.4"/>
+        <bits name="dst" above="48" width="0.4"/>
+        <bits name="src" above="48" width="0.4"/>
+        <bits name="type" above="16" below="0x800" width="0.4"/>
       </header>
       <header name="IPv4">
-	<bits name="..." width="0.4"/>
-	<bits name="proto" above="8" below="6" width="0.3"/>
-	<bits name="src" above="32" width="0.4"/>
-	<bits name="dst" above="32" width="0.4"/>
+        <bits name="..." width="0.4"/>
+        <bits name="proto" above="8" below="6" width="0.3"/>
+        <bits name="src" above="32" width="0.4"/>
+        <bits name="dst" above="32" width="0.4"/>
       </header>
       <header name="TCP">
-	<bits name="src" above="16" width=".2"/>
-	<bits name="dst" above="16" width=".2"/>
-	<bits name="..." width=".75"/>
-	<bits name="flags" above="12" width=".3"/>
-	<bits name="..." width=".6"/>
+        <bits name="src" above="16" width=".2"/>
+        <bits name="dst" above="16" width=".2"/>
+        <bits name="..." width=".75"/>
+        <bits name="flags" above="12" width=".3"/>
+        <bits name="..." width=".6"/>
       </header>
       <dots/>
     </diagram>
@@ -4413,30 +4413,30 @@ r r c c c.
       </p>
 
       <diagram>
-	<header>
-	  <bits name="zero" above="4" below="0" width=".9"/>
-	</header>
-	<nospace/>
-	<header name="reserved">
-	  <bits name="[800]" above="1" width=".35"/>
-	  <bits name="[400]" above="1" width=".35"/>
-	  <bits name="[200]" above="1" width=".35"/>
-	</header>
-	<nospace/>
-	<header name="later RFCs">
-	  <bits name="NS" above="1" width=".35"/>
-	  <bits name="CWR" above="1" width=".35"/>
-	  <bits name="ECE" above="1" width=".35"/>
-	</header>
-	<nospace/>
-	<header name="RFC 793">
-	  <bits name="URG" above="1" width=".35"/>
-	  <bits name="ACK" above="1" width=".35"/>
-	  <bits name="PSH" above="1" width=".35"/>
-	  <bits name="RST" above="1" width=".35"/>
-	  <bits name="SYN" above="1" width=".35"/>
-	  <bits name="FIN" above="1" width=".35"/>
-	</header>
+        <header>
+          <bits name="zero" above="4" below="0" width=".9"/>
+        </header>
+        <nospace/>
+        <header name="reserved">
+          <bits name="[800]" above="1" width=".35"/>
+          <bits name="[400]" above="1" width=".35"/>
+          <bits name="[200]" above="1" width=".35"/>
+        </header>
+        <nospace/>
+        <header name="later RFCs">
+          <bits name="NS" above="1" width=".35"/>
+          <bits name="CWR" above="1" width=".35"/>
+          <bits name="ECE" above="1" width=".35"/>
+        </header>
+        <nospace/>
+        <header name="RFC 793">
+          <bits name="URG" above="1" width=".35"/>
+          <bits name="ACK" above="1" width=".35"/>
+          <bits name="PSH" above="1" width=".35"/>
+          <bits name="RST" above="1" width=".35"/>
+          <bits name="SYN" above="1" width=".35"/>
+          <bits name="FIN" above="1" width=".35"/>
+        </header>
       </diagram>
     </field>
 
@@ -4450,20 +4450,20 @@ r r c c c.
 
     <diagram>
       <header name="Ethernet">
-	<bits name="dst" above="48" width="0.4"/>
-	<bits name="src" above="48" width="0.4"/>
-	<bits name="type" above="16" below="0x800" width="0.4"/>
+        <bits name="dst" above="48" width="0.4"/>
+        <bits name="src" above="48" width="0.4"/>
+        <bits name="type" above="16" below="0x800" width="0.4"/>
       </header>
       <header name="IPv4">
-	<bits name="..." width="0.4"/>
-	<bits name="proto" above="8" below="17" width="0.3"/>
-	<bits name="src" above="32" width="0.4"/>
-	<bits name="dst" above="32" width="0.4"/>
+        <bits name="..." width="0.4"/>
+        <bits name="proto" above="8" below="17" width="0.3"/>
+        <bits name="src" above="32" width="0.4"/>
+        <bits name="dst" above="32" width="0.4"/>
       </header>
       <header name="UDP">
-	<bits name="src" above="16" width=".2"/>
-	<bits name="dst" above="16" width=".2"/>
-	<bits name="..." width=".4"/>
+        <bits name="src" above="16" width=".2"/>
+        <bits name="dst" above="16" width=".2"/>
+        <bits name="..." width=".4"/>
       </header>
       <dots/>
     </diagram>
@@ -4480,20 +4480,20 @@ r r c c c.
 
     <diagram>
       <header name="Ethernet">
-	<bits name="dst" above="48" width="0.4"/>
-	<bits name="src" above="48" width="0.4"/>
-	<bits name="type" above="16" below="0x800" width="0.4"/>
+        <bits name="dst" above="48" width="0.4"/>
+        <bits name="src" above="48" width="0.4"/>
+        <bits name="type" above="16" below="0x800" width="0.4"/>
       </header>
       <header name="IPv4">
-	<bits name="..." width="0.4"/>
-	<bits name="proto" above="8" below="132" width="0.3"/>
-	<bits name="src" above="32" width="0.4"/>
-	<bits name="dst" above="32" width="0.4"/>
+        <bits name="..." width="0.4"/>
+        <bits name="proto" above="8" below="132" width="0.3"/>
+        <bits name="src" above="32" width="0.4"/>
+        <bits name="dst" above="32" width="0.4"/>
       </header>
       <header name="SCTP">
-	<bits name="src" above="16" width=".2"/>
-	<bits name="dst" above="16" width=".2"/>
-	<bits name="..." width=".8"/>
+        <bits name="src" above="16" width=".2"/>
+        <bits name="dst" above="16" width=".2"/>
+        <bits name="..." width=".8"/>
       </header>
       <dots/>
     </diagram>
@@ -4505,20 +4505,20 @@ r r c c c.
     <h2>ICMPv4</h2>
     <diagram>
       <header name="Ethernet">
-	<bits name="dst" above="48" width="0.4"/>
-	<bits name="src" above="48" width="0.4"/>
-	<bits name="type" above="16" below="0x800" width="0.4"/>
+        <bits name="dst" above="48" width="0.4"/>
+        <bits name="src" above="48" width="0.4"/>
+        <bits name="type" above="16" below="0x800" width="0.4"/>
       </header>
       <header name="IPv4">
-	<bits name="..." width="0.4"/>
-	<bits name="proto" above="8" below="1" width="0.3"/>
-	<bits name="src" above="32" width="0.4"/>
-	<bits name="dst" above="32" width="0.4"/>
+        <bits name="..." width="0.4"/>
+        <bits name="proto" above="8" below="1" width="0.3"/>
+        <bits name="src" above="32" width="0.4"/>
+        <bits name="dst" above="32" width="0.4"/>
       </header>
       <header name="ICMPv4">
-	<bits name="type" above="8" width=".3"/>
-	<bits name="code" above="8" width=".3"/>
-	<bits name="..." width=".8"/>
+        <bits name="type" above="8" width=".3"/>
+        <bits name="code" above="8" width=".3"/>
+        <bits name="..." width=".8"/>
       </header>
       <dots/>
     </diagram>
@@ -4538,20 +4538,20 @@ r r c c c.
     <h2>ICMPv6</h2>
     <diagram>
       <header name="Ethernet">
-	<bits name="dst" above="48" width="0.4"/>
-	<bits name="src" above="48" width="0.4"/>
-	<bits name="type" above="16" below="0x86dd" width="0.4"/>
+        <bits name="dst" above="48" width="0.4"/>
+        <bits name="src" above="48" width="0.4"/>
+        <bits name="type" above="16" below="0x86dd" width="0.4"/>
       </header>
       <header name="IPv6">
-	<bits name="..." width="0.2"/>
-	<bits name="next" above="8" below="58" width="0.3"/>
-	<bits name="src" above="128" width="0.4"/>
-	<bits name="dst" above="128" width="0.4"/>
+        <bits name="..." width="0.2"/>
+        <bits name="next" above="8" below="58" width="0.3"/>
+        <bits name="src" above="128" width="0.4"/>
+        <bits name="dst" above="128" width="0.4"/>
       </header>
       <header name="ICMPv6">
-	<bits name="type" above="8" width=".3"/>
-	<bits name="code" above="8" width=".3"/>
-	<bits name="..." width=".8"/>
+        <bits name="type" above="8" width=".3"/>
+        <bits name="code" above="8" width=".3"/>
+        <bits name="..." width=".8"/>
       </header>
       <dots/>
     </diagram>
@@ -4561,31 +4561,31 @@ r r c c c.
     <h2>ICMPv6 Neighbor Discovery</h2>
     <diagram>
       <header name="Ethernet">
-	<bits name="dst" above="48" width="0.4"/>
-	<bits name="src" above="48" width="0.4"/>
-	<bits name="type" above="16" below="0x86dd" width="0.4"/>
+        <bits name="dst" above="48" width="0.4"/>
+        <bits name="src" above="48" width="0.4"/>
+        <bits name="type" above="16" below="0x86dd" width="0.4"/>
       </header>
       <header name="IPv6">
-	<bits name="..." width="0.2"/>
-	<bits name="next" above="8" below="58" width="0.3"/>
-	<bits name="src" above="128" width="0.4"/>
-	<bits name="dst" above="128" width="0.4"/>
+        <bits name="..." width="0.2"/>
+        <bits name="next" above="8" below="58" width="0.3"/>
+        <bits name="src" above="128" width="0.4"/>
+        <bits name="dst" above="128" width="0.4"/>
       </header>
       <header name="ICMPv6">
-	<bits name="type" above="8" below="135/136" width=".3"/>
-	<bits name="code" above="8" below="0" width=".3"/>
-	<bits name="..." width=".8"/>
+        <bits name="type" above="8" below="135/136" width=".3"/>
+        <bits name="code" above="8" below="0" width=".3"/>
+        <bits name="..." width=".8"/>
       </header>
       <header name="ICMPv6 ND">
-	<bits name="target" above="128" width=".4"/>
-	<bits name="option ..." width=".6"/>
+        <bits name="target" above="128" width=".4"/>
+        <bits name="option ..." width=".6"/>
       </header>
     </diagram>
     <field id="MFF_ND_TARGET" title="ICMPv6 Neighbor Discovery Target IPv6"/>
     <field id="MFF_ND_SLL"
-	   title="ICMPv6 Neighbor Discovery Source Ethernet Address"/>
+           title="ICMPv6 Neighbor Discovery Source Ethernet Address"/>
     <field id="MFF_ND_TLL"
-	   title="ICMPv6 Neighbor Discovery Target Ethernet Address"/>
+           title="ICMPv6 Neighbor Discovery Target Ethernet Address"/>
   </group>
 
   <h1>References</h1>

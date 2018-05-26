@@ -2146,7 +2146,7 @@
         </ul>
         <p>Some interfaces may not have a software-controllable MAC
         address.  This option only affects internal ports.  For other type ports,
-	you can change the MAC address outside Open vSwitch, using ip command.</p>
+        you can change the MAC address outside Open vSwitch, using ip command.</p>
       </column>
 
       <column name="error">

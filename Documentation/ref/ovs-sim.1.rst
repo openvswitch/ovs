@@ -95,9 +95,9 @@ instances.
     The new sandbox starts out without any bridges. Use ``ovs-vsctl``
     in the context of the new sandbox to create a bridge, e.g.::
 
-	sim_add hv0           # Create sandbox hv0.
-	as hv0                # Set hv0 as default sandbox.
-	ovs-vsctl add-br br0  # Add bridge br0 inside hv0.
+        sim_add hv0           # Create sandbox hv0.
+        as hv0                # Set hv0 as default sandbox.
+        ovs-vsctl add-br br0  # Add bridge br0 inside hv0.
 
     The Open vSwitch instances that ``sim_add`` creates enable
     ``dummy`` devices.  This means that bridges and interfaces can be
@@ -191,9 +191,9 @@ one, and then connects the two through an interconnection network
 
     net_add n1
     for i in 0 1; do
-	sim_add hv$i
-	as hv$i ovs-vsctl add-br br0 -- add-port br0 vif$i
-	as hv$i net_attach n1 br0
+        sim_add hv$i
+        as hv$i ovs-vsctl add-br br0 -- add-port br0 vif$i
+        as hv$i net_attach n1 br0
     done
 
 Here’s an extended version that also starts OVN::
@@ -202,13 +202,13 @@ Here’s an extended version that also starts OVN::
     ovn-nbctl ls-add lsw0
     net_add n1
     for i in 0 1; do
-	sim_add hv$i
-	as hv$i
-	ovs-vsctl add-br br-phys
-	ovn_attach n1 br-phys 192.168.0.`expr $i + 1`
-	ovs-vsctl add-port br-int vif$i -- set Interface vif$i external-ids:iface-id=lp$i
-	ovn-nbctl lsp-add lsw0 lp$i
-	ovn-nbctl lsp-set-addresses lp$i f0:00:00:00:00:0$i
+        sim_add hv$i
+        as hv$i
+        ovs-vsctl add-br br-phys
+        ovn_attach n1 br-phys 192.168.0.`expr $i + 1`
+        ovs-vsctl add-port br-int vif$i -- set Interface vif$i external-ids:iface-id=lp$i
+        ovn-nbctl lsp-add lsw0 lp$i
+        ovn-nbctl lsp-set-addresses lp$i f0:00:00:00:00:0$i
     done
 
 Here’s a primitive OVN "scale test" (adjust the scale by changing
@@ -219,23 +219,23 @@ Here’s a primitive OVN "scale test" (adjust the scale by changing
     net_add n1
     ovn-nbctl ls-add br0
     for i in `seq $n`; do
-	(sim_add hv$i
-	as hv$i
-	ovs-vsctl add-br br-phys
-	y=$(expr $i / 256)
-	x=$(expr $i % 256)
-	ovn_attach n1 br-phys 192.168.$y.$x
-	ovs-vsctl add-port br-int vif$i -- set Interface vif$i external-ids:iface-id=lp$i) &
-	case $i in
-	    *50|*00) echo $i; wait ;;
-	esac
+        (sim_add hv$i
+        as hv$i
+        ovs-vsctl add-br br-phys
+        y=$(expr $i / 256)
+        x=$(expr $i % 256)
+        ovn_attach n1 br-phys 192.168.$y.$x
+        ovs-vsctl add-port br-int vif$i -- set Interface vif$i external-ids:iface-id=lp$i) &
+        case $i in
+            *50|*00) echo $i; wait ;;
+        esac
     done
     wait
     for i in `seq $n`; do
-	yy=$(printf %02x $(expr $i / 256))
-	xx=$(printf $02x $(expr $i % 256))
-	ovn-nbctl lsp-add br0 lp$i
-	ovn-nbctl lsp-set-addresses lp$i f0:00:00:00:$yy:$xx
+        yy=$(printf %02x $(expr $i / 256))
+        xx=$(printf $02x $(expr $i % 256))
+        ovn-nbctl lsp-add br0 lp$i
+        ovn-nbctl lsp-set-addresses lp$i f0:00:00:00:$yy:$xx
     done
 
 When the scale test has finished initializing, you can watch the

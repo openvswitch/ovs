@@ -2283,7 +2283,7 @@ ipfix_cache_entry_init(const struct dpif_ipfix *di,
         data_tunnel->tunnel_key_length = tunnel_port->tunnel_key_length;
         /* tun_id is in network order, and tunnel key is in low bits. */
         tun_id = (const uint8_t *) &tunnel_key->tun_id;
-	memcpy(data_tunnel->tunnel_key,
+        memcpy(data_tunnel->tunnel_key,
                &tun_id[8 - tunnel_port->tunnel_key_length],
                tunnel_port->tunnel_key_length);
     }

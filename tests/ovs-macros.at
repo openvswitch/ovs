@@ -227,12 +227,12 @@ uuidfilt () {
 # Not all shells support "exec -a NAME", so test for it.
 if (exec -a myname true); then
     run_as () {
-	(exec -a "$@")
+        (exec -a "$@")
     }
 else
     run_as () {
         shift
-	(exec "$@")
+        (exec "$@")
     }
 fi
 ]

@@ -9,20 +9,20 @@ ovsdb_check_monitor () {
     $schema_func > schema
     AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
     while test "$1" != "--"; do
-	AT_CHECK([ovsdb-tool transact db "$1"], [0], [ignore], [ignore])
-	shift
+        AT_CHECK([ovsdb-tool transact db "$1"], [0], [ignore], [ignore])
+        shift
     done
     shift
     AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file db > ovsdb-server.stdout 2> ovsdb-server.stderr],
-	     [0], [], [])
+             [0], [], [])
     on_exit 'kill `cat ovsdb-server.pid`'
     if test "$IS_WIN32" = "yes"; then
       AT_CHECK([ovsdb-client -vjsonrpc --pidfile --log-file -d json monitor --format=csv unix:socket $db $table $columns > output 2> ovsdb-client.stderr &],
-	       [0], [ignore], [ignore])
+               [0], [ignore], [ignore])
       sleep 1
     else
       AT_CHECK([ovsdb-client -vjsonrpc --detach --pidfile --log-file -d json monitor --format=csv unix:socket $db $table $columns > output 2> ovsdb-client.stderr],
-	     [0], [ignore], [ignore])
+             [0], [ignore], [ignore])
     fi
     on_exit 'kill `cat ovsdb-client.pid`'
     for txn in ${1+"$@"} '[["'$db'"]]'; do
@@ -92,7 +92,7 @@ m4_define([OVSDB_CHECK_MONITOR_COND],
    AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file="`pwd`"/ovsdb-server-log db >/dev/null 2>&1])
    on_exit 'kill `cat ovsdb-server.pid`'
    AT_CHECK([ovsdb-client -vjsonrpc --pidfile --detach --no-chdir -d json monitor-cond --format=csv unix:socket $4 '[$8]' $5 $9 > output],
-	  [0], [ignore], [ignore])
+          [0], [ignore], [ignore])
    on_exit 'kill `cat ovsdb-client.pid`'
    for txn in m4_foreach([txn], [$6], ['txn' ]); do
      AT_CHECK([ovsdb-client transact unix:socket "$txn"], [0],

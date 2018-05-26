@@ -369,7 +369,7 @@ do_open(const char *name, const char *type, bool create, struct dpif **dpifp)
                 netdev_close(netdev);
             } else {
                 VLOG_WARN("could not open netdev %s type %s: %s",
-			  dpif_port.name, dpif_port.type, ovs_strerror(err));
+                          dpif_port.name, dpif_port.type, ovs_strerror(err));
             }
         }
     } else {
@@ -1176,7 +1176,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
         if (!aux->meter_action) {
             aux->meter_action = action;
         }
-	break;
+        break;
 
     case OVS_ACTION_ATTR_CT:
     case OVS_ACTION_ATTR_OUTPUT:

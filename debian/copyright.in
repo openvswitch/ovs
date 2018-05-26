@@ -1,6 +1,6 @@
 The original sources for this package can be found at:
 
-	http://openvswitch.org/
+        http://openvswitch.org/
 
 Upstream Authors (from AUTHORS):
 
@@ -8,22 +8,22 @@ Upstream Authors (from AUTHORS):
 
 Upstream Copyright Holders:
 
-	Copyright (c) 2007, 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
-	Copyright (c) 2010 Jean Tourrilhes - HP-Labs.
-	Copyright (c) 2008,2009,2010 Citrix Systems, Inc.
-	and authors listed above.
-	Copyright (c) 2011 Gaetano Catalli
-	Copyright (C) 2000-2003 Geoffrey Wossum (gwossum@acm.org)
-	Copyright (C) 2000 The NetBSD Foundation, Inc.
-	Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
-	Copyright (c) 1982, 1986, 1990, 1993 The Regents of the University of California.
-	Copyright (c) 2008, 2012 Vincent Bernat <bernat@luffy.cx>
-	Copyright (c) 2014 Michael Chapman
-	Copyright (c) 2014 WindRiver, Inc.
-	Copyright (c) 2014 Avaya, Inc.
-	Copyright (c) 2001 Daniel Hartmeier
-	Copyright (c) 2002 - 2008 Henning Brauer
-	Copyright (c) 2012 Gleb Smirnoff <glebius@FreeBSD.org>
+        Copyright (c) 2007, 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+        Copyright (c) 2010 Jean Tourrilhes - HP-Labs.
+        Copyright (c) 2008,2009,2010 Citrix Systems, Inc.
+        and authors listed above.
+        Copyright (c) 2011 Gaetano Catalli
+        Copyright (C) 2000-2003 Geoffrey Wossum (gwossum@acm.org)
+        Copyright (C) 2000 The NetBSD Foundation, Inc.
+        Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
+        Copyright (c) 1982, 1986, 1990, 1993 The Regents of the University of California.
+        Copyright (c) 2008, 2012 Vincent Bernat <bernat@luffy.cx>
+        Copyright (c) 2014 Michael Chapman
+        Copyright (c) 2014 WindRiver, Inc.
+        Copyright (c) 2014 Avaya, Inc.
+        Copyright (c) 2001 Daniel Hartmeier
+        Copyright (c) 2002 - 2008 Henning Brauer
+        Copyright (c) 2012 Gleb Smirnoff <glebius@FreeBSD.org>
 
 License:
 
@@ -31,15 +31,15 @@ License:
   GNU Lesser General Public License version 2.1 only
   with the exception clause below as a pre-amble.
 
-	xenserver/etc_xensource_scripts_vif
-	xenserver/opt_xensource_libexec_InterfaceReconfigure.py
-	xenserver/opt_xensource_libexec_InterfaceReconfigureBridge.py
-	xenserver/opt_xensource_libexec_InterfaceReconfigureVswitch.py
-	xenserver/opt_xensource_libexec_interface-reconfigure
-	xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py
+        xenserver/etc_xensource_scripts_vif
+        xenserver/opt_xensource_libexec_InterfaceReconfigure.py
+        xenserver/opt_xensource_libexec_InterfaceReconfigureBridge.py
+        xenserver/opt_xensource_libexec_InterfaceReconfigureVswitch.py
+        xenserver/opt_xensource_libexec_interface-reconfigure
+        xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py
 
-	* These components are only distributed in the source package.
-	  They do not appear in any binary packages.
+        * These components are only distributed in the source package.
+          They do not appear in any binary packages.
 
   On Debian systems, the complete text of the
   GNU Lesser General Public License version 2.1 can be found in
@@ -64,12 +64,12 @@ License:
 * The following components are licensed under the
   GNU Lesser General Public License version 2.1.
 
-	utilities/bugtool/ovs-bugtool
-	utilities/bugtool/ovs-bugtool-*
-	utilities/bugtool/plugins/kernel-info/openvswitch.xml
-	utilities/bugtool/plugins/network-status/openvswitch.xml
-	utilities/bugtool/plugins/system-configuration.xml
-	utilities/bugtool/plugins/system-configuration/openvswitch.xml
+        utilities/bugtool/ovs-bugtool
+        utilities/bugtool/ovs-bugtool-*
+        utilities/bugtool/plugins/kernel-info/openvswitch.xml
+        utilities/bugtool/plugins/network-status/openvswitch.xml
+        utilities/bugtool/plugins/system-configuration.xml
+        utilities/bugtool/plugins/system-configuration/openvswitch.xml
 
   On Debian systems, the complete text of the
   GNU Lesser General Public License version 2.1 can be found in
@@ -78,7 +78,7 @@ License:
 * The following component is licensed under the GNU General Public License
   version 2.
 
-	datapath/
+        datapath/
 
   On Debian systems, the complete text of the GNU General Public License
   version 2 can be found in `/usr/share/common-licenses/GPL-2'
@@ -86,25 +86,25 @@ License:
 * The following file is licensed under the GNU General Public License
   version 2.
 
-	build-aux/cccl
+        build-aux/cccl
 
 * The following files are licensed under the 2-clause BSD license.
 
-	lib/getopt_long.c
-	include/windows/getopt.h
-	datapath-windows/ovsext/Conntrack-tcp.c
-	lib/conntrack-tcp.c
+        lib/getopt_long.c
+        include/windows/getopt.h
+        datapath-windows/ovsext/Conntrack-tcp.c
+        lib/conntrack-tcp.c
 
 * The following files are licensed under the 3-clause BSD-license
 
-	include/windows/netinet/icmp6.h
-	include/windows/netinet/ip6.h
-	lib/strsep.c
+        include/windows/netinet/icmp6.h
+        include/windows/netinet/ip6.h
+        lib/strsep.c
 
 * The following components are dual-licensed under the
   GNU General Public License version 2 and the Apache License Version 2.0.
 
-	datapath/linux/compat/include/linux/openvswitch.h
+        datapath/linux/compat/include/linux/openvswitch.h
 
   On Debian systems, the complete text of the GNU General Public License
   version 2 can be found in `/usr/share/common-licenses/GPL-2'.
@@ -114,12 +114,12 @@ License:
 * The following components are licensed under the terms of either the
   Sun Industry Standard Source License 1.1 or the InMon sFlow License:
 
-	lib/sflow.h
-	lib/sflow_agent.c
-	lib/sflow_api.h
-	lib/sflow_poller.c
-	lib/sflow_receiver.c
-	lib/sflow_sampler.c
+        lib/sflow.h
+        lib/sflow_agent.c
+        lib/sflow_api.h
+        lib/sflow_poller.c
+        lib/sflow_receiver.c
+        lib/sflow_sampler.c
 
   These licenses are available, respectively, the following URLs:
 
@@ -131,7 +131,7 @@ License:
 
 * The following components are licensed for use as desired without restriction:
 
-	lib/crc32c.c
+        lib/crc32c.c
 
 * lib/ovs.tmac in the source distribution, and manpages in the
   binaries, includes troff macros from groff 1.21 that contain the
@@ -491,7 +491,7 @@ ACCEPTANCE OF THE TERMS AND CONDITIONS OF THIS AGREEMENT.  IF YOU DO NOT AGREE T
 BY THE TERMS AND CONDITIONS OF THIS AGREEMENT, YOU MAY NOT REPRODUCE OR IN ANY WAY UTILIZE
 THE SOFTWARE OR THE DOCUMENTATION OR THE SPECIFICATIONS.
 
-1.	Definitions.
+1.      Definitions.
 
 "Documentation" means the user manuals, training materials, and operating materials, if any,
 InMon provides to Licensee under this Agreement.
@@ -519,9 +519,9 @@ InMon at: http://www.sflow.org.
 
 "Trademark" means InMon's "sFlow(R)" trademark.
 
-2.	License Grant.
+2.      License Grant.
 
-2.1	Software, Documentation and Specifications License Grant.  InMon hereby grants to
+2.1     Software, Documentation and Specifications License Grant.  InMon hereby grants to
 Licensee, under all of InMon's Intellectual Property Rights therein, a perpetual (subject
 to InMon's termination rights under Section 7 below), nonexclusive, royalty-free, worldwide,
 transferable, sublicensable license, to:  (i) use and reproduce the Software, the
@@ -531,13 +531,13 @@ Specifications have been implemented, on Licensee Hardware and Products, and (v)
 any Products that include the Software, the Documentation, or software in which the
 Specifications have been implemented.
 
-2.2	Trademark License.  InMon hereby grants to Licensee a perpetual (subject to InMon's
+2.2     Trademark License.  InMon hereby grants to Licensee a perpetual (subject to InMon's
 termination rights under Section 7 below), nonexclusive, royalty-free, worldwide,
 transferable, sublicensable license to use the Trademark on or in connection with the
 Software, the Documentation, the Specifications and any software that implements the
 Specifications.
 
-2.3	Restrictions.  Licensee agrees that it will not use the Software in a way
+2.3     Restrictions.  Licensee agrees that it will not use the Software in a way
 inconsistent with the license granted in Section 2.1.  Further, Licensee agrees that, in
 exercising its rights under the license granted to it in this Agreement, Licensee will:
 (i) strictly adhere to and fully comply with the Specifications; (ii) use the Trademark,
@@ -558,7 +558,7 @@ terminate this Agreement as provided under paragraph 7 below and pursue any and 
 actions and remedies as it deems necessary, including, but not limited to breach of
 contract.
 
-3.	Ownership.  Except for the license expressly granted in Section 2, Inmon hereby
+3.      Ownership.  Except for the license expressly granted in Section 2, Inmon hereby
 retains all right, title, and interest in and to the Trademark and all its Intellectual
 Property Rights in the Software, the Documentation and the Specifications.  Licensee
 obtains no rights hereunder in the Trademark, Software, Documentation or Specifications by
@@ -567,18 +567,18 @@ Documentation and Specifications are being licensed and not sold under this Agre
 that this Agreement does not transfer title in the Trademark, Software, Documentation or
 Specifications, or any copy thereof, to Licensee.
 
-4.	Support.  Inmon shall have no obligation under this Agreement to (a) supply
+4.      Support.  Inmon shall have no obligation under this Agreement to (a) supply
 maintenance or support, bug fixes or error corrections to the Licensed Software,
 (b) supply future versions of the Licensed Software or (c) provide Licensed Software
 development tools to Licensee.
 
-5.	Warranty.  INMON HEREBY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS, IMPLIED OR
+5.      Warranty.  INMON HEREBY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS, IMPLIED OR
 STATUTORY, WITH RESPECT TO THE TRADEMARK, THE SOFTWARE, THE DOCUMENTATION, THE
 SPECIFICATIONS. OR OTHERWISE, INCLUDING BUT NOT LIMITED TO IMPLIED WARRANTIES OF
 MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT OF ANY INTELLECTUAL
 PROPERTY RIGHTS.
 
-6.	Limitation of Liability.  IN NO EVENT SHALL INMON OR ITS SUPPLIERS OR LICENSORS BE
+6.      Limitation of Liability.  IN NO EVENT SHALL INMON OR ITS SUPPLIERS OR LICENSORS BE
 LIABLE FOR ANY CONSEQUENTIAL, INCIDENTAL, SPECIAL, INDIRECT OR EXEMPLARY DAMAGES WHATSOEVER,
 WHETHER RELATED TO OR ARISING OUT OF THIS AGREEMENT, THE TRADEMARK, THE SOFTWARE, THE
 DOCUMENTATION, THE SPECIFICATIONS, OR OTHERWISE, INCLUDING WITHOUT LIMITATION, DAMAGES FOR
@@ -587,7 +587,7 @@ GOODS OR SERVICES OR FOR ANY CLAIM OR DEMAND AGAINST LICENSEE BY ANY OTHER PARTY
 PECUNIARY LOSS, EVEN IF INMON HAS BEEN ADVISED OF OR KNOWS OF THE POSSIBILITY OF SUCH
 DAMAGES.
 
-7.	Term and Termination.  The term of this Agreement will begin on the Effective Date,
+7.      Term and Termination.  The term of this Agreement will begin on the Effective Date,
 which shall be deemed to be the date of delivery of the Software and/or Documentation and/or
 Specifications to Licensee, and shall continue indefinitely unless and until terminated by
 Licensee's giving written notice of termination to InMon, or by InMon pursuant to InMon's
@@ -597,58 +597,58 @@ including the right to distribute Products that incorporate the Software or Docu
 or that implement the Specifications.  The rights and obligations contained in Sections 1,
 3, 5, 6, 7, and 8 shall survive any termination of this Agreement.
 
-8.	General Provisions.
+8.      General Provisions.
 
-8.1	Assignment.  This Agreement shall be binding upon and inure to the benefit of the
+8.1     Assignment.  This Agreement shall be binding upon and inure to the benefit of the
 parties hereto and their permitted successors and permitted assigns.  InMon will have the
 right to assign this Agreement without notice to Licensee.  Licensee may assign or transfer
 (whether by merger, operation of law or in any other manner) any of its rights or delegate
 any of its obligations hereunder without the prior written consent of InMon, provided the
 assignee assumes in writing all of Licensee's obligations hereunder.
 
-8.2	Notices.  All notices permitted or required under this Agreement shall be in
+8.2     Notices.  All notices permitted or required under this Agreement shall be in
 writing and shall be delivered in person or mailed by first class, registered or certified
 mail, postage prepaid, to the address of the party specified in this Agreement or such
 other address as either party may specify in writing.  Such notice shall be deemed to have
 been given upon receipt.
 
-8.3	Non-Waiver.  No term or provision hereof shall be deemed waived, and no breach
+8.3     Non-Waiver.  No term or provision hereof shall be deemed waived, and no breach
 excused, unless such waiver or consent shall be in writing and signed by the party claimed
 to have waived or consented.  Any consent or waiver, whether express or implied, shall not
 constitute a consent or waiver of, or excuse for any separate, different or subsequent
 breach.
 
-8.4	Independent Contractor.  The parties' relationship shall be solely that of
+8.4     Independent Contractor.  The parties' relationship shall be solely that of
 independent contractors, and nothing contained in this Agreement shall be construed to make
 either party an agent, partner, representative or principal of the other for any purpose.
 
-8.5	Choice of Law and Forum.  This Agreement shall be governed by and construed under
+8.5     Choice of Law and Forum.  This Agreement shall be governed by and construed under
 the laws of the State of California, without giving effect to such state's conflict of laws
 principles.  The parties hereby submit to the personal jurisdiction of, and agree that any
 legal proceeding with respect to or arising under this Agreement shall be brought in, the
 United States District Court for the Northern District of California or the state courts
 of the State of California for the County of San Francisco.
 
-8.6	U.S. Government Licenses.  The Software and Documentation are considered a
+8.6     U.S. Government Licenses.  The Software and Documentation are considered a
 "commercial item" as that term is defined at 48 C.F.R 2.101, or "commercial computer
 software" and "commercial computer software documentation" as such terms are used in
 48 C.F.R 12.212 of the Federal Acquisition Regulations and its successors, and
 48 C.F.R. 227.7202 of the DoD FAR Supplement and its successors.
 
-8.7	Severability.  If any provision of this Agreement is held to be unenforceable under
+8.7     Severability.  If any provision of this Agreement is held to be unenforceable under
 applicable law, then such provision shall be excluded from this Agreement and the balance
 of this Agreement shall be interpreted as if such provision were so excluded and shall be
 enforceable in accordance with its terms.  The court in its discretion may substitute for
 the excluded provision an enforceable provision which in economic substance reasonably
 approximates the excluded provision.
 
-8.8	Compliance With Law.  Licensee shall comply with all applicable laws and
+8.8     Compliance With Law.  Licensee shall comply with all applicable laws and
 regulations (including privacy laws and regulations) having application to or governing its
  use and/or operation of the Software and agrees to indemnify and hold InMon harmless from
 and against any claims, damages, losses or obligations suffered or incurred by InMon
 arising from its failure to so comply.
 
-8.9	Entire Agreement; Amendment.  This Agreement constitutes the final, complete and
+8.9     Entire Agreement; Amendment.  This Agreement constitutes the final, complete and
 entire agreement between the parties with respect to the subject matter hereof, and
 supersedes any previous proposals, negotiations, agreements, or arrangements, whether
 verbal or written, made between the parties with respect to such subject matter.  This

@@ -2537,8 +2537,8 @@ AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 dnl Modified MPLS pop action.
 dnl The input is a frame with two MPLS label stack entries which tcpdump -vve shows as:
 dnl 60:66:66:66:01:00 > 50:54:00:00:00:07, ethertype MPLS multicast (0x8848), length 66: MPLS (label 20, exp 0, ttl 32)
-dnl		(label 20, exp 0, [S], ttl 31)
-dnl		(tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl             (label 20, exp 0, [S], ttl 31)
+dnl             (tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
 dnl        192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x7744 (correct), seq 42:46, win 10000, length 4
 AT_CHECK([ovs-ofctl monitor br0 65534 -P nxt_packet_in --detach --pidfile 2> ofctl_monitor.log])
 
@@ -2564,8 +2564,8 @@ AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 dnl Modified MPLS pop action.
 dnl The input is a frame with two MPLS label stack entries which tcpdump -vve shows as:
 dnl 60:66:66:66:01:01 > 50:54:00:00:00:07, ethertype MPLS unicast (0x8847), length 66: MPLS (label 20, exp 0, ttl 32)
-dnl		(label 20, exp 0, [S], ttl 31)
-dnl		(tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl             (label 20, exp 0, [S], ttl 31)
+dnl             (tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
 dnl        192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x7744 (correct), seq 42:46, win 10000, length 4
 AT_CHECK([ovs-ofctl monitor br0 65534 -P nxt_packet_in --detach --pidfile 2> ofctl_monitor.log])
 
@@ -2591,8 +2591,8 @@ AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 dnl Modified MPLS pop action.
 dnl The input is a frame with two MPLS label stack entries which tcpdump -vve shows as:
 dnl 60:66:66:66:01:02 > 50:54:00:00:00:07, ethertype MPLS multicast (0x8848), length 66: MPLS (label 20, exp 0, ttl 32)
-dnl		(label 20, exp 0, [S], ttl 31)
-dnl		(tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl             (label 20, exp 0, [S], ttl 31)
+dnl             (tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
 dnl        192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x7744 (correct), seq 42:46, win 10000, length 4
 AT_CHECK([ovs-ofctl monitor br0 65534 -P nxt_packet_in --detach --pidfile 2> ofctl_monitor.log])
 
@@ -2618,8 +2618,8 @@ AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 dnl Modified MPLS pop action.
 dnl The input is a frame with two MPLS label stack entries which tcpdump -vve shows as:
 dnl 60:66:66:66:02:00 > 50:54:00:00:02:00, ethertype MPLS unicast (0x8847), length 66: MPLS (label 20, exp 0, ttl 32)
-dnl		(label 20, exp 0, [S], ttl 31)
-dnl		(tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl             (label 20, exp 0, [S], ttl 31)
+dnl             (tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
 dnl        192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x7744 (correct), seq 42:46, win 10000, length 4
 AT_CHECK([ovs-ofctl monitor br0 65534 -P nxt_packet_in --detach --pidfile 2> ofctl_monitor.log])
 
@@ -2645,8 +2645,8 @@ AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 dnl Modified MPLS pop action.
 dnl The input is a frame with two MPLS label stack entries which tcpdump -vve shows as:
 dnl 60:66:66:66:02:01 > 50:54:00:00:02:01, ethertype MPLS multicast (0x8848), length 66: MPLS (label 20, exp 0, ttl 32)
-dnl		(label 20, exp 0, [S], ttl 31)
-dnl		(tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl             (label 20, exp 0, [S], ttl 31)
+dnl             (tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
 dnl        192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x7744 (correct), seq 42:46, win 10000, length 4
 AT_CHECK([ovs-ofctl monitor br0 65534 -P nxt_packet_in --detach --pidfile 2> ofctl_monitor.log])
 
@@ -2673,8 +2673,8 @@ AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 dnl Modified MPLS pop action.
 dnl The input is a frame with two MPLS label stack entries which tcpdump -vve shows as:
 dnl 60:66:66:66:02:10 > 50:54:00:00:00:07, ethertype MPLS unicast (0x8847), length 66: MPLS (label 20, exp 0, ttl 32)
-dnl		(label 20, exp 0, [S], ttl 31)
-dnl		(tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl             (label 20, exp 0, [S], ttl 31)
+dnl             (tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
 dnl        192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x7744 (correct), seq 42:46, win 10000, length 4
 AT_CHECK([ovs-ofctl monitor br0 65534 -P nxt_packet_in --detach --pidfile 2> ofctl_monitor.log])
 
@@ -2700,9 +2700,9 @@ AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 dnl Modified MPLS pop action.
 dnl The input is a frame with three MPLS label stack entries which tcpdump -vve shows as:
 dnl 60:66:66:66:03:00 > 50:54:00:00:00:07, ethertype MPLS unicast (0x8847), length 66: MPLS (label 20, exp 0, ttl 32)
-dnl		(label 20, exp 0, ttl 31)
-dnl		(label 20, exp 0, [S], ttl 30)
-dnl		(tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl             (label 20, exp 0, ttl 31)
+dnl             (label 20, exp 0, [S], ttl 30)
+dnl             (tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
 dnl        192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x7744 (correct), seq 42:46, win 10000, length 4
 AT_CHECK([ovs-ofctl monitor br0 65534 -P nxt_packet_in --detach --pidfile 2> ofctl_monitor.log])
 
@@ -2728,9 +2728,9 @@ AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 dnl Modified MPLS pop action.
 dnl The input is a frame with three MPLS label stack entries which tcpdump -vve shows as:
 dnl 60:66:66:66:03:01 > 50:54:00:00:00:00, ethertype MPLS multicast (0x8848), length 66: MPLS (label 20, exp 0, ttl 32)
-dnl		(label 20, exp 0, ttl 31)
-dnl		(label 20, exp 0, [S], ttl 30)
-dnl		(tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl             (label 20, exp 0, ttl 31)
+dnl             (label 20, exp 0, [S], ttl 30)
+dnl             (tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
 dnl        192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x7744 (correct), seq 42:46, win 10000, length 4
 AT_CHECK([ovs-ofctl monitor br0 65534 -P nxt_packet_in --detach --pidfile 2> ofctl_monitor.log])
 
@@ -2756,9 +2756,9 @@ AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 dnl Modified MPLS pop action.
 dnl The input is a frame with three MPLS label stack entries which tcpdump -vve shows as:
 dnl 60:66:66:66:03:10 > 50:54:00:00:00:00, ethertype MPLS unicast (0x8847), length 66: MPLS (label 20, exp 0, ttl 32)
-dnl		(label 20, exp 0, ttl 31)
-dnl		(label 20, exp 0, [S], ttl 30)
-dnl		(tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
+dnl             (label 20, exp 0, ttl 31)
+dnl             (label 20, exp 0, [S], ttl 30)
+dnl             (tos 0x0, ttl 254, id 0, offset 0, flags [none], proto TCP (6), length 44)
 dnl        192.168.0.1.80 > 192.168.0.2.0: Flags [none], cksum 0x7744 (correct), seq 42:46, win 10000, length 4
 AT_CHECK([ovs-ofctl monitor br0 65534 -P nxt_packet_in --detach --pidfile 2> ofctl_monitor.log])
 
@@ -4771,12 +4771,12 @@ OVS_VSWITCHD_START
 add_of_ports br0 1 2 3
 ovs-vsctl \
         -- set Bridge br0 fail-mode=standalone mirrors=@m1,@m2 \
-	-- --id=@m1 create Mirror name=m1 select_all=true output_vlan=500 \
-	-- --id=@m2 create Mirror name=m2 select_all=true output_vlan=501 \
-	-- set Port br0 tag=0 \
-	-- set Port p1 tag=0 \
-	-- set Port p2 tag=500 \
-	-- set Port p3 tag=501
+        -- --id=@m1 create Mirror name=m1 select_all=true output_vlan=500 \
+        -- --id=@m2 create Mirror name=m2 select_all=true output_vlan=501 \
+        -- set Port br0 tag=0 \
+        -- set Port p1 tag=0 \
+        -- set Port p2 tag=500 \
+        -- set Port p3 tag=501
 
 flow='in_port=1'
 AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
@@ -5993,363 +5993,363 @@ m4_define([CHECK_SFLOW_SAMPLING_PACKET],
   OVS_APP_EXIT_AND_WAIT([test-sflow])
 
   AT_CHECK_UNQUOTED([[sort sflow.log | $EGREP 'HEADER|ERROR' | sed 's/ /\
-	/g']], [0], [dnl
+        /g']], [0], [dnl
 HEADER
-	dgramSeqNo=1
-	ds=127.0.0.1>2:1000
-	fsSeqNo=1
-	in_vlan=0
-	in_priority=0
-	out_vlan=0
-	out_priority=0
-	meanSkip=1
-	samplePool=1
-	dropEvents=0
-	in_ifindex=1004
-	in_format=0
-	out_ifindex=2
-	out_format=2
-	hdr_prot=1
-	pkt_len=46
-	stripped=4
-	hdr_len=42
-	hdr=FF-FF-FF-FF-FF-FF-50-54-00-00-00-05-08-06-00-01-08-00-06-04-00-01-50-54-00-00-00-05-C0-A8-00-02-00-00-00-00-00-00-C0-A8-00-01
+        dgramSeqNo=1
+        ds=127.0.0.1>2:1000
+        fsSeqNo=1
+        in_vlan=0
+        in_priority=0
+        out_vlan=0
+        out_priority=0
+        meanSkip=1
+        samplePool=1
+        dropEvents=0
+        in_ifindex=1004
+        in_format=0
+        out_ifindex=2
+        out_format=2
+        hdr_prot=1
+        pkt_len=46
+        stripped=4
+        hdr_len=42
+        hdr=FF-FF-FF-FF-FF-FF-50-54-00-00-00-05-08-06-00-01-08-00-06-04-00-01-50-54-00-00-00-05-C0-A8-00-02-00-00-00-00-00-00-C0-A8-00-01
 HEADER
-	dgramSeqNo=1
-	ds=127.0.0.1>2:1000
-	fsSeqNo=2
-	in_vlan=0
-	in_priority=0
-	out_vlan=0
-	out_priority=0
-	meanSkip=1
-	samplePool=2
-	dropEvents=0
-	in_ifindex=1003
-	in_format=0
-	out_ifindex=2
-	out_format=2
-	hdr_prot=1
-	pkt_len=46
-	stripped=4
-	hdr_len=42
-	hdr=FF-FF-FF-FF-FF-FF-50-54-00-00-00-07-08-06-00-01-08-00-06-04-00-01-50-54-00-00-00-07-C0-A8-00-01-00-00-00-00-00-00-C0-A8-00-02
+        dgramSeqNo=1
+        ds=127.0.0.1>2:1000
+        fsSeqNo=2
+        in_vlan=0
+        in_priority=0
+        out_vlan=0
+        out_priority=0
+        meanSkip=1
+        samplePool=2
+        dropEvents=0
+        in_ifindex=1003
+        in_format=0
+        out_ifindex=2
+        out_format=2
+        hdr_prot=1
+        pkt_len=46
+        stripped=4
+        hdr_len=42
+        hdr=FF-FF-FF-FF-FF-FF-50-54-00-00-00-07-08-06-00-01-08-00-06-04-00-01-50-54-00-00-00-07-C0-A8-00-01-00-00-00-00-00-00-C0-A8-00-02
 HEADER
-	dgramSeqNo=1
-	ds=127.0.0.1>2:1000
-	fsSeqNo=3
-	in_vlan=0
-	in_priority=0
-	out_vlan=0
-	out_priority=0
-	meanSkip=1
-	samplePool=3
-	dropEvents=0
-	in_ifindex=1004
-	in_format=0
-	out_ifindex=1003
-	out_format=0
-	hdr_prot=1
-	pkt_len=110
-	stripped=4
-	hdr_len=106
-	hdr=50-54-00-00-00-07-50-54-00-00-00-05-08-00-45-00-00-5C-00-00-00-00-40-01-F9-4D-C0-A8-00-01-C0-A8-00-02-08-00-13-FC-00-00-00-00-00-01-02-03-04-05-06-07-08-09-0A-0B-0C-0D-0E-0F-10-11-12-13-14-15-16-17-18-19-1A-1B-1C-1D-1E-1F-20-21-22-23-24-25-26-27-28-29-2A-2B-2C-2D-2E-2F-30-31-32-33-34-35-36-37-38-39-3A-3B-3C-3D-3E-3F
+        dgramSeqNo=1
+        ds=127.0.0.1>2:1000
+        fsSeqNo=3
+        in_vlan=0
+        in_priority=0
+        out_vlan=0
+        out_priority=0
+        meanSkip=1
+        samplePool=3
+        dropEvents=0
+        in_ifindex=1004
+        in_format=0
+        out_ifindex=1003
+        out_format=0
+        hdr_prot=1
+        pkt_len=110
+        stripped=4
+        hdr_len=106
+        hdr=50-54-00-00-00-07-50-54-00-00-00-05-08-00-45-00-00-5C-00-00-00-00-40-01-F9-4D-C0-A8-00-01-C0-A8-00-02-08-00-13-FC-00-00-00-00-00-01-02-03-04-05-06-07-08-09-0A-0B-0C-0D-0E-0F-10-11-12-13-14-15-16-17-18-19-1A-1B-1C-1D-1E-1F-20-21-22-23-24-25-26-27-28-29-2A-2B-2C-2D-2E-2F-30-31-32-33-34-35-36-37-38-39-3A-3B-3C-3D-3E-3F
 HEADER
-	dgramSeqNo=1
-	ds=127.0.0.1>2:1000
-	fsSeqNo=4
-	in_vlan=0
-	in_priority=0
-	out_vlan=0
-	out_priority=0
-	meanSkip=1
-	samplePool=4
-	dropEvents=0
-	in_ifindex=1003
-	in_format=0
-	out_ifindex=1004
-	out_format=0
-	hdr_prot=1
-	pkt_len=110
-	stripped=4
-	hdr_len=106
-	hdr=50-54-00-00-00-05-50-54-00-00-00-07-08-00-45-00-00-5C-00-00-00-00-40-01-F9-4D-C0-A8-00-02-C0-A8-00-01-00-00-1B-FC-00-00-00-00-00-01-02-03-04-05-06-07-08-09-0A-0B-0C-0D-0E-0F-10-11-12-13-14-15-16-17-18-19-1A-1B-1C-1D-1E-1F-20-21-22-23-24-25-26-27-28-29-2A-2B-2C-2D-2E-2F-30-31-32-33-34-35-36-37-38-39-3A-3B-3C-3D-3E-3F
+        dgramSeqNo=1
+        ds=127.0.0.1>2:1000
+        fsSeqNo=4
+        in_vlan=0
+        in_priority=0
+        out_vlan=0
+        out_priority=0
+        meanSkip=1
+        samplePool=4
+        dropEvents=0
+        in_ifindex=1003
+        in_format=0
+        out_ifindex=1004
+        out_format=0
+        hdr_prot=1
+        pkt_len=110
+        stripped=4
+        hdr_len=106
+        hdr=50-54-00-00-00-05-50-54-00-00-00-07-08-00-45-00-00-5C-00-00-00-00-40-01-F9-4D-C0-A8-00-02-C0-A8-00-01-00-00-1B-FC-00-00-00-00-00-01-02-03-04-05-06-07-08-09-0A-0B-0C-0D-0E-0F-10-11-12-13-14-15-16-17-18-19-1A-1B-1C-1D-1E-1F-20-21-22-23-24-25-26-27-28-29-2A-2B-2C-2D-2E-2F-30-31-32-33-34-35-36-37-38-39-3A-3B-3C-3D-3E-3F
 HEADER
-	dgramSeqNo=1
-	ds=127.0.0.1>2:1000
-	fsSeqNo=5
-	in_vlan=0
-	in_priority=0
-	out_vlan=0
-	out_priority=0
-	meanSkip=1
-	samplePool=5
-	dropEvents=0
-	in_ifindex=1003
-	in_format=0
-	out_ifindex=1004
-	out_format=0
-	hdr_prot=1
-	pkt_len=58
-	stripped=4
-	hdr_len=54
-	hdr=50-54-00-00-00-05-50-54-00-00-00-07-86-DD-67-00-00-00-00-00-0A-80-FE-80-00-00-00-00-00-00-00-00-00-00-00-00-00-01-FE-80-00-00-00-00-00-00-00-00-00-00-00-00-00-02
+        dgramSeqNo=1
+        ds=127.0.0.1>2:1000
+        fsSeqNo=5
+        in_vlan=0
+        in_priority=0
+        out_vlan=0
+        out_priority=0
+        meanSkip=1
+        samplePool=5
+        dropEvents=0
+        in_ifindex=1003
+        in_format=0
+        out_ifindex=1004
+        out_format=0
+        hdr_prot=1
+        pkt_len=58
+        stripped=4
+        hdr_len=54
+        hdr=50-54-00-00-00-05-50-54-00-00-00-07-86-DD-67-00-00-00-00-00-0A-80-FE-80-00-00-00-00-00-00-00-00-00-00-00-00-00-01-FE-80-00-00-00-00-00-00-00-00-00-00-00-00-00-02
 ])
 
   AT_CHECK_UNQUOTED([[sort sflow.log | $EGREP 'ETHCOUNTERS|IFCOUNTERS|ERROR|PORTNAME|OPENFLOWPORT' | head -24 | sed 's/ /\
-	/g']], [0], [dnl
+        /g']], [0], [dnl
 ETHCOUNTERS
-	dot3StatsAlignmentErrors=4294967295
-	dot3StatsFCSErrors=4294967295
-	dot3StatsSingleCollisionFrames=4294967295
-	dot3StatsMultipleCollisionFrames=4294967295
-	dot3StatsSQETestErrors=4294967295
-	dot3StatsDeferredTransmissions=4294967295
-	dot3StatsLateCollisions=4294967295
-	dot3StatsExcessiveCollisions=4294967295
-	dot3StatsInternalMacTransmitErrors=4294967295
-	dot3StatsCarrierSenseErrors=4294967295
-	dot3StatsFrameTooLongs=4294967295
-	dot3StatsInternalMacReceiveErrors=4294967295
-	dot3StatsSymbolErrors=4294967295
+        dot3StatsAlignmentErrors=4294967295
+        dot3StatsFCSErrors=4294967295
+        dot3StatsSingleCollisionFrames=4294967295
+        dot3StatsMultipleCollisionFrames=4294967295
+        dot3StatsSQETestErrors=4294967295
+        dot3StatsDeferredTransmissions=4294967295
+        dot3StatsLateCollisions=4294967295
+        dot3StatsExcessiveCollisions=4294967295
+        dot3StatsInternalMacTransmitErrors=4294967295
+        dot3StatsCarrierSenseErrors=4294967295
+        dot3StatsFrameTooLongs=4294967295
+        dot3StatsInternalMacReceiveErrors=4294967295
+        dot3StatsSymbolErrors=4294967295
 ETHCOUNTERS
-	dot3StatsAlignmentErrors=4294967295
-	dot3StatsFCSErrors=4294967295
-	dot3StatsSingleCollisionFrames=4294967295
-	dot3StatsMultipleCollisionFrames=4294967295
-	dot3StatsSQETestErrors=4294967295
-	dot3StatsDeferredTransmissions=4294967295
-	dot3StatsLateCollisions=4294967295
-	dot3StatsExcessiveCollisions=4294967295
-	dot3StatsInternalMacTransmitErrors=4294967295
-	dot3StatsCarrierSenseErrors=4294967295
-	dot3StatsFrameTooLongs=4294967295
-	dot3StatsInternalMacReceiveErrors=4294967295
-	dot3StatsSymbolErrors=4294967295
+        dot3StatsAlignmentErrors=4294967295
+        dot3StatsFCSErrors=4294967295
+        dot3StatsSingleCollisionFrames=4294967295
+        dot3StatsMultipleCollisionFrames=4294967295
+        dot3StatsSQETestErrors=4294967295
+        dot3StatsDeferredTransmissions=4294967295
+        dot3StatsLateCollisions=4294967295
+        dot3StatsExcessiveCollisions=4294967295
+        dot3StatsInternalMacTransmitErrors=4294967295
+        dot3StatsCarrierSenseErrors=4294967295
+        dot3StatsFrameTooLongs=4294967295
+        dot3StatsInternalMacReceiveErrors=4294967295
+        dot3StatsSymbolErrors=4294967295
 ETHCOUNTERS
-	dot3StatsAlignmentErrors=4294967295
-	dot3StatsFCSErrors=4294967295
-	dot3StatsSingleCollisionFrames=4294967295
-	dot3StatsMultipleCollisionFrames=4294967295
-	dot3StatsSQETestErrors=4294967295
-	dot3StatsDeferredTransmissions=4294967295
-	dot3StatsLateCollisions=4294967295
-	dot3StatsExcessiveCollisions=4294967295
-	dot3StatsInternalMacTransmitErrors=4294967295
-	dot3StatsCarrierSenseErrors=4294967295
-	dot3StatsFrameTooLongs=4294967295
-	dot3StatsInternalMacReceiveErrors=4294967295
-	dot3StatsSymbolErrors=4294967295
+        dot3StatsAlignmentErrors=4294967295
+        dot3StatsFCSErrors=4294967295
+        dot3StatsSingleCollisionFrames=4294967295
+        dot3StatsMultipleCollisionFrames=4294967295
+        dot3StatsSQETestErrors=4294967295
+        dot3StatsDeferredTransmissions=4294967295
+        dot3StatsLateCollisions=4294967295
+        dot3StatsExcessiveCollisions=4294967295
+        dot3StatsInternalMacTransmitErrors=4294967295
+        dot3StatsCarrierSenseErrors=4294967295
+        dot3StatsFrameTooLongs=4294967295
+        dot3StatsInternalMacReceiveErrors=4294967295
+        dot3StatsSymbolErrors=4294967295
 ETHCOUNTERS
-	dot3StatsAlignmentErrors=4294967295
-	dot3StatsFCSErrors=4294967295
-	dot3StatsSingleCollisionFrames=4294967295
-	dot3StatsMultipleCollisionFrames=4294967295
-	dot3StatsSQETestErrors=4294967295
-	dot3StatsDeferredTransmissions=4294967295
-	dot3StatsLateCollisions=4294967295
-	dot3StatsExcessiveCollisions=4294967295
-	dot3StatsInternalMacTransmitErrors=4294967295
-	dot3StatsCarrierSenseErrors=4294967295
-	dot3StatsFrameTooLongs=4294967295
-	dot3StatsInternalMacReceiveErrors=4294967295
-	dot3StatsSymbolErrors=4294967295
+        dot3StatsAlignmentErrors=4294967295
+        dot3StatsFCSErrors=4294967295
+        dot3StatsSingleCollisionFrames=4294967295
+        dot3StatsMultipleCollisionFrames=4294967295
+        dot3StatsSQETestErrors=4294967295
+        dot3StatsDeferredTransmissions=4294967295
+        dot3StatsLateCollisions=4294967295
+        dot3StatsExcessiveCollisions=4294967295
+        dot3StatsInternalMacTransmitErrors=4294967295
+        dot3StatsCarrierSenseErrors=4294967295
+        dot3StatsFrameTooLongs=4294967295
+        dot3StatsInternalMacReceiveErrors=4294967295
+        dot3StatsSymbolErrors=4294967295
 ETHCOUNTERS
-	dot3StatsAlignmentErrors=4294967295
-	dot3StatsFCSErrors=4294967295
-	dot3StatsSingleCollisionFrames=4294967295
-	dot3StatsMultipleCollisionFrames=4294967295
-	dot3StatsSQETestErrors=4294967295
-	dot3StatsDeferredTransmissions=4294967295
-	dot3StatsLateCollisions=4294967295
-	dot3StatsExcessiveCollisions=4294967295
-	dot3StatsInternalMacTransmitErrors=4294967295
-	dot3StatsCarrierSenseErrors=4294967295
-	dot3StatsFrameTooLongs=4294967295
-	dot3StatsInternalMacReceiveErrors=4294967295
-	dot3StatsSymbolErrors=4294967295
+        dot3StatsAlignmentErrors=4294967295
+        dot3StatsFCSErrors=4294967295
+        dot3StatsSingleCollisionFrames=4294967295
+        dot3StatsMultipleCollisionFrames=4294967295
+        dot3StatsSQETestErrors=4294967295
+        dot3StatsDeferredTransmissions=4294967295
+        dot3StatsLateCollisions=4294967295
+        dot3StatsExcessiveCollisions=4294967295
+        dot3StatsInternalMacTransmitErrors=4294967295
+        dot3StatsCarrierSenseErrors=4294967295
+        dot3StatsFrameTooLongs=4294967295
+        dot3StatsInternalMacReceiveErrors=4294967295
+        dot3StatsSymbolErrors=4294967295
 ETHCOUNTERS
-	dot3StatsAlignmentErrors=4294967295
-	dot3StatsFCSErrors=4294967295
-	dot3StatsSingleCollisionFrames=4294967295
-	dot3StatsMultipleCollisionFrames=4294967295
-	dot3StatsSQETestErrors=4294967295
-	dot3StatsDeferredTransmissions=4294967295
-	dot3StatsLateCollisions=4294967295
-	dot3StatsExcessiveCollisions=4294967295
-	dot3StatsInternalMacTransmitErrors=4294967295
-	dot3StatsCarrierSenseErrors=4294967295
-	dot3StatsFrameTooLongs=4294967295
-	dot3StatsInternalMacReceiveErrors=4294967295
-	dot3StatsSymbolErrors=4294967295
+        dot3StatsAlignmentErrors=4294967295
+        dot3StatsFCSErrors=4294967295
+        dot3StatsSingleCollisionFrames=4294967295
+        dot3StatsMultipleCollisionFrames=4294967295
+        dot3StatsSQETestErrors=4294967295
+        dot3StatsDeferredTransmissions=4294967295
+        dot3StatsLateCollisions=4294967295
+        dot3StatsExcessiveCollisions=4294967295
+        dot3StatsInternalMacTransmitErrors=4294967295
+        dot3StatsCarrierSenseErrors=4294967295
+        dot3StatsFrameTooLongs=4294967295
+        dot3StatsInternalMacReceiveErrors=4294967295
+        dot3StatsSymbolErrors=4294967295
 IFCOUNTERS
-	dgramSeqNo=1
-	ds=127.0.0.1>0:1003
-	csSeqNo=1
-	ifindex=1003
-	type=6
-	ifspeed=100000000
-	direction=0
-	status=0
-	in_octets=202
-	in_unicasts=3
-	in_multicasts=4294967295
-	in_broadcasts=4294967295
-	in_discards=4294967295
-	in_errors=4294967295
-	in_unknownprotos=4294967295
-	out_octets=148
-	out_unicasts=2
-	out_multicasts=4294967295
-	out_broadcasts=4294967295
-	out_discards=4294967295
-	out_errors=4294967295
-	promiscuous=0
+        dgramSeqNo=1
+        ds=127.0.0.1>0:1003
+        csSeqNo=1
+        ifindex=1003
+        type=6
+        ifspeed=100000000
+        direction=0
+        status=0
+        in_octets=202
+        in_unicasts=3
+        in_multicasts=4294967295
+        in_broadcasts=4294967295
+        in_discards=4294967295
+        in_errors=4294967295
+        in_unknownprotos=4294967295
+        out_octets=148
+        out_unicasts=2
+        out_multicasts=4294967295
+        out_broadcasts=4294967295
+        out_discards=4294967295
+        out_errors=4294967295
+        promiscuous=0
 IFCOUNTERS
-	dgramSeqNo=1
-	ds=127.0.0.1>0:1004
-	csSeqNo=1
-	ifindex=1004
-	type=6
-	ifspeed=100000000
-	direction=0
-	status=0
-	in_octets=148
-	in_unicasts=2
-	in_multicasts=4294967295
-	in_broadcasts=4294967295
-	in_discards=4294967295
-	in_errors=4294967295
-	in_unknownprotos=4294967295
-	out_octets=202
-	out_unicasts=3
-	out_multicasts=4294967295
-	out_broadcasts=4294967295
-	out_discards=4294967295
-	out_errors=4294967295
-	promiscuous=0
+        dgramSeqNo=1
+        ds=127.0.0.1>0:1004
+        csSeqNo=1
+        ifindex=1004
+        type=6
+        ifspeed=100000000
+        direction=0
+        status=0
+        in_octets=148
+        in_unicasts=2
+        in_multicasts=4294967295
+        in_broadcasts=4294967295
+        in_discards=4294967295
+        in_errors=4294967295
+        in_unknownprotos=4294967295
+        out_octets=202
+        out_unicasts=3
+        out_multicasts=4294967295
+        out_broadcasts=4294967295
+        out_discards=4294967295
+        out_errors=4294967295
+        promiscuous=0
 IFCOUNTERS
-	dgramSeqNo=2
-	ds=127.0.0.1>0:1002
-	csSeqNo=1
-	ifindex=1002
-	type=6
-	ifspeed=100000000
-	direction=0
-	status=0
-	in_octets=0
-	in_unicasts=0
-	in_multicasts=4294967295
-	in_broadcasts=4294967295
-	in_discards=4294967295
-	in_errors=4294967295
-	in_unknownprotos=4294967295
-	out_octets=84
-	out_unicasts=2
-	out_multicasts=4294967295
-	out_broadcasts=4294967295
-	out_discards=4294967295
-	out_errors=4294967295
-	promiscuous=0
+        dgramSeqNo=2
+        ds=127.0.0.1>0:1002
+        csSeqNo=1
+        ifindex=1002
+        type=6
+        ifspeed=100000000
+        direction=0
+        status=0
+        in_octets=0
+        in_unicasts=0
+        in_multicasts=4294967295
+        in_broadcasts=4294967295
+        in_discards=4294967295
+        in_errors=4294967295
+        in_unknownprotos=4294967295
+        out_octets=84
+        out_unicasts=2
+        out_multicasts=4294967295
+        out_broadcasts=4294967295
+        out_discards=4294967295
+        out_errors=4294967295
+        promiscuous=0
 IFCOUNTERS
-	dgramSeqNo=3
-	ds=127.0.0.1>0:1002
-	csSeqNo=2
-	ifindex=1002
-	type=6
-	ifspeed=100000000
-	direction=0
-	status=0
-	in_octets=0
-	in_unicasts=0
-	in_multicasts=4294967295
-	in_broadcasts=4294967295
-	in_discards=4294967295
-	in_errors=4294967295
-	in_unknownprotos=4294967295
-	out_octets=84
-	out_unicasts=2
-	out_multicasts=4294967295
-	out_broadcasts=4294967295
-	out_discards=4294967295
-	out_errors=4294967295
-	promiscuous=0
+        dgramSeqNo=3
+        ds=127.0.0.1>0:1002
+        csSeqNo=2
+        ifindex=1002
+        type=6
+        ifspeed=100000000
+        direction=0
+        status=0
+        in_octets=0
+        in_unicasts=0
+        in_multicasts=4294967295
+        in_broadcasts=4294967295
+        in_discards=4294967295
+        in_errors=4294967295
+        in_unknownprotos=4294967295
+        out_octets=84
+        out_unicasts=2
+        out_multicasts=4294967295
+        out_broadcasts=4294967295
+        out_discards=4294967295
+        out_errors=4294967295
+        promiscuous=0
 IFCOUNTERS
-	dgramSeqNo=3
-	ds=127.0.0.1>0:1003
-	csSeqNo=2
-	ifindex=1003
-	type=6
-	ifspeed=100000000
-	direction=0
-	status=0
-	in_octets=202
-	in_unicasts=3
-	in_multicasts=4294967295
-	in_broadcasts=4294967295
-	in_discards=4294967295
-	in_errors=4294967295
-	in_unknownprotos=4294967295
-	out_octets=148
-	out_unicasts=2
-	out_multicasts=4294967295
-	out_broadcasts=4294967295
-	out_discards=4294967295
-	out_errors=4294967295
-	promiscuous=0
+        dgramSeqNo=3
+        ds=127.0.0.1>0:1003
+        csSeqNo=2
+        ifindex=1003
+        type=6
+        ifspeed=100000000
+        direction=0
+        status=0
+        in_octets=202
+        in_unicasts=3
+        in_multicasts=4294967295
+        in_broadcasts=4294967295
+        in_discards=4294967295
+        in_errors=4294967295
+        in_unknownprotos=4294967295
+        out_octets=148
+        out_unicasts=2
+        out_multicasts=4294967295
+        out_broadcasts=4294967295
+        out_discards=4294967295
+        out_errors=4294967295
+        promiscuous=0
 IFCOUNTERS
-	dgramSeqNo=3
-	ds=127.0.0.1>0:1004
-	csSeqNo=2
-	ifindex=1004
-	type=6
-	ifspeed=100000000
-	direction=0
-	status=0
-	in_octets=148
-	in_unicasts=2
-	in_multicasts=4294967295
-	in_broadcasts=4294967295
-	in_discards=4294967295
-	in_errors=4294967295
-	in_unknownprotos=4294967295
-	out_octets=202
-	out_unicasts=3
-	out_multicasts=4294967295
-	out_broadcasts=4294967295
-	out_discards=4294967295
-	out_errors=4294967295
-	promiscuous=0
+        dgramSeqNo=3
+        ds=127.0.0.1>0:1004
+        csSeqNo=2
+        ifindex=1004
+        type=6
+        ifspeed=100000000
+        direction=0
+        status=0
+        in_octets=148
+        in_unicasts=2
+        in_multicasts=4294967295
+        in_broadcasts=4294967295
+        in_discards=4294967295
+        in_errors=4294967295
+        in_unknownprotos=4294967295
+        out_octets=202
+        out_unicasts=3
+        out_multicasts=4294967295
+        out_broadcasts=4294967295
+        out_discards=4294967295
+        out_errors=4294967295
+        promiscuous=0
 OPENFLOWPORT
-	datapath_id=18364758544493064720
-	port_no=1
+        datapath_id=18364758544493064720
+        port_no=1
 OPENFLOWPORT
-	datapath_id=18364758544493064720
-	port_no=1
+        datapath_id=18364758544493064720
+        port_no=1
 OPENFLOWPORT
-	datapath_id=18364758544493064720
-	port_no=2
+        datapath_id=18364758544493064720
+        port_no=2
 OPENFLOWPORT
-	datapath_id=18364758544493064720
-	port_no=2
+        datapath_id=18364758544493064720
+        port_no=2
 OPENFLOWPORT
-	datapath_id=18364758544493064720
-	port_no=65534
+        datapath_id=18364758544493064720
+        port_no=65534
 OPENFLOWPORT
-	datapath_id=18364758544493064720
-	port_no=65534
+        datapath_id=18364758544493064720
+        port_no=65534
 PORTNAME
-	portName=br0
+        portName=br0
 PORTNAME
-	portName=br0
+        portName=br0
 PORTNAME
-	portName=p1
+        portName=p1
 PORTNAME
-	portName=p1
+        portName=p1
 PORTNAME
-	portName=p2
+        portName=p2
 PORTNAME
-	portName=p2
+        portName=p2
 ])])
 
 AT_SETUP([ofproto-dpif - basic truncate action])
@@ -6489,19 +6489,19 @@ dnl Test sFlow LAG structures
 AT_SETUP([ofproto-dpif - sFlow packet sampling - LACP structures])
 AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 OVS_VSWITCHD_START([dnl
-		    add-bond br0 bond p1 p2 --				\
-		    set Port bond lacp=active bond-mode=active-backup	\
-		    other_config:lacp-time="fast"			\
-		    other_config:lacp-system-id=11:22:33:44:55:66	\
-		    other_config:lacp-system-priority=54321 --		\
-		    set Interface p1 type=dummy				\
-		    other_config:lacp-port-id=11			\
-		    other_config:lacp-port-priority=111			\
-		    other_config:lacp-aggregation-key=3333 --		\
-		    set Interface p2 type=dummy				\
-		    other_config:lacp-port-id=22			\
-		    other_config:lacp-port-priority=222			\
-		    other_config:lacp-aggregation-key=3333 ])
+                    add-bond br0 bond p1 p2 --                          \
+                    set Port bond lacp=active bond-mode=active-backup   \
+                    other_config:lacp-time="fast"                       \
+                    other_config:lacp-system-id=11:22:33:44:55:66       \
+                    other_config:lacp-system-priority=54321 --          \
+                    set Interface p1 type=dummy                         \
+                    other_config:lacp-port-id=11                        \
+                    other_config:lacp-port-priority=111                 \
+                    other_config:lacp-aggregation-key=3333 --           \
+                    set Interface p2 type=dummy                         \
+                    other_config:lacp-port-id=22                        \
+                    other_config:lacp-port-priority=222                 \
+                    other_config:lacp-aggregation-key=3333 ])
 
 on_exit 'kill `cat test-sflow.pid`'
 AT_CHECK([ovstest test-sflow --log-file --detach --no-chdir --pidfile 0:127.0.0.1 > sflow.log], [0], [], [ignore])
@@ -6511,9 +6511,9 @@ PARSE_LISTENING_PORT([test-sflow.log], [SFLOW_PORT])
 ovs-appctl time/stop
 
 ovs-vsctl \
-      set Interface p1 options:ifindex=1003 --			\
-      set Bridge br0 sflow=@sf --				\
-      --id=@sf create sflow targets=\"127.0.0.1:$SFLOW_PORT\"	\
+      set Interface p1 options:ifindex=1003 --                  \
+      set Bridge br0 sflow=@sf --                               \
+      --id=@sf create sflow targets=\"127.0.0.1:$SFLOW_PORT\"   \
       header=128 sampling=1 polling=1 agent=127.0.0.1
 
 dnl sleep long enough to get the sFlow datagram flushed out (may be delayed for up to 1 second)
@@ -6522,23 +6522,23 @@ AT_CHECK([ovs-appctl revalidator/purge], [0])
 OVS_VSWITCHD_STOP
 OVS_APP_EXIT_AND_WAIT([test-sflow])
 AT_CHECK([[sort sflow.log | $EGREP 'LACPCOUNTERS|ERROR' | head -n 1 | sed 's/ /\
-	/g']], [0], [dnl
+        /g']], [0], [dnl
 LACPCOUNTERS
-	sysID=11:22:33:44:55:66
-	partnerID=00:00:00:00:00:00
-	aggID=3333
-	actorAdmin=0x7
-	actorOper=0xbf
-	partnerAdmin=0x0
-	partnerOper=0x2
-	LACPDUsRx=0
-	markerPDUsRx=4294967295
-	markerRespPDUsRx=4294967295
-	unknownRx=4294967295
-	illegalRx=0
-	LACPDUsTx=1
-	markerPDUsTx=4294967295
-	markerRespPDUsTx=4294967295
+        sysID=11:22:33:44:55:66
+        partnerID=00:00:00:00:00:00
+        aggID=3333
+        actorAdmin=0x7
+        actorOper=0xbf
+        partnerAdmin=0x0
+        partnerOper=0x2
+        LACPDUsRx=0
+        markerPDUsRx=4294967295
+        markerRespPDUsRx=4294967295
+        unknownRx=4294967295
+        illegalRx=0
+        LACPDUsTx=1
+        markerPDUsTx=4294967295
+        markerRespPDUsTx=4294967295
 ])
 
 AT_CLEANUP
@@ -6555,7 +6555,7 @@ ovs-appctl time/stop
 
 OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
 AT_CHECK([ovs-vsctl add-port br0 gre0 -- set Interface gre0 type=gre \
-     		    options:remote_ip=1.1.1.1 options:key=456 ofport_request=3])
+                    options:remote_ip=1.1.1.1 options:key=456 ofport_request=3])
 AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dummy ofport_request=4])
 
 AT_CHECK([ovs-ofctl add-flow br0 action=3])
@@ -6577,36 +6577,36 @@ done
 OVS_APP_EXIT_AND_WAIT([test-sflow])
 
 AT_CHECK_UNQUOTED([[sort sflow.log | $EGREP 'HEADER|ERROR' | sed 's/ /\
-	/g']], [0], [dnl
+        /g']], [0], [dnl
 HEADER
-	dgramSeqNo=1
-	ds=127.0.0.1>2:1000
-	fsSeqNo=1
-	tunnel4_out_length=0
-	tunnel4_out_protocol=47
-	tunnel4_out_src=0.0.0.0
-	tunnel4_out_dst=1.1.1.1
-	tunnel4_out_src_port=0
-	tunnel4_out_dst_port=0
-	tunnel4_out_tcp_flags=0
-	tunnel4_out_tos=1
-	tunnel_out_vni=456
-	in_vlan=0
-	in_priority=0
-	out_vlan=0
-	out_priority=0
-	meanSkip=1
-	samplePool=1
-	dropEvents=0
-	in_ifindex=0
-	in_format=0
-	out_ifindex=1
-	out_format=2
-	hdr_prot=1
-	pkt_len=110
-	stripped=4
-	hdr_len=106
-	hdr=50-54-00-00-00-0A-50-54-00-00-00-09-08-00-45-01-00-5C-00-00-00-00-80-01-12-8A-0A-0A-0A-02-0A-0A-0A-01-08-00-13-FC-00-00-00-00-00-01-02-03-04-05-06-07-08-09-0A-0B-0C-0D-0E-0F-10-11-12-13-14-15-16-17-18-19-1A-1B-1C-1D-1E-1F-20-21-22-23-24-25-26-27-28-29-2A-2B-2C-2D-2E-2F-30-31-32-33-34-35-36-37-38-39-3A-3B-3C-3D-3E-3F
+        dgramSeqNo=1
+        ds=127.0.0.1>2:1000
+        fsSeqNo=1
+        tunnel4_out_length=0
+        tunnel4_out_protocol=47
+        tunnel4_out_src=0.0.0.0
+        tunnel4_out_dst=1.1.1.1
+        tunnel4_out_src_port=0
+        tunnel4_out_dst_port=0
+        tunnel4_out_tcp_flags=0
+        tunnel4_out_tos=1
+        tunnel_out_vni=456
+        in_vlan=0
+        in_priority=0
+        out_vlan=0
+        out_priority=0
+        meanSkip=1
+        samplePool=1
+        dropEvents=0
+        in_ifindex=0
+        in_format=0
+        out_ifindex=1
+        out_format=2
+        hdr_prot=1
+        pkt_len=110
+        stripped=4
+        hdr_len=106
+        hdr=50-54-00-00-00-0A-50-54-00-00-00-09-08-00-45-01-00-5C-00-00-00-00-80-01-12-8A-0A-0A-0A-02-0A-0A-0A-01-08-00-13-FC-00-00-00-00-00-01-02-03-04-05-06-07-08-09-0A-0B-0C-0D-0E-0F-10-11-12-13-14-15-16-17-18-19-1A-1B-1C-1D-1E-1F-20-21-22-23-24-25-26-27-28-29-2A-2B-2C-2D-2E-2F-30-31-32-33-34-35-36-37-38-39-3A-3B-3C-3D-3E-3F
 ])
 
 OVS_VSWITCHD_STOP
@@ -6679,36 +6679,36 @@ done
 OVS_APP_EXIT_AND_WAIT([test-sflow])
 
 AT_CHECK_UNQUOTED([[sort sflow.log | $EGREP 'HEADER|ERROR' | sed 's/ /\
-	/g']], [0], [dnl
+        /g']], [0], [dnl
 HEADER
-	dgramSeqNo=1
-	ds=127.0.0.1>2:1000
-	fsSeqNo=1
-	tunnel4_out_length=0
-	tunnel4_out_protocol=47
-	tunnel4_out_src=1.1.2.88
-	tunnel4_out_dst=1.1.2.92
-	tunnel4_out_src_port=0
-	tunnel4_out_dst_port=0
-	tunnel4_out_tcp_flags=0
-	tunnel4_out_tos=0
-	tunnel_out_vni=456
-	in_vlan=0
-	in_priority=0
-	out_vlan=0
-	out_priority=0
-	meanSkip=1
-	samplePool=1
-	dropEvents=0
-	in_ifindex=2011
-	in_format=0
-	out_ifindex=1
-	out_format=2
-	hdr_prot=1
-	pkt_len=110
-	stripped=4
-	hdr_len=106
-	hdr=50-54-00-00-00-0A-50-54-00-00-00-05-08-00-45-00-00-5C-00-00-00-00-80-01-B6-4D-C0-A8-01-01-C0-A8-02-02-08-00-13-FC-00-00-00-00-00-01-02-03-04-05-06-07-08-09-0A-0B-0C-0D-0E-0F-10-11-12-13-14-15-16-17-18-19-1A-1B-1C-1D-1E-1F-20-21-22-23-24-25-26-27-28-29-2A-2B-2C-2D-2E-2F-30-31-32-33-34-35-36-37-38-39-3A-3B-3C-3D-3E-3F
+        dgramSeqNo=1
+        ds=127.0.0.1>2:1000
+        fsSeqNo=1
+        tunnel4_out_length=0
+        tunnel4_out_protocol=47
+        tunnel4_out_src=1.1.2.88
+        tunnel4_out_dst=1.1.2.92
+        tunnel4_out_src_port=0
+        tunnel4_out_dst_port=0
+        tunnel4_out_tcp_flags=0
+        tunnel4_out_tos=0
+        tunnel_out_vni=456
+        in_vlan=0
+        in_priority=0
+        out_vlan=0
+        out_priority=0
+        meanSkip=1
+        samplePool=1
+        dropEvents=0
+        in_ifindex=2011
+        in_format=0
+        out_ifindex=1
+        out_format=2
+        hdr_prot=1
+        pkt_len=110
+        stripped=4
+        hdr_len=106
+        hdr=50-54-00-00-00-0A-50-54-00-00-00-05-08-00-45-00-00-5C-00-00-00-00-80-01-B6-4D-C0-A8-01-01-C0-A8-02-02-08-00-13-FC-00-00-00-00-00-01-02-03-04-05-06-07-08-09-0A-0B-0C-0D-0E-0F-10-11-12-13-14-15-16-17-18-19-1A-1B-1C-1D-1E-1F-20-21-22-23-24-25-26-27-28-29-2A-2B-2C-2D-2E-2F-30-31-32-33-34-35-36-37-38-39-3A-3B-3C-3D-3E-3F
 ])
 
 OVS_VSWITCHD_STOP
@@ -6748,59 +6748,59 @@ done
 OVS_APP_EXIT_AND_WAIT([test-sflow])
 
 AT_CHECK_UNQUOTED([[sort sflow.log | $EGREP 'HEADER|ERROR' | sed 's/ /\
-	/g']], [0], [dnl
+        /g']], [0], [dnl
 HEADER
-	dgramSeqNo=1
-	ds=127.0.0.1>2:1000
-	fsSeqNo=1
-	mpls_label_0=789
-	mpls_tc_0=4
-	mpls_ttl_0=32
-	mpls_bos_0=0
-	mpls_label_1=11
-	mpls_tc_1=3
-	mpls_ttl_1=64
-	mpls_bos_1=1
-	in_vlan=0
-	in_priority=0
-	out_vlan=0
-	out_priority=0
-	meanSkip=1
-	samplePool=1
-	dropEvents=0
-	in_ifindex=0
-	in_format=0
-	out_ifindex=1
-	out_format=2
-	hdr_prot=1
-	pkt_len=22
-	stripped=4
-	hdr_len=18
-	hdr=50-54-00-00-00-0A-50-54-00-00-00-09-88-47-00-00-B7-40
+        dgramSeqNo=1
+        ds=127.0.0.1>2:1000
+        fsSeqNo=1
+        mpls_label_0=789
+        mpls_tc_0=4
+        mpls_ttl_0=32
+        mpls_bos_0=0
+        mpls_label_1=11
+        mpls_tc_1=3
+        mpls_ttl_1=64
+        mpls_bos_1=1
+        in_vlan=0
+        in_priority=0
+        out_vlan=0
+        out_priority=0
+        meanSkip=1
+        samplePool=1
+        dropEvents=0
+        in_ifindex=0
+        in_format=0
+        out_ifindex=1
+        out_format=2
+        hdr_prot=1
+        pkt_len=22
+        stripped=4
+        hdr_len=18
+        hdr=50-54-00-00-00-0A-50-54-00-00-00-09-88-47-00-00-B7-40
 HEADER
-	dgramSeqNo=1
-	ds=127.0.0.1>2:1000
-	fsSeqNo=2
-	mpls_label_0=789
-	mpls_tc_0=4
-	mpls_ttl_0=32
-	mpls_bos_0=1
-	in_vlan=0
-	in_priority=0
-	out_vlan=0
-	out_priority=0
-	meanSkip=1
-	samplePool=2
-	dropEvents=0
-	in_ifindex=0
-	in_format=0
-	out_ifindex=1
-	out_format=2
-	hdr_prot=1
-	pkt_len=38
-	stripped=4
-	hdr_len=34
-	hdr=50-54-00-00-00-0A-50-54-00-00-00-09-08-00-45-00-00-14-00-00-00-00-00-00-BA-EB-00-00-00-00-00-00-00-00
+        dgramSeqNo=1
+        ds=127.0.0.1>2:1000
+        fsSeqNo=2
+        mpls_label_0=789
+        mpls_tc_0=4
+        mpls_ttl_0=32
+        mpls_bos_0=1
+        in_vlan=0
+        in_priority=0
+        out_vlan=0
+        out_priority=0
+        meanSkip=1
+        samplePool=2
+        dropEvents=0
+        in_ifindex=0
+        in_format=0
+        out_ifindex=1
+        out_format=2
+        hdr_prot=1
+        pkt_len=38
+        stripped=4
+        hdr_len=34
+        hdr=50-54-00-00-00-0A-50-54-00-00-00-09-08-00-45-00-00-14-00-00-00-00-00-00-BA-EB-00-00-00-00-00-00-00-00
 ])
 
 OVS_VSWITCHD_STOP
@@ -8855,7 +8855,7 @@ AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl -P nxt_packet_in --detach --no-chdir --pidfile 2> ofctl_monitor.log])
 
 for i in 1 2 3; do
-	AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 CONTROLLER controller '50540000000a5054000000091234'])
+        AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 CONTROLLER controller '50540000000a5054000000091234'])
 done
 
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
@@ -8906,7 +8906,7 @@ AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_CHECK([ovs-ofctl monitor br1 65534 invalid_ttl -P nxt_packet_in --detach --no-chdir --pidfile 2> ofctl_monitor.log])
 
 for i in 1 2 3; do
-	AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 CONTROLLER output:1 '50540000000a5054000000091234'])
+        AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 CONTROLLER output:1 '50540000000a5054000000091234'])
 done
 
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])

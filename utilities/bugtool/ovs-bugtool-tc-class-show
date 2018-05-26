@@ -18,8 +18,8 @@
 
 for iface in $(cd /sys/class/net && echo *); do
     if [ -d /sys/class/net/$iface ]; then
-	echo Interface $iface:
-	# indent tc output so it's clear which interface it pertains to
-	/sbin/tc -s -d class show dev $iface | /bin/sed 's/^/ /'
+        echo Interface $iface:
+        # indent tc output so it's clear which interface it pertains to
+        /sbin/tc -s -d class show dev $iface | /bin/sed 's/^/ /'
     fi
 done

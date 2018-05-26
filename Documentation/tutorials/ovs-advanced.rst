@@ -337,7 +337,7 @@ The output should look something like this::
     bridge("br0")
     -------------
      0. dl_dst=01:80:c2:00:00:00/ff:ff:ff:ff:ff:f0, priority 32768
-	drop
+        drop
 
     Final flow: unchanged
     Megaflow: recirc_id=0,in_port=1,dl_src=00:00:00:00:00:00/01:00:00:00:00:00,dl_dst=01:80:c2:00:00:00/ff:ff:ff:ff:ff:f0,dl_type=0x0000
@@ -370,9 +370,9 @@ The output should be::
     bridge("br0")
     -------------
      0. priority 0
-	resubmit(,1)
+        resubmit(,1)
      1. No match.
-	drop
+        drop
 
     Final flow: unchanged
     Megaflow: recirc_id=0,in_port=1,dl_src=00:00:00:00:00:00/01:00:00:00:00:00,dl_dst=01:80:c2:00:00:10/ff:ff:ff:ff:ff:f0,dl_type=0x0000
@@ -450,11 +450,11 @@ yet)::
     bridge("br0")
     -------------
      0. priority 0
-	resubmit(,1)
+        resubmit(,1)
      1. in_port=1, priority 99
-	resubmit(,2)
+        resubmit(,2)
      2. No match.
-	drop
+        drop
 
     Final flow: unchanged
     Megaflow: recirc_id=0,in_port=1,dl_src=00:00:00:00:00:00/01:00:00:00:00:00,dl_dst=00:00:00:00:00:00/ff:ff:ff:ff:ff:f0,dl_type=0x0000
@@ -477,12 +477,12 @@ table 2::
     bridge("br0")
     -------------
      0. priority 0
-	resubmit(,1)
+        resubmit(,1)
      1. in_port=2,vlan_tci=0x0000, priority 99
-	mod_vlan_vid:20
-	resubmit(,2)
+        mod_vlan_vid:20
+        resubmit(,2)
      2. No match.
-	drop
+        drop
 
     Final flow: in_port=2,dl_vlan=20,dl_vlan_pcp=0,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x0000
     Megaflow: recirc_id=0,in_port=2,vlan_tci=0x0000,dl_src=00:00:00:00:00:00/01:00:00:00:00:00,dl_dst=00:00:00:00:00:00/ff:ff:ff:ff:ff:f0,dl_type=0x0000
@@ -503,9 +503,9 @@ The output shows the packet matching the default drop flow::
     bridge("br0")
     -------------
      0. priority 0
-	resubmit(,1)
+        resubmit(,1)
      1. priority 0
-	drop
+        drop
 
     Final flow: unchanged
     Megaflow: recirc_id=0,in_port=2,vlan_tci=0x0005,dl_src=00:00:00:00:00:00/01:00:00:00:00:00,dl_dst=00:00:00:00:00:00/ff:ff:ff:ff:ff:f0,dl_type=0x0000
@@ -584,15 +584,15 @@ particular flow that was added::
     bridge("br0")
     -------------
      0. priority 0
-	resubmit(,1)
+        resubmit(,1)
      1. in_port=1, priority 99
-	resubmit(,2)
+        resubmit(,2)
      2. priority 32768
-	learn(table=10,NXM_OF_VLAN_TCI[0..11],NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[],load:NXM_OF_IN_PORT[]->NXM_NX_REG0[0..15])
-	 -> table=10 vlan_tci=0x0014/0x0fff,dl_dst=50:00:00:00:00:01 priority=32768 actions=load:0x1->NXM_NX_REG0[0..15]
-	resubmit(,3)
+        learn(table=10,NXM_OF_VLAN_TCI[0..11],NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[],load:NXM_OF_IN_PORT[]->NXM_NX_REG0[0..15])
+         -> table=10 vlan_tci=0x0014/0x0fff,dl_dst=50:00:00:00:00:01 priority=32768 actions=load:0x1->NXM_NX_REG0[0..15]
+        resubmit(,3)
      3. No match.
-	drop
+        drop
 
     Final flow: unchanged
     Megaflow: recirc_id=0,in_port=1,vlan_tci=0x0014/0x1fff,dl_src=50:00:00:00:00:01,dl_dst=00:00:00:00:00:00/ff:ff:ff:ff:ff:f0,dl_type=0x0000
@@ -694,20 +694,20 @@ table 10) that the flow's destination was unknown::
     bridge("br0")
     -------------
      0. priority 0
-	resubmit(,1)
+        resubmit(,1)
      1. in_port=1, priority 99
-	resubmit(,2)
+        resubmit(,2)
      2. priority 32768
-	learn(table=10,NXM_OF_VLAN_TCI[0..11],NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[],load:NXM_OF_IN_PORT[]->NXM_NX_REG0[0..15])
-	 -> table=10 vlan_tci=0x0014/0x0fff,dl_dst=f0:00:00:00:00:01 priority=32768 actions=load:0x1->NXM_NX_REG0[0..15]
-	resubmit(,3)
+        learn(table=10,NXM_OF_VLAN_TCI[0..11],NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[],load:NXM_OF_IN_PORT[]->NXM_NX_REG0[0..15])
+         -> table=10 vlan_tci=0x0014/0x0fff,dl_dst=f0:00:00:00:00:01 priority=32768 actions=load:0x1->NXM_NX_REG0[0..15]
+        resubmit(,3)
      3. priority 50
-	resubmit(,10)
-	10. No match.
-		drop
-	resubmit(,4)
+        resubmit(,10)
+        10. No match.
+                drop
+        resubmit(,4)
      4. No match.
-	drop
+        drop
 
     Final flow: unchanged
     Megaflow: recirc_id=0,in_port=1,dl_vlan=20,dl_src=f0:00:00:00:00:01,dl_dst=90:00:00:00:00:01,dl_type=0x0000
@@ -745,21 +745,21 @@ the learned port ``p1`` into register ``0``::
     bridge("br0")
     -------------
      0. priority 0
-	resubmit(,1)
+        resubmit(,1)
      1. in_port=2,vlan_tci=0x0000, priority 99
-	mod_vlan_vid:20
-	resubmit(,2)
+        mod_vlan_vid:20
+        resubmit(,2)
      2. priority 32768
-	learn(table=10,NXM_OF_VLAN_TCI[0..11],NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[],load:NXM_OF_IN_PORT[]->NXM_NX_REG0[0..15])
-	 -> table=10 vlan_tci=0x0014/0x0fff,dl_dst=90:00:00:00:00:01 priority=32768 actions=load:0x2->NXM_NX_REG0[0..15]
-	resubmit(,3)
+        learn(table=10,NXM_OF_VLAN_TCI[0..11],NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[],load:NXM_OF_IN_PORT[]->NXM_NX_REG0[0..15])
+         -> table=10 vlan_tci=0x0014/0x0fff,dl_dst=90:00:00:00:00:01 priority=32768 actions=load:0x2->NXM_NX_REG0[0..15]
+        resubmit(,3)
      3. priority 50
-	resubmit(,10)
-	10. vlan_tci=0x0014/0x0fff,dl_dst=f0:00:00:00:00:01, priority 32768
-		load:0x1->NXM_NX_REG0[0..15]
-	resubmit(,4)
+        resubmit(,10)
+        10. vlan_tci=0x0014/0x0fff,dl_dst=f0:00:00:00:00:01, priority 32768
+                load:0x1->NXM_NX_REG0[0..15]
+        resubmit(,4)
      4. No match.
-	drop
+        drop
 
     Final flow: reg0=0x1,in_port=2,dl_vlan=20,dl_vlan_pcp=0,dl_src=90:00:00:00:00:01,dl_dst=f0:00:00:00:00:01,dl_type=0x0000
     Megaflow: recirc_id=0,in_port=2,vlan_tci=0x0000,dl_src=90:00:00:00:00:01,dl_dst=f0:00:00:00:00:01,dl_type=0x0000
@@ -781,20 +781,20 @@ executed in table 10, that the destination has now been learned::
     bridge("br0")
     -------------
      0. priority 0
-	resubmit(,1)
+        resubmit(,1)
      1. in_port=1, priority 99
-	resubmit(,2)
+        resubmit(,2)
      2. priority 32768
-	learn(table=10,NXM_OF_VLAN_TCI[0..11],NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[],load:NXM_OF_IN_PORT[]->NXM_NX_REG0[0..15])
-	 -> table=10 vlan_tci=0x0014/0x0fff,dl_dst=f0:00:00:00:00:01 priority=32768 actions=load:0x1->NXM_NX_REG0[0..15]
-	resubmit(,3)
+        learn(table=10,NXM_OF_VLAN_TCI[0..11],NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[],load:NXM_OF_IN_PORT[]->NXM_NX_REG0[0..15])
+         -> table=10 vlan_tci=0x0014/0x0fff,dl_dst=f0:00:00:00:00:01 priority=32768 actions=load:0x1->NXM_NX_REG0[0..15]
+        resubmit(,3)
      3. priority 50
-	resubmit(,10)
-	10. vlan_tci=0x0014/0x0fff,dl_dst=90:00:00:00:00:01, priority 32768
-		load:0x2->NXM_NX_REG0[0..15]
-	resubmit(,4)
+        resubmit(,10)
+        10. vlan_tci=0x0014/0x0fff,dl_dst=90:00:00:00:00:01, priority 32768
+                load:0x2->NXM_NX_REG0[0..15]
+        resubmit(,4)
      4. No match.
-	drop
+        drop
 
 
 Implementing Table 4: Output Processing

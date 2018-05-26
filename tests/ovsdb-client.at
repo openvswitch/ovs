@@ -57,8 +57,8 @@ AT_CHECK(
       ["ordinals",
        {"op": "update",
         "table": "ordinals",
-	"where": [],
-	"row": {"name": ""}}]']],
+        "where": [],
+        "row": {"name": ""}}]']],
   [0],
   [[[{"count":6}]
 ]])
@@ -138,10 +138,10 @@ dnl Use "query" for some of them, which won't have any effect.
 AT_CHECK(
   [[for txn in 'transact zero 0' \
                'query one 1' \
-	       'transact two 2' \
-	       'query three 3' \
-	       'transact four 4' \
-	       'query five 5'
+               'transact two 2' \
+               'query three 3' \
+               'transact four 4' \
+               'query five 5'
     do
       set -- $txn
       ovsdb-client $1 '

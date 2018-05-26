@@ -340,7 +340,7 @@ else    # $1 = 2 for upgrade
     if [ "$mode" != "vswitch" ] && [ "$mode" != "openvswitch" ]; then
         printf "\nThe server is not configured to run Open vSwitch.  To run in\n"
         printf "vswitch mode, you must run the following command:\n\n"
-        printf "\txe-switch-network-backend vswitch"
+        printf "  xe-switch-network-backend vswitch"
         printf "\n\n"
     fi
 fi

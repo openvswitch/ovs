@@ -3432,7 +3432,7 @@ native_tunnel_output(struct xlate_ctx *ctx, const struct xport *xport,
     /* Backup flow & base_flow data. */
     memcpy(&old_base_flow, &ctx->base_flow, sizeof old_base_flow);
     memcpy(&old_flow, &ctx->xin->flow, sizeof old_flow);
-	
+
     if (flow->tunnel.ip_src) {
         in6_addr_set_mapped_ipv4(&s_ip6, flow->tunnel.ip_src);
     }

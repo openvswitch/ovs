@@ -192,8 +192,8 @@ def main():
             # print lflow info when the current flow block ends
             if regex_table_id.match(line) or line.strip() == '':
                 lflow = get_lflow_from_cookie(ovsdb_ovnsb, cookie)
-                print_lflow(lflow, "\t* ")
-                print_lflow_nb_hint(lflow, "\t\t* ", ovsdb_ovnnb)
+                print_lflow(lflow, "  * ")
+                print_lflow_nb_hint(lflow, "    * ", ovsdb_ovnnb)
                 cookie = None
 
         print line.strip()

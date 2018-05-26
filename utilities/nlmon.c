@@ -119,7 +119,7 @@ main(int argc OVS_UNUSED, char *argv[])
                     : nlh->nlmsg_type == RTM_GETLINK ? "RTM_GETLINK"
                     : nlh->nlmsg_type == RTM_SETLINK ? "RTM_SETLINK"
                     : "other"));
-            printf("\tflags:");
+            printf("  flags:");
             for (i = 0; i < ARRAY_SIZE(flags); i++) {
                 if (iim->ifi_flags & flags[i].flag) {
                     printf(" %s", flags[i].name);
@@ -127,9 +127,9 @@ main(int argc OVS_UNUSED, char *argv[])
             }
             printf("\n");
             if (netnsid_is_remote(nsid)) {
-                printf("\tnetns id: %d\n", nsid);
+                printf("  netns id: %d\n", nsid);
             } else {
-                printf("\tnetns id: local\n");
+                printf("  netns id: local\n");
             }
             if (attrs[IFLA_MASTER]) {
                 uint32_t idx = nl_attr_get_u32(attrs[IFLA_MASTER]);
@@ -137,7 +137,7 @@ main(int argc OVS_UNUSED, char *argv[])
                 if (!if_indextoname(idx, ifname)) {
                     strcpy(ifname, "unknown");
                 }
-                printf("\tmaster=%"PRIu32" (%s)\n", idx, ifname);
+                printf("  master=%"PRIu32" (%s)\n", idx, ifname);
             }
         }
 

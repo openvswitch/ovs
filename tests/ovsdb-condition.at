@@ -12,7 +12,7 @@ OVSDB_CHECK_POSITIVE([conditions on scalars],
         {"i": {"type": "integer"},
          "r": {"type": "real"},
          "b": {"type": "boolean"},
-	 "s": {"type": "string"},
+         "s": {"type": "string"},
          "u": {"type": "uuid"}}}' \
     '[["i", "==", 0]]' \
     '[["i", "!=", 1]]' \
@@ -79,7 +79,7 @@ AT_CHECK([[test-ovsdb parse-conditions \
         {"i": {"type": "integer"},
          "r": {"type": "real"},
          "b": {"type": "boolean"},
-	 "s": {"type": "string"},
+         "s": {"type": "string"},
          "u": {"type": "uuid"}}}' \
     '[["b", ">", true]]' \
     '[["b", ">=", false]]' \
@@ -115,7 +115,7 @@ OVSDB_CHECK_POSITIVE([conditions on sets],
         {"i": {"type": {"key": "integer", "min": 0, "max": "unlimited"}},
          "r": {"type": {"key": "real", "min": 0, "max": "unlimited"}},
          "b": {"type": {"key": "boolean", "min": 0, "max": "unlimited"}},
-	 "s": {"type": {"key": "string", "min": 0, "max": "unlimited"}},
+         "s": {"type": {"key": "string", "min": 0, "max": "unlimited"}},
          "u": {"type": {"key": "uuid", "min": 0, "max": "unlimited"}}}}' \
     '[["i", "==", ["set", []]]]' \
     '[["i", "!=", ["set", [1]]]]' \

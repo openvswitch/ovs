@@ -6,11 +6,11 @@
     missingok
     rotate 30
     postrotate
-	# Tell Open vSwitch daemons to reopen their log files
-	if [ -d /var/run/openvswitch ]; then
+        # Tell Open vSwitch daemons to reopen their log files
+        if [ -d /var/run/openvswitch ]; then
             for ctl in /var/run/openvswitch/*.ctl; do
                 ovs-appctl -t "$ctl" vlog/reopen 2>/dev/null || :
             done
-	fi
+        fi
     endscript
 }

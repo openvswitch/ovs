@@ -69,8 +69,8 @@ run ovs-vsctl --no-wait \
     -- set bridge br0 datapath-type=dummy fail-mode=secure
 for port in p1 p2 p3 p4; do
     run ovs-vsctl --no-wait \
-	-- add-port br0 $port \
-	-- set interface $port type=dummy \
+        -- add-port br0 $port \
+        -- set interface $port type=dummy \
                                options:pstream=punix:$OVS_RUNDIR/$port
 done
 run ovs-vsctl \
@@ -84,9 +84,9 @@ cat <<EOF
 
 ----------------------------------------------------------------------
 Logs may be found under $sandbox, e.g.:
-	$sandbox/oft.log
-	$sandbox/ovs-vswitchd.log
-	$sandbox/ovsdb-server.log
+        $sandbox/oft.log
+        $sandbox/ovs-vswitchd.log
+        $sandbox/ovsdb-server.log
 ----------------------------------------------------------------------
 EOF
 

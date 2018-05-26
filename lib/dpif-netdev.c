@@ -856,15 +856,15 @@ pmd_info_show_stats(struct ds *reply,
     }
 
     ds_put_format(reply,
-                  "\tpackets received: %"PRIu64"\n"
-                  "\tpacket recirculations: %"PRIu64"\n"
-                  "\tavg. datapath passes per packet: %.02f\n"
-                  "\temc hits: %"PRIu64"\n"
-                  "\tmegaflow hits: %"PRIu64"\n"
-                  "\tavg. subtable lookups per megaflow hit: %.02f\n"
-                  "\tmiss with success upcall: %"PRIu64"\n"
-                  "\tmiss with failed upcall: %"PRIu64"\n"
-                  "\tavg. packets per output batch: %.02f\n",
+                  "  packets received: %"PRIu64"\n"
+                  "  packet recirculations: %"PRIu64"\n"
+                  "  avg. datapath passes per packet: %.02f\n"
+                  "  emc hits: %"PRIu64"\n"
+                  "  megaflow hits: %"PRIu64"\n"
+                  "  avg. subtable lookups per megaflow hit: %.02f\n"
+                  "  miss with success upcall: %"PRIu64"\n"
+                  "  miss with failed upcall: %"PRIu64"\n"
+                  "  avg. packets per output batch: %.02f\n",
                   total_packets, stats[PMD_STAT_RECIRC],
                   passes_per_pkt, stats[PMD_STAT_EXACT_HIT],
                   stats[PMD_STAT_MASKED_HIT], lookups_per_hit,
@@ -876,8 +876,8 @@ pmd_info_show_stats(struct ds *reply,
     }
 
     ds_put_format(reply,
-                  "\tidle cycles: %"PRIu64" (%.02f%%)\n"
-                  "\tprocessing cycles: %"PRIu64" (%.02f%%)\n",
+                  "  idle cycles: %"PRIu64" (%.02f%%)\n"
+                  "  processing cycles: %"PRIu64" (%.02f%%)\n",
                   stats[PMD_CYCLES_ITER_IDLE],
                   stats[PMD_CYCLES_ITER_IDLE] / (double) total_cycles * 100,
                   stats[PMD_CYCLES_ITER_BUSY],
@@ -888,12 +888,12 @@ pmd_info_show_stats(struct ds *reply,
     }
 
     ds_put_format(reply,
-                  "\tavg cycles per packet: %.02f (%"PRIu64"/%"PRIu64")\n",
+                  "  avg cycles per packet: %.02f (%"PRIu64"/%"PRIu64")\n",
                   total_cycles / (double) total_packets,
                   total_cycles, total_packets);
 
     ds_put_format(reply,
-                  "\tavg processing cycles per packet: "
+                  "  avg processing cycles per packet: "
                   "%.02f (%"PRIu64"/%"PRIu64")\n",
                   stats[PMD_CYCLES_ITER_BUSY] / (double) total_packets,
                   stats[PMD_CYCLES_ITER_BUSY], total_packets);
@@ -991,7 +991,7 @@ pmd_info_show_rxq(struct ds *reply, struct dp_netdev_pmd_thread *pmd)
         uint64_t total_cycles = 0;
 
         ds_put_format(reply,
-                      "pmd thread numa_id %d core_id %u:\n\tisolated : %s\n",
+                      "pmd thread numa_id %d core_id %u:\n  isolated : %s\n",
                       pmd->numa_id, pmd->core_id, (pmd->isolated)
                                                   ? "true" : "false");
 
@@ -1011,9 +1011,9 @@ pmd_info_show_rxq(struct ds *reply, struct dp_netdev_pmd_thread *pmd)
             for (int j = 0; j < PMD_RXQ_INTERVAL_MAX; j++) {
                 proc_cycles += dp_netdev_rxq_get_intrvl_cycles(rxq, j);
             }
-            ds_put_format(reply, "\tport: %-16s\tqueue-id: %2d", name,
+            ds_put_format(reply, "  port: %-16s  queue-id: %2d", name,
                           netdev_rxq_get_queue_id(list[i].rxq->rx));
-            ds_put_format(reply, "\tpmd usage: ");
+            ds_put_format(reply, "  pmd usage: ");
             if (total_cycles) {
                 ds_put_format(reply, "%2"PRIu64"",
                               proc_cycles * 100 / total_cycles);

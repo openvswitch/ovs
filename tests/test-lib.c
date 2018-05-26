@@ -49,7 +49,7 @@ parse_options(int argc, char *argv[])
     static const struct option long_options[] = {
         {"help", no_argument, NULL, 'h'},
         {"version", no_argument, NULL, 'V'},
-		{"verbose", optional_argument, NULL, 'v'},
+        {"verbose", optional_argument, NULL, 'v'},
         {NULL, 0, NULL, 0},
     };
     char *short_options = "hVv";

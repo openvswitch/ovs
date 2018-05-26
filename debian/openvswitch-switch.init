@@ -46,26 +46,26 @@ load_kmod () {
 
 start () {
     if ovs_ctl load-kmod; then
-	:
+        :
     else
-	echo "Module has probably not been built for this kernel."
-	if ! test -d /usr/share/doc/openvswitch-datapath-source; then
-	    echo "Install the openvswitch-datapath-source package, then read"
-	else
+        echo "Module has probably not been built for this kernel."
+        if ! test -d /usr/share/doc/openvswitch-datapath-source; then
+            echo "Install the openvswitch-datapath-source package, then read"
+        else
             echo "For instructions, read"
-	fi
-	echo "/usr/share/doc/openvswitch-datapath-source/README.Debian"
+        fi
+        echo "/usr/share/doc/openvswitch-datapath-source/README.Debian"
 
-	if test X"$OVS_MISSING_KMOD_OK" = Xyes; then
-	    # We're being invoked by the package postinst.  Do not
-	    # fail package installation just because the kernel module
-	    # is not available.
-	    exit 0
-	fi
+        if test X"$OVS_MISSING_KMOD_OK" = Xyes; then
+            # We're being invoked by the package postinst.  Do not
+            # fail package installation just because the kernel module
+            # is not available.
+            exit 0
+        fi
     fi
     set ovs_ctl ${1-start} --system-id=random
     if test X"$FORCE_COREFILES" != X; then
-	set "$@" --force-corefiles="$FORCE_COREFILES"
+        set "$@" --force-corefiles="$FORCE_COREFILES"
     fi
     set "$@" $OVS_CTL_OPTS
     "$@" || exit $?
@@ -117,7 +117,7 @@ restart () {
 case $1 in
     start)
         start
-	;;
+        ;;
     stop | force-stop)
         stop
         ;;

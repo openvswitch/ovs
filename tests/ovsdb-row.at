@@ -116,7 +116,7 @@ OVSDB_CHECK_POSITIVE([row hashing (scalars)],
         {"i": {"type": "integer"},
          "r": {"type": "real"},
          "b": {"type": "boolean"},
-	 "s": {"type": "string"},
+         "s": {"type": "string"},
          "u": {"type": "uuid"}}}' \
      '["null", {}]' \
      '["i1", {"i": 1}]' \
@@ -185,7 +185,7 @@ OVSDB_CHECK_POSITIVE([row hashing (sets)],
         {"i": {"type": {"key": "integer", "min": 0, "max": "unlimited"}},
          "r": {"type": {"key": "real", "min": 0, "max": "unlimited"}},
          "b": {"type": {"key": "boolean", "min": 0, "max": "unlimited"}},
-	 "s": {"type": {"key": "string", "min": 0, "max": "unlimited"}},
+         "s": {"type": {"key": "string", "min": 0, "max": "unlimited"}},
          "u": {"type": {"key": "uuid", "min": 0, "max": "unlimited"}}}}' \
     '["null0", {"i": ["set", []]}]' \
     '["i0", {"i": ["set", [0]]}]' \
@@ -241,7 +241,7 @@ OVSDB_CHECK_POSITIVE([row hashing (maps)],
                          "min": 0, "max": "unlimited"}},
          "bb": {"type": {"key": "boolean", "value": "boolean",
                          "min": 0, "max": "unlimited"}},
-	 "ss": {"type": {"key": "string", "value": "string",
+         "ss": {"type": {"key": "string", "value": "string",
                          "min": 0, "max": "unlimited"}}}}' \
     '["null", {}]' \
     '["ii0", {"ii": ["map", [[0, 0]]]}]' \
