@@ -629,38 +629,36 @@ AT_CHECK([
 #N3_DPPORT=$(ovs-appctl dpif/show | grep "n3 30" | sed 's|.*/\([[0-9]]*\):.*|\1|')
 
 ### Verify datapath configuration
-AT_CHECK([
-    ovs-appctl dpif/show | grep -v hit | sed 's/\t/    /g'
-], [0], [dnl
-    br-in1:
-        br-in1 65534/101: (dummy-internal)
-        n1 10/4: (dummy)
-        vxlangpe12 1020/4789: (vxlan: packet_type=ptap, remote_ip=10.0.0.2)
-        vxlangpe13 1030/4789: (vxlan: packet_type=ptap, remote_ip=10.0.0.3)
-    br-in2:
-        br-in2 65534/102: (dummy-internal)
-        n2 20/5: (dummy)
-        vxlangpe21 2010/4789: (vxlan: packet_type=ptap, remote_ip=20.0.0.1)
-        vxlangpe23 2030/4789: (vxlan: packet_type=ptap, remote_ip=20.0.0.3)
-    br-in3:
-        br-in3 65534/103: (dummy-internal)
-        n3 30/6: (dummy)
-        vxlangpe31 3010/4789: (vxlan: packet_type=ptap, remote_ip=30.0.0.1)
-        vxlangpe32 3020/4789: (vxlan: packet_type=ptap, remote_ip=30.0.0.2)
-    br-p1:
-        br-p1 65534/1: (dummy-internal)
-        p1-0 2/none: (patch: peer=p0-1)
-    br-p2:
-        br-p2 65534/2: (dummy-internal)
-        p2-0 2/none: (patch: peer=p0-2)
-    br-p3:
-        br-p3 65534/3: (dummy-internal)
-        p3-0 2/none: (patch: peer=p0-3)
-    br0:
-        br0 65534/100: (dummy-internal)
-        p0-1 10/none: (patch: peer=p1-0)
-        p0-2 20/none: (patch: peer=p2-0)
-        p0-3 30/none: (patch: peer=p3-0)
+AT_CHECK([ovs-appctl dpif/show | grep -v hit], [0], [dnl
+  br-in1:
+    br-in1 65534/101: (dummy-internal)
+    n1 10/4: (dummy)
+    vxlangpe12 1020/4789: (vxlan: packet_type=ptap, remote_ip=10.0.0.2)
+    vxlangpe13 1030/4789: (vxlan: packet_type=ptap, remote_ip=10.0.0.3)
+  br-in2:
+    br-in2 65534/102: (dummy-internal)
+    n2 20/5: (dummy)
+    vxlangpe21 2010/4789: (vxlan: packet_type=ptap, remote_ip=20.0.0.1)
+    vxlangpe23 2030/4789: (vxlan: packet_type=ptap, remote_ip=20.0.0.3)
+  br-in3:
+    br-in3 65534/103: (dummy-internal)
+    n3 30/6: (dummy)
+    vxlangpe31 3010/4789: (vxlan: packet_type=ptap, remote_ip=30.0.0.1)
+    vxlangpe32 3020/4789: (vxlan: packet_type=ptap, remote_ip=30.0.0.2)
+  br-p1:
+    br-p1 65534/1: (dummy-internal)
+    p1-0 2/none: (patch: peer=p0-1)
+  br-p2:
+    br-p2 65534/2: (dummy-internal)
+    p2-0 2/none: (patch: peer=p0-2)
+  br-p3:
+    br-p3 65534/3: (dummy-internal)
+    p3-0 2/none: (patch: peer=p0-3)
+  br0:
+    br0 65534/100: (dummy-internal)
+    p0-1 10/none: (patch: peer=p1-0)
+    p0-2 20/none: (patch: peer=p2-0)
+    p0-3 30/none: (patch: peer=p3-0)
 ])
 
 ### Setup SFC flow configuration

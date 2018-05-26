@@ -233,39 +233,39 @@ ovs-vsctl \
 
 ### Verify datapath configuration
 AT_CHECK([
-    ovs-appctl dpif/show | grep -v hit | sed "s/$(printf \\t)/    /g" | sed 's./[[0-9]]\{1,\}..'
+    ovs-appctl dpif/show | grep -v hit | sed 's./[[0-9]]\{1,\}..'
 ], [0], [dnl
-    br-in1:
-        br-in1 65534: (dummy-internal)
-        gre12 1020: (gre: remote_ip=10.0.0.2)
-        gre12_l3 1021: (gre: packet_type=legacy_l3, remote_ip=10.0.0.2)
-        gre13 1030: (gre: remote_ip=10.0.0.3)
-        n1 10: (dummy)
-    br-in2:
-        br-in2 65534: (dummy-internal)
-        gre21 2010: (gre: packet_type=ptap, remote_ip=20.0.0.1)
-        gre23 2030: (gre: packet_type=ptap, remote_ip=20.0.0.3)
-        n2 20: (dummy)
-    br-in3:
-        br-in3 65534: (dummy-internal)
-        gre31 3010: (gre: remote_ip=30.0.0.1)
-        gre32 3020: (gre: remote_ip=30.0.0.2)
-        gre32_l3 3021: (gre: packet_type=legacy_l3, remote_ip=30.0.0.2)
-        n3 30: (dummy)
-    br-p1:
-        br-p1 65534: (dummy-internal)
-        p1-0 2/none: (patch: peer=p0-1)
-    br-p2:
-        br-p2 65534: (dummy-internal)
-        p2-0 2/none: (patch: peer=p0-2)
-    br-p3:
-        br-p3 65534: (dummy-internal)
-        p3-0 2/none: (patch: peer=p0-3)
-    br0:
-        br0 65534: (dummy-internal)
-        p0-1 10/none: (patch: peer=p1-0)
-        p0-2 20/none: (patch: peer=p2-0)
-        p0-3 30/none: (patch: peer=p3-0)
+  br-in1:
+    br-in1 65534: (dummy-internal)
+    gre12 1020: (gre: remote_ip=10.0.0.2)
+    gre12_l3 1021: (gre: packet_type=legacy_l3, remote_ip=10.0.0.2)
+    gre13 1030: (gre: remote_ip=10.0.0.3)
+    n1 10: (dummy)
+  br-in2:
+    br-in2 65534: (dummy-internal)
+    gre21 2010: (gre: packet_type=ptap, remote_ip=20.0.0.1)
+    gre23 2030: (gre: packet_type=ptap, remote_ip=20.0.0.3)
+    n2 20: (dummy)
+  br-in3:
+    br-in3 65534: (dummy-internal)
+    gre31 3010: (gre: remote_ip=30.0.0.1)
+    gre32 3020: (gre: remote_ip=30.0.0.2)
+    gre32_l3 3021: (gre: packet_type=legacy_l3, remote_ip=30.0.0.2)
+    n3 30: (dummy)
+  br-p1:
+    br-p1 65534: (dummy-internal)
+    p1-0 2/none: (patch: peer=p0-1)
+  br-p2:
+    br-p2 65534: (dummy-internal)
+    p2-0 2/none: (patch: peer=p0-2)
+  br-p3:
+    br-p3 65534: (dummy-internal)
+    p3-0 2/none: (patch: peer=p0-3)
+  br0:
+    br0 65534: (dummy-internal)
+    p0-1 10/none: (patch: peer=p1-0)
+    p0-2 20/none: (patch: peer=p2-0)
+    p0-3 30/none: (patch: peer=p3-0)
 ])
 
 ### Test L3 forwarding flows
@@ -663,20 +663,20 @@ OVS_VSWITCHD_START([dnl
 
 ### Verify datapath configuration
 AT_CHECK([
-    ovs-appctl dpif/show | grep -v hit | sed 's/\t/    /g' | sed 's./[[0-9]]\{1,\}..'
+    ovs-appctl dpif/show | grep -v hit | sed 's./[[0-9]]\{1,\}..'
 ], [0], [dnl
-    br0:
-        br0 65534: (dummy-internal)
-        n0 30: (dummy)
-        p0 10/none: (patch: peer=p1)
-    br1:
-        br1 65534: (dummy-internal)
-        gre1 100: (gre: packet_type=ptap, remote_ip=10.0.0.2)
-        n1 40: (dummy)
-        p1 20/none: (patch: peer=p0)
-    br2:
-        br2 65534: (dummy-internal)
-        n2 50: (dummy)
+  br0:
+    br0 65534: (dummy-internal)
+    n0 30: (dummy)
+    p0 10/none: (patch: peer=p1)
+  br1:
+    br1 65534: (dummy-internal)
+    gre1 100: (gre: packet_type=ptap, remote_ip=10.0.0.2)
+    n1 40: (dummy)
+    p1 20/none: (patch: peer=p0)
+  br2:
+    br2 65534: (dummy-internal)
+    n2 50: (dummy)
 ])
 
 AT_CHECK([
@@ -842,20 +842,20 @@ AT_CHECK([
 
 ### Verify datapath configuration
 AT_CHECK([
-    ovs-appctl dpif/show | grep -v hit | sed 's/\t/    /g' | sed 's./[[0-9]]\{1,\}..'
+    ovs-appctl dpif/show | grep -v hit | sed 's./[[0-9]]\{1,\}..'
 ], [0], [dnl
-    br0:
-        br0 65534: (dummy-internal)
-        n0 30: (dummy)
-        p0 10/none: (patch: peer=p1)
-    br1:
-        br1 65534: (dummy-internal)
-        gre1 100: (gre: packet_type=legacy_l3, remote_ip=10.0.0.2)
-        n1 40: (dummy)
-        p1 20/none: (patch: peer=p0)
-    br2:
-        br2 65534: (dummy-internal)
-        n2 50: (dummy)
+  br0:
+    br0 65534: (dummy-internal)
+    n0 30: (dummy)
+    p0 10/none: (patch: peer=p1)
+  br1:
+    br1 65534: (dummy-internal)
+    gre1 100: (gre: packet_type=legacy_l3, remote_ip=10.0.0.2)
+    n1 40: (dummy)
+    p1 20/none: (patch: peer=p0)
+  br2:
+    br2 65534: (dummy-internal)
+    n2 50: (dummy)
 ])
 
 AT_CHECK([
@@ -943,14 +943,14 @@ OVS_VSWITCHD_START([dnl
 
 ### Verify datapath configuration
 AT_CHECK([
-    ovs-appctl dpif/show | grep -v hit | sed 's/\t/    /g' | sed 's./[[0-9]]\{1,\}..'
+    ovs-appctl dpif/show | grep -v hit | sed 's./[[0-9]]\{1,\}..'
 ], [0], [dnl
-    br0:
-        br0 65534: (dummy-internal)
-        p0 1: (dummy)
-    int-br:
-        int-br 65534: (dummy-internal)
-        tunnel 2: (gre: packet_type=legacy_l3, remote_ip=20.0.0.2)
+  br0:
+    br0 65534: (dummy-internal)
+    p0 1: (dummy)
+  int-br:
+    int-br 65534: (dummy-internal)
+    tunnel 2: (gre: packet_type=legacy_l3, remote_ip=20.0.0.2)
 ])
 
 AT_CHECK([

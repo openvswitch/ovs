@@ -5526,7 +5526,7 @@ dpif_show_backer(const struct dpif_backer *backer, struct ds *ds)
             continue;
         }
 
-        ds_put_format(ds, "\t%s:\n", ofproto->up.name);
+        ds_put_format(ds, "  %s:\n", ofproto->up.name);
 
         ports = shash_sort(&ofproto->up.port_by_name);
         for (j = 0; j < shash_count(&ofproto->up.port_by_name); j++) {
@@ -5535,7 +5535,7 @@ dpif_show_backer(const struct dpif_backer *backer, struct ds *ds)
             struct smap config;
             odp_port_t odp_port;
 
-            ds_put_format(ds, "\t\t%s %u/", netdev_get_name(ofport->netdev),
+            ds_put_format(ds, "    %s %u/", netdev_get_name(ofport->netdev),
                           ofport->ofp_port);
 
             odp_port = ofp_port_to_odp_port(ofproto, ofport->ofp_port);

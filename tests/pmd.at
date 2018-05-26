@@ -78,9 +78,9 @@ pmd thread numa_id <cleared> core_id <cleared>:
 
 AT_CHECK([ovs-appctl dpif/show | sed 's/\(tx_queues=\)[[0-9]]*/\1<cleared>/g'], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:0
-	br0:
-		br0 65534/100: (dummy-internal)
-		p0 1/1: (dummy-pmd: configured_rx_queues=1, configured_tx_queues=<cleared>, requested_rx_queues=1, requested_tx_queues=<cleared>)
+  br0:
+    br0 65534/100: (dummy-internal)
+    p0 1/1: (dummy-pmd: configured_rx_queues=1, configured_tx_queues=<cleared>, requested_rx_queues=1, requested_tx_queues=<cleared>)
 ])
 
 OVS_VSWITCHD_STOP
@@ -96,9 +96,9 @@ AT_CHECK([ovs-vsctl set interface p0 options:n_rxq=8])
 
 AT_CHECK([ovs-appctl dpif/show | sed 's/\(tx_queues=\)[[0-9]]*/\1<cleared>/g'], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:0
-	br0:
-		br0 65534/100: (dummy-internal)
-		p0 1/1: (dummy-pmd: configured_rx_queues=8, configured_tx_queues=<cleared>, requested_rx_queues=8, requested_tx_queues=<cleared>)
+  br0:
+    br0 65534/100: (dummy-internal)
+    p0 1/1: (dummy-pmd: configured_rx_queues=8, configured_tx_queues=<cleared>, requested_rx_queues=8, requested_tx_queues=<cleared>)
 ])
 
 AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed SED_NUMA_CORE_PATTERN], [0], [dnl
@@ -127,9 +127,9 @@ CHECK_PMD_THREADS_CREATED()
 
 AT_CHECK([ovs-appctl dpif/show | sed 's/\(tx_queues=\)[[0-9]]*/\1<cleared>/g'], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:0
-	br0:
-		br0 65534/100: (dummy-internal)
-		p0 1/1: (dummy-pmd: configured_rx_queues=8, configured_tx_queues=<cleared>, requested_rx_queues=8, requested_tx_queues=<cleared>)
+  br0:
+    br0 65534/100: (dummy-internal)
+    p0 1/1: (dummy-pmd: configured_rx_queues=8, configured_tx_queues=<cleared>, requested_rx_queues=8, requested_tx_queues=<cleared>)
 ])
 
 AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed SED_NUMA_CORE_PATTERN], [0], [dnl
@@ -190,9 +190,9 @@ sleep 1
 
 AT_CHECK([ovs-appctl dpif/show | sed 's/\(tx_queues=\)[[0-9]]*/\1<cleared>/g'], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:0
-	br0:
-		br0 65534/100: (dummy-internal)
-		p0 7/1: (dummy-pmd: configured_rx_queues=4, configured_tx_queues=<cleared>, requested_rx_queues=4, requested_tx_queues=<cleared>)
+  br0:
+    br0 65534/100: (dummy-internal)
+    p0 7/1: (dummy-pmd: configured_rx_queues=4, configured_tx_queues=<cleared>, requested_rx_queues=4, requested_tx_queues=<cleared>)
 ])
 
 AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | sed SED_NUMA_CORE_PATTERN | sed '/cycles/d' | grep pmd -A 8], [0], [dnl
@@ -296,7 +296,7 @@ dnl Check resetting to default number of rx queues after removal from the db.
 AT_CHECK([ovs-vsctl remove interface p1 options n_rxq])
 
 AT_CHECK([ovs-appctl dpif/show | grep p1 | sed 's/\(tx_queues=\)[[0-9]]*/\1<cleared>/g'], [0], [dnl
-		p1 1/1: (dummy-pmd: configured_rx_queues=1, configured_tx_queues=<cleared>, requested_rx_queues=1, requested_tx_queues=<cleared>)
+    p1 1/1: (dummy-pmd: configured_rx_queues=1, configured_tx_queues=<cleared>, requested_rx_queues=1, requested_tx_queues=<cleared>)
 ])
 
 OVS_VSWITCHD_STOP

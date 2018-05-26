@@ -186,9 +186,9 @@ AT_CHECK([ovs-vsctl add-port br0 p1  -- set interface p1 type=internal])
 
 dnl ovs-vswitchd should still 'see' ovsdb change with the 'monitor' method
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
-		br0 65534/100: (dummy-internal)
-		p0 1/1: (dummy-internal)
-		p1 2/2: (dummy-internal)
+    br0 65534/100: (dummy-internal)
+    p0 1/1: (dummy-internal)
+    p1 2/2: (dummy-internal)
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

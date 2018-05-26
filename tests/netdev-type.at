@@ -8,9 +8,9 @@ OVS_VSWITCHD_START
 add_of_ports br0 1
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:0
-	br0:
-		br0 65534/100: (dummy-internal)
-		p1 1/1: (dummy)
+  br0:
+    br0 65534/100: (dummy-internal)
+    p1 1/1: (dummy)
 ])
 #
 # Set MAC address of dummy device and check that it has been set

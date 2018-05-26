@@ -19,15 +19,15 @@ AT_CHECK([ovs-vsctl add-port int-br t1 -- set Interface t1 type=erspan \
 
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:0
-	br0:
-		br0 65534/100: (dummy-internal)
-		p0 1/1: (dummy)
-	int-br:
-		int-br 65534/2: (dummy-internal)
-		t1 2/3: (erspan: erspan_idx=0x3, erspan_ver=1, key=123, remote_ip=1.1.2.92)
-		t2 3/3: (erspan: erspan_dir=1, erspan_hwid=0x7, erspan_ver=2, key=567, remote_ip=1.1.2.92)
-		t3 4/3: (erspan: erspan_dir=flow, erspan_hwid=flow, erspan_ver=2, key=456, remote_ip=flow)
-		t4 5/3: (erspan: erspan_dir=flow, erspan_hwid=flow, erspan_idx=flow, erspan_ver=flow, key=56, remote_ip=flow)
+  br0:
+    br0 65534/100: (dummy-internal)
+    p0 1/1: (dummy)
+  int-br:
+    int-br 65534/2: (dummy-internal)
+    t1 2/3: (erspan: erspan_idx=0x3, erspan_ver=1, key=123, remote_ip=1.1.2.92)
+    t2 3/3: (erspan: erspan_dir=1, erspan_hwid=0x7, erspan_ver=2, key=567, remote_ip=1.1.2.92)
+    t3 4/3: (erspan: erspan_dir=flow, erspan_hwid=flow, erspan_ver=2, key=456, remote_ip=flow)
+    t4 5/3: (erspan: erspan_dir=flow, erspan_hwid=flow, erspan_idx=flow, erspan_ver=flow, key=56, remote_ip=flow)
 ])
 
 dnl First setup dummy interface IP address, then add the route
@@ -220,18 +220,18 @@ AT_CHECK([ovs-vsctl add-port int-br t2 -- set Interface t2 type=vxlan \
 
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:0
-	br0:
-		br0 65534/100: (dummy-internal)
-		p0 1/1: (dummy)
-	int-br:
-		int-br 65534/2: (dummy-internal)
-		t1 3/3: (gre: key=456, remote_ip=1.1.2.92)
-		t2 2/4789: (vxlan: key=123, remote_ip=1.1.2.92)
-		t3 4/4789: (vxlan: csum=true, out_key=flow, remote_ip=1.1.2.93)
-		t4 5/6081: (geneve: key=123, remote_ip=flow)
-		t5 6/6081: (geneve: egress_pkt_mark=1234, out_key=flow, remote_ip=1.1.2.93)
-		t6 7/3: (gre: key=456, packet_type=legacy_l3, remote_ip=1.1.2.92)
-		t7 8/4789: (vxlan: key=345, remote_ip=1.1.2.92)
+  br0:
+    br0 65534/100: (dummy-internal)
+    p0 1/1: (dummy)
+  int-br:
+    int-br 65534/2: (dummy-internal)
+    t1 3/3: (gre: key=456, remote_ip=1.1.2.92)
+    t2 2/4789: (vxlan: key=123, remote_ip=1.1.2.92)
+    t3 4/4789: (vxlan: csum=true, out_key=flow, remote_ip=1.1.2.93)
+    t4 5/6081: (geneve: key=123, remote_ip=flow)
+    t5 6/6081: (geneve: egress_pkt_mark=1234, out_key=flow, remote_ip=1.1.2.93)
+    t6 7/3: (gre: key=456, packet_type=legacy_l3, remote_ip=1.1.2.92)
+    t7 8/4789: (vxlan: key=345, remote_ip=1.1.2.92)
 ])
 
 dnl First setup dummy interface IP address, then add the route
@@ -560,12 +560,12 @@ AT_CHECK([ovs-vsctl add-port int-br t1 -- set Interface t1 type=gre \
 
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:0
-	br0:
-		br0 65534/100: (dummy-internal)
-		p0 1/1: (dummy)
-	int-br:
-		int-br 65534/2: (dummy-internal)
-		t1 3/3: (gre: key=456, remote_ip=1.1.2.92, seq=true)
+  br0:
+    br0 65534/100: (dummy-internal)
+    p0 1/1: (dummy)
+  int-br:
+    int-br 65534/2: (dummy-internal)
+    t1 3/3: (gre: key=456, remote_ip=1.1.2.92, seq=true)
 ])
 
 AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 1.1.2.88/24], [0], [OK

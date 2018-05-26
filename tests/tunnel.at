@@ -16,10 +16,10 @@ OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
-		br0 65534/100: (dummy-internal)
-		p1 1/1: (gre: remote_ip=1.1.1.1)
-		p2 2/1: (gre: local_ip=2.2.2.2, remote_ip=1.1.1.1)
-		p3 3/1: (gre: remote_ip=2.2.2.2)
+    br0 65534/100: (dummy-internal)
+    p1 1/1: (gre: remote_ip=1.1.1.1)
+    p2 2/1: (gre: local_ip=2.2.2.2, remote_ip=1.1.1.1)
+    p3 3/1: (gre: remote_ip=2.2.2.2)
 ])
 
 dnl remote_ip
@@ -39,10 +39,10 @@ AT_CHECK([ovs-vsctl set Interface p2 type=gre options:local_ip=2.2.2.3 \
           options:df_default=false options:ttl=1 options:csum=true \
           -- set Interface p3 type=vxlan])
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
-		br0 65534/100: (dummy-internal)
-		p1 1/1: (gre: remote_ip=1.1.1.1)
-		p2 2/1: (gre: csum=true, df_default=false, local_ip=2.2.2.3, remote_ip=1.1.1.1, ttl=1)
-		p3 3/4789: (vxlan: remote_ip=2.2.2.2)
+    br0 65534/100: (dummy-internal)
+    p1 1/1: (gre: remote_ip=1.1.1.1)
+    p2 2/1: (gre: csum=true, df_default=false, local_ip=2.2.2.3, remote_ip=1.1.1.1, ttl=1)
+    p3 3/4789: (vxlan: remote_ip=2.2.2.2)
 ])
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(src=1.1.1.1,dst=2.2.2.2,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
@@ -74,9 +74,9 @@ actions=2
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
-		br0 65534/100: (dummy-internal)
-		p1 1/1: (gre: remote_ip=1.1.1.1)
-		p2 2/2: (dummy)
+    br0 65534/100: (dummy-internal)
+    p1 1/1: (gre: remote_ip=1.1.1.1)
+    p2 2/2: (dummy)
 ])
 
 dnl Tunnel CE and encapsulated packet CE
@@ -123,9 +123,9 @@ OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
-		br0 65534/100: (dummy-internal)
-		p1 1/1: (gre: key=5, local_ip=2.2.2.2, remote_ip=1.1.1.1)
-		p2 2/2: (dummy)
+    br0 65534/100: (dummy-internal)
+    p1 1/1: (gre: key=5, local_ip=2.2.2.2, remote_ip=1.1.1.1)
+    p2 2/2: (dummy)
 ])
 
 dnl Basic
@@ -210,9 +210,9 @@ OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
-		br0 65534/100: (dummy-internal)
-		p1 1/1: (gre: remote_ip=1.1.1.1, tos=inherit, ttl=inherit)
-		p2 2/2: (dummy)
+    br0 65534/100: (dummy-internal)
+    p1 1/1: (gre: remote_ip=1.1.1.1, tos=inherit, ttl=inherit)
+    p2 2/2: (dummy)
 ])
 
 dnl Basic
@@ -253,11 +253,11 @@ OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
-		br0 65534/100: (dummy-internal)
-		p1 1/1: (gre: key=flow, remote_ip=1.1.1.1)
-		p2 2/1: (gre: key=flow, remote_ip=2.2.2.2)
-		p3 3/1: (gre: key=flow, remote_ip=3.3.3.3)
-		p4 4/1: (gre: key=flow, remote_ip=4.4.4.4)
+    br0 65534/100: (dummy-internal)
+    p1 1/1: (gre: key=flow, remote_ip=1.1.1.1)
+    p2 2/1: (gre: key=flow, remote_ip=2.2.2.2)
+    p3 3/1: (gre: key=flow, remote_ip=3.3.3.3)
+    p4 4/1: (gre: key=flow, remote_ip=4.4.4.4)
 ])
 
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(100),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
@@ -286,10 +286,10 @@ OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
-		br0 65534/100: (dummy-internal)
-		p1 1/1: (gre: key=1, remote_ip=1.1.1.1)
-		p2 2/1: (gre: in_key=2, out_key=3, remote_ip=1.1.1.1)
-		p3 3/1: (gre: out_key=5, remote_ip=1.1.1.1)
+    br0 65534/100: (dummy-internal)
+    p1 1/1: (gre: key=1, remote_ip=1.1.1.1)
+    p2 2/1: (gre: in_key=2, out_key=3, remote_ip=1.1.1.1)
+    p3 3/1: (gre: out_key=5, remote_ip=1.1.1.1)
 ])
 
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0x1,src=1.1.1.1,dst=2.2.2.2,ttl=64,flags(key)),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
@@ -339,12 +339,12 @@ OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
-		br0 65534/100: (dummy-internal)
-		p1 1/1: (gre: key=flow, remote_ip=1.1.1.1)
-		p2 2/1: (gre: key=3, remote_ip=3.3.3.3)
-		p3 3/3: (dummy)
-		p4 4/4: (dummy)
-		p5 5/5: (dummy)
+    br0 65534/100: (dummy-internal)
+    p1 1/1: (gre: key=flow, remote_ip=1.1.1.1)
+    p2 2/1: (gre: key=3, remote_ip=3.3.3.3)
+    p3 3/3: (dummy)
+    p4 4/4: (dummy)
+    p5 5/5: (dummy)
 ])
 
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0x2,src=1.1.1.1,dst=2.2.2.2,ttl=64,flags(key)),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
@@ -375,8 +375,8 @@ OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=geneve \
                     options:remote_ip=1.1.1.1 ofport_request=1 options:dst_port=5000])
 
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
-		br0 65534/100: (dummy-internal)
-		p1 1/5000: (geneve: dst_port=5000, remote_ip=1.1.1.1)
+    br0 65534/100: (dummy-internal)
+    p1 1/5000: (geneve: dst_port=5000, remote_ip=1.1.1.1)
 ])
 
 OVS_VSWITCHD_STOP
@@ -387,8 +387,8 @@ OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=vxlan \
                     options:remote_ip=1.1.1.1 ofport_request=1])
 
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
-		br0 65534/100: (dummy-internal)
-		p1 1/4789: (vxlan: remote_ip=1.1.1.1)
+    br0 65534/100: (dummy-internal)
+    p1 1/4789: (vxlan: remote_ip=1.1.1.1)
 ])
 
 OVS_VSWITCHD_STOP
@@ -399,8 +399,8 @@ OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=lisp \
                     options:remote_ip=1.1.1.1 ofport_request=1])
 
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
-		br0 65534/100: (dummy-internal)
-		p1 1/4341: (lisp: remote_ip=1.1.1.1)
+    br0 65534/100: (dummy-internal)
+    p1 1/4341: (lisp: remote_ip=1.1.1.1)
 ])
 
 OVS_VSWITCHD_STOP
@@ -423,11 +423,11 @@ OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=erspan \
                  ])
 
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
-		br0 65534/100: (dummy-internal)
-		p1 1/1: (erspan: erspan_idx=0x0, erspan_ver=1, key=1, remote_ip=1.1.1.1)
-		p2 2/1: (erspan: erspan_idx=flow, erspan_ver=1, key=flow, remote_ip=1.1.1.1)
-		p3 3/1: (erspan: erspan_dir=flow, erspan_hwid=flow, erspan_ver=2, key=10, remote_ip=1.1.1.1)
-		p4 4/1: (erspan: erspan_dir=flow, erspan_hwid=flow, erspan_idx=flow, erspan_ver=flow, key=flow, remote_ip=1.2.3.4)
+    br0 65534/100: (dummy-internal)
+    p1 1/1: (erspan: erspan_idx=0x0, erspan_ver=1, key=1, remote_ip=1.1.1.1)
+    p2 2/1: (erspan: erspan_idx=flow, erspan_ver=1, key=flow, remote_ip=1.1.1.1)
+    p3 3/1: (erspan: erspan_dir=flow, erspan_hwid=flow, erspan_ver=2, key=10, remote_ip=1.1.1.1)
+    p4 4/1: (erspan: erspan_dir=flow, erspan_hwid=flow, erspan_idx=flow, erspan_ver=flow, key=flow, remote_ip=1.2.3.4)
 ])
 
 dnl Check ERSPAN v1 flow-based tunnel push
@@ -454,8 +454,8 @@ OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=vxlan \
                     options:remote_ip=1.1.1.1 ofport_request=1 options:dst_port=4341])
 
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
-		br0 65534/100: (dummy-internal)
-		p1 1/4341: (vxlan: dst_port=4341, remote_ip=1.1.1.1)
+    br0 65534/100: (dummy-internal)
+    p1 1/4341: (vxlan: dst_port=4341, remote_ip=1.1.1.1)
 ])
 
 dnl change UDP port
@@ -463,8 +463,8 @@ dnl change UDP port
 AT_CHECK([ovs-vsctl -- set Interface p1 options:dst_port=5000])
 
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
-		br0 65534/100: (dummy-internal)
-		p1 1/5000: (vxlan: dst_port=5000, remote_ip=1.1.1.1)
+    br0 65534/100: (dummy-internal)
+    p1 1/5000: (vxlan: dst_port=5000, remote_ip=1.1.1.1)
 ])
 
 dnl change UDP port to default
@@ -472,8 +472,8 @@ dnl change UDP port to default
 AT_CHECK([ovs-vsctl -- set Interface p1 options:dst_port=4789])
 
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
-		br0 65534/100: (dummy-internal)
-		p1 1/4789: (vxlan: remote_ip=1.1.1.1)
+    br0 65534/100: (dummy-internal)
+    p1 1/4789: (vxlan: remote_ip=1.1.1.1)
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -524,11 +524,11 @@ OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=dummy \
 OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
 
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
-		br0 65534/100: (dummy-internal)
-		p1 1/3: (dummy)
-		p2 2/2: (dummy)
-		p3 3/1: (erspan: erspan_idx=0x7, erspan_ver=1, key=1, remote_ip=1.1.1.1)
-		p4 4/1: (erspan: erspan_dir=1, erspan_hwid=0x7, erspan_ver=2, key=2, remote_ip=1.1.1.2)
+    br0 65534/100: (dummy-internal)
+    p1 1/3: (dummy)
+    p2 2/2: (dummy)
+    p3 3/1: (erspan: erspan_idx=0x7, erspan_ver=1, key=1, remote_ip=1.1.1.1)
+    p4 4/1: (erspan: erspan_dir=1, erspan_hwid=0x7, erspan_ver=2, key=2, remote_ip=1.1.1.2)
 ])
 
 AT_DATA([flows.txt], [dnl
