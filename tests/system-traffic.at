@@ -725,7 +725,7 @@ AT_CHECK([ovs-appctl ofproto/trace br0 "in_port=1,dl_type=0x800,dl_src=e6:66:c1:
 AT_CHECK([tail -3 stdout], [0],
 [Datapath actions: trunc(100),3,5,trunc(100),3,trunc(100),5,3,trunc(200),5,trunc(65535),3
 This flow is handled by the userspace slow path because it:
-	- Uses action(s) not supported by datapath.
+  - Uses action(s) not supported by datapath.
 ])
 
 dnl SLOW_ACTION test2: check actual packet truncate

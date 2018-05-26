@@ -637,7 +637,7 @@ ofproto_trace__(struct ofproto_dpif *ofproto, const struct flow *flow,
         while (slow) {
             enum slow_path_reason bit = rightmost_1bit(slow);
 
-            ds_put_format(output, "\n\t- %s.",
+            ds_put_format(output, "\n  - %s.",
                           slow_path_reason_to_explanation(bit));
 
             slow &= ~bit;

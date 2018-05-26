@@ -241,7 +241,7 @@ AT_CHECK([ovs-appctl ofproto/trace --l7-len 0 ovs-dummy 'tunnel(tun_id=0x1,src=2
 # check that the packet should be handled as BFD packet.
 AT_CHECK([tail -2 stdout], [0], [dnl
 This flow is handled by the userspace slow path because it:
-	- Consists of BFD packets.
+  - Consists of BFD packets.
 ], [])
 
 # turn on the check_tnl_key.
@@ -258,7 +258,7 @@ AT_CHECK([ovs-appctl ofproto/trace --l7-len 0 ovs-dummy 'tunnel(tun_id=0x0,src=2
 # check that the packet should be handled as BFD packet.
 AT_CHECK([tail -2 stdout], [0], [dnl
 This flow is handled by the userspace slow path because it:
-	- Consists of BFD packets.
+  - Consists of BFD packets.
 ], [])
 
 OVS_VSWITCHD_STOP

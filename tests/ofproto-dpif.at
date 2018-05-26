@@ -271,7 +271,7 @@ AT_CHECK([tail -4 stdout], [0],
   [Megaflow: recirc_id=0,eth,icmp6,in_port=1,nw_frag=no,icmp_type=0x87/0xff,icmp_code=0x0/0xff,nd_target=fe80::2020,nd_sll=66:55:44:33:22:11
 Datapath actions: 10,set(nd(target=fe80::4,sll=cc:cc:cc:cc:cc:cc)),11,set(nd(target=fe80::3,sll=aa:aa:aa:aa:aa:aa)),13
 This flow is handled by the userspace slow path because it:
-	- Uses action(s) not supported by datapath.
+  - Uses action(s) not supported by datapath.
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -5173,7 +5173,7 @@ flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x080
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow" -generate], [0], [stdout])
 AT_CHECK_UNQUOTED([tail -3 stdout], [0], [Datapath actions: 2
 This flow is handled by the userspace slow path because it:
-	- Uses action(s) not supported by datapath.
+  - Uses action(s) not supported by datapath.
 ])
 
 OVS_VSWITCHD_STOP
