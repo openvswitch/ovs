@@ -69,6 +69,7 @@ struct ip6gre_net {
 	struct ip6_tnl __rcu *tunnels[4][IP6_GRE_HASH_SIZE];
 
 	struct ip6_tnl __rcu *collect_md_tun;
+	struct ip6_tnl __rcu *collect_md_tun_erspan;
 	struct net_device *fb_tunnel_dev;
 };
 
@@ -245,7 +246,12 @@ static struct ip6_tnl *ip6gre_tunnel_lookup(struct net_device *dev,
 	if (cand)
 		return cand;
 
-	t = rcu_dereference(ign->collect_md_tun);
+	if (gre_proto == htons(ETH_P_ERSPAN) ||
+	    gre_proto == htons(ETH_P_ERSPAN2))
+		t = rcu_dereference(ign->collect_md_tun_erspan);
+	else
+		t = rcu_dereference(ign->collect_md_tun);
+
 	if (t && t->dev->flags & IFF_UP)
 		return t;
 
@@ -274,6 +280,31 @@ static struct ip6_tnl __rcu **__ip6gre_bucket(struct ip6gre_net *ign,
 	return &ign->tunnels[prio][h];
 }
 
+static void ip6gre_tunnel_link_md(struct ip6gre_net *ign, struct ip6_tnl *t)
+{
+       if (t->parms.collect_md)
+               rcu_assign_pointer(ign->collect_md_tun, t);
+}
+
+static void ip6erspan_tunnel_link_md(struct ip6gre_net *ign, struct ip6_tnl *t)
+{
+       if (t->parms.collect_md)
+               rcu_assign_pointer(ign->collect_md_tun_erspan, t);
+}
+
+static void ip6gre_tunnel_unlink_md(struct ip6gre_net *ign, struct ip6_tnl *t)
+{
+       if (t->parms.collect_md)
+               rcu_assign_pointer(ign->collect_md_tun, NULL);
+}
+
+static void ip6erspan_tunnel_unlink_md(struct ip6gre_net *ign,
+                                      struct ip6_tnl *t)
+{
+       if (t->parms.collect_md)
+               rcu_assign_pointer(ign->collect_md_tun_erspan, NULL);
+}
+
 static inline struct ip6_tnl __rcu **ip6gre_bucket(struct ip6gre_net *ign,
 		const struct ip6_tnl *t)
 {
@@ -284,9 +315,6 @@ static void ip6gre_tunnel_link(struct ip6gre_net *ign, struct ip6_tnl *t)
 {
 	struct ip6_tnl __rcu **tp = ip6gre_bucket(ign, t);
 
-	if (t->parms.collect_md)
-		rcu_assign_pointer(ign->collect_md_tun, t);
-
 	rcu_assign_pointer(t->next, rtnl_dereference(*tp));
 	rcu_assign_pointer(*tp, t);
 }
@@ -295,9 +323,6 @@ static void ip6gre_tunnel_unlink(struct ip6gre_net *ign, struct ip6_tnl *t)
 {
 	struct ip6_tnl __rcu **tp;
 	struct ip6_tnl *iter;
-
-	if (t->parms.collect_md)
-		rcu_assign_pointer(ign->collect_md_tun, NULL);
 
 	for (tp = ip6gre_bucket(ign, t);
 	     (iter = rtnl_dereference(*tp)) != NULL;
@@ -385,11 +410,23 @@ failed_free:
 	return NULL;
 }
 
+static void ip6erspan_tunnel_uninit(struct net_device *dev)
+{
+	struct ip6_tnl *t = netdev_priv(dev);
+	struct ip6gre_net *ign = net_generic(t->net, ip6gre_net_id);
+
+	ip6erspan_tunnel_unlink_md(ign, t);
+	ip6gre_tunnel_unlink(ign, t);
+	dst_cache_reset(&t->dst_cache);
+	dev_put(dev);
+}
+
 static void ip6gre_tunnel_uninit(struct net_device *dev)
 {
 	struct ip6_tnl *t = netdev_priv(dev);
 	struct ip6gre_net *ign = net_generic(t->net, ip6gre_net_id);
 
+	ip6gre_tunnel_unlink_md(ign, t);
 	ip6gre_tunnel_unlink(ign, t);
 	dst_cache_reset(&t->dst_cache);
 	dev_put(dev);
@@ -2032,7 +2069,7 @@ static int ip6erspan_tap_init(struct net_device *dev)
 
 static const struct net_device_ops ip6erspan_netdev_ops = {
 	.ndo_init =		ip6erspan_tap_init,
-	.ndo_uninit =		ip6gre_tunnel_uninit,
+	.ndo_uninit =		ip6erspan_tunnel_uninit,
 	.ndo_start_xmit =	ip6erspan_tunnel_xmit,
 	.ndo_set_mac_address =	eth_mac_addr,
 	.ndo_validate_addr =	eth_validate_addr,
@@ -2107,8 +2144,6 @@ static int rpl_ip6gre_newlink_common(struct net *src_net, struct net_device *dev
 #endif
 {
 	struct ip6_tnl *nt;
-	struct net *net = dev_net(dev);
-	struct ip6gre_net *ign = net_generic(net, ip6gre_net_id);
 	struct ip_tunnel_encap ipencap;
 	int err;
 
@@ -2119,16 +2154,6 @@ static int rpl_ip6gre_newlink_common(struct net *src_net, struct net_device *dev
 
 		if (err < 0)
 			return err;
-	}
-
-	ip6gre_netlink_parms(data, &nt->parms);
-
-	if (nt->parms.collect_md) {
-		if (rtnl_dereference(ign->collect_md_tun))
-			return -EEXIST;
-	} else {
-		if (ip6gre_tunnel_find(net, &nt->parms, dev->type))
-			return -EEXIST;
 	}
 
 	if (dev->type == ARPHRD_ETHER && !tb[IFLA_ADDRESS])
@@ -2160,17 +2185,30 @@ static int rpl_ip6gre_newlink(struct net *src_net, struct net_device *dev,
 			  struct nlattr *tb[], struct nlattr *data[])
 #endif
 {
-
-#ifdef HAVE_IP6GRE_EXTACK
-	int err = ip6gre_newlink_common(src_net, dev, tb, data, extack);
-#else
-	int err = ip6gre_newlink_common(src_net, dev, tb, data);
-#endif
 	struct ip6_tnl *nt = netdev_priv(dev);
 	struct net *net = dev_net(dev);
+	struct ip6gre_net *ign;
+	int err;
 
+	ip6gre_netlink_parms(data, &nt->parms);
+	ign = net_generic(net, ip6gre_net_id);
+
+	if (nt->parms.collect_md) {
+		if (rtnl_dereference(ign->collect_md_tun))
+			return -EEXIST;
+	} else {
+		if (ip6gre_tunnel_find(net, &nt->parms, dev->type))
+			return -EEXIST;
+	}
+
+#ifdef HAVE_IP6GRE_EXTACK
+	err = ip6gre_newlink_common(src_net, dev, tb, data, extack);
+#else
+	err = ip6gre_newlink_common(src_net, dev, tb, data);
+#endif
 	if (!err) {
 		ip6gre_tnl_link_config(nt, !tb[IFLA_MTU]);
+		ip6gre_tunnel_link_md(ign, nt);
 		ip6gre_tunnel_link(net_generic(net, ip6gre_net_id), nt);
 	}
 	return err;
@@ -2240,8 +2278,10 @@ static int rpl_ip6gre_changelink(struct net_device *dev, struct nlattr *tb[],
 	if (IS_ERR(t))
 		return PTR_ERR(t);
 
+	ip6gre_tunnel_unlink_md(ign, t);
 	ip6gre_tunnel_unlink(ign, t);
 	ip6gre_tnl_change(t, &p, !tb[IFLA_MTU]);
+	ip6gre_tunnel_link_md(ign, t);
 	ip6gre_tunnel_link(ign, t);
 	return 0;
 }
@@ -2405,16 +2445,30 @@ static int rpl_ip6erspan_newlink(struct net *src_net, struct net_device *dev,
 				 struct nlattr *tb[], struct nlattr *data[])
 #endif
 {
-#ifdef HAVE_IP6GRE_EXTACK
-	int err = ip6gre_newlink_common(src_net, dev, tb, data, extack);
-#else
-	int err = ip6gre_newlink_common(src_net, dev, tb, data);
-#endif
 	struct ip6_tnl *nt = netdev_priv(dev);
 	struct net *net = dev_net(dev);
+	struct ip6gre_net *ign;
+	int err;
 
+	ip6gre_netlink_parms(data, &nt->parms);
+	ign = net_generic(net, ip6gre_net_id);
+
+	if (nt->parms.collect_md) {
+		if (rtnl_dereference(ign->collect_md_tun_erspan))
+			return -EEXIST;
+	} else {
+		if (ip6gre_tunnel_find(net, &nt->parms, dev->type))
+			return -EEXIST;
+	}
+
+#ifdef HAVE_IP6GRE_EXTACK
+	err = ip6gre_newlink_common(src_net, dev, tb, data, extack);
+#else
+	err = ip6gre_newlink_common(src_net, dev, tb, data);
+#endif
 	if (!err) {
 		ip6erspan_tnl_link_config(nt, !tb[IFLA_MTU]);
+		ip6erspan_tunnel_link_md(ign, nt);
 		ip6gre_tunnel_link(net_generic(net, ip6gre_net_id), nt);
 	}
 	return err;
@@ -2455,8 +2509,10 @@ static int rpl_ip6erspan_changelink(struct net_device *dev, struct nlattr *tb[],
 	if (IS_ERR(t))
 		return PTR_ERR(t);
 
+	ip6gre_tunnel_unlink_md(ign, t);
 	ip6gre_tunnel_unlink(ign, t);
 	ip6erspan_tnl_change(t, &p, !tb[IFLA_MTU]);
+	ip6erspan_tunnel_link_md(ign, t);
 	ip6gre_tunnel_link(ign, t);
 	return 0;
 }
@@ -2532,7 +2588,7 @@ struct net_device *ip6erspan_fb_dev_create(struct net *net, const char *name,
 	t = netdev_priv(dev);
 	t->parms.collect_md = true;
 
-	err = ip6gre_newlink(net, dev, tb, NULL);
+	err = ip6erspan_newlink(net, dev, tb, NULL);
 	if (err < 0) {
 		free_netdev(dev);
 		return ERR_PTR(err);
