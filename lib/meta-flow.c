@@ -2821,7 +2821,7 @@ mf_from_frag_string(const char *s, uint8_t *valuep, uint8_t *maskp)
     }
 
     return xasprintf("%s: unknown fragment type (valid types are \"no\", "
-                     "\"yes\", \"first\", \"later\", \"not_first\"", s);
+                     "\"yes\", \"first\", \"later\", \"not_later\"", s);
 }
 
 static char *
