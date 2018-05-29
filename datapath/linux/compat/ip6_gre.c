@@ -1183,12 +1183,11 @@ static netdev_tx_t __ip6erspan_tunnel_xmit(struct sk_buff *skb)
 	return ip6erspan_tunnel_xmit(skb, skb->dev);
 }
 
-static void ip6gre_tnl_link_config(struct ip6_tnl *t, int set_mtu)
+static void ip6gre_tnl_link_config_common(struct ip6_tnl *t)
 {
 	struct net_device *dev = t->dev;
 	struct __ip6_tnl_parm *p = &t->parms;
 	struct flowi6 *fl6 = &t->fl.u.ip6;
-	int t_hlen;
 
 	if (dev->type != ARPHRD_ETHER) {
 		memcpy(dev->dev_addr, &p->laddr, sizeof(struct in6_addr));
@@ -1215,12 +1214,13 @@ static void ip6gre_tnl_link_config(struct ip6_tnl *t, int set_mtu)
 		dev->flags |= IFF_POINTOPOINT;
 	else
 		dev->flags &= ~IFF_POINTOPOINT;
+}
 
-	t->tun_hlen = gre_calc_hlen(t->parms.o_flags);
-
-	t->hlen = t->encap_hlen + t->tun_hlen;
-
-	t_hlen = t->hlen + sizeof(struct ipv6hdr);
+static void ip6gre_tnl_link_config_route(struct ip6_tnl *t, int set_mtu,
+					 int t_hlen)
+{
+	const struct __ip6_tnl_parm *p = &t->parms;
+	struct net_device *dev = t->dev;
 
 	if (p->flags & IP6_TNL_F_CAP_XMIT) {
 		int strict = (ipv6_addr_type(&p->raddr) &
@@ -1250,6 +1250,24 @@ static void ip6gre_tnl_link_config(struct ip6_tnl *t, int set_mtu)
 		}
 		ip6_rt_put(rt);
 	}
+}
+
+static int ip6gre_calc_hlen(struct ip6_tnl *tunnel)
+{
+	int t_hlen;
+
+	tunnel->tun_hlen = gre_calc_hlen(tunnel->parms.o_flags);
+	tunnel->hlen = tunnel->tun_hlen + tunnel->encap_hlen;
+
+	t_hlen = tunnel->hlen + sizeof(struct ipv6hdr);
+	tunnel->dev->hard_header_len = LL_MAX_HEADER + t_hlen;
+	return t_hlen;
+}
+
+static void ip6gre_tnl_link_config(struct ip6_tnl *t, int set_mtu)
+{
+	ip6gre_tnl_link_config_common(t);
+	ip6gre_tnl_link_config_route(t, set_mtu, ip6gre_calc_hlen(t));
 }
 
 static int ip6gre_tnl_change(struct ip6_tnl *t,
@@ -1553,11 +1571,7 @@ static int ip6gre_tunnel_init_common(struct net_device *dev)
 		return ret;
 	}
 
-	tunnel->tun_hlen = gre_calc_hlen(tunnel->parms.o_flags);
-	tunnel->hlen = tunnel->tun_hlen + tunnel->encap_hlen;
-	t_hlen = tunnel->hlen + sizeof(struct ipv6hdr);
-
-	dev->hard_header_len = LL_MAX_HEADER + t_hlen;
+	t_hlen = ip6gre_calc_hlen(tunnel);
 	dev->mtu = ETH_DATA_LEN - t_hlen;
 	if (dev->type == ARPHRD_ETHER)
 		dev->mtu -= ETH_HLEN;
