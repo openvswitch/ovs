@@ -1706,7 +1706,6 @@ ovsdb_idl_db_track_clear(struct ovsdb_idl_db *db)
                 ovs_list_remove(&row->track_node);
                 ovs_list_init(&row->track_node);
                 if (ovsdb_idl_row_is_orphan(row)) {
-                    ovsdb_idl_row_clear_old(row);
                     free(row);
                 }
             }
