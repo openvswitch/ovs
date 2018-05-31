@@ -45,8 +45,8 @@ VLOG_DEFINE_THIS_MODULE(dpif_netlink_rtnl);
 #ifndef IFLA_GRE_MAX
 #define IFLA_GRE_MAX 0
 #endif
-#if IFLA_GRE_MAX < 18
-#define IFLA_GRE_COLLECT_METADATA 18
+#if IFLA_GRE_MAX < 24
+#define IFLA_GRE_ERSPAN_HWID 24
 #endif
 
 #ifndef IFLA_GENEVE_MAX
@@ -74,7 +74,7 @@ static const struct nl_policy vxlan_policy[] = {
     [IFLA_VXLAN_GPE] = { .type = NL_A_FLAG, .optional = true },
 };
 static const struct nl_policy gre_policy[] = {
-    [IFLA_GRE_COLLECT_METADATA] = { .type = NL_A_FLAG },
+    [IFLA_GRE_ERSPAN_HWID] = { .type = NL_A_U16 },
 };
 static const struct nl_policy geneve_policy[] = {
     [IFLA_GENEVE_COLLECT_METADATA] = { .type = NL_A_FLAG },
@@ -207,7 +207,7 @@ dpif_netlink_rtnl_gre_verify(const struct netdev_tunnel_config OVS_UNUSED *tnl,
     err = rtnl_policy_parse(kind, reply, gre_policy, gre,
                             ARRAY_SIZE(gre_policy));
     if (!err) {
-        if (!nl_attr_get_flag(gre[IFLA_GRE_COLLECT_METADATA])) {
+        if (!nl_attr_get_u16(gre[IFLA_GRE_ERSPAN_HWID])) {
             err = EINVAL;
         }
     }
@@ -328,7 +328,7 @@ dpif_netlink_rtnl_create(const struct netdev_tunnel_config *tnl_cfg,
     case OVS_VPORT_TYPE_ERSPAN:
     case OVS_VPORT_TYPE_IP6ERSPAN:
     case OVS_VPORT_TYPE_IP6GRE:
-        nl_msg_put_flag(&request, IFLA_GRE_COLLECT_METADATA);
+        nl_msg_put_u16(&request, IFLA_GRE_ERSPAN_HWID, 0xdead);
         break;
     case OVS_VPORT_TYPE_GENEVE:
         nl_msg_put_flag(&request, IFLA_GENEVE_COLLECT_METADATA);
