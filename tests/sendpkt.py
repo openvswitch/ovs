@@ -66,7 +66,10 @@ for a in args[1:]:
 
     hex_list.append(temp)
 
-pkt = "".join(map(chr, hex_list))
+if sys.version_info < (3, 0):
+    pkt = "".join(map(chr, hex_list))
+else:
+    pkt = bytes(hex_list)
 
 try:
     sockfd = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
