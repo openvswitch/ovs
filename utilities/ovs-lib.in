@@ -622,6 +622,14 @@ force_reload_kmod () {
         action "Removing $vport module" rmmod $vport
     done
 
+    if test -e /sys/module/ip_gre; then
+        action "Forcing removal of ip_gre module" rmmod ip_gre
+    fi
+
+    if test -e /sys/module/gre; then
+        action "Forcing removal of gre module" rmmod gre
+    fi
+
     if test -e /sys/module/openvswitch; then
         action "Removing openvswitch module" rmmod openvswitch
     fi
