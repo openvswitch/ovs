@@ -60,9 +60,15 @@ int ovs_iptunnel_handle_offloads(struct sk_buff *skb,
  * rpl prefix is to make OVS build happy.
  */
 #define iptunnel_handle_offloads rpl_iptunnel_handle_offloads
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,7,0)
 struct sk_buff *rpl_iptunnel_handle_offloads(struct sk_buff *skb,
 					     bool csum_help,
 					     int gso_type_mask);
+#else
+int rpl_iptunnel_handle_offloads(struct sk_buff *skb,
+				 bool csum_help,
+				 int gso_type_mask);
+#endif
 
 #define iptunnel_xmit rpl_iptunnel_xmit
 void rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
@@ -231,7 +237,6 @@ static inline void ip_tunnel_key_init(struct ip_tunnel_key *key,
 
 #define ip_tunnel_collect_metadata() true
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,6,0)
 #undef TUNNEL_NOCACHE
 #define TUNNEL_NOCACHE 0
 
@@ -248,7 +253,6 @@ ip_tunnel_dst_cache_usable(const struct sk_buff *skb,
 
 	return true;
 }
-#endif
 
 #define ip_tunnel_dst rpl_ip_tunnel_dst
 struct rpl_ip_tunnel_dst {
@@ -359,14 +363,14 @@ static inline int ovs_ip_tunnel_encap(struct sk_buff *skb, struct ip_tunnel *t,
 	return ret;
 }
 
-#ifndef HAVE_PCPU_SW_NETSTATS
 #define ip_tunnel_get_stats64 rpl_ip_tunnel_get_stats64
-#else
-#define rpl_ip_tunnel_get_stats64 ip_tunnel_get_stats64
-#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,11,0)
 struct rtnl_link_stats64 *rpl_ip_tunnel_get_stats64(struct net_device *dev,
 						    struct rtnl_link_stats64 *tot);
-
+#else
+void rpl_ip_tunnel_get_stats64(struct net_device *dev,
+						    struct rtnl_link_stats64 *tot);
+#endif
 #define ip_tunnel_get_dsfield rpl_ip_tunnel_get_dsfield
 static inline u8 rpl_ip_tunnel_get_dsfield(const struct iphdr *iph,
 					   const struct sk_buff *skb)

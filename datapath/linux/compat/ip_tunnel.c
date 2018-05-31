@@ -470,7 +470,9 @@ EXPORT_SYMBOL_GPL(rpl_ip_tunnel_xmit);
 static void ip_tunnel_dev_free(struct net_device *dev)
 {
 	free_percpu(dev->tstats);
+#ifndef HAVE_NEEDS_FREE_NETDEV
 	free_netdev(dev);
+#endif
 }
 
 void rpl_ip_tunnel_dellink(struct net_device *dev, struct list_head *head)

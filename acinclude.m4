@@ -151,10 +151,10 @@ AC_DEFUN([OVS_CHECK_LINUX], [
     AC_MSG_RESULT([$kversion])
 
     if test "$version" -ge 4; then
-       if test "$version" = 4 && test "$patchlevel" -le 15; then
+       if test "$version" = 4 && test "$patchlevel" -le 14; then
           : # Linux 4.x
        else
-          AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 4.15.x is not supported (please refer to the FAQ for advice)])
+          AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 4.14.x is not supported (please refer to the FAQ for advice)])
        fi
     elif test "$version" = 3 && test "$patchlevel" -ge 10; then
        : # Linux 3.x
@@ -828,12 +828,6 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/netdevice.h], [net_device],
                         [max_mtu],
                         [OVS_DEFINE([HAVE_NET_DEVICE_MAX_MTU])])
-  OVS_GREP_IFELSE([$KSRC/include/net/erspan.h],
-                  [__LINUX_ERSPAN_H],
-                  [OVS_DEFINE([HAVE_LINUX_ERSPAN_H])])
-  OVS_FIND_PARAM_IFELSE([$KSRC/net/ipv6/ip6_gre.c],
-                        [ip6gre_tunnel_validate], [extack],
-                        [OVS_DEFINE([HAVE_IP6GRE_EXTACK])])
   OVS_FIND_FIELD_IFELSE([$KSRC/include/net/ip6_tunnel.h], [__ip6_tnl_parm],
                         [erspan_ver],
                         [OVS_DEFINE([HAVE_IP6_TNL_PARM_ERSPAN_VER])])
@@ -864,9 +858,6 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/uapi/linux/if_tunnel.h],
                   [IFLA_IPTUN_COLLECT_METADATA],
                   [OVS_DEFINE([HAVE_IFLA_IPTUN_COLLECT_METADATA])])
-  OVS_GREP_IFELSE([$KSRC/net/ipv4/gre_demux.c],
-                  [parse_gre_header],
-                  [OVS_DEFINE([HAVE_DEMUX_PARSE_GRE_HEADER])])
   OVS_GREP_IFELSE([$KSRC/include/uapi/linux/if_tunnel.h],
                   [IFLA_GRE_ENCAP_DPORT])
   OVS_GREP_IFELSE([$KSRC/include/uapi/linux/if_tunnel.h],
@@ -879,6 +870,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [IFLA_GRE_ERSPAN_INDEX])
   OVS_GREP_IFELSE([$KSRC/include/uapi/linux/if_tunnel.h],
                   [IFLA_GRE_ERSPAN_HWID])
+  OVS_GREP_IFELSE([$KSRC/include/uapi/linux/if_tunnel.h],
+                  [IFLA_IPTUN_FWMARK])
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then

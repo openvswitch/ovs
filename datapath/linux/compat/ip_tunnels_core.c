@@ -129,9 +129,16 @@ error:
 }
 EXPORT_SYMBOL_GPL(ovs_iptunnel_handle_offloads);
 
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,7,0)
 struct sk_buff *rpl_iptunnel_handle_offloads(struct sk_buff *skb,
 					     bool csum_help,
 					     int gso_type_mask)
+#else
+int rpl_iptunnel_handle_offloads(struct sk_buff *skb,
+				 bool csum_help,
+				 int gso_type_mask)
+#endif
 {
 	int err;
 
@@ -145,7 +152,7 @@ struct sk_buff *rpl_iptunnel_handle_offloads(struct sk_buff *skb,
 		if (unlikely(err))
 			goto error;
 		skb_shinfo(skb)->gso_type |= gso_type_mask;
-		return skb;
+		goto out;
 	}
 
 	/* If packet is not gso and we are resolving any partial checksum,
@@ -163,10 +170,17 @@ struct sk_buff *rpl_iptunnel_handle_offloads(struct sk_buff *skb,
 	} else if (skb->ip_summed != CHECKSUM_PARTIAL)
 		skb->ip_summed = CHECKSUM_NONE;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,7,0)
+out:
 	return skb;
 error:
 	kfree_skb(skb);
 	return ERR_PTR(err);
+#else
+out:
+error:
+	return 0;
+#endif
 }
 EXPORT_SYMBOL_GPL(rpl_iptunnel_handle_offloads);
 
@@ -258,9 +272,15 @@ static void netdev_stats_to_stats64(struct rtnl_link_stats64 *stats64,
 		dst[i] = src[i];
 #endif
 }
+#endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,11,0)
 struct rtnl_link_stats64 *rpl_ip_tunnel_get_stats64(struct net_device *dev,
 						struct rtnl_link_stats64 *tot)
+#else
+void rpl_ip_tunnel_get_stats64(struct net_device *dev,
+						struct rtnl_link_stats64 *tot)
+#endif
 {
 	int i;
 
@@ -286,9 +306,10 @@ struct rtnl_link_stats64 *rpl_ip_tunnel_get_stats64(struct net_device *dev,
 		tot->tx_bytes   += tx_bytes;
 	}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,11,0)
 	return tot;
-}
 #endif
+}
 
 void rpl_ip6tunnel_xmit(struct sock *sk, struct sk_buff *skb,
 		    struct net_device *dev)

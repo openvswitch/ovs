@@ -1,6 +1,11 @@
 #ifndef __LINUX_COMPILER_H
+#if 0
+/* Disable this check - it no longer makes sense with so many backports
+ * due to spectre mitigation
+ */
 #ifndef HAVE_LINUX_COMPILER_TYPES_H
 #error "Please don't include <linux/compiler-gcc.h> directly, include <linux/compiler.h> instead."
+#endif
 #endif
 #endif
 

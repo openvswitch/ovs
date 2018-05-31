@@ -785,9 +785,9 @@ static int rpl_gre_handle_offloads(struct sk_buff *skb, bool gre_csum)
 #else
 static int gre_handle_offloads(struct sk_buff *skb, bool csum)
 {
-	return iptunnel_handle_offloads(skb,
+	return iptunnel_handle_offloads(skb, csum,
 					csum ? SKB_GSO_GRE_CSUM : SKB_GSO_GRE);
-
+}
 #endif
 
 static void prepare_ip6gre_xmit_ipv4(struct sk_buff *skb,
@@ -1526,7 +1526,7 @@ static const struct net_device_ops ip6gre_netdev_ops = {
 	.ndo_start_xmit		= ip6gre_tunnel_xmit,
 	.ndo_do_ioctl		= ip6gre_tunnel_ioctl,
 	.ndo_change_mtu		= ip6_tnl_change_mtu,
-	.ndo_get_stats64	= rpl_ip_tunnel_get_stats64,
+	.ndo_get_stats64	= ip_tunnel_get_stats64,
 #ifdef HAVE_NDO_GET_IFLINK
 	.ndo_get_iflink		= ip6_tnl_get_iflink,
 #endif
@@ -1787,7 +1787,7 @@ static struct pernet_operations ip6gre_net_ops = {
 	.id   = &ip6gre_net_id,
 	.size = sizeof(struct ip6gre_net),
 };
-#ifdef HAVE_IP6GRE_EXTACK
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
 static int rpl_ip6gre_tunnel_validate(struct nlattr *tb[],
 				      struct nlattr *data[],
 				      struct netlink_ext_ack *extack)
@@ -1813,7 +1813,7 @@ static int rpl_ip6gre_tunnel_validate(struct nlattr *tb[],
 }
 #define ip6gre_tunnel_validate rpl_ip6gre_tunnel_validate
 
-#ifdef HAVE_IP6GRE_EXTACK
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
 static int rpl_ip6gre_tap_validate(struct nlattr *tb[], struct nlattr *data[],
 				   struct netlink_ext_ack *extack)
 #else
@@ -1839,7 +1839,7 @@ static int rpl_ip6gre_tap_validate(struct nlattr *tb[], struct nlattr *data[])
 	}
 
 out:
-#ifdef HAVE_IP6GRE_EXTACK
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
 	return ip6gre_tunnel_validate(tb, data, extack);
 #else
 	return ip6gre_tunnel_validate(tb, data);
@@ -1847,7 +1847,7 @@ out:
 }
 #define ip6gre_tap_validate rpl_ip6gre_tap_validate
 
-#ifdef HAVE_IP6GRE_EXTACK
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
 static int rpl_ip6erspan_tap_validate(struct nlattr *tb[],
 				      struct nlattr *data[],
 				      struct netlink_ext_ack *extack)
@@ -1862,7 +1862,7 @@ static int rpl_ip6erspan_tap_validate(struct nlattr *tb[],
 	if (!data)
 		return 0;
 
-#ifdef HAVE_IP6GRE_EXTACK
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
 	ret = ip6gre_tap_validate(tb, data, extack);
 #else
 	ret = ip6gre_tap_validate(tb, data);
@@ -2011,7 +2011,7 @@ static const struct net_device_ops ip6gre_tap_netdev_ops = {
 	.ndo_set_mac_address = eth_mac_addr,
 	.ndo_validate_addr = eth_validate_addr,
 	.ndo_change_mtu = ip6_tnl_change_mtu,
-	.ndo_get_stats64 = rpl_ip_tunnel_get_stats64,
+	.ndo_get_stats64 = ip_tunnel_get_stats64,
 #ifdef HAVE_NDO_GET_IFLINK
 	.ndo_get_iflink = ip6_tnl_get_iflink,
 #endif
@@ -2134,7 +2134,7 @@ static bool ip6gre_netlink_encap_parms(struct nlattr *data[],
 	return ret;
 }
 
-#ifdef HAVE_IP6GRE_EXTACK
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
 static int rpl_ip6gre_newlink_common(struct net *src_net, struct net_device *dev,
 			      struct nlattr *tb[], struct nlattr *data[],
 			      struct netlink_ext_ack *extack)
@@ -2176,7 +2176,7 @@ out:
 }
 #define ip6gre_newlink_common rpl_ip6gre_newlink_common
 
-#ifdef HAVE_IP6GRE_EXTACK
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
 static int rpl_ip6gre_newlink(struct net *src_net, struct net_device *dev,
 			  struct nlattr *tb[], struct nlattr *data[],
 			  struct netlink_ext_ack *extack)
@@ -2201,7 +2201,7 @@ static int rpl_ip6gre_newlink(struct net *src_net, struct net_device *dev,
 			return -EEXIST;
 	}
 
-#ifdef HAVE_IP6GRE_EXTACK
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
 	err = ip6gre_newlink_common(src_net, dev, tb, data, extack);
 #else
 	err = ip6gre_newlink_common(src_net, dev, tb, data);
@@ -2216,7 +2216,7 @@ static int rpl_ip6gre_newlink(struct net *src_net, struct net_device *dev,
 
 #define ip6gre_newlink rpl_ip6gre_newlink
 
-#ifdef HAVE_IP6GRE_EXTACK
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
 static struct ip6_tnl *
 rpl_ip6gre_changelink_common(struct net_device *dev, struct nlattr *tb[],
 			 struct nlattr *data[], struct __ip6_tnl_parm *p_p,
@@ -2257,7 +2257,7 @@ rpl_ip6gre_changelink_common(struct net_device *dev, struct nlattr *tb[],
 }
 #define ip6gre_changelink_common rpl_ip6gre_changelink_common
 
-#ifdef HAVE_IP6GRE_EXTACK
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
 static int rpl_ip6gre_changelink(struct net_device *dev, struct nlattr *tb[],
 			     struct nlattr *data[],
 			     struct netlink_ext_ack *extack)
@@ -2270,7 +2270,7 @@ static int rpl_ip6gre_changelink(struct net_device *dev, struct nlattr *tb[],
 	struct __ip6_tnl_parm p;
 	struct ip6_tnl *t;
 
-#ifdef HAVE_IP6GRE_EXTACK
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
 	t = ip6gre_changelink_common(dev, tb, data, &p, extack);
 #else
 	t = ip6gre_changelink_common(dev, tb, data, &p);
@@ -2436,7 +2436,7 @@ static void ip6erspan_tap_setup(struct net_device *dev)
 	netif_keep_dst(dev);
 }
 
-#ifdef HAVE_IP6GRE_EXTACK
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
 static int rpl_ip6erspan_newlink(struct net *src_net, struct net_device *dev,
 				 struct nlattr *tb[], struct nlattr *data[],
 				 struct netlink_ext_ack *extack)
@@ -2461,7 +2461,7 @@ static int rpl_ip6erspan_newlink(struct net *src_net, struct net_device *dev,
 			return -EEXIST;
 	}
 
-#ifdef HAVE_IP6GRE_EXTACK
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
 	err = ip6gre_newlink_common(src_net, dev, tb, data, extack);
 #else
 	err = ip6gre_newlink_common(src_net, dev, tb, data);
@@ -2489,7 +2489,7 @@ static int ip6erspan_tnl_change(struct ip6_tnl *t,
 	return 0;
 }
 
-#ifdef HAVE_IP6GRE_EXTACK
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
 static int rpl_ip6erspan_changelink(struct net_device *dev, struct nlattr *tb[],
 				    struct nlattr *data[],
 				    struct netlink_ext_ack *extack)
@@ -2501,7 +2501,7 @@ static int rpl_ip6erspan_changelink(struct net_device *dev, struct nlattr *tb[],
 	struct ip6gre_net *ign = net_generic(dev_net(dev), ip6gre_net_id);
 	struct __ip6_tnl_parm p;
 	struct ip6_tnl *t;
-#ifdef HAVE_IP6GRE_EXTACK
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
 	t = ip6gre_changelink_common(dev, tb, data, &p, extack);
 #else
 	t = ip6gre_changelink_common(dev, tb, data, &p);
@@ -2588,7 +2588,11 @@ struct net_device *ip6erspan_fb_dev_create(struct net *net, const char *name,
 	t = netdev_priv(dev);
 	t->parms.collect_md = true;
 
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+	err = ip6erspan_newlink(net, dev, tb, NULL, NULL);
+#else
 	err = ip6erspan_newlink(net, dev, tb, NULL);
+#endif
 	if (err < 0) {
 		free_netdev(dev);
 		return ERR_PTR(err);
@@ -2685,7 +2689,11 @@ struct net_device *ip6gre_fb_dev_create(struct net *net, const char *name,
 	t = netdev_priv(dev);
 	t->parms.collect_md = true;
 
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+	err = ip6gre_newlink(net, dev, tb, NULL, NULL);
+#else
 	err = ip6gre_newlink(net, dev, tb, NULL);
+#endif
 	if (err < 0) {
 		free_netdev(dev);
 		return ERR_PTR(err);

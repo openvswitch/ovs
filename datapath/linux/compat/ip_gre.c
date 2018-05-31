@@ -19,7 +19,7 @@
 #include <linux/kernel.h>
 #include <linux/kconfig.h>
 #include <linux/slab.h>
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
 #include <linux/skbuff.h>
 #include <linux/netdevice.h>
 #include <linux/netdev_features.h>
@@ -96,14 +96,6 @@ static __be32 tunnel_id_to_key(__be64 x)
 #endif
 }
 
-#ifdef HAVE_DEMUX_PARSE_GRE_HEADER
-/* Called with rcu_read_lock and BH disabled. */
-static int gre_err(struct sk_buff *skb, u32 info,
-		   const struct tnl_ptk_info *tpi)
-{
-	return PACKET_REJECT;
-}
-#endif
 static struct dst_ops md_dst_ops = {
 	.family =		AF_UNSPEC,
 };
@@ -354,7 +346,6 @@ static void __gre_xmit(struct sk_buff *skb, struct net_device *dev,
 	ip_tunnel_xmit(skb, dev, tnl_params, tnl_params->protocol);
 }
 
-#ifndef HAVE_DEMUX_PARSE_GRE_HEADER
 static int gre_rcv(struct sk_buff *skb, const struct tnl_ptk_info *unused_tpi)
 {
 	struct tnl_ptk_info tpi;
@@ -379,28 +370,9 @@ drop:
 	kfree_skb(skb);
 	return 0;
 }
-#else
-static int gre_rcv(struct sk_buff *skb, const struct tnl_ptk_info *__tpi)
-{
-	struct tnl_ptk_info tpi = *__tpi;
-
-	if (unlikely(tpi.proto == htons(ETH_P_ERSPAN) ||
-		     tpi.proto == htons(ETH_P_ERSPAN2))) {
-		if (erspan_rcv(skb, &tpi, 0) == PACKET_RCVD)
-			return 0;
-		goto drop;
-	}
-
-	if (ipgre_rcv(skb, &tpi, 0) == PACKET_RCVD)
-		return 0;
-drop:
-
-	kfree_skb(skb);
-	return 0;
-}
-#endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,7,0)
+#include "gso.h"
 /* gre_handle_offloads() has different return type on older kernsl. */
 static void gre_nop_fix(struct sk_buff *skb) { }
 
@@ -418,11 +390,6 @@ static void gre_csum_fix(struct sk_buff *skb)
 						     skb->len - gre_offset, 0));
 }
 
-static bool is_gre_gso(struct sk_buff *skb)
-{
-	return skb_is_gso(skb);
-}
-
 #define gre_handle_offloads rpl_gre_handle_offloads
 static int rpl_gre_handle_offloads(struct sk_buff *skb, bool gre_csum)
 {
@@ -437,22 +404,18 @@ static int rpl_gre_handle_offloads(struct sk_buff *skb, bool gre_csum)
 	return ovs_iptunnel_handle_offloads(skb, type, fix_segment);
 }
 #else
+static int gre_handle_offloads(struct sk_buff *skb, bool csum)
+{
+	return iptunnel_handle_offloads(skb, csum,
+					csum ? SKB_GSO_GRE_CSUM : SKB_GSO_GRE);
+}
+#endif
 
 static bool is_gre_gso(struct sk_buff *skb)
 {
 	return skb_shinfo(skb)->gso_type &
 		(SKB_GSO_GRE | SKB_GSO_GRE_CSUM);
 }
-
-static int rpl_gre_handle_offloads(struct sk_buff *skb, bool gre_csum)
-{
-	if (skb_is_gso(skb) && skb_is_encapsulated(skb))
-		return -ENOSYS;
-
-#undef gre_handle_offloads
-	return gre_handle_offloads(skb, gre_csum);
-}
-#endif
 
 static void build_header(struct sk_buff *skb, int hdr_len, __be16 flags,
 			 __be16 proto, __be32 key, __be32 seq)
@@ -589,14 +552,14 @@ netdev_tx_t rpl_gre_fb_xmit(struct sk_buff *skb)
 			goto err_free_rt;
 	}
 
-	skb = vlan_hwaccel_push_inside(skb);
+	skb = __vlan_hwaccel_push_inside(skb);
 	if (unlikely(!skb)) {
 		err = -ENOMEM;
 		goto err_free_rt;
 	}
 
 	/* Push Tunnel header. */
-	err = rpl_gre_handle_offloads(skb, !!(tun_info->key.tun_flags & TUNNEL_CSUM));
+	err = gre_handle_offloads(skb, !!(tun_info->key.tun_flags & TUNNEL_CSUM));
 	if (err)
 		goto err_free_rt;
 
@@ -747,14 +710,6 @@ static void __gre_tunnel_init(struct net_device *dev)
 	}
 }
 
-#ifdef HAVE_DEMUX_PARSE_GRE_HEADER
-static struct gre_cisco_protocol ipgre_cisco_protocol = {
-	.handler        = gre_rcv,
-	.err_handler    = gre_err,
-	.priority       = 1,
-};
-#endif
-
 static int __gre_rcv(struct sk_buff *skb)
 {
 	return gre_rcv(skb, NULL);
@@ -789,7 +744,12 @@ static struct pernet_operations ipgre_net_ops = {
 	.size = sizeof(struct ip_tunnel_net),
 };
 
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+static int ipgre_tunnel_validate(struct nlattr *tb[], struct nlattr *data[],
+				 struct netlink_ext_ack *extack)
+#else
 static int ipgre_tunnel_validate(struct nlattr *tb[], struct nlattr *data[])
+#endif
 {
 	__be16 flags;
 
@@ -807,7 +767,12 @@ static int ipgre_tunnel_validate(struct nlattr *tb[], struct nlattr *data[])
 	return 0;
 }
 
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+static int ipgre_tap_validate(struct nlattr *tb[], struct nlattr *data[],
+			      struct netlink_ext_ack *extack)
+#else
 static int ipgre_tap_validate(struct nlattr *tb[], struct nlattr *data[])
+#endif
 {
 	__be32 daddr;
 
@@ -828,7 +793,11 @@ static int ipgre_tap_validate(struct nlattr *tb[], struct nlattr *data[])
 	}
 
 out:
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+	return ipgre_tunnel_validate(tb, data, NULL);
+#else
 	return ipgre_tunnel_validate(tb, data);
+#endif
 }
 
 enum {
@@ -859,7 +828,12 @@ enum {
 
 #define RPL_IFLA_GRE_MAX (IFLA_GRE_ERSPAN_HWID + 1)
 
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+static int erspan_validate(struct nlattr *tb[], struct nlattr *data[],
+			   struct netlink_ext_ack *extack)
+#else
 static int erspan_validate(struct nlattr *tb[], struct nlattr *data[])
+#endif
 {
 	__be16 flags = 0;
 	int ret;
@@ -867,7 +841,11 @@ static int erspan_validate(struct nlattr *tb[], struct nlattr *data[])
 	if (!data)
 		return 0;
 
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+	ret = ipgre_tap_validate(tb, data, NULL);
+#else
 	ret = ipgre_tap_validate(tb, data);
+#endif
 	if (ret)
 		return ret;
 
@@ -1194,7 +1172,7 @@ static const struct net_device_ops gre_tap_netdev_ops = {
 #else
 	.ndo_change_mtu		= ip_tunnel_change_mtu,
 #endif
-	.ndo_get_stats64	= rpl_ip_tunnel_get_stats64,
+	.ndo_get_stats64	= ip_tunnel_get_stats64,
 #ifdef HAVE_NDO_GET_IFLINK
 	.ndo_get_iflink		= rpl_ip_tunnel_get_iflink,
 #endif
@@ -1210,7 +1188,7 @@ static const struct net_device_ops erspan_netdev_ops = {
 	.ndo_set_mac_address	= eth_mac_addr,
 	.ndo_validate_addr	= eth_validate_addr,
 	.ndo_change_mtu		= ip_tunnel_change_mtu,
-	.ndo_get_stats64	= rpl_ip_tunnel_get_stats64,
+	.ndo_get_stats64	= ip_tunnel_get_stats64,
 #ifdef HAVE_NDO_GET_IFLINK
 	.ndo_get_iflink		= rpl_ip_tunnel_get_iflink,
 #endif
@@ -1247,8 +1225,14 @@ static void erspan_setup(struct net_device *dev)
 	ip_tunnel_setup(dev, erspan_net_id);
 }
 
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+static int ipgre_newlink(struct net *src_net, struct net_device *dev,
+			 struct nlattr *tb[], struct nlattr *data[],
+			 struct netlink_ext_ack *extack)
+#else
 static int ipgre_newlink(struct net *src_net, struct net_device *dev,
 			 struct nlattr *tb[], struct nlattr *data[])
+#endif
 {
 	struct ip_tunnel_parm p;
 	int err;
@@ -1424,7 +1408,11 @@ struct net_device *rpl_gretap_fb_dev_create(struct net *net, const char *name,
 	t = netdev_priv(dev);
 	t->collect_md = true;
 	/* Configure flow based GRE device. */
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+	err = ipgre_newlink(net, dev, tb, NULL, NULL);
+#else
 	err = ipgre_newlink(net, dev, tb, NULL);
+#endif
 	if (err < 0) {
 		free_netdev(dev);
 		return ERR_PTR(err);
@@ -1504,7 +1492,11 @@ static struct net_device *erspan_fb_dev_create(struct net *net,
 	t = netdev_priv(dev);
 	t->collect_md = true;
 	/* Configure flow based GRE device. */
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
+	err = ipgre_newlink(net, dev, tb, NULL, NULL);
+#else
 	err = ipgre_newlink(net, dev, tb, NULL);
+#endif
 	if (err < 0) {
 		free_netdev(dev);
 		return ERR_PTR(err);
@@ -1648,19 +1640,11 @@ int rpl_ipgre_init(void)
 	if (err < 0)
 		goto pnet_ipgre_failed;
 
-#ifdef HAVE_DEMUX_PARSE_GRE_HEADER
-	err = gre_cisco_register(&ipgre_cisco_protocol);
-	if (err < 0) {
-		pr_info("%s: can't add protocol\n", __func__);
-		goto add_proto_failed;
-	}
-#else
 	err = gre_add_protocol(&ipgre_protocol, GREPROTO_CISCO);
 	if (err < 0) {
 		pr_info("%s: can't add protocol\n", __func__);
 		goto add_proto_failed;
 	}
-#endif
 
 	pr_info("GRE over IPv4 tunneling driver\n");
 	
@@ -1683,11 +1667,7 @@ void rpl_ipgre_fini(void)
 {
 	ovs_vport_ops_unregister(&ovs_erspan_vport_ops);
 	ovs_vport_ops_unregister(&ovs_ipgre_vport_ops);
-#ifdef HAVE_DEMUX_PARSE_GRE_HEADER
-	gre_cisco_unregister(&ipgre_cisco_protocol);
-#else
 	gre_del_protocol(&ipgre_protocol, GREPROTO_CISCO);
-#endif
 	unregister_pernet_device(&ipgre_net_ops);
 	unregister_pernet_device(&erspan_net_ops);
 	unregister_pernet_device(&ipgre_tap_net_ops);

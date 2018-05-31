@@ -116,13 +116,11 @@ static inline void ovs_ipv6_tun_rx_dst(struct metadata_dst *md_dst,
 void ovs_ip_tunnel_rcv(struct net_device *dev, struct sk_buff *skb,
 		      struct metadata_dst *tun_dst);
 
-#ifndef HAVE_METADATA_DST_ALLOC_WITH_METADATA_TYPE
 static inline struct metadata_dst *
 rpl_metadata_dst_alloc(u8 optslen, enum metadata_type type, gfp_t flags)
 {
 	return metadata_dst_alloc(optslen, flags);
 }
 #define metadata_dst_alloc rpl_metadata_dst_alloc
-#endif
 
 #endif /* __NET_DST_METADATA_WRAPPER_H */

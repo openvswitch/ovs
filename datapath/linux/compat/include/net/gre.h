@@ -124,34 +124,6 @@ static inline __be16 rpl_gre_tnl_flags_to_gre_flags(__be16 tflags)
 	return flags;
 }
 
-#ifndef HAVE_GRE_CISCO_REGISTER
-
-/* GRE demux not available, implement our own demux. */
-#define MAX_GRE_PROTO_PRIORITY 255
-
-struct gre_cisco_protocol {
-	int (*handler)(struct sk_buff *skb, const struct tnl_ptk_info *tpi);
-	int (*err_handler)(struct sk_buff *skb, u32 info,
-			   const struct tnl_ptk_info *tpi);
-	u8 priority;
-};
-
-#define gre_cisco_register rpl_gre_cisco_register
-int rpl_gre_cisco_register(struct gre_cisco_protocol *proto);
-
-#define gre_cisco_unregister rpl_gre_cisco_unregister
-int rpl_gre_cisco_unregister(struct gre_cisco_protocol *proto);
-
-#ifndef GRE_HEADER_SECTION
-struct gre_base_hdr {
-	__be16 flags;
-	__be16 protocol;
-};
-#define GRE_HEADER_SECTION 4
-#endif
-
-#endif /* HAVE_GRE_CISCO_REGISTER */
-
 #define gre_build_header rpl_gre_build_header
 void rpl_gre_build_header(struct sk_buff *skb, const struct tnl_ptk_info *tpi,
 			  int hdr_len);

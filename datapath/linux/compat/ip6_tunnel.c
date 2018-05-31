@@ -73,9 +73,11 @@ enum {
 	IFLA_IPTUN_ENCAP_SPORT,
 	IFLA_IPTUN_ENCAP_DPORT,
 #endif
-#ifndef HAVE_IFLA_IPTUN_COLLECT_METADTA
+#ifndef HAVE_IFLA_IPTUN_COLLECT_METADATA
 	IFLA_IPTUN_COLLECT_METADATA = IFLA_IPTUN_ENCAP_DPORT + 1,
-	IFLA_IPTUN_FWMARK,
+#endif
+#ifndef HAVE_IFLA_IPTUN_FWMARK
+	IFLA_IPTUN_FWMARK = IFLA_IPTUN_COLLECT_METADATA + 1,
 #endif
 	RPL__IFLA_IPTUN_MAX = IFLA_IPTUN_FWMARK + 1,
 };
@@ -104,7 +106,8 @@ static void gre_csum_fix(struct sk_buff *skb)
 }
 
 #define iptunnel_handle_offloads rpl__iptunnel_handle_offloads
-static int rpl__iptunnel_handle_offloads(struct sk_buff *skb, bool gre_csum)
+static int rpl__iptunnel_handle_offloads(struct sk_buff *skb, bool gre_csum,
+					 int __always_unused ignored)
 {
 	int type = gre_csum ? SKB_GSO_GRE_CSUM : SKB_GSO_GRE;
 	gso_fix_segment_t fix_segment;
@@ -1116,7 +1119,7 @@ ip4ip6_tnl_xmit(struct sk_buff *skb, struct net_device *dev)
 // FIX ME
 //	fl6.flowi6_uid = sock_net_uid(dev_net(dev), NULL);
 
-	if (iptunnel_handle_offloads(skb, SKB_GSO_IPXIP6))
+	if (iptunnel_handle_offloads(skb, true, SKB_GSO_IPXIP6))
 		return -1;
 
 	dsfield = INET_ECN_encapsulate(dsfield, ipv4_get_dsfield(iph));
@@ -1208,7 +1211,7 @@ ip6ip6_tnl_xmit(struct sk_buff *skb, struct net_device *dev)
 //	FIX ME
 //	fl6.flowi6_uid = sock_net_uid(dev_net(dev), NULL);
 
-	if (iptunnel_handle_offloads(skb, SKB_GSO_IPXIP6))
+	if (iptunnel_handle_offloads(skb, true, SKB_GSO_IPXIP6))
 		return -1;
 
 	dsfield = INET_ECN_encapsulate(dsfield, ipv6_get_dsfield(ipv6h));
@@ -1746,7 +1749,7 @@ static int __net_init ip6_fb_tnl_dev_init(struct net_device *dev)
 	return 0;
 }
 
-#ifdef HAVE_IP6GRE_EXTACK
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
 static int rpl_ip6_tnl_validate(struct nlattr *tb[], struct nlattr *data[],
 				struct netlink_ext_ack *extack)
 #else
@@ -1840,7 +1843,7 @@ static bool ip6_tnl_netlink_encap_parms(struct nlattr *data[],
 	return ret;
 }
 
-#ifdef HAVE_IP6GRE_EXTACK
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
 static int rpl_ip6_tnl_newlink(struct net *src_net, struct net_device *dev,
 			       struct nlattr *tb[], struct nlattr *data[],
 			       struct netlink_ext_ack *extack)
@@ -1882,7 +1885,7 @@ static int rpl_ip6_tnl_newlink(struct net *src_net, struct net_device *dev,
 }
 #define ip6_tnl_newlink rpl_ip6_tnl_newlink
 
-#ifdef HAVE_IP6GRE_EXTACK
+#ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
 static int rpl_ip6_tnl_changelink(struct net_device *dev, struct nlattr *tb[],
 				  struct nlattr *data[],
 				  struct netlink_ext_ack *extack)
