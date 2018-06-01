@@ -27,7 +27,9 @@
 #    - ovs_dump_dp_netdev_ports <struct dp_netdev *>
 #    - ovs_dump_dp_provider
 #    - ovs_dump_netdev
+#    - ovs_dump_netdev_provider
 #    - ovs_dump_ovs_list <struct ovs_list *> {[<structure>] [<member>] {dump}]}
+#    - ovs_dump_simap <struct simap *>
 #
 #  Example:
 #    $ gdb $(which ovs-vswitchd) $(pidof ovs-vswitchd)
@@ -237,6 +239,19 @@ class ForEachSHASH(ForEachHMAP):
             return node
 
         return node['data'].cast(gdb.lookup_type(self.data_typeobj).pointer())
+
+
+#
+# Class that will provide an iterator over an OVS simap.
+#
+class ForEachSIMAP(ForEachHMAP):
+    def __init__(self, shash):
+        super(ForEachSIMAP, self).__init__(shash['map'],
+                                           "struct simap_node", "node")
+
+    def next(self):
+        node = super(ForEachSIMAP, self).next()
+        return node['name'], node['data']
 
 
 #
@@ -473,7 +488,6 @@ class CmdDumpDpProvider(gdb.Command):
                                                 gdb.COMMAND_DATA)
 
     def invoke(self, arg, from_tty):
-
         dp_providers = get_global_variable('dpif_classes')
         if dp_providers is None:
             return
@@ -516,6 +530,66 @@ class CmdDumpNetdev(gdb.Command):
 
         for netdev in ForEachSHASH(netdev_shash, "struct netdev"):
             self.display_single_netdev(netdev)
+
+
+#
+# Implements the GDB "ovs_dump_netdev_provider" command
+#
+class CmdDumpNetdevProvider(gdb.Command):
+    """Dump all registered netdev providers.
+    Usage: ovs_dump_netdev_provider
+    """
+    def __init__(self):
+        super(CmdDumpNetdevProvider, self).__init__("ovs_dump_netdev_provider",
+                                                    gdb.COMMAND_DATA)
+
+    @staticmethod
+    def is_class_vport_class(netdev_class):
+        netdev_class = netdev_class.cast(
+            gdb.lookup_type('struct netdev_class').pointer())
+
+        vport_construct = gdb.lookup_symbol('netdev_vport_construct')[0]
+
+        if netdev_class['construct'] == vport_construct.value():
+            return True
+        return False
+
+    @staticmethod
+    def display_single_netdev_provider(reg_class, indent=0):
+        indent = " " * indent
+        print("{}(struct netdev_registered_class *) {}: refcnt = {},".
+              format(indent, reg_class, reg_class['refcnt']))
+
+        print("{}    (struct netdev_class *) 0x{:x} = {{type = {}, "
+              "is_pmd = {}, ...}}, ".
+              format(indent, long(reg_class['class']),
+                     reg_class['class']['type'].string(),
+                     reg_class['class']['is_pmd']))
+
+        if CmdDumpNetdevProvider.is_class_vport_class(reg_class['class']):
+            vport = container_of(
+                reg_class['class'],
+                gdb.lookup_type('struct vport_class').pointer(),
+                'netdev_class')
+
+            if vport['dpif_port'] != 0:
+                dpif_port = vport['dpif_port'].string()
+            else:
+                dpif_port = "\"\""
+
+            print("{}    (struct vport_class *) 0x{:x} = "
+                  "{{ dpif_port = {}, ... }}".
+                  format(indent, long(vport), dpif_port))
+
+    def invoke(self, arg, from_tty):
+        netdev_classes = get_global_variable('netdev_classes')
+        if netdev_classes is None:
+            return
+
+        for reg_class in ForEachCMAP(netdev_classes,
+                                     "struct netdev_registered_class",
+                                     "cmap_node"):
+            self.display_single_netdev_provider(reg_class)
 
 
 #
@@ -592,6 +666,41 @@ class CmdDumpOvsList(gdb.Command):
 
 
 #
+# Implements the GDB "ovs_dump_simap" command
+#
+class CmdDumpSimap(gdb.Command):
+    """Dump all nodes of an ovs_list give
+    Usage: ovs_dump_ovs_list <struct simap *>
+    """
+
+    def __init__(self):
+        super(CmdDumpSimap, self).__init__("ovs_dump_simap",
+                                           gdb.COMMAND_DATA)
+
+    def invoke(self, arg, from_tty):
+        arg_list = gdb.string_to_argv(arg)
+
+        if len(arg_list) != 1:
+            print("ERROR: Missing argument!\n")
+            print(self.__doc__)
+            return
+
+        simap = gdb.parse_and_eval(arg_list[0]).cast(
+            gdb.lookup_type('struct simap').pointer())
+
+        values = dict()
+        max_name_len = 0
+        for name, value in ForEachSIMAP(simap.dereference()):
+            values[name.string()] = long(value)
+            if len(name.string()) > max_name_len:
+                max_name_len = len(name.string())
+
+        for name in sorted(values.iterkeys()):
+            print("{}: {} / 0x{:x}".format(name.ljust(max_name_len),
+                                           values[name], values[name]))
+
+
+#
 # Initialize all GDB commands
 #
 CmdDumpBridge()
@@ -601,4 +710,6 @@ CmdDumpDpNetdevPollThreads()
 CmdDumpDpNetdevPorts()
 CmdDumpDpProvider()
 CmdDumpNetdev()
+CmdDumpNetdevProvider()
 CmdDumpOvsList()
+CmdDumpSimap()
