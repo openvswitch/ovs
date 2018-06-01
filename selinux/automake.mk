@@ -6,11 +6,12 @@
 # without warranty of any kind.
 
 EXTRA_DIST += \
+        selinux/openvswitch-custom.fc.in \
         selinux/openvswitch-custom.te.in
 
 PHONY: selinux-policy
 
-selinux-policy: selinux/openvswitch-custom.te
+selinux-policy: selinux/openvswitch-custom.te selinux/openvswitch-custom.fc
 	$(MAKE) -C selinux/ -f /usr/share/selinux/devel/Makefile
 
 CLEANFILES += \

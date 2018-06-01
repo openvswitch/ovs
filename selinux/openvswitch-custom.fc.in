@@ -1,0 +1,1 @@
+@pkgdatadir@/scripts/ovs-kmod-ctl -- gen_context(system_u:object_r:openvswitch_load_module_exec_t,s0)

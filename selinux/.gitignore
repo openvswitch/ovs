@@ -1,1 +1,5 @@
 openvswitch-custom.te
+openvswitch-custom.fc
+openvswitch-custom.pp
+openvswitch-custom.if
+tmp/
