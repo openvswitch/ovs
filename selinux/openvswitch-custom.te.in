@@ -1,4 +1,6 @@
-module openvswitch-custom 1.0.1;
+# SPDX-License-Identifier: Apache-2.0
+
+module openvswitch-custom @VERSION@;
 
 require {
         role system_r;
