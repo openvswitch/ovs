@@ -342,6 +342,9 @@ rm -f $RPM_BUILD_ROOT%{_bindir}/ovs-parse-backtrace \
 %clean
 rm -rf $RPM_BUILD_ROOT
 
+%pre selinux-policy
+%selinux_relabel_pre -s targeted
+
 %preun
 %if 0%{?systemd_preun:1}
     %systemd_preun %{name}.service
@@ -452,7 +455,7 @@ fi
 %endif
 
 %post selinux-policy
-/usr/sbin/semodule -i %{_datadir}/selinux/packages/%{name}/openvswitch-custom.pp &> /dev/null || :
+%selinux_modules_install -s targeted %{_datadir}/selinux/packages/%{name}/openvswitch-custom.pp
 
 %postun
 %if 0%{?systemd_postun:1}
@@ -484,8 +487,11 @@ fi
 
 %postun selinux-policy
 if [ $1 -eq 0 ] ; then
-  /usr/sbin/semodule -r openvswitch-custom &> /dev/null || :
+  %selinux_modules_uninstall -s targeted openvswitch-custom
 fi
+
+%posttrans selinux-policy
+%selinux_relabel_post -s targeted
 
 %files selinux-policy
 %defattr(-,root,root)
