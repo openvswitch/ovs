@@ -30,37 +30,9 @@ done
 ## start ##
 ## ----- ##
 
-insert_mods () {
-    # Try loading openvswitch again.
-    action "Inserting openvswitch module" modprobe openvswitch
-}
-
 insert_mod_if_required () {
-    # If this kernel has no module support, expect we're done.
-    if test ! -e /proc/modules
-    then
-        log_success_msg "Kernel has no loadable module support. Skipping modprobe"
-        return 0
-    fi
-
-    # If openvswitch is already loaded then we're done.
-    test -e /sys/module/openvswitch && return 0
-
-    # Load openvswitch.  If that's successful then we're done.
-    insert_mods && return 0
-
-    # If the bridge module is loaded, then that might be blocking
-    # openvswitch.  Try to unload it, if there are no bridges.
-    test -e /sys/module/bridge || return 1
-    bridges=`echo /sys/class/net/*/bridge | sed 's,/sys/class/net/,,g;s,/bridge,,g'`
-    if test "$bridges" != "*"; then
-        log_warning_msg "not removing bridge module because bridges exist ($bridges)"
-        return 1
-    fi
-    action "removing bridge module" rmmod bridge || return 1
-
-    # Try loading openvswitch again.
-    insert_mods
+    ## This takes care of inserting any required kernel modules
+    ovs_kmod_ctl insert
 }
 
 set_hostname () {

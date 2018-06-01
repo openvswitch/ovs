@@ -503,6 +503,10 @@ ovs_vsctl () {
 ## force-reload-kmod ##
 ## ----------------- ##
 
+ovs_kmod_ctl () {
+    "$dir0/ovs-kmod-ctl" "$@"
+}
+
 internal_interfaces () {
     # Outputs a list of internal interfaces:
     #
@@ -618,13 +622,7 @@ force_reload_kmod () {
     done
     action "ovs-appctl dpctl/flush-conntrack"
 
-    for vport in `awk '/^vport_/ { print $1 }' /proc/modules`; do
-        action "Removing $vport module" rmmod $vport
-    done
-
-    if test -e /sys/module/openvswitch; then
-        action "Removing openvswitch module" rmmod openvswitch
-    fi
+    ovs_kmod_ctl remove
 
     # Start vswitchd by asking it to wait till flow restore is finished.
     flow_restore_wait

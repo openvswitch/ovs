@@ -20,6 +20,7 @@ endif
 scripts_SCRIPTS += \
 	utilities/ovs-check-dead-ifs \
 	utilities/ovs-ctl \
+	utilities/ovs-kmod-ctl \
 	utilities/ovs-save
 scripts_DATA += utilities/ovs-lib
 
@@ -44,6 +45,7 @@ EXTRA_DIST += \
 	utilities/ovs-dev.py \
 	utilities/ovs-docker \
 	utilities/ovs-dpctl-top.in \
+	utilities/ovs-kmod-ctl.in \
 	utilities/ovs-l3ping.in \
 	utilities/ovs-lib.in \
 	utilities/ovs-parse-backtrace.in \
@@ -63,6 +65,7 @@ MAN_ROOTS += \
 	utilities/ovs-ctl.8 \
 	utilities/ovs-dpctl.8.in \
 	utilities/ovs-dpctl-top.8.in \
+	utilities/ovs-kmod-ctl.8 \
 	utilities/ovs-l3ping.8.in \
 	utilities/ovs-ofctl.8.in \
 	utilities/ovs-parse-backtrace.8 \
@@ -81,6 +84,7 @@ CLEANFILES += \
 	utilities/ovs-dpctl.8 \
 	utilities/ovs-dpctl-top \
 	utilities/ovs-dpctl-top.8 \
+	utilities/ovs-kmod-ctl \
 	utilities/ovs-l3ping \
 	utilities/ovs-l3ping.8 \
 	utilities/ovs-lib \
@@ -106,6 +110,7 @@ man_MANS += \
 	utilities/ovs-testcontroller.8 \
 	utilities/ovs-dpctl.8 \
 	utilities/ovs-dpctl-top.8 \
+	utilities/ovs-kmod-ctl.8 \
 	utilities/ovs-l3ping.8 \
 	utilities/ovs-ofctl.8 \
 	utilities/ovs-parse-backtrace.8 \

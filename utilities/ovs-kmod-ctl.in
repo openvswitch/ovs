@@ -1,0 +1,183 @@
+#! /bin/sh
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (C) 2018 Red Hat, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+. "@pkgdatadir@/scripts/ovs-lib" || exit 1
+
+for dir in "$sbindir" "$bindir" /sbin /bin /usr/sbin /usr/bin; do
+    case :$PATH: in
+        *:$dir:*) ;;
+        *) PATH=$PATH:$dir ;;
+    esac
+done
+
+insert_mods () {
+    # Try loading openvswitch kernel module.
+    action "Inserting openvswitch module" modprobe openvswitch
+}
+
+insert_kmods_if_required() {
+    # If this kernel has no module support, expect we're done.
+    if test ! -e /proc/modules
+    then
+        log_success_msg "Kernel has no loadable module support. Skipping modprobe"
+        return 0
+    fi
+
+    # If openvswitch is already loaded then we're done.
+    test -e /sys/module/openvswitch && return 0
+
+    # Load openvswitch.  If that's successful then we're done.
+    insert_mods && return 0
+
+    # If the bridge module is loaded, then that might be blocking
+    # openvswitch.  Try to unload it, if there are no bridges.
+    test -e /sys/module/bridge || return 1
+    bridges=`echo /sys/class/net/*/bridge | sed 's,/sys/class/net/,,g;s,/bridge,,g'`
+    if test "$bridges" != "*"; then
+        log_warning_msg "not removing bridge module because bridges exist ($bridges)"
+        return 1
+    fi
+    action "removing bridge module" rmmod bridge || return 1
+
+    # Try loading openvswitch again.
+    insert_mods
+}
+
+remove_kmods() {
+    for vport in `awk '/^vport_/ { print $1 }' /proc/modules`; do
+        action "Removing $vport module" rmmod $vport
+    done
+
+    if test -e /sys/module/ip_gre; then
+        action "Forcing removal of ip_gre module" rmmod ip_gre
+    fi
+
+    if test -e /sys/module/gre; then
+        action "Forcing removal of gre module" rmmod gre
+    fi
+
+    if test -e /sys/module/openvswitch; then
+        action "Removing openvswitch module" rmmod openvswitch
+    fi
+}
+
+usage () {
+    cat <<EOF
+$0: controls Open vSwitch kernel modules
+usage: $0 [OPTIONS] COMMAND
+
+This program is intended to be invoked internally by Open vSwitch startup
+scripts.  System administrators should not normally invoke it directly.
+
+Commands:
+  insert                  insert the Open vSwitch kernel modules
+  remove                  remove the Open vSwitch kernel modules
+
+Options:
+  -h, --help              display this help message
+  -V, --version           display version information
+
+Default directories with "configure" option and environment variable override:
+  logs: @LOGDIR@ (--with-logdir, OVS_LOGDIR)
+  pidfiles and sockets: @RUNDIR@ (--with-rundir, OVS_RUNDIR)
+  conf.db: @DBDIR@ (--with-dbdir, OVS_DBDIR)
+  system configuration: @sysconfdir@ (--sysconfdir, OVS_SYSCONFDIR)
+  data files: @pkgdatadir@ (--pkgdatadir, OVS_PKGDATADIR)
+  user binaries: @bindir@ (--bindir, OVS_BINDIR)
+  system binaries: @sbindir@ (--sbindir, OVS_SBINDIR)
+
+Please report bugs to bugs@openvswitch.org (see REPORTING-BUGS for details).
+EOF
+
+    exit 0
+}
+
+set_option () {
+    var=`echo "$option" | tr abcdefghijklmnopqrstuvwxyz- ABCDEFGHIJKLMNOPQRSTUVWXYZ_`
+    eval set=\${$var+yes}
+    eval old_value=\$$var
+    if test X$set = X || \
+        (test $type = bool && \
+        test X"$old_value" != Xno && test X"$old_value" != Xyes); then
+        echo >&2 "$0: unknown option \"$arg\" (use --help for help)"
+        return
+    fi
+    eval $var=\$value
+}
+
+extra_ids=
+command=
+for arg
+do
+    case $arg in
+        -h | --help)
+            usage
+            ;;
+        -V | --version)
+            echo "$0 (Open vSwitch) $VERSION"
+            exit 0
+            ;;
+        --[a-z]*=*)
+            option=`expr X"$arg" : 'X--\([^=]*\)'`
+            value=`expr X"$arg" : 'X[^=]*=\(.*\)'`
+            type=string
+            set_option
+            ;;
+        --no-[a-z]*)
+            option=`expr X"$arg" : 'X--no-\(.*\)'`
+            value=no
+            type=bool
+            set_option
+            ;;
+        --[a-z]*)
+            option=`expr X"$arg" : 'X--\(.*\)'`
+            value=yes
+            type=bool
+            set_option
+            ;;
+        -*)
+            echo >&2 "$0: unknown option \"$arg\" (use --help for help)"
+            exit 1
+            ;;
+        *)
+            if test X"$command" = X; then
+                command=$arg
+            else
+                echo >&2 "$0: exactly one non-option argument required (use --help for help)"
+                exit 1
+            fi
+            ;;
+    esac
+done
+case $command in
+    remove)
+        remove_kmods
+        ;;
+    insert)
+        insert_kmods_if_required
+        ;;
+    help)
+        usage
+        ;;
+    '')
+        echo >&2 "$0: missing command name (use --help for help)"
+        exit 1
+        ;;
+    *)
+        echo >&2 "$0: unknown command \"$command\" (use --help for help)"
+        exit 1
+        ;;
+esac

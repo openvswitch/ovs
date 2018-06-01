@@ -3,6 +3,7 @@ ovsdb/ovsdb-server.5
 utilities/ovs-ctl.8
 utilities/ovs-dpctl-top.8
 utilities/ovs-dpctl.8
+utilities/ovs-kmod-ctl.8
 utilities/ovs-pcap.1
 utilities/ovs-tcpdump.8
 utilities/ovs-tcpundump.1

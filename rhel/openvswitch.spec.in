@@ -238,6 +238,7 @@ exit 0
 /usr/share/man/man8/ovs-ctl.8.gz
 /usr/share/man/man8/ovs-dpctl.8.gz
 /usr/share/man/man8/ovs-dpctl-top.8.gz
+/usr/share/man/man8/ovs-kmod-ctl.8.gz
 /usr/share/man/man8/ovs-ofctl.8.gz
 /usr/share/man/man8/ovs-parse-backtrace.8.gz
 /usr/share/man/man8/ovs-pki.8.gz
@@ -251,6 +252,7 @@ exit 0
 /usr/share/openvswitch/scripts/ovs-bugtool-*
 /usr/share/openvswitch/scripts/ovs-check-dead-ifs
 /usr/share/openvswitch/scripts/ovs-ctl
+/usr/share/openvswitch/scripts/ovs-kmod-ctl
 /usr/share/openvswitch/scripts/ovs-lib
 /usr/share/openvswitch/scripts/ovs-save
 /usr/share/openvswitch/scripts/ovs-vtep

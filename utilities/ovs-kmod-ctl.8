@@ -1,0 +1,109 @@
+.\" -*- nroff -*-
+.de IQ
+.  br
+.  ns
+.  IP "\\$1"
+..
+.de ST
+.  PP
+.  RS -0.15in
+.  I "\\$1"
+.  RE
+..
+.TH ovs\-ctl 8 "February 2018" "Open vSwitch" "Open vSwitch Manual"
+.ds PN ovs\-ctl
+.
+.SH NAME
+ovs\-kmod\-ctl \- OVS startup helper script for loading kernel modules
+.
+.SH SYNOPSIS
+\fBovs\-kmod\-ctl\fR \fBinsert
+.br
+\fBovs\-kmod\-ctl \fBremove
+.br
+\fBovs\-kmod\-ctl help \fR| \fB\-h \fR| \fB\-\-help
+.br
+\fBovs\-kmod\-ctl \-\-version
+.br
+\fBovs\-kmod\-ctl version
+.
+.SH DESCRIPTION
+.
+.PP
+The \fBovs\-kmod\-ctl\fR program is responsible for inserting and
+removing Open vSwitch kernel modules.  It is not meant to be invoked
+directly by system administrators but to be called internally by
+system startup scripts.  The script is used as part of an SELinux
+transition domain.
+.
+.PP
+Each of \fBovs\-kmod\-ctl\fR's commands is described separately below.
+.
+.SH "The ``insert'' command"
+.
+.PP
+The \fBinsert\fR command loads the Open vSwitch kernel modules, if
+needed.  If this fails, and the Linux bridge module is loaded but no
+bridges exist, it tries to unload the bridge module and tries loading
+the Open vSwitch kernel module again.
+.
+.SH "The ``remove'' command"
+.
+.PP
+The \fBremove\fR command unloads the Open vSwitch kernel module (including
+the bridge compatibility module, if loaded) and any associated vport
+modules.
+.
+.SH "EXIT STATUS"
+.
+\fBovs\-kmod\-ctl\fR exits with status 0 on success and nonzero on
+failure.  The \fBinsert\fR command is considered to succeed if kernel
+modules are already loaded; the \fBremove\fR command is considered to
+succeed if none of the kernel modules are loaded.
+.
+.SH "ENVIRONMENT"
+.
+The following environment variables affect \fBovs\-kmod\-ctl\fR:
+.
+.IP "\fBPATH\fR"
+\fBovs\-kmod\-ctl\fR does not hardcode the location of any of the programs
+that it runs.  \fBovs\-kmod\-ctl\fR will add the \fIsbindir\fR and
+\fIbindir\fR that were specified at \fBconfigure\fR time to
+\fBPATH\fR, if they are not already present.
+.
+.IP "\fBOVS_LOGDIR\fR"
+.IQ "\fBOVS_RUNDIR\fR"
+.IQ "\fBOVS_DBDIR\fR"
+.IQ "\fBOVS_SYSCONFDIR\fR"
+.IQ "\fBOVS_PKGDATADIR\fR"
+.IQ "\fBOVS_BINDIR\fR"
+.IQ "\fBOVS_SBINDIR\fR"
+Setting one of these variables in the environment overrides the
+respective \fBconfigure\fR option, both for \fBovs\-kmod\-ctl\fR itself
+and for the other Open vSwitch programs that it runs.
+.
+.SH "FILES"
+.
+\fBovs\-kmod\-ctl\fR uses the following files:
+.
+.IP "\fBovs\-lib"
+Shell function library used internally by \fBovs\-kmod\-ctl\fR.  It must
+be installed in the same directory as \fBovs\-kmod\-ctl\fR.
+.
+.SH "EXAMPLE"
+.
+.PP
+\fBovs\-kmod\-ctl\fR isn't intended to be manually executed.  However, the
+following examples demonstrate loading the kernel modules.
+.
+.TP
+\fBovs\-kmod\-ctl\fR insert
+Attempts to insert the Open vSwitch kernel modules.
+.
+.TP
+\fBovs\-kmod\-ctl\fR remove
+Attempts to remove the Open vSwitch kernel modules.
+.
+.SH "SEE ALSO"
+.
+\fBREADME.rst\fR, \fBovs\-ctl\fR(8)
