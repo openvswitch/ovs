@@ -37,7 +37,7 @@ require {
         type vfio_device_t;
 @end_dpdk@
 
-        class capability { dac_override audit_write };
+        class capability { dac_override audit_write net_broadcast net_raw };
         class chr_file { write getattr read open ioctl };
         class dir { write remove_name add_name lock read getattr search open };
         class fd { use };
@@ -70,7 +70,7 @@ domain_entry_file(openvswitch_load_module_t, openvswitch_load_module_exec_t);
 domtrans_pattern(openvswitch_t, openvswitch_load_module_exec_t, openvswitch_load_module_t);
 
 #============= openvswitch_t ==============
-allow openvswitch_t self:capability { dac_override audit_write };
+allow openvswitch_t self:capability { dac_override audit_write net_broadcast net_raw };
 allow openvswitch_t self:netlink_audit_socket { create nlmsg_relay audit_write read write };
 allow openvswitch_t self:netlink_socket { setopt getopt create connect getattr write read };
 
