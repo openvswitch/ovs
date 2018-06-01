@@ -240,17 +240,19 @@
     <p>
       This table prepares flows for possible stateful load balancing processing
       in ingress table <code>LB</code> and <code>Stateful</code>.  It contains
-      a priority-0 flow that simply moves traffic to the next table.  If load
-      balancing rules with virtual IP addresses (and ports) are configured in
-      <code>OVN_Northbound</code> database for a logical switch datapath, a
-      priority-100 flow is added for each configured virtual IP address
-      <var>VIP</var>. For IPv4 <var>VIPs</var>, the match is <code>ip
-      &amp;&amp; ip4.dst == <var>VIP</var></code>.  For IPv6 <var>VIPs</var>,
-      the match is <code>ip &amp;&amp; ip6.dst == <var>VIP</var></code>. The
-      flow sets an action <code>reg0[0] = 1; next;</code> to act as a
-      hint for table <code>Pre-stateful</code> to send IP packets to the
-      connection tracker for packet de-fragmentation before eventually
-      advancing to ingress table <code>LB</code>.
+      a priority-0 flow that simply moves traffic to the next table. Moreover
+      it contains a priority-110 flow to move IPv6 Neighbor Discovery traffic
+      to the next table. If load balancing rules with virtual IP addresses
+      (and ports) are configured in <code>OVN_Northbound</code> database for a
+      logical switch datapath, a priority-100 flow is added for each configured
+      virtual IP address <var>VIP</var>. For IPv4 <var>VIPs</var>, the match is
+      <code>ip &amp;&amp; ip4.dst == <var>VIP</var></code>. For IPv6
+      <var>VIPs</var>, the match is <code>ip &amp;&amp;
+      ip6.dst == <var>VIP</var></code>. The flow sets an action
+      <code>reg0[0] = 1; next;</code> to act as a hint for table
+      <code>Pre-stateful</code> to send IP packets to the connection tracker
+      for packet de-fragmentation before eventually advancing to ingress table
+      <code>LB</code>.
     </p>
 
     <h3>Ingress Table 5: Pre-stateful</h3>
@@ -866,10 +868,12 @@ output;
     <p>
       This table is similar to ingress table <code>Pre-LB</code>.  It
       contains a priority-0 flow that simply moves traffic to the next table.
-      If any load balancing rules exist for the datapath, a priority-100 flow
-      is added with a match of <code>ip</code> and action of <code>reg0[0] = 1;
-       next;</code> to act as a hint for table <code>Pre-stateful</code> to
-      send IP packets to the connection tracker for packet de-fragmentation.
+      Moreover it contains a priority-110 flow to move IPv6 Neighbor Discovery
+      traffic to the next table. If any load balancing rules exist for the
+      datapath, a priority-100 flow is added with a match of <code>ip</code>
+      and action of <code>reg0[0] = 1; next;</code> to act as a hint for
+      table <code>Pre-stateful</code> to send IP packets to the connection
+      tracker for packet de-fragmentation.
     </p>
 
     <h3>Egress Table 1: <code>to-lport</code> Pre-ACLs</h3>
