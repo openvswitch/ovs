@@ -32,7 +32,11 @@ static inline __wsum null_compute_pseudo(struct sk_buff *skb, int proto)
 #ifndef HAVE_SKB_CHECKSUM_CONVERT
 static inline bool __skb_checksum_convert_check(struct sk_buff *skb)
 {
+#ifdef HAVE_SKBUFF_CSUM_VALID
 	return (skb->ip_summed == CHECKSUM_NONE && skb->csum_valid);
+#else
+	return skb->ip_summed == CHECKSUM_NONE;
+#endif
 }
 
 static inline void __skb_checksum_convert(struct sk_buff *skb,
@@ -50,6 +54,21 @@ do {									\
 } while (0)
 
 #endif
+
+#ifndef SKB_CHECKSUM_SIMPLE_VALIDATE
+
+#define __skb_checksum_validate(skb, proto, complete,			\
+				zero_okay, check, compute_pseudo)	\
+({									\
+	__sum16 __ret = 0;						\
+	__ret;								\
+})
+
+
+#define skb_checksum_simple_validate(skb)				\
+	__skb_checksum_validate(skb, 0, true, false, 0, null_compute_pseudo)
+#endif
+
 #ifndef HAVE_SKB_COPY_FROM_LINEAR_DATA_OFFSET
 static inline void skb_copy_from_linear_data_offset(const struct sk_buff *skb,
 						    const int offset, void *to,

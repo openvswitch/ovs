@@ -872,6 +872,11 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [IFLA_GRE_ERSPAN_HWID])
   OVS_GREP_IFELSE([$KSRC/include/uapi/linux/if_tunnel.h],
                   [IFLA_IPTUN_FWMARK])
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/skbuff.h], [sk_buff],
+                        [csum_valid],
+                        [OVS_DEFINE([HAVE_SKBUFF_CSUM_VALID])])
+  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h],
+                  [skb_checksum_simple_validate])
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then
