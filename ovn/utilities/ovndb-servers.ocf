@@ -9,6 +9,7 @@
 : ${SB_MASTER_PROTO_DEFAULT="tcp"}
 : ${MANAGE_NORTHD_DEFAULT="no"}
 : ${INACTIVE_PROBE_DEFAULT="5000"}
+: ${LISTEN_ON_MASTER_IP_ONLY_DEFAULT="yes"}
 
 CRM_MASTER="${HA_SBIN_DIR}/crm_master -l reboot"
 CRM_ATTR_REPL_INFO="${HA_SBIN_DIR}/crm_attribute --type crm_config --name OVN_REPL_INFO -s ovn_ovsdb_master_server"
@@ -20,6 +21,10 @@ SB_MASTER_PORT=${OCF_RESKEY_sb_master_port:-${SB_MASTER_PORT_DEFAULT}}
 SB_MASTER_PROTO=${OCF_RESKEY_sb_master_protocol:-${SB_MASTER_PROTO_DEFAULT}}
 MANAGE_NORTHD=${OCF_RESKEY_manage_northd:-${MANAGE_NORTHD_DEFAULT}}
 INACTIVE_PROBE=${OCF_RESKEY_inactive_probe_interval:-${INACTIVE_PROBE_DEFAULT}}
+
+# In order for pacemaker to work with LB, we can set LISTEN_ON_MASTER_IP_ONLY
+# to false and pass LB vip IP while creating pcs resource.
+LISTEN_ON_MASTER_IP_ONLY=${OCF_RESKEY_listen_on_master_ip_only:-${LISTEN_ON_MASTER_IP_ONLY_DEFAULT}}
 
 # Invalid IP address is an address that can never exist in the network, as
 # mentioned in rfc-5737. The ovsdb servers connects to this IP address till
@@ -117,6 +122,16 @@ ovsdb_server_metadata() {
   <content type="string" />
   </parameter>
 
+  <parameter name="listen_on_master_ip_only" unique="1">
+  <longdesc lang="en">
+  If set to yes, the OVNDBs will listen on master IP. Otherwise, it will
+  listen on 0.0.0.0. Set to yes when using pacemaker managed vip resource
+  as MASTER_IP; set to no when using external LB VIP.
+  </longdesc>
+  <shortdesc lang="en">Listen on master IP or 0.0.0.0</shortdesc>
+  <content type="string" />
+  </parameter>
+
   </parameters>
 
   <actions>
@@ -157,22 +172,25 @@ ovsdb_server_notify() {
             ${OVN_CTL} --ovn-manage-ovsdb=no start_northd
         fi
 
-        conn=`ovn-nbctl get NB_global . connections`
-        if [ "$conn" == "[]" ]
-        then
-            ovn-nbctl -- --id=@conn_uuid create Connection \
+        # Not needed while listening on 0.0.0.0 as we do not want to allow
+        # local binds. However, it is needed if vip ip is binded to nodes.
+        if [ "x${LISTEN_ON_MASTER_IP_ONLY}" = xyes ]; then
+            conn=`ovn-nbctl get NB_global . connections`
+            if [ "$conn" == "[]" ]
+            then
+                ovn-nbctl -- --id=@conn_uuid create Connection \
 target="p${NB_MASTER_PROTO}\:${NB_MASTER_PORT}\:${MASTER_IP}" \
 inactivity_probe=$INACTIVE_PROBE -- set NB_Global . connections=@conn_uuid
-        fi
+            fi
 
-        conn=`ovn-sbctl get SB_global . connections`
-        if [ "$conn" == "[]" ]
-        then
-            ovn-sbctl -- --id=@conn_uuid create Connection \
+            conn=`ovn-sbctl get SB_global . connections`
+            if [ "$conn" == "[]" ]
+            then
+                ovn-sbctl -- --id=@conn_uuid create Connection \
 target="p${SB_MASTER_PROTO}\:${SB_MASTER_PORT}\:${MASTER_IP}" \
 inactivity_probe=$INACTIVE_PROBE -- set SB_Global . connections=@conn_uuid
+            fi
         fi
-
     else
         if [ "$MANAGE_NORTHD" = "yes" ]; then
             # Stop ovn-northd service. Set --ovn-manage-ovsdb=no so that
@@ -295,15 +313,13 @@ ovsdb_server_start() {
 
     set ${OVN_CTL}
 
-    set $@ --db-nb-addr=${MASTER_IP} --db-nb-port=${NB_MASTER_PORT}
-    set $@ --db-sb-addr=${MASTER_IP} --db-sb-port=${SB_MASTER_PORT}
+    if [ "x${LISTEN_ON_MASTER_IP_ONLY}" = xno ]; then
+        set $@ --db-nb-port=${NB_MASTER_PORT}
+        set $@ --db-sb-port=${SB_MASTER_PORT}
 
-    if [ "x${NB_MASTER_PROTO}" = xtcp ]; then
-        set $@ --db-nb-create-insecure-remote=yes
-    fi
-
-    if [ "x${SB_MASTER_PROTO}" = xtcp ]; then
-        set $@ --db-sb-create-insecure-remote=yes
+    else
+       set $@ --db-nb-addr=${MASTER_IP} --db-nb-port=${NB_MASTER_PORT}
+       set $@ --db-sb-addr=${MASTER_IP} --db-sb-port=${SB_MASTER_PORT}
     fi
 
     if [ "x${present_master}" = x ]; then
@@ -313,15 +329,33 @@ ovsdb_server_start() {
         # Force all copies to come up as slaves by pointing them into
         # space and let pacemaker pick one to promote:
         #
+        if [ "x${NB_MASTER_PROTO}" = xtcp ]; then
+            set $@ --db-nb-create-insecure-remote=yes
+        fi
+
+        if [ "x${SB_MASTER_PROTO}" = xtcp ]; then
+            set $@ --db-sb-create-insecure-remote=yes
+        fi
         set $@ --db-nb-sync-from-addr=${INVALID_IP_ADDRESS} --db-sb-sync-from-addr=${INVALID_IP_ADDRESS}
 
     elif [ ${present_master} != ${host_name} ]; then
+        # TODO: for using LB vip, need to test for ssl.
+        if [ "x${LISTEN_ON_MASTER_IP_ONLY}" = xyes ]; then
+            if [ "x${NB_MASTER_PROTO}" = xtcp ]; then
+                set $@ --db-nb-create-insecure-remote=yes
+            fi
+
+            if [ "x${SB_MASTER_PROTO}" = xtcp ]; then
+                set $@ --db-sb-create-insecure-remote=yes
+            fi
+        fi
         # An existing master is active, connect to it
         set $@ --db-nb-sync-from-addr=${MASTER_IP} --db-sb-sync-from-addr=${MASTER_IP}
         set $@ --db-nb-sync-from-port=${NB_MASTER_PORT}
         set $@ --db-nb-sync-from-proto=${NB_MASTER_PROTO}
         set $@ --db-sb-sync-from-port=${SB_MASTER_PORT}
         set $@ --db-sb-sync-from-proto=${SB_MASTER_PROTO}
+
     fi
 
     $@ start_ovsdb
@@ -416,6 +450,11 @@ ovsdb_server_promote() {
             ;;
     esac
 
+    # Restart ovs so that new master can listen on tcp port
+    if [ "x${LISTEN_ON_MASTER_IP_ONLY}" = xno ]; then
+        ${OVN_CTL} stop_ovsdb
+        ovsdb_server_start
+    fi
     ${OVN_CTL} promote_ovnnb
     ${OVN_CTL} promote_ovnsb
 

@@ -243,12 +243,13 @@ node at which the active server is run, it is not efficient to instruct all the
 ovn-controllers and the ovn-northd to listen to the latest active server's
 ip-address.
 
-This problem can be solved by using a native ocf resource agent
-``ocf:heartbeat:IPaddr2``. The IPAddr2 resource agent is just a resource with
-an ip-address. When we colocate this resource with the active server, pacemaker
-will enable the active server to be connected with a single ip-address all the
-time. This is the ip-address that needs to be given as the parameter while
-creating the `ovndb_servers` resource.
+This problem can be solved by two ways:
+
+1. By using a native ocf resource agent ``ocf:heartbeat:IPaddr2``.  The IPAddr2
+resource agent is just a resource with an ip-address. When we colocate this
+resource with the active server, pacemaker will enable the active server to be
+connected with a single ip-address all the time. This is the ip-address that
+needs to be given as the parameter while creating the `ovndb_servers` resource.
 
 Use the following command to create the IPAddr2 resource and colocate it
 with the active server::
@@ -258,3 +259,22 @@ with the active server::
     $ pcs constraint order promote ovndb_servers-master then VirtualIP
     $ pcs constraint colocation add VirtualIP with master ovndb_servers-master \
         score=INFINITY
+
+2. Using load balancer vip ip as a master_ip.  In order to use this feature,
+one needs to use listen_on_master_ip_only to no.  Current code for load
+balancer have been tested to work with tcp protocol and needs to be
+tested/enchanced for ssl. Using load balancer, standby nodes will not listen on
+nb and sb db ports so that load balancer will always communicate to the active
+node and all the traffic will be sent to active node only.  Standby will
+continue to sync using LB VIP IP in this case.
+
+Use the following command to create pcs resource using LB VIP IP::
+
+    $ pcs resource create ovndb_servers ocf:ovn:ovndb-servers \
+         master_ip="<load_balance_vip_ip>" \
+         listen_on_master_ip_only="no" \
+         ovn_ctl=<path of the ovn-ctl script> \
+         op monitor interval="10s" \
+         op monitor role=Master interval="15s"
+    $ pcs resource master ovndb_servers-master ovndb_servers \
+        meta notify="true"
