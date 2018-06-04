@@ -57,13 +57,14 @@ do {									\
 
 #ifndef SKB_CHECKSUM_SIMPLE_VALIDATE
 
+#ifndef __skb_checksum_validate
 #define __skb_checksum_validate(skb, proto, complete,			\
 				zero_okay, check, compute_pseudo)	\
 ({									\
 	__sum16 __ret = 0;						\
 	__ret;								\
 })
-
+#endif
 
 #define skb_checksum_simple_validate(skb)				\
 	__skb_checksum_validate(skb, 0, true, false, 0, null_compute_pseudo)
