@@ -238,7 +238,6 @@ struct rstp_bpdu {
     ovs_be16 hello_time;
     ovs_be16 forward_delay;
     uint8_t version1_length;
-    uint8_t padding[7];
 });
 
 enum rstp_info_is {
