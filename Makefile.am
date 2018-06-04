@@ -314,6 +314,21 @@ check-echo-n:
 	fi
 .PHONY: check-echo-n
 
+ALL_LOCAL += check-tabs
+check-tabs:
+	@cd $(srcdir); \
+	if test -e .git && (git --version) >/dev/null 2>&1 && \
+	  grep -ln "^	" \
+	    `git ls-files \
+	      | grep -v -f build-aux/initial-tab-whitelist` /dev/null \
+	      | $(EGREP) -v ':[ 	]*/?\*'; \
+	then \
+	  echo "See above for files that use tabs for indentation."; \
+	  echo "Please use spaces instead."; \
+	  exit 1; \
+	fi
+.PHONY: check-tabs
+
 ALL_LOCAL += thread-safety-check
 thread-safety-check:
 	@cd $(srcdir); \

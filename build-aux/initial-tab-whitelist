@@ -1,0 +1,16 @@
+\.am$
+\.m4$
+\.mk$
+\.png$
+\.sln$
+^datapath/
+^include/linux/
+^include/windows/
+^lib/sflow
+^lib/getopt_long\.c$
+^lib/strsep\.c$
+^third-party/
+^windows/
+^xenserver/
+^debian/rules.modules$
+^debian/rules$
