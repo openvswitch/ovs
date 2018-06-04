@@ -127,7 +127,7 @@ int rpl_gre_init(void)
 
 	if (inet_add_protocol(&net_gre_protocol, IPPROTO_GRE) < 0) {
 		pr_err("can't add protocol\n");
-		return -EAGAIN;
+		return -EEXIST;
 	}
 	return 0;
 }

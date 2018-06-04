@@ -42,6 +42,7 @@
 #include "vport-internal_dev.h"
 
 static LIST_HEAD(vport_ops_list);
+static bool compat_gre_loaded = false;
 
 /* Protected by RCU read lock for reading, ovs_mutex for writing. */
 static struct hlist_head *dev_table;
@@ -64,9 +65,17 @@ int ovs_vport_init(void)
 	err = lisp_init_module();
 	if (err)
 		goto err_lisp;
-	err = ipgre_init();
-	if (err)
-		goto err_ipgre;
+	err = gre_init();
+	if (err && err != -EEXIST)
+		goto err_gre;
+	else if (err == -EEXIST)
+		pr_warn("Cannot take GRE protocol entry - The ERSPAN feature may not be supported\n");
+	else {
+		err = ipgre_init();
+		if (err && err != -EEXIST) 
+			goto err_ipgre;
+		compat_gre_loaded = true;
+	}
 	err = ip6gre_init();
 	if (err)
 		goto err_ip6gre;
@@ -82,12 +91,8 @@ int ovs_vport_init(void)
 	err = ovs_stt_init_module();
 	if (err)
 		goto err_stt;
-	err = gre_init();
-	if (err)
-		goto err_gre;
 
 	return 0;
-err_gre:
 	ovs_stt_cleanup_module();
 err_stt:
 	vxlan_cleanup_module();
@@ -100,6 +105,8 @@ err_ip6_tunnel:
 err_ip6gre:
 	ipgre_fini();
 err_ipgre:
+	gre_exit();
+err_gre:
 	lisp_cleanup_module();
 err_lisp:
 	kfree(dev_table);
@@ -113,13 +120,15 @@ err_lisp:
  */
 void ovs_vport_exit(void)
 {
-	gre_exit();
+	if (compat_gre_loaded) {
+		gre_exit();
+		ipgre_fini();
+	}
 	ovs_stt_cleanup_module();
 	vxlan_cleanup_module();
 	geneve_cleanup_module();
 	ip6_tunnel_cleanup();
 	ip6gre_fini();
-	ipgre_fini();
 	lisp_cleanup_module();
 	kfree(dev_table);
 }
