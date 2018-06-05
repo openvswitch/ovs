@@ -947,12 +947,14 @@ do_ssl_init(void)
 {
     SSL_METHOD *method;
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined (LIBRESSL_VERSION_NUMBER)
 #ifdef _WIN32
     /* The following call is needed if we "#include <openssl/applink.c>". */
     CRYPTO_malloc_init();
 #endif
     SSL_library_init();
     SSL_load_error_strings();
+#endif
 
     if (!RAND_status()) {
         /* We occasionally see OpenSSL fail to seed its random number generator
