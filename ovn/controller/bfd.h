@@ -27,7 +27,7 @@ struct sset;
 void bfd_register_ovs_idl(struct ovsdb_idl *);
 void bfd_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
              const struct sbrec_chassis *chassis_rec,
-             struct hmap *local_datapaths, const struct chassis_index *);
+             const struct hmap *local_datapaths, const struct chassis_index *);
 void  bfd_calculate_active_tunnels(const struct ovsrec_bridge *br_int,
                                    struct sset *active_tunnels);
 

@@ -65,18 +65,18 @@ static void consider_logical_flow(struct controller_ctx *ctx,
                                   const struct chassis_index *chassis_index,
                                   const struct sbrec_logical_flow *lflow,
                                   const struct hmap *local_datapaths,
-                                  struct ovn_extend_table *group_table,
-                                  struct ovn_extend_table *meter_table,
                                   const struct sbrec_chassis *chassis,
                                   struct hmap *dhcp_opts,
                                   struct hmap *dhcpv6_opts,
                                   struct hmap *nd_ra_opts,
-                                  uint32_t *conj_id_ofs,
                                   const struct shash *addr_sets,
                                   const struct shash *port_groups,
+                                  const struct sset *active_tunnels,
+                                  const struct sset *local_lport_ids,
+                                  uint32_t *conj_id_ofs,
                                   struct hmap *flow_table,
-                                  struct sset *active_tunnels,
-                                  struct sset *local_lport_ids);
+                                  struct ovn_extend_table *group_table,
+                                  struct ovn_extend_table *meter_table);
 
 static bool
 lookup_port_cb(const void *aux_, const char *port_name, unsigned int *portp)
@@ -140,14 +140,14 @@ static void
 add_logical_flows(struct controller_ctx *ctx,
                   const struct chassis_index *chassis_index,
                   const struct hmap *local_datapaths,
-                  struct ovn_extend_table *group_table,
-                  struct ovn_extend_table *meter_table,
                   const struct sbrec_chassis *chassis,
                   const struct shash *addr_sets,
                   const struct shash *port_groups,
+                  const struct sset *active_tunnels,
+                  const struct sset *local_lport_ids,
                   struct hmap *flow_table,
-                  struct sset *active_tunnels,
-                  struct sset *local_lport_ids)
+                  struct ovn_extend_table *group_table,
+                  struct ovn_extend_table *meter_table)
 {
     uint32_t conj_id_ofs = 1;
     const struct sbrec_logical_flow *lflow;
@@ -171,12 +171,11 @@ add_logical_flows(struct controller_ctx *ctx,
     nd_ra_opts_init(&nd_ra_opts);
 
     SBREC_LOGICAL_FLOW_FOR_EACH (lflow, ctx->ovnsb_idl) {
-        consider_logical_flow(ctx, chassis_index,
-                              lflow, local_datapaths,
-                              group_table, meter_table, chassis,
-                              &dhcp_opts, &dhcpv6_opts, &nd_ra_opts,
-                              &conj_id_ofs, addr_sets, port_groups,
-                              flow_table, active_tunnels, local_lport_ids);
+        consider_logical_flow(ctx, chassis_index, lflow, local_datapaths,
+                              chassis, &dhcp_opts, &dhcpv6_opts, &nd_ra_opts,
+                              addr_sets, port_groups, active_tunnels,
+                              local_lport_ids, &conj_id_ofs,
+                              flow_table, group_table, meter_table);
     }
 
     dhcp_opts_destroy(&dhcp_opts);
@@ -189,18 +188,18 @@ consider_logical_flow(struct controller_ctx *ctx,
                       const struct chassis_index *chassis_index,
                       const struct sbrec_logical_flow *lflow,
                       const struct hmap *local_datapaths,
-                      struct ovn_extend_table *group_table,
-                      struct ovn_extend_table *meter_table,
                       const struct sbrec_chassis *chassis,
                       struct hmap *dhcp_opts,
                       struct hmap *dhcpv6_opts,
                       struct hmap *nd_ra_opts,
-                      uint32_t *conj_id_ofs,
                       const struct shash *addr_sets,
                       const struct shash *port_groups,
+                      const struct sset *active_tunnels,
+                      const struct sset *local_lport_ids,
+                      uint32_t *conj_id_ofs,
                       struct hmap *flow_table,
-                      struct sset *active_tunnels,
-                      struct sset *local_lport_ids)
+                      struct ovn_extend_table *group_table,
+                      struct ovn_extend_table *meter_table)
 {
     /* Determine translation of logical table IDs to physical table IDs. */
     bool ingress = !strcmp(lflow->pipeline, "ingress");
@@ -444,20 +443,19 @@ lflow_run(struct controller_ctx *ctx,
           const struct sbrec_chassis *chassis,
           const struct chassis_index *chassis_index,
           const struct hmap *local_datapaths,
-          struct ovn_extend_table *group_table,
-          struct ovn_extend_table *meter_table,
           const struct shash *addr_sets,
           const struct shash *port_groups,
+          const struct sset *active_tunnels,
+          const struct sset *local_lport_ids,
           struct hmap *flow_table,
-          struct sset *active_tunnels,
-          struct sset *local_lport_ids)
+          struct ovn_extend_table *group_table,
+          struct ovn_extend_table *meter_table)
 {
     COVERAGE_INC(lflow_run);
 
-    add_logical_flows(ctx, chassis_index, local_datapaths,
-                      group_table, meter_table, chassis, addr_sets,
-                      port_groups, flow_table, active_tunnels,
-                      local_lport_ids);
+    add_logical_flows(ctx, chassis_index, local_datapaths, chassis, addr_sets,
+                      port_groups, active_tunnels, local_lport_ids,
+                      flow_table, group_table, meter_table);
     add_neighbor_flows(ctx, flow_table);
 }
 

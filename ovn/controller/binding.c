@@ -384,7 +384,7 @@ update_local_lport_ids(struct sset *local_lport_ids,
 static void
 consider_local_datapath(struct controller_ctx *ctx,
                         const struct chassis_index *chassis_index,
-                        struct sset *active_tunnels,
+                        const struct sset *active_tunnels,
                         const struct sbrec_chassis *chassis_rec,
                         const struct sbrec_port_binding *binding_rec,
                         struct hmap *qos_map,
@@ -527,7 +527,7 @@ void
 binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
             const struct sbrec_chassis *chassis_rec,
             const struct chassis_index *chassis_index,
-            struct sset *active_tunnels,
+            const struct sset *active_tunnels,
             struct hmap *local_datapaths, struct sset *local_lports,
             struct sset *local_lport_ids)
 {

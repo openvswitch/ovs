@@ -31,7 +31,8 @@ void binding_register_ovs_idl(struct ovsdb_idl *);
 void binding_run(struct controller_ctx *, const struct ovsrec_bridge *br_int,
                  const struct sbrec_chassis *,
                  const struct chassis_index *,
-                 struct sset *active_tunnels, struct hmap *local_datapaths,
+                 const struct sset *active_tunnels,
+                 struct hmap *local_datapaths,
                  struct sset *local_lports, struct sset *local_lport_ids);
 bool binding_cleanup(struct controller_ctx *, const struct sbrec_chassis *);
 

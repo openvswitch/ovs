@@ -66,13 +66,13 @@ void lflow_run(struct controller_ctx *,
                const struct sbrec_chassis *chassis,
                const struct chassis_index *,
                const struct hmap *local_datapaths,
-               struct ovn_extend_table *group_table,
-               struct ovn_extend_table *meter_table,
                const struct shash *addr_sets,
                const struct shash *port_groups,
+               const struct sset *active_tunnels,
+               const struct sset *local_lport_ids,
                struct hmap *flow_table,
-               struct sset *active_tunnels,
-               struct sset *local_lport_ids);
+               struct ovn_extend_table *group_table,
+               struct ovn_extend_table *meter_table);
 void lflow_destroy(void);
 
 #endif /* ovn/lflow.h */

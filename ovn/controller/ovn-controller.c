@@ -346,7 +346,7 @@ get_ovnsb_remote(struct ovsdb_idl *ovs_idl)
 }
 
 static void
-update_ct_zones(struct sset *lports, const struct hmap *local_datapaths,
+update_ct_zones(const struct sset *lports, const struct hmap *local_datapaths,
                 struct simap *ct_zones, unsigned long *ct_zone_bitmap,
                 struct shash *pending_ct_zones)
 {
@@ -735,9 +735,9 @@ main(int argc, char *argv[])
 
                     struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
                     lflow_run(&ctx, chassis,
-                              &chassis_index, &local_datapaths, &group_table,
-                              &meter_table, &addr_sets, &port_groups,
-                              &flow_table, &active_tunnels, &local_lport_ids);
+                              &chassis_index, &local_datapaths, &addr_sets,
+                              &port_groups, &active_tunnels, &local_lport_ids,
+                              &flow_table, &group_table, &meter_table);
 
                     if (chassis_id) {
                         bfd_run(&ctx, br_int, chassis, &local_datapaths,
@@ -745,8 +745,9 @@ main(int argc, char *argv[])
                     }
                     physical_run(&ctx, mff_ovn_geneve,
                                  br_int, chassis, &ct_zones,
-                                 &flow_table, &local_datapaths, &local_lports,
-                                 &chassis_index, &active_tunnels);
+                                 &local_datapaths, &local_lports,
+                                 &chassis_index, &active_tunnels,
+                                 &flow_table);
 
                     stopwatch_stop(CONTROLLER_LOOP_STOPWATCH_NAME,
                                    time_msec());

@@ -151,11 +151,11 @@ put_stack(enum mf_field_id field, struct ofpact_stack *stack)
     stack->subfield.n_bits = stack->subfield.field->n_bits;
 }
 
-static const struct sbrec_port_binding*
-get_localnet_port(struct hmap *local_datapaths, int64_t tunnel_key)
+static const struct sbrec_port_binding *
+get_localnet_port(const struct hmap *local_datapaths, int64_t tunnel_key)
 {
-    struct local_datapath *ld = get_local_datapath(local_datapaths,
-                                                   tunnel_key);
+    const struct local_datapath *ld = get_local_datapath(local_datapaths,
+                                                         tunnel_key);
     return ld ? ld->localnet_port : NULL;
 }
 
@@ -295,8 +295,8 @@ consider_port_binding(struct controller_ctx *ctx,
                       enum mf_field_id mff_ovn_geneve,
                       const struct simap *ct_zones,
                       const struct chassis_index *chassis_index,
-                      struct sset *active_tunnels,
-                      struct hmap *local_datapaths,
+                      const struct sset *active_tunnels,
+                      const struct hmap *local_datapaths,
                       const struct sbrec_port_binding *binding,
                       const struct sbrec_chassis *chassis,
                       struct ofpbuf *ofpacts_p,
@@ -730,7 +730,7 @@ out:
 static void
 consider_mc_group(enum mf_field_id mff_ovn_geneve,
                   const struct simap *ct_zones,
-                  struct hmap *local_datapaths,
+                  const struct hmap *local_datapaths,
                   const struct sbrec_chassis *chassis,
                   const struct sbrec_multicast_group *mc,
                   struct ofpbuf *ofpacts_p,
@@ -871,10 +871,11 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
              const struct ovsrec_bridge *br_int,
              const struct sbrec_chassis *chassis,
              const struct simap *ct_zones,
-             struct hmap *flow_table, struct hmap *local_datapaths,
+             const struct hmap *local_datapaths,
              const struct sset *local_lports,
-             struct chassis_index *chassis_index,
-             struct sset *active_tunnels)
+             const struct chassis_index *chassis_index,
+             const struct sset *active_tunnels,
+             struct hmap *flow_table)
 {
 
     /* This bool tracks physical mapping changes. */

@@ -77,8 +77,8 @@ static void send_garp_run(struct controller_ctx *ctx,
                           const struct ovsrec_bridge *,
                           const struct sbrec_chassis *,
                           const struct chassis_index *chassis_index,
-                          struct hmap *local_datapaths,
-                          struct sset *active_tunnels);
+                          const struct hmap *local_datapaths,
+                          const struct sset *active_tunnels);
 static void pinctrl_handle_nd_na(const struct flow *ip_flow,
                                  const struct match *md,
                                  struct ofpbuf *userdata,
@@ -96,7 +96,7 @@ static void init_ipv6_ras(void);
 static void destroy_ipv6_ras(void);
 static void ipv6_ra_wait(void);
 static void send_ipv6_ras(const struct controller_ctx *,
-                          struct hmap *local_datapaths);
+                          const struct hmap *local_datapaths);
 
 COVERAGE_DEFINE(pinctrl_drop_put_mac_binding);
 
@@ -1238,8 +1238,8 @@ pinctrl_run(struct controller_ctx *ctx,
             const struct ovsrec_bridge *br_int,
             const struct sbrec_chassis *chassis,
             const struct chassis_index *chassis_index,
-            struct hmap *local_datapaths,
-            struct sset *active_tunnels)
+            const struct hmap *local_datapaths,
+            const struct sset *active_tunnels)
 {
     char *target = xasprintf("unix:%s/%s.mgmt", ovs_rundir(), br_int->name);
     if (strcmp(target, rconn_get_target(swconn))) {
@@ -1490,7 +1490,8 @@ ipv6_ra_wait(void)
 }
 
 static void
-send_ipv6_ras(const struct controller_ctx *ctx, struct hmap *local_datapaths)
+send_ipv6_ras(const struct controller_ctx *ctx,
+              const struct hmap *local_datapaths)
 {
     struct shash_node *iter, *iter_next;
 
@@ -1814,7 +1815,8 @@ add_garp(const char *name, ofp_port_t ofport, int tag,
 /* Add or update a vif for which GARPs need to be announced. */
 static void
 send_garp_update(const struct sbrec_port_binding *binding_rec,
-                 struct simap *localnet_ofports, struct hmap *local_datapaths,
+                 struct simap *localnet_ofports,
+                 const struct hmap *local_datapaths,
                  struct shash *nat_addresses)
 {
     /* Find the localnet ofport to send this GARP. */
@@ -1944,7 +1946,7 @@ static void
 get_localnet_vifs_l3gwports(struct controller_ctx *ctx,
                   const struct ovsrec_bridge *br_int,
                   const struct sbrec_chassis *chassis,
-                  struct hmap *local_datapaths,
+                  const struct hmap *local_datapaths,
                   struct sset *localnet_vifs,
                   struct simap *localnet_ofports,
                   struct sset *local_l3gw_ports)
@@ -2030,7 +2032,7 @@ static bool
 pinctrl_is_chassis_resident(struct controller_ctx *ctx,
                             const struct sbrec_chassis *chassis,
                             const struct chassis_index *chassis_index,
-                            struct sset *active_tunnels,
+                            const struct sset *active_tunnels,
                             const char *port_name)
 {
     const struct sbrec_port_binding *pb
@@ -2124,7 +2126,7 @@ consider_nat_address(struct controller_ctx *ctx,
                      struct sset *nat_address_keys,
                      const struct sbrec_chassis *chassis,
                      const struct chassis_index *chassis_index,
-                     struct sset *active_tunnels,
+                     const struct sset *active_tunnels,
                      struct shash *nat_addresses)
 {
     struct lport_addresses *laddrs = xmalloc(sizeof *laddrs);
@@ -2156,7 +2158,7 @@ get_nat_addresses_and_keys(struct controller_ctx *ctx,
                            struct sset *local_l3gw_ports,
                            const struct sbrec_chassis *chassis,
                            const struct chassis_index *chassis_index,
-                           struct sset *active_tunnels,
+                           const struct sset *active_tunnels,
                            struct shash *nat_addresses)
 {
     const char *gw_port;
@@ -2201,8 +2203,8 @@ send_garp_run(struct controller_ctx *ctx,
               const struct ovsrec_bridge *br_int,
               const struct sbrec_chassis *chassis,
               const struct chassis_index *chassis_index,
-              struct hmap *local_datapaths,
-              struct sset *active_tunnels)
+              const struct hmap *local_datapaths,
+              const struct sset *active_tunnels)
 {
     struct sset localnet_vifs = SSET_INITIALIZER(&localnet_vifs);
     struct sset local_l3gw_ports = SSET_INITIALIZER(&local_l3gw_ports);
