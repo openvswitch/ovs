@@ -562,6 +562,9 @@ OVS_WAIT_UNTIL([ovs-appctl mdb/show br0 | grep 'querier'])
 OVS_WAIT_UNTIL([ovs-appctl mdb/show br1 | grep 'querier'])
 OVS_WAIT_UNTIL([ovs-appctl mdb/show br2 | grep 'querier'])
 
+# Make sure that  validation of flows was before changing of topology.
+ovs-appctl revalidator/wait
+
 # del p2 on the br0, the topology will be changed
 AT_CHECK([ovs-vsctl del-port br0 p2])
 
