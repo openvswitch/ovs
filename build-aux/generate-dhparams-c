@@ -1,0 +1,32 @@
+#! /bin/sh -e
+
+cat <<'EOF'
+/* Generated automatically; do not modify!     -*- buffer-read-only: t -*-
+ *
+ * If you do need to regenerate this file, run "make generate-dhparams-c". */
+
+#include <config.h>
+#include "lib/dhparams.h"
+#include "openvswitch/util.h"
+
+static int
+my_DH_set0_pqg(DH *dh, BIGNUM *p, const BIGNUM **q OVS_UNUSED, BIGNUM *g)
+{
+    ovs_assert(q == NULL);
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined (LIBRESSL_VERSION_NUMBER)
+    dh->p = p;
+    dh->g = g;
+    return 1;
+#else
+    return DH_set0_pqg(dh, p, NULL, g);
+#endif
+}
+EOF
+(openssl dhparam -C -in lib/dh1024.pem -noout &&
+openssl dhparam -C -in lib/dh2048.pem -noout &&
+openssl dhparam -C -in lib/dh4096.pem -noout) | sed '
+    s/\(get_dh[0-9]*\)()/\1(void)/
+    s/\(DH_set0_pqg\)/my_\1/
+    s/[ 	]*$//
+    s/	/        /g
+'
