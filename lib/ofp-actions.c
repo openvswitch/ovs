@@ -6956,17 +6956,77 @@ ofpacts_pull_openflow_actions(struct ofpbuf *openflow,
                                            ofpacts_tlv_bitmap);
 }
 
-/* OpenFlow 1.1 actions. */
+/* OpenFlow 1.1 action sets. */
 
+/* Append ofpact 'a' onto the tail of 'out' */
+static void
+ofpact_copy(struct ofpbuf *out, const struct ofpact *a)
+{
+    ofpbuf_put(out, a, OFPACT_ALIGN(a->len));
+}
 
-/* True if an action sets the value of a field
- * in a way that is compatibile with the action set.
- * The field can be set via either a set or a move action.
- * False otherwise. */
-static bool
-ofpact_is_set_or_move_action(const struct ofpact *a)
+/* The order in which actions in an action set get executed.  This is only for
+ * the actions where only the last instance added is used. */
+#define ACTION_SET_ORDER                        \
+    SLOT(OFPACT_STRIP_VLAN)                     \
+    SLOT(OFPACT_POP_MPLS)                       \
+    SLOT(OFPACT_DECAP)                          \
+    SLOT(OFPACT_ENCAP)                          \
+    SLOT(OFPACT_PUSH_MPLS)                      \
+    SLOT(OFPACT_PUSH_VLAN)                      \
+    SLOT(OFPACT_DEC_TTL)                        \
+    SLOT(OFPACT_DEC_MPLS_TTL)                   \
+    SLOT(OFPACT_DEC_NSH_TTL)
+
+/* Priority for "final actions" in an action set.  An action set only gets
+ * executed at all if at least one of these actions is present.  If more than
+ * one is present, then only the one later in this list is executed (and if
+ * more than one of a given type, the one later in the action set). */
+#define ACTION_SET_FINAL_PRIORITY               \
+    FINAL(OFPACT_CT)                            \
+    FINAL(OFPACT_CT_CLEAR)                      \
+    FINAL(OFPACT_RESUBMIT)                      \
+    FINAL(OFPACT_OUTPUT)                        \
+    FINAL(OFPACT_GROUP)
+
+enum action_set_class {
+    /* Actions that individually can usefully appear only once in an action
+     * set.  If they do appear more than once, then only the last instance is
+     * honored. */
+#define SLOT(OFPACT) ACTION_SLOT_##OFPACT,
+    ACTION_SET_ORDER
+#undef SLOT
+
+    /* Final actions. */
+#define FINAL(OFPACT) ACTION_SLOT_##OFPACT,
+    ACTION_SET_FINAL_PRIORITY
+#undef FINAL
+
+    /* Actions that can appear in an action set more than once and are executed
+     * in order. */
+    ACTION_SLOT_SET_OR_MOVE,
+
+    /* Actions that shouldn't appear in the action set at all. */
+    ACTION_SLOT_INVALID
+};
+
+/* Count the action set slots. */
+#define SLOT(OFPACT) +1
+enum { N_ACTION_SLOTS = ACTION_SET_ORDER };
+#undef SLOT
+
+static enum action_set_class
+action_set_classify(const struct ofpact *a)
 {
     switch (a->type) {
+#define SLOT(OFPACT) case OFPACT: return ACTION_SLOT_##OFPACT;
+        ACTION_SET_ORDER
+#undef SLOT
+
+#define FINAL(OFPACT) case OFPACT: return ACTION_SLOT_##OFPACT;
+        ACTION_SET_FINAL_PRIORITY
+#undef FINAL
+
     case OFPACT_SET_FIELD:
     case OFPACT_REG_MOVE:
     case OFPACT_SET_ETH_DST:
@@ -6985,47 +7045,35 @@ ofpact_is_set_or_move_action(const struct ofpact *a)
     case OFPACT_SET_TUNNEL:
     case OFPACT_SET_VLAN_PCP:
     case OFPACT_SET_VLAN_VID:
-        return true;
+        return ACTION_SLOT_SET_OR_MOVE;
+
     case OFPACT_BUNDLE:
     case OFPACT_CLEAR_ACTIONS:
-    case OFPACT_CT:
-    case OFPACT_CT_CLEAR:
     case OFPACT_CLONE:
     case OFPACT_NAT:
     case OFPACT_CONTROLLER:
-    case OFPACT_DEC_MPLS_TTL:
-    case OFPACT_DEC_TTL:
     case OFPACT_ENQUEUE:
     case OFPACT_EXIT:
     case OFPACT_UNROLL_XLATE:
     case OFPACT_FIN_TIMEOUT:
     case OFPACT_GOTO_TABLE:
-    case OFPACT_GROUP:
     case OFPACT_LEARN:
     case OFPACT_CONJUNCTION:
     case OFPACT_METER:
     case OFPACT_MULTIPATH:
     case OFPACT_NOTE:
-    case OFPACT_OUTPUT:
     case OFPACT_OUTPUT_REG:
     case OFPACT_OUTPUT_TRUNC:
-    case OFPACT_POP_MPLS:
     case OFPACT_POP_QUEUE:
-    case OFPACT_PUSH_MPLS:
-    case OFPACT_PUSH_VLAN:
-    case OFPACT_RESUBMIT:
     case OFPACT_SAMPLE:
     case OFPACT_STACK_POP:
     case OFPACT_STACK_PUSH:
-    case OFPACT_STRIP_VLAN:
     case OFPACT_WRITE_ACTIONS:
     case OFPACT_WRITE_METADATA:
     case OFPACT_DEBUG_RECIRC:
     case OFPACT_DEBUG_SLOW:
-    case OFPACT_ENCAP:
-    case OFPACT_DECAP:
-    case OFPACT_DEC_NSH_TTL:
-        return false;
+        return ACTION_SLOT_INVALID;
+
     default:
         OVS_NOT_REACHED();
     }
@@ -7036,119 +7084,7 @@ ofpact_is_set_or_move_action(const struct ofpact *a)
 static bool
 ofpact_is_allowed_in_actions_set(const struct ofpact *a)
 {
-    switch (a->type) {
-    case OFPACT_DEC_MPLS_TTL:
-    case OFPACT_DEC_TTL:
-    case OFPACT_GROUP:
-    case OFPACT_OUTPUT:
-    case OFPACT_OUTPUT_TRUNC:
-    case OFPACT_POP_MPLS:
-    case OFPACT_PUSH_MPLS:
-    case OFPACT_PUSH_VLAN:
-    case OFPACT_REG_MOVE:
-    case OFPACT_SET_FIELD:
-    case OFPACT_SET_ETH_DST:
-    case OFPACT_SET_ETH_SRC:
-    case OFPACT_SET_IP_DSCP:
-    case OFPACT_SET_IP_ECN:
-    case OFPACT_SET_IP_TTL:
-    case OFPACT_SET_IPV4_DST:
-    case OFPACT_SET_IPV4_SRC:
-    case OFPACT_SET_L4_DST_PORT:
-    case OFPACT_SET_L4_SRC_PORT:
-    case OFPACT_SET_MPLS_LABEL:
-    case OFPACT_SET_MPLS_TC:
-    case OFPACT_SET_MPLS_TTL:
-    case OFPACT_SET_QUEUE:
-    case OFPACT_SET_TUNNEL:
-    case OFPACT_SET_VLAN_PCP:
-    case OFPACT_SET_VLAN_VID:
-    case OFPACT_STRIP_VLAN:
-    case OFPACT_ENCAP:
-    case OFPACT_DECAP:
-    case OFPACT_DEC_NSH_TTL:
-        return true;
-
-    /* In general these actions are excluded because they are not part of
-     * the OpenFlow specification nor map to actions that are defined in
-     * the specification.  Thus the order in which they should be applied
-     * in the action set is undefined. */
-    case OFPACT_BUNDLE:
-    case OFPACT_CLONE:
-    case OFPACT_CONTROLLER:
-    case OFPACT_CT:
-    case OFPACT_CT_CLEAR:
-    case OFPACT_NAT:
-    case OFPACT_ENQUEUE:
-    case OFPACT_EXIT:
-    case OFPACT_UNROLL_XLATE:
-    case OFPACT_FIN_TIMEOUT:
-    case OFPACT_LEARN:
-    case OFPACT_CONJUNCTION:
-    case OFPACT_MULTIPATH:
-    case OFPACT_NOTE:
-    case OFPACT_OUTPUT_REG:
-    case OFPACT_POP_QUEUE:
-    case OFPACT_RESUBMIT:
-    case OFPACT_SAMPLE:
-    case OFPACT_STACK_POP:
-    case OFPACT_STACK_PUSH:
-    case OFPACT_DEBUG_RECIRC:
-    case OFPACT_DEBUG_SLOW:
-
-    /* The action set may only include actions and thus
-     * may not include any instructions */
-    case OFPACT_CLEAR_ACTIONS:
-    case OFPACT_GOTO_TABLE:
-    case OFPACT_METER:
-    case OFPACT_WRITE_ACTIONS:
-    case OFPACT_WRITE_METADATA:
-        return false;
-    default:
-        OVS_NOT_REACHED();
-    }
-}
-
-/* Append ofpact 'a' onto the tail of 'out' */
-static void
-ofpact_copy(struct ofpbuf *out, const struct ofpact *a)
-{
-    ofpbuf_put(out, a, OFPACT_ALIGN(a->len));
-}
-
-/* Copies the last ofpact whose type is 'filter' from 'in' to 'out'. */
-static bool
-ofpacts_copy_last(struct ofpbuf *out, const struct ofpbuf *in,
-                  enum ofpact_type filter)
-{
-    const struct ofpact *target;
-    const struct ofpact *a;
-
-    target = NULL;
-    OFPACT_FOR_EACH (a, in->data, in->size) {
-        if (a->type == filter) {
-            target = a;
-        }
-    }
-    if (target) {
-        ofpact_copy(out, target);
-    }
-    return target != NULL;
-}
-
-/* Append all ofpacts, for which 'filter' returns true, from 'in' to 'out'.
- * The order of appended ofpacts is preserved between 'in' and 'out' */
-static void
-ofpacts_copy_all(struct ofpbuf *out, const struct ofpbuf *in,
-                 bool (*filter)(const struct ofpact *))
-{
-    const struct ofpact *a;
-
-    OFPACT_FOR_EACH (a, in->data, in->size) {
-        if (filter(a)) {
-            ofpact_copy(out, a);
-        }
-    }
+    return action_set_classify(a) != ACTION_SLOT_INVALID;
 }
 
 /* Reads 'action_set', which contains ofpacts accumulated by
@@ -7172,32 +7108,41 @@ void
 ofpacts_execute_action_set(struct ofpbuf *action_list,
                            const struct ofpbuf *action_set)
 {
-    /* The OpenFlow spec "Action Set" section specifies this order. */
-    ofpacts_copy_last(action_list, action_set, OFPACT_STRIP_VLAN);
-    ofpacts_copy_last(action_list, action_set, OFPACT_POP_MPLS);
-    ofpacts_copy_last(action_list, action_set, OFPACT_DECAP);
-    ofpacts_copy_last(action_list, action_set, OFPACT_ENCAP);
-    ofpacts_copy_last(action_list, action_set, OFPACT_PUSH_MPLS);
-    ofpacts_copy_last(action_list, action_set, OFPACT_PUSH_VLAN);
-    ofpacts_copy_last(action_list, action_set, OFPACT_DEC_TTL);
-    ofpacts_copy_last(action_list, action_set, OFPACT_DEC_MPLS_TTL);
-    ofpacts_copy_last(action_list, action_set, OFPACT_DEC_NSH_TTL);
-    ofpacts_copy_all(action_list, action_set, ofpact_is_set_or_move_action);
-    ofpacts_copy_last(action_list, action_set, OFPACT_SET_QUEUE);
+    const struct ofpact *slots[N_ACTION_SLOTS] = {NULL, };
 
-    /* If both OFPACT_GROUP and OFPACT_OUTPUT are present, OpenFlow says that
-     * we should execute only OFPACT_GROUP.
-     *
-     * If neither OFPACT_GROUP nor OFPACT_OUTPUT is present, then we can drop
-     * all the actions because there's no point in modifying a packet that will
-     * not be sent anywhere. */
-    if (!ofpacts_copy_last(action_list, action_set, OFPACT_GROUP) &&
-        !ofpacts_copy_last(action_list, action_set, OFPACT_OUTPUT) &&
-        !ofpacts_copy_last(action_list, action_set, OFPACT_RESUBMIT) &&
-        !ofpacts_copy_last(action_list, action_set, OFPACT_CT_CLEAR) &&
-        !ofpacts_copy_last(action_list, action_set, OFPACT_CT)) {
-        ofpbuf_clear(action_list);
+    struct ofpbuf set_or_move;
+    ofpbuf_init(&set_or_move, 0);
+
+    const struct ofpact *final_action = NULL;
+    enum action_set_class final_class = 0;
+
+    const struct ofpact *cursor;
+    OFPACT_FOR_EACH (cursor, action_set->data, action_set->size) {
+        int class = action_set_classify(cursor);
+        if (class < N_ACTION_SLOTS) {
+            slots[class] = cursor;
+        } else if (class < ACTION_SLOT_SET_OR_MOVE) {
+            if (class >= final_class) {
+                final_action = cursor;
+                final_class = class;
+            }
+        } else if (class == ACTION_SLOT_SET_OR_MOVE) {
+            ofpact_copy(&set_or_move, cursor);
+        } else {
+            ovs_assert(class == ACTION_SLOT_INVALID);
+        }
     }
+
+    if (final_action) {
+        for (int i = 0; i < N_ACTION_SLOTS; i++) {
+            if (slots[i]) {
+                ofpact_copy(action_list, slots[i]);
+            }
+        }
+        ofpbuf_put(action_list, set_or_move.data, set_or_move.size);
+        ofpact_copy(action_list, final_action);
+    }
+    ofpbuf_uninit(&set_or_move);
 }
 
 
