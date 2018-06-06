@@ -289,6 +289,10 @@ struct vport *ovs_vport_add(const struct vport_parms *parms)
 		return vport;
 	}
 
+	if (parms->type == OVS_VPORT_TYPE_GRE && !compat_gre_loaded) {
+		pr_warn("GRE protocol already loaded!\n");
+		return ERR_PTR(-EAFNOSUPPORT);
+	}
 	/* Unlock to attempt module load and return -EAGAIN if load
 	 * was successful as we need to restart the port addition
 	 * workflow.
