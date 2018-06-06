@@ -450,15 +450,16 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/route-table-bsd.c
 endif
 
+.PHONY: generate-dhparams-c
 if HAVE_OPENSSL
-lib_libopenvswitch_la_SOURCES += lib/stream-ssl.c
-nodist_lib_libopenvswitch_la_SOURCES += lib/dhparams.c
-lib/dhparams.c: lib/dh1024.pem lib/dh2048.pem lib/dh4096.pem
-	$(AM_V_GEN)(echo '#include "lib/dhparams.h"' &&                 \
-	 openssl dhparam -C -in $(srcdir)/lib/dh1024.pem -noout &&	\
-	 openssl dhparam -C -in $(srcdir)/lib/dh2048.pem -noout &&	\
-	 openssl dhparam -C -in $(srcdir)/lib/dh4096.pem -noout)	\
-	| sed 's/\(get_dh[0-9]*\)()/\1(void)/' > lib/dhparams.c.tmp &&  \
+lib_libopenvswitch_la_SOURCES += lib/stream-ssl.c lib/dhparams.c
+
+# Manually regenerates lib/dhparams.c.  Not normally necessary since
+# lib/dhparams.c is part of the repository and doesn't normally need
+# updates.
+generate-dhparams-c:
+	$(AM_V_GEN)cd $(srcdir) && \
+	build-aux/generate-dhparams-c > lib/dhparams.c.tmp && \
 	mv lib/dhparams.c.tmp lib/dhparams.c
 else
 lib_libopenvswitch_la_SOURCES += lib/stream-nossl.c
