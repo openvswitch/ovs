@@ -100,6 +100,7 @@ rm \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-test.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-l3ping.8 \
     $RPM_BUILD_ROOT/usr/sbin/ovs-vlan-bug-workaround \
+    $RPM_BUILD_ROOT/usr/share/man/man1/ovs-sim.1 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-vlan-bug-workaround.8 \
     $RPM_BUILD_ROOT/usr/bin/ovn-* \
     $RPM_BUILD_ROOT/usr/share/man/man?/ovn-* \
