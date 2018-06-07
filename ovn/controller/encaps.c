@@ -153,7 +153,10 @@ preferred_encap(const struct sbrec_chassis *chassis_rec)
 }
 
 void
-encaps_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
+encaps_run(struct controller_ctx *ctx,
+           const struct ovsrec_bridge_table *bridge_table,
+           const struct ovsrec_bridge *br_int,
+           const struct sbrec_chassis_table *chassis_table,
            const char *chassis_id)
 {
     if (!ctx->ovs_idl_txn || !br_int) {
@@ -177,7 +180,7 @@ encaps_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
     /* Collect all port names into tc.port_names.
      *
      * Collect all the OVN-created tunnels into tc.tunnel_hmap. */
-    OVSREC_BRIDGE_FOR_EACH(br, ctx->ovs_idl) {
+    OVSREC_BRIDGE_TABLE_FOR_EACH (br, bridge_table) {
         for (size_t i = 0; i < br->n_ports; i++) {
             const struct ovsrec_port *port = br->ports[i];
             sset_add(&tc.port_names, port->name);
@@ -198,7 +201,7 @@ encaps_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
         }
     }
 
-    SBREC_CHASSIS_FOR_EACH(chassis_rec, ctx->ovnsb_idl) {
+    SBREC_CHASSIS_TABLE_FOR_EACH (chassis_rec, chassis_table) {
         if (strcmp(chassis_rec->name, chassis_id)) {
             /* Create tunnels to the other chassis. */
             const struct sbrec_encap *encap = preferred_encap(chassis_rec);

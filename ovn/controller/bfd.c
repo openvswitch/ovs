@@ -246,8 +246,11 @@ bfd_calculate_chassis(struct controller_ctx *ctx,
 }
 
 void
-bfd_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
-        const struct sbrec_chassis *chassis_rec, const struct hmap *local_datapaths,
+bfd_run(struct controller_ctx *ctx,
+        const struct ovsrec_interface_table *interface_table,
+        const struct ovsrec_bridge *br_int,
+        const struct sbrec_chassis *chassis_rec,
+        const struct hmap *local_datapaths,
         const struct chassis_index *chassis_index)
 {
 
@@ -274,7 +277,7 @@ bfd_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
 
     /* Enable or disable bfd */
     const struct ovsrec_interface *iface;
-    OVSREC_INTERFACE_FOR_EACH (iface, ctx->ovs_idl) {
+    OVSREC_INTERFACE_TABLE_FOR_EACH (iface, interface_table) {
         if (sset_contains(&tunnels, iface->name)) {
                 interface_set_bfd(
                         iface, sset_contains(&bfd_ifaces, iface->name));

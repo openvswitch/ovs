@@ -75,7 +75,10 @@ get_cms_options(const struct smap *ext_ids)
 /* Returns this chassis's Chassis record, if it is available and is currently
  * amenable to a transaction. */
 const struct sbrec_chassis *
-chassis_run(struct controller_ctx *ctx, const char *chassis_id,
+chassis_run(struct controller_ctx *ctx,
+            const struct ovsrec_open_vswitch_table *ovs_table,
+            const struct sbrec_chassis_table *chassis_table,
+            const char *chassis_id,
             const struct ovsrec_bridge *br_int)
 {
     if (!ctx->ovnsb_idl_txn) {
@@ -86,7 +89,7 @@ chassis_run(struct controller_ctx *ctx, const char *chassis_id,
     const char *encap_type, *encap_ip;
     static bool inited = false;
 
-    cfg = ovsrec_open_vswitch_first(ctx->ovs_idl);
+    cfg = ovsrec_open_vswitch_table_first(ovs_table);
     if (!cfg) {
         VLOG_INFO("No Open_vSwitch row defined.");
         return NULL;
@@ -136,7 +139,7 @@ chassis_run(struct controller_ctx *ctx, const char *chassis_id,
     const char *iface_types_str = ds_cstr(&iface_types);
 
     const struct sbrec_chassis *chassis_rec
-        = get_chassis(ctx->ovnsb_idl, chassis_id);
+        = get_chassis(chassis_table, chassis_id);
     const char *encap_csum = smap_get_def(&cfg->external_ids,
                                           "ovn-encap-csum", "true");
     if (chassis_rec) {

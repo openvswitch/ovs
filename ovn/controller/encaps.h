@@ -21,10 +21,15 @@
 struct controller_ctx;
 struct ovsdb_idl;
 struct ovsrec_bridge;
+struct ovsrec_bridge_table;
+struct sbrec_chassis_table;
 
 void encaps_register_ovs_idl(struct ovsdb_idl *);
 void encaps_run(struct controller_ctx *,
-                const struct ovsrec_bridge *br_int, const char *chassis_id);
+                const struct ovsrec_bridge_table *,
+                const struct ovsrec_bridge *br_int,
+                const struct sbrec_chassis_table *,
+                const char *chassis_id);
 bool encaps_cleanup(struct controller_ctx *,
                     const struct ovsrec_bridge *br_int);
 

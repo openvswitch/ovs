@@ -42,13 +42,13 @@ chassis_lookup_by_name(const struct chassis_index *chassis_index,
 }
 
 void
-chassis_index_init(struct chassis_index *chassis_index,
-                   struct ovsdb_idl *sb_idl)
+chassis_index_init(const struct sbrec_chassis_table *chassis_table,
+                   struct chassis_index *chassis_index)
 {
     hmap_init(&chassis_index->by_name);
 
     const struct sbrec_chassis *chassis;
-    SBREC_CHASSIS_FOR_EACH (chassis, sb_idl) {
+    SBREC_CHASSIS_TABLE_FOR_EACH (chassis, chassis_table) {
         if (!chassis->name) {
             continue;
         }

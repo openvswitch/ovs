@@ -137,17 +137,21 @@ is_switch(const struct sbrec_datapath_binding *ldp)
 
 /* Adds the logical flows from the Logical_Flow table to flow tables. */
 static void
-add_logical_flows(struct controller_ctx *ctx,
-                  const struct chassis_index *chassis_index,
-                  const struct hmap *local_datapaths,
-                  const struct sbrec_chassis *chassis,
-                  const struct shash *addr_sets,
-                  const struct shash *port_groups,
-                  const struct sset *active_tunnels,
-                  const struct sset *local_lport_ids,
-                  struct hmap *flow_table,
-                  struct ovn_extend_table *group_table,
-                  struct ovn_extend_table *meter_table)
+add_logical_flows(
+    struct controller_ctx *ctx,
+    const struct sbrec_dhcp_options_table *dhcp_options_table,
+    const struct sbrec_dhcpv6_options_table *dhcpv6_options_table,
+    const struct sbrec_logical_flow_table *logical_flow_table,
+    const struct chassis_index *chassis_index,
+    const struct hmap *local_datapaths,
+    const struct sbrec_chassis *chassis,
+    const struct shash *addr_sets,
+    const struct shash *port_groups,
+    const struct sset *active_tunnels,
+    const struct sset *local_lport_ids,
+    struct hmap *flow_table,
+    struct ovn_extend_table *group_table,
+    struct ovn_extend_table *meter_table)
 {
     uint32_t conj_id_ofs = 1;
     const struct sbrec_logical_flow *lflow;
@@ -155,14 +159,15 @@ add_logical_flows(struct controller_ctx *ctx,
     struct hmap dhcp_opts = HMAP_INITIALIZER(&dhcp_opts);
     struct hmap dhcpv6_opts = HMAP_INITIALIZER(&dhcpv6_opts);
     const struct sbrec_dhcp_options *dhcp_opt_row;
-    SBREC_DHCP_OPTIONS_FOR_EACH(dhcp_opt_row, ctx->ovnsb_idl) {
+    SBREC_DHCP_OPTIONS_TABLE_FOR_EACH (dhcp_opt_row, dhcp_options_table) {
         dhcp_opt_add(&dhcp_opts, dhcp_opt_row->name, dhcp_opt_row->code,
                      dhcp_opt_row->type);
     }
 
 
     const struct sbrec_dhcpv6_options *dhcpv6_opt_row;
-    SBREC_DHCPV6_OPTIONS_FOR_EACH(dhcpv6_opt_row, ctx->ovnsb_idl) {
+    SBREC_DHCPV6_OPTIONS_TABLE_FOR_EACH (dhcpv6_opt_row,
+                                         dhcpv6_options_table) {
        dhcp_opt_add(&dhcpv6_opts, dhcpv6_opt_row->name, dhcpv6_opt_row->code,
                     dhcpv6_opt_row->type);
     }
@@ -170,7 +175,7 @@ add_logical_flows(struct controller_ctx *ctx,
     struct hmap nd_ra_opts = HMAP_INITIALIZER(&nd_ra_opts);
     nd_ra_opts_init(&nd_ra_opts);
 
-    SBREC_LOGICAL_FLOW_FOR_EACH (lflow, ctx->ovnsb_idl) {
+    SBREC_LOGICAL_FLOW_TABLE_FOR_EACH (lflow, logical_flow_table) {
         consider_logical_flow(ctx, chassis_index, lflow, local_datapaths,
                               chassis, &dhcp_opts, &dhcpv6_opts, &nd_ra_opts,
                               addr_sets, port_groups, active_tunnels,
@@ -428,10 +433,11 @@ consider_neighbor_flow(struct controller_ctx *ctx,
  * southbound database. */
 static void
 add_neighbor_flows(struct controller_ctx *ctx,
+                   const struct sbrec_mac_binding_table *mac_binding_table,
                    struct hmap *flow_table)
 {
     const struct sbrec_mac_binding *b;
-    SBREC_MAC_BINDING_FOR_EACH (b, ctx->ovnsb_idl) {
+    SBREC_MAC_BINDING_TABLE_FOR_EACH (b, mac_binding_table) {
         consider_neighbor_flow(ctx, b, flow_table);
     }
 }
@@ -440,6 +446,10 @@ add_neighbor_flows(struct controller_ctx *ctx,
  * into OpenFlow flows.  See ovn-architecture(7) for more information. */
 void
 lflow_run(struct controller_ctx *ctx,
+          const struct sbrec_dhcp_options_table *dhcp_options_table,
+          const struct sbrec_dhcpv6_options_table *dhcpv6_options_table,
+          const struct sbrec_logical_flow_table *logical_flow_table,
+          const struct sbrec_mac_binding_table *mac_binding_table,
           const struct sbrec_chassis *chassis,
           const struct chassis_index *chassis_index,
           const struct hmap *local_datapaths,
@@ -453,10 +463,11 @@ lflow_run(struct controller_ctx *ctx,
 {
     COVERAGE_INC(lflow_run);
 
-    add_logical_flows(ctx, chassis_index, local_datapaths, chassis, addr_sets,
-                      port_groups, active_tunnels, local_lport_ids,
-                      flow_table, group_table, meter_table);
-    add_neighbor_flows(ctx, flow_table);
+    add_logical_flows(ctx, dhcp_options_table, dhcpv6_options_table,
+                      logical_flow_table, chassis_index, local_datapaths,
+                      chassis, addr_sets, port_groups, active_tunnels,
+                      local_lport_ids, flow_table, group_table, meter_table);
+    add_neighbor_flows(ctx, mac_binding_table, flow_table);
 }
 
 void

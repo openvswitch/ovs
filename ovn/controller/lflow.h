@@ -40,6 +40,10 @@ struct controller_ctx;
 struct ovn_extend_table;
 struct hmap;
 struct sbrec_chassis;
+struct sbrec_dhcp_options_table;
+struct sbrec_dhcpv6_options_table;
+struct sbrec_logical_flow_table;
+struct sbrec_mac_binding_table;
 struct simap;
 struct sset;
 struct uuid;
@@ -63,6 +67,10 @@ struct uuid;
 
 void lflow_init(void);
 void lflow_run(struct controller_ctx *,
+               const struct sbrec_dhcp_options_table *,
+               const struct sbrec_dhcpv6_options_table *,
+               const struct sbrec_logical_flow_table *,
+               const struct sbrec_mac_binding_table *,
                const struct sbrec_chassis *chassis,
                const struct chassis_index *,
                const struct hmap *local_datapaths,

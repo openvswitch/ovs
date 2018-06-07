@@ -66,7 +66,8 @@ static void pinctrl_handle_put_mac_binding(const struct flow *md,
                                            bool is_arp);
 static void init_put_mac_bindings(void);
 static void destroy_put_mac_bindings(void);
-static void run_put_mac_bindings(struct controller_ctx *);
+static void run_put_mac_bindings(struct controller_ctx *,
+                                 const struct sbrec_mac_binding_table *);
 static void wait_put_mac_bindings(struct controller_ctx *);
 static void flush_put_mac_bindings(void);
 
@@ -856,9 +857,9 @@ put_be32(struct ofpbuf *buf, ovs_be32 x)
 
 static void
 pinctrl_handle_dns_lookup(
+    const struct sbrec_dns_table *dns_table,
     struct dp_packet *pkt_in, struct ofputil_packet_in *pin,
-    struct ofpbuf *userdata, struct ofpbuf *continuation,
-    struct controller_ctx *ctx)
+    struct ofpbuf *userdata, struct ofpbuf *continuation)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
     enum ofp_version version = rconn_get_version(swconn);
@@ -951,7 +952,7 @@ pinctrl_handle_dns_lookup(
     uint64_t dp_key = ntohll(pin->flow_metadata.flow.metadata);
     const struct sbrec_dns *sbrec_dns;
     const char *answer_ips = NULL;
-    SBREC_DNS_FOR_EACH(sbrec_dns, ctx->ovnsb_idl) {
+    SBREC_DNS_TABLE_FOR_EACH (sbrec_dns, dns_table) {
         for (size_t i = 0; i < sbrec_dns->n_datapaths; i++) {
             if (sbrec_dns->datapaths[i]->tunnel_key == dp_key) {
                 answer_ips = smap_get(&sbrec_dns->records,
@@ -1109,7 +1110,8 @@ exit:
 }
 
 static void
-process_packet_in(const struct ofp_header *msg, struct controller_ctx *ctx)
+process_packet_in(const struct ofp_header *msg,
+                  const struct sbrec_dns_table *dns_table)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
@@ -1173,7 +1175,8 @@ process_packet_in(const struct ofp_header *msg, struct controller_ctx *ctx)
         break;
 
     case ACTION_OPCODE_DNS_LOOKUP:
-        pinctrl_handle_dns_lookup(&packet, &pin, &userdata, &continuation, ctx);
+        pinctrl_handle_dns_lookup(dns_table,
+                                  &packet, &pin, &userdata, &continuation);
         break;
 
     case ACTION_OPCODE_LOG:
@@ -1207,8 +1210,8 @@ process_packet_in(const struct ofp_header *msg, struct controller_ctx *ctx)
 }
 
 static void
-pinctrl_recv(const struct ofp_header *oh, enum ofptype type,
-             struct controller_ctx *ctx)
+pinctrl_recv(const struct sbrec_dns_table *dns_table,
+             const struct ofp_header *oh, enum ofptype type)
 {
     if (type == OFPTYPE_ECHO_REQUEST) {
         queue_msg(ofputil_encode_echo_reply(oh));
@@ -1220,7 +1223,7 @@ pinctrl_recv(const struct ofp_header *oh, enum ofptype type,
         config.miss_send_len = UINT16_MAX;
         set_switch_config(swconn, &config);
     } else if (type == OFPTYPE_PACKET_IN) {
-        process_packet_in(oh, ctx);
+        process_packet_in(oh, dns_table);
     } else {
         if (VLOG_IS_DBG_ENABLED()) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
@@ -1235,6 +1238,8 @@ pinctrl_recv(const struct ofp_header *oh, enum ofptype type,
 
 void
 pinctrl_run(struct controller_ctx *ctx,
+            const struct sbrec_dns_table *dns_table,
+            const struct sbrec_mac_binding_table *mac_binding_table,
             const struct ovsrec_bridge *br_int,
             const struct sbrec_chassis *chassis,
             const struct chassis_index *chassis_index,
@@ -1271,11 +1276,11 @@ pinctrl_run(struct controller_ctx *ctx,
         enum ofptype type;
 
         ofptype_decode(&type, oh);
-        pinctrl_recv(oh, type, ctx);
+        pinctrl_recv(dns_table, oh, type);
         ofpbuf_delete(msg);
     }
 
-    run_put_mac_bindings(ctx);
+    run_put_mac_bindings(ctx, mac_binding_table);
     send_garp_run(ctx, br_int, chassis, chassis_index, local_datapaths,
                   active_tunnels);
     send_ipv6_ras(ctx, local_datapaths);
@@ -1686,6 +1691,7 @@ pinctrl_handle_put_mac_binding(const struct flow *md,
 
 static void
 run_put_mac_binding(struct controller_ctx *ctx,
+                    const struct sbrec_mac_binding_table *mac_binding_table,
                     const struct put_mac_binding *pmb)
 {
     if (time_msec() > pmb->timestamp + 1000) {
@@ -1713,7 +1719,7 @@ run_put_mac_binding(struct controller_ctx *ctx,
      *
      * XXX This is not very efficient. */
     const struct sbrec_mac_binding *b;
-    SBREC_MAC_BINDING_FOR_EACH (b, ctx->ovnsb_idl) {
+    SBREC_MAC_BINDING_TABLE_FOR_EACH (b, mac_binding_table) {
         if (!strcmp(b->logical_port, pb->logical_port)
             && !strcmp(b->ip, pmb->ip_s)) {
             if (strcmp(b->mac, mac_string)) {
@@ -1732,7 +1738,8 @@ run_put_mac_binding(struct controller_ctx *ctx,
 }
 
 static void
-run_put_mac_bindings(struct controller_ctx *ctx)
+run_put_mac_bindings(struct controller_ctx *ctx,
+                     const struct sbrec_mac_binding_table *mac_binding_table)
 {
     if (!ctx->ovnsb_idl_txn) {
         return;
@@ -1740,7 +1747,7 @@ run_put_mac_bindings(struct controller_ctx *ctx)
 
     const struct put_mac_binding *pmb;
     HMAP_FOR_EACH (pmb, hmap_node, &put_mac_bindings) {
-        run_put_mac_binding(ctx, pmb);
+        run_put_mac_binding(ctx, mac_binding_table, pmb);
     }
     flush_put_mac_bindings();
 }

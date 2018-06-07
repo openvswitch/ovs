@@ -7217,7 +7217,8 @@ main(int argc, char *argv[])
         struct chassis_index chassis_index;
         bool destroy_chassis_index = false;
         if (ovsdb_idl_has_lock(ovnsb_idl_loop.idl)) {
-            chassis_index_init(&chassis_index, ctx.ovnsb_idl);
+            chassis_index_init(sbrec_chassis_table_get(ovnsb_idl_loop.idl),
+                               &chassis_index);
             destroy_chassis_index = true;
 
             ovnnb_db_run(&ctx, &chassis_index, &ovnsb_idl_loop);

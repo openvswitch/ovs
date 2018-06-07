@@ -21,11 +21,14 @@ struct controller_ctx;
 struct hmap;
 struct ovsdb_idl;
 struct ovsrec_bridge;
+struct ovsrec_interface_table;
 struct sbrec_chassis;
 struct sset;
 
 void bfd_register_ovs_idl(struct ovsdb_idl *);
-void bfd_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
+void bfd_run(struct controller_ctx *ctx,
+             const struct ovsrec_interface_table *interface_table,
+             const struct ovsrec_bridge *br_int,
              const struct sbrec_chassis *chassis_rec,
              const struct hmap *local_datapaths, const struct chassis_index *);
 void  bfd_calculate_active_tunnels(const struct ovsrec_bridge *br_int,

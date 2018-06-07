@@ -200,10 +200,11 @@ get_qos_params(const struct sbrec_port_binding *pb, struct hmap *queue_map)
 }
 
 static const struct ovsrec_qos *
-get_noop_qos(struct controller_ctx *ctx)
+get_noop_qos(struct controller_ctx *ctx,
+             const struct ovsrec_qos_table *qos_table)
 {
     const struct ovsrec_qos *qos;
-    OVSREC_QOS_FOR_EACH (qos, ctx->ovs_idl) {
+    OVSREC_QOS_TABLE_FOR_EACH (qos, qos_table) {
         if (!strcmp(qos->type, "linux-noop")) {
             return qos;
         }
@@ -218,13 +219,16 @@ get_noop_qos(struct controller_ctx *ctx)
 }
 
 static bool
-set_noop_qos(struct controller_ctx *ctx, struct sset *egress_ifaces)
+set_noop_qos(struct controller_ctx *ctx,
+             const struct ovsrec_port_table *port_table,
+             const struct ovsrec_qos_table *qos_table,
+             struct sset *egress_ifaces)
 {
     if (!ctx->ovs_idl_txn) {
         return false;
     }
 
-    const struct ovsrec_qos *noop_qos = get_noop_qos(ctx);
+    const struct ovsrec_qos *noop_qos = get_noop_qos(ctx, qos_table);
     if (!noop_qos) {
         return false;
     }
@@ -232,7 +236,7 @@ set_noop_qos(struct controller_ctx *ctx, struct sset *egress_ifaces)
     const struct ovsrec_port *port;
     size_t count = 0;
 
-    OVSREC_PORT_FOR_EACH (port, ctx->ovs_idl) {
+    OVSREC_PORT_TABLE_FOR_EACH (port, port_table) {
         if (sset_contains(egress_ifaces, port->name)) {
             ovsrec_port_set_qos(port, noop_qos);
             count++;
@@ -524,7 +528,11 @@ consider_localnet_port(const struct sbrec_port_binding *binding_rec,
 }
 
 void
-binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
+binding_run(struct controller_ctx *ctx,
+            const struct ovsrec_port_table *port_table,
+            const struct ovsrec_qos_table *qos_table,
+            const struct sbrec_port_binding_table *port_binding_table,
+            const struct ovsrec_bridge *br_int,
             const struct sbrec_chassis *chassis_rec,
             const struct chassis_index *chassis_index,
             const struct sset *active_tunnels,
@@ -549,7 +557,7 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
     /* Run through each binding record to see if it is resident on this
      * chassis and update the binding accordingly.  This includes both
      * directly connected logical ports and children of those ports. */
-    SBREC_PORT_BINDING_FOR_EACH(binding_rec, ctx->ovnsb_idl) {
+    SBREC_PORT_BINDING_TABLE_FOR_EACH (binding_rec, port_binding_table) {
         consider_local_datapath(ctx, chassis_index,
                                 active_tunnels, chassis_rec, binding_rec,
                                 sset_is_empty(&egress_ifaces) ? NULL :
@@ -561,14 +569,14 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
     /* Run through each binding record to see if it is a localnet port
      * on local datapaths discovered from above loop, and update the
      * corresponding local datapath accordingly. */
-    SBREC_PORT_BINDING_FOR_EACH (binding_rec, ctx->ovnsb_idl) {
+    SBREC_PORT_BINDING_TABLE_FOR_EACH (binding_rec, port_binding_table) {
         if (!strcmp(binding_rec->type, "localnet")) {
             consider_localnet_port(binding_rec, local_datapaths);
         }
     }
 
     if (!sset_is_empty(&egress_ifaces)
-        && set_noop_qos(ctx, &egress_ifaces)) {
+        && set_noop_qos(ctx, port_table, qos_table, &egress_ifaces)) {
         const char *entry;
         SSET_FOR_EACH (entry, &egress_ifaces) {
             setup_qos(entry, &qos_map);
@@ -584,6 +592,7 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
  * required. */
 bool
 binding_cleanup(struct controller_ctx *ctx,
+                const struct sbrec_port_binding_table *port_binding_table,
                 const struct sbrec_chassis *chassis_rec)
 {
     if (!ctx->ovnsb_idl_txn) {
@@ -600,7 +609,7 @@ binding_cleanup(struct controller_ctx *ctx,
 
     const struct sbrec_port_binding *binding_rec;
     bool any_changes = false;
-    SBREC_PORT_BINDING_FOR_EACH(binding_rec, ctx->ovnsb_idl) {
+    SBREC_PORT_BINDING_TABLE_FOR_EACH (binding_rec, port_binding_table) {
         if (binding_rec->chassis == chassis_rec) {
             sbrec_port_binding_set_chassis(binding_rec, NULL);
             any_changes = true;

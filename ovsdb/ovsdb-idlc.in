@@ -238,6 +238,18 @@ extern "C" {
         print("\nextern struct ovsdb_idl_column %s_columns[%s_N_COLUMNS];" % (structName, structName.upper()))
 
         print('''
+const struct %(s)s_table *%(s)s_table_get(const struct ovsdb_idl *);
+const struct %(s)s *%(s)s_table_first(const struct %(s)s_table *);
+
+#define %(S)s_TABLE_FOR_EACH(ROW, TABLE) \\
+        for ((ROW) = %(s)s_table_first(TABLE); \\
+             (ROW); \\
+             (ROW) = %(s)s_next(ROW))
+#define %(S)s_TABLE_FOR_EACH_SAFE(ROW, NEXT, TABLE) \\
+        for ((ROW) = %(s)s_table_first(TABLE); \\
+             (ROW) ? ((NEXT) = %(s)s_next(ROW), 1) : 0; \\
+             (ROW) = (NEXT))
+
 const struct %(s)s *%(s)s_get_for_uuid(const struct ovsdb_idl *, const struct uuid *);
 const struct %(s)s *%(s)s_first(const struct ovsdb_idl *);
 const struct %(s)s *%(s)s_next(const struct %(s)s *);
@@ -434,6 +446,21 @@ static struct %(s)s *
         structName = "%s%s" % (prefix, tableName.lower())
         print("")
         print("/* %s table. */" % (tableName))
+
+        print('''
+const struct %(s)s_table *
+%(s)s_table_get(const struct ovsdb_idl *idl)
+{
+    return (const struct %(s)s_table *) idl;
+}
+
+const struct %(s)s *
+%(s)s_table_first(const struct %(s)s_table *table)
+{
+    const struct ovsdb_idl *idl = (const struct ovsdb_idl *) table;
+    return %(s)s_first(idl);
+}
+''' % {'s': structName})
 
         # Parse functions.
         for columnName, column in sorted_columns(table):
