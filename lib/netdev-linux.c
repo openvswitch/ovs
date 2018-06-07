@@ -600,7 +600,11 @@ static int
 netdev_linux_netnsid_update(struct netdev_linux *netdev)
 {
     if (netnsid_is_unset(netdev->netnsid)) {
-        return netdev_linux_netnsid_update__(netdev);
+        if (netdev_get_class(&netdev->up) == &netdev_tap_class) {
+            netnsid_set_local(&netdev->netnsid);
+        } else {
+            return netdev_linux_netnsid_update__(netdev);
+        }
     }
 
     return 0;
