@@ -507,6 +507,11 @@ struct dpif_flow_stats {
     uint16_t tcp_flags;
 };
 
+struct dpif_flow_attrs {
+    bool offloaded;         /* True if flow is offloaded to HW. */
+    const char *dp_layer;   /* DP layer the flow is handled in. */
+};
+
 void dpif_flow_stats_extract(const struct flow *, const struct dp_packet *packet,
                              long long int used, struct dpif_flow_stats *);
 void dpif_flow_stats_format(const struct dpif_flow_stats *, struct ds *);
@@ -589,7 +594,7 @@ struct dpif_flow {
     bool ufid_present;            /* True if 'ufid' was provided by datapath.*/
     unsigned pmd_id;              /* Datapath poll mode driver id. */
     struct dpif_flow_stats stats; /* Flow statistics. */
-    bool offloaded;               /* True if flow is offloaded */
+    struct dpif_flow_attrs attrs; /* Flow attributes. */
 };
 int dpif_flow_dump_next(struct dpif_flow_dump_thread *,
                         struct dpif_flow *flows, int max_flows);

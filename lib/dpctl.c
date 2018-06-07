@@ -771,7 +771,7 @@ dpctl_dump_dps(int argc OVS_UNUSED, const char *argv[] OVS_UNUSED,
 
 static void
 format_dpif_flow(struct ds *ds, const struct dpif_flow *f, struct hmap *ports,
-                 char *type, struct dpctl_params *dpctl_p)
+                 struct dpctl_params *dpctl_p)
 {
     if (dpctl_p->verbosity && f->ufid_present) {
         odp_format_ufid(&f->ufid, ds);
@@ -782,8 +782,11 @@ format_dpif_flow(struct ds *ds, const struct dpif_flow *f, struct hmap *ports,
     ds_put_cstr(ds, ", ");
 
     dpif_flow_stats_format(&f->stats, ds);
-    if (dpctl_p->verbosity && !type && f->offloaded) {
+    if (dpctl_p->verbosity && f->attrs.offloaded) {
         ds_put_cstr(ds, ", offloaded:yes");
+    }
+    if (dpctl_p->verbosity && f->attrs.dp_layer) {
+        ds_put_format(ds, ", dp:%s", f->attrs.dp_layer);
     }
     ds_put_cstr(ds, ", actions:");
     format_odp_actions(ds, f->actions, f->actions_len, ports);
@@ -793,6 +796,15 @@ static char *supported_dump_types[] = {
     "offloaded",
     "ovs",
 };
+
+static bool
+flow_passes_type_filter(const struct dpif_flow *f, char *type)
+{
+    if (!strcmp(type, "offloaded")) {
+        return f->attrs.offloaded;
+    }
+    return true;
+}
 
 static struct hmap *
 dpctl_get_portno_names(struct dpif *dpif, const struct dpctl_params *dpctl_p)
@@ -938,9 +950,10 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
             }
             pmd_id = f.pmd_id;
         }
-        format_dpif_flow(&ds, &f, portno_names, type, dpctl_p);
-
-        dpctl_print(dpctl_p, "%s\n", ds_cstr(&ds));
+        if (!type || flow_passes_type_filter(&f, type)) {
+            format_dpif_flow(&ds, &f, portno_names, dpctl_p);
+            dpctl_print(dpctl_p, "%s\n", ds_cstr(&ds));
+        }
     }
     dpif_flow_dump_thread_destroy(flow_dump_thread);
     error = dpif_flow_dump_destroy(flow_dump);
@@ -1102,7 +1115,7 @@ dpctl_get_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     }
 
     ds_init(&ds);
-    format_dpif_flow(&ds, &flow, portno_names, NULL, dpctl_p);
+    format_dpif_flow(&ds, &flow, portno_names, dpctl_p);
     dpctl_print(dpctl_p, "%s\n", ds_cstr(&ds));
     ds_destroy(&ds);
 

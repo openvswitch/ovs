@@ -458,6 +458,28 @@ nl_parse_flower_ip(struct nlattr **attrs, struct tc_flower *flower) {
     }
 }
 
+static enum tc_offloaded_state
+nl_get_flower_offloaded_state(struct nlattr **attrs)
+{
+    uint32_t flower_flags = 0;
+
+    if (attrs[TCA_FLOWER_FLAGS]) {
+        flower_flags = nl_attr_get_u32(attrs[TCA_FLOWER_FLAGS]);
+        if (flower_flags & TCA_CLS_FLAGS_NOT_IN_HW) {
+            return TC_OFFLOADED_STATE_NOT_IN_HW;
+        } else if (flower_flags & TCA_CLS_FLAGS_IN_HW) {
+            return TC_OFFLOADED_STATE_IN_HW;
+        }
+    }
+    return TC_OFFLOADED_STATE_UNDEFINED;
+}
+
+static void
+nl_parse_flower_flags(struct nlattr **attrs, struct tc_flower *flower)
+{
+    flower->offloaded_state = nl_get_flower_offloaded_state(attrs);
+}
+
 static const struct nl_policy pedit_policy[] = {
             [TCA_PEDIT_PARMS_EX] = { .type = NL_A_UNSPEC,
                                      .min_len = sizeof(struct tc_pedit),
@@ -942,6 +964,7 @@ nl_parse_flower_options(struct nlattr *nl_options, struct tc_flower *flower)
     nl_parse_flower_vlan(attrs, flower);
     nl_parse_flower_ip(attrs, flower);
     nl_parse_flower_tunnel(attrs, flower);
+    nl_parse_flower_flags(attrs, flower);
     return nl_parse_flower_actions(attrs, flower);
 }
 

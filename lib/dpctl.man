@@ -119,9 +119,9 @@ flow. As an example, \fBfilter='tcp,tp_src=100'\fR will match the
 datapath flow containing '\fBtcp(src=80/0xff00,dst=8080/0xff)\fR'.
 .IP
 If \fBtype=\fItype\fR is specified, only displays flows of a specific type.
-\fItype\fR can be \fBoffloaded\fR to display only offloaded rules or \fBovs\fR
-to display only non-offloaded rules.
-By default both offloaded and non-offloaded rules are displayed.
+\fItype\fR can be \fBoffloaded\fR to display only rules offloaded to the HW
+or \fBovs\fR to display only rules from the OVS tables.
+By default all rules are displayed.
 .
 .IP "\*(DX\fBadd\-flow\fR [\fIdp\fR] \fIflow actions\fR"
 .TP

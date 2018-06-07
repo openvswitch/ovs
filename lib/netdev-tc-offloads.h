@@ -25,6 +25,7 @@ int netdev_tc_flow_dump_destroy(struct netdev_flow_dump *);
 bool netdev_tc_flow_dump_next(struct netdev_flow_dump *, struct match *,
                               struct nlattr **actions,
                               struct dpif_flow_stats *,
+                              struct dpif_flow_attrs *,
                               ovs_u128 *ufid,
                               struct ofpbuf *rbuffer,
                               struct ofpbuf *wbuffer);
@@ -34,7 +35,8 @@ int netdev_tc_flow_put(struct netdev *, struct match *,
                        struct dpif_flow_stats *);
 int netdev_tc_flow_get(struct netdev *, struct match *,
                        struct nlattr **actions, const ovs_u128 *,
-                       struct dpif_flow_stats *, struct ofpbuf *);
+                       struct dpif_flow_stats *,
+                       struct dpif_flow_attrs *, struct ofpbuf *);
 int netdev_tc_flow_del(struct netdev *, const ovs_u128 *,
                         struct dpif_flow_stats *);
 int netdev_tc_init_flow_api(struct netdev *);
