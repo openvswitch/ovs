@@ -950,6 +950,7 @@ netdev_linux_construct_tap(struct netdev *netdev_)
         goto error_close;
     }
 
+    netdev->present = true;
     return 0;
 
 error_close:
