@@ -20,13 +20,14 @@ struct chassis_index;
 struct controller_ctx;
 struct hmap;
 struct ovsdb_idl;
+struct ovsdb_idl_index;
 struct ovsrec_bridge;
 struct ovsrec_interface_table;
 struct sbrec_chassis;
 struct sset;
 
 void bfd_register_ovs_idl(struct ovsdb_idl *);
-void bfd_run(struct controller_ctx *ctx,
+void bfd_run(struct ovsdb_idl_index *sbrec_port_binding_by_datapath,
              const struct ovsrec_interface_table *interface_table,
              const struct ovsrec_bridge *br_int,
              const struct sbrec_chassis *chassis_rec,

@@ -26,6 +26,7 @@ struct chassis_index;
 struct controller_ctx;
 struct hmap;
 struct lport_index;
+struct ovsdb_idl_index;
 struct ovsrec_bridge;
 struct sbrec_chassis;
 struct sbrec_dns_table;
@@ -33,6 +34,10 @@ struct sbrec_mac_binding_table;
 
 void pinctrl_init(void);
 void pinctrl_run(struct controller_ctx *,
+                 struct ovsdb_idl_index *sbrec_datapath_binding_by_key,
+                 struct ovsdb_idl_index *sbrec_port_binding_by_datapath,
+                 struct ovsdb_idl_index *sbrec_port_binding_by_key,
+                 struct ovsdb_idl_index *sbrec_port_binding_by_name,
                  const struct sbrec_dns_table *,
                  const struct sbrec_mac_binding_table *,
                  const struct ovsrec_bridge *, const struct sbrec_chassis *,

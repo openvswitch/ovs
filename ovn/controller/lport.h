@@ -17,13 +17,11 @@
 #define OVN_LPORT_H 1
 
 #include <stdint.h>
-#include "lib/uuid.h"
-#include "openvswitch/hmap.h"
-#include "openvswitch/list.h"
 
-struct ovsdb_idl;
+struct ovsdb_idl_index;
 struct sbrec_chassis;
 struct sbrec_datapath_binding;
+struct sbrec_multicast_group;
 struct sbrec_port_binding;
 
 
@@ -34,22 +32,21 @@ struct sbrec_port_binding;
  * look up data based on values of its fields.  It's not that smart (yet), so
  * instead we define our own indexes.
  */
-
-
-const struct sbrec_datapath_binding *datapath_lookup_by_key(struct ovsdb_idl *,
-                                                            uint64_t dp_key);
 
 const struct sbrec_port_binding *lport_lookup_by_name(
-    struct ovsdb_idl *, const char *name);
-const struct sbrec_port_binding *lport_lookup_by_key(
-    struct ovsdb_idl *, uint64_t dp_key, uint64_t port_key);
-
-
-const struct sbrec_multicast_group *mcgroup_lookup_by_dp_name(
-    struct ovsdb_idl *idl,
-    const struct sbrec_datapath_binding *,
+    struct ovsdb_idl_index *sbrec_port_binding_by_name,
     const char *name);
 
-void lport_init(struct ovsdb_idl *idl);
+const struct sbrec_port_binding *lport_lookup_by_key(
+    struct ovsdb_idl_index *sbrec_datapath_binding_by_key,
+    struct ovsdb_idl_index *sbrec_port_binding_by_key,
+    uint64_t dp_key, uint64_t port_key);
+
+const struct sbrec_datapath_binding *datapath_lookup_by_key(
+    struct ovsdb_idl_index *sbrec_datapath_binding_by_key, uint64_t dp_key);
+
+const struct sbrec_multicast_group *mcgroup_lookup_by_dp_name(
+    struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath,
+    const struct sbrec_datapath_binding *, const char *name);
 
 #endif /* ovn/lport.h */

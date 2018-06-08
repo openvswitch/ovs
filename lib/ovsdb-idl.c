@@ -361,11 +361,7 @@ ovsdb_idl_table_from_class(const struct ovsdb_idl *,
 static bool ovsdb_idl_track_is_set(struct ovsdb_idl_table *table);
 static void ovsdb_idl_send_cond_change(struct ovsdb_idl *idl);
 
-static struct ovsdb_idl_index *ovsdb_idl_create_index_(const struct
-                                                       ovsdb_idl_table *table,
-                                                       size_t allocated_cols);
-static void
- ovsdb_idl_destroy_indexes(struct ovsdb_idl_table *table);
+static void ovsdb_idl_destroy_indexes(struct ovsdb_idl_table *);
 static void ovsdb_idl_add_to_indexes(const struct ovsdb_idl_row *);
 static void ovsdb_idl_remove_from_indexes(const struct ovsdb_idl_row *);
 
@@ -405,7 +401,7 @@ ovsdb_idl_db_init(struct ovsdb_idl_db *db, const struct ovsdb_idl_class *class,
         memset(table->modes, default_mode, tc->n_columns);
         table->need_table = false;
         shash_init(&table->columns);
-        shash_init(&table->indexes);
+        ovs_list_init(&table->indexes);
         for (size_t j = 0; j < tc->n_columns; j++) {
             const struct ovsdb_idl_column *column = &tc->columns[j];
 
@@ -2461,44 +2457,6 @@ ovsdb_idl_row_unparse(struct ovsdb_idl_row *row)
  * iterate over a subset of rows in a defined order.
  */
 
-static struct ovsdb_idl_index *
-ovsdb_idl_db_create_index(struct ovsdb_idl_db *db,
-                          const struct ovsdb_idl_table_class *tc,
-                          const char *index_name)
-{
-    struct ovsdb_idl_index *index;
-    size_t i;
-
-    for (i = 0; i < db->class_->n_tables; i++) {
-        struct ovsdb_idl_table *table = &db->tables[i];
-
-        if (table->class_ == tc) {
-            index = ovsdb_idl_create_index_(table, 1);
-            if (!shash_add_once(&table->indexes, index_name, index)) {
-                VLOG_ERR("Duplicate index name '%s' in table %s",
-                         index_name, table->class_->name);
-                return NULL;
-            }
-            index->index_name = index_name;
-            return index;
-        }
-    }
-    OVS_NOT_REACHED();
-    return NULL;
-}
-
-/* Creates a new index with the provided name, attached to the given idl and
- * table. Note that all indexes must be created and indexing columns added
- * before the first call to ovsdb_idl_run() is made.
- */
-struct ovsdb_idl_index *
-ovsdb_idl_create_index(struct ovsdb_idl *idl,
-                       const struct ovsdb_idl_table_class *tc,
-                       const char *index_name)
-{
-    return ovsdb_idl_db_create_index(&idl->data, tc, index_name);
-}
-
 /* Generic comparator that can compare each index, using the custom
  * configuration (an struct ovsdb_idl_index) passed to it.
  * Not intended for direct usage.
@@ -2533,7 +2491,7 @@ ovsdb_idl_index_generic_comparer(const void *a,
         }
 
         if (val) {
-            return val * index->columns[i].sorting_order;
+            return index->columns[i].order == OVSDB_INDEX_ASC ? val : -val;
         }
     }
 
@@ -2558,34 +2516,73 @@ ovsdb_idl_index_generic_comparer(const void *a,
 }
 
 static struct ovsdb_idl_index *
-ovsdb_idl_create_index_(const struct ovsdb_idl_table *table,
-                        size_t allocated_cols)
+ovsdb_idl_db_index_create(struct ovsdb_idl_db *db,
+                          const struct ovsdb_idl_index_column *columns,
+                          size_t n)
 {
-    struct ovsdb_idl_index *index;
+    ovs_assert(n > 0);
 
-    index = xmalloc(sizeof (struct ovsdb_idl_index));
-    index->n_columns = 0;
-    index->alloc_columns = allocated_cols;
+    struct ovsdb_idl_index *index = xzalloc(sizeof *index);
+
+    index->table = ovsdb_idl_table_from_column(db, columns[0].column);
+    for (size_t i = 0; i < n; i++) {
+        const struct ovsdb_idl_index_column *c = &columns[i];
+        ovs_assert(ovsdb_idl_table_from_column(db, c->column) == index->table);
+        ovs_assert(*ovsdb_idl_db_get_mode(db, c->column) & OVSDB_IDL_MONITOR);
+    }
+
+    index->columns = xmemdup(columns, n * sizeof *columns);
+    index->n_columns = n;
     index->skiplist = skiplist_create(ovsdb_idl_index_generic_comparer, index);
-    index->columns = xmalloc(allocated_cols *
-                             sizeof (struct ovsdb_idl_index_column));
-    index->ins_del = false;
-    index->table = table;
+
+    ovs_list_push_back(&index->table->indexes, &index->node);
+
     return index;
+}
+
+/* Creates a new index for the given 'idl' and with the 'n' specified
+ * 'columns'.
+ *
+ * All indexes must be created before the first call to ovsdb_idl_run(). */
+struct ovsdb_idl_index *
+ovsdb_idl_index_create(struct ovsdb_idl *idl,
+                       const struct ovsdb_idl_index_column *columns,
+                       size_t n)
+{
+    return ovsdb_idl_db_index_create(&idl->data, columns, n);
+}
+
+struct ovsdb_idl_index *
+ovsdb_idl_index_create1(struct ovsdb_idl *idl,
+                        const struct ovsdb_idl_column *column1)
+{
+    const struct ovsdb_idl_index_column columns[] = {
+        { .column = column1 },
+    };
+    return ovsdb_idl_index_create(idl, columns, ARRAY_SIZE(columns));
+}
+
+struct ovsdb_idl_index *
+ovsdb_idl_index_create2(struct ovsdb_idl *idl,
+                        const struct ovsdb_idl_column *column1,
+                        const struct ovsdb_idl_column *column2)
+{
+    const struct ovsdb_idl_index_column columns[] = {
+        { .column = column1 },
+        { .column = column2 },
+    };
+    return ovsdb_idl_index_create(idl, columns, ARRAY_SIZE(columns));
 }
 
 static void
 ovsdb_idl_destroy_indexes(struct ovsdb_idl_table *table)
 {
-    struct ovsdb_idl_index *index;
-    struct shash_node *node;
-
-    SHASH_FOR_EACH (node, &(table->indexes)) {
-        index = node->data;
+    struct ovsdb_idl_index *index, *next;
+    LIST_FOR_EACH_SAFE (index, next, node, &table->indexes) {
         skiplist_destroy(index->skiplist, NULL);
         free(index->columns);
+        free(index);
     }
-    shash_destroy_free_data(&table->indexes);
 }
 
 static void
@@ -2593,10 +2590,7 @@ ovsdb_idl_add_to_indexes(const struct ovsdb_idl_row *row)
 {
     struct ovsdb_idl_table *table = row->table;
     struct ovsdb_idl_index *index;
-    struct shash_node *node;
-
-    SHASH_FOR_EACH (node, &(table->indexes)) {
-        index = node->data;
+    LIST_FOR_EACH (index, node, &table->indexes) {
         index->ins_del = true;
         skiplist_insert(index->skiplist, row);
         index->ins_del = false;
@@ -2608,110 +2602,17 @@ ovsdb_idl_remove_from_indexes(const struct ovsdb_idl_row *row)
 {
     struct ovsdb_idl_table *table = row->table;
     struct ovsdb_idl_index *index;
-    struct shash_node *node;
-
-    SHASH_FOR_EACH (node, &(table->indexes)) {
-        index = node->data;
+    LIST_FOR_EACH (index, node, &table->indexes) {
         index->ins_del = true;
         skiplist_delete(index->skiplist, row);
         index->ins_del = false;
     }
 }
 
-/* Adds a column to an existing index (note that columns can only be added to
- * an index before the first call to ovsdb_idl_run()). The 'order' parameter
- * specifies whether the sort order should be ascending (OVSDB_INDEX_ASC) or
- * descending (OVSDB_INDEX_DESC). The 'custom_comparer' parameter, if non-NULL,
- * contains a pointer to a custom comparison function. A default comparison
- * function is used if a custom comparison function is not provided (the
- * default comparison function can only be used for columns of type string,
- * uuid, integer, real, or boolean).
- */
+/* Writes a datum in an ovsdb_idl_row, and updates the corresponding field in
+ * the table record.  Not intended for direct usage. */
 void
-ovsdb_idl_index_add_column(struct ovsdb_idl_index *index,
-                           const struct ovsdb_idl_column *column,
-                           int order, column_comparator *custom_comparer)
-{
-    /* Check that the column or table is tracked */
-    if (!index->table->need_table &&
-        !((OVSDB_IDL_MONITOR | OVSDB_IDL_ALERT) &
-          *ovsdb_idl_db_get_mode(index->table->db, column))) {
-        VLOG_ERR("Can't add unmonitored column '%s' at index '%s' in "
-                 "table '%s'.",
-                 column->name, index->index_name, index->table->class_->name);
-    }
-    if (!ovsdb_type_is_scalar(&column->type) && !custom_comparer) {
-        VLOG_WARN("Comparing non-scalar values.");
-    }
-
-    /* Allocate more memory for column configuration */
-    if (index->n_columns == index->alloc_columns) {
-        index->alloc_columns++;
-        index->columns = xrealloc(index->columns,
-                                  index->alloc_columns *
-                                  sizeof(struct ovsdb_idl_index_column));
-    }
-
-    /* Append column to index */
-    int i = index->n_columns;
-
-    index->columns[i].column = column;
-    index->columns[i].comparer = custom_comparer ? custom_comparer : NULL;
-    if (order == OVSDB_INDEX_ASC) {
-        index->columns[i].sorting_order = OVSDB_INDEX_ASC;
-    } else {
-        index->columns[i].sorting_order = OVSDB_INDEX_DESC;
-    }
-    index->n_columns++;
-}
-
-static bool
-ovsdb_idl_db_initialize_cursor(struct ovsdb_idl_db *db,
-                               const struct ovsdb_idl_table_class *tc,
-                               const char *index_name,
-                               struct ovsdb_idl_index_cursor *cursor)
-{
-    size_t i;
-
-    for (i = 0; i < db->class_->n_tables; i++) {
-        struct ovsdb_idl_table *table = &db->tables[i];
-
-        if (table->class_ == tc) {
-            struct shash_node *node = shash_find(&table->indexes, index_name);
-
-            if (!node || !node->data) {
-                VLOG_ERR("Cursor initialization failed, "
-                         "index %s at table %s does not exist.",
-                         index_name, tc->name);
-                cursor->index = NULL;
-                cursor->position = NULL;
-                return false;
-            }
-            cursor->index = node->data;
-            cursor->position = skiplist_first(cursor->index->skiplist);
-            return true;
-        }
-    }
-    VLOG_ERR("Cursor initialization failed, "
-             "index %s at table %s does not exist.", index_name, tc->name);
-    return false;
-}
-
-bool
-ovsdb_idl_initialize_cursor(struct ovsdb_idl *idl,
-                            const struct ovsdb_idl_table_class *tc,
-                            const char *index_name,
-                            struct ovsdb_idl_index_cursor *cursor)
-{
-    return ovsdb_idl_db_initialize_cursor(&idl->data, tc, index_name, cursor);
-}
-
-/* ovsdb_idl_index_write_ writes a datum in an ovsdb_idl_row,
- * and updates the corresponding field in the table record.
- * Not intended for direct usage.
- */
-void
-ovsdb_idl_index_write_(struct ovsdb_idl_row *const_row,
+ovsdb_idl_index_write(struct ovsdb_idl_row *const_row,
                        const struct ovsdb_idl_column *column,
                        struct ovsdb_datum *datum,
                        const struct ovsdb_idl_table_class *class)
@@ -2739,7 +2640,7 @@ static const struct uuid index_row_uuid = {
 
 /* Check if a row is an index row */
 static bool
-is_index_row(struct ovsdb_idl_row *row)
+is_index_row(const struct ovsdb_idl_row *row)
 {
     return uuid_equals(&row->uuid, &index_row_uuid);
 }
@@ -2748,15 +2649,15 @@ is_index_row(struct ovsdb_idl_row *row)
  * Not intended for direct usage.
  */
 struct ovsdb_idl_row *
-ovsdb_idl_index_init_row(struct ovsdb_idl * idl,
-                         const struct ovsdb_idl_table_class *class)
+ovsdb_idl_index_init_row(struct ovsdb_idl_index *index)
 {
+    const struct ovsdb_idl_table_class *class = index->table->class_;
     struct ovsdb_idl_row *row = xzalloc(class->allocation_size);
     class->row_init(row);
     row->uuid = index_row_uuid;
     row->new_datum = xmalloc(class->n_columns * sizeof *row->new_datum);
     row->written = bitmap_allocate(class->n_columns);
-    row->table = ovsdb_idl_table_from_class(idl, class);
+    row->table = index->table;
     /* arcs are not used for index row, but it doesn't harm to initialize */
     ovs_list_init(&row->src_arcs);
     ovs_list_init(&row->dst_arcs);
@@ -2768,13 +2669,14 @@ ovsdb_idl_index_init_row(struct ovsdb_idl * idl,
  * generated by ovsdb-idlc.
  */
 void
-ovsdb_idl_index_destroy_row__(const struct ovsdb_idl_row *row_)
+ovsdb_idl_index_destroy_row(const struct ovsdb_idl_row *row_)
 {
     struct ovsdb_idl_row *row = CONST_CAST(struct ovsdb_idl_row *, row_);
     const struct ovsdb_idl_table_class *class = row->table->class_;
     const struct ovsdb_idl_column *c;
     size_t i;
 
+    ovs_assert(is_index_row(row_));
     ovs_assert(ovs_list_is_empty(&row_->src_arcs));
     ovs_assert(ovs_list_is_empty(&row_->dst_arcs));
     BITMAP_FOR_EACH_1 (i, class->n_columns, row->written) {
@@ -2788,68 +2690,60 @@ ovsdb_idl_index_destroy_row__(const struct ovsdb_idl_row *row_)
     free(row);
 }
 
-/* Moves the cursor to the first entry in the index. Returns a pointer to the
- * corresponding ovsdb_idl_row, or NULL if the index list is empy.
- */
 struct ovsdb_idl_row *
-ovsdb_idl_index_first(struct ovsdb_idl_index_cursor *cursor)
+ovsdb_idl_index_find(struct ovsdb_idl_index *index,
+                     const struct ovsdb_idl_row *target)
 {
-    cursor->position = skiplist_first(cursor->index->skiplist);
-    return ovsdb_idl_index_data(cursor);
+    return skiplist_get_data(skiplist_find(index->skiplist, target));
 }
 
-/* Moves the cursor to the next record in the index list.
- */
-struct ovsdb_idl_row *
-ovsdb_idl_index_next(struct ovsdb_idl_index_cursor *cursor)
+struct ovsdb_idl_cursor
+ovsdb_idl_cursor_first(struct ovsdb_idl_index *index)
 {
-    if (!cursor->position) {
-        return NULL;
-    }
-    cursor->position = skiplist_next(cursor->position);
-    return ovsdb_idl_index_data(cursor);
- }
+    struct skiplist_node *node = skiplist_first(index->skiplist);
+    return (struct ovsdb_idl_cursor) { index, node };
+}
 
-/* Returns the ovsdb_idl_row pointer corresponding to the record at the
- * current cursor location.
- */
+struct ovsdb_idl_cursor
+ovsdb_idl_cursor_first_eq(struct ovsdb_idl_index *index,
+                          const struct ovsdb_idl_row *target)
+{
+    struct skiplist_node *node = skiplist_find(index->skiplist, target);
+    return (struct ovsdb_idl_cursor) { index, node };
+}
+
+struct ovsdb_idl_cursor
+ovsdb_idl_cursor_first_ge(struct ovsdb_idl_index *index,
+                          const struct ovsdb_idl_row *target)
+{
+    struct skiplist_node *node = (target
+                                  ? skiplist_forward_to(index->skiplist,
+                                                        target)
+                                  : skiplist_first(index->skiplist));
+    return (struct ovsdb_idl_cursor) { index, node };
+}
+
+void
+ovsdb_idl_cursor_next(struct ovsdb_idl_cursor *cursor)
+{
+    cursor->position = skiplist_next(cursor->position);
+}
+
+void
+ovsdb_idl_cursor_next_eq(struct ovsdb_idl_cursor *cursor)
+{
+    struct ovsdb_idl_row *data = skiplist_get_data(cursor->position);
+    struct skiplist_node *next_position = skiplist_next(cursor->position);
+    struct ovsdb_idl_row *next_data = skiplist_get_data(next_position);
+    cursor->position = (!ovsdb_idl_index_compare(cursor->index,
+                                                 data, next_data)
+                        ? next_position : NULL);
+}
+
 struct ovsdb_idl_row *
-ovsdb_idl_index_data(struct ovsdb_idl_index_cursor *cursor)
+ovsdb_idl_cursor_data(struct ovsdb_idl_cursor *cursor)
 {
     return skiplist_get_data(cursor->position);
-}
-
-/* Moves the cursor to the first entry in the index matching the specified
- * value. If 'value' is NULL, the cursor is moved to the last entry in the
- * list. Returns a pointer to the corresponding ovsdb_idl_row or NULL.
- */
-struct ovsdb_idl_row *
-ovsdb_idl_index_find(struct ovsdb_idl_index_cursor *cursor,
-                     struct ovsdb_idl_row *value)
-{
-    if (value) {
-        cursor->position = skiplist_find(cursor->index->skiplist, value);
-    } else {
-        cursor->position = skiplist_first(cursor->index->skiplist);
-    }
-    return ovsdb_idl_index_data(cursor);
-}
-
-/* Moves the cursor to the first entry in the index with a value greater than
- * or equal to the given value. If 'value' is NULL, the cursor is moved to the
- * first entry in the index.  Returns a pointer to the corresponding
- * ovsdb_idl_row or NULL if such a row does not exist.
- */
-struct ovsdb_idl_row *
-ovsdb_idl_index_forward_to(struct ovsdb_idl_index_cursor *cursor,
-                           struct ovsdb_idl_row *value)
-{
-    if (value) {
-        cursor->position = skiplist_forward_to(cursor->index->skiplist, value);
-    } else {
-        cursor->position = skiplist_first(cursor->index->skiplist);
-    }
-    return ovsdb_idl_index_data(cursor);
 }
 
 /* Returns the result of comparing two rows using the comparison function
@@ -2862,11 +2756,12 @@ ovsdb_idl_index_forward_to(struct ovsdb_idl_index_cursor *cursor,
  * greater than any other value, and NULL == NULL.
  */
 int
-ovsdb_idl_index_compare(struct ovsdb_idl_index_cursor *cursor,
-                        struct ovsdb_idl_row *a, struct ovsdb_idl_row *b)
+ovsdb_idl_index_compare(struct ovsdb_idl_index *index,
+                        const struct ovsdb_idl_row *a,
+                        const struct ovsdb_idl_row *b)
 {
     if (a && b) {
-        return ovsdb_idl_index_generic_comparer(a, b, cursor->index);
+        return ovsdb_idl_index_generic_comparer(a, b, index);
     } else if (!a && !b) {
         return 0;
     } else if (a) {

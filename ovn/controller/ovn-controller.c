@@ -556,46 +556,6 @@ ctrl_register_ovs_idl(struct ovsdb_idl *ovs_idl)
     physical_register_ovs_idl(ovs_idl);
 }
 
-static void
-create_ovnsb_indexes(struct ovsdb_idl *ovnsb_idl)
-{
-    struct ovsdb_idl_index *index;
-
-    /* Index multicast group table by name and datapath. */
-    index = ovsdb_idl_create_index(ovnsb_idl, &sbrec_table_multicast_group,
-                                   "multicast-group-by-dp-name");
-    ovsdb_idl_index_add_column(index, &sbrec_multicast_group_col_name,
-                               OVSDB_INDEX_ASC, NULL);
-    ovsdb_idl_index_add_column(index, &sbrec_multicast_group_col_datapath,
-                               OVSDB_INDEX_ASC, NULL);
-
-    /* Index logical port table by name. */
-    index = ovsdb_idl_create_index(ovnsb_idl, &sbrec_table_port_binding,
-                                   "lport-by-name");
-    ovsdb_idl_index_add_column(index, &sbrec_port_binding_col_logical_port,
-                               OVSDB_INDEX_ASC, NULL);
-
-    /* Index logical port table by tunnel key and datapath. */
-    index = ovsdb_idl_create_index(ovnsb_idl, &sbrec_table_port_binding,
-                                   "lport-by-key");
-    ovsdb_idl_index_add_column(index, &sbrec_port_binding_col_tunnel_key,
-                               OVSDB_INDEX_ASC, NULL);
-    ovsdb_idl_index_add_column(index, &sbrec_port_binding_col_datapath,
-                               OVSDB_INDEX_ASC, NULL);
-
-    /* Index logical port table by datapath. */
-    index = ovsdb_idl_create_index(ovnsb_idl, &sbrec_table_port_binding,
-                                   "lport-by-datapath");
-    ovsdb_idl_index_add_column(index, &sbrec_port_binding_col_datapath,
-                               OVSDB_INDEX_ASC, NULL);
-
-    /* Index datapath binding table by tunnel key. */
-    index = ovsdb_idl_create_index(ovnsb_idl, &sbrec_table_datapath_binding,
-                                   "dpath-by-key");
-    ovsdb_idl_index_add_column(index, &sbrec_datapath_binding_col_tunnel_key,
-                               OVSDB_INDEX_ASC, NULL);
-}
-
 int
 main(int argc, char *argv[])
 {
@@ -643,8 +603,23 @@ main(int argc, char *argv[])
         ovsdb_idl_create(ovnsb_remote, &sbrec_idl_class, true, true));
     ovsdb_idl_set_leader_only(ovnsb_idl_loop.idl, false);
 
-    create_ovnsb_indexes(ovnsb_idl_loop.idl);
-    lport_init(ovnsb_idl_loop.idl);
+    struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath
+        = ovsdb_idl_index_create2(ovnsb_idl_loop.idl,
+                                  &sbrec_multicast_group_col_name,
+                                  &sbrec_multicast_group_col_datapath);
+    struct ovsdb_idl_index *sbrec_port_binding_by_name
+        = ovsdb_idl_index_create1(ovnsb_idl_loop.idl,
+                                  &sbrec_port_binding_col_logical_port);
+    struct ovsdb_idl_index *sbrec_port_binding_by_key
+        = ovsdb_idl_index_create2(ovnsb_idl_loop.idl,
+                                  &sbrec_port_binding_col_tunnel_key,
+                                  &sbrec_port_binding_col_datapath);
+    struct ovsdb_idl_index *sbrec_port_binding_by_datapath
+        = ovsdb_idl_index_create1(ovnsb_idl_loop.idl,
+                                  &sbrec_port_binding_col_datapath);
+    struct ovsdb_idl_index *sbrec_datapath_binding_by_key
+        = ovsdb_idl_index_create1(ovnsb_idl_loop.idl,
+                                  &sbrec_datapath_binding_col_tunnel_key);
 
     ovsdb_idl_omit_alert(ovnsb_idl_loop.idl, &sbrec_chassis_col_nb_cfg);
     update_sb_monitors(ovnsb_idl_loop.idl, NULL, NULL, NULL);
@@ -727,6 +702,9 @@ main(int argc, char *argv[])
                        sbrec_chassis_table_get(ctx.ovnsb_idl), chassis_id);
             bfd_calculate_active_tunnels(br_int, &active_tunnels);
             binding_run(&ctx,
+                        sbrec_datapath_binding_by_key,
+                        sbrec_port_binding_by_datapath,
+                        sbrec_port_binding_by_name,
                         ovsrec_port_table_get(ctx.ovs_idl),
                         ovsrec_qos_table_get(ctx.ovs_idl),
                         sbrec_port_binding_table_get(ctx.ovnsb_idl),
@@ -752,7 +730,12 @@ main(int argc, char *argv[])
             enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int,
                                                          &pending_ct_zones);
 
-            pinctrl_run(&ctx, sbrec_dns_table_get(ctx.ovnsb_idl),
+            pinctrl_run(&ctx,
+                        sbrec_datapath_binding_by_key,
+                        sbrec_port_binding_by_datapath,
+                        sbrec_port_binding_by_key,
+                        sbrec_port_binding_by_name,
+                        sbrec_dns_table_get(ctx.ovnsb_idl),
                         sbrec_mac_binding_table_get(ctx.ovnsb_idl),
                         br_int, chassis, &chassis_index,
                         &local_datapaths, &active_tunnels);
@@ -766,7 +749,8 @@ main(int argc, char *argv[])
                     commit_ct_zones(br_int, &pending_ct_zones);
 
                     struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
-                    lflow_run(&ctx,
+                    lflow_run(sbrec_multicast_group_by_name_datapath,
+                              sbrec_port_binding_by_name,
                               sbrec_dhcp_options_table_get(ctx.ovnsb_idl),
                               sbrec_dhcpv6_options_table_get(ctx.ovnsb_idl),
                               sbrec_logical_flow_table_get(ctx.ovnsb_idl),
@@ -777,13 +761,13 @@ main(int argc, char *argv[])
                               &flow_table, &group_table, &meter_table);
 
                     if (chassis_id) {
-                        bfd_run(&ctx,
+                        bfd_run(sbrec_port_binding_by_datapath,
                                 ovsrec_interface_table_get(ctx.ovs_idl),
                                 br_int, chassis, &local_datapaths,
                                 &chassis_index);
                     }
                     physical_run(
-                        &ctx,
+                        sbrec_port_binding_by_name,
                         sbrec_multicast_group_table_get(ctx.ovnsb_idl),
                         sbrec_port_binding_table_get(ctx.ovnsb_idl),
                         mff_ovn_geneve,

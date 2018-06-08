@@ -89,21 +89,16 @@ following options:
 -  Use a custom ordering comparator (eg: treat a string column like a IP,
    or sort by the value of the "config" key in a map column).
 
-For querying the index the user needs to create a cursor. That cursor
-points to a position in the index. The user can then use the cursor to
-perform lookups (by key) and/or get the subsequent rows. The user can
-also compare the current value of the cursor to a record.
+Indexes can be searched for matches based on the key.  They can also
+be iterated across a range of keys or in full.
 
 For lookups, the user needs to provide a key to be used for locating the
-specific rows that meet his criteria. This key could be an IP address, a
-MAC address, an ACL rule, etc. When the information is found in the data
-structure the user's cursor is updated to point to the row. If several
-rows match the query then the user can easily get the next row in sequence
-by updating the cursor.
+specific rows that meet his criteria. This key could be an IP address, a MAC
+address, an ACL rule, etc. If several rows match the query then the user can
+easily iterate over all of the matches.
 
 For accessing data in lexicographic order, the user can use the ranged
-iterators. Those iterators need a cursor and "from" and "to" values to
-define a range.
+iterators, which use "from" and "to" values to define a range.
 
 The indexes maintain a pointer to the row in the local replica, avoiding
 the need to make additional copies of the data and thereby minimizing any
@@ -153,10 +148,10 @@ C IDL API
 Index Creation
 ~~~~~~~~~~~~~~
 
-Each index must be created with the function ``ovsdb_idl_create_index()``.
-After an index has been created the user can add one or more columns to it,
-using ``ovsdb_idl_index_add_column``. All indexes must be created with all
-columns added BEFORE the first call to ovsdb\_idl\_run().
+Each index must be created with the function ``ovsdb_idl_index_create()`` or
+one of the simpler convenience functions ``ovsdb_idl_index_create1()`` or
+``ovsdb_idl_index_create2()``.  All indexes must be created before the first
+call to ovsdb\_idl\_run().
 
 Index Creation Example
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -185,19 +180,15 @@ Index Creation Example
         ovsdb_idl_add_column(*idl, &ovsrec_test_col_enumField);
         ovsdb_idl_add_column(*idl, &ovsrec_test_col_boolField);
 
-        /* Create an index.
-         * This index is created using (stringField, numericField) as key.
-         * Also shows the usage of some arguments of add column, although
-         * for a string column it is unnecesary to pass a custom comparator.
-         */
-        struct ovsdb_idl_index *index;
-        index = ovsdb_idl_create_index(*idl, &ovsrec_table_test,
-                                       "by_stringField");
-        ovsdb_idl_index_add_column(index, &ovsrec_test_col_stringField,
-                                   OVSDB_INDEX_ASC, stringField_comparator);
-        ovsdb_idl_index_add_column(index, &ovsrec_test_col_numericField,
-                                   OVSDB_INDEX_DESC, NULL);
-        /* Done. */
+        struct ovsdb_idl_index_column columns[] = {
+            { .column = &ovsrec_test_col_stringField,
+              .comparer = stringField_comparator },
+            { .column = &ovsrec_test_col_numericField, 
+              .order = OVSDB_INDEX_DESC },
+        };
+        struct ovsdb_idl_index *index = ovsdb_idl_create_index(
+            *idl, columns, ARRAY_SIZE(columns));
+        ...
     }
 
 Index Usage
@@ -210,29 +201,21 @@ The recommended way to do queries is using a "ranged foreach", an "equal
 foreach" or a "full foreach" over an index. The mechanism works as
 follows:
 
-1. Create a cursor.
-2. Create index row objects with index columns set to desired search key
+1. Create index row objects with index columns set to desired search key
    values (one is needed for equality iterators, two for range iterators,
    a search key is not needed for the full index iterator).
-3. Pass the cursor, an iteration variable, and the key values to the iterator.
-4. Use the values within iterator loop.
+2. Pass the index, an iteration variable, and the index row object to the
+   iterator.
+3. Use the values within iterator loop.
 
-To create the cursor for the example, we use the following code:
-
-::
-
-    ovsdb_idl_index_cursor my_cursor;
-    ovsdb_idl_initialize_cursor(idl, &ovsrec_table_test, "by_stringField",
-                                &my_cursor);
-
-Now the cursor can be used to perform queries. The library implements three
-different iterators: a range iterator, an equality iterator and a full index
-iterator. The range iterator receives two values and iterates over all
-rows with values that are within that range (inclusive of the two values
-defining the range). The equality iterator iterates over all rows that exactly
-match the value passed. The full index iterator iterates over all rows in the
-index, in an order determined by the comparison function and configured
-direction (ascending or descending).
+The library implements three different iterators: a range iterator, an
+equality iterator and a full index iterator. The range iterator
+receives two values and iterates over all rows with values that are
+within that range (inclusive of the two values defining the range). The
+equality iterator iterates over all rows that exactly match the value
+passed. The full index iterator iterates over all rows in the index, in
+an order determined by the comparison function and configured direction
+(ascending or descending).
 
 Note that indexes are *sorted by the "concatenation" of the values in
 all indexed columns*, so the ranged iterator returns all the values
@@ -248,41 +231,40 @@ these iterators follows:
     /*
      * Equality iterator; iterates over all the records equal to "value".
      */
-    ovsrec_test *value, *record;
-    value = ovsrec_test_index_init_row(idl, &ovsrec_table_test);
-    ovsrec_test_index_set_stringField(value, "hello world");
-    OVSREC_TEST_FOR_EACH_EQUAL (record, &my_cursor, value) {
+    struct ovsrec_test *target = ovsrec_test_index_init_row(index);
+    ovsrec_test_index_set_stringField(target, "hello world");
+    struct ovsrec_test *record;
+    OVSREC_TEST_FOR_EACH_EQUAL (record, target, index) {
         /* Can return zero, one or more records */
         assert(strcmp(record->stringField, "hello world") == 0);
         printf("Found one record with %s", record->stringField);
     }
-    ovsrec_test_index_destroy_row(value);
+    ovsrec_test_index_destroy_row(target);
 
     /*
      * Range iterator; iterates over all records between two values
      * (inclusive).
      */
-    ovsrec_test *value_from, *value_to;
-    value_from = ovsrec_test_index_init_row(idl, &ovsrec_table_test);
-    value_to = ovsrec_test_index_init_row(idl, &ovsrec_table_test);
+    struct ovsrec_test *from = ovsrec_test_index_init_row(index);
+    struct ovsrec_test *to = ovsrec_test_index_init_row(index);
 
-    ovsrec_test_index_set_stringField(value_from, "aaa");
-    ovsrec_test_index_set_stringField(value_to, "mmm");
-    OVSREC_TEST_FOR_EACH_RANGE (record, &my_cursor, value_from, value_to) {
+    ovsrec_test_index_set_stringField(from, "aaa");
+    ovsrec_test_index_set_stringField(to, "mmm");
+    OVSREC_TEST_FOR_EACH_RANGE (record, from, to, index) {
         /* Can return zero, one or more records */
         assert(strcmp("aaa", record->stringField) <= 0);
         assert(strcmp(record->stringField, "mmm") <= 0);
         printf("Found one record with %s", record->stringField);
     }
-    ovsrec_test_index_destroy_row(value_from);
-    ovsrec_test_index_destroy_row(value_to);
+    ovsrec_test_index_destroy_row(from);
+    ovsrec_test_index_destroy_row(to);
 
     /*
      * Index iterator; iterates over all nodes in the index, in order
      * determined by comparison function and configured order (ascending
      * or descending).
      */
-    OVSREC_TEST_FOR_EACH_BYINDEX (record, &my_cursor) {
+    OVSREC_TEST_FOR_EACH_BYINDEX (record, index) {
         /* Can return zero, one or more records */
         printf("Found one record with %s", record->stringField);
     }
@@ -292,11 +274,4 @@ General Index Access
 
 While the currently defined iterators are suitable for many use cases, it is
 also possible to create custom iterators using the more general API on which
-the existing iterators have been built. This API includes the following
-functions, declared in "lib/ovsdb-idl.h":
-
-1. ``ovsrec_<table>_index_compare()``
-2. ``ovsrec_<table>_index_next()``
-3. ``ovsrec_<table>_index_find()``
-4. ``ovsrec_<table>_index_forward_to()``
-5. ``ovsrec_<table>_index_get_data()``
+the existing iterators have been built.  See ``ovsdb-idl.h`` for the details.

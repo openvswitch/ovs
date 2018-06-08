@@ -23,6 +23,7 @@ struct controller_ctx;
 struct chassis_index;
 struct hmap;
 struct ovsdb_idl;
+struct ovsdb_idl_index;
 struct ovsrec_bridge;
 struct ovsrec_port_table;
 struct ovsrec_qos_table;
@@ -32,6 +33,9 @@ struct sset;
 
 void binding_register_ovs_idl(struct ovsdb_idl *);
 void binding_run(struct controller_ctx *,
+                 struct ovsdb_idl_index *sbrec_datapath_binding_by_key,
+                 struct ovsdb_idl_index *sbrec_port_binding_by_datapath,
+                 struct ovsdb_idl_index *sbrec_port_binding_by_name,
                  const struct ovsrec_port_table *,
                  const struct ovsrec_qos_table *,
                  const struct sbrec_port_binding_table *,

@@ -45,7 +45,7 @@ struct sset;
 #define OVN_GENEVE_LEN 4
 
 void physical_register_ovs_idl(struct ovsdb_idl *);
-void physical_run(struct controller_ctx *,
+void physical_run(struct ovsdb_idl_index *sbrec_port_binding_by_name,
                   const struct sbrec_multicast_group_table *,
                   const struct sbrec_port_binding_table *,
                   enum mf_field_id mff_ovn_geneve,

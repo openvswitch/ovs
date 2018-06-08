@@ -291,7 +291,7 @@ load_logical_ingress_metadata(const struct sbrec_port_binding *binding,
 }
 
 static void
-consider_port_binding(struct controller_ctx *ctx,
+consider_port_binding(struct ovsdb_idl_index *sbrec_port_binding_by_name,
                       enum mf_field_id mff_ovn_geneve,
                       const struct simap *ct_zones,
                       const struct chassis_index *chassis_index,
@@ -318,7 +318,7 @@ consider_port_binding(struct controller_ctx *ctx,
         }
 
         const struct sbrec_port_binding *peer = lport_lookup_by_name(
-            ctx->ovnsb_idl, peer_name);
+            sbrec_port_binding_by_name, peer_name);
         if (!peer || strcmp(peer->type, binding->type)) {
             return;
         }
@@ -385,7 +385,8 @@ consider_port_binding(struct controller_ctx *ctx,
         const char *distributed_port = smap_get_def(&binding->options,
                                                     "distributed-port", "");
         const struct sbrec_port_binding *distributed_binding
-            = lport_lookup_by_name(ctx->ovnsb_idl, distributed_port);
+            = lport_lookup_by_name(sbrec_port_binding_by_name,
+                                   distributed_port);
 
         if (!distributed_binding) {
             /* Packet will be dropped. */
@@ -867,7 +868,7 @@ update_ofports(struct simap *old, struct simap *new)
 }
 
 void
-physical_run(struct controller_ctx *ctx,
+physical_run(struct ovsdb_idl_index *sbrec_port_binding_by_name,
              const struct sbrec_multicast_group_table *multicast_group_table,
              const struct sbrec_port_binding_table *port_binding_table,
              enum mf_field_id mff_ovn_geneve,
@@ -880,7 +881,6 @@ physical_run(struct controller_ctx *ctx,
              const struct sset *active_tunnels,
              struct hmap *flow_table)
 {
-
     /* This bool tracks physical mapping changes. */
     bool physical_map_changed = false;
 
@@ -999,7 +999,8 @@ physical_run(struct controller_ctx *ctx,
      * 64 for logical-to-physical translation. */
     const struct sbrec_port_binding *binding;
     SBREC_PORT_BINDING_TABLE_FOR_EACH (binding, port_binding_table) {
-        consider_port_binding(ctx, mff_ovn_geneve, ct_zones,
+        consider_port_binding(sbrec_port_binding_by_name,
+                              mff_ovn_geneve, ct_zones,
                               chassis_index, active_tunnels,
                               local_datapaths, binding, chassis,
                               &ofpacts, flow_table);
@@ -1138,7 +1139,7 @@ physical_run(struct controller_ctx *ctx,
          * rule with higher priority for every localport in this
          * datapath. */
         const struct sbrec_port_binding *pb = lport_lookup_by_name(
-            ctx->ovnsb_idl, localport);
+            sbrec_port_binding_by_name, localport);
         if (pb && !strcmp(pb->type, "localport")) {
             match_set_reg(&match, MFF_LOG_INPORT - MFF_REG0, pb->tunnel_key);
             match_set_metadata(&match, htonll(pb->datapath->tunnel_key));

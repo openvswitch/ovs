@@ -284,24 +284,43 @@ static inline bool %(s)s_is_deleted(const struct %(s)s *row)
 }
 
 void %(s)s_index_destroy_row(const struct %(s)s *);
-int %(s)s_index_compare(struct ovsdb_idl_index_cursor *, const struct %(s)s *, const struct %(s)s *);
-const struct %(s)s *%(s)s_index_first(struct ovsdb_idl_index_cursor *);
-const struct %(s)s *%(s)s_index_next(struct ovsdb_idl_index_cursor *);
-const struct %(s)s *%(s)s_index_find(struct ovsdb_idl_index_cursor *, const struct %(s)s *);
-const struct %(s)s *%(s)s_index_forward_to(struct ovsdb_idl_index_cursor *, const struct %(s)s *);
-const struct %(s)s *%(s)s_index_get_data(const struct ovsdb_idl_index_cursor *);
-#define %(S)s_FOR_EACH_RANGE(ROW, CURSOR, FROM, TO) \\
-        for ((ROW) = %(s)s_index_forward_to(CURSOR, FROM); \\
-             ((ROW) && %(s)s_index_compare(CURSOR, ROW, TO) <= 0); \\
-             (ROW) = %(s)s_index_next(CURSOR))
-#define %(S)s_FOR_EACH_EQUAL(ROW, CURSOR, KEY) \\
-        for ((ROW) = %(s)s_index_find(CURSOR, KEY); \\
-             ((ROW) && %(s)s_index_compare(CURSOR, ROW, KEY) == 0); \\
-             (ROW) = %(s)s_index_next(CURSOR))
-#define %(S)s_FOR_EACH_BYINDEX(ROW, CURSOR) \\
-        for ((ROW) = %(s)s_index_first(CURSOR); \\
-             (ROW); \\
-             (ROW) = %(s)s_index_next(CURSOR))
+
+struct %(s)s *%(s)s_index_find(struct ovsdb_idl_index *, const struct %(s)s *);
+
+int %(s)s_index_compare(
+    struct ovsdb_idl_index *, 
+    const struct %(s)s *, 
+    const struct %(s)s *);
+struct ovsdb_idl_cursor %(s)s_cursor_first(struct ovsdb_idl_index *);
+struct ovsdb_idl_cursor %(s)s_cursor_first_eq(
+    struct ovsdb_idl_index *, const struct %(s)s *);
+struct ovsdb_idl_cursor %(s)s_cursor_first_ge(
+    struct ovsdb_idl_index *, const struct %(s)s *);
+
+struct %(s)s *%(s)s_cursor_data(struct ovsdb_idl_cursor *);
+
+#define %(S)s_FOR_EACH_RANGE(ROW, FROM, TO, INDEX) \\
+        for (struct ovsdb_idl_cursor cursor__ = %(s)s_cursor_first_ge(INDEX, FROM); \\
+             (cursor__.position \\
+              && ((ROW) = %(s)s_cursor_data(&cursor__), \\
+                  !(TO) || %(s)s_index_compare(INDEX, ROW, TO) <= 0)); \\
+             ovsdb_idl_cursor_next(&cursor__))
+#define %(S)s_FOR_EACH_EQUAL(ROW, KEY, INDEX) \\
+        for (struct ovsdb_idl_cursor cursor__ = %(s)s_cursor_first_eq(INDEX, KEY); \\
+             (cursor__.position \\
+              ? ((ROW) = %(s)s_cursor_data(&cursor__), \\
+                 ovsdb_idl_cursor_next_eq(&cursor__), \\
+                 true) \\
+              : false); \\
+            )
+#define %(S)s_FOR_EACH_BYINDEX(ROW, INDEX) \\
+        for (struct ovsdb_idl_cursor cursor__ = %(s)s_cursor_first(INDEX); \\
+             (cursor__.position \\
+              ? ((ROW) = %(s)s_cursor_data(&cursor__), \\
+                 ovsdb_idl_cursor_next(&cursor__), \\
+                 true) \\
+              : false); \\
+            )
 
 void %(s)s_init(struct %(s)s *);
 void %(s)s_delete(const struct %(s)s *);
@@ -367,7 +386,7 @@ bool %(s)s_is_updated(const struct %(s)s *, enum %(s)s_column_id);
         print("")
 
     # Table indexes.
-        print("struct %(s)s * %(s)s_index_init_row(struct ovsdb_idl *, const struct ovsdb_idl_table_class *);" % {'s': structName})
+        print("struct %(s)s *%(s)s_index_init_row(struct ovsdb_idl_index *);" % {'s': structName})
         print
         for columnName, column in sorted(table.columns.items()):
             print('void %(s)s_index_set_%(c)s(const struct %(s)s *,' % {'s': structName, 'c': columnName})
@@ -1164,80 +1183,68 @@ void
 void
 %(s)s_index_destroy_row(const struct %(s)s *row)
 {
-    ovsdb_idl_index_destroy_row__(&row->header_);
+    ovsdb_idl_index_destroy_row(&row->header_);
 }
         """ % { 's' : structName, 't': tableName })
         print("""
 /* Creates a new row of kind "%(t)s". */
 struct %(s)s *
-%(s)s_index_init_row(struct ovsdb_idl *idl, const struct ovsdb_idl_table_class *class_)
-{""" % {'s': structName, 't': tableName})
-        #for columnName, column in sorted(table.columns.items()):
-        #    if column.type.is_smap():
-        #        print "    smap_init(&row->%s);" % columnName
-        print("    return (struct %(s)s *) ovsdb_idl_index_init_row(idl, class_);" % {'s': structName, 't': tableName})
-        print("}")
+%(s)s_index_init_row(struct ovsdb_idl_index *index)
+{
+    ovs_assert(index->table->class_ == &%(p)stable_%(tl)s);
+    return (struct %(s)s *) ovsdb_idl_index_init_row(index);
+}
 
-        print("""
-/*  This function is used to compare "%(s)s" records on table in iteration loops for compound-index operations.
-    After been called, cursor point to current position in the index
-    Parameters: struct ovsdb_idl_index_cursor *cursor. Cursor used to iterate over the indexed data on this table.
-                const struct "%(s)s" *const_data1,  const struct "%(s)s" *const_data2. Data to be compared.
-    Return value: 0 if both data values are equal, -1 if first parameter is less than second and 1 otherwise. */""" % {'s' : structName})
-        print('int')
-        print("""%(s)s_index_compare(struct ovsdb_idl_index_cursor *cursor, const struct %(s)s *const_data1,  const struct %(s)s *const_data2)
+struct %(s)s *
+%(s)s_index_find(struct ovsdb_idl_index *index, const struct %(s)s *target)
 {
-    struct %(s)s *data1 = CONST_CAST(struct %(s)s *, const_data1);
-    struct %(s)s *data2 = CONST_CAST(struct %(s)s *, const_data2);
-    return ovsdb_idl_index_compare(cursor, &data1->header_, &data2->header_);
-}""" % { 's' : structName })
-        print("""
-/*  This function is called to position the cursor at the first row in "%(s)s" table on the associated compound-index.
-    Parameters: struct ovsdb_idl_index_cursor *cursor. Cursor used to iterate over the indexed data on this table.
-    Return value: The first row in the corresponding index. */""" %  {'s' : structName })
-        print("""const struct %(s)s *\n%(s)s_index_first(struct ovsdb_idl_index_cursor *cursor)
+    ovs_assert(index->table->class_ == &%(p)stable_%(tl)s);
+    return %(s)s_cast(ovsdb_idl_index_find(index, &target->header_));
+}
+
+/* Compares 'a' to 'b' and returns a strcmp()-type result. */
+int
+%(s)s_index_compare(
+    struct ovsdb_idl_index *index, 
+    const struct %(s)s *a, 
+    const struct %(s)s *b)
 {
-    return %(s)s_cast(ovsdb_idl_index_first(cursor));
-}""" % { 's' : structName })
-        print("""
-/*  This function is called to position the cursor at the next row in "%(s)s" table on the associated compound-index.
-    Parameters: struct ovsdb_idl_index_cursor *cursor. Cursor used to iterate over the indexed data on this table.
-    Return value: The next row in the corresponding index. */""" %  {'s' : structName, 'c' : columnName })
-        print("""const struct %(s)s *\n%(s)s_index_next(struct ovsdb_idl_index_cursor *cursor)
+    return ovsdb_idl_index_compare(index, &a->header_, &b->header_);
+}
+
+struct ovsdb_idl_cursor
+%(s)s_cursor_first(struct ovsdb_idl_index *index)
 {
-    return %(s)s_cast(ovsdb_idl_index_next(cursor));
-}""" % { 's' : structName })
-        print("""
-/*  This function is used to find the data of the row in "%(s)s" table that meet criteria with the requested data
-    associated in the compound-index.
-    Parameters: struct ovsdb_idl_index_cursor *cursor. Cursor used to iterate over the indexed data on this table.
-                const struct %(s)s *const_data. Data to be searched.
-    Return value: The row in the corresponding index if found or NULL otherwise. */""" %  {'s' : structName })
-        print("""const struct %(s)s *\n%(s)s_index_find(struct ovsdb_idl_index_cursor *cursor, const struct %(s)s *const_data)
+    ovs_assert(index->table->class_ == &%(p)stable_%(tl)s);
+    return ovsdb_idl_cursor_first(index);
+}
+
+struct ovsdb_idl_cursor
+%(s)s_cursor_first_eq(
+    struct ovsdb_idl_index *index, const struct %(s)s *target)
 {
-    struct %(s)s *data = CONST_CAST(struct %(s)s *, const_data);
-    return %(s)s_cast(ovsdb_idl_index_find(cursor, &data->header_));
-}""" % { 's' : structName })
-        print("""
-/*  This function is used to set the cursor pointing to the row in "%(s)s" table that meet criteria of the requested data
-    associated in the compound-index.
-    Parameters: struct ovsdb_idl_index_cursor *cursor. Cursor used to iterate over the indexed data on this table.
-                const struct %(s)s *const_data. Data to be searched.
-    Return value: The row in the corresponding index closest to the criteria. */""" %  {'s' : structName })
-        print("""const struct %(s)s *\n%(s)s_index_forward_to(struct ovsdb_idl_index_cursor *cursor, const struct %(s)s *const_data)
+    ovs_assert(index->table->class_ == &%(p)stable_%(tl)s);
+    return ovsdb_idl_cursor_first_eq(index, &target->header_);
+}
+
+struct ovsdb_idl_cursor
+%(s)s_cursor_first_ge(
+    struct ovsdb_idl_index *index, const struct %(s)s *target)
 {
-    struct %(s)s *data = CONST_CAST(struct %(s)s *, const_data);
-    return %(s)s_cast(ovsdb_idl_index_forward_to(cursor, &data->header_));
-}""" % { 's' : structName })
-        print("""
-/*  This function is used to get the data of the row in the current position pointed by the cursor in
-    "%(s)s" table.
-    Parameters: struct ovsdb_idl_index_cursor *cursor. Cursor used to iterate over the indexed data on this table.
-    Return value: The row in the corresponding index if found or NULL otherwise. */""" %  {'s' : structName, 'c' : columnName })
-        print("""const struct %(s)s *\n%(s)s_index_get_data(const struct ovsdb_idl_index_cursor *cursor)
+    ovs_assert(index->table->class_ == &%(p)stable_%(tl)s);
+    return ovsdb_idl_cursor_first_ge(index, &target->header_);
+}
+
+struct %(s)s *
+%(s)s_cursor_data(struct ovsdb_idl_cursor *cursor)
 {
-    return %(s)s_cast(ovsdb_idl_index_data(CONST_CAST(struct ovsdb_idl_index_cursor *, cursor)));
-}""" % { 's' : structName })
+    return %(s)s_cast(ovsdb_idl_cursor_data(cursor));
+}
+""" % {'s': structName,
+        'c': columnName,
+        't': tableName,
+        'tl': tableName.lower(),
+        'p': prefix})
         # Indexes Set functions
         for columnName, column in sorted(table.columns.items()):
             type = column.type
@@ -1270,10 +1277,10 @@ struct %(s)s *
     } else {
         ovsdb_datum_init_empty(datum);
     }
-    ovsdb_idl_index_write_(CONST_CAST(struct ovsdb_idl_row *, &row->header_),
-                           &%(s)s_columns[%(S)s_COL_%(C)s],
-                           datum,
-                           &%(p)stable_classes[%(P)sTABLE_%(T)s]);
+    ovsdb_idl_index_write(CONST_CAST(struct ovsdb_idl_row *, &row->header_),
+                          &%(s)s_columns[%(S)s_COL_%(C)s],
+                          datum,
+                          &%(p)stable_classes[%(P)sTABLE_%(T)s]);
 }
 """ % {'t': tableName,
        'p': prefix,
@@ -1317,7 +1324,7 @@ struct %(s)s *
                     print("    "+ type.value.assign_c_value_casting_away_const("value->%s" % type.value.type.to_string(), valueVar))
                 else:
                     print("    datum.values = NULL;")
-                txn_write_func = "ovsdb_idl_index_write_"
+                txn_write_func = "ovsdb_idl_index_write"
             elif type.is_optional_pointer():
                 print("    union ovsdb_atom *key = xmalloc(sizeof (union ovsdb_atom));")
                 print()
@@ -1330,7 +1337,7 @@ struct %(s)s *
                 print("        datum.keys = NULL;")
                 print("    }")
                 print("    datum.values = NULL;")
-                txn_write_func = "ovsdb_idl_index_write_"
+                txn_write_func = "ovsdb_idl_index_write"
             elif type.n_max == 1:
                 print("    union ovsdb_atom *key = xmalloc(sizeof(union ovsdb_atom));")
                 print()
@@ -1343,7 +1350,7 @@ struct %(s)s *
                 print("        datum.keys = NULL;")
                 print("    }")
                 print("    datum.values = NULL;")
-                txn_write_func = "ovsdb_idl_index_write_"
+                txn_write_func = "ovsdb_idl_index_write"
             else:
                 print("    size_t i;")
                 print()
@@ -1364,7 +1371,7 @@ struct %(s)s *
                     valueType = "OVSDB_TYPE_VOID"
                 print("    ovsdb_datum_sort_unique(&datum, %s, %s);" % (
                     type.key.toAtomicType(), valueType))
-                txn_write_func = "ovsdb_idl_index_write_"
+                txn_write_func = "ovsdb_idl_index_write"
             print("    %(f)s(CONST_CAST(struct ovsdb_idl_row *, &row->header_), &%(s)s_columns[ %(S)s_COL_%(C)s ], &datum, &%(p)stable_classes[%(P)sTABLE_%(T)s]);" \
                 % {'f': txn_write_func,
                    's': structName,

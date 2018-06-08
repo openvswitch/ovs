@@ -22,146 +22,81 @@
 #include "ovn/lib/ovn-sb-idl.h"
 VLOG_DEFINE_THIS_MODULE(lport);
 
-static struct ovsdb_idl_index_cursor lport_by_name_cursor;
-static struct ovsdb_idl_index_cursor lport_by_key_cursor;
-static struct ovsdb_idl_index_cursor dpath_by_key_cursor;
-static struct ovsdb_idl_index_cursor mc_grp_by_dp_name_cursor;
-
-
-
-/* Finds and returns the port binding record with the given 'name',
- * or NULL if no such port binding exists. */
 const struct sbrec_port_binding *
-lport_lookup_by_name(struct ovsdb_idl *idl, const char *name)
+lport_lookup_by_name(struct ovsdb_idl_index *sbrec_port_binding_by_name,
+                     const char *name)
 {
-    struct sbrec_port_binding *value;
-    const struct sbrec_port_binding *pb, *retval =  NULL;
+    struct sbrec_port_binding *pb = sbrec_port_binding_index_init_row(
+        sbrec_port_binding_by_name);
+    sbrec_port_binding_index_set_logical_port(pb, name);
 
-    /* Build key for an indexed lookup. */
-    value = sbrec_port_binding_index_init_row(idl, &sbrec_table_port_binding);
-    sbrec_port_binding_index_set_logical_port(value, name);
+    const struct sbrec_port_binding *retval = sbrec_port_binding_index_find(
+        sbrec_port_binding_by_name, pb);
 
-    /* Find an entry with matching logical port name. Since this column is
-     * declared to be an index in the OVN_Southbound schema, the first match
-     * (if any) will be the only match. */
-    SBREC_PORT_BINDING_FOR_EACH_EQUAL (pb, &lport_by_name_cursor, value) {
-        retval = pb;
-        break;
-    }
-
-    sbrec_port_binding_index_destroy_row(value);
+    sbrec_port_binding_index_destroy_row(pb);
 
     return retval;
 }
 
-/* Finds and returns the datapath binding record with tunnel_key equal to the
- * given 'dp_key', or NULL if no such datapath binding exists. */
-const struct sbrec_datapath_binding *
-datapath_lookup_by_key(struct ovsdb_idl *idl, uint64_t dp_key)
-{
-    struct sbrec_datapath_binding *dbval;
-    const struct sbrec_datapath_binding *db, *retval = NULL;
-
-    /* Build key for an indexed lookup. */
-    dbval = sbrec_datapath_binding_index_init_row(idl,
-                                                &sbrec_table_datapath_binding);
-    sbrec_datapath_binding_index_set_tunnel_key(dbval, dp_key);
-
-    /* Find an entry with matching tunnel_key. Since this column is declared
-     * to be an index in the OVN_Southbound schema, the first match (if any)
-     * will be the only match. */
-    SBREC_DATAPATH_BINDING_FOR_EACH_EQUAL (db, &dpath_by_key_cursor, dbval) {
-        retval = db;
-        break;
-    }
-    sbrec_datapath_binding_index_destroy_row(dbval);
-
-    return retval;
-}
-
-/* Finds and returns the port binding record with tunnel_key equal to the
- * given 'port_key' and datapath binding matching 'dp_key', or NULL if no
- * such port binding exists. */
 const struct sbrec_port_binding *
-lport_lookup_by_key(struct ovsdb_idl *idl, uint64_t dp_key, uint64_t port_key)
+lport_lookup_by_key(struct ovsdb_idl_index *sbrec_datapath_binding_by_key,
+                    struct ovsdb_idl_index *sbrec_port_binding_by_key,
+                    uint64_t dp_key, uint64_t port_key)
 {
-    struct sbrec_port_binding *pbval;
-    const struct sbrec_port_binding *pb, *retval = NULL;
-    const struct sbrec_datapath_binding *db;
-
     /* Lookup datapath corresponding to dp_key. */
-    db = datapath_lookup_by_key(idl, dp_key);
+    const struct sbrec_datapath_binding *db = datapath_lookup_by_key(
+        sbrec_datapath_binding_by_key, dp_key);
     if (!db) {
         return NULL;
     }
 
     /* Build key for an indexed lookup. */
-    pbval = sbrec_port_binding_index_init_row(idl, &sbrec_table_port_binding);
-    sbrec_port_binding_index_set_datapath(pbval, db);
-    sbrec_port_binding_index_set_tunnel_key(pbval, port_key);
+    struct sbrec_port_binding *pb = sbrec_port_binding_index_init_row(
+        sbrec_port_binding_by_key);
+    sbrec_port_binding_index_set_datapath(pb, db);
+    sbrec_port_binding_index_set_tunnel_key(pb, port_key);
 
-    /* Find an entry with matching tunnel_key and datapath UUID. Since this
-     * column pair is declared to be an index in the OVN_Southbound schema,
-     * the first match (if any) will be the only match. */
-    SBREC_PORT_BINDING_FOR_EACH_EQUAL (pb, &lport_by_key_cursor, pbval) {
-        retval = pb;
-        break;
-    }
-    sbrec_port_binding_index_destroy_row(pbval);
+    const struct sbrec_port_binding *retval = sbrec_port_binding_index_find(
+        sbrec_port_binding_by_key, pb);
+
+    sbrec_port_binding_index_destroy_row(pb);
 
     return retval;
 }
-
-/* Finds and returns the logical multicast group with the given 'name' and
- * datapath binding, or NULL if no such logical multicast group exists. */
+
+const struct sbrec_datapath_binding *
+datapath_lookup_by_key(struct ovsdb_idl_index *sbrec_datapath_binding_by_key,
+                       uint64_t dp_key)
+{
+    struct sbrec_datapath_binding *db = sbrec_datapath_binding_index_init_row(
+        sbrec_datapath_binding_by_key);
+    sbrec_datapath_binding_index_set_tunnel_key(db, dp_key);
+
+    const struct sbrec_datapath_binding *retval
+        = sbrec_datapath_binding_index_find(sbrec_datapath_binding_by_key,
+                                            db);
+
+    sbrec_datapath_binding_index_destroy_row(db);
+
+    return retval;
+}
+
 const struct sbrec_multicast_group *
-mcgroup_lookup_by_dp_name(struct ovsdb_idl *idl,
-                           const struct sbrec_datapath_binding *dp,
-                           const char *name)
+mcgroup_lookup_by_dp_name(
+    struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath,
+    const struct sbrec_datapath_binding *db, const char *name)
 {
-    struct sbrec_multicast_group *mcval;
-    const struct sbrec_multicast_group *mc, *retval = NULL;
-
     /* Build key for an indexed lookup. */
-    mcval = sbrec_multicast_group_index_init_row(idl,
-                                                 &sbrec_table_multicast_group);
-    sbrec_multicast_group_index_set_name(mcval, name);
-    sbrec_multicast_group_index_set_datapath(mcval, dp);
+    struct sbrec_multicast_group *mc = sbrec_multicast_group_index_init_row(
+        sbrec_multicast_group_by_name_datapath);
+    sbrec_multicast_group_index_set_name(mc, name);
+    sbrec_multicast_group_index_set_datapath(mc, db);
 
-    /* Find an entry with matching logical multicast group name and datapath.
-     * Since this column pair is declared to be an index in the OVN_Southbound
-     * schema, the first match (if any) will be the only match. */
-    SBREC_MULTICAST_GROUP_FOR_EACH_EQUAL (mc, &mc_grp_by_dp_name_cursor,
-                                          mcval) {
-        retval = mc;
-        break;
-    }
+    const struct sbrec_multicast_group *retval
+        = sbrec_multicast_group_index_find(
+            sbrec_multicast_group_by_name_datapath, mc);
 
-    sbrec_multicast_group_index_destroy_row(mcval);
+    sbrec_multicast_group_index_destroy_row(mc);
 
     return retval;
-}
-
-void
-lport_init(struct ovsdb_idl *idl)
-{
-    /* Create a cursor for searching multicast group table by datapath
-     * and group name. */
-    ovsdb_idl_initialize_cursor(idl, &sbrec_table_multicast_group,
-                                "multicast-group-by-dp-name",
-                                &mc_grp_by_dp_name_cursor);
-
-    /* Create cursor to search port binding table by logical port name. */
-    ovsdb_idl_initialize_cursor(idl, &sbrec_table_port_binding,
-                                "lport-by-name",
-                                &lport_by_name_cursor);
-
-    /* Create cursor to search port binding table by logical port tunnel key
-     * and datapath uuid. */
-    ovsdb_idl_initialize_cursor(idl, &sbrec_table_port_binding, "lport-by-key",
-                                &lport_by_key_cursor);
-
-    /* Create cursor to search datapath binding table by tunnel key. */
-    ovsdb_idl_initialize_cursor(idl, &sbrec_table_datapath_binding,
-                                "dpath-by-key", &dpath_by_key_cursor);
 }
