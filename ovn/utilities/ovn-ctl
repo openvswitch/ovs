@@ -115,6 +115,7 @@ start_ovsdb__() {
     local port
     local addr
     local active_conf_file
+    local use_remote_in_db
     eval pid=\$DB_${DB}_PID
     eval cluster_local_addr=\$DB_${DB}_CLUSTER_LOCAL_ADDR
     eval cluster_local_port=\$DB_${DB}_CLUSTER_LOCAL_PORT
@@ -135,6 +136,7 @@ start_ovsdb__() {
     eval port=\$DB_${DB}_PORT
     eval addr=\$DB_${DB}_ADDR
     eval active_conf_file=\$ovn${db}_active_conf_file
+    eval use_remote_in_db=\$DB_${DB}_USE_REMOTE_IN_DB
 
     # Check and eventually start ovsdb-server for DB
     if pidfile_is_running $pid; then
@@ -176,7 +178,9 @@ $cluster_remote_port
         set exec "$@"
     fi
 
-    set "$@" --remote=db:$schema_name,$table_name,connections
+    if test X"$use_remote_in_db" != Xno; then
+        set "$@" --remote=db:$schema_name,$table_name,connections
+    fi
     set "$@" --private-key=db:$schema_name,SSL,private_key
     set "$@" --certificate=db:$schema_name,SSL,certificate
     set "$@" --ca-cert=db:$schema_name,SSL,ca_cert
@@ -463,6 +467,8 @@ set_defaults () {
 
     OVN_NORTHD_NB_DB="unix:$DB_NB_SOCK"
     OVN_NORTHD_SB_DB="unix:$DB_SB_SOCK"
+    DB_NB_USE_REMOTE_IN_DB="yes"
+    DB_SB_USE_REMOTE_IN_DB="yes"
 }
 
 set_option () {
@@ -577,6 +583,8 @@ File location options:
   transport (default: $DB_SB_CLUSTER_REMOTE_PROTO)
   --ovn-northd-nb-db=NB DB address(es) (default: $OVN_NORTHD_NB_DB)
   --ovn-northd-sb-db=SB DB address(es) (default: $OVN_NORTHD_SB_DB)
+  --db-nb-use-remote-in-db=yes|no OVN_Northbound db listen on target connection table (default: $DB_NB_USE_REMOTE_IN_DB)
+  --db-sb-use-remote-in-db=yes|no OVN_Southbound db listen on target connection table (default: $DB_SB_USE_REMOTE_IN_DB)
 
 Default directories with "configure" option and environment variable override:
   logs: /usr/local/var/log/openvswitch (--with-logdir, OVS_LOGDIR)
