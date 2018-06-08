@@ -22,6 +22,7 @@
 #include "lib/vswitch-idl.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/vlog.h"
+#include "ovn/lib/chassis-index.h"
 #include "ovn/lib/ovn-sb-idl.h"
 #include "ovn-controller.h"
 #include "lib/util.h"
@@ -76,8 +77,8 @@ get_cms_options(const struct smap *ext_ids)
  * amenable to a transaction. */
 const struct sbrec_chassis *
 chassis_run(struct controller_ctx *ctx,
+            struct ovsdb_idl_index *sbrec_chassis_by_name,
             const struct ovsrec_open_vswitch_table *ovs_table,
-            const struct sbrec_chassis_table *chassis_table,
             const char *chassis_id,
             const struct ovsrec_bridge *br_int)
 {
@@ -139,7 +140,7 @@ chassis_run(struct controller_ctx *ctx,
     const char *iface_types_str = ds_cstr(&iface_types);
 
     const struct sbrec_chassis *chassis_rec
-        = get_chassis(chassis_table, chassis_id);
+        = chassis_lookup_by_name(sbrec_chassis_by_name, chassis_id);
     const char *encap_csum = smap_get_def(&cfg->external_ids,
                                           "ovn-encap-csum", "true");
     if (chassis_rec) {

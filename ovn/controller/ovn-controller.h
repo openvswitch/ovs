@@ -78,9 +78,6 @@ struct local_datapath *get_local_datapath(const struct hmap *,
 const struct ovsrec_bridge *get_bridge(const struct ovsrec_bridge_table *,
                                        const char *br_name);
 
-const struct sbrec_chassis *get_chassis(const struct sbrec_chassis_table *,
-                                        const char *chassis_id);
-
 /* Must be a bit-field ordered from most-preferred (higher number) to
  * least-preferred (lower number). */
 enum chassis_tunnel_type {

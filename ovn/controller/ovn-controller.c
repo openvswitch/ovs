@@ -94,21 +94,6 @@ get_local_datapath(const struct hmap *local_datapaths, uint32_t tunnel_key)
             : NULL);
 }
 
-const struct sbrec_chassis *
-get_chassis(const struct sbrec_chassis_table *chassis_table,
-            const char *chassis_id)
-{
-    const struct sbrec_chassis *chassis_rec;
-
-    SBREC_CHASSIS_TABLE_FOR_EACH (chassis_rec, chassis_table) {
-        if (!strcmp(chassis_rec->name, chassis_id)) {
-            break;
-        }
-    }
-
-    return chassis_rec;
-}
-
 uint32_t
 get_tunnel_type(const char *name)
 {
@@ -691,9 +676,8 @@ main(int argc, char *argv[])
 
         const struct sbrec_chassis *chassis = NULL;
         if (chassis_id) {
-            chassis = chassis_run(&ctx,
+            chassis = chassis_run(&ctx, sbrec_chassis_by_name,
                                   ovsrec_open_vswitch_table_get(ctx.ovs_idl),
-                                  sbrec_chassis_table_get(ctx.ovnsb_idl),
                                   chassis_id, br_int);
             encaps_run(&ctx,
                        ovsrec_bridge_table_get(ctx.ovs_idl), br_int,
@@ -881,8 +865,6 @@ main(int argc, char *argv[])
         const struct ovsrec_open_vswitch_table *ovs_table
             = ovsrec_open_vswitch_table_get(ctx.ovs_idl);
 
-        const struct sbrec_chassis_table *chassis_table
-            = sbrec_chassis_table_get(ctx.ovnsb_idl);
         const struct sbrec_port_binding_table *port_binding_table
             = sbrec_port_binding_table_get(ctx.ovnsb_idl);
 
@@ -890,7 +872,9 @@ main(int argc, char *argv[])
                                                         ovs_table);
         const char *chassis_id = get_chassis_id(ovs_table);
         const struct sbrec_chassis *chassis
-            = chassis_id ? get_chassis(chassis_table, chassis_id) : NULL;
+            = (chassis_id
+               ? chassis_lookup_by_name(sbrec_chassis_by_name, chassis_id)
+               : NULL);
 
         /* Run all of the cleanup functions, even if one of them returns false.
          * We're done if all of them return true. */
