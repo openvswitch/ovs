@@ -603,6 +603,8 @@ main(int argc, char *argv[])
         ovsdb_idl_create(ovnsb_remote, &sbrec_idl_class, true, true));
     ovsdb_idl_set_leader_only(ovnsb_idl_loop.idl, false);
 
+    struct ovsdb_idl_index *sbrec_chassis_by_name
+        = chassis_index_create(ovnsb_idl_loop.idl);
     struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath
         = ovsdb_idl_index_create2(ovnsb_idl_loop.idl,
                                   &sbrec_multicast_group_col_name,
@@ -687,10 +689,6 @@ main(int argc, char *argv[])
         const char *chassis_id
             = get_chassis_id(ovsrec_open_vswitch_table_get(ctx.ovs_idl));
 
-        struct chassis_index chassis_index;
-        chassis_index_init(sbrec_chassis_table_get(ctx.ovnsb_idl),
-                           &chassis_index);
-
         const struct sbrec_chassis *chassis = NULL;
         if (chassis_id) {
             chassis = chassis_run(&ctx,
@@ -701,7 +699,7 @@ main(int argc, char *argv[])
                        ovsrec_bridge_table_get(ctx.ovs_idl), br_int,
                        sbrec_chassis_table_get(ctx.ovnsb_idl), chassis_id);
             bfd_calculate_active_tunnels(br_int, &active_tunnels);
-            binding_run(&ctx,
+            binding_run(&ctx, sbrec_chassis_by_name,
                         sbrec_datapath_binding_by_key,
                         sbrec_port_binding_by_datapath,
                         sbrec_port_binding_by_name,
@@ -709,7 +707,7 @@ main(int argc, char *argv[])
                         ovsrec_qos_table_get(ctx.ovs_idl),
                         sbrec_port_binding_table_get(ctx.ovnsb_idl),
                         br_int, chassis,
-                        &chassis_index, &active_tunnels, &local_datapaths,
+                        &active_tunnels, &local_datapaths,
                         &local_lports, &local_lport_ids);
         }
         if (br_int && chassis) {
@@ -730,14 +728,14 @@ main(int argc, char *argv[])
             enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int,
                                                          &pending_ct_zones);
 
-            pinctrl_run(&ctx,
+            pinctrl_run(&ctx, sbrec_chassis_by_name,
                         sbrec_datapath_binding_by_key,
                         sbrec_port_binding_by_datapath,
                         sbrec_port_binding_by_key,
                         sbrec_port_binding_by_name,
                         sbrec_dns_table_get(ctx.ovnsb_idl),
                         sbrec_mac_binding_table_get(ctx.ovnsb_idl),
-                        br_int, chassis, &chassis_index,
+                        br_int, chassis,
                         &local_datapaths, &active_tunnels);
             update_ct_zones(&local_lports, &local_datapaths, &ct_zones,
                             ct_zone_bitmap, &pending_ct_zones);
@@ -749,31 +747,33 @@ main(int argc, char *argv[])
                     commit_ct_zones(br_int, &pending_ct_zones);
 
                     struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
-                    lflow_run(sbrec_multicast_group_by_name_datapath,
+                    lflow_run(sbrec_chassis_by_name,
+                              sbrec_multicast_group_by_name_datapath,
                               sbrec_port_binding_by_name,
                               sbrec_dhcp_options_table_get(ctx.ovnsb_idl),
                               sbrec_dhcpv6_options_table_get(ctx.ovnsb_idl),
                               sbrec_logical_flow_table_get(ctx.ovnsb_idl),
                               sbrec_mac_binding_table_get(ctx.ovnsb_idl),
                               chassis,
-                              &chassis_index, &local_datapaths, &addr_sets,
+                              &local_datapaths, &addr_sets,
                               &port_groups, &active_tunnels, &local_lport_ids,
                               &flow_table, &group_table, &meter_table);
 
                     if (chassis_id) {
-                        bfd_run(sbrec_port_binding_by_datapath,
+                        bfd_run(sbrec_chassis_by_name,
+                                sbrec_port_binding_by_datapath,
                                 ovsrec_interface_table_get(ctx.ovs_idl),
-                                br_int, chassis, &local_datapaths,
-                                &chassis_index);
+                                br_int, chassis, &local_datapaths);
                     }
                     physical_run(
+                        sbrec_chassis_by_name,
                         sbrec_port_binding_by_name,
                         sbrec_multicast_group_table_get(ctx.ovnsb_idl),
                         sbrec_port_binding_table_get(ctx.ovnsb_idl),
                         mff_ovn_geneve,
                         br_int, chassis, &ct_zones,
                         &local_datapaths, &local_lports,
-                        &chassis_index, &active_tunnels,
+                        &active_tunnels,
                         &flow_table);
 
                     stopwatch_stop(CONTROLLER_LOOP_STOPWATCH_NAME,
@@ -823,8 +823,6 @@ main(int argc, char *argv[])
             pending_pkt.conn = NULL;
             free(pending_pkt.flow_s);
         }
-
-        chassis_index_destroy(&chassis_index);
 
         sset_destroy(&local_lports);
         sset_destroy(&local_lport_ids);

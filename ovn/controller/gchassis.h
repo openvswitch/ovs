@@ -21,8 +21,8 @@
 #include "openvswitch/hmap.h"
 #include "openvswitch/list.h"
 
-struct chassis_index;
 struct ovsdb_idl;
+struct ovsdb_idl_index;
 struct sbrec_chassis;
 struct sbrec_gateway_chassis;
 struct sbrec_port_binding;
@@ -44,8 +44,8 @@ struct gateway_chassis {
 
 /* Gets, and orders by priority/name the list of Gateway_Chassis */
 struct ovs_list *gateway_chassis_get_ordered(
-        const struct sbrec_port_binding *binding,
-        const struct chassis_index *chassis_index);
+    struct ovsdb_idl_index *sbrec_chassis_by_name,
+    const struct sbrec_port_binding *binding);
 
 /* Checks if an specific chassis is contained in the gateway_chassis
  * list */

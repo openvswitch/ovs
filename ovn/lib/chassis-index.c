@@ -13,65 +13,29 @@
  */
 
 #include <config.h>
-
-#include "openvswitch/hmap.h"
-#include "openvswitch/vlog.h"
-#include "ovn/actions.h"
 #include "ovn/lib/chassis-index.h"
 #include "ovn/lib/ovn-sb-idl.h"
 
-VLOG_DEFINE_THIS_MODULE(chassis_index);
+struct ovsdb_idl_index *
+chassis_index_create(struct ovsdb_idl *idl)
+{
+    return ovsdb_idl_index_create1(idl, &sbrec_chassis_col_name);
+}
 
-struct chassis {
-    struct hmap_node name_node;
-    const struct sbrec_chassis *db;
-};
-
+/* Finds and returns the chassis with the given 'name', or NULL if no such
+ * chassis exists. */
 const struct sbrec_chassis *
-chassis_lookup_by_name(const struct chassis_index *chassis_index,
+chassis_lookup_by_name(struct ovsdb_idl_index *sbrec_chassis_by_name,
                        const char *name)
 {
-    const struct chassis *chassis;
-    HMAP_FOR_EACH_WITH_HASH (chassis, name_node, hash_string(name, 0),
-                             &chassis_index->by_name) {
-        if (!strcmp(chassis->db->name, name)) {
-            return chassis->db;
-        }
-    }
-    return NULL;
-}
+    struct sbrec_chassis *target = sbrec_chassis_index_init_row(
+        sbrec_chassis_by_name);
+    sbrec_chassis_set_name(target, name);
 
-void
-chassis_index_init(const struct sbrec_chassis_table *chassis_table,
-                   struct chassis_index *chassis_index)
-{
-    hmap_init(&chassis_index->by_name);
+    struct sbrec_chassis *retval = sbrec_chassis_index_find(
+        sbrec_chassis_by_name, target);
 
-    const struct sbrec_chassis *chassis;
-    SBREC_CHASSIS_TABLE_FOR_EACH (chassis, chassis_table) {
-        if (!chassis->name) {
-            continue;
-        }
-        struct chassis *c = xmalloc(sizeof *c);
-        hmap_insert(&chassis_index->by_name, &c->name_node,
-                    hash_string(chassis->name, 0));
-        c->db = chassis;
-    }
-}
+    sbrec_chassis_index_destroy_row(target);
 
-void
-chassis_index_destroy(struct chassis_index *chassis_index)
-{
-    if (!chassis_index) {
-        return;
-    }
-
-    /* Destroy all of the "struct chassis"s. */
-    struct chassis *chassis, *next;
-    HMAP_FOR_EACH_SAFE (chassis, next, name_node, &chassis_index->by_name) {
-        hmap_remove(&chassis_index->by_name, &chassis->name_node);
-        free(chassis);
-    }
-
-    hmap_destroy(&chassis_index->by_name);
+    return retval;
 }

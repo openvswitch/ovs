@@ -186,8 +186,8 @@ bfd_travel_gw_related_chassis(
 
 static struct ovs_list *
 bfd_find_ha_gateway_chassis(
+    struct ovsdb_idl_index *sbrec_chassis_by_name,
     struct ovsdb_idl_index *sbrec_port_binding_by_datapath,
-    const struct chassis_index *chassis_index,
     const struct sbrec_datapath_binding *datapath)
 {
     struct sbrec_port_binding *target = sbrec_port_binding_index_init_row(
@@ -203,7 +203,7 @@ bfd_find_ha_gateway_chassis(
         }
 
         struct ovs_list *gateway_chassis = gateway_chassis_get_ordered(
-            pb, chassis_index);
+            sbrec_chassis_by_name, pb);
         if (!gateway_chassis || ovs_list_is_short(gateway_chassis)) {
             /* We don't need BFD for non-HA chassisredirect. */
             gateway_chassis_destroy(gateway_chassis);
@@ -219,10 +219,10 @@ bfd_find_ha_gateway_chassis(
 
 static void
 bfd_calculate_chassis(
+    struct ovsdb_idl_index *sbrec_chassis_by_name,
     struct ovsdb_idl_index *sbrec_port_binding_by_datapath,
     const struct sbrec_chassis *our_chassis,
     const struct hmap *local_datapaths,
-    const struct chassis_index *chassis_index,
     struct sset *bfd_chassis)
 {
     /* Identify all chassis nodes to which we need to enable bfd.
@@ -239,8 +239,9 @@ bfd_calculate_chassis(
         bool our_chassis_is_gw_for_dp = false;
         if (is_router) {
             struct ovs_list *ha_gateway_chassis
-                = bfd_find_ha_gateway_chassis(sbrec_port_binding_by_datapath,
-                                              chassis_index, dp->datapath);
+                = bfd_find_ha_gateway_chassis(sbrec_chassis_by_name,
+                                              sbrec_port_binding_by_datapath,
+                                              dp->datapath);
             if (ha_gateway_chassis) {
                 our_chassis_is_gw_for_dp = gateway_chassis_contains(
                     ha_gateway_chassis, our_chassis);
@@ -261,21 +262,21 @@ bfd_calculate_chassis(
 }
 
 void
-bfd_run(struct ovsdb_idl_index *sbrec_port_binding_by_datapath,
+bfd_run(struct ovsdb_idl_index *sbrec_chassis_by_name,
+        struct ovsdb_idl_index *sbrec_port_binding_by_datapath,
         const struct ovsrec_interface_table *interface_table,
         const struct ovsrec_bridge *br_int,
         const struct sbrec_chassis *chassis_rec,
-        const struct hmap *local_datapaths,
-        const struct chassis_index *chassis_index)
+        const struct hmap *local_datapaths)
 {
 
     if (!chassis_rec) {
         return;
     }
     struct sset bfd_chassis = SSET_INITIALIZER(&bfd_chassis);
-    bfd_calculate_chassis(sbrec_port_binding_by_datapath,
-                          chassis_rec, local_datapaths, chassis_index,
-                          &bfd_chassis);
+    bfd_calculate_chassis(sbrec_chassis_by_name,
+                          sbrec_port_binding_by_datapath,
+                          chassis_rec, local_datapaths, &bfd_chassis);
     /* Identify tunnels ports(connected to remote chassis id) to enable bfd */
     struct sset tunnels = SSET_INITIALIZER(&tunnels);
     struct sset bfd_ifaces = SSET_INITIALIZER(&bfd_ifaces);

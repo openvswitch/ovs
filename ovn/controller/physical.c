@@ -291,10 +291,10 @@ load_logical_ingress_metadata(const struct sbrec_port_binding *binding,
 }
 
 static void
-consider_port_binding(struct ovsdb_idl_index *sbrec_port_binding_by_name,
+consider_port_binding(struct ovsdb_idl_index *sbrec_chassis_by_name,
+                      struct ovsdb_idl_index *sbrec_port_binding_by_name,
                       enum mf_field_id mff_ovn_geneve,
                       const struct simap *ct_zones,
-                      const struct chassis_index *chassis_index,
                       const struct sset *active_tunnels,
                       const struct hmap *local_datapaths,
                       const struct sbrec_port_binding *binding,
@@ -361,7 +361,7 @@ consider_port_binding(struct ovsdb_idl_index *sbrec_port_binding_by_name,
     }
 
     struct ovs_list *gateway_chassis
-        = gateway_chassis_get_ordered(binding, chassis_index);
+        = gateway_chassis_get_ordered(sbrec_chassis_by_name, binding);
 
     if (!strcmp(binding->type, "chassisredirect")
         && (binding->chassis == chassis
@@ -868,7 +868,8 @@ update_ofports(struct simap *old, struct simap *new)
 }
 
 void
-physical_run(struct ovsdb_idl_index *sbrec_port_binding_by_name,
+physical_run(struct ovsdb_idl_index *sbrec_chassis_by_name,
+             struct ovsdb_idl_index *sbrec_port_binding_by_name,
              const struct sbrec_multicast_group_table *multicast_group_table,
              const struct sbrec_port_binding_table *port_binding_table,
              enum mf_field_id mff_ovn_geneve,
@@ -877,7 +878,6 @@ physical_run(struct ovsdb_idl_index *sbrec_port_binding_by_name,
              const struct simap *ct_zones,
              const struct hmap *local_datapaths,
              const struct sset *local_lports,
-             const struct chassis_index *chassis_index,
              const struct sset *active_tunnels,
              struct hmap *flow_table)
 {
@@ -999,9 +999,10 @@ physical_run(struct ovsdb_idl_index *sbrec_port_binding_by_name,
      * 64 for logical-to-physical translation. */
     const struct sbrec_port_binding *binding;
     SBREC_PORT_BINDING_TABLE_FOR_EACH (binding, port_binding_table) {
-        consider_port_binding(sbrec_port_binding_by_name,
+        consider_port_binding(sbrec_chassis_by_name,
+                              sbrec_port_binding_by_name,
                               mff_ovn_geneve, ct_zones,
-                              chassis_index, active_tunnels,
+                              active_tunnels,
                               local_datapaths, binding, chassis,
                               &ofpacts, flow_table);
     }

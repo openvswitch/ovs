@@ -16,25 +16,11 @@
 #ifndef OVN_CHASSIS_INDEX_H
 #define OVN_CHASSIS_INDEX_H 1
 
-#include "openvswitch/hmap.h"
+struct ovsdb_idl;
 
-struct chassis_index {
-    struct hmap by_name;
-};
+struct ovsdb_idl_index *chassis_index_create(struct ovsdb_idl *);
 
-struct sbrec_chassis_table;
-
-/* Finds and returns the chassis with the given 'name', or NULL if no such
- * chassis exists. */
-const struct sbrec_chassis *
-chassis_lookup_by_name(const struct chassis_index *chassis_index,
-                       const char *name);
-
-/* Initializes the chassis index out of the ovsdb_idl to SBDB */
-void chassis_index_init(const struct sbrec_chassis_table *,
-                        struct chassis_index *chassis_index);
-
-/* Free a chassis index from memory */
-void chassis_index_destroy(struct chassis_index *chassis_index);
+const struct sbrec_chassis *chassis_lookup_by_name(
+    struct ovsdb_idl_index *sbrec_chassis_by_name, const char *name);
 
 #endif /* ovn/lib/chassis-index.h */

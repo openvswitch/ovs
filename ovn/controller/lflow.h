@@ -35,7 +35,6 @@
 
 #include <stdint.h>
 
-struct chassis_index;
 struct ovn_extend_table;
 struct ovsdb_idl_index;
 struct hmap;
@@ -66,14 +65,14 @@ struct uuid;
 #define LOG_PIPELINE_LEN 24
 
 void lflow_init(void);
-void lflow_run(struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath,
+void lflow_run(struct ovsdb_idl_index *sbrec_chassis_by_name,
+               struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath,
                struct ovsdb_idl_index *sbrec_port_binding_by_name,
                const struct sbrec_dhcp_options_table *,
                const struct sbrec_dhcpv6_options_table *,
                const struct sbrec_logical_flow_table *,
                const struct sbrec_mac_binding_table *,
                const struct sbrec_chassis *chassis,
-               const struct chassis_index *,
                const struct hmap *local_datapaths,
                const struct shash *addr_sets,
                const struct shash *port_groups,

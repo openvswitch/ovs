@@ -20,7 +20,6 @@
 #include <stdbool.h>
 
 struct controller_ctx;
-struct chassis_index;
 struct hmap;
 struct ovsdb_idl;
 struct ovsdb_idl_index;
@@ -33,6 +32,7 @@ struct sset;
 
 void binding_register_ovs_idl(struct ovsdb_idl *);
 void binding_run(struct controller_ctx *,
+                 struct ovsdb_idl_index *sbrec_chassis_by_name,
                  struct ovsdb_idl_index *sbrec_datapath_binding_by_key,
                  struct ovsdb_idl_index *sbrec_port_binding_by_datapath,
                  struct ovsdb_idl_index *sbrec_port_binding_by_name,
@@ -41,7 +41,6 @@ void binding_run(struct controller_ctx *,
                  const struct sbrec_port_binding_table *,
                  const struct ovsrec_bridge *br_int,
                  const struct sbrec_chassis *,
-                 const struct chassis_index *,
                  const struct sset *active_tunnels,
                  struct hmap *local_datapaths,
                  struct sset *local_lports, struct sset *local_lport_ids);

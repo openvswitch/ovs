@@ -393,10 +393,10 @@ update_local_lport_ids(struct sset *local_lport_ids,
 
 static void
 consider_local_datapath(struct controller_ctx *ctx,
+                        struct ovsdb_idl_index *sbrec_chassis_by_name,
                         struct ovsdb_idl_index *sbrec_datapath_binding_by_key,
                         struct ovsdb_idl_index *sbrec_port_binding_by_datapath,
                         struct ovsdb_idl_index *sbrec_port_binding_by_name,
-                        const struct chassis_index *chassis_index,
                         const struct sset *active_tunnels,
                         const struct sbrec_chassis *chassis_rec,
                         const struct sbrec_port_binding *binding_rec,
@@ -441,8 +441,8 @@ consider_local_datapath(struct controller_ctx *ctx,
                                binding_rec->datapath, false, local_datapaths);
         }
     } else if (!strcmp(binding_rec->type, "chassisredirect")) {
-        gateway_chassis = gateway_chassis_get_ordered(binding_rec,
-                                                       chassis_index);
+        gateway_chassis = gateway_chassis_get_ordered(sbrec_chassis_by_name,
+                                                      binding_rec);
         if (gateway_chassis &&
             gateway_chassis_contains(gateway_chassis, chassis_rec)) {
 
@@ -546,6 +546,7 @@ consider_localnet_port(const struct sbrec_port_binding *binding_rec,
 
 void
 binding_run(struct controller_ctx *ctx,
+            struct ovsdb_idl_index *sbrec_chassis_by_name,
             struct ovsdb_idl_index *sbrec_datapath_binding_by_key,
             struct ovsdb_idl_index *sbrec_port_binding_by_datapath,
             struct ovsdb_idl_index *sbrec_port_binding_by_name,
@@ -554,7 +555,6 @@ binding_run(struct controller_ctx *ctx,
             const struct sbrec_port_binding_table *port_binding_table,
             const struct ovsrec_bridge *br_int,
             const struct sbrec_chassis *chassis_rec,
-            const struct chassis_index *chassis_index,
             const struct sset *active_tunnels,
             struct hmap *local_datapaths, struct sset *local_lports,
             struct sset *local_lport_ids)
@@ -578,9 +578,10 @@ binding_run(struct controller_ctx *ctx,
      * chassis and update the binding accordingly.  This includes both
      * directly connected logical ports and children of those ports. */
     SBREC_PORT_BINDING_TABLE_FOR_EACH (binding_rec, port_binding_table) {
-        consider_local_datapath(ctx, sbrec_datapath_binding_by_key,
+        consider_local_datapath(ctx, sbrec_chassis_by_name,
+                                sbrec_datapath_binding_by_key,
                                 sbrec_port_binding_by_datapath,
-                                sbrec_port_binding_by_name, chassis_index,
+                                sbrec_port_binding_by_name,
                                 active_tunnels, chassis_rec, binding_rec,
                                 sset_is_empty(&egress_ifaces) ? NULL :
                                 &qos_map, local_datapaths, &lport_to_iface,
