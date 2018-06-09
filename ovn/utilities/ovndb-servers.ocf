@@ -172,25 +172,29 @@ ovsdb_server_notify() {
             ${OVN_CTL} --ovn-manage-ovsdb=no start_northd
         fi
 
-        # Not needed while listening on 0.0.0.0 as we do not want to allow
-        # local binds. However, it is needed if vip ip is binded to nodes.
-        if [ "x${LISTEN_ON_MASTER_IP_ONLY}" = xyes ]; then
-            conn=`ovn-nbctl get NB_global . connections`
-            if [ "$conn" == "[]" ]
-            then
-                ovn-nbctl -- --id=@conn_uuid create Connection \
-target="p${NB_MASTER_PROTO}\:${NB_MASTER_PORT}\:${MASTER_IP}" \
-inactivity_probe=$INACTIVE_PROBE -- set NB_Global . connections=@conn_uuid
-            fi
-
-            conn=`ovn-sbctl get SB_global . connections`
-            if [ "$conn" == "[]" ]
-            then
-                ovn-sbctl -- --id=@conn_uuid create Connection \
-target="p${SB_MASTER_PROTO}\:${SB_MASTER_PORT}\:${MASTER_IP}" \
-inactivity_probe=$INACTIVE_PROBE -- set SB_Global . connections=@conn_uuid
-            fi
+        # In order to over-ride inactivity_probe for LB use case, we need to
+        # create connection entry to listen on 0.0.0.0 for master node.
+        if [ "x${LISTEN_ON_MASTER_IP_ONLY}" = xno ]; then
+           LISTON_ON_IP="0.0.0.0"
+        else
+           LISTON_ON_IP=${MASTER_IP}
         fi
+        conn=`ovn-nbctl get NB_global . connections`
+        if [ "$conn" == "[]" ]
+        then
+            ovn-nbctl -- --id=@conn_uuid create Connection \
+target="p${NB_MASTER_PROTO}\:${NB_MASTER_PORT}\:${LISTON_ON_IP}" \
+inactivity_probe=$INACTIVE_PROBE -- set NB_Global . connections=@conn_uuid
+        fi
+
+        conn=`ovn-sbctl get SB_global . connections`
+        if [ "$conn" == "[]" ]
+        then
+            ovn-sbctl -- --id=@conn_uuid create Connection \
+target="p${SB_MASTER_PROTO}\:${SB_MASTER_PORT}\:${LISTON_ON_IP}" \
+inactivity_probe=$INACTIVE_PROBE -- set SB_Global . connections=@conn_uuid
+        fi
+
     else
         if [ "$MANAGE_NORTHD" = "yes" ]; then
             # Stop ovn-northd service. Set --ovn-manage-ovsdb=no so that
@@ -355,7 +359,10 @@ ovsdb_server_start() {
         set $@ --db-nb-sync-from-proto=${NB_MASTER_PROTO}
         set $@ --db-sb-sync-from-port=${SB_MASTER_PORT}
         set $@ --db-sb-sync-from-proto=${SB_MASTER_PROTO}
-
+        if [ "x${LISTEN_ON_MASTER_IP_ONLY}" = xno ]; then
+            set $@ --db-sb-use-remote-in-db="no"
+            set $@ --db-nb-use-remote-in-db="no"
+        fi
     fi
 
     $@ start_ovsdb
