@@ -1,0 +1,21 @@
+[Unit]
+Description=OVN Docker LibNetwork plugin
+After=syslog.target
+Requires=openvswitch.service
+BindsTo=docker.service
+PartOf=docker.service
+Before=docker.service
+After=openvswitch.service
+
+[Service]
+Type=forking
+RemainAfterExit=yes
+Environment=OVS_RUNDIR=%t/openvswitch OVS_DBDIR=/var/lib/openvswitch
+EnvironmentFile=-/etc/sysconfig/ovn-docker-overlay-driver
+PIDFile=/var/run/openvswitch/ovn-docker-overlay-driver.pid
+ExecStart=/usr/bin/ovn-docker-overlay-driver --detach --pidfile /var/run/openvswitch/ovn-docker-overlay-driver.pid $OVN_DOCKER_OVERLAY_OPTS
+TimeoutStopSec=5
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target

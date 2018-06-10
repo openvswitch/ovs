@@ -13,6 +13,7 @@ EXTRA_DIST += \
 	rhel/etc_openvswitch_default.conf \
 	rhel/etc_sysconfig_network-scripts_ifdown-ovs \
 	rhel/etc_sysconfig_network-scripts_ifup-ovs \
+	rhel/etc_sysconfig_ovn-docker-overlay-driver \
 	rhel/openvswitch-dkms.spec \
 	rhel/openvswitch-dkms.spec.in \
 	rhel/openvswitch-kmod-rhel6.spec \
@@ -35,6 +36,7 @@ EXTRA_DIST += \
 	rhel/usr_lib_systemd_system_ovn-controller.service \
 	rhel/usr_lib_systemd_system_ovn-controller-vtep.service \
 	rhel/usr_lib_systemd_system_ovn-northd.service \
+	rhel/usr_lib_systemd_system_ovn-docker-overlay-driver.service \
 	rhel/usr_lib_firewalld_services_ovn-central-firewall-service.xml \
 	rhel/usr_lib_firewalld_services_ovn-host-firewall-service.xml
 

@@ -102,7 +102,7 @@ class Vlog(object):
             elif "m" in m:
                 tmp = self._format_field(tmp, m, message)
             elif "N" in m:
-                tmp = self._format_field(tmp, m, str(msg_num))
+                tmp = self._format_field(tmp, m, str(msg_num), True)
             elif "n" in m:
                 tmp = re.sub(m, "\n", tmp)
             elif "p" in m:
@@ -128,17 +128,17 @@ class Vlog(object):
                 tmp = self._format_field(tmp, m, subprogram)
         return tmp.strip()
 
-    def _format_field(self, tmp, match, replace):
+    def _format_field(self, tmp, match, replace, zerofill=False):
         formatting = re.compile("^%(0)?([1-9])?")
         matches = formatting.match(match)
-        # Do we need to apply padding?
-        if not matches.group(1) and replace != "":
-            replace = replace.center(len(replace) + 2)
-        # Does the field have a minimum width
         if matches.group(2):
             min_width = int(matches.group(2))
             if len(replace) < min_width:
-                replace = replace.center(min_width)
+                if zerofill:
+                    for i in range(len(replace), min_width):
+                        replace = "0" + replace
+                else:
+                    replace = replace.center(min_width)
         return re.sub(match, replace, tmp)
 
     def _format_time(self, tmp):

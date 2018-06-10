@@ -317,6 +317,10 @@ install -p -D -m 0755 \
         rhel/usr_share_openvswitch_scripts_ovs-systemd-reload \
         $RPM_BUILD_ROOT%{_datadir}/openvswitch/scripts/ovs-systemd-reload
 
+install -p -m 0644 \
+        rhel/etc_sysconfig_ovn-docker-overlay-driver \
+        $RPM_BUILD_ROOT/%{_sysconfdir}/sysconfig/ovn-docker-overlay-driver
+
 # remove unpackaged files
 rm -f $RPM_BUILD_ROOT%{_bindir}/ovs-parse-backtrace \
         $RPM_BUILD_ROOT%{_sbindir}/ovs-vlan-bug-workaround \
@@ -386,6 +390,17 @@ rm -rf $RPM_BUILD_ROOT
     fi
 %endif
 
+%preun ovn-docker
+%if 0%{?systemd_preun:1}
+    %systemd_preun ovn-docker-overlay-driver.service
+%else
+    if [ $1 -eq 0 ] ; then
+        # Package removal, not upgrade
+        /bin/systemctl --no-reload disable ovn-docker-overlay-driver.service >/dev/null 2>&1 || :
+        /bin/systemctl stop ovn-docker-overlay-driver.service >/dev/null 2>&1 || :
+    fi
+%endif
+
 %pre
 getent group openvswitch >/dev/null || groupadd -r openvswitch
 getent passwd openvswitch >/dev/null || \
@@ -451,6 +466,16 @@ fi
     fi
 %endif
 
+%post ovn-docker
+%if 0%{?systemd_post:1}
+    %systemd_post ovn-docker-overlay-driver.service
+%else
+    # Package install, not upgrade
+    if [ $1 -eq 1 ]; then
+        /bin/systemctl daemon-reload >dev/null || :
+    fi
+%endif
+
 %post selinux-policy
 /usr/sbin/semodule -i %{_datadir}/selinux/packages/%{name}/openvswitch-custom.pp &> /dev/null || :
 
@@ -478,6 +503,13 @@ fi
 %postun ovn-vtep
 %if 0%{?systemd_postun:1}
     %systemd_postun ovn-controller-vtep.service
+%else
+    /bin/systemctl daemon-reload >/dev/null 2>&1 || :
+%endif
+
+%postun ovn-docker
+%if 0%{?systemd_postun:1}
+    %systemd_postun ovn-docker-overlay-driver.service
 %else
     /bin/systemctl daemon-reload >/dev/null 2>&1 || :
 %endif
@@ -598,6 +630,8 @@ fi
 %files ovn-docker
 %{_bindir}/ovn-docker-overlay-driver
 %{_bindir}/ovn-docker-underlay-driver
+%{_unitdir}/ovn-docker-overlay-driver.service
+%{_sysconfdir}/sysconfig/ovn-docker-overlay-driver
 
 %files ovn-common
 %{_bindir}/ovn-nbctl
