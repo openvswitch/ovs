@@ -628,11 +628,6 @@ binding_cleanup(struct ovsdb_idl_txn *ovnsb_idl_txn,
         return true;
     }
 
-    ovsdb_idl_txn_add_comment(
-        ovnsb_idl_txn,
-        "ovn-controller: removing all port bindings for '%s'",
-        chassis_rec->name);
-
     const struct sbrec_port_binding *binding_rec;
     bool any_changes = false;
     SBREC_PORT_BINDING_TABLE_FOR_EACH (binding_rec, port_binding_table) {
@@ -641,5 +636,13 @@ binding_cleanup(struct ovsdb_idl_txn *ovnsb_idl_txn,
             any_changes = true;
         }
     }
+
+    if (any_changes) {
+        ovsdb_idl_txn_add_comment(
+            ovnsb_idl_txn,
+            "ovn-controller: removing all port bindings for '%s'",
+            chassis_rec->name);
+    }
+
     return !any_changes;
 }
