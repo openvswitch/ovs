@@ -123,7 +123,7 @@ import sys
 try:
     socket.socket(family=socket.AF_INET6).bind(("::1", 0, 0, 0))
 except socket.error as e:
-    if e.errno == errno.EAFNOSUPPORT:
+    if e.errno == errno.EAFNOSUPPORT or errno.EADDRNOTAVAIL:
         sys.exit(2)
     raise
 '
