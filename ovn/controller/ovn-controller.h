@@ -25,11 +25,6 @@ struct ovsrec_bridge_table;
 /* Linux supports a maximum of 64K zones, which seems like a fine default. */
 #define MAX_CT_ZONES 65535
 
-struct controller_ctx {
-    struct ovsdb_idl_txn *ovnsb_idl_txn;
-    struct ovsdb_idl_txn *ovs_idl_txn;
-};
-
 /* States to move through when a new conntrack zone has been allocated. */
 enum ct_zone_pending_state {
     CT_ZONE_OF_QUEUED,    /* Waiting to send conntrack flush command. */

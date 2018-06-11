@@ -16,7 +16,6 @@
 #ifndef OVN_BFD_H
 #define OVN_BFD_H 1
 
-struct controller_ctx;
 struct hmap;
 struct ovsdb_idl;
 struct ovsdb_idl_index;

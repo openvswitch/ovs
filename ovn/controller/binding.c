@@ -206,7 +206,7 @@ get_qos_params(const struct sbrec_port_binding *pb, struct hmap *queue_map)
 }
 
 static const struct ovsrec_qos *
-get_noop_qos(struct controller_ctx *ctx,
+get_noop_qos(struct ovsdb_idl_txn *ovs_idl_txn,
              const struct ovsrec_qos_table *qos_table)
 {
     const struct ovsrec_qos *qos;
@@ -216,25 +216,25 @@ get_noop_qos(struct controller_ctx *ctx,
         }
     }
 
-    if (!ctx->ovs_idl_txn) {
+    if (!ovs_idl_txn) {
         return NULL;
     }
-    qos = ovsrec_qos_insert(ctx->ovs_idl_txn);
+    qos = ovsrec_qos_insert(ovs_idl_txn);
     ovsrec_qos_set_type(qos, "linux-noop");
     return qos;
 }
 
 static bool
-set_noop_qos(struct controller_ctx *ctx,
+set_noop_qos(struct ovsdb_idl_txn *ovs_idl_txn,
              const struct ovsrec_port_table *port_table,
              const struct ovsrec_qos_table *qos_table,
              struct sset *egress_ifaces)
 {
-    if (!ctx->ovs_idl_txn) {
+    if (!ovs_idl_txn) {
         return false;
     }
 
-    const struct ovsrec_qos *noop_qos = get_noop_qos(ctx, qos_table);
+    const struct ovsrec_qos *noop_qos = get_noop_qos(ovs_idl_txn, qos_table);
     if (!noop_qos) {
         return false;
     }
@@ -392,7 +392,8 @@ update_local_lport_ids(struct sset *local_lport_ids,
 }
 
 static void
-consider_local_datapath(struct controller_ctx *ctx,
+consider_local_datapath(struct ovsdb_idl_txn *ovnsb_idl_txn,
+                        struct ovsdb_idl_txn *ovs_idl_txn,
                         struct ovsdb_idl_index *sbrec_chassis_by_name,
                         struct ovsdb_idl_index *sbrec_datapath_binding_by_key,
                         struct ovsdb_idl_index *sbrec_port_binding_by_datapath,
@@ -422,7 +423,7 @@ consider_local_datapath(struct controller_ctx *ctx,
                            sbrec_port_binding_by_datapath,
                            sbrec_port_binding_by_name,
                            binding_rec->datapath, false, local_datapaths);
-        if (iface_rec && qos_map && ctx->ovs_idl_txn) {
+        if (iface_rec && qos_map && ovs_idl_txn) {
             get_qos_params(binding_rec, qos_map);
         }
         /* This port is in our chassis unless it is a localport. */
@@ -480,7 +481,7 @@ consider_local_datapath(struct controller_ctx *ctx,
         update_local_lport_ids(local_lport_ids, binding_rec);
     }
 
-    if (ctx->ovnsb_idl_txn) {
+    if (ovnsb_idl_txn) {
         const char *vif_chassis = smap_get(&binding_rec->options,
                                            "requested-chassis");
         bool can_bind = !vif_chassis || !vif_chassis[0]
@@ -545,7 +546,8 @@ consider_localnet_port(const struct sbrec_port_binding *binding_rec,
 }
 
 void
-binding_run(struct controller_ctx *ctx,
+binding_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
+            struct ovsdb_idl_txn *ovs_idl_txn,
             struct ovsdb_idl_index *sbrec_chassis_by_name,
             struct ovsdb_idl_index *sbrec_datapath_binding_by_key,
             struct ovsdb_idl_index *sbrec_port_binding_by_datapath,
@@ -578,7 +580,8 @@ binding_run(struct controller_ctx *ctx,
      * chassis and update the binding accordingly.  This includes both
      * directly connected logical ports and children of those ports. */
     SBREC_PORT_BINDING_TABLE_FOR_EACH (binding_rec, port_binding_table) {
-        consider_local_datapath(ctx, sbrec_chassis_by_name,
+        consider_local_datapath(ovnsb_idl_txn, ovs_idl_txn,
+                                sbrec_chassis_by_name,
                                 sbrec_datapath_binding_by_key,
                                 sbrec_port_binding_by_datapath,
                                 sbrec_port_binding_by_name,
@@ -599,7 +602,7 @@ binding_run(struct controller_ctx *ctx,
     }
 
     if (!sset_is_empty(&egress_ifaces)
-        && set_noop_qos(ctx, port_table, qos_table, &egress_ifaces)) {
+        && set_noop_qos(ovs_idl_txn, port_table, qos_table, &egress_ifaces)) {
         const char *entry;
         SSET_FOR_EACH (entry, &egress_ifaces) {
             setup_qos(entry, &qos_map);
@@ -614,11 +617,11 @@ binding_run(struct controller_ctx *ctx,
 /* Returns true if the database is all cleaned up, false if more work is
  * required. */
 bool
-binding_cleanup(struct controller_ctx *ctx,
+binding_cleanup(struct ovsdb_idl_txn *ovnsb_idl_txn,
                 const struct sbrec_port_binding_table *port_binding_table,
                 const struct sbrec_chassis *chassis_rec)
 {
-    if (!ctx->ovnsb_idl_txn) {
+    if (!ovnsb_idl_txn) {
         return false;
     }
     if (!chassis_rec) {
@@ -626,7 +629,7 @@ binding_cleanup(struct controller_ctx *ctx,
     }
 
     ovsdb_idl_txn_add_comment(
-        ctx->ovnsb_idl_txn,
+        ovnsb_idl_txn,
         "ovn-controller: removing all port bindings for '%s'",
         chassis_rec->name);
 

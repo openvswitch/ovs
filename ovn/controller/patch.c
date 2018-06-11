@@ -56,7 +56,7 @@ match_patch_port(const struct ovsrec_port *port, const char *peer)
  *
  * If such a patch port already exists, removes it from 'existing_ports'. */
 static void
-create_patch_port(struct controller_ctx *ctx,
+create_patch_port(struct ovsdb_idl_txn *ovs_idl_txn,
                   const char *key, const char *value,
                   const struct ovsrec_bridge *src, const char *src_name,
                   const struct ovsrec_bridge *dst, const char *dst_name,
@@ -70,19 +70,19 @@ create_patch_port(struct controller_ctx *ctx,
         }
     }
 
-    ovsdb_idl_txn_add_comment(ctx->ovs_idl_txn,
+    ovsdb_idl_txn_add_comment(ovs_idl_txn,
             "ovn-controller: creating patch port '%s' from '%s' to '%s'",
             src_name, src->name, dst->name);
 
     struct ovsrec_interface *iface;
-    iface = ovsrec_interface_insert(ctx->ovs_idl_txn);
+    iface = ovsrec_interface_insert(ovs_idl_txn);
     ovsrec_interface_set_name(iface, src_name);
     ovsrec_interface_set_type(iface, "patch");
     const struct smap options = SMAP_CONST1(&options, "peer", dst_name);
     ovsrec_interface_set_options(iface, &options);
 
     struct ovsrec_port *port;
-    port = ovsrec_port_insert(ctx->ovs_idl_txn);
+    port = ovsrec_port_insert(ovs_idl_txn);
     ovsrec_port_set_name(port, src_name);
     ovsrec_port_set_interfaces(port, &iface, 1);
     const struct smap ids = SMAP_CONST1(&ids, key, value);
@@ -133,7 +133,7 @@ remove_port(const struct ovsrec_bridge_table *bridge_table,
  * the local bridge mappings.  Removes any patch ports for bridge mappings that
  * already existed from 'existing_ports'. */
 static void
-add_bridge_mappings(struct controller_ctx *ctx,
+add_bridge_mappings(struct ovsdb_idl_txn *ovs_idl_txn,
                     const struct ovsrec_bridge_table *bridge_table,
                     const struct ovsrec_open_vswitch_table *ovs_table,
                     const struct sbrec_port_binding_table *port_binding_table,
@@ -214,9 +214,9 @@ add_bridge_mappings(struct controller_ctx *ctx,
 
         char *name1 = patch_port_name(br_int->name, binding->logical_port);
         char *name2 = patch_port_name(binding->logical_port, br_int->name);
-        create_patch_port(ctx, patch_port_id, binding->logical_port,
+        create_patch_port(ovs_idl_txn, patch_port_id, binding->logical_port,
                           br_int, name1, br_ln, name2, existing_ports);
-        create_patch_port(ctx, patch_port_id, binding->logical_port,
+        create_patch_port(ovs_idl_txn, patch_port_id, binding->logical_port,
                           br_ln, name2, br_int, name1, existing_ports);
         free(name1);
         free(name2);
@@ -226,7 +226,7 @@ add_bridge_mappings(struct controller_ctx *ctx,
 }
 
 void
-patch_run(struct controller_ctx *ctx,
+patch_run(struct ovsdb_idl_txn *ovs_idl_txn,
           const struct ovsrec_bridge_table *bridge_table,
           const struct ovsrec_open_vswitch_table *ovs_table,
           const struct ovsrec_port_table *port_table,
@@ -234,7 +234,7 @@ patch_run(struct controller_ctx *ctx,
           const struct ovsrec_bridge *br_int,
           const struct sbrec_chassis *chassis)
 {
-    if (!ctx->ovs_idl_txn) {
+    if (!ovs_idl_txn) {
         return;
     }
 
@@ -258,8 +258,8 @@ patch_run(struct controller_ctx *ctx,
     /* Create in the database any patch ports that should exist.  Remove from
      * 'existing_ports' any patch ports that do exist in the database and
      * should be there. */
-    add_bridge_mappings(ctx, bridge_table, ovs_table, port_binding_table,
-                        br_int, &existing_ports, chassis);
+    add_bridge_mappings(ovs_idl_txn, bridge_table, ovs_table,
+                        port_binding_table, br_int, &existing_ports, chassis);
 
     /* Now 'existing_ports' only still contains patch ports that exist in the
      * database but shouldn't.  Delete them from the database. */

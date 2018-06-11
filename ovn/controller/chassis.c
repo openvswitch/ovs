@@ -76,13 +76,13 @@ get_cms_options(const struct smap *ext_ids)
 /* Returns this chassis's Chassis record, if it is available and is currently
  * amenable to a transaction. */
 const struct sbrec_chassis *
-chassis_run(struct controller_ctx *ctx,
+chassis_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
             struct ovsdb_idl_index *sbrec_chassis_by_name,
             const struct ovsrec_open_vswitch_table *ovs_table,
             const char *chassis_id,
             const struct ovsrec_bridge *br_int)
 {
-    if (!ctx->ovnsb_idl_txn) {
+    if (!ovnsb_idl_txn) {
         return NULL;
     }
 
@@ -209,7 +209,7 @@ chassis_run(struct controller_ctx *ctx,
         }
     }
 
-    ovsdb_idl_txn_add_comment(ctx->ovnsb_idl_txn,
+    ovsdb_idl_txn_add_comment(ovnsb_idl_txn,
                               "ovn-controller: registering chassis '%s'",
                               chassis_id);
 
@@ -218,7 +218,7 @@ chassis_run(struct controller_ctx *ctx,
         smap_add(&ext_ids, "ovn-bridge-mappings", bridge_mappings);
         smap_add(&ext_ids, "datapath-type", datapath_type);
         smap_add(&ext_ids, "iface-types", iface_types_str);
-        chassis_rec = sbrec_chassis_insert(ctx->ovnsb_idl_txn);
+        chassis_rec = sbrec_chassis_insert(ovnsb_idl_txn);
         sbrec_chassis_set_name(chassis_rec, chassis_id);
         sbrec_chassis_set_hostname(chassis_rec, hostname);
         sbrec_chassis_set_external_ids(chassis_rec, &ext_ids);
@@ -232,7 +232,7 @@ chassis_run(struct controller_ctx *ctx,
     for (int i = 0; i < n_encaps; i++) {
         const char *type = pop_tunnel_name(&req_tunnels);
 
-        encaps[i] = sbrec_encap_insert(ctx->ovnsb_idl_txn);
+        encaps[i] = sbrec_encap_insert(ovnsb_idl_txn);
 
         sbrec_encap_set_type(encaps[i], type);
         sbrec_encap_set_ip(encaps[i], encap_ip);
@@ -249,14 +249,14 @@ chassis_run(struct controller_ctx *ctx,
 /* Returns true if the database is all cleaned up, false if more work is
  * required. */
 bool
-chassis_cleanup(struct controller_ctx *ctx,
+chassis_cleanup(struct ovsdb_idl_txn *ovnsb_idl_txn,
                 const struct sbrec_chassis *chassis_rec)
 {
     if (!chassis_rec) {
         return true;
     }
-    if (ctx->ovnsb_idl_txn) {
-        ovsdb_idl_txn_add_comment(ctx->ovnsb_idl_txn,
+    if (ovnsb_idl_txn) {
+        ovsdb_idl_txn_add_comment(ovnsb_idl_txn,
                                   "ovn-controller: unregistering chassis '%s'",
                                   chassis_rec->name);
         sbrec_chassis_delete(chassis_rec);

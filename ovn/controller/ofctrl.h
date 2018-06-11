@@ -22,7 +22,6 @@
 #include "openvswitch/meta-flow.h"
 #include "ovsdb-idl.h"
 
-struct controller_ctx;
 struct ovn_extend_table;
 struct hmap;
 struct match;

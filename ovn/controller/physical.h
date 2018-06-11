@@ -27,7 +27,6 @@
 
 #include "openvswitch/meta-flow.h"
 
-struct controller_ctx;
 struct hmap;
 struct ovsdb_idl_index;
 struct ovsrec_bridge;

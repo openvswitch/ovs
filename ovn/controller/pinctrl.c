@@ -67,11 +67,11 @@ static void pinctrl_handle_put_mac_binding(const struct flow *md,
 static void init_put_mac_bindings(void);
 static void destroy_put_mac_bindings(void);
 static void run_put_mac_bindings(
-    struct controller_ctx *,
+    struct ovsdb_idl_txn *ovnsb_idl_txn,
     struct ovsdb_idl_index *sbrec_datapath_binding_by_key,
     struct ovsdb_idl_index *sbrec_port_binding_by_key,
     const struct sbrec_mac_binding_table *);
-static void wait_put_mac_bindings(struct controller_ctx *);
+static void wait_put_mac_bindings(struct ovsdb_idl_txn *ovnsb_idl_txn);
 static void flush_put_mac_bindings(void);
 
 static void init_send_garps(void);
@@ -1245,7 +1245,7 @@ pinctrl_recv(const struct sbrec_dns_table *dns_table,
 }
 
 void
-pinctrl_run(struct controller_ctx *ctx,
+pinctrl_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
             struct ovsdb_idl_index *sbrec_chassis_by_name,
             struct ovsdb_idl_index *sbrec_datapath_binding_by_key,
             struct ovsdb_idl_index *sbrec_port_binding_by_datapath,
@@ -1292,7 +1292,7 @@ pinctrl_run(struct controller_ctx *ctx,
         ofpbuf_delete(msg);
     }
 
-    run_put_mac_bindings(ctx, sbrec_datapath_binding_by_key,
+    run_put_mac_bindings(ovnsb_idl_txn, sbrec_datapath_binding_by_key,
                          sbrec_port_binding_by_key, mac_binding_table);
     send_garp_run(sbrec_chassis_by_name, sbrec_port_binding_by_datapath,
                   sbrec_port_binding_by_name, br_int, chassis,
@@ -1593,9 +1593,9 @@ send_ipv6_ras(struct ovsdb_idl_index *sbrec_port_binding_by_datapath,
 }
 
 void
-pinctrl_wait(struct controller_ctx *ctx)
+pinctrl_wait(struct ovsdb_idl_txn *ovnsb_idl_txn)
 {
-    wait_put_mac_bindings(ctx);
+    wait_put_mac_bindings(ovnsb_idl_txn);
     rconn_run_wait(swconn);
     rconn_recv_wait(swconn);
     send_garp_wait();
@@ -1617,7 +1617,7 @@ pinctrl_destroy(void)
  * updating the MAC_Binding table in the southbound database.
  *
  * This code could be a lot simpler if the database could always be updated,
- * but in fact we can only update it when ctx->ovnsb_idl_txn is nonnull.  Thus,
+ * but in fact we can only update it when 'ovnsb_idl_txn' is nonnull.  Thus,
  * we buffer up a few put_mac_bindings (but we don't keep them longer
  * than 1 second) and apply them whenever a database transaction is
  * available. */
@@ -1703,7 +1703,7 @@ pinctrl_handle_put_mac_binding(const struct flow *md,
 }
 
 static void
-run_put_mac_binding(struct controller_ctx *ctx,
+run_put_mac_binding(struct ovsdb_idl_txn *ovnsb_idl_txn,
                     struct ovsdb_idl_index *sbrec_datapath_binding_by_key,
                     struct ovsdb_idl_index *sbrec_port_binding_by_key,
                     const struct sbrec_mac_binding_table *mac_binding_table,
@@ -1746,7 +1746,7 @@ run_put_mac_binding(struct controller_ctx *ctx,
     }
 
     /* Add new IP-MAC binding for this logical port. */
-    b = sbrec_mac_binding_insert(ctx->ovnsb_idl_txn);
+    b = sbrec_mac_binding_insert(ovnsb_idl_txn);
     sbrec_mac_binding_set_logical_port(b, pb->logical_port);
     sbrec_mac_binding_set_ip(b, pmb->ip_s);
     sbrec_mac_binding_set_mac(b, mac_string);
@@ -1754,27 +1754,27 @@ run_put_mac_binding(struct controller_ctx *ctx,
 }
 
 static void
-run_put_mac_bindings(struct controller_ctx *ctx,
+run_put_mac_bindings(struct ovsdb_idl_txn *ovnsb_idl_txn,
                      struct ovsdb_idl_index *sbrec_datapath_binding_by_key,
                      struct ovsdb_idl_index *sbrec_port_binding_by_key,
                      const struct sbrec_mac_binding_table *mac_binding_table)
 {
-    if (!ctx->ovnsb_idl_txn) {
+    if (!ovnsb_idl_txn) {
         return;
     }
 
     const struct put_mac_binding *pmb;
     HMAP_FOR_EACH (pmb, hmap_node, &put_mac_bindings) {
-        run_put_mac_binding(ctx, sbrec_datapath_binding_by_key,
+        run_put_mac_binding(ovnsb_idl_txn, sbrec_datapath_binding_by_key,
                             sbrec_port_binding_by_key, mac_binding_table, pmb);
     }
     flush_put_mac_bindings();
 }
 
 static void
-wait_put_mac_bindings(struct controller_ctx *ctx)
+wait_put_mac_bindings(struct ovsdb_idl_txn *ovnsb_idl_txn)
 {
-    if (ctx->ovnsb_idl_txn && !hmap_is_empty(&put_mac_bindings)) {
+    if (ovnsb_idl_txn && !hmap_is_empty(&put_mac_bindings)) {
         poll_immediate_wake();
     }
 }

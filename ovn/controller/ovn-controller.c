@@ -196,29 +196,29 @@ update_sb_monitors(struct ovsdb_idl *ovnsb_idl,
 }
 
 static const struct ovsrec_bridge *
-create_br_int(struct controller_ctx *ctx,
+create_br_int(struct ovsdb_idl_txn *ovs_idl_txn,
               const struct ovsrec_open_vswitch *cfg,
               const char *bridge_name)
 {
-    if (!ctx->ovs_idl_txn) {
+    if (!ovs_idl_txn) {
         return NULL;
     }
 
-    ovsdb_idl_txn_add_comment(ctx->ovs_idl_txn,
+    ovsdb_idl_txn_add_comment(ovs_idl_txn,
             "ovn-controller: creating integration bridge '%s'", bridge_name);
 
     struct ovsrec_interface *iface;
-    iface = ovsrec_interface_insert(ctx->ovs_idl_txn);
+    iface = ovsrec_interface_insert(ovs_idl_txn);
     ovsrec_interface_set_name(iface, bridge_name);
     ovsrec_interface_set_type(iface, "internal");
 
     struct ovsrec_port *port;
-    port = ovsrec_port_insert(ctx->ovs_idl_txn);
+    port = ovsrec_port_insert(ovs_idl_txn);
     ovsrec_port_set_name(port, bridge_name);
     ovsrec_port_set_interfaces(port, &iface, 1);
 
     struct ovsrec_bridge *bridge;
-    bridge = ovsrec_bridge_insert(ctx->ovs_idl_txn);
+    bridge = ovsrec_bridge_insert(ovs_idl_txn);
     ovsrec_bridge_set_name(bridge, bridge_name);
     ovsrec_bridge_set_fail_mode(bridge, "secure");
     const struct smap oc = SMAP_CONST1(&oc, "disable-in-band", "true");
@@ -238,7 +238,7 @@ create_br_int(struct controller_ctx *ctx,
 }
 
 static const struct ovsrec_bridge *
-get_br_int(struct controller_ctx *ctx,
+get_br_int(struct ovsdb_idl_txn *ovs_idl_txn,
            const struct ovsrec_bridge_table *bridge_table,
            const struct ovsrec_open_vswitch_table *ovs_table)
 {
@@ -253,7 +253,7 @@ get_br_int(struct controller_ctx *ctx,
 
     const struct ovsrec_bridge *br = get_bridge(bridge_table, br_int_name);
     if (!br) {
-        return create_br_int(ctx, cfg, br_int_name);
+        return create_br_int(ovs_idl_txn, cfg, br_int_name);
     }
     return br;
 }
@@ -642,10 +642,9 @@ main(int argc, char *argv[])
             free(new_ovnsb_remote);
         }
 
-        struct controller_ctx ctx = {
-            .ovs_idl_txn = ovsdb_idl_loop_run(&ovs_idl_loop),
-            .ovnsb_idl_txn = ovsdb_idl_loop_run(&ovnsb_idl_loop),
-        };
+        struct ovsdb_idl_txn *ovs_idl_txn = ovsdb_idl_loop_run(&ovs_idl_loop);
+        struct ovsdb_idl_txn *ovnsb_idl_txn
+            = ovsdb_idl_loop_run(&ovnsb_idl_loop);
 
         update_probe_interval(ovsrec_open_vswitch_table_get(ovs_idl_loop.idl),
                               ovnsb_remote, ovnsb_idl_loop.idl);
@@ -667,21 +666,22 @@ main(int argc, char *argv[])
         struct sset active_tunnels = SSET_INITIALIZER(&active_tunnels);
 
         const struct ovsrec_bridge *br_int
-            = get_br_int(&ctx, ovsrec_bridge_table_get(ovs_idl_loop.idl),
+            = get_br_int(ovs_idl_txn,
+                         ovsrec_bridge_table_get(ovs_idl_loop.idl),
                          ovsrec_open_vswitch_table_get(ovs_idl_loop.idl));
         const char *chassis_id
             = get_chassis_id(ovsrec_open_vswitch_table_get(ovs_idl_loop.idl));
 
         const struct sbrec_chassis *chassis = NULL;
         if (chassis_id) {
-            chassis = chassis_run(&ctx, sbrec_chassis_by_name,
+            chassis = chassis_run(ovnsb_idl_txn, sbrec_chassis_by_name,
                                   ovsrec_open_vswitch_table_get(ovs_idl_loop.idl),
                                   chassis_id, br_int);
-            encaps_run(&ctx,
+            encaps_run(ovs_idl_txn,
                        ovsrec_bridge_table_get(ovs_idl_loop.idl), br_int,
                        sbrec_chassis_table_get(ovnsb_idl_loop.idl), chassis_id);
             bfd_calculate_active_tunnels(br_int, &active_tunnels);
-            binding_run(&ctx, sbrec_chassis_by_name,
+            binding_run(ovnsb_idl_txn, ovs_idl_txn, sbrec_chassis_by_name,
                         sbrec_datapath_binding_by_key,
                         sbrec_port_binding_by_datapath,
                         sbrec_port_binding_by_name,
@@ -700,7 +700,7 @@ main(int argc, char *argv[])
             port_groups_init(sbrec_port_group_table_get(ovnsb_idl_loop.idl),
                              &port_groups);
 
-            patch_run(&ctx,
+            patch_run(ovs_idl_txn,
                       ovsrec_bridge_table_get(ovs_idl_loop.idl),
                       ovsrec_open_vswitch_table_get(ovs_idl_loop.idl),
                       ovsrec_port_table_get(ovs_idl_loop.idl),
@@ -710,7 +710,7 @@ main(int argc, char *argv[])
             enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int,
                                                          &pending_ct_zones);
 
-            pinctrl_run(&ctx, sbrec_chassis_by_name,
+            pinctrl_run(ovnsb_idl_txn, sbrec_chassis_by_name,
                         sbrec_datapath_binding_by_key,
                         sbrec_port_binding_by_datapath,
                         sbrec_port_binding_by_key,
@@ -721,7 +721,7 @@ main(int argc, char *argv[])
                         &local_datapaths, &active_tunnels);
             update_ct_zones(&local_lports, &local_datapaths, &ct_zones,
                             ct_zone_bitmap, &pending_ct_zones);
-            if (ctx.ovs_idl_txn) {
+            if (ovs_idl_txn) {
                 if (ofctrl_can_put()) {
                     stopwatch_start(CONTROLLER_LOOP_STOPWATCH_NAME,
                                     time_msec());
@@ -767,7 +767,7 @@ main(int argc, char *argv[])
 
                     hmap_destroy(&flow_table);
                 }
-                if (ctx.ovnsb_idl_txn) {
+                if (ovnsb_idl_txn) {
                     int64_t cur_cfg = ofctrl_get_cur_cfg();
                     if (cur_cfg && cur_cfg != chassis->nb_cfg) {
                         sbrec_chassis_set_nb_cfg(chassis, cur_cfg);
@@ -827,7 +827,7 @@ main(int argc, char *argv[])
 
         if (br_int) {
             ofctrl_wait();
-            pinctrl_wait(&ctx);
+            pinctrl_wait(ovnsb_idl_txn);
         }
 
         ovsdb_idl_loop_commit_and_wait(&ovnsb_idl_loop);
@@ -851,10 +851,9 @@ main(int argc, char *argv[])
     /* It's time to exit.  Clean up the databases. */
     bool done = false;
     while (!done) {
-        struct controller_ctx ctx = {
-            .ovs_idl_txn = ovsdb_idl_loop_run(&ovs_idl_loop),
-            .ovnsb_idl_txn = ovsdb_idl_loop_run(&ovnsb_idl_loop),
-        };
+        struct ovsdb_idl_txn *ovs_idl_txn = ovsdb_idl_loop_run(&ovs_idl_loop);
+        struct ovsdb_idl_txn *ovnsb_idl_txn
+            = ovsdb_idl_loop_run(&ovnsb_idl_loop);
 
         const struct ovsrec_bridge_table *bridge_table
             = ovsrec_bridge_table_get(ovs_idl_loop.idl);
@@ -864,7 +863,8 @@ main(int argc, char *argv[])
         const struct sbrec_port_binding_table *port_binding_table
             = sbrec_port_binding_table_get(ovnsb_idl_loop.idl);
 
-        const struct ovsrec_bridge *br_int = get_br_int(&ctx, bridge_table,
+        const struct ovsrec_bridge *br_int = get_br_int(ovs_idl_txn,
+                                                        bridge_table,
                                                         ovs_table);
         const char *chassis_id = get_chassis_id(ovs_table);
         const struct sbrec_chassis *chassis
@@ -874,9 +874,9 @@ main(int argc, char *argv[])
 
         /* Run all of the cleanup functions, even if one of them returns false.
          * We're done if all of them return true. */
-        done = binding_cleanup(&ctx, port_binding_table, chassis);
-        done = chassis_cleanup(&ctx, chassis) && done;
-        done = encaps_cleanup(&ctx, br_int) && done;
+        done = binding_cleanup(ovnsb_idl_txn, port_binding_table, chassis);
+        done = chassis_cleanup(ovnsb_idl_txn, chassis) && done;
+        done = encaps_cleanup(ovs_idl_txn, br_int) && done;
         if (done) {
             poll_immediate_wake();
         }
