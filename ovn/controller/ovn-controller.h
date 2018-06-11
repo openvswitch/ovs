@@ -26,10 +26,7 @@ struct ovsrec_bridge_table;
 #define MAX_CT_ZONES 65535
 
 struct controller_ctx {
-    struct ovsdb_idl *ovnsb_idl;
     struct ovsdb_idl_txn *ovnsb_idl_txn;
-
-    struct ovsdb_idl *ovs_idl;
     struct ovsdb_idl_txn *ovs_idl_txn;
 };
 
