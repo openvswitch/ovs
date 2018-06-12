@@ -364,7 +364,7 @@ static inline int ovs_ip_tunnel_encap(struct sk_buff *skb, struct ip_tunnel *t,
 }
 
 #define ip_tunnel_get_stats64 rpl_ip_tunnel_get_stats64
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,11,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,11,0) && !defined(HAVE_RHEL7_MAX_MTU)
 struct rtnl_link_stats64 *rpl_ip_tunnel_get_stats64(struct net_device *dev,
 						    struct rtnl_link_stats64 *tot);
 #else

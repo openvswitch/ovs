@@ -274,7 +274,7 @@ static void netdev_stats_to_stats64(struct rtnl_link_stats64 *stats64,
 }
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,11,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,11,0) && !defined(HAVE_RHEL7_MAX_MTU)
 struct rtnl_link_stats64 *rpl_ip_tunnel_get_stats64(struct net_device *dev,
 						struct rtnl_link_stats64 *tot)
 #else
@@ -306,7 +306,7 @@ void rpl_ip_tunnel_get_stats64(struct net_device *dev,
 		tot->tx_bytes   += tx_bytes;
 	}
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,11,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,11,0) && !defined(HAVE_RHEL7_MAX_MTU)
 	return tot;
 #endif
 }
