@@ -145,7 +145,7 @@ Summary: Open vSwitch testing utilities
 License: ASL 2.0
 BuildArch: noarch
 Requires: %{_py2}-openvswitch = %{version}-%{release}
-Requires: %{_py2} %{_py2}-twisted
+Requires: %{_py2} %{_py2}-netifaces %{_py2}-twisted
 
 %description test
 Utilities that are useful to diagnose performance and connectivity
