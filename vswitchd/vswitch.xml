@@ -302,9 +302,10 @@
         </p>
         <p>
           If dpdk-socket-mem and dpdk-alloc-mem are not specified, dpdk-socket-mem
-          will be used and the default value is 1024,0. If dpdk-socket-mem and
-          dpdk-alloc-mem are specified at same time, dpdk-socket-mem will be
-          used as default. Changing this value requires restarting the daemon.
+          will be used and the default value is 1024 for each numa node. If
+          dpdk-socket-mem and dpdk-alloc-mem are specified at same time,
+          dpdk-socket-mem will be used as default. Changing this value
+          requires restarting the daemon.
         </p>
       </column>
 

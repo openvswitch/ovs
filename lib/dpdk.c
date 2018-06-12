@@ -36,6 +36,7 @@
 #include "netdev-dpdk.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/vlog.h"
+#include "ovs-numa.h"
 #include "smap.h"
 #include "vswitch-idl.h"
 
@@ -167,6 +168,28 @@ construct_dpdk_options(const struct smap *ovs_other_config,
     return ret;
 }
 
+static char *
+construct_dpdk_socket_mem(void)
+{
+    int numa;
+    const char *def_value = "1024";
+    int numa_nodes = ovs_numa_get_n_numas();
+
+    if (numa_nodes == 0 || numa_nodes == OVS_NUMA_UNSPEC) {
+        numa_nodes = 1;
+    }
+    /* Allocate enough memory for digits, comma-sep and terminator. */
+    char *dpdk_socket_mem = xzalloc(numa_nodes * (strlen(def_value) + 1));
+
+    strcat(dpdk_socket_mem, def_value);
+    for (numa = 1; numa < numa_nodes; ++numa) {
+        strcat(dpdk_socket_mem, ",");
+        strcat(dpdk_socket_mem, def_value);
+    }
+
+    return dpdk_socket_mem;
+}
+
 #define MAX_DPDK_EXCL_OPTS 10
 
 static int
@@ -174,6 +197,7 @@ construct_dpdk_mutex_options(const struct smap *ovs_other_config,
                              char ***argv, const int initial_size,
                              char **extra_args, const size_t extra_argc)
 {
+    char *default_dpdk_socket_mem = construct_dpdk_socket_mem();
     struct dpdk_exclusive_options_map {
         const char *category;
         const char *ovs_dpdk_options[MAX_DPDK_EXCL_OPTS];
@@ -184,7 +208,7 @@ construct_dpdk_mutex_options(const struct smap *ovs_other_config,
         {"memory type",
          {"dpdk-alloc-mem", "dpdk-socket-mem", NULL,},
          {"-m",             "--socket-mem",    NULL,},
-         "1024,0", 1
+         default_dpdk_socket_mem, 1
         },
     };
 
@@ -230,6 +254,8 @@ construct_dpdk_mutex_options(const struct smap *ovs_other_config,
                       "dpdk_extras config", popt->eal_dpdk_options[found_pos]);
         }
     }
+
+    free(default_dpdk_socket_mem);
 
     return ret;
 }
