@@ -1612,7 +1612,12 @@ static const struct net_device_ops ip6_tnl_netdev_ops = {
 	.ndo_uninit	= ip6_tnl_dev_uninit,
 	.ndo_start_xmit = ip6_tnl_start_xmit,
 	.ndo_do_ioctl	= ip6_tnl_ioctl,
+#ifdef	HAVE_RHEL7_MAX_MTU
+	.ndo_size		= sizeof(struct net_device_ops),
+	.extended.ndo_change_mtu = ip6_tnl_change_mtu,
+#else
 	.ndo_change_mtu = ip6_tnl_change_mtu,
+#endif
 	.ndo_get_stats	= ip6_get_stats,
 #ifdef HAVE_NDO_GET_IFLINK
 	.ndo_get_iflink = ip6_tnl_get_iflink,
