@@ -40,6 +40,7 @@
 #include <sys/utsname.h>
 #endif
 #include "compiler.h"
+#include "openvswitch/dynamic-string.h"
 #include "openvswitch/list.h"
 #include "packets.h"
 #include "timeval.h"
@@ -417,7 +418,6 @@ lldpd_hide_ports(struct lldpd *cfg,
                  int mask) {
     struct lldpd_port *port;
     int protocols[LLDPD_MODE_MAX + 1];
-    char buffer[256];
     bool found = false;
     int i, j, k;
     unsigned int min;
@@ -505,29 +505,25 @@ lldpd_hide_ports(struct lldpd *cfg,
         j++;
     }
 
-    buffer[0] = '\0';
-    for (i = 0; cfg->g_protocols[i].mode != 0; i++) {
-        if (cfg->g_protocols[i].enabled &&
-            protocols[cfg->g_protocols[i].mode]) {
-            if (strlen(buffer) +
-                strlen(cfg->g_protocols[i].name) + 3 > sizeof(buffer)) {
-                /* Unlikely, our buffer is too small */
-                memcpy(buffer + sizeof(buffer) - 4, "...", 4);
-                break;
-            }
-            if (buffer[0]) {
-                strncat(buffer, ", ", 2);
-                strncat(buffer, cfg->g_protocols[i].name,
-                strlen(cfg->g_protocols[i].name));
+    if (VLOG_IS_DBG_ENABLED()) {
+        struct ds buffer = DS_EMPTY_INITIALIZER;
+        for (struct protocol *p = cfg->g_protocols; p->mode; p++) {
+            if (p->enabled && protocols[p->mode]) {
+                if (buffer.length) {
+                    ds_put_cstr(&buffer, ", ");
+                }
+                ds_put_cstr(&buffer, p->name);
             }
         }
+        VLOG_DBG("%s: %s: %d visible neighbors (out of %d)",
+                 hw->h_ifname,
+                 (mask == SMART_OUTGOING) ? "out filter" : "in filter",
+                 k, j);
+        VLOG_DBG("%s: protocols: %s",
+                 hw->h_ifname,
+                 buffer.length ? ds_cstr(&buffer) : "(none)");
+        ds_destroy(&buffer);
     }
-    VLOG_DBG("%s: %s: %d visible neighbors (out of %d)",
-             hw->h_ifname,
-             (mask == SMART_OUTGOING) ? "out filter" : "in filter",
-             k, j);
-    VLOG_DBG("%s: protocols: %s",
-             hw->h_ifname, buffer[0] ? buffer : "(none)");
 }
 
 /* Hide unwanted ports depending on smart mode set by the user */
