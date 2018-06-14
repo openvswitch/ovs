@@ -51,22 +51,6 @@ The following commands manage datapaths.
 .so lib/dpctl.man
 .
 .SH OPTIONS
-.IP "\fB\-s\fR"
-.IQ "\fB\-\-statistics\fR"
-Causes the \fBshow\fR command to print packet and byte counters for
-each port within the datapaths that it shows.
-.
-.IP "\fB\-m\fR"
-.IQ "\fB\-\-more\fR"
-Increases verbosity of output for \fBdump\-flows\fR and
-\fBget\-flow\fR.
-.
-.IP "\fB\-\-names\fR"
-.IQ "\fB\-\-no-names\fR"
-Enables or disables showing port names in place of numbers in output
-for \fBdump\-flows\fR and \fBget\-flow\fR.  By default, names are
-shown if at least one \fB\-m\fR or \fB\-\-more\fR is specified.
-.
 .IP "\fB\-t\fR"
 .IQ "\fB\-\-timeout=\fIsecs\fR"
 Limits \fBovs\-dpctl\fR runtime to approximately \fIsecs\fR seconds.  If
