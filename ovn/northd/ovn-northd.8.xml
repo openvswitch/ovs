@@ -1401,10 +1401,6 @@ icmp4 {
     next;
 };
         </pre>
-
-        <p>
-          Not yet implemented.
-        </p>
       </li>
 
       <li>
