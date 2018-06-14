@@ -603,12 +603,13 @@ parse_ofp_meter_mod_str__(struct ofputil_meter_mod *mm, char *string,
     return NULL;
 }
 
-/* Convert 'str_' (as described in the Flow Syntax section of the ovs-ofctl man
- * page) into 'mm' for sending the specified meter_mod 'command' to a switch.
+/* Convert 'str_' (as described in the Meter Syntax section of the
+ * ovs-ofctl man page) into 'mm' for sending the specified meter_mod
+ * 'command' to a switch.
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string.
- * If successful, 'mm->meter.bands' must be free()d by the caller. */
+ * If successful, 'mm->meter.bands' must be free()'d by the caller. */
 char * OVS_WARN_UNUSED_RESULT
 parse_ofp_meter_mod_str(struct ofputil_meter_mod *mm, const char *str_,
                         int command, enum ofputil_protocol *usable_protocols)
