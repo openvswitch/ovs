@@ -240,11 +240,11 @@ An example of an IPv6 TCP \fIct-tuple\fR:
 "ct_ipv6_src=fc00::1,ct_ipv6_dst=fc00::2,ct_nw_proto=6,ct_tp_src=1,ct_tp_dst=2"
 .
 .TP
-\*(DX\fBct\-stats\-show\fR [\fIdp\fR] [\fBzone=\fIzone\fR] [\fBverbose\fR]
+.DO "[\fB\-m\fR | \fB\-\-more\fR]" "\*(DX\fBct\-stats\-show\fR [\fIdp\fR] [\fBzone=\fIzone\fR]"
 Displays the number of connections grouped by protocol used by \fIdp\fR.
 If \fBzone=\fIzone\fR is specified, numbers refer to the connections in
-\fBzone\fR. The \fBverbose\fR option allows to group by connection state
-for each protocol.
+\fBzone\fR.  With \fB\-\-more\fR, groups by connection state for each
+protocol.
 .
 .TP
 \*(DX\fBct\-bkts\fR [\fIdp\fR] [\fBgt=\fIThreshold\fR]

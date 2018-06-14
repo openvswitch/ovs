@@ -1377,16 +1377,18 @@ dpctl_ct_stats_show(int argc, const char *argv[],
     struct ct_dpif_entry cte;
     uint16_t zone, *pzone = NULL;
     int tot_bkts;
-    bool verbose = false;
     int lastargc = 0;
 
     int proto_stats[CT_STATS_MAX];
     int tcp_conn_per_states[CT_DPIF_TCPS_MAX_NUM];
     int error;
 
+    bool verbose = dpctl_p->verbosity;
+
     while (argc > 1 && lastargc != argc) {
         lastargc = argc;
         if (!strncmp(argv[argc - 1], "verbose", 7)) {
+            /* Support "verbose" argument for backwards compatibility. */
             verbose = true;
             argc--;
         } else if (!strncmp(argv[argc - 1], "zone=", 5)) {
@@ -1958,7 +1960,7 @@ static const struct dpctl_command all_commands[] = {
     { "dump-conntrack", "[dp] [zone=N]", 0, 2, dpctl_dump_conntrack, DP_RO },
     { "flush-conntrack", "[dp] [zone=N] [ct-tuple]", 0, 3,
       dpctl_flush_conntrack, DP_RW },
-    { "ct-stats-show", "[dp] [zone=N] [verbose]",
+    { "ct-stats-show", "[dp] [zone=N]",
       0, 3, dpctl_ct_stats_show, DP_RO },
     { "ct-bkts", "[dp] [gt=N]", 0, 2, dpctl_ct_bkts, DP_RO },
     { "ct-set-maxconns", "[dp] maxconns", 1, 2, dpctl_ct_set_maxconns, DP_RW },
