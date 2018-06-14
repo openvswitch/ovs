@@ -217,7 +217,7 @@ do not apply specifically to one datapath.
 .DO "[\fB\-m\fR | \fB\-\-more\fR] [\fB\-s\fR | \fB\-\-statistics\fR]" "\*(DX\fBdump\-conntrack\fR" "[\fIdp\fR] [\fBzone=\fIzone\fR]"
 Prints to the console all the connection entries in the tracker used by
 \fIdp\fR.  If \fBzone=\fIzone\fR is specified, only shows the connections
-in \fBzone\fR.  With \fB\-\-more\fR, some implementation specific details
+in \fIzone\fR.  With \fB\-\-more\fR, some implementation specific details
 are included. With \fB\-\-statistics\fR timeouts and timestamps are
 added to the output.
 .
@@ -243,33 +243,32 @@ An example of an IPv6 TCP \fIct-tuple\fR:
 .DO "[\fB\-m\fR | \fB\-\-more\fR]" "\*(DX\fBct\-stats\-show\fR [\fIdp\fR] [\fBzone=\fIzone\fR]"
 Displays the number of connections grouped by protocol used by \fIdp\fR.
 If \fBzone=\fIzone\fR is specified, numbers refer to the connections in
-\fBzone\fR.  With \fB\-\-more\fR, groups by connection state for each
+\fIzone\fR.  With \fB\-\-more\fR, groups by connection state for each
 protocol.
 .
 .TP
-\*(DX\fBct\-bkts\fR [\fIdp\fR] [\fBgt=\fIThreshold\fR]
-For each ConnTracker bucket, displays the number of connections used
+\*(DX\fBct\-bkts\fR [\fIdp\fR] [\fBgt=\fIthreshold\fR]
+For each conntrack bucket, displays the number of connections used
 by \fIdp\fR.
-If \fBgt=\fIThreshold\fR is specified, bucket numbers are displayed when
-the number of connections in a bucket is greater than \fIThreshold\fR.
+If \fBgt=\fIthreshold\fR is specified, bucket numbers are displayed when
+the number of connections in a bucket is greater than \fIthreshold\fR.
 .
 .TP
-\*(DX\fBct\-set\-maxconns\fR [\fIdp\fR] \fBparam\fR
-Set the maximum limit of connection tracker connections.
-Can be used to reduce the processing load on the system due to
-connection tracking or simply limiting connection tracking.
-If the number of connections is already beyond the new maximum limit
-request for the number of connections then the new maximum limit will
-be enforced when the number of connections decreases to that limit, which
-normally happens due to connection expiry.  Only supported for userspace
-datapath.
+\*(DX\fBct\-set\-maxconns\fR [\fIdp\fR] \fImaxconns\fR
+Sets the maximum limit of connection tracker entries to \fImaxconns\fR
+on \fIdp\fR.  This can be used to reduce the processing load on the
+system due to connection tracking or simply limiting connection
+tracking.  If the number of connections is already over the new maximum
+limit request then the new maximum limit will be enforced when the
+number of connections decreases to that limit, which normally happens
+due to connection expiry.  Only supported for userspace datapath.
 .
 .TP
 \*(DX\fBct\-get\-maxconns\fR [\fIdp\fR]
-Read the maximum limit of connection tracker connections.
+Prints the maximum limit of connection tracker entries on \fIdp\fR.
 Only supported for userspace datapath.
 .
 .TP
 \*(DX\fBct\-get\-nconns\fR [\fIdp\fR]
-Read the current number of connection tracker connections.
+Prints the current number of connection tracker entries on \fIdp\fR.
 Only supported for userspace datapath.
