@@ -173,8 +173,9 @@ ovsdb_jsonrpc_server_add_db(struct ovsdb_jsonrpc_server *svr, struct ovsdb *db)
 
 /* Removes 'db' from the set of databases served out by 'svr'.
  *
- * 'comment' should be a human-readable reason for removing the database.  This
- * function frees it. */
+ * 'comment' should be a human-readable reason for removing the database, for
+ * use in log messages, or NULL to suppress logging.  This function frees
+ * it. */
 void
 ovsdb_jsonrpc_server_remove_db(struct ovsdb_jsonrpc_server *svr,
                                struct ovsdb *db, char *comment)
@@ -339,7 +340,7 @@ ovsdb_jsonrpc_server_free_remote_status(
 
 /* Makes all of the JSON-RPC sessions managed by 'svr' disconnect.  (They
  * will then generally reconnect.).  Uses 'comment' as a human-readable comment
- * for logging.  Frees 'comment'.
+ * for logging (it may be NULL to suppress logging).  Frees 'comment'.
  *
  * If 'force' is true, disconnects all sessions.  Otherwise, disconnects only
  * sesions that aren't database change aware. */
@@ -644,7 +645,8 @@ ovsdb_jsonrpc_session_close_all(struct ovsdb_jsonrpc_remote *remote)
 
 /* Makes all of the JSON-RPC sessions managed by 'remote' disconnect.  (They
  * will then generally reconnect.).  'comment' should be a human-readable
- * explanation of the reason for disconnection, for use in log messages.
+ * explanation of the reason for disconnection, for use in log messages, or
+ * NULL to suppress logging.
  *
  * If 'force' is true, disconnects all sessions.  Otherwise, disconnects only
  * sesions that aren't database change aware. */
@@ -657,7 +659,7 @@ ovsdb_jsonrpc_session_reconnect_all(struct ovsdb_jsonrpc_remote *remote,
     LIST_FOR_EACH_SAFE (s, next, node, &remote->sessions) {
         if (force || !s->db_change_aware) {
             jsonrpc_session_force_reconnect(s->js);
-            if (jsonrpc_session_is_connected(s->js)) {
+            if (comment && jsonrpc_session_is_connected(s->js)) {
                 VLOG_INFO("%s: disconnecting (%s)",
                           jsonrpc_session_get_name(s->js), comment);
             }
