@@ -1,0 +1,29 @@
+### Configuration options for ovn-docker-overlay-driver
+
+
+# Run OVN Docker LibNetwork Plugin is distributed mode with health check being on and
+# the health check interval of 3 minutes, while logging to ovn-docker-overlay-driver.log
+# file. Additionally, IP lookup flows get created when container comes up online.
+#
+#OVN_DOCKER_OVERLAY_OPTS="--log-file /var/log/openvswitch/ovn-docker-overlay-driver.log \
+#    --distributed --health-check-on --health-check-interval 180 --ip-lookup"
+
+# Run OVN Docker LibNetwork Plugin is distributed mode with health check being on and
+# the health check interval of 30 seconds, while logging to ovn-docker-overlay-driver.log
+# file and debug is enabled.
+#
+#OVN_DOCKER_OVERLAY_OPTS="--log-file /var/log/openvswitch/ovn-docker-overlay-driver.log \
+#    --distributed --health-check-on --health-check-interval 30 --verbose"
+
+# Run OVN Docker LibNetwork Plugin is distributed mode with health check being on and
+# the health check interval of 3 minutes, while logging to ovn-docker-overlay-driver.log
+# file.
+#
+#OVN_DOCKER_OVERLAY_OPTS="--log-file /var/log/openvswitch/ovn-docker-overlay-driver.log \
+#    --distributed --health-check-on --health-check-interval 180"
+
+
+# Run OVN Docker LibNetwork Plugin in non-distributed mode, while logging to
+# ovn-docker-overlay-driver.log file.
+#
+OVN_DOCKER_OVERLAY_OPTS="--log-file /var/log/openvswitch/ovn-docker-overlay-driver.log"
