@@ -3507,10 +3507,14 @@ ofproto_packet_out_init(struct ofproto *ofproto,
      * check instructions (e.g., goto-table), which can't appear on the action
      * list of a packet-out. */
     match_wc_init(&match, opo->flow);
-    error = ofpacts_check_consistency(po->ofpacts, po->ofpacts_len, &match,
-                                      u16_to_ofp(ofproto->max_ports), 0,
-                                      ofproto->n_tables,
-                                      ofconn_get_protocol(ofconn));
+    struct ofpact_check_params cp = {
+        .match = &match,
+        .max_ports = u16_to_ofp(ofproto->max_ports),
+        .table_id = 0,
+        .n_tables = ofproto->n_tables
+    };
+    error = ofpacts_check_consistency(po->ofpacts, po->ofpacts_len,
+                                      ofconn_get_protocol(ofconn), &cp);
     if (error) {
         dp_packet_delete(opo->packet);
         free(opo->flow);

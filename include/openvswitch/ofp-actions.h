@@ -1037,14 +1037,22 @@ ofpacts_pull_openflow_instructions(struct ofpbuf *openflow,
                                    const struct vl_mff_map *vl_mff_map,
                                    uint64_t *ofpacts_tlv_bitmap,
                                    struct ofpbuf *ofpacts);
+
+struct ofpact_check_params {
+    /* Input. */
+    struct match *match;
+    ofp_port_t max_ports;
+    uint8_t table_id;
+    uint8_t n_tables;
+
+    /* Output. */
+    enum ofputil_protocol usable_protocols;
+};
 enum ofperr ofpacts_check(struct ofpact[], size_t ofpacts_len,
-                          struct match *, ofp_port_t max_ports,
-                          uint8_t table_id, uint8_t n_tables,
-                          enum ofputil_protocol *usable_protocols);
+                          struct ofpact_check_params *);
 enum ofperr ofpacts_check_consistency(struct ofpact[], size_t ofpacts_len,
-                                      struct match *, ofp_port_t max_ports,
-                                      uint8_t table_id, uint8_t n_tables,
-                                      enum ofputil_protocol usable_protocols);
+                                      enum ofputil_protocol needed_protocols,
+                                      struct ofpact_check_params *);
 enum ofperr ofpact_check_output_port(ofp_port_t port, ofp_port_t max_ports);
 
 /* Converting ofpacts to OpenFlow. */

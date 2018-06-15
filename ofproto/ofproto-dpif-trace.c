@@ -538,16 +538,16 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
         unixctl_command_reply_error(conn, "invalid in_port");
         goto exit;
     }
-    if (enforce_consistency) {
-        retval = ofpacts_check_consistency(ofpacts.data, ofpacts.size, &match,
-                                           u16_to_ofp(ofproto->up.max_ports),
-                                           0, ofproto->up.n_tables,
-                                           usable_protocols);
-    } else {
-        retval = ofpacts_check(ofpacts.data, ofpacts.size, &match,
-                               u16_to_ofp(ofproto->up.max_ports), 0,
-                               ofproto->up.n_tables, &usable_protocols);
-    }
+
+    struct ofpact_check_params cp = {
+        .match = &match,
+        .max_ports = u16_to_ofp(ofproto->up.max_ports),
+        .table_id = 0,
+        .n_tables = ofproto->up.n_tables,
+    };
+    retval = ofpacts_check_consistency(
+        ofpacts.data, ofpacts.size,
+        enforce_consistency ? usable_protocols : 0, &cp);
     if (!retval) {
         ovs_mutex_lock(&ofproto_mutex);
         retval = ofproto_check_ofpacts(&ofproto->up, ofpacts.data,
