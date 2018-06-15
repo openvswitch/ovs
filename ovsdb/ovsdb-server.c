@@ -459,9 +459,7 @@ main(int argc, char *argv[])
 
     SHASH_FOR_EACH_SAFE(node, next, &all_dbs) {
         struct db *db = node->data;
-        close_db(&server_config, db,
-                 xasprintf("removing %s database due to server termination",
-                           db->db->name));
+        close_db(&server_config, db, NULL);
         shash_delete(&all_dbs, node);
     }
     ovsdb_jsonrpc_server_destroy(jsonrpc);
