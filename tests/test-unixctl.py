@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import argparse
-import sys
 
 import ovs.daemon
 import ovs.unixctl
@@ -88,11 +87,4 @@ def main():
 
 
 if __name__ == '__main__':
-    try:
-        main()
-    except SystemExit:
-        # Let system.exit() calls complete normally
-        raise
-    except:
-        vlog.exception("traceback")
-        sys.exit(ovs.daemon.RESTART_EXIT_CODE)
+    main()
