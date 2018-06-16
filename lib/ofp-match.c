@@ -724,6 +724,46 @@ ofputil_decode_tlv_table_mod(const struct ofp_header *oh,
                                         &ttm->mappings);
 }
 
+static void
+print_tlv_table(struct ds *s, const struct ovs_list *mappings)
+{
+    struct ofputil_tlv_map *map;
+
+    ds_put_cstr(s, " mapping table:\n");
+    ds_put_cstr(s, "  class  type  length  match field\n");
+    ds_put_cstr(s, " ------  ----  ------  --------------");
+
+    LIST_FOR_EACH (map, list_node, mappings) {
+        ds_put_format(s, "\n %#6"PRIx16"  %#4"PRIx8"  %6"PRIu8"  "
+                      "tun_metadata%"PRIu16,
+                      map->option_class, map->option_type, map->option_len,
+                      map->index);
+    }
+}
+
+void
+ofputil_format_tlv_table_mod(struct ds *s,
+                             const struct ofputil_tlv_table_mod *ttm)
+{
+    ds_put_cstr(s, "\n ");
+
+    switch (ttm->command) {
+    case NXTTMC_ADD:
+        ds_put_cstr(s, "ADD");
+        break;
+    case NXTTMC_DELETE:
+        ds_put_cstr(s, "DEL");
+        break;
+    case NXTTMC_CLEAR:
+        ds_put_cstr(s, "CLEAR");
+        break;
+    }
+
+    if (ttm->command != NXTTMC_CLEAR) {
+        print_tlv_table(s, &ttm->mappings);
+    }
+}
+
 struct ofpbuf *
 ofputil_encode_tlv_table_reply(const struct ofp_header *oh,
                                   struct ofputil_tlv_table_reply *ttr)
@@ -793,6 +833,25 @@ parse_ofp_tlv_table_mod_str(struct ofputil_tlv_table_mod *ttm,
     }
 
     return NULL;
+}
+
+void
+ofputil_format_tlv_table_reply(struct ds *s,
+                               const struct ofputil_tlv_table_reply *ttr)
+{
+    ds_put_char(s, '\n');
+
+    const struct ofputil_tlv_map *map;
+    int allocated_space = 0;
+    LIST_FOR_EACH (map, list_node, &ttr->mappings) {
+        allocated_space += map->option_len;
+    }
+
+    ds_put_format(s, " max option space=%"PRIu32" max fields=%"PRIu16"\n",
+                  ttr->max_option_space, ttr->max_fields);
+    ds_put_format(s, " allocated option space=%d\n", allocated_space);
+    ds_put_char(s, '\n');
+    print_tlv_table(s, &ttr->mappings);
 }
 
 void

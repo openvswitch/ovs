@@ -31,22 +31,26 @@ struct ofputil_role_request {
     uint64_t generation_id;
 };
 
+enum ofperr ofputil_decode_role_message(const struct ofp_header *,
+                                        struct ofputil_role_request *);
+void ofputil_format_role_message(struct ds *,
+                                 const struct ofputil_role_request *);
+struct ofpbuf *ofputil_encode_role_reply(const struct ofp_header *,
+                                         const struct ofputil_role_request *);
+
+/* Abstract OFPT_ROLE_STATUS. */
 struct ofputil_role_status {
     enum ofp12_controller_role role;
     enum ofp14_controller_role_reason reason;
     uint64_t generation_id;
 };
 
-enum ofperr ofputil_decode_role_message(const struct ofp_header *,
-                                        struct ofputil_role_request *);
-struct ofpbuf *ofputil_encode_role_reply(const struct ofp_header *,
-                                         const struct ofputil_role_request *);
-
 struct ofpbuf *ofputil_encode_role_status(const struct ofputil_role_status *,
                                           enum ofputil_protocol);
-
 enum ofperr ofputil_decode_role_status(const struct ofp_header *,
                                        struct ofputil_role_status *);
+void ofputil_format_role_status(struct ds *,
+                                const struct ofputil_role_status *);
 
 enum ofputil_async_msg_type {
     /* Standard asynchronous messages. */
@@ -79,6 +83,8 @@ struct ofpbuf *ofputil_encode_get_async_reply(
     const struct ofp_header *, const struct ofputil_async_cfg *);
 struct ofpbuf *ofputil_encode_set_async_config(
     const struct ofputil_async_cfg *, uint32_t oams, enum ofp_version);
+void ofputil_format_set_async_config(struct ds *,
+                                     const struct ofputil_async_cfg *);
 
 struct ofputil_async_cfg ofputil_async_cfg_default(enum ofp_version);
 

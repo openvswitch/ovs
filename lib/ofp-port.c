@@ -1815,6 +1815,151 @@ ofputil_decode_port_stats(struct ofputil_port_stats *ps, struct ofpbuf *msg)
     return OFPERR_OFPBRC_BAD_LEN;
 }
 
+static void
+print_port_stat(struct ds *string, const char *leader, uint64_t stat, int more)
+{
+    ds_put_cstr(string, leader);
+    if (stat != UINT64_MAX) {
+        ds_put_format(string, "%"PRIu64, stat);
+    } else {
+        ds_put_char(string, '?');
+    }
+    if (more) {
+        ds_put_cstr(string, ", ");
+    } else {
+        ds_put_cstr(string, "\n");
+    }
+}
+
+static void
+print_port_stat_cond(struct ds *string, const char *leader, uint64_t stat)
+{
+    if (stat != UINT64_MAX) {
+        ds_put_format(string, "%s%"PRIu64", ", leader, stat);
+    }
+}
+
+void
+ofputil_format_port_stats(struct ds *string,
+                          const struct ofputil_port_stats *ps,
+                          const struct ofputil_port_map *port_map)
+{
+    ds_put_cstr(string, "  port ");
+    if (ofp_to_u16(ps->port_no) < 10) {
+        ds_put_char(string, ' ');
+    }
+    ofputil_format_port(ps->port_no, port_map, string);
+
+    ds_put_cstr(string, ": rx ");
+    print_port_stat(string, "pkts=", ps->stats.rx_packets, 1);
+    print_port_stat(string, "bytes=", ps->stats.rx_bytes, 1);
+    print_port_stat(string, "drop=", ps->stats.rx_dropped, 1);
+    print_port_stat(string, "errs=", ps->stats.rx_errors, 1);
+    print_port_stat(string, "frame=", ps->stats.rx_frame_errors, 1);
+    print_port_stat(string, "over=", ps->stats.rx_over_errors, 1);
+    print_port_stat(string, "crc=", ps->stats.rx_crc_errors, 0);
+
+    ds_put_cstr(string, "           tx ");
+    print_port_stat(string, "pkts=", ps->stats.tx_packets, 1);
+    print_port_stat(string, "bytes=", ps->stats.tx_bytes, 1);
+    print_port_stat(string, "drop=", ps->stats.tx_dropped, 1);
+    print_port_stat(string, "errs=", ps->stats.tx_errors, 1);
+    print_port_stat(string, "coll=", ps->stats.collisions, 0);
+
+    if (ps->duration_sec != UINT32_MAX) {
+        ds_put_cstr(string, "           duration=");
+        ofp_print_duration(string, ps->duration_sec, ps->duration_nsec);
+        ds_put_char(string, '\n');
+    }
+    struct ds string_ext_stats = DS_EMPTY_INITIALIZER;
+
+    ds_init(&string_ext_stats);
+
+    print_port_stat_cond(&string_ext_stats, "1_to_64_packets=",
+                         ps->stats.rx_1_to_64_packets);
+    print_port_stat_cond(&string_ext_stats, "65_to_127_packets=",
+                         ps->stats.rx_65_to_127_packets);
+    print_port_stat_cond(&string_ext_stats, "128_to_255_packets=",
+                         ps->stats.rx_128_to_255_packets);
+    print_port_stat_cond(&string_ext_stats, "256_to_511_packets=",
+                         ps->stats.rx_256_to_511_packets);
+    print_port_stat_cond(&string_ext_stats, "512_to_1023_packets=",
+                         ps->stats.rx_512_to_1023_packets);
+    print_port_stat_cond(&string_ext_stats, "1024_to_1522_packets=",
+                         ps->stats.rx_1024_to_1522_packets);
+    print_port_stat_cond(&string_ext_stats, "1523_to_max_packets=",
+                         ps->stats.rx_1523_to_max_packets);
+    print_port_stat_cond(&string_ext_stats, "broadcast_packets=",
+                         ps->stats.rx_broadcast_packets);
+    print_port_stat_cond(&string_ext_stats, "undersized_errors=",
+                         ps->stats.rx_undersized_errors);
+    print_port_stat_cond(&string_ext_stats, "oversize_errors=",
+                         ps->stats.rx_oversize_errors);
+    print_port_stat_cond(&string_ext_stats, "rx_fragmented_errors=",
+                         ps->stats.rx_fragmented_errors);
+    print_port_stat_cond(&string_ext_stats, "rx_jabber_errors=",
+                         ps->stats.rx_jabber_errors);
+
+    if (string_ext_stats.length != 0) {
+        /* If at least one statistics counter is reported: */
+        ds_put_cstr(string, "           rx rfc2819 ");
+        ds_put_buffer(string, string_ext_stats.string,
+                      string_ext_stats.length);
+        ds_put_cstr(string, "\n");
+        ds_destroy(&string_ext_stats);
+    }
+
+    ds_init(&string_ext_stats);
+
+    print_port_stat_cond(&string_ext_stats, "1_to_64_packets=",
+                         ps->stats.tx_1_to_64_packets);
+    print_port_stat_cond(&string_ext_stats, "65_to_127_packets=",
+                         ps->stats.tx_65_to_127_packets);
+    print_port_stat_cond(&string_ext_stats, "128_to_255_packets=",
+                         ps->stats.tx_128_to_255_packets);
+    print_port_stat_cond(&string_ext_stats, "256_to_511_packets=",
+                         ps->stats.tx_256_to_511_packets);
+    print_port_stat_cond(&string_ext_stats, "512_to_1023_packets=",
+                         ps->stats.tx_512_to_1023_packets);
+    print_port_stat_cond(&string_ext_stats, "1024_to_1522_packets=",
+                         ps->stats.tx_1024_to_1522_packets);
+    print_port_stat_cond(&string_ext_stats, "1523_to_max_packets=",
+                         ps->stats.tx_1523_to_max_packets);
+    print_port_stat_cond(&string_ext_stats, "multicast_packets=",
+                         ps->stats.tx_multicast_packets);
+    print_port_stat_cond(&string_ext_stats, "broadcast_packets=",
+                         ps->stats.tx_broadcast_packets);
+
+    if (string_ext_stats.length != 0) {
+        /* If at least one statistics counter is reported: */
+        ds_put_cstr(string, "           tx rfc2819 ");
+        ds_put_buffer(string, string_ext_stats.string,
+                      string_ext_stats.length);
+        ds_put_cstr(string, "\n");
+        ds_destroy(&string_ext_stats);
+    }
+
+    if (ps->custom_stats.size) {
+        ds_put_cstr(string, "           CUSTOM Statistics");
+        for (int i = 0; i < ps->custom_stats.size; i++) {
+            /* 3 counters in the row */
+            if (ps->custom_stats.counters[i].name[0]) {
+                if (i % 3 == 0) {
+                    ds_put_cstr(string, "\n");
+                    ds_put_cstr(string, "                      ");
+                } else {
+                    ds_put_char(string, ' ');
+                }
+                ds_put_format(string, "%s=%"PRIu64",",
+                              ps->custom_stats.counters[i].name,
+                              ps->custom_stats.counters[i].value);
+            }
+        }
+        ds_put_cstr(string, "\n");
+    }
+}
+
+
 /* Parse a port status request message into a 16 bit OpenFlow 1.0
  * port number and stores the latter in '*ofp10_port'.
  * Returns 0 if successful, otherwise an OFPERR_* number. */

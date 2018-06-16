@@ -133,6 +133,10 @@ struct ofpbuf *ofputil_encode_requestforward(
     const struct ofputil_requestforward *, enum ofputil_protocol);
 enum ofperr ofputil_decode_requestforward(const struct ofp_header *,
                                           struct ofputil_requestforward *);
+void ofputil_format_requestforward(struct ds *, enum ofp_version,
+                                   const struct ofputil_requestforward *,
+                                   const struct ofputil_port_map *,
+                                   const struct ofputil_table_map *);
 void ofputil_destroy_requestforward(struct ofputil_requestforward *);
 
 #ifdef __cplusplus

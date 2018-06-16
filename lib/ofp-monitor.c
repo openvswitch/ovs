@@ -880,6 +880,33 @@ ofputil_decode_requestforward(const struct ofp_header *outer,
     return 0;
 }
 
+void
+ofputil_format_requestforward(struct ds *string,
+                              enum ofp_version ofp_version,
+                              const struct ofputil_requestforward *rf,
+                              const struct ofputil_port_map *port_map,
+                              const struct ofputil_table_map *table_map)
+{
+    ds_put_cstr(string, " reason=");
+
+    switch (rf->reason) {
+    case OFPRFR_GROUP_MOD:
+        ds_put_cstr(string, "group_mod");
+        ofputil_group_mod_format__(string, ofp_version, rf->group_mod,
+                                   port_map, table_map);
+        break;
+
+    case OFPRFR_METER_MOD:
+        ds_put_cstr(string, "meter_mod");
+        ofputil_format_meter_mod(string, rf->meter_mod);
+        break;
+
+    case OFPRFR_N_REASONS:
+        OVS_NOT_REACHED();
+    }
+}
+
+
 /* Frees the content of 'rf', which should have been initialized through a
  * successful call to ofputil_decode_requestforward(). */
 void

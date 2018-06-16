@@ -309,10 +309,16 @@ struct ofputil_table_status {
     struct ofputil_table_desc desc;   /* New table config. */
 };
 
+const char *ofp_table_reason_to_string(enum ofp14_table_reason,
+                                       char *reasonbuf, size_t bufsize);
+
 enum ofperr ofputil_decode_table_status(const struct ofp_header *,
                                         struct ofputil_table_status *);
 struct ofpbuf *ofputil_encode_table_status(const struct ofputil_table_status *,
                                            enum ofputil_protocol);
+void ofputil_format_table_status(struct ds *,
+                                 const struct ofputil_table_status *,
+                                 const struct ofputil_table_map *);
 
 #ifdef __cplusplus
 }

@@ -79,9 +79,12 @@ struct ofputil_tlv_table_reply {
 };
 
 struct ofpbuf *ofputil_encode_tlv_table_mod(enum ofp_version ofp_version,
-                                               struct ofputil_tlv_table_mod *);
-enum ofperr ofputil_decode_tlv_table_mod(const struct ofp_header *,
                                             struct ofputil_tlv_table_mod *);
+enum ofperr ofputil_decode_tlv_table_mod(const struct ofp_header *,
+                                         struct ofputil_tlv_table_mod *);
+void ofputil_format_tlv_table_mod(struct ds *,
+                                  const struct ofputil_tlv_table_mod *);
+
 struct ofpbuf *ofputil_encode_tlv_table_reply(
     const struct ofp_header *, struct ofputil_tlv_table_reply *);
 enum ofperr ofputil_decode_tlv_table_reply(
@@ -90,6 +93,8 @@ char *parse_ofp_tlv_table_mod_str(struct ofputil_tlv_table_mod *,
                                      uint16_t command, const char *string,
                                      enum ofputil_protocol *usable_protocols)
     OVS_WARN_UNUSED_RESULT;
+void ofputil_format_tlv_table_reply(struct ds *,
+                                    const struct ofputil_tlv_table_reply *);
 
 void ofputil_uninit_tlv_table(struct ovs_list *mappings);
 

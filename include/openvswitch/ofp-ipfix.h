@@ -19,6 +19,7 @@
 
 #include "openflow/openflow.h"
 
+struct ds;
 struct ofpbuf;
 struct ovs_list;
 
@@ -44,6 +45,10 @@ void ofputil_append_ipfix_stat(struct ovs_list *replies,
                               const struct ofputil_ipfix_stats *);
 size_t ofputil_count_ipfix_stats(const struct ofp_header *);
 int ofputil_pull_ipfix_stats(struct ofputil_ipfix_stats *, struct ofpbuf *msg);
+void ofputil_format_ipfix_stats_bridge(struct ds *,
+                                       const struct ofputil_ipfix_stats *);
+void ofputil_format_ipfix_stats_flow(struct ds *,
+                                     const struct ofputil_ipfix_stats *);
 
 #ifdef __cplusplus
 }

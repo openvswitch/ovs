@@ -19,6 +19,7 @@
 #include "byte-order.h"
 #include "flow.h"
 #include "openvswitch/ofp-msgs.h"
+#include "openvswitch/ofp-print.h"
 #include "openvswitch/ofp-port.h"
 #include "openvswitch/ofp-prop.h"
 #include "openvswitch/ofpbuf.h"
@@ -28,6 +29,18 @@
 VLOG_DEFINE_THIS_MODULE(ofp_queue);
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+static void
+ofp_print_queue_name(struct ds *string, uint32_t queue_id)
+{
+    if (queue_id == OFPQ_ALL) {
+        ds_put_cstr(string, "ALL");
+    } else {
+        ds_put_format(string, "%"PRIu32, queue_id);
+    }
+}
+
+/* OFPT_QUEUE_GET_CONFIG request and reply. */
 
 /* Constructs and returns an OFPT_QUEUE_GET_CONFIG request for the specified
  * 'port' and 'queue', suitable for OpenFlow version 'version'.
@@ -109,6 +122,31 @@ ofputil_decode_queue_get_config_request(const struct ofp_header *oh,
     return (ofp_to_u16(*port) < ofp_to_u16(OFPP_MAX)
             ? 0
             : OFPERR_OFPQOFC_BAD_PORT);
+}
+
+enum ofperr
+ofputil_queue_get_config_request_format(
+    struct ds *string, const struct ofp_header *oh,
+    const struct ofputil_port_map *port_map)
+{
+    enum ofperr error;
+    ofp_port_t port;
+    uint32_t queue;
+
+    error = ofputil_decode_queue_get_config_request(oh, &port, &queue);
+    if (error) {
+        return error;
+    }
+
+    ds_put_cstr(string, " port=");
+    ofputil_format_port(port, port_map, string);
+
+    if (queue != OFPQ_ALL) {
+        ds_put_cstr(string, " queue=");
+        ofp_print_queue_name(string, queue);
+    }
+
+    return 0;
 }
 
 /* Constructs and returns the beginning of a reply to
@@ -419,6 +457,83 @@ ofputil_pull_queue_get_config_reply(struct ofpbuf *msg,
         return ofputil_pull_queue_get_config_reply10(msg, queue);
     }
 }
+
+static void
+print_queue_rate(struct ds *string, const char *name, unsigned int rate)
+{
+    if (rate <= 1000) {
+        ds_put_format(string, " %s:%u.%u%%", name, rate / 10, rate % 10);
+    } else if (rate < UINT16_MAX) {
+        ds_put_format(string, " %s:(disabled)", name);
+    }
+}
+
+/* qsort comparison function. */
+static int
+compare_queues(const void *a_, const void *b_)
+{
+    const struct ofputil_queue_config *a = a_;
+    const struct ofputil_queue_config *b = b_;
+
+    uint16_t ap = ofp_to_u16(a->port);
+    uint16_t bp = ofp_to_u16(b->port);
+    if (ap != bp) {
+        return ap < bp ? -1 : 1;
+    }
+
+    uint32_t aq = a->queue;
+    uint32_t bq = b->queue;
+    return aq < bq ? -1 : aq > bq;
+}
+
+enum ofperr
+ofputil_queue_get_config_reply_format(struct ds *string,
+                                      const struct ofp_header *oh,
+                                      const struct ofputil_port_map *port_map)
+{
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+
+    struct ofputil_queue_config *queues = NULL;
+    size_t allocated_queues = 0;
+    size_t n = 0;
+
+    int retval = 0;
+    for (;;) {
+        if (n >= allocated_queues) {
+            queues = x2nrealloc(queues, &allocated_queues, sizeof *queues);
+        }
+        retval = ofputil_pull_queue_get_config_reply(&b, &queues[n]);
+        if (retval) {
+            break;
+        }
+        n++;
+    }
+
+    qsort(queues, n, sizeof *queues, compare_queues);
+
+    ds_put_char(string, ' ');
+
+    ofp_port_t port = 0;
+    for (const struct ofputil_queue_config *q = queues; q < &queues[n]; q++) {
+        if (q->port != port) {
+            port = q->port;
+
+            ds_put_cstr(string, "port=");
+            ofputil_format_port(port, port_map, string);
+            ds_put_char(string, '\n');
+        }
+
+        ds_put_format(string, "queue %"PRIu32":", q->queue);
+        print_queue_rate(string, "min_rate", q->min_rate);
+        print_queue_rate(string, "max_rate", q->max_rate);
+        ds_put_char(string, '\n');
+    }
+
+    ds_chomp(string, ' ');
+    free(queues);
+
+    return retval != EOF ? retval : 0;
+}
 
 /* Parse a queue status request message into 'oqsr'.
  * Returns 0 if successful, otherwise an OFPERR_* number. */
@@ -493,6 +608,28 @@ ofputil_encode_queue_stats_request(
     }
 
     return request;
+}
+
+enum ofperr
+ofputil_queue_stats_request_format(struct ds *string,
+                                   const struct ofp_header *oh,
+                                   const struct ofputil_port_map *port_map)
+{
+    struct ofputil_queue_stats_request oqsr;
+    enum ofperr error;
+
+    error = ofputil_decode_queue_stats_request(oh, &oqsr);
+    if (error) {
+        return error;
+    }
+
+    ds_put_cstr(string, " port=");
+    ofputil_format_port(oqsr.port_no, port_map, string);
+
+    ds_put_cstr(string, " queue=");
+    ofp_print_queue_name(string, oqsr.queue_id);
+
+    return 0;
 }
 
 /* Returns the number of queue stats elements in OFPTYPE_QUEUE_STATS_REPLY
@@ -723,6 +860,65 @@ ofputil_append_queue_stat(struct ovs_list *replies,
 
     default:
         OVS_NOT_REACHED();
+    }
+}
+
+static void
+print_queue_stat(struct ds *string, const char *leader, uint64_t stat,
+                 int more)
+{
+    ds_put_cstr(string, leader);
+    if (stat != UINT64_MAX) {
+        ds_put_format(string, "%"PRIu64, stat);
+    } else {
+        ds_put_char(string, '?');
+    }
+    if (more) {
+        ds_put_cstr(string, ", ");
+    } else {
+        ds_put_cstr(string, "\n");
+    }
+}
+
+enum ofperr
+ofputil_queue_stats_reply_format(struct ds *string,
+                                 const struct ofp_header *oh,
+                                 const struct ofputil_port_map *port_map,
+                                 int verbosity)
+{
+    ds_put_format(string, " %"PRIuSIZE" queues\n",
+                  ofputil_count_queue_stats(oh));
+    if (verbosity < 1) {
+        return 0;
+    }
+
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    for (;;) {
+        struct ofputil_queue_stats qs;
+        int retval;
+
+        retval = ofputil_decode_queue_stats(&qs, &b);
+        if (retval) {
+            return retval != EOF ? retval : 0;
+        }
+
+        ds_put_cstr(string, "  port ");
+        ofputil_format_port(qs.port_no, port_map, string);
+        ds_put_cstr(string, " queue ");
+        ofp_print_queue_name(string, qs.queue_id);
+        ds_put_cstr(string, ": ");
+
+        print_queue_stat(string, "bytes=", qs.tx_bytes, 1);
+        print_queue_stat(string, "pkts=", qs.tx_packets, 1);
+        print_queue_stat(string, "errors=", qs.tx_errors, 1);
+
+        ds_put_cstr(string, "duration=");
+        if (qs.duration_sec != UINT32_MAX) {
+            ofp_print_duration(string, qs.duration_sec, qs.duration_nsec);
+        } else {
+            ds_put_char(string, '?');
+        }
+        ds_put_char(string, '\n');
     }
 }
 

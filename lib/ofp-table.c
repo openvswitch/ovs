@@ -1912,6 +1912,26 @@ ofputil_decode_table_stats_reply(struct ofpbuf *msg,
     }
 }
 
+/* Returns a string form of 'reason'.  The return value is either a statically
+ * allocated constant string or the 'bufsize'-byte buffer 'reasonbuf'.
+ * 'bufsize' should be at least OFP_ASYNC_CONFIG_REASON_BUFSIZE. */
+const char *
+ofp_table_reason_to_string(enum ofp14_table_reason reason,
+                           char *reasonbuf, size_t bufsize)
+{
+    switch (reason) {
+    case OFPTR_VACANCY_DOWN:
+        return "vacancy_down";
+
+    case OFPTR_VACANCY_UP:
+        return "vacancy_up";
+
+    default:
+        snprintf(reasonbuf, bufsize, "%d", (int) reason);
+        return reasonbuf;
+    }
+}
+
 static void
 ofputil_put_ofp14_table_desc(const struct ofputil_table_desc *td,
                              struct ofpbuf *b, enum ofp_version version)
@@ -1996,4 +2016,19 @@ ofputil_decode_table_status(const struct ofp_header *oh,
     }
 
     return 0;
+}
+
+void
+ofputil_format_table_status(struct ds *string,
+                            const struct ofputil_table_status *ts,
+                            const struct ofputil_table_map *table_map)
+{
+    if (ts->reason == OFPTR_VACANCY_DOWN) {
+        ds_put_format(string, " reason=VACANCY_DOWN");
+    } else if (ts->reason == OFPTR_VACANCY_UP) {
+        ds_put_format(string, " reason=VACANCY_UP");
+    }
+
+    ds_put_format(string, "\ntable_desc:-");
+    ofputil_table_desc_format(string, &ts->desc, table_map);
 }

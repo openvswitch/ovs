@@ -109,3 +109,54 @@ ofputil_count_ipfix_stats(const struct ofp_header *oh)
 
     return b.size / sizeof(struct ofputil_ipfix_stats);
 }
+
+static void
+print_ipfix_stat(struct ds *string, const char *leader, uint64_t stat,
+                 int more)
+{
+    ds_put_cstr(string, leader);
+    if (stat != UINT64_MAX) {
+        ds_put_format(string, "%"PRIu64, stat);
+    } else {
+        ds_put_char(string, '?');
+    }
+    if (more) {
+        ds_put_cstr(string, ", ");
+    } else {
+        ds_put_cstr(string, "\n");
+    }
+}
+
+static void
+format_ipfix_stats(struct ds *string, const struct ofputil_ipfix_stats *is,
+                   int indent)
+{
+    print_ipfix_stat(string, "flows=", is->total_flows, 1);
+    print_ipfix_stat(string, "current flows=", is->current_flows, 1);
+    print_ipfix_stat(string, "sampled pkts=", is->pkts, 1);
+    print_ipfix_stat(string, "ipv4 ok=", is->ipv4_pkts, 1);
+    print_ipfix_stat(string, "ipv6 ok=", is->ipv6_pkts, 1);
+    print_ipfix_stat(string, "tx pkts=", is->tx_pkts, 0);
+    ds_put_char_multiple(string, ' ', indent);
+    print_ipfix_stat(string, "pkts errs=", is->error_pkts, 1);
+    print_ipfix_stat(string, "ipv4 errs=", is->ipv4_error_pkts, 1);
+    print_ipfix_stat(string, "ipv6 errs=", is->ipv6_error_pkts, 1);
+    print_ipfix_stat(string, "tx errs=", is->tx_errors, 0);
+}
+
+void
+ofputil_format_ipfix_stats_bridge(struct ds *string,
+                                  const struct ofputil_ipfix_stats *is)
+{
+    ds_put_cstr(string, "\n  bridge ipfix: ");
+    format_ipfix_stats(string, is, 16);
+}
+
+void
+ofputil_format_ipfix_stats_flow(struct ds *string,
+                                const struct ofputil_ipfix_stats *is)
+{
+    ds_put_cstr(string, "  id");
+    ds_put_format(string, " %3"PRIuSIZE": ", (size_t) is->collector_set_id);
+    format_ipfix_stats(string, is, 10);
+}

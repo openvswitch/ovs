@@ -30,6 +30,8 @@ extern "C" {
 /* Type for meter_id in ofproto provider interface, UINT32_MAX if invalid. */
 typedef struct { uint32_t uint32; } ofproto_meter_id;
 
+void ofputil_format_meter_id(struct ds *s, uint32_t meter_id, char separator);
+
 /* Meter band configuration for all supported band types. */
 struct ofputil_meter_band {
     uint16_t type;
@@ -37,6 +39,9 @@ struct ofputil_meter_band {
     uint32_t rate;
     uint32_t burst_size;
 };
+
+void ofputil_format_meter_band(struct ds *, enum ofp13_meter_flags,
+                               const struct ofputil_meter_band *);
 
 struct ofputil_meter_band_stats {
     uint64_t packet_count;
@@ -55,6 +60,8 @@ void ofputil_append_meter_config(struct ovs_list *replies,
 int ofputil_decode_meter_config(struct ofpbuf *,
                                 struct ofputil_meter_config *,
                                 struct ofpbuf *bands);
+void ofputil_format_meter_config(struct ds *,
+                                 const struct ofputil_meter_config *);
 
 struct ofputil_meter_mod {
     uint16_t command;
@@ -70,6 +77,7 @@ char *parse_ofp_meter_mod_str(struct ofputil_meter_mod *, const char *string,
                               int command,
                               enum ofputil_protocol *usable_protocols)
     OVS_WARN_UNUSED_RESULT;
+void ofputil_format_meter_mod(struct ds *, const struct ofputil_meter_mod *);
 
 struct ofputil_meter_stats {
     uint32_t meter_id;
@@ -87,6 +95,8 @@ void ofputil_append_meter_stats(struct ovs_list *replies,
 int ofputil_decode_meter_stats(struct ofpbuf *,
                                struct ofputil_meter_stats *,
                                struct ofpbuf *bands);
+void ofputil_format_meter_stats(struct ds *,
+                                const struct ofputil_meter_stats *);
 
 struct ofputil_meter_features {
     uint32_t max_meters;        /* Maximum number of meters. */
@@ -102,6 +112,8 @@ struct ofpbuf *ofputil_encode_meter_features_reply(const struct
                                                    ofputil_meter_features *,
                                                    const struct ofp_header *
                                                    request);
+void ofputil_format_meter_features(struct ds *,
+                                   const struct ofputil_meter_features *);
 
 enum ofputil_meter_request_type {
     OFPUTIL_METER_FEATURES,

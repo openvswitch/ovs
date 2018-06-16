@@ -21,12 +21,63 @@
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/ofp-msgs.h"
 #include "openvswitch/ofp-parse.h"
+#include "openvswitch/ofp-print.h"
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_meter);
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+void
+ofputil_format_meter_id(struct ds *s, uint32_t meter_id, char separator)
+{
+    if (meter_id <= OFPM13_MAX) {
+        ds_put_format(s, "meter%c%"PRIu32, separator, meter_id);
+    } else {
+        const char *name;
+        switch (meter_id) {
+        case OFPM13_SLOWPATH:
+            name = "slowpath";
+            break;
+        case OFPM13_CONTROLLER:
+            name = "controller";
+            break;
+        case OFPM13_ALL:
+            name = "all";
+            break;
+        default:
+            name = "unknown";
+        }
+        ds_put_format(s, "meter%c%s", separator, name);
+    }
+}
+
+void
+ofputil_format_meter_band(struct ds *s, enum ofp13_meter_flags flags,
+                          const struct ofputil_meter_band *mb)
+{
+    ds_put_cstr(s, "\ntype=");
+    switch (mb->type) {
+    case OFPMBT13_DROP:
+        ds_put_cstr(s, "drop");
+        break;
+    case OFPMBT13_DSCP_REMARK:
+        ds_put_cstr(s, "dscp_remark");
+        break;
+    default:
+        ds_put_format(s, "%u", mb->type);
+    }
+
+    ds_put_format(s, " rate=%"PRIu32, mb->rate);
+
+    if (flags & OFPMF13_BURST) {
+        ds_put_format(s, " burst_size=%"PRIu32, mb->burst_size);
+    }
+    if (mb->type == OFPMBT13_DSCP_REMARK) {
+        ds_put_format(s, " prec_level=%"PRIu8, mb->prec_level);
+    }
+}
 
 static enum ofperr
 ofputil_pull_bands(struct ofpbuf *msg, size_t len, uint16_t *n_bands,
@@ -268,6 +319,46 @@ ofputil_decode_meter_config(struct ofpbuf *msg,
     return 0;
 }
 
+static void
+ofp_print_meter_flags(struct ds *s, enum ofp13_meter_flags flags)
+{
+    if (flags & OFPMF13_KBPS) {
+        ds_put_cstr(s, "kbps ");
+    }
+    if (flags & OFPMF13_PKTPS) {
+        ds_put_cstr(s, "pktps ");
+    }
+    if (flags & OFPMF13_BURST) {
+        ds_put_cstr(s, "burst ");
+    }
+    if (flags & OFPMF13_STATS) {
+        ds_put_cstr(s, "stats ");
+    }
+
+    flags &= ~(OFPMF13_KBPS | OFPMF13_PKTPS | OFPMF13_BURST | OFPMF13_STATS);
+    if (flags) {
+        ds_put_format(s, "flags:0x%"PRIx16" ", flags);
+    }
+}
+
+void
+ofputil_format_meter_config(struct ds *s,
+                            const struct ofputil_meter_config *mc)
+{
+    uint16_t i;
+
+    ofputil_format_meter_id(s, mc->meter_id, '=');
+    ds_put_char(s, ' ');
+
+    ofp_print_meter_flags(s, mc->flags);
+
+    ds_put_cstr(s, "bands=");
+    for (i = 0; i < mc->n_bands; ++i) {
+        ofputil_format_meter_band(s, mc->flags, &mc->bands[i]);
+    }
+    ds_put_char(s, '\n');
+}
+
 static enum ofperr
 ofputil_pull_band_stats(struct ofpbuf *msg, size_t len, uint16_t *n_bands,
                         struct ofpbuf *bands)
@@ -348,6 +439,28 @@ ofputil_decode_meter_stats(struct ofpbuf *msg,
 }
 
 void
+ofputil_format_meter_stats(struct ds *s, const struct ofputil_meter_stats *ms)
+{
+    uint16_t i;
+
+    ofputil_format_meter_id(s, ms->meter_id, ':');
+    ds_put_char(s, ' ');
+    ds_put_format(s, "flow_count:%"PRIu32" ", ms->flow_count);
+    ds_put_format(s, "packet_in_count:%"PRIu64" ", ms->packet_in_count);
+    ds_put_format(s, "byte_in_count:%"PRIu64" ", ms->byte_in_count);
+    ds_put_cstr(s, "duration:");
+    ofp_print_duration(s, ms->duration_sec, ms->duration_nsec);
+    ds_put_char(s, ' ');
+
+    ds_put_cstr(s, "bands:\n");
+    for (i = 0; i < ms->n_bands; ++i) {
+        ds_put_format(s, "%d: ", i);
+        ds_put_format(s, "packet_count:%"PRIu64" ", ms->bands[i].packet_count);
+        ds_put_format(s, "byte_count:%"PRIu64"\n", ms->bands[i].byte_count);
+    }
+}
+
+void
 ofputil_decode_meter_features(const struct ofp_header *oh,
                               struct ofputil_meter_features *mf)
 {
@@ -377,6 +490,51 @@ ofputil_encode_meter_features_reply(const struct ofputil_meter_features *mf,
     omf->max_color = mf->max_color;
 
     return reply;
+}
+
+static const char *
+ofputil_meter_band_types_to_name(uint32_t bit)
+{
+    switch (bit) {
+    case 1 << OFPMBT13_DROP:          return "drop";
+    case 1 << OFPMBT13_DSCP_REMARK:   return "dscp_remark";
+    }
+
+    return NULL;
+}
+
+static const char *
+ofputil_meter_capabilities_to_name(uint32_t bit)
+{
+    enum ofp13_meter_flags flag = bit;
+
+    switch (flag) {
+    case OFPMF13_KBPS:    return "kbps";
+    case OFPMF13_PKTPS:   return "pktps";
+    case OFPMF13_BURST:   return "burst";
+    case OFPMF13_STATS:   return "stats";
+    }
+
+    return NULL;
+}
+
+void
+ofputil_format_meter_features(struct ds *s,
+                              const struct ofputil_meter_features *mf)
+{
+    ds_put_format(s, "\nmax_meter:%"PRIu32, mf->max_meters);
+    ds_put_format(s, " max_bands:%"PRIu8, mf->max_bands);
+    ds_put_format(s, " max_color:%"PRIu8"\n", mf->max_color);
+
+    ds_put_cstr(s, "band_types: ");
+    ofp_print_bit_names(s, mf->band_types,
+                        ofputil_meter_band_types_to_name, ' ');
+    ds_put_char(s, '\n');
+
+    ds_put_cstr(s, "capabilities: ");
+    ofp_print_bit_names(s, mf->capabilities,
+                        ofputil_meter_capabilities_to_name, ' ');
+    ds_put_char(s, '\n');
 }
 
 struct ofpbuf *
@@ -628,4 +786,24 @@ parse_ofp_meter_mod_str(struct ofputil_meter_mod *mm, const char *str_,
     ofpbuf_uninit(&bands);
 
     return error;
+}
+
+void
+ofputil_format_meter_mod(struct ds *s, const struct ofputil_meter_mod *mm)
+{
+    switch (mm->command) {
+    case OFPMC13_ADD:
+        ds_put_cstr(s, " ADD ");
+        break;
+    case OFPMC13_MODIFY:
+        ds_put_cstr(s, " MOD ");
+        break;
+    case OFPMC13_DELETE:
+        ds_put_cstr(s, " DEL ");
+        break;
+    default:
+        ds_put_format(s, " cmd:%d ", mm->command);
+    }
+
+    ofputil_format_meter_config(s, &mm->meter);
 }

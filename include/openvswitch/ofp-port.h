@@ -169,6 +169,9 @@ void ofputil_append_port_stat(struct ovs_list *replies,
                               const struct ofputil_port_stats *ops);
 size_t ofputil_count_port_stats(const struct ofp_header *);
 int ofputil_decode_port_stats(struct ofputil_port_stats *, struct ofpbuf *msg);
+void ofputil_format_port_stats(struct ds *, const struct ofputil_port_stats *,
+                               const struct ofputil_port_map *);
+
 enum ofperr ofputil_decode_port_stats_request(const struct ofp_header *request,
                                               ofp_port_t *ofp10_port);
 

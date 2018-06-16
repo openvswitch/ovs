@@ -19,7 +19,9 @@
 
 #include "openflow/openflow.h"
 
+struct ds;
 struct ofpbuf;
+struct ofputil_port_map;
 struct ovs_list;
 
 #ifdef __cplusplus
@@ -45,6 +47,8 @@ void ofputil_append_queue_get_config_reply(
 
 int ofputil_pull_queue_get_config_reply(struct ofpbuf *reply,
                                         struct ofputil_queue_config *);
+enum ofperr ofputil_queue_get_config_reply_format(
+    struct ds *, const struct ofp_header *, const struct ofputil_port_map *);
 
 struct ofputil_queue_stats_request {
     ofp_port_t port_no;           /* OFPP_ANY means "all ports". */
@@ -55,6 +59,9 @@ enum ofperr ofputil_decode_queue_stats_request(
     const struct ofp_header *, struct ofputil_queue_stats_request *);
 struct ofpbuf *ofputil_encode_queue_stats_request(
     enum ofp_version, const struct ofputil_queue_stats_request *);
+enum ofperr ofputil_queue_stats_request_format(
+    struct ds *, const struct ofp_header *,
+    const struct ofputil_port_map *);
 
 struct ofputil_queue_stats {
     ofp_port_t port_no;
@@ -74,6 +81,10 @@ size_t ofputil_count_queue_stats(const struct ofp_header *);
 int ofputil_decode_queue_stats(struct ofputil_queue_stats *, struct ofpbuf *);
 void ofputil_append_queue_stat(struct ovs_list *replies,
                                const struct ofputil_queue_stats *);
+enum ofperr ofputil_queue_stats_reply_format(struct ds *,
+                                             const struct ofp_header *,
+                                             const struct ofputil_port_map *,
+                                             int verbosity);
 
 /* Queue configuration request. */
 struct ofpbuf *ofputil_encode_queue_get_config_request(enum ofp_version,
@@ -82,6 +93,9 @@ struct ofpbuf *ofputil_encode_queue_get_config_request(enum ofp_version,
 enum ofperr ofputil_decode_queue_get_config_request(const struct ofp_header *,
                                                     ofp_port_t *port,
                                                     uint32_t *queue);
+enum ofperr ofputil_queue_get_config_request_format(
+    struct ds *, const struct ofp_header *,
+    const struct ofputil_port_map *);
 
 #ifdef __cplusplus
 }

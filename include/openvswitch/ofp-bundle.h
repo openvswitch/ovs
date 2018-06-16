@@ -36,9 +36,11 @@ struct ofputil_bundle_ctrl_msg {
 
 enum ofperr ofputil_decode_bundle_ctrl(const struct ofp_header *,
                                        struct ofputil_bundle_ctrl_msg *);
-
 struct ofpbuf *ofputil_encode_bundle_ctrl_request(
     enum ofp_version, struct ofputil_bundle_ctrl_msg *);
+void ofputil_format_bundle_ctrl_request(
+    struct ds *, const struct ofputil_bundle_ctrl_msg *);
+
 struct ofpbuf *ofputil_encode_bundle_ctrl_reply(
     const struct ofp_header *, struct ofputil_bundle_ctrl_msg *);
 
@@ -51,10 +53,15 @@ struct ofputil_bundle_add_msg {
 
 struct ofpbuf *ofputil_encode_bundle_add(enum ofp_version,
                                          struct ofputil_bundle_add_msg *);
-
 enum ofperr ofputil_decode_bundle_add(const struct ofp_header *,
                                       struct ofputil_bundle_add_msg *,
                                       enum ofptype *);
+void ofputil_format_bundle_add(struct ds *,
+                               const struct ofputil_bundle_add_msg *,
+                               const struct ofputil_port_map *,
+                               const struct ofputil_table_map *,
+                               int verbosity);
+
 
 /* Bundle message as produced by ofp-parse. */
 struct ofputil_bundle_msg {

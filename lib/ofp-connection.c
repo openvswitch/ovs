@@ -19,9 +19,13 @@
 #include "byte-order.h"
 #include "openflow/nicira-ext.h"
 #include "openvswitch/ofp-errors.h"
+#include "openvswitch/ofp-monitor.h"
 #include "openvswitch/ofp-msgs.h"
+#include "openvswitch/ofp-packet.h"
 #include "openvswitch/ofp-prop.h"
+#include "openvswitch/ofp-table.h"
 #include "openvswitch/ofpbuf.h"
+#include "openvswitch/type-props.h"
 #include "openvswitch/vlog.h"
 #include "util.h"
 
@@ -81,6 +85,43 @@ ofputil_decode_role_message(const struct ofp_header *oh,
     }
 
     return 0;
+}
+
+static void
+format_role_generic(struct ds *string, enum ofp12_controller_role role,
+                    uint64_t generation_id)
+{
+    ds_put_cstr(string, " role=");
+
+    switch (role) {
+    case OFPCR12_ROLE_NOCHANGE:
+        ds_put_cstr(string, "nochange");
+        break;
+    case OFPCR12_ROLE_EQUAL:
+        ds_put_cstr(string, "equal"); /* OF 1.2 wording */
+        break;
+    case OFPCR12_ROLE_MASTER:
+        ds_put_cstr(string, "master");
+        break;
+    case OFPCR12_ROLE_SLAVE:
+        ds_put_cstr(string, "slave");
+        break;
+    default:
+        OVS_NOT_REACHED();
+    }
+
+    if (generation_id != UINT64_MAX) {
+        ds_put_format(string, " generation_id=%"PRIu64, generation_id);
+    }
+}
+
+void
+ofputil_format_role_message(struct ds *string,
+                            const struct ofputil_role_request *rr)
+{
+    format_role_generic(string, rr->role, (rr->have_generation_id
+                                           ? rr->generation_id
+                                           : UINT64_MAX));
 }
 
 /* Returns an encoded form of a role reply suitable for the "request" in a
@@ -166,6 +207,31 @@ ofputil_decode_role_status(const struct ofp_header *oh,
     rs->reason = r->reason;
 
     return 0;
+}
+
+void
+ofputil_format_role_status(struct ds *string,
+                           const struct ofputil_role_status *rs)
+{
+    format_role_generic(string, rs->role, rs->generation_id);
+
+    ds_put_cstr(string, " reason=");
+
+    switch (rs->reason) {
+    case OFPCRR_MASTER_REQUEST:
+        ds_put_cstr(string, "master_request");
+        break;
+    case OFPCRR_CONFIG:
+        ds_put_cstr(string, "configuration_changed");
+        break;
+    case OFPCRR_EXPERIMENTER:
+        ds_put_cstr(string, "experimenter_data_changed");
+        break;
+    case OFPCRR_N_REASONS:
+    default:
+        ds_put_cstr(string, "(unknown)");
+        break;
+    }
 }
 
 const char *
@@ -491,6 +557,137 @@ ofputil_encode_set_async_config(const struct ofputil_async_cfg *ac,
                                 raw == OFPRAW_NXT_SET_ASYNC_CONFIG2),
                                ofp_version, oams);
     return request;
+}
+
+/* Returns a string form of 'reason'.  The return value is either a statically
+ * allocated constant string or the 'bufsize'-byte buffer 'reasonbuf'.
+ * 'bufsize' should be at least OFP_PORT_REASON_BUFSIZE. */
+#define OFP_PORT_REASON_BUFSIZE (INT_STRLEN(int) + 1)
+static const char *
+ofp_port_reason_to_string(enum ofp_port_reason reason,
+                          char *reasonbuf, size_t bufsize)
+{
+    switch (reason) {
+    case OFPPR_ADD:
+        return "add";
+
+    case OFPPR_DELETE:
+        return "delete";
+
+    case OFPPR_MODIFY:
+        return "modify";
+
+    case OFPPR_N_REASONS:
+    default:
+        snprintf(reasonbuf, bufsize, "%d", (int) reason);
+        return reasonbuf;
+    }
+}
+
+/* Returns a string form of 'reason'.  The return value is either a statically
+ * allocated constant string or the 'bufsize'-byte buffer 'reasonbuf'.
+ * 'bufsize' should be at least OFP_ASYNC_CONFIG_REASON_BUFSIZE. */
+static const char*
+ofp_role_reason_to_string(enum ofp14_controller_role_reason reason,
+                          char *reasonbuf, size_t bufsize)
+{
+    switch (reason) {
+    case OFPCRR_MASTER_REQUEST:
+        return "master_request";
+
+    case OFPCRR_CONFIG:
+        return "configuration_changed";
+
+    case OFPCRR_EXPERIMENTER:
+        return "experimenter_data_changed";
+
+    case OFPCRR_N_REASONS:
+    default:
+        snprintf(reasonbuf, bufsize, "%d", (int) reason);
+        return reasonbuf;
+    }
+}
+
+/* Returns a string form of 'reason'.  The return value is either a statically
+ * allocated constant string or the 'bufsize'-byte buffer 'reasonbuf'.
+ * 'bufsize' should be at least OFP_ASYNC_CONFIG_REASON_BUFSIZE. */
+static const char*
+ofp_requestforward_reason_to_string(enum ofp14_requestforward_reason reason,
+                                    char *reasonbuf, size_t bufsize)
+{
+    switch (reason) {
+    case OFPRFR_GROUP_MOD:
+        return "group_mod_request";
+
+    case OFPRFR_METER_MOD:
+        return "meter_mod_request";
+
+    case OFPRFR_N_REASONS:
+    default:
+        snprintf(reasonbuf, bufsize, "%d", (int) reason);
+        return reasonbuf;
+    }
+}
+
+static const char *
+ofp_async_config_reason_to_string(uint32_t reason,
+                                  enum ofputil_async_msg_type type,
+                                  char *reasonbuf, size_t bufsize)
+{
+    switch (type) {
+    case OAM_PACKET_IN:
+        return ofputil_packet_in_reason_to_string(reason, reasonbuf, bufsize);
+
+    case OAM_PORT_STATUS:
+        return ofp_port_reason_to_string(reason, reasonbuf, bufsize);
+
+    case OAM_FLOW_REMOVED:
+        return ofp_flow_removed_reason_to_string(reason, reasonbuf, bufsize);
+
+    case OAM_ROLE_STATUS:
+        return ofp_role_reason_to_string(reason, reasonbuf, bufsize);
+
+    case OAM_TABLE_STATUS:
+        return ofp_table_reason_to_string(reason, reasonbuf, bufsize);
+
+    case OAM_REQUESTFORWARD:
+        return ofp_requestforward_reason_to_string(reason, reasonbuf, bufsize);
+
+    case OAM_N_TYPES:
+    default:
+        return "Unknown asynchronous configuration message type";
+    }
+}
+
+void
+ofputil_format_set_async_config(struct ds *string,
+                                const struct ofputil_async_cfg *ac)
+{
+    for (int i = 0; i < 2; i++) {
+        ds_put_format(string, "\n %s:\n", i == 0 ? "master" : "slave");
+        for (uint32_t type = 0; type < OAM_N_TYPES; type++) {
+            ds_put_format(string, "%16s:",
+                          ofputil_async_msg_type_to_string(type));
+
+            uint32_t role = i == 0 ? ac->master[type] : ac->slave[type];
+            for (int j = 0; j < 32; j++) {
+                if (role & (1u << j)) {
+                    char reasonbuf[INT_STRLEN(int) + 1];
+                    const char *reason;
+
+                    reason = ofp_async_config_reason_to_string(
+                        j, type, reasonbuf, sizeof reasonbuf);
+                    if (reason[0]) {
+                        ds_put_format(string, " %s", reason);
+                    }
+                }
+            }
+            if (!role) {
+                ds_put_cstr(string, " (off)");
+            }
+            ds_put_char(string, '\n');
+        }
+    }
 }
 
 struct ofputil_async_cfg
