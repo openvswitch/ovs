@@ -1297,10 +1297,11 @@ struct ofproto_class {
     struct rule *(*rule_alloc)(void);
     enum ofperr (*rule_construct)(struct rule *rule)
         /* OVS_REQUIRES(ofproto_mutex) */;
-    void (*rule_insert)(struct rule *rule, struct rule *old_rule,
-                        bool forward_counts)
+    enum ofperr (*rule_insert)(struct rule *rule, struct rule *old_rule,
+                                                    bool forward_counts)
         /* OVS_REQUIRES(ofproto_mutex) */;
-    void (*rule_delete)(struct rule *rule) /* OVS_REQUIRES(ofproto_mutex) */;
+    enum ofperr (*rule_delete)(struct rule *rule)
+        /* OVS_REQUIRES(ofproto_mutex) */;
     void (*rule_destruct)(struct rule *rule);
     void (*rule_dealloc)(struct rule *rule);
 

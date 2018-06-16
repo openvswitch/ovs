@@ -4444,7 +4444,7 @@ rule_construct(struct rule *rule_)
     return 0;
 }
 
-static void
+static enum ofperr
 rule_insert(struct rule *rule_, struct rule *old_rule_, bool forward_counts)
     OVS_REQUIRES(ofproto_mutex)
 {
@@ -4474,6 +4474,8 @@ rule_insert(struct rule *rule_, struct rule *old_rule_, bool forward_counts)
         ovs_mutex_unlock(&rule->stats_mutex);
         ovs_mutex_unlock(&old_rule->stats_mutex);
     }
+
+    return 0;
 }
 
 static void
