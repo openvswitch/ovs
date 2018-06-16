@@ -8648,7 +8648,7 @@ ofproto_rule_insert__(struct ofproto *ofproto, struct rule *rule)
     const struct rule_actions *actions = rule_get_actions(rule);
 
     /* A rule may not be reinserted. */
-    ovs_assert(rule->state == RULE_INITIALIZED);
+    ovs_assert(rule->state != RULE_INSERTED);
 
     if (rule->hard_timeout || rule->idle_timeout) {
         ovs_list_insert(&ofproto->expirable, &rule->expirable);
