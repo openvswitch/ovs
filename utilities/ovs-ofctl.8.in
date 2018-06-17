@@ -1239,9 +1239,7 @@ continue pipeline processing). As such, it is strongly recommended that
 multiple flows should not execute \fBct\fR to reassemble fragments from the
 same IP message.
 .IP
-Currently, connection tracking is only available on Linux kernels with the
-nf_conntrack module loaded. The \fBct\fR action was introduced in Open vSwitch
-2.5.
+The \fBct\fR action was introduced in Open vSwitch 2.5.
 .
 .IP \fBct_clear\fR
 Clears connection tracking state from the flow, zeroing
