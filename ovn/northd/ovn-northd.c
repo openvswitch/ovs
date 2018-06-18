@@ -427,7 +427,7 @@ struct ovn_datapath {
     bool has_unknown;
 
     /* IPAM data. */
-    struct ipam_info *ipam_info;
+    struct ipam_info ipam_info;
 
     /* OVN northd only needs to know about the logical router gateway port for
      * NAT on a distributed router.  This "distributed gateway port" is
@@ -480,10 +480,7 @@ ovn_datapath_destroy(struct hmap *datapaths, struct ovn_datapath *od)
          * use it. */
         hmap_remove(datapaths, &od->key_node);
         destroy_tnlids(&od->port_tnlids);
-        if (od->ipam_info) {
-            bitmap_free(od->ipam_info->allocated_ipv4s);
-            free(od->ipam_info);
-        }
+        bitmap_free(od->ipam_info.allocated_ipv4s);
         free(od->router_ports);
         free(od);
     }
@@ -539,9 +536,8 @@ init_ipam_info_for_datapath(struct ovn_datapath *od)
     const char *ipv6_prefix = smap_get(&od->nbs->other_config, "ipv6_prefix");
 
     if (ipv6_prefix) {
-        od->ipam_info = xzalloc(sizeof *od->ipam_info);
-        od->ipam_info->ipv6_prefix_set = ipv6_parse(
-            ipv6_prefix, &od->ipam_info->ipv6_prefix);
+        od->ipam_info.ipv6_prefix_set = ipv6_parse(
+            ipv6_prefix, &od->ipam_info.ipv6_prefix);
     }
 
     if (!subnet_str) {
@@ -558,16 +554,13 @@ init_ipam_info_for_datapath(struct ovn_datapath *od)
         return;
     }
 
-    if (!od->ipam_info) {
-        od->ipam_info = xzalloc(sizeof *od->ipam_info);
-    }
-    od->ipam_info->start_ipv4 = ntohl(subnet) + 1;
-    od->ipam_info->total_ipv4s = ~ntohl(mask);
-    od->ipam_info->allocated_ipv4s =
-        bitmap_allocate(od->ipam_info->total_ipv4s);
+    od->ipam_info.start_ipv4 = ntohl(subnet) + 1;
+    od->ipam_info.total_ipv4s = ~ntohl(mask);
+    od->ipam_info.allocated_ipv4s =
+        bitmap_allocate(od->ipam_info.total_ipv4s);
 
     /* Mark first IP as taken */
-    bitmap_set1(od->ipam_info->allocated_ipv4s, 0);
+    bitmap_set1(od->ipam_info.allocated_ipv4s, 0);
 
     /* Check if there are any reserver IPs (list) to be excluded from IPAM */
     const char *exclude_ip_list = smap_get(&od->nbs->other_config,
@@ -601,11 +594,11 @@ init_ipam_info_for_datapath(struct ovn_datapath *od)
         }
 
         /* Clamp start...end to fit the subnet. */
-        start = MAX(od->ipam_info->start_ipv4, start);
-        end = MIN(od->ipam_info->start_ipv4 + od->ipam_info->total_ipv4s, end);
+        start = MAX(od->ipam_info.start_ipv4, start);
+        end = MIN(od->ipam_info.start_ipv4 + od->ipam_info.total_ipv4s, end);
         if (end > start) {
-            bitmap_set_multiple(od->ipam_info->allocated_ipv4s,
-                                start - od->ipam_info->start_ipv4,
+            bitmap_set_multiple(od->ipam_info.allocated_ipv4s,
+                                start - od->ipam_info.start_ipv4,
                                 end - start, 1);
         } else {
             lexer_error(&lexer, "excluded addresses not in subnet");
@@ -937,14 +930,14 @@ ipam_insert_mac(struct eth_addr *ea, bool check)
 static void
 ipam_insert_ip(struct ovn_datapath *od, uint32_t ip)
 {
-    if (!od || !od->ipam_info || !od->ipam_info->allocated_ipv4s) {
+    if (!od || !od->ipam_info.allocated_ipv4s) {
         return;
     }
 
-    if (ip >= od->ipam_info->start_ipv4 &&
-        ip < (od->ipam_info->start_ipv4 + od->ipam_info->total_ipv4s)) {
-        bitmap_set1(od->ipam_info->allocated_ipv4s,
-                    ip - od->ipam_info->start_ipv4);
+    if (ip >= od->ipam_info.start_ipv4 &&
+        ip < (od->ipam_info.start_ipv4 + od->ipam_info.total_ipv4s)) {
+        bitmap_set1(od->ipam_info.allocated_ipv4s,
+                    ip - od->ipam_info.start_ipv4);
     }
 }
 
@@ -967,7 +960,7 @@ ipam_insert_lsp_addresses(struct ovn_datapath *od, struct ovn_port *op,
 
     /* IP is only added to IPAM if the switch's subnet option
      * is set, whereas MAC is always added to MACAM. */
-    if (!od->ipam_info || !od->ipam_info->allocated_ipv4s) {
+    if (!od->ipam_info.allocated_ipv4s) {
         destroy_lport_addresses(&laddrs);
         return;
     }
@@ -1052,26 +1045,26 @@ ipam_get_unused_mac(void)
 static uint32_t
 ipam_get_unused_ip(struct ovn_datapath *od)
 {
-    if (!od || !od->ipam_info || !od->ipam_info->allocated_ipv4s) {
+    if (!od || !od->ipam_info.allocated_ipv4s) {
         return 0;
     }
 
-    size_t new_ip_index = bitmap_scan(od->ipam_info->allocated_ipv4s, 0, 0,
-                                      od->ipam_info->total_ipv4s - 1);
-    if (new_ip_index == od->ipam_info->total_ipv4s - 1) {
+    size_t new_ip_index = bitmap_scan(od->ipam_info.allocated_ipv4s, 0, 0,
+                                      od->ipam_info.total_ipv4s - 1);
+    if (new_ip_index == od->ipam_info.total_ipv4s - 1) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
         VLOG_WARN_RL( &rl, "Subnet address space has been exhausted.");
         return 0;
     }
 
-    return od->ipam_info->start_ipv4 + new_ip_index;
+    return od->ipam_info.start_ipv4 + new_ip_index;
 }
 
 static bool
 ipam_allocate_addresses(struct ovn_datapath *od, struct ovn_port *op,
                         const char *addrspec)
 {
-    if (!op->nbsp || !od->ipam_info) {
+    if (!op->nbsp) {
         return false;
     }
 
@@ -1093,14 +1086,14 @@ ipam_allocate_addresses(struct ovn_datapath *od, struct ovn_port *op,
     }
 
     /* Generate IPv4 address, if desirable. */
-    bool dynamic_ip4 = od->ipam_info->allocated_ipv4s != NULL;
+    bool dynamic_ip4 = od->ipam_info.allocated_ipv4s != NULL;
     uint32_t ip4 = dynamic_ip4 ? ipam_get_unused_ip(od) : 0;
 
     /* Generate IPv6 address, if desirable. */
-    bool dynamic_ip6 = od->ipam_info->ipv6_prefix_set;
+    bool dynamic_ip6 = od->ipam_info.ipv6_prefix_set;
     struct in6_addr ip6;
     if (dynamic_ip6) {
-        in6_generate_eui64(mac, &od->ipam_info->ipv6_prefix, &ip6);
+        in6_generate_eui64(mac, &od->ipam_info.ipv6_prefix, &ip6);
     }
 
     /* If we didn't generate anything, bail out. */
@@ -1140,7 +1133,8 @@ build_ipam(struct hmap *datapaths, struct hmap *ports)
      * ports that have the "dynamic" keyword in their addresses column. */
     struct ovn_datapath *od;
     HMAP_FOR_EACH (od, key_node, datapaths) {
-        if (!od->nbs || !od->ipam_info) {
+        if (!od->nbs || (!od->ipam_info.allocated_ipv4s &&
+                         !od->ipam_info.ipv6_prefix_set)) {
             continue;
         }
 
