@@ -31,6 +31,7 @@
 #include "compat.h"
 #include "flow.h"
 #include "flow_table.h"
+#include "meter.h"
 #include "vport-internal_dev.h"
 
 #define DP_MAX_PORTS           USHRT_MAX

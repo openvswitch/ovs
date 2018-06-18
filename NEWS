@@ -19,8 +19,9 @@ Post-v2.9.0
      * New OpenFlow 1.0 extensions for group support.
      * Default selection method for select groups is now dp_hash with improved
        accuracy.
-   - Linux kernel 4.14
-     * Add support for compiling OVS with the latest Linux 4.14 kernel
+   - Linux datapath
+     * Add support for compiling OVS with the latest Linux 4.14 kernel.
+     * Added support for meters.
    - ovn:
      * implemented icmp4/icmp6/tcp_reset actions in order to drop the packet
        and reply with a RST for TCP or ICMPv4/ICMPv6 unreachable message for
