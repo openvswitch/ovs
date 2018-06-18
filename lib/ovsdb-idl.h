@@ -60,6 +60,8 @@ struct ovsdb_idl *ovsdb_idl_create(const char *remote,
                                    const struct ovsdb_idl_class *,
                                    bool monitor_everything_by_default,
                                    bool retry);
+struct ovsdb_idl *ovsdb_idl_create_unconnected(
+    const struct ovsdb_idl_class *, bool monitor_everything_by_default);
 void ovsdb_idl_set_remote(struct ovsdb_idl *, const char *, bool);
 void ovsdb_idl_destroy(struct ovsdb_idl *);
 
