@@ -1330,10 +1330,6 @@ nd_na {
         <p>
           These flows should not match IP fragments with nonzero offset.
         </p>
-
-        <p>
-          Details TBD.  Not yet implemented.
-        </p>
       </li>
 
       <li>

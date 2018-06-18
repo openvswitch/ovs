@@ -5141,7 +5141,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                           ds_cstr(&match), ds_cstr(&actions));
         }
 
-        /* UDP port unreachable */
+        /* UDP/TCP port unreachable */
         for (int i = 0; i < op->lrp_networks.n_ipv4_addrs; i++) {
             const char *action;
 
@@ -5155,6 +5155,17 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                         "ip.ttl = 255; "
                         "icmp4.type = 3; "
                         "icmp4.code = 3; "
+                        "next; };";
+            ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 80,
+                          ds_cstr(&match), action);
+
+            ds_clear(&match);
+            ds_put_format(&match,
+                          "ip4 && ip4.dst == %s && !ip.later_frag && tcp",
+                          op->lrp_networks.ipv4_addrs[i].addr_s);
+            action = "tcp_reset {"
+                        "eth.dst <-> eth.src; "
+                        "ip4.dst <-> ip4.src; "
                         "next; };";
             ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 80,
                           ds_cstr(&match), action);
@@ -5278,6 +5289,22 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                           op->lrp_networks.ea_s);
             ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 90,
                           ds_cstr(&match), ds_cstr(&actions));
+        }
+
+        /* TCP port unreachable */
+        for (int i = 0; i < op->lrp_networks.n_ipv6_addrs; i++) {
+            const char *action;
+
+            ds_clear(&match);
+            ds_put_format(&match,
+                          "ip6 && ip6.dst == %s && !ip.later_frag && tcp",
+                          op->lrp_networks.ipv6_addrs[i].addr_s);
+            action = "tcp_reset {"
+                        "eth.dst <-> eth.src; "
+                        "ip6.dst <-> ip6.src; "
+                        "next; };";
+            ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 80,
+                          ds_cstr(&match), action);
         }
     }
 
