@@ -2244,13 +2244,16 @@ multiple arguments.). Unless noted otherwise only the last instance
 of each field is honoured.
 .PP
 .IP \fBmeter=\fIid\fR
-The integer meter id of the meter.
+The identifier for the meter.  An integer is used to specify a
+user-defined meter.  In addition, the keywords "all", "controller", and
+"slowpath", are also supported as virtual meters.  The "controller" and
+"slowpath" virtual meters apply to packets sent to the controller and to
+the OVS userspace, respectively.
+.IP
 When this field is specified in \fBdel-meter\fR, \fBdump-meter\fR, or
-\fBmeter-stats\fR, the keyword "all" may be used to designate all meters.
-.
-This field is required, except for \fBmeter-stats\fR, which dumps all stats
-when this field is not specified.
-
+\fBmeter-stats\fR, the keyword "all" may be used to designate all
+meters.  This field is required, except for \fBmeter-stats\fR, which
+dumps all stats when this field is not specified.
 .IP \fBkbps\fR
 .IQ \fBpktps\fR
 The unit for the meter band rate parameters, either kilobits per second, or
