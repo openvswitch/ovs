@@ -1667,7 +1667,7 @@ encode_put_dhcpv4_option(const struct ovnact_gen_option *o,
             if (c[i].masked) {
                 plen = (uint8_t) ip_count_cidr_bits(c[i].mask.ipv4);
             }
-            opt_header[1] += (1 + (plen / 8) + sizeof(ovs_be32)) ;
+            opt_header[1] += (1 + DIV_ROUND_UP(plen, 8) + sizeof(ovs_be32));
         }
 
         /* Copied from RFC 3442. Please refer to this RFC for the format of
@@ -1692,7 +1692,7 @@ encode_put_dhcpv4_option(const struct ovnact_gen_option *o,
                 plen = ip_count_cidr_bits(c[i].mask.ipv4);
             }
             ofpbuf_put(ofpacts, &plen, 1);
-            ofpbuf_put(ofpacts, &c[i].value.ipv4, plen / 8);
+            ofpbuf_put(ofpacts, &c[i].value.ipv4, DIV_ROUND_UP(plen, 8));
             ofpbuf_put(ofpacts, &c[i + 1].value.ipv4,
                        sizeof(ovs_be32));
         }
