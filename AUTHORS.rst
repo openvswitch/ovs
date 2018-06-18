@@ -198,6 +198,7 @@ Kmindg G                           kmindg@gmail.com
 Kris Murphy                        kriskend@linux.vnet.ibm.com
 Krishna Kondaka                    kkondaka@vmware.com
 Kyle Mestery                       mestery@mestery.com
+Kyle Simpson                       kyleandrew.simpson@gmail.com
 Kyle Upton                         kupton@baymicrosystems.com
 Lance Richardson                   lrichard@redhat.com
 Lars Kellogg-Stedman               lars@redhat.com
