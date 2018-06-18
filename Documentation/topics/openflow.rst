@@ -104,14 +104,6 @@ specs carefully yet.)
 
   (optional for OF1.3+)
 
-* Per-flow meters.
-
-  OpenFlow protocol support is now implemented.  Support for the special
-  ``OFPM_SLOWPATH`` and ``OFPM_CONTROLLER`` meters is missing.  Support for
-  the software switch is under review.
-
-  (optional for OF1.3+)
-
 * Auxiliary connections.
 
   An implementation in generic code might be a week's worth of work.  The value
