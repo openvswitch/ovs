@@ -1522,6 +1522,8 @@ void
 ofproto_rule_delete(struct ofproto *ofproto, struct rule *rule)
     OVS_EXCLUDED(ofproto_mutex)
 {
+    int error = 0;
+
     /* This skips the ofmonitor and flow-removed notifications because the
      * switch is being deleted and any OpenFlow channels have been or soon will
      * be killed. */
@@ -1535,7 +1537,10 @@ ofproto_rule_delete(struct ofproto *ofproto, struct rule *rule)
                                  &rule->cr);
         ofproto_rule_remove__(rule->ofproto, rule);
         if (ofproto->ofproto_class->rule_delete) {
-            ofproto->ofproto_class->rule_delete(rule);
+            error = ofproto->ofproto_class->rule_delete(rule);
+            if (error) {
+                VLOG_INFO("Rule deletion failed, error = %u", error);
+            }
         }
 
         /* This may not be the last reference to the rule. */
@@ -2882,11 +2887,15 @@ remove_rule_rcu__(struct rule *rule)
 {
     struct ofproto *ofproto = rule->ofproto;
     struct oftable *table = &ofproto->tables[rule->table_id];
+    int error = 0;
 
     ovs_assert(!cls_rule_visible_in_version(&rule->cr, OVS_VERSION_MAX));
     classifier_remove_assert(&table->cls, &rule->cr);
     if (ofproto->ofproto_class->rule_delete) {
-        ofproto->ofproto_class->rule_delete(rule);
+        error = ofproto->ofproto_class->rule_delete(rule);
+        if (error) {
+            VLOG_INFO("Rule deletion failed, error = %u", error);
+        }
     }
     ofproto_rule_unref(rule);
 }
@@ -5252,6 +5261,7 @@ replace_rule_finish(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
     OVS_REQUIRES(ofproto_mutex)
 {
     struct rule *replaced_rule;
+    int error = 0;
 
     replaced_rule = (old_rule && old_rule->removed_reason != OFPRR_EVICTION)
         ? old_rule : NULL;
@@ -5261,8 +5271,12 @@ replace_rule_finish(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
      * link the packet and byte counts from the old rule to the new one if
      * 'modify_keep_counts' is 'true'.  The 'replaced_rule' will be deleted
      * right after this call. */
-    ofproto->ofproto_class->rule_insert(new_rule, replaced_rule,
-                                        ofm->modify_keep_counts);
+    error = ofproto->ofproto_class->rule_insert(new_rule, replaced_rule,
+                                               ofm->modify_keep_counts);
+    if (error) {
+        VLOG_INFO("Rule insert failed, error=%u", error);
+    }
+
     learned_cookies_inc(ofproto, rule_get_actions(new_rule));
 
     if (old_rule) {
