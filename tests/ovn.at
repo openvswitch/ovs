@@ -10444,6 +10444,7 @@ OVN_POPULATE_ARP
 ovn-nbctl --wait=hv sync
 
 test_ip_packet 1 1 000000000001 00000000ff01 $(ip_to_hex 192 168 1 1) $(ip_to_hex 192 168 1 254) 11 0000 7dae fcfc 0303
+test_ip_packet 1 1 000000000001 00000000ff01 $(ip_to_hex 192 168 1 1) $(ip_to_hex 192 168 1 254) 84 0000 7dae fcfd 0302
 OVN_CHECK_PACKETS([hv1/vif1-tx.pcap], [vif1.expected])
 
 test_tcp_syn_packet 2 2 000000000002 00000000ff02 $(ip_to_hex 192 168 2 1) $(ip_to_hex 192 168 2 254) 0000 8b40 3039 0000 7bae 4486

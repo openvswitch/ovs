@@ -5169,6 +5169,20 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                         "next; };";
             ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 80,
                           ds_cstr(&match), action);
+
+            ds_clear(&match);
+            ds_put_format(&match,
+                          "ip4 && ip4.dst == %s && !ip.later_frag",
+                          op->lrp_networks.ipv4_addrs[i].addr_s);
+            action = "icmp4 {"
+                        "eth.dst <-> eth.src; "
+                        "ip4.dst <-> ip4.src; "
+                        "ip.ttl = 255; "
+                        "icmp4.type = 3; "
+                        "icmp4.code = 2; "
+                        "next; };";
+            ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 70,
+                          ds_cstr(&match), action);
         }
 
         ds_clear(&match);
