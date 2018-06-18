@@ -5141,6 +5141,25 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                           ds_cstr(&match), ds_cstr(&actions));
         }
 
+        /* UDP port unreachable */
+        for (int i = 0; i < op->lrp_networks.n_ipv4_addrs; i++) {
+            const char *action;
+
+            ds_clear(&match);
+            ds_put_format(&match,
+                          "ip4 && ip4.dst == %s && !ip.later_frag && udp",
+                          op->lrp_networks.ipv4_addrs[i].addr_s);
+            action = "icmp4 {"
+                        "eth.dst <-> eth.src; "
+                        "ip4.dst <-> ip4.src; "
+                        "ip.ttl = 255; "
+                        "icmp4.type = 3; "
+                        "icmp4.code = 3; "
+                        "next; };";
+            ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 80,
+                          ds_cstr(&match), action);
+        }
+
         ds_clear(&match);
         ds_put_cstr(&match, "ip4.dst == {");
         bool has_drop_ips = false;
