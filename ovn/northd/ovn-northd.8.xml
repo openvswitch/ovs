@@ -349,18 +349,20 @@
       </li>
     </ul>
 
-    <h3>Ingress Table 7: <code>from-lport</code> QoS marking</h3>
+    <h3>Ingress Table 7: <code>from-lport</code> QoS Marking</h3>
 
     <p>
       Logical flows in this table closely reproduce those in the
-      <code>QoS</code> table in the <code>OVN_Northbound</code> database
-      for the <code>from-lport</code> direction.
+      <code>QoS</code> table with the <code>action</code> column set in
+      the <code>OVN_Northbound</code> database for the
+      <code>from-lport</code> direction.
     </p>
 
     <ul>
       <li>
-        For every qos_rules for every logical switch a flow will be added at
-        priorities mentioned in the QoS table.
+        For every qos_rules entry in a logical switch with DSCP marking
+        enabled, a flow will be added at the priority mentioned in the
+        QoS table.
       </li>
 
       <li>
@@ -369,19 +371,20 @@
       </li>
     </ul>
 
-    <h3>Ingress Table 8: <code>from-lport</code> QoS meter</h3>
+    <h3>Ingress Table 8: <code>from-lport</code> QoS Meter</h3>
 
     <p>
       Logical flows in this table closely reproduce those in the
-      <code>QoS</code> table <code>bandwidth</code> column in the
-      <code>OVN_Northbound</code> database for the <code>from-lport</code>
-      direction.
+      <code>QoS</code> table with the  <code>bandwidth</code> column set
+      in the <code>OVN_Northbound</code> database for the
+      <code>from-lport</code> direction.
     </p>
 
     <ul>
       <li>
-        For every qos_rules for every logical switch a flow will be added at
-        priorities mentioned in the QoS table.
+        For every qos_rules entry in a logical switch with metering
+        enabled, a flow will be added at the priorirty mentioned in the
+        QoS table.
       </li>
 
       <li>
@@ -920,18 +923,18 @@ output;
       </li>
     </ul>
 
-    <h3>Egress Table 5: <code>to-lport</code> QoS marking</h3>
+    <h3>Egress Table 5: <code>to-lport</code> QoS Marking</h3>
 
     <p>
-      This is similar to ingress table <code>QoS marking</code> except for
-      <code>to-lport</code> qos rules.
+      This is similar to ingress table <code>QoS marking</code> except
+      they apply to <code>to-lport</code> QoS rules.
     </p>
 
-    <h3>Egress Table 6: <code>to-lport</code> QoS meter</h3>
+    <h3>Egress Table 6: <code>to-lport</code> QoS Meter</h3>
 
     <p>
-      This is similar to ingress table <code>QoS meter</code> except for
-      <code>to-lport</code> qos rules.
+      This is similar to ingress table <code>QoS meter</code> except
+      they apply to <code>to-lport</code> QoS rules.
     </p>
 
     <h3>Egress Table 7: Stateful</h3>

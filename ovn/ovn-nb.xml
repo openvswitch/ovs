@@ -122,7 +122,8 @@
     </column>
 
     <column name="qos_rules">
-      QOS marking rules that apply to packets within the logical switch.
+      QoS marking and metering rules that apply to packets within the
+      logical switch.
     </column>
 
     <column name="dns_records">
@@ -1280,19 +1281,25 @@
     </group>
   </table>
 
-  <table name="QoS" title="QOS table">
+  <table name="QoS" title="QoS table">
     <p>
-      Each row in this table represents one QOS rule for a logical switch
-      that points to it through its <ref column="qos_rules"/> column.  The <ref
-      column="action"/> column for the highest-<ref column="priority"/>
-      matching row in this table determines a packet's qos marking.  If no row
-      matches, packets will not have any qos marking.
+      Each row in this table represents one QoS rule for a logical switch
+      that points to it through its <ref column="qos_rules"/> column.
+      Two types of QoS are supported: DSCP marking and metering.  A
+      <ref column="match"/> with the highest-<ref column="priority"/>
+      will have QoS applied to it.  If the <ref column="action"/> column is
+      specified, then matching packets will have DSCP marking applied.
+      If the <ref column="bandwdith"/> column is specified, then matching
+      packets will have metering applied.  <ref column="action"/> and
+      <ref column="bandwdith"/> are not exclusive, so both marking and
+      metering by defined for the same QoS entry. If no row matches,
+      packets will not have any QoS applied.
     </p>
 
     <column name="priority">
       <p>
-        The QOS rule's priority.  Rules with numerically higher priority
-        take precedence over those with lower.  If two QOS rules with
+        The QoS rule's priority.  Rules with numerically higher priority
+        take precedence over those with lower.  If two QoS rules with
         the same priority both match, then the one actually applied to a
         packet is undefined.
       </p>
@@ -1308,7 +1315,7 @@
 
     <column name="match">
       <p>
-        The packets that the QOS rules should match, in the same expression
+        The packets that the QoS rules should match, in the same expression
         language used for the <ref column="match" table="Logical_Flow"
         db="OVN_Southbound"/> column in the OVN Southbound database's
         <ref table="Logical_Flow" db="OVN_Southbound"/> table.  The
@@ -1319,7 +1326,7 @@
     </column>
 
     <column name="action">
-      <p>The action to be performed on the matched packet</p>
+      <p>When specified, matching flows will have DSCP marking applied.</p>
       <ul>
         <li>
           <code>dscp</code>: The value of this action should be in the
@@ -1330,16 +1337,16 @@
 
     <column name="bandwidth">
       <p>
-         The bandwidth limit to be performed on the matched packet.
-         Currently only supported in the userspace by dpdk.
+         When specified, matching packets will have bandwidth metering
+         applied.  Traffic over the limit will be dropped.
       </p>
       <ul>
         <li>
           <code>rate</code>: The value of rate limit in kbps.
         </li>
         <li>
-          <code>burst</code>: The value of burst rate limit in kbps.
-          This is optional and needs to specify the <code>rate</code> first.
+          <code>burst</code>: The value of burst rate limit in kilobits.
+          This is optional and needs to specify the <code>rate</code>.
         </li>
       </ul>
     </column>
