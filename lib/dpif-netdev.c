@@ -4845,7 +4845,8 @@ dpif_netdev_meter_get_features(const struct dpif * dpif OVS_UNUSED,
     features->max_color = 0;
 }
 
-/* Returns false when packet needs to be dropped. */
+/* Applies the meter identified by 'meter_id' to 'packets_'.  Packets
+ * that exceed a band are dropped in-place. */
 static void
 dp_netdev_run_meter(struct dp_netdev *dp, struct dp_packet_batch *packets_,
                     uint32_t meter_id, long long int now)
@@ -4965,9 +4966,8 @@ dp_netdev_run_meter(struct dp_netdev *dp, struct dp_packet_batch *packets_,
         }
     }
 
-    /* Fire the highest rate band exceeded by each packet.
-     * Drop packets if needed, by swapping packet to the end that will be
-     * ignored. */
+    /* Fire the highest rate band exceeded by each packet, and drop
+     * packets if needed. */
     size_t j;
     DP_PACKET_BATCH_REFILL_FOR_EACH (j, cnt, packet, packets_) {
         if (exceeded_band[j] >= 0) {
