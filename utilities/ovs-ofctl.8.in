@@ -2256,16 +2256,17 @@ meters.  This field is required, except for \fBmeter-stats\fR, which
 dumps all stats when this field is not specified.
 .IP \fBkbps\fR
 .IQ \fBpktps\fR
-The unit for the meter band rate parameters, either kilobits per second, or
-packets per second, respectively.  One of these must be specified.  The burst
-size unit corresponds to the rate unit by dropping the "per second", i.e.,
-burst is in units of kilobits or packets, respectively.
+The unit for the \fBrate\fR and \fBburst_size\fR band parameters.
+\fBkbps\fR specifies kilobits per second, and \fBpktps\fR specifies
+packets per second.  A unit is required for the \fBadd-meter\fR and
+\fBmod-meter\fR commands.
 
 .IP \fBburst\fR
-Specify burst size for all bands, or none of them, if this flag is not given.
+If set, enables burst support for meter bands through the \fBburst_size\fR
+parameter.
 
 .IP \fBstats\fR
-Collect meter and band statistics.
+If set, enables the collection of meter and band statistics.
 
 .IP \fBbands\fR=\fIband_parameters\fR
 The \fBadd-meter\fR and \fBmod-meter\fR commands require at least one
@@ -2286,12 +2287,12 @@ Drop packets exceeding the band's rate limit.
 .IP "The other \fIband_parameters\fR are:"
 .IP \fBrate=\fIvalue\fR
 The relative rate limit for this band, in kilobits per second or packets per
-second, depending on the meter flags defined above.
+second, depending on whether \fBkbps\fR or \fBpktps\fR was specified.
 .IP \fBburst_size=\fIsize\fR
-The maximum burst allowed for the band.  If \fBpktps\fR is specified,
-then \fIsize\fR is a packet count, otherwise it is in kilobits.  If
-unspecified, the switch is free to select some reasonable value
-depending on its configuration.
+If \fBburst\fR is specified for the meter entry, configures the maximum
+burst allowed for the band in kilobits or packets, depending on whether
+\fBkbps\fR or \fBpktps\fR was specified.  If unspecified, the switch is
+free to select some reasonable value depending on its configuration.
 .RE
 .
 .SH OPTIONS
