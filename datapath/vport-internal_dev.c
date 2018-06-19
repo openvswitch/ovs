@@ -169,7 +169,7 @@ static void do_setup(struct net_device *netdev)
 
 #ifdef HAVE_NET_DEVICE_WITH_MAX_MTU
 	netdev->max_mtu = ETH_MAX_MTU;
-#elif HAVE_RHEL7_MAX_MTU
+#elif defined(HAVE_RHEL7_MAX_MTU)
 	netdev->extended->max_mtu = ETH_MAX_MTU;
 #endif
 	netdev->netdev_ops = &internal_dev_netdev_ops;
