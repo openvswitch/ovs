@@ -20,7 +20,7 @@
 #
 #  Notes:
 #    It implements the following GDB commands:
-#    - ovs_dump_bridge [ports|wanted]
+#    - ovs_dump_bridge {ports|wanted}
 #    - ovs_dump_bridge_ports <struct bridge *>
 #    - ovs_dump_dp_netdev [ports]
 #    - ovs_dump_dp_netdev_poll_threads <struct dp_netdev *>
@@ -30,6 +30,7 @@
 #    - ovs_dump_netdev_provider
 #    - ovs_dump_ovs_list <struct ovs_list *> {[<structure>] [<member>] {dump}]}
 #    - ovs_dump_simap <struct simap *>
+#    - ovs_show_fdb {[<bridge_name>] {dbg} {hash}}
 #
 #  Example:
 #    $ gdb $(which ovs-vswitchd) $(pidof ovs-vswitchd)
@@ -116,6 +117,28 @@ def get_global_variable(name):
         return None
     return gdb.parse_and_eval(name)
 
+
+def get_time_msec():
+    # There is no variable that stores the current time each iteration,
+    # to get a decent time time_now() value. For now we take the global
+    # "coverage_run_time" value, which is the current time + max 5 seconds
+    # (COVERAGE_RUN_INTERVAL)
+    return long(get_global_variable("coverage_run_time")), -5000
+
+
+def get_time_now():
+    # See get_time_msec() above
+    return long(get_global_variable("coverage_run_time"))/1000, -5
+
+
+def eth_addr_to_string(eth_addr):
+    return "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}".format(
+        long(eth_addr['ea'][0]),
+        long(eth_addr['ea'][1]),
+        long(eth_addr['ea'][2]),
+        long(eth_addr['ea'][3]),
+        long(eth_addr['ea'][4]),
+        long(eth_addr['ea'][5]))
 
 #
 # Class that will provide an iterator over an OVS cmap.
@@ -286,7 +309,7 @@ class ForEachLIST():
 #
 class CmdDumpBridge(gdb.Command):
     """Dump all configured bridges.
-    Usage: ovs_dump_bridge [ports|wanted]
+    Usage: ovs_dump_bridge {ports|wanted}
     """
     def __init__(self):
         super(CmdDumpBridge, self).__init__("ovs_dump_bridge",
@@ -299,7 +322,7 @@ class CmdDumpBridge(gdb.Command):
         if len(arg_list) > 1 or \
            (len(arg_list) == 1 and arg_list[0] != "ports" and
            arg_list[0] != "wanted"):
-            print("usage: ovs_dump_bridge [ports|wanted]")
+            print("usage: ovs_dump_bridge {ports|wanted}")
             return
         elif len(arg_list) == 1:
             if arg_list[0] == "ports":
@@ -701,6 +724,167 @@ class CmdDumpSimap(gdb.Command):
 
 
 #
+# Implements the GDB "ovs_show_fdb" command
+#
+class CmdShowFDB(gdb.Command):
+    """Show FDB information
+    Usage: ovs_show_fdb {<bridge_name> {dbg} {hash}}
+
+       <bridge_name> : Optional bridge name, if not supplied FDB summary
+                       information is displayed for all bridges.
+       dbg           : Will show structure address information
+       hash          : Will display the forwarding table using the hash
+                       table, rather than the rlu list.
+    """
+
+    def __init__(self):
+        super(CmdShowFDB, self).__init__("ovs_show_fdb",
+                                         gdb.COMMAND_DATA)
+
+    @staticmethod
+    def __get_port_name_num(mac_entry):
+        if mac_entry['mlport'] is not None:
+            port = mac_entry['mlport']['port'].cast(
+                gdb.lookup_type('struct ofbundle').pointer())
+
+            port_name = port['name'].string()
+            port_no = long(container_of(
+                port['ports']['next'],
+                gdb.lookup_type('struct ofport_dpif').pointer(),
+                'bundle_node')['up']['ofp_port'])
+
+            if port_no == 0xfff7:
+                port_no = "UNSET"
+            elif port_no == 0xfff8:
+                port_no = "IN_PORT"
+            elif port_no == 0xfff9:
+                port_no = "TABLE"
+            elif port_no == 0xfffa:
+                port_no = "NORMAL"
+            elif port_no == 0xfffb:
+                port_no = "FLOOD"
+            elif port_no == 0xfffc:
+                port_no = "ALL"
+            elif port_no == 0xfffd:
+                port_no = "CONTROLLER"
+            elif port_no == 0xfffe:
+                port_no = "LOCAL"
+            elif port_no == 0xffff:
+                port_no = "NONE"
+            else:
+                port_no = str(port_no)
+        else:
+            port_name = "-"
+            port_no = "?"
+
+        return port_name, port_no
+
+    @staticmethod
+    def display_ml_summary(ml, indent=0, dbg=False):
+        indent = " " * indent
+        if ml is None:
+            return
+
+        if dbg:
+            print("[(struct mac_learning *) {}]".format(ml))
+
+        print("{}table.n         : {}".format(indent, ml['table']['n']))
+        print("{}secret          : 0x{:x}".format(indent, long(ml['secret'])))
+        print("{}idle_time       : {}".format(indent, ml['idle_time']))
+        print("{}max_entries     : {}".format(indent, ml['max_entries']))
+        print("{}ref_count       : {}".format(indent, ml['ref_cnt']['count']))
+        print("{}need_revalidate : {}".format(indent, ml['need_revalidate']))
+        print("{}ports_by_ptr.n  : {}".format(indent, ml['ports_by_ptr']['n']))
+        print("{}ports_by_usage.n: {}".format(indent,
+                                              ml['ports_by_usage']['n']))
+
+    @staticmethod
+    def display_mac_entry(mac_entry, indent=0, dbg=False):
+        port_name, port_no = CmdShowFDB.__get_port_name_num(mac_entry)
+
+        line = "{}{:16.16}  {:-4}  {}  {:-9}".format(
+            indent,
+            "{}[{}]".format(port_no, port_name),
+            long(mac_entry['vlan']),
+            eth_addr_to_string(mac_entry['mac']),
+            long(mac_entry['expires']))
+
+        if dbg:
+            line += " [(struct mac_entry *) {}]".format(mac_entry)
+
+        print(line)
+
+    @staticmethod
+    def display_ml_entries(ml, indent=0, hash=False, dbg=False):
+        indent = " " * indent
+        if ml is None:
+            return
+
+        print("\n{}FDB \"{}\" table:".format(indent,
+                                             "lrus" if not hash else "hash"))
+        print("{}port               VLAN  MAC                Age out @".
+              format(indent))
+        print("{}-----------------  ----  -----------------  ---------".
+              format(indent))
+
+        mac_entries = 0
+
+        if hash:
+            for mac_entry in ForEachHMAP(ml['table'],
+                                         "struct mac_entry",
+                                         "hmap_node"):
+                CmdShowFDB.display_mac_entry(mac_entry, len(indent), dbg)
+                mac_entries += 1
+        else:
+            for mac_entry in ForEachLIST(ml['lrus'],
+                                         "struct mac_entry",
+                                         "lru_node"):
+                CmdShowFDB.display_mac_entry(mac_entry, len(indent), dbg)
+                mac_entries += 1
+
+        print("\nTotal MAC entries: {}".format(mac_entries))
+        time_now = list(get_time_now())
+        time_now[1] = time_now[0] + time_now[1]
+        print("\n{}Current time is between {} and {} seconds.\n".
+              format(indent, min(time_now[0], time_now[1]),
+                     max(time_now[0], time_now[1])))
+
+    def invoke(self, arg, from_tty):
+        arg_list = gdb.string_to_argv(arg)
+
+        all_ofproto_dpifs_by_name = get_global_variable(
+            'all_ofproto_dpifs_by_name')
+        if all_ofproto_dpifs_by_name is None:
+            return
+
+        all_name = dict()
+        max_name_len = 0
+        for node in ForEachHMAP(all_ofproto_dpifs_by_name,
+                                "struct ofproto_dpif",
+                                "all_ofproto_dpifs_by_name_node"):
+
+            all_name[node['up']['name'].string()] = node
+            if len(node['up']['name'].string()) > max_name_len:
+                max_name_len = len(node['up']['name'].string())
+
+        if len(arg_list) == 0:
+            for name in sorted(all_name.iterkeys()):
+                print("{}: (struct mac_learning *) {}".
+                      format(name.ljust(max_name_len),
+                             all_name[name]['ml']))
+
+                self.display_ml_summary(all_name[name]['ml'], 4)
+        else:
+            if not arg_list[0] in all_name:
+                print("ERROR: Given bridge name is not known!")
+                return
+
+            ml = all_name[arg_list[0]]['ml']
+            self.display_ml_summary(ml, 0, "dbg" in arg_list[1:])
+            self.display_ml_entries(ml, 0, "hash" in arg_list[1:],
+                                    "dbg" in arg_list[1:])
+
+#
 # Initialize all GDB commands
 #
 CmdDumpBridge()
@@ -713,3 +897,4 @@ CmdDumpNetdev()
 CmdDumpNetdevProvider()
 CmdDumpOvsList()
 CmdDumpSimap()
+CmdShowFDB()
