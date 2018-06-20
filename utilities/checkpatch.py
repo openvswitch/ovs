@@ -81,6 +81,7 @@ checking_file = False
 total_line = 0
 colors = False
 spellcheck_comments = False
+quiet = False
 
 
 def get_color_end():
@@ -719,6 +720,7 @@ Check options:
 -h|--help                      This help message
 -b|--skip-block-whitespace     Skips the if/while/for whitespace tests
 -l|--skip-leading-whitespace   Skips the leading whitespace test
+-q|--quiet                     Only print error and warning information
 -s|--skip-signoff-lines        Tolerate missing Signed-off-by line
 -S|--spellcheck-comments       Check C comments for possible spelling mistakes
 -t|--skip-trailing-whitespace  Skips the trailing whitespace test"""
@@ -726,11 +728,12 @@ Check options:
 
 
 def ovs_checkpatch_print_result(result):
-    global __warnings, __errors, total_line
+    global quiet, __warnings, __errors, total_line
+
     if result < 0:
         print("Lines checked: %d, Warnings: %d, Errors: %d\n" %
               (total_line, __warnings, __errors))
-    else:
+    elif not quiet:
         print("Lines checked: %d, no obvious problems found\n" % (total_line))
 
 
@@ -768,14 +771,15 @@ if __name__ == '__main__':
                                           sys.argv[1:])
         n_patches = int(numeric_options[-1][1:]) if numeric_options else 0
 
-        optlist, args = getopt.getopt(args, 'bhlstfS',
+        optlist, args = getopt.getopt(args, 'bhlstfSq',
                                       ["check-file",
                                        "help",
                                        "skip-block-whitespace",
                                        "skip-leading-whitespace",
                                        "skip-signoff-lines",
                                        "skip-trailing-whitespace",
-                                       "spellcheck-comments"])
+                                       "spellcheck-comments",
+                                       "quiet"])
     except:
         print("Unknown option encountered. Please rerun with -h for help.")
         sys.exit(-1)
@@ -800,6 +804,8 @@ if __name__ == '__main__':
                 print("         Please install python enchant.")
             else:
                 spellcheck_comments = True
+        elif o in ("-q", "--quiet"):
+            quiet = True
         else:
             print("Unknown option '%s'" % o)
             sys.exit(-1)
@@ -820,7 +826,8 @@ if __name__ == '__main__':
             patch = f.read()
             f.close()
 
-            print('== Checking %s ("%s") ==' % (revision[0:12], name))
+            if not quiet:
+                print('== Checking %s ("%s") ==' % (revision[0:12], name))
             result = ovs_checkpatch_parse(patch, revision)
             ovs_checkpatch_print_result(result)
             if result:
@@ -837,7 +844,8 @@ if __name__ == '__main__':
 
     status = 0
     for filename in args:
-        print('== Checking "%s" ==' % filename)
+        if not quiet:
+            print('== Checking "%s" ==' % filename)
         result = ovs_checkpatch_file(filename)
         if result:
             status = -1
