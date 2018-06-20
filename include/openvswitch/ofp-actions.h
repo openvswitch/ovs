@@ -287,6 +287,8 @@ struct ofpact_output {
     uint16_t max_len;           /* Max send len, for port OFPP_CONTROLLER. */
 };
 
+#define NX_CTLR_NO_METER 0
+
 /* OFPACT_CONTROLLER.
  *
  * Used for NXAST_CONTROLLER. */
@@ -305,6 +307,12 @@ struct ofpact_controller {
         /* Arbitrary data to include in the packet-in message (currently,
          * only in NXT_PACKET_IN2). */
         uint16_t userdata_len;
+
+        /* Meter to which this controller action should be associated.
+         * If requested, this will override a "controller" virtual meter.
+         * A value of NX_CTLR_NO_METER means no meter is requested. */
+        uint32_t meter_id;
+        uint32_t provider_meter_id;
     );
     uint8_t userdata[0];
 };

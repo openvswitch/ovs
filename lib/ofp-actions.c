@@ -754,6 +754,7 @@ enum nx_action_controller2_prop_type {
     NXAC2PT_REASON,             /* uint8_t reason (OFPR_*), default 0. */
     NXAC2PT_USERDATA,           /* Data to copy into NXPINT_USERDATA. */
     NXAC2PT_PAUSE,              /* Flag to pause pipeline to resume later. */
+    NXAC2PT_METER_ID,           /* ovs_b32 meter (default NX_CTLR_NO_METER). */
 };
 
 /* The action structure for NXAST_CONTROLLER2 is "struct ext_action_header",
@@ -771,6 +772,7 @@ decode_NXAST_RAW_CONTROLLER(const struct nx_action_controller *nac,
     oc->max_len = ntohs(nac->max_len);
     oc->controller_id = ntohs(nac->controller_id);
     oc->reason = nac->reason;
+    oc->meter_id = NX_CTLR_NO_METER;
     ofpact_finish_CONTROLLER(out, &oc);
 
     return 0;
@@ -790,6 +792,7 @@ decode_NXAST_RAW_CONTROLLER2(const struct ext_action_header *eah,
     oc->ofpact.raw = NXAST_RAW_CONTROLLER2;
     oc->max_len = UINT16_MAX;
     oc->reason = OFPR_ACTION;
+    oc->meter_id = NX_CTLR_NO_METER;
 
     struct ofpbuf properties;
     ofpbuf_use_const(&properties, eah, ntohs(eah->len));
@@ -831,6 +834,10 @@ decode_NXAST_RAW_CONTROLLER2(const struct ext_action_header *eah,
             oc->pause = true;
             break;
 
+        case NXAC2PT_METER_ID:
+            error = ofpprop_parse_u32(&payload, &oc->meter_id);
+            break;
+
         default:
             error = OFPPROP_UNKNOWN(false, "NXAST_RAW_CONTROLLER2", type);
             break;
@@ -852,6 +859,7 @@ encode_CONTROLLER(const struct ofpact_controller *controller,
 {
     if (controller->userdata_len
         || controller->pause
+        || controller->meter_id != NX_CTLR_NO_METER
         || controller->ofpact.raw == NXAST_RAW_CONTROLLER2) {
         size_t start_ofs = out->size;
         put_NXAST_CONTROLLER2(out);
@@ -872,6 +880,9 @@ encode_CONTROLLER(const struct ofpact_controller *controller,
         if (controller->pause) {
             ofpprop_put_flag(out, NXAC2PT_PAUSE);
         }
+        if (controller->meter_id != NX_CTLR_NO_METER) {
+            ofpprop_put_u32(out, NXAC2PT_METER_ID, controller->meter_id);
+        }
         pad_ofpat(out, start_ofs);
     } else {
         struct nx_action_controller *nac;
@@ -889,6 +900,7 @@ parse_CONTROLLER(char *arg, const struct ofpact_parse_params *pp)
     enum ofp_packet_in_reason reason = OFPR_ACTION;
     uint16_t controller_id = 0;
     uint16_t max_len = UINT16_MAX;
+    uint32_t meter_id = NX_CTLR_NO_METER;
     const char *userdata = NULL;
     bool pause = false;
 
@@ -921,6 +933,11 @@ parse_CONTROLLER(char *arg, const struct ofpact_parse_params *pp)
                 userdata = value;
             } else if (!strcmp(name, "pause")) {
                 pause = true;
+            } else if (!strcmp(name, "meter_id")) {
+                char *error = str_to_u32(value, &meter_id);
+                if (error) {
+                    return error;
+                }
             } else {
                 return xasprintf("unknown key \"%s\" parsing controller "
                                  "action", name);
@@ -928,7 +945,8 @@ parse_CONTROLLER(char *arg, const struct ofpact_parse_params *pp)
         }
     }
 
-    if (reason == OFPR_ACTION && controller_id == 0 && !userdata && !pause) {
+    if (reason == OFPR_ACTION && controller_id == 0 && !userdata && !pause
+        && meter_id == NX_CTLR_NO_METER) {
         struct ofpact_output *output;
 
         output = ofpact_put_OUTPUT(pp->ofpacts);
@@ -942,6 +960,7 @@ parse_CONTROLLER(char *arg, const struct ofpact_parse_params *pp)
         controller->reason = reason;
         controller->controller_id = controller_id;
         controller->pause = pause;
+        controller->meter_id = meter_id;
 
         if (userdata) {
             size_t start_ofs = pp->ofpacts->size;
@@ -976,7 +995,7 @@ format_CONTROLLER(const struct ofpact_controller *a,
                   const struct ofpact_format_params *fp)
 {
     if (a->reason == OFPR_ACTION && !a->controller_id && !a->userdata_len
-        && !a->pause) {
+        && !a->pause && a->meter_id == NX_CTLR_NO_METER) {
         ds_put_format(fp->s, "%sCONTROLLER:%s%"PRIu16,
                       colors.special, colors.end, a->max_len);
     } else {
@@ -1005,6 +1024,10 @@ format_CONTROLLER(const struct ofpact_controller *a,
         }
         if (a->pause) {
             ds_put_format(fp->s, "%spause%s,", colors.value, colors.end);
+        }
+        if (a->meter_id != NX_CTLR_NO_METER) {
+            ds_put_format(fp->s, "%smeter_id=%s%"PRIu32",",
+                          colors.param, colors.end, a->meter_id);
         }
         ds_chomp(fp->s, ',');
         ds_put_format(fp->s, "%s)%s", colors.paren, colors.end);

@@ -859,6 +859,11 @@ switch in an \fBNXT_RESUME\fR message, which will restart the packet's
 traversal from the point where it was interrupted.  This permits an
 OpenFlow controller to interpose on a packet midway through processing
 in Open vSwitch.
+.IP "\fBmeter_id=\fIid\fR"
+Use meter \fIid\fR to rate-limit the OpenFlow packet-in messages that
+this action sends to the controller.  By default, packets sent to the
+controller are associated with the "controller" virtual meter, if one
+was configured.
 .
 .RE
 .IP

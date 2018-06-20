@@ -1520,6 +1520,7 @@ add_internal_flows(struct ofproto_dpif *ofproto)
     controller->max_len = UINT16_MAX;
     controller->controller_id = 0;
     controller->reason = OFPR_IMPLICIT_MISS;
+    controller->meter_id = NX_CTLR_NO_METER;
     ofpact_finish_CONTROLLER(&ofpacts, &controller);
 
     error = add_internal_miss_flow(ofproto, id++, &ofpacts,
