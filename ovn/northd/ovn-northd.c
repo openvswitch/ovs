@@ -2835,8 +2835,47 @@ build_dhcpv6_action(struct ovn_port *op, struct in6_addr *offer_ip,
     return true;
 }
 
+struct ovn_port_group_ls {
+    struct hmap_node key_node;  /* Index on 'key'. */
+    struct uuid key;            /* nb_ls->header_.uuid. */
+    const struct nbrec_logical_switch *nb_ls;
+};
+
+struct ovn_port_group {
+    struct hmap_node key_node;  /* Index on 'key'. */
+    struct uuid key;            /* nb_pg->header_.uuid. */
+    const struct nbrec_port_group *nb_pg;
+    struct hmap nb_lswitches;   /* NB lswitches related to the port group */
+    size_t n_acls;              /* Number of ACLs applied to the port group */
+    struct nbrec_acl **acls;    /* ACLs applied to the port group */
+};
+
+static void
+ovn_port_group_ls_add(struct ovn_port_group *pg,
+                      const struct nbrec_logical_switch *nb_ls)
+{
+    struct ovn_port_group_ls *pg_ls = xzalloc(sizeof *pg_ls);
+    pg_ls->key = nb_ls->header_.uuid;
+    pg_ls->nb_ls = nb_ls;
+    hmap_insert(&pg->nb_lswitches, &pg_ls->key_node, uuid_hash(&pg_ls->key));
+}
+
+static struct ovn_port_group_ls *
+ovn_port_group_ls_find(struct ovn_port_group *pg, const struct uuid *ls_uuid)
+{
+    struct ovn_port_group_ls *pg_ls;
+
+    HMAP_FOR_EACH_WITH_HASH (pg_ls, key_node, uuid_hash(ls_uuid),
+                             &pg->nb_lswitches) {
+        if (uuid_equals(ls_uuid, &pg_ls->key)) {
+            return pg_ls;
+        }
+    }
+    return NULL;
+}
+
 static bool
-has_stateful_acl(struct ovn_datapath *od)
+has_stateful_acl(struct ovn_datapath *od, struct hmap *port_groups)
 {
     for (size_t i = 0; i < od->nbs->n_acls; i++) {
         struct nbrec_acl *acl = od->nbs->acls[i];
@@ -2845,13 +2884,25 @@ has_stateful_acl(struct ovn_datapath *od)
         }
     }
 
+    struct ovn_port_group *pg;
+    HMAP_FOR_EACH (pg, key_node, port_groups) {
+        if (ovn_port_group_ls_find(pg, &od->nbs->header_.uuid)) {
+            for (size_t i = 0; i < pg->n_acls; i++) {
+                struct nbrec_acl *acl = pg->acls[i];
+                if (!strcmp(acl->action, "allow-related")) {
+                    return true;
+                }
+            }
+        }
+    }
     return false;
 }
 
 static void
-build_pre_acls(struct ovn_datapath *od, struct hmap *lflows)
+build_pre_acls(struct ovn_datapath *od, struct hmap *lflows,
+               struct hmap *port_groups)
 {
-    bool has_stateful = has_stateful_acl(od);
+    bool has_stateful = has_stateful_acl(od, port_groups);
 
     /* Ingress and Egress Pre-ACL Table (Priority 0): Packets are
      * allowed by default. */
@@ -3315,21 +3366,6 @@ consider_acl(struct hmap *lflows, struct ovn_datapath *od,
     free(stage_hint);
 }
 
-struct ovn_port_group_ls {
-    struct hmap_node key_node;  /* Index on 'key'. */
-    struct uuid key;            /* nb_ls->header_.uuid. */
-    const struct nbrec_logical_switch *nb_ls;
-};
-
-struct ovn_port_group {
-    struct hmap_node key_node;  /* Index on 'key'. */
-    struct uuid key;            /* nb_pg->header_.uuid. */
-    const struct nbrec_port_group *nb_pg;
-    struct hmap nb_lswitches;   /* NB lswitches related to the port group */
-    size_t n_acls;              /* Number of ACLs applied to the port group */
-    struct nbrec_acl **acls;    /* ACLs applied to the port group */
-};
-
 static struct ovn_port_group *
 ovn_port_group_create(struct hmap *pgs,
                       const struct nbrec_port_group *nb_pg)
@@ -3342,30 +3378,6 @@ ovn_port_group_create(struct hmap *pgs,
     hmap_init(&pg->nb_lswitches);
     hmap_insert(pgs, &pg->key_node, uuid_hash(&pg->key));
     return pg;
-}
-
-static void
-ovn_port_group_ls_add(struct ovn_port_group *pg,
-                      const struct nbrec_logical_switch *nb_ls)
-{
-    struct ovn_port_group_ls *pg_ls = xzalloc(sizeof *pg_ls);
-    pg_ls->key = nb_ls->header_.uuid;
-    pg_ls->nb_ls = nb_ls;
-    hmap_insert(&pg->nb_lswitches, &pg_ls->key_node, uuid_hash(&pg_ls->key));
-}
-
-static struct ovn_port_group_ls *
-ovn_port_group_ls_find(struct ovn_port_group *pg, const struct uuid *ls_uuid)
-{
-    struct ovn_port_group_ls *pg_ls;
-
-    HMAP_FOR_EACH_WITH_HASH (pg_ls, key_node, uuid_hash(ls_uuid),
-                             &pg->nb_lswitches) {
-        if (uuid_equals(ls_uuid, &pg_ls->key)) {
-            return pg_ls;
-        }
-    }
-    return NULL;
 }
 
 static void
@@ -3422,7 +3434,7 @@ static void
 build_acls(struct ovn_datapath *od, struct hmap *lflows,
            struct hmap *port_groups)
 {
-    bool has_stateful = has_stateful_acl(od);
+    bool has_stateful = has_stateful_acl(od, port_groups);
 
     /* Ingress and Egress ACL Table (Priority 0): Packets are allowed by
      * default.  A related rule at priority 1 is added below if there
@@ -3775,7 +3787,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
             continue;
         }
 
-        build_pre_acls(od, lflows);
+        build_pre_acls(od, lflows, port_groups);
         build_pre_lb(od, lflows);
         build_pre_stateful(od, lflows);
         build_acls(od, lflows, port_groups);

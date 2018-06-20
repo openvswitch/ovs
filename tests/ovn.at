@@ -9981,7 +9981,7 @@ ovn-nbctl create Port_Group name=pg2 ports="$pg2_ports"
 # create ACLs on pg1 to drop traffic from pg2 to pg1
 ovn-nbctl acl-add pg1 to-lport 1001 'outport == @pg1' drop
 ovn-nbctl --type=port-group acl-add pg1 to-lport 1002 \
-        'outport == @pg1 && ip4.src == $pg2_ip4' allow-related
+        'outport == @pg1 && ip4.src == $pg2_ip4' allow
 
 # Physical network:
 #
