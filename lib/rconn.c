@@ -511,7 +511,7 @@ run_CONNECTING(struct rconn *rc)
 {
     int retval = vconn_connect(rc->vconn);
     if (!retval) {
-        VLOG_INFO("%s: connected", rc->name);
+        VLOG(rc->reliable ? VLL_INFO : VLL_DBG, "%s: connected", rc->name);
         rc->n_successful_connections++;
         state_transition(rc, S_ACTIVE);
         rc->version = vconn_get_version(rc->vconn);
