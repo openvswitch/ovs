@@ -623,9 +623,9 @@ def ovs_checkpatch_parse(text, filename):
     hunks = re.compile('^(---|\+\+\+) (\S+)')
     hunk_differences = re.compile(
         r'^@@ ([0-9-+]+),([0-9-+]+) ([0-9-+]+),([0-9-+]+) @@')
-    is_signature = re.compile(r'((\s*Signed-off-by: )(.*))$',
+    is_signature = re.compile(r'^(Signed-off-by: )(.*)$',
                               re.I | re.M | re.S)
-    is_co_author = re.compile(r'(\s*(Co-authored-by: )(.*))$',
+    is_co_author = re.compile(r'^(Co-authored-by: )(.*)$',
                               re.I | re.M | re.S)
     is_gerrit_change_id = re.compile(r'(\s*(change-id: )(.*))$',
                                      re.I | re.M | re.S)
@@ -664,10 +664,10 @@ def ovs_checkpatch_parse(text, filename):
                         print_error("Co-authored-by/Signed-off-by corruption")
             elif is_signature.match(line):
                 m = is_signature.match(line)
-                signatures.append(m.group(3))
+                signatures.append(m.group(2))
             elif is_co_author.match(line):
                 m = is_co_author.match(line)
-                co_authors.append(m.group(3))
+                co_authors.append(m.group(2))
             elif is_gerrit_change_id.match(line):
                 print_error(
                     "Remove Gerrit Change-Id's before submitting upstream.")
