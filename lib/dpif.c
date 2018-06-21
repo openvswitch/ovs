@@ -591,8 +591,13 @@ dpif_port_add(struct dpif *dpif, struct netdev *netdev, odp_port_t *port_nop)
             netdev_ports_insert(netdev, dpif->dpif_class, &dpif_port);
         }
     } else {
-        VLOG_WARN_RL(&error_rl, "%s: failed to add %s as port: %s",
-                     dpif_name(dpif), netdev_name, ovs_strerror(error));
+        if (error != EEXIST) {
+            VLOG_WARN_RL(&error_rl, "%s: failed to add %s as port: %s",
+                         dpif_name(dpif), netdev_name, ovs_strerror(error));
+        } else {
+            /* It's fairly common for upper layers to try to add a duplicate
+             * port, and they know how to handle it properly. */
+        }
         port_no = ODPP_NONE;
     }
     if (port_nop) {
