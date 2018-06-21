@@ -25,3 +25,41 @@ OVS_TRAFFIC_VSWITCHD_STOP(["dnl
 
 AT_CLEANUP
 
+dnl add a p1-0 interface to br-p1, then add a route to br-p1 and stop the OvS
+dnl instance. Confirm br-p1 interface has been deleted from the system.
+AT_SETUP([interface - add route to br and verify clean-up])
+
+OVS_TRAFFIC_VSWITCHD_START()
+
+HWADDR_BRP1=aa:55:00:00:00:01
+
+dnl Create tap port to later add to br-p1
+AT_CHECK([ip tuntap add name p1-0 mode tap])
+AT_CHECK([ip link set p1-0 up])
+on_exit 'ip link del p1-0'
+
+AT_CHECK([
+    ovs-vsctl add-br br-p1 -- \
+        set bridge br-p1 datapath_type=netdev fail-mode=standalone other-config:hwaddr=$HWADDR_BRP1
+
+    ovs-vsctl add-port br-p1 p1-0
+
+    ovs-ofctl del-flows br-p1
+], [0])
+
+AT_CHECK([
+    ip addr add 10.0.0.1/24 dev br-p1
+    ip link set br-p1 up
+], [0], [stdout])
+
+AT_CHECK([
+    ovs-appctl ovs/route/add 10.0.0.0/24 br-p1
+    ovs-appctl tnl/arp/set br-p1 10.0.0.1 $HWADDR_BRP1
+], [0], [stdout])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CHECK([
+    ip link show br-p1], [1],
+    [stdout], [Device "br-p1" does not exist.]
+)
+AT_CLEANUP
