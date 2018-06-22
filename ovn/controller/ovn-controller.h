@@ -52,7 +52,6 @@ struct ct_zone_pending_entry {
 struct local_datapath {
     struct hmap_node hmap_node;
     const struct sbrec_datapath_binding *datapath;
-    const struct ldatapath *ldatapath;
 
     /* The localnet port in this datapath, if any (at most one is allowed). */
     const struct sbrec_port_binding *localnet_port;
