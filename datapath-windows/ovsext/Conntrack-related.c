@@ -18,7 +18,7 @@
 #include "Jhash.h"
 
 static PLIST_ENTRY ovsCtRelatedTable; /* Holds related entries */
-static UINT64 ctTotalRelatedEntries;
+static ULONG ctTotalRelatedEntries;
 static OVS_CT_THREAD_CTX ctRelThreadCtx;
 static PNDIS_RW_LOCK_EX ovsCtRelatedLockObj;
 extern POVS_SWITCH_CONTEXT gOvsSwitchContext;
@@ -75,13 +75,11 @@ OvsCtRelatedLookup(OVS_CT_KEY key, UINT64 currentTime)
     POVS_CT_REL_ENTRY entry;
     LOCK_STATE_EX lockState;
 
-    NdisAcquireRWLockRead(ovsCtRelatedLockObj, &lockState, 0);
-
     if (!ctTotalRelatedEntries) {
-        NdisReleaseRWLock(ovsCtRelatedLockObj, &lockState);
         return NULL;
     }
 
+    NdisAcquireRWLockRead(ovsCtRelatedLockObj, &lockState, 0);
     for (int i = 0; i < CT_HASH_TABLE_SIZE; i++) {
         /* XXX - Scan the table based on the hash instead */
         LIST_FORALL_SAFE(&ovsCtRelatedTable[i], link, next) {
@@ -103,7 +101,7 @@ OvsCtRelatedEntryDelete(POVS_CT_REL_ENTRY entry)
 {
     RemoveEntryList(&entry->link);
     OvsFreeMemoryWithTag(entry, OVS_CT_POOL_TAG);
-    ctTotalRelatedEntries--;
+    NdisInterlockedDecrement((PLONG)&ctTotalRelatedEntries);
 }
 
 NDIS_STATUS
@@ -139,7 +137,7 @@ OvsCtRelatedEntryCreate(UINT8 ipProto,
     NdisAcquireRWLockWrite(ovsCtRelatedLockObj, &lockState, 0);
     InsertHeadList(&ovsCtRelatedTable[hash & CT_HASH_TABLE_MASK],
                    &entry->link);
-    ctTotalRelatedEntries++;
+    NdisInterlockedIncrement((PLONG)&ctTotalRelatedEntries);
     NdisReleaseRWLock(ovsCtRelatedLockObj, &lockState);
 
     return NDIS_STATUS_SUCCESS;
@@ -150,20 +148,19 @@ OvsCtRelatedFlush()
 {
     PLIST_ENTRY link, next;
     POVS_CT_REL_ENTRY entry;
-
     LOCK_STATE_EX lockState;
-    NdisAcquireRWLockWrite(ovsCtRelatedLockObj, &lockState, 0);
 
     if (ctTotalRelatedEntries) {
+        NdisAcquireRWLockWrite(ovsCtRelatedLockObj, &lockState, 0);
         for (int i = 0; i < CT_HASH_TABLE_SIZE; i++) {
             LIST_FORALL_SAFE(&ovsCtRelatedTable[i], link, next) {
                 entry = CONTAINING_RECORD(link, OVS_CT_REL_ENTRY, link);
                 OvsCtRelatedEntryDelete(entry);
             }
         }
+        NdisReleaseRWLock(ovsCtRelatedLockObj, &lockState);
     }
 
-    NdisReleaseRWLock(ovsCtRelatedLockObj, &lockState);
     return NDIS_STATUS_SUCCESS;
 }
 
@@ -189,9 +186,8 @@ OvsCtRelatedEntryCleaner(PVOID data)
             /* Lock has been freed by 'OvsCleanupCtRelated()' */
             break;
         }
-        NdisAcquireRWLockWrite(ovsCtRelatedLockObj, &lockState, 0);
+
         if (context->exit) {
-            NdisReleaseRWLock(ovsCtRelatedLockObj, &lockState);
             break;
         }
 
@@ -201,6 +197,7 @@ OvsCtRelatedEntryCleaner(PVOID data)
         threadSleepTimeout = currentTime + CT_CLEANUP_INTERVAL;
 
         if (ctTotalRelatedEntries) {
+            NdisAcquireRWLockWrite(ovsCtRelatedLockObj, &lockState, 0);
             for (int i = 0; i < CT_HASH_TABLE_SIZE; i++) {
                 LIST_FORALL_SAFE(&ovsCtRelatedTable[i], link, next) {
                     entry = CONTAINING_RECORD(link, OVS_CT_REL_ENTRY, link);
@@ -209,8 +206,8 @@ OvsCtRelatedEntryCleaner(PVOID data)
                     }
                 }
             }
+            NdisReleaseRWLock(ovsCtRelatedLockObj, &lockState);
         }
-        NdisReleaseRWLock(ovsCtRelatedLockObj, &lockState);
         KeWaitForSingleObject(&context->event, Executive, KernelMode,
                               FALSE, (LARGE_INTEGER *)&threadSleepTimeout);
     }

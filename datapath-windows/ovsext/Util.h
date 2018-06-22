@@ -105,6 +105,24 @@ VOID OvsAppendList(PLIST_ENTRY dst, PLIST_ENTRY src);
 #define BIT16(_x)                       ((UINT16)0x1 << (_x))
 #define BIT32(_x)                       ((UINT32)0x1 << (_x))
 
+#define OVS_ACQUIRE_SPIN_LOCK(_pLock, _dispatchLevel)                        \
+{                                                                            \
+    if (_dispatchLevel) {                                                    \
+        NdisDprAcquireSpinLock(_pLock);                                      \
+    } else {                                                                 \
+        NdisAcquireSpinLock(_pLock);                                         \
+    }                                                                        \
+}
+
+#define OVS_RELEASE_SPIN_LOCK(_pLock, _dispatchLevel)                        \
+{                                                                            \
+    if (_dispatchLevel) {                                                    \
+        NdisDprReleaseSpinLock(_pLock);                                      \
+    } else {                                                                 \
+        NdisReleaseSpinLock(_pLock);                                         \
+    }                                                                        \
+}
+
 BOOLEAN OvsCompareString(PVOID string1, PVOID string2);
 
 /*

@@ -101,7 +101,7 @@ typedef struct _NAT_ACTION_INFO {
 typedef struct OVS_CT_ENTRY {
     /* Reference to ovsCtBucketLock of ovsConntrackTable.*/
     PNDIS_RW_LOCK_EX bucketLockRef;
-    PNDIS_RW_LOCK_EX lock;       /* Protects OVS_CT_ENTRY. */
+    NDIS_SPIN_LOCK lock;       /* Protects OVS_CT_ENTRY. */
     OVS_CT_KEY  key;
     OVS_CT_KEY  rev_key;
     UINT64      expiration;
