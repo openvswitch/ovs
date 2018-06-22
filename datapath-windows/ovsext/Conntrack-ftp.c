@@ -129,14 +129,14 @@ OvsCtHandleFtp(PNET_BUFFER_LIST curNbl,
     char temp[256] = { 0 };
     char ftpMsg[256] = { 0 };
 
+    UINT32 len;
     TCPHdr tcpStorage;
     const TCPHdr *tcp;
-    tcp = OvsGetTcp(curNbl, layers->l4Offset, &tcpStorage);
+    tcp = OvsGetTcpHeader(curNbl, layers, &tcpStorage, &len);
     if (!tcp) {
         return NDIS_STATUS_INVALID_PACKET;
     }
 
-    UINT32 len = OvsGetTcpPayloadLength(curNbl);
     if (len > sizeof(temp)) {
         /* We only care up to 256 */
         len = sizeof(temp);

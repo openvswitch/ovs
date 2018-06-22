@@ -194,9 +194,9 @@ OvsCastConntrackEntryToTcpEntry(OVS_CT_ENTRY* conn)
 enum CT_UPDATE_RES
 OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
                            const TCPHdr *tcp,
-                           PNET_BUFFER_LIST nbl,
                            BOOLEAN reply,
-                           UINT64 now)
+                           UINT64 now,
+                           UINT32 tcpPayloadLen)
 {
     struct conn_tcp *conn = OvsCastConntrackEntryToTcpEntry(conn_);
     /* The peer that sent 'pkt' */
@@ -207,7 +207,6 @@ OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
     UINT16 tcp_flags = ntohs(tcp->flags);
     uint16_t win = ntohs(tcp->window);
     uint32_t ack, end, seq, orig_seq;
-    uint32_t p_len = OvsGetTcpPayloadLength(nbl);
     int ackskew;
 
     if (OvsCtInvalidTcpFlags(tcp_flags)) {
@@ -248,7 +247,7 @@ OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
 
         ack = ntohl(tcp->ack_seq);
 
-        end = seq + p_len;
+        end = seq + tcpPayloadLen;
         if (tcp_flags & TCP_SYN) {
             end++;
             if (dst->wscale & CT_WSCALE_FLAG) {
@@ -287,7 +286,7 @@ OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
 
     } else {
         ack = ntohl(tcp->ack_seq);
-        end = seq + p_len;
+        end = seq + tcpPayloadLen;
         if (tcp_flags & TCP_SYN) {
             end++;
         }
@@ -469,8 +468,8 @@ OvsConntrackValidateTcpPacket(const TCPHdr *tcp)
 
 OVS_CT_ENTRY *
 OvsConntrackCreateTcpEntry(const TCPHdr *tcp,
-                           PNET_BUFFER_LIST nbl,
-                           UINT64 now)
+                           UINT64 now,
+                           UINT32 tcpPayloadLen)
 {
     struct conn_tcp* newconn;
     struct tcp_peer *src, *dst;
@@ -486,7 +485,7 @@ OvsConntrackCreateTcpEntry(const TCPHdr *tcp,
     dst = &newconn->peer[1];
 
     src->seqlo = ntohl(tcp->seq);
-    src->seqhi = src->seqlo + OvsGetTcpPayloadLength(nbl) + 1;
+    src->seqhi = src->seqlo + tcpPayloadLen + 1;
 
     if (tcp->flags & TCP_SYN) {
         src->seqhi++;
