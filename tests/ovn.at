@@ -2402,8 +2402,8 @@ for i in 1 2 3; do
 
             ovn-nbctl \
                 -- lsp-add ls$i lp$i$j$k \
-                -- lsp-set-addresses lp$i$j$k "f0:00:00:00:0$i:$j$k \
-                   192.168.$i$j.$k" $unknown
+                -- lsp-set-addresses lp$i$j$k \
+                   "f0:00:00:00:0$i:$j$k 192.168.$i$j.$k" $unknown
         done
     done
 done
@@ -9723,8 +9723,8 @@ for i in 1 2 3; do
         for k in 1 2 3; do
             ovn-nbctl \
                 -- lsp-add ls$i lp$i$j$k \
-                -- lsp-set-addresses lp$i$j$k "f0:00:00:00:0$i:$j$k \
-                   192.168.$i$j.$k"
+                -- lsp-set-addresses lp$i$j$k \
+                   "f0:00:00:00:0$i:$j$k 192.168.$i$j.$k"
             # logical ports lp[12]?1 belongs to port group pg1
             if test $i != 3 && test $k == 1; then
                 pg1_ports="$pg1_ports `get_lsp_uuid $i$j$k`"
@@ -9949,8 +9949,8 @@ for i in 1 2 3; do
         for k in 1 2 3; do
             ovn-nbctl \
                 -- lsp-add ls$i lp$i$j$k \
-                -- lsp-set-addresses lp$i$j$k "f0:00:00:00:0$i:$j$k \
-                   192.168.$i$j.$k"
+                -- lsp-set-addresses lp$i$j$k \
+                   "f0:00:00:00:0$i:$j$k 192.168.$i$j.$k"
             # logical ports lp[12]?1 belongs to port group pg1
             if test $i != 3 && test $k == 1; then
                 pg1_ports="$pg1_ports `get_lsp_uuid $i$j$k`"
