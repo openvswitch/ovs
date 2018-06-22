@@ -237,6 +237,4 @@ NDIS_STATUS OvsCtHandleFtp(PNET_BUFFER_LIST curNbl,
                            UINT64 currentTime,
                            POVS_CT_ENTRY entry,
                            BOOLEAN request);
-
-UINT32 OvsHashCtKey(const OVS_CT_KEY *key);
 #endif /* __OVS_CONNTRACK_H_ */

@@ -151,6 +151,24 @@ OvsCleanupConntrack(VOID)
     OvsNatCleanup();
 }
 
+/*
+ *----------------------------------------------------------------------------
+ * OvsCtHashKey
+ *     Compute hash using 5-tuple and zone.
+ *----------------------------------------------------------------------------
+ */
+UINT32
+OvsCtHashKey(const OVS_CT_KEY *key)
+{
+    UINT32 hsrc, hdst, hash;
+    hsrc = key->src.addr.ipv4 | ntohl(key->src.port);
+    hdst = key->dst.addr.ipv4 | ntohl(key->dst.port);
+    hash = hsrc ^ hdst; /* TO identify reverse traffic */
+    hash = hash | (key->zone + key->nw_proto);
+    hash = OvsJhashWords((uint32_t*) &hash, 1, hash);
+    return hash;
+}
+
 static __inline VOID
 OvsCtKeyReverse(OVS_CT_KEY *key)
 {
@@ -231,7 +249,7 @@ OvsCtAddEntry(POVS_CT_ENTRY entry,
             if (!OvsNatTranslateCtEntry(entry)) {
                 return FALSE;
             }
-            ctx->hash = OvsHashCtKey(&entry->key);
+            ctx->hash = OvsCtHashKey(&entry->key);
         } else {
             entry->natInfo.natAction = natInfo->natAction;
         }
@@ -531,20 +549,6 @@ OvsCtLookup(OvsConntrackKeyLookupCtx *ctx)
     return found;
 }
 
-UINT32
-OvsHashCtKey(const OVS_CT_KEY *key)
-{
-    UINT32 hsrc, hdst, hash;
-    hsrc = OvsJhashBytes((UINT32*) &key->src, sizeof(key->src), 0);
-    hdst = OvsJhashBytes((UINT32*) &key->dst, sizeof(key->dst), 0);
-    hash = hsrc ^ hdst; /* TO identify reverse traffic */
-    hash = OvsJhashBytes((uint32_t *) &key->dst + 1,
-                         ((uint32_t *) (key + 1) -
-                         (uint32_t *) (&key->dst + 1)),
-                         hash);
-    return hash;
-}
-
 static UINT8
 OvsReverseIcmpType(UINT8 type)
 {
@@ -642,7 +646,7 @@ OvsCtSetupLookupCtx(OvsFlowKey *flowKey,
         OvsCtKeyReverse(&ctx->key);
     }
 
-    ctx->hash = OvsHashCtKey(&ctx->key);
+    ctx->hash = OvsCtHashKey(&ctx->key);
     return NDIS_STATUS_SUCCESS;
 }
 
@@ -953,7 +957,6 @@ OvsExecuteConntrackAction(OvsForwardingContext *fwdCtx,
                           OvsFlowKey *key,
                           const PNL_ATTR a)
 {
-    PNL_ATTR ctAttr;
     BOOLEAN commit = FALSE;
     BOOLEAN force = FALSE;
     BOOLEAN postUpdateEvent = FALSE;
@@ -973,108 +976,109 @@ OvsExecuteConntrackAction(OvsForwardingContext *fwdCtx,
         return status;
     }
 
-    /* XXX Convert this to NL_ATTR_FOR_EACH */
-    ctAttr = NlAttrFindNested(a, OVS_CT_ATTR_ZONE);
-    if (ctAttr) {
-        zone = NlAttrGetU16(ctAttr);
-    }
-    ctAttr = NlAttrFindNested(a, OVS_CT_ATTR_COMMIT);
-    if (ctAttr) {
-        commit = TRUE;
-    }
-    ctAttr = NlAttrFindNested(a, OVS_CT_ATTR_MARK);
-    if (ctAttr) {
-        mark = NlAttrGet(ctAttr);
-    }
-    ctAttr = NlAttrFindNested(a, OVS_CT_ATTR_LABELS);
-    if (ctAttr) {
-        labels = NlAttrGet(ctAttr);
-    }
-    natActionInfo.natAction = NAT_ACTION_NONE;
-    ctAttr = NlAttrFindNested(a, OVS_CT_ATTR_NAT);
-    if (ctAttr) {
-        /* Pares Nested NAT attributes. */
-        PNL_ATTR natAttr;
-        unsigned int left;
-        BOOLEAN hasMinIp = FALSE;
-        BOOLEAN hasMinPort = FALSE;
-        BOOLEAN hasMaxIp = FALSE;
-        BOOLEAN hasMaxPort = FALSE;
-        NL_NESTED_FOR_EACH_UNSAFE (natAttr, left, ctAttr) {
-            enum ovs_nat_attr subtype = NlAttrType(natAttr);
-            switch(subtype) {
-            case OVS_NAT_ATTR_SRC:
-            case OVS_NAT_ATTR_DST:
-                natActionInfo.natAction |=
-                    ((subtype == OVS_NAT_ATTR_SRC)
-                        ? NAT_ACTION_SRC : NAT_ACTION_DST);
+    PNL_ATTR ctAttr = NULL;
+    INT left;
+
+    NL_NESTED_FOR_EACH (ctAttr, left, a) {
+        switch(NlAttrType(ctAttr)) {
+            case OVS_CT_ATTR_ZONE:
+                zone = NlAttrGetU16(ctAttr);
                 break;
-            case OVS_NAT_ATTR_IP_MIN:
-                memcpy(&natActionInfo.minAddr,
-                       NlAttrData(natAttr), NlAttrGetSize(natAttr));
-                hasMinIp = TRUE;
+            case OVS_CT_ATTR_COMMIT:
+                commit = TRUE;
                 break;
-            case OVS_NAT_ATTR_IP_MAX:
-                memcpy(&natActionInfo.maxAddr,
-                       NlAttrData(natAttr), NlAttrGetSize(natAttr));
-                hasMaxIp = TRUE;
+            case OVS_CT_ATTR_MARK:
+                mark = NlAttrGet(ctAttr);
                 break;
-            case OVS_NAT_ATTR_PROTO_MIN:
-                natActionInfo.minPort = NlAttrGetU16(natAttr);
-                hasMinPort = TRUE;
+            case OVS_CT_ATTR_LABELS:
+                labels = NlAttrGet(ctAttr);
                 break;
-            case OVS_NAT_ATTR_PROTO_MAX:
-                natActionInfo.maxPort = NlAttrGetU16(natAttr);
-                hasMaxPort = TRUE;
+            case OVS_CT_ATTR_HELPER:
+                helper = NlAttrGetString(ctAttr);
+                if (helper == NULL) {
+                    return NDIS_STATUS_INVALID_PARAMETER;
+                }
+                if (strcmp("ftp", helper) != 0) {
+                    /* Only support FTP */
+                    return NDIS_STATUS_NOT_SUPPORTED;
+                }
                 break;
-            case OVS_NAT_ATTR_PERSISTENT:
-            case OVS_NAT_ATTR_PROTO_HASH:
-            case OVS_NAT_ATTR_PROTO_RANDOM:
+            case OVS_CT_ATTR_FORCE_COMMIT:
+                force = TRUE;
+                /* Force implicitly means commit */
+                commit = TRUE;
                 break;
-            }
+            case OVS_CT_ATTR_EVENTMASK:
+                eventmask = NlAttrGetU32(ctAttr);
+                /* Only mark and label updates are supported. */
+                if (eventmask & (1 << IPCT_MARK | 1 << IPCT_LABEL))
+                    postUpdateEvent = TRUE;
+                break;
+            case OVS_CT_ATTR_NAT:
+                natActionInfo.natAction = NAT_ACTION_NONE;
+                /* Pares Nested NAT attributes. */
+                PNL_ATTR natAttr;
+                unsigned int natLeft;
+                BOOLEAN hasMinIp = FALSE;
+                BOOLEAN hasMinPort = FALSE;
+                BOOLEAN hasMaxIp = FALSE;
+                BOOLEAN hasMaxPort = FALSE;
+                NL_NESTED_FOR_EACH_UNSAFE (natAttr, natLeft, ctAttr) {
+                    enum ovs_nat_attr subtype = NlAttrType(natAttr);
+                    switch(subtype) {
+                    case OVS_NAT_ATTR_SRC:
+                    case OVS_NAT_ATTR_DST:
+                        natActionInfo.natAction |=
+                            ((subtype == OVS_NAT_ATTR_SRC)
+                                ? NAT_ACTION_SRC : NAT_ACTION_DST);
+                        break;
+                    case OVS_NAT_ATTR_IP_MIN:
+                        memcpy(&natActionInfo.minAddr,
+                                NlAttrData(natAttr), NlAttrGetSize(natAttr));
+                        hasMinIp = TRUE;
+                        break;
+                    case OVS_NAT_ATTR_IP_MAX:
+                        memcpy(&natActionInfo.maxAddr,
+                                NlAttrData(natAttr), NlAttrGetSize(natAttr));
+                        hasMaxIp = TRUE;
+                        break;
+                    case OVS_NAT_ATTR_PROTO_MIN:
+                        natActionInfo.minPort = NlAttrGetU16(natAttr);
+                        hasMinPort = TRUE;
+                        break;
+                    case OVS_NAT_ATTR_PROTO_MAX:
+                        natActionInfo.maxPort = NlAttrGetU16(natAttr);
+                        hasMaxPort = TRUE;
+                        break;
+                    case OVS_NAT_ATTR_PERSISTENT:
+                    case OVS_NAT_ATTR_PROTO_HASH:
+                    case OVS_NAT_ATTR_PROTO_RANDOM:
+                        break;
+                    }
+                }
+                if (natActionInfo.natAction == NAT_ACTION_NONE) {
+                    natActionInfo.natAction = NAT_ACTION_REVERSE;
+                }
+                if (hasMinIp && !hasMaxIp) {
+                    memcpy(&natActionInfo.maxAddr,
+                            &natActionInfo.minAddr,
+                            sizeof(natActionInfo.maxAddr));
+                }
+                if (hasMinPort && !hasMaxPort) {
+                    natActionInfo.maxPort = natActionInfo.minPort;
+                }
+                if (hasMinPort || hasMaxPort) {
+                    if (natActionInfo.natAction & NAT_ACTION_SRC) {
+                        natActionInfo.natAction |= NAT_ACTION_SRC_PORT;
+                    } else if (natActionInfo.natAction & NAT_ACTION_DST) {
+                        natActionInfo.natAction |= NAT_ACTION_DST_PORT;
+                    }
+                }
+                break;
+            default:
+                OVS_LOG_TRACE("Invalid netlink attr type: %u", NlAttrType(ctAttr));
+                break;
         }
-        if (natActionInfo.natAction == NAT_ACTION_NONE) {
-            natActionInfo.natAction = NAT_ACTION_REVERSE;
-        }
-        if (hasMinIp && !hasMaxIp) {
-            memcpy(&natActionInfo.maxAddr,
-                   &natActionInfo.minAddr,
-                   sizeof(natActionInfo.maxAddr));
-        }
-        if (hasMinPort && !hasMaxPort) {
-            natActionInfo.maxPort = natActionInfo.minPort;
-        }
-        if (hasMinPort || hasMaxPort) {
-            if (natActionInfo.natAction & NAT_ACTION_SRC) {
-                natActionInfo.natAction |= NAT_ACTION_SRC_PORT;
-            } else if (natActionInfo.natAction & NAT_ACTION_DST) {
-                natActionInfo.natAction |= NAT_ACTION_DST_PORT;
-            }
-        }
-    }
-    ctAttr = NlAttrFindNested(a, OVS_CT_ATTR_HELPER);
-    if (ctAttr) {
-        helper = NlAttrGetString(ctAttr);
-        if (helper == NULL) {
-            return NDIS_STATUS_INVALID_PARAMETER;
-        }
-        if (strcmp("ftp", helper) != 0) {
-            /* Only support FTP */
-            return NDIS_STATUS_NOT_SUPPORTED;
-        }
-    }
-    ctAttr = NlAttrFindNested(a, OVS_CT_ATTR_FORCE_COMMIT);
-    if (ctAttr) {
-        force = TRUE;
-        /* Force implicitly means commit */
-        commit = TRUE;
-    }
-    ctAttr = NlAttrFindNested(a, OVS_CT_ATTR_EVENTMASK);
-    if (ctAttr) {
-        eventmask = NlAttrGetU32(ctAttr);
-        /* Only mark and label updates are supported. */
-        if (eventmask & (1 << IPCT_MARK | 1 << IPCT_LABEL))
-            postUpdateEvent = TRUE;
     }
     /* If newNbl is not allocated, use the current Nbl*/
     status = OvsCtExecute_(fwdCtx, key, layers,
