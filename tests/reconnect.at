@@ -17,9 +17,9 @@ m4_define([RECONNECT_CHECK],
      [$3])
    __RECONNECT_CHECK(
      [$1 - Python2],
-     [AT_SKIP_IF([test $HAVE_PYTHON = no])],
+     [AT_SKIP_IF([test $HAVE_PYTHON2 = no])],
      [$2],
-     [$PYTHON $srcdir/test-reconnect.py < input],
+     [$PYTHON2 $srcdir/test-reconnect.py < input],
      [$3])
    __RECONNECT_CHECK(
      [$1 - Python3],

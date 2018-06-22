@@ -25,12 +25,12 @@ m4_define([JSON_CHECK_POSITIVE_PY],
 m4_define([JSON_CHECK_POSITIVE_UCS4PY],
   [AT_SETUP([$1])
    AT_KEYWORDS([json positive Python])
-   AT_SKIP_IF([test $HAVE_PYTHON = no])
-   AT_XFAIL_IF([test $HAVE_PYTHON = yes &&
-                $PYTHON -c "exit(len(u'\U00010800'))"; test $? -ne 1])
+   AT_SKIP_IF([test $HAVE_PYTHON2 = no])
+   AT_XFAIL_IF([test $HAVE_PYTHON2 = yes &&
+                $PYTHON2 -c "exit(len(u'\U00010800'))"; test $? -ne 1])
    AT_CHECK([printf %s "AS_ESCAPE([$2])" > input])
    AT_CAPTURE_FILE([input])
-   AT_CHECK([$PYTHON $srcdir/test-json.py $4 input], [0], [stdout], [])
+   AT_CHECK([$PYTHON2 $srcdir/test-json.py $4 input], [0], [stdout], [])
    AT_CHECK([cat stdout], [0], [$3
 ])
    AT_CLEANUP])
@@ -38,13 +38,13 @@ m4_define([JSON_CHECK_POSITIVE_UCS4PY],
 m4_define([JSON_CHECK_POSITIVE],
   [JSON_CHECK_POSITIVE_C([$1 - C], [$2], [$3], [$4])
    JSON_CHECK_POSITIVE_PY([$1 - Python2], [$2], [$3], [$4],
-                          [$HAVE_PYTHON], [$PYTHON])
+                          [$HAVE_PYTHON2], [$PYTHON2])
    JSON_CHECK_POSITIVE_PY([$1 - Python3], [$2], [$3], [$4],
                           [$HAVE_PYTHON3], [$PYTHON3])])
 
 m4_define([JSON_CHECK_POSITIVE_PY23],
   [JSON_CHECK_POSITIVE_PY([$1 - Python2], [$2], [$3], [$4],
-                          [$HAVE_PYTHON], [$PYTHON])
+                          [$HAVE_PYTHON2], [$PYTHON2])
    JSON_CHECK_POSITIVE_PY([$1 - Python3], [$2], [$3], [$4],
                           [$HAVE_PYTHON3], [$PYTHON3])])
 
@@ -75,7 +75,7 @@ m4_define([JSON_CHECK_NEGATIVE_PY],
 m4_define([JSON_CHECK_NEGATIVE],
   [JSON_CHECK_NEGATIVE_C([$1 - C], [$2], [$3], [$4])
    JSON_CHECK_NEGATIVE_PY([$1 - Python2], [$2], [$3], [$4],
-                          [$HAVE_PYTHON], [$PYTHON])
+                          [$HAVE_PYTHON2], [$PYTHON2])
    JSON_CHECK_NEGATIVE_PY([$1 - Python3], [$2], [$3], [$4],
                           [$HAVE_PYTHON3], [$PYTHON3])])
 
@@ -156,9 +156,9 @@ AT_CLEANUP
 
 AT_SETUP([end of input in quoted string - Python])
 AT_KEYWORDS([json negative Python])
-AT_SKIP_IF([test $HAVE_PYTHON = no])
+AT_SKIP_IF([test $HAVE_PYTHON2 = no])
 AT_CHECK([printf '"xxx' > input
-$PYTHON $srcdir/test-json.py input], [1],
+$PYTHON2 $srcdir/test-json.py input], [1],
   [error: line 0, column 4, byte 4: unexpected end of input in quoted string
 ])
 AT_CLEANUP

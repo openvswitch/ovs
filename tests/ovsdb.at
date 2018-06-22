@@ -23,10 +23,10 @@ m4_define([OVSDB_CHECK_POSITIVE],
 # TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
 m4_define([OVSDB_CHECK_POSITIVE_PY], 
   [AT_SETUP([$1])
-   AT_SKIP_IF([test $HAVE_PYTHON = no])
+   AT_SKIP_IF([test $HAVE_PYTHON2 = no])
    $6
    AT_KEYWORDS([ovsdb positive Python $4])
-   AT_CHECK([$PYTHON $srcdir/test-ovsdb.py $2], [0], [$3
+   AT_CHECK([$PYTHON2 $srcdir/test-ovsdb.py $2], [0], [$3
 ], [])
    AT_CLEANUP])
 
@@ -85,9 +85,9 @@ m4_define([OVSDB_CHECK_NEGATIVE],
 # TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
 m4_define([OVSDB_CHECK_NEGATIVE_PY],
   [AT_SETUP([$1])
-   AT_SKIP_IF([test $HAVE_PYTHON = no])
+   AT_SKIP_IF([test $HAVE_PYTHON2 = no])
    AT_KEYWORDS([ovsdb negative $4])
-   AT_CHECK([$PYTHON $srcdir/test-ovsdb.py $2], [1], [], [stderr])
+   AT_CHECK([$PYTHON2 $srcdir/test-ovsdb.py $2], [1], [], [stderr])
    m4_assert(m4_len([$3]))
    AT_CHECK(
      [if grep -F -e "AS_ESCAPE([$3])" stderr

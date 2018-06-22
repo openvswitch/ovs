@@ -102,7 +102,7 @@ AssertionError
 
    AT_CLEANUP])
 
-VLOG_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
+VLOG_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
 VLOG_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 
 m4_divert_push([PREPARE_TESTS])
@@ -175,7 +175,7 @@ m4_define([VLOG_REOPEN_PYN],
 ])
    AT_CLEANUP])
 
-VLOG_REOPEN_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
+VLOG_REOPEN_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
 VLOG_REOPEN_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 
 AT_SETUP([vlog - vlog/reopen without log file - C])
@@ -202,7 +202,7 @@ m4_define([VLOG_REOPEN_WITHOUT_FILE_PYN],
 ])
    AT_CLEANUP])
 
-VLOG_REOPEN_WITHOUT_FILE_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
+VLOG_REOPEN_WITHOUT_FILE_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
 VLOG_REOPEN_WITHOUT_FILE_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 
 dnl This checks that if vlog/reopen can't reopen the log file,
@@ -272,7 +272,7 @@ m4_define([VLOG_CANT_REOPEN_PYN],
 ])
    AT_CLEANUP])
 
-VLOG_CANT_REOPEN_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
+VLOG_CANT_REOPEN_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
 VLOG_CANT_REOPEN_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 
 AT_SETUP([vlog - vlog/close - C])
@@ -351,7 +351,7 @@ m4_define([VLOG_CLOSE_PYN],
 ])
    AT_CLEANUP])
 
-VLOG_CLOSE_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
+VLOG_CLOSE_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
 VLOG_CLOSE_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 
 AT_SETUP([vlog - vlog/set and vlog/list - C])
@@ -452,7 +452,7 @@ unixctl_server    info       info        dbg
    AT_CHECK([grep -q 'I<3OVS' log])
    AT_CLEANUP])
 
-VLOG_SET_AND_LIST_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
+VLOG_SET_AND_LIST_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
 VLOG_SET_AND_LIST_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 
 AT_SETUP([vlog - RFC5424 facility])
@@ -511,5 +511,5 @@ m4_define([VLOG_RFC5424_PYN],
    AT_CHECK([ovs-appctl -t test-unixctl.py vlog/set FACILITY:local0])
    AT_CLEANUP])
 
-VLOG_RFC5424_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
+VLOG_RFC5424_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
 VLOG_RFC5424_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])

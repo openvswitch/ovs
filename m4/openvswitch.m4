@@ -348,14 +348,14 @@ AC_DEFUN([OVS_CHECK_VALGRIND],
   [AC_CHECK_HEADERS([valgrind/valgrind.h])])
 
 dnl Checks for Python 2.x, x >= 7.
-AC_DEFUN([OVS_CHECK_PYTHON],
+AC_DEFUN([OVS_CHECK_PYTHON2],
   [AC_CACHE_CHECK(
      [for Python 2.x for x >= 7],
-     [ovs_cv_python],
-     [if test -n "$PYTHON"; then
-        ovs_cv_python=$PYTHON
+     [ovs_cv_python2],
+     [if test -n "$PYTHON2"; then
+        ovs_cv_python2=$PYTHON2
       else
-        ovs_cv_python=no
+        ovs_cv_python2=no
         for binary in python2 python2.7 python; do
           ovs_save_IFS=$IFS; IFS=$PATH_SEPARATOR
           for dir in $PATH; do
@@ -366,31 +366,27 @@ if sys.hexversion >= 0x02070000 and sys.hexversion < 0x03000000:
     sys.exit(0)
 else:
     sys.exit(1)'; then
-              ovs_cv_python=$dir/$binary
+              ovs_cv_python2=$dir/$binary
               break 2
             fi
           done
         done
+        if test $ovs_cv_python2 != no && test -x "$ovs_cv_python2"; then
+          if ! "$ovs_cv_python2" -c 'import six ; six.moves.range' >&AS_MESSAGE_LOG_FD 2>&1; then
+            ovs_cv_python2=no
+            AC_MSG_WARN([Missing Python six library or version too old.])
+          fi
+        fi
       fi])
-
-   # Set $PYTHON from cache variable.
-   if test $ovs_cv_python = no; then
-     AC_MSG_ERROR([cannot find python 2.7 or higher.])
+   AC_SUBST([HAVE_PYTHON2])
+   AM_MISSING_PROG([PYTHON2], [python2])
+   if test $ovs_cv_python2 != no; then
+     PYTHON2=$ovs_cv_python2
+     HAVE_PYTHON2=yes
+   else
+     HAVE_PYTHON2=no
    fi
-   AM_MISSING_PROG([PYTHON], [python])
-   PYTHON=$ovs_cv_python
-
-   # HAVE_PYTHON is always true.  (Python has not always been a build
-   # requirement, so this variable is now obsolete.)
-   AC_SUBST([HAVE_PYTHON])
-   HAVE_PYTHON=yes
-   AM_CONDITIONAL([HAVE_PYTHON], [test "$HAVE_PYTHON" = yes])
-
-   AC_MSG_CHECKING([whether $PYTHON has six library])
-   if ! $PYTHON -c 'import six ; six.moves.range' >&AS_MESSAGE_LOG_FD 2>&1; then
-     AC_MSG_ERROR([Missing Python six library or version too old.])
-   fi
-   AC_MSG_RESULT([yes])])
+   AM_CONDITIONAL([HAVE_PYTHON2], [test "$HAVE_PYTHON2" = yes])])
 
 dnl Checks for Python 3.x, x >= 4.
 AC_DEFUN([OVS_CHECK_PYTHON3],
@@ -433,6 +429,29 @@ else:
    fi
    AM_CONDITIONAL([HAVE_PYTHON3], [test "$HAVE_PYTHON3" = yes])])
 
+dnl Checks if you have any compatible Python version installed.
+dnl Python 2.7+ has the preference to 3.4+
+AC_DEFUN([OVS_CHECK_PYTHON],
+  [AC_CACHE_CHECK(
+     [for Python 2 or 3],
+     [ovs_cv_python],
+     [if test -n "$PYTHON"; then
+        ovs_cv_python=$PYTHON
+      else
+        ovs_cv_python=no
+        if test $ovs_cv_python2 != no; then
+          ovs_cv_python=$ovs_cv_python2
+        elif test $ovs_cv_python3 != no; then
+          ovs_cv_python=$ovs_cv_python3
+        else
+          AC_MSG_ERROR([Missing Python.])
+        fi
+      fi])
+    AC_SUBST([PYTHON])
+    PYTHON=$ovs_cv_python
+    AC_SUBST([HAVE_PYTHON])
+    HAVE_PYTHON=yes
+    AM_CONDITIONAL([HAVE_PYTHON], [test "$HAVE_PYTHON" = yes])])
 
 dnl Checks for flake8.
 AC_DEFUN([OVS_CHECK_FLAKE8],

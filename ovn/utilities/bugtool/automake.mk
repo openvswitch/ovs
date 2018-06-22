@@ -1,4 +1,4 @@
-if HAVE_PYTHON
+if HAVE_PYTHON2
 bugtool_plugins += \
 	ovn/utilities/bugtool/plugins/network-status/ovn.xml
 

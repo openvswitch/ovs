@@ -1,7 +1,6 @@
 AT_BANNER([unixctl])
 
 m4_define([APPCTL], [ovs-appctl --timeout 20])
-m4_define([PYAPPCTL], [$PYTHON $srcdir/appctl.py --timeout 20])
 m4_define([PYAPPCTL_PYN], [$1 $srcdir/appctl.py --timeout 20])
 
 m4_define([UNIXCTL_EXIT_PYN],
@@ -17,7 +16,7 @@ m4_define([UNIXCTL_EXIT_PYN],
    OVS_WAIT_WHILE([test -s ovsdb-server.pid])
    AT_CLEANUP])
 
-UNIXCTL_EXIT_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
+UNIXCTL_EXIT_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
 UNIXCTL_EXIT_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 
 m4_define([UNIXCTL_LIST_COMMANDS_PYN],
@@ -35,7 +34,7 @@ The available commands are:
    OVS_VSWITCHD_STOP
    AT_CLEANUP])
 
-UNIXCTL_LIST_COMMANDS_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
+UNIXCTL_LIST_COMMANDS_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
 UNIXCTL_LIST_COMMANDS_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 
 m4_define([UNIXCTL_ARGS_PYN],
@@ -81,7 +80,7 @@ invalid vlan
    OVS_VSWITCHD_STOP
    AT_CLEANUP])
 
-UNIXCTL_ARGS_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
+UNIXCTL_ARGS_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
 UNIXCTL_ARGS_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 
 m4_define([UNIXCTL_BAD_TARGET_PYN],
@@ -106,7 +105,7 @@ appctl.py: cannot connect to "c:/bogus/path.pid" (No such file or directory)
 
    AT_CLEANUP])
 
-UNIXCTL_BAD_TARGET_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
+UNIXCTL_BAD_TARGET_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
 UNIXCTL_BAD_TARGET_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 
 m4_define([UNIXCTL_SERVER_PYN],
@@ -180,7 +179,7 @@ ovs-appctl: test-unixctl.py: server returned an error
    AT_CHECK([APPCTL -t test-unixctl.py exit])
    AT_CLEANUP])
 
-UNIXCTL_SERVER_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
+UNIXCTL_SERVER_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
 UNIXCTL_SERVER_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 
 m4_define([UNIXCTL_SERVER_ERRORS_PYN],
@@ -189,5 +188,5 @@ m4_define([UNIXCTL_SERVER_ERRORS_PYN],
    AT_CHECK($3 $srcdir/test-unixctl.py --unixctl "`pwd`"/bogus/path, [1], [], [ignore])
    AT_CLEANUP])
 
-UNIXCTL_SERVER_ERRORS_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
+UNIXCTL_SERVER_ERRORS_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
 UNIXCTL_SERVER_ERRORS_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])

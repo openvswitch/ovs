@@ -59,7 +59,7 @@ m4_define([OVSDB_CHECK_IDL_PYN],
 
 m4_define([OVSDB_CHECK_IDL_PY],
    [OVSDB_CHECK_IDL_PYN([$1 - Python2], [$2], [$3], [$4], [$5], [$6],
-                        [$HAVE_PYTHON], [$PYTHON])
+                        [$HAVE_PYTHON2], [$PYTHON2])
     OVSDB_CHECK_IDL_PYN([$1 - Python3], [$2], [$3], [$4], [$5], [$6],
                         [$HAVE_PYTHON3], [$PYTHON3])])
 
@@ -79,7 +79,7 @@ m4_define([OVSDB_CHECK_IDL_REGISTER_COLUMNS_PYN],
 
 m4_define([OVSDB_CHECK_IDL_REGISTER_COLUMNS_PY],
    [OVSDB_CHECK_IDL_REGISTER_COLUMNS_PYN([$1 - Python2], [$2], [$3], [$4], [$5], [$6],
-                        [$HAVE_PYTHON], [$PYTHON])
+                        [$HAVE_PYTHON2], [$PYTHON2])
     OVSDB_CHECK_IDL_REGISTER_COLUMNS_PYN([$1 - Python3], [$2], [$3], [$4], [$5], [$6],
                         [$HAVE_PYTHON3], [$PYTHON3])])
 
@@ -102,7 +102,7 @@ m4_define([OVSDB_CHECK_IDL_TCP_PYN],
 
 m4_define([OVSDB_CHECK_IDL_TCP_PY],
    [OVSDB_CHECK_IDL_TCP_PYN([$1 - Python2], [$2], [$3], [$4], [$5], [$6],
-                        [$HAVE_PYTHON], [$PYTHON])
+                        [$HAVE_PYTHON2], [$PYTHON2])
     OVSDB_CHECK_IDL_TCP_PYN([$1 - Python3], [$2], [$3], [$4], [$5], [$6],
                         [$HAVE_PYTHON3], [$PYTHON3])])
 
@@ -128,7 +128,7 @@ m4_define([OVSDB_CHECK_IDL_TCP6_PYN],
 
 m4_define([OVSDB_CHECK_IDL_TCP6_PY],
    [OVSDB_CHECK_IDL_TCP6_PYN([$1 - Python2], [$2], [$3], [$4], [$5], [$6],
-                        [$HAVE_PYTHON], [$PYTHON])
+                        [$HAVE_PYTHON2], [$PYTHON2])
     OVSDB_CHECK_IDL_TCP6_PYN([$1 - Python3], [$2], [$3], [$4], [$5], [$6],
                         [$HAVE_PYTHON3], [$PYTHON3])])
 
@@ -204,7 +204,7 @@ m4_define([OVSDB_CHECK_IDL_PASSIVE_TCP_PYN],
 
 m4_define([OVSDB_CHECK_IDL_PASSIVE_TCP_PY],
     [OVSDB_CHECK_IDL_PASSIVE_TCP_PYN([$1 - Python2], [$2], [$3], [$4], [$5], [$6],
-                        [$HAVE_PYTHON], [$PYTHON])
+                        [$HAVE_PYTHON2], [$PYTHON2])
     OVSDB_CHECK_IDL_PASSIVE_TCP_PYN([$1 - Python3], [$2], [$3], [$4], [$5], [$6],
                         [$HAVE_PYTHON3], [$PYTHON3])])
 
@@ -393,7 +393,7 @@ m4_define([OVSDB_CHECK_IDL_PYN_WITH_EXPOUT],
 
 m4_define([OVSDB_CHECK_IDL_PY_WITH_EXPOUT],
    [OVSDB_CHECK_IDL_PYN_WITH_EXPOUT([$1 - Python2], [$2], [$3], [$4], [$5], [$6],
-                                    [$HAVE_PYTHON], [$PYTHON])
+                                    [$HAVE_PYTHON2], [$PYTHON2])
     OVSDB_CHECK_IDL_PYN_WITH_EXPOUT([$1 - Python3], [$2], [$3], [$4], [$5], [$6],
                                     [$HAVE_PYTHON3], [$PYTHON3])])
 
@@ -927,7 +927,7 @@ m4_define([OVSDB_CHECK_IDL_FETCH_COLUMNS_PYN],
 
 m4_define([OVSDB_CHECK_IDL_FETCH_COLUMNS_PY],
     [OVSDB_CHECK_IDL_FETCH_COLUMNS_PYN([$1 - Python2], [$2], [$3], [$4], [$5], [$6], [$7],
-                        [$HAVE_PYTHON], [$PYTHON])
+                        [$HAVE_PYTHON2], [$PYTHON2])
     OVSDB_CHECK_IDL_FETCH_COLUMNS_PYN([$1 - Python3], [$2], [$3], [$4], [$5], [$6], [$7],
                         [$HAVE_PYTHON3], [$PYTHON3])])
 
@@ -977,7 +977,7 @@ m4_define([OVSDB_CHECK_IDL_WO_MONITOR_COND_PYN],
 
 m4_define([OVSDB_CHECK_IDL_WO_MONITOR_COND_PY],
     [OVSDB_CHECK_IDL_WO_MONITOR_COND_PYN([$1 - Python2], [$2], [$3], [$4], [$5],
-                        [$HAVE_PYTHON], [$PYTHON])
+                        [$HAVE_PYTHON2], [$PYTHON2])
     OVSDB_CHECK_IDL_WO_MONITOR_COND_PYN([$1 - Python3], [$2], [$3], [$4], [$5],
                         [$HAVE_PYTHON3], [$PYTHON3])])
 
@@ -1306,7 +1306,7 @@ m4_define([OVSDB_CHECK_IDL_NOTIFY_PYN],
 
 m4_define([OVSDB_CHECK_IDL_NOTIFY_PY],
     [OVSDB_CHECK_IDL_NOTIFY_PYN([$1 - Python2], [$2], [$3], [$4], [$5],
-                        [$HAVE_PYTHON], [$PYTHON])
+                        [$HAVE_PYTHON2], [$PYTHON2])
     OVSDB_CHECK_IDL_NOTIFY_PYN([$1 - Python3], [$2], [$3], [$4], [$5],
                         [$HAVE_PYTHON3], [$PYTHON3])])
 
@@ -1316,7 +1316,7 @@ m4_define([OVSDB_CHECK_IDL_NOTIFY_SSL_PYN],
 
 m4_define([OVSDB_CHECK_IDL_NOTIFY_SSL_PY],
     [OVSDB_CHECK_IDL_NOTIFY_SSL_PYN([$1 - Python2], [$2], [$3], [$4], [$5],
-                        [$HAVE_PYTHON], [$PYTHON])
+                        [$HAVE_PYTHON2], [$PYTHON2])
     OVSDB_CHECK_IDL_NOTIFY_SSL_PYN([$1 - Python3], [$2], [$3], [$4], [$5],
                         [$HAVE_PYTHON3], [$PYTHON3])])
 

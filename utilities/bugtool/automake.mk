@@ -1,4 +1,4 @@
-if HAVE_PYTHON
+if HAVE_PYTHON2
 sbin_SCRIPTS += utilities/bugtool/ovs-bugtool
 CLEANFILES += utilities/bugtool/ovs-bugtool
 

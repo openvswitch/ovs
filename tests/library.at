@@ -183,7 +183,7 @@ m4_define([UNIX_SOCKET_SHORT_PATHNAME_PYN],
    AT_CHECK([$3 $srcdir/test-unix-socket.py x])
    AT_CLEANUP])
 
-UNIX_SOCKET_SHORT_PATHNAME_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
+UNIX_SOCKET_SHORT_PATHNAME_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
 UNIX_SOCKET_SHORT_PATHNAME_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 
 dnl Unix sockets with long names are problematic because the name has to
@@ -205,7 +205,7 @@ m4_define([UNIX_SOCKET_LONG_PATHNAME_PYN],
    AT_CHECK([cd $longname && $3 $abs_srcdir/test-unix-socket.py ../$longname/socket socket])
    AT_CLEANUP])
 
-UNIX_SOCKET_LONG_PATHNAME_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
+UNIX_SOCKET_LONG_PATHNAME_PYN([Python2], [$HAVE_PYTHON2], [$PYTHON2])
 UNIX_SOCKET_LONG_PATHNAME_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 
 AT_SETUP([ovs_assert])
