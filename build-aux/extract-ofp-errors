@@ -391,7 +391,7 @@ static const char *error_comments[OFPERR_N_ERRORS] = {
 static enum ofperr
 %s_decode(uint32_t vendor, uint16_t type, uint16_t code)
 {
-    switch (((uint64_t) vendor << 32) | (uint32_t) (type << 16) | code) {"""
+    switch (((uint64_t) vendor << 32) | ((uint32_t) type << 16) | code) {"""
                % name)
         found = set()
         for enum in names:
@@ -406,7 +406,7 @@ static enum ofperr
                 vendor_s = "(%#xULL << 32) | " % vendor
             else:
                 vendor_s = ""
-            print ("    case %s(uint32_t) (%d << 16) | %d:" % (vendor_s,
+            print ("    case %s ((uint32_t) %d << 16) | %d:" % (vendor_s,
                                                                type_, code))
             print ("        return OFPERR_%s;" % enum)
         print ("""\
