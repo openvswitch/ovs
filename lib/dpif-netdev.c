@@ -76,6 +76,7 @@
 #include "tnl-ports.h"
 #include "unixctl.h"
 #include "util.h"
+#include "uuid.h"
 
 VLOG_DEFINE_THIS_MODULE(dpif_netdev);
 
@@ -434,7 +435,9 @@ struct dp_netdev_flow {
     /* Hash table index by unmasked flow. */
     const struct cmap_node node; /* In owning dp_netdev_pmd_thread's */
                                  /* 'flow_table'. */
+    const struct cmap_node mark_node; /* In owning flow_mark's mark_to_flow */
     const ovs_u128 ufid;         /* Unique flow identifier. */
+    const ovs_u128 mega_ufid;    /* Unique mega flow identifier. */
     const unsigned pmd_id;       /* The 'core_id' of pmd thread owning this */
                                  /* flow. */
 
@@ -445,6 +448,7 @@ struct dp_netdev_flow {
     struct ovs_refcount ref_cnt;
 
     bool dead;
+    uint32_t mark;               /* Unique flow mark assigned to a flow */
 
     /* Statistics. */
     struct dp_netdev_flow_stats stats;
@@ -1941,6 +1945,180 @@ dp_netdev_pmd_find_dpcls(struct dp_netdev_pmd_thread *pmd,
     return cls;
 }
 
+#define MAX_FLOW_MARK       (UINT32_MAX - 1)
+#define INVALID_FLOW_MARK   (UINT32_MAX)
+
+struct megaflow_to_mark_data {
+    const struct cmap_node node;
+    ovs_u128 mega_ufid;
+    uint32_t mark;
+};
+
+struct flow_mark {
+    struct cmap megaflow_to_mark;
+    struct cmap mark_to_flow;
+    struct id_pool *pool;
+    struct ovs_mutex mutex;
+};
+
+static struct flow_mark flow_mark = {
+    .megaflow_to_mark = CMAP_INITIALIZER,
+    .mark_to_flow = CMAP_INITIALIZER,
+    .mutex = OVS_MUTEX_INITIALIZER,
+};
+
+static uint32_t
+flow_mark_alloc(void)
+{
+    uint32_t mark;
+
+    if (!flow_mark.pool) {
+        /* Haven't initiated yet, do it here */
+        flow_mark.pool = id_pool_create(0, MAX_FLOW_MARK);
+    }
+
+    if (id_pool_alloc_id(flow_mark.pool, &mark)) {
+        return mark;
+    }
+
+    return INVALID_FLOW_MARK;
+}
+
+static void
+flow_mark_free(uint32_t mark)
+{
+    id_pool_free_id(flow_mark.pool, mark);
+}
+
+/* associate megaflow with a mark, which is a 1:1 mapping */
+static void
+megaflow_to_mark_associate(const ovs_u128 *mega_ufid, uint32_t mark)
+{
+    size_t hash = dp_netdev_flow_hash(mega_ufid);
+    struct megaflow_to_mark_data *data = xzalloc(sizeof(*data));
+
+    data->mega_ufid = *mega_ufid;
+    data->mark = mark;
+
+    cmap_insert(&flow_mark.megaflow_to_mark,
+                CONST_CAST(struct cmap_node *, &data->node), hash);
+}
+
+/* disassociate meagaflow with a mark */
+static void
+megaflow_to_mark_disassociate(const ovs_u128 *mega_ufid)
+{
+    size_t hash = dp_netdev_flow_hash(mega_ufid);
+    struct megaflow_to_mark_data *data;
+
+    CMAP_FOR_EACH_WITH_HASH (data, node, hash, &flow_mark.megaflow_to_mark) {
+        if (ovs_u128_equals(*mega_ufid, data->mega_ufid)) {
+            cmap_remove(&flow_mark.megaflow_to_mark,
+                        CONST_CAST(struct cmap_node *, &data->node), hash);
+            free(data);
+            return;
+        }
+    }
+
+    VLOG_WARN("Masked ufid "UUID_FMT" is not associated with a mark?\n",
+              UUID_ARGS((struct uuid *)mega_ufid));
+}
+
+static inline uint32_t
+megaflow_to_mark_find(const ovs_u128 *mega_ufid)
+{
+    size_t hash = dp_netdev_flow_hash(mega_ufid);
+    struct megaflow_to_mark_data *data;
+
+    CMAP_FOR_EACH_WITH_HASH (data, node, hash, &flow_mark.megaflow_to_mark) {
+        if (ovs_u128_equals(*mega_ufid, data->mega_ufid)) {
+            return data->mark;
+        }
+    }
+
+    VLOG_WARN("Mark id for ufid "UUID_FMT" was not found\n",
+              UUID_ARGS((struct uuid *)mega_ufid));
+    return INVALID_FLOW_MARK;
+}
+
+/* associate mark with a flow, which is 1:N mapping */
+static void
+mark_to_flow_associate(const uint32_t mark, struct dp_netdev_flow *flow)
+{
+    dp_netdev_flow_ref(flow);
+
+    cmap_insert(&flow_mark.mark_to_flow,
+                CONST_CAST(struct cmap_node *, &flow->mark_node),
+                hash_int(mark, 0));
+    flow->mark = mark;
+
+    VLOG_DBG("Associated dp_netdev flow %p with mark %u\n", flow, mark);
+}
+
+static bool
+flow_mark_has_no_ref(uint32_t mark)
+{
+    struct dp_netdev_flow *flow;
+
+    CMAP_FOR_EACH_WITH_HASH (flow, mark_node, hash_int(mark, 0),
+                             &flow_mark.mark_to_flow) {
+        if (flow->mark == mark) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static int
+mark_to_flow_disassociate(struct dp_netdev_pmd_thread *pmd,
+                          struct dp_netdev_flow *flow)
+{
+    int ret = 0;
+    uint32_t mark = flow->mark;
+    struct cmap_node *mark_node = CONST_CAST(struct cmap_node *,
+                                             &flow->mark_node);
+
+    cmap_remove(&flow_mark.mark_to_flow, mark_node, hash_int(mark, 0));
+    flow->mark = INVALID_FLOW_MARK;
+
+    /*
+     * no flow is referencing the mark any more? If so, let's
+     * remove the flow from hardware and free the mark.
+     */
+    if (flow_mark_has_no_ref(mark)) {
+        struct dp_netdev_port *port;
+        odp_port_t in_port = flow->flow.in_port.odp_port;
+
+        ovs_mutex_lock(&pmd->dp->port_mutex);
+        port = dp_netdev_lookup_port(pmd->dp, in_port);
+        if (port) {
+            ret = netdev_flow_del(port->netdev, &flow->mega_ufid, NULL);
+        }
+        ovs_mutex_unlock(&pmd->dp->port_mutex);
+
+        flow_mark_free(mark);
+        VLOG_DBG("Freed flow mark %u\n", mark);
+
+        megaflow_to_mark_disassociate(&flow->mega_ufid);
+    }
+    dp_netdev_flow_unref(flow);
+
+    return ret;
+}
+
+static void
+flow_mark_flush(struct dp_netdev_pmd_thread *pmd)
+{
+    struct dp_netdev_flow *flow;
+
+    CMAP_FOR_EACH (flow, mark_node, &flow_mark.mark_to_flow) {
+        if (flow->pmd_id == pmd->core_id) {
+            mark_to_flow_disassociate(pmd, flow);
+        }
+    }
+}
+
 static void
 dp_netdev_pmd_remove_flow(struct dp_netdev_pmd_thread *pmd,
                           struct dp_netdev_flow *flow)
@@ -1954,6 +2132,9 @@ dp_netdev_pmd_remove_flow(struct dp_netdev_pmd_thread *pmd,
     ovs_assert(cls != NULL);
     dpcls_remove(cls, &flow->cr);
     cmap_remove(&pmd->flow_table, node, dp_netdev_flow_hash(&flow->ufid));
+    if (flow->mark != INVALID_FLOW_MARK) {
+        mark_to_flow_disassociate(pmd, flow);
+    }
     flow->dead = true;
 
     dp_netdev_flow_unref(flow);
@@ -2534,6 +2715,101 @@ out:
     return error;
 }
 
+/*
+ * There are two flow offload operations here: addition and modification.
+ *
+ * For flow addition, this function does:
+ * - allocate a new flow mark id
+ * - perform hardware flow offload
+ * - associate the flow mark with flow and mega flow
+ *
+ * For flow modification, both flow mark and the associations are still
+ * valid, thus only item 2 needed.
+ */
+static void
+try_netdev_flow_put(struct dp_netdev_pmd_thread *pmd, odp_port_t in_port,
+                    struct dp_netdev_flow *flow, struct match *match,
+                    const struct nlattr *actions, size_t actions_len)
+{
+    struct offload_info info;
+    struct dp_netdev_port *port;
+    bool modification = flow->mark != INVALID_FLOW_MARK;
+    const char *op = modification ? "modify" : "add";
+    uint32_t mark;
+    int ret;
+
+    ovs_mutex_lock(&flow_mark.mutex);
+
+    if (modification) {
+        mark = flow->mark;
+    } else {
+        if (!netdev_is_flow_api_enabled()) {
+            goto out;
+        }
+
+        /*
+         * If a mega flow has already been offloaded (from other PMD
+         * instances), do not offload it again.
+         */
+        mark = megaflow_to_mark_find(&flow->mega_ufid);
+        if (mark != INVALID_FLOW_MARK) {
+            VLOG_DBG("Flow has already been offloaded with mark %u\n", mark);
+            mark_to_flow_associate(mark, flow);
+            goto out;
+        }
+
+        mark = flow_mark_alloc();
+        if (mark == INVALID_FLOW_MARK) {
+            VLOG_ERR("Failed to allocate flow mark!\n");
+            goto out;
+        }
+    }
+    info.flow_mark = mark;
+
+    ovs_mutex_lock(&pmd->dp->port_mutex);
+    port = dp_netdev_lookup_port(pmd->dp, in_port);
+    if (!port) {
+        ovs_mutex_unlock(&pmd->dp->port_mutex);
+        goto out;
+    }
+    ret = netdev_flow_put(port->netdev, match,
+                          CONST_CAST(struct nlattr *, actions),
+                          actions_len, &flow->mega_ufid, &info, NULL);
+    ovs_mutex_unlock(&pmd->dp->port_mutex);
+
+    if (ret) {
+        VLOG_ERR("Failed to %s netdev flow with mark %u\n", op, mark);
+        if (!modification) {
+            flow_mark_free(mark);
+        } else {
+            mark_to_flow_disassociate(pmd, flow);
+        }
+        goto out;
+    }
+
+    if (!modification) {
+        megaflow_to_mark_associate(&flow->mega_ufid, mark);
+        mark_to_flow_associate(mark, flow);
+    }
+    VLOG_DBG("Succeed to %s netdev flow with mark %u\n", op, mark);
+
+out:
+    ovs_mutex_unlock(&flow_mark.mutex);
+}
+
+static void
+dp_netdev_get_mega_ufid(const struct match *match, ovs_u128 *mega_ufid)
+{
+    struct flow masked_flow;
+    size_t i;
+
+    for (i = 0; i < sizeof(struct flow); i++) {
+        ((uint8_t *)&masked_flow)[i] = ((uint8_t *)&match->flow)[i] &
+                                       ((uint8_t *)&match->wc)[i];
+    }
+    dpif_flow_hash(NULL, &masked_flow, sizeof(struct flow), mega_ufid);
+}
+
 static struct dp_netdev_flow *
 dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
                    struct match *match, const ovs_u128 *ufid,
@@ -2569,12 +2845,14 @@ dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
     memset(&flow->stats, 0, sizeof flow->stats);
     flow->dead = false;
     flow->batch = NULL;
+    flow->mark = INVALID_FLOW_MARK;
     *CONST_CAST(unsigned *, &flow->pmd_id) = pmd->core_id;
     *CONST_CAST(struct flow *, &flow->flow) = match->flow;
     *CONST_CAST(ovs_u128 *, &flow->ufid) = *ufid;
     ovs_refcount_init(&flow->ref_cnt);
     ovsrcu_set(&flow->actions, dp_netdev_actions_create(actions, actions_len));
 
+    dp_netdev_get_mega_ufid(match, CONST_CAST(ovs_u128 *, &flow->mega_ufid));
     netdev_flow_key_init_masked(&flow->cr.flow, &match->flow, &mask);
 
     /* Select dpcls for in_port. Relies on in_port to be exact match. */
@@ -2583,6 +2861,8 @@ dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
 
     cmap_insert(&pmd->flow_table, CONST_CAST(struct cmap_node *, &flow->node),
                 dp_netdev_flow_hash(&flow->ufid));
+
+    try_netdev_flow_put(pmd, in_port, flow, match, actions, actions_len);
 
     if (OVS_UNLIKELY(!VLOG_DROP_DBG((&upcall_rl)))) {
         struct ds ds = DS_EMPTY_INITIALIZER;
@@ -2664,12 +2944,16 @@ flow_put_on_pmd(struct dp_netdev_pmd_thread *pmd,
         if (put->flags & DPIF_FP_MODIFY) {
             struct dp_netdev_actions *new_actions;
             struct dp_netdev_actions *old_actions;
+            odp_port_t in_port = netdev_flow->flow.in_port.odp_port;
 
             new_actions = dp_netdev_actions_create(put->actions,
                                                    put->actions_len);
 
             old_actions = dp_netdev_flow_get_actions(netdev_flow);
             ovsrcu_set(&netdev_flow->actions, new_actions);
+
+            try_netdev_flow_put(pmd, in_port, netdev_flow, match,
+                                put->actions, put->actions_len);
 
             if (stats) {
                 get_dpif_flow_stats(netdev_flow, stats);
@@ -3792,6 +4076,7 @@ reload_affected_pmds(struct dp_netdev *dp)
 
     CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
         if (pmd->need_reload) {
+            flow_mark_flush(pmd);
             dp_netdev_reload_pmd__(pmd);
             pmd->need_reload = false;
         }
