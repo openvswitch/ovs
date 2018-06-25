@@ -160,6 +160,12 @@ struct mac_learning {
     struct ovs_rwlock rwlock;
     bool need_revalidate;
 
+    /* Statistics */
+    uint64_t total_learned;
+    uint64_t total_expired;
+    uint64_t total_evicted;
+    uint64_t total_moved;
+
     /* Fairness.
      *
      * Both of these data structures include the same "struct

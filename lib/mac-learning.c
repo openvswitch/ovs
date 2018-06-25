@@ -153,6 +153,7 @@ evict_mac_entry_fairly(struct mac_learning *ml)
     e = CONTAINER_OF(ovs_list_front(&mlport->port_lrus),
                      struct mac_entry, port_lru_node);
     COVERAGE_INC(mac_learning_evicted);
+    ml->total_evicted++;
     mac_learning_expire(ml, e);
 }
 
@@ -180,6 +181,18 @@ normalize_idle_time(unsigned int idle_time)
             : idle_time);
 }
 
+/* Clear all the mac_learning statistics */
+static void
+mac_learning_clear_statistics(struct mac_learning *ml)
+{
+    if (ml != NULL) {
+        ml->total_learned = 0;
+        ml->total_expired = 0;
+        ml->total_evicted = 0;
+        ml->total_moved = 0;
+    }
+}
+
 /* Creates and returns a new MAC learning table with an initial MAC aging
  * timeout of 'idle_time' seconds and an initial maximum of MAC_DEFAULT_MAX
  * entries. */
@@ -200,6 +213,7 @@ mac_learning_create(unsigned int idle_time)
     heap_init(&ml->ports_by_usage);
     ovs_refcount_init(&ml->ref_cnt);
     ovs_rwlock_init(&ml->rwlock);
+    mac_learning_clear_statistics(ml);
     return ml;
 }
 
@@ -323,6 +337,7 @@ mac_learning_insert(struct mac_learning *ml,
         e->grat_arp_lock = TIME_MIN;
         e->mlport = NULL;
         COVERAGE_INC(mac_learning_learned);
+        ml->total_learned++;
     } else {
         ovs_list_remove(&e->lru_node);
     }
@@ -426,6 +441,7 @@ update_learning_table__(struct mac_learning *ml, struct eth_addr src,
     if (mac_entry_get_port(ml, mac) != in_port) {
         if (mac_entry_get_port(ml, mac) != NULL) {
             COVERAGE_INC(mac_learning_moved);
+            ml->total_moved++;
         }
         mac_entry_set_port(ml, mac, in_port);
         return true;
@@ -524,6 +540,7 @@ mac_learning_run(struct mac_learning *ml)
            && (hmap_count(&ml->table) > ml->max_entries
                || time_now() >= e->expires)) {
         COVERAGE_INC(mac_learning_expired);
+        ml->total_expired++;
         mac_learning_expire(ml, e);
     }
 
