@@ -166,6 +166,11 @@ if no \fIbridge\fR is given.
 Lists each MAC address/VLAN pair learned by the specified \fIbridge\fR,
 along with the port on which it was learned and the age of the entry,
 in seconds.
+.IP "\fBfdb/stats-clear\fR [\fIbridge\fR]"
+Clear \fIbridge\fR MAC address learning table statistics, or all
+statistics if no \fIbridge\fR is given.
+.IP "\fBfdb/stats-show\fR \fIbridge\fR"
+Show MAC address learning table statistics for the specified \fIbridge\fR.
 .IP "\fBmdb/flush\fR [\fIbridge\fR]"
 Flushes \fIbridge\fR multicast snooping table, or all snooping tables
 if no \fIbridge\fR is given.
