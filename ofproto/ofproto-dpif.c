@@ -5247,6 +5247,69 @@ ofproto_unixctl_fdb_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
 }
 
 static void
+ofproto_unixctl_fdb_stats_clear(struct unixctl_conn *conn, int argc,
+                                const char *argv[], void *aux OVS_UNUSED)
+{
+    struct ofproto_dpif *ofproto;
+
+    if (argc > 1) {
+        ofproto = ofproto_dpif_lookup_by_name(argv[1]);
+        if (!ofproto) {
+            unixctl_command_reply_error(conn, "no such bridge");
+            return;
+        }
+        ovs_rwlock_wrlock(&ofproto->ml->rwlock);
+        mac_learning_clear_statistics(ofproto->ml);
+        ovs_rwlock_unlock(&ofproto->ml->rwlock);
+    } else {
+        HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_by_name_node,
+                       &all_ofproto_dpifs_by_name) {
+            ovs_rwlock_wrlock(&ofproto->ml->rwlock);
+            mac_learning_clear_statistics(ofproto->ml);
+            ovs_rwlock_unlock(&ofproto->ml->rwlock);
+        }
+    }
+
+    unixctl_command_reply(conn, "statistics successfully cleared");
+}
+
+static void
+ofproto_unixctl_fdb_stats_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                               const char *argv[], void *aux OVS_UNUSED)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    const struct ofproto_dpif *ofproto;
+    ofproto = ofproto_dpif_lookup_by_name(argv[1]);
+    if (!ofproto) {
+        unixctl_command_reply_error(conn, "no such bridge");
+        return;
+    }
+
+    ds_put_format(&ds, "Statistics for bridge \"%s\":\n", argv[1]);
+    ovs_rwlock_rdlock(&ofproto->ml->rwlock);
+
+    ds_put_format(&ds, "  Current/maximum MAC entries in the table: %"
+                  PRIuSIZE"/%"PRIuSIZE"\n",
+                  hmap_count(&ofproto->ml->table), ofproto->ml->max_entries);
+    ds_put_format(&ds,
+                  "  Total number of learned MAC entries     : %"PRIu64"\n",
+                  ofproto->ml->total_learned);
+    ds_put_format(&ds,
+                  "  Total number of expired MAC entries     : %"PRIu64"\n",
+                  ofproto->ml->total_expired);
+    ds_put_format(&ds,
+                  "  Total number of evicted MAC entries     : %"PRIu64"\n",
+                  ofproto->ml->total_evicted);
+    ds_put_format(&ds,
+                  "  Total number of port moved MAC entries  : %"PRIu64"\n",
+                  ofproto->ml->total_moved);
+
+    ovs_rwlock_unlock(&ofproto->ml->rwlock);
+    unixctl_command_reply(conn, ds_cstr(&ds));
+    ds_destroy(&ds);
+}
+
+static void
 ofproto_unixctl_mcast_snooping_show(struct unixctl_conn *conn,
                                     int argc OVS_UNUSED,
                                     const char *argv[],
@@ -5736,6 +5799,10 @@ ofproto_unixctl_init(void)
                              ofproto_unixctl_fdb_flush, NULL);
     unixctl_command_register("fdb/show", "bridge", 1, 1,
                              ofproto_unixctl_fdb_show, NULL);
+    unixctl_command_register("fdb/stats-clear", "[bridge]", 0, 1,
+                             ofproto_unixctl_fdb_stats_clear, NULL);
+    unixctl_command_register("fdb/stats-show", "bridge", 1, 1,
+                             ofproto_unixctl_fdb_stats_show, NULL);
     unixctl_command_register("mdb/flush", "[bridge]", 0, 1,
                              ofproto_unixctl_mcast_snooping_flush, NULL);
     unixctl_command_register("mdb/show", "bridge", 1, 1,

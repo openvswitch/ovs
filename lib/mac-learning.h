@@ -189,6 +189,7 @@ int mac_entry_age(const struct mac_learning *ml, const struct mac_entry *e)
 struct mac_learning *mac_learning_create(unsigned int idle_time);
 struct mac_learning *mac_learning_ref(const struct mac_learning *);
 void mac_learning_unref(struct mac_learning *);
+void mac_learning_clear_statistics(struct mac_learning *ml);
 
 bool mac_learning_run(struct mac_learning *ml) OVS_REQ_WRLOCK(ml->rwlock);
 void mac_learning_wait(struct mac_learning *ml)

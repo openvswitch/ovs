@@ -182,7 +182,7 @@ normalize_idle_time(unsigned int idle_time)
 }
 
 /* Clear all the mac_learning statistics */
-static void
+void
 mac_learning_clear_statistics(struct mac_learning *ml)
 {
     if (ml != NULL) {
