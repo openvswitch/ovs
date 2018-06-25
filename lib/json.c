@@ -718,16 +718,21 @@ json_lex_number(struct json_parser *p)
         exponent = 0;
         do {
             if (exponent >= INT_MAX / 10) {
-                json_error(p, "exponent outside valid range");
-                return;
+                goto bad_exponent;
             }
             exponent = exponent * 10 + (*cp - '0');
             cp++;
         } while (isdigit((unsigned char) *cp));
 
         if (negative_exponent) {
+            if (pow10 < INT_MIN + exponent) {
+                goto bad_exponent;
+            }
             pow10 -= exponent;
         } else {
+            if (pow10 > INT_MAX - exponent) {
+                goto bad_exponent;
+            }
             pow10 += exponent;
         }
     }
@@ -777,6 +782,10 @@ json_lex_number(struct json_parser *p)
         token.real = 0;
     }
     json_parser_input(p, &token);
+    return;
+
+bad_exponent:
+    json_error(p, "exponent outside valid range");
 }
 
 static const char *

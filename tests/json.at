@@ -279,9 +279,21 @@ JSON_CHECK_NEGATIVE(
   [1e9999 is too big],
   [[[1e9999]]],
   [error: number outside valid range])
-JSON_CHECK_NEGATIVE(
+JSON_CHECK_NEGATIVE_C(
   [exponent bigger than INT_MAX],
   [[[1e9999999999999999999]]],
+  [error: exponent outside valid range])
+JSON_CHECK_NEGATIVE_C(
+  [exponent smaller than INT_MIN],
+  [[[1e-9999999999999999999]]],
+  [error: exponent outside valid range])
+JSON_CHECK_NEGATIVE_C(
+  [accumulated exponent bigger than INT_MAX],
+  [[[340282366920938463461761716499e2147483647]]],
+  [error: exponent outside valid range])
+JSON_CHECK_NEGATIVE_C(
+  [accumulated exponent smaller than INT_MIN],
+  [[[0.340282366920938463461761716499e-2147483648]]],
   [error: exponent outside valid range])
 JSON_CHECK_NEGATIVE(
   [decimal point must be followed by digit],
