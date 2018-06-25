@@ -8903,7 +8903,8 @@ ofpact_hdrs_equal(const struct ofpact_hdrs *a,
 static uint32_t
 ofpact_hdrs_hash(const struct ofpact_hdrs *hdrs)
 {
-    return hash_2words(hdrs->vendor, (hdrs->type << 16) | hdrs->ofp_version);
+    return hash_2words(hdrs->vendor,
+                       ((uint32_t) hdrs->type << 16) | hdrs->ofp_version);
 }
 
 #include "ofp-actions.inc2"
