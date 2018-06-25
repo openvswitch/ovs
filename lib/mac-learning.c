@@ -32,6 +32,8 @@
 
 COVERAGE_DEFINE(mac_learning_learned);
 COVERAGE_DEFINE(mac_learning_expired);
+COVERAGE_DEFINE(mac_learning_evicted);
+COVERAGE_DEFINE(mac_learning_moved);
 
 /* Returns the number of seconds since 'e' (within 'ml') was last learned. */
 int
@@ -150,6 +152,7 @@ evict_mac_entry_fairly(struct mac_learning *ml)
                           struct mac_learning_port, heap_node);
     e = CONTAINER_OF(ovs_list_front(&mlport->port_lrus),
                      struct mac_entry, port_lru_node);
+    COVERAGE_INC(mac_learning_evicted);
     mac_learning_expire(ml, e);
 }
 
@@ -421,6 +424,9 @@ update_learning_table__(struct mac_learning *ml, struct eth_addr src,
     }
 
     if (mac_entry_get_port(ml, mac) != in_port) {
+        if (mac_entry_get_port(ml, mac) != NULL) {
+            COVERAGE_INC(mac_learning_moved);
+        }
         mac_entry_set_port(ml, mac, in_port);
         return true;
     }
