@@ -348,6 +348,37 @@ enum rxq_cycles_counter_type {
     RXQ_N_CYCLES
 };
 
+enum {
+    DP_NETDEV_FLOW_OFFLOAD_OP_ADD,
+    DP_NETDEV_FLOW_OFFLOAD_OP_MOD,
+    DP_NETDEV_FLOW_OFFLOAD_OP_DEL,
+};
+
+struct dp_flow_offload_item {
+    struct dp_netdev_pmd_thread *pmd;
+    struct dp_netdev_flow *flow;
+    int op;
+    struct match match;
+    struct nlattr *actions;
+    size_t actions_len;
+
+    struct ovs_list node;
+};
+
+struct dp_flow_offload {
+    struct ovs_mutex mutex;
+    struct ovs_list list;
+    pthread_cond_t cond;
+};
+
+static struct dp_flow_offload dp_flow_offload = {
+    .mutex = OVS_MUTEX_INITIALIZER,
+    .list  = OVS_LIST_INITIALIZER(&dp_flow_offload.list),
+};
+
+static struct ovsthread_once offload_thread_once
+    = OVSTHREAD_ONCE_INITIALIZER;
+
 #define XPS_TIMEOUT 500000LL    /* In microseconds. */
 
 /* Contained by struct dp_netdev_port's 'rxqs' member.  */
@@ -728,6 +759,8 @@ static void emc_clear_entry(struct emc_entry *ce);
 static void dp_netdev_request_reconfigure(struct dp_netdev *dp);
 static inline bool
 pmd_perf_metrics_enabled(const struct dp_netdev_pmd_thread *pmd);
+static void queue_netdev_flow_del(struct dp_netdev_pmd_thread *pmd,
+                                  struct dp_netdev_flow *flow);
 
 static void
 emc_cache_init(struct emc_cache *flow_cache)
@@ -1958,13 +1991,11 @@ struct flow_mark {
     struct cmap megaflow_to_mark;
     struct cmap mark_to_flow;
     struct id_pool *pool;
-    struct ovs_mutex mutex;
 };
 
 static struct flow_mark flow_mark = {
     .megaflow_to_mark = CMAP_INITIALIZER,
     .mark_to_flow = CMAP_INITIALIZER,
-    .mutex = OVS_MUTEX_INITIALIZER,
 };
 
 static uint32_t
@@ -2114,7 +2145,7 @@ flow_mark_flush(struct dp_netdev_pmd_thread *pmd)
 
     CMAP_FOR_EACH (flow, mark_node, &flow_mark.mark_to_flow) {
         if (flow->pmd_id == pmd->core_id) {
-            mark_to_flow_disassociate(pmd, flow);
+            queue_netdev_flow_del(pmd, flow);
         }
     }
 }
@@ -2136,6 +2167,226 @@ mark_to_flow_find(const struct dp_netdev_pmd_thread *pmd,
     return NULL;
 }
 
+static struct dp_flow_offload_item *
+dp_netdev_alloc_flow_offload(struct dp_netdev_pmd_thread *pmd,
+                             struct dp_netdev_flow *flow,
+                             int op)
+{
+    struct dp_flow_offload_item *offload;
+
+    offload = xzalloc(sizeof(*offload));
+    offload->pmd = pmd;
+    offload->flow = flow;
+    offload->op = op;
+
+    dp_netdev_flow_ref(flow);
+    dp_netdev_pmd_try_ref(pmd);
+
+    return offload;
+}
+
+static void
+dp_netdev_free_flow_offload(struct dp_flow_offload_item *offload)
+{
+    dp_netdev_pmd_unref(offload->pmd);
+    dp_netdev_flow_unref(offload->flow);
+
+    free(offload->actions);
+    free(offload);
+}
+
+static void
+dp_netdev_append_flow_offload(struct dp_flow_offload_item *offload)
+{
+    ovs_mutex_lock(&dp_flow_offload.mutex);
+    ovs_list_push_back(&dp_flow_offload.list, &offload->node);
+    xpthread_cond_signal(&dp_flow_offload.cond);
+    ovs_mutex_unlock(&dp_flow_offload.mutex);
+}
+
+static int
+dp_netdev_flow_offload_del(struct dp_flow_offload_item *offload)
+{
+    return mark_to_flow_disassociate(offload->pmd, offload->flow);
+}
+
+/*
+ * There are two flow offload operations here: addition and modification.
+ *
+ * For flow addition, this function does:
+ * - allocate a new flow mark id
+ * - perform hardware flow offload
+ * - associate the flow mark with flow and mega flow
+ *
+ * For flow modification, both flow mark and the associations are still
+ * valid, thus only item 2 needed.
+ */
+static int
+dp_netdev_flow_offload_put(struct dp_flow_offload_item *offload)
+{
+    struct dp_netdev_port *port;
+    struct dp_netdev_pmd_thread *pmd = offload->pmd;
+    struct dp_netdev_flow *flow = offload->flow;
+    odp_port_t in_port = flow->flow.in_port.odp_port;
+    bool modification = offload->op == DP_NETDEV_FLOW_OFFLOAD_OP_MOD;
+    struct offload_info info;
+    uint32_t mark;
+    int ret;
+
+    if (flow->dead) {
+        return -1;
+    }
+
+    if (modification) {
+        mark = flow->mark;
+        ovs_assert(mark != INVALID_FLOW_MARK);
+    } else {
+        /*
+         * If a mega flow has already been offloaded (from other PMD
+         * instances), do not offload it again.
+         */
+        mark = megaflow_to_mark_find(&flow->mega_ufid);
+        if (mark != INVALID_FLOW_MARK) {
+            VLOG_DBG("Flow has already been offloaded with mark %u\n", mark);
+            if (flow->mark != INVALID_FLOW_MARK) {
+                ovs_assert(flow->mark == mark);
+            } else {
+                mark_to_flow_associate(mark, flow);
+            }
+            return 0;
+        }
+
+        mark = flow_mark_alloc();
+        if (mark == INVALID_FLOW_MARK) {
+            VLOG_ERR("Failed to allocate flow mark!\n");
+        }
+    }
+    info.flow_mark = mark;
+
+    ovs_mutex_lock(&pmd->dp->port_mutex);
+    port = dp_netdev_lookup_port(pmd->dp, in_port);
+    if (!port) {
+        ovs_mutex_unlock(&pmd->dp->port_mutex);
+        return -1;
+    }
+    ret = netdev_flow_put(port->netdev, &offload->match,
+                          CONST_CAST(struct nlattr *, offload->actions),
+                          offload->actions_len, &flow->mega_ufid, &info,
+                          NULL);
+    ovs_mutex_unlock(&pmd->dp->port_mutex);
+
+    if (ret) {
+        if (!modification) {
+            flow_mark_free(mark);
+        } else {
+            mark_to_flow_disassociate(pmd, flow);
+        }
+        return -1;
+    }
+
+    if (!modification) {
+        megaflow_to_mark_associate(&flow->mega_ufid, mark);
+        mark_to_flow_associate(mark, flow);
+    }
+
+    return 0;
+}
+
+static void *
+dp_netdev_flow_offload_main(void *data OVS_UNUSED)
+{
+    struct dp_flow_offload_item *offload;
+    struct ovs_list *list;
+    const char *op;
+    int ret;
+
+    for (;;) {
+        ovs_mutex_lock(&dp_flow_offload.mutex);
+        if (ovs_list_is_empty(&dp_flow_offload.list)) {
+            ovsrcu_quiesce_start();
+            ovs_mutex_cond_wait(&dp_flow_offload.cond,
+                                &dp_flow_offload.mutex);
+        }
+        list = ovs_list_pop_front(&dp_flow_offload.list);
+        offload = CONTAINER_OF(list, struct dp_flow_offload_item, node);
+        ovs_mutex_unlock(&dp_flow_offload.mutex);
+
+        switch (offload->op) {
+        case DP_NETDEV_FLOW_OFFLOAD_OP_ADD:
+            op = "add";
+            ret = dp_netdev_flow_offload_put(offload);
+            break;
+        case DP_NETDEV_FLOW_OFFLOAD_OP_MOD:
+            op = "modify";
+            ret = dp_netdev_flow_offload_put(offload);
+            break;
+        case DP_NETDEV_FLOW_OFFLOAD_OP_DEL:
+            op = "delete";
+            ret = dp_netdev_flow_offload_del(offload);
+            break;
+        default:
+            OVS_NOT_REACHED();
+        }
+
+        VLOG_DBG("%s to %s netdev flow\n",
+                 ret == 0 ? "succeed" : "failed", op);
+        dp_netdev_free_flow_offload(offload);
+    }
+
+    return NULL;
+}
+
+static void
+queue_netdev_flow_del(struct dp_netdev_pmd_thread *pmd,
+                      struct dp_netdev_flow *flow)
+{
+    struct dp_flow_offload_item *offload;
+
+    if (ovsthread_once_start(&offload_thread_once)) {
+        xpthread_cond_init(&dp_flow_offload.cond, NULL);
+        ovs_thread_create("dp_netdev_flow_offload",
+                          dp_netdev_flow_offload_main, NULL);
+        ovsthread_once_done(&offload_thread_once);
+    }
+
+    offload = dp_netdev_alloc_flow_offload(pmd, flow,
+                                           DP_NETDEV_FLOW_OFFLOAD_OP_DEL);
+    dp_netdev_append_flow_offload(offload);
+}
+
+static void
+queue_netdev_flow_put(struct dp_netdev_pmd_thread *pmd,
+                      struct dp_netdev_flow *flow, struct match *match,
+                      const struct nlattr *actions, size_t actions_len)
+{
+    struct dp_flow_offload_item *offload;
+    int op;
+
+    if (!netdev_is_flow_api_enabled()) {
+        return;
+    }
+
+    if (ovsthread_once_start(&offload_thread_once)) {
+        xpthread_cond_init(&dp_flow_offload.cond, NULL);
+        ovs_thread_create("dp_netdev_flow_offload",
+                          dp_netdev_flow_offload_main, NULL);
+        ovsthread_once_done(&offload_thread_once);
+    }
+
+    if (flow->mark != INVALID_FLOW_MARK) {
+        op = DP_NETDEV_FLOW_OFFLOAD_OP_MOD;
+    } else {
+        op = DP_NETDEV_FLOW_OFFLOAD_OP_ADD;
+    }
+    offload = dp_netdev_alloc_flow_offload(pmd, flow, op);
+    offload->match = *match;
+    offload->actions = xmalloc(actions_len);
+    memcpy(offload->actions, actions, actions_len);
+    offload->actions_len = actions_len;
+
+    dp_netdev_append_flow_offload(offload);
+}
+
 static void
 dp_netdev_pmd_remove_flow(struct dp_netdev_pmd_thread *pmd,
                           struct dp_netdev_flow *flow)
@@ -2150,7 +2401,7 @@ dp_netdev_pmd_remove_flow(struct dp_netdev_pmd_thread *pmd,
     dpcls_remove(cls, &flow->cr);
     cmap_remove(&pmd->flow_table, node, dp_netdev_flow_hash(&flow->ufid));
     if (flow->mark != INVALID_FLOW_MARK) {
-        mark_to_flow_disassociate(pmd, flow);
+        queue_netdev_flow_del(pmd, flow);
     }
     flow->dead = true;
 
@@ -2732,88 +2983,6 @@ out:
     return error;
 }
 
-/*
- * There are two flow offload operations here: addition and modification.
- *
- * For flow addition, this function does:
- * - allocate a new flow mark id
- * - perform hardware flow offload
- * - associate the flow mark with flow and mega flow
- *
- * For flow modification, both flow mark and the associations are still
- * valid, thus only item 2 needed.
- */
-static void
-try_netdev_flow_put(struct dp_netdev_pmd_thread *pmd, odp_port_t in_port,
-                    struct dp_netdev_flow *flow, struct match *match,
-                    const struct nlattr *actions, size_t actions_len)
-{
-    struct offload_info info;
-    struct dp_netdev_port *port;
-    bool modification = flow->mark != INVALID_FLOW_MARK;
-    const char *op = modification ? "modify" : "add";
-    uint32_t mark;
-    int ret;
-
-    ovs_mutex_lock(&flow_mark.mutex);
-
-    if (modification) {
-        mark = flow->mark;
-    } else {
-        if (!netdev_is_flow_api_enabled()) {
-            goto out;
-        }
-
-        /*
-         * If a mega flow has already been offloaded (from other PMD
-         * instances), do not offload it again.
-         */
-        mark = megaflow_to_mark_find(&flow->mega_ufid);
-        if (mark != INVALID_FLOW_MARK) {
-            VLOG_DBG("Flow has already been offloaded with mark %u\n", mark);
-            mark_to_flow_associate(mark, flow);
-            goto out;
-        }
-
-        mark = flow_mark_alloc();
-        if (mark == INVALID_FLOW_MARK) {
-            VLOG_ERR("Failed to allocate flow mark!\n");
-            goto out;
-        }
-    }
-    info.flow_mark = mark;
-
-    ovs_mutex_lock(&pmd->dp->port_mutex);
-    port = dp_netdev_lookup_port(pmd->dp, in_port);
-    if (!port) {
-        ovs_mutex_unlock(&pmd->dp->port_mutex);
-        goto out;
-    }
-    ret = netdev_flow_put(port->netdev, match,
-                          CONST_CAST(struct nlattr *, actions),
-                          actions_len, &flow->mega_ufid, &info, NULL);
-    ovs_mutex_unlock(&pmd->dp->port_mutex);
-
-    if (ret) {
-        VLOG_ERR("Failed to %s netdev flow with mark %u\n", op, mark);
-        if (!modification) {
-            flow_mark_free(mark);
-        } else {
-            mark_to_flow_disassociate(pmd, flow);
-        }
-        goto out;
-    }
-
-    if (!modification) {
-        megaflow_to_mark_associate(&flow->mega_ufid, mark);
-        mark_to_flow_associate(mark, flow);
-    }
-    VLOG_DBG("Succeed to %s netdev flow with mark %u\n", op, mark);
-
-out:
-    ovs_mutex_unlock(&flow_mark.mutex);
-}
-
 static void
 dp_netdev_get_mega_ufid(const struct match *match, ovs_u128 *mega_ufid)
 {
@@ -2879,7 +3048,7 @@ dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
     cmap_insert(&pmd->flow_table, CONST_CAST(struct cmap_node *, &flow->node),
                 dp_netdev_flow_hash(&flow->ufid));
 
-    try_netdev_flow_put(pmd, in_port, flow, match, actions, actions_len);
+    queue_netdev_flow_put(pmd, flow, match, actions, actions_len);
 
     if (OVS_UNLIKELY(!VLOG_DROP_DBG((&upcall_rl)))) {
         struct ds ds = DS_EMPTY_INITIALIZER;
@@ -2961,7 +3130,6 @@ flow_put_on_pmd(struct dp_netdev_pmd_thread *pmd,
         if (put->flags & DPIF_FP_MODIFY) {
             struct dp_netdev_actions *new_actions;
             struct dp_netdev_actions *old_actions;
-            odp_port_t in_port = netdev_flow->flow.in_port.odp_port;
 
             new_actions = dp_netdev_actions_create(put->actions,
                                                    put->actions_len);
@@ -2969,8 +3137,8 @@ flow_put_on_pmd(struct dp_netdev_pmd_thread *pmd,
             old_actions = dp_netdev_flow_get_actions(netdev_flow);
             ovsrcu_set(&netdev_flow->actions, new_actions);
 
-            try_netdev_flow_put(pmd, in_port, netdev_flow, match,
-                                put->actions, put->actions_len);
+            queue_netdev_flow_put(pmd, netdev_flow, match,
+                                  put->actions, put->actions_len);
 
             if (stats) {
                 get_dpif_flow_stats(netdev_flow, stats);
