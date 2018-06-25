@@ -624,6 +624,70 @@ flow_extract(struct dp_packet *packet, struct flow *flow)
     miniflow_expand(&m.mf, flow);
 }
 
+static inline bool
+ipv4_sanity_check(const struct ip_header *nh, size_t size,
+                  int *ip_lenp, uint16_t *tot_lenp)
+{
+    int ip_len;
+    uint16_t tot_len;
+
+    if (OVS_UNLIKELY(size < IP_HEADER_LEN)) {
+        return false;
+    }
+    ip_len = IP_IHL(nh->ip_ihl_ver) * 4;
+
+    if (OVS_UNLIKELY(ip_len < IP_HEADER_LEN || size < ip_len)) {
+        return false;
+    }
+
+    tot_len = ntohs(nh->ip_tot_len);
+    if (OVS_UNLIKELY(tot_len > size || ip_len > tot_len ||
+                size - tot_len > UINT8_MAX)) {
+        return false;
+    }
+
+    *ip_lenp = ip_len;
+    *tot_lenp = tot_len;
+
+    return true;
+}
+
+static inline uint8_t
+ipv4_get_nw_frag(const struct ip_header *nh)
+{
+    uint8_t nw_frag = 0;
+
+    if (OVS_UNLIKELY(IP_IS_FRAGMENT(nh->ip_frag_off))) {
+        nw_frag = FLOW_NW_FRAG_ANY;
+        if (nh->ip_frag_off & htons(IP_FRAG_OFF_MASK)) {
+            nw_frag |= FLOW_NW_FRAG_LATER;
+        }
+    }
+
+    return nw_frag;
+}
+
+static inline bool
+ipv6_sanity_check(const struct ovs_16aligned_ip6_hdr *nh, size_t size)
+{
+    uint16_t plen;
+
+    if (OVS_UNLIKELY(size < sizeof *nh)) {
+        return false;
+    }
+
+    plen = ntohs(nh->ip6_plen);
+    if (OVS_UNLIKELY(plen > size)) {
+        return false;
+    }
+    /* Jumbo Payload option not supported yet. */
+    if (OVS_UNLIKELY(size - plen > UINT8_MAX)) {
+        return false;
+    }
+
+    return true;
+}
+
 /* Caller is responsible for initializing 'dst' with enough storage for
  * FLOW_U64S * 8 bytes. */
 void
@@ -748,22 +812,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
         int ip_len;
         uint16_t tot_len;
 
-        if (OVS_UNLIKELY(size < IP_HEADER_LEN)) {
-            goto out;
-        }
-        ip_len = IP_IHL(nh->ip_ihl_ver) * 4;
-
-        if (OVS_UNLIKELY(ip_len < IP_HEADER_LEN)) {
-            goto out;
-        }
-        if (OVS_UNLIKELY(size < ip_len)) {
-            goto out;
-        }
-        tot_len = ntohs(nh->ip_tot_len);
-        if (OVS_UNLIKELY(tot_len > size || ip_len > tot_len)) {
-            goto out;
-        }
-        if (OVS_UNLIKELY(size - tot_len > UINT8_MAX)) {
+        if (OVS_UNLIKELY(!ipv4_sanity_check(nh, size, &ip_len, &tot_len))) {
             goto out;
         }
         dp_packet_set_l2_pad_size(packet, size - tot_len);
@@ -786,31 +835,19 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
         nw_tos = nh->ip_tos;
         nw_ttl = nh->ip_ttl;
         nw_proto = nh->ip_proto;
-        if (OVS_UNLIKELY(IP_IS_FRAGMENT(nh->ip_frag_off))) {
-            nw_frag = FLOW_NW_FRAG_ANY;
-            if (nh->ip_frag_off & htons(IP_FRAG_OFF_MASK)) {
-                nw_frag |= FLOW_NW_FRAG_LATER;
-            }
-        }
+        nw_frag = ipv4_get_nw_frag(nh);
         data_pull(&data, &size, ip_len);
     } else if (dl_type == htons(ETH_TYPE_IPV6)) {
-        const struct ovs_16aligned_ip6_hdr *nh;
+        const struct ovs_16aligned_ip6_hdr *nh = data;
         ovs_be32 tc_flow;
         uint16_t plen;
 
-        if (OVS_UNLIKELY(size < sizeof *nh)) {
+        if (OVS_UNLIKELY(!ipv6_sanity_check(nh, size))) {
             goto out;
         }
-        nh = data_pull(&data, &size, sizeof *nh);
+        data_pull(&data, &size, sizeof *nh);
 
         plen = ntohs(nh->ip6_plen);
-        if (OVS_UNLIKELY(plen > size)) {
-            goto out;
-        }
-        /* Jumbo Payload option not supported yet. */
-        if (OVS_UNLIKELY(size - plen > UINT8_MAX)) {
-            goto out;
-        }
         dp_packet_set_l2_pad_size(packet, size - plen);
         size = plen;   /* Never pull padding. */
 
