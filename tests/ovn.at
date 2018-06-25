@@ -9981,7 +9981,7 @@ ovn-nbctl create Port_Group name=pg2 ports="$pg2_ports"
 # create ACLs on pg1 to drop traffic from pg2 to pg1
 ovn-nbctl acl-add pg1 to-lport 1001 'outport == @pg1' drop
 ovn-nbctl --type=port-group acl-add pg1 to-lport 1002 \
-        'outport == @pg1 && ip4.src == $pg2_ip4' allow
+        'outport == @pg1 && ip4.src == $pg2_ip4' allow-related
 
 # Physical network:
 #
@@ -10043,13 +10043,20 @@ OVN_POPULATE_ARP
 # XXX This should be more systematic.
 sleep 1
 
-# test_ip INPORT SRC_MAC DST_MAC SRC_IP DST_IP OUTPORT...
+lsp_to_mac() {
+    echo f0:00:00:00:0${1:0:1}:${1:1:2}
+}
+
+lrp_to_mac() {
+    echo 00:00:00:00:ff:$1
+}
+
+# test_icmp INPORT SRC_MAC DST_MAC SRC_IP DST_IP ICMP_TYPE OUTPORT...
 #
-# This shell function causes a packet to be received on INPORT.  The packet's
-# content has Ethernet destination DST and source SRC (each exactly 12 hex
-# digits) and Ethernet type ETHTYPE (4 hex digits).  The OUTPORTs (zero or
-# more) list the VIFs on which the packet should be received.  INPORT and the
-# OUTPORTs are specified as logical switch port numbers, e.g. 123 for vif123.
+# This shell function causes a ICMP packet to be received on INPORT.
+# The OUTPORTs (zero or more) list the VIFs on which the packet should
+# be received.  INPORT and the OUTPORTs are specified as logical switch
+# port numbers, e.g. 123 for vif123.
 for i in 1 2 3; do
     for j in 1 2 3; do
         for k in 1 2 3; do
@@ -10057,26 +10064,34 @@ for i in 1 2 3; do
         done
     done
 done
-test_ip() {
-    # This packet has bad checksums but logical L3 routing doesn't check.
-    local inport=$1 src_mac=$2 dst_mac=$3 src_ip=$4 dst_ip=$5
-    local packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
-    shift; shift; shift; shift; shift
+
+test_icmp() {
+    local inport=$1 src_mac=$2 dst_mac=$3 src_ip=$4 dst_ip=$5 icmp_type=$6
+    local packet="inport==\"lp$inport\" && eth.src==$src_mac &&
+                  eth.dst==$dst_mac && ip.ttl==64 && ip4.src==$src_ip
+                  && ip4.dst==$dst_ip && icmp4.type==$icmp_type &&
+                  icmp4.code==0"
+    shift; shift; shift; shift; shift; shift
     hv=hv`vif_to_hv $inport`
-    as $hv ovs-appctl netdev-dummy/receive vif$inport $packet
-    #as $hv ovs-appctl ofproto/trace br-int in_port=$inport $packet
+    as $hv ovs-appctl -t ovn-controller inject-pkt "$packet"
     in_ls=`vif_to_ls $inport`
     in_lrp=`vif_to_lrp $inport`
     for outport; do
         out_ls=`vif_to_ls $outport`
         if test $in_ls = $out_ls; then
             # Ports on the same logical switch receive exactly the same packet.
-            echo $packet
+            echo $packet | ovstest test-ovn expr-to-packets
         else
             # Routing decrements TTL and updates source and dest MAC
             # (and checksum).
             out_lrp=`vif_to_lrp $outport`
-            echo f00000000${outport}00000000ff${out_lrp}08004500001c00000000"3f1101"00${src_ip}${dst_ip}0035111100080000
+            exp_smac=`lrp_to_mac $out_lrp`
+            exp_dmac=`lsp_to_mac $outport`
+            exp_packet="eth.src==$exp_smac && eth.dst==$exp_dmac &&
+                ip.ttl==63 && ip4.src==$src_ip && ip4.dst==$dst_ip &&
+                icmp4.type==$icmp_type && icmp4.code==0"
+            echo $exp_packet | ovstest test-ovn expr-to-packets
+
         fi >> $outport.expected
     done
 }
@@ -10099,14 +10114,17 @@ for is in 1 2 3; do
     for ks in 1 2 3; do
       bcast=
       s=$is$js$ks
-      smac=f00000000$s
-      sip=`ip_to_hex 192 168 $is$js $ks`
+      slsp_mac=`lsp_to_mac $s`
+      slrp_mac=`lrp_to_mac $is$js`
+      sip=192.168.$is$js.$ks
       for id in 1 2 3; do
           for jd in 1 2 3; do
               for kd in 1 2 3; do
                 d=$id$jd$kd
-                dip=`ip_to_hex 192 168 $id$jd $kd`
-                if test $is = $id; then dmac=f00000000$d; else dmac=00000000ff$is$js; fi
+                dlsp_mac=`lsp_to_mac $d`
+                dlrp_mac=`lrp_to_mac $id$jd`
+                dip=192.168.$id$jd.$kd
+                if test $is = $id; then dmac=$dlsp_mac; else dmac=$slrp_mac; fi
                 if test $d != $s; then unicast=$d; else unicast=; fi
 
                 # packets matches ACL1 but not ACL2 should be dropped
@@ -10115,7 +10133,16 @@ for is in 1 2 3; do
                         unicast=
                     fi
                 fi
-                test_ip $s $smac $dmac $sip $dip $unicast #1
+                # icmp request (type = 8)
+                test_icmp $s $slsp_mac $dmac $sip $dip 8 $unicast
+
+                # if packets are not dropped, test the return traffic (icmp echo)
+                # to make sure stateful works, too.
+                if test x$unicast != x; then
+                    if test $is = $id; then dmac=$slsp_mac; else dmac=$dlrp_mac; fi
+                    # icmp echo (type = 0)
+                    test_icmp $unicast $dlsp_mac $dmac $dip $sip 0 $s
+                fi
               done
           done
         done
