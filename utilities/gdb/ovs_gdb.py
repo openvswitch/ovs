@@ -950,6 +950,10 @@ class CmdShowFDB(gdb.Command):
         print("{}ports_by_ptr.n  : {}".format(indent, ml['ports_by_ptr']['n']))
         print("{}ports_by_usage.n: {}".format(indent,
                                               ml['ports_by_usage']['n']))
+        print("{}total_learned   : {}".format(indent, ml['total_learned']))
+        print("{}total_expired   : {}".format(indent, ml['total_expired']))
+        print("{}total_evicted   : {}".format(indent, ml['total_evicted']))
+        print("{}total_moved     : {}".format(indent, ml['total_moved']))
 
     @staticmethod
     def display_mac_entry(mac_entry, indent=0, dbg=False):
