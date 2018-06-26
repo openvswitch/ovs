@@ -126,11 +126,11 @@ stream_usage(const char *name, bool active, bool passive,
     printf("\n");
     if (active) {
         printf("Active %s connection methods:\n", name);
-        printf("  tcp:IP:PORT             "
-               "PORT at remote IP\n");
+        printf("  tcp:HOST:PORT           "
+               "PORT at remote HOST\n");
 #ifdef HAVE_OPENSSL
-        printf("  ssl:IP:PORT             "
-               "SSL PORT at remote IP\n");
+        printf("  ssl:HOST:PORT           "
+               "SSL PORT at remote HOST\n");
 #endif
         printf("  unix:FILE               "
                "Unix domain socket named FILE\n");

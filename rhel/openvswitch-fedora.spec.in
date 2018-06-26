@@ -87,8 +87,9 @@ BuildRequires: libpcap-devel numactl-devel
 BuildRequires: dpdk-devel >= 17.05.1
 Provides: %{name}-dpdk = %{version}-%{release}
 %endif
+BuildRequires: unbound unbound-devel
 
-Requires: openssl hostname iproute module-init-tools
+Requires: openssl hostname iproute module-init-tools unbound
 #Upstream kernel commit 4f647e0a3c37b8d5086214128614a136064110c3
 #Requires: kernel >= 3.15.0-0
 

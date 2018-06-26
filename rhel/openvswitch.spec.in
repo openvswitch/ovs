@@ -38,6 +38,7 @@ BuildRequires: openssl-devel
 BuildRequires: checkpolicy, selinux-policy-devel
 BuildRequires: autoconf, automake, libtool
 BuildRequires: python-sphinx
+BuildRequires: unbound-devel
 
 %bcond_without check
 %bcond_with check_datapath_kernel

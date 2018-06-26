@@ -1,10 +1,10 @@
-.IP "\fBssl:\fIip\fR[\fB:\fIport\fR]"
-.IQ "\fBtcp:\fIip\fR[\fB:\fIport\fR]"
-The specified \fIport\fR on the host at the given \fIip\fR, which must
-be expressed as an IP address (not a DNS name) in IPv4 or IPv6 address
-format.  Wrap IPv6 addresses in square brackets,
-e.g. \fBtcp:[::1]:6653\fR.  On Linux, use \fB%\fIdevice\fR to
-designate a scope for IPv6 link-level addresses,
+.IP "\fBssl:\fIhost\fR[\fB:\fIport\fR]"
+.IQ "\fBtcp:\fIhost\fR[\fB:\fIport\fR]"
+The specified \fIport\fR on the given \fIhost\fR, which can
+be expressed either as a DNS name (if built with unbound library)
+or an IP address in IPv4 or IPv6 address format.  Wrap IPv6 addresses
+in square brackets, e.g. \fBtcp:[::1]:6653\fR.  On Linux, use
+\fB%\fIdevice\fR to designate a scope for IPv6 link-level addresses,
 e.g. \fBtcp:[fe80::1234%eth0]:6653\fR.  For \fBssl\fR, the
 \fB\-\-private\-key\fR, \fB\-\-certificate\fR, and \fB\-\-ca\-cert\fR
 options are mandatory.

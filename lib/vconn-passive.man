@@ -1,12 +1,12 @@
-.IP "\fBpssl:\fR[\fIport\fR][\fB:\fIip\fR]"
-.IQ "\fBptcp:\fR[\fIport\fR][\fB:\fIip\fR]"
+.IP "\fBpssl:\fR[\fIport\fR][\fB:\fIhost\fR]"
+.IQ "\fBptcp:\fR[\fIport\fR][\fB:\fIhost\fR]"
 Listens for OpenFlow connections on \fIport\fR.  The default
 \fIport\fR is 6653.  By default, connections are allowed from any IPv4
-address.  Specify \fIip\fR as an IPv4 address or a bracketed IPv6
+address.  Specify \fIhost\fR as an IPv4 address or a bracketed IPv6
 address (e.g. \fBptcp:6653:[::1]\fR).  On Linux, use \fB%\fIdevice\fR
 to designate a scope for IPv6 link-level addresses,
-e.g. \fBptcp:6653:[fe80::1234%eth0]\fR.  DNS names may
-not be used.  For \fBpssl\fR, the
+e.g. \fBptcp:6653:[fe80::1234%eth0]\fR.  DNS names can
+be used if built with unbound library.  For \fBpssl\fR, the
 \fB\-\-private\-key\fR,\fB\-\-certificate\fR, and \fB\-\-ca\-cert\fR
 options are mandatory.
 .IP

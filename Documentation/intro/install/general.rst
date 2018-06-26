@@ -93,6 +93,10 @@ need the following software:
 - Python 2.7. You must also have the Python ``six`` library version 1.4.0
   or later.
 
+- Unbound library, from http://www.unbound.net, is optional but recommended if
+  you want to enable ovs-vswitchd and other utilities to use DNS names when
+  specifying OpenFlow and OVSDB remotes. If unbound library is already
+  installed, then Open vSwitch will automatically build with support for it.
 
 On Linux, you may choose to compile the kernel module that comes with the Open
 vSwitch distribution or to use the kernel module built into the Linux kernel

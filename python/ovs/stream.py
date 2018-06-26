@@ -702,8 +702,8 @@ def usage(name):
     return """
 Active %s connection methods:
   unix:FILE               Unix domain socket named FILE
-  tcp:IP:PORT             TCP socket to IP with port no of PORT
-  ssl:IP:PORT             SSL socket to IP with port no of PORT
+  tcp:HOST:PORT           TCP socket to HOST with port no of PORT
+  ssl:HOST:PORT           SSL socket to HOST with port no of PORT
 
 Passive %s connection methods:
   punix:FILE              Listen on Unix domain socket FILE""" % (name, name)

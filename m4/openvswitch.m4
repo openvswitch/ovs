@@ -669,3 +669,13 @@ AC_DEFUN([OVS_CHECK_CXX],
      enable_cxx=false
    fi
    AM_CONDITIONAL([HAVE_CXX], [$enable_cxx])])
+
+dnl Checks for unbound library.
+AC_DEFUN([OVS_CHECK_UNBOUND],
+  [AC_CHECK_LIB(unbound, ub_ctx_create, [HAVE_UNBOUND=yes])
+   if test "$HAVE_UNBOUND" = yes; then
+     AC_DEFINE([HAVE_UNBOUND], [1], [Define to 1 if unbound is detected.])
+     LIBS="$LIBS -lunbound"
+   fi
+   AM_CONDITIONAL([HAVE_UNBOUND], [test "$HAVE_UNBOUND" = yes])
+   AC_SUBST([HAVE_UNBOUND])])

@@ -116,12 +116,12 @@
           The following connection methods are currently supported:
         </p>
         <dl>
-          <dt><code>ssl:<var>ip</var></code>[<code>:<var>port</var></code>]</dt>
+          <dt><code>ssl:<var>host</var></code>[<code>:<var>port</var></code>]</dt>
           <dd>
             <p>
-              The specified SSL <var>port</var> (default: 6640) on the host at
-              the given <var>ip</var>, which must be expressed as an IP address
-              (not a DNS name).
+              The specified SSL <var>port</var> (default: 6640) on the given
+              <var>host</var>, which can either be a DNS name (if built with
+              unbound library) or an IP address.
             </p>
             <p>
               SSL key and certificate configuration happens outside the
@@ -129,27 +129,29 @@
             </p>
           </dd>
 
-          <dt><code>tcp:<var>ip</var></code>[<code>:<var>port</var></code>]</dt>
+          <dt><code>tcp:<var>host</var></code>[<code>:<var>port</var></code>]</dt>
           <dd>
-            The specified TCP <var>port</var> (default: 6640) on the host at
-            the given <var>ip</var>, which must be expressed as an IP address
-            (not a DNS name).
+            The specified TCP <var>port</var> (default: 6640) on the given
+            <var>host</var>, which can either be a DNS name (if built with
+            unbound library) or an IP address.
           </dd>
-          <dt><code>pssl:</code>[<var>port</var>][<code>:<var>ip</var></code>]</dt>
+          <dt><code>pssl:</code>[<var>port</var>][<code>:<var>host</var></code>]</dt>
           <dd>
             <p>
               Listens for SSL connections on the specified TCP <var>port</var>
-              (default: 6640).  If <var>ip</var>, which must be expressed as an
-              IP address (not a DNS name), is specified, then connections are
-              restricted to the specified local IP address.
+              (default: 6640).  If <var>host</var>, which can either be a DNS
+              name (if built with unbound library) or an IP address, is
+              specified, then connections are restricted to the resolved or
+              specified local IP address.
             </p>
           </dd>
-          <dt><code>ptcp:</code>[<var>port</var>][<code>:<var>ip</var></code>]</dt>
+          <dt><code>ptcp:</code>[<var>port</var>][<code>:<var>host</var></code>]</dt>
           <dd>
             Listens for connections on the specified TCP <var>port</var>
-            (default: 6640).  If <var>ip</var>, which must be expressed as an
-            IP address (not a DNS name), is specified, then connections are
-            restricted to the specified local IP address.
+            (default: 6640).  If <var>host</var>, which can either be a DNS
+            name (if built with unbound library) or an IP address, is
+            specified, then connections are restricted to the resolved or
+            specified local IP address.
           </dd>
         </dl>
       </column>

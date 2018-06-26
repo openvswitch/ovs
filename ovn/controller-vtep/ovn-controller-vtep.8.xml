@@ -39,28 +39,28 @@
     <ul>
       <li>
         <p>
-          <code>ssl:<var>ip</var>:<var>port</var></code>
+          <code>ssl:<var>host</var>:<var>port</var></code>
         </p>
         <p>
-          The specified SSL <var>port</var> on the host at the given
-          <var>ip</var>, which must be expressed as an IP address (not a DNS
-          name) in IPv4 or IPv6 address format.  If <var>ip</var> is an IPv6
-          address, then wrap <var>ip</var> with square brackets, e.g.:
-          <code>ssl:[::1]:6640</code>.  The <code>--private-key</code>,
-          <code>--certificate</code> and either of <code>--ca-cert</code>
-          or <code>--bootstrap-ca-cert</code> options are mandatory when this
-          form is used.
+          The specified SSL <var>port</var> on the give <var>host</var>, which
+          can either be a DNS name (if built with unbound library) or an IP
+          address (IPv4 or IPv6).  If <var>host</var> is an IPv6 address, then
+          wrap <var>host</var> with square brackets, e.g.: <code>ssl:[::1]:6640</code>.
+          The <code>--private-key</code>, <code>--certificate</code> and either
+          of <code>--ca-cert</code> or <code>--bootstrap-ca-cert</code> options
+          are mandatory when this form is used.
         </p>
       </li>
       <li>
         <p>
-          <code>tcp:<var>ip</var>:<var>port</var></code>
+          <code>tcp:<var>host</var>:<var>port</var></code>
         </p>
         <p>
-          Connect to the given TCP <var>port</var> on <var>ip</var>, where
-          <var>ip</var> can be IPv4 or IPv6 address. If <var>ip</var> is an
-          IPv6 address, then wrap <var>ip</var> with square brackets, e.g.:
-          <code>tcp:[::1]:6640</code>.
+          Connect to the given TCP <var>port</var> on <var>host</var>, where
+          <var>host</var> can be a DNS name (if built with unbound library) or
+          IP address (IPv4 or IPv6). If <var>host</var> is an IPv6 address,
+          then wrap <var>host</var> with square brackets,
+          e.g.: <code>tcp:[::1]:6640</code>.
         </p>
       </li>
       <li>

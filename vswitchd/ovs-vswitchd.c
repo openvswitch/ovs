@@ -51,6 +51,7 @@
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
 #include "lib/vswitch-idl.h"
+#include "lib/dns-resolve.h"
 
 VLOG_DEFINE_THIS_MODULE(vswitchd);
 
@@ -81,6 +82,7 @@ main(int argc, char *argv[])
     set_program_name(argv[0]);
     ovsthread_id_init();
 
+    dns_resolve_init(true);
     ovs_cmdl_proctitle_init(argc, argv);
     service_start(&argc, &argv);
     remote = parse_options(argc, argv, &unixctl_path);
@@ -141,6 +143,7 @@ main(int argc, char *argv[])
     service_stop();
     vlog_disable_async();
     ovsrcu_exit();
+    dns_resolve_destroy();
 
     return 0;
 }

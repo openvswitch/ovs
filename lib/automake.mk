@@ -465,6 +465,13 @@ else
 lib_libopenvswitch_la_SOURCES += lib/stream-nossl.c
 endif
 
+lib_libopenvswitch_la_SOURCES += lib/dns-resolve.h
+if HAVE_UNBOUND
+lib_libopenvswitch_la_SOURCES += lib/dns-resolve.c
+else
+lib_libopenvswitch_la_SOURCES += lib/dns-resolve-stub.c
+endif
+
 pkgconfig_DATA += \
 	lib/libopenvswitch.pc \
 	lib/libsflow.pc
