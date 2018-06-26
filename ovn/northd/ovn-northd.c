@@ -4659,8 +4659,7 @@ add_router_lb_flow(struct hmap *lflows, struct ovn_datapath *od,
     free(new_match);
     free(est_match);
 
-    if (!od->l3dgw_port || !od->l3redirect_port || !backend_ips
-            || addr_family != AF_INET) {
+    if (!od->l3dgw_port || !od->l3redirect_port || !backend_ips) {
         return;
     }
 
@@ -4669,7 +4668,11 @@ add_router_lb_flow(struct hmap *lflows, struct ovn_datapath *od,
      * router has a gateway router port associated.
      */
     struct ds undnat_match = DS_EMPTY_INITIALIZER;
-    ds_put_cstr(&undnat_match, "ip4 && (");
+    if (addr_family == AF_INET) {
+        ds_put_cstr(&undnat_match, "ip4 && (");
+    } else {
+        ds_put_cstr(&undnat_match, "ip6 && (");
+    }
     char *start, *next, *ip_str;
     start = next = xstrdup(backend_ips);
     ip_str = strsep(&next, ",");
@@ -4684,7 +4687,11 @@ add_router_lb_flow(struct hmap *lflows, struct ovn_datapath *od,
             break;
         }
 
-        ds_put_format(&undnat_match, "(ip4.src == %s", ip_address);
+        if (addr_family_ == AF_INET) {
+            ds_put_format(&undnat_match, "(ip4.src == %s", ip_address);
+        } else {
+            ds_put_format(&undnat_match, "(ip6.src == %s", ip_address);
+        }
         free(ip_address);
         if (port) {
             ds_put_format(&undnat_match, " && %s.src == %d) || ",
