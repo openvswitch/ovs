@@ -243,6 +243,7 @@ Mika Vaisanen                      mika.vaisanen@gmail.com
 Minoru TAKAHASHI                   takahashi.minoru7@gmail.com
 Murphy McCauley                    murphy.mccauley@gmail.com
 Natasha Gude                       natasha@nicira.com
+Neal Shrader                       neal@digitalocean.com
 Neil McKee                         neil.mckee@inmon.com
 Neil Zhu                           zhuj@centecnetworks.com
 Nimay Desai                        nimaydesai1@gmail.com
