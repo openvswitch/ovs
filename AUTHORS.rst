@@ -218,7 +218,7 @@ Luigi Rizzo                        rizzo@iet.unipi.it
 Luis E. P.                         l31g@hotmail.com
 Lukasz Rzasik                      lukasz.rzasik@gmail.com
 Madhu Challa                       challa@noironetworks.com
-Manohar Krishnappa Chidambaraswamy manohar.krishnappa.chidambaraswamy@ericsson.com
+Manohar K C                        manukc@gmail.com
 Marcin Mirecki                     mmirecki@redhat.com
 Mario Cabrera                      mario.cabrera@hpe.com
 Mark D. Gray                       mark.d.gray@intel.com
