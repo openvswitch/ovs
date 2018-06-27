@@ -89,7 +89,7 @@
 struct mac_learning;
 
 /* Default maximum size of a MAC learning table, in entries. */
-#define MAC_DEFAULT_MAX 2048
+#define MAC_DEFAULT_MAX 8192
 
 /* Time, in seconds, before expiring a mac_entry due to inactivity. */
 #define MAC_ENTRY_DEFAULT_IDLE_TIME 300
