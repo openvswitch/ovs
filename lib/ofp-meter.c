@@ -337,7 +337,7 @@ ofp_print_meter_flags(struct ds *s, enum ofp13_meter_flags flags)
 
     flags &= ~(OFPMF13_KBPS | OFPMF13_PKTPS | OFPMF13_BURST | OFPMF13_STATS);
     if (flags) {
-        ds_put_format(s, "flags:0x%x", (unsigned)flags);
+        ds_put_format(s, "flags:0x%x ", (unsigned)flags);
     }
 }
 
