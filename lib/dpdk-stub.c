@@ -56,6 +56,12 @@ dpdk_vhost_iommu_enabled(void)
     return false;
 }
 
+bool
+dpdk_per_port_memory(void)
+{
+    return false;
+}
+
 void
 print_dpdk_version(void)
 {

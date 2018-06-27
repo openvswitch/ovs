@@ -360,6 +360,23 @@
         </p>
       </column>
 
+      <column name="other_config" key="per-port-memory"
+              type='{"type": "boolean"}'>
+        <p>
+          By default OVS DPDK uses a shared memory model wherein devices
+          that have the same MTU and socket values can share the same
+          mempool. Setting this value to <code>true</code> changes this
+          behaviour. Per port memory allow DPDK devices to use private
+          memory per device. This can provide greater transparency as
+          regards memory usage but potentially at the cost of greater memory
+          requirements.
+        </p>
+        <p>
+          Changing this value requires restarting the daemon if dpdk-init has
+          already been set to true.
+        </p>
+      </column>
+
       <column name="other_config" key="tx-flush-interval"
               type='{"type": "integer",
                      "minInteger": 0, "maxInteger": 1000000}'>

@@ -35,6 +35,7 @@ Post-v2.9.0
      * Add LSC interrupt support for DPDK physical devices.
      * Allow init to fail and record DPDK status/version in OVS database.
      * Add experimental flow hardware offload support
+     * Support both shared and per port mempools for DPDK devices.
    - Userspace datapath:
      * Commands ovs-appctl dpif-netdev/pmd-*-show can now work on a single PMD
      * Detailed PMD performance metrics available with new command

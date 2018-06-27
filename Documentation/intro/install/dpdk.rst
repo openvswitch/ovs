@@ -170,6 +170,12 @@ Mount the hugepages, if not already mounted by default::
 
     $ mount -t hugetlbfs none /dev/hugepages``
 
+.. note::
+
+   The amount of hugepage memory required can be affected by various
+   aspects of the datapath and device configuration. Refer to
+   :doc:`/topics/dpdk/memory` for more details.
+
 .. _dpdk-vfio:
 
 Setup DPDK devices using VFIO
