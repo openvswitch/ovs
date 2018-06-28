@@ -1310,8 +1310,9 @@ nd_na {
         <p>
           UDP port unreachable.  Priority-80 flows generate ICMP port
           unreachable messages in reply to UDP datagrams directed to the
-          router's IP address.  The logical router doesn't accept any UDP
-          traffic so it always generates such a reply.
+          router's IP address, except in the special case of gateways,
+          which accept traffic directed to a router IP for load balancing
+          and NAT purposes.
         </p>
 
         <p>
@@ -1321,10 +1322,10 @@ nd_na {
 
       <li>
         <p>
-          TCP reset.  Priority-80 flows generate TCP reset messages in reply to
-          TCP datagrams directed to the router's IP address.  The logical
-          router doesn't accept any TCP traffic so it always generates such a
-          reply.
+          TCP reset.  Priority-80 flows generate TCP reset messages in reply
+          to TCP datagrams directed to the router's IP address, except in
+          the special case of gateways, which accept traffic directed to a
+          router IP for load balancing and NAT purposes.
         </p>
 
         <p>
@@ -1336,7 +1337,9 @@ nd_na {
         <p>
           Protocol unreachable.  Priority-70 flows generate ICMP protocol
           unreachable messages in reply to packets directed to the router's IP
-          address on IP protocols other than UDP, TCP, and ICMP.
+          address on IP protocols other than UDP, TCP, and ICMP, except in the
+          special case of gateways, which accept traffic directed to a router
+          IP for load balancing purposes.
         </p>
 
         <p>
