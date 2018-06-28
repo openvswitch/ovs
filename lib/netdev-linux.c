@@ -233,6 +233,18 @@ enum {
     VALID_FEATURES          = 1 << 7,
 };
 
+struct linux_lag_slave {
+   uint32_t block_id;
+   struct shash_node *node;
+};
+
+/* Protects 'lag_shash' and the mutable members of struct linux_lag_slave. */
+static struct ovs_mutex lag_mutex = OVS_MUTEX_INITIALIZER;
+
+/* All slaves whose LAG masters are network devices in OvS. */
+static struct shash lag_shash OVS_GUARDED_BY(lag_mutex)
+    = SHASH_INITIALIZER(&lag_shash);
+
 /* Traffic control. */
 
 /* An instance of a traffic control class.  Always associated with a particular
@@ -692,6 +704,61 @@ netdev_linux_kind_is_lag(const char *kind)
 }
 
 static void
+netdev_linux_update_lag(struct rtnetlink_change *change)
+    OVS_REQUIRES(lag_mutex)
+{
+    struct linux_lag_slave *lag;
+
+    if (!rtnetlink_type_is_rtnlgrp_link(change->nlmsg_type)) {
+        return;
+    }
+
+    if (change->slave && netdev_linux_kind_is_lag(change->slave)) {
+        lag = shash_find_data(&lag_shash, change->ifname);
+
+        if (!lag) {
+            struct netdev *master_netdev;
+            char master_name[IFNAMSIZ];
+            uint32_t block_id;
+            int error = 0;
+
+            if_indextoname(change->master_ifindex, master_name);
+            master_netdev = netdev_from_name(master_name);
+
+            if (is_netdev_linux_class(master_netdev->netdev_class)) {
+                block_id = netdev_get_block_id(master_netdev);
+                if (!block_id) {
+                   return;
+                }
+
+                lag = xmalloc(sizeof *lag);
+                lag->block_id = block_id;
+                lag->node = shash_add(&lag_shash, change->ifname, lag);
+
+                /* LAG master is linux netdev so add slave to same block. */
+                error = tc_add_del_ingress_qdisc(change->if_index, true,
+                                                 block_id);
+                if (error) {
+                    VLOG_WARN("failed to bind LAG slave to master's block");
+                    shash_delete(&lag_shash, lag->node);
+                    free(lag);
+                }
+            }
+        }
+    } else if (change->master_ifindex == 0) {
+        /* Check if this was a lag slave that has been freed. */
+        lag = shash_find_data(&lag_shash, change->ifname);
+
+        if (lag) {
+            tc_add_del_ingress_qdisc(change->if_index, false,
+                                     lag->block_id);
+            shash_delete(&lag_shash, lag->node);
+            free(lag);
+        }
+    }
+}
+
+static void
 netdev_linux_run(const struct netdev_class *netdev_class OVS_UNUSED)
 {
     struct nl_sock *sock;
@@ -733,6 +800,12 @@ netdev_linux_run(const struct netdev_class *netdev_class OVS_UNUSED)
                     ovs_mutex_lock(&netdev->mutex);
                     netdev_linux_update(netdev, nsid, &change);
                     ovs_mutex_unlock(&netdev->mutex);
+                }
+                else if (!netdev_ && change.ifname) {
+                    /* Netdev is not present in OvS but its master could be. */
+                    ovs_mutex_lock(&lag_mutex);
+                    netdev_linux_update_lag(&change);
+                    ovs_mutex_unlock(&lag_mutex);
                 }
                 netdev_close(netdev_);
             }
