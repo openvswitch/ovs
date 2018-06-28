@@ -48,6 +48,10 @@ struct rtnetlink_change {
 
     /* Network device address status. */
     /* xxx To be added when needed. */
+
+    /* Link info. */
+    const char *master;         /* Kind of master (NULL if not master). */
+    const char *slave;          /* Kind of slave (NULL if not slave). */
 };
 
 /* Function called to report that a netdev has changed.  'change' describes the

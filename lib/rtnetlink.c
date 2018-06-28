@@ -27,6 +27,10 @@
 #include "openvswitch/ofpbuf.h"
 #include "packets.h"
 
+#if IFLA_INFO_MAX < 5
+#define IFLA_INFO_SLAVE_KIND 4
+#endif
+
 static struct nln *nln = NULL;
 static struct rtnetlink_change rtn_change;
 
@@ -43,6 +47,36 @@ bool
 rtnetlink_type_is_rtnlgrp_addr(uint16_t type)
 {
     return type == RTM_NEWADDR || type == RTM_DELADDR;
+}
+
+/* Parses nested nlattr for link info. Returns false if unparseable, else
+ * populates 'change' and returns true. */
+static bool
+rtnetlink_parse_link_info(const struct nlattr *nla,
+                          struct rtnetlink_change *change)
+{
+    bool parsed = false;
+
+    static const struct nl_policy linkinfo_policy[] = {
+        [IFLA_INFO_KIND] = { .type = NL_A_STRING, .optional = true  },
+        [IFLA_INFO_SLAVE_KIND] = { .type = NL_A_STRING, .optional = true  },
+    };
+
+    struct nlattr *linkinfo[ARRAY_SIZE(linkinfo_policy)];
+
+    parsed = nl_parse_nested(nla, linkinfo_policy, linkinfo,
+                             ARRAY_SIZE(linkinfo_policy));
+
+    if (parsed) {
+        change->master = (linkinfo[IFLA_INFO_KIND]
+                          ? nl_attr_get_string(linkinfo[IFLA_INFO_KIND])
+                          : NULL);
+        change->slave = (linkinfo[IFLA_INFO_SLAVE_KIND]
+                         ? nl_attr_get_string(linkinfo[IFLA_INFO_SLAVE_KIND])
+                         : NULL);
+    }
+
+    return parsed;
 }
 
 /* Parses a rtnetlink message 'buf' into 'change'.  If 'buf' is unparseable,
@@ -64,6 +98,7 @@ rtnetlink_parse(struct ofpbuf *buf, struct rtnetlink_change *change)
             [IFLA_MASTER] = { .type = NL_A_U32,    .optional = true },
             [IFLA_MTU]    = { .type = NL_A_U32,    .optional = true },
             [IFLA_ADDRESS] = { .type = NL_A_UNSPEC, .optional = true },
+            [IFLA_LINKINFO] = { .type = NL_A_NESTED, .optional = true },
         };
 
         struct nlattr *attrs[ARRAY_SIZE(policy)];
@@ -93,6 +128,14 @@ rtnetlink_parse(struct ofpbuf *buf, struct rtnetlink_change *change)
                        ETH_ADDR_LEN);
             } else {
                 memset(&change->mac, 0, ETH_ADDR_LEN);
+            }
+
+            if (attrs[IFLA_LINKINFO]) {
+                parsed = rtnetlink_parse_link_info(attrs[IFLA_LINKINFO],
+                                                   change);
+            } else {
+                change->master = NULL;
+                change->slave = NULL;
             }
         }
     } else if (rtnetlink_type_is_rtnlgrp_addr(nlmsg->nlmsg_type)) {
