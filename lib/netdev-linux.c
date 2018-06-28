@@ -509,6 +509,9 @@ struct netdev_linux {
     int tap_fd;
     bool present;               /* If the device is present in the namespace */
     uint64_t tx_dropped;        /* tap device can drop if the iface is down */
+
+    /* LAG information. */
+    bool is_lag_master;         /* True if the netdev is a LAG master. */
 };
 
 struct netdev_rxq_linux {
@@ -678,6 +681,16 @@ netdev_linux_miimon_enabled(void)
     return atomic_count_get(&miimon_cnt) > 0;
 }
 
+static bool
+netdev_linux_kind_is_lag(const char *kind)
+{
+    if (!strcmp(kind, "bond") || !strcmp(kind, "team")) {
+        return true;
+    }
+
+    return false;
+}
+
 static void
 netdev_linux_run(const struct netdev_class *netdev_class OVS_UNUSED)
 {
@@ -810,6 +823,10 @@ netdev_linux_update__(struct netdev_linux *dev,
 
                 /* The mac addr has been changed, report it now. */
                 rtnetlink_report_link();
+            }
+
+            if (change->master && netdev_linux_kind_is_lag(change->master)) {
+                dev->is_lag_master = true;
             }
 
             dev->ifindex = change->if_index;
@@ -5763,6 +5780,9 @@ netdev_linux_update_via_netlink(struct netdev_linux *netdev)
             netdev->cache_valid |= VALID_IFINDEX;
             netdev->get_ifindex_error = 0;
             changed = true;
+        }
+        if (change->master && netdev_linux_kind_is_lag(change->master)) {
+            netdev->is_lag_master = true;
         }
         if (changed) {
             netdev_change_seq_changed(&netdev->up);
