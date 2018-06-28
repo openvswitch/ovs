@@ -2225,6 +2225,16 @@ netdev_init_flow_api(struct netdev *netdev)
             : EOPNOTSUPP);
 }
 
+uint32_t
+netdev_get_block_id(struct netdev *netdev)
+{
+    const struct netdev_class *class = netdev->netdev_class;
+
+    return (class->get_block_id
+            ? class->get_block_id(netdev)
+            : 0);
+}
+
 bool
 netdev_is_flow_api_enabled(void)
 {

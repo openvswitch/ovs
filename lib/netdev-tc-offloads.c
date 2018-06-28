@@ -304,6 +304,16 @@ get_prio_for_tc_flower(struct tc_flower *flower)
     return new_data->prio;
 }
 
+static uint32_t
+get_block_id_from_netdev(struct netdev *netdev)
+{
+    if (block_support) {
+        return netdev_get_block_id(netdev);
+    }
+
+    return 0;
+}
+
 int
 netdev_tc_flow_flush(struct netdev *netdev)
 {
@@ -315,6 +325,8 @@ netdev_tc_flow_flush(struct netdev *netdev)
                     netdev_get_name(netdev), ovs_strerror(-ifindex));
         return -ifindex;
     }
+
+    block_id = get_block_id_from_netdev(netdev);
 
     return tc_flush(ifindex, block_id);
 }
@@ -334,6 +346,7 @@ netdev_tc_flow_dump_create(struct netdev *netdev,
         return -ifindex;
     }
 
+    block_id = get_block_id_from_netdev(netdev);
     dump = xzalloc(sizeof *dump);
     dump->nl_dump = xzalloc(sizeof *dump->nl_dump);
     dump->netdev = netdev_ref(netdev);
@@ -1098,6 +1111,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         }
     }
 
+    block_id = get_block_id_from_netdev(netdev);
     handle = get_ufid_tc_mapping(ufid, &prio, NULL);
     if (handle && prio) {
         VLOG_DBG_RL(&rl, "updating old handle: %d prio: %d", handle, prio);
@@ -1157,6 +1171,7 @@ netdev_tc_flow_get(struct netdev *netdev OVS_UNUSED,
 
     VLOG_DBG_RL(&rl, "flow get (dev %s prio %d handle %d)",
                 netdev_get_name(dev), prio, handle);
+    block_id = get_block_id_from_netdev(netdev);
     err = tc_get_flower(ifindex, prio, handle, &flower, block_id);
     netdev_close(dev);
     if (err) {
@@ -1199,6 +1214,8 @@ netdev_tc_flow_del(struct netdev *netdev OVS_UNUSED,
         netdev_close(dev);
         return -ifindex;
     }
+
+    block_id = get_block_id_from_netdev(netdev);
 
     if (stats) {
         memset(stats, 0, sizeof *stats);
@@ -1289,6 +1306,7 @@ netdev_tc_init_flow_api(struct netdev *netdev)
         ovsthread_once_done(&block_once);
     }
 
+    block_id = get_block_id_from_netdev(netdev);
     error = tc_add_del_ingress_qdisc(ifindex, true, block_id);
 
     if (error && error != EEXIST) {

@@ -1050,7 +1050,8 @@ netdev_vport_get_ifindex(const struct netdev *netdev_)
     NULL,                   /* rx_wait */                   \
     NULL,                   /* rx_drain */                  \
                                                             \
-    NETDEV_FLOW_OFFLOAD_API
+    NETDEV_FLOW_OFFLOAD_API,                                 \
+    NULL                    /* get_block_id */
 
 
 #define TUNNEL_CLASS(NAME, DPIF_PORT, BUILD_HEADER, PUSH_HEADER, POP_HEADER,   \

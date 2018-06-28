@@ -3115,7 +3115,8 @@ exit:
     netdev_linux_rxq_wait,                                      \
     netdev_linux_rxq_drain,                                     \
                                                                 \
-    FLOW_OFFLOAD_API                                            \
+    FLOW_OFFLOAD_API,                                           \
+    NULL                        /* get_block_id */              \
 }
 
 const struct netdev_class netdev_linux_class =

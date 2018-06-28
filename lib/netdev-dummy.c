@@ -1464,7 +1464,8 @@ netdev_dummy_update_flags(struct netdev *netdev_,
     netdev_dummy_rxq_wait,                                      \
     netdev_dummy_rxq_drain,                                     \
                                                                 \
-    NO_OFFLOAD_API                                              \
+    NO_OFFLOAD_API,                                             \
+    NULL                        /* get_block_id */              \
 }
 
 static const struct netdev_class dummy_class =

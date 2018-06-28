@@ -870,6 +870,10 @@ struct netdev_class {
     /* Initializies the netdev flow api.
      * Return 0 if successful, otherwise returns a positive errno value. */
     int (*init_flow_api)(struct netdev *);
+
+    /* Get a block_id from the netdev.
+     * Returns the block_id or 0 if none exists for netdev. */
+    uint32_t (*get_block_id)(struct netdev *);
 };
 
 int netdev_register_provider(const struct netdev_class *);
