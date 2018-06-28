@@ -619,7 +619,7 @@ def ovs_checkpatch_parse(text, filename):
     parse = 0
     current_file = filename if checking_file else ''
     previous_file = ''
-    scissors = re.compile(r'^[\w]*---[\w]*')
+    seppatch = re.compile(r'^---([\w]*| \S+)$')
     hunks = re.compile('^(---|\+\+\+) (\S+)')
     hunk_differences = re.compile(
         r'^@@ ([0-9-+]+),([0-9-+]+) ([0-9-+]+),([0-9-+]+) @@')
@@ -652,7 +652,7 @@ def ovs_checkpatch_parse(text, filename):
                 print_file_name = current_file
             continue
         elif parse == PARSE_STATE_HEADING:
-            if scissors.match(line):
+            if seppatch.match(line):
                 parse = PARSE_STATE_DIFF_HEADER
                 if not skip_signoff_check:
                     if len(signatures) == 0:
