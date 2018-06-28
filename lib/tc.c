@@ -43,6 +43,14 @@
 
 #define MAX_PEDIT_OFFSETS 32
 
+#ifndef TCM_IFINDEX_MAGIC_BLOCK
+#define TCM_IFINDEX_MAGIC_BLOCK (0xFFFFFFFFU)
+#endif
+
+#if TCA_MAX < 14
+#define TCA_INGRESS_BLOCK 13
+#endif
+
 VLOG_DEFINE_THIS_MODULE(tc);
 
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(60, 5);
@@ -173,10 +181,14 @@ tc_transact(struct ofpbuf *request, struct ofpbuf **replyp)
  * The configuration and stats may be seen with the following command:
  *     /sbin/tc -s qdisc show dev <devname>
  *
+ * If block_id is greater than 0, then the ingress qdisc is added to a block.
+ * In this case, it is equivalent to running (when 'add' is true):
+ *     /sbin/tc qdisc add dev <devname> ingress_block <block_id> ingress
+ *
  * Returns 0 if successful, otherwise a positive errno value.
  */
 int
-tc_add_del_ingress_qdisc(int ifindex, bool add)
+tc_add_del_ingress_qdisc(int ifindex, bool add, uint32_t block_id)
 {
     struct ofpbuf request;
     struct tcmsg *tcmsg;
@@ -189,6 +201,9 @@ tc_add_del_ingress_qdisc(int ifindex, bool add)
     tcmsg->tcm_parent = TC_H_INGRESS;
     nl_msg_put_string(&request, TCA_KIND, "ingress");
     nl_msg_put_unspec(&request, TCA_OPTIONS, NULL, 0);
+    if (block_id) {
+        nl_msg_put_u32(&request, TCA_INGRESS_BLOCK, block_id);
+    }
 
     error = tc_transact(&request, NULL);
     if (error) {
@@ -1007,13 +1022,15 @@ parse_netlink_to_tc_flower(struct ofpbuf *reply, struct tc_flower *flower)
 }
 
 int
-tc_dump_flower_start(int ifindex, struct nl_dump *dump)
+tc_dump_flower_start(int ifindex, struct nl_dump *dump, uint32_t block_id)
 {
     struct ofpbuf request;
     struct tcmsg *tcmsg;
+    int index;
 
-    tcmsg = tc_make_request(ifindex, RTM_GETTFILTER, NLM_F_DUMP, &request);
-    tcmsg->tcm_parent = TC_INGRESS_PARENT;
+    index = block_id ? TCM_IFINDEX_MAGIC_BLOCK : ifindex;
+    tcmsg = tc_make_request(index, RTM_GETTFILTER, NLM_F_DUMP, &request);
+    tcmsg->tcm_parent = block_id ? : TC_INGRESS_PARENT;
     tcmsg->tcm_info = TC_H_UNSPEC;
     tcmsg->tcm_handle = 0;
 
@@ -1024,28 +1041,32 @@ tc_dump_flower_start(int ifindex, struct nl_dump *dump)
 }
 
 int
-tc_flush(int ifindex)
+tc_flush(int ifindex, uint32_t block_id)
 {
     struct ofpbuf request;
     struct tcmsg *tcmsg;
+    int index;
 
-    tcmsg = tc_make_request(ifindex, RTM_DELTFILTER, NLM_F_ACK, &request);
-    tcmsg->tcm_parent = TC_INGRESS_PARENT;
+    index = block_id ? TCM_IFINDEX_MAGIC_BLOCK : ifindex;
+    tcmsg = tc_make_request(index, RTM_DELTFILTER, NLM_F_ACK, &request);
+    tcmsg->tcm_parent = block_id ? : TC_INGRESS_PARENT;
     tcmsg->tcm_info = TC_H_UNSPEC;
 
     return tc_transact(&request, NULL);
 }
 
 int
-tc_del_filter(int ifindex, int prio, int handle)
+tc_del_filter(int ifindex, int prio, int handle, uint32_t block_id)
 {
     struct ofpbuf request;
     struct tcmsg *tcmsg;
     struct ofpbuf *reply;
     int error;
+    int index;
 
-    tcmsg = tc_make_request(ifindex, RTM_DELTFILTER, NLM_F_ECHO, &request);
-    tcmsg->tcm_parent = TC_INGRESS_PARENT;
+    index = block_id ? TCM_IFINDEX_MAGIC_BLOCK : ifindex;
+    tcmsg = tc_make_request(index, RTM_DELTFILTER, NLM_F_ECHO, &request);
+    tcmsg->tcm_parent = block_id ? : TC_INGRESS_PARENT;
     tcmsg->tcm_info = tc_make_handle(prio, 0);
     tcmsg->tcm_handle = handle;
 
@@ -1057,15 +1078,18 @@ tc_del_filter(int ifindex, int prio, int handle)
 }
 
 int
-tc_get_flower(int ifindex, int prio, int handle, struct tc_flower *flower)
+tc_get_flower(int ifindex, int prio, int handle, struct tc_flower *flower,
+              uint32_t block_id)
 {
     struct ofpbuf request;
     struct tcmsg *tcmsg;
     struct ofpbuf *reply;
     int error;
+    int index;
 
-    tcmsg = tc_make_request(ifindex, RTM_GETTFILTER, NLM_F_ECHO, &request);
-    tcmsg->tcm_parent = TC_INGRESS_PARENT;
+    index = block_id ? TCM_IFINDEX_MAGIC_BLOCK : ifindex;
+    tcmsg = tc_make_request(index, RTM_GETTFILTER, NLM_F_ECHO, &request);
+    tcmsg->tcm_parent = block_id ? : TC_INGRESS_PARENT;
     tcmsg->tcm_info = tc_make_handle(prio, 0);
     tcmsg->tcm_handle = handle;
 
@@ -1625,7 +1649,7 @@ nl_msg_put_flower_options(struct ofpbuf *request, struct tc_flower *flower)
 
 int
 tc_replace_flower(int ifindex, uint16_t prio, uint32_t handle,
-                  struct tc_flower *flower)
+                  struct tc_flower *flower, uint32_t block_id)
 {
     struct ofpbuf request;
     struct tcmsg *tcmsg;
@@ -1633,10 +1657,12 @@ tc_replace_flower(int ifindex, uint16_t prio, uint32_t handle,
     int error = 0;
     size_t basic_offset;
     uint16_t eth_type = (OVS_FORCE uint16_t) flower->key.eth_type;
+    int index;
 
-    tcmsg = tc_make_request(ifindex, RTM_NEWTFILTER,
-                            NLM_F_CREATE | NLM_F_ECHO, &request);
-    tcmsg->tcm_parent = TC_INGRESS_PARENT;
+    index = block_id ? TCM_IFINDEX_MAGIC_BLOCK : ifindex;
+    tcmsg = tc_make_request(index, RTM_NEWTFILTER, NLM_F_CREATE | NLM_F_ECHO,
+                            &request);
+    tcmsg->tcm_parent = block_id ? : TC_INGRESS_PARENT;
     tcmsg->tcm_info = tc_make_handle(prio, eth_type);
     tcmsg->tcm_handle = handle;
 

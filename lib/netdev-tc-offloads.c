@@ -44,6 +44,7 @@ static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(60, 5);
 
 static struct hmap ufid_tc = HMAP_INITIALIZER(&ufid_tc);
 static bool multi_mask_per_prio = false;
+static bool block_support = false;
 
 struct netlink_field {
     int offset;
@@ -307,6 +308,7 @@ int
 netdev_tc_flow_flush(struct netdev *netdev)
 {
     int ifindex = netdev_get_ifindex(netdev);
+    uint32_t block_id = 0;
 
     if (ifindex < 0) {
         VLOG_ERR_RL(&error_rl, "flow_flush: failed to get ifindex for %s: %s",
@@ -314,7 +316,7 @@ netdev_tc_flow_flush(struct netdev *netdev)
         return -ifindex;
     }
 
-    return tc_flush(ifindex);
+    return tc_flush(ifindex, block_id);
 }
 
 int
@@ -322,6 +324,7 @@ netdev_tc_flow_dump_create(struct netdev *netdev,
                            struct netdev_flow_dump **dump_out)
 {
     struct netdev_flow_dump *dump;
+    uint32_t block_id = 0;
     int ifindex;
 
     ifindex = netdev_get_ifindex(netdev);
@@ -334,7 +337,7 @@ netdev_tc_flow_dump_create(struct netdev *netdev,
     dump = xzalloc(sizeof *dump);
     dump->nl_dump = xzalloc(sizeof *dump->nl_dump);
     dump->netdev = netdev_ref(netdev);
-    tc_dump_flower_start(ifindex, dump->nl_dump);
+    tc_dump_flower_start(ifindex, dump->nl_dump, block_id);
 
     *dump_out = dump;
 
@@ -890,6 +893,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     struct flow *mask = &match->wc.masks;
     const struct flow_tnl *tnl = &match->flow.tunnel;
     struct tc_action *action;
+    uint32_t block_id = 0;
     struct nlattr *nla;
     size_t left;
     int prio = 0;
@@ -1097,7 +1101,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     handle = get_ufid_tc_mapping(ufid, &prio, NULL);
     if (handle && prio) {
         VLOG_DBG_RL(&rl, "updating old handle: %d prio: %d", handle, prio);
-        tc_del_filter(ifindex, prio, handle);
+        tc_del_filter(ifindex, prio, handle, block_id);
     }
 
     if (!prio) {
@@ -1111,7 +1115,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     flower.act_cookie.data = ufid;
     flower.act_cookie.len = sizeof *ufid;
 
-    err = tc_replace_flower(ifindex, prio, handle, &flower);
+    err = tc_replace_flower(ifindex, prio, handle, &flower, block_id);
     if (!err) {
         add_ufid_tc_mapping(ufid, flower.prio, flower.handle, netdev, ifindex);
     }
@@ -1131,6 +1135,7 @@ netdev_tc_flow_get(struct netdev *netdev OVS_UNUSED,
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
     struct netdev *dev;
     struct tc_flower flower;
+    uint32_t block_id = 0;
     odp_port_t in_port;
     int prio = 0;
     int ifindex;
@@ -1152,7 +1157,7 @@ netdev_tc_flow_get(struct netdev *netdev OVS_UNUSED,
 
     VLOG_DBG_RL(&rl, "flow get (dev %s prio %d handle %d)",
                 netdev_get_name(dev), prio, handle);
-    err = tc_get_flower(ifindex, prio, handle, &flower);
+    err = tc_get_flower(ifindex, prio, handle, &flower, block_id);
     netdev_close(dev);
     if (err) {
         VLOG_ERR_RL(&error_rl, "flow get failed (dev %s prio %d handle %d): %s",
@@ -1175,6 +1180,7 @@ netdev_tc_flow_del(struct netdev *netdev OVS_UNUSED,
                    struct dpif_flow_stats *stats)
 {
     struct tc_flower flower;
+    uint32_t block_id = 0;
     struct netdev *dev;
     int prio = 0;
     int ifindex;
@@ -1196,14 +1202,14 @@ netdev_tc_flow_del(struct netdev *netdev OVS_UNUSED,
 
     if (stats) {
         memset(stats, 0, sizeof *stats);
-        if (!tc_get_flower(ifindex, prio, handle, &flower)) {
+        if (!tc_get_flower(ifindex, prio, handle, &flower, block_id)) {
             stats->n_packets = get_32aligned_u64(&flower.stats.n_packets);
             stats->n_bytes = get_32aligned_u64(&flower.stats.n_bytes);
             stats->used = flower.lastused;
         }
     }
 
-    error = tc_del_filter(ifindex, prio, handle);
+    error = tc_del_filter(ifindex, prio, handle, block_id);
     del_ufid_tc_mapping(ufid);
 
     netdev_close(dev);
@@ -1212,7 +1218,7 @@ netdev_tc_flow_del(struct netdev *netdev OVS_UNUSED,
 }
 
 static void
-probe_multi_mask_per_prio(int ifindex)
+probe_multi_mask_per_prio(int ifindex, uint32_t block_id)
 {
     struct tc_flower flower;
     int error;
@@ -1224,7 +1230,7 @@ probe_multi_mask_per_prio(int ifindex)
     memset(&flower.key.dst_mac, 0x11, sizeof flower.key.dst_mac);
     memset(&flower.mask.dst_mac, 0xff, sizeof flower.mask.dst_mac);
 
-    error = tc_replace_flower(ifindex, 1, 1, &flower);
+    error = tc_replace_flower(ifindex, 1, 1, &flower, block_id);
     if (error) {
         return;
     }
@@ -1232,23 +1238,42 @@ probe_multi_mask_per_prio(int ifindex)
     memset(&flower.key.src_mac, 0x11, sizeof flower.key.src_mac);
     memset(&flower.mask.src_mac, 0xff, sizeof flower.mask.src_mac);
 
-    error = tc_replace_flower(ifindex, 1, 2, &flower);
-    tc_del_filter(ifindex, 1, 1);
+    error = tc_replace_flower(ifindex, 1, 2, &flower, block_id);
+    tc_del_filter(ifindex, 1, 1, block_id);
 
     if (error) {
         return;
     }
 
-    tc_del_filter(ifindex, 1, 2);
+    tc_del_filter(ifindex, 1, 2, block_id);
 
     multi_mask_per_prio = true;
     VLOG_INFO("probe tc: multiple masks on single tc prio is supported.");
 }
 
+static void
+probe_tc_block_support(int ifindex)
+{
+    uint32_t block_id = 1;
+    int error;
+
+    error = tc_add_del_ingress_qdisc(ifindex, true, block_id);
+    if (error) {
+        return;
+    }
+
+    tc_add_del_ingress_qdisc(ifindex, false, block_id);
+
+    block_support = true;
+    VLOG_INFO("probe tc: block offload is supported.");
+}
+
 int
 netdev_tc_init_flow_api(struct netdev *netdev)
 {
-    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+    static struct ovsthread_once multi_mask_once = OVSTHREAD_ONCE_INITIALIZER;
+    static struct ovsthread_once block_once = OVSTHREAD_ONCE_INITIALIZER;
+    uint32_t block_id = 0;
     int ifindex;
     int error;
 
@@ -1259,7 +1284,12 @@ netdev_tc_init_flow_api(struct netdev *netdev)
         return -ifindex;
     }
 
-    error = tc_add_del_ingress_qdisc(ifindex, true);
+    if (ovsthread_once_start(&block_once)) {
+        probe_tc_block_support(ifindex);
+        ovsthread_once_done(&block_once);
+    }
+
+    error = tc_add_del_ingress_qdisc(ifindex, true, block_id);
 
     if (error && error != EEXIST) {
         VLOG_ERR("failed adding ingress qdisc required for offloading: %s",
@@ -1269,9 +1299,9 @@ netdev_tc_init_flow_api(struct netdev *netdev)
 
     VLOG_INFO("added ingress qdisc to %s", netdev_get_name(netdev));
 
-    if (ovsthread_once_start(&once)) {
-        probe_multi_mask_per_prio(ifindex);
-        ovsthread_once_done(&once);
+    if (ovsthread_once_start(&multi_mask_once)) {
+        probe_multi_mask_per_prio(ifindex, block_id);
+        ovsthread_once_done(&multi_mask_once);
     }
 
     return 0;
