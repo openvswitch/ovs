@@ -2945,6 +2945,27 @@ netdev_internal_get_status(const struct netdev *netdev OVS_UNUSED,
     return 0;
 }
 
+static uint32_t
+netdev_linux_get_block_id(struct netdev *netdev_)
+{
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    uint32_t block_id = 0;
+
+    ovs_mutex_lock(&netdev->mutex);
+    /* Ensure the linux netdev has had its fields populated. */
+    if (!(netdev->cache_valid & VALID_IFINDEX)) {
+        netdev_linux_update_via_netlink(netdev);
+    }
+
+    /* Only assigning block ids to linux netdevs that are LAG masters. */
+    if (netdev->is_lag_master) {
+        block_id = netdev->ifindex;
+    }
+    ovs_mutex_unlock(&netdev->mutex);
+
+    return block_id;
+}
+
 /* Looks up the ARP table entry for 'ip' on 'netdev'.  If one exists and can be
  * successfully retrieved, it stores the corresponding MAC address in 'mac' and
  * returns 0.  Otherwise, it returns a positive errno value; in particular,
@@ -3060,7 +3081,7 @@ exit:
 
 #define NETDEV_LINUX_CLASS(NAME, CONSTRUCT, GET_STATS,          \
                            GET_FEATURES, GET_STATUS,            \
-                           FLOW_OFFLOAD_API)                    \
+                           FLOW_OFFLOAD_API, GET_BLOCK_ID)      \
 {                                                               \
     NAME,                                                       \
     false,                      /* is_pmd */                    \
@@ -3133,7 +3154,7 @@ exit:
     netdev_linux_rxq_drain,                                     \
                                                                 \
     FLOW_OFFLOAD_API,                                           \
-    NULL                        /* get_block_id */              \
+    GET_BLOCK_ID                                                \
 }
 
 const struct netdev_class netdev_linux_class =
@@ -3143,7 +3164,8 @@ const struct netdev_class netdev_linux_class =
         netdev_linux_get_stats,
         netdev_linux_get_features,
         netdev_linux_get_status,
-        LINUX_FLOW_OFFLOAD_API);
+        LINUX_FLOW_OFFLOAD_API,
+        netdev_linux_get_block_id);
 
 const struct netdev_class netdev_tap_class =
     NETDEV_LINUX_CLASS(
@@ -3152,7 +3174,8 @@ const struct netdev_class netdev_tap_class =
         netdev_tap_get_stats,
         netdev_linux_get_features,
         netdev_linux_get_status,
-        NO_OFFLOAD_API);
+        NO_OFFLOAD_API,
+        NULL);
 
 const struct netdev_class netdev_internal_class =
     NETDEV_LINUX_CLASS(
@@ -3161,7 +3184,8 @@ const struct netdev_class netdev_internal_class =
         netdev_internal_get_stats,
         NULL,                  /* get_features */
         netdev_internal_get_status,
-        NO_OFFLOAD_API);
+        NO_OFFLOAD_API,
+        NULL);
 
 
 #define CODEL_N_QUEUES 0x0000
