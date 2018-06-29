@@ -91,6 +91,22 @@ m4_define([CHECK_CONNTRACK_FRAG])
 # needed.
 m4_define([CHECK_CONNTRACK_LOCAL_STACK])
 
+# CHECK_CONNTRACK_FRAG_OVERLAP()
+#
+# The kernel does not support overlapping fragments checking.
+m4_define([CHECK_CONNTRACK_FRAG_OVERLAP],
+[
+    AT_SKIP_IF([:])
+])
+
+# CHECK_CONNTRACK_FRAG_IPV6_MULT_EXTEN()
+#
+# The kernel does not support fragments with multiple extension headers.
+m4_define([CHECK_CONNTRACK_FRAG_IPV6_MULT_EXTEN],
+[
+    AT_SKIP_IF([:])
+])
+
 # CHECK_CONNTRACK_NAT()
 #
 # Perform requirements checks for running conntrack NAT tests. The kernel
