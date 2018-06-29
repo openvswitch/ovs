@@ -443,6 +443,11 @@ struct dpif_class {
     int (*ct_get_maxconns)(struct dpif *, uint32_t *maxconns);
     /* Get number of connections tracked. */
     int (*ct_get_nconns)(struct dpif *, uint32_t *nconns);
+    int (*ct_get_invl_stats)(struct dpif *, unsigned int *,
+         unsigned int *, unsigned int *, unsigned int *,
+         unsigned int *, unsigned int *, unsigned int *,
+         unsigned int *, unsigned int *, unsigned int *,
+         unsigned int *, unsigned int *, unsigned int *);
 
     /* Meters */
 

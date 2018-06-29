@@ -200,6 +200,19 @@ int ct_dpif_flush(struct dpif *, const uint16_t *zone,
 int ct_dpif_set_maxconns(struct dpif *dpif, uint32_t maxconns);
 int ct_dpif_get_maxconns(struct dpif *dpif, uint32_t *maxconns);
 int ct_dpif_get_nconns(struct dpif *dpif, uint32_t *nconns);
+int ct_dpif_get_invl_stats(struct dpif *dpif, unsigned int *min_hdr_err_v4,
+                           unsigned int *size_err_v4,
+                           unsigned int *cksum_err_v4,
+                           unsigned int *min_hdr_err_v6,
+                           unsigned int *hdr_parse_err_v6,
+                           unsigned int *hdr_size_err_tcp,
+                           unsigned int *size_err_tcp,
+                           unsigned int *cksum_err_tcp,
+                           unsigned int *hdr_size_err_udp,
+                           unsigned int *size_err_udp,
+                           unsigned int *cksum_err_udp,
+                           unsigned int *cksum_err_icmp,
+                           unsigned int *cksum_err_icmp6);
 void ct_dpif_entry_uninit(struct ct_dpif_entry *);
 void ct_dpif_format_entry(const struct ct_dpif_entry *, struct ds *,
                           bool verbose, bool print_stats);

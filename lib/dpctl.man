@@ -244,7 +244,8 @@ An example of an IPv6 TCP \fIct-tuple\fR:
 Displays the number of connections grouped by protocol used by \fIdp\fR.
 If \fBzone=\fIzone\fR is specified, numbers refer to the connections in
 \fIzone\fR.  With \fB\-\-more\fR, groups by connection state for each
-protocol.
+protocol.  Prints global invalid packet stats for the userspace connection
+tracker; typically, a rule is in place to drop invalid flagged packets.
 .
 .TP
 \*(DX\fBct\-bkts\fR [\fIdp\fR] [\fBgt=\fIthreshold\fR]
