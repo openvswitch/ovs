@@ -93,6 +93,22 @@ m4_define([CHECK_CONNTRACK_LOCAL_STACK],
     AT_SKIP_IF([:])
 ])
 
+# CHECK_CONNTRACK_FRAG_OVERLAP()
+#
+# The userspace datapath does not support fragments yet.
+m4_define([CHECK_CONNTRACK_FRAG_OVERLAP],
+[
+    AT_SKIP_IF([:])
+])
+
+# CHECK_CONNTRACK_FRAG_IPV6_MULT_EXTEN()
+#
+# The userspace datapath does not support fragments yet.
+m4_define([CHECK_CONNTRACK_FRAG_IPV6_MULT_EXTEN],
+[
+    AT_SKIP_IF([:])
+])
+
 # CHECK_CONNTRACK_NAT()
 #
 # Perform requirements checks for running conntrack NAT tests. The userspace
