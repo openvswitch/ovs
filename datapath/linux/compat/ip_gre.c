@@ -208,10 +208,9 @@ static int erspan_rcv(struct sk_buff *skb, struct tnl_ptk_info *tpi,
 	 * Use ERSPAN 10-bit session ID as key.
 	 */
 	tpi->key = cpu_to_be32(get_session_id(ershdr));
-	/* OVS doesn't set tunnel key - so don't bother with it */
 	tunnel = ip_tunnel_lookup(itn, skb->dev->ifindex,
 				  tpi->flags,
-				  iph->saddr, iph->daddr, 0);
+				  iph->saddr, iph->daddr, tpi->key);
 
 	if (tunnel) {
 		len = gre_hdr_len + erspan_hdr_len(ver);

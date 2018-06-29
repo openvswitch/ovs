@@ -749,6 +749,10 @@ skip_key_lookup:
 	if (cand)
 		return cand;
 
+	t = rcu_dereference(itn->collect_md_tun);
+	if (t)
+		return t;
+
 	if (itn->fb_tunnel_dev && itn->fb_tunnel_dev->flags & IFF_UP)
 		return netdev_priv(itn->fb_tunnel_dev);
 
