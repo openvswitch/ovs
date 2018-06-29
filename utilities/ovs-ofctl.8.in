@@ -459,16 +459,17 @@ described in section \fBMeter Syntax\fR, below.
 .IP "\fBmod\-meter \fIswitch meter\fR"
 Modify an existing meter.
 .
-.IP "\fBdel\-meters \fIswitch\fR"
-.IQ "\fBdel\-meter \fIswitch\fR [\fImeter\fR]"
-Delete entries from \fIswitch\fR's meter table.  \fImeter\fR can specify
-a single meter with syntax \fBmeter=\fIid\fR, or all meters with syntax
-\fBmeter=all\fR.
+.IP "\fBdel\-meters \fIswitch\fR [\fImeter\fR]"
+Delete entries from \fIswitch\fR's meter table.  To delete only a
+specific meter, specify its number as \fImeter\fR.  Otherwise, if
+\fImeter\fR is omitted, or if it is specified as \fBall\fR, then all
+meters are deleted.
 .
-.IP "\fBdump\-meters \fIswitch\fR"
-.IQ "\fBdump\-meter \fIswitch\fR [\fImeter\fR]"
-Print meter configuration.  \fImeter\fR can specify a single meter with
-syntax \fBmeter=\fIid\fR, or all meters with syntax \fBmeter=all\fR.
+.IP "\fBdump\-meters \fIswitch\fR [\fImeter\fR]"
+Print entries from \fIswitch\fR's meter table.  To print only a
+specific meter, specify its number as \fImeter\fR.  Otherwise, if
+\fImeter\fR is omitted, or if it is specified as \fBall\fR, then all
+meters are printed.
 .
 .IP "\fBmeter\-stats \fIswitch\fR [\fImeter\fR]"
 Print meter statistics.  \fImeter\fR can specify a single meter with

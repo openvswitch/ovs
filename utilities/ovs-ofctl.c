@@ -477,10 +477,8 @@ usage(void)
            "  queue-get-config SWITCH [PORT]  print queue config for PORT\n"
            "  add-meter SWITCH METER      add meter described by METER\n"
            "  mod-meter SWITCH METER      modify specific METER\n"
-           "  del-meter SWITCH METER      delete METER\n"
-           "  del-meters SWITCH           delete all meters\n"
-           "  dump-meter SWITCH METER     print METER configuration\n"
-           "  dump-meters SWITCH          print all meter configuration\n"
+           "  del-meters SWITCH [METER]   delete meters matching METER\n"
+           "  dump-meters SWITCH [METER]  print METER configuration\n"
            "  meter-stats SWITCH [METER]  print meter statistics\n"
            "  meter-features SWITCH       print meter features\n"
            "  add-tlv-map SWITCH MAP      add TLV option MAPpings\n"
@@ -4844,13 +4842,13 @@ static const struct ovs_cmdl_command all_commands[] = {
     { "mod-meter", "switch meter",
       2, 2, ofctl_mod_meter, OVS_RW },
     { "del-meter", "switch meter",
-      2, 2, ofctl_del_meters, OVS_RW },
+      1, 2, ofctl_del_meters, OVS_RW },
     { "del-meters", "switch",
-      1, 1, ofctl_del_meters, OVS_RW },
+      1, 2, ofctl_del_meters, OVS_RW },
     { "dump-meter", "switch meter",
-      2, 2, ofctl_dump_meters, OVS_RO },
+      1, 2, ofctl_dump_meters, OVS_RO },
     { "dump-meters", "switch",
-      1, 1, ofctl_dump_meters, OVS_RO },
+      1, 2, ofctl_dump_meters, OVS_RO },
     { "meter-stats", "switch [meter]",
       1, 2, ofctl_meter_stats, OVS_RO },
     { "meter-features", "switch",
