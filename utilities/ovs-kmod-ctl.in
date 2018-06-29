@@ -72,6 +72,25 @@ remove_kmods() {
     if test -e /sys/module/openvswitch; then
         action "Removing openvswitch module" rmmod openvswitch
     fi
+
+    # Older releases may be using the rtnetlink interface while a
+    # newer release will want to use the internal compat interface
+    # for geneve and vxlan.
+    if test -e /sys/class/net/genev_sys_6081; then
+        action "Removing geneve device" \
+                ip link del link genev_sys_6081 dev genev_sys_6081
+    fi
+    if test -e /sys/class/net/vxlan_sys_4789; then
+        action "Removing vxlan device" \
+                ip link del link vxlan_sys_4789 dev vxlan_sys_4789
+    fi
+
+    if test -e /sys/module/geneve; then
+        action "Forcing removal of geneve module" rmmod geneve
+    fi
+    if test -e /sys/module/vxlan; then
+        action "Forcing removal of vxlan module" rmmod vxlan
+    fi
 }
 
 usage () {
