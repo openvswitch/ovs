@@ -605,6 +605,7 @@ force_reload_kmod () {
     stop_ovsdb
     start_ovsdb || return 1
 
+    action "Flush old conntrack entries" ovs-appctl dpctl/flush-conntrack
     stop_forwarding
 
     if action "Saving interface configuration" save_interfaces; then
@@ -620,7 +621,6 @@ force_reload_kmod () {
     for dp in `ovs-dpctl dump-dps`; do
         action "Removing datapath: $dp" ovs-dpctl del-dp "$dp"
     done
-    action "ovs-appctl dpctl/flush-conntrack"
 
     ovs_kmod_ctl remove
 
