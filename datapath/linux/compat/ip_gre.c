@@ -552,10 +552,12 @@ netdev_tx_t rpl_gre_fb_xmit(struct sk_buff *skb)
 			goto err_free_rt;
 	}
 
-	skb = __vlan_hwaccel_push_inside(skb);
-	if (unlikely(!skb)) {
-		err = -ENOMEM;
-		goto err_free_rt;
+	if (skb_vlan_tag_present(skb)) {
+		skb = __vlan_hwaccel_push_inside(skb);
+		if (unlikely(!skb)) {
+			err = -ENOMEM;
+			goto err_free_rt;
+		}
 	}
 
 	/* Push Tunnel header. */
