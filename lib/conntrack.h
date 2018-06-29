@@ -122,6 +122,19 @@ int conntrack_flush_tuple(struct conntrack *, const struct ct_dpif_tuple *,
 int conntrack_set_maxconns(struct conntrack *ct, uint32_t maxconns);
 int conntrack_get_maxconns(struct conntrack *ct, uint32_t *maxconns);
 int conntrack_get_nconns(struct conntrack *ct, uint32_t *nconns);
+int conntrack_get_invl_stats(unsigned int *ct_min_hdr_err_v4,
+                             unsigned int *ct_size_err_v4,
+                             unsigned int *ct_cksum_err_v4,
+                             unsigned int *ct_min_hdr_err_v6,
+                             unsigned int *ct_hdr_parse_err_v6,
+                             unsigned int *ct_hdr_size_err_tcp,
+                             unsigned int *ct_size_err_tcp,
+                             unsigned int *ct_cksum_err_tcp,
+                             unsigned int *ct_hdr_size_err_udp,
+                             unsigned int *ct_size_err_udp,
+                             unsigned int *ct_cksum_err_udp,
+                             unsigned int *ct_cksum_err_icmp,
+                             unsigned int *ct_cksum_err_icmp6);
 
 /* 'struct ct_lock' is a wrapper for an adaptive mutex.  It's useful to try
  * different types of locks (e.g. spinlocks) */

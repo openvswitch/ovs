@@ -1381,6 +1381,67 @@ error:
     return error;
 }
 
+static void
+ct_print_invalid_stats(struct dpctl_params *dpctl_p, struct dpif *dpif)
+{
+    if (dpif) {
+        unsigned int min_hdr_err_v4;
+        unsigned int size_err_v4;
+        unsigned int cksum_err_v4;
+        unsigned int min_hdr_err_v6;
+        unsigned int hdr_parse_err_v6;
+        unsigned int hdr_size_err_tcp;
+        unsigned int size_err_tcp;
+        unsigned int cksum_err_tcp;
+        unsigned int hdr_size_err_udp;
+        unsigned int size_err_udp;
+        unsigned int cksum_err_udp;
+        unsigned int cksum_err_icmp;
+        unsigned int cksum_err_icmp6;
+        int error = ct_dpif_get_invl_stats(dpif, &min_hdr_err_v4, &size_err_v4,
+                                           &cksum_err_v4, &min_hdr_err_v6,
+                                           &hdr_parse_err_v6,
+                                           &hdr_size_err_tcp, &size_err_tcp,
+                                           &cksum_err_tcp,
+                                           &hdr_size_err_udp, &size_err_udp,
+                                           &cksum_err_udp, &cksum_err_icmp,
+                                           &cksum_err_icmp6);
+
+        if (!error) {
+            dpctl_print(dpctl_p, "\nConnTracker Invalid Packet Stats:\n");
+            dpctl_print(dpctl_p, "v4 minimum header errors: %u\n",
+                        min_hdr_err_v4);
+            dpctl_print(dpctl_p, "v4 packet size errors: %u\n",
+                        size_err_v4);
+            dpctl_print(dpctl_p, "v4 checksum errors: %u\n",
+                        cksum_err_v4);
+            dpctl_print(dpctl_p, "v6 minimum header errors: %u\n",
+                        min_hdr_err_v6);
+            dpctl_print(dpctl_p, "v6 parse errors: %u\n",
+                        hdr_parse_err_v6);
+            dpctl_print(dpctl_p, "tcp header size errors: %u\n",
+                        cksum_err_tcp);
+            dpctl_print(dpctl_p, "tcp size errors: %u\n",
+                        cksum_err_tcp);
+            dpctl_print(dpctl_p, "tcp checksum errors: %u\n",
+                        cksum_err_tcp);
+            dpctl_print(dpctl_p, "udp header size errors: %u\n",
+                        cksum_err_tcp);
+            dpctl_print(dpctl_p, "udp size errors: %u\n",
+                        cksum_err_tcp);
+            dpctl_print(dpctl_p, "udp checksum errors: %u\n",
+                        cksum_err_udp);
+            dpctl_print(dpctl_p, "icmp checksum errors: %u\n",
+                        cksum_err_icmp);
+            dpctl_print(dpctl_p, "icmp6 checksum errors: %u\n",
+                        cksum_err_icmp6);
+        } else {
+            dpctl_error(dpctl_p, error,
+                        "ct drop stats could not be retrieved");
+        }
+    }
+}
+
 static int
 dpctl_ct_stats_show(int argc, const char *argv[],
                      struct dpctl_params *dpctl_p)
@@ -1514,6 +1575,7 @@ dpctl_ct_stats_show(int argc, const char *argv[],
     }
 
     ct_dpif_dump_done(dump);
+    ct_print_invalid_stats(dpctl_p, dpif);
     dpif_close(dpif);
     return error;
 }

@@ -123,13 +123,14 @@ static uint8_t
 reverse_icmp_type(uint8_t type);
 static uint8_t
 reverse_icmp6_type(uint8_t type);
-static inline bool
-extract_l3_ipv4(struct conn_key *key, const void *data, size_t size,
-                const char **new_data, bool validate_checksum);
-static inline bool
-extract_l3_ipv6(struct conn_key *key, const void *data, size_t size,
-                const char **new_data);
+static inline bool extract_l3_ipv4(const void *data, size_t size,
+                                   bool validate_checksum,
+                                   struct conn_key *key,
+                                   const char **new_data);
 
+static inline bool extract_l3_ipv6(const void *data, size_t size,
+                                   struct conn_key *key,
+                                   const char **new_data);
 static struct alg_exp_node *
 expectation_lookup(struct hmap *alg_expectations, const struct conn_key *key,
                    uint32_t basis, bool src_ip_wc);
@@ -226,6 +227,25 @@ long long ct_timeout_val[] = {
 /* If the total number of connections goes above this value, no new connections
  * are accepted; this is for CT_CONN_TYPE_DEFAULT connections. */
 #define DEFAULT_N_CONN_LIMIT 3000000
+
+/* IPv4 sanity invalid packets. */
+static atomic_count min_hdr_err_v4;
+static atomic_count size_err_v4;
+static atomic_count cksum_err_v4;
+
+/* IPv6 sanity invalid packets. */
+static atomic_count min_hdr_err_v6;
+static atomic_count hdr_parse_err_v6;
+
+/* L4 sanity invalid packets. */
+static atomic_count hdr_size_err_tcp;
+static atomic_count size_err_tcp;
+static atomic_count cksum_err_tcp;
+static atomic_count hdr_size_err_udp;
+static atomic_count size_err_udp;
+static atomic_count cksum_err_udp;
+static atomic_count cksum_err_icmp;
+static atomic_count cksum_err_icmp6;
 
 /* Does a member by member comparison of two conn_keys; this
  * function must be kept in sync with struct conn_key; returns 0
@@ -338,6 +358,20 @@ conntrack_init(struct conntrack *ct)
     ct->hash_basis = random_uint32();
     atomic_count_init(&ct->n_conn, 0);
     atomic_init(&ct->n_conn_limit, DEFAULT_N_CONN_LIMIT);
+    atomic_count_init(&min_hdr_err_v4, 0);
+    atomic_count_init(&size_err_v4, 0);
+    atomic_count_init(&cksum_err_v4, 0);
+    atomic_count_init(&min_hdr_err_v6, 0);
+    atomic_count_init(&hdr_parse_err_v6, 0);
+    atomic_count_init(&hdr_size_err_tcp, 0);
+    atomic_count_init(&size_err_tcp, 0);
+    atomic_count_init(&cksum_err_tcp, 0);
+    atomic_count_init(&hdr_size_err_udp, 0);
+    atomic_count_init(&size_err_udp, 0);
+    atomic_count_init(&cksum_err_udp, 0);
+    atomic_count_init(&cksum_err_icmp, 0);
+    atomic_count_init(&cksum_err_icmp6, 0);
+
     latch_init(&ct->clean_thread_exit);
     ct->clean_thread = ovs_thread_create("ct_clean", clean_thread_main, ct);
 }
@@ -648,8 +682,8 @@ reverse_nat_packet(struct dp_packet *pkt, const struct conn *conn)
         struct ip_header *nh = dp_packet_l3(pkt);
         struct icmp_header *icmp = dp_packet_l4(pkt);
         struct ip_header *inner_l3 = (struct ip_header *) (icmp + 1);
-        extract_l3_ipv4(&inner_key, inner_l3, tail - ((char *)inner_l3) - pad,
-                        &inner_l4, false);
+        extract_l3_ipv4(inner_l3, tail - (char *)inner_l3 - pad, false,
+                        &inner_key, &inner_l4);
         pkt->l3_ofs += (char *) inner_l3 - (char *) nh;
         pkt->l4_ofs += inner_l4 - (char *) icmp;
 
@@ -669,9 +703,8 @@ reverse_nat_packet(struct dp_packet *pkt, const struct conn *conn)
         struct icmp6_error_header *icmp6 = dp_packet_l4(pkt);
         struct ovs_16aligned_ip6_hdr *inner_l3_6 =
             (struct ovs_16aligned_ip6_hdr *) (icmp6 + 1);
-        extract_l3_ipv6(&inner_key, inner_l3_6,
-                        tail - ((char *)inner_l3_6) - pad,
-                        &inner_l4);
+        extract_l3_ipv6(inner_l3_6, tail - ((char *)inner_l3_6) - pad,
+                        &inner_key, &inner_l4);
         pkt->l3_ofs += (char *) inner_l3_6 - (char *) nh6;
         pkt->l4_ofs += inner_l4 - (char *) icmp6;
 
@@ -1497,44 +1530,39 @@ clean_thread_main(void *f_)
     return NULL;
 }
 
-/* Key extraction */
-
-/* The function stores a pointer to the first byte after the header in
- * '*new_data', if 'new_data' is not NULL.  If it is NULL, the caller is
- * not interested in the header's tail,  meaning that the header has
- * already been parsed (e.g. by flow_extract): we take this as a hint to
- * save a few checks.  If 'validate_checksum' is true, the function returns
- * false if the IPv4 checksum is invalid. */
 static inline bool
-extract_l3_ipv4(struct conn_key *key, const void *data, size_t size,
-                const char **new_data, bool validate_checksum)
+extract_l3_ipv4(const void *data, size_t size, bool validate_checksum,
+                struct conn_key *key, const char **new_data)
 {
-    if (new_data) {
-        if (OVS_UNLIKELY(size < IP_HEADER_LEN)) {
-            return false;
-        }
+    if (OVS_UNLIKELY(size < IP_HEADER_LEN)) {
+        atomic_count_inc(&min_hdr_err_v4);
+        return false;
     }
 
     const struct ip_header *ip = data;
     size_t ip_len = IP_IHL(ip->ip_ihl_ver) * 4;
 
-    if (new_data) {
-        if (OVS_UNLIKELY(ip_len < IP_HEADER_LEN)) {
-            return false;
-        }
-        if (OVS_UNLIKELY(size < ip_len)) {
-            return false;
-        }
-
-        if (IP_IS_FRAGMENT(ip->ip_frag_off)) {
-            return false;
-        }
-
-        *new_data = (char *) data + ip_len;
+    if (OVS_UNLIKELY(ip_len < IP_HEADER_LEN)) {
+        atomic_count_inc(&min_hdr_err_v4);
+        return false;
     }
 
-    if (validate_checksum && csum(data, ip_len) != 0) {
+    if (OVS_UNLIKELY(size < ip_len)) {
+        atomic_count_inc(&size_err_v4);
         return false;
+    }
+
+    if (OVS_UNLIKELY(validate_checksum && csum(data, ip_len) != 0)) {
+        atomic_count_inc(&cksum_err_v4);
+        return false;
+    }
+
+    if (OVS_UNLIKELY(IP_IS_FRAGMENT(ip->ip_frag_off))) {
+        return false;
+    }
+
+    if (new_data) {
+        *new_data = (char *) data + ip_len;
     }
 
     key->src.addr.ipv4 = ip->ip_src;
@@ -1544,21 +1572,15 @@ extract_l3_ipv4(struct conn_key *key, const void *data, size_t size,
     return true;
 }
 
-/* The function stores a pointer to the first byte after the header in
- * '*new_data', if 'new_data' is not NULL.  If it is NULL, the caller is
- * not interested in the header's tail,  meaning that the header has
- * already been parsed (e.g. by flow_extract): we take this as a hint to
- * save a few checks. */
 static inline bool
-extract_l3_ipv6(struct conn_key *key, const void *data, size_t size,
+extract_l3_ipv6(const void *data, size_t size, struct conn_key *key,
                 const char **new_data)
 {
     const struct ovs_16aligned_ip6_hdr *ip6 = data;
 
-    if (new_data) {
-        if (OVS_UNLIKELY(size < sizeof *ip6)) {
-            return false;
-        }
+    if (OVS_UNLIKELY(size < sizeof *ip6)) {
+        atomic_count_inc(&min_hdr_err_v6);
+        return false;
     }
 
     data = ip6 + 1;
@@ -1566,11 +1588,13 @@ extract_l3_ipv6(struct conn_key *key, const void *data, size_t size,
     uint8_t nw_proto = ip6->ip6_nxt;
     uint8_t nw_frag = 0;
 
-    if (!parse_ipv6_ext_hdrs(&data, &size, &nw_proto, &nw_frag)) {
+    if (OVS_UNLIKELY(!parse_ipv6_ext_hdrs(&data, &size, &nw_proto,
+                                          &nw_frag))) {
+        atomic_count_inc(&hdr_parse_err_v6);
         return false;
     }
 
-    if (nw_frag) {
+    if (OVS_UNLIKELY(nw_frag)) {
         return false;
     }
 
@@ -1610,15 +1634,24 @@ check_l4_tcp(const struct conn_key *key, const void *data, size_t size,
 {
     const struct tcp_header *tcp = data;
     if (size < sizeof *tcp) {
+        atomic_count_inc(&hdr_size_err_tcp);
         return false;
     }
 
     size_t tcp_len = TCP_OFFSET(tcp->tcp_ctl) * 4;
     if (OVS_UNLIKELY(tcp_len < TCP_HEADER_LEN || tcp_len > size)) {
+        atomic_count_inc(&size_err_tcp);
         return false;
     }
 
-    return validate_checksum ? checksum_valid(key, data, size, l3) : true;
+    if (!validate_checksum) {
+        return true;
+    } else if (checksum_valid(key, data, size, l3)) {
+        return true;
+    } else {
+        atomic_count_inc(&cksum_err_tcp);
+        return false;
+    }
 }
 
 static inline bool
@@ -1627,30 +1660,53 @@ check_l4_udp(const struct conn_key *key, const void *data, size_t size,
 {
     const struct udp_header *udp = data;
     if (size < sizeof *udp) {
+        atomic_count_inc(&hdr_size_err_udp);
         return false;
     }
 
     size_t udp_len = ntohs(udp->udp_len);
     if (OVS_UNLIKELY(udp_len < UDP_HEADER_LEN || udp_len > size)) {
+        atomic_count_inc(&size_err_udp);
         return false;
     }
 
     /* Validation must be skipped if checksum is 0 on IPv4 packets */
-    return (udp->udp_csum == 0 && key->dl_type == htons(ETH_TYPE_IP))
-           || (validate_checksum ? checksum_valid(key, data, size, l3) : true);
+    if (!validate_checksum ||
+        (udp->udp_csum == 0 && key->dl_type == htons(ETH_TYPE_IP))) {
+        return true;
+    } else if (checksum_valid(key, data, size, l3)) {
+        return true;
+    } else {
+        atomic_count_inc(&cksum_err_udp);
+        return false;
+    }
 }
 
 static inline bool
 check_l4_icmp(const void *data, size_t size, bool validate_checksum)
 {
-    return validate_checksum ? csum(data, size) == 0 : true;
+    if (!validate_checksum) {
+        return true;
+    } else if (csum(data, size) == 0) {
+        return true;
+    } else {
+        atomic_count_inc(&cksum_err_icmp);
+        return false;
+    }
 }
 
 static inline bool
 check_l4_icmp6(const struct conn_key *key, const void *data, size_t size,
                const void *l3, bool validate_checksum)
 {
-    return validate_checksum ? checksum_valid(key, data, size, l3) : true;
+    if (!validate_checksum) {
+        return true;
+    } else if (checksum_valid(key, data, size, l3)) {
+        return true;
+    } else {
+        atomic_count_inc(&cksum_err_icmp6);
+        return false;
+    }
 }
 
 static inline bool
@@ -1758,7 +1814,7 @@ extract_l4_icmp(struct conn_key *key, const void *data, size_t size,
 
         memset(&inner_key, 0, sizeof inner_key);
         inner_key.dl_type = htons(ETH_TYPE_IP);
-        bool ok = extract_l3_ipv4(&inner_key, l3, tail - l3, &l4, false);
+        bool ok = extract_l3_ipv4(l3, tail - l3, false, &inner_key, &l4);
         if (!ok) {
             return false;
         }
@@ -1843,7 +1899,7 @@ extract_l4_icmp6(struct conn_key *key, const void *data, size_t size,
 
         memset(&inner_key, 0, sizeof inner_key);
         inner_key.dl_type = htons(ETH_TYPE_IPV6);
-        bool ok = extract_l3_ipv6(&inner_key, l3, tail - l3, &l4);
+        bool ok = extract_l3_ipv6(l3, tail - l3, &inner_key, &l4);
         if (!ok) {
             return false;
         }
@@ -1961,14 +2017,15 @@ conn_key_extract(struct conntrack *ct, struct dp_packet *pkt, ovs_be16 dl_type,
         bool hwol_bad_l3_csum = dp_packet_ip_checksum_bad(pkt);
         if (hwol_bad_l3_csum) {
             ok = false;
+            atomic_count_inc(&cksum_err_v4);
         } else {
             bool hwol_good_l3_csum = dp_packet_ip_checksum_valid(pkt);
             /* Validate the checksum only when hwol is not supported. */
-            ok = extract_l3_ipv4(&ctx->key, l3, tail - (char *) l3, NULL,
-                                 !hwol_good_l3_csum);
+            ok = extract_l3_ipv4(l3, tail - (char *) l3, !hwol_good_l3_csum,
+                                 &ctx->key,  NULL);
         }
     } else if (ctx->key.dl_type == htons(ETH_TYPE_IPV6)) {
-        ok = extract_l3_ipv6(&ctx->key, l3, tail - (char *) l3, NULL);
+        ok = extract_l3_ipv6(l3, tail - (char *) l3, &ctx->key, NULL);
     } else {
         ok = false;
     }
@@ -2606,6 +2663,38 @@ int
 conntrack_get_nconns(struct conntrack *ct, uint32_t *nconns)
 {
     *nconns = atomic_count_get(&ct->n_conn);
+    return 0;
+}
+
+int
+conntrack_get_invl_stats(unsigned int *ct_min_hdr_err_v4,
+                         unsigned int *ct_size_err_v4,
+                         unsigned int *ct_cksum_err_v4,
+                         unsigned int *ct_min_hdr_err_v6,
+                         unsigned int *ct_hdr_parse_err_v6,
+                         unsigned int *ct_hdr_size_err_tcp,
+                         unsigned int *ct_size_err_tcp,
+                         unsigned int *ct_cksum_err_tcp,
+                         unsigned int *ct_hdr_size_err_udp,
+                         unsigned int *ct_size_err_udp,
+                         unsigned int *ct_cksum_err_udp,
+                         unsigned int *ct_cksum_err_icmp,
+                         unsigned int *ct_cksum_err_icmp6)
+{
+    *ct_min_hdr_err_v4 = atomic_count_get(&min_hdr_err_v4);
+    *ct_size_err_v4 = atomic_count_get(&size_err_v4);
+    *ct_cksum_err_v4 = atomic_count_get(&cksum_err_v4);
+    *ct_min_hdr_err_v6 = atomic_count_get(&min_hdr_err_v6);
+    *ct_hdr_parse_err_v6 = atomic_count_get(&hdr_parse_err_v6);
+    *ct_hdr_size_err_tcp = atomic_count_get(&hdr_size_err_tcp);
+    *ct_size_err_tcp = atomic_count_get(&size_err_tcp);
+    *ct_cksum_err_tcp = atomic_count_get(&cksum_err_tcp);
+    *ct_hdr_size_err_udp = atomic_count_get(&hdr_size_err_udp);
+    *ct_size_err_udp = atomic_count_get(&size_err_udp);
+    *ct_cksum_err_udp = atomic_count_get(&cksum_err_udp);
+    *ct_cksum_err_icmp = atomic_count_get(&cksum_err_icmp);
+    *ct_cksum_err_icmp6 = atomic_count_get(&cksum_err_icmp6);
+
     return 0;
 }
 

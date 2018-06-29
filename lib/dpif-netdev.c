@@ -6044,6 +6044,31 @@ dpif_netdev_ct_get_nconns(struct dpif *dpif, uint32_t *nconns)
     return conntrack_get_nconns(&dp->conntrack, nconns);
 }
 
+static int
+dpif_netdev_ct_get_invl_stats(struct dpif *dpif OVS_UNUSED,
+                              unsigned int *ct_min_hdr_err_v4,
+                              unsigned int *ct_size_err_v4,
+                              unsigned int *ct_cksum_err_v4,
+                              unsigned int *ct_min_hdr_err_v6,
+                              unsigned int *ct_hdr_parse_err_v6,
+                              unsigned int *ct_hdr_size_err_tcp,
+                              unsigned int *ct_size_err_tcp,
+                              unsigned int *ct_cksum_err_tcp,
+                              unsigned int *ct_hdr_size_err_udp,
+                              unsigned int *ct_size_err_udp,
+                              unsigned int *ct_cksum_err_udp,
+                              unsigned int *ct_cksum_err_icmp,
+                              unsigned int *ct_cksum_err_icmp6)
+{
+    return conntrack_get_invl_stats(ct_min_hdr_err_v4, ct_size_err_v4,
+                                    ct_cksum_err_v4, ct_min_hdr_err_v6,
+                                    ct_hdr_parse_err_v6, ct_hdr_size_err_tcp,
+                                    ct_size_err_tcp, ct_cksum_err_tcp,
+                                    ct_hdr_size_err_udp, ct_size_err_udp,
+                                    ct_cksum_err_udp, ct_cksum_err_icmp,
+                                    ct_cksum_err_icmp6);
+}
+
 const struct dpif_class dpif_netdev_class = {
     "netdev",
     dpif_netdev_init,
@@ -6092,6 +6117,7 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_ct_set_maxconns,
     dpif_netdev_ct_get_maxconns,
     dpif_netdev_ct_get_nconns,
+    dpif_netdev_ct_get_invl_stats,
     dpif_netdev_meter_get_features,
     dpif_netdev_meter_set,
     dpif_netdev_meter_get,

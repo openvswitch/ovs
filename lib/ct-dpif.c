@@ -164,6 +164,30 @@ ct_dpif_get_nconns(struct dpif *dpif, uint32_t *nconns)
             : EOPNOTSUPP);
 }
 
+int
+ct_dpif_get_invl_stats(struct dpif *dpif, unsigned int *min_hdr_err_v4,
+                       unsigned int *size_err_v4,
+                       unsigned int *cksum_err_v4,
+                       unsigned int *min_hdr_err_v6,
+                       unsigned int *hdr_parse_err_v6,
+                       unsigned int *hdr_size_err_tcp,
+                       unsigned int *size_err_tcp,
+                       unsigned int *cksum_err_tcp,
+                       unsigned int *hdr_size_err_udp,
+                       unsigned int *size_err_udp,
+                       unsigned int *cksum_err_udp,
+                       unsigned int *cksum_err_icmp,
+                       unsigned int *cksum_err_icmp6)
+{
+    return (dpif->dpif_class->ct_get_invl_stats
+            ? dpif->dpif_class->ct_get_invl_stats(dpif, min_hdr_err_v4,
+                  size_err_v4, cksum_err_v4, min_hdr_err_v6,
+                  hdr_parse_err_v6, hdr_size_err_tcp, size_err_tcp,
+                  cksum_err_tcp, hdr_size_err_udp, size_err_udp,
+                  cksum_err_udp, cksum_err_icmp, cksum_err_icmp6)
+            : EOPNOTSUPP);
+}
+
 void
 ct_dpif_entry_uninit(struct ct_dpif_entry *entry)
 {
