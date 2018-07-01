@@ -1,7 +1,7 @@
 {
     "name": "OVN_Southbound",
-    "version": "1.15.0",
-    "cksum": "1839738004 13639",
+    "version": "1.16.0",
+    "cksum": "3046632234 14844",
     "tables": {
         "SB_Global": {
             "columns": {
@@ -98,6 +98,29 @@
             "indexes": [["datapath", "tunnel_key"],
                         ["datapath", "name"]],
             "isRoot": true},
+        "Meter": {
+            "columns": {
+                "name": {"type": "string"},
+                "unit": {"type": {"key": {"type": "string",
+                                          "enum": ["set", ["kbps", "pktps"]]}}},
+                "bands": {"type": {"key": {"type": "uuid",
+                                           "refTable": "Meter_Band",
+                                           "refType": "strong"},
+                                   "min": 1,
+                                   "max": "unlimited"}}},
+            "indexes": [["name"]],
+            "isRoot": true},
+        "Meter_Band": {
+            "columns": {
+                "action": {"type": {"key": {"type": "string",
+                                            "enum": ["set", ["drop"]]}}},
+                "rate": {"type": {"key": {"type": "integer",
+                                          "minInteger": 1,
+                                          "maxInteger": 4294967295}}},
+                "burst_size": {"type": {"key": {"type": "integer",
+                                                "minInteger": 0,
+                                                "maxInteger": 4294967295}}}},
+            "isRoot": false},
         "Datapath_Binding": {
             "columns": {
                 "tunnel_key": {

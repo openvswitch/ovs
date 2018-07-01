@@ -323,6 +323,74 @@ OVN_NBCTL_TEST_STOP
 AT_CLEANUP
 
 dnl ---------------------------------------------------------------------
+
+AT_SETUP([ovn-nbctl - Meters])
+OVN_NBCTL_TEST_START
+
+AT_CHECK([ovn-nbctl meter-add meter1 drop 10 kbps])
+AT_CHECK([ovn-nbctl meter-add meter2 drop 3 kbps 2])
+AT_CHECK([ovn-nbctl meter-add meter3 drop 100 kbps 200])
+AT_CHECK([ovn-nbctl meter-add meter4 drop 10 pktps 30])
+
+dnl Add duplicate meter name
+AT_CHECK([ovn-nbctl meter-add meter1 drop 10 kbps], [1], [], [stderr])
+AT_CHECK([grep 'already exists' stderr], [0], [ignore])
+
+dnl Add reserved meter name
+AT_CHECK([ovn-nbctl meter-add __meter1 drop 10 kbps], [1], [], [stderr])
+AT_CHECK([grep 'reserved' stderr], [0], [ignore])
+
+dnl Add meter with invalid rates
+AT_CHECK([ovn-nbctl meter-add meter5 drop 100010111111 kbps], [1], [],
+[ovn-nbctl: rate must be in the range 1...4294967295
+])
+
+dnl Add meter with invalid rates
+AT_CHECK([ovn-nbctl meter-add meter5 drop 100010111111 foo], [1], [],
+[ovn-nbctl: rate must be in the range 1...4294967295
+])
+
+AT_CHECK([ovn-nbctl meter-add meter5 drop 0 kbps], [1], [],
+[ovn-nbctl: rate must be in the range 1...4294967295
+])
+
+dnl Add meter with invalid burst
+AT_CHECK([ovn-nbctl meter-add meter5 drop 10 100010111111 kbps], [1], [],
+[ovn-nbctl: unit must be "kbps" or "pktps"
+])
+
+AT_CHECK([ovn-nbctl meter-list], [0], [dnl
+meter1: bands:
+  drop: 10 kbps
+meter2: bands:
+  drop: 3 kbps, 2 kb burst
+meter3: bands:
+  drop: 100 kbps, 200 kb burst
+meter4: bands:
+  drop: 10 pktps, 30 packet burst
+])
+
+dnl Delete a single meter.
+AT_CHECK([ovn-nbctl meter-del meter2])
+AT_CHECK([ovn-nbctl meter-list], [0], [dnl
+meter1: bands:
+  drop: 10 kbps
+meter3: bands:
+  drop: 100 kbps, 200 kb burst
+meter4: bands:
+  drop: 10 pktps, 30 packet burst
+])
+
+dnl Delete all meters.
+AT_CHECK([ovn-nbctl meter-del])
+AT_CHECK([ovn-nbctl meter-list], [0], [dnl
+])
+
+OVN_NBCTL_TEST_STOP
+AT_CLEANUP
+
+dnl ---------------------------------------------------------------------
+
 AT_SETUP([ovn-nbctl - NATs])
 OVN_NBCTL_TEST_START
 AT_CHECK([ovn-nbctl lr-add lr0])

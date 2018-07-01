@@ -6606,6 +6606,140 @@ sync_port_groups(struct northd_context *ctx)
     shash_destroy(&sb_port_groups);
 }
 
+struct band_entry {
+    int64_t rate;
+    int64_t burst_size;
+    const char *action;
+};
+
+static int
+band_cmp(const void *band1_, const void *band2_)
+{
+    const struct band_entry *band1p = band1_;
+    const struct band_entry *band2p = band2_;
+
+    if (band1p->rate != band2p->rate) {
+        return band1p->rate > band2p->rate ? -1 : 1;
+    } else if (band1p->burst_size != band2p->burst_size) {
+        return band1p->burst_size > band2p->burst_size ? -1 : 1;
+    } else {
+        return strcmp(band1p->action, band2p->action);
+    }
+}
+
+static bool
+bands_need_update(const struct nbrec_meter *nb_meter,
+                  const struct sbrec_meter *sb_meter)
+{
+    if (nb_meter->n_bands != sb_meter->n_bands) {
+        return true;
+    }
+
+    /* A single band is the most common scenario, so speed up that
+     * check. */
+    if (nb_meter->n_bands == 1) {
+        struct nbrec_meter_band *nb_band = nb_meter->bands[0];
+        struct sbrec_meter_band *sb_band = sb_meter->bands[0];
+
+        return !(nb_band->rate == sb_band->rate
+                 && nb_band->burst_size == sb_band->burst_size
+                 && !strcmp(sb_band->action, nb_band->action));
+    }
+
+    /* Place the Northbound entries in sorted order. */
+    struct band_entry *nb_bands;
+    nb_bands = xmalloc(sizeof *nb_bands * nb_meter->n_bands);
+    for (size_t i = 0; i < nb_meter->n_bands; i++) {
+        struct nbrec_meter_band *nb_band = nb_meter->bands[i];
+
+        nb_bands[i].rate = nb_band->rate;
+        nb_bands[i].burst_size = nb_band->burst_size;
+        nb_bands[i].action = nb_band->action;
+    }
+    qsort(nb_bands, nb_meter->n_bands, sizeof *nb_bands, band_cmp);
+
+    /* Place the Southbound entries in sorted order. */
+    struct band_entry *sb_bands;
+    sb_bands = xmalloc(sizeof *sb_bands * sb_meter->n_bands);
+    for (size_t i = 0; i < sb_meter->n_bands; i++) {
+        struct sbrec_meter_band *sb_band = sb_meter->bands[i];
+
+        sb_bands[i].rate = sb_band->rate;
+        sb_bands[i].burst_size = sb_band->burst_size;
+        sb_bands[i].action = sb_band->action;
+    }
+    qsort(sb_bands, sb_meter->n_bands, sizeof *sb_bands, band_cmp);
+
+    bool need_update = false;
+    for (size_t i = 0; i < nb_meter->n_bands; i++) {
+        if (nb_bands[i].rate != sb_bands[i].rate
+            || nb_bands[i].burst_size != sb_bands[i].burst_size
+            || strcmp(nb_bands[i].action, nb_bands[i].action)) {
+            need_update = true;
+            goto done;
+        }
+    }
+
+done:
+    free(nb_bands);
+    free(sb_bands);
+
+    return need_update;
+}
+
+/* Each entry in the Meter and Meter_Band tables in OVN_Northbound have
+ * a corresponding entries in the Meter and Meter_Band tables in
+ * OVN_Southbound.
+ */
+static void
+sync_meters(struct northd_context *ctx)
+{
+    struct shash sb_meters = SHASH_INITIALIZER(&sb_meters);
+
+    const struct sbrec_meter *sb_meter;
+    SBREC_METER_FOR_EACH (sb_meter, ctx->ovnsb_idl) {
+        shash_add(&sb_meters, sb_meter->name, sb_meter);
+    }
+
+    const struct nbrec_meter *nb_meter;
+    NBREC_METER_FOR_EACH (nb_meter, ctx->ovnnb_idl) {
+        bool new_sb_meter = false;
+
+        sb_meter = shash_find_and_delete(&sb_meters, nb_meter->name);
+        if (!sb_meter) {
+            sb_meter = sbrec_meter_insert(ctx->ovnsb_txn);
+            sbrec_meter_set_name(sb_meter, nb_meter->name);
+            new_sb_meter = true;
+        }
+
+        if (new_sb_meter || bands_need_update(nb_meter, sb_meter)) {
+            struct sbrec_meter_band **sb_bands;
+            sb_bands = xcalloc(nb_meter->n_bands, sizeof *sb_bands);
+            for (size_t i = 0; i < nb_meter->n_bands; i++) {
+                const struct nbrec_meter_band *nb_band = nb_meter->bands[i];
+
+                sb_bands[i] = sbrec_meter_band_insert(ctx->ovnsb_txn);
+
+                sbrec_meter_band_set_action(sb_bands[i], nb_band->action);
+                sbrec_meter_band_set_rate(sb_bands[i], nb_band->rate);
+                sbrec_meter_band_set_burst_size(sb_bands[i],
+                                                nb_band->burst_size);
+            }
+            sbrec_meter_set_bands(sb_meter, sb_bands, nb_meter->n_bands);
+            free(sb_bands);
+        }
+
+        sbrec_meter_set_unit(sb_meter, nb_meter->unit);
+    }
+
+    struct shash_node *node, *next;
+    SHASH_FOR_EACH_SAFE (node, next, &sb_meters) {
+        sbrec_meter_delete(node->data);
+        shash_delete(&sb_meters, node);
+    }
+    shash_destroy(&sb_meters);
+}
+
 /*
  * struct 'dns_info' is used to sync the DNS records between OVN Northbound db
  * and Southbound db.
@@ -6726,6 +6860,7 @@ ovnnb_db_run(struct northd_context *ctx,
 
     sync_address_sets(ctx);
     sync_port_groups(ctx);
+    sync_meters(ctx);
     sync_dns_entries(ctx, &datapaths);
 
     struct ovn_port_group *pg, *next_pg;
@@ -7350,6 +7485,16 @@ main(int argc, char *argv[])
     add_column_noalert(ovnsb_idl_loop.idl,
                        &sbrec_rbac_permission_col_insert_delete);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_rbac_permission_col_update);
+
+    ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_meter);
+    ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_meter_col_name);
+    ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_meter_col_unit);
+    ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_meter_col_bands);
+
+    ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_meter_band);
+    ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_meter_band_col_action);
+    ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_meter_band_col_rate);
+    ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_meter_band_col_burst_size);
 
     ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_chassis);
     ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_chassis_col_nb_cfg);
