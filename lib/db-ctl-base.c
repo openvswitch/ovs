@@ -977,6 +977,7 @@ cmd_get(struct ctl_context *ctx)
             ctx->error = ovsdb_atom_from_string(&key, NULL, &column->type.key,
                                                 key_string, ctx->symtab);
             if (ctx->error) {
+                free(key_string);
                 return;
             }
 
