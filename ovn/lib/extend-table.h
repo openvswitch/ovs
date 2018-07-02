@@ -20,7 +20,6 @@
 #define MAX_EXT_TABLE_ID 65535
 #define EXT_TABLE_ID_INVALID 0
 
-#include "openvswitch/dynamic-string.h"
 #include "openvswitch/hmap.h"
 #include "openvswitch/list.h"
 
@@ -36,7 +35,7 @@ struct ovn_extend_table {
 
 struct ovn_extend_table_info {
     struct hmap_node hmap_node;
-    struct ds info;     /* Details string for the table entity. */
+    char *name;         /* Name for the table entity. */
     uint32_t table_id;
     bool new_table_id;  /* 'True' if 'table_id' was reserved from
                          * ovn_extend_table's 'table_ids' bitmap. */
@@ -58,7 +57,7 @@ void ovn_extend_table_remove(struct ovn_extend_table *,
 void ovn_extend_table_move(struct ovn_extend_table *);
 
 uint32_t ovn_extend_table_assign_id(struct ovn_extend_table *,
-                                    struct ds *);
+                                    const char *name);
 
 /* Iterates 'DESIRED' through all of the 'ovn_extend_table_info's in
  * 'TABLE'->desired that are not in 'TABLE'->existing.  (The loop body

@@ -874,7 +874,7 @@ ofctrl_put(struct hmap *flow_table, struct shash *pending_ct_zones,
         enum ofputil_protocol usable_protocols;
         char *group_string = xasprintf("group_id=%"PRIu32",%s",
                                        desired->table_id,
-                                       ds_cstr(&desired->info));
+                                       desired->name);
         char *error = parse_ofp_group_mod_str(&gm, OFPGC11_ADD, group_string,
                                               NULL, NULL, &usable_protocols);
         if (!error) {
@@ -897,7 +897,7 @@ ofctrl_put(struct hmap *flow_table, struct shash *pending_ct_zones,
         enum ofputil_protocol usable_protocols;
         char *meter_string = xasprintf("meter=%"PRIu32",%s",
                                        m_desired->table_id,
-                                       ds_cstr(&m_desired->info));
+                                       m_desired->name);
         char *error = parse_ofp_meter_mod_str(&mm, meter_string, OFPMC13_ADD,
                                               &usable_protocols);
         if (!error) {
