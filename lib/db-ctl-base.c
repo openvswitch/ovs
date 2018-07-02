@@ -1041,7 +1041,7 @@ parse_column_names(const char *column_names,
     return NULL;
 }
 
-static void
+static char * OVS_WARN_UNUSED_RESULT
 pre_list_columns(struct ctl_context *ctx,
                  const struct ovsdb_idl_table_class *table,
                  const char *column_names)
@@ -1049,14 +1049,19 @@ pre_list_columns(struct ctl_context *ctx,
     const struct ovsdb_idl_column **columns;
     size_t n_columns;
     size_t i;
+    char *error;
 
-    die_if_error(parse_column_names(column_names, table, &columns, &n_columns));
+    error = parse_column_names(column_names, table, &columns, &n_columns);
+    if (error) {
+        return error;
+    }
     for (i = 0; i < n_columns; i++) {
         if (columns[i]) {
             ovsdb_idl_add_column(ctx->idl, columns[i]);
         }
     }
     free(columns);
+    return NULL;
 }
 
 static void
@@ -1067,7 +1072,7 @@ pre_cmd_list(struct ctl_context *ctx)
     const struct ovsdb_idl_table_class *table;
 
     die_if_error(pre_get_table(ctx, table_name, &table));
-    pre_list_columns(ctx, table, column_names);
+    die_if_error(pre_list_columns(ctx, table, column_names));
 }
 
 static struct table *
@@ -1199,7 +1204,7 @@ pre_cmd_find(struct ctl_context *ctx)
     int i;
 
     die_if_error(pre_get_table(ctx, table_name, &table));
-    pre_list_columns(ctx, table, column_names);
+    die_if_error(pre_list_columns(ctx, table, column_names));
     for (i = 2; i < ctx->argc; i++) {
         die_if_error(pre_parse_column_key_value(ctx, ctx->argv[i], table));
     }
