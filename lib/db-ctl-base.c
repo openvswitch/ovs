@@ -2169,6 +2169,25 @@ ctl_might_write_to_db(const struct ctl_command *commands, size_t n)
     return false;
 }
 
+/* Report an error while running in the command context. Caller should return
+ * to its caller immediately after reporting the error. */
+void
+ctl_error(struct ctl_context *ctx, const char *format, ...)
+{
+    va_list args;
+
+    ovs_assert(ctx);
+
+    if (ctx->error) {
+        VLOG_ERR("Discarding unhandled error: %s", ctx->error);
+        free(ctx->error);
+    }
+
+    va_start(args, format);
+    ctx->error = xvasprintf(format, args);
+    va_end(args);
+}
+
 void
 ctl_fatal(const char *format, ...)
 {
@@ -2354,6 +2373,7 @@ ctl_context_init_command(struct ctl_context *ctx,
     ds_swap(&ctx->output, &command->output);
     ctx->table = command->table;
     ctx->try_again = false;
+    ctx->error = NULL;
 }
 
 /* Initializes the entire 'ctx'. */
@@ -2379,6 +2399,8 @@ ctl_context_done_command(struct ctl_context *ctx,
 {
     ds_swap(&ctx->output, &command->output);
     command->table = ctx->table;
+    free(ctx->error);
+    ctx->error = NULL;
 }
 
 /* Finishes up with 'ctx'.

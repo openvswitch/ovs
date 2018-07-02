@@ -2528,6 +2528,9 @@ run_prerequisites(struct ctl_command *commands, size_t n_commands,
 
             vsctl_context_init(&vsctl_ctx, c, idl, NULL, NULL, NULL);
             (c->syntax->prerequisites)(&vsctl_ctx.base);
+            if (vsctl_ctx.base.error) {
+                ctl_fatal("%s", vsctl_ctx.base.error);
+            }
             vsctl_context_done(&vsctl_ctx, c);
 
             ovs_assert(!c->output.string);
@@ -2623,6 +2626,9 @@ do_vsctl(const char *args, struct ctl_command *commands, size_t n_commands,
         if (c->syntax->run) {
             (c->syntax->run)(&vsctl_ctx.base);
         }
+        if (vsctl_ctx.base.error) {
+            ctl_fatal("%s", vsctl_ctx.base.error);
+        }
         vsctl_context_done_command(&vsctl_ctx, c);
 
         if (vsctl_ctx.base.try_again) {
@@ -2661,6 +2667,9 @@ do_vsctl(const char *args, struct ctl_command *commands, size_t n_commands,
             if (c->syntax->postprocess) {
                 vsctl_context_init(&vsctl_ctx, c, idl, txn, ovs, symtab);
                 (c->syntax->postprocess)(&vsctl_ctx.base);
+                if (vsctl_ctx.base.error) {
+                    ctl_fatal("%s", vsctl_ctx.base.error);
+                }
                 vsctl_context_done(&vsctl_ctx, c);
             }
         }

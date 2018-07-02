@@ -2261,6 +2261,9 @@ run_prerequisites(struct ctl_command *commands, size_t n_commands,
 
             vtep_ctl_context_init(&vtepctl_ctx, c, idl, NULL, NULL, NULL);
             (c->syntax->prerequisites)(&vtepctl_ctx.base);
+            if (vtepctl_ctx.base.error) {
+                ctl_fatal("%s", vtepctl_ctx.base.error);
+            }
             vtep_ctl_context_done(&vtepctl_ctx, c);
 
             ovs_assert(!c->output.string);
@@ -2306,6 +2309,9 @@ do_vtep_ctl(const char *args, struct ctl_command *commands,
         if (c->syntax->run) {
             (c->syntax->run)(&vtepctl_ctx.base);
         }
+        if (vtepctl_ctx.base.error) {
+            ctl_fatal("%s", vtepctl_ctx.base.error);
+        }
         vtep_ctl_context_done_command(&vtepctl_ctx, c);
 
         if (vtepctl_ctx.base.try_again) {
@@ -2341,6 +2347,9 @@ do_vtep_ctl(const char *args, struct ctl_command *commands,
             if (c->syntax->postprocess) {
                 vtep_ctl_context_init(&vtepctl_ctx, c, idl, txn, vtep_global, symtab);
                 (c->syntax->postprocess)(&vtepctl_ctx.base);
+                if (vtepctl_ctx.base.error) {
+                    ctl_fatal("%s", vtepctl_ctx.base.error);
+                }
                 vtep_ctl_context_done(&vtepctl_ctx, c);
             }
         }
