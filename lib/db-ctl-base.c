@@ -880,14 +880,20 @@ pre_cmd_get(struct ctl_context *ctx)
                   "possibly erroneous");
     }
 
-    die_if_error(pre_get_table(ctx, table_name, &table));
+    ctx->error = pre_get_table(ctx, table_name, &table);
+    if (ctx->error) {
+        return;
+    }
     for (i = 3; i < ctx->argc; i++) {
         if (!strcasecmp(ctx->argv[i], "_uuid")
             || !strcasecmp(ctx->argv[i], "-uuid")) {
             continue;
         }
 
-        die_if_error(pre_parse_column_key_value(ctx, ctx->argv[i], table));
+        ctx->error = pre_parse_column_key_value(ctx, ctx->argv[i], table);
+        if (ctx->error) {
+            return;
+        }
     }
 }
 
@@ -907,8 +913,14 @@ cmd_get(struct ctl_context *ctx)
         ctl_fatal("--if-exists and --id may not be specified together");
     }
 
-    die_if_error(get_table(table_name, &table));
-    die_if_error(ctl_get_row(ctx, table, record_id, must_exist, &row));
+    ctx->error = get_table(table_name, &table);
+    if (ctx->error) {
+        return;
+    }
+    ctx->error = ctl_get_row(ctx, table, record_id, must_exist, &row);
+    if (ctx->error) {
+        return;
+    }
     if (!row) {
         return;
     }
@@ -917,7 +929,10 @@ cmd_get(struct ctl_context *ctx)
         struct ovsdb_symbol *symbol;
         bool new;
 
-        die_if_error(create_symbol(ctx->symtab, id, &symbol, &new));
+        ctx->error = create_symbol(ctx->symtab, id, &symbol, &new);
+        if (ctx->error) {
+            return;
+        }
         if (!new) {
             ctl_fatal("row id \"%s\" specified on \"get\" command was used "
                       "before it was defined", id);
@@ -942,9 +957,11 @@ cmd_get(struct ctl_context *ctx)
             continue;
         }
 
-        die_if_error(parse_column_key_value(ctx->argv[i], table,
-                                            &column, &key_string,
-                                            NULL, NULL, 0, NULL));
+        ctx->error = parse_column_key_value(ctx->argv[i], table, &column,
+                                            &key_string, NULL, NULL, 0, NULL);
+        if (ctx->error) {
+            return;
+        }
 
         ovsdb_idl_txn_verify(row, column);
         datum = ovsdb_idl_read(row, column);
@@ -957,9 +974,11 @@ cmd_get(struct ctl_context *ctx)
                           column->name);
             }
 
-            die_if_error(ovsdb_atom_from_string(&key, NULL,
-                                                &column->type.key,
-                                                key_string, ctx->symtab));
+            ctx->error = ovsdb_atom_from_string(&key, NULL, &column->type.key,
+                                                key_string, ctx->symtab);
+            if (ctx->error) {
+                return;
+            }
 
             idx = ovsdb_datum_find_key(datum, &key,
                                        column->type.key.type);
@@ -1071,8 +1090,14 @@ pre_cmd_list(struct ctl_context *ctx)
     const char *table_name = ctx->argv[1];
     const struct ovsdb_idl_table_class *table;
 
-    die_if_error(pre_get_table(ctx, table_name, &table));
-    die_if_error(pre_list_columns(ctx, table, column_names));
+    ctx->error = pre_get_table(ctx, table_name, &table);
+    if (ctx->error) {
+        return;
+    }
+    ctx->error = pre_list_columns(ctx, table, column_names);
+    if (ctx->error) {
+        return;
+    }
 }
 
 static struct table *
@@ -1143,15 +1168,24 @@ cmd_list(struct ctl_context *ctx)
     size_t n_columns;
     int i;
 
-    die_if_error(get_table(table_name, &table));
-    die_if_error(parse_column_names(column_names, table, &columns, &n_columns));
+    ctx->error = get_table(table_name, &table);
+    if (ctx->error) {
+        return;
+    }
+    ctx->error = parse_column_names(column_names, table, &columns, &n_columns);
+    if (ctx->error) {
+        return;
+    }
     out = ctx->table = list_make_table(columns, n_columns);
     if (ctx->argc > 2) {
         for (i = 2; i < ctx->argc; i++) {
             const struct ovsdb_idl_row *row;
 
-            die_if_error(ctl_get_row(ctx, table, ctx->argv[i], must_exist,
-                                     &row));
+            ctx->error = ctl_get_row(ctx, table, ctx->argv[i], must_exist,
+                                     &row);
+            if (ctx->error) {
+                return;
+            }
             list_record(row, columns, n_columns, out);
         }
     } else {
@@ -1203,10 +1237,19 @@ pre_cmd_find(struct ctl_context *ctx)
     const struct ovsdb_idl_table_class *table;
     int i;
 
-    die_if_error(pre_get_table(ctx, table_name, &table));
-    die_if_error(pre_list_columns(ctx, table, column_names));
+    ctx->error = pre_get_table(ctx, table_name, &table);
+    if (ctx->error) {
+        return;
+    }
+    ctx->error = pre_list_columns(ctx, table, column_names);
+    if (ctx->error) {
+        return;
+    }
     for (i = 2; i < ctx->argc; i++) {
-        die_if_error(pre_parse_column_key_value(ctx, ctx->argv[i], table));
+        ctx->error = pre_parse_column_key_value(ctx, ctx->argv[i], table);
+        if (ctx->error) {
+            return;
+        }
     }
 }
 
@@ -1221,8 +1264,14 @@ cmd_find(struct ctl_context *ctx)
     struct table *out;
     size_t n_columns;
 
-    die_if_error(get_table(table_name, &table));
-    die_if_error(parse_column_names(column_names, table, &columns, &n_columns));
+    ctx->error = get_table(table_name, &table);
+    if (ctx->error) {
+        return;
+    }
+    ctx->error = parse_column_names(column_names, table, &columns, &n_columns);
+    if (ctx->error) {
+        return;
+    }
     out = ctx->table = list_make_table(columns, n_columns);
     for (row = ovsdb_idl_first_row(ctx->idl, table); row;
          row = ovsdb_idl_next_row(row)) {
@@ -1231,8 +1280,11 @@ cmd_find(struct ctl_context *ctx)
         for (i = 2; i < ctx->argc; i++) {
             bool satisfied;
 
-            die_if_error(check_condition(table, row, ctx->argv[i], ctx->symtab,
-                                         &satisfied));
+            ctx->error = check_condition(table, row, ctx->argv[i],
+                                         ctx->symtab, &satisfied);
+            if (ctx->error) {
+                return;
+            }
             if (!satisfied) {
                 goto next_row;
             }
@@ -1326,9 +1378,15 @@ pre_cmd_set(struct ctl_context *ctx)
     const struct ovsdb_idl_table_class *table;
     int i;
 
-    die_if_error(pre_get_table(ctx, table_name, &table));
+    ctx->error = pre_get_table(ctx, table_name, &table);
+    if (ctx->error) {
+        return;
+    }
     for (i = 3; i < ctx->argc; i++) {
-        die_if_error(pre_parse_column_key_value(ctx, ctx->argv[i], table));
+        ctx->error = pre_parse_column_key_value(ctx, ctx->argv[i], table);
+        if (ctx->error) {
+            return;
+        }
     }
 }
 
@@ -1342,14 +1400,23 @@ cmd_set(struct ctl_context *ctx)
     const struct ovsdb_idl_row *row;
     int i;
 
-    die_if_error(get_table(table_name, &table));
-    die_if_error(ctl_get_row(ctx, table, record_id, must_exist, &row));
+    ctx->error = get_table(table_name, &table);
+    if (ctx->error) {
+        return;
+    }
+    ctx->error = ctl_get_row(ctx, table, record_id, must_exist, &row);
+    if (ctx->error) {
+        return;
+    }
     if (!row) {
         return;
     }
 
     for (i = 3; i < ctx->argc; i++) {
-        die_if_error(set_column(table, row, ctx->argv[i], ctx->symtab));
+        ctx->error = set_column(table, row, ctx->argv[i], ctx->symtab);
+        if (ctx->error) {
+            return;
+        }
     }
 
     invalidate_cache(ctx);
@@ -1363,8 +1430,14 @@ pre_cmd_add(struct ctl_context *ctx)
     const struct ovsdb_idl_table_class *table;
     const struct ovsdb_idl_column *column;
 
-    die_if_error(pre_get_table(ctx, table_name, &table));
-    die_if_error(pre_get_column(ctx, table, column_name, &column));
+    ctx->error = pre_get_table(ctx, table_name, &table);
+    if (ctx->error) {
+        return;
+    }
+    ctx->error = pre_get_column(ctx, table, column_name, &column);
+    if (ctx->error) {
+        return;
+    }
 }
 
 static void
@@ -1381,13 +1454,25 @@ cmd_add(struct ctl_context *ctx)
     struct ovsdb_datum old;
     int i;
 
-    die_if_error(get_table(table_name, &table));
-    die_if_error(get_column(table, column_name, &column));
-    die_if_error(ctl_get_row(ctx, table, record_id, must_exist, &row));
+    ctx->error = get_table(table_name, &table);
+    if (ctx->error) {
+        return;
+    }
+    ctx->error = get_column(table, column_name, &column);
+    if (ctx->error) {
+        return;
+    }
+    ctx->error = ctl_get_row(ctx, table, record_id, must_exist, &row);
+    if (ctx->error) {
+        return;
+    }
     if (!row) {
         return;
     }
-    die_if_error(check_mutable(row, column));
+    ctx->error = check_mutable(row, column);
+    if (ctx->error) {
+        return;
+    }
 
     type = &column->type;
     ovsdb_datum_clone(&old, ovsdb_idl_read(row, column), &column->type);
@@ -1398,8 +1483,11 @@ cmd_add(struct ctl_context *ctx)
         add_type = *type;
         add_type.n_min = 1;
         add_type.n_max = UINT_MAX;
-        die_if_error(ovsdb_datum_from_string(&add, &add_type, ctx->argv[i],
-                                             ctx->symtab));
+        ctx->error = ovsdb_datum_from_string(&add, &add_type, ctx->argv[i],
+                                             ctx->symtab);
+        if (ctx->error) {
+            return;
+        }
         ovsdb_datum_union(&old, &add, type, false);
         ovsdb_datum_destroy(&add, type);
     }
@@ -1424,8 +1512,14 @@ pre_cmd_remove(struct ctl_context *ctx)
     const struct ovsdb_idl_table_class *table;
     const struct ovsdb_idl_column *column;
 
-    die_if_error(pre_get_table(ctx, table_name, &table));
-    die_if_error(pre_get_column(ctx, table, column_name, &column));
+    ctx->error = pre_get_table(ctx, table_name, &table);
+    if (ctx->error) {
+        return;
+    }
+    ctx->error = pre_get_column(ctx, table, column_name, &column);
+    if (ctx->error) {
+        return;
+    }
 }
 
 static void
@@ -1442,13 +1536,25 @@ cmd_remove(struct ctl_context *ctx)
     struct ovsdb_datum old;
     int i;
 
-    die_if_error(get_table(table_name, &table));
-    die_if_error(get_column(table, column_name, &column));
-    die_if_error(ctl_get_row(ctx, table, record_id, must_exist, &row));
+    ctx->error = get_table(table_name, &table);
+    if (ctx->error) {
+        return;
+    }
+    ctx->error = get_column(table, column_name, &column);
+    if (ctx->error) {
+        return;
+    }
+    ctx->error = ctl_get_row(ctx, table, record_id, must_exist, &row);
+    if (ctx->error) {
+        return;
+    }
     if (!row) {
         return;
     }
-    die_if_error(check_mutable(row, column));
+    ctx->error = check_mutable(row, column);
+    if (ctx->error) {
+        return;
+    }
 
     type = &column->type;
     ovsdb_datum_clone(&old, ovsdb_idl_read(row, column), &column->type);
@@ -1467,8 +1573,12 @@ cmd_remove(struct ctl_context *ctx)
             if (ovsdb_type_is_map(&rm_type)) {
                 rm_type.value.type = OVSDB_TYPE_VOID;
                 free(error);
-                die_if_error(ovsdb_datum_from_string(
-                                                     &rm, &rm_type, ctx->argv[i], ctx->symtab));
+                ctx->error = ovsdb_datum_from_string(&rm, &rm_type,
+                                                     ctx->argv[i],
+                                                     ctx->symtab);
+                if (ctx->error) {
+                    return;
+                }
             } else {
                 ctl_fatal("%s", error);
             }
@@ -1496,11 +1606,17 @@ pre_cmd_clear(struct ctl_context *ctx)
     const struct ovsdb_idl_table_class *table;
     int i;
 
-    die_if_error(pre_get_table(ctx, table_name, &table));
+    ctx->error = pre_get_table(ctx, table_name, &table);
+    if (ctx->error) {
+        return;
+    }
     for (i = 3; i < ctx->argc; i++) {
         const struct ovsdb_idl_column *column;
 
-        die_if_error(pre_get_column(ctx, table, ctx->argv[i], &column));
+        ctx->error = pre_get_column(ctx, table, ctx->argv[i], &column);
+        if (ctx->error) {
+            return;
+        }
     }
 }
 
@@ -1514,8 +1630,14 @@ cmd_clear(struct ctl_context *ctx)
     const struct ovsdb_idl_row *row;
     int i;
 
-    die_if_error(get_table(table_name, &table));
-    die_if_error(ctl_get_row(ctx, table, record_id, must_exist, &row));
+    ctx->error = get_table(table_name, &table);
+    if (ctx->error) {
+        return;
+    }
+    ctx->error = ctl_get_row(ctx, table, record_id, must_exist, &row);
+    if (ctx->error) {
+        return;
+    }
     if (!row) {
         return;
     }
@@ -1525,8 +1647,14 @@ cmd_clear(struct ctl_context *ctx)
         const struct ovsdb_type *type;
         struct ovsdb_datum datum;
 
-        die_if_error(get_column(table, ctx->argv[i], &column));
-        die_if_error(check_mutable(row, column));
+        ctx->error = get_column(table, ctx->argv[i], &column);
+        if (ctx->error) {
+            return;
+        }
+        ctx->error = check_mutable(row, column);
+        if (ctx->error) {
+            return;
+        }
 
         type = &column->type;
         if (type->n_min > 0) {
@@ -1549,7 +1677,10 @@ pre_create(struct ctl_context *ctx)
     const char *table_name = ctx->argv[1];
     const struct ovsdb_idl_table_class *table;
 
-    die_if_error(get_table(table_name, &table));
+    ctx->error = get_table(table_name, &table);
+    if (ctx->error) {
+        return;
+    }
     if (!id && !table->is_root) {
         VLOG_WARN("applying \"create\" command to table %s without --id "
                   "option will have no effect", table->name);
@@ -1566,11 +1697,17 @@ cmd_create(struct ctl_context *ctx)
     const struct uuid *uuid;
     int i;
 
-    die_if_error(get_table(table_name, &table));
+    ctx->error = get_table(table_name, &table);
+    if (ctx->error) {
+        return;
+    }
     if (id) {
         struct ovsdb_symbol *symbol;
 
-        die_if_error(create_symbol(ctx->symtab, id, &symbol, NULL));
+        ctx->error = create_symbol(ctx->symtab, id, &symbol, NULL);
+        if (ctx->error) {
+            return;
+        }
         if (table->is_root) {
             /* This table is in the root set, meaning that rows created in it
              * won't disappear even if they are unreferenced, so disable
@@ -1584,7 +1721,10 @@ cmd_create(struct ctl_context *ctx)
 
     row = ovsdb_idl_txn_insert(ctx->txn, table, uuid);
     for (i = 2; i < ctx->argc; i++) {
-        die_if_error(set_column(table, row, ctx->argv[i], ctx->symtab));
+        ctx->error = set_column(table, row, ctx->argv[i], ctx->symtab);
+        if (ctx->error) {
+            return;
+        }
     }
     ds_put_format(&ctx->output, UUID_FMT, UUID_ARGS(&row->uuid));
 }
@@ -1620,7 +1760,10 @@ pre_cmd_destroy(struct ctl_context *ctx)
 {
     const char *table_name = ctx->argv[1];
 
-    die_if_error(pre_get_table(ctx, table_name, NULL));
+    ctx->error = pre_get_table(ctx, table_name, NULL);
+    if (ctx->error) {
+        return;
+    }
 }
 
 static void
@@ -1632,7 +1775,10 @@ cmd_destroy(struct ctl_context *ctx)
     const struct ovsdb_idl_table_class *table;
     int i;
 
-    die_if_error(get_table(table_name, &table));
+    ctx->error = get_table(table_name, &table);
+    if (ctx->error) {
+        return;
+    }
 
     if (delete_all && ctx->argc > 2) {
         ctl_fatal("--all and records argument should not be specified together");
@@ -1656,8 +1802,11 @@ cmd_destroy(struct ctl_context *ctx)
         for (i = 2; i < ctx->argc; i++) {
             const struct ovsdb_idl_row *row;
 
-            die_if_error(ctl_get_row(ctx, table, ctx->argv[i], must_exist,
-                                     &row));
+            ctx->error = ctl_get_row(ctx, table, ctx->argv[i], must_exist,
+                                     &row);
+            if (ctx->error) {
+                return;
+            }
             if (row) {
                 ovsdb_idl_txn_delete(row);
             }
@@ -1673,10 +1822,16 @@ pre_cmd_wait_until(struct ctl_context *ctx)
     const struct ovsdb_idl_table_class *table;
     int i;
 
-    die_if_error(pre_get_table(ctx, table_name, &table));
+    ctx->error = pre_get_table(ctx, table_name, &table);
+    if (ctx->error) {
+        return;
+    }
 
     for (i = 3; i < ctx->argc; i++) {
-        die_if_error(pre_parse_column_key_value(ctx, ctx->argv[i], table));
+        ctx->error = pre_parse_column_key_value(ctx, ctx->argv[i], table);
+        if (ctx->error) {
+            return;
+        }
     }
 }
 
@@ -1689,8 +1844,14 @@ cmd_wait_until(struct ctl_context *ctx)
     const struct ovsdb_idl_row *row;
     int i;
 
-    die_if_error(get_table(table_name, &table));
-    die_if_error(ctl_get_row(ctx, table, record_id, false, &row));
+    ctx->error = get_table(table_name, &table);
+    if (ctx->error) {
+        return;
+    }
+    ctx->error = ctl_get_row(ctx, table, record_id, false, &row);
+    if (ctx->error) {
+        return;
+    }
     if (!row) {
         ctx->try_again = true;
         return;
@@ -1699,8 +1860,11 @@ cmd_wait_until(struct ctl_context *ctx)
     for (i = 3; i < ctx->argc; i++) {
         bool satisfied;
 
-        die_if_error(check_condition(table, row, ctx->argv[i], ctx->symtab,
-                                     &satisfied));
+        ctx->error = check_condition(table, row, ctx->argv[i], ctx->symtab,
+                                     &satisfied);
+        if (ctx->error) {
+            return;
+        }
         if (!satisfied) {
             ctx->try_again = true;
             return;
