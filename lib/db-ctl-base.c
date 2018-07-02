@@ -277,8 +277,11 @@ record_id_equals(const union ovsdb_atom *name, enum ovsdb_atomic_type type,
 static const struct ovsdb_idl_row *
 get_row_by_id(struct ctl_context *ctx,
               const struct ovsdb_idl_table_class *table,
-              const struct ctl_row_id *id, const char *record_id)
+              const struct ctl_row_id *id, const char *record_id,
+              bool *multiple_matches)
 {
+    ovs_assert(multiple_matches);
+    *multiple_matches = false;
 
     if (!id->name_column) {
         return NULL;
@@ -336,8 +339,8 @@ get_row_by_id(struct ctl_context *ctx,
         /* If the name equals 'record_id', take it. */
         if (record_id_equals(name, name_type, record_id)) {
             if (referrer) {
-                ctl_fatal("multiple rows in %s match \"%s\"",
-                          id_table->name, record_id);
+                *multiple_matches = true;
+                return NULL;
             }
             referrer = row;
         }
@@ -386,8 +389,18 @@ ctl_get_row(struct ctl_context *ctx,
         const struct ctl_table_class *ctl_class
             = &ctl_classes[table - idl_classes];
         for (int i = 0; i < ARRAY_SIZE(ctl_class->row_ids); i++) {
-            row = get_row_by_id(ctx, table, &ctl_class->row_ids[i],
-                                record_id);
+            const struct ctl_row_id *id = &ctl_class->row_ids[i];
+            bool multiple_matches;
+
+            row = get_row_by_id(ctx, table, id, record_id, &multiple_matches);
+            if (multiple_matches) {
+                const struct ovsdb_idl_class *class =
+                    ovsdb_idl_get_class(ctx->idl);
+                const struct ovsdb_idl_table_class *table_class =
+                    ovsdb_idl_table_class_from_column(class, id->name_column);
+                ctl_fatal("multiple rows in %s match \"%s\"",
+                          table_class->name, record_id);
+            }
             if (row) {
                 break;
             }
