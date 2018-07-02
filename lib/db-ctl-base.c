@@ -73,9 +73,9 @@ static size_t n_classes;
 
 static struct shash all_commands = SHASH_INITIALIZER(&all_commands);
 static char *get_table(const char *, const struct ovsdb_idl_table_class **);
-static void set_column(const struct ovsdb_idl_table_class *,
-                       const struct ovsdb_idl_row *, const char *,
-                       struct ovsdb_symbol_table *);
+static char *set_column(const struct ovsdb_idl_table_class *,
+                        const struct ovsdb_idl_row *, const char *,
+                        struct ovsdb_symbol_table *);
 
 
 static struct option *
@@ -1197,37 +1197,52 @@ cmd_find(struct ctl_context *ctx)
     free(columns);
 }
 
-/* Sets the column of 'row' in 'table'. */
-static void
+/* Sets the column of 'row' in 'table'. Returns NULL on success or a
+ * malloc()'ed error message on failure. */
+static char * OVS_WARN_UNUSED_RESULT
 set_column(const struct ovsdb_idl_table_class *table,
            const struct ovsdb_idl_row *row, const char *arg,
            struct ovsdb_symbol_table *symtab)
 {
     const struct ovsdb_idl_column *column;
-    char *key_string, *value_string;
+    char *key_string = NULL;
+    char *value_string = NULL;
     char *error;
 
     error = parse_column_key_value(arg, table, &column, &key_string,
                                    NULL, NULL, 0, &value_string);
-    die_if_error(error);
-    if (!value_string) {
-        ctl_fatal("%s: missing value", arg);
+    if (error) {
+        goto out;
     }
-    die_if_error(check_mutable(row, column));
+    if (!value_string) {
+        error = xasprintf("%s: missing value", arg);
+        goto out;
+    }
+    error = check_mutable(row, column);
+    if (error) {
+        goto out;
+    }
 
     if (key_string) {
         union ovsdb_atom key, value;
         struct ovsdb_datum datum;
 
         if (column->type.value.type == OVSDB_TYPE_VOID) {
-            ctl_fatal("cannot specify key to set for non-map column %s",
-                      column->name);
+            error = xasprintf("cannot specify key to set for non-map column "
+                              "%s", column->name);
+            goto out;
         }
 
-        die_if_error(ovsdb_atom_from_string(&key, NULL, &column->type.key,
-                                            key_string, symtab));
-        die_if_error(ovsdb_atom_from_string(&value, NULL, &column->type.value,
-                                            value_string, symtab));
+        error = ovsdb_atom_from_string(&key, NULL, &column->type.key,
+                                       key_string, symtab);
+        if (error) {
+            goto out;
+        }
+        error = ovsdb_atom_from_string(&value, NULL, &column->type.value,
+                                       value_string, symtab);
+        if (error) {
+            goto out;
+        }
 
         ovsdb_datum_init_empty(&datum);
         ovsdb_datum_add_unsafe(&datum, &key, &value, &column->type, NULL);
@@ -1242,13 +1257,19 @@ set_column(const struct ovsdb_idl_table_class *table,
     } else {
         struct ovsdb_datum datum;
 
-        die_if_error(ovsdb_datum_from_string(&datum, &column->type,
-                                             value_string, symtab));
+        error = ovsdb_datum_from_string(&datum, &column->type,
+                                        value_string, symtab);
+        if (error) {
+            goto out;
+        }
         ovsdb_idl_txn_write(row, column, &datum);
     }
 
+out:
     free(key_string);
     free(value_string);
+
+    return error;
 }
 
 static void
@@ -1281,7 +1302,7 @@ cmd_set(struct ctl_context *ctx)
     }
 
     for (i = 3; i < ctx->argc; i++) {
-        set_column(table, row, ctx->argv[i], ctx->symtab);
+        die_if_error(set_column(table, row, ctx->argv[i], ctx->symtab));
     }
 
     invalidate_cache(ctx);
@@ -1514,7 +1535,7 @@ cmd_create(struct ctl_context *ctx)
 
     row = ovsdb_idl_txn_insert(ctx->txn, table, uuid);
     for (i = 2; i < ctx->argc; i++) {
-        set_column(table, row, ctx->argv[i], ctx->symtab);
+        die_if_error(set_column(table, row, ctx->argv[i], ctx->symtab));
     }
     ds_put_format(&ctx->output, UUID_FMT, UUID_ARGS(&row->uuid));
 }
@@ -2332,5 +2353,5 @@ void ctl_set_column(const char *table_name,
     const struct ovsdb_idl_table_class *table;
 
     die_if_error(get_table(table_name, &table));
-    set_column(table, row, arg, symtab);
+    die_if_error(set_column(table, row, arg, symtab));
 }
