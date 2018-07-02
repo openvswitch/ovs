@@ -1285,6 +1285,7 @@ cmd_find(struct ctl_context *ctx)
             ctx->error = check_condition(table, row, ctx->argv[i],
                                          ctx->symtab, &satisfied);
             if (ctx->error) {
+                free(columns);
                 return;
             }
             if (!satisfied) {
