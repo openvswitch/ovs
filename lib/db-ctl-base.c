@@ -902,7 +902,8 @@ cmd_get(struct ctl_context *ctx)
     int i;
 
     if (id && !must_exist) {
-        ctl_fatal("--if-exists and --id may not be specified together");
+        ctl_error(ctx, "--if-exists and --id may not be specified together");
+        return;
     }
 
     ctx->error = get_table(table_name, &table);
@@ -926,8 +927,9 @@ cmd_get(struct ctl_context *ctx)
             return;
         }
         if (!new) {
-            ctl_fatal("row id \"%s\" specified on \"get\" command was used "
-                      "before it was defined", id);
+            ctl_error(ctx, "row id \"%s\" specified on \"get\" command was "
+                      "used before it was defined", id);
+            return;
         }
         symbol->uuid = row->uuid;
 
@@ -962,8 +964,11 @@ cmd_get(struct ctl_context *ctx)
             unsigned int idx;
 
             if (column->type.value.type == OVSDB_TYPE_VOID) {
-                ctl_fatal("cannot specify key to get for non-map column %s",
+                ctl_error(ctx,
+                          "cannot specify key to get for non-map column %s",
                           column->name);
+                free(key_string);
+                return;
             }
 
             ctx->error = ovsdb_atom_from_string(&key, NULL, &column->type.key,
@@ -977,9 +982,11 @@ cmd_get(struct ctl_context *ctx)
                                        column->type.key.type);
             if (idx == UINT_MAX) {
                 if (must_exist) {
-                    ctl_fatal("no key \"%s\" in %s record \"%s\" column %s",
-                              key_string, table->name, record_id,
-                              column->name);
+                    ctl_error(
+                        ctx, "no key \"%s\" in %s record \"%s\" column %s",
+                        key_string, table->name, record_id, column->name);
+                    free(key_string);
+                    return;
                 }
             } else {
                 ovsdb_atom_to_string(&datum->values[idx],
