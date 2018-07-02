@@ -1235,10 +1235,16 @@ netdev_tc_flow_del(struct netdev *netdev OVS_UNUSED,
 }
 
 static void
-probe_multi_mask_per_prio(int ifindex, uint32_t block_id)
+probe_multi_mask_per_prio(int ifindex)
 {
     struct tc_flower flower;
+    int block_id = 0;
     int error;
+
+    error = tc_add_del_ingress_qdisc(ifindex, true, block_id);
+    if (error) {
+        return;
+    }
 
     memset(&flower, 0, sizeof flower);
 
@@ -1249,7 +1255,7 @@ probe_multi_mask_per_prio(int ifindex, uint32_t block_id)
 
     error = tc_replace_flower(ifindex, 1, 1, &flower, block_id);
     if (error) {
-        return;
+        goto out;
     }
 
     memset(&flower.key.src_mac, 0x11, sizeof flower.key.src_mac);
@@ -1259,13 +1265,16 @@ probe_multi_mask_per_prio(int ifindex, uint32_t block_id)
     tc_del_filter(ifindex, 1, 1, block_id);
 
     if (error) {
-        return;
+        goto out;
     }
 
     tc_del_filter(ifindex, 1, 2, block_id);
 
     multi_mask_per_prio = true;
     VLOG_INFO("probe tc: multiple masks on single tc prio is supported.");
+
+out:
+    tc_add_del_ingress_qdisc(ifindex, false, block_id);
 }
 
 static void
@@ -1306,6 +1315,11 @@ netdev_tc_init_flow_api(struct netdev *netdev)
         ovsthread_once_done(&block_once);
     }
 
+    if (ovsthread_once_start(&multi_mask_once)) {
+        probe_multi_mask_per_prio(ifindex);
+        ovsthread_once_done(&multi_mask_once);
+    }
+
     block_id = get_block_id_from_netdev(netdev);
     error = tc_add_del_ingress_qdisc(ifindex, true, block_id);
 
@@ -1316,11 +1330,6 @@ netdev_tc_init_flow_api(struct netdev *netdev)
     }
 
     VLOG_INFO("added ingress qdisc to %s", netdev_get_name(netdev));
-
-    if (ovsthread_once_start(&multi_mask_once)) {
-        probe_multi_mask_per_prio(ifindex, block_id);
-        ovsthread_once_done(&multi_mask_once);
-    }
 
     return 0;
 }
