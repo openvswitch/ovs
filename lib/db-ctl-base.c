@@ -1785,11 +1785,15 @@ cmd_destroy(struct ctl_context *ctx)
     }
 
     if (delete_all && ctx->argc > 2) {
-        ctl_fatal("--all and records argument should not be specified together");
+        ctl_error(ctx, "--all and records argument should not be specified "
+                  "together");
+        return;
     }
 
     if (delete_all && !must_exist) {
-        ctl_fatal("--all and --if-exists should not be specified together");
+        ctl_error(ctx, "--all and --if-exists should not be specified "
+                  "together");
+        return;
     }
 
     if (delete_all) {
