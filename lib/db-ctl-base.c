@@ -1661,9 +1661,10 @@ cmd_clear(struct ctl_context *ctx)
 
         type = &column->type;
         if (type->n_min > 0) {
-            ctl_fatal("\"clear\" operation cannot be applied to column %s "
-                      "of table %s, which is not allowed to be empty",
+            ctl_error(ctx, "\"clear\" operation cannot be applied to column "
+                      "%s of table %s, which is not allowed to be empty",
                       column->name, table->name);
+            return;
         }
 
         ovsdb_datum_init_empty(&datum);
