@@ -1582,18 +1582,19 @@ cmd_remove(struct ctl_context *ctx)
                     return;
                 }
             } else {
-                ctl_fatal("%s", error);
+                ctx->error = error;
+                return;
             }
         }
         ovsdb_datum_subtract(&old, type, &rm, &rm_type);
         ovsdb_datum_destroy(&rm, &rm_type);
     }
     if (old.n < type->n_min) {
-        ctl_fatal("\"remove\" operation would put %u %s in column %s of "
-                  "table %s but the minimum number is %u",
-                  old.n,
+        ctl_error(ctx, "\"remove\" operation would put %u %s in column %s of "
+                  "table %s but the minimum number is %u", old.n,
                   type->value.type == OVSDB_TYPE_VOID ? "values" : "pairs",
                   column->name, table->name, type->n_min);
+        return;
     }
     ovsdb_idl_txn_verify(row, column);
     ovsdb_idl_txn_write(row, column, &old);
