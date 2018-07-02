@@ -634,14 +634,17 @@ pre_parse_column_key_value(struct ctl_context *ctx,
     return column;
 }
 
-static void
+/* Checks if the 'column' is mutable. Returns NULL if it is mutable, or a
+ * malloc()'ed error message otherwise. */
+static char * OVS_WARN_UNUSED_RESULT
 check_mutable(const struct ovsdb_idl_row *row,
               const struct ovsdb_idl_column *column)
 {
     if (!ovsdb_idl_is_mutable(row, column)) {
-        ctl_fatal("cannot modify read-only column %s in table %s",
-                  column->name, row->table->class_->name);
+        return xasprintf("cannot modify read-only column %s in table %s",
+                         column->name, row->table->class_->name);
     }
+    return NULL;
 }
 
 #define RELOPS                                  \
@@ -1210,7 +1213,7 @@ set_column(const struct ovsdb_idl_table_class *table,
     if (!value_string) {
         ctl_fatal("%s: missing value", arg);
     }
-    check_mutable(row, column);
+    die_if_error(check_mutable(row, column));
 
     if (key_string) {
         union ovsdb_atom key, value;
@@ -1316,7 +1319,7 @@ cmd_add(struct ctl_context *ctx)
     if (!row) {
         return;
     }
-    check_mutable(row, column);
+    die_if_error(check_mutable(row, column));
 
     type = &column->type;
     ovsdb_datum_clone(&old, ovsdb_idl_read(row, column), &column->type);
@@ -1377,7 +1380,7 @@ cmd_remove(struct ctl_context *ctx)
     if (!row) {
         return;
     }
-    check_mutable(row, column);
+    die_if_error(check_mutable(row, column));
 
     type = &column->type;
     ovsdb_datum_clone(&old, ovsdb_idl_read(row, column), &column->type);
@@ -1455,7 +1458,7 @@ cmd_clear(struct ctl_context *ctx)
         struct ovsdb_datum datum;
 
         die_if_error(get_column(table, ctx->argv[i], &column));
-        check_mutable(row, column);
+        die_if_error(check_mutable(row, column));
 
         type = &column->type;
         if (type->n_min > 0) {
