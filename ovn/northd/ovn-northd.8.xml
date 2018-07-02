@@ -1383,7 +1383,8 @@ nd_na {
           address is <var>A</var>, a priority-40 flow with match <code>inport
           == <var>P</var> &amp;&amp; ip.ttl == {0, 1} &amp;&amp;
           !ip.later_frag</code> matches packets whose TTL has expired, with the
-          following actions to send an ICMP time exceeded reply:
+          following actions to send an ICMP time exceeded reply for IPv4 and
+          IPv6 respectively:
         </p>
 
         <pre>
@@ -1392,6 +1393,15 @@ icmp4 {
     icmp4.code = 0;  /* TTL exceeded in transit. */
     ip4.dst = ip4.src;
     ip4.src = <var>A</var>;
+    ip.ttl = 255;
+    next;
+};
+
+icmp6 {
+    icmp6.type = 3; /* Time exceeded. */
+    icmp6.code = 0;  /* TTL exceeded in transit. */
+    ip6.dst = ip6.src;
+    ip6.src = <var>A</var>;
     ip.ttl = 255;
     next;
 };
