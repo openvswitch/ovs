@@ -465,14 +465,18 @@ get_column(const struct ovsdb_idl_table_class *table, const char *column_name,
     }
 }
 
-static void
+static char * OVS_WARN_UNUSED_RESULT
 pre_get_column(struct ctl_context *ctx,
                const struct ovsdb_idl_table_class *table,
                const char *column_name,
                const struct ovsdb_idl_column **columnp)
 {
-    die_if_error(get_column(table, column_name, columnp));
+    char *error = get_column(table, column_name, columnp);
+    if (error) {
+        return error;
+    }
     ovsdb_idl_add_column(ctx->idl, *columnp);
+    return NULL;
 }
 
 static const struct ovsdb_idl_table_class *
@@ -651,7 +655,7 @@ pre_parse_column_key_value(struct ctl_context *ctx,
         ctl_fatal("%s: missing column name", arg);
     }
 
-    pre_get_column(ctx, table, column_name, &column);
+    die_if_error(pre_get_column(ctx, table, column_name, &column));
     free(column_name);
 
     return column;
@@ -1343,7 +1347,7 @@ pre_cmd_add(struct ctl_context *ctx)
     const struct ovsdb_idl_column *column;
 
     table = pre_get_table(ctx, table_name);
-    pre_get_column(ctx, table, column_name, &column);
+    die_if_error(pre_get_column(ctx, table, column_name, &column));
 }
 
 static void
@@ -1404,7 +1408,7 @@ pre_cmd_remove(struct ctl_context *ctx)
     const struct ovsdb_idl_column *column;
 
     table = pre_get_table(ctx, table_name);
-    pre_get_column(ctx, table, column_name, &column);
+    die_if_error(pre_get_column(ctx, table, column_name, &column));
 }
 
 static void
@@ -1479,7 +1483,7 @@ pre_cmd_clear(struct ctl_context *ctx)
     for (i = 3; i < ctx->argc; i++) {
         const struct ovsdb_idl_column *column;
 
-        pre_get_column(ctx, table, ctx->argv[i], &column);
+        die_if_error(pre_get_column(ctx, table, ctx->argv[i], &column));
     }
 }
 
