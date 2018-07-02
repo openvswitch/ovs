@@ -479,11 +479,15 @@ pre_get_column(struct ctl_context *ctx,
     return NULL;
 }
 
-static const struct ovsdb_idl_table_class *
-pre_get_table(struct ctl_context *ctx, const char *table_name)
+static char * OVS_WARN_UNUSED_RESULT
+pre_get_table(struct ctl_context *ctx, const char *table_name,
+              const struct ovsdb_idl_table_class **tablep)
 {
     const struct ovsdb_idl_table_class *table;
-    die_if_error(get_table(table_name, &table));
+    char *error = get_table(table_name, &table);
+    if (error) {
+        return error;
+    }
     ovsdb_idl_add_table(ctx->idl, table);
 
     const struct ctl_table_class *ctl = &ctl_classes[table - idl_classes];
@@ -497,7 +501,10 @@ pre_get_table(struct ctl_context *ctx, const char *table_name)
         }
     }
 
-    return table;
+    if (tablep) {
+        *tablep = table;
+    }
+    return NULL;
 }
 
 static char *
@@ -868,7 +875,7 @@ pre_cmd_get(struct ctl_context *ctx)
                   "possibly erroneous");
     }
 
-    table = pre_get_table(ctx, table_name);
+    die_if_error(pre_get_table(ctx, table_name, &table));
     for (i = 3; i < ctx->argc; i++) {
         if (!strcasecmp(ctx->argv[i], "_uuid")
             || !strcasecmp(ctx->argv[i], "-uuid")) {
@@ -1054,7 +1061,7 @@ pre_cmd_list(struct ctl_context *ctx)
     const char *table_name = ctx->argv[1];
     const struct ovsdb_idl_table_class *table;
 
-    table = pre_get_table(ctx, table_name);
+    die_if_error(pre_get_table(ctx, table_name, &table));
     pre_list_columns(ctx, table, column_names);
 }
 
@@ -1186,7 +1193,7 @@ pre_cmd_find(struct ctl_context *ctx)
     const struct ovsdb_idl_table_class *table;
     int i;
 
-    table = pre_get_table(ctx, table_name);
+    die_if_error(pre_get_table(ctx, table_name, &table));
     pre_list_columns(ctx, table, column_names);
     for (i = 2; i < ctx->argc; i++) {
         pre_parse_column_key_value(ctx, ctx->argv[i], table);
@@ -1309,7 +1316,7 @@ pre_cmd_set(struct ctl_context *ctx)
     const struct ovsdb_idl_table_class *table;
     int i;
 
-    table = pre_get_table(ctx, table_name);
+    die_if_error(pre_get_table(ctx, table_name, &table));
     for (i = 3; i < ctx->argc; i++) {
         pre_parse_column_key_value(ctx, ctx->argv[i], table);
     }
@@ -1346,7 +1353,7 @@ pre_cmd_add(struct ctl_context *ctx)
     const struct ovsdb_idl_table_class *table;
     const struct ovsdb_idl_column *column;
 
-    table = pre_get_table(ctx, table_name);
+    die_if_error(pre_get_table(ctx, table_name, &table));
     die_if_error(pre_get_column(ctx, table, column_name, &column));
 }
 
@@ -1407,7 +1414,7 @@ pre_cmd_remove(struct ctl_context *ctx)
     const struct ovsdb_idl_table_class *table;
     const struct ovsdb_idl_column *column;
 
-    table = pre_get_table(ctx, table_name);
+    die_if_error(pre_get_table(ctx, table_name, &table));
     die_if_error(pre_get_column(ctx, table, column_name, &column));
 }
 
@@ -1479,7 +1486,7 @@ pre_cmd_clear(struct ctl_context *ctx)
     const struct ovsdb_idl_table_class *table;
     int i;
 
-    table = pre_get_table(ctx, table_name);
+    die_if_error(pre_get_table(ctx, table_name, &table));
     for (i = 3; i < ctx->argc; i++) {
         const struct ovsdb_idl_column *column;
 
@@ -1603,7 +1610,7 @@ pre_cmd_destroy(struct ctl_context *ctx)
 {
     const char *table_name = ctx->argv[1];
 
-    pre_get_table(ctx, table_name);
+    die_if_error(pre_get_table(ctx, table_name, NULL));
 }
 
 static void
@@ -1656,7 +1663,7 @@ pre_cmd_wait_until(struct ctl_context *ctx)
     const struct ovsdb_idl_table_class *table;
     int i;
 
-    table = pre_get_table(ctx, table_name);
+    die_if_error(pre_get_table(ctx, table_name, &table));
 
     for (i = 3; i < ctx->argc; i++) {
         pre_parse_column_key_value(ctx, ctx->argv[i], table);
