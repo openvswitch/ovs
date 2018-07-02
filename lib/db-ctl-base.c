@@ -186,14 +186,6 @@ print_command_arguments(const struct ctl_command_syntax *command)
     free(output);
 }
 
-static void
-die_if_error(char *error)
-{
-    if (error) {
-        ctl_fatal("%s", error);
-    }
-}
-
 static int
 to_lower_and_underscores(unsigned c)
 {
