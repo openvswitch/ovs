@@ -1049,7 +1049,7 @@ encode_CT_LB(const struct ovnact_ct_lb *cl,
                       recirc_table, zone_reg);
     }
 
-    table_id = ovn_extend_table_assign_id(ep->group_table, &ds);
+    table_id = ovn_extend_table_assign_id(ep->group_table, ds_cstr(&ds));
     ds_destroy(&ds);
     if (table_id == EXT_TABLE_ID_INVALID) {
         return;
@@ -2217,24 +2217,20 @@ encode_SET_METER(const struct ovnact_set_meter *cl,
     uint32_t table_id;
     struct ofpact_meter *om;
 
-    struct ds ds = DS_EMPTY_INITIALIZER;
+    char *name;
     if (cl->burst) {
-        ds_put_format(&ds,
-                      "kbps burst stats bands=type=drop rate=%"PRId64" "
-                      "burst_size=%"PRId64"",
-                      cl->rate, cl->burst);
+        name = xasprintf("kbps burst stats bands=type=drop rate=%"PRId64" "
+                         "burst_size=%"PRId64"", cl->rate, cl->burst);
     } else {
-        ds_put_format(&ds, "kbps stats bands=type=drop rate=%"PRId64"",
-                      cl->rate);
+        name = xasprintf("kbps stats bands=type=drop rate=%"PRId64"",
+                         cl->rate);
     }
 
-    table_id = ovn_extend_table_assign_id(ep->meter_table, &ds);
+    table_id = ovn_extend_table_assign_id(ep->meter_table, name);
+    free(name);
     if (table_id == EXT_TABLE_ID_INVALID) {
-        ds_destroy(&ds);
         return;
     }
-
-    ds_destroy(&ds);
 
     /* Create an action to set the meter. */
     om = ofpact_put_METER(ofpacts);
