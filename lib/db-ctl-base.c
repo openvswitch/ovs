@@ -72,7 +72,7 @@ static const struct ovsdb_idl_table_class *idl_classes;
 static size_t n_classes;
 
 static struct shash all_commands = SHASH_INITIALIZER(&all_commands);
-static const struct ovsdb_idl_table_class *get_table(const char *table_name);
+static char *get_table(const char *, const struct ovsdb_idl_table_class **);
 static void set_column(const struct ovsdb_idl_table_class *,
                        const struct ovsdb_idl_row *, const char *,
                        struct ovsdb_symbol_table *);
@@ -455,7 +455,8 @@ pre_get_column(struct ctl_context *ctx,
 static const struct ovsdb_idl_table_class *
 pre_get_table(struct ctl_context *ctx, const char *table_name)
 {
-    const struct ovsdb_idl_table_class *table = get_table(table_name);
+    const struct ovsdb_idl_table_class *table;
+    die_if_error(get_table(table_name, &table));
     ovsdb_idl_add_table(ctx->idl, table);
 
     const struct ctl_table_class *ctl = &ctl_classes[table - idl_classes];
@@ -842,7 +843,7 @@ cmd_get(struct ctl_context *ctx)
         ctl_fatal("--if-exists and --id may not be specified together");
     }
 
-    table = get_table(table_name);
+    die_if_error(get_table(table_name, &table));
     row = ctl_get_row(ctx, table, record_id, must_exist);
     if (!row) {
         return;
@@ -1073,7 +1074,7 @@ cmd_list(struct ctl_context *ctx)
     size_t n_columns;
     int i;
 
-    table = get_table(table_name);
+    die_if_error(get_table(table_name, &table));
     die_if_error(parse_column_names(column_names, table, &columns, &n_columns));
     out = ctx->table = list_make_table(columns, n_columns);
     if (ctx->argc > 2) {
@@ -1092,13 +1093,15 @@ cmd_list(struct ctl_context *ctx)
     free(columns);
 }
 
-/* Finds and returns the "struct ovsdb_idl_table_class *" with 'table_name' by
- * searching the tables in these schema. */
-static const struct ovsdb_idl_table_class *
-get_table(const char *table_name)
+/* Finds the "struct ovsdb_idl_table_class *" with 'table_name' by searching
+ * the tables in these schema. Returns NULL and sets 'tablep' on success, or a
+ * malloc()'ed error message on failure. */
+static char * OVS_WARN_UNUSED_RESULT
+get_table(const char *table_name, const struct ovsdb_idl_table_class **tablep)
 {
     const struct ovsdb_idl_table_class *best_match = NULL;
     unsigned int best_score = 0;
+    char *error = NULL;
 
     for (const struct ovsdb_idl_table_class *table = idl_classes;
          table < &idl_classes[n_classes]; table++) {
@@ -1111,13 +1114,13 @@ get_table(const char *table_name)
         }
     }
     if (best_match) {
-        return best_match;
+        *tablep = best_match;
     } else if (best_score) {
-        ctl_fatal("multiple table names match \"%s\"", table_name);
+        error = xasprintf("multiple table names match \"%s\"", table_name);
     } else {
-        ctl_fatal("unknown table \"%s\"", table_name);
+        error = xasprintf("unknown table \"%s\"", table_name);
     }
-    return NULL;
+    return error;
 }
 
 static void
@@ -1146,7 +1149,7 @@ cmd_find(struct ctl_context *ctx)
     struct table *out;
     size_t n_columns;
 
-    table = get_table(table_name);
+    die_if_error(get_table(table_name, &table));
     die_if_error(parse_column_names(column_names, table, &columns, &n_columns));
     out = ctx->table = list_make_table(columns, n_columns);
     for (row = ovsdb_idl_first_row(ctx->idl, table); row;
@@ -1243,7 +1246,7 @@ cmd_set(struct ctl_context *ctx)
     const struct ovsdb_idl_row *row;
     int i;
 
-    table = get_table(table_name);
+    die_if_error(get_table(table_name, &table));
     row = ctl_get_row(ctx, table, record_id, must_exist);
     if (!row) {
         return;
@@ -1282,7 +1285,7 @@ cmd_add(struct ctl_context *ctx)
     struct ovsdb_datum old;
     int i;
 
-    table = get_table(table_name);
+    die_if_error(get_table(table_name, &table));
     die_if_error(get_column(table, column_name, &column));
     row = ctl_get_row(ctx, table, record_id, must_exist);
     if (!row) {
@@ -1343,7 +1346,7 @@ cmd_remove(struct ctl_context *ctx)
     struct ovsdb_datum old;
     int i;
 
-    table = get_table(table_name);
+    die_if_error(get_table(table_name, &table));
     die_if_error(get_column(table, column_name, &column));
     row = ctl_get_row(ctx, table, record_id, must_exist);
     if (!row) {
@@ -1415,7 +1418,7 @@ cmd_clear(struct ctl_context *ctx)
     const struct ovsdb_idl_row *row;
     int i;
 
-    table = get_table(table_name);
+    die_if_error(get_table(table_name, &table));
     row = ctl_get_row(ctx, table, record_id, must_exist);
     if (!row) {
         return;
@@ -1450,7 +1453,7 @@ pre_create(struct ctl_context *ctx)
     const char *table_name = ctx->argv[1];
     const struct ovsdb_idl_table_class *table;
 
-    table = get_table(table_name);
+    die_if_error(get_table(table_name, &table));
     if (!id && !table->is_root) {
         VLOG_WARN("applying \"create\" command to table %s without --id "
                   "option will have no effect", table->name);
@@ -1462,11 +1465,12 @@ cmd_create(struct ctl_context *ctx)
 {
     const char *id = shash_find_data(&ctx->options, "--id");
     const char *table_name = ctx->argv[1];
-    const struct ovsdb_idl_table_class *table = get_table(table_name);
+    const struct ovsdb_idl_table_class *table;
     const struct ovsdb_idl_row *row;
     const struct uuid *uuid;
     int i;
 
+    die_if_error(get_table(table_name, &table));
     if (id) {
         struct ovsdb_symbol *symbol = create_symbol(ctx->symtab, id, NULL);
         if (table->is_root) {
@@ -1530,7 +1534,7 @@ cmd_destroy(struct ctl_context *ctx)
     const struct ovsdb_idl_table_class *table;
     int i;
 
-    table = get_table(table_name);
+    die_if_error(get_table(table_name, &table));
 
     if (delete_all && ctx->argc > 2) {
         ctl_fatal("--all and records argument should not be specified together");
@@ -1586,7 +1590,7 @@ cmd_wait_until(struct ctl_context *ctx)
     const struct ovsdb_idl_row *row;
     int i;
 
-    table = get_table(table_name);
+    die_if_error(get_table(table_name, &table));
 
     row = ctl_get_row(ctx, table, record_id, false);
     if (!row) {
@@ -2293,5 +2297,8 @@ void ctl_set_column(const char *table_name,
                     const struct ovsdb_idl_row *row, const char *arg,
                     struct ovsdb_symbol_table *symtab)
 {
-    set_column(get_table(table_name), row, arg, symtab);
+    const struct ovsdb_idl_table_class *table;
+
+    die_if_error(get_table(table_name, &table));
+    set_column(table, row, arg, symtab);
 }
