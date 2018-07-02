@@ -647,25 +647,30 @@ parse_column_key_value(const char *arg,
     return error;
 }
 
-static const struct ovsdb_idl_column *
-pre_parse_column_key_value(struct ctl_context *ctx,
-                           const char *arg,
+static char * OVS_WARN_UNUSED_RESULT
+pre_parse_column_key_value(struct ctl_context *ctx, const char *arg,
                            const struct ovsdb_idl_table_class *table)
 {
     const struct ovsdb_idl_column *column;
     const char *p;
-    char *column_name;
+    char *column_name = NULL;
+    char *error;
 
     p = arg;
-    die_if_error(ovsdb_token_parse(&p, &column_name));
+    error = ovsdb_token_parse(&p, &column_name);
+    if (error) {
+        goto out;
+    }
     if (column_name[0] == '\0') {
-        ctl_fatal("%s: missing column name", arg);
+        error = xasprintf("%s: missing column name", arg);
+        goto out;
     }
 
-    die_if_error(pre_get_column(ctx, table, column_name, &column));
+    error = pre_get_column(ctx, table, column_name, &column);
+out:
     free(column_name);
 
-    return column;
+    return error;
 }
 
 /* Checks if the 'column' is mutable. Returns NULL if it is mutable, or a
@@ -882,7 +887,7 @@ pre_cmd_get(struct ctl_context *ctx)
             continue;
         }
 
-        pre_parse_column_key_value(ctx, ctx->argv[i], table);
+        die_if_error(pre_parse_column_key_value(ctx, ctx->argv[i], table));
     }
 }
 
@@ -1196,7 +1201,7 @@ pre_cmd_find(struct ctl_context *ctx)
     die_if_error(pre_get_table(ctx, table_name, &table));
     pre_list_columns(ctx, table, column_names);
     for (i = 2; i < ctx->argc; i++) {
-        pre_parse_column_key_value(ctx, ctx->argv[i], table);
+        die_if_error(pre_parse_column_key_value(ctx, ctx->argv[i], table));
     }
 }
 
@@ -1318,7 +1323,7 @@ pre_cmd_set(struct ctl_context *ctx)
 
     die_if_error(pre_get_table(ctx, table_name, &table));
     for (i = 3; i < ctx->argc; i++) {
-        pre_parse_column_key_value(ctx, ctx->argv[i], table);
+        die_if_error(pre_parse_column_key_value(ctx, ctx->argv[i], table));
     }
 }
 
@@ -1666,7 +1671,7 @@ pre_cmd_wait_until(struct ctl_context *ctx)
     die_if_error(pre_get_table(ctx, table_name, &table));
 
     for (i = 3; i < ctx->argc; i++) {
-        pre_parse_column_key_value(ctx, ctx->argv[i], table);
+        die_if_error(pre_parse_column_key_value(ctx, ctx->argv[i], table));
     }
 }
 
