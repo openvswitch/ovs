@@ -529,16 +529,18 @@ if $ovn; then
         OVN_CTRLR_PKI=""
     fi
     for i in $(seq $n_northds); do
+        if [ $i -eq 1 ]; then inst=""; else inst=$i; fi
         rungdb $gdb_ovn_northd $gdb_ovn_northd_ex ovn-northd --detach \
-               --no-chdir --pidfile=ovn-northd$i.pid -vconsole:off \
-               --log-file=ovn-northd$i.log -vsyslog:off \
+               --no-chdir --pidfile=ovn-northd${inst}.pid -vconsole:off \
+               --log-file=ovn-northd${inst}.log -vsyslog:off \
                --ovnsb-db="$OVN_SB_DB" --ovnnb-db="$OVN_NB_DB"
     done
     for i in $(seq $n_controllers); do
+        if [ $i -eq 1 ]; then inst=""; else inst=$i; fi
         rungdb $gdb_ovn_controller $gdb_ovn_controller_ex ovn-controller \
                $OVN_CTRLR_PKI --detach --no-chdir -vsyslog:off \
-               --log-file=ovn-controller$i.log \
-               --pidfile=ovn-controller$i.pid -vconsole:off
+               --log-file=ovn-controller${inst}.log \
+               --pidfile=ovn-controller${inst}.pid -vconsole:off
     done
     rungdb $gdb_ovn_controller_vtep $gdb_ovn_controller_vtep_ex \
         ovn-controller-vtep --detach --no-chdir --pidfile -vconsole:off \
