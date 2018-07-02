@@ -374,6 +374,11 @@
         Lists each meter table entry and its local meter id.
       </dd>
 
+      <dt><code>group-table-list</code></dt>
+      <dd>
+        Lists each group table entry and its local group id.
+      </dd>
+
       <dt><code>inject-pkt</code> <var>microflow</var></dt>
       <dd>
       <p>
