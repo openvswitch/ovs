@@ -706,10 +706,14 @@ evaluate_relop(const struct ovsdb_datum *a, const struct ovsdb_datum *b,
     }
 }
 
-static bool
-is_condition_satisfied(const struct ovsdb_idl_table_class *table,
-                       const struct ovsdb_idl_row *row, const char *arg,
-                       struct ovsdb_symbol_table *symtab)
+/* Checks if given row satisfies the specified condition. Returns the result of
+ * evaluating the condition in 'satisfied' flag and NULL as a return value on
+ * success. On failure returns a malloc()'ed error message and 'satisfied'
+ * value is not modified. */
+static char * OVS_WARN_UNUSED_RESULT
+check_condition(const struct ovsdb_idl_table_class *table,
+                const struct ovsdb_idl_row *row, const char *arg,
+                struct ovsdb_symbol_table *symtab, bool *satisfied)
 {
     static const char *operators[] = {
 #define RELOP(ENUM, STRING) STRING,
@@ -719,18 +723,24 @@ is_condition_satisfied(const struct ovsdb_idl_table_class *table,
 
     const struct ovsdb_idl_column *column;
     const struct ovsdb_datum *have_datum;
-    char *key_string, *value_string;
+    char *key_string = NULL;
+    char *value_string = NULL;
     struct ovsdb_type type;
     int operator;
     bool retval;
     char *error;
 
+    ovs_assert(satisfied);
+
     error = parse_column_key_value(arg, table, &column, &key_string,
                                    &operator, operators, ARRAY_SIZE(operators),
                                    &value_string);
-    die_if_error(error);
+    if (error) {
+        goto out;
+    }
     if (!value_string) {
-        ctl_fatal("%s: missing value", arg);
+        error = xasprintf("%s: missing value", arg);
+        goto out;
     }
 
     type = column->type;
@@ -743,16 +753,23 @@ is_condition_satisfied(const struct ovsdb_idl_table_class *table,
         unsigned int idx;
 
         if (column->type.value.type == OVSDB_TYPE_VOID) {
-            ctl_fatal("cannot specify key to check for non-map column %s",
-                      column->name);
+            error = xasprintf("cannot specify key to check for non-map column "
+                              "%s", column->name);
+            goto out;
         }
 
-        die_if_error(ovsdb_atom_from_string(&want_key, NULL, &column->type.key,
-                                            key_string, symtab));
+        error = ovsdb_atom_from_string(&want_key, NULL, &column->type.key,
+                                       key_string, symtab);
+        if (error) {
+            goto out;
+        }
 
         type.key = type.value;
         type.value.type = OVSDB_TYPE_VOID;
-        die_if_error(ovsdb_datum_from_string(&b, &type, value_string, symtab));
+        error = ovsdb_datum_from_string(&b, &type, value_string, symtab);
+        if (error) {
+            goto out;
+        }
 
         idx = ovsdb_datum_find_key(have_datum,
                                    &want_key, column->type.key.type);
@@ -779,16 +796,21 @@ is_condition_satisfied(const struct ovsdb_idl_table_class *table,
     } else {
         struct ovsdb_datum want_datum;
 
-        die_if_error(ovsdb_datum_from_string(&want_datum, &column->type,
-                                             value_string, symtab));
+        error = ovsdb_datum_from_string(&want_datum, &column->type,
+                                        value_string, symtab);
+        if (error) {
+            goto out;
+        }
         retval = evaluate_relop(have_datum, &want_datum, &type, operator);
         ovsdb_datum_destroy(&want_datum, &column->type);
     }
 
+    *satisfied = retval;
+out:
     free(key_string);
     free(value_string);
 
-    return retval;
+    return error;
 }
 
 static void
@@ -1157,8 +1179,11 @@ cmd_find(struct ctl_context *ctx)
         int i;
 
         for (i = 2; i < ctx->argc; i++) {
-            if (!is_condition_satisfied(table, row, ctx->argv[i],
-                                        ctx->symtab)) {
+            bool satisfied;
+
+            die_if_error(check_condition(table, row, ctx->argv[i], ctx->symtab,
+                                         &satisfied));
+            if (!satisfied) {
                 goto next_row;
             }
         }
@@ -1599,7 +1624,11 @@ cmd_wait_until(struct ctl_context *ctx)
     }
 
     for (i = 3; i < ctx->argc; i++) {
-        if (!is_condition_satisfied(table, row, ctx->argv[i], ctx->symtab)) {
+        bool satisfied;
+
+        die_if_error(check_condition(table, row, ctx->argv[i], ctx->symtab,
+                                     &satisfied));
+        if (!satisfied) {
             ctx->try_again = true;
             return;
         }
