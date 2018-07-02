@@ -30,7 +30,9 @@
 #    - ovs_dump_netdev_provider
 #    - ovs_dump_ovs_list <struct ovs_list *> {[<structure>] [<member>] {dump}]}
 #    - ovs_dump_simap <struct simap *>
+#    - ovs_dump_udpif_keys {<udpif_name>|<udpif_address>} {short}
 #    - ovs_show_fdb {[<bridge_name>] {dbg} {hash}}
+#    - ovs_show_upcall {dbg}
 #
 #  Example:
 #    $ gdb $(which ovs-vswitchd) $(pidof ovs-vswitchd)
@@ -52,8 +54,14 @@
 #    ...
 #    ...
 #
-
 import gdb
+import uuid
+
+
+#
+# Global #define's from OVS which might need updating based on a version.
+#
+N_UMAPS = 512
 
 
 #
@@ -139,6 +147,7 @@ def eth_addr_to_string(eth_addr):
         long(eth_addr['ea'][3]),
         long(eth_addr['ea'][4]),
         long(eth_addr['ea'][5]))
+
 
 #
 # Class that will provide an iterator over an OVS cmap.
@@ -242,6 +251,39 @@ class ForEachHMAP(object):
         return container_of(self.node,
                             gdb.lookup_type(self.typeobj).pointer(),
                             self.member)
+
+
+#
+# Class that will provide an iterator over an Netlink attributes
+#
+class ForEachNL():
+    def __init__(self, nlattrs, nlattrs_len):
+        self.attr = nlattrs.cast(gdb.lookup_type('struct nlattr').pointer())
+        self.attr_len = long(nlattrs_len)
+
+    def __iter__(self):
+        return self
+
+    def round_up(self, val, round_to):
+        return int(val) + (round_to - int(val)) % round_to
+
+    def next(self):
+        if self.attr is None or \
+           self.attr_len < 4 or self.attr['nla_len'] < 4 or  \
+           self.attr['nla_len'] > self.attr_len:
+            #
+            # Invalid attr set, maybe we should raise an exception?
+            #
+            raise StopIteration
+
+        attr = self.attr
+        self.attr_len -= self.round_up(attr['nla_len'], 4)
+
+        self.attr = self.attr.cast(gdb.lookup_type('void').pointer()) \
+            + self.round_up(attr['nla_len'], 4)
+        self.attr = self.attr.cast(gdb.lookup_type('struct nlattr').pointer())
+
+        return attr
 
 
 #
@@ -724,6 +766,117 @@ class CmdDumpSimap(gdb.Command):
 
 
 #
+# Implements the GDB "ovs_dump_simap" command
+#
+class CmdDumpUdpifKeys(gdb.Command):
+    """Dump all nodes of an ovs_list give
+    Usage: ovs_dump_udpif_keys {<udpif_name>|<udpif_address>} {short}
+
+      <udpif_name>    : Full name of the udpif's dpif to dump
+      <udpif_address> : Address of the udpif structure to dump. If both the
+                        <udpif_name> and <udpif_address> are omitted the
+                        available udpif structures are displayed.
+      short           : Only dump ukey structure addresses, no content details
+    """
+
+    def __init__(self):
+        super(CmdDumpUdpifKeys, self).__init__("ovs_dump_udpif_keys",
+                                               gdb.COMMAND_DATA)
+
+    def count_all_ukeys(self, udpif):
+        count = 0
+        for j in range(0, N_UMAPS):
+            count += udpif['ukeys'][j]['cmap']['impl']['p']['n']
+        return count
+
+    def dump_all_ukeys(self, udpif, indent=0, short=False):
+        indent = " " * indent
+        for j in range(0, N_UMAPS):
+            if udpif['ukeys'][j]['cmap']['impl']['p']['n'] != 0:
+                print("{}(struct umap *) {}:".
+                      format(indent, udpif['ukeys'][j].address))
+                for ukey in ForEachCMAP(udpif['ukeys'][j]['cmap'],
+                                        "struct udpif_key", "cmap_node"):
+
+                    base_str = "{}  (struct udpif_key *) {}: ". \
+                        format(indent, ukey)
+                    if short:
+                        print(base_str)
+                        continue
+
+                    print("{}key_len = {}, mask_len = {}".
+                          format(base_str, ukey['key_len'], ukey['mask_len']))
+
+                    indent_b = " " * len(base_str)
+                    if ukey['ufid_present']:
+                        print("{}ufid = {}".
+                              format(
+                                  indent_b, str(uuid.UUID(
+                                      "{:08x}{:08x}{:08x}{:08x}".
+                                      format(long(ukey['ufid']['u32'][3]),
+                                             long(ukey['ufid']['u32'][2]),
+                                             long(ukey['ufid']['u32'][1]),
+                                             long(ukey['ufid']['u32'][0]))))))
+
+                    print("{}hash = 0x{:8x}, pmd_id = {}".
+                          format(indent_b, long(ukey['hash']), ukey['pmd_id']))
+                    print("{}state = {}".format(indent_b, ukey['state']))
+                    print("{}n_packets = {}, n_bytes = {}".
+                          format(indent_b,
+                                 ukey['stats']['n_packets'],
+                                 ukey['stats']['n_bytes']))
+                    print("{}used = {}, tcp_flags = 0x{:04x}".
+                          format(indent_b,
+                                 ukey['stats']['used'],
+                                 long(ukey['stats']['tcp_flags'])))
+
+                    #
+                    # TODO: Would like to add support for dumping key, mask
+                    #       actions, and xlate_cache
+                    #
+                    # key = ""
+                    # for nlattr in ForEachNL(ukey['key'], ukey['key_len']):
+                    #     key += "{}{}".format(
+                    #         "" if len(key) == 0 else ", ",
+                    #         nlattr['nla_type'].cast(
+                    #             gdb.lookup_type('enum ovs_key_attr')))
+                    # print("{}key attributes = {}".format(indent_b, key))
+
+    def invoke(self, arg, from_tty):
+        arg_list = gdb.string_to_argv(arg)
+        all_udpifs = get_global_variable('all_udpifs')
+        if all_udpifs is None:
+            return
+
+        udpifs = dict()
+        for udpif in ForEachLIST(all_udpifs, "struct udpif", "list_node"):
+            udpifs[udpif['dpif']['full_name'].string()] = udpif
+
+            if len(arg_list) == 0:
+                print("(struct udpif *) {}: name = {}, total keys = {}".
+                      format(udpif, udpif['dpif']['full_name'].string(),
+                             self.count_all_ukeys(udpif)))
+
+        if len(arg_list) == 0:
+            return
+
+        if arg_list[0] in udpifs:
+            udpif = udpifs[arg_list[0]]
+        else:
+            try:
+                udpif = gdb.parse_and_eval(arg_list[0]).cast(
+                    gdb.lookup_type('struct udpif').pointer())
+            except Exception:
+                udpif = None
+
+        if udpif is None:
+            print("Can't find provided udpif address!")
+            return
+
+        self.dump_all_ukeys(udpif, 0, "short" in arg_list[1:])
+
+
+#
 # Implements the GDB "ovs_show_fdb" command
 #
 class CmdShowFDB(gdb.Command):
@@ -884,6 +1037,76 @@ class CmdShowFDB(gdb.Command):
             self.display_ml_entries(ml, 0, "hash" in arg_list[1:],
                                     "dbg" in arg_list[1:])
 
+
+#
+# Implements the GDB "ovs_show_fdb" command
+#
+class CmdShowUpcall(gdb.Command):
+    """Show upcall information
+    Usage: ovs_show_upcall {dbg}
+
+      dbg  : Will show structure address information
+    """
+
+    def __init__(self):
+        super(CmdShowUpcall, self).__init__("ovs_show_upcall",
+                                            gdb.COMMAND_DATA)
+
+    @staticmethod
+    def display_udpif_upcall(udpif, indent=0, dbg=False):
+        indent = " " * indent
+
+        enable_ufid = get_global_variable('enable_ufid')
+        if enable_ufid is None:
+            return
+
+        dbg_str = ""
+        if dbg:
+            dbg_str = ", ((struct udpif *) {})".format(udpif)
+
+        print("{}{}{}:".format(
+            indent, udpif['dpif']['full_name'].string(),
+            dbg_str))
+
+        print("{}  flows         : (current {}) (avg {}) (max {}) (limit {})".
+              format(indent, udpif['n_flows'], udpif['avg_n_flows'],
+                     udpif['max_n_flows'], udpif['flow_limit']))
+        print("{}  dump duration : {}ms".
+              format(indent, udpif['dump_duration']))
+        print("{}  ufid enabled  : {}\n".
+              format(indent, enable_ufid &
+                     udpif['backer']['rt_support']['ufid']))
+
+        for i in range(0, int(udpif['n_revalidators'])):
+            revalidator = udpif['revalidators'][i]
+
+            dbg_str = ""
+            if dbg:
+                dbg_str = ", ((struct revalidator *) {})".\
+                    format(revalidator.address)
+
+            count = 0
+            j = i
+            while j < N_UMAPS:
+                count += udpif['ukeys'][j]['cmap']['impl']['p']['n']
+                j += int(udpif['n_revalidators'])
+
+            print("{}  {}: (keys {}){}".
+                  format(indent, revalidator['id'], count, dbg_str))
+
+        print("")
+
+    def invoke(self, arg, from_tty):
+        arg_list = gdb.string_to_argv(arg)
+
+        all_udpifs = get_global_variable('all_udpifs')
+        if all_udpifs is None:
+            return
+
+        for udpif in ForEachLIST(all_udpifs, "struct udpif", "list_node"):
+            self.display_udpif_upcall(udpif, 0, "dbg" in arg_list)
+
+
 #
 # Initialize all GDB commands
 #
@@ -897,4 +1120,6 @@ CmdDumpNetdev()
 CmdDumpNetdevProvider()
 CmdDumpOvsList()
 CmdDumpSimap()
+CmdDumpUdpifKeys()
 CmdShowFDB()
+CmdShowUpcall()
