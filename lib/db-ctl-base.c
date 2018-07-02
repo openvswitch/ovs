@@ -222,13 +222,18 @@ score_partial_match(const char *name, const char *s)
     return *s == '\0' ? score : 0;
 }
 
-static struct ovsdb_symbol *
-create_symbol(struct ovsdb_symbol_table *symtab, const char *id, bool *newp)
+/* Returns NULL and sets 'symbolp' and 'newp' if symbol was created
+ * successfully. Otherwise returns a malloc()'ed error message on failure. */
+static char * OVS_WARN_UNUSED_RESULT
+create_symbol(struct ovsdb_symbol_table *symtab, const char *id,
+              struct ovsdb_symbol **symbolp, bool *newp)
 {
     struct ovsdb_symbol *symbol;
 
+    ovs_assert(symbolp);
+
     if (id[0] != '@') {
-        ctl_fatal("row id \"%s\" does not begin with \"@\"", id);
+        return xasprintf("row id \"%s\" does not begin with \"@\"", id);
     }
 
     if (newp) {
@@ -237,11 +242,12 @@ create_symbol(struct ovsdb_symbol_table *symtab, const char *id, bool *newp)
 
     symbol = ovsdb_symbol_table_insert(symtab, id);
     if (symbol->created) {
-        ctl_fatal("row id \"%s\" may only be specified on one --id option",
-                  id);
+        return xasprintf("row id \"%s\" may only be specified on one --id "
+                         "option", id);
     }
     symbol->created = true;
-    return symbol;
+    *symbolp = symbol;
+    return NULL;
 }
 
 static bool
@@ -878,7 +884,7 @@ cmd_get(struct ctl_context *ctx)
         struct ovsdb_symbol *symbol;
         bool new;
 
-        symbol = create_symbol(ctx->symtab, id, &new);
+        die_if_error(create_symbol(ctx->symtab, id, &symbol, &new));
         if (!new) {
             ctl_fatal("row id \"%s\" specified on \"get\" command was used "
                       "before it was defined", id);
@@ -1521,7 +1527,9 @@ cmd_create(struct ctl_context *ctx)
 
     die_if_error(get_table(table_name, &table));
     if (id) {
-        struct ovsdb_symbol *symbol = create_symbol(ctx->symtab, id, NULL);
+        struct ovsdb_symbol *symbol;
+
+        die_if_error(create_symbol(ctx->symtab, id, &symbol, NULL));
         if (table->is_root) {
             /* This table is in the root set, meaning that rows created in it
              * won't disappear even if they are unreferenced, so disable
