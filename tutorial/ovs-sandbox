@@ -537,7 +537,8 @@ if $ovn; then
     for i in $(seq $n_controllers); do
         rungdb $gdb_ovn_controller $gdb_ovn_controller_ex ovn-controller \
                $OVN_CTRLR_PKI --detach --no-chdir -vsyslog:off \
-               --pidfile=ovn-controller$i.pid -vconsole:off --log-file
+               --log-file=ovn-controller$i.log \
+               --pidfile=ovn-controller$i.pid -vconsole:off
     done
     rungdb $gdb_ovn_controller_vtep $gdb_ovn_controller_vtep_ex \
         ovn-controller-vtep --detach --no-chdir --pidfile -vconsole:off \
