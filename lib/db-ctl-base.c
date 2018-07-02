@@ -918,7 +918,8 @@ cmd_get(struct ctl_context *ctx)
     }
 }
 
-static void
+/* Returns NULL on success or malloc()'ed error message on failure. */
+static char * OVS_WARN_UNUSED_RESULT
 parse_column_names(const char *column_names,
                    const struct ovsdb_idl_table_class *table,
                    const struct ovsdb_idl_column ***columnsp,
@@ -951,7 +952,12 @@ parse_column_names(const char *column_names,
             if (!strcasecmp(column_name, "_uuid")) {
                 column = NULL;
             } else {
-                die_if_error(get_column(table, column_name, &column));
+                char *error = get_column(table, column_name, &column);
+                if (error) {
+                    free(columns);
+                    free(s);
+                    return error;
+                }
             }
             if (n_columns >= allocated_columns) {
                 columns = x2nrealloc(columns, &allocated_columns,
@@ -962,11 +968,12 @@ parse_column_names(const char *column_names,
         free(s);
 
         if (!n_columns) {
-            ctl_fatal("must specify at least one column name");
+            return xstrdup("must specify at least one column name");
         }
     }
     *columnsp = columns;
     *n_columnsp = n_columns;
+    return NULL;
 }
 
 static void
@@ -978,7 +985,7 @@ pre_list_columns(struct ctl_context *ctx,
     size_t n_columns;
     size_t i;
 
-    parse_column_names(column_names, table, &columns, &n_columns);
+    die_if_error(parse_column_names(column_names, table, &columns, &n_columns));
     for (i = 0; i < n_columns; i++) {
         if (columns[i]) {
             ovsdb_idl_add_column(ctx->idl, columns[i]);
@@ -1067,7 +1074,7 @@ cmd_list(struct ctl_context *ctx)
     int i;
 
     table = get_table(table_name);
-    parse_column_names(column_names, table, &columns, &n_columns);
+    die_if_error(parse_column_names(column_names, table, &columns, &n_columns));
     out = ctx->table = list_make_table(columns, n_columns);
     if (ctx->argc > 2) {
         for (i = 2; i < ctx->argc; i++) {
@@ -1140,7 +1147,7 @@ cmd_find(struct ctl_context *ctx)
     size_t n_columns;
 
     table = get_table(table_name);
-    parse_column_names(column_names, table, &columns, &n_columns);
+    die_if_error(parse_column_names(column_names, table, &columns, &n_columns));
     out = ctx->table = list_make_table(columns, n_columns);
     for (row = ovsdb_idl_first_row(ctx->idl, table); row;
          row = ovsdb_idl_next_row(row)) {
