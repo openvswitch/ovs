@@ -273,8 +273,7 @@ char *ctl_get_row(struct ctl_context *, const struct ovsdb_idl_table_class *,
                   const char *record_id, bool must_exist,
                   const struct ovsdb_idl_row **);
 
-void ctl_set_column(const char *table_name,
-                    const struct ovsdb_idl_row *, const char *arg,
-                    struct ovsdb_symbol_table *);
+char *ctl_set_column(const char *table_name, const struct ovsdb_idl_row *,
+                     const char *arg, struct ovsdb_symbol_table *);
 
 #endif /* db-ctl-base.h */

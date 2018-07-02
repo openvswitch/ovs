@@ -1591,8 +1591,11 @@ add_port(struct ctl_context *ctx,
     }
 
     for (i = 0; i < n_settings; i++) {
-        ctl_set_column("Port", &port->header_, settings[i],
-                       ctx->symtab);
+        char *error = ctl_set_column("Port", &port->header_, settings[i],
+                                     ctx->symtab);
+        if (error) {
+            ctl_fatal("%s", error);
+        }
     }
 
     bridge_insert_port((bridge->parent ? bridge->parent->br_cfg

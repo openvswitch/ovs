@@ -3279,8 +3279,11 @@ nbctl_lrp_add(struct ctl_context *ctx)
     nbrec_logical_router_port_set_networks(lrp, networks, n_networks);
 
     for (int i = 0; i < n_settings; i++) {
-        ctl_set_column("Logical_Router_Port", &lrp->header_, settings[i],
-                       ctx->symtab);
+        char *error = ctl_set_column("Logical_Router_Port", &lrp->header_,
+                                     settings[i], ctx->symtab);
+        if (error) {
+            ctl_fatal("%s", error);
+        }
     }
 
     /* Insert the logical port into the logical router. */

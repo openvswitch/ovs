@@ -2395,12 +2395,21 @@ ctl_context_done(struct ctl_context *ctx,
     invalidate_cache(ctx);
 }
 
-void ctl_set_column(const char *table_name,
-                    const struct ovsdb_idl_row *row, const char *arg,
-                    struct ovsdb_symbol_table *symtab)
+char * OVS_WARN_UNUSED_RESULT
+ctl_set_column(const char *table_name, const struct ovsdb_idl_row *row,
+               const char *arg, struct ovsdb_symbol_table *symtab)
 {
     const struct ovsdb_idl_table_class *table;
+    char *error;
 
-    die_if_error(get_table(table_name, &table));
-    die_if_error(set_column(table, row, arg, symtab));
+    error = get_table(table_name, &table);
+    if (error) {
+        return error;
+    }
+    error = set_column(table, row, arg, symtab);
+    if (error) {
+        return error;
+    }
+
+    return NULL;
 }
