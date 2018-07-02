@@ -65,6 +65,7 @@ VLOG_DEFINE_THIS_MODULE(main);
 
 static unixctl_cb_func ovn_controller_exit;
 static unixctl_cb_func ct_zone_list;
+static unixctl_cb_func meter_table_list;
 static unixctl_cb_func inject_pkt;
 
 #define DEFAULT_BRIDGE_NAME "br-int"
@@ -569,6 +570,8 @@ main(int argc, char *argv[])
     /* Initialize meter ids for QoS. */
     struct ovn_extend_table meter_table;
     ovn_extend_table_init(&meter_table);
+    unixctl_command_register("meter-table-list", "", 0, 0,
+                             meter_table_list, &meter_table);
 
     daemonize_complete();
 
@@ -1019,6 +1022,33 @@ ct_zone_list(struct unixctl_conn *conn, int argc OVS_UNUSED,
     SIMAP_FOR_EACH(zone, ct_zones) {
         ds_put_format(&ds, "%s %d\n", zone->name, zone->data);
     }
+
+    unixctl_command_reply(conn, ds_cstr(&ds));
+    ds_destroy(&ds);
+}
+
+static void
+meter_table_list(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                 const char *argv[] OVS_UNUSED, void *meter_table_)
+{
+    struct ovn_extend_table *meter_table = meter_table_;
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    struct simap meters = SIMAP_INITIALIZER(&meters);
+
+    struct ovn_extend_table_info *m_installed, *next_meter;
+    EXTEND_TABLE_FOR_EACH_INSTALLED (m_installed, next_meter, meter_table) {
+        simap_put(&meters, m_installed->name, m_installed->table_id);
+    }
+
+    const struct simap_node **nodes = simap_sort(&meters);
+    size_t n_nodes = simap_count(&meters);
+    for (size_t i = 0; i < n_nodes; i++) {
+        const struct simap_node *node = nodes[i];
+        ds_put_format(&ds, "%s: %d\n", node->name, node->data);
+    }
+
+    free(nodes);
+    simap_destroy(&meters);
 
     unixctl_command_reply(conn, ds_cstr(&ds));
     ds_destroy(&ds);

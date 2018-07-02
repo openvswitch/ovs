@@ -369,6 +369,11 @@
         Lists each local logical port and its connection tracking zone.
       </dd>
 
+      <dt><code>meter-table-list</code></dt>
+      <dd>
+        Lists each meter table entry and its local meter id.
+      </dd>
+
       <dt><code>inject-pkt</code> <var>microflow</var></dt>
       <dd>
       <p>
