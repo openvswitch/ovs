@@ -1185,6 +1185,7 @@ cmd_list(struct ctl_context *ctx)
             ctx->error = ctl_get_row(ctx, table, ctx->argv[i], must_exist,
                                      &row);
             if (ctx->error) {
+                free(columns);
                 return;
             }
             list_record(row, columns, n_columns, out);
