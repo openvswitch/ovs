@@ -842,9 +842,14 @@ cmd_lflow_list(struct ctl_context *ctx)
 {
     const struct sbrec_datapath_binding *datapath = NULL;
     if (ctx->argc > 1) {
-        datapath = (const struct sbrec_datapath_binding *)
-            ctl_get_row(ctx, &sbrec_table_datapath_binding,
-                        ctx->argv[1], false);
+        const struct ovsdb_idl_row *row;
+        char *error = ctl_get_row(ctx, &sbrec_table_datapath_binding,
+                                  ctx->argv[1], false, &row);
+        if (error) {
+            ctl_fatal("%s", error);
+        }
+
+        datapath = (const struct sbrec_datapath_binding *)row;
         if (datapath) {
             ctx->argc--;
             ctx->argv++;

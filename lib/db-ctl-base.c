@@ -366,13 +366,15 @@ get_row_by_id(struct ctl_context *ctx,
     return final;
 }
 
-const struct ovsdb_idl_row *
+char * OVS_WARN_UNUSED_RESULT
 ctl_get_row(struct ctl_context *ctx,
             const struct ovsdb_idl_table_class *table, const char *record_id,
-            bool must_exist)
+            bool must_exist, const struct ovsdb_idl_row **rowp)
 {
     const struct ovsdb_idl_row *row = NULL;
     struct uuid uuid;
+
+    ovs_assert(rowp);
 
     if (uuid_from_string(&uuid, record_id)) {
         row = ovsdb_idl_get_row_for_uuid(ctx->idl, table, &uuid);
@@ -398,8 +400,8 @@ ctl_get_row(struct ctl_context *ctx,
                     ovsdb_idl_get_class(ctx->idl);
                 const struct ovsdb_idl_table_class *table_class =
                     ovsdb_idl_table_class_from_column(class, id->name_column);
-                ctl_fatal("multiple rows in %s match \"%s\"",
-                          table_class->name, record_id);
+                return xasprintf("multiple rows in %s match \"%s\"",
+                                 table_class->name, record_id);
             }
             if (row) {
                 break;
@@ -415,19 +417,21 @@ ctl_get_row(struct ctl_context *ctx,
                 if (!row) {
                     row = r;
                 } else {
-                    ctl_fatal("%s contains 2 or more rows whose UUIDs begin "
-                              "with %s: at least "UUID_FMT" and "UUID_FMT,
-                              table->name, record_id,
-                              UUID_ARGS(&row->uuid),
-                              UUID_ARGS(&r->uuid));
+                    return xasprintf("%s contains 2 or more rows whose UUIDs "
+                                     "begin with %s: at least "UUID_FMT" "
+                                     "and "UUID_FMT, table->name, record_id,
+                                     UUID_ARGS(&row->uuid),
+                                     UUID_ARGS(&r->uuid));
                 }
             }
         }
     }
     if (must_exist && !row) {
-        ctl_fatal("no row \"%s\" in table %s", record_id, table->name);
+        return xasprintf("no row \"%s\" in table %s", record_id, table->name);
     }
-    return row;
+
+    *rowp = row;
+    return NULL;
 }
 
 static char *
@@ -888,7 +892,7 @@ cmd_get(struct ctl_context *ctx)
     }
 
     die_if_error(get_table(table_name, &table));
-    row = ctl_get_row(ctx, table, record_id, must_exist);
+    die_if_error(ctl_get_row(ctx, table, record_id, must_exist, &row));
     if (!row) {
         return;
     }
@@ -1123,8 +1127,11 @@ cmd_list(struct ctl_context *ctx)
     out = ctx->table = list_make_table(columns, n_columns);
     if (ctx->argc > 2) {
         for (i = 2; i < ctx->argc; i++) {
-            list_record(ctl_get_row(ctx, table, ctx->argv[i], must_exist),
-                        columns, n_columns, out);
+            const struct ovsdb_idl_row *row;
+
+            die_if_error(ctl_get_row(ctx, table, ctx->argv[i], must_exist,
+                                     &row));
+            list_record(row, columns, n_columns, out);
         }
     } else {
         const struct ovsdb_idl_row *row;
@@ -1315,7 +1322,7 @@ cmd_set(struct ctl_context *ctx)
     int i;
 
     die_if_error(get_table(table_name, &table));
-    row = ctl_get_row(ctx, table, record_id, must_exist);
+    die_if_error(ctl_get_row(ctx, table, record_id, must_exist, &row));
     if (!row) {
         return;
     }
@@ -1355,7 +1362,7 @@ cmd_add(struct ctl_context *ctx)
 
     die_if_error(get_table(table_name, &table));
     die_if_error(get_column(table, column_name, &column));
-    row = ctl_get_row(ctx, table, record_id, must_exist);
+    die_if_error(ctl_get_row(ctx, table, record_id, must_exist, &row));
     if (!row) {
         return;
     }
@@ -1416,7 +1423,7 @@ cmd_remove(struct ctl_context *ctx)
 
     die_if_error(get_table(table_name, &table));
     die_if_error(get_column(table, column_name, &column));
-    row = ctl_get_row(ctx, table, record_id, must_exist);
+    die_if_error(ctl_get_row(ctx, table, record_id, must_exist, &row));
     if (!row) {
         return;
     }
@@ -1487,7 +1494,7 @@ cmd_clear(struct ctl_context *ctx)
     int i;
 
     die_if_error(get_table(table_name, &table));
-    row = ctl_get_row(ctx, table, record_id, must_exist);
+    die_if_error(ctl_get_row(ctx, table, record_id, must_exist, &row));
     if (!row) {
         return;
     }
@@ -1628,7 +1635,8 @@ cmd_destroy(struct ctl_context *ctx)
         for (i = 2; i < ctx->argc; i++) {
             const struct ovsdb_idl_row *row;
 
-            row = ctl_get_row(ctx, table, ctx->argv[i], must_exist);
+            die_if_error(ctl_get_row(ctx, table, ctx->argv[i], must_exist,
+                                     &row));
             if (row) {
                 ovsdb_idl_txn_delete(row);
             }
@@ -1661,8 +1669,7 @@ cmd_wait_until(struct ctl_context *ctx)
     int i;
 
     die_if_error(get_table(table_name, &table));
-
-    row = ctl_get_row(ctx, table, record_id, false);
+    die_if_error(ctl_get_row(ctx, table, record_id, false, &row));
     if (!row) {
         ctx->try_again = true;
         return;
