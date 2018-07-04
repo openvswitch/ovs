@@ -284,6 +284,7 @@ struct ovnact_log {
     uint8_t verdict;            /* One of LOG_VERDICT_*. */
     uint8_t severity;           /* One of LOG_SEVERITY_*. */
     char *name;
+    char *meter;
 };
 
 /* OVNACT_SET_METER. */

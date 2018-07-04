@@ -85,7 +85,7 @@
       must be either <code>switch</code> or <code>port-group</code>.
     </p>
     <dl>
-      <dt>[<code>--type=</code>{<code>switch</code> | <code>port-group</code>}] [<code>--log</code>] [<code>--severity=</code><var>severity</var>] [<code>--name=</code><var>name</var>] [<code>--may-exist</code>] <code>acl-add</code> <var>entity</var> <var>direction</var> <var>priority</var> <var>match</var> <var>verdict</var></dt>
+      <dt>[<code>--type=</code>{<code>switch</code> | <code>port-group</code>}] [<code>--log</code>] [<code>--meter=</code><var>meter</var>] [<code>--severity=</code><var>severity</var>] [<code>--name=</code><var>name</var>] [<code>--may-exist</code>] <code>acl-add</code> <var>entity</var> <var>direction</var> <var>priority</var> <var>match</var> <var>verdict</var></dt>
       <dd>
         <p>
           Adds the specified ACL to <var>entity</var>.  <var>direction</var>
@@ -105,7 +105,9 @@
           logging).  The severity must be one of <code>alert</code>,
           <code>warning</code>, <code>notice</code>, <code>info</code>, or
           <code>debug</code>.  If a severity is not specified, the default is
-          <code>info</code>.
+          <code>info</code>.  The <code>--meter=<var>meter</var></code> option
+          is used to rate-limit packet logging.  The <var>meter</var> argument
+          names a meter configured by <code>meter-add</code>.
         </p>
       </dd>
 

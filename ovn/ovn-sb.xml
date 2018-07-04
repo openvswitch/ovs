@@ -1761,6 +1761,15 @@
               The verdict for packets matching the flow.  The value must be one
               of <code>allow</code>, <code>deny</code>, or <code>reject</code>.
             </dd>
+            <dt><code>meter=</code><var>string</var></dt>
+            <dd>
+              An optional rate-limiting meter to be applied to the logs.
+              The <var>string</var> should reference a
+              <ref column="name" table="Meter"/> entry from the
+              <ref table="Meter"/> table.  The only meter
+              <ref column="action" table="meter"/> that is appriopriate
+              is <code>drop</code>.
+            </dd>
           </dl>
         </dd>
       </dl>
