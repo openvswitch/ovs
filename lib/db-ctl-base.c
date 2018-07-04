@@ -919,8 +919,8 @@ cmd_get(struct ctl_context *ctx)
     }
 
     if (id) {
-        struct ovsdb_symbol *symbol;
-        bool new;
+        struct ovsdb_symbol *symbol = NULL;
+        bool new = NULL;
 
         ctx->error = create_symbol(ctx->symtab, id, &symbol, &new);
         if (ctx->error) {
@@ -1698,7 +1698,7 @@ cmd_create(struct ctl_context *ctx)
     const char *table_name = ctx->argv[1];
     const struct ovsdb_idl_table_class *table;
     const struct ovsdb_idl_row *row;
-    const struct uuid *uuid;
+    const struct uuid *uuid = NULL;
     int i;
 
     ctx->error = get_table(table_name, &table);
@@ -1706,7 +1706,7 @@ cmd_create(struct ctl_context *ctx)
         return;
     }
     if (id) {
-        struct ovsdb_symbol *symbol;
+        struct ovsdb_symbol *symbol = NULL;
 
         ctx->error = create_symbol(ctx->symtab, id, &symbol, NULL);
         if (ctx->error) {
@@ -1719,8 +1719,6 @@ cmd_create(struct ctl_context *ctx)
             symbol->strong_ref = true;
         }
         uuid = &symbol->uuid;
-    } else {
-        uuid = NULL;
     }
 
     row = ovsdb_idl_txn_insert(ctx->txn, table, uuid);
