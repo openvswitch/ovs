@@ -1159,6 +1159,15 @@
           <code>info</code>.
         </p>
       </column>
+
+      <column name="meter">
+        <p>
+            The name of a meter to rate-limit log messages for the ACL.
+            The string must match the <ref column="name" table="meter"/>
+            column of a row in the <ref table="Meter"/> table.  By
+            default, log messages are not rate-limited.
+        </p>
+      </column>
     </group>
 
     <group title="Common Columns">

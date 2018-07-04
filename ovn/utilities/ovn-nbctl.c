@@ -1822,7 +1822,10 @@ nbctl_acl_list(struct ctl_context *ctx)
                 ds_put_format(&ctx->output, "name=%s,", acl->name);
             }
             if (acl->severity) {
-                ds_put_format(&ctx->output, "severity=%s", acl->severity);
+                ds_put_format(&ctx->output, "severity=%s,", acl->severity);
+            }
+            if (acl->meter) {
+                ds_put_format(&ctx->output, "meter=\"%s\",", acl->meter);
             }
             ds_chomp(&ctx->output, ',');
             ds_put_cstr(&ctx->output, ")");
@@ -1927,7 +1930,8 @@ nbctl_acl_add(struct ctl_context *ctx)
     bool log = shash_find(&ctx->options, "--log") != NULL;
     const char *severity = shash_find_data(&ctx->options, "--severity");
     const char *name = shash_find_data(&ctx->options, "--name");
-    if (log || severity || name) {
+    const char *meter = shash_find_data(&ctx->options, "--meter");
+    if (log || severity || name || meter) {
         nbrec_acl_set_log(acl, true);
     }
     if (severity) {
@@ -1939,6 +1943,9 @@ nbctl_acl_add(struct ctl_context *ctx)
     }
     if (name) {
         nbrec_acl_set_name(acl, name);
+    }
+    if (meter) {
+        nbrec_acl_set_meter(acl, meter);
     }
 
     /* Check if same acl already exists for the ls/portgroup */
@@ -4801,7 +4808,7 @@ static const struct ctl_command_syntax nbctl_commands[] = {
     /* acl commands. */
     { "acl-add", 5, 6, "{SWITCH | PORTGROUP} DIRECTION PRIORITY MATCH ACTION",
       NULL, nbctl_acl_add, NULL,
-      "--log,--may-exist,--type=,--name=,--severity=", RW },
+      "--log,--may-exist,--type=,--name=,--severity=,--meter=", RW },
     { "acl-del", 1, 4, "{SWITCH | PORTGROUP} [DIRECTION [PRIORITY MATCH]]",
       NULL, nbctl_acl_del, NULL, "--type=", RW },
     { "acl-list", 1, 1, "{SWITCH | PORTGROUP}",

@@ -3140,6 +3140,10 @@ build_acl_log(struct ds *actions, const struct nbrec_acl *acl)
         ds_put_cstr(actions, "verdict=allow, ");
     }
 
+    if (acl->meter) {
+        ds_put_format(actions, "meter=\"%s\", ", acl->meter);
+    }
+
     ds_chomp(actions, ' ');
     ds_chomp(actions, ',');
     ds_put_cstr(actions, "); ");
