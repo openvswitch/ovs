@@ -8280,7 +8280,7 @@ parse_group_prop_ntr_selection_method(struct ofpbuf *payload,
                      "for select groups");
         return OFPERR_OFPBPC_BAD_VALUE;
     default:
-        OVS_NOT_REACHED();
+        return OFPERR_OFPGMFC_BAD_TYPE;
     }
 
     switch (group_cmd) {
@@ -8294,7 +8294,7 @@ parse_group_prop_ntr_selection_method(struct ofpbuf *payload,
                      "for add and delete group modifications");
         return OFPERR_OFPBPC_BAD_VALUE;
     default:
-        OVS_NOT_REACHED();
+        return OFPERR_OFPGMFC_BAD_COMMAND;
     }
 
     if (payload->size < sizeof *prop) {
