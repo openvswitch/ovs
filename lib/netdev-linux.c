@@ -724,11 +724,15 @@ netdev_linux_update_lag(struct rtnetlink_change *change)
 
             if_indextoname(change->master_ifindex, master_name);
             master_netdev = netdev_from_name(master_name);
+            if (!master_netdev) {
+                return;
+            }
 
             if (is_netdev_linux_class(master_netdev->netdev_class)) {
                 block_id = netdev_get_block_id(master_netdev);
                 if (!block_id) {
-                   return;
+                    netdev_close(master_netdev);
+                    return;
                 }
 
                 lag = xmalloc(sizeof *lag);
@@ -744,6 +748,8 @@ netdev_linux_update_lag(struct rtnetlink_change *change)
                     free(lag);
                 }
             }
+
+            netdev_close(master_netdev);
         }
     } else if (change->master_ifindex == 0) {
         /* Check if this was a lag slave that has been freed. */
