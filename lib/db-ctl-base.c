@@ -920,7 +920,7 @@ cmd_get(struct ctl_context *ctx)
 
     if (id) {
         struct ovsdb_symbol *symbol = NULL;
-        bool new = NULL;
+        bool new = false;
 
         ctx->error = create_symbol(ctx->symtab, id, &symbol, &new);
         if (ctx->error) {
