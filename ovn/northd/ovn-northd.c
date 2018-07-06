@@ -5324,7 +5324,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                           ds_cstr(&match), ds_cstr(&actions));
         }
 
-        /* TCP port unreachable */
+        /* UDP/TCP port unreachable */
         if (!smap_get(&op->od->nbr->options, "chassis")
             && !op->od->l3dgw_port) {
             for (int i = 0; i < op->lrp_networks.n_ipv6_addrs; i++) {
@@ -5338,6 +5338,20 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                                      "next; };";
                 ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 80,
                           ds_cstr(&match), action);
+
+                ds_clear(&match);
+                ds_put_format(&match,
+                              "ip6 && ip6.dst == %s && !ip.later_frag && udp",
+                              op->lrp_networks.ipv6_addrs[i].addr_s);
+                action = "icmp6 {"
+                         "eth.dst <-> eth.src; "
+                         "ip6.dst <-> ip6.src; "
+                         "ip.ttl = 255; "
+                         "icmp6.type = 1; "
+                         "icmp6.code = 4; "
+                         "next; };";
+                ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 80,
+                              ds_cstr(&match), action);
             }
         }
 
