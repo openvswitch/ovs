@@ -14,11 +14,13 @@ print_and_free_json(struct json *json)
     free(string);
 }
 
-int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
-    if ((size == 0) || (data[size-1] != '\0')) return 0;
+    if ((size == 0) || (data[size-1] != '\0')) {
+      return 0;
+    }
 
-    struct json *j1,*j2;
+    struct json *j1, *j2;
     struct jsonrpc_msg *msg;
 
     // j1 alloc
@@ -26,7 +28,6 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
     if (j1->type == JSON_STRING) {
       json_destroy(j1);
       return 0;
-    // j1 freed
     }
    
     // s1 alloc
@@ -38,7 +39,6 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
       free(s1);
       free(error);
       return 0;
-      // j1 freed by API call, s1 freed by hand
     }
    
     // j2 alloc, msg freed
