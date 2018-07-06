@@ -1339,8 +1339,9 @@ nd_na {
 
       <li>
         <p>
-          Protocol unreachable.  Priority-70 flows generate ICMP protocol
-          unreachable messages in reply to packets directed to the router's IP
+          Protocol or address unreachable. Priority-70 flows generate ICMP
+          protocol or address unreachable messages for IPv4 and IPv6
+          respectively in reply to packets directed to the router's IP
           address on IP protocols other than UDP, TCP, and ICMP, except in the
           special case of gateways, which accept traffic directed to a router
           IP for load balancing purposes.
