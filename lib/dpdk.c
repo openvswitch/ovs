@@ -48,6 +48,7 @@ static char *vhost_sock_dir = NULL;   /* Location of vhost-user sockets */
 static bool vhost_iommu_enabled = false; /* Status of vHost IOMMU support */
 static bool dpdk_initialized = false; /* Indicates successful initialization
                                        * of DPDK. */
+static bool per_port_memory = false; /* Status of per port memory support */
 
 static int
 process_vhost_flags(char *flag, const char *default_val, int size,
@@ -384,6 +385,11 @@ dpdk_init__(const struct smap *ovs_other_config)
     VLOG_INFO("IOMMU support for vhost-user-client %s.",
                vhost_iommu_enabled ? "enabled" : "disabled");
 
+    per_port_memory = smap_get_bool(ovs_other_config,
+                                    "per-port-memory", false);
+    VLOG_INFO("Per port memory for DPDK devices %s.",
+              per_port_memory ? "enabled" : "disabled");
+
     argv = grow_argv(&argv, 0, 1);
     argc = 1;
     argv[0] = xstrdup(ovs_get_program_name());
@@ -539,6 +545,12 @@ bool
 dpdk_vhost_iommu_enabled(void)
 {
     return vhost_iommu_enabled;
+}
+
+bool
+dpdk_per_port_memory(void)
+{
+    return per_port_memory;
 }
 
 void

@@ -691,6 +691,19 @@ reset_dp_packet_checksum_ol_flags(struct dp_packet *p)
 #define reset_dp_packet_checksum_ol_flags(arg)
 #endif
 
+static inline bool
+dp_packet_has_flow_mark(struct dp_packet *p OVS_UNUSED,
+                        uint32_t *mark OVS_UNUSED)
+{
+#ifdef DPDK_NETDEV
+    if (p->mbuf.ol_flags & PKT_RX_FDIR_ID) {
+        *mark = p->mbuf.hash.fdir.hi;
+        return true;
+    }
+#endif
+    return false;
+}
+
 enum { NETDEV_MAX_BURST = 32 }; /* Maximum number packets in a batch. */
 
 struct dp_packet_batch {

@@ -40,7 +40,7 @@ Build requirements
 In addition to the requirements described in :doc:`general`, building Open
 vSwitch with DPDK will require the following:
 
-- DPDK 17.11.2
+- DPDK 17.11.3
 
 - A `DPDK supported NIC`_
 
@@ -69,9 +69,9 @@ Install DPDK
 #. Download the `DPDK sources`_, extract the file and set ``DPDK_DIR``::
 
        $ cd /usr/src/
-       $ wget http://fast.dpdk.org/rel/dpdk-17.11.2.tar.xz
-       $ tar xf dpdk-17.11.2.tar.xz
-       $ export DPDK_DIR=/usr/src/dpdk-stable-17.11.2
+       $ wget http://fast.dpdk.org/rel/dpdk-17.11.3.tar.xz
+       $ tar xf dpdk-17.11.3.tar.xz
+       $ export DPDK_DIR=/usr/src/dpdk-stable-17.11.3
        $ cd $DPDK_DIR
 
 #. (Optional) Configure DPDK as a shared library
@@ -169,6 +169,12 @@ To verify hugepage configuration::
 Mount the hugepages, if not already mounted by default::
 
     $ mount -t hugetlbfs none /dev/hugepages``
+
+.. note::
+
+   The amount of hugepage memory required can be affected by various
+   aspects of the datapath and device configuration. Refer to
+   :doc:`/topics/dpdk/memory` for more details.
 
 .. _dpdk-vfio:
 

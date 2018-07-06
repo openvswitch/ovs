@@ -358,6 +358,28 @@ devices to bridge ``br0``. Once complete, follow the below steps:
 
        $ cat /proc/interrupts | grep virtio
 
+.. _dpdk-flow-hardware-offload:
+
+Flow Hardware Offload (Experimental)
+------------------------------------
+
+The flow hardware offload is disabled by default and can be enabled by::
+
+    $ ovs-vsctl set Open_vSwitch . other_config:hw-offload=true
+
+So far only partial flow offload is implemented. Moreover, it only works
+with PMD drivers have the rte_flow action "MARK + RSS" support.
+
+The validated NICs are:
+
+- Mellanox (ConnectX-4, ConnectX-4 Lx, ConnectX-5)
+- Napatech (NT200B01)
+
+Supported protocols for hardware offload are:
+- L2: Ethernet, VLAN
+- L3: IPv4, IPv6
+- L4: TCP, UDP, SCTP, ICMP
+
 Further Reading
 ---------------
 
