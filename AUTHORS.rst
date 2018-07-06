@@ -191,6 +191,7 @@ Keith Amidon                       keith@nicira.com
 Ken Ajiro                          ajiro@mxw.nes.nec.co.jp
 Kenneth Duda                       kduda@arista.com
 Kentaro Ebisawa                    ebiken.g@gmail.com
+Keshav Gupta                       keshav.gupta@ericsson.com
 Kevin Lo                           kevlo@FreeBSD.org
 Kevin Traynor                      kevin.traynor@intel.com
 Khem Raj                           raj.khem@gmail.com
@@ -284,6 +285,7 @@ Rob Adams                          readams@readams.net
 Robert Åkerblom-Andersson          Robert.nr1@gmail.com
 Robert Wojciechowicz               robertx.wojciechowicz@intel.com
 Rob Hoes                           rob.hoes@citrix.com
+Rohith Basavaraja                  rohith.basavaraja@gmail.com
 Roi Dayan                          roid@mellanox.com
 Róbert Mulik                       robert.mulik@ericsson.com
 Romain Lenglet                     romain.lenglet@berabera.info
