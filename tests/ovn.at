@@ -10330,6 +10330,25 @@ test_ip_packet() {
     as hv$hv ovs-appctl netdev-dummy/receive vif$inport $packet
 }
 
+# test_ip6_packet INPORT HV ETH_SRC ETH_DST IPV6_SRC IPV6_DST IPV6_ROUTER EXP_ICMP_CHKSUM
+#
+# Causes a packet to be received on INPORT of the hypervisor HV. The packet is an IPv6
+# packet with ETH_SRC, ETH_DST, IPV6_SRC and IPV6_DST as specified.
+# IPV6_ROUTER and EXP_ICMP_CHKSUM are the source IP and checksum of the icmpv6 ttl exceeded
+# packet sent by OVN logical router
+test_ip6_packet() {
+    local inport=$1 hv=$2 eth_src=$3 eth_dst=$4 ipv6_src=$5 ipv6_dst=$6 ipv6_router=$7 exp_icmp_chksum=$8
+    shift 8
+
+    local ip6_hdr=6000000000151101${ipv6_src}${ipv6_dst}
+    local packet=${eth_dst}${eth_src}86dd${ip6_hdr}dbb8303900155bac6b646f65206676676e6d66720a
+
+    local reply=${eth_src}${eth_dst}86dd6000000000303afe${ipv6_router}${ipv6_src}0300${exp_icmp_chksum}00000000${ip6_hdr}
+    echo $reply >> vif$inport.expected
+
+    as hv$hv ovs-appctl netdev-dummy/receive vif$inport $packet
+}
+
 ip_to_hex() {
     printf "%02x%02x%02x%02x" "$@"
 }
@@ -10344,7 +10363,7 @@ for i in 1 2; do
     ovn_attach n$i br-phys 192.168.$i.1
 
     ovn-nbctl lsp-add sw$i sw$i-p${i}0 -- \
-        lsp-set-addresses sw$i-p${i}0 "00:00:00:00:00:0$i 192.168.$i.1"
+        lsp-set-addresses sw$i-p${i}0 "00:00:00:00:00:0$i 192.168.$i.1 2001:db8:$i::11"
 
     ovs-vsctl -- add-port br-int vif$i -- \
         set interface vif$i \
@@ -10356,10 +10375,10 @@ done
 
 ovn-nbctl lr-add lr0
 for i in 1 2; do
-    ovn-nbctl lrp-add lr0 lrp$i 00:00:00:00:ff:0$i 192.168.$i.254/24
+    ovn-nbctl lrp-add lr0 lrp$i 00:00:00:00:ff:0$i 192.168.$i.254/24 2001:db8:$i::1/64
     ovn-nbctl -- lsp-add sw$i lrp$i-attachment \
               -- set Logical_Switch_Port lrp$i-attachment type=router \
-                options:router-port=lrp$i addresses='"00:00:00:00:ff:'0$i'"'
+                options:router-port=lrp$i addresses='"00:00:00:00:ff:0'$i' 192.168.'$i'.254 2001:db8:'$i'::1"'
 done
 
 OVN_POPULATE_ARP
@@ -10367,6 +10386,7 @@ OVN_POPULATE_ARP
 ovn-nbctl --wait=hv sync
 
 test_ip_packet 1 1 000000000001 00000000ff01 $(ip_to_hex 192 168 1 1) $(ip_to_hex 192 168 2 1) $(ip_to_hex 192 168 1 254) 0000 7dae f4ff
+test_ip6_packet 1 1 000000000001 00000000ff01 20010db8000100000000000000000011 20010db8000200000000000000000011 20010db8000100000000000000000001 d461
 OVN_CHECK_PACKETS([hv1/vif1-tx.pcap], [vif1.expected])
 
 OVN_CLEANUP([hv1], [hv2])
