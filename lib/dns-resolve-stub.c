@@ -19,7 +19,7 @@
 #include "compiler.h"
 
 void
-dns_resolve_init(void)
+dns_resolve_init(bool is_daemon OVS_UNUSED)
 {
 }
 
