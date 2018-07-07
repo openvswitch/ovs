@@ -3309,10 +3309,11 @@ nbctl_lrp_set_gateway_chassis(struct ctl_context *ctx)
     const struct nbrec_logical_router_port *lrp;
     char *error = lrp_by_name_or_uuid(ctx, lrp_name, true, &lrp);
     if (error) {
-        ctl_fatal("%s", error);
+        ctx->error = error;
+        return;
     }
     if (!lrp) {
-        ctl_fatal("router port %s is required", lrp_name);
+        ctl_error(ctx, "router port %s is required", lrp_name);
         return;
     }
 
