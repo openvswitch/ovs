@@ -1899,21 +1899,23 @@ nbctl_qos_add(struct ctl_context *ctx)
 
     char *error = ls_by_name_or_uuid(ctx, ctx->argv[1], true, &ls);
     if (error) {
-        ctl_fatal("%s", error);
+        ctx->error = error;
+        return;
     }
 
     for (int i = 5; i < ctx->argc; i++) {
         if (!strncmp(ctx->argv[i], "dscp=", 5)) {
             if (!ovs_scan(ctx->argv[i] + 5, "%"SCNd64, &dscp)
                 || dscp < 0 || dscp > 63) {
-                ctl_fatal("%s: dscp must in range 0...63.", ctx->argv[i] + 5);
+                ctl_error(ctx, "%s: dscp must in range 0...63.",
+                          ctx->argv[i] + 5);
                 return;
             }
         }
         else if (!strncmp(ctx->argv[i], "rate=", 5)) {
             if (!ovs_scan(ctx->argv[i] + 5, "%"SCNd64, &rate)
                 || rate < 1 || rate > UINT32_MAX) {
-                ctl_fatal("%s: rate must in range 1...4294967295.",
+                ctl_error(ctx, "%s: rate must in range 1...4294967295.",
                           ctx->argv[i] + 5);
                 return;
             }
@@ -1921,20 +1923,20 @@ nbctl_qos_add(struct ctl_context *ctx)
         else if (!strncmp(ctx->argv[i], "burst=", 6)) {
             if (!ovs_scan(ctx->argv[i] + 6, "%"SCNd64, &burst)
                 || burst < 1 || burst > UINT32_MAX) {
-                ctl_fatal("%s: burst must in range 1...4294967295.",
+                ctl_error(ctx, "%s: burst must in range 1...4294967295.",
                           ctx->argv[i] + 6);
                 return;
             }
         } else {
-            ctl_fatal("%s: must be start of \"dscp=\", \"rate=\", \"burst=\".",
-                      ctx->argv[i]);
+            ctl_error(ctx, "%s: must be start of \"dscp=\", \"rate=\", "
+                      "\"burst=\".", ctx->argv[i]);
             return;
         }
     }
 
     /* Validate rate and dscp. */
     if (-1 == dscp && !rate) {
-        ctl_fatal("One of the rate or dscp must be configured.");
+        ctl_error(ctx, "One of the rate or dscp must be configured.");
         return;
     }
 
@@ -1963,8 +1965,9 @@ nbctl_qos_add(struct ctl_context *ctx)
         if (!qos_cmp(&ls->qos_rules[i], &qos)) {
             bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
             if (!may_exist) {
-                ctl_fatal("Same qos already existed on the ls %s.",
+                ctl_error(ctx, "Same qos already existed on the ls %s.",
                           ctx->argv[1]);
+                return;
             }
             return;
         }
