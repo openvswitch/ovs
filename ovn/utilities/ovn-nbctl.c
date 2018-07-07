@@ -1285,16 +1285,20 @@ nbctl_lsp_get_up(struct ctl_context *ctx)
                   "%s\n", (lsp->up && *lsp->up) ? "up" : "down");
 }
 
-static bool
-parse_enabled(const char *state)
+static char * OVS_WARN_UNUSED_RESULT
+parse_enabled(const char *state, bool *enabled_p)
 {
+    ovs_assert(enabled_p);
+
     if (!strcasecmp(state, "enabled")) {
-        return true;
+        *enabled_p = true;
     } else if (!strcasecmp(state, "disabled")) {
-        return false;
+        *enabled_p = false;
     } else {
-        ctl_fatal("%s: state must be \"enabled\" or \"disabled\"", state);
+        return xasprintf("%s: state must be \"enabled\" or \"disabled\"",
+                         state);
     }
+    return NULL;
 }
 
 static void
@@ -1308,7 +1312,11 @@ nbctl_lsp_set_enabled(struct ctl_context *ctx)
     if (error) {
         ctl_fatal("%s", error);
     }
-    bool enabled = parse_enabled(state);
+    bool enabled;
+    error = parse_enabled(state, &enabled);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     nbrec_logical_switch_port_set_enabled(lsp, &enabled, 1);
 }
 
@@ -3592,7 +3600,11 @@ nbctl_lrp_set_enabled(struct ctl_context *ctx)
         return;
     }
 
-    bool enabled = parse_enabled(state);
+    bool enabled;
+    error = parse_enabled(state, &enabled);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     nbrec_logical_router_port_set_enabled(lrp, &enabled, 1);
 }
 
