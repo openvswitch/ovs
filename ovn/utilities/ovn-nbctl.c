@@ -2933,7 +2933,8 @@ nbctl_lr_route_del(struct ctl_context *ctx)
     const struct nbrec_logical_router *lr;
     char *error = lr_by_name_or_uuid(ctx, ctx->argv[1], true, &lr);
     if (error) {
-        ctl_fatal("%s", error);
+        ctx->error = error;
+        return;
     }
 
     if (ctx->argc == 2) {
@@ -2944,7 +2945,8 @@ nbctl_lr_route_del(struct ctl_context *ctx)
 
     char *prefix = normalize_prefix_str(ctx->argv[2]);
     if (!prefix) {
-        ctl_fatal("bad prefix argument: %s", ctx->argv[2]);
+        ctl_error(ctx, "bad prefix argument: %s", ctx->argv[2]);
+        return;
     }
 
     for (int i = 0; i < lr->n_static_routes; i++) {
@@ -2972,7 +2974,7 @@ nbctl_lr_route_del(struct ctl_context *ctx)
     }
 
     if (!shash_find(&ctx->options, "--if-exists")) {
-        ctl_fatal("no matching prefix: %s", prefix);
+        ctl_error(ctx, "no matching prefix: %s", prefix);
     }
     free(prefix);
 }
