@@ -569,8 +569,9 @@ ls_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist,
     return NULL;
 }
 
-static const struct nbrec_load_balancer *
-lb_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist)
+static char * OVS_WARN_UNUSED_RESULT
+lb_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist,
+                   const struct nbrec_load_balancer **lb_p)
 {
     const struct nbrec_load_balancer *lb = NULL;
 
@@ -588,19 +589,22 @@ lb_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist)
                 continue;
             }
             if (lb) {
-                ctl_fatal("Multiple load balancers named '%s'.  "
-                          "Use a UUID.", id);
+                return xasprintf("Multiple load balancers named '%s'.  "
+                                 "Use a UUID.", id);
             }
             lb = iter;
         }
     }
 
     if (!lb && must_exist) {
-        ctl_fatal("%s: load balancer %s not found", id,
-                is_uuid ? "UUID" : "name");
+        return xasprintf("%s: load balancer %s not found", id,
+                         is_uuid ? "UUID" : "name");
     }
 
-    return lb;
+    if (lb_p) {
+        *lb_p = lb;
+    }
+    return NULL;
 }
 
 static const struct nbrec_port_group *
@@ -2069,7 +2073,10 @@ nbctl_lb_add(struct ctl_context *ctx)
 
     const struct nbrec_load_balancer *lb = NULL;
     if (!add_duplicate) {
-        lb = lb_by_name_or_uuid(ctx, lb_name, false);
+        char *error = lb_by_name_or_uuid(ctx, lb_name, false, &lb);
+        if (error) {
+            ctl_fatal("%s", error);
+        }
         if (lb) {
             if (smap_get(&lb->vips, lb_vip_normalized)) {
                 if (!may_exist) {
@@ -2118,7 +2125,10 @@ nbctl_lb_del(struct ctl_context *ctx)
     const struct nbrec_load_balancer *lb = NULL;
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
 
-    lb = lb_by_name_or_uuid(ctx, id, false);
+    char *error = lb_by_name_or_uuid(ctx, id, false, &lb);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     if (!lb) {
         return;
     }
@@ -2255,7 +2265,10 @@ nbctl_lr_lb_add(struct ctl_context *ctx)
     const struct nbrec_load_balancer *new_lb;
 
     lr = lr_by_name_or_uuid(ctx, ctx->argv[1], true);
-    new_lb = lb_by_name_or_uuid(ctx, ctx->argv[2], true);
+    char *error = lb_by_name_or_uuid(ctx, ctx->argv[2], true, &new_lb);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
 
     bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
     for (int i = 0; i < lr->n_load_balancer; i++) {
@@ -2300,7 +2313,10 @@ nbctl_lr_lb_del(struct ctl_context *ctx)
         return;
     }
 
-    del_lb = lb_by_name_or_uuid(ctx, ctx->argv[2], true);
+    char *error = lb_by_name_or_uuid(ctx, ctx->argv[2], true, &del_lb);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     for (size_t i = 0; i < lr->n_load_balancer; i++) {
         const struct nbrec_load_balancer *lb
             = lr->load_balancer[i];
@@ -2361,7 +2377,10 @@ nbctl_ls_lb_add(struct ctl_context *ctx)
     if (error) {
         ctl_fatal("%s", error);
     }
-    new_lb = lb_by_name_or_uuid(ctx, ctx->argv[2], true);
+    error = lb_by_name_or_uuid(ctx, ctx->argv[2], true, &new_lb);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
 
     bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
     for (int i = 0; i < ls->n_load_balancer; i++) {
@@ -2409,7 +2428,10 @@ nbctl_ls_lb_del(struct ctl_context *ctx)
         return;
     }
 
-    del_lb = lb_by_name_or_uuid(ctx, ctx->argv[2], true);
+    error = lb_by_name_or_uuid(ctx, ctx->argv[2], true, &del_lb);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     for (size_t i = 0; i < ls->n_load_balancer; i++) {
         const struct nbrec_load_balancer *lb
             = ls->load_balancer[i];
