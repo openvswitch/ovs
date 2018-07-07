@@ -3843,7 +3843,7 @@ do_nbctl(const char *args, struct ctl_command *commands, size_t n_commands,
             (c->syntax->run)(&ctx);
         }
         if (ctx.error) {
-            ctl_fatal("%s", error);
+            ctl_fatal("%s", ctx.error);
         }
         ctl_context_done_command(&ctx, c);
 
