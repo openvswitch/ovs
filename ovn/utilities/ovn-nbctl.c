@@ -496,9 +496,9 @@ Other options:\n\
 
 
 /* Find a logical router given its id. */
-static const struct nbrec_logical_router *
+static char * OVS_WARN_UNUSED_RESULT
 lr_by_name_or_uuid(struct ctl_context *ctx, const char *id,
-                        bool must_exist)
+                   bool must_exist, const struct nbrec_logical_router **lr_p)
 {
     const struct nbrec_logical_router *lr = NULL;
     bool is_uuid = false;
@@ -517,18 +517,22 @@ lr_by_name_or_uuid(struct ctl_context *ctx, const char *id,
                 continue;
             }
             if (lr) {
-                ctl_fatal("Multiple logical routers named '%s'.  "
-                          "Use a UUID.", id);
+                return xasprintf("Multiple logical routers named '%s'.  "
+                                 "Use a UUID.", id);
             }
             lr = iter;
         }
     }
 
     if (!lr && must_exist) {
-        ctl_fatal("%s: router %s not found", id, is_uuid ? "UUID" : "name");
+        return xasprintf("%s: router %s not found",
+                         id, is_uuid ? "UUID" : "name");
     }
 
-    return lr;
+    if (lr_p) {
+        *lr_p = lr;
+    }
+    return NULL;
 }
 
 static char * OVS_WARN_UNUSED_RESULT
@@ -820,7 +824,10 @@ nbctl_show(struct ctl_context *ctx)
     const struct nbrec_logical_router *lr;
 
     if (ctx->argc == 2) {
-        lr = lr_by_name_or_uuid(ctx, ctx->argv[1], false);
+        char *error = lr_by_name_or_uuid(ctx, ctx->argv[1], false, &lr);
+        if (error) {
+            ctl_fatal("%s", error);
+        }
         if (lr) {
             print_lr(lr, &ctx->output);
         }
@@ -2264,8 +2271,11 @@ nbctl_lr_lb_add(struct ctl_context *ctx)
     const struct nbrec_logical_router *lr;
     const struct nbrec_load_balancer *new_lb;
 
-    lr = lr_by_name_or_uuid(ctx, ctx->argv[1], true);
-    char *error = lb_by_name_or_uuid(ctx, ctx->argv[2], true, &new_lb);
+    char *error = lr_by_name_or_uuid(ctx, ctx->argv[1], true, &lr);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
+    error = lb_by_name_or_uuid(ctx, ctx->argv[2], true, &new_lb);
     if (error) {
         ctl_fatal("%s", error);
     }
@@ -2303,7 +2313,10 @@ nbctl_lr_lb_del(struct ctl_context *ctx)
 {
     const struct nbrec_logical_router *lr;
     const struct nbrec_load_balancer *del_lb;
-    lr = lr_by_name_or_uuid(ctx, ctx->argv[1], true);
+    char *error = lr_by_name_or_uuid(ctx, ctx->argv[1], true, &lr);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
 
     if (ctx->argc == 2) {
         /* If load-balancer is not specified, remove
@@ -2313,7 +2326,7 @@ nbctl_lr_lb_del(struct ctl_context *ctx)
         return;
     }
 
-    char *error = lb_by_name_or_uuid(ctx, ctx->argv[2], true, &del_lb);
+    error = lb_by_name_or_uuid(ctx, ctx->argv[2], true, &del_lb);
     if (error) {
         ctl_fatal("%s", error);
     }
@@ -2351,7 +2364,10 @@ nbctl_lr_lb_list(struct ctl_context *ctx)
     struct smap lbs = SMAP_INITIALIZER(&lbs);
     int vip_width = 0;
 
-    lr = lr_by_name_or_uuid(ctx, lr_name, true);
+    char *error = lr_by_name_or_uuid(ctx, lr_name, true, &lr);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     for (int i = 0; i < lr->n_load_balancer; i++) {
         const struct nbrec_load_balancer *lb
             = lr->load_balancer[i];
@@ -2529,7 +2545,10 @@ nbctl_lr_del(struct ctl_context *ctx)
     const char *id = ctx->argv[1];
     const struct nbrec_logical_router *lr;
 
-    lr = lr_by_name_or_uuid(ctx, id, must_exist);
+    char *error = lr_by_name_or_uuid(ctx, id, must_exist, &lr);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     if (!lr) {
         return;
     }
@@ -2733,7 +2752,10 @@ static void
 nbctl_lr_route_add(struct ctl_context *ctx)
 {
     const struct nbrec_logical_router *lr;
-    lr = lr_by_name_or_uuid(ctx, ctx->argv[1], true);
+    char *error = lr_by_name_or_uuid(ctx, ctx->argv[1], true, &lr);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     char *prefix, *next_hop;
 
     const char *policy = shash_find_data(&ctx->options, "--policy");
@@ -2838,7 +2860,10 @@ static void
 nbctl_lr_route_del(struct ctl_context *ctx)
 {
     const struct nbrec_logical_router *lr;
-    lr = lr_by_name_or_uuid(ctx, ctx->argv[1], true);
+    char *error = lr_by_name_or_uuid(ctx, ctx->argv[1], true, &lr);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
 
     if (ctx->argc == 2) {
         /* If a prefix is not specified, delete all routes. */
@@ -2890,7 +2915,10 @@ nbctl_lr_nat_add(struct ctl_context *ctx)
     const char *logical_ip = ctx->argv[4];
     char *new_logical_ip = NULL;
 
-    lr = lr_by_name_or_uuid(ctx, ctx->argv[1], true);
+    char *error = lr_by_name_or_uuid(ctx, ctx->argv[1], true, &lr);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
 
     if (strcmp(nat_type, "dnat") && strcmp(nat_type, "snat")
             && strcmp(nat_type, "dnat_and_snat")) {
@@ -2910,7 +2938,7 @@ nbctl_lr_nat_add(struct ctl_context *ctx)
         }
         new_logical_ip = xstrdup(logical_ip);
     } else {
-        char *error = ip_parse_cidr(logical_ip, &ipv4, &plen);
+        error = ip_parse_cidr(logical_ip, &ipv4, &plen);
         if (error) {
             free(error);
             ctl_fatal("%s: should be an IPv4 address or network.",
@@ -2931,7 +2959,7 @@ nbctl_lr_nat_add(struct ctl_context *ctx)
         }
 
         logical_port = ctx->argv[5];
-        char *error = lsp_by_name_or_uuid(ctx, logical_port, true, NULL);
+        error = lsp_by_name_or_uuid(ctx, logical_port, true, NULL);
         if (error) {
             ctl_fatal("%s", error);
         }
@@ -3002,7 +3030,10 @@ nbctl_lr_nat_del(struct ctl_context *ctx)
 {
     const struct nbrec_logical_router *lr;
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
-    lr = lr_by_name_or_uuid(ctx, ctx->argv[1], true);
+    char *error = lr_by_name_or_uuid(ctx, ctx->argv[1], true, &lr);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
 
     if (ctx->argc == 2) {
         /* If type, external_ip and logical_ip are not specified, delete
@@ -3063,7 +3094,10 @@ static void
 nbctl_lr_nat_list(struct ctl_context *ctx)
 {
     const struct nbrec_logical_router *lr;
-    lr = lr_by_name_or_uuid(ctx, ctx->argv[1], true);
+    char *error = lr_by_name_or_uuid(ctx, ctx->argv[1], true, &lr);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
 
     struct smap lr_nats = SMAP_INITIALIZER(&lr_nats);
     for (size_t i = 0; i < lr->n_nat; i++) {
@@ -3306,7 +3340,10 @@ nbctl_lrp_add(struct ctl_context *ctx)
     bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
 
     const struct nbrec_logical_router *lr;
-    lr = lr_by_name_or_uuid(ctx, ctx->argv[1], true);
+    char *error = lr_by_name_or_uuid(ctx, ctx->argv[1], true, &lr);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
 
     const char *lrp_name = ctx->argv[2];
     const char *mac = ctx->argv[3];
@@ -3390,7 +3427,7 @@ nbctl_lrp_add(struct ctl_context *ctx)
     for (int i = 0; i < n_networks; i++) {
         ovs_be32 ipv4;
         unsigned int plen;
-        char *error = ip_parse_cidr(networks[i], &ipv4, &plen);
+        error = ip_parse_cidr(networks[i], &ipv4, &plen);
         if (error) {
             free(error);
             struct in6_addr ipv6;
@@ -3410,8 +3447,8 @@ nbctl_lrp_add(struct ctl_context *ctx)
     nbrec_logical_router_port_set_networks(lrp, networks, n_networks);
 
     for (int i = 0; i < n_settings; i++) {
-        char *error = ctl_set_column("Logical_Router_Port", &lrp->header_,
-                                     settings[i], ctx->symtab);
+        error = ctl_set_column("Logical_Router_Port", &lrp->header_,
+                               settings[i], ctx->symtab);
         if (error) {
             ctl_fatal("%s", error);
         }
@@ -3487,7 +3524,10 @@ nbctl_lrp_list(struct ctl_context *ctx)
     struct smap lrps;
     size_t i;
 
-    lr = lr_by_name_or_uuid(ctx, id, true);
+    char *error = lr_by_name_or_uuid(ctx, id, true, &lr);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
 
     smap_init(&lrps);
     for (i = 0; i < lr->n_ports; i++) {
@@ -3608,7 +3648,10 @@ nbctl_lr_route_list(struct ctl_context *ctx)
     size_t n_ipv4_routes = 0;
     size_t n_ipv6_routes = 0;
 
-    lr = lr_by_name_or_uuid(ctx, ctx->argv[1], true);
+    char *error = lr_by_name_or_uuid(ctx, ctx->argv[1], true, &lr);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
 
     ipv4_routes = xmalloc(sizeof *ipv4_routes * lr->n_static_routes);
     ipv6_routes = xmalloc(sizeof *ipv6_routes * lr->n_static_routes);
@@ -3619,7 +3662,6 @@ nbctl_lr_route_list(struct ctl_context *ctx)
         unsigned int plen;
         ovs_be32 ipv4;
         const char *policy = route->policy ? route->policy : "dst-ip";
-        char *error;
         error = ip_parse_cidr(route->ip_prefix, &ipv4, &plen);
         if (!error) {
             ipv4_routes[n_ipv4_routes].priority = !strcmp(policy, "dst-ip")
