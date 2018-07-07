@@ -2960,32 +2960,37 @@ nbctl_lr_nat_add(struct ctl_context *ctx)
 
     char *error = lr_by_name_or_uuid(ctx, ctx->argv[1], true, &lr);
     if (error) {
-        ctl_fatal("%s", error);
+        ctx->error = error;
+        return;
     }
 
     if (strcmp(nat_type, "dnat") && strcmp(nat_type, "snat")
             && strcmp(nat_type, "dnat_and_snat")) {
-        ctl_fatal("%s: type must be one of \"dnat\", \"snat\" and "
-                "\"dnat_and_snat\".", nat_type);
+        ctl_error(ctx, "%s: type must be one of \"dnat\", \"snat\" and "
+                  "\"dnat_and_snat\".", nat_type);
+        return;
     }
 
     ovs_be32 ipv4 = 0;
     unsigned int plen;
     if (!ip_parse(external_ip, &ipv4)) {
-        ctl_fatal("%s: should be an IPv4 address.", external_ip);
+        ctl_error(ctx, "%s: should be an IPv4 address.", external_ip);
+        return;
     }
 
     if (strcmp("snat", nat_type)) {
         if (!ip_parse(logical_ip, &ipv4)) {
-            ctl_fatal("%s: should be an IPv4 address.", logical_ip);
+            ctl_error(ctx, "%s: should be an IPv4 address.", logical_ip);
+            return;
         }
         new_logical_ip = xstrdup(logical_ip);
     } else {
         error = ip_parse_cidr(logical_ip, &ipv4, &plen);
         if (error) {
             free(error);
-            ctl_fatal("%s: should be an IPv4 address or network.",
-                    logical_ip);
+            ctl_error(ctx, "%s: should be an IPv4 address or network.",
+                      logical_ip);
+            return;
         }
         new_logical_ip = normalize_ipv4_prefix(ipv4, plen);
     }
@@ -2993,24 +2998,32 @@ nbctl_lr_nat_add(struct ctl_context *ctx)
     const char *logical_port;
     const char *external_mac;
     if (ctx->argc == 6) {
-        ctl_fatal("lr-nat-add with logical_port "
+        ctl_error(ctx, "lr-nat-add with logical_port "
                   "must also specify external_mac.");
+        free(new_logical_ip);
+        return;
     } else if (ctx->argc == 7) {
         if (strcmp(nat_type, "dnat_and_snat")) {
-            ctl_fatal("logical_port and external_mac are only valid when "
+            ctl_error(ctx, "logical_port and external_mac are only valid when "
                       "type is \"dnat_and_snat\".");
+            free(new_logical_ip);
+            return;
         }
 
         logical_port = ctx->argv[5];
         error = lsp_by_name_or_uuid(ctx, logical_port, true, NULL);
         if (error) {
-            ctl_fatal("%s", error);
+            ctx->error = error;
+            free(new_logical_ip);
+            return;
         }
 
         external_mac = ctx->argv[6];
         struct eth_addr ea;
         if (!eth_addr_from_string(external_mac, &ea)) {
-            ctl_fatal("invalid mac address %s.", external_mac);
+            ctl_error(ctx, "invalid mac address %s.", external_mac);
+            free(new_logical_ip);
+            return;
         }
     } else {
         logical_port = NULL;
@@ -3034,15 +3047,19 @@ nbctl_lr_nat_add(struct ctl_context *ctx)
                             free(new_logical_ip);
                             return;
                         }
-                        ctl_fatal("%s, %s: a NAT with this external_ip and "
-                                "logical_ip already exists",
-                                external_ip, new_logical_ip);
+                        ctl_error(ctx, "%s, %s: a NAT with this external_ip "
+                                  "and logical_ip already exists",
+                                  external_ip, new_logical_ip);
+                        free(new_logical_ip);
+                        return;
                 } else {
-                        ctl_fatal("a NAT with this type (%s) and %s (%s) "
-                                "already exists",
-                                nat_type,
-                                is_snat ? "logical_ip" : "external_ip",
-                                is_snat ? new_logical_ip : external_ip);
+                    ctl_error(ctx, "a NAT with this type (%s) and %s (%s) "
+                              "already exists",
+                              nat_type,
+                              is_snat ? "logical_ip" : "external_ip",
+                              is_snat ? new_logical_ip : external_ip);
+                    free(new_logical_ip);
+                    return;
                 }
             }
         }
