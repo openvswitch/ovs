@@ -3439,7 +3439,8 @@ nbctl_lrp_add(struct ctl_context *ctx)
     const struct nbrec_logical_router *lr;
     char *error = lr_by_name_or_uuid(ctx, ctx->argv[1], true, &lr);
     if (error) {
-        ctl_fatal("%s", error);
+        ctx->error = error;
+        return;
     }
 
     const char *lrp_name = ctx->argv[2];
@@ -3455,7 +3456,9 @@ nbctl_lrp_add(struct ctl_context *ctx)
     }
 
     if (!n_networks) {
-        ctl_fatal("%s: router port requires specifying a network", lrp_name);
+        ctl_error(ctx, "%s: router port requires specifying a network",
+                  lrp_name);
+        return;
     }
 
     char **settings = (char **) &ctx->argv[n_networks + 4];
@@ -3464,25 +3467,29 @@ nbctl_lrp_add(struct ctl_context *ctx)
     const struct nbrec_logical_router_port *lrp;
     error = lrp_by_name_or_uuid(ctx, lrp_name, false, &lrp);
     if (error) {
-        ctl_fatal("%s", error);
+        ctx->error = error;
+        return;
     }
     if (lrp) {
         if (!may_exist) {
-            ctl_fatal("%s: a port with this name already exists",
+            ctl_error(ctx, "%s: a port with this name already exists",
                       lrp_name);
+            return;
         }
 
         const struct nbrec_logical_router *bound_lr;
         bound_lr = lrp_to_lr(ctx->idl, lrp);
         if (bound_lr != lr) {
             char uuid_s[UUID_LEN + 1];
-            ctl_fatal("%s: port already exists but in router %s", lrp_name,
-                      lr_get_name(bound_lr, uuid_s, sizeof uuid_s));
+            ctl_error(ctx, "%s: port already exists but in router %s",
+                      lrp_name, lr_get_name(bound_lr, uuid_s, sizeof uuid_s));
+            return;
         }
 
         if (strcmp(mac, lrp->mac)) {
-            ctl_fatal("%s: port already exists with mac %s", lrp_name,
+            ctl_error(ctx, "%s: port already exists with mac %s", lrp_name,
                       lrp->mac);
+            return;
         }
 
         struct sset new_networks = SSET_INITIALIZER(&new_networks);
@@ -3497,8 +3504,9 @@ nbctl_lrp_add(struct ctl_context *ctx)
         sset_destroy(&orig_networks);
         sset_destroy(&new_networks);
         if (!same_networks) {
-            ctl_fatal("%s: port already exists with different network",
+            ctl_error(ctx, "%s: port already exists with different network",
                       lrp_name);
+            return;
         }
 
         /* Special-case sanity-check of peer ports. */
@@ -3512,8 +3520,9 @@ nbctl_lrp_add(struct ctl_context *ctx)
 
         if ((!peer != !lrp->peer) ||
                 (lrp->peer && strcmp(peer, lrp->peer))) {
-            ctl_fatal("%s: port already exists with mismatching peer",
+            ctl_error(ctx, "%s: port already exists with mismatching peer",
                       lrp_name);
+            return;
         }
 
         return;
@@ -3521,7 +3530,8 @@ nbctl_lrp_add(struct ctl_context *ctx)
 
     struct eth_addr ea;
     if (!eth_addr_from_string(mac, &ea)) {
-        ctl_fatal("%s: invalid mac address %s", lrp_name, mac);
+        ctl_error(ctx, "%s: invalid mac address %s", lrp_name, mac);
+        return;
     }
 
     for (int i = 0; i < n_networks; i++) {
@@ -3534,8 +3544,9 @@ nbctl_lrp_add(struct ctl_context *ctx)
             error = ipv6_parse_cidr(networks[i], &ipv6, &plen);
             if (error) {
                 free(error);
-                ctl_fatal("%s: invalid network address: %s", lrp_name,
+                ctl_error(ctx, "%s: invalid network address: %s", lrp_name,
                           networks[i]);
+                return;
             }
         }
     }
@@ -3550,7 +3561,8 @@ nbctl_lrp_add(struct ctl_context *ctx)
         error = ctl_set_column("Logical_Router_Port", &lrp->header_,
                                settings[i], ctx->symtab);
         if (error) {
-            ctl_fatal("%s", error);
+            ctx->error = error;
+            return;
         }
     }
 
