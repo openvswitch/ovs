@@ -1526,7 +1526,7 @@ acl_cmp(const void *acl1_, const void *acl2_)
     }
 }
 
-static void
+static char * OVS_WARN_UNUSED_RESULT
 acl_cmd_get_pg_or_ls(struct ctl_context *ctx,
                      const struct nbrec_logical_switch **ls,
                      const struct nbrec_port_group **pg)
@@ -1538,16 +1538,16 @@ acl_cmd_get_pg_or_ls(struct ctl_context *ctx,
         *pg = pg_by_name_or_uuid(ctx, ctx->argv[1], false);
         error = ls_by_name_or_uuid(ctx, ctx->argv[1], false, ls);
         if (error) {
-            ctl_fatal("%s", error);
+            return error;
         }
         if (*pg && *ls) {
-            ctl_fatal("Same name '%s' exists in both port-groups and "
-                      "logical switches. Specify --type=port-group or "
-                      "switch, or use a UUID.", ctx->argv[1]);
+            return xasprintf("Same name '%s' exists in both port-groups and "
+                             "logical switches. Specify --type=port-group or "
+                             "switch, or use a UUID.", ctx->argv[1]);
         }
         if (!*pg && !*ls) {
-            ctl_fatal("'%s' is not found for port-group or switch.",
-                      ctx->argv[1]);
+            return xasprintf("'%s' is not found for port-group or switch.",
+                             ctx->argv[1]);
         }
     } else if (!strcmp(opt_type, "port-group")) {
         *pg = pg_by_name_or_uuid(ctx, ctx->argv[1], true);
@@ -1555,12 +1555,14 @@ acl_cmd_get_pg_or_ls(struct ctl_context *ctx,
     } else if (!strcmp(opt_type, "switch")) {
         error = ls_by_name_or_uuid(ctx, ctx->argv[1], true, ls);
         if (error) {
-            ctl_fatal("%s", error);
+            return error;
         }
         *pg = NULL;
     } else {
-        ctl_fatal("Invalid value '%s' for option --type", opt_type);
+        return xasprintf("Invalid value '%s' for option --type", opt_type);
     }
+
+    return NULL;
 }
 
 static void
@@ -1571,7 +1573,11 @@ nbctl_acl_list(struct ctl_context *ctx)
     const struct nbrec_acl **acls;
     size_t i;
 
-    acl_cmd_get_pg_or_ls(ctx, &ls, &pg);
+    char *error = acl_cmd_get_pg_or_ls(ctx, &ls, &pg);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
+
     size_t n_acls = pg ? pg->n_acls : ls->n_acls;
     struct nbrec_acl **nb_acls = pg ? pg->acls : ls->acls;
 
@@ -1656,7 +1662,10 @@ nbctl_acl_add(struct ctl_context *ctx)
     const struct nbrec_port_group *pg = NULL;
     const char *action = ctx->argv[5];
 
-    acl_cmd_get_pg_or_ls(ctx, &ls, &pg);
+    char *error = acl_cmd_get_pg_or_ls(ctx, &ls, &pg);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
 
     const char *direction = parse_direction(ctx->argv[2]);
     int64_t priority = parse_priority(ctx->argv[3]);
@@ -1727,7 +1736,10 @@ nbctl_acl_del(struct ctl_context *ctx)
     const struct nbrec_logical_switch *ls = NULL;
     const struct nbrec_port_group *pg = NULL;
 
-    acl_cmd_get_pg_or_ls(ctx, &ls, &pg);
+    char *error = acl_cmd_get_pg_or_ls(ctx, &ls, &pg);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
 
     if (ctx->argc == 2) {
         /* If direction, priority, and match are not specified, delete
