@@ -1494,11 +1494,12 @@ cmd_add(struct ctl_context *ctx)
         ovsdb_datum_destroy(&add, type);
     }
     if (old.n > type->n_max) {
-        ctl_fatal("\"add\" operation would put %u %s in column %s of "
+        ctl_error(ctx, "\"add\" operation would put %u %s in column %s of "
                   "table %s but the maximum number is %u",
                   old.n,
                   type->value.type == OVSDB_TYPE_VOID ? "values" : "pairs",
                   column->name, table->name, type->n_max);
+        return;
     }
     ovsdb_idl_txn_verify(row, column);
     ovsdb_idl_txn_write(row, column, &old);
