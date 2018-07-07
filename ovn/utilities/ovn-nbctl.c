@@ -3672,7 +3672,8 @@ nbctl_lrp_set_enabled(struct ctl_context *ctx)
 
     char *error = lrp_by_name_or_uuid(ctx, id, true, &lrp);
     if (error) {
-        ctl_fatal("%s", error);
+        ctx->error = error;
+        return;
     }
     if (!lrp) {
         return;
@@ -3681,7 +3682,8 @@ nbctl_lrp_set_enabled(struct ctl_context *ctx)
     bool enabled;
     error = parse_enabled(state, &enabled);
     if (error) {
-        ctl_fatal("%s", error);
+        ctx->error = error;
+        return;
     }
     nbrec_logical_router_port_set_enabled(lrp, &enabled, 1);
 }
