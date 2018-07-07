@@ -3387,7 +3387,8 @@ nbctl_lrp_del_gateway_chassis(struct ctl_context *ctx)
     const struct nbrec_logical_router_port *lrp;
     char *error = lrp_by_name_or_uuid(ctx, ctx->argv[1], true, &lrp);
     if (error) {
-        ctl_fatal("%s", error);
+        ctx->error = error;
+        return;
     }
     if (!lrp) {
         return;
@@ -3404,7 +3405,7 @@ nbctl_lrp_del_gateway_chassis(struct ctl_context *ctx)
     }
 
     /* Can't happen because of the database schema. */
-    ctl_fatal("chassis %s is not added to logical port %s",
+    ctl_error(ctx, "chassis %s is not added to logical port %s",
               chassis_name, ctx->argv[1]);
 }
 
