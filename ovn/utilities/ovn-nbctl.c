@@ -3092,7 +3092,8 @@ nbctl_lr_nat_del(struct ctl_context *ctx)
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
     char *error = lr_by_name_or_uuid(ctx, ctx->argv[1], true, &lr);
     if (error) {
-        ctl_fatal("%s", error);
+        ctx->error = error;
+        return;
     }
 
     if (ctx->argc == 2) {
@@ -3106,8 +3107,9 @@ nbctl_lr_nat_del(struct ctl_context *ctx)
     const char *nat_type = ctx->argv[2];
     if (strcmp(nat_type, "dnat") && strcmp(nat_type, "snat")
             && strcmp(nat_type, "dnat_and_snat")) {
-        ctl_fatal("%s: type must be one of \"dnat\", \"snat\" and "
-                "\"dnat_and_snat\".", nat_type);
+        ctl_error(ctx, "%s: type must be one of \"dnat\", \"snat\" and "
+                  "\"dnat_and_snat\".", nat_type);
+        return;
     }
 
     if (ctx->argc == 3) {
@@ -3145,8 +3147,9 @@ nbctl_lr_nat_del(struct ctl_context *ctx)
     }
 
     if (must_exist) {
-        ctl_fatal("no matching NAT with the type (%s) and %s (%s)",
-                nat_type, is_snat ? "logical_ip" : "external_ip", nat_ip);
+        ctl_error(ctx, "no matching NAT with the type (%s) and %s (%s)",
+                  nat_type, is_snat ? "logical_ip" : "external_ip", nat_ip);
+        return;
     }
 }
 
