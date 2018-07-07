@@ -846,7 +846,9 @@ nbctl_ls_add(struct ctl_context *ctx)
     bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
     bool add_duplicate = shash_find(&ctx->options, "--add-duplicate") != NULL;
     if (may_exist && add_duplicate) {
-        ctl_fatal("--may-exist and --add-duplicate may not be used together");
+        ctl_error(ctx, "--may-exist and --add-duplicate may not be used "
+                  "together");
+        return;
     }
 
     if (ls_name) {
@@ -857,15 +859,18 @@ nbctl_ls_add(struct ctl_context *ctx)
                     if (may_exist) {
                         return;
                     }
-                    ctl_fatal("%s: a switch with this name already exists",
-                              ls_name);
+                    ctl_error(ctx, "%s: a switch with this name already "
+                              "exists", ls_name);
+                    return;
                 }
             }
         }
     } else if (may_exist) {
-        ctl_fatal("--may-exist requires specifying a name");
+        ctl_error(ctx, "--may-exist requires specifying a name");
+        return;
     } else if (add_duplicate) {
-        ctl_fatal("--add-duplicate requires specifying a name");
+        ctl_error(ctx, "--add-duplicate requires specifying a name");
+        return;
     }
 
     struct nbrec_logical_switch *ls;
