@@ -2442,11 +2442,13 @@ nbctl_ls_lb_add(struct ctl_context *ctx)
 
     char *error = ls_by_name_or_uuid(ctx, ctx->argv[1], true, &ls);
     if (error) {
-        ctl_fatal("%s", error);
+        ctx->error = error;
+        return;
     }
     error = lb_by_name_or_uuid(ctx, ctx->argv[2], true, &new_lb);
     if (error) {
-        ctl_fatal("%s", error);
+        ctx->error = error;
+        return;
     }
 
     bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
@@ -2458,8 +2460,9 @@ nbctl_ls_lb_add(struct ctl_context *ctx)
             if (may_exist) {
                 return;
             }
-            ctl_fatal(UUID_FMT " : a load balancer with this UUID already "
-                    "exists", UUID_ARGS(&lb->header_.uuid));
+            ctl_error(ctx, UUID_FMT " : a load balancer with this UUID "
+                      "already exists", UUID_ARGS(&lb->header_.uuid));
+            return;
         }
     }
 
