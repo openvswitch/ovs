@@ -902,9 +902,10 @@ nbctl_ls_list(struct ctl_context *ctx)
     free(nodes);
 }
 
-static const struct nbrec_logical_switch_port *
+static char * OVS_WARN_UNUSED_RESULT
 lsp_by_name_or_uuid(struct ctl_context *ctx, const char *id,
-                    bool must_exist)
+                    bool must_exist,
+                    const struct nbrec_logical_switch_port **lsp_p)
 {
     const struct nbrec_logical_switch_port *lsp = NULL;
 
@@ -923,10 +924,14 @@ lsp_by_name_or_uuid(struct ctl_context *ctx, const char *id,
     }
 
     if (!lsp && must_exist) {
-        ctl_fatal("%s: port %s not found", id, is_uuid ? "UUID" : "name");
+        return xasprintf("%s: port %s not found",
+                         id, is_uuid ? "UUID" : "name");
     }
 
-    return lsp;
+    if (lsp_p) {
+        *lsp_p = lsp;
+    }
+    return NULL;
 }
 
 /* Returns the logical switch that contains 'lsp'. */
@@ -989,7 +994,10 @@ nbctl_lsp_add(struct ctl_context *ctx)
 
     const char *lsp_name = ctx->argv[2];
     const struct nbrec_logical_switch_port *lsp;
-    lsp = lsp_by_name_or_uuid(ctx, lsp_name, false);
+    error = lsp_by_name_or_uuid(ctx, lsp_name, false, &lsp);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     if (lsp) {
         if (!may_exist) {
             ctl_fatal("%s: a port with this name already exists",
@@ -1079,7 +1087,10 @@ nbctl_lsp_del(struct ctl_context *ctx)
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
     const struct nbrec_logical_switch_port *lsp;
 
-    lsp = lsp_by_name_or_uuid(ctx, ctx->argv[1], must_exist);
+    char *error = lsp_by_name_or_uuid(ctx, ctx->argv[1], must_exist, &lsp);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     if (!lsp) {
         return;
     }
@@ -1133,7 +1144,10 @@ nbctl_lsp_get_parent(struct ctl_context *ctx)
 {
     const struct nbrec_logical_switch_port *lsp;
 
-    lsp = lsp_by_name_or_uuid(ctx, ctx->argv[1], true);
+    char *error = lsp_by_name_or_uuid(ctx, ctx->argv[1], true, &lsp);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     if (lsp->parent_name) {
         ds_put_format(&ctx->output, "%s\n", lsp->parent_name);
     }
@@ -1144,7 +1158,10 @@ nbctl_lsp_get_tag(struct ctl_context *ctx)
 {
     const struct nbrec_logical_switch_port *lsp;
 
-    lsp = lsp_by_name_or_uuid(ctx, ctx->argv[1], true);
+    char *error = lsp_by_name_or_uuid(ctx, ctx->argv[1], true, &lsp);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     if (lsp->n_tag > 0) {
         ds_put_format(&ctx->output, "%"PRId64"\n", lsp->tag[0]);
     }
@@ -1156,7 +1173,10 @@ nbctl_lsp_set_addresses(struct ctl_context *ctx)
     const char *id = ctx->argv[1];
     const struct nbrec_logical_switch_port *lsp;
 
-    lsp = lsp_by_name_or_uuid(ctx, id, true);
+    char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
 
     int i;
     for (i = 2; i < ctx->argc; i++) {
@@ -1186,7 +1206,10 @@ nbctl_lsp_get_addresses(struct ctl_context *ctx)
     const char *mac;
     size_t i;
 
-    lsp = lsp_by_name_or_uuid(ctx, id, true);
+    char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
 
     svec_init(&addresses);
     for (i = 0; i < lsp->n_addresses; i++) {
@@ -1205,7 +1228,10 @@ nbctl_lsp_set_port_security(struct ctl_context *ctx)
     const char *id = ctx->argv[1];
     const struct nbrec_logical_switch_port *lsp;
 
-    lsp = lsp_by_name_or_uuid(ctx, id, true);
+    char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     nbrec_logical_switch_port_set_port_security(lsp,
             (const char **) ctx->argv + 2, ctx->argc - 2);
 }
@@ -1219,7 +1245,10 @@ nbctl_lsp_get_port_security(struct ctl_context *ctx)
     const char *addr;
     size_t i;
 
-    lsp = lsp_by_name_or_uuid(ctx, id, true);
+    char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     svec_init(&addrs);
     for (i = 0; i < lsp->n_port_security; i++) {
         svec_add(&addrs, lsp->port_security[i]);
@@ -1237,7 +1266,10 @@ nbctl_lsp_get_up(struct ctl_context *ctx)
     const char *id = ctx->argv[1];
     const struct nbrec_logical_switch_port *lsp;
 
-    lsp = lsp_by_name_or_uuid(ctx, id, true);
+    char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     ds_put_format(&ctx->output,
                   "%s\n", (lsp->up && *lsp->up) ? "up" : "down");
 }
@@ -1261,7 +1293,10 @@ nbctl_lsp_set_enabled(struct ctl_context *ctx)
     const char *state = ctx->argv[2];
     const struct nbrec_logical_switch_port *lsp;
 
-    lsp = lsp_by_name_or_uuid(ctx, id, true);
+    char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     bool enabled = parse_enabled(state);
     nbrec_logical_switch_port_set_enabled(lsp, &enabled, 1);
 }
@@ -1272,7 +1307,10 @@ nbctl_lsp_get_enabled(struct ctl_context *ctx)
     const char *id = ctx->argv[1];
     const struct nbrec_logical_switch_port *lsp;
 
-    lsp = lsp_by_name_or_uuid(ctx, id, true);
+    char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     ds_put_format(&ctx->output, "%s\n",
                   !lsp->enabled || *lsp->enabled ? "enabled" : "disabled");
 }
@@ -1284,7 +1322,10 @@ nbctl_lsp_set_type(struct ctl_context *ctx)
     const char *type = ctx->argv[2];
     const struct nbrec_logical_switch_port *lsp;
 
-    lsp = lsp_by_name_or_uuid(ctx, id, true);
+    char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     if (ovn_is_known_nb_lsp_type(type)) {
         nbrec_logical_switch_port_set_type(lsp, type);
     } else {
@@ -1299,7 +1340,10 @@ nbctl_lsp_get_type(struct ctl_context *ctx)
     const char *id = ctx->argv[1];
     const struct nbrec_logical_switch_port *lsp;
 
-    lsp = lsp_by_name_or_uuid(ctx, id, true);
+    char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     ds_put_format(&ctx->output, "%s\n", lsp->type);
 }
 
@@ -1311,7 +1355,10 @@ nbctl_lsp_set_options(struct ctl_context *ctx)
     size_t i;
     struct smap options = SMAP_INITIALIZER(&options);
 
-    lsp = lsp_by_name_or_uuid(ctx, id, true);
+    char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     for (i = 2; i < ctx->argc; i++) {
         char *key, *value;
         value = xstrdup(ctx->argv[i]);
@@ -1334,7 +1381,10 @@ nbctl_lsp_get_options(struct ctl_context *ctx)
     const struct nbrec_logical_switch_port *lsp;
     struct smap_node *node;
 
-    lsp = lsp_by_name_or_uuid(ctx, id, true);
+    char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     SMAP_FOR_EACH(node, &lsp->options) {
         ds_put_format(&ctx->output, "%s=%s\n", node->key, node->value);
     }
@@ -1346,7 +1396,10 @@ nbctl_lsp_set_dhcpv4_options(struct ctl_context *ctx)
     const char *id = ctx->argv[1];
     const struct nbrec_logical_switch_port *lsp;
 
-    lsp = lsp_by_name_or_uuid(ctx, id, true);
+    char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     const struct nbrec_dhcp_options *dhcp_opt = NULL;
     if (ctx->argc == 3 ) {
         dhcp_opt = dhcp_options_get(ctx, ctx->argv[2], true);
@@ -1355,7 +1408,7 @@ nbctl_lsp_set_dhcpv4_options(struct ctl_context *ctx)
     if (dhcp_opt) {
         ovs_be32 ip;
         unsigned int plen;
-        char *error = ip_parse_cidr(dhcp_opt->cidr, &ip, &plen);
+        error = ip_parse_cidr(dhcp_opt->cidr, &ip, &plen);
         if (error){
             free(error);
             ctl_fatal("DHCP options cidr '%s' is not IPv4", dhcp_opt->cidr);
@@ -1370,7 +1423,10 @@ nbctl_lsp_set_dhcpv6_options(struct ctl_context *ctx)
     const char *id = ctx->argv[1];
     const struct nbrec_logical_switch_port *lsp;
 
-    lsp = lsp_by_name_or_uuid(ctx, id, true);
+    char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     const struct nbrec_dhcp_options *dhcp_opt = NULL;
     if (ctx->argc == 3) {
         dhcp_opt = dhcp_options_get(ctx, ctx->argv[2], true);
@@ -1379,7 +1435,7 @@ nbctl_lsp_set_dhcpv6_options(struct ctl_context *ctx)
     if (dhcp_opt) {
         struct in6_addr ip;
         unsigned int plen;
-        char *error = ipv6_parse_cidr(dhcp_opt->cidr, &ip, &plen);
+        error = ipv6_parse_cidr(dhcp_opt->cidr, &ip, &plen);
         if (error) {
             free(error);
             ctl_fatal("DHCP options cidr '%s' is not IPv6", dhcp_opt->cidr);
@@ -1394,7 +1450,10 @@ nbctl_lsp_get_dhcpv4_options(struct ctl_context *ctx)
     const char *id = ctx->argv[1];
     const struct nbrec_logical_switch_port *lsp;
 
-    lsp = lsp_by_name_or_uuid(ctx, id, true);
+    char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     if (lsp->dhcpv4_options) {
         ds_put_format(&ctx->output, UUID_FMT " (%s)\n",
                       UUID_ARGS(&lsp->dhcpv4_options->header_.uuid),
@@ -1408,7 +1467,10 @@ nbctl_lsp_get_dhcpv6_options(struct ctl_context *ctx)
     const char *id = ctx->argv[1];
     const struct nbrec_logical_switch_port *lsp;
 
-    lsp = lsp_by_name_or_uuid(ctx, id, true);
+    char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     if (lsp->dhcpv6_options) {
         ds_put_format(&ctx->output, UUID_FMT " (%s)\n",
                       UUID_ARGS(&lsp->dhcpv6_options->header_.uuid),
@@ -2847,7 +2909,10 @@ nbctl_lr_nat_add(struct ctl_context *ctx)
         }
 
         logical_port = ctx->argv[5];
-        lsp_by_name_or_uuid(ctx, logical_port, true);
+        char *error = lsp_by_name_or_uuid(ctx, logical_port, true, NULL);
+        if (error) {
+            ctl_fatal("%s", error);
+        }
 
         external_mac = ctx->argv[6];
         struct eth_addr ea;
