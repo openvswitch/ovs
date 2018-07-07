@@ -2817,24 +2817,28 @@ nbctl_lr_route_add(struct ctl_context *ctx)
     const struct nbrec_logical_router *lr;
     char *error = lr_by_name_or_uuid(ctx, ctx->argv[1], true, &lr);
     if (error) {
-        ctl_fatal("%s", error);
+        ctx->error = error;
+        return;
     }
     char *prefix, *next_hop;
 
     const char *policy = shash_find_data(&ctx->options, "--policy");
     if (policy && strcmp(policy, "src-ip") && strcmp(policy, "dst-ip")) {
-        ctl_fatal("bad policy: %s", policy);
+        ctl_error(ctx, "bad policy: %s", policy);
+        return;
     }
 
     prefix = normalize_prefix_str(ctx->argv[2]);
     if (!prefix) {
-        ctl_fatal("bad prefix argument: %s", ctx->argv[2]);
+        ctl_error(ctx, "bad prefix argument: %s", ctx->argv[2]);
+        return;
     }
 
     next_hop = normalize_prefix_str(ctx->argv[3]);
     if (!next_hop) {
         free(prefix);
-        ctl_fatal("bad next hop argument: %s", ctx->argv[3]);
+        ctl_error(ctx, "bad next hop argument: %s", ctx->argv[3]);
+        return;
     }
 
     if (strchr(prefix, '.')) {
@@ -2842,14 +2846,16 @@ nbctl_lr_route_add(struct ctl_context *ctx)
         if (!ip_parse(ctx->argv[3], &hop_ipv4)) {
             free(prefix);
             free(next_hop);
-            ctl_fatal("bad IPv4 nexthop argument: %s", ctx->argv[3]);
+            ctl_error(ctx, "bad IPv4 nexthop argument: %s", ctx->argv[3]);
+            return;
         }
     } else {
         struct in6_addr hop_ipv6;
         if (!ipv6_parse(ctx->argv[3], &hop_ipv6)) {
             free(prefix);
             free(next_hop);
-            ctl_fatal("bad IPv6 nexthop argument: %s", ctx->argv[3]);
+            ctl_error(ctx, "bad IPv6 nexthop argument: %s", ctx->argv[3]);
+            return;
         }
     }
 
@@ -2871,9 +2877,11 @@ nbctl_lr_route_add(struct ctl_context *ctx)
         }
 
         if (!may_exist) {
+            ctl_error(ctx, "duplicate prefix: %s", prefix);
             free(next_hop);
             free(rt_prefix);
-            ctl_fatal("duplicate prefix: %s", prefix);
+            free(prefix);
+            return;
         }
 
         /* Update the next hop for an existing route. */
