@@ -2183,7 +2183,8 @@ nbctl_lb_del(struct ctl_context *ctx)
 
     char *error = lb_by_name_or_uuid(ctx, id, false, &lb);
     if (error) {
-        ctl_fatal("%s", error);
+        ctx->error = error;
+        return;
     }
     if (!lb) {
         return;
@@ -2204,8 +2205,9 @@ nbctl_lb_del(struct ctl_context *ctx)
             return;
         }
         if (must_exist) {
-            ctl_fatal("vip %s is not part of the load balancer.",
-                    lb_vip);
+            ctl_error(ctx, "vip %s is not part of the load balancer.",
+                      lb_vip);
+            return;
         }
         return;
     }
