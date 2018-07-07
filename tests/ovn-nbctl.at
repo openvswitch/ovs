@@ -295,23 +295,23 @@ from-lport   200 (ip) rate=301 burst=1000102 dscp=19
 ])
 
 AT_CHECK([ovn-nbctl qos-add ls0 from-lport 600 ip rate=100010111111], [1], [],
-[ovn-nbctl: 100010111111: rate must in range 1...4294967295.
+[ovn-nbctl: 100010111111: rate must be in the range 1...4294967295
 ])
 
 AT_CHECK([ovn-nbctl qos-add ls0 from-lport 600 ip burst=100010111112 rate=100010], [1], [],
-[ovn-nbctl: 100010111112: burst must in range 1...4294967295.
+[ovn-nbctl: 100010111112: burst must be in the range 1...4294967295
 ])
 
 AT_CHECK([ovn-nbctl qos-add ls0 from-lport 600 ip dscp=-1], [1], [],
-[ovn-nbctl: -1: dscp must in range 0...63.
+[ovn-nbctl: -1: dscp must be in the range 0...63
 ])
 
 AT_CHECK([ovn-nbctl qos-add ls0 from-lport 600 ip dscpa=-1], [1], [],
-[ovn-nbctl: dscpa=-1: must be start of "dscp=", "rate=", "burst=".
+[ovn-nbctl: dscpa=-1: supported arguments are "dscp=", "rate=", and "burst="
 ])
 
 AT_CHECK([ovn-nbctl qos-add ls0 from-lport 600 ip burst=123], [1], [],
-[ovn-nbctl: One of the rate or dscp must be configured.
+[ovn-nbctl: Either "rate" and/or "dscp" must be specified
 ])
 
 OVN_NBCTL_TEST_STOP

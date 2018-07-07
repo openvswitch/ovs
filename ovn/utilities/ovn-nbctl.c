@@ -1909,7 +1909,7 @@ nbctl_qos_add(struct ctl_context *ctx)
         if (!strncmp(ctx->argv[i], "dscp=", 5)) {
             if (!ovs_scan(ctx->argv[i] + 5, "%"SCNd64, &dscp)
                 || dscp < 0 || dscp > 63) {
-                ctl_error(ctx, "%s: dscp must in range 0...63.",
+                ctl_error(ctx, "%s: dscp must be in the range 0...63",
                           ctx->argv[i] + 5);
                 return;
             }
@@ -1917,7 +1917,7 @@ nbctl_qos_add(struct ctl_context *ctx)
         else if (!strncmp(ctx->argv[i], "rate=", 5)) {
             if (!ovs_scan(ctx->argv[i] + 5, "%"SCNd64, &rate)
                 || rate < 1 || rate > UINT32_MAX) {
-                ctl_error(ctx, "%s: rate must in range 1...4294967295.",
+                ctl_error(ctx, "%s: rate must be in the range 1...4294967295",
                           ctx->argv[i] + 5);
                 return;
             }
@@ -1925,20 +1925,20 @@ nbctl_qos_add(struct ctl_context *ctx)
         else if (!strncmp(ctx->argv[i], "burst=", 6)) {
             if (!ovs_scan(ctx->argv[i] + 6, "%"SCNd64, &burst)
                 || burst < 1 || burst > UINT32_MAX) {
-                ctl_error(ctx, "%s: burst must in range 1...4294967295.",
+                ctl_error(ctx, "%s: burst must be in the range 1...4294967295",
                           ctx->argv[i] + 6);
                 return;
             }
         } else {
-            ctl_error(ctx, "%s: must be start of \"dscp=\", \"rate=\", "
-                      "\"burst=\".", ctx->argv[i]);
+            ctl_error(ctx, "%s: supported arguments are \"dscp=\", \"rate=\", "
+                      "and \"burst=\"", ctx->argv[i]);
             return;
         }
     }
 
     /* Validate rate and dscp. */
     if (-1 == dscp && !rate) {
-        ctl_error(ctx, "One of the rate or dscp must be configured.");
+        ctl_error(ctx, "Either \"rate\" and/or \"dscp\" must be specified");
         return;
     }
 
