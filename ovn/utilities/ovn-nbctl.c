@@ -2069,15 +2069,17 @@ nbctl_lb_add(struct ctl_context *ctx)
         lb_proto = ctx->argv[4];
         is_update_proto = true;
         if (strcmp(lb_proto, "tcp") && strcmp(lb_proto, "udp")) {
-            ctl_fatal("%s: protocol must be one of \"tcp\", \"udp\".",
-                    lb_proto);
+            ctl_error(ctx, "%s: protocol must be one of \"tcp\", \"udp\".",
+                      lb_proto);
+            return;
         }
     }
 
     struct sockaddr_storage ss_vip;
     if (!inet_parse_active(lb_vip, 0, &ss_vip)) {
-        ctl_fatal("%s: should be an IP address (or an IP address "
+        ctl_error(ctx, "%s: should be an IP address (or an IP address "
                   "and a port number with : as a separator).", lb_vip);
+        return;
     }
 
     struct ds lb_vip_normalized_ds = DS_EMPTY_INITIALIZER;
@@ -2091,8 +2093,10 @@ nbctl_lb_add(struct ctl_context *ctx)
     const char *lb_vip_normalized = ds_cstr(&lb_vip_normalized_ds);
 
     if (!lb_vip_port && is_update_proto) {
-        ctl_fatal("Protocol is unnecessary when no port of vip "
+        ds_destroy(&lb_vip_normalized_ds);
+        ctl_error(ctx, "Protocol is unnecessary when no port of vip "
                   "is given.");
+        return;
     }
 
     char *token = NULL, *save_ptr = NULL;
@@ -2103,19 +2107,21 @@ nbctl_lb_add(struct ctl_context *ctx)
 
         if (lb_vip_port) {
             if (!inet_parse_active(token, -1, &ss_dst)) {
-                ctl_fatal("%s: should be an IP address and a port "
+                ctl_error(ctx, "%s: should be an IP address and a port "
                           "number with : as a separator.", token);
+                goto out;
             }
         } else {
             if (!inet_parse_address(token, &ss_dst)) {
-                ctl_fatal("%s: should be an IP address.", token);
+                ctl_error(ctx, "%s: should be an IP address.", token);
+                goto out;
             }
         }
 
         if (ss_vip.ss_family != ss_dst.ss_family) {
-            ds_destroy(&lb_ips_new);
-            ctl_fatal("%s: IP address family is different from VIP %s.",
-                    token, lb_vip_normalized);
+            ctl_error(ctx, "%s: IP address family is different from VIP %s.",
+                      token, lb_vip_normalized);
+            goto out;
         }
         ds_put_format(&lb_ips_new, "%s%s",
                 lb_ips_new.length ? "," : "", token);
@@ -2125,14 +2131,15 @@ nbctl_lb_add(struct ctl_context *ctx)
     if (!add_duplicate) {
         char *error = lb_by_name_or_uuid(ctx, lb_name, false, &lb);
         if (error) {
-            ctl_fatal("%s", error);
+            ctx->error = error;
+            goto out;
         }
         if (lb) {
             if (smap_get(&lb->vips, lb_vip_normalized)) {
                 if (!may_exist) {
-                    ds_destroy(&lb_ips_new);
-                    ctl_fatal("%s: a load balancer with this vip (%s) "
-                            "already exists", lb_name, lb_vip_normalized);
+                    ctl_error(ctx, "%s: a load balancer with this vip (%s) "
+                              "already exists", lb_name, lb_vip_normalized);
+                    goto out;
                 }
                 /* Update the vips. */
                 smap_replace(CONST_CAST(struct smap *, &lb->vips),
@@ -2150,9 +2157,7 @@ nbctl_lb_add(struct ctl_context *ctx)
             }
             nbrec_load_balancer_verify_vips(lb);
             nbrec_load_balancer_set_vips(lb, &lb->vips);
-            ds_destroy(&lb_ips_new);
-            ds_destroy(&lb_vip_normalized_ds);
-            return;
+            goto out;
         }
     }
 
@@ -2163,6 +2168,7 @@ nbctl_lb_add(struct ctl_context *ctx)
     smap_add(CONST_CAST(struct smap *, &lb->vips),
             lb_vip_normalized, ds_cstr(&lb_ips_new));
     nbrec_load_balancer_set_vips(lb, &lb->vips);
+out:
     ds_destroy(&lb_ips_new);
 
     ds_destroy(&lb_vip_normalized_ds);
