@@ -989,7 +989,8 @@ nbctl_lsp_add(struct ctl_context *ctx)
     const struct nbrec_logical_switch *ls;
     char *error = ls_by_name_or_uuid(ctx, ctx->argv[1], true, &ls);
     if (error) {
-        ctl_fatal("%s", error);
+        ctx->error = error;
+        return;
     }
 
     const char *parent_name;
@@ -1002,54 +1003,64 @@ nbctl_lsp_add(struct ctl_context *ctx)
         parent_name = ctx->argv[3];
         if (!ovs_scan(ctx->argv[4], "%"SCNd64, &tag)
             || tag < 0 || tag > 4095) {
-            ctl_fatal("%s: invalid tag (must be in range 0 to 4095)",
+            ctl_error(ctx, "%s: invalid tag (must be in range 0 to 4095)",
                       ctx->argv[4]);
+            return;
         }
     } else {
-        ctl_fatal("lsp-add with parent must also specify a tag");
+        ctl_error(ctx, "lsp-add with parent must also specify a tag");
+        return;
     }
 
     const char *lsp_name = ctx->argv[2];
     const struct nbrec_logical_switch_port *lsp;
     error = lsp_by_name_or_uuid(ctx, lsp_name, false, &lsp);
     if (error) {
-        ctl_fatal("%s", error);
+        ctx->error = error;
+        return;
     }
     if (lsp) {
         if (!may_exist) {
-            ctl_fatal("%s: a port with this name already exists",
+            ctl_error(ctx, "%s: a port with this name already exists",
                       lsp_name);
+            return;
         }
 
         const struct nbrec_logical_switch *lsw;
         lsw = lsp_to_ls(ctx->idl, lsp);
         if (lsw != ls) {
             char uuid_s[UUID_LEN + 1];
-            ctl_fatal("%s: port already exists but in switch %s", lsp_name,
-                      ls_get_name(lsw, uuid_s, sizeof uuid_s));
+            ctl_error(ctx, "%s: port already exists but in switch %s",
+                      lsp_name, ls_get_name(lsw, uuid_s, sizeof uuid_s));
+            return;
         }
 
         if (parent_name) {
             if (!lsp->parent_name) {
-                ctl_fatal("%s: port already exists but has no parent",
+                ctl_error(ctx, "%s: port already exists but has no parent",
                           lsp_name);
+                return;
             } else if (strcmp(parent_name, lsp->parent_name)) {
-                ctl_fatal("%s: port already exists with different parent %s",
-                          lsp_name, lsp->parent_name);
+                ctl_error(ctx, "%s: port already exists with different parent "
+                          "%s", lsp_name, lsp->parent_name);
+                return;
             }
 
             if (!lsp->n_tag_request) {
-                ctl_fatal("%s: port already exists but has no tag_request",
-                          lsp_name);
+                ctl_error(ctx, "%s: port already exists but has no "
+                          "tag_request", lsp_name);
+                return;
             } else if (lsp->tag_request[0] != tag) {
-                ctl_fatal("%s: port already exists with different "
+                ctl_error(ctx, "%s: port already exists with different "
                           "tag_request %"PRId64, lsp_name,
                           lsp->tag_request[0]);
+                return;
             }
         } else {
             if (lsp->parent_name) {
-                ctl_fatal("%s: port already exists but has parent %s",
+                ctl_error(ctx, "%s: port already exists but has parent %s",
                           lsp_name, lsp->parent_name);
+                return;
             }
         }
 
