@@ -3419,7 +3419,8 @@ nbctl_lrp_get_gateway_chassis(struct ctl_context *ctx)
 
     char *error = lrp_by_name_or_uuid(ctx, id, true, &lrp);
     if (error) {
-        ctl_fatal("%s", error);
+        ctx->error = error;
+        return;
     }
     gcs = get_ordered_gw_chassis_prio_list(lrp);
 
