@@ -1689,7 +1689,8 @@ nbctl_acl_add(struct ctl_context *ctx)
 
     char *error = acl_cmd_get_pg_or_ls(ctx, &ls, &pg);
     if (error) {
-        ctl_fatal("%s", error);
+        ctx->error = error;
+        return;
     }
 
     const char *direction = parse_direction(ctx->argv[2]);
@@ -1698,8 +1699,8 @@ nbctl_acl_add(struct ctl_context *ctx)
     /* Validate action. */
     if (strcmp(action, "allow") && strcmp(action, "allow-related")
         && strcmp(action, "drop") && strcmp(action, "reject")) {
-        ctl_fatal("%s: action must be one of \"allow\", \"allow-related\", "
-                  "\"drop\", and \"reject\"", action);
+        ctl_error(ctx, "%s: action must be one of \"allow\", "
+                  "\"allow-related\", \"drop\", and \"reject\"", action);
         return;
     }
 
@@ -1719,7 +1720,8 @@ nbctl_acl_add(struct ctl_context *ctx)
     }
     if (severity) {
         if (log_severity_from_string(severity) == UINT8_MAX) {
-            ctl_fatal("bad severity: %s", severity);
+            ctl_error(ctx, "bad severity: %s", severity);
+            return;
         }
         nbrec_acl_set_severity(acl, severity);
     }
@@ -1734,8 +1736,9 @@ nbctl_acl_add(struct ctl_context *ctx)
         if (!acl_cmp(&acls[i], &acl)) {
             bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
             if (!may_exist) {
-                ctl_fatal("Same ACL already existed on the ls %s.",
+                ctl_error(ctx, "Same ACL already existed on the ls %s.",
                           ctx->argv[1]);
+                return;
             }
             return;
         }
