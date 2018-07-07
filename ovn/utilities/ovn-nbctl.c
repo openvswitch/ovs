@@ -3129,8 +3129,9 @@ nbctl_lr_nat_list(struct ctl_context *ctx)
 }
 
 
-static const struct nbrec_logical_router_port *
-lrp_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist)
+static char * OVS_WARN_UNUSED_RESULT
+lrp_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist,
+                    const struct nbrec_logical_router_port **lrp_p)
 {
     const struct nbrec_logical_router_port *lrp = NULL;
 
@@ -3149,10 +3150,14 @@ lrp_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist)
     }
 
     if (!lrp && must_exist) {
-        ctl_fatal("%s: port %s not found", id, is_uuid ? "UUID" : "name");
+        return xasprintf("%s: port %s not found",
+                         id, is_uuid ? "UUID" : "name");
     }
 
-    return lrp;
+    if (lrp_p) {
+        *lrp_p = lrp;
+    }
+    return NULL;
 }
 
 /* Returns the logical router that contains 'lrp'. */
@@ -3219,7 +3224,10 @@ nbctl_lrp_set_gateway_chassis(struct ctl_context *ctx)
     int64_t priority = 0;
     const char *lrp_name = ctx->argv[1];
     const struct nbrec_logical_router_port *lrp;
-    lrp = lrp_by_name_or_uuid(ctx, lrp_name, true);
+    char *error = lrp_by_name_or_uuid(ctx, lrp_name, true, &lrp);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     if (!lrp) {
         ctl_fatal("router port %s is required", lrp_name);
         return;
@@ -3293,7 +3301,10 @@ static void
 nbctl_lrp_del_gateway_chassis(struct ctl_context *ctx)
 {
     const struct nbrec_logical_router_port *lrp;
-    lrp = lrp_by_name_or_uuid(ctx, ctx->argv[1], true);
+    char *error = lrp_by_name_or_uuid(ctx, ctx->argv[1], true, &lrp);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     if (!lrp) {
         return;
     }
@@ -3322,7 +3333,10 @@ nbctl_lrp_get_gateway_chassis(struct ctl_context *ctx)
     const struct nbrec_gateway_chassis **gcs;
     size_t i;
 
-    lrp = lrp_by_name_or_uuid(ctx, id, true);
+    char *error = lrp_by_name_or_uuid(ctx, id, true, &lrp);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     gcs = get_ordered_gw_chassis_prio_list(lrp);
 
     for (i = 0; i < lrp->n_gateway_chassis; i++) {
@@ -3365,7 +3379,10 @@ nbctl_lrp_add(struct ctl_context *ctx)
     int n_settings = ctx->argc - 4 - n_networks;
 
     const struct nbrec_logical_router_port *lrp;
-    lrp = lrp_by_name_or_uuid(ctx, lrp_name, false);
+    error = lrp_by_name_or_uuid(ctx, lrp_name, false, &lrp);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     if (lrp) {
         if (!may_exist) {
             ctl_fatal("%s: a port with this name already exists",
@@ -3494,7 +3511,10 @@ nbctl_lrp_del(struct ctl_context *ctx)
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
     const struct nbrec_logical_router_port *lrp;
 
-    lrp = lrp_by_name_or_uuid(ctx, ctx->argv[1], must_exist);
+    char *error = lrp_by_name_or_uuid(ctx, ctx->argv[1], must_exist, &lrp);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     if (!lrp) {
         return;
     }
@@ -3552,7 +3572,10 @@ nbctl_lrp_set_enabled(struct ctl_context *ctx)
     const char *state = ctx->argv[2];
     const struct nbrec_logical_router_port *lrp;
 
-    lrp = lrp_by_name_or_uuid(ctx, id, true);
+    char *error = lrp_by_name_or_uuid(ctx, id, true, &lrp);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     if (!lrp) {
         return;
     }
@@ -3568,7 +3591,10 @@ nbctl_lrp_get_enabled(struct ctl_context *ctx)
     const char *id = ctx->argv[1];
     const struct nbrec_logical_router_port *lrp;
 
-    lrp = lrp_by_name_or_uuid(ctx, id, true);
+    char *error = lrp_by_name_or_uuid(ctx, id, true, &lrp);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     if (!lrp) {
         return;
     }
