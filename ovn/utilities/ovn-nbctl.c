@@ -889,7 +889,8 @@ nbctl_ls_del(struct ctl_context *ctx)
 
     char *error = ls_by_name_or_uuid(ctx, id, must_exist, &ls);
     if (error) {
-        ctl_fatal("%s", error);
+        ctx->error = error;
+        return;
     }
     if (!ls) {
         return;
