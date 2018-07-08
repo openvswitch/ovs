@@ -512,6 +512,11 @@ struct dpif_flow_attrs {
     const char *dp_layer;   /* DP layer the flow is handled in. */
 };
 
+struct dpif_flow_dump_types {
+    bool ovs_flows;
+    bool netdev_flows;
+};
+
 void dpif_flow_stats_extract(const struct flow *, const struct dp_packet *packet,
                              long long int used, struct dpif_flow_stats *);
 void dpif_flow_stats_format(const struct dpif_flow_stats *, struct ds *);
@@ -573,7 +578,7 @@ int dpif_flow_get(struct dpif *,
  * All error reporting is deferred to the call to dpif_flow_dump_destroy().
  */
 struct dpif_flow_dump *dpif_flow_dump_create(const struct dpif *, bool terse,
-                                             char *type);
+                                             struct dpif_flow_dump_types *);
 int dpif_flow_dump_destroy(struct dpif_flow_dump *);
 
 struct dpif_flow_dump_thread *dpif_flow_dump_thread_create(
