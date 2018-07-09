@@ -11,9 +11,17 @@
 /ovs-pki.log
 /pki/
 /system-dpdk-testsuite
+/system-dpdk-testsuite.dir/
+/system-dpdk-testsuite.log
 /system-kmod-testsuite
+/system-kmod-testsuite.dir/
+/system-kmod-testsuite.log
 /system-userspace-testsuite
+/system-userspace-testsuite.dir/
+/system-userspace-testsuite.log
 /system-offloads-testsuite
+/system-offloads-testsuite.dir/
+/system-offloads-testsuite.log
 /test-aes128
 /test-atomic
 /test-bundle
