@@ -677,7 +677,7 @@ ipv6_sanity_check(const struct ovs_16aligned_ip6_hdr *nh, size_t size)
     }
 
     plen = ntohs(nh->ip6_plen);
-    if (OVS_UNLIKELY(plen > size)) {
+    if (OVS_UNLIKELY(plen + IPV6_HEADER_LEN > size)) {
         return false;
     }
     /* Jumbo Payload option not supported yet. */
