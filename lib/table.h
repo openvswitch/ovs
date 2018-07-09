@@ -21,6 +21,7 @@
 #include <stddef.h>
 #include "compiler.h"
 
+struct ds;
 struct table_style;
 
 /* Manipulating tables and their rows and columns. */
@@ -128,6 +129,8 @@ void table_parse_format(struct table_style *, const char *format);
 void table_parse_cell_format(struct table_style *, const char *format);
 
 void table_print(const struct table *, const struct table_style *);
+void table_format(const struct table *, const struct table_style *,
+                  struct ds *);
 void table_usage(void);
 
 #endif /* table.h */
