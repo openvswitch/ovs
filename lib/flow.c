@@ -540,7 +540,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
         nh = data_pull(&data, &size, sizeof *nh);
 
         plen = ntohs(nh->ip6_plen);
-        if (OVS_UNLIKELY(plen > size)) {
+        if (OVS_UNLIKELY(plen + IPV6_HEADER_LEN > size)) {
             goto out;
         }
         /* Jumbo Payload option not supported yet. */
