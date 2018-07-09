@@ -2624,7 +2624,6 @@ do_idl_partial_update_map_column(struct ovs_cmdl_context *ctx)
 
     ovsdb_idl_destroy(idl);
     printf("%03d: End test\n", step);
-    return;
 }
 
 static void
@@ -2744,7 +2743,6 @@ do_idl_partial_update_set_column(struct ovs_cmdl_context *ctx)
     dump_simple3(idl, myRow, step++);
     ovsdb_idl_destroy(idl);
     printf("%03d: End test\n", step);
-    return;
 }
 
 static void
@@ -2817,7 +2815,6 @@ do_idl_compound_index_with_ref(struct ovs_cmdl_context *ctx)
 
     ovsdb_idl_destroy(idl);
     printf("%03d: End test\n", step);
-    return;
 }
 
 

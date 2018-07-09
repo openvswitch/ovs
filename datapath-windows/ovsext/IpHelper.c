@@ -565,8 +565,6 @@ OvsUpdateIpInterfaceNotification(PMIB_IPINTERFACE_ROW ipRow)
         ExReleaseResourceLite(&instance->lock);
     }
     ExReleaseResourceLite(&ovsInstanceListLock);
-
-    return;
 }
 
 static VOID
@@ -672,8 +670,6 @@ error:
             OvsIpHelperDeleteInstance(instance);
         }
     }
-
-    return;
 }
 
 static VOID
@@ -713,8 +709,6 @@ OvsRemoveIpInterfaceNotification(PMIB_IPINTERFACE_ROW ipRow)
         OvsCleanupIpHelperRequestList();
         OvsCleanupFwdTable();
     }
-
-    return;
 }
 
 static VOID

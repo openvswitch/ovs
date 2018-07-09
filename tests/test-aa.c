@@ -47,8 +47,6 @@ check_received_port(struct lldpd_port *sport,
     assert(rport->p_id_len == sport->p_id_len);
     assert(strncmp(rport->p_id, sport->p_id, sport->p_id_len) == 0);
     assert(strcmp(rport->p_descr, sport->p_descr) == 0);
-
-    return;
 }
 
 
@@ -66,8 +64,6 @@ check_received_chassis(struct lldpd_chassis *schassis,
     assert(strcmp(rchassis->c_descr, schassis->c_descr) == 0);
     assert(rchassis->c_cap_available == schassis->c_cap_available);
     assert(rchassis->c_cap_enabled == schassis->c_cap_enabled);
-
-    return;
 }
 
 
@@ -113,8 +109,6 @@ check_received_aa(struct lldpd_port *sport,
         i++;
     }
     assert(i == 2);
-
-    return;
 }
 
 

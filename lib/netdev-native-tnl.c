@@ -614,7 +614,6 @@ netdev_erspan_push_header(const struct netdev *netdev,
         md2 = ALIGNED_CAST(struct erspan_md2 *, ersh + 1);
         put_16aligned_be32(&md2->timestamp, get_erspan_ts(ERSPAN_100US));
     }
-    return;
 }
 
 int

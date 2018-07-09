@@ -201,5 +201,4 @@ OvsExtStatus(NDIS_HANDLE filterModuleContext,
     POVS_SWITCH_CONTEXT switchObject = (POVS_SWITCH_CONTEXT)filterModuleContext;
 
     NdisFIndicateStatus(switchObject->NdisFilterHandle, statusIndication);
-    return;
 }

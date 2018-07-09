@@ -2085,8 +2085,6 @@ nat_ipv6_addr_increment(struct in6_addr *ipv6_aligned, uint32_t increment)
 
     memcpy(ipv6_hi, &addr6_64_hi, sizeof addr6_64_hi);
     memcpy(ipv6_lo, &addr6_64_lo, sizeof addr6_64_lo);
-
-    return;
 }
 
 static uint32_t
@@ -3282,7 +3280,6 @@ handle_ftp_ctl(struct conntrack *ct, const struct conn_lookup_ctx *ctx,
     uint8_t pad = dp_packet_l2_pad_size(pkt);
     th->tcp_csum = csum_finish(
         csum_continue(tcp_csum, th, tail - (char *) th - pad));
-    return;
 }
 
 static void
@@ -3296,5 +3293,4 @@ handle_tftp_ctl(struct conntrack *ct,
     expectation_create(ct, conn_for_expectation->key.src.port,
                        conn_for_expectation,
                        !!(pkt->md.ct_state & CS_REPLY_DIR), false, false);
-    return;
 }

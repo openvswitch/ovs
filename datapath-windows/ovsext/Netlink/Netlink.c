@@ -653,7 +653,6 @@ VOID
 NlMsgAlignSize(const PNL_MSG_HDR nlh)
 {
     nlh->nlmsgLen = NLMSG_ALIGN(nlh->nlmsgLen);
-    return;
 }
 
 /*

@@ -408,8 +408,6 @@ lldpd_decode(struct lldpd *cfg, char *frame, int s,
     if (!oport)  {
         hw->h_insert_cnt++;
     }
-
-    return;
 }
 
 static void

@@ -1219,7 +1219,6 @@ UpdateSwitchCtxWithVport(POVS_SWITCH_CONTEXT switchContext,
     if (newPort) {
         switchContext->numHvVports++;
     }
-    return;
 }
 
 /*
