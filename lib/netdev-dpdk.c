@@ -934,14 +934,6 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev)
 
     mbp_priv = rte_mempool_get_priv(dev->dpdk_mp->mp);
     dev->buf_size = mbp_priv->mbuf_data_room_size - RTE_PKTMBUF_HEADROOM;
-
-    /* Get the Flow control configuration for DPDK-ETH */
-    diag = rte_eth_dev_flow_ctrl_get(dev->port_id, &dev->fc_conf);
-    if (diag) {
-        VLOG_DBG("cannot get flow control parameters on port "DPDK_PORT_ID_FMT
-                 ", err=%d", dev->port_id, diag);
-    }
-
     return 0;
 }
 
@@ -1642,6 +1634,13 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args,
     autoneg = smap_get_bool(args, "flow-ctrl-autoneg", false);
 
     fc_mode = fc_mode_set[tx_fc_en][rx_fc_en];
+    /* Get the Flow control configuration for DPDK-ETH */
+    err = rte_eth_dev_flow_ctrl_get(dev->port_id, &dev->fc_conf);
+    if (err) {
+        VLOG_INFO("cannot get flow control parameters on port "DPDK_PORT_ID_FMT
+                 ", err=%d", dev->port_id, err);
+    }
+
     if (dev->fc_conf.mode != fc_mode || autoneg != dev->fc_conf.autoneg) {
         dev->fc_conf.mode = fc_mode;
         dev->fc_conf.autoneg = autoneg;
