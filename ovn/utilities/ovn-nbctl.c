@@ -883,7 +883,7 @@ nbctl_ls_del(struct ctl_context *ctx)
 {
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
     const char *id = ctx->argv[1];
-    const struct nbrec_logical_switch *ls;
+    const struct nbrec_logical_switch *ls = NULL;
 
     char *error = ls_by_name_or_uuid(ctx, id, must_exist, &ls);
     if (error) {
@@ -983,7 +983,7 @@ nbctl_lsp_add(struct ctl_context *ctx)
 {
     bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
 
-    const struct nbrec_logical_switch *ls;
+    const struct nbrec_logical_switch *ls = NULL;
     char *error = ls_by_name_or_uuid(ctx, ctx->argv[1], true, &ls);
     if (error) {
         ctx->error = error;
@@ -1110,7 +1110,7 @@ static void
 nbctl_lsp_del(struct ctl_context *ctx)
 {
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
-    const struct nbrec_logical_switch_port *lsp;
+    const struct nbrec_logical_switch_port *lsp = NULL;
 
     char *error = lsp_by_name_or_uuid(ctx, ctx->argv[1], must_exist, &lsp);
     if (error) {
@@ -1167,7 +1167,7 @@ nbctl_lsp_list(struct ctl_context *ctx)
 static void
 nbctl_lsp_get_parent(struct ctl_context *ctx)
 {
-    const struct nbrec_logical_switch_port *lsp;
+    const struct nbrec_logical_switch_port *lsp = NULL;
 
     char *error = lsp_by_name_or_uuid(ctx, ctx->argv[1], true, &lsp);
     if (error) {
@@ -1181,7 +1181,7 @@ nbctl_lsp_get_parent(struct ctl_context *ctx)
 static void
 nbctl_lsp_get_tag(struct ctl_context *ctx)
 {
-    const struct nbrec_logical_switch_port *lsp;
+    const struct nbrec_logical_switch_port *lsp = NULL;
 
     char *error = lsp_by_name_or_uuid(ctx, ctx->argv[1], true, &lsp);
     if (error) {
@@ -1196,7 +1196,7 @@ static void
 nbctl_lsp_set_addresses(struct ctl_context *ctx)
 {
     const char *id = ctx->argv[1];
-    const struct nbrec_logical_switch_port *lsp;
+    const struct nbrec_logical_switch_port *lsp = NULL;
 
     char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
     if (error) {
@@ -1226,7 +1226,7 @@ static void
 nbctl_lsp_get_addresses(struct ctl_context *ctx)
 {
     const char *id = ctx->argv[1];
-    const struct nbrec_logical_switch_port *lsp;
+    const struct nbrec_logical_switch_port *lsp = NULL;
     struct svec addresses;
     const char *mac;
     size_t i;
@@ -1251,7 +1251,7 @@ static void
 nbctl_lsp_set_port_security(struct ctl_context *ctx)
 {
     const char *id = ctx->argv[1];
-    const struct nbrec_logical_switch_port *lsp;
+    const struct nbrec_logical_switch_port *lsp = NULL;
 
     char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
     if (error) {
@@ -1265,7 +1265,7 @@ static void
 nbctl_lsp_get_port_security(struct ctl_context *ctx)
 {
     const char *id = ctx->argv[1];
-    const struct nbrec_logical_switch_port *lsp;
+    const struct nbrec_logical_switch_port *lsp = NULL;
     struct svec addrs;
     const char *addr;
     size_t i;
@@ -1289,7 +1289,7 @@ static void
 nbctl_lsp_get_up(struct ctl_context *ctx)
 {
     const char *id = ctx->argv[1];
-    const struct nbrec_logical_switch_port *lsp;
+    const struct nbrec_logical_switch_port *lsp = NULL;
 
     char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
     if (error) {
@@ -1320,7 +1320,7 @@ nbctl_lsp_set_enabled(struct ctl_context *ctx)
 {
     const char *id = ctx->argv[1];
     const char *state = ctx->argv[2];
-    const struct nbrec_logical_switch_port *lsp;
+    const struct nbrec_logical_switch_port *lsp = NULL;
 
     char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
     if (error) {
@@ -1338,7 +1338,7 @@ static void
 nbctl_lsp_get_enabled(struct ctl_context *ctx)
 {
     const char *id = ctx->argv[1];
-    const struct nbrec_logical_switch_port *lsp;
+    const struct nbrec_logical_switch_port *lsp = NULL;
 
     char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
     if (error) {
@@ -1353,7 +1353,7 @@ nbctl_lsp_set_type(struct ctl_context *ctx)
 {
     const char *id = ctx->argv[1];
     const char *type = ctx->argv[2];
-    const struct nbrec_logical_switch_port *lsp;
+    const struct nbrec_logical_switch_port *lsp = NULL;
 
     char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
     if (error) {
@@ -1373,7 +1373,7 @@ static void
 nbctl_lsp_get_type(struct ctl_context *ctx)
 {
     const char *id = ctx->argv[1];
-    const struct nbrec_logical_switch_port *lsp;
+    const struct nbrec_logical_switch_port *lsp = NULL;
 
     char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
     if (error) {
@@ -1386,7 +1386,7 @@ static void
 nbctl_lsp_set_options(struct ctl_context *ctx)
 {
     const char *id = ctx->argv[1];
-    const struct nbrec_logical_switch_port *lsp;
+    const struct nbrec_logical_switch_port *lsp = NULL;
     size_t i;
     struct smap options = SMAP_INITIALIZER(&options);
 
@@ -1413,7 +1413,7 @@ static void
 nbctl_lsp_get_options(struct ctl_context *ctx)
 {
     const char *id = ctx->argv[1];
-    const struct nbrec_logical_switch_port *lsp;
+    const struct nbrec_logical_switch_port *lsp = NULL;
     struct smap_node *node;
 
     char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
@@ -1429,7 +1429,7 @@ static void
 nbctl_lsp_set_dhcpv4_options(struct ctl_context *ctx)
 {
     const char *id = ctx->argv[1];
-    const struct nbrec_logical_switch_port *lsp;
+    const struct nbrec_logical_switch_port *lsp = NULL;
 
     char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
     if (error) {
@@ -1456,7 +1456,7 @@ static void
 nbctl_lsp_set_dhcpv6_options(struct ctl_context *ctx)
 {
     const char *id = ctx->argv[1];
-    const struct nbrec_logical_switch_port *lsp;
+    const struct nbrec_logical_switch_port *lsp = NULL;
 
     char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
     if (error) {
@@ -1483,7 +1483,7 @@ static void
 nbctl_lsp_get_dhcpv4_options(struct ctl_context *ctx)
 {
     const char *id = ctx->argv[1];
-    const struct nbrec_logical_switch_port *lsp;
+    const struct nbrec_logical_switch_port *lsp = NULL;
 
     char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
     if (error) {
@@ -1500,7 +1500,7 @@ static void
 nbctl_lsp_get_dhcpv6_options(struct ctl_context *ctx)
 {
     const char *id = ctx->argv[1];
-    const struct nbrec_logical_switch_port *lsp;
+    const struct nbrec_logical_switch_port *lsp = NULL;
 
     char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
     if (error) {
@@ -2318,7 +2318,7 @@ nbctl_lb_list(struct ctl_context *ctx)
 static void
 nbctl_lr_lb_add(struct ctl_context *ctx)
 {
-    const struct nbrec_logical_router *lr;
+    const struct nbrec_logical_router *lr = NULL;
     const struct nbrec_load_balancer *new_lb;
 
     char *error = lr_by_name_or_uuid(ctx, ctx->argv[1], true, &lr);
@@ -2439,7 +2439,7 @@ nbctl_lr_lb_list(struct ctl_context *ctx)
 static void
 nbctl_ls_lb_add(struct ctl_context *ctx)
 {
-    const struct nbrec_logical_switch *ls;
+    const struct nbrec_logical_switch *ls = NULL;
     const struct nbrec_load_balancer *new_lb;
 
     char *error = ls_by_name_or_uuid(ctx, ctx->argv[1], true, &ls);
@@ -2604,7 +2604,7 @@ nbctl_lr_del(struct ctl_context *ctx)
 {
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
     const char *id = ctx->argv[1];
-    const struct nbrec_logical_router *lr;
+    const struct nbrec_logical_router *lr = NULL;
 
     char *error = lr_by_name_or_uuid(ctx, id, must_exist, &lr);
     if (error) {
@@ -2813,7 +2813,7 @@ normalize_prefix_str(const char *orig_prefix)
 static void
 nbctl_lr_route_add(struct ctl_context *ctx)
 {
-    const struct nbrec_logical_router *lr;
+    const struct nbrec_logical_router *lr = NULL;
     char *error = lr_by_name_or_uuid(ctx, ctx->argv[1], true, &lr);
     if (error) {
         ctx->error = error;
@@ -2981,7 +2981,7 @@ nbctl_lr_route_del(struct ctl_context *ctx)
 static void
 nbctl_lr_nat_add(struct ctl_context *ctx)
 {
-    const struct nbrec_logical_router *lr;
+    const struct nbrec_logical_router *lr = NULL;
     const char *nat_type = ctx->argv[2];
     const char *external_ip = ctx->argv[3];
     const char *logical_ip = ctx->argv[4];
@@ -3118,7 +3118,7 @@ nbctl_lr_nat_add(struct ctl_context *ctx)
 static void
 nbctl_lr_nat_del(struct ctl_context *ctx)
 {
-    const struct nbrec_logical_router *lr;
+    const struct nbrec_logical_router *lr = NULL;
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
     char *error = lr_by_name_or_uuid(ctx, ctx->argv[1], true, &lr);
     if (error) {
@@ -3315,7 +3315,7 @@ nbctl_lrp_set_gateway_chassis(struct ctl_context *ctx)
     char *gc_name;
     int64_t priority = 0;
     const char *lrp_name = ctx->argv[1];
-    const struct nbrec_logical_router_port *lrp;
+    const struct nbrec_logical_router_port *lrp = NULL;
     char *error = lrp_by_name_or_uuid(ctx, lrp_name, true, &lrp);
     if (error) {
         ctx->error = error;
@@ -3393,7 +3393,7 @@ remove_gc(const struct nbrec_logical_router_port *lrp, size_t idx)
 static void
 nbctl_lrp_del_gateway_chassis(struct ctl_context *ctx)
 {
-    const struct nbrec_logical_router_port *lrp;
+    const struct nbrec_logical_router_port *lrp = NULL;
     char *error = lrp_by_name_or_uuid(ctx, ctx->argv[1], true, &lrp);
     if (error) {
         ctx->error = error;
@@ -3423,7 +3423,7 @@ static void
 nbctl_lrp_get_gateway_chassis(struct ctl_context *ctx)
 {
     const char *id = ctx->argv[1];
-    const struct nbrec_logical_router_port *lrp;
+    const struct nbrec_logical_router_port *lrp = NULL;
     const struct nbrec_gateway_chassis **gcs;
     size_t i;
 
@@ -3448,7 +3448,7 @@ nbctl_lrp_add(struct ctl_context *ctx)
 {
     bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
 
-    const struct nbrec_logical_router *lr;
+    const struct nbrec_logical_router *lr = NULL;
     char *error = lr_by_name_or_uuid(ctx, ctx->argv[1], true, &lr);
     if (error) {
         ctx->error = error;
@@ -3616,7 +3616,7 @@ static void
 nbctl_lrp_del(struct ctl_context *ctx)
 {
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
-    const struct nbrec_logical_router_port *lrp;
+    const struct nbrec_logical_router_port *lrp = NULL;
 
     char *error = lrp_by_name_or_uuid(ctx, ctx->argv[1], must_exist, &lrp);
     if (error) {
@@ -3677,7 +3677,7 @@ nbctl_lrp_set_enabled(struct ctl_context *ctx)
 {
     const char *id = ctx->argv[1];
     const char *state = ctx->argv[2];
-    const struct nbrec_logical_router_port *lrp;
+    const struct nbrec_logical_router_port *lrp = NULL;
 
     char *error = lrp_by_name_or_uuid(ctx, id, true, &lrp);
     if (error) {
@@ -3702,7 +3702,7 @@ static void
 nbctl_lrp_get_enabled(struct ctl_context *ctx)
 {
     const char *id = ctx->argv[1];
-    const struct nbrec_logical_router_port *lrp;
+    const struct nbrec_logical_router_port *lrp = NULL;
 
     char *error = lrp_by_name_or_uuid(ctx, id, true, &lrp);
     if (error) {
