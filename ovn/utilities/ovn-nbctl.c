@@ -504,6 +504,7 @@ lr_by_name_or_uuid(struct ctl_context *ctx, const char *id,
     bool is_uuid = false;
     struct uuid lr_uuid;
 
+    *lr_p = NULL;
     if (uuid_from_string(&lr_uuid, id)) {
         is_uuid = true;
         lr = nbrec_logical_router_get_for_uuid(ctx->idl, &lr_uuid);
@@ -529,9 +530,7 @@ lr_by_name_or_uuid(struct ctl_context *ctx, const char *id,
                          id, is_uuid ? "UUID" : "name");
     }
 
-    if (lr_p) {
-        *lr_p = lr;
-    }
+    *lr_p = lr;
     return NULL;
 }
 
@@ -540,6 +539,7 @@ ls_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist,
                    const struct nbrec_logical_switch **ls_p)
 {
     const struct nbrec_logical_switch *ls = NULL;
+    *ls_p = NULL;
 
     struct uuid ls_uuid;
     bool is_uuid = uuid_from_string(&ls_uuid, id);
@@ -567,9 +567,7 @@ ls_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist,
                          id, is_uuid ? "UUID" : "name");
     }
 
-    if (ls_p) {
-        *ls_p = ls;
-    }
+    *ls_p = ls;
     return NULL;
 }
 
@@ -925,6 +923,7 @@ lsp_by_name_or_uuid(struct ctl_context *ctx, const char *id,
                     const struct nbrec_logical_switch_port **lsp_p)
 {
     const struct nbrec_logical_switch_port *lsp = NULL;
+    *lsp_p = NULL;
 
     struct uuid lsp_uuid;
     bool is_uuid = uuid_from_string(&lsp_uuid, id);
@@ -945,9 +944,7 @@ lsp_by_name_or_uuid(struct ctl_context *ctx, const char *id,
                          id, is_uuid ? "UUID" : "name");
     }
 
-    if (lsp_p) {
-        *lsp_p = lsp;
-    }
+    *lsp_p = lsp;
     return NULL;
 }
 
@@ -3043,7 +3040,8 @@ nbctl_lr_nat_add(struct ctl_context *ctx)
         }
 
         logical_port = ctx->argv[5];
-        error = lsp_by_name_or_uuid(ctx, logical_port, true, NULL);
+        const struct nbrec_logical_switch_port *lsp;
+        error = lsp_by_name_or_uuid(ctx, logical_port, true, &lsp);
         if (error) {
             ctx->error = error;
             free(new_logical_ip);
@@ -3229,6 +3227,7 @@ lrp_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist,
                     const struct nbrec_logical_router_port **lrp_p)
 {
     const struct nbrec_logical_router_port *lrp = NULL;
+    *lrp_p = NULL;
 
     struct uuid lrp_uuid;
     bool is_uuid = uuid_from_string(&lrp_uuid, id);
@@ -3249,9 +3248,7 @@ lrp_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist,
                          id, is_uuid ? "UUID" : "name");
     }
 
-    if (lrp_p) {
-        *lrp_p = lrp;
-    }
+    *lrp_p = lrp;
     return NULL;
 }
 
