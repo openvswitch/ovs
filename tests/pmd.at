@@ -185,6 +185,7 @@ CHECK_PMD_THREADS_CREATED()
 AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg])
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
 AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:emc-insert-inv-prob=1])
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:smc-enable=true])
 
 sleep 1
 
@@ -195,12 +196,13 @@ dummy@ovs-dummy: hit:0 missed:0
     p0 7/1: (dummy-pmd: configured_rx_queues=4, configured_tx_queues=<cleared>, requested_rx_queues=4, requested_tx_queues=<cleared>)
 ])
 
-AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | sed SED_NUMA_CORE_PATTERN | sed '/cycles/d' | grep pmd -A 8], [0], [dnl
+AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | sed SED_NUMA_CORE_PATTERN | sed '/cycles/d' | grep pmd -A 9], [0], [dnl
 pmd thread numa_id <cleared> core_id <cleared>:
   packets received: 0
   packet recirculations: 0
   avg. datapath passes per packet: 0.00
   emc hits: 0
+  smc hits: 0
   megaflow hits: 0
   avg. subtable lookups per megaflow hit: 0.00
   miss with success upcall: 0
@@ -225,12 +227,13 @@ AT_CHECK([cat ovs-vswitchd.log | filter_flow_install | strip_xout], [0], [dnl
 recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=50:54:00:00:00:77,dst=50:54:00:00:01:78),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
 
-AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | sed SED_NUMA_CORE_PATTERN | sed '/cycles/d' | grep pmd -A 8], [0], [dnl
+AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | sed SED_NUMA_CORE_PATTERN | sed '/cycles/d' | grep pmd -A 9], [0], [dnl
 pmd thread numa_id <cleared> core_id <cleared>:
   packets received: 20
   packet recirculations: 0
   avg. datapath passes per packet: 1.00
   emc hits: 19
+  smc hits: 0
   megaflow hits: 0
   avg. subtable lookups per megaflow hit: 0.00
   miss with success upcall: 1

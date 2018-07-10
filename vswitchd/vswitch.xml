@@ -405,6 +405,19 @@
         </p>
       </column>
 
+      <column name="other_config" key="smc-enable"
+              type='{"type": "boolean"}'>
+        <p>
+          Signature match cache or SMC is a cache between EMC and megaflow
+          cache. It does not store the full key of the flow, so it is more
+          memory efficient comparing to EMC cache. SMC is especially useful
+          when flow count is larger than EMC capacity.
+        </p>
+        <p>
+          Defaults to false but can be changed at any time.
+        </p>
+      </column>
+
       <column name="other_config" key="n-handler-threads"
               type='{"type": "integer", "minInteger": 1}'>
         <p>

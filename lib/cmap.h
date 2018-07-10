@@ -145,6 +145,17 @@ size_t cmap_replace(struct cmap *, struct cmap_node *old_node,
 const struct cmap_node *cmap_find(const struct cmap *, uint32_t hash);
 struct cmap_node *cmap_find_protected(const struct cmap *, uint32_t hash);
 
+/* Find node by index or find index by hash. The 'index' of a cmap entry is a
+ * way to combine the specific bucket and the entry of the bucket into a
+ * convenient single integer value. In other words, it is the index of the
+ * entry and each entry has an unique index. It is not used internally by
+ * cmap.
+ * Currently the functions assume index will not be larger than uint32_t. In
+ * OvS table size is usually much smaller than this size.*/
+const struct cmap_node * cmap_find_by_index(const struct cmap *,
+                                            uint32_t index);
+uint32_t cmap_find_index(const struct cmap *, uint32_t hash);
+
 /* Looks up multiple 'hashes', when the corresponding bit in 'map' is 1,
  * and sets the corresponding pointer in 'nodes', if the hash value was
  * found from the 'cmap'.  In other cases the 'nodes' values are not changed,

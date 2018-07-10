@@ -102,3 +102,18 @@ For certain traffic profiles with many parallel flows, it's recommended to set
 ``N`` to '0' to achieve higher forwarding performance.
 
 For more information on the EMC refer to :doc:`/intro/install/dpdk` .
+
+
+SMC cache (experimental)
+-------------------------
+
+SMC cache or signature match cache is a new cache level after EMC cache.
+The difference between SMC and EMC is SMC only stores a signature of a flow
+thus it is much more memory efficient. With same memory space, EMC can store 8k
+flows while SMC can store 1M flows. When traffic flow count is much larger than
+EMC size, it is generally beneficial to turn off EMC and turn on SMC. It is
+currently turned off by default and an experimental feature.
+
+To turn on SMC::
+
+    $ ovs-vsctl --no-wait set Open_vSwitch . other_config:smc-enable=true

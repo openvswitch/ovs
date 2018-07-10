@@ -373,6 +373,80 @@ cmap_find(const struct cmap *cmap, uint32_t hash)
                        hash);
 }
 
+/* Find a node by the index of the entry of cmap. Index N means the N/CMAP_K
+ * bucket and N%CMAP_K entry in that bucket.
+ * Notice that it is not protected by the optimistic lock (versioning) because
+ * it does not compare the hashes. Currently it is only used by the datapath
+ * SMC cache.
+ *
+ * Return node for the entry of index or NULL if the index beyond boundary */
+const struct cmap_node *
+cmap_find_by_index(const struct cmap *cmap, uint32_t index)
+{
+    const struct cmap_impl *impl = cmap_get_impl(cmap);
+
+    uint32_t b = index / CMAP_K;
+    uint32_t e = index % CMAP_K;
+
+    if (b > impl->mask) {
+        return NULL;
+    }
+
+    const struct cmap_bucket *bucket = &impl->buckets[b];
+
+    return cmap_node_next(&bucket->nodes[e]);
+}
+
+/* Find the index of certain hash value. Currently only used by the datapath
+ * SMC cache.
+ *
+ * Return the index of the entry if found, or UINT32_MAX if not found. The
+ * function assumes entry index cannot be larger than UINT32_MAX. */
+uint32_t
+cmap_find_index(const struct cmap *cmap, uint32_t hash)
+{
+    const struct cmap_impl *impl = cmap_get_impl(cmap);
+    uint32_t h1 = rehash(impl, hash);
+    uint32_t h2 = other_hash(h1);
+
+    uint32_t b_index1 = h1 & impl->mask;
+    uint32_t b_index2 = h2 & impl->mask;
+
+    uint32_t c1, c2;
+    uint32_t index = UINT32_MAX;
+
+    const struct cmap_bucket *b1 = &impl->buckets[b_index1];
+    const struct cmap_bucket *b2 = &impl->buckets[b_index2];
+
+    do {
+        do {
+            c1 = read_even_counter(b1);
+            for (int i = 0; i < CMAP_K; i++) {
+                if (b1->hashes[i] == hash) {
+                    index = b_index1 * CMAP_K + i;
+                 }
+            }
+        } while (OVS_UNLIKELY(counter_changed(b1, c1)));
+        if (index != UINT32_MAX) {
+            break;
+        }
+        do {
+            c2 = read_even_counter(b2);
+            for (int i = 0; i < CMAP_K; i++) {
+                if (b2->hashes[i] == hash) {
+                    index = b_index2 * CMAP_K + i;
+                }
+            }
+        } while (OVS_UNLIKELY(counter_changed(b2, c2)));
+
+        if (index != UINT32_MAX) {
+            break;
+        }
+    } while (OVS_UNLIKELY(counter_changed(b1, c1)));
+
+    return index;
+}
+
 /* Looks up multiple 'hashes', when the corresponding bit in 'map' is 1,
  * and sets the corresponding pointer in 'nodes', if the hash value was
  * found from the 'cmap'.  In other cases the 'nodes' values are not changed,
