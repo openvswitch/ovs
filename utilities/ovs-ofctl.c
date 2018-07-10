@@ -4802,6 +4802,24 @@ ofctl_compose_packet(struct ovs_cmdl_context *ctx)
     }
 }
 
+/* "parse-packet" reads an Ethernet packet from stdin and prints it out its
+ * extracted flow fields. */
+static void
+ofctl_parse_packet(struct ovs_cmdl_context *ctx OVS_UNUSED)
+{
+    char packet[65535];
+    ssize_t size = read(STDIN_FILENO, packet, sizeof packet);
+    if (size < 0) {
+        ovs_fatal(errno, "failed to read packet from stdin");
+    }
+
+    /* Make a copy of the packet in allocated memory to better allow Valgrind
+     * and Address Sanitizer to catch out-of-range access. */
+    void *packet_copy = xmemdup(packet, size);
+    ofp_print_packet(stdout, packet_copy, size, 0);
+    free(packet_copy);
+}
+
 static const struct ovs_cmdl_command all_commands[] = {
     { "show", "switch",
       1, 1, ofctl_show, OVS_RO },
@@ -4936,6 +4954,7 @@ static const struct ovs_cmdl_command all_commands[] = {
     { "encode-hello", NULL, 1, 1, ofctl_encode_hello, OVS_RW },
     { "parse-key-value", NULL, 1, INT_MAX, ofctl_parse_key_value, OVS_RW },
     { "compose-packet", NULL, 1, 2, ofctl_compose_packet, OVS_RO },
+    { "parse-packet", NULL, 0, 0, ofctl_parse_packet, OVS_RO },
 
     { NULL, NULL, 0, 0, NULL, OVS_RO },
 };
