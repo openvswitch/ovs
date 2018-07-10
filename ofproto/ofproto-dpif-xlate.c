@@ -3831,7 +3831,7 @@ is_nd_dst_correct(const struct flow *flow, const struct in6_addr *ipv6_addr)
     const uint8_t *flow_ipv6_addr = (uint8_t *) &flow->ipv6_dst;
     const uint8_t *addr = (uint8_t *) ipv6_addr;
 
-    return (IN6_IS_ADDR_MC_LINKLOCAL(ipv6_addr) &&
+    return (IN6_IS_ADDR_MC_LINKLOCAL(&flow->ipv6_dst) &&
             flow_ipv6_addr[11] == 0x01 &&
             flow_ipv6_addr[12] == 0xff &&
             flow_ipv6_addr[13] == addr[13] &&
