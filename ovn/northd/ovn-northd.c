@@ -4463,9 +4463,9 @@ add_router_lb_flow(struct hmap *lflows, struct ovn_datapath *od,
     while (ip_str && ip_str[0]) {
         char *ip_address = NULL;
         uint16_t port = 0;
-        int addr_family;
+        int addr_family_;
         ip_address_and_port_from_lb_key(ip_str, &ip_address, &port,
-                                        &addr_family);
+                                        &addr_family_);
         if (!ip_address) {
             break;
         }
