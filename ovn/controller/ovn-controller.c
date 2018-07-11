@@ -625,6 +625,10 @@ main(int argc, char *argv[])
     struct ovsdb_idl_index *sbrec_datapath_binding_by_key
         = ovsdb_idl_index_create1(ovnsb_idl_loop.idl,
                                   &sbrec_datapath_binding_col_tunnel_key);
+    struct ovsdb_idl_index *sbrec_mac_binding_by_lport_ip
+        = ovsdb_idl_index_create2(ovnsb_idl_loop.idl,
+                                  &sbrec_mac_binding_col_logical_port,
+                                  &sbrec_mac_binding_col_ip);
 
     ovsdb_idl_omit_alert(ovnsb_idl_loop.idl, &sbrec_chassis_col_nb_cfg);
     update_sb_monitors(ovnsb_idl_loop.idl, NULL, NULL, NULL);
@@ -734,8 +738,8 @@ main(int argc, char *argv[])
                         sbrec_port_binding_by_datapath,
                         sbrec_port_binding_by_key,
                         sbrec_port_binding_by_name,
+                        sbrec_mac_binding_by_lport_ip,
                         sbrec_dns_table_get(ovnsb_idl_loop.idl),
-                        sbrec_mac_binding_table_get(ovnsb_idl_loop.idl),
                         br_int, chassis,
                         &local_datapaths, &active_tunnels);
             update_ct_zones(&local_lports, &local_datapaths, &ct_zones,
