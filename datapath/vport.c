@@ -66,11 +66,15 @@ int ovs_vport_init(void)
 	if (err)
 		goto err_lisp;
 	err = gre_init();
-	if (err && err != -EEXIST)
+	if (err && err != -EEXIST) {
 		goto err_gre;
-	else if (err == -EEXIST)
-		pr_warn("Cannot take GRE protocol entry - The ERSPAN feature may not be supported\n");
-	else {
+	} else {
+		if (err == -EEXIST) {
+			pr_warn("Cannot take GRE protocol rx entry"\
+				"- The GRE/ERSPAN rx feature not supported\n");
+			/* continue GRE tx */
+		}
+
 		err = ipgre_init();
 		if (err && err != -EEXIST) 
 			goto err_ipgre;
