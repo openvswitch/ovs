@@ -70,7 +70,7 @@ static void run_put_mac_bindings(
     struct ovsdb_idl_txn *ovnsb_idl_txn,
     struct ovsdb_idl_index *sbrec_datapath_binding_by_key,
     struct ovsdb_idl_index *sbrec_port_binding_by_key,
-    const struct sbrec_mac_binding_table *);
+    struct ovsdb_idl_index *sbrec_mac_binding_by_lport_ip);
 static void wait_put_mac_bindings(struct ovsdb_idl_txn *ovnsb_idl_txn);
 static void flush_put_mac_bindings(void);
 
@@ -1251,8 +1251,8 @@ pinctrl_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
             struct ovsdb_idl_index *sbrec_port_binding_by_datapath,
             struct ovsdb_idl_index *sbrec_port_binding_by_key,
             struct ovsdb_idl_index *sbrec_port_binding_by_name,
+            struct ovsdb_idl_index *sbrec_mac_binding_by_lport_ip,
             const struct sbrec_dns_table *dns_table,
-            const struct sbrec_mac_binding_table *mac_binding_table,
             const struct ovsrec_bridge *br_int,
             const struct sbrec_chassis *chassis,
             const struct hmap *local_datapaths,
@@ -1293,7 +1293,8 @@ pinctrl_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
     }
 
     run_put_mac_bindings(ovnsb_idl_txn, sbrec_datapath_binding_by_key,
-                         sbrec_port_binding_by_key, mac_binding_table);
+                         sbrec_port_binding_by_key,
+                         sbrec_mac_binding_by_lport_ip);
     send_garp_run(sbrec_chassis_by_name, sbrec_port_binding_by_datapath,
                   sbrec_port_binding_by_name, br_int, chassis,
                   local_datapaths, active_tunnels);
@@ -1702,11 +1703,30 @@ pinctrl_handle_put_mac_binding(const struct flow *md,
     pmb->mac = headers->dl_src;
 }
 
+static const struct sbrec_mac_binding *
+mac_binding_lookup(struct ovsdb_idl_index *sbrec_mac_binding_by_lport_ip,
+                   const char *logical_port,
+                   const char *ip)
+{
+    struct sbrec_mac_binding *mb = sbrec_mac_binding_index_init_row(
+        sbrec_mac_binding_by_lport_ip);
+    sbrec_mac_binding_index_set_logical_port(mb, logical_port);
+    sbrec_mac_binding_index_set_ip(mb, ip);
+
+    const struct sbrec_mac_binding *retval
+        = sbrec_mac_binding_index_find(sbrec_mac_binding_by_lport_ip,
+                                       mb);
+
+    sbrec_mac_binding_index_destroy_row(mb);
+
+    return retval;
+}
+
 static void
 run_put_mac_binding(struct ovsdb_idl_txn *ovnsb_idl_txn,
                     struct ovsdb_idl_index *sbrec_datapath_binding_by_key,
                     struct ovsdb_idl_index *sbrec_port_binding_by_key,
-                    const struct sbrec_mac_binding_table *mac_binding_table,
+                    struct ovsdb_idl_index *sbrec_mac_binding_by_lport_ip,
                     const struct put_mac_binding *pmb)
 {
     if (time_msec() > pmb->timestamp + 1000) {
@@ -1730,19 +1750,17 @@ run_put_mac_binding(struct ovsdb_idl_txn *ovnsb_idl_txn,
     snprintf(mac_string, sizeof mac_string,
              ETH_ADDR_FMT, ETH_ADDR_ARGS(pmb->mac));
 
-    /* Check for an update an existing IP-MAC binding for this logical
+    /* Check for and update an existing IP-MAC binding for this logical
      * port.
-     *
-     * XXX This is not very efficient. */
-    const struct sbrec_mac_binding *b;
-    SBREC_MAC_BINDING_TABLE_FOR_EACH (b, mac_binding_table) {
-        if (!strcmp(b->logical_port, pb->logical_port)
-            && !strcmp(b->ip, pmb->ip_s)) {
-            if (strcmp(b->mac, mac_string)) {
-                sbrec_mac_binding_set_mac(b, mac_string);
-            }
-            return;
+     */
+    const struct sbrec_mac_binding *b =
+        mac_binding_lookup(sbrec_mac_binding_by_lport_ip, pb->logical_port,
+                           pmb->ip_s);
+    if (b) {
+        if (strcmp(b->mac, mac_string)) {
+            sbrec_mac_binding_set_mac(b, mac_string);
         }
+        return;
     }
 
     /* Add new IP-MAC binding for this logical port. */
@@ -1757,7 +1775,7 @@ static void
 run_put_mac_bindings(struct ovsdb_idl_txn *ovnsb_idl_txn,
                      struct ovsdb_idl_index *sbrec_datapath_binding_by_key,
                      struct ovsdb_idl_index *sbrec_port_binding_by_key,
-                     const struct sbrec_mac_binding_table *mac_binding_table)
+                     struct ovsdb_idl_index *sbrec_mac_binding_by_lport_ip)
 {
     if (!ovnsb_idl_txn) {
         return;
@@ -1766,7 +1784,9 @@ run_put_mac_bindings(struct ovsdb_idl_txn *ovnsb_idl_txn,
     const struct put_mac_binding *pmb;
     HMAP_FOR_EACH (pmb, hmap_node, &put_mac_bindings) {
         run_put_mac_binding(ovnsb_idl_txn, sbrec_datapath_binding_by_key,
-                            sbrec_port_binding_by_key, mac_binding_table, pmb);
+                            sbrec_port_binding_by_key,
+                            sbrec_mac_binding_by_lport_ip,
+                            pmb);
     }
     flush_put_mac_bindings();
 }
