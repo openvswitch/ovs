@@ -1,3 +1,0 @@
-%defattr(644,root,root,755)
-/lib/modules/%2-%1
-/etc/depmod.d/openvswitch.conf

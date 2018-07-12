@@ -1,7 +1,7 @@
 # Spec file for Open vSwitch kernel modules on Red Hat Enterprise
 # Linux 6.
 
-# Copyright (C) 2011, 2012 Nicira, Inc.
+# Copyright (C) 2011, 2012, 2018 Nicira, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -10,7 +10,7 @@
 
 %define oname openvswitch
 
-Name:           %{oname}-kmod
+Name:           kmod-%{oname}
 Version:        @VERSION@
 Release:        1%{?dist}
 Summary:        Open vSwitch kernel module
@@ -19,23 +19,22 @@ Group:          System/Kernel
 License:        GPLv2
 URL:            http://openvswitch.org/
 Source0:        %{oname}-%{version}.tar.gz
-Source1:        %{oname}-kmod.files
 BuildRoot:      %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
-BuildRequires:  %kernel_module_package_buildreqs
 
 # Without this we get an empty openvswitch-debuginfo package (whose name
 # conflicts with the openvswitch-debuginfo package for OVS userspace).
 %undefine _enable_debug_packages
 
+%define kernel_source_extended() /usr/src/kernels/%{2}$([ %{1} = default ] || echo ".%{1}")
+
 # Use -D 'kversion 2.6.32-131.6.1.el6.x86_64' to build package
 # for specified kernel version.
-%{?kversion:%define kernel_version %kversion}
+# By default, build against the latest installed kernel-devel
+%{!?kversion:%global kversion %(rpm -qa | egrep "^kernel(-rt|-aarch64)?-devel" | /usr/lib/rpm/redhat/rpmsort -r | head -n 1| sed "s/^kernel.*-devel-//")}
 
 # Use -D 'kflavors default debug kdump' to build packages for
 # specified kernel variants.
-%{!?kflavors:%define kflavors default}
-
-%kernel_module_package -n %{oname} -f %{SOURCE1} %kflavors
+%{!?kflavors:%global kflavors default}
 
 %description
 Open vSwitch Linux kernel module.
@@ -45,24 +44,24 @@ Open vSwitch Linux kernel module.
 %setup -n %{oname}-%{version}
 
 %build
-for flavor in %flavors_to_build; do
+for flavor in %{kflavors} ; do
         mkdir _$flavor
-        (cd _$flavor && ../configure --with-linux="%{kernel_source $flavor}")
+        (cd _$flavor && ../configure --with-linux="%{kernel_source_extended $flavor %{kversion}}")
         %{__make} -C _$flavor/datapath/linux %{?_smp_mflags}
 done
 
 %install
 export INSTALL_MOD_PATH=$RPM_BUILD_ROOT
 export INSTALL_MOD_DIR=extra/%{oname}
-for flavor in %flavors_to_build ; do
-         make -C %{kernel_source $flavor} modules_install \
+for flavor in %{kflavors} ; do
+         make -C %{kernel_source_extended $flavor %{kversion}} modules_install \
                  M="`pwd`"/_$flavor/datapath/linux
 
          # Cleanup unnecessary kernel-generated module dependency files.
          find $INSTALL_MOD_PATH/lib/modules -iname 'modules.*' -exec rm {} \;
 done
 install -d %{buildroot}%{_sysconfdir}/depmod.d/
-for module in %{buildroot}/lib/modules/%{kernel_version}/$INSTALL_MOD_DIR/*.ko;
+for module in %{buildroot}/lib/modules/%{kversion}/$INSTALL_MOD_DIR/*.ko;
 do
     modname="$(basename ${module})"
     echo "override ${modname%.ko} * extra/%{oname}" >> %{oname}.conf
@@ -78,7 +77,7 @@ done
 if [ -x "/sbin/weak-modules" ]; then
     for m in openvswitch vport-gre vport-stt vport-geneve \
              vport-lisp vport-vxlan; do
-        echo "/lib/modules/%{kernel}/extra/$m.ko"
+        echo "/lib/modules/%{kversion}/extra/$m.ko"
     done | /sbin/weak-modules --add-modules
 fi
 
@@ -90,14 +89,15 @@ if [ "$1" = 0 ]; then  # Erase, not upgrade
     if [ -x "/sbin/weak-modules" ]; then
         for m in openvswitch vport-gre vport-stt vport-geneve \
                  vport-lisp vport-vxlan; do
-        echo "/lib/modules/%{kernel}/extra/$m.ko"
+        echo "/lib/modules/%{kversion}/extra/$m.ko"
     done | /sbin/weak-modules --remove-modules
     fi
 fi
 
 %files
-%defattr(644,root,root)
+%defattr(644,root,root,755)
 /etc/depmod.d/%{oname}.conf
+/lib/modules/
 
 %clean
 rm -rf $RPM_BUILD_ROOT
