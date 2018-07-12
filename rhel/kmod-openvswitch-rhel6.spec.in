@@ -29,6 +29,9 @@ BuildRoot:      %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 
 # Use -D 'kversion 2.6.32-131.6.1.el6.x86_64' to build package
 # for specified kernel version.
+# Use -D 'kversion 3.10.0-693.1.1.el7.x86_64 3.10.0-693.17.1.el7.x86_64'
+# to build package for mulitple kernel versions in the same package
+# This only works for kernel 3.10.0 major revision 693
 # By default, build against the latest installed kernel-devel
 %{!?kversion:%global kversion %(rpm -qa | egrep "^kernel(-rt|-aarch64)?-devel" | /usr/lib/rpm/redhat/rpmsort -r | head -n 1| sed "s/^kernel.*-devel-//")}
 
@@ -44,60 +47,75 @@ Open vSwitch Linux kernel module.
 %setup -n %{oname}-%{version}
 
 %build
-for flavor in %{kflavors} ; do
-        mkdir _$flavor
-        (cd _$flavor && ../configure --with-linux="%{kernel_source_extended $flavor %{kversion}}")
-        %{__make} -C _$flavor/datapath/linux %{?_smp_mflags}
+for kv in %{kversion}; do
+    for flavor in %{kflavors}; do
+        mkdir -p _$flavor/_$kv
+        (cd _$flavor/_$kv && ../../configure --with-linux="%{kernel_source_extended $flavor $kv}")
+        %{__make} -C _$flavor/_$kv/datapath/linux %{?_smp_mflags}
+        done
 done
 
 %install
 export INSTALL_MOD_PATH=$RPM_BUILD_ROOT
 export INSTALL_MOD_DIR=extra/%{oname}
-for flavor in %{kflavors} ; do
-         make -C %{kernel_source_extended $flavor %{kversion}} modules_install \
-                 M="`pwd`"/_$flavor/datapath/linux
-
-         # Cleanup unnecessary kernel-generated module dependency files.
-         find $INSTALL_MOD_PATH/lib/modules -iname 'modules.*' -exec rm {} \;
+for kv in %{kversion}; do
+    for flavor in %{kflavors} ; do
+        make -C %{kernel_source_extended $flavor $kv} modules_install \
+                M="`pwd`"/_$flavor/_$kv/datapath/linux
+        # Cleanup unnecessary kernel-generated module dependency files.
+        find $INSTALL_MOD_PATH/lib/modules -iname 'modules.*' -exec rm {} \;
+    done
 done
 install -d %{buildroot}%{_sysconfdir}/depmod.d/
-for module in %{buildroot}/lib/modules/%{kversion}/$INSTALL_MOD_DIR/*.ko;
-do
-    modname="$(basename ${module})"
-    echo "override ${modname%.ko} * extra/%{oname}" >> %{oname}.conf
-    echo "override ${modname%.ko} * weak-updates/%{oname}" >> %{oname}.conf
+for kv in %{kversion}; do
+    for module in %{buildroot}/lib/modules/$kv/$INSTALL_MOD_DIR/*.ko;
+    do
+        modname="$(basename ${module})"
+        grep -qsPo "^\s*override ${modname%.ko} \* extra\/%{oname}" %{oname}.conf || \
+            echo "override ${modname%.ko} * extra/%{oname}" >> %{oname}.conf
+        grep -qsPo "^\s*override ${modname%.ko} \* weak-updates\/%{oname}" %{oname}.conf || \
+            echo "override ${modname%.ko} * weak-updates/%{oname}" >> %{oname}.conf
+    done
 done
 install -m 644 %{oname}.conf %{buildroot}%{_sysconfdir}/depmod.d/
+install -d -m 0755 $RPM_BUILD_ROOT/usr/share/%{oname}/scripts
+install -p -m 0755 rhel/usr_share_openvswitch_scripts_ovs-kmod-manage.sh \
+    $RPM_BUILD_ROOT/usr/share/%{oname}/scripts/ovs-kmod-manage.sh
 
 %post
-# Ensure that modprobe will find our modules.
-for k in $(cd /lib/modules && /bin/ls); do
-    [ -d "/lib/modules/$k/kernel/" ] && depmod -a "$k"
-done
-if [ -x "/sbin/weak-modules" ]; then
-    for m in openvswitch vport-gre vport-stt vport-geneve \
-             vport-lisp vport-vxlan; do
-        echo "/lib/modules/%{kversion}/extra/$m.ko"
-    done | /sbin/weak-modules --add-modules
-fi
-
-%postun
-for k in $(cd /lib/modules && /bin/ls); do
-    [ -d "/lib/modules/$k/kernel/" ] && depmod -a "$k"
-done
-if [ "$1" = 0 ]; then  # Erase, not upgrade
+current_kernel=$(uname -r)
+IFS=. read installed_major installed_minor installed_micro installed_arch \
+    installed_build <<<"${current_kernel##*-}"
+if [ "$installed_major" = "693" ]; then
+    # Workaround for RHEL 7.4
+    if [ -x "/usr/share/%{oname}/scripts/ovs-kmod-manage.sh" ]; then
+        /usr/share/%{oname}/scripts/ovs-kmod-manage.sh
+    fi
+else
+    # Ensure that modprobe will find our modules.
+    for k in $(cd /lib/modules && /bin/ls); do
+        [ -d "/lib/modules/$k/kernel/" ] && depmod -a "$k"
+    done
     if [ -x "/sbin/weak-modules" ]; then
         for m in openvswitch vport-gre vport-stt vport-geneve \
                  vport-lisp vport-vxlan; do
-        echo "/lib/modules/%{kversion}/extra/$m.ko"
-    done | /sbin/weak-modules --remove-modules
+            echo "/lib/modules/%{kversion}/extra/%{oname}/$m.ko"
+        done | /sbin/weak-modules --add-modules
     fi
 fi
+
+%postun
+for kname in `ls -d /lib/modules/*`
+do
+    rm -rf $kname/weak-updates/openvswitch
+done
+/sbin/depmod -a
 
 %files
 %defattr(644,root,root,755)
 /etc/depmod.d/%{oname}.conf
 /lib/modules/
+%attr(755,root,root) /usr/share/%{oname}/scripts/ovs-kmod-manage.sh
 
 %clean
 rm -rf $RPM_BUILD_ROOT
