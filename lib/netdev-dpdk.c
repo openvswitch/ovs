@@ -4079,12 +4079,8 @@ dump_flow_pattern(struct rte_flow_item *item)
         if (eth_spec) {
             VLOG_DBG("  Spec: src="ETH_ADDR_FMT", dst="ETH_ADDR_FMT", "
                      "type=0x%04" PRIx16"\n",
-                     eth_spec->src.addr_bytes[0], eth_spec->src.addr_bytes[1],
-                     eth_spec->src.addr_bytes[2], eth_spec->src.addr_bytes[3],
-                     eth_spec->src.addr_bytes[4], eth_spec->src.addr_bytes[5],
-                     eth_spec->dst.addr_bytes[0], eth_spec->dst.addr_bytes[1],
-                     eth_spec->dst.addr_bytes[2], eth_spec->dst.addr_bytes[3],
-                     eth_spec->dst.addr_bytes[4], eth_spec->dst.addr_bytes[5],
+                     ETH_ADDR_BYTES_ARGS(eth_spec->src.addr_bytes),
+                     ETH_ADDR_BYTES_ARGS(eth_spec->dst.addr_bytes),
                      ntohs(eth_spec->type));
         } else {
             VLOG_DBG("  Spec = null\n");
@@ -4092,12 +4088,8 @@ dump_flow_pattern(struct rte_flow_item *item)
         if (eth_mask) {
             VLOG_DBG("  Mask: src="ETH_ADDR_FMT", dst="ETH_ADDR_FMT", "
                      "type=0x%04"PRIx16"\n",
-                     eth_mask->src.addr_bytes[0], eth_mask->src.addr_bytes[1],
-                     eth_mask->src.addr_bytes[2], eth_mask->src.addr_bytes[3],
-                     eth_mask->src.addr_bytes[4], eth_mask->src.addr_bytes[5],
-                     eth_mask->dst.addr_bytes[0], eth_mask->dst.addr_bytes[1],
-                     eth_mask->dst.addr_bytes[2], eth_mask->dst.addr_bytes[3],
-                     eth_mask->dst.addr_bytes[4], eth_mask->dst.addr_bytes[5],
+                     ETH_ADDR_BYTES_ARGS(eth_mask->src.addr_bytes),
+                     ETH_ADDR_BYTES_ARGS(eth_mask->dst.addr_bytes),
                      eth_mask->type);
         } else {
             VLOG_DBG("  Mask = null\n");
