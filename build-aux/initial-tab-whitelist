@@ -5,6 +5,7 @@
 \.sln$
 ^datapath/
 ^include/linux/
+^include/sparse/rte_
 ^include/windows/
 ^lib/sflow
 ^lib/getopt_long\.c$
