@@ -4384,7 +4384,7 @@ netdev_dpdk_add_rte_flow_offload(struct netdev *netdev,
     struct rte_flow_item_ipv4 ipv4_mask;
     memset(&ipv4_spec, 0, sizeof(ipv4_spec));
     memset(&ipv4_mask, 0, sizeof(ipv4_mask));
-    if (match->flow.dl_type == ntohs(ETH_TYPE_IP)) {
+    if (match->flow.dl_type == htons(ETH_TYPE_IP)) {
 
         ipv4_spec.hdr.type_of_service = match->flow.nw_tos;
         ipv4_spec.hdr.time_to_live    = match->flow.nw_ttl;
@@ -4419,8 +4419,8 @@ netdev_dpdk_add_rte_flow_offload(struct netdev *netdev,
         goto out;
     }
 
-    if ((match->wc.masks.tp_src && match->wc.masks.tp_src != 0xffff) ||
-        (match->wc.masks.tp_dst && match->wc.masks.tp_dst != 0xffff)) {
+    if ((match->wc.masks.tp_src && match->wc.masks.tp_src != OVS_BE16_MAX) ||
+        (match->wc.masks.tp_dst && match->wc.masks.tp_dst != OVS_BE16_MAX)) {
         ret = -1;
         goto out;
     }
