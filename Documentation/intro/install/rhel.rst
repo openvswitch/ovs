@@ -197,17 +197,16 @@ the unit tests, run::
 Kernel Module
 ~~~~~~~~~~~~~
 
-On RHEL 6, to build the Open vSwitch kernel module, copy
-rhel/openvswitch-kmod.files into the RPM sources directory and run::
+On RHEL 6, to build the Open vSwitch kernel module run::
 
-    $ rpmbuild -bb rhel/openvswitch-kmod-rhel6.spec
+    $ rpmbuild -bb rhel/kmod-openvswitch-rhel6.spec
 
 You might have to specify a kernel version and/or variants, e.g.:
 
     $ rpmbuild -bb \
         -D "kversion 2.6.32-131.6.1.el6.x86_64" \
         -D "kflavors default debug kdump" \
-        rhel/openvswitch-kmod-rhel6.spec
+        rhel/kmod-openvswitch-rhel6.spec
 
 This produces an "kmod-openvswitch" RPM for each kernel variant, in this
 example: "kmod-openvswitch", "kmod-openvswitch-debug", and
