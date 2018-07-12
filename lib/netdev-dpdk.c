@@ -4202,8 +4202,8 @@ dump_flow_pattern(struct rte_flow_item *item)
         VLOG_DBG("rte flow icmp pattern:\n");
         if (icmp_spec) {
             VLOG_DBG("  Spec: icmp_type=%"PRIu8", icmp_code=%"PRIu8"\n",
-                     ntohs(icmp_spec->hdr.icmp_type),
-                     ntohs(icmp_spec->hdr.icmp_code));
+                     icmp_spec->hdr.icmp_type,
+                     icmp_spec->hdr.icmp_code);
         } else {
             VLOG_DBG("  Spec = null\n");
         }
