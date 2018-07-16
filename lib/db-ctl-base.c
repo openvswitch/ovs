@@ -1279,7 +1279,7 @@ cmd_find(struct ctl_context *ctx)
         int i;
 
         for (i = 2; i < ctx->argc; i++) {
-            bool satisfied;
+            bool satisfied = false;
 
             ctx->error = check_condition(table, row, ctx->argv[i],
                                          ctx->symtab, &satisfied);
