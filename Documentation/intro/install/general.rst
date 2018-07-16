@@ -156,6 +156,8 @@ The datapath tests for userspace and Linux datapaths also rely upon:
 
 - tftpy. Version 0.6.2 is known to work. Earlier versions should also work.
 
+- netstat.  Available from various distro specific packages
+
 The ovs-vswitchd.conf.db(5) manpage will include an E-R diagram, in formats
 other than plain text, only if you have the following:
 
