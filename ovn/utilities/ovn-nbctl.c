@@ -3474,6 +3474,7 @@ nbctl_lrp_set_gateway_chassis(struct ctl_context *ctx)
     error = gc_by_name_or_uuid(ctx, gc_name, false, &existing_gc);
     if (error) {
         ctx->error = error;
+        free(gc_name);
         return;
     }
     if (existing_gc) {
