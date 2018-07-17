@@ -234,6 +234,11 @@ OVN_NBCTL_TEST_ACL([ls1], [--type=switch])
 AT_CHECK([ovn-nbctl create port_group name=pg0], [0], [ignore])
 OVN_NBCTL_TEST_ACL([pg0], [--type=port-group])
 
+dnl Test when port group doesn't exist
+AT_CHECK([ovn-nbctl --type=port-group acl-add pg1 to-lport 100 ip drop], [1], [], [dnl
+ovn-nbctl: pg1: port group name not found
+])
+
 dnl Test when same name exists in logical switches and portgroups
 AT_CHECK([ovn-nbctl create port_group name=ls0], [0], [ignore])
 AT_CHECK([ovn-nbctl acl-add ls0 to-lport 100 ip drop], [1], [], [stderr])

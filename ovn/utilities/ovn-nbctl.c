@@ -609,10 +609,12 @@ lb_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist,
     return NULL;
 }
 
-static const struct nbrec_port_group *
-pg_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist)
+static char * OVS_WARN_UNUSED_RESULT
+pg_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist,
+                   const struct nbrec_port_group **pg_p)
 {
     const struct nbrec_port_group *pg = NULL;
+    *pg_p = NULL;
 
     struct uuid pg_uuid;
     bool is_uuid = uuid_from_string(&pg_uuid, id);
@@ -632,11 +634,12 @@ pg_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist)
     }
 
     if (!pg && must_exist) {
-        ctl_fatal("%s: port group %s not found", id,
-                  is_uuid ? "UUID" : "name");
+        return xasprintf("%s: port group %s not found", id,
+                         is_uuid ? "UUID" : "name");
     }
 
-    return pg;
+    *pg_p = pg;
+    return NULL;
 }
 
 static void
@@ -1559,7 +1562,10 @@ acl_cmd_get_pg_or_ls(struct ctl_context *ctx,
     char *error;
 
     if (!opt_type) {
-        *pg = pg_by_name_or_uuid(ctx, ctx->argv[1], false);
+        error = pg_by_name_or_uuid(ctx, ctx->argv[1], false, pg);
+        if (error) {
+            return error;
+        }
         error = ls_by_name_or_uuid(ctx, ctx->argv[1], false, ls);
         if (error) {
             return error;
@@ -1574,7 +1580,10 @@ acl_cmd_get_pg_or_ls(struct ctl_context *ctx,
                              ctx->argv[1]);
         }
     } else if (!strcmp(opt_type, "port-group")) {
-        *pg = pg_by_name_or_uuid(ctx, ctx->argv[1], true);
+        error = pg_by_name_or_uuid(ctx, ctx->argv[1], true, pg);
+        if (error) {
+            return error;
+        }
         *ls = NULL;
     } else if (!strcmp(opt_type, "switch")) {
         error = ls_by_name_or_uuid(ctx, ctx->argv[1], true, ls);
