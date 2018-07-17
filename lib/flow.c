@@ -2520,14 +2520,14 @@ flow_hash_in_wildcards(const struct flow *flow,
  *
  *      - Other values of 'vid' should not be used. */
 void
-flow_set_dl_vlan(struct flow *flow, ovs_be16 vid)
+flow_set_dl_vlan(struct flow *flow, ovs_be16 vid, int id)
 {
     if (vid == htons(OFP10_VLAN_NONE)) {
-        flow->vlans[0].tci = htons(0);
+        flow->vlans[id].tci = htons(0);
     } else {
         vid &= htons(VLAN_VID_MASK);
-        flow->vlans[0].tci &= ~htons(VLAN_VID_MASK);
-        flow->vlans[0].tci |= htons(VLAN_CFI) | vid;
+        flow->vlans[id].tci &= ~htons(VLAN_VID_MASK);
+        flow->vlans[id].tci |= htons(VLAN_CFI) | vid;
     }
 }
 
@@ -2560,11 +2560,11 @@ flow_set_vlan_vid(struct flow *flow, ovs_be16 vid)
  * After calling this function, 'flow' will not match packets without a VLAN
  * header. */
 void
-flow_set_vlan_pcp(struct flow *flow, uint8_t pcp)
+flow_set_vlan_pcp(struct flow *flow, uint8_t pcp, int id)
 {
     pcp &= 0x07;
-    flow->vlans[0].tci &= ~htons(VLAN_PCP_MASK);
-    flow->vlans[0].tci |= htons((pcp << VLAN_PCP_SHIFT) | VLAN_CFI);
+    flow->vlans[id].tci &= ~htons(VLAN_PCP_MASK);
+    flow->vlans[id].tci |= htons((pcp << VLAN_PCP_SHIFT) | VLAN_CFI);
 }
 
 /* Counts the number of VLAN headers. */

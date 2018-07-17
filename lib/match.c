@@ -705,13 +705,13 @@ match_set_any_vid(struct match *match)
  *     VID equals the low 12 bits of 'dl_vlan'.
  */
 void
-match_set_dl_vlan(struct match *match, ovs_be16 dl_vlan)
+match_set_dl_vlan(struct match *match, ovs_be16 dl_vlan, int id)
 {
-    flow_set_dl_vlan(&match->flow, dl_vlan);
+    flow_set_dl_vlan(&match->flow, dl_vlan, id);
     if (dl_vlan == htons(OFP10_VLAN_NONE)) {
-        match->wc.masks.vlans[0].tci = OVS_BE16_MAX;
+        match->wc.masks.vlans[id].tci = OVS_BE16_MAX;
     } else {
-        match->wc.masks.vlans[0].tci |= htons(VLAN_VID_MASK | VLAN_CFI);
+        match->wc.masks.vlans[id].tci |= htons(VLAN_VID_MASK | VLAN_CFI);
     }
 }
 
@@ -757,10 +757,10 @@ match_set_any_pcp(struct match *match)
 /* Modifies 'match' so that it matches only packets with an 802.1Q header whose
  * PCP equals the low 3 bits of 'dl_vlan_pcp'. */
 void
-match_set_dl_vlan_pcp(struct match *match, uint8_t dl_vlan_pcp)
+match_set_dl_vlan_pcp(struct match *match, uint8_t dl_vlan_pcp, int id)
 {
-    flow_set_vlan_pcp(&match->flow, dl_vlan_pcp);
-    match->wc.masks.vlans[0].tci |= htons(VLAN_CFI | VLAN_PCP_MASK);
+    flow_set_vlan_pcp(&match->flow, dl_vlan_pcp, id);
+    match->wc.masks.vlans[id].tci |= htons(VLAN_CFI | VLAN_PCP_MASK);
 }
 
 /* Modifies 'match' so that the MPLS label 'idx' matches 'lse' exactly. */

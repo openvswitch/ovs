@@ -549,7 +549,7 @@ consider_port_binding(struct ovsdb_idl_index *sbrec_chassis_by_name,
          * for frames that lack any 802.1Q header later. */
         if (tag || !strcmp(binding->type, "localnet")
             || !strcmp(binding->type, "l2gateway")) {
-            match_set_dl_vlan(&match, htons(tag));
+            match_set_dl_vlan(&match, htons(tag), 0);
             if (nested_container) {
                 /* When a packet comes from a container sitting behind a
                  * parent_port, we should let it loopback to other containers
