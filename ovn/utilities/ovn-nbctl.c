@@ -1149,7 +1149,6 @@ nbctl_lsp_del(struct ctl_context *ctx)
     /* Can't happen because of the database schema. */
     ctl_error(ctx, "logical port %s is not part of any logical switch",
               ctx->argv[1]);
-    return;
 }
 
 static void
@@ -3788,7 +3787,6 @@ nbctl_lrp_del(struct ctl_context *ctx)
     /* Can't happen because of the database schema. */
     ctl_error(ctx, "logical port %s is not part of any logical router",
               ctx->argv[1]);
-    return;
 }
 
 /* Print a list of logical router ports. */
