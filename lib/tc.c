@@ -784,9 +784,11 @@ nl_parse_act_vlan(struct nlattr *options, struct tc_flower *flower)
     vlan_parms = vlan_attrs[TCA_VLAN_PARMS];
     v = nl_attr_get_unspec(vlan_parms, sizeof *v);
     if (v->v_action == TCA_VLAN_ACT_PUSH) {
+        struct nlattr *vlan_tpid = vlan_attrs[TCA_VLAN_PUSH_VLAN_PROTOCOL];
         struct nlattr *vlan_id = vlan_attrs[TCA_VLAN_PUSH_VLAN_ID];
         struct nlattr *vlan_prio = vlan_attrs[TCA_VLAN_PUSH_VLAN_PRIORITY];
 
+        action->vlan.vlan_push_tpid = nl_attr_get_u16(vlan_tpid);
         action->vlan.vlan_push_id = nl_attr_get_u16(vlan_id);
         action->vlan.vlan_push_prio = vlan_prio ? nl_attr_get_u8(vlan_prio) : 0;
         action->type = TC_ACT_VLAN_PUSH;
@@ -1158,7 +1160,8 @@ nl_msg_put_act_pedit(struct ofpbuf *request, struct tc_pedit *parm,
 }
 
 static void
-nl_msg_put_act_push_vlan(struct ofpbuf *request, uint16_t vid, uint8_t prio)
+nl_msg_put_act_push_vlan(struct ofpbuf *request, uint16_t tpid,
+                         uint16_t vid, uint8_t prio)
 {
     size_t offset;
 
@@ -1169,6 +1172,7 @@ nl_msg_put_act_push_vlan(struct ofpbuf *request, uint16_t vid, uint8_t prio)
                                 .v_action = TCA_VLAN_ACT_PUSH };
 
         nl_msg_put_unspec(request, TCA_VLAN_PARMS, &parm, sizeof parm);
+        nl_msg_put_u16(request, TCA_VLAN_PUSH_VLAN_PROTOCOL, tpid);
         nl_msg_put_u16(request, TCA_VLAN_PUSH_VLAN_ID, vid);
         nl_msg_put_u8(request, TCA_VLAN_PUSH_VLAN_PRIORITY, prio);
     }
@@ -1489,6 +1493,7 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
             case TC_ACT_VLAN_PUSH: {
                 act_offset = nl_msg_start_nested(request, act_index++);
                 nl_msg_put_act_push_vlan(request,
+                                         action->vlan.vlan_push_tpid,
                                          action->vlan.vlan_push_id,
                                          action->vlan.vlan_push_prio);
                 nl_msg_end_nested(request, act_offset);

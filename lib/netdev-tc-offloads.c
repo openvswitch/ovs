@@ -1077,6 +1077,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_PUSH_VLAN) {
             const struct ovs_action_push_vlan *vlan_push = nl_attr_get(nla);
 
+            action->vlan.vlan_push_tpid = vlan_push->vlan_tpid;
             action->vlan.vlan_push_id = vlan_tci_to_vid(vlan_push->vlan_tci);
             action->vlan.vlan_push_prio = vlan_tci_to_pcp(vlan_push->vlan_tci);
             action->type = TC_ACT_VLAN_PUSH;

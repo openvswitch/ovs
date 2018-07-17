@@ -119,6 +119,7 @@ struct tc_action {
         int ifindex_out;
 
         struct {
+            ovs_be16 vlan_push_tpid;
             uint16_t vlan_push_id;
             uint8_t vlan_push_prio;
         } vlan;
