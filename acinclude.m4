@@ -619,6 +619,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                         [nf_conn_labels], [words])
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_nat.h], [nf_ct_nat_ext_add])
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_nat.h], [nf_nat_alloc_null_binding])
+  OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_nat.h], [nf_nat_range2])
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_seqadj.h], [nf_ct_seq_adjust])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/random.h], [prandom_u32])

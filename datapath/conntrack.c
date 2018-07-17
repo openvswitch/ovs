@@ -41,6 +41,10 @@
 #include "flow_netlink.h"
 #include "gso.h"
 
+#ifndef HAVE_NF_NAT_RANGE2
+#define nf_nat_range2 nf_nat_range
+#endif
+
 struct ovs_ct_len_tbl {
 	int maxlen;
 	int minlen;
@@ -79,7 +83,7 @@ struct ovs_conntrack_info {
 	struct md_mark mark;
 	struct md_labels labels;
 #ifdef CONFIG_NF_NAT_NEEDED
-	struct nf_nat_range range;  /* Only present for SRC NAT and DST NAT. */
+	struct nf_nat_range2 range;  /* Only present for SRC NAT and DST NAT. */
 #endif
 };
 
@@ -744,7 +748,7 @@ static bool skb_nfct_cached(struct net *net,
  */
 static int ovs_ct_nat_execute(struct sk_buff *skb, struct nf_conn *ct,
 			      enum ip_conntrack_info ctinfo,
-			      const struct nf_nat_range *range,
+			      const struct nf_nat_range2 *range,
 			      enum nf_nat_manip_type maniptype)
 {
 	int hooknum, nh_off, err = NF_ACCEPT;
