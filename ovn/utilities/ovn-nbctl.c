@@ -1147,8 +1147,9 @@ nbctl_lsp_del(struct ctl_context *ctx)
     }
 
     /* Can't happen because of the database schema. */
-    ctl_fatal("logical port %s is not part of any logical switch",
+    ctl_error(ctx, "logical port %s is not part of any logical switch",
               ctx->argv[1]);
+    return;
 }
 
 static void
@@ -1230,10 +1231,11 @@ nbctl_lsp_set_addresses(struct ctl_context *ctx)
             && strcmp(ctx->argv[i], "router")
             && !ovs_scan(ctx->argv[i], ETH_ADDR_SCAN_FMT,
                          ETH_ADDR_SCAN_ARGS(ea))) {
-            ctl_fatal("%s: Invalid address format. See ovn-nb(5). "
+            ctl_error(ctx, "%s: Invalid address format. See ovn-nb(5). "
                       "Hint: An Ethernet address must be "
                       "listed before an IP address, together as a single "
                       "argument.", ctx->argv[i]);
+            return;
         }
     }
 
@@ -1480,7 +1482,9 @@ nbctl_lsp_set_dhcpv4_options(struct ctl_context *ctx)
         error = ip_parse_cidr(dhcp_opt->cidr, &ip, &plen);
         if (error){
             free(error);
-            ctl_fatal("DHCP options cidr '%s' is not IPv4", dhcp_opt->cidr);
+            ctl_error(ctx, "DHCP options cidr '%s' is not IPv4",
+                      dhcp_opt->cidr);
+            return;
         }
     }
     nbrec_logical_switch_port_set_dhcpv4_options(lsp, dhcp_opt);
@@ -1512,7 +1516,9 @@ nbctl_lsp_set_dhcpv6_options(struct ctl_context *ctx)
         error = ipv6_parse_cidr(dhcp_opt->cidr, &ip, &plen);
         if (error) {
             free(error);
-            ctl_fatal("DHCP options cidr '%s' is not IPv6", dhcp_opt->cidr);
+            ctl_error(ctx, "DHCP options cidr '%s' is not IPv6",
+                      dhcp_opt->cidr);
+            return;
         }
     }
     nbrec_logical_switch_port_set_dhcpv6_options(lsp, dhcp_opt);
@@ -1884,7 +1890,8 @@ nbctl_acl_del(struct ctl_context *ctx)
     }
 
     if (ctx->argc == 4) {
-        ctl_fatal("cannot specify priority without match");
+        ctl_error(ctx, "cannot specify priority without match");
+        return;
     }
 
     /* Remove the matching rule. */
@@ -2121,7 +2128,8 @@ nbctl_qos_del(struct ctl_context *ctx)
     }
 
     if (ctx->argc == 4) {
-        ctl_fatal("cannot specify priority without match");
+        ctl_error(ctx, "cannot specify priority without match");
+        return;
     }
 
     /* Remove the matching rule. */
@@ -2502,8 +2510,9 @@ nbctl_lr_lb_del(struct ctl_context *ctx)
 
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
     if (must_exist) {
-        ctl_fatal("load balancer %s is not part of any logical router.",
-                del_lb->name);
+        ctl_error(ctx, "load balancer %s is not part of any logical router.",
+                  del_lb->name);
+        return;
     }
 }
 
@@ -2626,8 +2635,9 @@ nbctl_ls_lb_del(struct ctl_context *ctx)
 
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
     if (must_exist) {
-        ctl_fatal("load balancer %s is not part of any logical switch.",
-                del_lb->name);
+        ctl_error(ctx, "load balancer %s is not part of any logical switch.",
+                  del_lb->name);
+        return;
     }
 }
 
@@ -2771,7 +2781,8 @@ nbctl_dhcp_options_create(struct ctl_context *ctx)
         error = ipv6_parse_cidr(ctx->argv[1], &ipv6, &plen);
         if (error) {
             free(error);
-            ctl_fatal("Invalid cidr format '%s'", ctx->argv[1]);
+            ctl_error(ctx, "Invalid cidr format '%s'", ctx->argv[1]);
+            return;
         }
     }
 
@@ -3775,8 +3786,9 @@ nbctl_lrp_del(struct ctl_context *ctx)
     }
 
     /* Can't happen because of the database schema. */
-    ctl_fatal("logical port %s is not part of any logical router",
+    ctl_error(ctx, "logical port %s is not part of any logical router",
               ctx->argv[1]);
+    return;
 }
 
 /* Print a list of logical router ports. */
