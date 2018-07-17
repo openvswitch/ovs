@@ -3291,10 +3291,12 @@ lr_get_name(const struct nbrec_logical_router *lr, char uuid_s[UUID_LEN + 1],
     return uuid_s;
 }
 
-static const struct nbrec_gateway_chassis *
-gc_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist)
+static char * OVS_WARN_UNUSED_RESULT
+gc_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist,
+                   const struct nbrec_gateway_chassis **gc_p)
 {
     const struct nbrec_gateway_chassis *gc = NULL;
+    *gc_p = NULL;
 
     struct uuid gc_uuid;
     bool is_uuid = uuid_from_string(&gc_uuid, id);
@@ -3311,11 +3313,12 @@ gc_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist)
     }
 
     if (!gc && must_exist) {
-        ctl_fatal("%s: gateway chassis %s not found", id,
-                  is_uuid ? "UUID" : "name");
+        return xasprintf("%s: gateway chassis %s not found", id,
+                         is_uuid ? "UUID" : "name");
     }
 
-    return gc;
+    *gc_p = gc;
+    return NULL;
 }
 
 static void
@@ -3342,7 +3345,10 @@ nbctl_lrp_set_gateway_chassis(struct ctl_context *ctx)
 
     gc_name = xasprintf("%s-%s", lrp_name, chassis_name);
     const struct nbrec_gateway_chassis *existing_gc;
-    existing_gc = gc_by_name_or_uuid(ctx, gc_name, false);
+    error = gc_by_name_or_uuid(ctx, gc_name, false, &existing_gc);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     if (existing_gc) {
         nbrec_gateway_chassis_set_priority(existing_gc, priority);
         free(gc_name);
