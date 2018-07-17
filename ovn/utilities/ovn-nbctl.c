@@ -952,22 +952,26 @@ lsp_by_name_or_uuid(struct ctl_context *ctx, const char *id,
 }
 
 /* Returns the logical switch that contains 'lsp'. */
-static const struct nbrec_logical_switch *
+static char * OVS_WARN_UNUSED_RESULT
 lsp_to_ls(const struct ovsdb_idl *idl,
-               const struct nbrec_logical_switch_port *lsp)
+          const struct nbrec_logical_switch_port *lsp,
+          const struct nbrec_logical_switch **ls_p)
 {
     const struct nbrec_logical_switch *ls;
+    *ls_p = NULL;
+
     NBREC_LOGICAL_SWITCH_FOR_EACH (ls, idl) {
         for (size_t i = 0; i < ls->n_ports; i++) {
             if (ls->ports[i] == lsp) {
-                return ls;
+                *ls_p = ls;
+                return NULL;
             }
         }
     }
 
     /* Can't happen because of the database schema */
-    ctl_fatal("logical port %s is not part of any logical switch",
-              lsp->name);
+    return xasprintf("logical port %s is not part of any logical switch",
+                     lsp->name);
 }
 
 static const char *
@@ -1027,7 +1031,11 @@ nbctl_lsp_add(struct ctl_context *ctx)
         }
 
         const struct nbrec_logical_switch *lsw;
-        lsw = lsp_to_ls(ctx->idl, lsp);
+        error = lsp_to_ls(ctx->idl, lsp, &lsw);
+        if (error) {
+            ctx->error = error;
+            return;
+        }
         if (lsw != ls) {
             char uuid_s[UUID_LEN + 1];
             ctl_error(ctx, "%s: port already exists but in switch %s",
