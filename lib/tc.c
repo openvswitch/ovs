@@ -332,7 +332,7 @@ nl_parse_flower_eth(struct nlattr **attrs, struct tc_flower *flower)
 static void
 nl_parse_flower_vlan(struct nlattr **attrs, struct tc_flower *flower)
 {
-    if (flower->key.eth_type != htons(ETH_TYPE_VLAN)) {
+    if (!eth_type_vlan(flower->key.eth_type)) {
         return;
     }
 
@@ -1576,7 +1576,7 @@ nl_msg_put_flower_options(struct ofpbuf *request, struct tc_flower *flower)
 {
 
     uint16_t host_eth_type = ntohs(flower->key.eth_type);
-    bool is_vlan = (host_eth_type == ETH_TYPE_VLAN);
+    bool is_vlan = eth_type_vlan(flower->key.eth_type);
     int err;
 
     /* need to parse acts first as some acts require changing the matching

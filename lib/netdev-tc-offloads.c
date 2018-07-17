@@ -430,7 +430,7 @@ parse_tc_flower_to_match(struct tc_flower *flower,
     match_set_dl_src_masked(match, key->src_mac, mask->src_mac);
     match_set_dl_dst_masked(match, key->dst_mac, mask->dst_mac);
 
-    if (key->eth_type == htons(ETH_TYPE_VLAN)) {
+    if (eth_type_vlan(key->eth_type)) {
         match_set_dl_vlan(match, htons(key->vlan_id));
         match_set_dl_vlan_pcp(match, key->vlan_prio);
         match_set_dl_type(match, key->encap_eth_type);
@@ -517,7 +517,7 @@ parse_tc_flower_to_match(struct tc_flower *flower,
 
                 push = nl_msg_put_unspec_zero(buf, OVS_ACTION_ATTR_PUSH_VLAN,
                                               sizeof *push);
-                push->vlan_tpid = htons(ETH_TYPE_VLAN);
+                push->vlan_tpid = action->vlan.vlan_push_tpid;
                 push->vlan_tci = htons(action->vlan.vlan_push_id
                                        | (action->vlan.vlan_push_prio << 13)
                                        | VLAN_CFI);
@@ -962,7 +962,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
                 VLOG_DBG_RL(&rl, "vlan_prio: %d\n", flower.key.vlan_prio);
             }
             flower.key.encap_eth_type = flower.key.eth_type;
-            flower.key.eth_type = htons(ETH_TYPE_VLAN);
+            flower.key.eth_type = key->vlans[0].tpid;
         } else if (mask->vlans[0].tci == htons(0xffff) &&
                    ntohs(key->vlans[0].tci) == 0) {
             /* exact && no vlan */
