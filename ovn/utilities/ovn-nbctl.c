@@ -3270,22 +3270,26 @@ lrp_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist,
 }
 
 /* Returns the logical router that contains 'lrp'. */
-static const struct nbrec_logical_router *
+static char * OVS_WARN_UNUSED_RESULT
 lrp_to_lr(const struct ovsdb_idl *idl,
-               const struct nbrec_logical_router_port *lrp)
+          const struct nbrec_logical_router_port *lrp,
+          const struct nbrec_logical_router **lr_p)
 {
     const struct nbrec_logical_router *lr;
+    *lr_p = NULL;
+
     NBREC_LOGICAL_ROUTER_FOR_EACH (lr, idl) {
         for (size_t i = 0; i < lr->n_ports; i++) {
             if (lr->ports[i] == lrp) {
-                return lr;
+                *lr_p = lr;
+                return NULL;
             }
         }
     }
 
     /* Can't happen because of the database schema */
-    ctl_fatal("port %s is not part of any logical router",
-              lrp->name);
+    return xasprintf("port %s is not part of any logical router",
+                     lrp->name);
 }
 
 static const char *
@@ -3513,7 +3517,11 @@ nbctl_lrp_add(struct ctl_context *ctx)
         }
 
         const struct nbrec_logical_router *bound_lr;
-        bound_lr = lrp_to_lr(ctx->idl, lrp);
+        error = lrp_to_lr(ctx->idl, lrp, &bound_lr);
+        if (error) {
+            ctx->error = error;
+            return;
+        }
         if (bound_lr != lr) {
             char uuid_s[UUID_LEN + 1];
             ctl_error(ctx, "%s: port already exists but in router %s",
