@@ -431,9 +431,20 @@ parse_tc_flower_to_match(struct tc_flower *flower,
     match_set_dl_dst_masked(match, key->dst_mac, mask->dst_mac);
 
     if (eth_type_vlan(key->eth_type)) {
-        match_set_dl_vlan(match, htons(key->vlan_id), 0);
-        match_set_dl_vlan_pcp(match, key->vlan_prio, 0);
-        match_set_dl_type(match, key->encap_eth_type);
+        match->flow.vlans[0].tpid = key->eth_type;
+        match->wc.masks.vlans[0].tpid = OVS_BE16_MAX;
+        match_set_dl_vlan(match, htons(key->vlan_id[0]), 0);
+        match_set_dl_vlan_pcp(match, key->vlan_prio[0], 0);
+
+        if (eth_type_vlan(key->encap_eth_type[0])) {
+            match_set_dl_vlan(match, htons(key->vlan_id[1]), 1);
+            match_set_dl_vlan_pcp(match, key->vlan_prio[1], 1);
+            match_set_dl_type(match, key->encap_eth_type[1]);
+            match->flow.vlans[1].tpid = key->encap_eth_type[0];
+            match->wc.masks.vlans[1].tpid = OVS_BE16_MAX;
+        } else {
+            match_set_dl_type(match, key->encap_eth_type[0]);
+        }
         flow_fix_vlan_tpid(&match->flow);
     } else {
         match_set_dl_type(match, key->eth_type);
@@ -954,14 +965,15 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
             && (!pcp_mask || pcp_mask == htons(VLAN_PCP_MASK))
             && (vid_mask || pcp_mask)) {
             if (vid_mask) {
-                flower.key.vlan_id = vlan_tci_to_vid(key->vlans[0].tci);
-                VLOG_DBG_RL(&rl, "vlan_id: %d\n", flower.key.vlan_id);
+                flower.key.vlan_id[0] = vlan_tci_to_vid(key->vlans[0].tci);
+                VLOG_DBG_RL(&rl, "vlan_id[0]: %d\n", flower.key.vlan_id[0]);
             }
             if (pcp_mask) {
-                flower.key.vlan_prio = vlan_tci_to_pcp(key->vlans[0].tci);
-                VLOG_DBG_RL(&rl, "vlan_prio: %d\n", flower.key.vlan_prio);
+                flower.key.vlan_prio[0] = vlan_tci_to_pcp(key->vlans[0].tci);
+                VLOG_DBG_RL(&rl, "vlan_prio[0]: %d\n",
+                            flower.key.vlan_prio[0]);
             }
-            flower.key.encap_eth_type = flower.key.eth_type;
+            flower.key.encap_eth_type[0] = flower.key.eth_type;
             flower.key.eth_type = key->vlans[0].tpid;
         } else if (mask->vlans[0].tci == htons(0xffff) &&
                    ntohs(key->vlans[0].tci) == 0) {
@@ -970,8 +982,34 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
             /* partial mask */
             return EOPNOTSUPP;
         }
-    } else if (mask->vlans[1].tci) {
-        return EOPNOTSUPP;
+    }
+
+    if (mask->vlans[1].tci) {
+        ovs_be16 vid_mask = mask->vlans[1].tci & htons(VLAN_VID_MASK);
+        ovs_be16 pcp_mask = mask->vlans[1].tci & htons(VLAN_PCP_MASK);
+        ovs_be16 cfi = mask->vlans[1].tci & htons(VLAN_CFI);
+
+        if (cfi && key->vlans[1].tci & htons(VLAN_CFI)
+            && (!vid_mask || vid_mask == htons(VLAN_VID_MASK))
+            && (!pcp_mask || pcp_mask == htons(VLAN_PCP_MASK))
+            && (vid_mask || pcp_mask)) {
+            if (vid_mask) {
+                flower.key.vlan_id[1] = vlan_tci_to_vid(key->vlans[1].tci);
+                VLOG_DBG_RL(&rl, "vlan_id[1]: %d", flower.key.vlan_id[1]);
+            }
+            if (pcp_mask) {
+                flower.key.vlan_prio[1] = vlan_tci_to_pcp(key->vlans[1].tci);
+                VLOG_DBG_RL(&rl, "vlan_prio[1]: %d", flower.key.vlan_prio[1]);
+            }
+            flower.key.encap_eth_type[1] = flower.key.encap_eth_type[0];
+            flower.key.encap_eth_type[0] = key->vlans[1].tpid;
+        } else if (mask->vlans[1].tci == htons(0xffff) &&
+                   ntohs(key->vlans[1].tci) == 0) {
+            /* exact && no vlan */
+        } else {
+            /* partial mask */
+            return EOPNOTSUPP;
+        }
     }
     memset(mask->vlans, 0, sizeof mask->vlans);
 

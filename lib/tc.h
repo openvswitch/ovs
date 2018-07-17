@@ -26,6 +26,7 @@
 #include "netlink-socket.h"
 #include "odp-netlink.h"
 #include "openvswitch/ofpbuf.h"
+#include "openvswitch/flow.h"
 
 /* For backwards compatability with older kernels */
 #ifndef TC_H_CLSACT
@@ -87,10 +88,10 @@ struct tc_flower_key {
     ovs_be16 sctp_src;
     ovs_be16 sctp_dst;
 
-    uint16_t vlan_id;
-    uint8_t vlan_prio;
+    uint16_t vlan_id[FLOW_MAX_VLAN_HEADERS];
+    uint8_t vlan_prio[FLOW_MAX_VLAN_HEADERS];
 
-    ovs_be16 encap_eth_type;
+    ovs_be16 encap_eth_type[FLOW_MAX_VLAN_HEADERS];
 
     uint8_t flags;
     uint8_t ip_ttl;
