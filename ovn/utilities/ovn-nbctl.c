@@ -86,8 +86,9 @@ static void run_prerequisites(struct ctl_command[], size_t n_commands,
                               struct ovsdb_idl *);
 static bool do_nbctl(const char *args, struct ctl_command *, size_t n,
                      struct ovsdb_idl *);
-static const struct nbrec_dhcp_options *dhcp_options_get(
-    struct ctl_context *ctx, const char *id, bool must_exist);
+static char * OVS_WARN_UNUSED_RESULT dhcp_options_get(
+    struct ctl_context *ctx, const char *id, bool must_exist,
+    const struct nbrec_dhcp_options **);
 
 int
 main(int argc, char *argv[])
@@ -1448,7 +1449,10 @@ nbctl_lsp_set_dhcpv4_options(struct ctl_context *ctx)
     }
     const struct nbrec_dhcp_options *dhcp_opt = NULL;
     if (ctx->argc == 3 ) {
-        dhcp_opt = dhcp_options_get(ctx, ctx->argv[2], true);
+        error = dhcp_options_get(ctx, ctx->argv[2], true, &dhcp_opt);
+        if (error) {
+            ctl_fatal("%s", error);
+        }
     }
 
     if (dhcp_opt) {
@@ -1475,7 +1479,10 @@ nbctl_lsp_set_dhcpv6_options(struct ctl_context *ctx)
     }
     const struct nbrec_dhcp_options *dhcp_opt = NULL;
     if (ctx->argc == 3) {
-        dhcp_opt = dhcp_options_get(ctx, ctx->argv[2], true);
+        error = dhcp_options_get(ctx, ctx->argv[2], true, &dhcp_opt);
+        if (error) {
+            ctl_fatal("%s", error);
+        }
     }
 
     if (dhcp_opt) {
@@ -2697,8 +2704,9 @@ nbctl_lr_list(struct ctl_context *ctx)
     free(nodes);
 }
 
-static const struct nbrec_dhcp_options *
-dhcp_options_get(struct ctl_context *ctx, const char *id, bool must_exist)
+static char *
+dhcp_options_get(struct ctl_context *ctx, const char *id, bool must_exist,
+                 const struct nbrec_dhcp_options **dhcp_opts_p)
 {
     struct uuid dhcp_opts_uuid;
     const struct nbrec_dhcp_options *dhcp_opts = NULL;
@@ -2707,9 +2715,10 @@ dhcp_options_get(struct ctl_context *ctx, const char *id, bool must_exist)
     }
 
     if (!dhcp_opts && must_exist) {
-        ctl_fatal("%s: dhcp options UUID not found", id);
+        return xasprintf("%s: dhcp options UUID not found", id);
     }
-    return dhcp_opts;
+    *dhcp_opts_p = dhcp_opts;
+    return NULL;
 }
 
 static void
@@ -2751,8 +2760,11 @@ nbctl_dhcp_options_create(struct ctl_context *ctx)
 static void
 nbctl_dhcp_options_set_options(struct ctl_context *ctx)
 {
-    const struct nbrec_dhcp_options *dhcp_opts = dhcp_options_get(
-        ctx, ctx->argv[1], true);
+    const struct nbrec_dhcp_options *dhcp_opts;
+    char *error = dhcp_options_get(ctx, ctx->argv[1], true, &dhcp_opts);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
 
     struct smap dhcp_options = SMAP_INITIALIZER(&dhcp_options);
     for (size_t i = 2; i < ctx->argc; i++) {
@@ -2772,8 +2784,11 @@ nbctl_dhcp_options_set_options(struct ctl_context *ctx)
 static void
 nbctl_dhcp_options_get_options(struct ctl_context *ctx)
 {
-    const struct nbrec_dhcp_options *dhcp_opts = dhcp_options_get(
-        ctx, ctx->argv[1], true);
+    const struct nbrec_dhcp_options *dhcp_opts;
+    char *error = dhcp_options_get(ctx, ctx->argv[1], true, &dhcp_opts);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
 
     struct smap_node *node;
     SMAP_FOR_EACH(node, &dhcp_opts->options) {
@@ -2788,7 +2803,10 @@ nbctl_dhcp_options_del(struct ctl_context *ctx)
     const char *id = ctx->argv[1];
     const struct nbrec_dhcp_options *dhcp_opts;
 
-    dhcp_opts = dhcp_options_get(ctx, id, must_exist);
+    char *error = dhcp_options_get(ctx, id, must_exist, &dhcp_opts);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     if (!dhcp_opts) {
         return;
     }
