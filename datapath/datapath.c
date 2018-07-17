@@ -2385,10 +2385,18 @@ static void __net_exit ovs_exit_net(struct net *dnet)
 	list_for_each_entry_safe(dp, dp_next, &ovs_net->dps, list_node)
 		__dp_destroy(dp);
 
+#ifdef HAVE_NET_RWSEM
+	down_read(&net_rwsem);
+#else
 	rtnl_lock();
+#endif
 	for_each_net(net)
 		list_vports_from_net(net, dnet, &head);
+#ifdef HAVE_NET_RWSEM
+	up_read(&net_rwsem);
+#else
 	rtnl_unlock();
+#endif
 
 	/* Detach all vports from given namespace. */
 	list_for_each_entry_safe(vport, vport_next, &head, detach_list) {
