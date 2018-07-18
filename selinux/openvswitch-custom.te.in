@@ -37,13 +37,14 @@ require {
         type svirt_image_t;
         type svirt_tmpfs_t;
         type vfio_device_t;
+        type zero_device_t;
 @end_dpdk@
 
         class capability { dac_override audit_write net_broadcast net_raw };
-        class chr_file { write getattr read open ioctl };
+        class chr_file { write getattr read open ioctl map };
         class dir { write remove_name add_name lock read getattr search open };
         class fd { use };
-        class file { write getattr read open execute execute_no_trans create unlink map entrypoint lock ioctl };
+        class file { map write getattr read open execute execute_no_trans create unlink map entrypoint lock ioctl };
         class fifo_file { getattr read write append ioctl lock open };
         class filesystem getattr;
         class lnk_file { read open };
@@ -83,7 +84,8 @@ allow openvswitch_t openvswitch_rw_t:dir { write remove_name add_name lock read 
 allow openvswitch_t openvswitch_rw_t:file { write getattr read open execute execute_no_trans create unlink };
 allow openvswitch_t openvswitch_tmp_t:file { execute execute_no_trans };
 allow openvswitch_t openvswitch_tmp_t:unix_stream_socket { write getattr read connectto connect setopt getopt sendto accept bind recvfrom acceptfrom };
-allow openvswitch_t openvswitch_var_run_t:dir { getattr read open search };
+allow openvswitch_t openvswitch_var_run_t:dir { getattr read open search write remove_name add_name lock };
+allow openvswitch_t openvswitch_var_run_t:file { map open read write getattr create unlink };
 allow openvswitch_t tun_tap_device_t:chr_file { read write getattr open ioctl };
 
 @begin_dpdk@
@@ -96,6 +98,7 @@ allow openvswitch_t svirt_tmpfs_t:file { read write };
 allow openvswitch_t svirt_tmpfs_t:sock_file { read write append getattr open };
 allow openvswitch_t svirt_t:unix_stream_socket { connectto read write getattr sendto recvfrom setopt };
 allow openvswitch_t vfio_device_t:chr_file { read write open ioctl getattr };
+allow openvswitch_t zero_device_t:chr_file { read open getattr map };
 @end_dpdk@
 
 #============= Transition allows =============
