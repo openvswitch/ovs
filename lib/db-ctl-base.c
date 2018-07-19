@@ -1880,7 +1880,7 @@ cmd_wait_until(struct ctl_context *ctx)
 }
 
 /* Parses one command. */
-static void
+static char * OVS_WARN_UNUSED_RESULT
 parse_command(int argc, char *argv[], struct shash *local_options,
               struct ctl_command *command)
 {
@@ -1888,6 +1888,7 @@ parse_command(int argc, char *argv[], struct shash *local_options,
     struct shash_node *node;
     int n_arg;
     int i;
+    char *error;
 
     shash_init(&command->options);
     shash_swap(local_options, &command->options);
@@ -1910,17 +1911,23 @@ parse_command(int argc, char *argv[], struct shash *local_options,
         }
 
         if (shash_find(&command->options, key)) {
-            ctl_fatal("'%s' option specified multiple times", argv[i]);
+            free(key);
+            free(value);
+            error = xasprintf("'%s' option specified multiple times", argv[i]);
+            goto error;
         }
         shash_add_nocopy(&command->options, key, value);
     }
     if (i == argc) {
-        ctl_fatal("missing command name (use --help for help)");
+        error = xstrdup("missing command name (use --help for help)");
+        goto error;
     }
 
     p = shash_find_data(&all_commands, argv[i]);
     if (!p) {
-        ctl_fatal("unknown command '%s'; use --help for help", argv[i]);
+        error = xasprintf("unknown command '%s'; use --help for help",
+                          argv[i]);
+        goto error;
     }
 
     SHASH_FOR_EACH (node, &command->options) {
@@ -1928,43 +1935,54 @@ parse_command(int argc, char *argv[], struct shash *local_options,
         int end = s ? s[strlen(node->name)] : EOF;
 
         if (!strchr("=,? ", end)) {
-            ctl_fatal("'%s' command has no '%s' option",
-                      argv[i], node->name);
+            error = xasprintf("'%s' command has no '%s' option",
+                              argv[i], node->name);
+            goto error;
         }
         if (end != '?' && (end == '=') != (node->data != NULL)) {
             if (end == '=') {
-                ctl_fatal("missing argument to '%s' option on '%s' "
-                          "command", node->name, argv[i]);
+                error = xasprintf("missing argument to '%s' option on '%s' "
+                                  "command", node->name, argv[i]);
+                goto error;
             } else {
-                ctl_fatal("'%s' option on '%s' does not accept an "
-                          "argument", node->name, argv[i]);
+                error = xasprintf("'%s' option on '%s' does not accept an "
+                                  "argument", node->name, argv[i]);
+                goto error;
             }
         }
     }
 
     n_arg = argc - i - 1;
     if (n_arg < p->min_args) {
-        ctl_fatal("'%s' command requires at least %d arguments",
-                  p->name, p->min_args);
+        error = xasprintf("'%s' command requires at least %d arguments",
+                          p->name, p->min_args);
+        goto error;
     } else if (n_arg > p->max_args) {
         int j;
 
         for (j = i + 1; j < argc; j++) {
             if (argv[j][0] == '-') {
-                ctl_fatal("'%s' command takes at most %d arguments "
-                          "(note that options must precede command "
-                          "names and follow a \"--\" argument)",
-                          p->name, p->max_args);
+                error = xasprintf("'%s' command takes at most %d arguments "
+                                  "(note that options must precede command "
+                                  "names and follow a \"--\" argument)",
+                                  p->name, p->max_args);
+                goto error;
             }
         }
 
-        ctl_fatal("'%s' command takes at most %d arguments",
-                  p->name, p->max_args);
+        error = xasprintf("'%s' command takes at most %d arguments",
+                          p->name, p->max_args);
+        goto error;
     }
 
     command->syntax = p;
     command->argc = n_arg + 1;
     command->argv = &argv[i];
+    return NULL;
+
+error:
+    shash_destroy_free_data(&command->options);
+    return error;
 }
 
 static void
@@ -2247,6 +2265,8 @@ ctl_parse_commands(int argc, char *argv[], struct shash *local_options,
     for (start = i = 0; i <= argc; i++) {
         if (i == argc || !strcmp(argv[i], "--")) {
             if (i > start) {
+                char *error;
+
                 if (n_commands >= allocated_commands) {
                     struct ctl_command *c;
 
@@ -2256,8 +2276,11 @@ ctl_parse_commands(int argc, char *argv[], struct shash *local_options,
                         shash_moved(&c->options);
                     }
                 }
-                parse_command(i - start, &argv[start], local_options,
-                              &commands[n_commands++]);
+                error = parse_command(i - start, &argv[start], local_options,
+                                      &commands[n_commands++]);
+                if (error) {
+                    ctl_fatal("%s", error);
+                }
             } else if (!shash_is_empty(local_options)) {
                 ctl_fatal("missing command name (use --help for help)");
             }
