@@ -4458,6 +4458,7 @@ do_nbctl(const char *args, struct ctl_command *commands, size_t n_commands,
     }
 
     ovsdb_idl_txn_destroy(txn);
+    the_idl_txn = NULL;
 
     *retry = false;
     return;
