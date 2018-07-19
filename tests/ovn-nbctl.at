@@ -1408,3 +1408,24 @@ AT_CHECK([ovn-nbctl ls-list | uuidfilt], [0], [dnl
 
 OVN_NBCTL_TEST_STOP
 AT_CLEANUP
+
+dnl ---------------------------------------------------------------------
+
+AT_SETUP([ovn-nbctl - oneline output])
+OVN_NBCTL_TEST_START
+
+AT_CHECK([ovn-nbctl ls-add ls0 -- ls-add ls1])
+
+dnl Expect one line for one command.
+AT_CHECK([ovn-nbctl --oneline ls-list | uuidfilt], [0], [dnl
+<0> (ls0)\n<1> (ls1)
+])
+
+dnl Expect lines for two commands.
+AT_CHECK([ovn-nbctl --oneline ls-list -- ls-list | uuidfilt], [0], [dnl
+<0> (ls0)\n<1> (ls1)
+<0> (ls0)\n<1> (ls1)
+])
+
+OVN_NBCTL_TEST_STOP
+AT_CLEANUP
