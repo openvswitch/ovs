@@ -20,6 +20,7 @@
 #include <stdio.h>
 
 #include "command-line.h"
+#include "daemon.h"
 #include "db-ctl-base.h"
 #include "dirs.h"
 #include "fatal-signal.h"
@@ -38,6 +39,7 @@
 #include "table.h"
 #include "timeval.h"
 #include "timer.h"
+#include "unixctl.h"
 #include "util.h"
 #include "openvswitch/vlog.h"
 
@@ -80,6 +82,13 @@ OVS_NO_RETURN static void nbctl_exit(int status);
 /* --leader-only, --no-leader-only: Only accept the leader in a cluster. */
 static int leader_only = true;
 
+/* --unixctl-path: Path to use for unixctl server, for "monitor" and "snoop"
+     commands. */
+static char *unixctl_path;
+
+static unixctl_cb_func server_cmd_exit;
+static unixctl_cb_func server_cmd_run;
+
 static void nbctl_cmd_init(void);
 OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[], struct shash *local_options);
@@ -99,14 +108,13 @@ static char * OVS_WARN_UNUSED_RESULT main_loop(const char *args,
                                                size_t n_commands,
                                                struct ovsdb_idl *idl,
                                                const struct timer *);
+static void server_loop(struct ovsdb_idl *idl);
 
 int
 main(int argc, char *argv[])
 {
     struct ovsdb_idl *idl;
-    struct ctl_command *commands;
     struct shash local_options;
-    size_t n_commands;
 
     set_program_name(argv[0]);
     fatal_ignore_sigpipe();
@@ -119,41 +127,59 @@ main(int argc, char *argv[])
     char *args = process_escape_args(argv);
     shash_init(&local_options);
     parse_options(argc, argv, &local_options);
-    char *error = ctl_parse_commands(argc - optind, argv + optind,
-                                     &local_options, &commands, &n_commands);
-    if (error) {
-        ctl_fatal("%s", error);
-    }
-    VLOG(ctl_might_write_to_db(commands, n_commands) ? VLL_INFO : VLL_DBG,
-         "Called as %s", args);
-
-    if (timeout) {
-        time_alarm(timeout);
-    }
+    argc -= optind;
+    argv += optind;
 
     /* Initialize IDL. */
     idl = the_idl = ovsdb_idl_create(db, &nbrec_idl_class, true, false);
     ovsdb_idl_set_leader_only(idl, leader_only);
-    error = run_prerequisites(commands, n_commands, idl);
-    if (error) {
-        ctl_fatal("%s", error);
-    }
 
-    error = main_loop(args, commands, n_commands, idl, NULL);
-    if (error) {
-        ctl_fatal("%s", error);
+    if (get_detach()) {
+        if (argc != 0) {
+            ctl_fatal("non-option arguments not supported with --detach "
+                      "(use --help for help)");
+        }
+        server_loop(idl);
+    } else {
+        struct ctl_command *commands;
+        size_t n_commands;
+        char *error;
+
+        error = ctl_parse_commands(argc, argv, &local_options, &commands,
+                                   &n_commands);
+        if (error) {
+            ctl_fatal("%s", error);
+        }
+        VLOG(ctl_might_write_to_db(commands, n_commands) ? VLL_INFO : VLL_DBG,
+             "Called as %s", args);
+
+        if (timeout) {
+            time_alarm(timeout);
+        }
+
+        error = run_prerequisites(commands, n_commands, idl);
+        if (error) {
+            ctl_fatal("%s", error);
+        }
+
+        error = main_loop(args, commands, n_commands, idl, NULL);
+        if (error) {
+            ctl_fatal("%s", error);
+        }
+
+        struct ctl_command *c;
+        for (c = commands; c < &commands[n_commands]; c++) {
+            ds_destroy(&c->output);
+            table_destroy(c->table);
+            free(c->table);
+            shash_destroy_free_data(&c->options);
+        }
+        free(commands);
     }
 
     ovsdb_idl_destroy(idl);
     idl = the_idl = NULL;
 
-    for (struct ctl_command *c = commands; c < &commands[n_commands]; c++) {
-        ds_destroy(&c->output);
-        table_destroy(c->table);
-        free(c->table);
-        shash_destroy_free_data(&c->options);
-    }
-    free(commands);
     free(args);
     exit(EXIT_SUCCESS);
 }
@@ -163,6 +189,7 @@ main_loop(const char *args, struct ctl_command *commands, size_t n_commands,
           struct ovsdb_idl *idl, const struct timer *wait_timeout)
 {
     unsigned int seqno;
+    bool idl_ready;
 
     /* Execute the commands.
      *
@@ -172,6 +199,11 @@ main_loop(const char *args, struct ctl_command *commands, size_t n_commands,
      * it's because the database changed and we need to obtain an up-to-date
      * view of the database before we try the transaction again. */
     seqno = ovsdb_idl_get_seqno(idl);
+
+    /* IDL might have already obtained the database copy during previous
+     * invocation. If so, we can't expect the sequence number to change before
+     * we issue any new requests. */
+    idl_ready = ovsdb_idl_has_ever_connected(idl);
     for (;;) {
         ovsdb_idl_run(idl);
         if (!ovsdb_idl_is_alive(idl)) {
@@ -180,7 +212,8 @@ main_loop(const char *args, struct ctl_command *commands, size_t n_commands,
                       db, ovs_retval_to_string(retval));
         }
 
-        if (seqno != ovsdb_idl_get_seqno(idl)) {
+        if (idl_ready || seqno != ovsdb_idl_get_seqno(idl)) {
+            idl_ready = false;
             seqno = ovsdb_idl_get_seqno(idl);
 
             bool retry;
@@ -225,6 +258,7 @@ enum {
     OPT_OPTIONS,
     OPT_BOOTSTRAP_CA_CERT,
     MAIN_LOOP_OPTION_ENUMS,
+    DAEMON_OPTION_ENUMS,
     VLOG_OPTION_ENUMS,
     TABLE_OPTION_ENUMS,
     SSL_OPTION_ENUMS,
@@ -278,12 +312,12 @@ handle_main_loop_option(int opt, const char *arg, bool *handled)
 }
 
 static char * OVS_WARN_UNUSED_RESULT
-build_short_options(const struct option *long_options)
+build_short_options(const struct option *long_options, bool print_errors)
 {
     char *tmp, *short_options;
 
     tmp = ovs_cmdl_long_options_to_short_options(long_options);
-    short_options = xasprintf("+%s", tmp);
+    short_options = xasprintf("+%s%s", print_errors ? "" : ":", tmp);
     free(tmp);
 
     return short_options;
@@ -326,6 +360,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
         {"no-leader-only", no_argument, &leader_only, false},
         {"version", no_argument, NULL, 'V'},
         MAIN_LOOP_LONG_OPTIONS,
+        DAEMON_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
         STREAM_SSL_LONG_OPTIONS,
         {"bootstrap-ca-cert", required_argument, NULL, OPT_BOOTSTRAP_CA_CERT},
@@ -337,7 +372,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
     struct option *options;
     size_t i;
 
-    short_options = build_short_options(global_long_options);
+    short_options = build_short_options(global_long_options, true);
     options = append_command_options(global_long_options, OPT_LOCAL);
 
     for (;;) {
@@ -394,6 +429,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
             printf("DB Schema %s\n", nbrec_get_db_version());
             exit(EXIT_SUCCESS);
 
+        DAEMON_OPTION_HANDLERS
         VLOG_OPTION_HANDLERS
         TABLE_OPTION_HANDLERS(&table_style)
         STREAM_SSL_OPTION_HANDLERS
@@ -587,6 +623,7 @@ Options:\n\
            program_name, program_name, ctl_get_db_cmd_usage(),
            ctl_list_db_tables_usage(), default_nb_db());
     table_usage();
+    daemon_usage();
     vlog_usage();
     printf("\
   --no-syslog             equivalent to --verbose=nbctl:syslog:warn\n");
@@ -4770,4 +4807,240 @@ nbctl_cmd_init(void)
 {
     ctl_init(&nbrec_idl_class, nbrec_table_classes, tables, NULL, nbctl_exit);
     ctl_register_commands(nbctl_commands);
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+server_parse_options(int argc, char *argv[], struct shash *local_options,
+                     int *n_options_p)
+{
+    static const struct option global_long_options[] = {
+        MAIN_LOOP_LONG_OPTIONS,
+        TABLE_LONG_OPTIONS,
+        {NULL, 0, NULL, 0},
+    };
+    const int n_global_long_options = ARRAY_SIZE(global_long_options) - 1;
+    char *short_options;
+    struct option *options;
+    char *error = NULL;
+
+    ovs_assert(n_options_p);
+
+    short_options = build_short_options(global_long_options, false);
+    options = append_command_options(global_long_options, OPT_LOCAL);
+
+    optind = 1;
+    opterr = 0;
+    for (;;) {
+        int idx;
+        int c;
+
+        c = getopt_long(argc, argv, short_options, options, &idx);
+        if (c == -1) {
+            break;
+        }
+
+        bool handled;
+        error = handle_main_loop_option(c, optarg, &handled);
+        if (error) {
+            goto out;
+        }
+        if (handled) {
+            continue;
+        }
+
+        switch (c) {
+        case OPT_LOCAL:
+            if (shash_find(local_options, options[idx].name)) {
+                error = xasprintf("'%s' option specified multiple times",
+                                  options[idx].name);
+                goto out;
+            }
+            shash_add_nocopy(local_options,
+                             xasprintf("--%s", options[idx].name),
+                             nullable_xstrdup(optarg));
+            break;
+
+        VLOG_OPTION_HANDLERS
+        TABLE_OPTION_HANDLERS(&table_style)
+
+        case '?':
+            if (optopt) {
+                error = xasprintf("option '%s' doesn't allow an argument",
+                                  argv[optind-1]);
+            } else {
+                error = xasprintf("unrecognized option '%s'", argv[optind-1]);
+            }
+            goto out;
+            break;
+
+        case ':':
+            error = xasprintf("option '%s' requires an argument",
+                              argv[optind-1]);
+            goto out;
+            break;
+
+        case 0:
+            break;
+
+        default:
+            error = xasprintf("unhandled option '%c'", c);
+            goto out;
+            break;
+        }
+    }
+    *n_options_p = optind;
+
+out:
+    for (int i = n_global_long_options; options[i].name; i++) {
+        free(CONST_CAST(char *, options[i].name));
+    }
+    free(options);
+    free(short_options);
+
+    return error;
+}
+
+static void
+server_cmd_exit(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                const char *argv[] OVS_UNUSED, void *exiting_)
+{
+    bool *exiting = exiting_;
+    *exiting = true;
+    unixctl_command_reply(conn, NULL);
+}
+
+static void
+server_cmd_run(struct unixctl_conn *conn, int argc, const char **argv_,
+               void *idl_)
+{
+    struct ovsdb_idl *idl = idl_;
+    struct ctl_command *commands = NULL;
+    struct shash local_options;
+    size_t n_commands = 0;
+    int n_options = 0;
+    char *error = NULL;
+
+    /* Copy args so that getopt() can permute them. Leave last entry NULL. */
+    char **argv = xcalloc(argc + 1, sizeof *argv);
+    for (int i = 0; i < argc; i++) {
+        argv[i] = xstrdup(argv_[i]);
+    }
+
+    /* Reset global state. */
+    oneline = false;
+    dry_run = false;
+    wait_type = NBCTL_WAIT_NONE;
+    force_wait = false;
+    timeout = 0;
+    table_style = table_style_default;
+
+    /* Parse commands & options. */
+    char *args = process_escape_args(argv);
+    shash_init(&local_options);
+    error = server_parse_options(argc, argv, &local_options, &n_options);
+    if (error) {
+        unixctl_command_reply_error(conn, error);
+        goto out;
+    }
+    error = ctl_parse_commands(argc - n_options, argv + n_options,
+                               &local_options, &commands, &n_commands);
+    if (error) {
+        unixctl_command_reply_error(conn, error);
+        goto out;
+    }
+    VLOG(ctl_might_write_to_db(commands, n_commands) ? VLL_INFO : VLL_DBG,
+         "Running command %s", args);
+
+    struct timer *wait_timeout = NULL;
+    struct timer wait_timeout_;
+    if (timeout) {
+        wait_timeout = &wait_timeout_;
+        timer_set_duration(wait_timeout, timeout * 1000);
+    }
+
+    error = run_prerequisites(commands, n_commands, idl);
+    if (error) {
+        unixctl_command_reply_error(conn, error);
+        goto out;
+    }
+    error = main_loop(args, commands, n_commands, idl, wait_timeout);
+    if (error) {
+        unixctl_command_reply_error(conn, error);
+        goto out;
+    }
+
+    struct ds output = DS_EMPTY_INITIALIZER;
+    for (struct ctl_command *c = commands; c < &commands[n_commands]; c++) {
+        if (c->table) {
+            table_format(c->table, &table_style, &output);
+        } else if (oneline) {
+            oneline_format(&c->output, &output);
+        } else {
+            ds_put_cstr(&output, ds_cstr_ro(&c->output));
+        }
+
+        ds_destroy(&c->output);
+        table_destroy(c->table);
+        free(c->table);
+    }
+    unixctl_command_reply(conn, ds_cstr_ro(&output));
+    ds_destroy(&output);
+
+out:
+    free(error);
+    for (struct ctl_command *c = commands; c < &commands[n_commands]; c++) {
+        shash_destroy_free_data(&c->options);
+    }
+    free(commands);
+    shash_destroy_free_data(&local_options);
+    free(args);
+    for (int i = 0; i < argc; i++) {
+        free(argv[i]);
+    }
+    free(argv);
+}
+
+static void
+server_cmd_init(struct ovsdb_idl *idl, bool *exiting)
+{
+    unixctl_command_register("exit", "", 0, 0, server_cmd_exit, exiting);
+    unixctl_command_register("run", "", 1, INT_MAX, server_cmd_run, idl);
+}
+
+static void
+server_loop(struct ovsdb_idl *idl)
+{
+    struct unixctl_server *server = NULL;
+    bool exiting = false;
+
+    daemonize_start(false);
+    int error = unixctl_server_create(unixctl_path, &server);
+    if (error) {
+        ctl_fatal("failed to create unixctl server (%s)",
+                  ovs_retval_to_string(error));
+    }
+    server_cmd_init(idl, &exiting);
+
+    for (;;) {
+        ovsdb_idl_run(idl);
+        if (!ovsdb_idl_is_alive(idl)) {
+            int retval = ovsdb_idl_get_last_error(idl);
+            ctl_fatal("%s: database connection failed (%s)",
+                      db, ovs_retval_to_string(retval));
+        }
+
+        if (ovsdb_idl_has_ever_connected(idl)) {
+            daemonize_complete();
+            unixctl_server_run(server);
+        }
+        if (exiting) {
+            break;
+        }
+
+        ovsdb_idl_wait(idl);
+        unixctl_server_wait(server);
+        poll_block();
+    }
+
+    unixctl_server_destroy(server);
 }

@@ -913,6 +913,43 @@
       </dd>
     </dl>
 
+    <h1>Daemon Mode</h1>
+
+    <p>
+      If <code>ovn-nbctl</code> is invoked with the <code>--detach</code>
+      option (see <code>Daemon Options</code>, below), it runs in the
+      background as a daemon and accepts commands from <code>ovs-appctl</code>
+      (or another JSON-RPC client) indefinitely.  The currently supported
+      commands are described below.
+    </p>
+
+    <p>
+
+    </p>
+
+    <dl>
+      <dt>
+        <code>run</code> [<var>options</var>] <var>command</var>
+        [<var>arg</var>...] [<code>--</code> [<var>options</var>]
+        <var>command</var> [<var>arg</var>...] ...]
+      </dt>
+      <dd>
+        Instructs the daemon process to run one or more <code>ovn-nbctl</code>
+        commands described above and reply with the results of running these
+        commands. Accepts the <code>--no-wait</code>, <code>--wait</code>,
+        <code>--timeout</code>, <code>--dry-run</code>, <code>--oneline</code>,
+        and the options described under <code>Table Formatting Options</code>
+        in addition to the the command-specific options.
+      </dd>
+
+      <dt><code>exit</code></dt>
+      <dd>Causes <code>ovn-nbctl</code> to gracefully terminate.</dd>
+    </dl>
+
+    <p>
+      Daemon mode is considered experimental.
+    </p>
+
     <h1>Options</h1>
 
     <dl>
@@ -981,6 +1018,9 @@
       for more information.
     </dd>
     </dl>
+
+    <h2>Daemon Options</h2>
+    <xi:include href="lib/daemon.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
 
     <h1>Logging options</h1>
     <xi:include href="lib/vlog.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
