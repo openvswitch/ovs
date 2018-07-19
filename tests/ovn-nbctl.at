@@ -1429,3 +1429,79 @@ AT_CHECK([ovn-nbctl --oneline ls-list -- ls-list | uuidfilt], [0], [dnl
 
 OVN_NBCTL_TEST_STOP
 AT_CLEANUP
+
+dnl ---------------------------------------------------------------------
+
+AT_SETUP([ovn-nbctl - commands parser error paths])
+OVN_NBCTL_TEST_START
+
+dnl FIXME: Duplicate options are allowed when passed with global options.
+dnl        For example: ovn-nbctl --if-exists --if-exists list Logical_Switch
+
+dnl Duplicate option
+AT_CHECK([ovn-nbctl -- --if-exists --if-exists list Logical_Switch], [1], [], [stderr])
+AT_CHECK([grep 'option specified multiple times' stderr], [0], [ignore])
+
+dnl Missing command
+AT_CHECK([ovn-nbctl], [1], [], [stderr])
+AT_CHECK([grep 'missing command name' stderr], [0], [ignore])
+
+AT_CHECK([ovn-nbctl --if-exists], [1], [], [stderr])
+AT_CHECK([grep 'missing command name' stderr], [0], [ignore])
+
+AT_CHECK([ovn-nbctl --], [1], [], [stderr])
+AT_CHECK([grep 'missing command name' stderr], [0], [ignore])
+
+AT_CHECK([ovn-nbctl -- --if-exists], [1], [], [stderr])
+AT_CHECK([grep 'missing command name' stderr], [0], [ignore])
+
+dnl Unknown command
+AT_CHECK([ovn-nbctl foo], [1], [], [stderr])
+AT_CHECK([grep 'unknown command' stderr], [0], [ignore])
+
+AT_CHECK([ovn-nbctl -- foo], [1], [], [stderr])
+AT_CHECK([grep 'unknown command' stderr], [0], [ignore])
+
+dnl Unknown option
+AT_CHECK([ovn-nbctl --foo list Logical_Switch], [1], [], [stderr])
+AT_CHECK([grep 'unrecognized option' stderr], [0], [ignore])
+
+AT_CHECK([ovn-nbctl -- --foo list Logical_Switch], [1], [], [stderr])
+AT_CHECK([grep 'command has no .* option' stderr], [0], [ignore])
+
+dnl Missing option argument
+AT_CHECK([ovn-nbctl --columns], [1], [], [stderr])
+AT_CHECK([grep 'option .* requires an argument' stderr], [0], [ignore])
+
+AT_CHECK([ovn-nbctl -- --columns list Logical_Switch], [1], [], [stderr])
+AT_CHECK([grep 'missing argument to .* option' stderr], [0], [ignore])
+
+dnl Unexpected option argument
+AT_CHECK([ovn-nbctl --if-exists=foo list Logical_Switch], [1], [], [stderr])
+AT_CHECK([grep 'option .* doesn'\''t allow an argument' stderr], [0], [ignore])
+
+AT_CHECK([ovn-nbctl -- --if-exists=foo list Logical_Switch], [1], [], [stderr])
+AT_CHECK([grep 'option on .* does not accept an argument' stderr], [0], [ignore])
+
+dnl Not enough arguments
+AT_CHECK([ovn-nbctl list], [1], [], [stderr])
+AT_CHECK([grep 'command requires at least .* arguments' stderr], [0], [ignore])
+
+AT_CHECK([ovn-nbctl -- list], [1], [], [stderr])
+AT_CHECK([grep 'command requires at least .* arguments' stderr], [0], [ignore])
+
+dnl Too many arguments
+AT_CHECK([ovn-nbctl show foo bar], [1], [], [stderr])
+AT_CHECK([grep 'command takes at most .* arguments' stderr], [0], [ignore])
+
+AT_CHECK([ovn-nbctl -- show foo bar], [1], [], [stderr])
+AT_CHECK([grep 'command takes at most .* arguments' stderr], [0], [ignore])
+
+AT_CHECK([ovn-nbctl show foo --bar], [1], [], [stderr])
+AT_CHECK([grep 'command takes at most .* arguments' stderr], [0], [ignore])
+
+AT_CHECK([ovn-nbctl -- show foo --bar], [1], [], [stderr])
+AT_CHECK([grep 'command takes at most .* arguments' stderr], [0], [ignore])
+
+OVN_NBCTL_TEST_STOP
+AT_CLEANUP
