@@ -277,6 +277,18 @@ handle_main_loop_option(int opt, const char *arg, bool *handled)
     return NULL;
 }
 
+static char * OVS_WARN_UNUSED_RESULT
+build_short_options(const struct option *long_options)
+{
+    char *tmp, *short_options;
+
+    tmp = ovs_cmdl_long_options_to_short_options(long_options);
+    short_options = xasprintf("+%s", tmp);
+    free(tmp);
+
+    return short_options;
+}
+
 static void
 parse_options(int argc, char *argv[], struct shash *local_options)
 {
@@ -297,16 +309,14 @@ parse_options(int argc, char *argv[], struct shash *local_options)
         {NULL, 0, NULL, 0},
     };
     const int n_global_long_options = ARRAY_SIZE(global_long_options) - 1;
-    char *tmp, *short_options;
+    char *short_options;
 
     struct option *options;
     size_t allocated_options;
     size_t n_options;
     size_t i;
 
-    tmp = ovs_cmdl_long_options_to_short_options(global_long_options);
-    short_options = xasprintf("+%s", tmp);
-    free(tmp);
+    short_options = build_short_options(global_long_options);
 
     /* We want to parse both global and command-specific options here, but
      * getopt_long() isn't too convenient for the job.  We copy our global
