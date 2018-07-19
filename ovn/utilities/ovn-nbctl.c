@@ -203,38 +203,93 @@ main_loop(const char *args, struct ctl_command *commands, size_t n_commands,
     return NULL;
 }
 
+/* All options that affect the main loop and are not external. */
+#define MAIN_LOOP_OPTION_ENUMS                  \
+        OPT_NO_WAIT,                            \
+        OPT_WAIT,                               \
+        OPT_DRY_RUN,                            \
+        OPT_ONELINE
+
+#define MAIN_LOOP_LONG_OPTIONS                           \
+        {"no-wait", no_argument, NULL, OPT_NO_WAIT},     \
+        {"wait", required_argument, NULL, OPT_WAIT},     \
+        {"dry-run", no_argument, NULL, OPT_DRY_RUN},     \
+        {"oneline", no_argument, NULL, OPT_ONELINE},     \
+        {"timeout", required_argument, NULL, 't'}
+
+enum {
+    OPT_DB = UCHAR_MAX + 1,
+    OPT_NO_SYSLOG,
+    OPT_LOCAL,
+    OPT_COMMANDS,
+    OPT_OPTIONS,
+    OPT_BOOTSTRAP_CA_CERT,
+    MAIN_LOOP_OPTION_ENUMS,
+    VLOG_OPTION_ENUMS,
+    TABLE_OPTION_ENUMS,
+    SSL_OPTION_ENUMS,
+};
+
+static char * OVS_WARN_UNUSED_RESULT
+handle_main_loop_option(int opt, const char *arg, bool *handled)
+{
+    ovs_assert(handled);
+    *handled = true;
+
+    switch (opt) {
+    case OPT_ONELINE:
+        oneline = true;
+        break;
+
+    case OPT_NO_WAIT:
+        wait_type = NBCTL_WAIT_NONE;
+        break;
+
+    case OPT_WAIT:
+        if (!strcmp(arg, "none")) {
+            wait_type = NBCTL_WAIT_NONE;
+        } else if (!strcmp(arg, "sb")) {
+            wait_type = NBCTL_WAIT_SB;
+        } else if (!strcmp(arg, "hv")) {
+            wait_type = NBCTL_WAIT_HV;
+        } else {
+            return xstrdup("argument to --wait must be "
+                           "\"none\", \"sb\", or \"hv\"");
+        }
+        break;
+
+    case OPT_DRY_RUN:
+        dry_run = true;
+        break;
+
+    case 't':
+        timeout = strtoul(arg, NULL, 10);
+        if (timeout < 0) {
+            return xasprintf("value %s on -t or --timeout is invalid", arg);
+        }
+        break;
+
+    default:
+        *handled = false;
+        break;
+    }
+
+    return NULL;
+}
+
 static void
 parse_options(int argc, char *argv[], struct shash *local_options)
 {
-    enum {
-        OPT_DB = UCHAR_MAX + 1,
-        OPT_NO_SYSLOG,
-        OPT_NO_WAIT,
-        OPT_WAIT,
-        OPT_DRY_RUN,
-        OPT_ONELINE,
-        OPT_LOCAL,
-        OPT_COMMANDS,
-        OPT_OPTIONS,
-        OPT_BOOTSTRAP_CA_CERT,
-        VLOG_OPTION_ENUMS,
-        TABLE_OPTION_ENUMS,
-        SSL_OPTION_ENUMS,
-    };
     static const struct option global_long_options[] = {
         {"db", required_argument, NULL, OPT_DB},
         {"no-syslog", no_argument, NULL, OPT_NO_SYSLOG},
-        {"no-wait", no_argument, NULL, OPT_NO_WAIT},
-        {"wait", required_argument, NULL, OPT_WAIT},
-        {"dry-run", no_argument, NULL, OPT_DRY_RUN},
-        {"oneline", no_argument, NULL, OPT_ONELINE},
-        {"timeout", required_argument, NULL, 't'},
         {"help", no_argument, NULL, 'h'},
         {"commands", no_argument, NULL, OPT_COMMANDS},
         {"options", no_argument, NULL, OPT_OPTIONS},
         {"leader-only", no_argument, &leader_only, true},
         {"no-leader-only", no_argument, &leader_only, false},
         {"version", no_argument, NULL, 'V'},
+        MAIN_LOOP_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
         STREAM_SSL_LONG_OPTIONS,
         {"bootstrap-ca-cert", required_argument, NULL, OPT_BOOTSTRAP_CA_CERT},
@@ -271,38 +326,22 @@ parse_options(int argc, char *argv[], struct shash *local_options)
             break;
         }
 
+        bool handled;
+        char *error = handle_main_loop_option(c, optarg, &handled);
+        if (error) {
+            ctl_fatal("%s", error);
+        }
+        if (handled) {
+            continue;
+        }
+
         switch (c) {
         case OPT_DB:
             db = optarg;
             break;
 
-        case OPT_ONELINE:
-            oneline = true;
-            break;
-
         case OPT_NO_SYSLOG:
             vlog_set_levels(&this_module, VLF_SYSLOG, VLL_WARN);
-            break;
-
-        case OPT_NO_WAIT:
-            wait_type = NBCTL_WAIT_NONE;
-            break;
-
-        case OPT_WAIT:
-            if (!strcmp(optarg, "none")) {
-                wait_type = NBCTL_WAIT_NONE;
-            } else if (!strcmp(optarg, "sb")) {
-                wait_type = NBCTL_WAIT_SB;
-            } else if (!strcmp(optarg, "hv")) {
-                wait_type = NBCTL_WAIT_HV;
-            } else {
-                ctl_fatal("argument to --wait must be "
-                          "\"none\", \"sb\", or \"hv\"");
-            }
-            break;
-
-        case OPT_DRY_RUN:
-            dry_run = true;
             break;
 
         case OPT_LOCAL:
@@ -331,13 +370,6 @@ parse_options(int argc, char *argv[], struct shash *local_options)
             ovs_print_version(0, 0);
             printf("DB Schema %s\n", nbrec_get_db_version());
             exit(EXIT_SUCCESS);
-
-        case 't':
-            timeout = strtoul(optarg, NULL, 10);
-            if (timeout < 0) {
-                ctl_fatal("value %s on -t or --timeout is invalid", optarg);
-            }
-            break;
 
         VLOG_OPTION_HANDLERS
         TABLE_OPTION_HANDLERS(&table_style)
