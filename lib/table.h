@@ -20,6 +20,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include "compiler.h"
+#include "openvswitch/json.h"
 
 struct ds;
 struct table_style;
@@ -83,6 +84,7 @@ struct table_style {
 };
 
 #define TABLE_STYLE_DEFAULT { TF_LIST, CF_STRING, true, JSSF_SORT, 0 }
+static const struct table_style table_style_default = TABLE_STYLE_DEFAULT;
 
 #define TABLE_OPTION_ENUMS                      \
     OPT_NO_HEADINGS,                            \
