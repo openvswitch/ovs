@@ -90,8 +90,10 @@ static char * OVS_WARN_UNUSED_RESULT do_nbctl(const char *args,
 static char * OVS_WARN_UNUSED_RESULT dhcp_options_get(
     struct ctl_context *ctx, const char *id, bool must_exist,
     const struct nbrec_dhcp_options **);
-static void main_loop(const char *args, struct ctl_command *commands,
-                      size_t n_commands, struct ovsdb_idl *idl);
+static char * OVS_WARN_UNUSED_RESULT main_loop(const char *args,
+                                               struct ctl_command *commands,
+                                               size_t n_commands,
+                                               struct ovsdb_idl *idl);
 
 int
 main(int argc, char *argv[])
@@ -129,7 +131,10 @@ main(int argc, char *argv[])
     ovsdb_idl_set_leader_only(idl, leader_only);
     run_prerequisites(commands, n_commands, idl);
 
-    main_loop(args, commands, n_commands, idl);
+    error = main_loop(args, commands, n_commands, idl);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
 
     ovsdb_idl_destroy(idl);
     idl = the_idl = NULL;
@@ -145,7 +150,7 @@ main(int argc, char *argv[])
     exit(EXIT_SUCCESS);
 }
 
-static void
+static char *
 main_loop(const char *args, struct ctl_command *commands, size_t n_commands,
           struct ovsdb_idl *idl)
 {
@@ -173,10 +178,10 @@ main_loop(const char *args, struct ctl_command *commands, size_t n_commands,
             bool retry;
             char *error = do_nbctl(args, commands, n_commands, idl, &retry);
             if (error) {
-                ctl_fatal("%s", error);
+                return error;
             }
             if (!retry) {
-                return;
+                return NULL;
             }
         }
 
@@ -185,6 +190,8 @@ main_loop(const char *args, struct ctl_command *commands, size_t n_commands,
             poll_block();
         }
     }
+
+    return NULL;
 }
 
 static void
