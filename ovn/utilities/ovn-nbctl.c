@@ -84,8 +84,9 @@ OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[], struct shash *local_options);
 static void run_prerequisites(struct ctl_command[], size_t n_commands,
                               struct ovsdb_idl *);
-static void do_nbctl(const char *args, struct ctl_command *, size_t n,
-                     struct ovsdb_idl *, bool *retry);
+static char * OVS_WARN_UNUSED_RESULT do_nbctl(const char *args,
+                                              struct ctl_command *, size_t n,
+                                              struct ovsdb_idl *, bool *retry);
 static char * OVS_WARN_UNUSED_RESULT dhcp_options_get(
     struct ctl_context *ctx, const char *id, bool must_exist,
     const struct nbrec_dhcp_options **);
@@ -170,7 +171,10 @@ main_loop(const char *args, struct ctl_command *commands, size_t n_commands,
             seqno = ovsdb_idl_get_seqno(idl);
 
             bool retry;
-            do_nbctl(args, commands, n_commands, idl, &retry);
+            char *error = do_nbctl(args, commands, n_commands, idl, &retry);
+            if (error) {
+                ctl_fatal("%s", error);
+            }
             if (!retry) {
                 return;
             }
@@ -4291,7 +4295,7 @@ run_prerequisites(struct ctl_command *commands, size_t n_commands,
     }
 }
 
-static void
+static char *
 do_nbctl(const char *args, struct ctl_command *commands, size_t n_commands,
          struct ovsdb_idl *idl, bool *retry)
 {
@@ -4302,6 +4306,7 @@ do_nbctl(const char *args, struct ctl_command *commands, size_t n_commands,
     struct ctl_command *c;
     struct shash_node *node;
     int64_t next_cfg = 0;
+    char *error = NULL;
 
     ovs_assert(retry);
 
@@ -4335,7 +4340,9 @@ do_nbctl(const char *args, struct ctl_command *commands, size_t n_commands,
             (c->syntax->run)(&ctx);
         }
         if (ctx.error) {
-            ctl_fatal("%s", ctx.error);
+            error = xstrdup(ctx.error);
+            ctl_context_done(&ctx, c);
+            goto out_error;
         }
         ctl_context_done_command(&ctx, c);
 
@@ -4349,9 +4356,10 @@ do_nbctl(const char *args, struct ctl_command *commands, size_t n_commands,
     SHASH_FOR_EACH (node, &symtab->sh) {
         struct ovsdb_symbol *symbol = node->data;
         if (!symbol->created) {
-            ctl_fatal("row id \"%s\" is referenced but never created (e.g. "
-                      "with \"-- --id=%s create ...\")",
-                      node->name, node->name);
+            error = xasprintf("row id \"%s\" is referenced but never created "
+                              "(e.g. with \"-- --id=%s create ...\")",
+                              node->name, node->name);
+            goto out_error;
         }
         if (!symbol->strong_ref) {
             if (!symbol->weak_ref) {
@@ -4376,7 +4384,9 @@ do_nbctl(const char *args, struct ctl_command *commands, size_t n_commands,
                 ctl_context_init(&ctx, c, idl, txn, symtab, NULL);
                 (c->syntax->postprocess)(&ctx);
                 if (ctx.error) {
-                    ctl_fatal("%s", ctx.error);
+                    error = xstrdup(ctx.error);
+                    ctl_context_done(&ctx, c);
+                    goto out_error;
                 }
                 ctl_context_done(&ctx, c);
             }
@@ -4390,7 +4400,8 @@ do_nbctl(const char *args, struct ctl_command *commands, size_t n_commands,
 
     case TXN_ABORTED:
         /* Should not happen--we never call ovsdb_idl_txn_abort(). */
-        ctl_fatal("transaction aborted");
+        error = xstrdup("transaction aborted");
+        goto out_error;
 
     case TXN_UNCHANGED:
     case TXN_SUCCESS:
@@ -4400,11 +4411,14 @@ do_nbctl(const char *args, struct ctl_command *commands, size_t n_commands,
         goto try_again;
 
     case TXN_ERROR:
-        ctl_fatal("transaction error: %s", ovsdb_idl_txn_get_error(txn));
+        error = xasprintf("transaction error: %s",
+                          ovsdb_idl_txn_get_error(txn));
+        goto out_error;
 
     case TXN_NOT_LOCKED:
         /* Should not happen--we never call ovsdb_idl_set_lock(). */
-        ctl_fatal("database not locked");
+        error = xstrdup("database not locked");
+        goto out_error;
 
     default:
         OVS_NOT_REACHED();
@@ -4464,11 +4478,14 @@ do_nbctl(const char *args, struct ctl_command *commands, size_t n_commands,
     the_idl_txn = NULL;
 
     *retry = false;
-    return;
+    return NULL;
 
 try_again:
     /* Our transaction needs to be rerun, or a prerequisite was not met.  Free
      * resources and return so that the caller can try again. */
+    *retry = true;
+
+out_error:
     ovsdb_idl_txn_abort(txn);
     ovsdb_idl_txn_destroy(txn);
     the_idl_txn = NULL;
@@ -4479,7 +4496,8 @@ try_again:
         table_destroy(c->table);
         free(c->table);
     }
-    *retry = true;
+
+    return error;
 }
 
 /* Frees the current transaction and the underlying IDL and then calls
