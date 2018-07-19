@@ -89,6 +89,8 @@ static bool do_nbctl(const char *args, struct ctl_command *, size_t n,
 static char * OVS_WARN_UNUSED_RESULT dhcp_options_get(
     struct ctl_context *ctx, const char *id, bool must_exist,
     const struct nbrec_dhcp_options **);
+static void main_loop(const char *args, struct ctl_command *commands,
+                      size_t n_commands, struct ovsdb_idl *idl);
 
 int
 main(int argc, char *argv[])
@@ -96,7 +98,6 @@ main(int argc, char *argv[])
     struct ovsdb_idl *idl;
     struct ctl_command *commands;
     struct shash local_options;
-    unsigned int seqno;
     size_t n_commands;
 
     set_program_name(argv[0]);
@@ -124,6 +125,18 @@ main(int argc, char *argv[])
     ovsdb_idl_set_leader_only(idl, leader_only);
     run_prerequisites(commands, n_commands, idl);
 
+    main_loop(args, commands, n_commands, idl);
+
+    free(args);
+    exit(EXIT_SUCCESS);
+}
+
+static void
+main_loop(const char *args, struct ctl_command *commands, size_t n_commands,
+          struct ovsdb_idl *idl)
+{
+    unsigned int seqno;
+
     /* Execute the commands.
      *
      * 'seqno' is the database sequence number for which we last tried to
@@ -137,14 +150,13 @@ main(int argc, char *argv[])
         if (!ovsdb_idl_is_alive(idl)) {
             int retval = ovsdb_idl_get_last_error(idl);
             ctl_fatal("%s: database connection failed (%s)",
-                        db, ovs_retval_to_string(retval));
+                      db, ovs_retval_to_string(retval));
         }
 
         if (seqno != ovsdb_idl_get_seqno(idl)) {
             seqno = ovsdb_idl_get_seqno(idl);
             if (do_nbctl(args, commands, n_commands, idl)) {
-                free(args);
-                exit(EXIT_SUCCESS);
+                return;
             }
         }
 
