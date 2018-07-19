@@ -4315,6 +4315,39 @@ run_prerequisites(struct ctl_command *commands, size_t n_commands,
     return NULL;
 }
 
+static void
+oneline_format(struct ds *lines, struct ds *s)
+{
+    size_t j;
+
+    ds_chomp(lines, '\n');
+    for (j = 0; j < lines->length; j++) {
+        int ch = lines->string[j];
+        switch (ch) {
+        case '\n':
+            ds_put_cstr(s, "\\n");
+            break;
+
+        case '\\':
+            ds_put_cstr(s, "\\\\");
+            break;
+
+        default:
+            ds_put_char(s, ch);
+        }
+    }
+    ds_put_char(s, '\n');
+}
+
+static void
+oneline_print(struct ds *lines)
+{
+    struct ds s = DS_EMPTY_INITIALIZER;
+    oneline_format(lines, &s);
+    fputs(ds_cstr(&s), stdout);
+    ds_destroy(&s);
+}
+
 static char *
 do_nbctl(const char *args, struct ctl_command *commands, size_t n_commands,
          struct ovsdb_idl *idl, const struct timer *wait_timeout, bool *retry)
@@ -4450,25 +4483,7 @@ do_nbctl(const char *args, struct ctl_command *commands, size_t n_commands,
         if (c->table) {
             table_print(c->table, &table_style);
         } else if (oneline) {
-            size_t j;
-
-            ds_chomp(ds, '\n');
-            for (j = 0; j < ds->length; j++) {
-                int ch = ds->string[j];
-                switch (ch) {
-                case '\n':
-                    fputs("\\n", stdout);
-                    break;
-
-                case '\\':
-                    fputs("\\\\", stdout);
-                    break;
-
-                default:
-                    putchar(ch);
-                }
-            }
-            putchar('\n');
+            oneline_print(ds);
         } else {
             fputs(ds_cstr(ds), stdout);
         }
