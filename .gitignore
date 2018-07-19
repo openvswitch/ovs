@@ -31,7 +31,6 @@
 .libs
 .tmp_versions
 .vagrant
-.gitattributes
 /Makefile
 /Makefile.in
 /aclocal.m4
