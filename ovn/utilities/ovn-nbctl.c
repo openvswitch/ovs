@@ -37,6 +37,7 @@
 #include "svec.h"
 #include "table.h"
 #include "timeval.h"
+#include "timer.h"
 #include "util.h"
 #include "openvswitch/vlog.h"
 
@@ -87,14 +88,17 @@ static char * OVS_WARN_UNUSED_RESULT run_prerequisites(struct ctl_command[],
                                                        struct ovsdb_idl *);
 static char * OVS_WARN_UNUSED_RESULT do_nbctl(const char *args,
                                               struct ctl_command *, size_t n,
-                                              struct ovsdb_idl *, bool *retry);
+                                              struct ovsdb_idl *,
+                                              const struct timer *,
+                                              bool *retry);
 static char * OVS_WARN_UNUSED_RESULT dhcp_options_get(
     struct ctl_context *ctx, const char *id, bool must_exist,
     const struct nbrec_dhcp_options **);
 static char * OVS_WARN_UNUSED_RESULT main_loop(const char *args,
                                                struct ctl_command *commands,
                                                size_t n_commands,
-                                               struct ovsdb_idl *idl);
+                                               struct ovsdb_idl *idl,
+                                               const struct timer *);
 
 int
 main(int argc, char *argv[])
@@ -135,7 +139,7 @@ main(int argc, char *argv[])
         ctl_fatal("%s", error);
     }
 
-    error = main_loop(args, commands, n_commands, idl);
+    error = main_loop(args, commands, n_commands, idl, NULL);
     if (error) {
         ctl_fatal("%s", error);
     }
@@ -156,7 +160,7 @@ main(int argc, char *argv[])
 
 static char *
 main_loop(const char *args, struct ctl_command *commands, size_t n_commands,
-          struct ovsdb_idl *idl)
+          struct ovsdb_idl *idl, const struct timer *wait_timeout)
 {
     unsigned int seqno;
 
@@ -180,7 +184,8 @@ main_loop(const char *args, struct ctl_command *commands, size_t n_commands,
             seqno = ovsdb_idl_get_seqno(idl);
 
             bool retry;
-            char *error = do_nbctl(args, commands, n_commands, idl, &retry);
+            char *error = do_nbctl(args, commands, n_commands, idl,
+                                   wait_timeout, &retry);
             if (error) {
                 return error;
             }
@@ -4312,7 +4317,7 @@ run_prerequisites(struct ctl_command *commands, size_t n_commands,
 
 static char *
 do_nbctl(const char *args, struct ctl_command *commands, size_t n_commands,
-         struct ovsdb_idl *idl, bool *retry)
+         struct ovsdb_idl *idl, const struct timer *wait_timeout, bool *retry)
 {
     struct ovsdb_idl_txn *txn;
     enum ovsdb_idl_txn_status status;
@@ -4439,8 +4444,6 @@ do_nbctl(const char *args, struct ctl_command *commands, size_t n_commands,
         OVS_NOT_REACHED();
     }
 
-    ovsdb_symbol_table_destroy(symtab);
-
     for (c = commands; c < &commands[n_commands]; c++) {
         struct ds *ds = &c->output;
 
@@ -4484,11 +4487,19 @@ do_nbctl(const char *args, struct ctl_command *commands, size_t n_commands,
                 }
             }
             ovsdb_idl_wait(idl);
+            if (wait_timeout) {
+                timer_wait(wait_timeout);
+            }
             poll_block();
+            if (wait_timeout && timer_expired(wait_timeout)) {
+                error = xstrdup("timeout expired");
+                goto out_error;
+            }
         }
     done: ;
     }
 
+    ovsdb_symbol_table_destroy(symtab);
     ovsdb_idl_txn_destroy(txn);
     the_idl_txn = NULL;
 
