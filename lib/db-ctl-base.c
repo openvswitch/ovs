@@ -2251,22 +2251,24 @@ ctl_add_cmd_options(struct option **options_p, size_t *n_options_p,
 }
 
 /* Parses command-line input for commands. */
-struct ctl_command *
+char *
 ctl_parse_commands(int argc, char *argv[], struct shash *local_options,
-                   size_t *n_commandsp)
+                   struct ctl_command **commandsp, size_t *n_commandsp)
 {
     struct ctl_command *commands;
     size_t n_commands, allocated_commands;
     int i, start;
+    char *error;
 
     commands = NULL;
     n_commands = allocated_commands = 0;
 
+    *commandsp = NULL;
+    *n_commandsp = 0;
+
     for (start = i = 0; i <= argc; i++) {
         if (i == argc || !strcmp(argv[i], "--")) {
             if (i > start) {
-                char *error;
-
                 if (n_commands >= allocated_commands) {
                     struct ctl_command *c;
 
@@ -2277,21 +2279,31 @@ ctl_parse_commands(int argc, char *argv[], struct shash *local_options,
                     }
                 }
                 error = parse_command(i - start, &argv[start], local_options,
-                                      &commands[n_commands++]);
+                                      &commands[n_commands]);
                 if (error) {
-                    ctl_fatal("%s", error);
+                    struct ctl_command *c;
+
+                    for (c = commands; c < &commands[n_commands]; c++) {
+                        shash_destroy_free_data(&c->options);
+                    }
+                    free(commands);
+
+                    return error;
                 }
+
+                n_commands++;
             } else if (!shash_is_empty(local_options)) {
-                ctl_fatal("missing command name (use --help for help)");
+                return xstrdup("missing command name (use --help for help)");
             }
             start = i + 1;
         }
     }
     if (!n_commands) {
-        ctl_fatal("missing command name (use --help for help)");
+        return xstrdup("missing command name (use --help for help)");
     }
+    *commandsp = commands;
     *n_commandsp = n_commands;
-    return commands;
+    return NULL;
 }
 
 /* Prints all registered commands. */

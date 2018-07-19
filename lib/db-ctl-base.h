@@ -166,9 +166,9 @@ void ctl_print_options(const struct option *);
 void ctl_add_cmd_options(struct option **, size_t *n_options_p,
                          size_t *allocated_options_p, int opt_val);
 void ctl_register_commands(const struct ctl_command_syntax *);
-struct ctl_command *ctl_parse_commands(int argc, char *argv[],
-                                       struct shash *local_options,
-                                       size_t *n_commandsp);
+char * OVS_WARN_UNUSED_RESULT ctl_parse_commands(
+    int argc, char *argv[], struct shash *local_options,
+    struct ctl_command **commandsp, size_t *n_commandsp);
 
 /* Sometimes, it is desirable to print the table with weak reference to
  * rows in a 'cmd_show_table' table.  In that case, the 'weak_ref_table'

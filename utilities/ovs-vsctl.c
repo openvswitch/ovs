@@ -148,8 +148,11 @@ main(int argc, char *argv[])
     char *args = process_escape_args(argv);
     shash_init(&local_options);
     parse_options(argc, argv, &local_options);
-    commands = ctl_parse_commands(argc - optind, argv + optind, &local_options,
-                                  &n_commands);
+    char *error = ctl_parse_commands(argc - optind, argv + optind,
+                                     &local_options, &commands, &n_commands);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
     VLOG(ctl_might_write_to_db(commands, n_commands) ? VLL_INFO : VLL_DBG,
          "Called as %s", args);
 
