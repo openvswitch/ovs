@@ -289,6 +289,30 @@ build_short_options(const struct option *long_options)
     return short_options;
 }
 
+static struct option * OVS_WARN_UNUSED_RESULT
+append_command_options(const struct option *options, int opt_val)
+{
+    struct option *o;
+    size_t n_allocated;
+    size_t n_existing;
+    int i;
+
+    for (i = 0; options[i].name; i++) {
+        ;
+    }
+    n_allocated = i + 1;
+    n_existing = i;
+
+    /* We want to parse both global and command-specific options here, but
+     * getopt_long() isn't too convenient for the job.  We copy our global
+     * options into a dynamic array, then append all of the command-specific
+     * options. */
+    o = xmemdup(options, n_allocated * sizeof *options);
+    ctl_add_cmd_options(&o, &n_existing, &n_allocated, opt_val);
+
+    return o;
+}
+
 static void
 parse_options(int argc, char *argv[], struct shash *local_options)
 {
@@ -310,22 +334,11 @@ parse_options(int argc, char *argv[], struct shash *local_options)
     };
     const int n_global_long_options = ARRAY_SIZE(global_long_options) - 1;
     char *short_options;
-
     struct option *options;
-    size_t allocated_options;
-    size_t n_options;
     size_t i;
 
     short_options = build_short_options(global_long_options);
-
-    /* We want to parse both global and command-specific options here, but
-     * getopt_long() isn't too convenient for the job.  We copy our global
-     * options into a dynamic array, then append all of the command-specific
-     * options. */
-    options = xmemdup(global_long_options, sizeof global_long_options);
-    allocated_options = ARRAY_SIZE(global_long_options);
-    n_options = n_global_long_options;
-    ctl_add_cmd_options(&options, &n_options, &allocated_options, OPT_LOCAL);
+    options = append_command_options(global_long_options, OPT_LOCAL);
 
     for (;;) {
         int idx;
