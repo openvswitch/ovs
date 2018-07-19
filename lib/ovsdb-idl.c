@@ -1117,6 +1117,20 @@ ovsdb_idl_db_get_mode(struct ovsdb_idl_db *db,
 }
 
 static void
+ovsdb_idl_db_set_mode(struct ovsdb_idl_db *db,
+                      const struct ovsdb_idl_column *column,
+                      unsigned char mode)
+{
+    const struct ovsdb_idl_table *table = ovsdb_idl_table_from_column(db,
+                                                                      column);
+    size_t column_idx = column - table->class_->columns;
+
+    if (table->modes[column_idx] != mode) {
+        *ovsdb_idl_db_get_mode(db, column) = mode;
+    }
+}
+
+static void
 add_ref_table(struct ovsdb_idl_db *db, const struct ovsdb_base_type *base)
 {
     if (base->type == OVSDB_TYPE_UUID && base->uuid.refTableName) {
@@ -1136,7 +1150,7 @@ static void
 ovsdb_idl_db_add_column(struct ovsdb_idl_db *db,
                         const struct ovsdb_idl_column *column)
 {
-    *ovsdb_idl_db_get_mode(db, column) = OVSDB_IDL_MONITOR | OVSDB_IDL_ALERT;
+    ovsdb_idl_db_set_mode(db, column, OVSDB_IDL_MONITOR | OVSDB_IDL_ALERT);
     add_ref_table(db, &column->type.key);
     add_ref_table(db, &column->type.value);
 }
