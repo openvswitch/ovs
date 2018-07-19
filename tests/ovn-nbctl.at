@@ -1387,3 +1387,24 @@ inactivity_probe    : 30000
 
 OVN_NBCTL_TEST_STOP
 AT_CLEANUP
+
+dnl ---------------------------------------------------------------------
+
+AT_SETUP([ovn-nbctl - dry run mode])
+OVN_NBCTL_TEST_START
+
+dnl Check that dry run has no permanent effect.
+AT_CHECK([ovn-nbctl --dry-run ls-add ls0 -- ls-list | uuidfilt], [0], [dnl
+<0> (ls0)
+])
+AT_CHECK([ovn-nbctl ls-list | uuidfilt], [0], [dnl
+])
+
+dnl Check that dry-run mode is not sticky.
+AT_CHECK([ovn-nbctl ls-add ls0])
+AT_CHECK([ovn-nbctl ls-list | uuidfilt], [0], [dnl
+<0> (ls0)
+])
+
+OVN_NBCTL_TEST_STOP
+AT_CLEANUP
