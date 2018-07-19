@@ -127,6 +127,9 @@ main(int argc, char *argv[])
 
     main_loop(args, commands, n_commands, idl);
 
+    ovsdb_idl_destroy(idl);
+    idl = the_idl = NULL;
+
     for (struct ctl_command *c = commands; c < &commands[n_commands]; c++) {
         ds_destroy(&c->output);
         table_destroy(c->table);
@@ -4450,7 +4453,6 @@ do_nbctl(const char *args, struct ctl_command *commands, size_t n_commands,
     }
 
     ovsdb_idl_txn_destroy(txn);
-    ovsdb_idl_destroy(idl);
 
     return true;
 
