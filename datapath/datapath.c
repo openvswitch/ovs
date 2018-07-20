@@ -2478,16 +2478,6 @@ error:
 
 static void dp_cleanup(void)
 {
-#if RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(8,0)
-	/* On RHEL 7.x kernels we hit a kernel paging error without
-	 * this barrier and subsequent hefty delay.  A process will
-	 * attempt to access openvwitch memory after it has been
-	 * unloaded.  Further debugging is needed on that but for
-	 * now let's not let customer machines panic.
-	 */
-	rcu_barrier();
-	msleep(3000);
-#endif
 	dp_unregister_genl(ARRAY_SIZE(dp_genl_families));
 	ovs_netdev_exit();
 	unregister_netdevice_notifier(&ovs_dp_device_notifier);
