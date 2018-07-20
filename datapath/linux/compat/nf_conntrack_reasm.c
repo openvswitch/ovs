@@ -643,6 +643,9 @@ int rpl_nf_ct_frag6_init(void)
 #ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 	nf_frags.frags_cache_name = nf_frags_cache_name;
 #endif
+#if RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(8,0)
+	nf_frags.secret_interval = 10 * 60 * HZ;
+#endif
 	ret = inet_frags_init(&nf_frags);
 	if (ret)
 		goto out;
