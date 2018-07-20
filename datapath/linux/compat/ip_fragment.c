@@ -812,6 +812,9 @@ int __init rpl_ipfrag_init(void)
 #ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 	ip4_frags.frags_cache_name = ip_frag_cache_name;
 #endif
+#if RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(8,0)
+	ip4_frags.secret_interval = 10 * 60 * HZ;
+#endif
 	if (inet_frags_init(&ip4_frags)) {
 		pr_warn("IP: failed to allocate ip4_frags cache\n");
 		return -ENOMEM;
