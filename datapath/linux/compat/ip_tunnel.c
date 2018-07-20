@@ -482,8 +482,10 @@ void rpl_ip_tunnel_dellink(struct net_device *dev, struct list_head *head)
 
 	itn = net_generic(tunnel->net, tunnel->ip_tnl_net_id);
 
-	ip_tunnel_del(itn, netdev_priv(dev));
-        unregister_netdevice_queue(dev, head);
+	if (itn->fb_tunnel_dev != dev) {
+		ip_tunnel_del(itn, netdev_priv(dev));
+		unregister_netdevice_queue(dev, head);
+	}
 }
 
 int rpl_ip_tunnel_init_net(struct net *net, int ip_tnl_net_id,
@@ -642,7 +644,8 @@ void rpl_ip_tunnel_uninit(struct net_device *dev)
 	struct ip_tunnel_net *itn;
 
 	itn = net_generic(net, tunnel->ip_tnl_net_id);
-	ip_tunnel_del(itn, netdev_priv(dev));
+	if (itn->fb_tunnel_dev != dev)
+		ip_tunnel_del(itn, netdev_priv(dev));
 }
 
 /* Do least required initialization, rest of init is done in tunnel_init call */
