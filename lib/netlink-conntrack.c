@@ -660,7 +660,7 @@ ip_ct_tcp_flags_to_dpif(uint8_t flags)
 #define CT_DPIF_TCP_FLAG(FLAG) \
         ret |= (flags & IP_CT_TCP_FLAG_##FLAG) ? CT_DPIF_TCPF_##FLAG : 0;
     CT_DPIF_TCP_FLAGS
-#undef CT_DPIF_STATUS_FLAG
+#undef CT_DPIF_TCP_FLAG
     return ret;
 #endif
 }
