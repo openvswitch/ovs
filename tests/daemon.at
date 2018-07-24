@@ -149,7 +149,7 @@ AT_SETUP([daemon --detach startup errors])
 AT_CAPTURE_FILE([pid])
 OVSDB_INIT([db])
 AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --unixctl=nonexistent/unixctl db], [1], [], [stderr])
-AT_CHECK([grep 'ovsdb-server: could not initialize control socket' stderr],
+AT_CHECK([grep 'could not initialize control socket' stderr],
   [0], [ignore])
 AT_CHECK([test ! -s pid])
 AT_CLEANUP
@@ -159,7 +159,7 @@ AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 AT_CAPTURE_FILE([pid])
 OVSDB_INIT([db])
 AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --monitor --unixctl=nonexistent/unixctl db], [1], [], [stderr])
-AT_CHECK([grep 'ovsdb-server: could not initialize control socket' stderr],
+AT_CHECK([grep 'could not initialize control socket' stderr],
   [0], [ignore])
 AT_CHECK([test ! -s pid])
 AT_CLEANUP

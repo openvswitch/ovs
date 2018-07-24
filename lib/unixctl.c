@@ -56,6 +56,7 @@ struct unixctl_conn {
 struct unixctl_server {
     struct pstream *listener;
     struct ovs_list conns;
+    char *path;
 };
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
@@ -216,48 +217,44 @@ unixctl_command_reply_error(struct unixctl_conn *conn, const char *error)
 int
 unixctl_server_create(const char *path, struct unixctl_server **serverp)
 {
-    struct unixctl_server *server;
-    struct pstream *listener;
-    char *punix_path;
-    int error;
-
     *serverp = NULL;
     if (path && !strcmp(path, "none")) {
         return 0;
     }
 
-    if (path) {
-        char *abs_path;
-        abs_path = abs_file_name(ovs_rundir(), path);
-        punix_path = xasprintf("punix:%s", abs_path);
-        free(abs_path);
-    } else {
-#ifndef _WIN32
-        punix_path = xasprintf("punix:%s/%s.%ld.ctl", ovs_rundir(),
-                               program_name, (long int) getpid());
+#ifdef _WIN32
+    enum { WINDOWS = 1 };
 #else
-        punix_path = xasprintf("punix:%s/%s.ctl", ovs_rundir(), program_name);
+    enum { WINDOWS = 0 };
 #endif
-    }
 
-    error = pstream_open(punix_path, &listener, 0);
+    long int pid = getpid();
+    char *abs_path
+        = (path ? abs_file_name(ovs_rundir(), path)
+           : WINDOWS ? xasprintf("%s/%s.ctl", ovs_rundir(), program_name)
+           : xasprintf("%s/%s.%ld.ctl", ovs_rundir(), program_name, pid));
+
+    struct pstream *listener;
+    char *punix_path = xasprintf("punix:%s", abs_path);
+    int error = pstream_open(punix_path, &listener, 0);
+    free(punix_path);
+
     if (error) {
-        ovs_error(error, "could not initialize control socket %s", punix_path);
-        goto exit;
+        ovs_error(error, "%s: could not initialize control socket", abs_path);
+        free(abs_path);
+        return error;
     }
 
     unixctl_command_register("list-commands", "", 0, 0, unixctl_list_commands,
                              NULL);
     unixctl_command_register("version", "", 0, 0, unixctl_version, NULL);
 
-    server = xmalloc(sizeof *server);
+    struct unixctl_server *server = xmalloc(sizeof *server);
     server->listener = listener;
+    server->path = abs_path;
     ovs_list_init(&server->conns);
     *serverp = server;
-
-exit:
-    free(punix_path);
-    return error;
+    return 0;
 }
 
 static void
@@ -429,9 +426,16 @@ unixctl_server_destroy(struct unixctl_server *server)
             kill_connection(conn);
         }
 
+        free (server->path);
         pstream_close(server->listener);
         free(server);
     }
+}
+
+const char *
+unixctl_server_get_path(const struct unixctl_server *server)
+{
+    return server ? server->path : NULL;
 }
 
 /* On POSIX based systems, connects to a unixctl server socket.  'path' should

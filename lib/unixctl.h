@@ -28,6 +28,8 @@ void unixctl_server_run(struct unixctl_server *);
 void unixctl_server_wait(struct unixctl_server *);
 void unixctl_server_destroy(struct unixctl_server *);
 
+const char *unixctl_server_get_path(const struct unixctl_server *);
+
 /* Client for Unix domain socket control connection. */
 struct jsonrpc;
 int unixctl_client_create(const char *path, struct jsonrpc **client);
