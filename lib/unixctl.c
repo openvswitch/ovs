@@ -228,11 +228,7 @@ unixctl_server_create(const char *path, struct unixctl_server **serverp)
 
     if (path) {
         char *abs_path;
-#ifndef _WIN32
         abs_path = abs_file_name(ovs_rundir(), path);
-#else
-        abs_path = xstrdup(path);
-#endif
         punix_path = xasprintf("punix:%s", abs_path);
         free(abs_path);
     } else {
@@ -451,16 +447,11 @@ unixctl_server_destroy(struct unixctl_server *server)
 int
 unixctl_client_create(const char *path, struct jsonrpc **client)
 {
-    char *abs_path, *unix_path;
     struct stream *stream;
     int error;
 
-#ifdef _WIN32
-    abs_path = xstrdup(path);
-#else
-    abs_path = abs_file_name(ovs_rundir(), path);
-#endif
-    unix_path = xasprintf("unix:%s", abs_path);
+    char *abs_path = abs_file_name(ovs_rundir(), path);
+    char *unix_path = xasprintf("unix:%s", abs_path);
 
     *client = NULL;
 
