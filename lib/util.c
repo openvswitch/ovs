@@ -38,6 +38,9 @@
 #ifdef HAVE_PTHREAD_SET_NAME_NP
 #include <pthread_np.h>
 #endif
+#ifdef _WIN32
+#include <shlwapi.h>
+#endif
 
 VLOG_DEFINE_THIS_MODULE(util);
 
@@ -1049,37 +1052,56 @@ base_name(const char *file_name)
 }
 #endif /* _WIN32 */
 
-/* If 'file_name' starts with '/', returns a copy of 'file_name'.  Otherwise,
+bool
+is_file_name_absolute(const char *fn)
+{
+#ifdef _WIN32
+    /* Use platform specific API */
+    return !PathIsRelative(fn);
+#else
+    /* An absolute path begins with /. */
+    return fn[0] == '/';
+#endif
+}
+
+/* If 'file_name' is absolute, returns a copy of 'file_name'.  Otherwise,
  * returns an absolute path to 'file_name' considering it relative to 'dir',
  * which itself must be absolute.  'dir' may be null or the empty string, in
  * which case the current working directory is used.
- *
- * Additionally on Windows, if 'file_name' has a ':', returns a copy of
- * 'file_name'
  *
  * Returns a null pointer if 'dir' is null and getcwd() fails. */
 char *
 abs_file_name(const char *dir, const char *file_name)
 {
-    if (file_name[0] == '/') {
+    /* If it's already absolute, return a copy. */
+    if (is_file_name_absolute(file_name)) {
         return xstrdup(file_name);
-#ifdef _WIN32
-    } else if (strchr(file_name, ':')) {
-        return xstrdup(file_name);
-#endif
-    } else if (dir && dir[0]) {
+    }
+
+    /* If a base dir was supplied, use it.  We assume, without checking, that
+     * the base dir is absolute.*/
+    if (dir && dir[0]) {
         char *separator = dir[strlen(dir) - 1] == '/' ? "" : "/";
         return xasprintf("%s%s%s", dir, separator, file_name);
-    } else {
-        char *cwd = get_cwd();
-        if (cwd) {
-            char *abs_name = xasprintf("%s/%s", cwd, file_name);
-            free(cwd);
-            return abs_name;
-        } else {
-            return NULL;
-        }
     }
+
+#if _WIN32
+    /* It's a little complicated to make an absolute path on Windows because a
+     * relative path might still specify a drive letter.  The OS has a function
+     * to do the job for us, so use it. */
+    char abs_path[MAX_PATH];
+    DWORD n = GetFullPathName(file_name, sizeof abs_path, abs_path, NULL);
+    return n > 0 && n <= sizeof abs_path ? xmemdup0(abs_path, n) : NULL;
+#else
+    /* Outside Windows, do the job ourselves. */
+    char *cwd = get_cwd();
+    if (!cwd) {
+        return NULL;
+    }
+    char *abs_name = xasprintf("%s/%s", cwd, file_name);
+    free(cwd);
+    return abs_name;
+#endif
 }
 
 /* Like readlink(), but returns the link name as a null-terminated string in

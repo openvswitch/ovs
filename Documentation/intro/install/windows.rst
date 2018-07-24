@@ -156,7 +156,7 @@ component installation directories, etc. For example:
 ::
 
    $ ./configure CC=./build-aux/cccl LD="$(which link)" \
-       LIBS="-lws2_32 -liphlpapi -lwbemuuid -lole32 -loleaut32" \
+       LIBS="-lws2_32 -lShlwapi -liphlpapi -lwbemuuid -lole32 -loleaut32" \
        --prefix="C:/openvswitch/usr" \
        --localstatedir="C:/openvswitch/var" \
        --sysconfdir="C:/openvswitch/etc" \
@@ -172,7 +172,7 @@ To configure with SSL support, add the requisite additional options:
 ::
 
    $ ./configure CC=./build-aux/cccl LD="`which link`"  \
-       LIBS="-lws2_32 -liphlpapi -lwbemuuid -lole32 -loleaut32" \
+       LIBS="-lws2_32 -lShlwapi -liphlpapi -lwbemuuid -lole32 -loleaut32" \
        --prefix="C:/openvswitch/usr" \
        --localstatedir="C:/openvswitch/var"
        --sysconfdir="C:/openvswitch/etc" \
@@ -184,7 +184,7 @@ Finally, to the kernel module also:
 ::
 
    $ ./configure CC=./build-aux/cccl LD="`which link`" \
-       LIBS="-lws2_32 -liphlpapi -lwbemuuid -lole32 -loleaut32" \
+       LIBS="-lws2_32 -lShlwapi -liphlpapi -lwbemuuid -lole32 -loleaut32" \
        --prefix="C:/openvswitch/usr" \
        --localstatedir="C:/openvswitch/var" \
        --sysconfdir="C:/openvswitch/etc" \
