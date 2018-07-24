@@ -971,15 +971,62 @@
     <h1>Daemon Mode</h1>
 
     <p>
-      If <code>ovn-nbctl</code> is invoked with the <code>--detach</code>
-      option (see <code>Daemon Options</code>, below), it runs in the
-      background as a daemon and accepts commands from <code>ovs-appctl</code>
-      (or another JSON-RPC client) indefinitely.  The currently supported
-      commands are described below.
+      When it is invoked in the most ordinary way, <code>ovn-nbctl</code>
+      connects to an OVSDB server that hosts the northbound database, retrieves
+      a partial copy of the database that is complete enough to do its work,
+      sends a transaction request to the server, and receives and processes the
+      server's reply.  In common interactive use, this is fine, but if the
+      database is large, the step in which <code>ovn-nbctl</code> retrieves a
+      partial copy of the database can take a long time, which yields poor
+      performance overall.
     </p>
 
     <p>
+      To improve performance in such a case, <code>ovn-nbctl</code> offers a
+      "daemon mode," in which the user first starts <code>ovn-nbctl</code>
+      running in the background and afterward uses the daemon to execute
+      operations.  Over several <code>ovn-nbctl</code> command invocations,
+      this performs better overall because it retrieves a copy of the database
+      only once at the beginning, not once per program run.
+    </p>
 
+    <p>
+      Use the <code>--detach</code> option to start an <code>ovn-nbctl</code>
+      daemon.  With this option, <code>ovn-nbctl</code> prints the name of a
+      control socket to stdout.  The client should save this name in
+      environment variable <env>OVN_NB_DAEMON</env>.  Under the Bourne shell
+      this might be done like this:
+    </p>
+
+    <pre fixed="yes">
+      export OVN_NB_DAEMON=$(ovn-nbctl --pidfile --detach)
+    </pre>
+
+    <p>
+      When <env>OVN_NB_DAEMON</env> is set, <code>ovn-nbctl</code>
+      automatically and transparently uses the daemon to execute its commands.
+    </p>
+
+    <p>
+      When the daemon is no longer needed, kill it and unset the environment
+      variable, e.g.:
+    </p>
+
+    <pre fixed="yes">
+      kill $(cat /var/run/ovn-nbctl.pid)
+      unset OVN_NB_DAEMON
+    </pre>
+
+    <p>
+      Daemon mode is experimental.
+    </p>
+
+    <h2>Daemon Commands</h2>
+
+    <p>
+      Daemon mode is internally implemented using the same mechanism used by
+      <code>ovs-appctl</code>.  One may also use <code>ovs-appctl</code>
+      directly with the following commands:
     </p>
 
     <dl>
@@ -1000,10 +1047,6 @@
       <dt><code>exit</code></dt>
       <dd>Causes <code>ovn-nbctl</code> to gracefully terminate.</dd>
     </dl>
-
-    <p>
-      Daemon mode is considered experimental.
-    </p>
 
     <h1>Options</h1>
 

@@ -84,6 +84,15 @@
             daemon_set_new_user(optarg);        \
             break;
 
+#define DAEMON_OPTION_CASES                     \
+        case OPT_DETACH:                        \
+        case OPT_NO_SELF_CONFINEMENT:           \
+        case OPT_NO_CHDIR:                      \
+        case OPT_PIDFILE:                       \
+        case OPT_OVERWRITE_PIDFILE:             \
+        case OPT_MONITOR:                       \
+        case OPT_USER_GROUP:
+
 void set_detach(void);
 void daemon_set_monitor(void);
 void set_no_chdir(void);
@@ -137,6 +146,16 @@ pid_t read_pidfile(const char *name);
                                                 \
         case OPT_USER_GROUP:                    \
             daemon_set_new_user(optarg);
+
+#define DAEMON_OPTION_CASES                     \
+        case OPT_DETACH:                        \
+        case OPT_NO_SELF_CONFINEMENT:           \
+        case OPT_NO_CHDIR:                      \
+        case OPT_PIDFILE:                       \
+        case OPT_PIPE_HANDLE:                   \
+        case OPT_SERVICE:                       \
+        case OPT_SERVICE_MONITOR:               \
+        case OPT_USER_GROUP:
 
 void control_handler(DWORD request);
 void set_pipe_handle(const char *pipe_handle);
