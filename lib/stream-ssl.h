@@ -58,6 +58,9 @@ void stream_ssl_set_ciphers(const char *arg);
                                                         \
         case OPT_SSL_CIPHERS:                           \
             stream_ssl_set_ciphers(optarg);             \
-            break;                                      
+            break;
+
+#define STREAM_SSL_CASES \
+    case 'p': case 'c': case 'C': case OPT_SSL_PROTOCOLS: case OPT_SSL_CIPHERS:
 
 #endif /* stream-ssl.h */

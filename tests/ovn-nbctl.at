@@ -1,30 +1,59 @@
 AT_BANNER([ovn-nbctl])
 
+OVS_START_SHELL_HELPERS
 # OVN_NBCTL_TEST_START
 m4_define([OVN_NBCTL_TEST_START],
-  [dnl Create ovn-nb database.
-   AT_KEYWORDS([ovn])
+  [AT_KEYWORDS([ovn])
+   AT_CAPTURE_FILE([ovsdb-server.log])
+   ovn_nbctl_test_start $1])
+ovn_nbctl_test_start() {
+   dnl Create ovn-nb database.
    AT_CHECK([ovsdb-tool create ovn-nb.db $abs_top_srcdir/ovn/ovn-nb.ovsschema])
 
    dnl Start ovsdb-server.
    AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --log-file --remote=punix:$OVS_RUNDIR/ovnnb_db.sock ovn-nb.db], [0], [], [stderr])
    on_exit "kill `cat ovsdb-server.pid`"
+   AS_CASE([$1],
+     [daemon],
+       [export OVN_NB_DAEMON=$(ovn-nbctl --pidfile --detach --log-file -vsocket_util:off)
+        on_exit "kill `cat ovn-nbctl.pid`"],
+     [direct], [],
+     [*], [AT_FAIL_IF(:)])
    AT_CHECK([ovn-nbctl init])
    AT_CHECK([[sed < stderr '
 /vlog|INFO|opened log file/d
 /ovsdb_server|INFO|ovsdb-server (Open vSwitch)/d']])
-   AT_CAPTURE_FILE([ovsdb-server.log])
-])
+}
 
 # OVN_NBCTL_TEST_STOP
-m4_define([OVN_NBCTL_TEST_STOP],
-  [AT_CHECK([check_logs "$1"])
-   OVS_APP_EXIT_AND_WAIT([ovsdb-server])])
+m4_define([OVN_NBCTL_TEST_STOP], [ovn_nbctl_test_stop])
+ovn_nbctl_test_stop() {
+   AT_CHECK([check_logs "$1"])
+   OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+}
+OVS_END_SHELL_HELPERS
 
+# OVN_NBCTL_TEST(NAME, TITLE, COMMANDS)
+m4_define([OVN_NBCTL_TEST],
+   [OVS_START_SHELL_HELPERS
+    $1() {
+      $3
+    }
+    OVS_END_SHELL_HELPERS
 
-AT_SETUP([ovn-nbctl - basic switch commands])
-OVN_NBCTL_TEST_START
+    AT_SETUP([ovn-nbctl - $2 - direct])
+    OVN_NBCTL_TEST_START direct
+    $1
+    OVN_NBCTL_TEST_STOP
+    AT_CLEANUP
 
+    AT_SETUP([ovn-nbctl - $2 - daemon])
+    OVN_NBCTL_TEST_START daemon
+    $1
+    OVN_NBCTL_TEST_STOP
+    AT_CLEANUP])
+
+OVN_NBCTL_TEST([ovn_nbctl_basic_switch], [basic switch commands], [
 AT_CHECK([ovn-nbctl ls-add ls0])
 AT_CHECK([ovn-nbctl ls-list | uuidfilt], [0], [dnl
 <0> (ls0)
@@ -73,16 +102,11 @@ AT_CHECK([ovn-nbctl --add-duplicate ls-add], [1], [],
 ])
 AT_CHECK([ovn-nbctl --may-exist ls-add], [1], [],
   [ovn-nbctl: --may-exist requires specifying a name
-])
-
-OVN_NBCTL_TEST_STOP
-AT_CLEANUP
+])])
 
 dnl ---------------------------------------------------------------------
 
-AT_SETUP([ovn-nbctl - basic logical switch port commands])
-OVN_NBCTL_TEST_START
-
+OVN_NBCTL_TEST([ovn_nbctl_basic_lsp], [basic logical switch port commands], [
 AT_CHECK([ovn-nbctl ls-add ls0])
 AT_CHECK([ovn-nbctl lsp-add ls0 lp0])
 AT_CHECK([ovn-nbctl lsp-add ls0 lp0], [1], [],
@@ -125,16 +149,11 @@ AT_CHECK([ovn-nbctl --may-exist lsp-add ls0 lp2 lp3 10], [1], [],
 AT_CHECK([ovn-nbctl clear Logical_Switch_Port lp2 tag_request])
 AT_CHECK([ovn-nbctl --may-exist lsp-add ls0 lp2 lp3 5], [1], [],
   [ovn-nbctl: lp2: port already exists but has no tag_request
-])
-
-OVN_NBCTL_TEST_STOP
-AT_CLEANUP
+])])
 
 dnl ---------------------------------------------------------------------
 
-AT_SETUP([ovn-nbctl - lport addresses])
-OVN_NBCTL_TEST_START
-
+OVN_NBCTL_TEST([ovn_nbctl_lport_addresses], [lport addresses], [
 AT_CHECK([ovn-nbctl ls-add ls0])
 AT_CHECK([ovn-nbctl lsp-add ls0 lp0])
 AT_CHECK([ovn-nbctl lsp-get-addresses lp0], [0], [dnl
@@ -148,16 +167,11 @@ unknown
 
 AT_CHECK([ovn-nbctl lsp-set-addresses lp0])
 AT_CHECK([ovn-nbctl lsp-get-addresses lp0], [0], [dnl
-])
-
-OVN_NBCTL_TEST_STOP
-AT_CLEANUP
+])])
 
 dnl ---------------------------------------------------------------------
 
-AT_SETUP([ovn-nbctl - port security])
-OVN_NBCTL_TEST_START
-
+OVN_NBCTL_TEST([ovn_nbctl_port_security], [port security], [
 AT_CHECK([ovn-nbctl ls-add ls0])
 AT_CHECK([ovn-nbctl lsp-add ls0 lp0])
 AT_CHECK([ovn-nbctl lsp-get-addresses lp0], [0], [dnl
@@ -171,15 +185,13 @@ aa:bb:cc:dd:ee:ff
 
 AT_CHECK([ovn-nbctl lsp-set-port-security lp0])
 AT_CHECK([ovn-nbctl lsp-get-port-security lp0], [0], [dnl
-])
-
-OVN_NBCTL_TEST_STOP
-AT_CLEANUP
+])])
 
 dnl ---------------------------------------------------------------------
 
-m4_define([OVN_NBCTL_TEST_ACL],
-  [AT_CHECK([ovn-nbctl $2 --log acl-add $1 from-lport 600 udp drop])
+OVN_NBCTL_TEST([ovn_nbctl_acls], [ACLs], [
+ovn_nbctl_test_acl() {
+   AT_CHECK([ovn-nbctl $2 --log acl-add $1 from-lport 600 udp drop])
    AT_CHECK([ovn-nbctl $2 --log --name=test --severity=info acl-add $1 to-lport 500 udp drop])
    AT_CHECK([ovn-nbctl $2 acl-add $1 from-lport 400 tcp drop])
    AT_CHECK([ovn-nbctl $2 acl-add $1 to-lport 300 tcp drop])
@@ -222,17 +234,14 @@ from-lport   200 (ip) drop
 from-lport   600 (udp) drop
 from-lport   200 (ip) drop
 ])
-])
-
-AT_SETUP([ovn-nbctl - ACLs])
-OVN_NBCTL_TEST_START
+}
 
 AT_CHECK([ovn-nbctl ls-add ls0])
-OVN_NBCTL_TEST_ACL([ls0])
+ovn_nbctl_test_acl ls0
 AT_CHECK([ovn-nbctl ls-add ls1])
-OVN_NBCTL_TEST_ACL([ls1], [--type=switch])
+ovn_nbctl_test_acl ls1 --type=switch
 AT_CHECK([ovn-nbctl create port_group name=pg0], [0], [ignore])
-OVN_NBCTL_TEST_ACL([pg0], [--type=port-group])
+ovn_nbctl_test_acl pg0 --type=port-group
 
 dnl Test when port group doesn't exist
 AT_CHECK([ovn-nbctl --type=port-group acl-add pg1 to-lport 100 ip drop], [1], [], [dnl
@@ -243,16 +252,11 @@ dnl Test when same name exists in logical switches and portgroups
 AT_CHECK([ovn-nbctl create port_group name=ls0], [0], [ignore])
 AT_CHECK([ovn-nbctl acl-add ls0 to-lport 100 ip drop], [1], [], [stderr])
 AT_CHECK([grep 'exists in both' stderr], [0], [ignore])
-AT_CHECK([ovn-nbctl --type=port-group acl-add ls0 to-lport 100 ip drop], [0], [ignore])
-
-OVN_NBCTL_TEST_STOP
-AT_CLEANUP
+AT_CHECK([ovn-nbctl --type=port-group acl-add ls0 to-lport 100 ip drop], [0], [ignore])])
 
 dnl ---------------------------------------------------------------------
 
-AT_SETUP([ovn-nbctl - QoS])
-OVN_NBCTL_TEST_START
-
+OVN_NBCTL_TEST([ovn_nbctl_qos], [QoS], [
 AT_CHECK([ovn-nbctl ls-add ls0])
 AT_CHECK([ovn-nbctl qos-add ls0 from-lport 600 tcp dscp=63])
 AT_CHECK([ovn-nbctl qos-add ls0 from-lport 500 udp rate=100 burst=1000])
@@ -317,16 +321,11 @@ AT_CHECK([ovn-nbctl qos-add ls0 from-lport 600 ip dscpa=-1], [1], [],
 
 AT_CHECK([ovn-nbctl qos-add ls0 from-lport 600 ip burst=123], [1], [],
 [ovn-nbctl: Either "rate" and/or "dscp" must be specified
-])
-
-OVN_NBCTL_TEST_STOP
-AT_CLEANUP
+])])
 
 dnl ---------------------------------------------------------------------
 
-AT_SETUP([ovn-nbctl - Meters])
-OVN_NBCTL_TEST_START
-
+OVN_NBCTL_TEST([ovn_nbctl_meters], [meters], [
 AT_CHECK([ovn-nbctl meter-add meter1 drop 10 kbps])
 AT_CHECK([ovn-nbctl meter-add meter2 drop 3 kbps 2])
 AT_CHECK([ovn-nbctl meter-add meter3 drop 100 kbps 200])
@@ -384,15 +383,11 @@ meter4: bands:
 dnl Delete all meters.
 AT_CHECK([ovn-nbctl meter-del])
 AT_CHECK([ovn-nbctl meter-list], [0], [dnl
-])
-
-OVN_NBCTL_TEST_STOP
-AT_CLEANUP
+])])
 
 dnl ---------------------------------------------------------------------
 
-AT_SETUP([ovn-nbctl - NATs])
-OVN_NBCTL_TEST_START
+OVN_NBCTL_TEST([ovn_nbctl_nats], [NATs], [
 AT_CHECK([ovn-nbctl lr-add lr0])
 AT_CHECK([ovn-nbctl lr-nat-add lr0 snatt 30.0.0.2 192.168.1.2], [1], [],
 [ovn-nbctl: snatt: type must be one of "dnat", "snat" and "dnat_and_snat".
@@ -537,15 +532,11 @@ snat             30.0.0.1           192.168.1.0/24
 AT_CHECK([ovn-nbctl lr-nat-del lr0])
 AT_CHECK([ovn-nbctl lr-nat-list lr0], [0], [])
 AT_CHECK([ovn-nbctl lr-nat-del lr0])
-AT_CHECK([ovn-nbctl lr-nat-del lr0 dnat])
-OVN_NBCTL_TEST_STOP
-AT_CLEANUP
+AT_CHECK([ovn-nbctl lr-nat-del lr0 dnat])])
 
 dnl ---------------------------------------------------------------------
 
-AT_SETUP([ovn-nbctl - LBs])
-OVN_NBCTL_TEST_START
-
+OVN_NBCTL_TEST([ovn_nbctl_lbs], [LBs], [
 dnl Add two LBs.
 AT_CHECK([ovn-nbctl -vsocket_util:off lb-add lb0 30.0.0.10:80a 192.168.10.10:80,192.168.10.20:80 tcp], [1], [],
 [ovn-nbctl: 30.0.0.10:80a: should be an IP address (or an IP address and a port number with : as a separator).
@@ -761,16 +752,11 @@ AT_CHECK([ovn-nbctl lr-lb-add lr0 lb0])
 AT_CHECK([ovn-nbctl lr-lb-add lr0 lb1])
 AT_CHECK([ovn-nbctl lr-lb-add lr0 lb3])
 AT_CHECK([ovn-nbctl lr-lb-del lr0])
-AT_CHECK([ovn-nbctl lr-lb-list lr0 | uuidfilt], [0], [])
+AT_CHECK([ovn-nbctl lr-lb-list lr0 | uuidfilt], [0], [])])
 
-OVN_NBCTL_TEST_STOP
-AT_CLEANUP
-dnl
 dnl ---------------------------------------------------------------------
 
-AT_SETUP([ovn-nbctl - LBs IPv6])
-OVN_NBCTL_TEST_START
-
+OVN_NBCTL_TEST([ovn_nbctl_lbs_ipv6], [LBs IPv6], [
 dnl A bunch of commands that should fail
 AT_CHECK([ovn-nbctl -vsocket_util:off lb-add lb0 [[ae0f::10]]:80a [[fd0f::10]]:80,[[fd0f::20]]:80 tcp], [1], [],
 [ovn-nbctl: [[ae0f::10]]:80a: should be an IP address (or an IP address and a port number with : as a separator).
@@ -1025,15 +1011,11 @@ AT_CHECK([ovn-nbctl lr-lb-add lr0 lb0])
 AT_CHECK([ovn-nbctl lr-lb-add lr0 lb1])
 AT_CHECK([ovn-nbctl lr-lb-add lr0 lb3])
 AT_CHECK([ovn-nbctl lr-lb-del lr0])
-AT_CHECK([ovn-nbctl lr-lb-list lr0 | uuidfilt], [0], [])
+AT_CHECK([ovn-nbctl lr-lb-list lr0 | uuidfilt], [0], [])])
 
-OVN_NBCTL_TEST_STOP
-AT_CLEANUP
 dnl ---------------------------------------------------------------------
 
-AT_SETUP([ovn-nbctl - basic logical router commands])
-OVN_NBCTL_TEST_START
-
+OVN_NBCTL_TEST([ovn_nbctl_basic_lr], [basic logical router commands], [
 AT_CHECK([ovn-nbctl lr-add lr0])
 AT_CHECK([ovn-nbctl lr-list | uuidfilt], [0], [dnl
 <0> (lr0)
@@ -1082,16 +1064,11 @@ AT_CHECK([ovn-nbctl --add-duplicate lr-add], [1], [],
 ])
 AT_CHECK([ovn-nbctl --may-exist lr-add], [1], [],
   [ovn-nbctl: --may-exist requires specifying a name
-])
-
-OVN_NBCTL_TEST_STOP
-AT_CLEANUP
+])])
 
 dnl ---------------------------------------------------------------------
 
-AT_SETUP([ovn-nbctl - basic logical router port commands])
-OVN_NBCTL_TEST_START
-
+OVN_NBCTL_TEST([ovn_nbctl_basic_lrp], [basic logical router port commands], [
 AT_CHECK([ovn-nbctl lr-add lr0])
 AT_CHECK([ovn-nbctl lrp-add lr0 lrp0 00:00:00:01:02 192.168.1.1/24], [1], [],
   [ovn-nbctl: lrp0: invalid mac address 00:00:00:01:02
@@ -1157,15 +1134,11 @@ AT_CHECK([ovn-nbctl --may-exist lrp-add lr0 lrp1 00:00:00:01:02:03 192.168.1.1/2
   [ovn-nbctl: lrp1: port already exists with different network
 ])
 
-AT_CHECK([ovn-nbctl --may-exist lrp-add lr0 lrp1 00:00:00:01:02:03 10.0.0.1/24 192.168.1.1/24 peer=lrp1-peer])
-
-OVN_NBCTL_TEST_STOP
-AT_CLEANUP
+AT_CHECK([ovn-nbctl --may-exist lrp-add lr0 lrp1 00:00:00:01:02:03 10.0.0.1/24 192.168.1.1/24 peer=lrp1-peer])])
 
 dnl ---------------------------------------------------------------------
 
-AT_SETUP([ovn-nbctl - logical router port gateway chassis])
-OVN_NBCTL_TEST_START
+OVN_NBCTL_TEST([ovn_nbctl_lrp_gw_chassi], [logical router port gateway chassis], [
 AT_CHECK([ovn-nbctl lr-add lr0])
 AT_CHECK([ovn-nbctl lrp-add lr0 lrp0 00:00:00:01:02:03 192.168.1.1/24])
 AT_CHECK([ovn-nbctl lrp-get-gateway-chassis lrp0], [0], [])
@@ -1221,16 +1194,11 @@ AT_CHECK([ovn-nbctl lrp-get-gateway-chassis lrp0], [0], [dnl
 lrp0-chassis2    10
 lrp0-chassis3     5
 lrp0-chassis1     1
-])
-
-OVN_NBCTL_TEST_STOP
-AT_CLEANUP
+])])
 
 dnl ---------------------------------------------------------------------
 
-AT_SETUP([ovn-nbctl - logical router port enable and disable])
-OVN_NBCTL_TEST_START
-
+OVN_NBCTL_TEST([ovn_nbctl_lrp_enable], [logical router port enable and disable], [
 AT_CHECK([ovn-nbctl lr-add lr0])
 AT_CHECK([ovn-nbctl lrp-add lr0 lrp0 00:00:00:01:02:03 192.168.1.1/24])
 AT_CHECK([ovn-nbctl lrp-get-enabled lrp0], [0], [enabled
@@ -1246,16 +1214,11 @@ AT_CHECK([ovn-nbctl lrp-get-enabled lrp0], [0], [enabled
 
 AT_CHECK([ovn-nbctl lrp-set-enabled lrp0 xyzzy], [1], [],
   [ovn-nbctl: xyzzy: state must be "enabled" or "disabled"
-])
-
-OVN_NBCTL_TEST_STOP
-AT_CLEANUP
+])])
 
 dnl ---------------------------------------------------------------------
 
-AT_SETUP([ovn-nbctl - routes])
-OVN_NBCTL_TEST_START
-
+OVN_NBCTL_TEST([ovn_nbctl_routes], [routes], [
 AT_CHECK([ovn-nbctl lr-add lr0])
 
 dnl Check IPv4 routes
@@ -1364,16 +1327,11 @@ IPv6 Routes
             2001:db8::/64        2001:db8:0:f102::1 dst-ip lp0
           2001:db8:1::/64        2001:db8:0:f103::1 dst-ip
                      ::/0        2001:db8:0:f101::1 dst-ip
-])
-
-OVN_NBCTL_TEST_STOP
-AT_CLEANUP
+])])
 
 dnl ---------------------------------------------------------------------
 
-AT_SETUP([ovn-nbctl - lsp types])
-OVN_NBCTL_TEST_START
-
+OVN_NBCTL_TEST([ovn_nbctl_lsp_types], [lsp types], [
 AT_CHECK([ovn-nbctl ls-add ls0])
 AT_CHECK([ovn-nbctl lsp-add ls0 lp0])
 
@@ -1437,30 +1395,20 @@ dnl Empty string should work too
 AT_CHECK([ovn-nbctl lsp-set-type lp0 ""])
 AT_CHECK([ovn-nbctl lsp-get-type lp0], [0], [dnl
 
-])
-
-OVN_NBCTL_TEST_STOP
-AT_CLEANUP
+])])
 
 dnl ---------------------------------------------------------------------
 
-AT_SETUP([ovn-nbctl - connection])
-OVN_NBCTL_TEST_START
-
+OVN_NBCTL_TEST([ovn_nbctl_connection], [connection], [
 AT_CHECK([ovn-nbctl --inactivity-probe=30000 set-connection ptcp:6641:127.0.0.1 punix:$OVS_RUNDIR/ovnnb_db.sock])
 AT_CHECK([ovn-nbctl list connection | grep inactivity_probe], [0], [dnl
 inactivity_probe    : 30000
 inactivity_probe    : 30000
-])
-
-OVN_NBCTL_TEST_STOP
-AT_CLEANUP
+])])
 
 dnl ---------------------------------------------------------------------
 
-AT_SETUP([ovn-nbctl - dry run mode])
-OVN_NBCTL_TEST_START
-
+OVN_NBCTL_TEST([ovn_nbctl_dry_run_mode], [dry run mode], [
 dnl Check that dry run has no permanent effect.
 AT_CHECK([ovn-nbctl --dry-run ls-add ls0 -- ls-list | uuidfilt], [0], [dnl
 <0> (ls0)
@@ -1472,16 +1420,11 @@ dnl Check that dry-run mode is not sticky.
 AT_CHECK([ovn-nbctl ls-add ls0])
 AT_CHECK([ovn-nbctl ls-list | uuidfilt], [0], [dnl
 <0> (ls0)
-])
-
-OVN_NBCTL_TEST_STOP
-AT_CLEANUP
+])])
 
 dnl ---------------------------------------------------------------------
 
-AT_SETUP([ovn-nbctl - oneline output])
-OVN_NBCTL_TEST_START
-
+OVN_NBCTL_TEST([ovn_nbctl_oneline_output], [oneline output], [
 AT_CHECK([ovn-nbctl ls-add ls0 -- ls-add ls1])
 
 dnl Expect one line for one command.
@@ -1493,16 +1436,11 @@ dnl Expect lines for two commands.
 AT_CHECK([ovn-nbctl --oneline ls-list -- ls-list | uuidfilt], [0], [dnl
 <0> (ls0)\n<1> (ls1)
 <0> (ls0)\n<1> (ls1)
-])
-
-OVN_NBCTL_TEST_STOP
-AT_CLEANUP
+])])
 
 dnl ---------------------------------------------------------------------
 
-AT_SETUP([ovn-nbctl - commands parser error paths])
-OVN_NBCTL_TEST_START
-
+OVN_NBCTL_TEST([ovn_nbctl_error_paths], [commands parser error paths], [
 dnl FIXME: Duplicate options are allowed when passed with global options.
 dnl        For example: ovn-nbctl --if-exists --if-exists list Logical_Switch
 
@@ -1569,21 +1507,13 @@ AT_CHECK([ovn-nbctl show foo --bar], [1], [], [stderr])
 AT_CHECK([grep 'command takes at most .* arguments' stderr], [0], [ignore])
 
 AT_CHECK([ovn-nbctl -- show foo --bar], [1], [], [stderr])
-AT_CHECK([grep 'command takes at most .* arguments' stderr], [0], [ignore])
-
-OVN_NBCTL_TEST_STOP
-AT_CLEANUP
+AT_CHECK([grep 'command takes at most .* arguments' stderr], [0], [ignore])])
 
 dnl ---------------------------------------------------------------------
 
-AT_SETUP([ovn-nbctl - Port Groups])
-OVN_NBCTL_TEST_START
-
+OVN_NBCTL_TEST([ovn_nbctl_port_groups], [port groups], [
 dnl Check that port group can be looked up by name
 AT_CHECK([ovn-nbctl create Port_Group name=pg0], [0], [ignore])
 AT_CHECK([ovn-nbctl get Port_Group pg0 name], [0], [dnl
 "pg0"
-])
-
-OVN_NBCTL_TEST_STOP
-AT_CLEANUP
+])])
