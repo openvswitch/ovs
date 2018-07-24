@@ -93,3 +93,31 @@ Q: How do I add support for a new OpenFlow error message?
     the file for details.  If you need to add an OpenFlow vendor extension
     error for a vendor that doesn't yet have any, first add the vendor ID to
     the ``<name>_VENDOR_ID`` list in ``include/openflow/openflow-common.h``.
+
+Q: What's a Signed-off-by and how do I provide one?
+
+    A: Free and open source software projects usually require a contributor to
+    provide some assurance that they're entitled to contribute the code that
+    they provide.  Some projects, for example, do this with a Contributor
+    License Agreement (CLA) or a copyright assignment that is signed on paper
+    or electronically.
+
+    For this purpose, Open vSwitch has adopted something called the Developer's
+    Certificate of Origin (DCO), which is also used by the Linux kernel and
+    originated there.  Informally stated, agreeing to the DCO is the
+    developer's way of attesting that a particular commit that they are
+    contributing is one that they are allowed to contribute.  You should visit
+    https://developercertificate.org/ to read the full statement of the DCO,
+    which is less than 200 words long.
+
+    To certify compliance with the Developer's Certificate of Origin for a
+    particular commit, just add the following line to the end of your commit
+    message, properly substituting your name and email address:
+
+        Signed-off-by: Firstname Lastname <email@example.org>
+
+    Git has special support for adding a Signed-off-by line to a commit
+    message: when you run "git commit", just add the -s option, as in "git
+    commit -s".  If you use the "git citool" GUI for commits, you can add a
+    Signed-off-by line to the commit message by pressing Control+S.  Other Git
+    user interfaces may provide similar support.
