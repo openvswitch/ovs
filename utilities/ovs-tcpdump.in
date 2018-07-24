@@ -62,8 +62,8 @@ def _install_tap_linux(tap_name, mtu_value=None):
     TUNSETIFF = 0x400454CA  # This is derived by printf() of TUNSETIFF
     TUNSETOWNER = TUNSETIFF + 2
 
-    tapdev_fd = open('/dev/net/tun', 'rw')
-    ifr = struct.pack('16sH', tap_name, IFF_TAP | IFF_NO_PI)
+    tapdev_fd = os.open('/dev/net/tun', os.O_RDWR)
+    ifr = struct.pack('16sH', tap_name.encode('utf8'), IFF_TAP | IFF_NO_PI)
     fcntl.ioctl(tapdev_fd, TUNSETIFF, ifr)
     fcntl.ioctl(tapdev_fd, TUNSETOWNER, os.getegid())
 
@@ -457,10 +457,10 @@ def main():
     pipes = _doexec(*([dump_cmd, '-i', mirror_interface] + tcpdargs))
     try:
         while pipes.poll() is None:
-            data = pipes.stdout.readline().strip('\n')
+            data = pipes.stdout.readline().strip(b'\n')
             if len(data) == 0:
                 raise KeyboardInterrupt
-            print(data)
+            print(data.decode('utf-8'))
         raise KeyboardInterrupt
     except KeyboardInterrupt:
         if pipes.poll() is None:
