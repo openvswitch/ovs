@@ -41,6 +41,6 @@ build_script:
 - C:\MinGW\msys\1.0\bin\bash -lc "cp /c/pthreads-win32/Pre-built.2/dll/x86/*.dll /c/openvswitch/."
 - C:\MinGW\msys\1.0\bin\bash -lc "mv /bin/link.exe /bin/link_copy.exe"
 - C:\MinGW\msys\1.0\bin\bash -lc "cd /c/openvswitch && ./boot.sh"
-- C:\MinGW\msys\1.0\bin\bash -lc "cd /c/openvswitch && ./configure CC=build-aux/cccl LD=\"`which link`\" LIBS=\"-lws2_32 -liphlpapi -lwbemuuid -lole32 -loleaut32\" --with-pthread=C:/pthreads-win32/Pre-built.2 --with-openssl=C:/OpenSSL-Win32 --with-vstudiotarget=\"Debug\"
+- C:\MinGW\msys\1.0\bin\bash -lc "cd /c/openvswitch && ./configure CC=build-aux/cccl LD=\"`which link`\" LIBS=\"-lws2_32 -lShlwapi -liphlpapi -lwbemuuid -lole32 -loleaut32\" --with-pthread=C:/pthreads-win32/Pre-built.2 --with-openssl=C:/OpenSSL-Win32 --with-vstudiotarget=\"Debug\"
 - C:\MinGW\msys\1.0\bin\bash -lc "cd /c/openvswitch && make"
 - C:\MinGW\msys\1.0\bin\bash -lc "cd /c/openvswitch && make datapath_windows_analyze"

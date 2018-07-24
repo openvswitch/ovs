@@ -231,6 +231,7 @@ char *dir_name(const char *file_name);
 char *base_name(const char *file_name);
 #endif
 char *abs_file_name(const char *dir, const char *file_name);
+bool is_file_name_absolute(const char *);
 
 char *follow_symlinks(const char *filename);
 
