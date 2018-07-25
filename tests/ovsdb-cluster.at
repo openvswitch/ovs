@@ -149,7 +149,7 @@ ovsdb|WARN|schema: changed 2 columns in 'OVN_Southbound' database from ephemeral
     sleep 2
 
     echo "waiting for ovn-sbctl processes to exit..."
-    phase=0
+    echo 0 > phase
     i=0
     (while :; do echo; sleep 1; done) | while read; do
         printf "t=%2d s:" $i
@@ -165,7 +165,7 @@ ovsdb|WARN|schema: changed 2 columns in 'OVN_Southbound' database from ephemeral
             break
         fi
 
-        case $phase in # (
+        case $(cat phase) in # (
         0)
             if test $done -ge $(expr $n1 / 4); then
                 if test $variant = kill; then
@@ -173,7 +173,7 @@ ovsdb|WARN|schema: changed 2 columns in 'OVN_Southbound' database from ephemeral
                 else
                     remove_server $victim
                 fi
-                phase=1
+                echo 1 > phase
                 next=$(expr $i + 2)
             fi
             ;; # (
@@ -185,7 +185,7 @@ ovsdb|WARN|schema: changed 2 columns in 'OVN_Southbound' database from ephemeral
                 else
                     add_server $victim
                 fi
-                phase=2
+                echo 2 > phase
             fi
             ;;
         esac
@@ -193,7 +193,7 @@ ovsdb|WARN|schema: changed 2 columns in 'OVN_Southbound' database from ephemeral
         i=$(expr $i + 1)
     done
     echo "...done"
-    AT_CHECK([if test $phase != 2; then exit 77; fi])
+    AT_CHECK([if test $(cat phase) != 2; then exit 77; fi])
 
     for i in $(seq 0 $(expr $n1 - 1) ); do
         for j in `seq $n2`; do
@@ -203,7 +203,7 @@ ovsdb|WARN|schema: changed 2 columns in 'OVN_Southbound' database from ephemeral
     AT_CHECK([ovn-sbctl --timeout=30 --log-file=finalize.log -vtimeval:off -vfile -vsyslog:off --bare get SB_Global . external-ids | sed 's/, /\n/g; s/[[{}""]]//g;' | sort], [0], [expout])
 
     for i in `seq $n`; do
-        if test $i != $victim || test $phase != 1; then
+        if test $i != $victim || test $(cat phase) != 1; then
             stop_server $i
         fi
     done
