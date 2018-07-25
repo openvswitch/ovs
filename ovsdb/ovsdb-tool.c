@@ -1385,7 +1385,8 @@ do_check_cluster(struct ovs_cmdl_context *ctx)
     struct commit *commit = NULL;
     for (uint64_t term = min_term; term <= max_term; term++) {
         struct leader *leader = find_leader(&c, term);
-        if (leader && commit && commit->index >= leader->log_end) {
+        if (leader && leader->log_end
+            && commit && commit->index >= leader->log_end) {
             ovs_fatal(0, "leader %s for term %"PRIu64" has log entries only "
                       "up to index %"PRIu64", but index %"PRIu64" was "
                       "committed in a previous term (e.g. by %s)",
