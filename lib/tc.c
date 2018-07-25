@@ -814,7 +814,7 @@ nl_parse_act_vlan(struct nlattr *options, struct tc_flower *flower)
         struct nlattr *vlan_id = vlan_attrs[TCA_VLAN_PUSH_VLAN_ID];
         struct nlattr *vlan_prio = vlan_attrs[TCA_VLAN_PUSH_VLAN_PRIORITY];
 
-        action->vlan.vlan_push_tpid = nl_attr_get_u16(vlan_tpid);
+        action->vlan.vlan_push_tpid = nl_attr_get_be16(vlan_tpid);
         action->vlan.vlan_push_id = nl_attr_get_u16(vlan_id);
         action->vlan.vlan_push_prio = vlan_prio ? nl_attr_get_u8(vlan_prio) : 0;
         action->type = TC_ACT_VLAN_PUSH;
@@ -1186,7 +1186,7 @@ nl_msg_put_act_pedit(struct ofpbuf *request, struct tc_pedit *parm,
 }
 
 static void
-nl_msg_put_act_push_vlan(struct ofpbuf *request, uint16_t tpid,
+nl_msg_put_act_push_vlan(struct ofpbuf *request, ovs_be16 tpid,
                          uint16_t vid, uint8_t prio)
 {
     size_t offset;
@@ -1198,7 +1198,7 @@ nl_msg_put_act_push_vlan(struct ofpbuf *request, uint16_t tpid,
                                 .v_action = TCA_VLAN_ACT_PUSH };
 
         nl_msg_put_unspec(request, TCA_VLAN_PARMS, &parm, sizeof parm);
-        nl_msg_put_u16(request, TCA_VLAN_PUSH_VLAN_PROTOCOL, tpid);
+        nl_msg_put_be16(request, TCA_VLAN_PUSH_VLAN_PROTOCOL, tpid);
         nl_msg_put_u16(request, TCA_VLAN_PUSH_VLAN_ID, vid);
         nl_msg_put_u8(request, TCA_VLAN_PUSH_VLAN_PRIORITY, prio);
     }
