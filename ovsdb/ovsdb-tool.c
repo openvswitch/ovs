@@ -1052,7 +1052,7 @@ get_server_name(const struct cluster *c, const struct uuid *sid,
                 char buf[SID_LEN + 1], size_t bufsize)
 {
     for (size_t i = 0; i < c->n_servers; i++) {
-        struct server *s = &c->servers[c->n_servers];
+        struct server *s = &c->servers[i];
         if (uuid_equals(&s->header.sid, sid)) {
             return s->filename;
         }
