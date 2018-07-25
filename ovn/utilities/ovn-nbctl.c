@@ -1879,6 +1879,9 @@ parse_priority(const char *arg, int64_t *priority_p)
     int64_t priority;
     if (!ovs_scan(arg, "%"SCNd64, &priority)
         || priority < 0 || priority > 32767) {
+        /* Priority_p could be uninitialized as no valid priority was
+         * input, initialize it to a valid value of 0 before returning */
+        *priority_p = 0;
         return xasprintf("%s: priority must in range 0...32767", arg);
     }
     *priority_p = priority;
@@ -3043,10 +3046,11 @@ dhcp_options_get(struct ctl_context *ctx, const char *id, bool must_exist,
         dhcp_opts = nbrec_dhcp_options_get_for_uuid(ctx->idl, &dhcp_opts_uuid);
     }
 
+    *dhcp_opts_p = dhcp_opts;
     if (!dhcp_opts && must_exist) {
         return xasprintf("%s: dhcp options UUID not found", id);
     }
-    *dhcp_opts_p = dhcp_opts;
+
     return NULL;
 }
 
