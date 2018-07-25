@@ -1178,6 +1178,13 @@ do_check_cluster(struct ovs_cmdl_context *ctx)
             ovsdb_log_close(s->log);
             continue;
         }
+        for (size_t j = 0; j < c.n_servers; j++) {
+            if (uuid_equals(&s->header.sid, &c.servers[j].header.sid)) {
+                ovs_fatal(0, "Duplicate server ID "SID_FMT" in %s and %s.",
+                          SID_ARGS(&s->header.sid),
+                          s->filename, c.servers[j].filename);
+            }
+        }
         if (c.n_servers > 0) {
             struct server *s0 = &c.servers[0];
             if (!uuid_equals(&s0->header.cid, &s->header.cid)) {
