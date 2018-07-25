@@ -4962,6 +4962,19 @@ nbctl_cmd_init(void)
     ctl_register_commands(nbctl_commands);
 }
 
+static const struct option *
+find_option_by_value(const struct option *options, int value)
+{
+    const struct option *o;
+
+    for (o = options; o->name; o++) {
+        if (o->val == value) {
+            return o;
+        }
+    }
+    return NULL;
+}
+
 static char * OVS_WARN_UNUSED_RESULT
 server_parse_options(int argc, char *argv[], struct shash *local_options,
                      int *n_options_p)
@@ -4981,7 +4994,7 @@ server_parse_options(int argc, char *argv[], struct shash *local_options,
     short_options = build_short_options(global_long_options, false);
     options = append_command_options(global_long_options, OPT_LOCAL);
 
-    optind = 1;
+    optind = 0;
     opterr = 0;
     for (;;) {
         int idx;
@@ -5017,9 +5030,11 @@ server_parse_options(int argc, char *argv[], struct shash *local_options,
         TABLE_OPTION_HANDLERS(&table_style)
 
         case '?':
-            if (optopt) {
+            if (find_option_by_value(options, optopt)) {
                 error = xasprintf("option '%s' doesn't allow an argument",
                                   argv[optind-1]);
+            } else if (optopt) {
+                error = xasprintf("unrecognized option '%c'", optopt);
             } else {
                 error = xasprintf("unrecognized option '%s'", argv[optind-1]);
             }
