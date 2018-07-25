@@ -1001,6 +1001,7 @@ do_show_log(struct ovs_cmdl_context *ctx)
 }
 
 struct server {
+    struct ovsdb_log *log;
     const char *filename;
     const char *nickname;
 
@@ -1164,17 +1165,17 @@ do_check_cluster(struct ovs_cmdl_context *ctx)
         struct server *s = &c.servers[c.n_servers];
         s->filename = ctx->argv[i];
 
-        struct ovsdb_log *log;
         check_ovsdb_error(ovsdb_log_open(s->filename, RAFT_MAGIC,
-                                         OVSDB_LOG_READ_ONLY, -1, &log));
+                                         OVSDB_LOG_READ_ONLY, -1, &s->log));
 
         struct json *json;
-        check_ovsdb_error(ovsdb_log_read(log, &json));
+        check_ovsdb_error(ovsdb_log_read(s->log, &json));
         check_ovsdb_error(raft_header_from_json(&s->header, json));
         json_destroy(json);
 
         if (s->header.joining) {
             printf("%s has not joined the cluster, omitting\n", s->filename);
+            ovsdb_log_close(s->log);
             continue;
         }
         if (c.n_servers > 0) {
@@ -1191,6 +1192,10 @@ do_check_cluster(struct ovs_cmdl_context *ctx)
                           s->filename, s->header.name);
             }
         }
+        c.n_servers++;
+    }
+
+    for (struct server *s = c.servers; s < &c.servers[c.n_servers]; s++) {
         s->snap = &s->header.snap;
         s->log_start = s->log_end = s->header.snap_index + 1;
 
@@ -1209,7 +1214,9 @@ do_check_cluster(struct ovs_cmdl_context *ctx)
                 s->records = x2nrealloc(s->records, &allocated_records,
                                         sizeof *s->records);
             }
-            check_ovsdb_error(ovsdb_log_read(log, &json));
+
+            struct json *json;
+            check_ovsdb_error(ovsdb_log_read(s->log, &json));
             if (!json) {
                 break;
             }
@@ -1229,7 +1236,6 @@ do_check_cluster(struct ovs_cmdl_context *ctx)
             if (term > max_term) {
                 max_term = term;
             }
-
 
             switch (r->type) {
             case RAFT_REC_ENTRY:
@@ -1359,9 +1365,8 @@ do_check_cluster(struct ovs_cmdl_context *ctx)
             }
         }
 
-        ovsdb_log_close(log);
-
-        c.n_servers++;
+        ovsdb_log_close(s->log);
+        s->log = NULL;
     }
 
     /* Check the Leader Completeness property from Figure 3.2: If a log entry
