@@ -1462,6 +1462,16 @@ dpif_netlink_init_flow_del(struct dpif_netlink *dpif,
                                  del->ufid, del->terse, request);
 }
 
+enum {
+    DUMP_OVS_FLOWS_BIT    = 0,
+    DUMP_NETDEV_FLOWS_BIT = 1,
+};
+
+enum {
+    DUMP_OVS_FLOWS    = (1 << DUMP_OVS_FLOWS_BIT),
+    DUMP_NETDEV_FLOWS = (1 << DUMP_NETDEV_FLOWS_BIT),
+};
+
 struct dpif_netlink_flow_dump {
     struct dpif_flow_dump up;
     struct nl_dump nl_dump;
@@ -1470,7 +1480,7 @@ struct dpif_netlink_flow_dump {
     int netdev_dumps_num;                    /* Number of netdev_flow_dumps */
     struct ovs_mutex netdev_lock;            /* Guards the following. */
     int netdev_current_dump OVS_GUARDED;     /* Shared current dump */
-    struct dpif_flow_dump_types types;       /* Type of dump */
+    int type;                                /* Type of dump */
 };
 
 static struct dpif_netlink_flow_dump *
@@ -1485,7 +1495,7 @@ start_netdev_dump(const struct dpif *dpif_,
 {
     ovs_mutex_init(&dump->netdev_lock);
 
-    if (!(dump->types.netdev_flows)) {
+    if (!(dump->type & DUMP_NETDEV_FLOWS)) {
         dump->netdev_dumps_num = 0;
         dump->netdev_dumps = NULL;
         return;
@@ -1499,20 +1509,24 @@ start_netdev_dump(const struct dpif *dpif_,
     ovs_mutex_unlock(&dump->netdev_lock);
 }
 
-static void
-dpif_netlink_populate_flow_dump_types(struct dpif_netlink_flow_dump *dump,
-                                      struct dpif_flow_dump_types *types) {
-    if (!types) {
-        dump->types.ovs_flows = true;
-        dump->types.netdev_flows = true;
-    } else {
-        memcpy(&dump->types, types, sizeof *types);
+static int
+dpif_netlink_get_dump_type(char *str) {
+    int type = 0;
+
+    if (!str || !strcmp(str, "ovs") || !strcmp(str, "dpctl")) {
+        type |= DUMP_OVS_FLOWS;
     }
+    if ((netdev_is_flow_api_enabled() && !str)
+        || (str && (!strcmp(str, "offloaded") || !strcmp(str, "dpctl")))) {
+        type |= DUMP_NETDEV_FLOWS;
+    }
+
+    return type;
 }
 
 static struct dpif_flow_dump *
 dpif_netlink_flow_dump_create(const struct dpif *dpif_, bool terse,
-                              struct dpif_flow_dump_types *types)
+                              char *type)
 {
     const struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
     struct dpif_netlink_flow_dump *dump;
@@ -1522,9 +1536,9 @@ dpif_netlink_flow_dump_create(const struct dpif *dpif_, bool terse,
     dump = xmalloc(sizeof *dump);
     dpif_flow_dump_init(&dump->up, dpif_);
 
-    dpif_netlink_populate_flow_dump_types(dump, types);
+    dump->type = dpif_netlink_get_dump_type(type);
 
-    if (dump->types.ovs_flows) {
+    if (dump->type & DUMP_OVS_FLOWS) {
         dpif_netlink_flow_init(&request);
         request.cmd = OVS_FLOW_CMD_GET;
         request.dp_ifindex = dpif->dp_ifindex;
@@ -1551,7 +1565,7 @@ dpif_netlink_flow_dump_destroy(struct dpif_flow_dump *dump_)
     unsigned int nl_status = 0;
     int dump_status;
 
-    if (dump->types.ovs_flows) {
+    if (dump->type & DUMP_OVS_FLOWS) {
         nl_status = nl_dump_done(&dump->nl_dump);
     }
 
@@ -1787,7 +1801,7 @@ dpif_netlink_flow_dump_next(struct dpif_flow_dump_thread *thread_,
         }
     }
 
-    if (!(dump->types.ovs_flows)) {
+    if (!(dump->type & DUMP_OVS_FLOWS)) {
         return n_flows;
     }
 
