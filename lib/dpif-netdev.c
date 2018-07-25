@@ -5801,9 +5801,9 @@ smc_lookup_batch(struct dp_netdev_pmd_thread *pmd,
                 if (OVS_LIKELY(dpcls_rule_matches_key(&flow->cr, &keys[i]) &&
                 flow->flow.in_port.odp_port == packet->md.in_port.odp_port)) {
                     /* SMC hit and emc miss, we insert into EMC */
-                    emc_probabilistic_insert(pmd, &keys[i], flow);
                     keys[i].len =
                         netdev_flow_key_size(miniflow_n_values(&keys[i].mf));
+                    emc_probabilistic_insert(pmd, &keys[i], flow);
                     dp_netdev_queue_batches(packet, flow,
                     miniflow_get_tcp_flags(&keys[i].mf), batches, n_batches);
                     n_smc_hit++;
