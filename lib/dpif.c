@@ -1895,11 +1895,27 @@ int
 dpif_meter_set(struct dpif *dpif, ofproto_meter_id *meter_id,
                struct ofputil_meter_config *config)
 {
-    int error;
-
     COVERAGE_INC(dpif_meter_set);
 
-    error = dpif->dpif_class->meter_set(dpif, meter_id, config);
+    if (!(config->flags & (OFPMF13_KBPS | OFPMF13_PKTPS))) {
+        return EBADF; /* Rate unit type not set. */
+    }
+
+    if ((config->flags & OFPMF13_KBPS) && (config->flags & OFPMF13_PKTPS)) {
+        return EBADF; /* Both rate units may not be set. */
+    }
+
+    if (config->n_bands == 0) {
+        return EINVAL;
+    }
+
+    for (size_t i = 0; i < config->n_bands; i++) {
+        if (config->bands[i].rate == 0) {
+            return EDOM; /* Rate must be non-zero */
+        }
+    }
+
+    int error = dpif->dpif_class->meter_set(dpif, meter_id, config);
     if (!error) {
         VLOG_DBG_RL(&dpmsg_rl, "%s: DPIF meter %"PRIu32" set",
                     dpif_name(dpif), meter_id->uint32);

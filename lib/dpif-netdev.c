@@ -5172,21 +5172,12 @@ dpif_netdev_meter_set(struct dpif *dpif, ofproto_meter_id *meter_id,
         return EFBIG; /* Meter_id out of range. */
     }
 
-    if (config->flags & ~DP_SUPPORTED_METER_FLAGS_MASK ||
-        !(config->flags & (OFPMF13_KBPS | OFPMF13_PKTPS))) {
+    if (config->flags & ~DP_SUPPORTED_METER_FLAGS_MASK) {
         return EBADF; /* Unsupported flags set */
     }
 
-    /* Validate bands */
-    if (config->n_bands == 0 || config->n_bands > MAX_BANDS) {
-        return EINVAL; /* Too many bands */
-    }
-
-    /* Validate rates */
-    for (i = 0; i < config->n_bands; i++) {
-        if (config->bands[i].rate == 0) {
-            return EDOM; /* rate must be non-zero */
-        }
+    if (config->n_bands > MAX_BANDS) {
+        return EINVAL;
     }
 
     for (i = 0; i < config->n_bands; ++i) {
