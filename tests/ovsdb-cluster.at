@@ -108,7 +108,7 @@ ovsdb|WARN|schema: changed 2 columns in 'OVN_Southbound' database from ephemeral
         AT_CHECK([ovs-appctl --timeout=30 -t "`pwd`"/s$i cluster/leave OVN_Southbound])
         printf "\ns$i: waiting for removal to complete\n"
         AT_CHECK([ovsdb-client --timeout=30 -vfile -vsyslog:off -vvlog:off --log-file=remove$i.log wait unix:s$i.ovsdb $schema removed])
-        stop_server $victim
+        stop_server $i
     }
     add_server() {
         local i=$1
