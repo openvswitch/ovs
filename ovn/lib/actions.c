@@ -2217,13 +2217,16 @@ encode_SET_METER(const struct ovnact_set_meter *cl,
     uint32_t table_id;
     struct ofpact_meter *om;
 
+    /* Use the special "__string:" prefix to indicate that the name
+     * describes the meter itself. */
     char *name;
     if (cl->burst) {
-        name = xasprintf("kbps burst stats bands=type=drop rate=%"PRId64" "
-                         "burst_size=%"PRId64"", cl->rate, cl->burst);
+        name = xasprintf("__string: kbps burst stats bands=type=drop "
+                         "rate=%"PRId64" burst_size=%"PRId64"", cl->rate,
+                         cl->burst);
     } else {
-        name = xasprintf("kbps stats bands=type=drop rate=%"PRId64"",
-                         cl->rate);
+        name = xasprintf("__string: kbps stats bands=type=drop "
+                         "rate=%"PRId64"", cl->rate);
     }
 
     table_id = ovn_extend_table_assign_id(ep->meter_table, name);
