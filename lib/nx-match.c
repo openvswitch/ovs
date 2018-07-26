@@ -658,7 +658,6 @@ oxm_pull_field_array(const void *fields_data, size_t fields_len,
         error = nx_pull_entry__(&b, false, &header, &field, &value, NULL);
         if (error) {
             VLOG_DBG_RL(&rl, "error pulling field array field");
-            return error;
         } else if (!field) {
             VLOG_DBG_RL(&rl, "unknown field array field");
             error = OFPERR_OFPBMC_BAD_FIELD;
@@ -667,7 +666,7 @@ oxm_pull_field_array(const void *fields_data, size_t fields_len,
             error = OFPERR_OFPBMC_DUP_FIELD;
         } else if (!mf_is_mask_valid(field, &value)) {
             VLOG_DBG_RL(&rl, "bad mask in field array field '%s'", field->name);
-            return OFPERR_OFPBMC_BAD_MASK;
+            error = OFPERR_OFPBMC_BAD_MASK;
         } else {
             field_array_set(field->id, &value, fa);
         }
@@ -678,6 +677,8 @@ oxm_pull_field_array(const void *fields_data, size_t fields_len,
             VLOG_DBG_RL(&rl, "error parsing OXM at offset %"PRIdPTR" "
                         "within field array (%s)", pos - start,
                         ofperr_to_string(error));
+
+            free(fa->values);
             return error;
         }
     }
