@@ -768,6 +768,7 @@ main(int argc, char *argv[])
                                    time_msec());
 
                     ofctrl_put(&flow_table, &pending_ct_zones,
+                               sbrec_meter_table_get(ovnsb_idl_loop.idl),
                                get_nb_cfg(sbrec_sb_global_table_get(
                                               ovnsb_idl_loop.idl)));
 

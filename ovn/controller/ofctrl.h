@@ -27,6 +27,7 @@ struct hmap;
 struct match;
 struct ofpbuf;
 struct ovsrec_bridge;
+struct sbrec_meter_table;
 struct shash;
 
 /* Interface for OVN main loop. */
@@ -36,7 +37,7 @@ enum mf_field_id ofctrl_run(const struct ovsrec_bridge *br_int,
                             struct shash *pending_ct_zones);
 bool ofctrl_can_put(void);
 void ofctrl_put(struct hmap *flow_table, struct shash *pending_ct_zones,
-                int64_t nb_cfg);
+                const struct sbrec_meter_table *meter_table, int64_t nb_cfg);
 void ofctrl_wait(void);
 void ofctrl_destroy(void);
 int64_t ofctrl_get_cur_cfg(void);
