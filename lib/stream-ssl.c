@@ -1188,8 +1188,7 @@ stream_ssl_set_protocols(const char *arg)
     }
 
     /* Start with all the flags off and turn them on as requested. */
-    long protocol_flags = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1;
-    protocol_flags |= SSL_OP_NO_TLSv1_1 | SSL_OP_NO_TLSv1_2;
+    long protocol_flags = SSL_OP_NO_SSL_MASK;
 
     char *s = xstrdup(arg);
     char *save_ptr = NULL;
