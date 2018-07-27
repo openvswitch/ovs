@@ -244,6 +244,13 @@ struct dpcls_rule {
     /* 'flow' must be the last field, additional space is allocated here. */
 };
 
+/* Data structure to keep packet order till fastpath processing. */
+struct dp_packet_flow_map {
+    struct dp_packet *packet;
+    struct dp_netdev_flow *flow;
+    uint16_t tcp_flags;
+};
+
 static void dpcls_init(struct dpcls *);
 static void dpcls_destroy(struct dpcls *);
 static void dpcls_sort_subtable_vector(struct dpcls *);
@@ -5765,6 +5772,19 @@ dp_netdev_queue_batches(struct dp_packet *pkt,
     packet_batch_per_flow_update(batch, pkt, tcp_flags);
 }
 
+static inline void
+packet_enqueue_to_flow_map(struct dp_packet *packet,
+                           struct dp_netdev_flow *flow,
+                           uint16_t tcp_flags,
+                           struct dp_packet_flow_map *flow_map,
+                           size_t index)
+{
+    struct dp_packet_flow_map *map = &flow_map[index];
+    map->flow = flow;
+    map->packet = packet;
+    map->tcp_flags = tcp_flags;
+}
+
 /* SMC lookup function for a batch of packets.
  * By doing batching SMC lookup, we can use prefetch
  * to hide memory access latency.
@@ -5774,8 +5794,9 @@ smc_lookup_batch(struct dp_netdev_pmd_thread *pmd,
             struct netdev_flow_key *keys,
             struct netdev_flow_key **missed_keys,
             struct dp_packet_batch *packets_,
-            struct packet_batch_per_flow batches[],
-            size_t *n_batches, const int cnt)
+            const int cnt,
+            struct dp_packet_flow_map *flow_map,
+            uint8_t *index_map)
 {
     int i;
     struct dp_packet *packet;
@@ -5783,6 +5804,8 @@ smc_lookup_batch(struct dp_netdev_pmd_thread *pmd,
     struct dfc_cache *cache = &pmd->flow_cache;
     struct smc_cache *smc_cache = &cache->smc_cache;
     const struct cmap_node *flow_node;
+    int recv_idx;
+    uint16_t tcp_flags;
 
     /* Prefetch buckets for all packets */
     for (i = 0; i < cnt; i++) {
@@ -5793,6 +5816,8 @@ smc_lookup_batch(struct dp_netdev_pmd_thread *pmd,
         struct dp_netdev_flow *flow = NULL;
         flow_node = smc_entry_get(pmd, keys[i].hash);
         bool hit = false;
+        /* Get the original order of this packet in received batch. */
+        recv_idx = index_map[i];
 
         if (OVS_LIKELY(flow_node != NULL)) {
             CMAP_NODE_FOR_EACH (flow, node, flow_node) {
@@ -5800,12 +5825,17 @@ smc_lookup_batch(struct dp_netdev_pmd_thread *pmd,
                  * number, we need to  verify that the input ports match. */
                 if (OVS_LIKELY(dpcls_rule_matches_key(&flow->cr, &keys[i]) &&
                 flow->flow.in_port.odp_port == packet->md.in_port.odp_port)) {
+                    tcp_flags = miniflow_get_tcp_flags(&keys[i].mf);
+
                     /* SMC hit and emc miss, we insert into EMC */
                     keys[i].len =
                         netdev_flow_key_size(miniflow_n_values(&keys[i].mf));
                     emc_probabilistic_insert(pmd, &keys[i], flow);
-                    dp_netdev_queue_batches(packet, flow,
-                    miniflow_get_tcp_flags(&keys[i].mf), batches, n_batches);
+                    /* Add these packets into the flow map in the same order
+                     * as received.
+                     */
+                    packet_enqueue_to_flow_map(packet, flow, tcp_flags,
+                                               flow_map, recv_idx);
                     n_smc_hit++;
                     hit = true;
                     break;
@@ -5819,6 +5849,10 @@ smc_lookup_batch(struct dp_netdev_pmd_thread *pmd,
         /* SMC missed. Group missed packets together at
          * the beginning of the 'packets' array. */
         dp_packet_batch_refill(packets_, packet, i);
+
+        /* Preserve the order of packet for flow batching. */
+        index_map[n_missed] = recv_idx;
+
         /* Put missed keys to the pointer arrays return to the caller */
         missed_keys[n_missed++] = &keys[i];
     }
@@ -5847,6 +5881,8 @@ dfc_processing(struct dp_netdev_pmd_thread *pmd,
                struct netdev_flow_key *keys,
                struct netdev_flow_key **missed_keys,
                struct packet_batch_per_flow batches[], size_t *n_batches,
+               struct dp_packet_flow_map *flow_map,
+               size_t *n_flows, uint8_t *index_map,
                bool md_is_valid, odp_port_t port_no)
 {
     struct netdev_flow_key *key = &keys[0];
@@ -5858,6 +5894,8 @@ dfc_processing(struct dp_netdev_pmd_thread *pmd,
     int i;
     uint16_t tcp_flags;
     bool smc_enable_db;
+    size_t map_cnt = 0;
+    bool batch_enable = true;
 
     atomic_read_relaxed(&pmd->dp->smc_enable_db, &smc_enable_db);
     atomic_read_relaxed(&pmd->dp->emc_insert_min, &cur_min);
@@ -5888,10 +5926,19 @@ dfc_processing(struct dp_netdev_pmd_thread *pmd,
         if ((*recirc_depth_get() == 0) &&
             dp_packet_has_flow_mark(packet, &mark)) {
             flow = mark_to_flow_find(pmd, mark);
-            if (flow) {
+            if (OVS_LIKELY(flow)) {
                 tcp_flags = parse_tcp_flags(packet);
-                dp_netdev_queue_batches(packet, flow, tcp_flags, batches,
-                                        n_batches);
+                if (OVS_LIKELY(batch_enable)) {
+                    dp_netdev_queue_batches(packet, flow, tcp_flags, batches,
+                                            n_batches);
+                } else {
+                    /* Flow batching should be performed only after fast-path
+                     * processing is also completed for packets with emc miss
+                     * or else it will result in reordering of packets with
+                     * same datapath flows. */
+                    packet_enqueue_to_flow_map(packet, flow, tcp_flags,
+                                               flow_map, map_cnt++);
+                }
                 continue;
             }
         }
@@ -5914,13 +5961,27 @@ dfc_processing(struct dp_netdev_pmd_thread *pmd,
         }
         if (OVS_LIKELY(flow)) {
             tcp_flags = miniflow_get_tcp_flags(&key->mf);
-            dp_netdev_queue_batches(packet, flow, tcp_flags, batches,
-                                    n_batches);
             n_emc_hit++;
+            if (OVS_LIKELY(batch_enable)) {
+                dp_netdev_queue_batches(packet, flow, tcp_flags, batches,
+                                        n_batches);
+            } else {
+                /* Flow batching should be performed only after fast-path
+                 * processing is also completed for packets with emc miss
+                 * or else it will result in reordering of packets with
+                 * same datapath flows. */
+                packet_enqueue_to_flow_map(packet, flow, tcp_flags,
+                                           flow_map, map_cnt++);
+            }
         } else {
             /* Exact match cache missed. Group missed packets together at
              * the beginning of the 'packets' array. */
             dp_packet_batch_refill(packets_, packet, i);
+
+            /* Preserve the order of packet for flow batching. */
+            index_map[n_missed] = map_cnt;
+            flow_map[map_cnt++].flow = NULL;
+
             /* 'key[n_missed]' contains the key of the current packet and it
              * will be passed to SMC lookup. The next key should be extracted
              * to 'keys[n_missed + 1]'.
@@ -5928,8 +5989,13 @@ dfc_processing(struct dp_netdev_pmd_thread *pmd,
              * which will be returned to the caller for future processing. */
             missed_keys[n_missed] = key;
             key = &keys[++n_missed];
+
+            /* Skip batching for subsequent packets to avoid reordering. */
+            batch_enable = false;
         }
     }
+    /* Count of packets which are not flow batched. */
+    *n_flows = map_cnt;
 
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_EXACT_HIT, n_emc_hit);
 
@@ -5938,8 +6004,8 @@ dfc_processing(struct dp_netdev_pmd_thread *pmd,
     }
 
     /* Packets miss EMC will do a batch lookup in SMC if enabled */
-    smc_lookup_batch(pmd, keys, missed_keys, packets_, batches,
-                            n_batches, n_missed);
+    smc_lookup_batch(pmd, keys, missed_keys, packets_,
+                     n_missed, flow_map, index_map);
 
     return dp_packet_batch_size(packets_);
 }
@@ -6026,8 +6092,8 @@ static inline void
 fast_path_processing(struct dp_netdev_pmd_thread *pmd,
                      struct dp_packet_batch *packets_,
                      struct netdev_flow_key **keys,
-                     struct packet_batch_per_flow batches[],
-                     size_t *n_batches,
+                     struct dp_packet_flow_map *flow_map,
+                     uint8_t *index_map,
                      odp_port_t in_port)
 {
     const size_t cnt = dp_packet_batch_size(packets_);
@@ -6107,6 +6173,9 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
 
     DP_PACKET_BATCH_FOR_EACH (i, packet, packets_) {
         struct dp_netdev_flow *flow;
+        /* Get the original order of this packet in received batch. */
+        int recv_idx = index_map[i];
+        uint16_t tcp_flags;
 
         if (OVS_UNLIKELY(!rules[i])) {
             continue;
@@ -6117,9 +6186,12 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
         smc_insert(pmd, keys[i], hash);
 
         emc_probabilistic_insert(pmd, keys[i], flow);
-        dp_netdev_queue_batches(packet, flow,
-                                miniflow_get_tcp_flags(&keys[i]->mf),
-                                batches, n_batches);
+        /* Add these packets into the flow map in the same order
+         * as received.
+         */
+        tcp_flags = miniflow_get_tcp_flags(&keys[i]->mf);
+        packet_enqueue_to_flow_map(packet, flow, tcp_flags,
+                                   flow_map, recv_idx);
     }
 
     pmd_perf_update_counter(&pmd->perf_stats, PMD_STAT_MASKED_HIT,
@@ -6152,17 +6224,33 @@ dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
     struct netdev_flow_key *missed_keys[PKT_ARRAY_SIZE];
     struct packet_batch_per_flow batches[PKT_ARRAY_SIZE];
     size_t n_batches;
+    struct dp_packet_flow_map flow_map[PKT_ARRAY_SIZE];
+    uint8_t index_map[PKT_ARRAY_SIZE];
+    size_t n_flows, i;
+
     odp_port_t in_port;
 
     n_batches = 0;
     dfc_processing(pmd, packets, keys, missed_keys, batches, &n_batches,
-                            md_is_valid, port_no);
+                   flow_map, &n_flows, index_map, md_is_valid, port_no);
+
     if (!dp_packet_batch_is_empty(packets)) {
         /* Get ingress port from first packet's metadata. */
         in_port = packets->packets[0]->md.in_port.odp_port;
         fast_path_processing(pmd, packets, missed_keys,
-                             batches, &n_batches, in_port);
+                             flow_map, index_map, in_port);
     }
+
+    /* Batch rest of packets which are in flow map. */
+    for (i = 0; i < n_flows; i++) {
+        struct dp_packet_flow_map *map = &flow_map[i];
+
+        if (OVS_UNLIKELY(!map->flow)) {
+            continue;
+        }
+        dp_netdev_queue_batches(map->packet, map->flow, map->tcp_flags,
+                                batches, &n_batches);
+     }
 
     /* All the flow batches need to be reset before any call to
      * packet_batch_per_flow_execute() as it could potentially trigger
@@ -6173,7 +6261,6 @@ dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
      * already its own batches[k] still waiting to be served.  So if its
      * ‘batch’ member is not reset, the recirculated packet would be wrongly
      * appended to batches[k] of the 1st call to dp_netdev_input__(). */
-    size_t i;
     for (i = 0; i < n_batches; i++) {
         batches[i].flow->batch = NULL;
     }
