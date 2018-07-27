@@ -43,6 +43,7 @@
 
 static LIST_HEAD(vport_ops_list);
 static bool compat_gre_loaded = false;
+static bool compat_ip6_tunnel_loaded = false;
 
 /* Protected by RCU read lock for reading, ovs_mutex for writing. */
 static struct hlist_head *dev_table;
@@ -81,11 +82,22 @@ int ovs_vport_init(void)
 		compat_gre_loaded = true;
 	}
 	err = ip6gre_init();
-	if (err)
+	if (err && err != -EEXIST) {
 		goto err_ip6gre;
+	} else {
+		if (err == -EEXIST) {
+			pr_warn("IPv6 GRE/ERSPAN Rx mode is not supported\n");
+			goto skip_ip6_tunnel_init;
+		}
+	}
+
 	err = ip6_tunnel_init();
 	if (err)
 		goto err_ip6_tunnel;
+	else
+		compat_ip6_tunnel_loaded = true;
+
+skip_ip6_tunnel_init:
 	err = geneve_init_module();
 	if (err)
 		goto err_geneve;
@@ -131,7 +143,8 @@ void ovs_vport_exit(void)
 	ovs_stt_cleanup_module();
 	vxlan_cleanup_module();
 	geneve_cleanup_module();
-	ip6_tunnel_cleanup();
+	if (compat_ip6_tunnel_loaded)
+		ip6_tunnel_cleanup();
 	ip6gre_fini();
 	lisp_cleanup_module();
 	kfree(dev_table);
