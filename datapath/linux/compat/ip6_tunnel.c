@@ -2158,8 +2158,11 @@ int rpl_ip6_tunnel_init(void)
 		return -EOPNOTSUPP;
 #endif
 	err = register_pernet_device(&ip6_tnl_net_ops);
-	if (err < 0)
+	if (err < 0) {
+		pr_err("%s: can't register ip6_tnl pernet device\n",
+			__func__);
 		goto out_pernet;
+	}
 
 	err = xfrm6_tunnel_register(&ip4ip6_handler, AF_INET);
 	if (err < 0) {
@@ -2172,10 +2175,13 @@ int rpl_ip6_tunnel_init(void)
 		pr_err("%s: can't register ip6ip6\n", __func__);
 		goto out_ip6ip6;
 	}
-	err = rtnl_link_register(&ip6_link_ops);
-	if (err < 0)
-		goto rtnl_link_failed;
 
+	err = rtnl_link_register(&ip6_link_ops);
+	if (err < 0) {
+		pr_err("%s: can't register ip6_lin_ops\n",
+			__func__);
+		goto rtnl_link_failed;
+	}
 	return 0;
 
 rtnl_link_failed:
