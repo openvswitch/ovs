@@ -65,6 +65,7 @@
 #define IP6_GRE_HASH_SIZE (1 << IP6_GRE_HASH_SIZE_SHIFT)
 
 static unsigned int ip6gre_net_id __read_mostly;
+static bool ip6_gre_loaded = false;
 struct ip6gre_net {
 	struct ip6_tnl __rcu *tunnels[4][IP6_GRE_HASH_SIZE];
 
@@ -2792,32 +2793,52 @@ int rpl_ip6gre_init(void)
 	int err;
 
 	err = register_pernet_device(&ip6gre_net_ops);
-	if (err < 0)
-		return err;
+	if (err < 0) {
+		if (err == -EEXIST)
+			goto ip6_gre_loaded;
+		else
+			goto out;
+	}
 
 	err = inet6_add_protocol(&ip6gre_protocol, IPPROTO_GRE);
 	if (err < 0) {
 		pr_info("%s: can't add protocol\n", __func__);
-		goto add_proto_failed;
+		unregister_pernet_device(&ip6gre_net_ops);
+		goto ip6_gre_loaded;
 	}
 
 	pr_info("GRE over IPv6 tunneling driver\n");
 	ovs_vport_ops_register(&ovs_ip6gre_vport_ops);
 	ovs_vport_ops_register(&ovs_erspan6_vport_ops);
-	return 0;
-out:
 	return err;
 
-add_proto_failed:
-	unregister_pernet_device(&ip6gre_net_ops);
-	goto out;
+ip6_gre_loaded:
+	/* Since IPv6 GRE only allows single receiver to be registerd,
+	 * we skip here so only transmit works, see:
+	 *
+	 * commit f9242b6b28d61295f2bf7e8adfb1060b382e5381
+	 * Author: David S. Miller <davem@davemloft.net>
+	 * Date:   Tue Jun 19 18:56:21 2012 -0700
+	 *
+	 *     inet: Sanitize inet{,6} protocol demux.
+	 *
+	 * OVS GRE receive part is disabled.
+	 */
+	pr_info("GRE TX only over IPv6 tunneling driver\n");
+	ip6_gre_loaded = true;
+	ovs_vport_ops_register(&ovs_ip6gre_vport_ops);
+	ovs_vport_ops_register(&ovs_erspan6_vport_ops);
+out:
+	return err;
 }
 
 void rpl_ip6gre_fini(void)
 {
 	ovs_vport_ops_unregister(&ovs_erspan6_vport_ops);
 	ovs_vport_ops_unregister(&ovs_ip6gre_vport_ops);
-	inet6_del_protocol(&ip6gre_protocol, IPPROTO_GRE);
-	unregister_pernet_device(&ip6gre_net_ops);
+	if (!ip6_gre_loaded) {
+		inet6_del_protocol(&ip6gre_protocol, IPPROTO_GRE);
+		unregister_pernet_device(&ip6gre_net_ops);
+	}
 }
 #endif /* USE_UPSTREAM_TUNNEL */
