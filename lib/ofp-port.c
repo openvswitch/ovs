@@ -1637,28 +1637,6 @@ parse_intel_port_custom_property(struct ofpbuf *payload,
 }
 
 static enum ofperr
-parse_intel_port_stats_property(struct ofpbuf *payload,
-                                uint32_t exp_type,
-                                struct ofputil_port_stats *ops)
-{
-    enum ofperr error;
-
-    switch (exp_type) {
-    case INTEL_PORT_STATS_RFC2819:
-        error = parse_intel_port_stats_rfc2819_property(payload, ops);
-        break;
-    case INTEL_PORT_STATS_CUSTOM:
-        error = parse_intel_port_custom_property(payload, ops);
-        break;
-    default:
-        error = OFPERR_OFPBPC_BAD_EXP_TYPE;
-        break;
-    }
-
-    return error;
-}
-
-static enum ofperr
 ofputil_pull_ofp14_port_stats(struct ofputil_port_stats *ops,
                               struct ofpbuf *msg)
 {
@@ -1705,14 +1683,10 @@ ofputil_pull_ofp14_port_stats(struct ofputil_port_stats *ops,
             error = parse_ofp14_port_stats_ethernet_property(&payload, ops);
             break;
         case OFPPROP_EXP(INTEL_VENDOR_ID, INTEL_PORT_STATS_RFC2819):
-            error = parse_intel_port_stats_property(&payload,
-                                                    INTEL_PORT_STATS_RFC2819,
-                                                    ops);
+            error = parse_intel_port_stats_rfc2819_property(&payload, ops);
             break;
         case OFPPROP_EXP(INTEL_VENDOR_ID, INTEL_PORT_STATS_CUSTOM):
-            error = parse_intel_port_stats_property(&payload,
-                                                    INTEL_PORT_STATS_CUSTOM,
-                                                    ops);
+            error = parse_intel_port_custom_property(&payload, ops);
             break;
         default:
             error = OFPPROP_UNKNOWN(true, "port stats", type);
