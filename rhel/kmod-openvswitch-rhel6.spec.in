@@ -105,10 +105,12 @@ else
 fi
 
 %postun
-for kname in `ls -d /lib/modules/*`
-do
-    rm -rf $kname/weak-updates/openvswitch
-done
+if [ "$1" = 0 ]; then  # Erase, not upgrade
+    for kname in `ls -d /lib/modules/*`
+    do
+        rm -rf $kname/weak-updates/openvswitch
+    done
+fi
 /sbin/depmod -a
 
 %files
