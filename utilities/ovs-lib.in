@@ -258,7 +258,7 @@ stop_daemon () {
                 case $action in
                     EXIT)
                         action "Exiting $1 ($pid)" \
-                            ${bindir}/ovs-appctl -T 1 -t $rundir/$1.$pid.ctl exit
+                            ${bindir}/ovs-appctl -T 1 -t $rundir/$1.$pid.ctl exit $2
                         ;;
                     TERM)
                         action "Killing $1 ($pid)" kill $pid

@@ -350,7 +350,7 @@ stop_northd () {
 }
 
 stop_controller () {
-    OVS_RUNDIR=${OVN_RUNDIR} stop_daemon ovn-controller
+    OVS_RUNDIR=${OVN_RUNDIR} stop_daemon ovn-controller "$@"
 }
 
 stop_controller_vtep () {
@@ -367,7 +367,7 @@ restart_northd () {
 }
 
 restart_controller () {
-    stop_controller
+    stop_controller --restart
     start_controller
 }
 
