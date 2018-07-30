@@ -4333,6 +4333,7 @@ handle_flow_stats_request(struct ofconn *ofconn,
     ofpmp_init(&replies, request);
     struct rule *rule;
     RULE_COLLECTION_FOR_EACH (rule, &rules) {
+        uint64_t packet_count, byte_count;
         long long int now = time_msec();
         struct ofputil_flow_stats fs;
         long long int created, used, modified;
@@ -4351,7 +4352,10 @@ handle_flow_stats_request(struct ofconn *ofconn,
         ovs_mutex_unlock(&rule->mutex);
 
         ofproto->ofproto_class->rule_get_stats(rule, &fs.packet_count,
-                                               &fs.byte_count, &used);
+                                               &fs.byte_count, &packet_count,
+                                               &byte_count, &used);
+        fs.packet_count += packet_count;
+        fs.byte_count += byte_count;
 
         minimatch_expand(&rule->cr.match, &fs.match);
         fs.table_id = rule->table_id;
@@ -4379,11 +4383,14 @@ static void
 flow_stats_ds(struct ofproto *ofproto, struct rule *rule, struct ds *results)
 {
     uint64_t packet_count, byte_count;
+    uint64_t offload_packet_count, offload_byte_count;
     const struct rule_actions *actions;
     long long int created, used;
 
     rule->ofproto->ofproto_class->rule_get_stats(rule, &packet_count,
-                                                 &byte_count, &used);
+                                                 &byte_count,
+                                                 &offload_packet_count,
+                                                 &offload_byte_count, &used);
 
     ovs_mutex_lock(&rule->mutex);
     actions = rule_get_actions(rule);
@@ -4396,6 +4403,9 @@ flow_stats_ds(struct ofproto *ofproto, struct rule *rule, struct ds *results)
     ds_put_format(results, "duration=%llds, ", (time_msec() - created) / 1000);
     ds_put_format(results, "n_packets=%"PRIu64", ", packet_count);
     ds_put_format(results, "n_bytes=%"PRIu64", ", byte_count);
+    ds_put_format(results, "n_offload_packets=%"PRIu64", ",
+                  offload_packet_count);
+    ds_put_format(results, "n_offload_bytes=%"PRIu64", ", offload_byte_count);
     cls_rule_format(&rule->cr, ofproto_get_tun_tab(ofproto), NULL, results);
     ds_put_char(results, ',');
 
@@ -4505,23 +4515,27 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
 
     struct rule *rule;
     RULE_COLLECTION_FOR_EACH (rule, &rules) {
-        uint64_t packet_count;
-        uint64_t byte_count;
+        uint64_t packet_count, offload_packet_count;
+        uint64_t byte_count, offload_byte_count;
         long long int used;
 
         ofproto->ofproto_class->rule_get_stats(rule, &packet_count,
-                                               &byte_count, &used);
+                                               &byte_count,
+                                               &offload_packet_count,
+                                               &offload_byte_count, &used);
 
         if (packet_count == UINT64_MAX) {
             unknown_packets = true;
         } else {
             stats.packet_count += packet_count;
+            stats.packet_count += offload_packet_count;
         }
 
         if (byte_count == UINT64_MAX) {
             unknown_bytes = true;
         } else {
             stats.byte_count += byte_count;
+            stats.byte_count += offload_byte_count;
         }
 
         stats.flow_count++;
@@ -5688,6 +5702,7 @@ ofproto_rule_send_removed(struct rule *rule)
 {
     struct ofputil_flow_removed fr;
     long long int used;
+    uint64_t offload_packet_count, offload_byte_count OVS_UNUSED;
 
     minimatch_expand(&rule->cr.match, &fr.match);
     fr.priority = rule->cr.priority;
@@ -5711,7 +5726,9 @@ ofproto_rule_send_removed(struct rule *rule)
     fr.hard_timeout = rule->hard_timeout;
     ovs_mutex_unlock(&rule->mutex);
     rule->ofproto->ofproto_class->rule_get_stats(rule, &fr.packet_count,
-                                                 &fr.byte_count, &used);
+                                                 &fr.byte_count,
+                                                 &offload_packet_count,
+                                                 &offload_byte_count, &used);
     connmgr_send_flow_removed(connmgr, &fr);
     ovs_mutex_unlock(&ofproto_mutex);
 }
@@ -8462,11 +8479,13 @@ rule_eviction_priority(struct ofproto *ofproto, struct rule *rule)
         expiration = modified + rule->hard_timeout * 1000;
     }
     if (rule->idle_timeout) {
-        uint64_t packets, bytes;
+        uint64_t packets, bytes, offload_packets, offload_bytes OVS_UNUSED;
         long long int used;
         long long int idle_expiration;
 
-        ofproto->ofproto_class->rule_get_stats(rule, &packets, &bytes, &used);
+        ofproto->ofproto_class->rule_get_stats(rule, &packets, &bytes,
+                                               &offload_packets,
+                                               &offload_bytes, &used);
         idle_expiration = used + rule->idle_timeout * 1000;
         expiration = MIN(expiration, idle_expiration);
     }
