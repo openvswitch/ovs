@@ -1573,3 +1573,17 @@ AT_CHECK([grep 'command takes at most .* arguments' stderr], [0], [ignore])
 
 OVN_NBCTL_TEST_STOP
 AT_CLEANUP
+
+dnl ---------------------------------------------------------------------
+
+AT_SETUP([ovn-nbctl - Port Groups])
+OVN_NBCTL_TEST_START
+
+dnl Check that port group can be looked up by name
+AT_CHECK([ovn-nbctl create Port_Group name=pg0], [0], [ignore])
+AT_CHECK([ovn-nbctl get Port_Group pg0 name], [0], [dnl
+"pg0"
+])
+
+OVN_NBCTL_TEST_STOP
+AT_CLEANUP
