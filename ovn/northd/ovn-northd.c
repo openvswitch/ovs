@@ -6477,6 +6477,24 @@ sync_address_set(struct northd_context *ctx, const char *name,
                                     addrs, n_addrs);
 }
 
+/* Go through 'addresses' and add found IPv4 addresses to 'ipv4_addrs' and IPv6
+ * addresses to 'ipv6_addrs'.
+ */
+static void
+split_addresses(const char *addresses, struct svec *ipv4_addrs,
+                struct svec *ipv6_addrs)
+{
+    struct lport_addresses laddrs;
+    extract_lsp_addresses(addresses, &laddrs);
+    for (size_t k = 0; k < laddrs.n_ipv4_addrs; k++) {
+        svec_add(ipv4_addrs, laddrs.ipv4_addrs[k].addr_s);
+    }
+    for (size_t k = 0; k < laddrs.n_ipv6_addrs; k++) {
+        svec_add(ipv6_addrs, laddrs.ipv6_addrs[k].addr_s);
+    }
+    destroy_lport_addresses(&laddrs);
+}
+
 /* OVN_Southbound Address_Set table contains same records as in north
  * bound, plus the records generated from Port_Group table in north bound.
  *
@@ -6504,16 +6522,14 @@ sync_address_sets(struct northd_context *ctx)
         struct svec ipv6_addrs = SVEC_EMPTY_INITIALIZER;
         for (size_t i = 0; i < nb_port_group->n_ports; i++) {
             for (size_t j = 0; j < nb_port_group->ports[i]->n_addresses; j++) {
-                struct lport_addresses laddrs;
-                extract_lsp_addresses(nb_port_group->ports[i]->addresses[j],
-                                     &laddrs);
-                for (size_t k = 0; k < laddrs.n_ipv4_addrs; k++) {
-                    svec_add(&ipv4_addrs, laddrs.ipv4_addrs[k].addr_s);
+                const char *addrs = nb_port_group->ports[i]->addresses[j];
+                if (!is_dynamic_lsp_address(addrs)) {
+                    split_addresses(addrs, &ipv4_addrs, &ipv6_addrs);
                 }
-                for (size_t k = 0; k < laddrs.n_ipv6_addrs; k++) {
-                    svec_add(&ipv6_addrs, laddrs.ipv6_addrs[k].addr_s);
-                }
-                destroy_lport_addresses(&laddrs);
+            }
+            if (nb_port_group->ports[i]->dynamic_addresses) {
+                split_addresses(nb_port_group->ports[i]->dynamic_addresses,
+                                &ipv4_addrs, &ipv6_addrs);
             }
         }
         char *ipv4_addrs_name = xasprintf("%s_ip4", nb_port_group->name);

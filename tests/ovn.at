@@ -10310,6 +10310,65 @@ AT_CHECK([ovn-sbctl get Address_Set pg1_ip6 addresses],
 
 AT_CLEANUP
 
+AT_SETUP([ovn -- Address Set generation from Port Groups (dynamic addressing)])
+ovn_start
+
+ovn-nbctl ls-add ls1
+ovn-nbctl ls-add ls2
+ovn-nbctl ls-add ls3
+
+ovn-nbctl set Logical_Switch ls1 \
+    other_config:subnet=10.1.0.0/24 other_config:ipv6_prefix="2001:db8:1::"
+ovn-nbctl set Logical_Switch ls2 \
+    other_config:subnet=10.2.0.0/24 other_config:ipv6_prefix="2001:db8:2::"
+ovn-nbctl set Logical_Switch ls3 \
+    other_config:subnet=10.3.0.0/24 other_config:ipv6_prefix="2001:db8:3::"
+
+ovn-nbctl lsp-add ls1 lp1
+ovn-nbctl lsp-add ls2 lp2
+ovn-nbctl lsp-add ls3 lp3
+
+ovn-nbctl lsp-set-addresses lp1 "02:00:00:00:00:01 dynamic"
+ovn-nbctl lsp-set-addresses lp2 "02:00:00:00:00:02 dynamic"
+ovn-nbctl lsp-set-addresses lp3 "02:00:00:00:00:03 dynamic"
+
+ovn-nbctl create Port_Group name=pg1
+ovn-nbctl create Port_Group name=pg2
+
+ovn-nbctl --id=@p get Logical_Switch_Port lp1 -- add Port_Group pg1 ports @p
+ovn-nbctl --id=@p get Logical_Switch_Port lp2 -- add Port_Group pg1 ports @p
+ovn-nbctl --id=@p get Logical_Switch_Port lp2 -- add Port_Group pg2 ports @p
+ovn-nbctl --id=@p get Logical_Switch_Port lp3 -- add Port_Group pg2 ports @p
+
+ovn-nbctl --wait=sb sync
+
+dnl Check if port group address sets were populated with ports' addresses
+AT_CHECK([ovn-sbctl get Address_Set pg1_ip4 addresses],
+         [0], [[["10.1.0.2", "10.2.0.2"]]
+])
+AT_CHECK([ovn-sbctl get Address_Set pg2_ip4 addresses],
+         [0], [[["10.2.0.2", "10.3.0.2"]]
+])
+AT_CHECK([ovn-sbctl get Address_Set pg1_ip6 addresses],
+         [0], [[["2001:db8:1::ff:fe00:1", "2001:db8:2::ff:fe00:2"]]
+])
+AT_CHECK([ovn-sbctl get Address_Set pg2_ip6 addresses],
+         [0], [[["2001:db8:2::ff:fe00:2", "2001:db8:3::ff:fe00:3"]]
+])
+
+ovn-nbctl set Logical_Switch ls1 \
+    other_config:subnet=10.11.0.0/24 other_config:ipv6_prefix="2001:db8:11::"
+
+dnl Check if updated address got propagated to the port group address sets
+AT_CHECK([ovn-sbctl get Address_Set pg1_ip4 addresses],
+         [0], [[["10.11.0.2", "10.2.0.2"]]
+])
+AT_CHECK([ovn-sbctl get Address_Set pg1_ip6 addresses],
+         [0], [[["2001:db8:11::ff:fe00:1", "2001:db8:2::ff:fe00:2"]]
+])
+
+AT_CLEANUP
+
 AT_SETUP([ovn -- ACL conjunction])
 ovn_start
 
