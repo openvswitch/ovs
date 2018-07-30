@@ -10260,6 +10260,56 @@ done
 OVN_CLEANUP([hv1], [hv2], [hv3])
 AT_CLEANUP
 
+AT_SETUP([ovn -- Address Set generation from Port Groups (static addressing)])
+ovn_start
+
+ovn-nbctl ls-add ls1
+
+ovn-nbctl lsp-add ls1 lp1
+ovn-nbctl lsp-add ls1 lp2
+ovn-nbctl lsp-add ls1 lp3
+
+ovn-nbctl lsp-set-addresses lp1 "02:00:00:00:00:01 10.0.0.1 2001:db8::1"
+ovn-nbctl lsp-set-addresses lp2 "02:00:00:00:00:02 10.0.0.2 2001:db8::2"
+ovn-nbctl lsp-set-addresses lp3 "02:00:00:00:00:03 10.0.0.3 2001:db8::3"
+
+ovn-nbctl create Port_Group name=pg1
+ovn-nbctl create Port_Group name=pg2
+
+ovn-nbctl --id=@p get Logical_Switch_Port lp1 -- add Port_Group pg1 ports @p
+ovn-nbctl --id=@p get Logical_Switch_Port lp2 -- add Port_Group pg1 ports @p
+ovn-nbctl --id=@p get Logical_Switch_Port lp2 -- add Port_Group pg2 ports @p
+ovn-nbctl --id=@p get Logical_Switch_Port lp3 -- add Port_Group pg2 ports @p
+
+ovn-nbctl --wait=sb sync
+
+dnl Check if port group address sets were populated with ports' addresses
+AT_CHECK([ovn-sbctl get Address_Set pg1_ip4 addresses],
+         [0], [[["10.0.0.1", "10.0.0.2"]]
+])
+AT_CHECK([ovn-sbctl get Address_Set pg2_ip4 addresses],
+         [0], [[["10.0.0.2", "10.0.0.3"]]
+])
+AT_CHECK([ovn-sbctl get Address_Set pg1_ip6 addresses],
+         [0], [[["2001:db8::1", "2001:db8::2"]]
+])
+AT_CHECK([ovn-sbctl get Address_Set pg2_ip6 addresses],
+         [0], [[["2001:db8::2", "2001:db8::3"]]
+])
+
+ovn-nbctl --wait=sb lsp-set-addresses lp1 \
+    "02:00:00:00:00:01 10.0.0.11 2001:db8::11"
+
+dnl Check if updated address got propagated to the port group address sets
+AT_CHECK([ovn-sbctl get Address_Set pg1_ip4 addresses],
+         [0], [[["10.0.0.11", "10.0.0.2"]]
+])
+AT_CHECK([ovn-sbctl get Address_Set pg1_ip6 addresses],
+         [0], [[["2001:db8::11", "2001:db8::2"]]
+])
+
+AT_CLEANUP
+
 AT_SETUP([ovn -- ACL conjunction])
 ovn_start
 
