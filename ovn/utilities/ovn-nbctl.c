@@ -4513,6 +4513,9 @@ static const struct ctl_table_class tables[NBREC_N_TABLES] = {
     [NBREC_TABLE_ADDRESS_SET].row_ids[0]
     = {&nbrec_address_set_col_name, NULL, NULL},
 
+    [NBREC_TABLE_PORT_GROUP].row_ids[0]
+    = {&nbrec_port_group_col_name, NULL, NULL},
+
     [NBREC_TABLE_ACL].row_ids[0] = {&nbrec_acl_col_name, NULL, NULL},
 };
 
