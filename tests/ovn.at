@@ -10791,3 +10791,189 @@ OVN_CHECK_PACKETS([hv2/vif2-tx.pcap], [vif2.expected])
 
 OVN_CLEANUP([hv1], [hv2])
 AT_CLEANUP
+
+AT_SETUP([ovn -- ovn-controller exit])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+# Logical network:
+# One Logical Router: ro, with two logical switches sw1 and sw2.
+# sw1 is for subnet 10.0.0.0/8
+# sw2 is for subnet 20.0.0.0/8
+# sw1 has a single port bound on hv1
+# sw2 has a single port bound on hv2
+
+ovn-nbctl lr-add ro
+ovn-nbctl ls-add sw1
+ovn-nbctl ls-add sw2
+
+sw1_ro_mac=00:00:10:00:00:01
+sw1_ro_ip=10.0.0.1
+sw2_ro_mac=00:00:20:00:00:01
+sw2_ro_ip=20.0.0.1
+sw1_p1_mac=00:00:10:00:00:02
+sw1_p1_ip=10.0.0.2
+sw2_p1_mac=00:00:20:00:00:02
+sw2_p1_ip=20.0.0.2
+
+ovn-nbctl lrp-add ro ro-sw1 $sw1_ro_mac ${sw1_ro_ip}/8
+ovn-nbctl lrp-add ro ro-sw2 $sw2_ro_mac ${sw2_ro_ip}/8
+ovn-nbctl lsp-add sw1 sw1-ro -- set Logical_Switch_Port sw1-ro type=router \
+  options:router-port=ro-sw1 addresses=\"$sw1_ro_mac\"
+ovn-nbctl lsp-add sw2 sw2-ro -- set Logical_Switch_Port sw2-ro type=router \
+  options:router-port=ro-sw2 addresses=\"$sw2_ro_mac\"
+
+ovn-nbctl lsp-add sw1 sw1-p1 \
+-- lsp-set-addresses sw1-p1 "$sw1_p1_mac $sw1_p1_ip"
+
+ovn-nbctl lsp-add sw2 sw2-p1 \
+-- lsp-set-addresses sw2-p1 "$sw2_p1_mac $sw2_p1_ip"
+
+net_add n1
+
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl -- add-port br-int hv1-vif1 -- \
+    set interface hv1-vif1 external-ids:iface-id=sw1-p1 \
+    options:tx_pcap=hv1/vif1-tx.pcap \
+    options:rxq_pcap=hv1/vif1-rx.pcap \
+    ofport-request=1
+
+sim_add hv2
+as hv2
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.2
+ovs-vsctl -- add-port br-int hv2-vif1 -- \
+    set interface hv2-vif1 external-ids:iface-id=sw2-p1 \
+    options:tx_pcap=hv2/vif1-tx.pcap \
+    options:rxq_pcap=hv2/vif1-rx.pcap \
+    ofport-request=1
+
+OVN_POPULATE_ARP
+
+sleep 1
+
+packet="inport==\"sw1-p1\" && eth.src==$sw1_p1_mac && eth.dst==$sw1_ro_mac &&
+       ip4 && ip.ttl==64 && ip4.src==$sw1_p1_ip && ip4.dst==$sw2_p1_ip &&
+       udp && udp.src==53 && udp.dst==4369"
+
+# Start by Sending the packet and make sure it makes it there as expected
+as hv1 ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+# Expected packet has TTL decreased by 1
+expected="eth.src==$sw2_ro_mac && eth.dst==$sw2_p1_mac &&
+       ip4 && ip.ttl==63 && ip4.src==$sw1_p1_ip && ip4.dst==$sw2_p1_ip &&
+       udp && udp.src==53 && udp.dst==4369"
+echo $expected | ovstest test-ovn expr-to-packets > expected
+
+OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [expected])
+
+# Stop ovn-controller on hv2
+as hv2 ovs-appctl -t ovn-controller exit
+
+# Now send the packet again. This time, it should not arrive.
+as hv1 ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [expected])
+
+# Start ovn-controller again just so OVN_CLEANUP doesn't complain
+as hv2 start_daemon ovn-controller
+
+OVN_CLEANUP([hv1],[hv2])
+AT_CLEANUP
+
+AT_SETUP([ovn -- ovn-controller restart])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# Logical network:
+# One Logical Router: ro, with two logical switches sw1 and sw2.
+# sw1 is for subnet 10.0.0.0/8
+# sw2 is for subnet 20.0.0.0/8
+# sw1 has a single port bound on hv1
+# sw2 has a single port bound on hv2
+
+ovn-nbctl lr-add ro
+ovn-nbctl ls-add sw1
+ovn-nbctl ls-add sw2
+
+sw1_ro_mac=00:00:10:00:00:01
+sw1_ro_ip=10.0.0.1
+sw2_ro_mac=00:00:20:00:00:01
+sw2_ro_ip=20.0.0.1
+sw1_p1_mac=00:00:10:00:00:02
+sw1_p1_ip=10.0.0.2
+sw2_p1_mac=00:00:20:00:00:02
+sw2_p1_ip=20.0.0.2
+
+ovn-nbctl lrp-add ro ro-sw1 $sw1_ro_mac ${sw1_ro_ip}/8
+ovn-nbctl lrp-add ro ro-sw2 $sw2_ro_mac ${sw2_ro_ip}/8
+ovn-nbctl lsp-add sw1 sw1-ro -- set Logical_Switch_Port sw1-ro type=router \
+  options:router-port=ro-sw1 addresses=\"$sw1_ro_mac\"
+ovn-nbctl lsp-add sw2 sw2-ro -- set Logical_Switch_Port sw2-ro type=router \
+  options:router-port=ro-sw2 addresses=\"$sw2_ro_mac\"
+
+ovn-nbctl lsp-add sw1 sw1-p1 \
+-- lsp-set-addresses sw1-p1 "$sw1_p1_mac $sw1_p1_ip"
+
+ovn-nbctl lsp-add sw2 sw2-p1 \
+-- lsp-set-addresses sw2-p1 "$sw2_p1_mac $sw2_p1_ip"
+
+net_add n1
+
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl -- add-port br-int hv1-vif1 -- \
+    set interface hv1-vif1 external-ids:iface-id=sw1-p1 \
+    options:tx_pcap=hv1/vif1-tx.pcap \
+    options:rxq_pcap=hv1/vif1-rx.pcap \
+    ofport-request=1
+
+sim_add hv2
+as hv2
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.2
+ovs-vsctl -- add-port br-int hv2-vif1 -- \
+    set interface hv2-vif1 external-ids:iface-id=sw2-p1 \
+    options:tx_pcap=hv2/vif1-tx.pcap \
+    options:rxq_pcap=hv2/vif1-rx.pcap \
+    ofport-request=1
+
+OVN_POPULATE_ARP
+
+sleep 1
+
+packet="inport==\"sw1-p1\" && eth.src==$sw1_p1_mac && eth.dst==$sw1_ro_mac &&
+       ip4 && ip.ttl==64 && ip4.src==$sw1_p1_ip && ip4.dst==$sw2_p1_ip &&
+       udp && udp.src==53 && udp.dst==4369"
+
+# Start by Sending the packet and make sure it makes it there as expected
+as hv1 ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+# Expected packet has TTL decreased by 1
+expected="eth.src==$sw2_ro_mac && eth.dst==$sw2_p1_mac &&
+       ip4 && ip.ttl==63 && ip4.src==$sw1_p1_ip && ip4.dst==$sw2_p1_ip &&
+       udp && udp.src==53 && udp.dst==4369"
+echo $expected | ovstest test-ovn expr-to-packets > expected
+
+OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [expected])
+
+# Stop ovn-controller on hv2 with --restart flag
+as hv2 ovs-appctl -t ovn-controller exit --restart
+
+# Now send the packet again. This time, it should still arrive
+as hv1 ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+cat expected expected > expected2
+
+OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [expected2])
+
+# Start ovn-controller again just so OVN_CLEANUP doesn't complain
+as hv2 start_daemon ovn-controller
+
+OVN_CLEANUP([hv1],[hv2])
+
+AT_CLEANUP
