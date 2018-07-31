@@ -74,8 +74,12 @@ try:
 except:
     no_spellcheck = True
 
+RETURN_CHECK_INITIAL_STATE = 0
+RETURN_CHECK_STATE_WITH_RETURN = 1
+RETURN_CHECK_AWAITING_BRACE = 2
 __errors = 0
 __warnings = 0
+empty_return_check_state = 0
 print_file_name = None
 checking_file = False
 total_line = 0
@@ -158,6 +162,7 @@ __regex_conditional_else_bracing2 = re.compile(r'^\s*}\selse\s*$')
 __regex_has_xxx_mark = re.compile(r'.*xxx.*', re.IGNORECASE)
 __regex_added_doc_rst = re.compile(
                     r'\ndiff .*Documentation/.*rst\nnew file mode')
+__regex_empty_return = re.compile(r'\s*return;')
 
 skip_leading_whitespace_check = False
 skip_trailing_whitespace_check = False
@@ -454,6 +459,33 @@ def check_new_docs_index(text):
     return __check_new_docs(text, 'rst')
 
 
+def empty_return_with_brace(line):
+    """Returns TRUE if a function contains a return; followed
+       by one or more line feeds and terminates with a '}'
+       at start of line"""
+
+    def empty_return(line):
+        """Returns TRUE if a function has a 'return;'"""
+        return __regex_empty_return.match(line) is not None
+
+    global empty_return_check_state
+    if empty_return_check_state == RETURN_CHECK_INITIAL_STATE \
+       and empty_return(line):
+        empty_return_check_state = RETURN_CHECK_STATE_WITH_RETURN
+    elif empty_return_check_state == RETURN_CHECK_STATE_WITH_RETURN \
+         and (re.match(r'^}$', line) or len(line) == 0):
+        if re.match('^}$', line):
+            empty_return_check_state = RETURN_CHECK_AWAITING_BRACE
+    else:
+        empty_return_check_state = RETURN_CHECK_INITIAL_STATE
+
+    if empty_return_check_state == RETURN_CHECK_AWAITING_BRACE:
+        empty_return_check_state = RETURN_CHECK_INITIAL_STATE
+        return True
+
+    return False
+
+
 file_checks = [
         {'regex': __regex_added_doc_rst,
          'check': check_new_docs_index},
@@ -505,6 +537,13 @@ checks = [
     {'regex': '(\.c|\.h)(\.in)?$', 'match_name': None,
      'prereq': lambda x: has_comment(x),
      'check': lambda x: check_comment_spelling(x)},
+
+    {'regex': '(\.c|\.h)(\.in)?$', 'match_name': None,
+     'check': lambda x: empty_return_with_brace(x),
+     'interim_line': True,
+     'print':
+     lambda: print_warning("Empty return followed by brace, consider omitting")
+     },
 ]
 
 
@@ -599,6 +638,29 @@ def run_checks(current_file, line, lineno):
         print("%s\n" % line)
 
 
+def interim_line_check(current_file, line, lineno):
+    """Runs the various checks for the particular interim line.  This will
+       take filename into account, and will check for the 'interim_line'
+       key before running the check."""
+    global checking_file, total_line
+    print_line = False
+    for check in get_file_type_checks(current_file):
+        if 'prereq' in check and not check['prereq'](line):
+            continue
+        if 'interim_line' in check and check['interim_line']:
+            if check['check'](line):
+                if 'print' in check:
+                    check['print']()
+                    print_line = True
+
+    if print_line:
+        if checking_file:
+            print("%s:%d:" % (current_file, lineno))
+        else:
+            print("#%d FILE: %s:%d:" % (total_line, current_file, lineno))
+        print("%s\n" % line)
+
+
 def run_file_checks(text):
     """Runs the various checks for the text."""
     for check in file_checks:
@@ -607,7 +669,8 @@ def run_file_checks(text):
 
 
 def ovs_checkpatch_parse(text, filename):
-    global print_file_name, total_line, checking_file
+    global print_file_name, total_line, checking_file, \
+        empty_return_check_state
 
     PARSE_STATE_HEADING = 0
     PARSE_STATE_DIFF_HEADER = 1
@@ -680,16 +743,21 @@ def ovs_checkpatch_parse(text, filename):
                 continue
             reset_line_number = hunk_differences.match(line)
             if reset_line_number:
+                empty_return_check_state = RETURN_CHECK_INITIAL_STATE
                 lineno = int(reset_line_number.group(3))
                 if lineno < 0:
                     lineno = -1 * lineno
                 lineno -= 1
+
             if is_subtracted_line(line):
                 lineno -= 1
-            if not is_added_line(line):
                 continue
 
             cmp_line = added_line(line)
+
+            if not is_added_line(line):
+                interim_line_check(current_file, cmp_line, lineno)
+                continue
 
             # Skip files which have /datapath in them, since they are
             # linux or windows coding standards
