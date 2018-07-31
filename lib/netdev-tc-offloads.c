@@ -563,6 +563,14 @@ parse_tc_flower_to_match(struct tc_flower *flower,
                     nl_msg_put_in6_addr(buf, OVS_TUNNEL_KEY_ATTR_IPV6_DST,
                                         &action->encap.ipv6.ipv6_dst);
                 }
+                if (action->encap.tos) {
+                    nl_msg_put_u8(buf, OVS_TUNNEL_KEY_ATTR_TOS,
+                                  action->encap.tos);
+                }
+                if (action->encap.ttl) {
+                    nl_msg_put_u8(buf, OVS_TUNNEL_KEY_ATTR_TTL,
+                                  action->encap.ttl);
+                }
                 nl_msg_put_be16(buf, OVS_TUNNEL_KEY_ATTR_TP_DST,
                                 action->encap.tp_dst);
 
@@ -744,6 +752,14 @@ parse_put_flow_set_action(struct tc_flower *flower, struct tc_action *action,
         break;
         case OVS_TUNNEL_KEY_ATTR_IPV4_DST: {
             action->encap.ipv4.ipv4_dst = nl_attr_get_be32(tun_attr);
+        }
+        break;
+        case OVS_TUNNEL_KEY_ATTR_TOS: {
+            action->encap.tos = nl_attr_get_u8(tun_attr);
+        }
+        break;
+        case OVS_TUNNEL_KEY_ATTR_TTL: {
+            action->encap.ttl = nl_attr_get_u8(tun_attr);
         }
         break;
         case OVS_TUNNEL_KEY_ATTR_IPV6_SRC: {

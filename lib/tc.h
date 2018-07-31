@@ -130,6 +130,8 @@ struct tc_action {
             ovs_be64 id;
             ovs_be16 tp_src;
             ovs_be16 tp_dst;
+            uint8_t tos;
+            uint8_t ttl;
             struct {
                 ovs_be32 ipv4_src;
                 ovs_be32 ipv4_dst;

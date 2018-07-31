@@ -1,7 +1,7 @@
 #ifndef __LINUX_TC_ACT_TC_TUNNEL_KEY_WRAPPER_H
 #define __LINUX_TC_ACT_TC_TUNNEL_KEY_WRAPPER_H 1
 
-#if defined(__KERNEL__) || defined(HAVE_TCA_TUNNEL_KEY_ENC_DST_PORT)
+#if defined(__KERNEL__) || defined(HAVE_TCA_TUNNEL_KEY_ENC_TTL)
 #include_next <linux/tc_act/tc_tunnel_key.h>
 #else
 
@@ -36,11 +36,17 @@ enum {
 	TCA_TUNNEL_KEY_ENC_KEY_ID,	/* be64 */
 	TCA_TUNNEL_KEY_PAD,
 	TCA_TUNNEL_KEY_ENC_DST_PORT,	/* be16 */
+	TCA_TUNNEL_KEY_NO_CSUM,     	/* u8 */
+	TCA_TUNNEL_KEY_ENC_OPTS,        /* Nested TCA_TUNNEL_KEY_ENC_OPTS_
+                                     * attributes
+                                     */
+	TCA_TUNNEL_KEY_ENC_TOS,		    /* u8 */
+	TCA_TUNNEL_KEY_ENC_TTL,		    /* u8 */
 	__TCA_TUNNEL_KEY_MAX,
 };
 
 #define TCA_TUNNEL_KEY_MAX (__TCA_TUNNEL_KEY_MAX - 1)
 
-#endif /* __KERNEL__ || HAVE_TCA_TUNNEL_KEY_ENC_DST_PORT */
+#endif /* __KERNEL__ || HAVE_TCA_TUNNEL_KEY_ENC_TTL */
 
 #endif /* __LINUX_TC_ACT_TC_TUNNEL_KEY_WRAPPER_H */

@@ -192,10 +192,10 @@ AC_DEFUN([OVS_CHECK_LINUX_TC], [
 
   AC_COMPILE_IFELSE([
     AC_LANG_PROGRAM([#include <linux/tc_act/tc_tunnel_key.h>], [
-        int x = TCA_TUNNEL_KEY_ENC_DST_PORT;
+        int x = TCA_TUNNEL_KEY_ENC_TTL;
     ])],
-    [AC_DEFINE([HAVE_TCA_TUNNEL_KEY_ENC_DST_PORT], [1],
-               [Define to 1 if TCA_TUNNEL_KEY_ENC_DST_PORT is avaiable.])])
+    [AC_DEFINE([HAVE_TCA_TUNNEL_KEY_ENC_TTL], [1],
+               [Define to 1 if TCA_TUNNEL_KEY_ENC_TTL is available.])])
 
   AC_COMPILE_IFELSE([
     AC_LANG_PROGRAM([#include <linux/tc_act/tc_pedit.h>], [
