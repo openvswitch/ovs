@@ -284,7 +284,7 @@ policy         = policy                # default policy
 email_in_dn    = no                    # Don't add the email into cert DN
 name_opt       = ca_default            # Subject name display option
 cert_opt       = ca_default            # Certificate display option
-copy_extensions = none                 # Don't copy extensions from request
+copy_extensions = copy                 # Copy extensions from request
 unique_subject = no                    # Allow certs with duplicate subjects
 
 # For the CA policy
@@ -295,6 +295,13 @@ organizationName        = match
 organizationalUnitName  = optional
 commonName              = supplied
 emailAddress            = optional
+
+# For the x509v3 extension
+[ ca_cert ]
+basicConstraints=CA:true
+
+[ usr_cert ]
+basicConstraints=CA:false
 EOF
         fi
 
@@ -307,7 +314,8 @@ EOF
         openssl req -config ca.cnf -nodes \
             -newkey $newkey -keyout private/cakey.pem -out careq.pem \
             1>&3 2>&3
-        openssl ca -config ca.cnf -create_serial -out cacert.pem \
+        openssl ca -config ca.cnf -create_serial \
+            -extensions ca_cert -out cacert.pem \
             -days 3650 -batch -keyfile private/cakey.pem -selfsign \
             -infiles careq.pem 1>&3 2>&3
         chmod 0700 private/cakey.pem
@@ -445,6 +453,7 @@ make_request() {
 [ req ]
 prompt = no
 distinguished_name = req_distinguished_name
+req_extensions = v3_req
 
 [ req_distinguished_name ]
 C = US
@@ -453,6 +462,9 @@ L = Palo Alto
 O = Open vSwitch
 OU = Open vSwitch certifier
 CN = $cn
+
+[ v3_req ]
+subjectAltName = DNS:$cn
 EOF
     if test $keytype = rsa; then
         (umask 077 && openssl genrsa -out "$1-privkey.pem" $bits) 1>&3 2>&3 \
@@ -481,7 +493,7 @@ sign_request() {
     esac
 
     (cd "$pkidir/${type}ca" && 
-     openssl ca -config ca.cnf -batch -in "$request_file") \
+     openssl ca -config ca.cnf -extensions usr_cert -batch -in "$request_file") \
         > "$2.tmp$$" 2>&3
     mv "$2.tmp$$" "$2"
 }
@@ -529,11 +541,16 @@ elif test "$command" = self-sign; then
     must_exist "$arg1-req.pem"
     must_exist "$arg1-privkey.pem"
     must_not_exist "$arg1-cert.pem"
+    make_tmpdir
+    cat > "$TMP/v3.ext" <<EOF
+subjectAltName = DNS:$arg1
+EOF
 
     # Create both the private key and certificate with restricted permissions.
     (umask 077 && \
      openssl x509 -in "$arg1-req.pem" -out "$arg1-cert.pem.tmp" \
-        -signkey "$arg1-privkey.pem" -req -days 3650 -text) 2>&3 || exit $?
+                  -signkey "$arg1-privkey.pem" -req -days 3650 -text \
+                  -extfile $TMP/v3.ext) 2>&3 || exit $?
 
     # Reset the permissions on the certificate to the user's default.
     cat "$arg1-cert.pem.tmp" > "$arg1-cert.pem"

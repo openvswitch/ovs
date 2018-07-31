@@ -59,6 +59,9 @@ v2.10.0 - xx xxx xxxx
        both kernel datapath and userspace datapath.
      * Added port-based and flow-based ERSPAN tunnel port support, added
        OpenFlow rules matching ERSPAN fields. See ovs-fields(7).
+   - ovs-pki
+     * ovs-pki now generates x.509 version 3 certificate. The new format adds
+       subjectAltName field and sets its value the same as common name (CN).
 
 v2.9.0 - 19 Feb 2018
 --------------------
