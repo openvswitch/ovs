@@ -228,3 +228,37 @@ as ovn-sb
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 
 AT_CLEANUP
+
+# Check ovn-controller connection status to Southbound database
+AT_SETUP([ovn-controller - check sbdb connection])
+AT_KEYWORDS([ovn])
+ovn_init_db ovn-sb
+
+net_add n1
+sim_add hv
+as hv
+ovs-vsctl \
+    -- add-br br-phys \
+    -- add-br br-eth0 \
+    -- add-br br-eth1 \
+    -- add-br br-eth2
+ovn_attach n1 br-phys 192.168.0.1
+
+check_sbdb_connection () {
+    test "$(ovs-appctl -t ovn-controller connection-status)" = "$1"
+}
+
+OVS_WAIT_UNTIL([check_sbdb_connection connected])
+
+ovs-vsctl set open . external_ids:ovn-remote=tcp:192.168.0.10:6642
+OVS_WAIT_UNTIL([check_sbdb_connection 'not connected'])
+
+# reset the remote for clean-up
+ovs-vsctl set open . external_ids:ovn-remote=unix:$ovs_base/ovn-sb/ovn-sb.sock
+# Gracefully terminate daemons
+OVN_CLEANUP_SBOX([hv])
+OVN_CLEANUP_VSWITCH([main])
+as ovn-sb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+AT_CLEANUP
