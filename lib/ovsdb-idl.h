@@ -80,6 +80,7 @@ void ovsdb_idl_force_reconnect(struct ovsdb_idl *);
 void ovsdb_idl_verify_write_only(struct ovsdb_idl *);
 
 bool ovsdb_idl_is_alive(const struct ovsdb_idl *);
+bool ovsdb_idl_is_connected(const struct ovsdb_idl *idl);
 int ovsdb_idl_get_last_error(const struct ovsdb_idl *);
 
 void ovsdb_idl_set_probe_interval(const struct ovsdb_idl *, int probe_interval);

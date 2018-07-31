@@ -922,6 +922,12 @@ ovsdb_idl_is_alive(const struct ovsdb_idl *idl)
            idl->state != IDL_S_ERROR;
 }
 
+bool
+ovsdb_idl_is_connected(const struct ovsdb_idl *idl)
+{
+    return idl->session && jsonrpc_session_is_connected(idl->session);
+}
+
 /* Returns the last error reported on a connection by 'idl'.  The return value
  * is 0 only if no connection made by 'idl' has ever encountered an error and
  * a negative response to a schema request has never been received. See

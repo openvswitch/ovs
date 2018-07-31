@@ -398,6 +398,11 @@
         0x800</code>.
       </p>
       </dd>
+
+      <dt><code>connection-status</code></dt>
+      <dd>
+        Show OVN SBDB connection status for the chassis.
+      </dd>
       </dl>
     </p>
 
