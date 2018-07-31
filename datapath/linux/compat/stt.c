@@ -972,7 +972,8 @@ err_free_rt:
 static struct rtable *stt_get_rt(struct sk_buff *skb,
 				 struct net_device *dev,
 				 struct flowi4 *fl,
-				 const struct ip_tunnel_key *key)
+				 const struct ip_tunnel_key *key,
+				 __be16 dport, __be16 sport)
 {
 	struct net *net = dev_net(dev);
 
@@ -983,6 +984,8 @@ static struct rtable *stt_get_rt(struct sk_buff *skb,
 	fl->flowi4_tos = RT_TOS(key->tos);
 	fl->flowi4_mark = skb->mark;
 	fl->flowi4_proto = IPPROTO_TCP;
+	fl->fl4_dport = dport;
+	fl->fl4_sport = sport;
 
 	return ip_route_output_key(net, fl);
 }
@@ -1009,14 +1012,14 @@ netdev_tx_t ovs_stt_xmit(struct sk_buff *skb)
 
 	tun_key = &tun_info->key;
 
-	rt = stt_get_rt(skb, dev, &fl, tun_key);
+	sport = udp_flow_src_port(net, skb, 1, USHRT_MAX, true);
+	rt = stt_get_rt(skb, dev, &fl, tun_key, dport, sport);
 	if (IS_ERR(rt)) {
 		err = PTR_ERR(rt);
 		goto error;
 	}
 
 	df = tun_key->tun_flags & TUNNEL_DONT_FRAGMENT ? htons(IP_DF) : 0;
-	sport = udp_flow_src_port(net, skb, 1, USHRT_MAX, true);
 	skb->ignore_df = 1;
 
 	stt_xmit_skb(skb, rt, fl.saddr, tun_key->u.ipv4.dst,
@@ -1818,20 +1821,22 @@ int ovs_stt_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb)
 	struct stt_dev *stt_dev = netdev_priv(dev);
 	struct net *net = stt_dev->net;
 	__be16 dport = stt_dev->dst_port;
+	__be16 sport;
 	struct flowi4 fl4;
 	struct rtable *rt;
 
 	if (ip_tunnel_info_af(info) != AF_INET)
 		return -EINVAL;
 
-	rt = stt_get_rt(skb, dev, &fl4, &info->key);
+	sport = udp_flow_src_port(net, skb, 1, USHRT_MAX, true);
+	rt = stt_get_rt(skb, dev, &fl4, &info->key, dport, sport);
 	if (IS_ERR(rt))
 		return PTR_ERR(rt);
 
 	ip_rt_put(rt);
 
 	info->key.u.ipv4.src = fl4.saddr;
-	info->key.tp_src = udp_flow_src_port(net, skb, 1, USHRT_MAX, true);
+	info->key.tp_src = sport;
 	info->key.tp_dst = dport;
 	return 0;
 }
