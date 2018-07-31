@@ -1224,6 +1224,25 @@ set_meter(100, 1000, );
 set_meter(4294967295, 4294967295);
     encodes as meter:3
 
+# log
+log(verdict=allow, severity=warning);
+    encodes as controller(userdata=00.00.00.07.00.00.00.00.00.04)
+log(name="test1", verdict=drop, severity=info);
+    encodes as controller(userdata=00.00.00.07.00.00.00.00.01.06.74.65.73.74.31)
+log(verdict=drop, severity=info, meter="meter1");
+    encodes as controller(userdata=00.00.00.07.00.00.00.00.01.06,meter_id=4)
+log(name="test1", verdict=drop, severity=info, meter="meter1");
+    encodes as controller(userdata=00.00.00.07.00.00.00.00.01.06.74.65.73.74.31,meter_id=4)
+log(verdict=drop);
+    formats as log(verdict=drop, severity=info);
+    encodes as controller(userdata=00.00.00.07.00.00.00.00.01.06)
+log(verdict=bad_verdict, severity=info);
+    Syntax error at `bad_verdict' unknown verdict.
+log(verdict=drop, severity=bad_severity);
+    Syntax error at `bad_severity' unknown severity.
+log(severity=notice);
+    Syntax error at `;' expecting verdict.
+
 # put_nd_ra_opts
 reg1[0] = put_nd_ra_opts(addr_mode = "slaac", mtu = 1500, prefix = aef0::/64, slla = ae:01:02:03:04:05);
     encodes as controller(userdata=00.00.00.08.00.00.00.00.00.01.de.10.00.00.00.40.86.00.00.00.ff.00.ff.ff.00.00.00.00.00.00.00.00.05.01.00.00.00.00.05.dc.03.04.40.c0.ff.ff.ff.ff.ff.ff.ff.ff.00.00.00.00.ae.f0.00.00.00.00.00.00.00.00.00.00.00.00.00.00.01.01.ae.01.02.03.04.05,pause)
