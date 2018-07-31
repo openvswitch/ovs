@@ -3519,7 +3519,9 @@ mf_vl_mff_mf_from_nxm_header(uint32_t header,
                              uint64_t *tlv_bitmap)
 {
     *field = mf_from_nxm_header(header, vl_mff_map);
-    if (mf_vl_mff_invalid(*field, vl_mff_map)) {
+    if (!*field) {
+        return OFPERR_OFPBAC_BAD_SET_TYPE;
+    } else if (mf_vl_mff_invalid(*field, vl_mff_map)) {
         return OFPERR_NXFMFC_INVALID_TLV_FIELD;
     }
 
