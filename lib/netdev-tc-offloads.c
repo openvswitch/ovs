@@ -929,8 +929,10 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     if (is_ip_any(key)) {
         flower.key.ip_proto = key->nw_proto;
         flower.mask.ip_proto = mask->nw_proto;
+        mask->nw_proto = 0;
         flower.key.ip_ttl = key->nw_ttl;
         flower.mask.ip_ttl = mask->nw_ttl;
+        mask->nw_ttl = 0;
 
         if (key->nw_proto == IPPROTO_TCP) {
             flower.key.tcp_dst = key->tp_dst;
@@ -960,8 +962,6 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
 
         mask->nw_frag = 0;
         mask->nw_tos = 0;
-        mask->nw_proto = 0;
-        mask->nw_ttl = 0;
 
         if (key->dl_type == htons(ETH_P_IP)) {
             flower.key.ipv4.ipv4_src = key->nw_src;
