@@ -1,7 +1,7 @@
 #ifndef __LINUX_PKT_CLS_WRAPPER_H
 #define __LINUX_PKT_CLS_WRAPPER_H 1
 
-#if defined(__KERNEL__) || defined(HAVE_TCA_FLOWER_KEY_CVLAN_PRIO)
+#if defined(__KERNEL__) || defined(HAVE_TCA_FLOWER_KEY_ENC_IP_TTL_MASK)
 #include_next <linux/pkt_cls.h>
 #else
 
@@ -199,6 +199,11 @@ enum {
 	TCA_FLOWER_KEY_CVLAN_ID,	/* be16 */
 	TCA_FLOWER_KEY_CVLAN_PRIO,	/* u8   */
 	TCA_FLOWER_KEY_CVLAN_ETH_TYPE,	/* be16 */
+
+	TCA_FLOWER_KEY_ENC_IP_TOS,	    /* u8 */
+	TCA_FLOWER_KEY_ENC_IP_TOS_MASK,	/* u8 */
+	TCA_FLOWER_KEY_ENC_IP_TTL,		/* u8 */
+	TCA_FLOWER_KEY_ENC_IP_TTL_MASK,	/* u8 */
 
 	__TCA_FLOWER_MAX,
 };

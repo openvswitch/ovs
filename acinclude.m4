@@ -178,17 +178,17 @@ dnl Configure Linux tc compat.
 AC_DEFUN([OVS_CHECK_LINUX_TC], [
   AC_COMPILE_IFELSE([
     AC_LANG_PROGRAM([#include <linux/pkt_cls.h>], [
-        int x = TCA_FLOWER_KEY_CVLAN_PRIO;
+        int x = TCA_FLOWER_KEY_ENC_IP_TTL_MASK;
     ])],
-    [AC_DEFINE([HAVE_TCA_FLOWER_KEY_CVLAN_PRIO], [1],
-               [Define to 1 if TCA_FLOWER_KEY_CVLAN_PRIO is avaiable.])])
+    [AC_DEFINE([HAVE_TCA_FLOWER_KEY_ENC_IP_TTL_MASK], [1],
+               [Define to 1 if TCA_FLOWER_KEY_ENC_IP_TTL_MASK is available.])])
 
   AC_COMPILE_IFELSE([
     AC_LANG_PROGRAM([#include <linux/tc_act/tc_vlan.h>], [
         int x = TCA_VLAN_PUSH_VLAN_PRIORITY;
     ])],
     [AC_DEFINE([HAVE_TCA_VLAN_PUSH_VLAN_PRIORITY], [1],
-               [Define to 1 if TCA_VLAN_PUSH_VLAN_PRIORITY is avaiable.])])
+               [Define to 1 if TCA_VLAN_PUSH_VLAN_PRIORITY is available.])])
 
   AC_COMPILE_IFELSE([
     AC_LANG_PROGRAM([#include <linux/tc_act/tc_tunnel_key.h>], [
@@ -202,7 +202,7 @@ AC_DEFUN([OVS_CHECK_LINUX_TC], [
         int x = TCA_PEDIT_KEY_EX_HDR_TYPE_UDP;
     ])],
     [AC_DEFINE([HAVE_TCA_PEDIT_KEY_EX_HDR_TYPE_UDP], [1],
-               [Define to 1 if TCA_PEDIT_KEY_EX_HDR_TYPE_UDP is avaiable.])])
+               [Define to 1 if TCA_PEDIT_KEY_EX_HDR_TYPE_UDP is available.])])
 ])
 
 dnl OVS_CHECK_DPDK

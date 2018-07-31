@@ -510,6 +510,12 @@ parse_tc_flower_to_match(struct tc_flower *flower,
             match_set_tun_ipv6_src(match, &flower->tunnel.ipv6.ipv6_src);
             match_set_tun_ipv6_dst(match, &flower->tunnel.ipv6.ipv6_dst);
         }
+        if (flower->tunnel.tos) {
+            match_set_tun_tos(match, flower->tunnel.tos);
+        }
+        if (flower->tunnel.ttl) {
+            match_set_tun_ttl(match, flower->tunnel.ttl);
+        }
         if (flower->tunnel.tp_dst) {
             match_set_tun_tp_dst(match, flower->tunnel.tp_dst);
         }
@@ -963,6 +969,8 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         flower.tunnel.ipv4.ipv4_dst = tnl->ip_dst;
         flower.tunnel.ipv6.ipv6_src = tnl->ipv6_src;
         flower.tunnel.ipv6.ipv6_dst = tnl->ipv6_dst;
+        flower.tunnel.tos = tnl->ip_tos;
+        flower.tunnel.ttl = tnl->ip_ttl;
         flower.tunnel.tp_src = tnl->tp_src;
         flower.tunnel.tp_dst = tnl->tp_dst;
         flower.tunnel.tunnel = true;
