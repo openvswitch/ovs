@@ -1589,6 +1589,8 @@ nl_msg_put_flower_options(struct ofpbuf *request, struct tc_flower *flower)
     FLOWER_PUT_MASKED_VALUE(src_mac, TCA_FLOWER_KEY_ETH_SRC);
 
     if (host_eth_type == ETH_P_IP || host_eth_type == ETH_P_IPV6) {
+        FLOWER_PUT_MASKED_VALUE(ip_ttl, TCA_FLOWER_KEY_IP_TTL);
+
         if (flower->mask.ip_proto && flower->key.ip_proto) {
             nl_msg_put_u8(request, TCA_FLOWER_KEY_IP_PROTO,
                           flower->key.ip_proto);
@@ -1617,7 +1619,6 @@ nl_msg_put_flower_options(struct ofpbuf *request, struct tc_flower *flower)
     if (host_eth_type == ETH_P_IP) {
             FLOWER_PUT_MASKED_VALUE(ipv4.ipv4_src, TCA_FLOWER_KEY_IPV4_SRC);
             FLOWER_PUT_MASKED_VALUE(ipv4.ipv4_dst, TCA_FLOWER_KEY_IPV4_DST);
-            FLOWER_PUT_MASKED_VALUE(ip_ttl, TCA_FLOWER_KEY_IP_TTL);
     } else if (host_eth_type == ETH_P_IPV6) {
             FLOWER_PUT_MASKED_VALUE(ipv6.ipv6_src, TCA_FLOWER_KEY_IPV6_SRC);
             FLOWER_PUT_MASKED_VALUE(ipv6.ipv6_dst, TCA_FLOWER_KEY_IPV6_DST);
