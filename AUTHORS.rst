@@ -271,6 +271,7 @@ pritesh                            pritesh.kothari@cisco.com
 Pravin B Shelar                    pshelar@nicira.com
 Przemyslaw Szczerbik               przemyslawx.szczerbik@intel.com
 Quentin Monnet                     quentin.monnet@6wind.com
+Qiuyu Xiao                         qiuyu.xiao.qyx@gmail.com
 Raju Subramanian                   rsubramanian@nicira.com
 Rami Rosen                         ramirose@gmail.com
 Ramu Ramamurthy                    ramu.ramamurthy@us.ibm.com
