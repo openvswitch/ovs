@@ -605,7 +605,9 @@ force_reload_kmod () {
     stop_ovsdb
     start_ovsdb || return 1
 
-    action "Flush old conntrack entries" ovs-appctl dpctl/flush-conntrack
+    if [[ $(ovs-dpctl show) ]]; then
+        action "Flush old conntrack entries" ovs-appctl dpctl/flush-conntrack
+    fi
     stop_forwarding
 
     if action "Saving interface configuration" save_interfaces; then
