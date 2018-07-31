@@ -539,6 +539,7 @@ Murali R                        muralirdev@gmail.com
 Nagi Reddy Jonnala              njonnala@Brocade.com
 Niels van Adrichem              N.L.M.vanAdrichem@tudelft.nl
 Niklas Andersson                nandersson@nicira.com
+Oscar Wilde                     xdxiaobin@gmail.com
 Pankaj Thakkar                  thakkar@nicira.com
 Pasi Kärkkäinen                 pasik@iki.fi
 Patrik Andersson R              patrik.r.andersson@ericsson.com

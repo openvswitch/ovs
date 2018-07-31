@@ -2781,7 +2781,8 @@ ofctl_ofp_parse_pcap(struct ovs_cmdl_context *ctx)
 
                     oh = dp_packet_data(payload);
                     length = ntohs(oh->length);
-                    if (dp_packet_size(payload) < length) {
+                    if (dp_packet_size(payload) < length
+                        || length < sizeof *oh) {
                         break;
                     }
 
