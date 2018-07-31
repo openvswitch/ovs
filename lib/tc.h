@@ -94,6 +94,7 @@ struct tc_flower_key {
 
     uint8_t flags;
     uint8_t ip_ttl;
+    uint8_t ip_tos;
 
     struct {
         ovs_be32 ipv4_src;
