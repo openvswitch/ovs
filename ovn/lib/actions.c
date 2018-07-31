@@ -2071,7 +2071,8 @@ parse_log_arg(struct action_context *ctx, struct ovnact_log *log)
         } else if (lexer_match_id(ctx->lexer, "allow")) {
             log->verdict = LOG_VERDICT_ALLOW;
         } else {
-            lexer_syntax_error(ctx->lexer, "unknown acl verdict");
+            lexer_syntax_error(ctx->lexer, "unknown verdict");
+            return;
         }
     } else if (lexer_match_id(ctx->lexer, "name")) {
         if (!lexer_force_match(ctx->lexer, LEX_T_EQUALS)) {
@@ -2102,6 +2103,9 @@ parse_log_arg(struct action_context *ctx, struct ovnact_log *log)
             if (severity != UINT8_MAX) {
                 log->severity = severity;
                 lexer_get(ctx->lexer);
+                return;
+            } else {
+                lexer_syntax_error(ctx->lexer, "unknown severity");
                 return;
             }
         }
@@ -2141,6 +2145,9 @@ parse_LOG(struct action_context *ctx)
             }
             lexer_match(ctx->lexer, LEX_T_COMMA);
         }
+    }
+    if (log->verdict == LOG_VERDICT_UNKNOWN) {
+        lexer_syntax_error(ctx->lexer, "expecting verdict");
     }
 }
 
