@@ -302,6 +302,10 @@ static const struct nl_policy tca_flower_policy[] = {
                                 .optional = true, },
     [TCA_FLOWER_KEY_IP_TTL_MASK] = { .type = NL_A_U8,
                                      .optional = true, },
+    [TCA_FLOWER_KEY_IP_TOS] = { .type = NL_A_U8,
+                                .optional = true, },
+    [TCA_FLOWER_KEY_IP_TOS_MASK] = { .type = NL_A_U8,
+                                     .optional = true, },
     [TCA_FLOWER_KEY_TCP_FLAGS] = { .type = NL_A_U16,
                                    .optional = true, },
     [TCA_FLOWER_KEY_TCP_FLAGS_MASK] = { .type = NL_A_U16,
@@ -496,6 +500,11 @@ nl_parse_flower_ip(struct nlattr **attrs, struct tc_flower *flower) {
     if (attrs[TCA_FLOWER_KEY_IP_TTL_MASK]) {
         key->ip_ttl = nl_attr_get_u8(attrs[TCA_FLOWER_KEY_IP_TTL]);
         mask->ip_ttl = nl_attr_get_u8(attrs[TCA_FLOWER_KEY_IP_TTL_MASK]);
+    }
+
+    if (attrs[TCA_FLOWER_KEY_IP_TOS_MASK]) {
+        key->ip_tos = nl_attr_get_u8(attrs[TCA_FLOWER_KEY_IP_TOS]);
+        mask->ip_tos = nl_attr_get_u8(attrs[TCA_FLOWER_KEY_IP_TOS_MASK]);
     }
 }
 
@@ -1626,6 +1635,7 @@ nl_msg_put_flower_options(struct ofpbuf *request, struct tc_flower *flower)
 
     if (host_eth_type == ETH_P_IP || host_eth_type == ETH_P_IPV6) {
         FLOWER_PUT_MASKED_VALUE(ip_ttl, TCA_FLOWER_KEY_IP_TTL);
+        FLOWER_PUT_MASKED_VALUE(ip_tos, TCA_FLOWER_KEY_IP_TOS);
 
         if (flower->mask.ip_proto && flower->key.ip_proto) {
             nl_msg_put_u8(request, TCA_FLOWER_KEY_IP_PROTO,

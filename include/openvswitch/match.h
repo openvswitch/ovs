@@ -194,6 +194,7 @@ void match_set_nw_dscp(struct match *, uint8_t);
 void match_set_nw_ecn(struct match *, uint8_t);
 void match_set_nw_ttl(struct match *, uint8_t nw_ttl);
 void match_set_nw_ttl_masked(struct match *, uint8_t nw_ttl, uint8_t mask);
+void match_set_nw_tos_masked(struct match *, uint8_t nw_tos, uint8_t mask);
 void match_set_nw_frag(struct match *, uint8_t nw_frag);
 void match_set_nw_frag_masked(struct match *, uint8_t nw_frag, uint8_t mask);
 void match_set_icmp_type(struct match *, uint8_t);

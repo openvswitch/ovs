@@ -455,6 +455,7 @@ parse_tc_flower_to_match(struct tc_flower *flower,
             match_set_nw_proto(match, key->ip_proto);
         }
 
+        match_set_nw_tos_masked(match, key->ip_tos, mask->ip_tos);
         match_set_nw_ttl_masked(match, key->ip_ttl, mask->ip_ttl);
 
         if (mask->flags) {
@@ -1026,6 +1027,9 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         flower.key.ip_proto = key->nw_proto;
         flower.mask.ip_proto = mask->nw_proto;
         mask->nw_proto = 0;
+        flower.key.ip_tos = key->nw_tos;
+        flower.mask.ip_tos = mask->nw_tos;
+        mask->nw_tos = 0;
         flower.key.ip_ttl = key->nw_ttl;
         flower.mask.ip_ttl = mask->nw_ttl;
         mask->nw_ttl = 0;
@@ -1073,8 +1077,6 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
             mask->tp_src = 0;
             mask->tp_dst = 0;
         }
-
-        mask->nw_tos = 0;
 
         if (key->dl_type == htons(ETH_P_IP)) {
             flower.key.ipv4.ipv4_src = key->nw_src;
