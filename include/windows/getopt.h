@@ -33,7 +33,7 @@
 #include <unistd.h>
 
 extern char *optarg;
-extern int optind;
+extern int optind, opterr, optopt;
 
 /*
  * Gnu like getopt_long() and BSD4.4 getsubopt()/optreset extensions
