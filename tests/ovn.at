@@ -10361,10 +10361,10 @@ ovn-nbctl set Logical_Switch ls1 \
 
 dnl Check if updated address got propagated to the port group address sets
 AT_CHECK([ovn-sbctl get Address_Set pg1_ip4 addresses],
-         [0], [[["10.11.0.2", "10.2.0.2"]]
+         [0], [[["10.1.0.2", "10.2.0.2"]]
 ])
 AT_CHECK([ovn-sbctl get Address_Set pg1_ip6 addresses],
-         [0], [[["2001:db8:11::ff:fe00:1", "2001:db8:2::ff:fe00:2"]]
+         [0], [[["2001:db8:1::ff:fe00:1", "2001:db8:2::ff:fe00:2"]]
 ])
 
 AT_CLEANUP
