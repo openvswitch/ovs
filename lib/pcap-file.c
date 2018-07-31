@@ -161,7 +161,7 @@ ovs_pcap_read(FILE *file, struct ofpbuf **bufp, long long int *when)
     if (swap) {
         len = uint32_byteswap(len);
         if (len > 0xffff) {
-            VLOG_WARN("bad packet length %"PRIuSIZE" or %"PRIu32
+            VLOG_WARN("bad packet length %"PRIuSIZE" or %"PRIu32" "
                       "reading pcap file",
                       len, uint32_byteswap(len));
             return EPROTO;
