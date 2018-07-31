@@ -1082,7 +1082,7 @@ ofctrl_put(struct hmap *flow_table, struct shash *pending_ct_zones,
         /* Delete the meter. */
         struct ofputil_meter_mod mm = {
             .command = OFPMC13_DELETE,
-            .meter.meter_id = m_installed->table_id,
+            .meter = { .meter_id = m_installed->table_id },
         };
         add_meter_mod(&mm, &msgs);
 
