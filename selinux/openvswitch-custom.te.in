@@ -90,7 +90,7 @@ allow openvswitch_t tun_tap_device_t:chr_file { read write getattr open ioctl };
 
 @begin_dpdk@
 allow openvswitch_t hugetlbfs_t:dir { write remove_name add_name lock read };
-allow openvswitch_t hugetlbfs_t:file { create unlink };
+allow openvswitch_t hugetlbfs_t:file { create unlink map };
 allow openvswitch_t kernel_t:unix_stream_socket { write getattr read connectto connect setopt getopt sendto accept bind recvfrom acceptfrom };
 allow openvswitch_t self:tun_socket { relabelfrom relabelto create };
 allow openvswitch_t svirt_image_t:file { getattr read write };
