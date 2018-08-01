@@ -98,10 +98,8 @@ else
         [ -d "/lib/modules/$k/kernel/" ] && depmod -a "$k"
     done
     if [ -x "/sbin/weak-modules" ]; then
-        for m in openvswitch vport-gre vport-stt vport-geneve \
-                 vport-lisp vport-vxlan; do
-            echo "/lib/modules/%{kversion}/extra/%{oname}/$m.ko"
-        done | /sbin/weak-modules --add-modules
+        rpm -ql kmod-%{oname} | grep '\.ko$' | \
+            /sbin/weak-modules --add-modules
     fi
 fi
 
