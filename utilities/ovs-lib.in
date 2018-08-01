@@ -605,7 +605,7 @@ force_reload_kmod () {
     stop_ovsdb
     start_ovsdb || return 1
 
-    if [[ $(ovs-dpctl show) ]]; then
+    if [ -n "$(ovs-dpctl show)" ]; then
         action "Flush old conntrack entries" ovs-appctl dpctl/flush-conntrack
     fi
     stop_forwarding
