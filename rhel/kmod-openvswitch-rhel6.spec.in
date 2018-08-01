@@ -31,7 +31,8 @@ BuildRoot:      %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 # for specified kernel version.
 # Use -D 'kversion 3.10.0-693.1.1.el7.x86_64 3.10.0-693.17.1.el7.x86_64'
 # to build package for mulitple kernel versions in the same package
-# This only works for kernel 3.10.0 major revision 693
+# This only works for kernel 3.10.0 major revision 693 (RHEL 7.4)
+# and major revision 327 (RHEL 7.2)
 # By default, build against the latest installed kernel-devel
 %{!?kversion:%global kversion %(rpm -qa | egrep "^kernel(-rt|-aarch64)?-devel" | /usr/lib/rpm/redhat/rpmsort -r | head -n 1| sed "s/^kernel.*-devel-//")}
 
@@ -86,8 +87,8 @@ install -p -m 0755 rhel/usr_share_openvswitch_scripts_ovs-kmod-manage.sh \
 current_kernel=$(uname -r)
 IFS=. read installed_major installed_minor installed_micro installed_arch \
     installed_build <<<"${current_kernel##*-}"
-if [ "$installed_major" = "693" ]; then
-    # Workaround for RHEL 7.4
+if [ "$installed_major" = "327" ] || [ "$installed_major" = "693" ]; then
+    # Workaround for RHEL 7.2 and 7.4
     if [ -x "/usr/share/%{oname}/scripts/ovs-kmod-manage.sh" ]; then
         /usr/share/%{oname}/scripts/ovs-kmod-manage.sh
     fi
