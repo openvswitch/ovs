@@ -39,6 +39,7 @@ root_prefix = ""
 
 __pychecker__ = 'no-reuseattr'  # Remove in pychecker >= 0.8.19.
 vlog = ovs.vlog.Vlog("ovs-vtep")
+verbose_args = []
 exiting = False
 
 ps_name = ""
@@ -53,7 +54,7 @@ bfd_ref = {}
 
 
 def call_prog(prog, args_list):
-    cmd = [prog, "-vconsole:off"] + args_list
+    cmd = [prog] + verbose_args + ["-vconsole:off"] + args_list
     creationFlags = 0
     if sys.platform == 'win32':
         creationFlags = 0x08000000  # CREATE_NO_WINDOW
@@ -727,6 +728,10 @@ def main():
 
     global ps_name
     ps_name = args.ps_name
+
+    global verbose_args
+    if args.verbose:
+        verbose_args = ['-v' + arg for arg in args.verbose]
 
     ovs.daemon.daemonize()
 
