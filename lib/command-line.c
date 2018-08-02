@@ -52,6 +52,114 @@ ovs_cmdl_long_options_to_short_options(const struct option options[])
     return xstrdup(short_options);
 }
 
+static char * OVS_WARN_UNUSED_RESULT
+build_short_options(const struct option *long_options)
+{
+    char *tmp, *short_options;
+
+    tmp = ovs_cmdl_long_options_to_short_options(long_options);
+    short_options = xasprintf("+:%s", tmp);
+    free(tmp);
+
+    return short_options;
+}
+
+static const struct option *
+find_option_by_value(const struct option *options, int value)
+{
+    const struct option *o;
+
+    for (o = options; o->name; o++) {
+        if (o->val == value) {
+            return o;
+        }
+    }
+    return NULL;
+}
+
+/* Parses the command-line options in 'argc' and 'argv'.  The caller specifies
+ * the supported options in 'options'.  On success, stores the parsed options
+ * in '*pop', the number of options in '*n_pop', and returns NULL.  On failure,
+ * returns an error message and zeros the output arguments. */
+char * OVS_WARN_UNUSED_RESULT
+ovs_cmdl_parse_all(int argc, char *argv[],
+                   const struct option *options,
+                   struct ovs_cmdl_parsed_option **pop, size_t *n_pop)
+{
+    /* Count number of options so we can have better assertions later. */
+    size_t n_options OVS_UNUSED = 0;
+    while (options[n_options].name) {
+        n_options++;
+    }
+
+    char *short_options = build_short_options(options);
+
+    struct ovs_cmdl_parsed_option *po = NULL;
+    size_t allocated_po = 0;
+    size_t n_po = 0;
+
+    char *error;
+
+    optind = 0;
+    opterr = 0;
+    for (;;) {
+        int idx = -1;
+        int c = getopt_long(argc, argv, short_options, options, &idx);
+        switch (c) {
+        case -1:
+            *pop = po;
+            *n_pop = n_po;
+            free(short_options);
+            return NULL;
+
+        case 0:
+            /* getopt_long() processed the option directly by setting a flag
+             * variable.  This is probably undesirable for use with this
+             * function. */
+            OVS_NOT_REACHED();
+
+        case '?':
+            if (optopt && find_option_by_value(options, optopt)) {
+                error = xasprintf("option '%s' doesn't allow an argument",
+                                  argv[optind - 1]);
+            } else if (optopt) {
+                error = xasprintf("unrecognized option '%c'", optopt);
+            } else {
+                error = xasprintf("unrecognized option '%s'",
+                                  argv[optind - 1]);
+            }
+            goto error;
+
+        case ':':
+            error = xasprintf("option '%s' requires an argument",
+                              argv[optind - 1]);
+            goto error;
+
+        default:
+            if (n_po >= allocated_po) {
+                po = x2nrealloc(po, &allocated_po, sizeof *po);
+            }
+            if (idx == -1) {
+                po[n_po].o = find_option_by_value(options, c);
+            } else {
+                ovs_assert(idx >= 0 && idx < n_options);
+                po[n_po].o = &options[idx];
+            }
+            po[n_po].arg = optarg;
+            n_po++;
+            break;
+        }
+    }
+    OVS_NOT_REACHED();
+
+error:
+    free(po);
+    *pop = NULL;
+    *n_pop = 0;
+    free(short_options);
+    return error;
+}
+
 /* Given the 'struct ovs_cmdl_command' array, prints the usage of all commands. */
 void
 ovs_cmdl_print_commands(const struct ovs_cmdl_command commands[])
