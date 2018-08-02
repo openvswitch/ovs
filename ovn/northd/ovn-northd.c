@@ -986,9 +986,6 @@ ipam_add_port_addresses(struct ovn_datapath *od, struct ovn_port *op)
         for (size_t i = 0; i < op->nbsp->n_addresses; i++) {
             ipam_insert_lsp_addresses(od, op, op->nbsp->addresses[i]);
         }
-        if (op->nbsp->dynamic_addresses) {
-            ipam_insert_lsp_addresses(od, op, op->nbsp->dynamic_addresses);
-        }
     } else if (op->nbrp) {
         struct lport_addresses lrp_networks;
         if (!extract_lrp_networks(op->nbrp, &lrp_networks)) {
@@ -1061,64 +1058,263 @@ ipam_get_unused_ip(struct ovn_datapath *od)
     return od->ipam_info.start_ipv4 + new_ip_index;
 }
 
-static bool
-ipam_allocate_addresses(struct ovn_datapath *od, struct ovn_port *op,
-                        const char *addrspec)
+enum dynamic_update_type {
+    NONE,    /* No change to the address */
+    REMOVE,  /* Address is no longer dynamic */
+    STATIC,  /* Use static address (MAC only) */
+    DYNAMIC, /* Assign a new dynamic address */
+};
+
+struct dynamic_address_update {
+    struct ovs_list node;       /* In build_ipam()'s list of updates. */
+
+    struct ovn_port *op;
+
+    struct lport_addresses current_addresses;
+    struct eth_addr static_mac;
+    enum dynamic_update_type mac;
+    enum dynamic_update_type ipv4;
+    enum dynamic_update_type ipv6;
+};
+
+static enum dynamic_update_type
+dynamic_mac_changed(const char *lsp_addresses,
+                    struct dynamic_address_update *update)
 {
-    if (!op->nbsp) {
-        return false;
+   struct eth_addr ea;
+
+   if (ovs_scan(lsp_addresses, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(ea))) {
+       if (eth_addr_equals(ea, update->current_addresses.ea)) {
+           return NONE;
+       } else {
+           /* MAC is still static, but it has changed */
+           update->static_mac = ea;
+           return STATIC;
+       }
+   }
+
+   uint64_t mac64 = eth_addr_to_uint64(update->current_addresses.ea);
+   if ((mac64 ^ MAC_ADDR_PREFIX) >> 24) {
+       return DYNAMIC;
+   } else {
+       return NONE;
+   }
+}
+
+static enum dynamic_update_type
+dynamic_ip4_changed(struct dynamic_address_update *update)
+{
+    const struct ipam_info *ipam = &update->op->od->ipam_info;
+    const struct lport_addresses *cur_addresses = &update->current_addresses;
+    bool dynamic_ip4 = ipam->allocated_ipv4s != NULL;
+
+    if (!dynamic_ip4) {
+        if (update->current_addresses.n_ipv4_addrs) {
+            return REMOVE;
+        } else {
+            return NONE;
+        }
     }
 
-    /* Get or generate MAC address. */
+    if (!cur_addresses->n_ipv4_addrs) {
+        /* IPv4 was previously static but now is dynamic */
+        return DYNAMIC;
+    }
+
+    uint32_t ip4 = ntohl(cur_addresses->ipv4_addrs[0].addr);
+    if (ip4 < ipam->start_ipv4) {
+        return DYNAMIC;
+    }
+
+    uint32_t index = ip4 - ipam->start_ipv4;
+    if (index > ipam->total_ipv4s ||
+        bitmap_is_set(ipam->allocated_ipv4s, index)) {
+        /* Previously assigned dynamic IPv4 address can no longer be used.
+         * It's either outside the subnet, conflicts with an excluded IP,
+         * or conflicts with a statically-assigned address on the switch
+         */
+        return DYNAMIC;
+    } else {
+        return NONE;
+    }
+}
+
+static enum dynamic_update_type
+dynamic_ip6_changed(struct dynamic_address_update *update)
+{
+    bool dynamic_ip6 = update->op->od->ipam_info.ipv6_prefix_set;
+
+    if (!dynamic_ip6) {
+        if (update->current_addresses.n_ipv6_addrs) {
+            /* IPv6 was dynamic but now is not */
+            return REMOVE;
+        } else {
+            /* IPv6 has never been dynamic */
+            return NONE;
+        }
+    }
+
+    if (update->mac != NONE) {
+        /* IPv6 address is based on MAC, so if MAC has been updated,
+         * then we have to update IPv6 address too.
+         */
+        return DYNAMIC;
+    }
+
+    if (!update->current_addresses.n_ipv6_addrs) {
+        /* IPv6 was previously static but now is dynamic */
+        return DYNAMIC;
+    }
+
+    struct in6_addr masked = ipv6_addr_bitand(
+        &update->current_addresses.ipv6_addrs[0].addr,
+        &update->op->od->ipam_info.ipv6_prefix);
+    if (!IN6_ARE_ADDR_EQUAL(&masked, &update->op->od->ipam_info.ipv6_prefix)) {
+        return DYNAMIC;
+    }
+
+    return NONE;
+}
+
+/* Check previously assigned dynamic addresses for validity. This will
+ * check if the assigned addresses need to change.
+ *
+ * Returns true if any changes to dynamic addresses are required
+ */
+static bool
+dynamic_addresses_check_for_updates(const char *lsp_addrs,
+                                    struct dynamic_address_update *update)
+{
+    update->mac = dynamic_mac_changed(lsp_addrs, update);
+    update->ipv4 = dynamic_ip4_changed(update);
+    update->ipv6 = dynamic_ip6_changed(update);
+    if (update->mac == NONE &&
+        update->ipv4 == NONE &&
+        update->ipv6 == NONE) {
+        return false;
+    } else {
+        return true;
+    }
+}
+
+/* For addresses that do not need to be updated, go ahead and insert them
+ * into IPAM. This way, their addresses will be claimed and cannot be assigned
+ * elsewhere later.
+ */
+static void
+update_unchanged_dynamic_addresses(struct dynamic_address_update *update)
+{
+    if (update->mac == NONE) {
+        ipam_insert_mac(&update->current_addresses.ea, false);
+    }
+    if (update->ipv4 == NONE && update->current_addresses.n_ipv4_addrs) {
+        ipam_insert_ip(update->op->od,
+                       ntohl(update->current_addresses.ipv4_addrs[0].addr));
+    }
+}
+
+static void
+set_lsp_dynamic_addresses(const char *dynamic_addresses, struct ovn_port *op)
+{
+    extract_lsp_addresses(dynamic_addresses, &op->lsp_addrs[op->n_lsp_addrs]);
+    op->n_lsp_addrs++;
+}
+
+/* Determines which components (MAC, IPv4, and IPv6) of dynamic
+ * addresses need to be assigned. This is used exclusively for
+ * ports that do not have dynamic addresses already assigned.
+ */
+static void
+set_dynamic_updates(const char *addrspec,
+                    struct dynamic_address_update *update)
+{
     struct eth_addr mac;
-    bool dynamic_mac;
     int n = 0;
     if (ovs_scan(addrspec, ETH_ADDR_SCAN_FMT" dynamic%n",
                  ETH_ADDR_SCAN_ARGS(mac), &n)
         && addrspec[n] == '\0') {
-        dynamic_mac = false;
+        update->mac = STATIC;
+        update->static_mac = mac;
     } else {
-        uint64_t mac64 = ipam_get_unused_mac();
-        if (!mac64) {
-            return false;
+        update->mac = DYNAMIC;
+    }
+    if (update->op->od->ipam_info.allocated_ipv4s) {
+        update->ipv4 = DYNAMIC;
+    } else {
+        update->ipv4 = NONE;
+    }
+    if (update->op->od->ipam_info.ipv6_prefix_set) {
+        update->ipv6 = DYNAMIC;
+    } else {
+        update->ipv6 = NONE;
+    }
+}
+
+static void
+update_dynamic_addresses(struct ovn_datapath *od,
+                         struct dynamic_address_update *update)
+{
+    struct eth_addr mac;
+    switch (update->mac) {
+    case NONE:
+        mac = update->current_addresses.ea;
+        break;
+    case REMOVE:
+        OVS_NOT_REACHED();
+    case STATIC:
+        mac = update->static_mac;
+        break;
+    case DYNAMIC:
+        eth_addr_from_uint64(ipam_get_unused_mac(), &mac);
+        break;
+    }
+
+    ovs_be32 ip4 = 0;
+    switch (update->ipv4) {
+    case NONE:
+        if (update->current_addresses.n_ipv4_addrs) {
+            ip4 = update->current_addresses.ipv4_addrs[0].addr;
         }
-        eth_addr_from_uint64(mac64, &mac);
-        dynamic_mac = true;
+        break;
+    case REMOVE:
+        break;
+    case STATIC:
+        OVS_NOT_REACHED();
+    case DYNAMIC:
+        ip4 = htonl(ipam_get_unused_ip(od));
     }
 
-    /* Generate IPv4 address, if desirable. */
-    bool dynamic_ip4 = od->ipam_info.allocated_ipv4s != NULL;
-    uint32_t ip4 = dynamic_ip4 ? ipam_get_unused_ip(od) : 0;
-
-    /* Generate IPv6 address, if desirable. */
-    bool dynamic_ip6 = od->ipam_info.ipv6_prefix_set;
-    struct in6_addr ip6;
-    if (dynamic_ip6) {
+    struct in6_addr ip6 = in6addr_any;
+    switch (update->ipv6) {
+    case NONE:
+        if (update->current_addresses.n_ipv6_addrs) {
+            ip6 = update->current_addresses.ipv6_addrs[0].addr;
+        }
+        break;
+    case REMOVE:
+        break;
+    case STATIC:
+        OVS_NOT_REACHED();
+    case DYNAMIC:
         in6_generate_eui64(mac, &od->ipam_info.ipv6_prefix, &ip6);
+        break;
     }
 
-    /* If we didn't generate anything, bail out. */
-    if (!dynamic_ip4 && !dynamic_ip6) {
-        return false;
-    }
-
-    /* Save the dynamic addresses. */
     struct ds new_addr = DS_EMPTY_INITIALIZER;
     ds_put_format(&new_addr, ETH_ADDR_FMT, ETH_ADDR_ARGS(mac));
-    if (dynamic_ip4 && ip4) {
-        ipam_insert_ip(od, ip4);
-        ds_put_format(&new_addr, " "IP_FMT, IP_ARGS(htonl(ip4)));
+    if (ip4) {
+        ipam_insert_ip(od, ntohl(ip4));
+        ds_put_format(&new_addr, " "IP_FMT, IP_ARGS(ip4));
     }
-    if (dynamic_ip6) {
+    if (!IN6_ARE_ADDR_EQUAL(&ip6, &in6addr_any)) {
         char ip6_s[INET6_ADDRSTRLEN + 1];
         ipv6_string_mapped(ip6_s, &ip6);
         ds_put_format(&new_addr, " %s", ip6_s);
     }
-    ipam_insert_mac(&mac, !dynamic_mac);
-    nbrec_logical_switch_port_set_dynamic_addresses(op->nbsp,
+    nbrec_logical_switch_port_set_dynamic_addresses(update->op->nbsp,
                                                     ds_cstr(&new_addr));
+    set_lsp_dynamic_addresses(ds_cstr(&new_addr), update->op);
     ds_destroy(&new_addr);
-    return true;
 }
 
 static void
@@ -1134,47 +1330,82 @@ build_ipam(struct hmap *datapaths, struct hmap *ports)
      * ports that have the "dynamic" keyword in their addresses column. */
     struct ovn_datapath *od;
     HMAP_FOR_EACH (od, key_node, datapaths) {
-        if (!od->nbs || (!od->ipam_info.allocated_ipv4s &&
-                         !od->ipam_info.ipv6_prefix_set)) {
+        if (!od->nbs) {
             continue;
         }
 
-        struct ovn_port *op;
+        struct ovs_list updates;
+        ovs_list_init(&updates);
         for (size_t i = 0; i < od->nbs->n_ports; i++) {
-            const struct nbrec_logical_switch_port *nbsp =
-                od->nbs->ports[i];
+            const struct nbrec_logical_switch_port *nbsp = od->nbs->ports[i];
 
-            if (!nbsp) {
+            if (!od->ipam_info.allocated_ipv4s &&
+                !od->ipam_info.ipv6_prefix_set) {
+                if (nbsp->dynamic_addresses) {
+                    nbrec_logical_switch_port_set_dynamic_addresses(nbsp,
+                                                                    NULL);
+                }
                 continue;
             }
 
-            op = ovn_port_find(ports, nbsp->name);
-            if (!op || (op->nbsp && op->peer)) {
+            struct ovn_port *op = ovn_port_find(ports, nbsp->name);
+            if (!op || op->nbsp != nbsp || op->peer) {
                 /* Do not allocate addresses for logical switch ports that
                  * have a peer. */
                 continue;
             }
 
+            int num_dynamic_addresses = 0;
             for (size_t j = 0; j < nbsp->n_addresses; j++) {
-                if (is_dynamic_lsp_address(nbsp->addresses[j])
-                    && !nbsp->dynamic_addresses) {
-                    if (!ipam_allocate_addresses(od, op, nbsp->addresses[j])
-                        || !extract_lsp_addresses(nbsp->dynamic_addresses,
-                                        &op->lsp_addrs[op->n_lsp_addrs])) {
-                        static struct vlog_rate_limit rl
-                            = VLOG_RATE_LIMIT_INIT(1, 1);
-                        VLOG_INFO_RL(&rl, "Failed to allocate address.");
+                if (!is_dynamic_lsp_address(nbsp->addresses[j])) {
+                    continue;
+                }
+                if (num_dynamic_addresses) {
+                    static struct vlog_rate_limit rl
+                        = VLOG_RATE_LIMIT_INIT(1, 1);
+                    VLOG_WARN_RL(&rl, "More than one dynamic address "
+                                 "configured for logical switch port '%s'",
+                                 nbsp->name);
+                    continue;
+                }
+                num_dynamic_addresses++;
+                struct dynamic_address_update *update
+                    = xzalloc(sizeof *update);
+                update->op = op;
+                if (nbsp->dynamic_addresses) {
+                    bool any_changed;
+                    extract_lsp_addresses(nbsp->dynamic_addresses,
+                                          &update->current_addresses);
+                    any_changed = dynamic_addresses_check_for_updates(
+                        nbsp->addresses[j], update);
+                    update_unchanged_dynamic_addresses(update);
+                    if (any_changed) {
+                        ovs_list_push_back(&updates, &update->node);
                     } else {
-                        op->n_lsp_addrs++;
+                        /* No changes to dynamic addresses */
+                        set_lsp_dynamic_addresses(nbsp->dynamic_addresses, op);
+                        destroy_lport_addresses(&update->current_addresses);
+                        free(update);
                     }
-                    break;
+                } else {
+                    set_dynamic_updates(nbsp->addresses[j], update);
+                    ovs_list_push_back(&updates, &update->node);
                 }
             }
 
             if (!nbsp->n_addresses && nbsp->dynamic_addresses) {
-                nbrec_logical_switch_port_set_dynamic_addresses(op->nbsp,
-                                                                NULL);
+                nbrec_logical_switch_port_set_dynamic_addresses(nbsp, NULL);
             }
+        }
+
+        /* After retaining all unchanged dynamic addresses, now assign
+         * new ones.
+         */
+        struct dynamic_address_update *update;
+        LIST_FOR_EACH_POP (update, node, &updates) {
+            update_dynamic_addresses(od, update);
+            destroy_lport_addresses(&update->current_addresses);
+            free(update);
         }
     }
 }
@@ -1278,41 +1509,6 @@ tag_alloc_create_new_tag(struct hmap *tag_alloc_table,
 }
 
 
-/*
- * This function checks if the MAC in "address" parameter (if present) is
- * different from the one stored in Logical_Switch_Port.dynamic_addresses
- * and updates it.
- */
-static void
-check_and_update_mac_in_dynamic_addresses(
-    const char *address,
-    const struct nbrec_logical_switch_port *nbsp)
-{
-    if (!nbsp->dynamic_addresses) {
-        return;
-    }
-    int buf_index = 0;
-    struct eth_addr ea;
-    if (!ovs_scan_len(address, &buf_index,
-                      ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(ea))) {
-        return;
-    }
-
-    struct eth_addr present_ea;
-    buf_index = 0;
-    if (ovs_scan_len(nbsp->dynamic_addresses, &buf_index,
-                     ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(present_ea))
-        && !eth_addr_equals(ea, present_ea)) {
-        /* MAC address has changed. Update it */
-        char *new_addr =  xasprintf(
-            ETH_ADDR_FMT"%s", ETH_ADDR_ARGS(ea),
-            &nbsp->dynamic_addresses[buf_index]);
-        nbrec_logical_switch_port_set_dynamic_addresses(
-            nbsp, new_addr);
-        free(new_addr);
-    }
-}
-
 static void
 join_logical_ports(struct northd_context *ctx,
                    struct hmap *datapaths, struct hmap *ports,
@@ -1380,23 +1576,7 @@ join_logical_ports(struct northd_context *ctx,
                         continue;
                     }
                     if (is_dynamic_lsp_address(nbsp->addresses[j])) {
-                        if (nbsp->dynamic_addresses) {
-                            check_and_update_mac_in_dynamic_addresses(
-                                nbsp->addresses[j], nbsp);
-                            if (!extract_lsp_addresses(nbsp->dynamic_addresses,
-                                            &op->lsp_addrs[op->n_lsp_addrs])) {
-                                static struct vlog_rate_limit rl
-                                    = VLOG_RATE_LIMIT_INIT(1, 1);
-                                VLOG_INFO_RL(&rl, "invalid syntax '%s' in "
-                                                  "logical switch port "
-                                                  "dynamic_addresses. No "
-                                                  "MAC address found",
-                                                  op->nbsp->dynamic_addresses);
-                                continue;
-                            }
-                        } else {
-                            continue;
-                        }
+                        continue;
                     } else if (!extract_lsp_addresses(nbsp->addresses[j],
                                            &op->lsp_addrs[op->n_lsp_addrs])) {
                         static struct vlog_rate_limit rl
