@@ -161,7 +161,7 @@ Isaku Yamahata                     yamahata@valinux.co.jp
 Ivan Dyukov                        i.dyukov@samsung.com
 IWASE Yusuke                       iwase.yusuke@gmail.com
 Jakub Libosvar                     libosvar@redhat.com
-Jakub Sitnicki                     jkbs@redhat.com
+Jakub Sitnicki                     jsitnicki@gmail.com
 James P.                           roampune@gmail.com
 James Page                         james.page@ubuntu.com
 Jamie Lennox                       jamielennox@gmail.com
