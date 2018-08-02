@@ -368,24 +368,23 @@ parse_options(int argc, char *argv[], struct shash *local_options)
         {NULL, 0, NULL, 0},
     };
     const int n_global_long_options = ARRAY_SIZE(global_long_options) - 1;
-    char *short_options;
     struct option *options;
     size_t i;
 
-    short_options = build_short_options(global_long_options, true);
     options = append_command_options(global_long_options, OPT_LOCAL);
 
-    for (;;) {
-        int idx;
-        int c;
+    struct ovs_cmdl_parsed_option *parsed_options;
+    size_t n_po;
+    char *error = ovs_cmdl_parse_all(argc, argv, options,
+                                     &parsed_options, &n_po);
+    if (error) {
+        ctl_fatal("%s", error);
+    }
 
-        c = getopt_long(argc, argv, short_options, options, &idx);
-        if (c == -1) {
-            break;
-        }
-
+    for (const struct ovs_cmdl_parsed_option *po = parsed_options;
+         po < &parsed_options[n_po]; po++) {
         bool handled;
-        char *error = handle_main_loop_option(c, optarg, &handled);
+        error = handle_main_loop_option(po->o->val, po->arg, &handled);
         if (error) {
             ctl_fatal("%s", error);
         }
@@ -393,9 +392,10 @@ parse_options(int argc, char *argv[], struct shash *local_options)
             continue;
         }
 
-        switch (c) {
+        optarg = po->arg;
+        switch (po->o->val) {
         case OPT_DB:
-            db = optarg;
+            db = po->arg;
             break;
 
         case OPT_NO_SYSLOG:
@@ -403,13 +403,13 @@ parse_options(int argc, char *argv[], struct shash *local_options)
             break;
 
         case OPT_LOCAL:
-            if (shash_find(local_options, options[idx].name)) {
+            if (shash_find(local_options, po->o->name)) {
                 ctl_fatal("'%s' option specified multiple times",
-                            options[idx].name);
+                            po->o->name);
             }
             shash_add_nocopy(local_options,
-                             xasprintf("--%s", options[idx].name),
-                             nullable_xstrdup(optarg));
+                             xasprintf("--%s", po->o->name),
+                             nullable_xstrdup(po->arg));
             break;
 
         case 'h':
@@ -435,7 +435,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
         STREAM_SSL_OPTION_HANDLERS
 
         case OPT_BOOTSTRAP_CA_CERT:
-            stream_ssl_set_ca_cert_file(optarg, true);
+            stream_ssl_set_ca_cert_file(po->arg, true);
             break;
 
         case '?':
@@ -448,7 +448,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
             break;
         }
     }
-    free(short_options);
+    free(parsed_options);
 
     if (!db) {
         db = default_nb_db();
@@ -4984,6 +4984,7 @@ server_parse_options(int argc, char *argv[], struct shash *local_options,
                      int *n_options_p)
 {
     static const struct option global_long_options[] = {
+        VLOG_LONG_OPTIONS,
         MAIN_LOOP_LONG_OPTIONS,
         TABLE_LONG_OPTIONS,
         {NULL, 0, NULL, 0},
