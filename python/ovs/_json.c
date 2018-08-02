@@ -106,7 +106,7 @@ json_to_python(struct json *json)
             if (dict == NULL) {
                 return PyErr_NoMemory();
             }
-            SHASH_FOR_EACH(node, json->u.object) {
+            SHASH_FOR_EACH (node, json->object) {
                 PyObject *key = PyUnicode_FromString(node->name);
                 PyObject *val = json_to_python(node->data);
 
@@ -124,13 +124,13 @@ json_to_python(struct json *json)
         }
     case JSON_ARRAY:{
             int i;
-            PyObject *arr = PyList_New(json->u.array.n);
+            PyObject *arr = PyList_New(json->array.n);
 
             if (arr == NULL) {
                 return PyErr_NoMemory();
             }
-            for (i = 0; i < json->u.array.n; i++) {
-                PyObject *item = json_to_python(json->u.array.elems[i]);
+            for (i = 0; i < json->array.n; i++) {
+                PyObject *item = json_to_python(json->array.elems[i]);
 
                 if (!item || PyList_SetItem(arr, i, item)) {
                     Py_XDECREF(arr);
@@ -140,18 +140,18 @@ json_to_python(struct json *json)
             return arr;
         }
     case JSON_REAL:
-        if (json->u.real != 0) {
-            return PyFloat_FromDouble(json->u.real);
+        if (json->real != 0) {
+            return PyFloat_FromDouble(json->real);
         } /* fall through to treat 0 as int */
     case JSON_INTEGER:
 #ifdef IS_PY3K
-        return PyLong_FromLong((long) json->u.integer);
+        return PyLong_FromLong((long) json->integer);
 #else
-        return PyInt_FromLong((long) json->u.integer);
+        return PyInt_FromLong((long) json->integer);
 #endif
 
     case JSON_STRING:
-        return PyUnicode_FromString(json->u.string);
+        return PyUnicode_FromString(json->string);
     default:
         return NULL;
     }
