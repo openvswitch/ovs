@@ -149,6 +149,7 @@ ovsdb|WARN|schema: changed 2 columns in 'OVN_Southbound' database from ephemeral
     sleep 2
 
     echo "waiting for ovn-sbctl processes to exit..."
+    # Use file instead of var because code inside "while" runs in a subshell.
     echo 0 > phase
     i=0
     (while :; do echo; sleep 1; done) | while read; do
