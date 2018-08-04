@@ -553,6 +553,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [OVS_DEFINE([USE_UPSTREAM_TUNNEL_GSO])])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [ndo_add_vxlan_port])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [ndo_add_geneve_port])
+  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [ndo_udp_tunnel_add])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [netdev_features_t])
   dnl Ubuntu kernel 3.13 has defined this struct but not used for netdev->tstats.
   dnl So check type of tstats.

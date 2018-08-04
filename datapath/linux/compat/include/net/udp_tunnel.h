@@ -43,6 +43,20 @@ struct udp_port_cfg {
 				ipv6_v6only:1;
 };
 
+#ifdef HAVE_NDO_UDP_TUNNEL_ADD
+enum udp_parsable_tunnel_type {
+	UDP_TUNNEL_TYPE_VXLAN,      /* RFC 7348 */
+	UDP_TUNNEL_TYPE_GENEVE,     /* draft-ietf-nvo3-geneve */
+	UDP_TUNNEL_TYPE_VXLAN_GPE,  /* draft-ietf-nvo3-vxlan-gpe */
+};
+
+struct udp_tunnel_info {
+	unsigned short type;
+	sa_family_t sa_family;
+	__be16 port;
+};
+#endif
+
 #define udp_sock_create4 rpl_udp_sock_create4
 int rpl_udp_sock_create4(struct net *net, struct udp_port_cfg *cfg,
 		     struct socket **sockp);

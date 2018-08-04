@@ -432,6 +432,14 @@ static void geneve_notify_add_rx_port(struct geneve_sock *gs)
 		if (dev->netdev_ops->ndo_add_geneve_port)
 			dev->netdev_ops->ndo_add_geneve_port(dev, sa_family,
 					port);
+#elif defined(HAVE_NDO_UDP_TUNNEL_ADD)
+		struct udp_tunnel_info ti;
+		ti.type = UDP_TUNNEL_TYPE_GENEVE;
+		ti.sa_family = sa_family;
+		ti.port = inet_sk(sk)->inet_sport;
+
+		if (dev->netdev_ops->ndo_udp_tunnel_add)
+			dev->netdev_ops->ndo_udp_tunnel_add(dev, &ti);
 #endif
 	}
 	rcu_read_unlock();
@@ -452,6 +460,14 @@ static void geneve_notify_del_rx_port(struct geneve_sock *gs)
 		if (dev->netdev_ops->ndo_del_geneve_port)
 			dev->netdev_ops->ndo_del_geneve_port(dev, sa_family,
 					port);
+#elif defined(HAVE_NDO_UDP_TUNNEL_ADD)
+		struct udp_tunnel_info ti;
+		ti.type = UDP_TUNNEL_TYPE_GENEVE;
+		ti.port = inet_sk(sk)->inet_sport;
+		ti.sa_family = sa_family;
+
+		if (dev->netdev_ops->ndo_udp_tunnel_del)
+			dev->netdev_ops->ndo_udp_tunnel_del(dev, &ti);
 #endif
 	}
 
@@ -1301,9 +1317,9 @@ static struct device_type geneve_type = {
 	.name = "geneve",
 };
 
-/* Calls the ndo_add_geneve_port of the caller in order to
- * supply the listening GENEVE udp ports. Callers are expected
- * to implement the ndo_add_geneve_port.
+/* Calls the ndo_add_geneve_port or ndo_udp_tunnel_add of the caller
+ * in order to supply the listening GENEVE udp ports. Callers are
+ * expected to implement the ndo_add_geneve_port.
  */
 static void geneve_push_rx_ports(struct net_device *dev)
 {
@@ -1324,6 +1340,25 @@ static void geneve_push_rx_ports(struct net_device *dev)
 		sa_family = sk->sk_family;
 		port = inet_sk(sk)->inet_sport;
 		dev->netdev_ops->ndo_add_geneve_port(dev, sa_family, port);
+	}
+	rcu_read_unlock();
+#elif defined(HAVE_NDO_UDP_TUNNEL_ADD)
+	struct net *net = dev_net(dev);
+	struct geneve_net *gn = net_generic(net, geneve_net_id);
+	struct geneve_sock *gs;
+	struct sock *sk;
+
+	if (!dev->netdev_ops->ndo_udp_tunnel_add)
+		return;
+
+	rcu_read_lock();
+	list_for_each_entry_rcu(gs, &gn->sock_list, list) {
+		struct udp_tunnel_info ti;
+		ti.type = UDP_TUNNEL_TYPE_GENEVE;
+		sk = gs->sock->sk;
+		ti.port = inet_sk(sk)->inet_sport;
+		ti.sa_family = sk->sk_family;
+		dev->netdev_ops->ndo_udp_tunnel_add(dev, &ti);
 	}
 	rcu_read_unlock();
 #endif

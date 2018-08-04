@@ -396,6 +396,17 @@ static void vxlan_notify_add_rx_port(struct vxlan_sock *vs)
 		if (dev->netdev_ops->ndo_add_vxlan_port)
 			dev->netdev_ops->ndo_add_vxlan_port(dev, sa_family,
 					port);
+#elif defined(HAVE_NDO_UDP_TUNNEL_ADD)
+		struct udp_tunnel_info ti;
+		if (vs->flags & VXLAN_F_GPE)
+			ti.type = UDP_TUNNEL_TYPE_VXLAN_GPE;
+		else
+			ti.type = UDP_TUNNEL_TYPE_VXLAN;
+		ti.sa_family = sa_family;
+		ti.port = inet_sk(sk)->inet_sport;
+
+		if (dev->netdev_ops->ndo_udp_tunnel_add)
+			dev->netdev_ops->ndo_udp_tunnel_add(dev, &ti);
 #endif
 	}
 	rcu_read_unlock();
@@ -417,6 +428,17 @@ static void vxlan_notify_del_rx_port(struct vxlan_sock *vs)
 		if (dev->netdev_ops->ndo_del_vxlan_port)
 			dev->netdev_ops->ndo_del_vxlan_port(dev, sa_family,
 					port);
+#elif defined(HAVE_NDO_UDP_TUNNEL_ADD)
+		struct udp_tunnel_info ti;
+		if (vs->flags & VXLAN_F_GPE)
+			ti.type = UDP_TUNNEL_TYPE_VXLAN_GPE;
+		else
+			ti.type = UDP_TUNNEL_TYPE_VXLAN;
+		ti.port = inet_sk(sk)->inet_sport;
+		ti.sa_family = sa_family;
+
+		if (dev->netdev_ops->ndo_udp_tunnel_del)
+			dev->netdev_ops->ndo_udp_tunnel_del(dev, &ti);
 #endif
 	}
 	rcu_read_unlock();
@@ -1528,9 +1550,9 @@ static struct device_type vxlan_type = {
 	.name = "vxlan",
 };
 
-/* Calls the ndo_add_vxlan_port of the caller in order to
- * supply the listening VXLAN udp ports. Callers are expected
- * to implement the ndo_add_vxlan_port.
+/* Calls the ndo_add_vxlan_port or ndo_udp_tunnel_add of the caller
+ * in order to supply the listening VXLAN udp ports. Callers are
+ * expected to implement the ndo_add_vxlan_port.
  */
 static void vxlan_push_rx_ports(struct net_device *dev)
 {
@@ -1552,6 +1574,30 @@ static void vxlan_push_rx_ports(struct net_device *dev)
 			sa_family = vxlan_get_sk_family(vs);
 			dev->netdev_ops->ndo_add_vxlan_port(dev, sa_family,
 							    port);
+		}
+	}
+	spin_unlock(&vn->sock_lock);
+#elif defined(HAVE_NDO_UDP_TUNNEL_ADD)
+	struct vxlan_sock *vs;
+	struct net *net = dev_net(dev);
+	struct vxlan_net *vn = net_generic(net, vxlan_net_id);
+	unsigned int i;
+
+	if (!dev->netdev_ops->ndo_udp_tunnel_add)
+		return;
+
+	spin_lock(&vn->sock_lock);
+	for (i = 0; i < PORT_HASH_SIZE; ++i) {
+		hlist_for_each_entry_rcu(vs, &vn->sock_list[i], hlist) {
+			struct udp_tunnel_info ti;
+			if (vs->flags & VXLAN_F_GPE)
+				ti.type = UDP_TUNNEL_TYPE_VXLAN_GPE;
+			else
+				ti.type = UDP_TUNNEL_TYPE_VXLAN;
+			ti.port = inet_sk(vs->sock->sk)->inet_sport;
+			ti.sa_family = vxlan_get_sk_family(vs);
+
+			dev->netdev_ops->ndo_udp_tunnel_add(dev, &ti);
 		}
 	}
 	spin_unlock(&vn->sock_lock);
