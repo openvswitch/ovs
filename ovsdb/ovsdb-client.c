@@ -2326,10 +2326,6 @@ do_wait(struct jsonrpc *rpc_unused OVS_UNUSED,
         const char *database_unused OVS_UNUSED,
         int argc, char *argv[])
 {
-    vlog_set_levels(NULL, VLF_CONSOLE, VLL_WARN);
-    vlog_set_levels_from_string_assert("reconnect:err");
-    vlog_set_levels_from_string_assert("jsonrpc:err");
-
     const char *database = argv[argc - 2];
     const char *state = argv[argc - 1];
 

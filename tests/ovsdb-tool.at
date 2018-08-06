@@ -452,7 +452,7 @@ ovsdb-tool create-cluster db2 db1 unix:s1.raft
 
 # Dump the data.
 AT_CHECK([ovsdb-server -vconsole:off -vfile -vvlog:off --detach --no-chdir --pidfile --log-file --remote=punix:db.sock db2])
-AT_CHECK([ovsdb-client wait ordinals connected])
+AT_CHECK([ovsdb_client_wait ordinals connected])
 AT_CHECK([ovsdb-client dump > dump2])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 

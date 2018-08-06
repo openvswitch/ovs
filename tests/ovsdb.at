@@ -129,6 +129,12 @@ m4_define([OVSDB_CHECK_NEGATIVE_CPY],
    OVSDB_CHECK_NEGATIVE_PY([$1 - Python2], [$2], [$3], [$4], [$5])
    OVSDB_CHECK_NEGATIVE_PY3([$1 - Python3], [$2], [$3], [$4], [$5])])
 
+OVS_START_SHELL_HELPERS
+ovsdb_client_wait() {
+    ovsdb-client -vconsole:warn -vreconnect:err -vjsonrpc:err -vtimeval:off -vfile -vsyslog:off -vvlog:off --timeout=30 wait "$@"
+}
+OVS_END_SHELL_HELPERS
+
 m4_include([tests/ovsdb-log.at])
 m4_include([tests/ovsdb-types.at])
 m4_include([tests/ovsdb-data.at])

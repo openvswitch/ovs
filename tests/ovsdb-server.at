@@ -668,7 +668,7 @@ ovsdb_check_online_compaction() {
               fi])
     dnl Start ovsdb-server.
     AT_CHECK([ovsdb-server -vvlog:off -vconsole:off --detach --no-chdir --pidfile --remote=punix:socket --log-file db], [0])
-    AT_CHECK([ovsdb-client wait unix:socket ordinals connected])
+    AT_CHECK([ovsdb_client_wait unix:socket ordinals connected])
     AT_CAPTURE_FILE([ovsdb-server.log])
     dnl Do a bunch of random transactions that put crap in the database log.
     AT_CHECK(
