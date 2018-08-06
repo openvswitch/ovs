@@ -1309,61 +1309,35 @@ static int
 dpctl_flush_conntrack(int argc, const char *argv[],
                       struct dpctl_params *dpctl_p)
 {
-    struct dpif *dpif;
+    struct dpif *dpif = NULL;
     struct ct_dpif_tuple tuple, *ptuple = NULL;
     struct ds ds = DS_EMPTY_INITIALIZER;
     uint16_t zone, *pzone = NULL;
-    char *name;
-    int error, i = 1;
-    bool got_dpif = false;
+    int error;
+    int args = argc - 1;
 
-    /* Parse datapath name. It is not a mandatory parameter for this command.
-     * If it is not specified, we retrieve it from the current setup,
-     * assuming only one exists. */
-    if (argc >= 2) {
-        error = parsed_dpif_open(argv[i], false, &dpif);
-        if (!error) {
-            got_dpif = true;
-            i++;
-        } else if (argc == 4) {
-            dpctl_error(dpctl_p, error, "invalid datapath");
-            return error;
-        }
-    }
-    if (!got_dpif) {
-        name = get_one_dp(dpctl_p);
-        if (!name) {
-            return EINVAL;
-        }
-        error = parsed_dpif_open(name, false, &dpif);
-        free(name);
-        if (error) {
-            dpctl_error(dpctl_p, error, "opening datapath");
-            return error;
-        }
+    /* Parse ct tuple */
+    if (args && ct_dpif_parse_tuple(&tuple, argv[args], &ds)) {
+        ptuple = &tuple;
+        args--;
     }
 
     /* Parse zone */
-    if (argc > i && ovs_scan(argv[i], "zone=%"SCNu16, &zone)) {
+    if (args && ovs_scan(argv[args], "zone=%"SCNu16, &zone)) {
         pzone = &zone;
-        i++;
+        args--;
     }
+
     /* Report error if there are more than one unparsed argument. */
-    if (argc - i > 1) {
-        ds_put_cstr(&ds, "invalid zone");
+    if (args > 1) {
+        ds_put_cstr(&ds, "invalid arguments");
         error = EINVAL;
         goto error;
     }
 
-    /* Parse ct tuple */
-    if (argc > i && ct_dpif_parse_tuple(&tuple, argv[i], &ds)) {
-        ptuple = &tuple;
-        i++;
-    }
-    /* Report error if there is an unparsed argument. */
-    if (argc - i) {
-        error = EINVAL;
-        goto error;
+    error = opt_dpif_open(argc, argv, dpctl_p, 4, &dpif);
+    if (error) {
+        return error;
     }
 
     error = ct_dpif_flush(dpif, pzone, ptuple);
