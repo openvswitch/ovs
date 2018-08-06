@@ -423,6 +423,11 @@ punix:<file>
     On Windows, listens on a local named pipe, creating a named pipe
     <file> to mimic the behavior of a Unix domain socket.
 
+pfd:<fd>
+    On Unix-like systems, accepts connections on a socket already listening
+    socket. This is useful with service managers that are able to manage
+    sockets such as systemd.
+
 All IP-based connection methods accept IPv4 and IPv6 addresses.  To specify an
 IPv6 address, wrap it in square brackets, e.g.  ``ssl:[::1]:6640``.  Passive
 IP-based connection methods by default listen for IPv4 connections only; use

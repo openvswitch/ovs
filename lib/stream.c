@@ -68,6 +68,7 @@ static const struct pstream_class *pstream_classes[] = {
     &ptcp_pstream_class,
 #ifndef _WIN32
     &punix_pstream_class,
+    &pfd_pstream_class,
 #else
     &pwindows_pstream_class,
 #endif

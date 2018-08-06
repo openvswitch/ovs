@@ -192,6 +192,7 @@ extern const struct pstream_class ptcp_pstream_class;
 #ifndef _WIN32
 extern const struct stream_class unix_stream_class;
 extern const struct pstream_class punix_pstream_class;
+extern const struct pstream_class pfd_pstream_class;
 #else
 extern const struct stream_class windows_stream_class;
 extern const struct pstream_class pwindows_pstream_class;

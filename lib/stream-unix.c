@@ -136,3 +136,32 @@ const struct pstream_class punix_pstream_class = {
     NULL,
 };
 
+static int
+pfd_open(const char *name, char *suffix,
+             struct pstream **pstreamp, uint8_t dscp OVS_UNUSED)
+{
+    int fd, error;
+    char *end;
+
+    fd = strtol(suffix, &end, 10);
+    if (*end != '\0' || fd < 0 || fd >= INT_MAX) {
+        VLOG_ERR("%s: bad file descriptor number", suffix);
+        return ERANGE;
+    }
+
+    error = set_nonblocking(fd);
+    if (error)
+        return error;
+
+    return new_fd_pstream(xstrdup(name), fd,
+                          punix_accept, NULL, pstreamp);
+}
+
+const struct pstream_class pfd_pstream_class = {
+    "pfd",
+    false,
+    pfd_open,
+    NULL,
+    NULL,
+    NULL,
+};
