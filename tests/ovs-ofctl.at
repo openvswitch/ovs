@@ -3184,3 +3184,30 @@ AT_CHECK([grep -q "ct_dpif|DBG|.*ct_flush: zone 123" ovs-vswitchd.log])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+
+AT_SETUP([ovs-ofctl snoop])
+OVS_VSWITCHD_START
+
+dnl setup controller for br0 before starting the controller
+AT_CHECK([ovs-vsctl -vsyslog:off set-controller br0 unix:testcontroller])
+
+dnl then start listening on the '.snoop' connection
+on_exit 'kill `cat ovs-ofctl-snoop.pid`'
+AT_CHECK([ovs-ofctl -vsyslog:off --detach --pidfile=ovs-ofctl-snoop.pid snoop br0 > snoopbr0.txt 2>&1])
+
+dnl finally start the controller
+on_exit 'kill `cat ovs-testcontroller.pid`'
+AT_CHECK([ovs-testcontroller -vsyslog:off --detach --pidfile punix:testcontroller], [0], [ignore])
+OVS_WAIT_UNTIL([test -e testcontroller])
+
+dnl check for some of the initial handshake messages
+OVS_WAIT_UNTIL([egrep "OFPT_FEATURES_REQUEST" snoopbr0.txt >/dev/null 2>&1])
+OVS_WAIT_UNTIL([egrep "OFPT_FEATURES_REPLY" snoopbr0.txt >/dev/null 2>&1])
+OVS_WAIT_UNTIL([egrep "OFPT_SET_CONFIG" snoopbr0.txt >/dev/null 2>&1])
+
+dnl need to suppress the 'connection failed' WARN message in ovs-vswitchd
+dnl because we need ovs-vswitchd to have the controller config before starting
+dnl the controller to 'snoop' the OpenFlow messages from beginning
+OVS_VSWITCHD_STOP(["/connection failed (No such file or directory)/d"])
+AT_CLEANUP
