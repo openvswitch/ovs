@@ -389,7 +389,10 @@ move_ip_routes () {
 
 ovsdb_tool () {
     if [ "$OVS_USER" != "" ]; then
-        runuser --user "${OVS_USER%:*}" -- ovsdb-tool -vconsole:off "$@"
+        local uid=$(id -u "${OVS_USER%:*}")
+        local gid=$(id -g "${OVS_USER%:*}")
+        local groups=$(id -G "${OVS_USER%:*}" | tr ' ' ',')
+        setpriv --reuid "$uid" --regid "$gid" --groups "$groups" ovsdb-tool -vconsole:off "$@"
     else
         ovsdb-tool -vconsole:off "$@"
     fi
