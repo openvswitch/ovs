@@ -1,10 +1,9 @@
 [Unit]
 Description=Open vSwitch Forwarding Unit
-After=ovsdb-server.service network-pre.target systemd-udev-settle.service
+After=ovsdb-server.socket network-pre.target systemd-udev-settle.service
 Before=network.target network.service
-Requires=ovsdb-server.service
-ReloadPropagatedFrom=ovsdb-server.service
-AssertPathIsReadWrite=/var/run/openvswitch/db.sock
+Requires=ovsdb-server.socket
+ReloadPropagatedFrom=ovsdb-server.socket
 PartOf=openvswitch.service
 
 [Service]

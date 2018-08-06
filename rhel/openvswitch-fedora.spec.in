@@ -259,11 +259,13 @@ install -p -D -m 0644 rhel/usr_lib_udev_rules.d_91-vfio.rules \
 install -p -D -m 0644 \
         rhel/usr_share_openvswitch_scripts_systemd_sysconfig.template \
         $RPM_BUILD_ROOT/%{_sysconfdir}/sysconfig/openvswitch
-for service in openvswitch ovsdb-server ovs-vswitchd ovs-delete-transient-ports \
-                ovn-controller ovn-controller-vtep ovn-northd; do
+for unit in openvswitch.service ovsdb-server.service ovsdb-server.socket \
+                ovs-vswitchd.service ovs-delete-transient-ports.service \
+                ovn-controller.service ovn-controller-vtep.service \
+                ovn-northd.service; do
         install -p -D -m 0644 \
-                        rhel/usr_lib_systemd_system_${service}.service \
-                        $RPM_BUILD_ROOT%{_unitdir}/${service}.service
+                        rhel/usr_lib_systemd_system_${unit} \
+                        $RPM_BUILD_ROOT%{_unitdir}/${unit}
 done
 install -m 0755 rhel/etc_init.d_openvswitch \
         $RPM_BUILD_ROOT%{_datadir}/openvswitch/scripts/openvswitch.init
@@ -542,6 +544,7 @@ fi
 %config(noreplace) %{_sysconfdir}/logrotate.d/openvswitch
 %{_unitdir}/openvswitch.service
 %{_unitdir}/ovsdb-server.service
+%{_unitdir}/ovsdb-server.socket
 %{_unitdir}/ovs-vswitchd.service
 %{_unitdir}/ovs-delete-transient-ports.service
 %{_datadir}/openvswitch/scripts/openvswitch.init

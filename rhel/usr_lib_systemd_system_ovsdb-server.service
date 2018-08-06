@@ -23,3 +23,4 @@ ExecReload=/usr/share/openvswitch/scripts/ovs-ctl --no-ovs-vswitchd \
            --no-monitor restart $OPTIONS
 RuntimeDirectory=openvswitch
 RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=no
