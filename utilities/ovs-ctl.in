@@ -132,7 +132,12 @@ do_start_ovsdb () {
             set "$@" --no-self-confinement
         fi
         set "$@" -vconsole:emer -vsyslog:err -vfile:info
-        set "$@" --remote=punix:"$DB_SOCK"
+        if test X"$LISTEN_FDNAMES" = X"ovsdb-server.socket"; then
+            unset LISTEN_FDS LISTEN_FDNAMES LISTEN_PID
+            set "$@" --remote=pfd:3
+        else
+            set "$@" --remote=punix:"$DB_SOCK"
+        fi
         set "$@" --private-key=db:Open_vSwitch,SSL,private_key
         set "$@" --certificate=db:Open_vSwitch,SSL,certificate
         set "$@" --bootstrap-ca-cert=db:Open_vSwitch,SSL,ca_cert
