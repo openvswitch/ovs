@@ -1543,7 +1543,7 @@ compare_flows(const void *afs_, const void *bfs_)
         }
     }
 
-    return 0;
+    return a < b ? -1 : 1;
 }
 
 static void
@@ -1565,7 +1565,9 @@ ofctl_dump_flows(struct ovs_cmdl_context *ctx)
         run(vconn_dump_flows(vconn, &fsr, protocol, &fses, &n_fses),
             "dump flows");
 
-        qsort(fses, n_fses, sizeof *fses, compare_flows);
+        if (n_criteria) {
+            qsort(fses, n_fses, sizeof *fses, compare_flows);
+        }
 
         struct ds s = DS_EMPTY_INITIALIZER;
         for (size_t i = 0; i < n_fses; i++) {
