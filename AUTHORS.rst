@@ -66,6 +66,7 @@ Aryan TaheriMonfared               aryan.taherimonfared@uis.no
 Ashish Varma                       ashishvarma.ovs@gmail.com
 Ashwin Swaminathan                 ashwinds@arista.com
 Babu Shanmugam                     bschanmu@redhat.com
+Bala Sankaran                      bsankara@redhat.com
 Ben Pfaff                          blp@ovn.org
 Ben Warren                         ben@skyportsystems.com
 Benli Ye                           daniely@vmware.com
