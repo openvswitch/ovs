@@ -3838,22 +3838,22 @@ raft_store_snapshot(struct raft *raft, const struct json *new_snapshot_data)
     }
 
     uint64_t new_log_start = raft->last_applied + 1;
-    const struct raft_entry new_snapshot = {
+    struct raft_entry new_snapshot = {
         .term = raft_get_term(raft, new_log_start - 1),
-        .data = CONST_CAST(struct json *, new_snapshot_data),
+        .data = json_clone(new_snapshot_data),
         .eid = *raft_get_eid(raft, new_log_start - 1),
-        .servers = CONST_CAST(struct json *,
-                              raft_servers_for_index(raft, new_log_start - 1)),
+        .servers = json_clone(raft_servers_for_index(raft, new_log_start - 1)),
     };
     struct ovsdb_error *error = raft_save_snapshot(raft, new_log_start,
                                                    &new_snapshot);
     if (error) {
+        raft_entry_uninit(&new_snapshot);
         return error;
     }
 
     raft->log_synced = raft->log_end - 1;
     raft_entry_uninit(&raft->snap);
-    raft_entry_clone(&raft->snap, &new_snapshot);
+    raft->snap = new_snapshot;
     for (size_t i = 0; i < new_log_start - raft->log_start; i++) {
         raft_entry_uninit(&raft->entries[i]);
     }
