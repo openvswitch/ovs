@@ -1188,6 +1188,12 @@ stream_ssl_set_protocols(const char *arg)
     }
 
     /* Start with all the flags off and turn them on as requested. */
+#ifndef SSL_OP_NO_SSL_MASK
+    /* For old OpenSSL without this macro, this is the correct value.  */
+#define SSL_OP_NO_SSL_MASK (SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | \
+                            SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1 | \
+                            SSL_OP_NO_TLSv1_2)
+#endif
     long protocol_flags = SSL_OP_NO_SSL_MASK;
 
     char *s = xstrdup(arg);
