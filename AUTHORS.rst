@@ -365,6 +365,7 @@ Yin Lin                            linyi@vmware.com
 Yu Zhiguo                          yuzg@cn.fujitsu.com
 Yuanhan Liu                        yuanhan.liu@linux.intel.com
 Yunjian Wang                       wangyunjian@huawei.com
+Zak Whittington                    zwhitt.vmware@gmail.com
 ZhengLingyun                       konghuarukhr@163.com
 Zoltán Balogh                      zoltan.balogh.eth@gmail.com
 Zoltan Kiss                        zoltan.kiss@citrix.com
