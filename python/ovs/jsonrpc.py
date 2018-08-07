@@ -14,6 +14,7 @@
 import codecs
 import errno
 import os
+import random
 import sys
 
 import ovs.json
@@ -368,12 +369,17 @@ class Connection(object):
 class Session(object):
     """A JSON-RPC session with reconnection."""
 
-    def __init__(self, reconnect, rpc):
+    def __init__(self, reconnect, rpc, remotes):
         self.reconnect = reconnect
         self.rpc = rpc
         self.stream = None
         self.pstream = None
         self.seqno = 0
+        if type(remotes) != list:
+            remotes = [remotes]
+        self.remotes = remotes
+        random.shuffle(self.remotes)
+        self.next_remote = 0
 
     @staticmethod
     def open(name, probe_interval=None):
@@ -393,28 +399,38 @@ class Session(object):
         feature. If non-zero the value will be forced to at least 1000
         milliseconds. If None it will just use the default value in OVS.
         """
-        reconnect = ovs.reconnect.Reconnect(ovs.timeval.msec())
-        reconnect.set_name(name)
-        reconnect.enable(ovs.timeval.msec())
+        return Session.open_multiple([name], probe_interval=probe_interval)
 
-        if ovs.stream.PassiveStream.is_valid_name(name):
+    @staticmethod
+    def open_multiple(remotes, probe_interval=None):
+        reconnect = ovs.reconnect.Reconnect(ovs.timeval.msec())
+        session = Session(reconnect, None, remotes)
+        session.pick_remote()
+        reconnect.enable(ovs.timeval.msec())
+        reconnect.set_backoff_free_tries(len(remotes))
+        if ovs.stream.PassiveStream.is_valid_name(reconnect.get_name()):
             reconnect.set_passive(True, ovs.timeval.msec())
 
-        if not ovs.stream.stream_or_pstream_needs_probes(name):
+        if not ovs.stream.stream_or_pstream_needs_probes(reconnect.get_name()):
             reconnect.set_probe_interval(0)
         elif probe_interval is not None:
             reconnect.set_probe_interval(probe_interval)
 
-        return Session(reconnect, None)
+        return session
 
     @staticmethod
     def open_unreliably(jsonrpc):
         reconnect = ovs.reconnect.Reconnect(ovs.timeval.msec())
+        session = Session(reconnect, None, [jsonrpc.name])
         reconnect.set_quiet(True)
-        reconnect.set_name(jsonrpc.name)
+        session.pick_remote()
         reconnect.set_max_tries(0)
         reconnect.connected(ovs.timeval.msec())
-        return Session(reconnect, jsonrpc)
+        return session
+
+    def pick_remote(self):
+        self.reconnect.set_name(self.remotes[self.next_remote])
+        self.next_remote = (self.next_remote + 1) % len(self.remotes)
 
     def close(self):
         if self.rpc is not None:
@@ -448,6 +464,8 @@ class Session(object):
                 self.reconnect.connecting(ovs.timeval.msec())
             else:
                 self.reconnect.connect_failed(ovs.timeval.msec(), error)
+                self.stream = None
+                self.pick_remote()
         elif self.pstream is None:
             error, self.pstream = ovs.stream.PassiveStream.open(name)
             if not error:
@@ -490,6 +508,7 @@ class Session(object):
             if error != 0:
                 self.reconnect.disconnected(ovs.timeval.msec(), error)
                 self.__disconnect()
+                self.pick_remote()
         elif self.stream is not None:
             self.stream.run()
             error = self.stream.connect()
@@ -499,6 +518,7 @@ class Session(object):
                 self.stream = None
             elif error != errno.EAGAIN:
                 self.reconnect.connect_failed(ovs.timeval.msec(), error)
+                self.pick_remote()
                 self.stream.close()
                 self.stream = None
 
@@ -583,3 +603,6 @@ class Session(object):
 
     def force_reconnect(self):
         self.reconnect.force_reconnect(ovs.timeval.msec())
+
+    def get_num_of_remotes(self):
+        return len(self.remotes)

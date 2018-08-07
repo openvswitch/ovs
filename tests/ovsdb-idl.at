@@ -106,6 +106,32 @@ m4_define([OVSDB_CHECK_IDL_TCP_PY],
     OVSDB_CHECK_IDL_TCP_PYN([$1 - Python3], [$2], [$3], [$4], [$5], [$6],
                         [$HAVE_PYTHON3], [$PYTHON3])])
 
+# same as OVSDB_CHECK_IDL but uses the Python IDL implementation with tcp
+# with multiple remotes with only one remote reachable
+m4_define([OVSDB_CHECK_IDL_TCP_MULTIPLE_REMOTES_PYN],
+  [AT_SETUP([$1 - tcp])
+   AT_SKIP_IF([test $7 = no])
+   AT_KEYWORDS([ovsdb server idl positive Python with tcp socket $5])
+   AT_CHECK([ovsdb_start_idltest "ptcp:0:127.0.0.1"])
+   PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
+   WRONG_PORT_1=$((TCP_PORT + 1))
+   WRONG_PORT_2=$((TCP_PORT + 2))
+   remote=tcp:127.0.0.1:$WRONG_PORT_1,tcp:127.0.0.1:$TCP_PORT,tcp:127.0.0.1:$WRONG_PORT_2
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact tcp:127.0.0.1:$TCP_PORT $2], [0], [ignore], [ignore])])
+   AT_CHECK([$8 $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema $remote $3],
+            [0], [stdout], [ignore])
+   AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
+            [0], [$4])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+m4_define([OVSDB_CHECK_IDL_TCP_MULTIPLE_REMOTES_PY],
+   [OVSDB_CHECK_IDL_TCP_MULTIPLE_REMOTES_PYN([$1 - Python2 (multiple remotes)], [$2], [$3], [$4], [$5], [$6],
+                        [$HAVE_PYTHON], [$PYTHON])
+    OVSDB_CHECK_IDL_TCP_MULTIPLE_REMOTES_PYN([$1 - Python3 (multiple remotes)], [$2], [$3], [$4], [$5], [$6],
+                        [$HAVE_PYTHON3], [$PYTHON3])])
+
 # same as OVSDB_CHECK_IDL but uses the Python IDL implementation with tcp6
 m4_define([OVSDB_CHECK_IDL_TCP6_PYN],
   [AT_SETUP([$1 - tcp6])
@@ -130,6 +156,32 @@ m4_define([OVSDB_CHECK_IDL_TCP6_PY],
    [OVSDB_CHECK_IDL_TCP6_PYN([$1 - Python2], [$2], [$3], [$4], [$5], [$6],
                         [$HAVE_PYTHON2], [$PYTHON2])
     OVSDB_CHECK_IDL_TCP6_PYN([$1 - Python3], [$2], [$3], [$4], [$5], [$6],
+                        [$HAVE_PYTHON3], [$PYTHON3])])
+
+m4_define([OVSDB_CHECK_IDL_TCP6_MULTIPLE_REMOTES_PYN],
+  [AT_SETUP([$1 - tcp6])
+   AT_SKIP_IF([test $7 = no])
+   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+   AT_SKIP_IF([test $HAVE_IPV6 = no])
+   AT_KEYWORDS([ovsdb server idl positive Python with tcp6 socket $5])
+   AT_CHECK([ovsdb_start_idltest "ptcp:0:[[::1]]"])
+   PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
+   WRONG_PORT_1=$((TCP_PORT + 1))
+   WRONG_PORT_2=$((TCP_PORT + 2))
+   remote="tcp:[[::1]]:$WRONG_PORT_1,tcp:[[::1]]:$TCP_PORT,tcp:[[::1]]:$WRONG_PORT_2"
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact "tcp:[[::1]]:$TCP_PORT" $2], [0], [ignore], [ignore])])
+   AT_CHECK([$8 $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema $remote $3],
+            [0], [stdout], [ignore])
+   AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
+            [0], [$4])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+m4_define([OVSDB_CHECK_IDL_TCP6_MULTIPLE_REMOTES_PY],
+   [OVSDB_CHECK_IDL_TCP6_MULTIPLE_REMOTES_PYN([$1 - Python2 (multiple remotes)], [$2], [$3], [$4], [$5], [$6],
+                        [$HAVE_PYTHON], [$PYTHON])
+    OVSDB_CHECK_IDL_TCP6_MULTIPLE_REMOTES_PYN([$1 - Python3 (multiple remotes)], [$2], [$3], [$4], [$5], [$6],
                         [$HAVE_PYTHON3], [$PYTHON3])])
 
 # same as OVSDB_CHECK_IDL but uses the Python IDL implementation with SSL
@@ -178,7 +230,9 @@ m4_define([OVSDB_CHECK_IDL],
    OVSDB_CHECK_IDL_PY($@)
    OVSDB_CHECK_IDL_REGISTER_COLUMNS_PY($@)
    OVSDB_CHECK_IDL_TCP_PY($@)
+   OVSDB_CHECK_IDL_TCP_MULTIPLE_REMOTES_PY($@)
    OVSDB_CHECK_IDL_TCP6_PY($@)
+   OVSDB_CHECK_IDL_TCP6_MULTIPLE_REMOTES_PY($@)
    OVSDB_CHECK_IDL_SSL_PY($@)])
 
 # This test uses the Python IDL implementation with passive tcp

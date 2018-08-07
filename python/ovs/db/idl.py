@@ -101,6 +101,9 @@ class Idl(object):
         ovs.jsonrpc.session.open().  The connection will maintain an in-memory
         replica of the remote database.
 
+        'remote' can be comma separated multiple remotes and each remote
+        should be in a form acceptable to ovs.jsonrpc.session.open().
+
         'schema_helper' should be an instance of the SchemaHelper class which
         generates schema for the remote database. The caller may have cut it
         down by removing tables or columns that are not of interest.  The IDL
@@ -127,7 +130,8 @@ class Idl(object):
         self.tables = schema.tables
         self.readonly = schema.readonly
         self._db = schema
-        self._session = ovs.jsonrpc.Session.open(remote,
+        remotes = self._parse_remotes(remote)
+        self._session = ovs.jsonrpc.Session.open_multiple(remotes,
             probe_interval=probe_interval)
         self._monitor_request_id = None
         self._last_seqno = None
@@ -154,6 +158,19 @@ class Idl(object):
             table.idl = self
             table.condition = [True]
             table.cond_changed = False
+
+    def _parse_remotes(self, remote):
+        # If remote is -
+        # "tcp:10.0.0.1:6641,unix:/tmp/db.sock,t,s,tcp:10.0.0.2:6642"
+        # this function returns
+        # ["tcp:10.0.0.1:6641", "unix:/tmp/db.sock,t,s", tcp:10.0.0.2:6642"]
+        remotes = []
+        for r in remote.split(','):
+            if remotes and r.find(":") == -1:
+                remotes[-1] += "," + r
+            else:
+                remotes.append(r)
+        return remotes
 
     def index_create(self, table, name):
         """Create a named multi-column index on a table"""
