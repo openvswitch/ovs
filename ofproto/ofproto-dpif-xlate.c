@@ -674,6 +674,34 @@ xlate_report_error(const struct xlate_ctx *ctx, const char *format, ...)
     ds_destroy(&s);
 }
 
+/* This is like xlate_report() for messages that should be logged
+   at the info level (even when not tracing). */
+static void OVS_PRINTF_FORMAT(2, 3)
+xlate_report_info(const struct xlate_ctx *ctx, const char *format, ...)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+    if (!OVS_UNLIKELY(ctx->xin->trace)
+        && (!ctx->xin->packet || VLOG_DROP_INFO(&rl))) {
+        return;
+    }
+
+    struct ds s = DS_EMPTY_INITIALIZER;
+    va_list args;
+    va_start(args, format);
+    ds_put_format_valist(&s, format, args);
+    va_end(args);
+
+    if (ctx->xin->trace) {
+        oftrace_report(ctx->xin->trace, OFT_WARN, ds_cstr(&s));
+    } else {
+        ds_put_format(&s, " on bridge %s while processing ",
+                      ctx->xbridge->name);
+        flow_format(&s, &ctx->base_flow, NULL);
+        VLOG_INFO("%s", ds_cstr(&s));
+    }
+    ds_destroy(&s);
+}
+
 /* This is like xlate_report() for messages that should be logged at debug
  * level (even if we are not tracing) because they can be valuable for
  * debugging. */
@@ -5007,7 +5035,7 @@ xlate_output_action(struct xlate_ctx *ctx, ofp_port_t port,
         if (port != ctx->xin->flow.in_port.ofp_port) {
             compose_output_action(ctx, port, NULL, is_last_action, truncate);
         } else {
-            xlate_report(ctx, OFT_WARN, "skipping output to input port");
+            xlate_report_info(ctx, "skipping output to input port");
         }
         break;
     }
@@ -5092,7 +5120,7 @@ xlate_output_trunc_action(struct xlate_ctx *ctx,
                 ctx->xout->slow |= SLOW_ACTION;
             }
         } else {
-            xlate_report(ctx, OFT_WARN, "skipping output to input port");
+            xlate_report_info(ctx, "skipping output to input port");
         }
         break;
     }
