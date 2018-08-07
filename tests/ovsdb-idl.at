@@ -1730,3 +1730,19 @@ OVSDB_CHECK_IDL_COMPOUND_INDEX_WITH_REF([set, simple3 idl-compound-index-with-re
 007: check simple4: empty
 008: End test
 ]])
+
+m4_define([CHECK_STREAM_OPEN_BLOCK_PY],
+  [AT_SETUP([$1])
+   AT_SKIP_IF([test $2 = no])
+   AT_KEYWORDS([Check PY Stream open block - $3])
+   AT_CHECK([ovsdb_start_idltest "ptcp:0:127.0.0.1"])
+   PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
+   WRONG_PORT=$(($TCP_PORT+1))
+   AT_CHECK([$3 $srcdir/test-stream.py tcp:127.0.0.1:$TCP_PORT], [0], [ignore])
+   AT_CHECK([$3 $srcdir/test-stream.py tcp:127.0.0.1:$WRONG_PORT], [1], [ignore])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CHECK([$3 $srcdir/test-stream.py tcp:127.0.0.1:$TCP_PORT], [1], [ignore])
+   AT_CLEANUP])
+
+CHECK_STREAM_OPEN_BLOCK_PY([Check PY2 Stream open block], [$HAVE_PYTHON], [$PYTHON])
+CHECK_STREAM_OPEN_BLOCK_PY([Check PY3 Stream open block], [$HAVE_PYTHON], [$PYTHON3])

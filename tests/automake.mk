@@ -422,6 +422,7 @@ CHECK_PYFILES = \
 	tests/test-l7.py \
 	tests/test-ovsdb.py \
 	tests/test-reconnect.py \
+	tests/test-stream.py \
 	tests/MockXenAPI.py \
 	tests/test-unix-socket.py \
 	tests/test-unixctl.py \

@@ -191,8 +191,15 @@ class Stream(object):
         if error:
             return error, None
         else:
-            status = ovs.socket_util.check_connection_completion(sock)
-            return 0, cls(sock, name, status)
+            err = ovs.socket_util.check_connection_completion(sock)
+            if err == errno.EAGAIN or err == errno.EINPROGRESS:
+                status = errno.EAGAIN
+                err = 0
+            elif err == 0:
+                status = 0
+            else:
+                status = err
+            return err, cls(sock, name, status)
 
     @staticmethod
     def _open(suffix, dscp):
