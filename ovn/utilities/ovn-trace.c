@@ -1020,7 +1020,9 @@ ovntrace_lookup_port(const void *dp_, const char *port_name,
             *portp = port->tunnel_key;
             return true;
         }
-        VLOG_WARN("%s: not in datapath %s", port_name, dp->name);
+        /* The port is found but not in this datapath. It happens when port
+         * group is used in match conditions. */
+        return false;
     }
 
     const struct ovntrace_mcgroup *mcgroup = ovntrace_mcgroup_find_by_name(dp, port_name);
