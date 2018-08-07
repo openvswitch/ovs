@@ -666,9 +666,9 @@ xlate_report_error(const struct xlate_ctx *ctx, const char *format, ...)
     if (ctx->xin->trace) {
         oftrace_report(ctx->xin->trace, OFT_ERROR, ds_cstr(&s));
     } else {
-        ds_put_cstr(&s, " while processing ");
+        ds_put_format(&s, " on bridge %s while processing ",
+                      ctx->xbridge->name);
         flow_format(&s, &ctx->base_flow, NULL);
-        ds_put_format(&s, " on bridge %s", ctx->xbridge->name);
         VLOG_WARN("%s", ds_cstr(&s));
     }
     ds_destroy(&s);

@@ -8030,7 +8030,7 @@ recirc_id(0),in_port(100),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(src=192.1
 ])
 
 AT_CHECK([grep -e '|ofproto_dpif_xlate|WARN|' ovs-vswitchd.log | sed "s/^.*|WARN|//"], [0], [dnl
-stack underflow while processing icmp,in_port=LOCAL,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 on bridge br1
+stack underflow on bridge br1 while processing icmp,in_port=LOCAL,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0
 ])
 
 OVS_VSWITCHD_STOP(["/stack underflow/d"])
