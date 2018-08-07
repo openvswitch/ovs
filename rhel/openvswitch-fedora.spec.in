@@ -162,6 +162,18 @@ Provides: openvswitch-static = %{version}-%{release}
 This provides static library, libopenswitch.a and the openvswitch header
 files needed to build an external application.
 
+%if 0%{?rhel} > 7 || 0%{?fedora} > 28
+%package -n network-scripts-%{name}
+Summary: Open vSwitch legacy network service support
+License: ASL 2.0
+Requires: network-scripts
+Supplements: (%{name} and network-scripts)
+
+%description -n network-scripts-%{name}
+This provides the ifup and ifdown scripts for use with the legacy network
+service.
+%endif
+
 %package ovn-central
 Summary: Open vSwitch - Open Virtual Network support
 License: ASL 2.0
@@ -531,6 +543,12 @@ fi
 %{_includedir}/openflow/*
 %{_includedir}/ovn/*
 
+%if 0%{?rhel} > 7 || 0%{?fedora} > 28
+%files -n network-scripts-%{name}
+%{_sysconfdir}/sysconfig/network-scripts/ifup-ovs
+%{_sysconfdir}/sysconfig/network-scripts/ifdown-ovs
+%endif
+
 %files
 %defattr(-,openvswitch,openvswitch)
 %dir %{_sysconfdir}/openvswitch
@@ -548,8 +566,10 @@ fi
 %{_unitdir}/ovs-vswitchd.service
 %{_unitdir}/ovs-delete-transient-ports.service
 %{_datadir}/openvswitch/scripts/openvswitch.init
+%if ! (0%{?rhel} > 7 || 0%{?fedora} > 28)
 %{_sysconfdir}/sysconfig/network-scripts/ifup-ovs
 %{_sysconfdir}/sysconfig/network-scripts/ifdown-ovs
+%endif
 %{_datadir}/openvswitch/bugtool-plugins/
 %{_datadir}/openvswitch/scripts/ovs-bugtool-*
 %{_datadir}/openvswitch/scripts/ovs-check-dead-ifs
