@@ -595,9 +595,16 @@ def do_idl(schema_file, remote, *commands):
         idl.index_create("simple3", "simple3_by_name")
 
     if commands:
-        error, stream = ovs.stream.Stream.open_block(
-            ovs.stream.Stream.open(remote))
-        if error:
+        remotes = remote.split(',')
+        stream = None
+        for r in remotes:
+            error, stream = ovs.stream.Stream.open_block(
+                ovs.stream.Stream.open(r))
+            if not error and stream:
+                break
+            stream = None
+
+        if not stream:
             sys.stderr.write("failed to connect to \"%s\"" % remote)
             sys.exit(1)
         rpc = ovs.jsonrpc.Connection(stream)
