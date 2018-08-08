@@ -868,7 +868,7 @@ void dpif_print_packet(struct dpif *, struct dpif_upcall *);
 /* Meters. */
 void dpif_meter_get_features(const struct dpif *,
                              struct ofputil_meter_features *);
-int dpif_meter_set(struct dpif *, ofproto_meter_id *meter_id,
+int dpif_meter_set(struct dpif *, ofproto_meter_id meter_id,
                    struct ofputil_meter_config *);
 int dpif_meter_get(const struct dpif *, ofproto_meter_id meter_id,
                    struct ofputil_meter_stats *, uint16_t n_bands);

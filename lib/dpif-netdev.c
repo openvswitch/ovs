@@ -5160,11 +5160,11 @@ dp_netdev_run_meter(struct dp_netdev *dp, struct dp_packet_batch *packets_,
 
 /* Meter set/get/del processing is still single-threaded. */
 static int
-dpif_netdev_meter_set(struct dpif *dpif, ofproto_meter_id *meter_id,
+dpif_netdev_meter_set(struct dpif *dpif, ofproto_meter_id meter_id,
                       struct ofputil_meter_config *config)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
-    uint32_t mid = meter_id->uint32;
+    uint32_t mid = meter_id.uint32;
     struct dp_meter *meter;
     int i;
 
