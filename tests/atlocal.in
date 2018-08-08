@@ -212,3 +212,7 @@ unset NO_PROXY
 # Avoid OVN environment variables leaking in from external environment.
 unset OVN_NB_DB
 unset OVN_SB_DB
+
+# Prevent logging to syslog during tests.
+OVS_SYSLOG_METHOD=null
+export OVS_SYSLOG_METHOD

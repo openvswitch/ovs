@@ -39,6 +39,7 @@
 #include "svec.h"
 #include "syslog-direct.h"
 #include "syslog-libc.h"
+#include "syslog-null.h"
 #include "syslog-provider.h"
 #include "timeval.h"
 #include "unixctl.h"
@@ -584,7 +585,9 @@ vlog_set_syslog_method(const char *method)
         return;
     }
 
-    if (!strcmp(method, "libc")) {
+    if (!strcmp(method, "null")) {
+        syslogger = syslog_null_create();
+    } else if (!strcmp(method, "libc")) {
         syslogger = syslog_libc_create();
     } else if (!strncmp(method, "udp:", 4) || !strncmp(method, "unix:", 5)) {
         syslogger = syslog_direct_create(method);
@@ -778,7 +781,12 @@ vlog_init(void)
          * log anything before calling ovsthread_once_done() will deadlock. */
         atomic_read_explicit(&log_facility, &facility, memory_order_relaxed);
         if (!syslogger) {
-            syslogger = syslog_libc_create();
+            char *env = getenv("OVS_SYSLOG_METHOD");
+            if (env && env[0]) {
+                vlog_set_syslog_method(env);
+            } else {
+                syslogger = syslog_libc_create();
+            }
         }
         syslogger->class->openlog(syslogger, facility ? facility : LOG_DAEMON);
         ovsthread_once_done(&once);

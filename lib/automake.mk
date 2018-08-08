@@ -280,6 +280,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/syslog-direct.h \
 	lib/syslog-libc.c \
 	lib/syslog-libc.h \
+	lib/syslog-null.c \
+	lib/syslog-null.h \
 	lib/syslog-provider.h \
 	lib/table.c \
 	lib/table.h \

@@ -114,7 +114,7 @@
     <ul>
       <li>
         <code>libc</code>, to use the libc <code>syslog()</code> function.
-        This is the default behavior.  Downside of using this options is that
+        Downside of using this options is that
         libc adds fixed prefix to every message before it is actually sent to
         the syslog daemon over <code>/dev/log</code> UNIX domain socket.
       </li>
@@ -139,6 +139,15 @@
         local syslog traffic and there are some security considerations that
         apply to UDP sockets, but do not apply to UNIX domain sockets.
       </li>
+
+      <li>
+        <code>null</code>, to discard all messages logged to syslog.
+      </li>
     </ul>
+
+    <p>
+      The default is taken from the <code>OVS_SYSLOG_METHOD</code> environment
+      variable; if it is unset, the default is <code>libc</code>.
+    </p>
   </dd>
 </dl>

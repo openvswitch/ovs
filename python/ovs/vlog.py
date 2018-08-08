@@ -305,9 +305,11 @@ class Vlog(object):
             return
 
         logger = logging.getLogger('syslog')
-        # If there is no infrastructure to support python syslog, disable
-        # the logger to avoid repeated errors.
-        if not os.path.exists("/dev/log"):
+        # Disable the logger if there is no infrastructure to support python
+        # syslog (to avoid repeated errors) or if the "null" syslog method
+        # requested by environment.
+        if (not os.path.exists("/dev/log")
+            or os.environ.get('OVS_SYSLOG_METHOD') == "null"):
             logger.disabled = True
             return
 
