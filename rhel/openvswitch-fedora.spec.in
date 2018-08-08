@@ -405,6 +405,7 @@ exit 0
 %post
 if [ $1 -eq 1 ]; then
     sed -i 's:^#OVS_USER_ID=:OVS_USER_ID=:' /etc/sysconfig/openvswitch
+    sed -i 's:\(.*su\).*:\1 openvswitch openvswitch:' %{_sysconfdir}/logrotate.d/openvswitch
 
 %if %{with dpdk}
     sed -i \
@@ -414,6 +415,7 @@ if [ $1 -eq 1 ]; then
 
     # In the case of upgrade, this is not needed.
     chown -R openvswitch:openvswitch /etc/openvswitch
+    chown -R openvswitch:openvswitch /var/log/openvswitch
 fi
 
 %if 0%{?systemd_post:1}
@@ -601,7 +603,7 @@ fi
 %endif
 %doc NOTICE README.rst NEWS rhel/README.RHEL.rst
 /var/lib/openvswitch
-%attr(750,openvswitch,openvswitch) /var/log/openvswitch
+%attr(750,root,root) /var/log/openvswitch
 %ghost %attr(755,root,root) %{_rundir}/openvswitch
 
 %files ovn-docker
