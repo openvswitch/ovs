@@ -6,6 +6,7 @@
 # without warranty of any kind.
 
 /var/log/openvswitch/*.log {
+    su root root
     daily
     compress
     sharedscripts
