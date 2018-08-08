@@ -349,7 +349,7 @@ static void
 table_escape_html_text__(const char *content, size_t n, struct ds *s)
 {
     if (!strpbrk(content, "&<>\"")) {
-        ds_put_cstr(s, content);
+        ds_put_buffer(s, content, n);
     } else {
         size_t i;
 
