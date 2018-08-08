@@ -426,7 +426,7 @@ unixctl_server_destroy(struct unixctl_server *server)
             kill_connection(conn);
         }
 
-        free (server->path);
+        free(server->path);
         pstream_close(server->listener);
         free(server);
     }
