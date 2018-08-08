@@ -451,12 +451,11 @@ struct dpif_class {
     void (*meter_get_features)(const struct dpif *,
                                struct ofputil_meter_features *);
 
-    /* Adds or modifies 'meter' in 'dpif'.   If '*meter_id' is UINT32_MAX,
-     * adds a new meter, otherwise modifies an existing meter.
+    /* Adds or modifies the meter in 'dpif' with the given 'meter_id'
+     * and the configuration in 'config'.
      *
-     * If meter is successfully added, sets '*meter_id' to the new meter's
-     * meter id selected by 'dpif'. */
-    int (*meter_set)(struct dpif *, ofproto_meter_id *meter_id,
+     * The meter id specified through 'config->meter_id' is ignored. */
+    int (*meter_set)(struct dpif *, ofproto_meter_id meter_id,
                      struct ofputil_meter_config *);
 
     /* Queries 'dpif' for meter stats with the given 'meter_id'.  Stores

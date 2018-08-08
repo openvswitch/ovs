@@ -5959,7 +5959,7 @@ meter_set(struct ofproto *ofproto_, ofproto_meter_id *meter_id,
         }
     }
 
-    switch (dpif_meter_set(ofproto->backer->dpif, meter_id, config)) {
+    switch (dpif_meter_set(ofproto->backer->dpif, *meter_id, config)) {
     case 0:
         return 0;
     case EFBIG: /* meter_id out of range */

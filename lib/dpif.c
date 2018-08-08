@@ -1886,13 +1886,12 @@ dpif_meter_get_features(const struct dpif *dpif,
     }
 }
 
-/* Adds or modifies meter identified by 'meter_id' in 'dpif'.  If '*meter_id'
- * is UINT32_MAX, adds a new meter, otherwise modifies an existing meter.
+/* Adds or modifies the meter in 'dpif' with the given 'meter_id' and
+ * the configuration in 'config'.
  *
- * If meter is successfully added, sets '*meter_id' to the new meter's
- * meter number. */
+ * The meter id specified through 'config->meter_id' is ignored. */
 int
-dpif_meter_set(struct dpif *dpif, ofproto_meter_id *meter_id,
+dpif_meter_set(struct dpif *dpif, ofproto_meter_id meter_id,
                struct ofputil_meter_config *config)
 {
     COVERAGE_INC(dpif_meter_set);
@@ -1918,11 +1917,10 @@ dpif_meter_set(struct dpif *dpif, ofproto_meter_id *meter_id,
     int error = dpif->dpif_class->meter_set(dpif, meter_id, config);
     if (!error) {
         VLOG_DBG_RL(&dpmsg_rl, "%s: DPIF meter %"PRIu32" set",
-                    dpif_name(dpif), meter_id->uint32);
+                    dpif_name(dpif), meter_id.uint32);
     } else {
         VLOG_WARN_RL(&error_rl, "%s: failed to set DPIF meter %"PRIu32": %s",
-                     dpif_name(dpif), meter_id->uint32, ovs_strerror(error));
-        meter_id->uint32 = UINT32_MAX;
+                     dpif_name(dpif), meter_id.uint32, ovs_strerror(error));
     }
     return error;
 }

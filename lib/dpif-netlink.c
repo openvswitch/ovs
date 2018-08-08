@@ -3030,7 +3030,7 @@ dpif_netlink_meter_get_features(const struct dpif *dpif_,
 }
 
 static int
-dpif_netlink_meter_set(struct dpif *dpif_, ofproto_meter_id *meter_id,
+dpif_netlink_meter_set(struct dpif *dpif_, ofproto_meter_id meter_id,
                        struct ofputil_meter_config *config)
 {
     struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
@@ -3057,9 +3057,8 @@ dpif_netlink_meter_set(struct dpif *dpif_, ofproto_meter_id *meter_id,
 
     dpif_netlink_meter_init(dpif, &buf, stub, sizeof stub, OVS_METER_CMD_SET);
 
-    if (meter_id->uint32 != UINT32_MAX) {
-        nl_msg_put_u32(&buf, OVS_METER_ATTR_ID, meter_id->uint32);
-    }
+    nl_msg_put_u32(&buf, OVS_METER_ATTR_ID, meter_id.uint32);
+
     if (config->flags & OFPMF13_KBPS) {
         nl_msg_put_flag(&buf, OVS_METER_ATTR_KBPS);
     }
@@ -3098,7 +3097,11 @@ dpif_netlink_meter_set(struct dpif *dpif_, ofproto_meter_id *meter_id,
         return error;
     }
 
-    meter_id->uint32 = nl_attr_get_u32(a[OVS_METER_ATTR_ID]);
+    if (nl_attr_get_u32(a[OVS_METER_ATTR_ID]) != meter_id.uint32) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_INFO_RL(&rl,
+                     "Kernel returned a different meter id than requested");
+    }
     ofpbuf_delete(msg);
     return 0;
 }
