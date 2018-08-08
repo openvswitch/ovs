@@ -1597,75 +1597,43 @@ parse_intel_port_stats_rfc2819_property(const struct ofpbuf *payload,
 }
 
 static enum ofperr
-parse_intel_port_custom_property(const struct ofpbuf *payload,
+parse_intel_port_custom_property(struct ofpbuf *payload,
                                  struct ofputil_port_stats *ops)
 {
-    const struct intel_port_custom_stats *custom_stats = payload->data;
+    const struct intel_port_custom_stats *custom_stats
+        = ofpbuf_try_pull(payload, sizeof *custom_stats);
+    if (!custom_stats) {
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
 
     ops->custom_stats.size = ntohs(custom_stats->stats_array_size);
 
     ops->custom_stats.counters = xcalloc(ops->custom_stats.size,
                                          sizeof *ops->custom_stats.counters);
 
-    uint16_t msg_size = ntohs(custom_stats->length);
-    uint16_t current_len = sizeof *custom_stats;
-    uint8_t *current = (uint8_t *)payload->data + current_len;
-    uint8_t string_size = 0;
-    uint8_t value_size = 0;
-    ovs_be64 counter_value = 0;
-
     for (int i = 0; i < ops->custom_stats.size; i++) {
-        current_len += string_size + value_size;
-        current += string_size + value_size;
-
-        value_size = sizeof(uint64_t);
-        /* Counter name size */
-        string_size = *current;
-
-        /* Buffer overrun check */
-        if (current_len + string_size + value_size > msg_size) {
-            VLOG_WARN_RL(&rl, "Custom statistics buffer overrun! "
-                         "Further message parsing is aborted.");
-            break;
-        }
-
-        current++;
-        current_len++;
+        struct netdev_custom_counter *c = &ops->custom_stats.counters[i];
 
         /* Counter name. */
-        struct netdev_custom_counter *c = &ops->custom_stats.counters[i];
-        size_t len = MIN(string_size, sizeof c->name - 1);
-        memcpy(c->name, current, len);
+        uint8_t *name_len = ofpbuf_try_pull(payload, sizeof *name_len);
+        char *name = ofpbuf_try_pull(payload, *name_len);
+        if (!name_len || !name) {
+            return OFPERR_OFPBPC_BAD_LEN;
+        }
+
+        size_t len = MIN(*name_len, sizeof c->name - 1);
+        memcpy(c->name, name, len);
         c->name[len] = '\0';
-        memcpy(&counter_value, current + string_size, value_size);
 
         /* Counter value. */
-        c->value = ntohll(counter_value);
+        ovs_be64 *value = ofpbuf_try_pull(payload, sizeof *value);
+        if (!value) {
+            return OFPERR_OFPBPC_BAD_LEN;
+        }
+        c->value = ntohll(get_unaligned_be64(value));
     }
 
     return 0;
-}
-
-static enum ofperr
-parse_intel_port_stats_property(const struct ofpbuf *payload,
-                                uint32_t exp_type,
-                                struct ofputil_port_stats *ops)
-{
-    enum ofperr error;
-
-    switch (exp_type) {
-    case INTEL_PORT_STATS_RFC2819:
-        error = parse_intel_port_stats_rfc2819_property(payload, ops);
-        break;
-    case INTEL_PORT_STATS_CUSTOM:
-        error = parse_intel_port_custom_property(payload, ops);
-        break;
-    default:
-        error = OFPERR_OFPBPC_BAD_EXP_TYPE;
-        break;
-    }
-
-    return error;
 }
 
 static enum ofperr
@@ -1715,14 +1683,10 @@ ofputil_pull_ofp14_port_stats(struct ofputil_port_stats *ops,
             error = parse_ofp14_port_stats_ethernet_property(&payload, ops);
             break;
         case OFPPROP_EXP(INTEL_VENDOR_ID, INTEL_PORT_STATS_RFC2819):
-            error = parse_intel_port_stats_property(&payload,
-                                                    INTEL_PORT_STATS_RFC2819,
-                                                    ops);
+            error = parse_intel_port_stats_rfc2819_property(&payload, ops);
             break;
         case OFPPROP_EXP(INTEL_VENDOR_ID, INTEL_PORT_STATS_CUSTOM):
-            error = parse_intel_port_stats_property(&payload,
-                                                    INTEL_PORT_STATS_CUSTOM,
-                                                    ops);
+            error = parse_intel_port_custom_property(&payload, ops);
             break;
         default:
             error = OFPPROP_UNKNOWN(true, "port stats", type);
