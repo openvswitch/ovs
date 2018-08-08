@@ -547,6 +547,7 @@ table_print_json__(const struct table *table, const struct table_style *style,
     json_object_put(json, "data", data);
 
     json_to_ds(json, style->json_flags, s);
+    ds_put_char(s, '\n');
     json_destroy(json);
 }
 
