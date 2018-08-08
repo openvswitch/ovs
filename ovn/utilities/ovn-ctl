@@ -172,6 +172,8 @@ $cluster_remote_port
     set "$@" --remote=punix:$sock --pidfile=$pid
     set "$@" --unixctl=ovn${db}_db.ctl
 
+    [ "$OVS_USER" != "" ] && set "$@" --user "$OVS_USER"
+
     if test X"$detach" != Xno; then
         set "$@" --detach --monitor
     else
@@ -293,6 +295,8 @@ start_northd () {
             set "$@" --log-file=$OVN_NORTHD_LOGFILE
         fi
 
+        [ "$OVN_USER" != "" ] && set "$@" --user "$OVN_USER"
+
         set "$@" $OVN_NORTHD_LOG $ovn_northd_params
 
         OVS_RUNDIR=${OVN_RUNDIR} start_daemon "$OVN_NORTHD_PRIORITY" "$OVN_NORTHD_WRAPPER" "$@"
@@ -314,6 +318,9 @@ start_controller () {
     if test X"$OVN_CONTROLLER_SSL_BOOTSTRAP_CA_CERT" != X; then
         set "$@" --bootstrap-ca-cert=$OVN_CONTROLLER_SSL_BOOTSTRAP_CA_CERT
     fi
+
+    [ "$OVN_USER" != "" ] && set "$@" --user "$OVN_USER"
+
     OVS_RUNDIR=${OVN_RUNDIR} start_daemon "$OVN_CONTROLLER_PRIORITY" "$OVN_CONTROLLER_WRAPPER" "$@"
 }
 
@@ -332,6 +339,9 @@ start_controller_vtep () {
     if test X"$OVN_CONTROLLER_SSL_BOOTSTRAP_CA_CERT" != X; then
         set "$@" --bootstrap-ca-cert=$OVN_CONTROLLER_SSL_BOOTSTRAP_CA_CERT
     fi
+
+    [ "$OVN_USER" != "" ] && set "$@" --user "$OVN_USER"
+
     OVS_RUNDIR=${OVN_RUNDIR} start_daemon "$OVN_CONTROLLER_PRIORITY" "$OVN_CONTROLLER_WRAPPER" "$@"
 }
 
@@ -429,6 +439,8 @@ set_defaults () {
 
     OVS_RUNDIR=${OVS_RUNDIR:-${rundir}}
     OVN_RUNDIR=${OVN_RUNDIR:-${OVS_RUNDIR}}
+    OVN_USER=
+    OVS_USER=
 
     OVN_CONTROLLER_LOG="-vconsole:emer -vsyslog:err -vfile:info"
     OVN_NORTHD_LOG="-vconsole:emer -vsyslog:err -vfile:info"
@@ -535,6 +547,8 @@ Options:
   --ovn-northd-logfile=STRING        ovn northd process log file (default: $OVN_NORTHD_LOGFILE)
   --ovn-nb-log=STRING             ovn NB ovsdb-server processes logging params (default: $OVN_NB_LOG)
   --ovn-sb-log=STRING             ovn SB ovsdb-server processes logging params (default: $OVN_SB_LOG)
+  --ovn-user="user[:group]"      pass the --user flag to the ovn daemons
+  --ovs-user="user[:group]"      pass the --user flag to ovs daemons
   -h, --help                     display this help message
 
 File location options:
