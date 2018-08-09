@@ -53,6 +53,7 @@
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/poll-loop.h"
 #include "openvswitch/shash.h"
+#include "openvswitch/thread.h"
 #include "openvswitch/vlog.h"
 #include "packets.h"
 #include "random.h"
@@ -2926,6 +2927,12 @@ dpif_netlink_ct_flush(struct dpif *dpif OVS_UNUSED, const uint16_t *zone,
 #define DP_SUPPORTED_METER_FLAGS_MASK \
     (OFPMF13_STATS | OFPMF13_PKTPS | OFPMF13_KBPS | OFPMF13_BURST)
 
+/* Meter support was introduced in Linux 4.15.  In some versions of
+ * Linux 4.15, 4.16, and 4.17, there was a bug that never set the id
+ * when the meter was created, so all meters essentially had an id of
+ * zero.  Check for that condition and disable meters on those kernels. */
+static bool probe_broken_meters(struct dpif *);
+
 static void
 dpif_netlink_meter_init(struct dpif_netlink *dpif, struct ofpbuf *buf,
                         void *stub, size_t size, uint32_t command)
@@ -2977,6 +2984,11 @@ static void
 dpif_netlink_meter_get_features(const struct dpif *dpif_,
                                 struct ofputil_meter_features *features)
 {
+    if (probe_broken_meters(CONST_CAST(struct dpif *, dpif_))) {
+        features = NULL;
+        return;
+    }
+
     struct ofpbuf buf, *msg;
     uint64_t stub[1024 / 8];
 
@@ -3033,6 +3045,10 @@ static int
 dpif_netlink_meter_set(struct dpif *dpif_, ofproto_meter_id meter_id,
                        struct ofputil_meter_config *config)
 {
+    if (probe_broken_meters(dpif_)) {
+        return ENOMEM;
+    }
+
     struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
     struct ofpbuf buf, *msg;
     uint64_t stub[1024 / 8];
@@ -3206,6 +3222,49 @@ dpif_netlink_meter_del(struct dpif *dpif, ofproto_meter_id meter_id,
                                         OVS_METER_CMD_DEL);
 }
 
+static bool
+probe_broken_meters__(struct dpif *dpif)
+{
+    /* This test is destructive if a probe occurs while ovs-vswitchd is
+     * running (e.g., an ovs-dpctl meter command is called), so choose a
+     * random high meter id to make this less likely to occur. */
+    ofproto_meter_id id1 = { 54545401 };
+    ofproto_meter_id id2 = { 54545402 };
+    struct ofputil_meter_band band = {OFPMBT13_DROP, 0, 1, 0};
+    struct ofputil_meter_config config1 = { 1, OFPMF13_KBPS, 1, &band};
+    struct ofputil_meter_config config2 = { 2, OFPMF13_KBPS, 1, &band};
+
+    /* Try adding two meters and make sure that they both come back with
+     * the proper meter id. */
+    dpif_netlink_meter_set(dpif, id1, &config1);
+    dpif_netlink_meter_set(dpif, id2, &config2);
+
+    if (dpif_netlink_meter_get(dpif, id1, NULL, 0)
+        || dpif_netlink_meter_get(dpif, id2, NULL, 0)) {
+        VLOG_INFO("The kernel module has a broken meter implementation.");
+        return true;
+    }
+
+    dpif_netlink_meter_del(dpif, id1, NULL, 0);
+    dpif_netlink_meter_del(dpif, id2, NULL, 0);
+
+    return false;
+}
+
+static bool
+probe_broken_meters(struct dpif *dpif)
+{
+    /* This is a once-only test because currently OVS only has at most a single
+     * Netlink capable datapath on any given platform. */
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+
+    static bool broken_meters = false;
+    if (ovsthread_once_start(&once)) {
+        broken_meters = probe_broken_meters__(dpif);
+        ovsthread_once_done(&once);
+    }
+    return broken_meters;
+}
 
 const struct dpif_class dpif_netlink_class = {
     "system",
