@@ -1374,7 +1374,7 @@ AT_KEYWORDS([ovs-vsctl ssl])
 AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
 PKIDIR=`pwd`
 OVS_PKI="sh $abs_top_srcdir/utilities/ovs-pki.in --dir=$PKIDIR/pki --log=$PKIDIR/ovs-pki.log"
-AT_CHECK([$OVS_PKI -B 1024 init && $OVS_PKI -B 1024 req+sign vsctl switch && $OVS_PKI -B 1024 req ovsdbserver && $OVS_PKI self-sign ovsdbserver], [0], [ignore], [ignore])
+AT_CHECK([$OVS_PKI init && $OVS_PKI req+sign vsctl switch && $OVS_PKI req ovsdbserver && $OVS_PKI self-sign ovsdbserver], [0], [ignore], [ignore])
 
 dnl Create database.
 OVSDB_INIT([conf.db])
@@ -1401,7 +1401,7 @@ AT_KEYWORDS([ovs-vsctl ssl])
 AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
 PKIDIR=`pwd`
 OVS_PKI="sh $abs_top_srcdir/utilities/ovs-pki.in --dir=$PKIDIR/pki --log=$PKIDIR/ovs-pki.log"
-AT_CHECK([$OVS_PKI -B 1024 init && $OVS_PKI -B 1024 req+sign vsctl switch && $OVS_PKI -B 1024 req+sign ovsdbserver controller], [0], [ignore], [ignore])
+AT_CHECK([$OVS_PKI init && $OVS_PKI req+sign vsctl switch && $OVS_PKI req+sign ovsdbserver controller], [0], [ignore], [ignore])
 
 dnl Create database.
 OVSDB_INIT([conf.db])
