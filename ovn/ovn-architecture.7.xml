@@ -1607,7 +1607,7 @@
       Creating SSL certificates for each chassis with the certificate CN field
       set to the chassis name (e.g. for a chassis with
       <code>external-ids:system-id=chassis-1</code>, via the command
-      "<code>ovs-pki -B 1024 -u req+sign chassis-1 switch</code>").
+      "<code>ovs-pki -u req+sign chassis-1 switch</code>").
     </li>
     <li>
       Configuring each ovn-controller to use SSL when connecting to the
