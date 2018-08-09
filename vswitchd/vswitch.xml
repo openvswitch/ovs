@@ -218,11 +218,17 @@
       </column>
 
       <column name="other_config" key="dpdk-init"
-              type='{"type": "boolean"}'>
+              type='{"type": "string"}'>
         <p>
-          Set this value to <code>true</code> to enable runtime support for
-          DPDK ports. The vswitch must have compile-time support for DPDK as
-          well.
+          Set this value to <code>true</code> or <code>try</code> to enable
+          runtime support for DPDK ports. The vswitch must have compile-time
+          support for DPDK as well.
+        </p>
+        <p>
+          A value of <code>true</code> will cause the ovs-vswitchd process to
+          abort if DPDK cannot be initialized. A value of <code>try</code>
+          will allow the ovs-vswitchd process to continue running even if DPDK
+          cannot be initialized.
         </p>
         <p>
           The default value is <code>false</code>. Changing this value requires
