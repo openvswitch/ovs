@@ -390,11 +390,11 @@ if $ovn; then
 
     if [ "$HAVE_OPENSSL" = yes ]; then
         OVS_PKI="run ovs-pki --dir=$sandbox/pki --log=$sandbox/ovs-pki.log"
-        $OVS_PKI -B 1024 init
-        $OVS_PKI -B 1024 req+sign ovnsb switch
-        $OVS_PKI -B 1024 req+sign ovnnb switch
+        $OVS_PKI init
+        $OVS_PKI req+sign ovnsb switch
+        $OVS_PKI req+sign ovnnb switch
         for i in $(seq $n_controllers); do
-            $OVS_PKI -B 1024 -u req+sign chassis-$i switch
+            $OVS_PKI -u req+sign chassis-$i switch
         done
     fi
 fi
