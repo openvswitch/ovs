@@ -6,10 +6,10 @@ AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
 
 RBAC_PKIDIR="$(pwd)"
 RBAC_PKI="sh $abs_top_srcdir/utilities/ovs-pki.in --dir=$RBAC_PKIDIR/pki --log=$RBAC_PKIDIR/rbac-pki.log"
-$RBAC_PKI -B 1024 init
-$RBAC_PKI -B 1024 req+sign ovsdb-server switch
-$RBAC_PKI -B 1024 -u req+sign client-1 switch
-$RBAC_PKI -B 1024 -u req+sign client-2 switch
+$RBAC_PKI init
+$RBAC_PKI req+sign ovsdb-server switch
+$RBAC_PKI -u req+sign client-1 switch
+$RBAC_PKI -u req+sign client-2 switch
 
 AT_DATA([schema],
   [[{"name": "mydb",
