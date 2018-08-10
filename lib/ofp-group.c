@@ -1748,7 +1748,7 @@ ofputil_decode_ofp15_group_desc_reply(struct ofputil_group_desc *gd,
         msg, gd->type, OFPGC15_ADD, &gd->props,
         length - sizeof *ogds - bucket_list_len);
     if (error) {
-        ofputil_bucket_list_destroy(&gd->buckets);
+        ofputil_uninit_group_desc(gd);
     }
     return error;
 }
@@ -2173,7 +2173,7 @@ ofputil_pull_ofp15_group_mod(struct ofpbuf *msg, enum ofp_version ofp_version,
     error = parse_ofp15_group_properties(msg, gm->type, gm->command,
                                          &gm->props, msg->size);
     if (error) {
-        ofputil_bucket_list_destroy(&gm->buckets);
+        ofputil_uninit_group_mod(gm);
     }
     return error;
 }
