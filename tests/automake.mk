@@ -24,6 +24,7 @@ COMMON_MACROS_AT = \
 TESTSUITE_AT = \
 	tests/testsuite.at \
 	tests/completion.at \
+	tests/checkpatch.at \
 	tests/library.at \
 	tests/heap.at \
 	tests/bundle.at \

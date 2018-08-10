@@ -21,6 +21,7 @@ m4_include([tests/ovsdb-macros.at])
 m4_include([tests/ofproto-macros.at])
 
 m4_include([tests/completion.at])
+m4_include([tests/checkpatch.at])
 m4_include([tests/bfd.at])
 m4_include([tests/cfm.at])
 m4_include([tests/lacp.at])

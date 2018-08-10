@@ -668,7 +668,7 @@ def run_file_checks(text):
             check['check'](text)
 
 
-def ovs_checkpatch_parse(text, filename):
+def ovs_checkpatch_parse(text, filename, author=None, committer=None):
     global print_file_name, total_line, checking_file, \
         empty_return_check_state
 
@@ -686,6 +686,8 @@ def ovs_checkpatch_parse(text, filename):
     hunks = re.compile('^(---|\+\+\+) (\S+)')
     hunk_differences = re.compile(
         r'^@@ ([0-9-+]+),([0-9-+]+) ([0-9-+]+),([0-9-+]+) @@')
+    is_author = re.compile(r'^(Author|From): (.*)$', re.I | re.M | re.S)
+    is_committer = re.compile(r'^(Commit: )(.*)$', re.I | re.M | re.S)
     is_signature = re.compile(r'^(Signed-off-by: )(.*)$',
                               re.I | re.M | re.S)
     is_co_author = re.compile(r'^(Co-authored-by: )(.*)$',
@@ -718,13 +720,54 @@ def ovs_checkpatch_parse(text, filename):
             if seppatch.match(line):
                 parse = PARSE_STATE_DIFF_HEADER
                 if not skip_signoff_check:
-                    if len(signatures) == 0:
-                        print_error("No signatures found.")
-                    elif len(signatures) != 1 + len(co_authors):
-                        print_error("Too many signoffs; "
-                                    "are you missing Co-authored-by lines?")
-                    if not set(co_authors) <= set(signatures):
-                        print_error("Co-authored-by/Signed-off-by corruption")
+
+                    # Check that the patch has an author, that the
+                    # author is not among the co-authors, and that the
+                    # co-authors are unique.
+                    if not author:
+                        print_error("Patch lacks author.")
+                        continue
+                    if author in co_authors:
+                        print_error("Author should not be also be co-author.")
+                        continue
+                    if len(set(co_authors)) != len(co_authors):
+                        print_error("Duplicate co-author.")
+
+                    # Check that the author, all co-authors, and the
+                    # committer (if any) signed off.
+                    if author not in signatures:
+                        print_error("Author %s needs to sign off." % author)
+                    for ca in co_authors:
+                        if ca not in signatures:
+                            print_error("Co-author %s needs to sign off." % ca)
+                            break
+                    if (committer
+                        and author != committer
+                        and committer not in signatures):
+                        print_error("Committer %s needs to sign off."
+                                    % committer)
+
+                    # Check for signatures that we do not expect.
+                    # This is only a warning because there can be,
+                    # rarely, a signature chain.
+                    #
+                    # If we don't have a known committer, and there is
+                    # a single extra sign-off, then do not warn
+                    # because that extra sign-off is probably the
+                    # committer.
+                    extra_sigs = [x for x in signatures
+                                  if x not in co_authors
+                                  and x != author
+                                  and x != committer]
+                    if len(extra_sigs) > 1 or (committer and extra_sigs):
+                        print_warning("Unexpected sign-offs from developers "
+                                      "who are not authors or co-authors or "
+                                      "committers: %s"
+                                      % ", ".join(extra_sigs))
+            elif is_committer.match(line):
+                committer = is_committer.match(line).group(2)
+            elif is_author.match(line):
+                author = is_author.match(line).group(2)
             elif is_signature.match(line):
                 m = is_signature.match(line)
                 signatures.append(m.group(2))
@@ -815,7 +858,9 @@ def ovs_checkpatch_file(filename):
     for part in mail.walk():
         if part.get_content_maintype() == 'multipart':
             continue
-    result = ovs_checkpatch_parse(part.get_payload(decode=False), filename)
+    result = ovs_checkpatch_parse(part.get_payload(decode=False), filename,
+                                  mail.get('Author', mail['From']),
+                                  mail['Commit'])
     ovs_checkpatch_print_result(result)
     return result
 
@@ -890,7 +935,12 @@ if __name__ == '__main__':
 
         for i in reversed(range(0, n_patches)):
             revision, name = commits[i].split(" ", 1)
-            f = os.popen('git format-patch -1 --stdout %s' % revision, 'r')
+            f = os.popen('''git format-patch -1 --stdout --pretty=format:"\
+Author: %an <%ae>
+Commit: %cn <%ce>
+Subject: %s
+
+%b" ''' + revision, 'r')
             patch = f.read()
             f.close()
 
