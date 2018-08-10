@@ -3031,6 +3031,9 @@ dp_netdev_flow_to_dpif_flow(const struct dp_netdev_flow *netdev_flow,
     flow->ufid_present = true;
     flow->pmd_id = netdev_flow->pmd_id;
     get_dpif_flow_stats(netdev_flow, &flow->stats);
+
+    flow->attrs.offloaded = false;
+    flow->attrs.dp_layer = "ovs";
 }
 
 static int
