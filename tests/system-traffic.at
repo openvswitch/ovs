@@ -1040,7 +1040,7 @@ AT_CHECK([ovs-appctl dpctl/flush-conntrack zone=5 $ICMP_TUPLE])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "orig=.src=10\.1\.1\.2,"], [1], [dnl
 ])
 
-OVS_TRAFFIC_VSWITCHD_STOP(["/could not create datapath/d"])
+OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([conntrack - IPv4 ping])
@@ -1124,17 +1124,17 @@ ovs-appctl: ovs-vswitchd: server returned an error
 ])
 
 AT_CHECK([ovs-appctl dpctl/ct-set-maxconns one-bad-dp 10], [2], [], [dnl
-ovs-vswitchd: opening datapath (Address family not supported by protocol)
+ovs-vswitchd: datapath not found (Invalid argument)
 ovs-appctl: ovs-vswitchd: server returned an error
 ])
 
 AT_CHECK([ovs-appctl dpctl/ct-get-maxconns one-bad-dp], [2], [], [dnl
-ovs-vswitchd: opening datapath (Address family not supported by protocol)
+ovs-vswitchd: datapath not found (Invalid argument)
 ovs-appctl: ovs-vswitchd: server returned an error
 ])
 
 AT_CHECK([ovs-appctl dpctl/ct-get-nconns one-bad-dp], [2], [], [dnl
-ovs-vswitchd: opening datapath (Address family not supported by protocol)
+ovs-vswitchd: datapath not found (Invalid argument)
 ovs-appctl: ovs-vswitchd: server returned an error
 ])
 
@@ -1164,7 +1164,7 @@ AT_CHECK([ovs-appctl dpctl/ct-get-maxconns], [], [dnl
 10
 ])
 
-OVS_TRAFFIC_VSWITCHD_STOP(["/could not create datapath one-bad-dp of unknown type system/d"])
+OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([conntrack - IPv6 ping])

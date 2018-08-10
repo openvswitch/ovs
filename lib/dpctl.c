@@ -187,18 +187,52 @@ parsed_dpif_open(const char *arg_, bool create, struct dpif **dpifp)
     return result;
 }
 
+static bool
+dp_exists(const char *queried_dp)
+{
+    char *queried_name, *queried_type;
+    dp_parse_name(queried_dp, &queried_name, &queried_type);
+    struct sset dpif_names = SSET_INITIALIZER(&dpif_names),
+                dpif_types = SSET_INITIALIZER(&dpif_types);
+    dp_enumerate_types(&dpif_types);
+
+    bool found = (sset_contains(&dpif_types, queried_type) &&
+                  !dp_enumerate_names(queried_type, &dpif_names) &&
+                  sset_contains(&dpif_names, queried_name));
+
+    sset_destroy(&dpif_names);
+    sset_destroy(&dpif_types);
+    return found;
+}
+
+static bool
+dp_arg_exists(int argc, const char *argv[])
+{
+    return argc > 1 && dp_exists(argv[1]);
+}
+
 /* Open a dpif with an optional name argument.
  *
- * The datapath name is not a mandatory parameter for this command.  If
- * it is not specified -- so 'argc' < 'max_args' -- we retrieve it from
- * the current setup, assuming only one exists.  On success stores the
- * opened dpif in '*dpifp'. */
+ * The datapath name is not a mandatory parameter for this command.  If it is
+ * not specified, we retrieve it from the current setup, assuming only one
+ * exists.  On success stores the opened dpif in '*dpifp'. */
 static int
 opt_dpif_open(int argc, const char *argv[], struct dpctl_params *dpctl_p,
               uint8_t max_args, struct dpif **dpifp)
 {
+    char *dpname;
+    if (dp_arg_exists(argc, argv)) {
+        dpname = xstrdup(argv[1]);
+    } else if (argc != max_args) {
+        dpname = get_one_dp(dpctl_p);
+    } else {
+        /* If the arguments are the maximum possible number and there is no
+         * valid datapath argument, then we fall into the case of dpname is
+         * NULL, since this is an error. */
+        dpname = NULL;
+    }
+
     int error = 0;
-    char *dpname = argc >= max_args ? xstrdup(argv[1]) : get_one_dp(dpctl_p);
     if (!dpname) {
         error = EINVAL;
         dpctl_error(dpctl_p, error, "datapath not found");
