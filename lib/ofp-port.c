@@ -1616,7 +1616,7 @@ parse_intel_port_custom_property(struct ofpbuf *payload,
 
         /* Counter name. */
         uint8_t *name_len = ofpbuf_try_pull(payload, sizeof *name_len);
-        char *name = ofpbuf_try_pull(payload, *name_len);
+        char *name = name_len ? ofpbuf_try_pull(payload, *name_len) : NULL;
         if (!name_len || !name) {
             return OFPERR_OFPBPC_BAD_LEN;
         }
