@@ -3491,7 +3491,7 @@ dpif_netdev_flow_dump_cast(struct dpif_flow_dump *dump)
 
 static struct dpif_flow_dump *
 dpif_netdev_flow_dump_create(const struct dpif *dpif_, bool terse,
-                             char *type OVS_UNUSED)
+                             struct dpif_flow_dump_types *types OVS_UNUSED)
 {
     struct dpif_netdev_flow_dump *dump;
 

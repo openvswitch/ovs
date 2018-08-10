@@ -118,10 +118,16 @@ The \fIfilter\fR is also useful to match wildcarded fields in the datapath
 flow. As an example, \fBfilter='tcp,tp_src=100'\fR will match the
 datapath flow containing '\fBtcp(src=80/0xff00,dst=8080/0xff)\fR'.
 .IP
-If \fBtype=\fItype\fR is specified, only displays flows of a specific type.
-\fItype\fR can be \fBoffloaded\fR to display only rules offloaded to the HW
-or \fBovs\fR to display only rules from the OVS tables.
-By default all rules are displayed.
+If \fBtype=\fItype\fR is specified, only displays flows of the specified types.
+\fItype\fR is a comma separated list, which can contain any of the following:
+.
+   \fBovs\fR - displays flows handled in the ovs dp
+   \fBtc\fR - displays flows handled in the tc dp
+   \fBoffloaded\fR - displays flows offloaded to the HW
+   \fBnon-offloaded\fR - displays flows not offloaded to the HW
+   \fBall\fR - displays all the types of flows
+.IP
+By default all the types of flows are displayed.
 .
 .IP "\*(DX\fBadd\-flow\fR [\fIdp\fR] \fIflow actions\fR"
 .TP

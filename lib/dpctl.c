@@ -837,18 +837,85 @@ format_dpif_flow(struct ds *ds, const struct dpif_flow *f, struct hmap *ports,
     format_odp_actions(ds, f->actions, f->actions_len, ports);
 }
 
-static char *supported_dump_types[] = {
-    "offloaded",
-    "ovs",
+struct dump_types {
+    bool ovs;
+    bool tc;
+    bool offloaded;
+    bool non_offloaded;
 };
 
-static bool
-flow_passes_type_filter(const struct dpif_flow *f, char *type)
+static void
+enable_all_dump_types(struct dump_types *dump_types)
 {
-    if (!strcmp(type, "offloaded")) {
-        return f->attrs.offloaded;
+    dump_types->ovs = true;
+    dump_types->tc = true;
+    dump_types->offloaded = true;
+    dump_types->non_offloaded = true;
+}
+
+static int
+populate_dump_types(char *types_list, struct dump_types *dump_types,
+                    struct dpctl_params *dpctl_p)
+{
+    if (!types_list) {
+        enable_all_dump_types(dump_types);
+        return 0;
     }
-    return true;
+
+    char *current_type;
+
+    while (types_list && types_list[0] != '\0') {
+        current_type = types_list;
+        size_t type_len = strcspn(current_type, ",");
+
+        types_list += type_len + (types_list[type_len] != '\0');
+        current_type[type_len] = '\0';
+
+        if (!strcmp(current_type, "ovs")) {
+            dump_types->ovs = true;
+        } else if (!strcmp(current_type, "tc")) {
+            dump_types->tc = true;
+        } else if (!strcmp(current_type, "offloaded")) {
+            dump_types->offloaded = true;
+        } else if (!strcmp(current_type, "non-offloaded")) {
+            dump_types->non_offloaded = true;
+        } else if (!strcmp(current_type, "all")) {
+            enable_all_dump_types(dump_types);
+        } else {
+            dpctl_error(dpctl_p, EINVAL, "Failed to parse type (%s)",
+                        current_type);
+            return EINVAL;
+        }
+    }
+    return 0;
+}
+
+static void
+determine_dpif_flow_dump_types(struct dump_types *dump_types,
+                               struct dpif_flow_dump_types *dpif_dump_types)
+{
+    dpif_dump_types->ovs_flows = dump_types->ovs || dump_types->non_offloaded;
+    dpif_dump_types->netdev_flows = dump_types->tc || dump_types->offloaded
+                                    || dump_types->non_offloaded;
+}
+
+static bool
+flow_passes_type_filter(const struct dpif_flow *f,
+                        struct dump_types *dump_types)
+{
+    if (dump_types->ovs && !strcmp(f->attrs.dp_layer, "ovs")) {
+        return true;
+    }
+    if (dump_types->tc && !strcmp(f->attrs.dp_layer, "tc")) {
+        return true;
+    }
+    if (dump_types->offloaded && f->attrs.offloaded) {
+        return true;
+    }
+    if (dump_types->non_offloaded && !(f->attrs.offloaded)) {
+        return true;
+    }
+    return false;
 }
 
 static struct hmap *
@@ -888,9 +955,11 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     struct ds ds;
 
     char *filter = NULL;
-    char *type = NULL;
     struct flow flow_filter;
     struct flow_wildcards wc_filter;
+    char *types_list = NULL;
+    struct dump_types dump_types;
+    struct dpif_flow_dump_types dpif_dump_types;
 
     struct dpif_flow_dump_thread *flow_dump_thread;
     struct dpif_flow_dump *flow_dump;
@@ -903,8 +972,8 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
         lastargc = argc;
         if (!strncmp(argv[argc - 1], "filter=", 7) && !filter) {
             filter = xstrdup(argv[--argc] + 7);
-        } else if (!strncmp(argv[argc - 1], "type=", 5) && !type) {
-            type = xstrdup(argv[--argc] + 5);
+        } else if (!strncmp(argv[argc - 1], "type=", 5) && !types_list) {
+            types_list = xstrdup(argv[--argc] + 5);
         }
     }
 
@@ -937,19 +1006,12 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
         }
     }
 
-    if (type) {
-        error = EINVAL;
-        for (int i = 0; i < ARRAY_SIZE(supported_dump_types); i++) {
-            if (!strcmp(supported_dump_types[i], type)) {
-                error = 0;
-                break;
-            }
-        }
-        if (error) {
-            dpctl_error(dpctl_p, error, "Failed to parse type (%s)", type);
-            goto out_free;
-        }
+    memset(&dump_types, 0, sizeof dump_types);
+    error = populate_dump_types(types_list, &dump_types, dpctl_p);
+    if (error) {
+        goto out_free;
     }
+    determine_dpif_flow_dump_types(&dump_types, &dpif_dump_types);
 
     /* Make sure that these values are different. PMD_ID_NULL means that the
      * pmd is unspecified (e.g. because the datapath doesn't have different
@@ -959,7 +1021,7 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
 
     ds_init(&ds);
     memset(&f, 0, sizeof f);
-    flow_dump = dpif_flow_dump_create(dpif, false, (type ? type : "dpctl"));
+    flow_dump = dpif_flow_dump_create(dpif, false, &dpif_dump_types);
     flow_dump_thread = dpif_flow_dump_thread_create(flow_dump);
     while (dpif_flow_dump_next(flow_dump_thread, &f, 1)) {
         if (filter) {
@@ -995,7 +1057,7 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
             }
             pmd_id = f.pmd_id;
         }
-        if (!type || flow_passes_type_filter(&f, type)) {
+        if (flow_passes_type_filter(&f, &dump_types)) {
             format_dpif_flow(&ds, &f, portno_names, dpctl_p);
             dpctl_print(dpctl_p, "%s\n", ds_cstr(&ds));
         }
@@ -1013,7 +1075,7 @@ out_dpifclose:
     dpif_close(dpif);
 out_free:
     free(filter);
-    free(type);
+    free(types_list);
     return error;
 }
 
