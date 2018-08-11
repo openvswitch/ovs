@@ -2895,6 +2895,27 @@ test_idl_compound_index_single_column(struct ovsdb_idl *idl,
                myRow->s, myRow->b?"True":"False", myRow->r);
     }
 
+    /* Update record i=10 to i=30, make sure index is updated accordingly */
+    ++step;
+    struct idltest_simple *toUpdate;
+    toUpdate = idltest_simple_index_init_row(i_index);
+    idltest_simple_index_set_i(toUpdate, 10);
+    ovs_assert(toUpdate->i == 10);
+    myRow = idltest_simple_index_find(i_index, toUpdate);
+    ovs_assert(myRow);
+    ovs_assert(myRow->i == 10);
+    txn = ovsdb_idl_txn_create(idl);
+    idltest_simple_set_i(myRow, 30);
+    ovsdb_idl_txn_commit_block(txn);
+    ovsdb_idl_txn_destroy(txn);
+    idltest_simple_index_set_i(to, 60);
+    printf("Expected 60, stored %"PRId64"\n", to->i);
+    ovs_assert(to->i == 60);
+    IDLTEST_SIMPLE_FOR_EACH_RANGE (myRow, from, to, i_index) {
+        printf("%03d: i=%"PRId64" s=%s b=%s r=%f\n", step,  myRow->i,
+               myRow->s, myRow->b?"True":"False", myRow->r);
+    }
+
     /* Test special-case range, "from" and "to" are both NULL,
      * which is interpreted as the range from -infinity to +infinity. */
     ++step;
@@ -2908,6 +2929,7 @@ test_idl_compound_index_single_column(struct ovsdb_idl *idl,
     idltest_simple_index_destroy_row(to);
     idltest_simple_index_destroy_row(equal);
     idltest_simple_index_destroy_row(toDelete);
+    idltest_simple_index_destroy_row(toUpdate);
     return step;
 }
 

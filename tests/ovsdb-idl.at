@@ -1509,16 +1509,21 @@ OVSDB_CHECK_IDL_COMPOUND_INDEX_SINGLE_COLUMN_C([Compound_index, single column te
 006: i=19
 006: i=20
 006: i=54
-007: i=1
-007: i=1
-007: i=2
-007: i=2
-007: i=2
 007: i=5
-007: i=10
 007: i=19
 007: i=20
+007: i=30
 007: i=54
+008: i=1
+008: i=1
+008: i=2
+008: i=2
+008: i=2
+008: i=5
+008: i=19
+008: i=20
+008: i=30
+008: i=54
 ],
 [002: i=1 s=List000 b=True r=101.000000
 002: i=1 s=List001 b=False r=110.000000
@@ -1538,16 +1543,21 @@ OVSDB_CHECK_IDL_COMPOUND_INDEX_SINGLE_COLUMN_C([Compound_index, single column te
 006: i=20 s=List020 b=True r=220.000000
 006: i=5 s=List005 b=True r=130.000000
 006: i=54 s=Lista054 b=False r=0.000000
-007: i=1 s=List000 b=True r=101.000000
-007: i=1 s=List001 b=False r=110.000000
-007: i=10 s=List000 b=True r=110.000000
 007: i=19 s=List020 b=True r=219.000000
-007: i=2 s=List000 b=False r=102.000000
-007: i=2 s=List001 b=True r=120.000000
-007: i=2 s=List001 b=True r=122.000000
 007: i=20 s=List020 b=True r=220.000000
+007: i=30 s=List000 b=True r=110.000000
 007: i=5 s=List005 b=True r=130.000000
 007: i=54 s=Lista054 b=False r=0.000000
+008: i=1 s=List000 b=True r=101.000000
+008: i=1 s=List001 b=False r=110.000000
+008: i=19 s=List020 b=True r=219.000000
+008: i=2 s=List000 b=False r=102.000000
+008: i=2 s=List001 b=True r=120.000000
+008: i=2 s=List001 b=True r=122.000000
+008: i=20 s=List020 b=True r=220.000000
+008: i=30 s=List000 b=True r=110.000000
+008: i=5 s=List005 b=True r=130.000000
+008: i=54 s=Lista054 b=False r=0.000000
 ])
 
 # Tests to verify the functionality of two column compound index.
