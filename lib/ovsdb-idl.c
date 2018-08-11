@@ -3040,11 +3040,13 @@ ovsdb_idl_modify_row_by_diff(struct ovsdb_idl_row *row,
 {
     bool changed;
 
+    ovsdb_idl_remove_from_indexes(row);
     ovsdb_idl_row_unparse(row);
     ovsdb_idl_row_clear_arcs(row, true);
     changed = ovsdb_idl_row_apply_diff(row, diff_json,
                                        OVSDB_IDL_CHANGE_MODIFY);
     ovsdb_idl_row_parse(row);
+    ovsdb_idl_add_to_indexes(row);
 
     return changed;
 }
