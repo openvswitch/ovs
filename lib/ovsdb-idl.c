@@ -2299,6 +2299,24 @@ ovsdb_idl_process_update2(struct ovsdb_idl_table *table,
     return true;
 }
 
+/* Recursively add rows to tracked change lists for current row
+ * and the rows that reference this row. */
+static void
+add_tracked_change_for_references(struct ovsdb_idl_row *row)
+{
+    if (ovs_list_is_empty(&row->track_node) &&
+            ovsdb_idl_track_is_set(row->table)) {
+        ovs_list_push_back(&row->table->track_list,
+                           &row->track_node);
+
+        const struct ovsdb_idl_arc *arc;
+        LIST_FOR_EACH (arc, dst_node, &row->dst_arcs) {
+            add_tracked_change_for_references(arc->src);
+        }
+    }
+}
+
+
 /* Returns true if a column with mode OVSDB_IDL_MODE_RW changed, false
  * otherwise.
  *
@@ -2362,10 +2380,7 @@ ovsdb_idl_row_change__(struct ovsdb_idl_row *row, const struct json *row_json,
                         = row->table->change_seqno[change]
                         = row->table->db->change_seqno + 1;
                     if (table->modes[column_idx] & OVSDB_IDL_TRACK) {
-                        if (ovs_list_is_empty(&row->track_node)) {
-                            ovs_list_push_back(&row->table->track_list,
-                                               &row->track_node);
-                        }
+                        add_tracked_change_for_references(row);
                         if (!row->updated) {
                             row->updated = bitmap_allocate(class->n_columns);
                         }
