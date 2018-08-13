@@ -2039,19 +2039,36 @@ netdev_get_addrs(const char dev[], struct in6_addr **paddr,
     struct in6_addr *addr_array, *mask_array;
     const struct ifaddrs *ifa;
     int cnt = 0, i = 0;
+    int retries = 3;
 
     ovs_mutex_lock(&if_addr_list_lock);
     if (!if_addr_list) {
         int err;
 
+retry:
         err = getifaddrs(&if_addr_list);
         if (err) {
             ovs_mutex_unlock(&if_addr_list_lock);
             return -err;
         }
+        retries--;
     }
 
     for (ifa = if_addr_list; ifa; ifa = ifa->ifa_next) {
+        if (!ifa->ifa_name) {
+            if (retries) {
+                /* Older versions of glibc have a bug on race condition with
+                 * address addition which may cause one of the returned
+                 * ifa_name values to be NULL. In such case, we know that we've
+                 * got an inconsistent dump. Retry but beware of an endless
+                 * loop. */
+                freeifaddrs(if_addr_list);
+                goto retry;
+            } else {
+                VLOG_WARN("Proceeding with an inconsistent dump of "
+                          "interfaces from the kernel. Some may be missing");
+            }
+        }
         if (ifa->ifa_addr && ifa->ifa_name && ifa->ifa_netmask) {
             int family;
 
