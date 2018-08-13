@@ -251,6 +251,7 @@ const struct %(s)s *%(s)s_table_first(const struct %(s)s_table *);
              (ROW) = (NEXT))
 
 const struct %(s)s *%(s)s_get_for_uuid(const struct ovsdb_idl *, const struct uuid *);
+const struct %(s)s *%(s)s_table_get_for_uuid(const struct %(s)s_table *, const struct uuid *);
 const struct %(s)s *%(s)s_first(const struct ovsdb_idl *);
 const struct %(s)s *%(s)s_next(const struct %(s)s *);
 #define %(S)s_FOR_EACH(ROW, IDL) \\
@@ -270,6 +271,13 @@ const struct %(s)s *%(s)s_track_get_next(const struct %(s)s *);
         for ((ROW) = %(s)s_track_get_first(IDL); \\
              (ROW); \\
              (ROW) = %(s)s_track_get_next(ROW))
+
+const struct %(s)s *%(s)s_table_track_get_first(const struct %(s)s_table *);
+#define %(S)s_TABLE_FOR_EACH_TRACKED(ROW, TABLE) \\
+        for ((ROW) = %(s)s_table_track_get_first(TABLE); \\
+             (ROW); \\
+             (ROW) = %(s)s_track_get_next(ROW))
+
 
 /* Returns true if 'row' was inserted since the last change tracking reset. */
 static inline bool %(s)s_is_new(const struct %(s)s *row)
@@ -479,6 +487,14 @@ const struct %(s)s *
     const struct ovsdb_idl *idl = (const struct ovsdb_idl *) table;
     return %(s)s_first(idl);
 }
+
+
+const struct %(s)s *
+%(s)s_table_track_get_first(const struct %(s)s_table *table)
+{
+    const struct ovsdb_idl *idl =  (const struct ovsdb_idl *) table;
+    return %(s)s_track_get_first(idl);
+}
 ''' % {'s': structName})
 
         # Parse functions.
@@ -653,6 +669,15 @@ const struct %(s)s *
 %(s)s_get_for_uuid(const struct ovsdb_idl *idl, const struct uuid *uuid)
 {
     return %(s)s_cast(ovsdb_idl_get_row_for_uuid(idl, &%(p)stable_%(tl)s, uuid));
+}
+
+/* Searches table "%(t)s" for a row with UUID 'uuid'.  Returns
+ * a pointer to the row if there is one, otherwise a null pointer.  */
+const struct %(s)s *
+%(s)s_table_get_for_uuid(const struct %(s)s_table *table, const struct uuid *uuid)
+{
+    const struct ovsdb_idl *idl = (const struct ovsdb_idl *) table;
+    return %(s)s_get_for_uuid(idl, uuid);
 }
 
 /* Returns a row in table "%(t)s" in 'idl', or a null pointer if that
