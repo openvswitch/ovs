@@ -2834,9 +2834,7 @@ ovsdb_idl_row_clear_arcs(struct ovsdb_idl_row *row, bool destroy_dsts)
     struct ovsdb_idl_arc *arc, *next;
 
     /* Delete all forward arcs.  If 'destroy_dsts', destroy any orphaned rows
-     * that this causes to be unreferenced, if tracking is not enabled.
-     * If tracking is enabled, orphaned nodes are removed from hmap but not
-     * freed.
+     * that this causes to be unreferenced.
      */
     LIST_FOR_EACH_SAFE (arc, next, src_node, &row->src_arcs) {
         ovs_list_remove(&arc->dst_node);
