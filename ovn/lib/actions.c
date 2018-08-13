@@ -2179,7 +2179,7 @@ encode_LOG(const struct ovnact_log *log,
     if (log->meter) {
         meter_id = ovn_extend_table_assign_id(ep->meter_table, log->meter);
         if (meter_id == EXT_TABLE_ID_INVALID) {
-            VLOG_WARN("log specified unknown meter: %"PRIu32, meter_id);
+            VLOG_WARN("Unable to assign id for log meter: %s", log->meter);
             return;
         }
     }
