@@ -557,10 +557,6 @@ ovsdb_idl_db_clear(struct ovsdb_idl_db *db)
             /* No need to do anything with dst_arcs: some node has those arcs
              * as forward arcs and will destroy them itself. */
 
-            if (!ovs_list_is_empty(&row->track_node)) {
-                ovs_list_remove(&row->track_node);
-            }
-
             ovsdb_idl_row_destroy(row);
         }
     }
@@ -2366,11 +2362,10 @@ ovsdb_idl_row_change__(struct ovsdb_idl_row *row, const struct json *row_json,
                         = row->table->change_seqno[change]
                         = row->table->db->change_seqno + 1;
                     if (table->modes[column_idx] & OVSDB_IDL_TRACK) {
-                        if (!ovs_list_is_empty(&row->track_node)) {
-                            ovs_list_remove(&row->track_node);
+                        if (ovs_list_is_empty(&row->track_node)) {
+                            ovs_list_push_back(&row->table->track_list,
+                                               &row->track_node);
                         }
-                        ovs_list_push_back(&row->table->track_list,
-                                       &row->track_node);
                         if (!row->updated) {
                             row->updated = bitmap_allocate(class->n_columns);
                         }
@@ -2912,10 +2907,9 @@ ovsdb_idl_row_destroy(struct ovsdb_idl_row *row)
                 = row->table->change_seqno[OVSDB_IDL_CHANGE_DELETE]
                 = row->table->db->change_seqno + 1;
         }
-        if (!ovs_list_is_empty(&row->track_node)) {
-            ovs_list_remove(&row->track_node);
+        if (ovs_list_is_empty(&row->track_node)) {
+            ovs_list_push_back(&row->table->track_list, &row->track_node);
         }
-        ovs_list_push_back(&row->table->track_list, &row->track_node);
     }
 }
 
