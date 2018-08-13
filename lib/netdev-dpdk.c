@@ -2191,6 +2191,9 @@ netdev_dpdk_get_features(const struct netdev *netdev,
         if (link.link_speed == ETH_SPEED_NUM_10G) {
             *current = NETDEV_F_10GB_FD;
         }
+        if (link.link_speed == ETH_SPEED_NUM_40G) {
+            *current = NETDEV_F_40GB_FD;
+        }
     }
 
     if (link.link_autoneg) {
