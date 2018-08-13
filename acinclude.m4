@@ -880,6 +880,9 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                         [OVS_DEFINE([HAVE_SKBUFF_CSUM_VALID])])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h],
                   [skb_checksum_simple_validate])
+  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h],
+                  [void.*ndo_get_stats64],
+                  [OVS_DEFINE([HAVE_VOID_NDO_GET_STATS64])])
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then
