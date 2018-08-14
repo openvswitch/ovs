@@ -2880,9 +2880,17 @@ test_idl_compound_index_single_column(struct ovsdb_idl *idl,
     ovs_assert(myRow->i == 4);
     txn = ovsdb_idl_txn_create(idl);
     idltest_simple_delete(myRow);
-    toInsert = idltest_simple_insert(txn);
-    idltest_simple_set_i(toInsert, 54);
-    idltest_simple_set_s(toInsert, "Lista054");
+    myRow = idltest_simple_index_find(i_index, toDelete);
+    ovs_assert(!myRow);
+    myRow = idltest_simple_insert(txn);
+    idltest_simple_set_i(myRow, 54);
+    idltest_simple_set_s(myRow, "Lista054");
+    toInsert = idltest_simple_index_init_row(i_index);
+    idltest_simple_index_set_i(toInsert, 54);
+    myRow = idltest_simple_index_find(i_index, toInsert);
+    ovs_assert(myRow);
+    ovs_assert(myRow->i == 54);
+    ovs_assert(!strcmp(myRow->s, "Lista054"));
     ovsdb_idl_txn_commit_block(txn);
     ovsdb_idl_txn_destroy(txn);
     idltest_simple_index_set_i(to, 60);
@@ -2904,6 +2912,8 @@ test_idl_compound_index_single_column(struct ovsdb_idl *idl,
     ovs_assert(myRow->i == 10);
     txn = ovsdb_idl_txn_create(idl);
     idltest_simple_set_i(myRow, 30);
+    myRow = idltest_simple_index_find(i_index, toUpdate);
+    ovs_assert(!myRow);
     ovsdb_idl_txn_commit_block(txn);
     ovsdb_idl_txn_destroy(txn);
     idltest_simple_index_set_i(to, 60);
@@ -2927,6 +2937,7 @@ test_idl_compound_index_single_column(struct ovsdb_idl *idl,
     idltest_simple_index_destroy_row(to);
     idltest_simple_index_destroy_row(equal);
     idltest_simple_index_destroy_row(toDelete);
+    idltest_simple_index_destroy_row(toInsert);
     idltest_simple_index_destroy_row(toUpdate);
     return step;
 }
