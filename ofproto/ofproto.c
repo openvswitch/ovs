@@ -1593,7 +1593,9 @@ ofproto_destroy__(struct ofproto *ofproto)
 
     cmap_destroy(&ofproto->groups);
 
+    ovs_mutex_lock(&ofproto_mutex);
     hmap_remove(&all_ofprotos, &ofproto->hmap_node);
+    ovs_mutex_unlock(&ofproto_mutex);
 
     free(ofproto->name);
     free(ofproto->type);
