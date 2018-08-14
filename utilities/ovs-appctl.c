@@ -133,6 +133,7 @@ parse_command_line(int argc, char *argv[])
     e_options = 0;
     for (;;) {
         int option;
+        unsigned int timeout = 0;
 
         option = getopt_long(argc, argv, short_options, long_options, NULL);
         if (option == -1) {
@@ -165,7 +166,11 @@ parse_command_line(int argc, char *argv[])
             exit(EXIT_SUCCESS);
 
         case 'T':
-            time_alarm(atoi(optarg));
+            if (!str_to_uint(optarg, 10, &timeout) || !timeout) {
+                ovs_fatal(0, "value %s on -T or --timeout is invalid", optarg);
+            } else {
+                time_alarm(timeout);
+            }
             break;
 
         case 'V':

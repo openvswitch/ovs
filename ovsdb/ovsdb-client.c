@@ -332,7 +332,7 @@ parse_options(int argc, char *argv[])
     table_style.format = TF_TABLE;
 
     for (;;) {
-        unsigned long int timeout;
+        unsigned int timeout = 0;
         int c;
 
         c = getopt_long(argc, argv, short_options, long_options, NULL);
@@ -366,10 +366,8 @@ parse_options(int argc, char *argv[])
             break;
 
         case 't':
-            timeout = strtoul(optarg, NULL, 10);
-            if (timeout <= 0) {
-                ovs_fatal(0, "value %s on -t or --timeout is not at least 1",
-                          optarg);
+            if (!str_to_uint(optarg, 10, &timeout) || !timeout) {
+                ovs_fatal(0, "value %s on -t or --timeout is invalid", optarg);
             } else {
                 time_alarm(timeout);
             }

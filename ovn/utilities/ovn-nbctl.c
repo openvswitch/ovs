@@ -68,7 +68,7 @@ static enum nbctl_wait_type wait_type = NBCTL_WAIT_NONE;
 static bool force_wait = false;
 
 /* --timeout: Time to wait for a connection to 'db'. */
-static int timeout;
+static unsigned int timeout;
 
 /* Format for table output. */
 static struct table_style table_style = TABLE_STYLE_DEFAULT;
@@ -345,8 +345,7 @@ handle_main_loop_option(int opt, const char *arg, bool *handled)
         break;
 
     case 't':
-        timeout = strtoul(arg, NULL, 10);
-        if (timeout < 0) {
+        if (!str_to_uint(arg, 10, &timeout) || !timeout) {
             return xasprintf("value %s on -t or --timeout is invalid", arg);
         }
         break;
@@ -5358,8 +5357,7 @@ nbctl_client(const char *socket_name,
             exit(EXIT_SUCCESS);
 
         case 't':
-            timeout = strtoul(po->arg, NULL, 10);
-            if (timeout < 0) {
+            if (!str_to_uint(po->arg, 10, &timeout) || !timeout) {
                 ctl_fatal("value %s on -t or --timeout is invalid", po->arg);
             }
             break;
