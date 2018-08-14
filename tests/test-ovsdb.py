@@ -822,6 +822,7 @@ def main(argv):
         sys.stderr.write("%s: %s\n" % (ovs.util.PROGRAM_NAME, geo.msg))
         sys.exit(1)
 
+    timeout = None
     for key, value in options:
         if key in ['-h', '--help']:
             usage()
@@ -833,9 +834,10 @@ def main(argv):
             except TypeError:
                 raise error.Error("value %s on -t or --timeout is not at "
                                   "least 1" % value)
-            signal_alarm(timeout)
         else:
             sys.exit(0)
+
+    signal_alarm(timeout)
 
     if not args:
         sys.stderr.write("%s: missing command argument "

@@ -128,12 +128,12 @@ parse_command_line(int argc, char *argv[])
     char *short_options = xasprintf("+%s", short_options_);
     const char *target;
     int e_options;
+    unsigned int timeout = 0;
 
     target = NULL;
     e_options = 0;
     for (;;) {
         int option;
-        unsigned int timeout = 0;
 
         option = getopt_long(argc, argv, short_options, long_options, NULL);
         if (option == -1) {
@@ -168,8 +168,6 @@ parse_command_line(int argc, char *argv[])
         case 'T':
             if (!str_to_uint(optarg, 10, &timeout) || !timeout) {
                 ovs_fatal(0, "value %s on -T or --timeout is invalid", optarg);
-            } else {
-                time_alarm(timeout);
             }
             break;
 
@@ -188,6 +186,8 @@ parse_command_line(int argc, char *argv[])
     }
     free(short_options_);
     free(short_options);
+
+    ctl_timeout_setup(timeout);
 
     if (optind >= argc) {
         ovs_fatal(0, "at least one non-option argument is required "

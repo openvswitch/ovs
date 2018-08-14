@@ -136,6 +136,8 @@ const char *get_subprogram_name(void);
 unsigned int get_page_size(void);
 long long int get_boot_time(void);
 
+void ctl_timeout_setup(unsigned int secs);
+
 void ovs_print_version(uint8_t min_ofp, uint8_t max_ofp);
 
 OVS_NO_RETURN void out_of_memory(void);

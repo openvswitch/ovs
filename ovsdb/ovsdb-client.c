@@ -328,11 +328,11 @@ parse_options(int argc, char *argv[])
         {NULL, 0, NULL, 0},
     };
     char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
+    unsigned int timeout = 0;
 
     table_style.format = TF_TABLE;
 
     for (;;) {
-        unsigned int timeout = 0;
         int c;
 
         c = getopt_long(argc, argv, short_options, long_options, NULL);
@@ -368,8 +368,6 @@ parse_options(int argc, char *argv[])
         case 't':
             if (!str_to_uint(optarg, 10, &timeout) || !timeout) {
                 ovs_fatal(0, "value %s on -t or --timeout is invalid", optarg);
-            } else {
-                time_alarm(timeout);
             }
             break;
 
@@ -393,6 +391,8 @@ parse_options(int argc, char *argv[])
         }
     }
     free(short_options);
+
+    ctl_timeout_setup(timeout);
 }
 
 static void

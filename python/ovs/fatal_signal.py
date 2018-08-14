@@ -156,8 +156,14 @@ def _init():
 
 
 def signal_alarm(timeout):
+    if not timeout:
+        env_timeout = os.environ.get('OVS_CTL_TIMEOUT')
+        if env_timeout:
+            timeout = int(env_timeout)
+    if not timeout:
+        return
+
     if sys.platform == "win32":
-        import os
         import time
         import threading
 

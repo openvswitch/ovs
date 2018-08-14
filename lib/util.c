@@ -629,6 +629,24 @@ get_boot_time(void)
     return boot_time;
 }
 
+/* This is a wrapper for setting timeout in control utils.
+ * The value of OVS_CTL_TIMEOUT environment variable will be used by
+ * default if 'secs' is not specified. */
+void
+ctl_timeout_setup(unsigned int secs)
+{
+    if (!secs) {
+        char *env = getenv("OVS_CTL_TIMEOUT");
+
+        if (env && env[0]) {
+            str_to_uint(env, 10, &secs);
+        }
+    }
+    if (secs) {
+        time_alarm(secs);
+    }
+}
+
 /* Returns a pointer to a string describing the program version.  The
  * caller must not modify or free the returned string.
  */

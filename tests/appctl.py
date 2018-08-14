@@ -51,8 +51,7 @@ def main():
                         help="wait at most SECS seconds for a response")
     args = parser.parse_args()
 
-    if args.timeout:
-        signal_alarm(int(args.timeout))
+    signal_alarm(int(args.timeout) if args.timeout else None)
 
     ovs.vlog.Vlog.init()
     target = args.target

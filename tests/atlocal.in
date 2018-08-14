@@ -216,3 +216,7 @@ unset OVN_SB_DB
 # Prevent logging to syslog during tests.
 OVS_SYSLOG_METHOD=null
 export OVS_SYSLOG_METHOD
+
+# Set default timeout for control utils
+OVS_CTL_TIMEOUT=30
+export OVS_CTL_TIMEOUT

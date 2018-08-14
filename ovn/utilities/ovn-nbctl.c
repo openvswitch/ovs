@@ -199,9 +199,7 @@ main(int argc, char *argv[])
         VLOG(ctl_might_write_to_db(commands, n_commands) ? VLL_INFO : VLL_DBG,
              "Called as %s", args);
 
-        if (timeout) {
-            time_alarm(timeout);
-        }
+        ctl_timeout_setup(timeout);
 
         error = run_prerequisites(commands, n_commands, idl);
         if (error) {
@@ -5381,9 +5379,7 @@ nbctl_client(const char *socket_name,
         svec_add(&args, argv[i]);
     }
 
-    if (timeout) {
-        time_alarm(timeout);
-    }
+    ctl_timeout_setup(timeout);
 
     struct jsonrpc *client;
     int error = unixctl_client_create(socket_name, &client);

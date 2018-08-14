@@ -2,6 +2,8 @@ Post-v2.10.0
 ---------------------
    - The environment variable OVS_SYSLOG_METHOD, if set, is now used
      as the default syslog method.
+   - The environment variable OVS_CTL_TIMEOUT, if set, is now used
+     as the default timeout for control utilities.
 
 
 v2.10.0 - xx xxx xxxx
