@@ -114,47 +114,6 @@ if test "$IS_WIN32" = "yes"; then
     }
 fi
 
-# Try to add a default timeout for the following control utilities:
-#     - ovs-vsctl
-#     - ovs-ofctl
-#     - ovs-appctl
-#     - ovn-sbctl
-#     - ovn-nbctl
-#     - vtep-ctl
-# Set default timeout for 30 seconds.
-# This should be sufficient on all platforms.
-OVS_TIMEOUT=30
-alias ovs-vsctl='OVS_VSCTL_TIMEOUT' >/dev/null 2>&1
-if [ $? -eq 0 ]; then
-    OVS_VSCTL_TIMEOUT () {
-        command ovs-vsctl --timeout=$OVS_TIMEOUT "$@"
-    }
-    alias ovs-ofctl='OVS_OFCTL_TIMEOUT'
-    alias ovs-appctl='OVS_APPCTL_TIMEOUT'
-    alias ovn-sbctl='OVS_SBCTL_TIMEOUT'
-    alias ovn-nbctl='OVN_NBCTL_TIMEOUT'
-    alias vtep-ctl='VTEP_CTL_TIMEOUT'
-    alias ovsdb-client='OVSDB_CLIENT_TIMEOUT'
-    OVS_OFCTL_TIMEOUT () {
-        command ovs-ofctl --timeout=$OVS_TIMEOUT "$@"
-    }
-    OVS_APPCTL_TIMEOUT () {
-        command ovs-appctl --timeout=$OVS_TIMEOUT "$@"
-    }
-    OVS_SBCTL_TIMEOUT () {
-        command ovn-sbctl --timeout=$OVS_TIMEOUT "$@"
-    }
-    OVN_NBCTL_TIMEOUT () {
-        command ovn-nbctl --timeout=$OVS_TIMEOUT "$@"
-    }
-    VTEP_CTL_TIMEOUT () {
-        command vtep-ctl --timeout=$OVS_TIMEOUT "$@"
-    }
-    OVSDB_CLIENT_TIMEOUT () {
-        command ovsdb-client --timeout=$OVS_TIMEOUT "$@"
-    }
-fi
-
 # parent_pid PID
 #
 # Prints the PID of the parent of process PID.
