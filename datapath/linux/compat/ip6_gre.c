@@ -876,9 +876,6 @@ static netdev_tx_t __gre6_xmit(struct sk_buff *skb,
 	struct tnl_ptk_info tpi;
 	__be16 protocol;
 
-	if (dev->type == ARPHRD_ETHER)
-		IPCB(skb)->flags = 0;
-
 	if (dev->header_ops && dev->type == ARPHRD_IP6GRE)
 		fl6->daddr = ((struct ipv6hdr *)skb->data)->daddr;
 	else
@@ -1146,7 +1143,6 @@ static netdev_tx_t ip6erspan_tunnel_xmit(struct sk_buff *skb,
 		goto tx_err;
 
 	t->parms.o_flags &= ~TUNNEL_KEY;
-	IPCB(skb)->flags = 0;
 
 	tun_info = ovs_skb_tunnel_info(skb);
 	if (unlikely(!tun_info ||
