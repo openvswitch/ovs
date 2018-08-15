@@ -3158,113 +3158,77 @@ exit:
     return error;
 }
 
-#define NETDEV_LINUX_CLASS(NAME, CONSTRUCT, GET_STATS,          \
-                           GET_FEATURES, GET_STATUS,            \
-                           FLOW_OFFLOAD_API, GET_BLOCK_ID)      \
-{                                                               \
-    NAME,                                                       \
-    false,                      /* is_pmd */                    \
-                                                                \
-    NULL,                                                       \
-    netdev_linux_run,                                           \
-    netdev_linux_wait,                                          \
-                                                                \
-    netdev_linux_alloc,                                         \
-    CONSTRUCT,                                                  \
-    netdev_linux_destruct,                                      \
-    netdev_linux_dealloc,                                       \
-    NULL,                       /* get_config */                \
-    NULL,                       /* set_config */                \
-    NULL,                       /* get_tunnel_config */         \
-    NULL,                       /* build header */              \
-    NULL,                       /* push header */               \
-    NULL,                       /* pop header */                \
-    NULL,                       /* get_numa_id */               \
-    NULL,                       /* set_tx_multiq */             \
-                                                                \
-    netdev_linux_send,                                          \
-    netdev_linux_send_wait,                                     \
-                                                                \
-    netdev_linux_set_etheraddr,                                 \
-    netdev_linux_get_etheraddr,                                 \
-    netdev_linux_get_mtu,                                       \
-    netdev_linux_set_mtu,                                       \
-    netdev_linux_get_ifindex,                                   \
-    netdev_linux_get_carrier,                                   \
-    netdev_linux_get_carrier_resets,                            \
-    netdev_linux_set_miimon_interval,                           \
-    GET_STATS,                                                  \
-    NULL,														\
-                                                                \
-    GET_FEATURES,                                               \
-    netdev_linux_set_advertisements,                            \
-    NULL,                       /* get_pt_mode */               \
-                                                                \
-    netdev_linux_set_policing,                                  \
-    netdev_linux_get_qos_types,                                 \
-    netdev_linux_get_qos_capabilities,                          \
-    netdev_linux_get_qos,                                       \
-    netdev_linux_set_qos,                                       \
-    netdev_linux_get_queue,                                     \
-    netdev_linux_set_queue,                                     \
-    netdev_linux_delete_queue,                                  \
-    netdev_linux_get_queue_stats,                               \
-    netdev_linux_queue_dump_start,                              \
-    netdev_linux_queue_dump_next,                               \
-    netdev_linux_queue_dump_done,                               \
-    netdev_linux_dump_queue_stats,                              \
-                                                                \
-    netdev_linux_set_in4,                                       \
-    netdev_linux_get_addr_list,                                 \
-    netdev_linux_add_router,                                    \
-    netdev_linux_get_next_hop,                                  \
-    GET_STATUS,                                                 \
-    netdev_linux_arp_lookup,                                    \
-                                                                \
-    netdev_linux_update_flags,                                  \
-    NULL,                       /* reconfigure */               \
-                                                                \
-    netdev_linux_rxq_alloc,                                     \
-    netdev_linux_rxq_construct,                                 \
-    netdev_linux_rxq_destruct,                                  \
-    netdev_linux_rxq_dealloc,                                   \
-    netdev_linux_rxq_recv,                                      \
-    netdev_linux_rxq_wait,                                      \
-    netdev_linux_rxq_drain,                                     \
-                                                                \
-    FLOW_OFFLOAD_API,                                           \
-    GET_BLOCK_ID                                                \
-}
+#define NETDEV_LINUX_CLASS_COMMON                               \
+    .run = netdev_linux_run,                                    \
+    .wait = netdev_linux_wait,                                  \
+    .alloc = netdev_linux_alloc,                                \
+    .destruct = netdev_linux_destruct,                          \
+    .dealloc = netdev_linux_dealloc,                            \
+    .send = netdev_linux_send,                                  \
+    .send_wait = netdev_linux_send_wait,                        \
+    .set_etheraddr = netdev_linux_set_etheraddr,                \
+    .get_etheraddr = netdev_linux_get_etheraddr,                \
+    .get_mtu = netdev_linux_get_mtu,                            \
+    .set_mtu = netdev_linux_set_mtu,                            \
+    .get_ifindex = netdev_linux_get_ifindex,                    \
+    .get_carrier = netdev_linux_get_carrier,                    \
+    .get_carrier_resets = netdev_linux_get_carrier_resets,      \
+    .set_miimon_interval = netdev_linux_set_miimon_interval,    \
+    .set_advertisements = netdev_linux_set_advertisements,      \
+    .set_policing = netdev_linux_set_policing,                  \
+    .get_qos_types = netdev_linux_get_qos_types,                \
+    .get_qos_capabilities = netdev_linux_get_qos_capabilities,  \
+    .get_qos = netdev_linux_get_qos,                            \
+    .set_qos = netdev_linux_set_qos,                            \
+    .get_queue = netdev_linux_get_queue,                        \
+    .set_queue = netdev_linux_set_queue,                        \
+    .delete_queue = netdev_linux_delete_queue,                  \
+    .get_queue_stats = netdev_linux_get_queue_stats,            \
+    .queue_dump_start = netdev_linux_queue_dump_start,          \
+    .queue_dump_next = netdev_linux_queue_dump_next,            \
+    .queue_dump_done = netdev_linux_queue_dump_done,            \
+    .dump_queue_stats = netdev_linux_dump_queue_stats,          \
+    .set_in4 = netdev_linux_set_in4,                            \
+    .get_addr_list = netdev_linux_get_addr_list,                \
+    .add_router = netdev_linux_add_router,                      \
+    .get_next_hop = netdev_linux_get_next_hop,                  \
+    .arp_lookup = netdev_linux_arp_lookup,                      \
+    .update_flags = netdev_linux_update_flags,                  \
+    .rxq_alloc = netdev_linux_rxq_alloc,                        \
+    .rxq_construct = netdev_linux_rxq_construct,                \
+    .rxq_destruct = netdev_linux_rxq_destruct,                  \
+    .rxq_dealloc = netdev_linux_rxq_dealloc,                    \
+    .rxq_recv = netdev_linux_rxq_recv,                          \
+    .rxq_wait = netdev_linux_rxq_wait,                          \
+    .rxq_drain = netdev_linux_rxq_drain
 
-const struct netdev_class netdev_linux_class =
-    NETDEV_LINUX_CLASS(
-        "system",
-        netdev_linux_construct,
-        netdev_linux_get_stats,
-        netdev_linux_get_features,
-        netdev_linux_get_status,
-        LINUX_FLOW_OFFLOAD_API,
-        netdev_linux_get_block_id);
+const struct netdev_class netdev_linux_class = {
+    NETDEV_LINUX_CLASS_COMMON,
+    LINUX_FLOW_OFFLOAD_API,
+    .type = "system",
+    .construct = netdev_linux_construct,
+    .get_stats = netdev_linux_get_stats,
+    .get_features = netdev_linux_get_features,
+    .get_status = netdev_linux_get_status,
+    .get_block_id = netdev_linux_get_block_id
+};
 
-const struct netdev_class netdev_tap_class =
-    NETDEV_LINUX_CLASS(
-        "tap",
-        netdev_linux_construct_tap,
-        netdev_tap_get_stats,
-        netdev_linux_get_features,
-        netdev_linux_get_status,
-        NO_OFFLOAD_API,
-        NULL);
+const struct netdev_class netdev_tap_class = {
+    NETDEV_LINUX_CLASS_COMMON,
+    .type = "tap",
+    .construct = netdev_linux_construct_tap,
+    .get_stats = netdev_tap_get_stats,
+    .get_features = netdev_linux_get_features,
+    .get_status = netdev_linux_get_status,
+};
 
-const struct netdev_class netdev_internal_class =
-    NETDEV_LINUX_CLASS(
-        "internal",
-        netdev_linux_construct,
-        netdev_internal_get_stats,
-        NULL,                  /* get_features */
-        netdev_internal_get_status,
-        NO_OFFLOAD_API,
-        NULL);
+const struct netdev_class netdev_internal_class = {
+    NETDEV_LINUX_CLASS_COMMON,
+    .type = "internal",
+    .construct = netdev_linux_construct,
+    .get_stats = netdev_internal_get_stats,
+    .get_status = netdev_internal_get_status,
+};
 
 
 #define CODEL_N_QUEUES 0x0000
@@ -3461,19 +3425,14 @@ codel_qdisc_set(struct netdev *netdev, const struct smap *details)
 }
 
 static const struct tc_ops tc_ops_codel = {
-    "codel",                      /* linux_name */
-    "linux-codel",                /* ovs_name */
-    CODEL_N_QUEUES,               /* n_queues */
-    codel_tc_install,
-    codel_tc_load,
-    codel_tc_destroy,
-    codel_qdisc_get,
-    codel_qdisc_set,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL
+    .linux_name = "codel",
+    .ovs_name = "linux-codel",
+    .n_queues = CODEL_N_QUEUES,
+    .tc_install = codel_tc_install,
+    .tc_load = codel_tc_load,
+    .tc_destroy = codel_tc_destroy,
+    .qdisc_get = codel_qdisc_get,
+    .qdisc_set = codel_qdisc_set,
 };
 
 /* FQ-CoDel traffic control class. */
@@ -3703,19 +3662,14 @@ fqcodel_qdisc_set(struct netdev *netdev, const struct smap *details)
 }
 
 static const struct tc_ops tc_ops_fqcodel = {
-    "fq_codel",                      /* linux_name */
-    "linux-fq_codel",                /* ovs_name */
-    FQCODEL_N_QUEUES,                /* n_queues */
-    fqcodel_tc_install,
-    fqcodel_tc_load,
-    fqcodel_tc_destroy,
-    fqcodel_qdisc_get,
-    fqcodel_qdisc_set,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL
+    .linux_name = "fq_codel",
+    .ovs_name = "linux-fq_codel",
+    .n_queues = FQCODEL_N_QUEUES,
+    .tc_install = fqcodel_tc_install,
+    .tc_load = fqcodel_tc_load,
+    .tc_destroy = fqcodel_tc_destroy,
+    .qdisc_get = fqcodel_qdisc_get,
+    .qdisc_set = fqcodel_qdisc_set,
 };
 
 /* SFQ traffic control class. */
@@ -3882,19 +3836,14 @@ sfq_qdisc_set(struct netdev *netdev, const struct smap *details)
 }
 
 static const struct tc_ops tc_ops_sfq = {
-    "sfq",                      /* linux_name */
-    "linux-sfq",                /* ovs_name */
-    SFQ_N_QUEUES,               /* n_queues */
-    sfq_tc_install,
-    sfq_tc_load,
-    sfq_tc_destroy,
-    sfq_qdisc_get,
-    sfq_qdisc_set,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL
+    .linux_name = "sfq",
+    .ovs_name = "linux-sfq",
+    .n_queues = SFQ_N_QUEUES,
+    .tc_install = sfq_tc_install,
+    .tc_load = sfq_tc_load,
+    .tc_destroy = sfq_tc_destroy,
+    .qdisc_get = sfq_qdisc_get,
+    .qdisc_set = sfq_qdisc_set,
 };
 
 /* HTB traffic control class. */
@@ -4364,19 +4313,19 @@ htb_class_dump_stats(const struct netdev *netdev OVS_UNUSED,
 }
 
 static const struct tc_ops tc_ops_htb = {
-    "htb",                      /* linux_name */
-    "linux-htb",                /* ovs_name */
-    HTB_N_QUEUES,               /* n_queues */
-    htb_tc_install,
-    htb_tc_load,
-    htb_tc_destroy,
-    htb_qdisc_get,
-    htb_qdisc_set,
-    htb_class_get,
-    htb_class_set,
-    htb_class_delete,
-    htb_class_get_stats,
-    htb_class_dump_stats
+    .linux_name = "htb",
+    .ovs_name = "linux-htb",
+    .n_queues = HTB_N_QUEUES,
+    .tc_install = htb_tc_install,
+    .tc_load = htb_tc_load,
+    .tc_destroy = htb_tc_destroy,
+    .qdisc_get = htb_qdisc_get,
+    .qdisc_set = htb_qdisc_set,
+    .class_get = htb_class_get,
+    .class_set = htb_class_set,
+    .class_delete = htb_class_delete,
+    .class_get_stats = htb_class_get_stats,
+    .class_dump_stats = htb_class_dump_stats
 };
 
 /* "linux-hfsc" traffic control class. */
@@ -4861,19 +4810,19 @@ hfsc_class_dump_stats(const struct netdev *netdev OVS_UNUSED,
 }
 
 static const struct tc_ops tc_ops_hfsc = {
-    "hfsc",                     /* linux_name */
-    "linux-hfsc",               /* ovs_name */
-    HFSC_N_QUEUES,              /* n_queues */
-    hfsc_tc_install,            /* tc_install */
-    hfsc_tc_load,               /* tc_load */
-    hfsc_tc_destroy,            /* tc_destroy */
-    hfsc_qdisc_get,             /* qdisc_get */
-    hfsc_qdisc_set,             /* qdisc_set */
-    hfsc_class_get,             /* class_get */
-    hfsc_class_set,             /* class_set */
-    hfsc_class_delete,          /* class_delete */
-    hfsc_class_get_stats,       /* class_get_stats */
-    hfsc_class_dump_stats       /* class_dump_stats */
+    .linux_name = "hfsc",
+    .ovs_name = "linux-hfsc",
+    .n_queues = HFSC_N_QUEUES,              /* n_queues */
+    .tc_install = hfsc_tc_install,
+    .tc_load = hfsc_tc_load,
+    .tc_destroy = hfsc_tc_destroy,
+    .qdisc_get = hfsc_qdisc_get,
+    .qdisc_set = hfsc_qdisc_set,
+    .class_get = hfsc_class_get,
+    .class_set = hfsc_class_set,
+    .class_delete = hfsc_class_delete,
+    .class_get_stats = hfsc_class_get_stats,
+    .class_dump_stats = hfsc_class_dump_stats,
 };
 
 /* "linux-noop" traffic control class. */
@@ -4903,19 +4852,9 @@ noop_tc_load(struct netdev *netdev, struct ofpbuf *nlmsg OVS_UNUSED)
 }
 
 static const struct tc_ops tc_ops_noop = {
-    NULL,                       /* linux_name */
-    "linux-noop",               /* ovs_name */
-    0,                          /* n_queues */
-    noop_tc_install,
-    noop_tc_load,
-    NULL,                       /* tc_destroy */
-    NULL,                       /* qdisc_get */
-    NULL,                       /* qdisc_set */
-    NULL,                       /* class_get */
-    NULL,                       /* class_set */
-    NULL,                       /* class_delete */
-    NULL,                       /* class_get_stats */
-    NULL                        /* class_dump_stats */
+    .ovs_name = "linux-noop",               /* ovs_name */
+    .tc_install = noop_tc_install,
+    .tc_load = noop_tc_load,
 };
 
 /* "linux-default" traffic control class.
@@ -4950,19 +4889,9 @@ default_tc_load(struct netdev *netdev, struct ofpbuf *nlmsg OVS_UNUSED)
 }
 
 static const struct tc_ops tc_ops_default = {
-    NULL,                       /* linux_name */
-    "",                         /* ovs_name */
-    0,                          /* n_queues */
-    default_tc_install,
-    default_tc_load,
-    NULL,                       /* tc_destroy */
-    NULL,                       /* qdisc_get */
-    NULL,                       /* qdisc_set */
-    NULL,                       /* class_get */
-    NULL,                       /* class_set */
-    NULL,                       /* class_delete */
-    NULL,                       /* class_get_stats */
-    NULL                        /* class_dump_stats */
+    .ovs_name = "",                         /* ovs_name */
+    .tc_install = default_tc_install,
+    .tc_load = default_tc_load,
 };
 
 /* "linux-other" traffic control class.
@@ -4982,19 +4911,8 @@ other_tc_load(struct netdev *netdev_, struct ofpbuf *nlmsg OVS_UNUSED)
 }
 
 static const struct tc_ops tc_ops_other = {
-    NULL,                       /* linux_name */
-    "linux-other",              /* ovs_name */
-    0,                          /* n_queues */
-    NULL,                       /* tc_install */
-    other_tc_load,
-    NULL,                       /* tc_destroy */
-    NULL,                       /* qdisc_get */
-    NULL,                       /* qdisc_set */
-    NULL,                       /* class_get */
-    NULL,                       /* class_set */
-    NULL,                       /* class_delete */
-    NULL,                       /* class_get_stats */
-    NULL                        /* class_dump_stats */
+    .ovs_name = "linux-other",
+    .tc_load = other_tc_load,
 };
 
 /* Traffic control. */
