@@ -132,3 +132,25 @@ m4_define([CHECK_CT_DPIF_GET_NCONNS],
 [
     AT_SKIP_IF([:])
 ])
+
+# OVS_CHECK_KERNEL([minversion], [minsublevel], [maxversion], [maxsublevel])
+#
+# Check if kernel version falls between minversion.minsublevel and
+# maxversion.maxsublevel, skip this test if it is not.
+m4_define([OVS_CHECK_KERNEL],
+[
+    version=$(uname -r | sed -e 's/\./ /g' | awk '{print $ 1}')
+    sublevel=$(uname -r | sed -e 's/\./ /g' | awk '{print $ 2}')
+    AT_SKIP_IF([test $version -lt $1 || ( test $version -eq $1 && test $sublevel -lt $2 ) || test $version -gt $3 || ( test $version -eq $3 && test $sublevel -gt $4 )])
+])
+
+# OVS_CHECK_KERNEL_EXCL([minversion], [minsublevel], [maxversion], [maxsublevel])
+#
+# Check that kernel version doesn't fall between minversion.minsublevel and
+# maxversion.maxsublevel, skip this test if it is.
+m4_define([OVS_CHECK_KERNEL_EXCL],
+[
+    version=$(uname -r | sed -e 's/\./ /g' | awk '{print $ 1}')
+    sublevel=$(uname -r | sed -e 's/\./ /g' | awk '{print $ 2}')
+    AT_SKIP_IF([ ! ( test $version -lt $1 || ( test $version -eq $1 && test $sublevel -lt $2 ) || test $version -gt $3 || ( test $version -eq $3 && test $sublevel -gt $4 ) ) ])
+])

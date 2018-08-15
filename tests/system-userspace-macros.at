@@ -127,3 +127,19 @@ m4_define([CHECK_CT_DPIF_SET_GET_MAXCONNS])
 # Perform requirements checks for running ovs-dpctl ct-get-nconns. The
 # userspace datapath does support this feature.
 m4_define([CHECK_CT_DPIF_GET_NCONNS])
+
+# OVS_CHECK_KERNEL([minversion], [maxversion], [minsublevel], [maxsublevel])
+#
+# The userspace skips all tests that check kernel version.
+m4_define([OVS_CHECK_KERNEL],
+[
+    AT_SKIP_IF([:])
+])
+
+# OVS_CHECK_KERNEL_EXCL([minversion], [maxversion], [minsublevel], [maxsublevel])
+#
+# The userspace skips all tests that check kernel version.
+m4_define([OVS_CHECK_KERNEL_EXCL],
+[
+    AT_SKIP_IF([:])
+])
