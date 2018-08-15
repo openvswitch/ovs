@@ -7500,6 +7500,7 @@ ofpacts_pull_openflow_actions__(struct ofpbuf *openflow,
                                 uint64_t *ofpacts_tlv_bitmap)
 {
     const struct ofp_action_header *actions;
+    void *orig_data = ofpacts->data;
     size_t orig_size = ofpacts->size;
     enum ofperr error;
 
@@ -7519,14 +7520,17 @@ ofpacts_pull_openflow_actions__(struct ofpbuf *openflow,
 
     error = ofpacts_decode(actions, actions_len, version, vl_mff_map,
                            ofpacts_tlv_bitmap, ofpacts);
-    if (error) {
-        ofpacts->size = orig_size;
-        return error;
+    if (!error) {
+        error = ofpacts_verify(ofpacts->data, ofpacts->size, allowed_ovsinsts,
+                               outer_action);
     }
-
-    error = ofpacts_verify(ofpacts->data, ofpacts->size, allowed_ovsinsts,
-                           outer_action);
     if (error) {
+        /* Back out changes to 'ofpacts'.  (Normally, decoding would only
+         * append to 'ofpacts', so that one would expect only to need to
+         * restore 'ofpacts->size', but some action parsing temporarily pulls
+         * off data from the start of 'ofpacts' and may not properly re-push it
+         * on error paths.) */
+        ofpacts->data = orig_data;
         ofpacts->size = orig_size;
     }
     return error;
