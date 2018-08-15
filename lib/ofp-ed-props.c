@@ -35,7 +35,7 @@ decode_ed_prop(const struct ofp_ed_prop_header **ofp_prop,
     size_t len = (*ofp_prop)->len;
     size_t pad_len = ROUND_UP(len, 8);
 
-    if (pad_len > *remaining) {
+    if (len < sizeof **ofp_prop || pad_len > *remaining) {
         return OFPERR_OFPBAC_BAD_LEN;
     }
 
