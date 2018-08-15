@@ -575,6 +575,270 @@ NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PI
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([datapath - ping over gre tunnel by simulated packets])
+OVS_CHECK_KERNEL(3, 10, 4, 15)
+
+OVS_TRAFFIC_VSWITCHD_START()
+AT_CHECK([ovs-vsctl -- set bridge br0 other-config:hwaddr=\"f2:ff:00:00:00:01\"])
+ADD_BR([br-underlay], [set bridge br-underlay other-config:hwaddr=\"f2:ff:00:00:00:02\"])
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
+AT_CHECK([ovs-ofctl add-flow br-underlay "actions=normal"])
+
+ADD_NAMESPACES(at_ns0)
+
+dnl Set up underlay link from host into the namespace using veth pair.
+ADD_VETH(p0, at_ns0, br-underlay, "172.31.1.1/24", f2:ff:00:00:00:03)
+AT_CHECK([ip addr add dev br-underlay "172.31.1.100/24"])
+AT_CHECK([ip link set dev br-underlay up])
+
+dnl Set up tunnel endpoints on OVS outside the namespace.
+ADD_OVS_TUNNEL([gre], [br0], [at_gre0], [172.31.1.1], [10.1.1.100/24])
+
+dnl Certain Linux distributions, like CentOS, have default iptable rules
+dnl to reject input traffic from br-underlay. Here we add a rule to walk
+dnl around it.
+iptables -I INPUT 1 -i br-underlay -j ACCEPT
+on_exit 'iptables -D INPUT 1'
+
+ip netns exec at_ns0 tcpdump -n -i p0 dst host 172.31.1.1 -l > p0.pcap &
+sleep 1
+
+dnl First, check the underlay.
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl We don't actually add gretap port as below, instead, we will
+dnl emulate one that sends packets. Suppose its mac address is f2:ff:00:00:00:04.
+dnl ADD_NATIVE_TUNNEL([gretap], [ns_gre0], [at_ns0], [172.31.1.100], [10.1.1.1/24])
+
+dnl Now, check the overlay by sending out raw arp and icmp packets.
+ovs-ofctl -O OpenFlow13 packet-out br-underlay "in_port=1 packet=f2ff00000002f2ff00000003080045000042ec2c4000402ff3bcac1f0101ac1f016400006558fffffffffffff2ff0000000408060001080006040001f2ff000000040a0101010000000000000a010164 actions=NORMAL"
+
+OVS_WAIT_UNTIL([cat p0.pcap | egrep "IP 172.31.1.100 > 172.31.1.1: GREv0, length 46: ARP, Reply 10.1.1.100 is-at f2:ff:00:00:00:01.* length 28" 2>&1 1>/dev/null])
+
+ovs-ofctl -O OpenFlow13 packet-out br-underlay "in_port=1 packet=f2ff00000002f2ff0000000308004500007aec8e4000402ff322ac1f0101ac1f016400006558f2ff00000001f2ff00000004080045000054548f40004001cfb30a0101010a0101640800e6e829270003e1a3435b00000000ff1a050000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637 actions=NORMAL"
+
+OVS_WAIT_UNTIL([cat p0.pcap | egrep "IP 172.31.1.100 > 172.31.1.1: GREv0, length 102: IP 10.1.1.100 > 10.1.1.1: ICMP echo reply,.* length 64$" 2>&1 1>/dev/null])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([datapath - ping over erspan v1 tunnel by simulated packets])
+OVS_CHECK_KERNEL(3, 10, 4, 15)
+
+OVS_TRAFFIC_VSWITCHD_START()
+AT_CHECK([ovs-vsctl -- set bridge br0 other-config:hwaddr=\"f2:ff:00:00:00:01\"])
+ADD_BR([br-underlay], [set bridge br-underlay other-config:hwaddr=\"f2:ff:00:00:00:02\"])
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
+AT_CHECK([ovs-ofctl add-flow br-underlay "actions=normal"])
+
+ADD_NAMESPACES(at_ns0)
+
+dnl Set up underlay link from host into the namespace using veth pair.
+ADD_VETH(p0, at_ns0, br-underlay, "172.31.1.1/24", f2:ff:00:00:00:03)
+AT_CHECK([ip addr add dev br-underlay "172.31.1.100/24"])
+AT_CHECK([ip link set dev br-underlay up])
+
+dnl Set up tunnel endpoints on OVS outside the namespace and emulate a native
+dnl linux device inside the namespace.
+ADD_OVS_TUNNEL([erspan], [br0], [at_erspan0], [172.31.1.1], [10.1.1.100/24], [options:key=1 options:erspan_ver=1 options:erspan_idx=7])
+
+dnl Certain Linux distributions, like CentOS, have default iptable rules
+dnl to reject input traffic from br-underlay. Here we add a rule to walk
+dnl around it.
+iptables -I INPUT 1 -i br-underlay -j ACCEPT
+on_exit 'iptables -D INPUT 1'
+
+ip netns exec at_ns0 tcpdump -n -x -i p0 dst host 172.31.1.1 -l > p0.pcap &
+sleep 1
+
+dnl First, check the underlay
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Okay, now send out an arp request from 10.1.1.1 for 10.1.1.100 in erspan.
+ovs-ofctl -O OpenFlow13 packet-out br-underlay "in_port=1 packet=f2ff00000002f2ff0000000308004500004e151d4000402fcac0ac1f0101ac1f0164100088be000000061000000100000007fffffffffffff2ff0000000408060001080006040001f2ff000000040a0101010000000000000a010164 actions=normal"
+
+dnl 0002 is arp reply, followed by mac address of 10.1.1.100.
+OVS_WAIT_UNTIL([cat p0.pcap | egrep "0x0030:  0806 0001 0800 0604 0002 f2ff 0000 0001" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | egrep "0x0040:  0a01 0164 f2ff 0000 0004 0a01 0101" 2>&1 1>/dev/null])
+
+dnl Okay, now check the overlay with raw icmp packets.
+AT_FAIL_IF([cat p0.pcap | egrep "IP 172.31.1.100 > 172.31.1.1: GREv0,.* length 122" 2>&1 1>/dev/null])
+
+ovs-ofctl -O OpenFlow13 packet-out br-underlay "in_port=1 packet=f2ff00000002f2ff0000000308004500008e70cb4000402f6ed2ac1f0101ac1f0164100088be000000051000000100000007f2ff00000001f2ff0000000408004500005c4a3340004001da070a0101010a010164080084f238fb0001f36a6b5b0000000021870e0000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f actions=normal"
+
+OVS_WAIT_UNTIL([cat p0.pcap | egrep "IP 172.31.1.100 > 172.31.1.1: GREv0,.* length 122" 2>&1 1>/dev/null])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([datapath - ping over erspan v2 tunnel by simulated packets])
+OVS_CHECK_KERNEL(3, 10, 4, 15)
+
+OVS_TRAFFIC_VSWITCHD_START()
+AT_CHECK([ovs-vsctl -- set bridge br0 other-config:hwaddr=\"f2:ff:00:00:00:01\"])
+ADD_BR([br-underlay], [set bridge br-underlay other-config:hwaddr=\"f2:ff:00:00:00:02\"])
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
+AT_CHECK([ovs-ofctl add-flow br-underlay "actions=normal"])
+
+ADD_NAMESPACES(at_ns0)
+
+dnl Set up underlay link from host into the namespace using veth pair.
+ADD_VETH(p0, at_ns0, br-underlay, "172.31.1.1/24", f2:ff:00:00:00:03)
+AT_CHECK([ip addr add dev br-underlay "172.31.1.100/24"])
+AT_CHECK([ip link set dev br-underlay up])
+
+dnl Set up tunnel endpoints on OVS outside the namespace and simulate a native
+dnl linux device inside the namespace.
+ADD_OVS_TUNNEL([erspan], [br0], [at_erspan0], [172.31.1.1], [10.1.1.100/24], [options:key=1 options:erspan_ver=2 options:erspan_dir=1 options:erspan_hwid=0x7])
+
+dnl Certain Linux distributions, like CentOS, have default iptable rules
+dnl to reject input traffic from br-underlay. Here we add a rule to walk
+dnl around it.
+iptables -I INPUT 1 -i br-underlay -j ACCEPT
+on_exit 'iptables -D INPUT 1'
+
+ip netns exec at_ns0 tcpdump -n -x -i p0 dst host 172.31.1.1 -l > p0.pcap &
+sleep 1
+
+dnl First, check the underlay.
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Okay, send raw arp request and icmp echo request.
+ovs-ofctl -O OpenFlow13 packet-out br-underlay "in_port=1 packet=f2ff00000002f2ff00000003080045000052373d4000402fa89cac1f0101ac1f0164100088be00000006200000016f54b41700008078fffffffffffff2ff0000000408060001080006040001f2ff000000040a0101010000000000000a010164 actions=normal"
+
+OVS_WAIT_UNTIL([cat p0.pcap | egrep "0x0030:  0000 0001 0806 0001 0800 0604 0002 f2ff" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | egrep "0x0040:  0000 0001 0a01 0164 f2ff 0000 0004 0a01" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | egrep "0x0050:  0101" 2>&1 1>/dev/null])
+
+dnl Because tcpdump might not be able to parse erspan headers, we check icmp echo reply
+dnl by packet length.
+AT_FAIL_IF([cat p0.pcap | egrep "IP 172.31.1.100 > 172.31.1.1: GREv0,.* length 126" 2>&1 1>/dev/null])
+
+ovs-ofctl -O OpenFlow13 packet-out br-underlay "in_port=1 packet=f2ff00000002f2ff0000000308004500009287e14000402f57b8ac1f0101ac1f0164100088be0000000520000001144cd5a400008078f2ff00000001f2ff0000000408004500005c38d640004001eb640a0101010a01016408005e57585f0001df6c6b5b0000000045bc050000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f actions=normal"
+
+OVS_WAIT_UNTIL([cat p0.pcap | egrep "IP 172.31.1.100 > 172.31.1.1: GREv0,.* length 126" 2>&1 1>/dev/null])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([datapath - ping over ip6erspan v1 tunnel by simulated packets])
+OVS_CHECK_KERNEL(3, 10, 4, 15)
+
+OVS_TRAFFIC_VSWITCHD_START()
+AT_CHECK([ovs-vsctl -- set bridge br0 other-config:hwaddr=\"f2:ff:00:00:00:01\"])
+ADD_BR([br-underlay], [set bridge br-underlay other-config:hwaddr=\"f2:ff:00:00:00:02\"])
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
+AT_CHECK([ovs-ofctl add-flow br-underlay "actions=normal"])
+
+ADD_NAMESPACES(at_ns0)
+
+dnl Set up underlay link from host into the namespace using veth pair.
+ADD_VETH(p0, at_ns0, br-underlay, "fc00:100::1/96", f2:ff:00:00:00:03, [], nodad)
+AT_CHECK([ip addr add dev br-underlay "fc00:100::100/96" nodad])
+AT_CHECK([ip link set dev br-underlay up])
+
+dnl Set up tunnel endpoints on OVS outside the namespace and simulate a native
+dnl linux device inside the namespace.
+ADD_OVS_TUNNEL6([ip6erspan], [br0], [at_erspan0], [fc00:100::1], [10.1.1.100/24],
+                [options:key=123 options:erspan_ver=1 options:erspan_idx=0x7])
+
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 2 fc00:100::100])
+
+dnl Certain Linux distributions, like CentOS, have default iptable rules
+dnl to reject input traffic from br-underlay. Here we add a rule to walk
+dnl around it.
+ip6tables -I INPUT 1 -i br-underlay -j ACCEPT
+on_exit 'ip6tables -D INPUT 1'
+
+ip netns exec at_ns0 tcpdump -n -x -i p0 dst host fc00:100::1 -l > p0.pcap &
+sleep 1
+
+dnl First, check the underlay.
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00:100::100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Okay, now send raw arp request and icmp echo request.
+ovs-ofctl -O OpenFlow13 packet-out br-underlay "in_port=1 packet=f2ff00000002f2ff0000000386dd60008531003a2f40fc000100000000000000000000000001fc000100000000000000000000000100100088be000000051000007b00000007fffffffffffff2ff0000000408060001080006040001f2ff000000040a0101010000000000000a010164 actions=normal"
+
+dnl Check arp reply.
+OVS_WAIT_UNTIL([cat p0.pcap | egrep "0x0040:  0000 0001 0806 0001 0800 0604 0002 f2ff" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | egrep "0x0050:  0000 0001 0a01 0164 f2ff 0000 0004 0a01" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | egrep "0x0060:  0101" 2>&1 1>/dev/null])
+
+AT_FAIL_IF([cat p0.pcap | egrep "IP6 fc00:100::100 > fc00:100::1: GREv0,.* length 114" 2>&1 1>/dev/null])
+
+ovs-ofctl -O OpenFlow13 packet-out br-underlay "in_port=1 packet=f2ff00000002f2ff0000000386dd60008531007a3c40fc000100000000000000000000000001fc0001000000000000000000000001002f00040104010100100088be000000061000407b00000007f2ff00000001f2ff0000000408004500005429b640004001fa8c0a0101010a01016408005c2c7526000118d3685b00000000e4aa020000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637 actions=normal"
+
+OVS_WAIT_UNTIL([cat p0.pcap | egrep "IP6 fc00:100::100 > fc00:100::1: GREv0,.* length 114" 2>&1 1>/dev/null])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([datapath - ping over ip6erspan v2 tunnel by simulated packets])
+OVS_CHECK_KERNEL(3, 10, 4, 15)
+
+OVS_TRAFFIC_VSWITCHD_START()
+AT_CHECK([ovs-vsctl -- set bridge br0 other-config:hwaddr=\"f2:ff:00:00:00:01\"])
+ADD_BR([br-underlay], [set bridge br-underlay other-config:hwaddr=\"f2:ff:00:00:00:02\"])
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
+AT_CHECK([ovs-ofctl add-flow br-underlay "actions=normal"])
+
+ADD_NAMESPACES(at_ns0)
+
+dnl Set up underlay link from host into the namespace using veth pair.
+ADD_VETH(p0, at_ns0, br-underlay, "fc00:100::1/96", f2:ff:00:00:00:03, [], nodad)
+AT_CHECK([ip addr add dev br-underlay "fc00:100::100/96" nodad])
+AT_CHECK([ip link set dev br-underlay up])
+
+dnl Set up tunnel endpoints on OVS outside the namespace and simulate a native
+dnl linux device inside the namespace.
+ADD_OVS_TUNNEL6([ip6erspan], [br0], [at_erspan0], [fc00:100::1], [10.1.1.100/24],
+                [options:key=121 options:erspan_ver=2 options:erspan_dir=0 options:erspan_hwid=0x7])
+
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 2 fc00:100::100])
+
+dnl Certain Linux distributions, like CentOS, have default iptable rules
+dnl to reject input traffic from br-underlay. Here we add a rule to walk
+dnl around it.
+ip6tables -I INPUT 1 -i br-underlay -j ACCEPT
+on_exit 'ip6tables -D INPUT 1'
+
+ip netns exec at_ns0 tcpdump -n -x -i p0 dst host fc00:100::1 -l > p0.pcap &
+sleep 1
+
+dnl First, check the underlay.
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00:100::100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Okay, now send raw arp request and icmp echo request.
+ovs-ofctl -O OpenFlow13 packet-out br-underlay "in_port=1 packet=f2ff00000002f2ff0000000386dd60008531003e2f40fc000100000000000000000000000001fc000100000000000000000000000100100088be0000000620000079af514f9900008070fffffffffffff2ff0000000408060001080006040001f2ff000000040a0101010000000000000a010164 actions=normal"
+
+OVS_WAIT_UNTIL([cat p0.pcap | egrep "0x0040:  0004 f2ff 0000 0001 0806 0001 0800 0604" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | egrep "0x0050:  0002 f2ff 0000 0001 0a01 0164 f2ff 0000" 2>&1 1>/dev/null])
+OVS_WAIT_UNTIL([cat p0.pcap | egrep "0x0060:  0004 0a01 0101" 2>&1 1>/dev/null])
+
+AT_FAIL_IF([cat p0.pcap | egrep "IP6 fc00:100::100 > fc00:100::1: GREv0, .* length 118" 2>&1 1>/dev/null])
+
+ovs-ofctl -O OpenFlow13 packet-out br-underlay "in_port=1 packet=f2ff00000002f2ff0000000386dd60008531007e3c40fc000100000000000000000000000001fc0001000000000000000000000001002f00040104010100100088be0000000720004079af514f9b00008070f2ff00000001f2ff00000004080045000054ffcb4000400124770a0101010a0101640800419e23ac000112d7685b000000004caf0c0000000000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f3031323334353637 actions=normal"
+
+OVS_WAIT_UNTIL([cat p0.pcap | egrep "IP6 fc00:100::100 > fc00:100::1: GREv0, .* length 118" 2>&1 1>/dev/null])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([datapath - clone action])
 OVS_TRAFFIC_VSWITCHD_START()
 
