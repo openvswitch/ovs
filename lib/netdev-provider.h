@@ -893,6 +893,4 @@ extern const struct netdev_class netdev_tap_class;
 }
 #endif
 
-#define NO_OFFLOAD_API NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
-
 #endif /* netdev.h */

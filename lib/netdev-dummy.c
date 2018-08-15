@@ -1393,90 +1393,56 @@ netdev_dummy_update_flags(struct netdev *netdev_,
 
 /* Helper functions. */
 
-#define NETDEV_DUMMY_CLASS(NAME, PMD, RECOFIGURE)               \
-{                                                               \
-    NAME,                                                       \
-    PMD,                        /* is_pmd */                    \
-    NULL,                       /* init */                      \
-    netdev_dummy_run,                                           \
-    netdev_dummy_wait,                                          \
-                                                                \
-    netdev_dummy_alloc,                                         \
-    netdev_dummy_construct,                                     \
-    netdev_dummy_destruct,                                      \
-    netdev_dummy_dealloc,                                       \
-    netdev_dummy_get_config,                                    \
-    netdev_dummy_set_config,                                    \
-    NULL,                       /* get_tunnel_config */         \
-    NULL,                       /* build header */              \
-    NULL,                       /* push header */               \
-    NULL,                       /* pop header */                \
-    netdev_dummy_get_numa_id,                                   \
-    NULL,                       /* set_tx_multiq */             \
-                                                                \
-    netdev_dummy_send,          /* send */                      \
-    NULL,                       /* send_wait */                 \
-                                                                \
-    netdev_dummy_set_etheraddr,                                 \
-    netdev_dummy_get_etheraddr,                                 \
-    netdev_dummy_get_mtu,                                       \
-    netdev_dummy_set_mtu,                                       \
-    netdev_dummy_get_ifindex,                                   \
-    NULL,                       /* get_carrier */               \
-    NULL,                       /* get_carrier_resets */        \
-    NULL,                       /* get_miimon */                \
-    netdev_dummy_get_stats,                                     \
-    netdev_dummy_get_custom_stats,                              \
-                                                                \
-    NULL,                       /* get_features */              \
-    NULL,                       /* set_advertisements */        \
-    NULL,                       /* get_pt_mode */               \
-                                                                \
-    NULL,                       /* set_policing */              \
-    NULL,                       /* get_qos_types */             \
-    NULL,                       /* get_qos_capabilities */      \
-    NULL,                       /* get_qos */                   \
-    NULL,                       /* set_qos */                   \
-    netdev_dummy_get_queue,                                     \
-    NULL,                       /* set_queue */                 \
-    NULL,                       /* delete_queue */              \
-    netdev_dummy_get_queue_stats,                               \
-    netdev_dummy_queue_dump_start,                              \
-    netdev_dummy_queue_dump_next,                               \
-    netdev_dummy_queue_dump_done,                               \
-    netdev_dummy_dump_queue_stats,                              \
-                                                                \
-    NULL,                       /* set_in4 */                   \
-    netdev_dummy_get_addr_list,                                 \
-    NULL,                       /* add_router */                \
-    NULL,                       /* get_next_hop */              \
-    NULL,                       /* get_status */                \
-    NULL,                       /* arp_lookup */                \
-                                                                \
-    netdev_dummy_update_flags,                                  \
-    RECOFIGURE,                                                 \
-                                                                \
-    netdev_dummy_rxq_alloc,                                     \
-    netdev_dummy_rxq_construct,                                 \
-    netdev_dummy_rxq_destruct,                                  \
-    netdev_dummy_rxq_dealloc,                                   \
-    netdev_dummy_rxq_recv,                                      \
-    netdev_dummy_rxq_wait,                                      \
-    netdev_dummy_rxq_drain,                                     \
-                                                                \
-    NO_OFFLOAD_API,                                             \
-    NULL                        /* get_block_id */              \
-}
+#define NETDEV_DUMMY_CLASS_COMMON                       \
+    .run = netdev_dummy_run,                            \
+    .wait = netdev_dummy_wait,                          \
+    .alloc = netdev_dummy_alloc,                        \
+    .construct = netdev_dummy_construct,                \
+    .destruct = netdev_dummy_destruct,                  \
+    .dealloc = netdev_dummy_dealloc,                    \
+    .get_config = netdev_dummy_get_config,              \
+    .set_config = netdev_dummy_set_config,              \
+    .get_numa_id = netdev_dummy_get_numa_id,            \
+    .send = netdev_dummy_send,                          \
+    .set_etheraddr = netdev_dummy_set_etheraddr,        \
+    .get_etheraddr = netdev_dummy_get_etheraddr,        \
+    .get_mtu = netdev_dummy_get_mtu,                    \
+    .set_mtu = netdev_dummy_set_mtu,                    \
+    .get_ifindex = netdev_dummy_get_ifindex,            \
+    .get_stats = netdev_dummy_get_stats,                \
+    .get_custom_stats = netdev_dummy_get_custom_stats,  \
+    .get_queue = netdev_dummy_get_queue,                \
+    .get_queue_stats = netdev_dummy_get_queue_stats,    \
+    .queue_dump_start = netdev_dummy_queue_dump_start,  \
+    .queue_dump_next = netdev_dummy_queue_dump_next,    \
+    .queue_dump_done = netdev_dummy_queue_dump_done,    \
+    .dump_queue_stats = netdev_dummy_dump_queue_stats,  \
+    .get_addr_list = netdev_dummy_get_addr_list,        \
+    .update_flags = netdev_dummy_update_flags,          \
+    .rxq_alloc = netdev_dummy_rxq_alloc,                \
+    .rxq_construct = netdev_dummy_rxq_construct,        \
+    .rxq_destruct = netdev_dummy_rxq_destruct,          \
+    .rxq_dealloc = netdev_dummy_rxq_dealloc,            \
+    .rxq_recv = netdev_dummy_rxq_recv,                  \
+    .rxq_wait = netdev_dummy_rxq_wait,                  \
+    .rxq_drain = netdev_dummy_rxq_drain
 
-static const struct netdev_class dummy_class =
-    NETDEV_DUMMY_CLASS("dummy", false, NULL);
+static const struct netdev_class dummy_class = {
+    NETDEV_DUMMY_CLASS_COMMON,
+    .type = "dummy"
+};
 
-static const struct netdev_class dummy_internal_class =
-    NETDEV_DUMMY_CLASS("dummy-internal", false, NULL);
+static const struct netdev_class dummy_internal_class = {
+    NETDEV_DUMMY_CLASS_COMMON,
+    .type = "dummy-internal"
+};
 
-static const struct netdev_class dummy_pmd_class =
-    NETDEV_DUMMY_CLASS("dummy-pmd", true,
-                       netdev_dummy_reconfigure);
+static const struct netdev_class dummy_pmd_class = {
+    NETDEV_DUMMY_CLASS_COMMON,
+    .type = "dummy-pmd",
+    .is_pmd = true,
+    .reconfigure = netdev_dummy_reconfigure
+};
 
 static void
 pkt_list_delete(struct ovs_list *l)

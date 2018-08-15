@@ -936,7 +936,7 @@ set_patch_config(struct netdev *dev_, const struct smap *args, char **errp)
 }
 
 static int
-get_stats(const struct netdev *netdev, struct netdev_stats *stats)
+netdev_vport_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 {
     struct netdev_vport *dev = netdev_vport_cast(netdev);
 
@@ -952,7 +952,7 @@ get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 }
 
 static enum netdev_pt_mode
-get_pt_mode(const struct netdev *netdev)
+netdev_vport_get_pt_mode(const struct netdev *netdev)
 {
     struct netdev_vport *dev = netdev_vport_cast(netdev);
 
@@ -972,98 +972,32 @@ netdev_vport_get_ifindex(const struct netdev *netdev_)
 }
 
 #define NETDEV_VPORT_GET_IFINDEX netdev_vport_get_ifindex
-#define NETDEV_FLOW_OFFLOAD_API LINUX_FLOW_OFFLOAD_API
+#define NETDEV_FLOW_OFFLOAD_API , LINUX_FLOW_OFFLOAD_API
 #else /* !__linux__ */
 #define NETDEV_VPORT_GET_IFINDEX NULL
-#define NETDEV_FLOW_OFFLOAD_API NO_OFFLOAD_API
+#define NETDEV_FLOW_OFFLOAD_API
 #endif /* __linux__ */
 
-#define VPORT_FUNCTIONS(GET_CONFIG, SET_CONFIG,             \
-                        GET_TUNNEL_CONFIG, GET_STATUS,      \
-                        BUILD_HEADER,                       \
-                        PUSH_HEADER, POP_HEADER,            \
-                        GET_IFINDEX)                        \
-    NULL,                                                   \
-    netdev_vport_run,                                       \
-    netdev_vport_wait,                                      \
-                                                            \
-    netdev_vport_alloc,                                     \
-    netdev_vport_construct,                                 \
-    netdev_vport_destruct,                                  \
-    netdev_vport_dealloc,                                   \
-    GET_CONFIG,                                             \
-    SET_CONFIG,                                             \
-    GET_TUNNEL_CONFIG,                                      \
-    BUILD_HEADER,                                           \
-    PUSH_HEADER,                                            \
-    POP_HEADER,                                             \
-    NULL,                       /* get_numa_id */           \
-    NULL,                       /* set_tx_multiq */         \
-                                                            \
-    NULL,                       /* send */                  \
-    NULL,                       /* send_wait */             \
-                                                            \
-    netdev_vport_set_etheraddr,                             \
-    netdev_vport_get_etheraddr,                             \
-    NULL,                       /* get_mtu */               \
-    NULL,                       /* set_mtu */               \
-    GET_IFINDEX,                                            \
-    NULL,                       /* get_carrier */           \
-    NULL,                       /* get_carrier_resets */    \
-    NULL,                       /* get_miimon */            \
-    get_stats,                                              \
-    NULL,                       /* get_custom_stats */      \
-                                                            \
-    NULL,                       /* get_features */          \
-    NULL,                       /* set_advertisements */    \
-    get_pt_mode,                                            \
-                                                            \
-    NULL,                       /* set_policing */          \
-    NULL,                       /* get_qos_types */         \
-    NULL,                       /* get_qos_capabilities */  \
-    NULL,                       /* get_qos */               \
-    NULL,                       /* set_qos */               \
-    NULL,                       /* get_queue */             \
-    NULL,                       /* set_queue */             \
-    NULL,                       /* delete_queue */          \
-    NULL,                       /* get_queue_stats */       \
-    NULL,                       /* queue_dump_start */      \
-    NULL,                       /* queue_dump_next */       \
-    NULL,                       /* queue_dump_done */       \
-    NULL,                       /* dump_queue_stats */      \
-                                                            \
-    NULL,                       /* set_in4 */               \
-    NULL,                       /* get_addr_list */         \
-    NULL,                       /* add_router */            \
-    NULL,                       /* get_next_hop */          \
-    GET_STATUS,                                             \
-    NULL,                       /* arp_lookup */            \
-                                                            \
-    netdev_vport_update_flags,                              \
-    NULL,                       /* reconfigure */           \
-                                                            \
-    NULL,                   /* rx_alloc */                  \
-    NULL,                   /* rx_construct */              \
-    NULL,                   /* rx_destruct */               \
-    NULL,                   /* rx_dealloc */                \
-    NULL,                   /* rx_recv */                   \
-    NULL,                   /* rx_wait */                   \
-    NULL,                   /* rx_drain */                  \
-                                                            \
-    NETDEV_FLOW_OFFLOAD_API,                                 \
-    NULL                    /* get_block_id */
+#define VPORT_FUNCTIONS_COMMON                      \
+    .run = netdev_vport_run,                        \
+    .wait = netdev_vport_wait,                      \
+    .alloc = netdev_vport_alloc,                    \
+    .construct = netdev_vport_construct,            \
+    .destruct = netdev_vport_destruct,              \
+    .dealloc = netdev_vport_dealloc,                \
+    .set_etheraddr = netdev_vport_set_etheraddr,    \
+    .get_etheraddr = netdev_vport_get_etheraddr,    \
+    .get_stats = netdev_vport_get_stats,            \
+    .get_pt_mode = netdev_vport_get_pt_mode,        \
+    .update_flags = netdev_vport_update_flags       \
+    NETDEV_FLOW_OFFLOAD_API
 
-
-#define TUNNEL_CLASS(NAME, DPIF_PORT, BUILD_HEADER, PUSH_HEADER, POP_HEADER,   \
-                     GET_IFINDEX)                                              \
-    { DPIF_PORT,                                                               \
-        { NAME, false,                                                         \
-          VPORT_FUNCTIONS(get_tunnel_config,                                   \
-                          set_tunnel_config,                                   \
-                          get_netdev_tunnel_config,                            \
-                          tunnel_get_status,                                   \
-                          BUILD_HEADER, PUSH_HEADER, POP_HEADER,               \
-                          GET_IFINDEX) }}
+#define TUNNEL_FUNCTIONS_COMMON                     \
+    VPORT_FUNCTIONS_COMMON,                         \
+    .get_config = get_tunnel_config,                \
+    .set_config = set_tunnel_config,                \
+    .get_tunnel_config = get_netdev_tunnel_config,  \
+    .get_status = tunnel_get_status
 
 void
 netdev_vport_tunnel_register(void)
@@ -1071,32 +1005,74 @@ netdev_vport_tunnel_register(void)
     /* The name of the dpif_port should be short enough to accomodate adding
      * a port number to the end if one is necessary. */
     static const struct vport_class vport_classes[] = {
-        TUNNEL_CLASS("geneve", "genev_sys", netdev_geneve_build_header,
-                                            netdev_tnl_push_udp_header,
-                                            netdev_geneve_pop_header,
-                                            NETDEV_VPORT_GET_IFINDEX),
-        TUNNEL_CLASS("gre", "gre_sys", netdev_gre_build_header,
-                                       netdev_gre_push_header,
-                                       netdev_gre_pop_header,
-                                       NULL),
-        TUNNEL_CLASS("vxlan", "vxlan_sys", netdev_vxlan_build_header,
-                                           netdev_tnl_push_udp_header,
-                                           netdev_vxlan_pop_header,
-                                           NETDEV_VPORT_GET_IFINDEX),
-        TUNNEL_CLASS("lisp", "lisp_sys", NULL, NULL, NULL, NULL),
-        TUNNEL_CLASS("stt", "stt_sys", NULL, NULL, NULL, NULL),
-        TUNNEL_CLASS("erspan", "erspan_sys", netdev_erspan_build_header,
-                                             netdev_erspan_push_header,
-                                             netdev_erspan_pop_header,
-                                             NULL),
-        TUNNEL_CLASS("ip6erspan", "ip6erspan_sys", netdev_erspan_build_header,
-                                                   netdev_erspan_push_header,
-                                                   netdev_erspan_pop_header,
-                                                   NULL),
-        TUNNEL_CLASS("ip6gre", "ip6gre_sys", netdev_gre_build_header,
-                                             netdev_gre_push_header,
-                                             netdev_gre_pop_header,
-                                             NULL),
+        { "genev_sys",
+          {
+              TUNNEL_FUNCTIONS_COMMON,
+              .type = "geneve",
+              .build_header = netdev_geneve_build_header,
+              .push_header = netdev_tnl_push_udp_header,
+              .pop_header = netdev_geneve_pop_header,
+              .get_ifindex = NETDEV_VPORT_GET_IFINDEX,
+          }
+        },
+        { "gre_sys",
+          {
+              TUNNEL_FUNCTIONS_COMMON,
+              .type = "gre",
+              .build_header = netdev_gre_build_header,
+              .push_header = netdev_gre_push_header,
+              .pop_header = netdev_gre_pop_header
+          }
+        },
+        { "vxlan_sys",
+          {
+              TUNNEL_FUNCTIONS_COMMON,
+              .type = "vxlan",
+              .build_header = netdev_vxlan_build_header,
+              .push_header = netdev_tnl_push_udp_header,
+              .pop_header = netdev_vxlan_pop_header,
+              .get_ifindex = NETDEV_VPORT_GET_IFINDEX
+          }
+        },
+        { "lisp_sys",
+          {
+              TUNNEL_FUNCTIONS_COMMON,
+              .type = "lisp"
+          }
+        },
+        { "stt_sys",
+          {
+              TUNNEL_FUNCTIONS_COMMON,
+              .type = "stt"
+          }
+        },
+        { "erspan_sys",
+          {
+              TUNNEL_FUNCTIONS_COMMON,
+              .type = "erspan",
+              .build_header = netdev_erspan_build_header,
+              .push_header = netdev_erspan_push_header,
+              .pop_header = netdev_erspan_pop_header
+          }
+        },
+        { "ip6erspan_sys",
+          {
+              TUNNEL_FUNCTIONS_COMMON,
+              .type = "ip6erspan",
+              .build_header = netdev_erspan_build_header,
+              .push_header = netdev_erspan_push_header,
+              .pop_header = netdev_erspan_pop_header
+          }
+        },
+        { "ip6gre_sys",
+          {
+              TUNNEL_FUNCTIONS_COMMON,
+              .type = "ip6gre",
+              .build_header = netdev_gre_build_header,
+              .push_header = netdev_gre_push_header,
+              .pop_header = netdev_gre_pop_header
+          }
+        },
     };
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
 
@@ -1117,12 +1093,13 @@ netdev_vport_tunnel_register(void)
 void
 netdev_vport_patch_register(void)
 {
-    static const struct vport_class patch_class =
-        { NULL,
-            { "patch", false,
-              VPORT_FUNCTIONS(get_patch_config,
-                              set_patch_config,
-                              NULL,
-                              NULL, NULL, NULL, NULL, NULL) }};
+    static const struct vport_class patch_class = {
+        NULL,
+        { VPORT_FUNCTIONS_COMMON,
+          .type = "patch",
+          .get_config = get_patch_config,
+          .set_config = set_patch_config,
+        }
+    };
     netdev_register_provider(&patch_class.netdev_class);
 }
