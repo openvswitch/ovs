@@ -2739,7 +2739,7 @@ static const struct uuid index_row_uuid = {
 
 /* Check if a row is an index row */
 static bool
-is_index_row(struct ovsdb_idl_row *row)
+is_index_row(const struct ovsdb_idl_row *row)
 {
     return uuid_equals(&row->uuid, &index_row_uuid);
 }
@@ -3594,9 +3594,18 @@ ovsdb_idl_txn_disassemble(struct ovsdb_idl_txn *txn)
     txn->db->txn = NULL;
 
     HMAP_FOR_EACH_SAFE (row, next, txn_node, &txn->txn_rows) {
+        enum { INSERTED, MODIFIED, DELETED } op
+            = (!row->new_datum ? DELETED
+               : !row->old_datum ? INSERTED
+               : MODIFIED);
+
+        if (op != DELETED) {
+            ovsdb_idl_remove_from_indexes(row);
+        }
+
         ovsdb_idl_destroy_all_map_op_lists(row);
         ovsdb_idl_destroy_all_set_op_lists(row);
-        if (row->old_datum) {
+        if (op != INSERTED) {
             if (row->written) {
                 ovsdb_idl_row_unparse(row);
                 ovsdb_idl_row_clear_arcs(row, false);
@@ -3615,7 +3624,9 @@ ovsdb_idl_txn_disassemble(struct ovsdb_idl_txn *txn)
 
         hmap_remove(&txn->txn_rows, &row->txn_node);
         hmap_node_nullify(&row->txn_node);
-        if (!row->old_datum) {
+        if (op != INSERTED) {
+            ovsdb_idl_add_to_indexes(row);
+        } else {
             hmap_remove(&row->table->rows, &row->hmap_node);
             free(row);
         }
@@ -4295,6 +4306,10 @@ ovsdb_idl_txn_write__(const struct ovsdb_idl_row *row_,
         goto discard_datum;
     }
 
+    bool index_row = is_index_row(row);
+    if (!index_row) {
+        ovsdb_idl_remove_from_indexes(row);
+    }
     if (hmap_node_is_null(&row->txn_node)) {
         hmap_insert(&row->table->db->txn->txn_rows, &row->txn_node,
                     uuid_hash(&row->uuid));
@@ -4317,6 +4332,9 @@ ovsdb_idl_txn_write__(const struct ovsdb_idl_row *row_,
     }
     (column->unparse)(row);
     (column->parse)(row, &row->new_datum[column_idx]);
+    if (!index_row) {
+        ovsdb_idl_add_to_indexes(row);
+    }
     return;
 
 discard_datum:
@@ -4444,6 +4462,8 @@ ovsdb_idl_txn_delete(const struct ovsdb_idl_row *row_)
     }
 
     ovs_assert(row->new_datum != NULL);
+    ovs_assert(!is_index_row(row_));
+    ovsdb_idl_remove_from_indexes(row_);
     if (!row->old_datum) {
         ovsdb_idl_row_unparse(row);
         ovsdb_idl_row_clear_new(row);
@@ -4491,6 +4511,7 @@ ovsdb_idl_txn_insert(struct ovsdb_idl_txn *txn,
     row->new_datum = xmalloc(class->n_columns * sizeof *row->new_datum);
     hmap_insert(&row->table->rows, &row->hmap_node, uuid_hash(&row->uuid));
     hmap_insert(&txn->txn_rows, &row->txn_node, uuid_hash(&row->uuid));
+    ovsdb_idl_add_to_indexes(row);
     return row;
 }
 
