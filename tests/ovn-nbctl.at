@@ -1484,7 +1484,7 @@ AT_CHECK([grep 'missing argument to .* option' stderr], [0], [ignore])
 
 dnl Unexpected option argument
 AT_CHECK([ovn-nbctl --if-exists=foo list Logical_Switch], [1], [], [stderr])
-AT_CHECK([grep 'option .* doesn'\''t allow an argument' stderr], [0], [ignore])
+AT_CHECK([egrep 'option .* doesn'\''t allow an argument|option .* requires an argument' stderr], [0], [ignore])
 
 AT_CHECK([ovn-nbctl -- --if-exists=foo list Logical_Switch], [1], [], [stderr])
 AT_CHECK([grep 'option on .* does not accept an argument' stderr], [0], [ignore])
