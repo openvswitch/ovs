@@ -1275,9 +1275,15 @@ netdev_tx_t rpl_vxlan_xmit(struct sk_buff *skb)
 EXPORT_SYMBOL_GPL(rpl_vxlan_xmit);
 
 /* Walk the forwarding table and purge stale entries */
+#ifdef HAVE_INIT_TIMER_DEFERRABLE
 static void vxlan_cleanup(unsigned long arg)
 {
 	struct vxlan_dev *vxlan = (struct vxlan_dev *) arg;
+#else
+static void vxlan_cleanup(struct timer_list *t)
+{
+       struct vxlan_dev *vxlan = from_timer(vxlan, t, age_timer);
+#endif
 	unsigned long next_timer = jiffies + FDB_AGE_INTERVAL;
 	unsigned int h;
 
@@ -1638,9 +1644,13 @@ static void vxlan_setup(struct net_device *dev)
 	INIT_LIST_HEAD(&vxlan->next);
 	spin_lock_init(&vxlan->hash_lock);
 
+#ifdef HAVE_INIT_TIMER_DEFERRABLE
 	init_timer_deferrable(&vxlan->age_timer);
 	vxlan->age_timer.function = vxlan_cleanup;
 	vxlan->age_timer.data = (unsigned long) vxlan;
+#else
+	timer_setup(&vxlan->age_timer, vxlan_cleanup, TIMER_DEFERRABLE);
+#endif
 
 	vxlan->cfg.dst_port = htons(vxlan_port);
 
