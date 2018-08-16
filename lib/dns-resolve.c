@@ -162,8 +162,8 @@ dns_resolve_destroy(void)
         ub_ctx_delete(ub_ctx__);
         ub_ctx__ = NULL;
 
-        struct resolve_request *req;
-        HMAP_FOR_EACH(req, hmap_node, &all_reqs__) {
+        struct resolve_request *req, *next;
+        HMAP_FOR_EACH_SAFE (req, next, hmap_node, &all_reqs__) {
             ub_resolve_free(req->ub_result);
             free(req->addr);
             free(req->name);
