@@ -163,6 +163,8 @@ __regex_has_xxx_mark = re.compile(r'.*xxx.*', re.IGNORECASE)
 __regex_added_doc_rst = re.compile(
                     r'\ndiff .*Documentation/.*rst\nnew file mode')
 __regex_empty_return = re.compile(r'\s*return;')
+__regex_if_macros = re.compile(r'^ +(%s) \([\S][\s\S]+[\S]\) { \\' %
+                               __parenthesized_constructs)
 
 skip_leading_whitespace_check = False
 skip_trailing_whitespace_check = False
@@ -252,7 +254,9 @@ def if_and_for_end_with_bracket_check(line):
     if __regex_is_for_if_single_line_bracket.search(line) is not None:
         if not balanced_parens(line):
             return True
-        if __regex_ends_with_bracket.search(line) is None:
+
+        if __regex_ends_with_bracket.search(line) is None and \
+           __regex_if_macros.match(line) is None:
             return False
     if __regex_conditional_else_bracing.match(line) is not None:
         return False

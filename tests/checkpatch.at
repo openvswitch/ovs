@@ -156,3 +156,226 @@ try_checkpatch \
    "ERROR: Patch lacks author."
 
 AT_CLEANUP
+
+AT_SETUP([checkpatch - parenthesized constructs])
+for ctr in 'if' 'while' 'switch'; do
+try_checkpatch \
+   "Author: A
+    
+    Signed-off-by: A
+    ---
+    diff --git a/A.c b/A.c
+    index 0000000..1111111 100644
+    --- a/A.c
+    +++ b/A.c
+    @@ -1,1 +1,1 @@
+    +     $ctr (first_run) {
+    "
+
+try_checkpatch \
+   "Author: A
+
+    Signed-off-by: A
+    ---
+    diff --git a/A.c b/A.c
+    index 0000000..1111111 100644
+    --- a/A.c
+    +++ b/A.c
+    @@ -1,1 +1,1 @@
+    +     $ctr ( first_run) {
+    " \
+    "ERROR: Improper whitespace around control block
+    #8 FILE: A.c:1:
+         $ctr ( first_run) {
+"
+
+try_checkpatch \
+   "Author: A
+
+    Signed-off-by: A
+    ---
+    diff --git a/A.c b/A.c
+    index 0000000..1111111 100644
+    --- a/A.c
+    +++ b/A.c
+    @@ -1,1 +1,1 @@
+    +     $ctr (first_run ) {
+    " \
+    "ERROR: Inappropriate bracing around statement
+    #8 FILE: A.c:1:
+         $ctr (first_run ) {
+"
+
+try_checkpatch \
+   "Author: A
+
+    Signed-off-by: A
+    ---
+    diff --git a/A.c b/A.c
+    index 0000000..1111111 100644
+    --- a/A.c
+    +++ b/A.c
+    @@ -1,1 +1,1 @@
+    +     $ctr (first_run)
+    " \
+    "ERROR: Inappropriate bracing around statement
+    #8 FILE: A.c:1:
+         $ctr (first_run)
+"
+
+try_checkpatch \
+   "Author: A
+
+    Signed-off-by: A
+    ---
+    diff --git a/A.c b/A.c
+    index 0000000..1111111 100644
+    --- a/A.c
+    +++ b/A.c
+    @@ -1,1 +1,1 @@
+    +     $ctr(first_run)
+    " \
+    "ERROR: Improper whitespace around control block
+    #8 FILE: A.c:1:
+         $ctr(first_run)
+"
+
+try_checkpatch \
+   "Author: A
+
+    Signed-off-by: A
+    ---
+    diff --git a/A.c b/A.c
+    index 0000000..1111111 100644
+    --- a/A.c
+    +++ b/A.c
+    @@ -1,1 +1,1 @@
+    +     $ctr (first_run) { /* foo */
+    "
+
+try_checkpatch \
+   "Author: A
+
+    Signed-off-by: A
+    ---
+    diff --git a/A.c b/A.c
+    index 0000000..1111111 100644
+    --- a/A.c
+    +++ b/A.c
+    @@ -1,1 +1,1 @@
+    +     $ctr (first_run) { \\
+    "
+done
+AT_CLEANUP
+
+
+
+AT_SETUP([checkpatch - parenthesized constructs - for])
+try_checkpatch \
+   "Author: A
+
+    Signed-off-by: A
+    ---
+    diff --git a/A.c b/A.c
+    index 0000000..1111111 100644
+    --- a/A.c
+    +++ b/A.c
+    @@ -1,1 +1,1 @@
+    +     for (init; condition; increment) {
+    "
+
+try_checkpatch \
+   "Author: A
+
+    Signed-off-by: A
+    ---
+    diff --git a/A.c b/A.c
+    index 0000000..1111111 100644
+    --- a/A.c
+    +++ b/A.c
+    @@ -1,1 +1,1 @@
+    +     for ( init; condition; increment) {
+    " \
+    "ERROR: Improper whitespace around control block
+    #8 FILE: A.c:1:
+         for ( init; condition; increment) {
+"
+
+try_checkpatch \
+   "Author: A
+
+    Signed-off-by: A
+    ---
+    diff --git a/A.c b/A.c
+    index 0000000..1111111 100644
+    --- a/A.c
+    +++ b/A.c
+    @@ -1,1 +1,1 @@
+    +     for (init; condition; increment ) {
+    " \
+    "ERROR: Inappropriate bracing around statement
+    #8 FILE: A.c:1:
+         for (init; condition; increment ) {
+"
+
+try_checkpatch \
+   "Author: A
+
+    Signed-off-by: A
+    ---
+    diff --git a/A.c b/A.c
+    index 0000000..1111111 100644
+    --- a/A.c
+    +++ b/A.c
+    @@ -1,1 +1,1 @@
+    +     for (init; condition; increment)
+    " \
+    "ERROR: Inappropriate bracing around statement
+    #8 FILE: A.c:1:
+         for (init; condition; increment)
+"
+
+try_checkpatch \
+   "Author: A
+
+    Signed-off-by: A
+    ---
+    diff --git a/A.c b/A.c
+    index 0000000..1111111 100644
+    --- a/A.c
+    +++ b/A.c
+    @@ -1,1 +1,1 @@
+    +     for(init; condition; increment)
+    " \
+    "ERROR: Improper whitespace around control block
+    #8 FILE: A.c:1:
+         for(init; condition; increment)
+"
+
+try_checkpatch \
+   "Author: A
+
+    Signed-off-by: A
+    ---
+    diff --git a/A.c b/A.c
+    index 0000000..1111111 100644
+    --- a/A.c
+    +++ b/A.c
+    @@ -1,1 +1,1 @@
+    +     for (init; condition; increment) { /* foo */
+    "
+
+try_checkpatch \
+   "Author: A
+
+    Signed-off-by: A
+    ---
+    diff --git a/A.c b/A.c
+    index 0000000..1111111 100644
+    --- a/A.c
+    +++ b/A.c
+    @@ -1,1 +1,1 @@
+    +     for (init; condition; increment) { \\
+    "
+
+AT_CLEANUP
