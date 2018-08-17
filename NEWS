@@ -23,6 +23,8 @@ v2.10.0 - xx xxx xxxx
        default it always accepts names and in interactive use it displays them;
        use --names or --no-names to override.  See ovs-ofctl(8) for details.
    - ovs-vsctl: New commands "add-bond-iface" and "del-bond-iface".
+   - ovs-dpctl:
+     * New commands "ct-set-limits", "ct-del-limits", and "ct-get-limits".
    - OpenFlow:
      * OFPT_ROLE_STATUS is now available in OpenFlow 1.3.
      * OpenFlow 1.5 extensible statistics (OXS) now implemented.

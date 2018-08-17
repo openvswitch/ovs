@@ -125,6 +125,7 @@ Q: Are all features available with all datapaths?
     NIC Bonding           YES            YES            YES       YES
     Multiple VTEPs        YES            YES            YES       YES
     Meters                4.15           YES            YES       NO
+    Conntrack zone limit  4.18           YES            NO        NO
     ===================== ============== ============== ========= =======
 
     Do note, however:

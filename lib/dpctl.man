@@ -196,9 +196,9 @@ Fetches the flow from \fIdp\fR's flow table with unique identifier \fIufid\fR.
 .
 .IP "\*(DX\fBdel\-flows\fR [\fIdp\fR]"
 Deletes all flow entries from datapath \fIdp\fR's flow table.
-.SS "CONNECTION TRACKING TABLE DEBUGGING COMMANDS"
-The following commands are primarily useful for debugging the connection
-tracking entries in the datapath.
+.SS "CONNECTION TRACKING TABLE COMMANDS"
+The following commands are useful for debugging and configuring
+the connection tracking table in the datapath.
 .
 .PP
 The \fIdp\fR argument to each of these commands is optional when
@@ -272,3 +272,28 @@ Only supported for userspace datapath.
 \*(DX\fBct\-get\-nconns\fR [\fIdp\fR]
 Prints the current number of connection tracker entries on \fIdp\fR.
 Only supported for userspace datapath.
+.
+.TP
+\*(DX\fBct\-set\-limits\fR [\fIdp\fR] [\fBdefault=\fIdefault_limit\fR] [\fBzone=\fIzone\fR,\fBlimit=\fIlimit\fR]...
+Sets the maximum allowed number of connections in a connection tracking
+zone.  A specific \fIzone\fR may be set to \fIlimit\fR, and multiple zones
+may be specified with a comma-separated list.  If a per-zone limit for a
+particular zone is not specified in the datapath, it defaults to the
+default per-zone limit.  A default zone may be specified with the
+\fBdefault=\fIdefault_limit\fR argument.   Initially, the default
+per-zone limit is unlimited.  An unlimited number of entries may be set
+with \fB0\fR limit.  Only supported for Linux kernel datapath.
+.
+.TP
+\*(DX\fBct\-del\-limits\fR [\fIdp\fR] \fBzone=\fIzone[,zone]\fR...
+Deletes the connection tracking limit for \fIzone\fR.  Multiple zones may
+be specified with a comma-separated list.  Only supported for Linux
+kernel datapath.
+.
+.TP
+\*(DX\fBct\-get\-limits\fR [\fIdp\fR] [\fBzone=\fIzone\fR[\fB,\fIzone\fR]...]
+Retrieves the maximum allowed number of connections and current
+counts per-zone.  If \fIzone\fR is given, only the specified zone(s) are
+printed.  If no zones are specified, all the zone limits and counts are
+provided.  The command always displays the default zone limit.  Only
+supported for Linux kernel datapath.

@@ -222,5 +222,9 @@ bool ct_dpif_parse_tuple(struct ct_dpif_tuple *, const char *s, struct ds *);
 void ct_dpif_push_zone_limit(struct ovs_list *, uint16_t zone, uint32_t limit,
                              uint32_t count);
 void ct_dpif_free_zone_limits(struct ovs_list *);
+bool ct_dpif_parse_zone_limit_tuple(const char *s, uint16_t *pzone,
+                                    uint32_t *plimit, struct ds *);
+void ct_dpif_format_zone_limits(uint32_t default_limit,
+                                const struct ovs_list *, struct ds *);
 
 #endif /* CT_DPIF_H */
