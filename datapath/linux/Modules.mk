@@ -63,6 +63,7 @@ openvswitch_headers += \
 	linux/compat/include/linux/reciprocal_div.h \
 	linux/compat/include/linux/rtnetlink.h \
 	linux/compat/include/linux/skbuff.h \
+	linux/compat/include/linux/static_key.h \
 	linux/compat/include/linux/stddef.h \
 	linux/compat/include/linux/types.h \
 	linux/compat/include/linux/u64_stats_sync.h \
