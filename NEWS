@@ -32,6 +32,7 @@ v2.10.0 - xx xxx xxxx
    - Linux datapath
      * Add support for compiling OVS with the latest Linux 4.14 kernel.
      * Added support for meters.
+     * Add support for conntrack zone limit.
    - ovn:
      * Implemented icmp4/icmp6/tcp_reset actions in order to drop the packet
        and reply with a RST for TCP or ICMPv4/ICMPv6 unreachable message for
