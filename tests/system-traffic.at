@@ -3187,6 +3187,95 @@ tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - limit by zone])
+CHECK_CONNTRACK()
+CHECK_CT_DPIF_FLUSH_BY_CT_TUPLE()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=100,in_port=1,udp,action=ct(commit),2
+priority=100,in_port=2,udp,action=ct(zone=3,commit),1
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+AT_CHECK([ovs-appctl dpctl/ct-set-limits default=10 zone=0,limit=5 zone=1,limit=15 zone=2,limit=3 zone=3,limit=3])
+AT_CHECK([ovs-appctl dpctl/ct-del-limits zone=1,2,4])
+AT_CHECK([ovs-appctl dpctl/ct-get-limits zone=0,1,2,3], [],[dnl
+default limit=10
+zone=0,limit=5,count=0
+zone=1,limit=10,count=0
+zone=2,limit=10,count=0
+zone=3,limit=3,count=0
+])
+
+dnl Test UDP from port 1
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000200080000 actions=resubmit(,0)"])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000300080000 actions=resubmit(,0)"])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000400080000 actions=resubmit(,0)"])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000500080000 actions=resubmit(,0)"])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000600080000 actions=resubmit(,0)"])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000700080000 actions=resubmit(,0)"])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000800080000 actions=resubmit(,0)"])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000900080000 actions=resubmit(,0)"])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=1 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000a00080000 actions=resubmit(,0)"])
+
+AT_CHECK([ovs-appctl dpctl/ct-get-limits zone=0,1,2,3,4,5], [0], [dnl
+default limit=10
+zone=0,limit=5,count=5
+zone=1,limit=10,count=0
+zone=2,limit=10,count=0
+zone=3,limit=3,count=0
+zone=4,limit=10,count=0
+zone=5,limit=10,count=0
+])
+
+dnl Test ct-get-limits for all zoens
+AT_CHECK([ovs-appctl dpctl/ct-get-limits], [0], [dnl
+default limit=10
+zone=0,limit=5,count=5
+zone=3,limit=3,count=0
+])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "orig=.src=10\.1\.1\.1," | sort ], [0], [dnl
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2),reply=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1)
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=3),reply=(src=10.1.1.2,dst=10.1.1.1,sport=3,dport=1)
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=4),reply=(src=10.1.1.2,dst=10.1.1.1,sport=4,dport=1)
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=5),reply=(src=10.1.1.2,dst=10.1.1.1,sport=5,dport=1)
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=6),reply=(src=10.1.1.2,dst=10.1.1.1,sport=6,dport=1)
+])
+
+dnl Test UDP from port 2
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101030a0101040001000200080000 actions=resubmit(,0)"])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101030a0101040001000300080000 actions=resubmit(,0)"])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101030a0101040001000400080000 actions=resubmit(,0)"])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101030a0101040001000500080000 actions=resubmit(,0)"])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101030a0101040001000600080000 actions=resubmit(,0)"])
+
+AT_CHECK([ovs-appctl dpctl/ct-get-limits zone=0,3], [0], [dnl
+default limit=10
+zone=0,limit=5,count=5
+zone=3,limit=3,count=3
+])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | grep "orig=.src=10\.1\.1\.3," | sort ], [0], [dnl
+udp,orig=(src=10.1.1.3,dst=10.1.1.4,sport=1,dport=2),reply=(src=10.1.1.4,dst=10.1.1.3,sport=2,dport=1),zone=3
+udp,orig=(src=10.1.1.3,dst=10.1.1.4,sport=1,dport=3),reply=(src=10.1.1.4,dst=10.1.1.3,sport=3,dport=1),zone=3
+udp,orig=(src=10.1.1.3,dst=10.1.1.4,sport=1,dport=4),reply=(src=10.1.1.4,dst=10.1.1.3,sport=4,dport=1),zone=3
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP(["dnl
+/could not create datapath/d
+/(Cannot allocate memory) on packet/d"])
+AT_CLEANUP
+
 AT_SETUP([FTP - no conntrack])
 AT_SKIP_IF([test $HAVE_FTP = no])
 OVS_TRAFFIC_VSWITCHD_START()
