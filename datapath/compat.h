@@ -26,6 +26,7 @@
 #include <net/route.h>
 #include <net/xfrm.h>
 #include <net/netfilter/ipv6/nf_defrag_ipv6.h>
+#include <net/netfilter/nf_conntrack_count.h>
 
 /* Even though vanilla 3.10 kernel has grp->id, RHEL 7 kernel is missing
  * this field. */
@@ -59,8 +60,14 @@ static inline int __init compat_init(void)
 	if (err)
 		goto error_frag6_exit;
 
+	err = rpl_nf_conncount_modinit();
+	if (err)
+		goto error_nf_conncount_exit;
+
 	return 0;
 
+error_nf_conncount_exit:
+	rpl_nf_conncount_modexit();
 error_frag6_exit:
 	nf_ct_frag6_cleanup();
 error_ipfrag_exit:
@@ -69,6 +76,7 @@ error_ipfrag_exit:
 }
 static inline void compat_exit(void)
 {
+	rpl_nf_conncount_modexit();
 	ip6_output_exit();
 	nf_ct_frag6_cleanup();
 	rpl_ipfrag_fini();
