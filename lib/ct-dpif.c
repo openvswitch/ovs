@@ -597,3 +597,25 @@ error:
     free(copy);
     return false;
 }
+
+void
+ct_dpif_push_zone_limit(struct ovs_list *zone_limits, uint16_t zone,
+                        uint32_t limit, uint32_t count)
+{
+    struct ct_dpif_zone_limit *zone_limit = xmalloc(sizeof *zone_limit);
+    zone_limit->zone = zone;
+    zone_limit->limit = limit;
+    zone_limit->count = count;
+    ovs_list_push_back(zone_limits, &zone_limit->node);
+}
+
+void
+ct_dpif_free_zone_limits(struct ovs_list *zone_limits)
+{
+    while (!ovs_list_is_empty(zone_limits)) {
+        struct ovs_list *entry = ovs_list_pop_front(zone_limits);
+        struct ct_dpif_zone_limit *cdzl;
+        cdzl = CONTAINER_OF(entry, struct ct_dpif_zone_limit, node);
+        free(cdzl);
+    }
+}
