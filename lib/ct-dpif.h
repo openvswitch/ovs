@@ -219,5 +219,8 @@ void ct_dpif_format_tuple(struct ds *, const struct ct_dpif_tuple *);
 uint8_t ct_dpif_coalesce_tcp_state(uint8_t state);
 void ct_dpif_format_tcp_stat(struct ds *, int, int);
 bool ct_dpif_parse_tuple(struct ct_dpif_tuple *, const char *s, struct ds *);
+void ct_dpif_push_zone_limit(struct ovs_list *, uint16_t zone, uint32_t limit,
+                             uint32_t count);
+void ct_dpif_free_zone_limits(struct ovs_list *);
 
 #endif /* CT_DPIF_H */
