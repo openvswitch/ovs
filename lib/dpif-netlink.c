@@ -214,6 +214,7 @@ static int ovs_vport_family;
 static int ovs_flow_family;
 static int ovs_packet_family;
 static int ovs_meter_family;
+static int ovs_ct_limit_family;
 
 /* Generic Netlink multicast groups for OVS.
  *
@@ -2920,6 +2921,186 @@ dpif_netlink_ct_flush(struct dpif *dpif OVS_UNUSED, const uint16_t *zone,
     }
 }
 
+static int
+dpif_netlink_ct_set_limits(struct dpif *dpif OVS_UNUSED,
+                           const uint32_t *default_limits,
+                           const struct ovs_list *zone_limits)
+{
+    struct ovs_zone_limit req_zone_limit;
+
+    if (ovs_ct_limit_family < 0) {
+        return EOPNOTSUPP;
+    }
+
+    struct ofpbuf *request = ofpbuf_new(NL_DUMP_BUFSIZE);
+    nl_msg_put_genlmsghdr(request, 0, ovs_ct_limit_family,
+                          NLM_F_REQUEST | NLM_F_ECHO, OVS_CT_LIMIT_CMD_SET,
+                          OVS_CT_LIMIT_VERSION);
+
+    struct ovs_header *ovs_header;
+    ovs_header = ofpbuf_put_uninit(request, sizeof *ovs_header);
+    ovs_header->dp_ifindex = 0;
+
+    size_t opt_offset;
+    opt_offset = nl_msg_start_nested(request, OVS_CT_LIMIT_ATTR_ZONE_LIMIT);
+    if (default_limits) {
+        req_zone_limit.zone_id = OVS_ZONE_LIMIT_DEFAULT_ZONE;
+        req_zone_limit.limit = *default_limits;
+        nl_msg_put(request, &req_zone_limit, sizeof req_zone_limit);
+    }
+
+    if (!ovs_list_is_empty(zone_limits)) {
+        struct ct_dpif_zone_limit *zone_limit;
+
+        LIST_FOR_EACH (zone_limit, node, zone_limits) {
+            req_zone_limit.zone_id = zone_limit->zone;
+            req_zone_limit.limit = zone_limit->limit;
+            nl_msg_put(request, &req_zone_limit, sizeof req_zone_limit);
+        }
+    }
+    nl_msg_end_nested(request, opt_offset);
+
+    int err = nl_transact(NETLINK_GENERIC, request, NULL);
+    ofpbuf_uninit(request);
+    return err;
+}
+
+static int
+dpif_netlink_zone_limits_from_ofpbuf(const struct ofpbuf *buf,
+                                     uint32_t *default_limit,
+                                     struct ovs_list *zone_limits)
+{
+    static const struct nl_policy ovs_ct_limit_policy[] = {
+        [OVS_CT_LIMIT_ATTR_ZONE_LIMIT] = { .type = NL_A_NESTED,
+                                           .optional = true },
+    };
+
+    struct ofpbuf b = ofpbuf_const_initializer(buf->data, buf->size);
+    struct nlmsghdr *nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
+    struct genlmsghdr *genl = ofpbuf_try_pull(&b, sizeof *genl);
+    struct ovs_header *ovs_header = ofpbuf_try_pull(&b, sizeof *ovs_header);
+
+    struct nlattr *attr[ARRAY_SIZE(ovs_ct_limit_policy)];
+
+    if (!nlmsg || !genl || !ovs_header
+        || nlmsg->nlmsg_type != ovs_ct_limit_family
+        || !nl_policy_parse(&b, 0, ovs_ct_limit_policy, attr,
+                            ARRAY_SIZE(ovs_ct_limit_policy))) {
+        return EINVAL;
+    }
+
+
+    if (!attr[OVS_CT_LIMIT_ATTR_ZONE_LIMIT]) {
+        return EINVAL;
+    }
+
+    int rem = NLA_ALIGN(
+                nl_attr_get_size(attr[OVS_CT_LIMIT_ATTR_ZONE_LIMIT]));
+    const struct ovs_zone_limit *zone_limit =
+                nl_attr_get(attr[OVS_CT_LIMIT_ATTR_ZONE_LIMIT]);
+
+    while (rem >= sizeof *zone_limit) {
+        if (zone_limit->zone_id == OVS_ZONE_LIMIT_DEFAULT_ZONE) {
+            *default_limit = zone_limit->limit;
+        } else if (zone_limit->zone_id < OVS_ZONE_LIMIT_DEFAULT_ZONE ||
+                   zone_limit->zone_id > UINT16_MAX) {
+        } else {
+            ct_dpif_push_zone_limit(zone_limits, zone_limit->zone_id,
+                                    zone_limit->limit, zone_limit->count);
+        }
+        rem -= NLA_ALIGN(sizeof *zone_limit);
+        zone_limit = ALIGNED_CAST(struct ovs_zone_limit *,
+            (unsigned char *) zone_limit  + NLA_ALIGN(sizeof *zone_limit));
+    }
+    return 0;
+}
+
+static int
+dpif_netlink_ct_get_limits(struct dpif *dpif OVS_UNUSED,
+                           uint32_t *default_limit,
+                           const struct ovs_list *zone_limits_request,
+                           struct ovs_list *zone_limits_reply)
+{
+    if (ovs_ct_limit_family < 0) {
+        return EOPNOTSUPP;
+    }
+
+    struct ofpbuf *request = ofpbuf_new(NL_DUMP_BUFSIZE);
+    nl_msg_put_genlmsghdr(request, 0, ovs_ct_limit_family,
+            NLM_F_REQUEST | NLM_F_ECHO, OVS_CT_LIMIT_CMD_GET,
+            OVS_CT_LIMIT_VERSION);
+
+    struct ovs_header *ovs_header;
+    ovs_header = ofpbuf_put_uninit(request, sizeof *ovs_header);
+    ovs_header->dp_ifindex = 0;
+
+    if (!ovs_list_is_empty(zone_limits_request)) {
+        size_t opt_offset = nl_msg_start_nested(request,
+                                                OVS_CT_LIMIT_ATTR_ZONE_LIMIT);
+
+        struct ovs_zone_limit req_zone_limit;
+        req_zone_limit.zone_id = OVS_ZONE_LIMIT_DEFAULT_ZONE;
+        nl_msg_put(request, &req_zone_limit, sizeof req_zone_limit);
+
+        struct ct_dpif_zone_limit *zone_limit;
+        LIST_FOR_EACH (zone_limit, node, zone_limits_request) {
+            req_zone_limit.zone_id = zone_limit->zone;
+            nl_msg_put(request, &req_zone_limit, sizeof req_zone_limit);
+        }
+
+        nl_msg_end_nested(request, opt_offset);
+    }
+
+    struct ofpbuf *reply;
+    int err = nl_transact(NETLINK_GENERIC, request, &reply);
+    if (err) {
+        goto out;
+    }
+
+    err = dpif_netlink_zone_limits_from_ofpbuf(reply, default_limit,
+                                               zone_limits_reply);
+
+out:
+    ofpbuf_uninit(request);
+    ofpbuf_uninit(reply);
+    return err;
+}
+
+static int
+dpif_netlink_ct_del_limits(struct dpif *dpif OVS_UNUSED,
+                           const struct ovs_list *zone_limits)
+{
+    if (ovs_ct_limit_family < 0) {
+        return EOPNOTSUPP;
+    }
+
+    struct ofpbuf *request = ofpbuf_new(NL_DUMP_BUFSIZE);
+    nl_msg_put_genlmsghdr(request, 0, ovs_ct_limit_family,
+            NLM_F_REQUEST | NLM_F_ECHO, OVS_CT_LIMIT_CMD_DEL,
+            OVS_CT_LIMIT_VERSION);
+
+    struct ovs_header *ovs_header;
+    ovs_header = ofpbuf_put_uninit(request, sizeof *ovs_header);
+    ovs_header->dp_ifindex = 0;
+
+    if (!ovs_list_is_empty(zone_limits)) {
+        size_t opt_offset =
+            nl_msg_start_nested(request, OVS_CT_LIMIT_ATTR_ZONE_LIMIT);
+
+        struct ct_dpif_zone_limit *zone_limit;
+        LIST_FOR_EACH (zone_limit, node, zone_limits) {
+            struct ovs_zone_limit req_zone_limit;
+            req_zone_limit.zone_id = zone_limit->zone;
+            nl_msg_put(request, &req_zone_limit, sizeof req_zone_limit);
+        }
+        nl_msg_end_nested(request, opt_offset);
+    }
+
+    int err = nl_transact(NETLINK_GENERIC, request, NULL);
+
+    ofpbuf_uninit(request);
+    return err;
+}
 
 /* Meters */
 
@@ -3314,9 +3495,9 @@ const struct dpif_class dpif_netlink_class = {
     NULL,                       /* ct_set_maxconns */
     NULL,                       /* ct_get_maxconns */
     NULL,                       /* ct_get_nconns */
-    NULL,                       /* ct_set_limits */
-    NULL,                       /* ct_get_limits */
-    NULL,                       /* ct_del_limits */
+    dpif_netlink_ct_set_limits,
+    dpif_netlink_ct_get_limits,
+    dpif_netlink_ct_del_limits,
     dpif_netlink_meter_get_features,
     dpif_netlink_meter_set,
     dpif_netlink_meter_get,
@@ -3355,6 +3536,12 @@ dpif_netlink_init(void)
             if (nl_lookup_genl_family(OVS_METER_FAMILY, &ovs_meter_family)) {
                 VLOG_INFO("The kernel module does not support meters.");
             }
+        }
+        if (nl_lookup_genl_family(OVS_CT_LIMIT_FAMILY,
+                                  &ovs_ct_limit_family) < 0) {
+            VLOG_INFO("Generic Netlink family '%s' does not exist. "
+                      "Please update the Open vSwitch kernel module to enable "
+                      "the conntrack limit feature.", OVS_CT_LIMIT_FAMILY);
         }
 
         ovs_tunnels_out_of_tree = dpif_netlink_rtnl_probe_oot_tunnels();
