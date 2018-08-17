@@ -22,4 +22,12 @@ nf_ct_set(struct sk_buff *skb, struct nf_conn *ct, enum ip_conntrack_info info)
        skb->nfctinfo = info;
 }
 #endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,15,0)
+int rpl_nf_ct_netns_get(struct net *net, u8 nfproto);
+void rpl_nf_ct_netns_put(struct net *net, u8 nfproto);
+#define nf_ct_netns_get rpl_nf_ct_netns_get
+#define nf_ct_netns_put rpl_nf_ct_netns_put
+#endif
+
 #endif /* _NF_CONNTRACK_WRAPPER_H */
