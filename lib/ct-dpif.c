@@ -619,3 +619,70 @@ ct_dpif_free_zone_limits(struct ovs_list *zone_limits)
         free(cdzl);
     }
 }
+
+/* Parses a specification of a conntrack zone limit from 's' into '*pzone'
+ * and '*plimit'.  Returns true on success.  Otherwise, returns false and
+ * and puts the error message in 'ds'. */
+bool
+ct_dpif_parse_zone_limit_tuple(const char *s, uint16_t *pzone,
+                               uint32_t *plimit, struct ds *ds)
+{
+    char *pos, *key, *value, *copy, *err;
+    bool parsed_limit = false, parsed_zone = false;
+
+    pos = copy = xstrdup(s);
+    while (ofputil_parse_key_value(&pos, &key, &value)) {
+        if (!*value) {
+            ds_put_format(ds, "field %s missing value", key);
+            goto error;
+        }
+
+        if (!strcmp(key, "zone")) {
+            err = str_to_u16(value, key, pzone);
+            if (err) {
+                free(err);
+                goto error_with_msg;
+            }
+            parsed_zone = true;
+        }  else if (!strcmp(key, "limit")) {
+            err = str_to_u32(value, plimit);
+            if (err) {
+                free(err);
+                goto error_with_msg;
+            }
+            parsed_limit = true;
+        } else {
+            ds_put_format(ds, "invalid zone limit field: %s", key);
+            goto error;
+        }
+    }
+
+    if (!parsed_zone || !parsed_limit) {
+        ds_put_format(ds, "failed to parse zone limit");
+        goto error;
+    }
+
+    free(copy);
+    return true;
+
+error_with_msg:
+    ds_put_format(ds, "failed to parse field %s", key);
+error:
+    free(copy);
+    return false;
+}
+
+void
+ct_dpif_format_zone_limits(uint32_t default_limit,
+                           const struct ovs_list *zone_limits, struct ds *ds)
+{
+    struct ct_dpif_zone_limit *zone_limit;
+
+    ds_put_format(ds, "default limit=%"PRIu32, default_limit);
+
+    LIST_FOR_EACH (zone_limit, node, zone_limits) {
+        ds_put_format(ds, "\nzone=%"PRIu16, zone_limit->zone);
+        ds_put_format(ds, ",limit=%"PRIu32, zone_limit->limit);
+        ds_put_format(ds, ",count=%"PRIu32, zone_limit->count);
+    }
+}
