@@ -6825,6 +6825,9 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_ct_set_maxconns,
     dpif_netdev_ct_get_maxconns,
     dpif_netdev_ct_get_nconns,
+    NULL,                       /* ct_set_limits */
+    NULL,                       /* ct_get_limits */
+    NULL,                       /* ct_del_limits */
     dpif_netdev_meter_get_features,
     dpif_netdev_meter_set,
     dpif_netdev_meter_get,
