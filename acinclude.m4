@@ -589,6 +589,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [OVS_DEFINE([HAVE_NF_HOOKFN_ARG_PRIV])])
   OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/netfilter.h], [nf_hook_ops],
                         [owner], [OVS_DEFINE([HAVE_NF_HOOKS_OPS_OWNER])])
+  OVS_GREP_IFELSE([$KSRC/include/linux/netfilter.h], [NFPROTO_INET])
+
 
   OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/netfilter_ipv6.h], [nf_ipv6_ops],
                         [fragment.*sock], [OVS_DEFINE([HAVE_NF_IPV6_OPS_FRAGMENT])])
@@ -611,6 +613,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [nf_ct_is_untracked])
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_zones.h],
                   [nf_ct_zone_init])
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_l3proto.h],
+                        [net_ns_get])
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_labels.h],
                   [nf_connlabels_get])
   OVS_FIND_PARAM_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_labels.h],
