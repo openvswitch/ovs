@@ -3223,13 +3223,9 @@ dpif_netlink_meter_get_features(const struct dpif *dpif_,
 }
 
 static int
-dpif_netlink_meter_set(struct dpif *dpif_, ofproto_meter_id meter_id,
-                       struct ofputil_meter_config *config)
+dpif_netlink_meter_set__(struct dpif *dpif_, ofproto_meter_id meter_id,
+                         struct ofputil_meter_config *config)
 {
-    if (probe_broken_meters(dpif_)) {
-        return ENOMEM;
-    }
-
     struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
     struct ofpbuf buf, *msg;
     uint64_t stub[1024 / 8];
@@ -3301,6 +3297,17 @@ dpif_netlink_meter_set(struct dpif *dpif_, ofproto_meter_id meter_id,
     }
     ofpbuf_delete(msg);
     return 0;
+}
+
+static int
+dpif_netlink_meter_set(struct dpif *dpif_, ofproto_meter_id meter_id,
+                       struct ofputil_meter_config *config)
+{
+    if (probe_broken_meters(dpif_)) {
+        return ENOMEM;
+    }
+
+    return dpif_netlink_meter_set__(dpif_, meter_id, config);
 }
 
 /* Retrieve statistics and/or delete meter 'meter_id'.  Statistics are
@@ -3416,9 +3423,10 @@ probe_broken_meters__(struct dpif *dpif)
     struct ofputil_meter_config config2 = { 2, OFPMF13_KBPS, 1, &band};
 
     /* Try adding two meters and make sure that they both come back with
-     * the proper meter id. */
-    dpif_netlink_meter_set(dpif, id1, &config1);
-    dpif_netlink_meter_set(dpif, id2, &config2);
+     * the proper meter id.  Use the "__" version so that we don't cause
+     * a recurve deadlock. */
+    dpif_netlink_meter_set__(dpif, id1, &config1);
+    dpif_netlink_meter_set__(dpif, id2, &config2);
 
     if (dpif_netlink_meter_get(dpif, id1, NULL, 0)
         || dpif_netlink_meter_get(dpif, id2, NULL, 0)) {
