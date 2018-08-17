@@ -444,6 +444,35 @@ struct dpif_class {
     /* Get number of connections tracked. */
     int (*ct_get_nconns)(struct dpif *, uint32_t *nconns);
 
+    /* Connection tracking per zone limit */
+
+    /* Per zone conntrack limit sets the maximum allowed connections in zones
+     * to provide resource isolation.  If a per zone limit for a particular
+     * zone is not available in the datapath, it defaults to the default
+     * per zone limit.  Initially, the default per zone limit is
+     * unlimited (0). */
+
+    /* Sets the max connections allowed per zone according to 'zone_limits',
+     * a list of 'struct ct_dpif_zone_limit' entries (the 'count' member
+     * is not used when setting limits).  If 'default_limit' is not NULL,
+     * modifies the default limit to '*default_limit'. */
+    int (*ct_set_limits)(struct dpif *, const uint32_t *default_limit,
+                         const struct ovs_list *zone_limits);
+
+    /* Looks up the default per zone limit and stores that in
+     * 'default_limit'.  Look up the per zone limits for all zones in
+     * the 'zone_limits_in' list of 'struct ct_dpif_zone_limit' entries
+     * (the 'limit' and 'count' members are not used), and stores the
+     * reply that includes the zone, the per zone limit, and the number
+     * of connections in the zone into 'zone_limits_out' list. */
+    int (*ct_get_limits)(struct dpif *, uint32_t *default_limit,
+                         const struct ovs_list *zone_limits_in,
+                         struct ovs_list *zone_limits_out);
+
+    /* Deletes per zone limit of all zones specified in 'zone_limits', a
+     * list of 'struct ct_dpif_zone_limit' entries. */
+    int (*ct_del_limits)(struct dpif *, const struct ovs_list *zone_limits);
+
     /* Meters */
 
     /* Queries 'dpif' for supported meter features.
