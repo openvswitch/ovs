@@ -5166,7 +5166,7 @@ read_psched(void)
     VLOG_DBG("%s: psched parameters are: %u %u %u %u", fn, a, b, c, d);
     fclose(stream);
 
-    if (!a || !c) {
+    if (!a || !b || !c) {
         VLOG_WARN("%s: invalid scheduler parameters", fn);
         goto exit;
     }
