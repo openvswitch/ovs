@@ -12,7 +12,7 @@ Post-v2.10.0
      * Add option for simple round-robin based Rxq to PMD assignment.
        It can be set with pmd-rxq-assign.
 
-v2.10.0 - xx xxx xxxx
+v2.10.0 - 18 Aug 2018
 ---------------------
    - ovs-vswitchd and utilities now support DNS names in OpenFlow and
      OVSDB remotes.
