@@ -1798,5 +1798,5 @@ m4_define([CHECK_STREAM_OPEN_BLOCK_PY],
    AT_CHECK([$3 $srcdir/test-stream.py tcp:127.0.0.1:$TCP_PORT], [1], [ignore])
    AT_CLEANUP])
 
-CHECK_STREAM_OPEN_BLOCK_PY([Check PY2 Stream open block], [$HAVE_PYTHON], [$PYTHON])
-CHECK_STREAM_OPEN_BLOCK_PY([Check PY3 Stream open block], [$HAVE_PYTHON], [$PYTHON3])
+CHECK_STREAM_OPEN_BLOCK_PY([Check PY2 Stream open block], [$HAVE_PYTHON2], [$PYTHON2])
+CHECK_STREAM_OPEN_BLOCK_PY([Check PY3 Stream open block], [$HAVE_PYTHON3], [$PYTHON3])
