@@ -1122,8 +1122,9 @@ next;
         </p>
 
         <p>
-          These flows reply to ARP requests for the router's own IP address.
-          The ARP requests are responded only if the requestor's IP belongs
+          These flows reply to ARP requests for the router's own IP address
+          and populates mac binding table of the logical router port.
+          The ARP requests are handled only if the requestor's IP belongs
           to the same subnets of the logical router port.
           For each router port <var>P</var> that owns IP address <var>A</var>,
           which belongs to subnet <var>S</var> with prefix length <var>L</var>,
@@ -1135,6 +1136,7 @@ next;
         </p>
 
         <pre>
+put_arp(inport, arp.spa, arp.sha);
 eth.dst = eth.src;
 eth.src = <var>E</var>;
 arp.op = 2; /* ARP reply. */
@@ -1156,6 +1158,17 @@ output;
           of multiple ARP responses from different chassis, and allows
           upstream MAC learning to point to the
           <code>redirect-chassis</code>.
+        </p>
+      </li>
+
+      <li>
+        <p>
+          These flows handles ARP requests not for router's own IP address.
+          They use the SPA and SHA to populate the logical router port's
+          mac binding table, with priority 80.  The typical use case of
+          these flows are GARP requests handling.  For the gateway port
+          on a distributed logical router, these flows are only programmed
+          on the gateway port instance on the <code>redirect-chassis</code>.
         </p>
       </li>
 
