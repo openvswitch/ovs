@@ -5183,8 +5183,12 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         for (int i = 0; i < op->lrp_networks.n_ipv4_addrs; i++) {
             ds_clear(&match);
             ds_put_format(&match,
-                          "inport == %s && arp.tpa == %s && arp.op == 1",
-                          op->json_key, op->lrp_networks.ipv4_addrs[i].addr_s);
+                          "inport == %s && arp.spa == %s/%u && arp.tpa == %s"
+                          " && arp.op == 1",
+                          op->json_key,
+                          op->lrp_networks.ipv4_addrs[i].network_s,
+                          op->lrp_networks.ipv4_addrs[i].plen,
+                          op->lrp_networks.ipv4_addrs[i].addr_s);
             if (op->od->l3dgw_port && op == op->od->l3dgw_port
                 && op->od->l3redirect_port) {
                 /* Traffic with eth.src = l3dgw_port->lrp_networks.ea_s

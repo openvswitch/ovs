@@ -1123,11 +1123,15 @@ next;
 
         <p>
           These flows reply to ARP requests for the router's own IP address.
-          For each router port <var>P</var> that owns IP address <var>A</var>
+          The ARP requests are responded only if the requestor's IP belongs
+          to the same subnets of the logical router port.
+          For each router port <var>P</var> that owns IP address <var>A</var>,
+          which belongs to subnet <var>S</var> with prefix length <var>L</var>,
           and Ethernet address <var>E</var>, a priority-90 flow matches
-          <code>inport == <var>P</var> &amp;&amp; arp.op == 1 &amp;&amp;
-          arp.tpa == <var>A</var></code> (ARP request) with the following
-          actions:
+          <code>inport == <var>P</var> &amp;&amp;
+          arp.spa == <var>S</var>/<var>L</var> &amp;&amp; arp.op == 1
+          &amp;&amp; arp.tpa == <var>A</var></code> (ARP request) with the
+          following actions:
         </p>
 
         <pre>
