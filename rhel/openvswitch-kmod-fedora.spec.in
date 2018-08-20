@@ -1,6 +1,6 @@
 # Spec file for Open vSwitch.
 
-# Copyright (C) 2009, 2010, 2015 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010, 2015, 2018 Nicira Networks, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -9,6 +9,12 @@
 
 %global debug_package %{nil}
 
+# Use the kversion macro such as
+# RPMBUILD_OPT='-D "kversion 3.10.0-693.1.1.el7.x86_64 3.10.0-693.17.1.el7.x86_64"'
+# to build package for mulitple kernel versions in the same package
+# This only works for kernel 3.10.0 major revision 693 (RHEL 7.4)
+# and major revision 327 (RHEL 7.2)
+# By default, build against the current running kernel version
 #%define kernel 3.1.5-1.fc16.x86_64
 #define kernel %{kernel_source}
 %{?kversion:%define kernel %kversion}
@@ -26,6 +32,8 @@ Release: 1%{?dist}
 Source: openvswitch-%{version}.tar.gz
 #Source1: openvswitch-init
 Buildroot: /tmp/openvswitch-xen-rpm
+Provides: kmod-openvswitch
+Conflicts: kmod-openvswitch
 
 %description
 Open vSwitch provides standard network bridging functions augmented with
@@ -36,55 +44,78 @@ traffic. This package contains the kernel modules.
 %setup -q -n openvswitch-%{version}
 
 %build
-%configure --with-linux=/lib/modules/%{kernel}/build --enable-ssl
-make %{_smp_mflags} -C datapath/linux
+for kv in %{kversion}; do
+    mkdir -p _$kv
+    (cd _$kv && /bin/cp -f ../configure . && %configure --srcdir=.. \
+        --with-linux=/usr/src/kernels/${kv}/ --enable-ssl)
+    make %{_smp_mflags} -C _$kv/datapath/linux
+done
 
 %install
+export INSTALL_MOD_DIR=extra/openvswitch
 rm -rf $RPM_BUILD_ROOT
-make INSTALL_MOD_PATH=$RPM_BUILD_ROOT -C datapath/linux modules_install
-mkdir -p $RPM_BUILD_ROOT/etc/depmod.d
-for module in $RPM_BUILD_ROOT/lib/modules/%{kernel}/extra/*.ko
-do
-    modname="$(basename ${module})"
-    echo "override ${modname%.ko} * extra" >> \
-        $RPM_BUILD_ROOT/etc/depmod.d/kmod-openvswitch.conf
-    echo "override ${modname%.ko} * weak-updates" >> \
-        $RPM_BUILD_ROOT/etc/depmod.d/kmod-openvswitch.conf
+for kv in %{kversion}; do
+    make INSTALL_MOD_PATH=$RPM_BUILD_ROOT -C _$kv/datapath/linux modules_install
 done
+mkdir -p $RPM_BUILD_ROOT/etc/depmod.d
+for kv in %{kversion}; do
+    for module in $RPM_BUILD_ROOT/lib/modules/${kv}/extra/openvswitch/*.ko
+    do
+        modname="$(basename ${module})"
+        grep -qsPo "^\s*override ${modname%.ko} \* extra\/openvwitch" \
+            $RPM_BUILD_ROOT/etc/depmod.d/kmod-openvswitch.conf || \
+            echo "override ${modname%.ko} * extra/openvswitch" >> \
+            $RPM_BUILD_ROOT/etc/depmod.d/kmod-openvswitch.conf
+        grep -qsPo "^\s*override ${modname%.ko} \* weak-updates\/openvwitch" \
+            $RPM_BUILD_ROOT/etc/depmod.d/kmod-openvswitch.conf || \
+            echo "override ${modname%.ko} * weak-updates/openvswitch" >> \
+            $RPM_BUILD_ROOT/etc/depmod.d/kmod-openvswitch.conf
+    done
+done
+install -d -m 0755 $RPM_BUILD_ROOT/usr/share/openvswitch/scripts
+install -p -m 0755 rhel/usr_share_openvswitch_scripts_ovs-kmod-manage.sh \
+    $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/ovs-kmod-manage.sh
 
 %clean
 rm -rf $RPM_BUILD_ROOT
 
 %post
-# Ensure that modprobe will find our modules.
-for k in $(cd /lib/modules && /bin/ls); do
-    [ -d "/lib/modules/$k/kernel/" ] && depmod -a "$k"
-done
-if [ -x "/sbin/weak-modules" ]; then
-    for m in openvswitch vport-gre vport-stt vport-geneve \
-             vport-lisp vport-vxlan; do
-        echo "/lib/modules/%{kernel}/extra/$m.ko"
-    done | /sbin/weak-modules --add-modules
-fi
-
-%postun
-for k in $(cd /lib/modules && /bin/ls); do
-    [ -d "/lib/modules/$k/kernel/" ] && depmod -a "$k"
-done
-if [ "$1" = 0 ]; then  # Erase, not upgrade
+current_kernel=$(uname -r)
+IFS=. read installed_major installed_minor installed_micro installed_arch \
+    installed_build <<<"${current_kernel##*-}"
+if [ "$installed_major" = "327" ] || [ "$installed_major" = "693" ]; then
+    # Workaround for RHEL 7.2 and 7.4
+    if [ -x "/usr/share/openvswitch/scripts/ovs-kmod-manage.sh" ]; then
+        /usr/share/openvswitch/scripts/ovs-kmod-manage.sh
+    fi
+else
+    # Ensure that modprobe will find our modules.
+    for k in $(cd /lib/modules && /bin/ls); do
+        [ -d "/lib/modules/$k/kernel/" ] && depmod -a "$k"
+    done
     if [ -x "/sbin/weak-modules" ]; then
         for m in openvswitch vport-gre vport-stt vport-geneve \
                  vport-lisp vport-vxlan; do
-        echo "/lib/modules/%{kernel}/extra/$m.ko"
-    done | /sbin/weak-modules --remove-modules
+            echo "/lib/modules/%{kernel}/extra/openvswitch/$m.ko"
+        done | /sbin/weak-modules --add-modules
     fi
 fi
 
+%postun
+if [ "$1" = 0 ]; then  # Erase, not upgrade
+    for kname in `ls -d /lib/modules/*`
+do
+    rm -rf $kname/weak-updates/openvswitch
+done
+fi
+/sbin/depmod -a
+
 %files
 %defattr(0644,root,root)
-/lib/modules/%{kernel}/extra/*.ko
+/lib/modules/*/extra/openvswitch/*.ko
 /etc/depmod.d/kmod-openvswitch.conf
-%exclude /lib/modules/%{kernel}/modules.*
+%exclude /lib/modules/*/modules.*
+%attr(755,root,root) /usr/share/openvswitch/scripts/ovs-kmod-manage.sh
 
 %changelog
 * Wed Sep 21 2011 Kyle Mestery <kmestery@cisco.com>
