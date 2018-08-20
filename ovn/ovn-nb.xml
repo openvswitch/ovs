@@ -1991,6 +1991,14 @@
             Microsoft Windows DHCPv4 clients.
           </p>
         </column>
+
+        <column name="options" key="wpad">
+          <p>
+            The DHCPv4 option code for this option is 252. This option is used
+            as part of web proxy auto discovery to provide a URL for a web
+            proxy.
+          </p>
+        </column>
       </group>
 
       <group title="Boolean DHCP Options">
