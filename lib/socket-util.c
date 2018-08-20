@@ -725,7 +725,8 @@ inet_open_passive(int style, const char *target, int default_port,
     /* Bind. */
     if (bind(fd, (struct sockaddr *) &ss, ss_length(&ss)) < 0) {
         error = sock_errno();
-        VLOG_ERR("%s: bind: %s", target, sock_strerror(error));
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_ERR_RL(&rl, "%s: bind: %s", target, sock_strerror(error));
         goto error;
     }
 
