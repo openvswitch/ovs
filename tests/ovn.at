@@ -2671,9 +2671,9 @@ test_arp() {
 # 5. Router replies to query for its MAC address from any random IP address
 #    in its subnet.
 #
-# 6. Router replies to query for its MAC address from another subnet.
+# 6. No reply to query for IP address other than router IP.
 #
-# 7. No reply to query for IP address other than router IP.
+# 7. No reply to query from another subnet.
 for i in 1 2 3; do
   for j in 1 2 3; do
     for k in 1 2 3; do
@@ -2682,10 +2682,21 @@ for i in 1 2 3; do
       rip=`ip_to_hex 192 168 $i$j 254`   # Router IP
       rmac=00000000ff$i$j                # Router MAC
       otherip=`ip_to_hex 192 168 $i$j 55` # Some other IP in subnet
-      test_arp $i$j$k $smac $sip        $rip        $rmac #4
-      test_arp $i$j$k $smac $otherip    $rip        $rmac #5
-      test_arp $i$j$k $smac 0a123456    $rip        $rmac #6
-      test_arp $i$j$k $smac $sip        $otherip          #7
+      externalip=`ip_to_hex 1 2 3 4`      # Some other IP not in subnet
+
+      test_arp $i$j$k $smac $sip        $rip        $rmac      #4
+      test_arp $i$j$k $smac $otherip    $rip        $rmac      #5
+      test_arp $i$j$k $smac $sip        $otherip               #6
+
+      # When rip is 192.168.33.254, ARP request from externalip won't be
+      # filtered, because 192.168.33.254 is configured to switch peer port
+      # for lrp33.
+      lrp33_rsp=
+      if test $i = 3 && test $j = 3; then
+        lrp33_rsp=$rmac
+      fi
+      test_arp $i$j$k $smac $externalip $rip        $lrp33_rsp #7
+
     done
   done
 done
