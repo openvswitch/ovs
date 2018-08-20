@@ -182,6 +182,7 @@ create_gen_opts(struct hmap *dhcp_opts, struct hmap *dhcpv6_opts,
     dhcp_opt_add(dhcp_opts, "tcp_ttl", 37, "uint8");
     dhcp_opt_add(dhcp_opts, "mtu", 26, "uint16");
     dhcp_opt_add(dhcp_opts, "lease_time",  51, "uint32");
+    dhcp_opt_add(dhcp_opts, "wpad", 252, "str");
 
     /* DHCPv6 options. */
     hmap_init(dhcpv6_opts);

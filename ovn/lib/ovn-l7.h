@@ -70,6 +70,8 @@ struct gen_opts_map {
 #define DHCP_OPT_T1 DHCP_OPTION("T1", 58, "uint32")
 #define DHCP_OPT_T2 DHCP_OPTION("T2", 59, "uint32")
 
+#define DHCP_OPT_WPAD DHCP_OPTION("wpad", 252, "str")
+
 static inline uint32_t
 gen_opt_hash(char *opt_name)
 {
