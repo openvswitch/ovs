@@ -7186,7 +7186,8 @@ static struct gen_opts_map supported_dhcp_opts[] = {
     DHCP_OPT_MTU,
     DHCP_OPT_LEASE_TIME,
     DHCP_OPT_T1,
-    DHCP_OPT_T2
+    DHCP_OPT_T2,
+    DHCP_OPT_WPAD,
 };
 
 static struct gen_opts_map supported_dhcpv6_opts[] = {

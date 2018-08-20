@@ -1100,9 +1100,9 @@ put_arp(inport, arp.spa, arp.sha);
 # put_dhcp_opts
 reg1[0] = put_dhcp_opts(offerip = 1.2.3.4, router = 10.0.0.1);
     encodes as controller(userdata=00.00.00.02.00.00.00.00.00.01.de.10.00.00.00.40.01.02.03.04.03.04.0a.00.00.01,pause)
-reg2[5] = put_dhcp_opts(offerip=10.0.0.4,router=10.0.0.1,netmask=255.255.254.0,mtu=1400,domain="ovn.org");
-    formats as reg2[5] = put_dhcp_opts(offerip = 10.0.0.4, router = 10.0.0.1, netmask = 255.255.254.0, mtu = 1400, domain = "ovn.org");
-    encodes as controller(userdata=00.00.00.02.00.00.00.00.00.01.de.10.00.00.00.25.0a.00.00.04.03.04.0a.00.00.01.01.04.ff.ff.fe.00.1a.02.05.78.0f.07.6f.76.6e.2e.6f.72.67,pause)
+reg2[5] = put_dhcp_opts(offerip=10.0.0.4,router=10.0.0.1,netmask=255.255.254.0,mtu=1400,domain="ovn.org",wpad="https://example.org");
+    formats as reg2[5] = put_dhcp_opts(offerip = 10.0.0.4, router = 10.0.0.1, netmask = 255.255.254.0, mtu = 1400, domain = "ovn.org", wpad = "https://example.org");
+    encodes as controller(userdata=00.00.00.02.00.00.00.00.00.01.de.10.00.00.00.25.0a.00.00.04.03.04.0a.00.00.01.01.04.ff.ff.fe.00.1a.02.05.78.0f.07.6f.76.6e.2e.6f.72.67.fc.13.68.74.74.70.73.3a.2f.2f.65.78.61.6d.70.6c.65.2e.6f.72.67,pause)
 reg0[15] = put_dhcp_opts(offerip=10.0.0.4,router=10.0.0.1,netmask=255.255.255.0,mtu=1400,ip_forward_enable=1,default_ttl=121,dns_server={8.8.8.8,7.7.7.7},classless_static_route={30.0.0.0/24,10.0.0.4,40.0.0.0/16,10.0.0.6,0.0.0.0/0,10.0.0.1},ethernet_encap=1,router_discovery=0);
     formats as reg0[15] = put_dhcp_opts(offerip = 10.0.0.4, router = 10.0.0.1, netmask = 255.255.255.0, mtu = 1400, ip_forward_enable = 1, default_ttl = 121, dns_server = {8.8.8.8, 7.7.7.7}, classless_static_route = {30.0.0.0/24, 10.0.0.4, 40.0.0.0/16, 10.0.0.6, 0.0.0.0/0, 10.0.0.1}, ethernet_encap = 1, router_discovery = 0);
     encodes as controller(userdata=00.00.00.02.00.00.00.00.00.01.de.10.00.00.00.6f.0a.00.00.04.03.04.0a.00.00.01.01.04.ff.ff.ff.00.1a.02.05.78.13.01.01.17.01.79.06.08.08.08.08.08.07.07.07.07.79.14.18.1e.00.00.0a.00.00.04.10.28.00.0a.00.00.06.00.0a.00.00.01.24.01.01.1f.01.00,pause)
