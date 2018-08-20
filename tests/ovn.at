@@ -2674,6 +2674,7 @@ test_arp() {
 # 6. No reply to query for IP address other than router IP.
 #
 # 7. No reply to query from another subnet.
+: > mac_bindings.expected
 for i in 1 2 3; do
   for j in 1 2 3; do
     for k in 1 2 3; do
@@ -2697,6 +2698,22 @@ for i in 1 2 3; do
       fi
       test_arp $i$j$k $smac $externalip $rip        $lrp33_rsp #7
 
+      # MAC binding should be learned from ARP request.
+      host_mac_pretty=f0:00:00:00:0$i:$j$k
+
+      host_ip_pretty=192.168.$i$j.$k
+      echo lrp$i$j,$host_ip_pretty,$host_mac_pretty >> mac_bindings.expected
+
+      # mac_binding is learned and overwritten so only the last one remains.
+      if test $k = 3; then
+          # lrp33 will not learn from ARP request, because 192.168.33.254 is
+          # configured to switch peer port for lrp33.
+          if test $i != 3 || test $j != 3; then
+              host_ip_pretty=192.168.$i$j.55
+              echo lrp$i$j,$host_ip_pretty,$host_mac_pretty >> mac_bindings.expected
+          fi
+      fi
+
     done
   done
 done
@@ -2711,7 +2728,6 @@ sleep 1
 #    Here, the $s is the VIF that originated the ARP request and $d is
 #    the VIF that sends the ARP reply, which is somewhat backward but
 #    it means that $s and $d are the same as #3.
-: > mac_bindings.expected
 for is in 1 2 3; do
   for js in 1 2 3; do
     for ks in 1 2 3; do
@@ -2813,6 +2829,206 @@ AT_CHECK_UNQUOTED([sort < mac_bindings], [0], [`sort < mac_bindings.expected`
 
 # Gracefully terminate daemons
 OVN_CLEANUP([hv1], [hv2], [hv3])
+
+AT_CLEANUP
+
+AT_SETUP([ovn -- IP relocation using GARP request])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# Logical network:
+#
+# Two logical switches ls1, ls2.
+# One logical router lr0 connected to ls[12],
+# with 2 subnets, 1 per logical switch:
+#
+#    lrp1 on ls1 for subnet 192.168.1.1/24
+#    lrp2 on ls2 for subnet 192.168.2.1/24
+#
+# 4 VIFs, 2 per LS lp[12][12], first digit being LS.
+# VIFs' fixed IP addresses are 192.168.[12].1[12].
+#
+# There is a secondary IP 192.168.1.100 that is unknown in NB and learned
+# through ARP only, and it can move between lp11 and lp12.
+#
+ovn-nbctl lr-add lr0
+for i in 1 2 ; do
+    ovn-nbctl ls-add ls$i
+    ovn-nbctl lrp-add lr0 lrp$i 00:00:00:00:ff:0$i 192.168.$i.1/24
+    ovn-nbctl \
+        -- lsp-add ls$i lrp$i-attachment \
+        -- set Logical_Switch_Port lrp$i-attachment type=router \
+                         options:router-port=lrp$i \
+                         addresses=router
+    for j in 1 2; do
+        ovn-nbctl \
+            -- lsp-add ls$i lp$i$j \
+            -- lsp-set-addresses lp$i$j \
+               "f0:00:00:00:00:$i$j 192.168.$i.1$j"
+    done
+done
+
+# Physical network:
+# 2 hypervisors hv[12], lp?1 on hv1, lp?2 on hv2.
+
+# Given the name of a logical port, prints the name of the hypervisor
+# on which it is located, e.g. "vif_to_hv 12" yields 2.
+vif_to_hv() {
+    echo ${1#?}
+}
+
+# Given the name of a logical port, prints the name of its logical router
+# port, e.g. "vif_to_lrp 12" yields 1.
+vif_to_lrp() {
+    echo ${1%?}
+}
+
+# Given the name of a logical port, prints the name of its logical
+# switch, e.g. "vif_to_ls 12" yields 1.
+vif_to_ls() {
+    echo ${1%?}
+}
+
+net_add n1
+for i in 1 2; do
+    sim_add hv$i
+    as hv$i
+    ovs-vsctl add-br br-phys
+    ovn_attach n1 br-phys 192.168.0.$i
+done
+for i in 1 2; do
+    for j in 1 2; do
+        hv=`vif_to_hv $i$j`
+            as hv$hv ovs-vsctl \
+                -- add-port br-int vif$i$j \
+                -- set Interface vif$i$j \
+                    external-ids:iface-id=lp$i$j \
+                    options:tx_pcap=hv$hv/vif$i$j-tx.pcap \
+                    options:rxq_pcap=hv$hv/vif$i$j-rx.pcap \
+                    ofport-request=$i$j
+    done
+done
+
+# Pre-populate the hypervisors' ARP tables so that we don't lose any
+# packets for ARP resolution (native tunneling doesn't queue packets
+# for ARP resolution).
+OVN_POPULATE_ARP
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
+
+# test_ip INPORT SRC_MAC DST_MAC SRC_IP DST_IP OUTPORT...
+#
+# This shell function causes a packet to be received on INPORT.  The packet's
+# content has Ethernet destination DST and source SRC (each exactly 12 hex
+# digits) and Ethernet type ETHTYPE (4 hex digits).  The OUTPORTs (zero or
+# more) list the VIFs on which the packet should be received.  INPORT and the
+# OUTPORTs are specified as logical switch port numbers, e.g. 12 for vif12.
+for i in 1 2; do
+    for j in 1 2; do
+        : > $i$j.expected
+    done
+done
+test_ip() {
+    # This packet has bad checksums but logical L3 routing doesn't check.
+    local inport=$1 src_mac=$2 dst_mac=$3 src_ip=$4 dst_ip=$5
+    local packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
+    shift; shift; shift; shift; shift
+    hv=hv`vif_to_hv $inport`
+    as $hv ovs-appctl netdev-dummy/receive vif$inport $packet
+    in_ls=`vif_to_ls $inport`
+    in_lrp=`vif_to_lrp $inport`
+    for outport; do
+        out_ls=`vif_to_ls $outport`
+        if test $in_ls = $out_ls; then
+            # Ports on the same logical switch receive exactly the same packet.
+            echo $packet
+        else
+            # Routing decrements TTL and updates source and dest MAC
+            # (and checksum).
+            out_lrp=`vif_to_lrp $outport`
+            echo f000000000${outport}00000000ff0${out_lrp}08004500001c00000000"3f1101"00${src_ip}${dst_ip}0035111100080000
+        fi >> $outport.expected
+    done
+}
+
+# test_arp INPORT SHA SPA TPA [REPLY_HA]
+#
+# Causes a packet to be received on INPORT.  The packet is an ARP
+# request with SHA, SPA, and TPA as specified.  If REPLY_HA is provided, then
+# it should be the hardware address of the target to expect to receive in an
+# ARP reply; otherwise no reply is expected.
+#
+# INPORT is an logical switch port number, e.g. 11 for vif11.
+# SHA and REPLY_HA are each 12 hex digits.
+# SPA and TPA are each 8 hex digits.
+test_arp() {
+    local inport=$1 sha=$2 spa=$3 tpa=$4 reply_ha=$5
+    local request=ffffffffffff${sha}08060001080006040001${sha}${spa}ffffffffffff${tpa}
+    hv=hv`vif_to_hv $inport`
+    as $hv ovs-appctl netdev-dummy/receive vif$inport $request
+
+    # Expect to receive the broadcast ARP on the other logical switch ports if
+    # IP address is not configured to the switch patch port.
+    local i=`vif_to_ls $inport`
+    local j
+    for j in 1 2; do
+        if test $i$j != $inport; then
+            echo $request >> $i$j$k.expected
+        fi
+    done
+
+    # Expect to receive the reply, if any.
+    if test X$reply_ha != X; then
+        lrp=`vif_to_lrp $inport`
+        local reply=${sha}00000000ff0${lrp}08060001080006040002${reply_ha}${tpa}${sha}${spa}
+        echo $reply >> $inport.expected
+    fi
+}
+
+ip_to_hex() {
+    printf "%02x%02x%02x%02x" "$@"
+}
+
+# lp11 send GARP request to announce ownership of 192.168.1.100.
+
+sha=f00000000011
+spa=`ip_to_hex 192 168 1 100`
+tpa=$spa
+test_arp 11 $sha $spa $tpa
+OVS_WAIT_UNTIL([test `ovn-sbctl find mac_binding ip="192.168.1.100" | wc -l` -gt 0])
+ovn-nbctl --wait=hv sync
+
+# Send an IP packet from lp21 to 192.168.1.100, which should go to lp11.
+
+smac=f00000000021
+dmac=00000000ff02
+sip=`ip_to_hex 192 168 2 11`
+dip=`ip_to_hex 192 168 1 100`
+test_ip 21 $smac $dmac $sip $dip 11
+
+# lp12 send GARP request to announce ownership of 192.168.1.100.
+
+sha=f00000000012
+test_arp 12 $sha $spa $tpa
+OVS_WAIT_UNTIL([ovn-sbctl find mac_binding ip="192.168.1.100" | grep f0:00:00:00:00:12])
+ovn-nbctl --wait=hv sync
+
+# Send an IP packet from lp21 to 192.168.1.100, which should go to lp12.
+
+test_ip 21 $smac $dmac $sip $dip 12
+
+# Now check the packets actually received against the ones expected.
+for i in 1 2; do
+    for j in 1 2; do
+        OVN_CHECK_PACKETS([hv`vif_to_hv $i$j`/vif$i$j-tx.pcap],
+                          [$i$j.expected])
+    done
+done
+
+# Gracefully terminate daemons
+OVN_CLEANUP([hv1], [hv2])
 
 AT_CLEANUP
 
@@ -8019,9 +8235,9 @@ AT_CHECK([as hv1 ovs-ofctl dump-flows br-int table=32 | grep =0x3,metadata=0x1 |
 AT_CHECK([as hv2 ovs-ofctl dump-flows br-int table=32 | grep =0x3,metadata=0x1 | wc -l], [0], [0
 ])
 # Check that arp reply on distributed gateway port is only programmed on hv2
-AT_CHECK([as hv1 ovs-ofctl dump-flows br-int | grep arp | grep =0x2,metadata=0x1 | wc -l], [0], [0
+AT_CHECK([as hv1 ovs-ofctl dump-flows br-int | grep arp | grep load:0x2- | grep =0x2,metadata=0x1 | wc -l], [0], [0
 ])
-AT_CHECK([as hv2 ovs-ofctl dump-flows br-int | grep arp | grep =0x2,metadata=0x1 | wc -l], [0], [1
+AT_CHECK([as hv2 ovs-ofctl dump-flows br-int | grep arp | grep load:0x2- | grep =0x2,metadata=0x1 | wc -l], [0], [1
 ])
 
 
@@ -8099,34 +8315,11 @@ src_ip=`ip_to_hex 192 168 1 2`
 dst_ip=`ip_to_hex 172 16 1 3`
 packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
 
-# ARP request packet to expect at outside1
-src_mac="000002010203"
-src_ip=`ip_to_hex 172 16 1 1`
-arp_request=ffffffffffff${src_mac}08060001080006040001${src_mac}${src_ip}000000000000${dst_ip}
-
-as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
-
-echo $arp_request >> hv3-vif1.expected
-OVN_CHECK_PACKETS([hv3/vif1-tx.pcap], [hv3-vif1.expected])
-
-# Send ARP reply from outside1 back to the router
-reply_mac="f00000010204"
-arp_reply=${src_mac}${reply_mac}08060001080006040002${reply_mac}${dst_ip}${src_mac}${src_ip}
-
-as hv3 ovs-appctl netdev-dummy/receive hv3-vif1 $arp_reply
-
-# Allow some time for ovn-northd and ovn-controller to catch up.
-# XXX This should be more systematic.
-sleep 1
-
 # Packet to Expect at outside1
 src_mac="000002010203"
 dst_mac="f00000010204"
-src_ip=`ip_to_hex 192 168 1 2`
-dst_ip=`ip_to_hex 172 16 1 3`
 expected=${dst_mac}${src_mac}08004500001c000000003f110100${src_ip}${dst_ip}0035111100080000
 
-# Resend packet from foo1 to outside1
 as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
 
 echo "------ hv1 dump ----------"
