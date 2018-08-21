@@ -1,11 +1,6 @@
 #ifndef __NET_DST_METADATA_WRAPPER_H
 #define __NET_DST_METADATA_WRAPPER_H 1
 
-enum metadata_type {
-	METADATA_IP_TUNNEL,
-	METADATA_HW_PORT_MUX,
-};
-
 #ifdef USE_UPSTREAM_TUNNEL
 #include_next <net/dst_metadata.h>
 #else
@@ -15,6 +10,11 @@ enum metadata_type {
 #include <net/dst.h>
 #include <net/ipv6.h>
 #include <net/ip_tunnels.h>
+
+enum metadata_type {
+	METADATA_IP_TUNNEL,
+	METADATA_HW_PORT_MUX,
+};
 
 struct hw_port_info {
 	struct net_device *lower_dev;
@@ -119,7 +119,11 @@ void ovs_ip_tunnel_rcv(struct net_device *dev, struct sk_buff *skb,
 static inline struct metadata_dst *
 rpl_metadata_dst_alloc(u8 optslen, enum metadata_type type, gfp_t flags)
 {
+#if defined(HAVE_METADATA_DST_ALLOC_WITH_METADATA_TYPE) && defined(USE_UPSTREAM_TUNNEL)
+	return metadata_dst_alloc(optslen, type, flags);
+#else
 	return metadata_dst_alloc(optslen, flags);
+#endif
 }
 #define metadata_dst_alloc rpl_metadata_dst_alloc
 

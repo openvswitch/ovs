@@ -151,10 +151,10 @@ AC_DEFUN([OVS_CHECK_LINUX], [
     AC_MSG_RESULT([$kversion])
 
     if test "$version" -ge 4; then
-       if test "$version" = 4 && test "$patchlevel" -le 15; then
+       if test "$version" = 4 && test "$patchlevel" -le 17; then
           : # Linux 4.x
        else
-          AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 4.15.x is not supported (please refer to the FAQ for advice)])
+          AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 4.17.x is not supported (please refer to the FAQ for advice)])
        fi
     elif test "$version" = 3 && test "$patchlevel" -ge 10; then
        : # Linux 3.x
@@ -803,8 +803,6 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [OVS_DEFINE(HAVE_NF_CONNTRACK_HELPER_PUT)])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h],[[[[:space:]]]SKB_GSO_UDP[[[:space:]]]],
                   [OVS_DEFINE([HAVE_SKB_GSO_UDP])])
-  OVS_GREP_IFELSE([$KSRC/include/net/dst.h],[DST_NOCACHE],
-                  [OVS_DEFINE([HAVE_DST_NOCACHE])])
   OVS_FIND_FIELD_IFELSE([$KSRC/include/net/rtnetlink.h], [rtnl_link_ops],
                         [extack],
                   [OVS_DEFINE([HAVE_EXT_ACK_IN_RTNL_LINKOPS])])

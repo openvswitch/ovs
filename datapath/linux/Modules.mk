@@ -82,7 +82,6 @@ openvswitch_headers += \
 	linux/compat/include/net/inetpeer.h \
 	linux/compat/include/net/ip.h \
 	linux/compat/include/net/ip_tunnels.h \
-	linux/compat/include/net/ip6_fib.h \
 	linux/compat/include/net/ip6_route.h \
 	linux/compat/include/net/ip6_tunnel.h \
 	linux/compat/include/net/ipv6.h \

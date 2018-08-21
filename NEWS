@@ -1,5 +1,7 @@
 Post-v2.10.0
 ---------------------
+   - Linux datapath:
+     * Support for the kernel versions 4.16.x and 4.17.x.
    - The environment variable OVS_SYSLOG_METHOD, if set, is now used
      as the default syslog method.
    - The environment variable OVS_CTL_TIMEOUT, if set, is now used
