@@ -576,7 +576,7 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over gre tunnel by simulated packets])
-OVS_CHECK_KERNEL(3, 10, 4, 15)
+OVS_CHECK_KERNEL(3, 10, 4, 17)
 
 OVS_TRAFFIC_VSWITCHD_START()
 AT_CHECK([ovs-vsctl -- set bridge br0 other-config:hwaddr=\"f2:ff:00:00:00:01\"])
@@ -626,7 +626,7 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over erspan v1 tunnel by simulated packets])
-OVS_CHECK_KERNEL(3, 10, 4, 15)
+OVS_CHECK_KERNEL(3, 10, 4, 17)
 
 OVS_TRAFFIC_VSWITCHD_START()
 AT_CHECK([ovs-vsctl -- set bridge br0 other-config:hwaddr=\"f2:ff:00:00:00:01\"])
@@ -678,7 +678,7 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over erspan v2 tunnel by simulated packets])
-OVS_CHECK_KERNEL(3, 10, 4, 15)
+OVS_CHECK_KERNEL(3, 10, 4, 17)
 
 OVS_TRAFFIC_VSWITCHD_START()
 AT_CHECK([ovs-vsctl -- set bridge br0 other-config:hwaddr=\"f2:ff:00:00:00:01\"])
@@ -731,7 +731,7 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over ip6erspan v1 tunnel by simulated packets])
-OVS_CHECK_KERNEL(3, 10, 4, 15)
+OVS_CHECK_KERNEL(3, 10, 4, 17)
 
 OVS_TRAFFIC_VSWITCHD_START()
 AT_CHECK([ovs-vsctl -- set bridge br0 other-config:hwaddr=\"f2:ff:00:00:00:01\"])
@@ -786,7 +786,7 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - ping over ip6erspan v2 tunnel by simulated packets])
-OVS_CHECK_KERNEL(3, 10, 4, 15)
+OVS_CHECK_KERNEL(3, 10, 4, 17)
 
 OVS_TRAFFIC_VSWITCHD_START()
 AT_CHECK([ovs-vsctl -- set bridge br0 other-config:hwaddr=\"f2:ff:00:00:00:01\"])
