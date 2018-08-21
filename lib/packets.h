@@ -1289,6 +1289,16 @@ struct gre_base_hdr {
 #define ERSPAN_DIR_MASK     0x0008
 
 struct erspan_base_hdr {
+#ifdef WORDS_BIGENDIAN
+    uint8_t ver:4,
+            vlan_upper:4;
+    uint8_t vlan:8;
+    uint8_t cos:3,
+            en:2,
+            t:1,
+            session_id_upper:2;
+    uint8_t session_id:8;
+#else
     uint8_t vlan_upper:4,
             ver:4;
     uint8_t vlan:8;
@@ -1297,11 +1307,21 @@ struct erspan_base_hdr {
             en:2,
             cos:3;
     uint8_t session_id:8;
+#endif
 };
 
 struct erspan_md2 {
     ovs_16aligned_be32 timestamp;
     ovs_be16 sgt;
+#ifdef WORDS_BIGENDIAN
+    uint8_t p:1,
+            ft:5,
+            hwid_upper:2;
+    uint8_t hwid:4,
+            dir:1,
+            gra:2,
+            o:1;
+#else
     uint8_t hwid_upper:2,
             ft:5,
             p:1;
@@ -1309,6 +1329,7 @@ struct erspan_md2 {
             gra:2,
             dir:1,
             hwid:4;
+#endif
 };
 
 struct erspan_metadata {
