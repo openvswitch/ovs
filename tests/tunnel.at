@@ -592,9 +592,8 @@ dnl test wildcard mask: recevie all v2 regardless of its metadata
 AT_CHECK([ovs-ofctl del-flows br0 in_port=4,tun_erspan_ver=2,tun_erspan_dir=1,tun_erspan_hwid=0xf/0x1])
 AT_CHECK([ovs-ofctl add-flow br0 in_port=4,tun_erspan_ver=2,tun_erspan_dir=0/0,tun_erspan_hwid=0x0/0x0,actions=2])
 
-AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip],
+AT_CHECK([ovs-ofctl --sort=in_port dump-flows br0 | ofctl_strip],
 [0], [dnl
-NXST_FLOW reply:
  in_port=1 actions=output:3
  in_port=2 actions=output:4
  tun_erspan_ver=1,tun_erspan_idx=0x7,in_port=3 actions=output:1
