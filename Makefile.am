@@ -102,6 +102,7 @@ dist_pkgdata_SCRIPTS =
 dist_sbin_SCRIPTS =
 dist_scripts_SCRIPTS =
 dist_scripts_DATA =
+EXTRA_PROGRAMS =
 INSTALL_DATA_LOCAL =
 UNINSTALL_LOCAL =
 man_MANS =
