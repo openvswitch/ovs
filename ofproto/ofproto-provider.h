@@ -165,6 +165,7 @@ struct ofport {
     bool may_enable;            /* May be live (OFPPS_LIVE) if link is up. */
 };
 
+void ofproto_port_set_enable(struct ofport *, bool enable);
 void ofproto_port_set_state(struct ofport *, enum ofputil_port_state);
 
 /* OpenFlow table flags:

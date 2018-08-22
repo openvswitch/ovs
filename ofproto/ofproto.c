@@ -2457,11 +2457,34 @@ ofport_remove_with_name(struct ofproto *ofproto, const char *name)
     }
 }
 
+static enum ofputil_port_state
+normalize_state(enum ofputil_port_config config,
+                enum ofputil_port_state state,
+                bool may_enable)
+{
+    return (config & OFPUTIL_PC_PORT_DOWN
+            || state & OFPUTIL_PS_LINK_DOWN
+            || !may_enable
+            ? state & ~OFPUTIL_PS_LIVE
+            : state | OFPUTIL_PS_LIVE);
+}
+
+void
+ofproto_port_set_enable(struct ofport *port, bool enable)
+{
+    if (enable != port->may_enable) {
+        port->may_enable = enable;
+        ofproto_port_set_state(port, normalize_state(port->pp.config,
+                                                     port->pp.state,
+                                                     port->may_enable));
+    }
+}
 
 /* Update OpenFlow 'state' in 'port' and notify controller. */
 void
 ofproto_port_set_state(struct ofport *port, enum ofputil_port_state state)
 {
+    state = normalize_state(port->pp.config, state, port->may_enable);
     if (port->pp.state != state) {
         struct ofputil_phy_port old_pp = port->pp;
         port->pp.state = state;
@@ -2611,16 +2634,18 @@ update_port(struct ofproto *ofproto, const char *name)
         port = ofproto_get_port(ofproto, ofproto_port.ofp_port);
         if (port && !strcmp(netdev_get_name(port->netdev), name)) {
             struct netdev *old_netdev = port->netdev;
-            struct ofputil_phy_port old_pp = port->pp;
 
             /* ofport_open() only sets OFPUTIL_PC_PORT_DOWN and
-             * OFPUTIL_PS_LINK_DOWN.  Keep the other config and state bits. */
+             * OFPUTIL_PS_LINK_DOWN.  Keep the other config and state bits (but
+             * a port that is down cannot be live). */
             pp.config |= port->pp.config & ~OFPUTIL_PC_PORT_DOWN;
             pp.state |= port->pp.state & ~OFPUTIL_PS_LINK_DOWN;
+            pp.state = normalize_state(pp.config, pp.state, port->may_enable);
 
             /* 'name' hasn't changed location.  Any properties changed? */
-            bool port_changed = !ofport_equal(&port->pp, &pp);
-            if (port_changed) {
+            if (!ofport_equal(&port->pp, &pp)) {
+                connmgr_send_port_status(port->ofproto->connmgr, NULL,
+                                         &port->pp, &pp, OFPPR_MODIFY);
                 port->pp = pp;
             }
 
@@ -2634,12 +2659,6 @@ update_port(struct ofproto *ofproto, const char *name)
 
             if (port->ofproto->ofproto_class->port_modified) {
                 port->ofproto->ofproto_class->port_modified(port);
-            }
-
-            /* Send status update, if any port property changed */
-            if (port_changed) {
-                connmgr_send_port_status(port->ofproto->connmgr, NULL,
-                                         &old_pp, &port->pp, OFPPR_MODIFY);
             }
 
             netdev_close(old_netdev);
@@ -3636,7 +3655,11 @@ update_port_config(struct ofconn *ofconn, struct ofport *port,
 
     if (toggle) {
         struct ofputil_phy_port old_pp = port->pp;
+
         port->pp.config ^= toggle;
+        port->pp.state = normalize_state(port->pp.config, port->pp.state,
+                                         port->may_enable);
+
         port->ofproto->ofproto_class->port_reconfigured(port, old_pp.config);
         connmgr_send_port_status(port->ofproto->connmgr, ofconn, &old_pp,
                                  &port->pp, OFPPR_MODIFY);

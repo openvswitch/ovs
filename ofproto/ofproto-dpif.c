@@ -2003,16 +2003,6 @@ port_modified(struct ofport *port_)
         bfd_set_netdev(port->bfd, netdev);
     }
 
-    /* Set liveness, unless the link is administratively or
-     * operationally down or link monitoring false */
-    if (!(port->up.pp.config & OFPUTIL_PC_PORT_DOWN) &&
-        !(port->up.pp.state & OFPUTIL_PS_LINK_DOWN) &&
-        port->up.may_enable) {
-        port->up.pp.state |= OFPUTIL_PS_LIVE;
-    } else {
-        port->up.pp.state &= ~OFPUTIL_PS_LIVE;
-    }
-
     ofproto_dpif_monitor_port_update(port, port->bfd, port->cfm,
                                      port->lldp, &port->up.pp.hw_addr);
 
@@ -2047,6 +2037,7 @@ port_reconfigured(struct ofport *port_, enum ofputil_port_config old_config)
             bundle_update(port->bundle);
         }
     }
+    port_run(port);
 }
 
 static int
@@ -3609,26 +3600,13 @@ port_run(struct ofport_dpif *ofport)
 
     bool enable = may_enable_port(ofport);
     if (ofport->up.may_enable != enable) {
-        ofport->up.may_enable = enable;
+        ofproto_port_set_enable(&ofport->up, enable);
 
         struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
         ofproto->backer->need_revalidate = REV_PORT_TOGGLED;
 
         if (ofport->rstp_port) {
             rstp_port_set_mac_operational(ofport->rstp_port, enable);
-        }
-
-        /* Propagate liveness, unless the link is administratively or
-         * operationally down. */
-        if (!(ofport->up.pp.config & OFPUTIL_PC_PORT_DOWN) &&
-            !(ofport->up.pp.state & OFPUTIL_PS_LINK_DOWN)) {
-            enum ofputil_port_state of_state = ofport->up.pp.state;
-            if (enable) {
-                of_state |= OFPUTIL_PS_LIVE;
-            } else {
-                of_state &= ~OFPUTIL_PS_LIVE;
-            }
-            ofproto_port_set_state(&ofport->up, of_state);
         }
     }
 }
