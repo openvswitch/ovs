@@ -1609,24 +1609,28 @@ ofconn_send(const struct ofconn *ofconn, struct ofpbuf *msg,
 
 /* Sending asynchronous messages. */
 
-/* Sends an OFPT_PORT_STATUS message with 'opp' and 'reason' to appropriate
+/* Sends an OFPT_PORT_STATUS message with 'new_pp' and 'reason' to appropriate
  * controllers managed by 'mgr'.  For messages caused by a controller
  * OFPT_PORT_MOD, specify 'source' as the controller connection that sent the
- * request; otherwise, specify 'source' as NULL. */
+ * request; otherwise, specify 'source' as NULL.
+ *
+ * If 'reason' is OFPPR_MODIFY and 'old_pp' is nonnull, then messages are
+ * suppressed in the case where the change would not be visible to a particular
+ * controller.  For example, OpenFlow 1.0 does not have the OFPPS_LIVE flag, so
+ * this would suppress a change solely to that flag from being sent to an
+ * OpenFlow 1.0 controller. */
 void
 connmgr_send_port_status(struct connmgr *mgr, struct ofconn *source,
-                         const struct ofputil_phy_port *pp, uint8_t reason)
+                         const struct ofputil_phy_port *old_pp,
+                         const struct ofputil_phy_port *new_pp,
+                         uint8_t reason)
 {
     /* XXX Should limit the number of queued port status change messages. */
-    struct ofputil_port_status ps;
-    struct ofconn *ofconn;
+    struct ofputil_port_status new_ps = { reason, *new_pp };
 
-    ps.reason = reason;
-    ps.desc = *pp;
+    struct ofconn *ofconn;
     LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
         if (ofconn_receives_async_msg(ofconn, OAM_PORT_STATUS, reason)) {
-            struct ofpbuf *msg;
-
             /* Before 1.5, OpenFlow specified that OFPT_PORT_MOD should not
              * generate OFPT_PORT_STATUS messages.  That requirement was a
              * relic of how OpenFlow originally supported a single controller,
@@ -1651,7 +1655,21 @@ connmgr_send_port_status(struct connmgr *mgr, struct ofconn *source,
                 continue;
             }
 
-            msg = ofputil_encode_port_status(&ps, ofconn_get_protocol(ofconn));
+            enum ofputil_protocol protocol = ofconn_get_protocol(ofconn);
+            struct ofpbuf *msg = ofputil_encode_port_status(&new_ps, protocol);
+            if (reason == OFPPR_MODIFY && old_pp) {
+                struct ofputil_port_status old_ps = { reason, *old_pp };
+                struct ofpbuf *old_msg = ofputil_encode_port_status(&old_ps,
+                                                                    protocol);
+                bool suppress = ofpbuf_equal(msg, old_msg);
+                ofpbuf_delete(old_msg);
+
+                if (suppress) {
+                    ofpbuf_delete(msg);
+                    continue;
+                }
+            }
+
             ofconn_send(ofconn, msg, NULL);
         }
     }

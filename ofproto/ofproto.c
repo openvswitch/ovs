@@ -2417,7 +2417,7 @@ ofport_install(struct ofproto *p,
     if (error) {
         goto error;
     }
-    connmgr_send_port_status(p->connmgr, NULL, pp, OFPPR_ADD);
+    connmgr_send_port_status(p->connmgr, NULL, NULL, pp, OFPPR_ADD);
     return 0;
 
 error:
@@ -2438,7 +2438,7 @@ ofport_remove(struct ofport *ofport)
     struct ofproto *p = ofport->ofproto;
     bool is_mtu_overridden = ofport_is_mtu_overridden(p, ofport);
 
-    connmgr_send_port_status(ofport->ofproto->connmgr, NULL, &ofport->pp,
+    connmgr_send_port_status(ofport->ofproto->connmgr, NULL, NULL, &ofport->pp,
                              OFPPR_DELETE);
     ofport_destroy(ofport, true);
     if (!is_mtu_overridden) {
@@ -2483,8 +2483,9 @@ void
 ofproto_port_set_state(struct ofport *port, enum ofputil_port_state state)
 {
     if (port->pp.state != state) {
+        struct ofputil_phy_port old_pp = port->pp;
         port->pp.state = state;
-        connmgr_send_port_status(port->ofproto->connmgr, NULL,
+        connmgr_send_port_status(port->ofproto->connmgr, NULL, &old_pp,
                                  &port->pp, OFPPR_MODIFY);
     }
 }
@@ -2630,6 +2631,7 @@ update_port(struct ofproto *ofproto, const char *name)
         port = ofproto_get_port(ofproto, ofproto_port.ofp_port);
         if (port && !strcmp(netdev_get_name(port->netdev), name)) {
             struct netdev *old_netdev = port->netdev;
+            struct ofputil_phy_port old_pp = port->pp;
 
             /* 'name' hasn't changed location.  Any properties changed? */
             bool port_changed = !ofport_equal(&port->pp, &pp);
@@ -2652,7 +2654,7 @@ update_port(struct ofproto *ofproto, const char *name)
             /* Send status update, if any port property changed */
             if (port_changed) {
                 connmgr_send_port_status(port->ofproto->connmgr, NULL,
-                                         &port->pp, OFPPR_MODIFY);
+                                         &old_pp, &port->pp, OFPPR_MODIFY);
             }
 
             netdev_close(old_netdev);
@@ -3648,11 +3650,11 @@ update_port_config(struct ofconn *ofconn, struct ofport *port,
     }
 
     if (toggle) {
-        enum ofputil_port_config old_config = port->pp.config;
+        struct ofputil_phy_port old_pp = port->pp;
         port->pp.config ^= toggle;
-        port->ofproto->ofproto_class->port_reconfigured(port, old_config);
-        connmgr_send_port_status(port->ofproto->connmgr, ofconn, &port->pp,
-                                 OFPPR_MODIFY);
+        port->ofproto->ofproto_class->port_reconfigured(port, old_pp.config);
+        connmgr_send_port_status(port->ofproto->connmgr, ofconn, &old_pp,
+                                 &port->pp, OFPPR_MODIFY);
     }
 }
 

@@ -805,7 +805,6 @@ check_liveness 1 LIVE
 AT_CHECK([ovs-vsctl \
 -- add-port br0 null0 -- set int null0 type=patch options:peer=p2 -- set int p2 options:peer=null0 \
 -- add-port br1 null1 -- set int null1 type=patch options:peer=p0 -- set int p0 options:peer=null1])
-check_liveness 2 LIVE
 
 # Wait 4 more simulated seconds.  The LACP state should become "defaulted" for p0 and p2.
 ovs-appctl time/warp 4100 100
@@ -901,7 +900,6 @@ check_liveness 1 LIVE
 AT_CHECK([ovs-vsctl \
 -- add-port br0 null0 -- set int null0 type=patch options:peer=p2 -- set int p2 options:peer=null0 \
 -- add-port br1 null1 -- set int null1 type=patch options:peer=p0 -- set int p0 options:peer=null1])
-check_liveness 2 LIVE
 
 # Wait 4 more simulated seconds.  The LACP state should become "defaulted" for p0 and p2.
 ovs-appctl time/warp 4100 100
@@ -997,7 +995,6 @@ check_liveness 1 LIVE
 AT_CHECK([ovs-vsctl \
 -- add-port br0 null0 -- set int null0 type=patch options:peer=p2 -- set int p2 options:peer=null0 \
 -- add-port br1 null1 -- set int null1 type=patch options:peer=p0 -- set int p0 options:peer=null1])
-check_liveness 2 LIVE
 
 # Wait 4 more simulated seconds.  The LACP state should become "defaulted" for p0 and p2.
 ovs-appctl time/warp 4100 100

@@ -147,7 +147,9 @@ void ofconn_report_flow_mod(struct ofconn *, enum ofp_flow_mod_command);
 /* Sending asynchronous messages. */
 bool connmgr_wants_packet_in_on_miss(struct connmgr *mgr);
 void connmgr_send_port_status(struct connmgr *, struct ofconn *source,
-                              const struct ofputil_phy_port *, uint8_t reason);
+                              const struct ofputil_phy_port *old_pp,
+                              const struct ofputil_phy_port *new_pp,
+                              uint8_t reason);
 void connmgr_send_flow_removed(struct connmgr *,
                                const struct ofputil_flow_removed *)
     OVS_REQUIRES(ofproto_mutex);
