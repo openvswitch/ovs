@@ -713,7 +713,7 @@ AT_CHECK([ovs-ofctl -O OpenFlow12 add-group br0 'group_id=1234,type=ff,bucket=wa
 AT_CHECK([ovs-ofctl -O OpenFlow12 add-flow br0 'ip actions=write_actions(group:1234)'])
 AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=1,nw_tos=0,nw_ttl=128,icmp_type=8,icmp_code=0'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
-  [Datapath actions: drop
+  [Datapath actions: 10
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -2395,13 +2395,13 @@ OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([strip_metadata < ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
-tcp,vlan_tci=0x0000,dl_src=60:66:66:66:00:06,dl_dst=50:54:00:00:00:07,nw_src=192.168.255.255,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0 tcp_csum:7745
+tcp,vlan_tci=0x0000,dl_src=60:66:66:66:00:06,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0 tcp_csum:7744
 dnl
 NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
-tcp,vlan_tci=0x0000,dl_src=60:66:66:66:00:06,dl_dst=50:54:00:00:00:07,nw_src=192.168.255.255,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0 tcp_csum:7745
+tcp,vlan_tci=0x0000,dl_src=60:66:66:66:00:06,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0 tcp_csum:7744
 dnl
 NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
-tcp,vlan_tci=0x0000,dl_src=60:66:66:66:00:06,dl_dst=50:54:00:00:00:07,nw_src=192.168.255.255,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0 tcp_csum:7745
+tcp,vlan_tci=0x0000,dl_src=60:66:66:66:00:06,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0 tcp_csum:7744
 ])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
@@ -6296,7 +6296,7 @@ IFCOUNTERS
         type=6
         ifspeed=100000000
         direction=0
-        status=0
+        status=3
         in_octets=202
         in_unicasts=3
         in_multicasts=4294967295
@@ -6319,7 +6319,7 @@ IFCOUNTERS
         type=6
         ifspeed=100000000
         direction=0
-        status=0
+        status=3
         in_octets=148
         in_unicasts=2
         in_multicasts=4294967295
@@ -6342,7 +6342,7 @@ IFCOUNTERS
         type=6
         ifspeed=100000000
         direction=0
-        status=0
+        status=3
         in_octets=0
         in_unicasts=0
         in_multicasts=4294967295
@@ -6365,7 +6365,7 @@ IFCOUNTERS
         type=6
         ifspeed=100000000
         direction=0
-        status=0
+        status=3
         in_octets=0
         in_unicasts=0
         in_multicasts=4294967295
@@ -6388,7 +6388,7 @@ IFCOUNTERS
         type=6
         ifspeed=100000000
         direction=0
-        status=0
+        status=3
         in_octets=202
         in_unicasts=3
         in_multicasts=4294967295
@@ -6411,7 +6411,7 @@ IFCOUNTERS
         type=6
         ifspeed=100000000
         direction=0
-        status=0
+        status=3
         in_octets=148
         in_unicasts=2
         in_multicasts=4294967295

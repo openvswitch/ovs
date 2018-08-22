@@ -683,7 +683,7 @@ netdev_dummy_construct(struct netdev *netdev_)
     netdev->hwaddr.ea[4] = n >> 8;
     netdev->hwaddr.ea[5] = n;
     netdev->mtu = 1500;
-    netdev->flags = 0;
+    netdev->flags = NETDEV_UP;
     netdev->ifindex = -EOPNOTSUPP;
     netdev->requested_n_rxq = netdev_->n_rxq;
     netdev->requested_n_txq = netdev_->n_txq;
