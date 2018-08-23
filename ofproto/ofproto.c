@@ -2362,9 +2362,8 @@ ofport_open(struct ofproto *ofproto,
     return netdev;
 }
 
-/* Returns true if most fields of 'a' and 'b' are equal.  Differences in name,
- * port number, and 'config' bits other than OFPUTIL_PC_PORT_DOWN are
- * disregarded. */
+/* Returns true if most fields of 'a' and 'b' are equal.  Differences in name
+ * and port number are disregarded. */
 static bool
 ofport_equal(const struct ofputil_phy_port *a,
              const struct ofputil_phy_port *b)
@@ -2372,7 +2371,7 @@ ofport_equal(const struct ofputil_phy_port *a,
     return (eth_addr_equals(a->hw_addr, b->hw_addr)
             && eth_addr64_equals(a->hw_addr64, b->hw_addr64)
             && a->state == b->state
-            && !((a->config ^ b->config) & OFPUTIL_PC_PORT_DOWN)
+            && a->config == b->config
             && a->curr == b->curr
             && a->advertised == b->advertised
             && a->supported == b->supported
@@ -2457,26 +2456,6 @@ ofport_remove_with_name(struct ofproto *ofproto, const char *name)
     }
 }
 
-/* Updates 'port' with new 'pp' description.
- *
- * Does not handle a name or port number change.  The caller must implement
- * such a change as a delete followed by an add.  */
-static void
-ofport_modified(struct ofport *port, struct ofputil_phy_port *pp)
-{
-    port->pp.hw_addr = pp->hw_addr;
-    port->pp.hw_addr64 = pp->hw_addr64;
-    port->pp.config = ((port->pp.config & ~OFPUTIL_PC_PORT_DOWN)
-                        | (pp->config & OFPUTIL_PC_PORT_DOWN));
-    port->pp.state = ((port->pp.state & ~OFPUTIL_PS_LINK_DOWN)
-                      | (pp->state & OFPUTIL_PS_LINK_DOWN));
-    port->pp.curr = pp->curr;
-    port->pp.advertised = pp->advertised;
-    port->pp.supported = pp->supported;
-    port->pp.peer = pp->peer;
-    port->pp.curr_speed = pp->curr_speed;
-    port->pp.max_speed = pp->max_speed;
-}
 
 /* Update OpenFlow 'state' in 'port' and notify controller. */
 void
@@ -2633,10 +2612,15 @@ update_port(struct ofproto *ofproto, const char *name)
             struct netdev *old_netdev = port->netdev;
             struct ofputil_phy_port old_pp = port->pp;
 
+            /* ofport_open() only sets OFPUTIL_PC_PORT_DOWN and
+             * OFPUTIL_PS_LINK_DOWN.  Keep the other config and state bits. */
+            pp.config |= port->pp.config & ~OFPUTIL_PC_PORT_DOWN;
+            pp.state |= port->pp.state & ~OFPUTIL_PS_LINK_DOWN;
+
             /* 'name' hasn't changed location.  Any properties changed? */
             bool port_changed = !ofport_equal(&port->pp, &pp);
             if (port_changed) {
-                ofport_modified(port, &pp);
+                port->pp = pp;
             }
 
             update_mtu(ofproto, port);
