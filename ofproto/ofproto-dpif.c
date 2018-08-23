@@ -3569,45 +3569,49 @@ ofport_update_peer(struct ofport_dpif *ofport)
     free(peer_name);
 }
 
+static bool
+may_enable_port(struct ofport_dpif *ofport)
+{
+    /* Carrier must be up. */
+    if (!netdev_get_carrier(ofport->up.netdev)) {
+        return false;
+    }
+
+    /* If CFM or BFD is enabled, then at least one of them must report that the
+     * port is up. */
+    if ((ofport->bfd || ofport->cfm)
+        && !(ofport->cfm
+             && !cfm_get_fault(ofport->cfm)
+             && cfm_get_opup(ofport->cfm) != 0)
+        && !(ofport->bfd
+             && bfd_forwarding(ofport->bfd))) {
+        return false;
+    }
+
+    /* If LACP is enabled, it must report that the link is enabled. */
+    if (ofport->bundle
+        && !lacp_slave_may_enable(ofport->bundle->lacp, ofport)) {
+        return false;
+    }
+
+    return true;
+}
+
 static void
 port_run(struct ofport_dpif *ofport)
 {
     long long int carrier_seq = netdev_get_carrier_resets(ofport->up.netdev);
     bool carrier_changed = carrier_seq != ofport->carrier_seq;
-    bool enable = netdev_get_carrier(ofport->up.netdev);
-    bool cfm_enable = false;
-    bool bfd_enable = false;
-
     ofport->carrier_seq = carrier_seq;
-
-    if (ofport->cfm) {
-        int cfm_opup = cfm_get_opup(ofport->cfm);
-
-        cfm_enable = !cfm_get_fault(ofport->cfm);
-
-        if (cfm_opup >= 0) {
-            cfm_enable = cfm_enable && cfm_opup;
-        }
+    if (carrier_changed && ofport->bundle) {
+        lacp_slave_carrier_changed(ofport->bundle->lacp, ofport);
     }
 
-    if (ofport->bfd) {
-        bfd_enable = bfd_forwarding(ofport->bfd);
-    }
-
-    if (ofport->bfd || ofport->cfm) {
-        enable = enable && (cfm_enable || bfd_enable);
-    }
-
-    if (ofport->bundle) {
-        enable = enable && lacp_slave_may_enable(ofport->bundle->lacp, ofport);
-        if (carrier_changed) {
-            lacp_slave_carrier_changed(ofport->bundle->lacp, ofport);
-        }
-    }
-
+    bool enable = may_enable_port(ofport);
     if (ofport->up.may_enable != enable) {
-        struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
+        ofport->up.may_enable = enable;
 
+        struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
         ofproto->backer->need_revalidate = REV_PORT_TOGGLED;
 
         if (ofport->rstp_port) {
@@ -3627,8 +3631,6 @@ port_run(struct ofport_dpif *ofport)
             ofproto_port_set_state(&ofport->up, of_state);
         }
     }
-
-    ofport->up.may_enable = enable;
 }
 
 static int
