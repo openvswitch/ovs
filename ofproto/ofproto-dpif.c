@@ -137,7 +137,6 @@ struct ofport_dpif {
     struct cfm *cfm;            /* Connectivity Fault Management, if any. */
     struct bfd *bfd;            /* BFD, if any. */
     struct lldp *lldp;          /* lldp, if any. */
-    bool may_enable;            /* May be enabled in bonds. */
     bool is_tunnel;             /* This port is a tunnel. */
     long long int carrier_seq;  /* Carrier status changes. */
     struct ofport_dpif *peer;   /* Peer if patch port. */
@@ -479,7 +478,7 @@ type_run(const char *type)
                                  ofport->rstp_port, ofport->qdscp,
                                  ofport->n_qdscp, ofport->up.pp.config,
                                  ofport->up.pp.state, ofport->is_tunnel,
-                                 ofport->may_enable);
+                                 ofport->up.may_enable);
             }
         }
         xlate_txn_commit();
@@ -1848,7 +1847,6 @@ port_construct(struct ofport *port_)
     port->cfm = NULL;
     port->bfd = NULL;
     port->lldp = NULL;
-    port->may_enable = false;
     port->stp_port = NULL;
     port->stp_state = STP_DISABLED;
     port->rstp_port = NULL;
@@ -2009,7 +2007,7 @@ port_modified(struct ofport *port_)
      * operationally down or link monitoring false */
     if (!(port->up.pp.config & OFPUTIL_PC_PORT_DOWN) &&
         !(port->up.pp.state & OFPUTIL_PS_LINK_DOWN) &&
-        port->may_enable) {
+        port->up.may_enable) {
         port->up.pp.state |= OFPUTIL_PS_LIVE;
     } else {
         port->up.pp.state &= ~OFPUTIL_PS_LIVE;
@@ -2792,7 +2790,7 @@ set_rstp_port(struct ofport *ofport_,
                   ofport, netdev_get_name(ofport->up.netdev));
     update_rstp_port_state(ofport);
     /* Synchronize operational status. */
-    rstp_port_set_mac_operational(rp, ofport->may_enable);
+    rstp_port_set_mac_operational(rp, ofport->up.may_enable);
 }
 
 static void
@@ -3341,7 +3339,7 @@ bundle_run(struct ofbundle *bundle)
         struct ofport_dpif *port;
 
         LIST_FOR_EACH (port, bundle_node, &bundle->ports) {
-            bond_slave_set_may_enable(bundle->bond, port, port->may_enable);
+            bond_slave_set_may_enable(bundle->bond, port, port->up.may_enable);
         }
 
         if (bond_run(bundle->bond, lacp_status(bundle->lacp))) {
@@ -3607,7 +3605,7 @@ port_run(struct ofport_dpif *ofport)
         }
     }
 
-    if (ofport->may_enable != enable) {
+    if (ofport->up.may_enable != enable) {
         struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
 
         ofproto->backer->need_revalidate = REV_PORT_TOGGLED;
@@ -3630,7 +3628,7 @@ port_run(struct ofport_dpif *ofport)
         }
     }
 
-    ofport->may_enable = enable;
+    ofport->up.may_enable = enable;
 }
 
 static int

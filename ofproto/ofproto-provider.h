@@ -162,6 +162,7 @@ struct ofport {
     uint64_t change_seq;
     long long int created;      /* Time created, in msec. */
     int mtu;
+    bool may_enable;            /* May be live (OFPPS_LIVE) if link is up. */
 };
 
 void ofproto_port_set_state(struct ofport *, enum ofputil_port_state);

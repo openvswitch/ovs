@@ -2403,6 +2403,7 @@ ofport_install(struct ofproto *p,
     ofport->pp = *pp;
     ofport->ofp_port = pp->port_no;
     ofport->created = time_msec();
+    ofport->may_enable = false;
 
     /* Add port to 'p'. */
     hmap_insert(&p->ports, &ofport->hmap_node,
