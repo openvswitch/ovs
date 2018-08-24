@@ -201,16 +201,23 @@
       </column>
 
       <column name="other_config" key="tc-policy"
-              type='{"type": "string"}'>
+              type='{"type": "string",
+                     "enum": ["set", ["none", "skip_sw", "skip_hw"]]}'>
         <p>
-            Specified the policy used with HW offloading.
-            Options:
-                <code>none</code>    - Add software rule and offload rule to HW.
-                <code>skip_sw</code> - Offload rule to HW only.
-                <code>skip_hw</code> - Add software rule without offloading rule to HW.
+          Specified the policy used with HW offloading.
+          Options:
+          <dl>
+            <dt><code>none</code></dt>
+            <dd>Add software rule and offload rule to HW.</dd>
+            <dt><code>skip_sw</code></dt>
+            <dd>Offload rule to HW only.</dd>
+            <dt><code>skip_hw</code></dt>
+            <dd>Add software rule without offloading rule to HW.</dd>
+          </dl>
         </p>
         <p>
-            This is only relevant if HW offloading is enabled (hw-offload).
+          This is only relevant if
+          <ref column="other_config" key="hw-offload"/> is enabled.
         </p>
         <p>
           The default value is <code>none</code>.
