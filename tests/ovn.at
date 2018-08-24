@@ -9530,7 +9530,7 @@ ovn-nbctl lr-add lr0_ip6
 ovn-nbctl lrp-add lr0_ip6 lrp0_ip6 00:00:00:00:af:01 aef0:0:0:0:0:0:0:0/64
 ovn-nbctl lsp-add sw0_ip6 lrp0_ip6-attachment
 ovn-nbctl lsp-set-type lrp0_ip6-attachment router
-ovn-nbctl lsp-set-addresses lrp0_ip6-attachment 00:00:00:00:af:01
+ovn-nbctl lsp-set-addresses lrp0_ip6-attachment router
 ovn-nbctl lsp-set-options lrp0_ip6-attachment router-port=lrp0_ip6
 ovn-nbctl set logical_router_port lrp0_ip6 ipv6_ra_configs:address_mode=slaac
 
@@ -9563,6 +9563,19 @@ ovs-vsctl -- add-port br-int hv1-vif1 -- \
 ovs-vsctl set open . external-ids:ovn-bridge-mappings=phys:br-phys
 
 OVS_WAIT_UNTIL([test x`ovn-nbctl lsp-get-up sw0_ip6-port1` = xup])
+
+# There should be 2 Neighbor Advertisement flows for the router port
+# aef0:: ip address in logical switch pipeline with action nd_na_router.
+AT_CHECK([ovn-sbctl dump-flows sw0_ip6 | grep ls_in_arp_rsp | \
+grep "nd_na_router" | wc -l], [0], [2
+])
+
+# There should be 4 Neighbor Advertisement flows with action nd_na_router
+# in the router pipeline for the router lr0_ip6.
+AT_CHECK([ovn-sbctl dump-flows lr0_ip6 | grep nd_na_router | \
+wc -l], [0], [4
+])
+
 cr_uuid=`ovn-sbctl find port_binding logical_port=cr-ip6_public | grep _uuid | cut -f2 -d ":"`
 
 # There is only one chassis.
