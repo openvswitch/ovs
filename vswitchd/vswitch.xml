@@ -218,7 +218,8 @@
       </column>
 
       <column name="other_config" key="dpdk-init"
-              type='{"type": "string"}'>
+              type='{"type": "string",
+                     "enum": ["set", ["false", "true", "try"]]}'>
         <p>
           Set this value to <code>true</code> or <code>try</code> to enable
           runtime support for DPDK ports. The vswitch must have compile-time
