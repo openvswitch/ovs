@@ -549,13 +549,33 @@ output;
         <p>
           Priority-50 flows that match IPv6 ND neighbor solicitations to
           each known IP address <var>A</var> (and <var>A</var>'s
-          solicited node address) of every logical switch port, and
-          respond with neighbor advertisements directly with
+          solicited node address) of every logical switch port except of type
+          router, and respond with neighbor advertisements directly with
           corresponding Ethernet address <var>E</var>:
         </p>
 
         <pre>
 nd_na {
+    eth.src = <var>E</var>;
+    ip6.src = <var>A</var>;
+    nd.target = <var>A</var>;
+    nd.tll = <var>E</var>;
+    outport = inport;
+    flags.loopback = 1;
+    output;
+};
+        </pre>
+
+        <p>
+          Priority-50 flows that match IPv6 ND neighbor solicitations to
+          each known IP address <var>A</var> (and <var>A</var>'s
+          solicited node address) of logical switch port of type router, and
+          respond with neighbor advertisements directly with
+          corresponding Ethernet address <var>E</var>:
+        </p>
+
+        <pre>
+nd_na_router {
     eth.src = <var>E</var>;
     ip6.src = <var>A</var>;
     nd.target = <var>A</var>;
