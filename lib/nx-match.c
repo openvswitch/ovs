@@ -763,6 +763,7 @@ oxm_pull_field_array(const void *fields_data, size_t fields_len,
                         ofperr_to_string(error));
 
             free(fa->values);
+            fa->values = NULL;
             return error;
         }
     }
