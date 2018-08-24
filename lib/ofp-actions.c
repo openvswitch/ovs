@@ -5888,6 +5888,9 @@ decode_NXAST_RAW_CLONE(const struct ext_action_header *eah,
                                             ofp_version,
                                             1u << OVSINST_OFPIT11_APPLY_ACTIONS,
                                             out, 0, vl_mff_map, tlv_bitmap);
+    if (error) {
+        return error;
+    }
     clone = ofpbuf_push_uninit(out, sizeof *clone);
     out->header = &clone->ofpact;
     ofpact_finish_CLONE(out, &clone);
@@ -6479,7 +6482,7 @@ decode_NXAST_RAW_CT(const struct nx_action_conntrack *nac,
                                             out, OFPACT_CT, vl_mff_map,
                                             tlv_bitmap);
     if (error) {
-        goto out;
+        return error;
     }
 
     conntrack = ofpbuf_push_uninit(out, sizeof(*conntrack));
@@ -7500,8 +7503,6 @@ ofpacts_pull_openflow_actions__(struct ofpbuf *openflow,
                                 uint64_t *ofpacts_tlv_bitmap)
 {
     const struct ofp_action_header *actions;
-    void *orig_data = ofpacts->data;
-    size_t orig_size = ofpacts->size;
     enum ofperr error;
 
     if (actions_len % OFP_ACTION_ALIGN != 0) {
@@ -7525,21 +7526,15 @@ ofpacts_pull_openflow_actions__(struct ofpbuf *openflow,
                                outer_action);
     }
     if (error) {
-        /* Back out changes to 'ofpacts'.  (Normally, decoding would only
-         * append to 'ofpacts', so that one would expect only to need to
-         * restore 'ofpacts->size', but some action parsing temporarily pulls
-         * off data from the start of 'ofpacts' and may not properly re-push it
-         * on error paths.) */
-        ofpacts->data = orig_data;
-        ofpacts->size = orig_size;
+        ofpbuf_clear(ofpacts);
     }
     return error;
 }
 
 /* Attempts to convert 'actions_len' bytes of OpenFlow actions from the front
  * of 'openflow' into ofpacts.  On success, appends the converted actions to
- * 'ofpacts'; on failure, 'ofpacts' is unchanged (but might be reallocated) .
- * Returns 0 if successful, otherwise an OpenFlow error.
+ * 'ofpacts'; on failure, clears 'ofpacts'.  Returns 0 if successful, otherwise
+ * an OpenFlow error.
  *
  * Actions are processed according to their OpenFlow version which
  * is provided in the 'version' parameter.
