@@ -1,5 +1,13 @@
-usr/lib/*/lib*.so
-usr/lib/*/lib*.a
+usr/lib/*/libopenvswitch*.so
+usr/lib/*/libofproto*.so
+usr/lib/*/libovsdb*.so
+usr/lib/*/libsflow*.so
+usr/lib/*/libvtep*.so
+usr/lib/*/libopenvswitch*.a
+usr/lib/*/libofproto*.a
+usr/lib/*/libovsdb*.a
+usr/lib/*/libsflow*.a
+usr/lib/*/libvtep*.a
 usr/lib/*/pkgconfig
 include/*.h usr/include/openvswitch
 include/openflow/*.h usr/include/openvswitch/openflow
