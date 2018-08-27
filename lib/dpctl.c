@@ -202,6 +202,8 @@ dp_exists(const char *queried_dp)
 
     sset_destroy(&dpif_names);
     sset_destroy(&dpif_types);
+    free(queried_name);
+    free(queried_type);
     return found;
 }
 
