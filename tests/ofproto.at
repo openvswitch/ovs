@@ -2257,12 +2257,7 @@ head_table() {
 
 ' "$1"
 }
-ditto() {
-    for i in `seq $1 $2`; do
-        printf '  table %d: ditto\n' $i
-    done
-}
-(head_table; ditto 1 253) > expout
+(head_table; echo '  tables 1...253: ditto') > expout
 AT_CHECK([ovs-ofctl dump-tables br0], [0], [expout])
 # Change the configuration.
 AT_CHECK(
@@ -2284,7 +2279,7 @@ AT_CHECK(
     active=0, lookup=0, matched=0
     max_entries=1000000
     (same matching)
-'; ditto 3 253) > expout
+'; echo '  tables 3...253: ditto') > expout
 AT_CHECK([ovs-ofctl dump-tables br0], [0], [expout])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -2333,12 +2328,7 @@ head_table() {
 
 '
 }
-ditto() {
-    for i in `seq $1 $2`; do
-        printf '  table %d: ditto\n' $i
-    done
-}
-(head_table; ditto 1 253) > expout
+(head_table; echo '  tables 1...253: ditto') > expout
 AT_CHECK([ovs-ofctl dump-tables br0 | strip_xids], [0], [expout])
 OVS_VSWITCHD_STOP(["/240\.0\.0\.1/d"])
 AT_CLEANUP
@@ -2397,11 +2387,6 @@ head_table() {
 
 ' "$1"
 }
-ditto() {
-    for i in `seq $1 $2`; do
-        printf '  table %d: ditto\n' $i
-    done
-}
 tail_table() {
     printf '  table 253:
     active=0, lookup=0, matched=0
@@ -2414,7 +2399,7 @@ tail_table() {
     (same matching)
 '
 }
-(head_table; ditto 1 252; tail_table) > expout
+(head_table; printf '  tables 1...252: ditto\n\n'; tail_table) > expout
 AT_CHECK([ovs-ofctl -O OpenFlow12 dump-tables br0], [0], [expout])
 # Change the configuration.
 AT_CHECK(
@@ -2442,7 +2427,7 @@ AT_CHECK(
     max_entries=1000000
     (same instructions)
     (same matching)
-'; ditto 3 252; tail_table) > expout
+'; printf '  tables 3...252: ditto\n\n'; tail_table) > expout
 AT_CHECK([ovs-ofctl -O OpenFlow12 dump-tables br0], [0], [expout])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

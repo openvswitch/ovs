@@ -1395,21 +1395,31 @@ ofputil_table_features_format(
     const struct ofputil_table_features *prev_features,
     const struct ofputil_table_stats *stats,
     const struct ofputil_table_stats *prev_stats,
-    const struct ofputil_table_map *table_map)
+    const struct ofputil_table_map *table_map,
+    int *first_ditto, int *last_ditto)
 {
-    int i;
+    bool same_stats = !stats || (prev_stats
+                                 && table_stats_equal(stats, prev_stats));
+    bool same_features = prev_features && table_features_equal(features,
+                                                               prev_features);
+    if (same_stats && same_features && !features->name[0]) {
+        if (*first_ditto < 0) {
+            *first_ditto = features->table_id;
+        }
+        *last_ditto = features->table_id;
+        return;
+    }
+    ofputil_table_features_format_finish(s, *first_ditto, *last_ditto);
+    *first_ditto = -1;
 
-    ds_put_format(s, "  table ");
+    ds_put_format(s, "\n  table ");
     ofputil_format_table(features->table_id, table_map, s);
     if (features->name[0]) {
         ds_put_format(s, " (\"%s\")", features->name);
     }
     ds_put_char(s, ':');
 
-    bool same_stats = prev_stats && table_stats_equal(stats, prev_stats);
-    bool same_features = prev_features && table_features_equal(features,
-                                                               prev_features);
-    if ((!stats || same_stats) && same_features) {
+    if (same_stats && same_features) {
         ds_put_cstr(s, " ditto");
         return;
     }
@@ -1479,6 +1489,8 @@ ofputil_table_features_format(
             ds_put_cstr(s, "    (same matching)\n");
         } else {
             ds_put_cstr(s, "    matching:\n");
+
+            int i;
             BITMAP_FOR_EACH_1 (i, MFF_N_IDS, features->match.bm) {
                 const struct mf_field *f = mf_from_id(i);
                 bool mask = bitmap_is_set(features->mask.bm, i);
@@ -1491,6 +1503,22 @@ ofputil_table_features_format(
                                : "must exact match"));
             }
         }
+    }
+}
+
+void
+ofputil_table_features_format_finish(struct ds *s,
+                                     int first_ditto, int last_ditto)
+{
+    if (first_ditto < 0) {
+        return;
+    }
+
+    ds_put_char(s, '\n');
+    if (first_ditto == last_ditto) {
+        ds_put_format(s, "  table %d: ditto\n", first_ditto);
+    } else {
+        ds_put_format(s, "  tables %d...%d: ditto\n", first_ditto, last_ditto);
     }
 }
 

@@ -232,18 +232,19 @@ ofp_print_table_features_reply(struct ds *s, const struct ofp_header *oh,
     struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
 
     struct ofputil_table_features prev;
+    int first_ditto = -1, last_ditto = -1;
     for (int i = 0; ; i++) {
         struct ofputil_table_features tf;
         int retval;
 
         retval = ofputil_decode_table_features(&b, &tf, true);
         if (retval) {
+            ofputil_table_features_format_finish(s, first_ditto, last_ditto);
             return retval != EOF ? retval : 0;
         }
 
-        ds_put_char(s, '\n');
         ofputil_table_features_format(s, &tf, i ? &prev : NULL, NULL, NULL,
-                                      table_map);
+                                      table_map, &first_ditto, &last_ditto);
         prev = tf;
     }
 }
@@ -574,6 +575,7 @@ ofp_print_table_stats_reply(struct ds *string, const struct ofp_header *oh,
 
     struct ofputil_table_features prev_features;
     struct ofputil_table_stats prev_stats;
+    int first_ditto = -1, last_ditto = -1;
     for (int i = 0;; i++) {
         struct ofputil_table_features features;
         struct ofputil_table_stats stats;
@@ -581,14 +583,15 @@ ofp_print_table_stats_reply(struct ds *string, const struct ofp_header *oh,
 
         retval = ofputil_decode_table_stats_reply(&b, &stats, &features);
         if (retval) {
+            ofputil_table_features_format_finish(string,
+                                                 first_ditto, last_ditto);
             return retval != EOF ? retval : 0;
         }
 
-        ds_put_char(string, '\n');
         ofputil_table_features_format(string,
                                       &features, i ? &prev_features : NULL,
                                       &stats, i ? &prev_stats : NULL,
-                                      table_map);
+                                      table_map, &first_ditto, &last_ditto);
         prev_features = features;
         prev_stats = stats;
     }

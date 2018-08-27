@@ -888,6 +888,8 @@ ofctl_dump_table_features(struct ovs_cmdl_context *ctx)
     bool done = false;
 
     struct ofputil_table_features prev;
+    int first_ditto = -1, last_ditto = -1;
+    struct ds s = DS_EMPTY_INITIALIZER;
     int n = 0;
 
     send_openflow_buffer(vconn, request);
@@ -922,12 +924,10 @@ ofctl_dump_table_features(struct ovs_cmdl_context *ctx)
                         break;
                     }
 
-                    struct ds s = DS_EMPTY_INITIALIZER;
                     ofputil_table_features_format(
                         &s, &tf, n ? &prev : NULL, NULL, NULL,
-                        tables_to_show(ctx->argv[1]));
-                    puts(ds_cstr(&s));
-                    ds_destroy(&s);
+                        tables_to_show(ctx->argv[1]),
+                        &first_ditto, &last_ditto);
 
                     prev = tf;
                     n++;
@@ -945,6 +945,11 @@ ofctl_dump_table_features(struct ovs_cmdl_context *ctx)
         }
         ofpbuf_delete(reply);
     }
+
+    ofputil_table_features_format_finish(&s, first_ditto, last_ditto);
+    const char *p = ds_cstr(&s);
+    puts(p + (*p == '\n'));
+    ds_destroy(&s);
 
     vconn_close(vconn);
 }

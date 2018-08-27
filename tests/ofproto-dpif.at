@@ -8981,17 +8981,16 @@ AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
 NXST_FLOW reply:
 ])
 
-(echo "OFPST_TABLE reply (OF1.3) (xid=0x2):
+AT_CHECK([ovs-ofctl -O OpenFlow13 dump-tables br0], [0],
+  [OFPST_TABLE reply (OF1.3) (xid=0x2):
   table 0:
     active=1, lookup=0, matched=0
 
   table 1:
     active=0, lookup=0, matched=0
-"
- for i in `seq 2 253`; do
-     printf '  table %d: ditto\n' $i
- done) > expout
-AT_CHECK([ovs-ofctl -O OpenFlow13 dump-tables br0 ], [0], [expout])
+
+  tables 2...253: ditto
+])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -9027,26 +9026,24 @@ NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=14 in_port=1 (via no_match) data_l
 vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,dl_type=0x1234
 ])
 
-(echo "OFPST_TABLE reply (OF1.3) (xid=0x2):
+AT_CHECK([ovs-ofctl -O OpenFlow13 dump-tables br0], [0], [dnl
+OFPST_TABLE reply (OF1.3) (xid=0x2):
   table 0:
     active=0, lookup=0, matched=0
-"
- for i in `seq 1 253`; do
-     printf '  table %d: ditto\n' $i
- done) > expout
-AT_CHECK([ovs-ofctl -O OpenFlow13 dump-tables br0 ], [0], [expout])
 
-(echo "OFPST_TABLE reply (OF1.3) (xid=0x2):
+  tables 1...253: ditto
+])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 dump-tables br1], [0], [dnl
+OFPST_TABLE reply (OF1.3) (xid=0x2):
   table 0:
     active=0, lookup=3, matched=0
 
   table 1:
     active=0, lookup=0, matched=0
-"
- for i in `seq 2 253`; do
-     printf '  table %d: ditto\n' $i
- done) > expout
-AT_CHECK([ovs-ofctl -O OpenFlow13 dump-tables br1 ], [0], [expout])
+
+  tables 2...253: ditto
+])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -9138,18 +9135,18 @@ AT_CHECK([ovs-ofctl -O OpenFlow13 dump-flows br0 | ofctl_strip | sort], [0], [dn
 OFPST_FLOW reply (OF1.3):
 ])
 
-(echo "OFPST_TABLE reply (OF1.3) (xid=0x2):
+AT_CHECK([ovs-ofctl -O OpenFlow13 dump-tables br0], [0], [dnl
+OFPST_TABLE reply (OF1.3) (xid=0x2):
   table 0:
     active=1, lookup=3, matched=3
 
   table 1: ditto
+
   table 2:
     active=0, lookup=0, matched=0
-"
- for i in `seq 3 253`; do
-     printf '  table %d: ditto\n' $i
- done) > expout
-AT_CHECK([ovs-ofctl -O OpenFlow13 dump-tables br0 ], [0], [expout])
+
+  tables 3...253: ditto
+])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -9188,7 +9185,8 @@ AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip | sort], [0], [dn
 OFPST_FLOW reply (OF1.1):
 ])
 
-(echo "OFPST_TABLE reply (OF1.3) (xid=0x2):
+AT_CHECK([ovs-ofctl -O OpenFlow13 dump-tables br0], [0], [dnl
+OFPST_TABLE reply (OF1.3) (xid=0x2):
   table 0:
     active=0, lookup=3, matched=0
 
@@ -9197,11 +9195,9 @@ OFPST_FLOW reply (OF1.1):
 
   table 2:
     active=0, lookup=0, matched=0
-"
- for i in `seq 3 253`; do
-     printf '  table %d: ditto\n' $i
- done) > expout
-AT_CHECK([ovs-ofctl -O OpenFlow13 dump-tables br0 ], [0], [expout])
+
+  tables 3...253: ditto
+])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
