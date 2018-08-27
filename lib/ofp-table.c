@@ -1329,12 +1329,47 @@ print_table_instruction_features(
     }
 }
 
+/* Compares bitmaps of next tables 'a' and 'b', for tables 'a_table_id' and
+ * 'b_table_id', respectively.  Returns true if the bitmaps are equal.
+ *
+ * The bitmaps are considered equal if b_table_id == a_table_id + 1 and the bit
+ * for 'b_table_id' is set in 'a' but not in 'b'.  This is because OpenFlow
+ * requires that a table not be able to do a goto_table back to its own table
+ * or an earlier one.  Without considering these equivalent, every table will
+ * be different from every one in some way, which just isn't useful in printing
+ * table features. */
+static bool
+table_instruction_features_next_equal(const unsigned long *a, int a_table_id,
+                                      const unsigned long *b, int b_table_id)
+{
+    if (b_table_id == a_table_id + 1
+        && bitmap_is_set(a, b_table_id)
+        && !bitmap_is_set(b, b_table_id)) {
+        for (size_t i = 0; i < BITMAP_N_LONGS(255); i++) {
+            unsigned long diff = a[i] ^ b[i];
+            if (i == b_table_id / BITMAP_ULONG_BITS) {
+                diff &= ~bitmap_bit__(b_table_id);
+            }
+            if (diff) {
+                return false;
+            }
+        }
+        return true;
+    } else if (a_table_id == b_table_id + 1) {
+        return table_instruction_features_next_equal(b, b_table_id,
+                                                     a, a_table_id);
+    } else {
+        return bitmap_equal(a, b, 255);
+    }
+}
+
 static bool
 table_instruction_features_equal(
-    const struct ofputil_table_instruction_features *a,
-    const struct ofputil_table_instruction_features *b)
+    const struct ofputil_table_instruction_features *a, int a_table_id,
+    const struct ofputil_table_instruction_features *b, int b_table_id)
 {
-    return (bitmap_equal(a->next, b->next, 255)
+    return (table_instruction_features_next_equal(a->next, a_table_id,
+                                                  b->next, b_table_id)
             && a->instructions == b->instructions
             && table_action_features_equal(&a->write, &b->write)
             && table_action_features_equal(&a->apply, &b->apply));
@@ -1360,8 +1395,10 @@ table_features_equal(const struct ofputil_table_features *a,
             && a->supports_eviction == b->supports_eviction
             && a->supports_vacancy_events == b->supports_vacancy_events
             && a->max_entries == b->max_entries
-            && table_instruction_features_equal(&a->nonmiss, &b->nonmiss)
-            && table_instruction_features_equal(&a->miss, &b->miss)
+            && table_instruction_features_equal(&a->nonmiss, a->table_id,
+                                                &b->nonmiss, b->table_id)
+            && table_instruction_features_equal(&a->miss, a->table_id,
+                                                &b->miss, b->table_id)
             && bitmap_equal(a->match.bm, b->match.bm, MFF_N_IDS));
 }
 
@@ -1398,22 +1435,25 @@ ofputil_table_features_format(
     const struct ofputil_table_map *table_map,
     int *first_ditto, int *last_ditto)
 {
+    int table = features->table_id;
+    int prev_table = prev_features ? prev_features->table_id : 0;
+
     bool same_stats = !stats || (prev_stats
                                  && table_stats_equal(stats, prev_stats));
     bool same_features = prev_features && table_features_equal(features,
                                                                prev_features);
     if (same_stats && same_features && !features->name[0]) {
         if (*first_ditto < 0) {
-            *first_ditto = features->table_id;
+            *first_ditto = table;
         }
-        *last_ditto = features->table_id;
+        *last_ditto = table;
         return;
     }
     ofputil_table_features_format_finish(s, *first_ditto, *last_ditto);
     *first_ditto = -1;
 
     ds_put_format(s, "\n  table ");
-    ofputil_format_table(features->table_id, table_map, s);
+    ofputil_format_table(table, table_map, s);
     if (features->name[0]) {
         ds_put_format(s, " (\"%s\")", features->name);
     }
@@ -1466,13 +1506,15 @@ ofputil_table_features_format(
     const struct ofputil_table_instruction_features *prev_miss
         = prev_features ? &prev_features->miss : NULL;
     if (prev_features
-        && table_instruction_features_equal(&features->nonmiss, prev_nonmiss)
-        && table_instruction_features_equal(&features->miss, prev_miss)) {
+        && table_instruction_features_equal(&features->nonmiss, table,
+                                            prev_nonmiss, prev_table)
+        && table_instruction_features_equal(&features->miss, table,
+                                            prev_miss, prev_table)) {
         if (!table_instruction_features_empty(&features->nonmiss)) {
             ds_put_cstr(s, "    (same instructions)\n");
         }
-    } else if (!table_instruction_features_equal(&features->nonmiss,
-                                                 &features->miss)) {
+    } else if (!table_instruction_features_equal(&features->nonmiss, table,
+                                                 &features->miss, table)) {
         ds_put_cstr(s, "    instructions (other than table miss):\n");
         print_table_instruction_features(s, &features->nonmiss, prev_nonmiss);
         ds_put_cstr(s, "    instructions (table miss):\n");

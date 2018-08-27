@@ -2624,29 +2624,8 @@ metadata in_port in_port_oxm pkt_mark ct_mark ct_label reg0 reg1 reg2 reg3 reg4 
 
 ' "$1"
 }
-ditto() {
-    printf '  table %d:
-    metadata: match=0xffffffffffffffff write=0xffffffffffffffff
-    max_entries=%d
-    instructions (table miss and others):
-      next tables: %d-253
-      (same instructions)
-      (same actions)
-    (same matching)
-
-' $1 $2 `expr $1 + 1`
-}
 tail_tables() {
-echo '  table 252:
-    metadata: match=0xffffffffffffffff write=0xffffffffffffffff
-    max_entries=1000000
-    instructions (table miss and others):
-      next tables: 253
-      (same instructions)
-      (same actions)
-    (same matching)
-
-  table 253:
+echo '  table 253:
     metadata: match=0xffffffffffffffff write=0xffffffffffffffff
     max_entries=1000000
     instructions (table miss and others):
@@ -2656,9 +2635,7 @@ echo '  table 252:
 '
 }
 (head_table
- for i in `seq 1 251`; do
-     ditto $i 1000000
- done
+ printf '  tables 1...252: ditto\n\n'
  tail_tables) > expout
 AT_CHECK([ovs-ofctl -O OpenFlow13 dump-table-features br0], [0], [expout])
 # Change the configuration.
@@ -2673,10 +2650,20 @@ AT_CHECK(
 ])
 # Check that the configuration was updated.
 (head_table ' ("main")'
- ditto 1 1024
- for i in `seq 2 251`; do
-     ditto $i 1000000
- done
+ echo '  table 1:
+    metadata: match=0xffffffffffffffff write=0xffffffffffffffff
+    max_entries=1024
+    (same instructions)
+    (same matching)
+
+  table 2:
+    metadata: match=0xffffffffffffffff write=0xffffffffffffffff
+    max_entries=1000000
+    (same instructions)
+    (same matching)
+
+  tables 3...252: ditto
+'
  tail_tables) > expout
 AT_CHECK([ovs-ofctl -O OpenFlow13 dump-table-features br0], [0], [expout])
 OVS_VSWITCHD_STOP
