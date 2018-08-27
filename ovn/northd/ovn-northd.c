@@ -3733,7 +3733,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
 
                 ds_clear(&actions);
                 ds_put_format(&actions,
-                        "nd_na { "
+                        "%s { "
                         "eth.src = %s; "
                         "ip6.src = %s; "
                         "nd.target = %s; "
@@ -3742,6 +3742,8 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                         "flags.loopback = 1; "
                         "output; "
                         "};",
+                        !strcmp(op->nbsp->type, "router") ?
+                            "nd_na_router" : "nd_na",
                         op->lsp_addrs[i].ea_s,
                         op->lsp_addrs[i].ipv6_addrs[j].addr_s,
                         op->lsp_addrs[i].ipv6_addrs[j].addr_s,
