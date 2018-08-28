@@ -1,4 +1,3 @@
-#!/bin/bash
 #
 # A bash command completion script for ovs-appctl.
 #
