@@ -187,12 +187,22 @@ void ofputil_table_desc_format(struct ds *,
  * include support for a subset of ofp_table_features through OFPST_TABLE (aka
  * OFPMP_TABLE). */
 struct ofputil_table_features {
-    uint8_t table_id;         /* Identifier of table. Lower numbered tables
-                                 are consulted first. */
+    /* Only for OFPT_TABLE_FEATURES requests and only the first table_features
+     * in such a request.  */
+    enum ofp15_table_features_command command;
+
+    /* The following are always present in table features requests and
+     * replies. */
+    uint8_t table_id;
     char name[OFP_MAX_TABLE_NAME_LEN];
     ovs_be64 metadata_match;  /* Bits of metadata table can match. */
     ovs_be64 metadata_write;  /* Bits of metadata table can write. */
     uint32_t max_entries;     /* Max number of entries supported. */
+
+    /* True if the message included any properties.  This is important for
+     * OFPT_TABLE_FEATURES requests, which change table properties only if any
+     * are included. */
+    bool any_properties;
 
     /* Flags.
      *

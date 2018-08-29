@@ -215,13 +215,24 @@ struct ofp13_table_stats {
 };
 OFP_ASSERT(sizeof(struct ofp13_table_stats) == 24);
 
+enum ofp15_table_features_command {
+    OFPTFC15_REPLACE = 0,       /* Replace full pipeline. */
+    OFPTFC15_MODIFY = 1,        /* Modify flow tables capabilities. */
+    OFPTFC15_ENABLE = 2,        /* Enable flow tables in the pipeline. */
+    OFPTFC15_DISABLE = 3,       /* Disable flow tables in pipeline. */
+};
+
 /* Body for ofp_multipart_request of type OFPMP_TABLE_FEATURES./
  * Body of reply to OFPMP_TABLE_FEATURES request. */
 struct ofp13_table_features {
     ovs_be16 length;          /* Length is padded to 64 bits. */
     uint8_t table_id;         /* Identifier of table. Lower numbered tables
                                  are consulted first. */
-    uint8_t pad[5];           /* Align to 64-bits. */
+
+    /* Added in OF1.5.  Earlier versions acted like OFPTFC15_REPLACE. */
+    uint8_t command;          /* One of OFPTFC15_*. */
+
+    uint8_t pad[4];           /* Align to 64-bits. */
     char name[OFP_MAX_TABLE_NAME_LEN];
     ovs_be64 metadata_match;  /* Bits of metadata table can match. */
     ovs_be64 metadata_write;  /* Bits of metadata table can write. */
@@ -260,6 +271,17 @@ enum ofp13_table_feature_prop_type {
     OFPTFPT13_APPLY_SETFIELD_MISS  = 15, /* Apply Set-Field for table-miss. */
     OFPTFPT13_EXPERIMENTER         = 0xFFFE, /* Experimenter property. */
     OFPTFPT13_EXPERIMENTER_MISS    = 0xFFFF, /* Experimenter for table-miss. */
+
+    /* OpenFlow says that each of these properties must occur exactly once. */
+#define OFPTFPT13_REQUIRED ((1u << OFPTFPT13_INSTRUCTIONS) |    \
+                            (1u << OFPTFPT13_NEXT_TABLES) |     \
+                            (1u << OFPTFPT13_WRITE_ACTIONS) |   \
+                            (1u << OFPTFPT13_APPLY_ACTIONS) |   \
+                            (1u << OFPTFPT13_MATCH) |           \
+                            (1u << OFPTFPT13_WILDCARDS) |       \
+                            (1u << OFPTFPT13_WRITE_SETFIELD) |  \
+                            (1u << OFPTFPT13_APPLY_SETFIELD))
+
 };
 
 /* Body of reply to OFPMP13_PORT request. If a counter is unsupported, set

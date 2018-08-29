@@ -74,6 +74,33 @@ ofputil_table_vacancy_to_string(enum ofputil_table_vacancy vacancy)
     default: return "***error***";
     }
 }
+
+static bool
+ofp15_table_features_command_is_valid(enum ofp15_table_features_command cmd)
+{
+    switch (cmd) {
+    case OFPTFC15_REPLACE:
+    case OFPTFC15_MODIFY:
+    case OFPTFC15_ENABLE:
+    case OFPTFC15_DISABLE:
+        return true;
+
+    default:
+        return false;
+    }
+}
+
+static const char *
+ofp15_table_features_command_to_string(enum ofp15_table_features_command cmd)
+{
+    switch (cmd) {
+    case OFPTFC15_REPLACE: return "replace";
+    case OFPTFC15_MODIFY: return "modify";
+    case OFPTFC15_ENABLE: return "enable";
+    case OFPTFC15_DISABLE: return "disable";
+    default: return "***bad command***";
+    }
+}
 
 /* ofputil_table_map.  */
 
@@ -361,6 +388,15 @@ ofputil_decode_table_features(struct ofpbuf *msg,
         return OFPERR_OFPBPC_BAD_LEN;
     }
 
+    if (oh->version >= OFP15_VERSION) {
+        if (!ofp15_table_features_command_is_valid(otf->command)) {
+            return OFPERR_OFPTFFC_BAD_COMMAND;
+        }
+        tf->command = otf->command;
+    } else {
+        tf->command = OFPTFC15_REPLACE;
+    }
+
     tf->table_id = otf->table_id;
     if (tf->table_id == OFPTT_ALL) {
         return OFPERR_OFPTFFC_BAD_TABLE;
@@ -382,7 +418,9 @@ ofputil_decode_table_features(struct ofpbuf *msg,
 
     struct ofpbuf properties = ofpbuf_const_initializer(ofpbuf_pull(msg, len),
                                                         len);
+    tf->any_properties = properties.size > 0;
     ofpbuf_pull(&properties, sizeof *otf);
+    uint32_t seen = 0;
     while (properties.size > 0) {
         struct ofpbuf payload;
         enum ofperr error;
@@ -391,6 +429,14 @@ ofputil_decode_table_features(struct ofpbuf *msg,
         error = pull_table_feature_property(&properties, &payload, &type);
         if (error) {
             return error;
+        }
+
+        if (type < 32) {
+            uint32_t bit = 1u << type;
+            if (seen & bit) {
+                return OFPERR_OFPTFFC_BAD_FEATURES;
+            }
+            seen |= bit;
         }
 
         switch ((enum ofp13_table_feature_prop_type) type) {
@@ -461,6 +507,36 @@ ofputil_decode_table_features(struct ofpbuf *msg,
         }
         if (error) {
             return error;
+        }
+    }
+
+    /* OpenFlow 1.3 and 1.4 always require all of the required properties.
+     * OpenFlow 1.5 requires all of them if any property is present. */
+    if ((seen & OFPTFPT13_REQUIRED) != OFPTFPT13_REQUIRED
+        && (tf->any_properties || oh->version < OFP15_VERSION)) {
+        VLOG_WARN_RL(&rl, "table features message missing required property");
+        return OFPERR_OFPTFFC_BAD_FEATURES;
+    }
+
+    /* Copy nonmiss to miss when appropriate. */
+    if (tf->any_properties) {
+        if (!(seen & (1u << OFPTFPT13_INSTRUCTIONS_MISS))) {
+            tf->miss.instructions = tf->nonmiss.instructions;
+        }
+        if (!(seen & (1u << OFPTFPT13_NEXT_TABLES_MISS))) {
+            memcpy(tf->miss.next, tf->nonmiss.next, sizeof tf->miss.next);
+        }
+        if (!(seen & (1u << OFPTFPT13_WRITE_ACTIONS_MISS))) {
+            tf->miss.write.ofpacts = tf->nonmiss.write.ofpacts;
+        }
+        if (!(seen & (1u << OFPTFPT13_APPLY_ACTIONS_MISS))) {
+            tf->miss.apply.ofpacts = tf->nonmiss.apply.ofpacts;
+        }
+        if (!(seen & (1u << OFPTFPT13_WRITE_SETFIELD_MISS))) {
+            tf->miss.write.set_fields = tf->nonmiss.write.set_fields;
+        }
+        if (!(seen & (1u << OFPTFPT13_APPLY_SETFIELD_MISS))) {
+            tf->miss.apply.set_fields = tf->nonmiss.apply.set_fields;
         }
     }
 
@@ -577,6 +653,7 @@ ofputil_append_table_features_reply(const struct ofputil_table_features *tf,
 
     otf = ofpbuf_put_zeros(reply, sizeof *otf);
     otf->table_id = tf->table_id;
+    otf->command = version >= OFP15_VERSION ? tf->command : 0;
     ovs_strlcpy_arrays(otf->name, tf->name);
     otf->metadata_match = tf->metadata_match;
     otf->metadata_write = tf->metadata_write;
@@ -1434,6 +1511,12 @@ ofputil_table_features_format(
     const struct ofputil_table_stats *prev_stats,
     int *first_ditto, int *last_ditto)
 {
+    if (!prev_features && features->command != OFPTFC15_REPLACE) {
+        ds_put_format(s, "\n  command: %s",
+                      ofp15_table_features_command_to_string(
+                          features->command));
+    }
+
     int table = features->table_id;
     int prev_table = prev_features ? prev_features->table_id : 0;
 
