@@ -251,6 +251,21 @@ found:
     return end;
 }
 
+/* Returns true if the 1-bits in 'super' are a superset of the 1-bits in 'sub',
+ * false otherwise.  'super' and 'sub' both have 'n_bits' bits. */
+static inline bool
+bitmap_is_superset(const unsigned long int *super,
+                   const unsigned long int *sub, size_t n_bits)
+{
+    size_t n_longs = bitmap_n_longs(n_bits);
+    for (size_t i = 0; i < n_longs; i++) {
+        if (!uint_is_superset(super[i], sub[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
 /* Returns true if all of the 'n' bits in 'bitmap' are 0,
  * false if at least one bit is a 1.*/
 static inline bool

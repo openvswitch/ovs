@@ -913,9 +913,9 @@ ofctl_dump_table_features(struct ovs_cmdl_context *ctx)
                 done = !ofpmp_more(reply->data);
                 for (;;) {
                     struct ofputil_table_features tf;
-                    int retval;
-
-                    retval = ofputil_decode_table_features(reply, &tf, true);
+                    struct ofpbuf raw_properties;
+                    int retval = ofputil_decode_table_features(
+                        reply, &tf, &raw_properties);
                     if (retval) {
                         if (retval != EOF) {
                             ovs_fatal(0, "decode error: %s",
@@ -1207,6 +1207,7 @@ struct table_iterator {
     bool more;
 
     struct ofputil_table_features features;
+    struct ofpbuf raw_properties;
 };
 
 /* Initializes 'ti' to prepare for iterating through all of the tables on the
@@ -1248,7 +1249,7 @@ table_iterator_next(struct table_iterator *ti)
                 ovs_assert(ti->variant == TI_FEATURES);
                 retval = ofputil_decode_table_features(ti->reply,
                                                        &ti->features,
-                                                       true);
+                                                       &ti->raw_properties);
             }
             if (!retval) {
                 return &ti->features;
@@ -2581,15 +2582,94 @@ fetch_table_desc(struct vconn *vconn, struct ofputil_table_mod *tm,
 }
 
 static void
+change_table_name(struct vconn *vconn, uint8_t table_id, const char *new_name)
+{
+    /* Get all tables' features and properties. */
+    struct table {
+        struct ofputil_table_features tf;
+        struct ofpbuf *raw_properties;
+    } *tables[256];
+    memset(tables, 0, sizeof tables);
+
+    struct table_iterator ti;
+    table_iterator_init(&ti, vconn);
+    while (table_iterator_next(&ti)) {
+        struct table *t = tables[ti.features.table_id] = xmalloc(sizeof *t);
+        t->tf = ti.features;
+        t->raw_properties = ofpbuf_clone(&ti.raw_properties);
+    }
+    table_iterator_destroy(&ti);
+
+    /* Change the name for table 'table_id'. */
+    struct table *t = tables[table_id];
+    if (!t) {
+        ovs_fatal(0, "switch does not have table %"PRIu8, table_id);
+    }
+    ovs_strlcpy(t->tf.name, new_name, OFP_MAX_TABLE_NAME_LEN);
+
+    /* Compose the transaction. */
+    enum ofp_version version = vconn_get_version(vconn);
+    struct ovs_list requests = OVS_LIST_INITIALIZER(&requests);
+    struct ofpbuf *tfr = ofputil_encode_table_features_request(version);
+    ovs_list_push_back(&requests, &tfr->list_node);
+    if (version >= OFP15_VERSION) {
+        /* For OpenFlow 1.5, we can use a single OFPTFC15_MODIFY without any
+         * properties. */
+        t->tf.command = OFPTFC15_MODIFY;
+        t->tf.any_properties = false;
+        ofputil_append_table_features(&t->tf, NULL, &requests);
+    } else {
+        /* For OpenFlow 1.3 and 1.4, we have to regurgitate all of the tables
+         * and their properties. */
+        for (size_t i = 0; i < 256; i++) {
+            if (tables[i]) {
+                ofputil_append_table_features(&tables[i]->tf,
+                                              tables[i]->raw_properties,
+                                              &requests);
+            }
+        }
+    }
+
+    /* Transact.
+     *
+     * The reply repeats the entire new configuration of the tables, so we
+     * don't bother printing it unless there's an error. */
+    struct ovs_list replies;
+    struct ofpbuf *reply;
+    vconn_transact_multipart(vconn, &requests, &replies);
+    LIST_FOR_EACH (reply, list_node, &replies) {
+        enum ofptype type;
+        enum ofperr error = ofptype_decode(&type, reply->data);
+        if (error) {
+            ovs_fatal(0, "decode error: %s", ofperr_get_name(error));
+        } else if (type == OFPTYPE_ERROR) {
+            ofp_print(stderr, reply->data, reply->size, NULL, NULL,
+                      verbosity + 1);
+            exit(1);
+        }
+    }
+    ofpbuf_list_delete(&replies);
+
+    /* Clean up. */
+    for (size_t i = 0; i < ARRAY_SIZE(tables); i++) {
+        if (tables[i]) {
+            ofpbuf_delete(tables[i]->raw_properties);
+            free(tables[i]);
+        }
+    }
+}
+
+static void
 ofctl_mod_table(struct ovs_cmdl_context *ctx)
 {
     uint32_t usable_versions;
     struct ofputil_table_mod tm;
+    const char *name;
     struct vconn *vconn;
     char *error;
     int i;
 
-    error = parse_ofp_table_mod(&tm, ctx->argv[2], ctx->argv[3],
+    error = parse_ofp_table_mod(&tm, &name, ctx->argv[2], ctx->argv[3],
                                 tables_to_accept(ctx->argv[1]),
                                 &usable_versions);
     if (error) {
@@ -2607,27 +2687,33 @@ ofctl_mod_table(struct ovs_cmdl_context *ctx)
     mask_allowed_ofp_versions(usable_versions);
     enum ofputil_protocol protocol = open_vconn(ctx->argv[1], &vconn);
 
-    /* For OpenFlow 1.4+, ovs-ofctl mod-table should not affect table-config
-     * properties that the user didn't ask to change, so it is necessary to
-     * restore the current configuration of table-config parameters using
-     * OFPMP14_TABLE_DESC request. */
-    if ((allowed_versions & (1u << OFP14_VERSION)) ||
-        (allowed_versions & (1u << OFP15_VERSION))) {
-        struct ofputil_table_desc td;
+    if (name) {
+        change_table_name(vconn, tm.table_id, name);
+    } else {
+        /* For OpenFlow 1.4+, ovs-ofctl mod-table should not affect
+         * table-config properties that the user didn't ask to change, so it is
+         * necessary to restore the current configuration of table-config
+         * parameters using OFPMP14_TABLE_DESC request. */
+        if (allowed_versions & ((1u << OFP14_VERSION) |
+                                (1u << OFP15_VERSION) |
+                                (1u << OFP16_VERSION))) {
+            struct ofputil_table_desc td;
 
-        if (tm.table_id == OFPTT_ALL) {
-            for (i = 0; i < OFPTT_MAX; i++) {
-                tm.table_id = i;
+            if (tm.table_id == OFPTT_ALL) {
+                for (i = 0; i < OFPTT_MAX; i++) {
+                    tm.table_id = i;
+                    fetch_table_desc(vconn, &tm, &td);
+                    transact_noreply(vconn,
+                                     ofputil_encode_table_mod(&tm, protocol));
+                }
+            } else {
                 fetch_table_desc(vconn, &tm, &td);
-                transact_noreply(vconn,
-                                 ofputil_encode_table_mod(&tm, protocol));
+                transact_noreply(vconn, ofputil_encode_table_mod(&tm,
+                                                                 protocol));
             }
         } else {
-            fetch_table_desc(vconn, &tm, &td);
             transact_noreply(vconn, ofputil_encode_table_mod(&tm, protocol));
         }
-    } else {
-        transact_noreply(vconn, ofputil_encode_table_mod(&tm, protocol));
     }
     vconn_close(vconn);
 }

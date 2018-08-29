@@ -674,6 +674,9 @@ enum ofperr {
     /* OF1.5+(13,10).  Can't handle this many flow tables. */
     OFPERR_OFPTFFC_TOO_MANY,
 
+    /* NX1.3+(44).  Table specified multiple times. */
+    OFPERR_NXTFFC_DUP_TABLE,
+
 
 /* ## ------------------ ## */
 /* ## OFPET_BAD_PROPERTY ## */

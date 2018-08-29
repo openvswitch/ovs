@@ -85,7 +85,9 @@ const enum mf_field_id default_prefix_fields[2] =
 static void oftable_init(struct oftable *);
 static void oftable_destroy(struct oftable *);
 
-static void oftable_set_name(struct oftable *, const char *name);
+static void oftable_set_name(struct oftable *, const char *name, int level);
+static bool oftable_may_set_name(const struct oftable *,
+                                 const char *name, int level);
 
 static enum ofperr evict_rules_from_table(struct oftable *)
     OVS_REQUIRES(ofproto_mutex);
@@ -1473,7 +1475,7 @@ ofproto_configure_table(struct ofproto *ofproto, int table_id,
     ovs_assert(table_id >= 0 && table_id < ofproto->n_tables);
     table = &ofproto->tables[table_id];
 
-    oftable_set_name(table, s->name);
+    oftable_set_name(table, s->name, 2);
 
     if (table->flags & OFTABLE_READONLY) {
         return;
@@ -3249,6 +3251,8 @@ query_tables(struct ofproto *ofproto,
         atomic_read_relaxed(&ofproto->tables[i].miss_config, &f->miss_config);
         f->max_entries = 1000000;
 
+        f->any_properties = true;
+
         bool more_tables = false;
         for (int j = i + 1; j < ofproto->n_tables; j++) {
             if (!(ofproto->tables[j].flags & OFTABLE_HIDDEN)) {
@@ -3784,33 +3788,237 @@ handle_table_stats_request(struct ofconn *ofconn,
     return 0;
 }
 
-static enum ofperr
-handle_table_features_request(struct ofconn *ofconn,
-                              const struct ofp_header *request)
+/* OpenFlow 1.5.1 section 7.3.5.18.1 "Table Features request and reply"
+ * says:
+ *
+ *    If a table feature included in the request has an empty list of
+ *    properties, the list of properties for that flow table is unchanged and
+ *    only the other features of that flow table are updated.
+ *
+ * This function copies the "list of properties" from '*src' to '*dst'. */
+static void
+copy_properties(struct ofputil_table_features *dst,
+                const struct ofputil_table_features *src)
+{
+    dst->any_properties = src->any_properties;
+    if (src->any_properties) {
+        dst->nonmiss = src->nonmiss;
+        dst->miss = src->miss;
+        dst->match = src->match;
+        dst->mask = src->mask;
+        dst->wildcard = src->wildcard;
+    }
+}
+
+/* Attempts to change the table features of the ofproto backing 'ofconn' to
+ * those specified in the table features request in 'msgs', given that the
+ * features are currently those in 'old'.
+ *
+ * Returns 0 if successful, an OpenFlow error if the caller should send an
+ * error message for the request as a whole, or -1 if the function already sent
+ * an error message for some message in 'msgs'. */
+static int
+handle_table_features_change(struct ofconn *ofconn,
+                             const struct ovs_list *msgs,
+                             const struct ofputil_table_features old[])
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-    struct ofpbuf msg = ofpbuf_const_initializer(request,
-                                                 ntohs(request->length));
-    ofpraw_pull_assert(&msg);
-    if (msg.size || ofpmp_more(request)) {
+
+    enum ofp15_table_features_command command = OFPTFC15_REPLACE;
+    struct ofputil_table_features new[255];
+
+    unsigned long int seen[BITMAP_N_LONGS(255)];
+    memset(seen, 0, sizeof seen);
+
+    struct ofpbuf *msg;
+    int n = 0;
+    LIST_FOR_EACH (msg, list_node, msgs) {
+        for (;;) {
+            struct ofputil_table_features tf;
+            int retval = ofputil_decode_table_features(msg, &tf, NULL);
+            if (retval == EOF) {
+                break;
+            } else if (retval) {
+                ofconn_send_error(ofconn, msg->header, retval);
+                return -1;
+            }
+
+            /* Get command from first request. */
+            if (!n) {
+                command = tf.command;
+            }
+            n++;
+
+            /* Avoid duplicate tables. */
+            if (bitmap_is_set(seen, tf.table_id)) {
+                VLOG_INFO_RL(&rl, "duplicate table %"PRIu8, tf.table_id);
+                ofconn_send_error(ofconn, msg->header,
+                                  OFPERR_NXTFFC_DUP_TABLE);
+                return -1;
+            }
+            bitmap_set1(seen, tf.table_id);
+
+            /* Save table. */
+            new[tf.table_id] = tf;
+        }
+    }
+
+    if (!n) {
+        return 0;
+    }
+
+    for (size_t i = 0; i < ofproto->n_tables; i++) {
+        if (ofproto->tables[i].flags & OFTABLE_HIDDEN) {
+            if (bitmap_is_set(seen, i)) {
+                VLOG_INFO_RL(&rl, "can't modify hidden table %"PRIuSIZE, i);
+                return OFPERR_OFPTFFC_EPERM;
+            }
+
+            new[i] = old[i];
+            bitmap_set1(seen, i);
+        }
+    }
+
+    switch (command) {
+    case OFPTFC15_REPLACE:
+        break;
+
+    case OFPTFC15_MODIFY:
+        for (size_t i = 0; i < ofproto->n_tables; i++) {
+            if (!bitmap_is_set(seen, i)) {
+                new[i] = old[i];
+                bitmap_set1(seen, i);
+            } else if (!new[i].any_properties) {
+                copy_properties(&new[i], &old[i]);
+            }
+        }
+        break;
+
+    case OFPTFC15_ENABLE:
+    case OFPTFC15_DISABLE:
+        /* It really isn't clear what these commands are supposed to do in an
+         * Open vSwitch context.  OVS doesn't have a concept of tables that
+         * exist but are not in the pipeline, and OVS table ids are always
+         * sequential from 0. */
         return OFPERR_OFPTFFC_EPERM;
     }
 
+    /* Make sure that the new number of tables is the same as the old number,
+     * because we don't support changing the number of tables or disabling
+     * tables. */
+    int n_tables = bitmap_scan(seen, 0, 0, 255);
+    bool skipped_tables = bitmap_scan(seen, 1, n_tables, 255) != 255;
+    if (n_tables != ofproto->n_tables || skipped_tables) {
+        if (skipped_tables) {
+            VLOG_INFO_RL(&rl, "can't disable table %d", n_tables);
+        } else {
+            VLOG_INFO_RL(&rl, "can't change number of tables from %d to %d",
+                         ofproto->n_tables, n_tables);
+        }
+        return (n_tables > ofproto->n_tables
+                ? OFPERR_OFPTFFC_TOO_MANY
+                : OFPERR_OFPTFFC_EPERM);
+    }
+
+    /* OpenFlow 1.5.1 section 7.3.5.18.1 "Table Features request and reply"
+     * says:
+     *
+     *     "All fields in ofp_table_features may be requested to be changed by
+     *     the controller with the exception of the max_entries field, this is
+     *     read only and returned by the switch."
+     *
+     * so forbid the controller from attempting to change it.
+     *
+     * (This seems like a particularly arbitrary prohibition since OVS could
+     * easily implement such a feature.  Whatever.) */
+    for (size_t i = 0; i < n_tables; i++) {
+        if (old[i].max_entries != new[i].max_entries) {
+            VLOG_INFO_RL(&rl, "can't change max_entries");
+            return OFPERR_OFPTFFC_EPERM;
+        }
+    }
+
+    /* Check that we can set table names. */
+    for (size_t i = 0; i < n_tables; i++) {
+        if (!oftable_may_set_name(&ofproto->tables[i], new[i].name, 1)) {
+            const char *name = ofproto->tables[i].name;
+            VLOG_INFO_RL(&rl, "can't change name of table %"PRIuSIZE" "
+                         "to %s because it is already set to %s via OVSDB",
+                         i, new[i].name, name ? name : "\"\"");
+            return OFPERR_OFPTFFC_EPERM;
+        }
+    }
+
+    /* Ask the provider to update its features.
+     *
+     * If the provider can't update features, just make sure that the
+     * controller isn't asking to enable new features.  OpenFlow says it's OK
+     * if a superset of the requested features are actually enabled. */
+    if (ofproto->ofproto_class->modify_tables) {
+        enum ofperr error = ofproto->ofproto_class->modify_tables(ofproto,
+                                                                  old, new);
+        if (error) {
+            VLOG_INFO_RL(&rl, "can't change table features");
+            return error;
+        }
+    } else {
+        for (size_t i = 0; i < n_tables; i++) {
+            if (!ofputil_table_features_are_superset(&old[i], &new[i])) {
+                VLOG_INFO_RL(&rl, "can't increase table features "
+                             "for table %"PRIuSIZE, i);
+                return OFPERR_OFPTFFC_EPERM;
+            }
+        }
+    }
+
+    /* Update table names. */
+    for (size_t i = 0; i < n_tables; i++) {
+        oftable_set_name(&ofproto->tables[i], new[i].name, 1);
+    }
+
+    return 0;
+}
+
+static void
+handle_table_features_request(struct ofconn *ofconn,
+                              const struct ovs_list *msgs)
+{
+    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
+
+    struct ofpbuf *msg = ofpbuf_from_list(ovs_list_back(msgs));
+    const struct ofp_header *request = msg->data;
+    ofpraw_pull_assert(msg);
+
+    /* Update the table features configuration, if requested. */
     struct ofputil_table_features *features;
     query_tables(ofproto, &features, NULL);
+    if (!ovs_list_is_singleton(msgs) || msg->size) {
+        int retval = handle_table_features_change(ofconn, msgs, features);
+        free(features);
+        if (retval) {
+            if (retval < 0) {
+                /* handle_table_features_change() already sent an error. */
+            } else {
+                ofconn_send_error(ofconn, request, retval);
+            }
+            return;
+        }
 
+        /* Features may have changed, re-query. */
+        query_tables(ofproto, &features, NULL);
+    }
+
+    /* Reply the controller with the table configuration. */
     struct ovs_list replies;
     ofpmp_init(&replies, request);
     for (size_t i = 0; i < ofproto->n_tables; i++) {
         if (!(ofproto->tables[i].flags & OFTABLE_HIDDEN)) {
-            ofputil_append_table_features_reply(&features[i], &replies);
+            ofputil_append_table_features(&features[i], NULL, &replies);
         }
     }
     ofconn_send_replies(ofconn, &replies);
 
     free(features);
-
-    return 0;
 }
 
 /* Returns the vacancy of 'oftable', a number that ranges from 0 (if the table
@@ -8195,7 +8403,7 @@ handle_single_part_openflow(struct ofconn *ofconn, const struct ofp_header *oh,
         return handle_table_stats_request(ofconn, oh);
 
     case OFPTYPE_TABLE_FEATURES_STATS_REQUEST:
-        return handle_table_features_request(ofconn, oh);
+        OVS_NOT_REACHED();
 
     case OFPTYPE_TABLE_DESC_REQUEST:
         return handle_table_desc_request(ofconn, oh);
@@ -8306,7 +8514,9 @@ handle_openflow(struct ofconn *ofconn, const struct ovs_list *msgs)
     enum ofptype type;
     enum ofperr error = ofptype_decode(&type, msg->data);
     if (!error) {
-        if (!ovs_list_is_short(msgs)) {
+        if (type == OFPTYPE_TABLE_FEATURES_STATS_REQUEST) {
+            handle_table_features_request(ofconn, msgs);
+        } else if (!ovs_list_is_short(msgs)) {
             error = OFPERR_OFPBRC_BAD_STAT;
         } else {
             error = handle_single_part_openflow(ofconn, msg->data, type);
@@ -8631,24 +8841,48 @@ oftable_destroy(struct oftable *table)
     free(table->name);
 }
 
-/* Changes the name of 'table' to 'name'.  If 'name' is NULL or the empty
- * string, then 'table' will use its default name.
+/* Changes the name of 'table' to 'name'.  Null or empty string 'name' unsets
+ * the name.
+ *
+ * 'level' should be 1 if the name is being set via OpenFlow, or 2 if the name
+ * is being set via OVSDB.  Higher levels get precedence.
  *
  * This only affects the name exposed for a table exposed through the OpenFlow
  * OFPST_TABLE (as printed by "ovs-ofctl dump-tables"). */
 static void
-oftable_set_name(struct oftable *table, const char *name)
+oftable_set_name(struct oftable *table, const char *name, int level)
 {
-    if (name && name[0]) {
-        int len = strnlen(name, OFP_MAX_TABLE_NAME_LEN);
-        if (!table->name || strncmp(name, table->name, len)) {
+    int len = name ? strnlen(name, OFP_MAX_TABLE_NAME_LEN) : 0;
+    if (level >= table->name_level) {
+        if (name) {
+            if (name[0]) {
+                if (!table->name || strncmp(name, table->name, len)) {
+                    free(table->name);
+                    table->name = xmemdup0(name, len);
+                }
+            } else {
+                free(table->name);
+                table->name = NULL;
+            }
+            table->name_level = level;
+        } else if (table->name_level == level) {
             free(table->name);
-            table->name = xmemdup0(name, len);
+            table->name = NULL;
+            table->name_level = 0;
         }
-    } else {
-        free(table->name);
-        table->name = NULL;
     }
+}
+
+/* Returns true if oftable_set_name(table, name, level) would be effective,
+ * false otherwise.  */
+static bool
+oftable_may_set_name(const struct oftable *table, const char *name, int level)
+{
+    return (level >= table->name_level
+            || !name
+            || !table->name
+            || !strncmp(name, table->name,
+                        strnlen(name, OFP_MAX_TABLE_NAME_LEN)));
 }
 
 /* oftables support a choice of two policies when adding a rule would cause the

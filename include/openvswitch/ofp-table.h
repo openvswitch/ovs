@@ -155,7 +155,7 @@ struct ofpbuf *ofputil_encode_table_mod(const struct ofputil_table_mod *,
                                        enum ofputil_protocol);
 void ofputil_table_mod_format(struct ds *, const struct ofputil_table_mod *,
                               const struct ofputil_table_map *);
-char *parse_ofp_table_mod(struct ofputil_table_mod *,
+char *parse_ofp_table_mod(struct ofputil_table_mod *, const char **namep,
                           const char *table_id, const char *flow_miss_handling,
                           const struct ofputil_table_map *,
                           uint32_t *usable_versions)
@@ -271,15 +271,18 @@ struct ofputil_table_features {
     struct mf_bitmap wildcard;  /* Subset of 'match' that may be wildcarded. */
 };
 
-int ofputil_decode_table_features(struct ofpbuf *,
-                                  struct ofputil_table_features *, bool loose);
+int ofputil_decode_table_features(
+    struct ofpbuf *, struct ofputil_table_features *,
+    struct ofpbuf *raw_properties);
 
 struct ofpbuf *ofputil_encode_table_features_request(enum ofp_version);
 
 struct ofpbuf *ofputil_encode_table_desc_request(enum ofp_version);
 
-void ofputil_append_table_features_reply(
-    const struct ofputil_table_features *tf, struct ovs_list *replies);
+void ofputil_append_table_features(
+    const struct ofputil_table_features *tf,
+    const struct ofpbuf *raw_properties,
+    struct ovs_list *msgs);
 
 void ofputil_table_features_format(
     struct ds *, const struct ofputil_table_features *features,
@@ -289,6 +292,10 @@ void ofputil_table_features_format(
     int *first_ditto, int *last_ditto);
 void ofputil_table_features_format_finish(struct ds *,
                                           int first_ditto, int last_ditto);
+
+bool ofputil_table_features_are_superset(
+    const struct ofputil_table_features *super,
+    const struct ofputil_table_features *sub);
 
 /* Abstract table stats.
  *

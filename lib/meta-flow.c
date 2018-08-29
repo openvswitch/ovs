@@ -3528,3 +3528,12 @@ mf_vl_mff_mf_from_nxm_header(uint32_t header,
     mf_vl_mff_set_tlv_bitmap(*field, tlv_bitmap);
     return 0;
 }
+
+/* Returns true if the 1-bits in 'super' are a superset of the 1-bits in 'sub',
+ * false otherwise. */
+bool
+mf_bitmap_is_superset(const struct mf_bitmap *super,
+                      const struct mf_bitmap *sub)
+{
+    return bitmap_is_superset(super->bm, sub->bm, MFF_N_IDS);
+}

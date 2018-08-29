@@ -1913,6 +1913,9 @@ struct mf_bitmap {
 };
 #define MF_BITMAP_INITIALIZER { { [0] = 0 } }
 
+bool mf_bitmap_is_superset(const struct mf_bitmap *super,
+                           const struct mf_bitmap *sub);
+
 /* Use this macro as CASE_MFF_REGS: in a switch statement to choose all of the
  * MFF_REGn cases. */
 #if FLOW_N_REGS ==16

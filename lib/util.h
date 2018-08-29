@@ -436,6 +436,38 @@ static inline ovs_be32 be32_prefix_mask(int plen)
     return htonl((uint64_t)UINT32_MAX << (32 - plen));
 }
 
+/* Returns true if the 1-bits in 'super' are a superset of the 1-bits in 'sub',
+ * false otherwise. */
+static inline bool
+uint_is_superset(uintmax_t super, uintmax_t sub)
+{
+    return (super & sub) == sub;
+}
+
+/* Returns true if the 1-bits in 'super' are a superset of the 1-bits in 'sub',
+ * false otherwise. */
+static inline bool
+be16_is_superset(ovs_be16 super, ovs_be16 sub)
+{
+    return (super & sub) == sub;
+}
+
+/* Returns true if the 1-bits in 'super' are a superset of the 1-bits in 'sub',
+ * false otherwise. */
+static inline bool
+be32_is_superset(ovs_be32 super, ovs_be32 sub)
+{
+    return (super & sub) == sub;
+}
+
+/* Returns true if the 1-bits in 'super' are a superset of the 1-bits in 'sub',
+ * false otherwise. */
+static inline bool
+be64_is_superset(ovs_be64 super, ovs_be64 sub)
+{
+    return (super & sub) == sub;
+}
+
 bool is_all_zeros(const void *, size_t);
 bool is_all_ones(const void *, size_t);
 bool is_all_byte(const void *, size_t, uint8_t byte);
@@ -507,6 +539,20 @@ ovs_u128_and(const ovs_u128 a, const ovs_u128 b)
     dst.u64.lo = a.u64.lo & b.u64.lo;
 
     return dst;
+}
+
+static inline bool
+ovs_be128_is_superset(ovs_be128 super, ovs_be128 sub)
+{
+    return (be64_is_superset(super.be64.hi, sub.be64.hi) &&
+            be64_is_superset(super.be64.lo, sub.be64.lo));
+}
+
+static inline bool
+ovs_u128_is_superset(ovs_u128 super, ovs_u128 sub)
+{
+    return (uint_is_superset(super.u64.hi, sub.u64.hi) &&
+            uint_is_superset(super.u64.lo, sub.u64.lo));
 }
 
 void xsleep(unsigned int seconds);

@@ -6029,6 +6029,7 @@ const struct ofproto_class ofproto_dpif_class = {
     type_get_memory_usage,
     flush,
     query_tables,
+    NULL,                       /* modify_tables */
     set_tables_version,
     port_alloc,
     port_construct,

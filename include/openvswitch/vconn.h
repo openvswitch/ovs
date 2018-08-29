@@ -58,6 +58,8 @@ int vconn_transact(struct vconn *, struct ofpbuf *, struct ofpbuf **);
 int vconn_transact_noreply(struct vconn *, struct ofpbuf *, struct ofpbuf **);
 int vconn_transact_multiple_noreply(struct vconn *, struct ovs_list *requests,
                                     struct ofpbuf **replyp);
+int vconn_transact_multipart(struct vconn *, struct ovs_list *request,
+                             struct ovs_list *replies);
 
 int vconn_dump_flows(struct vconn *, const struct ofputil_flow_stats_request *,
                      enum ofputil_protocol,

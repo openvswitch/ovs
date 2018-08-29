@@ -234,9 +234,8 @@ ofp_print_table_features_reply(struct ds *s, const struct ofp_header *oh)
     int first_ditto = -1, last_ditto = -1;
     for (int i = 0; ; i++) {
         struct ofputil_table_features tf;
-        int retval;
-
-        retval = ofputil_decode_table_features(&b, &tf, true);
+        struct ofpbuf raw_properties;
+        int retval = ofputil_decode_table_features(&b, &tf, &raw_properties);
         if (retval) {
             ofputil_table_features_format_finish(s, first_ditto, last_ditto);
             return retval != EOF ? retval : 0;

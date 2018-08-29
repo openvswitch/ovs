@@ -2686,6 +2686,19 @@ AT_CLEANUP
 AT_SETUP([ofproto - flow table names])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2
+
+# Set a table name via OpenFlow 1.3 and one via OpenFlow 1.5.
+AT_CHECK([ovs-ofctl -O OpenFlow13 mod-table br0 0 name:xyzzy])
+AT_CHECK([ovs-ofctl -O OpenFlow15 mod-table br0 1 name:quux])
+AT_CHECK([ovs-ofctl -O OpenFlow15 dump-table-features br0 |grep '^  table'],
+  [0], [dnl
+  table 0 ("xyzzy"):
+  table 1 ("quux"): ditto
+  tables 2...252: ditto
+  table 253:
+])
+
+# Set some table names via OVSDB.
 AT_CHECK(
   [ovs-vsctl \
      -- --id=@t0 create Flow_Table name=zero \
@@ -2697,6 +2710,16 @@ AT_CHECK(
 <1>
 <2>
 ])
+AT_CHECK([ovs-ofctl -O OpenFlow15 dump-table-features br0 |grep '^  table'],
+  [0], [dnl
+  table 0 ("zero"):
+  table 1 ("one"): ditto
+  table 2 ("two"): ditto
+  tables 3...252: ditto
+  table 253:
+])
+
+# Check that flow table parsing and dumping uses the names.
 AT_DATA([flows.txt], [dnl
 table=zero in_port=p2 actions=p1,resubmit(,one)
 table=one,in_port=p1,ip,actions=ct(table=two)
@@ -2713,6 +2736,73 @@ AT_CHECK([ovs-ofctl --no-names --no-stats dump-flows br0], [0], [dnl
  table=1, ip,in_port=1 actions=ct(table=2)
  table=1, arp,in_port=1 actions=resubmit(,2)
 ])
+
+# Setting the same table names via OpenFlow 1.3 or OpenFlow 1.5 is a no-op.
+AT_CHECK([ovs-ofctl -O OpenFlow13 mod-table br0 0 name:zero])
+AT_CHECK([ovs-ofctl -O OpenFlow15 mod-table br0 1 name:one])
+AT_CHECK([ovs-ofctl -O OpenFlow15 dump-table-features br0 |grep '^  table'],
+  [0], [dnl
+  table 0 ("zero"):
+  table 1 ("one"): ditto
+  table 2 ("two"): ditto
+  tables 3...252: ditto
+  table 253:
+])
+
+# Setting different tables names via OpenFlow 1.3 or OpenFlow 1.5 yield errors.
+AT_CHECK([ovs-ofctl -O OpenFlow13 mod-table br0 0 name:xyzzy], 1, [], [stderr])
+AT_CHECK([head -1 stderr], [0], [OFPT_ERROR (OF1.3) (xid=0x5): OFPTFFC_EPERM
+])
+AT_CHECK([ovs-ofctl -O OpenFlow15 mod-table br0 1 name:quux], 1, [], [stderr])
+AT_CHECK([head -1 stderr], [0], [OFPT_ERROR (OF1.5) (xid=0x5): OFPTFFC_EPERM
+])
+
+# But we can still set table names for those not set via OVSDB.
+AT_CHECK([ovs-ofctl -O OpenFlow13 mod-table br0 3 name:three])
+AT_CHECK([ovs-ofctl -O OpenFlow15 dump-table-features br0 |grep '^  table'],
+  [0], [dnl
+  table 0 ("zero"):
+  table 1 ("one"): ditto
+  table 2 ("two"): ditto
+  table 3 ("three"): ditto
+  tables 4...252: ditto
+  table 253:
+])
+
+# Unsetting names via OVSDB then setting them via OpenFlow works too.
+AT_CHECK([ovs-vsctl remove bridge br0 Flow_Table 2])
+AT_CHECK([ovs-ofctl -O OpenFlow15 dump-table-features br0 |grep '^  table'],
+  [0], [dnl
+  table 0 ("zero"):
+  table 1 ("one"): ditto
+  table 2: ditto
+  table 3 ("three"): ditto
+  tables 4...252: ditto
+  table 253:
+])
+AT_CHECK([ovs-ofctl -O OpenFlow13 mod-table br0 2 name:foobar])
+AT_CHECK([ovs-ofctl -O OpenFlow15 dump-table-features br0 |grep '^  table'],
+  [0], [dnl
+  table 0 ("zero"):
+  table 1 ("one"): ditto
+  table 2 ("foobar"): ditto
+  table 3 ("three"): ditto
+  tables 4...252: ditto
+  table 253:
+])
+
+# We can clear names via OpenFlow, at least if they were set that way.
+AT_CHECK([ovs-ofctl -O OpenFlow13 mod-table br0 2 name:])
+AT_CHECK([ovs-ofctl -O OpenFlow15 dump-table-features br0 |grep '^  table'],
+  [0], [dnl
+  table 0 ("zero"):
+  table 1 ("one"): ditto
+  table 2: ditto
+  table 3 ("three"): ditto
+  tables 4...252: ditto
+  table 253:
+])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 

@@ -946,6 +946,46 @@ vconn_transact_multiple_noreply(struct vconn *vconn, struct ovs_list *requests,
     return 0;
 }
 
+/* Sends 'requests' (which should be a multipart request) on 'vconn' and waits
+ * for the replies, which are put into 'replies'.  Returns 0 if successful,
+ * otherwise an errno value. */
+int
+vconn_transact_multipart(struct vconn *vconn,
+                         struct ovs_list *requests,
+                         struct ovs_list *replies)
+{
+    struct ofpbuf *rq = ofpbuf_from_list(ovs_list_front(requests));
+    ovs_be32 send_xid = ((struct ofp_header *) rq->data)->xid;
+
+    ovs_list_init(replies);
+
+    /* Send all the requests. */
+    struct ofpbuf *b, *next;
+    LIST_FOR_EACH_SAFE (b, next, list_node, requests) {
+        ovs_list_remove(&b->list_node);
+        int error = vconn_send_block(vconn, b);
+        if (error) {
+            ofpbuf_delete(b);
+        }
+    }
+
+    /* Receive all the replies. */
+    bool more;
+    do {
+        struct ofpbuf *reply;
+        int error = vconn_recv_xid__(vconn, send_xid, &reply, NULL);
+        if (error) {
+            ofpbuf_list_delete(replies);
+            return error;
+        }
+
+        ovs_list_push_back(replies, &reply->list_node);
+        more = ofpmsg_is_stat_reply(reply->data) && ofpmp_more(reply->data);
+    } while (more);
+
+    return 0;
+}
+
 static int
 recv_flow_stats_reply(struct vconn *vconn, ovs_be32 send_xid,
                       struct ofpbuf **replyp,

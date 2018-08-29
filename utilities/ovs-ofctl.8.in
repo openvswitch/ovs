@@ -84,6 +84,18 @@ Send to controller.  (This is how an OpenFlow 1.0 switch always
 handles packets that do not match any flow in the last table.)
 .RE
 .IP
+In OpenFlow 1.3 and later (which must be enabled with the \fB\-O\fR
+option) and Open vSwitch 2.11 and later only, \fBmod\-table\fR can
+change the name of a table:
+.RS
+.IP \fBname:\fInew-name\fR
+Changes the name of the table to \fInew-name\fR.  Use an empty
+\fInew-name\fR to clear the name.  (This will be ineffective if the
+name is set via the \fBname\fR column in the \fBFlow_Table\fR table in
+the \fBOpen_vSwitch\fR database as described in
+\fBovs\-vswitchd.conf.db\fR(5).)
+.RE
+.IP
 In OpenFlow 1.4 and later (which must be enabled with the \fB\-O\fR
 option) only, \fBmod\-table\fR configures the behavior when a
 controller attempts to add a flow to a flow table that is full.  The
