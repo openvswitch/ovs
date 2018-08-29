@@ -418,8 +418,8 @@ ofputil_decode_table_features(struct ofpbuf *msg,
 
     struct ofpbuf properties = ofpbuf_const_initializer(ofpbuf_pull(msg, len),
                                                         len);
-    tf->any_properties = properties.size > 0;
     ofpbuf_pull(&properties, sizeof *otf);
+    tf->any_properties = properties.size > 0;
     uint32_t seen = 0;
     while (properties.size > 0) {
         struct ofpbuf payload;
