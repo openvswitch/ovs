@@ -41,6 +41,7 @@ env:
   - KERNEL=4.14.63
   - KERNEL=4.9.120
   - KERNEL=4.4.148
+  - KERNEL=3.19.8
   - KERNEL=3.16.57
   - TESTSUITE=1 LIBS=-ljemalloc
 

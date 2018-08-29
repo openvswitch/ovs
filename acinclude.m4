@@ -459,6 +459,9 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/arch/x86/include/asm/checksum_32.h], [src_err,],
                   [OVS_DEFINE([HAVE_CSUM_COPY_DBG])])
 
+  OVS_GREP_IFELSE([$KSRC/include/net/ip6_fib.h], [rt6_get_cookie],
+                  [OVS_DEFINE([HAVE_RT6_GET_COOKIE])])
+
   OVS_GREP_IFELSE([$KSRC/include/net/addrconf.h], [ipv6_dst_lookup.*net],
                   [OVS_DEFINE([HAVE_IPV6_DST_LOOKUP_NET])])
   OVS_GREP_IFELSE([$KSRC/include/net/addrconf.h], [ipv6_stub])
@@ -803,6 +806,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [OVS_DEFINE(HAVE_NF_CONNTRACK_HELPER_PUT)])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h],[[[[:space:]]]SKB_GSO_UDP[[[:space:]]]],
                   [OVS_DEFINE([HAVE_SKB_GSO_UDP])])
+  OVS_GREP_IFELSE([$KSRC/include/net/dst.h],[DST_NOCACHE],
+                  [OVS_DEFINE([HAVE_DST_NOCACHE])])
   OVS_FIND_FIELD_IFELSE([$KSRC/include/net/rtnetlink.h], [rtnl_link_ops],
                         [extack],
                   [OVS_DEFINE([HAVE_EXT_ACK_IN_RTNL_LINKOPS])])
