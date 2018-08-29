@@ -258,7 +258,7 @@ static void delete_flows__(struct rule_collection *,
 static void ofproto_group_delete_all__(struct ofproto *)
     OVS_REQUIRES(ofproto_mutex);
 static bool ofproto_group_exists(const struct ofproto *, uint32_t group_id);
-static void handle_openflow(struct ofconn *, const struct ofpbuf *);
+static void handle_openflow(struct ofconn *, const struct ovs_list *msgs);
 static enum ofperr ofproto_flow_mod_init(struct ofproto *,
                                          struct ofproto_flow_mod *,
                                          const struct ofputil_flow_mod *fm,
@@ -8102,26 +8102,14 @@ handle_tlv_table_request(struct ofconn *ofconn, const struct ofp_header *oh)
     return 0;
 }
 
+/* Processes the single-part OpenFlow message 'oh' that was received on
+ * 'ofconn'.  Returns an ofperr that, if nonzero, the caller should send back
+ * to the controller. */
 static enum ofperr
-handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
+handle_single_part_openflow(struct ofconn *ofconn, const struct ofp_header *oh,
+                            enum ofptype type)
     OVS_EXCLUDED(ofproto_mutex)
 {
-    const struct ofp_header *oh = msg->data;
-    enum ofptype type;
-    enum ofperr error;
-
-    error = ofptype_decode(&type, oh);
-    if (error) {
-        return error;
-    }
-    if (oh->version >= OFP13_VERSION && ofpmsg_is_stat_request(oh)
-        && ofpmp_more(oh)) {
-        /* We have no buffer implementation for multipart requests.
-         * Report overflow for requests which consists of multiple
-         * messages. */
-        return OFPERR_OFPBRC_MULTIPART_BUFFER_OVERFLOW;
-    }
-
     switch (type) {
         /* OpenFlow requests. */
     case OFPTYPE_ECHO_REQUEST:
@@ -8309,15 +8297,24 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
 }
 
 static void
-handle_openflow(struct ofconn *ofconn, const struct ofpbuf *ofp_msg)
+handle_openflow(struct ofconn *ofconn, const struct ovs_list *msgs)
     OVS_EXCLUDED(ofproto_mutex)
 {
-    enum ofperr error = handle_openflow__(ofconn, ofp_msg);
-
-    if (error) {
-        ofconn_send_error(ofconn, ofp_msg->data, error);
-    }
     COVERAGE_INC(ofproto_recv_openflow);
+
+    struct ofpbuf *msg = ofpbuf_from_list(ovs_list_front(msgs));
+    enum ofptype type;
+    enum ofperr error = ofptype_decode(&type, msg->data);
+    if (!error) {
+        if (!ovs_list_is_short(msgs)) {
+            error = OFPERR_OFPBRC_BAD_STAT;
+        } else {
+            error = handle_single_part_openflow(ofconn, msg->data, type);
+        }
+    }
+    if (error) {
+        ofconn_send_error(ofconn, msg->data, error);
+    }
 }
 
 static uint64_t

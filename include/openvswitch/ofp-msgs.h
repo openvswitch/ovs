@@ -45,6 +45,7 @@
 extern "C" {
 #endif
 
+struct hmap;
 struct ovs_list;
 
 /* Raw identifiers for OpenFlow messages.
@@ -821,9 +822,26 @@ void ofpmp_postappend(struct ovs_list *, size_t start_ofs);
 enum ofp_version ofpmp_version(struct ovs_list *);
 enum ofpraw ofpmp_decode_raw(struct ovs_list *);
 
-/* Decoding multipart replies. */
+/* Decoding multipart messages. */
 uint16_t ofpmp_flags(const struct ofp_header *);
 bool ofpmp_more(const struct ofp_header *);
+
+/* Multipart request assembler.
+ *
+ * OpenFlow 1.3 and later support making multipart requests that span more than
+ * one OpenFlow message.  These functions reassemble such requests.
+ *
+ * A reassembler is simply an hmap.  The following functions manipulate an hmap
+ * used for this purpose. */
+
+void ofpmp_assembler_clear(struct hmap *assembler);
+
+struct ofpbuf *ofpmp_assembler_run(struct hmap *assembler, long long int now)
+    OVS_WARN_UNUSED_RESULT;
+long long int ofpmp_assembler_wait(struct hmap *assembler);
+
+enum ofperr ofpmp_assembler_execute(struct hmap *assembler, struct ofpbuf *msg,
+                                    struct ovs_list *out, long long int now);
 
 #ifdef __cplusplus
 }

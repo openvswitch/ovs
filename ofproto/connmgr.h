@@ -80,7 +80,7 @@ void connmgr_destroy(struct connmgr *)
 
 void connmgr_run(struct connmgr *,
                  void (*handle_openflow)(struct ofconn *,
-                                         const struct ofpbuf *ofp_msg));
+                                         const struct ovs_list *msgs));
 void connmgr_wait(struct connmgr *);
 
 void connmgr_get_memory_usage(const struct connmgr *, struct simap *usage);

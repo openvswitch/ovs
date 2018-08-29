@@ -428,56 +428,16 @@ ofpraw_decode_assert(const struct ofp_header *oh)
     return raw;
 }
 
-/* Determines the OFPRAW_* type of the OpenFlow message in 'msg', which starts
- * at 'msg->data' and has length 'msg->size' bytes.  On success,
- * returns 0 and stores the type into '*rawp'.  On failure, returns an OFPERR_*
- * error code and zeros '*rawp'.
- *
- * This function checks that the message has a valid length for its particular
- * type of message, and returns an error if not.
- *
- * In addition to setting '*rawp', this function pulls off the OpenFlow header
- * (including the stats headers, vendor header, and any subtype header) with
- * ofpbuf_pull().  It also sets 'msg->header' to the start of the OpenFlow
- * header and 'msg->msg' just beyond the headers (that is, to the final value
- * of msg->data). */
-enum ofperr
-ofpraw_pull(enum ofpraw *rawp, struct ofpbuf *msg)
+/* Checks that 'len' is a valid length for an OpenFlow message that corresponds
+ * to 'info' and 'instance'.  Returns 0 if so, otherwise an OpenFlow error. */
+static enum ofperr
+ofpraw_check_length(const struct raw_info *info,
+                    const struct raw_instance *instance,
+                    unsigned int len)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
-    const struct raw_instance *instance;
-    const struct raw_info *info;
-    struct ofphdrs hdrs;
-
-    unsigned int min_len;
-    unsigned int len;
-
-    enum ofperr error;
-    enum ofpraw raw;
-
-    /* Set default outputs. */
-    msg->header = msg->data;
-    msg->msg = msg->header;
-    *rawp = 0;
-
-    len = msg->size;
-    error = ofphdrs_decode(&hdrs, msg->data, len);
-    if (error) {
-        return error;
-    }
-
-    error = ofpraw_from_ofphdrs(&raw, &hdrs);
-    if (error) {
-        return error;
-    }
-
-    info = raw_info_get(raw);
-    instance = raw_instance_get(info, hdrs.version);
-    msg->header = ofpbuf_pull(msg, instance->hdrs_len);
-    msg->msg = msg->data;
-
-    min_len = instance->hdrs_len + info->min_body;
+    unsigned int min_len = instance->hdrs_len + info->min_body;
     switch (info->extra_multiple) {
     case 0:
         if (len != min_len) {
@@ -507,6 +467,51 @@ ofpraw_pull(enum ofpraw *rawp, struct ofpbuf *msg)
         break;
     }
 
+    return 0;
+}
+
+/* Determines the OFPRAW_* type of the OpenFlow message in 'msg', which starts
+ * at 'msg->data' and has length 'msg->size' bytes.  On success,
+ * returns 0 and stores the type into '*rawp'.  On failure, returns an OFPERR_*
+ * error code and zeros '*rawp'.
+ *
+ * This function checks that the message has a valid length for its particular
+ * type of message, and returns an error if not.
+ *
+ * In addition to setting '*rawp', this function pulls off the OpenFlow header
+ * (including the stats headers, vendor header, and any subtype header) with
+ * ofpbuf_pull().  It also sets 'msg->header' to the start of the OpenFlow
+ * header and 'msg->msg' just beyond the headers (that is, to the final value
+ * of msg->data). */
+enum ofperr
+ofpraw_pull(enum ofpraw *rawp, struct ofpbuf *msg)
+{
+    /* Set default outputs. */
+    msg->header = msg->data;
+    msg->msg = msg->header;
+    *rawp = 0;
+
+    struct ofphdrs hdrs;
+    enum ofperr error = ofphdrs_decode(&hdrs, msg->data, msg->size);
+    if (error) {
+        return error;
+    }
+
+    enum ofpraw raw;
+    error = ofpraw_from_ofphdrs(&raw, &hdrs);
+    if (error) {
+        return error;
+    }
+
+    const struct raw_info *info = raw_info_get(raw);
+    const struct raw_instance *instance = raw_instance_get(info, hdrs.version);
+    error = ofpraw_check_length(info, instance, msg->size);
+    if (error) {
+        return error;
+    }
+
+    msg->header = ofpbuf_pull(msg, instance->hdrs_len);
+    msg->msg = msg->data;
     *rawp = raw;
     return 0;
 }
@@ -1057,6 +1062,247 @@ bool
 ofpmp_more(const struct ofp_header *oh)
 {
     return (ofpmp_flags(oh) & OFPSF_REPLY_MORE) != 0;
+}
+
+/* Multipart request assembler. */
+
+struct ofpmp_partial {
+    struct hmap_node hmap_node; /* In struct ofpmp_assembler's 'msgs'. */
+    ovs_be32 xid;
+    enum ofpraw raw;
+    long long int timeout;
+    struct ovs_list msgs;
+    size_t size;
+    bool has_body;
+};
+
+static uint32_t
+hash_xid(ovs_be32 xid)
+{
+    return hash_int((OVS_FORCE uint32_t) xid, 0);
+}
+
+static struct ofpmp_partial *
+ofpmp_assembler_find(struct hmap *assembler, ovs_be32 xid)
+{
+    if (hmap_is_empty(assembler)) {
+        /* Common case. */
+        return NULL;
+    }
+
+    struct ofpmp_partial *p;
+    HMAP_FOR_EACH_IN_BUCKET (p, hmap_node, hash_xid(xid), assembler) {
+        if (p->xid == xid) {
+            return p;
+        }
+    }
+    return NULL;
+}
+
+static void
+ofpmp_partial_destroy(struct hmap *assembler, struct ofpmp_partial *p)
+{
+    if (p) {
+        hmap_remove(assembler, &p->hmap_node);
+        ofpbuf_list_delete(&p->msgs);
+        free(p);
+    }
+}
+
+static struct ofpbuf *
+ofpmp_partial_error(struct hmap *assembler, struct ofpmp_partial *p,
+                    enum ofperr error)
+{
+    const struct ofpbuf *head = ofpbuf_from_list(ovs_list_back(&p->msgs));
+    const struct ofp_header *oh = head->data;
+    struct ofpbuf *reply = ofperr_encode_reply(error, oh);
+
+    ofpmp_partial_destroy(assembler, p);
+
+    return reply;
+}
+
+/* Clears out and frees any messages currently being reassembled.  Afterward,
+ * the caller may destroy the hmap, with hmap_destroy(), without risk of
+ * leaks. */
+void
+ofpmp_assembler_clear(struct hmap *assembler)
+{
+    struct ofpmp_partial *p, *next;
+    HMAP_FOR_EACH_SAFE (p, next, hmap_node, assembler) {
+        ofpmp_partial_destroy(assembler, p);
+    }
+}
+
+/* Does periodic maintenance on 'assembler'.  If any partially assembled
+ * requests have timed out, returns an appropriate error message for the caller
+ * to send to the controller.
+ *
+ * 'now' should be the current time as returned by time_msec(). */
+struct ofpbuf * OVS_WARN_UNUSED_RESULT
+ofpmp_assembler_run(struct hmap *assembler, long long int now)
+{
+    struct ofpmp_partial *p;
+    HMAP_FOR_EACH (p, hmap_node, assembler) {
+        if (now >= p->timeout) {
+            return ofpmp_partial_error(
+                assembler, p, OFPERR_OFPBRC_MULTIPART_REQUEST_TIMEOUT);
+        }
+    }
+    return NULL;
+}
+
+/* Returns the time at which the next partially assembled request times out.
+ * The caller should pass this time to poll_timer_wait_until(). */
+long long int
+ofpmp_assembler_wait(struct hmap *assembler)
+{
+    long long int timeout = LLONG_MAX;
+
+    struct ofpmp_partial *p;
+    HMAP_FOR_EACH (p, hmap_node, assembler) {
+        timeout = MIN(timeout, p->timeout);
+    }
+
+    return timeout;
+}
+
+/* Submits 'msg' to 'assembler' for reassembly.
+ *
+ * If 'msg' was accepted, returns 0 and initializes 'out' either to an empty
+ * list (if 'msg' is being held for reassembly) or to a list of one or more
+ * reassembled messages.  The reassembler takes ownership of 'msg'; the caller
+ * takes ownership of the messages in 'out'.
+ *
+ * If 'msg' was rejected, returns an OpenFlow error that the caller should
+ * reply to the caller and initializes 'out' as empty.  The caller retains
+ * ownership of 'msg'.
+ *
+ * 'now' should be the current time as returned by time_msec(). */
+enum ofperr
+ofpmp_assembler_execute(struct hmap *assembler, struct ofpbuf *msg,
+                        struct ovs_list *out, long long int now)
+{
+    ovs_list_init(out);
+
+    /* If the message is not a multipart request, pass it along without further
+     * inspection.
+     *
+     * We could also do this kind of early-out for multipart requests that have
+     * only a single piece, or for pre-OF1.3 multipart requests (since only
+     * OF1.3 introduced multipart requests with more than one piece), but we
+     * don't because this allows us to assure code that runs after us that
+     * invariants checked below on correct message lengths are always
+     * satisfied, even if there's only a single piece. */
+    struct ofp_header *oh = msg->data;
+    if (!ofpmsg_is_stat_request(oh)) {
+        ovs_list_push_back(out, &msg->list_node);
+        return 0;
+    }
+
+    /* Decode the multipart request. */
+    struct ofphdrs hdrs;
+    enum ofperr error = ofphdrs_decode(&hdrs, msg->data, msg->size);
+    if (error) {
+        return error;
+    }
+
+    enum ofpraw raw;
+    error = ofpraw_from_ofphdrs(&raw, &hdrs);
+    if (error) {
+        return error;
+    }
+
+    /* If the message has a nonempty body, check that it is a valid length.
+     *
+     * The OpenFlow spec says that pieces with empty bodies are allowed
+     * anywhere in a multipart sequence, so for now we allow such messages even
+     * if the overall multipart request requires a body. */
+    const struct raw_info *info = raw_info_get(raw);
+    const struct raw_instance *instance = raw_instance_get(info, hdrs.version);
+    unsigned int min_len = ofphdrs_len(&hdrs);
+    bool has_body = msg->size > min_len;
+    if (has_body) {
+        error = ofpraw_check_length(info, instance, msg->size);
+        if (error) {
+            return error;
+        }
+    }
+
+    /* Find or create an ofpmp_partial record. */
+    struct ofpmp_partial *p = ofpmp_assembler_find(assembler, oh->xid);
+    if (!p) {
+        p = xzalloc(sizeof *p);
+        hmap_insert(assembler, &p->hmap_node, hash_xid(oh->xid));
+        p->xid = oh->xid;
+        ovs_list_init(&p->msgs);
+        p->raw = raw;
+    }
+    p->timeout = now + 1000;
+
+    /* Check that the type is the same as any previous messages in this
+     * sequence. */
+    if (p->raw != raw) {
+        ofpmp_partial_destroy(assembler, p);
+        return OFPERR_OFPBRC_BAD_STAT;
+    }
+
+    /* Limit the size of a multipart sequence.
+     *
+     * (Table features requests can actually be over 1 MB.) */
+    p->size += msg->size;
+    if (p->size > 4 * 1024 * 1024) {
+        ofpmp_partial_destroy(assembler, p);
+        return OFPERR_OFPBRC_MULTIPART_BUFFER_OVERFLOW;
+    }
+
+    /* If a multipart request type requires a body, ensure that at least one of
+     * the pieces in a multipart request has one. */
+    bool more = oh->version >= OFP13_VERSION && ofpmp_more(oh);
+    if (has_body) {
+        p->has_body = true;
+    }
+    if (!more && !p->has_body && info->min_body) {
+        ofpmp_partial_destroy(assembler, p);
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+
+    /* Append the part to the list.
+     *
+     * If there are more pieces to come, we're done for now. */
+    ovs_list_push_back(&p->msgs, &msg->list_node);
+    if (more) {
+        return 0;
+    }
+
+    /* This multipart request is complete.  Move the messages from 'p' to 'out'
+     * and discard 'p'. */
+    ovs_list_move(out, &p->msgs);
+    ovs_list_init(&p->msgs);
+    ofpmp_partial_destroy(assembler, p);
+
+    /* Delete pieces with empty bodies from 'out' (but leave at least one
+     * piece).
+     *
+     * Most types of multipart requests have fixed-size bodies.  For example,
+     * OFPMP_PORT_DESCRIPTION has an 8-byte body.  Thus, it doesn't really make
+     * sense for a controller to use multiple pieces for these messages, and
+     * it's simpler to implement OVS as if they weren't really multipart.
+     *
+     * However, the OpenFlow spec says that messages with empty bodies are
+     * allowed anywhere in a multipart sequence, so in theory a controller
+     * could send an OFPMP_PORT_DESCRIPTION with an 8-byte body bracketed
+     * on either side by parts with 0-byte bodies.  We remove the 0-byte
+     * ones here to simplify processing later.
+     */
+    struct ofpbuf *b, *next;
+    LIST_FOR_EACH_SAFE (b, next, list_node, out) {
+        if (b->size <= min_len && !ovs_list_is_short(out)) {
+            ovs_list_remove(&b->list_node);
+            ofpbuf_delete(b);
+        }
+    }
+    return 0;
 }
 
 static void ofpmsgs_init(void);

@@ -101,6 +101,9 @@ struct ofconn {
     long long int next_op_report;    /* Time to report ops, or LLONG_MAX. */
     long long int op_backoff;        /* Earliest time to report ops again. */
 
+    /* Reassembly of multipart requests. */
+    struct hmap assembler;
+
 /* Flow monitors (e.g. NXST_FLOW_MONITOR). */
 
     /* Configuration.  Contains "struct ofmonitor"s. */
@@ -156,7 +159,7 @@ static void ofconn_reconfigure(struct ofconn *,
 
 static void ofconn_run(struct ofconn *,
                        void (*handle_openflow)(struct ofconn *,
-                                               const struct ofpbuf *ofp_msg));
+                                               const struct ovs_list *msgs));
 static void ofconn_wait(struct ofconn *);
 
 static void ofconn_log_flow_mods(struct ofconn *);
@@ -343,7 +346,7 @@ connmgr_destroy(struct connmgr *mgr)
 void
 connmgr_run(struct connmgr *mgr,
             void (*handle_openflow)(struct ofconn *,
-                                    const struct ofpbuf *ofp_msg))
+                                    const struct ovs_list *msgs))
     OVS_EXCLUDED(ofproto_mutex)
 {
     if (mgr->in_band) {
@@ -1260,6 +1263,8 @@ ofconn_create(struct connmgr *mgr, struct rconn *rconn, enum ofconn_type type,
     hmap_init(&ofconn->bundles);
     ofconn->next_bundle_expiry_check = time_msec() + BUNDLE_EXPIRY_INTERVAL;
 
+    hmap_init(&ofconn->assembler);
+
     ofconn_flush(ofconn);
 
     return ofconn;
@@ -1312,6 +1317,8 @@ ofconn_flush(struct ofconn *ofconn)
     rconn_packet_counter_destroy(ofconn->monitor_counter);
     ofconn->monitor_counter = rconn_packet_counter_create();
     ofpbuf_list_delete(&ofconn->updates); /* ...but it should be empty. */
+
+    ofpmp_assembler_clear(&ofconn->assembler);
 }
 
 static void
@@ -1338,6 +1345,9 @@ ofconn_destroy(struct ofconn *ofconn)
     rconn_packet_counter_destroy(ofconn->packet_in_counter);
     rconn_packet_counter_destroy(ofconn->reply_counter);
     rconn_packet_counter_destroy(ofconn->monitor_counter);
+
+    hmap_destroy(&ofconn->assembler);
+
     free(ofconn);
 }
 
@@ -1375,7 +1385,7 @@ ofconn_may_recv(const struct ofconn *ofconn)
 static void
 ofconn_run(struct ofconn *ofconn,
            void (*handle_openflow)(struct ofconn *,
-                                   const struct ofpbuf *ofp_msg))
+                                   const struct ovs_list *msgs))
 {
     struct connmgr *mgr = ofconn->connmgr;
 
@@ -1399,8 +1409,16 @@ ofconn_run(struct ofconn *ofconn,
             fail_open_maybe_recover(mgr->fail_open);
         }
 
-        handle_openflow(ofconn, of_msg);
-        ofpbuf_delete(of_msg);
+        struct ovs_list msgs;
+        enum ofperr error = ofpmp_assembler_execute(&ofconn->assembler, of_msg,
+                                                    &msgs, time_msec());
+        if (error) {
+            ofconn_send_error(ofconn, of_msg->data, error);
+            ofpbuf_delete(of_msg);
+        } else if (!ovs_list_is_empty(&msgs)) {
+            handle_openflow(ofconn, &msgs);
+            ofpbuf_list_delete(&msgs);
+        }
     }
 
     long long int now = time_msec();
@@ -1412,6 +1430,12 @@ ofconn_run(struct ofconn *ofconn,
 
     if (now >= ofconn->next_op_report) {
         ofconn_log_flow_mods(ofconn);
+    }
+
+    struct ofpbuf *error = ofpmp_assembler_run(&ofconn->assembler,
+                                               time_msec());
+    if (error) {
+        ofconn_send(ofconn, error, NULL);
     }
 
     ovs_mutex_lock(&ofproto_mutex);
@@ -1436,6 +1460,7 @@ ofconn_wait(struct ofconn *ofconn)
     if (ofconn->next_op_report != LLONG_MAX) {
         poll_timer_wait_until(ofconn->next_op_report);
     }
+    poll_timer_wait_until(ofpmp_assembler_wait(&ofconn->assembler));
 }
 
 static void
