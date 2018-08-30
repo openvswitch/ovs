@@ -1,0 +1,21 @@
+AT_BANNER([fuzz regression])
+
+OVS_START_SHELL_HELPERS
+test_fuzz_regression() {
+   filename=$top_srcdir/tests/fuzz-regression/$1
+   AS_CASE([$1],
+     [flow_extract_fuzzer*], [ovs-ofctl parse-packet < $filename],
+     [ofp_print_fuzzer*], [ovs-ofctl ofp-parse - < $filename],
+     [json_parser_fuzzer*], [ovstest test-json $filename],
+     [*], [AT_FAIL_IF([:])])
+   status=$?
+   AT_CHECK([test $status = 0 || test $status = 1])
+}
+OVS_END_SHELL_HELPERS
+
+m4_define([TEST_FUZZ_REGRESSION],
+  [AT_SETUP([fuzz regression - $1])
+   test_fuzz_regression $1
+   AT_CLEANUP])
+
+m4_include([tests/fuzz-regression-list.at])
