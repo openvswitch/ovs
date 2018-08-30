@@ -772,7 +772,7 @@ vconn_recv_xid__(struct vconn *vconn, ovs_be32 xid, struct ofpbuf **replyp,
         }
 
         error = ofptype_decode(&type, oh);
-        if (!error && type == OFPTYPE_ERROR) {
+        if (!error && type == OFPTYPE_ERROR && errors) {
             ovs_list_push_back(errors, &reply->list_node);
         } else {
             VLOG_DBG_RL(&bad_ofmsg_rl, "%s: received reply with xid %08"PRIx32
