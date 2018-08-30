@@ -284,7 +284,7 @@ devices to bridge ``br0``. Once complete, follow the below steps:
    We must configure with appropriate software versions to ensure this feature
    is supported.
 
-   .. list-table:: Recommended BIOS Settings
+   .. list-table:: VM Configuration
       :header-rows: 1
 
       * - Setting
