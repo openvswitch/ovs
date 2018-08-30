@@ -6362,49 +6362,60 @@ flow_monitor_delete(struct ofconn *ofconn, uint32_t id)
 }
 
 static enum ofperr
-handle_flow_monitor_request(struct ofconn *ofconn, const struct ofp_header *oh)
+handle_flow_monitor_request(struct ofconn *ofconn, const struct ovs_list *msgs)
     OVS_EXCLUDED(ofproto_mutex)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-
-    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
 
     struct ofmonitor **monitors = NULL;
     size_t allocated_monitors = 0;
     size_t n_monitors = 0;
 
-    enum ofperr error;
-
     ovs_mutex_lock(&ofproto_mutex);
-    for (;;) {
-        struct ofputil_flow_monitor_request request;
-        struct ofmonitor *m;
-        int retval;
+    struct ofpbuf *b;
+    LIST_FOR_EACH (b, list_node, msgs) {
+        for (;;) {
+            enum ofperr error;
 
-        retval = ofputil_decode_flow_monitor_request(&request, &b);
-        if (retval == EOF) {
-            break;
-        } else if (retval) {
-            error = retval;
-            goto error;
-        }
+            struct ofputil_flow_monitor_request request;
+            int retval = ofputil_decode_flow_monitor_request(&request, b);
+            if (retval == EOF) {
+                break;
+            } else if (retval) {
+                error = retval;
+                goto error;
+            }
 
-        if (request.table_id != 0xff
-            && request.table_id >= ofproto->n_tables) {
-            error = OFPERR_OFPBRC_BAD_TABLE_ID;
-            goto error;
-        }
+            if (request.table_id != OFPTT_ALL
+                && request.table_id >= ofproto->n_tables) {
+                error = OFPERR_OFPBRC_BAD_TABLE_ID;
+                goto error;
+            }
 
-        error = ofmonitor_create(&request, ofconn, &m);
-        if (error) {
-            goto error;
-        }
+            struct ofmonitor *m;
+            error = ofmonitor_create(&request, ofconn, &m);
+            if (error) {
+                goto error;
+            }
 
-        if (n_monitors >= allocated_monitors) {
-            monitors = x2nrealloc(monitors, &allocated_monitors,
-                                  sizeof *monitors);
+            if (n_monitors >= allocated_monitors) {
+                monitors = x2nrealloc(monitors, &allocated_monitors,
+                                      sizeof *monitors);
+            }
+            monitors[n_monitors++] = m;
+            continue;
+
+        error:
+            ofconn_send_error(ofconn, b->data, error);
+
+            for (size_t i = 0; i < n_monitors; i++) {
+                ofmonitor_destroy(monitors[i]);
+            }
+            free(monitors);
+            ovs_mutex_unlock(&ofproto_mutex);
+
+            return error;
         }
-        monitors[n_monitors++] = m;
     }
 
     struct rule_collection rules;
@@ -6414,7 +6425,7 @@ handle_flow_monitor_request(struct ofconn *ofconn, const struct ofp_header *oh)
     }
 
     struct ovs_list replies;
-    ofpmp_init(&replies, oh);
+    ofpmp_init(&replies, ofpbuf_from_list(ovs_list_back(msgs))->header);
     ofmonitor_compose_refresh_updates(&rules, &replies);
     ovs_mutex_unlock(&ofproto_mutex);
 
@@ -6424,15 +6435,6 @@ handle_flow_monitor_request(struct ofconn *ofconn, const struct ofp_header *oh)
     free(monitors);
 
     return 0;
-
-error:
-    for (size_t i = 0; i < n_monitors; i++) {
-        ofmonitor_destroy(monitors[i]);
-    }
-    free(monitors);
-    ovs_mutex_unlock(&ofproto_mutex);
-
-    return error;
 }
 
 static enum ofperr
@@ -8402,9 +8404,6 @@ handle_single_part_openflow(struct ofconn *ofconn, const struct ofp_header *oh,
     case OFPTYPE_TABLE_STATS_REQUEST:
         return handle_table_stats_request(ofconn, oh);
 
-    case OFPTYPE_TABLE_FEATURES_STATS_REQUEST:
-        OVS_NOT_REACHED();
-
     case OFPTYPE_TABLE_DESC_REQUEST:
         return handle_table_desc_request(ofconn, oh);
 
@@ -8417,8 +8416,10 @@ handle_single_part_openflow(struct ofconn *ofconn, const struct ofp_header *oh,
     case OFPTYPE_PORT_DESC_STATS_REQUEST:
         return handle_port_desc_stats_request(ofconn, oh);
 
+    case OFPTYPE_TABLE_FEATURES_STATS_REQUEST:
     case OFPTYPE_FLOW_MONITOR_STATS_REQUEST:
-        return handle_flow_monitor_request(ofconn, oh);
+        /* Handled as multipart requests in handle_openflow(). */
+        OVS_NOT_REACHED();
 
     case OFPTYPE_METER_STATS_REQUEST:
     case OFPTYPE_METER_CONFIG_STATS_REQUEST:
@@ -8516,6 +8517,8 @@ handle_openflow(struct ofconn *ofconn, const struct ovs_list *msgs)
     if (!error) {
         if (type == OFPTYPE_TABLE_FEATURES_STATS_REQUEST) {
             handle_table_features_request(ofconn, msgs);
+        } else if (type == OFPTYPE_FLOW_MONITOR_STATS_REQUEST) {
+            handle_flow_monitor_request(ofconn, msgs);
         } else if (!ovs_list_is_short(msgs)) {
             error = OFPERR_OFPBRC_BAD_STAT;
         } else {
