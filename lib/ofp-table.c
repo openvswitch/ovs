@@ -1432,7 +1432,6 @@ ofputil_table_features_format(
     const struct ofputil_table_features *prev_features,
     const struct ofputil_table_stats *stats,
     const struct ofputil_table_stats *prev_stats,
-    const struct ofputil_table_map *table_map,
     int *first_ditto, int *last_ditto)
 {
     int table = features->table_id;
@@ -1452,8 +1451,7 @@ ofputil_table_features_format(
     ofputil_table_features_format_finish(s, *first_ditto, *last_ditto);
     *first_ditto = -1;
 
-    ds_put_format(s, "\n  table ");
-    ofputil_format_table(table, table_map, s);
+    ds_put_format(s, "\n  table %"PRIu8, table);
     if (features->name[0]) {
         ds_put_format(s, " (\"%s\")", features->name);
     }

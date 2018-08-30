@@ -276,7 +276,6 @@ void ofputil_table_features_format(
     const struct ofputil_table_features *prev_features,
     const struct ofputil_table_stats *stats,
     const struct ofputil_table_stats *prev_stats,
-    const struct ofputil_table_map *table_map,
     int *first_ditto, int *last_ditto);
 void ofputil_table_features_format_finish(struct ds *,
                                           int first_ditto, int last_ditto);

@@ -226,8 +226,7 @@ ofp_print_get_config_reply(struct ds *string, const struct ofp_header *oh)
 }
 
 static enum ofperr
-ofp_print_table_features_reply(struct ds *s, const struct ofp_header *oh,
-                               const struct ofputil_table_map *table_map)
+ofp_print_table_features_reply(struct ds *s, const struct ofp_header *oh)
 {
     struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
 
@@ -244,7 +243,7 @@ ofp_print_table_features_reply(struct ds *s, const struct ofp_header *oh,
         }
 
         ofputil_table_features_format(s, &tf, i ? &prev : NULL, NULL, NULL,
-                                      table_map, &first_ditto, &last_ditto);
+                                      &first_ditto, &last_ditto);
         prev = tf;
     }
 }
@@ -567,8 +566,7 @@ ofp_print_ofpst_port_reply(struct ds *string, const struct ofp_header *oh,
 }
 
 static enum ofperr
-ofp_print_table_stats_reply(struct ds *string, const struct ofp_header *oh,
-                            const struct ofputil_table_map *table_map)
+ofp_print_table_stats_reply(struct ds *string, const struct ofp_header *oh)
 {
     struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     ofpraw_pull_assert(&b);
@@ -591,7 +589,7 @@ ofp_print_table_stats_reply(struct ds *string, const struct ofp_header *oh,
         ofputil_table_features_format(string,
                                       &features, i ? &prev_features : NULL,
                                       &stats, i ? &prev_stats : NULL,
-                                      table_map, &first_ditto, &last_ditto);
+                                      &first_ditto, &last_ditto);
         prev_features = features;
         prev_stats = stats;
     }
@@ -991,7 +989,7 @@ ofp_to_string__(const struct ofp_header *oh,
 
     case OFPTYPE_TABLE_FEATURES_STATS_REQUEST:
     case OFPTYPE_TABLE_FEATURES_STATS_REPLY:
-        return ofp_print_table_features_reply(string, oh, table_map);
+        return ofp_print_table_features_reply(string, oh);
 
     case OFPTYPE_TABLE_DESC_REQUEST:
     case OFPTYPE_TABLE_DESC_REPLY:
@@ -1114,7 +1112,7 @@ ofp_to_string__(const struct ofp_header *oh,
         return ofp_print_ofpst_port_reply(string, oh, port_map, verbosity);
 
     case OFPTYPE_TABLE_STATS_REPLY:
-        return ofp_print_table_stats_reply(string, oh, table_map);
+        return ofp_print_table_stats_reply(string, oh);
 
     case OFPTYPE_AGGREGATE_STATS_REPLY:
         return ofp_print_aggregate_stats_reply(string, oh);

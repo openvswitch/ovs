@@ -926,7 +926,6 @@ ofctl_dump_table_features(struct ovs_cmdl_context *ctx)
 
                     ofputil_table_features_format(
                         &s, &tf, n ? &prev : NULL, NULL, NULL,
-                        tables_to_show(ctx->argv[1]),
                         &first_ditto, &last_ditto);
 
                     prev = tf;
