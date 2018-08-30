@@ -1608,6 +1608,7 @@ parse_intel_port_custom_property(struct ofpbuf *payload,
 
     ops->custom_stats.size = ntohs(custom_stats->stats_array_size);
 
+    netdev_free_custom_stats_counters(&ops->custom_stats);
     ops->custom_stats.counters = xcalloc(ops->custom_stats.size,
                                          sizeof *ops->custom_stats.counters);
 
@@ -1618,6 +1619,7 @@ parse_intel_port_custom_property(struct ofpbuf *payload,
         uint8_t *name_len = ofpbuf_try_pull(payload, sizeof *name_len);
         char *name = name_len ? ofpbuf_try_pull(payload, *name_len) : NULL;
         if (!name_len || !name) {
+            netdev_free_custom_stats_counters(&ops->custom_stats);
             return OFPERR_OFPBPC_BAD_LEN;
         }
 
@@ -1628,6 +1630,7 @@ parse_intel_port_custom_property(struct ofpbuf *payload,
         /* Counter value. */
         ovs_be64 *value = ofpbuf_try_pull(payload, sizeof *value);
         if (!value) {
+            netdev_free_custom_stats_counters(&ops->custom_stats);
             return OFPERR_OFPBPC_BAD_LEN;
         }
         c->value = ntohll(get_unaligned_be64(value));
@@ -1714,6 +1717,7 @@ ofputil_count_port_stats(const struct ofp_header *oh)
         if (ofputil_decode_port_stats(&ps, &b)) {
             return n;
         }
+        netdev_free_custom_stats_counters(&ps.custom_stats);
     }
 }
 
@@ -1726,7 +1730,10 @@ ofputil_count_port_stats(const struct ofp_header *oh)
  * null and not modify them between calls.
  *
  * Returns 0 if successful, EOF if no replies were left in this 'msg',
- * otherwise a positive errno value. */
+ * otherwise a positive errno value.
+ *
+ * On success, the caller must eventually free ps->custom_stats.counters,
+ * with netdev_free_custom_stats_counters(&ps->custom_stats). */
 int
 ofputil_decode_port_stats(struct ofputil_port_stats *ps, struct ofpbuf *msg)
 {
