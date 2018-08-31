@@ -348,6 +348,8 @@ struct dp_netdev {
     /* id pool for per thread static_tx_qid. */
     struct id_pool *tx_qid_pool;
     struct ovs_mutex tx_qid_pool_mutex;
+    /* Use measured cycles for rxq to pmd assignment. */
+    bool pmd_rxq_assign_cyc;
 
     /* Protects the access of the 'struct dp_netdev_pmd_thread'
      * instance for non-pmd thread. */
@@ -1499,6 +1501,7 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     atomic_init(&dp->tx_flush_interval, DEFAULT_TX_FLUSH_INTERVAL);
 
     cmap_init(&dp->poll_threads);
+    dp->pmd_rxq_assign_cyc = true;
 
     ovs_mutex_init(&dp->tx_qid_pool_mutex);
     /* We need 1 Tx queue for each possible core + 1 for non-PMD threads. */
@@ -3726,6 +3729,8 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     const char *cmask = smap_get(other_config, "pmd-cpu-mask");
+    const char *pmd_rxq_assign = smap_get_def(other_config, "pmd-rxq-assign",
+                                             "cycles");
     unsigned long long insert_prob =
         smap_get_ullong(other_config, "emc-insert-inv-prob",
                         DEFAULT_EM_FLOW_INSERT_INV_PROB);
@@ -3787,6 +3792,20 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
         } else {
             VLOG_INFO("SMC cache is disabled");
         }
+    }
+
+    bool pmd_rxq_assign_cyc = !strcmp(pmd_rxq_assign, "cycles");
+    if (!pmd_rxq_assign_cyc && strcmp(pmd_rxq_assign, "roundrobin")) {
+        VLOG_WARN("Unsupported Rxq to PMD assignment mode in pmd-rxq-assign. "
+                      "Defaulting to 'cycles'.");
+        pmd_rxq_assign_cyc = true;
+        pmd_rxq_assign = "cycles";
+    }
+    if (dp->pmd_rxq_assign_cyc != pmd_rxq_assign_cyc) {
+        dp->pmd_rxq_assign_cyc = pmd_rxq_assign_cyc;
+        VLOG_INFO("Rxq to PMD assignment mode changed to: \'%s\'.",
+                  pmd_rxq_assign);
+        dp_netdev_request_reconfigure(dp);
     }
     return 0;
 }
@@ -4258,10 +4277,18 @@ rr_numa_list_populate(struct dp_netdev *dp, struct rr_numa_list *rr)
     }
 }
 
-/* Returns the next pmd from the numa node in
- * incrementing or decrementing order. */
+/*
+ * Returns the next pmd from the numa node.
+ *
+ * If 'updown' is 'true' it will alternate between selecting the next pmd in
+ * either an up or down walk, switching between up/down when the first or last
+ * core is reached. e.g. 1,2,3,3,2,1,1,2...
+ *
+ * If 'updown' is 'false' it will select the next pmd wrapping around when last
+ * core reached. e.g. 1,2,3,1,2,3,1,2...
+ */
 static struct dp_netdev_pmd_thread *
-rr_numa_get_pmd(struct rr_numa *numa)
+rr_numa_get_pmd(struct rr_numa *numa, bool updown)
 {
     int numa_idx = numa->cur_index;
 
@@ -4269,7 +4296,11 @@ rr_numa_get_pmd(struct rr_numa *numa)
         /* Incrementing through list of pmds. */
         if (numa->cur_index == numa->n_pmds-1) {
             /* Reached the last pmd. */
-            numa->idx_inc = false;
+            if (updown) {
+                numa->idx_inc = false;
+            } else {
+                numa->cur_index = 0;
+            }
         } else {
             numa->cur_index++;
         }
@@ -4332,9 +4363,6 @@ compare_rxq_cycles(const void *a, const void *b)
  * queues and marks the pmds as isolated.  Otherwise, assign non isolated
  * pmds to unpinned queues.
  *
- * If 'pinned' is false queues will be sorted by processing cycles they are
- * consuming and then assigned to pmds in round robin order.
- *
  * The function doesn't touch the pmd threads, it just stores the assignment
  * in the 'pmd' member of each rxq. */
 static void
@@ -4347,6 +4375,7 @@ rxq_scheduling(struct dp_netdev *dp, bool pinned) OVS_REQUIRES(dp->port_mutex)
     int n_rxqs = 0;
     struct rr_numa *numa = NULL;
     int numa_id;
+    bool assign_cyc = dp->pmd_rxq_assign_cyc;
 
     HMAP_FOR_EACH (port, node, &dp->ports) {
         if (!netdev_is_pmd(port->netdev)) {
@@ -4377,19 +4406,22 @@ rxq_scheduling(struct dp_netdev *dp, bool pinned) OVS_REQUIRES(dp->port_mutex)
                 } else {
                     rxqs = xrealloc(rxqs, sizeof *rxqs * (n_rxqs + 1));
                 }
-                /* Sum the queue intervals and store the cycle history. */
-                for (unsigned i = 0; i < PMD_RXQ_INTERVAL_MAX; i++) {
-                    cycle_hist += dp_netdev_rxq_get_intrvl_cycles(q, i);
-                }
-                dp_netdev_rxq_set_cycles(q, RXQ_CYCLES_PROC_HIST, cycle_hist);
 
+                if (assign_cyc) {
+                    /* Sum the queue intervals and store the cycle history. */
+                    for (unsigned i = 0; i < PMD_RXQ_INTERVAL_MAX; i++) {
+                        cycle_hist += dp_netdev_rxq_get_intrvl_cycles(q, i);
+                    }
+                    dp_netdev_rxq_set_cycles(q, RXQ_CYCLES_PROC_HIST,
+                                             cycle_hist);
+                }
                 /* Store the queue. */
                 rxqs[n_rxqs++] = q;
             }
         }
     }
 
-    if (n_rxqs > 1) {
+    if (n_rxqs > 1 && assign_cyc) {
         /* Sort the queues in order of the processing cycles
          * they consumed during their last pmd interval. */
         qsort(rxqs, n_rxqs, sizeof *rxqs, compare_rxq_cycles);
@@ -4413,7 +4445,7 @@ rxq_scheduling(struct dp_netdev *dp, bool pinned) OVS_REQUIRES(dp->port_mutex)
                          netdev_rxq_get_queue_id(rxqs[i]->rx));
                 continue;
             }
-            rxqs[i]->pmd = rr_numa_get_pmd(non_local_numa);
+            rxqs[i]->pmd = rr_numa_get_pmd(non_local_numa, assign_cyc);
             VLOG_WARN("There's no available (non-isolated) pmd thread "
                       "on numa node %d. Queue %d on port \'%s\' will "
                       "be assigned to the pmd on core %d "
@@ -4422,13 +4454,22 @@ rxq_scheduling(struct dp_netdev *dp, bool pinned) OVS_REQUIRES(dp->port_mutex)
                       netdev_rxq_get_name(rxqs[i]->rx),
                       rxqs[i]->pmd->core_id, rxqs[i]->pmd->numa_id);
         } else {
-        rxqs[i]->pmd = rr_numa_get_pmd(numa);
-        VLOG_INFO("Core %d on numa node %d assigned port \'%s\' "
-                  "rx queue %d (measured processing cycles %"PRIu64").",
-                  rxqs[i]->pmd->core_id, numa_id,
-                  netdev_rxq_get_name(rxqs[i]->rx),
-                  netdev_rxq_get_queue_id(rxqs[i]->rx),
-                  dp_netdev_rxq_get_cycles(rxqs[i], RXQ_CYCLES_PROC_HIST));
+            rxqs[i]->pmd = rr_numa_get_pmd(numa, assign_cyc);
+            if (assign_cyc) {
+                VLOG_INFO("Core %d on numa node %d assigned port \'%s\' "
+                          "rx queue %d "
+                          "(measured processing cycles %"PRIu64").",
+                          rxqs[i]->pmd->core_id, numa_id,
+                          netdev_rxq_get_name(rxqs[i]->rx),
+                          netdev_rxq_get_queue_id(rxqs[i]->rx),
+                          dp_netdev_rxq_get_cycles(rxqs[i],
+                                                   RXQ_CYCLES_PROC_HIST));
+            } else {
+                VLOG_INFO("Core %d on numa node %d assigned port \'%s\' "
+                          "rx queue %d.", rxqs[i]->pmd->core_id, numa_id,
+                          netdev_rxq_get_name(rxqs[i]->rx),
+                          netdev_rxq_get_queue_id(rxqs[i]->rx));
+            }
         }
     }
 
