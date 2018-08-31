@@ -72,7 +72,7 @@ default:
 
 modules_install:
 	$(MAKE) -C $(KSRC) M=$(builddir) modules_install
-	depmod `sed -n 's/#define UTS_RELEASE "\([^"]*\)"/\1/p' $(KSRC)/include/generated/utsrelease.h`
+	/sbin/depmod `sed -n 's/#define UTS_RELEASE "\([^"]*\)"/\1/p' $(KSRC)/include/generated/utsrelease.h`
 endif
 
 # Much of the kernel build system in this file is derived from Intel's

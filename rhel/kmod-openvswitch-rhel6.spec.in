@@ -95,7 +95,7 @@ if [ "$installed_major" = "327" ] || [ "$installed_major" = "693" ]; then
 else
     # Ensure that modprobe will find our modules.
     for k in $(cd /lib/modules && /bin/ls); do
-        [ -d "/lib/modules/$k/kernel/" ] && depmod -a "$k"
+        [ -d "/lib/modules/$k/kernel/" ] && /sbin/depmod -a "$k"
     done
     if [ -x "/sbin/weak-modules" ]; then
         rpm -ql kmod-%{oname} | grep '\.ko$' | \
