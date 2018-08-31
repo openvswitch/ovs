@@ -47,7 +47,7 @@ traffic. This package contains the kernel modules.
 for kv in %{kversion}; do
     mkdir -p _$kv
     (cd _$kv && /bin/cp -f ../configure . && %configure --srcdir=.. \
-        --with-linux=/lib/modules/${kv}/build --enable-ssl)
+        --with-linux=/lib/modules/${kv}/build --enable-ssl %{_ovs_config_extra_flags})
     make %{_smp_mflags} -C _$kv/datapath/linux
 done
 
