@@ -4488,7 +4488,7 @@ xlate_group_action__(struct xlate_ctx *ctx, struct group_dpif *group,
                      bool is_last_action)
 {
     if (group->up.type == OFPGT11_ALL || group->up.type == OFPGT11_INDIRECT) {
-        struct ovs_list *last_bucket = ovs_list_back(&group->up.buckets);
+        struct ovs_list *last_bucket = group->up.buckets.prev;
         struct ofputil_bucket *bucket;
         LIST_FOR_EACH (bucket, list_node, &group->up.buckets) {
             bool is_last_bucket = &bucket->list_node == last_bucket;
