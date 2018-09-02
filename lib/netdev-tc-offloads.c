@@ -446,6 +446,10 @@ parse_tc_flower_to_match(struct tc_flower *flower,
             match_set_dl_type(match, key->encap_eth_type[0]);
         }
         flow_fix_vlan_tpid(&match->flow);
+    } else if (eth_type_mpls(key->eth_type)) {
+        match->flow.mpls_lse[0] = key->mpls_lse & mask->mpls_lse;
+        match->wc.masks.mpls_lse[0] = mask->mpls_lse;
+        match_set_dl_type(match, key->encap_eth_type[0]);
     } else {
         match_set_dl_type(match, key->eth_type);
     }
@@ -877,9 +881,9 @@ test_key_and_mask(struct match *match)
         return EOPNOTSUPP;
     }
 
-    for (int i = 0; i < FLOW_MAX_MPLS_LABELS; i++) {
+    for (int i = 1; i < FLOW_MAX_MPLS_LABELS; i++) {
         if (mask->mpls_lse[i]) {
-            VLOG_DBG_RL(&rl, "offloading attribute mpls_lse isn't supported");
+            VLOG_DBG_RL(&rl, "offloading multiple mpls_lses isn't supported");
             return EOPNOTSUPP;
         }
     }
@@ -984,6 +988,12 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
 
     flower.key.eth_type = key->dl_type;
     flower.mask.eth_type = mask->dl_type;
+    if (mask->mpls_lse[0]) {
+        flower.key.mpls_lse = key->mpls_lse[0];
+        flower.mask.mpls_lse = mask->mpls_lse[0];
+        flower.key.encap_eth_type[0] = flower.key.eth_type;
+    }
+    mask->mpls_lse[0] = 0;
 
     if (mask->vlans[0].tci) {
         ovs_be16 vid_mask = mask->vlans[0].tci & htons(VLAN_VID_MASK);

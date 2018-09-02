@@ -78,6 +78,7 @@ struct tc_flower_key {
     struct eth_addr dst_mac;
     struct eth_addr src_mac;
 
+    ovs_be32 mpls_lse;
     ovs_be16 tcp_src;
     ovs_be16 tcp_dst;
     ovs_be16 tcp_flags;
