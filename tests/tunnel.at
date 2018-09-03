@@ -839,6 +839,35 @@ AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: set(tunnel(dst=1.1.1.1,ttl=64,tp_dst=4789,flags(df))),4789
 ])
 
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([tunnel - concomitant incompatible tunnels on the same port])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=vxlan \
+                    options:remote_ip=flow ofport_request=1])
+
+AT_CHECK([ovs-vsctl add-port br0 p2 -- set Interface p2 type=vxlan \
+                    options:remote_ip=flow options:exts=gbp options:key=1 ofport_request=2], [0],
+  [], [ignore])
+
+AT_CHECK([grep 'p2: could not set configuration (File exists)' ovs-vswitchd.log | sed "s/^.*\(p2:.*\)$/\1/"], [0],
+  [p2: could not set configuration (File exists)
+])
+
+OVS_VSWITCHD_STOP(["/p2: VXLAN-GBP, and non-VXLAN-GBP tunnels can't be configured on the same dst_port/d
+/p2: could not set configuration (File exists)/d"])
+AT_CLEANUP
+
+AT_SETUP([tunnel - concomitant incompatible tunnels on different ports])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=vxlan \
+                    options:remote_ip=flow ofport_request=1])
+
+AT_CHECK([ovs-vsctl add-port br0 p2 -- set Interface p2 type=vxlan options:dst_port=9000 \
+                    options:remote_ip=flow options:exts=gbp ofport_request=2])
+
+AT_CHECK([grep p2 ovs-vswitchd.log | sed "s/^.*\(bridge br0:.*\)$/\1/"], [0],
+  [bridge br0: added interface p2 on port 2
+])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
