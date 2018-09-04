@@ -48,24 +48,6 @@ ovs_setenv() {
     OVS_PKGDATADIR=$ovs_dir; export OVS_PKGDATADIR
 }
 
-ovs_wait () {
-    # First try the condition without waiting.
-    ovs_wait_cond && return 0
-
-    # Try a quick sleep, so that the test completes very quickly
-    # in the normal case.  POSIX doesn't require fractional times to
-    # work, so this might not work.
-    sleep 0.1
-    ovs_wait_cond && return 0
-
-    # Then wait up to 10 seconds.
-    for d in 0 1 2 3 4 5 6 7 8 9; do
-        sleep 1
-        ovs_wait_cond && return 0
-    done
-    return 1
-}
-
 # Prints the integers from $1 to $2, increasing by $3 (default 1) on stdout.
 seq () {
     if test $# = 1; then
@@ -197,17 +179,40 @@ fi
 ]
 m4_divert_pop([PREPARE_TESTS])
 
+OVS_START_SHELL_HELPERS
+ovs_wait () {
+    echo "$1: waiting $2..." >&AS_MESSAGE_LOG_FD
+
+    # First try the condition without waiting.
+    if ovs_wait_cond; then echo "$1: wait succeeded immediately" >&AS_MESSAGE_LOG_FD; return 0; fi
+
+    # Try a quick sleep, so that the test completes very quickly
+    # in the normal case.  POSIX doesn't require fractional times to
+    # work, so this might not work.
+    sleep 0.1
+    if ovs_wait_cond; then echo "$1: wait succeeded quickly" >&AS_MESSAGE_LOG_FD; return 0; fi
+
+    # Then wait up to 10 seconds.
+    local d
+    for d in 1 2 3 4 5 6 7 8 9 10; do
+        sleep 1
+        if ovs_wait_cond; then echo "$1: wait succeeded after $d seconds" >&AS_MESSAGE_LOG_FD; return 0; fi
+    done
+
+    echo "$1: wait failed after $d seconds" >&AS_MESSAGE_LOG_FD
+    ovs_wait_failed
+    AT_FAIL_IF([:])
+}
+OVS_END_SHELL_HELPERS
 m4_define([OVS_WAIT], [dnl
-AS_ECHO(["AS_ESCAPE([$3: waiting $4...])"]) >&AS_MESSAGE_LOG_FD
 ovs_wait_cond () {
     $1
 }
-if ovs_wait; then :
-else
-    AS_ECHO(["AS_ESCAPE([$3: wait failed])"]) >&AS_MESSAGE_LOG_FD
+ovs_wait_failed () {
+    :
     $2
-    AT_FAIL_IF([:])
-fi
+}
+ovs_wait "AS_ESCAPE([$3])" "AS_ESCAPE([$4])"
 ])
 
 dnl OVS_WAIT_UNTIL(COMMAND)

@@ -17,13 +17,11 @@ m4_divert_text([PREPARE_TESTS],
      rcv_text=`echo "$rcv_pcap.packets" | sed 's/\.pcap//'`
      exp_text=$2
      exp_n=`wc -l < "$exp_text"`
-     ovs_wait_cond () {
-         $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $rcv_pcap > $rcv_text
-         rcv_n=`wc -l < "$rcv_text"`
-         test $rcv_n -ge $exp_n
-     }
-     ovs_wait || echo "expected $exp_n packets, only received $rcv_n"
-
+     OVS_WAIT_UNTIL(
+       [$PYTHON "$top_srcdir/utilities/ovs-pcap.in" $rcv_pcap > $rcv_text
+        rcv_n=`wc -l < "$rcv_text"`
+        echo "rcv_n=$rcv_n exp_n=$exp_n"
+        test $rcv_n -ge $exp_n])
      sort $exp_text > expout
    }
 ])
@@ -4290,6 +4288,9 @@ test_dhcp() {
     # dhcp message type
     request=${request}3501${dhcp_type}ff
 
+    for port in $inport "$@"; do
+        : >> $port.expected
+    done
     if test $offer_ip != 0; then
         local srv_mac=$1 srv_ip=$2 expected_dhcp_opts=$3
         # total IP length will be the IP length of the request packet
