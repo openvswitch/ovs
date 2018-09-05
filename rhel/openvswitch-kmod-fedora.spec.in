@@ -81,13 +81,23 @@ rm -rf $RPM_BUILD_ROOT
 
 %post
 current_kernel=$(uname -r)
-IFS=. read installed_major installed_minor installed_micro installed_arch \
-    installed_build <<<"${current_kernel##*-}"
-if [ "$installed_major" = "327" ] || [ "$installed_major" = "693" ]; then
-    # Workaround for RHEL 7.2 and 7.4
-    if [ -x "/usr/share/openvswitch/scripts/ovs-kmod-manage.sh" ]; then
-        /usr/share/openvswitch/scripts/ovs-kmod-manage.sh
+IFS='.\|-' read mainline_major mainline_minor mainline_patch major_rev \
+    minor_rev _extra <<<"${current_kernel}"
+# echo mainline_major=$mainline_major mainline_minor=$mainline_minor \
+# mainline_patch=$mainline_patch major_rev=$major_rev minor_rev=$minor_rev
+if [ "$mainline_major" = "3" ] && [ "$mainline_minor" = "10" ]; then
+    if [ "$installed_major" = "327" ] || [ "$installed_major" = "693" ]; then
+        # For RHEL 7.2 and 7.4
+        if [ -x "/usr/share/openvswitch/scripts/ovs-kmod-manage.sh" ]; then
+            /usr/share/openvswitch/scripts/ovs-kmod-manage.sh
+        fi
     fi
+elif [ "$mainline_major" = "4" ] && [ "$mainline_minor" = "4" ] && \
+     [ "$mainline_patch" -ge "73" ]; then
+     # For SLES 12 SP3
+     if [ -x "/usr/share/openvswitch/scripts/ovs-kmod-manage.sh" ]; then
+         /usr/share/openvswitch/scripts/ovs-kmod-manage.sh
+     fi
 else
     # Ensure that modprobe will find our modules.
     for k in $(cd /lib/modules && /bin/ls); do
