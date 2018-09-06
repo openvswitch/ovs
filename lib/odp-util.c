@@ -7260,6 +7260,7 @@ commit_set_ipv6_action(const struct flow *flow, struct flow *base_flow,
     get_ipv6_key(&wc->masks, &mask, true);
     mask.ipv6_proto = 0;        /* Not writeable. */
     mask.ipv6_frag = 0;         /* Not writable. */
+    mask.ipv6_label &= htonl(IPV6_LABEL_MASK); /* Not writable. */
 
     if (flow_tnl_dst_is_set(&base_flow->tunnel) &&
         ((base_flow->nw_tos ^ flow->nw_tos) & IP_ECN_MASK) == 0) {
