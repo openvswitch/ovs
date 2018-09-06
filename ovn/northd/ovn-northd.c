@@ -944,6 +944,12 @@ ipam_insert_ip(struct ovn_datapath *od, uint32_t ip)
 
     if (ip >= od->ipam_info.start_ipv4 &&
         ip < (od->ipam_info.start_ipv4 + od->ipam_info.total_ipv4s)) {
+        if (bitmap_is_set(od->ipam_info.allocated_ipv4s,
+                          ip - od->ipam_info.start_ipv4)) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+            VLOG_WARN_RL(&rl, "Duplicate IP set on switch %s: "IP_FMT,
+                         od->nbs->name, IP_ARGS(htonl(ip)));
+        }
         bitmap_set1(od->ipam_info.allocated_ipv4s,
                     ip - od->ipam_info.start_ipv4);
     }

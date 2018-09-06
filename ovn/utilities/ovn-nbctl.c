@@ -1437,6 +1437,74 @@ nbctl_lsp_get_tag(struct ctl_context *ctx)
     }
 }
 
+static char *
+lsp_contains_duplicate_ip(struct lport_addresses *laddrs1,
+                          struct lport_addresses *laddrs2)
+{
+    for (size_t i = 0; i < laddrs1->n_ipv4_addrs; i++) {
+        for (size_t j = 0; j < laddrs2->n_ipv4_addrs; j++) {
+            if (laddrs1->ipv4_addrs[i].addr == laddrs2->ipv4_addrs[j].addr) {
+                return xasprintf("duplicate IPv4 address %s",
+                                 laddrs1->ipv4_addrs[i].addr_s);
+            }
+        }
+    }
+
+    for (size_t i = 0; i < laddrs1->n_ipv6_addrs; i++) {
+        for (size_t j = 0; j < laddrs2->n_ipv6_addrs; j++) {
+            if (IN6_ARE_ADDR_EQUAL(&laddrs1->ipv6_addrs[i].addr,
+                                   &laddrs2->ipv6_addrs[j].addr)) {
+                return xasprintf("duplicate IPv6 address %s",
+                                 laddrs1->ipv6_addrs[i].addr_s);
+            }
+        }
+    }
+
+    return NULL;
+}
+
+static char *
+lsp_contains_duplicates(const struct nbrec_logical_switch *ls,
+                        const struct nbrec_logical_switch_port *lsp,
+                        const char *address)
+{
+    struct lport_addresses laddrs;
+    if (!extract_lsp_addresses(address, &laddrs)) {
+        return NULL;
+    }
+
+    char *sub_error = NULL;
+    for (size_t i = 0; i < ls->n_ports; i++) {
+        struct nbrec_logical_switch_port *lsp_test = ls->ports[i];
+        if (lsp_test == lsp) {
+            continue;
+        }
+        for (size_t j = 0; j < lsp_test->n_addresses; j++) {
+            struct lport_addresses laddrs_test;
+            char *addr = lsp_test->addresses[j];
+            if (is_dynamic_lsp_address(addr)) {
+                addr = lsp_test->dynamic_addresses;
+            }
+            if (extract_lsp_addresses(addr, &laddrs_test)) {
+                sub_error = lsp_contains_duplicate_ip(&laddrs, &laddrs_test);
+                destroy_lport_addresses(&laddrs_test);
+                if (sub_error) {
+                    goto err_out;
+                }
+            }
+        }
+    }
+
+err_out: ;
+    char *error = NULL;
+    if (sub_error) {
+        error = xasprintf("Error on switch %s: %s", ls->name, sub_error);
+        free(sub_error);
+    }
+    destroy_lport_addresses(&laddrs);
+    return error;
+}
+
 static void
 nbctl_lsp_set_addresses(struct ctl_context *ctx)
 {
@@ -1444,6 +1512,13 @@ nbctl_lsp_set_addresses(struct ctl_context *ctx)
     const struct nbrec_logical_switch_port *lsp = NULL;
 
     char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
+    if (error) {
+        ctx->error = error;
+        return;
+    }
+
+    const struct nbrec_logical_switch *ls;
+    error = lsp_to_ls(ctx->idl, lsp, &ls);
     if (error) {
         ctx->error = error;
         return;
@@ -1461,6 +1536,12 @@ nbctl_lsp_set_addresses(struct ctl_context *ctx)
                       "Hint: An Ethernet address must be "
                       "listed before an IP address, together as a single "
                       "argument.", ctx->argv[i]);
+            return;
+        }
+
+        error = lsp_contains_duplicates(ls, lsp, ctx->argv[i]);
+        if (error) {
+            ctl_error(ctx, "%s", error);
             return;
         }
     }
