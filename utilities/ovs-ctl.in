@@ -164,16 +164,14 @@ start_ovsdb() {
 }
 
 add_managers () {
-    # Now that ovs-vswitchd has started and completed its initial
-    # configuration, tell ovsdb-server to connect to the remote managers.  We
-    # used to do this at ovsdb-server startup time, but waiting for
-    # ovs-vswitchd to finish configuring means that remote managers see less
-    # churn in the database at startup or restart.  (For example, managers
-    # won't briefly see empty datapath-id or ofport columns for records that
-    # exist at startup.)
+    # Tell ovsdb-server to connect to the remote managers. If ovs-vswitchd
+    # is not finished configuring, it may mean that remote managers will
+    # see more churn in the database at startup or restart. (For example,
+    # managers may briefly see empty datapath-id or ofport columns for
+    # records that exist at startup.).  However, the alternative is a
+    # 'bricked' system, so we allow database connectivity regardless.
     if test X"$OVSDB_SERVER" = Xyes || test X"$OVS_VSWITCHD" = Xyes; then
-        if daemon_is_running ovsdb-server \
-                && daemon_is_running ovs-vswitchd; then
+        if daemon_is_running ovsdb-server; then
             action "Enabling remote OVSDB managers" \
                    ovs-appctl -t ovsdb-server ovsdb-server/add-remote \
                    db:Open_vSwitch,Open_vSwitch,manager_options
