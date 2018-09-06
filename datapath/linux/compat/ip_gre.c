@@ -1222,12 +1222,15 @@ static void ipgre_tap_setup(struct net_device *dev)
 
 static void erspan_setup(struct net_device *dev)
 {
+	struct ip_tunnel *t = netdev_priv(dev);
+
 	eth_hw_addr_random(dev);
 	ether_setup(dev);
 	dev->netdev_ops = &erspan_netdev_ops;
 	dev->priv_flags &= ~IFF_TX_SKB_SHARING;
 	dev->priv_flags |= IFF_LIVE_ADDR_CHANGE;
 	ip_tunnel_setup(dev, erspan_net_id);
+	t->erspan_ver = 1;
 }
 
 #ifdef HAVE_EXT_ACK_IN_RTNL_LINKOPS
