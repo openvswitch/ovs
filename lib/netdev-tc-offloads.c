@@ -511,10 +511,12 @@ parse_tc_flower_to_match(struct tc_flower *flower,
             match_set_tun_ipv6_dst(match, &flower->key.tunnel.ipv6.ipv6_dst);
         }
         if (flower->key.tunnel.tos) {
-            match_set_tun_tos(match, flower->key.tunnel.tos);
+            match_set_tun_tos_masked(match, flower->key.tunnel.tos,
+                                     flower->mask.tunnel.tos);
         }
         if (flower->key.tunnel.ttl) {
-            match_set_tun_ttl(match, flower->key.tunnel.ttl);
+            match_set_tun_ttl_masked(match, flower->key.tunnel.ttl,
+                                     flower->mask.tunnel.ttl);
         }
         if (flower->key.tunnel.tp_dst) {
             match_set_tun_tp_dst(match, flower->key.tunnel.tp_dst);
@@ -939,6 +941,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     const struct flow *key = &match->flow;
     struct flow *mask = &match->wc.masks;
     const struct flow_tnl *tnl = &match->flow.tunnel;
+    const struct flow_tnl *tnl_mask = &mask->tunnel;
     struct tc_action *action;
     uint32_t block_id = 0;
     struct nlattr *nla;
@@ -973,6 +976,8 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         flower.key.tunnel.ttl = tnl->ip_ttl;
         flower.key.tunnel.tp_src = tnl->tp_src;
         flower.key.tunnel.tp_dst = tnl->tp_dst;
+        flower.mask.tunnel.tos = tnl_mask->ip_tos;
+        flower.mask.tunnel.ttl = tnl_mask->ip_ttl;
         flower.tunnel = true;
     }
     memset(&mask->tunnel, 0, sizeof mask->tunnel);

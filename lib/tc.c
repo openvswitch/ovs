@@ -415,13 +415,17 @@ nl_parse_flower_tunnel(struct nlattr **attrs, struct tc_flower *flower)
         flower->key.tunnel.tp_dst =
             nl_attr_get_be16(attrs[TCA_FLOWER_KEY_ENC_UDP_DST_PORT]);
     }
-    if (attrs[TCA_FLOWER_KEY_ENC_IP_TOS]) {
+    if (attrs[TCA_FLOWER_KEY_ENC_IP_TOS_MASK]) {
         flower->key.tunnel.tos =
             nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ENC_IP_TOS]);
+        flower->mask.tunnel.tos =
+            nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ENC_IP_TOS_MASK]);
     }
-    if (attrs[TCA_FLOWER_KEY_ENC_IP_TTL]) {
+    if (attrs[TCA_FLOWER_KEY_ENC_IP_TTL_MASK]) {
         flower->key.tunnel.ttl =
             nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ENC_IP_TTL]);
+        flower->mask.tunnel.ttl =
+            nl_attr_get_u8(attrs[TCA_FLOWER_KEY_ENC_IP_TTL_MASK]);
     }
 }
 
@@ -1623,6 +1627,8 @@ nl_msg_put_flower_tunnel(struct ofpbuf *request, struct tc_flower *flower)
     ovs_be32 id = be64_to_be32(flower->key.tunnel.id);
     uint8_t tos = flower->key.tunnel.tos;
     uint8_t ttl = flower->key.tunnel.ttl;
+    uint8_t tos_mask = flower->mask.tunnel.tos;
+    uint8_t ttl_mask = flower->mask.tunnel.ttl;
 
     if (ipv4_dst) {
         nl_msg_put_be32(request, TCA_FLOWER_KEY_ENC_IPV4_SRC, ipv4_src);
@@ -1631,11 +1637,13 @@ nl_msg_put_flower_tunnel(struct ofpbuf *request, struct tc_flower *flower)
         nl_msg_put_in6_addr(request, TCA_FLOWER_KEY_ENC_IPV6_SRC, ipv6_src);
         nl_msg_put_in6_addr(request, TCA_FLOWER_KEY_ENC_IPV6_DST, ipv6_dst);
     }
-    if (tos) {
+    if (tos_mask) {
         nl_msg_put_u8(request, TCA_FLOWER_KEY_ENC_IP_TOS, tos);
+        nl_msg_put_u8(request, TCA_FLOWER_KEY_ENC_IP_TOS_MASK, tos_mask);
     }
-    if (ttl) {
+    if (ttl_mask) {
         nl_msg_put_u8(request, TCA_FLOWER_KEY_ENC_IP_TTL, ttl);
+        nl_msg_put_u8(request, TCA_FLOWER_KEY_ENC_IP_TTL_MASK, ttl_mask);
     }
     nl_msg_put_be16(request, TCA_FLOWER_KEY_ENC_UDP_DST_PORT, tp_dst);
     nl_msg_put_be32(request, TCA_FLOWER_KEY_ENC_KEY_ID, id);
