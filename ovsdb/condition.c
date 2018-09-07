@@ -338,24 +338,17 @@ ovsdb_clause_evaluate(const struct ovsdb_datum *fields,
         c->function == OVSDB_F_FALSE) {
         return c->function == OVSDB_F_TRUE;
     }
-    if (ovsdb_type_is_optional_scalar(type) && field->n == 0) {
-        switch (c->function) {
-            case OVSDB_F_LT:
-            case OVSDB_F_LE:
-            case OVSDB_F_EQ:
-            case OVSDB_F_GE:
-            case OVSDB_F_GT:
-            case OVSDB_F_INCLUDES:
-                return false;
-            case OVSDB_F_NE:
-            case OVSDB_F_EXCLUDES:
-                return true;
-            case OVSDB_F_TRUE:
-            case OVSDB_F_FALSE:
-                OVS_NOT_REACHED();
-        }
-    } else if (ovsdb_type_is_scalar(type)
-               || ovsdb_type_is_optional_scalar(type)) {
+    if (ovsdb_type_is_optional_scalar(type)
+        && field->n == 0
+        && (c->function == OVSDB_F_LT ||
+            c->function == OVSDB_F_LE ||
+            c->function == OVSDB_F_GT ||
+            c->function == OVSDB_F_GE)) {
+        return false;
+    } else if ((ovsdb_type_is_scalar(type)
+                || ovsdb_type_is_optional_scalar(type))
+               && field->n == 1
+               && arg->n == 1) {
         int cmp = ovsdb_atom_compare_3way(&field->keys[0], &arg->keys[0],
                                           type->key.type);
         switch (c->function) {
