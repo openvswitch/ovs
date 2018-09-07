@@ -1706,9 +1706,6 @@ static void stt_cleanup(struct net *net)
 	int i;
 
 	sn->n_tunnels--;
-	if (sn->n_tunnels)
-		goto out;
-out:
 	n_tunnels--;
 	if (n_tunnels)
 		return;
