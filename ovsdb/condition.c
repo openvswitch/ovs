@@ -125,7 +125,12 @@ ovsdb_clause_from_json(const struct ovsdb_table_schema *ts,
             free(s);
             return error;
         }
+
+        /* Force the argument to be a scalar. */
+        type.n_min = 1;
+
         break;
+
     case OVSDB_F_EQ:
     case OVSDB_F_NE:
         break;

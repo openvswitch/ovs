@@ -455,9 +455,10 @@ form::
 For <condition>, RFC 7047 only allows the use of ``!=``, ``==``, ``includes``,
 and ``excludes`` operators with set types.  Open vSwitch 2.4 and later extend
 <condition> to allow the use of ``<``, ``<=``, ``>=``, and ``>`` operators with
-columns with type "set of 0 or 1 integer" and "set of 0 or 1 real".  These
-conditions evaluate to false when the column is empty, and otherwise as
-described in RFC 7047 for integer and real types.
+a column with type "set of 0 or 1 integer" and an integer argument, and with
+"set of 0 or 1 real" and a real argument.  These conditions evaluate to false
+when the column is empty, and otherwise as described in RFC 7047 for integer
+and real types.
 
 <condition> is specified in Section 5.1 in the RFC with the following change: A
 condition can be either a 3-element JSON array as described in the RFC or a

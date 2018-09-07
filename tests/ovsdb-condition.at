@@ -92,7 +92,58 @@ AT_CHECK([[test-ovsdb parse-conditions \
     '[["u", ">", ["uuid", "b10d28f7-af18-4a67-9e78-2a6394516c59"]]]' \
     '[["u", ">=", ["uuid", "9179ca6d-6d65-400a-b455-3ad92783a099"]]]' \
     '[["u", "<", ["uuid", "ad0fa355-8b84-4a36-a4b5-b2c1bfd91758"]]]' \
-    '[["u", "<=", ["uuid", "62315898-64e0-40b9-b26f-ff74225303e6"]]]']],
+    '[["u", "<=", ["uuid", "62315898-64e0-40b9-b26f-ff74225303e6"]]]' \
+    '[["i", "==", ["set", []]]]' \
+    '[["i", "!=", ["set", []]]]' \
+    '[["i", ">", ["set", []]]]' \
+    '[["i", ">=", ["set", []]]]' \
+    '[["i", "<", ["set", []]]]' \
+    '[["i", "<=", ["set", []]]]' \
+    '[["i", "includes", ["set", []]]]' \
+    '[["i", "excludes", ["set", []]]]' \
+    '[["i", ">", ["set", []]]]' \
+    '[["i", "==", ["set", []]]]' \
+    '[["r", "==", ["set", []]]]' \
+    '[["r", "!=", ["set", []]]]' \
+    '[["r", ">", ["set", []]]]' \
+    '[["r", ">=", ["set", []]]]' \
+    '[["r", "<", ["set", []]]]' \
+    '[["r", "<=", ["set", []]]]' \
+    '[["r", "includes", ["set", []]]]' \
+    '[["r", "excludes", ["set", []]]]' \
+    '[["r", ">", ["set", []]]]' \
+    '[["r", "==", ["set", []]]]' \
+    '[["b", "==", ["set", []]]]' \
+    '[["b", "!=", ["set", []]]]' \
+    '[["b", ">", ["set", []]]]' \
+    '[["b", ">=", ["set", []]]]' \
+    '[["b", "<", ["set", []]]]' \
+    '[["b", "<=", ["set", []]]]' \
+    '[["b", "includes", ["set", []]]]' \
+    '[["b", "excludes", ["set", []]]]' \
+    '[["b", ">", ["set", []]]]' \
+    '[["b", "==", ["set", []]]]' \
+    '[["s", "==", ["set", []]]]' \
+    '[["s", "!=", ["set", []]]]' \
+    '[["s", ">", ["set", []]]]' \
+    '[["s", ">=", ["set", []]]]' \
+    '[["s", "<", ["set", []]]]' \
+    '[["s", "<=", ["set", []]]]' \
+    '[["s", "includes", ["set", []]]]' \
+    '[["s", "excludes", ["set", []]]]' \
+    '[["s", ">", ["set", []]]]' \
+    '[["s", "==", ["set", []]]]' \
+    '[["u", "==", ["set", []]]]' \
+    '[["u", "!=", ["set", []]]]' \
+    '[["u", ">", ["set", []]]]' \
+    '[["u", ">=", ["set", []]]]' \
+    '[["u", "<", ["set", []]]]' \
+    '[["u", "<=", ["set", []]]]' \
+    '[["u", "includes", ["set", []]]]' \
+    '[["u", "excludes", ["set", []]]]' \
+    '[["u", ">", ["set", []]]]' \
+    '[["u", "==", ["set", []]]]' \
+]],
   [1], [],
   [[test-ovsdb: syntax "["b",">",true]": syntax error: Type mismatch: ">" operator may not be applied to column b of type boolean.
 test-ovsdb: syntax "["b",">=",false]": syntax error: Type mismatch: ">=" operator may not be applied to column b of type boolean.
@@ -106,6 +157,209 @@ test-ovsdb: syntax "["u",">",["uuid","b10d28f7-af18-4a67-9e78-2a6394516c59"]]": 
 test-ovsdb: syntax "["u",">=",["uuid","9179ca6d-6d65-400a-b455-3ad92783a099"]]": syntax error: Type mismatch: ">=" operator may not be applied to column u of type uuid.
 test-ovsdb: syntax "["u","<",["uuid","ad0fa355-8b84-4a36-a4b5-b2c1bfd91758"]]": syntax error: Type mismatch: "<" operator may not be applied to column u of type uuid.
 test-ovsdb: syntax "["u","<=",["uuid","62315898-64e0-40b9-b26f-ff74225303e6"]]": syntax error: Type mismatch: "<=" operator may not be applied to column u of type uuid.
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["b",">",["set",[]]]": syntax error: Type mismatch: ">" operator may not be applied to column b of type boolean.
+test-ovsdb: syntax "["b",">=",["set",[]]]": syntax error: Type mismatch: ">=" operator may not be applied to column b of type boolean.
+test-ovsdb: syntax "["b","<",["set",[]]]": syntax error: Type mismatch: "<" operator may not be applied to column b of type boolean.
+test-ovsdb: syntax "["b","<=",["set",[]]]": syntax error: Type mismatch: "<=" operator may not be applied to column b of type boolean.
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["b",">",["set",[]]]": syntax error: Type mismatch: ">" operator may not be applied to column b of type boolean.
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["s",">",["set",[]]]": syntax error: Type mismatch: ">" operator may not be applied to column s of type string.
+test-ovsdb: syntax "["s",">=",["set",[]]]": syntax error: Type mismatch: ">=" operator may not be applied to column s of type string.
+test-ovsdb: syntax "["s","<",["set",[]]]": syntax error: Type mismatch: "<" operator may not be applied to column s of type string.
+test-ovsdb: syntax "["s","<=",["set",[]]]": syntax error: Type mismatch: "<=" operator may not be applied to column s of type string.
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["s",">",["set",[]]]": syntax error: Type mismatch: ">" operator may not be applied to column s of type string.
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["u",">",["set",[]]]": syntax error: Type mismatch: ">" operator may not be applied to column u of type uuid.
+test-ovsdb: syntax "["u",">=",["set",[]]]": syntax error: Type mismatch: ">=" operator may not be applied to column u of type uuid.
+test-ovsdb: syntax "["u","<",["set",[]]]": syntax error: Type mismatch: "<" operator may not be applied to column u of type uuid.
+test-ovsdb: syntax "["u","<=",["set",[]]]": syntax error: Type mismatch: "<=" operator may not be applied to column u of type uuid.
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["u",">",["set",[]]]": syntax error: Type mismatch: ">" operator may not be applied to column u of type uuid.
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+]])
+AT_CLEANUP
+
+OVSDB_CHECK_POSITIVE([conditions on optional scalars],
+  [[parse-conditions \
+    '{"columns":
+        {"i": {"type": {"key": "integer", "min": 0, "max": 1}},
+         "r": {"type": {"key": "real", "min": 0, "max": 1}},
+         "b": {"type": {"key": "boolean", "min": 0, "max": 1}},
+         "s": {"type": {"key": "string", "min": 0, "max": 1}},
+         "u": {"type": {"key": "uuid", "min": 0, "max": 1}}}}' \
+    '[["i", "==", 0]]' \
+    '[["i", "!=", 1]]' \
+    '[["i", "<", 2]]' \
+    '[["i", "<=", 3]]' \
+    '[["i", ">", 4]]' \
+    '[["i", ">=", 5]]' \
+    '[["i", "includes", 6]]' \
+    '[["i", "excludes", 7]]' \
+    '[["r", "==", 0.5]]' \
+    '[["r", "!=", 1.5]]' \
+    '[["r", "<", 2.5]]' \
+    '[["r", "<=", 3.5]]' \
+    '[["r", ">", 4.5]]' \
+    '[["r", ">=", 5.5]]' \
+    '[["r", "includes", 6.5]]' \
+    '[["r", "excludes", 7.5]]' \
+    '[["b", "==", true]]' \
+    '[["b", "!=", false]]' \
+    '[["b", "includes", false]]' \
+    '[["b", "excludes", true]]' \
+    '[["s", "==", "a"]]' \
+    '[["s", "!=", "b"]]' \
+    '[["s", "includes", "c"]]' \
+    '[["s", "excludes", "d"]]' \
+    '[["u", "==", ["uuid", "b10d28f7-af18-4a67-9e78-2a6394516c59"]]]' \
+    '[["u", "!=", ["uuid", "9179ca6d-6d65-400a-b455-3ad92783a099"]]]' \
+    '[["u", "includes", ["uuid", "ad0fa355-8b84-4a36-a4b5-b2c1bfd91758"]]]' \
+    '[["u", "excludes", ["uuid", "62315898-64e0-40b9-b26f-ff74225303e6"]]]']],
+  [[[["i","==",0]]
+[["i","!=",1]]
+[["i","<",2]]
+[["i","<=",3]]
+[["i",">",4]]
+[["i",">=",5]]
+[["i","includes",6]]
+[["i","excludes",7]]
+[["r","==",0.5]]
+[["r","!=",1.5]]
+[["r","<",2.5]]
+[["r","<=",3.5]]
+[["r",">",4.5]]
+[["r",">=",5.5]]
+[["r","includes",6.5]]
+[["r","excludes",7.5]]
+[["b","==",true]]
+[["b","!=",false]]
+[["b","includes",false]]
+[["b","excludes",true]]
+[["s","==","a"]]
+[["s","!=","b"]]
+[["s","includes","c"]]
+[["s","excludes","d"]]
+[["u","==",["uuid","b10d28f7-af18-4a67-9e78-2a6394516c59"]]]
+[["u","!=",["uuid","9179ca6d-6d65-400a-b455-3ad92783a099"]]]
+[["u","includes",["uuid","ad0fa355-8b84-4a36-a4b5-b2c1bfd91758"]]]
+[["u","excludes",["uuid","62315898-64e0-40b9-b26f-ff74225303e6"]]]]],
+  [condition])
+
+AT_SETUP([disallowed conditions on optional scalars])
+AT_KEYWORDS([ovsdb negative condition])
+AT_CHECK([[test-ovsdb parse-conditions \
+    '{"columns":
+        {"i": {"type": {"key": "integer", "min": 0, "max": 1}},
+         "r": {"type": {"key": "real", "min": 0, "max": 1}},
+         "b": {"type": {"key": "boolean", "min": 0, "max": 1}},
+         "s": {"type": {"key": "string", "min": 0, "max": 1}},
+         "u": {"type": {"key": "uuid", "min": 0, "max": 1}}}}' \
+    '[["b", ">", true]]' \
+    '[["b", ">=", false]]' \
+    '[["b", "<", false]]' \
+    '[["b", "<=", false]]' \
+    '[["s", ">", "a"]]' \
+    '[["s", ">=", "b"]]' \
+    '[["s", "<", "c"]]' \
+    '[["s", "<=", "d"]]' \
+    '[["u", ">", ["uuid", "b10d28f7-af18-4a67-9e78-2a6394516c59"]]]' \
+    '[["u", ">=", ["uuid", "9179ca6d-6d65-400a-b455-3ad92783a099"]]]' \
+    '[["u", "<", ["uuid", "ad0fa355-8b84-4a36-a4b5-b2c1bfd91758"]]]' \
+    '[["u", "<=", ["uuid", "62315898-64e0-40b9-b26f-ff74225303e6"]]]' \
+    '[["i", ">", ["set", []]]]' \
+    '[["i", ">=", ["set", []]]]' \
+    '[["i", "<", ["set", []]]]' \
+    '[["i", "<=", ["set", []]]]' \
+    '[["i", ">", ["set", []]]]' \
+    '[["r", ">", ["set", []]]]' \
+    '[["r", ">=", ["set", []]]]' \
+    '[["r", "<", ["set", []]]]' \
+    '[["r", "<=", ["set", []]]]' \
+    '[["r", ">", ["set", []]]]' \
+    '[["b", ">", ["set", []]]]' \
+    '[["b", ">=", ["set", []]]]' \
+    '[["b", "<", ["set", []]]]' \
+    '[["b", "<=", ["set", []]]]' \
+    '[["b", ">", ["set", []]]]' \
+    '[["s", ">", ["set", []]]]' \
+    '[["s", ">=", ["set", []]]]' \
+    '[["s", "<", ["set", []]]]' \
+    '[["s", "<=", ["set", []]]]' \
+    '[["s", ">", ["set", []]]]' \
+    '[["u", ">", ["set", []]]]' \
+    '[["u", ">=", ["set", []]]]' \
+    '[["u", "<", ["set", []]]]' \
+    '[["u", "<=", ["set", []]]]' \
+    '[["u", ">", ["set", []]]]' \
+]],
+  [1], [], [[test-ovsdb: syntax "["b",">",true]": syntax error: Type mismatch: ">" operator may not be applied to column b of type set of up to 1 booleans.
+test-ovsdb: syntax "["b",">=",false]": syntax error: Type mismatch: ">=" operator may not be applied to column b of type set of up to 1 booleans.
+test-ovsdb: syntax "["b","<",false]": syntax error: Type mismatch: "<" operator may not be applied to column b of type set of up to 1 booleans.
+test-ovsdb: syntax "["b","<=",false]": syntax error: Type mismatch: "<=" operator may not be applied to column b of type set of up to 1 booleans.
+test-ovsdb: syntax "["s",">","a"]": syntax error: Type mismatch: ">" operator may not be applied to column s of type set of up to 1 strings.
+test-ovsdb: syntax "["s",">=","b"]": syntax error: Type mismatch: ">=" operator may not be applied to column s of type set of up to 1 strings.
+test-ovsdb: syntax "["s","<","c"]": syntax error: Type mismatch: "<" operator may not be applied to column s of type set of up to 1 strings.
+test-ovsdb: syntax "["s","<=","d"]": syntax error: Type mismatch: "<=" operator may not be applied to column s of type set of up to 1 strings.
+test-ovsdb: syntax "["u",">",["uuid","b10d28f7-af18-4a67-9e78-2a6394516c59"]]": syntax error: Type mismatch: ">" operator may not be applied to column u of type set of up to 1 uuids.
+test-ovsdb: syntax "["u",">=",["uuid","9179ca6d-6d65-400a-b455-3ad92783a099"]]": syntax error: Type mismatch: ">=" operator may not be applied to column u of type set of up to 1 uuids.
+test-ovsdb: syntax "["u","<",["uuid","ad0fa355-8b84-4a36-a4b5-b2c1bfd91758"]]": syntax error: Type mismatch: "<" operator may not be applied to column u of type set of up to 1 uuids.
+test-ovsdb: syntax "["u","<=",["uuid","62315898-64e0-40b9-b26f-ff74225303e6"]]": syntax error: Type mismatch: "<=" operator may not be applied to column u of type set of up to 1 uuids.
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["b",">",["set",[]]]": syntax error: Type mismatch: ">" operator may not be applied to column b of type set of up to 1 booleans.
+test-ovsdb: syntax "["b",">=",["set",[]]]": syntax error: Type mismatch: ">=" operator may not be applied to column b of type set of up to 1 booleans.
+test-ovsdb: syntax "["b","<",["set",[]]]": syntax error: Type mismatch: "<" operator may not be applied to column b of type set of up to 1 booleans.
+test-ovsdb: syntax "["b","<=",["set",[]]]": syntax error: Type mismatch: "<=" operator may not be applied to column b of type set of up to 1 booleans.
+test-ovsdb: syntax "["b",">",["set",[]]]": syntax error: Type mismatch: ">" operator may not be applied to column b of type set of up to 1 booleans.
+test-ovsdb: syntax "["s",">",["set",[]]]": syntax error: Type mismatch: ">" operator may not be applied to column s of type set of up to 1 strings.
+test-ovsdb: syntax "["s",">=",["set",[]]]": syntax error: Type mismatch: ">=" operator may not be applied to column s of type set of up to 1 strings.
+test-ovsdb: syntax "["s","<",["set",[]]]": syntax error: Type mismatch: "<" operator may not be applied to column s of type set of up to 1 strings.
+test-ovsdb: syntax "["s","<=",["set",[]]]": syntax error: Type mismatch: "<=" operator may not be applied to column s of type set of up to 1 strings.
+test-ovsdb: syntax "["s",">",["set",[]]]": syntax error: Type mismatch: ">" operator may not be applied to column s of type set of up to 1 strings.
+test-ovsdb: syntax "["u",">",["set",[]]]": syntax error: Type mismatch: ">" operator may not be applied to column u of type set of up to 1 uuids.
+test-ovsdb: syntax "["u",">=",["set",[]]]": syntax error: Type mismatch: ">=" operator may not be applied to column u of type set of up to 1 uuids.
+test-ovsdb: syntax "["u","<",["set",[]]]": syntax error: Type mismatch: "<" operator may not be applied to column u of type set of up to 1 uuids.
+test-ovsdb: syntax "["u","<=",["set",[]]]": syntax error: Type mismatch: "<=" operator may not be applied to column u of type set of up to 1 uuids.
+test-ovsdb: syntax "["u",">",["set",[]]]": syntax error: Type mismatch: ">" operator may not be applied to column u of type set of up to 1 uuids.
 ]])
 AT_CLEANUP
 
