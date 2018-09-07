@@ -2659,7 +2659,7 @@ done
 # Pre-populate the hypervisors' ARP tables so that we don't lose any
 # packets for ARP resolution (native tunneling doesn't queue packets
 # for ARP resolution).
-OVN_POPULATE_ARP
+ovn_populate_arp
 
 # Allow some time for ovn-northd and ovn-controller to catch up.
 # XXX This should be more systematic.
