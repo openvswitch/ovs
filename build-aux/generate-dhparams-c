@@ -25,6 +25,7 @@ EOF
 (openssl dhparam -C -in lib/dh1024.pem -noout &&
 openssl dhparam -C -in lib/dh2048.pem -noout &&
 openssl dhparam -C -in lib/dh4096.pem -noout) | sed '
+    s/^static DH/DH/
     s/\(get_dh[0-9]*\)()/\1(void)/
     s/\(DH_set0_pqg\)/my_\1/
     s/[ 	]*$//
