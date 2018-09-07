@@ -157,56 +157,56 @@ test-ovsdb: syntax "["u",">",["uuid","b10d28f7-af18-4a67-9e78-2a6394516c59"]]": 
 test-ovsdb: syntax "["u",">=",["uuid","9179ca6d-6d65-400a-b455-3ad92783a099"]]": syntax error: Type mismatch: ">=" operator may not be applied to column u of type uuid.
 test-ovsdb: syntax "["u","<",["uuid","ad0fa355-8b84-4a36-a4b5-b2c1bfd91758"]]": syntax error: Type mismatch: "<" operator may not be applied to column u of type uuid.
 test-ovsdb: syntax "["u","<=",["uuid","62315898-64e0-40b9-b26f-ff74225303e6"]]": syntax error: Type mismatch: "<=" operator may not be applied to column u of type uuid.
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
 test-ovsdb: syntax "["b",">",["set",[]]]": syntax error: Type mismatch: ">" operator may not be applied to column b of type boolean.
 test-ovsdb: syntax "["b",">=",["set",[]]]": syntax error: Type mismatch: ">=" operator may not be applied to column b of type boolean.
 test-ovsdb: syntax "["b","<",["set",[]]]": syntax error: Type mismatch: "<" operator may not be applied to column b of type boolean.
 test-ovsdb: syntax "["b","<=",["set",[]]]": syntax error: Type mismatch: "<=" operator may not be applied to column b of type boolean.
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
 test-ovsdb: syntax "["b",">",["set",[]]]": syntax error: Type mismatch: ">" operator may not be applied to column b of type boolean.
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
 test-ovsdb: syntax "["s",">",["set",[]]]": syntax error: Type mismatch: ">" operator may not be applied to column s of type string.
 test-ovsdb: syntax "["s",">=",["set",[]]]": syntax error: Type mismatch: ">=" operator may not be applied to column s of type string.
 test-ovsdb: syntax "["s","<",["set",[]]]": syntax error: Type mismatch: "<" operator may not be applied to column s of type string.
 test-ovsdb: syntax "["s","<=",["set",[]]]": syntax error: Type mismatch: "<=" operator may not be applied to column s of type string.
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
 test-ovsdb: syntax "["s",">",["set",[]]]": syntax error: Type mismatch: ">" operator may not be applied to column s of type string.
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
 test-ovsdb: syntax "["u",">",["set",[]]]": syntax error: Type mismatch: ">" operator may not be applied to column u of type uuid.
 test-ovsdb: syntax "["u",">=",["set",[]]]": syntax error: Type mismatch: ">=" operator may not be applied to column u of type uuid.
 test-ovsdb: syntax "["u","<",["set",[]]]": syntax error: Type mismatch: "<" operator may not be applied to column u of type uuid.
 test-ovsdb: syntax "["u","<=",["set",[]]]": syntax error: Type mismatch: "<=" operator may not be applied to column u of type uuid.
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
 test-ovsdb: syntax "["u",">",["set",[]]]": syntax error: Type mismatch: ">" operator may not be applied to column u of type uuid.
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
 ]])
 AT_CLEANUP
 
@@ -335,16 +335,16 @@ test-ovsdb: syntax "["u",">",["uuid","b10d28f7-af18-4a67-9e78-2a6394516c59"]]": 
 test-ovsdb: syntax "["u",">=",["uuid","9179ca6d-6d65-400a-b455-3ad92783a099"]]": syntax error: Type mismatch: ">=" operator may not be applied to column u of type set of up to 1 uuids.
 test-ovsdb: syntax "["u","<",["uuid","ad0fa355-8b84-4a36-a4b5-b2c1bfd91758"]]": syntax error: Type mismatch: "<" operator may not be applied to column u of type set of up to 1 uuids.
 test-ovsdb: syntax "["u","<=",["uuid","62315898-64e0-40b9-b26f-ff74225303e6"]]": syntax error: Type mismatch: "<=" operator may not be applied to column u of type set of up to 1 uuids.
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
-test-ovsdb: syntax "["set",[]]": syntax error: set must have 1 to 1 members but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
+test-ovsdb: syntax "["set",[]]": syntax error: set must have exactly one member but 0 are present
 test-ovsdb: syntax "["b",">",["set",[]]]": syntax error: Type mismatch: ">" operator may not be applied to column b of type set of up to 1 booleans.
 test-ovsdb: syntax "["b",">=",["set",[]]]": syntax error: Type mismatch: ">=" operator may not be applied to column b of type set of up to 1 booleans.
 test-ovsdb: syntax "["b","<",["set",[]]]": syntax error: Type mismatch: "<" operator may not be applied to column b of type set of up to 1 booleans.
