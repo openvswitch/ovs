@@ -493,11 +493,11 @@
           e.g. a packet with more 802.1q headers will match Ethernet type
           0x8100.
         </p>
+
         <p>
-          Value <code>0</code> means unlimited.  The actual number of supported
-          VLAN headers is the smallest of <code>vlan-limit</code>, the number
-          of VLANs supported by Open vSwitch userspace (currently 2), and the
-          number supported by the datapath.
+          Open vSwitch userspace currently supports at most 2 VLANs, and each
+          datapath has its own limit.  If <code>vlan-limit</code> is nonzero,
+          it acts as a further limit.
         </p>
 
         <p>
