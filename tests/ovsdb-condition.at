@@ -600,7 +600,11 @@ OVSDB_CHECK_POSITIVE([evaluating conditions on optional integers],
       [["i", ">", 1]],
       [["i", "includes", 1]],
       [["i", "excludes", 1]],
-      [["i", ">", 0], ["i", "<", 2]]]' \
+      [["i", ">", 0], ["i", "<", 2]],
+      [["i", "==", ["set", []]]],
+      [["i", "!=", ["set", []]]],
+      [["i", "includes", ["set", []]]],
+      [["i", "excludes", ["set", []]]]]' \
     '[{"i": ["set", []]},
       {"i": ["set", [0]]},
       {"i": ["set", [1]]},
@@ -614,7 +618,11 @@ condition  4: --TT
 condition  5: ---T
 condition  6: --T-
 condition  7: TT-T
-condition  8: --T-], [condition])
+condition  8: --T-
+condition  9: T---
+condition 10: -TTT
+condition 11: TTTT
+condition 12: TTTT], [condition])
 
 OVSDB_CHECK_POSITIVE([evaluating conditions on optional strings],
   [[evaluate-conditions \
@@ -654,7 +662,11 @@ OVSDB_CHECK_POSITIVE([evaluating conditions on optional reals],
       [["r", ">", 5.0]],
       [["r", "includes", 5.0]],
       [["r", "excludes", 5.0]],
-      [["r", "!=", 0], ["r", "!=", 5.1]]]' \
+      [["r", "!=", 0], ["r", "!=", 5.1]],
+      [["r", "==", ["set", []]]],
+      [["r", "!=", ["set", []]]],
+      [["r", "includes", ["set", []]]],
+      [["r", "excludes", ["set", []]]]]' \
     '[{"r": ["set", [0]]},
       {"r": ["set", [5.0]]},
       {"r": ["set", [5.1]]},
@@ -668,7 +680,11 @@ condition  4: -TT-
 condition  5: --T-
 condition  6: -T--
 condition  7: T-TT
-condition  8: -T-T], [condition])
+condition  8: -T-T
+condition  9: ---T
+condition 10: TTT-
+condition 11: TTTT
+condition 12: TTTT], [condition])
 
 OVSDB_CHECK_POSITIVE([evaluating false boolean condition],
   [[evaluate-conditions-any \
