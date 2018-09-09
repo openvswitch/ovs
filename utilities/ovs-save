@@ -121,7 +121,7 @@ save_flows () {
              cnt++;printf "{class="$1",type="$2",len="$3"}->"$4}'
         echo "'"
 
-        printf "%s" "ovs-ofctl -O $ofp_version add-flows ${bridge} " \
+        printf "%s" "ovs-ofctl -O $ofp_version replace-flows ${bridge} " \
             "\"$workdir/$bridge.flows.dump\""
 
         # If possible, use OpenFlow 1.4 atomic bundle transaction to add flows
