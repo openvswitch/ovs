@@ -403,10 +403,12 @@ nl_parse_flower_vlan(struct nlattr **attrs, struct tc_flower *flower)
     if (attrs[TCA_FLOWER_KEY_VLAN_ID]) {
         flower->key.vlan_id[0] =
             nl_attr_get_u16(attrs[TCA_FLOWER_KEY_VLAN_ID]);
+        flower->mask.vlan_id[0] = 0xffff;
     }
     if (attrs[TCA_FLOWER_KEY_VLAN_PRIO]) {
         flower->key.vlan_prio[0] =
             nl_attr_get_u8(attrs[TCA_FLOWER_KEY_VLAN_PRIO]);
+        flower->mask.vlan_prio[0] = 0xff;
     }
 
     if (!attrs[TCA_FLOWER_KEY_VLAN_ETH_TYPE]) {
@@ -424,10 +426,12 @@ nl_parse_flower_vlan(struct nlattr **attrs, struct tc_flower *flower)
     if (attrs[TCA_FLOWER_KEY_CVLAN_ID]) {
         flower->key.vlan_id[1] =
             nl_attr_get_u16(attrs[TCA_FLOWER_KEY_CVLAN_ID]);
+        flower->mask.vlan_id[1] = 0xffff;
     }
     if (attrs[TCA_FLOWER_KEY_CVLAN_PRIO]) {
         flower->key.vlan_prio[1] =
             nl_attr_get_u8(attrs[TCA_FLOWER_KEY_CVLAN_PRIO]);
+        flower->mask.vlan_prio[1] = 0xff;
     }
 }
 
@@ -1789,9 +1793,11 @@ nl_msg_put_flower_options(struct ofpbuf *request, struct tc_flower *flower)
     }
 
     if (is_vlan) {
-        if (flower->key.vlan_id[0] || flower->key.vlan_prio[0]) {
+        if (flower->mask.vlan_id[0]) {
             nl_msg_put_u16(request, TCA_FLOWER_KEY_VLAN_ID,
                            flower->key.vlan_id[0]);
+        }
+        if (flower->mask.vlan_prio[0]) {
             nl_msg_put_u8(request, TCA_FLOWER_KEY_VLAN_PRIO,
                           flower->key.vlan_prio[0]);
         }
@@ -1801,9 +1807,11 @@ nl_msg_put_flower_options(struct ofpbuf *request, struct tc_flower *flower)
         }
 
         if (is_qinq) {
-            if (flower->key.vlan_id[1] || flower->key.vlan_prio[1]) {
+            if (flower->mask.vlan_id[1]) {
                 nl_msg_put_u16(request, TCA_FLOWER_KEY_CVLAN_ID,
                                flower->key.vlan_id[1]);
+            }
+            if (flower->mask.vlan_prio[1]) {
                 nl_msg_put_u8(request, TCA_FLOWER_KEY_CVLAN_PRIO,
                               flower->key.vlan_prio[1]);
             }
