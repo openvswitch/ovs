@@ -1217,7 +1217,7 @@ struct %(s)s *
 %(s)s_index_init_row(struct ovsdb_idl_index *index)
 {
     ovs_assert(index->table->class_ == &%(p)stable_%(tl)s);
-    return (struct %(s)s *) ovsdb_idl_index_init_row(index);
+    return ALIGNED_CAST(struct %(s)s *, ovsdb_idl_index_init_row(index));
 }
 
 struct %(s)s *
