@@ -136,7 +136,7 @@ FUZZ_REGRESSION_TESTS = \
 	tests/fuzz-regression/ofp_print_fuzzer-6470117922701312 \
 	tests/fuzz-regression/ofp_print_fuzzer-6502620041576448
 $(srcdir)/tests/fuzz-regression-list.at: tests/automake.mk
-	for name in $(FUZZ_REGRESSION_TESTS); do \
+	$(AM_V_GEN)for name in $(FUZZ_REGRESSION_TESTS); do \
             basename=`echo $$name | sed 's,^.*/,,'`; \
 	    echo "TEST_FUZZ_REGRESSION([$$basename])"; \
 	done > $@.tmp && mv $@.tmp $@
