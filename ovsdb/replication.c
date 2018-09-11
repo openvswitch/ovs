@@ -299,19 +299,7 @@ replication_run(void)
                 /* After receiving schemas, reset the local databases that
                  * will be monitored and send out monitor requests for them. */
                 if (hmap_is_empty(&request_ids)) {
-                    struct shash_node *node, *next;
-
-                    SHASH_FOR_EACH_SAFE (node, next, replication_dbs) {
-                        db = node->data;
-                        error = reset_database(db);
-                        if (error) {
-                            const char *db_name = db->schema->name;
-                            shash_find_and_delete(replication_dbs, db_name);
-                            ovsdb_error_assert(error);
-                            VLOG_WARN("Failed to reset database, "
-                                      "%s not replicated.", db_name);
-                        }
-                    }
+                    struct shash_node *node;
 
                     if (shash_is_empty(replication_dbs)) {
                         VLOG_WARN("Nothing to replicate.");
@@ -335,7 +323,16 @@ replication_run(void)
             case RPL_S_MONITOR_REQUESTED: {
                 /* Reply to monitor requests. */
                 struct ovsdb_error *error;
-                error = process_notification(msg->result, db);
+                VLOG_INFO("Monitor request received. Resetting the database");
+                /* Resetting the database here has few risks. If the
+                 * process_notification() fails, the database is completely
+                 * lost locally. In case that node becomes active, then
+                 * there is a chance of complete data loss in the active/standy
+                 * cluster. */
+                error = reset_database(db);
+                if (!error) {
+                    error = process_notification(msg->result, db);
+                }
                 if (error) {
                     ovsdb_error_assert(error);
                     state = RPL_S_ERR;
