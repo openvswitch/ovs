@@ -457,6 +457,7 @@ static int lisp_open(struct net_device *dev)
 
 	rcu_assign_pointer(lisp->sock, sock);
 	/* Mark socket as an encapsulation socket */
+	memset(&tunnel_cfg, 0, sizeof(tunnel_cfg));
 	tunnel_cfg.sk_user_data = dev;
 	tunnel_cfg.encap_type = 1;
 	tunnel_cfg.encap_rcv = lisp_rcv;
