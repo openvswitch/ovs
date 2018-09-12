@@ -39,7 +39,7 @@ Packet Tracing
 --------------
 
 In order to understand the tool, let's use the following flows as an
-example:
+example::
 
     table=3,ip,tcp,tcp_dst=80,action=output:2
     table=2,ip,tcp,tcp_dst=22,action=output:1
