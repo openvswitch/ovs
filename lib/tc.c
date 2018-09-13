@@ -346,10 +346,12 @@ nl_parse_flower_vlan(struct nlattr **attrs, struct tc_flower *flower)
     if (attrs[TCA_FLOWER_KEY_VLAN_ID]) {
         flower->key.vlan_id =
             nl_attr_get_u16(attrs[TCA_FLOWER_KEY_VLAN_ID]);
+        flower->mask.vlan_id = 0xffff;
     }
     if (attrs[TCA_FLOWER_KEY_VLAN_PRIO]) {
         flower->key.vlan_prio =
             nl_attr_get_u8(attrs[TCA_FLOWER_KEY_VLAN_PRIO]);
+        flower->mask.vlan_prio = 0xff;
     }
 }
 
@@ -1637,9 +1639,11 @@ nl_msg_put_flower_options(struct ofpbuf *request, struct tc_flower *flower)
     nl_msg_put_be16(request, TCA_FLOWER_KEY_ETH_TYPE, flower->key.eth_type);
 
     if (is_vlan) {
-        if (flower->key.vlan_id || flower->key.vlan_prio) {
+        if (flower->key.vlan_id) {
             nl_msg_put_u16(request, TCA_FLOWER_KEY_VLAN_ID,
                            flower->key.vlan_id);
+        }
+        if (flower->key.vlan_prio) {
             nl_msg_put_u8(request, TCA_FLOWER_KEY_VLAN_PRIO,
                           flower->key.vlan_prio);
         }
