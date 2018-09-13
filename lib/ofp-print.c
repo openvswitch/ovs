@@ -558,6 +558,7 @@ ofp_print_ofpst_port_reply(struct ds *string, const struct ofp_header *oh,
 
         retval = ofputil_decode_port_stats(&ps, &b);
         if (retval) {
+            netdev_free_custom_stats_counters(&ps.custom_stats);
             return retval != EOF ? retval : 0;
         }
         ofputil_format_port_stats(string, &ps, port_map);
