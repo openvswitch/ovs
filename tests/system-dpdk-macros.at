@@ -2,7 +2,6 @@
 #
 # Check prerequisites for DPDK tests. Following settings are checked:
 #  - Hugepages
-#  - UIO driver
 #
 m4_define([OVS_DPDK_PRE_CHECK],
   [dnl Check Hugepages
@@ -11,13 +10,26 @@ m4_define([OVS_DPDK_PRE_CHECK],
    AT_CHECK([mount], [], [stdout])
    AT_CHECK([grep 'hugetlbfs' stdout], [], [stdout], [])
 
+])
+
+
+# OVS_DPDK_PRE_PHY_SKIP()
+#
+# Skip any phy related tests if the PHY variable is not set.
+# This is done by checking for a bound driver.
+#
+m4_define([OVS_DPDK_PRE_PHY_SKIP],
+  [dnl Perform the precheck
+   OVS_DPDK_PRE_CHECK()
+
    dnl Check if VFIO or UIO driver is loaded
-   AT_CHECK([lsmod | grep -E "igb_uio|vfio"], [], [stdout])
+   AT_SKIP_IF([ ! (lsmod | grep -E "igb_uio|vfio") ], [], [stdout])
 
    dnl Find PCI address candidate, skip if there is no DPDK-compatible NIC
    AT_CHECK([$DPDK_DIR/usertools/dpdk-devbind.py -s | head -n +4 | tail -1], [], [stdout])
    AT_CHECK([cat stdout | cut -d" " -s -f1 > PCI_ADDR])
-   AT_CHECK([test -s PCI_ADDR || exit 77])
+   AT_SKIP_IF([ ! test -s PCI_ADDR ])
+
 ])
 
 

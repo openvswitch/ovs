@@ -314,9 +314,11 @@ To see a list of all the available tests, run::
 
     # make check-dpdk TESTSUITEFLAGS=--list
 
-These tests require a `DPDK supported NIC`_ and proper DPDK variables
-(``DPDK_DIR`` and ``DPDK_BUILD``). Moreover you need to have root privileges,
-load the required modules and bind the NIC to the DPDK-compatible driver.
+These tests support a `DPDK supported NIC`_. The tests operate on a wider set of
+environments, for instance, when a virtual port is used.
+They do require proper DPDK variables (``DPDK_DIR`` and ``DPDK_BUILD``).
+Moreover you need to have root privileges to load the required modules and to bind
+the NIC to the DPDK-compatible driver.
 
 .. _DPDK supported NIC: http://dpdk.org/doc/nics
 
