@@ -1697,6 +1697,7 @@ ofputil_pull_ofp14_port_stats(struct ofputil_port_stats *ops,
         }
 
         if (error) {
+            netdev_free_custom_stats_counters(&ops->custom_stats);
             return error;
         }
     }
