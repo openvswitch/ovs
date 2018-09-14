@@ -47,7 +47,7 @@ dnl --------------------------------------------------------------------------
 dnl Add vhost-user-client port
 AT_SETUP([OVS-DPDK datapath - add vhost-user-client port])
 AT_KEYWORDS([dpdk])
-
+OVS_DPDK_PRE_CHECK()
 OVS_DPDK_START()
 
 dnl Add userspace bridge and attach it to OVS

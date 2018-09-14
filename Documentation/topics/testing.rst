@@ -322,6 +322,12 @@ the NIC to the DPDK-compatible driver.
 
 .. _DPDK supported NIC: http://dpdk.org/doc/nics
 
+All tests are skipped if no hugepages are configured. User must look into the DPDK
+manual to figure out how to `Configure hugepages`_.
+The phy test will skip if no compatible physical device is available.
+
+.. _Configure hugepages: http://doc.dpdk.org/guides/linux_gsg/sys_reqs.html
+
 Kernel datapath
 '''''''''''''''
 
