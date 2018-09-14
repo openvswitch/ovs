@@ -54,20 +54,20 @@ OVS_DPDK_START()
 
 dnl Add userspace bridge and attach it to OVS
 AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
-AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuserclient0 -- set Interface dpdkvhostuserclient0 type=dpdkvhostuserclient options:vhost-server-path=/tmp/dpdkvhostclient0], [], [stdout], [stderr])
+AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuserclient0 -- set Interface dpdkvhostuserclient0 type=dpdkvhostuserclient options:vhost-server-path=$OVS_RUNDIR/dpdkvhostclient0], [], [stdout], [stderr])
 AT_CHECK([ovs-vsctl show], [], [stdout])
 sleep 2
 
 dnl Parse log file
 AT_CHECK([grep "VHOST_CONFIG: vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
 AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
-AT_CHECK([grep "VHOST_CONFIG: /tmp/dpdkvhostclient0: reconnecting..." ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: $OVS_RUNDIR/dpdkvhostclient0: reconnecting..." ovs-vswitchd.log], [], [stdout])
 
 dnl Clean up
 AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
 OVS_VSWITCHD_STOP(["\@does not exist. The Open vSwitch kernel module is probably not loaded.@d
 \@Failed to enable flow control@d
-\@VHOST_CONFIG: failed to connect to /tmp/dpdkvhostclient0: No such file or directory@d
+\@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostclient0: No such file or directory@d
 \@Global register is changed during@d
 \@EAL:   Invalid NUMA socket, default to 0@d
 \@EAL: WARNING: cpu flags constant_tsc=yes nonstop_tsc=no -> using unreliable clock cycles !@d
