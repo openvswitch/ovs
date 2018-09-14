@@ -1,7 +1,10 @@
+m4_define([CONFIGURE_VETH_OFFLOADS],
+   [AT_CHECK([ethtool -K $1 tx off], [0], [ignore], [ignore])])
+
 AT_BANNER([OVS-DPDK unit tests])
 
 dnl --------------------------------------------------------------------------
-dnl Check if EAL init is successfull
+dnl Check if EAL init is successful
 AT_SETUP([OVS-DPDK datapath - EAL init])
 AT_KEYWORDS([dpdk])
 OVS_DPDK_PRE_CHECK()
@@ -69,6 +72,161 @@ OVS_VSWITCHD_STOP(["\@does not exist. The Open vSwitch kernel module is probably
 \@Failed to enable flow control@d
 \@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostclient0: No such file or directory@d
 \@Global register is changed during@d
+\@EAL:   Invalid NUMA socket, default to 0@d
+\@EAL: WARNING: cpu flags constant_tsc=yes nonstop_tsc=no -> using unreliable clock cycles !@d
+\@EAL: No free hugepages reported in hugepages-1048576kB@d"])
+AT_CLEANUP
+dnl --------------------------------------------------------------------------
+
+
+
+dnl --------------------------------------------------------------------------
+dnl Ping vhost-user port
+AT_SETUP([OVS-DPDK datapath - ping vhost-user ports])
+AT_KEYWORDS([dpdk])
+OVS_DPDK_PRE_CHECK()
+AT_SKIP_IF([! which testpmd >/dev/null 2>/dev/null])
+OVS_DPDK_START()
+
+dnl Find number of sockets
+AT_CHECK([lscpu], [], [stdout])
+AT_CHECK([cat stdout | grep "NUMA node(s)" | awk '{c=1; while (c++<$(3)) {printf "512,"}; print "512"}' > NUMA_NODE])
+
+dnl Add userspace bridge and attach it to OVS
+AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
+AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuser0 -- set Interface dpdkvhostuser0 \
+          type=dpdkvhostuser], [],
+         [stdout], [stderr])
+AT_CHECK([ovs-vsctl show], [], [stdout])
+
+dnl Parse log file
+AT_CHECK([grep "VHOST_CONFIG: vhost-user server: socket created" \
+          ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "Socket $OVS_RUNDIR/dpdkvhostuser0 created for vhost-user port dpdkvhostuser0" \
+          ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: bind to $OVS_RUNDIR/dpdkvhostuser0" ovs-vswitchd.log], [],
+         [stdout])
+
+dnl Set up namespaces
+ADD_NAMESPACES(ns1, ns2)
+
+dnl Add veth device
+ADD_VETH(tap1, ns2, br10, "172.31.110.12/24")
+
+dnl Execute testpmd in background
+on_exit "pkill -f -x -9 'tail -f /dev/null'"
+tail -f /dev/null | testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
+           --vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostuser0" \
+           --vdev="net_tap0,iface=tap0" --file-prefix page0 \
+           --single-file-segments -- -a >$OVS_RUNDIR/testpmd-dpdkvhostuser0.log 2>&1 &
+
+dnl Give settling time to the testpmd processes - NOTE: this is bad form.
+sleep 10
+
+dnl Move the tap devices to the namespaces
+AT_CHECK([ps aux | grep testpmd], [], [stdout], [stderr])
+AT_CHECK([ip link show], [], [stdout], [stderr])
+AT_CHECK([ip link set tap0 netns ns1], [], [stdout], [stderr])
+
+AT_CHECK([ip netns exec ns1 ip link show], [], [stdout], [stderr])
+AT_CHECK([ip netns exec ns1 ip link show | grep tap0], [], [stdout], [stderr])
+AT_CHECK([ip netns exec ns1 ip link set tap0 up], [], [stdout], [stderr])
+AT_CHECK([ip netns exec ns1 ip addr add 172.31.110.11/24 dev tap0], [],
+         [stdout], [stderr])
+
+AT_CHECK([ip netns exec ns1 ip link show], [], [stdout], [stderr])
+AT_CHECK([ip netns exec ns2 ip link show], [], [stdout], [stderr])
+AT_CHECK([ip netns exec ns1 ping -c 4 -I tap0 172.31.110.12], [], [stdout],
+         [stderr])
+
+dnl Clean up the testpmd now
+pkill -f -x -9 'tail -f /dev/null'
+
+dnl Clean up
+AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuser0], [], [stdout], [stderr])
+OVS_VSWITCHD_STOP(["\@does not exist. The Open vSwitch kernel module is probably not loaded.@d
+\@Failed to enable flow control@d
+\@VHOST_CONFIG: recvmsg failed@d
+\@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostuser0: No such file or directory@d
+\@Global register is changed during@d
+\@dpdkvhostuser ports are considered deprecated;  please migrate to dpdkvhostuserclient ports.@d
+\@failed to enumerate system datapaths: No such file or directory@d
+\@EAL:   Invalid NUMA socket, default to 0@d
+\@EAL: WARNING: cpu flags constant_tsc=yes nonstop_tsc=no -> using unreliable clock cycles !@d
+\@EAL: No free hugepages reported in hugepages-1048576kB@d"])
+AT_CLEANUP
+dnl --------------------------------------------------------------------------
+
+dnl --------------------------------------------------------------------------
+dnl Ping vhost-user-client port
+AT_SETUP([OVS-DPDK datapath - ping vhost-user-client ports])
+AT_KEYWORDS([dpdk])
+OVS_DPDK_PRE_CHECK()
+AT_SKIP_IF([! which testpmd >/dev/null 2>/dev/null])
+OVS_DPDK_START()
+
+dnl Find number of sockets
+AT_CHECK([lscpu], [], [stdout])
+AT_CHECK([cat stdout | grep "NUMA node(s)" | awk '{c=1; while (c++<$(3)) {printf "512,"}; print "512"}' > NUMA_NODE])
+
+dnl Add userspace bridge and attach it to OVS
+AT_CHECK([ovs-vsctl add-br br10 -- set bridge br10 datapath_type=netdev])
+AT_CHECK([ovs-vsctl add-port br10 dpdkvhostuserclient0 -- set Interface \
+          dpdkvhostuserclient0 \
+          type=dpdkvhostuserclient \
+          options:vhost-server-path=$OVS_RUNDIR/dpdkvhostclient0], [],
+         [stdout], [stderr])
+AT_CHECK([ovs-vsctl show], [], [stdout])
+
+dnl Parse log file
+AT_CHECK([grep "VHOST_CONFIG: vhost-user client: socket created" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "vHost User device 'dpdkvhostuserclient0' created in 'client' mode, using client socket" ovs-vswitchd.log], [], [stdout])
+AT_CHECK([grep "VHOST_CONFIG: $OVS_RUNDIR/dpdkvhostclient0: reconnecting..." ovs-vswitchd.log], [], [stdout])
+
+dnl Set up namespaces
+ADD_NAMESPACES(ns1, ns2)
+
+dnl Add veth device
+ADD_VETH(tap1, ns2, br10, "172.31.110.12/24")
+
+dnl Execute testpmd in background
+on_exit "pkill -f -x -9 'tail -f /dev/null'"
+tail -f /dev/null | testpmd --socket-mem="$(cat NUMA_NODE)" --no-pci\
+           --vdev="net_virtio_user,path=$OVS_RUNDIR/dpdkvhostclient0,server=1" \
+           --vdev="net_tap0,iface=tap0" --file-prefix page0 \
+           --single-file-segments -- -a >$OVS_RUNDIR/testpmd-dpdkvhostuserclient0.log 2>&1 &
+
+dnl Give settling time to the testpmd processes - NOTE: this is bad form.
+sleep 10
+
+dnl Move the tap devices to the namespaces
+AT_CHECK([ps aux | grep testpmd], [], [stdout], [stderr])
+AT_CHECK([ip link show], [], [stdout], [stderr])
+AT_CHECK([ip link set tap0 netns ns1], [], [stdout], [stderr])
+
+AT_CHECK([ip netns exec ns1 ip link show], [], [stdout], [stderr])
+AT_CHECK([ip netns exec ns1 ip link show | grep tap0], [], [stdout], [stderr])
+AT_CHECK([ip netns exec ns1 ip link set tap0 up], [], [stdout], [stderr])
+AT_CHECK([ip netns exec ns1 ip addr add 172.31.110.11/24 dev tap0], [],
+         [stdout], [stderr])
+
+AT_CHECK([ip netns exec ns1 ip link show], [], [stdout], [stderr])
+AT_CHECK([ip netns exec ns2 ip link show], [], [stdout], [stderr])
+AT_CHECK([ip netns exec ns1 ping -c 4 -I tap0 172.31.110.12], [], [stdout],
+         [stderr])
+
+dnl Clean up the testpmd now
+pkill -f -x -9 'tail -f /dev/null'
+
+dnl Clean up
+AT_CHECK([ovs-vsctl del-port br10 dpdkvhostuserclient0], [], [stdout], [stderr])
+OVS_VSWITCHD_STOP(["\@does not exist. The Open vSwitch kernel module is probably not loaded.@d
+\@Failed to enable flow control@d
+\@VHOST_CONFIG: recvmsg failed@d
+\@VHOST_CONFIG: failed to connect to $OVS_RUNDIR/dpdkvhostclient0: No such file or directory@d
+\@Global register is changed during@d
+\@dpdkvhostuser ports are considered deprecated;  please migrate to dpdkvhostuserclient ports.@d
+\@failed to enumerate system datapaths: No such file or directory@d
 \@EAL:   Invalid NUMA socket, default to 0@d
 \@EAL: WARNING: cpu flags constant_tsc=yes nonstop_tsc=no -> using unreliable clock cycles !@d
 \@EAL: No free hugepages reported in hugepages-1048576kB@d"])
