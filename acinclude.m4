@@ -996,7 +996,11 @@ AC_DEFUN([_OVS_CHECK_CC_OPTION], [dnl
      dnl    gcc: unrecognized option '-Qunused-arguments'
      dnl    0
      dnl    %
-     CFLAGS="$CFLAGS $WERROR $1"
+     dnl
+     dnl In addition, GCC does not complain about a -Wno-<foo> option that
+     dnl it does not understand, unless it has another error to report, so
+     dnl instead of testing for -Wno-<foo>, test for the positive version.
+     CFLAGS="$CFLAGS $WERROR m4_bpatsubst([$1], [-Wno-], [-W])"
      AC_COMPILE_IFELSE(
        [AC_LANG_SOURCE([int x;])],
        [if test -s conftest.err && grep "unrecognized option" conftest.err
