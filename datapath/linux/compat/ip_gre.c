@@ -1463,7 +1463,7 @@ static struct pernet_operations erspan_net_ops = {
 
 static int __net_init ipgre_tap_init_net(struct net *net)
 {
-	return ip_tunnel_init_net(net, gre_tap_net_id, &ipgre_tap_ops, "gretap0");
+	return ip_tunnel_init_net(net, gre_tap_net_id, &ipgre_tap_ops, "ovs-gretap0");
 }
 
 static void __net_exit ipgre_tap_exit_net(struct net *net)
