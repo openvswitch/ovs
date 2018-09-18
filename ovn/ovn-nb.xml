@@ -1992,13 +1992,6 @@
           </p>
         </column>
 
-        <column name="options" key="wpad">
-          <p>
-            The DHCPv4 option code for this option is 252. This option is used
-            as part of web proxy auto discovery to provide a URL for a web
-            proxy.
-          </p>
-        </column>
       </group>
 
       <group title="Boolean DHCP Options">
@@ -2061,6 +2054,20 @@
           This specifies the time interval from address assignment until the
           client begins trying to rebind its address.  The DHCPv4 option code
           for this option is 59.
+        </column>
+      </group>
+
+      <group title="String DHCP Options">
+        <p>
+          These options accept a string value.
+        </p>
+
+        <column name="options" key="wpad">
+          <p>
+            The DHCPv4 option code for this option is 252. This option is used
+            as part of web proxy auto discovery to provide a URL for a web
+            proxy.
+          </p>
         </column>
       </group>
     </group>
