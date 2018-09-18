@@ -273,8 +273,14 @@ is_pow2(uintmax_t x)
 #define BITMAP_ULONG_BITS (sizeof(unsigned long) * CHAR_BIT)
 #define BITMAP_N_LONGS(N_BITS) DIV_ROUND_UP(N_BITS, BITMAP_ULONG_BITS)
 
-/* Given ATTR, and TYPE, cast the ATTR to TYPE by first casting ATTR to
- * (void *). This is to suppress the alignment warning issued by clang. */
+/* Given ATTR, and TYPE, cast the ATTR to TYPE by first casting ATTR to (void
+ * *).  This suppresses the alignment warning issued by Clang and newer
+ * versions of GCC when a pointer is cast to a type with a stricter alignment.
+ *
+ * Add ALIGNED_CAST only if you are sure that the cast is actually correct,
+ * that is, that the pointer is actually properly aligned for the stricter
+ * type.  On RISC architectures, dereferencing a misaligned pointer can cause a
+ * segfault, so it is important to be aware of correct alignment. */
 #define ALIGNED_CAST(TYPE, ATTR) ((TYPE) (void *) (ATTR))
 
 #ifdef __cplusplus
