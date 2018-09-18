@@ -123,6 +123,7 @@ struct tc_flower_key {
         ovs_be16 tp_src;
         ovs_be16 tp_dst;
         ovs_be64 id;
+        struct tun_metadata metadata;
     } tunnel;
 };
 

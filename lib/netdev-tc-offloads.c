@@ -432,6 +432,38 @@ static void parse_tc_flower_geneve_opts(struct tc_action *action,
     nl_msg_end_nested(buf, geneve_off);
 }
 
+static void
+flower_tun_opt_to_match(struct match *match, struct tc_flower *flower)
+{
+    struct geneve_opt *opt, *opt_mask;
+    int len, cnt = 0;
+
+    memcpy(match->flow.tunnel.metadata.opts.gnv,
+           flower->key.tunnel.metadata.opts.gnv,
+           flower->key.tunnel.metadata.present.len);
+    match->flow.tunnel.metadata.present.len =
+           flower->key.tunnel.metadata.present.len;
+    match->flow.tunnel.flags |= FLOW_TNL_F_UDPIF;
+    memcpy(match->wc.masks.tunnel.metadata.opts.gnv,
+           flower->mask.tunnel.metadata.opts.gnv,
+           flower->mask.tunnel.metadata.present.len);
+
+    len = flower->key.tunnel.metadata.present.len;
+    while (len) {
+        opt = &match->flow.tunnel.metadata.opts.gnv[cnt];
+        opt_mask = &match->wc.masks.tunnel.metadata.opts.gnv[cnt];
+
+        opt_mask->length = 0x1f;
+
+        cnt += sizeof(struct geneve_opt) / 4 + opt->length;
+        len -= sizeof(struct geneve_opt) + opt->length * 4;
+    }
+
+    match->wc.masks.tunnel.metadata.present.len =
+           flower->mask.tunnel.metadata.present.len;
+    match->wc.masks.tunnel.flags |= FLOW_TNL_F_UDPIF;
+}
+
 static int
 parse_tc_flower_to_match(struct tc_flower *flower,
                          struct match *match,
@@ -547,6 +579,9 @@ parse_tc_flower_to_match(struct tc_flower *flower,
         }
         if (flower->key.tunnel.tp_dst) {
             match_set_tun_tp_dst(match, flower->key.tunnel.tp_dst);
+        }
+        if (flower->key.tunnel.metadata.present.len) {
+            flower_tun_opt_to_match(match, flower);
         }
     }
 
@@ -968,6 +1003,34 @@ test_key_and_mask(struct match *match)
     return 0;
 }
 
+static void
+flower_match_to_tun_opt(struct tc_flower *flower, const struct flow_tnl *tnl,
+                        const struct flow_tnl *tnl_mask)
+{
+    struct geneve_opt *opt, *opt_mask;
+    int len, cnt = 0;
+
+    memcpy(flower->key.tunnel.metadata.opts.gnv, tnl->metadata.opts.gnv,
+           tnl->metadata.present.len);
+    flower->key.tunnel.metadata.present.len = tnl->metadata.present.len;
+
+    memcpy(flower->mask.tunnel.metadata.opts.gnv, tnl_mask->metadata.opts.gnv,
+           tnl->metadata.present.len);
+
+    len = flower->key.tunnel.metadata.present.len;
+    while (len) {
+        opt = &flower->key.tunnel.metadata.opts.gnv[cnt];
+        opt_mask = &flower->mask.tunnel.metadata.opts.gnv[cnt];
+
+        opt_mask->length = opt->length;
+
+        cnt += sizeof(struct geneve_opt) / 4 + opt->length;
+        len -= sizeof(struct geneve_opt) + opt->length * 4;
+    }
+
+    flower->mask.tunnel.metadata.present.len = tnl->metadata.present.len;
+}
+
 int
 netdev_tc_flow_put(struct netdev *netdev, struct match *match,
                    struct nlattr *actions, size_t actions_len,
@@ -1016,6 +1079,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         flower.key.tunnel.tp_dst = tnl->tp_dst;
         flower.mask.tunnel.tos = tnl_mask->ip_tos;
         flower.mask.tunnel.ttl = tnl_mask->ip_ttl;
+        flower_match_to_tun_opt(&flower, tnl, tnl_mask);
         flower.tunnel = true;
     }
     memset(&mask->tunnel, 0, sizeof mask->tunnel);
