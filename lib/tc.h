@@ -27,6 +27,7 @@
 #include "odp-netlink.h"
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/flow.h"
+#include "openvswitch/tun-metadata.h"
 
 /* For backwards compatability with older kernels */
 #ifndef TC_H_CLSACT
@@ -157,6 +158,7 @@ struct tc_action {
                 struct in6_addr ipv6_src;
                 struct in6_addr ipv6_dst;
             } ipv6;
+            struct tun_metadata data;
         } encap;
      };
 

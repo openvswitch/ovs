@@ -409,6 +409,29 @@ parse_flower_rewrite_to_netlink_action(struct ofpbuf *buf,
     }
 }
 
+static void parse_tc_flower_geneve_opts(struct tc_action *action,
+                                        struct ofpbuf *buf)
+{
+    int tun_opt_len = action->encap.data.present.len;
+    size_t geneve_off;
+    int idx = 0;
+
+    if (!tun_opt_len) {
+        return;
+    }
+
+    geneve_off = nl_msg_start_nested(buf, OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS);
+    while (tun_opt_len) {
+        struct geneve_opt *opt;
+
+        opt = &action->encap.data.opts.gnv[idx];
+        nl_msg_put(buf, opt, sizeof(struct geneve_opt) + opt->length * 4);
+        idx += sizeof(struct geneve_opt) / 4 + opt->length;
+        tun_opt_len -= sizeof(struct geneve_opt) + opt->length * 4;
+    }
+    nl_msg_end_nested(buf, geneve_off);
+}
+
 static int
 parse_tc_flower_to_match(struct tc_flower *flower,
                          struct match *match,
@@ -586,6 +609,7 @@ parse_tc_flower_to_match(struct tc_flower *flower,
                 nl_msg_put_be16(buf, OVS_TUNNEL_KEY_ATTR_TP_DST,
                                 action->encap.tp_dst);
 
+                parse_tc_flower_geneve_opts(action, buf);
                 nl_msg_end_nested(buf, tunnel_offset);
                 nl_msg_end_nested(buf, set_offset);
             }
@@ -790,6 +814,12 @@ parse_put_flow_set_action(struct tc_flower *flower, struct tc_action *action,
         break;
         case OVS_TUNNEL_KEY_ATTR_TP_DST: {
             action->encap.tp_dst = nl_attr_get_be16(tun_attr);
+        }
+        break;
+        case OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS: {
+            memcpy(action->encap.data.opts.gnv, nl_attr_get(tun_attr),
+                   nl_attr_get_size(tun_attr));
+            action->encap.data.present.len = nl_attr_get_size(tun_attr);
         }
         break;
         }

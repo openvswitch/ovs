@@ -711,7 +711,109 @@ static const struct nl_policy tunnel_key_policy[] = {
     [TCA_TUNNEL_KEY_ENC_DST_PORT] = { .type = NL_A_U16, .optional = true, },
     [TCA_TUNNEL_KEY_ENC_TOS] = { .type = NL_A_U8, .optional = true, },
     [TCA_TUNNEL_KEY_ENC_TTL] = { .type = NL_A_U8, .optional = true, },
+    [TCA_TUNNEL_KEY_ENC_OPTS] = { .type = NL_A_NESTED, .optional = true, },
 };
+
+static int
+nl_parse_act_geneve_opts(const struct nlattr *in_nlattr,
+                         struct tc_action *action)
+{
+    struct geneve_opt *opt = NULL;
+    const struct ofpbuf *msg;
+    uint16_t last_opt_type;
+    struct nlattr *nla;
+    struct ofpbuf buf;
+    size_t left;
+    int cnt;
+
+    nl_attr_get_nested(in_nlattr, &buf);
+    msg = &buf;
+
+    last_opt_type = TCA_TUNNEL_KEY_ENC_OPT_GENEVE_UNSPEC;
+    cnt = 0;
+    NL_ATTR_FOR_EACH (nla, left, ofpbuf_at(msg, 0, 0), msg->size) {
+        uint16_t type = nl_attr_type(nla);
+
+        switch (type) {
+        case TCA_TUNNEL_KEY_ENC_OPT_GENEVE_CLASS:
+            if (cnt && last_opt_type != TCA_TUNNEL_KEY_ENC_OPT_GENEVE_DATA) {
+                VLOG_ERR_RL(&error_rl,
+                            "failed to parse action geneve options class");
+                return EINVAL;
+            }
+
+            opt = &action->encap.data.opts.gnv[cnt];
+            opt->opt_class = nl_attr_get_be16(nla);
+            cnt += sizeof(struct geneve_opt) / 4;
+            action->encap.data.present.len += sizeof(struct geneve_opt);
+            last_opt_type = TCA_TUNNEL_KEY_ENC_OPT_GENEVE_CLASS;
+            break;
+        case TCA_TUNNEL_KEY_ENC_OPT_GENEVE_TYPE:
+            if (last_opt_type != TCA_TUNNEL_KEY_ENC_OPT_GENEVE_CLASS) {
+                VLOG_ERR_RL(&error_rl,
+                            "failed to parse action geneve options type");
+                return EINVAL;
+            }
+
+            opt->type = nl_attr_get_u8(nla);
+            last_opt_type = TCA_TUNNEL_KEY_ENC_OPT_GENEVE_TYPE;
+            break;
+        case TCA_TUNNEL_KEY_ENC_OPT_GENEVE_DATA:
+            if (last_opt_type != TCA_TUNNEL_KEY_ENC_OPT_GENEVE_TYPE) {
+                VLOG_ERR_RL(&error_rl,
+                            "failed to parse action geneve options data");
+                return EINVAL;
+            }
+
+            opt->length = nl_attr_get_size(nla) / 4;
+            memcpy(opt + 1, nl_attr_get_unspec(nla, 1), opt->length * 4);
+            cnt += opt->length;
+            action->encap.data.present.len += opt->length * 4;
+            last_opt_type = TCA_TUNNEL_KEY_ENC_OPT_GENEVE_DATA;
+            break;
+        }
+    }
+
+    if (last_opt_type != TCA_TUNNEL_KEY_ENC_OPT_GENEVE_DATA) {
+        VLOG_ERR_RL(&error_rl,
+                   "failed to parse action geneve options without data");
+        return EINVAL;
+    }
+
+    return 0;
+}
+
+static int
+nl_parse_act_tunnel_opts(struct nlattr *options, struct tc_action *action)
+{
+    const struct ofpbuf *msg;
+    struct nlattr *nla;
+    struct ofpbuf buf;
+    size_t left;
+    int err;
+
+    if (!options) {
+        return 0;
+    }
+
+    nl_attr_get_nested(options, &buf);
+    msg = &buf;
+
+    NL_ATTR_FOR_EACH (nla, left, ofpbuf_at(msg, 0, 0), msg->size) {
+        uint16_t type = nl_attr_type(nla);
+        switch (type) {
+        case TCA_TUNNEL_KEY_ENC_OPTS_GENEVE:
+            err = nl_parse_act_geneve_opts(nla, action);
+            if (err) {
+                return err;
+            }
+
+            break;
+        }
+    }
+
+    return 0;
+}
 
 static int
 nl_parse_act_tunnel_key(struct nlattr *options, struct tc_flower *flower)
@@ -720,6 +822,7 @@ nl_parse_act_tunnel_key(struct nlattr *options, struct tc_flower *flower)
     const struct nlattr *tun_parms;
     const struct tc_tunnel_key *tun;
     struct tc_action *action;
+    int err;
 
     if (!nl_parse_nested(options, tunnel_key_policy, tun_attrs,
                 ARRAY_SIZE(tunnel_key_policy))) {
@@ -738,6 +841,7 @@ nl_parse_act_tunnel_key(struct nlattr *options, struct tc_flower *flower)
         struct nlattr *ipv6_dst = tun_attrs[TCA_TUNNEL_KEY_ENC_IPV6_DST];
         struct nlattr *tos = tun_attrs[TCA_TUNNEL_KEY_ENC_TOS];
         struct nlattr *ttl = tun_attrs[TCA_TUNNEL_KEY_ENC_TTL];
+        struct nlattr *tun_opt = tun_attrs[TCA_TUNNEL_KEY_ENC_OPTS];
 
         action = &flower->actions[flower->action_count++];
         action->type = TC_ACT_ENCAP;
@@ -753,6 +857,11 @@ nl_parse_act_tunnel_key(struct nlattr *options, struct tc_flower *flower)
         action->encap.tp_dst = dst_port ? nl_attr_get_be16(dst_port) : 0;
         action->encap.tos = tos ? nl_attr_get_u8(tos) : 0;
         action->encap.ttl = ttl ? nl_attr_get_u8(ttl) : 0;
+
+        err = nl_parse_act_tunnel_opts(tun_opt, action);
+        if (err) {
+            return err;
+        }
     } else if (tun->t_action == TCA_TUNNEL_KEY_ACT_RELEASE) {
         flower->tunnel = true;
     } else {
@@ -1322,12 +1431,46 @@ nl_msg_put_act_tunnel_key_release(struct ofpbuf *request)
 }
 
 static void
+nl_msg_put_act_tunnel_geneve_option(struct ofpbuf *request,
+                                    struct tun_metadata tun_metadata)
+{
+    const struct geneve_opt *opt;
+    size_t outer, inner;
+    int len, cnt = 0;
+
+    len = tun_metadata.present.len;
+    if (!len) {
+        return;
+    }
+
+    outer = nl_msg_start_nested(request, TCA_TUNNEL_KEY_ENC_OPTS);
+
+    while (len) {
+        opt = &tun_metadata.opts.gnv[cnt];
+        inner = nl_msg_start_nested(request, TCA_TUNNEL_KEY_ENC_OPTS_GENEVE);
+
+        nl_msg_put_be16(request, TCA_TUNNEL_KEY_ENC_OPT_GENEVE_CLASS,
+                        opt->opt_class);
+        nl_msg_put_u8(request, TCA_TUNNEL_KEY_ENC_OPT_GENEVE_TYPE, opt->type);
+        nl_msg_put_unspec(request, TCA_TUNNEL_KEY_ENC_OPT_GENEVE_DATA, opt + 1,
+                          opt->length * 4);
+
+        cnt += sizeof(struct geneve_opt) / 4 + opt->length;
+        len -= sizeof(struct geneve_opt) + opt->length * 4;
+
+        nl_msg_end_nested(request, inner);
+    }
+
+    nl_msg_end_nested(request, outer);
+}
+
+static void
 nl_msg_put_act_tunnel_key_set(struct ofpbuf *request, ovs_be64 id,
-                                ovs_be32 ipv4_src, ovs_be32 ipv4_dst,
-                                struct in6_addr *ipv6_src,
-                                struct in6_addr *ipv6_dst,
-                                ovs_be16 tp_dst,
-                                uint8_t tos, uint8_t ttl)
+                              ovs_be32 ipv4_src, ovs_be32 ipv4_dst,
+                              struct in6_addr *ipv6_src,
+                              struct in6_addr *ipv6_dst,
+                              ovs_be16 tp_dst, uint8_t tos, uint8_t ttl,
+                              struct tun_metadata tun_metadata)
 {
     size_t offset;
 
@@ -1357,6 +1500,7 @@ nl_msg_put_act_tunnel_key_set(struct ofpbuf *request, ovs_be64 id,
             nl_msg_put_u8(request, TCA_TUNNEL_KEY_ENC_TTL, ttl);
         }
         nl_msg_put_be16(request, TCA_TUNNEL_KEY_ENC_DST_PORT, tp_dst);
+        nl_msg_put_act_tunnel_geneve_option(request, tun_metadata);
     }
     nl_msg_end_nested(request, offset);
 }
@@ -1599,7 +1743,8 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
                                               &action->encap.ipv6.ipv6_dst,
                                               action->encap.tp_dst,
                                               action->encap.tos,
-                                              action->encap.ttl);
+                                              action->encap.ttl,
+                                              action->encap.data);
                 nl_msg_end_nested(request, act_offset);
             }
             break;
