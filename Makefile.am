@@ -482,6 +482,7 @@ include tests/automake.mk
 include include/automake.mk
 include third-party/automake.mk
 include debian/automake.mk
+include ipsec/automake.mk
 include vswitchd/automake.mk
 include ovsdb/automake.mk
 include rhel/automake.mk
