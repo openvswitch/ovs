@@ -551,7 +551,7 @@
           OpenFlow specification mandates the timeout to be at least one
           second. The default is 10 seconds.
         </p>
-    </column>
+      </column>
 
       <column name="other_config" key="offload-rebalance"
               type='{"type": "boolean"}'>
@@ -575,7 +575,6 @@
         </p>
       </column>
     </group>
-
     <group title="Status">
       <column name="next_cfg">
         Sequence number for client to increment.  When a client modifies
@@ -837,6 +836,118 @@
           The startup scripts that accompany Open vSwitch do this by default.
         </p>
       </column>
+    </group>
+
+    <group title="IPsec">
+      <p>
+        These settings control the global configuration of IPsec tunnels.  The
+        <code>options</code> column of the <code>Interface</code> table
+        configures IPsec for individual tunnels.
+      </p>
+      <p>
+        OVS IPsec supports the following three forms of authentication.
+        Currently, all IPsec tunnels must use the same form:
+      </p>
+      <ol>
+        <li>
+          Pre-shared keys: Omit the global settings.  On each tunnel, set <ref
+          column="options" key="psk"/>.
+        </li>
+        <li>
+          Self-signed certificates: Set the <code>private_key</code> and
+          <code>certificate</code> global settings.  On each tunnel, set <ref
+          column="options" key="remote_cert"/>.  The remote certificate can be
+          self-signed.
+        </li>
+        <li>
+          CA-signed certificates: Set all of the global settings.  On each
+          tunnel, set <ref column="options" key="remote_name"/> to the common
+          name (CN) of the remote certificate. The remote certificate must be
+          signed by the CA.
+        </li>
+      </ol>
+      <column name="other_config" key="private_key"
+              type='{"type": "string"}'>
+          <p>
+            Name of a PEM file containing the private key used as the switch's
+            identity for IPsec tunnels.
+          </p>
+      </column>
+      <column name="other_config" key="certificate"
+              type='{"type": "string"}'>
+          <p>
+            Name of a PEM file containing a certificate that certifies the
+            switch's private key, and identifies a trustworthy switch for IPsec
+            tunnels. The certificate must be x.509 version 3 and with the
+            string in common name (CN) also set in the subject alternative name
+            (SAN).
+          </p>
+      </column>
+      <column name="other_config" key="ca_cert"
+              type='{"type": "string"}'>
+          <p>
+            Name of a PEM file containing the CA certificate used to verify
+            that a remote switch of the IPsec tunnel is trustworthy.
+          </p>
+      </column>
+
+      <group title="Plaintext Tunnel Policy">
+        <p>
+          When an IPsec tunnel is configured in this database, multiple
+          independent components take responsibility for implementing it.
+          <code>ovs-vswitchd</code> and its datapath handle packet forwarding
+          to the tunnel and a separate daemon pushes the tunnel's IPsec policy
+          configuration to the kernel or other entity that implements it.
+          There is a race: if the former configuration completes before the
+          latter, then packets sent by the local host over the tunnel can be
+          transmitted in plaintext.  Using this setting, OVS users can avoid
+          this undesirable situation.
+        </p>
+        <column name="other_config" key="ipsec_skb_mark"
+                type='{"type": "string"}'>
+          <p>
+            This setting takes the form
+            <code><var>value</var>/<var>mask</var></code>.  If it is specified,
+            then the <code>skb_mark</code> field in every outgoing tunneled
+            packet sent in plaintext is compared against it and, if it matches,
+            the packet is dropped.  This is a global setting that is applied to
+            every tunneled packet, regardless of whether IPsec encryption is
+            enabled for the tunnel, the type of tunnel, or whether OVS is
+            involved.
+          </p>
+
+          <p>
+            Example policies:
+          </p>
+
+          <dl>
+            <dt><code>1/1</code></dt>
+            <dd>
+              Drop all unencrypted tunneled packets in which the
+              least-significant bit of <code>skb_mark</code> is 1.  This would
+              be a useful policy given an OpenFlow flow table that sets
+              <code>skb_mark</code> to 1 for traffic that should be encrypted.
+              The default <code>skb_mark</code> is 0, so this would not affect
+              other traffic.
+            </dd>
+
+            <dt><code>0/1</code></dt>
+            <dd>
+              Drop all unencrypted tunneled packets in which the
+              least-significant bit of <code>skb_mark</code> is 0.  This would
+              be a useful policy if no unencrypted tunneled traffic should exit
+              the system without being specially whitelisted by setting
+              <code>skb_mark</code> to 1.
+            </dd>
+
+            <dt>(empty)</dt>
+            <dd>
+              If this setting is empty or unset, then all unencrypted tunneled
+              packets are transmitted in the usual way.
+            </dd>
+          </dl>
+        </column>
+      </group>
     </group>
 
     <group title="Common Columns">
@@ -1478,7 +1589,7 @@
       <column name="external_ids"/>
     </group>
   </table>
-  
+
   <table name="Port" table="Port or bond configuration.">
     <p>A port within a <ref table="Bridge"/>.</p>
     <p>Most commonly, a port has exactly one ``interface,'' pointed to by its
@@ -2467,9 +2578,8 @@
 
       <column name="options" key="local_ip">
         <p>
-          Optional.  The tunnel destination IP that received packets must
-          match.  Default is to match all addresses.  If specified, may be one
-          of:
+          Optional. The tunnel destination IP that received packets must match.
+          Default is to match all addresses. If specified, may be one of:
         </p>
 
         <ul>
@@ -2730,7 +2840,7 @@
 
         <column name="options" key="csum" type='{"type": "boolean"}'>
           <p>
-            Optional.  Compute encapsulation header (either GRE or UDP) 
+            Optional.  Compute encapsulation header (either GRE or UDP)
             checksums on outgoing packets.  Default is disabled, set to
             <code>true</code> to enable.  Checksums present on incoming
             packets will be validated regardless of this setting.
@@ -2748,8 +2858,37 @@
 
         </column>
       </group>
-    </group>
 
+      <group title="Tunnel Options: IPsec">
+        <p>
+          Setting any of these options enables IPsec support for a given
+          tunnel.  <code>gre</code>, <code>geneve</code>, <code>vxlan</code>,
+          and <code>stt</code> interfaces support these options.  See the
+          <code>IPsec</code> section in the <ref table="Open_vSwitch"/> table
+          for a description of each mode.
+        </p>
+        <column name="options" key="psk" type='{"type": "string"}'>
+          <p>
+            In PSK mode only, the preshared secret to negotiate tunnel. This
+            value must match on both tunnel ends.
+          </p>
+        </column>
+        <column name="options" key="remote_cert" type='{"type": "string"}'>
+          <p>
+            In self-signed certificate mode only, name of a PEM file
+            containing a certificate of the remote switch.  The certificate
+            must be x.509 version 3 and with the string in common name (CN)
+            also set in the subject alternative name (SAN).
+          </p>
+        </column>
+        <column name="options" key="remote_name" type='{"type": "string"}'>
+          <p>
+            In CA-signed certificate mode only, common name (CN) of the remote
+            certificate.
+          </p>
+        </column>
+      </group>
+    </group>
     <group title="Tunnel Options: erspan only">
       <p>
         Only <code>erspan</code> interfaces support these options.

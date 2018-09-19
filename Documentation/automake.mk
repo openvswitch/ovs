@@ -28,6 +28,7 @@ DOC_SOURCE = \
 	Documentation/tutorials/ovn-openstack.rst \
 	Documentation/tutorials/ovn-sandbox.rst \
 	Documentation/tutorials/ovs-conntrack.rst \
+	Documentation/tutorials/ipsec.rst \
 	Documentation/topics/index.rst \
 	Documentation/topics/bonding.rst \
 	Documentation/topics/idl-compound-indexes.rst \
@@ -60,6 +61,7 @@ DOC_SOURCE = \
 	Documentation/howto/docker.rst \
 	Documentation/howto/dpdk.rst \
 	Documentation/howto/firewalld.rst \
+	Documentation/howto/ipsec.rst \
 	Documentation/howto/kvm.rst \
 	Documentation/howto/libvirt.rst \
 	Documentation/howto/selinux.rst \

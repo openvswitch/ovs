@@ -37,6 +37,7 @@ OVS
    :maxdepth: 2
 
    kvm
+   ipsec
    selinux
    libvirt
    ssl
