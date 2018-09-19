@@ -99,7 +99,8 @@ NetlinkCmdHandler        OvsGetNetdevCmdHandler,
                          OvsSubscribePacketCmdHandler,
                          OvsReadPacketCmdHandler,
                          OvsCtDeleteCmdHandler,
-                         OvsCtDumpCmdHandler;
+                         OvsCtDumpCmdHandler,
+                         OvsCtLimitHandler;
 
 static NTSTATUS HandleGetDpTransaction(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                        UINT32 *replyLen);
@@ -324,6 +325,34 @@ NETLINK_FAMILY nlNetdevFamilyOps = {
     .opsCount = ARRAY_SIZE(nlNetdevFamilyCmdOps)
 };
 
+
+/* Netlink conntrack limit family. */
+NETLINK_CMD nlCtLimitFamilyCmdOps[] = {
+    { .cmd = OVS_CT_LIMIT_CMD_GET,
+      .handler = OvsCtLimitHandler,
+      .supportedDevOp = OVS_TRANSACTION_DEV_OP,
+      .validateDpIndex = FALSE
+    },
+    { .cmd = OVS_CT_LIMIT_CMD_SET,
+      .handler = OvsCtLimitHandler,
+      .supportedDevOp = OVS_TRANSACTION_DEV_OP,
+      .validateDpIndex = FALSE
+    },
+    { .cmd = OVS_CT_LIMIT_CMD_DEL,
+      .handler = OvsCtLimitHandler,
+      .supportedDevOp = OVS_TRANSACTION_DEV_OP,
+      .validateDpIndex = FALSE
+    },
+};
+
+NETLINK_FAMILY nlCtLimitFamilyOps = {
+    .name     = OVS_CT_LIMIT_FAMILY,
+    .id       = OVS_WIN_NL_CTLIMIT_FAMILY_ID,
+    .version  = OVS_CT_LIMIT_VERSION,
+    .maxAttr  = OVS_CT_LIMIT_ATTR_MAX,
+    .cmds     = nlCtLimitFamilyCmdOps,
+    .opsCount = ARRAY_SIZE(nlCtLimitFamilyCmdOps)
+};
 static NTSTATUS MapIrpOutputBuffer(PIRP irp,
                                    UINT32 bufferLength,
                                    UINT32 requiredLength,
@@ -940,6 +969,9 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
         break;
     case OVS_WIN_NL_NETDEV_FAMILY_ID:
         nlFamilyOps = &nlNetdevFamilyOps;
+        break;
+    case OVS_WIN_NL_CTLIMIT_FAMILY_ID:
+        nlFamilyOps = &nlCtLimitFamilyOps;
         break;
     default:
         status = STATUS_INVALID_PARAMETER;

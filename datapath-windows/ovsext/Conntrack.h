@@ -132,6 +132,18 @@ typedef struct OvsConntrackKeyLookupCtx {
     BOOLEAN         related;
 } OvsConntrackKeyLookupCtx;
 
+/* Per zone strucuture. */
+typedef struct _OVS_CT_ZONE_INFO {
+    ULONG limit;
+    ULONG entries;
+} OVS_CT_ZONE_INFO, *POVS_CT_ZONE_INFO;
+
+typedef struct _OVS_CT_ZONE_LIMIT {
+    int zone_id;
+    ULONG limit;
+    ULONG count;
+} OVS_CT_ZONE_LIMIT, *POVS_CT_ZONE_LIMIT;
+
 #define CT_MAX_ENTRIES 1 << 21
 #define CT_HASH_TABLE_SIZE ((UINT32)1 << 10)
 #define CT_HASH_TABLE_MASK (CT_HASH_TABLE_SIZE - 1)
