@@ -14,7 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-. "@pkgdatadir@/scripts/ovs-lib" || exit 1
+case $0 in
+    */*) dir0=`echo "$0" | sed 's,/[^/]*$,,'` ;;
+    *) dir0=./ ;;
+esac
+. "$dir0/ovs-lib" || exit 1
 
 for dir in "$sbindir" "$bindir" /sbin /bin /usr/sbin /usr/bin; do
     case :$PATH: in
