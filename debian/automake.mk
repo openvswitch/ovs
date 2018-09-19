@@ -20,6 +20,9 @@ EXTRA_DIST += \
 	debian/openvswitch-datapath-source.copyright \
 	debian/openvswitch-datapath-source.dirs \
 	debian/openvswitch-datapath-source.install \
+	debian/openvswitch-ipsec.dirs \
+	debian/openvswitch-ipsec.init \
+	debian/openvswitch-ipsec.install \
 	debian/openvswitch-pki.dirs \
 	debian/openvswitch-pki.postinst \
 	debian/openvswitch-pki.postrm \

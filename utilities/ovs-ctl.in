@@ -224,6 +224,14 @@ start_forwarding () {
     return 0
 }
 
+start_ovs_ipsec () {
+    ${datadir}/scripts/ovs-monitor-ipsec \
+        --pidfile=${rundir}/ovs-monitor-ipsec.pid \
+        --ike-daemon=$IKE_DAEMON \
+        --log-file --detach --monitor unix:${rundir}/db.sock || return 1
+    return 0
+}
+
 ## ---- ##
 ## stop ##
 ## ---- ##
@@ -238,6 +246,11 @@ stop_forwarding () {
     if test X"$OVS_VSWITCHD" = Xyes; then
         stop_daemon ovs-vswitchd
     fi
+}
+
+stop_ovs_ipsec () {
+    ${bindir}/ovs-appctl -t ovs-monitor-ipsec exit || return 1
+    return 0
 }
 
 ## --------------- ##
@@ -320,6 +333,8 @@ set_defaults () {
     DPORT=
     SPORT=
 
+    IKE_DAEMON=
+
     type_file=$etcdir/system-type.conf
     version_file=$etcdir/system-version.conf
 
@@ -360,6 +375,8 @@ Commands:
                           module, reload kernel module, start OVS, restore state
   enable-protocol         enable protocol specified in options with iptables
   delete-transient-ports  delete transient (other_config:transient=true) ports
+  start-ovs-ipsec         start Open vSwitch ipsec daemon
+  stop-ovs-ipsec          stop Open vSwitch ipsec daemon
   help                    display this help message
 
 One of the following options is required for "start", "restart" and "force-reload-kmod":
@@ -396,6 +413,10 @@ Options for "enable-protocol":
   --protocol=PROTOCOL  protocol to enable with iptables (default: gre)
   --sport=PORT       source port to match (for tcp or udp protocol)
   --dport=PORT       ddestination port to match (for tcp or udp protocol)
+
+Option for "start-ovs-ipsec":
+  --ike-daemon=IKE_DAEMON
+      the IKE daemon for ipsec tunnels (either libreswan or strongswan)
 
 Other options:
   -h, --help                  display this help message
@@ -526,6 +547,12 @@ case $command in
         ;;
     delete-transient-ports)
         del_transient_ports
+        ;;
+    start-ovs-ipsec)
+        start_ovs_ipsec
+        ;;
+    stop-ovs-ipsec)
+        stop_ovs_ipsec
         ;;
     help)
         usage

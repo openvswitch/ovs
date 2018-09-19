@@ -1,0 +1,13 @@
+[Unit]
+Description=OVS IPsec daemon
+Requires=openvswitch.service
+After=openvswitch.service
+
+[Service]
+Type=forking
+ExecStart=/usr/share/openvswitch/scripts/ovs-ctl \
+                    --ike-daemon=libreswan start-ovs-ipsec
+ExecStop=/usr/share/openvswitch/scripts/ovs-ctl stop-ovs-ipsec
+
+[Install]
+WantedBy=multi-user.target

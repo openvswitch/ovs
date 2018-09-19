@@ -222,6 +222,14 @@ Requires: openvswitch openvswitch-ovn-common %{_py2}-openvswitch
 %description ovn-docker
 Docker network plugins for OVN.
 
+%package openvswitch-ipsec
+Summary: Open vSwitch IPsec tunneling support
+License: ASL 2.0
+Requires: openvswitch %{_py2}-openvswitch libreswan
+
+%description openvswitch-ipsec
+This package provides IPsec tunneling support for OVS tunnels.
+
 %prep
 %setup -q
 
@@ -274,7 +282,8 @@ install -p -D -m 0644 \
         rhel/usr_share_openvswitch_scripts_systemd_sysconfig.template \
         $RPM_BUILD_ROOT/%{_sysconfdir}/sysconfig/openvswitch
 for service in openvswitch ovsdb-server ovs-vswitchd ovs-delete-transient-ports \
-                ovn-controller ovn-controller-vtep ovn-northd; do
+                ovn-controller ovn-controller-vtep ovn-northd \
+                openvswitch-ipsec; do
         install -p -D -m 0644 \
                         rhel/usr_lib_systemd_system_${service}.service \
                         $RPM_BUILD_ROOT%{_unitdir}/${service}.service
@@ -331,6 +340,10 @@ ln -s %{_datadir}/openvswitch/scripts/ovndb-servers.ocf \
 install -p -D -m 0755 \
         rhel/usr_share_openvswitch_scripts_ovs-systemd-reload \
         $RPM_BUILD_ROOT%{_datadir}/openvswitch/scripts/ovs-systemd-reload
+
+install -m 0755 \
+        ipsec/ovs-monitor-ipsec \
+        $RPM_BUILD_ROOT%{_datadir}/openvswitch/scripts/ovs-monitor-ipsec
 
 # remove unpackaged files
 rm -f $RPM_BUILD_ROOT%{_bindir}/ovs-parse-backtrace \
@@ -671,6 +684,10 @@ fi
 %{_bindir}/ovn-controller-vtep
 %{_mandir}/man8/ovn-controller-vtep.8*
 %{_unitdir}/ovn-controller-vtep.service
+
+%files openvswitch-ipsec
+%{_datadir}/openvswitch/scripts/ovs-monitor-ipsec
+%{_unitdir}/openvswitch-ipsec.service
 
 %changelog
 * Wed Jan 12 2011 Ralf Spenneberg <ralf@os-s.net>
