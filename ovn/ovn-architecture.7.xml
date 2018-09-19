@@ -1621,6 +1621,45 @@
     </li>
   </ol>
 
+  <h2>Encrypt Tunnel Traffic with IPsec</h2>
+  <p>
+    OVN tunnel traffic goes through physical routers and switches. These
+    physical devices could be untrusted (devices in public network) or might be
+    compromised. Enabling encryption to the tunnel traffic can prevent the
+    traffic data from being monitored and manipulated.
+  </p>
+  <p>
+    The tunnel traffic is encrypted with IPsec. The CMS sets the
+    <code>ipsec</code> column in the northbound <code>NB_Global</code> table to
+    enable or disable IPsec encrytion. If <code>ipsec</code> is true, all OVN
+    tunnels will be encrypted. If <code>ipsec</code> is false, no OVN tunnels
+    will be encrypted.
+  </p>
+  <p>
+    When CMS updates the <code>ipsec</code> column in the northbound
+    <code>NB_Global</code> table, <code>ovn-northd</code> copies the value to
+    the <code>ipsec</code> column in the southbound <code>SB_Global</code>
+    table. <code>ovn-controller</code> in each chassis monitors the southbound
+    database and sets the options of the OVS tunnel interface accordingly. OVS
+    tunnel interface options are monitored by the
+    <code>ovs-monitor-ipsec</code> daemon which configures IKE daemon to set up
+    IPsec connections.
+  </p>
+  <p>
+    Chassis authenticates each other by using certificate. The authentication
+    succeeds if the other end in tunnel presents a certificate signed by a
+    trusted CA and the common name (CN) matches the expected chassis name.  The
+    SSL certificates used in role-based access controls (RBAC) can be used in
+    IPsec. Or use <code>ovs-pki</code> to create different certificates. The
+    certificate is required to be x.509 version 3, and with CN field and
+    subjectAltName field being set to the chassis name.
+  </p>
+  <p>
+    The CA certificate, chassis certificate and private key are required to be
+    installed in each chassis before enabling IPsec. Please see
+    <code>ovs-vswitchd.conf.db</code>(5) for setting up CA based IPsec
+    authentication.
+  </p>
   <h1>Design Decisions</h1>
 
   <h2>Tunnel Encapsulations</h2>

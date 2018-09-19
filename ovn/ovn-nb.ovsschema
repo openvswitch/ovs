@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
-    "version": "5.13.1",
-    "cksum": "749176366 20467",
+    "version": "5.14.0",
+    "cksum": "3600467067 20513",
     "tables": {
         "NB_Global": {
             "columns": {
@@ -22,7 +22,8 @@
                                      "min": 0, "max": 1}},
                 "options": {
                     "type": {"key": "string", "value": "string",
-                             "min": 0, "max": "unlimited"}}},
+                             "min": 0, "max": "unlimited"}},
+                "ipsec": {"type": "boolean"}},
             "maxRows": 1,
             "isRoot": true},
         "Logical_Switch": {

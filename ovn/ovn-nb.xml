@@ -120,6 +120,12 @@
         Global SSL configuration.
       </column>
     </group>
+    <group title="Security Configurations">
+      <column name="ipsec">
+        Tunnel encryption configuration. If this column is set to be true, all
+        OVN tunnels will be encrypted with IPsec.
+      </column>
+    </group>
   </table>
 
   <table name="Logical_Switch" title="L2 logical switch">

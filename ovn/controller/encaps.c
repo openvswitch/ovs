@@ -79,8 +79,8 @@ tunnel_create_name(struct tunnel_ctx *tc, const char *chassis_id)
 }
 
 static void
-tunnel_add(struct tunnel_ctx *tc, const char *new_chassis_id,
-           const struct sbrec_encap *encap)
+tunnel_add(struct tunnel_ctx *tc, const struct sbrec_sb_global *sbg,
+           const char *new_chassis_id, const struct sbrec_encap *encap)
 {
     struct smap options = SMAP_INITIALIZER(&options);
     smap_add(&options, "remote_ip", encap->ip);
@@ -88,6 +88,11 @@ tunnel_add(struct tunnel_ctx *tc, const char *new_chassis_id,
     const char *csum = smap_get(&encap->options, "csum");
     if (csum && (!strcmp(csum, "true") || !strcmp(csum, "false"))) {
         smap_add(&options, "csum", csum);
+    }
+
+    /* Add auth info if ipsec is enabled. */
+    if (sbg->ipsec) {
+        smap_add(&options, "remote_name", new_chassis_id);
     }
 
     /* If there's an existing chassis record that does not need any change,
@@ -157,7 +162,8 @@ encaps_run(struct ovsdb_idl_txn *ovs_idl_txn,
            const struct ovsrec_bridge_table *bridge_table,
            const struct ovsrec_bridge *br_int,
            const struct sbrec_chassis_table *chassis_table,
-           const char *chassis_id)
+           const char *chassis_id,
+           const struct sbrec_sb_global *sbg)
 {
     if (!ovs_idl_txn || !br_int) {
         return;
@@ -209,7 +215,7 @@ encaps_run(struct ovsdb_idl_txn *ovs_idl_txn,
                 VLOG_INFO("No supported encaps for '%s'", chassis_rec->name);
                 continue;
             }
-            tunnel_add(&tc, chassis_rec->name, encap);
+            tunnel_add(&tc, sbg, chassis_rec->name, encap);
         }
     }
 
