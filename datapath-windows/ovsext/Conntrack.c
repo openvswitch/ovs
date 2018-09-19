@@ -27,13 +27,17 @@
 #define WINDOWS_TICK 10000000
 #define SEC_TO_UNIX_EPOCH 11644473600LL
 #define SEC_TO_NANOSEC 1000000000LL
+#define CT_MAX_ZONE (UINT16_MAX + 1)
 
 KSTART_ROUTINE OvsConntrackEntryCleaner;
 static PLIST_ENTRY ovsConntrackTable;
 static OVS_CT_THREAD_CTX ctThreadCtx;
 static PNDIS_RW_LOCK_EX *ovsCtBucketLock = NULL;
+static NDIS_SPIN_LOCK ovsCtZoneLock;
+static POVS_CT_ZONE_INFO zoneInfo = NULL;
 extern POVS_SWITCH_CONTEXT gOvsSwitchContext;
 static ULONG ctTotalEntries;
+static ULONG defaultCtLimit;
 
 static __inline OvsCtFlush(UINT16 zone, struct ovs_key_ct_tuple_ipv4 *tuple);
 static __inline NDIS_STATUS
@@ -94,6 +98,20 @@ OvsInitConntrack(POVS_SWITCH_CONTEXT context)
     ZwClose(threadHandle);
     threadHandle = NULL;
 
+    zoneInfo = OvsAllocateMemoryWithTag(sizeof(OVS_CT_ZONE_INFO) *
+                                        CT_MAX_ZONE, OVS_CT_POOL_TAG);
+    if (zoneInfo == NULL) {
+        status = STATUS_INSUFFICIENT_RESOURCES;
+        goto freeBucketLock;
+    }
+
+    NdisAllocateSpinLock(&ovsCtZoneLock);
+    defaultCtLimit = CT_MAX_ENTRIES;
+    for (UINT32 i = 0; i < CT_MAX_ZONE; i++) {
+        zoneInfo[i].entries = 0;
+        zoneInfo[i].limit = defaultCtLimit;
+    }
+
     status = OvsNatInit();
 
     if (status != STATUS_SUCCESS) {
@@ -149,6 +167,25 @@ OvsCleanupConntrack(VOID)
     OvsFreeMemoryWithTag(ovsCtBucketLock, OVS_CT_POOL_TAG);
     ovsCtBucketLock = NULL;
     OvsNatCleanup();
+    NdisFreeSpinLock(&ovsCtZoneLock);
+    if (zoneInfo) {
+        OvsFreeMemoryWithTag(zoneInfo, OVS_CT_POOL_TAG);
+    }
+}
+
+VOID
+OvsCtSetZoneLimit(int zone, ULONG value) {
+    NdisAcquireSpinLock(&ovsCtZoneLock);
+    if (zone == -1) {
+        /* Set default limit for all zones. */
+        defaultCtLimit = value;
+        for (UINT32 i = 0; i < CT_MAX_ZONE; i++) {
+            zoneInfo[i].limit = value;
+        }
+    } else {
+        zoneInfo[(UINT16)zone].limit = value;
+    }
+    NdisReleaseSpinLock(&ovsCtZoneLock);
 }
 
 /*
@@ -263,6 +300,7 @@ OvsCtAddEntry(POVS_CT_ENTRY entry,
                    &entry->link);
 
     NdisInterlockedIncrement((PLONG)&ctTotalEntries);
+    NdisInterlockedIncrement((PLONG)&zoneInfo[ctx->key.zone].entries);
     NdisReleaseRWLock(ovsCtBucketLock[bucketIdx], &lockState);
     return TRUE;
 }
@@ -437,6 +475,7 @@ OvsCtEntryDelete(POVS_CT_ENTRY entry, BOOLEAN forceDelete)
         if (entry->natInfo.natAction) {
             OvsNatDeleteKey(&entry->key);
         }
+        NdisInterlockedDecrement((PLONG)&zoneInfo[entry->key.zone].entries);
         OvsPostCtEventEntry(entry, OVS_EVENT_CT_DELETE);
         RemoveEntryList(&entry->link);
         OVS_RELEASE_SPIN_LOCK(&(entry->lock), irql);
@@ -877,12 +916,16 @@ OvsCtExecute_(OvsForwardingContext *fwdCtx,
                                          &entryCreated);
 
     } else {
-        if (commit && ctTotalEntries >= CT_MAX_ENTRIES) {
+        if (commit && (ctTotalEntries >= CT_MAX_ENTRIES ||
+            zoneInfo[ctx.key.zone].entries >= zoneInfo[ctx.key.zone].limit)) {
             /* Don't proceed with processing if the max limit has been hit.
              * This blocks only new entries from being created and doesn't
              * affect existing connections.
              */
-            OVS_LOG_ERROR("Conntrack Limit hit: %lu", ctTotalEntries);
+            OVS_LOG_ERROR("Conntrack Limit hit: zone(%u), zoneLimit(%lu),"
+                          "zoneEntries(%lu), ctTotalEntries(%lu)",
+                           zone, zoneInfo[ctx.key.zone].limit,
+                           zoneInfo[ctx.key.zone].entries, ctTotalEntries);
             return NDIS_STATUS_RESOURCES;
         }
         /* If no matching entry was found, create one and add New state */
@@ -1781,6 +1824,126 @@ OvsCtDumpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     }
 
     return STATUS_SUCCESS;
+}
+
+static NTSTATUS
+OvsCreateNlMsgFromCtLimit(POVS_MESSAGE msgIn,
+                          PVOID outBuffer,
+                          UINT32 outBufLen,
+                          PCHAR attr,
+                          UINT32 numAttrs,
+                          int dpIfIndex)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+    NL_BUFFER nlBuffer;
+    PNL_MSG_HDR nlMsg;
+    PGENL_MSG_HDR genlMsgHdr = &(msgIn->genlMsg);
+
+    NlBufInit(&nlBuffer, outBuffer, outBufLen);
+
+    if (!NlFillOvsMsg(&nlBuffer, msgIn->nlMsg.nlmsgType, NLM_F_MULTI,
+                      msgIn->nlMsg.nlmsgSeq, msgIn->nlMsg.nlmsgPid,
+                      msgIn->genlMsg.cmd, msgIn->genlMsg.version,
+                      dpIfIndex)) {
+        return STATUS_INVALID_BUFFER_SIZE;
+    }
+
+    if (genlMsgHdr->cmd == OVS_CT_LIMIT_CMD_GET && numAttrs) {
+        POVS_CT_ZONE_LIMIT zoneLimitAttr = (POVS_CT_ZONE_LIMIT) attr;
+        UINT32 offset = NlMsgStartNested(&nlBuffer, OVS_CT_LIMIT_ATTR_ZONE_LIMIT);
+        if (!offset) {
+            /* Starting the nested attribute failed. */
+            status = STATUS_INVALID_BUFFER_SIZE;
+            goto done;
+        }
+
+        /* Insert OVS_CT_ZONE_LIMIT attributes.*/
+        for (UINT32 i = 0; i < numAttrs; i++) {
+            if (zoneLimitAttr) {
+                zoneLimitAttr->limit = zoneInfo[zoneLimitAttr->zone_id].limit;
+                zoneLimitAttr->count = zoneInfo[zoneLimitAttr->zone_id].entries;
+                if (zoneLimitAttr->zone_id == -1) {
+                    zoneLimitAttr->limit = defaultCtLimit;
+                }
+                NlMsgPutTail(&nlBuffer, (const PCHAR)zoneLimitAttr,
+                             sizeof(OVS_CT_ZONE_LIMIT));
+            } else {
+                status = STATUS_INVALID_PARAMETER;
+                break;
+            }
+            zoneLimitAttr = (POVS_CT_ZONE_LIMIT)((PCHAR) zoneLimitAttr +
+                                sizeof(OVS_CT_ZONE_LIMIT));
+        }
+        NlMsgEndNested(&nlBuffer, offset);
+    }
+
+done:
+    nlMsg = (PNL_MSG_HDR)NlBufAt(&nlBuffer, 0, 0);
+    nlMsg->nlmsgLen = NlBufSize(&nlBuffer);
+
+    return status;
+}
+
+NTSTATUS
+OvsCtLimitHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                  UINT32 *replyLen)
+{
+    NTSTATUS status;
+    POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
+    POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
+    PNL_MSG_HDR nlMsgHdr = &(msgIn->nlMsg);
+    PGENL_MSG_HDR genlMsgHdr = &(msgIn->genlMsg);
+    POVS_HDR ovsHdr = &(msgIn->ovsHdr);
+    PCHAR attr = NULL;
+    UINT32 numAttrs = 0;
+    UINT32 attrOffset = NLMSG_HDRLEN + GENL_HDRLEN + OVS_HDRLEN;
+
+    static const NL_POLICY ovsCtLimitPolicy[] = {
+        [OVS_CT_LIMIT_ATTR_ZONE_LIMIT] = { .type = NL_A_NESTED, .optional = TRUE }
+    };
+    PNL_ATTR nlAttrs[ARRAY_SIZE(ovsCtLimitPolicy)];
+
+    if ((NlAttrParse(nlMsgHdr, attrOffset, NlMsgAttrsLen(nlMsgHdr),
+                     ovsCtLimitPolicy, ARRAY_SIZE(ovsCtLimitPolicy),
+                     nlAttrs, ARRAY_SIZE(nlAttrs)))
+                     != TRUE) {
+        OVS_LOG_ERROR("Attr Parsing failed for msg: %p", nlMsgHdr);
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    if (nlAttrs[OVS_CT_LIMIT_ATTR_ZONE_LIMIT]) {
+        numAttrs = NlAttrGetSize(nlAttrs[OVS_CT_LIMIT_ATTR_ZONE_LIMIT])/sizeof(OVS_CT_ZONE_LIMIT);
+        attr = NlAttrGet(nlAttrs[OVS_CT_LIMIT_ATTR_ZONE_LIMIT]);
+    }
+
+    if (genlMsgHdr->cmd == OVS_CT_LIMIT_CMD_SET ||
+        genlMsgHdr->cmd == OVS_CT_LIMIT_CMD_DEL) {
+        POVS_CT_ZONE_LIMIT zoneLimitAttr = (POVS_CT_ZONE_LIMIT)attr;
+        for (UINT32 i = 0; i < numAttrs; i++) {
+            /* Parse zone limit attributes. */
+            if (zoneLimitAttr) {
+                if (genlMsgHdr->cmd == OVS_CT_LIMIT_CMD_DEL) {
+                    zoneLimitAttr->limit = CT_MAX_ENTRIES;
+                }
+                OvsCtSetZoneLimit(zoneLimitAttr->zone_id, zoneLimitAttr->limit);
+            } else {
+                OVS_LOG_ERROR("Failed to get zone limit attribute at index(%u),"
+                              " numAttrs(%u)", i, numAttrs);
+                return STATUS_INVALID_PARAMETER;
+            }
+            zoneLimitAttr = (POVS_CT_ZONE_LIMIT)((PCHAR) zoneLimitAttr +
+                                sizeof(OVS_CT_ZONE_LIMIT));
+        }
+    }
+
+    /* Output buffer has been validated while validating transact dev op. */
+    ASSERT(msgOut != NULL && usrParamsCtx->outputLength >= sizeof *msgOut);
+    status = OvsCreateNlMsgFromCtLimit(msgIn, msgOut,
+                                       usrParamsCtx->outputLength,
+                                       attr, numAttrs, ovsHdr->dp_ifindex);
+    *replyLen = msgOut->nlMsg.nlmsgLen;
+
+    return status;
 }
 
 #pragma warning(pop)
