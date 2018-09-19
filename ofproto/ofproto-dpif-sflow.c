@@ -472,11 +472,12 @@ sflow_choose_agent_address(const char *agent_device,
             /* sFlow only supports target in default routing table with
              * packet mark zero.
              */
-            ip = ss_get_address(&ss);
+            struct in6_addr target_ip = ss_get_address(&ss);
 
             struct in6_addr gw, src = in6addr_any;
             char name[IFNAMSIZ];
-            if (ovs_router_lookup(0, &ip, name, &src, &gw)) {
+            if (ovs_router_lookup(0, &target_ip, name, &src, &gw)) {
+                ip = src;
                 goto success;
             }
         }
