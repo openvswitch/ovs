@@ -187,8 +187,7 @@ OvsGetTcpHeader(PNET_BUFFER_LIST nbl,
     tcp = (TCPHdr *)((PCHAR)ipHdr + ipHdr->ihl * 4);
     if (tcp->doff * 4 >= sizeof *tcp) {
         NdisMoveMemory(dest, tcp, sizeof(TCPHdr));
-        *tcpPayloadLen = ntohs((ipHdr->tot_len) - (ipHdr->ihl * 4) -
-                               (TCP_HDR_LEN(tcp)));
+        *tcpPayloadLen = TCP_DATA_LENGTH(ipHdr, tcp);
         return storage;
     }
 
