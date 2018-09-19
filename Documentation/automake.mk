@@ -29,6 +29,8 @@ DOC_SOURCE = \
 	Documentation/tutorials/ovn-sandbox.rst \
 	Documentation/tutorials/ovs-conntrack.rst \
 	Documentation/tutorials/ipsec.rst \
+	Documentation/tutorials/ovn-ipsec.rst \
+	Documentation/tutorials/ovn-rbac.rst \
 	Documentation/topics/index.rst \
 	Documentation/topics/bonding.rst \
 	Documentation/topics/idl-compound-indexes.rst \
