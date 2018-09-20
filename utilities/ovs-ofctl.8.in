@@ -211,8 +211,8 @@ for matching for fragments with offset 0, and set to 0 in fragments
 with nonzero offset.  This mode is a Nicira extension.
 .RE
 .IP
-See the description of \fBip_frag\fR, below, for a way to match on
-whether a packet is a fragment and on its fragment offset.
+See the description of \fBip_frag\fR, in \fBovs\-fields\fR(7), for a way to
+match on whether a packet is a fragment and on its fragment offset.
 .
 .TP
 \fBdump\-flows \fIswitch \fR[\fIflows\fR]
