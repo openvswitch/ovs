@@ -253,9 +253,17 @@
       <code>ct_snat</code>) action.
     </dd>
 
-    <dt><code>ct_lb</code></dt>
+    <dt><code>ct_lb;</code></dt>
+    <dt><code>ct_lb(<var>ip</var></code>[<code>:<var>port</var></code>]...<code>);</code></dt>
     <dd>
-      Not yet implemented; currently implemented as a no-op.
+      Forks the pipeline. In one fork, sets <code>ip4.dst</code> (or
+      <code>ip6.dst</code>) to one of the load-balancer addresses and the
+      destination port to its associated port, if any, and sets
+      <code>ct.dnat</code> to 1.  With one or more arguments, gives preference
+      to the address specified on <code>--lb-dst</code>, if any; without
+      arguments, uses the address and port specified on <code>--lb-dst</code>.
+      In the other fork, the pipeline continues without change after the
+      <code>ct_lb</code> action.
     </dd>
 
     <dt><code>ct_commit</code></dt>
@@ -422,6 +430,12 @@
         <code>--ct</code> options than <code>ct_next</code> actions, the
         <var>flags</var> default to <code>trk,est</code>.
       </p>
+    </dd>
+
+    <dt><code>--lb-dst=</code><var>ip</var>[<code>:<var>port</var></code>]</dt>
+    <dd>
+      Sets the IP from VIP pool to use as destination of the packet.
+      <code>--lb-dst</code> is not available in daemon mode.
     </dd>
 
     <dt><code>--friendly-names</code></dt>
