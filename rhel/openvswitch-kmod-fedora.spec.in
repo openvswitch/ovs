@@ -74,7 +74,7 @@ for kv in %{kversion}; do
 done
 install -d -m 0755 $RPM_BUILD_ROOT/usr/share/openvswitch/scripts
 install -p -m 0755 rhel/usr_share_openvswitch_scripts_ovs-kmod-manage.sh \
-    $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/ovs-kmod-manage.sh
+    $RPM_BUILD_ROOT%{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -88,15 +88,15 @@ IFS='.\|-' read mainline_major mainline_minor mainline_patch major_rev \
 if [ "$mainline_major" = "3" ] && [ "$mainline_minor" = "10" ]; then
     if [ "$installed_major" = "327" ] || [ "$installed_major" = "693" ]; then
         # For RHEL 7.2 and 7.4
-        if [ -x "/usr/share/openvswitch/scripts/ovs-kmod-manage.sh" ]; then
-            /usr/share/openvswitch/scripts/ovs-kmod-manage.sh
+        if [ -x "%{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh" ]; then
+            %{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh
         fi
     fi
 elif [ "$mainline_major" = "4" ] && [ "$mainline_minor" = "4" ] && \
      [ "$mainline_patch" -ge "73" ]; then
      # For SLES 12 SP3
-     if [ -x "/usr/share/openvswitch/scripts/ovs-kmod-manage.sh" ]; then
-         /usr/share/openvswitch/scripts/ovs-kmod-manage.sh
+     if [ -x "%{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh" ]; then
+         %{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh
      fi
 else
     # Ensure that modprobe will find our modules.
@@ -125,7 +125,7 @@ fi
 /lib/modules/*/extra/openvswitch/*.ko
 /etc/depmod.d/kmod-openvswitch.conf
 %exclude /lib/modules/*/modules.*
-%attr(755,root,root) /usr/share/openvswitch/scripts/ovs-kmod-manage.sh
+%attr(755,root,root) %{_datadir}/openvswitch/scripts/ovs-kmod-manage.sh
 
 %changelog
 * Wed Sep 21 2011 Kyle Mestery <kmestery@cisco.com>
