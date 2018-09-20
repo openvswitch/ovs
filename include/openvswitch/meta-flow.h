@@ -1397,7 +1397,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      */
     MFF_IP_TTL,
 
-    /* "ip_frag".
+    /* "ip_frag" (aka "nw_frag").
      *
      * IP fragment information.
      *
