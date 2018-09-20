@@ -1006,15 +1006,19 @@ ofctrl_put(struct hmap *flow_table, struct shash *pending_ct_zones,
                     .table_id = i->table_id,
                     .ofpacts = d->ofpacts,
                     .ofpacts_len = d->ofpacts_len,
+                    .new_cookie = htonll(d->cookie),
+                    .modify_cookie = true,
                     .command = OFPFC_MODIFY_STRICT,
                 };
                 add_flow_mod(&fm, &msgs);
                 ovn_flow_log(i, "updating installed");
+                VLOG_INFO("modified flow cookie from %lx to %lx", i->cookie, d->cookie);
 
                 /* Replace 'i''s actions by 'd''s. */
                 free(i->ofpacts);
                 i->ofpacts = d->ofpacts;
                 i->ofpacts_len = d->ofpacts_len;
+                i->cookie = d->cookie;
                 d->ofpacts = NULL;
                 d->ofpacts_len = 0;
             }
