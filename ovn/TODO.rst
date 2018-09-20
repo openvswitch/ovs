@@ -111,34 +111,34 @@ OVN To-do List
     Without Prior Context".  (I'm not yet aware of previous non-academic use of
     this technique.)
 
-  * Support multiple tunnel encapsulations in Chassis.
+* Support multiple tunnel encapsulations in Chassis.
 
-    So far, both ovn-controller and ovn-controller-vtep only allow chassis to
-    have one tunnel encapsulation entry.  We should extend the implementation
-    to support multiple tunnel encapsulations.
+  So far, both ovn-controller and ovn-controller-vtep only allow chassis to
+  have one tunnel encapsulation entry.  We should extend the implementation
+  to support multiple tunnel encapsulations.
 
-  * Update learned MAC addresses from VTEP to OVN
+* Update learned MAC addresses from VTEP to OVN
 
-    The VTEP gateway stores all MAC addresses learned from its physical
-    interfaces in the 'Ucast_Macs_Local' and the 'Mcast_Macs_Local' tables.
-    ovn-controller-vtep should be able to update that information back to
-    ovn-sb database, so that other chassis know where to send packets destined
-    to the extended external network instead of broadcasting.
+  The VTEP gateway stores all MAC addresses learned from its physical
+  interfaces in the 'Ucast_Macs_Local' and the 'Mcast_Macs_Local' tables.
+  ovn-controller-vtep should be able to update that information back to
+  ovn-sb database, so that other chassis know where to send packets destined
+  to the extended external network instead of broadcasting.
 
-  * Translate ovn-sb Multicast_Group table into VTEP config
+* Translate ovn-sb Multicast_Group table into VTEP config
 
-    The ovn-controller-vtep daemon should be able to translate the
-    Multicast_Group table entry in ovn-sb database into Mcast_Macs_Remote table
-    configuration in VTEP database.
+  The ovn-controller-vtep daemon should be able to translate the
+  Multicast_Group table entry in ovn-sb database into Mcast_Macs_Remote table
+  configuration in VTEP database.
 
-  * OVN OCF pacemaker script to support Active / Passive HA for OVN dbs provides
-    the option to configure the inactivity_probe value. The default 5 seconds
-    inactivity_probe value is not sufficient and ovsdb-server drops the client
-    IDL connections for openstack deployments when the neutron server is heavily
-    loaded.
+* OVN OCF pacemaker script to support Active / Passive HA for OVN dbs provides
+  the option to configure the inactivity_probe value. The default 5 seconds
+  inactivity_probe value is not sufficient and ovsdb-server drops the client
+  IDL connections for openstack deployments when the neutron server is heavily
+  loaded.
 
-    We need to find a proper solution to solve this issue instead of increasing
-    the inactivity_probe value.
+  We need to find a proper solution to solve this issue instead of increasing
+  the inactivity_probe value.
 
 * ACL
 
