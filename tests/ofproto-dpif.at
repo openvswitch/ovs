@@ -4337,11 +4337,11 @@ AT_SETUP([ofproto-dpif - fragment handling - trace])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2 3 4 5 6 90
 AT_DATA([flows.txt], [dnl
-priority=75 tcp ip_frag=no    tp_dst=80 actions=move:OXM_OF_TCP_DST[[]]->OXM_OF_TCP_SRC[[]],output:1
-priority=75 tcp ip_frag=first tp_dst=80 actions=move:OXM_OF_TCP_DST[[]]->OXM_OF_TCP_SRC[[]],output:2
-priority=50 tcp ip_frag=no              actions=move:OXM_OF_TCP_DST[[]]->OXM_OF_TCP_SRC[[]],output:4
-priority=50 tcp ip_frag=first           actions=move:OXM_OF_TCP_DST[[]]->OXM_OF_TCP_SRC[[]],output:5
-priority=50 tcp ip_frag=later           actions=output:6
+priority=75 tcp nw_frag=no    tp_dst=80 actions=move:OXM_OF_TCP_DST[[]]->OXM_OF_TCP_SRC[[]],output:1
+priority=75 tcp nw_frag=first tp_dst=80 actions=move:OXM_OF_TCP_DST[[]]->OXM_OF_TCP_SRC[[]],output:2
+priority=50 tcp nw_frag=no              actions=move:OXM_OF_TCP_DST[[]]->OXM_OF_TCP_SRC[[]],output:4
+priority=50 tcp nw_frag=first           actions=move:OXM_OF_TCP_DST[[]]->OXM_OF_TCP_SRC[[]],output:5
+priority=50 tcp nw_frag=later           actions=output:6
 ])
 AT_CHECK([ovs-ofctl replace-flows br0 flows.txt])
 
