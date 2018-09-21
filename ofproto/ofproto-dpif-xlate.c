@@ -7464,19 +7464,21 @@ enum ofperr
 xlate_resume(struct ofproto_dpif *ofproto,
              const struct ofputil_packet_in_private *pin,
              struct ofpbuf *odp_actions,
-             enum slow_path_reason *slow)
+             enum slow_path_reason *slow,
+             struct flow *flow,
+             struct xlate_cache *xcache)
 {
     struct dp_packet packet;
     dp_packet_use_const(&packet, pin->base.packet,
                         pin->base.packet_len);
 
-    struct flow flow;
-    flow_extract(&packet, &flow);
+    flow_extract(&packet, flow);
 
     struct xlate_in xin;
     xlate_in_init(&xin, ofproto, ofproto_dpif_get_tables_version(ofproto),
-                  &flow, 0, NULL, ntohs(flow.tcp_flags),
+                  flow, 0, NULL, ntohs(flow->tcp_flags),
                   &packet, NULL, odp_actions);
+    xin.xcache = xcache;
 
     struct ofpact_note noop;
     ofpact_init_NOTE(&noop);

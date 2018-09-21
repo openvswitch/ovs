@@ -5393,6 +5393,39 @@ CHECK_CONTINUATION([patch ports], [4], [1],
        -- set interface patch11 type=patch options:peer=patch10 \
                                 ofport_request=11])
 
+AT_SETUP([ofproto-dpif - continuation flow stats])
+AT_KEYWORDS([continuations pause resume])
+OVS_VSWITCHD_START
+
+add_of_ports --pcap br0 `seq 1 2`
+
+flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1 actions=set_field:1->reg1 controller(pause) resubmit(,2)
+table=2 reg1=0x1 actions=2
+])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flows br0 flows.txt])
+
+AT_CAPTURE_FILE([ofctl_monitor0.log])
+ovs-ofctl monitor br0 resume --detach --no-chdir \
+--pidfile=ovs-ofctl0.pid 2> ofctl_monitor0.log
+
+# Run a packet through the switch.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 "$flow"], [0], [stdout])
+
+# Check flow stats
+AT_CHECK([ovs-ofctl dump-flows br0], [0], [stdout])
+AT_CHECK([strip_xids < stdout | sed -n 's/duration=[[0-9]]*\.[[0-9]]*s/duration=0.0s/p' | sed -n 's/idle_age=[[0-9]]*/idle_age=0/p' | grep 'table=2'], [0], [dnl
+ cookie=0x0, duration=0.0s, table=2, n_packets=1, n_bytes=106, idle_age=0, reg1=0x1 actions=output:2
+])
+
+# The packet should be recieved by port 2
+AT_CHECK([test 1 = `$PYTHON "$top_srcdir/utilities/ovs-pcap.in" p2-tx.pcap | wc -l`])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
 
 # Check that pause works after the packet is cloned.
 AT_SETUP([ofproto-dpif - continuation after clone])
