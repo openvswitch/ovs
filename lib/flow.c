@@ -868,11 +868,6 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
         }
 
         tc_flow = get_16aligned_be32(&nh->ip6_flow);
-        {
-            ovs_be32 label = tc_flow & htonl(IPV6_LABEL_MASK);
-            miniflow_push_be32(mf, ipv6_label, label);
-        }
-
         nw_tos = ntohl(tc_flow) >> 20;
         nw_ttl = nh->ip6_hlim;
         nw_proto = nh->ip6_nxt;
@@ -880,6 +875,12 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
         if (!parse_ipv6_ext_hdrs__(&data, &size, &nw_proto, &nw_frag)) {
             goto out;
         }
+
+        /* This needs to be after the parse_ipv6_ext_hdrs__() call because it
+         * leaves the nw_frag word uninitialized. */
+        ASSERT_SEQUENTIAL(ipv6_label, nw_frag);
+        ovs_be32 label = tc_flow & htonl(IPV6_LABEL_MASK);
+        miniflow_push_be32(mf, ipv6_label, label);
     } else {
         if (dl_type == htons(ETH_TYPE_ARP) ||
             dl_type == htons(ETH_TYPE_RARP)) {
