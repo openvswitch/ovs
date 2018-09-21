@@ -5051,17 +5051,28 @@ nxt_resume(struct ofproto *ofproto_,
            const struct ofputil_packet_in_private *pin)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+    struct dpif_flow_stats stats;
+    struct xlate_cache xcache;
+    struct flow flow;
+    xlate_cache_init(&xcache);
 
     /* Translate pin into datapath actions. */
     uint64_t odp_actions_stub[1024 / 8];
     struct ofpbuf odp_actions = OFPBUF_STUB_INITIALIZER(odp_actions_stub);
     enum slow_path_reason slow;
-    enum ofperr error = xlate_resume(ofproto, pin, &odp_actions, &slow);
+    enum ofperr error = xlate_resume(ofproto, pin, &odp_actions, &slow,
+                                     &flow, &xcache);
 
     /* Steal 'pin->packet' and put it into a dp_packet. */
     struct dp_packet packet;
     dp_packet_init(&packet, pin->base.packet_len);
     dp_packet_put(&packet, pin->base.packet, pin->base.packet_len);
+
+    /* Run the side effects from the xcache. */
+    dpif_flow_stats_extract(&flow, &packet, time_msec(), &stats);
+    ovs_mutex_lock(&ofproto_mutex);
+    ofproto_dpif_xcache_execute(ofproto, &xcache, &stats);
+    ovs_mutex_unlock(&ofproto_mutex);
 
     pkt_metadata_from_flow(&packet.md, &pin->base.flow_metadata.flow);
 
