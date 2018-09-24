@@ -121,11 +121,19 @@ save_flows () {
              cnt++;printf "{class="$1",type="$2",len="$3"}->"$4}'
         echo "'"
 
-        printf "%s" "ovs-ofctl -O $ofp_version replace-flows ${bridge} " \
-            "\"$workdir/$bridge.flows.dump\""
+        # If possible use OpenFlow 1.4 atomic bundle txn for flows and groups
+        [ ${ofp_version#OpenFlow} -ge 14 ] && bundle=" --bundle" || bundle=""
 
-        # If possible, use OpenFlow 1.4 atomic bundle transaction to add flows
-        [ ${ofp_version#OpenFlow} -ge 14 ] && echo " --bundle" || echo
+        echo "ovs-ofctl -O $ofp_version add-groups ${bridge} \
+              \"$workdir/$bridge.groups.dump\" ${bundle}"
+
+        echo "ovs-ofctl -O $ofp_version replace-flows ${bridge} \
+              \"$workdir/$bridge.flows.dump\" ${bundle}"
+
+        ovs-ofctl -O $ofp_version dump-groups "$bridge" | \
+            sed -e '/^OFPST_GROUP_DESC/d' \
+                -e '/^NXST_GROUP_DESC/d' > \
+                "$workdir/$bridge.groups.dump"
 
         ovs-ofctl -O $ofp_version dump-flows --no-names --no-stats "$bridge" | \
             sed -e '/NXST_FLOW/d' \
