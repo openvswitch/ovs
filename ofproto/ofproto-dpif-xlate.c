@@ -4463,6 +4463,7 @@ pick_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
      */
     if (ctx->was_mpls) {
         ctx_trigger_freeze(ctx);
+        return NULL;
     }
 
     switch (group->selection_method) {
