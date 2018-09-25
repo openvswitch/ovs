@@ -103,7 +103,9 @@ struct ofputil_group_mod {
 
 void ofputil_uninit_group_mod(struct ofputil_group_mod *gm);
 struct ofpbuf *ofputil_encode_group_mod(enum ofp_version ofp_version,
-                                        const struct ofputil_group_mod *gm);
+                                        const struct ofputil_group_mod *gm,
+                                        const struct ovs_list *new_buckets,
+                                        int group_existed);
 
 enum ofperr ofputil_decode_group_mod(const struct ofp_header *,
                                      struct ofputil_group_mod *);

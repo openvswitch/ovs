@@ -796,7 +796,8 @@ ofputil_encode_requestforward(const struct ofputil_requestforward *rf,
 
     switch (rf->reason) {
     case OFPRFR_GROUP_MOD:
-        inner = ofputil_encode_group_mod(ofp_version, rf->group_mod);
+        inner = ofputil_encode_group_mod(ofp_version, rf->group_mod,
+                                         rf->new_buckets, rf->group_existed);
         break;
 
     case OFPRFR_METER_MOD:
@@ -829,6 +830,9 @@ enum ofperr
 ofputil_decode_requestforward(const struct ofp_header *outer,
                               struct ofputil_requestforward *rf)
 {
+    rf->new_buckets = NULL;
+    rf->group_existed = -1;
+
     struct ofpbuf b = ofpbuf_const_initializer(outer, ntohs(outer->length));
 
     /* Skip past outer message. */
@@ -920,6 +924,7 @@ ofputil_destroy_requestforward(struct ofputil_requestforward *rf)
     case OFPRFR_GROUP_MOD:
         ofputil_uninit_group_mod(rf->group_mod);
         free(rf->group_mod);
+        /* 'rf' does not own rf->new_buckets. */
         break;
 
     case OFPRFR_METER_MOD:

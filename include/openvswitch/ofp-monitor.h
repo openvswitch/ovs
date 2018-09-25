@@ -125,7 +125,20 @@ struct ofputil_requestforward {
         };
 
         /* reason == OFPRFR_GROUP_MOD. */
-        struct ofputil_group_mod *group_mod;
+        struct {
+            struct ofputil_group_mod *group_mod;
+
+            /* If nonnull, points to the full set of new buckets that resulted
+             * from a OFPGC15_INSERT_BUCKET or OFPGC15_REMOVE_BUCKET command.
+             * Needed to translate such group_mods into OpenFlow 1.1-1.4
+             * OFPGC11_MODIFY. */
+            const struct ovs_list *new_buckets;
+
+            /* If nonnegative, specifies whether the group existed before the
+             * command was executed.  Needed to translate OVS's nonstandard
+             * OFPGC11_ADD_OR_MOD into a standard command. */
+            int group_existed;
+        };
     };
 };
 

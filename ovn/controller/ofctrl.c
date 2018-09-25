@@ -777,7 +777,7 @@ add_flow_mod(struct ofputil_flow_mod *fm, struct ovs_list *msgs)
 static struct ofpbuf *
 encode_group_mod(const struct ofputil_group_mod *gm)
 {
-    return ofputil_encode_group_mod(OFP13_VERSION, gm);
+    return ofputil_encode_group_mod(OFP13_VERSION, gm, NULL, -1);
 }
 
 static void
