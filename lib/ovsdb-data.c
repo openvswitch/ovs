@@ -2121,7 +2121,6 @@ ovsdb_datum_apply_diff(struct ovsdb_datum *new,
                        const struct ovsdb_datum *diff,
                        const struct ovsdb_type *type)
 {
-    ovsdb_datum_init_empty(new);
     ovsdb_datum_diff(new, old, diff, type);
 
     /* Make sure member size of 'new' conforms to type. */
