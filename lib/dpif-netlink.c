@@ -234,7 +234,7 @@ static bool ovs_tunnels_out_of_tree = true;
 static int dpif_netlink_init(void);
 static int open_dpif(const struct dpif_netlink_dp *, struct dpif **);
 static uint32_t dpif_netlink_port_get_pid(const struct dpif *,
-                                          odp_port_t port_no, uint32_t hash);
+                                          odp_port_t port_no);
 static void dpif_netlink_handler_uninit(struct dpif_handler *handler);
 static int dpif_netlink_refresh_channels(struct dpif_netlink *,
                                          uint32_t n_handlers);
@@ -991,7 +991,7 @@ dpif_netlink_port_query_by_name(const struct dpif *dpif_, const char *devname,
 
 static uint32_t
 dpif_netlink_port_get_pid__(const struct dpif_netlink *dpif,
-                            odp_port_t port_no, uint32_t hash OVS_UNUSED)
+                            odp_port_t port_no)
     OVS_REQ_RDLOCK(dpif->upcall_lock)
 {
     uint32_t port_idx = odp_to_u32(port_no);
@@ -1015,14 +1015,13 @@ dpif_netlink_port_get_pid__(const struct dpif_netlink *dpif,
 }
 
 static uint32_t
-dpif_netlink_port_get_pid(const struct dpif *dpif_, odp_port_t port_no,
-                          uint32_t hash)
+dpif_netlink_port_get_pid(const struct dpif *dpif_, odp_port_t port_no)
 {
     const struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
     uint32_t ret;
 
     fat_rwlock_rdlock(&dpif->upcall_lock);
-    ret = dpif_netlink_port_get_pid__(dpif, port_no, hash);
+    ret = dpif_netlink_port_get_pid__(dpif, port_no);
     fat_rwlock_unlock(&dpif->upcall_lock);
 
     return ret;

@@ -191,16 +191,7 @@ struct dpif_class {
 
     /* Returns the Netlink PID value to supply in OVS_ACTION_ATTR_USERSPACE
      * actions as the OVS_USERSPACE_ATTR_PID attribute's value, for use in
-     * flows whose packets arrived on port 'port_no'.  In the case where the
-     * provider allocates multiple Netlink PIDs to a single port, it may use
-     * 'hash' to spread load among them.  The caller need not use a particular
-     * hash function; a 5-tuple hash is suitable.
-     *
-     * (The datapath implementation might use some different hash function for
-     * distributing packets received via flow misses among PIDs.  This means
-     * that packets received via flow misses might be reordered relative to
-     * packets received via userspace actions.  This is not ordinarily a
-     * problem.)
+     * flows whose packets arrived on port 'port_no'.
      *
      * A 'port_no' of UINT32_MAX should be treated as a special case.  The
      * implementation should return a reserved PID, not allocated to any port,
@@ -212,8 +203,7 @@ struct dpif_class {
      *
      * A dpif provider that doesn't have meaningful Netlink PIDs can use NULL
      * for this function.  This is equivalent to always returning 0. */
-    uint32_t (*port_get_pid)(const struct dpif *dpif, odp_port_t port_no,
-                             uint32_t hash);
+    uint32_t (*port_get_pid)(const struct dpif *dpif, odp_port_t port_no);
 
     /* Attempts to begin dumping the ports in a dpif.  On success, returns 0
      * and initializes '*statep' with any data needed for iteration.  On

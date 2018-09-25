@@ -1021,7 +1021,6 @@ classify_upcall(enum dpif_upcall_type type, const struct nlattr *userdata,
  * initialized with at least 128 bytes of space. */
 static void
 compose_slow_path(struct udpif *udpif, struct xlate_out *xout,
-                  const struct flow *flow,
                   odp_port_t odp_in_port, ofp_port_t ofp_in_port,
                   struct ofpbuf *buf, uint32_t meter_id,
                   struct uuid *ofproto_uuid)
@@ -1038,7 +1037,7 @@ compose_slow_path(struct udpif *udpif, struct xlate_out *xout,
     port = xout->slow & (SLOW_CFM | SLOW_BFD | SLOW_LACP | SLOW_STP)
         ? ODPP_NONE
         : odp_in_port;
-    pid = dpif_port_get_pid(udpif->dpif, port, flow_hash_5tuple(flow, 0));
+    pid = dpif_port_get_pid(udpif->dpif, port);
 
     size_t offset;
     size_t ac_offset;
@@ -1196,7 +1195,7 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
                          odp_actions->data, odp_actions->size);
     } else {
         /* upcall->put_actions already initialized by upcall_receive(). */
-        compose_slow_path(udpif, &upcall->xout, upcall->flow,
+        compose_slow_path(udpif, &upcall->xout,
                           upcall->flow->in_port.odp_port, upcall->ofp_in_port,
                           &upcall->put_actions,
                           upcall->ofproto->up.slowpath_meter_id,
@@ -2155,7 +2154,7 @@ revalidate_ukey__(struct udpif *udpif, const struct udpif_key *ukey,
             goto exit;
         }
 
-        compose_slow_path(udpif, xoutp, &ctx.flow, ctx.flow.in_port.odp_port,
+        compose_slow_path(udpif, xoutp, ctx.flow.in_port.odp_port,
                           ofp_in_port, odp_actions,
                           ofproto->up.slowpath_meter_id, &ofproto->uuid);
     }

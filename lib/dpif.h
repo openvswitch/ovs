@@ -274,18 +274,6 @@
  *
  *    - Upcalls that specify the "special" Netlink PID are queued separately.
  *
- * Multiple threads may want to read upcalls simultaneously from a single
- * datapath.  To support multiple threads well, one extends the above preferred
- * behavior:
- *
- *    - Each port has multiple PIDs.  The datapath distributes "miss" upcalls
- *      across the PIDs, ensuring that a given flow is mapped in a stable way
- *      to a single PID.
- *
- *    - For "action" upcalls, the thread can specify its own Netlink PID or
- *      other threads' Netlink PID of the same port for offloading purpose
- *      (e.g. in a "round robin" manner).
- *
  *
  * Packet Format
  * =============
@@ -470,8 +458,7 @@ int dpif_port_query_by_name(const struct dpif *, const char *devname,
                             struct dpif_port *);
 int dpif_port_get_name(struct dpif *, odp_port_t port_no,
                        char *name, size_t name_size);
-uint32_t dpif_port_get_pid(const struct dpif *, odp_port_t port_no,
-                           uint32_t hash);
+uint32_t dpif_port_get_pid(const struct dpif *, odp_port_t port_no);
 
 struct dpif_port_dump {
     const struct dpif *dpif;
