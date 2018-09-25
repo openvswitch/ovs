@@ -1916,93 +1916,6 @@ ofputil_uninit_group_mod(struct ofputil_group_mod *gm)
     ofputil_group_properties_destroy(&gm->props);
 }
 
-static struct ofpbuf *
-ofputil_encode_ofp11_group_mod(enum ofp_version ofp_version,
-                               const struct ofputil_group_mod *gm)
-{
-    struct ofpbuf *b;
-    struct ofp11_group_mod *ogm;
-    size_t start_ogm;
-    struct ofputil_bucket *bucket;
-
-    b = ofpraw_alloc(OFPRAW_OFPT11_GROUP_MOD, ofp_version, 0);
-    start_ogm = b->size;
-    ofpbuf_put_zeros(b, sizeof *ogm);
-
-    LIST_FOR_EACH (bucket, list_node, &gm->buckets) {
-        ofputil_put_ofp11_bucket(bucket, b, ofp_version);
-    }
-    ogm = ofpbuf_at_assert(b, start_ogm, sizeof *ogm);
-    ogm->command = htons(gm->command);
-    ogm->type = gm->type;
-    ogm->group_id = htonl(gm->group_id);
-
-    return b;
-}
-
-static struct ofpbuf *
-ofputil_encode_ofp15_group_mod(enum ofp_version ofp_version,
-                               const struct ofputil_group_mod *gm)
-{
-    struct ofpbuf *b;
-    struct ofp15_group_mod *ogm;
-    size_t start_ogm;
-    struct ofputil_bucket *bucket;
-    struct id_pool *bucket_ids = NULL;
-
-    b = ofpraw_alloc((ofp_version == OFP10_VERSION
-                      ? OFPRAW_NXT_GROUP_MOD
-                      : OFPRAW_OFPT15_GROUP_MOD), ofp_version, 0);
-    start_ogm = b->size;
-    ofpbuf_put_zeros(b, sizeof *ogm);
-
-    LIST_FOR_EACH (bucket, list_node, &gm->buckets) {
-        uint32_t bucket_id;
-
-        /* Generate a bucket id if none was supplied */
-        if (bucket->bucket_id > OFPG15_BUCKET_MAX) {
-            if (!bucket_ids) {
-                const struct ofputil_bucket *bkt;
-
-                bucket_ids = id_pool_create(0, OFPG15_BUCKET_MAX + 1);
-
-                /* Mark all bucket_ids that are present in gm
-                 * as used in the pool. */
-                LIST_FOR_EACH_REVERSE (bkt, list_node, &gm->buckets) {
-                    if (bkt == bucket) {
-                        break;
-                    }
-                    if (bkt->bucket_id <= OFPG15_BUCKET_MAX) {
-                        id_pool_add(bucket_ids, bkt->bucket_id);
-                    }
-                }
-            }
-
-            if (!id_pool_alloc_id(bucket_ids, &bucket_id)) {
-                OVS_NOT_REACHED();
-            }
-        } else {
-            bucket_id = bucket->bucket_id;
-        }
-
-        ofputil_put_ofp15_bucket(bucket, bucket_id, gm->type, b, ofp_version);
-    }
-    ogm = ofpbuf_at_assert(b, start_ogm, sizeof *ogm);
-    ogm->command = htons(gm->command);
-    ogm->type = gm->type;
-    ogm->group_id = htonl(gm->group_id);
-    ogm->command_bucket_id = htonl(gm->command_bucket_id);
-    ogm->bucket_array_len = htons(b->size - start_ogm - sizeof *ogm);
-
-    /* Add group properties */
-    if (gm->props.selection_method[0]) {
-        ofputil_put_group_prop_ntr_selection_method(ofp_version, &gm->props, b);
-    }
-
-    id_pool_destroy(bucket_ids);
-    return b;
-}
-
 static void
 bad_group_cmd(enum ofp15_group_mod_command cmd)
 {
@@ -2060,11 +1973,137 @@ bad_group_cmd(enum ofp15_group_mod_command cmd)
 
 }
 
+static struct ofpbuf *
+ofputil_encode_ofp11_group_mod(enum ofp_version ofp_version,
+                               const struct ofputil_group_mod *gm,
+                               const struct ovs_list *new_buckets,
+                               int group_existed)
+{
+    struct ofpbuf *b;
+    struct ofp11_group_mod *ogm;
+    size_t start_ogm;
+    struct ofputil_bucket *bucket;
+
+    b = ofpraw_alloc(OFPRAW_OFPT11_GROUP_MOD, ofp_version, 0);
+    start_ogm = b->size;
+    ofpbuf_put_zeros(b, sizeof *ogm);
+
+    uint16_t command = gm->command;
+    const struct ovs_list *buckets = &gm->buckets;
+    switch (gm->command) {
+    case OFPGC15_INSERT_BUCKET:
+    case OFPGC15_REMOVE_BUCKET:
+        if (!new_buckets) {
+            bad_group_cmd(gm->command);
+        }
+        command = OFPGC11_MODIFY;
+        buckets = new_buckets;
+        break;
+
+    case OFPGC11_ADD_OR_MOD:
+        if (group_existed >= 0) {
+            command = group_existed ? OFPGC11_MODIFY : OFPGC11_ADD;
+        }
+        break;
+
+    default:
+        break;
+    }
+    LIST_FOR_EACH (bucket, list_node, buckets) {
+        ofputil_put_ofp11_bucket(bucket, b, ofp_version);
+    }
+    ogm = ofpbuf_at_assert(b, start_ogm, sizeof *ogm);
+    ogm->command = htons(command);
+    ogm->type = gm->type;
+    ogm->group_id = htonl(gm->group_id);
+
+    return b;
+}
+
+static struct ofpbuf *
+ofputil_encode_ofp15_group_mod(enum ofp_version ofp_version,
+                               const struct ofputil_group_mod *gm,
+                               int group_existed)
+{
+    struct ofpbuf *b;
+    struct ofp15_group_mod *ogm;
+    size_t start_ogm;
+    struct ofputil_bucket *bucket;
+    struct id_pool *bucket_ids = NULL;
+
+    b = ofpraw_alloc((ofp_version == OFP10_VERSION
+                      ? OFPRAW_NXT_GROUP_MOD
+                      : OFPRAW_OFPT15_GROUP_MOD), ofp_version, 0);
+    start_ogm = b->size;
+    ofpbuf_put_zeros(b, sizeof *ogm);
+
+    LIST_FOR_EACH (bucket, list_node, &gm->buckets) {
+        uint32_t bucket_id;
+
+        /* Generate a bucket id if none was supplied */
+        if (bucket->bucket_id > OFPG15_BUCKET_MAX) {
+            if (!bucket_ids) {
+                const struct ofputil_bucket *bkt;
+
+                bucket_ids = id_pool_create(0, OFPG15_BUCKET_MAX + 1);
+
+                /* Mark all bucket_ids that are present in gm
+                 * as used in the pool. */
+                LIST_FOR_EACH_REVERSE (bkt, list_node, &gm->buckets) {
+                    if (bkt == bucket) {
+                        break;
+                    }
+                    if (bkt->bucket_id <= OFPG15_BUCKET_MAX) {
+                        id_pool_add(bucket_ids, bkt->bucket_id);
+                    }
+                }
+            }
+
+            if (!id_pool_alloc_id(bucket_ids, &bucket_id)) {
+                OVS_NOT_REACHED();
+            }
+        } else {
+            bucket_id = bucket->bucket_id;
+        }
+
+        ofputil_put_ofp15_bucket(bucket, bucket_id, gm->type, b, ofp_version);
+    }
+    ogm = ofpbuf_at_assert(b, start_ogm, sizeof *ogm);
+    ogm->command = htons(gm->command != OFPGC11_ADD_OR_MOD || group_existed < 0
+                         ? gm->command
+                         : group_existed ? OFPGC11_MODIFY : OFPGC11_ADD);
+    ogm->type = gm->type;
+    ogm->group_id = htonl(gm->group_id);
+    ogm->command_bucket_id = htonl(gm->command_bucket_id);
+    ogm->bucket_array_len = htons(b->size - start_ogm - sizeof *ogm);
+
+    /* Add group properties */
+    if (gm->props.selection_method[0]) {
+        ofputil_put_group_prop_ntr_selection_method(ofp_version, &gm->props, b);
+    }
+
+    id_pool_destroy(bucket_ids);
+    return b;
+}
+
 /* Converts abstract group mod 'gm' into a message for OpenFlow version
- * 'ofp_version' and returns the message. */
+ * 'ofp_version' and returns the message.
+ *
+ * If 'new_buckets' is nonnull, it should point to the full set of new buckets
+ * that resulted from a OFPGC15_INSERT_BUCKET or OFPGC15_REMOVE_BUCKET command.
+ * It is needed to translate such group_mods into OpenFlow 1.1-1.4
+ * OFPGC11_MODIFY.  If it is null but needed for translation, then encoding the
+ * group_mod will print an error on stderr and exit().
+ *
+ * If 'group_existed' is nonnegative, it should specify whether the group
+ * existed before the command was executed.  If it is nonnegative, then it is
+ * used to translate OVS's nonstandard OFPGC11_ADD_OR_MOD into a standard
+ * command.  If it is negative, then OFPGC11_ADD_OR_MOD will be left as is. */
 struct ofpbuf *
 ofputil_encode_group_mod(enum ofp_version ofp_version,
-                         const struct ofputil_group_mod *gm)
+                         const struct ofputil_group_mod *gm,
+                         const struct ovs_list *new_buckets,
+                         int group_existed)
 {
 
     switch (ofp_version) {
@@ -2072,15 +2111,13 @@ ofputil_encode_group_mod(enum ofp_version ofp_version,
     case OFP12_VERSION:
     case OFP13_VERSION:
     case OFP14_VERSION:
-        if (gm->command > OFPGC11_DELETE && gm->command != OFPGC11_ADD_OR_MOD) {
-            bad_group_cmd(gm->command);
-        }
-        return ofputil_encode_ofp11_group_mod(ofp_version, gm);
+        return ofputil_encode_ofp11_group_mod(ofp_version, gm,
+                                              new_buckets, group_existed);
 
     case OFP10_VERSION:
     case OFP15_VERSION:
     case OFP16_VERSION:
-        return ofputil_encode_ofp15_group_mod(ofp_version, gm);
+        return ofputil_encode_ofp15_group_mod(ofp_version, gm, group_existed);
 
     default:
         OVS_NOT_REACHED();

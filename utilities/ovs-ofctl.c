@@ -2956,7 +2956,8 @@ bundle_group_mod__(const char *remote, struct ofputil_group_mod *gms,
 
     for (i = 0; i < n_gms; i++) {
         struct ofputil_group_mod *gm = &gms[i];
-        struct ofpbuf *request = ofputil_encode_group_mod(version, gm);
+        struct ofpbuf *request = ofputil_encode_group_mod(version, gm,
+                                                          NULL, -1);
 
         ovs_list_push_back(&requests, &request->list_node);
         ofputil_uninit_group_mod(gm);
@@ -2989,7 +2990,7 @@ ofctl_group_mod__(const char *remote, struct ofputil_group_mod *gms,
 
     for (i = 0; i < n_gms; i++) {
         gm = &gms[i];
-        request = ofputil_encode_group_mod(version, gm);
+        request = ofputil_encode_group_mod(version, gm, NULL, -1);
         transact_noreply(vconn, request);
         ofputil_uninit_group_mod(gm);
     }

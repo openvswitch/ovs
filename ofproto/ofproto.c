@@ -7393,10 +7393,13 @@ ofproto_group_mod_finish(struct ofproto *ofproto,
     remove_groups_postponed(&ogm->old_groups);
 
     if (req) {
-        struct ofputil_requestforward rf;
-        rf.xid = req->request->xid;
-        rf.reason = OFPRFR_GROUP_MOD;
-        rf.group_mod = &ogm->gm;
+        struct ofputil_requestforward rf = {
+            .xid = req->request->xid,
+            .reason = OFPRFR_GROUP_MOD,
+            .group_mod = &ogm->gm,
+            .new_buckets = new_group ? &new_group->buckets : NULL,
+            .group_existed = group_collection_n(&ogm->old_groups) > 0,
+        };
         connmgr_send_requestforward(ofproto->connmgr, req->ofconn, &rf);
     }
 }
