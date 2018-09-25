@@ -27,6 +27,9 @@
 #define __HAVE_FLOAT128 0
 #define __HAVE_FLOAT64X 0
 
+#ifdef HAVE_BITS_FLOATN_COMMON_H
+/* Introduced in glibc 2.27 */
 #include <bits/floatn-common.h>
+#endif
 
 #endif /* <bits/floatn.h> for sparse */
