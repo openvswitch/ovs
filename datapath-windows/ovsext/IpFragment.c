@@ -230,7 +230,7 @@ cleanup:
 /*
  *----------------------------------------------------------------------------
  * OvsProcessIpv4Fragment
- *     Reassemble the fragments once all the fragments are recieved and
+ *     Reassemble the fragments once all the fragments are received and
  *     return NDIS_STATUS_PENDING for the pending fragments
  *     XXX - Instead of copying NBls, Keep the NBLs in limbo state.
  *----------------------------------------------------------------------------
@@ -403,7 +403,7 @@ found:
             entry->tail = fragStorage;
         }
 
-        /*Update Maximum recieved Unit */
+        /*Update Maximum Receive Unit */
         entry->mru = entry->mru > (ETH_HEADER_LENGTH + ipHdrLen + payloadLen) ?
             entry->mru : (ETH_HEADER_LENGTH + ipHdrLen + payloadLen);
         entry->numFragments++;
