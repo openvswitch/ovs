@@ -432,7 +432,7 @@ pinctrl_handle_put_dhcp_opts(
     if (dp_packet_l4_size(pkt_in) < (UDP_HEADER_LEN +
         sizeof (struct dhcp_header) + sizeof(uint32_t) + 3)) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-        VLOG_WARN_RL(&rl, "Invalid or incomplete DHCP packet recieved");
+        VLOG_WARN_RL(&rl, "Invalid or incomplete DHCP packet received");
         goto exit;
     }
 

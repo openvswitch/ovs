@@ -5421,7 +5421,7 @@ AT_CHECK([strip_xids < stdout | sed -n 's/duration=[[0-9]]*\.[[0-9]]*s/duration=
  cookie=0x0, duration=0.0s, table=2, n_packets=1, n_bytes=106, idle_age=0, reg1=0x1 actions=output:2
 ])
 
-# The packet should be recieved by port 2
+# The packet should be received by port 2
 AT_CHECK([test 1 = `$PYTHON "$top_srcdir/utilities/ovs-pcap.in" p2-tx.pcap | wc -l`])
 
 OVS_VSWITCHD_STOP
@@ -5492,7 +5492,7 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 "$flow"], [0], [stdout])
 ovs-vsctl show
 ovs-ofctl dump-flows br0
 
-# The packet should be recieved by port 2 and not port 3
+# The packet should be received by port 2 and not port 3
 AT_CHECK([test 1 = `$PYTHON "$top_srcdir/utilities/ovs-pcap.in" p2-tx.pcap | wc -l`])
 AT_CHECK([test 0 = `$PYTHON "$top_srcdir/utilities/ovs-pcap.in" p3-tx.pcap | wc -l`])
 
