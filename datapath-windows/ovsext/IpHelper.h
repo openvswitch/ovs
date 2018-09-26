@@ -32,17 +32,44 @@
 
 #define OVS_IPNEIGH_TIMEOUT 100000000   // 10 s
 
+ /*
+ * This structure is used to define each adapter instance.
+ *
+ * Note:
+ * Only when the internal IP is configured and virtual
+ * internal port is connected, the IP helper request can be
+ * queued.
+ *
+ * We only keep internal IP for reference, it will not be used for determining
+ * SRC IP of the Tunnel.
+ *
+ * The lock must not raise the IRQL higher than PASSIVE_LEVEL in order for the
+ * route manipulation functions, i.e. GetBestRoute, to work.
+ */
+typedef struct _OVS_IPHELPER_INSTANCE
+{
+    LIST_ENTRY          link;
+
+    BOOLEAN             isIpConfigured;
+    UINT32              portNo;
+    GUID                netCfgId;
+    MIB_IF_ROW2         internalRow;
+    MIB_IPINTERFACE_ROW internalIPRow;
+    UINT32              ipAddress;
+
+    ERESOURCE           lock;
+} OVS_IPHELPER_INSTANCE, *POVS_IPHELPER_INSTANCE;
 
 typedef struct _OVS_IPNEIGH_ENTRY {
-    UINT8             macAddr[ETH_ADDR_LEN];
-    UINT16            refCount;
-    UINT32            ipAddr;
-    UINT32            pad;
-    UINT64            timeout;
-    LIST_ENTRY        link;
-    LIST_ENTRY        slink;
-    LIST_ENTRY        fwdList;
-    PVOID             context;
+    UINT8                       macAddr[ETH_ADDR_LEN];
+    UINT16                      refCount;
+    UINT32                      ipAddr;
+    UINT32                      pad;
+    UINT64                      timeout;
+    LIST_ENTRY                  link;
+    LIST_ENTRY                  slink;
+    LIST_ENTRY                  fwdList;
+    POVS_IPHELPER_INSTANCE      instance;
 } OVS_IPNEIGH_ENTRY, *POVS_IPNEIGH_ENTRY;
 
 typedef struct _OVS_IPFORWARD_ENTRY {
