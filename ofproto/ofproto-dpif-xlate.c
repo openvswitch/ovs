@@ -7239,6 +7239,7 @@ xlate_resume(struct ofproto_dpif *ofproto,
     dp_packet_use_const(&packet, pin->base.packet,
                         pin->base.packet_len);
 
+    pkt_metadata_from_flow(&packet.md, &pin->base.flow_metadata.flow);
     flow_extract(&packet, flow);
 
     struct xlate_in xin;
