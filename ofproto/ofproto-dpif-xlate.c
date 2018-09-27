@@ -3068,7 +3068,7 @@ compose_sample_action(struct xlate_ctx *ctx,
     /* When meter action is not required, avoid generate sample action
      * for 100% sampling rate.  */
     bool is_sample = probability < UINT32_MAX || meter_id != UINT32_MAX;
-    size_t sample_offset, actions_offset;
+    size_t sample_offset = 0, actions_offset = 0;
     if (is_sample) {
         sample_offset = nl_msg_start_nested(ctx->odp_actions,
                                             OVS_ACTION_ATTR_SAMPLE);
