@@ -98,7 +98,7 @@ For example, the following could represent a flow key corresponding to a TCP
 packet that arrived on vport 1::
 
     in_port(1), eth(src=e0:91:f5:21:d0:b2, dst=00:02:e3:0f:80:a4),
-    eth_type(0x0800), ipv4(src=172.16.0.20, dst=172.18.0.52, proto=17, tos=0,
+    eth_type(0x0800), ipv4(src=172.16.0.20, dst=172.18.0.52, proto=6, tos=0,
     frag=no), tcp(src=49163, dst=80)
 
 Often we ellipsize arguments not important to the discussion, e.g.::
