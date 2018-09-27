@@ -1761,9 +1761,9 @@ do_dump(struct jsonrpc *rpc, const char *database,
         for (i = 1; i < argc; i++) {
             node = shash_find(&tschema->columns, argv[i]);
             if (!node) {
-                ovs_fatal(0, "Table \"%s\" has no column %s.", argv[0], argv[1]);
+                ovs_fatal(0, "Table \"%s\" has no column %s.", argv[0], argv[i]);
             }
-            shash_add(&custom_columns, argv[1], node->data);
+            shash_add(&custom_columns, argv[i], node->data);
         }
     } else {
         tables = shash_sort(&schema->tables);
