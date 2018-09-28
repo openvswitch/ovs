@@ -11,7 +11,7 @@ Shows performance statistics for one or all pmd threads of the datapath
 \fIdp\fR. The special thread "main" sums up the statistics of every non pmd
 thread.
 
-The sum of "emc hits", "megaflow hits" and "miss" is the number of
+The sum of "emc hits", "smc hits", "megaflow hits" and "miss" is the number of
 packet lookups performed by the datapath. Beware that a recirculated packet
 experiences one additional lookup per recirculation, so there may be
 more lookups than forwarded packets in the datapath.
@@ -135,6 +135,7 @@ pmd thread numa_id 0 core_id 1:
   Rx packets:           2399607  (2381 Kpps, 848 cycles/pkt)
   Datapath passes:      3599415  (1.50 passes/pkt)
   - EMC hits:            336472  ( 9.3 %)
+  - SMC hits:                 0  ( 0.0 %)
   - Megaflow hits:      3262943  (90.7 %, 1.00 subtbl lookups/hit)
   - Upcalls:                  0  ( 0.0 %, 0.0 us/upcall)
   - Lost upcalls:             0  ( 0.0 %)
