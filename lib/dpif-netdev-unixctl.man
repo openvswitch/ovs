@@ -11,7 +11,7 @@ Shows performance statistics for one or all pmd threads of the datapath
 \fIdp\fR. The special thread "main" sums up the statistics of every non pmd
 thread.
 
-The sum of "emc hits", "masked hits" and "miss" is the number of
+The sum of "emc hits", "megaflow hits" and "miss" is the number of
 packet lookups performed by the datapath. Beware that a recirculated packet
 experiences one additional lookup per recirculation, so there may be
 more lookups than forwarded packets in the datapath.
