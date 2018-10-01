@@ -39,7 +39,9 @@
 #include <netpacket/packet.h>
 #include <net/if.h>
 #include <net/if_arp.h>
+#ifdef HAVE_IF_PACKET
 #include <net/if_packet.h>
+#endif
 #include <net/route.h>
 #include <poll.h>
 #include <stdlib.h>
