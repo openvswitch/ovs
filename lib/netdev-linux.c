@@ -3078,10 +3078,10 @@ netdev_linux_arp_lookup(const struct netdev *netdev,
     return retval;
 }
 
-static int
+static unsigned int
 nd_to_iff_flags(enum netdev_flags nd)
 {
-    int iff = 0;
+    unsigned int iff = 0;
     if (nd & NETDEV_UP) {
         iff |= IFF_UP;
     }
@@ -3095,7 +3095,7 @@ nd_to_iff_flags(enum netdev_flags nd)
 }
 
 static int
-iff_to_nd_flags(int iff)
+iff_to_nd_flags(unsigned int iff)
 {
     enum netdev_flags nd = 0;
     if (iff & IFF_UP) {
@@ -3115,7 +3115,7 @@ update_flags(struct netdev_linux *netdev, enum netdev_flags off,
              enum netdev_flags on, enum netdev_flags *old_flagsp)
     OVS_REQUIRES(netdev->mutex)
 {
-    int old_flags, new_flags;
+    unsigned int old_flags, new_flags;
     int error = 0;
 
     old_flags = netdev->ifi_flags;
