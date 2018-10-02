@@ -3235,7 +3235,6 @@ qos_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
             smap_init(&details);
             NETDEV_QUEUE_FOR_EACH (&queue_id, &details, &dump, iface->netdev) {
                 qos_unixctl_show_queue(queue_id, &details, iface, &ds);
-                smap_clear(&details);
             }
             smap_destroy(&details);
 
