@@ -51,6 +51,7 @@ Andrew Evans                       aevans@nicira.com
 Andrew Beekhof                     abeekhof@redhat.com
 Andrew Kampjes                     a.kampjes@gmail.com
 Andrew Lambeth                     wal@nicira.com
+Andre McCurdy                      armccurdy@gmail.com
 Andy Hill                          hillad@gmail.com
 Andy Southgate                     andy.southgate@citrix.com
 Andy Zhou                          azhou@ovn.org
