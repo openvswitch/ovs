@@ -2,7 +2,8 @@ OSS_FUZZ_TARGETS = \
 	tests/oss-fuzz/flow_extract_target \
 	tests/oss-fuzz/json_parser_target \
 	tests/oss-fuzz/ofp_print_target \
-	tests/oss-fuzz/expr_parse_target
+	tests/oss-fuzz/expr_parse_target \
+	tests/oss-fuzz/odp_target
 EXTRA_PROGRAMS += $(OSS_FUZZ_TARGETS)
 oss-fuzz-targets: $(OSS_FUZZ_TARGETS)
 
@@ -31,10 +32,18 @@ tests_oss_fuzz_expr_parse_target_LDADD = lib/libopenvswitch.la \
                                          ovn/lib/libovn.la
 tests_oss_fuzz_expr_parse_target_LDFLAGS = $(LIB_FUZZING_ENGINE) -lc++
 
+tests_oss_fuzz_odp_target_SOURCES = \
+        tests/oss-fuzz/odp_target.c \
+        tests/oss-fuzz/fuzzer.h
+tests_oss_fuzz_odp_target_LDADD = lib/libopenvswitch.la
+tests_oss_fuzz_odp_target_LDFLAGS = $(LIB_FUZZING_ENGINE) -lc++
+
 EXTRA_DIST += \
 	tests/oss-fuzz/config/flow_extract_target.options \
 	tests/oss-fuzz/config/json_parser_target.options \
 	tests/oss-fuzz/config/ofp_print_target.options \
 	tests/oss-fuzz/config/expr_parse_target.options \
+	tests/oss-fuzz/config/odp_target.options \
 	tests/oss-fuzz/config/ovs.dict \
-	tests/oss-fuzz/config/expr.dict
+	tests/oss-fuzz/config/expr.dict \
+	tests/oss-fuzz/config/odp.dict
