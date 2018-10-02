@@ -109,8 +109,10 @@ enum nx_hash_fields {
     NX_HASH_FIELDS_NW_SRC,
 
     /* Network destination address (NXM_OF_IP_DST) only. */
-    NX_HASH_FIELDS_NW_DST
+    NX_HASH_FIELDS_NW_DST,
 
+    /* Both network destination and source destination addresses. */
+    NX_HASH_FIELDS_SYMMETRIC_L3
 };
 
 /* NXT_PACKET_IN (analogous to OFPT_PACKET_IN).

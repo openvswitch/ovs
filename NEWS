@@ -11,6 +11,7 @@ Post-v2.10.0
    - DPDK:
      * Add option for simple round-robin based Rxq to PMD assignment.
        It can be set with pmd-rxq-assign.
+   - Add 'symmetric_l3' hash function.
 
 v2.10.0 - 18 Aug 2018
 ---------------------

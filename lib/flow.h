@@ -241,6 +241,7 @@ uint32_t flow_hash_symmetric_l4(const struct flow *flow, uint32_t basis);
 uint32_t flow_hash_symmetric_l2(const struct flow *flow, uint32_t basis);
 uint32_t flow_hash_symmetric_l3l4(const struct flow *flow, uint32_t basis,
                          bool inc_udp_ports );
+uint32_t flow_hash_symmetric_l3(const struct flow *flow, uint32_t basis);
 
 /* Initialize a flow with random fields that matter for nx_hash_fields. */
 void flow_random_hash_fields(struct flow *);

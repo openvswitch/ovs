@@ -382,6 +382,7 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
     hash = flow_hash_symmetric_l4(&flow, 0);
     hash = flow_hash_symmetric_l2(&flow, 0);
     hash = flow_hash_symmetric_l3l4(&flow, 0, NULL);
+    hash = flow_hash_symmetric_l3(&flow, 0);
     ignore(hash);
 
     /* Convert flow to match. */

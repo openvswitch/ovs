@@ -198,6 +198,8 @@ bundle_parse__(const char *s, const struct ofputil_port_map *port_map,
         bundle->fields = NX_HASH_FIELDS_NW_SRC;
     } else if (!strcasecmp(fields, "nw_dst")) {
         bundle->fields = NX_HASH_FIELDS_NW_DST;
+    } else if (!strcasecmp(fields, "symmetric_l3")) {
+        bundle->fields = NX_HASH_FIELDS_SYMMETRIC_L3;
     } else {
         return xasprintf("%s: unknown fields `%s'", s, fields);
     }

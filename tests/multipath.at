@@ -309,3 +309,274 @@ AT_CHECK([ovs-ofctl parse-flow 'actions=multipath(eth_src,50,modulo_n,1024,0,NXM
 ])
 AT_CLEANUP
 
+AT_SETUP([modulo_n multipath symmetric_l3 link selection])
+AT_CHECK([[ovstest test-multipath 'symmetric_l3,50,modulo_n,1,0,NXM_NX_REG0[]']],
+  [0], [ignore])
+# 1 ->  2: disruption=0.50 (perfect=0.50); stddev/expected=0.0000
+# 2 ->  3: disruption=0.66 (perfect=0.33); stddev/expected=0.0023
+# 3 ->  4: disruption=0.75 (perfect=0.25); stddev/expected=0.0061
+# 4 ->  5: disruption=0.80 (perfect=0.20); stddev/expected=0.0082
+# 5 ->  6: disruption=0.83 (perfect=0.17); stddev/expected=0.0083
+# 6 ->  7: disruption=0.86 (perfect=0.14); stddev/expected=0.0061
+# 7 ->  8: disruption=0.88 (perfect=0.12); stddev/expected=0.0103
+# 8 ->  9: disruption=0.89 (perfect=0.11); stddev/expected=0.0129
+# 9 -> 10: disruption=0.90 (perfect=0.10); stddev/expected=0.0091
+#10 -> 11: disruption=0.91 (perfect=0.09); stddev/expected=0.0114
+#11 -> 12: disruption=0.91 (perfect=0.08); stddev/expected=0.0073
+#12 -> 13: disruption=0.92 (perfect=0.08); stddev/expected=0.0165
+#13 -> 14: disruption=0.93 (perfect=0.07); stddev/expected=0.0149
+#14 -> 15: disruption=0.93 (perfect=0.07); stddev/expected=0.0127
+#15 -> 16: disruption=0.94 (perfect=0.06); stddev/expected=0.0142
+#16 -> 17: disruption=0.94 (perfect=0.06); stddev/expected=0.0098
+#17 -> 18: disruption=0.94 (perfect=0.06); stddev/expected=0.0159
+#18 -> 19: disruption=0.95 (perfect=0.05); stddev/expected=0.0121
+#19 -> 20: disruption=0.95 (perfect=0.05); stddev/expected=0.0195
+#20 -> 21: disruption=0.95 (perfect=0.05); stddev/expected=0.0120
+#21 -> 22: disruption=0.95 (perfect=0.05); stddev/expected=0.0181
+#22 -> 23: disruption=0.96 (perfect=0.04); stddev/expected=0.0222
+#23 -> 24: disruption=0.96 (perfect=0.04); stddev/expected=0.0164
+#24 -> 25: disruption=0.96 (perfect=0.04); stddev/expected=0.0146
+#25 -> 26: disruption=0.96 (perfect=0.04); stddev/expected=0.0175
+#26 -> 27: disruption=0.96 (perfect=0.04); stddev/expected=0.0231
+#27 -> 28: disruption=0.96 (perfect=0.04); stddev/expected=0.0172
+#28 -> 29: disruption=0.97 (perfect=0.03); stddev/expected=0.0211
+#29 -> 30: disruption=0.97 (perfect=0.03); stddev/expected=0.0213
+#30 -> 31: disruption=0.97 (perfect=0.03); stddev/expected=0.0253
+#31 -> 32: disruption=0.97 (perfect=0.03); stddev/expected=0.0208
+#32 -> 33: disruption=0.97 (perfect=0.03); stddev/expected=0.0223
+#33 -> 34: disruption=0.97 (perfect=0.03); stddev/expected=0.0215
+#34 -> 35: disruption=0.97 (perfect=0.03); stddev/expected=0.0201
+#35 -> 36: disruption=0.97 (perfect=0.03); stddev/expected=0.0220
+#36 -> 37: disruption=0.97 (perfect=0.03); stddev/expected=0.0221
+#37 -> 38: disruption=0.97 (perfect=0.03); stddev/expected=0.0201
+#38 -> 39: disruption=0.97 (perfect=0.03); stddev/expected=0.0215
+#39 -> 40: disruption=0.97 (perfect=0.03); stddev/expected=0.0271
+#40 -> 41: disruption=0.98 (perfect=0.02); stddev/expected=0.0272
+#41 -> 42: disruption=0.98 (perfect=0.02); stddev/expected=0.0208
+#42 -> 43: disruption=0.98 (perfect=0.02); stddev/expected=0.0226
+#43 -> 44: disruption=0.98 (perfect=0.02); stddev/expected=0.0264
+#44 -> 45: disruption=0.98 (perfect=0.02); stddev/expected=0.0233
+#45 -> 46: disruption=0.98 (perfect=0.02); stddev/expected=0.0285
+#46 -> 47: disruption=0.98 (perfect=0.02); stddev/expected=0.0246
+#47 -> 48: disruption=0.98 (perfect=0.02); stddev/expected=0.0282
+#48 -> 49: disruption=0.98 (perfect=0.02); stddev/expected=0.0233
+#49 -> 50: disruption=0.98 (perfect=0.02); stddev/expected=0.0197
+#50 -> 51: disruption=0.98 (perfect=0.02); stddev/expected=0.0317
+#51 -> 52: disruption=0.98 (perfect=0.02); stddev/expected=0.0283
+#52 -> 53: disruption=0.98 (perfect=0.02); stddev/expected=0.0282
+#53 -> 54: disruption=0.98 (perfect=0.02); stddev/expected=0.0273
+#54 -> 55: disruption=0.98 (perfect=0.02); stddev/expected=0.0283
+#55 -> 56: disruption=0.98 (perfect=0.02); stddev/expected=0.0288
+#56 -> 57: disruption=0.98 (perfect=0.02); stddev/expected=0.0263
+#57 -> 58: disruption=0.98 (perfect=0.02); stddev/expected=0.0339
+#58 -> 59: disruption=0.98 (perfect=0.02); stddev/expected=0.0262
+#59 -> 60: disruption=0.98 (perfect=0.02); stddev/expected=0.0309
+#60 -> 61: disruption=0.98 (perfect=0.02); stddev/expected=0.0285
+#61 -> 62: disruption=0.98 (perfect=0.02); stddev/expected=0.0288
+#62 -> 63: disruption=0.98 (perfect=0.02); stddev/expected=0.0298
+#63 -> 64: disruption=0.98 (perfect=0.02); stddev/expected=0.0277
+AT_CLEANUP
+
+AT_SETUP([hash_threshold multipath symmetric_l3 link selection])
+AT_CHECK([[ovstest test-multipath 'symmetric_l3,50,hash_threshold,1,0,NXM_NX_REG0[]']],
+  [0], [ignore])
+# 1 ->  2: disruption=0.50 (perfect=0.50); stddev/expected=0.0000
+# 2 ->  3: disruption=0.50 (perfect=0.33); stddev/expected=0.0056
+# 3 ->  4: disruption=0.50 (perfect=0.25); stddev/expected=0.0050
+# 4 ->  5: disruption=0.50 (perfect=0.20); stddev/expected=0.0074
+# 5 ->  6: disruption=0.50 (perfect=0.17); stddev/expected=0.0031
+# 6 ->  7: disruption=0.50 (perfect=0.14); stddev/expected=0.0078
+# 7 ->  8: disruption=0.50 (perfect=0.12); stddev/expected=0.0085
+# 8 ->  9: disruption=0.50 (perfect=0.11); stddev/expected=0.0093
+# 9 -> 10: disruption=0.50 (perfect=0.10); stddev/expected=0.0083
+#10 -> 11: disruption=0.51 (perfect=0.09); stddev/expected=0.0110
+#11 -> 12: disruption=0.50 (perfect=0.08); stddev/expected=0.0124
+#12 -> 13: disruption=0.50 (perfect=0.08); stddev/expected=0.0143
+#13 -> 14: disruption=0.50 (perfect=0.07); stddev/expected=0.0148
+#14 -> 15: disruption=0.50 (perfect=0.07); stddev/expected=0.0099
+#15 -> 16: disruption=0.50 (perfect=0.06); stddev/expected=0.0166
+#16 -> 17: disruption=0.50 (perfect=0.06); stddev/expected=0.0099
+#17 -> 18: disruption=0.50 (perfect=0.06); stddev/expected=0.0194
+#18 -> 19: disruption=0.50 (perfect=0.05); stddev/expected=0.0169
+#19 -> 20: disruption=0.50 (perfect=0.05); stddev/expected=0.0169
+#20 -> 21: disruption=0.50 (perfect=0.05); stddev/expected=0.0185
+#21 -> 22: disruption=0.50 (perfect=0.05); stddev/expected=0.0160
+#22 -> 23: disruption=0.50 (perfect=0.04); stddev/expected=0.0236
+#23 -> 24: disruption=0.50 (perfect=0.04); stddev/expected=0.0147
+#24 -> 25: disruption=0.50 (perfect=0.04); stddev/expected=0.0195
+#25 -> 26: disruption=0.50 (perfect=0.04); stddev/expected=0.0199
+#26 -> 27: disruption=0.50 (perfect=0.04); stddev/expected=0.0227
+#27 -> 28: disruption=0.50 (perfect=0.04); stddev/expected=0.0198
+#28 -> 29: disruption=0.50 (perfect=0.03); stddev/expected=0.0216
+#29 -> 30: disruption=0.50 (perfect=0.03); stddev/expected=0.0233
+#30 -> 31: disruption=0.50 (perfect=0.03); stddev/expected=0.0266
+#31 -> 32: disruption=0.51 (perfect=0.03); stddev/expected=0.0238
+#32 -> 33: disruption=0.50 (perfect=0.03); stddev/expected=0.0194
+#33 -> 34: disruption=0.50 (perfect=0.03); stddev/expected=0.0173
+#34 -> 35: disruption=0.50 (perfect=0.03); stddev/expected=0.0223
+#35 -> 36: disruption=0.50 (perfect=0.03); stddev/expected=0.0220
+#36 -> 37: disruption=0.50 (perfect=0.03); stddev/expected=0.0237
+#37 -> 38: disruption=0.50 (perfect=0.03); stddev/expected=0.0237
+#38 -> 39: disruption=0.50 (perfect=0.03); stddev/expected=0.0251
+#39 -> 40: disruption=0.50 (perfect=0.03); stddev/expected=0.0212
+#40 -> 41: disruption=0.50 (perfect=0.02); stddev/expected=0.0267
+#41 -> 42: disruption=0.50 (perfect=0.02); stddev/expected=0.0242
+#42 -> 43: disruption=0.50 (perfect=0.02); stddev/expected=0.0222
+#43 -> 44: disruption=0.50 (perfect=0.02); stddev/expected=0.0244
+#44 -> 45: disruption=0.50 (perfect=0.02); stddev/expected=0.0231
+#45 -> 46: disruption=0.50 (perfect=0.02); stddev/expected=0.0299
+#46 -> 47: disruption=0.50 (perfect=0.02); stddev/expected=0.0263
+#47 -> 48: disruption=0.50 (perfect=0.02); stddev/expected=0.0307
+#48 -> 49: disruption=0.50 (perfect=0.02); stddev/expected=0.0253
+#49 -> 50: disruption=0.50 (perfect=0.02); stddev/expected=0.0228
+#50 -> 51: disruption=0.50 (perfect=0.02); stddev/expected=0.0273
+#51 -> 52: disruption=0.50 (perfect=0.02); stddev/expected=0.0243
+#52 -> 53: disruption=0.50 (perfect=0.02); stddev/expected=0.0268
+#53 -> 54: disruption=0.50 (perfect=0.02); stddev/expected=0.0251
+#54 -> 55: disruption=0.50 (perfect=0.02); stddev/expected=0.0297
+#55 -> 56: disruption=0.50 (perfect=0.02); stddev/expected=0.0287
+#56 -> 57: disruption=0.50 (perfect=0.02); stddev/expected=0.0299
+#57 -> 58: disruption=0.50 (perfect=0.02); stddev/expected=0.0272
+#58 -> 59: disruption=0.50 (perfect=0.02); stddev/expected=0.0295
+#59 -> 60: disruption=0.50 (perfect=0.02); stddev/expected=0.0312
+#60 -> 61: disruption=0.50 (perfect=0.02); stddev/expected=0.0361
+#61 -> 62: disruption=0.50 (perfect=0.02); stddev/expected=0.0308
+#62 -> 63: disruption=0.50 (perfect=0.02); stddev/expected=0.0283
+#63 -> 64: disruption=0.50 (perfect=0.02); stddev/expected=0.0325
+AT_CLEANUP
+
+AT_SETUP([hrw multipath symmetric_l3 link selection])
+AT_CHECK([[ovstest test-multipath 'symmetric_l3,50,hrw,1,0,NXM_NX_REG0[]']],
+  [0], [ignore])
+# 1 ->  2: disruption=0.50 (perfect=0.50); stddev/expected=0.0000
+# 2 ->  3: disruption=0.33 (perfect=0.33); stddev/expected=0.0033
+# 3 ->  4: disruption=0.25 (perfect=0.25); stddev/expected=0.0076
+# 4 ->  5: disruption=0.20 (perfect=0.20); stddev/expected=0.0059
+# 5 ->  6: disruption=0.17 (perfect=0.17); stddev/expected=0.0030
+# 6 ->  7: disruption=0.14 (perfect=0.14); stddev/expected=0.0124
+# 7 ->  8: disruption=0.13 (perfect=0.12); stddev/expected=0.0072
+# 8 ->  9: disruption=0.11 (perfect=0.11); stddev/expected=0.0074
+# 9 -> 10: disruption=0.10 (perfect=0.10); stddev/expected=0.0161
+#10 -> 11: disruption=0.09 (perfect=0.09); stddev/expected=0.0055
+#11 -> 12: disruption=0.08 (perfect=0.08); stddev/expected=0.0092
+#12 -> 13: disruption=0.08 (perfect=0.08); stddev/expected=0.0134
+#13 -> 14: disruption=0.07 (perfect=0.07); stddev/expected=0.0124
+#14 -> 15: disruption=0.07 (perfect=0.07); stddev/expected=0.0156
+#15 -> 16: disruption=0.06 (perfect=0.06); stddev/expected=0.0182
+#16 -> 17: disruption=0.06 (perfect=0.06); stddev/expected=0.0150
+#17 -> 18: disruption=0.06 (perfect=0.06); stddev/expected=0.0109
+#18 -> 19: disruption=0.05 (perfect=0.05); stddev/expected=0.0162
+#19 -> 20: disruption=0.05 (perfect=0.05); stddev/expected=0.0149
+#20 -> 21: disruption=0.05 (perfect=0.05); stddev/expected=0.0148
+#21 -> 22: disruption=0.05 (perfect=0.05); stddev/expected=0.0230
+#22 -> 23: disruption=0.04 (perfect=0.04); stddev/expected=0.0208
+#23 -> 24: disruption=0.04 (perfect=0.04); stddev/expected=0.0210
+#24 -> 25: disruption=0.04 (perfect=0.04); stddev/expected=0.0228
+#25 -> 26: disruption=0.04 (perfect=0.04); stddev/expected=0.0155
+#26 -> 27: disruption=0.04 (perfect=0.04); stddev/expected=0.0208
+#27 -> 28: disruption=0.04 (perfect=0.04); stddev/expected=0.0218
+#28 -> 29: disruption=0.03 (perfect=0.03); stddev/expected=0.0193
+#29 -> 30: disruption=0.03 (perfect=0.03); stddev/expected=0.0169
+#30 -> 31: disruption=0.03 (perfect=0.03); stddev/expected=0.0163
+#31 -> 32: disruption=0.03 (perfect=0.03); stddev/expected=0.0192
+#32 -> 33: disruption=0.03 (perfect=0.03); stddev/expected=0.0212
+#33 -> 34: disruption=0.03 (perfect=0.03); stddev/expected=0.0240
+#34 -> 35: disruption=0.03 (perfect=0.03); stddev/expected=0.0227
+#35 -> 36: disruption=0.03 (perfect=0.03); stddev/expected=0.0230
+#36 -> 37: disruption=0.03 (perfect=0.03); stddev/expected=0.0183
+#37 -> 38: disruption=0.03 (perfect=0.03); stddev/expected=0.0227
+#38 -> 39: disruption=0.03 (perfect=0.03); stddev/expected=0.0255
+#39 -> 40: disruption=0.03 (perfect=0.03); stddev/expected=0.0247
+#40 -> 41: disruption=0.02 (perfect=0.02); stddev/expected=0.0228
+#41 -> 42: disruption=0.02 (perfect=0.02); stddev/expected=0.0247
+#42 -> 43: disruption=0.02 (perfect=0.02); stddev/expected=0.0265
+#43 -> 44: disruption=0.02 (perfect=0.02); stddev/expected=0.0250
+#44 -> 45: disruption=0.02 (perfect=0.02); stddev/expected=0.0258
+#45 -> 46: disruption=0.02 (perfect=0.02); stddev/expected=0.0196
+#46 -> 47: disruption=0.02 (perfect=0.02); stddev/expected=0.0235
+#47 -> 48: disruption=0.02 (perfect=0.02); stddev/expected=0.0314
+#48 -> 49: disruption=0.02 (perfect=0.02); stddev/expected=0.0293
+#49 -> 50: disruption=0.02 (perfect=0.02); stddev/expected=0.0241
+#50 -> 51: disruption=0.02 (perfect=0.02); stddev/expected=0.0291
+#51 -> 52: disruption=0.02 (perfect=0.02); stddev/expected=0.0304
+#52 -> 53: disruption=0.02 (perfect=0.02); stddev/expected=0.0307
+#53 -> 54: disruption=0.02 (perfect=0.02); stddev/expected=0.0250
+#54 -> 55: disruption=0.02 (perfect=0.02); stddev/expected=0.0290
+#55 -> 56: disruption=0.02 (perfect=0.02); stddev/expected=0.0284
+#56 -> 57: disruption=0.02 (perfect=0.02); stddev/expected=0.0272
+#57 -> 58: disruption=0.02 (perfect=0.02); stddev/expected=0.0272
+#58 -> 59: disruption=0.02 (perfect=0.02); stddev/expected=0.0304
+#59 -> 60: disruption=0.02 (perfect=0.02); stddev/expected=0.0345
+#60 -> 61: disruption=0.02 (perfect=0.02); stddev/expected=0.0251
+#61 -> 62: disruption=0.02 (perfect=0.02); stddev/expected=0.0249
+#62 -> 63: disruption=0.02 (perfect=0.02); stddev/expected=0.0285
+#63 -> 64: disruption=0.02 (perfect=0.02); stddev/expected=0.0285
+AT_CLEANUP
+
+AT_SETUP([iter_hash symmetric_l3 multipath link selection])
+AT_CHECK([[ovstest test-multipath 'symmetric_l3,50,iter_hash,1,0,NXM_NX_REG0[]']],
+  [0], [ignore])
+# 1 ->  2: disruption=0.50 (perfect=0.50); stddev/expected=0.0000
+# 2 ->  3: disruption=0.42 (perfect=0.33); stddev/expected=0.0034
+# 3 ->  4: disruption=0.25 (perfect=0.25); stddev/expected=0.0082
+# 4 ->  5: disruption=0.42 (perfect=0.20); stddev/expected=0.0073
+# 5 ->  6: disruption=0.17 (perfect=0.17); stddev/expected=0.0040
+# 6 ->  7: disruption=0.14 (perfect=0.14); stddev/expected=0.0069
+# 7 ->  8: disruption=0.13 (perfect=0.12); stddev/expected=0.0131
+# 8 ->  9: disruption=0.45 (perfect=0.11); stddev/expected=0.0093
+# 9 -> 10: disruption=0.10 (perfect=0.10); stddev/expected=0.0127
+#10 -> 11: disruption=0.09 (perfect=0.09); stddev/expected=0.0134
+#11 -> 12: disruption=0.08 (perfect=0.08); stddev/expected=0.0101
+#12 -> 13: disruption=0.08 (perfect=0.08); stddev/expected=0.0127
+#13 -> 14: disruption=0.07 (perfect=0.07); stddev/expected=0.0115
+#14 -> 15: disruption=0.07 (perfect=0.07); stddev/expected=0.0100
+#15 -> 16: disruption=0.06 (perfect=0.06); stddev/expected=0.0111
+#16 -> 17: disruption=0.47 (perfect=0.06); stddev/expected=0.0137
+#17 -> 18: disruption=0.05 (perfect=0.06); stddev/expected=0.0204
+#18 -> 19: disruption=0.05 (perfect=0.05); stddev/expected=0.0082
+#19 -> 20: disruption=0.05 (perfect=0.05); stddev/expected=0.0124
+#20 -> 21: disruption=0.05 (perfect=0.05); stddev/expected=0.0203
+#21 -> 22: disruption=0.05 (perfect=0.05); stddev/expected=0.0196
+#22 -> 23: disruption=0.04 (perfect=0.04); stddev/expected=0.0183
+#23 -> 24: disruption=0.04 (perfect=0.04); stddev/expected=0.0212
+#24 -> 25: disruption=0.04 (perfect=0.04); stddev/expected=0.0176
+#25 -> 26: disruption=0.04 (perfect=0.04); stddev/expected=0.0173
+#26 -> 27: disruption=0.04 (perfect=0.04); stddev/expected=0.0159
+#27 -> 28: disruption=0.03 (perfect=0.04); stddev/expected=0.0168
+#28 -> 29: disruption=0.03 (perfect=0.03); stddev/expected=0.0190
+#29 -> 30: disruption=0.03 (perfect=0.03); stddev/expected=0.0305
+#30 -> 31: disruption=0.03 (perfect=0.03); stddev/expected=0.0282
+#31 -> 32: disruption=0.03 (perfect=0.03); stddev/expected=0.0255
+#32 -> 33: disruption=0.49 (perfect=0.03); stddev/expected=0.0220
+#33 -> 34: disruption=0.03 (perfect=0.03); stddev/expected=0.0188
+#34 -> 35: disruption=0.03 (perfect=0.03); stddev/expected=0.0203
+#35 -> 36: disruption=0.03 (perfect=0.03); stddev/expected=0.0207
+#36 -> 37: disruption=0.03 (perfect=0.03); stddev/expected=0.0261
+#37 -> 38: disruption=0.03 (perfect=0.03); stddev/expected=0.0226
+#38 -> 39: disruption=0.03 (perfect=0.03); stddev/expected=0.0233
+#39 -> 40: disruption=0.03 (perfect=0.03); stddev/expected=0.0161
+#40 -> 41: disruption=0.03 (perfect=0.02); stddev/expected=0.0303
+#41 -> 42: disruption=0.02 (perfect=0.02); stddev/expected=0.0249
+#42 -> 43: disruption=0.02 (perfect=0.02); stddev/expected=0.0262
+#43 -> 44: disruption=0.02 (perfect=0.02); stddev/expected=0.0260
+#44 -> 45: disruption=0.02 (perfect=0.02); stddev/expected=0.0266
+#45 -> 46: disruption=0.02 (perfect=0.02); stddev/expected=0.0287
+#46 -> 47: disruption=0.02 (perfect=0.02); stddev/expected=0.0213
+#47 -> 48: disruption=0.02 (perfect=0.02); stddev/expected=0.0301
+#48 -> 49: disruption=0.02 (perfect=0.02); stddev/expected=0.0230
+#49 -> 50: disruption=0.02 (perfect=0.02); stddev/expected=0.0248
+#50 -> 51: disruption=0.02 (perfect=0.02); stddev/expected=0.0203
+#51 -> 52: disruption=0.02 (perfect=0.02); stddev/expected=0.0235
+#52 -> 53: disruption=0.02 (perfect=0.02); stddev/expected=0.0340
+#53 -> 54: disruption=0.02 (perfect=0.02); stddev/expected=0.0264
+#54 -> 55: disruption=0.02 (perfect=0.02); stddev/expected=0.0292
+#55 -> 56: disruption=0.02 (perfect=0.02); stddev/expected=0.0246
+#56 -> 57: disruption=0.02 (perfect=0.02); stddev/expected=0.0270
+#57 -> 58: disruption=0.02 (perfect=0.02); stddev/expected=0.0299
+#58 -> 59: disruption=0.02 (perfect=0.02); stddev/expected=0.0307
+#59 -> 60: disruption=0.02 (perfect=0.02); stddev/expected=0.0275
+#60 -> 61: disruption=0.02 (perfect=0.02); stddev/expected=0.0289
+#61 -> 62: disruption=0.02 (perfect=0.02); stddev/expected=0.0292
+#62 -> 63: disruption=0.02 (perfect=0.02); stddev/expected=0.0292
+#63 -> 64: disruption=0.02 (perfect=0.02); stddev/expected=0.0307
+AT_CLEANUP

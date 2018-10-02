@@ -1421,6 +1421,8 @@ and IPv6, which hash to a constant zero.
 Like \fBsymmetric_l3l4+udp\fR, but UDP ports are included in the hash.
 This is a more effective hash when asymmetric UDP protocols such as
 VXLAN are not a consideration.
+.IP \fBsymmetric_l3\fR
+Hashes network source address and network destination address.
 .IP \fBnw_src\fR
 Hashes Network source address only.
 .IP \fBnw_dst\fR
