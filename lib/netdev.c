@@ -1801,8 +1801,9 @@ bool
 netdev_queue_dump_next(struct netdev_queue_dump *dump,
                        unsigned int *queue_id, struct smap *details)
 {
-    const struct netdev *netdev = dump->netdev;
+    smap_clear(details);
 
+    const struct netdev *netdev = dump->netdev;
     if (dump->error) {
         return false;
     }
