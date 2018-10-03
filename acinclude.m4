@@ -906,17 +906,6 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   fi
 ])
 
-dnl Checks for net/if_packet.h.
-AC_DEFUN([OVS_CHECK_IF_PACKET],
-  [AC_CHECK_HEADER([net/if_packet.h],
-                   [HAVE_IF_PACKET=yes],
-                   [HAVE_IF_PACKET=no])
-   AM_CONDITIONAL([HAVE_IF_PACKET], [test "$HAVE_IF_PACKET" = yes])
-   if test "$HAVE_IF_PACKET" = yes; then
-      AC_DEFINE([HAVE_IF_PACKET], [1],
-                [Define to 1 if net/if_packet.h is available.])
-   fi])
-
 dnl Checks for net/if_dl.h.
 dnl
 dnl (We use this as a proxy for checking whether we're building on FreeBSD
