@@ -130,7 +130,7 @@ between one and the other.
 
 2. Build a docker container image::
 
-     $ docker build -t faucet/faucet .
+     $ docker build -t faucet/faucet -f Dockerfile.faucet .
 
    This will take a few minutes.
 
