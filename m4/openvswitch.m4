@@ -371,7 +371,7 @@ else:
             fi
           done
         done
-        if test $ovs_cv_python2 != no && test -x "$ovs_cv_python2"; then
+        if test "$ovs_cv_python2" != no && test -x "$ovs_cv_python2"; then
           if ! "$ovs_cv_python2" -c 'import six ; six.moves.range' >&AS_MESSAGE_LOG_FD 2>&1; then
             ovs_cv_python2=no
             AC_MSG_WARN([Missing Python six library or version too old.])
@@ -380,7 +380,7 @@ else:
       fi])
    AC_SUBST([HAVE_PYTHON2])
    AM_MISSING_PROG([PYTHON2], [python2])
-   if test $ovs_cv_python2 != no; then
+   if test "$ovs_cv_python2" != no; then
      PYTHON2=$ovs_cv_python2
      HAVE_PYTHON2=yes
    else
@@ -412,7 +412,7 @@ else:
             fi
           done
         done
-        if test $ovs_cv_python3 != no; then
+        if test "$ovs_cv_python3" != no; then
           if test -x "$ovs_cv_python3" && ! "$ovs_cv_python3" -c 'import six' >/dev/null 2>&1; then
             ovs_cv_python3=no
             AC_MSG_WARN([Missing Python six library.])
@@ -421,7 +421,7 @@ else:
       fi])
    AC_SUBST([HAVE_PYTHON3])
    AM_MISSING_PROG([PYTHON3], [python3])
-   if test $ovs_cv_python3 != no; then
+   if test "$ovs_cv_python3" != no; then
      PYTHON3=$ovs_cv_python3
      HAVE_PYTHON3=yes
    else
@@ -439,9 +439,9 @@ AC_DEFUN([OVS_CHECK_PYTHON],
         ovs_cv_python=$PYTHON
       else
         ovs_cv_python=no
-        if test $ovs_cv_python2 != no; then
+        if test "$ovs_cv_python2" != no; then
           ovs_cv_python=$ovs_cv_python2
-        elif test $ovs_cv_python3 != no; then
+        elif test "$ovs_cv_python3" != no; then
           ovs_cv_python=$ovs_cv_python3
         else
           AC_MSG_ERROR([Missing Python.])
