@@ -656,6 +656,19 @@ bfd_put_packet(struct bfd *bfd, struct dp_packet *p,
     ovs_mutex_unlock(&mutex);
 }
 
+static void
+unwildcard_tp_dst(const struct flow *flow, struct flow_wildcards *wc)
+{
+    uint64_t diff = BFD_DEST_PORT ^ ntohs(flow->tp_dst);
+    if (diff) {
+        unsigned int eqbits = raw_clz64(diff << 48 | UINT64_C(1) << 47);
+        /* Set mask including the first mismatching bit. */
+        wc->masks.tp_dst |= htons((uint16_t)~0u << (16 - eqbits -1));
+    } else {
+        memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
+    }
+}
+
 bool
 bfd_should_process_flow(const struct bfd *bfd_, const struct flow *flow,
                         struct flow_wildcards *wc)
@@ -673,7 +686,7 @@ bfd_should_process_flow(const struct bfd *bfd_, const struct flow *flow,
     if (flow->dl_type == htons(ETH_TYPE_IP)) {
         memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
         if (flow->nw_proto == IPPROTO_UDP && !(flow->nw_frag & FLOW_NW_FRAG_LATER)) {
-            memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
+            unwildcard_tp_dst(flow, wc);
             if (flow->tp_dst == htons(BFD_DEST_PORT)) {
                 bool check_tnl_key;
 
