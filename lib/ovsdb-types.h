@@ -53,6 +53,27 @@ enum ovsdb_ref_type {
     OVSDB_REF_WEAK              /* Delete reference if target disappears. */
 };
 
+struct ovsdb_integer_constraints {
+    int64_t min;        /* minInteger or INT64_MIN. */
+    int64_t max;        /* maxInteger or INT64_MAX. */
+};
+
+struct ovsdb_real_constraints {
+    double min;         /* minReal or -DBL_MAX. */
+    double max;         /* minReal or DBL_MAX. */
+};
+
+struct ovsdb_string_constraints {
+    unsigned int minLen; /* minLength or 0. */
+    unsigned int maxLen; /* maxLength or UINT_MAX. */
+};
+
+struct ovsdb_uuid_constraints {
+    char *refTableName; /* Name of referenced table, or NULL. */
+    struct ovsdb_table *refTable; /* Referenced table, if available. */
+    enum ovsdb_ref_type refType;  /* Reference type. */
+};
+
 struct ovsdb_base_type {
     enum ovsdb_atomic_type type;
 
@@ -61,28 +82,11 @@ struct ovsdb_base_type {
     struct ovsdb_datum *enum_;
 
     union {
-        struct ovsdb_integer_constraints {
-            int64_t min;        /* minInteger or INT64_MIN. */
-            int64_t max;        /* maxInteger or INT64_MAX. */
-        } integer;
-
-        struct ovsdb_real_constraints {
-            double min;         /* minReal or -DBL_MAX. */
-            double max;         /* minReal or DBL_MAX. */
-        } real;
-
+        struct ovsdb_integer_constraints integer;
+        struct ovsdb_real_constraints real;
         /* No constraints for Boolean types. */
-
-        struct ovsdb_string_constraints {
-            unsigned int minLen; /* minLength or 0. */
-            unsigned int maxLen; /* maxLength or UINT_MAX. */
-        } string;
-
-        struct ovsdb_uuid_constraints {
-            char *refTableName; /* Name of referenced table, or NULL. */
-            struct ovsdb_table *refTable; /* Referenced table, if available. */
-            enum ovsdb_ref_type refType;  /* Reference type. */
-        } uuid;
+        struct ovsdb_string_constraints string;
+        struct ovsdb_uuid_constraints uuid;
     };
 };
 
