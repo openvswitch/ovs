@@ -576,6 +576,7 @@ parse_nsh(const void **datap, size_t *sizep, struct ovs_key_nsh *key)
             break;
         default:
             /* We don't parse other context headers yet. */
+            memset(key->context, 0, sizeof(key->context));
             break;
     }
 
