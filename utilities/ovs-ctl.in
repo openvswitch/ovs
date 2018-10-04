@@ -38,7 +38,11 @@ insert_mod_if_required () {
 set_hostname () {
     # 'hostname -f' needs network connectivity to work.  So we should
     # call this only after ovs-vswitchd is running.
-    ovs_vsctl set Open_vSwitch . external-ids:hostname="$(hostname -f)"
+    hn="$(hostname -f)"
+    if test X$FULL_HOSTNAME = Xno; then
+        hn="$(hostname)"
+    fi
+    ovs_vsctl set Open_vSwitch . external-ids:hostname="$hn"
 }
 
 set_system_ids () {
@@ -289,6 +293,8 @@ enable_protocol () {
 set_defaults () {
     SYSTEM_ID=
 
+    FULL_HOSTNAME=yes
+
     DELETE_BRIDGES=no
     DELETE_TRANSIENT_PORTS=no
 
@@ -374,6 +380,7 @@ Less important options for "start", "restart" and "force-reload-kmod":
   --no-mlockall                  do not lock all of ovs-vswitchd into memory
   --ovsdb-server-priority=NICE   set ovsdb-server's niceness (default: $OVSDB_SERVER_PRIORITY)
   --ovs-vswitchd-priority=NICE   set ovs-vswitchd's niceness (default: $OVS_VSWITCHD_PRIORITY)
+  --no-full-hostname             set short hostname instead of full hostname
 
 Debugging options for "start", "restart" and "force-reload-kmod":
   --ovsdb-server-wrapper=WRAPPER
