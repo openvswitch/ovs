@@ -855,7 +855,7 @@ class Row(object):
                     if removes is not None:
                         for key in removes:
                             if key not in (inserts or {}):
-                                del dmap[key]
+                                dmap.pop(key, None)
                     datum = data.Datum.from_python(column.type, dmap,
                                                    _row_to_uuid)
             else:
