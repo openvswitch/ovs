@@ -2359,6 +2359,9 @@ add_tracked_change_for_references(struct ovsdb_idl_row *row)
             ovsdb_idl_track_is_set(row->table)) {
         ovs_list_push_back(&row->table->track_list,
                            &row->track_node);
+        row->change_seqno[OVSDB_IDL_CHANGE_MODIFY]
+            = row->table->change_seqno[OVSDB_IDL_CHANGE_MODIFY]
+            = row->table->db->change_seqno + 1;
 
         const struct ovsdb_idl_arc *arc;
         LIST_FOR_EACH (arc, dst_node, &row->dst_arcs) {
