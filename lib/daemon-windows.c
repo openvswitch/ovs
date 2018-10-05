@@ -82,6 +82,14 @@ daemon_usage(void)
                                    "unexpected failure. \n");
 }
 
+/* Sets up a following call to service_start() to detach from the foreground
+ * session, running this process in the background.  */
+void
+set_detach(void)
+{
+    detach = true;
+}
+
 /* Registers the call-back and configures the actions in case of a failure
  * with the Windows services manager. */
 void
@@ -357,7 +365,7 @@ detach_process(int argc, char *argv[])
 
     /* We are only interested in the '--detach' and '--pipe-handle'. */
     for (i = 0; i < argc; i ++) {
-        if (!strcmp(argv[i], "--detach")) {
+        if (!detach && !strcmp(argv[i], "--detach")) {
             detach = true;
         } else if (!strncmp(argv[i], "--pipe-handle", 13)) {
             /* If running as a child, return. */
