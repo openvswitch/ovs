@@ -191,7 +191,7 @@ static void
 test_pcap(struct ovs_cmdl_context *ctx)
 {
     size_t total_count, batch_size_;
-    FILE *pcap;
+    struct pcap_file *pcap;
     int err = 0;
 
     pcap = ovs_pcap_open(ctx->argv[1], "rb");
@@ -245,7 +245,7 @@ test_pcap(struct ovs_cmdl_context *ctx)
         dp_packet_delete_batch(batch, true);
     }
     conntrack_destroy(&ct);
-    fclose(pcap);
+    ovs_pcap_close(pcap);
 }
 
 static const struct ovs_cmdl_command commands[] = {

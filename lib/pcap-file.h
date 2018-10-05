@@ -21,13 +21,17 @@
 
 struct flow;
 struct dp_packet;
+struct pcap_file;
 
 /* PCAP file reading and writing. */
-FILE *ovs_pcap_open(const char *file_name, const char *mode);
-int ovs_pcap_read_header(FILE *);
-void ovs_pcap_write_header(FILE *);
-int ovs_pcap_read(FILE *, struct dp_packet **, long long int *when);
-void ovs_pcap_write(FILE *, struct dp_packet *);
+struct pcap_file *ovs_pcap_open(const char *file_name, const char *mode);
+struct pcap_file *ovs_pcap_stdout(void);
+int ovs_pcap_read_header(struct pcap_file *);
+void ovs_pcap_write_header(struct pcap_file *);
+int ovs_pcap_read(struct pcap_file *, struct dp_packet **,
+                  long long int *when);
+void ovs_pcap_write(struct pcap_file *, struct dp_packet *);
+void ovs_pcap_close(struct pcap_file *);
 
 /* Extracting TCP stream data from an Ethernet packet capture. */
 

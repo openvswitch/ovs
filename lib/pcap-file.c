@@ -34,6 +34,16 @@
 
 VLOG_DEFINE_THIS_MODULE(pcap);
 
+enum ts_resolution {
+    PCAP_USEC,
+    PCAP_NSEC,
+};
+
+struct pcap_file {
+    FILE *file;
+    enum ts_resolution resolution;
+};
+
 struct pcap_hdr {
     uint32_t magic_number;   /* magic number */
     uint16_t version_major;  /* major version number */
@@ -47,25 +57,27 @@ BUILD_ASSERT_DECL(sizeof(struct pcap_hdr) == 24);
 
 struct pcaprec_hdr {
     uint32_t ts_sec;         /* timestamp seconds */
-    uint32_t ts_usec;        /* timestamp microseconds */
+    uint32_t ts_subsec;      /* timestamp subseconds */
     uint32_t incl_len;       /* number of octets of packet saved in file */
     uint32_t orig_len;       /* actual length of packet */
 };
 BUILD_ASSERT_DECL(sizeof(struct pcaprec_hdr) == 16);
 
-FILE *
+struct pcap_file *
 ovs_pcap_open(const char *file_name, const char *mode)
 {
     struct stat s;
-    FILE *file;
+    struct pcap_file *p_file;
     int error;
 
     ovs_assert(!strcmp(mode, "rb") ||
                !strcmp(mode, "wb") ||
                !strcmp(mode, "ab"));
 
-    file = fopen(file_name, mode);
-    if (file == NULL) {
+    p_file = xmalloc(sizeof *p_file);
+    p_file->file = fopen(file_name, mode);
+    p_file->resolution = PCAP_USEC;
+    if (p_file->file == NULL) {
         VLOG_WARN("%s: failed to open pcap file for %s (%s)", file_name,
                   (mode[0] == 'r' ? "reading"
                    : mode[0] == 'w' ? "writing"
@@ -76,49 +88,64 @@ ovs_pcap_open(const char *file_name, const char *mode)
 
     switch (mode[0]) {
     case 'r':
-        error = ovs_pcap_read_header(file);
+        error = ovs_pcap_read_header(p_file);
         if (error) {
             errno = error;
-            fclose(file);
+            ovs_pcap_close(p_file);
             return NULL;
         }
         break;
 
     case 'w':
-        ovs_pcap_write_header(file);
+        ovs_pcap_write_header(p_file);
         break;
 
     case 'a':
-        if (!fstat(fileno(file), &s) && !s.st_size) {
-            ovs_pcap_write_header(file);
+        if (!fstat(fileno(p_file->file), &s) && !s.st_size) {
+            ovs_pcap_write_header(p_file);
         }
         break;
 
     default:
         OVS_NOT_REACHED();
     }
-    return file;
+
+    return p_file;
+}
+
+struct pcap_file *
+ovs_pcap_stdout(void)
+{
+    struct pcap_file *p_file = xmalloc(sizeof *p_file);
+    p_file->file = stdout;
+    return p_file;
 }
 
 int
-ovs_pcap_read_header(FILE *file)
+ovs_pcap_read_header(struct pcap_file *p_file)
 {
     struct pcap_hdr ph;
-    if (fread(&ph, sizeof ph, 1, file) != 1) {
-        int error = ferror(file) ? errno : EOF;
+    if (fread(&ph, sizeof ph, 1, p_file->file) != 1) {
+        int error = ferror(p_file->file) ? errno : EOF;
         VLOG_WARN("failed to read pcap header: %s", ovs_retval_to_string(error));
         return error;
     }
-    if (ph.magic_number != 0xa1b2c3d4 && ph.magic_number != 0xd4c3b2a1) {
+    if (ph.magic_number == 0xa1b2c3d4 || ph.magic_number == 0xd4c3b2a1) {
+        p_file->resolution = PCAP_USEC;
+    } else if (ph.magic_number == 0xa1b23c4d ||
+               ph.magic_number == 0x4d3cb2a1) {
+        p_file->resolution = PCAP_NSEC;
+    } else {
         VLOG_WARN("bad magic 0x%08"PRIx32" reading pcap file "
-                  "(expected 0xa1b2c3d4 or 0xd4c3b2a1)", ph.magic_number);
+                  "(expected 0xa1b2c3d4, 0xa1b23c4d, 0xd4c3b2a1, "
+                  "or 0x4d3cb2a1)", ph.magic_number);
         return EPROTO;
     }
     return 0;
 }
 
 void
-ovs_pcap_write_header(FILE *file)
+ovs_pcap_write_header(struct pcap_file *p_file)
 {
     /* The pcap reader is responsible for figuring out endianness based on the
      * magic number, so the lack of htonX calls here is intentional. */
@@ -130,12 +157,13 @@ ovs_pcap_write_header(FILE *file)
     ph.sigfigs = 0;
     ph.snaplen = 1518;
     ph.network = 1;             /* Ethernet */
-    ignore(fwrite(&ph, sizeof ph, 1, file));
-    fflush(file);
+    ignore(fwrite(&ph, sizeof ph, 1, p_file->file));
+    fflush(p_file->file);
 }
 
 int
-ovs_pcap_read(FILE *file, struct dp_packet **bufp, long long int *when)
+ovs_pcap_read(struct pcap_file *p_file, struct dp_packet **bufp,
+              long long int *when)
 {
     struct pcaprec_hdr prh;
     struct dp_packet *buf;
@@ -146,8 +174,8 @@ ovs_pcap_read(FILE *file, struct dp_packet **bufp, long long int *when)
     *bufp = NULL;
 
     /* Read header. */
-    if (fread(&prh, sizeof prh, 1, file) != 1) {
-        if (ferror(file)) {
+    if (fread(&prh, sizeof prh, 1, p_file->file) != 1) {
+        if (ferror(p_file->file)) {
             int error = errno;
             VLOG_WARN("failed to read pcap record header: %s",
                       ovs_retval_to_string(error));
@@ -173,15 +201,18 @@ ovs_pcap_read(FILE *file, struct dp_packet **bufp, long long int *when)
     /* Calculate time. */
     if (when) {
         uint32_t ts_sec = swap ? uint32_byteswap(prh.ts_sec) : prh.ts_sec;
-        uint32_t ts_usec = swap ? uint32_byteswap(prh.ts_usec) : prh.ts_usec;
-        *when = ts_sec * 1000LL + ts_usec / 1000;
+        uint32_t ts_subsec = swap ? uint32_byteswap(prh.ts_subsec)
+                                  : prh.ts_subsec;
+        ts_subsec = p_file->resolution == PCAP_USEC ? ts_subsec / 1000
+                                                    : ts_subsec / 1000000;
+        *when = ts_sec * 1000LL + ts_subsec;
     }
 
     /* Read packet. Packet type is Ethernet */
     buf = dp_packet_new(len);
     data = dp_packet_put_uninit(buf, len);
-    if (fread(data, len, 1, file) != 1) {
-        int error = ferror(file) ? errno : EOF;
+    if (fread(data, len, 1, p_file->file) != 1) {
+        int error = ferror(p_file->file) ? errno : EOF;
         VLOG_WARN("failed to read pcap packet: %s",
                   ovs_retval_to_string(error));
         dp_packet_delete(buf);
@@ -192,7 +223,7 @@ ovs_pcap_read(FILE *file, struct dp_packet **bufp, long long int *when)
 }
 
 void
-ovs_pcap_write(FILE *file, struct dp_packet *buf)
+ovs_pcap_write(struct pcap_file *p_file, struct dp_packet *buf)
 {
     struct pcaprec_hdr prh;
     struct timeval tv;
@@ -201,12 +232,21 @@ ovs_pcap_write(FILE *file, struct dp_packet *buf)
 
     xgettimeofday(&tv);
     prh.ts_sec = tv.tv_sec;
-    prh.ts_usec = tv.tv_usec;
+    prh.ts_subsec = tv.tv_usec;
     prh.incl_len = dp_packet_size(buf);
     prh.orig_len = dp_packet_size(buf);
-    ignore(fwrite(&prh, sizeof prh, 1, file));
-    ignore(fwrite(dp_packet_data(buf), dp_packet_size(buf), 1, file));
-    fflush(file);
+    ignore(fwrite(&prh, sizeof prh, 1, p_file->file));
+    ignore(fwrite(dp_packet_data(buf), dp_packet_size(buf), 1, p_file->file));
+    fflush(p_file->file);
+}
+
+void
+ovs_pcap_close(struct pcap_file *p_file)
+{
+    if (p_file->file != stdout) {
+        fclose(p_file->file);
+    }
+    free(p_file);
 }
 
 struct tcp_key {

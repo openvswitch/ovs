@@ -2743,12 +2743,12 @@ static void
 ofctl_ofp_parse_pcap(struct ovs_cmdl_context *ctx)
 {
     struct tcp_reader *reader;
-    FILE *file;
+    struct pcap_file *p_file;
     int error;
     bool first;
 
-    file = ovs_pcap_open(ctx->argv[1], "rb");
-    if (!file) {
+    p_file = ovs_pcap_open(ctx->argv[1], "rb");
+    if (!p_file) {
         ovs_fatal(errno, "%s: open failed", ctx->argv[1]);
     }
 
@@ -2759,7 +2759,7 @@ ofctl_ofp_parse_pcap(struct ovs_cmdl_context *ctx)
         long long int when;
         struct flow flow;
 
-        error = ovs_pcap_read(file, &packet, &when);
+        error = ovs_pcap_read(p_file, &packet, &when);
         if (error) {
             break;
         }
@@ -2809,7 +2809,7 @@ ofctl_ofp_parse_pcap(struct ovs_cmdl_context *ctx)
         dp_packet_delete(packet);
     }
     tcp_reader_close(reader);
-    fclose(file);
+    ovs_pcap_close(p_file);
 }
 
 static void
@@ -4456,7 +4456,7 @@ ofctl_parse_pcap(struct ovs_cmdl_context *ctx)
     int error = 0;
     for (int i = 1; i < ctx->argc; i++) {
         const char *filename = ctx->argv[i];
-        FILE *pcap = ovs_pcap_open(filename, "rb");
+        struct pcap_file *pcap = ovs_pcap_open(filename, "rb");
         if (!pcap) {
             error = errno;
             ovs_error(error, "%s: open failed", filename);
@@ -4482,7 +4482,7 @@ ofctl_parse_pcap(struct ovs_cmdl_context *ctx)
             putchar('\n');
             dp_packet_delete(packet);
         }
-        fclose(pcap);
+        ovs_pcap_close(pcap);
     }
     exit(error);
 }
@@ -4783,8 +4783,10 @@ ofctl_compose_packet(struct ovs_cmdl_context *ctx)
     free(l7);
 
     if (print_pcap) {
-        ovs_pcap_write_header(stdout);
-        ovs_pcap_write(stdout, &p);
+        struct pcap_file *p_file = ovs_pcap_stdout();
+        ovs_pcap_write_header(p_file);
+        ovs_pcap_write(p_file, &p);
+        ovs_pcap_close(p_file);
     } else {
         ovs_hex_dump(stdout, dp_packet_data(&p), dp_packet_size(&p), 0, false);
     }

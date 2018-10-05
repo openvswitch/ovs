@@ -37,7 +37,8 @@ static void
 test_flows_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     struct ofp10_match expected_match;
-    FILE *flows, *pcap;
+    FILE *flows;
+    struct pcap_file *pcap;
     int retval;
     int n = 0, errors = 0;
 
@@ -47,14 +48,9 @@ test_flows_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     if (!flows) {
         ovs_fatal(errno, "failed to open %s", argv[1]);
     }
-    pcap = fopen(argv[2], "rb");
+    pcap = ovs_pcap_open(argv[2], "rb");
     if (!pcap) {
         ovs_fatal(errno, "failed to open %s", argv[2]);
-    }
-
-    retval = ovs_pcap_read_header(pcap);
-    if (retval) {
-        ovs_fatal(retval > 0 ? retval : 0, "reading pcap header failed");
     }
 
     while (fread(&expected_match, sizeof expected_match, 1, flows)) {
@@ -97,6 +93,7 @@ test_flows_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
         dp_packet_delete(packet);
     }
+    ovs_pcap_close(pcap);
     printf("checked %d packets, %d errors\n", n, errors);
     exit(errors != 0);
 }

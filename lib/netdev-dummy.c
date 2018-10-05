@@ -118,7 +118,7 @@ struct netdev_dummy {
 
     struct dummy_packet_conn conn OVS_GUARDED;
 
-    FILE *tx_pcap, *rxq_pcap OVS_GUARDED;
+    struct pcap_file *tx_pcap, *rxq_pcap OVS_GUARDED;
 
     struct in_addr address, netmask;
     struct in6_addr ipv6, ipv6_mask;
@@ -719,10 +719,10 @@ netdev_dummy_destruct(struct netdev *netdev_)
 
     ovs_mutex_lock(&netdev->mutex);
     if (netdev->rxq_pcap) {
-        fclose(netdev->rxq_pcap);
+        ovs_pcap_close(netdev->rxq_pcap);
     }
     if (netdev->tx_pcap && netdev->tx_pcap != netdev->rxq_pcap) {
-        fclose(netdev->tx_pcap);
+        ovs_pcap_close(netdev->tx_pcap);
     }
     dummy_packet_conn_close(&netdev->conn);
     netdev->conn.type = NONE;
@@ -859,10 +859,10 @@ netdev_dummy_set_config(struct netdev *netdev_, const struct smap *args,
     dummy_packet_conn_set_config(&netdev->conn, args);
 
     if (netdev->rxq_pcap) {
-        fclose(netdev->rxq_pcap);
+        ovs_pcap_close(netdev->rxq_pcap);
     }
     if (netdev->tx_pcap && netdev->tx_pcap != netdev->rxq_pcap) {
-        fclose(netdev->tx_pcap);
+        ovs_pcap_close(netdev->tx_pcap);
     }
     netdev->rxq_pcap = netdev->tx_pcap = NULL;
     pcap = smap_get(args, "pcap");
@@ -1144,7 +1144,6 @@ netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
 
             dp_packet_use_const(&dp, buffer, size);
             ovs_pcap_write(dev->tx_pcap, &dp);
-            fflush(dev->tx_pcap);
         }
 
         ovs_mutex_unlock(&dev->mutex);
@@ -1529,7 +1528,6 @@ netdev_dummy_queue_packet(struct netdev_dummy *dummy, struct dp_packet *packet,
 
     if (dummy->rxq_pcap) {
         ovs_pcap_write(dummy->rxq_pcap, packet);
-        fflush(dummy->rxq_pcap);
     }
     prev = NULL;
     LIST_FOR_EACH (rx, node, &dummy->rxes) {
