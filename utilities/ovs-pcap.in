@@ -34,13 +34,14 @@ class PcapReader(object):
             raise PcapException("end of file reading pcap header")
         magic, version, thiszone, sigfigs, snaplen, network = \
             struct.unpack(">6I", header)
-        if magic == 0xa1b2c3d4:
+        if magic == 0xa1b2c3d4 or magic == 0xa1b23c4d:
             self.header_format = ">4I"
-        elif magic == 0xd4c3b2a1:
+        elif magic == 0xd4c3b2a1 or magic == 0x4d3cb2a1:
             self.header_format = "<4I"
         else:
             raise PcapException("bad magic %u reading pcap file "
-                        "(expected 0xa1b2c3d4 or 0xd4c3b2a1)" % magic)
+                        "(expected 0xa1b2c3d4, 0xa1b23c4d, 0x4d3cb2a1 or "
+                        "0xd4c3b2a1)" % magic)
 
     def read(self):
         header = self.file.read(16)
