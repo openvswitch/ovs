@@ -33,26 +33,25 @@ ovn_extend_table_init(struct ovn_extend_table *table)
     hmap_init(&table->existing);
 }
 
+static void
+ovn_extend_table_info_destroy(struct hmap *target)
+{
+    struct ovn_extend_table_info *e, *next;
+    HMAP_FOR_EACH_SAFE (e, next, hmap_node, target) {
+        hmap_remove(target, &e->hmap_node);
+        free(e->name);
+        free(e);
+    }
+    hmap_destroy(target);
+}
+
 void
 ovn_extend_table_destroy(struct ovn_extend_table *table)
 {
     bitmap_free(table->table_ids);
 
-    struct ovn_extend_table_info *desired, *d_next;
-    HMAP_FOR_EACH_SAFE (desired, d_next, hmap_node, &table->existing) {
-        hmap_remove(&table->existing, &desired->hmap_node);
-        free(desired->name);
-        free(desired);
-    }
-    hmap_destroy(&table->desired);
-
-    struct ovn_extend_table_info *existing, *e_next;
-    HMAP_FOR_EACH_SAFE (existing, e_next, hmap_node, &table->existing) {
-        hmap_remove(&table->existing, &existing->hmap_node);
-        free(existing->name);
-        free(existing);
-    }
-    hmap_destroy(&table->existing);
+    ovn_extend_table_info_destroy(&table->desired);
+    ovn_extend_table_info_destroy(&table->existing);
 }
 
 /* Finds and returns a group_info in 'existing' whose key is identical
