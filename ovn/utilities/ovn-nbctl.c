@@ -117,7 +117,7 @@ static char * OVS_WARN_UNUSED_RESULT main_loop(const char *args,
                                                size_t n_commands,
                                                struct ovsdb_idl *idl,
                                                const struct timer *);
-static void server_loop(struct ovsdb_idl *idl);
+static void server_loop(struct ovsdb_idl *idl, int argc, char *argv[]);
 
 int
 main(int argc, char *argv[])
@@ -173,26 +173,24 @@ main(int argc, char *argv[])
     shash_init(&local_options);
     apply_options_direct(parsed_options, n_parsed_options, &local_options);
     free(parsed_options);
-    argc -= optind;
-    argv += optind;
 
     /* Initialize IDL. */
     idl = the_idl = ovsdb_idl_create(db, &nbrec_idl_class, true, false);
     ovsdb_idl_set_leader_only(idl, leader_only);
 
     if (get_detach()) {
-        if (argc != 0) {
+        if (argc != optind) {
             ctl_fatal("non-option arguments not supported with --detach "
                       "(use --help for help)");
         }
-        server_loop(idl);
+        server_loop(idl, argc, argv);
     } else {
         struct ctl_command *commands;
         size_t n_commands;
         char *error;
 
-        error = ctl_parse_commands(argc, argv, &local_options, &commands,
-                                   &n_commands);
+        error = ctl_parse_commands(argc - optind, argv + optind,
+                                   &local_options, &commands, &n_commands);
         if (error) {
             ctl_fatal("%s", error);
         }
@@ -5426,11 +5424,12 @@ server_cmd_init(struct ovsdb_idl *idl, bool *exiting)
 }
 
 static void
-server_loop(struct ovsdb_idl *idl)
+server_loop(struct ovsdb_idl *idl, int argc, char *argv[])
 {
     struct unixctl_server *server = NULL;
     bool exiting = false;
 
+    service_start(&argc, &argv);
     daemonize_start(false);
     int error = unixctl_server_create(unixctl_path, &server);
     if (error) {
