@@ -121,6 +121,7 @@ pid_t read_pidfile(const char *name);
 
 #define DAEMON_OPTION_HANDLERS                  \
         case OPT_DETACH:                        \
+            set_detach();                       \
             break;                              \
                                                 \
         case OPT_NO_SELF_CONFINEMENT:           \
@@ -139,6 +140,7 @@ pid_t read_pidfile(const char *name);
             break;                              \
                                                 \
         case OPT_SERVICE:                       \
+            set_detach();                       \
             break;                              \
                                                 \
         case OPT_SERVICE_MONITOR:               \
@@ -159,6 +161,7 @@ pid_t read_pidfile(const char *name);
 
 void control_handler(DWORD request);
 void set_pipe_handle(const char *pipe_handle);
+void set_detach(void);
 #endif /* _WIN32 */
 
 bool get_detach(void);
