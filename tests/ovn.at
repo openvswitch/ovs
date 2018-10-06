@@ -7039,6 +7039,17 @@ packet=${dst_mac}${src_mac}8100000208004500001c000000003f110100${src_ip}${dst_ip
 echo  $packet >> expected1
 OVN_CHECK_PACKETS([hv1/vm1-tx.pcap], [expected1])
 
+# Send broadcast packet from foo1. foo1 should not receive the same packet.
+src_mac="f00000010205"
+dst_mac="ffffffffffff"
+src_ip=`ip_to_hex 192 168 1 2`
+dst_ip=`ip_to_hex 255 255 255 255`
+packet=${dst_mac}${src_mac}8100000108004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
+as hv1 ovs-appctl netdev-dummy/receive vm1 $packet
+
+# expected packet at VM1
+OVN_CHECK_PACKETS([hv1/vm1-tx.pcap], [expected1])
+
 OVN_CLEANUP([hv1],[hv2])
 
 AT_CLEANUP

@@ -189,7 +189,8 @@ get_zone_ids(const struct sbrec_port_binding *binding,
 
 static void
 put_local_common_flows(uint32_t dp_key, uint32_t port_key,
-                       bool nested_container, const struct zone_ids *zone_ids,
+                       uint32_t parent_port_key,
+                       const struct zone_ids *zone_ids,
                        struct ofpbuf *ofpacts_p, struct hmap *flow_table)
 {
     struct match match;
@@ -244,11 +245,19 @@ put_local_common_flows(uint32_t dp_key, uint32_t port_key,
     /* Table 64, Priority 100.
      * =======================
      *
-     * If the packet is supposed to hair-pin because the "loopback"
-     * flag is set (or if the destination is a nested container),
+     * If the packet is supposed to hair-pin because the
+     *   - "loopback" flag is set
+     *   - or if the destination is a nested container
+     *   - or if "nested_container" flag is set and the destination is the
+     *     parent port,
      * temporarily set the in_port to zero, resubmit to
      * table 65 for logical-to-physical translation, then restore
-     * the port number. */
+     * the port number.
+     *
+     * If 'parent_port_key' is set, then the 'port_key' represents a nested
+     * container. */
+
+    bool nested_container = parent_port_key ? true: false;
     match_init_catchall(&match);
     ofpbuf_clear(ofpacts_p);
     match_set_metadata(&match, htonll(dp_key));
@@ -264,6 +273,38 @@ put_local_common_flows(uint32_t dp_key, uint32_t port_key,
     put_stack(MFF_IN_PORT, ofpact_put_STACK_POP(ofpacts_p));
     ofctrl_add_flow(flow_table, OFTABLE_SAVE_INPORT, 100, 0,
                     &match, ofpacts_p);
+
+    if (nested_container) {
+        /* It's a nested container and when the packet from the nested
+         * container is to be sent to the parent port, "nested_container"
+         * flag will be set. We need to temporarily set the in_port to zero
+         * as mentioned in the comment above.
+         *
+         * If a parent port has multiple child ports, then this if condition
+         * will be hit multiple times, but we want to add only one flow.
+         * ofctrl_add_flow() logs a warning message for duplicate flows.
+         * So use the function 'ofctrl_check_and_add_flow' which doesn't
+         * log a warning.
+         *
+         * Other option is to add this flow for all the ports which are not
+         * nested containers. In which case we will add this flow for all the
+         * ports even if they don't have any child ports which is
+         * unnecessary.
+         */
+        match_init_catchall(&match);
+        ofpbuf_clear(ofpacts_p);
+        match_set_metadata(&match, htonll(dp_key));
+        match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, parent_port_key);
+        match_set_reg_masked(&match, MFF_LOG_FLAGS - MFF_REG0,
+                             MLF_NESTED_CONTAINER, MLF_NESTED_CONTAINER);
+
+        put_stack(MFF_IN_PORT, ofpact_put_STACK_PUSH(ofpacts_p));
+        put_load(0, MFF_IN_PORT, 0, 16, ofpacts_p);
+        put_resubmit(OFTABLE_LOG_TO_PHY, ofpacts_p);
+        put_stack(MFF_IN_PORT, ofpact_put_STACK_POP(ofpacts_p));
+        ofctrl_check_and_add_flow(flow_table, OFTABLE_SAVE_INPORT, 100, 0,
+                                  &match, ofpacts_p, false);
+    }
 }
 
 static void
@@ -328,7 +369,7 @@ consider_port_binding(struct ovsdb_idl_index *sbrec_chassis_by_name,
         }
 
         struct zone_ids binding_zones = get_zone_ids(binding, ct_zones);
-        put_local_common_flows(dp_key, port_key, false, &binding_zones,
+        put_local_common_flows(dp_key, port_key, 0, &binding_zones,
                                ofpacts_p, flow_table);
 
         match_init_catchall(&match);
@@ -452,6 +493,7 @@ consider_port_binding(struct ovsdb_idl_index *sbrec_chassis_by_name,
 
     int tag = 0;
     bool nested_container = false;
+    const struct sbrec_port_binding *parent_port = NULL;
     ofp_port_t ofport;
     bool is_remote = false;
     if (binding->parent_port && *binding->parent_port) {
@@ -463,6 +505,8 @@ consider_port_binding(struct ovsdb_idl_index *sbrec_chassis_by_name,
         if (ofport) {
             tag = *binding->tag;
             nested_container = true;
+            parent_port = lport_lookup_by_name(
+                sbrec_port_binding_by_name, binding->parent_port);
         }
     } else {
         ofport = u16_to_ofp(simap_get(&localvif_to_ofport,
@@ -523,7 +567,10 @@ consider_port_binding(struct ovsdb_idl_index *sbrec_chassis_by_name,
          */
 
         struct zone_ids zone_ids = get_zone_ids(binding, ct_zones);
-        put_local_common_flows(dp_key, port_key, nested_container, &zone_ids,
+        uint32_t parent_port_key = parent_port ? parent_port->tunnel_key : 0;
+        /* Pass the parent port tunnel key if the port is a nested
+         * container. */
+        put_local_common_flows(dp_key, port_key, parent_port_key, &zone_ids,
                                ofpacts_p, flow_table);
 
         /* Table 0, Priority 150 and 100.
@@ -553,8 +600,10 @@ consider_port_binding(struct ovsdb_idl_index *sbrec_chassis_by_name,
             if (nested_container) {
                 /* When a packet comes from a container sitting behind a
                  * parent_port, we should let it loopback to other containers
-                 * or the parent_port itself. */
-                put_load(MLF_ALLOW_LOOPBACK, MFF_LOG_FLAGS, 0, 1, ofpacts_p);
+                 * or the parent_port itself. Indicate this by setting the
+                 * MLF_NESTED_CONTAINER_BIT in MFF_LOG_FLAGS.*/
+                put_load(1, MFF_LOG_FLAGS, MLF_NESTED_CONTAINER_BIT, 1,
+                         ofpacts_p);
             }
             ofpact_put_STRIP_VLAN(ofpacts_p);
         }

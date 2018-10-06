@@ -50,6 +50,7 @@ enum mff_log_flags_bits {
     MLF_FORCE_SNAT_FOR_DNAT_BIT = 2,
     MLF_FORCE_SNAT_FOR_LB_BIT = 3,
     MLF_LOCAL_ONLY_BIT = 4,
+    MLF_NESTED_CONTAINER_BIT = 5,
 };
 
 /* MFF_LOG_FLAGS_REG flag assignments */
@@ -75,6 +76,9 @@ enum mff_log_flags {
      * hypervisors should instead only be output to local targets
      */
     MLF_LOCAL_ONLY = (1 << MLF_LOCAL_ONLY_BIT),
+
+    /* Indicate that a packet was received from a nested container. */
+    MLF_NESTED_CONTAINER = (1 << MLF_NESTED_CONTAINER_BIT),
 };
 
 #endif /* ovn/lib/logical-fields.h */
