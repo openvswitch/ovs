@@ -630,9 +630,11 @@ ofctrl_recv(const struct ofp_header *oh, enum ofptype type)
  *
  * The caller should initialize its own hmap to hold the flows. */
 void
-ofctrl_add_flow(struct hmap *desired_flows,
-                uint8_t table_id, uint16_t priority, uint64_t cookie,
-                const struct match *match, const struct ofpbuf *actions)
+ofctrl_check_and_add_flow(struct hmap *desired_flows,
+                          uint8_t table_id, uint16_t priority, uint64_t cookie,
+                          const struct match *match,
+                          const struct ofpbuf *actions,
+                          bool log_duplicate_flow)
 {
     struct ovn_flow *f = xmalloc(sizeof *f);
     f->table_id = table_id;
@@ -644,13 +646,14 @@ ofctrl_add_flow(struct hmap *desired_flows,
     f->cookie = cookie;
 
     if (ovn_flow_lookup(desired_flows, f)) {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
-        if (!VLOG_DROP_DBG(&rl)) {
-            char *s = ovn_flow_to_string(f);
-            VLOG_DBG("dropping duplicate flow: %s", s);
-            free(s);
+        if (log_duplicate_flow) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
+            if (!VLOG_DROP_DBG(&rl)) {
+                char *s = ovn_flow_to_string(f);
+                VLOG_DBG("dropping duplicate flow: %s", s);
+                free(s);
+            }
         }
-
         ovn_flow_destroy(f);
         return;
     }
@@ -658,6 +661,14 @@ ofctrl_add_flow(struct hmap *desired_flows,
     hmap_insert(desired_flows, &f->hmap_node, f->hmap_node.hash);
 }
 
+void
+ofctrl_add_flow(struct hmap *desired_flows,
+                uint8_t table_id, uint16_t priority, uint64_t cookie,
+                const struct match *match, const struct ofpbuf *actions)
+{
+    ofctrl_check_and_add_flow(desired_flows, table_id, priority, cookie,
+                              match, actions, true);
+}
 
 /* ovn_flow. */
 
