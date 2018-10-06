@@ -712,7 +712,7 @@ dpif_netlink_port_add__(struct dpif_netlink *dpif, const char *name,
     struct dpif_netlink_vport request, reply;
     struct ofpbuf *buf;
     struct nl_sock *socksp = NULL;
-    uint32_t upcall_pids;
+    uint32_t upcall_pids = 0;
     int error = 0;
 
     if (dpif->handlers) {
@@ -728,7 +728,9 @@ dpif_netlink_port_add__(struct dpif_netlink *dpif, const char *name,
     request.name = name;
 
     request.port_no = *port_nop;
-    upcall_pids = nl_sock_pid(socksp);
+    if (socksp) {
+        upcall_pids = nl_sock_pid(socksp);
+    }
     request.n_upcall_pids = 1;
     request.upcall_pids = &upcall_pids;
 
