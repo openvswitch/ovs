@@ -117,7 +117,7 @@ save_flows () {
 
         printf "%s" "ovs-ofctl add-tlv-map ${bridge} '"
         ovs-ofctl dump-tlv-map ${bridge} | \
-        awk '/^ 0x/ {if (cnt != 0) printf ","; \
+        awk '/^  *0x/ {if (cnt != 0) printf ","; \
              cnt++;printf "{class="$1",type="$2",len="$3"}->"$4}'
         echo "'"
 
