@@ -1,0 +1,3 @@
+[libfuzzer]
+dict = ovs.dict
+close_fd_mask = 3
