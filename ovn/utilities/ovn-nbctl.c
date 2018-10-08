@@ -5311,6 +5311,7 @@ server_cmd_run(struct unixctl_conn *conn, int argc, const char **argv_,
     }
 
     struct ds output = DS_EMPTY_INITIALIZER;
+    table_format_reset();
     for (struct ctl_command *c = commands; c < &commands[n_commands]; c++) {
         if (c->table) {
             table_format(c->table, &table_style, &output);

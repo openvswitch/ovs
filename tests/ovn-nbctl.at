@@ -1517,3 +1517,16 @@ AT_CHECK([ovn-nbctl create Port_Group name=pg0], [0], [ignore])
 AT_CHECK([ovn-nbctl get Port_Group pg0 name], [0], [dnl
 "pg0"
 ])])
+
+
+OVN_NBCTL_TEST([ovn_nbctl_extra_newlines], [extra newlines], [
+dnl This test addresses a specific issue seen when running ovn-nbctl in
+dnl daemon mode. All we have to do is ensure that each time we list database
+dnl information, there is not an extra newline at the beginning of the output.
+AT_CHECK([ovn-nbctl ls-add sw1], [0], [ignore])
+AT_CHECK([ovn-nbctl --columns=name list logical_switch sw1], [0], [dnl
+name                : "sw1"
+])
+AT_CHECK([ovn-nbctl --columns=name list logical_switch sw1], [0], [dnl
+name                : "sw1"
+])])
