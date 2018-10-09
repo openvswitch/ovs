@@ -10,6 +10,12 @@
 : ${MANAGE_NORTHD_DEFAULT="no"}
 : ${INACTIVE_PROBE_DEFAULT="5000"}
 : ${LISTEN_ON_MASTER_IP_ONLY_DEFAULT="yes"}
+: ${NB_SSL_KEY_DEFAULT="/etc/openvswitch/ovnnb-privkey.pem"}
+: ${NB_SSL_CERT_DEFAULT="/etc/openvswitch/ovnnb-cert.pem"}
+: ${NB_SSL_CACERT_DEFAULT="/etc/openvswitch/cacert.pem"}
+: ${SB_SSL_KEY_DEFAULT="/etc/openvswitch/ovnsb-privkey.pem"}
+: ${SB_SSL_CERT_DEFAULT="/etc/openvswitch/ovnsb-cert.pem"}
+: ${SB_SSL_CACERT_DEFAULT="/etc/openvswitch/cacert.pem"}
 
 CRM_MASTER="${HA_SBIN_DIR}/crm_master -l reboot"
 CRM_ATTR_REPL_INFO="${HA_SBIN_DIR}/crm_attribute --type crm_config --name OVN_REPL_INFO -s ovn_ovsdb_master_server"
@@ -21,6 +27,13 @@ SB_MASTER_PORT=${OCF_RESKEY_sb_master_port:-${SB_MASTER_PORT_DEFAULT}}
 SB_MASTER_PROTO=${OCF_RESKEY_sb_master_protocol:-${SB_MASTER_PROTO_DEFAULT}}
 MANAGE_NORTHD=${OCF_RESKEY_manage_northd:-${MANAGE_NORTHD_DEFAULT}}
 INACTIVE_PROBE=${OCF_RESKEY_inactive_probe_interval:-${INACTIVE_PROBE_DEFAULT}}
+NB_PRIVKEY=${OCF_RESKEY_ovn_nb_db_privkey:-${NB_SSL_KEY_DEFAULT}}
+NB_CERT=${OCF_RESKEY_ovn_nb_db_cert:-${NB_SSL_CERT_DEFAULT}}
+NB_CACERT=${OCF_RESKEY_ovn_nb_db_cacert:-${NB_SSL_CACERT_DEFAULT}}
+SB_PRIVKEY=${OCF_RESKEY_ovn_sb_db_privkey:-${SB_SSL_KEY_DEFAULT}}
+SB_CERT=${OCF_RESKEY_ovn_sb_db_cert:-${SB_SSL_CERT_DEFAULT}}
+SB_CACERT=${OCF_RESKEY_ovn_sb_db_cacert:-${SB_SSL_CACERT_DEFAULT}}
+
 
 # In order for pacemaker to work with LB, we can set LISTEN_ON_MASTER_IP_ONLY
 # to false and pass LB vip IP while creating pcs resource.
@@ -129,6 +142,54 @@ ovsdb_server_metadata() {
   as MASTER_IP; set to no when using external LB VIP.
   </longdesc>
   <shortdesc lang="en">Listen on master IP or 0.0.0.0</shortdesc>
+  <content type="string" />
+  </parameter>
+
+  <parameter name="ovn_nb_db_privkey" unique="1">
+  <longdesc lang="en">
+  OVN NB DB private key absolute path for ssl setup.
+  </longdesc>
+  <shortdesc lang="en">OVN NB DB private key file</shortdesc>
+  <content type="string" />
+  </parameter>
+
+  <parameter name="ovn_nb_db_cert" unique="1">
+  <longdesc lang="en">
+  OVN NB DB certificate absolute path for ssl setup.
+  </longdesc>
+  <shortdesc lang="en">OVN NB DB cert file</shortdesc>
+  <content type="string" />
+  </parameter>
+
+  <parameter name="ovn_nb_db_cacert" unique="1">
+  <longdesc lang="en">
+  OVN NB DB CA certificate absolute path for ssl setup.
+  </longdesc>
+  <shortdesc lang="en">OVN NB DB cacert file</shortdesc>
+  <content type="string" />
+  </parameter>
+
+  <parameter name="ovn_sb_db_privkey" unique="1">
+  <longdesc lang="en">
+  OVN SB DB private key absolute path for ssl setup.
+  </longdesc>
+  <shortdesc lang="en">OVN SB DB private key file</shortdesc>
+  <content type="string" />
+  </parameter>
+
+  <parameter name="ovn_sb_db_cert" unique="1">
+  <longdesc lang="en">
+  OVN SB DB certificate absolute path for ssl setup.
+  </longdesc>
+  <shortdesc lang="en">OVN SB DB cert file</shortdesc>
+  <content type="string" />
+  </parameter>
+
+  <parameter name="ovn_sb_db_cacert" unique="1">
+  <longdesc lang="en">
+  OVN SB DB CA certificate absolute path for ssl setup.
+  </longdesc>
+  <shortdesc lang="en">OVN SB DB cacert file</shortdesc>
   <content type="string" />
   </parameter>
 
@@ -326,6 +387,16 @@ ovsdb_server_start() {
        set $@ --db-sb-addr=${MASTER_IP} --db-sb-port=${SB_MASTER_PORT}
     fi
 
+    if [ "x${NB_MASTER_PROTO}" = xssl ]; then
+            set $@ --ovn-nb-db-ssl-key=${NB_PRIVKEY}
+            set $@ --ovn-nb-db-ssl-cert=${NB_CERT}
+            set $@ --ovn-nb-db-ssl-ca-cert=${NB_CACERT}
+    fi
+    if [ "x${SB_MASTER_PROTO}" = xssl ]; then
+            set $@ --ovn-sb-db-ssl-key=${SB_PRIVKEY}
+            set $@ --ovn-sb-db-ssl-cert=${SB_CERT}
+            set $@ --ovn-sb-db-ssl-ca-cert=${SB_CACERT}
+    fi
     if [ "x${present_master}" = x ]; then
         # No master detected, or the previous master is not among the
         # set starting.
@@ -343,7 +414,6 @@ ovsdb_server_start() {
         set $@ --db-nb-sync-from-addr=${INVALID_IP_ADDRESS} --db-sb-sync-from-addr=${INVALID_IP_ADDRESS}
 
     elif [ ${present_master} != ${host_name} ]; then
-        # TODO: for using LB vip, need to test for ssl.
         if [ "x${LISTEN_ON_MASTER_IP_ONLY}" = xyes ]; then
             if [ "x${NB_MASTER_PROTO}" = xtcp ]; then
                 set $@ --db-nb-create-insecure-remote=yes
