@@ -9,15 +9,16 @@ m4_define([JSON_CHECK_POSITIVE_C],
    AT_CLEANUP])
 
 # JSON_CHECK_POSITIVE_PY(TITLE, INPUT, OUTPUT, TEST-JSON-ARGS,
-#                        PYTHON-CHCEK, PYTHON-BIN)
+#                        PYTHON-CHCEK, PYTHON-BIN, JSON-PARSER = python)
 #
 m4_define([JSON_CHECK_POSITIVE_PY],
   [AT_SETUP([$1])
    AT_KEYWORDS([json positive Python])
    AT_SKIP_IF([test $5 = no])
+   AT_SKIP_IF([test $7 = C && ! $6 -c "import ovs._json" 2>/dev/null])
    AT_CHECK([printf %s "AS_ESCAPE([$2])" > input])
    AT_CAPTURE_FILE([input])
-   AT_CHECK([$6 $srcdir/test-json.py $4 input], [0], [stdout], [])
+   AT_CHECK([$6 $srcdir/test-json.py -j m4_default([$7], python) $4 input], [0], [stdout], [])
    AT_CHECK([cat stdout], [0], [$3
 ])
    AT_CLEANUP])
@@ -37,16 +38,17 @@ m4_define([JSON_CHECK_POSITIVE_UCS4PY],
 
 m4_define([JSON_CHECK_POSITIVE],
   [JSON_CHECK_POSITIVE_C([$1 - C], [$2], [$3], [$4])
-   JSON_CHECK_POSITIVE_PY([$1 - Python2], [$2], [$3], [$4],
-                          [$HAVE_PYTHON2], [$PYTHON2])
-   JSON_CHECK_POSITIVE_PY([$1 - Python3], [$2], [$3], [$4],
-                          [$HAVE_PYTHON3], [$PYTHON3])])
+   JSON_CHECK_POSITIVE_PY23([$1], [$2], [$3], [$4])])
 
 m4_define([JSON_CHECK_POSITIVE_PY23],
-  [JSON_CHECK_POSITIVE_PY([$1 - Python2], [$2], [$3], [$4],
+  [JSON_CHECK_POSITIVE_PY([$1 - Python2(pyjson)], [$2], [$3], [$4],
                           [$HAVE_PYTHON2], [$PYTHON2])
-   JSON_CHECK_POSITIVE_PY([$1 - Python3], [$2], [$3], [$4],
-                          [$HAVE_PYTHON3], [$PYTHON3])])
+   JSON_CHECK_POSITIVE_PY([$1 - Python2(cjson)], [$2], [$3], [$4],
+                          [$HAVE_PYTHON2], [$PYTHON2], C)
+   JSON_CHECK_POSITIVE_PY([$1 - Python3(pyjson)], [$2], [$3], [$4],
+                          [$HAVE_PYTHON3], [$PYTHON3])
+   JSON_CHECK_POSITIVE_PY([$1 - Python3(cjson)], [$2], [$3], [$4],
+                          [$HAVE_PYTHON3], [$PYTHON3], C)])
 
 m4_define([JSON_CHECK_NEGATIVE_C],
   [AT_SETUP([$1])
@@ -59,25 +61,30 @@ m4_define([JSON_CHECK_NEGATIVE_C],
    AT_CLEANUP])
 
 # JSON_CHECK_NEGATIVE_PY(TITLE, INPUT, OUTPUT, TEST-JSON-ARGS,
-#                        PYTHON-CHCEK, PYTHON-BIN)
+#                        PYTHON-CHCEK, PYTHON-BIN, JSON_PARSER = python)
 #
 m4_define([JSON_CHECK_NEGATIVE_PY], 
   [AT_SETUP([$1])
    AT_KEYWORDS([json negative Python])
    AT_SKIP_IF([test $5 = no])
+   AT_SKIP_IF([test $7 = C && ! $6 -c "import ovs._json" 2>/dev/null])
    AT_CHECK([printf %s "AS_ESCAPE([$2])" > input])
    AT_CAPTURE_FILE([input])
-   AT_CHECK([$6 $srcdir/test-json.py $4 input], [1], [stdout], [])
+   AT_CHECK([$6 $srcdir/test-json.py -j m4_default([$7], python) $4 input], [1], [stdout], [])
    AT_CHECK([[sed 's/^error: [^:]*:/error:/' < stdout]], [0], [$3
 ])
    AT_CLEANUP])
 
 m4_define([JSON_CHECK_NEGATIVE],
   [JSON_CHECK_NEGATIVE_C([$1 - C], [$2], [$3], [$4])
-   JSON_CHECK_NEGATIVE_PY([$1 - Python2], [$2], [$3], [$4],
+   JSON_CHECK_NEGATIVE_PY([$1 - Python2(pyjson)], [$2], [$3], [$4],
                           [$HAVE_PYTHON2], [$PYTHON2])
-   JSON_CHECK_NEGATIVE_PY([$1 - Python3], [$2], [$3], [$4],
-                          [$HAVE_PYTHON3], [$PYTHON3])])
+   JSON_CHECK_NEGATIVE_PY([$1 - Python2(cjson)], [$2], [$3], [$4],
+                          [$HAVE_PYTHON2], [$PYTHON2], C)
+   JSON_CHECK_NEGATIVE_PY([$1 - Python3(pyjson)], [$2], [$3], [$4],
+                          [$HAVE_PYTHON3], [$PYTHON3])
+   JSON_CHECK_NEGATIVE_PY([$1 - Python3(cjson)], [$2], [$3], [$4],
+                          [$HAVE_PYTHON3], [$PYTHON3], C)])
 
 AT_BANNER([JSON -- arrays])
 

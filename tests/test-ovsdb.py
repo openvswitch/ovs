@@ -23,6 +23,7 @@ import uuid
 import ovs.db.idl
 import ovs.db.schema
 import ovs.db.types
+import ovs.json
 import ovs.ovsuuid
 import ovs.poller
 import ovs.stream
@@ -815,14 +816,20 @@ The following options are also available:
 
 def main(argv):
     try:
-        options, args = getopt.gnu_getopt(argv[1:], 't:h',
+        options, args = getopt.gnu_getopt(argv[1:], 't:h:j:',
                                           ['timeout',
-                                           'help'])
+                                           'help', 'json-parser'])
     except getopt.GetoptError as geo:
         sys.stderr.write("%s: %s\n" % (ovs.util.PROGRAM_NAME, geo.msg))
         sys.exit(1)
 
     timeout = None
+    # Save the old version to detect whether we support the C Parser
+    # but then override to the Python parser because it is always available
+    # and is the historical default
+    ORIG_PARSER = ovs.json.PARSER
+    ovs.json.PARSER = ovs.json.PARSER_PY
+
     for key, value in options:
         if key in ['-h', '--help']:
             usage()
@@ -834,6 +841,17 @@ def main(argv):
             except TypeError:
                 raise error.Error("value %s on -t or --timeout is not at "
                                   "least 1" % value)
+        elif key in ['-j', '--json-parser']:
+            if value == "python":
+                ovs.json.PARSER = ovs.json.PARSER_PY
+            elif value in ('C', 'c'):
+                if ORIG_PARSER != ovs.json.PARSER_C:
+                    raise error.Error("C parser selected, but not compiled")
+                else:
+                    ovs.json.PARSER = ovs.json.PARSER_C
+            else:
+                raise error.Error(
+                    "invalid option: %s, json-parser must be 'C' or json")
         else:
             sys.exit(0)
 

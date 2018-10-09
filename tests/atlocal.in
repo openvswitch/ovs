@@ -22,8 +22,10 @@ if test x"$PYTHON3" = x; then
     export PYTHONCOERCECLOCALE
 fi
 
-PYTHONPATH=$abs_top_srcdir/python:$abs_top_builddir/tests:$PYTHONPATH
+PYTHONPATH=$abs_top_builddir/python:$abs_top_builddir/tests:$PYTHONPATH
 export PYTHONPATH
+LD_LIBRARY_PATH=$abs_top_builddir/lib/.libs
+export LD_LIBRARY_PATH
 
 PYTHONIOENCODING=utf_8
 export PYTHONIOENCODING

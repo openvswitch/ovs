@@ -18,6 +18,7 @@ import codecs
 import getopt
 import sys
 
+from ovs.db import error
 import ovs.json
 
 import six
@@ -66,15 +67,26 @@ def main(argv):
         sys.stderr = codecs.getwriter("utf-8")(sys.stderr)
 
     try:
-        options, args = getopt.gnu_getopt(argv[1:], '', ['multiple'])
+        options, args = getopt.gnu_getopt(argv[1:], 'j:',
+                                          ['multiple', 'json-parser'])
     except getopt.GetoptError as geo:
         sys.stderr.write("%s: %s\n" % (argv0, geo.msg))
         sys.exit(1)
 
     multiple = False
+    ORIG_PARSER = ovs.json.PARSER
+    ovs.json.PARSER = ovs.json.PARSER_PY
     for key, value in options:
         if key == '--multiple':
             multiple = True
+        elif key in ('-j', '--json-parser'):
+            if value == "python":
+                ovs.json.PARSER = ovs.json.PARSER_PY
+            elif value in ('C', 'c'):
+                if ORIG_PARSER != ovs.json.PARSER_C:
+                    raise error.Error("C parser selected, but not compiled")
+                else:
+                    ovs.json.PARSER = ovs.json.PARSER_C
         else:
             sys.stderr.write("%s: unhandled option %s\n" % (argv0, key))
             sys.exit(1)

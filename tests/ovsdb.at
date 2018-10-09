@@ -12,7 +12,7 @@ m4_define([OVSDB_CHECK_POSITIVE],
    AT_CLEANUP])
 
 # OVSDB_CHECK_POSITIVE_PY(TITLE, TEST-OVSDB-ARGS, OUTPUT, [KEYWORDS], [PREREQ],
-#                         [PY-CHECK])
+#                         [PY-CHECK] [JSON-PARSER = python])
 #
 # Runs "test-ovsdb.py TEST-OVSDB-ARGS" and checks that it exits with
 # status 0 and prints OUTPUT on stdout.
@@ -24,14 +24,15 @@ m4_define([OVSDB_CHECK_POSITIVE],
 m4_define([OVSDB_CHECK_POSITIVE_PY], 
   [AT_SETUP([$1])
    AT_SKIP_IF([test $HAVE_PYTHON2 = no])
+   AT_SKIP_IF([test $7 = C && ! $PYTHON2 -c "import ovs._json" 2>/dev/null])
    $6
    AT_KEYWORDS([ovsdb positive Python $4])
-   AT_CHECK([$PYTHON2 $srcdir/test-ovsdb.py $2], [0], [$3
+   AT_CHECK([$PYTHON2 $srcdir/test-ovsdb.py -j m4_default([$7], python) $2], [0], [$3
 ], [])
    AT_CLEANUP])
 
 # OVSDB_CHECK_POSITIVE_PY3(TITLE, TEST-OVSDB-ARGS, OUTPUT, [KEYWORDS], [PREREQ],
-#                          [PY-CHECK])
+#                          [PY-CHECK] [PY3-CHECK] [JSON-PARSER = python])
 #
 # Runs "test-ovsdb.py TEST-OVSDB-ARGS" and checks that it exits with
 # status 0 and prints OUTPUT on stdout.
@@ -43,9 +44,10 @@ m4_define([OVSDB_CHECK_POSITIVE_PY],
 m4_define([OVSDB_CHECK_POSITIVE_PY3],
   [AT_SETUP([$1])
    AT_SKIP_IF([test $HAVE_PYTHON3 = no])
+   AT_SKIP_IF([test $8 = C && ! $PYTHON3 -c "import ovs._json" 2>/dev/null])
    $6
    AT_KEYWORDS([ovsdb positive Python $4])
-   AT_CHECK([$PYTHON3 $srcdir/test-ovsdb.py $2], [0], [$3
+   AT_CHECK([$PYTHON3 $srcdir/test-ovsdb.py -j m4_default([$8], python) $2], [0], [$3
 ], [])
    AT_CLEANUP])
 
@@ -55,8 +57,10 @@ m4_define([OVSDB_CHECK_POSITIVE_PY3],
 # Runs identical C and Python tests, as specified.
 m4_define([OVSDB_CHECK_POSITIVE_CPY],
   [OVSDB_CHECK_POSITIVE([$1 - C], [$2], [$3], [$4], [$5])
-   OVSDB_CHECK_POSITIVE_PY([$1 - Python2], [$2], [$3], [$4], [$5], [$6])
-   OVSDB_CHECK_POSITIVE_PY3([$1 - Python3], [$2], [$3], [$4], [$5], [$7])])
+   OVSDB_CHECK_POSITIVE_PY([$1 - Python2(pyjson)], [$2], [$3], [$4], [$5], [$6])
+   OVSDB_CHECK_POSITIVE_PY([$1 - Python2(cjson)], [$2], [$3], [$4], [$5], [$6], C)
+   OVSDB_CHECK_POSITIVE_PY3([$1 - Python3(pyjson)], [$2], [$3], [$4], [$5], [$7])
+   OVSDB_CHECK_POSITIVE_PY3([$1 - Python3(cjson)], [$2], [$3], [$4], [$5], [$7], C)])
 
 # OVSDB_CHECK_NEGATIVE(TITLE, TEST-OVSDB-ARGS, OUTPUT, [KEYWORDS], [PREREQ])
 #
@@ -78,7 +82,7 @@ m4_define([OVSDB_CHECK_NEGATIVE],
             [0], [ignore], [ignore])
    AT_CLEANUP])
 
-# OVSDB_CHECK_NEGATIVE_PY(TITLE, TEST-OVSDB-ARGS, OUTPUT, [KEYWORDS], [PREREQ])
+# OVSDB_CHECK_NEGATIVE_PY(TITLE, TEST-OVSDB-ARGS, OUTPUT, [KEYWORDS], [PREREQ] [JSON-PARSER = python])
 #
 # Runs "test-ovsdb TEST-OVSDB-ARGS" and checks that it exits with
 # status 1 and that its output on stdout contains substring OUTPUT.
@@ -86,8 +90,9 @@ m4_define([OVSDB_CHECK_NEGATIVE],
 m4_define([OVSDB_CHECK_NEGATIVE_PY],
   [AT_SETUP([$1])
    AT_SKIP_IF([test $HAVE_PYTHON2 = no])
-   AT_KEYWORDS([ovsdb negative $4])
-   AT_CHECK([$PYTHON2 $srcdir/test-ovsdb.py $2], [1], [], [stderr])
+   AT_SKIP_IF([test $6 = C && ! $PYTHON2 -c "import ovs._json" 2>/dev/null])
+   AT_KEYWORDS([ovsdb negative Python $4])
+   AT_CHECK([$PYTHON2 $srcdir/test-ovsdb.py -j m4_default([$6], python) $2], [1], [], [stderr])
    m4_assert(m4_len([$3]))
    AT_CHECK(
      [if grep -F -e "AS_ESCAPE([$3])" stderr
@@ -99,7 +104,7 @@ m4_define([OVSDB_CHECK_NEGATIVE_PY],
             [0], [ignore], [ignore])
    AT_CLEANUP])
 
-# OVSDB_CHECK_NEGATIVE_PY3(TITLE, TEST-OVSDB-ARGS, OUTPUT, [KEYWORDS], [PREREQ])
+# OVSDB_CHECK_NEGATIVE_PY3(TITLE, TEST-OVSDB-ARGS, OUTPUT, [KEYWORDS], [PREREQ], [JSON-PARSER = python])
 #
 # Runs "test-ovsdb TEST-OVSDB-ARGS" and checks that it exits with
 # status 1 and that its output on stdout contains substring OUTPUT.
@@ -107,8 +112,9 @@ m4_define([OVSDB_CHECK_NEGATIVE_PY],
 m4_define([OVSDB_CHECK_NEGATIVE_PY],
   [AT_SETUP([$1])
    AT_SKIP_IF([test $HAVE_PYTHON3 = no])
-   AT_KEYWORDS([ovsdb negative $4])
-   AT_CHECK([$PYTHON3 $srcdir/test-ovsdb.py $2], [1], [], [stderr])
+   AT_SKIP_IF([test $6 = C && ! $PYTHON3 -c "import ovs._json" 2>/dev/null])
+   AT_KEYWORDS([ovsdb negative Python $4])
+   AT_CHECK([$PYTHON3 $srcdir/test-ovsdb.py -j m4_default([$6], python) $2], [1], [], [stderr])
    m4_assert(m4_len([$3]))
    AT_CHECK(
      [if grep -F -e "AS_ESCAPE([$3])" stderr
@@ -126,8 +132,10 @@ m4_define([OVSDB_CHECK_NEGATIVE_PY],
 # Runs identical C and Python tests, as specified.
 m4_define([OVSDB_CHECK_NEGATIVE_CPY],
   [OVSDB_CHECK_NEGATIVE([$1 - C], [$2], [$3], [$4], [$5])
-   OVSDB_CHECK_NEGATIVE_PY([$1 - Python2], [$2], [$3], [$4], [$5])
-   OVSDB_CHECK_NEGATIVE_PY3([$1 - Python3], [$2], [$3], [$4], [$5])])
+   OVSDB_CHECK_NEGATIVE_PY([$1 - Python2(pyjson)], [$2], [$3], [$4], [$5])
+   OVSDB_CHECK_NEGATIVE_PY([$1 - Python2(cjson)], [$2], [$3], [$4], [$5], C)
+   OVSDB_CHECK_NEGATIVE_PY3([$1 - Python3(pyjson)], [$2], [$3], [$4], [$5])
+   OVSDB_CHECK_NEGATIVE_PY3([$1 - Python3(cjson)], [$2], [$3], [$4], [$5], C)])
 
 OVS_START_SHELL_HELPERS
 ovsdb_client_wait() {
