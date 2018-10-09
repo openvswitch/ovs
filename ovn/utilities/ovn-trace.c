@@ -645,6 +645,15 @@ read_ports(void)
         } else if (!strcmp(sbpb->type, "l3gateway")) {
             /* Treat all gateways as local for our purposes. */
             dp->has_local_l3gateway = true;
+            const char *peer_name = smap_get(&sbpb->options, "peer");
+            if (peer_name) {
+                struct ovntrace_port *peer
+                    = shash_find_data(&ports, peer_name);
+                if (peer) {
+                    port->peer = peer;
+                    port->peer->peer = port;
+                }
+            }
         }
     }
 
