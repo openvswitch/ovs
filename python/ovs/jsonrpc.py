@@ -272,7 +272,8 @@ class Connection(object):
                 # data, so we convert it here as soon as possible.
                 if data and not error:
                     try:
-                        data = decoder.decode(data)
+                        if six.PY3 or ovs.json.PARSER == ovs.json.PARSER_PY:
+                            data = decoder.decode(data)
                     except UnicodeError:
                         error = errno.EILSEQ
                 if error:
@@ -298,7 +299,11 @@ class Connection(object):
             else:
                 if self.parser is None:
                     self.parser = ovs.json.Parser()
-                self.input = self.input[self.parser.feed(self.input):]
+                if six.PY3 and ovs.json.PARSER == ovs.json.PARSER_C:
+                    self.input = self.input.encode('utf-8')[
+                        self.parser.feed(self.input):].decode()
+                else:
+                    self.input = self.input[self.parser.feed(self.input):]
                 if self.parser.is_done():
                     msg = self.__process_msg()
                     if msg:
