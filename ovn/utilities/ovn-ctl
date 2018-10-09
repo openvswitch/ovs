@@ -116,6 +116,9 @@ start_ovsdb__() {
     local addr
     local active_conf_file
     local use_remote_in_db
+    local ovn_db_ssl_key
+    local ovn_db_ssl_cert
+    local ovn_db_ssl_cacert
     eval pid=\$DB_${DB}_PID
     eval cluster_local_addr=\$DB_${DB}_CLUSTER_LOCAL_ADDR
     eval cluster_local_port=\$DB_${DB}_CLUSTER_LOCAL_PORT
@@ -137,6 +140,9 @@ start_ovsdb__() {
     eval addr=\$DB_${DB}_ADDR
     eval active_conf_file=\$ovn${db}_active_conf_file
     eval use_remote_in_db=\$DB_${DB}_USE_REMOTE_IN_DB
+    eval ovn_db_ssl_key=\$OVN_${DB}_DB_SSL_KEY
+    eval ovn_db_ssl_cert=\$OVN_${DB}_DB_SSL_CERT
+    eval ovn_db_ssl_cacert=\$OVN_${DB}_DB_SSL_CA_CERT
 
     # Check and eventually start ovsdb-server for DB
     if pidfile_is_running $pid; then
@@ -183,9 +189,23 @@ $cluster_remote_port
     if test X"$use_remote_in_db" != Xno; then
         set "$@" --remote=db:$schema_name,$table_name,connections
     fi
-    set "$@" --private-key=db:$schema_name,SSL,private_key
-    set "$@" --certificate=db:$schema_name,SSL,certificate
-    set "$@" --ca-cert=db:$schema_name,SSL,ca_cert
+
+    if test X"$ovn_db_ssl_key" != X; then
+        set "$@" --private-key=$ovn_db_ssl_key
+    else
+        set "$@" --private-key=db:$schema_name,SSL,private_key
+    fi
+    if test X"$ovn_db_ssl_cert" != X; then
+        set "$@" --certificate=$ovn_db_ssl_cert
+    else
+        set "$@" --certificate=db:$schema_name,SSL,certificate
+    fi
+    if test X"$ovn_db_ssl_cacert" != X; then
+        set "$@" --ca-cert=$ovn_db_ssl_cacert
+    else
+        set "$@" --ca-cert=db:$schema_name,SSL,ca_cert
+    fi
+
     set "$@" --ssl-protocols=db:$schema_name,SSL,ssl_protocols
     set "$@" --ssl-ciphers=db:$schema_name,SSL,ssl_ciphers
 
@@ -481,6 +501,15 @@ set_defaults () {
     OVN_NORTHD_SB_DB="unix:$DB_SB_SOCK"
     DB_NB_USE_REMOTE_IN_DB="yes"
     DB_SB_USE_REMOTE_IN_DB="yes"
+
+    OVN_NB_DB_SSL_KEY=""
+    OVN_NB_DB_SSL_CERT=""
+    OVN_NB_DB_SSL_CA_CERT=""
+
+    OVN_SB_DB_SSL_KEY=""
+    OVN_SB_DB_SSL_CERT=""
+    OVN_SB_DB_SSL_CA_CERT=""
+
 }
 
 set_option () {
@@ -536,6 +565,12 @@ Options:
   --ovn-controller-ssl-cert=CERT OVN Southbound SSL certificate file
   --ovn-controller-ssl-ca-cert=CERT OVN Southbound SSL CA certificate file
   --ovn-controller-ssl-bootstrap-ca-cert=CERT Bootstrapped OVN Southbound SSL CA certificate file
+  --ovn-nb-db-ssl-key=KEY OVN Northbound DB SSL private key file
+  --ovn-nb-db-ssl-cert=CERT OVN Northbound DB SSL certificate file
+  --ovn-nb-db-ssl-ca-cert=CERT OVN Northbound DB SSL CA certificate file
+  --ovn-sb-db-ssl-key=KEY OVN Southbound DB SSL private key file
+  --ovn-sb-db-ssl-cert=CERT OVN Southbound DB SSL certificate file
+  --ovn-sb-db-ssl-ca-cert=CERT OVN Southbound DB SSL CA certificate file
   --ovn-manage-ovsdb=yes|no        Whether or not the OVN databases should be
                                    automatically started and stopped along
                                    with ovn-northd. The default is "yes". If

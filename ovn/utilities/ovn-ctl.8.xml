@@ -198,4 +198,18 @@
           start_northd
       </code>
     </p>
+
+    <h2>Passing ssl keys when starting OVN dbs will supercede the default ssl values in db</h2>
+    <h3>Starting standalone ovn db server passing SSL certificates</h3>
+    <p>
+      <code>
+        # ovn-ctl --ovn-nb-db-ssl-key=/etc/openvswitch/ovnnb-privkey.pem
+          --ovn-nb-db-ssl-cert=/etc/openvswitch/ovnnb-cert.pem
+          --ovn-nb-db-ssl-ca-cert=/etc/openvswitch/cacert.pem
+          --ovn-sb-db-ssl-key=/etc/openvswitch/ovnsb-privkey.pem
+          --ovn-sb-db-ssl-cert=/etc/openvswitch/ovnsb-cert.pem
+          --ovn-sb-db-ssl-ca-cert=/etc/openvswitch/cacert.pem
+           start_northd
+      </code>
+    </p>
 </manpage>
