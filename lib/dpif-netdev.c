@@ -3374,6 +3374,16 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
         dpif_flow_hash(dpif, &match.flow, sizeof match.flow, &ufid);
     }
 
+    /* The Netlink encoding of datapath flow keys cannot express
+     * wildcarding the presence of a VLAN tag. Instead, a missing VLAN
+     * tag is interpreted as exact match on the fact that there is no
+     * VLAN.  Unless we refactor a lot of code that translates between
+     * Netlink and struct flow representations, we have to do the same
+     * here.  This must be in sync with 'match' in handle_packet_upcall(). */
+    if (!match.wc.masks.vlans[0].tci) {
+        match.wc.masks.vlans[0].tci = htons(0xffff);
+    }
+
     /* Must produce a netdev_flow_key for lookup.
      * Use the same method as employed to create the key when adding
      * the flow to the dplcs to make sure they match. */
@@ -6089,7 +6099,7 @@ handle_packet_upcall(struct dp_netdev_pmd_thread *pmd,
      * tag is interpreted as exact match on the fact that there is no
      * VLAN.  Unless we refactor a lot of code that translates between
      * Netlink and struct flow representations, we have to do the same
-     * here. */
+     * here.  This must be in sync with 'match' in dpif_netdev_flow_put(). */
     if (!match.wc.masks.vlans[0].tci) {
         match.wc.masks.vlans[0].tci = htons(0xffff);
     }
