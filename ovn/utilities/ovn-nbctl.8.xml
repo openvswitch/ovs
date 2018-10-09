@@ -881,6 +881,28 @@
       </dd>
     </dl>
 
+    <h1>Port Group commands</h1>
+
+    <dl>
+      <dt><code>pg-add</code> <var>group</var> [<var>port</var>]...</dt>
+      <dd>
+        Creates a new port group in the <code>Port_Group</code> table named
+        <code>group</code> with optional <code>ports</code> added to the group.
+      </dd>
+
+      <dt><code>pg-set-ports</code> <var>group</var> <var>port</var>...</dt>
+      <dd>
+        Sets <code>ports</code> on the port group named <code>group</code>. It
+        is an error if <code>group</code> does not exist.
+      </dd>
+
+      <dt><code>pg-del</code> <var>group</var></dt>
+      <dd>
+        Deletes port group <code>group</code>. It is an error if
+        <code>group</code> does not exist.
+      </dd>
+    </dl>
+
     <h1>Database Commands</h1>
     <p>These commands query and modify the contents of <code>ovsdb</code> tables.
     They are a slight abstraction of the <code>ovsdb</code> interface and
