@@ -28,6 +28,13 @@
 #include <net/netfilter/ipv6/nf_defrag_ipv6.h>
 #include <net/netfilter/nf_conntrack_count.h>
 
+/* Fix grsecurity patch compilation issue. */
+#ifdef CONSTIFY_PLUGIN
+#include <linux/cache.h>
+#undef __read_mostly
+#define __read_mostly
+#endif
+
 /* Even though vanilla 3.10 kernel has grp->id, RHEL 7 kernel is missing
  * this field. */
 #ifdef HAVE_GENL_MULTICAST_GROUP_WITH_ID
