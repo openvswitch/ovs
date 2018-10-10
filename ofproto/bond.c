@@ -1717,8 +1717,7 @@ bond_link_status_update(struct bond_slave *slave)
             VLOG_INFO_RL(&rl, "interface %s: will not be %s",
                          slave->name, up ? "disabled" : "enabled");
         } else {
-            int delay = (bond->lacp_status != LACP_DISABLED ? 0
-                         : up ? bond->updelay : bond->downdelay);
+            int delay = up ? bond->updelay : bond->downdelay;
             slave->delay_expires = time_msec() + delay;
             if (delay) {
                 VLOG_INFO_RL(&rl, "interface %s: will be %s if it stays %s "

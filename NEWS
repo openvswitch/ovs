@@ -12,6 +12,7 @@ Post-v2.10.0
      * Add option for simple round-robin based Rxq to PMD assignment.
        It can be set with pmd-rxq-assign.
    - Add 'symmetric_l3' hash function.
+   - OVS now honors 'updelay' and 'downdelay' for bonds with LACP configured.
 
 v2.10.0 - 18 Aug 2018
 ---------------------
