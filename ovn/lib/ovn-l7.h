@@ -151,6 +151,7 @@ struct dhcp_opt6_header {
 #define DHCPV6_MSG_TYPE_CONFIRM     4
 #define DHCPV6_MSG_TYPE_REPLY       7
 #define DHCPV6_MSG_TYPE_DECLINE     9
+#define DHCPV6_MSG_TYPE_INFO_REQ    11
 
 
 /* DHCPv6 Option codes */
