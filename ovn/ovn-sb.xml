@@ -162,7 +162,45 @@
       <column name="external_ids">
         See <em>External IDs</em> at the beginning of this document.
       </column>
+
+      <column name="options">
+      </column>
     </group>
+
+    <group title="Common options">
+      <column name="options">
+        This column provides general key/value settings. The supported
+        options are described individually below.
+      </column>
+
+      <group title="Options for configuring BFD">
+        <p>
+          These options apply when <code>ovn-controller</code> configures
+          BFD on tunnels interfaces.
+        </p>
+
+        <column name="options" key="bfd-min-rx">
+          BFD option <code>min-rx</code> value to use when configuring BFD on
+          tunnel interfaces.
+        </column>
+
+        <column name="options" key="bfd-decay-min-rx">
+          BFD option <code>decay-min-rx</code> value to use when configuring
+          BFD on tunnel interfaces.
+        </column>
+
+        <column name="options" key="bfd-min-tx">
+          BFD option <code>min-tx</code> value to use when configuring BFD on
+          tunnel interfaces.
+        </column>
+
+        <column name="options" key="bfd-mult">
+          BFD option <code>mult</code> value to use when configuring BFD on
+          tunnel interfaces.
+        </column>
+      </group>
+    </group>
+
     <group title="Connection Options">
       <column name="connections">
         Database clients to which the Open vSwitch database server should

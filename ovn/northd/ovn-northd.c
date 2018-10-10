@@ -7138,6 +7138,7 @@ ovnnb_db_run(struct northd_context *ctx,
         sb = sbrec_sb_global_insert(ctx->ovnsb_txn);
     }
     sbrec_sb_global_set_nb_cfg(sb, nb->nb_cfg);
+    sbrec_sb_global_set_options(sb, &nb->options);
     sb_loop->next_cfg = nb->nb_cfg;
 
     cleanup_macam(&macam);
@@ -7641,6 +7642,7 @@ main(int argc, char *argv[])
 
     ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_sb_global);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_sb_global_col_nb_cfg);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_sb_global_col_options);
 
     ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_logical_flow);
     add_column_noalert(ovnsb_idl_loop.idl,

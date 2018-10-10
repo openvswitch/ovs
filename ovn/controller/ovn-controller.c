@@ -756,7 +756,9 @@ main(int argc, char *argv[])
                                 sbrec_chassis_by_name,
                                 sbrec_port_binding_by_datapath,
                                 ovsrec_interface_table_get(ovs_idl_loop.idl),
-                                br_int, chassis, &local_datapaths);
+                                br_int, chassis,
+                                sbrec_sb_global_table_get(ovnsb_idl_loop.idl),
+                                &local_datapaths);
                         }
                         physical_run(
                             sbrec_chassis_by_name,

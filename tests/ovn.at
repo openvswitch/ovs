@@ -9268,7 +9268,7 @@ for chassis in gw1 gw2; do
 done
 # make sure BFD is not enabled to hv2, we don't need it
 AT_CHECK([ovs-vsctl --bare --columns bfd find Interface name=ovn-hv2-0],[0],
-         [[enable=false
+         [[
 ]])
 
 
@@ -9282,7 +9282,7 @@ for chassis in gw1 gw2; do
 done
 # make sure BFD is not enabled to hv1, we don't need it
 AT_CHECK([ovs-vsctl --bare --columns bfd find Interface name=ovn-hv1-0],[0],
-         [[enable=false
+         [[
 ]])
 
 sleep 3  # let BFD sessions settle so we get the right flows on the right chassis
@@ -9311,6 +9311,33 @@ AT_CHECK([as gw2 ovs-ofctl dump-flows br-int table=24 | grep 00:00:02:01:02:04 |
 AT_CHECK([ovn-sbctl --columns chassis --bare find Port_Binding logical_port=cr-outside | grep $gw1_chassis | wc -l],
          [0],[[1
 ]])
+
+ovn-nbctl --wait=hv set NB_Global . options:"bfd-min-rx"=2000
+as gw2
+for chassis in gw1 hv1 hv2; do
+    echo "checking gw2 -> $chassis"
+    OVS_WAIT_UNTIL([
+    bfd_cfg=$(ovs-vsctl --bare --columns bfd find Interface name=ovn-$chassis-0)
+    test "$bfd_cfg" = "enable=true min_rx=2000"
+])
+done
+ovn-nbctl --wait=hv set NB_Global . options:"bfd-min-tx"=1500
+for chassis in gw1 hv1 hv2; do
+    echo "checking gw2 -> $chassis"
+    OVS_WAIT_UNTIL([
+    bfd_cfg=$(ovs-vsctl --bare --columns bfd find Interface name=ovn-$chassis-0)
+    test "$bfd_cfg" = "enable=true min_rx=2000 min_tx=1500"
+])
+done
+ovn-nbctl remove NB_Global . options "bfd-min-rx"
+ovn-nbctl --wait=hv set NB_Global . options:"bfd-mult"=5
+for chassis in gw1 hv1 hv2; do
+    echo "checking gw2 -> $chassis"
+    OVS_WAIT_UNTIL([
+    bfd_cfg=$(ovs-vsctl --bare --columns bfd find Interface name=ovn-$chassis-0)
+    test "$bfd_cfg" = "enable=true min_tx=1500 mult=5"
+])
+done
 
 OVN_CLEANUP([gw1],[gw2],[hv1],[hv2])
 
