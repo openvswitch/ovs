@@ -285,6 +285,8 @@ ip6.src == ::1 => ip6.src == 0x1
 inport == "eth0"
 !(inport != "eth0") => inport == "eth0"
 
+(((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((0))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))) => 0
+
 ip4.src == "eth0" => Integer field ip4.src is not compatible with string constant.
 inport == 1 => String field inport is not compatible with integer constant.
 ip4.src = 1.2.3.4 => Syntax error at `=' expecting relational operator.
@@ -351,6 +353,8 @@ eth.dst[40] x => Syntax error at `x' expecting end of input.
 
 ip4.src == {1.2.3.4, $set1, $unknownset} => Syntax error at `$unknownset' expecting address set name.
 eth.src == {$set3, badmac, 00:00:00:00:00:01} => Syntax error at `badmac' expecting constant.
+
+((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((())))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))) => Parentheses nested too deeply.
 ]])
 sed 's/ =>.*//' test-cases.txt > input.txt
 sed 's/.* => //' test-cases.txt > expout
