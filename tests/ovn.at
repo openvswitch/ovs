@@ -4619,15 +4619,23 @@ trim_zeros() {
 # from the "ovs-ofctl monitor br-int resume"
 test_dhcpv6() {
     local inport=$1 src_mac=$2 src_lla=$3 msg_code=$4 offer_ip=$5
-    local request=ffffffffffff${src_mac}86dd00000000002a1101${src_lla}
+    if test $msg_code != 0b; then
+        req_len=2a
+    else
+        req_len=1a
+    fi
+    local request=ffffffffffff${src_mac}86dd0000000000${req_len}1101${src_lla}
     # dst ip ff02::1:2
     request=${request}ff020000000000000000000000010002
     # udp header and dhcpv6 header
-    request=${request}02220223002affff${msg_code}010203
+    request=${request}0222022300${req_len}ffff${msg_code}010203
     # Client identifier
     request=${request}0001000a00030001${src_mac}
-    # IA-NA (Identity Association for Non Temporary Address)
-    request=${request}0003000c0102030400000e1000001518
+    # Add IA-NA (Identity Association for Non Temporary Address) if msg_code
+    # is not 11 (information request packet)
+    if test $msg_code != 0b; then
+        request=${request}0003000c0102030400000e1000001518
+    fi
     shift; shift; shift; shift; shift;
     if test $offer_ip != 0; then
         local server_mac=000000100001
@@ -4758,7 +4766,7 @@ cat 4.expected > expout
 AT_CHECK([cat 4.packets], [0], [expout])
 
 # Send DHCPv6 packet on ls1-lp3. native DHCPv6 works as stateless mode for this port.
-# The DHCPv6 reply should doesn't contian offer_ip.
+# The DHCPv6 reply shouldn't contain offer_ip.
 src_mac=f00000000022
 src_lla=fe80000000000000f20000fffe000022
 reset_pcap_file hv1-vif5 hv1/vif5
@@ -4768,6 +4776,23 @@ test_dhcpv6 5 $src_mac $src_lla 01 1 5
 OVS_WAIT_UNTIL([test 3 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
 
 $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif5-tx.pcap | trim_zeros > 5.packets
+# Skipping the UDP checksum
+cat 5.expected | cut -c 1-120,125- > expout
+AT_CHECK([cat 5.packets | cut -c 1-120,125- ], [0], [expout])
+
+# Send DHCPv6 information request (code 11) on ls1-lp3. The DHCPv6 reply
+# shouldn't contain offer_ip
+src_mac=f00000000022
+src_lla=fe80000000000000f20000fffe000022
+reset_pcap_file hv1-vif5 hv1/vif5
+rm -f 5.expected
+test_dhcpv6 5 $src_mac $src_lla 0b 1 5
+
+# NXT_RESUMEs should be 4.
+OVS_WAIT_UNTIL([test 4 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif5-tx.pcap |
+trim_zeros > 5.packets
 # Skipping the UDP checksum
 cat 5.expected | cut -c 1-120,125- > expout
 AT_CHECK([cat 5.packets | cut -c 1-120,125- ], [0], [expout])

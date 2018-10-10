@@ -788,6 +788,11 @@ compose_out_dhcpv6_opts(struct ofpbuf *userdata,
                 return false;
             }
 
+            if (!iaid) {
+                /* If iaid is None, it means its an DHCPv6 information request.
+                 * Don't put IA_NA option in the response. */
+                 break;
+            }
             /* IA Address option is used to specify IPv6 addresses associated
              * with an IA_NA or IA_TA. The IA Address option must be
              * encapsulated in the Options field of an IA_NA or IA_TA option.
@@ -896,7 +901,8 @@ pinctrl_handle_put_dhcpv6_opts(
     }
 
     uint8_t out_dhcpv6_msg_type;
-    switch(*in_dhcpv6_data) {
+    uint8_t in_dhcpv6_msg_type = *in_dhcpv6_data;
+    switch (in_dhcpv6_msg_type) {
     case DHCPV6_MSG_TYPE_SOLICIT:
         out_dhcpv6_msg_type = DHCPV6_MSG_TYPE_ADVT;
         break;
@@ -904,6 +910,7 @@ pinctrl_handle_put_dhcpv6_opts(
     case DHCPV6_MSG_TYPE_REQUEST:
     case DHCPV6_MSG_TYPE_CONFIRM:
     case DHCPV6_MSG_TYPE_DECLINE:
+    case DHCPV6_MSG_TYPE_INFO_REQ:
         out_dhcpv6_msg_type = DHCPV6_MSG_TYPE_REPLY;
         break;
 
@@ -916,7 +923,10 @@ pinctrl_handle_put_dhcpv6_opts(
     in_dhcpv6_data += 4;
     /* We need to extract IAID from the IA-NA option of the client's DHCPv6
      * solicit/request/confirm packet and copy the same IAID in the Server's
-     * response. */
+     * response.
+     * DHCPv6 information packet (for stateless request will not have IA-NA
+     * option. So we don't need to copy that in the Server's response.
+     * */
     ovs_be32 iaid = 0;
     struct dhcpv6_opt_header const *in_opt_client_id = NULL;
     size_t udp_len = ntohs(in_udp->udp_len);
@@ -950,7 +960,7 @@ pinctrl_handle_put_dhcpv6_opts(
         goto exit;
     }
 
-    if (!iaid) {
+    if (!iaid && in_dhcpv6_msg_type != DHCPV6_MSG_TYPE_INFO_REQ) {
         VLOG_WARN_RL(&rl, "DHCPv6 option - IA NA not present in the "
                      " DHCPv6 packet");
         goto exit;
