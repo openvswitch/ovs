@@ -125,7 +125,8 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
     /* Bail out if we cannot construct at least a 1 char string. */
     const char *input = (const char *) data;
-    if (size < 2 || input[size - 1] != '\0' || strchr(input, '\n')) {
+    if (size < 2 || input[size - 1] != '\0' || strchr(input, '\n') ||
+        strlen(input) != size - 1) {
         return 0;
     }
 
