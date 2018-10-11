@@ -255,6 +255,7 @@ vswitchd/ovs-vswitchd.8: \
 	lib/dpif-netdev-unixctl.man \
 	lib/memory-unixctl.man \
 	lib/netdev-dpdk-unixctl.man \
+	lib/ovs.tmac \
 	lib/service.man \
 	lib/ssl-bootstrap.man \
 	lib/ssl-peer-ca-cert.man \
@@ -273,6 +274,7 @@ lib/dpctl.man:
 lib/dpif-netdev-unixctl.man:
 lib/memory-unixctl.man:
 lib/netdev-dpdk-unixctl.man:
+lib/ovs.tmac:
 lib/service.man:
 lib/ssl-bootstrap.man:
 lib/ssl-peer-ca-cert.man:

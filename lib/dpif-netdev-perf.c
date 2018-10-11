@@ -170,7 +170,8 @@ pmd_perf_format_overall_stats(struct ds *str, struct pmd_perf_stats *s,
                               double duration)
 {
     uint64_t stats[PMD_N_STATS];
-    double us_per_cycle = 1000000.0 / get_tsc_hz();
+    uint64_t tsc_hz = get_tsc_hz();
+    double us_per_cycle = 1000000.0 / tsc_hz;
 
     if (duration == 0) {
         return;
@@ -191,26 +192,26 @@ pmd_perf_format_overall_stats(struct ds *str, struct pmd_perf_stats *s,
     uint64_t busy_iter = tot_iter >= idle_iter ? tot_iter - idle_iter : 0;
 
     ds_put_format(str,
-            "  Cycles:          %12"PRIu64"  (%.2f GHz)\n"
-            "  Iterations:      %12"PRIu64"  (%.2f us/it)\n"
-            "  - idle:          %12"PRIu64"  (%4.1f %% cycles)\n"
-            "  - busy:          %12"PRIu64"  (%4.1f %% cycles)\n",
-            tot_cycles, (tot_cycles / duration) / 1E9,
+            "  Iterations:        %12"PRIu64"  (%.2f us/it)\n"
+            "  - Used TSC cycles: %12"PRIu64"  (%5.1f %% of total cycles)\n"
+            "  - idle iterations: %12"PRIu64"  (%5.1f %% of used cycles)\n"
+            "  - busy iterations: %12"PRIu64"  (%5.1f %% of used cycles)\n",
             tot_iter, tot_cycles * us_per_cycle / tot_iter,
+            tot_cycles, 100.0 * (tot_cycles / duration) / tsc_hz,
             idle_iter,
             100.0 * stats[PMD_CYCLES_ITER_IDLE] / tot_cycles,
             busy_iter,
             100.0 * stats[PMD_CYCLES_ITER_BUSY] / tot_cycles);
     if (rx_packets > 0) {
         ds_put_format(str,
-            "  Rx packets:      %12"PRIu64"  (%.0f Kpps, %.0f cycles/pkt)\n"
-            "  Datapath passes: %12"PRIu64"  (%.2f passes/pkt)\n"
-            "  - EMC hits:      %12"PRIu64"  (%4.1f %%)\n"
-            "  - SMC hits:      %12"PRIu64"  (%4.1f %%)\n"
-            "  - Megaflow hits: %12"PRIu64"  (%4.1f %%, %.2f subtbl lookups/"
-                                                                     "hit)\n"
-            "  - Upcalls:       %12"PRIu64"  (%4.1f %%, %.1f us/upcall)\n"
-            "  - Lost upcalls:  %12"PRIu64"  (%4.1f %%)\n",
+            "  Rx packets:        %12"PRIu64"  (%.0f Kpps, %.0f cycles/pkt)\n"
+            "  Datapath passes:   %12"PRIu64"  (%.2f passes/pkt)\n"
+            "  - EMC hits:        %12"PRIu64"  (%5.1f %%)\n"
+            "  - SMC hits:        %12"PRIu64"  (%5.1f %%)\n"
+            "  - Megaflow hits:   %12"PRIu64"  (%5.1f %%, %.2f "
+                                                "subtbl lookups/hit)\n"
+            "  - Upcalls:         %12"PRIu64"  (%5.1f %%, %.1f us/upcall)\n"
+            "  - Lost upcalls:    %12"PRIu64"  (%5.1f %%)\n",
             rx_packets, (rx_packets / duration) / 1000,
             1.0 * stats[PMD_CYCLES_ITER_BUSY] / rx_packets,
             passes, rx_packets ? 1.0 * passes / rx_packets : 0,
@@ -228,17 +229,16 @@ pmd_perf_format_overall_stats(struct ds *str, struct pmd_perf_stats *s,
             stats[PMD_STAT_LOST],
             100.0 * stats[PMD_STAT_LOST] / passes);
     } else {
-        ds_put_format(str, "  Rx packets:      %12d\n", 0);
+        ds_put_format(str, "  Rx packets:        %12d\n", 0);
     }
     if (tx_packets > 0) {
         ds_put_format(str,
-            "  Tx packets:      %12"PRIu64"  (%.0f Kpps)\n"
-            "  Tx batches:      %12"PRIu64"  (%.2f pkts/batch)"
-            "\n",
+            "  Tx packets:        %12"PRIu64"  (%.0f Kpps)\n"
+            "  Tx batches:        %12"PRIu64"  (%.2f pkts/batch)\n",
             tx_packets, (tx_packets / duration) / 1000,
             tx_batches, 1.0 * tx_packets / tx_batches);
     } else {
-        ds_put_format(str, "  Tx packets:      %12d\n\n", 0);
+        ds_put_format(str, "  Tx packets:        %12d\n\n", 0);
     }
 }
 

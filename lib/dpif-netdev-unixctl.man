@@ -123,24 +123,26 @@ Display the last ms_len millisecond stats
 The output always contains the following global PMD statistics:
 .RS
 .IP
-Time: 15:24:55.270 .br
+.EX
+Time: 15:24:55.270
 Measurement duration: 1.008 s
 
 pmd thread numa_id 0 core_id 1:
 
-  Cycles:            2419034712  (2.40 GHz)
-  Iterations:            572817  (1.76 us/it)
-  - idle:                486808  (15.9 % cycles)
-  - busy:                 86009  (84.1 % cycles)
-  Rx packets:           2399607  (2381 Kpps, 848 cycles/pkt)
-  Datapath passes:      3599415  (1.50 passes/pkt)
-  - EMC hits:            336472  ( 9.3 %)
-  - SMC hits:                 0  ( 0.0 %)
-  - Megaflow hits:      3262943  (90.7 %, 1.00 subtbl lookups/hit)
-  - Upcalls:                  0  ( 0.0 %, 0.0 us/upcall)
-  - Lost upcalls:             0  ( 0.0 %)
-  Tx packets:           2399607  (2381 Kpps)
-  Tx batches:            171400  (14.00 pkts/batch)
+  Iterations:              572817  (1.76 us/it)
+  - Used TSC cycles:   2419034712  ( 99.9 % of total cycles)
+  - idle iterations:       486808  ( 15.9 % of used cycles)
+  - busy iterations:        86009  ( 84.1 % of used cycles)
+  Rx packets:             2399607  (2381 Kpps, 848 cycles/pkt)
+  Datapath passes:        3599415  (1.50 passes/pkt)
+  - EMC hits:              336472  (  9.3 %)
+  - SMC hits:                   0  ( 0.0 %)
+  - Megaflow hits:        3262943  ( 90.7 %, 1.00 subtbl lookups/hit)
+  - Upcalls:                    0  (  0.0 %, 0.0 us/upcall)
+  - Lost upcalls:               0  (  0.0 %)
+  Tx packets:             2399607  (2381 Kpps)
+  Tx batches:              171400  (14.00 pkts/batch)
+.EE
 .RE
 .IP
 Here "Rx packets" actually reflects the number of packets forwarded by the
