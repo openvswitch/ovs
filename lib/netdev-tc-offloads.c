@@ -643,6 +643,10 @@ parse_tc_flower_to_match(struct tc_flower *flower,
                 }
                 nl_msg_put_be16(buf, OVS_TUNNEL_KEY_ATTR_TP_DST,
                                 action->encap.tp_dst);
+                if (!action->encap.no_csum) {
+                    nl_msg_put_u8(buf, OVS_TUNNEL_KEY_ATTR_CSUM,
+                                  !action->encap.no_csum);
+                }
 
                 parse_tc_flower_geneve_opts(action, buf);
                 nl_msg_end_nested(buf, tunnel_offset);
@@ -1276,6 +1280,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
             }
             if (action->type == TC_ACT_ENCAP) {
                 action->encap.tp_dst = info->tp_dst_port;
+                action->encap.no_csum = !info->tunnel_csum_on;
             }
         } else if (nl_attr_type(nla) == OVS_ACTION_ATTR_SET_MASKED) {
             const struct nlattr *set = nl_attr_get(nla);

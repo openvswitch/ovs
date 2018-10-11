@@ -865,6 +865,7 @@ static const struct nl_policy tunnel_key_policy[] = {
     [TCA_TUNNEL_KEY_ENC_TOS] = { .type = NL_A_U8, .optional = true, },
     [TCA_TUNNEL_KEY_ENC_TTL] = { .type = NL_A_U8, .optional = true, },
     [TCA_TUNNEL_KEY_ENC_OPTS] = { .type = NL_A_NESTED, .optional = true, },
+    [TCA_TUNNEL_KEY_NO_CSUM] = { .type = NL_A_U8, .optional = true, },
 };
 
 static int
@@ -995,6 +996,7 @@ nl_parse_act_tunnel_key(struct nlattr *options, struct tc_flower *flower)
         struct nlattr *tos = tun_attrs[TCA_TUNNEL_KEY_ENC_TOS];
         struct nlattr *ttl = tun_attrs[TCA_TUNNEL_KEY_ENC_TTL];
         struct nlattr *tun_opt = tun_attrs[TCA_TUNNEL_KEY_ENC_OPTS];
+        struct nlattr *no_csum = tun_attrs[TCA_TUNNEL_KEY_NO_CSUM];
 
         action = &flower->actions[flower->action_count++];
         action->type = TC_ACT_ENCAP;
@@ -1010,6 +1012,7 @@ nl_parse_act_tunnel_key(struct nlattr *options, struct tc_flower *flower)
         action->encap.tp_dst = dst_port ? nl_attr_get_be16(dst_port) : 0;
         action->encap.tos = tos ? nl_attr_get_u8(tos) : 0;
         action->encap.ttl = ttl ? nl_attr_get_u8(ttl) : 0;
+        action->encap.no_csum = no_csum ? nl_attr_get_u8(no_csum) : 0;
 
         err = nl_parse_act_tunnel_opts(tun_opt, action);
         if (err) {
@@ -1628,7 +1631,8 @@ nl_msg_put_act_tunnel_key_set(struct ofpbuf *request, ovs_be64 id,
                               struct in6_addr *ipv6_src,
                               struct in6_addr *ipv6_dst,
                               ovs_be16 tp_dst, uint8_t tos, uint8_t ttl,
-                              struct tun_metadata tun_metadata)
+                              struct tun_metadata tun_metadata,
+                              uint8_t no_csum)
 {
     size_t offset;
 
@@ -1659,6 +1663,7 @@ nl_msg_put_act_tunnel_key_set(struct ofpbuf *request, ovs_be64 id,
         }
         nl_msg_put_be16(request, TCA_TUNNEL_KEY_ENC_DST_PORT, tp_dst);
         nl_msg_put_act_tunnel_geneve_option(request, tun_metadata);
+        nl_msg_put_u8(request, TCA_TUNNEL_KEY_NO_CSUM, no_csum);
     }
     nl_msg_end_nested(request, offset);
 }
@@ -1902,7 +1907,8 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
                                               action->encap.tp_dst,
                                               action->encap.tos,
                                               action->encap.ttl,
-                                              action->encap.data);
+                                              action->encap.data,
+                                              action->encap.no_csum);
                 nl_msg_end_nested(request, act_offset);
             }
             break;

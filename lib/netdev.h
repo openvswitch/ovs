@@ -201,6 +201,7 @@ void netdev_send_wait(struct netdev *, int qid);
 struct offload_info {
     const struct dpif_class *dpif_class;
     ovs_be16 tp_dst_port; /* Destination port for tunnel in SET action */
+    uint8_t tunnel_csum_on; /* Tunnel header with checksum */
 
     /*
      * The flow mark id assigened to the flow. If any pkts hit the flow,

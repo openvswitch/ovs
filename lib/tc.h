@@ -151,6 +151,7 @@ struct tc_action {
             ovs_be16 tp_dst;
             uint8_t tos;
             uint8_t ttl;
+            uint8_t no_csum;
             struct {
                 ovs_be32 ipv4_src;
                 ovs_be32 ipv4_dst;

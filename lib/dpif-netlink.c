@@ -1954,6 +1954,7 @@ parse_flow_put(struct dpif_netlink *dpif, struct dpif_flow_put *put)
     struct netdev *dev;
     struct offload_info info;
     ovs_be16 dst_port = 0;
+    uint8_t csum_on = false;
     int err;
 
     if (put->flags & DPIF_FP_PROBE) {
@@ -1994,12 +1995,16 @@ parse_flow_put(struct dpif_netlink *dpif, struct dpif_flow_put *put)
             if (tnl_cfg && tnl_cfg->dst_port != 0) {
                 dst_port = tnl_cfg->dst_port;
             }
+            if (tnl_cfg) {
+                csum_on = tnl_cfg->csum;
+            }
             netdev_close(outdev);
         }
     }
 
     info.dpif_class = dpif_class;
     info.tp_dst_port = dst_port;
+    info.tunnel_csum_on = csum_on;
     err = netdev_flow_put(dev, &match,
                           CONST_CAST(struct nlattr *, put->actions),
                           put->actions_len,
