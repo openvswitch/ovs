@@ -1154,7 +1154,8 @@ netdev_vport_tunnel_register(void)
               .type = "gre",
               .build_header = netdev_gre_build_header,
               .push_header = netdev_gre_push_header,
-              .pop_header = netdev_gre_pop_header
+              .pop_header = netdev_gre_pop_header,
+              .get_ifindex = NETDEV_VPORT_GET_IFINDEX,
           },
           {{NULL, NULL, 0, 0}}
         },
