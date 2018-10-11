@@ -581,6 +581,11 @@ make_cmp(struct expr_context *ctx,
                         f->symbol->name);
             goto exit;
         }
+        if (!cs->n_values) {
+            lexer_error(ctx->lexer, "Only == and != operators may be used "
+                        "to compare a field against an empty value set.");
+            goto exit;
+        }
         if (cs->values[0].masked) {
             lexer_error(ctx->lexer, "Only == and != operators may be used "
                         "with masked constants.  Consider using subfields "
