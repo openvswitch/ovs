@@ -355,6 +355,8 @@ ip4.src == {1.2.3.4, $set1, $unknownset} => Syntax error at `$unknownset' expect
 eth.src == {$set3, badmac, 00:00:00:00:00:01} => Syntax error at `badmac' expecting constant.
 
 ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((())))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))) => Parentheses nested too deeply.
+
+ct_label > $set4 => Only == and != operators may be used to compare a field against an empty value set.
 ]])
 sed 's/ =>.*//' test-cases.txt > input.txt
 sed 's/.* => //' test-cases.txt > expout
