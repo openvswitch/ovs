@@ -110,8 +110,10 @@ DPIF_NETDEV_DUMMY_IFACE([dummy-pmd])
 m4_define([DPIF_NETDEV_MISS_FLOW_INSTALL],
   [AT_SETUP([dpif-netdev - miss upcall key matches flow_install - $1])
    OVS_VSWITCHD_START(
-     [add-port br0 p1 -- set interface p1 type=$1 options:pstream=punix:$OVS_RUNDIR/p0.sock
-      set bridge br0 datapath-type=dummy other-config:datapath-id=1234 fail-mode=secure], [], [],
+     [add-port br0 p1 \
+      -- set interface p1 type=$1 options:pstream=punix:$OVS_RUNDIR/p0.sock \
+      -- set bridge br0 datapath-type=dummy \
+                        other-config:datapath-id=1234 fail-mode=secure], [], [],
       [m4_if([$1], [dummy-pmd], [--dummy-numa="0,0,0,0,1,1,1,1"], [])])
    AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
 
@@ -150,8 +152,10 @@ DPIF_NETDEV_MISS_FLOW_INSTALL([dummy-pmd])
 m4_define([DPIF_NETDEV_MISS_FLOW_DUMP],
   [AT_SETUP([dpif-netdev - miss upcall key matches flow_dump - $1])
    OVS_VSWITCHD_START(
-     [add-port br0 p1 -- set interface p1 type=$1 options:pstream=punix:$OVS_RUNDIR/p0.sock
-      set bridge br0 datapath-type=dummy other-config:datapath-id=1234 fail-mode=secure], [], [],
+     [add-port br0 p1 \
+      -- set interface p1 type=$1 options:pstream=punix:$OVS_RUNDIR/p0.sock \
+      -- set bridge br0 datapath-type=dummy \
+                        other-config:datapath-id=1234 fail-mode=secure], [], [],
       [m4_if([$1], [dummy-pmd], [--dummy-numa="0,0,0,0,1,1,1,1"], [])])
    AT_CHECK([ovs-appctl upcall/disable-ufid], [0], [Datapath dumping tersely using UFID disabled
 ], [])
