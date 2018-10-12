@@ -149,6 +149,60 @@ skb_priority(0),skb_mark(0),ct_state(-new-est-rel-rpl-inv-trk-snat-dnat),ct_zone
 DPIF_NETDEV_MISS_FLOW_INSTALL([dummy])
 DPIF_NETDEV_MISS_FLOW_INSTALL([dummy-pmd])
 
+m4_define([DPIF_NETDEV_FLOW_PUT_MODIFY],
+  [AT_SETUP([dpif-netdev - datapath flow modification - $1])
+   OVS_VSWITCHD_START(
+     [add-port br0 p1 -- set interface p1 type=$1 ofport_request=1 options:pstream=punix:$OVS_RUNDIR/p1.sock -- \
+      add-port br0 p2 -- set interface p2 type=$1 ofport_request=2 options:pstream=punix:$OVS_RUNDIR/p2.sock -- \
+      set bridge br0 datapath-type=dummy \
+                     other-config:datapath-id=1234 fail-mode=secure], [], [],
+      [m4_if([$1], [dummy-pmd], [--dummy-numa="0,0,0,0,1,1,1,1"], [])])
+   AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg])
+
+   # Add a flow that directs some packets received on p1 to p2 and the
+   # rest back out p1.
+   AT_CHECK([ovs-ofctl del-flows br0])
+   AT_CHECK([ovs-ofctl add-flow br0 priority=1,ip,in_port=1,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,actions=output:2])
+   AT_CHECK([ovs-ofctl add-flow br0 priority=0,in_port=1,actions=IN_PORT])
+
+   # Inject a packet of the form that should go to p2.
+   packet="in_port(1),packet_type(ns=0,id=0),eth(src=00:06:07:08:09:0a,dst=00:01:02:03:04:05),eth_type(0x8100),vlan(vid=1000,pcp=5),encap(eth_type(0x0800),ipv4(src=127.0.0.1,dst=127.0.0.1,proto=0,tos=0,ttl=64,frag=no))"
+   AT_CHECK([ovs-appctl netdev-dummy/receive p1 $packet --len 64], [0])
+
+   OVS_WAIT_UNTIL([grep "miss upcall" ovs-vswitchd.log])
+   AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
+skb_priority(0),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),packet_type(ns=0,id=0),eth(src=00:06:07:08:09:0a,dst=00:01:02:03:04:05),eth_type(0x8100),vlan(vid=1000,pcp=5),encap(eth_type(0x0800),ipv4(src=127.0.0.1,dst=127.0.0.1,proto=0,tos=0,ttl=64,frag=no))
+])
+   ovs-appctl revalidator/wait
+   # Dump the datapath flow to see that it goes to p2 ("actions:2").
+   AT_CHECK([ovs-appctl dpif/dump-flows br0], [0], [dnl
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=00:06:07:08:09:0a,dst=00:01:02:03:04:05),eth_type(0x8100),vlan(vid=1000,pcp=5),encap(eth_type(0x0800),ipv4(frag=no)), packets:0, bytes:0, used:never, actions:2
+])
+
+   # Delete the flows, then add new flows that would not match the same
+   # packet as before.
+   AT_CHECK([ovs-ofctl del-flows br0])
+   AT_CHECK([ovs-ofctl add-flow br0 priority=1,in_port=1,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,dl_type=0x0801,actions=output:2])
+   AT_CHECK([ovs-ofctl add-flow br0 priority=0,in_port=1,actions=IN_PORT])
+
+   # Wait for flow revalidation
+   ovs-appctl revalidator/wait
+
+   # Inject the same packet again.
+   AT_CHECK([ovs-appctl netdev-dummy/receive p1 $packet --len 64])
+
+   ovs-appctl revalidator/wait
+   # Dump the datapath flow to see that it goes to p1 ("actions:IN_PORT").
+   AT_CHECK([ovs-appctl dpif/dump-flows br0 | strip_timers], [0], [dnl
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth(src=00:06:07:08:09:0a,dst=00:01:02:03:04:05),eth_type(0x8100),vlan(vid=1000,pcp=5),encap(eth_type(0x0800),ipv4(frag=no)), packets:1, bytes:64, used:0.0s, actions:1
+])
+   OVS_VSWITCHD_STOP
+   AT_CLEANUP])
+
+DPIF_NETDEV_FLOW_PUT_MODIFY([dummy])
+DPIF_NETDEV_FLOW_PUT_MODIFY([dummy-pmd])
+
+
 m4_define([DPIF_NETDEV_MISS_FLOW_DUMP],
   [AT_SETUP([dpif-netdev - miss upcall key matches flow_dump - $1])
    OVS_VSWITCHD_START(
