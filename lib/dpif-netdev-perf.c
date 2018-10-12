@@ -206,6 +206,7 @@ pmd_perf_format_overall_stats(struct ds *str, struct pmd_perf_stats *s,
             "  Rx packets:      %12"PRIu64"  (%.0f Kpps, %.0f cycles/pkt)\n"
             "  Datapath passes: %12"PRIu64"  (%.2f passes/pkt)\n"
             "  - EMC hits:      %12"PRIu64"  (%4.1f %%)\n"
+            "  - SMC hits:      %12"PRIu64"  (%4.1f %%)\n"
             "  - Megaflow hits: %12"PRIu64"  (%4.1f %%, %.2f subtbl lookups/"
                                                                      "hit)\n"
             "  - Upcalls:       %12"PRIu64"  (%4.1f %%, %.1f us/upcall)\n"
@@ -215,6 +216,8 @@ pmd_perf_format_overall_stats(struct ds *str, struct pmd_perf_stats *s,
             passes, rx_packets ? 1.0 * passes / rx_packets : 0,
             stats[PMD_STAT_EXACT_HIT],
             100.0 * stats[PMD_STAT_EXACT_HIT] / passes,
+            stats[PMD_STAT_SMC_HIT],
+            100.0 * stats[PMD_STAT_SMC_HIT] / passes,
             stats[PMD_STAT_MASKED_HIT],
             100.0 * stats[PMD_STAT_MASKED_HIT] / passes,
             stats[PMD_STAT_MASKED_HIT]
