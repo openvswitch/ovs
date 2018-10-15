@@ -884,7 +884,8 @@ sflow_read_tnl_push_action(const struct nlattr *attr,
 {
     /* Modeled on lib/odp-util.c: format_odp_tnl_push_header */
     const struct ovs_action_push_tnl *data = nl_attr_get(attr);
-    const struct eth_header *eth = (const struct eth_header *) data->header;
+    const struct eth_header *eth = ALIGNED_CAST(const struct eth_header *,
+                                                data->header);
     const struct ip_header *ip
         = ALIGNED_CAST(const struct ip_header *, eth + 1);
 
