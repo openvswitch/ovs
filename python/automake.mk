@@ -92,17 +92,6 @@ python-sdist: $(srcdir)/python/ovs/version.py $(ovs_pyfiles) python/ovs/dirs.py
 
 pypi-upload: $(srcdir)/python/ovs/version.py $(ovs_pyfiles) python/ovs/dirs.py
 	(cd python/ && $(PYTHON) setup.py sdist upload)
-
-ALL_LOCAL += python-build
-python-build:$(lib_LTLIBRARIES)
-	(cd $(srcdir)/python/ && $(PYTHON) setup.py build_py -d $(abs_top_builddir)/python && $(PYTHON) setup.py build_ext -b $(abs_top_builddir)/python -I$(abs_top_srcdir)/include:$(abs_top_builddir)/include -L$(abs_top_builddir)/lib/.libs)
-if HAVE_PYTHON3
-	(cd $(srcdir)/python/ && $(PYTHON3) setup.py build_py -d $(abs_top_builddir)/python && $(PYTHON3) setup.py build_ext -b $(abs_top_builddir)/python -I$(abs_top_srcdir)/include:$(abs_top_builddir)/include  -L$(abs_top_builddir)/lib/.libs)
-
-CLEAN_LOCAL += python-clean
-python-clean:
-	rm -rf $(abs_top_builddir)/python
-endif
 else
 ovs-install-data-local:
 	@:
