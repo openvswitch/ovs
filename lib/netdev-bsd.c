@@ -1479,94 +1479,45 @@ netdev_bsd_update_flags(struct netdev *netdev_, enum netdev_flags off,
     return error;
 }
 
-/* Linux has also different GET_STATS, SET_STATS,
- * GET_STATUS)
- */
-#define NETDEV_BSD_CLASS(NAME, CONSTRUCT,            \
-                         GET_FEATURES)               \
-{                                                    \
-    NAME,                                            \
-    false, /* is_pmd */                              \
-                                                     \
-    NULL, /* init */                                 \
-    netdev_bsd_run,                                  \
-    netdev_bsd_wait,                                 \
-    netdev_bsd_alloc,                                \
-    CONSTRUCT,                                       \
-    netdev_bsd_destruct,                             \
-    netdev_bsd_dealloc,                              \
-    NULL, /* get_config */                           \
-    NULL, /* set_config */                           \
-    NULL, /* get_tunnel_config */                    \
-    NULL, /* build header */                         \
-    NULL, /* push header */                          \
-    NULL, /* pop header */                           \
-    NULL, /* get_numa_id */                          \
-    NULL, /* set_tx_multiq */                        \
-                                                     \
-    netdev_bsd_send,                                 \
-    netdev_bsd_send_wait,                            \
-                                                     \
-    netdev_bsd_set_etheraddr,                        \
-    netdev_bsd_get_etheraddr,                        \
-    netdev_bsd_get_mtu,                              \
-    NULL, /* set_mtu */                              \
-    netdev_bsd_get_ifindex,                          \
-    netdev_bsd_get_carrier,                          \
-    NULL, /* get_carrier_resets */                   \
-    NULL, /* set_miimon_interval */                  \
-    netdev_bsd_get_stats,                            \
-    NULL, /* get_custom_stats */                     \
-    GET_FEATURES,                                    \
-    NULL, /* set_advertisement */                    \
-    NULL, /* get_pt_mode */                          \
-    NULL, /* set_policing */                         \
-    NULL, /* get_qos_type */                         \
-    NULL, /* get_qos_capabilities */                 \
-    NULL, /* get_qos */                              \
-    NULL, /* set_qos */                              \
-    NULL, /* get_queue */                            \
-    NULL, /* set_queue */                            \
-    NULL, /* delete_queue */                         \
-    NULL, /* get_queue_stats */                      \
-    NULL, /* queue_dump_start */                     \
-    NULL, /* queue_dump_next */                      \
-    NULL, /* queue_dump_done */                      \
-    NULL, /* dump_queue_stats */                     \
-                                                     \
-    netdev_bsd_set_in4,                              \
-    netdev_bsd_get_addr_list,                        \
-    NULL, /* add_router */                           \
-    netdev_bsd_get_next_hop,                         \
-    NULL, /* get_status */                           \
-    netdev_bsd_arp_lookup, /* arp_lookup */          \
-                                                     \
-    netdev_bsd_update_flags,                         \
-    NULL, /* reconfigure */                          \
-                                                     \
-    netdev_bsd_rxq_alloc,                            \
-    netdev_bsd_rxq_construct,                        \
-    netdev_bsd_rxq_destruct,                         \
-    netdev_bsd_rxq_dealloc,                          \
-    netdev_bsd_rxq_recv,                             \
-    netdev_bsd_rxq_wait,                             \
-    netdev_bsd_rxq_drain,                            \
-                                                     \
-    NO_OFFLOAD_API,                                  \
-    NULL /* get_block_id */   \
-}
+#define NETDEV_BSD_CLASS_COMMON                      \
+    .run = netdev_bsd_run,                           \
+    .wait = netdev_bsd_wait,                         \
+    .alloc = netdev_bsd_alloc,                       \
+    .destruct = netdev_bsd_destruct,                 \
+    .dealloc = netdev_bsd_dealloc,                   \
+    .send = netdev_bsd_send,                         \
+    .send_wait = netdev_bsd_send_wait,               \
+    .set_etheraddr = netdev_bsd_set_etheraddr,       \
+    .get_etheraddr = netdev_bsd_get_etheraddr,       \
+    .get_mtu = netdev_bsd_get_mtu,                   \
+    .get_ifindex = netdev_bsd_get_ifindex,           \
+    .get_carrier = netdev_bsd_get_carrier,           \
+    .get_stats = netdev_bsd_get_stats,               \
+    .get_features = netdev_bsd_get_features,         \
+    .set_in4 = netdev_bsd_set_in4,                   \
+    .get_addr_list = netdev_bsd_get_addr_list,       \
+    .get_next_hop = netdev_bsd_get_next_hop,         \
+    .arp_lookup = netdev_bsd_arp_lookup,             \
+    .update_flags = netdev_bsd_update_flags,         \
+    .rxq_alloc = netdev_bsd_rxq_alloc,               \
+    .rxq_construct = netdev_bsd_rxq_construct,       \
+    .rxq_destruct = netdev_bsd_rxq_destruct,         \
+    .rxq_dealloc = netdev_bsd_rxq_dealloc,           \
+    .rxq_recv = netdev_bsd_rxq_recv,                 \
+    .rxq_wait = netdev_bsd_rxq_wait,                 \
+    .rxq_drain = netdev_bsd_rxq_drain
 
-const struct netdev_class netdev_bsd_class =
-    NETDEV_BSD_CLASS(
-        "system",
-        netdev_bsd_construct_system,
-        netdev_bsd_get_features);
+const struct netdev_class netdev_bsd_class = {
+    NETDEV_BSD_CLASS_COMMON,
+    .type = "system",
+    .construct = netdev_bsd_construct_system,
+};
 
-const struct netdev_class netdev_tap_class =
-    NETDEV_BSD_CLASS(
-        "tap",
-        netdev_bsd_construct_tap,
-        netdev_bsd_get_features);
+const struct netdev_class netdev_tap_class = {
+    NETDEV_BSD_CLASS_COMMON,
+    .type = "tap",
+    .construct = netdev_bsd_construct_tap,
+};
 
 
 static void
