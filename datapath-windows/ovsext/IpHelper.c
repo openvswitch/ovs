@@ -72,7 +72,7 @@ static OVS_IP_HELPER_THREAD_CONTEXT ovsIpHelperThreadContext;
 static POVS_IPFORWARD_ENTRY OvsLookupIPForwardEntry(PIP_ADDRESS_PREFIX prefix);
 static VOID OvsRemoveIPForwardEntry(POVS_IPFORWARD_ENTRY ipf);
 static VOID OvsRemoveAllFwdEntriesWithSrc(UINT32 ipAddr);
-static VOID OvsRemoveAllFwdEntriesWithPortNo(UINT32 portNo);
+static VOID OvsRemoveIPNeighEntriesWithInstance(POVS_IPHELPER_INSTANCE instance);
 static VOID OvsCleanupIpHelperRequestList(VOID);
 static VOID OvsCleanupFwdTable(VOID);
 static VOID OvsAddToSortedNeighList(POVS_IPNEIGH_ENTRY ipn);
@@ -1243,18 +1243,16 @@ OvsRemoveAllFwdEntriesWithSrc(UINT32 ipAddr)
 
 
 static VOID
-OvsRemoveAllFwdEntriesWithPortNo(UINT32 portNo)
+OvsRemoveIPNeighEntriesWithInstance(POVS_IPHELPER_INSTANCE instance)
 {
-    UINT32 i;
-    PLIST_ENTRY link, next;
-
-    for (i = 0; i < OVS_FWD_HASH_TABLE_SIZE; i++) {
-        LIST_FORALL_SAFE(&ovsFwdHashTable[i], link, next) {
-            POVS_FWD_ENTRY fwdEntry;
-
-            fwdEntry = CONTAINING_RECORD(link, OVS_FWD_ENTRY, link);
-            if (fwdEntry->info.srcPortNo == portNo) {
-                OvsRemoveFwdEntry(fwdEntry);
+    if (ovsNumFwdEntries) {
+        POVS_IPNEIGH_ENTRY ipn;
+        PLIST_ENTRY link, next;
+        LIST_FORALL_SAFE(&ovsSortedIPNeighList, link, next) {
+            ipn = CONTAINING_RECORD(link, OVS_IPNEIGH_ENTRY, slink);
+            POVS_IPHELPER_INSTANCE ipnInstance = ipn->instance;
+            if (ipnInstance == instance) {
+                OvsRemoveIPNeighEntry(ipn);
             }
         }
     }
@@ -1857,7 +1855,7 @@ OvsStartIpHelper(PVOID data)
                         IsEqualGUID(&instance->netCfgId, &netCfgInstanceId)) {
 
                         NdisAcquireRWLockWrite(ovsTableLock, &lockState, 0);
-                        OvsRemoveAllFwdEntriesWithPortNo(instance->portNo);
+                        OvsRemoveIPNeighEntriesWithInstance(instance);
                         NdisReleaseRWLock(ovsTableLock, &lockState);
 
                         RemoveEntryList(&instance->link);
@@ -1908,14 +1906,16 @@ OvsStartIpHelper(PVOID data)
             NTSTATUS status;
             POVS_IPHELPER_INSTANCE instance = ipn->instance;
             NdisReleaseSpinLock(&ovsIpHelperLock);
-            ExAcquireResourceExclusiveLite(&ovsInstanceListLock, TRUE);
 
-            status = OvsGetOrResolveIPNeigh(&instance->internalRow,
-                                            ipAddr, &ipNeigh);
-            OvsUpdateIPNeighEntry(ipAddr, &ipNeigh, status);
+            if (instance) {
+                ExAcquireResourceExclusiveLite(&instance->lock, TRUE);
 
-            ExReleaseResourceLite(&ovsInstanceListLock);
+                status = OvsGetOrResolveIPNeigh(&instance->internalRow,
+                                                ipAddr, &ipNeigh);
+                OvsUpdateIPNeighEntry(ipAddr, &ipNeigh, status);
 
+                ExReleaseResourceLite(&instance->lock);
+            }
             NdisAcquireSpinLock(&ovsIpHelperLock);
         }
         if (!IsListEmpty(&ovsIpHelperRequestList)) {
