@@ -1538,6 +1538,10 @@ ofconn_receives_async_msg(const struct ofconn *ofconn,
     ovs_assert(reason < 32);
     ovs_assert((unsigned int) type < OAM_N_TYPES);
 
+    if (!rconn_is_connected(ofconn->rconn)) {
+        return false;
+    }
+
     /* Keep the following code in sync with the documentation in the
      * "Asynchronous Messages" section in 'topics/design' */
 
