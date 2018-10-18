@@ -4511,15 +4511,21 @@ end_proto_check:
     add_flow_pattern(&patterns, RTE_FLOW_ITEM_TYPE_END, NULL, NULL);
 
     struct rte_flow_action_mark mark;
+    struct rte_flow_action_rss *rss;
+
     mark.id = info->flow_mark;
     add_flow_action(&actions, RTE_FLOW_ACTION_TYPE_MARK, &mark);
 
-    struct rte_flow_action_rss *rss;
+    ovs_mutex_lock(&dev->mutex);
+
     rss = add_flow_rss_action(&actions, netdev);
     add_flow_action(&actions, RTE_FLOW_ACTION_TYPE_END, NULL);
 
     flow = rte_flow_create(dev->port_id, &flow_attr, patterns.items,
                            actions.actions, &error);
+
+    ovs_mutex_unlock(&dev->mutex);
+
     free(rss);
     if (!flow) {
         VLOG_ERR("rte flow creat error: %u : message : %s\n",
@@ -4639,6 +4645,8 @@ netdev_dpdk_destroy_rte_flow(struct netdev_dpdk *dev,
     struct rte_flow_error error;
     int ret;
 
+    ovs_mutex_lock(&dev->mutex);
+
     ret = rte_flow_destroy(dev->port_id, rte_flow, &error);
     if (ret == 0) {
         ufid_to_rte_flow_disassociate(ufid);
@@ -4649,6 +4657,7 @@ netdev_dpdk_destroy_rte_flow(struct netdev_dpdk *dev,
                  error.type, error.message);
     }
 
+    ovs_mutex_unlock(&dev->mutex);
     return ret;
 }
 
