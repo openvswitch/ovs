@@ -415,6 +415,7 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
                 netdev->reconfigure_seq = seq_create();
                 netdev->last_reconfigure_seq =
                     seq_read(netdev->reconfigure_seq);
+                netdev->hw_info.oor = false;
                 netdev->node = shash_add(&netdev_shash, name, netdev);
 
                 /* By default enable one tx and rx queue per netdev. */
@@ -2253,6 +2254,31 @@ netdev_get_block_id(struct netdev *netdev)
             : 0);
 }
 
+/*
+ * Get the value of the hw info parameter specified by type.
+ * Returns the value on success (>= 0). Returns -1 on failure.
+ */
+int
+netdev_get_hw_info(struct netdev *netdev, int type)
+{
+    if (type == HW_INFO_TYPE_OOR) {
+        return netdev->hw_info.oor;
+    }
+
+    return -1;
+}
+
+/*
+ * Set the value of the hw info parameter specified by type.
+ */
+void
+netdev_set_hw_info(struct netdev *netdev, int type, int val)
+{
+    if (type == HW_INFO_TYPE_OOR) {
+        netdev->hw_info.oor = val;
+    }
+}
+
 bool
 netdev_is_flow_api_enabled(void)
 {
@@ -2487,6 +2513,14 @@ netdev_free_custom_stats_counters(struct netdev_custom_stats *custom_stats)
             custom_stats->size = 0;
         }
     }
+}
+
+static bool netdev_offload_rebalance_policy = false;
+
+bool
+netdev_is_offload_rebalance_policy_enabled(void)
+{
+    return netdev_offload_rebalance_policy;
 }
 
 #ifdef __linux__

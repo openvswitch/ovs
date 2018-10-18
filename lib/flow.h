@@ -73,6 +73,7 @@ void flow_extract(struct dp_packet *, struct flow *);
 void flow_zero_wildcards(struct flow *, const struct flow_wildcards *);
 void flow_unwildcard_tp_ports(const struct flow *, struct flow_wildcards *);
 void flow_get_metadata(const struct flow *, struct match *flow_metadata);
+struct netdev *flow_get_tunnel_netdev(struct flow_tnl *tunnel);
 
 const char *ct_state_to_string(uint32_t state);
 uint32_t ct_state_from_string(const char *);

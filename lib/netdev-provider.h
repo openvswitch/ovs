@@ -35,6 +35,15 @@ extern "C" {
 struct netdev_tnl_build_header_params;
 #define NETDEV_NUMA_UNSPEC OVS_NUMA_UNSPEC
 
+/* Offload-capable (HW) netdev information */
+struct netdev_hw_info {
+    bool oor;		/* Out of Offload Resources ? */
+};
+
+enum hw_info_type {
+    HW_INFO_TYPE_OOR = 1	/* OOR state */
+};
+
 /* A network device (e.g. an Ethernet device).
  *
  * Network device implementations may read these members but should not modify
@@ -80,6 +89,8 @@ struct netdev {
     int n_rxq;
     struct shash_node *node;            /* Pointer to element in global map. */
     struct ovs_list saved_flags_list; /* Contains "struct netdev_saved_flags". */
+
+    struct netdev_hw_info hw_info;	/* offload-capable netdev info */
 };
 
 static inline void

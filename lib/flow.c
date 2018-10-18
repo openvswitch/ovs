@@ -19,6 +19,7 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <limits.h>
+#include <net/if.h>
 #include <netinet/in.h>
 #include <netinet/icmp6.h>
 #include <netinet/ip6.h>
@@ -41,6 +42,8 @@
 #include "unaligned.h"
 #include "util.h"
 #include "openvswitch/nsh.h"
+#include "ovs-router.h"
+#include "lib/netdev-provider.h"
 
 COVERAGE_DEFINE(flow_extract);
 COVERAGE_DEFINE(miniflow_malloc);
@@ -3454,4 +3457,26 @@ flow_limit_vlans(int vlan_limit)
     } else {
         flow_vlan_limit = MIN(vlan_limit, FLOW_MAX_VLAN_HEADERS);
     }
+}
+
+struct netdev *
+flow_get_tunnel_netdev(struct flow_tnl *tunnel)
+{
+    char iface[IFNAMSIZ];
+    struct in6_addr ip6;
+    struct in6_addr gw;
+
+    if (tunnel->ip_src) {
+        in6_addr_set_mapped_ipv4(&ip6, tunnel->ip_src);
+    } else if (ipv6_addr_is_set(&tunnel->ipv6_src)) {
+        ip6 = tunnel->ipv6_src;
+    } else {
+        return NULL;
+    }
+
+    if (!ovs_router_lookup(0, &ip6, iface, NULL, &gw)) {
+        return NULL;
+    }
+
+    return netdev_from_name(iface);
 }

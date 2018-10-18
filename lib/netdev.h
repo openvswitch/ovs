@@ -228,8 +228,11 @@ int netdev_flow_del(struct netdev *, const ovs_u128 *,
                     struct dpif_flow_stats *);
 int netdev_init_flow_api(struct netdev *);
 uint32_t netdev_get_block_id(struct netdev *);
+int netdev_get_hw_info(struct netdev *, int);
+void netdev_set_hw_info(struct netdev *, int, int);
 bool netdev_is_flow_api_enabled(void);
 void netdev_set_flow_api_enabled(const struct smap *ovs_other_config);
+bool netdev_is_offload_rebalance_policy_enabled(void);
 
 struct dpif_port;
 int netdev_ports_insert(struct netdev *, const struct dpif_class *,

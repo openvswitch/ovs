@@ -2030,7 +2030,23 @@ parse_flow_put(struct dpif_netlink *dpif, struct dpif_flow_put *put)
 
         VLOG_DBG("added flow");
     } else if (err != EEXIST) {
-        VLOG_ERR_RL(&rl, "failed to offload flow: %s", ovs_strerror(err));
+        struct netdev *oor_netdev = NULL;
+        if (err == ENOSPC && netdev_is_offload_rebalance_policy_enabled()) {
+            /*
+             * We need to set OOR on the input netdev (i.e, 'dev') for the
+             * flow. But if the flow has a tunnel attribute (i.e, decap action,
+             * with a virtual device like a VxLAN interface as its in-port),
+             * then lookup and set OOR on the underlying tunnel (real) netdev.
+             */
+            oor_netdev = flow_get_tunnel_netdev(&match.flow.tunnel);
+            if (!oor_netdev) {
+                /* Not a 'tunnel' flow */
+                oor_netdev = dev;
+            }
+            netdev_set_hw_info(oor_netdev, HW_INFO_TYPE_OOR, true);
+        }
+        VLOG_ERR_RL(&rl, "failed to offload flow: %s: %s", ovs_strerror(err),
+                    (oor_netdev ? oor_netdev->name : dev->name));
     }
 
 out:
