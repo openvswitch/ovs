@@ -13,6 +13,9 @@ Post-v2.10.0
        It can be set with pmd-rxq-assign.
    - Add 'symmetric_l3' hash function.
    - OVS now honors 'updelay' and 'downdelay' for bonds with LACP configured.
+   - ovs-vswitchd:
+     * New configuration option "offload-rebalance", that enables dynamic
+       rebalancing of offloaded flows.
 
 v2.10.0 - 18 Aug 2018
 ---------------------

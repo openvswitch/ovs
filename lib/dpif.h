@@ -606,6 +606,13 @@ enum dpif_op_type {
     DPIF_OP_FLOW_GET,
 };
 
+/* offload_type argument types to (*operate) interface */
+enum dpif_offload_type {
+    DPIF_OFFLOAD_AUTO,         /* Offload if possible, fallback to software. */
+    DPIF_OFFLOAD_NEVER,        /* Never offload to hardware. */
+    DPIF_OFFLOAD_ALWAYS,       /* Always offload to hardware. */
+};
+
 /* Add or modify a flow.
  *
  * The flow is specified by the Netlink attributes with types OVS_KEY_ATTR_* in
@@ -760,8 +767,9 @@ struct dpif_op {
     };
 };
 
-void dpif_operate(struct dpif *, struct dpif_op **ops, size_t n_ops);
-
+void dpif_operate(struct dpif *, struct dpif_op **ops, size_t n_ops,
+                  enum dpif_offload_type);
+
 /* Upcalls. */
 
 enum dpif_upcall_type {

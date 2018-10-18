@@ -2261,11 +2261,23 @@ netdev_get_block_id(struct netdev *netdev)
 int
 netdev_get_hw_info(struct netdev *netdev, int type)
 {
-    if (type == HW_INFO_TYPE_OOR) {
-        return netdev->hw_info.oor;
+    int val = -1;
+
+    switch (type) {
+    case HW_INFO_TYPE_OOR:
+        val = netdev->hw_info.oor;
+        break;
+    case HW_INFO_TYPE_PEND_COUNT:
+        val = netdev->hw_info.pending_count;
+        break;
+    case HW_INFO_TYPE_OFFL_COUNT:
+        val = netdev->hw_info.offload_count;
+        break;
+    default:
+        break;
     }
 
-    return -1;
+    return val;
 }
 
 /*
@@ -2274,9 +2286,47 @@ netdev_get_hw_info(struct netdev *netdev, int type)
 void
 netdev_set_hw_info(struct netdev *netdev, int type, int val)
 {
-    if (type == HW_INFO_TYPE_OOR) {
+    switch (type) {
+    case HW_INFO_TYPE_OOR:
+        if (val == 0) {
+            VLOG_DBG("Offload rebalance: netdev: %s is not OOR", netdev->name);
+        }
         netdev->hw_info.oor = val;
+        break;
+    case HW_INFO_TYPE_PEND_COUNT:
+        netdev->hw_info.pending_count = val;
+        break;
+    case HW_INFO_TYPE_OFFL_COUNT:
+        netdev->hw_info.offload_count = val;
+        break;
+    default:
+        break;
     }
+}
+
+/*
+ * Find if any netdev is in OOR state. Return true if there's at least
+ * one netdev that's in OOR state; otherwise return false.
+ */
+bool
+netdev_any_oor(void)
+    OVS_EXCLUDED(netdev_mutex)
+{
+    struct shash_node *node;
+    bool oor = false;
+
+    ovs_mutex_lock(&netdev_mutex);
+    SHASH_FOR_EACH (node, &netdev_shash) {
+        struct netdev *dev = node->data;
+
+        if (dev->hw_info.oor) {
+            oor = true;
+            break;
+        }
+    }
+    ovs_mutex_unlock(&netdev_mutex);
+
+    return oor;
 }
 
 bool
@@ -2549,6 +2599,10 @@ netdev_set_flow_api_enabled(const struct smap *ovs_other_config)
 
             tc_set_policy(smap_get_def(ovs_other_config, "tc-policy",
                                        TC_POLICY_DEFAULT));
+
+            if (smap_get_bool(ovs_other_config, "offload-rebalance", false)) {
+                netdev_offload_rebalance_policy = true;
+            }
 
             netdev_ports_flow_init();
 

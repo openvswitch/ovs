@@ -2133,7 +2133,8 @@ dpif_netlink_operate_chunks(struct dpif_netlink *dpif, struct dpif_op **ops,
 }
 
 static void
-dpif_netlink_operate(struct dpif *dpif_, struct dpif_op **ops, size_t n_ops)
+dpif_netlink_operate(struct dpif *dpif_, struct dpif_op **ops, size_t n_ops,
+                     enum dpif_offload_type offload_type)
 {
     struct dpif_netlink *dpif = dpif_netlink_cast(dpif_);
     struct dpif_op *new_ops[OPERATE_MAX_OPS];
@@ -2141,7 +2142,12 @@ dpif_netlink_operate(struct dpif *dpif_, struct dpif_op **ops, size_t n_ops)
     int i = 0;
     int err = 0;
 
-    if (netdev_is_flow_api_enabled()) {
+    if (offload_type == DPIF_OFFLOAD_ALWAYS && !netdev_is_flow_api_enabled()) {
+        VLOG_DBG("Invalid offload_type: %d", offload_type);
+        return;
+    }
+
+    if (offload_type != DPIF_OFFLOAD_NEVER && netdev_is_flow_api_enabled()) {
         while (n_ops > 0) {
             count = 0;
 
@@ -2150,6 +2156,23 @@ dpif_netlink_operate(struct dpif *dpif_, struct dpif_op **ops, size_t n_ops)
 
                 err = try_send_to_netdev(dpif, op);
                 if (err && err != EEXIST) {
+                    if (offload_type == DPIF_OFFLOAD_ALWAYS) {
+                        /* We got an error while offloading an op. Since
+                         * OFFLOAD_ALWAYS is specified, we stop further
+                         * processing and return to the caller without
+                         * invoking kernel datapath as fallback. But the
+                         * interface requires us to process all n_ops; so
+                         * return the same error in the remaining ops too.
+                         */
+                        op->error = err;
+                        n_ops--;
+                        while (n_ops > 0) {
+                            op = ops[i++];
+                            op->error = err;
+                            n_ops--;
+                        }
+                        return;
+                    }
                     new_ops[count++] = op;
                 } else {
                     op->error = err;
@@ -2160,7 +2183,7 @@ dpif_netlink_operate(struct dpif *dpif_, struct dpif_op **ops, size_t n_ops)
 
             dpif_netlink_operate_chunks(dpif, new_ops, count);
         }
-    } else {
+    } else if (offload_type != DPIF_OFFLOAD_ALWAYS) {
         dpif_netlink_operate_chunks(dpif, ops, n_ops);
     }
 }

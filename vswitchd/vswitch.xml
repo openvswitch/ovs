@@ -543,6 +543,27 @@
         </p>
     </column>
 
+      <column name="other_config" key="offload-rebalance"
+              type='{"type": "boolean"}'>
+        <p>
+            Configures HW offload rebalancing, that allows to dynamically
+            offload and un-offload flows while an offload-device is out of
+            resources (OOR). This policy allows flows to be selected for
+            offloading based on the packets-per-second (pps) rate of flows.
+        </p>
+        <p>
+          Set this value to <code>true</code> to enable this option.
+        </p>
+        <p>
+          The default value is <code>false</code>. Changing this value requires
+          restarting the daemon.
+        </p>
+        <p>
+            This is only relevant if HW offloading is enabled (hw-offload).
+            When this policy is enabled, it also requires 'tc-policy' to
+            be set to 'skip_sw'.
+        </p>
+      </column>
     </group>
 
     <group title="Status">

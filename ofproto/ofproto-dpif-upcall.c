@@ -22,6 +22,7 @@
 #include "connmgr.h"
 #include "coverage.h"
 #include "cmap.h"
+#include "lib/dpif-provider.h"
 #include "dpif.h"
 #include "openvswitch/dynamic-string.h"
 #include "fail-open.h"
@@ -42,7 +43,6 @@
 #include "tunnel.h"
 #include "unixctl.h"
 #include "openvswitch/vlog.h"
-#include "lib/dpif-provider.h"
 #include "lib/netdev-provider.h"
 
 #define MAX_QUEUE_LENGTH 512
@@ -182,6 +182,8 @@ struct udpif {
     uint64_t conn_seq;                 /* Corresponds to 'dump_seq' when
                                           conns[n_conns-1] was stored. */
     size_t n_conns;                    /* Number of connections waiting. */
+
+    long long int offload_rebalance_time;  /* Time of last offload rebalance */
 };
 
 enum upcall_type {
@@ -308,6 +310,7 @@ struct udpif_key {
     struct recirc_refs recircs;  /* Action recirc IDs with references held. */
 
 #define OFFL_REBAL_INTVL_MSEC  3000	/* dynamic offload rebalance freq */
+    struct netdev *in_netdev;		/* in_odp_port's netdev */
     bool offloaded;			/* True if flow is offloaded */
     uint64_t flow_pps_rate;		/* Packets-Per-Second rate */
     long long int flow_time;		/* last pps update time */
@@ -395,6 +398,12 @@ static int upcall_receive(struct upcall *, const struct dpif_backer *,
                           const unsigned int mru,
                           const ovs_u128 *ufid, const unsigned pmd_id);
 static void upcall_uninit(struct upcall *);
+
+static void udpif_flow_rebalance(struct udpif *udpif);
+static int udpif_flow_program(struct udpif *udpif, struct udpif_key *ukey,
+                              enum dpif_offload_type offload_type);
+static int udpif_flow_unprogram(struct udpif *udpif, struct udpif_key *ukey,
+                                enum dpif_offload_type offload_type);
 
 static upcall_callback upcall_cb;
 static dp_purge_callback dp_purge_cb;
@@ -567,6 +576,7 @@ udpif_start_threads(struct udpif *udpif, size_t n_handlers_,
         ovs_barrier_init(&udpif->pause_barrier, udpif->n_revalidators + 1);
         udpif->reval_exit = false;
         udpif->pause = false;
+        udpif->offload_rebalance_time = time_msec();
         udpif->revalidators = xzalloc(udpif->n_revalidators
                                       * sizeof *udpif->revalidators);
         for (size_t i = 0; i < udpif->n_revalidators; i++) {
@@ -859,6 +869,26 @@ free_dupcall:
     return n_upcalls;
 }
 
+static void
+udpif_run_flow_rebalance(struct udpif *udpif)
+{
+    long long int now = 0;
+
+    /* Don't rebalance if OFFL_REBAL_INTVL_MSEC have not elapsed */
+    now = time_msec();
+    if (now < udpif->offload_rebalance_time + OFFL_REBAL_INTVL_MSEC) {
+        return;
+    }
+
+    if (!netdev_any_oor()) {
+        return;
+    }
+
+    VLOG_DBG("Offload rebalance: Found OOR netdevs");
+    udpif->offload_rebalance_time = now;
+    udpif_flow_rebalance(udpif);
+}
+
 static void *
 udpif_revalidator(void *arg)
 {
@@ -933,6 +963,9 @@ udpif_revalidator(void *arg)
 
             dpif_flow_dump_destroy(udpif->dump);
             seq_change(udpif->dump_seq);
+            if (netdev_is_offload_rebalance_policy_enabled()) {
+                udpif_run_flow_rebalance(udpif);
+            }
 
             duration = MAX(time_msec() - start_time, 1);
             udpif->dump_duration = duration;
@@ -977,7 +1010,7 @@ udpif_revalidator(void *arg)
 
     return NULL;
 }
-
+
 static enum upcall_type
 classify_upcall(enum dpif_upcall_type type, const struct nlattr *userdata,
                 struct user_action_cookie *cookie)
@@ -1578,7 +1611,7 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
     for (i = 0; i < n_ops; i++) {
         opsp[n_opsp++] = &ops[i].dop;
     }
-    dpif_operate(udpif->dpif, opsp, n_opsp);
+    dpif_operate(udpif->dpif, opsp, n_opsp, DPIF_OFFLOAD_AUTO);
     for (i = 0; i < n_ops; i++) {
         struct udpif_key *ukey = ops[i].ukey;
 
@@ -1670,13 +1703,13 @@ ukey_create__(const struct nlattr *key, size_t key_len,
     ukey->state = UKEY_CREATED;
     ukey->state_thread = ovsthread_id_self();
     ukey->state_where = OVS_SOURCE_LOCATOR;
-    ukey->created = time_msec();
+    ukey->created = ukey->flow_time = time_msec();
     memset(&ukey->stats, 0, sizeof ukey->stats);
     ukey->stats.used = used;
     ukey->xcache = NULL;
 
     ukey->offloaded = false;
-    ukey->flow_time = 0;
+    ukey->in_netdev = NULL;
     ukey->flow_packets = ukey->flow_backlog_packets = 0;
 
     ukey->key_recirc_id = key_recirc_id;
@@ -2328,7 +2361,7 @@ push_dp_ops(struct udpif *udpif, struct ukey_op *ops, size_t n_ops)
     for (i = 0; i < n_ops; i++) {
         opsp[i] = &ops[i].dop;
     }
-    dpif_operate(udpif->dpif, opsp, n_ops);
+    dpif_operate(udpif->dpif, opsp, n_ops, DPIF_OFFLOAD_AUTO);
 
     for (i = 0; i < n_ops; i++) {
         struct ukey_op *op = &ops[i];
@@ -2454,6 +2487,57 @@ reval_op_init(struct ukey_op *op, enum reval_result result,
     }
 }
 
+static void
+ukey_netdev_unref(struct udpif_key *ukey)
+{
+    if (!ukey->in_netdev) {
+        return;
+    }
+    netdev_close(ukey->in_netdev);
+    ukey->in_netdev = NULL;
+}
+
+/*
+ * Given a udpif_key, get its input port (netdev) by parsing the flow keys
+ * and actions. The flow may not contain flow attributes if it is a terse
+ * dump; read its attributes from the ukey and then parse the flow to get
+ * the port info. Save them in udpif_key.
+ */
+static void
+ukey_to_flow_netdev(struct udpif *udpif, struct udpif_key *ukey)
+{
+    const struct dpif *dpif = udpif->dpif;
+    const struct dpif_class *dpif_class = dpif->dpif_class;
+    const struct nlattr *k;
+    unsigned int left;
+
+    /* Remove existing references to netdev */
+    ukey_netdev_unref(ukey);
+
+    /* Find the input port and get a reference to its netdev */
+    NL_ATTR_FOR_EACH (k, left, ukey->key, ukey->key_len) {
+        enum ovs_key_attr type = nl_attr_type(k);
+
+        if (type == OVS_KEY_ATTR_IN_PORT) {
+            ukey->in_netdev = netdev_ports_get(nl_attr_get_odp_port(k),
+                                               dpif_class);
+        } else if (type == OVS_KEY_ATTR_TUNNEL) {
+            struct flow_tnl tnl;
+            enum odp_key_fitness res;
+
+            if (ukey->in_netdev) {
+                netdev_close(ukey->in_netdev);
+                ukey->in_netdev = NULL;
+            }
+            res = odp_tun_key_from_attr(k, &tnl);
+            if (res != ODP_FIT_ERROR) {
+                ukey->in_netdev = flow_get_tunnel_netdev(&tnl);
+                break;
+            }
+        }
+    }
+}
+
 static uint64_t
 udpif_flow_packet_delta(struct udpif_key *ukey, const struct dpif_flow *f)
 {
@@ -2465,6 +2549,16 @@ static long long int
 udpif_flow_time_delta(struct udpif *udpif, struct udpif_key *ukey)
 {
     return (udpif->dpif->current_ms - ukey->flow_time) / 1000;
+}
+
+/*
+ * Save backlog packet count while switching modes
+ * between offloaded and kernel datapaths.
+ */
+static void
+udpif_set_ukey_backlog_packets(struct udpif_key *ukey)
+{
+    ukey->flow_backlog_packets = ukey->flow_packets;
 }
 
 /* Gather pps-rate for the given dpif_flow and save it in its ukey */
@@ -2538,6 +2632,7 @@ revalidate(struct revalidator *revalidator)
         kill_them_all = n_dp_flows > flow_limit * 2;
         max_idle = n_dp_flows > flow_limit ? 100 : ofproto_max_idle;
 
+        udpif->dpif->current_ms = time_msec();
         for (f = flows; f < &flows[n_dumped]; f++) {
             long long int used = f->stats.used;
             struct recirc_refs recircs = RECIRC_REFS_EMPTY_INITIALIZER;
@@ -2913,4 +3008,343 @@ upcall_unixctl_purge(struct unixctl_conn *conn, int argc OVS_UNUSED,
         }
     }
     unixctl_command_reply(conn, "");
+}
+
+/* Flows are sorted in the following order:
+ * netdev, flow state (offloaded/kernel path), flow_pps_rate.
+ */
+static int
+flow_compare_rebalance(const void *elem1, const void *elem2)
+{
+    const struct udpif_key *f1 = *(struct udpif_key **)elem1;
+    const struct udpif_key *f2 = *(struct udpif_key **)elem2;
+    int64_t diff;
+
+    if (f1->in_netdev < f2->in_netdev) {
+        return -1;
+    } else if (f1->in_netdev > f2->in_netdev) {
+        return 1;
+    }
+
+    if (f1->offloaded != f2->offloaded) {
+        return f2->offloaded - f1->offloaded;
+    }
+
+    diff = (f1->offloaded == true) ?
+        f1->flow_pps_rate - f2->flow_pps_rate :
+        f2->flow_pps_rate - f1->flow_pps_rate;
+
+    return (diff < 0) ? -1 : 1;
+}
+
+/* Insert flows from pending array during rebalancing */
+static int
+rebalance_insert_pending(struct udpif *udpif, struct udpif_key **pending_flows,
+                         int pending_count, int insert_count,
+                         uint64_t rate_threshold)
+{
+    int count = 0;
+
+    for (int i = 0; i < pending_count; i++) {
+        struct udpif_key *flow = pending_flows[i];
+        int err;
+
+        /* Stop offloading pending flows if the insert count is
+         * reached and the flow rate is less than the threshold
+         */
+        if (count >= insert_count && flow->flow_pps_rate < rate_threshold) {
+                break;
+        }
+
+        /* Offload the flow to netdev */
+        err = udpif_flow_program(udpif, flow, DPIF_OFFLOAD_ALWAYS);
+
+        if (err == ENOSPC) {
+            /* Stop if we are out of resources */
+            break;
+        }
+
+        if (err) {
+            continue;
+        }
+
+        /* Offload succeeded; delete it from the kernel datapath */
+        udpif_flow_unprogram(udpif, flow, DPIF_OFFLOAD_NEVER);
+
+        /* Change the state of the flow, adjust dpif counters */
+        flow->offloaded = true;
+
+        udpif_set_ukey_backlog_packets(flow);
+        count++;
+    }
+
+    return count;
+}
+
+/* Remove flows from offloaded array during rebalancing */
+static void
+rebalance_remove_offloaded(struct udpif *udpif,
+                           struct udpif_key **offloaded_flows,
+                           int offload_count)
+{
+    for (int i = 0; i < offload_count; i++) {
+        struct udpif_key *flow = offloaded_flows[i];
+        int err;
+
+        /* Install the flow into kernel path first */
+        err = udpif_flow_program(udpif, flow, DPIF_OFFLOAD_NEVER);
+        if (err) {
+            continue;
+        }
+
+        /* Success; now remove offloaded flow from netdev */
+        err = udpif_flow_unprogram(udpif, flow, DPIF_OFFLOAD_ALWAYS);
+        if (err) {
+            udpif_flow_unprogram(udpif, flow, DPIF_OFFLOAD_NEVER);
+            continue;
+        }
+        udpif_set_ukey_backlog_packets(flow);
+        flow->offloaded = false;
+    }
+}
+
+/*
+ * Rebalance offloaded flows on a netdev that's in OOR state.
+ *
+ * The rebalancing is done in two phases. In the first phase, we check if
+ * the pending flows can be offloaded (if some resources became available
+ * in the meantime) by trying to offload each pending flow. If all pending
+ * flows get successfully offloaded, the OOR state is cleared on the netdev
+ * and there's nothing to rebalance.
+ *
+ * If some of the pending flows could not be offloaded, i.e, we still see
+ * the OOR error, then we move to the second phase of rebalancing. In this
+ * phase, the rebalancer compares pps-rate of an offloaded flow with the
+ * least pps-rate with that of a pending flow with the highest pps-rate from
+ * their respective sorted arrays. If pps-rate of the offloaded flow is less
+ * than the pps-rate of the pending flow, then it deletes the offloaded flow
+ * from the HW/netdev and adds it to kernel datapath and then offloads pending
+ * to HW/netdev. This process is repeated for every pair of offloaded and
+ * pending flows in the ordered list. The process stops when we encounter an
+ * offloaded flow that has a higher pps-rate than the corresponding pending
+ * flow. The entire rebalancing process is repeated in the next iteration.
+ */
+static bool
+rebalance_device(struct udpif *udpif, struct udpif_key **offloaded_flows,
+                 int offload_count, struct udpif_key **pending_flows,
+                 int pending_count)
+{
+
+    /* Phase 1 */
+    int num_inserted = rebalance_insert_pending(udpif, pending_flows,
+                                                pending_count, pending_count,
+                                                0);
+    if (num_inserted) {
+        VLOG_DBG("Offload rebalance: Phase1: inserted %d pending flows",
+                  num_inserted);
+    }
+
+    /* Adjust pending array */
+    pending_flows = &pending_flows[num_inserted];
+    pending_count -= num_inserted;
+
+    if (!pending_count) {
+        /*
+         * Successfully offloaded all pending flows. The device
+         * is no longer in OOR state; done rebalancing this device.
+         */
+        return false;
+    }
+
+    /*
+     * Phase 2; determine how many offloaded flows to churn.
+     */
+#define	OFFL_REBAL_MAX_CHURN    1024
+    int churn_count = 0;
+    while (churn_count < OFFL_REBAL_MAX_CHURN && churn_count < offload_count
+           && churn_count < pending_count) {
+        if (pending_flows[churn_count]->flow_pps_rate <=
+            offloaded_flows[churn_count]->flow_pps_rate)
+                break;
+        churn_count++;
+    }
+
+    if (churn_count) {
+        VLOG_DBG("Offload rebalance: Phase2: removing %d offloaded flows",
+                  churn_count);
+    }
+
+    /* Bail early if nothing to churn */
+    if (!churn_count) {
+        return true;
+    }
+
+    /* Remove offloaded flows */
+    rebalance_remove_offloaded(udpif, offloaded_flows, churn_count);
+
+    /* Adjust offloaded array */
+    offloaded_flows = &offloaded_flows[churn_count];
+    offload_count -= churn_count;
+
+    /* Replace offloaded flows with pending flows */
+    num_inserted = rebalance_insert_pending(udpif, pending_flows,
+                                            pending_count, churn_count,
+                                            offload_count ?
+                                            offloaded_flows[0]->flow_pps_rate :
+                                            0);
+    if (num_inserted) {
+        VLOG_DBG("Offload rebalance: Phase2: inserted %d pending flows",
+                  num_inserted);
+    }
+
+    return true;
+}
+
+static struct udpif_key **
+udpif_add_oor_flows(struct udpif_key **sort_flows, size_t *total_flow_count,
+                    size_t *alloc_flow_count, struct udpif_key *ukey)
+{
+    if (*total_flow_count >= *alloc_flow_count) {
+        sort_flows = x2nrealloc(sort_flows, alloc_flow_count, sizeof ukey);
+    }
+    sort_flows[(*total_flow_count)++] = ukey;
+    return sort_flows;
+}
+
+/*
+ * Build sort_flows[] initially with flows that
+ * reference an 'OOR' netdev as their input port.
+ */
+static struct udpif_key **
+udpif_build_oor_flows(struct udpif_key **sort_flows, size_t *total_flow_count,
+                      size_t *alloc_flow_count, struct udpif_key *ukey,
+                      int *oor_netdev_count)
+{
+    struct netdev *netdev;
+    int count;
+
+    /* Input netdev must be available for the flow */
+    netdev = ukey->in_netdev;
+    if (!netdev) {
+        return sort_flows;
+    }
+
+    /* Is the in-netdev for this flow in OOR state ? */
+    if (!netdev_get_hw_info(netdev, HW_INFO_TYPE_OOR)) {
+        ukey_netdev_unref(ukey);
+        return sort_flows;
+    }
+
+    /* Add the flow to sort_flows[] */
+    sort_flows = udpif_add_oor_flows(sort_flows, total_flow_count,
+                                      alloc_flow_count, ukey);
+    if (ukey->offloaded) {
+        count = netdev_get_hw_info(netdev, HW_INFO_TYPE_OFFL_COUNT);
+        ovs_assert(count >= 0);
+        if (count++ == 0) {
+            (*oor_netdev_count)++;
+        }
+        netdev_set_hw_info(netdev, HW_INFO_TYPE_OFFL_COUNT, count);
+    } else {
+        count = netdev_get_hw_info(netdev, HW_INFO_TYPE_PEND_COUNT);
+        ovs_assert(count >= 0);
+        netdev_set_hw_info(netdev, HW_INFO_TYPE_PEND_COUNT, ++count);
+    }
+
+    return sort_flows;
+}
+
+/*
+ * Rebalance offloaded flows on HW netdevs that are in OOR state.
+ */
+static void
+udpif_flow_rebalance(struct udpif *udpif)
+{
+    struct udpif_key **sort_flows = NULL;
+    size_t alloc_flow_count = 0;
+    size_t total_flow_count = 0;
+    int oor_netdev_count = 0;
+    int offload_index = 0;
+    int pending_index;
+
+    /* Collect flows (offloaded and pending) that reference OOR netdevs */
+    for (size_t i = 0; i < N_UMAPS; i++) {
+        struct udpif_key *ukey;
+        struct umap *umap = &udpif->ukeys[i];
+
+        CMAP_FOR_EACH (ukey, cmap_node, &umap->cmap) {
+            ukey_to_flow_netdev(udpif, ukey);
+            sort_flows = udpif_build_oor_flows(sort_flows, &total_flow_count,
+                                               &alloc_flow_count, ukey,
+                                               &oor_netdev_count);
+        }
+    }
+
+    /* Sort flows by OOR netdevs, state (offloaded/pending) and pps-rate  */
+    qsort(sort_flows, total_flow_count, sizeof(struct udpif_key *),
+          flow_compare_rebalance);
+
+    /*
+     * We now have flows referencing OOR netdevs, that are sorted. We also
+     * have a count of offloaded and pending flows on each of the netdevs
+     * that are in OOR state. Now rebalance each oor-netdev.
+     */
+    while (oor_netdev_count) {
+        struct netdev *netdev;
+        int offload_count;
+        int pending_count;
+        bool oor;
+
+        netdev = sort_flows[offload_index]->in_netdev;
+        ovs_assert(netdev_get_hw_info(netdev, HW_INFO_TYPE_OOR) == true);
+        VLOG_DBG("Offload rebalance: netdev: %s is OOR", netdev->name);
+
+        offload_count = netdev_get_hw_info(netdev, HW_INFO_TYPE_OFFL_COUNT);
+        pending_count = netdev_get_hw_info(netdev, HW_INFO_TYPE_PEND_COUNT);
+        pending_index = offload_index + offload_count;
+
+        oor = rebalance_device(udpif,
+                               &sort_flows[offload_index], offload_count,
+                               &sort_flows[pending_index], pending_count);
+        netdev_set_hw_info(netdev, HW_INFO_TYPE_OOR, oor);
+
+        offload_index = pending_index + pending_count;
+        netdev_set_hw_info(netdev, HW_INFO_TYPE_OFFL_COUNT, 0);
+        netdev_set_hw_info(netdev, HW_INFO_TYPE_PEND_COUNT, 0);
+        oor_netdev_count--;
+    }
+
+    for (int i = 0; i < total_flow_count; i++) {
+        struct udpif_key *ukey = sort_flows[i];
+        ukey_netdev_unref(ukey);
+    }
+    free(sort_flows);
+}
+
+static int
+udpif_flow_program(struct udpif *udpif, struct udpif_key *ukey,
+                   enum dpif_offload_type offload_type)
+{
+    struct dpif_op *opsp;
+    struct ukey_op uop;
+
+    opsp = &uop.dop;
+    put_op_init(&uop, ukey, DPIF_FP_CREATE);
+    dpif_operate(udpif->dpif, &opsp, 1, offload_type);
+
+    return opsp->error;
+}
+
+static int
+udpif_flow_unprogram(struct udpif *udpif, struct udpif_key *ukey,
+                     enum dpif_offload_type offload_type)
+{
+    struct dpif_op *opsp;
+    struct ukey_op uop;
+
+    opsp = &uop.dop;
+    delete_op_init(udpif, &uop, ukey);
+    dpif_operate(udpif->dpif, &opsp, 1, offload_type);
+
+    return opsp->error;
 }

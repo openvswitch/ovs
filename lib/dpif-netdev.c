@@ -3705,7 +3705,8 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
 }
 
 static void
-dpif_netdev_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
+dpif_netdev_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops,
+                    enum dpif_offload_type offload_type OVS_UNUSED)
 {
     size_t i;
 

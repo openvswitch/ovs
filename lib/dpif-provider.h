@@ -288,12 +288,14 @@ struct dpif_class {
 
     int (*flow_dump_next)(struct dpif_flow_dump_thread *thread,
                           struct dpif_flow *flows, int max_flows);
-
     /* Executes each of the 'n_ops' operations in 'ops' on 'dpif', in the order
      * in which they are specified, placing each operation's results in the
      * "output" members documented in comments and the 'error' member of each
-     * dpif_op. */
-    void (*operate)(struct dpif *dpif, struct dpif_op **ops, size_t n_ops);
+     * dpif_op. The offload_type argument tells the provider if 'ops' should
+     * be submitted to to a netdev (only offload) or to the kernel datapath
+     * (never offload) or to both (offload if possible; software fallback). */
+    void (*operate)(struct dpif *dpif, struct dpif_op **ops, size_t n_ops,
+                    enum dpif_offload_type offload_type);
 
     /* Enables or disables receiving packets with dpif_recv() for 'dpif'.
      * Turning packet receive off and then back on is allowed to change Netlink
