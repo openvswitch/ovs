@@ -79,3 +79,24 @@ AT_CHECK([ovs-vsctl --columns=status list controller | dnl
 OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
+
+AT_SETUP([bridge - add port after stopping controller])
+OVS_VSWITCHD_START
+
+dnl Start ovs-testcontroller
+ovs-testcontroller --detach punix:controller --pidfile=ovs-testcontroller.pid
+OVS_WAIT_UNTIL([test -e controller])
+
+AT_CHECK([ovs-vsctl set-controller br0 unix:controller])
+AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=internal], [0], [ignore])
+AT_CHECK([ovs-appctl -t ovs-vswitchd version], [0], [ignore])
+
+# Now kill the ovs-testcontroller
+kill `cat ovs-testcontroller.pid`
+OVS_WAIT_UNTIL([! test -e controller])
+AT_CHECK([ovs-vsctl --no-wait add-port br0 p2 -- set Interface p2 type=internal], [0], [ignore])
+AT_CHECK([ovs-appctl -t ovs-vswitchd version], [0], [ignore])
+
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+AT_CLEANUP
