@@ -2545,6 +2545,45 @@ test_ip() {
     done
 }
 
+# test_arp INPORT SHA SPA TPA [REPLY_HA]
+#
+# Causes a packet to be received on INPORT.  The packet is an ARP
+# request with SHA, SPA, and TPA as specified.  If REPLY_HA is provided, then
+# it should be the hardware address of the target to expect to receive in an
+# ARP reply; otherwise no reply is expected.
+#
+# INPORT is an logical switch port number, e.g. 11 for vif11.
+# SHA and REPLY_HA are each 12 hex digits.
+# SPA and TPA are each 8 hex digits.
+test_arp() {
+    local inport=$1 sha=$2 spa=$3 tpa=$4 reply_ha=$5
+    local request=ffffffffffff${sha}08060001080006040001${sha}${spa}ffffffffffff${tpa}
+    hv=hv`vif_to_hv $inport`
+    as $hv ovs-appctl netdev-dummy/receive vif$inport $request
+    as $hv ovs-appctl ofproto/trace br-int in_port=$inport $request
+
+    # Expect to receive the broadcast ARP on the other logical switch ports if
+    # IP address is not configured to the switch patch port.
+    local i=`vif_to_ls $inport`
+    local j k
+    for j in 1 2 3; do
+        for k in 1 2 3; do
+            # 192.168.33.254 is configured to the switch patch port for lrp33,
+            # so no ARP flooding expected for it.
+            if test $i$j$k != $inport && test $tpa != `ip_to_hex 192 168 33 254`; then
+                echo $request >> $i$j$k.expected
+            fi
+        done
+    done
+
+    # Expect to receive the reply, if any.
+    if test X$reply_ha != X; then
+        lrp=`vif_to_lrp $inport`
+        local reply=${sha}00000000ff${lrp}08060001080006040002${reply_ha}${tpa}${sha}${spa}
+        echo $reply >> $inport.expected
+    fi
+}
+
 as hv1 ovs-vsctl --columns=name,ofport list interface
 as hv1 ovn-sbctl list port_binding
 as hv1 ovn-sbctl list datapath_binding
@@ -2587,10 +2626,13 @@ for is in 1 2 3; do
   done
 done
 
+: > mac_bindings.expected
+
 # 3. Send an IP packet from every logical port to every other subnet,
 #    to an IP address that does not have a static IP-MAC binding.
 #    This should generate a broadcast ARP request for the destination
 #    IP address in the destination subnet.
+#    Moreover generate an ARP reply for each of the IP addresses ARPed
 for is in 1 2 3; do
   for js in 1 2 3; do
     for ks in 1 2 3; do
@@ -2623,50 +2665,28 @@ for is in 1 2 3; do
               echo $arp >> $id$jd2$kd.expected
             done
           done
+          if test $(vif_to_hv ${is}${js}${ks}) = $(vif_to_hv ${id}${jd}1); then
+              hmac=8000000000$o4
+              rmac=00000000ff$id$jd
+              echo ${hmac}${rmac}08004500001c00000000"3f1101"00${sip}${dip}0035111100080000 >> ${id}11.expected
+          fi
+
+          host_mac=8000000000$o4
+          lrmac=00000000ff$id$jd
+
+          arp_reply=${lrmac}${host_mac}08060001080006040002${host_mac}${dip}${lrmac}${lrip}
+
+          hv=hv`vif_to_hv ${id}${jd}1`
+          as $hv ovs-appctl netdev-dummy/receive vif${id}${jd}1 $arp_reply
+
+          host_ip_pretty=192.168.$id$jd.$o4
+          host_mac_pretty=80:00:00:00:00:$o4
+          echo lrp$id$jd,$host_ip_pretty,$host_mac_pretty >> mac_bindings.expected
         done
       done
     done
   done
 done
-
-# test_arp INPORT SHA SPA TPA [REPLY_HA]
-#
-# Causes a packet to be received on INPORT.  The packet is an ARP
-# request with SHA, SPA, and TPA as specified.  If REPLY_HA is provided, then
-# it should be the hardware address of the target to expect to receive in an
-# ARP reply; otherwise no reply is expected.
-#
-# INPORT is an logical switch port number, e.g. 11 for vif11.
-# SHA and REPLY_HA are each 12 hex digits.
-# SPA and TPA are each 8 hex digits.
-test_arp() {
-    local inport=$1 sha=$2 spa=$3 tpa=$4 reply_ha=$5
-    local request=ffffffffffff${sha}08060001080006040001${sha}${spa}ffffffffffff${tpa}
-    hv=hv`vif_to_hv $inport`
-    as $hv ovs-appctl netdev-dummy/receive vif$inport $request
-    as $hv ovs-appctl ofproto/trace br-int in_port=$inport $request
-
-    # Expect to receive the broadcast ARP on the other logical switch ports if
-    # IP address is not configured to the switch patch port.
-    local i=`vif_to_ls $inport`
-    local j k
-    for j in 1 2 3; do
-        for k in 1 2 3; do
-            # 192.168.33.254 is configured to the switch patch port for lrp33,
-            # so no ARP flooding expected for it.
-            if test $i$j$k != $inport && test $tpa != `ip_to_hex 192 168 33 254`; then
-                echo $request >> $i$j$k.expected
-            fi
-        done
-    done
-
-    # Expect to receive the reply, if any.
-    if test X$reply_ha != X; then
-        lrp=`vif_to_lrp $inport`
-        local reply=${sha}00000000ff${lrp}08060001080006040002${reply_ha}${tpa}${sha}${spa}
-        echo $reply >> $inport.expected
-    fi
-}
 
 # Test router replies to ARP requests from all source ports:
 #
@@ -2678,7 +2698,6 @@ test_arp() {
 # 6. No reply to query for IP address other than router IP.
 #
 # 7. No reply to query from another subnet.
-: > mac_bindings.expected
 for i in 1 2 3; do
   for j in 1 2 3; do
     for k in 1 2 3; do
@@ -2722,60 +2741,12 @@ for i in 1 2 3; do
   done
 done
 
-# Allow some time for packet forwarding.
-# XXX This can be improved.
-sleep 1
-
-# 8. Generate an ARP reply for each of the IP addresses ARPed for
-#    earlier as #3.
-#
-#    Here, the $s is the VIF that originated the ARP request and $d is
-#    the VIF that sends the ARP reply, which is somewhat backward but
-#    it means that $s and $d are the same as #3.
-for is in 1 2 3; do
-  for js in 1 2 3; do
-    for ks in 1 2 3; do
-      s=$is$js$ks
-      for id in 1 2 3; do
-        for jd in 1 2 3; do
-          if test $is$js = $id$jd; then
-            continue
-          fi
-
-          kd=1
-          d=$id$jd$kd
-
-          o4=`expr $is '*' 9 + $js '*' 3 + $ks + 10`
-          host_ip=`ip_to_hex 192 168 $id$jd $o4`
-          host_mac=8000000000$o4
-
-          lrmac=00000000ff$id$jd
-          lrip=`ip_to_hex 192 168 $id$jd 254`
-
-          arp=${lrmac}${host_mac}08060001080006040002${host_mac}${host_ip}${lrmac}${lrip}
-
-          echo
-          echo
-          echo
-          hv=hv`vif_to_hv $d`
-          as $hv ovs-appctl netdev-dummy/receive vif$d $arp
-          #as $hv ovs-appctl ofproto/trace br-int in_port=$d $arp
-          #as $hv ovs-ofctl dump-flows br-int table=19
-
-          host_ip_pretty=192.168.$id$jd.$o4
-          host_mac_pretty=80:00:00:00:00:$o4
-          echo lrp$id$jd,$host_ip_pretty,$host_mac_pretty >> mac_bindings.expected
-        done
-      done
-    done
-  done
-done
 
 # Allow some time for packet forwarding.
 # XXX This can be improved.
 sleep 1
 
-# 9. Send an IP packet from every logical port to every other subnet.  These
+# 8. Send an IP packet from every logical port to every other subnet.  These
 #    are the same packets already sent as #3, but now the destinations' IP-MAC
 #    bindings have been discovered via ARP, so instead of provoking an ARP
 #    request, these packets now get routed to their destinations (which don't
@@ -8912,8 +8883,6 @@ packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111
 as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
 OVS_WAIT_UNTIL([test `ovn-sbctl find mac_binding ip="10.0.0.2" | wc -l` -gt 0])
 ovn-nbctl --wait=hv sync
-# Send the second packet to reach the destination.
-as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
 
 # Packet to Expect at 'alice1'
 src_mac="000000010204"
@@ -11321,4 +11290,150 @@ AT_CHECK([ovn-nbctl lsp-set-addresses sw2-p1 "00:00:00:00:00:04 192.168.0.2"])
 AT_CHECK([ovn-nbctl lsp-set-addresses sw2-p1 "00:00:00:00:00:04 192.168.0.3"])
 AT_CHECK([ovn-nbctl lsp-set-addresses sw2-p1 "00:00:00:00:00:04 aef0::1"])
 
+AT_CLEANUP
+
+AT_SETUP([ovn -- IP packet buffering])
+AT_KEYWORDS([ip-buffering])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# Logical network:
+# One LR lr0 that has switches sw0 (192.168.1.0/24) and
+# sw1 (172.16.1.0/24) connected to it.
+#
+# Physical network:
+# Tw0 hypervisors hv[12].
+# hv1 hosts vif sw0-p0.
+# hv1 hosts vif sw1-p0.
+
+send_icmp_packet() {
+    local inport=$1 hv=$2 eth_src=$3 eth_dst=$4 ipv4_src=$5 ipv4_dst=$6 ip_chksum=$7 data=$8
+    shift 8
+
+    local ip_ttl=ff
+    local ip_len=001c
+    local packet=${eth_dst}${eth_src}08004500${ip_len}00004000${ip_ttl}01${ip_chksum}${ipv4_src}${ipv4_dst}${data}
+    as hv$hv ovs-appctl netdev-dummy/receive hv$hv-vif$inport $packet
+}
+
+send_icmp6_packet() {
+    local inport=$1 hv=$2 eth_src=$3 eth_dst=$4 ipv6_src=$5 ipv6_dst=$6 ipv6_router=$7 exp_icmp_chksum=$8
+    shift 8
+
+    local ip6_hdr=6000000000083aff${ipv6_src}${ipv6_dst}
+    local packet=${eth_dst}${eth_src}86dd${ip6_hdr}8000dcb662f00001
+
+    as hv$hv ovs-appctl netdev-dummy/receive hv$hv-vif$inport $packet
+}
+
+get_arp_req() {
+    local eth_src=$1 spa=$2 tpa=$3
+    local request=ffffffffffff${eth_src}08060001080006040001${eth_src}${spa}000000000000${tpa}
+    echo $request
+}
+
+send_arp_reply() {
+    local hv=$1 inport=$2 eth_src=$3 eth_dst=$4 spa=$5 tpa=$6
+    local request=${eth_dst}${eth_src}08060001080006040002${eth_src}${spa}${eth_dst}${tpa}
+    as hv$hv ovs-appctl netdev-dummy/receive hv${hv}-vif$inport $request
+}
+
+send_na() {
+    local hv=$1 inport=$2 eth_src=$3 eth_dst=$4 src_ip=$5 dst_ip=$6
+    local ip6_hdr=6000000000203aff${src_ip}${dst_ip}
+    local request=${eth_dst}${eth_src}86dd${ip6_hdr}8800d78440000000${src_ip}0201${eth_src}
+
+    as hv$hv ovs-appctl netdev-dummy/receive hv${hv}-vif$inport $request
+}
+
+get_nd() {
+    local eth_src=$1 src_ip=$2 dst_ip=$3 ta=$4
+    local ip6_hdr=6000000000203aff${src_ip}${dst_ip}
+    request=3333ff000010${eth_src}86dd${ip6_hdr}8700357600000000${ta}0101${eth_src}
+
+    echo $request
+}
+
+net_add n1
+
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl -- add-port br-int hv1-vif1 -- \
+    set interface hv1-vif1 external-ids:iface-id=sw0-p0 \
+    options:tx_pcap=hv1/vif1-tx.pcap \
+    options:rxq_pcap=hv1/vif1-rx.pcap \
+    ofport-request=1
+
+sim_add hv2
+as hv2
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.2
+ovs-vsctl -- add-port br-int hv2-vif1 -- \
+    set interface hv2-vif1 external-ids:iface-id=sw1-p0 \
+    options:tx_pcap=hv2/vif1-tx.pcap \
+    options:rxq_pcap=hv2/vif1-rx.pcap \
+    ofport-request=1
+
+ovn-nbctl create Logical_Router name=lr0 options:chassis=hv1
+ovn-nbctl ls-add sw0
+ovn-nbctl ls-add sw1
+
+ovn-nbctl lrp-add lr0 sw0 00:00:01:01:02:03 192.168.1.1/24 2001::1/64
+ovn-nbctl lsp-add sw0 rp-sw0 -- set Logical_Switch_Port rp-sw0 \
+    type=router options:router-port=sw0 \
+    -- lsp-set-addresses rp-sw0 router
+
+ovn-nbctl lrp-add lr0 sw1 00:00:02:01:02:03 172.16.1.1/24 2002::1/64
+ovn-nbctl lsp-add sw1 rp-sw1 -- set Logical_Switch_Port rp-sw1 \
+    type=router options:router-port=sw1 \
+    -- lsp-set-addresses rp-sw1 router
+
+ovn-nbctl lsp-add sw0 sw0-p0 \
+    -- lsp-set-addresses sw0-p0 "f0:00:00:01:02:03 192.168.1.2 2001::2"
+
+ovn-nbctl lsp-add sw1 sw1-p0 \
+    -- lsp-set-addresses sw1-p0 unknown
+
+OVN_POPULATE_ARP
+ovn-nbctl --wait=hv sync
+
+ip_to_hex() {
+    printf "%02x%02x%02x%02x" "$@"
+}
+
+src_mac=f00000010203
+src_ip=$(ip_to_hex 192 168 1 2)
+src_ip6=20010000000000000000000000000002
+
+router_mac0=000001010203
+router_mac1=000002010203
+router_ip=$(ip_to_hex 172 16 1 1)
+router_ip6=20020000000000000000000000000001
+
+dst_mac=001122334455
+dst_ip=$(ip_to_hex 172 16 1 10)
+dst_ip6=20020000000000000000000000000010
+
+data=0800bee4391a0001
+
+send_icmp_packet 1 1 $src_mac $router_mac0 $src_ip $dst_ip 0000 $data
+send_arp_reply 2 1 $dst_mac $router_mac1 $dst_ip $router_ip
+echo $(get_arp_req $router_mac1 $router_ip $dst_ip) > expected
+echo "${dst_mac}${router_mac1}08004500001c00004000fe010100${src_ip}${dst_ip}${data}" >> expected
+
+OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [expected])
+
+nd_ip=ff0200000000000000000001ff000010
+ip6_hdr=6000000000083afe${src_ip6}${dst_ip6}
+
+send_icmp6_packet 1 1 $src_mac $router_mac0 $src_ip6 $dst_ip6
+echo $(get_nd $router_mac1 $src_ip6 $nd_ip $dst_ip6) >> expected
+echo "${dst_mac}${router_mac1}86dd${ip6_hdr}8000dcb662f00001" >> expected
+send_na 2 1 $dst_mac $router_mac1 $dst_ip6 $router_ip6
+
+OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [expected])
+
+OVN_CLEANUP([hv1],[hv2])
 AT_CLEANUP
