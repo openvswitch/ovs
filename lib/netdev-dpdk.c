@@ -4696,6 +4696,10 @@ netdev_dpdk_flow_del(struct netdev *netdev, const ovs_u128 *ufid,
                                         ufid, rte_flow);
 }
 
+#define DPDK_FLOW_OFFLOAD_API                   \
+    .flow_put = netdev_dpdk_flow_put,           \
+    .flow_del = netdev_dpdk_flow_del
+
 #define NETDEV_DPDK_CLASS_COMMON                            \
     .is_pmd = true,                                         \
     .alloc = netdev_dpdk_alloc,                             \
@@ -4717,8 +4721,7 @@ netdev_dpdk_flow_del(struct netdev *netdev, const ovs_u128 *ufid,
     .rxq_alloc = netdev_dpdk_rxq_alloc,                     \
     .rxq_construct = netdev_dpdk_rxq_construct,             \
     .rxq_destruct = netdev_dpdk_rxq_destruct,               \
-    .rxq_dealloc = netdev_dpdk_rxq_dealloc,                 \
-    DPDK_FLOW_OFFLOAD_API
+    .rxq_dealloc = netdev_dpdk_rxq_dealloc
 
 #define NETDEV_DPDK_CLASS_BASE                          \
     NETDEV_DPDK_CLASS_COMMON,                           \
@@ -4731,7 +4734,8 @@ netdev_dpdk_flow_del(struct netdev *netdev, const ovs_u128 *ufid,
     .get_features = netdev_dpdk_get_features,           \
     .get_status = netdev_dpdk_get_status,               \
     .reconfigure = netdev_dpdk_reconfigure,             \
-    .rxq_recv = netdev_dpdk_rxq_recv
+    .rxq_recv = netdev_dpdk_rxq_recv,                   \
+    DPDK_FLOW_OFFLOAD_API
 
 static const struct netdev_class dpdk_class = {
     .type = "dpdk",
