@@ -2559,6 +2559,8 @@ odp_nsh_hdr_from_attr(const struct nlattr *attr,
     bool has_md1 = false;
     bool has_md2 = false;
 
+    memset(nsh_hdr, 0, size);
+
     NL_NESTED_FOR_EACH (a, left, attr) {
         uint16_t type = nl_attr_type(a);
         size_t len = nl_attr_get_size(a);
