@@ -39,6 +39,7 @@ struct dpif {
     char *full_name;
     uint8_t netflow_engine_type;
     uint8_t netflow_engine_id;
+    long long int current_ms;
 };
 
 void dpif_init(struct dpif *, const struct dpif_class *, const char *name,

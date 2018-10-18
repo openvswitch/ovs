@@ -42,6 +42,8 @@
 #include "tunnel.h"
 #include "unixctl.h"
 #include "openvswitch/vlog.h"
+#include "lib/dpif-provider.h"
+#include "lib/netdev-provider.h"
 
 #define MAX_QUEUE_LENGTH 512
 #define UPCALL_MAX_BATCH 64
@@ -304,6 +306,13 @@ struct udpif_key {
 
     uint32_t key_recirc_id;   /* Non-zero if reference is held by the ukey. */
     struct recirc_refs recircs;  /* Action recirc IDs with references held. */
+
+#define OFFL_REBAL_INTVL_MSEC  3000	/* dynamic offload rebalance freq */
+    bool offloaded;			/* True if flow is offloaded */
+    uint64_t flow_pps_rate;		/* Packets-Per-Second rate */
+    long long int flow_time;		/* last pps update time */
+    uint64_t flow_packets;		/* #pkts seen in interval */
+    uint64_t flow_backlog_packets;	/* prev-mode #pkts (offl or kernel) */
 };
 
 /* Datapath operation with optional ukey attached. */
@@ -1666,6 +1675,10 @@ ukey_create__(const struct nlattr *key, size_t key_len,
     ukey->stats.used = used;
     ukey->xcache = NULL;
 
+    ukey->offloaded = false;
+    ukey->flow_time = 0;
+    ukey->flow_packets = ukey->flow_backlog_packets = 0;
+
     ukey->key_recirc_id = key_recirc_id;
     recirc_refs_init(&ukey->recircs);
     if (xout) {
@@ -2441,6 +2454,39 @@ reval_op_init(struct ukey_op *op, enum reval_result result,
     }
 }
 
+static uint64_t
+udpif_flow_packet_delta(struct udpif_key *ukey, const struct dpif_flow *f)
+{
+    return f->stats.n_packets + ukey->flow_backlog_packets -
+                ukey->flow_packets;
+}
+
+static long long int
+udpif_flow_time_delta(struct udpif *udpif, struct udpif_key *ukey)
+{
+    return (udpif->dpif->current_ms - ukey->flow_time) / 1000;
+}
+
+/* Gather pps-rate for the given dpif_flow and save it in its ukey */
+static void
+udpif_update_flow_pps(struct udpif *udpif, struct udpif_key *ukey,
+                      const struct dpif_flow *f)
+{
+    uint64_t pps;
+
+    /* Update pps-rate only when we are close to rebalance interval */
+    if (udpif->dpif->current_ms - ukey->flow_time < OFFL_REBAL_INTVL_MSEC) {
+        return;
+    }
+
+    ukey->offloaded = f->attrs.offloaded;
+    pps = udpif_flow_packet_delta(ukey, f) /
+                    udpif_flow_time_delta(udpif, ukey);
+    ukey->flow_pps_rate = pps;
+    ukey->flow_packets = ukey->flow_backlog_packets + f->stats.n_packets;
+    ukey->flow_time = udpif->dpif->current_ms;
+}
+
 static void
 revalidate(struct revalidator *revalidator)
 {
@@ -2548,6 +2594,11 @@ revalidate(struct revalidator *revalidator)
                                          reval_seq, &recircs);
             }
             ukey->dump_seq = dump_seq;
+
+            if (netdev_is_offload_rebalance_policy_enabled() &&
+                result != UKEY_DELETE) {
+                udpif_update_flow_pps(udpif, ukey, f);
+            }
 
             if (result != UKEY_KEEP) {
                 /* Takes ownership of 'recircs'. */
