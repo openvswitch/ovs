@@ -5366,13 +5366,6 @@ static int
 parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
                         struct ofpbuf *key, struct ofpbuf *mask)
 {
-    /* Skip UFID. */
-    ovs_u128 ufid;
-    int ufid_len = odp_ufid_from_string(s, &ufid);
-    if (ufid_len) {
-        return ufid_len;
-    }
-
     SCAN_SINGLE("skb_priority(", uint32_t, u32, OVS_KEY_ATTR_PRIORITY);
     SCAN_SINGLE("skb_mark(", uint32_t, u32, OVS_KEY_ATTR_SKB_MARK);
     SCAN_SINGLE_FULLY_MASKED("recirc_id(", uint32_t, u32,
@@ -5583,6 +5576,17 @@ odp_flow_from_string(const char *s, const struct simap *port_names,
         s += strspn(s, delimiters);
         if (!*s) {
             return 0;
+        }
+
+        /* Skip UFID. */
+        ovs_u128 ufid;
+        retval = odp_ufid_from_string(s, &ufid);
+        if (retval < 0) {
+            key->size = old_size;
+            return -retval;
+        } else if (retval > 0) {
+            s += retval;
+            s += s[0] == ' ' ? 1 : 0;
         }
 
         retval = parse_odp_key_mask_attr(s, port_names, key, mask);
