@@ -4043,7 +4043,7 @@ ufid_to_rte_flow_disassociate(const ovs_u128 *ufid) {
         if (ovs_u128_equals(*ufid, data->ufid)) {
             cmap_remove(&ufid_to_rte_flow,
                         CONST_CAST(struct cmap_node *, &data->node), hash);
-            free(data);
+            ovsrcu_postpone(free, data);
             return;
         }
     }

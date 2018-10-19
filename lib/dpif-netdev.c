@@ -2136,7 +2136,7 @@ megaflow_to_mark_disassociate(const ovs_u128 *mega_ufid)
         if (ovs_u128_equals(*mega_ufid, data->mega_ufid)) {
             cmap_remove(&flow_mark.megaflow_to_mark,
                         CONST_CAST(struct cmap_node *, &data->node), hash);
-            free(data);
+            ovsrcu_postpone(free, data);
             return;
         }
     }
