@@ -500,12 +500,6 @@ QEMU versions v2.10 and greater). This value can be set like so::
 
 Because of this limitation, this feature is considered 'experimental'.
 
-The feature currently does not fully work with QEMU >= v2.7 due to a bug in
-DPDK which will be addressed in an upcoming release. The patch to fix this
-issue can be found on
-`Patchwork
-<http://dpdk.org/dev/patchwork/patch/32198/>`__
-
 Further information can be found in the
 `DPDK documentation
 <http://dpdk.readthedocs.io/en/v17.11/prog_guide/vhost_lib.html>`__
