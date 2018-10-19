@@ -110,6 +110,12 @@ utilities/ovs-appctl.8: \
 utilities/ovs-appctl.8.in:
 lib/common.man:
 
+utilities/ovs-benchmark.1: \
+	utilities/ovs-benchmark.1.in \
+	lib/ovs.tmac
+utilities/ovs-benchmark.1.in:
+lib/ovs.tmac:
+
 utilities/ovs-dpctl-top.8: \
 	utilities/ovs-dpctl-top.8.in
 utilities/ovs-dpctl-top.8.in:
