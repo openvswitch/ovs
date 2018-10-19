@@ -4072,28 +4072,38 @@ struct flow_actions {
 static void
 dump_flow_pattern(struct rte_flow_item *item)
 {
+    struct ds s;
+
+    if (!VLOG_IS_DBG_ENABLED() || item->type == RTE_FLOW_ITEM_TYPE_END) {
+        return;
+    }
+
+    ds_init(&s);
+
     if (item->type == RTE_FLOW_ITEM_TYPE_ETH) {
         const struct rte_flow_item_eth *eth_spec = item->spec;
         const struct rte_flow_item_eth *eth_mask = item->mask;
 
-        VLOG_DBG("rte flow eth pattern:\n");
+        ds_put_cstr(&s, "rte flow eth pattern:\n");
         if (eth_spec) {
-            VLOG_DBG("  Spec: src="ETH_ADDR_FMT", dst="ETH_ADDR_FMT", "
+            ds_put_format(&s,
+                     "  Spec: src="ETH_ADDR_FMT", dst="ETH_ADDR_FMT", "
                      "type=0x%04" PRIx16"\n",
                      ETH_ADDR_BYTES_ARGS(eth_spec->src.addr_bytes),
                      ETH_ADDR_BYTES_ARGS(eth_spec->dst.addr_bytes),
                      ntohs(eth_spec->type));
         } else {
-            VLOG_DBG("  Spec = null\n");
+            ds_put_cstr(&s, "  Spec = null\n");
         }
         if (eth_mask) {
-            VLOG_DBG("  Mask: src="ETH_ADDR_FMT", dst="ETH_ADDR_FMT", "
+            ds_put_format(&s,
+                     "  Mask: src="ETH_ADDR_FMT", dst="ETH_ADDR_FMT", "
                      "type=0x%04"PRIx16"\n",
                      ETH_ADDR_BYTES_ARGS(eth_mask->src.addr_bytes),
                      ETH_ADDR_BYTES_ARGS(eth_mask->dst.addr_bytes),
                      eth_mask->type);
         } else {
-            VLOG_DBG("  Mask = null\n");
+            ds_put_cstr(&s, "  Mask = null\n");
         }
     }
 
@@ -4101,19 +4111,21 @@ dump_flow_pattern(struct rte_flow_item *item)
         const struct rte_flow_item_vlan *vlan_spec = item->spec;
         const struct rte_flow_item_vlan *vlan_mask = item->mask;
 
-        VLOG_DBG("rte flow vlan pattern:\n");
+        ds_put_cstr(&s, "rte flow vlan pattern:\n");
         if (vlan_spec) {
-            VLOG_DBG("  Spec: tpid=0x%"PRIx16", tci=0x%"PRIx16"\n",
+            ds_put_format(&s,
+                     "  Spec: tpid=0x%"PRIx16", tci=0x%"PRIx16"\n",
                      ntohs(vlan_spec->tpid), ntohs(vlan_spec->tci));
         } else {
-            VLOG_DBG("  Spec = null\n");
+            ds_put_cstr(&s, "  Spec = null\n");
         }
 
         if (vlan_mask) {
-            VLOG_DBG("  Mask: tpid=0x%"PRIx16", tci=0x%"PRIx16"\n",
+            ds_put_format(&s,
+                     "  Mask: tpid=0x%"PRIx16", tci=0x%"PRIx16"\n",
                      vlan_mask->tpid, vlan_mask->tci);
         } else {
-            VLOG_DBG("  Mask = null\n");
+            ds_put_cstr(&s, "  Mask = null\n");
         }
     }
 
@@ -4121,9 +4133,10 @@ dump_flow_pattern(struct rte_flow_item *item)
         const struct rte_flow_item_ipv4 *ipv4_spec = item->spec;
         const struct rte_flow_item_ipv4 *ipv4_mask = item->mask;
 
-        VLOG_DBG("rte flow ipv4 pattern:\n");
+        ds_put_cstr(&s, "rte flow ipv4 pattern:\n");
         if (ipv4_spec) {
-            VLOG_DBG("  Spec: tos=0x%"PRIx8", ttl=%"PRIx8", proto=0x%"PRIx8
+            ds_put_format(&s,
+                     "  Spec: tos=0x%"PRIx8", ttl=%"PRIx8", proto=0x%"PRIx8
                      ", src="IP_FMT", dst="IP_FMT"\n",
                      ipv4_spec->hdr.type_of_service,
                      ipv4_spec->hdr.time_to_live,
@@ -4131,10 +4144,11 @@ dump_flow_pattern(struct rte_flow_item *item)
                      IP_ARGS(ipv4_spec->hdr.src_addr),
                      IP_ARGS(ipv4_spec->hdr.dst_addr));
         } else {
-            VLOG_DBG("  Spec = null\n");
+            ds_put_cstr(&s, "  Spec = null\n");
         }
         if (ipv4_mask) {
-            VLOG_DBG("  Mask: tos=0x%"PRIx8", ttl=%"PRIx8", proto=0x%"PRIx8
+            ds_put_format(&s,
+                     "  Mask: tos=0x%"PRIx8", ttl=%"PRIx8", proto=0x%"PRIx8
                      ", src="IP_FMT", dst="IP_FMT"\n",
                      ipv4_mask->hdr.type_of_service,
                      ipv4_mask->hdr.time_to_live,
@@ -4142,7 +4156,7 @@ dump_flow_pattern(struct rte_flow_item *item)
                      IP_ARGS(ipv4_mask->hdr.src_addr),
                      IP_ARGS(ipv4_mask->hdr.dst_addr));
         } else {
-            VLOG_DBG("  Mask = null\n");
+            ds_put_cstr(&s, "  Mask = null\n");
         }
     }
 
@@ -4150,20 +4164,22 @@ dump_flow_pattern(struct rte_flow_item *item)
         const struct rte_flow_item_udp *udp_spec = item->spec;
         const struct rte_flow_item_udp *udp_mask = item->mask;
 
-        VLOG_DBG("rte flow udp pattern:\n");
+        ds_put_cstr(&s, "rte flow udp pattern:\n");
         if (udp_spec) {
-            VLOG_DBG("  Spec: src_port=%"PRIu16", dst_port=%"PRIu16"\n",
+            ds_put_format(&s,
+                     "  Spec: src_port=%"PRIu16", dst_port=%"PRIu16"\n",
                      ntohs(udp_spec->hdr.src_port),
                      ntohs(udp_spec->hdr.dst_port));
         } else {
-            VLOG_DBG("  Spec = null\n");
+            ds_put_cstr(&s, "  Spec = null\n");
         }
         if (udp_mask) {
-            VLOG_DBG("  Mask: src_port=0x%"PRIx16", dst_port=0x%"PRIx16"\n",
+            ds_put_format(&s,
+                     "  Mask: src_port=0x%"PRIx16", dst_port=0x%"PRIx16"\n",
                      udp_mask->hdr.src_port,
                      udp_mask->hdr.dst_port);
         } else {
-            VLOG_DBG("  Mask = null\n");
+            ds_put_cstr(&s, "  Mask = null\n");
         }
     }
 
@@ -4171,20 +4187,22 @@ dump_flow_pattern(struct rte_flow_item *item)
         const struct rte_flow_item_sctp *sctp_spec = item->spec;
         const struct rte_flow_item_sctp *sctp_mask = item->mask;
 
-        VLOG_DBG("rte flow sctp pattern:\n");
+        ds_put_cstr(&s, "rte flow sctp pattern:\n");
         if (sctp_spec) {
-            VLOG_DBG("  Spec: src_port=%"PRIu16", dst_port=%"PRIu16"\n",
+            ds_put_format(&s,
+                     "  Spec: src_port=%"PRIu16", dst_port=%"PRIu16"\n",
                      ntohs(sctp_spec->hdr.src_port),
                      ntohs(sctp_spec->hdr.dst_port));
         } else {
-            VLOG_DBG("  Spec = null\n");
+            ds_put_cstr(&s, "  Spec = null\n");
         }
         if (sctp_mask) {
-            VLOG_DBG("  Mask: src_port=0x%"PRIx16", dst_port=0x%"PRIx16"\n",
+            ds_put_format(&s,
+                     "  Mask: src_port=0x%"PRIx16", dst_port=0x%"PRIx16"\n",
                      sctp_mask->hdr.src_port,
                      sctp_mask->hdr.dst_port);
         } else {
-            VLOG_DBG("  Mask = null\n");
+            ds_put_cstr(&s, "  Mask = null\n");
         }
     }
 
@@ -4192,20 +4210,22 @@ dump_flow_pattern(struct rte_flow_item *item)
         const struct rte_flow_item_icmp *icmp_spec = item->spec;
         const struct rte_flow_item_icmp *icmp_mask = item->mask;
 
-        VLOG_DBG("rte flow icmp pattern:\n");
+        ds_put_cstr(&s, "rte flow icmp pattern:\n");
         if (icmp_spec) {
-            VLOG_DBG("  Spec: icmp_type=%"PRIu8", icmp_code=%"PRIu8"\n",
+            ds_put_format(&s,
+                     "  Spec: icmp_type=%"PRIu8", icmp_code=%"PRIu8"\n",
                      icmp_spec->hdr.icmp_type,
                      icmp_spec->hdr.icmp_code);
         } else {
-            VLOG_DBG("  Spec = null\n");
+            ds_put_cstr(&s, "  Spec = null\n");
         }
         if (icmp_mask) {
-            VLOG_DBG("  Mask: icmp_type=0x%"PRIx8", icmp_code=0x%"PRIx8"\n",
+            ds_put_format(&s,
+                     "  Mask: icmp_type=0x%"PRIx8", icmp_code=0x%"PRIx8"\n",
                      icmp_spec->hdr.icmp_type,
                      icmp_spec->hdr.icmp_code);
         } else {
-            VLOG_DBG("  Mask = null\n");
+            ds_put_cstr(&s, "  Mask = null\n");
         }
     }
 
@@ -4213,28 +4233,33 @@ dump_flow_pattern(struct rte_flow_item *item)
         const struct rte_flow_item_tcp *tcp_spec = item->spec;
         const struct rte_flow_item_tcp *tcp_mask = item->mask;
 
-        VLOG_DBG("rte flow tcp pattern:\n");
+        ds_put_cstr(&s, "rte flow tcp pattern:\n");
         if (tcp_spec) {
-            VLOG_DBG("  Spec: src_port=%"PRIu16", dst_port=%"PRIu16
+            ds_put_format(&s,
+                     "  Spec: src_port=%"PRIu16", dst_port=%"PRIu16
                      ", data_off=0x%"PRIx8", tcp_flags=0x%"PRIx8"\n",
                      ntohs(tcp_spec->hdr.src_port),
                      ntohs(tcp_spec->hdr.dst_port),
                      tcp_spec->hdr.data_off,
                      tcp_spec->hdr.tcp_flags);
         } else {
-            VLOG_DBG("  Spec = null\n");
+            ds_put_cstr(&s, "  Spec = null\n");
         }
         if (tcp_mask) {
-            VLOG_DBG("  Mask: src_port=%"PRIx16", dst_port=%"PRIx16
+            ds_put_format(&s,
+                     "  Mask: src_port=%"PRIx16", dst_port=%"PRIx16
                      ", data_off=0x%"PRIx8", tcp_flags=0x%"PRIx8"\n",
                      tcp_mask->hdr.src_port,
                      tcp_mask->hdr.dst_port,
                      tcp_mask->hdr.data_off,
                      tcp_mask->hdr.tcp_flags);
         } else {
-            VLOG_DBG("  Mask = null\n");
+            ds_put_cstr(&s, "  Mask = null\n");
         }
     }
+
+    VLOG_DBG("%s", ds_cstr(&s));
+    ds_destroy(&s);
 }
 
 static void
