@@ -4528,14 +4528,14 @@ end_proto_check:
 
     free(rss);
     if (!flow) {
-        VLOG_ERR("rte flow creat error: %u : message : %s\n",
-                 error.type, error.message);
+        VLOG_ERR("%s: rte flow creat error: %u : message : %s\n",
+                 netdev_get_name(netdev), error.type, error.message);
         ret = -1;
         goto out;
     }
     ufid_to_rte_flow_associate(ufid, flow);
-    VLOG_DBG("installed flow %p by ufid "UUID_FMT"\n",
-             flow, UUID_ARGS((struct uuid *)ufid));
+    VLOG_DBG("%s: installed flow %p by ufid "UUID_FMT"\n",
+             netdev_get_name(netdev), flow, UUID_ARGS((struct uuid *)ufid));
 
 out:
     free(patterns.items);
@@ -4639,9 +4639,10 @@ err:
 }
 
 static int
-netdev_dpdk_destroy_rte_flow(struct netdev_dpdk *dev,
+netdev_dpdk_destroy_rte_flow(struct netdev *netdev,
                              const ovs_u128 *ufid,
                              struct rte_flow *rte_flow) {
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     struct rte_flow_error error;
     int ret;
 
@@ -4650,11 +4651,12 @@ netdev_dpdk_destroy_rte_flow(struct netdev_dpdk *dev,
     ret = rte_flow_destroy(dev->port_id, rte_flow, &error);
     if (ret == 0) {
         ufid_to_rte_flow_disassociate(ufid);
-        VLOG_DBG("removed rte flow %p associated with ufid " UUID_FMT "\n",
-                 rte_flow, UUID_ARGS((struct uuid *)ufid));
+        VLOG_DBG("%s: removed rte flow %p associated with ufid " UUID_FMT "\n",
+                 netdev_get_name(netdev), rte_flow,
+                 UUID_ARGS((struct uuid *)ufid));
     } else {
-        VLOG_ERR("rte flow destroy error: %u : message : %s\n",
-                 error.type, error.message);
+        VLOG_ERR("%s: rte flow destroy error: %u : message : %s\n",
+                 netdev_get_name(netdev), error.type, error.message);
     }
 
     ovs_mutex_unlock(&dev->mutex);
@@ -4675,8 +4677,7 @@ netdev_dpdk_flow_put(struct netdev *netdev, struct match *match,
      */
     rte_flow = ufid_to_rte_flow_find(ufid);
     if (rte_flow) {
-        ret = netdev_dpdk_destroy_rte_flow(netdev_dpdk_cast(netdev),
-                                           ufid, rte_flow);
+        ret = netdev_dpdk_destroy_rte_flow(netdev, ufid, rte_flow);
         if (ret < 0) {
             return ret;
         }
@@ -4701,8 +4702,7 @@ netdev_dpdk_flow_del(struct netdev *netdev, const ovs_u128 *ufid,
         return -1;
     }
 
-    return netdev_dpdk_destroy_rte_flow(netdev_dpdk_cast(netdev),
-                                        ufid, rte_flow);
+    return netdev_dpdk_destroy_rte_flow(netdev, ufid, rte_flow);
 }
 
 #define DPDK_FLOW_OFFLOAD_API                   \
