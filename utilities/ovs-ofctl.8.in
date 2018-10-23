@@ -922,17 +922,11 @@ its TTL is copied from the IP TTL (64 if the packet is not IP).
 If the packet does already contain an MPLS label, pushes a new
 outermost label as a copy of the existing outermost label.
 .IP
-A limitation of the implementation is that processing of actions will stop
-if \fBpush_mpls\fR follows another \fBpush_mpls\fR unless there is a
-\fBpop_mpls\fR in between.
+OVS currently supports at most 3 MPLS labels.
 .
 .IP \fBpop_mpls\fR:\fIethertype\fR
-Strips the outermost MPLS label stack entry.
-Currently the implementation restricts \fIethertype\fR to a non-MPLS Ethertype
-and thus \fBpop_mpls\fR should only be applied to packets with
-an MPLS label stack depth of one. A further limitation is that processing of
-actions will stop if \fBpop_mpls\fR follows another \fBpop_mpls\fR unless
-there is a \fBpush_mpls\fR in between.
+Strips the outermost MPLS label stack entry and changes the packet's
+Ethertype to \fIethertype\fR.
 .
 .IP \fBmod_dl_src\fB:\fImac\fR
 Sets the source Ethernet address to \fImac\fR.
