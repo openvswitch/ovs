@@ -208,11 +208,12 @@ enum ofproto_band {
 };
 
 struct ofproto_controller {
-    char *target;               /* e.g. "tcp:127.0.0.1" */
     int max_backoff;            /* Maximum reconnection backoff, in seconds. */
     int probe_interval;         /* Max idle time before probing, in seconds. */
     enum ofproto_band band;     /* In-band or out-of-band? */
     bool enable_async_msgs;     /* Initially enable asynchronous messages? */
+    uint32_t allowed_versions;  /* OpenFlow protocol versions that may
+                                 * be negotiated for a session. */
 
     /* OpenFlow packet-in rate-limiting. */
     int rate_limit;             /* Max packet-in rate in packets per second. */
@@ -304,9 +305,7 @@ int ofproto_port_query_by_name(const struct ofproto *, const char *devname,
 /* Top-level configuration. */
 uint64_t ofproto_get_datapath_id(const struct ofproto *);
 void ofproto_set_datapath_id(struct ofproto *, uint64_t datapath_id);
-void ofproto_set_controllers(struct ofproto *,
-                             const struct ofproto_controller *, size_t n,
-                             uint32_t allowed_versions);
+void ofproto_set_controllers(struct ofproto *, struct shash *controllers);
 void ofproto_set_fail_mode(struct ofproto *, enum ofproto_fail_mode fail_mode);
 void ofproto_reconnect_controllers(struct ofproto *);
 void ofproto_set_extra_in_band_remotes(struct ofproto *,

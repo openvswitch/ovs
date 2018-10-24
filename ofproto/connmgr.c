@@ -580,9 +580,7 @@ connmgr_free_controller_info(struct shash *info)
 /* Changes 'mgr''s set of controllers to the 'n_controllers' controllers in
  * 'controllers'. */
 void
-connmgr_set_controllers(struct connmgr *mgr,
-                        const struct ofproto_controller *controllers,
-                        size_t n_controllers, uint32_t allowed_versions)
+connmgr_set_controllers(struct connmgr *mgr, struct shash *controllers)
     OVS_EXCLUDED(ofproto_mutex)
 {
     bool had_controllers = connmgr_has_controllers(mgr);
@@ -591,52 +589,49 @@ connmgr_set_controllers(struct connmgr *mgr,
      * cover a smaller amount of code, if that yielded some benefit. */
     ovs_mutex_lock(&ofproto_mutex);
 
-    /* Create newly configured controllers and services.
-     * Create a name to ofproto_controller mapping in 'new_controllers'. */
-    struct shash new_controllers = SHASH_INITIALIZER(&new_controllers);
-    for (size_t i = 0; i < n_controllers; i++) {
-        const struct ofproto_controller *c = &controllers[i];
+    /* Create newly configured controllers and services. */
+    struct shash_node *node;
+    SHASH_FOR_EACH (node, controllers) {
+        const char *target = node->name;
+        const struct ofproto_controller *c = node->data;
 
-        if (!vconn_verify_name(c->target)) {
+        if (!vconn_verify_name(target)) {
             bool add = false;
-            struct ofconn *ofconn = find_controller_by_target(mgr, c->target);
+            struct ofconn *ofconn = find_controller_by_target(mgr, target);
             if (!ofconn) {
                 VLOG_INFO("%s: added primary controller \"%s\"",
-                          mgr->name, c->target);
+                          mgr->name, target);
                 add = true;
             } else if (rconn_get_allowed_versions(ofconn->rconn) !=
-                       allowed_versions) {
+                       c->allowed_versions) {
                 VLOG_INFO("%s: re-added primary controller \"%s\"",
-                          mgr->name, c->target);
+                          mgr->name, target);
                 add = true;
                 ofconn_destroy(ofconn);
             }
             if (add) {
-                add_controller(mgr, c->target, c->dscp, allowed_versions);
+                add_controller(mgr, target, c->dscp, c->allowed_versions);
             }
-        } else if (!pvconn_verify_name(c->target)) {
+        } else if (!pvconn_verify_name(target)) {
             bool add = false;
-            struct ofservice *ofservice = ofservice_lookup(mgr, c->target);
+            struct ofservice *ofservice = ofservice_lookup(mgr, target);
             if (!ofservice) {
                 VLOG_INFO("%s: added service controller \"%s\"",
-                          mgr->name, c->target);
+                          mgr->name, target);
                 add = true;
-            } else if (ofservice->allowed_versions != allowed_versions) {
+            } else if (ofservice->allowed_versions != c->allowed_versions) {
                 VLOG_INFO("%s: re-added service controller \"%s\"",
-                          mgr->name, c->target);
+                          mgr->name, target);
                 ofservice_destroy(mgr, ofservice);
                 add = true;
             }
             if (add) {
-                ofservice_create(mgr, c->target, allowed_versions, c->dscp);
+                ofservice_create(mgr, target, c->allowed_versions, c->dscp);
             }
         } else {
             VLOG_WARN_RL(&rl, "%s: unsupported controller \"%s\"",
-                         mgr->name, c->target);
-            continue;
+                         mgr->name, target);
         }
-
-        shash_add_once(&new_controllers, c->target, &controllers[i]);
     }
 
     /* Delete controllers that are no longer configured.
@@ -644,8 +639,7 @@ connmgr_set_controllers(struct connmgr *mgr,
     struct ofconn *ofconn, *next_ofconn;
     HMAP_FOR_EACH_SAFE (ofconn, next_ofconn, hmap_node, &mgr->controllers) {
         const char *target = ofconn_get_target(ofconn);
-        struct ofproto_controller *c = shash_find_data(&new_controllers,
-                                                       target);
+        struct ofproto_controller *c = shash_find_data(controllers, target);
         if (!c) {
             VLOG_INFO("%s: removed primary controller \"%s\"",
                       mgr->name, target);
@@ -660,8 +654,7 @@ connmgr_set_controllers(struct connmgr *mgr,
     struct ofservice *ofservice, *next_ofservice;
     HMAP_FOR_EACH_SAFE (ofservice, next_ofservice, node, &mgr->services) {
         const char *target = pvconn_get_name(ofservice->pvconn);
-        struct ofproto_controller *c = shash_find_data(&new_controllers,
-                                                       target);
+        struct ofproto_controller *c = shash_find_data(controllers, target);
         if (!c) {
             VLOG_INFO("%s: removed service controller \"%s\"",
                       mgr->name, target);
@@ -670,8 +663,6 @@ connmgr_set_controllers(struct connmgr *mgr,
             ofservice_reconfigure(ofservice, c);
         }
     }
-
-    shash_destroy(&new_controllers);
 
     ovs_mutex_unlock(&ofproto_mutex);
 

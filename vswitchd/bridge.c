@@ -3462,48 +3462,6 @@ bridge_del_ports(struct bridge *br, const struct shash *wanted_ports)
     }
 }
 
-/* Initializes 'oc' appropriately as a management service controller for
- * 'br'.
- *
- * The caller must free oc->target when it is no longer needed. */
-static void
-bridge_ofproto_controller_for_mgmt(const struct bridge *br,
-                                   struct ofproto_controller *oc)
-{
-    oc->target = xasprintf("punix:%s/%s.mgmt", ovs_rundir(), br->name);
-    oc->max_backoff = 0;
-    oc->probe_interval = 60;
-    oc->band = OFPROTO_OUT_OF_BAND;
-    oc->rate_limit = 0;
-    oc->burst_limit = 0;
-    oc->enable_async_msgs = true;
-    oc->dscp = 0;
-}
-
-/* Converts ovsrec_controller 'c' into an ofproto_controller in 'oc'.  */
-static void
-bridge_ofproto_controller_from_ovsrec(const struct ovsrec_controller *c,
-                                      struct ofproto_controller *oc)
-{
-    int dscp;
-
-    oc->target = c->target;
-    oc->max_backoff = c->max_backoff ? *c->max_backoff / 1000 : 8;
-    oc->probe_interval = c->inactivity_probe ? *c->inactivity_probe / 1000 : 5;
-    oc->band = (!c->connection_mode || !strcmp(c->connection_mode, "in-band")
-                ? OFPROTO_IN_BAND : OFPROTO_OUT_OF_BAND);
-    oc->rate_limit = c->controller_rate_limit ? *c->controller_rate_limit : 0;
-    oc->burst_limit = (c->controller_burst_limit
-                       ? *c->controller_burst_limit : 0);
-    oc->enable_async_msgs = (!c->enable_async_messages
-                             || *c->enable_async_messages);
-    dscp = smap_get_int(&c->other_config, "dscp", DSCP_DEFAULT);
-    if (dscp < 0 || dscp > 63) {
-        dscp = DSCP_DEFAULT;
-    }
-    oc->dscp = dscp;
-}
-
 /* Configures the IP stack for 'br''s local interface properly according to the
  * configuration in 'c'.  */
 static void
@@ -3589,10 +3547,6 @@ bridge_configure_remotes(struct bridge *br,
 
     enum ofproto_fail_mode fail_mode;
 
-    struct ofproto_controller *ocs;
-    size_t n_ocs;
-    size_t i;
-
     /* Check if we should disable in-band control on this bridge. */
     disable_in_band = smap_get_bool(&br->cfg->other_config, "disable-in-band",
                                     false);
@@ -3611,13 +3565,22 @@ bridge_configure_remotes(struct bridge *br,
     n_controllers = (ofproto_get_flow_restore_wait() ? 0
                      : bridge_get_controllers(br, &controllers));
 
-    ocs = xmalloc((n_controllers + 1) * sizeof *ocs);
-    n_ocs = 0;
+    /* The set of controllers to pass down to ofproto. */
+    struct shash ocs = SHASH_INITIALIZER(&ocs);
 
-    bridge_ofproto_controller_for_mgmt(br, &ocs[n_ocs++]);
-    for (i = 0; i < n_controllers; i++) {
+    /* Add managment controller. */
+    struct ofproto_controller *oc = xmalloc(sizeof *oc);
+    *oc = (struct ofproto_controller) {
+        .probe_interval = 60,
+        .band = OFPROTO_OUT_OF_BAND,
+        .enable_async_msgs = true,
+        .allowed_versions = bridge_get_allowed_versions(br),
+    };
+    shash_add_nocopy(
+        &ocs, xasprintf("punix:%s/%s.mgmt", ovs_rundir(), br->name), oc);
+
+    for (size_t i = 0; i < n_controllers; i++) {
         struct ovsrec_controller *c = controllers[i];
-
         if (daemon_should_self_confine()
             && (!strncmp(c->target, "punix:", 6)
             || !strncmp(c->target, "unix:", 5))) {
@@ -3668,17 +3631,34 @@ bridge_configure_remotes(struct bridge *br,
         }
 
         bridge_configure_local_iface_netdev(br, c);
-        bridge_ofproto_controller_from_ovsrec(c, &ocs[n_ocs]);
-        if (disable_in_band) {
-            ocs[n_ocs].band = OFPROTO_OUT_OF_BAND;
-        }
-        n_ocs++;
-    }
 
-    ofproto_set_controllers(br->ofproto, ocs, n_ocs,
-                            bridge_get_allowed_versions(br));
-    free(ocs[0].target); /* From bridge_ofproto_controller_for_mgmt(). */
-    free(ocs);
+        int dscp = smap_get_int(&c->other_config, "dscp", DSCP_DEFAULT);
+        if (dscp < 0 || dscp > 63) {
+            dscp = DSCP_DEFAULT;
+        }
+
+        oc = xmalloc(sizeof *oc);
+        *oc = (struct ofproto_controller) {
+            .max_backoff = c->max_backoff ? *c->max_backoff / 1000 : 8,
+            .probe_interval = (c->inactivity_probe
+                               ? *c->inactivity_probe / 1000 : 5),
+            .band = ((!c->connection_mode
+                      || !strcmp(c->connection_mode, "in-band"))
+                     && !disable_in_band
+                     ? OFPROTO_IN_BAND : OFPROTO_OUT_OF_BAND),
+            .enable_async_msgs = (!c->enable_async_messages
+                                  || *c->enable_async_messages),
+            .allowed_versions = bridge_get_allowed_versions(br),
+            .rate_limit = (c->controller_rate_limit
+                           ? *c->controller_rate_limit : 0),
+            .burst_limit = (c->controller_burst_limit
+                            ? *c->controller_burst_limit : 0),
+            .dscp = dscp,
+        };
+        shash_add(&ocs, c->target, oc);
+    }
+    ofproto_set_controllers(br->ofproto, &ocs);
+    shash_destroy_free_data(&ocs);
 
     /* Set the fail-mode. */
     fail_mode = !br->cfg->fail_mode

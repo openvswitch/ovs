@@ -56,6 +56,7 @@ enum ofconn_type {
     OFCONN_PRIMARY,             /* An ordinary OpenFlow controller. */
     OFCONN_SERVICE              /* A service connection, e.g. "ovs-ofctl". */
 };
+const char *ofconn_type_to_string(enum ofconn_type);
 
 /* An asynchronous message that might need to be queued between threads. */
 struct ofproto_async_msg {
@@ -94,9 +95,7 @@ void connmgr_retry(struct connmgr *);
 bool connmgr_has_controllers(const struct connmgr *);
 void connmgr_get_controller_info(struct connmgr *, struct shash *);
 void connmgr_free_controller_info(struct shash *);
-void connmgr_set_controllers(struct connmgr *,
-                             const struct ofproto_controller[], size_t n,
-                             uint32_t allowed_versions);
+void connmgr_set_controllers(struct connmgr *, struct shash *);
 void connmgr_reconnect(const struct connmgr *);
 
 int connmgr_set_snoops(struct connmgr *, const struct sset *snoops);
