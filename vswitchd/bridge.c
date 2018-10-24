@@ -2718,7 +2718,7 @@ ofp12_controller_role_to_str(enum ofp12_controller_role role)
         return "slave";
     case OFPCR12_ROLE_NOCHANGE:
     default:
-        return "*** INVALID ROLE ***";
+        return NULL;
     }
 }
 
