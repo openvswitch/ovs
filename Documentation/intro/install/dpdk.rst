@@ -661,7 +661,6 @@ The average number of packets per output batch can be checked in PMD stats::
 Limitations
 ------------
 
-- Currently DPDK ports does not use HW offload functionality.
 - Network Interface Firmware requirements: Each release of DPDK is
   validated against a specific firmware version for a supported Network
   Interface. New firmware versions introduce bug fixes, performance
