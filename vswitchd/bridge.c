@@ -3608,7 +3608,8 @@ bridge_configure_remotes(struct bridge *br,
         ofproto_set_extra_in_band_remotes(br->ofproto, managers, n_managers);
     }
 
-    n_controllers = bridge_get_controllers(br, &controllers);
+    n_controllers = (ofproto_get_flow_restore_wait() ? 0
+                     : bridge_get_controllers(br, &controllers));
 
     ocs = xmalloc((n_controllers + 1) * sizeof *ocs);
     n_ocs = 0;
