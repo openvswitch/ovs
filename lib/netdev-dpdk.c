@@ -3021,11 +3021,36 @@ netdev_dpdk_vhost_user_get_status(const struct netdev *netdev,
     return 0;
 }
 
+/*
+ * Convert a given uint32_t link speed defined in DPDK to a string
+ * equivalent.
+ */
+static const char *
+netdev_dpdk_link_speed_to_str__(uint32_t link_speed)
+{
+    switch (link_speed) {
+    case ETH_SPEED_NUM_10M:    return "10Mbps";
+    case ETH_SPEED_NUM_100M:   return "100Mbps";
+    case ETH_SPEED_NUM_1G:     return "1Gbps";
+    case ETH_SPEED_NUM_2_5G:   return "2.5Gbps";
+    case ETH_SPEED_NUM_5G:     return "5Gbps";
+    case ETH_SPEED_NUM_10G:    return "10Gbps";
+    case ETH_SPEED_NUM_20G:    return "20Gbps";
+    case ETH_SPEED_NUM_25G:    return "25Gbps";
+    case ETH_SPEED_NUM_40G:    return "40Gbps";
+    case ETH_SPEED_NUM_50G:    return "50Gbps";
+    case ETH_SPEED_NUM_56G:    return "56Gbps";
+    case ETH_SPEED_NUM_100G:   return "100Gbps";
+    default:                   return "Not Defined";
+    }
+}
+
 static int
 netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     struct rte_eth_dev_info dev_info;
+    uint32_t link_speed;
 
     if (!rte_eth_dev_is_valid_port(dev->port_id)) {
         return ENODEV;
@@ -3033,6 +3058,7 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
 
     ovs_mutex_lock(&dev->mutex);
     rte_eth_dev_info_get(dev->port_id, &dev_info);
+    link_speed = dev->link.link_speed;
     ovs_mutex_unlock(&dev->mutex);
 
     smap_add_format(args, "port_no", DPDK_PORT_ID_FMT, dev->port_id);
@@ -3063,6 +3089,14 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
         smap_add_format(args, "pci-device_id", "0x%x",
                         dev_info.pci_dev->id.device_id);
     }
+
+    /* Not all link speeds are defined in the OpenFlow specs e.g. 25 Gbps.
+     * In that case the speed will not be reported as part of the usual
+     * call to get_features(). Get the link speed of the device and add it
+     * to the device status in an easy to read string format.
+     */
+    smap_add(args, "link_speed",
+             netdev_dpdk_link_speed_to_str__(link_speed));
 
     return 0;
 }
