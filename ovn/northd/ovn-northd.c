@@ -1042,25 +1042,22 @@ ipam_add_port_addresses(struct ovn_datapath *od, struct ovn_port *op)
 }
 
 static uint64_t
-ipam_get_unused_mac(void)
+ipam_get_unused_mac(ovs_be32 ip)
 {
-    /* Stores the suffix of the most recently ipam-allocated MAC address. */
-    static uint32_t last_mac;
-
-    uint64_t mac64;
+    uint32_t mac_addr_suffix, i, base_addr = ntohl(ip) & MAC_ADDR_SPACE;
     struct eth_addr mac;
-    uint32_t mac_addr_suffix, i;
+    uint64_t mac64;
+
     for (i = 0; i < MAC_ADDR_SPACE - 1; i++) {
         /* The tentative MAC's suffix will be in the interval (1, 0xfffffe). */
-        mac_addr_suffix = ((last_mac + i) % (MAC_ADDR_SPACE - 1)) + 1;
+        mac_addr_suffix = ((base_addr + i) % (MAC_ADDR_SPACE - 1)) + 1;
         if (!eth_addr_is_zero(mac_prefix)) {
             mac64 =  eth_addr_to_uint64(mac_prefix) | mac_addr_suffix;
         } else {
             mac64 = MAC_ADDR_PREFIX | mac_addr_suffix;
         }
         eth_addr_from_uint64(mac64, &mac);
-        if (!ipam_is_duplicate_mac(&mac, mac64, false)) {
-            last_mac = mac_addr_suffix;
+        if (!ipam_is_duplicate_mac(&mac, mac64, true)) {
             break;
         }
     }
@@ -1296,21 +1293,6 @@ set_dynamic_updates(const char *addrspec,
 static void
 update_dynamic_addresses(struct dynamic_address_update *update)
 {
-    struct eth_addr mac;
-    switch (update->mac) {
-    case NONE:
-        mac = update->current_addresses.ea;
-        break;
-    case REMOVE:
-        OVS_NOT_REACHED();
-    case STATIC:
-        mac = update->static_mac;
-        break;
-    case DYNAMIC:
-        eth_addr_from_uint64(ipam_get_unused_mac(), &mac);
-        break;
-    }
-
     ovs_be32 ip4 = 0;
     switch (update->ipv4) {
     case NONE:
@@ -1324,6 +1306,21 @@ update_dynamic_addresses(struct dynamic_address_update *update)
         OVS_NOT_REACHED();
     case DYNAMIC:
         ip4 = htonl(ipam_get_unused_ip(update->od));
+    }
+
+    struct eth_addr mac;
+    switch (update->mac) {
+    case NONE:
+        mac = update->current_addresses.ea;
+        break;
+    case REMOVE:
+        OVS_NOT_REACHED();
+    case STATIC:
+        mac = update->static_mac;
+        break;
+    case DYNAMIC:
+        eth_addr_from_uint64(ipam_get_unused_mac(ip4), &mac);
+        break;
     }
 
     struct in6_addr ip6 = in6addr_any;
