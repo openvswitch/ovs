@@ -4186,6 +4186,205 @@ check_async 1 OFPGC_ADD OFPGC_MODIFY
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+dnl This test checks the backwards compatibility of the NXT_REQUESTFORWARD
+dnl message type to OpenFlow 1.0, also relying on the Nicira Extensions:
+dnl NXT_GROUP_MOD, NXT_ROLE_REQUEST, and OFPRAW_NXT_SET_ASYNC_CONFIG2,
+dnl while also testing the functionality of the previous test.
+AT_SETUP([ofproto - NXT requestforward (OpenFlow 1.0)])
+OVS_VSWITCHD_START
+on_exit 'kill `cat c1.pid c2.pid c3.pid`'
+
+# Start two ovs-ofctl controller processes.
+AT_CAPTURE_FILE([monitor1.log])
+AT_CAPTURE_FILE([expout1])
+AT_CAPTURE_FILE([monitor2.log])
+AT_CAPTURE_FILE([expout2])
+AT_CAPTURE_FILE([monitor3.log])
+AT_CAPTURE_FILE([expout3])
+
+ovs-ofctl -O OpenFlow10 monitor br0 --detach --no-chdir --pidfile=c1.pid --unixctl=c1
+ovs-ofctl -O OpenFlow10 monitor br0 --detach --no-chdir --pidfile=c2.pid --unixctl=c2
+ovs-ofctl -O OpenFlow10 monitor br0 --detach --no-chdir --pidfile=c3.pid --unixctl=c3
+
+check_async () {
+    for i in 1 3; do
+        ovs-appctl -t `pwd`/c$i ofctl/barrier
+        ovs-appctl -t `pwd`/c$i ofctl/set-output-file monitor$i.log
+        : > expout$i
+    done
+
+    printf '\n\n--- check_async %d ---\n\n\n' $1
+    INDEX=$1
+    shift
+
+    # OFPGC_ADD
+    # NXT_GROUP_MOD (xid=0x2):
+    # ADD group_id=2271560481,type=select,selection_method=hash,selection_method_param=7,bucket=bucket_id:0,weight:100,watch_port:1,actions=output:1,bucket=bucket_id:1,weight:200,watch_port:2,actions=output:2,bucket=bucket_id:2,weight:200,watch_port:3,actions=output:3
+    ovs-appctl -t `pwd`/c2 ofctl/send "01 04 00 a8 00 00 00 02 00 00 23 20 00 00 00 1f 00 00 01 00 87 65 43 21 00 60 00 00 ff ff ff ff 00 20 00 08 00 00 00 00 00 00 00 08 00 01 00 00 00 00 00 08 00 64 00 00 00 01 00 08 00 00 00 01 00 20 00 08 00 00 00 01 00 00 00 08 00 02 00 00 00 00 00 08 00 c8 00 00 00 01 00 08 00 00 00 02 00 20 00 08 00 00 00 02 00 00 00 08 00 03 00 00 00 00 00 08 00 c8 00 00 00 01 00 08 00 00 00 03 ff ff 00 28 00 00 15 40 00 00 00 01 00 00 00 00 68 61 73 68 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 07"
+    if test X"$1" = X"OFPGC_ADD"; then shift;
+        echo >>expout2 "send: NXT_GROUP_MOD:
+ ADD group_id=2271560481,type=select,selection_method=hash,selection_method_param=7,bucket=bucket_id:0,weight:100,watch_port:1,actions=output:1,bucket=bucket_id:1,weight:200,watch_port:2,actions=output:2,bucket=bucket_id:2,weight:200,watch_port:3,actions=output:3"
+        echo >>expout1 "NXT_REQUESTFORWARD: reason=group_mod
+ ADD group_id=2271560481,type=select,selection_method=hash,selection_method_param=7,bucket=bucket_id:0,weight:100,watch_port:1,actions=output:1,bucket=bucket_id:1,weight:200,watch_port:2,actions=output:2,bucket=bucket_id:2,weight:200,watch_port:3,actions=output:3"
+        echo >>expout3 "NXT_REQUESTFORWARD: reason=group_mod
+ ADD group_id=2271560481,type=select,selection_method=hash,selection_method_param=7,bucket=bucket_id:0,weight:100,watch_port:1,actions=output:1,bucket=bucket_id:1,weight:200,watch_port:2,actions=output:2,bucket=bucket_id:2,weight:200,watch_port:3,actions=output:3"
+    fi
+
+    # OFPGC_MODIFY
+    # NXT_GROUP_MOD (xid=0x2):
+    # MOD group_id=2271560481,type=select,selection_method=hash,selection_method_param=7,bucket=bucket_id:0,weight:150,watch_port:1,actions=output:1,bucket=bucket_id:1,weight:150,watch_port:2,actions=output:2,bucket=bucket_id:2,weight:150,watch_port:3,actions=output:3
+    ovs-appctl -t `pwd`/c2 ofctl/send "01 04 00 a8 00 00 00 02 00 00 23 20 00 00 00 1f 00 01 01 00 87 65 43 21 00 60 00 00 ff ff ff ff 00 20 00 08 00 00 00 00 00 00 00 08 00 01 00 00 00 00 00 08 00 96 00 00 00 01 00 08 00 00 00 01 00 20 00 08 00 00 00 01 00 00 00 08 00 02 00 00 00 00 00 08 00 96 00 00 00 01 00 08 00 00 00 02 00 20 00 08 00 00 00 02 00 00 00 08 00 03 00 00 00 00 00 08 00 96 00 00 00 01 00 08 00 00 00 03 ff ff 00 28 00 00 15 40 00 00 00 01 00 00 00 00 68 61 73 68 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 07"
+    if test X"$1" = X"OFPGC_MODIFY"; then shift;
+        echo >>expout2 "send: NXT_GROUP_MOD:
+ MOD group_id=2271560481,type=select,selection_method=hash,selection_method_param=7,bucket=bucket_id:0,weight:150,watch_port:1,actions=output:1,bucket=bucket_id:1,weight:150,watch_port:2,actions=output:2,bucket=bucket_id:2,weight:150,watch_port:3,actions=output:3"
+        echo >>expout1 "NXT_REQUESTFORWARD: reason=group_mod
+ MOD group_id=2271560481,type=select,selection_method=hash,selection_method_param=7,bucket=bucket_id:0,weight:150,watch_port:1,actions=output:1,bucket=bucket_id:1,weight:150,watch_port:2,actions=output:2,bucket=bucket_id:2,weight:150,watch_port:3,actions=output:3"
+        echo >>expout3 "NXT_REQUESTFORWARD: reason=group_mod
+ MOD group_id=2271560481,type=select,selection_method=hash,selection_method_param=7,bucket=bucket_id:0,weight:150,watch_port:1,actions=output:1,bucket=bucket_id:1,weight:150,watch_port:2,actions=output:2,bucket=bucket_id:2,weight:150,watch_port:3,actions=output:3"
+    fi
+
+    ovs-appctl -t `pwd`/c1 ofctl/barrier
+    echo >>expout1 "OFPT_BARRIER_REPLY:"
+    ovs-appctl -t `pwd`/c2 ofctl/barrier
+    echo >>expout2 "OFPT_BARRIER_REPLY:"
+    ovs-appctl -t `pwd`/c3 ofctl/barrier
+    echo >>expout3 "OFPT_BARRIER_REPLY:"
+
+    # Check output.
+    for i in 1 3; do
+        cp expout$i expout
+        AT_CHECK(
+      [[sed '
+s/ (xid=0x[0-9a-fA-F]*)//'< monitor$i.log]],
+      [0], [expout])
+    done
+}
+
+# controller 1: Become slave
+# NXT_ROLE_REQUEST (xid=0x3): role=slave
+ovs-appctl -t `pwd`/c1 ofctl/send 0104001400000003000023200000000a00000002
+
+# controller 2: Become master
+# NXT_ROLE_REQUEST (xid=0x3): role=master
+ovs-appctl -t `pwd`/c2 ofctl/send 0104001400000003000023200000000a00000001
+
+# controller 1: Become slave
+# NXT_ROLE_REQUEST (xid=0x3): role=slave
+ovs-appctl -t `pwd`/c3 ofctl/send 0104001400000003000023200000000a00000002
+
+# controller 1: Enabled requestforward using OFPRAW_NXT_SET_ASYNC_CONFIG2
+ovs-appctl -t `pwd`/c1 ofctl/send 0104003000000002000023200000001b00000008000000050002000800000002000400080000001a000a000800000003
+
+# controller 2: Enabled requestforward using OFPRAW_NXT_SET_ASYNC_CONFIG2
+ovs-appctl -t `pwd`/c2 ofctl/send 0104003000000002000023200000001b000100080000000200030008000000050005000800000005000b000800000003
+
+# controller 1: Enabled requestforward using OFPRAW_NXT_SET_ASYNC_CONFIG2
+ovs-appctl -t `pwd`/c3 ofctl/send 0104003000000002000023200000001b00000008000000050002000800000002000400080000001a000a000800000003
+check_async 1 OFPGC_ADD OFPGC_MODIFY
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl This test checks the Group and meter notifications when a group mod
+dnl command is sent from one controller and the reply is received by
+dnl other controllers, using the ONF Extension for OF 1.3.
+AT_SETUP([ofproto - ONF requestforward (OpenFlow 1.3)])
+OVS_VSWITCHD_START
+on_exit 'kill `cat c1.pid c2.pid c3.pid`'
+
+# Start two ovs-ofctl controller processes.
+AT_CAPTURE_FILE([monitor1.log])
+AT_CAPTURE_FILE([expout1])
+AT_CAPTURE_FILE([monitor2.log])
+AT_CAPTURE_FILE([expout2])
+AT_CAPTURE_FILE([monitor3.log])
+AT_CAPTURE_FILE([expout3])
+
+ovs-ofctl -O OpenFlow13 monitor br0 --detach --no-chdir --pidfile=c1.pid --unixctl=c1
+ovs-ofctl -O OpenFlow13 monitor br0 --detach --no-chdir --pidfile=c2.pid --unixctl=c2
+ovs-ofctl -O OpenFlow13 monitor br0 --detach --no-chdir --pidfile=c3.pid --unixctl=c3
+
+check_async () {
+    for i in 1 3; do
+        ovs-appctl -t `pwd`/c$i ofctl/barrier
+        ovs-appctl -t `pwd`/c$i ofctl/set-output-file monitor$i.log
+        : > expout$i
+    done
+
+    printf '\n\n--- check_async %d ---\n\n\n' $1
+    INDEX=$1
+    shift
+
+    # OFPGC_ADD
+    # OFPT_GROUP_MOD (OF1.3) (xid=0x2):
+    # ADD group_id=1,type=all,bucket=actions=drop
+    ovs-appctl -t `pwd`/c2 ofctl/send "040f0020000000020000000000000001 00100000 ffffffffffffffff 00000000"
+    if test X"$1" = X"OFPGC_ADD"; then shift;
+        echo >>expout2 "send: OFPT_GROUP_MOD (OF1.3):
+ ADD group_id=1,type=all,bucket=actions=drop"
+        echo >>expout1 "ONFT_REQUESTFORWARD (OF1.3): reason=group_mod
+ ADD group_id=1,type=all,bucket=actions=drop"
+        echo >>expout3 "ONFT_REQUESTFORWARD (OF1.3): reason=group_mod
+ ADD group_id=1,type=all,bucket=actions=drop"
+    fi
+
+    # OFPGC_MODIFY
+    # OFPT_GROUP_MOD (OF1.3) (xid=0x2):
+    # MOD group_id=1,type=select,bucket=weight:0,actions=drop
+    ovs-appctl -t `pwd`/c2 ofctl/send "040f0020000000020001010000000001 00100000 ffffffffffffffff 00000000"
+    if test X"$1" = X"OFPGC_MODIFY"; then shift;
+        echo >>expout2 "send: OFPT_GROUP_MOD (OF1.3):
+ MOD group_id=1,type=select,bucket=weight:0,actions=drop"
+        echo >>expout1 "ONFT_REQUESTFORWARD (OF1.3): reason=group_mod
+ MOD group_id=1,type=select,bucket=weight:0,actions=drop"
+        echo >>expout3 "ONFT_REQUESTFORWARD (OF1.3): reason=group_mod
+ MOD group_id=1,type=select,bucket=weight:0,actions=drop"
+    fi
+
+    ovs-appctl -t `pwd`/c1 ofctl/barrier
+    echo >>expout1 "OFPT_BARRIER_REPLY (OF1.3):"
+    ovs-appctl -t `pwd`/c2 ofctl/barrier
+    echo >>expout2 "OFPT_BARRIER_REPLY (OF1.3):"
+    ovs-appctl -t `pwd`/c3 ofctl/barrier
+    echo >>expout3 "OFPT_BARRIER_REPLY (OF1.3):"
+
+    # Check output.
+    for i in 1 3; do
+        cp expout$i expout
+        AT_CHECK(
+      [[sed '
+s/ (xid=0x[0-9a-fA-F]*)//'< monitor$i.log]],
+      [0], [expout])
+    done
+}
+
+# controller 1: Become slave
+# OFPT_ROLE_REQUEST (OF1.3) (xid=0x3): role=slave
+ovs-appctl -t `pwd`/c1 ofctl/send 041800180000000300000003000000008000000000000002
+
+# controller 2: Become master
+# OFPT_ROLE_REQUEST (OF1.3) (xid=0x3): role=master
+ovs-appctl -t `pwd`/c2 ofctl/send 041800180000000300000002000000008000000000000003
+
+# controller 1: Become slave
+# OFPT_ROLE_REQUEST (OF1.3) (xid=0x3): role=slave
+ovs-appctl -t `pwd`/c3 ofctl/send 041800180000000300000003000000008000000000000004
+
+# controller 1: Enabled requestforward using OFPRAW_NXT_SET_ASYNC_CONFIG2 (necessary for OF1.3)
+ovs-appctl -t `pwd`/c1 ofctl/send 0404003000000002000023200000001b00000008000000050002000800000002000400080000001a000a000800000003
+
+# controller 2: Enabled requestforward using OFPRAW_NXT_SET_ASYNC_CONFIG2 (necessary for OF1.3)
+ovs-appctl -t `pwd`/c2 ofctl/send 0404003000000002000023200000001b000100080000000200030008000000050005000800000005000b000800000003
+
+# controller 1: Enabled requestforward using OFPRAW_NXT_SET_ASYNC_CONFIG2 (necessary for OF1.3)
+ovs-appctl -t `pwd`/c3 ofctl/send 0404003000000002000023200000001b00000008000000050002000800000002000400080000001a000a000800000003
+check_async 1 OFPGC_ADD OFPGC_MODIFY
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
+
 dnl This test checks that OFPT_PACKET_OUT accepts both OFPP_NONE (as
 dnl specified by OpenFlow 1.0) and OFPP_CONTROLLER (used by some
 dnl controllers despite the spec) as meaning a packet that was generated

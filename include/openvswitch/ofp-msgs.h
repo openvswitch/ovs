@@ -274,6 +274,10 @@ enum ofpraw {
     /* OFPT 1.4+ (31): struct ofp14_table_status, uint8_t[8][]. */
     OFPRAW_OFPT14_TABLE_STATUS,
 
+    /* NXT 1.0-1.2 (132): struct ofp14_requestforward, uint8_t[8][]. */
+    OFPRAW_NXT_REQUESTFORWARD,
+    /* ONFT 1.3 (2350): struct ofp14_requestforward, uint8_t[8][]. */
+    OFPRAW_ONFT13_REQUESTFORWARD,
     /* OFPT 1.4+ (32): struct ofp14_requestforward, uint8_t[8][]. */
     OFPRAW_OFPT14_REQUESTFORWARD,
 
@@ -645,7 +649,9 @@ enum ofptype {
                                    * OFPRAW_OFPT14_ROLE_STATUS. */
 
     /* Request forwarding by the switch. */
-    OFPTYPE_REQUESTFORWARD,       /* OFPRAW_OFPT14_REQUESTFORWARD. */
+    OFPTYPE_REQUESTFORWARD,       /* OFPRAW_NXT_REQUESTFORWARD.
+                                   * OFPRAW_ONFT13_REQUESTFORWARD.
+                                   * OFPRAW_OFPT14_REQUESTFORWARD. */
 
     /* Asynchronous messages. */
     OFPTYPE_TABLE_STATUS,          /* OFPRAW_OFPT14_TABLE_STATUS. */

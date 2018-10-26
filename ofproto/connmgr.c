@@ -1691,8 +1691,13 @@ connmgr_send_requestforward(struct connmgr *mgr, const struct ofconn *source,
     struct ofconn *ofconn;
 
     LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
+        /* METER_MOD only supported in OF13 and up. */
+        if (rf->reason == OFPRFR_METER_MOD
+            && rconn_get_version(ofconn->rconn) < OFP13_VERSION) {
+            continue;
+        }
+
         if (ofconn_receives_async_msg(ofconn, OAM_REQUESTFORWARD, rf->reason)
-            && rconn_get_version(ofconn->rconn) >= OFP14_VERSION
             && ofconn != source) {
             enum ofputil_protocol protocol = ofconn_get_protocol(ofconn);
             ofconn_send(ofconn, ofputil_encode_requestforward(rf, protocol),

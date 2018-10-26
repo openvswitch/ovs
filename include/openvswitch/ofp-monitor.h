@@ -116,6 +116,7 @@ struct ofpbuf *ofputil_encode_flow_monitor_cancel(uint32_t id);
 
 struct ofputil_requestforward {
     ovs_be32 xid;
+    /* Also used for OF 1.0-1.3 when using Nicira Extension: */
     enum ofp14_requestforward_reason reason;
     union {
         /* reason == OFPRFR_METER_MOD. */

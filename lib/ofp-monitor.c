@@ -785,13 +785,13 @@ ofputil_flow_update_format(struct ds *s,
     }
 }
 
-/* Encodes 'rf' according to 'protocol', and returns the encoded message.
- * 'protocol' must be for OpenFlow 1.4 or later. */
+/* Encodes 'rf' according to 'protocol', and returns the encoded message. */
 struct ofpbuf *
 ofputil_encode_requestforward(const struct ofputil_requestforward *rf,
                               enum ofputil_protocol protocol)
 {
     enum ofp_version ofp_version = ofputil_protocol_to_ofp_version(protocol);
+    enum ofpraw raw_msg_type;
     struct ofpbuf *inner;
 
     switch (rf->reason) {
@@ -813,9 +813,16 @@ ofputil_encode_requestforward(const struct ofputil_requestforward *rf,
     inner_oh->xid = rf->xid;
     inner_oh->length = htons(inner->size);
 
-    struct ofpbuf *outer = ofpraw_alloc_xid(OFPRAW_OFPT14_REQUESTFORWARD,
-                                            ofp_version, htonl(0),
-                                            inner->size);
+    if (ofp_version < OFP13_VERSION) {
+        raw_msg_type = OFPRAW_NXT_REQUESTFORWARD;
+    } else if (ofp_version == OFP13_VERSION) {
+        raw_msg_type = OFPRAW_ONFT13_REQUESTFORWARD;
+    } else {
+        raw_msg_type = OFPRAW_OFPT14_REQUESTFORWARD;
+    }
+
+    struct ofpbuf *outer = ofpraw_alloc_xid(raw_msg_type, ofp_version,
+                                            htonl(0), inner->size);
     ofpbuf_put(outer, inner->data, inner->size);
     ofpbuf_delete(inner);
 
@@ -836,7 +843,10 @@ ofputil_decode_requestforward(const struct ofp_header *outer,
     struct ofpbuf b = ofpbuf_const_initializer(outer, ntohs(outer->length));
 
     /* Skip past outer message. */
-    ovs_assert(ofpraw_pull_assert(&b) == OFPRAW_OFPT14_REQUESTFORWARD);
+    enum ofpraw raw_msg_type = ofpraw_pull_assert(&b);
+    ovs_assert(raw_msg_type == OFPRAW_OFPT14_REQUESTFORWARD ||
+               raw_msg_type == OFPRAW_ONFT13_REQUESTFORWARD ||
+               raw_msg_type == OFPRAW_NXT_REQUESTFORWARD);
 
     /* Validate inner message. */
     if (b.size < sizeof(struct ofp_header)) {
