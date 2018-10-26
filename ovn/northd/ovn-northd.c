@@ -1102,6 +1102,7 @@ enum dynamic_update_type {
 struct dynamic_address_update {
     struct ovs_list node;       /* In build_ipam()'s list of updates. */
 
+    struct ovn_datapath *od;
     struct ovn_port *op;
 
     struct lport_addresses current_addresses;
@@ -1293,8 +1294,7 @@ set_dynamic_updates(const char *addrspec,
 }
 
 static void
-update_dynamic_addresses(struct ovn_datapath *od,
-                         struct dynamic_address_update *update)
+update_dynamic_addresses(struct dynamic_address_update *update)
 {
     struct eth_addr mac;
     switch (update->mac) {
@@ -1323,7 +1323,7 @@ update_dynamic_addresses(struct ovn_datapath *od,
     case STATIC:
         OVS_NOT_REACHED();
     case DYNAMIC:
-        ip4 = htonl(ipam_get_unused_ip(od));
+        ip4 = htonl(ipam_get_unused_ip(update->od));
     }
 
     struct in6_addr ip6 = in6addr_any;
@@ -1338,14 +1338,14 @@ update_dynamic_addresses(struct ovn_datapath *od,
     case STATIC:
         OVS_NOT_REACHED();
     case DYNAMIC:
-        in6_generate_eui64(mac, &od->ipam_info.ipv6_prefix, &ip6);
+        in6_generate_eui64(mac, &update->od->ipam_info.ipv6_prefix, &ip6);
         break;
     }
 
     struct ds new_addr = DS_EMPTY_INITIALIZER;
     ds_put_format(&new_addr, ETH_ADDR_FMT, ETH_ADDR_ARGS(mac));
     if (ip4) {
-        ipam_insert_ip(od, ntohl(ip4));
+        ipam_insert_ip(update->od, ntohl(ip4));
         ds_put_format(&new_addr, " "IP_FMT, IP_ARGS(ip4));
     }
     if (!IN6_ARE_ADDR_EQUAL(&ip6, &in6addr_any)) {
@@ -1371,13 +1371,14 @@ build_ipam(struct hmap *datapaths, struct hmap *ports)
     /* If the switch's other_config:subnet is set, allocate new addresses for
      * ports that have the "dynamic" keyword in their addresses column. */
     struct ovn_datapath *od;
+    struct ovs_list updates;
+
+    ovs_list_init(&updates);
     HMAP_FOR_EACH (od, key_node, datapaths) {
         if (!od->nbs) {
             continue;
         }
 
-        struct ovs_list updates;
-        ovs_list_init(&updates);
         for (size_t i = 0; i < od->nbs->n_ports; i++) {
             const struct nbrec_logical_switch_port *nbsp = od->nbs->ports[i];
 
@@ -1414,6 +1415,7 @@ build_ipam(struct hmap *datapaths, struct hmap *ports)
                 struct dynamic_address_update *update
                     = xzalloc(sizeof *update);
                 update->op = op;
+                update->od = od;
                 if (nbsp->dynamic_addresses) {
                     bool any_changed;
                     extract_lsp_addresses(nbsp->dynamic_addresses,
@@ -1440,15 +1442,16 @@ build_ipam(struct hmap *datapaths, struct hmap *ports)
             }
         }
 
-        /* After retaining all unchanged dynamic addresses, now assign
-         * new ones.
-         */
-        struct dynamic_address_update *update;
-        LIST_FOR_EACH_POP (update, node, &updates) {
-            update_dynamic_addresses(od, update);
-            destroy_lport_addresses(&update->current_addresses);
-            free(update);
-        }
+    }
+
+    /* After retaining all unchanged dynamic addresses, now assign
+     * new ones.
+     */
+    struct dynamic_address_update *update;
+    LIST_FOR_EACH_POP (update, node, &updates) {
+        update_dynamic_addresses(update);
+        destroy_lport_addresses(&update->current_addresses);
+        free(update);
     }
 }
 
