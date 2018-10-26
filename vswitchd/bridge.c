@@ -46,6 +46,7 @@
 #include "openvswitch/meta-flow.h"
 #include "openvswitch/ofp-print.h"
 #include "openvswitch/ofpbuf.h"
+#include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
 #include "ovs-lldp.h"
 #include "ovs-numa.h"
@@ -3536,6 +3537,14 @@ equal_pathnames(const char *a, const char *b, size_t b_stoplen)
     }
 }
 
+static enum ofconn_type
+get_controller_ofconn_type(const char *target, const char *type)
+{
+    return (type
+            ? (!strcmp(type, "primary") ? OFCONN_PRIMARY : OFCONN_SERVICE)
+            : (!vconn_verify_name(target) ? OFCONN_PRIMARY : OFCONN_SERVICE));
+}
+
 static void
 bridge_configure_remotes(struct bridge *br,
                          const struct sockaddr_in *managers, size_t n_managers)
@@ -3571,6 +3580,7 @@ bridge_configure_remotes(struct bridge *br,
     /* Add managment controller. */
     struct ofproto_controller *oc = xmalloc(sizeof *oc);
     *oc = (struct ofproto_controller) {
+        .type = OFCONN_SERVICE,
         .probe_interval = 60,
         .band = OFPROTO_OUT_OF_BAND,
         .enable_async_msgs = true,
@@ -3639,6 +3649,7 @@ bridge_configure_remotes(struct bridge *br,
 
         oc = xmalloc(sizeof *oc);
         *oc = (struct ofproto_controller) {
+            .type = get_controller_ofconn_type(c->target, c->type),
             .max_backoff = c->max_backoff ? *c->max_backoff / 1000 : 8,
             .probe_interval = (c->inactivity_probe
                                ? *c->inactivity_probe / 1000 : 5),

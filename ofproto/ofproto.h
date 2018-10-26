@@ -207,7 +207,25 @@ enum ofproto_band {
     OFPROTO_OUT_OF_BAND         /* Out-of-band connection to controller. */
 };
 
+/* ofproto supports two kinds of OpenFlow connections:
+ *
+ *   - "Primary" connections to ordinary OpenFlow controllers.  ofproto
+ *     maintains persistent connections to these controllers and by default
+ *     sends them asynchronous messages such as packet-ins.
+ *
+ *   - "Service" connections, e.g. from ovs-ofctl.  When these connections
+ *     drop, it is the other side's responsibility to reconnect them if
+ *     necessary.  ofproto does not send them asynchronous messages by default.
+ */
+enum ofconn_type {
+    OFCONN_PRIMARY,             /* An ordinary OpenFlow controller. */
+    OFCONN_SERVICE              /* A service connection, e.g. "ovs-ofctl". */
+};
+const char *ofconn_type_to_string(enum ofconn_type);
+
+/* Configuration for an OpenFlow controller. */
 struct ofproto_controller {
+    enum ofconn_type type;      /* Primary or service controller. */
     int max_backoff;            /* Maximum reconnection backoff, in seconds. */
     int probe_interval;         /* Max idle time before probing, in seconds. */
     enum ofproto_band band;     /* In-band or out-of-band? */

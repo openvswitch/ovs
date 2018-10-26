@@ -145,7 +145,7 @@ struct ofconn {
 
 static unsigned int bundle_idle_timeout = BUNDLE_IDLE_TIMEOUT_DEFAULT;
 
-static void ofconn_create(struct ofservice *, struct rconn *, enum ofconn_type,
+static void ofconn_create(struct ofservice *, struct rconn *,
                           const struct ofproto_controller *settings)
     OVS_EXCLUDED(ofproto_mutex);
 static void ofconn_destroy(struct ofconn *) OVS_REQUIRES(ofproto_mutex);
@@ -1153,7 +1153,7 @@ bundle_remove_expired(struct ofconn *ofconn, long long int now)
 
 static void
 ofconn_create(struct ofservice *ofservice, struct rconn *rconn,
-              enum ofconn_type type, const struct ofproto_controller *settings)
+              const struct ofproto_controller *settings)
     OVS_EXCLUDED(ofproto_mutex)
 {
     ovs_mutex_lock(&ofproto_mutex);
@@ -1169,7 +1169,7 @@ ofconn_create(struct ofservice *ofservice, struct rconn *rconn,
     ovs_list_push_back(&ofservice->conns, &ofconn->ofservice_node);
 
     ofconn->rconn = rconn;
-    ofconn->type = type;
+    ofconn->type = settings->type;
     ofconn->band = settings->band;
 
     ofconn->role = OFPCR12_ROLE_EQUAL;
@@ -1728,8 +1728,9 @@ connmgr_get_max_probe_interval(const struct connmgr *mgr)
     return max_probe_interval;
 }
 
-/* Returns the number of seconds for which all of 'mgr's primary controllers
- * have been disconnected.  Returns 0 if 'mgr' has no primary controllers. */
+/* Returns the number of seconds for which all of 'mgr's active, primary
+ * controllers have been disconnected.  Returns 0 if 'mgr' has no active,
+ * primary controllers. */
 int
 connmgr_failure_duration(const struct connmgr *mgr)
 {
@@ -1737,7 +1738,7 @@ connmgr_failure_duration(const struct connmgr *mgr)
 
     struct ofservice *ofservice;
     HMAP_FOR_EACH (ofservice, hmap_node, &mgr->services) {
-        if (ofservice->rconn) {
+        if (ofservice->s.type == OFCONN_PRIMARY && ofservice->rconn) {
             int failure_duration = rconn_failure_duration(ofservice->rconn);
             min_failure_duration = MIN(min_failure_duration, failure_duration);
         }
@@ -1754,7 +1755,8 @@ connmgr_is_any_controller_connected(const struct connmgr *mgr)
 {
     struct ofservice *ofservice;
     HMAP_FOR_EACH (ofservice, hmap_node, &mgr->services) {
-        if (ofservice->rconn && rconn_is_connected(ofservice->rconn)) {
+        if (ofservice->s.type == OFCONN_PRIMARY
+            && !ovs_list_is_empty(&ofservice->conns)) {
             return true;
         }
     }
@@ -1925,7 +1927,7 @@ ofservice_create(struct connmgr *mgr, const char *target,
     ofservice->connmgr = mgr;
     ofservice->target = xstrdup(target);
     ovs_list_init(&ofservice->conns);
-    ofservice->type = rconn ? OFCONN_PRIMARY : OFCONN_SERVICE;
+    ofservice->type = c->type;
     ofservice->rconn = rconn;
     ofservice->pvconn = pvconn;
     ofservice->s = *c;
@@ -1982,7 +1984,7 @@ ofservice_run(struct ofservice *ofservice)
             rconn_connect_unreliably(rconn, vconn, name);
             free(name);
 
-            ofconn_create(ofservice, rconn, OFCONN_SERVICE, &ofservice->s);
+            ofconn_create(ofservice, rconn, &ofservice->s);
         } else if (retval != EAGAIN) {
             VLOG_WARN_RL(&rl, "accept failed (%s)", ovs_strerror(retval));
         }
@@ -1992,8 +1994,7 @@ ofservice_run(struct ofservice *ofservice)
         bool connected = rconn_is_connected(ofservice->rconn);
         bool has_ofconn = !ovs_list_is_empty(&ofservice->conns);
         if (connected && !has_ofconn) {
-            ofconn_create(ofservice, ofservice->rconn, OFCONN_PRIMARY,
-                          &ofservice->s);
+            ofconn_create(ofservice, ofservice->rconn, &ofservice->s);
         }
     }
 }
@@ -2305,12 +2306,6 @@ ofmonitor_wait(struct connmgr *mgr)
         }
     }
     ovs_mutex_unlock(&ofproto_mutex);
-}
-
-const char *
-ofconn_type_to_string(enum ofconn_type type)
-{
-    return type == OFCONN_PRIMARY ? "primary" : "service";
 }
 
 void

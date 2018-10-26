@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
  "version": "8.0.0",
- "cksum": "1406362528 23817",
+ "cksum": "3962141869 23978",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -547,6 +547,10 @@
      "indexes": [["id", "bridge"]]},
    "Controller": {
      "columns": {
+       "type": {
+         "type": {"key": {"type": "string",
+                  "enum": ["set", ["primary", "service"]]},
+                  "min": 0, "max": 1}},
        "target": {
          "type": "string"},
        "max_backoff": {

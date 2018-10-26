@@ -1894,6 +1894,12 @@ ofproto_free_ofproto_controller_info(struct shash *info)
     connmgr_free_controller_info(info);
 }
 
+const char *
+ofconn_type_to_string(enum ofconn_type type)
+{
+    return type == OFCONN_PRIMARY ? "primary" : "service";
+}
+
 /* Makes a deep copy of 'old' into 'port'. */
 void
 ofproto_port_clone(struct ofproto_port *port, const struct ofproto_port *old)

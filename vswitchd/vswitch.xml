@@ -1151,9 +1151,12 @@
           avoid loops on such a bridge, configure <code>secure</code> mode or
           enable STP (see <ref column="stp_enable"/>).
         </p>
-        <p>When more than one controller is configured,
-        <ref column="fail_mode"/> is considered only when none of the
-        configured controllers can be contacted.</p>
+        <p>
+          The <ref column="fail_mode"/> setting applies only to primary
+          controllers.  When more than one primary controller is configured,
+          <ref column="fail_mode"/> is considered only when none of the
+          configured controllers can be contacted.
+        </p>
         <p>
           Changing <ref column="fail_mode"/> when no primary controllers are
           configured clears the OpenFlow flow tables, group table, and meter
@@ -4689,71 +4692,64 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
   <table name="Controller" title="OpenFlow controller configuration.">
     <p>An OpenFlow controller.</p>
 
-    <p>
-      Open vSwitch supports two kinds of OpenFlow controllers:
-    </p>
-
-    <dl>
-      <dt>Primary controllers</dt>
-      <dd>
-        <p>
-          This is the kind of controller envisioned by the OpenFlow 1.0
-          specification.  Usually, a primary controller implements a network
-          policy by taking charge of the switch's flow table.
-        </p>
-
-        <p>
-          Open vSwitch initiates and maintains persistent connections to
-          primary controllers, retrying the connection each time it fails or
-          drops.  The <ref table="Bridge" column="fail_mode"/> column in the
-          <ref table="Bridge"/> table applies to primary controllers.
-        </p>
-
-        <p>
-          Open vSwitch permits a bridge to have any number of primary
-          controllers.  When multiple controllers are configured, Open
-          vSwitch connects to all of them simultaneously.  Because
-          OpenFlow 1.0 does not specify how multiple controllers
-          coordinate in interacting with a single switch, more than
-          one primary controller should be specified only if the
-          controllers are themselves designed to coordinate with each
-          other.  (The Nicira-defined <code>NXT_ROLE</code> OpenFlow
-          vendor extension may be useful for this.)
-        </p>
-      </dd>
-      <dt>Service controllers</dt>
-      <dd>
-        <p>
-          These kinds of OpenFlow controller connections are intended for
-          occasional support and maintenance use, e.g. with
-          <code>ovs-ofctl</code>.  Usually a service controller connects only
-          briefly to inspect or modify some of a switch's state.
-        </p>
-
-        <p>
-          Open vSwitch listens for incoming connections from service
-          controllers.  The service controllers initiate and, if necessary,
-          maintain the connections from their end.  The <ref table="Bridge"
-          column="fail_mode"/> column in the <ref table="Bridge"/> table does
-          not apply to service controllers.
-        </p>
-
-        <p>
-          Open vSwitch supports configuring any number of service controllers.
-        </p>
-      </dd>
-    </dl>
-
-    <p>
-      The <ref column="target"/> determines the type of controller.
-    </p>
-
     <group title="Core Features">
+      <column name="type">
+        <p>
+          Open vSwitch supports two kinds of OpenFlow controllers.  A bridge
+          may have any number of each kind:
+        </p>
+
+        <dl>
+          <dt>Primary controllers</dt>
+          <dd>
+            <p>
+              This is the kind of controller envisioned by the OpenFlow
+              specifications.  Usually, a primary controller implements a
+              network policy by taking charge of the switch's flow table.
+            </p>
+
+            <p>
+              The <ref table="Bridge" column="fail_mode"/> column in the <ref
+              table="Bridge"/> table applies to primary controllers.
+            </p>
+
+            <p>
+              When multiple primary controllers are configured, Open vSwitch
+              connects to all of them simultaneously.  OpenFlow provides few
+              facilities to allow multiple controllers to coordinate in
+              interacting with a single switch, so more than one primary
+              controller should be specified only if the controllers are
+              themselves designed to coordinate with each other.
+            </p>
+          </dd>
+          <dt>Service controllers</dt>
+          <dd>
+            <p>
+              These kinds of OpenFlow controller connections are intended for
+              occasional support and maintenance use, e.g. with
+              <code>ovs-ofctl</code>.  Usually a service controller connects
+              only briefly to inspect or modify some of a switch's state.
+            </p>
+
+            <p>
+              The <ref table="Bridge" column="fail_mode"/> column in the <ref
+              table="Bridge"/> table does not apply to service controllers.
+            </p>
+          </dd>
+        </dl>
+
+        <p>
+          By default, Open vSwitch treats controllers with active connection
+          methods as primary controllers and those with passive connection
+          methods as service controllers.  Set this column to the desired type
+          to override this default.
+        </p>
+      </column>
+
       <column name="target">
         <p>Connection method for controller.</p>
         <p>
-          The following connection methods are currently supported for primary
-          controllers:
+          The following active connection methods are currently supported:
         </p>
         <dl>
           <dt><code>ssl:<var>host</var></code>[<code>:<var>port</var></code>]</dt>
@@ -4782,8 +4778,7 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
           </dd>
         </dl>
         <p>
-          The following connection methods are currently supported for service
-          controllers:
+          The following passive connection methods are currently supported:
         </p>
         <dl>
           <dt><code>pssl:</code>[<var>port</var>][<code>:<var>host</var></code>]</dt>
