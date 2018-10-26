@@ -68,6 +68,7 @@ static const char *unixctl_path;
 /* MAC address management (macam) table of "struct eth_addr"s, that holds the
  * MAC addresses allocated by the OVN ipam module. */
 static struct hmap macam = HMAP_INITIALIZER(&macam);
+static struct eth_addr mac_prefix;
 
 #define MAX_OVN_TAGS 4096
 
@@ -931,10 +932,17 @@ ipam_insert_mac(struct eth_addr *ea, bool check)
     }
 
     uint64_t mac64 = eth_addr_to_uint64(*ea);
+    uint64_t prefix;
+
+    if (!eth_addr_is_zero(mac_prefix)) {
+        prefix = eth_addr_to_uint64(mac_prefix);
+    } else {
+        prefix = MAC_ADDR_PREFIX;
+    }
     /* If the new MAC was not assigned by this address management system or
      * check is true and the new MAC is a duplicate, do not insert it into the
      * macam hmap. */
-    if (((mac64 ^ MAC_ADDR_PREFIX) >> 24)
+    if (((mac64 ^ prefix) >> 24)
         || (check && ipam_is_duplicate_mac(ea, mac64, true))) {
         return;
     }
@@ -1045,7 +1053,11 @@ ipam_get_unused_mac(void)
     for (i = 0; i < MAC_ADDR_SPACE - 1; i++) {
         /* The tentative MAC's suffix will be in the interval (1, 0xfffffe). */
         mac_addr_suffix = ((last_mac + i) % (MAC_ADDR_SPACE - 1)) + 1;
-        mac64 = MAC_ADDR_PREFIX | mac_addr_suffix;
+        if (!eth_addr_is_zero(mac_prefix)) {
+            mac64 =  eth_addr_to_uint64(mac_prefix) | mac_addr_suffix;
+        } else {
+            mac64 = MAC_ADDR_PREFIX | mac_addr_suffix;
+        }
         eth_addr_from_uint64(mac64, &mac);
         if (!ipam_is_duplicate_mac(&mac, mac64, false)) {
             last_mac = mac_addr_suffix;
@@ -1116,7 +1128,15 @@ dynamic_mac_changed(const char *lsp_addresses,
    }
 
    uint64_t mac64 = eth_addr_to_uint64(update->current_addresses.ea);
-   if ((mac64 ^ MAC_ADDR_PREFIX) >> 24) {
+   uint64_t prefix;
+
+   if (!eth_addr_is_zero(mac_prefix)) {
+       prefix = eth_addr_to_uint64(mac_prefix);
+   } else {
+       prefix = MAC_ADDR_PREFIX;
+   }
+
+   if ((mac64 ^ prefix) >> 24) {
        return DYNAMIC;
    } else {
        return NONE;
@@ -7155,6 +7175,17 @@ ovnnb_db_run(struct northd_context *ctx,
     sbrec_sb_global_set_nb_cfg(sb, nb->nb_cfg);
     sbrec_sb_global_set_options(sb, &nb->options);
     sb_loop->next_cfg = nb->nb_cfg;
+
+    const char *mac_addr_prefix = smap_get(&nb->options, "mac_prefix");
+    if (mac_addr_prefix) {
+        struct eth_addr addr;
+
+        memset(&addr, 0, sizeof addr);
+        if (ovs_scan(mac_addr_prefix, "%"SCNx8":%"SCNx8":%"SCNx8,
+                     &addr.ea[0], &addr.ea[1], &addr.ea[2])) {
+            mac_prefix = addr;
+        }
+    }
 
     cleanup_macam(&macam);
 }

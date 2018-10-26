@@ -102,6 +102,11 @@
           tunnel interfaces.
         </column>
       </group>
+
+      <column name="options" key="mac_prefix">
+        Configure a given OUI to be used as prefix when L2 address is
+        dynamically assigned, e.g. <code>00:11:22</code>
+      </column>
     </group>
 
     <group title="Connection Options">
