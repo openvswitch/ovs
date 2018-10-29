@@ -79,6 +79,7 @@ const char *rconn_get_name(const struct rconn *);
 void rconn_set_name(struct rconn *, const char *new_name);
 const char *rconn_get_target(const struct rconn *);
 
+bool rconn_is_reliable(const struct rconn *);
 bool rconn_is_alive(const struct rconn *);
 bool rconn_is_connected(const struct rconn *);
 bool rconn_is_admitted(const struct rconn *);

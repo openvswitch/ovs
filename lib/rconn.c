@@ -883,6 +883,13 @@ rconn_get_target(const struct rconn *rc)
     return rc->target;
 }
 
+/* Returns true if 'rconn' will reconnect if it disconnects. */
+bool
+rconn_is_reliable(const struct rconn *rconn)
+{
+    return rconn->reliable;
+}
+
 /* Returns true if 'rconn' is connected or in the process of reconnecting,
  * false if 'rconn' is disconnected and will not reconnect on its own. */
 bool
