@@ -339,6 +339,9 @@ executed.
 .IP
 Use \fBovsdb\-client wait\fR (see \fBovsdb\-client\fR(1)) to wait
 until the server has left the cluster.
+.IP
+Once a server leaves a cluster, it may never rejoin it.  Instead,
+create a new server and join it to the cluster.
 .
 .IP "\fBcluster/kick \fIdb server\fR"
 Start graceful removal of \fIserver\fR from \fIdb\fR's cluster, like
