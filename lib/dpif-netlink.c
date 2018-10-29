@@ -863,7 +863,7 @@ dpif_netlink_rtnl_port_create_and_add(struct dpif_netlink *dpif,
     name = netdev_vport_get_dpif_port(netdev, namebuf, sizeof namebuf);
     error = dpif_netlink_port_add__(dpif, name, OVS_VPORT_TYPE_NETDEV, NULL,
                                     port_nop);
-    if (error) {
+    if (error && error != EEXIST) {
         dpif_netlink_rtnl_port_destroy(name, netdev_get_type(netdev));
     }
     return error;
@@ -880,7 +880,7 @@ dpif_netlink_port_add(struct dpif *dpif_, struct netdev *netdev,
     if (!ovs_tunnels_out_of_tree) {
         error = dpif_netlink_rtnl_port_create_and_add(dpif, netdev, port_nop);
     }
-    if (error) {
+    if (error && error != EEXIST) {
         error = dpif_netlink_port_add_compat(dpif, netdev, port_nop);
     }
     fat_rwlock_unlock(&dpif->upcall_lock);
