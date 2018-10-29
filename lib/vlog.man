@@ -1,8 +1,3 @@
-.de IQ
-.  br
-.  ns
-.  IP "\\$1"
-..
 .IP "\fB\-v\fR[\fIspec\fR]
 .IQ "\fB\-\-verbose=\fR[\fIspec\fR]
 .

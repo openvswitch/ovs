@@ -1,10 +1,5 @@
 .\" -*- nroff -*-
-.de IQ
-.  br
-.  ns
-.  IP "\\$1"
-..
-.\" -*- nroff -*-
+.so lib/ovs.tmac
 .TH ovsdb\-tool 1 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
 .ds PN ovsdb\-tool
 .

@@ -1,8 +1,4 @@
-.de IQ
-.  br
-.  ns
-.  IP "\\$1"
-..
+.so lib/ovs.tmac
 .TH ovs\-pki 8 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
 
 .SH NAME

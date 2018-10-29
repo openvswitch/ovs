@@ -1,3 +1,4 @@
+.so lib/ovs.tmac
 .TH ovs\-tcpdump 8 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
 .
 .SH NAME

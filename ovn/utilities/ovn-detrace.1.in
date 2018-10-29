@@ -1,3 +1,4 @@
+.so lib/ovs.tmac
 .TH ovn\-detrace 1 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
 .
 .SH NAME

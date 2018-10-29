@@ -1,3 +1,4 @@
+.so lib/ovs.tmac
 .TH ovs\-pcap 1 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
 .
 .SH NAME

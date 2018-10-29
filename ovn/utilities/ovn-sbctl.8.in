@@ -1,15 +1,5 @@
 .\" -*- nroff -*-
-.de IQ
-.  br
-.  ns
-.  IP "\\$1"
-..
-.de ST
-.  PP
-.  RS -0.15in
-.  I "\\$1"
-.  RE
-..
+.so lib/ovs.tmac
 .TH ovn\-sbctl 8 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
 .\" This program's name:
 .ds PN ovn\-sbctl

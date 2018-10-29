@@ -1,9 +1,5 @@
 .\" -*- nroff -*-
-.de IQ
-.  br
-.  ns
-.  IP "\\$1"
-..
+.so lib/ovs.tmac
 .TH ovsdb\-server 1 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
 .\" This program's name:
 .ds PN ovsdb\-server

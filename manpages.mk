@@ -3,15 +3,18 @@
 ovn/utilities/ovn-detrace.1: \
 	ovn/utilities/ovn-detrace.1.in \
 	lib/common-syn.man \
-	lib/common.man
+	lib/common.man \
+	lib/ovs.tmac
 ovn/utilities/ovn-detrace.1.in:
 lib/common-syn.man:
 lib/common.man:
+lib/ovs.tmac:
 
 ovn/utilities/ovn-sbctl.8: \
 	ovn/utilities/ovn-sbctl.8.in \
 	lib/common.man \
 	lib/db-ctl-base.man \
+	lib/ovs.tmac \
 	lib/ssl-bootstrap.man \
 	lib/ssl.man \
 	lib/table.man \
@@ -19,6 +22,7 @@ ovn/utilities/ovn-sbctl.8: \
 ovn/utilities/ovn-sbctl.8.in:
 lib/common.man:
 lib/db-ctl-base.man:
+lib/ovs.tmac:
 lib/ssl-bootstrap.man:
 lib/ssl.man:
 lib/table.man:
@@ -30,6 +34,7 @@ ovsdb/ovsdb-client.1: \
 	lib/common.man \
 	lib/daemon-syn.man \
 	lib/daemon.man \
+	lib/ovs.tmac \
 	lib/ssl-bootstrap-syn.man \
 	lib/ssl-bootstrap.man \
 	lib/ssl-connect-syn.man \
@@ -45,6 +50,7 @@ lib/common-syn.man:
 lib/common.man:
 lib/daemon-syn.man:
 lib/daemon.man:
+lib/ovs.tmac:
 lib/ssl-bootstrap-syn.man:
 lib/ssl-bootstrap.man:
 lib/ssl-connect-syn.man:
@@ -64,6 +70,7 @@ ovsdb/ovsdb-server.1: \
 	lib/daemon-syn.man \
 	lib/daemon.man \
 	lib/memory-unixctl.man \
+	lib/ovs.tmac \
 	lib/service-syn.man \
 	lib/service.man \
 	lib/ssl-bootstrap-syn.man \
@@ -86,6 +93,7 @@ lib/coverage-unixctl.man:
 lib/daemon-syn.man:
 lib/daemon.man:
 lib/memory-unixctl.man:
+lib/ovs.tmac:
 lib/service-syn.man:
 lib/service.man:
 lib/ssl-bootstrap-syn.man:
@@ -106,47 +114,59 @@ ovsdb/ovsdb-tool.1: \
 	ovsdb/ovsdb-tool.1.in \
 	lib/common-syn.man \
 	lib/common.man \
+	lib/ovs.tmac \
 	lib/vlog-syn.man \
 	lib/vlog.man \
 	ovsdb/ovsdb-schemas.man
 ovsdb/ovsdb-tool.1.in:
 lib/common-syn.man:
 lib/common.man:
+lib/ovs.tmac:
 lib/vlog-syn.man:
 lib/vlog.man:
 ovsdb/ovsdb-schemas.man:
 
 utilities/bugtool/ovs-bugtool.8: \
-	utilities/bugtool/ovs-bugtool.8.in
+	utilities/bugtool/ovs-bugtool.8.in \
+	lib/ovs.tmac
 utilities/bugtool/ovs-bugtool.8.in:
+lib/ovs.tmac:
 
 utilities/ovs-appctl.8: \
 	utilities/ovs-appctl.8.in \
-	lib/common.man
+	lib/common.man \
+	lib/ovs.tmac
 utilities/ovs-appctl.8.in:
 lib/common.man:
+lib/ovs.tmac:
 
 utilities/ovs-dpctl-top.8: \
-	utilities/ovs-dpctl-top.8.in
+	utilities/ovs-dpctl-top.8.in \
+	lib/ovs.tmac
 utilities/ovs-dpctl-top.8.in:
+lib/ovs.tmac:
 
 utilities/ovs-dpctl.8: \
 	utilities/ovs-dpctl.8.in \
 	lib/common.man \
 	lib/dpctl.man \
+	lib/ovs.tmac \
 	lib/vlog.man
 utilities/ovs-dpctl.8.in:
 lib/common.man:
 lib/dpctl.man:
+lib/ovs.tmac:
 lib/vlog.man:
 
 utilities/ovs-l3ping.8: \
 	utilities/ovs-l3ping.8.in \
 	lib/common-syn.man \
-	lib/common.man
+	lib/common.man \
+	lib/ovs.tmac
 utilities/ovs-l3ping.8.in:
 lib/common-syn.man:
 lib/common.man:
+lib/ovs.tmac:
 
 utilities/ovs-ofctl.8: \
 	utilities/ovs-ofctl.8.in \
@@ -154,6 +174,7 @@ utilities/ovs-ofctl.8: \
 	lib/common.man \
 	lib/daemon.man \
 	lib/ofp-version.man \
+	lib/ovs.tmac \
 	lib/ssl.man \
 	lib/unixctl.man \
 	lib/vconn-active.man \
@@ -163,6 +184,7 @@ lib/colors.man:
 lib/common.man:
 lib/daemon.man:
 lib/ofp-version.man:
+lib/ovs.tmac:
 lib/ssl.man:
 lib/unixctl.man:
 lib/vconn-active.man:
@@ -171,34 +193,43 @@ lib/vlog.man:
 utilities/ovs-pcap.1: \
 	utilities/ovs-pcap.1.in \
 	lib/common-syn.man \
-	lib/common.man
+	lib/common.man \
+	lib/ovs.tmac
 utilities/ovs-pcap.1.in:
 lib/common-syn.man:
 lib/common.man:
+lib/ovs.tmac:
 
 utilities/ovs-pki.8: \
-	utilities/ovs-pki.8.in
+	utilities/ovs-pki.8.in \
+	lib/ovs.tmac
 utilities/ovs-pki.8.in:
+lib/ovs.tmac:
 
 utilities/ovs-tcpdump.8: \
 	utilities/ovs-tcpdump.8.in \
-	lib/common.man
+	lib/common.man \
+	lib/ovs.tmac
 utilities/ovs-tcpdump.8.in:
 lib/common.man:
+lib/ovs.tmac:
 
 utilities/ovs-tcpundump.1: \
 	utilities/ovs-tcpundump.1.in \
 	lib/common-syn.man \
-	lib/common.man
+	lib/common.man \
+	lib/ovs.tmac
 utilities/ovs-tcpundump.1.in:
 lib/common-syn.man:
 lib/common.man:
+lib/ovs.tmac:
 
 utilities/ovs-testcontroller.8: \
 	utilities/ovs-testcontroller.8.in \
 	lib/common.man \
 	lib/daemon.man \
 	lib/ofp-version.man \
+	lib/ovs.tmac \
 	lib/ssl-peer-ca-cert.man \
 	lib/ssl.man \
 	lib/unixctl.man \
@@ -209,6 +240,7 @@ utilities/ovs-testcontroller.8.in:
 lib/common.man:
 lib/daemon.man:
 lib/ofp-version.man:
+lib/ovs.tmac:
 lib/ssl-peer-ca-cert.man:
 lib/ssl.man:
 lib/unixctl.man:
@@ -219,15 +251,18 @@ lib/vlog.man:
 utilities/ovs-vlan-bug-workaround.8: \
 	utilities/ovs-vlan-bug-workaround.8.in \
 	lib/common.man \
+	lib/ovs.tmac \
 	utilities/ovs-vlan-bugs.man
 utilities/ovs-vlan-bug-workaround.8.in:
 lib/common.man:
+lib/ovs.tmac:
 utilities/ovs-vlan-bugs.man:
 
 utilities/ovs-vsctl.8: \
 	utilities/ovs-vsctl.8.in \
 	lib/common.man \
 	lib/db-ctl-base.man \
+	lib/ovs.tmac \
 	lib/ssl-bootstrap.man \
 	lib/ssl-peer-ca-cert.man \
 	lib/ssl.man \
@@ -238,6 +273,7 @@ utilities/ovs-vsctl.8: \
 utilities/ovs-vsctl.8.in:
 lib/common.man:
 lib/db-ctl-base.man:
+lib/ovs.tmac:
 lib/ssl-bootstrap.man:
 lib/ssl-peer-ca-cert.man:
 lib/ssl.man:
@@ -290,6 +326,7 @@ vtep/vtep-ctl.8: \
 	vtep/vtep-ctl.8.in \
 	lib/common.man \
 	lib/db-ctl-base.man \
+	lib/ovs.tmac \
 	lib/ssl-bootstrap.man \
 	lib/ssl-peer-ca-cert.man \
 	lib/ssl.man \
@@ -298,6 +335,7 @@ vtep/vtep-ctl.8: \
 vtep/vtep-ctl.8.in:
 lib/common.man:
 lib/db-ctl-base.man:
+lib/ovs.tmac:
 lib/ssl-bootstrap.man:
 lib/ssl-peer-ca-cert.man:
 lib/ssl.man:

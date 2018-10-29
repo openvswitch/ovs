@@ -1,8 +1,3 @@
-.de IQ
-.  br
-.  ns
-.  IP "\\$1"
-..
 .IP "\fB\-\-color\fR[\fB=\fR\fIwhen\fR]
 .
 Colorize the output (for some commands); \fIwhen\fR can be \fBnever\fR,
