@@ -393,6 +393,7 @@ free_chassis_queueid(struct hmap *set, struct sbrec_chassis *chassis,
         if (uuid_equals(chassis_uuid, &node->chassis_uuid)
             && node->queue_id == queue_id) {
             hmap_remove(set, &node->key_node);
+            free(node);
             break;
         }
     }
