@@ -1451,7 +1451,7 @@ ofputil_table_features_format(
     ofputil_table_features_format_finish(s, *first_ditto, *last_ditto);
     *first_ditto = -1;
 
-    ds_put_format(s, "\n  table %"PRIu8, table);
+    ds_put_format(s, "\n  table %d", table);
     if (features->name[0]) {
         ds_put_format(s, " (\"%s\")", features->name);
     }
