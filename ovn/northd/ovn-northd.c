@@ -323,6 +323,12 @@ struct ovn_chassis_qdisc_queues {
     struct uuid chassis_uuid;
 };
 
+static uint32_t
+hash_chassis_queue(const struct uuid *chassis_uuid, uint32_t queue_id)
+{
+    return hash_2words(uuid_hash(chassis_uuid), queue_id);
+}
+
 static void
 destroy_chassis_queues(struct hmap *set)
 {
@@ -340,7 +346,8 @@ add_chassis_queue(struct hmap *set, struct uuid *chassis_uuid,
     struct ovn_chassis_qdisc_queues *node = xmalloc(sizeof *node);
     node->queue_id = queue_id;
     memcpy(&node->chassis_uuid, chassis_uuid, sizeof node->chassis_uuid);
-    hmap_insert(set, &node->key_node, uuid_hash(chassis_uuid));
+    hmap_insert(set, &node->key_node,
+                hash_chassis_queue(chassis_uuid, queue_id));
 }
 
 static bool
@@ -348,7 +355,8 @@ chassis_queueid_in_use(const struct hmap *set, struct uuid *chassis_uuid,
                        uint32_t queue_id)
 {
     const struct ovn_chassis_qdisc_queues *node;
-    HMAP_FOR_EACH_WITH_HASH (node, key_node, uuid_hash(chassis_uuid), set) {
+    HMAP_FOR_EACH_WITH_HASH (node, key_node,
+                             hash_chassis_queue(chassis_uuid, queue_id), set) {
         if (uuid_equals(chassis_uuid, &node->chassis_uuid)
             && node->queue_id == queue_id) {
             return true;
@@ -378,11 +386,11 @@ static void
 free_chassis_queueid(struct hmap *set, struct sbrec_chassis *chassis,
                      uint32_t queue_id)
 {
+    const struct uuid *chassis_uuid = &chassis->header_.uuid;
     struct ovn_chassis_qdisc_queues *node;
     HMAP_FOR_EACH_WITH_HASH (node, key_node,
-                             uuid_hash(&chassis->header_.uuid),
-                             set) {
-        if (uuid_equals(&chassis->header_.uuid, &node->chassis_uuid)
+                             hash_chassis_queue(chassis_uuid, queue_id), set) {
+        if (uuid_equals(chassis_uuid, &node->chassis_uuid)
             && node->queue_id == queue_id) {
             hmap_remove(set, &node->key_node);
             break;
