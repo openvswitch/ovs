@@ -345,7 +345,7 @@ add_chassis_queue(struct hmap *set, struct uuid *chassis_uuid,
 {
     struct ovn_chassis_qdisc_queues *node = xmalloc(sizeof *node);
     node->queue_id = queue_id;
-    memcpy(&node->chassis_uuid, chassis_uuid, sizeof node->chassis_uuid);
+    node->chassis_uuid = *chassis_uuid;
     hmap_insert(set, &node->key_node,
                 hash_chassis_queue(chassis_uuid, queue_id));
 }
