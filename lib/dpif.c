@@ -1661,7 +1661,7 @@ dpif_queue_to_priority(const struct dpif *dpif, uint32_t queue_id,
     log_operation(dpif, "queue_to_priority", error);
     return error;
 }
-
+
 void
 dpif_init(struct dpif *dpif, const struct dpif_class *dpif_class,
           const char *name,

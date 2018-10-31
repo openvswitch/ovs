@@ -1010,7 +1010,7 @@ udpif_revalidator(void *arg)
 
     return NULL;
 }
-
+
 static enum upcall_type
 classify_upcall(enum dpif_upcall_type type, const struct nlattr *userdata,
                 struct user_action_cookie *cookie)
