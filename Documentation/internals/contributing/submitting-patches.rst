@@ -145,6 +145,9 @@ The description ends with a series of tags, written one to a line as the last
 paragraph of the email.  Each tag indicates some property of the patch in an
 easily machine-parseable manner.
 
+Please don't wrap a tag across multiple lines.  If necessary, it's OK to have a
+tag extend beyond the customary maximum width of a commit message.
+
 Examples of common tags follow.
 
 ``Signed-off-by: Author Name <author.name@email.address...>``
