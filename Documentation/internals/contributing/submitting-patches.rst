@@ -160,6 +160,12 @@ Examples of common tags follow.
   If the author and submitter are different, each must sign off.  If the patch
   has more than one author, all must sign off.
 
+  Signed-off-by tags should be the last tags in the commit message.  If the
+  author (or authors) and submitter are different, the author tags should come
+  first.  More generally, occasionally a patch might pass through a chain of
+  submitters, and in such a case the sign-offs should be arranged in
+  chronological order.
+
   ::
 
       Signed-off-by: Author Name <author.name@email.address...>
