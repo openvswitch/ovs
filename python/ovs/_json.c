@@ -170,6 +170,7 @@ Parser_finish(json_ParserObject * self)
     json = json_parser_finish(self->_parser);
     self->_parser = NULL;
     obj = json_to_python(json);
+    json_destroy(json);
     return obj;
 }
 
