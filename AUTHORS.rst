@@ -119,6 +119,7 @@ Ed Maste                           emaste@freebsd.org
 Ed Swierk                          eswierk@skyportsystems.com
 Edouard Bourguignon                madko@linuxed.net
 Eelco Chaudron                     echaudro@redhat.com
+Eric Lapointe                      elapointe@corsa.com
 Esteban Rodriguez Betancourt       estebarb@hpe.com
 Aymerich Edward                    edward.aymerich@hpe.com
 Edward Tomasz Napierała            trasz@freebsd.org
