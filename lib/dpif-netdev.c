@@ -2396,6 +2396,7 @@ dp_netdev_flow_offload_main(void *data OVS_UNUSED)
             ovsrcu_quiesce_start();
             ovs_mutex_cond_wait(&dp_flow_offload.cond,
                                 &dp_flow_offload.mutex);
+            ovsrcu_quiesce_end();
         }
         list = ovs_list_pop_front(&dp_flow_offload.list);
         offload = CONTAINER_OF(list, struct dp_flow_offload_item, node);
