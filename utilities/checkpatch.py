@@ -21,59 +21,6 @@ import os
 import re
 import sys
 
-try:
-    import enchant
-
-    extra_keywords = ['ovs', 'vswitch', 'vswitchd', 'ovs-vswitchd', 'netdev',
-                      'selinux', 'ovs-ctl', 'dpctl', 'ofctl', 'openvswitch',
-                      'dpdk', 'hugepage', 'hugepages', 'pmd', 'upcall',
-                      'vhost', 'rx', 'tx', 'vhostuser', 'openflow', 'qsort',
-                      'rxq', 'txq', 'perf', 'stats', 'struct', 'int',
-                      'char', 'bool', 'upcalls', 'nicira', 'bitmask', 'ipv4',
-                      'ipv6', 'tcp', 'tcp4', 'tcpv4', 'udp', 'udp4', 'udpv4',
-                      'icmp', 'icmp4', 'icmpv6', 'vlan', 'vxlan', 'cksum',
-                      'csum', 'checksum', 'ofproto', 'numa', 'mempool',
-                      'mempools', 'mbuf', 'mbufs', 'hmap', 'cmap', 'smap',
-                      'dhcpv4', 'dhcp', 'dhcpv6', 'opts', 'metadata',
-                      'geneve', 'mutex', 'netdev', 'netdevs', 'subtable',
-                      'virtio', 'qos', 'policer', 'datapath', 'tunctl',
-                      'attr', 'ethernet', 'ether', 'defrag', 'defragment',
-                      'loopback', 'sflow', 'acl', 'initializer', 'recirc',
-                      'xlated', 'unclosed', 'netlink', 'msec', 'usec',
-                      'nsec', 'ms', 'us', 'ns', 'kilobits', 'kbps',
-                      'kilobytes', 'megabytes', 'mbps', 'gigabytes', 'gbps',
-                      'megabits', 'gigabits', 'pkts', 'tuple', 'miniflow',
-                      'megaflow', 'conntrack', 'vlans', 'vxlans', 'arg',
-                      'tpid', 'xbundle', 'xbundles', 'mbundle', 'mbundles',
-                      'netflow', 'localnet', 'odp', 'pre', 'dst', 'dest',
-                      'src', 'ethertype', 'cvlan', 'ips', 'msg', 'msgs',
-                      'liveness', 'userspace', 'eventmask', 'datapaths',
-                      'slowpath', 'fastpath', 'multicast', 'unicast',
-                      'revalidation', 'namespace', 'qdisc', 'uuid', 'ofport',
-                      'subnet', 'revalidation', 'revalidator', 'revalidate',
-                      'l2', 'l3', 'l4', 'openssl', 'mtu', 'ifindex', 'enum',
-                      'enums', 'http', 'https', 'num', 'vconn', 'vconns',
-                      'conn', 'nat', 'memset', 'memcmp', 'strcmp',
-                      'strcasecmp', 'tc', 'ufid', 'api', 'ofpbuf', 'ofpbufs',
-                      'hashmaps', 'hashmap', 'deref', 'dereference', 'hw',
-                      'prio', 'sendmmsg', 'sendmsg', 'malloc', 'free', 'alloc',
-                      'pid', 'ppid', 'pgid', 'uid', 'gid', 'sid', 'utime',
-                      'stime', 'cutime', 'cstime', 'vsize', 'rss', 'rsslim',
-                      'whcan', 'gtime', 'eip', 'rip', 'cgtime', 'dbg', 'gw',
-                      'sbrec', 'bfd', 'sizeof', 'pmds', 'nic', 'nics', 'hwol',
-                      'encap', 'decap', 'tlv', 'tlvs', 'decapsulation', 'fd',
-                      'cacheline', 'xlate', 'skiplist', 'idl', 'comparator',
-                      'natting', 'alg', 'pasv', 'epasv', 'wildcard', 'nated',
-                      'amd64', 'x86_64', 'recirculation']
-
-    spell_check_dict = enchant.Dict("en_US")
-    for kw in extra_keywords:
-        spell_check_dict.add(kw)
-
-    no_spellcheck = False
-except:
-    no_spellcheck = True
-
 RETURN_CHECK_INITIAL_STATE = 0
 RETURN_CHECK_STATE_WITH_RETURN = 1
 RETURN_CHECK_AWAITING_BRACE = 2
@@ -86,6 +33,66 @@ total_line = 0
 colors = False
 spellcheck_comments = False
 quiet = False
+spell_check_dict = None
+
+
+def open_spell_check_dict():
+    import enchant
+
+    try:
+        extra_keywords = ['ovs', 'vswitch', 'vswitchd', 'ovs-vswitchd',
+                          'netdev', 'selinux', 'ovs-ctl', 'dpctl', 'ofctl',
+                          'openvswitch', 'dpdk', 'hugepage', 'hugepages',
+                          'pmd', 'upcall', 'vhost', 'rx', 'tx', 'vhostuser',
+                          'openflow', 'qsort', 'rxq', 'txq', 'perf', 'stats',
+                          'struct', 'int', 'char', 'bool', 'upcalls', 'nicira',
+                          'bitmask', 'ipv4', 'ipv6', 'tcp', 'tcp4', 'tcpv4',
+                          'udp', 'udp4', 'udpv4', 'icmp', 'icmp4', 'icmpv6',
+                          'vlan', 'vxlan', 'cksum', 'csum', 'checksum',
+                          'ofproto', 'numa', 'mempool', 'mempools', 'mbuf',
+                          'mbufs', 'hmap', 'cmap', 'smap', 'dhcpv4', 'dhcp',
+                          'dhcpv6', 'opts', 'metadata', 'geneve', 'mutex',
+                          'netdev', 'netdevs', 'subtable', 'virtio', 'qos',
+                          'policer', 'datapath', 'tunctl', 'attr', 'ethernet',
+                          'ether', 'defrag', 'defragment', 'loopback', 'sflow',
+                          'acl', 'initializer', 'recirc', 'xlated', 'unclosed',
+                          'netlink', 'msec', 'usec', 'nsec', 'ms', 'us', 'ns',
+                          'kilobits', 'kbps', 'kilobytes', 'megabytes', 'mbps',
+                          'gigabytes', 'gbps', 'megabits', 'gigabits', 'pkts',
+                          'tuple', 'miniflow', 'megaflow', 'conntrack',
+                          'vlans', 'vxlans', 'arg', 'tpid', 'xbundle',
+                          'xbundles', 'mbundle', 'mbundles', 'netflow',
+                          'localnet', 'odp', 'pre', 'dst', 'dest', 'src',
+                          'ethertype', 'cvlan', 'ips', 'msg', 'msgs',
+                          'liveness', 'userspace', 'eventmask', 'datapaths',
+                          'slowpath', 'fastpath', 'multicast', 'unicast',
+                          'revalidation', 'namespace', 'qdisc', 'uuid',
+                          'ofport', 'subnet', 'revalidation', 'revalidator',
+                          'revalidate', 'l2', 'l3', 'l4', 'openssl', 'mtu',
+                          'ifindex', 'enum', 'enums', 'http', 'https', 'num',
+                          'vconn', 'vconns', 'conn', 'nat', 'memset', 'memcmp',
+                          'strcmp', 'strcasecmp', 'tc', 'ufid', 'api',
+                          'ofpbuf', 'ofpbufs', 'hashmaps', 'hashmap', 'deref',
+                          'dereference', 'hw', 'prio', 'sendmmsg', 'sendmsg',
+                          'malloc', 'free', 'alloc', 'pid', 'ppid', 'pgid',
+                          'uid', 'gid', 'sid', 'utime', 'stime', 'cutime',
+                          'cstime', 'vsize', 'rss', 'rsslim', 'whcan', 'gtime',
+                          'eip', 'rip', 'cgtime', 'dbg', 'gw', 'sbrec', 'bfd',
+                          'sizeof', 'pmds', 'nic', 'nics', 'hwol', 'encap',
+                          'decap', 'tlv', 'tlvs', 'decapsulation', 'fd',
+                          'cacheline', 'xlate', 'skiplist', 'idl',
+                          'comparator', 'natting', 'alg', 'pasv', 'epasv',
+                          'wildcard', 'nated', 'amd64', 'x86_64',
+                          'recirculation']
+
+        global spell_check_dict
+        spell_check_dict = enchant.Dict("en_US")
+        for kw in extra_keywords:
+            spell_check_dict.add(kw)
+
+        return True
+    except:
+        return False
 
 
 def get_color_end():
@@ -359,7 +366,7 @@ def filter_comments(current_line, keep=False):
 
 
 def check_comment_spelling(line):
-    if no_spellcheck or not spellcheck_comments:
+    if not spell_check_dict or not spellcheck_comments:
         return False
 
     comment_words = filter_comments(line, True).replace(':', ' ').split(' ')
@@ -919,7 +926,7 @@ if __name__ == '__main__':
         elif o in ("-f", "--check-file"):
             checking_file = True
         elif o in ("-S", "--spellcheck-comments"):
-            if no_spellcheck:
+            if not open_spell_check_dict():
                 print("WARNING: The enchant library isn't availble.")
                 print("         Please install python enchant.")
             else:
