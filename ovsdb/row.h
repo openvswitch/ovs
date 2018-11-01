@@ -49,7 +49,7 @@ struct ovsdb_row {
     struct ovsdb_table *table;     /* Table to which this belongs. */
     struct ovsdb_txn_row *txn_row; /* Transaction that row is in, if any. */
 
-    /* Weak references. */
+    /* Weak references.  Updated and checked only at transaction commit. */
     struct ovs_list src_refs;   /* Weak references from this row. */
     struct ovs_list dst_refs;   /* Weak references to this row. */
 

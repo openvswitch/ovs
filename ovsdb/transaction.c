@@ -763,31 +763,40 @@ static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 check_index_uniqueness(struct ovsdb_txn *txn OVS_UNUSED,
                        struct ovsdb_txn_row *txn_row)
 {
-    struct ovsdb_txn_table *txn_table = txn_row->table->txn_table;
-    struct ovsdb_table *table = txn_row->table;
+    /* Skip rows that are being deleted since they can't violate uniqueness. */
     struct ovsdb_row *row = txn_row->new;
-    size_t i;
-
     if (!row) {
         return NULL;
     }
 
-    for (i = 0; i < table->schema->n_indexes; i++) {
+    struct ovsdb_txn_table *txn_table = txn_row->table->txn_table;
+    struct ovsdb_table *table = txn_row->table;
+    for (size_t i = 0; i < table->schema->n_indexes; i++) {
         const struct ovsdb_column_set *index = &table->schema->indexes[i];
-        struct ovsdb_row *irow;
-        uint32_t hash;
+        uint32_t hash = ovsdb_row_hash_columns(row, index, 0);
 
-        hash = ovsdb_row_hash_columns(row, index, 0);
-        irow = ovsdb_index_search(&txn_table->txn_indexes[i], row, i, hash);
+        /* Check whether the row has a match in the temporary hash table that
+         * we're building.  If we add two rows with the same index data, then
+         * there's a duplicate within the rows added or modified in this
+         * transaction.*/
+        struct ovsdb_row *irow
+            = ovsdb_index_search(&txn_table->txn_indexes[i], row, i, hash);
         if (irow) {
             return duplicate_index_row(index, irow, row);
         }
 
+        /* Also check whether the row has a match in the table's real index
+         * (which won't be updated until transaction commit is certain).  If
+         * there's a match, and it's for a row that wasn't pulled into the
+         * transaction, then it's a duplicate.  (If it is for a row that is
+         * part of the transaction, then the first check has already handled
+         * it.) */
         irow = ovsdb_index_search(&table->indexes[i], row, i, hash);
         if (irow && !irow->txn_row) {
             return duplicate_index_row(index, irow, row);
         }
 
+        /* Add row to temporary hash table. */
         hmap_insert(&txn_table->txn_indexes[i],
                     ovsdb_row_get_index_node(row, i), hash);
     }
