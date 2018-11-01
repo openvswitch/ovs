@@ -58,6 +58,7 @@ ofctl_parse_flow(const char *input, int command)
                                    command, &usable_protocols);
     if (error) {
         printf("Error encountered: %s\n", error);
+        free(error);
     } else {
         ofctl_parse_flows__(&fm, 1, usable_protocols);
     }
