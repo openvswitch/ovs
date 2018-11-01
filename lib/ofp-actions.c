@@ -5842,7 +5842,8 @@ static char * OVS_WARN_UNUSED_RESULT
 parse_UNROLL_XLATE(char *arg OVS_UNUSED,
                    const struct ofpact_parse_params *pp OVS_UNUSED)
 {
-    OVS_NOT_REACHED();
+    return xasprintf("UNROLL is an internal action "
+                     "that shouldn't be used via OpenFlow");
 }
 
 static void
