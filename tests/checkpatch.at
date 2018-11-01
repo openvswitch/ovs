@@ -51,6 +51,14 @@ try_checkpatch \
     Commit: A" \
    "ERROR: Author A needs to sign off."
 
+# Single author but somehow the mailing list is the author.
+try_checkpatch \
+   "Author: Foo Bar via dev <ovs-dev@openvswitch.org>
+    Commit: A
+
+    Signed-off-by: A" \
+   "ERROR: Author should not be mailing list."
+
 # Sign-off for single author and different committer.
 try_checkpatch \
    "Author: A

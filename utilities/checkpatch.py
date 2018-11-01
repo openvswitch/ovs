@@ -731,6 +731,9 @@ def ovs_checkpatch_parse(text, filename, author=None, committer=None):
                     if not author:
                         print_error("Patch lacks author.")
                         continue
+                    if " via " in author or "@openvswitch.org" in author:
+                        print_error("Author should not be mailing list.")
+                        continue
                     if author in co_authors:
                         print_error("Author should not be also be co-author.")
                         continue
