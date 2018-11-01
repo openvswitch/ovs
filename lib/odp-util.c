@@ -4812,7 +4812,7 @@ scan_vxlan_gbp(const char *s, uint32_t *key, uint32_t *mask)
         s += 3;
         len = scan_be16(s, &id, mask ? &id_mask : NULL);
         if (len == 0) {
-            return -EINVAL;
+            return 0;
         }
         s += len;
     }
@@ -4824,7 +4824,7 @@ scan_vxlan_gbp(const char *s, uint32_t *key, uint32_t *mask)
         s += 6;
         len = scan_u8(s, &flags, mask ? &flags_mask : NULL);
         if (len == 0) {
-            return -EINVAL;
+            return 0;
         }
         s += len;
     }
@@ -4858,7 +4858,7 @@ scan_erspan_metadata(const char *s,
         s += 4;
         len = scan_u8(s, &ver, mask ? &ver_mask : NULL);
         if (len == 0) {
-            return -EINVAL;
+            return 0;
         }
         s += len;
     }
@@ -4872,7 +4872,7 @@ scan_erspan_metadata(const char *s,
             s += 4;
             len = scan_u32(s, &idx, mask ? &idx_mask : NULL);
             if (len == 0) {
-                return -EINVAL;
+                return 0;
             }
             s += len;
         }
@@ -4892,7 +4892,7 @@ scan_erspan_metadata(const char *s,
             s += 4;
             len = scan_u8(s, &dir, mask ? &dir_mask : NULL);
             if (len == 0) {
-                return -EINVAL;
+                return 0;
             }
             s += len;
         }
@@ -4903,7 +4903,7 @@ scan_erspan_metadata(const char *s,
             s += 5;
             len = scan_u8(s, &hwid, mask ? &hwid_mask : NULL);
             if (len == 0) {
-                return -EINVAL;
+                return 0;
             }
             s += len;
         }
@@ -4944,7 +4944,7 @@ scan_geneve(const char *s, struct geneve_scan *key, struct geneve_scan *mask)
             len = scan_be16(s, &opt->opt_class,
                             mask ? &opt_mask->opt_class : NULL);
             if (len == 0) {
-                return -EINVAL;
+                return 0;
             }
             s += len;
         } else if (mask) {
@@ -4958,7 +4958,7 @@ scan_geneve(const char *s, struct geneve_scan *key, struct geneve_scan *mask)
             s += 5;
             len = scan_u8(s, &opt->type, mask ? &opt_mask->type : NULL);
             if (len == 0) {
-                return -EINVAL;
+                return 0;
             }
             s += len;
         } else if (mask) {
@@ -4973,7 +4973,7 @@ scan_geneve(const char *s, struct geneve_scan *key, struct geneve_scan *mask)
             s += 4;
             len = scan_u8(s, &opt_len, mask ? &opt_len_mask : NULL);
             if (len == 0) {
-                return -EINVAL;
+                return 0;
             }
             s += len;
 
@@ -5016,6 +5016,8 @@ scan_geneve(const char *s, struct geneve_scan *key, struct geneve_scan *mask)
                 opt_mask += 1 + data_len / 4;
             }
             len_remain -= data_len;
+        } else {
+            return 0;
         }
     }
 
