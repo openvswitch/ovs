@@ -504,34 +504,32 @@ udpif_destroy(struct udpif *udpif)
     free(udpif);
 }
 
-/* Stops the handler and revalidator threads, must be enclosed in
- * ovsrcu quiescent state unless when destroying udpif. */
+/* Stops the handler and revalidator threads. */
 static void
 udpif_stop_threads(struct udpif *udpif)
 {
     if (udpif && (udpif->n_handlers != 0 || udpif->n_revalidators != 0)) {
         size_t i;
 
+        /* Tell the threads to exit. */
         latch_set(&udpif->exit_latch);
 
+        /* Wait for the threads to exit.  Quiesce because this can take a long
+         * time.. */
+        ovsrcu_quiesce_start();
         for (i = 0; i < udpif->n_handlers; i++) {
-            struct handler *handler = &udpif->handlers[i];
-
-            xpthread_join(handler->thread, NULL);
+            xpthread_join(udpif->handlers[i].thread, NULL);
         }
-
         for (i = 0; i < udpif->n_revalidators; i++) {
             xpthread_join(udpif->revalidators[i].thread, NULL);
         }
-
         dpif_disable_upcall(udpif->dpif);
+        ovsrcu_quiesce_end();
 
+        /* Delete ukeys, and delete all flows from the datapath to prevent
+         * double-counting stats. */
         for (i = 0; i < udpif->n_revalidators; i++) {
-            struct revalidator *revalidator = &udpif->revalidators[i];
-
-            /* Delete ukeys, and delete all flows from the datapath to prevent
-             * double-counting stats. */
-            revalidator_purge(revalidator);
+            revalidator_purge(&udpif->revalidators[i]);
         }
 
         latch_poll(&udpif->exit_latch);
@@ -549,13 +547,16 @@ udpif_stop_threads(struct udpif *udpif)
     }
 }
 
-/* Starts the handler and revalidator threads, must be enclosed in
- * ovsrcu quiescent state. */
+/* Starts the handler and revalidator threads. */
 static void
 udpif_start_threads(struct udpif *udpif, size_t n_handlers_,
                     size_t n_revalidators_)
 {
     if (udpif && n_handlers_ && n_revalidators_) {
+        /* Creating a thread can take a significant amount of time on some
+         * systems, even hundred of milliseconds, so quiesce around it. */
+        ovsrcu_quiesce_start();
+
         udpif->n_handlers = n_handlers_;
         udpif->n_revalidators = n_revalidators_;
 
@@ -586,6 +587,7 @@ udpif_start_threads(struct udpif *udpif, size_t n_handlers_,
             revalidator->thread = ovs_thread_create(
                 "revalidator", udpif_revalidator, revalidator);
         }
+        ovsrcu_quiesce_end();
     }
 }
 
@@ -623,7 +625,6 @@ udpif_set_threads(struct udpif *udpif, size_t n_handlers_,
     ovs_assert(udpif);
     ovs_assert(n_handlers_ && n_revalidators_);
 
-    ovsrcu_quiesce_start();
     if (udpif->n_handlers != n_handlers_
         || udpif->n_revalidators != n_revalidators_) {
         udpif_stop_threads(udpif);
@@ -641,7 +642,6 @@ udpif_set_threads(struct udpif *udpif, size_t n_handlers_,
 
         udpif_start_threads(udpif, n_handlers_, n_revalidators_);
     }
-    ovsrcu_quiesce_end();
 }
 
 /* Waits for all ongoing upcall translations to complete.  This ensures that
@@ -657,10 +657,8 @@ udpif_synchronize(struct udpif *udpif)
     size_t n_handlers_ = udpif->n_handlers;
     size_t n_revalidators_ = udpif->n_revalidators;
 
-    ovsrcu_quiesce_start();
     udpif_stop_threads(udpif);
     udpif_start_threads(udpif, n_handlers_, n_revalidators_);
-    ovsrcu_quiesce_end();
 }
 
 /* Notifies 'udpif' that something changed which may render previous
@@ -700,13 +698,9 @@ udpif_flush(struct udpif *udpif)
     size_t n_handlers_ = udpif->n_handlers;
     size_t n_revalidators_ = udpif->n_revalidators;
 
-    ovsrcu_quiesce_start();
-
     udpif_stop_threads(udpif);
     dpif_flow_flush(udpif->dpif);
     udpif_start_threads(udpif, n_handlers_, n_revalidators_);
-
-    ovsrcu_quiesce_end();
 }
 
 /* Removes all flows from all datapaths. */
