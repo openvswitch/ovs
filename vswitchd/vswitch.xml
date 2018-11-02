@@ -122,6 +122,16 @@
           start receiving packets from the datapath and re-setup the flows.
         </p>
         <p>
+          Additionally, <code>ovs-vswitchd</code> is prevented from connecting
+          to controllers when this value is set to <code>true</code>. This
+          prevents controllers from making changes to the flow table in the
+          middle of flow restoration, which could result in undesirable
+          intermediate states. Once this value has been set to
+          <code>false</code> and the desired flow state has been
+          restored, <code>ovs-vswitchd</code> will be able to reconnect to
+          controllers and process any new flow table modifications.
+        </p>
+        <p>
           Thus, with this option, the procedure for a hot-upgrade of
           <code>ovs-vswitchd</code> becomes roughly the following:
         </p>
