@@ -194,7 +194,7 @@ static void
 parse_lb_option(const char *s)
 {
     struct sockaddr_storage ss;
-    if (!inet_parse_active(s, 0, &ss)) {
+    if (!inet_parse_active(s, 0, &ss, false)) {
         ovs_fatal(0, "%s: bad address", s);
     }
 
