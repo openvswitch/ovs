@@ -498,14 +498,14 @@ dp_packet_mbuf_rss_flag_reset(struct dp_packet *p)
     p->mbuf.ol_flags &= ~PKT_RX_RSS_HASH;
 }
 
-/* This initialization is needed for packets that do not come
- * from DPDK interfaces, when vswitchd is built with --with-dpdk.
- * The DPDK rte library will still otherwise manage the mbuf.
- * We only need to initialize the mbuf ol_flags. */
+/* This initialization is needed for packets that do not come from DPDK
+ * interfaces, when vswitchd is built with --with-dpdk. */
 static inline void
 dp_packet_mbuf_init(struct dp_packet *p)
 {
-    p->mbuf.ol_flags = 0;
+    p->mbuf.ol_flags = p->mbuf.tx_offload = p->mbuf.packet_type = 0;
+    p->mbuf.nb_segs = 1;
+    p->mbuf.next = NULL;
 }
 
 static inline bool
