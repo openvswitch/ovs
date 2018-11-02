@@ -2170,6 +2170,8 @@ ovn_port_update_sbrec(struct northd_context *ctx,
 
         struct smap ids = SMAP_INITIALIZER(&ids);
         sbrec_port_binding_set_external_ids(op->sb, &ids);
+
+        sbrec_port_binding_set_nat_addresses(op->sb, NULL, 0);
     } else {
         if (strcmp(op->nbsp->type, "router")) {
             uint32_t queue_id = smap_get_int(
@@ -2202,6 +2204,8 @@ ovn_port_update_sbrec(struct northd_context *ctx,
                     &rl, "Unknown port type '%s' set on logical switch '%s'.",
                     op->nbsp->type, op->nbsp->name);
             }
+
+            sbrec_port_binding_set_nat_addresses(op->sb, NULL, 0);
         } else {
             const char *chassis = NULL;
             if (op->peer && op->peer->od && op->peer->od->nbr) {
@@ -2229,6 +2233,8 @@ ovn_port_update_sbrec(struct northd_context *ctx,
                 }
                 sbrec_port_binding_set_options(op->sb, &new);
                 smap_destroy(&new);
+            } else {
+                sbrec_port_binding_set_options(op->sb, NULL);
             }
 
             const char *nat_addresses = smap_get(&op->nbsp->options,
