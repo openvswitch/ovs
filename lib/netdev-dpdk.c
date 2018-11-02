@@ -88,10 +88,6 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 #define MTU_TO_MAX_FRAME_LEN(mtu)   ((mtu) + ETHER_HDR_MAX_LEN)
 #define FRAME_LEN_TO_MTU(frame_len) ((frame_len)                    \
                                      - ETHER_HDR_LEN - ETHER_CRC_LEN)
-#define MBUF_SIZE(mtu)              ROUND_UP((MTU_TO_MAX_FRAME_LEN(mtu) \
-                                             + sizeof(struct dp_packet) \
-                                             + RTE_PKTMBUF_HEADROOM),   \
-                                             RTE_CACHE_LINE_SIZE)
 #define NETDEV_DPDK_MBUF_ALIGN      1024
 #define NETDEV_DPDK_MAX_PKT_LEN     9728
 
@@ -637,7 +633,11 @@ dpdk_mp_create(struct netdev_dpdk *dev, int mtu, bool per_port_mp)
     char mp_name[RTE_MEMPOOL_NAMESIZE];
     const char *netdev_name = netdev_get_name(&dev->up);
     int socket_id = dev->requested_socket_id;
-    uint32_t n_mbufs;
+    uint32_t n_mbufs = 0;
+    uint32_t mbuf_size = 0;
+    uint32_t aligned_mbuf_size = 0;
+    uint32_t mbuf_priv_data_len = 0;
+    uint32_t pkt_size = 0;
     uint32_t hash = hash_string(netdev_name, 0);
     struct dpdk_mp *dmp = NULL;
     int ret;
@@ -650,6 +650,9 @@ dpdk_mp_create(struct netdev_dpdk *dev, int mtu, bool per_port_mp)
     dmp->mtu = mtu;
     dmp->refcount = 1;
 
+    /* Get the size of each mbuf, based on the MTU */
+    mbuf_size = MTU_TO_FRAME_LEN(mtu);
+
     n_mbufs = dpdk_calculate_mbufs(dev, mtu, per_port_mp);
 
     do {
@@ -661,8 +664,8 @@ dpdk_mp_create(struct netdev_dpdk *dev, int mtu, bool per_port_mp)
          * so this is not an issue for tasks such as debugging.
          */
         ret = snprintf(mp_name, RTE_MEMPOOL_NAMESIZE,
-                           "ovs%08x%02d%05d%07u",
-                           hash, socket_id, mtu, n_mbufs);
+                       "ovs%08x%02d%05d%07u",
+                        hash, socket_id, mtu, n_mbufs);
         if (ret < 0 || ret >= RTE_MEMPOOL_NAMESIZE) {
             VLOG_DBG("snprintf returned %d. "
                      "Failed to generate a mempool name for \"%s\". "
@@ -671,17 +674,33 @@ dpdk_mp_create(struct netdev_dpdk *dev, int mtu, bool per_port_mp)
             break;
         }
 
-        VLOG_DBG("Port %s: Requesting a mempool of %u mbufs "
-                  "on socket %d for %d Rx and %d Tx queues.",
-                  netdev_name, n_mbufs, socket_id,
-                  dev->requested_n_rxq, dev->requested_n_txq);
+        VLOG_DBG("Port %s: Requesting a mempool of %u mbufs of size %u "
+                  "on socket %d for %d Rx and %d Tx queues, "
+                  "cache line size of %u",
+                  netdev_name, n_mbufs, mbuf_size, socket_id,
+                  dev->requested_n_rxq, dev->requested_n_txq,
+                  RTE_CACHE_LINE_SIZE);
 
-        dmp->mp = rte_pktmbuf_pool_create(mp_name, n_mbufs,
-                                          MP_CACHE_SZ,
-                                          sizeof (struct dp_packet)
-                                          - sizeof (struct rte_mbuf),
-                                          MBUF_SIZE(mtu)
-                                          - sizeof(struct dp_packet),
+        mbuf_priv_data_len = sizeof(struct dp_packet) -
+                                 sizeof(struct rte_mbuf);
+        /* The size of the entire dp_packet. */
+        pkt_size = sizeof(struct dp_packet) + mbuf_size;
+        /* mbuf size, rounded up to cacheline size. */
+        aligned_mbuf_size = ROUND_UP(pkt_size, RTE_CACHE_LINE_SIZE);
+        /* If there is a size discrepancy, add padding to mbuf_priv_data_len.
+         * This maintains mbuf size cache alignment, while also honoring RX
+         * buffer alignment in the data portion of the mbuf. If this adjustment
+         * is not made, there is a possiblity later on that for an element of
+         * the mempool, buf, buf->data_len < (buf->buf_len - buf->data_off).
+         * This is problematic in the case of multi-segment mbufs, particularly
+         * when an mbuf segment needs to be resized (when [push|popp]ing a VLAN
+         * header, for example.
+         */
+        mbuf_priv_data_len += (aligned_mbuf_size - pkt_size);
+
+        dmp->mp = rte_pktmbuf_pool_create(mp_name, n_mbufs, MP_CACHE_SZ,
+                                          mbuf_priv_data_len,
+                                          mbuf_size,
                                           socket_id);
 
         if (dmp->mp) {
