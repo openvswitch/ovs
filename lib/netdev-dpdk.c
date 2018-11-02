@@ -550,7 +550,7 @@ ovs_rte_pktmbuf_init(struct rte_mempool *mp OVS_UNUSED,
 {
     struct rte_mbuf *pkt = _p;
 
-    dp_packet_init_dpdk((struct dp_packet *) pkt, pkt->buf_len);
+    dp_packet_init_dpdk((struct dp_packet *) pkt);
 }
 
 static int
