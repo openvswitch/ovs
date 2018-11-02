@@ -25,10 +25,6 @@ struct dp_packet;
 
 #ifdef DPDK_NETDEV
 
-#define DPDK_FLOW_OFFLOAD_API                   \
-    .flow_put = netdev_dpdk_flow_put,           \
-    .flow_del = netdev_dpdk_flow_del
-
 void netdev_dpdk_register(void);
 void free_dpdk_buf(struct dp_packet *);
 

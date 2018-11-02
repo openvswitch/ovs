@@ -88,10 +88,6 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 #define MTU_TO_MAX_FRAME_LEN(mtu)   ((mtu) + ETHER_HDR_MAX_LEN)
 #define FRAME_LEN_TO_MTU(frame_len) ((frame_len)                    \
                                      - ETHER_HDR_LEN - ETHER_CRC_LEN)
-#define MBUF_SIZE(mtu)              ROUND_UP((MTU_TO_MAX_FRAME_LEN(mtu) \
-                                             + sizeof(struct dp_packet) \
-                                             + RTE_PKTMBUF_HEADROOM),   \
-                                             RTE_CACHE_LINE_SIZE)
 #define NETDEV_DPDK_MBUF_ALIGN      1024
 #define NETDEV_DPDK_MAX_PKT_LEN     9728
 
@@ -554,7 +550,7 @@ ovs_rte_pktmbuf_init(struct rte_mempool *mp OVS_UNUSED,
 {
     struct rte_mbuf *pkt = _p;
 
-    dp_packet_init_dpdk((struct dp_packet *) pkt, pkt->buf_len);
+    dp_packet_init_dpdk((struct dp_packet *) pkt);
 }
 
 static int
@@ -637,7 +633,11 @@ dpdk_mp_create(struct netdev_dpdk *dev, int mtu, bool per_port_mp)
     char mp_name[RTE_MEMPOOL_NAMESIZE];
     const char *netdev_name = netdev_get_name(&dev->up);
     int socket_id = dev->requested_socket_id;
-    uint32_t n_mbufs;
+    uint32_t n_mbufs = 0;
+    uint32_t mbuf_size = 0;
+    uint32_t aligned_mbuf_size = 0;
+    uint32_t mbuf_priv_data_len = 0;
+    uint32_t pkt_size = 0;
     uint32_t hash = hash_string(netdev_name, 0);
     struct dpdk_mp *dmp = NULL;
     int ret;
@@ -650,6 +650,9 @@ dpdk_mp_create(struct netdev_dpdk *dev, int mtu, bool per_port_mp)
     dmp->mtu = mtu;
     dmp->refcount = 1;
 
+    /* Get the size of each mbuf, based on the MTU */
+    mbuf_size = MTU_TO_FRAME_LEN(mtu);
+
     n_mbufs = dpdk_calculate_mbufs(dev, mtu, per_port_mp);
 
     do {
@@ -661,8 +664,8 @@ dpdk_mp_create(struct netdev_dpdk *dev, int mtu, bool per_port_mp)
          * so this is not an issue for tasks such as debugging.
          */
         ret = snprintf(mp_name, RTE_MEMPOOL_NAMESIZE,
-                           "ovs%08x%02d%05d%07u",
-                           hash, socket_id, mtu, n_mbufs);
+                       "ovs%08x%02d%05d%07u",
+                        hash, socket_id, mtu, n_mbufs);
         if (ret < 0 || ret >= RTE_MEMPOOL_NAMESIZE) {
             VLOG_DBG("snprintf returned %d. "
                      "Failed to generate a mempool name for \"%s\". "
@@ -671,17 +674,33 @@ dpdk_mp_create(struct netdev_dpdk *dev, int mtu, bool per_port_mp)
             break;
         }
 
-        VLOG_DBG("Port %s: Requesting a mempool of %u mbufs "
-                  "on socket %d for %d Rx and %d Tx queues.",
-                  netdev_name, n_mbufs, socket_id,
-                  dev->requested_n_rxq, dev->requested_n_txq);
+        VLOG_DBG("Port %s: Requesting a mempool of %u mbufs of size %u "
+                  "on socket %d for %d Rx and %d Tx queues, "
+                  "cache line size of %u",
+                  netdev_name, n_mbufs, mbuf_size, socket_id,
+                  dev->requested_n_rxq, dev->requested_n_txq,
+                  RTE_CACHE_LINE_SIZE);
 
-        dmp->mp = rte_pktmbuf_pool_create(mp_name, n_mbufs,
-                                          MP_CACHE_SZ,
-                                          sizeof (struct dp_packet)
-                                          - sizeof (struct rte_mbuf),
-                                          MBUF_SIZE(mtu)
-                                          - sizeof(struct dp_packet),
+        mbuf_priv_data_len = sizeof(struct dp_packet) -
+                                 sizeof(struct rte_mbuf);
+        /* The size of the entire dp_packet. */
+        pkt_size = sizeof(struct dp_packet) + mbuf_size;
+        /* mbuf size, rounded up to cacheline size. */
+        aligned_mbuf_size = ROUND_UP(pkt_size, RTE_CACHE_LINE_SIZE);
+        /* If there is a size discrepancy, add padding to mbuf_priv_data_len.
+         * This maintains mbuf size cache alignment, while also honoring RX
+         * buffer alignment in the data portion of the mbuf. If this adjustment
+         * is not made, there is a possiblity later on that for an element of
+         * the mempool, buf, buf->data_len < (buf->buf_len - buf->data_off).
+         * This is problematic in the case of multi-segment mbufs, particularly
+         * when an mbuf segment needs to be resized (when [push|popp]ing a VLAN
+         * header, for example.
+         */
+        mbuf_priv_data_len += (aligned_mbuf_size - pkt_size);
+
+        dmp->mp = rte_pktmbuf_pool_create(mp_name, n_mbufs, MP_CACHE_SZ,
+                                          mbuf_priv_data_len,
+                                          mbuf_size,
                                           socket_id);
 
         if (dmp->mp) {
@@ -2707,43 +2726,57 @@ netdev_dpdk_get_features(const struct netdev *netdev,
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     struct rte_eth_link link;
+    uint32_t feature = 0;
 
     ovs_mutex_lock(&dev->mutex);
     link = dev->link;
     ovs_mutex_unlock(&dev->mutex);
 
-    if (link.link_duplex == ETH_LINK_HALF_DUPLEX) {
-        if (link.link_speed == ETH_SPEED_NUM_10M) {
-            *current = NETDEV_F_10MB_HD;
+    /* Match against OpenFlow defined link speed values. */
+    if (link.link_duplex == ETH_LINK_FULL_DUPLEX) {
+        switch (link.link_speed) {
+        case ETH_SPEED_NUM_10M:
+            feature |= NETDEV_F_10MB_FD;
+            break;
+        case ETH_SPEED_NUM_100M:
+            feature |= NETDEV_F_100MB_FD;
+            break;
+        case ETH_SPEED_NUM_1G:
+            feature |= NETDEV_F_1GB_FD;
+            break;
+        case ETH_SPEED_NUM_10G:
+            feature |= NETDEV_F_10GB_FD;
+            break;
+        case ETH_SPEED_NUM_40G:
+            feature |= NETDEV_F_40GB_FD;
+            break;
+        case ETH_SPEED_NUM_100G:
+            feature |= NETDEV_F_100GB_FD;
+            break;
+        default:
+            feature |= NETDEV_F_OTHER;
         }
-        if (link.link_speed == ETH_SPEED_NUM_100M) {
-            *current = NETDEV_F_100MB_HD;
-        }
-        if (link.link_speed == ETH_SPEED_NUM_1G) {
-            *current = NETDEV_F_1GB_HD;
-        }
-    } else if (link.link_duplex == ETH_LINK_FULL_DUPLEX) {
-        if (link.link_speed == ETH_SPEED_NUM_10M) {
-            *current = NETDEV_F_10MB_FD;
-        }
-        if (link.link_speed == ETH_SPEED_NUM_100M) {
-            *current = NETDEV_F_100MB_FD;
-        }
-        if (link.link_speed == ETH_SPEED_NUM_1G) {
-            *current = NETDEV_F_1GB_FD;
-        }
-        if (link.link_speed == ETH_SPEED_NUM_10G) {
-            *current = NETDEV_F_10GB_FD;
-        }
-        if (link.link_speed == ETH_SPEED_NUM_40G) {
-            *current = NETDEV_F_40GB_FD;
+    } else if (link.link_duplex == ETH_LINK_HALF_DUPLEX) {
+        switch (link.link_speed) {
+        case ETH_SPEED_NUM_10M:
+            feature |= NETDEV_F_10MB_HD;
+            break;
+        case ETH_SPEED_NUM_100M:
+            feature |= NETDEV_F_100MB_HD;
+            break;
+        case ETH_SPEED_NUM_1G:
+            feature |= NETDEV_F_1GB_HD;
+            break;
+        default:
+            feature |= NETDEV_F_OTHER;
         }
     }
 
     if (link.link_autoneg) {
-        *current |= NETDEV_F_AUTONEG;
+        feature |= NETDEV_F_AUTONEG;
     }
 
+    *current = feature;
     *advertised = *supported = *peer = 0;
 
     return 0;
@@ -3007,11 +3040,36 @@ netdev_dpdk_vhost_user_get_status(const struct netdev *netdev,
     return 0;
 }
 
+/*
+ * Convert a given uint32_t link speed defined in DPDK to a string
+ * equivalent.
+ */
+static const char *
+netdev_dpdk_link_speed_to_str__(uint32_t link_speed)
+{
+    switch (link_speed) {
+    case ETH_SPEED_NUM_10M:    return "10Mbps";
+    case ETH_SPEED_NUM_100M:   return "100Mbps";
+    case ETH_SPEED_NUM_1G:     return "1Gbps";
+    case ETH_SPEED_NUM_2_5G:   return "2.5Gbps";
+    case ETH_SPEED_NUM_5G:     return "5Gbps";
+    case ETH_SPEED_NUM_10G:    return "10Gbps";
+    case ETH_SPEED_NUM_20G:    return "20Gbps";
+    case ETH_SPEED_NUM_25G:    return "25Gbps";
+    case ETH_SPEED_NUM_40G:    return "40Gbps";
+    case ETH_SPEED_NUM_50G:    return "50Gbps";
+    case ETH_SPEED_NUM_56G:    return "56Gbps";
+    case ETH_SPEED_NUM_100G:   return "100Gbps";
+    default:                   return "Not Defined";
+    }
+}
+
 static int
 netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     struct rte_eth_dev_info dev_info;
+    uint32_t link_speed;
 
     if (!rte_eth_dev_is_valid_port(dev->port_id)) {
         return ENODEV;
@@ -3019,6 +3077,7 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
 
     ovs_mutex_lock(&dev->mutex);
     rte_eth_dev_info_get(dev->port_id, &dev_info);
+    link_speed = dev->link.link_speed;
     ovs_mutex_unlock(&dev->mutex);
 
     smap_add_format(args, "port_no", DPDK_PORT_ID_FMT, dev->port_id);
@@ -3049,6 +3108,14 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
         smap_add_format(args, "pci-device_id", "0x%x",
                         dev_info.pci_dev->id.device_id);
     }
+
+    /* Not all link speeds are defined in the OpenFlow specs e.g. 25 Gbps.
+     * In that case the speed will not be reported as part of the usual
+     * call to get_features(). Get the link speed of the device and add it
+     * to the device status in an easy to read string format.
+     */
+    smap_add(args, "link_speed",
+             netdev_dpdk_link_speed_to_str__(link_speed));
 
     return 0;
 }
@@ -4043,7 +4110,7 @@ ufid_to_rte_flow_disassociate(const ovs_u128 *ufid) {
         if (ovs_u128_equals(*ufid, data->ufid)) {
             cmap_remove(&ufid_to_rte_flow,
                         CONST_CAST(struct cmap_node *, &data->node), hash);
-            free(data);
+            ovsrcu_postpone(free, data);
             return;
         }
     }
@@ -4072,28 +4139,38 @@ struct flow_actions {
 static void
 dump_flow_pattern(struct rte_flow_item *item)
 {
+    struct ds s;
+
+    if (!VLOG_IS_DBG_ENABLED() || item->type == RTE_FLOW_ITEM_TYPE_END) {
+        return;
+    }
+
+    ds_init(&s);
+
     if (item->type == RTE_FLOW_ITEM_TYPE_ETH) {
         const struct rte_flow_item_eth *eth_spec = item->spec;
         const struct rte_flow_item_eth *eth_mask = item->mask;
 
-        VLOG_DBG("rte flow eth pattern:\n");
+        ds_put_cstr(&s, "rte flow eth pattern:\n");
         if (eth_spec) {
-            VLOG_DBG("  Spec: src="ETH_ADDR_FMT", dst="ETH_ADDR_FMT", "
+            ds_put_format(&s,
+                     "  Spec: src="ETH_ADDR_FMT", dst="ETH_ADDR_FMT", "
                      "type=0x%04" PRIx16"\n",
                      ETH_ADDR_BYTES_ARGS(eth_spec->src.addr_bytes),
                      ETH_ADDR_BYTES_ARGS(eth_spec->dst.addr_bytes),
                      ntohs(eth_spec->type));
         } else {
-            VLOG_DBG("  Spec = null\n");
+            ds_put_cstr(&s, "  Spec = null\n");
         }
         if (eth_mask) {
-            VLOG_DBG("  Mask: src="ETH_ADDR_FMT", dst="ETH_ADDR_FMT", "
+            ds_put_format(&s,
+                     "  Mask: src="ETH_ADDR_FMT", dst="ETH_ADDR_FMT", "
                      "type=0x%04"PRIx16"\n",
                      ETH_ADDR_BYTES_ARGS(eth_mask->src.addr_bytes),
                      ETH_ADDR_BYTES_ARGS(eth_mask->dst.addr_bytes),
                      eth_mask->type);
         } else {
-            VLOG_DBG("  Mask = null\n");
+            ds_put_cstr(&s, "  Mask = null\n");
         }
     }
 
@@ -4101,19 +4178,21 @@ dump_flow_pattern(struct rte_flow_item *item)
         const struct rte_flow_item_vlan *vlan_spec = item->spec;
         const struct rte_flow_item_vlan *vlan_mask = item->mask;
 
-        VLOG_DBG("rte flow vlan pattern:\n");
+        ds_put_cstr(&s, "rte flow vlan pattern:\n");
         if (vlan_spec) {
-            VLOG_DBG("  Spec: tpid=0x%"PRIx16", tci=0x%"PRIx16"\n",
+            ds_put_format(&s,
+                     "  Spec: tpid=0x%"PRIx16", tci=0x%"PRIx16"\n",
                      ntohs(vlan_spec->tpid), ntohs(vlan_spec->tci));
         } else {
-            VLOG_DBG("  Spec = null\n");
+            ds_put_cstr(&s, "  Spec = null\n");
         }
 
         if (vlan_mask) {
-            VLOG_DBG("  Mask: tpid=0x%"PRIx16", tci=0x%"PRIx16"\n",
+            ds_put_format(&s,
+                     "  Mask: tpid=0x%"PRIx16", tci=0x%"PRIx16"\n",
                      vlan_mask->tpid, vlan_mask->tci);
         } else {
-            VLOG_DBG("  Mask = null\n");
+            ds_put_cstr(&s, "  Mask = null\n");
         }
     }
 
@@ -4121,9 +4200,10 @@ dump_flow_pattern(struct rte_flow_item *item)
         const struct rte_flow_item_ipv4 *ipv4_spec = item->spec;
         const struct rte_flow_item_ipv4 *ipv4_mask = item->mask;
 
-        VLOG_DBG("rte flow ipv4 pattern:\n");
+        ds_put_cstr(&s, "rte flow ipv4 pattern:\n");
         if (ipv4_spec) {
-            VLOG_DBG("  Spec: tos=0x%"PRIx8", ttl=%"PRIx8", proto=0x%"PRIx8
+            ds_put_format(&s,
+                     "  Spec: tos=0x%"PRIx8", ttl=%"PRIx8", proto=0x%"PRIx8
                      ", src="IP_FMT", dst="IP_FMT"\n",
                      ipv4_spec->hdr.type_of_service,
                      ipv4_spec->hdr.time_to_live,
@@ -4131,10 +4211,11 @@ dump_flow_pattern(struct rte_flow_item *item)
                      IP_ARGS(ipv4_spec->hdr.src_addr),
                      IP_ARGS(ipv4_spec->hdr.dst_addr));
         } else {
-            VLOG_DBG("  Spec = null\n");
+            ds_put_cstr(&s, "  Spec = null\n");
         }
         if (ipv4_mask) {
-            VLOG_DBG("  Mask: tos=0x%"PRIx8", ttl=%"PRIx8", proto=0x%"PRIx8
+            ds_put_format(&s,
+                     "  Mask: tos=0x%"PRIx8", ttl=%"PRIx8", proto=0x%"PRIx8
                      ", src="IP_FMT", dst="IP_FMT"\n",
                      ipv4_mask->hdr.type_of_service,
                      ipv4_mask->hdr.time_to_live,
@@ -4142,7 +4223,7 @@ dump_flow_pattern(struct rte_flow_item *item)
                      IP_ARGS(ipv4_mask->hdr.src_addr),
                      IP_ARGS(ipv4_mask->hdr.dst_addr));
         } else {
-            VLOG_DBG("  Mask = null\n");
+            ds_put_cstr(&s, "  Mask = null\n");
         }
     }
 
@@ -4150,20 +4231,22 @@ dump_flow_pattern(struct rte_flow_item *item)
         const struct rte_flow_item_udp *udp_spec = item->spec;
         const struct rte_flow_item_udp *udp_mask = item->mask;
 
-        VLOG_DBG("rte flow udp pattern:\n");
+        ds_put_cstr(&s, "rte flow udp pattern:\n");
         if (udp_spec) {
-            VLOG_DBG("  Spec: src_port=%"PRIu16", dst_port=%"PRIu16"\n",
+            ds_put_format(&s,
+                     "  Spec: src_port=%"PRIu16", dst_port=%"PRIu16"\n",
                      ntohs(udp_spec->hdr.src_port),
                      ntohs(udp_spec->hdr.dst_port));
         } else {
-            VLOG_DBG("  Spec = null\n");
+            ds_put_cstr(&s, "  Spec = null\n");
         }
         if (udp_mask) {
-            VLOG_DBG("  Mask: src_port=0x%"PRIx16", dst_port=0x%"PRIx16"\n",
+            ds_put_format(&s,
+                     "  Mask: src_port=0x%"PRIx16", dst_port=0x%"PRIx16"\n",
                      udp_mask->hdr.src_port,
                      udp_mask->hdr.dst_port);
         } else {
-            VLOG_DBG("  Mask = null\n");
+            ds_put_cstr(&s, "  Mask = null\n");
         }
     }
 
@@ -4171,20 +4254,22 @@ dump_flow_pattern(struct rte_flow_item *item)
         const struct rte_flow_item_sctp *sctp_spec = item->spec;
         const struct rte_flow_item_sctp *sctp_mask = item->mask;
 
-        VLOG_DBG("rte flow sctp pattern:\n");
+        ds_put_cstr(&s, "rte flow sctp pattern:\n");
         if (sctp_spec) {
-            VLOG_DBG("  Spec: src_port=%"PRIu16", dst_port=%"PRIu16"\n",
+            ds_put_format(&s,
+                     "  Spec: src_port=%"PRIu16", dst_port=%"PRIu16"\n",
                      ntohs(sctp_spec->hdr.src_port),
                      ntohs(sctp_spec->hdr.dst_port));
         } else {
-            VLOG_DBG("  Spec = null\n");
+            ds_put_cstr(&s, "  Spec = null\n");
         }
         if (sctp_mask) {
-            VLOG_DBG("  Mask: src_port=0x%"PRIx16", dst_port=0x%"PRIx16"\n",
+            ds_put_format(&s,
+                     "  Mask: src_port=0x%"PRIx16", dst_port=0x%"PRIx16"\n",
                      sctp_mask->hdr.src_port,
                      sctp_mask->hdr.dst_port);
         } else {
-            VLOG_DBG("  Mask = null\n");
+            ds_put_cstr(&s, "  Mask = null\n");
         }
     }
 
@@ -4192,20 +4277,22 @@ dump_flow_pattern(struct rte_flow_item *item)
         const struct rte_flow_item_icmp *icmp_spec = item->spec;
         const struct rte_flow_item_icmp *icmp_mask = item->mask;
 
-        VLOG_DBG("rte flow icmp pattern:\n");
+        ds_put_cstr(&s, "rte flow icmp pattern:\n");
         if (icmp_spec) {
-            VLOG_DBG("  Spec: icmp_type=%"PRIu8", icmp_code=%"PRIu8"\n",
+            ds_put_format(&s,
+                     "  Spec: icmp_type=%"PRIu8", icmp_code=%"PRIu8"\n",
                      icmp_spec->hdr.icmp_type,
                      icmp_spec->hdr.icmp_code);
         } else {
-            VLOG_DBG("  Spec = null\n");
+            ds_put_cstr(&s, "  Spec = null\n");
         }
         if (icmp_mask) {
-            VLOG_DBG("  Mask: icmp_type=0x%"PRIx8", icmp_code=0x%"PRIx8"\n",
+            ds_put_format(&s,
+                     "  Mask: icmp_type=0x%"PRIx8", icmp_code=0x%"PRIx8"\n",
                      icmp_spec->hdr.icmp_type,
                      icmp_spec->hdr.icmp_code);
         } else {
-            VLOG_DBG("  Mask = null\n");
+            ds_put_cstr(&s, "  Mask = null\n");
         }
     }
 
@@ -4213,28 +4300,33 @@ dump_flow_pattern(struct rte_flow_item *item)
         const struct rte_flow_item_tcp *tcp_spec = item->spec;
         const struct rte_flow_item_tcp *tcp_mask = item->mask;
 
-        VLOG_DBG("rte flow tcp pattern:\n");
+        ds_put_cstr(&s, "rte flow tcp pattern:\n");
         if (tcp_spec) {
-            VLOG_DBG("  Spec: src_port=%"PRIu16", dst_port=%"PRIu16
+            ds_put_format(&s,
+                     "  Spec: src_port=%"PRIu16", dst_port=%"PRIu16
                      ", data_off=0x%"PRIx8", tcp_flags=0x%"PRIx8"\n",
                      ntohs(tcp_spec->hdr.src_port),
                      ntohs(tcp_spec->hdr.dst_port),
                      tcp_spec->hdr.data_off,
                      tcp_spec->hdr.tcp_flags);
         } else {
-            VLOG_DBG("  Spec = null\n");
+            ds_put_cstr(&s, "  Spec = null\n");
         }
         if (tcp_mask) {
-            VLOG_DBG("  Mask: src_port=%"PRIx16", dst_port=%"PRIx16
+            ds_put_format(&s,
+                     "  Mask: src_port=%"PRIx16", dst_port=%"PRIx16
                      ", data_off=0x%"PRIx8", tcp_flags=0x%"PRIx8"\n",
                      tcp_mask->hdr.src_port,
                      tcp_mask->hdr.dst_port,
                      tcp_mask->hdr.data_off,
                      tcp_mask->hdr.tcp_flags);
         } else {
-            VLOG_DBG("  Mask = null\n");
+            ds_put_cstr(&s, "  Mask = null\n");
         }
     }
+
+    VLOG_DBG("%s", ds_cstr(&s));
+    ds_destroy(&s);
 }
 
 static void
@@ -4511,25 +4603,31 @@ end_proto_check:
     add_flow_pattern(&patterns, RTE_FLOW_ITEM_TYPE_END, NULL, NULL);
 
     struct rte_flow_action_mark mark;
+    struct rte_flow_action_rss *rss;
+
     mark.id = info->flow_mark;
     add_flow_action(&actions, RTE_FLOW_ACTION_TYPE_MARK, &mark);
 
-    struct rte_flow_action_rss *rss;
+    ovs_mutex_lock(&dev->mutex);
+
     rss = add_flow_rss_action(&actions, netdev);
     add_flow_action(&actions, RTE_FLOW_ACTION_TYPE_END, NULL);
 
     flow = rte_flow_create(dev->port_id, &flow_attr, patterns.items,
                            actions.actions, &error);
+
+    ovs_mutex_unlock(&dev->mutex);
+
     free(rss);
     if (!flow) {
-        VLOG_ERR("rte flow creat error: %u : message : %s\n",
-                 error.type, error.message);
+        VLOG_ERR("%s: rte flow creat error: %u : message : %s\n",
+                 netdev_get_name(netdev), error.type, error.message);
         ret = -1;
         goto out;
     }
     ufid_to_rte_flow_associate(ufid, flow);
-    VLOG_DBG("installed flow %p by ufid "UUID_FMT"\n",
-             flow, UUID_ARGS((struct uuid *)ufid));
+    VLOG_DBG("%s: installed flow %p by ufid "UUID_FMT"\n",
+             netdev_get_name(netdev), flow, UUID_ARGS((struct uuid *)ufid));
 
 out:
     free(patterns.items);
@@ -4633,22 +4731,27 @@ err:
 }
 
 static int
-netdev_dpdk_destroy_rte_flow(struct netdev_dpdk *dev,
+netdev_dpdk_destroy_rte_flow(struct netdev *netdev,
                              const ovs_u128 *ufid,
                              struct rte_flow *rte_flow) {
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     struct rte_flow_error error;
     int ret;
+
+    ovs_mutex_lock(&dev->mutex);
 
     ret = rte_flow_destroy(dev->port_id, rte_flow, &error);
     if (ret == 0) {
         ufid_to_rte_flow_disassociate(ufid);
-        VLOG_DBG("removed rte flow %p associated with ufid " UUID_FMT "\n",
-                 rte_flow, UUID_ARGS((struct uuid *)ufid));
+        VLOG_DBG("%s: removed rte flow %p associated with ufid " UUID_FMT "\n",
+                 netdev_get_name(netdev), rte_flow,
+                 UUID_ARGS((struct uuid *)ufid));
     } else {
-        VLOG_ERR("rte flow destroy error: %u : message : %s\n",
-                 error.type, error.message);
+        VLOG_ERR("%s: rte flow destroy error: %u : message : %s\n",
+                 netdev_get_name(netdev), error.type, error.message);
     }
 
+    ovs_mutex_unlock(&dev->mutex);
     return ret;
 }
 
@@ -4666,8 +4769,7 @@ netdev_dpdk_flow_put(struct netdev *netdev, struct match *match,
      */
     rte_flow = ufid_to_rte_flow_find(ufid);
     if (rte_flow) {
-        ret = netdev_dpdk_destroy_rte_flow(netdev_dpdk_cast(netdev),
-                                           ufid, rte_flow);
+        ret = netdev_dpdk_destroy_rte_flow(netdev, ufid, rte_flow);
         if (ret < 0) {
             return ret;
         }
@@ -4692,9 +4794,12 @@ netdev_dpdk_flow_del(struct netdev *netdev, const ovs_u128 *ufid,
         return -1;
     }
 
-    return netdev_dpdk_destroy_rte_flow(netdev_dpdk_cast(netdev),
-                                        ufid, rte_flow);
+    return netdev_dpdk_destroy_rte_flow(netdev, ufid, rte_flow);
 }
+
+#define DPDK_FLOW_OFFLOAD_API                   \
+    .flow_put = netdev_dpdk_flow_put,           \
+    .flow_del = netdev_dpdk_flow_del
 
 #define NETDEV_DPDK_CLASS_COMMON                            \
     .is_pmd = true,                                         \
@@ -4717,8 +4822,7 @@ netdev_dpdk_flow_del(struct netdev *netdev, const ovs_u128 *ufid,
     .rxq_alloc = netdev_dpdk_rxq_alloc,                     \
     .rxq_construct = netdev_dpdk_rxq_construct,             \
     .rxq_destruct = netdev_dpdk_rxq_destruct,               \
-    .rxq_dealloc = netdev_dpdk_rxq_dealloc,                 \
-    DPDK_FLOW_OFFLOAD_API
+    .rxq_dealloc = netdev_dpdk_rxq_dealloc
 
 #define NETDEV_DPDK_CLASS_BASE                          \
     NETDEV_DPDK_CLASS_COMMON,                           \
@@ -4731,7 +4835,8 @@ netdev_dpdk_flow_del(struct netdev *netdev, const ovs_u128 *ufid,
     .get_features = netdev_dpdk_get_features,           \
     .get_status = netdev_dpdk_get_status,               \
     .reconfigure = netdev_dpdk_reconfigure,             \
-    .rxq_recv = netdev_dpdk_rxq_recv
+    .rxq_recv = netdev_dpdk_rxq_recv,                   \
+    DPDK_FLOW_OFFLOAD_API
 
 static const struct netdev_class dpdk_class = {
     .type = "dpdk",

@@ -2136,7 +2136,7 @@ megaflow_to_mark_disassociate(const ovs_u128 *mega_ufid)
         if (ovs_u128_equals(*mega_ufid, data->mega_ufid)) {
             cmap_remove(&flow_mark.megaflow_to_mark,
                         CONST_CAST(struct cmap_node *, &data->node), hash);
-            free(data);
+            ovsrcu_postpone(free, data);
             return;
         }
     }
@@ -2396,6 +2396,7 @@ dp_netdev_flow_offload_main(void *data OVS_UNUSED)
             ovsrcu_quiesce_start();
             ovs_mutex_cond_wait(&dp_flow_offload.cond,
                                 &dp_flow_offload.mutex);
+            ovsrcu_quiesce_end();
         }
         list = ovs_list_pop_front(&dp_flow_offload.list);
         offload = CONTAINER_OF(list, struct dp_flow_offload_item, node);
