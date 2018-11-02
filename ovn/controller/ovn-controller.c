@@ -792,7 +792,7 @@ main(int argc, char *argv[])
 
                 if (pending_pkt.conn) {
                     char *error = ofctrl_inject_pkt(br_int, pending_pkt.flow_s,
-                                                    &port_groups, &addr_sets);
+                                                    &addr_sets, &port_groups);
                     if (error) {
                         unixctl_command_reply_error(pending_pkt.conn, error);
                         free(error);
