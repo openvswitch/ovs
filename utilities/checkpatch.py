@@ -927,7 +927,7 @@ if __name__ == '__main__':
             checking_file = True
         elif o in ("-S", "--spellcheck-comments"):
             if not open_spell_check_dict():
-                print("WARNING: The enchant library isn't availble.")
+                print("WARNING: The enchant library isn't available.")
                 print("         Please install python enchant.")
             else:
                 spellcheck_comments = True
