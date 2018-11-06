@@ -518,12 +518,13 @@ exit:
  * is optional and defaults to 'default_port' (use 0 to make the kernel choose
  * an available port, although this isn't usually appropriate for active
  * connections).  If 'default_port' is negative, then <port> is required.
+ * It resolves the host if 'resolve_host' is true.
  *
  * On success, returns true and stores the parsed remote address into '*ss'.
  * On failure, logs an error, stores zeros into '*ss', and returns false. */
 bool
 inet_parse_active(const char *target_, int default_port,
-                  struct sockaddr_storage *ss)
+                  struct sockaddr_storage *ss, bool resolve_host)
 {
     char *target = xstrdup(target_);
     char *port, *host;
@@ -538,7 +539,7 @@ inet_parse_active(const char *target_, int default_port,
         ok = false;
     } else {
         ok = parse_sockaddr_components(ss, host, port, default_port,
-                                       target_, true);
+                                       target_, resolve_host);
     }
     if (!ok) {
         memset(ss, 0, sizeof *ss);
@@ -575,7 +576,7 @@ inet_open_active(int style, const char *target, int default_port,
     int error;
 
     /* Parse. */
-    if (!inet_parse_active(target, default_port, &ss)) {
+    if (!inet_parse_active(target, default_port, &ss, true)) {
         error = EAFNOSUPPORT;
         goto exit;
     }
