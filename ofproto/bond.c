@@ -191,6 +191,7 @@ static struct bond_slave *choose_output_slave(const struct bond *,
                                               uint16_t vlan)
     OVS_REQ_RDLOCK(rwlock);
 static void update_recirc_rules__(struct bond *bond);
+static bool bond_is_falling_back_to_ab(const struct bond *);
 
 /* Attempts to parse 's' as the name of a bond balancing mode.  If successful,
  * stores the mode in '*balance' and returns true.  Otherwise returns false
@@ -653,6 +654,13 @@ bond_run(struct bond *bond, enum lacp_status lacp_status)
     if (bond->lacp_status != lacp_status) {
         bond->lacp_status = lacp_status;
         bond->bond_revalidate = true;
+
+        /* Change in LACP status can affect whether the bond is falling back to
+         * active-backup.  Make sure to create or destroy buckets if
+         * necessary.  */
+        if (bond_is_falling_back_to_ab(bond) || !bond->hash) {
+            bond_entry_reset(bond);
+        }
     }
 
     /* Enable slaves based on link status and LACP feedback. */
@@ -761,6 +769,15 @@ bond_compose_learning_packet(struct bond *bond, const struct eth_addr eth_src,
     return packet;
 }
 
+
+static bool
+bond_is_falling_back_to_ab(const struct bond *bond)
+{
+    return (bond->lacp_fallback_ab
+            && (bond->balance == BM_SLB || bond->balance == BM_TCP)
+            && bond->lacp_status == LACP_CONFIGURED);
+}
+
 /* Checks whether a packet that arrived on 'slave_' within 'bond', with an
  * Ethernet destination address of 'eth_dst', should be admitted.
  *
@@ -928,7 +945,8 @@ bool
 bond_may_recirc(const struct bond *bond, uint32_t *recirc_id,
                 uint32_t *hash_bias)
 {
-    bool may_recirc = bond->balance == BM_TCP && bond->recirc_id;
+    bool may_recirc = (bond->balance == BM_TCP && bond->recirc_id
+                       && !bond_is_falling_back_to_ab(bond));
 
     if (recirc_id) {
         *recirc_id = may_recirc ? bond->recirc_id : 0;
@@ -982,7 +1000,8 @@ static bool
 bond_is_balanced(const struct bond *bond) OVS_REQ_RDLOCK(rwlock)
 {
     return bond->rebalance_interval
-        && (bond->balance == BM_SLB || bond->balance == BM_TCP);
+        && (bond->balance == BM_SLB || bond->balance == BM_TCP)
+        && !(bond->lacp_fallback_ab && bond->lacp_status == LACP_CONFIGURED);
 }
 
 /* Notifies 'bond' that 'n_bytes' bytes were sent in 'flow' within 'vlan'. */
@@ -1637,7 +1656,7 @@ bond_init(void)
 static void
 bond_entry_reset(struct bond *bond)
 {
-    if (bond->balance != BM_AB) {
+    if (bond->balance != BM_AB && !bond_is_falling_back_to_ab(bond)) {
         size_t hash_len = BOND_BUCKETS * sizeof *bond->hash;
 
         if (!bond->hash) {
