@@ -493,6 +493,11 @@ class Datum(object):
                 if dk is not None and dv is not None:
                     value[dk] = dv
             return value
+        elif self.type.is_list():
+            values = list()
+            for k in self.values.keys():
+                values.append(k)
+            return values
         else:
             s = set()
             for k in self.values:

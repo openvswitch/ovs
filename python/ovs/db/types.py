@@ -500,6 +500,9 @@ class Type(object):
     def is_map(self):
         return self.value is not None
 
+    def is_list(self):
+        return self.key is not None and self.value is None
+
     def is_smap(self):
         return (self.is_map()
                 and self.key.type == StringType
