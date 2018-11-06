@@ -2700,6 +2700,12 @@
               OpenFlow controllers that expect this behavior.
             </li>
             <li>
+              The <code>legacy_l3</code> option is only available via the
+              user space datapath.  The OVS kernel datapath does not support
+              devices of type ARPHRD_IPGRE which is the requirement for
+              <code>legacy_l3</code> type packets.
+            </li>
+            <li>
               If this option is <code>ptap</code>, the tunnel sends and
               receives any kind of packet.  Open vSwitch represents packets in
               the tunnel using the <code>packet_type</code> mechanism
