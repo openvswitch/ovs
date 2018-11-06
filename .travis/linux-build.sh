@@ -6,6 +6,7 @@ KERNELSRC=""
 CFLAGS="-Werror"
 SPARSE_FLAGS=""
 EXTRA_OPTS=""
+TARGET="x86_64-native-linuxapp-gcc"
 
 function install_kernel()
 {
@@ -66,7 +67,11 @@ function install_dpdk()
     find ./ -type f | xargs sed -i 's/-Werror/-Werror -Wno-error=inline/'
     echo 'CONFIG_RTE_BUILD_FPIC=y' >>config/common_linuxapp
     sed -ri '/EXECENV_CFLAGS  = -pthread -fPIC/{s/$/\nelse ifeq ($(CONFIG_RTE_BUILD_FPIC),y)/;s/$/\nEXECENV_CFLAGS  = -pthread -fPIC/}' mk/exec-env/linuxapp/rte.vars.mk
-    make config CC=gcc T=x86_64-native-linuxapp-gcc
+    if [ "$DPDK_SHARED" ]; then
+        sed -i '/CONFIG_RTE_BUILD_SHARED_LIB=n/s/=n/=y/' config/common_base
+        export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/$TARGET/lib
+    fi
+    make config CC=gcc T=$TARGET
     make CC=gcc RTE_KERNELDIR=$KERNELSRC
     echo "Installed DPDK source in $(pwd)"
     cd ..
@@ -77,11 +82,11 @@ function configure_ovs()
     ./boot.sh && ./configure $*
 }
 
-if [ "$KERNEL" ] || [ "$DPDK" ]; then
+if [ "$KERNEL" ] || [ "$DPDK" ] || [ "$DPDK_SHARED" ]; then
     install_kernel $KERNEL
 fi
 
-if [ "$DPDK" ]; then
+if [ "$DPDK" ] || [ "$DPDK_SHARED" ]; then
     if [ -z "$DPDK_VER" ]; then
         DPDK_VER="18.11"
     fi
