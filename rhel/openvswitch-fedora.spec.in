@@ -410,7 +410,7 @@ getent passwd openvswitch >/dev/null || \
     -c "Open vSwitch Daemons" openvswitch
 
 %if %{with dpdk}
-    getent group hugetlbfs >/dev/null || groupadd hugetlbfs
+    getent group hugetlbfs >/dev/null || groupadd -r hugetlbfs
     usermod -a -G hugetlbfs openvswitch
 %endif
 exit 0
