@@ -394,3 +394,12 @@ AT_CHECK([echo 'encap_nsh@:{@' | ovstest test-odp parse-actions
 odp_actions_from_string: error
 ])
 AT_CLEANUP
+
+AT_SETUP([OVS datapath keys parsing and formatting - 33 nested encap ])
+AT_DATA([odp-in.txt], [dnl
+encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap()))))))))))))))))))))))))))))))))
+])
+AT_CHECK_UNQUOTED([ovstest test-odp parse-keys < odp-in.txt], [0], [dnl
+odp_flow_from_string: error
+])
+AT_CLEANUP

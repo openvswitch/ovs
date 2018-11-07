@@ -57,8 +57,15 @@ VLOG_DEFINE_THIS_MODULE(odp_util);
 static const char *delimiters = ", \t\r\n";
 static const char *delimiters_end = ", \t\r\n)";
 
-static int parse_odp_key_mask_attr(const char *, const struct simap *port_names,
-                              struct ofpbuf *, struct ofpbuf *);
+#define MAX_ODP_NESTED 32
+
+struct parse_odp_context {
+    const struct simap *port_names;
+    int depth; /* Current nested depth of odp string. */
+};
+
+static int parse_odp_key_mask_attr(struct parse_odp_context *, const char *,
+                                   struct ofpbuf *, struct ofpbuf *);
 static void format_odp_key_attr(const struct nlattr *a,
                                 const struct nlattr *ma,
                                 const struct hmap *portno_names, struct ds *ds,
@@ -2216,9 +2223,12 @@ parse_odp_action(const char *s, const struct simap *port_names,
         struct ofpbuf maskbuf = OFPBUF_STUB_INITIALIZER(mask);
         struct nlattr *nested, *key;
         size_t size;
+        struct parse_odp_context context = (struct parse_odp_context) {
+            .port_names = port_names,
+        };
 
         start_ofs = nl_msg_start_nested(actions, OVS_ACTION_ATTR_SET);
-        retval = parse_odp_key_mask_attr(s + 4, port_names, actions, &maskbuf);
+        retval = parse_odp_key_mask_attr(&context, s + 4, actions, &maskbuf);
         if (retval < 0) {
             ofpbuf_uninit(&maskbuf);
             return retval;
@@ -5268,7 +5278,8 @@ erspan_to_attr(struct ofpbuf *a, const void *data_)
 /* scan_port needs one extra argument. */
 #define SCAN_SINGLE_PORT(NAME, TYPE, ATTR)  \
     SCAN_BEGIN(NAME, TYPE) {                            \
-        len = scan_port(s, &skey, &smask, port_names);  \
+        len = scan_port(s, &skey, &smask,               \
+                        context->port_names);           \
         if (len == 0) {                                 \
             return -EINVAL;                             \
         }                                               \
@@ -5404,7 +5415,7 @@ parse_odp_nsh_key_mask_attr(const char *s, struct ofpbuf *key,
 }
 
 static int
-parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
+parse_odp_key_mask_attr(struct parse_odp_context *context, const char *s,
                         struct ofpbuf *key, struct ofpbuf *mask)
 {
     SCAN_SINGLE("skb_priority(", uint32_t, u32, OVS_KEY_ATTR_PRIORITY);
@@ -5557,6 +5568,11 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
         const char *start = s;
         size_t encap, encap_mask = 0;
 
+        if (context->depth + 1 == MAX_ODP_NESTED) {
+            return -EINVAL;
+        }
+        context->depth++;
+
         encap = nl_msg_start_nested(key, OVS_KEY_ATTR_ENCAP);
         if (mask) {
             encap_mask = nl_msg_start_nested(mask, OVS_KEY_ATTR_ENCAP);
@@ -5568,13 +5584,15 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
 
             s += strspn(s, delimiters);
             if (!*s) {
+                context->depth--;
                 return -EINVAL;
             } else if (*s == ')') {
                 break;
             }
 
-            retval = parse_odp_key_mask_attr(s, port_names, key, mask);
+            retval = parse_odp_key_mask_attr(context, s, key, mask);
             if (retval < 0) {
+                context->depth--;
                 return retval;
             }
             s += retval;
@@ -5585,6 +5603,7 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
         if (mask) {
             nl_msg_end_nested(mask, encap_mask);
         }
+        context->depth--;
 
         return s - start;
     }
@@ -5611,6 +5630,9 @@ odp_flow_from_string(const char *s, const struct simap *port_names,
                      struct ofpbuf *key, struct ofpbuf *mask)
 {
     const size_t old_size = key->size;
+    struct parse_odp_context context = (struct parse_odp_context) {
+        .port_names = port_names,
+    };
     for (;;) {
         int retval;
 
@@ -5630,7 +5652,7 @@ odp_flow_from_string(const char *s, const struct simap *port_names,
             s += s[0] == ' ' ? 1 : 0;
         }
 
-        retval = parse_odp_key_mask_attr(s, port_names, key, mask);
+        retval = parse_odp_key_mask_attr(&context, s, key, mask);
         if (retval < 0) {
             key->size = old_size;
             return -retval;
