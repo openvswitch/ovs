@@ -185,12 +185,15 @@ first_ptable(const struct ovnact_encode_params *ep,
             : ep->egress_ptable);
 }
 
+#define MAX_NESTED_ACTION_DEPTH 32
+
 /* Context maintained during ovnacts_parse(). */
 struct action_context {
     const struct ovnact_parse_params *pp; /* Parameters. */
     struct lexer *lexer;        /* Lexer for pulling more tokens. */
     struct ofpbuf *ovnacts;     /* Actions. */
     struct expr *prereqs;       /* Prerequisites to apply to match. */
+    int depth;                  /* Current nested action depth. */
 };
 
 static void parse_actions(struct action_context *, enum lex_type sentinel);
@@ -1092,6 +1095,11 @@ parse_nested_action(struct action_context *ctx, enum ovnact_type type,
         return;
     }
 
+    if (ctx->depth + 1 == MAX_NESTED_ACTION_DEPTH) {
+        lexer_error(ctx->lexer, "maximum depth of nested actions reached");
+        return;
+    }
+
     uint64_t stub[1024 / 8];
     struct ofpbuf nested = OFPBUF_STUB_INITIALIZER(stub);
 
@@ -1100,6 +1108,7 @@ parse_nested_action(struct action_context *ctx, enum ovnact_type type,
         .lexer = ctx->lexer,
         .ovnacts = &nested,
         .prereqs = NULL,
+        .depth = ctx->depth + 1,
     };
     parse_actions(&inner_ctx, LEX_T_RCURLY);
 
