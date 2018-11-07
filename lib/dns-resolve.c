@@ -90,7 +90,16 @@ dns_resolve_init(bool is_daemon)
         if (retval != 0) {
             VLOG_WARN_RL(&rl, "Failed to read %s: %s",
                          filename, ub_strerror(retval));
+            ub_ctx_delete(ub_ctx__);
+            ub_ctx__ = NULL;
+            return;
         }
+    } else {
+        VLOG_WARN_RL(&rl, "Failed to read %s: %s",
+                     filename, ovs_strerror(errno));
+        ub_ctx_delete(ub_ctx__);
+        ub_ctx__ = NULL;
+        return;
     }
 #endif
 
