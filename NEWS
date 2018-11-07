@@ -16,6 +16,8 @@ Post-v2.10.0
    - ovs-vswitchd:
      * New configuration option "offload-rebalance", that enables dynamic
        rebalancing of offloaded flows.
+   - The environment variable OVS_RESOLV_CONF, if set, is now used
+     as the DNS server configuration file.
 
 v2.10.0 - 18 Aug 2018
 ---------------------

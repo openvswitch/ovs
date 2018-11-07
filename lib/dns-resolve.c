@@ -82,14 +82,21 @@ dns_resolve_init(bool is_daemon)
         return;
     }
 
-#ifdef __linux__
-    const char *filename = "/etc/resolv.conf";
+    const char *filename = getenv("OVS_RESOLV_CONF");
+    if (!filename) {
+#ifdef _WIN32
+        /* On Windows, NULL means to use the system default nameserver. */
+#else
+        filename = "/etc/resolv.conf";
+#endif
+    }
     struct stat s;
-    if (!stat(filename, &s) || errno != ENOENT) {
+    if (!filename || !stat(filename, &s) || errno != ENOENT) {
         int retval = ub_ctx_resolvconf(ub_ctx__, filename);
         if (retval != 0) {
             VLOG_WARN_RL(&rl, "Failed to read %s: %s",
-                         filename, ub_strerror(retval));
+                         filename ? filename : "system default nameserver",
+                         ub_strerror(retval));
             ub_ctx_delete(ub_ctx__);
             ub_ctx__ = NULL;
             return;
@@ -101,7 +108,6 @@ dns_resolve_init(bool is_daemon)
         ub_ctx__ = NULL;
         return;
     }
-#endif
 
     /* Handles '/etc/hosts' on Linux and 'WINDIR/etc/hosts' on Windows. */
     int retval = ub_ctx_hosts(ub_ctx__, NULL);
