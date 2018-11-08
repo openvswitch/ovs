@@ -2516,6 +2516,7 @@ ofport_destroy__(struct ofport *port)
     struct ofproto *ofproto = port->ofproto;
     const char *name = netdev_get_name(port->netdev);
 
+    dealloc_ofp_port(port->ofproto, port->ofp_port);
     hmap_remove(&ofproto->ports, &port->hmap_node);
     shash_find_and_delete(&ofproto->port_by_name, name);
 
@@ -2527,7 +2528,6 @@ static void
 ofport_destroy(struct ofport *port, bool del)
 {
     if (port) {
-        dealloc_ofp_port(port->ofproto, port->ofp_port);
         port->ofproto->ofproto_class->port_destruct(port, del);
         ofport_destroy__(port);
      }
