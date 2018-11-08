@@ -2314,18 +2314,20 @@ dealloc_ofp_port(struct ofproto *ofproto, ofp_port_t ofp_port)
     }
 }
 
-/* Opens and returns a netdev for 'ofproto_port' in 'ofproto', or a null
- * pointer if the netdev cannot be opened.  On success, also fills in
- * '*pp'.  */
-static struct netdev *
+/* Opens a netdev for 'ofproto_port' in 'ofproto' and set to p_netdev,
+ * or a null pointer if the netdev cannot be opened.  On success, also
+ * fills in '*pp'.  Returns 0 on success, or a positive error number. */
+static int
 ofport_open(struct ofproto *ofproto,
             struct ofproto_port *ofproto_port,
-            struct ofputil_phy_port *pp)
+            struct ofputil_phy_port *pp,
+            struct netdev **p_netdev)
 {
     enum netdev_flags flags;
     struct netdev *netdev;
     int error;
 
+    *p_netdev = NULL;
     error = netdev_open(ofproto_port->name, ofproto_port->type, &netdev);
     if (error) {
         VLOG_WARN_RL(&rl, "%s: ignoring port %s (%"PRIu32") because netdev %s "
@@ -2333,15 +2335,22 @@ ofport_open(struct ofproto *ofproto,
                      ofproto->name,
                      ofproto_port->name, ofproto_port->ofp_port,
                      ofproto_port->name, ovs_strerror(error));
-        return NULL;
+        return 0;
     }
 
     if (ofproto_port->ofp_port == OFPP_NONE) {
         if (!strcmp(ofproto->name, ofproto_port->name)) {
             ofproto_port->ofp_port = OFPP_LOCAL;
         } else {
-            ofproto_port->ofp_port = alloc_ofp_port(ofproto,
-                                                    ofproto_port->name);
+            ofp_port_t ofp_port = alloc_ofp_port(ofproto,
+                                                 ofproto_port->name);
+            if (ofp_port == OFPP_NONE) {
+                VLOG_WARN_RL(&rl, "%s: failed to allocated ofp port number "
+                             "for %s.", ofproto->name, ofproto_port->name);
+                netdev_close(netdev);
+                return ENOSPC;
+            }
+            ofproto_port->ofp_port = ofp_port;
         }
     }
     pp->port_no = ofproto_port->ofp_port;
@@ -2356,7 +2365,8 @@ ofport_open(struct ofproto *ofproto,
     pp->curr_speed = netdev_features_to_bps(pp->curr, 0) / 1000;
     pp->max_speed = netdev_features_to_bps(pp->supported, 0) / 1000;
 
-    return netdev;
+    *p_netdev = netdev;
+    return 0;
 }
 
 /* Returns true if most fields of 'a' and 'b' are equal.  Differences in name
@@ -2623,9 +2633,11 @@ update_port(struct ofproto *ofproto, const char *name)
     COVERAGE_INC(ofproto_update_port);
 
     /* Fetch 'name''s location and properties from the datapath. */
-    netdev = (!ofproto_port_query_by_name(ofproto, name, &ofproto_port)
-              ? ofport_open(ofproto, &ofproto_port, &pp)
-              : NULL);
+    if (ofproto_port_query_by_name(ofproto, name, &ofproto_port)) {
+        netdev = NULL;
+    } else {
+        error = ofport_open(ofproto, &ofproto_port, &pp, &netdev);
+    }
 
     if (netdev) {
         port = ofproto_get_port(ofproto, ofproto_port.ofp_port);
@@ -2703,7 +2715,7 @@ init_ports(struct ofproto *p)
                           ofp_to_u16(iface_hint->ofp_port));
             }
 
-            netdev = ofport_open(p, &ofproto_port, &pp);
+            ofport_open(p, &ofproto_port, &pp, &netdev);
             if (netdev) {
                 ofport_install(p, netdev, &pp);
                 if (ofp_to_u16(ofproto_port.ofp_port) < p->max_ports) {
