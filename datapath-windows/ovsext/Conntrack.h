@@ -21,7 +21,6 @@
 #include "Actions.h"
 #include "Debug.h"
 #include "Flow.h"
-#include "Actions.h"
 #include <stddef.h>
 
 #ifdef OVS_DBG_MOD
