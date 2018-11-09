@@ -316,7 +316,7 @@ def block_xml_to_nroff(nodes, para='.PP'):
                         if node.tagName == 'ul':
                             s += ".IP \\(bu\n"
                         else:
-                            s += ".IP %d. .25in\n" % i
+                            s += ".IP %d. .4in\n" % i
                         s += block_xml_to_nroff(li_node.childNodes, ".IP")
                     elif li_node.nodeType == node.COMMENT_NODE:
                         pass
