@@ -133,6 +133,10 @@ Q: Are all features available with all datapaths?
     * Only a limited set of flow fields is modifiable via the set action by the
       Hyper-V datapath.
 
+    * Userspace datapath support, in some cases, is dependent on the associated
+      interface types.  For example, DPDK interfaces support ingress and egress
+      policing, but not shaping.
+
     The following table lists features that do not *directly* impact an Open
     vSwitch user, e.g. because their absence can be hidden by the ofproto layer
     (usually this comes with a performance penalty).
