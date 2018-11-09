@@ -516,44 +516,6 @@ but the packets are getting dropped instead.  Why?
 
     See also the preceding question.
 
-Q: The "learn" action can't learn the action I want, can you improve it?
-
-    A: By itself, the "learn" action can only put two kinds of actions into the
-    flows that it creates: "load" and "output" actions.  If "learn" is used in
-    isolation, these are severe limits.
-
-    However, "learn" is not meant to be used in isolation.  It is a primitive
-    meant to be used together with other Open vSwitch features to accomplish a
-    task.  Its existing features are enough to accomplish most tasks.
-
-    Here is an outline of a typical pipeline structure that allows for
-    versatile behavior using "learn":
-
-    - Flows in table A contain a "learn" action, that populates flows in table
-      L, that use a "load" action to populate register R with information about
-      what was learned.
-
-    - Flows in table B contain two sequential resubmit actions: one to table L
-      and another one to table B+1.
-
-    - Flows in table B+1 match on register R and act differently depending on
-      what the flows in table L loaded into it.
-
-    This approach can be used to implement many "learn"-based features.  For
-    example:
-
-    - Resubmit to a table selected based on learned information, e.g. see:
-      https://mail.openvswitch.org/pipermail/ovs-discuss/2016-June/021694.html
-
-    - MAC learning in the middle of a pipeline, as described in
-      :doc:`/tutorials/ovs-advanced`
-
-    - TCP state based firewalling, by learning outgoing connections based on
-      SYN packets and matching them up with incoming packets.
-
-    - At least some of the features described in T. A. Hoff, "Extending Open
-      vSwitch to Facilitate Creation of Stateful SDN Applications".
-
 Q: When using the "ct" action with FTP connections, it doesn't seem to matter
 if I set the "alg=ftp" parameter in the action. Is this required?
 

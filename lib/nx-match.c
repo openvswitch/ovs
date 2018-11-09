@@ -1745,7 +1745,7 @@ oxm_match_from_string(const char *s, struct ofpbuf *b)
     return match_len;
 }
 
-/* Parses 's' as a "move" action, in the form described in ovs-ofctl(8), into
+/* Parses 's' as a "move" action, in the form described in ovs-actions(7), into
  * '*move'.
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
@@ -1825,7 +1825,7 @@ nxm_reg_load(const struct mf_subfield *dst, uint64_t src_data,
 /* nxm_parse_stack_action, works for both push() and pop(). */
 
 /* Parses 's' as a "push" or "pop" action, in the form described in
- * ovs-ofctl(8), into '*stack_action'.
+ * ovs-actions(7), into '*stack_action'.
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */

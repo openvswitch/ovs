@@ -196,7 +196,7 @@ Q: Open vSwitch does not seem to obey my packet filter rules.
 
     For simple filtering rules, it might be possible to achieve similar results
     by installing appropriate OpenFlow flows instead.  The OVS conntrack
-    feature (see the "ct" action in ovs-ofctl(8)) can implement a stateful
+    feature (see the "ct" action in ovs-actions(7)) can implement a stateful
     firewall.
 
     If the use of a particular packet filter setup is essential, Open vSwitch

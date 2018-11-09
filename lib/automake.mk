@@ -557,9 +557,9 @@ CLEANFILES += lib/meta-flow.inc lib/nx-match.inc
 EXTRA_DIST += build-aux/extract-ofp-fields
 
 lib/ofp-actions.inc1: $(srcdir)/build-aux/extract-ofp-actions lib/ofp-actions.c
-	$(AM_V_GEN)$(run_python) $^ --prototypes > $@.tmp && mv $@.tmp $@
+	$(AM_V_GEN)$(run_python) $< prototypes $(srcdir)/lib/ofp-actions.c > $@.tmp && mv $@.tmp $@
 lib/ofp-actions.inc2: $(srcdir)/build-aux/extract-ofp-actions lib/ofp-actions.c
-	$(AM_V_GEN)$(run_python) $^ --definitions > $@.tmp && mv $@.tmp $@
+	$(AM_V_GEN)$(run_python) $< definitions $(srcdir)/lib/ofp-actions.c > $@.tmp && mv $@.tmp $@
 lib/ofp-actions.lo: lib/ofp-actions.inc1 lib/ofp-actions.inc2
 CLEANFILES += lib/ofp-actions.inc1 lib/ofp-actions.inc2
 EXTRA_DIST += build-aux/extract-ofp-actions
@@ -601,3 +601,12 @@ lib/ovs-fields.7: $(srcdir)/build-aux/extract-ofp-fields include/openvswitch/met
             $(srcdir)/lib/meta-flow.xml > $@.tmp
 	$(AM_V_at)mv $@.tmp $@
 EXTRA_DIST += lib/meta-flow.xml
+
+man_MANS += lib/ovs-actions.7
+CLEANFILES += lib/ovs-actions.7
+lib/ovs-actions.7: $(srcdir)/build-aux/extract-ofp-actions lib/ovs-actions.xml
+	$(AM_V_GEN)PYTHONIOENCODING=utf8 $(run_python) $< \
+            --ovs-version=$(VERSION) ovs-actions \
+            $(srcdir)/lib/ovs-actions.xml > $@.tmp
+	$(AM_V_at)mv $@.tmp $@
+EXTRA_DIST += lib/ovs-actions.xml

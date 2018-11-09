@@ -5526,7 +5526,7 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         <p>
           With <em>flow-based sampling</em>, <code>sample</code> actions in the
           OpenFlow flow table drive IPFIX sampling.  See
-          <code>ovs-ofctl</code>(8) for a description of the
+          <code>ovs-actions</code>(7) for a description of the
           <code>sample</code> action.
         </p>
 
