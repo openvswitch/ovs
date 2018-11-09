@@ -366,14 +366,14 @@ def block_xml_to_nroff(nodes, para='.PP'):
                 if s != "":
                     if not s.endswith("\n"):
                         s += "\n"
-                nroffTag = {'h1': 'SH',
-                            'h2': 'SS',
-                            'h3': 'ST',
-                            'h4': 'SU'}[node.tagName]
+                nroffTag, font = {'h1': ('SH', r'\fR'),
+                                  'h2': ('SS', r'\fB'),
+                                  'h3': ('ST', r'\fI'),
+                                  'h4': ('SU', r'\fI')}[node.tagName]
                 to_upper = node.tagName == 'h1'
                 s += ".%s \"" % nroffTag
                 for child_node in node.childNodes:
-                    s += inline_xml_to_nroff(child_node, r'\fR', to_upper)
+                    s += inline_xml_to_nroff(child_node, font, to_upper)
                 s += "\"\n"
             elif node.tagName == 'pre':
                 fixed = node.getAttribute('fixed')
