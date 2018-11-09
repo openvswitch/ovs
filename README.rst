@@ -1,133 +1,100 @@
-.. NOTE(stephenfin): If making changes to this file, ensure that the line
-   numbers found in 'Documentation/intro/what-is-ovs' are kept up-to-date.
-
-============
-Open vSwitch
-============
-
-.. image:: https://travis-ci.org/openvswitch/ovs.png
-    :target: https://travis-ci.org/openvswitch/ovs
-.. image:: https://ci.appveyor.com/api/projects/status/github/openvswitch/ovs?branch=master&svg=true&retina=true
-    :target: https://ci.appveyor.com/project/blp/ovs/history
-
-What is Open vSwitch?
----------------------
-
-Open vSwitch is a multilayer software switch licensed under the open source
-Apache 2 license.  Our goal is to implement a production quality switch
-platform that supports standard management interfaces and opens the forwarding
-functions to programmatic extension and control.
-
-Open vSwitch is well suited to function as a virtual switch in VM environments.
-In addition to exposing standard control and visibility interfaces to the
-virtual networking layer, it was designed to support distribution across
-multiple physical servers.  Open vSwitch supports multiple Linux-based
-virtualization technologies including Xen/XenServer, KVM, and VirtualBox.
-
-The bulk of the code is written in platform-independent C and is easily ported
-to other environments.  The current release of Open vSwitch supports the
-following features:
-
-- Standard 802.1Q VLAN model with trunk and access ports
-- NIC bonding with or without LACP on upstream switch
-- NetFlow, sFlow(R), and mirroring for increased visibility
-- QoS (Quality of Service) configuration, plus policing
-- Geneve, GRE, VXLAN, STT, and LISP tunneling
-- 802.1ag connectivity fault management
-- OpenFlow 1.0 plus numerous extensions
-- Transactional configuration database with C and Python bindings
-- High-performance forwarding using a Linux kernel module
-
-The included Linux kernel module supports Linux 3.10 and up.
-
-Open vSwitch can also operate entirely in userspace without assistance from
-a kernel module.  This userspace implementation should be easier to port than
-the kernel-based switch. OVS in userspace can access Linux or DPDK devices.
-Note Open vSwitch with userspace datapath and non DPDK devices is considered
-experimental and comes with a cost in performance.
-
-What's here?
-------------
-
-The main components of this distribution are:
-
-- ovs-vswitchd, a daemon that implements the switch, along with a companion
-  Linux kernel module for flow-based switching.
-- ovsdb-server, a lightweight database server that ovs-vswitchd queries to
-  obtain its configuration.
-- ovs-dpctl, a tool for configuring the switch kernel module.
-- Scripts and specs for building RPMs for Citrix XenServer and Red Hat
-  Enterprise Linux.  The XenServer RPMs allow Open vSwitch to be installed on a
-  Citrix XenServer host as a drop-in replacement for its switch, with
-  additional functionality.
-- ovs-vsctl, a utility for querying and updating the configuration of
-  ovs-vswitchd.
-- ovs-appctl, a utility that sends commands to running Open vSwitch daemons.
-
-Open vSwitch also provides some tools:
-
-- ovs-ofctl, a utility for querying and controlling OpenFlow switches and
-  controllers.
-- ovs-pki, a utility for creating and managing the public-key infrastructure
-  for OpenFlow switches.
-- ovs-testcontroller, a simple OpenFlow controller that may be useful for
-  testing (though not for production).
-- A patch to tcpdump that enables it to parse OpenFlow messages.
-
-What other documentation is available?
---------------------------------------
-
-.. TODO(stephenfin): Update with a link to the hosting site of the docs, once
-   we know where that is
-
-To install Open vSwitch on a regular Linux or FreeBSD host, please read the
-`installation guide <Documentation/intro/install/general.rst>`__. For specifics
-around installation on a specific platform, refer to one of the `other
-installation guides <Documentation/intro/install/index.rst>`__
-
-For answers to common questions, refer to the `FAQ <Documentation/faq>`__.
-
-To learn about some advanced features of the Open vSwitch software switch, read
-the `tutorial <Documentation/tutorials/ovs-advanced.rst>`__.
-
-Each Open vSwitch userspace program is accompanied by a manpage.  Many of the
-manpages are customized to your configuration as part of the build process, so
-we recommend building Open vSwitch before reading the manpages.
-
-License
--------
-
-The following is a summary of the licensing of files in this distribution.
-As mentioned, Open vSwitch is licensed under the open source Apache 2 license.
-Some files may be marked specifically with a different license, in which case
-that license applies to the file in question.
 
 
-Files under the datapath directory are licensed under the GNU General Public
-License, version 2.
 
-File build-aux/cccl is licensed under the GNU General Public License, version 2.
 
-The following files are licensed under the 2-clause BSD license.
-    include/windows/getopt.h
-    lib/getopt_long.c
-    lib/conntrack-tcp.c
+浙 江 大 学
+硕士学位论文开题报告
+（专业学位）
 
-The following files are licensed under the 3-clause BSD-license
-    include/windows/netinet/icmp6.h
-    include/windows/netinet/ip6.h
-    lib/strsep.c
+      论文题目： 基于OVS和DPDK的流日志方案的分析与实现 
+      
 
-Files under the xenserver directory are licensed on a file-by-file basis.
-Refer to each file for details.
 
-Files lib/sflow*.[ch] are licensed under the terms of either the
-Sun Industry Standards Source License 1.1, that is available at:
-        http://host-sflow.sourceforge.net/sissl.html
-or the InMon sFlow License, that is available at:
-        http://www.inmon.com/technology/sflowlicense.txt
 
-Contact
--------
+姓  名：    周恺鹏   
+学  号：    21751019 
+专  业：   软件工程  
+院  别：   软件学院  
+导  师：    李莹   
 
-bugs@openvswitch.org
+
+二零一八年 十一月  
+目  录
+
+1.课题来源及类型	- 1 -
+2.课题的意义及国内外现状分析	- 1 -
+2.1流日志的意义	- 1 -
+2.2国内外现状分析	- 1 -
+3. 课题的研究目标、研究内容和拟解决的关键问题	- 2 -
+3.1 课题研究目标	- 2 -
+3.2课题研究内容	- 2 -
+3.3 拟解决的关键问题	- 2 -
+4. 课题的设计及试验方案，可行性分析	- 3 -
+4.2课题设计方案	- 3 -
+4.3课题可行性分析	- 3 -
+5.课题计划进度和预期成果	- 3 -
+5.1计划进度	- 3 -
+5.2预期成果	- 4 -
+5.2.1流日志方案设计	- 4 -
+5.2.2流日志方案实现	- 4 -
+5.2.3总结与分析	- 4 -
+ 
+1.课题来源及类型
+目前，国内国外的大量的云用户，均有流日志需求。
+在复杂的网络环境中，流日志分析具有重要的意义，例如，排查流量未到达实例的原因，诊断过于严格的安全组规则，还可以用流日志作为安全工具监视到达实例的流量。
+基于此，本文主要研究，如何在保证网络性能的同时，记录网络流的相关数据，完成流日志功能。
+2.课题的意义及国内外现状分析
+2.1流日志的意义
+云计算，在近些年蓬勃发展，与此息息相关的，是对云网络需求的持续提高。云网络就是云计算的高速路，路够宽，路够好，云计算才能够充分发展其潜能。
+现在流行的OpenFlow网络交换模型，是基于流表的一种网络模型，这种模型为网络带来了强大的生命力，在实际效果上看，也是给网络领域带来了日新月异的发展。
+流日志，就是在OpenFlow模型下，加入流数据的记录。
+利用流日志（Flow logs,FL）这项功能，用户可以捕获有关传入和传出所拥有的VPC（Virtual Private Cloud）中网络接口的IP流量的信息。创建流日志后，用户可以在日志服务中查看和检索其数据，或者将流日志投递其他产品分析或存储，帮助用户解决故障排查、合规审计、架构优化、安全监测等问题，能够使得云上网络更加稳定、安全和智能。
+与传统方式对比，非侵入的采集从根源上避免了传统采集方式大量消耗云主机带宽及 CPU 的难题，帮助用户在云上搭建高效、稳定的网络监控系统。
+2.2国内外现状分析
+云计算领域，国内尚且和国外有一定发展差距，发展时间较晚，相较成熟度较低。
+云用户，在网络层面上，缺乏监控以及定位手段，会使得网络故障定位困难，网络架构优化困难，并且缺少网络威胁防御能力。
+例如，广播风暴、带宽的过度使用的云主机定位困难；网络流量无法分析，难以精确确定自己的网络策略；以及难以在不影响性能的情况下发现网络安全威胁等。
+基于上述原因，用户提出了高性能的网络监控方案需求。
+流日志功能，由亚马逊公司（Amazon）率先提出并实现，其解决方案完成度比较好，已经相对成熟。
+国内，该功能起步较晚，解决方案尚且在研究讨论阶段，解决方案尚不成熟。
+3. 课题的研究目标、研究内容和拟解决的关键问题
+3.1 课题研究目标
+本文以开源OVS（Open Vswitch）和DPDK（Data Plane Development Kit）为基础，对如何在其上设计与实现流日志功能进行了阐述。
+研究目标是：结合亚马逊已有的流日志功能，设计出基于开源OVS和DPDK的实现方案，并将其实现。方案要求非侵入式数据采集，尽可能不要影响原有OVS和DPDK性能，以及确保数据安全等。
+3.2课题研究内容
+本文针对开源OVS和DPDK现状，主要对其内部原理进行研究，结合具体需求，提出一个系统的完善的流日志解决方案，并加以实现。
+主要研究内容包括：
+首先，分析OVS和DPDK，明确其内部流的管理方式和实现的方法，总结其相关组件的关系；然后，提出一个流日志解决方案，分析其利弊，并加以实现；最后，再进行总结，对可行的不同方案进行对比各自优缺点，对未来的演化方向加以讨论。
+3.3 拟解决的关键问题
+针对该问题的具体特点，我分析了如下关键问题。
+在极限情况下，数据报文转发可能高达10M pps/s，在高速的报文转发情况下，如何实现统计，并且不影响其性能。
+数据采集点的选取，如何做到尽可能全面合理的选择，不影响其原有功能，又能实现尽可能全面的统计。
+方案，可能需要修改连接跟踪表处理逻辑，复杂度很高。
+如何尽可能不影响后续更新升级，做到低耦合，模块化开发。
+4. 课题的设计及试验方案，可行性分析
+4.2课题设计方案
+由于高性能虚拟交换机中，网桥分为用户态网桥和内核态网桥。
+针对用户态初步设想有两个方案。
+方案一，是新增加一张记录表。对所有流经开启流日志的虚拟机端口，记录五元组及报文统计，其中包括reject和accept的报文。当下一个统计窗口开启时，将所记录的所有信息交给新创建的日志收集进程保存在磁盘或内存中，OVS重新开始统计新的五元组信息。
+其问题是，会增加内存开销，需要单独开发五元组记录表的生命周期，极端情况下日志收集进程使用率很高，需要独占core，部分场景性能下降较多。
+方案二，是扩展当前CT（conntrack）表，即安全链接跟踪表做记录，进行全流监测方案。扩展连接跟踪表（增加报文统计和时间戳）来记录流日志，日志收集由连接跟踪的老化线程完成，每隔一个采样周期遍历所有CT项，处理后保存在磁盘或内存中。
+该方案与现行功能有冲突，而且无法遍历全部CT表，会极大影响性能，还有许多其他问题。
+4.3课题可行性分析
+    基于以上分析结果，我们认为本文的研究方法和设计方案切实可行，可操作性高，研究结果也具有很高的实用性，课题具有一定的研究价值。
+5.课题计划进度和预期成果
+5.1计划进度
+开始时间	结束时间	主要工作内容
+2018年10月	2018年11月	查阅文献资料，编写课题开题报告
+2018年11月	2018年12月	进行方案设计
+2018年12月	2019年03月	进行方案实现
+2019年03月	2019年04月	根据方案实现进行数据对比，确定方案优缺点
+2019年04月	2019年05月	撰写论文正文
+5.2预期成果
+总结全文，本文预期取得的主要研究成果如下：
+5.2.1流日志方案设计
+分析开源OVS+DPDK，结合其具体特点，然后分析流日志需求，完成方案设计，然后对方案进行分析。
+考虑对方案进行扩展性研究，研究是否有更加优秀的方案。
+5.2.2流日志方案实现
+在开源OVS+DPDK上实现设计方案，能够完成预计流日志功能。并且在此基础上，对数据进行对比分析，确定完成质量。
+5.2.3总结与分析
+总结当前方案的优缺点，对未来，该方向的发展提出一些建议与预测。
