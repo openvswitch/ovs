@@ -111,6 +111,7 @@ The following options are available:
    -i, --interface            Open vSwitch interface to mirror and tcpdump
    --mirror-to                The name for the mirror port to use (optional)
                               Default 'miINTERFACE'
+   --span                     If specified, mirror all ports (optional)
 """ % {'prog': sys.argv[0]})
     sys.exit(0)
 
@@ -312,13 +313,14 @@ class OVSDB(object):
         self._txn = None
         return result
 
-    def bridge_mirror(self, intf_name, mirror_intf_name, br_name):
+    def bridge_mirror(self, intf_name, mirror_intf_name, br_name,
+                      mirror_select_all=False):
 
         txn = self._start_txn()
         mirror = txn.insert(self.get_table('Mirror'))
         mirror.name = 'm_%s' % intf_name
 
-        mirror.select_all = False
+        mirror.select_all = mirror_select_all
 
         mirrored_port = self._find_row_by_name('Port', intf_name)
 
@@ -404,6 +406,9 @@ def main():
             mirror_interface = nxt
             skip_next = True
             continue
+        elif cur in ['--span']:
+            mirror_select_all = True
+            continue
         tcpdargs.append(cur)
 
     if interface is None:
@@ -445,7 +450,8 @@ def main():
     try:
         ovsdb.make_port(mirror_interface, ovsdb.port_bridge(interface))
         ovsdb.bridge_mirror(interface, mirror_interface,
-                            ovsdb.port_bridge(interface))
+                            ovsdb.port_bridge(interface),
+                            mirror_select_all)
     except OVSDBException as oe:
         print("ERROR: Unable to properly setup the mirror: %s." % str(oe))
         try:

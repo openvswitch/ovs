@@ -42,6 +42,9 @@ be dumped.
 The name of the interface which should be the destination of the mirrored
 packets. The default is miINTERFACE
 .
+.IP "\fB\-\-span\fR"
+If specified, mirror all ports (optional).
+.
 .SH "SEE ALSO"
 .
 .BR ovs\-appctl (8),
