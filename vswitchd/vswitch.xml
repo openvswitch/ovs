@@ -2629,9 +2629,9 @@
           <li>
             The word <code>flow</code>.  The tunnel accepts packets with any
             key.  The key will be placed in the <code>tun_id</code> field for
-            matching in the flow table.  The <code>ovs-ofctl</code> manual page
-            contains additional information about matching fields in OpenFlow
-            flows.
+            matching in the flow table.  The <code>ovs-fields</code>(7) manual
+            page contains additional information about matching fields in
+            OpenFlow flows.
           </li>
         </ul>
 
@@ -2657,8 +2657,8 @@
             The word <code>flow</code>.  Packets sent through the tunnel will
             have the key set using the <code>set_tunnel</code> Nicira OpenFlow
             vendor extension (0 is used in the absence of an action).  The
-            <code>ovs-ofctl</code> manual page contains additional information
-            about the Nicira OpenFlow vendor extensions.
+            <code>ovs-fields</code>(7) manual page contains additional
+            information about the Nicira OpenFlow vendor extensions.
           </li>
         </ul>
       </column>

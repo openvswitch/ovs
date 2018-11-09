@@ -330,7 +330,7 @@
         <code>ovn-trace</code> connects to <var>remote</var> (by default,
         <code>unix:@RUNDIR@/br-int.mgmt</code>) over OpenFlow and retrieves the
         flows.  If <var>remote</var> is specified, it must be an active
-        OpenFlow connection method described in <code>ovs-ofctl</code>(8).
+        OpenFlow connection method described in <code>ovsdb</code>(7).
       </p>
 
       <p>

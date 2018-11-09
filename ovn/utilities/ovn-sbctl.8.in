@@ -182,7 +182,7 @@ display the OpenFlow flows that correspond to each OVN logical flow.
 To do so, \fBovn\-sbctl\fR connects to \fIremote\fR (by default,
 \fBunix:@RUNDIR@/br-int.mgmt\fR) over OpenFlow and retrieves the
 flows.  If \fIremote\fR is specified, it must be an active OpenFlow
-connection method described in \fBovs\-ofctl\fR(8).  Please see the
+connection method described in \fBovsdb\fR(7).  Please see the
 discussion of the similar \fB\-\-ovs\fR option in \fBovn-trace\fR(8)
 for more information about the OpenFlow flow output.
 .IP
