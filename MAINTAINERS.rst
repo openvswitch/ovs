@@ -55,6 +55,8 @@ This is the current list of active Open vSwitch committers:
      - daniele.di.proietto@gmail.com
    * - Gurucharan Shetty
      - guru@ovn.org
+   * - Ian Stokes
+     - istokes@ovn.org
    * - Jarno Rajahalme
      - jarno@ovn.org
    * - Jesse Gross
