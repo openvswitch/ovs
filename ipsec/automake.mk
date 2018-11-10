@@ -5,6 +5,6 @@
 # notice and this notice are preserved.  This file is offered as-is,
 # without warranty of any kind.
 
-EXTRA_DIST += \
-        ipsec/ovs-monitor-ipsec
-FLAKE8_PYFILES += ipsec/ovs-monitor-ipsec
+bin_SCRIPTS += ipsec/ovs-monitor-ipsec
+EXTRA_DIST += ipsec/ovs-monitor-ipsec.in
+FLAKE8_PYFILES += ipsec/ovs-monitor-ipsec.in
