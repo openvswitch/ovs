@@ -39,9 +39,15 @@ enum ts_resolution {
     PCAP_NSEC,
 };
 
+enum network_type {
+    PCAP_ETHERNET = 0,
+    PCAP_LINUX_SLL = 0x71
+};
+
 struct pcap_file {
     FILE *file;
     enum ts_resolution resolution;
+    enum network_type network;
 };
 
 struct pcap_hdr {
@@ -130,15 +136,25 @@ ovs_pcap_read_header(struct pcap_file *p_file)
         VLOG_WARN("failed to read pcap header: %s", ovs_retval_to_string(error));
         return error;
     }
+    bool byte_swap;
     if (ph.magic_number == 0xa1b2c3d4 || ph.magic_number == 0xd4c3b2a1) {
+        byte_swap = ph.magic_number == 0xd4c3b2a1;
         p_file->resolution = PCAP_USEC;
     } else if (ph.magic_number == 0xa1b23c4d ||
                ph.magic_number == 0x4d3cb2a1) {
+        byte_swap = ph.magic_number == 0x4d3cb2a1;
         p_file->resolution = PCAP_NSEC;
     } else {
         VLOG_WARN("bad magic 0x%08"PRIx32" reading pcap file "
                   "(expected 0xa1b2c3d4, 0xa1b23c4d, 0xd4c3b2a1, "
                   "or 0x4d3cb2a1)", ph.magic_number);
+        return EPROTO;
+    }
+    p_file->network = byte_swap ? uint32_byteswap(ph.network) : ph.network;
+    if (p_file->network != PCAP_ETHERNET &&
+        p_file->network != PCAP_LINUX_SLL) {
+        VLOG_WARN("unknown network type %"PRIu16" reading pcap file",
+                  p_file->network);
         return EPROTO;
     }
     return 0;
@@ -218,6 +234,44 @@ ovs_pcap_read(struct pcap_file *p_file, struct dp_packet **bufp,
         dp_packet_delete(buf);
         return error;
     }
+
+    if (p_file->network == PCAP_LINUX_SLL) {
+        /* This format doesn't include the destination Ethernet address, which
+         * is weird. */
+
+        struct sll_header {
+            ovs_be16 packet_type;
+            ovs_be16 arp_hrd;
+            ovs_be16 lla_len;
+            struct eth_addr dl_src;
+            ovs_be16 reserved;
+            ovs_be16 protocol;
+        };
+        const struct sll_header *sll;
+        if (len < sizeof *sll) {
+            VLOG_WARN("pcap packet too short for SLL header");
+            dp_packet_delete(buf);
+            return EPROTO;
+        }
+
+        /* Pull Linux SLL header. */
+        sll = dp_packet_pull(buf, sizeof *sll);
+        if (sll->lla_len != htons(6)) {
+            ovs_hex_dump(stdout, sll, sizeof *sll, 0, false);
+            VLOG_WARN("bad SLL header");
+            dp_packet_delete(buf);
+            return EPROTO;
+        }
+
+        /* Push Ethernet header. */
+        struct eth_header eth = {
+            /* eth_dst is all zeros because the format doesn't include it. */
+            .eth_src = sll->dl_src,
+            .eth_type = sll->protocol,
+        };
+        dp_packet_push(buf, &eth, sizeof eth);
+    }
+
     *bufp = buf;
     return 0;
 }
