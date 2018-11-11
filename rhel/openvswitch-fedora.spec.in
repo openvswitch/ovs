@@ -222,12 +222,12 @@ Requires: openvswitch openvswitch-ovn-common %{_py2}-openvswitch
 %description ovn-docker
 Docker network plugins for OVN.
 
-%package openvswitch-ipsec
+%package ipsec
 Summary: Open vSwitch IPsec tunneling support
 License: ASL 2.0
 Requires: openvswitch %{_py2}-openvswitch libreswan
 
-%description openvswitch-ipsec
+%description ipsec
 This package provides IPsec tunneling support for OVS tunnels.
 
 %prep
@@ -685,7 +685,7 @@ fi
 %{_mandir}/man8/ovn-controller-vtep.8*
 %{_unitdir}/ovn-controller-vtep.service
 
-%files openvswitch-ipsec
+%files ipsec
 %{_datadir}/openvswitch/scripts/ovs-monitor-ipsec
 %{_unitdir}/openvswitch-ipsec.service
 
