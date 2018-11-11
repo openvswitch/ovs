@@ -341,10 +341,6 @@ install -p -D -m 0755 \
         rhel/usr_share_openvswitch_scripts_ovs-systemd-reload \
         $RPM_BUILD_ROOT%{_datadir}/openvswitch/scripts/ovs-systemd-reload
 
-install -m 0755 \
-        ipsec/ovs-monitor-ipsec \
-        $RPM_BUILD_ROOT%{_datadir}/openvswitch/scripts/ovs-monitor-ipsec
-
 # remove unpackaged files
 rm -f $RPM_BUILD_ROOT%{_bindir}/ovs-parse-backtrace \
         $RPM_BUILD_ROOT%{_sbindir}/ovs-vlan-bug-workaround \
