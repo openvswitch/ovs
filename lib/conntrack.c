@@ -30,6 +30,7 @@
 #include "ct-dpif.h"
 #include "dp-packet.h"
 #include "flow.h"
+#include "ipf.h"
 #include "netdev.h"
 #include "odp-netlink.h"
 #include "openvswitch/hmap.h"
@@ -339,6 +340,7 @@ conntrack_init(struct conntrack *ct)
     atomic_init(&ct->n_conn_limit, DEFAULT_N_CONN_LIMIT);
     latch_init(&ct->clean_thread_exit);
     ct->clean_thread = ovs_thread_create("ct_clean", clean_thread_main, ct);
+    ipf_init();
 }
 
 /* Destroys the connection tracker 'ct' and frees all the allocated memory. */
@@ -381,6 +383,7 @@ conntrack_destroy(struct conntrack *ct)
     hindex_destroy(&ct->alg_expectation_refs);
     ct_rwlock_unlock(&ct->resources_lock);
     ct_rwlock_destroy(&ct->resources_lock);
+    ipf_destroy();
 }
 
 static unsigned hash_to_bucket(uint32_t hash)
@@ -1295,7 +1298,8 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
 
 /* Sends the packets in '*pkt_batch' through the connection tracker 'ct'.  All
  * the packets must have the same 'dl_type' (IPv4 or IPv6) and should have
- * the l3 and and l4 offset properly set.
+ * the l3 and and l4 offset properly set.  Performs fragment reassembly with
+ * the help of ipf_preprocess_conntrack().
  *
  * If 'commit' is true, the packets are allowed to create new entries in the
  * connection tables.  'setmark', if not NULL, should point to a two
@@ -1310,11 +1314,14 @@ conntrack_execute(struct conntrack *ct, struct dp_packet_batch *pkt_batch,
                   const struct nat_action_info_t *nat_action_info,
                   long long now)
 {
+    ipf_preprocess_conntrack(pkt_batch, now, dl_type, zone, ct->hash_basis);
+
     struct dp_packet *packet;
     struct conn_lookup_ctx ctx;
 
     DP_PACKET_BATCH_FOR_EACH (i, packet, pkt_batch) {
-        if (!conn_key_extract(ct, packet, dl_type, &ctx, zone)) {
+        if (packet->md.ct_state == CS_INVALID
+            || !conn_key_extract(ct, packet, dl_type, &ctx, zone)) {
             packet->md.ct_state = CS_INVALID;
             write_ct_md(packet, zone, NULL, NULL, NULL);
             continue;
@@ -1322,6 +1329,8 @@ conntrack_execute(struct conntrack *ct, struct dp_packet_batch *pkt_batch,
         process_one(ct, packet, &ctx, zone, force, commit, now, setmark,
                     setlabel, nat_action_info, tp_src, tp_dst, helper);
     }
+
+    ipf_postprocess_conntrack(pkt_batch, now, dl_type);
 
     return 0;
 }

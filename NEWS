@@ -9,6 +9,8 @@ Post-v2.10.0
    - ovn:
      * New support for IPSEC encrypted tunnels between hypervisors.
      * ovn-ctl: allow passing user:group ids to the OVN daemons.
+   - Userspace datapath:
+     * Add v4/v6 fragmentation support for conntrack.
    - DPDK:
      * Add option for simple round-robin based Rxq to PMD assignment.
        It can be set with pmd-rxq-assign.

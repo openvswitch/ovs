@@ -77,12 +77,6 @@ m4_define([CHECK_CONNTRACK],
 #
 m4_define([CHECK_CONNTRACK_ALG])
 
-# CHECK_CONNTRACK_FRAG()
-#
-# Perform requirements checks for running conntrack fragmentations tests.
-# The kernel always supports fragmentation, so no check is needed.
-m4_define([CHECK_CONNTRACK_FRAG])
-
 # CHECK_CONNTRACK_LOCAL_STACK()
 #
 # Perform requirements checks for running conntrack tests with local stack.
@@ -90,6 +84,10 @@ m4_define([CHECK_CONNTRACK_FRAG])
 # from an internal port, without an explicit ct() action, so no check is
 # needed.
 m4_define([CHECK_CONNTRACK_LOCAL_STACK])
+
+# CHECK_CONNTRACK_SMALL_FRAG()
+#
+m4_define([CHECK_CONNTRACK_SMALL_FRAG])
 
 # CHECK_CONNTRACK_FRAG_OVERLAP()
 #
