@@ -8,3 +8,4 @@
 bin_SCRIPTS += ipsec/ovs-monitor-ipsec
 EXTRA_DIST += ipsec/ovs-monitor-ipsec.in
 FLAKE8_PYFILES += ipsec/ovs-monitor-ipsec.in
+CLEANFILES += ipsec/ovs-monitor-ipsec
