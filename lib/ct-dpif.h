@@ -212,6 +212,7 @@ int ct_dpif_set_limits(struct dpif *dpif, const uint32_t *default_limit,
 int ct_dpif_get_limits(struct dpif *dpif, uint32_t *default_limit,
                        const struct ovs_list *, struct ovs_list *);
 int ct_dpif_del_limits(struct dpif *dpif, const struct ovs_list *);
+int ct_dpif_ipf_set_enabled(struct dpif *, bool v6, bool enable);
 void ct_dpif_entry_uninit(struct ct_dpif_entry *);
 void ct_dpif_format_entry(const struct ct_dpif_entry *, struct ds *,
                           bool verbose, bool print_stats);

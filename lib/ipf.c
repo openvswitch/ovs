@@ -1361,3 +1361,10 @@ ipf_destroy(void)
     ipf_lock_unlock(&ipf_lock);
     ipf_lock_destroy(&ipf_lock);
 }
+
+int
+ipf_set_enabled(bool v6, bool enable)
+{
+    atomic_store_relaxed(v6 ? &ifp_v6_enabled : &ifp_v4_enabled, enable);
+    return 0;
+}

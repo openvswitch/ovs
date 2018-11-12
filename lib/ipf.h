@@ -29,5 +29,6 @@ void ipf_postprocess_conntrack(struct dp_packet_batch *pb, long long now,
 
 void ipf_init(void);
 void ipf_destroy(void);
+int ipf_set_enabled(bool v6, bool enable);
 
 #endif /* ipf.h */

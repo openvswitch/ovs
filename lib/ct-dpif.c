@@ -194,6 +194,14 @@ ct_dpif_del_limits(struct dpif *dpif, const struct ovs_list *zone_limits)
             : EOPNOTSUPP);
 }
 
+int
+ct_dpif_ipf_set_enabled(struct dpif *dpif, bool v6, bool enable)
+{
+    return (dpif->dpif_class->ipf_set_enabled
+            ? dpif->dpif_class->ipf_set_enabled(dpif, v6, enable)
+            : EOPNOTSUPP);
+}
+
 void
 ct_dpif_entry_uninit(struct ct_dpif_entry *entry)
 {

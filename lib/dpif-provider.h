@@ -468,6 +468,12 @@ struct dpif_class {
      * list of 'struct ct_dpif_zone_limit' entries. */
     int (*ct_del_limits)(struct dpif *, const struct ovs_list *zone_limits);
 
+    /* IP Fragmentation. */
+
+    /* Disables or enables conntrack fragment reassembly.  The default
+     * setting is enabled. */
+    int (*ipf_set_enabled)(struct dpif *, bool v6, bool enabled);
+
     /* Meters */
 
     /* Queries 'dpif' for supported meter features.

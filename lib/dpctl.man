@@ -220,6 +220,15 @@ nftables and the regular host stack).  Therefore, the following commands
 do not apply specifically to one datapath.
 .
 .TP
+\*(DX\fBipf\-set\-enabled\fR [\fIdp\fR] \fBv4\fR|\fBv6\fR
+.TQ
+\*(DX\fBipf\-set\-disabled\fR [\fIdp\fR] \fBv4\fR|\fBv6\fR
+Enables or disables IP fragmentation handling for the userspace
+connection tracker.  Either \fBv4\fR or \fBv6\fR must be specified.
+Both IPv4 and IPv6 fragment reassembly are enabled by default.  Only
+supported for the userspace datapath.
+.
+.TP
 .DO "[\fB\-m\fR | \fB\-\-more\fR] [\fB\-s\fR | \fB\-\-statistics\fR]" "\*(DX\fBdump\-conntrack\fR" "[\fIdp\fR] [\fBzone=\fIzone\fR]"
 Prints to the console all the connection entries in the tracker used by
 \fIdp\fR.  If \fBzone=\fIzone\fR is specified, only shows the connections

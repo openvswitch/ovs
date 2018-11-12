@@ -1917,6 +1917,51 @@ out:
     return error;
 }
 
+static int
+ipf_set_enabled__(int argc, const char *argv[], struct dpctl_params *dpctl_p,
+                  bool enabled)
+{
+    struct dpif *dpif;
+    int error = opt_dpif_open(argc, argv, dpctl_p, 4, &dpif);
+    if (!error) {
+        char v4_or_v6[3] = {0};
+        if (ovs_scan(argv[argc - 1], "%2s", v4_or_v6) &&
+            (!strncmp(v4_or_v6, "v4", 2) || !strncmp(v4_or_v6, "v6", 2))) {
+            error = ct_dpif_ipf_set_enabled(
+                        dpif, !strncmp(v4_or_v6, "v6", 2), enabled);
+            if (!error) {
+                dpctl_print(dpctl_p,
+                            "%s fragmentation reassembly successful",
+                            enabled ? "enabling" : "disabling");
+            } else {
+                dpctl_error(dpctl_p, error,
+                            "%s fragmentation reassembly failed",
+                            enabled ? "enabling" : "disabling");
+            }
+        } else {
+            error = EINVAL;
+            dpctl_error(dpctl_p, error,
+                        "parameter missing: 'v4' for IPv4 or 'v6' for IPv6");
+        }
+        dpif_close(dpif);
+    }
+    return error;
+}
+
+static int
+dpctl_ipf_set_enabled(int argc, const char *argv[],
+                      struct dpctl_params *dpctl_p)
+{
+    return ipf_set_enabled__(argc, argv, dpctl_p, true);
+}
+
+static int
+dpctl_ipf_set_disabled(int argc, const char *argv[],
+                       struct dpctl_params *dpctl_p)
+{
+    return ipf_set_enabled__(argc, argv, dpctl_p, false);
+}
+
 /* Undocumented commands for unit testing. */
 
 static int
@@ -2222,6 +2267,8 @@ static const struct dpctl_command all_commands[] = {
         DP_RO },
     { "ct-get-limits", "[dp] [zone=N1[,N2]...]", 0, 2, dpctl_ct_get_limits,
         DP_RO },
+    { "ipf-set-enabled", "[dp] v4|v6", 1, 2, dpctl_ipf_set_enabled, DP_RW },
+    { "ipf-set-disabled", "[dp] v4|v6", 1, 2, dpctl_ipf_set_disabled, DP_RW },
     { "help", "", 0, INT_MAX, dpctl_help, DP_RO },
     { "list-commands", "", 0, INT_MAX, dpctl_list_commands, DP_RO },
 
