@@ -479,6 +479,42 @@ atomic_count_set(atomic_count *count, unsigned int value)
     atomic_store_relaxed(&count->count, value);
 }
 
+static inline uint64_t
+atomic_count_inc64(atomic_uint64_t *counter)
+{
+    uint64_t old;
+
+    atomic_add_relaxed(counter, 1ull, &old);
+
+    return old;
+}
+
+static inline uint64_t
+atomic_count_dec64(atomic_uint64_t *counter)
+{
+    uint64_t old;
+
+    atomic_sub_relaxed(counter, 1ull, &old);
+
+    return old;
+}
+
+static inline uint64_t
+atomic_count_get64(atomic_uint64_t *counter)
+{
+    uint64_t value;
+
+    atomic_read_relaxed(counter, &value);
+
+    return value;
+}
+
+static inline void
+atomic_count_set64(atomic_uint64_t *counter, uint64_t value)
+{
+    atomic_store_relaxed(counter, value);
+}
+
 /* Reference count. */
 struct ovs_refcount {
     atomic_uint count;
