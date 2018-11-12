@@ -17,10 +17,10 @@
 #include <config.h>
 #include "netdev-dpdk.h"
 
-#include <string.h>
+#include <errno.h>
 #include <signal.h>
 #include <stdlib.h>
-#include <errno.h>
+#include <string.h>
 #include <unistd.h>
 #include <linux/virtio_net.h>
 #include <sys/socket.h>
@@ -32,13 +32,13 @@
 #include <rte_errno.h>
 #include <rte_eth_ring.h>
 #include <rte_ethdev.h>
+#include <rte_flow.h>
 #include <rte_malloc.h>
 #include <rte_mbuf.h>
 #include <rte_meter.h>
 #include <rte_pci.h>
-#include <rte_vhost.h>
 #include <rte_version.h>
-#include <rte_flow.h>
+#include <rte_vhost.h>
 
 #include "cmap.h"
 #include "dirs.h"
@@ -51,20 +51,21 @@
 #include "odp-util.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/list.h"
-#include "openvswitch/ofp-print.h"
-#include "openvswitch/vlog.h"
 #include "openvswitch/match.h"
-#include "ovs-numa.h"
-#include "ovs-thread.h"
-#include "ovs-rcu.h"
-#include "packets.h"
+#include "openvswitch/ofp-print.h"
 #include "openvswitch/shash.h"
+#include "openvswitch/vlog.h"
+#include "ovs-numa.h"
+#include "ovs-rcu.h"
+#include "ovs-thread.h"
+#include "packets.h"
 #include "smap.h"
 #include "sset.h"
-#include "unaligned.h"
 #include "timeval.h"
-#include "uuid.h"
+#include "unaligned.h"
 #include "unixctl.h"
+#include "util.h"
+#include "uuid.h"
 
 enum {VIRTIO_RXQ, VIRTIO_TXQ, VIRTIO_QNUM};
 
@@ -4785,39 +4786,24 @@ out:
     return ret;
 }
 
-static bool
-is_all_zero(const void *addr, size_t n) {
-    size_t i = 0;
-    const uint8_t *p = (uint8_t *)addr;
-
-    for (i = 0; i < n; i++) {
-        if (p[i] != 0) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
 /*
  * Check if any unsupported flow patterns are specified.
  */
 static int
 netdev_dpdk_validate_flow(const struct match *match) {
     struct match match_zero_wc;
+    const struct flow *masks = &match->wc.masks;
 
     /* Create a wc-zeroed version of flow */
     match_init(&match_zero_wc, &match->flow, &match->wc);
 
-    if (!is_all_zero(&match_zero_wc.flow.tunnel,
-                     sizeof(match_zero_wc.flow.tunnel))) {
+    if (!is_all_zeros(&match_zero_wc.flow.tunnel,
+                      sizeof match_zero_wc.flow.tunnel)) {
         goto err;
     }
 
-    if (match->wc.masks.metadata ||
-        match->wc.masks.skb_priority ||
-        match->wc.masks.pkt_mark ||
-        match->wc.masks.dp_hash) {
+    if (masks->metadata || masks->skb_priority ||
+        masks->pkt_mark || masks->dp_hash) {
         goto err;
     }
 
@@ -4826,38 +4812,31 @@ netdev_dpdk_validate_flow(const struct match *match) {
         goto err;
     }
 
-    if (match->wc.masks.ct_state ||
-        match->wc.masks.ct_nw_proto ||
-        match->wc.masks.ct_zone ||
-        match->wc.masks.ct_mark ||
-        match->wc.masks.ct_label.u64.hi ||
-        match->wc.masks.ct_label.u64.lo) {
+    if (masks->ct_state || masks->ct_nw_proto ||
+        masks->ct_zone  || masks->ct_mark     ||
+        !ovs_u128_is_zero(masks->ct_label)) {
         goto err;
     }
 
-    if (match->wc.masks.conj_id ||
-        match->wc.masks.actset_output) {
+    if (masks->conj_id || masks->actset_output) {
         goto err;
     }
 
     /* unsupported L2 */
-    if (!is_all_zero(&match->wc.masks.mpls_lse,
-                     sizeof(match_zero_wc.flow.mpls_lse))) {
+    if (!is_all_zeros(masks->mpls_lse, sizeof masks->mpls_lse)) {
         goto err;
     }
 
     /* unsupported L3 */
-    if (match->wc.masks.ipv6_label ||
-        match->wc.masks.ct_nw_src ||
-        match->wc.masks.ct_nw_dst ||
-        !is_all_zero(&match->wc.masks.ipv6_src, sizeof(struct in6_addr)) ||
-        !is_all_zero(&match->wc.masks.ipv6_dst, sizeof(struct in6_addr)) ||
-        !is_all_zero(&match->wc.masks.ct_ipv6_src, sizeof(struct in6_addr)) ||
-        !is_all_zero(&match->wc.masks.ct_ipv6_dst, sizeof(struct in6_addr)) ||
-        !is_all_zero(&match->wc.masks.nd_target, sizeof(struct in6_addr)) ||
-        !is_all_zero(&match->wc.masks.nsh, sizeof(struct ovs_key_nsh)) ||
-        !is_all_zero(&match->wc.masks.arp_sha, sizeof(struct eth_addr)) ||
-        !is_all_zero(&match->wc.masks.arp_tha, sizeof(struct eth_addr))) {
+    if (masks->ipv6_label || masks->ct_nw_src || masks->ct_nw_dst     ||
+        !is_all_zeros(&masks->ipv6_src,    sizeof masks->ipv6_src)    ||
+        !is_all_zeros(&masks->ipv6_dst,    sizeof masks->ipv6_dst)    ||
+        !is_all_zeros(&masks->ct_ipv6_src, sizeof masks->ct_ipv6_src) ||
+        !is_all_zeros(&masks->ct_ipv6_dst, sizeof masks->ct_ipv6_dst) ||
+        !is_all_zeros(&masks->nd_target,   sizeof masks->nd_target)   ||
+        !is_all_zeros(&masks->nsh,         sizeof masks->nsh)         ||
+        !is_all_zeros(&masks->arp_sha,     sizeof masks->arp_sha)     ||
+        !is_all_zeros(&masks->arp_tha,     sizeof masks->arp_tha)) {
         goto err;
     }
 
@@ -4867,9 +4846,7 @@ netdev_dpdk_validate_flow(const struct match *match) {
     }
 
     /* unsupported L4 */
-    if (match->wc.masks.igmp_group_ip4 ||
-        match->wc.masks.ct_tp_src ||
-        match->wc.masks.ct_tp_dst) {
+    if (masks->igmp_group_ip4 || masks->ct_tp_src || masks->ct_tp_dst) {
         goto err;
     }
 
