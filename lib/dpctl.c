@@ -1962,6 +1962,44 @@ dpctl_ipf_set_disabled(int argc, const char *argv[],
     return ipf_set_enabled__(argc, argv, dpctl_p, false);
 }
 
+static int
+dpctl_ipf_set_min_frag(int argc, const char *argv[],
+                       struct dpctl_params *dpctl_p)
+{
+    struct dpif *dpif;
+    int error = opt_dpif_open(argc, argv, dpctl_p, 4, &dpif);
+    if (!error) {
+        char v4_or_v6[3] = {0};
+        if (ovs_scan(argv[argc - 2], "%2s", v4_or_v6) &&
+            (!strncmp(v4_or_v6, "v4", 2) || !strncmp(v4_or_v6, "v6", 2))) {
+            uint32_t min_fragment;
+            if (ovs_scan(argv[argc - 1], "%"SCNu32, &min_fragment)) {
+                error = ct_dpif_ipf_set_min_frag(
+                            dpif, !strncmp(v4_or_v6, "v6", 2), min_fragment);
+                if (!error) {
+                    dpctl_print(dpctl_p,
+                                "setting minimum fragment size successful");
+                } else {
+                    dpctl_error(dpctl_p, error,
+                                "requested minimum fragment size too small;"
+                                " see documentation");
+                }
+            } else {
+                error = EINVAL;
+                dpctl_error(dpctl_p, error,
+                            "parameter missing for minimum fragment size");
+            }
+        } else {
+            error = EINVAL;
+            dpctl_error(dpctl_p, error,
+                        "parameter missing: v4 for IPv4 or v6 for IPv6");
+        }
+        dpif_close(dpif);
+    }
+
+    return error;
+}
+
 /* Undocumented commands for unit testing. */
 
 static int
@@ -2269,6 +2307,8 @@ static const struct dpctl_command all_commands[] = {
         DP_RO },
     { "ipf-set-enabled", "[dp] v4|v6", 1, 2, dpctl_ipf_set_enabled, DP_RW },
     { "ipf-set-disabled", "[dp] v4|v6", 1, 2, dpctl_ipf_set_disabled, DP_RW },
+    { "ipf-set-min-frag", "[dp] v4|v6 minfragment", 2, 3,
+       dpctl_ipf_set_min_frag, DP_RW },
     { "help", "", 0, INT_MAX, dpctl_help, DP_RO },
     { "list-commands", "", 0, INT_MAX, dpctl_list_commands, DP_RO },
 

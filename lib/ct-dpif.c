@@ -202,6 +202,14 @@ ct_dpif_ipf_set_enabled(struct dpif *dpif, bool v6, bool enable)
             : EOPNOTSUPP);
 }
 
+int
+ct_dpif_ipf_set_min_frag(struct dpif *dpif, bool v6, uint32_t min_frag)
+{
+    return (dpif->dpif_class->ipf_set_min_frag
+            ? dpif->dpif_class->ipf_set_min_frag(dpif, v6, min_frag)
+            : EOPNOTSUPP);
+}
+
 void
 ct_dpif_entry_uninit(struct ct_dpif_entry *entry)
 {

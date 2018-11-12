@@ -13,6 +13,8 @@ Post-v2.10.0
      * Add v4/v6 fragmentation support for conntrack.
      * New ovs-appctl "dpctl/ipf-set-enabled" and "dpctl/ipf-set-disabled"
        commands for userspace datapath conntrack fragmentation support.
+     * New "ovs-appctl dpctl/ipf-set-min-frag" command for userspace
+       datapath conntrack fragmentation support.
    - DPDK:
      * Add option for simple round-robin based Rxq to PMD assignment.
        It can be set with pmd-rxq-assign.

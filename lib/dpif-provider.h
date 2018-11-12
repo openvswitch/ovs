@@ -474,6 +474,9 @@ struct dpif_class {
      * setting is enabled. */
     int (*ipf_set_enabled)(struct dpif *, bool v6, bool enabled);
 
+    /* Set minimum fragment allowed. */
+    int (*ipf_set_min_frag)(struct dpif *, bool v6, uint32_t min_frag);
+
     /* Meters */
 
     /* Queries 'dpif' for supported meter features.

@@ -1368,3 +1368,26 @@ ipf_set_enabled(bool v6, bool enable)
     atomic_store_relaxed(v6 ? &ifp_v6_enabled : &ifp_v4_enabled, enable);
     return 0;
 }
+
+int
+ipf_set_min_frag(bool v6, uint32_t value)
+{
+    /* If the user specifies an unreasonably large number, fragmentation
+     * will not work well but it will not blow up. */
+    if ((!v6 && value < IPF_V4_FRAG_SIZE_LBOUND) ||
+        (v6 && value < IPF_V6_FRAG_SIZE_LBOUND)) {
+        return 1;
+    }
+
+    ipf_lock_lock(&ipf_lock);
+    if (v6) {
+        atomic_store_relaxed(&min_v6_frag_size, value);
+    } else {
+        atomic_store_relaxed(&min_v4_frag_size, value);
+        max_v4_frag_list_size = DIV_ROUND_UP(
+            IPV4_PACKET_MAX_SIZE - IPV4_PACKET_MAX_HDR_SIZE,
+            min_v4_frag_size - IPV4_PACKET_MAX_HDR_SIZE);
+    }
+    ipf_lock_unlock(&ipf_lock);
+    return 0;
+}
