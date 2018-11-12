@@ -241,8 +241,8 @@ destroy_buffered_packets(struct buffered_packets *bp)
 static void
 destroy_buffered_packets_map(void)
 {
-    struct buffered_packets *bp;
-    HMAP_FOR_EACH_POP (bp, hmap_node, &buffered_packets_map) {
+    struct buffered_packets *bp, *next;
+    HMAP_FOR_EACH_SAFE (bp, next, hmap_node, &buffered_packets_map) {
         destroy_buffered_packets(bp);
     }
     hmap_destroy(&buffered_packets_map);
