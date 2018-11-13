@@ -2567,15 +2567,18 @@ raft_update_commit_index(struct raft *raft, uint64_t new_commit_index)
         while (raft->commit_index < new_commit_index) {
             uint64_t index = ++raft->commit_index;
             const struct raft_entry *e = raft_get_entry(raft, index);
-            if (e->servers) {
-                raft_run_reconfigure(raft);
-            }
             if (e->data) {
                 struct raft_command *cmd
                     = raft_find_command_by_index(raft, index);
                 if (cmd) {
                     raft_command_complete(raft, cmd, RAFT_CMD_SUCCESS);
                 }
+            }
+            if (e->servers) {
+                /* raft_run_reconfigure() can write a new Raft entry, which can
+                 * reallocate raft->entries, which would invalidate 'e', so
+                 * this case must be last, after the one for 'e->data'. */
+                raft_run_reconfigure(raft);
             }
         }
     } else {
