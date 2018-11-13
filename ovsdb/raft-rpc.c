@@ -460,6 +460,10 @@ static void
 raft_remove_server_reply_to_jsonrpc(const struct raft_remove_server_reply *rpy,
                                     struct json *args)
 {
+    if (!uuid_is_zero(&rpy->target_sid)) {
+        json_object_put_format(args, "target_server",
+                               UUID_FMT, UUID_ARGS(&rpy->target_sid));
+    }
     json_object_put(args, "success", json_boolean_create(rpy->success));
 }
 
@@ -468,6 +472,7 @@ raft_remove_server_reply_from_jsonrpc(struct ovsdb_parser *p,
                                       struct raft_remove_server_reply *rpy)
 {
     rpy->success = raft_parse_required_boolean(p, "success");
+    raft_parse_optional_uuid(p, "target_server", &rpy->target_sid);
 }
 
 static void

@@ -296,6 +296,7 @@ static void raft_send_remove_server_reply__(
     struct raft *, const struct uuid *target_sid,
     const struct uuid *requester_sid, struct unixctl_conn *requester_conn,
     bool success, const char *comment);
+static void raft_finished_leaving_cluster(struct raft *);
 
 static void raft_server_init_leader(struct raft *, struct raft_server *);
 
@@ -303,6 +304,7 @@ static bool raft_rpc_is_heartbeat(const union raft_rpc *);
 static bool raft_is_rpc_synced(const struct raft *, const union raft_rpc *);
 
 static void raft_handle_rpc(struct raft *, const union raft_rpc *);
+
 static bool raft_send_at(struct raft *, const union raft_rpc *,
                          int line_number);
 #define raft_send(raft, rpc) raft_send_at(raft, rpc, __LINE__)
@@ -2197,16 +2199,28 @@ raft_send_add_server_reply__(struct raft *raft, const struct uuid *sid,
 }
 
 static void
-raft_send_remove_server_reply_rpc(struct raft *raft, const struct uuid *sid,
+raft_send_remove_server_reply_rpc(struct raft *raft,
+                                  const struct uuid *dst_sid,
+                                  const struct uuid *target_sid,
                                   bool success, const char *comment)
 {
+    if (uuid_equals(&raft->sid, dst_sid)) {
+        if (success && uuid_equals(&raft->sid, target_sid)) {
+            raft_finished_leaving_cluster(raft);
+        }
+        return;
+    }
+
     const union raft_rpc rpy = {
         .remove_server_reply = {
             .common = {
                 .type = RAFT_RPC_REMOVE_SERVER_REPLY,
-                .sid = *sid,
+                .sid = *dst_sid,
                 .comment = CONST_CAST(char *, comment),
             },
+            .target_sid = (uuid_equals(dst_sid, target_sid)
+                           ? UUID_ZERO
+                           : *target_sid),
             .success = success,
         }
     };
@@ -2235,6 +2249,9 @@ raft_send_remove_server_reply__(struct raft *raft,
     } else {
         char buf[SID_LEN + 1];
         ds_put_cstr(&s, raft_get_nickname(raft, target_sid, buf, sizeof buf));
+        if (uuid_equals(target_sid, &raft->sid)) {
+            ds_put_cstr(&s, " (ourselves)");
+        }
     }
     ds_put_format(&s, " from cluster "CID_FMT" %s",
                   CID_ARGS(&raft->cid),
@@ -2251,11 +2268,12 @@ raft_send_remove_server_reply__(struct raft *raft,
      * allows it to be sure that it's really removed and update its log and
      * disconnect permanently.  */
     if (!uuid_is_zero(requester_sid)) {
-        raft_send_remove_server_reply_rpc(raft, requester_sid,
+        raft_send_remove_server_reply_rpc(raft, requester_sid, target_sid,
                                           success, comment);
     }
     if (!uuid_equals(requester_sid, target_sid)) {
-        raft_send_remove_server_reply_rpc(raft, target_sid, success, comment);
+        raft_send_remove_server_reply_rpc(raft, target_sid, target_sid,
+                                          success, comment);
     }
     if (requester_conn) {
         if (success) {
@@ -3559,17 +3577,25 @@ raft_handle_remove_server_request(struct raft *raft,
 }
 
 static void
+raft_finished_leaving_cluster(struct raft *raft)
+{
+    VLOG_INFO(SID_FMT": finished leaving cluster "CID_FMT,
+              SID_ARGS(&raft->sid), CID_ARGS(&raft->cid));
+
+    raft_record_note(raft, "left", "this server left the cluster");
+
+    raft->leaving = false;
+    raft->left = true;
+}
+
+static void
 raft_handle_remove_server_reply(struct raft *raft,
                                 const struct raft_remove_server_reply *rpc)
 {
-    if (rpc->success) {
-        VLOG_INFO(SID_FMT": finished leaving cluster "CID_FMT,
-                  SID_ARGS(&raft->sid), CID_ARGS(&raft->cid));
-
-        raft_record_note(raft, "left", "this server left the cluster");
-
-        raft->leaving = false;
-        raft->left = true;
+    if (rpc->success
+        && (uuid_is_zero(&rpc->target_sid)
+            || uuid_equals(&rpc->target_sid, &raft->sid))) {
+        raft_finished_leaving_cluster(raft);
     }
 }
 
