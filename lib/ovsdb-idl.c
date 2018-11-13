@@ -4686,6 +4686,10 @@ ovsdb_idl_db_txn_process_reply(struct ovsdb_idl_db *db,
                     if (error->type == JSON_STRING) {
                         if (!strcmp(error->string, "timed out")) {
                             soft_errors++;
+                        } else if (!strcmp(error->string,
+                                           "unknown database")) {
+                            ovsdb_idl_retry(db->idl);
+                            soft_errors++;
                         } else if (!strcmp(error->string, "not owner")) {
                             lock_errors++;
                         } else if (!strcmp(error->string, "not allowed")) {
