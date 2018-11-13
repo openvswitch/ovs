@@ -1391,3 +1391,13 @@ ipf_set_min_frag(bool v6, uint32_t value)
     ipf_lock_unlock(&ipf_lock);
     return 0;
 }
+
+int
+ipf_set_max_nfrags(uint32_t value)
+{
+    if (value > IPF_NFRAG_UBOUND) {
+        return 1;
+    }
+    atomic_store_relaxed(&nfrag_max, value);
+    return 0;
+}

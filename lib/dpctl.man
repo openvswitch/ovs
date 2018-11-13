@@ -240,6 +240,15 @@ this value too high might result in valid fragments being dropped.  Only
 supported for userspace datapath.
 .
 .TP
+\*(DX\fBipf\-set\-max\-nfrags\fR [\fIdp\fR] \fImaxfrags\fR
+Sets the maximum number of fragments tracked by the userspace datapath
+connection tracker to \fImaxfrags\fR.  The default value is 1000 and the
+clamped maximum is 5000.  Note that packet buffers can be held by the
+fragmentation module while fragments are incomplete, but will timeout
+after 15 seconds.  Memory pool sizing should be set accordingly when
+fragmentation is enabled.  Only supported for userspace datapath.
+.
+.TP
 .DO "[\fB\-m\fR | \fB\-\-more\fR] [\fB\-s\fR | \fB\-\-statistics\fR]" "\*(DX\fBdump\-conntrack\fR" "[\fIdp\fR] [\fBzone=\fIzone\fR]"
 Prints to the console all the connection entries in the tracker used by
 \fIdp\fR.  If \fBzone=\fIzone\fR is specified, only shows the connections

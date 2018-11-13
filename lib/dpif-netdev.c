@@ -6937,6 +6937,13 @@ dpif_netdev_ipf_set_min_frag(struct dpif *dpif OVS_UNUSED, bool v6,
     return ipf_set_min_frag(v6, min_frag);
 }
 
+static int
+dpif_netdev_ipf_set_max_nfrags(struct dpif *dpif OVS_UNUSED,
+                               uint32_t max_frags)
+{
+    return ipf_set_max_nfrags(max_frags);
+}
+
 const struct dpif_class dpif_netdev_class = {
     "netdev",
     dpif_netdev_init,
@@ -6990,6 +6997,7 @@ const struct dpif_class dpif_netdev_class = {
     NULL,                       /* ct_del_limits */
     dpif_netdev_ipf_set_enabled,
     dpif_netdev_ipf_set_min_frag,
+    dpif_netdev_ipf_set_max_nfrags,
     dpif_netdev_meter_get_features,
     dpif_netdev_meter_set,
     dpif_netdev_meter_get,

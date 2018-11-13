@@ -210,6 +210,14 @@ ct_dpif_ipf_set_min_frag(struct dpif *dpif, bool v6, uint32_t min_frag)
             : EOPNOTSUPP);
 }
 
+int
+ct_dpif_ipf_set_max_nfrags(struct dpif *dpif, uint32_t max_frags)
+{
+    return (dpif->dpif_class->ipf_set_max_nfrags
+            ? dpif->dpif_class->ipf_set_max_nfrags(dpif, max_frags)
+            : EOPNOTSUPP);
+}
+
 void
 ct_dpif_entry_uninit(struct ct_dpif_entry *entry)
 {

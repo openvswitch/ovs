@@ -477,6 +477,9 @@ struct dpif_class {
     /* Set minimum fragment allowed. */
     int (*ipf_set_min_frag)(struct dpif *, bool v6, uint32_t min_frag);
 
+    /* Set maximum number of fragments tracked. */
+    int (*ipf_set_max_nfrags)(struct dpif *, uint32_t max_nfrags);
+
     /* Meters */
 
     /* Queries 'dpif' for supported meter features.
