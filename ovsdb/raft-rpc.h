@@ -205,6 +205,13 @@ struct raft_add_server_reply {
 struct raft_remove_server_reply {
     struct raft_rpc_common common;
     bool success;
+
+    /* SID of the removed server, but all-zeros if it is the same as the
+     * destination of the RPC.  (Older ovsdb-server did not have 'target_sid'
+     * and assumed that the destination was always the target, so by omitting
+     * 'target_sid' when this is the case we can preserve a small amount of
+     * inter-version compatibility.) */
+    struct uuid target_sid;
 };
 
 struct raft_install_snapshot_request {
