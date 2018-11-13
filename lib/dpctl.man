@@ -249,6 +249,13 @@ after 15 seconds.  Memory pool sizing should be set accordingly when
 fragmentation is enabled.  Only supported for userspace datapath.
 .
 .TP
+.DO "[\fB\-m\fR | \fB\-\-more\fR]" "\*(DX\fBipf\-get\-status\fR [\fIdp\fR]"
+Gets the configuration settings and fragment counters associated with the
+fragmentation handling of the userspace datapath connection tracker.
+With \fB\-m\fR or \fB\-\-more\fR, also dumps the IP fragment lists.
+Only supported for userspace datapath.
+.
+.TP
 .DO "[\fB\-m\fR | \fB\-\-more\fR] [\fB\-s\fR | \fB\-\-statistics\fR]" "\*(DX\fBdump\-conntrack\fR" "[\fIdp\fR] [\fBzone=\fIzone\fR]"
 Prints to the console all the connection entries in the tracker used by
 \fIdp\fR.  If \fBzone=\fIzone\fR is specified, only shows the connections

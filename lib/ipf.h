@@ -20,6 +20,24 @@
 #include "dp-packet.h"
 #include "openvswitch/types.h"
 
+struct ipf_proto_status {
+   uint64_t nfrag_accepted;
+   uint64_t nfrag_completed_sent;
+   uint64_t nfrag_expired_sent;
+   uint64_t nfrag_too_small;
+   uint64_t nfrag_overlap;
+   uint64_t nfrag_purged;
+   unsigned int min_frag_size;
+   bool enabled;
+};
+
+struct ipf_status {
+   struct ipf_proto_status v4;
+   struct ipf_proto_status v6;
+   unsigned int nfrag;
+   unsigned int nfrag_max;
+};
+
 void ipf_preprocess_conntrack(struct dp_packet_batch *pb, long long now,
                               ovs_be16 dl_type, uint16_t zone,
                               uint32_t hash_basis);
@@ -32,5 +50,11 @@ void ipf_destroy(void);
 int ipf_set_enabled(bool v6, bool enable);
 int ipf_set_min_frag(bool v6, uint32_t value);
 int ipf_set_max_nfrags(uint32_t value);
+int ipf_get_status(struct ipf_status *ipf_status);
+
+struct ipf_dump_ctx;
+int ipf_dump_start(struct ipf_dump_ctx **ipf_dump_ctx);
+int ipf_dump_next(struct ipf_dump_ctx *ipf_dump_ctx, char **dump);
+int ipf_dump_done(struct ipf_dump_ctx *ipf_dump_ctx);
 
 #endif /* ipf.h */

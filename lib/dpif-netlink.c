@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2017 Nicira, Inc.
+ * Copyright (c) 2008-2018 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -3432,6 +3432,10 @@ const struct dpif_class dpif_netlink_class = {
     NULL,                       /* ipf_set_enabled */
     NULL,                       /* ipf_set_min_frag */
     NULL,                       /* ipf_set_max_nfrags */
+    NULL,                       /* ipf_get_status */
+    NULL,                       /* ipf_dump_start */
+    NULL,                       /* ipf_dump_next */
+    NULL,                       /* ipf_dump_done */
     dpif_netlink_meter_get_features,
     dpif_netlink_meter_set,
     dpif_netlink_meter_get,

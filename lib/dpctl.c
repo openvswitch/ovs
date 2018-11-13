@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2017 Nicira, Inc.
+ * Copyright (c) 2008-2018 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@
 #include "dirs.h"
 #include "dpctl.h"
 #include "dpif.h"
+#include "dpif-provider.h"
 #include "openvswitch/dynamic-string.h"
 #include "flow.h"
 #include "openvswitch/match.h"
@@ -2028,6 +2029,99 @@ dpctl_ipf_set_max_nfrags(int argc, const char *argv[],
     return error;
 }
 
+static void
+dpctl_dump_ipf(struct dpif *dpif, struct dpctl_params *dpctl_p)
+{
+    struct ipf_dump_ctx *dump_ctx;
+    char *dump;
+
+    int error = ct_dpif_ipf_dump_start(dpif, &dump_ctx);
+    if (error) {
+        dpctl_error(dpctl_p, error, "starting ipf list dump");
+        /* Nothing to clean up, just return. */
+        return;
+    }
+
+    dpctl_print(dpctl_p, "\n        Fragment Lists:\n\n");
+    while (!(error = ct_dpif_ipf_dump_next(dpif, dump_ctx, &dump))) {
+        dpctl_print(dpctl_p, "%s\n", dump);
+        free(dump);
+    }
+
+    if (error && error != EOF) {
+        dpctl_error(dpctl_p, error, "dumping ipf lists failed");
+    }
+
+    ct_dpif_ipf_dump_done(dpif, dump_ctx);
+}
+
+static int
+dpctl_ct_ipf_get_status(int argc, const char *argv[],
+                        struct dpctl_params *dpctl_p)
+{
+    struct dpif *dpif;
+    int error = opt_dpif_open(argc, argv, dpctl_p, 2, &dpif);
+
+    if (!error) {
+        struct dpif_ipf_status dpif_ipf_status;
+        error = ct_dpif_ipf_get_status(dpif, &dpif_ipf_status);
+
+        if (!error) {
+            dpctl_print(dpctl_p, "        Fragmentation Module Status\n");
+            dpctl_print(dpctl_p, "        ---------------------------\n");
+            dpctl_print(dpctl_p, "        v4 enabled: %u\n",
+                        dpif_ipf_status.v4.enabled);
+            dpctl_print(dpctl_p, "        v6 enabled: %u\n",
+                        dpif_ipf_status.v6.enabled);
+            dpctl_print(dpctl_p, "        max num frags (v4/v6): %u\n",
+                        dpif_ipf_status.nfrag_max);
+            dpctl_print(dpctl_p, "        num frag: %u\n",
+                        dpif_ipf_status.nfrag);
+            dpctl_print(dpctl_p, "        min v4 frag size: %u\n",
+                        dpif_ipf_status.v4.min_frag_size);
+            dpctl_print(dpctl_p, "        v4 frags accepted: %"PRIu64"\n",
+                        dpif_ipf_status.v4.nfrag_accepted);
+            dpctl_print(dpctl_p, "        v4 frags completed: %"PRIu64"\n",
+                        dpif_ipf_status.v4.nfrag_completed_sent);
+            dpctl_print(dpctl_p, "        v4 frags expired: %"PRIu64"\n",
+                        dpif_ipf_status.v4.nfrag_expired_sent);
+            dpctl_print(dpctl_p, "        v4 frags too small: %"PRIu64"\n",
+                        dpif_ipf_status.v4.nfrag_too_small);
+            dpctl_print(dpctl_p, "        v4 frags overlapped: %"PRIu64"\n",
+                        dpif_ipf_status.v4.nfrag_overlap);
+            dpctl_print(dpctl_p, "        v4 frags purged: %"PRIu64"\n",
+                        dpif_ipf_status.v4.nfrag_purged);
+
+            dpctl_print(dpctl_p, "        min v6 frag size: %u\n",
+                        dpif_ipf_status.v6.min_frag_size);
+            dpctl_print(dpctl_p, "        v6 frags accepted: %"PRIu64"\n",
+                        dpif_ipf_status.v6.nfrag_accepted);
+            dpctl_print(dpctl_p, "        v6 frags completed: %"PRIu64"\n",
+                        dpif_ipf_status.v6.nfrag_completed_sent);
+            dpctl_print(dpctl_p, "        v6 frags expired: %"PRIu64"\n",
+                        dpif_ipf_status.v6.nfrag_expired_sent);
+            dpctl_print(dpctl_p, "        v6 frags too small: %"PRIu64"\n",
+                        dpif_ipf_status.v6.nfrag_too_small);
+            dpctl_print(dpctl_p, "        v6 frags overlapped: %"PRIu64"\n",
+                        dpif_ipf_status.v6.nfrag_overlap);
+            dpctl_print(dpctl_p, "        v6 frags purged: %"PRIu64"\n",
+                        dpif_ipf_status.v6.nfrag_purged);
+        } else {
+            dpctl_error(dpctl_p, error,
+                        "ipf status could not be retrieved");
+            return error;
+        }
+
+        if (dpctl_p->verbosity) {
+            dpctl_dump_ipf(dpif, dpctl_p);
+        }
+
+        dpif_close(dpif);
+    }
+
+    return error;
+}
+
 /* Undocumented commands for unit testing. */
 
 static int
@@ -2339,6 +2433,8 @@ static const struct dpctl_command all_commands[] = {
        dpctl_ipf_set_min_frag, DP_RW },
     { "ipf-set-max-nfrags", "[dp] maxfrags", 1, 2,
        dpctl_ipf_set_max_nfrags, DP_RW },
+    { "ipf-get-status", "[dp]", 0, 1, dpctl_ct_ipf_get_status,
+       DP_RO },
     { "help", "", 0, INT_MAX, dpctl_help, DP_RO },
     { "list-commands", "", 0, INT_MAX, dpctl_list_commands, DP_RO },
 

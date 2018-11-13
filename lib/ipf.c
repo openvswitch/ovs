@@ -54,6 +54,10 @@ enum ipf_list_state {
     IPF_LIST_STATE_NUM,
 };
 
+static char *ipf_state_name[IPF_LIST_STATE_NUM] =
+    {"unused", "reassemble fail", "other frag", "first frag", "last frag",
+     "first/last frag", "complete"};
+
 enum ipf_list_type {
     IPF_FRAG_COMPLETED_LIST,
     IPF_FRAG_EXPIRY_LIST,
@@ -1399,5 +1403,115 @@ ipf_set_max_nfrags(uint32_t value)
         return 1;
     }
     atomic_store_relaxed(&nfrag_max, value);
+    return 0;
+}
+
+int
+ipf_get_status(struct ipf_status *ipf_status)
+{
+    ipf_status->nfrag = atomic_count_get(&nfrag);
+    atomic_read_relaxed(&nfrag_max, &ipf_status->nfrag_max);
+
+    atomic_read_relaxed(&ifp_v4_enabled, &ipf_status->v4.enabled);
+    atomic_read_relaxed(&min_v4_frag_size, &ipf_status->v4.min_frag_size);
+    atomic_read_relaxed(&n4frag_accepted, &ipf_status->v4.nfrag_accepted);
+    atomic_read_relaxed(&n4frag_completed_sent,
+                        &ipf_status->v4.nfrag_completed_sent);
+    atomic_read_relaxed(&n4frag_expired_sent,
+                        &ipf_status->v4.nfrag_expired_sent);
+    atomic_read_relaxed(&n4frag_too_small, &ipf_status->v4.nfrag_too_small);
+    atomic_read_relaxed(&n4frag_overlap, &ipf_status->v4.nfrag_overlap);
+    atomic_read_relaxed(&n4frag_purged, &ipf_status->v4.nfrag_purged);
+
+    atomic_read_relaxed(&ifp_v6_enabled, &ipf_status->v6.enabled);
+    atomic_read_relaxed(&min_v6_frag_size, &ipf_status->v6.min_frag_size);
+    atomic_read_relaxed(&n6frag_accepted, &ipf_status->v6.nfrag_accepted);
+    atomic_read_relaxed(&n6frag_completed_sent,
+                        &ipf_status->v6.nfrag_completed_sent);
+    atomic_read_relaxed(&n6frag_expired_sent,
+                        &ipf_status->v6.nfrag_expired_sent);
+    atomic_read_relaxed(&n6frag_too_small, &ipf_status->v6.nfrag_too_small);
+    atomic_read_relaxed(&n6frag_overlap, &ipf_status->v6.nfrag_overlap);
+    atomic_read_relaxed(&n4frag_overlap, &ipf_status->v4.nfrag_overlap);
+    atomic_read_relaxed(&n6frag_purged, &ipf_status->v6.nfrag_purged);
+    return 0;
+}
+
+struct ipf_dump_ctx {
+    struct hmap_position bucket_pos;
+};
+
+/* Allocates an 'ipf_dump_ctx' to keep track of an hmap position. The
+ * caller must call ipf_dump_done() when dumping is finished. */
+int
+ipf_dump_start(struct ipf_dump_ctx **ipf_dump_ctx)
+{
+    *ipf_dump_ctx = xzalloc(sizeof **ipf_dump_ctx);
+    return 0;
+}
+
+/* Creates a string representation of the state of an 'ipf_list' and puts
+ * it in  'ds'. */
+static void
+ipf_dump_create(const struct ipf_list *ipf_list, struct ds *ds)
+{
+
+    ds_put_cstr(ds, "(");
+    if (ipf_list->key.dl_type == htons(ETH_TYPE_IP)) {
+        ds_put_format(ds, "src="IP_FMT",dst="IP_FMT",",
+                      IP_ARGS(ipf_list->key.src_addr.ipv4_aligned),
+                      IP_ARGS(ipf_list->key.dst_addr.ipv4_aligned));
+    } else {
+        ds_put_cstr(ds, "src=");
+        ipv6_format_addr(&ipf_list->key.src_addr.ipv6_aligned, ds);
+        ds_put_cstr(ds, ",dst=");
+        ipv6_format_addr(&ipf_list->key.dst_addr.ipv6_aligned, ds);
+        ds_put_cstr(ds, ",");
+    }
+
+    ds_put_format(ds, "recirc_id=%u,ip_id=%u,dl_type=0x%x,zone=%u,nw_proto=%u",
+                  ipf_list->key.recirc_id, ntohl(ipf_list->key.ip_id),
+                  ntohs(ipf_list->key.dl_type), ipf_list->key.zone,
+                  ipf_list->key.nw_proto);
+
+    ds_put_format(ds, ",num_fragments=%u,state=%s",
+                  ipf_list->last_inuse_idx + 1,
+                  ipf_state_name[ipf_list->state]);
+
+    ds_put_cstr(ds, ")");
+}
+
+/* Finds the next ipf list starting from 'ipf_dump_ctx->bucket_pos' and uses
+ * ipf_dump_create() to create a string representation of the state of an
+ * ipf list, to which 'dump' is pointed to.  Returns EOF when there are no
+ * more ipf lists. */
+int
+ipf_dump_next(struct ipf_dump_ctx *ipf_dump_ctx, char **dump)
+{
+    ipf_lock_lock(&ipf_lock);
+
+    struct hmap_node *node = hmap_at_position(&frag_lists,
+                                              &ipf_dump_ctx->bucket_pos);
+    if (!node) {
+        ipf_lock_unlock(&ipf_lock);
+        return EOF;
+    } else {
+        struct ipf_list *ipf_list_;
+        INIT_CONTAINER(ipf_list_, node, node);
+        struct ipf_list ipf_list = *ipf_list_;
+        ipf_lock_unlock(&ipf_lock);
+        struct ds ds = DS_EMPTY_INITIALIZER;
+        ipf_dump_create(&ipf_list, &ds);
+        *dump = xstrdup(ds.string);
+        ds_destroy(&ds);
+        return 0;
+    }
+}
+
+/* Frees 'ipf_dump_ctx' allocated by ipf_dump_start(). */
+int
+ipf_dump_done(struct ipf_dump_ctx *ipf_dump_ctx)
+{
+    free(ipf_dump_ctx);
     return 0;
 }

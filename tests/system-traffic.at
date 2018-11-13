@@ -2365,6 +2365,9 @@ priority=100,in_port=2,ct_state=+trk+est-new,icmp,action=1
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
+dnl Modify userspace conntrack fragmentation handling.
+DPCTL_MODIFY_FRAGMENTATION()
+
 dnl Ipv4 fragmentation connectivity check.
 NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
@@ -2374,6 +2377,9 @@ dnl Ipv4 larger fragmentation connectivity check.
 NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
+
+dnl Check userspace conntrack fragmentation counters.
+DPCTL_CHECK_FRAGMENTATION_PASS()
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -2400,10 +2406,16 @@ priority=100,in_port=2,ct_state=+trk+est-new,icmp,action=1
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
+dnl Modify userspace conntrack fragmentation handling.
+DPCTL_MODIFY_FRAGMENTATION()
+
 dnl Ipv4 fragmentation connectivity check.
 NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 1 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 7 packets transmitted, 0 received, 100% packet loss, time 0ms
 ])
+
+dnl Check userspace conntrack fragmentation counters.
+DPCTL_CHECK_FRAGMENTATION_FAIL()
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -2430,6 +2442,9 @@ priority=100,in_port=2,ct_state=+trk+est-new,icmp,action=1
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
+dnl Modify userspace conntrack fragmentation handling.
+DPCTL_MODIFY_FRAGMENTATION()
+
 dnl Ipv4 fragmentation connectivity check.
 NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
@@ -2439,6 +2454,9 @@ dnl Ipv4 larger fragmentation connectivity check.
 NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
+
+dnl Check userspace conntrack fragmentation counters.
+DPCTL_CHECK_FRAGMENTATION_PASS()
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -2498,6 +2516,8 @@ AT_CLEANUP
 AT_SETUP([conntrack - IPv4 fragmentation incomplete reassembled packet])
 CHECK_CONNTRACK()
 OVS_TRAFFIC_VSWITCHD_START()
+DPCTL_SET_MIN_FRAG_SIZE()
+
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -2519,8 +2539,8 @@ AT_CLEANUP
 dnl Uses same first fragment as above 'incomplete reassembled packet' test.
 AT_SETUP([conntrack - IPv4 fragmentation with fragments specified])
 CHECK_CONNTRACK()
-CHECK_CONNTRACK_SMALL_FRAG()
 OVS_TRAFFIC_VSWITCHD_START()
+DPCTL_SET_MIN_FRAG_SIZE()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -2543,8 +2563,8 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - IPv4 fragmentation out of order])
 CHECK_CONNTRACK()
-CHECK_CONNTRACK_SMALL_FRAG()
 OVS_TRAFFIC_VSWITCHD_START()
+DPCTL_SET_MIN_FRAG_SIZE()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -2567,9 +2587,9 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - IPv4 fragmentation overlapping fragments by 1 octet])
 CHECK_CONNTRACK()
-CHECK_CONNTRACK_SMALL_FRAG()
 CHECK_CONNTRACK_FRAG_OVERLAP()
 OVS_TRAFFIC_VSWITCHD_START()
+DPCTL_SET_MIN_FRAG_SIZE()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -2591,9 +2611,9 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - IPv4 fragmentation overlapping fragments by 1 octet out of order])
 CHECK_CONNTRACK()
-CHECK_CONNTRACK_SMALL_FRAG()
 CHECK_CONNTRACK_FRAG_OVERLAP()
 OVS_TRAFFIC_VSWITCHD_START()
+DPCTL_SET_MIN_FRAG_SIZE()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -2790,6 +2810,7 @@ AT_CLEANUP
 AT_SETUP([conntrack - IPv6 fragmentation incomplete reassembled packet])
 CHECK_CONNTRACK()
 OVS_TRAFFIC_VSWITCHD_START()
+DPCTL_SET_MIN_FRAG_SIZE()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -2810,8 +2831,8 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - IPv6 fragmentation with fragments specified])
 CHECK_CONNTRACK()
-CHECK_CONNTRACK_SMALL_FRAG()
 OVS_TRAFFIC_VSWITCHD_START()
+DPCTL_SET_MIN_FRAG_SIZE()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -2834,8 +2855,8 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - IPv6 fragmentation out of order])
 CHECK_CONNTRACK()
-CHECK_CONNTRACK_SMALL_FRAG()
 OVS_TRAFFIC_VSWITCHD_START()
+DPCTL_SET_MIN_FRAG_SIZE()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -2858,9 +2879,9 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - IPv6 fragmentation, multiple extension headers])
 CHECK_CONNTRACK()
-CHECK_CONNTRACK_SMALL_FRAG()
 CHECK_CONNTRACK_FRAG_IPV6_MULT_EXTEN()
 OVS_TRAFFIC_VSWITCHD_START()
+DPCTL_SET_MIN_FRAG_SIZE()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -2884,9 +2905,9 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - IPv6 fragmentation, multiple extension headers + out of order])
 CHECK_CONNTRACK()
-CHECK_CONNTRACK_SMALL_FRAG()
 CHECK_CONNTRACK_FRAG_IPV6_MULT_EXTEN()
 OVS_TRAFFIC_VSWITCHD_START()
+DPCTL_SET_MIN_FRAG_SIZE()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -2910,9 +2931,9 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - IPv6 fragmentation, multiple extension headers 2])
 CHECK_CONNTRACK()
-CHECK_CONNTRACK_SMALL_FRAG()
 CHECK_CONNTRACK_FRAG_IPV6_MULT_EXTEN()
 OVS_TRAFFIC_VSWITCHD_START()
+DPCTL_SET_MIN_FRAG_SIZE()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -2936,9 +2957,9 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - IPv6 fragmentation, multiple extension headers 2 + out of order])
 CHECK_CONNTRACK()
-CHECK_CONNTRACK_SMALL_FRAG()
 CHECK_CONNTRACK_FRAG_IPV6_MULT_EXTEN()
 OVS_TRAFFIC_VSWITCHD_START()
+DPCTL_SET_MIN_FRAG_SIZE()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 

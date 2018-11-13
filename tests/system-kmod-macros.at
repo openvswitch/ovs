@@ -85,10 +85,6 @@ m4_define([CHECK_CONNTRACK_ALG])
 # needed.
 m4_define([CHECK_CONNTRACK_LOCAL_STACK])
 
-# CHECK_CONNTRACK_SMALL_FRAG()
-#
-m4_define([CHECK_CONNTRACK_SMALL_FRAG])
-
 # CHECK_CONNTRACK_FRAG_OVERLAP()
 #
 # The kernel does not support overlapping fragments checking.
@@ -136,6 +132,46 @@ m4_define([CHECK_CT_DPIF_SET_GET_MAXCONNS],
 m4_define([CHECK_CT_DPIF_GET_NCONNS],
 [
     AT_SKIP_IF([:])
+])
+
+# DPCTL_SET_MIN_FRAG_SIZE()
+#
+# The kernel does not support this command.
+m4_define([DPCTL_SET_MIN_FRAG_SIZE],
+[
+
+])
+
+# DPCTL_MODIFY_FRAGMENTATION()
+#
+# The kernel does not support this command.
+m4_define([DPCTL_MODIFY_FRAGMENTATION],
+[
+
+])
+
+# DPCTL_CHECK_FRAGMENTATION_PASS()
+#
+# The kernel does not support this command.
+m4_define([DPCTL_CHECK_FRAGMENTATION_PASS],
+[
+
+])
+
+# DPCTL_CHECK_V6_FRAGMENTATION_PASS()
+#
+# The kernel does not support this command.
+m4_define([DPCTL_CHECK_V6_FRAGMENTATION_PASS],
+[
+
+])
+
+# DPCTL_CHECK_FRAGMENTATION_FAIL()
+#
+# The kernel does not support this command.
+m4_define([DPCTL_CHECK_FRAGMENTATION_FAIL],
+[
+
 ])
 
 # OVS_CHECK_KERNEL([minversion], [minsublevel], [maxversion], [maxsublevel])
