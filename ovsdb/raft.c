@@ -3045,8 +3045,10 @@ raft_update_match_index(struct raft *raft, struct raft_server *s,
 static void
 raft_update_our_match_index(struct raft *raft, uint64_t min_index)
 {
-    raft_update_match_index(raft, raft_find_server(raft, &raft->sid),
-                            min_index);
+    struct raft_server *server = raft_find_server(raft, &raft->sid);
+    if (server) {
+        raft_update_match_index(raft, server, min_index);
+    }
 }
 
 static void
