@@ -3867,6 +3867,13 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
         goto coverage_out;
     }
 
+    /* If we're still connecting or re-connecting, don't bother sending a
+     * transaction. */
+    if (txn->db->idl->state != IDL_S_MONITORING) {
+        txn->status = TXN_TRY_AGAIN;
+        goto disassemble_out;
+    }
+
     /* If we need a lock but don't have it, give up quickly. */
     if (txn->db->lock_name && !txn->db->has_lock) {
         txn->status = TXN_NOT_LOCKED;
