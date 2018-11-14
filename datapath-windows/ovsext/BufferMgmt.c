@@ -1622,6 +1622,7 @@ OvsCompleteNBL(PVOID switch_ctx,
 {
     POVS_BUFFER_CONTEXT ctx;
     UINT16 flags;
+    UINT32 dataOffsetDelta;
     PNET_BUFFER_LIST parent;
     NDIS_STATUS status;
     NDIS_HANDLE poolHandle;
@@ -1653,6 +1654,7 @@ OvsCompleteNBL(PVOID switch_ctx,
     nb = NET_BUFFER_LIST_FIRST_NB(nbl);
 
     flags = ctx->flags;
+    dataOffsetDelta = ctx->dataOffsetDelta;
     if (!(flags & OVS_BUFFER_FRAGMENT) &&
         NET_BUFFER_DATA_LENGTH(nb) != ctx->origDataLength) {
         UINT32 diff;
@@ -1667,7 +1669,7 @@ OvsCompleteNBL(PVOID switch_ctx,
         }
     }
 
-    if (ctx->flags & OVS_BUFFER_PRIVATE_CONTEXT) {
+    if (flags & OVS_BUFFER_PRIVATE_CONTEXT) {
         NdisFreeNetBufferListContext(nbl, sizeof (OVS_BUFFER_CONTEXT));
     }
 
@@ -1740,7 +1742,7 @@ OvsCompleteNBL(PVOID switch_ctx,
 #ifdef DBG
         InterlockedDecrement((LONG volatile *)&ovsPool->fragNBLCount);
 #endif
-        NdisFreeFragmentNetBufferList(nbl, ctx->dataOffsetDelta, 0);
+        NdisFreeFragmentNetBufferList(nbl, dataOffsetDelta, 0);
     }
 
     if (parent != NULL) {
