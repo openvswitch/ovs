@@ -1613,7 +1613,6 @@ packet_put_ra_prefix_opt(struct dp_packet *b,
     struct ip6_hdr *nh = dp_packet_l3(b);
     nh->ip6_plen = htons(prev_l4_size + ND_PREFIX_OPT_LEN);
 
-    struct ovs_ra_msg *ra = dp_packet_l4(b);
     struct ovs_nd_prefix_opt *prefix_opt =
         dp_packet_put_uninit(b, sizeof *prefix_opt);
     prefix_opt->type = ND_OPT_PREFIX_INFORMATION;
@@ -1625,6 +1624,7 @@ packet_put_ra_prefix_opt(struct dp_packet *b,
     put_16aligned_be32(&prefix_opt->reserved, 0);
     memcpy(prefix_opt->prefix.be32, prefix.be32, sizeof(ovs_be32[4]));
 
+    struct ovs_ra_msg *ra = dp_packet_l4(b);
     ra->icmph.icmp6_cksum = 0;
     uint32_t icmp_csum = packet_csum_pseudoheader6(dp_packet_l3(b));
     ra->icmph.icmp6_cksum = csum_finish(csum_continue(
