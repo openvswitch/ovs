@@ -62,6 +62,7 @@ ofctl_parse_flow(const char *input, int command)
         free(error);
     } else {
         ofctl_parse_flows__(&fm, 1, usable_protocols);
+        minimatch_destroy(&fm.match);
     }
 }
 
