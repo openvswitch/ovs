@@ -52,7 +52,7 @@ m4_define([OVN_CONTROLLER_VTEP_START],
 
    dnl Start ovs-vtep.
    AT_CHECK([vtep-ctl add-ps br-vtep -- set Physical_Switch br-vtep tunnel_ips=1.2.3.4])
-   AT_CHECK([ovs-vtep --log-file=ovs-vtep.log --pidfile=ovs-vtep.pid --detach br-vtep \], [0], [], [stderr])
+   AT_CHECK([ovs-vtep --log-file=ovs-vtep.log --pidfile=ovs-vtep.pid --detach --no-chdir br-vtep \], [0], [], [stderr])
    on_exit "kill `cat ovs-vtep.pid`"
    AT_CHECK([[sed < stderr '
 /vlog|INFO|opened log file/d']])
@@ -61,14 +61,14 @@ m4_define([OVN_CONTROLLER_VTEP_START],
 
    dnl Start ovn-northd.
    AT_CHECK([ovn-nbctl ls-add br-test])
-   AT_CHECK([ovn-northd --detach --pidfile --log-file], [0], [], [stderr])
+   AT_CHECK([ovn-northd --detach --no-chdir --pidfile --log-file], [0], [], [stderr])
    on_exit "kill `cat ovn-northd.pid`"
    AT_CHECK([[sed < stderr '
 /vlog|INFO|opened log file/d']])
    AT_CAPTURE_FILE([ovn-northd.log])
 
    dnl Start ovn-controllger-vtep.
-   AT_CHECK([ovn-controller-vtep --detach --pidfile --log-file --vtep-db=unix:$OVS_RUNDIR/db.sock --ovnsb-db=unix:$OVS_RUNDIR/ovnsb_db.sock], [0], [], [stderr])
+   AT_CHECK([ovn-controller-vtep --detach --no-chdir --pidfile --log-file --vtep-db=unix:$OVS_RUNDIR/db.sock --ovnsb-db=unix:$OVS_RUNDIR/ovnsb_db.sock], [0], [], [stderr])
    AT_CAPTURE_FILE([ovn-controller-vtep.log])
    on_exit "kill `cat ovn-controller-vtep.pid`"
    AT_CHECK([[sed < stderr '

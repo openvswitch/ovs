@@ -19,9 +19,9 @@ m4_define([OVSDB_CHECK_LOCK_SETUP],
 # Two sessions create two locks. Both sessions should be able to get their
 # own lock immediately.
 OVSDB_CHECK_LOCK_SETUP([lock], [positive])
-AT_CHECK([ovsdb-client --detach lock unix:socket lock0 >c1-output 2>&1],
+AT_CHECK([ovsdb-client --detach --no-chdir lock unix:socket lock0 >c1-output 2>&1],
       [0], [], [])
-AT_CHECK([ovsdb-client --detach lock unix:socket lock1 >c2-output 2>&1],
+AT_CHECK([ovsdb-client --detach --no-chdir lock unix:socket lock1 >c2-output 2>&1],
       [0], [], [])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CHECK([cat c1-output], 0, [{"locked":true}
@@ -35,9 +35,9 @@ AT_CLEANUP
 # to get the lock immediately, the second session will get a notification
 # after the first session unlocks.
 OVSDB_CHECK_LOCK_SETUP([unlock], [positive])
-AT_CHECK([ovsdb-client --detach --pidfile lock unix:socket lock0 >c1-output 2>&1],
+AT_CHECK([ovsdb-client --detach --no-chdir --pidfile lock unix:socket lock0 >c1-output 2>&1],
       [0], [], [])
-AT_CHECK([ovsdb-client --detach lock unix:socket lock0 >c2-output 2>&1],
+AT_CHECK([ovsdb-client --detach --no-chdir lock unix:socket lock0 >c2-output 2>&1],
       [0], [], [])
 AT_CHECK([ovs-appctl -t ovsdb-client unlock lock0], [0], [], [])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
@@ -55,9 +55,9 @@ AT_CLEANUP
 # to get the lock immediately. The second session tries to steal the lock, then
 # unlocks the lock.
 OVSDB_CHECK_LOCK_SETUP([steal], [positive])
-AT_CHECK([ovsdb-client --detach lock unix:socket lock0 >c1-output 2>&1],
+AT_CHECK([ovsdb-client --detach --no-chdir lock unix:socket lock0 >c1-output 2>&1],
       [0], [], [])
-AT_CHECK([ovsdb-client --detach --pidfile steal unix:socket lock0 >c2-output 2>&1],
+AT_CHECK([ovsdb-client --detach --no-chdir --pidfile steal unix:socket lock0 >c2-output 2>&1],
       [0], [], [])
 AT_CHECK([ovs-appctl -t ovsdb-client unlock lock0], [0], [], [])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])

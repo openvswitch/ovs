@@ -185,8 +185,8 @@ AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/remove-db ordinals], [0])
 CHECK_DBS([])
 
 # Start monitoring processes.
-AT_CHECK([ovsdb-client --detach --pidfile=ovsdb-client-1.pid --no-db-change-aware --no-headings monitor _Server Database name > db-change-unaware.stdout 2> db-change-unaware.stderr])
-AT_CHECK([ovsdb-client --detach --pidfile=ovsdb-client-2.pid --db-change-aware --no-headings monitor _Server Database name > db-change-aware.stdout 2> db-change-aware.stderr])
+AT_CHECK([ovsdb-client --detach --no-chdir --pidfile=ovsdb-client-1.pid --no-db-change-aware --no-headings monitor _Server Database name > db-change-unaware.stdout 2> db-change-unaware.stderr])
+AT_CHECK([ovsdb-client --detach --no-chdir --pidfile=ovsdb-client-2.pid --db-change-aware --no-headings monitor _Server Database name > db-change-aware.stdout 2> db-change-aware.stderr])
 AT_CAPTURE_FILE([db-change-unaware.stdout])
 AT_CAPTURE_FILE([db-change-unaware.stderr])
 AT_CAPTURE_FILE([db-change-aware.stdout])
@@ -888,24 +888,24 @@ ovsdb_check_online_conversion() {
 
     dnl Start two monitors on the 'ordinals' db, one that is database
     dnl change aware and one that is not.
-    AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --pidfile=monitor-ordinals-aware.pid --log-file=monitor-ordinals-aware.log --db-change-aware --no-headings monitor ordinals ordinals number name > monitor-ordinals-aware.stdout 2> monitor-ordinals-aware.stderr])
+    AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --no-chdir --pidfile=monitor-ordinals-aware.pid --log-file=monitor-ordinals-aware.log --db-change-aware --no-headings monitor ordinals ordinals number name > monitor-ordinals-aware.stdout 2> monitor-ordinals-aware.stderr])
     AT_CAPTURE_FILE([monitor-ordinals-aware.stdout])
     AT_CAPTURE_FILE([monitor-ordinals-aware.log])
     AT_CAPTURE_FILE([monitor-ordinals-aware.stderr])
 
-    AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --pidfile=monitor-ordinals-unaware.pid --log-file=monitor-ordinals-unaware.log --no-db-change-aware --no-headings monitor ordinals ordinals number name > monitor-ordinals-unaware.stdout 2> monitor-ordinals-unaware.stderr])
+    AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --no-chdir --pidfile=monitor-ordinals-unaware.pid --log-file=monitor-ordinals-unaware.log --no-db-change-aware --no-headings monitor ordinals ordinals number name > monitor-ordinals-unaware.stdout 2> monitor-ordinals-unaware.stderr])
     AT_CAPTURE_FILE([monitor-ordinals-unaware.stdout])
     AT_CAPTURE_FILE([monitor-ordinals-unaware.log])
     AT_CAPTURE_FILE([monitor-ordinals-unaware.stderr])
 
     dnl Start two monitors on the '_Server' db, one that is database
     dnl change aware and one that is not.
-    AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --pidfile=monitor-server-aware.pid --log-file=monitor-server-aware.log --db-change-aware --no-headings monitor _Server Database name > monitor-server-aware.stdout 2> monitor-server-aware.stderr])
+    AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --no-chdir --pidfile=monitor-server-aware.pid --log-file=monitor-server-aware.log --db-change-aware --no-headings monitor _Server Database name > monitor-server-aware.stdout 2> monitor-server-aware.stderr])
     AT_CAPTURE_FILE([monitor-server-aware.stdout])
     AT_CAPTURE_FILE([monitor-server-aware.log])
     AT_CAPTURE_FILE([monitor-server-aware.stderr])
 
-    AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --pidfile=monitor-server-unaware.pid --log-file=monitor-server-unaware.log --no-db-change-aware --no-headings monitor _Server Database name > monitor-server-unaware.stdout 2> monitor-server-unaware.stderr])
+    AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --no-chdir --pidfile=monitor-server-unaware.pid --log-file=monitor-server-unaware.log --no-db-change-aware --no-headings monitor _Server Database name > monitor-server-unaware.stdout 2> monitor-server-unaware.stderr])
     AT_CAPTURE_FILE([monitor-server-unaware.stdout])
     AT_CAPTURE_FILE([monitor-server-unaware.log])
     AT_CAPTURE_FILE([monitor-server-unaware.stderr])
@@ -919,12 +919,12 @@ ovsdb_check_online_conversion() {
                      "columns": ["name", "number"],
                      "rows": [],
                      "until": "!="}]]'
-    AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --pidfile=trigger-ordinals-aware.pid --log-file=trigger-ordinals-aware.log --db-change-aware transact "$ordinals_txn"  > trigger-ordinals-aware.stdout 2> trigger-ordinals-aware.stderr])
+    AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --no-chdir --pidfile=trigger-ordinals-aware.pid --log-file=trigger-ordinals-aware.log --db-change-aware transact "$ordinals_txn"  > trigger-ordinals-aware.stdout 2> trigger-ordinals-aware.stderr])
     AT_CAPTURE_FILE([trigger-ordinals-aware.stdout])
     AT_CAPTURE_FILE([trigger-ordinals-aware.log])
     AT_CAPTURE_FILE([trigger-ordinals-aware.stderr])
 
-    AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --pidfile=trigger-ordinals-unaware.pid --log-file=trigger-ordinals-unaware.log --no-db-change-aware transact  "$ordinals_txn" > trigger-ordinals-unaware.stdout 2> trigger-ordinals-unaware.stderr])
+    AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --no-chdir --pidfile=trigger-ordinals-unaware.pid --log-file=trigger-ordinals-unaware.log --no-db-change-aware transact  "$ordinals_txn" > trigger-ordinals-unaware.stdout 2> trigger-ordinals-unaware.stderr])
     AT_CAPTURE_FILE([trigger-ordinals-unaware.stdout])
     AT_CAPTURE_FILE([trigger-ordinals-unaware.log])
     AT_CAPTURE_FILE([trigger-ordinals-unaware.stderr])
@@ -938,12 +938,12 @@ ovsdb_check_online_conversion() {
                    "columns": ["name"],
                    "rows": [],
                    "until": "!="}]]'
-    AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --pidfile=trigger-server-aware.pid --log-file=trigger-server-aware.log --db-change-aware transact "$server_txn"  > trigger-server-aware.stdout 2> trigger-server-aware.stderr])
+    AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --no-chdir --pidfile=trigger-server-aware.pid --log-file=trigger-server-aware.log --db-change-aware transact "$server_txn"  > trigger-server-aware.stdout 2> trigger-server-aware.stderr])
     AT_CAPTURE_FILE([trigger-server-aware.stdout])
     AT_CAPTURE_FILE([trigger-server-aware.log])
     AT_CAPTURE_FILE([trigger-server-aware.stderr])
 
-    AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --pidfile=trigger-server-unaware.pid --log-file=trigger-server-unaware.log --no-db-change-aware transact  "$server_txn" > trigger-server-unaware.stdout 2> trigger-server-unaware.stderr])
+    AT_CHECK([ovsdb-client -vfile -vvlog:off --detach --no-chdir --pidfile=trigger-server-unaware.pid --log-file=trigger-server-unaware.log --no-db-change-aware transact  "$server_txn" > trigger-server-unaware.stdout 2> trigger-server-unaware.stderr])
     AT_CAPTURE_FILE([trigger-server-unaware.stdout])
     AT_CAPTURE_FILE([trigger-server-unaware.log])
     AT_CAPTURE_FILE([trigger-server-unaware.stderr])

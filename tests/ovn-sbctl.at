@@ -18,7 +18,7 @@ m4_define([OVN_SBCTL_TEST_START],
    AT_CAPTURE_FILE([ovsdb-server.log])
 
    dnl Start ovn-northd.
-   AT_CHECK([ovn-northd --detach --pidfile --log-file --ovnnb-db=unix:$OVS_RUNDIR/ovnnb_db.sock --ovnsb-db=unix:$OVS_RUNDIR/ovnsb_db.sock], [0], [], [stderr])
+   AT_CHECK([ovn-northd --detach --no-chdir --pidfile --log-file --ovnnb-db=unix:$OVS_RUNDIR/ovnnb_db.sock --ovnsb-db=unix:$OVS_RUNDIR/ovnsb_db.sock], [0], [], [stderr])
    on_exit "kill `cat ovn-northd.pid`"
    AT_CHECK([[sed < stderr '
 /vlog|INFO|opened log file/d']])

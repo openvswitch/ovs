@@ -120,7 +120,7 @@ on_exit 'kill `cat test-unixctl.pid`'
 
 AT_CAPTURE_FILE([log])
 AT_CAPTURE_FILE([log.old])
-AT_CHECK([ovstest test-unixctl --log-file=`pwd`/log --pidfile --detach],
+AT_CHECK([ovstest test-unixctl --log-file=`pwd`/log --pidfile --detach --no-chdir],
   [0], [], [stderr])
 AT_CHECK([vlog_filt stderr], [0],
   [opened log file
@@ -156,7 +156,7 @@ m4_define([VLOG_REOPEN_PYN],
 
    AT_CAPTURE_FILE([log])
    AT_CAPTURE_FILE([log.old])
-   AT_CHECK([$3 $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach])
+   AT_CHECK([$3 $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach --no-chdir])
 
    AT_CHECK([APPCTL -t test-unixctl.py log message])
    mv log log.old
@@ -181,7 +181,7 @@ VLOG_REOPEN_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 AT_SETUP([vlog - vlog/reopen without log file - C])
 on_exit 'kill `cat test-unixctl.pid`'
 
-AT_CHECK([ovstest test-unixctl --pidfile --detach])
+AT_CHECK([ovstest test-unixctl --pidfile --detach --no-chdir])
 
 AT_CHECK([APPCTL -t test-unixctl vlog/reopen], [2], [],
   [Logging to file not configured
@@ -195,7 +195,7 @@ m4_define([VLOG_REOPEN_WITHOUT_FILE_PYN],
    AT_SKIP_IF([test $2 = no])
    on_exit 'kill `cat test-unixctl.py.pid`'
 
-   AT_CHECK([$3 $srcdir/test-unixctl.py --pidfile --detach])
+   AT_CHECK([$3 $srcdir/test-unixctl.py --pidfile --detach --no-chdir])
 
    AT_CHECK([APPCTL -t test-unixctl.py vlog/reopen], [0],
      [Logging to file not configured
@@ -214,7 +214,7 @@ AT_SKIP_IF([echo > /dev/full])
 
 on_exit 'kill `cat test-unixctl.pid`'
 
-AT_CHECK([ovstest test-unixctl --log-file=`pwd`/log --pidfile --detach],
+AT_CHECK([ovstest test-unixctl --log-file=`pwd`/log --pidfile --detach --no-chdir],
   [0], [], [stderr])
 AT_CHECK([vlog_filt stderr], [0], [opened log file
 ])
@@ -253,7 +253,7 @@ m4_define([VLOG_CANT_REOPEN_PYN],
 
    on_exit 'kill `cat test-unixctl.py.pid`'
 
-   AT_CHECK([$3 $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach])
+   AT_CHECK([$3 $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach --no-chdir])
    AT_CHECK([APPCTL -t test-unixctl.py log message])
    mv log log.old
    ln -s /dev/full log
@@ -280,7 +280,7 @@ on_exit 'kill `cat test-unixctl.pid`'
 
 AT_CAPTURE_FILE([log])
 AT_CAPTURE_FILE([log.old])
-AT_CHECK([ovstest test-unixctl --log-file=`pwd`/log --pidfile --detach],
+AT_CHECK([ovstest test-unixctl --log-file=`pwd`/log --pidfile --detach --no-chdir],
   [0], [], [ignore])
 AT_CHECK([vlog_filt log], [0], [opened log file
 Entering run loop.
@@ -322,7 +322,7 @@ m4_define([VLOG_CLOSE_PYN],
 
    AT_CAPTURE_FILE([log])
    AT_CAPTURE_FILE([log.old])
-   AT_CHECK([$3 $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach])
+   AT_CHECK([$3 $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach --no-chdir])
 
    AT_CHECK([APPCTL -t test-unixctl.py log message])
    AT_CHECK([APPCTL -t test-unixctl.py log message2])
@@ -358,7 +358,7 @@ AT_SETUP([vlog - vlog/set and vlog/list - C])
 on_exit 'kill `cat test-unixctl.pid`'
 
 AT_CAPTURE_FILE([log])
-AT_CHECK([ovstest test-unixctl --log-file=`pwd`/log --pidfile --detach],
+AT_CHECK([ovstest test-unixctl --log-file=`pwd`/log --pidfile --detach --no-chdir],
   [0], [], [ignore])
 AT_CHECK([vlog_filt log], [0], [opened log file
 Entering run loop.
@@ -406,7 +406,7 @@ m4_define([VLOG_SET_AND_LIST_PYN],
    on_exit 'kill `cat test-unixctl.py.pid`'
 
    AT_CAPTURE_FILE([log])
-   AT_CHECK([$3 $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach])
+   AT_CHECK([$3 $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach --no-chdir])
 
    AT_CHECK([APPCTL -t test-unixctl.py vlog/list], [0], [dnl
                  console    syslog    file
@@ -498,11 +498,11 @@ m4_define([VLOG_RFC5424_PYN],
    on_exit 'kill `cat test-unixctl.py.pid`'
 
    AT_CHECK([$3 $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile \
--vFACILITY:invalid --detach], [1], [], [test-unixctl.py: processing "FACILITY:invalid": Facility invalid is invalid
+-vFACILITY:invalid --detach --no-chdir], [1], [], [test-unixctl.py: processing "FACILITY:invalid": Facility invalid is invalid
 ])
 
    AT_CHECK([$3 $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile \
--vFACILITY:daemon --detach])
+-vFACILITY:daemon --detach --no-chdir])
 
    AT_CHECK([ovs-appctl -t test-unixctl.py vlog/set FACILITY:invalid], [0],
 [Facility invalid is invalid

@@ -122,7 +122,7 @@ m4_define([DAEMON_DETACH_PYN],
    # Start the daemon and make sure that the pidfile exists immediately.
    # We don't wait for the pidfile to get created because the daemon is
    # supposed to do so before the parent exits.
-   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile=pid --detach], [0])
+   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile=pid --detach --no-chdir], [0])
    AT_CHECK([test -s pid])
    AT_CHECK([kill -0 `cat pid`])
    # Kill the daemon and make sure that the pidfile gets deleted.
@@ -149,7 +149,7 @@ m4_define([DAEMON_DETACH_MONITOR_PYN],
    # Start the daemon and make sure that the pidfile exists immediately.
    # We don't wait for the pidfile to get created because the daemon is
    # supposed to do so before the parent exits.
-   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile=daemon --detach --monitor], [0])
+   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile=daemon --detach --no-chdir --monitor], [0])
    on_exit 'kill `cat daemon olddaemon newdaemon monitor`'
    AT_CHECK([test -s daemon])
    # Check that the pidfile names a running process,
@@ -190,7 +190,7 @@ m4_define([DAEMON_DETACH_ERRORS_PYN],
   [AT_SETUP([daemon --detach startup errors - $1])
    AT_SKIP_IF([test $2 = no])
    AT_CAPTURE_FILE([pid])
-   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile=pid --detach --bail], [1], [], [stderr])
+   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile=pid --detach --no-chdir --bail], [1], [], [stderr])
    AT_CHECK([grep 'test-daemon.py: exiting after daemonize_start() as requested' stderr],
      [0], [ignore], [])
    AT_CHECK([test ! -s pid])
@@ -203,7 +203,7 @@ m4_define([DAEMON_DETACH_MONITOR_ERRORS_PYN],
   [AT_SETUP([daemon --detach --monitor startup errors - $1])
    AT_SKIP_IF([test $2 = no])
    AT_CAPTURE_FILE([pid])
-   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile=pid --detach --monitor --bail], [1], [], [stderr])
+   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile=pid --detach --no-chdir --monitor --bail], [1], [], [stderr])
    AT_CHECK([grep 'test-daemon.py: exiting after daemonize_start() as requested' stderr],
      [0], [ignore], [])
    AT_CHECK([test ! -s pid])
@@ -220,7 +220,7 @@ m4_define([DAEMON_DETACH_CLOSES_FDS_PYN],
    AT_CAPTURE_FILE([pid])
    AT_CAPTURE_FILE([status])
    AT_CAPTURE_FILE([stderr])
-   AT_CHECK([(yes 2>stderr; echo $? > status) | $3 $srcdir/test-daemon.py --pidfile=pid --detach])
+   AT_CHECK([(yes 2>stderr; echo $? > status) | $3 $srcdir/test-daemon.py --pidfile=pid --detach --no-chdir])
    AT_CHECK([kill `cat pid`])
    AT_CHECK([test -s status])
    if grep '[[bB]]roken pipe' stderr >/dev/null 2>&1; then
@@ -247,7 +247,7 @@ m4_define([DAEMON_DETACH_MONITOR_CLOSES_FDS_PYN],
    AT_CAPTURE_FILE([status])
    AT_CAPTURE_FILE([stderr])
    OVSDB_INIT([db])
-   AT_CHECK([(yes 2>stderr; echo $? > status) | $3 $srcdir/test-daemon.py --pidfile=pid --detach], [0], [], [])
+   AT_CHECK([(yes 2>stderr; echo $? > status) | $3 $srcdir/test-daemon.py --pidfile=pid --detach --no-chdir], [0], [], [])
    AT_CHECK([kill `cat pid`])
    AT_CHECK([test -s status])
    if grep '[[bB]]roken pipe' stderr >/dev/null 2>&1; then

@@ -3206,11 +3206,11 @@ AT_CHECK([ovs-vsctl -vsyslog:off set-controller br0 unix:testcontroller])
 
 dnl then start listening on the '.snoop' connection
 on_exit 'kill `cat ovs-ofctl-snoop.pid`'
-AT_CHECK([ovs-ofctl -vsyslog:off --detach --pidfile=ovs-ofctl-snoop.pid snoop br0 > snoopbr0.txt 2>&1])
+AT_CHECK([ovs-ofctl -vsyslog:off --detach --no-chdir --pidfile=ovs-ofctl-snoop.pid snoop br0 > snoopbr0.txt 2>&1])
 
 dnl finally start the controller
 on_exit 'kill `cat ovs-testcontroller.pid`'
-AT_CHECK([ovs-testcontroller -vsyslog:off --detach --pidfile punix:testcontroller], [0], [ignore])
+AT_CHECK([ovs-testcontroller -vsyslog:off --detach --no-chdir --pidfile punix:testcontroller], [0], [ignore])
 OVS_WAIT_UNTIL([test -e testcontroller])
 
 dnl check for some of the initial handshake messages

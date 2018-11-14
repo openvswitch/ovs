@@ -15,7 +15,7 @@ ovn_nbctl_test_start() {
    on_exit "kill `cat ovsdb-server.pid`"
    AS_CASE([$1],
      [daemon],
-       [export OVN_NB_DAEMON=$(ovn-nbctl --pidfile --detach --log-file -vsocket_util:off)
+       [export OVN_NB_DAEMON=$(ovn-nbctl --pidfile --detach --no-chdir --log-file -vsocket_util:off)
         on_exit "kill `cat ovn-nbctl.pid`"],
      [direct], [],
      [*], [AT_FAIL_IF(:)])

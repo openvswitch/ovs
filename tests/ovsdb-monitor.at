@@ -21,7 +21,7 @@ ovsdb_check_monitor () {
                [0], [ignore], [ignore])
       sleep 1
     else
-      AT_CHECK([ovsdb-client -vjsonrpc --detach --pidfile --log-file -d json monitor --format=csv unix:socket $db $table $columns > output 2> ovsdb-client.stderr],
+      AT_CHECK([ovsdb-client -vjsonrpc --detach --no-chdir --pidfile --log-file -d json monitor --format=csv unix:socket $db $table $columns > output 2> ovsdb-client.stderr],
              [0], [ignore], [ignore])
     fi
     on_exit 'kill `cat ovsdb-client.pid`'
