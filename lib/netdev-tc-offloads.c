@@ -89,8 +89,20 @@ del_ufid_tc_mapping(const ovs_u128 *ufid)
     ovs_mutex_unlock(&ufid_lock);
 }
 
-/* Add ufid entry to ufid_tc hashmap.
- * If entry exists already it will be replaced. */
+/* Wrapper function to delete filter and ufid tc mapping */
+static int
+del_filter_and_ufid_mapping(int ifindex, int prio, int handle,
+                            const ovs_u128 *ufid)
+{
+    int err;
+
+    err = tc_del_filter(ifindex, prio, handle);
+    del_ufid_tc_mapping(ufid);
+
+    return err;
+}
+
+/* Add ufid entry to ufid_tc hashmap. */
 static void
 add_ufid_tc_mapping(const ovs_u128 *ufid, int prio, int handle,
                     struct netdev *netdev, int ifindex)
@@ -98,8 +110,6 @@ add_ufid_tc_mapping(const ovs_u128 *ufid, int prio, int handle,
     size_t ufid_hash = hash_bytes(ufid, sizeof *ufid, 0);
     size_t tc_hash = hash_int(hash_int(prio, handle), ifindex);
     struct ufid_tc_data *new_data = xzalloc(sizeof *new_data);
-
-    del_ufid_tc_mapping(ufid);
 
     new_data->ufid = *ufid;
     new_data->prio = prio;
@@ -845,7 +855,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
     handle = get_ufid_tc_mapping(ufid, &prio, NULL);
     if (handle && prio) {
         VLOG_DBG_RL(&rl, "updating old handle: %d prio: %d", handle, prio);
-        tc_del_filter(ifindex, prio, handle);
+        del_filter_and_ufid_mapping(ifindex, prio, handle, ufid);
     }
 
     if (!prio) {
@@ -950,8 +960,7 @@ netdev_tc_flow_del(struct netdev *netdev OVS_UNUSED,
         }
     }
 
-    error = tc_del_filter(ifindex, prio, handle);
-    del_ufid_tc_mapping(ufid);
+    error = del_filter_and_ufid_mapping(ifindex, prio, handle, ufid);
 
     netdev_close(dev);
 
