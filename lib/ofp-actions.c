@@ -840,7 +840,7 @@ decode_NXAST_RAW_CONTROLLER2(const struct ext_action_header *eah,
         }
 
         case NXAC2PT_USERDATA:
-            out->size = start_ofs + OFPACT_CONTROLLER_SIZE;
+            out->size = start_ofs + sizeof(struct ofpact_controller);
             ofpbuf_put(out, payload.msg, ofpbuf_msgsize(&payload));
             oc = ofpbuf_at_assert(out, start_ofs, sizeof *oc);
             oc->userdata_len = ofpbuf_msgsize(&payload);

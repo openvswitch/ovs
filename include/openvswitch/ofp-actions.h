@@ -275,16 +275,20 @@ ofpact_find_type_flattened(const struct ofpact *a, enum ofpact_type type,
  * Action structure for actions that do not have any extra data beyond the
  * action type. */
 struct ofpact_null {
-    struct ofpact ofpact;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+    );
 };
 
 /* OFPACT_OUTPUT.
  *
  * Used for OFPAT10_OUTPUT. */
 struct ofpact_output {
-    struct ofpact ofpact;
-    ofp_port_t port;            /* Output port. */
-    uint16_t max_len;           /* Max send len, for port OFPP_CONTROLLER. */
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        ofp_port_t port;        /* Output port. */
+        uint16_t max_len;       /* Max send len, for port OFPP_CONTROLLER. */
+    );
 };
 
 #define NX_CTLR_NO_METER 0
@@ -321,27 +325,33 @@ struct ofpact_controller {
  *
  * Used for OFPAT10_ENQUEUE. */
 struct ofpact_enqueue {
-    struct ofpact ofpact;
-    ofp_port_t port;
-    uint32_t queue;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        ofp_port_t port;
+        uint32_t queue;
+    );
 };
 
 /* OFPACT_OUTPUT_REG.
  *
  * Used for NXAST_OUTPUT_REG. */
 struct ofpact_output_reg {
-    struct ofpact ofpact;
-    uint16_t max_len;
-    struct mf_subfield src;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        uint16_t max_len;
+        struct mf_subfield src;
+    );
 };
 
 /* OFPACT_OUTPUT_TRUNC.
  *
  * Used for NXAST_OUTPUT_TRUNC. */
 struct ofpact_output_trunc {
-    struct ofpact ofpact;
-    ofp_port_t port;            /* Output port. */
-    uint32_t max_len;           /* Max send len. */
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        ofp_port_t port;        /* Output port. */
+        uint32_t max_len;       /* Max send len. */
+    );
 };
 
 /* Bundle slave choice algorithm to apply.
@@ -371,19 +381,21 @@ enum nx_bd_algorithm {
  *
  * Used for NXAST_BUNDLE. */
 struct ofpact_bundle {
-    struct ofpact ofpact;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
 
-    /* Slave choice algorithm to apply to hash value. */
-    enum nx_bd_algorithm algorithm;
+        /* Slave choice algorithm to apply to hash value. */
+        enum nx_bd_algorithm algorithm;
 
-    /* What fields to hash and how. */
-    enum nx_hash_fields fields;
-    uint16_t basis;             /* Universal hash parameter. */
+        /* What fields to hash and how. */
+        enum nx_hash_fields fields;
+        uint16_t basis;         /* Universal hash parameter. */
 
-    struct mf_subfield dst;
+        struct mf_subfield dst;
 
-    /* Slaves for output. */
-    unsigned int n_slaves;
+        /* Slaves for output. */
+        unsigned int n_slaves;
+    );
     ofp_port_t slaves[];
 };
 
@@ -396,10 +408,12 @@ struct ofpact_bundle {
  *
  * Used for OFPAT10_SET_VLAN_VID and OFPAT11_SET_VLAN_VID. */
 struct ofpact_vlan_vid {
-    struct ofpact ofpact;
-    uint16_t vlan_vid;          /* VLAN VID in low 12 bits, 0 in other bits. */
-    bool push_vlan_if_needed;   /* OF 1.0 semantics if true. */
-    bool flow_has_vlan;         /* VLAN present at action validation time? */
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        uint16_t vlan_vid;        /* VLAN VID in low 12 bits, other bits 0. */
+        bool push_vlan_if_needed; /* OF 1.0 semantics if true. */
+        bool flow_has_vlan;       /* VLAN present at action validation time? */
+    );
 };
 
 /* OFPACT_SET_VLAN_PCP.
@@ -411,84 +425,104 @@ struct ofpact_vlan_vid {
  *
  * Used for OFPAT10_SET_VLAN_PCP and OFPAT11_SET_VLAN_PCP. */
 struct ofpact_vlan_pcp {
-    struct ofpact ofpact;
-    uint8_t vlan_pcp;           /* VLAN PCP in low 3 bits, 0 in other bits. */
-    bool push_vlan_if_needed;   /* OF 1.0 semantics if true. */
-    bool flow_has_vlan;         /* VLAN present at action validation time? */
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        uint8_t vlan_pcp;           /* VLAN PCP in low 3 bits, other bits 0. */
+        bool push_vlan_if_needed;   /* OF 1.0 semantics if true. */
+        bool flow_has_vlan;         /* VLAN present at action validation? */
+    );
 };
 
 /* OFPACT_PUSH_VLAN.
  *
  * Used for OFPAT11_PUSH_VLAN. */
 struct ofpact_push_vlan {
-    struct ofpact ofpact;
-    ovs_be16 ethertype;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        ovs_be16 ethertype;
+    );
 };
 
 /* OFPACT_SET_ETH_SRC, OFPACT_SET_ETH_DST.
  *
  * Used for OFPAT10_SET_DL_SRC, OFPAT10_SET_DL_DST. */
 struct ofpact_mac {
-    struct ofpact ofpact;
-    struct eth_addr mac;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        struct eth_addr mac;
+    );
 };
 
 /* OFPACT_SET_IPV4_SRC, OFPACT_SET_IPV4_DST.
  *
  * Used for OFPAT10_SET_NW_SRC, OFPAT10_SET_NW_DST. */
 struct ofpact_ipv4 {
-    struct ofpact ofpact;
-    ovs_be32 ipv4;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        ovs_be32 ipv4;
+    );
 };
 
 /* OFPACT_SET_IP_DSCP.
  *
  * Used for OFPAT10_SET_NW_TOS. */
 struct ofpact_dscp {
-    struct ofpact ofpact;
-    uint8_t dscp;               /* DSCP in high 6 bits, rest ignored. */
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        uint8_t dscp;           /* DSCP in high 6 bits, rest ignored. */
+    );
 };
 
 /* OFPACT_SET_IP_ECN.
  *
  * Used for OFPAT11_SET_NW_ECN. */
 struct ofpact_ecn {
-    struct ofpact ofpact;
-    uint8_t ecn;               /* ECN in low 2 bits, rest ignored. */
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        uint8_t ecn;            /* ECN in low 2 bits, rest ignored. */
+    );
 };
 
 /* OFPACT_SET_IP_TTL.
  *
  * Used for OFPAT11_SET_NW_TTL. */
 struct ofpact_ip_ttl {
-    struct ofpact ofpact;
-    uint8_t ttl;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        uint8_t ttl;
+    );
 };
 
 /* OFPACT_SET_L4_SRC_PORT, OFPACT_SET_L4_DST_PORT.
  *
  * Used for OFPAT10_SET_TP_SRC, OFPAT10_SET_TP_DST. */
 struct ofpact_l4_port {
-    struct ofpact ofpact;
-    uint16_t port;              /* TCP, UDP or SCTP port number. */
-    uint8_t  flow_ip_proto;     /* IP proto from corresponding match, or 0 */
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        uint16_t port;          /* TCP, UDP or SCTP port number. */
+        uint8_t  flow_ip_proto; /* IP proto from corresponding match, or 0 */
+    );
 };
 
 /* OFPACT_REG_MOVE.
  *
  * Used for NXAST_REG_MOVE. */
 struct ofpact_reg_move {
-    struct ofpact ofpact;
-    struct mf_subfield src;
-    struct mf_subfield dst;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        struct mf_subfield src;
+        struct mf_subfield dst;
+    );
 };
 
 /* OFPACT_STACK_PUSH, OFPACT_STACK_POP.
  *
  * Used for NXAST_STACK_PUSH and NXAST_STACK_POP. */
 struct ofpact_stack {
-    struct ofpact ofpact;
-    struct mf_subfield subfield;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        struct mf_subfield subfield;
+    );
 };
 
 /* OFPACT_SET_FIELD.
@@ -517,59 +551,73 @@ BUILD_ASSERT_DECL(offsetof(struct ofpact_set_field, value)
  *
  * Used for NXAST_PUSH_MPLS, OFPAT11_PUSH_MPLS. */
 struct ofpact_push_mpls {
-    struct ofpact ofpact;
-    ovs_be16 ethertype;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        ovs_be16 ethertype;
+    );
 };
 
 /* OFPACT_POP_MPLS
  *
  * Used for NXAST_POP_MPLS, OFPAT11_POP_MPLS.. */
 struct ofpact_pop_mpls {
-    struct ofpact ofpact;
-    ovs_be16 ethertype;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        ovs_be16 ethertype;
+    );
 };
 
 /* OFPACT_SET_TUNNEL.
  *
  * Used for NXAST_SET_TUNNEL, NXAST_SET_TUNNEL64. */
 struct ofpact_tunnel {
-    struct ofpact ofpact;
-    uint64_t tun_id;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        uint64_t tun_id;
+    );
 };
 
 /* OFPACT_SET_QUEUE.
  *
  * Used for NXAST_SET_QUEUE. */
 struct ofpact_queue {
-    struct ofpact ofpact;
-    uint32_t queue_id;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        uint32_t queue_id;
+    );
 };
 
 /* OFPACT_FIN_TIMEOUT.
  *
  * Used for NXAST_FIN_TIMEOUT. */
 struct ofpact_fin_timeout {
-    struct ofpact ofpact;
-    uint16_t fin_idle_timeout;
-    uint16_t fin_hard_timeout;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        uint16_t fin_idle_timeout;
+        uint16_t fin_hard_timeout;
+    );
 };
 
 /* OFPACT_WRITE_METADATA.
  *
  * Used for NXAST_WRITE_METADATA. */
 struct ofpact_metadata {
-    struct ofpact ofpact;
-    ovs_be64 metadata;
-    ovs_be64 mask;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        ovs_be64 metadata;
+        ovs_be64 mask;
+    );
 };
 
 /* OFPACT_METER.
  *
  * Used for OFPIT13_METER. */
 struct ofpact_meter {
-    struct ofpact ofpact;
-    uint32_t meter_id;
-    uint32_t provider_meter_id;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        uint32_t meter_id;
+        uint32_t provider_meter_id;
+    );
 };
 
 /* OFPACT_WRITE_ACTIONS, OFPACT_CLONE.
@@ -657,25 +705,27 @@ enum nx_nat_flags {
  *
  * Used for NXAST_NAT. */
 struct ofpact_nat {
-    struct ofpact ofpact;
-    uint8_t range_af; /* AF_UNSPEC, AF_INET, or AF_INET6 */
-    uint16_t flags;  /* NX_NAT_F_* */
-    struct {
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        uint8_t range_af; /* AF_UNSPEC, AF_INET, or AF_INET6 */
+        uint16_t flags;  /* NX_NAT_F_* */
         struct {
-            uint16_t min;
-            uint16_t max;
-        } proto;
-        union {
             struct {
-                ovs_be32 min;
-                ovs_be32 max;
-            } ipv4;
-            struct {
-                struct in6_addr min;
-                struct in6_addr max;
-            } ipv6;
-        } addr;
-    } range;
+                uint16_t min;
+                uint16_t max;
+            } proto;
+            union {
+                struct {
+                    ovs_be32 min;
+                    ovs_be32 max;
+                } ipv4;
+                struct {
+                    struct in6_addr min;
+                    struct in6_addr max;
+                } ipv6;
+            } addr;
+        } range;
+    );
 };
 
 
@@ -683,11 +733,13 @@ struct ofpact_nat {
  *
  * Used for NXAST_RESUBMIT, NXAST_RESUBMIT_TABLE, NXAST_RESUBMIT_TABLE_CT. */
 struct ofpact_resubmit {
-    struct ofpact ofpact;
-    ofp_port_t in_port;
-    uint8_t table_id;
-    bool with_ct_orig;   /* Resubmit with Conntrack original direction tuple
-                          * fields in place of IP header fields. */
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        ofp_port_t in_port;
+        uint8_t table_id;
+        bool with_ct_orig;  /* Resubmit with Conntrack original direction tuple
+                             * fields in place of IP header fields. */
+    );
 };
 
 /* Bits for 'flags' in struct nx_action_learn.
@@ -870,37 +922,43 @@ enum nx_mp_algorithm {
  *
  * Used for NXAST_CONJUNCTION. */
 struct ofpact_conjunction {
-    struct ofpact ofpact;
-    uint8_t clause;
-    uint8_t n_clauses;
-    uint32_t id;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        uint8_t clause;
+        uint8_t n_clauses;
+        uint32_t id;
+    );
 };
 
 /* OFPACT_MULTIPATH.
  *
  * Used for NXAST_MULTIPATH. */
 struct ofpact_multipath {
-    struct ofpact ofpact;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
 
-    /* What fields to hash and how. */
-    enum nx_hash_fields fields;
-    uint16_t basis;             /* Universal hash parameter. */
+        /* What fields to hash and how. */
+        enum nx_hash_fields fields;
+        uint16_t basis;         /* Universal hash parameter. */
 
-    /* Multipath link choice algorithm to apply to hash value. */
-    enum nx_mp_algorithm algorithm;
-    uint16_t max_link;          /* Number of output links, minus 1. */
-    uint32_t arg;               /* Algorithm-specific argument. */
+        /* Multipath link choice algorithm to apply to hash value. */
+        enum nx_mp_algorithm algorithm;
+        uint16_t max_link;      /* Number of output links, minus 1. */
+        uint32_t arg;           /* Algorithm-specific argument. */
 
-    /* Where to store the result. */
-    struct mf_subfield dst;
+        /* Where to store the result. */
+        struct mf_subfield dst;
+    );
 };
 
 /* OFPACT_NOTE.
  *
  * Used for NXAST_NOTE. */
 struct ofpact_note {
-    struct ofpact ofpact;
-    size_t length;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        size_t length;
+    );
     uint8_t data[];
 };
 
@@ -922,23 +980,25 @@ enum nx_action_sample_direction {
  *
  * Used for NXAST_SAMPLE, NXAST_SAMPLE2, and NXAST_SAMPLE3. */
 struct ofpact_sample {
-    struct ofpact ofpact;
-    uint16_t probability;  /* Always positive. */
-    uint32_t collector_set_id;
-    uint32_t obs_domain_id;
-    uint32_t obs_point_id;
-    ofp_port_t sampling_port;
-    enum nx_action_sample_direction direction;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        uint16_t probability;   /* Always positive. */
+        uint32_t collector_set_id;
+        uint32_t obs_domain_id;
+        uint32_t obs_point_id;
+        ofp_port_t sampling_port;
+        enum nx_action_sample_direction direction;
+    );
 };
 
 /* OFPACT_DEC_TTL.
  *
  * Used for OFPAT11_DEC_NW_TTL, NXAST_DEC_TTL and NXAST_DEC_TTL_CNT_IDS. */
 struct ofpact_cnt_ids {
-    struct ofpact ofpact;
-
-    /* Controller ids. */
-    unsigned int n_controllers;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        unsigned int n_controllers;
+    );
     uint16_t cnt_ids[];
 };
 
@@ -946,54 +1006,63 @@ struct ofpact_cnt_ids {
  *
  * Used for OFPAT11_SET_MPLS_LABEL and NXAST_SET_MPLS_LABEL */
 struct ofpact_mpls_label {
-    struct ofpact ofpact;
-
-    ovs_be32 label;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        ovs_be32 label;
+    );
 };
 
 /* OFPACT_SET_MPLS_TC.
  *
  * Used for OFPAT11_SET_MPLS_TC and NXAST_SET_MPLS_TC */
 struct ofpact_mpls_tc {
-    struct ofpact ofpact;
-
-    uint8_t tc;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        uint8_t tc;
+    );
 };
 
 /* OFPACT_SET_MPLS_TTL.
  *
  * Used for OFPAT11_SET_MPLS_TTL and NXAST_SET_MPLS_TTL */
 struct ofpact_mpls_ttl {
-    struct ofpact ofpact;
-
-    uint8_t ttl;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        uint8_t ttl;
+    );
 };
 
 /* OFPACT_GOTO_TABLE
  *
  * Used for OFPIT11_GOTO_TABLE */
 struct ofpact_goto_table {
-    struct ofpact ofpact;
-    uint8_t table_id;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        uint8_t table_id;
+    );
 };
 
 /* OFPACT_GROUP.
  *
  * Used for OFPAT11_GROUP. */
 struct ofpact_group {
-    struct ofpact ofpact;
-    uint32_t group_id;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        uint32_t group_id;
+    );
 };
 
 /* OFPACT_UNROLL_XLATE.
  *
  * Used only internally. */
 struct ofpact_unroll_xlate {
-    struct ofpact ofpact;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
 
-    /* Metadata in xlate context, visible to controller via PACKET_INs. */
-    uint8_t  rule_table_id;       /* 0xFF if none. */
-    ovs_be64 rule_cookie;         /* OVS_BE64_MAX if none. */
+        /* Metadata in xlate context, visible to controller via PACKET_INs. */
+        uint8_t  rule_table_id; /* 0xFF if none. */
+        ovs_be64 rule_cookie;   /* OVS_BE64_MAX if none. */
+    );
 };
 
 /* OFPACT_ENCAP.
@@ -1001,10 +1070,12 @@ struct ofpact_unroll_xlate {
  * Used for NXAST_ENCAP. */
 
 struct ofpact_encap {
-    struct ofpact ofpact;
-    ovs_be32 new_pkt_type;        /* Packet type of the header to add. */
-    uint16_t hdr_size;            /* New header size in bytes. */
-    uint16_t n_props;             /* Number of encap properties. */
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        ovs_be32 new_pkt_type;         /* Packet type of the header to add. */
+        uint16_t hdr_size;             /* New header size in bytes. */
+        uint16_t n_props;              /* Number of encap properties. */
+    );
     struct ofpact_ed_prop props[]; /* Properties in internal format. */
 };
 
@@ -1012,15 +1083,17 @@ struct ofpact_encap {
  *
  * Used for NXAST_DECAP. */
 struct ofpact_decap {
-    struct ofpact ofpact;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
 
-    /* New packet type.
-     *
-     * The special value (0,0xFFFE) "Use next proto" is used to request OVS to
-     * automatically set the new packet type based on the decap'ed header's
-     * next protocol.
-     */
-    ovs_be32 new_pkt_type;
+        /* New packet type.
+         *
+         * The special value (0,0xFFFE) "Use next proto" is used to request OVS
+         * to automatically set the new packet type based on the decap'ed
+         * header's next protocol.
+         */
+        ovs_be32 new_pkt_type;
+    );
 };
 
 /* Converting OpenFlow to ofpacts. */
@@ -1150,21 +1223,23 @@ void *ofpact_finish(struct ofpbuf *, struct ofpact *);
  *
  *     Initializes the parts of 'ofpact' that identify it as having type
  *     OFPACT_<ENUM> and length OFPACT_<ENUM>_SIZE and zeros the rest.
- *
- *   <ENUM>_SIZE
- *
- *     The size of the action structure.  For a fixed-length action, this is
- *     sizeof(struct <STRUCT>) rounded up to a multiple of OFPACT_ALIGNTO.  For
- *     a variable-length action, this is the offset to the variable-length
- *     part.
  */
 #define OFPACT(ENUM, STRUCT, MEMBER, NAME)                              \
     BUILD_ASSERT_DECL(offsetof(struct STRUCT, ofpact) == 0);            \
                                                                         \
-    enum { OFPACT_##ENUM##_SIZE                                         \
-           = (offsetof(struct STRUCT, MEMBER) != 0                      \
-              ? offsetof(struct STRUCT, MEMBER)                         \
-              : OFPACT_ALIGN(sizeof(struct STRUCT))) };                 \
+    /* Action structures must be a multiple of OFPACT_ALIGNTO bytes. */ \
+    BUILD_ASSERT_DECL(sizeof(struct STRUCT) % OFPACT_ALIGNTO == 0);     \
+                                                                        \
+    /* Variable-length data must start at a multiple of OFPACT_ALIGNTO  \
+     * bytes. */                                                        \
+    BUILD_ASSERT_DECL(offsetof(struct STRUCT, MEMBER)                   \
+                      % OFPACT_ALIGNTO == 0);                           \
+                                                                        \
+    /* If there is variable-length data, it starts at the end of the    \
+     * structure. */                                                    \
+    BUILD_ASSERT_DECL(!offsetof(struct STRUCT, MEMBER)                  \
+                      || (offsetof(struct STRUCT, MEMBER)               \
+                          == sizeof(struct STRUCT)));                   \
                                                                         \
     static inline struct STRUCT *                                       \
     ofpact_get_##ENUM(const struct ofpact *ofpact)                      \
@@ -1184,14 +1259,14 @@ void *ofpact_finish(struct ofpbuf *, struct ofpact *);
     ofpact_put_##ENUM(struct ofpbuf *ofpacts)                           \
     {                                                                   \
         return (struct STRUCT *) ofpact_put(ofpacts, OFPACT_##ENUM,     \
-                                            OFPACT_##ENUM##_SIZE);      \
+                                            sizeof(struct STRUCT));     \
     }                                                                   \
                                                                         \
     static inline void                                                  \
     ofpact_init_##ENUM(struct STRUCT *ofpact)                           \
     {                                                                   \
         ofpact_init(&ofpact->ofpact, OFPACT_##ENUM,                     \
-                    OFPACT_##ENUM##_SIZE);                              \
+                    sizeof(struct STRUCT));                             \
     }                                                                   \
                                                                         \
     static inline void                                                  \

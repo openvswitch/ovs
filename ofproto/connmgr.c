@@ -1939,7 +1939,7 @@ connmgr_flushed(struct connmgr *mgr)
         struct ofpbuf ofpacts;
         struct match match;
 
-        ofpbuf_init(&ofpacts, OFPACT_OUTPUT_SIZE);
+        ofpbuf_init(&ofpacts, sizeof(struct ofpact_output));
         ofpact_put_OUTPUT(&ofpacts)->port = OFPP_NORMAL;
 
         match_init_catchall(&match);
