@@ -40,7 +40,7 @@ enum ts_resolution {
 };
 
 enum network_type {
-    PCAP_ETHERNET = 0,
+    PCAP_ETHERNET = 1,
     PCAP_LINUX_SLL = 0x71
 };
 
