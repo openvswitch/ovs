@@ -295,6 +295,13 @@ target machine.
 
       $ make EXTRA_CFLAGS="-Wno-error=date-time"
 
+If you are a developer and want to enable Address Sanitizer for debugging
+purposes, at about a 2x runtime cost, you can add
+``-fsanitize=address -fno-omit-frame-pointer -fno-common`` to CFLAGS.  For
+example::
+
+    $ ./configure CFLAGS="-g -O2 -fsanitize=address -fno-omit-frame-pointer -fno-common"
+
 To build the Linux kernel module, so that you can run the kernel-based switch,
 pass the location of the kernel build directory on ``--with-linux``. For
 example, to build for a running instance of Linux::

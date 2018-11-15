@@ -10,6 +10,13 @@ m4_define([AT_SETUP], [OVS_AT_SETUP($@)
 ovs_init
 ])
 
+dnl Make AT_CLEANUP check for Address Sanitizer errors as the last step
+dnl in every test.
+m4_rename([AT_CLEANUP], [OVS_AT_CLEANUP])
+m4_define([AT_CLEANUP], [ovs_cleanup
+OVS_AT_CLEANUP($@)
+])
+
 dnl OVS_START_SHELL_HELPERS...OVS_END_SHELL_HELPERS may bracket shell
 dnl function definitions that invoke AT_CHECK and other Autotest macros
 dnl that can ordinarily be run only within AT_SETUP...AT_CLEANUP.
@@ -180,6 +187,13 @@ fi
 m4_divert_pop([PREPARE_TESTS])
 
 OVS_START_SHELL_HELPERS
+ovs_cleanup() {
+    if test "$(echo asan.*)" != 'asan.*'; then
+        echo "Address Sanitizer reported errors in:" asan.*
+        AT_FAIL_IF([:])
+    fi
+}
+
 ovs_wait () {
     echo "$1: waiting $2..." >&AS_MESSAGE_LOG_FD
 

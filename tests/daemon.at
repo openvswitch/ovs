@@ -29,6 +29,10 @@ AT_CLEANUP
 
 AT_SETUP([daemon --monitor])
 AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+
+# This test intentionally causes SIGSEGV, so make Address Sanitizer ignore it.
+ASAN_OPTIONS=$ASAN_OPTIONS:handle_segv=0; export ASAN_OPTIONS
+
 OVSDB_INIT([db])
 AT_CAPTURE_FILE([pid])
 AT_CAPTURE_FILE([parent])
@@ -101,6 +105,10 @@ AT_CLEANUP
 
 AT_SETUP([daemon --detach --monitor])
 AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+
+# This test intentionally causes SIGSEGV, so make Address Sanitizer ignore it.
+ASAN_OPTIONS=$ASAN_OPTIONS:handle_segv=0; export ASAN_OPTIONS
+
 OVSDB_INIT([db])
 AT_CAPTURE_FILE([daemon])
 AT_CAPTURE_FILE([olddaemon])
