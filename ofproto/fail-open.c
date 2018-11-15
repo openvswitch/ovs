@@ -163,7 +163,7 @@ fail_open_add_normal_flow(struct fail_open *fo)
 
     /* Set up a flow that matches every packet and directs them to
      * OFPP_NORMAL. */
-    ofpbuf_init(&ofpacts, OFPACT_OUTPUT_SIZE);
+    ofpbuf_init(&ofpacts, sizeof(struct ofpact_output));
     ofpact_put_OUTPUT(&ofpacts)->port = OFPP_NORMAL;
 
     match_init_catchall(&match);
