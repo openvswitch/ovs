@@ -530,7 +530,7 @@ Do not put any white space around postfix, prefix, or grouping operators:
 Exception 1: Put a space after (but not before) the "sizeof" keyword.
 
 Exception 2: Put a space between the () used in a cast and the expression whose
-type is cast: ``(void \*) 0``.
+type is cast: ``(void *) 0``.
 
 Break long lines before the ternary operators ? and :, rather than after
 them, e.g.
@@ -585,7 +585,7 @@ Try to avoid casts. Don't cast the return value of malloc().
 
 The "sizeof" operator is unique among C operators in that it accepts two very
 different kinds of operands: an expression or a type. In general, prefer to
-specify an expression, e.g. ``int *x = xmalloc(sizeof *\ x);``. When the
+specify an expression, e.g. ``int *x = xmalloc(sizeof *x);``. When the
 operand of sizeof is an expression, there is no need to parenthesize that
 operand, and please don't.
 
