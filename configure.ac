@@ -77,7 +77,7 @@ AC_SUBST([LT_AGE])
 AC_SEARCH_LIBS([pow], [m])
 AC_SEARCH_LIBS([clock_gettime], [rt])
 AC_SEARCH_LIBS([timer_create], [rt])
-AC_SEARCH_LIBS([pthread_create], [pthread])
+AC_SEARCH_LIBS([pthread_rwlock_tryrdlock], [pthread])
 AC_FUNC_STRERROR_R
 
 OVS_CHECK_ESX
