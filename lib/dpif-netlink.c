@@ -716,7 +716,8 @@ dpif_netlink_port_add__(struct dpif_netlink *dpif, const char *name,
     int error = 0;
 
     if (dpif->handlers) {
-        if (nl_sock_create(NETLINK_GENERIC, &socksp)) {
+        error = nl_sock_create(NETLINK_GENERIC, &socksp);
+        if (error) {
             return error;
         }
     }
