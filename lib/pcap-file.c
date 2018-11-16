@@ -153,8 +153,8 @@ ovs_pcap_read_header(struct pcap_file *p_file)
     p_file->network = byte_swap ? uint32_byteswap(ph.network) : ph.network;
     if (p_file->network != PCAP_ETHERNET &&
         p_file->network != PCAP_LINUX_SLL) {
-        VLOG_WARN("unknown network type %"PRIu16" reading pcap file",
-                  p_file->network);
+        VLOG_WARN("unknown network type %u reading pcap file",
+                  (unsigned int) p_file->network);
         return EPROTO;
     }
     return 0;
