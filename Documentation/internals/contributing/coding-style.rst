@@ -131,8 +131,8 @@ Use ``XXX`` or ``FIXME`` comments to mark code that needs work.
 
 Don't use ``//`` comments.
 
-Don't comment out or #if 0 out code. Just remove it. The code that was there
-will still be in version control history.
+Don't comment out or ``#if 0`` out code. Just remove it. The code that was
+there will still be in version control history.
 
 .. _functions:
 
@@ -144,8 +144,8 @@ code on separate lines, all starting in column 0.
 
 Before each function definition, write a comment that describes the function's
 purpose, including each parameter, the return value, and side effects.
-References to argument names should be given in single-quotes, e.g. 'arg'. The
-comment should not include the function name, nor need it follow any formal
+References to argument names should be given in single-quotes, e.g. ``'arg'``.
+The comment should not include the function name, nor need it follow any formal
 structure. The comment does not need to describe how a function does its work,
 unless this information is needed to use the function correctly (this is often
 better done with comments *inside* the function).
@@ -174,7 +174,7 @@ In the absence of good reasons for another order, the following parameter order
 is preferred. One notable exception is that data parameters and their
 corresponding size parameters should be paired.
 
-1. The primary object being manipulated, if any (equivalent to the "this"
+1. The primary object being manipulated, if any (equivalent to the ``this``
    pointer in C++).
 
 2. Input-only parameters.
@@ -211,8 +211,8 @@ null-pointer check. We find that this usually makes code easier to read.
 
 Functions in ``.c`` files should not normally be marked ``inline``, because it
 does not usually help code generation and it does suppress compiler warnings
-about unused functions. (Functions defined in .h usually should be marked
-inline.)
+about unused functions. (Functions defined in ``.h`` usually should be marked
+``inline``.)
 
 .. _function prototypes:
 
@@ -303,13 +303,13 @@ style:
 
 Use ``for (;;)`` to write an infinite loop.
 
-In an if/else construct where one branch is the "normal" or "common" case and
-the other branch is the "uncommon" or "error" case, put the common case after
-the "if", not the "else". This is a form of documentation. It also places the
-most important code in sequential order without forcing the reader to visually
-skip past less important details. (Some compilers also assume that the "if"
-branch is the more common case, so this can be a real form of optimization as
-well.)
+In an ``if/else`` construct where one branch is the "normal" or "common" case
+and the other branch is the "uncommon" or "error" case, put the common case
+after the ``if``, not the ``else``. This is a form of documentation. It also
+places the most important code in sequential order without forcing the reader
+to visually skip past less important details. (Some compilers also assume that
+the ``if`` branch is the more common case, so this can be a real form of
+optimization as well.)
 
 Return Values
 -------------
@@ -317,21 +317,21 @@ Return Values
 For functions that return a success or failure indication, prefer one of the
 following return value conventions:
 
-- An ``int`` where 0 indicates success and a positive errno value indicates a
-  reason for failure.
+- An ``int`` where ``0`` indicates success and a positive errno value indicates
+  a reason for failure.
 
-- A ``bool`` where true indicates success and false indicates failure.
+- A ``bool`` where ``true`` indicates success and ``false`` indicates failure.
 
 Macros
 ------
 
 Don't define an object-like macro if an enum can be used instead.
 
-Don't define a function-like macro if a "static inline" function can be used
+Don't define a function-like macro if a ``static inline`` function can be used
 instead.
 
-If a macro's definition contains multiple statements, enclose them with ``do {
-... } while (0)`` to allow them to work properly in all syntactic
+If a macro's definition contains multiple statements, enclose them with
+``do { ... } while (0)`` to allow them to work properly in all syntactic
 circumstances.
 
 Do use macros to eliminate the need to update different parts of a single file
@@ -389,7 +389,7 @@ The comment should explain how the code in the file relates to code in other
 files. The goal is to allow a programmer to quickly figure out where a given
 module fits into the larger system.
 
-The first non-comment line in a .c source file should be:
+The first non-comment line in a ``.c`` source file should be:
 
 ::
 
@@ -429,9 +429,9 @@ like so:
 
     #endif /* netdev.h */
 
-Header files should be self-contained; that is, they should ``#include`` whatever
-additional headers are required, without requiring the client to ``#include``
-them for it.
+Header files should be self-contained; that is, they should ``#include``
+whatever additional headers are required, without requiring the client to
+``#include`` them for it.
 
 Don't define the members of a struct or union in a header file, unless client
 code is actually intended to access them directly or if the definition is
@@ -446,9 +446,9 @@ Types
 -----
 
 Use typedefs sparingly. Code is clearer if the actual type is visible at the
-point of declaration. Do not, in general, declare a typedef for a struct,
-union, or enum. Do not declare a typedef for a pointer type, because this can
-be very confusing to the reader.
+point of declaration. Do not, in general, declare a typedef for a ``struct``,
+``union``, or ``enum``. Do not declare a typedef for a pointer type, because
+this can be very confusing to the reader.
 
 A function type is a good use for a typedef because it can clarify code.  The
 type should be a function type, not a pointer-to-function type. That way, the
@@ -479,16 +479,16 @@ instead of ``"%zx"`` or ``"%x"`` instead of ``"%hhx"``.
 Also, instead of ``"%hhd"``, use ``"%d"``. Be cautious substituting ``"%u"``,
 ``"%x"``, and ``"%o"`` for the corresponding versions with ``"hh"``: cast the
 argument to unsigned char if necessary, because ``printf("%hhu", -1)`` prints
-255 but ``printf("%u", -1)`` prints 4294967295.
+``255`` but ``printf("%u", -1)`` prints ``4294967295``.
 
 Use bit-fields sparingly. Do not use bit-fields for layout of network
 protocol fields or in other circumstances where the exact format is
 important.
 
-Declare bit-fields to be signed or unsigned integer types or \_Bool (aka
-bool). Do *not* declare bit-fields of type ``int``: C99 allows these to be
+Declare bit-fields to be signed or unsigned integer types or ``_Bool`` (aka
+``bool``). Do *not* declare bit-fields of type ``int``: C99 allows these to be
 either signed or unsigned according to the compiler's whim. (A 1-bit bit-field
-of type ``int`` may have a range of -1...0!)
+of type ``int`` may have a range of ``-1...0``!)
 
 Try to order structure members such that they pack well on a system with 2-byte
 ``short``, 4-byte ``int``, and 4- or 8-byte ``long`` and pointer types.  Prefer
@@ -529,11 +529,11 @@ Do not put any white space around postfix, prefix, or grouping operators:
 
 Exception 1: Put a space after (but not before) the "sizeof" keyword.
 
-Exception 2: Put a space between the () used in a cast and the expression whose
-type is cast: ``(void *) 0``.
+Exception 2: Put a space between the ``()`` used in a cast and the expression
+whose type is cast: ``(void *) 0``.
 
-Break long lines before the ternary operators ? and :, rather than after
-them, e.g.
+Break long lines before the ternary operators ``?`` and ``:``, rather than
+after them, e.g.
 
 ::
 
@@ -583,10 +583,10 @@ each situation, based on which of these factors appear to be more important.
 
 Try to avoid casts. Don't cast the return value of malloc().
 
-The "sizeof" operator is unique among C operators in that it accepts two very
+The ``sizeof`` operator is unique among C operators in that it accepts two very
 different kinds of operands: an expression or a type. In general, prefer to
 specify an expression, e.g. ``int *x = xmalloc(sizeof *x);``. When the
-operand of sizeof is an expression, there is no need to parenthesize that
+operand of ``sizeof`` is an expression, there is no need to parenthesize that
 operand, and please don't.
 
 Use the ``ARRAY_SIZE`` macro from ``lib/util.h`` to calculate the number of
@@ -614,27 +614,27 @@ Most C99 features are OK because they are widely implemented:
 
 - ``long long``
 
-- ``bool`` and ``<stdbool.h>``, but don't assume that bool or \_Bool can only
-  take on the values 0 or 1, because this behavior can't be simulated on C89
-  compilers.
+- ``bool`` and ``<stdbool.h>``, but don't assume that ``bool`` or ``_Bool`` can
+  only take on the values ``0`` or ``1``, because this behavior can't be
+  simulated on C89 compilers.
 
   Also, don't assume that a conversion to ``bool`` or ``_Bool`` follows C99
-  semantics, i.e. use ``(bool)(some_value != 0)`` rather than
-  ``(bool)some_value``. The latter might produce unexpected results on non-C99
-  environments. For example, if bool is implemented as a typedef of char and
-  ``some_value = 0x10000000``.
+  semantics, i.e. use ``(bool) (some_value != 0)`` rather than
+  ``(bool) some_value``. The latter might produce unexpected results on non-C99
+  environments. For example, if ``bool`` is implemented as a typedef of char
+  and ``some_value = 0x10000000``.
 
-- Designated initializers (e.g. ``struct foo foo = {.a = 1};`` and ``int
-  a[] = {[2] = 5};``).
+- Designated initializers (e.g. ``struct foo foo = { .a = 1 };`` and
+  ``int a[] = { [2] = 5 };``).
 
 - Mixing of declarations and code within a block.  Favor positioning that
   allows variables to be initialized at their point of declaration.
 
-- Use of declarations in iteration statements (e.g. ``for (int i = 0; i
-  < 10; i++)``).
+- Use of declarations in iteration statements
+  (e.g. ``for (int i = 0; i < 10; i++)``).
 
-- Use of a trailing comma in an enum declaration (e.g. ``enum { x = 1,
-  };``).
+- Use of a trailing comma in an enum declaration (e.g.
+  ``enum { x = 1, };``).
 
 As a matter of style, avoid ``//`` comments.
 
