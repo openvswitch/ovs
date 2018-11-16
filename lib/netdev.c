@@ -2063,7 +2063,8 @@ retry:
                  * address addition which may cause one of the returned
                  * ifa_name values to be NULL. In such case, we know that we've
                  * got an inconsistent dump. Retry but beware of an endless
-                 * loop. */
+                 * loop. From glibc 2.28 and beyond, this workaround is not
+                 * needed and should be eventually removed. */
                 freeifaddrs(if_addr_list);
                 goto retry;
             } else {
