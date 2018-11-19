@@ -217,23 +217,15 @@ dp_arg_exists(int argc, const char *argv[])
  *
  * The datapath name is not a mandatory parameter for this command.  If it is
  * not specified, we retrieve it from the current setup, assuming only one
- * exists.  On success stores the opened dpif in '*dpifp', and the next
- * arugment to be parsed in '*indexp'.  */
+ * exists.  On success stores the opened dpif in '*dpifp'.  */
 static int
 opt_dpif_open(int argc, const char *argv[], struct dpctl_params *dpctl_p,
-              int max_args, struct dpif **dpifp, int *indexp)
+              int max_args, struct dpif **dpifp)
 {
     char *dpname;
 
-    if (indexp) {
-        *indexp = 1;
-    }
-
     if (dp_arg_exists(argc, argv)) {
         dpname = xstrdup(argv[1]);
-        if (indexp) {
-            *indexp = 2;
-        }
     } else if (argc != max_args) {
         dpname = get_one_dp(dpctl_p);
     } else {
@@ -977,7 +969,7 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
         }
     }
 
-    error = opt_dpif_open(argc, argv, dpctl_p, 2, &dpif, NULL);
+    error = opt_dpif_open(argc, argv, dpctl_p, 2, &dpif);
     if (error) {
         goto out_free;
     }
@@ -1097,7 +1089,7 @@ dpctl_put_flow(int argc, const char *argv[], enum dpif_flow_put_flags flags,
     struct simap port_names;
     int n, error;
 
-    error = opt_dpif_open(argc, argv, dpctl_p, 4, &dpif, NULL);
+    error = opt_dpif_open(argc, argv, dpctl_p, 4, &dpif);
     if (error) {
         return error;
     }
@@ -1199,7 +1191,7 @@ dpctl_get_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     struct ds ds;
     int n, error;
 
-    error = opt_dpif_open(argc, argv, dpctl_p, 3, &dpif, NULL);
+    error = opt_dpif_open(argc, argv, dpctl_p, 3, &dpif);
     if (error) {
         return error;
     }
@@ -1248,7 +1240,7 @@ dpctl_del_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     struct simap port_names;
     int n, error;
 
-    error = opt_dpif_open(argc, argv, dpctl_p, 3, &dpif, NULL);
+    error = opt_dpif_open(argc, argv, dpctl_p, 3, &dpif);
     if (error) {
         return error;
     }
@@ -1317,7 +1309,7 @@ dpctl_del_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
 {
     struct dpif *dpif;
 
-    int error = opt_dpif_open(argc, argv, dpctl_p, 2, &dpif, NULL);
+    int error = opt_dpif_open(argc, argv, dpctl_p, 2, &dpif);
     if (error) {
         return error;
     }
@@ -1378,7 +1370,7 @@ dpctl_dump_conntrack(int argc, const char *argv[],
         argc--;
     }
 
-    error = opt_dpif_open(argc, argv, dpctl_p, 2, &dpif, NULL);
+    error = opt_dpif_open(argc, argv, dpctl_p, 2, &dpif);
     if (error) {
         return error;
     }
@@ -1442,7 +1434,7 @@ dpctl_flush_conntrack(int argc, const char *argv[],
         goto error;
     }
 
-    error = opt_dpif_open(argc, argv, dpctl_p, 4, &dpif, NULL);
+    error = opt_dpif_open(argc, argv, dpctl_p, 4, &dpif);
     if (error) {
         return error;
     }
@@ -1493,7 +1485,7 @@ dpctl_ct_stats_show(int argc, const char *argv[],
         }
     }
 
-    error = opt_dpif_open(argc, argv, dpctl_p, 2, &dpif, NULL);
+    error = opt_dpif_open(argc, argv, dpctl_p, 2, &dpif);
     if (error) {
         return error;
     }
@@ -1618,7 +1610,7 @@ dpctl_ct_bkts(int argc, const char *argv[],
         }
     }
 
-    error = opt_dpif_open(argc, argv, dpctl_p, 2, &dpif, NULL);
+    error = opt_dpif_open(argc, argv, dpctl_p, 2, &dpif);
     if (error) {
         return error;
     }
@@ -1698,7 +1690,7 @@ dpctl_ct_set_maxconns(int argc, const char *argv[],
                       struct dpctl_params *dpctl_p)
 {
     struct dpif *dpif;
-    int error = opt_dpif_open(argc, argv, dpctl_p, 3, &dpif, NULL);
+    int error = opt_dpif_open(argc, argv, dpctl_p, 3, &dpif);
     if (!error) {
         uint32_t maxconns;
         if (ovs_scan(argv[argc - 1], "%"SCNu32, &maxconns)) {
@@ -1724,7 +1716,7 @@ dpctl_ct_get_maxconns(int argc, const char *argv[],
                     struct dpctl_params *dpctl_p)
 {
     struct dpif *dpif;
-    int error = opt_dpif_open(argc, argv, dpctl_p, 2, &dpif, NULL);
+    int error = opt_dpif_open(argc, argv, dpctl_p, 2, &dpif);
     if (!error) {
         uint32_t maxconns;
         error = ct_dpif_get_maxconns(dpif, &maxconns);
@@ -1745,7 +1737,7 @@ dpctl_ct_get_nconns(int argc, const char *argv[],
                     struct dpctl_params *dpctl_p)
 {
     struct dpif *dpif;
-    int error = opt_dpif_open(argc, argv, dpctl_p, 2, &dpif, NULL);
+    int error = opt_dpif_open(argc, argv, dpctl_p, 2, &dpif);
     if (!error) {
         uint32_t nconns;
         error = ct_dpif_get_nconns(dpif, &nconns);
@@ -1767,11 +1759,11 @@ dpctl_ct_set_limits(int argc, const char *argv[],
 {
     struct dpif *dpif;
     struct ds ds = DS_EMPTY_INITIALIZER;
-    int i = 1;
+    int i =  dp_arg_exists(argc, argv) ? 2 : 1;
     uint32_t default_limit, *p_default_limit = NULL;
     struct ovs_list zone_limits = OVS_LIST_INITIALIZER(&zone_limits);
 
-    int error = opt_dpif_open(argc, argv, dpctl_p, INT_MAX, &dpif, &i);
+    int error = opt_dpif_open(argc, argv, dpctl_p, INT_MAX, &dpif);
     if (error) {
         return error;
     }
@@ -1851,10 +1843,11 @@ dpctl_ct_del_limits(int argc, const char *argv[],
 {
     struct dpif *dpif;
     struct ds ds = DS_EMPTY_INITIALIZER;
-    int error, i = 1;
+    int error;
+    int i =  dp_arg_exists(argc, argv) ? 2 : 1;
     struct ovs_list zone_limits = OVS_LIST_INITIALIZER(&zone_limits);
 
-    error = opt_dpif_open(argc, argv, dpctl_p, 3, &dpif, &i);
+    error = opt_dpif_open(argc, argv, dpctl_p, 3, &dpif);
     if (error) {
         return error;
     }
@@ -1887,11 +1880,11 @@ dpctl_ct_get_limits(int argc, const char *argv[],
     struct dpif *dpif;
     struct ds ds = DS_EMPTY_INITIALIZER;
     uint32_t default_limit;
-    int i = 1;
+    int i =  dp_arg_exists(argc, argv) ? 2 : 1;
     struct ovs_list list_query = OVS_LIST_INITIALIZER(&list_query);
     struct ovs_list list_reply = OVS_LIST_INITIALIZER(&list_reply);
 
-    int error = opt_dpif_open(argc, argv, dpctl_p, 3, &dpif, &i);
+    int error = opt_dpif_open(argc, argv, dpctl_p, 3, &dpif);
     if (error) {
         return error;
     }
