@@ -874,6 +874,25 @@ output;
             resident.
           </li>
         </ul>
+
+        <p>
+          For the Ethernet address on a logical switch port of type
+          <code>router</code>, when that logical switch port's
+          <ref column="addresses" table="Logical_Switch_Port"
+          db="OVN_Northbound"/> column is set to <code>router</code> and
+          the connected logical router port specifies a
+          <code>reside-on-redirect-chassis</code> and the logical router
+          to which the connected logical router port belongs to has a
+          <code>redirect-chassis</code> distributed gateway logical router
+          port:
+        </p>
+
+        <ul>
+          <li>
+            The flow for the connected logical router port's Ethernet
+            address is only programmed on the <code>redirect-chassis</code>.
+          </li>
+        </ul>
       </li>
 
       <li>
@@ -1175,6 +1194,17 @@ output;
           <code>redirect-chassis</code>), the above flows are only
           programmed on the gateway port instance on the
           <code>redirect-chassis</code>.  This behavior avoids generation
+          of multiple ARP responses from different chassis, and allows
+          upstream MAC learning to point to the
+          <code>redirect-chassis</code>.
+        </p>
+
+        <p>
+          For the logical router port with the option
+          <code>reside-on-redirect-chassis</code> set (which is centralized),
+          the above flows are only programmed on the gateway port instance on
+          the <code>redirect-chassis</code> (if the logical router has a
+          distributed gateway port). This behavior avoids generation
           of multiple ARP responses from different chassis, and allows
           upstream MAC learning to point to the
           <code>redirect-chassis</code>.

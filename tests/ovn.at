@@ -8567,6 +8567,279 @@ OVN_CLEANUP([hv1],[hv2],[hv3])
 
 AT_CLEANUP
 
+# VLAN traffic for external network redirected through distributed router
+# gateway port should use vlans(i.e input network vlan tag) across hypervisors
+# instead of tunneling.
+AT_SETUP([ovn -- vlan traffic for external network with distributed router gateway port])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# Logical network:
+# # One LR R1 that has switches foo (192.168.1.0/24) and
+# # alice (172.16.1.0/24) connected to it.  The logical port
+# # between R1 and alice has a "redirect-chassis" specified,
+# # i.e. it is the distributed router gateway port(172.16.1.6).
+# # Switch alice also has a localnet port defined.
+# # An additional switch outside has the same subnet as alice
+# # (172.16.1.0/24), a localnet port and nexthop port(172.16.1.1)
+# # which will receive the packet destined for external network
+# # (i.e 8.8.8.8 as destination ip).
+
+# Physical network:
+# # Three hypervisors hv[123].
+# # hv1 hosts vif foo1.
+# # hv2 is the "redirect-chassis" that hosts the distributed router gateway port.
+# # hv3 hosts nexthop port vif outside1.
+# # All other tests connect hypervisors to network n1 through br-phys for tunneling.
+# # But in this test, hv1 won't connect to n1(and no br-phys in hv1), and
+# # in order to show vlans(instead of tunneling) used between hv1 and hv2,
+# # a new network n2 created and hv1 and hv2 connected to this network through br-ex.
+# # hv2 and hv3 are still connected to n1 network through br-phys.
+net_add n1
+
+# We are not calling ovn_attach for hv1, to avoid adding br-phys.
+# Tunneling won't work in hv1 as ovn-encap-ip is not added to any bridge in hv1
+sim_add hv1
+as hv1
+ovs-vsctl \
+    -- set Open_vSwitch . external-ids:system-id=hv1 \
+    -- set Open_vSwitch . external-ids:ovn-remote=unix:$ovs_base/ovn-sb/ovn-sb.sock \
+    -- set Open_vSwitch . external-ids:ovn-encap-type=geneve,vxlan \
+    -- set Open_vSwitch . external-ids:ovn-encap-ip=192.168.0.1 \
+    -- add-br br-int \
+    -- set bridge br-int fail-mode=secure other-config:disable-in-band=true \
+    -- set Open_vSwitch . external-ids:ovn-bridge-mappings=public:br-ex
+
+start_daemon ovn-controller
+ovs-vsctl -- add-port br-int hv1-vif1 -- \
+    set interface hv1-vif1 external-ids:iface-id=foo1 \
+    ofport-request=1
+
+sim_add hv2
+as hv2
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.2
+ovs-vsctl set Open_vSwitch . external-ids:ovn-bridge-mappings="public:br-ex,phys:br-phys"
+
+sim_add hv3
+as hv3
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.3
+ovs-vsctl -- add-port br-int hv3-vif1 -- \
+    set interface hv3-vif1 external-ids:iface-id=outside1 \
+    options:tx_pcap=hv3/vif1-tx.pcap \
+    options:rxq_pcap=hv3/vif1-rx.pcap \
+    ofport-request=1
+ovs-vsctl set Open_vSwitch . external-ids:ovn-bridge-mappings="phys:br-phys"
+
+# Create network n2 for vlan connectivity between hv1 and hv2
+net_add n2
+
+as hv1
+ovs-vsctl add-br br-ex
+net_attach n2 br-ex
+
+as hv2
+ovs-vsctl add-br br-ex
+net_attach n2 br-ex
+
+OVN_POPULATE_ARP
+
+ovn-nbctl create Logical_Router name=R1
+
+ovn-nbctl ls-add foo
+ovn-nbctl ls-add alice
+ovn-nbctl ls-add outside
+
+# Connect foo to R1
+ovn-nbctl lrp-add R1 foo 00:00:01:01:02:03 192.168.1.1/24
+ovn-nbctl lsp-add foo rp-foo -- set Logical_Switch_Port rp-foo \
+    type=router options:router-port=foo \
+    -- lsp-set-addresses rp-foo router
+
+# Connect alice to R1 as distributed router gateway port (172.16.1.6) on hv2
+ovn-nbctl lrp-add R1 alice 00:00:02:01:02:03 172.16.1.6/24 \
+    -- set Logical_Router_Port alice options:redirect-chassis="hv2"
+ovn-nbctl lsp-add alice rp-alice -- set Logical_Switch_Port rp-alice \
+    type=router options:router-port=alice \
+    -- lsp-set-addresses rp-alice router \
+
+# Create logical port foo1 in foo
+ovn-nbctl lsp-add foo foo1 \
+-- lsp-set-addresses foo1 "f0:00:00:01:02:03 192.168.1.2"
+
+# Create logical port outside1 in outside, which is a nexthop address
+# for 172.16.1.0/24
+ovn-nbctl lsp-add outside outside1 \
+-- lsp-set-addresses outside1 "f0:00:00:01:02:04 172.16.1.1"
+
+# Set default gateway (nexthop) to 172.16.1.1
+ovn-nbctl lr-route-add R1 "0.0.0.0/0" 172.16.1.1 alice
+AT_CHECK([ovn-nbctl lr-nat-add R1 snat 172.16.1.6 192.168.1.1/24])
+ovn-nbctl set Logical_Switch_Port rp-alice options:nat-addresses=router
+
+ovn-nbctl lsp-add foo ln-foo
+ovn-nbctl lsp-set-addresses ln-foo unknown
+ovn-nbctl lsp-set-options ln-foo network_name=public
+ovn-nbctl lsp-set-type ln-foo localnet
+AT_CHECK([ovn-nbctl set Logical_Switch_Port ln-foo tag=2])
+
+# Create localnet port in alice
+ovn-nbctl lsp-add alice ln-alice
+ovn-nbctl lsp-set-addresses ln-alice unknown
+ovn-nbctl lsp-set-type ln-alice localnet
+ovn-nbctl lsp-set-options ln-alice network_name=phys
+
+# Create localnet port in outside
+ovn-nbctl lsp-add outside ln-outside
+ovn-nbctl lsp-set-addresses ln-outside unknown
+ovn-nbctl lsp-set-type ln-outside localnet
+ovn-nbctl lsp-set-options ln-outside network_name=phys
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+ovn-nbctl --wait=hv --timeout=3 sync
+
+# Check that there is a logical flow in logical switch foo's pipeline
+# to set the outport to rp-foo (which is expected).
+OVS_WAIT_UNTIL([test 1 = `ovn-sbctl dump-flows foo | grep ls_in_l2_lkup | \
+grep rp-foo | grep -v is_chassis_resident | wc -l`])
+
+# Set the option 'reside-on-redirect-chassis' for foo
+ovn-nbctl set logical_router_port foo options:reside-on-redirect-chassis=true
+# Check that there is a logical flow in logical switch foo's pipeline
+# to set the outport to rp-foo with the condition is_chassis_redirect.
+ovn-sbctl dump-flows foo
+OVS_WAIT_UNTIL([test 1 = `ovn-sbctl dump-flows foo | grep ls_in_l2_lkup | \
+grep rp-foo | grep is_chassis_resident | wc -l`])
+
+echo "---------NB dump-----"
+ovn-nbctl show
+echo "---------------------"
+ovn-nbctl list logical_router
+echo "---------------------"
+ovn-nbctl list nat
+echo "---------------------"
+ovn-nbctl list logical_router_port
+echo "---------------------"
+
+echo "---------SB dump-----"
+ovn-sbctl list datapath_binding
+echo "---------------------"
+ovn-sbctl list port_binding
+echo "---------------------"
+ovn-sbctl dump-flows
+echo "---------------------"
+ovn-sbctl list chassis
+echo "---------------------"
+
+for chassis in hv1 hv2 hv3; do
+    as $chassis
+    echo "------ $chassis dump ----------"
+    ovs-vsctl show br-int
+    ovs-ofctl show br-int
+    ovs-ofctl dump-flows br-int
+    echo "--------------------------"
+done
+
+ip_to_hex() {
+    printf "%02x%02x%02x%02x" "$@"
+}
+
+foo1_ip=$(ip_to_hex 192 168 1 2)
+gw_ip=$(ip_to_hex 172 16 1 6)
+dst_ip=$(ip_to_hex 8 8 8 8)
+nexthop_ip=$(ip_to_hex 172 16 1 1)
+
+foo1_mac="f00000010203"
+foo_mac="000001010203"
+gw_mac="000002010203"
+nexthop_mac="f00000010204"
+
+# Send ip packet from foo1 to 8.8.8.8
+src_mac="f00000010203"
+dst_mac="000001010203"
+packet=${foo_mac}${foo1_mac}08004500001c0000000040110000${foo1_ip}${dst_ip}0035111100080000
+
+as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
+sleep 2
+
+# ARP request packet for nexthop_ip to expect at outside1
+arp_request=ffffffffffff${gw_mac}08060001080006040001${gw_mac}${gw_ip}000000000000${nexthop_ip}
+echo $arp_request >> hv3-vif1.expected
+cat hv3-vif1.expected > expout
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv3/vif1-tx.pcap | grep ${nexthop_ip} | uniq > hv3-vif1
+AT_CHECK([sort hv3-vif1], [0], [expout])
+
+# Send ARP reply from outside1 back to the router
+reply_mac="f00000010204"
+arp_reply=${gw_mac}${nexthop_mac}08060001080006040002${nexthop_mac}${nexthop_ip}${gw_mac}${gw_ip}
+
+as hv3 ovs-appctl netdev-dummy/receive hv3-vif1 $arp_reply
+OVS_WAIT_UNTIL([
+    test `as hv2 ovs-ofctl dump-flows br-int | grep table=66 | \
+grep actions=mod_dl_dst:f0:00:00:01:02:04 | wc -l` -eq 1
+    ])
+
+# VLAN tagged packet with router port(192.168.1.1) MAC as destination MAC
+# is expected on bridge connecting hv1 and hv2
+expected=${foo_mac}${foo1_mac}8100000208004500001c0000000040110000${foo1_ip}${dst_ip}0035111100080000
+echo $expected > hv1-br-ex_n2.expected
+
+# Packet to Expect at outside1 i.e nexthop(172.16.1.1) port.
+# As connection tracking not enabled for this test, snat can't be done on the packet.
+# We still see foo1 as the source ip address. But source mac(gateway MAC) and
+# dest mac(nexthop mac) are properly configured.
+expected=${nexthop_mac}${gw_mac}08004500001c000000003f110100${foo1_ip}${dst_ip}0035111100080000
+echo $expected > hv3-vif1.expected
+
+reset_pcap_file() {
+    local iface=$1
+    local pcap_file=$2
+    ovs-vsctl -- set Interface $iface options:tx_pcap=dummy-tx.pcap \
+options:rxq_pcap=dummy-rx.pcap
+    rm -f ${pcap_file}*.pcap
+    ovs-vsctl -- set Interface $iface options:tx_pcap=${pcap_file}-tx.pcap \
+options:rxq_pcap=${pcap_file}-rx.pcap
+}
+
+as hv1 reset_pcap_file br-ex_n2 hv1/br-ex_n2
+as hv3 reset_pcap_file hv3-vif1 hv3/vif1
+sleep 2
+as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
+sleep 2
+
+# On hv1, the packet should not go from vlan switch pipleline to router
+# pipleine
+as hv1 ovs-ofctl dump-flows br-int
+
+AT_CHECK([as hv1 ovs-ofctl dump-flows br-int table=65 | grep "priority=100,reg15=0x1,metadata=0x2" \
+| grep actions=clone | grep -v n_packets=0 | wc -l], [0], [[0
+]])
+
+# On hv1, table 32 check that no packet goes via the tunnel port
+AT_CHECK([as hv1 ovs-ofctl dump-flows br-int table=32 \
+| grep "NXM_NX_TUN_ID" | grep -v n_packets=0 | wc -l], [0], [[0
+]])
+
+ip_packet() {
+    grep "1010203f00000010203"
+}
+
+# Check vlan tagged packet on the bridge connecting hv1 and hv2 with the
+# foo1's mac.
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/br-ex_n2-tx.pcap | ip_packet | uniq > hv1-br-ex_n2
+cat hv1-br-ex_n2.expected > expout
+AT_CHECK([sort hv1-br-ex_n2], [0], [expout])
+
+# Check expected packet on nexthop interface
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv3/vif1-tx.pcap | grep ${foo1_ip}${dst_ip} | uniq > hv3-vif1
+cat hv3-vif1.expected > expout
+AT_CHECK([sort hv3-vif1], [0], [expout])
+
+OVN_CLEANUP([hv1],[hv2],[hv3])
+AT_CLEANUP
+
 AT_SETUP([ovn -- IPv6 ND Router Solicitation responder])
 AT_KEYWORDS([ovn-nd_ra])
 AT_SKIP_IF([test $HAVE_PYTHON = no])

@@ -1681,6 +1681,49 @@
           chassis to enable high availability.
         </p>
       </column>
+
+      <column name="options" key="reside-on-redirect-chassis">
+        <p>
+          Generally routing is distributed in <code>OVN</code>. The packet
+          from a logical port which needs to be routed hits the router pipeline
+          in the source chassis. For the East-West traffic, the packet is
+          sent directly to the destination chassis. For the outside traffic
+          the packet is sent to the gateway chassis.
+        </p>
+
+        <p>
+          When this option is set, <code>OVN</code> considers this only if
+        </p>
+
+        <ul>
+          <li>
+            The logical router to which this logical router port belongs to
+            has a distributed gateway port.
+          </li>
+
+          <li>
+            The peer's logical switch has a localnet port (representing
+            a VLAN tagged network)
+          </li>
+        </ul>
+
+        <p>
+          When this option is set to <code>true</code>, then the packet
+          which needs to be routed hits the router pipeline in the chassis
+          hosting the distributed gateway router port. The source chassis
+          pushes out this traffic via the localnet port. With this the
+          East-West traffic is no more distributed and will always go through
+          the gateway chassis.
+        </p>
+
+        <p>
+          Without this option set, for any traffic destined to outside from a
+          logical port which belongs to a logical switch with localnet port,
+          the source chassis will send the traffic to the gateway chassis via
+          the tunnel port instead of the localnet port and this could cause MTU
+          issues.
+        </p>
+      </column>
     </group>
 
     <group title="Attachment">

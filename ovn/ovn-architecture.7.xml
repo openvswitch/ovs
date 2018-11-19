@@ -1372,6 +1372,217 @@
     http://docs.openvswitch.org/en/latest/topics/high-availability.
   </p>
 
+  <h2>Multiple localnet logical switches connected to a Logical Router</h2>
+
+  <p>
+    It is possible to have multiple logical switches each with a localnet port
+    (representing physical networks) connected to a logical router, in which
+    one localnet logical switch may provide the external connectivity via a
+    distributed gateway port and rest of the localnet logical switches use
+    VLAN tagging in the physical network. It is expected that
+    <code>ovn-bridge-mappings</code> is configured appropriately on the
+    chassis for all these localnet networks.
+  </p>
+
+  <h3>East West routing</h3>
+  <p>
+    East-West routing between these localnet VLAN tagged logical switches
+    work almost the same way as normal logical switches. When the VM sends
+    such a packet, then:
+  </p>
+  <ol>
+    <li>
+      It first enters the ingress pipeline, and then egress pipeline of the
+      source localnet logical switch datapath. It then enters the ingress
+      pipeline of the logical router datapath via the logical router port in
+      the source chassis.
+    </li>
+
+    <li>
+      Routing decision is taken.
+    </li>
+
+    <li>
+      From the router datapath, packet enters the ingress pipeline and then
+      egress pipeline of the destination localnet logical switch datapath
+      and goes out of the integration bridge to the provider bridge (
+      belonging to the destination logical switch) via the localnet port.
+    </li>
+
+    <li>
+      The destination chassis receives the packet via the localnet port and
+      sends it to the integration bridge. The packet enters the
+      ingress pipeline and then egress pipeline of the destination localnet
+      logical switch and finally gets delivered to the destination VM port.
+    </li>
+  </ol>
+
+  <h3>External traffic</h3>
+
+  <p>
+    The following happens when a VM sends an external traffic (which requires
+    NATting) and the chassis hosting the VM doesn't have a distributed gateway
+    port.
+  </p>
+
+  <ol>
+    <li>
+      The packet first enters the ingress pipeline, and then egress pipeline of
+      the source localnet logical switch datapath. It then enters the ingress
+      pipeline of the logical router datapath via the logical router port in
+      the source chassis.
+    </li>
+
+    <li>
+      Routing decision is taken. Since the gateway router or the distributed
+      gateway port doesn't reside in the source chassis, the traffic is
+      redirected to the gateway chassis via the tunnel port.
+    </li>
+
+    <li>
+      The gateway chassis receives the packet via the tunnel port and the
+      packet enters the egress pipeline of the logical router datapath. NAT
+      rules are applied here. The packet then enters the ingress pipeline and
+      then egress pipeline of the localnet logical switch datapath which
+      provides external connectivity and finally goes out via the localnet
+      port of the logical switch which provides external connectivity.
+    </li>
+  </ol>
+
+  <p>
+    Although this works, the VM traffic is tunnelled when sent from the compute
+    chassis to the gateway chassis. In order for it to work properly, the MTU
+    of the localnet logical switches must be lowered to account for the tunnel
+    encapsulation.
+  </p>
+
+  <h2>
+    Centralized routing for localnet VLAN tagged logical switches connected
+    to a Logical Router
+  </h2>
+
+  <p>
+    To overcome the tunnel encapsulation problem described in the previous
+    section, <code>OVN</code> supports the option of enabling centralized
+    routing for localnet VLAN tagged logical switches. CMS can configure the
+    option <ref column="options:reside-on-redirect-chassis"
+    table="Logical_Router_Port" db="OVN_NB"/> to <code>true</code> for each
+    <ref table="Logical_Router_Port" db="OVN_NB"/> which connects to the
+    localnet VLAN tagged logical switches. This causes the gateway
+    chassis (hosting the distributed gateway port) to handle all the
+    routing for these networks, making it centralized. It will reply to
+    the ARP requests for the logical router port IPs.
+  </p>
+
+  <p>
+    If the logical router doesn't have a distributed gateway port connecting
+    to the localnet logical switch which provides external connectivity,
+    then this option is ignored by <code>OVN</code>.
+  </p>
+
+  <p>
+    The following happens when a VM sends an east-west traffic which needs to
+    be routed:
+  </p>
+
+  <ol>
+    <li>
+      The packet first enters the ingress pipeline, and then egress pipeline of
+      the source localnet logical switch datapath and is sent out via the
+      localnet port of the source localnet logical switch (instead of sending
+      it to router pipeline).
+    </li>
+
+    <li>
+      The gateway chassis receives the packet via the localnet port of the
+      source localnet logical switch and sends it to the integration bridge.
+      The packet then enters the ingress pipeline, and then egress pipeline of
+      the source localnet logical switch datapath and enters the ingress
+      pipeline of the logical router datapath.
+    </li>
+
+    <li>
+      Routing decision is taken.
+    </li>
+
+    <li>
+      From the router datapath, packet enters the ingress pipeline and then
+      egress pipeline of the destination localnet logical switch datapath.
+      It then goes out of the integration bridge to the provider bridge (
+      belonging to the destination logical switch) via the localnet port.
+    </li>
+
+    <li>
+      The destination chassis receives the packet via the localnet port and
+      sends it to the integration bridge. The packet enters the
+      ingress pipeline and then egress pipeline of the destination localnet
+      logical switch and finally delivered to the destination VM port.
+    </li>
+  </ol>
+
+  <p>
+    The following happens when a VM sends an external traffic which requires
+    NATting:
+  </p>
+
+  <ol>
+    <li>
+      The packet first enters the ingress pipeline, and then egress pipeline of
+      the source localnet logical switch datapath and is sent out via the
+      localnet port of the source localnet logical switch (instead of sending
+      it to router pipeline).
+    </li>
+
+    <li>
+      The gateway chassis receives the packet via the localnet port of the
+      source localnet logical switch and sends it to the integration bridge.
+      The packet then enters the ingress pipeline, and then egress pipeline of
+      the source localnet logical switch datapath and enters the ingress
+      pipeline of the logical router datapath.
+    </li>
+
+    <li>
+      Routing decision is taken and NAT rules are applied.
+    </li>
+
+    <li>
+      From the router datapath, packet enters the ingress pipeline and then
+      egress pipeline of the localnet logical switch datapath which provides
+      external connectivity. It then goes out of the integration bridge to the
+      provider bridge (belonging to the logical switch which provides external
+      connectivity) via the localnet port.
+    </li>
+  </ol>
+
+  <p>
+    The following happens for the reverse external traffic.
+  </p>
+
+  <ol>
+    <li>
+      The gateway chassis receives the packet from the localnet port of
+      the logical switch which provides external connectivity. The packet then
+      enters the ingress pipeline and then egress pipeline of the localnet
+      logical switch (which provides external connectivity). The packet then
+      enters the ingress pipeline of the logical router datapath.
+    </li>
+
+    <li>
+      The ingress pipeline of the logical router datapath applies the unNATting
+      rules. The packet then enters the ingress pipeline and then egress
+      pipeline of the source localnet logical switch. Since the source VM
+      doesn't reside in the gateway chassis, the packet is sent out via the
+      localnet port of the source logical switch.
+    </li>
+
+    <li>
+      The source chassis receives the packet via the localnet port and
+      sends it to the integration bridge. The packet enters the
+      ingress pipeline and then egress pipeline of the source localnet
+      logical switch and finally gets delivered to the source VM port.
+    </li>
+  </ol>
+
   <h2>Life Cycle of a VTEP gateway</h2>
 
   <p>
