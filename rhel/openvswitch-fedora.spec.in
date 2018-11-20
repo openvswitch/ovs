@@ -156,10 +156,9 @@ issues in Open vSwitch setup.
 %package devel
 Summary: Open vSwitch OpenFlow development package (library, headers)
 License: ASL 2.0
-Provides: openvswitch-static = %{version}-%{release}
 
 %description devel
-This provides static library, libopenswitch.a and the openvswitch header
+This provides shared library, libopenswitch.so and the openvswitch header
 files needed to build an external application.
 
 %if 0%{?rhel} > 7 || 0%{?fedora} > 28
@@ -244,6 +243,7 @@ This package provides IPsec tunneling support for OVS tunnels.
         --with-dpdk=$(dirname %{_datadir}/dpdk/*/.config) \
 %endif
         --enable-ssl \
+        --disable-static \
         --enable-shared \
         --with-pkidir=%{_sharedstatedir}/openvswitch/pki \
 %if 0%{?fedora} > 22 || %{with build_python3}
@@ -547,12 +547,11 @@ fi
 
 %files devel
 %{_libdir}/lib*.so
-%{_libdir}/*.a
-%{_libdir}/*.la
 %{_libdir}/pkgconfig/*.pc
 %{_includedir}/openvswitch/*
 %{_includedir}/openflow/*
 %{_includedir}/ovn/*
+%exclude %{_libdir}/*.la
 
 %if 0%{?rhel} > 7 || 0%{?fedora} > 28
 %files -n network-scripts-%{name}
