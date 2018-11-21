@@ -5741,6 +5741,19 @@ AT_CHECK([ovn-nbctl get Logical-Switch-Port p53 dynamic_addresses], [0],
     ["00:11:22:a8:64:05 192.168.100.4"
 ])
 
+# verify configuration order does not break IPAM/MACAM
+ovn-nbctl ls-add sw7
+for n in $(seq 1 3); do
+    ovn-nbctl --wait=sb lsp-add sw7 "p7$n" -- lsp-set-addresses "p7$n" dynamic
+done
+ovn-nbctl --wait=sb set Logical-Switch sw7 other_config:ipv6_prefix="bef0::"
+p71_addr=$(ovn-nbctl get Logical-Switch-Port p71 dynamic_addresses)
+p72_addr=$(ovn-nbctl get Logical-Switch-Port p72 dynamic_addresses)
+p73_addr=$(ovn-nbctl get Logical-Switch-Port p73 dynamic_addresses)
+AT_CHECK([test "$p71_addr" != "$p72_addr"], [0], [])
+AT_CHECK([test "$p71_addr" != "$p73_addr"], [0], [])
+AT_CHECK([test "$p72_addr" != "$p73_addr"], [0], [])
+
 as ovn-sb
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 

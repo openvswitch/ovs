@@ -1341,6 +1341,8 @@ update_dynamic_addresses(struct dynamic_address_update *update)
 
     struct ds new_addr = DS_EMPTY_INITIALIZER;
     ds_put_format(&new_addr, ETH_ADDR_FMT, ETH_ADDR_ARGS(mac));
+    ipam_insert_mac(&mac, true);
+
     if (ip4) {
         ipam_insert_ip(update->od, ntohl(ip4));
         ds_put_format(&new_addr, " "IP_FMT, IP_ARGS(ip4));
