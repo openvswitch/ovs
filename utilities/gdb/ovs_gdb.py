@@ -30,6 +30,7 @@
 #    - ovs_dump_netdev_provider
 #    - ovs_dump_ovs_list <struct ovs_list *> {[<structure>] [<member>] {dump}]}
 #    - ovs_dump_simap <struct simap *>
+#    - ovs_dump_smap <struct smap *>
 #    - ovs_dump_udpif_keys {<udpif_name>|<udpif_address>} {short}
 #    - ovs_show_fdb {[<bridge_name>] {dbg} {hash}}
 #    - ovs_show_upcall {dbg}
@@ -317,6 +318,19 @@ class ForEachSIMAP(ForEachHMAP):
     def next(self):
         node = super(ForEachSIMAP, self).next()
         return node['name'], node['data']
+
+
+#
+# Class that will provide an iterator over an OVS smap.
+#
+class ForEachSMAP(ForEachHMAP):
+    def __init__(self, shash):
+        super(ForEachSMAP, self).__init__(shash['map'],
+                                          "struct smap_node", "node")
+
+    def next(self):
+        node = super(ForEachSMAP, self).next()
+        return node['key'], node['value']
 
 
 #
@@ -734,8 +748,8 @@ class CmdDumpOvsList(gdb.Command):
 # Implements the GDB "ovs_dump_simap" command
 #
 class CmdDumpSimap(gdb.Command):
-    """Dump all nodes of an ovs_list give
-    Usage: ovs_dump_ovs_list <struct simap *>
+    """Dump all key, value entries of a simap
+    Usage: ovs_dump_simap <struct simap *>
     """
 
     def __init__(self):
@@ -766,7 +780,42 @@ class CmdDumpSimap(gdb.Command):
 
 
 #
-# Implements the GDB "ovs_dump_simap" command
+# Implements the GDB "ovs_dump_smap" command
+#
+class CmdDumpSmap(gdb.Command):
+    """Dump all key, value pairs of a smap
+    Usage: ovs_dump_smap <struct smap *>
+    """
+
+    def __init__(self):
+        super(CmdDumpSmap, self).__init__("ovs_dump_smap",
+                                          gdb.COMMAND_DATA)
+
+    def invoke(self, arg, from_tty):
+        arg_list = gdb.string_to_argv(arg)
+
+        if len(arg_list) != 1:
+            print("ERROR: Missing argument!\n")
+            print(self.__doc__)
+            return
+
+        smap = gdb.parse_and_eval(arg_list[0]).cast(
+            gdb.lookup_type('struct smap').pointer())
+
+        values = dict()
+        max_key_len = 0
+        for key, value in ForEachSMAP(smap.dereference()):
+            values[key.string()] = value.string()
+            if len(key.string()) > max_key_len:
+                max_key_len = len(key.string())
+
+        for key in sorted(values.iterkeys()):
+            print("{}: {}".format(key.ljust(max_key_len),
+                                  values[key]))
+
+
+#
+# Implements the GDB "ovs_dump_udpif_keys" command
 #
 class CmdDumpUdpifKeys(gdb.Command):
     """Dump all nodes of an ovs_list give
@@ -1124,6 +1173,7 @@ CmdDumpNetdev()
 CmdDumpNetdevProvider()
 CmdDumpOvsList()
 CmdDumpSimap()
+CmdDumpSmap()
 CmdDumpUdpifKeys()
 CmdShowFDB()
 CmdShowUpcall()
