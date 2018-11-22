@@ -62,8 +62,10 @@ set_system_ids () {
                 # Migrate from old file name.
                 . "$uuid_file"
                 SYSTEM_ID=$INSTALLATION_UUID
+                run_as_ovsuser touch "$id_file"
                 echo "$SYSTEM_ID" > "$id_file"
             elif SYSTEM_ID=`uuidgen`; then
+                run_as_ovsuser touch "$id_file"
                 echo "$SYSTEM_ID" > "$id_file"
             else
                 log_failure_msg "missing uuidgen, could not generate system ID"

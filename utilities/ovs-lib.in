@@ -387,15 +387,19 @@ move_ip_routes () {
     done
 }
 
-ovsdb_tool () {
+run_as_ovsuser() {
     if [ "$OVS_USER" != "" ]; then
         local uid=$(id -u "${OVS_USER%:*}")
         local gid=$(id -g "${OVS_USER%:*}")
         local groups=$(id -G "${OVS_USER%:*}" | tr ' ' ',')
-        setpriv --reuid "$uid" --regid "$gid" --groups "$groups" ovsdb-tool -vconsole:off "$@"
+        setpriv --reuid "$uid" --regid "$gid" --groups "$groups" "$@"
     else
-        ovsdb-tool -vconsole:off "$@"
+        "$@"
     fi
+}
+
+ovsdb_tool () {
+    run_as_ovsuser ovsdb-tool -vconsole:off "$@"
 }
 
 create_db () {
