@@ -1818,11 +1818,6 @@
         </dd>
       </dl>
 
-      <p>
-        The following actions will likely be useful later, but they have not
-        been thought out carefully.
-      </p>
-
       <dl>
         <dt><code>icmp4 { <var>action</var>; </code>...<code> };</code></dt>
         <dd>
