@@ -521,8 +521,8 @@ is_dpdk_class(const struct netdev_class *class)
 static uint32_t
 dpdk_buf_size(int mtu)
 {
-    return ROUND_UP((MTU_TO_MAX_FRAME_LEN(mtu) + RTE_PKTMBUF_HEADROOM),
-                     NETDEV_DPDK_MBUF_ALIGN);
+    return ROUND_UP(MTU_TO_MAX_FRAME_LEN(mtu), NETDEV_DPDK_MBUF_ALIGN)
+            + RTE_PKTMBUF_HEADROOM;
 }
 
 /* Allocates an area of 'sz' bytes from DPDK.  The memory is zero'ed.
@@ -681,6 +681,8 @@ dpdk_mp_create(struct netdev_dpdk *dev, int mtu, bool per_port_mp)
                   dev->requested_n_rxq, dev->requested_n_txq,
                   RTE_CACHE_LINE_SIZE);
 
+        /* The size of the mbuf's private area (i.e. area that holds OvS'
+         * dp_packet data)*/
         mbuf_priv_data_len = sizeof(struct dp_packet) -
                                  sizeof(struct rte_mbuf);
         /* The size of the entire dp_packet. */

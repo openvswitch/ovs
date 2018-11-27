@@ -107,8 +107,8 @@ Example 1
 
  MTU = 1500 Bytes
  Number of mbufs = 262144
- Mbuf size = 2752 Bytes
- Memory required = 262144 * 2752 = 721 MB
+ Mbuf size = 3008 Bytes
+ Memory required = 262144 * 3008 = 788 MB
 
 Example 2
 +++++++++
@@ -116,8 +116,8 @@ Example 2
 
  MTU = 1800 Bytes
  Number of mbufs = 262144
- Mbuf size = 2752 Bytes
- Memory required = 262144 * 2752 = 721 MB
+ Mbuf size = 3008 Bytes
+ Memory required = 262144 * 3008 = 788 MB
 
 .. note::
 
@@ -130,8 +130,8 @@ Example 3
 
  MTU = 6000 Bytes
  Number of mbufs = 262144
- Mbuf size = 8000 Bytes
- Memory required = 262144 * 8000 = 2097 MB
+ Mbuf size = 7104 Bytes
+ Memory required = 262144 * 7104 = 1862 MB
 
 Example 4
 +++++++++
@@ -139,8 +139,8 @@ Example 4
 
  MTU = 9000 Bytes
  Number of mbufs = 262144
- Mbuf size = 10048 Bytes
- Memory required = 262144 * 10048 = 2634 MB
+ Mbuf size = 10176 Bytes
+ Memory required = 262144 * 10176 = 2667 MB
 
 Per Port Memory Calculations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -194,8 +194,8 @@ Example 1: (1 rxq, 1 PMD, 1500 MTU)
 
  MTU = 1500
  Number of mbufs = (1 * 2048) + (2 * 2048) + (1 * 32) + (16384) = 22560
- Mbuf size = 2752 Bytes
- Memory required = 22560 * 2752 = 62 MB
+ Mbuf size = 3008 Bytes
+ Memory required = 22560 * 3008 = 67 MB
 
 Example 2: (1 rxq, 2 PMD, 6000 MTU)
 +++++++++++++++++++++++++++++++++++
@@ -203,8 +203,8 @@ Example 2: (1 rxq, 2 PMD, 6000 MTU)
 
  MTU = 6000
  Number of mbufs = (1 * 2048) + (3 * 2048) + (1 * 32) + (16384) = 24608
- Mbuf size = 8000 Bytes
- Memory required = 24608 * 8000 = 196 MB
+ Mbuf size = 7104 Bytes
+ Memory required = 24608 * 7104 = 175 MB
 
 Example 3: (2 rxq, 2 PMD, 9000 MTU)
 +++++++++++++++++++++++++++++++++++
@@ -212,5 +212,5 @@ Example 3: (2 rxq, 2 PMD, 9000 MTU)
 
  MTU = 9000
  Number of mbufs = (2 * 2048) + (3 * 2048) + (1 * 32) + (16384) = 26656
- Mbuf size = 10048 Bytes
- Memory required = 26656 * 10048 = 267 MB
+ Mbuf size = 10176 Bytes
+ Memory required = 26656 * 10176 = 271 MB
