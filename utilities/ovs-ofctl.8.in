@@ -2225,10 +2225,14 @@ during bucket select for groups whose \fBtype\fR is \fBselect\fR.
 Port used to determine liveness of group.
 This or the \fBwatch_group\fR field is required
 for groups whose \fBtype\fR is \fBff\fR or \fBfast_failover\fR.
+This or the \fBwatch_group\fR field can also be used
+for groups whose \fBtype\fR is \fBselect\fR.
 .IP \fBwatch_group=\fIgroup_id\fR
 Group identifier of group used to determine liveness of group.
 This or the \fBwatch_port\fR field is required
 for groups whose \fBtype\fR is \fBff\fR or \fBfast_failover\fR.
+This or the \fBwatch_port\fR field can also be used
+for groups whose \fBtype\fR is \fBselect\fR.
 .RE
 .
 .SS "Meter Syntax"
