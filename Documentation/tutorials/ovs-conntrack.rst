@@ -31,7 +31,7 @@ etc., connections. (Connection tracking system supports tracking of both
 statefull and stateless protocols)
 
 This tutorial demonstrates how OVS can use the connection tracking system
-to match on the TCP segments from connection setup to connection teardown.
+to match on the TCP segments from connection setup to connection tear down.
 It will use OVS with the Linux kernel module as the datapath for this
 tutorial. (The datapath that utilizes the openvswitch kernel module to do
 the packet processing in the Linux kernel)
@@ -80,7 +80,7 @@ Possible values:
 Each of these flags is preceded by either a "+" for a flag that
 must be set, or a "-" for a flag that must be unset.
 Multiple flags can also be specified e.g. ct_state=+trk+new.
-We will see the usage of some these flags below. For a detailed
+We will see the usage of some of these flags below. For a detailed
 description, please see the OVS fields documentation at:
 http://openvswitch.org/support/dist-docs/ovs-fields.7.txt
 
@@ -283,7 +283,7 @@ packets from "left" to "right" and from "right" to "left"::
 Instead of adding these two flows, we will add flows to match on the
 states of the TCP segments.
 
-We will send the TCP connections setup segments namely:
+We will send the TCP connection setup segments namely:
 syn, syn-ack and ack between hosts 192.168.0.2 in the "left" namespace and
 10.0.0.2 in the "right" namespace.
 
@@ -294,7 +294,7 @@ First, let's add a flow to start "tracking" a packet received at OVS.
 To start tracking a packet, it first needs to match a flow, which has action
 as "ct".  This action sends the packet through the connection tracker.  To
 identify that a packet is an "untracked" packet, the ct_state in the flow
-match filed must be set to "-trk", which means it is not a tracked packet.
+match field must be set to "-trk", which means it is not a tracked packet.
 Once the packet is sent to the connection tracker, then only we will know about
 its conntrack state.  (i.e. whether this packet represents start of a new
 connection or the packet belongs to an existing connection or it is
@@ -353,8 +353,8 @@ The conntrack module will now have an entry for this connection::
 Note: At this stage, if the TCP syn packet is re-transmitted, it will again
 match flow #1 (since a new packet is untracked) and it will match flow #2.
 The reason it will match flow #2 is that although conntrack has information
-about the connection, but it is not in established state, therefore it matches
-the "new" state again.
+about the connection, but it is not in "ESTABLISHED" state, therefore it
+matches the "new" state again.
 
 Next for the TCP syn-ack from the opposite/server direction, we need
 following flows at OVS::
@@ -418,7 +418,7 @@ conntrack entry::
          reply=(src=10.0.0.2,dst=192.168.0.2,sport=2048,dport=1024), \
                                          protoinfo=(state=ESTABLISHED)
 
-The conntrck state stays in "ESTABLISHED" state, but now since it has received
+The conntrack state stays in "ESTABLISHED" state, but now since it has received
 the ack from client, it will stay in this state for a longer time even without
 receiving any data on this connection.
 
@@ -445,7 +445,7 @@ The acknowledgement for the data would hit flow #3 and flow #4.
 
 TCP Connection Teardown
 ~~~~~~~~~~~~~~~~~~~~~~~
-There are different ways to teardown TCP connection. We will teardown the
+There are different ways to tear down TCP connection. We will tear down the
 connection by sending "fin" from client, "fin-ack" from server followed
 by the last "ack" by client.
 
@@ -507,7 +507,7 @@ conntrack entry::
 Summary
 -------
 
-Following table summarizes the TCP segments exhanged against the flow
+Following table summarizes the TCP segments exchanged against the flow
 match fields
 
   +-------------------------------------------------------+-------------------+
