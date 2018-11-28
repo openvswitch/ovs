@@ -2282,6 +2282,10 @@ parse_odp_action(const char *s, const struct simap *port_names,
                         &tpid, &vid, &pcp, &n)
             || ovs_scan(s, "push_vlan(tpid=%i,vid=%i,pcp=%i,cfi=%i)%n",
                         &tpid, &vid, &pcp, &cfi, &n)) {
+            if ((vid & ~(VLAN_VID_MASK >> VLAN_VID_SHIFT)) != 0
+                || (pcp & ~(VLAN_PCP_MASK >> VLAN_PCP_SHIFT)) != 0) {
+                return -EINVAL;
+            }
             push.vlan_tpid = htons(tpid);
             push.vlan_tci = htons((vid << VLAN_VID_SHIFT)
                                   | (pcp << VLAN_PCP_SHIFT)
