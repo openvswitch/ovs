@@ -1952,7 +1952,7 @@ If set, a matching flow must include an output action to \fIport\fR,
 which must be an OpenFlow port number or name (e.g. \fBlocal\fR).
 .
 .TP
-\fBout_group=\fIport\fR
+\fBout_group=\fIgroup\fR
 If set, a matching flow must include an \fBgroup\fR action naming
 \fIgroup\fR, which must be an OpenFlow group number.  This field
 is supported in Open vSwitch 2.5 and later and requires OpenFlow 1.1
