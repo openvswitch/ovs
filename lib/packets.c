@@ -524,6 +524,21 @@ eth_format_masked(const struct eth_addr eth,
     }
 }
 
+/* Generates ipv6 link local address from the given eth addr
+ * with prefix 'fe80::/64' and stores it in 'lla'. */
+void
+in6_generate_lla(struct eth_addr ea, struct in6_addr *lla)
+{
+    union ovs_16aligned_in6_addr *taddr =
+        (union ovs_16aligned_in6_addr *) lla;
+    memset(taddr->be16, 0, sizeof(taddr->be16));
+    taddr->be16[0] = htons(0xfe80);
+    taddr->be16[4] = htons(((ea.ea[0] ^ 0x02) << 8) | ea.ea[1]);
+    taddr->be16[5] = htons(ea.ea[2] << 8 | 0x00ff);
+    taddr->be16[6] = htons(0xfe << 8 | ea.ea[3]);
+    taddr->be16[7] = ea.be16[2];
+}
+
 /* Given the IP netmask 'netmask', returns the number of bits of the IP address
  * that it specifies, that is, the number of 1-bits in 'netmask'.
  *
