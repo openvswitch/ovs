@@ -281,12 +281,7 @@ static inline bool eth_addr_equal_except(const struct eth_addr a,
              || ((a.be16[2] ^ b.be16[2]) & mask.be16[2]));
 }
 
-static inline uint64_t eth_addr_to_uint64(const struct eth_addr ea)
-{
-    return (((uint64_t) ntohs(ea.be16[0]) << 32)
-            | ((uint64_t) ntohs(ea.be16[1]) << 16)
-            | ntohs(ea.be16[2]));
-}
+uint64_t eth_addr_to_uint64(const struct eth_addr ea);
 
 static inline uint64_t eth_addr_vlan_to_uint64(const struct eth_addr ea,
                                                uint16_t vlan)
@@ -294,12 +289,7 @@ static inline uint64_t eth_addr_vlan_to_uint64(const struct eth_addr ea,
     return (((uint64_t)vlan << 48) | eth_addr_to_uint64(ea));
 }
 
-static inline void eth_addr_from_uint64(uint64_t x, struct eth_addr *ea)
-{
-    ea->be16[0] = htons(x >> 32);
-    ea->be16[1] = htons((x & 0xFFFF0000) >> 16);
-    ea->be16[2] = htons(x & 0xFFFF);
-}
+void eth_addr_from_uint64(uint64_t x, struct eth_addr *ea);
 
 static inline struct eth_addr eth_addr_invert(const struct eth_addr src)
 {
@@ -312,11 +302,7 @@ static inline struct eth_addr eth_addr_invert(const struct eth_addr src)
     return dst;
 }
 
-static inline void eth_addr_mark_random(struct eth_addr *ea)
-{
-    ea->ea[0] &= ~1;                /* Unicast. */
-    ea->ea[0] |= 2;                 /* Private. */
-}
+void eth_addr_mark_random(struct eth_addr *ea);
 
 static inline void eth_addr_random(struct eth_addr *ea)
 {
@@ -1211,80 +1197,19 @@ in6_addr_get_mapped_ipv4(const struct in6_addr *addr)
     }
 }
 
-static inline void
-in6_addr_solicited_node(struct in6_addr *addr, const struct in6_addr *ip6)
-{
-    union ovs_16aligned_in6_addr *taddr =
-        (union ovs_16aligned_in6_addr *) addr;
-    memset(taddr->be16, 0, sizeof(taddr->be16));
-    taddr->be16[0] = htons(0xff02);
-    taddr->be16[5] = htons(0x1);
-    taddr->be16[6] = htons(0xff00);
-    memcpy(&addr->s6_addr[13], &ip6->s6_addr[13], 3);
-}
+void in6_addr_solicited_node(struct in6_addr *addr,
+                             const struct in6_addr *ip6);
 
-/*
- * Generates ipv6 EUI64 address from the given eth addr
- * and prefix and stores it in 'lla'
- */
-static inline void
-in6_generate_eui64(struct eth_addr ea, struct in6_addr *prefix,
-                   struct in6_addr *lla)
-{
-    union ovs_16aligned_in6_addr *taddr =
-        (union ovs_16aligned_in6_addr *) lla;
-    union ovs_16aligned_in6_addr *prefix_taddr =
-        (union ovs_16aligned_in6_addr *) prefix;
-    taddr->be16[0] = prefix_taddr->be16[0];
-    taddr->be16[1] = prefix_taddr->be16[1];
-    taddr->be16[2] = prefix_taddr->be16[2];
-    taddr->be16[3] = prefix_taddr->be16[3];
-    taddr->be16[4] = htons(((ea.ea[0] ^ 0x02) << 8) | ea.ea[1]);
-    taddr->be16[5] = htons(ea.ea[2] << 8 | 0x00ff);
-    taddr->be16[6] = htons(0xfe << 8 | ea.ea[3]);
-    taddr->be16[7] = ea.be16[2];
-}
+void in6_generate_eui64(struct eth_addr ea, const struct in6_addr *prefix,
+                        struct in6_addr *lla);
 
-/*
- * Generates ipv6 link local address from the given eth addr
- * with prefix 'fe80::/64' and stores it in 'lla'
- */
-static inline void
-in6_generate_lla(struct eth_addr ea, struct in6_addr *lla)
-{
-    union ovs_16aligned_in6_addr *taddr =
-        (union ovs_16aligned_in6_addr *) lla;
-    memset(taddr->be16, 0, sizeof(taddr->be16));
-    taddr->be16[0] = htons(0xfe80);
-    taddr->be16[4] = htons(((ea.ea[0] ^ 0x02) << 8) | ea.ea[1]);
-    taddr->be16[5] = htons(ea.ea[2] << 8 | 0x00ff);
-    taddr->be16[6] = htons(0xfe << 8 | ea.ea[3]);
-    taddr->be16[7] = ea.be16[2];
-}
+void in6_generate_lla(struct eth_addr ea, struct in6_addr *lla);
 
 /* Returns true if 'addr' is a link local address.  Otherwise, false. */
-static inline bool
-in6_is_lla(struct in6_addr *addr)
-{
-#ifdef s6_addr32
-    return addr->s6_addr32[0] == htonl(0xfe800000) && !(addr->s6_addr32[1]);
-#else
-    return addr->s6_addr[0] == 0xfe && addr->s6_addr[1] == 0x80 &&
-         !(addr->s6_addr[2] | addr->s6_addr[3] | addr->s6_addr[4] |
-           addr->s6_addr[5] | addr->s6_addr[6] | addr->s6_addr[7]);
-#endif
-}
+bool in6_is_lla(struct in6_addr *addr);
 
-static inline void
-ipv6_multicast_to_ethernet(struct eth_addr *eth, const struct in6_addr *ip6)
-{
-    eth->ea[0] = 0x33;
-    eth->ea[1] = 0x33;
-    eth->ea[2] = ip6->s6_addr[12];
-    eth->ea[3] = ip6->s6_addr[13];
-    eth->ea[4] = ip6->s6_addr[14];
-    eth->ea[5] = ip6->s6_addr[15];
-}
+void ipv6_multicast_to_ethernet(struct eth_addr *eth,
+                                const struct in6_addr *ip6);
 
 static inline bool dl_type_is_ip_any(ovs_be16 dl_type)
 {
