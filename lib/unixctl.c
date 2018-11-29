@@ -409,7 +409,7 @@ unixctl_server_wait(struct unixctl_server *server)
     pstream_wait(server->listener);
     LIST_FOR_EACH (conn, node, &server->conns) {
         jsonrpc_wait(conn->rpc);
-        if (!jsonrpc_get_backlog(conn->rpc)) {
+        if (!jsonrpc_get_backlog(conn->rpc) && !conn->request_id) {
             jsonrpc_recv_wait(conn->rpc);
         }
     }
