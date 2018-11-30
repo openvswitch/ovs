@@ -38,7 +38,7 @@ EOF
 }
 
 save_interfaces () {
-    if (ip -V) > /dev/null 2>&1; then :; else
+    if (ip link show) > /dev/null 2>&1; then :; else
         echo "$0: ip not found in $PATH" >&2
         exit 1
     fi
