@@ -449,12 +449,12 @@ Additionally, the ovs-ctl script allows starting / stopping the daemons
 individually using specific options.  To start just the ovsdb-server::
 
     $ export PATH=$PATH:/usr/local/share/openvswitch/scripts
-    $ ovs-ctl --no-ovs-vswitchd start
+    $ ovs-ctl --no-ovsdb-server start
 
 Likewise, to start just the ovs-vswitchd::
 
     $ export PATH=$PATH:/usr/local/share/openvswitch/scripts
-    $ ovs-ctl --no-ovsdb-server start
+    $ ovs-ctl --no-ovs-vswitchd start
 
 Refer to ovs-ctl(8) for more information on ovs-ctl.
 
