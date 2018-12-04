@@ -38,9 +38,10 @@ insert_mod_if_required () {
 set_hostname () {
     # 'hostname -f' needs network connectivity to work.  So we should
     # call this only after ovs-vswitchd is running.
-    hn="$(hostname -f)"
-    if test X$FULL_HOSTNAME = Xno; then
-        hn="$(hostname)"
+    if test X$FULL_HOSTNAME = Xyes; then
+        hn="$(hostname -f)" || hn="$(uname -n)"
+    else
+        hn="$(uname -n)"
     fi
     ovs_vsctl set Open_vSwitch . external-ids:hostname="$hn"
 }
