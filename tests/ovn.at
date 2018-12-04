@@ -8761,21 +8761,7 @@ src_mac="f00000010203"
 dst_mac="000001010203"
 packet=${foo_mac}${foo1_mac}08004500001c0000000040110000${foo1_ip}${dst_ip}0035111100080000
 
-as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
-sleep 2
-
-# ARP request packet for nexthop_ip to expect at outside1
-arp_request=ffffffffffff${gw_mac}08060001080006040001${gw_mac}${gw_ip}000000000000${nexthop_ip}
-echo $arp_request >> hv3-vif1.expected
-cat hv3-vif1.expected > expout
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv3/vif1-tx.pcap | grep ${nexthop_ip} | uniq > hv3-vif1
-AT_CHECK([sort hv3-vif1], [0], [expout])
-
-# Send ARP reply from outside1 back to the router
-reply_mac="f00000010204"
-arp_reply=${gw_mac}${nexthop_mac}08060001080006040002${nexthop_mac}${nexthop_ip}${gw_mac}${gw_ip}
-
-as hv3 ovs-appctl netdev-dummy/receive hv3-vif1 $arp_reply
+# Wait for GARPs announcing gw IP to arrive
 OVS_WAIT_UNTIL([
     test `as hv2 ovs-ofctl dump-flows br-int | grep table=66 | \
 grep actions=mod_dl_dst:f0:00:00:01:02:04 | wc -l` -eq 1
@@ -8806,15 +8792,17 @@ options:rxq_pcap=${pcap_file}-rx.pcap
 as hv1 reset_pcap_file br-ex_n2 hv1/br-ex_n2
 as hv3 reset_pcap_file hv3-vif1 hv3/vif1
 sleep 2
+# Take note of how many packets arrived on the VLAN switch before generating
+# further traffic
+n_packets=`as hv1 ovs-ofctl dump-flows br-int table=65 | grep "priority=100,reg15=0x1,metadata=0x2" | grep actions=clone | sed 's/.*n_packets=\([[0-9]]\+\),.*/\1/'`
 as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
 sleep 2
 
 # On hv1, the packet should not go from vlan switch pipleline to router
-# pipleine
+# pipeline
 as hv1 ovs-ofctl dump-flows br-int
-
 AT_CHECK([as hv1 ovs-ofctl dump-flows br-int table=65 | grep "priority=100,reg15=0x1,metadata=0x2" \
-| grep actions=clone | grep -v n_packets=0 | wc -l], [0], [[0
+| grep actions=clone | grep -v n_packets=$n_packets | wc -l], [0], [[0
 ]])
 
 # On hv1, table 32 check that no packet goes via the tunnel port
@@ -11726,4 +11714,104 @@ send_na 2 1 $dst_mac $router_mac1 $dst_ip6 $router_ip6
 OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [expected])
 
 OVN_CLEANUP([hv1],[hv2])
+AT_CLEANUP
+
+AT_SETUP([ovn -- neighbor update on same HV])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# Logical network:
+# A public switch (pub) with a localnet port connected to two LRs (lr0 and lr1)
+# each with a distributed gateway port.
+# Two VMs: lp0 on sw0 connected to lr0
+#          lp1 on sw1 connected to lr1
+#
+# This test adds a floating IP to each VM so when they are bound to the same
+# hypervisor, it checks that the GARP sent by ovn-controller causes the
+# MAC_Binding entries to be updated properly on each logical router.
+# It will also capture packets on the physical interface to make sure that the
+# GARPs have been sent out to the external network as well.
+
+# Create logical switches
+ovn-nbctl ls-add sw0
+ovn-nbctl ls-add sw1
+ovn-nbctl ls-add pub
+
+# Created localnet port on public switch
+ovn-nbctl lsp-add pub ln-pub
+ovn-nbctl lsp-set-type ln-pub localnet
+ovn-nbctl lsp-set-addresses ln-pub unknown
+ovn-nbctl lsp-set-options ln-pub network_name=phys
+
+# Create logical routers and connect them to public switch
+ovn-nbctl create Logical_Router name=lr0
+ovn-nbctl create Logical_Router name=lr1
+
+ovn-nbctl lrp-add lr0 lr0-pub f0:00:00:00:00:01 172.24.4.220/24
+ovn-nbctl lsp-add pub pub-lr0 -- set Logical_Switch_Port pub-lr0 \
+    type=router options:router-port=lr0-pub options:nat-addresses="router" addresses="router"
+ovn-nbctl lrp-add lr1 lr1-pub f0:00:00:00:01:01 172.24.4.221/24
+ovn-nbctl lsp-add pub pub-lr1 -- set Logical_Switch_Port pub-lr1 \
+    type=router options:router-port=lr1-pub options:nat-addresses="router" addresses="router"
+
+ovn-nbctl lrp-set-gateway-chassis lr0-pub hv1 10
+ovn-nbctl lrp-set-gateway-chassis lr1-pub hv1 10
+
+# Connect sw0 and sw1 to lr0 and lr1
+ovn-nbctl lrp-add lr0 lr0-sw0 00:00:00:00:ff:01 10.0.0.254/24
+ovn-nbctl lsp-add sw0 sw0-lr0 -- set Logical_Switch_Port sw0-lr0 type=router \
+    options:router-port=lr0-sw0 addresses="router"
+ovn-nbctl lrp-add lr1 lr1-sw1 00:00:00:00:ff:02 20.0.0.254/24
+ovn-nbctl lsp-add sw1 sw1-lr1 -- set Logical_Switch_Port sw1-lr1 type=router \
+    options:router-port=lr1-sw1 addresses="router"
+
+
+# Add SNAT rules
+ovn-nbctl lr-nat-add lr0 snat 172.24.4.220 10.0.0.0/24
+ovn-nbctl lr-nat-add lr1 snat 172.24.4.221 20.0.0.0/24
+
+net_add n1
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 172.24.4.1
+ovs-vsctl set open . external-ids:ovn-bridge-mappings=phys:br-phys
+
+ovs-vsctl add-port br-int vif0 -- set Interface vif0 external-ids:iface-id=lp0
+ovs-vsctl add-port br-int vif1 -- set Interface vif1 external-ids:iface-id=lp1
+
+ovn-nbctl lsp-add sw0 lp0
+ovn-nbctl lsp-add sw1 lp1
+ovn-nbctl lsp-set-addresses lp0 "50:54:00:00:00:01 10.0.0.10"
+ovn-nbctl lsp-set-addresses lp1 "50:54:00:00:00:02 20.0.0.10"
+
+OVS_WAIT_UNTIL([test x`ovn-nbctl lsp-get-up lp0` = xup])
+OVS_WAIT_UNTIL([test x`ovn-nbctl lsp-get-up lp1` = xup])
+
+# Create two floating IPs, one for each VIF
+ovn-nbctl lr-nat-add lr0 dnat_and_snat 172.24.4.100 10.0.0.10
+ovn-nbctl lr-nat-add lr1 dnat_and_snat 172.24.4.200 20.0.0.10
+
+# Check that the MAC_Binding entries have been properly created
+OVS_WAIT_UNTIL([test `ovn-sbctl find mac_binding logical_port="lr0-pub" ip="172.24.4.200" | wc -l` -gt 0])
+OVS_WAIT_UNTIL([test `ovn-sbctl find mac_binding logical_port="lr1-pub" ip="172.24.4.100" | wc -l` -gt 0])
+
+# Check that the GARPs went also to the external physical network
+# Wait until at least 4 packets have arrived and copy them to a separate file as
+# more GARPs are expected in the capture in order to avoid race conditions.
+OVS_WAIT_UNTIL([test `$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/br-phys-tx.pcap | wc -l` -gt 4])
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/br-phys-tx.pcap | head -n4 > hv1/br-phys-tx4.pcap
+
+# GARP for lp0 172.24.4.100 on lr0-pub MAC (f0:00:00:00:00:01)
+echo "fffffffffffff0000000000108060001080006040001f00000000001ac180464000000000000ac180464" > expout
+# GARP for 172.24.4.220 on lr0-pub (f0:00:00:00:00:01)
+echo "fffffffffffff0000000000108060001080006040001f00000000001ac1804dc000000000000ac1804dc" >> expout
+# GARP for lp1 172.24.4.200 on lr1-pub MAC (f0:00:00:00:01:01)
+echo "fffffffffffff0000000010108060001080006040001f00000000101ac1804c8000000000000ac1804c8" >> expout
+# GARP for 172.24.4.221 on lr1-pub (f0:00:00:00:01:01)
+echo "fffffffffffff0000000010108060001080006040001f00000000101ac1804dd000000000000ac1804dd" >> expout
+AT_CHECK([sort hv1/br-phys-tx4.pcap], [0], [expout])
+#OVN_CHECK_PACKETS([hv1/br-phys-tx4.pcap], [br-phys.expected])
+
+OVN_CLEANUP([hv1])
 AT_CLEANUP
