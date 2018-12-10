@@ -155,8 +155,6 @@ UNLOCK_FUNCTION(rwlock, destroy, NULL);
         }                                               \
     }
 
-XPTHREAD_FUNC1(pthread_mutex_lock, pthread_mutex_t *);
-XPTHREAD_FUNC1(pthread_mutex_unlock, pthread_mutex_t *);
 XPTHREAD_FUNC1(pthread_mutexattr_init, pthread_mutexattr_t *);
 XPTHREAD_FUNC1(pthread_mutexattr_destroy, pthread_mutexattr_t *);
 XPTHREAD_FUNC2(pthread_mutexattr_settype, pthread_mutexattr_t *, int);
