@@ -78,8 +78,11 @@ FreeBSD)
     [789].*)
         MALLOC_CONF=AJ
         ;;
-    *)
+    1[01].*)
         MALLOC_CONF=abort:true,junk:true,redzone:true
+        ;;
+    *)
+        MALLOC_CONF=abort:true,junk:true
         ;;
     esac
     export MALLOC_CONF
