@@ -717,7 +717,7 @@ odp_execute_actions(void *dp, struct dp_packet_batch *batch, bool steal,
 
                 dp_execute_action(dp, batch, a, should_steal);
 
-                if (last_action || batch->count == 0) {
+                if (last_action || dp_packet_batch_is_empty(batch)) {
                     /* We do not need to free the packets.
                      * Either dp_execute_actions() has stolen them
                      * or the batch is freed due to errors. In either

@@ -177,7 +177,7 @@ pcap_batch_execute_conntrack(struct conntrack *ct_,
                               NULL, NULL, 0, 0, NULL, NULL, now);
             dp_packet_batch_init(&new_batch);
         }
-        new_batch.packets[new_batch.count++] = packet;;
+        dp_packet_batch_add(&new_batch, packet);
     }
 
     if (!dp_packet_batch_is_empty(&new_batch)) {
@@ -226,7 +226,7 @@ test_pcap(struct ovs_cmdl_context *ctx)
             }
             dp_packet_batch_add(batch, packet);
         }
-        if (!batch->count) {
+        if (dp_packet_batch_is_empty(batch)) {
             break;
         }
         pcap_batch_execute_conntrack(&ct, batch);

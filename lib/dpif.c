@@ -1166,7 +1166,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
     int type = nl_attr_type(action);
     struct dp_packet *packet = packets_->packets[0];
 
-    ovs_assert(packets_->count == 1);
+    ovs_assert(dp_packet_batch_size(packets_) == 1);
 
     switch ((enum ovs_action_attr)type) {
     case OVS_ACTION_ATTR_METER:

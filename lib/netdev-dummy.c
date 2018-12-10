@@ -1036,8 +1036,7 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch,
     netdev->custom_stats[1].value++;
     ovs_mutex_unlock(&netdev->mutex);
 
-    batch->packets[0] = packet;
-    batch->count = 1;
+    dp_packet_batch_init_packet(batch, packet);
 
     if (qfill) {
         *qfill = -ENOTSUP;
@@ -1091,7 +1090,7 @@ netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
         const void *buffer = dp_packet_data(packet);
         size_t size = dp_packet_size(packet);
 
-        if (batch->packets[i]->packet_type != htonl(PT_ETH)) {
+        if (packet->packet_type != htonl(PT_ETH)) {
             error = EPFNOSUPPORT;
             break;
         }
