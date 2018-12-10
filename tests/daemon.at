@@ -1,5 +1,48 @@
 AT_BANNER([daemon unit tests - C])
 
+OVS_START_SHELL_HELPERS
+# check_process_name PID NAME
+#
+# On Linux, make sure that the name of process PID is NAME.
+# (On other systems, don't bother.)
+if test -e /proc/$$/comm; then
+    check_process_name() {
+        AT_CHECK_UNQUOTED([cat /proc/$1/comm], [0], [$2
+])
+    }
+else
+    check_process_name() {
+        :
+    }
+fi
+
+# check_ancestors PID PARENT [GRANDPARENT...]
+check_ancestors() {
+    echo "checking ancestry: $*"
+    local child=$1; shift
+    AT_CHECK([kill -0 $child])
+    while test $# != 0; do
+        local parent=$1; shift
+        AT_CHECK([parent_pid $child], [0], [stdout])
+        actual_parent=$(cat stdout)
+        if test $parent = 1; then
+            # Traditionally, if a parent's process exits, the process's new
+            # parent is pid 1 (init) but this is not always the case these
+            # days.  Instead, if the parent process should be pid 1, be
+            # satisfied if the parent process is different from our own pid.
+            if test $actual_parent = $$; then
+                echo "parent of pid $child is this shell ($$) but should not be"
+                AT_FAIL_IF([:])
+            fi
+        elif test $parent != $actual_parent; then
+            echo "parent of pid $child is $actual_parent but should be $parent"
+            AT_FAIL_IF([:])
+        fi
+        child=$parent
+    done
+}
+OVS_END_SHELL_HELPERS
+
 AT_SETUP([daemon])
 AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 
@@ -11,19 +54,22 @@ m4_define([OVS_SKIP_NON_ADMIN_WIN],
    AT_SKIP_IF([net session; test $? -ne 0])
    ])
 
-OVSDB_INIT([db])
-AT_CAPTURE_FILE([pid])
-AT_CAPTURE_FILE([expected])
 # Start the daemon and wait for the pidfile to get created
 # and that its contents are the correct pid.
-AT_CHECK([ovsdb-server --pidfile --remote=punix:socket db 2>/dev/null & echo $! > expected], [0])
-on_exit 'kill `cat expected`'
+on_exit 'kill $(cat *.pid)'
+AT_CHECK([ovsdb-server --pidfile --no-db 2>/dev/null & echo $!], [0], [stdout])
+expected_pid=$(cat stdout)
+
 OVS_WAIT_UNTIL([test -s ovsdb-server.pid])
-AT_CHECK([pid=`cat ovsdb-server.pid` && expected=`cat expected` && test "$pid" = "$expected"])
-AT_CHECK([kill -0 `cat ovsdb-server.pid`])
+pid=$(cat ovsdb-server.pid)
+
+AT_CHECK([test $pid = $expected_pid])
+AT_CHECK([kill -0 $pid])
+
 # Kill the daemon and make sure that the pidfile gets deleted.
-kill `cat expected`
-OVS_WAIT_WHILE([kill -0 `cat expected`])
+AT_CHECK([kill $pid])
+OVS_WAIT_WHILE([kill -0 $pid])
+
 AT_CHECK([test ! -e ovsdb-server.pid])
 AT_CLEANUP
 
@@ -33,75 +79,67 @@ AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 # This test intentionally causes SIGSEGV, so make Address Sanitizer ignore it.
 ASAN_OPTIONS=$ASAN_OPTIONS:handle_segv=0; export ASAN_OPTIONS
 
-OVSDB_INIT([db])
-AT_CAPTURE_FILE([pid])
-AT_CAPTURE_FILE([parent])
-AT_CAPTURE_FILE([parentpid])
-AT_CAPTURE_FILE([newpid])
 # Start the daemon and wait for the pidfile to get created.
-AT_CHECK([ovsdb-server --monitor --pidfile --remote=punix:socket db 2>/dev/null & echo $! > parent], [0])
-OVS_WAIT_UNTIL([test -s ovsdb-server.pid], [kill `cat parent`])
+on_exit 'kill $(cat *.pid)'
+AT_CHECK([ovsdb-server --monitor --pidfile --no-db 2>/dev/null & echo $!],
+  [0], [stdout])
+parent=$(cat stdout)
+OVS_WAIT_UNTIL([test -s ovsdb-server.pid])
+
 # Check that the pidfile names a running process,
-# and that the parent process of that process is our child process.
-AT_CHECK([kill -0 `cat ovsdb-server.pid`], [0], [], [], [kill `cat parent`])
-AT_CHECK([parent_pid `cat ovsdb-server.pid` > parentpid],
-  [0], [], [], [kill `cat parent`])
-AT_CHECK(
-  [parentpid=`cat parentpid` && 
-   parent=`cat parent` && 
-   test $parentpid = $parent],
-  [0], [], [], [kill `cat parent`])
+# and that the parent process of that process is our child process,
+# and that (with a Linux kernel) the child's process name is correct.
+child=$(cat ovsdb-server.pid)
+check_ancestors $child $parent
+check_process_name $child ovsdb-server
+
 # Avoid a race between pidfile creation and notifying the parent,
 # which can easily trigger if ovsdb-server is slow (e.g. due to valgrind).
-OVS_WAIT_UNTIL(
-  [ovs-appctl --timeout=10 -t ovsdb-server version],
-  [kill `cat ovsdb-server.pid`])
+OVS_WAIT_UNTIL([ovs-appctl --timeout=10 -t ovsdb-server version])
+
 # Kill the daemon process, making it look like a segfault,
 # and wait for a new child process to get spawned.
-AT_CHECK([cp ovsdb-server.pid oldpid], [0], [], [], [kill `cat parent`])
-AT_CHECK([kill -SEGV `cat ovsdb-server.pid`], [0], [], [ignore], [kill `cat parent`])
-OVS_WAIT_WHILE([kill -0 `cat oldpid`], [kill `cat parent`])
-OVS_WAIT_UNTIL([test -s ovsdb-server.pid && test `cat ovsdb-server.pid` != `cat oldpid`],
-  [kill `cat parent`])
-AT_CHECK([cp ovsdb-server.pid newpid], [0], [], [], [kill `cat parent`])
+AT_CHECK([kill -SEGV $child], [0], [], [ignore])
+OVS_WAIT_WHILE([kill -0 $child])
+OVS_WAIT_UNTIL([test -s ovsdb-server.pid && test $(cat ovsdb-server.pid) != $child])
+
 # Check that the pidfile names a running process,
 # and that the parent process of that process is our child process.
-AT_CHECK([parent_pid `cat ovsdb-server.pid` > parentpid],
-  [0], [], [], [kill `cat parent`])
-AT_CHECK(
-  [parentpid=`cat parentpid` && 
-   parent=`cat parent` && 
-   test $parentpid = $parent],
-  [0], [], [], [kill `cat parent`])
+child2=$(cat ovsdb-server.pid)
+check_ancestors $child2 $parent
+check_process_name $child2 ovsdb-server
+
 # Kill the daemon process with SIGTERM, and wait for the daemon
 # and the monitor processes to go away and the pidfile to get deleted.
-AT_CHECK([kill `cat ovsdb-server.pid`], [0], [], [ignore], [kill `cat parent`])
-OVS_WAIT_WHILE([kill -0 `cat parent` || kill -0 `cat newpid` || test -e ovsdb-server.pid],
-  [kill `cat parent`])
+AT_CHECK([kill $child2])
+OVS_WAIT_WHILE([kill -0 $parent || kill -0 $child2 || test -e ovsdb-server.pid])
 AT_CLEANUP
 
+
 AT_SETUP([daemon --detach])
-AT_CAPTURE_FILE([pid])
-OVSDB_INIT([db])
+
 # Start the daemon and make sure that the pidfile exists immediately.
 # We don't wait for the pidfile to get created because the daemon is
 # supposed to do so before the parent exits.
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket db], [0])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --no-db], [0])
 AT_CHECK([test -s ovsdb-server.pid])
-AT_CHECK([kill -0 `cat ovsdb-server.pid`])
+child=$(cat ovsdb-server.pid)
+AT_CHECK([kill -0 $child])
+
 # Kill the daemon and make sure that the pidfile gets deleted.
-cp ovsdb-server.pid saved-pid
 if test "$IS_WIN32" = "yes"; then
   # When a 'kill pid' is done on windows (through 'taskkill //F'),
   # pidfiles are not deleted (because it is force kill), so use
   # 'ovs-appctl exit' instead
   OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 else
-  kill `cat ovsdb-server.pid`
+  kill $child
 fi
-OVS_WAIT_WHILE([kill -0 `cat saved-pid`])
+OVS_WAIT_WHILE([kill -0 $child])
 AT_CHECK([test ! -e ovsdb-server.pid])
+
 AT_CLEANUP
+
 
 AT_SETUP([daemon --detach --monitor])
 AT_SKIP_IF([test "$IS_WIN32" = "yes"])
@@ -109,68 +147,55 @@ AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 # This test intentionally causes SIGSEGV, so make Address Sanitizer ignore it.
 ASAN_OPTIONS=$ASAN_OPTIONS:handle_segv=0; export ASAN_OPTIONS
 
-OVSDB_INIT([db])
-AT_CAPTURE_FILE([daemon])
-AT_CAPTURE_FILE([olddaemon])
-AT_CAPTURE_FILE([newdaemon])
-AT_CAPTURE_FILE([monitor])
-AT_CAPTURE_FILE([newmonitor])
-AT_CAPTURE_FILE([init])
+on_exit 'kill $(cat *.pid)'
+
 # Start the daemon and make sure that the pidfile exists immediately.
 # We don't wait for the pidfile to get created because the daemon is
 # supposed to do so before the parent exits.
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --monitor --remote=punix:socket db], [0])
-on_exit 'kill `cat ovsdb-server.pid olddaemon newdaemon monitor newmonitor`'
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --monitor --no-db])
 AT_CHECK([test -s ovsdb-server.pid])
-# Check that the pidfile names a running process,
-# and that the parent process of that process is a running process,
-# and that the parent process of that process is init.
-AT_CHECK([kill -0 `cat ovsdb-server.pid`])
-AT_CHECK([parent_pid `cat ovsdb-server.pid` > monitor])
-AT_CHECK([kill -0 `cat monitor`])
-AT_CHECK([parent_pid `cat monitor` > init])
-AT_CHECK([test `cat init` != $$])
+child=$(cat ovsdb-server.pid)
+
+# Check process naming and ancestry.
+monitor=$(parent_pid $child)
+check_process_name $child ovsdb-server
+check_ancestors $child $monitor 1
+
 # Kill the daemon process, making it look like a segfault,
 # and wait for a new daemon process to get spawned.
-AT_CHECK([cp ovsdb-server.pid olddaemon])
-AT_CHECK([kill -SEGV `cat ovsdb-server.pid`], [0])
-OVS_WAIT_WHILE([kill -0 `cat olddaemon`])
-OVS_WAIT_UNTIL([test -s ovsdb-server.pid && test `cat ovsdb-server.pid` != `cat olddaemon`])
-AT_CHECK([cp ovsdb-server.pid newdaemon])
-# Check that the pidfile names a running process,
-# and that the parent process of that process is our child process.
-AT_CHECK([kill -0 `cat ovsdb-server.pid`])
-AT_CHECK([diff olddaemon newdaemon], [1], [ignore])
-AT_CHECK([parent_pid `cat ovsdb-server.pid` > newmonitor])
-AT_CHECK([diff monitor newmonitor])
-AT_CHECK([kill -0 `cat newmonitor`])
-AT_CHECK([parent_pid `cat newmonitor` > init])
-AT_CHECK([test `cat init` != $$])
+AT_CHECK([kill -SEGV $child], [0])
+OVS_WAIT_WHILE([kill -0 $child])
+OVS_WAIT_UNTIL([test -s ovsdb-server.pid && test `cat ovsdb-server.pid` != $child])
+child2=$(cat ovsdb-server.pid)
+
+# Check process naming and ancestry.
+check_process_name $child2 ovsdb-server
+check_ancestors $child2 $monitor 1
+
 # Kill the daemon process with SIGTERM, and wait for the daemon
 # and the monitor processes to go away and the pidfile to get deleted.
-AT_CHECK([kill `cat ovsdb-server.pid`], [0], [], [ignore])
+AT_CHECK([kill $child2])
 OVS_WAIT_WHILE(
-  [kill -0 `cat monitor` || kill -0 `cat newdaemon` || test -e ovsdb-server.pid])
+  [kill -0 $monitor || kill -0 $child2 || test -e ovsdb-server.pid])
 AT_CLEANUP
 
+
 AT_SETUP([daemon --detach startup errors])
-AT_CAPTURE_FILE([pid])
-OVSDB_INIT([db])
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --unixctl=nonexistent/unixctl db], [1], [], [stderr])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --unixctl=nonexistent/unixctl --no-db], [1], [], [stderr])
 AT_CHECK([grep 'could not initialize control socket' stderr],
   [0], [ignore])
-AT_CHECK([test ! -s pid])
+AT_CHECK([test ! -e ovsdb-server.pid])
 AT_CLEANUP
+
 
 AT_SETUP([daemon --detach --monitor startup errors])
 AT_SKIP_IF([test "$IS_WIN32" = "yes"])
-AT_CAPTURE_FILE([pid])
-OVSDB_INIT([db])
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --monitor --unixctl=nonexistent/unixctl db], [1], [], [stderr])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --monitor --unixctl=nonexistent/unixctl --no-db], [1], [], [stderr])
 AT_CHECK([grep 'could not initialize control socket' stderr],
   [0], [ignore])
-AT_CHECK([test ! -s pid])
+AT_CHECK([test ! -e ovsdb-server.pid])
 AT_CLEANUP
+
 
 AT_SETUP([daemon --service])
 AT_KEYWORDS([windows-service])
@@ -178,12 +203,11 @@ AT_SKIP_IF([test "$IS_WIN32" != "yes"])
 OVS_SKIP_NON_ADMIN_WIN
 AT_SKIP_IF([sc qc ovsdb-server])
 
-OVSDB_INIT([db])
 AT_CAPTURE_FILE([pid])
 # To create a Windows service, we need the absolute path for the executable.
 abs_path="$(cd $(dirname `which ovsdb-server`); pwd -W; cd $OLDPWD)"
 
-AT_CHECK([sc create ovsdb-server binpath="$abs_path/ovsdb-server `pwd`/db --log-file=`pwd`/ovsdb-server.log --pidfile=`pwd`/ovsdb-server.pid --unixctl=`pwd`/ovsdb-server.ctl --remote=punix:`pwd`/socket --service"],
+AT_CHECK([sc create ovsdb-server binpath="$abs_path/ovsdb-server --no-db --log-file=`pwd`/ovsdb-server.log --pidfile=`pwd`/ovsdb-server.pid --unixctl=`pwd`/ovsdb-server.ctl --remote=punix:`pwd`/socket --service"],
 [0], [[[SC]] CreateService SUCCESS
 ])
 
