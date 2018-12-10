@@ -257,6 +257,7 @@ ovs_rwlock_init(const struct ovs_rwlock *l_)
  * call with calls to ovsrcu_quiesce_start() and ovsrcu_quiesce_end().  */
 void
 ovs_mutex_cond_wait(pthread_cond_t *cond, const struct ovs_mutex *mutex_)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct ovs_mutex *mutex = CONST_CAST(struct ovs_mutex *, mutex_);
     int error;

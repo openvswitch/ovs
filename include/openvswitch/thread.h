@@ -68,7 +68,8 @@ int ovs_mutex_trylock_at(const struct ovs_mutex *mutex, const char *where)
 #define ovs_mutex_trylock(mutex) \
         ovs_mutex_trylock_at(mutex, OVS_SOURCE_LOCATOR)
 
-void ovs_mutex_cond_wait(pthread_cond_t *, const struct ovs_mutex *);
+void ovs_mutex_cond_wait(pthread_cond_t *, const struct ovs_mutex *mutex)
+    OVS_REQUIRES(mutex);
 
 /* Convenient once-only execution.
  *
