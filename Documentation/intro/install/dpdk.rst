@@ -42,7 +42,7 @@ Build requirements
 In addition to the requirements described in :doc:`general`, building Open
 vSwitch with DPDK will require the following:
 
-- DPDK 17.11.4
+- DPDK 18.11
 
 - A `DPDK supported NIC`_
 
@@ -71,9 +71,9 @@ Install DPDK
 #. Download the `DPDK sources`_, extract the file and set ``DPDK_DIR``::
 
        $ cd /usr/src/
-       $ wget http://fast.dpdk.org/rel/dpdk-17.11.4.tar.xz
-       $ tar xf dpdk-17.11.4.tar.xz
-       $ export DPDK_DIR=/usr/src/dpdk-stable-17.11.4
+       $ wget http://fast.dpdk.org/rel/dpdk-18.11.tar.xz
+       $ tar xf dpdk-18.11.tar.xz
+       $ export DPDK_DIR=/usr/src/dpdk-18.11
        $ cd $DPDK_DIR
 
 #. (Optional) Configure DPDK as a shared library
@@ -672,7 +672,8 @@ Limitations
   The latest list of validated firmware versions can be found in the `DPDK
   release notes`_.
 
-.. _DPDK release notes: http://dpdk.org/doc/guides/rel_notes/release_17_11.html
+.. _DPDK release notes:
+   https://doc.dpdk.org/guides/rel_notes/release_18_11.html
 
 - Upper bound MTU: DPDK device drivers differ in how the L2 frame for a
   given MTU value is calculated e.g. i40e driver includes 2 x vlan headers in

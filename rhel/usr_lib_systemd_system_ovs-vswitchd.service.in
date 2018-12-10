@@ -10,7 +10,7 @@ PartOf=openvswitch.service
 [Service]
 Type=forking
 Restart=on-failure
-Environment=HOME=/var/run/openvswitch
+Environment=XDG_RUNTIME_DIR=/var/run/openvswitch
 EnvironmentFile=/etc/openvswitch/default.conf
 EnvironmentFile=-/etc/sysconfig/openvswitch
 EnvironmentFile=-/run/openvswitch/useropts

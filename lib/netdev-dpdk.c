@@ -164,11 +164,7 @@ static const struct rte_eth_conf port_conf = {
     .rxmode = {
         .mq_mode = ETH_MQ_RX_RSS,
         .split_hdr_size = 0,
-        .header_split   = 0, /* Header Split disabled */
-        .hw_ip_checksum = 0, /* IP checksum offload disabled */
-        .hw_vlan_filter = 0, /* VLAN filtering disabled */
-        .jumbo_frame    = 0, /* Jumbo Frame Support disabled */
-        .hw_strip_crc   = 0,
+        .offloads = 0,
     },
     .rx_adv_conf = {
         .rss_conf = {
@@ -360,12 +356,14 @@ struct dpdk_ring {
 struct ingress_policer {
     struct rte_meter_srtcm_params app_srtcm_params;
     struct rte_meter_srtcm in_policer;
+    struct rte_meter_srtcm_profile in_prof;
     rte_spinlock_t policer_lock;
 };
 
 enum dpdk_hw_ol_features {
     NETDEV_RX_CHECKSUM_OFFLOAD = 1 << 0,
     NETDEV_RX_HW_CRC_STRIP = 1 << 1,
+    NETDEV_RX_HW_SCATTER = 1 << 2
 };
 
 /*
@@ -915,26 +913,32 @@ dpdk_eth_dev_port_config(struct netdev_dpdk *dev, int n_rxq, int n_txq)
     struct rte_eth_dev_info info;
     uint16_t conf_mtu;
 
+    rte_eth_dev_info_get(dev->port_id, &info);
+
     /* As of DPDK 17.11.1 a few PMDs require to explicitly enable
-     * scatter to support jumbo RX. Checking the offload capabilities
-     * is not an option as PMDs are not required yet to report
-     * them. The only reliable info is the driver name and knowledge
-     * (testing or code review). Listing all such PMDs feels harder
-     * than highlighting the one known not to need scatter */
+     * scatter to support jumbo RX.
+     * Setting scatter for the device is done after checking for
+     * scatter support in the device capabilites. */
     if (dev->mtu > ETHER_MTU) {
-        rte_eth_dev_info_get(dev->port_id, &info);
-        if (strncmp(info.driver_name, "net_nfp", 7)) {
-            conf.rxmode.enable_scatter = 1;
+        if (dev->hw_ol_features & NETDEV_RX_HW_SCATTER) {
+            conf.rxmode.offloads |= DEV_RX_OFFLOAD_SCATTER;
         }
     }
 
     conf.intr_conf.lsc = dev->lsc_interrupt_mode;
-    conf.rxmode.hw_ip_checksum = (dev->hw_ol_features &
-                                  NETDEV_RX_CHECKSUM_OFFLOAD) != 0;
 
-    if (dev->hw_ol_features & NETDEV_RX_HW_CRC_STRIP) {
-        conf.rxmode.hw_strip_crc = 1;
+    if (dev->hw_ol_features & NETDEV_RX_CHECKSUM_OFFLOAD) {
+        conf.rxmode.offloads |= DEV_RX_OFFLOAD_CHECKSUM;
     }
+
+    if (!(dev->hw_ol_features & NETDEV_RX_HW_CRC_STRIP)
+        && info.rx_offload_capa & DEV_RX_OFFLOAD_KEEP_CRC) {
+        conf.rxmode.offloads |= DEV_RX_OFFLOAD_KEEP_CRC;
+    }
+
+    /* Limit configured rss hash functions to only those supported
+     * by the eth device. */
+    conf.rx_adv_conf.rss_conf.rss_hf &= info.flow_type_rss_offloads;
 
     /* A device may report more queues than it makes available (this has
      * been observed for Intel xl710, which reserves some of them for
@@ -1050,6 +1054,13 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev)
         dev->hw_ol_features &= ~NETDEV_RX_CHECKSUM_OFFLOAD;
     } else {
         dev->hw_ol_features |= NETDEV_RX_CHECKSUM_OFFLOAD;
+    }
+
+    if (info.rx_offload_capa & DEV_RX_OFFLOAD_SCATTER) {
+        dev->hw_ol_features |= NETDEV_RX_HW_SCATTER;
+    } else {
+        /* Do not warn on lack of scatter support */
+        dev->hw_ol_features &= ~NETDEV_RX_HW_SCATTER;
     }
 
     n_rxq = MIN(info.max_rx_queues, dev->up.n_rxq);
@@ -1342,7 +1353,7 @@ static void
 netdev_dpdk_destruct(struct netdev *netdev)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    char devname[RTE_ETH_NAME_MAX_LEN];
+    struct rte_eth_dev_info dev_info;
 
     ovs_mutex_lock(&dpdk_mutex);
 
@@ -1351,10 +1362,11 @@ netdev_dpdk_destruct(struct netdev *netdev)
 
     if (dev->attached) {
         rte_eth_dev_close(dev->port_id);
-        if (rte_eth_dev_detach(dev->port_id, devname) < 0) {
-            VLOG_ERR("Device '%s' can not be detached", dev->devargs);
+        rte_eth_dev_info_get(dev->port_id, &dev_info);
+        if (dev_info.device && !rte_dev_remove(dev_info.device)) {
+            VLOG_INFO("Device '%s' has been detached", dev->devargs);
         } else {
-            VLOG_INFO("Device '%s' has been detached", devname);
+            VLOG_ERR("Device '%s' can not be detached", dev->devargs);
         }
     }
 
@@ -1644,7 +1656,8 @@ netdev_dpdk_process_devargs(struct netdev_dpdk *dev,
         if (rte_eth_dev_get_port_by_name(name, &new_port_id)
                 || !rte_eth_dev_is_valid_port(new_port_id)) {
             /* Device not found in DPDK, attempt to attach it */
-            if (!rte_eth_dev_attach(devargs, &new_port_id)) {
+            if (!rte_dev_probe(devargs)
+                && !rte_eth_dev_get_port_by_name(name, &new_port_id)) {
                 /* Attach successful */
                 dev->attached = true;
                 VLOG_INFO("Device '%s' attached to DPDK", devargs);
@@ -1953,16 +1966,18 @@ netdev_dpdk_eth_tx_burst(struct netdev_dpdk *dev, int qid,
 
 static inline bool
 netdev_dpdk_policer_pkt_handle(struct rte_meter_srtcm *meter,
+                               struct rte_meter_srtcm_profile *profile,
                                struct rte_mbuf *pkt, uint64_t time)
 {
     uint32_t pkt_len = rte_pktmbuf_pkt_len(pkt) - sizeof(struct ether_hdr);
 
-    return rte_meter_srtcm_color_blind_check(meter, time, pkt_len) ==
-                                                e_RTE_METER_GREEN;
+    return rte_meter_srtcm_color_blind_check(meter, profile, time, pkt_len) ==
+                                             e_RTE_METER_GREEN;
 }
 
 static int
 netdev_dpdk_policer_run(struct rte_meter_srtcm *meter,
+                        struct rte_meter_srtcm_profile *profile,
                         struct rte_mbuf **pkts, int pkt_cnt,
                         bool should_steal)
 {
@@ -1974,7 +1989,8 @@ netdev_dpdk_policer_run(struct rte_meter_srtcm *meter,
     for (i = 0; i < pkt_cnt; i++) {
         pkt = pkts[i];
         /* Handle current packet */
-        if (netdev_dpdk_policer_pkt_handle(meter, pkt, current_time)) {
+        if (netdev_dpdk_policer_pkt_handle(meter, profile,
+                                           pkt, current_time)) {
             if (cnt != i) {
                 pkts[cnt] = pkt;
             }
@@ -1996,8 +2012,8 @@ ingress_policer_run(struct ingress_policer *policer, struct rte_mbuf **pkts,
     int cnt = 0;
 
     rte_spinlock_lock(&policer->policer_lock);
-    cnt = netdev_dpdk_policer_run(&policer->in_policer, pkts,
-                                  pkt_cnt, should_steal);
+    cnt = netdev_dpdk_policer_run(&policer->in_policer, &policer->in_prof,
+                                  pkts, pkt_cnt, should_steal);
     rte_spinlock_unlock(&policer->policer_lock);
 
     return cnt;
@@ -2802,8 +2818,12 @@ netdev_dpdk_policer_construct(uint32_t rate, uint32_t burst)
     policer->app_srtcm_params.cir = rate_bytes;
     policer->app_srtcm_params.cbs = burst_bytes;
     policer->app_srtcm_params.ebs = 0;
-    err = rte_meter_srtcm_config(&policer->in_policer,
-                                    &policer->app_srtcm_params);
+    err = rte_meter_srtcm_profile_config(&policer->in_prof,
+                                         &policer->app_srtcm_params);
+    if (!err) {
+        err = rte_meter_srtcm_config(&policer->in_policer,
+                                     &policer->in_prof);
+    }
     if (err) {
         VLOG_ERR("Could not create rte meter for ingress policer");
         free(policer);
@@ -3097,10 +3117,24 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
         return ENODEV;
     }
 
+    ovs_mutex_lock(&dpdk_mutex);
     ovs_mutex_lock(&dev->mutex);
     rte_eth_dev_info_get(dev->port_id, &dev_info);
     link_speed = dev->link.link_speed;
     ovs_mutex_unlock(&dev->mutex);
+    const struct rte_bus *bus;
+    const struct rte_pci_device *pci_dev;
+    uint16_t vendor_id = PCI_ANY_ID;
+    uint16_t device_id = PCI_ANY_ID;
+    bus = rte_bus_find_by_device(dev_info.device);
+    if (bus && !strcmp(bus->name, "pci")) {
+        pci_dev = RTE_DEV_TO_PCI(dev_info.device);
+        if (pci_dev) {
+            vendor_id = pci_dev->id.vendor_id;
+            device_id = pci_dev->id.device_id;
+        }
+    }
+    ovs_mutex_unlock(&dpdk_mutex);
 
     smap_add_format(args, "port_no", DPDK_PORT_ID_FMT, dev->port_id);
     smap_add_format(args, "numa_id", "%d",
@@ -3123,13 +3157,8 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
     smap_add_format(args, "if_type", "%"PRIu32, IF_TYPE_ETHERNETCSMACD);
     smap_add_format(args, "if_descr", "%s %s", rte_version(),
                                                dev_info.driver_name);
-
-    if (dev_info.pci_dev) {
-        smap_add_format(args, "pci-vendor_id", "0x%x",
-                        dev_info.pci_dev->id.vendor_id);
-        smap_add_format(args, "pci-device_id", "0x%x",
-                        dev_info.pci_dev->id.device_id);
-    }
+    smap_add_format(args, "pci-vendor_id", "0x%x", vendor_id);
+    smap_add_format(args, "pci-device_id", "0x%x", device_id);
 
     /* Not all link speeds are defined in the OpenFlow specs e.g. 25 Gbps.
      * In that case the speed will not be reported as part of the usual
@@ -3204,11 +3233,10 @@ static void
 netdev_dpdk_detach(struct unixctl_conn *conn, int argc OVS_UNUSED,
                    const char *argv[], void *aux OVS_UNUSED)
 {
-    int ret;
     char *response;
     dpdk_port_t port_id;
-    char devname[RTE_ETH_NAME_MAX_LEN];
     struct netdev_dpdk *dev;
+    struct rte_eth_dev_info dev_info;
 
     ovs_mutex_lock(&dpdk_mutex);
 
@@ -3227,8 +3255,8 @@ netdev_dpdk_detach(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
     rte_eth_dev_close(port_id);
 
-    ret = rte_eth_dev_detach(port_id, devname);
-    if (ret < 0) {
+    rte_eth_dev_info_get(port_id, &dev_info);
+    if (!dev_info.device || rte_dev_remove(dev_info.device)) {
         response = xasprintf("Device '%s' can not be detached", argv[1]);
         goto error;
     }
@@ -3816,6 +3844,7 @@ struct egress_policer {
     struct qos_conf qos_conf;
     struct rte_meter_srtcm_params app_srtcm_params;
     struct rte_meter_srtcm egress_meter;
+    struct rte_meter_srtcm_profile egress_prof;
 };
 
 static void
@@ -3838,11 +3867,17 @@ egress_policer_qos_construct(const struct smap *details,
     policer = xmalloc(sizeof *policer);
     qos_conf_init(&policer->qos_conf, &egress_policer_ops);
     egress_policer_details_to_param(details, &policer->app_srtcm_params);
-    err = rte_meter_srtcm_config(&policer->egress_meter,
-                                 &policer->app_srtcm_params);
+    err = rte_meter_srtcm_profile_config(&policer->egress_prof,
+                                         &policer->app_srtcm_params);
+    if (!err) {
+        err = rte_meter_srtcm_config(&policer->egress_meter,
+                                     &policer->egress_prof);
+    }
+
     if (!err) {
         *conf = &policer->qos_conf;
     } else {
+        VLOG_ERR("Could not create rte meter for egress policer");
         free(policer);
         *conf = NULL;
         err = -err;
@@ -3892,7 +3927,8 @@ egress_policer_run(struct qos_conf *conf, struct rte_mbuf **pkts, int pkt_cnt,
     struct egress_policer *policer =
         CONTAINER_OF(conf, struct egress_policer, qos_conf);
 
-    cnt = netdev_dpdk_policer_run(&policer->egress_meter, pkts,
+    cnt = netdev_dpdk_policer_run(&policer->egress_meter,
+                                  &policer->egress_prof, pkts,
                                   pkt_cnt, should_steal);
 
     return cnt;
@@ -3977,7 +4013,7 @@ dpdk_vhost_reconfigure_helper(struct netdev_dpdk *dev)
     if (!err) {
         /* A new mempool was created or re-used. */
         netdev_change_seq_changed(&dev->up);
-    } else if (err != EEXIST){
+    } else if (err != EEXIST) {
         return err;
     }
     if (netdev_dpdk_get_vid(dev) >= 0) {
@@ -4203,16 +4239,16 @@ dump_flow_pattern(struct rte_flow_item *item)
         ds_put_cstr(&s, "rte flow vlan pattern:\n");
         if (vlan_spec) {
             ds_put_format(&s,
-                     "  Spec: tpid=0x%"PRIx16", tci=0x%"PRIx16"\n",
-                     ntohs(vlan_spec->tpid), ntohs(vlan_spec->tci));
+                     "  Spec: inner_type=0x%"PRIx16", tci=0x%"PRIx16"\n",
+                     ntohs(vlan_spec->inner_type), ntohs(vlan_spec->tci));
         } else {
             ds_put_cstr(&s, "  Spec = null\n");
         }
 
         if (vlan_mask) {
             ds_put_format(&s,
-                     "  Mask: tpid=0x%"PRIx16", tci=0x%"PRIx16"\n",
-                     vlan_mask->tpid, vlan_mask->tci);
+                     "  Mask: inner_type=0x%"PRIx16", tci=0x%"PRIx16"\n",
+                     ntohs(vlan_mask->inner_type), ntohs(vlan_mask->tci));
         } else {
             ds_put_cstr(&s, "  Mask = null\n");
         }
@@ -4395,27 +4431,39 @@ add_flow_action(struct flow_actions *actions, enum rte_flow_action_type type,
     actions->cnt++;
 }
 
-static struct rte_flow_action_rss *
+struct action_rss_data {
+    struct rte_flow_action_rss conf;
+    uint16_t queue[0];
+};
+
+static struct action_rss_data *
 add_flow_rss_action(struct flow_actions *actions,
                     struct netdev *netdev) {
     int i;
-    struct rte_flow_action_rss *rss;
+    struct action_rss_data *rss_data;
 
-    rss = xmalloc(sizeof(*rss) + sizeof(uint16_t) * netdev->n_rxq);
-    /*
-     * Setting it to NULL will let the driver use the default RSS
-     * configuration we have set: &port_conf.rx_adv_conf.rss_conf.
-     */
-    rss->rss_conf = NULL;
-    rss->num = netdev->n_rxq;
+    rss_data = xmalloc(sizeof(struct action_rss_data) +
+                       sizeof(uint16_t) * netdev->n_rxq);
+    *rss_data = (struct action_rss_data) {
+        .conf = (struct rte_flow_action_rss) {
+            .func = RTE_ETH_HASH_FUNCTION_DEFAULT,
+            .level = 0,
+            .types = 0,
+            .queue_num = netdev->n_rxq,
+            .queue = rss_data->queue,
+            .key_len = 0,
+            .key  = NULL
+        },
+    };
 
-    for (i = 0; i < rss->num; i++) {
-        rss->queue[i] = i;
+    /* Override queue array with default */
+    for (i = 0; i < netdev->n_rxq; i++) {
+       rss_data->queue[i] = i;
     }
 
-    add_flow_action(actions, RTE_FLOW_ACTION_TYPE_RSS, rss);
+    add_flow_action(actions, RTE_FLOW_ACTION_TYPE_RSS, &rss_data->conf);
 
-    return rss;
+    return rss_data;
 }
 
 static int
@@ -4479,7 +4527,7 @@ netdev_dpdk_add_rte_flow_offload(struct netdev *netdev,
         vlan_mask.tci  = match->wc.masks.vlans[0].tci & ~htons(VLAN_CFI);
 
         /* match any protocols */
-        vlan_mask.tpid = 0;
+        vlan_mask.inner_type = 0;
 
         add_flow_pattern(&patterns, RTE_FLOW_ITEM_TYPE_VLAN,
                          &vlan_spec, &vlan_mask);
@@ -4625,7 +4673,7 @@ end_proto_check:
     add_flow_pattern(&patterns, RTE_FLOW_ITEM_TYPE_END, NULL, NULL);
 
     struct rte_flow_action_mark mark;
-    struct rte_flow_action_rss *rss;
+    struct action_rss_data *rss;
 
     mark.id = info->flow_mark;
     add_flow_action(&actions, RTE_FLOW_ACTION_TYPE_MARK, &mark);

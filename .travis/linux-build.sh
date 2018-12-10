@@ -56,9 +56,9 @@ function install_dpdk()
         cd dpdk-$1
         git checkout tags/v$1
     else
-        wget http://fast.dpdk.org/rel/dpdk-$1.tar.gz
-        tar xzvf dpdk-$1.tar.gz > /dev/null
-        DIR_NAME=$(tar -tf dpdk-$1.tar.gz | head -1 | cut -f1 -d"/")
+        wget https://fast.dpdk.org/rel/dpdk-$1.tar.xz
+        tar xvf dpdk-$1.tar.xz > /dev/null
+        DIR_NAME=$(tar -tf dpdk-$1.tar.xz | head -1 | cut -f1 -d"/")
         if [ $DIR_NAME != "dpdk-$1"  ]; then mv $DIR_NAME dpdk-$1; fi
         cd dpdk-$1
     fi
@@ -83,7 +83,7 @@ fi
 
 if [ "$DPDK" ]; then
     if [ -z "$DPDK_VER" ]; then
-        DPDK_VER="17.11.4"
+        DPDK_VER="18.11"
     fi
     install_dpdk $DPDK_VER
     if [ "$CC" = "clang" ]; then
