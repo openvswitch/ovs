@@ -28,6 +28,7 @@
 ### END INIT INFO
 
 SYSTEMCTL_SKIP_REDIRECT=yes
+SYSTEMD_NO_WRAP=yes
 
 . /usr/share/openvswitch/scripts/ovs-lib || exit 1
 test -e /etc/sysconfig/openvswitch && . /etc/sysconfig/openvswitch
