@@ -188,7 +188,7 @@ sed -n 's/,frag=no),.*/,frag=later)/p' odp-base.txt
 
  echo
  echo '# Valid forms with tunnel and ERSPAN v2 headers.'
- sed 's/^/skb_priority(0),tunnel(tun_id=0xfedcba9876543210,src=10.0.0.1,dst=10.0.0.2,ttl=128,erspan(ver=2,dir=0x1,hwid=0x7/0xf),flags(df|key)),skb_mark(0),recirc_id(0),dp_hash(0),/' odp-base.txt
+ sed 's/^/skb_priority(0),tunnel(tun_id=0xfedcba9876543210,src=10.0.0.1,dst=10.0.0.2,ttl=128,erspan(ver=2,dir=1,hwid=0x7/0xf),flags(df|key)),skb_mark(0),recirc_id(0),dp_hash(0),/' odp-base.txt
 ) > odp.txt
 AT_CAPTURE_FILE([odp.txt])
 AT_CHECK_UNQUOTED([ovstest test-odp parse-wc-keys < odp.txt], [0], [`cat odp.txt`
