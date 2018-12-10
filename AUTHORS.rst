@@ -104,6 +104,7 @@ Darrell Ball                       dlu998@gmail.com
 Dave Tucker                        dave@dtucker.co.uk
 David Erickson                     derickso@stanford.edu
 David Hill                         dhill@redhat.com
+David Marchand                     david.marchand@redhat.com
 David S. Miller                    davem@davemloft.net
 David Yang                         davidy@vmware.com
 Dennis Sam                         dsam@arista.com
@@ -306,6 +307,7 @@ Sanjay Sane
 Saurabh Mohan                      saurabh@cplanenetworks.com
 Saurabh Shah
 Saurabh Shrivastava                saurabh.shrivastava@nuagenetworks.net
+Scott Cheloha                      scottcheloha@gmail.com
 Scott Lowe                         scott.lowe@scottlowe.org
 Scott Mann                         sdmnix@gmail.com
 Selvamuthukumar                    smkumar@merunetworks.com
