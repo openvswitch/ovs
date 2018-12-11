@@ -190,6 +190,7 @@ OVS_START_SHELL_HELPERS
 ovs_cleanup() {
     if test "$(echo asan.*)" != 'asan.*'; then
         echo "Address Sanitizer reported errors in:" asan.*
+        cat asan.*
         AT_FAIL_IF([:])
     fi
 }
