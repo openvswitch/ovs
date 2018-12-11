@@ -1,0 +1,30 @@
+freebsd_build_task:
+
+  freebsd_instance:
+    matrix:
+      image: freebsd-12-0-release-amd64
+      image: freebsd-11-2-release-amd64
+    cpu: 4
+    memory: 8G
+
+  env:
+    matrix:
+      COMPILER: gcc
+      COMPILER: clang
+
+  prepare_script:
+    - pkg install -y automake libtool gmake gcc wget
+                     python py27-six py27-sphinx
+
+  configure_script:
+    - ./boot.sh
+    - ./configure CC=$COMPILER MAKE=gmake OVS_CFLAGS='-Wall' --enable-Werror
+                  || { cat config.log; exit 1; }
+
+  build_script:
+    - gmake -j8
+
+#  TODO(i.maximets): Uncomment the test suite execution when it is fixed.
+#  check_script:
+#    - gmake -j8 check TESTSUITEFLAGS=-j8 RECHECK=yes
+#                || { cat ./tests/testsuite.log; exit 1; }

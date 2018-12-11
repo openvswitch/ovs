@@ -76,6 +76,7 @@ EXTRA_DIST = \
 	MAINTAINERS.rst \
 	README.rst \
 	NOTICE \
+	.cirrus.yml \
 	.travis.yml \
 	.travis/linux-build.sh \
 	.travis/linux-prepare.sh \
