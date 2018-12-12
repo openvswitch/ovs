@@ -28,6 +28,7 @@
 #define DHCP_MAGIC_COOKIE 0x63825363
 
 #define DHCP_HEADER_LEN 236
+OVS_PACKED(
 struct dhcp_header {
     uint8_t op;                 /* DHCP_BOOTREQUEST or DHCP_BOOTREPLY. */
     uint8_t htype;              /* ARP_HRD_ETHERNET (typically). */
@@ -44,7 +45,7 @@ struct dhcp_header {
     char sname[64];             /* Optional server host name. */
     char file[128];             /* Boot file name. */
     /* Followed by variable-length options field. */
-};
+});
 BUILD_ASSERT_DECL(DHCP_HEADER_LEN == sizeof(struct dhcp_header));
 
 #define DHCP_OP_REQUEST    1
