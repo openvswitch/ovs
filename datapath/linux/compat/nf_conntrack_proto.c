@@ -11,10 +11,10 @@
  *
  * However, we only need this feature if the underlying nf_conntrack_l3proto
  * supports net_ns_get/put.  Thus, we just mock the functions if
- * HAVE_NET_NS_SET is false.
+ * HAVE_NET_NS_GET is false.
  */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,15,0)
-#ifdef HAVE_NET_NS_SET
+#ifdef HAVE_NET_NS_GET
 static int nf_ct_netns_do_get(struct net *net, u8 nfproto)
 {
 	const struct nf_conntrack_l3proto *l3proto;
@@ -96,7 +96,7 @@ void rpl_nf_ct_netns_put(struct net *net, uint8_t nfproto)
 }
 EXPORT_SYMBOL_GPL(rpl_nf_ct_netns_put);
 
-#else /* !HAVE_NET_NS_SET */
+#else /* !HAVE_NET_NS_GET */
 void rpl_nf_ct_netns_put(struct net *net, uint8_t nfproto)
 {
 }
@@ -108,5 +108,5 @@ int rpl_nf_ct_netns_get(struct net *net, u8 nfproto)
 }
 EXPORT_SYMBOL_GPL(rpl_nf_ct_netns_get);
 
-#endif /* HAVE_NET_NS_SET */
+#endif /* HAVE_NET_NS_GET */
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(4,15,0) */
