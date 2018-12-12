@@ -235,6 +235,7 @@ Mark Maglana                       mmaglana@gmail.com
 Mark Michelson                     mmichels@redhat.com
 Markos Chandras                    mchandras@suse.de
 Martin Casado                      casado@cs.stanford.edu
+Martin Fong                        mwfong@csl.sri.com
 Martino Fornasa                    mf@fornasa.it
 Maryam Tahhan                      maryam.tahhan@intel.com
 Matteo Croce                       mcroce@redhat.com
