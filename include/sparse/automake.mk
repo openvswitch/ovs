@@ -25,4 +25,5 @@ noinst_HEADERS += \
         include/sparse/sys/socket.h \
         include/sparse/sys/sysmacros.h \
         include/sparse/sys/types.h \
-        include/sparse/sys/wait.h
+        include/sparse/sys/wait.h \
+        include/sparse/threads.h
