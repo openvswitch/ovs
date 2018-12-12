@@ -1517,7 +1517,7 @@ ofconn_receives_async_msg(const struct ofconn *ofconn,
     ovs_assert(reason < 32);
     ovs_assert((unsigned int) type < OAM_N_TYPES);
 
-    if (!rconn_is_connected(ofconn->rconn)) {
+    if (!rconn_is_connected(ofconn->rconn) || !ofconn_get_protocol(ofconn)) {
         return false;
     }
 
