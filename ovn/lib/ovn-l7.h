@@ -138,6 +138,15 @@ dhcp_opts_destroy(struct hmap *dhcp_opts)
     gen_opts_destroy(dhcp_opts);
 }
 
+OVS_PACKED(
+struct dhcp_opt_header {
+    uint8_t code;
+    uint8_t len;
+});
+
+#define DHCP_OPT_PAYLOAD(hdr) \
+    (void *)((char *)hdr + sizeof(struct dhcp_opt_header))
+
 /* Used in the OpenFlow PACKET_IN userdata */
 struct dhcp_opt6_header {
     ovs_be16 opt_code;

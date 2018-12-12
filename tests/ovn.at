@@ -4234,10 +4234,10 @@ sleep 2
 as hv1 ovs-vsctl show
 
 # This shell function sends a DHCP request packet
-# test_dhcp INPORT SRC_MAC DHCP_TYPE OFFER_IP ...
+# test_dhcp INPORT SRC_MAC DHCP_TYPE OFFER_IP REQUEST_IP ...
 test_dhcp() {
-    local inport=$1 src_mac=$2 dhcp_type=$3 offer_ip=$4 use_ip=$5
-    shift; shift; shift; shift; shift;
+    local inport=$1 src_mac=$2 dhcp_type=$3 ciaddr=$4 offer_ip=$5 request_ip=$6 use_ip=$7
+    shift; shift; shift; shift; shift; shift; shift;
     if test $use_ip != 0; then
         src_ip=$1
         dst_ip=$2
@@ -4246,10 +4246,17 @@ test_dhcp() {
         src_ip=`ip_to_hex 0 0 0 0`
         dst_ip=`ip_to_hex 255 255 255 255`
     fi
-    local request=ffffffffffff${src_mac}0800451001100000000080110000${src_ip}${dst_ip}
+    if test $request_ip != 0; then
+        ip_len=0120
+        udp_len=010b
+    else
+        ip_len=011a
+        udp_len=0106
+    fi
+    local request=ffffffffffff${src_mac}08004510${ip_len}0000000080110000${src_ip}${dst_ip}
     # udp header and dhcp header
-    request=${request}0044004300fc0000
-    request=${request}010106006359aa760000000000000000000000000000000000000000${src_mac}
+    request=${request}00440043${udp_len}0000
+    request=${request}010106006359aa7600000000${ciaddr}000000000000000000000000${src_mac}
     # client hardware padding
     request=${request}00000000000000000000
     # server hostname
@@ -4263,13 +4270,23 @@ test_dhcp() {
     # dhcp magic cookie
     request=${request}63825363
     # dhcp message type
-    request=${request}3501${dhcp_type}ff
+    request=${request}3501${dhcp_type}
+    # dhcp unknown option
+    request=${request}d70701020304050607
+    # dhcp pad option
+    request=${request}00
+    if test $request_ip != 0; then
+        # dhcp requested ip
+        request=${request}3204${request_ip}
+    fi
+    # dhcp end option
+    request=${request}ff
 
     for port in $inport "$@"; do
         : >> $port.expected
     done
     if test $offer_ip != 0; then
-        local srv_mac=$1 srv_ip=$2 expected_dhcp_opts=$3
+        local srv_mac=$1 srv_ip=$2 dhcp_reply_type=$3 expected_dhcp_opts=$4
         # total IP length will be the IP length of the request packet
         # (which is 272 in our case) + 8 (padding bytes) + (expected_dhcp_opts / 2)
         ip_len=`expr 280 + ${#expected_dhcp_opts} / 2`
@@ -4280,9 +4297,13 @@ test_dhcp() {
         local reply=${src_mac}${srv_mac}080045100${ip_len}000000008011XXXX${srv_ip}${offer_ip}
         # udp header and dhcp header.
         # $udp_len var will be in 3 digits. So adding a '0' before $udp_len
-        reply=${reply}004300440${udp_len}0000020106006359aa760000000000000000
-        # your ip address
-        reply=${reply}${offer_ip}
+        reply=${reply}004300440${udp_len}0000020106006359aa7600000000${ciaddr}
+        # your ip address; 0 for NAK
+        if test $dhcp_reply_type = 06; then
+            reply=${reply}00000000
+        else
+            reply=${reply}${offer_ip}
+        fi
         # next server ip address, relay agent ip address, client mac address
         reply=${reply}0000000000000000${src_mac}
         # client hardware padding
@@ -4297,11 +4318,6 @@ test_dhcp() {
         reply=${reply}0000000000000000000000000000000000000000000000000000000000000000
         # dhcp magic cookie
         reply=${reply}63825363
-        # dhcp message type
-        local dhcp_reply_type=02
-        if test $dhcp_type = 03; then
-            dhcp_reply_type=05
-        fi
         reply=${reply}3501${dhcp_reply_type}${expected_dhcp_opts}00000000ff00000000
         echo $reply >> $inport.expected
     else
@@ -4349,8 +4365,10 @@ as hv1 ovs-ofctl dump-flows br-int
 # Send DHCPDISCOVER.
 offer_ip=`ip_to_hex 10 0 0 4`
 server_ip=`ip_to_hex 10 0 0 1`
+ciaddr=`ip_to_hex 0 0 0 0`
+request_ip=0
 expected_dhcp_opts=330400000e100104ffffff0003040a00000136040a000001
-test_dhcp 1 f00000000001 01 $offer_ip 0 ff1000000001 $server_ip $expected_dhcp_opts
+test_dhcp 1 f00000000001 01 $ciaddr $offer_ip $request_ip 0 ff1000000001 $server_ip 02 $expected_dhcp_opts
 
 # NXT_RESUMEs should be 1.
 OVS_WAIT_UNTIL([test 1 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
@@ -4369,14 +4387,41 @@ reset_pcap_file hv1-vif2 hv1/vif2
 rm -f 1.expected
 rm -f 2.expected
 
-# Send DHCPREQUEST.
+# Send DHCPREQUEST in the SELECTING/INIT-REBOOT state with the offered IP
+# address in the Requested IP Address option.
 offer_ip=`ip_to_hex 10 0 0 6`
 server_ip=`ip_to_hex 10 0 0 1`
+ciaddr=`ip_to_hex 0 0 0 0`
+request_ip=$offer_ip
 expected_dhcp_opts=330400000e100104ffffff0003040a00000136040a000001
-test_dhcp 2 f00000000002 03 $offer_ip 0 ff1000000001 $server_ip $expected_dhcp_opts
+test_dhcp 2 f00000000002 03 $ciaddr $offer_ip $request_ip 0 ff1000000001 $server_ip 05 $expected_dhcp_opts
 
 # NXT_RESUMEs should be 2.
 OVS_WAIT_UNTIL([test 2 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap > 2.packets
+cat 2.expected | cut -c -48 > expout
+AT_CHECK([cat 2.packets | cut -c -48], [0], [expout])
+# Skipping the IPv4 checksum.
+cat 2.expected | cut -c 53- > expout
+AT_CHECK([cat 2.packets | cut -c 53-], [0], [expout])
+
+reset_pcap_file hv1-vif1 hv1/vif1
+reset_pcap_file hv1-vif2 hv1/vif2
+rm -f 1.expected
+rm -f 2.expected
+
+# Send DHCPREQUEST in the SELECTING/INIT-REBOOT state with a mismatched IP in
+# the Requested IP Address option, expect a DHCPNAK.
+offer_ip=`ip_to_hex 10 0 0 6`
+server_ip=`ip_to_hex 10 0 0 1`
+ciaddr=`ip_to_hex 0 0 0 0`
+request_ip=`ip_to_hex 10 0 0 7`
+expected_dhcp_opts=""
+test_dhcp 2 f00000000002 03 $ciaddr $offer_ip $request_ip 0 ff1000000001 $server_ip 06 $expected_dhcp_opts
+
+# NXT_RESUMEs should be 3.
+OVS_WAIT_UNTIL([test 3 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
 
 $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap > 2.packets
 cat 2.expected | cut -c -48 > expout
@@ -4394,11 +4439,13 @@ rm -f 2.expected
 # but should be resumed without the reply.
 # ls1-lp1 (vif1-tx.pcap) should receive the DHCPv4 request packet twice,
 # one from ovn-controller and the other from "ovs-ofctl resume."
+ciaddr=`ip_to_hex 0 0 0 0`
 offer_ip=0
-test_dhcp 2 f00000000002 08 $offer_ip 0 1 1
+request_ip=0
+test_dhcp 2 f00000000002 08 $ciaddr $offer_ip $request_ip 0 1 1
 
-# NXT_RESUMEs should be 3.
-OVS_WAIT_UNTIL([test 3 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
+# NXT_RESUMEs should be 4.
+OVS_WAIT_UNTIL([test 4 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
 
 # vif1-tx.pcap should have received the DHCPv4 (invalid) request packet
 OVN_CHECK_PACKETS([hv1/vif1-tx.pcap], [1.expected])
@@ -4411,28 +4458,33 @@ rm -f 2.expected
 # Send DHCPv4 packet on ls2-lp1. It doesn't have any DHCPv4 options defined.
 # ls2-lp2 (vif4-tx.pcap) should receive the DHCPv4 request packet once.
 
-test_dhcp 3 f00000000003 01 0 4 0
+ciaddr=`ip_to_hex 0 0 0 0`
+test_dhcp 3 f00000000003 01 $ciaddr 0 0 4 0
 
 # Send DHCPv4 packet on ls2-lp2. "router" DHCPv4 option is not defined for
 # this lport.
-test_dhcp 4 f00000000004 01 0 3 0
-
-# NXT_RESUMEs should be 3.
-OVS_WAIT_UNTIL([test 3 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
-
-OVN_CHECK_PACKETS([hv1/vif3-tx.pcap], [3.expected])
-OVN_CHECK_PACKETS([hv1/vif4-tx.pcap], [4.expected])
-
-# Send DHCPREQUEST with ip4.src set to 10.0.0.6 and ip4.dst set to 10.0.0.1.
-offer_ip=`ip_to_hex 10 0 0 6`
-server_ip=`ip_to_hex 10 0 0 1`
-expected_dhcp_opts=330400000e100104ffffff0003040a00000136040a000001
-src_ip=$offer_ip
-dst_ip=$server_ip
-test_dhcp 2 f00000000002 03 $offer_ip 1 $src_ip $dst_ip ff1000000001 $server_ip $expected_dhcp_opts
+ciaddr=`ip_to_hex 0 0 0 0`
+test_dhcp 4 f00000000004 01 $ciaddr 0 0 3 0
 
 # NXT_RESUMEs should be 4.
 OVS_WAIT_UNTIL([test 4 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
+
+#OVN_CHECK_PACKETS([hv1/vif3-tx.pcap], [3.expected])
+#OVN_CHECK_PACKETS([hv1/vif4-tx.pcap], [4.expected])
+
+# Send DHCPREQUEST in the RENEWING/REBINDING state with ip4.src set to 10.0.0.6
+# and ip4.dst set to 10.0.0.1.
+offer_ip=`ip_to_hex 10 0 0 6`
+server_ip=`ip_to_hex 10 0 0 1`
+ciaddr=$offer_ip
+request_ip=0
+src_ip=$offer_ip
+dst_ip=$server_ip
+expected_dhcp_opts=330400000e100104ffffff0003040a00000136040a000001
+test_dhcp 2 f00000000002 03 $ciaddr $offer_ip $request_ip 1 $src_ip $dst_ip ff1000000001 $server_ip 05 $expected_dhcp_opts
+
+# NXT_RESUMEs should be 5.
+OVS_WAIT_UNTIL([test 5 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
 
 $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap > 2.packets
 cat 2.expected | cut -c -48 > expout
@@ -4446,16 +4498,71 @@ reset_pcap_file hv1-vif2 hv1/vif2
 rm -f 1.expected
 rm -f 2.expected
 
-# Send DHCPREQUEST with ip4.src set to 10.0.0.6 and ip4.dst set to 255.255.255.255.
+# Send DHCPREQUEST in the RENEWING/REBINDING state with ip4.src set to 10.0.0.6
+# and ip4.dst set to 255.255.255.255.
 offer_ip=`ip_to_hex 10 0 0 6`
 server_ip=`ip_to_hex 10 0 0 1`
-expected_dhcp_opts=330400000e100104ffffff0003040a00000136040a000001
+ciaddr=$offer_ip
+request_ip=0
 src_ip=$offer_ip
 dst_ip=`ip_to_hex 255 255 255 255`
-test_dhcp 2 f00000000002 03 $offer_ip 1 $src_ip $dst_ip ff1000000001 $server_ip $expected_dhcp_opts
+expected_dhcp_opts=330400000e100104ffffff0003040a00000136040a000001
+test_dhcp 2 f00000000002 03 $ciaddr $offer_ip $request_ip 1 $src_ip $dst_ip ff1000000001 $server_ip 05 $expected_dhcp_opts
 
-# NXT_RESUMEs should be 5.
-OVS_WAIT_UNTIL([test 5 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
+# NXT_RESUMEs should be 6.
+OVS_WAIT_UNTIL([test 6 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap > 2.packets
+cat 2.expected | cut -c -48 > expout
+AT_CHECK([cat 2.packets | cut -c -48], [0], [expout])
+# Skipping the IPv4 checksum.
+cat 2.expected | cut -c 53- > expout
+AT_CHECK([cat 2.packets | cut -c 53-], [0], [expout])
+
+reset_pcap_file hv1-vif1 hv1/vif1
+reset_pcap_file hv1-vif2 hv1/vif2
+rm -f 1.expected
+rm -f 2.expected
+
+# Send DHCPREQUEST in the RENEWING/REBINDING state with a mismatched IP in the
+# ciaddr, expect a DHCPNAK.
+offer_ip=`ip_to_hex 10 0 0 6`
+server_ip=`ip_to_hex 10 0 0 1`
+ciaddr=`ip_to_hex 10 0 0 7`
+request_ip=0
+src_ip=$offer_ip
+dst_ip=`ip_to_hex 255 255 255 255`
+expected_dhcp_opts=""
+test_dhcp 2 f00000000002 03 $ciaddr $offer_ip $request_ip 1 $src_ip $dst_ip ff1000000001 $server_ip 06 $expected_dhcp_opts
+
+# NXT_RESUMEs should be 7.
+OVS_WAIT_UNTIL([test 7 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap > 2.packets
+cat 2.expected | cut -c -48 > expout
+AT_CHECK([cat 2.packets | cut -c -48], [0], [expout])
+# Skipping the IPv4 checksum.
+cat 2.expected | cut -c 53- > expout
+AT_CHECK([cat 2.packets | cut -c 53-], [0], [expout])
+
+reset_pcap_file hv1-vif1 hv1/vif1
+reset_pcap_file hv1-vif2 hv1/vif2
+rm -f 1.expected
+rm -f 2.expected
+
+# Send DHCPREQUEST in the RENEWING/REBINDING state without a specifyied ciaddr,
+# expect a DHCPNAK.
+offer_ip=`ip_to_hex 10 0 0 6`
+server_ip=`ip_to_hex 10 0 0 1`
+ciaddr=`ip_to_hex 0 0 0 0`
+request_ip=0
+src_ip=$offer_ip
+dst_ip=`ip_to_hex 255 255 255 255`
+expected_dhcp_opts=""
+test_dhcp 2 f00000000002 03 $ciaddr $offer_ip $request_ip 1 $src_ip $dst_ip ff1000000001 $server_ip 06 $expected_dhcp_opts
+
+# NXT_RESUMEs should be 8.
+OVS_WAIT_UNTIL([test 8 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
 
 $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap > 2.packets
 cat 2.expected | cut -c -48 > expout
@@ -4471,12 +4578,13 @@ rm -f 2.expected
 
 # Send DHCPREQUEST with ip4.src set to 10.0.0.6 and ip4.dst set to 10.0.0.4.
 # The packet should not be received by ovn-controller.
+ciaddr=`ip_to_hex 0 0 0 0`
 src_ip=`ip_to_hex 10 0 0 6`
 dst_ip=`ip_to_hex 10 0 0 4`
-test_dhcp 2 f00000000002 03 0 1 $src_ip $dst_ip 1
+test_dhcp 2 f00000000002 03 $ciaddr 0 0 1 $src_ip $dst_ip 1
 
-# NXT_RESUMEs should be 5.
-OVS_WAIT_UNTIL([test 5 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
+# NXT_RESUMEs should be 8.
+OVS_WAIT_UNTIL([test 8 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
 
 # vif1-tx.pcap should have received the DHCPv4 request packet
 OVN_CHECK_PACKETS([hv1/vif1-tx.pcap], [1.expected])

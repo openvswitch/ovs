@@ -55,7 +55,10 @@ BUILD_ASSERT_DECL(DHCP_HEADER_LEN == sizeof(struct dhcp_header));
 #define DHCP_MSG_OFFER     2
 #define DHCP_MSG_REQUEST   3
 #define DHCP_MSG_ACK       5
+#define DHCP_MSG_NAK       6
 
+#define DHCP_OPT_PAD       0
+#define DHCP_OPT_REQ_IP    50
 #define DHCP_OPT_MSG_TYPE  53
 #define DHCP_OPT_END       255
 
