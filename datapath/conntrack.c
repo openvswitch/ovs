@@ -1370,6 +1370,10 @@ static int ovs_ct_add_helper(struct ovs_conntrack_info *info, const char *name,
 
 	rcu_assign_pointer(help->helper, helper);
 	info->helper = helper;
+
+	if (info->nat)
+		request_module("ip_nat_%s", name);
+
 	return 0;
 }
 
