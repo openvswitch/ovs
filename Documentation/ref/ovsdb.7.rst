@@ -405,7 +405,7 @@ unix:<file>
     way, a client could talk to the wrong instance of a database.  To avoid
     this possibility, add ``cid:<uuid>`` to the list of methods, where <uuid>
     is the cluster ID of the desired database cluster, as printed by
-    ``ovsdb-tool get-cid``.  This feature is optional.
+    ``ovsdb-tool db-cid``.  This feature is optional.
 
 OVSDB supports the following passive connection methods:
 
