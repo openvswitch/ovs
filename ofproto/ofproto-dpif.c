@@ -3665,7 +3665,7 @@ port_add(struct ofproto *ofproto_, struct netdev *netdev)
 
     odp_port_t port_no = ODPP_NONE;
     int error = dpif_port_add(ofproto->backer->dpif, netdev, &port_no);
-    if (error != EEXIST && error != EBUSY) {
+    if (error != EEXIST) {
         if (error) {
             return error;
         }
