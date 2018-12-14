@@ -23,16 +23,16 @@ struct static_key_false {
 #define rpl_STATIC_KEY_INIT_TRUE	{ .enabled = ATOMIC_INIT(1) }
 #define rpl_STATIC_KEY_INIT_FALSE	{ .enabled = ATOMIC_INIT(0) }
 
-#define STATIC_KEY_TRUE_INIT	\
+#define rpl_STATIC_KEY_TRUE_INIT	\
 	(struct static_key_true) { .key = rpl_STATIC_KEY_INIT_TRUE,  }
-#define STATIC_KEY_FALSE_INIT	\
+#define rpl_STATIC_KEY_FALSE_INIT	\
 	(struct static_key_false){ .key = rpl_STATIC_KEY_INIT_FALSE, }
 
-#define DEFINE_STATIC_KEY_TRUE(name)	\
-	struct static_key_true name = STATIC_KEY_TRUE_INIT
+#define rpl_DEFINE_STATIC_KEY_TRUE(name)	\
+	struct static_key_true name = rpl_STATIC_KEY_TRUE_INIT
 
-#define DEFINE_STATIC_KEY_FALSE(name)	\
-	struct static_key_false name = STATIC_KEY_FALSE_INIT
+#define rpl_DEFINE_STATIC_KEY_FALSE(name)	\
+	struct static_key_false name = rpl_STATIC_KEY_FALSE_INIT
 
 static inline int rpl_static_key_count(struct static_key *key)
 {
@@ -58,6 +58,14 @@ static inline void rpl_static_key_disable(struct static_key *key)
 	if (count)
 		static_key_slow_dec(key);
 }
+
+#ifdef	HAVE_DEFINE_STATIC_KEY
+#undef	DEFINE_STATIC_KEY_TRUE
+#undef	DEFINE_STATIC_KEY_FALSE
+#endif
+
+#define DEFINE_STATIC_KEY_TRUE		rpl_DEFINE_STATIC_KEY_TRUE
+#define DEFINE_STATIC_KEY_FALSE		rpl_DEFINE_STATIC_KEY_FALSE
 
 #define static_branch_likely(x)		likely(static_key_enabled(&(x)->key))
 #define static_branch_unlikely(x)	unlikely(static_key_enabled(&(x)->key))
