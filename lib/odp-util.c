@@ -2712,7 +2712,7 @@ odp_nsh_key_from_attr(const struct nlattr *attr, struct ovs_key_nsh *nsh,
         return ODP_FIT_TOO_MUCH;
     }
 
-    if (has_md1 && nsh->mdtype != NSH_M_TYPE1) {
+    if (has_md1 && nsh->mdtype != NSH_M_TYPE1 && !nsh_mask) {
         return ODP_FIT_ERROR;
     }
 
