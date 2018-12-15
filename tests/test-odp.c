@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013, 2014, 2019 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,10 +46,12 @@ parse_keys(bool wc_keys)
         /* Convert string to OVS DP key. */
         ofpbuf_init(&odp_key, 0);
         ofpbuf_init(&odp_mask, 0);
+        char *error_s;
         error = odp_flow_from_string(ds_cstr(&in), NULL,
-                                     &odp_key, &odp_mask);
+                                     &odp_key, &odp_mask, &error_s);
         if (error) {
-            printf("odp_flow_from_string: error\n");
+            printf("odp_flow_from_string: error (%s)\n", error_s);
+            free(error_s);
             goto next;
         }
 
@@ -67,7 +69,8 @@ parse_keys(bool wc_keys)
             };
 
             /* Convert odp_key to flow. */
-            fitness = odp_flow_key_to_flow(odp_key.data, odp_key.size, &flow);
+            fitness = odp_flow_key_to_flow(odp_key.data, odp_key.size, &flow,
+                                           &error_s);
             switch (fitness) {
                 case ODP_FIT_PERFECT:
                     break;
@@ -81,7 +84,8 @@ parse_keys(bool wc_keys)
                     break;
 
                 case ODP_FIT_ERROR:
-                    printf("odp_flow_key_to_flow: error\n");
+                    printf("odp_flow_key_to_flow: error (%s)\n", error_s);
+                    free(error_s);
                     goto next;
             }
             /* Convert cls_rule back to odp_key. */
@@ -182,8 +186,11 @@ parse_filter(char *filter_parse)
         /* Convert string to OVS DP key. */
         ofpbuf_init(&odp_key, 0);
         ofpbuf_init(&odp_mask, 0);
-        if (odp_flow_from_string(ds_cstr(&in), NULL, &odp_key, &odp_mask)) {
-            printf("odp_flow_from_string: error\n");
+        char *error_s;
+        if (odp_flow_from_string(ds_cstr(&in), NULL, &odp_key, &odp_mask,
+                                 &error_s)) {
+            printf("odp_flow_from_string: error (%s)\n", error_s);
+            free(error_s);
             goto next;
         }
 
@@ -193,8 +200,9 @@ parse_filter(char *filter_parse)
             struct match match, match_filter;
             struct minimatch minimatch;
 
-            odp_flow_key_to_flow(odp_key.data, odp_key.size, &flow);
-            odp_flow_key_to_mask(odp_mask.data, odp_mask.size, &wc, &flow);
+            odp_flow_key_to_flow(odp_key.data, odp_key.size, &flow, NULL);
+            odp_flow_key_to_mask(odp_mask.data, odp_mask.size, &wc, &flow,
+                                 NULL);
             match_init(&match, &flow, &wc);
 
             match_init(&match_filter, &flow_filter, &wc);

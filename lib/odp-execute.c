@@ -198,7 +198,7 @@ odp_set_sctp(struct dp_packet *packet, const struct ovs_key_sctp *key,
 static void
 odp_set_tunnel_action(const struct nlattr *a, struct flow_tnl *tun_key)
 {
-    ovs_assert(odp_tun_key_from_attr(a, tun_key) != ODP_FIT_ERROR);
+    ovs_assert(odp_tun_key_from_attr(a, tun_key, NULL) != ODP_FIT_ERROR);
 }
 
 static void
@@ -297,9 +297,9 @@ odp_set_nsh(struct dp_packet *packet, const struct nlattr *a, bool has_mask)
     ovs_be32 path_hdr;
 
     if (has_mask) {
-        odp_nsh_key_from_attr(a, &key, &mask);
+        odp_nsh_key_from_attr(a, &key, &mask, NULL);
     } else {
-        odp_nsh_key_from_attr(a, &key, NULL);
+        odp_nsh_key_from_attr(a, &key, NULL, NULL);
     }
 
     if (!has_mask) {

@@ -5707,7 +5707,7 @@ m4_foreach(
 [AT_CHECK([ovs-appctl ofproto/trace "$br_flow" option],
   [2], [], [stderr])
 AT_CHECK([tail -2 stderr], [0], [dnl
-Must specify bridge name
+syntax error at in_port=1,dl_src=50:54:00:00:00:01,dl_dst=50:54:00:00:00:02 (or the bridge name was omitted)
 ovs-appctl: ovs-vswitchd: server returned an error
 ])])
 

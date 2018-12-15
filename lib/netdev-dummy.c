@@ -1462,8 +1462,10 @@ eth_from_packet(const char *s)
 }
 
 static struct dp_packet *
-eth_from_flow(const char *s, size_t packet_size)
+eth_from_flow(const char *s, size_t packet_size, char **errorp)
 {
+    *errorp = NULL;
+
     enum odp_key_fitness fitness;
     struct dp_packet *packet;
     struct ofpbuf odp_key;
@@ -1477,14 +1479,14 @@ eth_from_flow(const char *s, size_t packet_size)
      * settle for parsing a datapath key for now.
      */
     ofpbuf_init(&odp_key, 0);
-    error = odp_flow_from_string(s, NULL, &odp_key, NULL);
+    error = odp_flow_from_string(s, NULL, &odp_key, NULL, errorp);
     if (error) {
         ofpbuf_uninit(&odp_key);
         return NULL;
     }
 
     /* Convert odp_key to flow. */
-    fitness = odp_flow_key_to_flow(odp_key.data, odp_key.size, &flow);
+    fitness = odp_flow_key_to_flow(odp_key.data, odp_key.size, &flow, errorp);
     if (fitness == ODP_FIT_ERROR) {
         ofpbuf_uninit(&odp_key);
         return NULL;
@@ -1592,10 +1594,11 @@ netdev_dummy_receive(struct unixctl_conn *conn,
                 i += 2;
             }
             /* Try parse 'argv[i]' as odp flow. */
-            packet = eth_from_flow(flow_str, packet_size);
-
+            char *error_s;
+            packet = eth_from_flow(flow_str, packet_size, &error_s);
             if (!packet) {
-                unixctl_command_reply_error(conn, "bad packet or flow syntax");
+                unixctl_command_reply_error(conn, error_s);
+                free(error_s);
                 goto exit;
             }
         }

@@ -988,7 +988,7 @@ sflow_read_set_action(const struct nlattr *attr,
             /* Do not handle multi-encap for now. */
             sflow_actions->tunnel_err = true;
         } else {
-            if (odp_tun_key_from_attr(attr, &sflow_actions->tunnel)
+            if (odp_tun_key_from_attr(attr, &sflow_actions->tunnel, NULL)
                 == ODP_FIT_ERROR) {
                 /* Tunnel parsing error. */
                 sflow_actions->tunnel_err = true;

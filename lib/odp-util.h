@@ -157,10 +157,11 @@ struct odputil_keybuf {
 };
 
 enum odp_key_fitness odp_tun_key_from_attr(const struct nlattr *,
-                                           struct flow_tnl *);
+                                           struct flow_tnl *, char **errorp);
 enum odp_key_fitness odp_nsh_key_from_attr(const struct nlattr *,
                                            struct ovs_key_nsh *,
-                                           struct ovs_key_nsh *);
+                                           struct ovs_key_nsh *,
+                                           char **errorp);
 enum odp_key_fitness odp_nsh_hdr_from_attr(const struct nlattr *,
                                            struct nsh_hdr *, size_t);
 
@@ -172,9 +173,8 @@ void odp_flow_format(const struct nlattr *key, size_t key_len,
                      const struct hmap *portno_names, struct ds *,
                      bool verbose);
 void odp_flow_key_format(const struct nlattr *, size_t, struct ds *);
-int odp_flow_from_string(const char *s,
-                         const struct simap *port_names,
-                         struct ofpbuf *, struct ofpbuf *);
+int odp_flow_from_string(const char *s, const struct simap *port_names,
+                         struct ofpbuf *, struct ofpbuf *, char **errorp);
 
 /* ODP_SUPPORT_FIELD(TYPE, FIELD_NAME, FIELD_DESCRIPTION)
  *
@@ -261,11 +261,12 @@ enum odp_key_fitness {
     ODP_FIT_ERROR,              /* The key was invalid. */
 };
 enum odp_key_fitness odp_flow_key_to_flow(const struct nlattr *, size_t,
-                                          struct flow *);
+                                          struct flow *, char **errorp);
 enum odp_key_fitness odp_flow_key_to_mask(const struct nlattr *mask_key,
                                           size_t mask_key_len,
                                           struct flow_wildcards *mask,
-                                          const struct flow *flow);
+                                          const struct flow *flow,
+                                          char **errorp);
 int parse_key_and_mask_to_match(const struct nlattr *key, size_t key_len,
                                 const struct nlattr *mask, size_t mask_len,
                                 struct match *match);

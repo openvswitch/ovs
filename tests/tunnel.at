@@ -55,7 +55,7 @@ AT_CHECK([tail -1 stdout], [0],
 
 dnl nonexistent tunnel
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(src=5.5.5.5,dst=6.6.6.6,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [2], [ignore], [dnl
-Invalid datapath flow
+no OpenFlow tunnel port for this packet
 ovs-appctl: ovs-vswitchd: server returned an error
 ])
 
@@ -314,7 +314,7 @@ set(tunnel(tun_id=0x3,dst=1.1.1.1,ttl=64,flags(df|key))),1
 ])
 
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0xf,src=1.1.1.1,dst=2.2.2.2,ttl=64,flags(key)),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [2], [ignore], [dnl
-Invalid datapath flow
+no OpenFlow tunnel port for this packet
 ovs-appctl: ovs-vswitchd: server returned an error
 ])
 OVS_VSWITCHD_STOP(["/receive tunnel port not found/d"])

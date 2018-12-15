@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2018 Nicira, Inc.
+ * Copyright (c) 2008-2019 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1023,8 +1023,8 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
             struct match match, match_filter;
             struct minimatch minimatch;
 
-            odp_flow_key_to_flow(f.key, f.key_len, &flow);
-            odp_flow_key_to_mask(f.mask, f.mask_len, &wc, &flow);
+            odp_flow_key_to_flow(f.key, f.key_len, &flow, NULL);
+            odp_flow_key_to_mask(f.mask, f.mask_len, &wc, &flow, NULL);
             match_init(&match, &flow, &wc);
 
             match_init(&match_filter, &flow_filter, &wc);
@@ -1112,10 +1112,12 @@ dpctl_put_flow(int argc, const char *argv[], enum dpif_flow_put_flags flags,
 
     ofpbuf_init(&key, 0);
     ofpbuf_init(&mask, 0);
-    error = odp_flow_from_string(key_s, &port_names, &key, &mask);
+    char *error_s;
+    error = odp_flow_from_string(key_s, &port_names, &key, &mask, &error_s);
     simap_destroy(&port_names);
     if (error) {
-        dpctl_error(dpctl_p, error, "parsing flow key");
+        dpctl_error(dpctl_p, error, "parsing flow key (%s)", error_s);
+        free(error_s);
         goto out_freekeymask;
     }
 
@@ -1264,9 +1266,11 @@ dpctl_del_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     ofpbuf_init(&key, 0);
     ofpbuf_init(&mask, 0);
 
-    error = odp_flow_from_string(key_s, &port_names, &key, &mask);
+    char *error_s;
+    error = odp_flow_from_string(key_s, &port_names, &key, &mask, &error_s);
     if (error) {
-        dpctl_error(dpctl_p, error, "parsing flow key");
+        dpctl_error(dpctl_p, error, "%s", error_s);
+        free(error_s);
         goto out;
     }
 
@@ -2281,9 +2285,12 @@ dpctl_normalize_actions(int argc, const char *argv[],
 
     /* Parse flow key. */
     ofpbuf_init(&keybuf, 0);
-    error = odp_flow_from_string(argv[1], &port_names, &keybuf, NULL);
+    char *error_s;
+    error = odp_flow_from_string(argv[1], &port_names, &keybuf, NULL,
+                                 &error_s);
     if (error) {
-        dpctl_error(dpctl_p, error, "odp_flow_key_from_string");
+        dpctl_error(dpctl_p, error, "odp_flow_key_from_string (%s)", error_s);
+        free(error_s);
         goto out_freekeybuf;
     }
 
@@ -2292,9 +2299,11 @@ dpctl_normalize_actions(int argc, const char *argv[],
                     &s, dpctl_p->verbosity);
     dpctl_print(dpctl_p, "input flow: %s\n", ds_cstr(&s));
 
-    error = odp_flow_key_to_flow(keybuf.data, keybuf.size, &flow);
+    error = odp_flow_key_to_flow(keybuf.data, keybuf.size, &flow, &error_s);
     if (error) {
-        dpctl_error(dpctl_p, error, "odp_flow_key_to_flow");
+        dpctl_error(dpctl_p, error, "odp_flow_key_to_flow failed (%s)",
+                    error_s ? error_s : "reason unknown");
+        free(error_s);
         goto out_freekeybuf;
     }
 

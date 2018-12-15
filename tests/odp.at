@@ -397,6 +397,6 @@ AT_DATA([odp-in.txt], [dnl
 encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap()))))))))))))))))))))))))))))))))
 ])
 AT_CHECK_UNQUOTED([ovstest test-odp parse-keys < odp-in.txt], [0], [dnl
-odp_flow_from_string: error
+odp_flow_from_string: error (syntax error at encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap(encap())))))))))))))))))))))))))))))))))
 ])
 AT_CLEANUP

@@ -796,7 +796,7 @@ recv_upcalls(struct handler *handler)
         }
 
         upcall->fitness = odp_flow_key_to_flow(dupcall->key, dupcall->key_len,
-                                               flow);
+                                               flow, NULL);
         if (upcall->fitness == ODP_FIT_ERROR) {
             goto free_dupcall;
         }
@@ -1437,7 +1437,8 @@ process_upcall(struct udpif *udpif, struct upcall *upcall,
             memset(&ipfix_actions, 0, sizeof ipfix_actions);
 
             if (upcall->out_tun_key) {
-                odp_tun_key_from_attr(upcall->out_tun_key, &output_tunnel_key);
+                odp_tun_key_from_attr(upcall->out_tun_key, &output_tunnel_key,
+                                      NULL);
             }
 
             actions_len = dpif_read_actions(udpif, upcall, flow,
@@ -2093,7 +2094,7 @@ xlate_key(struct udpif *udpif, const struct nlattr *key, unsigned int len,
     struct xlate_in xin;
     int error;
 
-    fitness = odp_flow_key_to_flow(key, len, &ctx->flow);
+    fitness = odp_flow_key_to_flow(key, len, &ctx->flow, NULL);
     if (fitness == ODP_FIT_ERROR) {
         return EINVAL;
     }
@@ -2186,7 +2187,8 @@ revalidate_ukey__(struct udpif *udpif, const struct udpif_key *ukey,
         struct ofproto_dpif *ofproto;
         ofp_port_t ofp_in_port;
 
-        ofproto = xlate_lookup_ofproto(udpif->backer, &ctx.flow, &ofp_in_port);
+        ofproto = xlate_lookup_ofproto(udpif->backer, &ctx.flow, &ofp_in_port,
+                                       NULL);
 
         ofpbuf_clear(odp_actions);
 
@@ -2199,7 +2201,8 @@ revalidate_ukey__(struct udpif *udpif, const struct udpif_key *ukey,
                           ofproto->up.slowpath_meter_id, &ofproto->uuid);
     }
 
-    if (odp_flow_key_to_mask(ukey->mask, ukey->mask_len, &dp_mask, &ctx.flow)
+    if (odp_flow_key_to_mask(ukey->mask, ukey->mask_len, &dp_mask, &ctx.flow,
+                             NULL)
         == ODP_FIT_ERROR) {
         goto exit;
     }
@@ -2523,7 +2526,7 @@ ukey_to_flow_netdev(struct udpif *udpif, struct udpif_key *ukey)
                 netdev_close(ukey->in_netdev);
                 ukey->in_netdev = NULL;
             }
-            res = odp_tun_key_from_attr(k, &tnl);
+            res = odp_tun_key_from_attr(k, &tnl, NULL);
             if (res != ODP_FIT_ERROR) {
                 ukey->in_netdev = flow_get_tunnel_netdev(&tnl);
                 break;

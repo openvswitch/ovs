@@ -3072,7 +3072,7 @@ dpif_netdev_mask_from_nlattrs(const struct nlattr *key, uint32_t key_len,
 {
     enum odp_key_fitness fitness;
 
-    fitness = odp_flow_key_to_mask(mask_key, mask_key_len, wc, flow);
+    fitness = odp_flow_key_to_mask(mask_key, mask_key_len, wc, flow, NULL);
     if (fitness) {
         if (!probe) {
             /* This should not happen: it indicates that
@@ -3103,7 +3103,7 @@ static int
 dpif_netdev_flow_from_nlattrs(const struct nlattr *key, uint32_t key_len,
                               struct flow *flow, bool probe)
 {
-    if (odp_flow_key_to_flow(key, key_len, flow)) {
+    if (odp_flow_key_to_flow(key, key_len, flow, NULL)) {
         if (!probe) {
             /* This should not happen: it indicates that
              * odp_flow_key_from_flow() and odp_flow_key_to_flow() disagree on
