@@ -6777,6 +6777,9 @@ odp_flow_key_to_flow__(const struct nlattr *key, size_t key_len,
         flow->packet_type
             = nl_attr_get_be32(attrs[OVS_KEY_ATTR_PACKET_TYPE]);
         expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_PACKET_TYPE;
+        if (pt_ns(src_flow->packet_type) == OFPHTN_ETHERTYPE) {
+            flow->dl_type = pt_ns_type_be(flow->packet_type);
+        }
     } else if (!is_mask) {
         flow->packet_type = htonl(PT_ETH);
     }
