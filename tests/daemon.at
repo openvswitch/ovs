@@ -7,7 +7,9 @@ OVS_START_SHELL_HELPERS
 # (On other systems, don't bother.)
 if test -e /proc/$$/comm; then
     check_process_name() {
-        AT_CHECK_UNQUOTED([cat /proc/$1/comm], [0], [$2
+        # In case we're building with shared libraries enabled, strip
+        # off libtool's lt- prefix.
+        AT_CHECK_UNQUOTED([sed 's/lt-//' /proc/$1/comm], [0], [$2
 ])
     }
 else
