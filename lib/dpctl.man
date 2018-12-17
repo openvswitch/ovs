@@ -237,6 +237,8 @@ If \fBzone\fR=\fIzone\fR is specified, only flushes the connections in
 .IP
 If \fIct-tuple\fR is provided, flushes the connection entry specified by
 \fIct-tuple\fR in \fIzone\fR. The zone defaults to 0 if it is not provided.
+The userspace connection tracker requires flushing with the original pre-NATed
+tuple and a warning log will be otherwise generated.
 An example of an IPv4 ICMP \fIct-tuple\fR:
 .IP
 "ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=1,icmp_type=8,icmp_code=0,icmp_id=10"
