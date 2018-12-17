@@ -2085,6 +2085,30 @@ arp {
         </pre>
 
         <p>
+          Unknown MAC address.  For each IPv6 static route associated with the
+          router with the nexthop IP: <var>G</var>, a priority-200 flow
+          for IPv6 packets with match
+          <code>eth.dst == 00:00:00:00:00:00 &amp;&amp;
+          xxreg0 == <var>G</var></code>
+          with the following actions is added:
+        </p>
+
+        <pre>
+nd_ns {
+    eth.dst = <var>E</var>;
+    ip6.dst = <var>I</var>
+    nd.target = <var>G</var>;
+    output;
+};
+        </pre>
+
+        <p>
+          Where <var>E</var> is the multicast mac derived from the Gateway IP,
+          <var>I</var> is the solicited-node multicast address corresponding
+          to the target address <var>G</var>.
+        </p>
+
+        <p>
           Unknown MAC address.  A priority-100 flow for IPv6 packets with match
           <code>eth.dst == 00:00:00:00:00:00</code> has the following actions:
         </p>

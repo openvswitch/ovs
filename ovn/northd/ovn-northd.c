@@ -6624,6 +6624,42 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
             continue;
         }
 
+        for (int i = 0; i < od->nbr->n_static_routes; i++) {
+            const struct nbrec_logical_router_static_route *route;
+
+            route = od->nbr->static_routes[i];
+            struct in6_addr gw_ip6;
+            unsigned int plen;
+            char *error = ipv6_parse_cidr(route->nexthop, &gw_ip6, &plen);
+            if (error || plen != 128) {
+                free(error);
+                continue;
+            }
+
+            ds_clear(&match);
+            ds_put_format(&match, "eth.dst == 00:00:00:00:00:00 && "
+                          "ip6 && xxreg0 == %s", route->nexthop);
+            struct in6_addr sn_addr;
+            struct eth_addr eth_dst;
+            in6_addr_solicited_node(&sn_addr, &gw_ip6);
+            ipv6_multicast_to_ethernet(&eth_dst, &sn_addr);
+
+            char sn_addr_s[INET6_ADDRSTRLEN + 1];
+            ipv6_string_mapped(sn_addr_s, &sn_addr);
+
+            ds_clear(&actions);
+            ds_put_format(&actions,
+                          "nd_ns { "
+                          "eth.dst = "ETH_ADDR_FMT"; "
+                          "ip6.dst = %s; "
+                          "nd.target = %s; "
+                          "output; "
+                          "};", ETH_ADDR_ARGS(eth_dst), sn_addr_s,
+                          route->nexthop);
+            ovn_lflow_add(lflows, od, S_ROUTER_IN_ARP_REQUEST, 200,
+                          ds_cstr(&match), ds_cstr(&actions));
+        }
+
         ovn_lflow_add(lflows, od, S_ROUTER_IN_ARP_REQUEST, 100,
                       "eth.dst == 00:00:00:00:00:00",
                       "arp { "

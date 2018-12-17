@@ -9984,6 +9984,10 @@ ovn-nbctl lrp-add lr0_ip6 ip6_public 00:00:02:01:02:04 \
 2001:db8:1:0:200:02ff:fe01:0204/64 \
 -- set Logical_Router_port ip6_public options:redirect-chassis="hv1"
 
+#install static route
+ovn-nbctl -- --id=@lrt create Logical_Router_Static_Route \
+ip_prefix="\:\:/0" nexthop="2001\:db8\:1\:0\:200\:02ff\:fe01\:1305" \
+-- add Logical_Router lr0_ip6 static_routes @lrt
 
 ovn-nbctl lsp-add public rp-ip6_public -- set Logical_Switch_Port \
 rp-ip6_public  type=router options:router-port=ip6_public \
@@ -10026,36 +10030,82 @@ trim_zeros() {
     sed 's/\(00\)\{1,\}$//'
 }
 
+reset_pcap_file() {
+    local iface=$1
+    local pcap_file=$2
+    ovs-vsctl -- set Interface $iface options:tx_pcap=dummy-tx.pcap \
+options:rxq_pcap=dummy-rx.pcap
+    rm -f ${pcap_file}*.pcap
+    ovs-vsctl -- set Interface $iface options:tx_pcap=${pcap_file}-tx.pcap \
+options:rxq_pcap=${pcap_file}-rx.pcap
+}
+
 # Test the IPv6 Neighbor Solicitation (NS) - nd_ns action for unknown MAC
 # addresses. ovn-controller should generate an IPv6 NS request for IPv6
 # packets whose MAC is unknown (in the ARP_REQUEST router pipeline stage.
 # test_ipv6 INPORT SRC_MAC DST_MAC SRC_IP DST_IP OUTPORT...
 # This function sends ipv6 packet
 test_ipv6() {
-    local inport=$1 src_mac=$2 dst_mac=$3 src_ip=$4
-    dst_ip=20010db800010000020002fffe010205
+    local inport=$1 src_mac=$2 dst_mac=$3 src_ip=$4 dst_ip=$5
+    local dst_mcast_mac=$6 mcast_node_ip=$7 nd_target=$8
 
     local packet=${dst_mac}${src_mac}86dd6000000000083aff${src_ip}${dst_ip}
     packet=${packet}8000000000000000
-    shift; shift; shift; shift
 
-    dst_mac=3333ff010205
     src_mac=000002010204
-    mcast_node_ip=ff0200000000000000000001ff010205
-    expected_packet=${dst_mac}${src_mac}86dd6000000000203aff${src_ip}
-    expected_packet=${expected_packet}${mcast_node_ip}8700XXXX00000000${dst_ip}
-    expected_packet=${expected_packet}0101${src_mac}
+    expected_packet=${dst_mcast_mac}${src_mac}86dd6000000000203aff${src_ip}
+    expected_packet=${expected_packet}${mcast_node_ip}8700XXXX00000000
+    expected_packet=${expected_packet}${nd_target}0101${src_mac}
 
     as hv1 ovs-appctl netdev-dummy/receive hv1-vif${inport} $packet
+    rm -f ipv6_ns.expected
     echo $expected_packet >> ipv6_ns.expected
 }
 
 src_mac=506400000002
 dst_mac=00000000af01
 src_ip=aef0000000000000526400fffe000002
+dst_ip=20010db800010000020002fffe010205
+dst_mcast_mac=3333ff010205
+mcast_node_ip=ff0200000000000000000001ff010205
+nd_target=20010db800010000020002fffe010205
 # Send an IPv6 packet. Generated IPv6 Neighbor solicitation packet
 # should be received by the ports attached to br-phys.
-test_ipv6 1 $src_mac $dst_mac $src_ip 2
+test_ipv6 1 $src_mac $dst_mac $src_ip $dst_ip $dst_mcast_mac \
+$mcast_node_ip $nd_target
+
+OVS_WAIT_WHILE([test 24 = $(wc -c hv1/br-phys_n1-tx.pcap | cut -d " " -f1)])
+OVS_WAIT_WHILE([test 24 = $(wc -c hv1/br-phys-tx.pcap | cut -d " " -f1)])
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/br-phys_n1-tx.pcap | \
+trim_zeros > 1.packets
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/br-phys-tx.pcap | \
+trim_zeros > 2.packets
+
+cat ipv6_ns.expected | cut -c -112 > expout
+AT_CHECK([cat 1.packets | cut -c -112], [0], [expout])
+AT_CHECK([cat 2.packets | cut -c -112], [0], [expout])
+
+# Skipping the ICMPv6 checksum
+cat ipv6_ns.expected | cut -c 117- > expout
+AT_CHECK([cat 1.packets | cut -c 117-], [0], [expout])
+AT_CHECK([cat 2.packets | cut -c 117-], [0], [expout])
+
+# Now send a packet with destination ip other than
+# 2001:db8:1:0:200:02ff:fe01:0204/64 prefix.
+reset_pcap_file br-phys_n1 hv1/br-phys_n1
+reset_pcap_file br-phys hv1/br-phys
+
+src_mac=506400000002
+dst_mac=00000000af01
+src_ip=aef0000000000000526400fffe000002
+dst_ip=20020ab8000100000200020000020306
+# multicast mac of the nexthop IP - 2001:db8:1:0:200:02ff:fe01:1305
+dst_mcast_mac=3333ff011305
+mcast_node_ip=ff0200000000000000000001ff011305
+nd_target=20010db800010000020002fffe011305
+test_ipv6 1 $src_mac $dst_mac $src_ip $dst_ip $dst_mcast_mac \
+$mcast_node_ip $nd_target
 
 OVS_WAIT_WHILE([test 24 = $(wc -c hv1/br-phys_n1-tx.pcap | cut -d " " -f1)])
 OVS_WAIT_WHILE([test 24 = $(wc -c hv1/br-phys-tx.pcap | cut -d " " -f1)])
