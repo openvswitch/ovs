@@ -803,11 +803,14 @@ nat_clean(struct conntrack *ct, struct conn *conn,
     ct_lock_lock(&ctb->lock);
 }
 
+/* Must be called with 'CT_CONN_TYPE_DEFAULT' 'conn_type'. */
 static void
 conn_clean(struct conntrack *ct, struct conn *conn,
            struct conntrack_bucket *ctb)
     OVS_REQUIRES(ctb->lock)
 {
+    ovs_assert(conn->conn_type == CT_CONN_TYPE_DEFAULT);
+
     if (conn->alg) {
         expectation_clean(ct, &conn->key, ct->hash_basis);
     }
