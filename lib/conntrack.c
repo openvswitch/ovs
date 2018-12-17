@@ -3177,7 +3177,7 @@ handle_ftp_ctl(struct conntrack *ct, const struct conn_lookup_ctx *ctx,
     struct ip_header *l3_hdr = dp_packet_l3(pkt);
     ovs_be32 v4_addr_rep = 0;
     struct ct_addr v6_addr_rep;
-    size_t addr_offset_from_ftp_data_start;
+    size_t addr_offset_from_ftp_data_start = 0;
     size_t addr_size = 0;
     char *ftp_data_start;
     bool do_seq_skew_adj = true;
