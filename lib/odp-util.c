@@ -5173,7 +5173,7 @@ erspan_to_attr(struct ofpbuf *a, const void *data_)
 /* Beginning of nested attribute. */
 #define SCAN_BEGIN_NESTED(NAME, ATTR)                      \
     SCAN_IF(NAME);                                         \
-        size_t key_offset, mask_offset;                    \
+        size_t key_offset, mask_offset = 0;                \
         key_offset = nl_msg_start_nested(key, ATTR);       \
         if (mask) {                                        \
             mask_offset = nl_msg_start_nested(mask, ATTR); \
