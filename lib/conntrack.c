@@ -2172,7 +2172,9 @@ nat_select_range_tuple(struct conntrack *ct, const struct conn *conn,
 
     uint16_t port = first_port;
     bool all_ports_tried = false;
-    bool original_ports_tried = false;
+    /* For DNAT, we don't use ephemeral ports. */
+    bool ephemeral_ports_tried = conn->nat_info->nat_action & NAT_ACTION_DST
+                                 ? true : false;
     struct ct_addr first_addr = ct_addr;
 
     while (true) {
@@ -2218,8 +2220,8 @@ nat_select_range_tuple(struct conntrack *ct, const struct conn *conn,
                 ct_addr = conn->nat_info->min_addr;
             }
             if (!memcmp(&ct_addr, &first_addr, sizeof ct_addr)) {
-                if (!original_ports_tried) {
-                    original_ports_tried = true;
+                if (!ephemeral_ports_tried) {
+                    ephemeral_ports_tried = true;
                     ct_addr = conn->nat_info->min_addr;
                     min_port = MIN_NAT_EPHEMERAL_PORT;
                     max_port = MAX_NAT_EPHEMERAL_PORT;
