@@ -1,7 +1,7 @@
 {
     "name": "OVN_Southbound",
-    "version": "1.17.0",
-    "cksum": "3217981733 15045",
+    "version": "2.0.0",
+    "cksum": "3109267860 15085",
     "tables": {
         "SB_Global": {
             "columns": {
@@ -50,7 +50,8 @@
                                      "min": 0,
                                      "max": "unlimited"}},
                 "ip": {"type": "string"},
-                "chassis_name": {"type": "string"}}},
+                "chassis_name": {"type": "string"}},
+            "indexes": [["type", "ip"]]},
         "Address_Set": {
             "columns": {
                 "name": {"type": "string"},

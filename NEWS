@@ -7,6 +7,11 @@ Post-v2.10.0
    - The environment variable OVS_CTL_TIMEOUT, if set, is now used
      as the default timeout for control utilities.
    - ovn:
+     * OVN-SB schema changed: duplicated IP with same Encapsulation type
+       is not allowed any more.  Please refer to
+       Documentation/intro/install/ovn-upgrades.rst for the instructions
+       in case there are problems encountered when upgrading from an earlier
+       version.
      * New support for IPSEC encrypted tunnels between hypervisors.
      * ovn-ctl: allow passing user:group ids to the OVN daemons.
    - DPDK:
