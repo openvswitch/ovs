@@ -130,7 +130,7 @@ between one and the other.
 
 2. Build a docker container image::
 
-     $ docker build -t faucet/faucet .
+     $ docker build -t faucet/faucet -f Dockerfile.faucet .
 
    This will take a few minutes.
 
@@ -234,7 +234,7 @@ putting the following into ``inst/faucet.yaml``::
       switch-1:
           dp_id: 0x1
           timeout: 3600
-          arp_neighbor_timeout: 3600
+          arp_neighbor_timeout: 900
           interfaces:
               1:
                   native_vlan: 100
@@ -262,6 +262,9 @@ to be 0x1.
   5 minutes and about 8 minutes, which are fine in production but
   sometimes too fast for manual experimentation.  (Don't use a timeout
   bigger than about 65000 seconds because it will crash Faucet.)
+  
+  MAC learning and ARP timeouts must be set as the following formula:
+  (L2 timeout must be > ARP timeout * 2) - rejecting
 
 Now restart Faucet so that the configuration takes effect, e.g.::
 
