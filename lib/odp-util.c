@@ -5005,11 +5005,11 @@ scan_geneve(const char *s, struct geneve_scan *key, struct geneve_scan *mask)
 
         if (s[0] == ',') {
             s++;
+            if (parse_int_string(s, (uint8_t *)(opt + 1),
+                                 data_len, (char **)&s)) {
+                return 0;
+            }
         }
-        if (parse_int_string(s, (uint8_t *)(opt + 1), data_len, (char **)&s)) {
-            return 0;
-        }
-
         if (mask) {
             if (s[0] == '/') {
                 s++;
