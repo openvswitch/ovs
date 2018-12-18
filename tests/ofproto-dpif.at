@@ -1,5 +1,28 @@
 AT_BANNER([ofproto-dpif])
 
+m4_divert_push([PREPARE_TESTS])
+
+# Helper function to check the spread of dp_hash flows over buckets in the datapath
+check_dpflow_stats () {
+    min_flows=$1
+    min_buckets=$2
+    dpflows=`cat`
+    if [[ $# -eq 3 ]]; then
+        echo "$dpflows" | grep "actions:hash"
+        n_flows=`echo "$dpflows" | grep -c dp_hash`
+        n_buckets=`echo "$dpflows" | grep dp_hash | grep -o "actions:[[0-9]]*" | sort | uniq -c | wc -l`
+    else
+        n_flows=`echo "$dpflows" | wc -l`
+        n_buckets=`echo "$dpflows" | grep -o "actions:[[0-9]]*" | sort | uniq -c | wc -l`
+    fi
+    if [[ $n_flows -ge $min_flows ]]; then flows=ok; else flows=nok; fi
+    if [[ $n_buckets -ge $min_buckets ]]; then buckets=ok; else buckets=nok; fi
+    echo "n_flows=$flows n_buckets=$buckets"
+}
+
+m4_divert_pop([PREPARE_TESTS])
+
+
 AT_SETUP([ofproto-dpif - revalidator/wait])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-appctl revalidator/wait])
@@ -406,20 +429,6 @@ AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - select group])
 
-# Helper function to check the spread of dp_hash flows over buckets in the datapath
-check_dpflow_stats () {
-    min_flows=$1
-    min_buckets=$2
-    dpflows=`cat`
-    hash_flow=`echo "$dpflows" | grep "actions:hash"`
-    n_flows=`echo "$dpflows" | grep -c dp_hash`
-    n_buckets=`echo "$dpflows" | grep dp_hash | grep -o "actions:[[0-9]]*" | sort | uniq -c | wc -l`
-    if [[ $n_flows -ge $min_flows ]]; then flows=ok; else flows=nok; fi
-    if [[ $n_buckets -ge $min_buckets ]]; then buckets=ok; else buckets=nok; fi
-    echo $hash_flow
-    echo "n_flows=$flows n_buckets=$buckets"
-}
-
 OVS_VSWITCHD_START
 add_of_ports br0 1 10 11
 
@@ -445,7 +454,7 @@ for d in 0 1 2 3; do
     done
 done
 
-AT_CHECK([ovs-appctl dpctl/dump-flows | sort | strip_ufid | strip_used | check_dpflow_stats 5 2], [0], [dnl
+AT_CHECK([ovs-appctl dpctl/dump-flows | sort | strip_ufid | strip_used | check_dpflow_stats 5 2 dp_hash], [0], [dnl
 recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:15, bytes:1590, used:0.0s, actions:hash(sym_l4(0)),recirc(0x1)
 n_flows=ok n_buckets=ok
 ])
@@ -475,20 +484,6 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - select group with weights])
-
-# Helper function to check the spread of dp_hash flows over buckets in the datapath
-check_dpflow_stats () {
-    min_flows=$1
-    min_buckets=$2
-    dpflows=`cat`
-    hash_flow=`echo "$dpflows" | grep "actions:hash"`
-    n_flows=`echo "$dpflows" | grep -c dp_hash`
-    n_buckets=`echo "$dpflows" | grep dp_hash | grep -o "actions:[[0-9]]*" | sort | uniq -c | wc -l`
-    if [[ $n_flows -ge $min_flows ]]; then flows=ok; else flows=nok; fi
-    if [[ $n_buckets -ge $min_buckets ]]; then buckets=ok; else buckets=nok; fi
-    echo $hash_flow
-    echo "n_flows=$flows n_buckets=$buckets"
-}
 
 # Helper function to check the accuracy of distribution of packets over buckets
 check_group_stats () {
@@ -537,7 +532,7 @@ for d1 in 0 1 2 3 4 5 6 7 8 9 ; do
 done
 
 # Check balanced distribution over 32 dp_hash values
-AT_CHECK([ovs-appctl dpctl/dump-flows | sort | strip_ufid | strip_used | check_dpflow_stats 32 4 ], [0], [dnl
+AT_CHECK([ovs-appctl dpctl/dump-flows | sort | strip_ufid | strip_used | check_dpflow_stats 32 4 dp_hash], [0], [dnl
 recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:999, bytes:117882, used:0.0s, actions:hash(sym_l4(0)),recirc(0x1)
 n_flows=ok n_buckets=ok
 ])
@@ -603,18 +598,6 @@ AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - select group with legacy hash selection method])
 
-# Helper function to check the spread of dp_hash flows over buckets in the datapath
-check_dpflow_stats () {
-    min_flows=$1
-    min_buckets=$2
-    dpflows=`cat`
-    n_flows=`echo "$dpflows" | wc -l`
-    n_buckets=`echo "$dpflows" | grep -o "actions:[[0-9]]*" | sort | uniq -c | wc -l`
-    if [[ $n_flows -ge $min_flows ]]; then flows=ok; else flows=nok; fi
-    if [[ $n_buckets -ge $min_buckets ]]; then buckets=ok; else buckets=nok; fi
-    echo "n_flows=$flows n_buckets=$buckets"
-}
-
 OVS_VSWITCHD_START
 add_of_ports br0 1 10 11
 
@@ -646,18 +629,6 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - select group with custom hash selection method])
-
-# Helper function to check the spread of dp_hash flows over buckets in the datapath
-check_dpflow_stats () {
-    min_flows=$1
-    min_buckets=$2
-    dpflows=`cat`
-    n_flows=`echo "$dpflows" | wc -l`
-    n_buckets=`echo "$dpflows" | grep -o "actions:[[0-9]]*" | sort | uniq -c | wc -l`
-    if [[ $n_flows -ge $min_flows ]]; then flows=ok; else flows=nok; fi
-    if [[ $n_buckets -ge $min_buckets ]]; then buckets=ok; else buckets=nok; fi
-    echo "n_flows=$flows n_buckets=$buckets"
-}
 
 OVS_VSWITCHD_START
 add_of_ports br0 1 10 11
