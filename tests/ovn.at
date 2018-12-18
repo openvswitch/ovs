@@ -9519,7 +9519,7 @@ for chassis in gw1 gw2 hv1 hv2; do
     ovs-ofctl dump-flows br-int
     echo "--------------------------"
 done
-function bfd_dump() {
+bfd_dump() {
     for chassis in gw1 gw2 hv1 hv2; do
         as $chassis
         echo "------ $chassis dump (BFD)----"
