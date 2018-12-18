@@ -492,16 +492,17 @@ check_dpflow_stats () {
 
 # Helper function to check the accuracy of distribution of packets over buckets
 check_group_stats () {
-    min=($1 $2 $3 $4)
     buckets=`grep -o 'packet_count=[[0-9]]*' | cut -d'=' -f2 | tail -n +2`
     i=0
     for bucket in $buckets; do
-        if [[ $bucket -ge ${min[i]} ]]; then
-            echo "bucket$i >= ${min[[$i]]}"
+        min=$1
+        shift
+        if [[ $bucket -ge $min ]]; then
+            echo "bucket$i >= $min"
         else
-            echo "bucket$i < ${min[[$i]]}"
+            echo "bucket$i < $min"
         fi
-        (( i++ ))
+        i=`expr $i + 1`
         if [[ $i -ge 4 ]]; then break; fi
     done
 }
