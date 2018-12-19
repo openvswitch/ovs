@@ -262,9 +262,8 @@ to be 0x1.
   5 minutes and about 8 minutes, which are fine in production but
   sometimes too fast for manual experimentation.  (Don't use a timeout
   bigger than about 65000 seconds because it will crash Faucet.)
-  
   MAC learning and ARP timeouts must be set as the following formula:
-  (L2 timeout must be > ARP timeout * 2) - rejecting
+  (L2 timeout must be > ARP timeout * 2) - rejecting.
 
 Now restart Faucet so that the configuration takes effect, e.g.::
 
