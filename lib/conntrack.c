@@ -2223,6 +2223,7 @@ nat_select_range_tuple(struct conntrack *ct, const struct conn *conn,
                 if (!ephemeral_ports_tried) {
                     ephemeral_ports_tried = true;
                     ct_addr = conn->nat_info->min_addr;
+                    first_addr = ct_addr;
                     min_port = MIN_NAT_EPHEMERAL_PORT;
                     max_port = MAX_NAT_EPHEMERAL_PORT;
                 } else {
