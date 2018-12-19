@@ -2572,9 +2572,10 @@ conntrack_flush_tuple(struct conntrack *ct, const struct ct_dpif_tuple *tuple,
 
     ct_lock_lock(&ct->buckets[bucket].lock);
     conn_key_lookup(&ct->buckets[bucket], &ctx, time_msec());
-    if (ctx.conn) {
+    if (ctx.conn && ctx.conn->conn_type == CT_CONN_TYPE_DEFAULT) {
         conn_clean(ct, ctx.conn, &ct->buckets[bucket]);
     } else {
+        VLOG_WARN("Must flush tuple using the original pre-NATed tuple");
         error = ENOENT;
     }
     ct_lock_unlock(&ct->buckets[bucket].lock);
