@@ -968,8 +968,8 @@ free:
 
     errno = 0;
     integer = strtoull(s, tail, 0);
-    if (errno) {
-        return errno;
+    if (errno || s == *tail) {
+        return errno ? errno : EINVAL;
     }
 
     for (i = field_width - 1; i >= 0; i--) {
