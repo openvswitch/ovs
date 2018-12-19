@@ -3798,7 +3798,7 @@ sfq_tc_load(struct netdev *netdev, struct ofpbuf *nlmsg)
     error = tc_parse_qdisc(nlmsg, &kind, &nlattr);
     if (error == 0) {
         sfq = nl_attr_get(nlattr);
-        sfq_install__(netdev, sfq->perturb_period, sfq->quantum);
+        sfq_install__(netdev, sfq->quantum, sfq->perturb_period);
         return 0;
     }
 
