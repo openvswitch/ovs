@@ -6071,7 +6071,7 @@ m4_define([CHECK_SFLOW_SAMPLING_PACKET],
   OVS_APP_EXIT_AND_WAIT([test-sflow])
 
   AT_CHECK_UNQUOTED([[sort sflow.log | $EGREP 'HEADER|ERROR' | sed 's/ /\
-        /g']], [0], [dnl
+        /g' | sed 's/\(.*\)ds=\[::1\]\(.*\)/\1ds=127.0.0.1\2/g' ]], [0], [dnl
 HEADER
         dgramSeqNo=1
         ds=127.0.0.1>2:1000
@@ -6175,7 +6175,7 @@ HEADER
 ])
 
   AT_CHECK_UNQUOTED([[sort sflow.log | $EGREP 'ETHCOUNTERS|IFCOUNTERS|ERROR|PORTNAME|OPENFLOWPORT' | head -24 | sed 's/ /\
-        /g']], [0], [dnl
+        /g' | sed 's/\(.*\)ds=\[::1\]\(.*\)/\1ds=127.0.0.1\2/g' ]], [0], [dnl
 ETHCOUNTERS
         dot3StatsAlignmentErrors=4294967295
         dot3StatsFCSErrors=4294967295
