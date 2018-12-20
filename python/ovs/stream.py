@@ -741,7 +741,11 @@ class TCPStream(Stream):
         error, sock = ovs.socket_util.inet_open_active(socket.SOCK_STREAM,
                                                        suffix, 0, dscp)
         if not error:
-            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            try:
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            except socket.error as e:
+                sock.close()
+                return ovs.socket_util.get_exception_errno(e), None
         return error, sock
 
 
