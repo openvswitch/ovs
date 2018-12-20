@@ -679,11 +679,11 @@ def do_idl(schema_file, remote, *commands):
             request = ovs.jsonrpc.Message.create_request("transact", json)
             error, reply = rpc.transact_block(request)
             if error:
-                sys.stderr.write("jsonrpc transaction failed: %s"
+                sys.stderr.write("jsonrpc transaction failed: %s\n"
                                  % os.strerror(error))
                 sys.exit(1)
             elif reply.error is not None:
-                sys.stderr.write("jsonrpc transaction failed: %s"
+                sys.stderr.write("jsonrpc transaction failed: %s\n"
                                  % reply.error)
                 sys.exit(1)
 
@@ -732,11 +732,11 @@ def do_idl_passive(schema_file, remote, *commands):
         request = ovs.jsonrpc.Message.create_request("transact", json)
         error, reply = rpc.transact_block(request)
         if error:
-            sys.stderr.write("jsonrpc transaction failed: %s"
+            sys.stderr.write("jsonrpc transaction failed: %s\n"
                              % os.strerror(error))
             sys.exit(1)
         elif reply.error is not None:
-            sys.stderr.write("jsonrpc transaction failed: %s"
+            sys.stderr.write("jsonrpc transaction failed: %s\n"
                              % reply.error)
             sys.exit(1)
 
