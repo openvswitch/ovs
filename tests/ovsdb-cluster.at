@@ -152,7 +152,7 @@ ovsdb|WARN|schema: changed 2 columns in 'OVN_Southbound' database from ephemeral
     # Use file instead of var because code inside "while" runs in a subshell.
     echo 0 > phase
     i=0
-    (while :; do echo; sleep 1; done) | while read; do
+    (while :; do echo; sleep 1; done) | while read REPLY; do
         printf "t=%2d s:" $i
         done=0
         for j in $(seq 0 $(expr $n1 - 1)); do
@@ -201,7 +201,7 @@ ovsdb|WARN|schema: changed 2 columns in 'OVN_Southbound' database from ephemeral
             echo "$i-$j=$i-$j"
         done
     done | sort > expout
-    AT_CHECK([ovn-sbctl --timeout=30 --log-file=finalize.log -vtimeval:off -vfile -vsyslog:off --bare get SB_Global . external-ids | sed 's/, /\n/g; s/[[{}""]]//g;' | sort], [0], [expout])
+    AT_CHECK([ovn-sbctl --timeout=30 --log-file=finalize.log -vtimeval:off -vfile -vsyslog:off --bare get SB_Global . external-ids | tr ',' '\n' | sed 's/[[{}"" ]]//g' | sort], [0], [expout])
 
     for i in `seq $n`; do
         if test $i != $victim || test $(cat phase) != 1; then
