@@ -563,8 +563,6 @@ AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=0,len=4}->tun_metadata0"
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-ofctl add-flow br-underlay "actions=normal"])
 
-AT_CHECK([ovs-ofctl monitor br0 resume --detach --no-chdir --pidfile=ovs-ofctl0.pid 2> ofctl_monitor0.log])
-
 NS_CHECK_EXEC([at_ns0], [ping -q -c 3 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
@@ -901,6 +899,8 @@ AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl --detach --no-chdir --pidfile 
 NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
+
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([cat ofctl_monitor.log | STRIP_MONITOR_CSUM], [0], [dnl
 icmp,vlan_tci=0x0000,dl_src=ae:c6:7e:54:8d:4d,dl_dst=50:54:00:00:00:0b,nw_src=10.1.1.2,nw_dst=192.168.4.4,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=0,icmp_code=0 icmp_csum: <skip>
@@ -1349,6 +1349,8 @@ AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 1 ct\(commit\),controller '5054
 dnl Now try a reply from port 2.
 AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 2 ct\(table=0\) '50540000000a50540000000908004500001c000000000011a4cd0a0101020a0101010002000100080000'])
 
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
+
 dnl Check this output. We only see the latter two packets, not the first.
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN2 (xid=0x0): total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
@@ -1394,6 +1396,8 @@ dnl Now try a reply from port 2.
 AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 "in_port=2 packet=50540000000a50540000000908004500001c000000000011a4cd0a0101020a0101010002000100080000 actions=resubmit(,0)"])
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
+
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 dnl Check this output. We only see the latter two packets, not the first.
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
@@ -2324,6 +2328,8 @@ AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 1 resubmit\(,0\) 'c6f94ecb72dbe
 
 dnl 3. Send an ICMP port unreach reply from a path midpoint for port 5555, related to the first packet
 AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 2 resubmit\(,0\) 'e64c473528c9c6f94ecb72db080045c0003d2e8700004001f354ac100003ac1000010303553f0000000045000021317040004011b138ac100001ac100002a28e15b3000d20966369616f0a'])
+
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 dnl Check this output. We only see the latter two packets, not the first.
 AT_CHECK([cat ofctl_monitor.log | grep -v ff02 | grep -v fe80 | grep -v no_match], [0], [dnl
