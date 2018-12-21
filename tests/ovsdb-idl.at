@@ -42,6 +42,40 @@ m4_define([OVSDB_CHECK_IDL_C],
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
 
+# same as OVSDB_CHECK_IDL but uses tcp.
+m4_define([OVSDB_CHECK_IDL_TCP_C],
+  [AT_SETUP([$1 - C - tcp])
+   AT_KEYWORDS([ovsdb server idl positive tcp socket $5])
+   AT_CHECK([ovsdb_start_idltest "ptcp:0:127.0.0.1"])
+   PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
+
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact tcp:127.0.0.1:$TCP_PORT $2], [0], [ignore], [ignore])])
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl tcp:127.0.0.1:$TCP_PORT $3],
+            [0], [stdout], [ignore])
+   AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
+            [0], [$4])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+# same as OVSDB_CHECK_IDL but uses tcp6.
+m4_define([OVSDB_CHECK_IDL_TCP6_C],
+  [AT_SETUP([$1 - C - tcp6])
+   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+   AT_SKIP_IF([test $HAVE_IPV6 = no])
+   AT_KEYWORDS([ovsdb server idl positive tcp6 socket $5])
+   AT_CHECK([ovsdb_start_idltest "ptcp:0:[[::1]]"])
+   PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
+
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact tcp:[[::1]]:$TCP_PORT $2], [0], [ignore], [ignore])])
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl tcp:[[::1]]:$TCP_PORT $3],
+            [0], [stdout], [ignore])
+   AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
+            [0], [$4])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
 # same as OVSDB_CHECK_IDL but uses the Python IDL implementation.
 m4_define([OVSDB_CHECK_IDL_PYN],
   [AT_SETUP([$1])
@@ -227,6 +261,8 @@ m4_define([OVSDB_CHECK_IDL_SSL_PY],
 
 m4_define([OVSDB_CHECK_IDL],
   [OVSDB_CHECK_IDL_C($@)
+   OVSDB_CHECK_IDL_TCP_C($@)
+   OVSDB_CHECK_IDL_TCP6_C($@)
    OVSDB_CHECK_IDL_PY($@)
    OVSDB_CHECK_IDL_REGISTER_COLUMNS_PY($@)
    OVSDB_CHECK_IDL_TCP_PY($@)
