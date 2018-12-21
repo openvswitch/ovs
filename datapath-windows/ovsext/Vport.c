@@ -632,13 +632,13 @@ HvDisconnectNic(POVS_SWITCH_CONTEXT switchContext,
         OvsRemoveAndDeleteVport(NULL, switchContext, vport, FALSE, TRUE);
         OvsPostVportEvent(&event);
     }
-    NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
 
     if (isInternalPort) {
         OvsInternalAdapterDown(vport->portNo, vport->netCfgInstanceId);
         OvsRemoveAndDeleteVport(NULL, switchContext, vport, TRUE, TRUE);
         OvsPostVportEvent(&event);
     }
+    NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
 
 done:
     VPORT_NIC_EXIT(nicParam);
