@@ -51,6 +51,7 @@
 /test-sha1
 /test-skiplist
 /test-stp
+/test-stream
 /test-strtok_r
 /test-timeval
 /test-type-props
