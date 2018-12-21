@@ -1785,6 +1785,23 @@ OVSDB_CHECK_IDL_COMPOUND_INDEX_WITH_REF([set, simple3 idl-compound-index-with-re
 008: End test
 ]])
 
+m4_define([CHECK_STREAM_OPEN_BLOCK],
+  [AT_SETUP([Check Stream open block - C - $1])
+   AT_SKIP_IF([test "$1" = "tcp6" && test "$IS_WIN32" = "yes"])
+   AT_SKIP_IF([test "$1" = "tcp6" && test "$HAVE_IPV6" = "no"])
+   AT_KEYWORDS([Check Stream open block $1])
+   AT_CHECK([ovsdb_start_idltest "ptcp:0:$2"])
+   PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
+   WRONG_PORT=$(($TCP_PORT+1))
+   AT_CHECK([test-stream tcp:$2:$TCP_PORT], [0], [ignore])
+   AT_CHECK([test-stream tcp:$2:$WRONG_PORT], [1], [ignore], [ignore])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CHECK([test-stream tcp:$2:$TCP_PORT], [1], [ignore], [ignore])
+   AT_CLEANUP])
+
+CHECK_STREAM_OPEN_BLOCK([tcp], [127.0.0.1])
+CHECK_STREAM_OPEN_BLOCK([tcp6], [[[::1]]])
+
 m4_define([CHECK_STREAM_OPEN_BLOCK_PY],
   [AT_SETUP([$1])
    AT_SKIP_IF([test $2 = no])

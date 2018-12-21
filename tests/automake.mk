@@ -436,6 +436,10 @@ endif
 
 tests_ovstest_LDADD = lib/libopenvswitch.la ovn/lib/libovn.la
 
+noinst_PROGRAMS += tests/test-stream
+tests_test_stream_SOURCES = tests/test-stream.c
+tests_test_stream_LDADD = lib/libopenvswitch.la
+
 noinst_PROGRAMS += tests/test-strtok_r
 tests_test_strtok_r_SOURCES = tests/test-strtok_r.c
 
