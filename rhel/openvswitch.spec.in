@@ -263,6 +263,7 @@ exit 0
 /usr/share/openvswitch/scripts/ovs-save
 /usr/share/openvswitch/scripts/ovs-vtep
 /usr/share/openvswitch/scripts/sysconfig.template
+/usr/share/openvswitch/scripts/ovs-monitor-ipsec
 /usr/share/openvswitch/vswitch.ovsschema
 /usr/share/openvswitch/vtep.ovsschema
 %doc NOTICE README.rst NEWS rhel/README.RHEL.rst
