@@ -568,7 +568,7 @@ cmap_find_protected(const struct cmap *cmap, uint32_t hash)
 {
     struct cmap_impl *impl = cmap_get_impl(cmap);
     uint32_t h1 = rehash(impl, hash);
-    uint32_t h2 = other_hash(hash);
+    uint32_t h2 = other_hash(h1);
     struct cmap_node *node;
 
     node = cmap_find_bucket_protected(impl, hash, h1);
