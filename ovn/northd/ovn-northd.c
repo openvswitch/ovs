@@ -7031,7 +7031,7 @@ bands_need_update(const struct nbrec_meter *nb_meter,
     for (size_t i = 0; i < nb_meter->n_bands; i++) {
         if (nb_bands[i].rate != sb_bands[i].rate
             || nb_bands[i].burst_size != sb_bands[i].burst_size
-            || strcmp(nb_bands[i].action, nb_bands[i].action)) {
+            || strcmp(nb_bands[i].action, sb_bands[i].action)) {
             need_update = true;
             goto done;
         }
