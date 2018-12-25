@@ -27,11 +27,16 @@ import ovs.ovsuuid
 import ovs.poller
 import ovs.stream
 import ovs.util
+import ovs.vlog
 from ovs.db import data
 from ovs.db import error
 from ovs.fatal_signal import signal_alarm
 
 import six
+
+vlog = ovs.vlog.Vlog("test-ovsdb")
+vlog.set_levels_from_string("console:dbg")
+vlog.init(None)
 
 
 def unbox_json(json):
