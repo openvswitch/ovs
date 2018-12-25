@@ -8915,7 +8915,7 @@ as hv3 reset_pcap_file hv3-vif1 hv3/vif1
 sleep 2
 # Take note of how many packets arrived on the VLAN switch before generating
 # further traffic
-n_packets=`as hv1 ovs-ofctl dump-flows br-int table=65 | grep "priority=100,reg15=0x1,metadata=0x2" | grep actions=clone | sed 's/.*n_packets=\([[0-9]]\+\),.*/\1/'`
+n_packets=`as hv1 ovs-ofctl dump-flows br-int table=65 | grep "priority=100,reg15=0x1,metadata=0x2" | grep actions=clone | sed 's/.*n_packets=\([[0-9]]*\),.*/\1/'`
 as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
 sleep 2
 
