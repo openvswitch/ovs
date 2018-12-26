@@ -153,7 +153,7 @@ m4_define([OVSDB_CHECK_IDL_TCP_MULTIPLE_REMOTES_PYN],
    remote=tcp:127.0.0.1:$WRONG_PORT_1,tcp:127.0.0.1:$TCP_PORT,tcp:127.0.0.1:$WRONG_PORT_2
    m4_if([$2], [], [],
      [AT_CHECK([ovsdb-client transact tcp:127.0.0.1:$TCP_PORT $2], [0], [ignore], [ignore])])
-   AT_CHECK([$8 $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema $remote $3],
+   AT_CHECK([$8 $srcdir/test-ovsdb.py  -t20 idl $srcdir/idltest.ovsschema $remote $3],
             [0], [stdout], [ignore])
    AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
             [0], [$4])
@@ -205,7 +205,7 @@ m4_define([OVSDB_CHECK_IDL_TCP6_MULTIPLE_REMOTES_PYN],
    remote="tcp:[[::1]]:$WRONG_PORT_1,tcp:[[::1]]:$TCP_PORT,tcp:[[::1]]:$WRONG_PORT_2"
    m4_if([$2], [], [],
      [AT_CHECK([ovsdb-client transact "tcp:[[::1]]:$TCP_PORT" $2], [0], [ignore], [ignore])])
-   AT_CHECK([$8 $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema $remote $3],
+   AT_CHECK([$8 $srcdir/test-ovsdb.py  -t20 idl $srcdir/idltest.ovsschema $remote $3],
             [0], [stdout], [ignore])
    AT_CHECK([sort stdout | uuidfilt]m4_if([$6],,, [[| $6]]),
             [0], [$4])
