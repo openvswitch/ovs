@@ -8,8 +8,9 @@ freebsd_build_task:
     memory: 8G
 
   env:
-    DEPENDENCIES: automake libtool gmake gcc wget
-                  python py27-six py27-sphinx
+    DEPENDENCIES: automake libtool gmake gcc wget openssl
+                  python py27-six py27-sphinx py27-openssl
+                  python3 py36-six py36-openssl
     matrix:
       COMPILER: gcc
       COMPILER: clang
