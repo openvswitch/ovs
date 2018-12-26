@@ -396,10 +396,11 @@ check_logs () {
     # database.  However, in reaction, some daemon may immediately update the
     # database, and this later update may cause database sending update back to
     # *ctl command if *ctl has not exited yet.  If *ctl command exits before
-    # the database calls send, the send fails with 'Broken pipe'.  Also removes
-    # all "connection reset" warning logs for similar reasons (either EPIPE or
-    # ECONNRESET can be returned on a send depending on whether the peer had
-    # unconsumed data when it closed the socket).
+    # the database calls send, the send fails with 'Broken pipe' or
+    # 'not connected' depending on system.  Also removes all 'connection reset'
+    # warning logs for similar reasons (EPIPE, ENOTCONN or ECONNRESET can be
+    # returned on a send depending on whether the peer had unconsumed data
+    # when it closed the socket).
     #
     # We also ignore "Dropped # log messages..." messages.  Otherwise, even if
     # we ignore the messages that were rate-limited, we can end up failing just
@@ -408,6 +409,7 @@ check_logs () {
     sed -n "$1
 /reset by peer/d
 /Broken pipe/d
+/is not connected/d
 /timeval.*Unreasonably long [[0-9]]*ms poll interval/d
 /timeval.*faults: [[0-9]]* minor, [[0-9]]* major/d
 /timeval.*disk: [[0-9]]* reads, [[0-9]]* writes/d
