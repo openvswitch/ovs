@@ -76,6 +76,10 @@ static struct netlink_field set_flower_map[][3] = {
           offsetof(struct tc_flower_key, ipv6.ipv6_dst),
           MEMBER_SIZEOF(struct tc_flower_key, ipv6.ipv6_dst)
         },
+        { offsetof(struct ovs_key_ipv6, ipv6_hlimit),
+          offsetof(struct tc_flower_key, ipv6.rewrite_hlimit),
+          MEMBER_SIZEOF(struct tc_flower_key, ipv6.rewrite_hlimit)
+        },
     },
     [OVS_KEY_ATTR_ETHERNET] = {
         { offsetof(struct ovs_key_ethernet, eth_src),
