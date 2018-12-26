@@ -148,8 +148,8 @@ m4_define([OVSDB_CHECK_IDL_TCP_MULTIPLE_REMOTES_PYN],
    AT_KEYWORDS([ovsdb server idl positive Python with tcp socket $5])
    AT_CHECK([ovsdb_start_idltest "ptcp:0:127.0.0.1"])
    PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
-   WRONG_PORT_1=$((TCP_PORT + 1))
-   WRONG_PORT_2=$((TCP_PORT + 2))
+   WRONG_PORT_1=$((TCP_PORT + 101))
+   WRONG_PORT_2=$((TCP_PORT + 102))
    remote=tcp:127.0.0.1:$WRONG_PORT_1,tcp:127.0.0.1:$TCP_PORT,tcp:127.0.0.1:$WRONG_PORT_2
    m4_if([$2], [], [],
      [AT_CHECK([ovsdb-client transact tcp:127.0.0.1:$TCP_PORT $2], [0], [ignore], [ignore])])
@@ -200,8 +200,8 @@ m4_define([OVSDB_CHECK_IDL_TCP6_MULTIPLE_REMOTES_PYN],
    AT_KEYWORDS([ovsdb server idl positive Python with tcp6 socket $5])
    AT_CHECK([ovsdb_start_idltest "ptcp:0:[[::1]]"])
    PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
-   WRONG_PORT_1=$((TCP_PORT + 1))
-   WRONG_PORT_2=$((TCP_PORT + 2))
+   WRONG_PORT_1=$((TCP_PORT + 101))
+   WRONG_PORT_2=$((TCP_PORT + 102))
    remote="tcp:[[::1]]:$WRONG_PORT_1,tcp:[[::1]]:$TCP_PORT,tcp:[[::1]]:$WRONG_PORT_2"
    m4_if([$2], [], [],
      [AT_CHECK([ovsdb-client transact "tcp:[[::1]]:$TCP_PORT" $2], [0], [ignore], [ignore])])
@@ -1828,7 +1828,7 @@ m4_define([CHECK_STREAM_OPEN_BLOCK],
    AT_KEYWORDS([Check Stream open block $1])
    AT_CHECK([ovsdb_start_idltest "ptcp:0:$2"])
    PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
-   WRONG_PORT=$(($TCP_PORT+1))
+   WRONG_PORT=$(($TCP_PORT + 101))
    AT_CHECK([test-stream tcp:$2:$TCP_PORT], [0], [ignore])
    AT_CHECK([test-stream tcp:$2:$WRONG_PORT], [1], [ignore], [ignore])
    OVSDB_SERVER_SHUTDOWN
@@ -1844,7 +1844,7 @@ m4_define([CHECK_STREAM_OPEN_BLOCK_PY],
    AT_KEYWORDS([Check PY Stream open block - $3])
    AT_CHECK([ovsdb_start_idltest "ptcp:0:127.0.0.1"])
    PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
-   WRONG_PORT=$(($TCP_PORT+1))
+   WRONG_PORT=$(($TCP_PORT + 101))
    AT_CHECK([$3 $srcdir/test-stream.py tcp:127.0.0.1:$TCP_PORT], [0], [ignore])
    AT_CHECK([$3 $srcdir/test-stream.py tcp:127.0.0.1:$WRONG_PORT], [1], [ignore])
    OVSDB_SERVER_SHUTDOWN
