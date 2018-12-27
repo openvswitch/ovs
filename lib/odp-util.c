@@ -496,8 +496,8 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr,
                               ",controller_id=%"PRIu16
                               ",max_len=%"PRIu16,
                               cookie.controller.reason,
-                              cookie.controller.dont_send ? 1 : 0,
-                              cookie.controller.continuation ? 1 : 0,
+                              !!cookie.controller.dont_send,
+                              !!cookie.controller.continuation,
                               cookie.controller.recirc_id,
                               ntohll(get_32aligned_be64(
                                          &cookie.controller.rule_cookie)),

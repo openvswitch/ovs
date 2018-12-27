@@ -339,8 +339,8 @@ struct user_action_cookie {
 
         struct {
             /* USER_ACTION_COOKIE_CONTROLLER. */
-            bool dont_send;         /* Don't send the packet to controller. */
-            bool continuation;      /* Send packet-in as a continuation. */
+            uint8_t dont_send;      /* Don't send the packet to controller. */
+            uint8_t continuation;   /* Send packet-in as a continuation. */
             uint16_t reason;
             uint32_t recirc_id;
             ovs_32aligned_be64 rule_cookie;
