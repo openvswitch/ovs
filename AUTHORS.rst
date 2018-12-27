@@ -381,7 +381,7 @@ Zongkai LI                         zealokii@gmail.com
 Zhi Yong Wu                        zwu.kernel@gmail.com
 Zang MingJie                       zealot0630@gmail.com
 Zhenyu Gao                         sysugaozhenyu@gmail.com
-ZhiPeng Lu                         lu.zhipeng@zte.com.cn
+ZhiPeng Lu                         luzhipeng@uniudc.com
 Zhou Yangchao                      1028519445@qq.com
 aginwala                           amginwal@gmail.com
 wenxu                              wenxu@ucloud.cn
