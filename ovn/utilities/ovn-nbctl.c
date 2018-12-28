@@ -1529,11 +1529,14 @@ nbctl_lsp_set_addresses(struct ctl_context *ctx)
     int i;
     for (i = 2; i < ctx->argc; i++) {
         struct eth_addr ea;
+        ovs_be32 ip;
 
         if (strcmp(ctx->argv[i], "unknown") && strcmp(ctx->argv[i], "dynamic")
             && strcmp(ctx->argv[i], "router")
             && !ovs_scan(ctx->argv[i], ETH_ADDR_SCAN_FMT,
-                         ETH_ADDR_SCAN_ARGS(ea))) {
+                         ETH_ADDR_SCAN_ARGS(ea))
+            && !ovs_scan(ctx->argv[i], "dynamic "IP_SCAN_FMT,
+                         IP_SCAN_ARGS(&ip))) {
             ctl_error(ctx, "%s: Invalid address format. See ovn-nb(5). "
                       "Hint: An Ethernet address must be "
                       "listed before an IP address, together as a single "

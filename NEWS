@@ -14,7 +14,11 @@ Post-v2.10.0
        version.
      * New support for IPSEC encrypted tunnels between hypervisors.
      * ovn-ctl: allow passing user:group ids to the OVN daemons.
-     * IPAM/MACAM: add the capability to dynamically assign just L2 addresses
+     * IPAM/MACAM:
+       - add the capability to dynamically assign just L2 addresses
+       - add the capability to specify a static ip address and get the L2 one
+         allocated dynamically using the following syntax:
+           ovn-nbctl lsp-set-addresses <port> "dynamic <IP>"
    - DPDK:
      * Add option for simple round-robin based Rxq to PMD assignment.
        It can be set with pmd-rxq-assign.
