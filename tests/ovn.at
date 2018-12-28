@@ -5754,6 +5754,23 @@ AT_CHECK([test "$p71_addr" != "$p72_addr"], [0], [])
 AT_CHECK([test "$p71_addr" != "$p73_addr"], [0], [])
 AT_CHECK([test "$p72_addr" != "$p73_addr"], [0], [])
 
+# request to assign mac only
+#
+ovn-nbctl ls-add sw8
+ovn-nbctl --wait=sb set Logical-Switch sw8 other_config:mac_only=true
+for n in $(seq 1 3); do
+    ovn-nbctl --wait=sb lsp-add sw8 "p8$n" -- lsp-set-addresses "p8$n" dynamic
+done
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p81 dynamic_addresses], [0],
+    ["00:11:22:00:00:06"
+])
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p82 dynamic_addresses], [0],
+    ["00:11:22:00:00:07"
+])
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p83 dynamic_addresses], [0],
+    ["00:11:22:00:00:08"
+])
+
 as ovn-sb
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 

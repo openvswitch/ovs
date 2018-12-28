@@ -414,6 +414,7 @@ struct ipam_info {
     unsigned long *allocated_ipv4s; /* A bitmap of allocated IPv4s */
     bool ipv6_prefix_set;
     struct in6_addr ipv6_prefix;
+    bool mac_only;
 };
 
 /* The 'key' comes from nbs->header_.uuid or nbr->header_.uuid or
@@ -559,6 +560,10 @@ init_ipam_info_for_datapath(struct ovn_datapath *od)
     }
 
     if (!subnet_str) {
+        if (!ipv6_prefix) {
+            od->ipam_info.mac_only = smap_get_bool(&od->nbs->other_config,
+                                                   "mac_only", false);
+        }
         return;
     }
 
@@ -1382,7 +1387,8 @@ build_ipam(struct hmap *datapaths, struct hmap *ports)
             const struct nbrec_logical_switch_port *nbsp = od->nbs->ports[i];
 
             if (!od->ipam_info.allocated_ipv4s &&
-                !od->ipam_info.ipv6_prefix_set) {
+                !od->ipam_info.ipv6_prefix_set &&
+                !od->ipam_info.mac_only) {
                 if (nbsp->dynamic_addresses) {
                     nbrec_logical_switch_port_set_dynamic_addresses(nbsp,
                                                                     NULL);

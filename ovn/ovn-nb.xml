@@ -267,6 +267,11 @@
           <li><code>8230:5678::</code></li>
         </ul>
       </column>
+
+      <column name="other_config" key="mac_only" type='{"type": "boolean"}'>
+        Value used to request to assign L2 address only if neither subnet
+        nor ipv6_prefix are specified
+      </column>
     </group>
 
     <group title="Common Columns">

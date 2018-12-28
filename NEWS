@@ -14,6 +14,7 @@ Post-v2.10.0
        version.
      * New support for IPSEC encrypted tunnels between hypervisors.
      * ovn-ctl: allow passing user:group ids to the OVN daemons.
+     * IPAM/MACAM: add the capability to dynamically assign just L2 addresses
    - DPDK:
      * Add option for simple round-robin based Rxq to PMD assignment.
        It can be set with pmd-rxq-assign.
