@@ -26,7 +26,7 @@ DPDK Bridges
 ============
 
 The DPDK datapath requires specially configured bridge(s) in order to utilize
-DPDK-backed :doc:`physical <phy>` and `virtual <vhost-user>` ports.
+DPDK-backed :doc:`physical <phy>` and :doc:`virtual <vhost-user>` ports.
 
 Quick Example
 -------------
