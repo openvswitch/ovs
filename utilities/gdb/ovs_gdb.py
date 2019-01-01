@@ -133,7 +133,7 @@ def get_global_variable(name):
     var = gdb.lookup_symbol(name)[0]
     if var is None or not var.is_variable:
         print("Can't find {} global variable, are you sure "
-              "your debugging OVS?".format(name))
+              "you are debugging OVS?".format(name))
         return None
     return gdb.parse_and_eval(name)
 
@@ -487,7 +487,7 @@ class CmdDumpBridgePorts(gdb.Command):
     def display_single_port(port, indent=0):
         indent = " " * indent
         port = port.cast(gdb.lookup_type('struct port').pointer())
-        print("{}(struct port *) {}: name = {}, brige = (struct bridge *) {}".
+        print("{}(struct port *) {}: name = {}, bridge = (struct bridge *) {}".
               format(indent, port, port['name'].string(),
                      port['bridge']))
 
