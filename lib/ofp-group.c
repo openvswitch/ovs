@@ -1043,7 +1043,8 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, int command,
         }
         ovs_list_push_back(&gm->buckets, &bucket->list_node);
 
-        if (gm->type != OFPGT11_SELECT && bucket->weight) {
+        if (gm->command != OFPGC15_INSERT_BUCKET
+            && gm->type != OFPGT11_SELECT && bucket->weight) {
             error = xstrdup("Only select groups can have bucket weights.");
             goto out;
         }
@@ -1189,7 +1190,7 @@ ofputil_put_ofp15_bucket(const struct ofputil_bucket *bucket,
                                  openflow, ofp_version);
     actions_len = openflow->size - actions_start;
 
-    if (group_type == OFPGT11_SELECT) {
+    if (group_type == OFPGT11_SELECT || bucket->weight) {
         ofpprop_put_u16(openflow, OFPGBPT15_WEIGHT, bucket->weight);
     }
     if (bucket->watch_port != OFPP_ANY) {
@@ -2251,7 +2252,8 @@ ofputil_check_group_mod(const struct ofputil_group_mod *gm)
 
     struct ofputil_bucket *bucket;
     LIST_FOR_EACH (bucket, list_node, &gm->buckets) {
-        if (bucket->weight && gm->type != OFPGT11_SELECT) {
+        if (bucket->weight && gm->type != OFPGT11_SELECT
+            && gm->command != OFPGC15_INSERT_BUCKET) {
             return OFPERR_OFPGMFC_INVALID_GROUP;
         }
 
