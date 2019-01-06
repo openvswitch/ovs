@@ -1612,7 +1612,8 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, int command,
         }
         ovs_list_push_back(&gm->buckets, &bucket->list_node);
 
-        if (gm->type != OFPGT11_SELECT && bucket->weight) {
+        if (gm->command != OFPGC15_INSERT_BUCKET
+            && gm->type != OFPGT11_SELECT && bucket->weight) {
             error = xstrdup("Only select groups can have bucket weights.");
             goto out;
         }
