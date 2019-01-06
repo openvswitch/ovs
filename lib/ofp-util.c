@@ -8581,7 +8581,7 @@ ofputil_put_ofp15_bucket(const struct ofputil_bucket *bucket,
                                  openflow, ofp_version);
     actions_len = openflow->size - actions_start;
 
-    if (group_type == OFPGT11_SELECT) {
+    if (group_type == OFPGT11_SELECT || bucket->weight) {
         ofpprop_put_u16(openflow, OFPGBPT15_WEIGHT, bucket->weight);
     }
     if (bucket->watch_port != OFPP_ANY) {
@@ -9481,7 +9481,8 @@ ofputil_check_group_mod(const struct ofputil_group_mod *gm)
 
     struct ofputil_bucket *bucket;
     LIST_FOR_EACH (bucket, list_node, &gm->buckets) {
-        if (bucket->weight && gm->type != OFPGT11_SELECT) {
+        if (bucket->weight && gm->type != OFPGT11_SELECT
+            && gm->command != OFPGC15_INSERT_BUCKET) {
             return OFPERR_OFPGMFC_INVALID_GROUP;
         }
 
