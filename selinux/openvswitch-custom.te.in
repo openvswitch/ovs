@@ -16,6 +16,7 @@ require {
         type init_t;
         type init_var_run_t;
         type insmod_exec_t;
+        type kernel_t;
         type hostname_exec_t;
         type modules_conf_t;
         type modules_object_t;
@@ -32,7 +33,6 @@ require {
 
 @begin_dpdk@
         type hugetlbfs_t;
-        type kernel_t;
         type svirt_t;
         type svirt_image_t;
         type svirt_tmpfs_t;
@@ -51,7 +51,7 @@ require {
         class netlink_audit_socket { create nlmsg_relay audit_write read write };
         class netlink_socket { setopt getopt create connect getattr write read };
         class sock_file { write };
-        class system module_load;
+        class system { module_load module_request };
         class process { sigchld signull transition noatsecure siginh rlimitinh };
         class unix_stream_socket { write getattr read connectto connect setopt getopt sendto accept bind recvfrom acceptfrom ioctl };
 
@@ -110,6 +110,7 @@ allow openvswitch_load_module_t bin_t:file { execute execute_no_trans map };
 allow openvswitch_load_module_t init_t:unix_stream_socket { getattr ioctl read write };
 allow openvswitch_load_module_t init_var_run_t:dir { getattr read open search };
 allow openvswitch_load_module_t insmod_exec_t:file { execute execute_no_trans getattr map open read };
+allow openvswitch_load_module_t kernel_t:system module_request;
 allow openvswitch_load_module_t modules_conf_t:dir { getattr open read search };
 allow openvswitch_load_module_t modules_conf_t:file { getattr open read };
 allow openvswitch_load_module_t modules_object_t:file { map getattr open read };
@@ -120,7 +121,7 @@ allow openvswitch_load_module_t plymouth_exec_t:file { getattr read open execute
 allow openvswitch_load_module_t proc_t:file { getattr open read };
 allow openvswitch_load_module_t self:system module_load;
 allow openvswitch_load_module_t self:process { siginh noatsecure rlimitinh siginh };
-allow openvswitch_load_module_t shell_exec_t:file { map execute read open getattr };
+allow openvswitch_load_module_t shell_exec_t:file { map execute execute_no_trans read open getattr };
 allow openvswitch_load_module_t sssd_public_t:dir { getattr open read search };
 allow openvswitch_load_module_t sssd_public_t:file { getattr map open read };
 allow openvswitch_load_module_t sssd_t:unix_stream_socket connectto;
