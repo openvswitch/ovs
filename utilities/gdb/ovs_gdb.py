@@ -55,7 +55,11 @@
 #    ...
 #    ...
 #
+from __future__ import print_function
+
 import gdb
+import six
+import sys
 import uuid
 
 
@@ -63,6 +67,13 @@ import uuid
 # Global #define's from OVS which might need updating based on a version.
 #
 N_UMAPS = 512
+
+
+#
+# For Python2-3 compatibility define long as int
+#
+if six.PY3:
+    long = int
 
 
 #
@@ -151,6 +162,37 @@ def eth_addr_to_string(eth_addr):
 
 
 #
+# Simple class to print a spinner on the console
+#
+class ProgressIndicator(object):
+    def __init__(self, message=None):
+        self.spinner = "/-\|"
+        self.spinner_index = 0
+        self.message = message
+
+        if self.message is not None:
+            print(self.message, end='')
+
+    def update(self):
+        print("{}\b".format(self.spinner[self.spinner_index]), end='')
+        sys.stdout.flush()
+        self.spinner_index += 1
+        if self.spinner_index >= len(self.spinner):
+            self.spinner_index = 0
+
+    def pause(self):
+        print("\r\033[K", end='')
+
+    def resume(self):
+        if self.message is not None:
+            print(self.message, end='')
+        self.update()
+
+    def done(self):
+        self.pause()
+
+
+#
 # Class that will provide an iterator over an OVS cmap.
 #
 class ForEachCMAP(object):
@@ -192,7 +234,7 @@ class ForEachCMAP(object):
 
         raise StopIteration
 
-    def next(self):
+    def __next__(self):
         ipml = self.cmap['impl']['p']
         if ipml['n'] == 0:
             raise StopIteration
@@ -205,6 +247,9 @@ class ForEachCMAP(object):
         return container_of(self.node,
                             gdb.lookup_type(self.typeobj).pointer(),
                             self.member)
+
+    def next(self):
+        return self.__next__()
 
 
 #
@@ -229,7 +274,7 @@ class ForEachHMAP(object):
 
         raise StopIteration
 
-    def next(self):
+    def __next__(self):
         #
         # In the real implementation the n values is never checked,
         # however when debugging we do, as we might try to access
@@ -253,6 +298,9 @@ class ForEachHMAP(object):
                             gdb.lookup_type(self.typeobj).pointer(),
                             self.member)
 
+    def next(self):
+        return self.__next__()
+
 
 #
 # Class that will provide an iterator over an Netlink attributes
@@ -268,7 +316,7 @@ class ForEachNL():
     def round_up(self, val, round_to):
         return int(val) + (round_to - int(val)) % round_to
 
-    def next(self):
+    def __next__(self):
         if self.attr is None or \
            self.attr_len < 4 or self.attr['nla_len'] < 4 or  \
            self.attr['nla_len'] > self.attr_len:
@@ -286,6 +334,9 @@ class ForEachNL():
 
         return attr
 
+    def next(self):
+        return self.__next__()
+
 
 #
 # Class that will provide an iterator over an OVS shash.
@@ -298,13 +349,16 @@ class ForEachSHASH(ForEachHMAP):
         super(ForEachSHASH, self).__init__(shash['map'],
                                            "struct shash_node", "node")
 
-    def next(self):
-        node = super(ForEachSHASH, self).next()
+    def __next__(self):
+        node = super(ForEachSHASH, self).__next__()
 
         if self.data_typeobj is None:
             return node
 
         return node['data'].cast(gdb.lookup_type(self.data_typeobj).pointer())
+
+    def next(self):
+        return self.__next__()
 
 
 #
@@ -315,9 +369,12 @@ class ForEachSIMAP(ForEachHMAP):
         super(ForEachSIMAP, self).__init__(shash['map'],
                                            "struct simap_node", "node")
 
-    def next(self):
-        node = super(ForEachSIMAP, self).next()
+    def __next__(self):
+        node = super(ForEachSIMAP, self).__next__()
         return node['name'], node['data']
+
+    def next(self):
+        return self.__next__()
 
 
 #
@@ -328,9 +385,12 @@ class ForEachSMAP(ForEachHMAP):
         super(ForEachSMAP, self).__init__(shash['map'],
                                           "struct smap_node", "node")
 
-    def next(self):
-        node = super(ForEachSMAP, self).next()
+    def __next__(self):
+        node = super(ForEachSMAP, self).__next__()
         return node['key'], node['value']
+
+    def next(self):
+        return self.__next__()
 
 
 #
@@ -346,7 +406,7 @@ class ForEachLIST():
     def __iter__(self):
         return self
 
-    def next(self):
+    def __next__(self):
         if self.list.address == self.node['next']:
             raise StopIteration
 
@@ -358,6 +418,9 @@ class ForEachLIST():
         return container_of(self.node,
                             gdb.lookup_type(self.typeobj).pointer(),
                             self.member)
+
+    def next(self):
+        return self.__next__()
 
 
 #
@@ -499,7 +562,7 @@ class CmdDumpDpNetdevPollThreads(gdb.Command):
     @staticmethod
     def display_single_poll_thread(pmd_thread, indent=0):
         indent = " " * indent
-        print("{}(struct dp_netdev_pmd_thread *) {}: core_id = {:s}, "
+        print("{}(struct dp_netdev_pmd_thread *) {}: core_id = {}, "
               "numa_id {}".format(indent,
                                   pmd_thread, pmd_thread['core_id'],
                                   pmd_thread['numa_id']))
@@ -597,7 +660,7 @@ class CmdDumpNetdev(gdb.Command):
     @staticmethod
     def display_single_netdev(netdev, indent=0):
         indent = " " * indent
-        print("{}(struct netdev *) {}: name = {:15}, auto_classified = {:5}, "
+        print("{}(struct netdev *) {}: name = {:15}, auto_classified = {}, "
               "netdev_class = {}".
               format(indent, netdev, netdev['name'].string(),
                      netdev['auto_classified'], netdev['netdev_class']))
@@ -733,10 +796,11 @@ class CmdDumpOvsList(gdb.Command):
             if typeobj is None or member is None:
                 print("(struct ovs_list *) {}".format(node))
             else:
-                print("({} *) {} =".format(
+                print("({} *) {} {}".format(
                     typeobj,
                     container_of(node,
-                                 gdb.lookup_type(typeobj).pointer(), member)))
+                                 gdb.lookup_type(typeobj).pointer(), member),
+                    "=" if dump else ""))
                 if dump:
                     print("  {}\n".format(container_of(
                         node,
@@ -774,7 +838,7 @@ class CmdDumpSimap(gdb.Command):
             if len(name.string()) > max_name_len:
                 max_name_len = len(name.string())
 
-        for name in sorted(values.iterkeys()):
+        for name in sorted(six.iterkeys(values)):
             print("{}: {} / 0x{:x}".format(name.ljust(max_name_len),
                                            values[name], values[name]))
 
@@ -809,7 +873,7 @@ class CmdDumpSmap(gdb.Command):
             if len(key.string()) > max_key_len:
                 max_key_len = len(key.string())
 
-        for key in sorted(values.iterkeys()):
+        for key in sorted(six.iterkeys(values)):
             print("{}: {}".format(key.ljust(max_key_len),
                                   values[key]))
 
@@ -826,6 +890,7 @@ class CmdDumpUdpifKeys(gdb.Command):
                         <udpif_name> and <udpif_address> are omitted the
                         available udpif structures are displayed.
       short           : Only dump ukey structure addresses, no content details
+      no_count        : Do not count the number of ukeys, as it might be slow
     """
 
     def __init__(self):
@@ -834,14 +899,22 @@ class CmdDumpUdpifKeys(gdb.Command):
 
     def count_all_ukeys(self, udpif):
         count = 0
+        spinner = ProgressIndicator("Counting all ukeys: ")
+
         for j in range(0, N_UMAPS):
+            spinner.update()
             count += udpif['ukeys'][j]['cmap']['impl']['p']['n']
+
+        spinner.done()
         return count
 
     def dump_all_ukeys(self, udpif, indent=0, short=False):
         indent = " " * indent
+        spinner = ProgressIndicator("Walking ukeys: ")
         for j in range(0, N_UMAPS):
+            spinner.update()
             if udpif['ukeys'][j]['cmap']['impl']['p']['n'] != 0:
+                spinner.pause()
                 print("{}(struct umap *) {}:".
                       format(indent, udpif['ukeys'][j].address))
                 for ukey in ForEachCMAP(udpif['ukeys'][j]['cmap'],
@@ -890,10 +963,14 @@ class CmdDumpUdpifKeys(gdb.Command):
                     #         nlattr['nla_type'].cast(
                     #             gdb.lookup_type('enum ovs_key_attr')))
                     # print("{}key attributes = {}".format(indent_b, key))
+                spinner.resume()
+        spinner.done()
 
     def invoke(self, arg, from_tty):
         arg_list = gdb.string_to_argv(arg)
         all_udpifs = get_global_variable('all_udpifs')
+        no_count = "no_count" in arg_list
+
         if all_udpifs is None:
             return
 
@@ -901,12 +978,15 @@ class CmdDumpUdpifKeys(gdb.Command):
         for udpif in ForEachLIST(all_udpifs, "struct udpif", "list_node"):
             udpifs[udpif['dpif']['full_name'].string()] = udpif
 
-            if len(arg_list) == 0:
+            if len(arg_list) == 0 or (
+                    len(arg_list) == 1 and arg_list[0] == "no_count"):
                 print("(struct udpif *) {}: name = {}, total keys = {}".
                       format(udpif, udpif['dpif']['full_name'].string(),
-                             self.count_all_ukeys(udpif)))
+                             self.count_all_ukeys(udpif) if not no_count
+                             else "<not counted!>"))
 
-        if len(arg_list) == 0:
+        if len(arg_list) == 0 or (
+                len(arg_list) == 1 and arg_list[0] == "no_count"):
             return
 
         if arg_list[0] in udpifs:
@@ -1074,7 +1154,7 @@ class CmdShowFDB(gdb.Command):
                 max_name_len = len(node['up']['name'].string())
 
         if len(arg_list) == 0:
-            for name in sorted(all_name.iterkeys()):
+            for name in sorted(six.iterkeys(all_name)):
                 print("{}: (struct mac_learning *) {}".
                       format(name.ljust(max_name_len),
                              all_name[name]['ml']))
@@ -1140,10 +1220,13 @@ class CmdShowUpcall(gdb.Command):
 
             count = 0
             j = i
+            spinner = ProgressIndicator("Counting all ukeys: ")
             while j < N_UMAPS:
+                spinner.update()
                 count += udpif['ukeys'][j]['cmap']['impl']['p']['n']
                 j += int(udpif['n_revalidators'])
 
+            spinner.done()
             print("{}  {}: (keys {}){}".
                   format(indent, revalidator['id'], count, dbg_str))
 
