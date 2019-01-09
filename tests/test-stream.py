@@ -20,7 +20,7 @@ import ovs.stream
 def main(argv):
     remote = argv[1]
     err, stream = ovs.stream.Stream.open_block(
-            ovs.stream.Stream.open(remote))
+            ovs.stream.Stream.open(remote), 10000)
 
     if err or stream is None:
         sys.exit(1)

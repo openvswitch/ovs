@@ -37,7 +37,7 @@ main(int argc, char *argv[])
     }
 
     error = stream_open_block(stream_open(argv[1], &stream, DSCP_DEFAULT),
-                              &stream);
+                              10000, &stream);
     if (error) {
         VLOG_ERR("stream_open_block(%s) failure: %s",
                  argv[1], ovs_strerror(error));

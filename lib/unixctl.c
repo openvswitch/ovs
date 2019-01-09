@@ -460,7 +460,7 @@ unixctl_client_create(const char *path, struct jsonrpc **client)
     *client = NULL;
 
     error = stream_open_block(stream_open(unix_path, &stream, DSCP_DEFAULT),
-                              &stream);
+                              -1, &stream);
     free(unix_path);
     free(abs_path);
 

@@ -604,7 +604,7 @@ def do_idl(schema_file, remote, *commands):
         stream = None
         for r in remotes:
             error, stream = ovs.stream.Stream.open_block(
-                ovs.stream.Stream.open(r))
+                ovs.stream.Stream.open(r), 2000)
             if not error and stream:
                 break
             stream = None
