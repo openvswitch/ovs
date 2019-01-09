@@ -2244,7 +2244,7 @@ trace(const char *dp_s, const char *flow_s)
     ds_put_char(&output, '\n');
 
     if (ovs) {
-        int retval = vconn_open_block(ovs, 1 << OFP13_VERSION, 0, &vconn);
+        int retval = vconn_open_block(ovs, 1 << OFP13_VERSION, 0, -1, &vconn);
         if (retval) {
             VLOG_WARN("%s: connection failed (%s)", ovs, ovs_strerror(retval));
         }

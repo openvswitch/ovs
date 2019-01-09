@@ -777,7 +777,7 @@ sbctl_open_vconn(struct shash *options)
 
     char *remote = ovs->data ? xstrdup(ovs->data) : default_ovs();
     struct vconn *vconn;
-    int retval = vconn_open_block(remote, 1 << OFP13_VERSION, 0, &vconn);
+    int retval = vconn_open_block(remote, 1 << OFP13_VERSION, 0, -1, &vconn);
     if (retval) {
         VLOG_WARN("%s: connection failed (%s)", remote, ovs_strerror(retval));
     }

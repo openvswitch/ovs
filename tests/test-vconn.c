@@ -37,6 +37,8 @@
 #include "timeval.h"
 #include "util.h"
 
+#define TIMEOUT 10
+
 struct fake_pvconn {
     const char *type;
     char *pvconn_name;
@@ -152,9 +154,9 @@ test_refuse_connection(struct ovs_cmdl_context *ctx)
     fpv_close(&fpv);
     vconn_run(vconn);
 
-    error = vconn_connect_block(vconn);
+    error = vconn_connect_block(vconn, (TIMEOUT - 2) * 1000);
     if (!strcmp(type, "tcp")) {
-        if (error != ECONNRESET && error != EPIPE
+        if (error != ECONNRESET && error != EPIPE && error != ETIMEDOUT
 #ifdef _WIN32
             && error != WSAECONNRESET
 #endif
@@ -165,7 +167,7 @@ test_refuse_connection(struct ovs_cmdl_context *ctx)
     } else if (!strcmp(type, "unix")) {
         CHECK_ERRNO(error, EPIPE);
     } else if (!strcmp(type, "ssl")) {
-        if (error != EPROTO && error != ECONNRESET) {
+        if (error != EPROTO && error != ECONNRESET && error != ETIMEDOUT) {
             ovs_fatal(0, "unexpected vconn_connect() return value %d (%s)",
                       error, ovs_strerror(error));
         }
@@ -194,7 +196,7 @@ test_accept_then_close(struct ovs_cmdl_context *ctx)
     stream_close(fpv_accept(&fpv));
     fpv_close(&fpv);
 
-    error = vconn_connect_block(vconn);
+    error = vconn_connect_block(vconn, -1);
     if (!strcmp(type, "tcp") || !strcmp(type, "unix")) {
         if (error != ECONNRESET && error != EPIPE
 #ifdef _WIN32
@@ -254,7 +256,7 @@ test_read_hello(struct ovs_cmdl_context *ctx)
        poll_block();
     }
     stream_close(stream);
-    error = vconn_connect_block(vconn);
+    error = vconn_connect_block(vconn, -1);
     if (error != ECONNRESET && error != EPIPE) {
         ovs_fatal(0, "unexpected vconn_connect() return value %d (%s)",
                   error, ovs_strerror(error));
@@ -451,7 +453,7 @@ test_vconn_main(int argc, char *argv[])
     vlog_set_levels(NULL, VLF_CONSOLE, VLL_DBG);
     fatal_ignore_sigpipe();
 
-    time_alarm(10);
+    time_alarm(TIMEOUT);
 
     ovs_cmdl_run_command(&ctx, commands);
 }

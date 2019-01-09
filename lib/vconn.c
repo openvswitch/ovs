@@ -306,7 +306,7 @@ vconn_get_status(const struct vconn *vconn)
 
 int
 vconn_open_block(const char *name, uint32_t allowed_versions, uint8_t dscp,
-                 struct vconn **vconnp)
+                 long long int timeout, struct vconn **vconnp)
 {
     struct vconn *vconn;
     int error;
@@ -315,7 +315,7 @@ vconn_open_block(const char *name, uint32_t allowed_versions, uint8_t dscp,
 
     error = vconn_open(name, allowed_versions, dscp, &vconn);
     if (!error) {
-        error = vconn_connect_block(vconn);
+        error = vconn_connect_block(vconn, timeout);
     }
 
     if (error) {
@@ -697,16 +697,28 @@ do_send(struct vconn *vconn, struct ofpbuf *msg)
 }
 
 /* Same as vconn_connect(), except that it waits until the connection on
- * 'vconn' completes or fails.  Thus, it will never return EAGAIN. */
+ * 'vconn' completes or fails, but no more than 'timeout' milliseconds.
+ * Thus, it will never return EAGAIN.  Negative value of 'timeout' means
+ * infinite waiting.*/
 int
-vconn_connect_block(struct vconn *vconn)
+vconn_connect_block(struct vconn *vconn, long long int timeout)
 {
-    int error;
+    long long int deadline = (timeout >= 0
+                              ? time_msec() + deadline
+                              : LLONG_MAX);
 
+    int error;
     while ((error = vconn_connect(vconn)) == EAGAIN) {
+        if (time_msec() > deadline) {
+            error = ETIMEDOUT;
+            break;
+        }
         vconn_run(vconn);
         vconn_run_wait(vconn);
         vconn_connect_wait(vconn);
+        if (deadline != LLONG_MAX) {
+            poll_timer_wait_until(deadline);
+        }
         poll_block();
     }
     ovs_assert(error != EINPROGRESS);

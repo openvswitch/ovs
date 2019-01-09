@@ -601,7 +601,7 @@ open_vconn__(const char *name, enum open_target target,
     free(socket_name);
 
     VLOG_DBG("connecting to %s", vconn_get_name(*vconnp));
-    error = vconn_connect_block(*vconnp);
+    error = vconn_connect_block(*vconnp, -1);
     if (error) {
         ovs_fatal(0, "%s: failed to connect to socket (%s)", name,
                   ovs_strerror(error));
