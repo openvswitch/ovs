@@ -419,3 +419,17 @@ Q: I just upgraded and I see a performance drop.  Why?
 
     To get the best possible performance and functionality, it is recommended
     to pair the same versions of the kernel module and OVS userspace.
+
+Q: I can't unload the openvswitch kernel module.  Why?
+
+    A: The userspace might still hold the reference count. So ``rmmod openvswitch``
+    does not work, for example::
+
+        $ lsmod | grep openvswitch
+        openvswitch       155648 4
+        nf_conncount      24576  1 openvswitch
+
+    Use the command below to drop the refcnt::
+
+        $ ovs-dpctl del-dp system@ovs-system
+        $ rmmod openvswitch
