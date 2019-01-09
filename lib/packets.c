@@ -75,6 +75,22 @@ dpid_from_string(const char *s, uint64_t *dpidp)
     return *dpidp != 0;
 }
 
+uint64_t
+eth_addr_to_uint64(const struct eth_addr ea)
+{
+    return (((uint64_t) ntohs(ea.be16[0]) << 32)
+            | ((uint64_t) ntohs(ea.be16[1]) << 16)
+            | ntohs(ea.be16[2]));
+}
+
+void
+eth_addr_from_uint64(uint64_t x, struct eth_addr *ea)
+{
+    ea->be16[0] = htons(x >> 32);
+    ea->be16[1] = htons((x & 0xFFFF0000) >> 16);
+    ea->be16[2] = htons(x & 0xFFFF);
+}
+
 /* Returns true if 'ea' is a reserved address, that a bridge must never
  * forward, false otherwise.
  *
@@ -524,6 +540,28 @@ eth_format_masked(const struct eth_addr eth,
     }
 }
 
+/*
+ * Generates ipv6 EUI64 address from the given eth addr
+ * and prefix and stores it in 'lla'
+ */
+void
+in6_generate_eui64(struct eth_addr ea, const struct in6_addr *prefix,
+                   struct in6_addr *lla)
+{
+    union ovs_16aligned_in6_addr *taddr =
+        (union ovs_16aligned_in6_addr *) lla;
+    union ovs_16aligned_in6_addr *prefix_taddr =
+        (union ovs_16aligned_in6_addr *) prefix;
+    taddr->be16[0] = prefix_taddr->be16[0];
+    taddr->be16[1] = prefix_taddr->be16[1];
+    taddr->be16[2] = prefix_taddr->be16[2];
+    taddr->be16[3] = prefix_taddr->be16[3];
+    taddr->be16[4] = htons(((ea.ea[0] ^ 0x02) << 8) | ea.ea[1]);
+    taddr->be16[5] = htons(ea.ea[2] << 8 | 0x00ff);
+    taddr->be16[6] = htons(0xfe << 8 | ea.ea[3]);
+    taddr->be16[7] = ea.be16[2];
+}
+
 /* Generates ipv6 link local address from the given eth addr
  * with prefix 'fe80::/64' and stores it in 'lla'. */
 void
@@ -537,6 +575,19 @@ in6_generate_lla(struct eth_addr ea, struct in6_addr *lla)
     taddr->be16[5] = htons(ea.ea[2] << 8 | 0x00ff);
     taddr->be16[6] = htons(0xfe << 8 | ea.ea[3]);
     taddr->be16[7] = ea.be16[2];
+}
+
+/* Returns true if 'addr' is a link local address.  Otherwise, false. */
+bool
+in6_is_lla(struct in6_addr *addr)
+{
+#ifdef s6_addr32
+    return addr->s6_addr32[0] == htonl(0xfe800000) && !(addr->s6_addr32[1]);
+#else
+    return addr->s6_addr[0] == 0xfe && addr->s6_addr[1] == 0x80 &&
+         !(addr->s6_addr[2] | addr->s6_addr[3] | addr->s6_addr[4] |
+           addr->s6_addr[5] | addr->s6_addr[6] | addr->s6_addr[7]);
+#endif
 }
 
 /* Given the IP netmask 'netmask', returns the number of bits of the IP address
@@ -971,6 +1022,7 @@ eth_compose(struct dp_packet *b, const struct eth_addr eth_dst,
 {
     void *data;
     struct eth_header *eth;
+
 
     dp_packet_clear(b);
 
