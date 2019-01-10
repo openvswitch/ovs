@@ -177,7 +177,7 @@ class Parser(object):
             return False
 
     __number_re = re.compile("(-)?(0|[1-9][0-9]*)"
-            "(?:\.([0-9]+))?(?:[eE]([-+]?[0-9]+))?$")
+            r"(?:\.([0-9]+))?(?:[eE]([-+]?[0-9]+))?$")
 
     def __lex_finish_number(self):
         s = self.buffer
@@ -234,7 +234,7 @@ class Parser(object):
             self.__error("leading zeros not allowed")
         elif re.match("-([^0-9]|$)", s):
             self.__error("'-' must be followed by digit")
-        elif re.match("-?(0|[1-9][0-9]*)\.([^0-9]|$)", s):
+        elif re.match(r"-?(0|[1-9][0-9]*)\.([^0-9]|$)", s):
             self.__error("decimal point must be followed by digit")
         elif re.search("e[-+]?([^0-9]|$)", s):
             self.__error("exponent must contain at least one digit")

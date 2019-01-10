@@ -274,7 +274,7 @@ def diagram_to_nroff(nodes, para):
     text_s = '.br\n'.join(["\\fL%s\n" % s for s in text if s != ""])
     return para + """
 .\\" check if in troff mode (TTY)
-.if t \{
+.if t \\{
 .PS
 boxht = .2
 textht = 1/6
@@ -283,7 +283,7 @@ fillval = .2
 .PE
 \\}
 .\\" check if in nroff mode:
-.if n \{
+.if n \\{
 .nf
 """ + text_s + """\
 .fi

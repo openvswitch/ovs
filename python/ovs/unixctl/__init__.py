@@ -73,7 +73,7 @@ def command_register(name, usage, min_args, max_args, callback, aux):
 def socket_name_from_target(target):
     assert isinstance(target, strtypes)
 
-    """ On Windows an absolute path contains ':' ( i.e: C:\ ) """
+    """ On Windows an absolute path contains ':' ( i.e: C:\\ ) """
     if target.startswith('/') or target.find(':') > -1:
         return 0, target
 

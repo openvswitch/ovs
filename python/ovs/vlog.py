@@ -142,7 +142,7 @@ class Vlog(object):
         return re.sub(match, replace, tmp)
 
     def _format_time(self, tmp):
-        date_regex = re.compile('(%(0?[1-9]?[dD])(\{(.*)\})?)')
+        date_regex = re.compile(r'(%(0?[1-9]?[dD])(\{(.*)\})?)')
         match = date_regex.search(tmp)
 
         if match is None:

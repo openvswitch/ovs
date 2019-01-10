@@ -73,7 +73,7 @@ class DbSchema(object):
         parser.finish()
 
         if (version is not None and
-            not re.match('[0-9]+\.[0-9]+\.[0-9]+$', version)):
+            not re.match(r'[0-9]+\.[0-9]+\.[0-9]+$', version)):
             raise error.Error('schema version "%s" not in format x.y.z'
                               % version)
 

@@ -325,7 +325,7 @@ def modinst():
 
     _sh("modprobe", "openvswitch")
     _sh("dmesg | grep openvswitch | tail -1")
-    _sh("find /lib/modules/%s/ -iname vport-*.ko -exec insmod '{}' \;"
+    _sh("find /lib/modules/%s/ -iname vport-*.ko -exec insmod '{}' \\;"
         % uname())
 
 
