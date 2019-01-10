@@ -415,6 +415,7 @@ poll_loop(void)
     loop = pthread_getspecific(key);
     if (!loop) {
         loop = xzalloc(sizeof *loop);
+        loop->timeout_when = LLONG_MAX;
         hmap_init(&loop->poll_nodes);
         xpthread_setspecific(key, loop);
     }
