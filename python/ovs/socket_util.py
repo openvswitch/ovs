@@ -90,7 +90,7 @@ def make_unix_socket(style, nonblock, bind_path, connect_path, short=False):
 
             try:
                 os.fchmod(sock.fileno(), 0o700)
-            except OSError as e:
+            except OSError:
                 pass
         if connect_path is not None:
             try:

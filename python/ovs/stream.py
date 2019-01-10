@@ -174,7 +174,7 @@ class Stream(object):
                     try:
                         winutils.set_pipe_mode(npipe,
                                                win32pipe.PIPE_READMODE_BYTE)
-                    except pywintypes.error as e:
+                    except pywintypes.error:
                         return errno.ENOENT, None
                 except pywintypes.error as e:
                     if e.winerror == winutils.winerror.ERROR_PIPE_BUSY:
