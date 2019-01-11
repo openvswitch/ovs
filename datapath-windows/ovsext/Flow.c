@@ -115,7 +115,7 @@ const NL_POLICY nlFlowKeyPolicy[] = {
     [OVS_KEY_ATTR_PRIORITY] = {.type = NL_A_UNSPEC, .minLen = 4,
                                .maxLen = 4, .optional = TRUE},
     [OVS_KEY_ATTR_IN_PORT] = {.type = NL_A_UNSPEC, .minLen = 4,
-                              .maxLen = 4, .optional = FALSE},
+                              .maxLen = 4, .optional = TRUE},
     [OVS_KEY_ATTR_ETHERNET] = {.type = NL_A_UNSPEC,
                                .minLen = sizeof(struct ovs_key_ethernet),
                                .maxLen = sizeof(struct ovs_key_ethernet),
@@ -457,6 +457,7 @@ _FlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     NL_BUFFER nlBuf;
     PNL_ATTR keyAttrs[__OVS_KEY_ATTR_MAX];
     PNL_ATTR tunnelAttrs[__OVS_TUNNEL_KEY_ATTR_MAX];
+    PNL_ATTR encapAttrs[__OVS_KEY_ATTR_MAX];
 
     NlBufInit(&nlBuf, usrParamsCtx->outputBuffer,
               usrParamsCtx->outputLength);
@@ -464,6 +465,7 @@ _FlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     RtlZeroMemory(&getOutput, sizeof(OvsFlowGetOutput));
     UINT32 keyAttrOffset = 0;
     UINT32 tunnelKeyAttrOffset = 0;
+    UINT32 encapOffset = 0;
     BOOLEAN ok;
     NL_ERROR nlError = NL_ERROR_SUCCESS;
 
@@ -503,6 +505,23 @@ _FlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         goto done;
     }
 
+    if (keyAttrs[OVS_KEY_ATTR_ENCAP]) {
+        encapOffset = (UINT32)((PCHAR) (keyAttrs[OVS_KEY_ATTR_ENCAP])
+                          - (PCHAR)nlMsgHdr);
+
+        if ((NlAttrParseNested(nlMsgHdr, encapOffset,
+                               NlAttrLen(keyAttrs[OVS_KEY_ATTR_ENCAP]),
+                               nlFlowKeyPolicy,
+                               ARRAY_SIZE(nlFlowKeyPolicy),
+                               encapAttrs, ARRAY_SIZE(encapAttrs)))
+                               != TRUE) {
+            OVS_LOG_ERROR("Encap Key Attr Parsing failed for msg: %p",
+                          nlMsgHdr);
+            rc = STATUS_INVALID_PARAMETER;
+            goto done;
+        }
+    }
+
     if (keyAttrs[OVS_KEY_ATTR_TUNNEL]) {
         tunnelKeyAttrOffset = (UINT32)((PCHAR)
                               (keyAttrs[OVS_KEY_ATTR_TUNNEL])
@@ -524,6 +543,12 @@ _FlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
     _MapKeyAttrToFlowPut(keyAttrs, tunnelAttrs,
                          &(getInput.key));
+    ASSERT(keyAttrs[OVS_KEY_ATTR_IN_PORT]);
+
+    if (encapOffset) {
+        _MapKeyAttrToFlowPut(encapAttrs, tunnelAttrs,
+                             &(getInput.key));
+    }
 
     getInput.dpNo = ovsHdr->dp_ifindex;
     getInput.getFlags = FLOW_GET_STATS | FLOW_GET_ACTIONS;
@@ -855,7 +880,7 @@ MapFlowKeyToNlKey(PNL_BUFFER nlBuf,
 {
     NTSTATUS rc = STATUS_SUCCESS;
     struct ovs_key_ethernet ethKey;
-    UINT32 offset = 0;
+    UINT32 offset = 0, encap_offset = 0;
 
     offset = NlMsgStartNested(nlBuf, keyType);
     if (!offset) {
@@ -924,16 +949,33 @@ MapFlowKeyToNlKey(PNL_BUFFER nlBuf,
     }
 
     if (!NlMsgPutTailU16(nlBuf, OVS_KEY_ATTR_ETHERTYPE,
-                         flowKey->l2.dlType)) {
+        flowKey->l2.vlanKey.vlanTci == 0 ? flowKey->l2.dlType :
+            flowKey->l2.vlanKey.vlanTpid)) {
         rc = STATUS_UNSUCCESSFUL;
         goto done;
     }
 
-    if (flowKey->l2.vlanTci) {
+    if (flowKey->l2.vlanKey.vlanTci ||
+        flowKey->l2.dlType == ETH_TYPE_802_1PQ) {
         if (!NlMsgPutTailU16(nlBuf, OVS_KEY_ATTR_VLAN,
-                             flowKey->l2.vlanTci)) {
+            flowKey->l2.vlanKey.vlanTci)) {
             rc = STATUS_UNSUCCESSFUL;
             goto done;
+        }
+
+        /* Add encap attributes. */
+        encap_offset = NlMsgStartNested(nlBuf, OVS_KEY_ATTR_ENCAP);
+        if (!encap_offset) {
+            /* Starting the nested attribute failed. */
+            rc = STATUS_UNSUCCESSFUL;
+            goto done;
+        }
+
+        /* Add packet Ethernet Type*/
+        if (!NlMsgPutTailU16(nlBuf, OVS_KEY_ATTR_ETHERTYPE,
+                             flowKey->l2.dlType)) {
+            rc = STATUS_UNSUCCESSFUL;
+            goto encap;
         }
     }
 
@@ -981,6 +1023,10 @@ MapFlowKeyToNlKey(PNL_BUFFER nlBuf,
         if (rc != STATUS_SUCCESS) {
             goto done;
         }
+    }
+encap:
+    if (encap_offset) {
+        NlMsgEndNested(nlBuf, encap_offset);
     }
 
 done:
@@ -1336,9 +1382,11 @@ _MapNlToFlowPut(POVS_MESSAGE msgIn, PNL_ATTR keyAttr,
 
     UINT32 keyAttrOffset = (UINT32)((PCHAR)keyAttr - (PCHAR)nlMsgHdr);
     UINT32 tunnelKeyAttrOffset;
+    UINT32 encapOffset = 0;
 
     PNL_ATTR keyAttrs[__OVS_KEY_ATTR_MAX] = {NULL};
     PNL_ATTR tunnelAttrs[__OVS_TUNNEL_KEY_ATTR_MAX] = {NULL};
+    PNL_ATTR encapAttrs[__OVS_KEY_ATTR_MAX] = { NULL };
 
     /* Get flow keys attributes */
     if ((NlAttrParseNested(nlMsgHdr, keyAttrOffset, NlAttrLen(keyAttr),
@@ -1349,6 +1397,23 @@ _MapNlToFlowPut(POVS_MESSAGE msgIn, PNL_ATTR keyAttr,
                       nlMsgHdr);
         rc = STATUS_INVALID_PARAMETER;
         goto done;
+    }
+
+    if (keyAttrs[OVS_KEY_ATTR_ENCAP]) {
+        encapOffset = (UINT32)((PCHAR)(keyAttrs[OVS_KEY_ATTR_ENCAP])
+                          - (PCHAR)nlMsgHdr);
+
+        if ((NlAttrParseNested(nlMsgHdr, encapOffset,
+                               NlAttrLen(keyAttrs[OVS_KEY_ATTR_ENCAP]),
+                               nlFlowKeyPolicy,
+                               ARRAY_SIZE(nlFlowKeyPolicy),
+                               encapAttrs, ARRAY_SIZE(encapAttrs)))
+                               != TRUE) {
+            OVS_LOG_ERROR("Encap Key Attr Parsing failed for msg: %p",
+                          nlMsgHdr);
+            rc = STATUS_INVALID_PARAMETER;
+            goto done;
+        }
     }
 
     if (keyAttrs[OVS_KEY_ATTR_TUNNEL]) {
@@ -1372,6 +1437,12 @@ _MapNlToFlowPut(POVS_MESSAGE msgIn, PNL_ATTR keyAttr,
 
     _MapKeyAttrToFlowPut(keyAttrs, tunnelAttrs,
                          &(mappedFlow->key));
+    ASSERT(keyAttrs[OVS_KEY_ATTR_IN_PORT]);
+
+    if (encapOffset) {
+        _MapKeyAttrToFlowPut(encapAttrs, tunnelAttrs,
+                             &(mappedFlow->key));
+    }
 
     /* Map the action */
     if (actionAttr) {
@@ -1469,7 +1540,9 @@ _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
     }
 
     /* ===== L2 headers ===== */
-    destKey->l2.inPort = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_IN_PORT]);
+    if (keyAttrs[OVS_KEY_ATTR_IN_PORT]) {
+        destKey->l2.inPort = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_IN_PORT]);
+    }
 
     if (keyAttrs[OVS_KEY_ATTR_ETHERNET]) {
         const struct ovs_key_ethernet *eth_key;
@@ -1488,7 +1561,11 @@ _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
     }
 
     if (keyAttrs[OVS_KEY_ATTR_VLAN]) {
-        destKey->l2.vlanTci = NlAttrGetU16(keyAttrs[OVS_KEY_ATTR_VLAN]);
+        destKey->l2.vlanKey.vlanTci = NlAttrGetU16(keyAttrs[OVS_KEY_ATTR_VLAN]);
+        if (destKey->l2.vlanKey.vlanTci != 0) {
+            /* set TPID to dlType. */
+            destKey->l2.vlanKey.vlanTpid = destKey->l2.dlType;
+        }
     }
 
     /* ==== L3 + L4. ==== */
@@ -2267,17 +2344,20 @@ OvsExtractFlow(const NET_BUFFER_LIST *packet,
     if (vlanTagValue) {
         PNDIS_NET_BUFFER_LIST_8021Q_INFO vlanTag =
             (PNDIS_NET_BUFFER_LIST_8021Q_INFO)(PVOID *)&vlanTagValue;
-        flow->l2.vlanTci = htons(vlanTag->TagHeader.VlanId | OVSWIN_VLAN_CFI |
-                                 (vlanTag->TagHeader.UserPriority << 13));
+        flow->l2.vlanKey.vlanTci = htons(vlanTag->TagHeader.VlanId | OVSWIN_VLAN_CFI |
+            (vlanTag->TagHeader.UserPriority << 13));
+        flow->l2.vlanKey.vlanTpid = htons(ETH_TYPE_802_1PQ);
     } else {
         if (eth->dix.typeNBO == ETH_TYPE_802_1PQ_NBO) {
             Eth_802_1pq_Tag *tag= (Eth_802_1pq_Tag *)&eth->dix.typeNBO;
-            flow->l2.vlanTci = ((UINT16)tag->priority << 13) |
-                               OVSWIN_VLAN_CFI |
-                               ((UINT16)tag->vidHi << 8)  | tag->vidLo;
+            flow->l2.vlanKey.vlanTci = ((UINT16)tag->priority << 13) |
+                OVSWIN_VLAN_CFI | ((UINT16)tag->vidHi << 8) | tag->vidLo;
+            flow->l2.vlanKey.vlanTpid = htons(ETH_TYPE_802_1PQ);
             offset = sizeof (Eth_802_1pq_Tag);
         } else {
-            flow->l2.vlanTci = 0;
+            /* Initialize vlan key to 0 for non vlan packets. */
+            flow->l2.vlanKey.vlanTci = 0;
+            flow->l2.vlanKey.vlanTpid = 0;
         }
         /*
          * XXX Please note after this point, src mac and dst mac should
@@ -3095,7 +3175,9 @@ OvsProbeSupportedFeature(POVS_MESSAGE msgIn,
     PNL_MSG_HDR nlMsgHdr = &(msgIn->nlMsg);
 
     UINT32 keyAttrOffset = (UINT32)((PCHAR)keyAttr - (PCHAR)nlMsgHdr);
+    UINT32 encapOffset = 0;
     PNL_ATTR keyAttrs[__OVS_KEY_ATTR_MAX] = { NULL };
+    PNL_ATTR encapAttrs[__OVS_KEY_ATTR_MAX] = { NULL };
 
     /* Get flow keys attributes */
     if ((NlAttrParseNested(nlMsgHdr, keyAttrOffset, NlAttrLen(keyAttr),
@@ -3106,6 +3188,24 @@ OvsProbeSupportedFeature(POVS_MESSAGE msgIn,
                       nlMsgHdr);
         status = STATUS_INVALID_PARAMETER;
         goto done;
+    }
+
+    if (keyAttrs[OVS_KEY_ATTR_ENCAP]) {
+        encapOffset = (UINT32)((PCHAR)(keyAttrs[OVS_KEY_ATTR_ENCAP])
+                          - (PCHAR)nlMsgHdr);
+
+        /* Get tunnel keys attributes */
+        if ((NlAttrParseNested(nlMsgHdr, encapOffset,
+                               NlAttrLen(keyAttrs[OVS_KEY_ATTR_ENCAP]),
+                               nlFlowKeyPolicy,
+                               ARRAY_SIZE(nlFlowKeyPolicy),
+                               encapAttrs, ARRAY_SIZE(encapAttrs)))
+                               != TRUE) {
+            OVS_LOG_ERROR("Encap Key Attr Parsing failed for msg: %p",
+                          nlMsgHdr);
+            status = STATUS_INVALID_PARAMETER;
+            goto done;
+        }
     }
 
     if (keyAttrs[OVS_KEY_ATTR_MPLS] &&

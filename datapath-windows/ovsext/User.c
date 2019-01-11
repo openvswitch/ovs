@@ -321,6 +321,25 @@ OvsNlExecuteCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         goto done;
     }
 
+    if (keyAttrs[OVS_KEY_ATTR_ENCAP]) {
+        UINT32 encapOffset = 0;
+        PNL_ATTR encapAttrs[__OVS_KEY_ATTR_MAX];
+        encapOffset = (UINT32)((PCHAR)(keyAttrs[OVS_KEY_ATTR_ENCAP])
+                          - (PCHAR)nlMsgHdr);
+
+        if ((NlAttrParseNested(nlMsgHdr, encapOffset,
+                               NlAttrLen(keyAttrs[OVS_KEY_ATTR_ENCAP]),
+                               nlFlowKeyPolicy,
+                               nlFlowKeyPolicyLen,
+                               encapAttrs, ARRAY_SIZE(encapAttrs)))
+                               != TRUE) {
+            OVS_LOG_ERROR("Encap Key Attr Parsing failed for msg: %p",
+                           nlMsgHdr);
+            status = STATUS_UNSUCCESSFUL;
+            goto done;
+        }
+    }
+
     execute.dpNo = ovsHdr->dp_ifindex;
 
     _MapNlAttrToOvsPktExec(nlMsgHdr, nlAttrs, keyAttrs, &execute);
