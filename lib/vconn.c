@@ -704,7 +704,7 @@ int
 vconn_connect_block(struct vconn *vconn, long long int timeout)
 {
     long long int deadline = (timeout >= 0
-                              ? time_msec() + deadline
+                              ? time_msec() + timeout
                               : LLONG_MAX);
 
     int error;
