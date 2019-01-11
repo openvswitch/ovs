@@ -2419,11 +2419,11 @@ table=1,in_port=2,ip,ct_state=+trk+est,action=1
         <dt><code>symmetric_l4</code></dt>
         <dd>
           Hashes Ethernet source, destination, and type, VLAN ID, IPv4/IPv6
-          source, destination, and proto‐ col, and TCP or SCTP (but not UDP)
+          source, destination, and protocol, and TCP or SCTP (but not UDP)
           ports.  The hash is computed so that pairs of corresponding flows in
           each direction hash to the same value, in environments where L2 paths
           are the same in each direction.  UDP ports are not included in the
-          hash to support protocols such as VXLAN that use asym‐ metric ports
+          hash to support protocols such as VXLAN that use asymmetric ports
           in each direction.
         </dd>
 
