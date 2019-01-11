@@ -112,6 +112,11 @@ typedef struct Icmp6Key {
     struct in6_addr ndTarget;    /* IPv6 neighbor discovery (ND) target. */
 } Icmp6Key; /* Size of 72 byte. */
 
+typedef struct VlanKey {
+    ovs_be16 vlanTci;            /* If 802.1Q, TCI | VLAN_CFI; otherwise 0. */
+    ovs_be16 vlanTpid;           /* Vlan type. Generally 802.1q or 802.1ad.*/
+} VlanKey;
+
 typedef struct L2Key {
     uint32_t inPort;             /* Port number of input port. */
     union {
@@ -123,9 +128,10 @@ typedef struct L2Key {
     };
     uint8_t dlSrc[6];            /* Ethernet source address. */
     uint8_t dlDst[6];            /* Ethernet destination address. */
-    ovs_be16 vlanTci;            /* If 802.1Q, TCI | VLAN_CFI; otherwise 0. */
     ovs_be16 dlType;             /* Ethernet frame type. */
-} L2Key; /* Size of 24 byte. */
+    struct VlanKey vlanKey;      /* VLAN header. */
+    uint16_t pad[3];             /* Padding 6 bytes. */
+} L2Key; /* Size of 32 byte. */
 
 /* Number of packet attributes required to store OVS tunnel key. */
 #define NUM_PKT_ATTR_REQUIRED 35
@@ -182,7 +188,7 @@ typedef struct MplsKey {
 
 typedef __declspec(align(8)) struct OvsFlowKey {
     OvsIPv4TunnelKey tunKey;     /* 280 bytes */
-    L2Key l2;                    /* 24 bytes */
+    L2Key l2;                    /* 32 bytes */
     union {
         /* These headers are mutually exclusive. */
         IpKey ipKey;             /* size 16 */

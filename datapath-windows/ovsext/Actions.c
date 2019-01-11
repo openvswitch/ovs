@@ -2057,6 +2057,9 @@ OvsDoExecuteActions(POVS_SWITCH_CONTEXT switchContext,
                     goto dropit;
                 }
             }
+            /* Reset vlan header info in flowkey. */
+            key->l2.vlanKey.vlanTci = 0;
+            key->l2.vlanKey.vlanTpid = 0;
             break;
         }
 
