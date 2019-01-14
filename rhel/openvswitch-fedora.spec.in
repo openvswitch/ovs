@@ -613,6 +613,7 @@ fi
 %{_mandir}/man5/ovs-vswitchd.conf.db.5*
 %{_mandir}/man5/ovsdb.5*
 %{_mandir}/man5/vtep.5*
+%{_mandir}/man7/ovs-actions.7*
 %{_mandir}/man7/ovs-fields.7*
 %{_mandir}/man7/ovsdb.7*
 %{_mandir}/man7/ovsdb-server.7*
