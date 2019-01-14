@@ -2163,6 +2163,13 @@
             proxy.
           </p>
         </column>
+
+        <column name="options" key="bootfile_name">
+          <p>
+            The DHCPv4 option code for this option is 67. This option is used
+            to identify a bootfile.
+          </p>
+        </column>
       </group>
     </group>
 
