@@ -21,10 +21,13 @@ import sys
 
 import six
 
+PARSER_C = 'C'
+PARSER_PY = 'PYTHON'
 try:
     import ovs._json
+    PARSER = PARSER_C
 except ImportError:
-    pass
+    PARSER = PARSER_PY
 
 __pychecker__ = 'no-stringiter'
 
@@ -91,10 +94,9 @@ class Parser(object):
     MAX_HEIGHT = 1000
 
     def __new__(cls, *args, **kwargs):
-        try:
+        if PARSER == PARSER_C:
             return ovs._json.Parser(*args, **kwargs)
-        except NameError:
-            return super(Parser, cls).__new__(cls)
+        return super(Parser, cls).__new__(cls)
 
     def __init__(self, check_trailer=False):
         self.check_trailer = check_trailer
