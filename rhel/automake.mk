@@ -23,6 +23,8 @@ EXTRA_DIST += \
 	rhel/openvswitch.spec.in \
 	rhel/openvswitch-fedora.spec \
 	rhel/openvswitch-fedora.spec.in \
+	rhel/ovn-fedora.spec \
+	rhel/ovn-fedora.spec.in \
 	rhel/usr_share_openvswitch_scripts_ovs-systemd-reload \
 	rhel/usr_share_openvswitch_scripts_sysconfig.template \
 	rhel/usr_share_openvswitch_scripts_systemd_sysconfig.template \
@@ -71,6 +73,13 @@ rpm-fedora: dist $(srcdir)/rhel/openvswitch-fedora.spec
 	rpmbuild ${RPMBUILD_OPT} \
                  -D "_topdir ${RPMBUILD_TOP}" \
                  -ba $(srcdir)/rhel/openvswitch-fedora.spec
+
+rpm-fedora-ovn: dist $(srcdir)/rhel/ovn-fedora.spec
+	${MKDIR_P} ${RPMBUILD_TOP}/SOURCES
+	cp ${DIST_ARCHIVES} ${RPMBUILD_TOP}/SOURCES
+	rpmbuild ${RPMBUILD_OPT} \
+                 -D "_topdir ${RPMBUILD_TOP}" \
+                 -ba $(srcdir)/rhel/ovn-fedora.spec
 
 # Build kernel datapath RPM
 rpm-fedora-kmod: dist $(srcdir)/rhel/openvswitch-kmod-fedora.spec

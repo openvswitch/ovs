@@ -35,6 +35,10 @@ Post-v2.10.0
        rebalancing of offloaded flows.
    - The environment variable OVS_RESOLV_CONF, if set, is now used
      as the DNS server configuration file.
+   - RHEL packaging:
+     * OVN packages are split from OVS packages. A new spec
+       file - ovn-fedora.spec.in is added to generate OVN packages.
+
 
 v2.10.0 - 18 Aug 2018
 ---------------------
