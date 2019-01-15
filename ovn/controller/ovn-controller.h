@@ -69,6 +69,8 @@ struct local_datapath *get_local_datapath(const struct hmap *,
 const struct ovsrec_bridge *get_bridge(const struct ovsrec_bridge_table *,
                                        const char *br_name);
 
+struct sbrec_encap *preferred_encap(const struct sbrec_chassis *);
+
 /* Must be a bit-field ordered from most-preferred (higher number) to
  * least-preferred (lower number). */
 enum chassis_tunnel_type {
@@ -79,5 +81,11 @@ enum chassis_tunnel_type {
 
 uint32_t get_tunnel_type(const char *name);
 
+/*
+ * Given there could be multiple tunnels with different IPs to the same
+ * chassis we annotate the ovn-chassis-id with
+ * <chassis_name>OVN_MVTEP_CHASSISID_DELIM<IP>.
+ */
+#define	OVN_MVTEP_CHASSISID_DELIM	"@"
 
 #endif /* ovn/ovn-controller.h */

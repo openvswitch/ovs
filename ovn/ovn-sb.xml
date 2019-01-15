@@ -2179,6 +2179,12 @@ tcp.flags = RST;
         logical port ID.
       </column>
 
+      <column name="encap">
+        Points to supported encapsulation configurations to transmit
+        logical dataplane packets to this chassis.  Each entry is a <ref
+        table="Encap"/> record that describes the configuration.
+      </column>
+
       <column name="chassis">
         The meaning of this column depends on the value of the <ref column="type"/>
         column.  This is the meaning for each <ref column="type"/>

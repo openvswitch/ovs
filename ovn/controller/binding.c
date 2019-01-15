@@ -391,6 +391,42 @@ update_local_lport_ids(struct sset *local_lport_ids,
         sset_add(local_lport_ids, buf);
 }
 
+/*
+ * Get the encap from the chassis for this port. The interface
+ * may have an external_ids:encap-ip=<encap-ip> set; if so we
+ * get the corresponding encap from the chassis.
+ * If "encap-ip" external-ids is not set, we'll not bind the port
+ * to any specific encap rec. and we'll pick up a tunnel port based on
+ * the chassis name alone for the port.
+ */
+static struct sbrec_encap *
+sbrec_get_port_encap(const struct sbrec_chassis *chassis_rec,
+                     const struct ovsrec_interface *iface_rec)
+{
+
+    if (!iface_rec) {
+        return NULL;
+    }
+
+    const char *encap_ip = smap_get(&iface_rec->external_ids, "encap-ip");
+    if (!encap_ip) {
+        return NULL;
+    }
+
+    struct sbrec_encap *best_encap = NULL;
+    uint32_t best_type = 0;
+    for (int i = 0; i < chassis_rec->n_encaps; i++) {
+        if (!strcmp(chassis_rec->encaps[i]->ip, encap_ip)) {
+            uint32_t tun_type = get_tunnel_type(chassis_rec->encaps[i]->type);
+            if (tun_type > best_type) {
+                best_type = tun_type;
+                best_encap = chassis_rec->encaps[i];
+            }
+        }
+    }
+    return best_encap;
+}
+
 static void
 consider_local_datapath(struct ovsdb_idl_txn *ovnsb_idl_txn,
                         struct ovsdb_idl_txn *ovs_idl_txn,
@@ -505,9 +541,17 @@ consider_local_datapath(struct ovsdb_idl_txn *ovnsb_idl_txn,
                 }
                 sbrec_port_binding_set_chassis(binding_rec, chassis_rec);
             }
+            /* Check if the port encap binding, if any, has changed */
+            struct sbrec_encap *encap_rec = sbrec_get_port_encap(
+                                            chassis_rec, iface_rec);
+            if (encap_rec && binding_rec->encap != encap_rec) {
+                sbrec_port_binding_set_encap(binding_rec, encap_rec);
+            }
         } else if (binding_rec->chassis == chassis_rec) {
             VLOG_INFO("Releasing lport %s from this chassis.",
                       binding_rec->logical_port);
+            if (binding_rec->encap)
+                sbrec_port_binding_set_encap(binding_rec, NULL);
             sbrec_port_binding_set_chassis(binding_rec, NULL);
         } else if (our_chassis) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
@@ -632,6 +676,8 @@ binding_cleanup(struct ovsdb_idl_txn *ovnsb_idl_txn,
     bool any_changes = false;
     SBREC_PORT_BINDING_TABLE_FOR_EACH (binding_rec, port_binding_table) {
         if (binding_rec->chassis == chassis_rec) {
+            if (binding_rec->encap)
+                sbrec_port_binding_set_encap(binding_rec, NULL);
             sbrec_port_binding_set_chassis(binding_rec, NULL);
             any_changes = true;
         }

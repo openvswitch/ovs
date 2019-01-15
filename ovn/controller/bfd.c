@@ -73,7 +73,14 @@ bfd_calculate_active_tunnels(const struct ovsrec_bridge *br_int,
                         const char *id = smap_get(&port_rec->external_ids,
                                                   "ovn-chassis-id");
                         if (id) {
-                            sset_add(active_tunnels, id);
+                            char *chassis_name;
+                            char *save_ptr = NULL;
+                            char *tokstr = xstrdup(id);
+                            chassis_name = strtok_r(tokstr, OVN_MVTEP_CHASSISID_DELIM, &save_ptr);
+                            if (chassis_name && !sset_contains(active_tunnels, chassis_name)) {
+                                sset_add(active_tunnels, chassis_name);
+                            }
+                            free(tokstr);
                         }
                     }
                 }
@@ -264,14 +271,20 @@ bfd_run(struct ovsdb_idl_index *sbrec_chassis_by_name,
     struct sset tunnels = SSET_INITIALIZER(&tunnels);
     struct sset bfd_ifaces = SSET_INITIALIZER(&bfd_ifaces);
     for (size_t k = 0; k < br_int->n_ports; k++) {
-        const char *chassis_id = smap_get(&br_int->ports[k]->external_ids,
+        const char *tunnel_id = smap_get(&br_int->ports[k]->external_ids,
                                           "ovn-chassis-id");
-        if (chassis_id) {
+        if (tunnel_id) {
+            char *chassis_name;
+            char *save_ptr = NULL;
+            char *tokstr = xstrdup(tunnel_id);
             char *port_name = br_int->ports[k]->name;
+
             sset_add(&tunnels, port_name);
-            if (sset_contains(&bfd_chassis, chassis_id)) {
+            chassis_name = strtok_r(tokstr, OVN_MVTEP_CHASSISID_DELIM, &save_ptr);
+            if (chassis_name && sset_contains(&bfd_chassis, chassis_name)) {
                 sset_add(&bfd_ifaces, port_name);
             }
+            free(tokstr);
         }
     }
 

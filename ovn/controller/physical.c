@@ -74,16 +74,41 @@ struct chassis_tunnel {
     enum chassis_tunnel_type type;
 };
 
+/*
+ * This function looks up the list of tunnel ports (provided by
+ * ovn-chassis-id ports) and returns the tunnel for the given chassid-id and
+ * encap-ip. The ovn-chassis-id is formed using the chassis-id and encap-ip as
+ * <chassis-id>OVN_MVTEP_CHASSISID_DELIM<encap-ip>. The list is hashed using
+ * the chassis-id. If the encap-ip is not specified, it means we'll just
+ * return a tunnel for that chassis-id, i.e. we just check for chassis-id and
+ * if there is a match, we'll return the tunnel. If encap-ip is also provided we
+ * use <chassis-id>OVN_MVTEP_CHASSISID_DELIM<encap-ip> to do a more specific
+ * lookup.
+ */
 static struct chassis_tunnel *
-chassis_tunnel_find(const char *chassis_id)
+chassis_tunnel_find(const char *chassis_id, char *encap_ip)
 {
-    struct chassis_tunnel *tun;
+    char *chassis_tunnel_entry;
+
+    /*
+     * If the specific encap_ip is given, look for the chassisid_ip entry,
+     * else return the 1st found entry for the chassis.
+     */
+    if (encap_ip != NULL) {
+        chassis_tunnel_entry = xasprintf("%s%s%s", chassis_id,
+            OVN_MVTEP_CHASSISID_DELIM, encap_ip);
+    } else {
+        chassis_tunnel_entry = xasprintf("%s", chassis_id);
+    }
+    struct chassis_tunnel *tun = NULL;
     HMAP_FOR_EACH_WITH_HASH (tun, hmap_node, hash_string(chassis_id, 0),
                              &tunnels) {
-        if (!strcmp(tun->chassis_id, chassis_id)) {
+        if (strstr(tun->chassis_id, chassis_tunnel_entry) != NULL) {
+            free (chassis_tunnel_entry);
             return tun;
         }
     }
+    free (chassis_tunnel_entry);
     return NULL;
 }
 
@@ -120,6 +145,26 @@ put_resubmit(uint8_t table_id, struct ofpbuf *ofpacts)
     struct ofpact_resubmit *resubmit = ofpact_put_RESUBMIT(ofpacts);
     resubmit->in_port = OFPP_IN_PORT;
     resubmit->table_id = table_id;
+}
+
+/*
+ * For a port binding, get the corresponding ovn-chassis-id tunnel port
+ * from the associated encap.
+ */
+static struct chassis_tunnel *
+get_port_binding_tun(const struct sbrec_port_binding *binding)
+{
+    struct sbrec_encap *encap = binding->encap;
+    struct sbrec_chassis *chassis = binding->chassis;
+    struct chassis_tunnel *tun = NULL;
+
+    if (encap) {
+        tun = chassis_tunnel_find(chassis->name, encap->ip);
+    }
+    if (!tun) {
+        tun = chassis_tunnel_find(chassis->name, NULL);
+    }
+    return tun;
 }
 
 static void
@@ -548,7 +593,7 @@ consider_port_binding(struct ovsdb_idl_index *sbrec_chassis_by_name,
                 if (!binding->chassis) {
                     goto out;
                 }
-                tun = chassis_tunnel_find(binding->chassis->name);
+                tun = chassis_tunnel_find(binding->chassis->name, NULL);
                 if (!tun) {
                     goto out;
                 }
@@ -698,10 +743,15 @@ consider_port_binding(struct ovsdb_idl_index *sbrec_chassis_by_name,
 
         if (!is_ha_remote) {
             /* Setup encapsulation */
+            const struct chassis_tunnel *rem_tun =
+                get_port_binding_tun(binding);
+            if (!rem_tun) {
+                goto out;
+            }
             put_encapsulation(mff_ovn_geneve, tun, binding->datapath,
                               port_key, ofpacts_p);
             /* Output to tunnel. */
-            ofpact_put_OUTPUT(ofpacts_p)->port = ofport;
+            ofpact_put_OUTPUT(ofpacts_p)->port = rem_tun->ofport;
         } else {
             struct gateway_chassis *gwc;
             /* Make sure all tunnel endpoints use the same encapsulation,
@@ -709,10 +759,10 @@ consider_port_binding(struct ovsdb_idl_index *sbrec_chassis_by_name,
             LIST_FOR_EACH (gwc, node, gateway_chassis) {
                 if (gwc->db->chassis) {
                     if (!tun) {
-                        tun = chassis_tunnel_find(gwc->db->chassis->name);
+                        tun = chassis_tunnel_find(gwc->db->chassis->name, NULL);
                     } else {
                         struct chassis_tunnel *chassis_tunnel =
-                            chassis_tunnel_find(gwc->db->chassis->name);
+                            chassis_tunnel_find(gwc->db->chassis->name, NULL);
                         if (chassis_tunnel &&
                             tun->type != chassis_tunnel->type) {
                             static struct vlog_rate_limit rl =
@@ -743,7 +793,7 @@ consider_port_binding(struct ovsdb_idl_index *sbrec_chassis_by_name,
 
             LIST_FOR_EACH (gwc, node, gateway_chassis) {
                 if (gwc->db->chassis) {
-                    tun = chassis_tunnel_find(gwc->db->chassis->name);
+                    tun = chassis_tunnel_find(gwc->db->chassis->name, NULL);
                     if (!tun) {
                         continue;
                     }
@@ -881,7 +931,7 @@ consider_mc_group(enum mf_field_id mff_ovn_geneve,
         const struct chassis_tunnel *prev = NULL;
         SSET_FOR_EACH (chassis_name, &remote_chassis) {
             const struct chassis_tunnel *tun
-                = chassis_tunnel_find(chassis_name);
+                = chassis_tunnel_find(chassis_name, NULL);
             if (!tun) {
                 continue;
             }
@@ -943,9 +993,9 @@ physical_run(struct ovsdb_idl_index *sbrec_chassis_by_name,
             continue;
         }
 
-        const char *chassis_id = smap_get(&port_rec->external_ids,
+        const char *tunnel_id = smap_get(&port_rec->external_ids,
                                           "ovn-chassis-id");
-        if (chassis_id && !strcmp(chassis_id, chassis->name)) {
+        if (tunnel_id && strstr(tunnel_id, chassis->name)) {
             continue;
         }
 
@@ -977,7 +1027,7 @@ physical_run(struct ovsdb_idl_index *sbrec_chassis_by_name,
                 /* L2 gateway patch ports can be handled just like VIFs. */
                 simap_put(&new_localvif_to_ofport, l2gateway, ofport);
                 break;
-            } else if (chassis_id) {
+            } else if (tunnel_id) {
                 enum chassis_tunnel_type tunnel_type;
                 if (!strcmp(iface_rec->type, "geneve")) {
                     tunnel_type = GENEVE;
@@ -992,8 +1042,28 @@ physical_run(struct ovsdb_idl_index *sbrec_chassis_by_name,
                     continue;
                 }
 
-                simap_put(&new_tunnel_to_ofport, chassis_id, ofport);
-                struct chassis_tunnel *tun = chassis_tunnel_find(chassis_id);
+                simap_put(&new_tunnel_to_ofport, tunnel_id, ofport);
+                /*
+                 * We split the tunnel_id to get the chassis-id
+                 * and hash the tunnel list on the chassis-id. The
+                 * reason to use the chassis-id alone is because 
+                 * there might be cases (multicast, gateway chassis)
+                 * where we need to tunnel to the chassis, but won't
+                 * have the encap-ip specifically.
+                 */
+                char *tokstr = xstrdup(tunnel_id);
+                char *save_ptr = NULL;
+                char *hash_id = strtok_r(tokstr, OVN_MVTEP_CHASSISID_DELIM,
+                                &save_ptr);
+                char *ip = strtok_r(NULL, "", &save_ptr);
+                /*
+                 * If the value has morphed into something other than
+                 * chassis-id>delim>encap-ip, ignore.
+                 */
+                if (!hash_id || !ip) {
+                    continue;
+                }
+                struct chassis_tunnel *tun = chassis_tunnel_find(hash_id, ip);
                 if (tun) {
                     /* If the tunnel's ofport has changed, update. */
                     if (tun->ofport != u16_to_ofp(ofport) ||
@@ -1005,12 +1075,13 @@ physical_run(struct ovsdb_idl_index *sbrec_chassis_by_name,
                 } else {
                     tun = xmalloc(sizeof *tun);
                     hmap_insert(&tunnels, &tun->hmap_node,
-                                hash_string(chassis_id, 0));
-                    tun->chassis_id = xstrdup(chassis_id);
+                                hash_string(hash_id, 0));
+                    tun->chassis_id = xstrdup(tunnel_id);
                     tun->ofport = u16_to_ofp(ofport);
                     tun->type = tunnel_type;
                     physical_map_changed = true;
                 }
+                free(tokstr);
                 break;
             } else {
                 const char *iface_id = smap_get(&iface_rec->external_ids,
@@ -1120,7 +1191,7 @@ physical_run(struct ovsdb_idl_index *sbrec_chassis_by_name,
             struct match match = MATCH_CATCHALL_INITIALIZER;
 
             if (!binding->chassis ||
-                strcmp(tun->chassis_id, binding->chassis->name)) {
+                strstr(tun->chassis_id, binding->chassis->name) == NULL) {
                 continue;
             }
 

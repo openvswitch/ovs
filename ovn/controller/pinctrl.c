@@ -2259,9 +2259,9 @@ get_localnet_vifs_l3gwports(
         if (!strcmp(port_rec->name, br_int->name)) {
             continue;
         }
-        const char *chassis_id = smap_get(&port_rec->external_ids,
+        const char *tunnel_id = smap_get(&port_rec->external_ids,
                                           "ovn-chassis-id");
-        if (chassis_id && !strcmp(chassis_id, chassis->name)) {
+        if (tunnel_id && strstr(tunnel_id, chassis->name)) {
             continue;
         }
         const char *localnet = smap_get(&port_rec->external_ids,

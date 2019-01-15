@@ -206,7 +206,14 @@ ovn-sbctl chassis-add fakechassis stt 192.168.0.2
 OVS_WAIT_UNTIL([check_tunnel_property type stt])
 
 # See if we switch to Geneve as the first choice when it is available
-encap_uuid=$(ovn-sbctl add chassis fakechassis encaps @encap -- --id=@encap create encap type=geneve ip="127.0.0.1")
+# With multi-VTEP support we support tunnels with different IPs to the
+# same chassis, and hence use the IP to annotate the tunnel (along with
+# the chassis-id in ovn-chassis-id); if we supply a different IP here
+# we won't be able to co-relate this to the tunnel port that was created
+# in the previous step and, as a result, will end up creating another tunnel,
+# ie. we can't just lookup using "ovn-fakech-0". So, need to use the same IP
+# as above, i.e 192.168.0.2, here.
+encap_uuid=$(ovn-sbctl add chassis fakechassis encaps @encap -- --id=@encap create encap type=geneve ip="192.168.0.2")
 OVS_WAIT_UNTIL([check_tunnel_property type geneve])
 
 # Check that changes within an encap row are propagated

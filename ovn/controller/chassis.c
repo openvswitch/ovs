@@ -117,6 +117,15 @@ chassis_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
     }
     free(tokstr);
 
+    tokstr = xstrdup(encap_ip);
+    save_ptr = NULL;
+    uint32_t nencap_ips = 0;
+    for (token = strtok_r(tokstr, ",", &save_ptr); token != NULL;
+                          token = strtok_r(NULL, ",", &save_ptr)) {
+        nencap_ips++;
+    }
+    free(tokstr);
+
     const char *hostname = smap_get_def(&cfg->external_ids, "hostname", "");
     char hostname_[HOST_NAME_MAX + 1];
     if (!hostname[0]) {
@@ -143,6 +152,7 @@ chassis_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
         = chassis_lookup_by_name(sbrec_chassis_by_name, chassis_id);
     const char *encap_csum = smap_get_def(&cfg->external_ids,
                                           "ovn-encap-csum", "true");
+    int n_encaps = count_1bits(req_tunnels);
     if (chassis_rec) {
         if (strcmp(hostname, chassis_rec->hostname)) {
             sbrec_chassis_set_hostname(chassis_rec, hostname);
@@ -175,17 +185,46 @@ chassis_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
         }
 
         /* Compare desired tunnels against those currently in the database. */
+
+        /*
+         * We walk through the types and the IP's rather than check for the
+         * combination since we create a mesh; if we create specific tunnel-
+         * type combinations, then we'd need to check for the type-remote-ip
+         * pair.
+         */
         uint32_t cur_tunnels = 0;
         bool same = true;
         for (int i = 0; i < chassis_rec->n_encaps; i++) {
             cur_tunnels |= get_tunnel_type(chassis_rec->encaps[i]->type);
-            same = same && !strcmp(chassis_rec->encaps[i]->ip, encap_ip);
 
             same = same && !strcmp(
                 smap_get_def(&chassis_rec->encaps[i]->options, "csum", ""),
                 encap_csum);
         }
         same = same && req_tunnels == cur_tunnels;
+
+        same = same && chassis_rec->n_encaps == nencap_ips * n_encaps;
+        if (same) {
+            tokstr = xstrdup(encap_ip);
+            save_ptr = NULL;
+            bool found = false;
+
+            for (token = strtok_r(tokstr, ",", &save_ptr); token != NULL;
+                                  token = strtok_r(NULL, ",", &save_ptr)) {
+                found = false;
+                for (int i = 0; i < chassis_rec->n_encaps; i++) {
+                    if (!strcmp(chassis_rec->encaps[i]->ip, token)) {
+                        found = true;
+                        break;
+                    }
+                }
+                same = same && found;
+                if (!same) {
+                    break;
+                }
+            }
+            free(tokstr);
+        }
 
         if (same) {
             /* Nothing changed. */
@@ -226,20 +265,31 @@ chassis_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
     }
 
     ds_destroy(&iface_types);
-    int n_encaps = count_1bits(req_tunnels);
-    struct sbrec_encap **encaps = xmalloc(n_encaps * sizeof *encaps);
+    struct sbrec_encap **encaps =
+                      xmalloc((nencap_ips * n_encaps) * sizeof *encaps);
     const struct smap options = SMAP_CONST1(&options, "csum", encap_csum);
-    for (int i = 0; i < n_encaps; i++) {
-        const char *type = pop_tunnel_name(&req_tunnels);
+    tokstr = xstrdup(encap_ip);
+    save_ptr = NULL;
+    uint32_t save_req_tunnels = req_tunnels;
+    uint32_t tuncnt = 0;
+    for (token = strtok_r(tokstr, ",", &save_ptr); token != NULL;
+                          token = strtok_r(NULL, ",", &save_ptr)) {
 
-        encaps[i] = sbrec_encap_insert(ovnsb_idl_txn);
+        req_tunnels = save_req_tunnels;
+        for (int i = 0; i < n_encaps; i++) {
+            const char *type = pop_tunnel_name(&req_tunnels);
 
-        sbrec_encap_set_type(encaps[i], type);
-        sbrec_encap_set_ip(encaps[i], encap_ip);
-        sbrec_encap_set_options(encaps[i], &options);
-        sbrec_encap_set_chassis_name(encaps[i], chassis_id);
+            encaps[tuncnt] = sbrec_encap_insert(ovnsb_idl_txn);
+
+            sbrec_encap_set_type(encaps[tuncnt], type);
+            sbrec_encap_set_ip(encaps[tuncnt], token);
+            sbrec_encap_set_options(encaps[tuncnt], &options);
+            sbrec_encap_set_chassis_name(encaps[tuncnt], chassis_id);
+            tuncnt++;
+        }
     }
-    sbrec_chassis_set_encaps(chassis_rec, encaps, n_encaps);
+    sbrec_chassis_set_encaps(chassis_rec, encaps, tuncnt);
+    free(tokstr);
     free(encaps);
 
     inited = true;

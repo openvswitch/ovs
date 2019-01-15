@@ -86,6 +86,16 @@ tunnel_add(struct tunnel_ctx *tc, const struct sbrec_sb_global *sbg,
     smap_add(&options, "remote_ip", encap->ip);
     smap_add(&options, "key", "flow");
     const char *csum = smap_get(&encap->options, "csum");
+    char *tunnel_entry_id = NULL;
+
+    /*
+     * Since a chassis may have multiple encap-ip, we can't just add the
+     * chassis name as as the "ovn-chassis-id" for the port; we use the
+     * combination of the chassis_name and the encap-ip to identify
+     * a specific tunnel to the chassis.
+     */
+    tunnel_entry_id = xasprintf("%s%s%s", new_chassis_id,
+                                OVN_MVTEP_CHASSISID_DELIM, encap->ip);
     if (csum && (!strcmp(csum, "true") || !strcmp(csum, "false"))) {
         smap_add(&options, "csum", csum);
     }
@@ -100,12 +110,12 @@ tunnel_add(struct tunnel_ctx *tc, const struct sbrec_sb_global *sbg,
      * record, the new record will supplant it and encaps_run() will delete
      * it). */
     struct chassis_node *chassis = shash_find_data(&tc->chassis,
-                                                   new_chassis_id);
+                                                   tunnel_entry_id);
     if (chassis
         && chassis->port->n_interfaces == 1
         && !strcmp(chassis->port->interfaces[0]->type, encap->type)
         && smap_equal(&chassis->port->interfaces[0]->options, &options)) {
-        shash_find_and_delete(&tc->chassis, new_chassis_id);
+        shash_find_and_delete(&tc->chassis, tunnel_entry_id);
         free(chassis);
         goto exit;
     }
@@ -129,7 +139,7 @@ tunnel_add(struct tunnel_ctx *tc, const struct sbrec_sb_global *sbg,
     struct ovsrec_port *port = ovsrec_port_insert(tc->ovs_txn);
     ovsrec_port_set_name(port, port_name);
     ovsrec_port_set_interfaces(port, &iface, 1);
-    const struct smap id = SMAP_CONST1(&id, "ovn-chassis-id", new_chassis_id);
+    const struct smap id = SMAP_CONST1(&id, "ovn-chassis-id", tunnel_entry_id);
     ovsrec_port_set_external_ids(port, &id);
 
     ovsrec_bridge_update_ports_addvalue(tc->br_int, port);
@@ -137,10 +147,11 @@ tunnel_add(struct tunnel_ctx *tc, const struct sbrec_sb_global *sbg,
     sset_add_and_free(&tc->port_names, port_name);
 
 exit:
+    free(tunnel_entry_id);
     smap_destroy(&options);
 }
 
-static struct sbrec_encap *
+struct sbrec_encap *
 preferred_encap(const struct sbrec_chassis *chassis_rec)
 {
     struct sbrec_encap *best_encap = NULL;
@@ -155,6 +166,33 @@ preferred_encap(const struct sbrec_chassis *chassis_rec)
     }
 
     return best_encap;
+}
+
+/*
+ * For each peer chassis, get a preferred tunnel type and create as many tunnels
+ * as there are VTEP of that type (differentiated by remote_ip) on that chassis.
+ */
+static int
+chassis_tunnel_add(const struct sbrec_chassis *chassis_rec, const struct sbrec_sb_global *sbg, struct tunnel_ctx *tc)
+{
+    struct sbrec_encap *encap = preferred_encap(chassis_rec);
+    int tuncnt = 0;
+
+    if (!encap) {
+        VLOG_INFO("chassis_tunnel_add: No supported encaps for '%s'", chassis_rec->name);
+        return tuncnt;
+    }
+
+    uint32_t pref_type = get_tunnel_type(encap->type);
+    for (int i = 0; i < chassis_rec->n_encaps; i++) {
+        uint32_t tun_type = get_tunnel_type(chassis_rec->encaps[i]->type);
+        if (tun_type != pref_type) {
+            continue;
+        }
+        tunnel_add(tc, sbg, chassis_rec->name, chassis_rec->encaps[i]);
+        tuncnt++;
+    }
+    return tuncnt;
 }
 
 void
@@ -191,6 +229,10 @@ encaps_run(struct ovsdb_idl_txn *ovs_idl_txn,
             const struct ovsrec_port *port = br->ports[i];
             sset_add(&tc.port_names, port->name);
 
+            /*
+             * note that the id here is not just the chassis name, but the
+             * combination of <chassis_name><delim><encap_ip>
+             */
             const char *id = smap_get(&port->external_ids, "ovn-chassis-id");
             if (id) {
                 if (!shash_find(&tc.chassis, id)) {
@@ -210,12 +252,10 @@ encaps_run(struct ovsdb_idl_txn *ovs_idl_txn,
     SBREC_CHASSIS_TABLE_FOR_EACH (chassis_rec, chassis_table) {
         if (strcmp(chassis_rec->name, chassis_id)) {
             /* Create tunnels to the other chassis. */
-            const struct sbrec_encap *encap = preferred_encap(chassis_rec);
-            if (!encap) {
-                VLOG_INFO("No supported encaps for '%s'", chassis_rec->name);
+            if (chassis_tunnel_add(chassis_rec, sbg, &tc) == 0) {
+                VLOG_INFO("Creating encap for '%s' failed", chassis_rec->name);
                 continue;
             }
-            tunnel_add(&tc, sbg, chassis_rec->name, encap);
         }
     }
 
