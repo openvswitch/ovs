@@ -139,7 +139,7 @@ class Vlog(object):
             min_width = int(matches.group(2))
             if len(replace) < min_width:
                 replace = replace.center(min_width)
-        return re.sub(match, replace, tmp)
+        return re.sub(match, replace.replace('\\', r'\\'), tmp)
 
     def _format_time(self, tmp):
         date_regex = re.compile(r'(%(0?[1-9]?[dD])(\{(.*)\})?)')
