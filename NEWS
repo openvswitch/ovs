@@ -27,6 +27,7 @@ Post-v2.10.0
      * Add option for simple round-robin based Rxq to PMD assignment.
        It can be set with pmd-rxq-assign.
      * Add support for DPDK 18.11
+     * Add support for Auto load balancing of PMDs (experimental)
    - Add 'symmetric_l3' hash function.
    - OVS now honors 'updelay' and 'downdelay' for bonds with LACP configured.
    - ovs-vswitchd:
