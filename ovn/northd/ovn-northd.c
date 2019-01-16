@@ -1685,7 +1685,6 @@ join_logical_ports(struct northd_context *ctx,
                 }
 
                 op->od = od;
-                ipam_add_port_addresses(od, op);
                 tag_alloc_add_existing_tags(tag_alloc_table, nbsp);
             }
         } else {
@@ -1729,7 +1728,6 @@ join_logical_ports(struct northd_context *ctx,
 
                 op->lrp_networks = lrp_networks;
                 op->od = od;
-                ipam_add_port_addresses(op->od, op);
 
                 const char *redirect_chassis = smap_get(&op->nbrp->options,
                                                         "redirect-chassis");
@@ -1831,6 +1829,8 @@ join_logical_ports(struct northd_context *ctx,
                 }
             }
         }
+
+        ipam_add_port_addresses(op->od, op);
     }
 }
 

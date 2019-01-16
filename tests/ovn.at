@@ -12034,3 +12034,24 @@ ovn-nbctl get Logical-Switch-Port p0 dynamic_addresses
 AT_CHECK([ovn-nbctl get Logical-Switch-Port p0 dynamic_addresses], [0], [[[]]
 ])
 AT_CLEANUP
+
+AT_SETUP([ovn -- ipam router ports])
+ovn_start
+
+ovn-nbctl ls-add sw
+ovn-nbctl set logical_switch sw other-config:subnet=192.168.1.0/24
+
+for i in 2 3 4; do
+    ovn-nbctl lr-add ro$i
+    ovn-nbctl lsp-add sw swp$i
+    ovn-nbctl --wait=sb lsp-set-addresses swp$i "02:00:00:00:00:0$i dynamic"
+    cidr=$(ovn-nbctl get logical_switch_port swp$i dynamic_addresses |cut -f2 -d' '|cut -f1 -d\")
+    ovn-nbctl lrp-add ro$i rop$i 02:00:00:00:00:0$i $cidr/24 -- set logical_switch_port swp$i type=router options:router-port=rop$i addresses=router;
+    AT_CHECK_UNQUOTED([ovn-nbctl get logical_router_port rop$i networks], [0], [[["192.168.1.$i/24"]]
+])
+done
+
+ovn-nbctl list logical_switch_port
+ovn-nbctl list logical_router_port
+
+AT_CLEANUP
