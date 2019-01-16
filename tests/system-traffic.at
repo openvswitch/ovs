@@ -4226,6 +4226,7 @@ dnl NAT, using the provided flow table.
 m4_define([CHECK_FTP_NAT],
    [AT_SETUP([conntrack - FTP NAT $1])
     AT_SKIP_IF([test $HAVE_FTP = no])
+    AT_SKIP_IF([test $HAVE_LFTP = no])
     CHECK_CONNTRACK()
     CHECK_CONNTRACK_NAT()
     CHECK_CONNTRACK_ALG()
@@ -4246,7 +4247,18 @@ m4_define([CHECK_FTP_NAT],
     OVS_START_L7([at_ns1], [ftp])
 
     dnl FTP requests from p0->p1 should work fine.
-    NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -4 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-remove-listing -o wget0.log -d])
+    AT_DATA([ftp.cmd], [dnl
+set net:max-retries 1
+set net:timeout 1
+set ftp:passive-mode off
+cache off
+connect ftp://anonymous:@10.1.1.2
+ls
+ls
+ls
+ls
+])
+    NS_CHECK_EXEC([at_ns0], [lftp -f ftp.cmd > lftp.log])
 
     dnl Discards CLOSE_WAIT and CLOSING
     AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [$4])
