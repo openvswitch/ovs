@@ -468,7 +468,7 @@ The backup database file is sandbox/${db}2.db
                     ovn_start_ovsdb_server $i
                 done
                 remote=unix:${db}1.ovsdb
-                for i in `seq 2 $n`; do
+                for i in `seq 2 $servers`; do
                     remote=$remote,unix:$db$i.ovsdb
                 done
                 for i in $(seq $servers); do
