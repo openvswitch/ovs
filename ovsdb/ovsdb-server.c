@@ -1409,7 +1409,7 @@ ovsdb_server_disable_monitor_cond(struct unixctl_conn *conn,
 
     ovsdb_jsonrpc_disable_monitor_cond();
     ovsdb_jsonrpc_server_reconnect(
-        jsonrpc, true, xstrdup("user ran ovsdb-server/disable-monitor"));
+        jsonrpc, true, xstrdup("user ran ovsdb-server/disable-monitor-cond"));
     unixctl_command_reply(conn, NULL);
 }
 
