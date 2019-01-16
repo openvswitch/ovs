@@ -1471,7 +1471,7 @@ build_ipam(struct hmap *datapaths, struct hmap *ports)
                 }
             }
 
-            if (!nbsp->n_addresses && nbsp->dynamic_addresses) {
+            if (!num_dynamic_addresses && nbsp->dynamic_addresses) {
                 nbrec_logical_switch_port_set_dynamic_addresses(nbsp, NULL);
             }
         }

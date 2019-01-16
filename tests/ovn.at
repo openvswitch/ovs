@@ -12015,3 +12015,22 @@ AT_CHECK([sort hv1/br-phys-tx4.pcap], [0], [expout])
 
 OVN_CLEANUP([hv1])
 AT_CLEANUP
+
+AT_SETUP([ovn -- ipam to non-ipam])
+ovn_start
+
+ovn-nbctl ls-add sw0
+ovn-nbctl lsp-add sw0 p0 -- lsp-set-addresses p0 dynamic
+ovn-nbctl --wait=sb add Logical-Switch sw0 other_config subnet=192.168.1.0/24
+
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p0 dynamic_addresses], [0],
+    ["0a:00:00:a8:01:03 192.168.1.2"
+])
+
+ovn-nbctl lsp-set-addresses p0 router
+
+ovn-nbctl get Logical-Switch-Port p0 dynamic_addresses
+
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p0 dynamic_addresses], [0], [[[]]
+])
+AT_CLEANUP
