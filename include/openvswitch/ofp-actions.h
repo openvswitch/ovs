@@ -799,7 +799,7 @@ struct ofpact_learn_spec {
                                     * NX_LEARN_DST_LOAD only. */
         uint16_t src_type;         /* One of NX_LEARN_SRC_*. */
         uint16_t dst_type;         /* One of NX_LEARN_DST_*. */
-        uint8_t n_bits;            /* Number of bits in source and dest. */
+        uint32_t n_bits;           /* Number of bits in source and dest. */
     );
     /* Followed by 'DIV_ROUND_UP(n_bits, 8)' bytes of immediate data for
      * match 'dst_type's NX_LEARN_DST_MATCH and NX_LEARN_DST_LOAD when
