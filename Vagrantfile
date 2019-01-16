@@ -12,7 +12,8 @@ dnf -y install autoconf automake openssl-devel libtool \
                python-twisted python-zope-interface \
                desktop-file-utils groff graphviz rpmdevtools nc curl \
                wget python-six pyftpdlib checkpolicy selinux-policy-devel \
-               libcap-ng-devel kernel-devel-`uname -r` ethtool python-tftpy
+               libcap-ng-devel kernel-devel-`uname -r` ethtool python-tftpy \
+               lftp
 echo "search extra update built-in" >/etc/depmod.d/search_path.conf
 SCRIPT
 
@@ -28,7 +29,8 @@ aptitude -y install -R \
                 wget python-six ethtool \
                 libcap-ng-dev libssl-dev python-dev openssl \
                 python-pyftpdlib python-flake8 python-tftpy \
-                linux-headers-`uname -r`
+                linux-headers-`uname -r` \
+                lftp
 SCRIPT
 
 $bootstrap_centos = <<SCRIPT
@@ -37,7 +39,8 @@ yum -y install autoconf automake openssl-devel libtool \
                python-twisted-core python-zope-interface \
                desktop-file-utils groff graphviz rpmdevtools nc curl \
                wget python-six pyftpdlib checkpolicy selinux-policy-devel \
-               libcap-ng-devel kernel-devel-`uname -r` ethtool net-tools
+               libcap-ng-devel kernel-devel-`uname -r` ethtool net-tools \
+               lftp
 SCRIPT
 
 $configure_ovs = <<SCRIPT
