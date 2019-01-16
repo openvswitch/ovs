@@ -2713,21 +2713,29 @@ expectation_create(struct conntrack *ct, ovs_be16 dst_port,
     if (reply) {
         src_addr = master_conn->key.src.addr;
         dst_addr = master_conn->key.dst.addr;
+        alg_exp_node->nat_rpl_dst = true;
         if (skip_nat) {
             alg_nat_repl_addr = dst_addr;
+        } else if (master_conn->nat_info &&
+                   master_conn->nat_info->nat_action & NAT_ACTION_DST) {
+            alg_nat_repl_addr = master_conn->rev_key.src.addr;
+            alg_exp_node->nat_rpl_dst = false;
         } else {
             alg_nat_repl_addr = master_conn->rev_key.dst.addr;
         }
-        alg_exp_node->nat_rpl_dst = true;
     } else {
         src_addr = master_conn->rev_key.src.addr;
         dst_addr = master_conn->rev_key.dst.addr;
+        alg_exp_node->nat_rpl_dst = false;
         if (skip_nat) {
             alg_nat_repl_addr = src_addr;
+        } else if (master_conn->nat_info &&
+                   master_conn->nat_info->nat_action & NAT_ACTION_DST) {
+            alg_nat_repl_addr = master_conn->key.dst.addr;
+            alg_exp_node->nat_rpl_dst = true;
         } else {
             alg_nat_repl_addr = master_conn->key.src.addr;
         }
-        alg_exp_node->nat_rpl_dst = false;
     }
     if (src_ip_wc) {
         memset(&src_addr, 0, sizeof src_addr);
