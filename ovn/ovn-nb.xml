@@ -1093,7 +1093,7 @@
       highest-<ref column="priority"/> matching row in this table determines a
       packet's treatment.  If no row matches, packets are allowed by default.
       (Default-deny treatment is possible: add a rule with
-      <ref column="priority"/> 0, <code>0</code> as <ref column="match"/>,
+      <ref column="priority"/> 0, <code>1</code> as <ref column="match"/>,
       and <code>deny</code> as <ref column="action"/>.)
     </p>
 
@@ -1238,7 +1238,7 @@
     </column>
 
     <column name="static_routes">
-      One or more static routes for the router.
+      Zero or more static routes for the router.
     </column>
 
     <column name="enabled">
