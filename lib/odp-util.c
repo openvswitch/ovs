@@ -1872,7 +1872,7 @@ parse_odp_encap_nsh_action(const char *s, struct ofpbuf *actions)
                 /* Pad metadata to 4 bytes. */
                 padding = PAD_SIZE(mdlen, 4);
                 if (padding > 0) {
-                    ofpbuf_push_zeros(&b, padding);
+                    ofpbuf_put_zeros(&b, padding);
                 }
                 encap_nsh.mdlen = mdlen + padding;
                 ofpbuf_uninit(&b);
