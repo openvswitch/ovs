@@ -582,7 +582,9 @@ parse_tc_flower_to_match(struct tc_flower *flower,
     }
 
     if (flower->tunnel) {
-        match_set_tun_id(match, flower->key.tunnel.id);
+        if (flower->mask.tunnel.id) {
+            match_set_tun_id(match, flower->key.tunnel.id);
+        }
         if (flower->key.tunnel.ipv4.ipv4_dst) {
             match_set_tun_src(match, flower->key.tunnel.ipv4.ipv4_src);
             match_set_tun_dst(match, flower->key.tunnel.ipv4.ipv4_dst);
@@ -636,7 +638,9 @@ parse_tc_flower_to_match(struct tc_flower *flower,
                 size_t tunnel_offset =
                     nl_msg_start_nested(buf, OVS_KEY_ATTR_TUNNEL);
 
-                nl_msg_put_be64(buf, OVS_TUNNEL_KEY_ATTR_ID, action->encap.id);
+                if (action->encap.id_present) {
+                    nl_msg_put_be64(buf, OVS_TUNNEL_KEY_ATTR_ID, action->encap.id);
+                }
                 if (action->encap.ipv4.ipv4_src) {
                     nl_msg_put_be32(buf, OVS_TUNNEL_KEY_ATTR_IPV4_SRC,
                                     action->encap.ipv4.ipv4_src);
@@ -838,11 +842,13 @@ parse_put_flow_set_action(struct tc_flower *flower, struct tc_action *action,
     tunnel_len = nl_attr_get_size(set);
 
     action->type = TC_ACT_ENCAP;
+    action->encap.id_present = false;
     flower->action_count++;
     NL_ATTR_FOR_EACH_UNSAFE(tun_attr, tun_left, tunnel, tunnel_len) {
         switch (nl_attr_type(tun_attr)) {
         case OVS_TUNNEL_KEY_ATTR_ID: {
             action->encap.id = nl_attr_get_be64(tun_attr);
+            action->encap.id_present = true;
         }
         break;
         case OVS_TUNNEL_KEY_ATTR_IPV4_SRC: {
@@ -1107,6 +1113,7 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
         flower.key.tunnel.tp_dst = tnl->tp_dst;
         flower.mask.tunnel.tos = tnl_mask->ip_tos;
         flower.mask.tunnel.ttl = tnl_mask->ip_ttl;
+        flower.mask.tunnel.id = (tnl->flags & FLOW_TNL_F_KEY) ? tnl_mask->tun_id : 0;
         flower_match_to_tun_opt(&flower, tnl, tnl_mask);
         flower.tunnel = true;
     }

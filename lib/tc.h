@@ -149,6 +149,7 @@ struct tc_action {
         } vlan;
 
         struct {
+            bool id_present;
             ovs_be64 id;
             ovs_be16 tp_src;
             ovs_be16 tp_dst;
