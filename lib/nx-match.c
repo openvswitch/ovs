@@ -192,7 +192,7 @@ struct nxm_field {
     enum mf_field_id id;
 };
 
-static const struct nxm_field *nxm_field_by_header(uint64_t header);
+static const struct nxm_field *nxm_field_by_header(uint64_t header, bool is_action, enum ofperr *h_error);
 static const struct nxm_field *nxm_field_by_name(const char *name, size_t len);
 static const struct nxm_field *nxm_field_by_mf_id(enum mf_field_id,
                                                   enum ofp_version);
@@ -250,9 +250,10 @@ nxm_header_from_mff(const struct mf_field *mff)
 }
 
 static const struct mf_field *
-mf_from_oxm_header(uint64_t header, const struct vl_mff_map *vl_mff_map)
+mf_from_oxm_header(uint64_t header, const struct vl_mff_map *vl_mff_map,
+                   bool is_action, enum ofperr *h_error)
 {
-    const struct nxm_field *f = nxm_field_by_header(header);
+    const struct nxm_field *f = nxm_field_by_header(header, is_action, h_error);
 
     if (f) {
         const struct mf_field *mff = mf_from_id(f->id);
@@ -268,7 +269,7 @@ mf_from_oxm_header(uint64_t header, const struct vl_mff_map *vl_mff_map)
 const struct mf_field *
 mf_from_nxm_header(uint32_t header, const struct vl_mff_map *vl_mff_map)
 {
-    return mf_from_oxm_header((uint64_t) header << 32, vl_mff_map);
+    return mf_from_oxm_header((uint64_t) header << 32, vl_mff_map, false, NULL);
 }
 
 /* Returns the width of the data for a field with the given 'header', in
@@ -313,7 +314,7 @@ is_cookie_pseudoheader(uint64_t header)
 static enum ofperr
 nx_pull_header__(struct ofpbuf *b, bool allow_cookie,
                  const struct vl_mff_map *vl_mff_map, uint64_t *header,
-                 const struct mf_field **field)
+                 const struct mf_field **field, bool is_action)
 {
     if (b->size < 4) {
         goto bad_len;
@@ -336,11 +337,20 @@ nx_pull_header__(struct ofpbuf *b, bool allow_cookie,
     ofpbuf_pull(b, nxm_header_len(*header));
 
     if (field) {
-        *field = mf_from_oxm_header(*header, vl_mff_map);
+        enum ofperr h_error = 0;
+        *field = mf_from_oxm_header(*header, vl_mff_map, is_action, &h_error);
         if (!*field && !(allow_cookie && is_cookie_pseudoheader(*header))) {
             VLOG_DBG_RL(&rl, "OXM header "NXM_HEADER_FMT" is unknown",
                         NXM_HEADER_ARGS(*header));
-            return OFPERR_OFPBMC_BAD_FIELD;
+            if (is_action) {
+                if (h_error) {
+                     *field = NULL;
+                     return h_error;
+                }
+                return OFPERR_OFPBAC_BAD_SET_TYPE;
+            } else {
+                return OFPERR_OFPBMC_BAD_FIELD;
+            }
         } else if (mf_vl_mff_invalid(*field, vl_mff_map)) {
             return OFPERR_NXFMFC_INVALID_TLV_FIELD;
         }
@@ -381,7 +391,7 @@ static enum ofperr
 nx_pull_entry__(struct ofpbuf *b, bool allow_cookie,
                 const struct vl_mff_map *vl_mff_map, uint64_t *header,
                 const struct mf_field **field_,
-                union mf_value *value, union mf_value *mask)
+                union mf_value *value, union mf_value *mask, bool is_action)
 {
     const struct mf_field *field;
     enum ofperr header_error;
@@ -390,7 +400,7 @@ nx_pull_entry__(struct ofpbuf *b, bool allow_cookie,
     int width;
 
     header_error = nx_pull_header__(b, allow_cookie, vl_mff_map, header,
-                                    &field);
+                                    &field, is_action);
     if (header_error && header_error != OFPERR_OFPBMC_BAD_FIELD) {
         return header_error;
     }
@@ -442,15 +452,20 @@ nx_pull_entry__(struct ofpbuf *b, bool allow_cookie,
  *
  * If a NULL 'mask' is supplied, masked OXM or NXM entries are treated as
  * errors (with OFPERR_OFPBMC_BAD_MASK).
+ *
+ * The "bool is_action" is supplied to differentiate between match and action
+ * headers. This is done in order to return appropriate error type and code for
+ * bad match or bad action conditions. If set to True, indicates that the
+ * OXM or NXM entries belong to an action header.
  */
 enum ofperr
 nx_pull_entry(struct ofpbuf *b, const struct vl_mff_map *vl_mff_map,
               const struct mf_field **field, union mf_value *value,
-              union mf_value *mask)
+              union mf_value *mask, bool is_action)
 {
     uint64_t header;
 
-    return nx_pull_entry__(b, false, vl_mff_map, &header, field, value, mask);
+    return nx_pull_entry__(b, false, vl_mff_map, &header, field, value, mask, is_action);
 }
 
 /* Attempts to pull an NXM or OXM header from the beginning of 'b'.  If
@@ -470,7 +485,7 @@ nx_pull_header(struct ofpbuf *b, const struct vl_mff_map *vl_mff_map,
     enum ofperr error;
     uint64_t header;
 
-    error = nx_pull_header__(b, false, vl_mff_map,  &header, field);
+    error = nx_pull_header__(b, false, vl_mff_map,  &header, field, false);
     if (masked) {
         *masked = !error && nxm_hasmask(header);
     } else if (!error && nxm_hasmask(header)) {
@@ -489,7 +504,7 @@ nx_pull_match_entry(struct ofpbuf *b, bool allow_cookie,
     uint64_t header;
 
     error = nx_pull_entry__(b, allow_cookie, vl_mff_map, &header, field, value,
-                            mask);
+                            mask, false);
     if (error) {
         return error;
     }
@@ -739,7 +754,7 @@ oxm_pull_field_array(const void *fields_data, size_t fields_len,
         uint64_t header;
 
         error = nx_pull_entry__(&b, false, NULL, &header, &field, &value,
-                                NULL);
+                                NULL, false);
         if (error) {
             VLOG_DBG_RL(&rl, "error pulling field array field");
         } else if (!field) {
@@ -1496,7 +1511,7 @@ nx_match_to_string(const uint8_t *p, unsigned int match_len)
         uint64_t header;
         int value_len;
 
-        error = nx_pull_entry__(&b, true, NULL, &header, NULL, &value, &mask);
+        error = nx_pull_entry__(&b, true, NULL, &header, NULL, &value, &mask, false);
         if (error) {
             break;
         }
@@ -1580,7 +1595,7 @@ nx_format_field_name(enum mf_field_id id, enum ofp_version version,
 static void
 format_nxm_field_name(struct ds *s, uint64_t header)
 {
-    const struct nxm_field *f = nxm_field_by_header(header);
+    const struct nxm_field *f = nxm_field_by_header(header, false, NULL);
     if (f) {
         ds_put_cstr(s, f->name);
         if (nxm_hasmask(header)) {
@@ -1682,7 +1697,7 @@ nx_match_from_string_raw(const char *s, struct ofpbuf *b)
         b->header = ofpbuf_put_uninit(b, nxm_header_len(header));
         s = ofpbuf_put_hex(b, s, &n);
         if (n != nxm_field_bytes(header)) {
-            const struct mf_field *field = mf_from_oxm_header(header, NULL);
+            const struct mf_field *field = mf_from_oxm_header(header, NULL, false, NULL);
 
             if (field && field->variable_len) {
                 if (n <= field->n_bytes) {
@@ -2128,7 +2143,7 @@ oxm_bitmap_to_mf_bitmap(ovs_be64 oxm_bitmap, enum ofp_version version)
 
     for (enum mf_field_id id = 0; id < MFF_N_IDS; id++) {
         uint64_t oxm = mf_oxm_header(id, version);
-        if (oxm && version >= nxm_field_by_header(oxm)->version) {
+        if (oxm && version >= nxm_field_by_header(oxm, false, NULL)->version) {
             uint32_t class = nxm_class(oxm);
             int field = nxm_field(oxm);
 
@@ -2225,8 +2240,9 @@ nxm_init(void)
     }
 }
 
+
 static const struct nxm_field *
-nxm_field_by_header(uint64_t header)
+nxm_field_by_header(uint64_t header, bool is_action, enum ofperr *h_error)
 {
     const struct nxm_field_index *nfi;
     uint64_t header_no_len;
@@ -2240,6 +2256,11 @@ nxm_field_by_header(uint64_t header)
 
     HMAP_FOR_EACH_IN_BUCKET (nfi, header_node, hash_uint64(header_no_len),
                              &nxm_header_map) {
+        if (is_action && nxm_length(header) > 0) {
+            if (nxm_length(header) != nxm_length(nfi->nf.header) && h_error ) {
+               *h_error = OFPERR_OFPBAC_BAD_SET_LEN;
+            }
+        }
         if (header_no_len == nxm_no_len(nfi->nf.header)) {
             if (nxm_length(header) == nxm_length(nfi->nf.header) ||
                 mf_from_id(nfi->nf.id)->variable_len) {

@@ -3541,7 +3541,7 @@ mf_vl_mff_nx_pull_entry(struct ofpbuf *b, const struct vl_mff_map *vl_mff_map,
                         const struct mf_field **field, union mf_value *value,
                         union mf_value *mask, uint64_t *tlv_bitmap)
 {
-    enum ofperr error = nx_pull_entry(b, vl_mff_map, field, value, mask);
+    enum ofperr error = nx_pull_entry(b, vl_mff_map, field, value, mask, true);
     if (error) {
         return error;
     }
