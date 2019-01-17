@@ -82,7 +82,7 @@ int oxm_put_field_array(struct ofpbuf *, const struct field_array *,
  * ID followed by a value and possibly a mask). */
 enum ofperr nx_pull_entry(struct ofpbuf *, const struct vl_mff_map *,
                           const struct mf_field **, union mf_value *value,
-                          union mf_value *mask);
+                          union mf_value *mask, bool is_action);
 enum ofperr nx_pull_header(struct ofpbuf *, const struct vl_mff_map *,
                            const struct mf_field **, bool *masked);
 void nxm_put_entry_raw(struct ofpbuf *, enum mf_field_id field,

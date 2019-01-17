@@ -97,6 +97,7 @@ enum ofp12_oxm_class {
 
 /* Functions for extracting raw field values from OXM/NXM headers. */
 static uint32_t nxm_vendor(uint64_t header) { return header; }
+enum ofperr nxm_validate_action_field_header(uint64_t header);
 static int nxm_class(uint64_t header) { return header >> 48; }
 static int nxm_field(uint64_t header) { return (header >> 41) & 0x7f; }
 static bool nxm_hasmask(uint64_t header) { return (header >> 40) & 1; }
@@ -313,7 +314,7 @@ is_cookie_pseudoheader(uint64_t header)
 static enum ofperr
 nx_pull_header__(struct ofpbuf *b, bool allow_cookie,
                  const struct vl_mff_map *vl_mff_map, uint64_t *header,
-                 const struct mf_field **field)
+                 const struct mf_field **field, bool is_action)
 {
     if (b->size < 4) {
         goto bad_len;
@@ -340,7 +341,16 @@ nx_pull_header__(struct ofpbuf *b, bool allow_cookie,
         if (!*field && !(allow_cookie && is_cookie_pseudoheader(*header))) {
             VLOG_DBG_RL(&rl, "OXM header "NXM_HEADER_FMT" is unknown",
                         NXM_HEADER_ARGS(*header));
-            return OFPERR_OFPBMC_BAD_FIELD;
+            if (is_action) {
+                enum ofperr h_error = nxm_validate_action_field_header(*header);
+                if (h_error) {
+                     *field = NULL;
+                     return h_error;
+                }
+                return OFPERR_OFPBAC_BAD_SET_TYPE;
+            } else {
+                return OFPERR_OFPBMC_BAD_FIELD;
+            }
         } else if (mf_vl_mff_invalid(*field, vl_mff_map)) {
             return OFPERR_NXFMFC_INVALID_TLV_FIELD;
         }
@@ -381,7 +391,7 @@ static enum ofperr
 nx_pull_entry__(struct ofpbuf *b, bool allow_cookie,
                 const struct vl_mff_map *vl_mff_map, uint64_t *header,
                 const struct mf_field **field_,
-                union mf_value *value, union mf_value *mask)
+                union mf_value *value, union mf_value *mask, bool is_action)
 {
     const struct mf_field *field;
     enum ofperr header_error;
@@ -390,7 +400,7 @@ nx_pull_entry__(struct ofpbuf *b, bool allow_cookie,
     int width;
 
     header_error = nx_pull_header__(b, allow_cookie, vl_mff_map, header,
-                                    &field);
+                                    &field, is_action);
     if (header_error && header_error != OFPERR_OFPBMC_BAD_FIELD) {
         return header_error;
     }
@@ -442,15 +452,20 @@ nx_pull_entry__(struct ofpbuf *b, bool allow_cookie,
  *
  * If a NULL 'mask' is supplied, masked OXM or NXM entries are treated as
  * errors (with OFPERR_OFPBMC_BAD_MASK).
+ *
+ * The "bool is_action" is supplied to differentiate between match and action
+ * headers. This is done in order to return appropriate error type and code for
+ * bad match or bad action conditions. If set to True, indicates that the
+ * OXM or NXM entries belong to an action header.
  */
 enum ofperr
 nx_pull_entry(struct ofpbuf *b, const struct vl_mff_map *vl_mff_map,
               const struct mf_field **field, union mf_value *value,
-              union mf_value *mask)
+              union mf_value *mask, bool is_action)
 {
     uint64_t header;
 
-    return nx_pull_entry__(b, false, vl_mff_map, &header, field, value, mask);
+    return nx_pull_entry__(b, false, vl_mff_map, &header, field, value, mask, is_action);
 }
 
 /* Attempts to pull an NXM or OXM header from the beginning of 'b'.  If
@@ -470,7 +485,7 @@ nx_pull_header(struct ofpbuf *b, const struct vl_mff_map *vl_mff_map,
     enum ofperr error;
     uint64_t header;
 
-    error = nx_pull_header__(b, false, vl_mff_map,  &header, field);
+    error = nx_pull_header__(b, false, vl_mff_map,  &header, field, false);
     if (masked) {
         *masked = !error && nxm_hasmask(header);
     } else if (!error && nxm_hasmask(header)) {
@@ -489,7 +504,7 @@ nx_pull_match_entry(struct ofpbuf *b, bool allow_cookie,
     uint64_t header;
 
     error = nx_pull_entry__(b, allow_cookie, vl_mff_map, &header, field, value,
-                            mask);
+                            mask, false);
     if (error) {
         return error;
     }
@@ -739,7 +754,7 @@ oxm_pull_field_array(const void *fields_data, size_t fields_len,
         uint64_t header;
 
         error = nx_pull_entry__(&b, false, NULL, &header, &field, &value,
-                                NULL);
+                                NULL, false);
         if (error) {
             VLOG_DBG_RL(&rl, "error pulling field array field");
         } else if (!field) {
@@ -1488,7 +1503,7 @@ nx_match_to_string(const uint8_t *p, unsigned int match_len)
         uint64_t header;
         int value_len;
 
-        error = nx_pull_entry__(&b, true, NULL, &header, NULL, &value, &mask);
+        error = nx_pull_entry__(&b, true, NULL, &header, NULL, &value, &mask, false);
         if (error) {
             break;
         }
@@ -2242,6 +2257,32 @@ nxm_field_by_header(uint64_t header)
         }
     }
     return NULL;
+}
+
+enum ofperr nxm_validate_action_field_header(uint64_t header)
+{
+    const struct nxm_field_index *nfi;
+    uint64_t header_no_len;
+
+    nxm_init();
+    if (nxm_hasmask(header)) {
+        header = nxm_make_exact_header(header);
+    }
+
+    header_no_len = nxm_no_len(header);
+
+    HMAP_FOR_EACH_IN_BUCKET (nfi, header_node, hash_uint64(header_no_len),
+                             &nxm_header_map) {
+        if (header_no_len == nxm_no_len(nfi->nf.header)) {
+            if (nxm_length(header) > 0) {
+                if (nxm_length(header) != nxm_length(nfi->nf.header)) {
+                    return OFPERR_OFPBAC_BAD_SET_LEN;
+                }
+            }
+        }
+    }
+
+    return 0;
 }
 
 static const struct nxm_field *

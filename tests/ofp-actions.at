@@ -746,6 +746,20 @@ dnl Check the ONF extension form of "copy_field".
 # actions=move:NXM_OF_IN_PORT[]->NXM_OF_VLAN_TCI[]
 ffff 0020 4f4e4600 0c80 0000 0010 0000 0000 0000 00000002 00000802 00000000
 
+dnl Check OpenFlow v1.3.4 Conformance Test: 430.500.
+# bad OpenFlow13 actions: OFPBAC_BAD_SET_TYPE
+& ofp_actions|WARN|bad action at offset 0 (OFPBAC_BAD_SET_TYPE):
+& 00000000  00 19 00 08 80 00 fe 00-00 00 00 10 00 00 00 01
+& 00000010  00 00 00 00 00 00 00 00-
+0019 0008 8000fe00 000000100000 000100000000 00000000
+
+dnl Check OpenFlow v1.3.4 Conformance Test: 430.510.
+# bad OpenFlow13 actions: OFPBAC_BAD_SET_LEN
+& ofp_actions|WARN|bad action at offset 0 (OFPBAC_BAD_SET_LEN):
+& 00000000  00 19 00 10 80 00 08 07-00 01 02 03 04 05 00 00
+& 00000010  00 00 00 10 00 00 00 01-
+0019 0010 80000807 000102030405 000000000010 00000001
+
 ])
 sed '/^[[#&]]/d' < test-data > input.txt
 sed -n 's/^# //p; /^$/p' < test-data > expout
