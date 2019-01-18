@@ -102,7 +102,6 @@ OpenFlow 1.2: vendor 0, type 3, code 5
 OpenFlow 1.3: vendor 0, type 3, code 5
 OpenFlow 1.4: vendor 0, type 3, code 5
 OpenFlow 1.5: vendor 0, type 3, code 5
-OpenFlow 1.6: vendor 0, type 3, code 5
 ])
 AT_CHECK([ovs-ofctl print-error OFPBIC_BAD_EXP_TYPE], [0], [dnl
 OpenFlow 1.1: vendor 0, type 3, code 5
@@ -110,7 +109,6 @@ OpenFlow 1.2: vendor 0, type 3, code 6
 OpenFlow 1.3: vendor 0, type 3, code 6
 OpenFlow 1.4: vendor 0, type 3, code 6
 OpenFlow 1.5: vendor 0, type 3, code 6
-OpenFlow 1.6: vendor 0, type 3, code 6
 ])
 AT_CLEANUP
 

@@ -219,7 +219,6 @@ ofputil_encode_barrier_request(enum ofp_version ofp_version)
     enum ofpraw type;
 
     switch (ofp_version) {
-    case OFP16_VERSION:
     case OFP15_VERSION:
     case OFP14_VERSION:
     case OFP13_VERSION:

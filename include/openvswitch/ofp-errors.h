@@ -803,8 +803,8 @@ enum ofperr {
     /* OF1.5+(17,18).  Scheduled commit time exceeds lower bound. */
     OFPERR_OFPBFC_SCHED_PAST,
 
-    /* NX1.4-1.5(22), OF1.6+(17,19).  In an OFPT_BUNDLE_ADD_MESSAGE, the
-     * OpenFlow version in the inner and outer messages differ. */
+    /* NX1.4-1.5(22).  In an OFPT_BUNDLE_ADD_MESSAGE, the OpenFlow version in
+     * the inner and outer messages differ. */
     OFPERR_OFPBFC_BAD_VERSION,
 
 /* ## ------------------------- ## */

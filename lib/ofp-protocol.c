@@ -46,7 +46,6 @@ static const struct proto_abbrev proto_abbrevs[] = {
 #define N_PROTO_ABBREVS ARRAY_SIZE(proto_abbrevs)
 
 enum ofputil_protocol ofputil_flow_dump_protocols[] = {
-    OFPUTIL_P_OF16_OXM,
     OFPUTIL_P_OF15_OXM,
     OFPUTIL_P_OF14_OXM,
     OFPUTIL_P_OF13_OXM,
@@ -77,8 +76,6 @@ ofputil_protocols_from_ofp_version(enum ofp_version version)
         return OFPUTIL_P_OF14_OXM;
     case OFP15_VERSION:
         return OFPUTIL_P_OF15_OXM;
-    case OFP16_VERSION:
-        return OFPUTIL_P_OF16_OXM;
     default:
         return 0;
     }
@@ -116,8 +113,6 @@ ofputil_protocol_to_ofp_version(enum ofputil_protocol protocol)
         return OFP14_VERSION;
     case OFPUTIL_P_OF15_OXM:
         return OFP15_VERSION;
-    case OFPUTIL_P_OF16_OXM:
-        return OFP16_VERSION;
     }
 
     OVS_NOT_REACHED();
@@ -200,9 +195,6 @@ ofputil_protocol_set_tid(enum ofputil_protocol protocol, bool enable)
     case OFPUTIL_P_OF15_OXM:
         return OFPUTIL_P_OF15_OXM;
 
-    case OFPUTIL_P_OF16_OXM:
-        return OFPUTIL_P_OF16_OXM;
-
     default:
         OVS_NOT_REACHED();
     }
@@ -249,9 +241,6 @@ ofputil_protocol_set_base(enum ofputil_protocol cur,
     case OFPUTIL_P_OF15_OXM:
         return ofputil_protocol_set_tid(OFPUTIL_P_OF15_OXM, tid);
 
-    case OFPUTIL_P_OF16_OXM:
-        return ofputil_protocol_set_tid(OFPUTIL_P_OF16_OXM, tid);
-
     default:
         OVS_NOT_REACHED();
     }
@@ -294,9 +283,6 @@ ofputil_protocol_to_string(enum ofputil_protocol protocol)
 
     case OFPUTIL_P_OF15_OXM:
         return "OXM-OpenFlow15";
-
-    case OFPUTIL_P_OF16_OXM:
-        return "OXM-OpenFlow16";
     }
 
     /* Check abbreviations. */
@@ -438,9 +424,6 @@ ofputil_version_from_string(const char *s)
     if (!strcasecmp(s, "OpenFlow15")) {
         return OFP15_VERSION;
     }
-    if (!strcasecmp(s, "OpenFlow16")) {
-        return OFP16_VERSION;
-    }
     return 0;
 }
 
@@ -515,8 +498,6 @@ ofputil_version_to_string(enum ofp_version ofp_version)
         return "OpenFlow14";
     case OFP15_VERSION:
         return "OpenFlow15";
-    case OFP16_VERSION:
-        return "OpenFlow16";
     default:
         OVS_NOT_REACHED();
     }
@@ -599,7 +580,6 @@ ofputil_encode_set_protocol(enum ofputil_protocol current,
         case OFPUTIL_P_OF13_OXM:
         case OFPUTIL_P_OF14_OXM:
         case OFPUTIL_P_OF15_OXM:
-        case OFPUTIL_P_OF16_OXM:
             /* There is only one variant of each OpenFlow 1.1+ protocol, and we
              * verified above that we're not trying to change versions. */
             OVS_NOT_REACHED();

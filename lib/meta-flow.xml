@@ -3720,9 +3720,7 @@ r r c c c.
       label at any given time.  To match on the second label, one must first
       ``pop'' the outer label and advance to another OpenFlow table, where the
       inner label may be matched.  To match on the third label, one must pop
-      the two outer labels, and so on.  The Open Networking Foundation is
-      considering support for directly matching on multiple MPLS labels for
-      OpenFlow 1.6.<!-- XXX add EXT-* link -->
+      the two outer labels, and so on.
     </p>
 
     <h2>MPLS Inner Protocol</h2>

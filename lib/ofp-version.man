@@ -36,7 +36,3 @@ and development purposes.  They are not enabled by default:
 .RS
 .IP \(bu
 \fBOpenFlow15\fR, for OpenFlow 1.5.
-.
-.IP \(bu
-\fBOpenFlow16\fR, for OpenFlow 1.6.
-.RE

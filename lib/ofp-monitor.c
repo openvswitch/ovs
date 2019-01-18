@@ -218,8 +218,7 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
         ofputil_put_ofp11_match(msg, &fr->match, protocol);
         break;
     }
-    case OFPUTIL_P_OF15_OXM:
-    case OFPUTIL_P_OF16_OXM: {
+    case OFPUTIL_P_OF15_OXM: {
         struct ofp15_flow_removed *ofr;
 
         msg = ofpraw_alloc_xid(OFPRAW_OFPT15_FLOW_REMOVED,

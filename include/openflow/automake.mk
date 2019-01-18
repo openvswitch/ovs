@@ -9,7 +9,6 @@ openflowinclude_HEADERS = \
 	include/openflow/openflow-1.3.h \
 	include/openflow/openflow-1.4.h \
 	include/openflow/openflow-1.5.h \
-	include/openflow/openflow-1.6.h \
 	include/openflow/openflow-common.h \
 	include/openflow/openflow.h
 

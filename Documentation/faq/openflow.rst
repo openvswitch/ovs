@@ -30,17 +30,17 @@ Q: What versions of OpenFlow does Open vSwitch support?
     A: The following table lists the versions of OpenFlow supported by each
     version of Open vSwitch:
 
-    =============== ===== ===== ===== ===== ===== ===== =====
-    Open vSwitch    OF1.0 OF1.1 OF1.2 OF1.3 OF1.4 OF1.5 OF1.6
-    =============== ===== ===== ===== ===== ===== ===== =====
-    1.9 and earlier  yes   ---   ---   ---   ---   ---   ---
-    1.10, 1.11       yes   ---   (*)   (*)   ---   ---   ---
-    2.0, 2.1         yes   (*)   (*)   (*)   ---   ---   ---
-    2.2              yes   (*)   (*)   (*)   (%)   (*)   ---
-    2.3, 2.4         yes   yes   yes   yes   (*)   (*)   ---
-    2.5, 2.6, 2.7    yes   yes   yes   yes   (*)   (*)   (*)
-    2.8              yes   yes   yes   yes   yes   (*)   (*)
-    =============== ===== ===== ===== ===== ===== ===== =====
+    =============== ===== ===== ===== ===== ===== =====
+    Open vSwitch    OF1.0 OF1.1 OF1.2 OF1.3 OF1.4 OF1.5
+    =============== ===== ===== ===== ===== ===== =====
+    1.9 and earlier  yes   ---   ---   ---   ---   ---
+    1.10, 1.11       yes   ---   (*)   (*)   ---   ---
+    2.0, 2.1         yes   (*)   (*)   (*)   ---   ---
+    2.2              yes   (*)   (*)   (*)   (%)   (*)
+    2.3, 2.4         yes   yes   yes   yes   (*)   (*)
+    2.5, 2.6, 2.7    yes   yes   yes   yes   (*)   (*)
+    2.8              yes   yes   yes   yes   yes   (*)
+    =============== ===== ===== ===== ===== ===== =====
 
     --- Not supported.
     yes Supported and enabled by default
@@ -73,8 +73,8 @@ Q: What versions of OpenFlow does Open vSwitch support?
     could cause crashes.  We don't recommend enabling it.)
 
     :doc:`/topics/openflow` tracks support for OpenFlow 1.1 and later features.
-    When support for OpenFlow 1.5 and 1.6 is solidly implemented, Open vSwitch
-    will enable those version by default.
+    When support for OpenFlow 1.5 is solidly implemented, Open vSwitch will
+    enable it by default.
 
 Q: Does Open vSwitch support MPLS?
 

@@ -52,7 +52,6 @@ ofputil_capabilities_mask(enum ofp_version ofp_version)
         return OFPC_COMMON | OFPC12_PORT_BLOCKED;
     case OFP14_VERSION:
     case OFP15_VERSION:
-    case OFP16_VERSION:
         return OFPC_COMMON | OFPC12_PORT_BLOCKED | OFPC14_BUNDLES
             | OFPC14_FLOW_MONITORING;
     default:
@@ -168,7 +167,6 @@ ofputil_encode_switch_features(const struct ofputil_switch_features *features,
     case OFP13_VERSION:
     case OFP14_VERSION:
     case OFP15_VERSION:
-    case OFP16_VERSION:
         raw = OFPRAW_OFPT13_FEATURES_REPLY;
         break;
     default:
@@ -193,7 +191,6 @@ ofputil_encode_switch_features(const struct ofputil_switch_features *features,
     case OFP13_VERSION:
     case OFP14_VERSION:
     case OFP15_VERSION:
-    case OFP16_VERSION:
         osf->auxiliary_id = features->auxiliary_id;
         /* fall through */
     case OFP11_VERSION:

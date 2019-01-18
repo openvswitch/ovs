@@ -1288,8 +1288,8 @@ vSwitch 2.10 added support for table names.  Earlier versions always
 behaved as if \fB\-\-no\-names\fR were specified.
 .IP
 Open vSwitch does not place its own limit on the length of port names,
-but OpenFlow 1.0 to 1.5 limit port names to 15 bytes and OpenFlow 1.6
-limits them to 63 bytes.  Because \fRovs\-ofctl\fR uses OpenFlow to
+but OpenFlow limits port names to 15 bytes.
+Because \fRovs\-ofctl\fR uses OpenFlow to
 retrieve the mapping between port names and numbers, names longer than
 this limit will be truncated for both display and acceptance.
 Truncation can also cause long names that are different to appear to
@@ -1365,7 +1365,6 @@ format.
 .IQ "\fBOXM-OpenFlow13\fR"
 .IQ "\fBOXM-OpenFlow14\fR"
 .IQ "\fBOXM-OpenFlow15\fR"
-.IQ "\fBOXM-OpenFlow16\fR"
 These are the standard OXM (OpenFlow Extensible Match) flow format in
 OpenFlow 1.2 and later.
 .RE

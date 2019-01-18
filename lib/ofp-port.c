@@ -165,7 +165,7 @@ ofputil_port_from_string(const char *s,
                       "be translated to %u when talking to an OF1.1 or "
                       "later controller", port32, port32 + OFPP11_OFFSET);
         } else if (port32 <= ofp_to_u16(OFPP_LAST_RESV)) {
-            char name[OFP10_MAX_PORT_NAME_LEN];
+            char name[OFP_MAX_PORT_NAME_LEN];
 
             ofputil_port_to_string(u16_to_ofp(port32), NULL,
                                    name, sizeof name);
@@ -553,34 +553,6 @@ ofputil_pull_ofp14_port(struct ofputil_phy_port *pp, struct ofpbuf *msg)
     return ofputil_pull_ofp14_port_properties(ofpbuf_pull(msg, len), len, pp);
 }
 
-static enum ofperr
-ofputil_pull_ofp16_port(struct ofputil_phy_port *pp, struct ofpbuf *msg)
-{
-    const struct ofp16_port *op = ofpbuf_try_pull(msg, sizeof *op);
-    if (!op) {
-        return OFPERR_OFPBRC_BAD_LEN;
-    }
-
-    size_t len = ntohs(op->length);
-    if (len < sizeof *op || len - sizeof *op > msg->size) {
-        return OFPERR_OFPBRC_BAD_LEN;
-    }
-    len -= sizeof *op;
-
-    enum ofperr error = ofputil_port_from_ofp11(op->port_no, &pp->port_no);
-    if (error) {
-        return error;
-    }
-    pp->hw_addr = op->hw_addr;
-    pp->hw_addr64 = op->hw_addr64;
-    ovs_strlcpy_arrays(pp->name, op->name);
-
-    pp->config = ntohl(op->config) & OFPPC11_ALL;
-    pp->state = ntohl(op->state) & OFPPS11_ALL;
-
-    return ofputil_pull_ofp14_port_properties(ofpbuf_pull(msg, len), len, pp);
-}
-
 static void
 ofputil_encode_ofp10_phy_port(const struct ofputil_phy_port *pp,
                               struct ofp10_phy_port *opp)
@@ -655,27 +627,6 @@ ofputil_put_ofp14_port(const struct ofputil_phy_port *pp, struct ofpbuf *b)
     ofputil_encode_ofp14_port_ethernet_prop(pp, eth);
 }
 
-static void
-ofputil_put_ofp16_port(const struct ofputil_phy_port *pp, struct ofpbuf *b)
-{
-    struct ofp16_port *op;
-    struct ofp14_port_desc_prop_ethernet *eth;
-
-    ofpbuf_prealloc_tailroom(b, sizeof *op + sizeof *eth);
-
-    op = ofpbuf_put_zeros(b, sizeof *op);
-    op->port_no = ofputil_port_to_ofp11(pp->port_no);
-    op->length = htons(sizeof *op + sizeof *eth);
-    op->hw_addr = pp->hw_addr;
-    op->hw_addr64 = pp->hw_addr64;
-    ovs_strlcpy_arrays(op->name, pp->name);
-    op->config = htonl(pp->config & OFPPC11_ALL);
-    op->state = htonl(pp->state & OFPPS11_ALL);
-
-    eth = ofpprop_put_zeros(b, OFPPDPT14_ETHERNET, sizeof *eth);
-    ofputil_encode_ofp14_port_ethernet_prop(pp, eth);
-}
-
 void
 ofputil_put_phy_port(enum ofp_version ofp_version,
                      const struct ofputil_phy_port *pp, struct ofpbuf *b)
@@ -698,9 +649,6 @@ ofputil_put_phy_port(enum ofp_version ofp_version,
     case OFP14_VERSION:
     case OFP15_VERSION:
         ofputil_put_ofp14_port(pp, b);
-        break;
-    case OFP16_VERSION:
-        ofputil_put_ofp16_port(pp, b);
         break;
 
     default:
@@ -743,8 +691,7 @@ ofputil_encode_port_desc_stats_request(enum ofp_version ofp_version,
         request = ofpraw_alloc(OFPRAW_OFPST10_PORT_DESC_REQUEST,
                                ofp_version, 0);
         break;
-    case OFP15_VERSION:
-    case OFP16_VERSION:{
+    case OFP15_VERSION: {
         struct ofp15_port_desc_request *req;
         request = ofpraw_alloc(OFPRAW_OFPST15_PORT_DESC_REQUEST,
                                ofp_version, 0);
@@ -795,8 +742,6 @@ ofputil_pull_phy_port(enum ofp_version ofp_version, struct ofpbuf *b,
     case OFP14_VERSION:
     case OFP15_VERSION:
         return b->size ? ofputil_pull_ofp14_port(pp, b) : EOF;
-    case OFP16_VERSION:
-        return b->size ? ofputil_pull_ofp16_port(pp, b) : EOF;
     default:
         OVS_NOT_REACHED();
     }
@@ -820,11 +765,6 @@ ofputil_phy_port_format(struct ds *s, const struct ofputil_phy_port *port)
     ofputil_format_port(port->port_no, NULL, s);
     ds_put_format(s, "(%s): addr:"ETH_ADDR_FMT"\n",
                   name, ETH_ADDR_ARGS(port->hw_addr));
-
-    if (!eth_addr64_is_zero(port->hw_addr64)) {
-        ds_put_format(s, "     addr64: "ETH_ADDR64_FMT"\n",
-                      ETH_ADDR64_ARGS(port->hw_addr64));
-    }
 
     ds_put_cstr(s, "     config:     ");
     ofputil_port_config_format(s, port->config);
@@ -952,10 +892,6 @@ ofputil_encode_port_status(const struct ofputil_port_status *ps,
         raw = OFPRAW_OFPT14_PORT_STATUS;
         break;
 
-    case OFP16_VERSION:
-        raw = OFPRAW_OFPT16_PORT_STATUS;
-        break;
-
     default:
         OVS_NOT_REACHED();
     }
@@ -1078,24 +1014,6 @@ ofputil_decode_ofp14_port_mod(struct ofpbuf *b, bool loose,
     return ofputil_decode_ofp14_port_mod_properties(b, loose, pm);
 }
 
-static enum ofperr
-ofputil_decode_ofp16_port_mod(struct ofpbuf *b, bool loose,
-                              struct ofputil_port_mod *pm)
-{
-    const struct ofp16_port_mod *opm = ofpbuf_pull(b, sizeof *opm);
-    enum ofperr error = ofputil_port_from_ofp11(opm->port_no, &pm->port_no);
-    if (error) {
-        return error;
-    }
-
-    pm->hw_addr = opm->hw_addr;
-    pm->hw_addr64 = opm->hw_addr64;
-    pm->config = ntohl(opm->config) & OFPPC11_ALL;
-    pm->mask = ntohl(opm->mask) & OFPPC11_ALL;
-
-    return ofputil_decode_ofp14_port_mod_properties(b, loose, pm);
-}
-
 /* Decodes the OpenFlow "port mod" message in '*oh' into an abstract form in
  * '*pm'.  Returns 0 if successful, otherwise an OFPERR_* value. */
 enum ofperr
@@ -1114,8 +1032,6 @@ ofputil_decode_port_mod(const struct ofp_header *oh,
         error = ofputil_decode_ofp11_port_mod(b.data, pm);
     } else if (raw == OFPRAW_OFPT14_PORT_MOD) {
         error = ofputil_decode_ofp14_port_mod(&b, loose, pm);
-    } else if (raw == OFPRAW_OFPT16_PORT_MOD) {
-        error = ofputil_decode_ofp16_port_mod(&b, loose, pm);
     } else {
         error = OFPERR_OFPBRC_BAD_TYPE;
     }
@@ -1179,23 +1095,6 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
         }
         break;
     }
-    case OFP16_VERSION: {
-        struct ofp16_port_mod *opm;
-
-        b = ofpraw_alloc(OFPRAW_OFPT16_PORT_MOD, ofp_version, 0);
-        opm = ofpbuf_put_zeros(b, sizeof *opm);
-        opm->port_no = ofputil_port_to_ofp11(pm->port_no);
-        opm->hw_addr = pm->hw_addr;
-        opm->hw_addr64 = pm->hw_addr64;
-        opm->config = htonl(pm->config & OFPPC11_ALL);
-        opm->mask = htonl(pm->mask & OFPPC11_ALL);
-
-        if (pm->advertise) {
-            ofpprop_put_be32(b, OFPPMPT14_ETHERNET,
-                             netdev_port_features_to_ofp11(pm->advertise));
-        }
-        break;
-    }
     default:
         OVS_NOT_REACHED();
     }
@@ -1211,10 +1110,6 @@ ofputil_port_mod_format(struct ds *s, const struct ofputil_port_mod *pm,
     ofputil_format_port(pm->port_no, port_map, s);
     ds_put_format(s, ": addr:"ETH_ADDR_FMT"\n",
                   ETH_ADDR_ARGS(pm->hw_addr));
-    if (!eth_addr64_is_zero(pm->hw_addr64)) {
-        ds_put_format(s, "     addr64: "ETH_ADDR64_FMT"\n",
-                      ETH_ADDR64_ARGS(pm->hw_addr64));
-    }
 
     ds_put_cstr(s, "     config: ");
     ofputil_port_config_format(s, pm->config);
@@ -1251,8 +1146,7 @@ ofputil_encode_dump_ports_request(enum ofp_version ofp_version,
     case OFP12_VERSION:
     case OFP13_VERSION:
     case OFP14_VERSION:
-    case OFP15_VERSION:
-    case OFP16_VERSION: {
+    case OFP15_VERSION: {
         struct ofp11_port_stats_request *req;
         request = ofpraw_alloc(OFPRAW_OFPST11_PORT_REQUEST, ofp_version, 0);
         req = ofpbuf_put_zeros(request, sizeof *req);
@@ -1462,7 +1356,6 @@ ofputil_append_port_stat(struct ovs_list *replies,
 
     case OFP14_VERSION:
     case OFP15_VERSION:
-    case OFP16_VERSION:
         ofputil_append_ofp14_port_stats(ops, replies);
         break;
 
@@ -1941,7 +1834,6 @@ ofputil_decode_port_stats_request(const struct ofp_header *request,
                                   ofp_port_t *ofp10_port)
 {
     switch ((enum ofp_version)request->version) {
-    case OFP16_VERSION:
     case OFP15_VERSION:
     case OFP14_VERSION:
     case OFP13_VERSION:

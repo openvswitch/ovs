@@ -384,8 +384,7 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
     case OFPUTIL_P_OF12_OXM:
     case OFPUTIL_P_OF13_OXM:
     case OFPUTIL_P_OF14_OXM:
-    case OFPUTIL_P_OF15_OXM:
-    case OFPUTIL_P_OF16_OXM: {
+    case OFPUTIL_P_OF15_OXM: {
         struct ofp11_flow_mod *ofm;
         int tailroom;
 
@@ -746,8 +745,7 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
     case OFPUTIL_P_OF12_OXM:
     case OFPUTIL_P_OF13_OXM:
     case OFPUTIL_P_OF14_OXM:
-    case OFPUTIL_P_OF15_OXM:
-    case OFPUTIL_P_OF16_OXM: {
+    case OFPUTIL_P_OF15_OXM: {
         struct ofp11_flow_stats_request *ofsr;
 
         if (protocol > OFPUTIL_P_OF14_OXM) {

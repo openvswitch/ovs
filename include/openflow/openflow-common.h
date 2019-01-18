@@ -79,8 +79,7 @@ enum ofp_version {
     OFP12_VERSION = 0x03,
     OFP13_VERSION = 0x04,
     OFP14_VERSION = 0x05,
-    OFP15_VERSION = 0x06,
-    OFP16_VERSION = 0x07
+    OFP15_VERSION = 0x06
 };
 
 /* Vendor (aka experimenter) IDs.
@@ -113,6 +112,7 @@ enum ofp_version {
 #define INTEL_VENDOR_ID 0x0000AA01 /* Intel */
 
 #define OFP_MAX_TABLE_NAME_LEN 32
+#define OFP_MAX_PORT_NAME_LEN  16
 
 #define OFP_OLD_PORT  6633
 #define OFP_PORT  6653

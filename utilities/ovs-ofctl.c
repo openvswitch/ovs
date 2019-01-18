@@ -2489,7 +2489,6 @@ ofctl_mod_port(struct ovs_cmdl_context *ctx)
 
     pm.port_no = pp.port_no;
     pm.hw_addr = pp.hw_addr;
-    pm.hw_addr64 = pp.hw_addr64;
     pm.config = 0;
     pm.mask = 0;
     pm.advertise = 0;
@@ -2695,8 +2694,7 @@ ofctl_mod_table(struct ovs_cmdl_context *ctx)
          * necessary to restore the current configuration of table-config
          * parameters using OFPMP14_TABLE_DESC request. */
         if (allowed_versions & ((1u << OFP14_VERSION) |
-                                (1u << OFP15_VERSION) |
-                                (1u << OFP16_VERSION))) {
+                                (1u << OFP15_VERSION))) {
             struct ofputil_table_desc td;
 
             if (tm.table_id == OFPTT_ALL) {

@@ -181,40 +181,6 @@ OFPST_PORT_DESC reply (OF1.5):
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([ofproto - port-desc stats (OpenFlow 1.6)])
-OVS_VSWITCHD_START
-add_of_ports br0 1 2 3
-AT_CHECK([ovs-ofctl -F OXM-OpenFlow16 -O OpenFlow16 -vwarn dump-ports-desc br0], [0], [stdout])
-AT_CHECK([strip_xids < stdout | sed 's/00:0./00:0x/'], [0], [dnl
-OFPST_PORT_DESC reply (OF1.6):
- 1(p1): addr:aa:55:aa:55:00:0x
-     config:     0
-     state:      LIVE
-     speed: 0 Mbps now, 0 Mbps max
- 2(p2): addr:aa:55:aa:55:00:0x
-     config:     0
-     state:      LIVE
-     speed: 0 Mbps now, 0 Mbps max
- 3(p3): addr:aa:55:aa:55:00:0x
-     config:     0
-     state:      LIVE
-     speed: 0 Mbps now, 0 Mbps max
- LOCAL(br0): addr:aa:55:aa:55:00:0x
-     config:     0
-     state:      LIVE
-     speed: 0 Mbps now, 0 Mbps max
-])
-AT_CHECK([ovs-ofctl -F OXM-OpenFlow16 -O OpenFlow16 -vwarn dump-ports-desc br0 2], [0], [stdout])
-AT_CHECK([strip_xids < stdout | sed 's/00:0./00:0x/'], [0], [dnl
-OFPST_PORT_DESC reply (OF1.6):
- 2(p2): addr:aa:55:aa:55:00:0x
-     config:     0
-     state:      LIVE
-     speed: 0 Mbps now, 0 Mbps max
-])
-OVS_VSWITCHD_STOP
-AT_CLEANUP
-
 dnl CHECK_QUEUE_STATS(label, option, format)
 m4_define([CHECK_QUEUE_STATS], [
 AT_SETUP([ofproto - queue stats - (OpenFlow $1)])
@@ -747,7 +713,7 @@ OFPT_GROUP_MOD (OF1.5):
 ])
 # Negative test.
 AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn remove-buckets br0 group_id=1234,command_bucket_id=last], [1], [],
-  [ovs-ofctl: none of the usable flow formats (OpenFlow10,NXM,OXM-OpenFlow15,OXM-OpenFlow16) is among the allowed flow formats (OpenFlow11)
+  [ovs-ofctl: none of the usable flow formats (OpenFlow10,NXM,OXM-OpenFlow15) is among the allowed flow formats (OpenFlow11)
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -1054,7 +1020,7 @@ Error OFPBFC_MSG_FAILED for: OFPT_BUNDLE_CONTROL (OF1.5):
 ])
 # Negative test.
 AT_CHECK([ovs-ofctl --bundle -O OpenFlow11 -vwarn remove-buckets br0 group_id=1234,command_bucket_id=last], [1], [],
-  [ovs-ofctl: none of the usable flow formats (OXM-OpenFlow15,OXM-OpenFlow16) is among the allowed flow formats (OXM-OpenFlow14)
+  [ovs-ofctl: none of the usable flow formats (OXM-OpenFlow15) is among the allowed flow formats (OXM-OpenFlow14)
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -1369,39 +1335,6 @@ OFPST_PORT_DESC reply (OF1.4):
      state:      $state
      speed: 0 Mbps now, 0 Mbps max
 OFPT_GET_CONFIG_REPLY (OF1.4): frags=normal miss_send_len=0
-])
-done
-OVS_VSWITCHD_STOP
-AT_CLEANUP
-
-AT_SETUP([ofproto - mod-port (OpenFlow 1.6)])
-OVS_VSWITCHD_START
-for command_config_state in \
-    'up 0 LIVE' \
-    'no-receive NO_RECV LIVE' \
-    'no-forward NO_RECV,NO_FWD LIVE' \
-    'no-packet-in NO_RECV,NO_FWD,NO_PACKET_IN LIVE' \
-    'forward NO_RECV,NO_PACKET_IN LIVE' \
-    'packet-in NO_RECV LIVE' \
-    'up NO_RECV LIVE' \
-    'receive 0 LIVE' \
-    'down PORT_DOWN LINK_DOWN'
-do
-    printf '\n--- %s --- \n\n' "$command_config_state"
-    set $command_config_state
-    command=$[1] config=`echo $[2] | sed 's/,/ /g'` state=$[3]
-    AT_CHECK([ovs-ofctl -O OpenFlow16 -vwarn mod-port br0 br0 $command])
-    AT_CHECK([ovs-ofctl -O OpenFlow16 -vwarn show br0], [0], [stdout])
-    AT_CHECK_UNQUOTED([strip_xids < stdout], [0], [dnl
-OFPT_FEATURES_REPLY (OF1.6): dpid:fedcba9876543210
-n_tables:254, n_buffers:0
-capabilities: FLOW_STATS TABLE_STATS PORT_STATS GROUP_STATS QUEUE_STATS BUNDLES
-OFPST_PORT_DESC reply (OF1.6):
- LOCAL(br0): addr:aa:55:aa:55:00:00
-     config:     $config
-     state:      $state
-     speed: 0 Mbps now, 0 Mbps max
-OFPT_GET_CONFIG_REPLY (OF1.6): frags=normal miss_send_len=0
 ])
 done
 OVS_VSWITCHD_STOP
@@ -5564,19 +5497,19 @@ dnl Check logs for OpenFlow trace
 # Prevent race.
 OVS_WAIT_UNTIL([vconn_sub < ovs-vswitchd.log | test `grep -- "|vconn|DBG|unix: sent (Success): NXST_FLOW reply" | wc -l` -ge 3])
 AT_CHECK([print_vconn_debug | vconn_sub | ofctl_strip], [0], [dnl
-vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.6):
- version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
 vconn|DBG|unix: received: OFPT_HELLO:
  version bitmap: 0x01
-vconn|DBG|unix: negotiated OpenFlow version 0x01 (we support version 0x07 and earlier, peer supports version 0x01)
+vconn|DBG|unix: negotiated OpenFlow version 0x01 (we support version 0x06 and earlier, peer supports version 0x01)
 vconn|DBG|unix: received: OFPT_FLOW_MOD: DEL actions=drop
 vconn|DBG|unix: received: OFPT_BARRIER_REQUEST:
 vconn|DBG|unix: sent (Success): OFPT_BARRIER_REPLY:
-vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.6):
- version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
 vconn|DBG|unix: received: OFPT_HELLO (OF1.4):
  version bitmap: 0x05
-vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x07 and earlier, peer supports version 0x05)
+vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x06 and earlier, peer supports version 0x05)
 vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=OPEN_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
@@ -5614,11 +5547,11 @@ vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=COMMIT_REPLY flags=0
-vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.6):
- version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
 vconn|DBG|unix: received: OFPT_HELLO:
  version bitmap: 0x01
-vconn|DBG|unix: negotiated OpenFlow version 0x01 (we support version 0x07 and earlier, peer supports version 0x01)
+vconn|DBG|unix: negotiated OpenFlow version 0x01 (we support version 0x06 and earlier, peer supports version 0x01)
 vconn|DBG|unix: received: NXT_SET_FLOW_FORMAT: format=nxm
 vconn|DBG|unix: received: OFPT_BARRIER_REQUEST:
 vconn|DBG|unix: sent (Success): OFPT_BARRIER_REPLY:
@@ -5626,11 +5559,11 @@ vconn|DBG|unix: received: NXST_FLOW request:
 vconn|DBG|unix: sent (Success): NXST_FLOW reply:
  idle_timeout=50, in_port=2,dl_src=00:66:77:88:99:aa actions=output:5
  idle_timeout=60, in_port=2,dl_src=00:77:88:99:aa:bb actions=output:6
-vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.6):
- version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
 vconn|DBG|unix: received: OFPT_HELLO (OF1.4):
  version bitmap: 0x05
-vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x07 and earlier, peer supports version 0x05)
+vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x06 and earlier, peer supports version 0x05)
 vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=OPEN_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
@@ -5647,11 +5580,11 @@ vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=COMMIT_REPLY flags=0
-vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.6):
- version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
 vconn|DBG|unix: received: OFPT_HELLO:
  version bitmap: 0x01
-vconn|DBG|unix: negotiated OpenFlow version 0x01 (we support version 0x07 and earlier, peer supports version 0x01)
+vconn|DBG|unix: negotiated OpenFlow version 0x01 (we support version 0x06 and earlier, peer supports version 0x01)
 vconn|DBG|unix: received: NXT_SET_FLOW_FORMAT: format=nxm
 vconn|DBG|unix: received: OFPT_BARRIER_REQUEST:
 vconn|DBG|unix: sent (Success): OFPT_BARRIER_REPLY:
@@ -5659,11 +5592,11 @@ vconn|DBG|unix: received: NXST_FLOW request:
 vconn|DBG|unix: sent (Success): NXST_FLOW reply:
  idle_timeout=50, in_port=2,dl_src=00:66:77:88:99:aa actions=drop
  idle_timeout=60, in_port=2,dl_src=00:77:88:99:aa:bb actions=output:7
-vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.6):
- version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
 vconn|DBG|unix: received: OFPT_HELLO (OF1.4):
  version bitmap: 0x05
-vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x07 and earlier, peer supports version 0x05)
+vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x06 and earlier, peer supports version 0x05)
 vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=OPEN_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
@@ -5683,11 +5616,11 @@ vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=COMMIT_REPLY flags=0
-vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.6):
- version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
 vconn|DBG|unix: received: OFPT_HELLO:
  version bitmap: 0x01
-vconn|DBG|unix: negotiated OpenFlow version 0x01 (we support version 0x07 and earlier, peer supports version 0x01)
+vconn|DBG|unix: negotiated OpenFlow version 0x01 (we support version 0x06 and earlier, peer supports version 0x01)
 vconn|DBG|unix: received: NXT_SET_FLOW_FORMAT: format=nxm
 vconn|DBG|unix: received: OFPT_BARRIER_REQUEST:
 vconn|DBG|unix: sent (Success): OFPT_BARRIER_REPLY:
@@ -6246,19 +6179,19 @@ dnl Check logs for OpenFlow trace
 # Prevent race.
 OVS_WAIT_UNTIL([vconn_sub < ovs-vswitchd.log | test `grep -- "|vconn|DBG|unix: sent (Success): NXST_FLOW reply" | wc -l` -ge 3])
 AT_CHECK([print_vconn_debug | vconn_sub | ofctl_strip], [0], [dnl
-vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.6):
- version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
 vconn|DBG|unix: received: OFPT_HELLO:
  version bitmap: 0x01
-vconn|DBG|unix: negotiated OpenFlow version 0x01 (we support version 0x07 and earlier, peer supports version 0x01)
+vconn|DBG|unix: negotiated OpenFlow version 0x01 (we support version 0x06 and earlier, peer supports version 0x01)
 vconn|DBG|unix: received: OFPT_FLOW_MOD: DEL actions=drop
 vconn|DBG|unix: received: OFPT_BARRIER_REQUEST:
 vconn|DBG|unix: sent (Success): OFPT_BARRIER_REPLY:
-vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.6):
- version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
 vconn|DBG|unix: received: OFPT_HELLO (OF1.3):
  version bitmap: 0x04
-vconn|DBG|unix: negotiated OpenFlow version 0x04 (we support version 0x07 and earlier, peer supports version 0x04)
+vconn|DBG|unix: negotiated OpenFlow version 0x04 (we support version 0x06 and earlier, peer supports version 0x04)
 vconn|DBG|unix: received: ONFT_BUNDLE_CONTROL (OF1.3):
  bundle_id=0 type=OPEN_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): ONFT_BUNDLE_CONTROL (OF1.3):
@@ -6296,11 +6229,11 @@ vconn|DBG|unix: received: ONFT_BUNDLE_CONTROL (OF1.3):
  bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): ONFT_BUNDLE_CONTROL (OF1.3):
  bundle_id=0 type=COMMIT_REPLY flags=0
-vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.6):
- version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
 vconn|DBG|unix: received: OFPT_HELLO:
  version bitmap: 0x01
-vconn|DBG|unix: negotiated OpenFlow version 0x01 (we support version 0x07 and earlier, peer supports version 0x01)
+vconn|DBG|unix: negotiated OpenFlow version 0x01 (we support version 0x06 and earlier, peer supports version 0x01)
 vconn|DBG|unix: received: NXT_SET_FLOW_FORMAT: format=nxm
 vconn|DBG|unix: received: OFPT_BARRIER_REQUEST:
 vconn|DBG|unix: sent (Success): OFPT_BARRIER_REPLY:
@@ -6308,11 +6241,11 @@ vconn|DBG|unix: received: NXST_FLOW request:
 vconn|DBG|unix: sent (Success): NXST_FLOW reply:
  idle_timeout=50, in_port=2,dl_src=00:66:77:88:99:aa actions=output:5
  idle_timeout=60, in_port=2,dl_src=00:77:88:99:aa:bb actions=output:6
-vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.6):
- version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
 vconn|DBG|unix: received: OFPT_HELLO (OF1.3):
  version bitmap: 0x04
-vconn|DBG|unix: negotiated OpenFlow version 0x04 (we support version 0x07 and earlier, peer supports version 0x04)
+vconn|DBG|unix: negotiated OpenFlow version 0x04 (we support version 0x06 and earlier, peer supports version 0x04)
 vconn|DBG|unix: received: ONFT_BUNDLE_CONTROL (OF1.3):
  bundle_id=0 type=OPEN_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): ONFT_BUNDLE_CONTROL (OF1.3):
@@ -6329,11 +6262,11 @@ vconn|DBG|unix: received: ONFT_BUNDLE_CONTROL (OF1.3):
  bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): ONFT_BUNDLE_CONTROL (OF1.3):
  bundle_id=0 type=COMMIT_REPLY flags=0
-vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.6):
- version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
 vconn|DBG|unix: received: OFPT_HELLO:
  version bitmap: 0x01
-vconn|DBG|unix: negotiated OpenFlow version 0x01 (we support version 0x07 and earlier, peer supports version 0x01)
+vconn|DBG|unix: negotiated OpenFlow version 0x01 (we support version 0x06 and earlier, peer supports version 0x01)
 vconn|DBG|unix: received: NXT_SET_FLOW_FORMAT: format=nxm
 vconn|DBG|unix: received: OFPT_BARRIER_REQUEST:
 vconn|DBG|unix: sent (Success): OFPT_BARRIER_REPLY:
@@ -6341,11 +6274,11 @@ vconn|DBG|unix: received: NXST_FLOW request:
 vconn|DBG|unix: sent (Success): NXST_FLOW reply:
  idle_timeout=50, in_port=2,dl_src=00:66:77:88:99:aa actions=drop
  idle_timeout=60, in_port=2,dl_src=00:77:88:99:aa:bb actions=output:7
-vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.6):
- version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
 vconn|DBG|unix: received: OFPT_HELLO (OF1.3):
  version bitmap: 0x04
-vconn|DBG|unix: negotiated OpenFlow version 0x04 (we support version 0x07 and earlier, peer supports version 0x04)
+vconn|DBG|unix: negotiated OpenFlow version 0x04 (we support version 0x06 and earlier, peer supports version 0x04)
 vconn|DBG|unix: received: ONFT_BUNDLE_CONTROL (OF1.3):
  bundle_id=0 type=OPEN_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): ONFT_BUNDLE_CONTROL (OF1.3):
@@ -6365,11 +6298,11 @@ vconn|DBG|unix: received: ONFT_BUNDLE_CONTROL (OF1.3):
  bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): ONFT_BUNDLE_CONTROL (OF1.3):
  bundle_id=0 type=COMMIT_REPLY flags=0
-vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.6):
- version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
 vconn|DBG|unix: received: OFPT_HELLO:
  version bitmap: 0x01
-vconn|DBG|unix: negotiated OpenFlow version 0x01 (we support version 0x07 and earlier, peer supports version 0x01)
+vconn|DBG|unix: negotiated OpenFlow version 0x01 (we support version 0x06 and earlier, peer supports version 0x01)
 vconn|DBG|unix: received: NXT_SET_FLOW_FORMAT: format=nxm
 vconn|DBG|unix: received: OFPT_BARRIER_REQUEST:
 vconn|DBG|unix: sent (Success): OFPT_BARRIER_REPLY:

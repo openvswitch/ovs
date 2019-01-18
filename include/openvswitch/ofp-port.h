@@ -90,19 +90,12 @@ enum ofputil_port_state {
 
 void ofputil_port_state_format(struct ds *, enum ofputil_port_state);
 
-/* Abstract ofp10_phy_port, ofp11_port, ofp14_port, or ofp16_port. */
+/* Abstract ofp10_phy_port, ofp11_port, or ofp14_port. */
 struct ofputil_phy_port {
     ofp_port_t port_no;
 
-    /* Hardware addresses.
-     *
-     * Most hardware has a normal 48-bit Ethernet address, in hw_addr.
-     * Some hardware might have a 64-bit address in hw_addr64.
-     * All-bits-0 indicates that a given address is not present. */
     struct eth_addr hw_addr;
-    struct eth_addr64 hw_addr64;
-
-    char name[OFP16_MAX_PORT_NAME_LEN]; /* 64 bytes in OF1.6+, 16 otherwise. */
+    char name[OFP_MAX_PORT_NAME_LEN]; /* 16 bytes. */
     enum ofputil_port_config config;
     enum ofputil_port_state state;
 
@@ -142,7 +135,6 @@ void ofputil_port_status_format(struct ds *,
 struct ofputil_port_mod {
     ofp_port_t port_no;
     struct eth_addr hw_addr;
-    struct eth_addr64 hw_addr64;
     enum ofputil_port_config config;
     enum ofputil_port_config mask;
     enum netdev_features advertise;

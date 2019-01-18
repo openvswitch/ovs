@@ -711,32 +711,6 @@ OFPT_PORT_STATUS (OF1.4) (xid=0x0): MOD: 3(eth0): addr:50:54:00:00:00:01
 ])
 AT_CLEANUP
 
-AT_SETUP([OFPT_PORT_STATUS - OF1.6])
-AT_KEYWORDS([ofp-print])
-AT_CHECK([ovs-ofctl ofp-print "\
-07 0c 00 90 00 00 00 00 02 00 00 00 00 00 00 00 \
-\
-00 00 00 03 00 80 00 03 50 54 00 00 00 01 00 00 \
-50 54 00 ff fe 00 00 01 \
-65 74 68 30 00 00 00 00 00 00 00 00 00 00 00 00 \
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
-00 00 00 00 00 00 00 00 00 00 00 20 00 00 00 00 \
-00 00 20 08 00 00 28 0f 00 00 28 0f 00 00 00 00 \
-00 01 86 a0 00 01 86 a0 \
-"], [0], [dnl
-OFPT_PORT_STATUS (OF1.6) (xid=0x0): MOD: 3(eth0): addr:50:54:00:00:00:01
-     addr64: 50:54:00:ff:fe:00:00:01
-     config:     0
-     state:      0
-     current:    100MB-FD AUTO_NEG
-     advertised: 10MB-HD 10MB-FD 100MB-HD 100MB-FD COPPER AUTO_NEG
-     supported:  10MB-HD 10MB-FD 100MB-HD 100MB-FD COPPER AUTO_NEG
-     speed: 100 Mbps now, 100 Mbps max
-])
-AT_CLEANUP
-
 AT_SETUP([OFPT_PACKET_OUT - OF1.0])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
@@ -1228,21 +1202,6 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 00 00 08 00 00 00 01
 " 3], [0], [dnl
 OFPT_PORT_MOD (OF1.4) (xid=0x3): port: 3: addr:50:54:00:00:00:01
-     config: PORT_DOWN
-     mask:   PORT_DOWN
-     advertise: 10MB-HD
-])
-AT_CLEANUP
-
-AT_SETUP([OFPT_PORT_MOD - OF1.6])
-AT_KEYWORDS([ofp-print])
-AT_CHECK([ovs-ofctl ofp-print "\
-07 10 00 30 00 00 00 03 00 00 00 03 00 03 00 00 \
-50 54 00 00 00 01 00 00 50 54 00 ff fe 00 00 01 \
-00 00 00 01 00 00 00 01 00 00 00 08 00 00 00 01
-" 3], [0], [dnl
-OFPT_PORT_MOD (OF1.6) (xid=0x3): port: 3: addr:50:54:00:00:00:01
-     addr64: 50:54:00:ff:fe:00:00:01
      config: PORT_DOWN
      mask:   PORT_DOWN
      advertise: 10MB-HD

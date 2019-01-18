@@ -21,11 +21,6 @@
 
 #include <openflow/openflow-common.h>
 
-/* Maximum name of a port.
- *
- * OpenFlow 1.6 (draft) increases this to 64. */
-#define OFP10_MAX_PORT_NAME_LEN  16
-
 /* Port number(s)   meaning
  * ---------------  --------------------------------------
  * 0x0000           not assigned a meaning by OpenFlow 1.0
@@ -102,7 +97,7 @@ enum ofp10_port_features {
 struct ofp10_phy_port {
     ovs_be16 port_no;
     struct eth_addr hw_addr;
-    char name[OFP10_MAX_PORT_NAME_LEN]; /* Null-terminated */
+    char name[OFP_MAX_PORT_NAME_LEN]; /* Null-terminated */
 
     ovs_be32 config;        /* Bitmap of OFPPC_* and OFPPC10_* flags. */
     ovs_be32 state;         /* Bitmap of OFPPS_* and OFPPS10_* flags. */

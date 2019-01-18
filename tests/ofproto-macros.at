@@ -434,8 +434,7 @@ add_of_br () {
                           other-config:datapath-id=$dpid \
                           other-config:hwaddr=$mac \
                           protocols="[[OpenFlow10,OpenFlow11,OpenFlow12,\
-                                       OpenFlow13,OpenFlow14,OpenFlow15,\
-                                       OpenFlow16]]" \
+                                       OpenFlow13,OpenFlow14,OpenFlow15]]" \
         -- "$@"
 }
 

@@ -177,10 +177,8 @@ enum ofpraw {
     OFPRAW_OFPT10_PORT_STATUS,
     /* OFPT 1.1-1.3 (12): struct ofp_port_status, struct ofp11_port. */
     OFPRAW_OFPT11_PORT_STATUS,
-    /* OFPT 1.4-1.5 (12): struct ofp_port_status, struct ofp14_port, uint8_t[8][]. */
+    /* OFPT 1.4+ (12): struct ofp_port_status, struct ofp14_port, uint8_t[8][]. */
     OFPRAW_OFPT14_PORT_STATUS,
-    /* OFPT 1.6+ (12): struct ofp_port_status, struct ofp16_port, uint8_t[8][]. */
-    OFPRAW_OFPT16_PORT_STATUS,
 
     /* OFPT 1.0 (13): struct ofp10_packet_out, uint8_t[]. */
     OFPRAW_OFPT10_PACKET_OUT,
@@ -207,10 +205,8 @@ enum ofpraw {
     OFPRAW_OFPT10_PORT_MOD,
     /* OFPT 1.1-1.3 (16): struct ofp11_port_mod. */
     OFPRAW_OFPT11_PORT_MOD,
-    /* OFPT 1.4-1.5 (16): struct ofp14_port_mod, uint8_t[8][]. */
+    /* OFPT 1.4+ (16): struct ofp14_port_mod, uint8_t[8][]. */
     OFPRAW_OFPT14_PORT_MOD,
-    /* OFPT 1.6+ (16): struct ofp16_port_mod, uint8_t[8][]. */
-    OFPRAW_OFPT16_PORT_MOD,
 
     /* OFPT 1.1-1.3 (17): struct ofp11_table_mod. */
     OFPRAW_OFPT11_TABLE_MOD,
@@ -592,8 +588,7 @@ enum ofptype {
                                   * OFPRAW_NXT_FLOW_REMOVED. */
     OFPTYPE_PORT_STATUS,         /* OFPRAW_OFPT10_PORT_STATUS.
                                   * OFPRAW_OFPT11_PORT_STATUS.
-                                  * OFPRAW_OFPT14_PORT_STATUS.
-                                  * OFPRAW_OFPT16_PORT_STATUS. */
+                                  * OFPRAW_OFPT14_PORT_STATUS. */
 
     /* Controller command messages. */
     OFPTYPE_PACKET_OUT,          /* OFPRAW_OFPT10_PACKET_OUT.
@@ -607,8 +602,7 @@ enum ofptype {
                                   * OFPRAW_OFPT15_GROUP_MOD. */
     OFPTYPE_PORT_MOD,            /* OFPRAW_OFPT10_PORT_MOD.
                                   * OFPRAW_OFPT11_PORT_MOD.
-                                  * OFPRAW_OFPT14_PORT_MOD.
-                                  * OFPRAW_OFPT16_PORT_MOD. */
+                                  * OFPRAW_OFPT14_PORT_MOD. */
     OFPTYPE_TABLE_MOD,           /* OFPRAW_OFPT11_TABLE_MOD.
                                   * OFPRAW_OFPT14_TABLE_MOD. */
 
