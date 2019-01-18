@@ -474,6 +474,7 @@ struct dp_netdev_port {
     unsigned n_rxq;             /* Number of elements in 'rxqs' */
     unsigned *txq_used;         /* Number of threads that use each tx queue. */
     struct ovs_mutex txq_used_mutex;
+    bool emc_enabled;           /* If true EMC will be used. */
     char *type;                 /* Port type as requested by user. */
     char *rxq_affinity_list;    /* Requested affinity of rx queues. */
 };
@@ -588,6 +589,7 @@ static void dp_netdev_actions_free(struct dp_netdev_actions *);
 struct polled_queue {
     struct dp_netdev_rxq *rxq;
     odp_port_t port_no;
+    bool emc_enabled;
 };
 
 /* Contained by struct dp_netdev_pmd_thread's 'poll_list' member. */
@@ -617,6 +619,8 @@ struct dp_netdev_pmd_thread_ctx {
     long long now;
     /* RX queue from which last packet was received. */
     struct dp_netdev_rxq *last_rxq;
+    /* EMC insertion probability context for the current processing cycle. */
+    uint32_t emc_insert_min;
 };
 
 /* PMD: Poll modes drivers.  PMD accesses devices via polling to eliminate
@@ -1798,6 +1802,7 @@ port_create(const char *devname, const char *type,
     port->netdev = netdev;
     port->type = xstrdup(type);
     port->sf = sf;
+    port->emc_enabled = true;
     port->need_reconfigure = true;
     ovs_mutex_init(&port->txq_used_mutex);
 
@@ -2830,9 +2835,7 @@ emc_probabilistic_insert(struct dp_netdev_pmd_thread *pmd,
      * default the value is UINT32_MAX / 100 which yields an insertion
      * probability of 1/100 ie. 1% */
 
-    uint32_t min;
-
-    atomic_read_relaxed(&pmd->dp->emc_insert_min, &min);
+    uint32_t min = pmd->ctx.emc_insert_min;
 
     if (min && random_uint32() <= min) {
         emc_insert(&(pmd->flow_cache).emc_cache, key, flow);
@@ -3698,7 +3701,8 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
         ovs_mutex_lock(&dp->non_pmd_mutex);
     }
 
-    /* Update current time in PMD context. */
+    /* Update current time in PMD context. We don't care about EMC insertion
+     * probability, because we are on a slow path. */
     pmd_thread_ctx_time_update(pmd);
 
     /* The action processing expects the RSS hash to be valid, because
@@ -3842,7 +3846,7 @@ dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
     if (insert_min != cur_min) {
         atomic_store_relaxed(&dp->emc_insert_min, insert_min);
         if (insert_min == 0) {
-            VLOG_INFO("EMC has been disabled");
+            VLOG_INFO("EMC insertion probability changed to zero");
         } else {
             VLOG_INFO("EMC insertion probability changed to 1/%llu (~%.2f%%)",
                       insert_prob, (100 / (float)insert_prob));
@@ -3965,8 +3969,29 @@ exit:
     return error;
 }
 
-/* Changes the affinity of port's rx queues.  The changes are actually applied
- * in dpif_netdev_run(). */
+/* Returns 'true' if one of the 'port's RX queues exists in 'poll_list'
+ * of given PMD thread. */
+static bool
+dpif_netdev_pmd_polls_port(struct dp_netdev_pmd_thread *pmd,
+                           struct dp_netdev_port *port)
+    OVS_EXCLUDED(pmd->port_mutex)
+{
+    struct rxq_poll *poll;
+    bool found = false;
+
+    ovs_mutex_lock(&pmd->port_mutex);
+    HMAP_FOR_EACH (poll, node, &pmd->poll_list) {
+        if (port == poll->rxq->port) {
+            found = true;
+            break;
+        }
+    }
+    ovs_mutex_unlock(&pmd->port_mutex);
+    return found;
+}
+
+/* Updates port configuration from the database.  The changes are actually
+ * applied in dpif_netdev_run(). */
 static int
 dpif_netdev_port_set_config(struct dpif *dpif, odp_port_t port_no,
                             const struct smap *cfg)
@@ -3975,10 +4000,49 @@ dpif_netdev_port_set_config(struct dpif *dpif, odp_port_t port_no,
     struct dp_netdev_port *port;
     int error = 0;
     const char *affinity_list = smap_get(cfg, "pmd-rxq-affinity");
+    bool emc_enabled = smap_get_bool(cfg, "emc-enable", true);
 
     ovs_mutex_lock(&dp->port_mutex);
     error = get_port_by_number(dp, port_no, &port);
-    if (error || !netdev_is_pmd(port->netdev)
+    if (error) {
+        goto unlock;
+    }
+
+    if (emc_enabled != port->emc_enabled) {
+        struct dp_netdev_pmd_thread *pmd;
+        struct ds ds = DS_EMPTY_INITIALIZER;
+        uint32_t cur_min, insert_prob;
+
+        port->emc_enabled = emc_enabled;
+        /* Mark for reload all the threads that polls this port and request
+         * for reconfiguration for the actual reloading of threads. */
+        CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
+            if (dpif_netdev_pmd_polls_port(pmd, port)) {
+                pmd->need_reload = true;
+            }
+        }
+        dp_netdev_request_reconfigure(dp);
+
+        ds_put_format(&ds, "%s: EMC has been %s.",
+                      netdev_get_name(port->netdev),
+                      (emc_enabled) ? "enabled" : "disabled");
+        if (emc_enabled) {
+            ds_put_cstr(&ds, " Current insertion probability is ");
+            atomic_read_relaxed(&dp->emc_insert_min, &cur_min);
+            if (!cur_min) {
+                ds_put_cstr(&ds, "zero.");
+            } else {
+                insert_prob = UINT32_MAX / cur_min;
+                ds_put_format(&ds, "1/%"PRIu32" (~%.2f%%).",
+                              insert_prob, 100 / (float) insert_prob);
+            }
+        }
+        VLOG_INFO("%s", ds_cstr(&ds));
+        ds_destroy(&ds);
+    }
+
+    /* Checking for RXq affinity changes. */
+    if (!netdev_is_pmd(port->netdev)
         || nullable_string_is_equal(affinity_list, port->rxq_affinity_list)) {
         goto unlock;
     }
@@ -5123,6 +5187,13 @@ dpif_netdev_run(struct dpif *dpif)
             if (!netdev_is_pmd(port->netdev)) {
                 int i;
 
+                if (port->emc_enabled) {
+                    atomic_read_relaxed(&dp->emc_insert_min,
+                                        &non_pmd->ctx.emc_insert_min);
+                } else {
+                    non_pmd->ctx.emc_insert_min = 0;
+                }
+
                 for (i = 0; i < port->n_rxq; i++) {
                     if (dp_netdev_process_rxq_port(non_pmd,
                                                    &port->rxqs[i],
@@ -5296,6 +5367,7 @@ pmd_load_queues_and_ports(struct dp_netdev_pmd_thread *pmd,
     HMAP_FOR_EACH (poll, node, &pmd->poll_list) {
         poll_list[i].rxq = poll->rxq;
         poll_list[i].port_no = poll->rxq->port->port_no;
+        poll_list[i].emc_enabled = poll->rxq->port->emc_enabled;
         i++;
     }
 
@@ -5360,6 +5432,14 @@ reload:
         pmd_perf_start_iteration(s);
 
         for (i = 0; i < poll_cnt; i++) {
+
+            if (poll_list[i].emc_enabled) {
+                atomic_read_relaxed(&pmd->dp->emc_insert_min,
+                                    &pmd->ctx.emc_insert_min);
+            } else {
+                pmd->ctx.emc_insert_min = 0;
+            }
+
             process_packets =
                 dp_netdev_process_rxq_port(pmd, poll_list[i].rxq,
                                            poll_list[i].port_no);
@@ -6301,7 +6381,7 @@ dfc_processing(struct dp_netdev_pmd_thread *pmd,
     struct dfc_cache *cache = &pmd->flow_cache;
     struct dp_packet *packet;
     const size_t cnt = dp_packet_batch_size(packets_);
-    uint32_t cur_min;
+    uint32_t cur_min = pmd->ctx.emc_insert_min;
     int i;
     uint16_t tcp_flags;
     bool smc_enable_db;
@@ -6309,7 +6389,6 @@ dfc_processing(struct dp_netdev_pmd_thread *pmd,
     bool batch_enable = true;
 
     atomic_read_relaxed(&pmd->dp->smc_enable_db, &smc_enable_db);
-    atomic_read_relaxed(&pmd->dp->emc_insert_min, &cur_min);
     pmd_perf_update_counter(&pmd->perf_stats,
                             md_is_valid ? PMD_STAT_RECIRC : PMD_STAT_RECV,
                             cnt);

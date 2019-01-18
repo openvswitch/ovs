@@ -3101,6 +3101,25 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
       </column>
     </group>
 
+    <group title="EMC (Exact Match Cache) Configuration">
+      <p>
+        These settings controls behaviour of EMC lookups/insertions for packets
+        received from the interface.
+      </p>
+
+      <column name="other_config" key="emc-enable" type='{"type": "boolean"}'>
+        <p>
+          Specifies if Exact Match Cache (EMC) should be used while processing
+          packets received from this interface.
+          If true, <ref table="Open_vSwitch" column="other_config"
+          key="emc-insert-inv-prob"/> will have effect on this interface.
+        </p>
+        <p>
+          Defaults to true.
+        </p>
+      </column>
+    </group>
+
     <group title="MTU">
       <p>
         The MTU (maximum transmission unit) is the largest amount of data

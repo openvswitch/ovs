@@ -24,11 +24,14 @@ Post-v2.10.0
          allocated dynamically using the following syntax:
            ovn-nbctl lsp-set-addresses <port> "dynamic <IP>"
    - DPDK:
+     * Add support for DPDK 18.11
+     * Add support for port representors.
+   - Userspace datapath:
      * Add option for simple round-robin based Rxq to PMD assignment.
        It can be set with pmd-rxq-assign.
-     * Add support for DPDK 18.11
      * Add support for Auto load balancing of PMDs (experimental)
-     * Add support for port representors.
+     * Added new per-port configurable option to manage EMC:
+       'other_config:emc-enable'.
    - Add 'symmetric_l3' hash function.
    - OVS now honors 'updelay' and 'downdelay' for bonds with LACP configured.
    - ovs-vswitchd:

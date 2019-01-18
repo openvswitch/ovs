@@ -101,6 +101,19 @@ observed with pmd stats::
 For certain traffic profiles with many parallel flows, it's recommended to set
 ``N`` to '0' to achieve higher forwarding performance.
 
+It is also possible to enable/disable EMC on per-port basis using::
+
+    $ ovs-vsctl set interface <iface> other_config:emc-enable={true,false}
+
+.. note::
+
+   This could be useful for cases where different number of flows expected on
+   different ports. For example, if one of the VMs encapsulates traffic using
+   additional headers, it will receive large number of flows but only few flows
+   will come out of this VM. In this scenario it's much faster to use EMC
+   instead of classifier for traffic from the VM, but it's better to disable
+   EMC for the traffic which flows to the VM.
+
 For more information on the EMC refer to :doc:`/intro/install/dpdk` .
 
 
