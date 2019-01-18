@@ -163,6 +163,7 @@ __regex_ends_with_bracket = \
 __regex_ptr_declaration_missing_whitespace = re.compile(r'[a-zA-Z0-9]\*[^*]')
 __regex_is_comment_line = re.compile(r'^\s*(/\*|\*\s)')
 __regex_has_comment = re.compile(r'.*(/\*|\*\s)')
+__regex_has_c99_comment = re.compile(r'.*//.*$')
 __regex_trailing_operator = re.compile(r'^[^ ]* [^ ]*[?:]$')
 __regex_conditional_else_bracing = re.compile(r'^\s*else\s*{?$')
 __regex_conditional_else_bracing2 = re.compile(r'^\s*}\selse\s*$')
@@ -296,6 +297,11 @@ def has_comment(line):
     """Returns TRUE if the current line contains a comment or is part of
        a block comment."""
     return __regex_has_comment.match(line) is not None
+
+
+def has_c99_comment(line):
+    """Returns TRUE if the current line contains C99 style comment (//)."""
+    return __regex_has_c99_comment.match(line) is not None
 
 
 def trailing_operator(line):
@@ -544,6 +550,11 @@ checks = [
      'prereq': lambda x: has_comment(x),
      'check': lambda x: has_xxx_mark(x),
      'print': lambda: print_warning("Comment with 'xxx' marker")},
+
+    {'regex': r'(\.c|\.h)(\.in)?$', 'match_name': None,
+     'prereq': lambda x: not is_comment_line(x),
+     'check': lambda x: has_c99_comment(x),
+     'print': lambda: print_error("C99 style comment")},
 
     {'regex': r'(\.c|\.h)(\.in)?$', 'match_name': None,
      'prereq': lambda x: has_comment(x),

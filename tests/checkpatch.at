@@ -287,3 +287,26 @@ try_checkpatch \
     "
 
 AT_CLEANUP
+
+
+AT_SETUP([checkpatch - comments])
+try_checkpatch \
+   "COMMON_PATCH_HEADER
+    +     a = 1; /* C style comment. */
+    "
+
+try_checkpatch \
+   "COMMON_PATCH_HEADER
+    +     /* http://URL/inside/the/comment.html */
+    "
+
+try_checkpatch \
+   "COMMON_PATCH_HEADER
+    +     a = 1; // C99 style comment.
+    " \
+    "ERROR: C99 style comment
+    #8 FILE: A.c:1:
+         a = 1; // C99 style comment.
+"
+
+AT_CLEANUP
