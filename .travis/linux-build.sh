@@ -119,7 +119,7 @@ else
     make -j2 CFLAGS="$CFLAGS $BUILD_ENV $SPARSE_FLAGS" C=1
 fi
 
-if [ "$TESTSUITE" ] && [ "$CC" != "clang" ]; then
+if [ "$TESTSUITE" ]; then
     if ! make distcheck TESTSUITEFLAGS=-j4 RECHECK=yes; then
         # testsuite.log is necessary for debugging.
         cat */_build/tests/testsuite.log
