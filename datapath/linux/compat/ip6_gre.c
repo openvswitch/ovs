@@ -2802,6 +2802,13 @@ int rpl_ip6gre_init(void)
 	if (err < 0) {
 		pr_info("%s: can't add protocol\n", __func__);
 		unregister_pernet_device(&ip6gre_net_ops);
+		/*
+		 * inet6_add_protocol will return a -1 if it fails
+		 * to grab the pointer but the vport initialization
+		 * expects a return value of -EEXIST.  Set err to
+		 * -EEXIST here to ensure proper handling.
+		 */
+		err = -EEXIST;
 		goto ip6_gre_loaded;
 	}
 
