@@ -77,14 +77,14 @@
  *
  *    struct ovs_mutex mutex;
  *    struct ovs_list queue OVS_GUARDED_BY(mutex);
- *    struct seq nonempty_seq;
+ *    struct seq *nonempty_seq;
  *
  * To add an element to the queue:
  *
  *    ovs_mutex_lock(&mutex);
  *    ovs_list_push_back(&queue, ...element...);
  *    if (ovs_list_is_singleton(&queue)) {   // The 'if' test here is optional.
- *        seq_change(&nonempty_seq);
+ *        seq_change(nonempty_seq);
  *    }
  *    ovs_mutex_unlock(&mutex);
  *
@@ -92,7 +92,7 @@
  *
  *    ovs_mutex_lock(&mutex);
  *    if (ovs_list_is_empty(&queue)) {
- *        seq_wait(&nonempty_seq, seq_read(&nonempty_seq));
+ *        seq_wait(nonempty_seq, seq_read(nonempty_seq));
  *    } else {
  *        poll_immediate_wake();
  *    }
