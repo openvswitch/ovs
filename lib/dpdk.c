@@ -172,23 +172,20 @@ construct_dpdk_options(const struct smap *ovs_other_config,
 static char *
 construct_dpdk_socket_mem(void)
 {
-    int numa;
     const char *def_value = "1024";
-    int numa_nodes = ovs_numa_get_n_numas();
+    int numa, numa_nodes = ovs_numa_get_n_numas();
+    struct ds dpdk_socket_mem = DS_EMPTY_INITIALIZER;
 
     if (numa_nodes == 0 || numa_nodes == OVS_NUMA_UNSPEC) {
         numa_nodes = 1;
     }
-    /* Allocate enough memory for digits, comma-sep and terminator. */
-    char *dpdk_socket_mem = xzalloc(numa_nodes * (strlen(def_value) + 1));
 
-    strcat(dpdk_socket_mem, def_value);
+    ds_put_cstr(&dpdk_socket_mem, def_value);
     for (numa = 1; numa < numa_nodes; ++numa) {
-        strcat(dpdk_socket_mem, ",");
-        strcat(dpdk_socket_mem, def_value);
+        ds_put_format(&dpdk_socket_mem, ",%s", def_value);
     }
 
-    return dpdk_socket_mem;
+    return ds_cstr(&dpdk_socket_mem);
 }
 
 #define MAX_DPDK_EXCL_OPTS 10
