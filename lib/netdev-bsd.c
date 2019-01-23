@@ -996,7 +996,7 @@ netdev_bsd_get_stats(const struct netdev *netdev_, struct netdev_stats *stats)
     mib[3] = IFMIB_IFDATA;
     len = sizeof(ifmd);
     for (i = 1; i <= if_count; i++) {
-        mib[4] = i; //row
+        mib[4] = i; /* row */
         if (sysctl(mib, 6, &ifmd, &len, (void *)0, 0) == -1) {
             VLOG_DBG_RL(&rl, "%s: sysctl failed: %s",
                         netdev_get_name(netdev_), ovs_strerror(errno));

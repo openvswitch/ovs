@@ -72,7 +72,7 @@ struct ofpbuf {
  *
  * Usage example:
  *
- *     uint64_t stub[1024 / 8]; // 1 kB stub properly aligned for 64-bit data.
+ *     uint64_t stub[1024 / 8];         <-- 1 kB stub aligned for 64-bit data.
  *     struct ofpbuf ofpbuf = OFPBUF_STUB_INITIALIZER(stub);
  */
 #define OFPBUF_STUB_INITIALIZER(STUB) {         \

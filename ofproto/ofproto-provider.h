@@ -1128,12 +1128,12 @@ struct ofproto_class {
      *         if (error) {
      *             break;
      *         }
-     *         // Do something with 'port' here (without modifying or freeing
-     *         // any of its data).
+     *         ...Do something with 'port' here (without modifying or freeing
+     *            any of its data)...
      *     }
      *     ofproto->ofproto_class->port_dump_done(ofproto, state);
      * }
-     * // 'error' is now EOF (success) or a positive errno value (failure).
+     * ...'error' is now EOF (success) or a positive errno value (failure)...
      */
     int (*port_dump_start)(const struct ofproto *ofproto, void **statep);
     int (*port_dump_next)(const struct ofproto *ofproto, void *state,

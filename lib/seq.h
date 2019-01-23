@@ -83,7 +83,7 @@
  *
  *    ovs_mutex_lock(&mutex);
  *    ovs_list_push_back(&queue, ...element...);
- *    if (ovs_list_is_singleton(&queue)) {   // The 'if' test here is optional.
+ *    if (ovs_list_is_singleton(&queue)) {   <-- The 'if' here is optional.
  *        seq_change(nonempty_seq);
  *    }
  *    ovs_mutex_unlock(&mutex);

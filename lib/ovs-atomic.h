@@ -509,7 +509,7 @@ ovs_refcount_ref(struct ovs_refcount *refcount)
  * in this form:
  *
  * if (ovs_refcount_unref(&object->ref_cnt) == 1) {
- *     // ...uninitialize object...
+ *     ...uninitialize object...
  *     free(object);
  * }
  *
@@ -593,7 +593,6 @@ ovs_refcount_try_ref_rcu(struct ovs_refcount *refcount)
  * For example:
  *
  * if (ovs_refcount_unref_relaxed(&object->ref_cnt) == 1) {
- *     // Schedule uninitialization and freeing of the object:
  *     ovsrcu_postpone(destructor_function, object);
  * }
  *

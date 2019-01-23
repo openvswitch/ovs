@@ -117,7 +117,7 @@ rtbsd_notifier_run(void)
         int retval;
 
         msg.ifm_type = RTM_IFINFO;
-        msg.ifm_version = RTM_VERSION; //XXX check if necessary
+        msg.ifm_version = RTM_VERSION; /* XXX Check if necessary. */
 
         /* read from PF_ROUTE socket */
         retval = read(notify_sock, (char *)&msg, sizeof(msg));
@@ -176,8 +176,8 @@ rtbsd_report_change(const struct if_msghdr *msg)
 
     COVERAGE_INC(rtbsd_changed);
 
-    change.msg_type = msg->ifm_type; //XXX
-    change.master_ifindex = 0; //XXX
+    change.msg_type = msg->ifm_type; /* XXX */
+    change.master_ifindex = 0; /* XXX */
 
     switch (msg->ifm_type) {
     case RTM_IFINFO:

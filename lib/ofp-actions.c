@@ -3569,10 +3569,10 @@ struct nx_action_cnt_ids {
     ovs_be16 n_controllers;     /* Number of controllers. */
     uint8_t zeros[4];           /* Must be zero. */
 
-    /* Followed by 1 or more controller ids.
+    /* Followed by 1 or more controller ids:
      *
-     * uint16_t cnt_ids[];        // Controller ids.
-     * uint8_t pad[];           // Must be 0 to 8-byte align cnt_ids[].
+     * uint16_t cnt_ids[];      -- Controller ids.
+     * uint8_t pad[];           -- Must be 0 to 8-byte align cnt_ids[].
      */
 };
 OFP_ASSERT(sizeof(struct nx_action_cnt_ids) == 16);

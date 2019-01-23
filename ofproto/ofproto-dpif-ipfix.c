@@ -1115,7 +1115,7 @@ dpif_ipfix_set_options(
             }
             options++;
         }
-        if (i == n_flow_exporters_options) {  // Not found.
+        if (i == n_flow_exporters_options) {  /* Not found. */
             remove_flow_exporter(di, node);
         }
     }

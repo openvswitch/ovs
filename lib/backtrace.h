@@ -27,8 +27,8 @@
  * desired:
  *       #include "backtrace.h"
  *
- *       log_backtrace();
- *       // A message can be added with log_backtrace_msg("your message")
+ *       log_backtrace();                           <-- plain
+ *       log_backtrace_msg("your message");         <-- with a message
  *
  *
  * A typical log will look like the following. The hex numbers listed after

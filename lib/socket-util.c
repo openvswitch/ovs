@@ -1241,7 +1241,7 @@ sock_strerror(int error)
 #endif
 }
 
-#ifndef _WIN32 //Avoid using sendmsg on Windows entirely
+#ifndef _WIN32 /* Avoid using sendmsg on Windows entirely. */
 static int
 emulate_sendmmsg(int fd, struct mmsghdr *msgs, unsigned int n,
                  unsigned int flags)

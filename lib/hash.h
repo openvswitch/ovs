@@ -55,8 +55,8 @@ static inline uint32_t hash_string(const char *, uint32_t basis);
  *
  * The upstream license there says:
  *
- * // MurmurHash3 was written by Austin Appleby, and is placed in the public
- * // domain. The author hereby disclaims copyright to this source code.
+ *    MurmurHash3 was written by Austin Appleby, and is placed in the public
+ *    domain. The author hereby disclaims copyright to this source code.
  *
  * See hash_words() for sample usage. */
 
