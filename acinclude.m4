@@ -895,6 +895,9 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [OVS_DEFINE([HAVE_VOID_NDO_GET_STATS64])])
   OVS_GREP_IFELSE([$KSRC/include/linux/timer.h], [init_timer_deferrable],
                   [OVS_DEFINE([HAVE_INIT_TIMER_DEFERRABLE])])
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/net/inet_frag.h], [inet_frags],
+                        [rnd],
+                        [OVS_DEFINE([HAVE_INET_FRAGS_RND])])
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then

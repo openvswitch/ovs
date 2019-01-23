@@ -99,6 +99,7 @@ static inline u8 ip6_frag_ecn(const struct ipv6hdr *ipv6h)
 	return 1 << (ipv6_get_dsfield(ipv6h) & INET_ECN_MASK);
 }
 
+#ifdef HAVE_INET_FRAGS_RND
 static unsigned int nf_hash_frag(__be32 id, const struct in6_addr *saddr,
 				 const struct in6_addr *daddr)
 {
@@ -125,6 +126,7 @@ static unsigned int nf_hashfn(struct inet_frag_queue *q)
 	return nf_hash_frag(nq->id, &nq->saddr, &nq->daddr);
 }
 
+#endif /* HAVE_INET_FRAGS_RND */
 static void nf_ct_frag6_expire(unsigned long data)
 {
 	struct frag_queue *fq;
@@ -133,9 +135,14 @@ static void nf_ct_frag6_expire(unsigned long data)
 	fq = container_of((struct inet_frag_queue *)data, struct frag_queue, q);
 	net = get_net_from_netns_frags6(fq->q.net);
 
+#ifdef HAVE_INET_FRAGS_RND
 	ip6_expire_frag_queue(net, fq, &nf_frags);
+#else
+	ip6_expire_frag_queue(net, fq);
+#endif
 }
 
+#ifdef HAVE_INET_FRAGS_RND
 /* Creation primitives. */
 static inline struct frag_queue *fq_find(struct net *net, __be32 id,
 					 u32 user, struct in6_addr *src,
@@ -168,7 +175,27 @@ static inline struct frag_queue *fq_find(struct net *net, __be32 id,
 	}
 	return container_of(q, struct frag_queue, q);
 }
+#else
+static struct frag_queue *fq_find(struct net *net, __be32 id, u32 user,
+				  const struct ipv6hdr *hdr, int iif)
+{
+	struct frag_v6_compare_key key = {
+		.id = id,
+		.saddr = hdr->saddr,
+		.daddr = hdr->daddr,
+		.user = user,
+		.iif = iif,
+	};
+	struct inet_frag_queue *q;
 
+	q = inet_frag_find(&net->nf_frag.frags, &key);
+	if (!q)
+		return NULL;
+
+	return container_of(q, struct frag_queue, q);
+}
+
+#endif  /* HAVE_INET_FRAGS_RND */
 
 static int nf_ct_frag6_queue(struct frag_queue *fq, struct sk_buff *skb,
 			     const struct frag_hdr *fhdr, int nhoff)
@@ -317,7 +344,11 @@ found:
 	return 0;
 
 discard_fq:
+#ifdef HAVE_INET_FRAGS_RND
 	inet_frag_kill(&fq->q, &nf_frags);
+#else
+	inet_frag_kill(&fq->q);
+#endif
 err:
 	return -1;
 }
@@ -339,7 +370,11 @@ nf_ct_frag6_reasm(struct frag_queue *fq, struct sk_buff *prev,  struct net_devic
 	int    payload_len;
 	u8 ecn;
 
+#ifdef HAVE_INET_FRAGS_RND
 	inet_frag_kill(&fq->q, &nf_frags);
+#else
+	inet_frag_kill(&fq->q);
+#endif
 
 	WARN_ON(head == NULL);
 	WARN_ON(NFCT_FRAG6_CB(head)->offset != 0);
@@ -561,8 +596,13 @@ int rpl_nf_ct_frag6_gather(struct net *net, struct sk_buff *skb, u32 user)
 #endif
 
 	skb_orphan(skb);
+#ifdef HAVE_INET_FRAGS_RND
 	fq = fq_find(net, fhdr->identification, user, &hdr->saddr, &hdr->daddr,
 		     ip6_frag_ecn(hdr));
+#else
+	fq = fq_find(net, fhdr->identification, user, hdr,
+		     skb->dev ? skb->dev->ifindex : 0);
+#endif
 	if (fq == NULL)
 		return -ENOMEM;
 
@@ -584,7 +624,11 @@ int rpl_nf_ct_frag6_gather(struct net *net, struct sk_buff *skb, u32 user)
 
 out_unlock:
 	spin_unlock_bh(&fq->q.lock);
+#ifdef HAVE_INET_FRAGS_RND
 	inet_frag_put(&fq->q, &nf_frags);
+#else
+	inet_frag_put(&fq->q);
+#endif
 	return ret;
 }
 
@@ -614,10 +658,12 @@ void ovs_netns_frags6_init(struct net *net)
 
 void ovs_netns_frags6_exit(struct net *net)
 {
+#ifdef HAVE_INET_FRAGS_RND
 	struct netns_frags *frags;
 
 	frags = get_netns_frags6_from_net(net);
 	inet_frags_exit_net(frags, &nf_frags);
+#endif
 }
 
 static struct pernet_operations nf_ct_net_ops = {
@@ -634,13 +680,17 @@ int rpl_nf_ct_frag6_init(void)
 #ifndef HAVE_DEFRAG_ENABLE_TAKES_NET
 	nf_defrag_ipv6_enable();
 #endif
+#ifdef HAVE_INET_FRAGS_RND
 	nf_frags.hashfn = nf_hashfn;
+	nf_frags.match = ip6_frag_match;
+#else
+	nf_frags.rhash_params = ip6_rhash_params;
+#endif
 	nf_frags.constructor = ip6_frag_init;
 	nf_frags.destructor = NULL;
 	nf_frags.qsize = sizeof(struct frag_queue);
-	nf_frags.match = ip6_frag_match;
 	nf_frags.frag_expire = nf_ct_frag6_expire;
-#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
+#if defined(HAVE_INET_FRAGS_WITH_FRAGS_WORK) || !defined(HAVE_INET_FRAGS_RND)
 	nf_frags.frags_cache_name = nf_frags_cache_name;
 #endif
 #if RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(8,0)
