@@ -11858,12 +11858,12 @@ ovn-nbctl create Logical_Router name=lr0 options:chassis=hv1
 ovn-nbctl ls-add sw0
 ovn-nbctl ls-add sw1
 
-ovn-nbctl lrp-add lr0 sw0 00:00:01:01:02:03 192.168.1.1/24 2001::1/64
+ovn-nbctl lrp-add lr0 sw0 00:00:01:01:02:03 192.168.1.1/24 2001:0:0:0:0:0:0:1/64
 ovn-nbctl lsp-add sw0 rp-sw0 -- set Logical_Switch_Port rp-sw0 \
     type=router options:router-port=sw0 \
     -- lsp-set-addresses rp-sw0 router
 
-ovn-nbctl lrp-add lr0 sw1 00:00:02:01:02:03 172.16.1.1/24 2002::1/64
+ovn-nbctl lrp-add lr0 sw1 00:00:02:01:02:03 172.16.1.1/24 2002:0:0:0:0:0:0:1/64
 ovn-nbctl lsp-add sw1 rp-sw1 -- set Logical_Switch_Port rp-sw1 \
     type=router options:router-port=sw1 \
     -- lsp-set-addresses rp-sw1 router
