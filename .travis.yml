@@ -34,7 +34,7 @@ env:
   - KERNEL=3.16.54 DPDK=1 OPTS="--enable-shared"
   - KERNEL=4.15.3
   - KERNEL=4.14.19
-  - KERNEL=4.9.81
+  - KERNEL=4.9.149
   - KERNEL=4.4.115
   - KERNEL=4.1.49
   - KERNEL=3.10.108
