@@ -1029,7 +1029,7 @@ netdev_tx_t ovs_stt_xmit(struct sk_buff *skb)
 error:
 	kfree_skb(skb);
 	dev->stats.tx_errors++;
-	return NETDEV_TX_OK;
+	return err;
 }
 EXPORT_SYMBOL(ovs_stt_xmit);
 
