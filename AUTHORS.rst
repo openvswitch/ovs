@@ -213,6 +213,7 @@ Lars Kellogg-Stedman               lars@redhat.com
 Lei Huang                          huang.f.lei@gmail.com
 Leif Madsen                        lmadsen@redhat.com
 Leo Alterman
+Li RongQing                        lirongqing@baidu.com
 Lian-min Wang                      liang-min.wang@intel.com
 Lilijun                            jerry.lilijun@huawei.com
 Lili Huang                         huanglili.huang@huawei.com
