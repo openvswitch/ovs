@@ -3023,6 +3023,9 @@ flow_compose_l4_csum(struct dp_packet *p, const struct flow *flow,
             udp->udp_csum = 0;
             udp->udp_csum = csum_finish(csum_continue(pseudo_hdr_csum,
                                                       udp, l4_len));
+            if (!udp->udp_csum) {
+                udp->udp_csum = htons(0xffff);
+            }
         } else if (flow->nw_proto == IPPROTO_ICMP) {
             struct icmp_header *icmp = dp_packet_l4(p);
 
