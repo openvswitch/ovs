@@ -758,6 +758,70 @@ def do_idl_passive(schema_file, remote, *commands):
     print("%03d: done" % step)
 
 
+def do_idl_cluster(schema_file, remote, pid, *commands):
+    schema_helper = ovs.db.idl.SchemaHelper(schema_file)
+
+    if remote.startswith("ssl:"):
+        if len(commands) < 3:
+            sys.stderr.write("SSL connection requires private key, "
+                             "certificate for private key, and peer CA "
+                             "certificate as arguments\n")
+            sys.exit(1)
+        ovs.stream.Stream.ssl_set_private_key_file(commands[0])
+        ovs.stream.Stream.ssl_set_certificate_file(commands[1])
+        ovs.stream.Stream.ssl_set_ca_cert_file(commands[2])
+        commands = commands[3:]
+
+    schema_helper.register_all()
+    idl = ovs.db.idl.Idl(remote, schema_helper)
+
+    step = 0
+    seqno = 0
+    commands = list(commands)
+    for command in commands:
+        if command.startswith("+"):
+            # The previous transaction didn't change anything.
+            command = command[1:]
+        else:
+            # Wait for update.
+            while idl.change_seqno == seqno and not idl.run():
+                poller = ovs.poller.Poller()
+                idl.wait(poller)
+                poller.block()
+            step += 1
+
+        seqno = idl.change_seqno
+
+        if command == "reconnect":
+            print("%03d: reconnect" % step)
+            sys.stdout.flush()
+            step += 1
+            idl.force_reconnect()
+        elif command == "remote":
+            print("%03d: %s" % (step, idl.session_name()))
+            sys.stdout.flush()
+            step += 1
+        elif command == "remotestop":
+            r = idl.session_name()
+            remotes = remote.split(',')
+            i = remotes.index(r)
+            pids = pid.split(',')
+            command = None
+            try:
+                command = "kill %s" % pids[i]
+            except ValueError as error:
+                sys.stderr.write("Cannot find pid of remote: %s\n"
+                                 % os.strerror(error))
+                sys.exit(1)
+            os.popen(command)
+            print("%03d: stop %s" % (step, pids[i]))
+            sys.stdout.flush()
+            step += 1
+
+    idl.close()
+    print("%03d: done" % step)
+
+
 def usage():
     print("""\
 %(program_name)s: test utility for Open vSwitch database Python bindings
@@ -861,7 +925,8 @@ def main(argv):
                 "parse-table": (do_parse_table, (2, 3)),
                 "parse-schema": (do_parse_schema, 1),
                 "idl": (do_idl, (2,)),
-                "idl_passive": (do_idl_passive, (2,))}
+                "idl_passive": (do_idl_passive, (2,)),
+                "idl-cluster": (do_idl_cluster, (3,))}
 
     command_name = args[0]
     args = args[1:]

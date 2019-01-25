@@ -344,6 +344,9 @@ class Reconnect(object):
                 else:
                     self.info_level("%s: error listening for connections"
                                     % self.name)
+            elif self.state == Reconnect.Reconnect:
+                self.info_level("%s: connection closed by client"
+                                % self.name)
             elif self.backoff < self.max_backoff:
                 if self.passive:
                     type_ = "listen"
