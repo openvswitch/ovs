@@ -40,7 +40,6 @@
 /* Skiplist node container */
 struct skiplist_node {
     const void *data;                 /* Pointer to saved data. */
-    int height;                       /* Height of this node. */
     struct skiplist_node *forward[];  /* Links to the next nodes. */
 };
 
@@ -66,7 +65,6 @@ skiplist_create_node(int level, const void *object)
 
     new_node = xmalloc(alloc_size);
     new_node->data = object;
-    new_node->height = level;
     memset(new_node->forward, 0,
            (level + 1) * sizeof new_node->forward[0]);
 
