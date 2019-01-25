@@ -100,6 +100,7 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/guarded-list.h \
 	lib/hash.c \
 	lib/hash.h \
+	lib/hash-aarch64.h \
 	lib/hindex.c \
 	lib/hindex.h \
 	lib/hmap.c \
