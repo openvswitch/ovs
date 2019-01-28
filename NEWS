@@ -3,6 +3,9 @@ Post-v2.11.0
    - DPDK:
      * New option 'other_config:dpdk-socket-limit' to limit amount of
        hugepage memory that can be used by DPDK.
+   - Userspace datapath:
+     * ICMPv6 ND enhancements: support for match and set ND options type
+       and reserved fields.
 
 
 v2.11.0 - xx xxx xxxx

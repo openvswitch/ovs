@@ -1080,6 +1080,19 @@ match_set_nd_target_masked(struct match *match,
     match->wc.masks.nd_target = *mask;
 }
 
+void
+match_set_nd_reserved (struct match *match, ovs_be32 value)
+{
+   match->flow.igmp_group_ip4 = value;
+   match->wc.masks.igmp_group_ip4 = OVS_BE32_MAX;
+}
+
+void
+match_set_nd_options_type(struct match *match, uint8_t option)
+{
+    match_set_tcp_flags(match, htons(option));
+}
+
 /* Returns true if 'a' and 'b' wildcard the same fields and have the same
  * values for fixed fields, otherwise false. */
 bool
@@ -1688,6 +1701,14 @@ match_format(const struct match *match,
                             &wc->masks.nd_target);
         format_eth_masked(s, "nd_sll", f->arp_sha, wc->masks.arp_sha);
         format_eth_masked(s, "nd_tll", f->arp_tha, wc->masks.arp_tha);
+        if (wc->masks.igmp_group_ip4) {
+            format_be32_masked(s,"nd_reserved", f->igmp_group_ip4,
+                               wc->masks.igmp_group_ip4);
+        }
+        if (wc->masks.tcp_flags) {
+            format_be16_masked(s,"nd_options_type", f->tcp_flags,
+                               wc->masks.tcp_flags);
+        }
     } else {
         format_be16_masked(s, "tp_src", f->tp_src, wc->masks.tp_src);
         format_be16_masked(s, "tp_dst", f->tp_dst, wc->masks.tp_dst);

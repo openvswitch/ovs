@@ -396,13 +396,14 @@ parse_ethertype(const void **datap, size_t *sizep)
 }
 
 /* Returns 'true' if the packet is an ND packet. In that case the '*nd_target'
- * and 'arp_buf[]' are filled in.  If the packet is not an ND pacet, 'false' is
- * returned and no values are filled in on '*nd_target' or 'arp_buf[]'. */
+ * and 'arp_buf[]' are filled in.  If the packet is not an ND packet, 'false'
+ * is returned and no values are filled in on '*nd_target' or 'arp_buf[]'. */
 static inline bool
 parse_icmpv6(const void **datap, size_t *sizep, const struct icmp6_hdr *icmp,
-             const struct in6_addr **nd_target,
-             struct eth_addr arp_buf[2])
+             uint32_t *rso_flags, const struct in6_addr **nd_target,
+             struct eth_addr arp_buf[2], uint8_t *opt_type)
 {
+    const uint32_t *reserved;
     if (icmp->icmp6_code != 0 ||
         (icmp->icmp6_type != ND_NEIGHBOR_SOLICIT &&
          icmp->icmp6_type != ND_NEIGHBOR_ADVERT)) {
@@ -411,6 +412,15 @@ parse_icmpv6(const void **datap, size_t *sizep, const struct icmp6_hdr *icmp,
 
     arp_buf[0] = eth_addr_zero;
     arp_buf[1] = eth_addr_zero;
+    *opt_type = 0;
+
+    reserved = data_try_pull(datap, sizep, sizeof(uint32_t));
+    if (OVS_UNLIKELY(!reserved)) {
+        /* Invalid ND packet. */
+        return false;
+    }
+    *rso_flags = *reserved;
+
     *nd_target = data_try_pull(datap, sizep, sizeof **nd_target);
     if (OVS_UNLIKELY(!*nd_target)) {
         return true;
@@ -432,12 +442,20 @@ parse_icmpv6(const void **datap, size_t *sizep, const struct icmp6_hdr *icmp,
         if (lla_opt->type == ND_OPT_SOURCE_LINKADDR && opt_len == 8) {
             if (OVS_LIKELY(eth_addr_is_zero(arp_buf[0]))) {
                 arp_buf[0] = lla_opt->mac;
+                /* We use only first option type present in ND packet. */
+                if (*opt_type == 0) {
+                    *opt_type = lla_opt->type;
+                }
             } else {
                 goto invalid;
             }
         } else if (lla_opt->type == ND_OPT_TARGET_LINKADDR && opt_len == 8) {
             if (OVS_LIKELY(eth_addr_is_zero(arp_buf[1]))) {
                 arp_buf[1] = lla_opt->mac;
+                /* We use only first option type present in ND packet. */
+                if (*opt_type == 0) {
+                    *opt_type = lla_opt->type;
+                }
             } else {
                 goto invalid;
             }
@@ -987,18 +1005,38 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
             if (OVS_LIKELY(size >= sizeof(struct icmp6_hdr))) {
                 const struct in6_addr *nd_target;
                 struct eth_addr arp_buf[2];
-                const struct icmp6_hdr *icmp = data_pull(&data, &size,
-                                                         sizeof *icmp);
-                if (parse_icmpv6(&data, &size, icmp, &nd_target, arp_buf)) {
+                /* This will populate whether we received Option 1
+                 * or Option 2. */
+                uint8_t opt_type;
+                /* This holds the ND Reserved field. */
+                uint32_t rso_flags;
+                const struct icmp6_hdr *icmp = data_pull(&data,
+                                               &size,ICMP6_HEADER_LEN);
+                if (parse_icmpv6(&data, &size, icmp,
+                                 &rso_flags, &nd_target, arp_buf, &opt_type)) {
                     if (nd_target) {
                         miniflow_push_words(mf, nd_target, nd_target,
                                             sizeof *nd_target / sizeof(uint64_t));
                     }
                     miniflow_push_macs(mf, arp_sha, arp_buf);
-                    miniflow_pad_to_64(mf, arp_tha);
+                    /* Populate options field and set the padding
+                     * accordingly. */
+                    if (opt_type != 0) {
+                        miniflow_push_be16(mf, tcp_flags, htons(opt_type));
+                        /* Pad to align with 64 bits.
+                         * This will zero out the pad3 field. */
+                        miniflow_pad_to_64(mf, tcp_flags);
+                    } else {
+                        /* Pad to align with 64 bits.
+                         * This will zero out the tcp_flags & pad3 field. */
+                        miniflow_pad_to_64(mf, arp_tha);
+                    }
                     miniflow_push_be16(mf, tp_src, htons(icmp->icmp6_type));
                     miniflow_push_be16(mf, tp_dst, htons(icmp->icmp6_code));
                     miniflow_pad_to_64(mf, tp_dst);
+                    /* Fill ND reserved field. */
+                    miniflow_push_be32(mf, igmp_group_ip4, htonl(rso_flags));
+                    miniflow_pad_to_64(mf, igmp_group_ip4);
                 } else {
                     /* ICMPv6 but not ND. */
                     miniflow_push_be16(mf, tp_src, htons(icmp->icmp6_type));
@@ -1927,6 +1965,8 @@ flow_wc_map(const struct flow *flow, struct flowmap *map)
             FLOWMAP_SET(map, nd_target);
             FLOWMAP_SET(map, arp_sha);
             FLOWMAP_SET(map, arp_tha);
+            FLOWMAP_SET(map, tcp_flags);
+            FLOWMAP_SET(map, igmp_group_ip4);
         } else {
             FLOWMAP_SET(map, ct_nw_proto);
             FLOWMAP_SET(map, ct_ipv6_src);
@@ -2968,6 +3008,8 @@ flow_compose_l4(struct dp_packet *p, const struct flow *flow,
             struct icmp6_hdr *icmp = dp_packet_put_zeros(p, sizeof *icmp);
             icmp->icmp6_type = ntohs(flow->tp_src);
             icmp->icmp6_code = ntohs(flow->tp_dst);
+            uint32_t *reserved = &icmp->icmp6_dataun.icmp6_un_data32[0];
+            *reserved = ntohl(flow->igmp_group_ip4);
 
             if (icmp->icmp6_code == 0 &&
                 (icmp->icmp6_type == ND_NEIGHBOR_SOLICIT ||

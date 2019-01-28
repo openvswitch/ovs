@@ -71,6 +71,7 @@ OXM_CLASSES = {"NXM_OF_":        (0,          0x0000, 'extension'),
                "OXM_OF_":        (0,          0x8000, 'standard'),
                "OXM_OF_PKT_REG": (0,          0x8001, 'standard'),
                "ONFOXM_ET_":     (0x4f4e4600, 0xffff, 'standard'),
+               "ERICOXM_OF_":    (0,          0x1000, 'extension'),
 
                # This is the experimenter OXM class for Nicira, which is the
                # one that OVS would be using instead of NXM_OF_ and NXM_NX_

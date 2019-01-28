@@ -219,6 +219,9 @@ void match_set_nd_target(struct match *, const struct in6_addr *);
 void match_set_nd_target_masked(struct match *, const struct in6_addr *,
                                 const struct in6_addr *);
 
+void match_set_nd_reserved(struct match *, ovs_be32);
+void match_set_nd_options_type(struct match *, uint8_t);
+
 bool match_equal(const struct match *, const struct match *);
 uint32_t match_hash(const struct match *, uint32_t basis);
 

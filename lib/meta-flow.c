@@ -344,6 +344,11 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_ND_TARGET:
         return ipv6_mask_is_any(&wc->masks.nd_target);
 
+    case MFF_ND_RESERVED:
+        return !wc->masks.igmp_group_ip4;
+    case MFF_ND_OPTIONS_TYPE:
+        return !wc->masks.tcp_flags;
+
     case MFF_IP_FRAG:
         return !(wc->masks.nw_frag & FLOW_NW_FRAG_MASK);
 
@@ -571,6 +576,8 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_ND_TARGET:
     case MFF_ND_SLL:
     case MFF_ND_TLL:
+    case MFF_ND_RESERVED:
+    case MFF_ND_OPTIONS_TYPE:
         return true;
 
     case MFF_IN_PORT_OXM:
@@ -909,7 +916,12 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         break;
 
     case MFF_TCP_FLAGS:
+    case MFF_ND_OPTIONS_TYPE:
         value->be16 = flow->tcp_flags;
+        break;
+
+    case MFF_ND_RESERVED:
+        value->be32 = flow->igmp_group_ip4;
         break;
 
     case MFF_ICMPV4_TYPE:
@@ -1257,6 +1269,14 @@ mf_set_value(const struct mf_field *mf,
 
     case MFF_ND_TARGET:
         match_set_nd_target(match, &value->ipv6);
+        break;
+
+    case MFF_ND_RESERVED:
+        match_set_nd_reserved(match, value->be32);
+        break;
+
+    case MFF_ND_OPTIONS_TYPE:
+        match_set_nd_options_type(match, value->u8);
         break;
 
     case MFF_NSH_FLAGS:
@@ -1668,6 +1688,14 @@ mf_set_flow_value(const struct mf_field *mf,
         flow->nd_target = value->ipv6;
         break;
 
+    case MFF_ND_RESERVED:
+        flow->igmp_group_ip4 = value->be32;
+        break;
+
+    case MFF_ND_OPTIONS_TYPE:
+        flow->tcp_flags = htons(value->u8);
+        break;
+
     case MFF_NSH_FLAGS:
         flow->nsh.flags = value->u8;
         break;
@@ -1823,6 +1851,8 @@ mf_is_pipeline_field(const struct mf_field *mf)
     case MFF_ND_TARGET:
     case MFF_ND_SLL:
     case MFF_ND_TLL:
+    case MFF_ND_RESERVED:
+    case MFF_ND_OPTIONS_TYPE:
     case MFF_NSH_FLAGS:
     case MFF_NSH_TTL:
     case MFF_NSH_MDTYPE:
@@ -2150,6 +2180,11 @@ mf_set_wild(const struct mf_field *mf, struct match *match, char **err_str)
         match->wc.masks.arp_tha = eth_addr_zero;
         break;
 
+    case MFF_ND_RESERVED:
+        match->wc.masks.igmp_group_ip4 = htonl(0);
+        match->flow.igmp_group_ip4 = htonl(0);
+        break;
+
     case MFF_TCP_SRC:
     case MFF_UDP_SRC:
     case MFF_SCTP_SRC:
@@ -2169,6 +2204,7 @@ mf_set_wild(const struct mf_field *mf, struct match *match, char **err_str)
         break;
 
     case MFF_TCP_FLAGS:
+    case MFF_ND_OPTIONS_TYPE:
         match->wc.masks.tcp_flags = htons(0);
         match->flow.tcp_flags = htons(0);
         break;
@@ -2285,6 +2321,8 @@ mf_set(const struct mf_field *mf,
     case MFF_ICMPV4_CODE:
     case MFF_ICMPV6_TYPE:
     case MFF_ICMPV6_CODE:
+    case MFF_ND_RESERVED:
+    case MFF_ND_OPTIONS_TYPE:
         return OFPUTIL_P_NONE;
 
     case MFF_DP_HASH:

@@ -4586,6 +4586,18 @@ r r c c c.
            title="ICMPv6 Neighbor Discovery Source Ethernet Address"/>
     <field id="MFF_ND_TLL"
            title="ICMPv6 Neighbor Discovery Target Ethernet Address"/>
+    <field id="MFF_ND_RESERVED"
+           title="ICMPv6 Neighbor Discovery Reserved Field"/>
+      <p>
+        This is used to set the R,S,O bits in Neighbor Advertisement Messages
+      </p>
+    <field id="MFF_ND_OPTIONS_TYPE"
+          title="ICMPv6 Neighbor Discovery Options Type Field"/>
+    <p>
+       A value of 1 indicates that the option is Source Link Layer.
+       A value of 2 indicates that the options is Target Link Layer.
+       See RFC 4861 for further details.
+    </p>
   </group>
 
   <h1>References</h1>

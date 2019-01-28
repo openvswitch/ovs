@@ -990,8 +990,16 @@ nxm_put_ip(struct nxm_put_ctx *ctx,
                           ntohs(flow->tp_dst));
             }
             if (is_nd(flow, NULL)) {
+                if (match->wc.masks.igmp_group_ip4) {
+                    nxm_put_32(ctx, MFF_ND_RESERVED, oxm,
+                           flow->igmp_group_ip4);
+                }
                 nxm_put_ipv6(ctx, MFF_ND_TARGET, oxm,
                              &flow->nd_target, &match->wc.masks.nd_target);
+                if (match->wc.masks.tcp_flags) {
+                   nxm_put_8(ctx, MFF_ND_OPTIONS_TYPE, oxm,
+                             ntohs(flow->tcp_flags));
+                }
                 if (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT)) {
                     nxm_put_eth_masked(ctx, MFF_ND_SLL, oxm,
                                        flow->arp_sha, match->wc.masks.arp_sha);

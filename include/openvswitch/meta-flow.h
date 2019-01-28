@@ -1796,6 +1796,34 @@ enum OVS_PACKED_ENUM mf_field_id {
      */
     MFF_ND_TLL,
 
+    /* "nd_reserved".
+     *
+     * The reserved field in IPv6 Neighbor Discovery message.
+     *
+     * Type: be32.
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: ND.
+     * Access: read/write.
+     * NXM: none.
+     * OXM: ERICOXM_OF_ICMPV6_ND_RESERVED(1) since v2.11.
+     */
+    MFF_ND_RESERVED,
+
+    /* "nd_options_type".
+     *
+     * The type of the option in IPv6 Neighbor Discovery message.
+     *
+     * Type: u8.
+     * Maskable: no.
+     * Formatting: decimal.
+     * Prerequisites: ND.
+     * Access: read/write.
+     * NXM: none.
+     * OXM: ERICOXM_OF_ICMPV6_ND_OPTIONS_TYPE(2) since v2.11.
+     */
+    MFF_ND_OPTIONS_TYPE,
+
 /* ## ---- ## */
 /* ## NSH  ## */
 /* ## ---- ## */
