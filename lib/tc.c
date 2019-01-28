@@ -92,6 +92,11 @@ static struct flower_key_to_pedit flower_pedit_map[] = {
         offsetof(struct tc_flower_key, ipv4.rewrite_ttl),
         MEMBER_SIZEOF(struct tc_flower_key, ipv4.rewrite_ttl)
     }, {
+        TCA_PEDIT_KEY_EX_HDR_TYPE_IP4,
+        1,
+        offsetof(struct tc_flower_key, ipv4.rewrite_tos),
+        MEMBER_SIZEOF(struct tc_flower_key, ipv4.rewrite_tos)
+    }, {
         TCA_PEDIT_KEY_EX_HDR_TYPE_IP6,
         7,
         offsetof(struct tc_flower_key, ipv6.rewrite_hlimit),

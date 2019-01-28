@@ -52,7 +52,7 @@ struct netlink_field {
     int size;
 };
 
-static struct netlink_field set_flower_map[][3] = {
+static struct netlink_field set_flower_map[][4] = {
     [OVS_KEY_ATTR_IPV4] = {
         { offsetof(struct ovs_key_ipv4, ipv4_src),
           offsetof(struct tc_flower_key, ipv4.ipv4_src),
@@ -65,6 +65,10 @@ static struct netlink_field set_flower_map[][3] = {
         { offsetof(struct ovs_key_ipv4, ipv4_ttl),
           offsetof(struct tc_flower_key, ipv4.rewrite_ttl),
           MEMBER_SIZEOF(struct tc_flower_key, ipv4.rewrite_ttl)
+        },
+        { offsetof(struct ovs_key_ipv4, ipv4_tos),
+          offsetof(struct tc_flower_key, ipv4.rewrite_tos),
+          MEMBER_SIZEOF(struct tc_flower_key, ipv4.rewrite_tos)
         },
     },
     [OVS_KEY_ATTR_IPV6] = {

@@ -103,6 +103,7 @@ struct tc_flower_key {
         ovs_be32 ipv4_src;
         ovs_be32 ipv4_dst;
         uint8_t rewrite_ttl;
+        uint8_t rewrite_tos;
     } ipv4;
     struct {
         struct in6_addr ipv6_src;
