@@ -1299,6 +1299,7 @@ parse_ct_state(const char *state_str, uint32_t default_state,
         if (!bit) {
             ds_put_format(ds, "%s: unknown connection tracking state flag",
                           cs);
+            free(state_s);
             return false;
         }
         state |= bit;
