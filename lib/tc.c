@@ -1737,7 +1737,7 @@ calc_offsets(struct tc_flower *flower, struct flower_key_to_pedit *m,
     start_offset = ROUND_DOWN(m->offset, 4);
     diff = m->offset - start_offset;
     total_size = max_offset - start_offset;
-    right_zero_bits = 8 * (4 - (max_offset % 4));
+    right_zero_bits = 8 * (4 - ((max_offset % 4) ? : 4));
     left_zero_bits = 8 * (m->offset - start_offset);
 
     *cur_offset = start_offset;
