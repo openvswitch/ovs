@@ -26,4 +26,5 @@ noinst_HEADERS += \
         include/sparse/sys/sysmacros.h \
         include/sparse/sys/types.h \
         include/sparse/sys/wait.h \
-        include/sparse/threads.h
+        include/sparse/threads.h \
+        include/sparse/linux/tc_act/tc_pedit.h

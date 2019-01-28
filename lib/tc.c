@@ -825,17 +825,17 @@ nl_parse_act_pedit(struct nlattr *options, struct tc_flower *flower)
             if ((keys->off >= mf && keys->off < mf + sz)
                 || (keys->off + 3 >= mf && keys->off + 3 < mf + sz)) {
                 int diff = flower_off + (keys->off - mf);
-                uint32_t *dst = (void *) (rewrite_key + diff);
-                uint32_t *dst_m = (void *) (rewrite_mask + diff);
-                uint32_t mask = ~(keys->mask);
+                ovs_be32 *dst = (void *) (rewrite_key + diff);
+                ovs_be32 *dst_m = (void *) (rewrite_mask + diff);
+                ovs_be32 mask = ~(keys->mask);
                 uint32_t zero_bits;
 
                 if (keys->off < mf) {
                     zero_bits = 8 * (mf - keys->off);
-                    mask &= UINT32_MAX << zero_bits;
+                    mask &= htonl(UINT32_MAX >> zero_bits);
                 } else if (keys->off + 4 > mf + m->size) {
                     zero_bits = 8 * (keys->off + 4 - mf - m->size);
-                    mask &= UINT32_MAX >> zero_bits;
+                    mask &= htonl(UINT32_MAX << zero_bits);
                 }
 
                 *dst_m |= mask;
@@ -1725,8 +1725,8 @@ nl_msg_put_act_cookie(struct ofpbuf *request, struct tc_cookie *ck) {
  * (as we read entire words). */
 static void
 calc_offsets(struct tc_flower *flower, struct flower_key_to_pedit *m,
-             int *cur_offset, int *cnt, uint32_t *last_word_mask,
-             uint32_t *first_word_mask, uint32_t **mask, uint32_t **data)
+             int *cur_offset, int *cnt, ovs_be32 *last_word_mask,
+             ovs_be32 *first_word_mask, ovs_be32 **mask, ovs_be32 **data)
 {
     int start_offset, max_offset, total_size;
     int diff, right_zero_bits, left_zero_bits;
@@ -1742,8 +1742,8 @@ calc_offsets(struct tc_flower *flower, struct flower_key_to_pedit *m,
 
     *cur_offset = start_offset;
     *cnt = (total_size / 4) + (total_size % 4 ? 1 : 0);
-    *last_word_mask = UINT32_MAX >> right_zero_bits;
-    *first_word_mask = UINT32_MAX << left_zero_bits;
+    *last_word_mask = htonl(UINT32_MAX << right_zero_bits);
+    *first_word_mask = htonl(UINT32_MAX >> left_zero_bits);
     *data = (void *) (rewrite_key + m->flower_offset - diff);
     *mask = (void *) (rewrite_mask + m->flower_offset - diff);
 }
@@ -1815,7 +1815,7 @@ nl_msg_put_flower_rewrite_pedits(struct ofpbuf *request,
         struct flower_key_to_pedit *m = &flower_pedit_map[i];
         struct tc_pedit_key *pedit_key = NULL;
         struct tc_pedit_key_ex *pedit_key_ex = NULL;
-        uint32_t *mask, *data, first_word_mask, last_word_mask;
+        ovs_be32 *mask, *data, first_word_mask, last_word_mask;
         int cnt = 0, cur_offset = 0;
 
         if (!m->size) {
@@ -1826,7 +1826,7 @@ nl_msg_put_flower_rewrite_pedits(struct ofpbuf *request,
                      &first_word_mask, &mask, &data);
 
         for (j = 0; j < cnt; j++,  mask++, data++, cur_offset += 4) {
-            uint32_t mask_word = *mask;
+            ovs_be32 mask_word = *mask;
 
             if (j == 0) {
                 mask_word &= first_word_mask;
