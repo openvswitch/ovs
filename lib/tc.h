@@ -109,6 +109,7 @@ struct tc_flower_key {
         struct in6_addr ipv6_src;
         struct in6_addr ipv6_dst;
         uint8_t rewrite_hlimit;
+        uint8_t rewrite_tclass;
     } ipv6;
 
     struct {
