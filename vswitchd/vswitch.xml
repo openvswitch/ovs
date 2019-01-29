@@ -333,6 +333,28 @@
         </p>
       </column>
 
+      <column name="other_config" key="dpdk-socket-limit"
+              type='{"type": "string"}'>
+        <p>
+          Limits the maximum amount of memory that can be used from the
+          hugepage pool, on a per-socket basis.
+        </p>
+        <p>
+          The specifier is a comma-separated list of memory limits per socket.
+          <code>0</code> will disable the limit for a particular socket.
+        </p>
+        <p>
+          If not specified, OVS will configure limits equal to the amount of
+          preallocated memory specified by <ref column="other_config"
+          key="dpdk-socket-mem"/> or <code>--socket-mem</code> in
+          <ref column="other_config" key="dpdk-extra"/>. If none of the above
+          options specified or <code>--legacy-mem</code> provided in
+          <ref column="other_config" key="dpdk-extra"/>, limits will not be
+          applied.
+          Changing this value requires restarting the daemon.
+        </p>
+      </column>
+
       <column name="other_config" key="dpdk-hugepage-dir"
               type='{"type": "string"}'>
         <p>

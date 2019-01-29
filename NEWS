@@ -1,5 +1,8 @@
 Post-v2.11.0
 ---------------------
+   - DPDK:
+     * New option 'other_config:dpdk-socket-limit' to limit amount of
+       hugepage memory that can be used by DPDK.
 
 
 v2.11.0 - xx xxx xxxx
