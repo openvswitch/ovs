@@ -188,9 +188,7 @@ skiplist_delete(struct skiplist *list, const void *value)
 
     if (x && list->cmp(x->data, value, list->cfg) == 0) {
         for (i = 0; i <= list->level; i++) {
-            if (!update[i]->forward[i] ||
-                list->cmp(update[i]->forward[i]->data, value,
-                          list->cfg) != 0) {
+            if (update[i]->forward[i] != x) {
                 break;
             }
             update[i]->forward[i] = x->forward[i];
