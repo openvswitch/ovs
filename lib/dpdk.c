@@ -38,6 +38,7 @@
 #include "openvswitch/vlog.h"
 #include "ovs-numa.h"
 #include "smap.h"
+#include "svec.h"
 #include "vswitch-idl.h"
 
 VLOG_DEFINE_THIS_MODULE(dpdk);
@@ -75,65 +76,23 @@ process_vhost_flags(char *flag, const char *default_val, int size,
     return changed;
 }
 
-static char **
-grow_argv(char ***argv, size_t cur_siz, size_t grow_by)
-{
-    return xrealloc(*argv, sizeof(char *) * (cur_siz + grow_by));
-}
-
-static void
-dpdk_option_extend(char ***argv, int argc, const char *option,
-                   const char *value)
-{
-    char **newargv = grow_argv(argv, argc, 2);
-    *argv = newargv;
-    newargv[argc] = xstrdup(option);
-    newargv[argc+1] = xstrdup(value);
-}
-
-static char **
-move_argv(char ***argv, size_t cur_size, char **src_argv, size_t src_argc)
-{
-    char **newargv = grow_argv(argv, cur_size, src_argc);
-    while (src_argc--) {
-        newargv[cur_size+src_argc] = src_argv[src_argc];
-        src_argv[src_argc] = NULL;
-    }
-    return newargv;
-}
-
-static int
-extra_dpdk_args(const char *ovs_extra_config, char ***argv, int argc)
-{
-    int ret = argc;
-    char *release_tok = xstrdup(ovs_extra_config);
-    char *tok, *endptr = NULL;
-
-    for (tok = strtok_r(release_tok, " ", &endptr); tok != NULL;
-         tok = strtok_r(NULL, " ", &endptr)) {
-        char **newarg = grow_argv(argv, ret, 1);
-        *argv = newarg;
-        newarg[ret++] = xstrdup(tok);
-    }
-    free(release_tok);
-    return ret;
-}
-
 static bool
-argv_contains(char **argv_haystack, const size_t argc_haystack,
-              const char *needle)
+args_contains(const struct svec *args, const char *value)
 {
-    for (size_t i = 0; i < argc_haystack; ++i) {
-        if (!strcmp(argv_haystack[i], needle))
+    const char *arg;
+    size_t i;
+
+    /* We can't just use 'svec_contains' because args are not sorted. */
+    SVEC_FOR_EACH (i, arg, args) {
+        if (!strcmp(arg, value)) {
             return true;
+        }
     }
     return false;
 }
 
-static int
-construct_dpdk_options(const struct smap *ovs_other_config,
-                       char ***argv, const int initial_size,
-                       char **extra_args, const size_t extra_argc)
+static void
+construct_dpdk_options(const struct smap *ovs_other_config, struct svec *args)
 {
     struct dpdk_options_map {
         const char *ovs_configuration;
@@ -145,28 +104,26 @@ construct_dpdk_options(const struct smap *ovs_other_config,
         {"dpdk-hugepage-dir", "--huge-dir", false, NULL},
     };
 
-    int i, ret = initial_size;
+    int i;
 
     /*First, construct from the flat-options (non-mutex)*/
     for (i = 0; i < ARRAY_SIZE(opts); ++i) {
-        const char *lookup = smap_get(ovs_other_config,
-                                      opts[i].ovs_configuration);
-        if (!lookup && opts[i].default_enabled) {
-            lookup = opts[i].default_value;
+        const char *value = smap_get(ovs_other_config,
+                                     opts[i].ovs_configuration);
+        if (!value && opts[i].default_enabled) {
+            value = opts[i].default_value;
         }
 
-        if (lookup) {
-            if (!argv_contains(extra_args, extra_argc, opts[i].dpdk_option)) {
-                dpdk_option_extend(argv, ret, opts[i].dpdk_option, lookup);
-                ret += 2;
+        if (value) {
+            if (!args_contains(args, opts[i].dpdk_option)) {
+                svec_add(args, opts[i].dpdk_option);
+                svec_add(args, value);
             } else {
                 VLOG_WARN("Ignoring database defined option '%s' due to "
-                          "dpdk_extras config", opts[i].dpdk_option);
+                          "dpdk-extra config", opts[i].dpdk_option);
             }
         }
     }
-
-    return ret;
 }
 
 static char *
@@ -190,12 +147,12 @@ construct_dpdk_socket_mem(void)
 
 #define MAX_DPDK_EXCL_OPTS 10
 
-static int
+static void
 construct_dpdk_mutex_options(const struct smap *ovs_other_config,
-                             char ***argv, const int initial_size,
-                             char **extra_args, const size_t extra_argc)
+                             struct svec *args)
 {
     char *default_dpdk_socket_mem = construct_dpdk_socket_mem();
+
     struct dpdk_exclusive_options_map {
         const char *category;
         const char *ovs_dpdk_options[MAX_DPDK_EXCL_OPTS];
@@ -210,7 +167,7 @@ construct_dpdk_mutex_options(const struct smap *ovs_other_config,
         },
     };
 
-    int i, ret = initial_size;
+    int i;
     for (i = 0; i < ARRAY_SIZE(excl_opts); ++i) {
         int found_opts = 0, scan, found_pos = -1;
         const char *found_value;
@@ -218,12 +175,12 @@ construct_dpdk_mutex_options(const struct smap *ovs_other_config,
 
         for (scan = 0; scan < MAX_DPDK_EXCL_OPTS
                  && popt->ovs_dpdk_options[scan]; ++scan) {
-            const char *lookup = smap_get(ovs_other_config,
-                                          popt->ovs_dpdk_options[scan]);
-            if (lookup && strlen(lookup)) {
+            const char *value = smap_get(ovs_other_config,
+                                         popt->ovs_dpdk_options[scan]);
+            if (value && strlen(value)) {
                 found_opts++;
                 found_pos = scan;
-                found_value = lookup;
+                found_value = value;
             }
         }
 
@@ -242,58 +199,29 @@ construct_dpdk_mutex_options(const struct smap *ovs_other_config,
                      popt->category);
         }
 
-        if (!argv_contains(extra_args, extra_argc,
-                           popt->eal_dpdk_options[found_pos])) {
-            dpdk_option_extend(argv, ret, popt->eal_dpdk_options[found_pos],
-                               found_value);
-            ret += 2;
+        if (!args_contains(args, popt->eal_dpdk_options[found_pos])) {
+            svec_add(args, popt->eal_dpdk_options[found_pos]);
+            svec_add(args, found_value);
         } else {
             VLOG_WARN("Ignoring database defined option '%s' due to "
-                      "dpdk_extras config", popt->eal_dpdk_options[found_pos]);
+                      "dpdk-extra config", popt->eal_dpdk_options[found_pos]);
         }
     }
 
     free(default_dpdk_socket_mem);
-
-    return ret;
-}
-
-static int
-get_dpdk_args(const struct smap *ovs_other_config, char ***argv,
-              int argc)
-{
-    const char *extra_configuration;
-    char **extra_args = NULL;
-    int i;
-    size_t extra_argc = 0;
-
-    extra_configuration = smap_get(ovs_other_config, "dpdk-extra");
-    if (extra_configuration) {
-        extra_argc = extra_dpdk_args(extra_configuration, &extra_args, 0);
-    }
-
-    i = construct_dpdk_options(ovs_other_config, argv, argc, extra_args,
-                               extra_argc);
-    i = construct_dpdk_mutex_options(ovs_other_config, argv, i, extra_args,
-                                     extra_argc);
-
-    if (extra_configuration) {
-        *argv = move_argv(argv, i, extra_args, extra_argc);
-    }
-
-    return i + extra_argc;
 }
 
 static void
-argv_release(char **dpdk_argv, char **dpdk_argv_release, size_t dpdk_argc)
+construct_dpdk_args(const struct smap *ovs_other_config, struct svec *args)
 {
-    int result;
-    for (result = 0; result < dpdk_argc; ++result) {
-        free(dpdk_argv_release[result]);
+    const char *extra_configuration = smap_get(ovs_other_config, "dpdk-extra");
+
+    if (extra_configuration) {
+        svec_parse_words(args, extra_configuration);
     }
 
-    free(dpdk_argv_release);
-    free(dpdk_argv);
+    construct_dpdk_options(ovs_other_config, args);
+    construct_dpdk_mutex_options(ovs_other_config, args);
 }
 
 static ssize_t
@@ -337,13 +265,13 @@ static cookie_io_functions_t dpdk_log_func = {
 static bool
 dpdk_init__(const struct smap *ovs_other_config)
 {
-    char **argv = NULL, **argv_to_release = NULL;
+    char *sock_dir_subcomponent;
+    char **argv = NULL;
     int result;
-    int argc, argc_tmp;
     bool auto_determine = true;
     int err = 0;
     cpu_set_t cpuset;
-    char *sock_dir_subcomponent;
+    struct svec args = SVEC_EMPTY_INITIALIZER;
 
     log_stream = fopencookie(NULL, "w+", dpdk_log_func);
     if (log_stream == NULL) {
@@ -387,75 +315,62 @@ dpdk_init__(const struct smap *ovs_other_config)
     VLOG_INFO("Per port memory for DPDK devices %s.",
               per_port_memory ? "enabled" : "disabled");
 
-    argv = grow_argv(&argv, 0, 1);
-    argc = 1;
-    argv[0] = xstrdup(ovs_get_program_name());
-    argc_tmp = get_dpdk_args(ovs_other_config, &argv, argc);
+    svec_add(&args, ovs_get_program_name());
+    construct_dpdk_args(ovs_other_config, &args);
 
-    while (argc_tmp != argc) {
-        if (!strcmp("-c", argv[argc]) || !strcmp("-l", argv[argc])) {
-            auto_determine = false;
-            break;
-        }
-        argc++;
+    if (args_contains(&args, "-c") || args_contains(&args, "-l")) {
+        auto_determine = false;
     }
-    argc = argc_tmp;
 
     /**
      * NOTE: This is an unsophisticated mechanism for determining the DPDK
      * lcore for the DPDK Master.
      */
     if (auto_determine) {
-        int i;
+        int cpu = 0;
+
         /* Get the main thread affinity */
         CPU_ZERO(&cpuset);
         err = pthread_getaffinity_np(pthread_self(), sizeof(cpu_set_t),
                                      &cpuset);
         if (!err) {
-            for (i = 0; i < CPU_SETSIZE; i++) {
-                if (CPU_ISSET(i, &cpuset)) {
-                    argv = grow_argv(&argv, argc, 2);
-                    argv[argc++] = xstrdup("-c");
-                    argv[argc++] = xasprintf("0x%08llX", (1ULL<<i));
-                    i = CPU_SETSIZE;
+            for (cpu = 0; cpu < CPU_SETSIZE; cpu++) {
+                if (CPU_ISSET(cpu, &cpuset)) {
+                    break;
                 }
             }
         } else {
-            VLOG_ERR("Thread getaffinity error %d. Using core 0x1", err);
             /* User did not set dpdk-lcore-mask and unable to get current
-             * thread affintity - default to core 0x1 */
-            argv = grow_argv(&argv, argc, 2);
-            argv[argc++] = xstrdup("-c");
-            argv[argc++] = xasprintf("0x%X", 1);
+             * thread affintity - default to core #0 */
+            VLOG_ERR("Thread getaffinity error %d. Using core #0", err);
         }
+        svec_add(&args, "-l");
+        svec_add_nocopy(&args, xasprintf("%d", cpu));
     }
 
-    argv = grow_argv(&argv, argc, 1);
-    argv[argc] = NULL;
+    svec_terminate(&args);
 
     optind = 1;
 
     if (VLOG_IS_INFO_ENABLED()) {
-        struct ds eal_args;
-        int opt;
-        ds_init(&eal_args);
-        ds_put_cstr(&eal_args, "EAL ARGS:");
-        for (opt = 0; opt < argc; ++opt) {
-            ds_put_cstr(&eal_args, " ");
-            ds_put_cstr(&eal_args, argv[opt]);
-        }
+        struct ds eal_args = DS_EMPTY_INITIALIZER;
+        char *joined_args = svec_join(&args, " ", ".");
+
+        ds_put_format(&eal_args, "EAL ARGS: %s", joined_args);
         VLOG_INFO("%s", ds_cstr_ro(&eal_args));
         ds_destroy(&eal_args);
+        free(joined_args);
     }
 
-    argv_to_release = grow_argv(&argv_to_release, 0, argc);
-    for (argc_tmp = 0; argc_tmp < argc; ++argc_tmp) {
-        argv_to_release[argc_tmp] = argv[argc_tmp];
-    }
+    /* Copy because 'rte_eal_init' will change the argv, i.e. it will remove
+     * some arguments from it. '+1' to copy the terminating NULL.  */
+    argv = xmemdup(args.names, (args.n + 1) * sizeof args.names[0]);
 
     /* Make sure things are initialized ... */
-    result = rte_eal_init(argc, argv);
-    argv_release(argv, argv_to_release, argc);
+    result = rte_eal_init(args.n, argv);
+
+    free(argv);
+    svec_destroy(&args);
 
     /* Set the main thread affinity back to pre rte_eal_init() value */
     if (auto_determine && !err) {
