@@ -52,7 +52,8 @@ v2.11.0 - xx xxx xxxx
    - RHEL packaging:
      * OVN packages are split from OVS packages. A new spec
        file - ovn-fedora.spec.in is added to generate OVN packages.
-
+   - Linux datapath:
+     * Support for the kernel versions 4.18.x
 
 v2.10.0 - 18 Aug 2018
 ---------------------
