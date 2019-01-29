@@ -97,7 +97,6 @@ enum ofp12_oxm_class {
 
 /* Functions for extracting raw field values from OXM/NXM headers. */
 static uint32_t nxm_vendor(uint64_t header) { return header; }
-enum ofperr nxm_validate_action_field_header(uint64_t header);
 static int nxm_class(uint64_t header) { return header >> 48; }
 static int nxm_field(uint64_t header) { return (header >> 41) & 0x7f; }
 static bool nxm_hasmask(uint64_t header) { return (header >> 40) & 1; }
@@ -193,7 +192,7 @@ struct nxm_field {
     enum mf_field_id id;
 };
 
-static const struct nxm_field *nxm_field_by_header(uint64_t header);
+static const struct nxm_field *nxm_field_by_header(uint64_t header, bool is_action, enum ofperr *h_error);
 static const struct nxm_field *nxm_field_by_name(const char *name, size_t len);
 static const struct nxm_field *nxm_field_by_mf_id(enum mf_field_id,
                                                   enum ofp_version);
@@ -251,9 +250,9 @@ nxm_header_from_mff(const struct mf_field *mff)
 }
 
 static const struct mf_field *
-mf_from_oxm_header(uint64_t header, const struct vl_mff_map *vl_mff_map)
+mf_from_oxm_header(uint64_t header, const struct vl_mff_map *vl_mff_map, bool is_action, enum ofperr *h_error)
 {
-    const struct nxm_field *f = nxm_field_by_header(header);
+    const struct nxm_field *f = nxm_field_by_header(header, is_action, h_error);
 
     if (f) {
         const struct mf_field *mff = mf_from_id(f->id);
@@ -269,7 +268,7 @@ mf_from_oxm_header(uint64_t header, const struct vl_mff_map *vl_mff_map)
 const struct mf_field *
 mf_from_nxm_header(uint32_t header, const struct vl_mff_map *vl_mff_map)
 {
-    return mf_from_oxm_header((uint64_t) header << 32, vl_mff_map);
+    return mf_from_oxm_header((uint64_t) header << 32, vl_mff_map, false, NULL);
 }
 
 /* Returns the width of the data for a field with the given 'header', in
@@ -337,12 +336,12 @@ nx_pull_header__(struct ofpbuf *b, bool allow_cookie,
     ofpbuf_pull(b, nxm_header_len(*header));
 
     if (field) {
-        *field = mf_from_oxm_header(*header, vl_mff_map);
+        enum ofperr h_error = 0;
+        *field = mf_from_oxm_header(*header, vl_mff_map, is_action, &h_error);
         if (!*field && !(allow_cookie && is_cookie_pseudoheader(*header))) {
             VLOG_DBG_RL(&rl, "OXM header "NXM_HEADER_FMT" is unknown",
                         NXM_HEADER_ARGS(*header));
             if (is_action) {
-                enum ofperr h_error = nxm_validate_action_field_header(*header);
                 if (h_error) {
                      *field = NULL;
                      return h_error;
@@ -1587,7 +1586,7 @@ nx_format_field_name(enum mf_field_id id, enum ofp_version version,
 static void
 format_nxm_field_name(struct ds *s, uint64_t header)
 {
-    const struct nxm_field *f = nxm_field_by_header(header);
+    const struct nxm_field *f = nxm_field_by_header(header, false, NULL);
     if (f) {
         ds_put_cstr(s, f->name);
         if (nxm_hasmask(header)) {
@@ -1689,7 +1688,7 @@ nx_match_from_string_raw(const char *s, struct ofpbuf *b)
         b->header = ofpbuf_put_uninit(b, nxm_header_len(header));
         s = ofpbuf_put_hex(b, s, &n);
         if (n != nxm_field_bytes(header)) {
-            const struct mf_field *field = mf_from_oxm_header(header, NULL);
+            const struct mf_field *field = mf_from_oxm_header(header, NULL, false, NULL);
 
             if (field && field->variable_len) {
                 if (n <= field->n_bytes) {
@@ -2135,7 +2134,7 @@ oxm_bitmap_to_mf_bitmap(ovs_be64 oxm_bitmap, enum ofp_version version)
 
     for (enum mf_field_id id = 0; id < MFF_N_IDS; id++) {
         uint64_t oxm = mf_oxm_header(id, version);
-        if (oxm && version >= nxm_field_by_header(oxm)->version) {
+        if (oxm && version >= nxm_field_by_header(oxm, false, NULL)->version) {
             uint32_t class = nxm_class(oxm);
             int field = nxm_field(oxm);
 
@@ -2232,8 +2231,9 @@ nxm_init(void)
     }
 }
 
+
 static const struct nxm_field *
-nxm_field_by_header(uint64_t header)
+nxm_field_by_header(uint64_t header, bool is_action, enum ofperr *h_error)
 {
     const struct nxm_field_index *nfi;
     uint64_t header_no_len;
@@ -2247,6 +2247,11 @@ nxm_field_by_header(uint64_t header)
 
     HMAP_FOR_EACH_IN_BUCKET (nfi, header_node, hash_uint64(header_no_len),
                              &nxm_header_map) {
+        if (is_action && nxm_length(header) > 0) {
+            if (nxm_length(header) != nxm_length(nfi->nf.header) && h_error ) {
+               *h_error = OFPERR_OFPBAC_BAD_SET_LEN;
+            }
+        }
         if (header_no_len == nxm_no_len(nfi->nf.header)) {
             if (nxm_length(header) == nxm_length(nfi->nf.header) ||
                 mf_from_id(nfi->nf.id)->variable_len) {
@@ -2257,32 +2262,6 @@ nxm_field_by_header(uint64_t header)
         }
     }
     return NULL;
-}
-
-enum ofperr nxm_validate_action_field_header(uint64_t header)
-{
-    const struct nxm_field_index *nfi;
-    uint64_t header_no_len;
-
-    nxm_init();
-    if (nxm_hasmask(header)) {
-        header = nxm_make_exact_header(header);
-    }
-
-    header_no_len = nxm_no_len(header);
-
-    HMAP_FOR_EACH_IN_BUCKET (nfi, header_node, hash_uint64(header_no_len),
-                             &nxm_header_map) {
-        if (header_no_len == nxm_no_len(nfi->nf.header)) {
-            if (nxm_length(header) > 0) {
-                if (nxm_length(header) != nxm_length(nfi->nf.header)) {
-                    return OFPERR_OFPBAC_BAD_SET_LEN;
-                }
-            }
-        }
-    }
-
-    return 0;
 }
 
 static const struct nxm_field *
