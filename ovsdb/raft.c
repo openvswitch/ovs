@@ -1453,7 +1453,6 @@ raft_waiter_complete_rpc(struct raft *raft, const union raft_rpc *rpc)
 static void
 raft_waiter_complete(struct raft *raft, struct raft_waiter *w)
 {
-    VLOG_INFO("%s:%d", __FILE__, __LINE__);
     switch (w->type) {
     case RAFT_W_ENTRY:
         if (raft->role == RAFT_LEADER) {
