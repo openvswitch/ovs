@@ -100,8 +100,9 @@ construct_dpdk_options(const struct smap *ovs_other_config, struct svec *args)
         bool default_enabled;
         const char *default_value;
     } opts[] = {
-        {"dpdk-lcore-mask", "-c", false, NULL},
-        {"dpdk-hugepage-dir", "--huge-dir", false, NULL},
+        {"dpdk-lcore-mask",   "-c",             false, NULL},
+        {"dpdk-hugepage-dir", "--huge-dir",     false, NULL},
+        {"dpdk-socket-limit", "--socket-limit", false, NULL},
     };
 
     int i;
@@ -317,6 +318,22 @@ dpdk_init__(const struct smap *ovs_other_config)
 
     svec_add(&args, ovs_get_program_name());
     construct_dpdk_args(ovs_other_config, &args);
+
+    if (!args_contains(&args, "--legacy-mem")
+        && !args_contains(&args, "--socket-limit")) {
+        const char *arg;
+        size_t i;
+
+        SVEC_FOR_EACH (i, arg, &args) {
+            if (!strcmp(arg, "--socket-mem")) {
+                break;
+            }
+        }
+        if (i < args.n - 1) {
+            svec_add(&args, "--socket-limit");
+            svec_add(&args, args.names[i + 1]);
+        }
+    }
 
     if (args_contains(&args, "-c") || args_contains(&args, "-l")) {
         auto_determine = false;

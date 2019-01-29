@@ -26,6 +26,8 @@ v2.11.0 - xx xxx xxxx
    - DPDK:
      * Add support for DPDK 18.11
      * Add support for port representors.
+     * New option 'other_config:dpdk-socket-limit' to limit amount of
+       hugepage memory that can be used by DPDK.
    - Userspace datapath:
      * Add option for simple round-robin based Rxq to PMD assignment.
        It can be set with pmd-rxq-assign.
