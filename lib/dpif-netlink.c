@@ -3925,7 +3925,7 @@ put_exclude_packet_type(struct ofpbuf *buf, uint16_t type,
             ovs_be16 pt = pt_ns_type_be(nl_attr_get_be32(packet_type));
             const struct nlattr *nla;
 
-            nla = nl_attr_find(buf, NLA_HDRLEN, OVS_KEY_ATTR_ETHERTYPE);
+            nla = nl_attr_find(buf, ofs + NLA_HDRLEN, OVS_KEY_ATTR_ETHERTYPE);
             if (nla) {
                 ovs_be16 *ethertype;
 
