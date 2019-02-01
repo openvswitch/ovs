@@ -57,9 +57,6 @@ m4_define([OVS_DPDK_START],
 
    dnl Enable DPDK functionality
    AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-init=true])
-   AT_CHECK([lscpu], [], [stdout])
-   AT_CHECK([cat stdout | grep "NUMA node(s)" | awk '{c=1; while (c++<$(3)) {printf "1024,"}; print "1024"}' > SOCKET_MEM])
-   AT_CHECK([ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-socket-mem="$(cat SOCKET_MEM)"])
 
    dnl Start ovs-vswitchd.
    AT_CHECK([ovs-vswitchd --detach --no-chdir --pidfile --log-file -vvconn -vofproto_dpif -vunixctl], [0], [stdout], [stderr])
