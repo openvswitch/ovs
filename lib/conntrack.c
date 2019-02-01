@@ -136,7 +136,7 @@ expectation_lookup(struct hmap *alg_expectations, const struct conn_key *key,
 static int
 repl_ftp_v4_addr(struct dp_packet *pkt, ovs_be32 v4_addr_rep,
                  char *ftp_data_v4_start,
-                 size_t addr_offset_from_ftp_data_start);
+                 size_t addr_offset_from_ftp_data_start, size_t addr_size);
 
 static enum ftp_ctl_pkt
 process_ftp_ctl_v4(struct conntrack *ct,
@@ -144,7 +144,8 @@ process_ftp_ctl_v4(struct conntrack *ct,
                    const struct conn *conn_for_expectation,
                    ovs_be32 *v4_addr_rep,
                    char **ftp_data_v4_start,
-                   size_t *addr_offset_from_ftp_data_start);
+                   size_t *addr_offset_from_ftp_data_start,
+                   size_t *addr_size);
 
 static enum ftp_ctl_pkt
 detect_ftp_ctl_type(const struct conn_lookup_ctx *ctx,
@@ -2771,13 +2772,6 @@ expectation_create(struct conntrack *ct, ovs_be16 dst_port,
     ct_rwlock_unlock(&ct->resources_lock);
 }
 
-static uint8_t
-get_v4_byte_be(ovs_be32 v4_addr, uint8_t index)
-{
-    uint8_t *byte_ptr = (OVS_FORCE uint8_t *) &v4_addr;
-    return byte_ptr[index];
-}
-
 static void
 replace_substring(char *substr, uint8_t substr_size,
                   uint8_t total_size, char *rep_str,
@@ -2788,51 +2782,56 @@ replace_substring(char *substr, uint8_t substr_size,
     memcpy(substr, rep_str, rep_str_size);
 }
 
+static void
+repl_bytes(char *str, char c1, char c2)
+{
+    while (*str) {
+        if (*str == c1) {
+            *str = c2;
+        }
+        str++;
+    }
+}
+
+static void
+modify_packet(struct dp_packet *pkt, char *pkt_str, size_t size,
+              char *repl_str, size_t repl_size,
+              uint32_t orig_used_size)
+{
+    replace_substring(pkt_str, size,
+                      (const char *) dp_packet_tail(pkt) - pkt_str,
+                      repl_str, repl_size);
+    dp_packet_set_size(pkt, orig_used_size + (int) repl_size - (int) size);
+}
+
 /* Replace IPV4 address in FTP message with NATed address. */
 static int
 repl_ftp_v4_addr(struct dp_packet *pkt, ovs_be32 v4_addr_rep,
                  char *ftp_data_start,
-                 size_t addr_offset_from_ftp_data_start)
+                 size_t addr_offset_from_ftp_data_start,
+                 size_t addr_size OVS_UNUSED)
 {
     enum { MAX_FTP_V4_NAT_DELTA = 8 };
 
     /* Do conservative check for pathological MTU usage. */
     uint32_t orig_used_size = dp_packet_size(pkt);
-    uint16_t allocated_size = dp_packet_get_allocated(pkt);
-    if (orig_used_size + MAX_FTP_V4_NAT_DELTA > allocated_size) {
+    if (orig_used_size + MAX_FTP_V4_NAT_DELTA >
+        dp_packet_get_allocated(pkt)) {
+
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
-        VLOG_WARN_RL(&rl, "Unsupported effective MTU %u used with FTP",
-                     allocated_size);
+        VLOG_WARN_RL(&rl, "Unsupported effective MTU %u used with FTP V4",
+                     dp_packet_get_allocated(pkt));
         return 0;
     }
 
-    size_t remain_size = tcp_payload_length(pkt) -
-                             addr_offset_from_ftp_data_start;
-    int overall_delta = 0;
-    char *byte_str = ftp_data_start + addr_offset_from_ftp_data_start;
-
-    /* Replace the existing IPv4 address by the new one. */
-    for (uint8_t i = 0; i < 4; i++) {
-        /* Find the end of the string for this octet. */
-        char *next_delim = memchr(byte_str, ',', 4);
-        ovs_assert(next_delim);
-        int substr_size = next_delim - byte_str;
-        remain_size -= substr_size;
-
-        /* Compose the new string for this octet, and replace it. */
-        char rep_str[4];
-        uint8_t rep_byte = get_v4_byte_be(v4_addr_rep, i);
-        int replace_size = sprintf(rep_str, "%d", rep_byte);
-        replace_substring(byte_str, substr_size, remain_size,
-                          rep_str, replace_size);
-        overall_delta += replace_size - substr_size;
-
-        /* Advance past the octet and the following comma. */
-        byte_str += replace_size + 1;
-    }
-
-    dp_packet_set_size(pkt, orig_used_size + overall_delta);
-    return overall_delta;
+    char v4_addr_str[INET_ADDRSTRLEN] = {0};
+    ovs_assert(inet_ntop(AF_INET, &v4_addr_rep, v4_addr_str,
+                         sizeof v4_addr_str));
+    repl_bytes(v4_addr_str, '.', ',');
+    modify_packet(pkt, ftp_data_start + addr_offset_from_ftp_data_start,
+                  addr_size, v4_addr_str, strlen(v4_addr_str),
+                  orig_used_size);
+    return (int) strlen(v4_addr_str) - (int) addr_size;
 }
 
 static char *
@@ -2901,7 +2900,8 @@ process_ftp_ctl_v4(struct conntrack *ct,
                    const struct conn *conn_for_expectation,
                    ovs_be32 *v4_addr_rep,
                    char **ftp_data_v4_start,
-                   size_t *addr_offset_from_ftp_data_start)
+                   size_t *addr_offset_from_ftp_data_start,
+                   size_t *addr_size)
 {
     struct tcp_header *th = dp_packet_l4(pkt);
     size_t tcp_hdr_len = TCP_OFFSET(th->tcp_ctl) * 4;
@@ -2957,6 +2957,7 @@ process_ftp_ctl_v4(struct conntrack *ct,
         return CT_FTP_CTL_INVALID;
     }
 
+    *addr_size = ftp - ip_addr_start - 1;
     char *save_ftp = ftp;
     ftp = terminate_number_str(ftp, MAX_FTP_PORT_DGTS);
     if (!ftp) {
@@ -3149,31 +3150,22 @@ repl_ftp_v6_addr(struct dp_packet *pkt, struct ct_addr v6_addr_rep,
 
     /* Do conservative check for pathological MTU usage. */
     uint32_t orig_used_size = dp_packet_size(pkt);
-    uint16_t allocated_size = dp_packet_get_allocated(pkt);
-    if (orig_used_size + MAX_FTP_V6_NAT_DELTA > allocated_size) {
+    if (orig_used_size + MAX_FTP_V6_NAT_DELTA >
+        dp_packet_get_allocated(pkt)) {
+
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
-        VLOG_WARN_RL(&rl, "Unsupported effective MTU %u used with FTP",
-                     allocated_size);
+        VLOG_WARN_RL(&rl, "Unsupported effective MTU %u used with FTP V6",
+                     dp_packet_get_allocated(pkt));
         return 0;
     }
 
     char v6_addr_str[IPV6_SCAN_LEN] = {0};
     ovs_assert(inet_ntop(AF_INET6, &v6_addr_rep.ipv6_aligned, v6_addr_str,
                          IPV6_SCAN_LEN - 1));
-
-    size_t replace_addr_size = strlen(v6_addr_str);
-
-    size_t remain_size = tcp_payload_length(pkt) -
-                             addr_offset_from_ftp_data_start;
-
-    char *pkt_addr_str = ftp_data_start + addr_offset_from_ftp_data_start;
-    replace_substring(pkt_addr_str, addr_size, remain_size,
-                      v6_addr_str, replace_addr_size);
-
-    int overall_delta = (int) replace_addr_size - (int) addr_size;
-
-    dp_packet_set_size(pkt, orig_used_size + overall_delta);
-    return overall_delta;
+    modify_packet(pkt, ftp_data_start + addr_offset_from_ftp_data_start,
+                  addr_size, v6_addr_str, strlen(v6_addr_str),
+                  orig_used_size);
+    return (int) strlen(v6_addr_str) - (int) addr_size;
 }
 
 /* Increment/decrement a TCP sequence number. */
@@ -3213,7 +3205,8 @@ handle_ftp_ctl(struct conntrack *ct, const struct conn_lookup_ctx *ctx,
         } else {
             rc = process_ftp_ctl_v4(ct, pkt, ec,
                                     &v4_addr_rep, &ftp_data_start,
-                                    &addr_offset_from_ftp_data_start);
+                                    &addr_offset_from_ftp_data_start,
+                                    &addr_size);
         }
         if (rc == CT_FTP_CTL_INVALID) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
@@ -3240,7 +3233,8 @@ handle_ftp_ctl(struct conntrack *ct, const struct conn_lookup_ctx *ctx,
                 if (nat) {
                     seq_skew = repl_ftp_v4_addr(pkt, v4_addr_rep,
                                    ftp_data_start,
-                                   addr_offset_from_ftp_data_start);
+                                   addr_offset_from_ftp_data_start,
+                                   addr_size);
                 }
                 if (seq_skew) {
                     ip_len = ntohs(l3_hdr->ip_tot_len) + seq_skew;
