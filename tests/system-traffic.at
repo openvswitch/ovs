@@ -4652,6 +4652,66 @@ tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - IPv4 FTP Passive with DNAT 2])
+AT_SKIP_IF([test $HAVE_FTP = no])
+CHECK_CONNTRACK()
+CHECK_CONNTRACK_NAT()
+CHECK_CONNTRACK_ALG()
+
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/16")
+NS_CHECK_EXEC([at_ns0], [ip link set dev p0 address e6:66:c1:11:11:11])
+NS_CHECK_EXEC([at_ns0], [arp -s 10.1.1.200 e6:66:c1:22:22:22])
+NS_CHECK_EXEC([at_ns0], [arp -s 10.1.100.1 e6:66:c1:22:22:22])
+
+ADD_VETH(p1, at_ns1, br0, "10.1.100.1/16")
+NS_CHECK_EXEC([at_ns1], [ip link set dev p1 address e6:66:c1:22:22:22])
+NS_CHECK_EXEC([at_ns1], [arp -s 10.1.1.1 e6:66:c1:11:11:11])
+
+dnl Allow any traffic from ns0->ns1.
+AT_DATA([flows.txt], [dnl
+dnl track all IPv4 traffic and NAT any established traffic.
+table=0 priority=10 ip, action=ct(nat,table=1)
+table=0 priority=0 action=drop
+dnl
+dnl Table 1
+dnl
+dnl Allow new FTP control connections.
+table=1 in_port=1 ct_state=+new tcp nw_src=10.1.1.1 tp_dst=21 action=ct(alg=ftp,commit,nat(dst=10.1.100.1)),2
+dnl Allow related TCP connections from port 1.
+table=1 in_port=1 ct_state=+new+rel tcp nw_src=10.1.1.1 action=ct(commit,nat),2
+dnl Allow established TCP connections both ways, post-NAT match.
+table=1 in_port=1 ct_state=+est tcp nw_dst=10.1.100.1 action=2
+table=1 in_port=2 ct_state=+est tcp nw_dst=10.1.1.1 action=1
+
+dnl Allow ICMP both ways.
+table=1 priority=100 in_port=1 icmp, action=2
+table=1 priority=100 in_port=2 icmp, action=1
+table=1 priority=0, action=drop
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl Check that the stacks working to avoid races.
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.1.100.1 >/dev/null])
+
+OVS_START_L7([at_ns1], [ftp])
+
+dnl FTP requests from p0->p1 should work fine.
+NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.200 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+dnl Discards CLOSE_WAIT and CLOSING
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.200)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.200,sport=<cleared>,dport=<cleared>),reply=(src=10.1.100.1,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
+tcp,orig=(src=10.1.1.1,dst=10.1.1.200,sport=<cleared>,dport=<cleared>),reply=(src=10.1.100.1,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([conntrack - IPv4 FTP Active with DNAT])
 AT_SKIP_IF([test $HAVE_FTP = no])
 CHECK_CONNTRACK()
@@ -4722,12 +4782,12 @@ OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
-ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/16")
 NS_CHECK_EXEC([at_ns0], [ip link set dev p0 address e6:66:c1:11:11:11])
 NS_CHECK_EXEC([at_ns0], [arp -s 10.1.1.2 e6:66:c1:22:22:22])
-NS_CHECK_EXEC([at_ns0], [arp -s 10.1.1.240 e6:66:c1:22:22:22])
+NS_CHECK_EXEC([at_ns0], [arp -s 10.1.120.240 e6:66:c1:22:22:22])
 
-ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/16")
 NS_CHECK_EXEC([at_ns1], [ip link set dev p1 address e6:66:c1:22:22:22])
 NS_CHECK_EXEC([at_ns1], [arp -s 10.1.1.1 e6:66:c1:11:11:11])
 
@@ -4761,12 +4821,12 @@ OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.1.1.2 >/dev/null])
 OVS_START_L7([at_ns1], [ftp])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.240 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.120.240 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
 dnl Discards CLOSE_WAIT and CLOSING
-AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.240,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
-tcp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.240,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.120.240)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.120.240,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
+tcp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.120.240,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
