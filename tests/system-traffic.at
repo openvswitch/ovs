@@ -538,6 +538,8 @@ OVS_CHECK_GENEVE()
 OVS_TRAFFIC_VSWITCHD_START()
 ADD_BR([br-underlay])
 
+AT_CHECK([ovs-ofctl monitor br0 resume --detach --no-chdir --pidfile 2> /dev/null])
+
 ADD_NAMESPACES(at_ns0)
 
 dnl Set up underlay link from host into the namespace using veth pair.
@@ -567,6 +569,7 @@ NS_CHECK_EXEC([at_ns0], [ping -q -c 3 10.1.1.100 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
