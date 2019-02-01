@@ -286,7 +286,7 @@ get_prio_for_tc_flower(struct tc_flower *flower)
 {
     static struct hmap prios = HMAP_INITIALIZER(&prios);
     static struct ovs_mutex prios_lock = OVS_MUTEX_INITIALIZER;
-    static uint16_t last_prio = 0;
+    static uint16_t last_prio = TC_RESERVED_PRIORITY_MAX;
     size_t key_len = sizeof(struct tc_flower_key);
     size_t hash = hash_int((OVS_FORCE uint32_t) flower->key.eth_type, 0);
     struct prio_map_data *data;

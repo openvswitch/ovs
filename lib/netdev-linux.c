@@ -113,6 +113,10 @@ COVERAGE_DEFINE(netdev_set_ethtool);
 #define TC_RTAB_SIZE 1024
 #endif
 
+#ifndef TCM_IFINDEX_MAGIC_BLOCK
+#define TCM_IFINDEX_MAGIC_BLOCK (0xFFFFFFFFU)
+#endif
+
 /* Linux 2.6.21 introduced struct tpacket_auxdata.
  * Linux 2.6.27 added the tp_vlan_tci member.
  * Linux 3.0 defined TP_STATUS_VLAN_VALID.
@@ -473,10 +477,10 @@ static int tc_delete_class(const struct netdev *, unsigned int handle);
 static int tc_del_qdisc(struct netdev *netdev);
 static int tc_query_qdisc(const struct netdev *netdev);
 
+void
+tc_put_rtab(struct ofpbuf *msg, uint16_t type, const struct tc_ratespec *rate);
 static int tc_calc_cell_log(unsigned int mtu);
 static void tc_fill_rate(struct tc_ratespec *rate, uint64_t bps, int mtu);
-static void tc_put_rtab(struct ofpbuf *, uint16_t type,
-                        const struct tc_ratespec *rate);
 static int tc_calc_buffer(unsigned int Bps, int mtu, uint64_t burst_bytes);
 
 struct netdev_linux {
@@ -2324,6 +2328,109 @@ exit:
     return error;
 }
 
+static struct tc_police
+tc_matchall_fill_police(uint32_t kbits_rate, uint32_t kbits_burst)
+{
+    unsigned int bsize = MIN(UINT32_MAX / 1024, kbits_burst) * 1024 / 64;
+    unsigned int bps = ((uint64_t) kbits_rate * 1000) / 8;
+    struct tc_police police;
+    struct tc_ratespec rate;
+    int mtu = 65535;
+
+    memset(&rate, 0, sizeof rate);
+    rate.rate = bps;
+    rate.cell_log = tc_calc_cell_log(mtu);
+    rate.mpu = ETH_TOTAL_MIN;
+
+    memset(&police, 0, sizeof police);
+    police.burst = tc_bytes_to_ticks(bps, bsize);
+    police.action = TC_POLICE_SHOT;
+    police.rate = rate;
+    police.mtu = mtu;
+
+    return police;
+}
+
+static void
+nl_msg_put_act_police(struct ofpbuf *request, struct tc_police police)
+{
+    size_t offset;
+
+    nl_msg_put_string(request, TCA_ACT_KIND, "police");
+    offset = nl_msg_start_nested(request, TCA_ACT_OPTIONS);
+    nl_msg_put_unspec(request, TCA_POLICE_TBF, &police, sizeof police);
+    tc_put_rtab(request, TCA_POLICE_RATE, &police.rate);
+    nl_msg_put_u32(request, TCA_POLICE_RESULT, TC_ACT_UNSPEC);
+    nl_msg_end_nested(request, offset);
+}
+
+static int
+tc_add_matchall_policer(struct netdev *netdev, uint32_t kbits_rate,
+                        uint32_t kbits_burst)
+{
+    uint16_t eth_type = (OVS_FORCE uint16_t) htons(ETH_P_ALL);
+    size_t basic_offset, action_offset, inner_offset;
+    uint16_t prio = TC_RESERVED_PRIORITY_POLICE;
+    int ifindex, index, err = 0;
+    struct tc_police pol_act;
+    uint32_t block_id = 0;
+    struct ofpbuf request;
+    struct ofpbuf *reply;
+    struct tcmsg *tcmsg;
+    uint32_t handle = 1;
+
+    err = get_ifindex(netdev, &ifindex);
+    if (err) {
+        return err;
+    }
+
+    index = block_id ? TCM_IFINDEX_MAGIC_BLOCK : ifindex;
+    tcmsg = tc_make_request(index, RTM_NEWTFILTER, NLM_F_CREATE | NLM_F_ECHO,
+                            &request);
+    tcmsg->tcm_parent = block_id ? : TC_INGRESS_PARENT;
+    tcmsg->tcm_info = tc_make_handle(prio, eth_type);
+    tcmsg->tcm_handle = handle;
+
+    pol_act = tc_matchall_fill_police(kbits_rate, kbits_burst);
+    nl_msg_put_string(&request, TCA_KIND, "matchall");
+    basic_offset = nl_msg_start_nested(&request, TCA_OPTIONS);
+    action_offset = nl_msg_start_nested(&request, TCA_MATCHALL_ACT);
+    inner_offset = nl_msg_start_nested(&request, 1);
+    nl_msg_put_act_police(&request, pol_act);
+    nl_msg_end_nested(&request, inner_offset);
+    nl_msg_end_nested(&request, action_offset);
+    nl_msg_end_nested(&request, basic_offset);
+
+    err = tc_transact(&request, &reply);
+    if (!err) {
+        struct tcmsg *tc =
+            ofpbuf_at_assert(reply, NLMSG_HDRLEN, sizeof *tc);
+        ofpbuf_delete(reply);
+    }
+
+    return err;
+}
+
+static int
+tc_del_matchall_policer(struct netdev *netdev)
+{
+    uint32_t block_id = 0;
+    int ifindex;
+    int err;
+
+    err = get_ifindex(netdev, &ifindex);
+    if (err) {
+        return err;
+    }
+
+    err = tc_del_filter(ifindex, TC_RESERVED_PRIORITY_POLICE, 1, block_id);
+    if (err) {
+        return err;
+    }
+
+    return 0;
+}
+
 /* Attempts to set input rate limiting (policing) policy.  Returns 0 if
  * successful, otherwise a positive errno value. */
 static int
@@ -2334,14 +2441,6 @@ netdev_linux_set_policing(struct netdev *netdev_,
     const char *netdev_name = netdev_get_name(netdev_);
     int ifindex;
     int error;
-
-    if (netdev_is_flow_api_enabled()) {
-        if (kbits_rate) {
-            VLOG_WARN_RL(&rl, "%s: policing with offload isn't supported",
-                         netdev_name);
-        }
-        return EOPNOTSUPP;
-    }
 
     kbits_burst = (!kbits_rate ? 0       /* Force to 0 if no rate specified. */
                    : !kbits_burst ? 8000 /* Default to 8000 kbits if 0. */
@@ -2366,6 +2465,16 @@ netdev_linux_set_policing(struct netdev *netdev_,
     error = get_ifindex(netdev_, &ifindex);
     if (error) {
         goto out;
+    }
+
+    /* Use matchall for policing when offloadling ovs with tc-flower. */
+    if (netdev_is_flow_api_enabled()) {
+        error = tc_del_matchall_policer(netdev_);
+        if (kbits_rate) {
+            error = tc_add_matchall_policer(netdev_, kbits_rate, kbits_burst);
+        }
+        ovs_mutex_unlock(&netdev->mutex);
+        return error;
     }
 
     COVERAGE_INC(netdev_set_policing);
@@ -5481,7 +5590,7 @@ tc_fill_rate(struct tc_ratespec *rate, uint64_t Bps, int mtu)
  * attribute of the specified "type".
  *
  * See tc_calc_cell_log() above for a description of "rtab"s. */
-static void
+void
 tc_put_rtab(struct ofpbuf *msg, uint16_t type, const struct tc_ratespec *rate)
 {
     uint32_t *rtab;
