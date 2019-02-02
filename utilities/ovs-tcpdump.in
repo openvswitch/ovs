@@ -379,6 +379,7 @@ def main():
 
     skip_next = False
     mirror_interface = None
+    mirror_select_all = False
     dump_cmd = 'tcpdump'
 
     for cur, nxt in argv_tuples(sys.argv[1:]):
