@@ -1175,7 +1175,11 @@ struct ofpact_parse_params {
     /* Output. */
     struct ofpbuf *ofpacts;
     enum ofputil_protocol *usable_protocols;
+
+    /* Parse context. */
+    unsigned int depth;
 };
+#define MAX_OFPACT_PARSE_DEPTH 100
 char *ofpacts_parse_actions(const char *, const struct ofpact_parse_params *)
     OVS_WARN_UNUSED_RESULT;
 char *ofpacts_parse_instructions(const char *,
