@@ -740,7 +740,7 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
         ds_put_format(output, "\nrecirc(%#"PRIx32")",
                       recirc_node->recirc_id);
 
-        if (recirc_node->type == OFT_RECIRC_CONNTRACK) {
+        if (next_ct_states && recirc_node->type == OFT_RECIRC_CONNTRACK) {
             uint32_t ct_state;
             if (ovs_list_is_empty(next_ct_states)) {
                 ct_state = CS_TRACKED | CS_NEW;
