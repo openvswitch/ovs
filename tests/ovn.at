@@ -7989,6 +7989,7 @@ test_ip_packet()
 {
     local active_gw=$1
     local backup_gw=$2
+    local backup_vswitchd_dead=$3
 
     # Send ip packet between foo1 and outside1
     src_mac="f00000010203" # foo1 mac
@@ -8027,7 +8028,11 @@ grep actions=mod_dl_dst:f0:00:00:01:02:04 | wc -l` -eq 1
     echo $expected > ext1-vif1.expected
 
     as $active_gw reset_pcap_file br-phys_n1 $active_gw/br-phys_n1
-    as $backup_gw reset_pcap_file br-phys_n1 $backup_gw/br-phys_n1
+
+    if test $backup_vswitchd_dead != 1; then
+        # Reset the file only if vswitchd in backup gw is alive
+        as $backup_gw reset_pcap_file br-phys_n1 $backup_gw/br-phys_n1
+    fi
     as ext1 reset_pcap_file ext1-vif1 ext1/vif1
 
     # Resend packet from foo1 to outside1
@@ -8038,11 +8043,14 @@ grep actions=mod_dl_dst:f0:00:00:01:02:04 | wc -l` -eq 1
     OVN_CHECK_PACKETS([ext1/vif1-tx.pcap], [ext1-vif1.expected])
     $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $active_gw/br-phys_n1-tx.pcap  > packets
     AT_CHECK([grep $expected packets | sort], [0], [expout])
-    $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $backup_gw/br-phys_n1-tx.pcap  > packets
-    AT_CHECK([grep $expected packets | sort], [0], [])
+    if test $backup_vswitchd_dead != 1; then
+        # Check for backup gw only if vswitchd is alive
+        $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $backup_gw/br-phys_n1-tx.pcap  > packets
+        AT_CHECK([grep $expected packets | sort], [0], [])
+    fi
 }
 
-test_ip_packet gw1 gw2
+test_ip_packet gw1 gw2 0
 
 ovn-nbctl --timeout=3 --wait=hv \
     --id=@gc0 create Gateway_Chassis name=alice_gw1 \
@@ -8053,9 +8061,34 @@ ovn-nbctl --timeout=3 --wait=hv \
                                      priority=20 -- \
     set Logical_Router_Port alice 'gateway_chassis=[@gc0,@gc1]'
 
-test_ip_packet gw2 gw1
+test_ip_packet gw2 gw1 0
 
-OVN_CLEANUP([hv1],[gw1],[gw2],[ext1])
+# Get the claim count of both gw1 and gw2.
+gw1_claim_ct=`grep "cr-alice: Claiming" gw1/ovn-controller.log | wc -l`
+gw2_claim_ct=`grep "cr-alice: Claiming" gw2/ovn-controller.log | wc -l`
+
+# Stop ovs-vswitchd in gw2. gw1 should claim the gateway port.
+as gw2
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+
+# gw1 should claim the cr-alice and the claim count of gw1 should be
+# incremented by 1.
+gw1_claim_ct=$((gw1_claim_ct+1))
+
+OVS_WAIT_UNTIL([test $gw1_claim_ct = `cat gw1/ovn-controller.log \
+| grep -c "cr-alice: Claiming"`])
+
+AT_CHECK([test $gw2_claim_ct = `cat gw2/ovn-controller.log | \
+grep -c "cr-alice: Claiming"`])
+
+test_ip_packet gw1 gw2 1
+
+as gw2
+OVS_APP_EXIT_AND_WAIT([ovn-controller])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+OVN_CLEANUP([hv1],[gw1],[ext1])
+
 AT_CLEANUP
 
 AT_SETUP([ovn -- 4 HV, 3 LS, 2 LR, packet test with HA distributed router gateway port])

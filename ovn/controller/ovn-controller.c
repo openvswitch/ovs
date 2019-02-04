@@ -689,7 +689,18 @@ main(int argc, char *argv[])
                     ovsrec_bridge_table_get(ovs_idl_loop.idl), br_int,
                     sbrec_chassis_table_get(ovnsb_idl_loop.idl), chassis_id,
                     sbrec_sb_global_first(ovnsb_idl_loop.idl));
-                bfd_calculate_active_tunnels(br_int, &active_tunnels);
+
+                if (ofctrl_is_connected()) {
+                    /* Calculate the active tunnels only if have an an active
+                     * OpenFlow connection to br-int.
+                     * If we don't have a connection to br-int, it could mean
+                     * ovs-vswitchd is down for some reason and the BFD status
+                     * in the Interface rows could be stale. So its better to
+                     * consider 'active_tunnels' set to be empty if it's not
+                     * connected. */
+                    bfd_calculate_active_tunnels(br_int, &active_tunnels);
+                }
+
                 binding_run(ovnsb_idl_txn, ovs_idl_txn, sbrec_chassis_by_name,
                             sbrec_datapath_binding_by_key,
                             sbrec_port_binding_by_datapath,

@@ -60,4 +60,7 @@ void ofctrl_check_and_add_flow(struct hmap *desired_flows, uint8_t table_id,
                                const struct match *,
                                const struct ofpbuf *ofpacts,
                                bool log_duplicate_flow);
+
+bool ofctrl_is_connected(void);
+
 #endif /* ovn/ofctrl.h */
