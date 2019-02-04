@@ -4570,18 +4570,18 @@ netdev_dpdk_add_rte_flow_offload(struct netdev *netdev,
     /* Eth */
     struct rte_flow_item_eth eth_spec;
     struct rte_flow_item_eth eth_mask;
-    memset(&eth_spec, 0, sizeof(eth_spec));
-    memset(&eth_mask, 0, sizeof(eth_mask));
     if (!eth_addr_is_zero(match->wc.masks.dl_src) ||
         !eth_addr_is_zero(match->wc.masks.dl_dst)) {
-        rte_memcpy(&eth_spec.dst, &match->flow.dl_dst, sizeof(eth_spec.dst));
-        rte_memcpy(&eth_spec.src, &match->flow.dl_src, sizeof(eth_spec.src));
+        memset(&eth_spec, 0, sizeof eth_spec);
+        memset(&eth_mask, 0, sizeof eth_mask);
+        rte_memcpy(&eth_spec.dst, &match->flow.dl_dst, sizeof eth_spec.dst);
+        rte_memcpy(&eth_spec.src, &match->flow.dl_src, sizeof eth_spec.src);
         eth_spec.type = match->flow.dl_type;
 
         rte_memcpy(&eth_mask.dst, &match->wc.masks.dl_dst,
-                   sizeof(eth_mask.dst));
+                   sizeof eth_mask.dst);
         rte_memcpy(&eth_mask.src, &match->wc.masks.dl_src,
-                   sizeof(eth_mask.src));
+                   sizeof eth_mask.src);
         eth_mask.type = match->wc.masks.dl_type;
 
         add_flow_pattern(&patterns, RTE_FLOW_ITEM_TYPE_ETH,
@@ -4600,9 +4600,9 @@ netdev_dpdk_add_rte_flow_offload(struct netdev *netdev,
     /* VLAN */
     struct rte_flow_item_vlan vlan_spec;
     struct rte_flow_item_vlan vlan_mask;
-    memset(&vlan_spec, 0, sizeof(vlan_spec));
-    memset(&vlan_mask, 0, sizeof(vlan_mask));
     if (match->wc.masks.vlans[0].tci && match->flow.vlans[0].tci) {
+        memset(&vlan_spec, 0, sizeof vlan_spec);
+        memset(&vlan_mask, 0, sizeof vlan_mask);
         vlan_spec.tci  = match->flow.vlans[0].tci & ~htons(VLAN_CFI);
         vlan_mask.tci  = match->wc.masks.vlans[0].tci & ~htons(VLAN_CFI);
 
@@ -4617,9 +4617,9 @@ netdev_dpdk_add_rte_flow_offload(struct netdev *netdev,
     uint8_t proto = 0;
     struct rte_flow_item_ipv4 ipv4_spec;
     struct rte_flow_item_ipv4 ipv4_mask;
-    memset(&ipv4_spec, 0, sizeof(ipv4_spec));
-    memset(&ipv4_mask, 0, sizeof(ipv4_mask));
     if (match->flow.dl_type == htons(ETH_TYPE_IP)) {
+        memset(&ipv4_spec, 0, sizeof ipv4_spec);
+        memset(&ipv4_mask, 0, sizeof ipv4_mask);
 
         ipv4_spec.hdr.type_of_service = match->flow.nw_tos;
         ipv4_spec.hdr.time_to_live    = match->flow.nw_ttl;
@@ -4662,9 +4662,9 @@ netdev_dpdk_add_rte_flow_offload(struct netdev *netdev,
 
     struct rte_flow_item_tcp tcp_spec;
     struct rte_flow_item_tcp tcp_mask;
-    memset(&tcp_spec, 0, sizeof(tcp_spec));
-    memset(&tcp_mask, 0, sizeof(tcp_mask));
     if (proto == IPPROTO_TCP) {
+        memset(&tcp_spec, 0, sizeof tcp_spec);
+        memset(&tcp_mask, 0, sizeof tcp_mask);
         tcp_spec.hdr.src_port  = match->flow.tp_src;
         tcp_spec.hdr.dst_port  = match->flow.tp_dst;
         tcp_spec.hdr.data_off  = ntohs(match->flow.tcp_flags) >> 8;
@@ -4687,9 +4687,9 @@ netdev_dpdk_add_rte_flow_offload(struct netdev *netdev,
 
     struct rte_flow_item_udp udp_spec;
     struct rte_flow_item_udp udp_mask;
-    memset(&udp_spec, 0, sizeof(udp_spec));
-    memset(&udp_mask, 0, sizeof(udp_mask));
     if (proto == IPPROTO_UDP) {
+        memset(&udp_spec, 0, sizeof udp_spec);
+        memset(&udp_mask, 0, sizeof udp_mask);
         udp_spec.hdr.src_port = match->flow.tp_src;
         udp_spec.hdr.dst_port = match->flow.tp_dst;
 
@@ -4708,9 +4708,9 @@ netdev_dpdk_add_rte_flow_offload(struct netdev *netdev,
 
     struct rte_flow_item_sctp sctp_spec;
     struct rte_flow_item_sctp sctp_mask;
-    memset(&sctp_spec, 0, sizeof(sctp_spec));
-    memset(&sctp_mask, 0, sizeof(sctp_mask));
     if (proto == IPPROTO_SCTP) {
+        memset(&sctp_spec, 0, sizeof sctp_spec);
+        memset(&sctp_mask, 0, sizeof sctp_mask);
         sctp_spec.hdr.src_port = match->flow.tp_src;
         sctp_spec.hdr.dst_port = match->flow.tp_dst;
 
@@ -4729,9 +4729,9 @@ netdev_dpdk_add_rte_flow_offload(struct netdev *netdev,
 
     struct rte_flow_item_icmp icmp_spec;
     struct rte_flow_item_icmp icmp_mask;
-    memset(&icmp_spec, 0, sizeof(icmp_spec));
-    memset(&icmp_mask, 0, sizeof(icmp_mask));
     if (proto == IPPROTO_ICMP) {
+        memset(&icmp_spec, 0, sizeof icmp_spec);
+        memset(&icmp_mask, 0, sizeof icmp_mask);
         icmp_spec.hdr.icmp_type = (uint8_t)ntohs(match->flow.tp_src);
         icmp_spec.hdr.icmp_code = (uint8_t)ntohs(match->flow.tp_dst);
 
