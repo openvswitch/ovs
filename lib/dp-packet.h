@@ -352,10 +352,23 @@ dp_packet_set_l4(struct dp_packet *b, void *l4)
     b->l4_ofs = l4 ? (char *) l4 - (char *) dp_packet_data(b) : UINT16_MAX;
 }
 
+/* Returns the size of the packet from the beginning of the L3 header to the
+ * end of the L3 payload.  Hence L2 padding is not included. */
+static inline size_t
+dp_packet_l3_size(const struct dp_packet *b)
+{
+    return OVS_LIKELY(b->l3_ofs != UINT16_MAX)
+        ? (const char *)dp_packet_tail(b) - (const char *)dp_packet_l3(b)
+        - dp_packet_l2_pad_size(b)
+        : 0;
+}
+
+/* Returns the size of the packet from the beginning of the L4 header to the
+ * end of the L4 payload.  Hence L2 padding is not included. */
 static inline size_t
 dp_packet_l4_size(const struct dp_packet *b)
 {
-    return b->l4_ofs != UINT16_MAX
+    return OVS_LIKELY(b->l4_ofs != UINT16_MAX)
         ? (const char *)dp_packet_tail(b) - (const char *)dp_packet_l4(b)
         - dp_packet_l2_pad_size(b)
         : 0;
