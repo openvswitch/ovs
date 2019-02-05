@@ -748,7 +748,7 @@ conn_lookup(struct conntrack *ct, const struct conn_key *key, long long now)
 {
     struct conn_lookup_ctx ctx;
     ctx.conn = NULL;
-    ctx.key = *key;
+    memcpy(&ctx.key, key, sizeof ctx.key);
     ctx.hash = conn_key_hash(key, ct->hash_basis);
     unsigned bucket = hash_to_bucket(ctx.hash);
     conn_key_lookup(&ct->buckets[bucket], &ctx, now);
@@ -905,7 +905,7 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
                     nc->rev_key.src.addr = alg_exp->alg_nat_repl_addr;
                     nc->nat_info->nat_action = NAT_ACTION_DST;
                 }
-                *conn_for_un_nat_copy = *nc;
+                memcpy(conn_for_un_nat_copy, nc, sizeof *conn_for_un_nat_copy);
                 ct_rwlock_wrlock(&ct->resources_lock);
                 bool new_insert = nat_conn_keys_insert(&ct->nat_conn_keys,
                                                        conn_for_un_nat_copy,
@@ -919,7 +919,7 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
                     free(log_msg);
                 }
             } else {
-                *conn_for_un_nat_copy = *nc;
+                memcpy(conn_for_un_nat_copy, nc, sizeof *conn_for_un_nat_copy);
                 ct_rwlock_wrlock(&ct->resources_lock);
                 bool nat_res = nat_select_range_tuple(ct, nc,
                                                       conn_for_un_nat_copy);
@@ -1262,7 +1262,7 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
                                      ct->hash_basis,
                                      alg_src_ip_wc(ct_alg_ctl));
         if (alg_exp) {
-            alg_exp_entry = *alg_exp;
+            memcpy(&alg_exp_entry, alg_exp, sizeof alg_exp_entry);
             alg_exp = &alg_exp_entry;
         }
         ct_rwlock_unlock(&ct->resources_lock);
@@ -2612,7 +2612,8 @@ static struct alg_exp_node *
 expectation_lookup(struct hmap *alg_expectations, const struct conn_key *key,
                    uint32_t basis, bool src_ip_wc)
 {
-    struct conn_key check_key = *key;
+    struct conn_key check_key;
+    memcpy(&check_key, key, sizeof check_key);
     check_key.src.port = ALG_WC_SRC_PORT;
 
     if (src_ip_wc) {
