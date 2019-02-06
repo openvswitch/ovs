@@ -4565,28 +4565,36 @@ netdev_dpdk_add_rte_flow_offload(struct netdev *netdev,
     struct flow_actions actions = { .actions = NULL, .cnt = 0 };
     struct rte_flow *flow;
     struct rte_flow_error error;
-    uint8_t *ipv4_next_proto_mask = NULL;
+    uint8_t proto = 0;
     int ret = 0;
+    struct flow_items {
+        struct rte_flow_item_eth  eth;
+        struct rte_flow_item_vlan vlan;
+        struct rte_flow_item_ipv4 ipv4;
+        union {
+            struct rte_flow_item_tcp  tcp;
+            struct rte_flow_item_udp  udp;
+            struct rte_flow_item_sctp sctp;
+            struct rte_flow_item_icmp icmp;
+        };
+    } spec, mask;
+
+    memset(&spec, 0, sizeof spec);
+    memset(&mask, 0, sizeof mask);
 
     /* Eth */
-    struct rte_flow_item_eth eth_spec;
-    struct rte_flow_item_eth eth_mask;
     if (!eth_addr_is_zero(match->wc.masks.dl_src) ||
         !eth_addr_is_zero(match->wc.masks.dl_dst)) {
-        memset(&eth_spec, 0, sizeof eth_spec);
-        memset(&eth_mask, 0, sizeof eth_mask);
-        rte_memcpy(&eth_spec.dst, &match->flow.dl_dst, sizeof eth_spec.dst);
-        rte_memcpy(&eth_spec.src, &match->flow.dl_src, sizeof eth_spec.src);
-        eth_spec.type = match->flow.dl_type;
+        memcpy(&spec.eth.dst, &match->flow.dl_dst, sizeof spec.eth.dst);
+        memcpy(&spec.eth.src, &match->flow.dl_src, sizeof spec.eth.src);
+        spec.eth.type = match->flow.dl_type;
 
-        rte_memcpy(&eth_mask.dst, &match->wc.masks.dl_dst,
-                   sizeof eth_mask.dst);
-        rte_memcpy(&eth_mask.src, &match->wc.masks.dl_src,
-                   sizeof eth_mask.src);
-        eth_mask.type = match->wc.masks.dl_type;
+        memcpy(&mask.eth.dst, &match->wc.masks.dl_dst, sizeof mask.eth.dst);
+        memcpy(&mask.eth.src, &match->wc.masks.dl_src, sizeof mask.eth.src);
+        mask.eth.type = match->wc.masks.dl_type;
 
         add_flow_pattern(&patterns, RTE_FLOW_ITEM_TYPE_ETH,
-                         &eth_spec, &eth_mask);
+                         &spec.eth, &mask.eth);
     } else {
         /*
          * If user specifies a flow (like UDP flow) without L2 patterns,
@@ -4599,50 +4607,37 @@ netdev_dpdk_add_rte_flow_offload(struct netdev *netdev,
     }
 
     /* VLAN */
-    struct rte_flow_item_vlan vlan_spec;
-    struct rte_flow_item_vlan vlan_mask;
     if (match->wc.masks.vlans[0].tci && match->flow.vlans[0].tci) {
-        memset(&vlan_spec, 0, sizeof vlan_spec);
-        memset(&vlan_mask, 0, sizeof vlan_mask);
-        vlan_spec.tci  = match->flow.vlans[0].tci & ~htons(VLAN_CFI);
-        vlan_mask.tci  = match->wc.masks.vlans[0].tci & ~htons(VLAN_CFI);
+        spec.vlan.tci  = match->flow.vlans[0].tci & ~htons(VLAN_CFI);
+        mask.vlan.tci  = match->wc.masks.vlans[0].tci & ~htons(VLAN_CFI);
 
         /* match any protocols */
-        vlan_mask.inner_type = 0;
+        mask.vlan.inner_type = 0;
 
         add_flow_pattern(&patterns, RTE_FLOW_ITEM_TYPE_VLAN,
-                         &vlan_spec, &vlan_mask);
+                         &spec.vlan, &mask.vlan);
     }
 
     /* IP v4 */
-    uint8_t proto = 0;
-    struct rte_flow_item_ipv4 ipv4_spec;
-    struct rte_flow_item_ipv4 ipv4_mask;
     if (match->flow.dl_type == htons(ETH_TYPE_IP)) {
-        memset(&ipv4_spec, 0, sizeof ipv4_spec);
-        memset(&ipv4_mask, 0, sizeof ipv4_mask);
+        spec.ipv4.hdr.type_of_service = match->flow.nw_tos;
+        spec.ipv4.hdr.time_to_live    = match->flow.nw_ttl;
+        spec.ipv4.hdr.next_proto_id   = match->flow.nw_proto;
+        spec.ipv4.hdr.src_addr        = match->flow.nw_src;
+        spec.ipv4.hdr.dst_addr        = match->flow.nw_dst;
 
-        ipv4_spec.hdr.type_of_service = match->flow.nw_tos;
-        ipv4_spec.hdr.time_to_live    = match->flow.nw_ttl;
-        ipv4_spec.hdr.next_proto_id   = match->flow.nw_proto;
-        ipv4_spec.hdr.src_addr        = match->flow.nw_src;
-        ipv4_spec.hdr.dst_addr        = match->flow.nw_dst;
-
-        ipv4_mask.hdr.type_of_service = match->wc.masks.nw_tos;
-        ipv4_mask.hdr.time_to_live    = match->wc.masks.nw_ttl;
-        ipv4_mask.hdr.next_proto_id   = match->wc.masks.nw_proto;
-        ipv4_mask.hdr.src_addr        = match->wc.masks.nw_src;
-        ipv4_mask.hdr.dst_addr        = match->wc.masks.nw_dst;
+        mask.ipv4.hdr.type_of_service = match->wc.masks.nw_tos;
+        mask.ipv4.hdr.time_to_live    = match->wc.masks.nw_ttl;
+        mask.ipv4.hdr.next_proto_id   = match->wc.masks.nw_proto;
+        mask.ipv4.hdr.src_addr        = match->wc.masks.nw_src;
+        mask.ipv4.hdr.dst_addr        = match->wc.masks.nw_dst;
 
         add_flow_pattern(&patterns, RTE_FLOW_ITEM_TYPE_IPV4,
-                         &ipv4_spec, &ipv4_mask);
+                         &spec.ipv4, &mask.ipv4);
 
         /* Save proto for L4 protocol setup */
-        proto = ipv4_spec.hdr.next_proto_id &
-                ipv4_mask.hdr.next_proto_id;
-
-        /* Remember proto mask address for later modification */
-        ipv4_next_proto_mask = &ipv4_mask.hdr.next_proto_id;
+        proto = spec.ipv4.hdr.next_proto_id &
+                mask.ipv4.hdr.next_proto_id;
     }
 
     if (proto != IPPROTO_ICMP && proto != IPPROTO_UDP  &&
@@ -4661,95 +4656,67 @@ netdev_dpdk_add_rte_flow_offload(struct netdev *netdev,
         goto out;
     }
 
-    struct rte_flow_item_tcp tcp_spec;
-    struct rte_flow_item_tcp tcp_mask;
-    if (proto == IPPROTO_TCP) {
-        memset(&tcp_spec, 0, sizeof tcp_spec);
-        memset(&tcp_mask, 0, sizeof tcp_mask);
-        tcp_spec.hdr.src_port  = match->flow.tp_src;
-        tcp_spec.hdr.dst_port  = match->flow.tp_dst;
-        tcp_spec.hdr.data_off  = ntohs(match->flow.tcp_flags) >> 8;
-        tcp_spec.hdr.tcp_flags = ntohs(match->flow.tcp_flags) & 0xff;
+    switch (proto) {
+    case IPPROTO_TCP:
+        spec.tcp.hdr.src_port  = match->flow.tp_src;
+        spec.tcp.hdr.dst_port  = match->flow.tp_dst;
+        spec.tcp.hdr.data_off  = ntohs(match->flow.tcp_flags) >> 8;
+        spec.tcp.hdr.tcp_flags = ntohs(match->flow.tcp_flags) & 0xff;
 
-        tcp_mask.hdr.src_port  = match->wc.masks.tp_src;
-        tcp_mask.hdr.dst_port  = match->wc.masks.tp_dst;
-        tcp_mask.hdr.data_off  = ntohs(match->wc.masks.tcp_flags) >> 8;
-        tcp_mask.hdr.tcp_flags = ntohs(match->wc.masks.tcp_flags) & 0xff;
+        mask.tcp.hdr.src_port  = match->wc.masks.tp_src;
+        mask.tcp.hdr.dst_port  = match->wc.masks.tp_dst;
+        mask.tcp.hdr.data_off  = ntohs(match->wc.masks.tcp_flags) >> 8;
+        mask.tcp.hdr.tcp_flags = ntohs(match->wc.masks.tcp_flags) & 0xff;
 
         add_flow_pattern(&patterns, RTE_FLOW_ITEM_TYPE_TCP,
-                         &tcp_spec, &tcp_mask);
+                         &spec.tcp, &mask.tcp);
 
         /* proto == TCP and ITEM_TYPE_TCP, thus no need for proto match */
-        if (ipv4_next_proto_mask) {
-            *ipv4_next_proto_mask = 0;
-        }
-        goto end_proto_check;
-    }
+        mask.ipv4.hdr.next_proto_id = 0;
+        break;
 
-    struct rte_flow_item_udp udp_spec;
-    struct rte_flow_item_udp udp_mask;
-    if (proto == IPPROTO_UDP) {
-        memset(&udp_spec, 0, sizeof udp_spec);
-        memset(&udp_mask, 0, sizeof udp_mask);
-        udp_spec.hdr.src_port = match->flow.tp_src;
-        udp_spec.hdr.dst_port = match->flow.tp_dst;
+    case IPPROTO_UDP:
+        spec.udp.hdr.src_port = match->flow.tp_src;
+        spec.udp.hdr.dst_port = match->flow.tp_dst;
 
-        udp_mask.hdr.src_port = match->wc.masks.tp_src;
-        udp_mask.hdr.dst_port = match->wc.masks.tp_dst;
+        mask.udp.hdr.src_port = match->wc.masks.tp_src;
+        mask.udp.hdr.dst_port = match->wc.masks.tp_dst;
 
         add_flow_pattern(&patterns, RTE_FLOW_ITEM_TYPE_UDP,
-                         &udp_spec, &udp_mask);
+                         &spec.udp, &mask.udp);
 
         /* proto == UDP and ITEM_TYPE_UDP, thus no need for proto match */
-        if (ipv4_next_proto_mask) {
-            *ipv4_next_proto_mask = 0;
-        }
-        goto end_proto_check;
-    }
+        mask.ipv4.hdr.next_proto_id = 0;
+        break;
 
-    struct rte_flow_item_sctp sctp_spec;
-    struct rte_flow_item_sctp sctp_mask;
-    if (proto == IPPROTO_SCTP) {
-        memset(&sctp_spec, 0, sizeof sctp_spec);
-        memset(&sctp_mask, 0, sizeof sctp_mask);
-        sctp_spec.hdr.src_port = match->flow.tp_src;
-        sctp_spec.hdr.dst_port = match->flow.tp_dst;
+    case IPPROTO_SCTP:
+        spec.sctp.hdr.src_port = match->flow.tp_src;
+        spec.sctp.hdr.dst_port = match->flow.tp_dst;
 
-        sctp_mask.hdr.src_port = match->wc.masks.tp_src;
-        sctp_mask.hdr.dst_port = match->wc.masks.tp_dst;
+        mask.sctp.hdr.src_port = match->wc.masks.tp_src;
+        mask.sctp.hdr.dst_port = match->wc.masks.tp_dst;
 
         add_flow_pattern(&patterns, RTE_FLOW_ITEM_TYPE_SCTP,
-                         &sctp_spec, &sctp_mask);
+                         &spec.sctp, &mask.sctp);
 
         /* proto == SCTP and ITEM_TYPE_SCTP, thus no need for proto match */
-        if (ipv4_next_proto_mask) {
-            *ipv4_next_proto_mask = 0;
-        }
-        goto end_proto_check;
-    }
+        mask.ipv4.hdr.next_proto_id = 0;
+        break;
 
-    struct rte_flow_item_icmp icmp_spec;
-    struct rte_flow_item_icmp icmp_mask;
-    if (proto == IPPROTO_ICMP) {
-        memset(&icmp_spec, 0, sizeof icmp_spec);
-        memset(&icmp_mask, 0, sizeof icmp_mask);
-        icmp_spec.hdr.icmp_type = (uint8_t)ntohs(match->flow.tp_src);
-        icmp_spec.hdr.icmp_code = (uint8_t)ntohs(match->flow.tp_dst);
+    case IPPROTO_ICMP:
+        spec.icmp.hdr.icmp_type = (uint8_t) ntohs(match->flow.tp_src);
+        spec.icmp.hdr.icmp_code = (uint8_t) ntohs(match->flow.tp_dst);
 
-        icmp_mask.hdr.icmp_type = (uint8_t)ntohs(match->wc.masks.tp_src);
-        icmp_mask.hdr.icmp_code = (uint8_t)ntohs(match->wc.masks.tp_dst);
+        mask.icmp.hdr.icmp_type = (uint8_t) ntohs(match->wc.masks.tp_src);
+        mask.icmp.hdr.icmp_code = (uint8_t) ntohs(match->wc.masks.tp_dst);
 
         add_flow_pattern(&patterns, RTE_FLOW_ITEM_TYPE_ICMP,
-                         &icmp_spec, &icmp_mask);
+                         &spec.icmp, &mask.icmp);
 
         /* proto == ICMP and ITEM_TYPE_ICMP, thus no need for proto match */
-        if (ipv4_next_proto_mask) {
-            *ipv4_next_proto_mask = 0;
-        }
-        goto end_proto_check;
+        mask.ipv4.hdr.next_proto_id = 0;
+        break;
     }
-
-end_proto_check:
 
     add_flow_pattern(&patterns, RTE_FLOW_ITEM_TYPE_END, NULL, NULL);
 
