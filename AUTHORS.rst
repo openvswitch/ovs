@@ -65,6 +65,7 @@ Ariel Tubaltsev                    atubaltsev@vmware.com
 Arnoldo Lutz                       arnoldo.lutz.guevara@hpe.com
 Arun Sharma                        arun.sharma@calsoftinc.com
 Aryan TaheriMonfared               aryan.taherimonfared@uis.no
+Asaf Penso                         asafp@mellanox.com
 Ashish Varma                       ashishvarma.ovs@gmail.com
 Ashwin Swaminathan                 ashwinds@arista.com
 Babu Shanmugam                     bschanmu@redhat.com
