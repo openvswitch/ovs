@@ -254,7 +254,7 @@ AC_DEFUN([OVS_CHECK_DPDK], [
       AC_LANG_PROGRAM(
         [
           #include <rte_config.h>
-#if RTE_LIBRTE_VHOST_NUMA
+#if defined(RTE_LIBRTE_VHOST_NUMA) || defined(RTE_EAL_NUMA_AWARE_HUGEPAGES)
 #error
 #endif
         ], [])
