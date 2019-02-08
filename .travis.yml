@@ -33,7 +33,6 @@ env:
   - TESTSUITE=1 KERNEL=3.16.54
   - TESTSUITE=1 OPTS="--enable-shared"
   - BUILD_ENV="-m32" OPTS="--disable-ssl"
-  - KERNEL=3.16.54 DPDK=1
   - KERNEL=3.16.54 DPDK=1 OPTS="--enable-shared"
   - KERNEL=3.16.54 TESTSUITE=1 DPDK=1
   - KERNEL=3.16.54 DPDK_SHARED=1
