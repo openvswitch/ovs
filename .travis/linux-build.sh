@@ -73,7 +73,7 @@ function install_dpdk()
         export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/$TARGET/lib
     fi
     make config CC=gcc T=$TARGET
-    make CC=gcc RTE_KERNELDIR=$KERNELSRC
+    make -j4 CC=gcc RTE_KERNELDIR=$KERNELSRC
     echo "Installed DPDK source in $(pwd)"
     cd ..
 }
