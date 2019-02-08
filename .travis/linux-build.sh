@@ -79,7 +79,7 @@ function install_dpdk()
 
 function configure_ovs()
 {
-    ./boot.sh && ./configure $*
+    ./boot.sh && ./configure $* || { cat config.log; exit 1; }
 }
 
 if [ "$KERNEL" ] || [ "$DPDK" ] || [ "$DPDK_SHARED" ]; then
