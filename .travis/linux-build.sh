@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -o errexit
+set -x
 
 KERNELSRC=""
 CFLAGS="-Werror"
