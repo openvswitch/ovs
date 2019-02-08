@@ -29,8 +29,8 @@ check: all
 installcheck:
 mostlyclean:
 clean:
-	rm -f *.o *.ko *.mod.* Module.symvers .*.cmd kcompat.h.new \
-		modules.order .tmp_versions/openvswitch.mod
+	rm -f *.o *.ko *.mod.* .*.gcno .*.d .*.cmd kcompat.h.new \
+		.cache.mk Module.symvers modules.order .tmp_versions/*.mod
 	for d in $(build_links); do if test -h $$d; then rm $$d; fi; done
 distclean: clean
 	rm -f kcompat.h
