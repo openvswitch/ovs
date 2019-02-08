@@ -64,6 +64,7 @@ include/openvswitch/cxxtest.cc: \
 	for header in $(openvswitchinclude_HEADERS); do	\
 	  echo $$header; \
 	done | sed 's,^include/\(.*\)$$,#include <\1>,'; } > $@
+CLEANFILES += include/openvswitch/cxxtest.cc
 endif
 
 # OVS does not use C++ itself, but it provides public header files
