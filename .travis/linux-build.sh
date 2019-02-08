@@ -95,37 +95,44 @@ if [ "$DPDK" ] || [ "$DPDK_SHARED" ]; then
         # Disregard cast alignment errors until DPDK is fixed
         CFLAGS="$CFLAGS -Wno-cast-align"
     fi
-    EXTRA_OPTS="$EXTRA_OPTS --with-dpdk=./dpdk-$DPDK_VER/build"
+    EXTRA_OPTS="$EXTRA_OPTS --with-dpdk=$(pwd)/dpdk-$DPDK_VER/build"
 elif [ "$CC" != "clang" ]; then
     # DPDK headers currently trigger sparse errors
     SPARSE_FLAGS="$SPARSE_FLAGS -Wsparse-error"
 fi
 
-configure_ovs $EXTRA_OPTS $*
-
-make selinux-policy
-
-# Only build datapath if we are testing kernel w/o running testsuite
-if [ "$KERNEL" ] && [ ! "$TESTSUITE" ] && \
-   [ ! "$DPDK" ] && [ ! "$DPDK_SHARED" ]; then
-    cd datapath
-fi
+OPTS="$EXTRA_OPTS $*"
 
 if [ "$CC" = "clang" ]; then
-    make -j2 CFLAGS="$CFLAGS -Wno-error=unused-command-line-argument"
+    export OVS_CFLAGS="$CFLAGS -Wno-error=unused-command-line-argument"
 elif [[ $BUILD_ENV =~ "-m32" ]]; then
     # Disable sparse for 32bit builds on 64bit machine
-    make -j2 CFLAGS="$CFLAGS $BUILD_ENV"
+    export OVS_CFLAGS="$CFLAGS $BUILD_ENV"
 else
-    make -j2 CFLAGS="$CFLAGS $BUILD_ENV $SPARSE_FLAGS" C=1
+    OPTS="$OPTS --enable-sparse"
+    export OVS_CFLAGS="$CFLAGS $BUILD_ENV $SPARSE_FLAGS"
 fi
 
 if [ "$TESTSUITE" ]; then
+    # 'distcheck' will reconfigure with required options.
+    # Now we only need to prepare the Makefile wihtout sparse-wrapped CC.
+    configure_ovs
+
+    export DISTCHECK_CONFIGURE_FLAGS="$OPTS"
     if ! make distcheck TESTSUITEFLAGS=-j4 RECHECK=yes; then
         # testsuite.log is necessary for debugging.
         cat */_build/tests/testsuite.log
         exit 1
     fi
+else
+    configure_ovs $OPTS
+    make selinux-policy
+
+    # Only build datapath if we are testing kernel w/o running testsuite
+    if [ "$KERNEL" ] && [ ! "$DPDK" ] && [ ! "$DPDK_SHARED" ]; then
+        cd datapath
+    fi
+    make -j4
 fi
 
 exit 0
