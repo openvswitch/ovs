@@ -43,7 +43,7 @@ function install_kernel()
     fi
 
     KERNELSRC=$(pwd)
-    if [ ! "$DPDK" ]; then
+    if [ ! "$DPDK" ] && [ ! "$DPDK_SHARED" ]; then
         EXTRA_OPTS="--with-linux=$(pwd)"
     fi
     echo "Installed kernel source in $(pwd)"
@@ -106,7 +106,8 @@ configure_ovs $EXTRA_OPTS $*
 make selinux-policy
 
 # Only build datapath if we are testing kernel w/o running testsuite
-if [ "$KERNEL" ] && [ ! "$TESTSUITE" ] && [ ! "$DPDK" ]; then
+if [ "$KERNEL" ] && [ ! "$TESTSUITE" ] && \
+   [ ! "$DPDK" ] && [ ! "$DPDK_SHARED" ]; then
     cd datapath
 fi
 
