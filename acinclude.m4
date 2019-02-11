@@ -316,7 +316,21 @@ AC_DEFUN([OVS_CHECK_DPDK], [
       AC_LANG_PROGRAM(
         [
           #include <rte_config.h>
+#if defined(RTE_LIBRTE_MLX4_PMD) && !defined(RTE_LIBRTE_MLX4_DLOPEN_DEPS)
+#error
+#endif
+        ], [])
+      ], [],
+      [AC_SEARCH_LIBS([mlx4dv_init_obj],[mlx4],[],[AC_MSG_ERROR([unable to find libmlx4, install the dependency package])])])
+
+    AC_COMPILE_IFELSE([
+      AC_LANG_PROGRAM(
+        [
+          #include <rte_config.h>
 #if defined(RTE_LIBRTE_MLX5_PMD) && !defined(RTE_LIBRTE_MLX5_DLOPEN_DEPS)
+#error
+#endif
+#if defined(RTE_LIBRTE_MLX4_PMD) && !defined(RTE_LIBRTE_MLX4_DLOPEN_DEPS)
 #error
 #endif
         ], [])
