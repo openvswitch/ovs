@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
-    "version": "5.14.0",
-    "cksum": "3600467067 20513",
+    "version": "5.14.1",
+    "cksum": "3758097843 20509",
     "tables": {
         "NB_Global": {
             "columns": {
@@ -46,7 +46,7 @@
                                   "max": "unlimited"}},
                 "load_balancer": {"type": {"key": {"type": "uuid",
                                                   "refTable": "Load_Balancer",
-                                                  "refType": "strong"},
+                                                  "refType": "weak"},
                                            "min": 0,
                                            "max": "unlimited"}},
                 "dns_records": {"type": {"key": {"type": "uuid",
@@ -250,7 +250,7 @@
                                  "max": "unlimited"}},
                 "load_balancer": {"type": {"key": {"type": "uuid",
                                                   "refTable": "Load_Balancer",
-                                                  "refType": "strong"},
+                                                  "refType": "weak"},
                                            "min": 0,
                                            "max": "unlimited"}},
                 "options": {

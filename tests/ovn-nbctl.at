@@ -752,7 +752,15 @@ AT_CHECK([ovn-nbctl lr-lb-add lr0 lb0])
 AT_CHECK([ovn-nbctl lr-lb-add lr0 lb1])
 AT_CHECK([ovn-nbctl lr-lb-add lr0 lb3])
 AT_CHECK([ovn-nbctl lr-lb-del lr0])
-AT_CHECK([ovn-nbctl lr-lb-list lr0 | uuidfilt], [0], [])])
+AT_CHECK([ovn-nbctl lr-lb-list lr0 | uuidfilt], [0], [])
+
+dnl Remove load balancers after adding them to a logical router/switch.
+AT_CHECK([ovn-nbctl lr-lb-add lr0 lb0])
+AT_CHECK([ovn-nbctl ls-lb-add ls0 lb1])
+AT_CHECK([ovn-nbctl lb-del lb0])
+AT_CHECK([ovn-nbctl lb-del lb1])
+AT_CHECK([ovn-nbctl lr-lb-list lr0 | uuidfilt], [0], [])
+AT_CHECK([ovn-nbctl ls-lb-list ls0 | uuidfilt], [0], [])])
 
 dnl ---------------------------------------------------------------------
 
