@@ -2997,12 +2997,7 @@ process_ftp_ctl_v4(struct conntrack *ct,
         return CT_FTP_CTL_INVALID;
     }
 
-    uint16_t port_lo_hs = value;
-    if (65535 - port_hs < port_lo_hs) {
-        return CT_FTP_CTL_INVALID;
-    }
-
-    port_hs |= port_lo_hs;
+    port_hs |= value;
     ovs_be16 port = htons(port_hs);
     ovs_be32 conn_ipv4_addr;
 
