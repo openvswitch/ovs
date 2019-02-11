@@ -1109,6 +1109,7 @@ compare_poll_list(const void *a_, const void *b_)
 static void
 sorted_poll_list(struct dp_netdev_pmd_thread *pmd, struct rxq_poll **list,
                  size_t *n)
+    OVS_REQUIRES(pmd->port_mutex)
 {
     struct rxq_poll *ret, *poll;
     size_t i;
