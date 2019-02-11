@@ -144,6 +144,7 @@ do_start_ovsdb () {
         set "$@" --certificate=db:Open_vSwitch,SSL,certificate
         set "$@" --bootstrap-ca-cert=db:Open_vSwitch,SSL,ca_cert
         [ "$OVS_USER" != "" ] && set "$@" --user "$OVS_USER"
+        [ "$OVSDB_SERVER_OPTIONS" != "" ] && set "$@" $OVSDB_SERVER_OPTIONS
 
         start_daemon "$OVSDB_SERVER_PRIORITY" "$OVSDB_SERVER_WRAPPER" "$@" \
             || return 1
@@ -213,6 +214,7 @@ do_start_forwarding () {
             set "$@" --no-self-confinement
         fi
         [ "$OVS_USER" != "" ] && set "$@" --user "$OVS_USER"
+        [ "$OVS_VSWITCHD_OPTIONS" != "" ] &&set "$@" $OVS_VSWITCHD_OPTIONS
 
         start_daemon "$OVS_VSWITCHD_PRIORITY" "$OVS_VSWITCHD_WRAPPER" "$@" ||
             return 1
@@ -326,6 +328,8 @@ set_defaults () {
     OVS_VSWITCHD_PRIORITY=-10
     OVSDB_SERVER_WRAPPER=
     OVS_VSWITCHD_WRAPPER=
+    OVSDB_SERVER_OPTIONS=
+    OVS_VSWITCHD_OPTIONS=
 
     DB_FILE=$dbdir/conf.db
     DB_SOCK=$rundir/db.sock
