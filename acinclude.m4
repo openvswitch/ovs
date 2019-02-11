@@ -298,8 +298,7 @@ AC_DEFUN([OVS_CHECK_DPDK], [
 #endif
         ], [])
       ], [],
-      [AC_SEARCH_LIBS([mnl_attr_put],[mnl],[],[AC_MSG_ERROR([unable to find libmnl, install the dependency package])])
-       AC_DEFINE([DPDK_MNL], [1], [MLX5 PMD detected in DPDK.])])
+      [AC_SEARCH_LIBS([mnl_attr_put],[mnl],[],[AC_MSG_ERROR([unable to find libmnl, install the dependency package])])])
 
     AC_COMPILE_IFELSE([
       AC_LANG_PROGRAM(
