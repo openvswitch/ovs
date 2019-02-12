@@ -589,3 +589,71 @@ row,action,name,number,_version
    [[[["name","==","one"]]]],
     [[[false]]],
     [[[true]]]])
+
+
+AT_SETUP(monitor-cond-change with many sessions pending)
+AT_KEYWORDS([ovsdb server monitor monitor-cond negative])
+ordinal_schema > schema
+AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
+
+AT_CAPTURE_FILE([ovsdb-server-log])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file="`pwd`"/ovsdb-server-log db >/dev/null 2>&1])
+on_exit 'kill `cat ovsdb-server.pid`'
+for txn in m4_foreach([txn], [[[["ordinals",
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 0, "name": "zero"}},
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 1, "name": "one"}},
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 2, "name": "two"}}]]]], ['txn' ]); do
+  AT_CHECK([ovsdb-client transact unix:socket "$txn"], [0], [ignore], [ignore])
+done
+
+# 1001 clients monitoring column "name" and with condition for "name" only.
+# The clients are created in a way that the 991th client will request condition
+# change, so that the chance is high that the condition change will be handled
+# before some pending changes are freed.
+
+cond='[[["name","==","ten"]]]'
+for i in `seq 1 990`; do
+    AT_CHECK([ovsdb-client -vjsonrpc --pidfile=ovsdb-client$i.pid --detach --no-chdir -d json monitor-cond --format=csv unix:socket ordinals $cond ordinals ["name"]], [0], [ignore], [ignore])
+done
+
+AT_CHECK([ovsdb-client -vjsonrpc --pidfile --detach --no-chdir -d json monitor-cond --format=csv unix:socket ordinals $cond ordinals ["name"] > output],
+       [0], [ignore], [ignore])
+
+for i in `seq 991 1000`; do
+    AT_CHECK([ovsdb-client -vjsonrpc --pidfile=ovsdb-client$i.pid --detach --no-chdir -d json monitor-cond --format=csv unix:socket ordinals $cond ordinals ["name"]], [0], [ignore], [ignore])
+done
+
+for txn in m4_foreach([txn], [[[["ordinals",
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 10, "name": "ten"}}]]]], ['txn' ]); do
+  AT_CHECK([ovsdb-client transact unix:socket "$txn"], [0],
+           [ignore], [ignore], [kill `cat server-pid client-pid`])
+done
+
+# Change the condition so that a new column "number" is added to monitor table.
+cond='[[["number","==",1]]]'
+AT_CHECK([ovs-appctl -t ovsdb-client ovsdb-client/cond_change ordinals $cond], [0], [ignore], [ignore])
+
+# Give some time for the server to flush and free pending changes
+# (to crash, when n_columns is not handled properly)
+sleep 1
+
+AT_CHECK([ovsdb-client transact unix:socket '[["ordinals"]]'], [0],
+         [ignore], [ignore])
+AT_CHECK([ovs-appctl -t ovsdb-server -e exit], [0], [ignore], [ignore])
+OVS_WAIT_UNTIL([test ! -e ovsdb-server.pid && test ! -e ovsdb-client.pid])
+AT_CHECK([$PYTHON $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0], [[row,action,name
+<0>,insert,"""ten"""
+
+row,action,name
+<0>,delete,
+<1>,insert,"""one"""
+]], [ignore])
+AT_CLEANUP
