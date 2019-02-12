@@ -30,5 +30,5 @@ class Error(Exception):
         # Compose message.
         syntax = ""
         if self.json is not None:
-                syntax = 'syntax "%s": ' % ovs.json.to_string(self.json)
+            syntax = 'syntax "%s": ' % ovs.json.to_string(self.json)
         Exception.__init__(self, "%s%s: %s" % (syntax, self.tag, self.msg))

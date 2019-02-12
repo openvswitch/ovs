@@ -241,7 +241,7 @@ class Reconnect(object):
 
         if (self.state == Reconnect.Backoff and
             self.backoff > self.max_backoff):
-                self.backoff = self.max_backoff
+            self.backoff = self.max_backoff
 
     def set_backoff_free_tries(self, backoff_free_tries):
         """Sets the number of connection attempts that will be made without

@@ -764,18 +764,18 @@ def dump_scsi_hosts(cap):
     for h in scsi_list:
         procname = ''
         try:
-                f = open('/sys/class/scsi_host/%s/proc_name' % h)
-                procname = f.readline().strip("\n")
-                f.close()
+            f = open('/sys/class/scsi_host/%s/proc_name' % h)
+            procname = f.readline().strip("\n")
+            f.close()
         except:
-                pass
+            pass
         modelname = None
         try:
-                f = open('/sys/class/scsi_host/%s/model_name' % h)
-                modelname = f.readline().strip("\n")
-                f.close()
+            f = open('/sys/class/scsi_host/%s/model_name' % h)
+            modelname = f.readline().strip("\n")
+            f.close()
         except:
-                pass
+            pass
 
         output += "%s:\n" % h
         output += "    %s%s\n" \

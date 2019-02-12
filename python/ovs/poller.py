@@ -115,7 +115,7 @@ class _SelectSelect(object):
                     False,  # Wait all
                     timeout)
             except winutils.pywintypes.error:
-                    return [(0, POLLERR)]
+                return [(0, POLLERR)]
 
             if retval == winutils.winerror.WAIT_TIMEOUT:
                 return []
