@@ -223,9 +223,11 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     case "$with_dpdk" in
       yes)
         DPDK_AUTO_DISCOVER="true"
-        PKG_CHECK_MODULES([DPDK], [libdpdk],
-                          [DPDK_INCLUDE="$DPDK_CFLAGS"],
-                          [DPDK_INCLUDE="-I/usr/local/include/dpdk -I/usr/include/dpdk"])
+        PKG_CHECK_MODULES_STATIC([DPDK], [libdpdk], [
+            DPDK_INCLUDE="$DPDK_CFLAGS"
+            DPDK_LIB="$DPDK_LIBS"], [
+            DPDK_INCLUDE="-I/usr/local/include/dpdk -I/usr/include/dpdk"
+            DPDK_LIB="-ldpdk"])
         ;;
       *)
         DPDK_AUTO_DISCOVER="false"
@@ -238,10 +240,9 @@ AC_DEFUN([OVS_CHECK_DPDK], [
            DPDK_INCLUDE="-I$DPDK_INCLUDE_PATH/dpdk"
         fi
         DPDK_LIB_DIR="$with_dpdk/lib"
+        DPDK_LIB="-ldpdk"
         ;;
     esac
-
-    DPDK_LIB="-ldpdk"
 
     ovs_save_CFLAGS="$CFLAGS"
     ovs_save_LDFLAGS="$LDFLAGS"
@@ -346,7 +347,14 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     #
     # These options are specified inside a single -Wl directive to prevent
     # autotools from reordering them.
-    DPDK_vswitchd_LDFLAGS=-Wl,--whole-archive,$DPDK_LIB,--no-whole-archive
+    #
+    # OTOH newer versions of dpdk pkg-config (generated with Meson)
+    # will already have flagged just the right set of libs with
+    # --whole-archive - in those cases do not wrap it once more.
+    case "$DPDK_LIB" in
+      *whole-archive*) DPDK_vswitchd_LDFLAGS=$DPDK_LIB;;
+      *) DPDK_vswitchd_LDFLAGS=-Wl,--whole-archive,$DPDK_LIB,--no-whole-archive
+    esac
     AC_SUBST([DPDK_vswitchd_LDFLAGS])
     AC_DEFINE([DPDK_NETDEV], [1], [System uses the DPDK module.])
   fi
