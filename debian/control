@@ -41,7 +41,7 @@ Description: Open vSwitch datapath module source - module-assistant version
 
 Package: openvswitch-datapath-dkms
 Architecture: all
-Depends: dkms (>= 1.95), libc6-dev, make, ${misc:Depends}, ${python:Depends}
+Depends: dkms (>= 1.95), libc6-dev, libelf-dev, make, ${misc:Depends}, ${python:Depends}
 Description: Open vSwitch datapath module source - DKMS version
  Open vSwitch is a production quality, multilayer, software-based,
  Ethernet virtual switch. It is designed to enable massive network
