@@ -250,6 +250,10 @@ AC_DEFUN([OVS_CHECK_DPDK], [
       LDFLAGS="$LDFLAGS -L${DPDK_LIB_DIR}"
     fi
 
+    AC_CHECK_HEADERS([rte_config.h], [], [
+      AC_MSG_ERROR([unable to find rte_config.h in $with_dpdk])
+    ], [AC_INCLUDES_DEFAULT])
+
     AC_COMPILE_IFELSE([
       AC_LANG_PROGRAM(
         [
