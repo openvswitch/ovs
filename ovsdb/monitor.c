@@ -122,6 +122,12 @@ struct ovsdb_monitor_changes {
     struct hmap rows;
     int n_refs;
     uint64_t transaction;
+
+    /* Save the mt->n_columns that is used when creating the changes.
+     * It can be different from the current mt->n_columns because
+     * mt->n_columns can be increased when there are condition changes
+     * from any of the clients sharing the dbmon. */
+    size_t n_columns;
 };
 
 /* A particular table being monitored. */
@@ -158,7 +164,8 @@ typedef struct json *
      const struct ovsdb_monitor_session_condition * condition,
      enum ovsdb_monitor_row_type row_type,
      const void *,
-     bool initial, unsigned long int *changed);
+     bool initial, unsigned long int *changed,
+     size_t n_columns);
 
 static void ovsdb_monitor_destroy(struct ovsdb_monitor *dbmon);
 static struct ovsdb_monitor_changes * ovsdb_monitor_table_add_changes(
@@ -264,14 +271,15 @@ ovsdb_monitor_changes_row_find(const struct ovsdb_monitor_changes *changes,
     return NULL;
 }
 
-/* Allocates an array of 'mt->n_columns' ovsdb_datums and initializes them as
+/* Allocates an array of 'n_columns' ovsdb_datums and initializes them as
  * copies of the data in 'row' drawn from the columns represented by
  * mt->columns[].  Returns the array.
  *
  * If 'row' is NULL, returns NULL. */
 static struct ovsdb_datum *
 clone_monitor_row_data(const struct ovsdb_monitor_table *mt,
-                       const struct ovsdb_row *row)
+                       const struct ovsdb_row *row,
+                       size_t n_columns)
 {
     struct ovsdb_datum *data;
     size_t i;
@@ -280,8 +288,8 @@ clone_monitor_row_data(const struct ovsdb_monitor_table *mt,
         return NULL;
     }
 
-    data = xmalloc(mt->n_columns * sizeof *data);
-    for (i = 0; i < mt->n_columns; i++) {
+    data = xmalloc(n_columns * sizeof *data);
+    for (i = 0; i < n_columns; i++) {
         const struct ovsdb_column *c = mt->columns[i].column;
         const struct ovsdb_datum *src = &row->fields[c->index];
         struct ovsdb_datum *dst = &data[i];
@@ -292,16 +300,17 @@ clone_monitor_row_data(const struct ovsdb_monitor_table *mt,
     return data;
 }
 
-/* Replaces the mt->n_columns ovsdb_datums in row[] by copies of the data from
+/* Replaces the n_columns ovsdb_datums in row[] by copies of the data from
  * in 'row' drawn from the columns represented by mt->columns[]. */
 static void
 update_monitor_row_data(const struct ovsdb_monitor_table *mt,
                         const struct ovsdb_row *row,
-                        struct ovsdb_datum *data)
+                        struct ovsdb_datum *data,
+                        size_t n_columns)
 {
     size_t i;
 
-    for (i = 0; i < mt->n_columns; i++) {
+    for (i = 0; i < n_columns; i++) {
         const struct ovsdb_column *c = mt->columns[i].column;
         const struct ovsdb_datum *src = &row->fields[c->index];
         struct ovsdb_datum *dst = &data[i];
@@ -314,16 +323,17 @@ update_monitor_row_data(const struct ovsdb_monitor_table *mt,
     }
 }
 
-/* Frees all of the mt->n_columns ovsdb_datums in data[], using the types taken
+/* Frees all of the n_columns ovsdb_datums in data[], using the types taken
  * from mt->columns[], plus 'data' itself. */
 static void
 free_monitor_row_data(const struct ovsdb_monitor_table *mt,
-                      struct ovsdb_datum *data)
+                      struct ovsdb_datum *data,
+                      size_t n_columns)
 {
     if (data) {
         size_t i;
 
-        for (i = 0; i < mt->n_columns; i++) {
+        for (i = 0; i < n_columns; i++) {
             const struct ovsdb_column *c = mt->columns[i].column;
 
             ovsdb_datum_destroy(&data[i], &c->type);
@@ -335,11 +345,12 @@ free_monitor_row_data(const struct ovsdb_monitor_table *mt,
 /* Frees 'row', which must have been created from 'mt'. */
 static void
 ovsdb_monitor_row_destroy(const struct ovsdb_monitor_table *mt,
-                          struct ovsdb_monitor_row *row)
+                          struct ovsdb_monitor_row *row,
+                          size_t n_columns)
 {
     if (row) {
-        free_monitor_row_data(mt, row->old);
-        free_monitor_row_data(mt, row->new);
+        free_monitor_row_data(mt, row->old, n_columns);
+        free_monitor_row_data(mt, row->new, n_columns);
         free(row);
     }
 }
@@ -502,6 +513,7 @@ ovsdb_monitor_table_add_changes(struct ovsdb_monitor_table *mt,
     changes->transaction = next_txn;
     changes->mt = mt;
     changes->n_refs = 1;
+    changes->n_columns = mt->n_columns;
     hmap_init(&changes->rows);
     hmap_insert(&mt->changes, &changes->hmap_node, hash_uint64(next_txn));
 
@@ -562,7 +574,7 @@ ovsdb_monitor_changes_destroy(struct ovsdb_monitor_changes *changes)
 
     HMAP_FOR_EACH_SAFE (row, next, hmap_node, &changes->rows) {
         hmap_remove(&changes->rows, &row->hmap_node);
-        ovsdb_monitor_row_destroy(changes->mt, row);
+        ovsdb_monitor_row_destroy(changes->mt, row, changes->n_columns);
     }
     hmap_destroy(&changes->rows);
     free(changes);
@@ -801,7 +813,8 @@ ovsdb_monitor_row_skip_update(const struct ovsdb_monitor_table *mt,
                               const struct ovsdb_datum *old,
                               const struct ovsdb_datum *new,
                               enum ovsdb_monitor_selection type,
-                              unsigned long int *changed)
+                              unsigned long int *changed,
+                              size_t n_columns)
 {
     if (!(mt->select & type)) {
         return true;
@@ -811,8 +824,8 @@ ovsdb_monitor_row_skip_update(const struct ovsdb_monitor_table *mt,
         size_t i, n_changes;
 
         n_changes = 0;
-        memset(changed, 0, bitmap_n_bytes(mt->n_columns));
-        for (i = 0; i < mt->n_columns; i++) {
+        memset(changed, 0, bitmap_n_bytes(n_columns));
+        for (i = 0; i < n_columns; i++) {
             const struct ovsdb_column *c = mt->columns[i].column;
             size_t index = row_type == OVSDB_ROW ? c->index : i;
             if (!ovsdb_datum_equals(&old[index], &new[index], &c->type)) {
@@ -838,14 +851,15 @@ ovsdb_monitor_row_skip_update(const struct ovsdb_monitor_table *mt,
  * going to be used as part of an "update" notification.
  *
  * 'changed' must be a scratch buffer for internal use that is at least
- * bitmap_n_bytes(mt->n_columns) bytes long. */
+ * bitmap_n_bytes(n_columns) bytes long. */
 static struct json *
 ovsdb_monitor_compose_row_update(
     const struct ovsdb_monitor_table *mt,
     const struct ovsdb_monitor_session_condition *condition OVS_UNUSED,
     enum ovsdb_monitor_row_type row_type OVS_UNUSED,
     const void *_row,
-    bool initial, unsigned long int *changed)
+    bool initial, unsigned long int *changed,
+    size_t n_columns OVS_UNUSED)
 {
     const struct ovsdb_monitor_row *row = _row;
     enum ovsdb_monitor_selection type;
@@ -856,7 +870,8 @@ ovsdb_monitor_compose_row_update(
     ovs_assert(row_type == OVSDB_MONITOR_ROW);
     type = ovsdb_monitor_row_update_type(initial, row->old, row->new);
     if (ovsdb_monitor_row_skip_update(mt, row_type, row->old,
-                                      row->new, type, changed)) {
+                                      row->new, type, changed,
+                                      mt->n_columns)) {
         return NULL;
     }
 
@@ -904,14 +919,15 @@ ovsdb_monitor_compose_row_update(
  * false if it is going to be used as part of an "update2" notification.
  *
  * 'changed' must be a scratch buffer for internal use that is at least
- * bitmap_n_bytes(mt->n_columns) bytes long. */
+ * bitmap_n_bytes(n_columns) bytes long. */
 static struct json *
 ovsdb_monitor_compose_row_update2(
     const struct ovsdb_monitor_table *mt,
     const struct ovsdb_monitor_session_condition *condition,
     enum ovsdb_monitor_row_type row_type,
     const void *_row,
-    bool initial, unsigned long int *changed)
+    bool initial, unsigned long int *changed,
+    size_t n_columns)
 {
     enum ovsdb_monitor_selection type;
     struct json *row_update2, *diff_json;
@@ -927,7 +943,8 @@ ovsdb_monitor_compose_row_update2(
 
     type = ovsdb_monitor_row_update_type_condition(mt, condition, initial,
                                                    row_type, old, new);
-    if (ovsdb_monitor_row_skip_update(mt, row_type, old, new, type, changed)) {
+    if (ovsdb_monitor_row_skip_update(mt, row_type, old, new, type, changed,
+                                      n_columns)) {
         return NULL;
     }
 
@@ -1045,7 +1062,7 @@ ovsdb_monitor_compose_update(
         HMAP_FOR_EACH_SAFE (row, next, hmap_node, &changes->rows) {
             struct json *row_json;
             row_json = (*row_update)(mt, condition, OVSDB_MONITOR_ROW, row,
-                                     initial, changed);
+                                     initial, changed, changes->n_columns);
             if (row_json) {
                 ovsdb_monitor_add_json_row(&json, mt->table->schema->name,
                                            &table_json, row_json,
@@ -1089,7 +1106,8 @@ ovsdb_monitor_compose_cond_change_update(
 
             row_json = ovsdb_monitor_compose_row_update2(mt, condition,
                                                          OVSDB_ROW, row,
-                                                         false, changed);
+                                                         false, changed,
+                                                         mt->n_columns);
             if (row_json) {
                 ovsdb_monitor_add_json_row(&json, mt->table->schema->name,
                                            &table_json, row_json,
@@ -1248,8 +1266,8 @@ ovsdb_monitor_changes_update(const struct ovsdb_row *old,
         change = xzalloc(sizeof *change);
         hmap_insert(&changes->rows, &change->hmap_node, uuid_hash(uuid));
         change->uuid = *uuid;
-        change->old = clone_monitor_row_data(mt, old);
-        change->new = clone_monitor_row_data(mt, new);
+        change->old = clone_monitor_row_data(mt, old, changes->n_columns);
+        change->new = clone_monitor_row_data(mt, new, changes->n_columns);
     } else {
         if (new) {
             if (!change->new) {
@@ -1288,12 +1306,14 @@ ovsdb_monitor_changes_update(const struct ovsdb_row *old,
                  *    replication, the row carries the same UUID as the row
                  *    just deleted.
                  */
-                change->new = clone_monitor_row_data(mt, new);
+                change->new = clone_monitor_row_data(mt, new,
+                                                     changes->n_columns);
             } else {
-                update_monitor_row_data(mt, new, change->new);
+                update_monitor_row_data(mt, new, change->new,
+                                        changes->n_columns);
             }
         } else {
-            free_monitor_row_data(mt, change->new);
+            free_monitor_row_data(mt, change->new, changes->n_columns);
             change->new = NULL;
 
             if (!change->old) {
