@@ -1298,7 +1298,7 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
 }
 
 /* Sends the packets in '*pkt_batch' through the connection tracker 'ct'.  All
- * the packets should have the same 'dl_type' (IPv4 or IPv6) and should have
+ * the packets must have the same 'dl_type' (IPv4 or IPv6) and should have
  * the l3 and and l4 offset properly set.
  *
  * If 'commit' is true, the packets are allowed to create new entries in the
