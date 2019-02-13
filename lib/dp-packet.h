@@ -817,6 +817,12 @@ dp_packet_batch_is_empty(const struct dp_packet_batch *batch)
     return !dp_packet_batch_size(batch);
 }
 
+static inline bool
+dp_packet_batch_is_full(const struct dp_packet_batch *batch)
+{
+    return dp_packet_batch_size(batch) == NETDEV_MAX_BURST;
+}
+
 #define DP_PACKET_BATCH_FOR_EACH(IDX, PACKET, BATCH)                \
     for (size_t IDX = 0; IDX < dp_packet_batch_size(BATCH); IDX++)  \
         if (PACKET = BATCH->packets[IDX], true)
