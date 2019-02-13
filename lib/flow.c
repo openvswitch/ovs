@@ -476,8 +476,10 @@ invalid:
 
 static inline bool
 parse_ipv6_ext_hdrs__(const void **datap, size_t *sizep, uint8_t *nw_proto,
-                      uint8_t *nw_frag)
+                      uint8_t *nw_frag,
+                      const struct ovs_16aligned_ip6_frag **frag_hdr)
 {
+    *frag_hdr = NULL;
     while (1) {
         if (OVS_LIKELY((*nw_proto != IPPROTO_HOPOPTS)
                        && (*nw_proto != IPPROTO_ROUTING)
@@ -523,17 +525,17 @@ parse_ipv6_ext_hdrs__(const void **datap, size_t *sizep, uint8_t *nw_proto,
                 return false;
             }
         } else if (*nw_proto == IPPROTO_FRAGMENT) {
-            const struct ovs_16aligned_ip6_frag *frag_hdr = *datap;
+            *frag_hdr = *datap;
 
-            *nw_proto = frag_hdr->ip6f_nxt;
-            if (!data_try_pull(datap, sizep, sizeof *frag_hdr)) {
+            *nw_proto = (*frag_hdr)->ip6f_nxt;
+            if (!data_try_pull(datap, sizep, sizeof **frag_hdr)) {
                 return false;
             }
 
             /* We only process the first fragment. */
-            if (frag_hdr->ip6f_offlg != htons(0)) {
+            if ((*frag_hdr)->ip6f_offlg != htons(0)) {
                 *nw_frag = FLOW_NW_FRAG_ANY;
-                if ((frag_hdr->ip6f_offlg & IP6F_OFF_MASK) != htons(0)) {
+                if (((*frag_hdr)->ip6f_offlg & IP6F_OFF_MASK) != htons(0)) {
                     *nw_frag |= FLOW_NW_FRAG_LATER;
                     *nw_proto = IPPROTO_FRAGMENT;
                     return true;
@@ -543,11 +545,29 @@ parse_ipv6_ext_hdrs__(const void **datap, size_t *sizep, uint8_t *nw_proto,
     }
 }
 
+/* Parses IPv6 extension headers until a terminal header (or header we
+ * don't understand) is found.  'datap' points to the first extension
+ * header and advances as parsing occurs; 'sizep' is the remaining size
+ * and is decreased accordingly.  'nw_proto' starts as the first
+ * extension header to process and is updated as the extension headers
+ * are parsed.
+ *
+ * If a fragment header is found, '*frag_hdr' is set to the fragment
+ * header and otherwise set to NULL.  If it is the first fragment,
+ * extension header parsing otherwise continues as usual.  If it's not
+ * the first fragment, 'nw_proto' is set to IPPROTO_FRAGMENT and 'nw_frag'
+ * has FLOW_NW_FRAG_LATER set.  Both first and later fragments have
+ * FLOW_NW_FRAG_ANY set in 'nw_frag'.
+ *
+ * A return value of false indicates that there was a problem parsing
+ * the extension headers.*/
 bool
 parse_ipv6_ext_hdrs(const void **datap, size_t *sizep, uint8_t *nw_proto,
-                    uint8_t *nw_frag)
+                    uint8_t *nw_frag,
+                    const struct ovs_16aligned_ip6_frag **frag_hdr)
 {
-    return parse_ipv6_ext_hdrs__(datap, sizep, nw_proto, nw_frag);
+    return parse_ipv6_ext_hdrs__(datap, sizep, nw_proto, nw_frag,
+                                 frag_hdr);
 }
 
 bool
@@ -894,7 +914,9 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
         nw_ttl = nh->ip6_hlim;
         nw_proto = nh->ip6_nxt;
 
-        if (!parse_ipv6_ext_hdrs__(&data, &size, &nw_proto, &nw_frag)) {
+        const struct ovs_16aligned_ip6_frag *frag_hdr;
+        if (!parse_ipv6_ext_hdrs__(&data, &size, &nw_proto, &nw_frag,
+                                   &frag_hdr)) {
             goto out;
         }
 
@@ -1115,7 +1137,9 @@ parse_tcp_flags(struct dp_packet *packet)
         plen = ntohs(nh->ip6_plen); /* Never pull padding. */
         dp_packet_set_l2_pad_size(packet, size - plen);
         size = plen;
-        if (!parse_ipv6_ext_hdrs__(&data, &size, &nw_proto, &nw_frag)) {
+        const struct ovs_16aligned_ip6_frag *frag_hdr;
+        if (!parse_ipv6_ext_hdrs__(&data, &size, &nw_proto, &nw_frag,
+            &frag_hdr)) {
             return 0;
         }
         nw_proto = nh->ip6_nxt;
