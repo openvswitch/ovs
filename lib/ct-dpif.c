@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Nicira, Inc.
+ * Copyright (c) 2015, 2018 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -191,6 +191,62 @@ ct_dpif_del_limits(struct dpif *dpif, const struct ovs_list *zone_limits)
 {
     return (dpif->dpif_class->ct_del_limits
             ? dpif->dpif_class->ct_del_limits(dpif, zone_limits)
+            : EOPNOTSUPP);
+}
+
+int
+ct_dpif_ipf_set_enabled(struct dpif *dpif, bool v6, bool enable)
+{
+    return (dpif->dpif_class->ipf_set_enabled
+            ? dpif->dpif_class->ipf_set_enabled(dpif, v6, enable)
+            : EOPNOTSUPP);
+}
+
+int
+ct_dpif_ipf_set_min_frag(struct dpif *dpif, bool v6, uint32_t min_frag)
+{
+    return (dpif->dpif_class->ipf_set_min_frag
+            ? dpif->dpif_class->ipf_set_min_frag(dpif, v6, min_frag)
+            : EOPNOTSUPP);
+}
+
+int
+ct_dpif_ipf_set_max_nfrags(struct dpif *dpif, uint32_t max_frags)
+{
+    return (dpif->dpif_class->ipf_set_max_nfrags
+            ? dpif->dpif_class->ipf_set_max_nfrags(dpif, max_frags)
+            : EOPNOTSUPP);
+}
+
+int ct_dpif_ipf_get_status(struct dpif *dpif,
+                           struct dpif_ipf_status *dpif_ipf_status)
+{
+    return (dpif->dpif_class->ipf_get_status
+            ? dpif->dpif_class->ipf_get_status(dpif, dpif_ipf_status)
+            : EOPNOTSUPP);
+}
+
+int
+ct_dpif_ipf_dump_start(struct dpif *dpif, struct ipf_dump_ctx **dump_ctx)
+{
+    return (dpif->dpif_class->ipf_dump_start
+           ? dpif->dpif_class->ipf_dump_start(dpif, dump_ctx)
+           : EOPNOTSUPP);
+}
+
+int
+ct_dpif_ipf_dump_next(struct dpif *dpif, void *dump_ctx,  char **dump)
+{
+    return (dpif->dpif_class->ipf_dump_next
+            ? dpif->dpif_class->ipf_dump_next(dpif, dump_ctx, dump)
+            : EOPNOTSUPP);
+}
+
+int
+ct_dpif_ipf_dump_done(struct dpif *dpif, void *dump_ctx)
+{
+    return (dpif->dpif_class->ipf_dump_done
+            ? dpif->dpif_class->ipf_dump_done(dpif, dump_ctx)
             : EOPNOTSUPP);
 }
 

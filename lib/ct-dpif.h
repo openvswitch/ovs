@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Nicira, Inc.
+ * Copyright (c) 2015, 2018 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -186,6 +186,8 @@ enum {
 };
 
 struct dpif;
+struct dpif_ipf_status;
+struct ipf_dump_ctx;
 
 struct ct_dpif_dump_state {
     struct dpif *dpif;
@@ -212,6 +214,14 @@ int ct_dpif_set_limits(struct dpif *dpif, const uint32_t *default_limit,
 int ct_dpif_get_limits(struct dpif *dpif, uint32_t *default_limit,
                        const struct ovs_list *, struct ovs_list *);
 int ct_dpif_del_limits(struct dpif *dpif, const struct ovs_list *);
+int ct_dpif_ipf_set_enabled(struct dpif *, bool v6, bool enable);
+int ct_dpif_ipf_set_min_frag(struct dpif *, bool v6, uint32_t min_frag);
+int ct_dpif_ipf_set_max_nfrags(struct dpif *, uint32_t max_frags);
+int ct_dpif_ipf_get_status(struct dpif *dpif,
+                           struct dpif_ipf_status *dpif_ipf_status);
+int ct_dpif_ipf_dump_start(struct dpif *dpif, struct ipf_dump_ctx **);
+int ct_dpif_ipf_dump_next(struct dpif *dpif, void *, char **);
+int ct_dpif_ipf_dump_done(struct dpif *dpif, void *);
 void ct_dpif_entry_uninit(struct ct_dpif_entry *);
 void ct_dpif_format_entry(const struct ct_dpif_entry *, struct ds *,
                           bool verbose, bool print_stats);

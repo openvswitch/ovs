@@ -73,15 +73,6 @@ m4_define([CHECK_CONNTRACK],
 #
 m4_define([CHECK_CONNTRACK_ALG])
 
-# CHECK_CONNTRACK_FRAG()
-#
-# Perform requirements checks for running conntrack fragmentations tests.
-# The userspace doesn't support fragmentation yet, so skip the tests.
-m4_define([CHECK_CONNTRACK_FRAG],
-[
-    AT_SKIP_IF([:])
-])
-
 # CHECK_CONNTRACK_LOCAL_STACK()
 #
 # Perform requirements checks for running conntrack tests with local stack.
@@ -95,19 +86,13 @@ m4_define([CHECK_CONNTRACK_LOCAL_STACK],
 
 # CHECK_CONNTRACK_FRAG_OVERLAP()
 #
-# The userspace datapath does not support fragments yet.
-m4_define([CHECK_CONNTRACK_FRAG_OVERLAP],
-[
-    AT_SKIP_IF([:])
-])
+# The userspace datapath supports fragment overlap check.
+m4_define([CHECK_CONNTRACK_FRAG_OVERLAP])
 
-# CHECK_CONNTRACK_FRAG_IPV6_MULT_EXTEN()
+# CHECK_CONNTRACK_FRAG_IPV6_MULT_EXTEN
 #
-# The userspace datapath does not support fragments yet.
-m4_define([CHECK_CONNTRACK_FRAG_IPV6_MULT_EXTEN],
-[
-    AT_SKIP_IF([:])
-])
+# The userspace datapath supports fragments with multiple extension headers.
+m4_define([CHECK_CONNTRACK_FRAG_IPV6_MULT_EXTEN])
 
 # CHECK_CONNTRACK_NAT()
 #
@@ -136,6 +121,167 @@ m4_define([CHECK_CT_DPIF_SET_GET_MAXCONNS])
 # Perform requirements checks for running ovs-dpctl ct-get-nconns. The
 # userspace datapath does support this feature.
 m4_define([CHECK_CT_DPIF_GET_NCONNS])
+
+# DPCTL_SET_MIN_FRAG_SIZE()
+#
+# The userspace datapath supports this command.
+m4_define([DPCTL_SET_MIN_FRAG_SIZE],
+[
+AT_CHECK([ovs-appctl dpctl/ipf-set-min-frag v4 400], [], [dnl
+setting minimum fragment size successful
+])
+AT_CHECK([ovs-appctl dpctl/ipf-set-min-frag v6 400], [], [dnl
+setting minimum fragment size successful
+])
+])
+
+# DPCTL_MODIFY_FRAGMENTATION()
+#
+# The userspace datapath supports this command.
+m4_define([DPCTL_MODIFY_FRAGMENTATION],
+[
+AT_CHECK([ovs-appctl dpctl/ipf-set-min-frag v4 1000], [], [dnl
+setting minimum fragment size successful
+])
+AT_CHECK([ovs-appctl dpctl/ipf-set-max-nfrags 500], [], [dnl
+setting maximum fragments successful
+])
+AT_CHECK([ovs-appctl dpctl/ipf-get-status], [], [dnl
+        Fragmentation Module Status
+        ---------------------------
+        v4 enabled: 1
+        v6 enabled: 1
+        max num frags (v4/v6): 500
+        num frag: 0
+        min v4 frag size: 1000
+        v4 frags accepted: 0
+        v4 frags completed: 0
+        v4 frags expired: 0
+        v4 frags too small: 0
+        v4 frags overlapped: 0
+        v4 frags purged: 0
+        min v6 frag size: 1280
+        v6 frags accepted: 0
+        v6 frags completed: 0
+        v6 frags expired: 0
+        v6 frags too small: 0
+        v6 frags overlapped: 0
+        v6 frags purged: 0
+])
+])
+
+# DPCTL_CHECK_FRAGMENTATION_PASS()
+#
+# Used to check fragmentation counters for some fragmentation tests using
+# the userspace datapath.
+m4_define([DPCTL_CHECK_FRAGMENTATION_PASS],
+[
+AT_CHECK([ovs-appctl dpctl/ipf-get-status --more], [], [dnl
+        Fragmentation Module Status
+        ---------------------------
+        v4 enabled: 1
+        v6 enabled: 1
+        max num frags (v4/v6): 500
+        num frag: 0
+        min v4 frag size: 1000
+        v4 frags accepted: 30
+        v4 frags completed: 30
+        v4 frags expired: 0
+        v4 frags too small: 0
+        v4 frags overlapped: 0
+        v4 frags purged: 0
+        min v6 frag size: 1280
+        v6 frags accepted: 0
+        v6 frags completed: 0
+        v6 frags expired: 0
+        v6 frags too small: 0
+        v6 frags overlapped: 0
+        v6 frags purged: 0
+
+        Fragment Lists:
+
+])
+])
+
+# DPCTL_CHECK_V6_FRAGMENTATION_PASS()
+#
+# Used to check fragmentation counters for some fragmentation tests using
+# the userspace datapath.
+m4_define([DPCTL_CHECK_V6_FRAGMENTATION_PASS],
+[
+AT_CHECK([ovs-appctl dpctl/ipf-get-status --more], [], [dnl
+        Fragmentation Module Status
+        ---------------------------
+        v4 enabled: 1
+        v6 enabled: 1
+        max num frags (v4/v6): 1000
+        num frag: 0
+        min v4 frag size: 1200
+        v4 frags accepted: 0
+        v4 frags completed: 0
+        v4 frags expired: 0
+        v4 frags too small: 0
+        v4 frags overlapped: 0
+        v4 frags purged: 0
+        min v6 frag size: 1280
+        v6 frags accepted: 30
+        v6 frags completed: 30
+        v6 frags expired: 0
+        v6 frags too small: 0
+        v6 frags overlapped: 0
+        v6 frags purged: 0
+
+        Fragment Lists:
+
+])
+])
+
+# FORMAT_FRAG_LIST([])
+#
+# Strip content from the piped input which can differ from test to test; recirc_id
+# and ip_id fields in an ipf_list vary from test to test and hence are cleared.
+m4_define([FORMAT_FRAG_LIST],
+    [[sed -e 's/ip_id=[0-9]*/ip_id=<cleared>/g' -e 's/recirc_id=[0-9]*/recirc_id=<cleared>/g']])
+
+# DPCTL_CHECK_FRAGMENTATION_FAIL()
+#
+# Used to check fragmentation counters for some fragmentation tests using
+# the userspace datapath, when failure to transmit fragments is expected.
+m4_define([DPCTL_CHECK_FRAGMENTATION_FAIL],
+[
+AT_CHECK([ovs-appctl dpctl/ipf-get-status -m | FORMAT_FRAG_LIST()], [], [dnl
+        Fragmentation Module Status
+        ---------------------------
+        v4 enabled: 1
+        v6 enabled: 1
+        max num frags (v4/v6): 500
+        num frag: 7
+        min v4 frag size: 1000
+        v4 frags accepted: 7
+        v4 frags completed: 0
+        v4 frags expired: 0
+        v4 frags too small: 0
+        v4 frags overlapped: 0
+        v4 frags purged: 0
+        min v6 frag size: 1280
+        v6 frags accepted: 0
+        v6 frags completed: 0
+        v6 frags expired: 0
+        v6 frags too small: 0
+        v6 frags overlapped: 0
+        v6 frags purged: 0
+
+        Fragment Lists:
+
+(src=10.1.1.1,dst=10.1.1.2,recirc_id=<cleared>,ip_id=<cleared>,dl_type=0x800,zone=9,nw_proto=1,num_fragments=1,state=first frag)
+(src=10.1.1.1,dst=10.1.1.2,recirc_id=<cleared>,ip_id=<cleared>,dl_type=0x800,zone=9,nw_proto=1,num_fragments=1,state=first frag)
+(src=10.1.1.1,dst=10.1.1.2,recirc_id=<cleared>,ip_id=<cleared>,dl_type=0x800,zone=9,nw_proto=1,num_fragments=1,state=first frag)
+(src=10.1.1.1,dst=10.1.1.2,recirc_id=<cleared>,ip_id=<cleared>,dl_type=0x800,zone=9,nw_proto=1,num_fragments=1,state=first frag)
+(src=10.1.1.1,dst=10.1.1.2,recirc_id=<cleared>,ip_id=<cleared>,dl_type=0x800,zone=9,nw_proto=1,num_fragments=1,state=first frag)
+(src=10.1.1.1,dst=10.1.1.2,recirc_id=<cleared>,ip_id=<cleared>,dl_type=0x800,zone=9,nw_proto=1,num_fragments=1,state=first frag)
+(src=10.1.1.1,dst=10.1.1.2,recirc_id=<cleared>,ip_id=<cleared>,dl_type=0x800,zone=9,nw_proto=1,num_fragments=1,state=first frag)
+])
+])
 
 # OVS_CHECK_KERNEL([minversion], [maxversion], [minsublevel], [maxsublevel])
 #

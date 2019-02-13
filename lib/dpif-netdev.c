@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2016, 2017 Nicira, Inc.
+ * Copyright (c) 2009-2014, 2016-2018 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,6 +47,7 @@
 #include "flow.h"
 #include "hmapx.h"
 #include "id-pool.h"
+#include "ipf.h"
 #include "latch.h"
 #include "netdev.h"
 #include "netdev-provider.h"
@@ -7356,6 +7357,61 @@ dpif_netdev_ct_get_nconns(struct dpif *dpif, uint32_t *nconns)
     return conntrack_get_nconns(&dp->conntrack, nconns);
 }
 
+static int
+dpif_netdev_ipf_set_enabled(struct dpif *dpif, bool v6, bool enable)
+{
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    return ipf_set_enabled(conntrack_ipf_ctx(&dp->conntrack), v6, enable);
+}
+
+static int
+dpif_netdev_ipf_set_min_frag(struct dpif *dpif, bool v6, uint32_t min_frag)
+{
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    return ipf_set_min_frag(conntrack_ipf_ctx(&dp->conntrack), v6, min_frag);
+}
+
+static int
+dpif_netdev_ipf_set_max_nfrags(struct dpif *dpif, uint32_t max_frags)
+{
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    return ipf_set_max_nfrags(conntrack_ipf_ctx(&dp->conntrack), max_frags);
+}
+
+/* Adjust this function if 'dpif_ipf_status' and 'ipf_status' were to
+ * diverge. */
+static int
+dpif_netdev_ipf_get_status(struct dpif *dpif,
+                           struct dpif_ipf_status *dpif_ipf_status)
+{
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    ipf_get_status(conntrack_ipf_ctx(&dp->conntrack),
+                   (struct ipf_status *) dpif_ipf_status);
+    return 0;
+}
+
+static int
+dpif_netdev_ipf_dump_start(struct dpif *dpif OVS_UNUSED,
+                           struct ipf_dump_ctx **ipf_dump_ctx)
+{
+    return ipf_dump_start(ipf_dump_ctx);
+}
+
+static int
+dpif_netdev_ipf_dump_next(struct dpif *dpif, void *ipf_dump_ctx, char **dump)
+{
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    return ipf_dump_next(conntrack_ipf_ctx(&dp->conntrack), ipf_dump_ctx,
+                         dump);
+}
+
+static int
+dpif_netdev_ipf_dump_done(struct dpif *dpif OVS_UNUSED, void *ipf_dump_ctx)
+{
+    return ipf_dump_done(ipf_dump_ctx);
+
+}
+
 const struct dpif_class dpif_netdev_class = {
     "netdev",
     dpif_netdev_init,
@@ -7407,6 +7463,13 @@ const struct dpif_class dpif_netdev_class = {
     NULL,                       /* ct_set_limits */
     NULL,                       /* ct_get_limits */
     NULL,                       /* ct_del_limits */
+    dpif_netdev_ipf_set_enabled,
+    dpif_netdev_ipf_set_min_frag,
+    dpif_netdev_ipf_set_max_nfrags,
+    dpif_netdev_ipf_get_status,
+    dpif_netdev_ipf_dump_start,
+    dpif_netdev_ipf_dump_next,
+    dpif_netdev_ipf_dump_done,
     dpif_netdev_meter_get_features,
     dpif_netdev_meter_set,
     dpif_netdev_meter_get,

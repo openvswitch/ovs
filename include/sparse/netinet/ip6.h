@@ -64,5 +64,6 @@ struct ip6_frag {
 };
 
 #define IP6F_OFF_MASK ((OVS_FORCE ovs_be16) 0xfff8)
+#define IP6F_MORE_FRAG ((OVS_FORCE ovs_be16) 0x0001)
 
 #endif /* netinet/ip6.h sparse */

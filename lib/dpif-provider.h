@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2009-2014, 2018 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +42,9 @@ struct dpif {
     long long int current_ms;
 };
 
+struct dpif_ipf_status;
+struct ipf_dump_ctx;
+
 void dpif_init(struct dpif *, const struct dpif_class *, const char *name,
                uint8_t netflow_engine_type, uint8_t netflow_engine_id);
 void dpif_uninit(struct dpif *dpif, bool close);
@@ -77,6 +80,27 @@ dpif_flow_dump_thread_init(struct dpif_flow_dump_thread *thread,
 struct ct_dpif_dump_state;
 struct ct_dpif_entry;
 struct ct_dpif_tuple;
+
+/* 'dpif_ipf_proto_status' and 'dpif_ipf_status' are presently in
+ * sync with 'ipf_proto_status' and 'ipf_status', but more
+ * generally represent a superset of present and future support. */
+struct dpif_ipf_proto_status {
+   uint64_t nfrag_accepted;
+   uint64_t nfrag_completed_sent;
+   uint64_t nfrag_expired_sent;
+   uint64_t nfrag_too_small;
+   uint64_t nfrag_overlap;
+   uint64_t nfrag_purged;
+   unsigned int min_frag_size;
+   bool enabled;
+};
+
+struct dpif_ipf_status {
+   struct dpif_ipf_proto_status v4;
+   struct dpif_ipf_proto_status v6;
+   unsigned int nfrag;
+   unsigned int nfrag_max;
+};
 
 /* Datapath interface class structure, to be defined by each implementation of
  * a datapath interface.
@@ -467,6 +491,33 @@ struct dpif_class {
     /* Deletes per zone limit of all zones specified in 'zone_limits', a
      * list of 'struct ct_dpif_zone_limit' entries. */
     int (*ct_del_limits)(struct dpif *, const struct ovs_list *zone_limits);
+
+    /* IP Fragmentation. */
+
+    /* Disables or enables conntrack fragment reassembly.  The default
+     * setting is enabled. */
+    int (*ipf_set_enabled)(struct dpif *, bool v6, bool enabled);
+
+    /* Set minimum fragment allowed. */
+    int (*ipf_set_min_frag)(struct dpif *, bool v6, uint32_t min_frag);
+
+    /* Set maximum number of fragments tracked. */
+    int (*ipf_set_max_nfrags)(struct dpif *, uint32_t max_nfrags);
+
+    /* Get fragmentation configuration status and counters. */
+    int (*ipf_get_status)(struct dpif *,
+                          struct dpif_ipf_status *dpif_ipf_status);
+
+    /* The following 3 apis find and print ipf lists by creating a string
+     * representation of the state of an ipf list, to which 'dump' is pointed
+     * to.  'ipf_dump_start()' allocates memory for 'ipf_dump_ctx'.
+     * 'ipf_dump_next()' finds the next ipf list and copies it's
+     * characteristics to a string, which is freed by the caller.
+     * 'ipf_dump_done()' frees the 'ipf_dump_ctx' that was allocated in
+     * 'ipf_dump_start'. */
+    int (*ipf_dump_start)(struct dpif *, struct ipf_dump_ctx **ipf_dump_ctx);
+    int (*ipf_dump_next)(struct dpif *, void *ipf_dump_ctx, char **dump);
+    int (*ipf_dump_done)(struct dpif *, void *ipf_dump_ctx);
 
     /* Meters */
 

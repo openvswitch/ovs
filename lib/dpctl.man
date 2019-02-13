@@ -220,6 +220,42 @@ nftables and the regular host stack).  Therefore, the following commands
 do not apply specifically to one datapath.
 .
 .TP
+\*(DX\fBipf\-set\-enabled\fR [\fIdp\fR] \fBv4\fR|\fBv6\fR
+.TQ
+\*(DX\fBipf\-set\-disabled\fR [\fIdp\fR] \fBv4\fR|\fBv6\fR
+Enables or disables IP fragmentation handling for the userspace
+connection tracker.  Either \fBv4\fR or \fBv6\fR must be specified.
+Both IPv4 and IPv6 fragment reassembly are enabled by default.  Only
+supported for the userspace datapath.
+.
+.TP
+\*(DX\fBipf\-set\-min\-frag\fR [\fIdp\fR] \fBv4\fR|\fBv6\fR \fIminfrag\fR
+Sets the minimum fragment size for non-final fragments to
+\fIminfrag\fR.  Either \fBv4\fR or \fBv6\fR must be specified.  For
+enhanced DOS security, higher minimum fragment sizes can usually be used.
+The default IPv4 value is 1200 and the clamped minimum is 400.  The default
+IPv6 value is 1280, with a clamped minimum of 400, for testing
+flexibility.  The maximum fragment size is not clamped, however, setting
+this value too high might result in valid fragments being dropped.  Only
+supported for userspace datapath.
+.
+.TP
+\*(DX\fBipf\-set\-max\-nfrags\fR [\fIdp\fR] \fImaxfrags\fR
+Sets the maximum number of fragments tracked by the userspace datapath
+connection tracker to \fImaxfrags\fR.  The default value is 1000 and the
+clamped maximum is 5000.  Note that packet buffers can be held by the
+fragmentation module while fragments are incomplete, but will timeout
+after 15 seconds.  Memory pool sizing should be set accordingly when
+fragmentation is enabled.  Only supported for userspace datapath.
+.
+.TP
+.DO "[\fB\-m\fR | \fB\-\-more\fR]" "\*(DX\fBipf\-get\-status\fR [\fIdp\fR]"
+Gets the configuration settings and fragment counters associated with the
+fragmentation handling of the userspace datapath connection tracker.
+With \fB\-m\fR or \fB\-\-more\fR, also dumps the IP fragment lists.
+Only supported for userspace datapath.
+.
+.TP
 .DO "[\fB\-m\fR | \fB\-\-more\fR] [\fB\-s\fR | \fB\-\-statistics\fR]" "\*(DX\fBdump\-conntrack\fR" "[\fIdp\fR] [\fBzone=\fIzone\fR]"
 Prints to the console all the connection entries in the tracker used by
 \fIdp\fR.  If \fBzone=\fIzone\fR is specified, only shows the connections
