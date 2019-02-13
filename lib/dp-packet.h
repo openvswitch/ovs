@@ -754,6 +754,7 @@ enum { NETDEV_MAX_BURST = 32 }; /* Maximum number packets in a batch. */
 struct dp_packet_batch {
     size_t count;
     bool trunc; /* true if the batch needs truncate. */
+    bool do_not_steal; /* Indicate that the packets should not be stolen. */
     struct dp_packet *packets[NETDEV_MAX_BURST];
 };
 
@@ -762,6 +763,7 @@ dp_packet_batch_init(struct dp_packet_batch *batch)
 {
     batch->count = 0;
     batch->trunc = false;
+    batch->do_not_steal = false;
 }
 
 static inline void
