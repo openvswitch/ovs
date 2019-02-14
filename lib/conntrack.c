@@ -1823,6 +1823,9 @@ extract_l4_icmp6(struct conn_key *key, const void *data, size_t size,
  * processed, the function will extract the key from the packet nested
  * in the ICMP payload and set '*related' to true.
  *
+ * 'size' here is the layer 4 size, which can be a nested size if parsing
+ * an ICMP or ICMP6 header. **
+ *
  * If 'related' is NULL, it means that we're already parsing a header nested
  * in an ICMP error.  In this case, we skip checksum and length validation. */
 static inline bool
@@ -1856,7 +1859,6 @@ conn_key_extract(struct conntrack *ct, struct dp_packet *pkt, ovs_be16 dl_type,
     const struct eth_header *l2 = dp_packet_eth(pkt);
     const struct ip_header *l3 = dp_packet_l3(pkt);
     const char *l4 = dp_packet_l4(pkt);
-    const char *tail = dp_packet_tail(pkt);
     bool ok;
 
     memset(ctx, 0, sizeof *ctx);
@@ -1907,11 +1909,11 @@ conn_key_extract(struct conntrack *ct, struct dp_packet *pkt, ovs_be16 dl_type,
         } else {
             bool  hwol_good_l3_csum = dp_packet_ip_checksum_valid(pkt);
             /* Validate the checksum only when hwol is not supported. */
-            ok = extract_l3_ipv4(&ctx->key, l3, tail - (char *) l3, NULL,
+            ok = extract_l3_ipv4(&ctx->key, l3, dp_packet_l3_size(pkt), NULL,
                                  !hwol_good_l3_csum);
         }
     } else if (ctx->key.dl_type == htons(ETH_TYPE_IPV6)) {
-        ok = extract_l3_ipv6(&ctx->key, l3, tail - (char *) l3, NULL);
+        ok = extract_l3_ipv6(&ctx->key, l3, dp_packet_l3_size(pkt), NULL);
     } else {
         ok = false;
     }
@@ -1922,8 +1924,8 @@ conn_key_extract(struct conntrack *ct, struct dp_packet *pkt, ovs_be16 dl_type,
         if (!hwol_bad_l4_csum) {
             bool  hwol_good_l4_csum = dp_packet_l4_checksum_valid(pkt);
             /* Validate the checksum only when hwol is not supported. */
-            if (extract_l4(&ctx->key, l4, tail - l4, &ctx->icmp_related, l3,
-                           !hwol_good_l4_csum)) {
+            if (extract_l4(&ctx->key, l4, dp_packet_l4_size(pkt),
+                           &ctx->icmp_related, l3, !hwol_good_l4_csum)) {
                 ctx->hash = conn_key_hash(&ctx->key, ct->hash_basis);
                 return true;
             }
