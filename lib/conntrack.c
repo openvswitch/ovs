@@ -3087,11 +3087,9 @@ repl_ftp_v6_addr(struct dp_packet *pkt, struct ct_addr v6_addr_rep,
         return 0;
     }
 
-    const char *rc;
-    char v6_addr_str[IPV6_SCAN_LEN] = {0};
-    rc = inet_ntop(AF_INET6, &v6_addr_rep.ipv6_aligned, v6_addr_str,
-              IPV6_SCAN_LEN - 1);
-    ovs_assert(rc != NULL);
+    char v6_addr_str[INET6_ADDRSTRLEN] = {0};
+    ovs_assert(inet_ntop(AF_INET6, &v6_addr_rep.ipv6_aligned, v6_addr_str,
+                         sizeof v6_addr_str));
     modify_packet(pkt, ftp_data_start + addr_offset_from_ftp_data_start,
                   addr_size, v6_addr_str, strlen(v6_addr_str),
                   orig_used_size);
