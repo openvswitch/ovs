@@ -64,13 +64,9 @@ struct dp_packet_batch;
 
 struct conntrack;
 
-struct ct_addr {
-    union {
-        ovs_16aligned_be32 ipv4;
-        union ovs_16aligned_in6_addr ipv6;
-        ovs_be32 ipv4_aligned;
-        struct in6_addr ipv6_aligned;
-    };
+union ct_addr {
+    ovs_be32 ipv4;
+    struct in6_addr ipv6;
 };
 
 enum nat_action_e {
@@ -81,8 +77,8 @@ enum nat_action_e {
 };
 
 struct nat_action_info_t {
-    struct ct_addr min_addr;
-    struct ct_addr max_addr;
+    union ct_addr min_addr;
+    union ct_addr max_addr;
     uint16_t min_port;
     uint16_t max_port;
     uint16_t nat_action;

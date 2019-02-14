@@ -31,7 +31,7 @@
 #include "dp-packet.h"
 
 struct ct_endpoint {
-    struct ct_addr addr;
+    union ct_addr addr;
     union {
         ovs_be16 port;
         struct {
@@ -44,7 +44,7 @@ struct ct_endpoint {
 
 /* Verify that there is no padding in struct ct_endpoint, to facilitate
  * hashing in ct_endpoint_hash_add(). */
-BUILD_ASSERT_DECL(sizeof(struct ct_endpoint) == sizeof(struct ct_addr) + 4);
+BUILD_ASSERT_DECL(sizeof(struct ct_endpoint) == sizeof(union ct_addr) + 4);
 
 /* Changes to this structure need to be reflected in conn_key_hash()
  * and conn_key_cmp(). */
@@ -77,7 +77,7 @@ struct alg_exp_node {
     /* Corresponding key of the control connection. */
     struct conn_key master_key;
     /* The NAT replacement address to be used by the data connection. */
-    struct ct_addr alg_nat_repl_addr;
+    union ct_addr alg_nat_repl_addr;
     /* The data connection inherits the master control
      * connection label and mark. */
     ovs_u128 master_label;
