@@ -1787,7 +1787,11 @@ rstp_process_packet(const struct xport *xport, const struct dp_packet *packet)
         dp_packet_set_size(&payload, ntohs(eth->eth_type) + ETH_HEADER_LEN);
     }
 
-    if (dp_packet_try_pull(&payload, ETH_HEADER_LEN + LLC_HEADER_LEN)) {
+    int len = ETH_HEADER_LEN + LLC_HEADER_LEN;
+    if (eth->eth_type == htons(ETH_TYPE_VLAN)) {
+        len += VLAN_HEADER_LEN;
+    }
+    if (dp_packet_try_pull(&payload, len)) {
         rstp_port_received_bpdu(xport->rstp_port, dp_packet_data(&payload),
                                 dp_packet_size(&payload));
     }
