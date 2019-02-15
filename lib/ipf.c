@@ -420,7 +420,7 @@ ipf_reassemble_v4_frags(struct ipf_list *ipf_list)
         return NULL;
     }
 
-    dp_packet_prealloc_tailroom(pkt, len + rest_len);
+    dp_packet_prealloc_tailroom(pkt, rest_len);
 
     for (int i = 1; i <= ipf_list->last_inuse_idx; i++) {
         size_t add_len = frag_list[i].end_data_byte -
@@ -463,7 +463,7 @@ ipf_reassemble_v6_frags(struct ipf_list *ipf_list)
         return NULL;
     }
 
-    dp_packet_prealloc_tailroom(pkt, pl + rest_len);
+    dp_packet_prealloc_tailroom(pkt, rest_len);
 
     for (int i = 1; i <= ipf_list->last_inuse_idx; i++) {
         size_t add_len = frag_list[i].end_data_byte -
