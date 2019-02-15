@@ -222,7 +222,7 @@ $cluster_remote_port
     # Initialize the database if it's running standalone,
     # active-passive, or is the first server in a cluster.
     if test -z "$cluster_remote_addr"; then
-        ovn-nbctl init
+        ovn-${db}ctl init
     fi
 
     if test $mode = cluster; then
