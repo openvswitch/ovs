@@ -165,14 +165,14 @@ typedef struct json *
      bool initial, unsigned long int *changed,
      size_t n_columns);
 
-static void ovsdb_monitor_destroy(struct ovsdb_monitor *dbmon);
+static void ovsdb_monitor_destroy(struct ovsdb_monitor *);
 static struct ovsdb_monitor_changes * ovsdb_monitor_table_add_changes(
-    struct ovsdb_monitor_table *mt, uint64_t next_txn);
+    struct ovsdb_monitor_table *, uint64_t next_txn);
 static struct ovsdb_monitor_changes *ovsdb_monitor_table_find_changes(
-    struct ovsdb_monitor_table *mt, uint64_t unflushed);
+    struct ovsdb_monitor_table *, uint64_t unflushed);
 static void ovsdb_monitor_changes_destroy(
-                                  struct ovsdb_monitor_changes *changes);
-static void ovsdb_monitor_table_track_changes(struct ovsdb_monitor_table *mt,
+                                  struct ovsdb_monitor_changes *);
+static void ovsdb_monitor_table_track_changes(struct ovsdb_monitor_table *,
                                   uint64_t unflushed);
 
 static uint32_t
@@ -1121,9 +1121,9 @@ struct json *
 ovsdb_monitor_get_update(
              struct ovsdb_monitor *dbmon,
              bool initial, bool cond_updated,
-             uint64_t *unflushed_,
              struct ovsdb_monitor_session_condition *condition,
-             enum ovsdb_monitor_version version)
+             enum ovsdb_monitor_version version,
+             uint64_t *unflushed_)
 {
     struct ovsdb_monitor_json_cache_node *cache_node = NULL;
     struct shash_node *node;

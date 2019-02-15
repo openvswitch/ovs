@@ -1578,7 +1578,7 @@ ovsdb_jsonrpc_monitor_cond_change(struct ovsdb_jsonrpc_session *s,
     struct json *update_json;
 
     update_json = ovsdb_monitor_get_update(m->dbmon, false, true,
-                                    &m->unflushed, m->condition, m->version);
+                                    m->condition, m->version, &m->unflushed);
     if (update_json) {
         struct jsonrpc_msg *msg;
         struct json *p;
@@ -1653,7 +1653,7 @@ ovsdb_jsonrpc_monitor_compose_update(struct ovsdb_jsonrpc_monitor *m,
     }
 
     return ovsdb_monitor_get_update(m->dbmon, initial, false,
-                                    &m->unflushed, m->condition, m->version);
+                                    m->condition, m->version, &m->unflushed);
 }
 
 static bool
