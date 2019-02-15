@@ -117,7 +117,7 @@ Q: Are all features available with all datapaths?
     Tunnel - GRE                    3.11           YES          YES      YES
     Tunnel - VXLAN                  3.12           YES          YES      YES
     Tunnel - Geneve                 3.18           YES          YES      YES
-    Tunnel - GRE-IPv6               NO             NO           YES      NO
+    Tunnel - GRE-IPv6               4.18           YES          YES      NO
     Tunnel - VXLAN-IPv6             4.3            YES          YES      NO
     Tunnel - Geneve-IPv6            4.4            YES          YES      NO
     Tunnel - ERSPAN                 4.18           YES          YES      NO
