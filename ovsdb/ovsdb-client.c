@@ -1267,7 +1267,7 @@ ovsdb_client_cond_change(struct unixctl_conn *conn, int argc OVS_UNUSED,
     jsonrpc_send(rpc, request);
 
     VLOG_DBG("cond change %s %s", argv[1], argv[2]);
-    unixctl_command_reply(conn, "condiiton changed");
+    unixctl_command_reply(conn, "condition changed");
 }
 
 static void
