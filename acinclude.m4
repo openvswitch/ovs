@@ -214,6 +214,12 @@ AC_DEFUN([OVS_CHECK_DPDK], [
                               [Specify the DPDK build directory])],
               [have_dpdk=true])
 
+  # DPDK has two compilation mode: make/gmake or meson (probably main choice in
+  # the next releases). With make/gmake is created an additional library libdpdk.so
+  # that is an hack for simplify users life without use pkg-config.
+  # With meson and with the new releases it is used pkg-config for retrieve
+  # list of libraries to link on DPDK applications. So, if it is used meson
+  # libdpdk.so isn't created.
   AC_MSG_CHECKING([whether dpdk datapath is enabled])
   if test "$have_dpdk" != true || test "$with_dpdk" = no; then
     AC_MSG_RESULT([no])
@@ -240,7 +246,11 @@ AC_DEFUN([OVS_CHECK_DPDK], [
            DPDK_INCLUDE="-I$DPDK_INCLUDE_PATH/dpdk"
         fi
         DPDK_LIB_DIR="$with_dpdk/lib"
-        DPDK_LIB="-ldpdk"
+        DPDK_LIB=$(PKG_CONFIG_PATH=$with_dpdk/build/meson-private/ pkg-config --define-prefix $DPDK_LIB_DIR --libs libdpdk)
+        if test "$?" != "0" ; then
+          # POST: pkg-config fail. I try search for libdpdk.so created with make.
+          DPDK_LIB="-ldpdk"
+        fi
         ;;
     esac
 
