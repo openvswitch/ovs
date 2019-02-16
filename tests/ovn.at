@@ -1629,6 +1629,186 @@ OVN_CLEANUP([hv1],[hv2],[hv3])
 
 AT_CLEANUP
 
+# 2 hypervisors, one logical switch, 2 logical ports per hypervisor
+# logical ports bound to chassis encap-ip.
+AT_SETUP([ovn -- 2 HVs, 1 LS, 2 lports/HV])
+AT_KEYWORDS([ovnarp])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# Create hypervisors hv[12].
+# Add vif1[12] to hv1, vif2[12] to hv2
+ovn-nbctl ls-add lsw0
+net_add n1
+for i in 1 2; do
+    sim_add hv$i
+    as hv$i
+    ovs-vsctl add-br br-phys
+    ovn_attach n1 br-phys 192.168.0.$i
+
+    for j in 1 2; do
+        ovs-vsctl add-port br-int vif$i$j -- set Interface vif$i$j external-ids:iface-id=lp$i$j options:tx_pcap=hv$i/vif$i$j-tx.pcap options:rxq_pcap=hv$i/vif$i$j-rx.pcap ofport-request=$i$j
+        ovn-nbctl lsp-add lsw0 lp$i$j
+        ip_addrs="192.168.0.$i$j"
+        ovn-nbctl lsp-set-addresses lp$i$j "f0:00:00:00:00:$i$j $ip_addrs"
+        ovn-nbctl lsp-set-port-security lp$i$j f0:00:00:00:00:$i$j
+    done
+done
+
+get_lsp_uuid () {
+    ovn-nbctl lsp-list lsw0 | grep $1 | awk '{ print $1 }'
+}
+
+# XXX-Check how to pass lp$i1 in AT_CHECK_UNQUOTED, for now just do it
+# explictly
+
+# For Chassis hv1
+AT_CHECK_UNQUOTED([ovn-sbctl  --column encap list port_binding lp11], [0], [dnl
+encap               : [[]]
+])
+AT_CHECK_UNQUOTED([ovn-sbctl  --column encap list port_binding lp12], [0], [dnl
+encap               : [[]]
+])
+
+# For Chassis hv2
+AT_CHECK_UNQUOTED([ovn-sbctl  --column encap list port_binding lp21], [0], [dnl
+encap               : [[]]
+])
+AT_CHECK_UNQUOTED([ovn-sbctl  --column encap list port_binding lp22], [0], [dnl
+encap               : [[]]
+])
+
+# Bind the ports to the encap-ip
+for i in 1 2; do
+    for j in 1 2; do
+        as hv$i
+        ovs-vsctl set Interface vif$i$j external-ids:encap-ip=192.168.0.$i
+    done
+done
+
+sleep 1
+
+# dump port bindings; since we have vxlan and geneve tunnels, we expect the
+# ports to be bound to geneve tunnels.
+
+# For Chassis 1
+encap_rec=`ovn-sbctl --data=bare --no-heading --column _uuid find encap chassis_name=hv1 type=geneve ip=192.168.0.1`
+
+AT_CHECK_UNQUOTED([ovn-sbctl  --column encap list port_binding lp11], [0], [dnl
+encap               : ${encap_rec}
+])
+
+AT_CHECK_UNQUOTED([ovn-sbctl  --column encap list port_binding lp12], [0], [dnl
+encap               : ${encap_rec}
+])
+
+# For Chassis 2
+encap_rec=`ovn-sbctl --data=bare --no-heading --column _uuid find encap chassis_name=hv2 type=geneve ip=192.168.0.2`
+
+AT_CHECK_UNQUOTED([ovn-sbctl  --column encap list port_binding lp21], [0], [dnl
+encap               : ${encap_rec}
+])
+
+AT_CHECK_UNQUOTED([ovn-sbctl  --column encap list port_binding lp22], [0], [dnl
+encap               : ${encap_rec}
+])
+
+# Pre-populate the hypervisors' ARP tables so that we don't lose any
+# packets for ARP resolution (native tunneling doesn't queue packets
+# for ARP resolution).
+OVN_POPULATE_ARP
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
+
+# Make sure there is no attempt to adding duplicated flows by ovn-controller
+AT_FAIL_IF([test -n "`grep duplicate hv1/ovn-controller.log`"])
+AT_FAIL_IF([test -n "`grep duplicate hv2/ovn-controller.log`"])
+AT_FAIL_IF([test -n "`grep duplicate hv3/ovn-controller.log`"])
+
+# Given the name of a logical port, prints the name of the hypervisor
+# on which it is located.
+vif_to_hv() {
+    echo hv${1%?}
+}
+
+# test_packet INPORT DST SRC ETHTYPE OUTPORT...
+#
+# This shell function causes a packet to be received on INPORT.  The packet's
+# content has Ethernet destination DST and source SRC (each exactly 12 hex
+# digits) and Ethernet type ETHTYPE (4 hex digits).  The OUTPORTs (zero or
+# more) list the VIFs on which the packet should be received.  INPORT and the
+# OUTPORTs are specified as logical switch port numbers, e.g. 11 for vif11.
+for i in 1 2; do
+    for j in 1 2; do
+        : > $i$j.expected
+    done
+done
+test_packet() {
+    local inport=$1 packet=$2$3$4; shift; shift; shift; shift
+    hv=`vif_to_hv $inport`
+    vif=vif$inport
+    as $hv ovs-appctl netdev-dummy/receive $vif $packet
+    for outport; do
+        echo $packet >> $outport.expected
+    done
+}
+
+ip_to_hex() {
+    printf "%02x%02x%02x%02x" "$@"
+}
+
+# Send packets between all pairs of source and destination ports:
+#
+# 1. Unicast packets are delivered to exactly one logical switch port
+#    (except that packets destined to their input ports are dropped).
+
+for is in 1 2; do
+    for js in 1 2; do
+        s=$is$js
+        bcast=
+        unknown=
+        bacl2=
+        bacl3=
+        for id in 1 2 3; do
+            for jd in 1 2 3; do
+                d=$id$jd
+
+                if test $d != $s; then unicast=$d; else unicast=; fi
+                test_packet $s f000000000$d f000000000$s $s$d $unicast     #1
+            done
+        done
+
+    done
+done
+
+# dump information and flows with counters
+ovn-sbctl dump-flows -- list multicast_group
+
+echo "------ hv1 dump ------"
+as hv1 ovs-vsctl show
+as hv1 ovs-ofctl -O OpenFlow13 dump-flows br-int
+
+echo "------ hv2 dump ------"
+as hv2 ovs-vsctl show
+as hv2 ovs-ofctl -O OpenFlow13 dump-flows br-int
+
+echo "------ hv3 dump ------"
+as hv3 ovs-vsctl show
+as hv3 ovs-ofctl -O OpenFlow13 dump-flows br-int
+
+# Now check the packets actually received against the ones expected.
+for i in 1 2; do
+    for j in 1 2; do
+        OVN_CHECK_PACKETS([hv$i/vif$i$j-tx.pcap], [$i$j.expected])
+    done
+done
+
+OVN_CLEANUP([hv1],[hv2])
+
+AT_CLEANUP
+
 AT_SETUP([ovn -- trace 1 LS, 3 LSPs])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
