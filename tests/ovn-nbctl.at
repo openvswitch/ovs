@@ -1571,3 +1571,11 @@ $SW1P2
 AT_CHECK([ovn-nbctl pg-del pg1], [0], [ignore])
 AT_CHECK([ovn-nbctl list port_group], [0], [])
 ])
+
+AT_SETUP([ovn-nbctl - daemon retry connection])
+OVN_NBCTL_TEST_START daemon
+AT_CHECK([kill `cat ovsdb-server.pid`])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --log-file --remote=punix:$OVS_RUNDIR/ovnnb_db.sock ovn-nb.db], [0], [], [stderr])
+AT_CHECK([ovn-nbctl show], [0], [ignore])
+OVN_NBCTL_TEST_STOP /Terminated/d
+AT_CLEANUP
