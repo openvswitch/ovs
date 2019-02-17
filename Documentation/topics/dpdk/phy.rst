@@ -219,6 +219,145 @@ For more information please refer to the `DPDK Port Hotplug Framework`__.
 
 __ http://dpdk.org/doc/guides/prog_guide/port_hotplug_framework.html#hotplug
 
+.. _representors:
+
+Representors
+------------
+
+DPDK representors enable configuring a phy port to a guest (VM) machine.
+
+OVS resides in the hypervisor which has one or more physical interfaces also
+known as the physical functions (PFs). If a PF supports SR-IOV it can be used
+to enable communication with the VMs via Virtual Functions (VFs).
+The VFs are virtual PCIe devices created from the physical Ethernet controller.
+
+DPDK models a physical interface as a rte device on top of which an eth
+device is created.
+DPDK (version 18.xx) introduced the representors eth devices.
+A representor device represents the VF eth device (VM side) on the hypervisor
+side and operates on top of a PF.
+Representors are multi devices created on top of one PF.
+
+For more information, refer to the `DPDK documentation`__.
+
+__ https://doc.dpdk.org/guides-18.11/prog_guide/switch_representation.html
+
+Prior to port representors there was a one-to-one relationship between the PF
+and the eth device. With port representors the relationship becomes one PF to
+many eth devices.
+In case of two representors ports, when one of the ports is closed - the PCI
+bus cannot be detached until the second representor port is closed as well.
+
+.. _representors-configuration:
+
+When configuring a PF-based port, OVS traditionally assigns the device PCI
+address in devargs. For an existing bridge called ``br0`` and PCI address
+``0000:08:00.0`` an ``add-port`` command is written as::
+
+    $ ovs-vsctl add-port br0 dpdk-pf -- set Interface dpdk-pf type=dpdk \
+       options:dpdk-devargs=0000:08:00.0
+
+When configuring a VF-based port, DPDK uses an extended devargs syntax which
+has the following format::
+
+    BDBF,representor=[<representor id>]
+
+This syntax shows that a representor is an enumerated eth device (with
+a representor ID) which uses the PF PCI address.
+The following commands add representors 3 and 5 using PCI device address
+``0000:08:00.0``::
+
+    $ ovs-vsctl add-port br0 dpdk-rep3 -- set Interface dpdk-rep3 type=dpdk \
+       options:dpdk-devargs=0000:08:00.0,representor=[3]
+
+    $ ovs-vsctl add-port br0 dpdk-rep5 -- set Interface dpdk-rep5 type=dpdk \
+       options:dpdk-devargs=0000:08:00.0,representor=[5]
+
+.. important::
+
+   Representors ports are configured prior to OVS invocation and independently
+   of it, or by other means as well. Please consult a NIC vendor instructions
+   on how to establish representors.
+
+.. _multi-dev-configuration:
+
+**Intel NICs ixgbe and i40e**
+
+In the following example we create one representor on PF address
+``0000:05:00.0``. Once the NIC is bounded to a DPDK compatible PMD the
+representor is created::
+
+    # echo 1 > /sys/bus/pci/devices/0000\:05\:00.0/max_vfs
+
+**Mellanox NICs ConnectX-4, ConnectX-5 and ConnectX-6**
+
+In the following example we create two representors on PF address
+``0000:05:00.0`` and net device name ``enp3s0f0``.
+
+- Ensure SR-IOV is enabled on the system.
+
+Enable IOMMU in Linux by adding ``intel_iommu=on`` to kernel parameters, for
+example, using GRUB (see /etc/grub/grub.conf).
+
+- Verify the PF PCI address prior to representors creation::
+
+    # lspci | grep Mellanox
+    05:00.0 Ethernet controller: Mellanox Technologies MT27700 Family [ConnectX-4]
+    05:00.1 Ethernet controller: Mellanox Technologies MT27700 Family [ConnectX-4]
+
+- Create the two VFs on the compute node::
+
+    # echo 2 > /sys/class/net/enp3s0f0/device/sriov_numvfs
+
+ Verify the VFs creation::
+
+    # lspci | grep Mellanox
+    05:00.0 Ethernet controller: Mellanox Technologies MT27700 Family [ConnectX-4]
+    05:00.1 Ethernet controller: Mellanox Technologies MT27700 Family [ConnectX-4]
+    05:00.2 Ethernet controller: Mellanox Technologies MT27700 Family [ConnectX-4 Virtual Function]
+    05:00.3 Ethernet controller: Mellanox Technologies MT27700 Family [ConnectX-4 Virtual Function]
+
+- Unbind the relevant VFs 0000:05:00.2..0000:05:00.3::
+
+    # echo 0000:05:00.2 > /sys/bus/pci/drivers/mlx5_core/unbind
+    # echo 0000:05:00.3 > /sys/bus/pci/drivers/mlx5_core/unbind
+
+- Change e-switch mode.
+
+The Mellanox NIC has an e-switch on it. Change the e-switch mode from
+legacy to switchdev using the PF PCI address::
+
+    # sudo devlink dev eswitch set pci/0000:05:00.0 mode switchdev
+
+This will create the VF representors network devices in the host OS.
+
+- After setting the PF to switchdev mode bind back the relevant VFs::
+
+    # echo 0000:05:00.2 > /sys/bus/pci/drivers/mlx5_core/bind
+    # echo 0000:05:00.3 > /sys/bus/pci/drivers/mlx5_core/bind
+
+- Restart Open vSwitch
+
+To verify representors correct configuration, execute::
+
+    $ ovs-vsctl show
+
+and make sure no errors are indicated.
+
+.. _vendor_configuration:
+
+Port representors are an example of multi devices. There are NICs which support
+multi devices by other methods than representors for which a generic devargs
+syntax is used. The generic syntax is based on the device mac address::
+
+    class=eth,mac=<MAC address>
+
+For example, the following command adds a port to a bridge called ``br0`` using
+an eth device whose mac address is ``00:11:22:33:44:55``::
+
+    $ ovs-vsctl add-port br0 dpdk-mac -- set Interface dpdk-mac type=dpdk \
+       options:dpdk-devargs="class=eth,mac=00:11:22:33:44:55"
+
 Jumbo Frames
 ------------
 
