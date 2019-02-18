@@ -4562,6 +4562,7 @@ ofctl_parse_pcap(struct ovs_cmdl_context *ctx)
             } else if (retval) {
                 error = retval;
                 ovs_error(error, "%s: read failed", filename);
+                break;
             }
 
             pkt_metadata_init(&packet->md, u32_to_odp(ofp_to_u16(OFPP_ANY)));
