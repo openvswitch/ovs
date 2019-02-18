@@ -566,7 +566,8 @@ struct xlate_bond_recirc {
 
 static void compose_output_action(struct xlate_ctx *, ofp_port_t ofp_port,
                                   const struct xlate_bond_recirc *xr,
-                                  bool is_last_action, bool truncate);
+                                  bool is_last_action, bool truncate,
+                                  bool mac_learn);
 
 static struct xbridge *xbridge_lookup(struct xlate_cfg *,
                                       const struct ofproto_dpif *);
@@ -2432,7 +2433,7 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
     xvlan_put(&ctx->xin->flow, &out_xvlan);
 
     compose_output_action(ctx, xport->ofp_port, use_recirc ? &xr : NULL,
-                          false, false);
+                          false, false, false);
     memcpy(&ctx->xin->flow.vlans, &old_vlans, sizeof(old_vlans));
 }
 
@@ -3991,7 +3992,8 @@ terminate_native_tunnel(struct xlate_ctx *ctx, ofp_port_t ofp_port,
 static void
 compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                         const struct xlate_bond_recirc *xr, bool check_stp,
-                        bool is_last_action OVS_UNUSED, bool truncate)
+                        bool is_last_action OVS_UNUSED, bool truncate,
+                        bool mac_learn)
 {
     const struct xport *xport = get_ofp_port(ctx->xbridge, ofp_port);
     struct flow_wildcards *wc = ctx->wc;
@@ -4006,6 +4008,10 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     struct eth_addr flow_dl_src = flow->dl_src;
     ovs_be32 flow_packet_type = flow->packet_type;
     ovs_be16 flow_dl_type = flow->dl_type;
+    struct xport *in_port;
+    struct xbundle *in_xbundle;
+    struct xvlan in_xvlan;
+    uint16_t vlan;
 
     /* If 'struct flow' gets additional metadata, we'll need to zero it out
      * before traversing a patch port. */
@@ -4141,6 +4147,27 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                 }
             }
 
+            in_xbundle = lookup_input_bundle(ctx, flow->in_port.ofp_port,
+                                             &in_port);
+            if (mac_learn
+                && in_xbundle
+                && ctx->xin->allow_side_effects
+                && flow->packet_type == htonl(PT_ETH)
+                && in_port->pt_mode != NETDEV_PT_LEGACY_L3
+            ) {
+                if (xbundle_trunks_vlan(xport->xbundle,
+                                        xport->xbundle->vlan)) {
+                    xvlan_extract(flow, &in_xvlan);
+                    vlan = in_xvlan.v[0].vid;
+                } else {
+                    vlan = xport->xbundle->vlan;
+                }
+
+                /* Learn source MAC. */
+                bool is_grat_arp = is_gratuitous_arp(flow, wc);
+                update_learning_table(ctx, in_xbundle, flow->dl_src, vlan,
+                                      is_grat_arp);
+            }
             nl_msg_put_odp_port(ctx->odp_actions,
                                 OVS_ACTION_ATTR_OUTPUT,
                                 out_port);
@@ -4170,10 +4197,11 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
 static void
 compose_output_action(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                       const struct xlate_bond_recirc *xr,
-                      bool is_last_action, bool truncate)
+                      bool is_last_action, bool truncate,
+                      bool mac_learn)
 {
     compose_output_action__(ctx, ofp_port, xr, true,
-                            is_last_action, truncate);
+                            is_last_action, truncate, mac_learn);
 }
 
 static void
@@ -4649,10 +4677,10 @@ flood_packet_to_port(struct xlate_ctx *ctx, const struct xport *xport,
 
     if (all) {
         compose_output_action__(ctx, xport->ofp_port, NULL, false,
-                                is_last_action, false);
+                                is_last_action, false, false);
     } else {
         compose_output_action(ctx, xport->ofp_port, NULL, is_last_action,
-                              false);
+                              false, false);
     }
 }
 
@@ -5069,7 +5097,7 @@ xlate_output_action(struct xlate_ctx *ctx, ofp_port_t port,
     switch (port) {
     case OFPP_IN_PORT:
         compose_output_action(ctx, ctx->xin->flow.in_port.ofp_port, NULL,
-                              is_last_action, truncate);
+                              is_last_action, truncate, false);
         break;
     case OFPP_TABLE:
         xlate_table_action(ctx, ctx->xin->flow.in_port.ofp_port,
@@ -5098,7 +5126,8 @@ xlate_output_action(struct xlate_ctx *ctx, ofp_port_t port,
     case OFPP_LOCAL:
     default:
         if (port != ctx->xin->flow.in_port.ofp_port) {
-            compose_output_action(ctx, port, NULL, is_last_action, truncate);
+            compose_output_action(ctx, port, NULL, is_last_action, truncate,
+                                  true);
         } else {
             xlate_report_info(ctx, "skipping output to input port");
         }
@@ -5222,7 +5251,7 @@ xlate_enqueue_action(struct xlate_ctx *ctx,
     /* Add datapath actions. */
     flow_priority = ctx->xin->flow.skb_priority;
     ctx->xin->flow.skb_priority = priority;
-    compose_output_action(ctx, ofp_port, NULL, is_last_action, false);
+    compose_output_action(ctx, ofp_port, NULL, is_last_action, false, false);
     ctx->xin->flow.skb_priority = flow_priority;
 
     /* Update NetFlow output port. */
@@ -7430,7 +7459,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             && xbridge->has_in_band
             && in_band_must_output_to_local_port(flow)
             && !actions_output_to_local_port(&ctx)) {
-            compose_output_action(&ctx, OFPP_LOCAL, NULL, false, false);
+            compose_output_action(&ctx, OFPP_LOCAL, NULL, false, false, false);
         }
 
         if (user_cookie_offset) {
