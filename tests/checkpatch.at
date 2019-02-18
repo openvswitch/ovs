@@ -310,3 +310,21 @@ try_checkpatch \
 "
 
 AT_CLEANUP
+
+AT_SETUP([checkpatch - whitespace around operator])
+try_checkpatch \
+   "COMMON_PATCH_HEADER
+    +     if (--mcs->n_refs == 0) {
+    "
+
+try_checkpatch \
+   "COMMON_PATCH_HEADER
+    +     if (--mcs->n_refs==0) {
+    " \
+    "WARNING: Line lacks whitespace around operator
+    WARNING: Line lacks whitespace around operator
+    #8 FILE: A.c:1:
+         if (--mcs->n_refs==0) {
+"
+
+AT_CLEANUP
