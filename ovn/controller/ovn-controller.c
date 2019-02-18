@@ -253,7 +253,16 @@ get_br_int(struct ovsdb_idl_txn *ovs_idl_txn,
 
     const struct ovsrec_bridge *br = get_bridge(bridge_table, br_int_name);
     if (!br) {
-        return create_br_int(ovs_idl_txn, cfg, br_int_name);
+        br = create_br_int(ovs_idl_txn, cfg, br_int_name);
+    }
+    if (br && ovs_idl_txn) {
+        const char *datapath_type = smap_get(&cfg->external_ids,
+                                             "ovn-bridge-datapath-type");
+        /* Check for the datapath_type and set it only if it is defined in
+         * cfg. */
+        if (datapath_type && strcmp(br->datapath_type, datapath_type)) {
+            ovsrec_bridge_set_datapath_type(br, datapath_type);
+        }
     }
     return br;
 }

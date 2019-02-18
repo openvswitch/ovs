@@ -81,6 +81,14 @@
         default configuration suggested in <code>ovn-architecture</code>(7).
       </dd>
 
+      <dt><code>external_ids:ovn-bridge-datapath-type</code></dt>
+      <dd>
+        This configuration is optional. If set, then the datapath type of
+        the integration bridge will be set to the configured value. If this
+        option is not set, then <code>ovn-controller</code> will not modify
+        the existing <code>datapath-type</code> of the integration bridge.
+      </dd>
+
       <dt><code>external_ids:ovn-remote</code></dt>
       <dd>
         <p>
