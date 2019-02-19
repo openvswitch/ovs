@@ -2161,6 +2161,10 @@ parse_action_list(const char *s, const struct simap *port_names,
         n += retval;
     }
 
+    if (actions->size > UINT16_MAX) {
+        return -EFBIG;
+    }
+
     return n;
 }
 
