@@ -230,7 +230,7 @@ supported for the userspace datapath.
 .
 .TP
 \*(DX\fBipf\-set\-min\-frag\fR [\fIdp\fR] \fBv4\fR|\fBv6\fR \fIminfrag\fR
-Sets the minimum fragment size for non-final fragments to
+Sets the minimum fragment size (L3 header and data) for non-final fragments to
 \fIminfrag\fR.  Either \fBv4\fR or \fBv6\fR must be specified.  For
 enhanced DOS security, higher minimum fragment sizes can usually be used.
 The default IPv4 value is 1200 and the clamped minimum is 400.  The default

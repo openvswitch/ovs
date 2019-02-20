@@ -613,7 +613,7 @@ ipf_is_valid_v4_frag(struct ipf *ipf, struct dp_packet *pkt)
     uint32_t min_v4_frag_size_;
     atomic_read_relaxed(&ipf->min_v4_frag_size, &min_v4_frag_size_);
     bool lf = ipf_is_last_v4_frag(pkt);
-    if (OVS_UNLIKELY(!lf && dp_packet_size(pkt) < min_v4_frag_size_)) {
+    if (OVS_UNLIKELY(!lf && dp_packet_l3_size(pkt) < min_v4_frag_size_)) {
         ipf_count(ipf, false, IPF_NFRAGS_TOO_SMALL);
         goto invalid_pkt;
     }
@@ -693,7 +693,7 @@ ipf_is_valid_v6_frag(struct ipf *ipf, struct dp_packet *pkt)
     atomic_read_relaxed(&ipf->min_v6_frag_size, &min_v6_frag_size_);
     bool lf = ipf_is_last_v6_frag(ip6f_offlg);
 
-    if (OVS_UNLIKELY(!lf && dp_packet_size(pkt) < min_v6_frag_size_)) {
+    if (OVS_UNLIKELY(!lf && dp_packet_l3_size(pkt) < min_v6_frag_size_)) {
         ipf_count(ipf, true, IPF_NFRAGS_TOO_SMALL);
         goto invalid_pkt;
     }
