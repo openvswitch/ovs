@@ -407,6 +407,7 @@ ipf_reassemble_v4_frags(struct ipf_list *ipf_list)
 {
     struct ipf_frag *frag_list = ipf_list->frag_list;
     struct dp_packet *pkt = dp_packet_clone(frag_list[0].pkt);
+    dp_packet_set_size(pkt, dp_packet_size(pkt) - dp_packet_l2_pad_size(pkt));
     struct ip_header *l3 = dp_packet_l3(pkt);
     int len = ntohs(l3->ip_tot_len);
 
@@ -451,6 +452,7 @@ ipf_reassemble_v6_frags(struct ipf_list *ipf_list)
 {
     struct ipf_frag *frag_list = ipf_list->frag_list;
     struct dp_packet *pkt = dp_packet_clone(frag_list[0].pkt);
+    dp_packet_set_size(pkt, dp_packet_size(pkt) - dp_packet_l2_pad_size(pkt));
     struct  ovs_16aligned_ip6_hdr *l3 = dp_packet_l3(pkt);
     int pl = ntohs(l3->ip6_plen) - sizeof(struct ovs_16aligned_ip6_frag);
 
