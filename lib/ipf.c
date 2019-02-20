@@ -420,15 +420,16 @@ ipf_reassemble_v4_frags(struct ipf_list *ipf_list)
         return NULL;
     }
 
-    dp_packet_prealloc_tailroom(pkt, len + rest_len);
+    dp_packet_prealloc_tailroom(pkt, rest_len);
 
     for (int i = 1; i <= ipf_list->last_inuse_idx; i++) {
         size_t add_len = frag_list[i].end_data_byte -
                          frag_list[i].start_data_byte + 1;
-        len += add_len;
         const char *l4 = dp_packet_l4(frag_list[i].pkt);
         dp_packet_put(pkt, l4, add_len);
     }
+
+    len += rest_len;
     l3 = dp_packet_l3(pkt);
     ovs_be16 new_ip_frag_off = l3->ip_frag_off & ~htons(IP_MORE_FRAGMENTS);
     l3->ip_csum = recalc_csum16(l3->ip_csum, l3->ip_frag_off,
@@ -463,16 +464,16 @@ ipf_reassemble_v6_frags(struct ipf_list *ipf_list)
         return NULL;
     }
 
-    dp_packet_prealloc_tailroom(pkt, pl + rest_len);
+    dp_packet_prealloc_tailroom(pkt, rest_len);
 
     for (int i = 1; i <= ipf_list->last_inuse_idx; i++) {
         size_t add_len = frag_list[i].end_data_byte -
                           frag_list[i].start_data_byte + 1;
-        pl += add_len;
         const char *l4 = dp_packet_l4(frag_list[i].pkt);
         dp_packet_put(pkt, l4, add_len);
     }
 
+    pl += rest_len;
     l3 = dp_packet_l3(pkt);
 
     uint8_t nw_proto = l3->ip6_nxt;
