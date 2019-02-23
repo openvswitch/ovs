@@ -522,9 +522,7 @@ ipf_list_state_transition(struct ipf *ipf, struct ipf_list *ipf_list,
         }
         break;
     case IPF_LIST_STATE_FIRST_SEEN:
-        if (ff) {
-            next_state = IPF_LIST_STATE_FIRST_SEEN;
-        } else if (lf) {
+        if (lf) {
             next_state = IPF_LIST_STATE_FIRST_LAST_SEEN;
         } else {
             next_state = IPF_LIST_STATE_FIRST_SEEN;
@@ -714,16 +712,10 @@ ipf_v6_key_extract(struct dp_packet *pkt, ovs_be16 dl_type, uint16_t zone,
                    uint16_t *end_data_byte, bool *ff, bool *lf)
 {
     const struct ovs_16aligned_ip6_hdr *l3 = dp_packet_l3(pkt);
-    const char *l4 = dp_packet_l4(pkt);
-    const char *tail = dp_packet_tail(pkt);
-    uint8_t pad = dp_packet_l2_pad_size(pkt);
-    size_t l3_size = tail - (char *)l3 - pad;
-    size_t l4_size = tail - (char *)l4 - pad;
-    size_t l3_hdr_size = sizeof *l3;
     uint8_t nw_frag = 0;
     uint8_t nw_proto = l3->ip6_nxt;
     const void *data = l3 + 1;
-    size_t datasize = l3_size - l3_hdr_size;
+    size_t datasize = dp_packet_l3_size(pkt) - sizeof *l3;
     const struct ovs_16aligned_ip6_frag *frag_hdr = NULL;
 
     parse_ipv6_ext_hdrs(&data, &datasize, &nw_proto, &nw_frag, &frag_hdr);
@@ -731,7 +723,7 @@ ipf_v6_key_extract(struct dp_packet *pkt, ovs_be16 dl_type, uint16_t zone,
     ovs_be16 ip6f_offlg = frag_hdr->ip6f_offlg;
     *start_data_byte = ntohs(ip6f_offlg & IP6F_OFF_MASK) +
         sizeof (struct ovs_16aligned_ip6_frag);
-    *end_data_byte = *start_data_byte + l4_size - 1;
+    *end_data_byte = *start_data_byte + dp_packet_l4_size(pkt) - 1;
     *ff = ipf_is_first_v6_frag(ip6f_offlg);
     *lf = ipf_is_last_v6_frag(ip6f_offlg);
     memset(key, 0, sizeof *key);
@@ -1175,12 +1167,9 @@ ipf_post_execute_reass_pkts(struct ipf *ipf,
                 }
 
                 const struct ipf_frag *frag_0 = &rp->list->frag_list[0];
-                const char *tail_frag = dp_packet_tail(frag_0->pkt);
-                uint8_t pad_frag = dp_packet_l2_pad_size(frag_0->pkt);
                 void *l4_frag = dp_packet_l4(frag_0->pkt);
                 void *l4_reass = dp_packet_l4(pkt);
-                memcpy(l4_frag, l4_reass,
-                       tail_frag - (char *) l4_frag - pad_frag);
+                memcpy(l4_frag, l4_reass, dp_packet_l4_size(frag_0->pkt));
 
                 if (v6) {
                     struct ovs_16aligned_ip6_hdr *l3_frag
