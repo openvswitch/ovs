@@ -1695,7 +1695,7 @@ packet_csum_pseudoheader6(const struct ovs_16aligned_ip6_hdr *ip6)
 /* Calculate the IPv6 upper layer checksum according to RFC2460. We pass the
    ip6_nxt and ip6_plen values, so it will also work if extension headers
    are present. */
-uint16_t
+ovs_be16
 packet_csum_upperlayer6(const struct ovs_16aligned_ip6_hdr *ip6,
                         const void *data, uint8_t l4_protocol,
                         uint16_t l4_size)
