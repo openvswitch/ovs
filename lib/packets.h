@@ -930,7 +930,7 @@ struct icmp6_error_header {
 BUILD_ASSERT_DECL(ICMP6_ERROR_HEADER_LEN == sizeof(struct icmp6_error_header));
 
 uint32_t packet_csum_pseudoheader6(const struct ovs_16aligned_ip6_hdr *);
-uint16_t packet_csum_upperlayer6(const struct ovs_16aligned_ip6_hdr *,
+ovs_be16 packet_csum_upperlayer6(const struct ovs_16aligned_ip6_hdr *,
                                  const void *, uint8_t, uint16_t);
 
 /* Neighbor Discovery option field.
