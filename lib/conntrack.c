@@ -603,19 +603,14 @@ static inline bool
 checksum_valid(const struct conn_key *key, const void *data, size_t size,
                const void *l3)
 {
-    uint32_t csum = 0;
-
     if (key->dl_type == htons(ETH_TYPE_IP)) {
-        csum = packet_csum_pseudoheader(l3);
+        uint32_t csum = packet_csum_pseudoheader(l3);
+        return csum_finish(csum_continue(csum, data, size)) == 0;
     } else if (key->dl_type == htons(ETH_TYPE_IPV6)) {
-        csum = packet_csum_pseudoheader6(l3);
+        return packet_csum_upperlayer6(l3, data, key->nw_proto, size) == 0;
     } else {
         return false;
     }
-
-    csum = csum_continue(csum, data, size);
-
-    return csum_finish(csum) == 0;
 }
 
 static inline bool
