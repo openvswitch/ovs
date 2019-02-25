@@ -2179,6 +2179,8 @@ nat_select_range_tuple(struct conntrack *ct, const struct conn *conn,
     bool ephemeral_ports_tried = conn->nat_info->nat_action & NAT_ACTION_DST
                                  ? true : false;
     union ct_addr first_addr = ct_addr;
+    bool pat_enabled = conn->key.nw_proto != IPPROTO_ICMP &&
+                       conn->key.nw_proto != IPPROTO_ICMPV6;
 
     while (true) {
         if (conn->nat_info->nat_action & NAT_ACTION_SRC) {
@@ -2186,11 +2188,7 @@ nat_select_range_tuple(struct conntrack *ct, const struct conn *conn,
         } else {
             nat_conn->rev_key.src.addr = ct_addr;
         }
-
-        if ((conn->key.nw_proto == IPPROTO_ICMP) ||
-            (conn->key.nw_proto == IPPROTO_ICMPV6)) {
-            all_ports_tried = true;
-        } else if (conn->nat_info->nat_action & NAT_ACTION_SRC) {
+        if (conn->nat_info->nat_action & NAT_ACTION_SRC) {
             nat_conn->rev_key.dst.port = htons(port);
         } else {
             nat_conn->rev_key.src.port = htons(port);
@@ -2200,7 +2198,7 @@ nat_select_range_tuple(struct conntrack *ct, const struct conn *conn,
                                                ct->hash_basis);
         if (new_insert) {
             return true;
-        } else if (!all_ports_tried) {
+        } else if (pat_enabled && !all_ports_tried) {
             if (min_port == max_port) {
                 all_ports_tried = true;
             } else if (port == max_port) {
@@ -2222,7 +2220,7 @@ nat_select_range_tuple(struct conntrack *ct, const struct conn *conn,
                 ct_addr = conn->nat_info->min_addr;
             }
             if (!memcmp(&ct_addr, &first_addr, sizeof ct_addr)) {
-                if (!ephemeral_ports_tried) {
+                if (pat_enabled && !ephemeral_ports_tried) {
                     ephemeral_ports_tried = true;
                     ct_addr = conn->nat_info->min_addr;
                     first_addr = ct_addr;
