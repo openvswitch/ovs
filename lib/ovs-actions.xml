@@ -1664,11 +1664,12 @@ $ ovs-ofctl -O OpenFlow10 add-flow br0 actions=mod_nw_src:1.2.3.4
             <dd>
               The L4 <var>port</var> or range
               <code><var>port1</var>-<var>port2</var></code> from which the
-              translated port should be selected. In case of a mapping conflict
-              the datapath may choose any other non-conflicting port number
-              instead, even when no port range is specified.  The port number
-              selection can be informed by the optional <code>random</code> and
-              <code>hash</code> flags described below.
+              translated port should be selected. When a port range is
+              specified, fallback to ephemeral ports does not happen, else,
+              it will.  The port number selection can be informed by the
+              optional <code>random</code> and <code>hash</code> flags
+              described below.  The userspace datapath only supports the
+              <code>hash</code> behavior.
             </dd>
           </dl>
 

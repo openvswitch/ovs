@@ -2175,9 +2175,11 @@ nat_select_range_tuple(struct conntrack *ct, const struct conn *conn,
 
     uint16_t port = first_port;
     bool all_ports_tried = false;
-    /* For DNAT, we don't use ephemeral ports. */
-    bool ephemeral_ports_tried = conn->nat_info->nat_action & NAT_ACTION_DST
-                                 ? true : false;
+    /* For DNAT or for specified port ranges, we don't use ephemeral ports. */
+    bool ephemeral_ports_tried
+        = conn->nat_info->nat_action & NAT_ACTION_DST ||
+              conn->nat_info->nat_action & NAT_ACTION_SRC_PORT
+          ? true : false;
     union ct_addr first_addr = ct_addr;
     bool pat_enabled = conn->key.nw_proto != IPPROTO_ICMP &&
                        conn->key.nw_proto != IPPROTO_ICMPV6;
