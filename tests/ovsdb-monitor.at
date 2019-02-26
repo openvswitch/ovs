@@ -630,7 +630,7 @@ AT_CHECK([ovsdb-client transact unix:socket '[["ordinals"]]'], [0],
          [ignore], [ignore])
 AT_CHECK([ovs-appctl -t ovsdb-server -e exit], [0], [ignore], [ignore])
 OVS_WAIT_UNTIL([test ! -e ovsdb-server.pid && test ! -e ovsdb-client.pid])
-AT_CHECK([$PYTHON $srcdir/ovsdb-monitor-sort.py < output | uuidfilt], [0], [[row,action,name
+AT_CHECK([${PERL} $srcdir/ovsdb-monitor-sort.pl < output | ${PERL} $srcdir/uuidfilt.pl], [0], [[row,action,name
 <0>,insert,"""ten"""
 
 row,action,name
