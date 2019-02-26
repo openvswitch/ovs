@@ -237,7 +237,7 @@ class Vlog(object):
                     Vlog.__file_handler = logging.FileHandler(Vlog.__log_file)
                     logger.addHandler(Vlog.__file_handler)
             except (IOError, socket.error):
-                logger.setLevel(logging.CRITICAL)
+                logger.disabled = True
 
         ovs.unixctl.command_register("vlog/reopen", "", 0, 0,
                                      Vlog._unixctl_vlog_reopen, None)
@@ -305,20 +305,19 @@ class Vlog(object):
             return
 
         logger = logging.getLogger('syslog')
-        # If there is no infrastructure to support python syslog, disable
-        # the logger to avoid repeated errors.
-        if not os.path.exists("/dev/log"):
-            logger.disabled = True
-            return
+
+        if facility is None:
+            facility = syslog_facility
+
+        new_handler = logging.handlers.SysLogHandler(address="/dev/log",
+                                                     facility=facility)
 
         if syslog_handler:
             logger.removeHandler(syslog_handler)
 
-        if facility:
-            syslog_facility = facility
+        syslog_handler = new_handler
+        syslog_facility = facility
 
-        syslog_handler = logging.handlers.SysLogHandler(address="/dev/log",
-                                                    facility=syslog_facility)
         logger.addHandler(syslog_handler)
         return
 
@@ -342,7 +341,11 @@ class Vlog(object):
                 return "Please supply a valid pattern and destination"
         elif words[0] == "FACILITY":
             if words[1] in FACILITIES:
-                Vlog.add_syslog_handler(words[1])
+                try:
+                    Vlog.add_syslog_handler(words[1])
+                except (IOError, socket.error):
+                    logger = logging.getLogger('syslog')
+                    logger.disabled = True
                 return
             else:
                 return "Facility %s is invalid" % words[1]
