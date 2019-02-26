@@ -2,6 +2,10 @@
 
 set -ev
 
+# Logging to syslog could be way too slow on Travis.
+# Stopping the rsyslog daemon to allow tests to fit the time limit.
+sudo service rsyslog stop
+
 # Build and install sparse.
 #
 # Explicitly disable sparse support for llvm because some travis
