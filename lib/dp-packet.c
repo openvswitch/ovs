@@ -30,9 +30,10 @@ dp_packet_init__(struct dp_packet *b, size_t allocated, enum dp_packet_source so
     b->source = source;
     dp_packet_reset_offsets(b);
     pkt_metadata_init(&b->md, 0);
-    dp_packet_rss_invalidate(b);
-    dp_packet_mbuf_init(b);
     dp_packet_reset_cutlen(b);
+    dp_packet_reset_offload(b);
+    /* Initialize implementation-specific fields of dp_packet. */
+    dp_packet_init_specific(b);
     /* By default assume the packet type to be Ethernet. */
     b->packet_type = htonl(PT_ETH);
 }
@@ -173,16 +174,10 @@ dp_packet_clone_with_headroom(const struct dp_packet *buffer, size_t headroom)
 
 #ifdef DPDK_NETDEV
     new_buffer->mbuf.ol_flags = buffer->mbuf.ol_flags;
-#else
-    new_buffer->rss_hash_valid = buffer->rss_hash_valid;
 #endif
 
-    if (dp_packet_rss_valid(new_buffer)) {
-#ifdef DPDK_NETDEV
-        new_buffer->mbuf.hash.rss = buffer->mbuf.hash.rss;
-#else
-        new_buffer->rss_hash = buffer->rss_hash;
-#endif
+    if (dp_packet_rss_valid(buffer)) {
+        dp_packet_set_rss_hash(new_buffer, dp_packet_get_rss_hash(buffer));
     }
 
     return new_buffer;

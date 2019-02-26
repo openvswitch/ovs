@@ -3775,11 +3775,11 @@ netdev_dpdk_ring_send(struct netdev *netdev, int qid,
     struct dp_packet *packet;
 
     /* When using 'dpdkr' and sending to a DPDK ring, we want to ensure that
-     * the rss hash field is clear. This is because the same mbuf may be
+     * the offload fields are clear. This is because the same mbuf may be
      * modified by the consumer of the ring and return into the datapath
-     * without recalculating the RSS hash. */
+     * without recalculating the RSS hash or revalidating the checksums. */
     DP_PACKET_BATCH_FOR_EACH (i, packet, batch) {
-        dp_packet_mbuf_rss_flag_reset(packet);
+        dp_packet_reset_offload(packet);
     }
 
     netdev_dpdk_send__(dev, qid, batch, concurrent_txq);
