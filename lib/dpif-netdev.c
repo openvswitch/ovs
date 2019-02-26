@@ -2183,8 +2183,8 @@ megaflow_to_mark_find(const ovs_u128 *mega_ufid)
         }
     }
 
-    VLOG_WARN("Mark id for ufid "UUID_FMT" was not found\n",
-              UUID_ARGS((struct uuid *)mega_ufid));
+    VLOG_DBG("Mark id for ufid "UUID_FMT" was not found\n",
+             UUID_ARGS((struct uuid *)mega_ufid));
     return INVALID_FLOW_MARK;
 }
 
