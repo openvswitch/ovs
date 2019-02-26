@@ -29,6 +29,7 @@
 #include "odp-util.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/list.h"
+#include "openvswitch/match.h"
 #include "openvswitch/ofp-print.h"
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
@@ -92,6 +93,13 @@ struct pkt_list_node {
     struct ovs_list list_node;
 };
 
+struct offloaded_flow {
+    struct hmap_node node;
+    ovs_u128 ufid;
+    struct match match;
+    uint32_t mark;
+};
+
 /* Protects 'dummy_list'. */
 static struct ovs_mutex dummy_list_mutex = OVS_MUTEX_INITIALIZER;
 
@@ -123,6 +131,8 @@ struct netdev_dummy {
     struct in_addr address, netmask;
     struct in6_addr ipv6, ipv6_mask;
     struct ovs_list rxes OVS_GUARDED; /* List of child "netdev_rxq_dummy"s. */
+
+    struct hmap offloaded_flows OVS_GUARDED;
 
     /* The following properties are for dummy-pmd and they cannot be changed
      * when a device is running, so we remember the request and update them
@@ -699,6 +709,7 @@ netdev_dummy_construct(struct netdev *netdev_)
     dummy_packet_conn_init(&netdev->conn);
 
     ovs_list_init(&netdev->rxes);
+    hmap_init(&netdev->offloaded_flows);
     ovs_mutex_unlock(&netdev->mutex);
 
     ovs_mutex_lock(&dummy_list_mutex);
@@ -712,6 +723,7 @@ static void
 netdev_dummy_destruct(struct netdev *netdev_)
 {
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
+    struct offloaded_flow *off_flow;
 
     ovs_mutex_lock(&dummy_list_mutex);
     ovs_list_remove(&netdev->list_node);
@@ -726,6 +738,11 @@ netdev_dummy_destruct(struct netdev *netdev_)
     }
     dummy_packet_conn_close(&netdev->conn);
     netdev->conn.type = NONE;
+
+    HMAP_FOR_EACH_POP (off_flow, node, &netdev->offloaded_flows) {
+        free(off_flow);
+    }
+    hmap_destroy(&netdev->offloaded_flows);
 
     ovs_mutex_unlock(&netdev->mutex);
     ovs_mutex_destroy(&netdev->mutex);
@@ -1388,8 +1405,88 @@ netdev_dummy_update_flags(struct netdev *netdev_,
 
     return error;
 }
-
-/* Helper functions. */
+
+/* Flow offload API. */
+static uint32_t
+netdev_dummy_flow_hash(const ovs_u128 *ufid)
+{
+    return ufid->u32[0];
+}
+
+static struct offloaded_flow *
+find_offloaded_flow(const struct hmap *offloaded_flows, const ovs_u128 *ufid)
+{
+    uint32_t hash = netdev_dummy_flow_hash(ufid);
+    struct offloaded_flow *data;
+
+    HMAP_FOR_EACH_WITH_HASH (data, node, hash, offloaded_flows) {
+        if (ovs_u128_equals(*ufid, data->ufid)) {
+            return data;
+        }
+    }
+
+    return NULL;
+}
+
+static int
+netdev_dummy_flow_put(struct netdev *netdev, struct match *match,
+                      struct nlattr *actions OVS_UNUSED,
+                      size_t actions_len OVS_UNUSED,
+                      const ovs_u128 *ufid, struct offload_info *info,
+                      struct dpif_flow_stats *stats OVS_UNUSED)
+{
+    struct netdev_dummy *dev = netdev_dummy_cast(netdev);
+    struct offloaded_flow *off_flow;
+
+    ovs_mutex_lock(&dev->mutex);
+
+    off_flow = find_offloaded_flow(&dev->offloaded_flows, ufid);
+    if (!off_flow) {
+        /* Create new offloaded flow. */
+        off_flow = xzalloc(sizeof *off_flow);
+        memcpy(&off_flow->ufid, ufid, sizeof *ufid);
+        hmap_insert(&dev->offloaded_flows, &off_flow->node,
+                    netdev_dummy_flow_hash(ufid));
+    }
+
+    off_flow->mark = info->flow_mark;
+    memcpy(&off_flow->match, match, sizeof *match);
+
+    /* As we have per-netdev 'offloaded_flows', we don't need to match
+     * the 'in_port' for received packets. This will also allow offloading for
+     * packets passed to 'receive' command without specifying the 'in_port'. */
+    off_flow->match.wc.masks.in_port.odp_port = 0;
+
+    ovs_mutex_unlock(&dev->mutex);
+
+    return 0;
+}
+
+static int
+netdev_dummy_flow_del(struct netdev *netdev, const ovs_u128 *ufid,
+                      struct dpif_flow_stats *stats OVS_UNUSED)
+{
+    struct netdev_dummy *dev = netdev_dummy_cast(netdev);
+    struct offloaded_flow *off_flow;
+
+    ovs_mutex_lock(&dev->mutex);
+
+    off_flow = find_offloaded_flow(&dev->offloaded_flows, ufid);
+    if (!off_flow) {
+        ovs_mutex_unlock(&dev->mutex);
+        return -1;
+    }
+
+    hmap_remove(&dev->offloaded_flows, &off_flow->node);
+    free(off_flow);
+
+    ovs_mutex_unlock(&dev->mutex);
+    return 0;
+}
+
+#define DUMMY_FLOW_OFFLOAD_API                          \
+    .flow_put = netdev_dummy_flow_put,                  \
+    .flow_del = netdev_dummy_flow_del
 
 #define NETDEV_DUMMY_CLASS_COMMON                       \
     .run = netdev_dummy_run,                            \
@@ -1423,7 +1520,8 @@ netdev_dummy_update_flags(struct netdev *netdev_,
     .rxq_dealloc = netdev_dummy_rxq_dealloc,            \
     .rxq_recv = netdev_dummy_rxq_recv,                  \
     .rxq_wait = netdev_dummy_rxq_wait,                  \
-    .rxq_drain = netdev_dummy_rxq_drain
+    .rxq_drain = netdev_dummy_rxq_drain,                \
+    DUMMY_FLOW_OFFLOAD_API
 
 static const struct netdev_class dummy_class = {
     NETDEV_DUMMY_CLASS_COMMON,
@@ -1441,6 +1539,8 @@ static const struct netdev_class dummy_pmd_class = {
     .is_pmd = true,
     .reconfigure = netdev_dummy_reconfigure
 };
+
+/* Helper functions. */
 
 static void
 pkt_list_delete(struct ovs_list *l)
