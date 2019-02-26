@@ -5365,7 +5365,6 @@ nbctl_client(const char *socket_name,
             break;
 
         VLOG_OPTION_HANDLERS
-        TABLE_OPTION_HANDLERS(&table_style)
 
         case OPT_LOCAL:
         default:
