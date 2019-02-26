@@ -133,6 +133,7 @@ void table_parse_cell_format(struct table_style *, const char *format);
 void table_print(const struct table *, const struct table_style *);
 void table_format(const struct table *, const struct table_style *,
                   struct ds *);
+void table_format_reset(void);
 void table_usage(void);
 
 #endif /* table.h */

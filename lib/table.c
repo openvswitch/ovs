@@ -236,15 +236,18 @@ table_print_timestamp__(const struct table *table, struct ds *s)
     }
 }
 
+static bool first_table = true;
+
 static void
 table_print_table__(const struct table *table, const struct table_style *style,
                     struct ds *s)
 {
-    static int n = 0;
     int *widths;
     size_t x, y;
 
-    if (n++ > 0) {
+    if (first_table) {
+        first_table = false;
+    } else {
         ds_put_char(s, '\n');
     }
 
@@ -318,10 +321,11 @@ static void
 table_print_list__(const struct table *table, const struct table_style *style,
                    struct ds *s)
 {
-    static int n = 0;
     size_t x, y;
 
-    if (n++ > 0) {
+    if (first_table) {
+        first_table = false;
+    } else {
         ds_put_char(s, '\n');
     }
 
@@ -469,10 +473,11 @@ static void
 table_print_csv__(const struct table *table, const struct table_style *style,
                   struct ds *s)
 {
-    static int n = 0;
     size_t x, y;
 
-    if (n++ > 0) {
+    if (first_table) {
+        first_table = false;
+    } else {
         ds_put_char(s, '\n');
     }
 
@@ -612,6 +617,12 @@ table_format(const struct table *table, const struct table_style *style,
         table_print_json__(table, style, s);
         break;
     }
+}
+
+void
+table_format_reset(void)
+{
+    first_table = true;
 }
 
 /* Outputs 'table' on stdout in the specified 'style'. */
