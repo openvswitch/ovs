@@ -34,6 +34,18 @@ filter_flow_install () {
     grep 'flow_add' | sed 's/.*flow_add: //' | sort | uniq
 }
 
+filter_hw_flow_install () {
+    grep 'netdev_dummy.*flow put\[create\]' | sed 's/.*|DBG|//' | sort | uniq
+}
+
+filter_hw_flow_del () {
+    grep 'netdev_dummy.*flow del' | sed 's/.*|DBG|//' | sort | uniq
+}
+
+filter_hw_packet_netdev_dummy () {
+    grep 'netdev_dummy.*: packet:.*with mark' | sed 's/.*|DBG|//' | sort | uniq
+}
+
 filter_flow_dump () {
     grep 'flow_dump ' | sed '
         s/.*flow_dump //
@@ -346,3 +358,65 @@ recirc_id(0),in_port(8),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), a
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+m4_define([DPIF_NETDEV_FLOW_HW_OFFLOAD],
+  [AT_SETUP([dpif-netdev - partial hw offload - $1])
+   AT_SKIP_IF([test "$IS_WIN32" = "yes" || test "$IS_BSD" = "yes"])
+   OVS_VSWITCHD_START(
+     [add-port br0 p1 -- set interface p1 type=$1 ofport_request=1 options:pstream=punix:$OVS_RUNDIR/p1.sock -- \
+      set bridge br0 datapath-type=dummy \
+                     other-config:datapath-id=1234 fail-mode=secure], [], [],
+      [m4_if([$1], [dummy-pmd], [--dummy-numa="0,0,0,0,1,1,1,1"], [])])
+   AT_CHECK([ovs-appctl vlog/set dpif:file:dbg dpif_netdev:file:dbg netdev_dummy:file:dbg])
+
+   AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:hw-offload=true])
+   OVS_WAIT_UNTIL([grep "netdev: Flow API Enabled" ovs-vswitchd.log])
+
+   AT_CHECK([ovs-ofctl del-flows br0])
+   AT_CHECK([ovs-ofctl add-flow br0 in_port=1,actions=IN_PORT])
+
+   packet="packet_type(ns=0,id=0),eth(src=00:06:07:08:09:0a,dst=00:01:02:03:04:05),eth_type(0x0800),ipv4(src=127.0.0.1,dst=127.0.0.1,proto=0,tos=0,ttl=64,frag=no)"
+   AT_CHECK([ovs-appctl netdev-dummy/receive p1 $packet --len 64], [0])
+
+   OVS_WAIT_UNTIL([grep "miss upcall" ovs-vswitchd.log])
+   AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
+skb_priority(0),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),packet_type(ns=0,id=0),eth(src=00:06:07:08:09:0a,dst=00:01:02:03:04:05),eth_type(0x0800),ipv4(src=127.0.0.1,dst=127.0.0.1,proto=0,tos=0,ttl=64,frag=no)
+])
+   # Check that flow successfully offloaded.
+   OVS_WAIT_UNTIL([grep "succeed to add netdev flow" ovs-vswitchd.log])
+   AT_CHECK([filter_hw_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
+p1: flow put[[create]]: flow match: recirc_id=0,eth,ip,in_port=1,vlan_tci=0x0000,nw_frag=no, mark: 0
+])
+   # Check that datapath flow installed successfully.
+   AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), actions: <del>
+])
+   # Inject the same packet again.
+   AT_CHECK([ovs-appctl netdev-dummy/receive p1 $packet --len 64], [0])
+
+   # Check for succesfull packet matching with installed offloaded flow.
+   AT_CHECK([filter_hw_packet_netdev_dummy < ovs-vswitchd.log | strip_xout], [0], [dnl
+p1: packet: ip,vlan_tci=0x0000,dl_src=00:06:07:08:09:0a,dl_dst=00:01:02:03:04:05,nw_src=127.0.0.1,nw_dst=127.0.0.1,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=64 matches with flow: recirc_id=0,eth,ip,vlan_tci=0x0000,nw_frag=no with mark: 0
+])
+
+   ovs-appctl revalidator/wait
+   # Dump the datapath flow to see that actions was executed for a packet.
+   AT_CHECK([ovs-appctl dpif/dump-flows br0 | strip_timers], [0], [dnl
+recirc_id(0),in_port(1),packet_type(ns=0,id=0),eth_type(0x0800),ipv4(frag=no), packets:1, bytes:64, used:0.0s, actions:1
+])
+
+   # Wait for datapath flow expiration.
+   ovs-appctl time/stop
+   ovs-appctl time/warp 15000
+   ovs-appctl revalidator/wait
+
+   # Check that flow successfully deleted from HW.
+   OVS_WAIT_UNTIL([grep "succeed to delete netdev flow" ovs-vswitchd.log])
+   AT_CHECK([filter_hw_flow_del < ovs-vswitchd.log | strip_xout], [0], [dnl
+p1: flow del: mark: 0
+])
+   OVS_VSWITCHD_STOP
+   AT_CLEANUP])
+
+DPIF_NETDEV_FLOW_HW_OFFLOAD([dummy])
+DPIF_NETDEV_FLOW_HW_OFFLOAD([dummy-pmd])
