@@ -162,6 +162,7 @@ struct dp_packet *
 dp_packet_clone_with_headroom(const struct dp_packet *buffer, size_t headroom)
 {
     struct dp_packet *new_buffer;
+    uint32_t mark;
 
     new_buffer = dp_packet_clone_data_with_headroom(dp_packet_data(buffer),
                                                  dp_packet_size(buffer),
@@ -178,6 +179,9 @@ dp_packet_clone_with_headroom(const struct dp_packet *buffer, size_t headroom)
 
     if (dp_packet_rss_valid(buffer)) {
         dp_packet_set_rss_hash(new_buffer, dp_packet_get_rss_hash(buffer));
+    }
+    if (dp_packet_has_flow_mark(buffer, &mark)) {
+        dp_packet_set_flow_mark(new_buffer, mark);
     }
 
     return new_buffer;
