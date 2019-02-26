@@ -452,12 +452,11 @@ HvConnectNic(POVS_SWITCH_CONTEXT switchContext,
     vport->ovsState = OVS_STATE_CONNECTED;
     vport->nicState = NdisSwitchNicStateConnected;
 
-    NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
-
     if (nicParam->NicType == NdisSwitchNicTypeInternal) {
         OvsInternalAdapterUp(vport->portNo, &vport->netCfgInstanceId);
     }
 
+    NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
 done:
     VPORT_NIC_EXIT(nicParam);
 }
