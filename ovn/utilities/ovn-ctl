@@ -553,6 +553,14 @@ Commands:
   restart_sb_ovsdb            restart ovn southbound db ovsdb-server process
   restart_controller          restart ovn-controller
   restart_controller_vtep     restart ovn-controller-vtep
+  status_northd               status ovs-northd
+  status_ovsdb                status related ovsdb-server processes
+  status_controller           status ovn-controller
+  status_controller_vtep      status ovn-controller-vtep
+  promote_ovnnb               promote ovn northbound db backup server to active
+  promote_ovnsb               promote ovn southbound db backup server to active
+  demote_ovnnb                demote ovn northbound db active server to backup
+  demote_ovnsb                demote ovn southbound db active server to backup
   run_nb_ovsdb                run ovn northbound db ovsdb-server process
   run_sb_ovsdb                run ovn southbound db ovsdb-server process
 
