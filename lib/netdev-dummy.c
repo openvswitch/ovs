@@ -1437,6 +1437,7 @@ netdev_dummy_flow_put(struct netdev *netdev, struct match *match,
 {
     struct netdev_dummy *dev = netdev_dummy_cast(netdev);
     struct offloaded_flow *off_flow;
+    bool modify = true;
 
     ovs_mutex_lock(&dev->mutex);
 
@@ -1447,6 +1448,7 @@ netdev_dummy_flow_put(struct netdev *netdev, struct match *match,
         memcpy(&off_flow->ufid, ufid, sizeof *ufid);
         hmap_insert(&dev->offloaded_flows, &off_flow->node,
                     netdev_dummy_flow_hash(ufid));
+        modify = false;
     }
 
     off_flow->mark = info->flow_mark;
@@ -1459,6 +1461,20 @@ netdev_dummy_flow_put(struct netdev *netdev, struct match *match,
 
     ovs_mutex_unlock(&dev->mutex);
 
+    if (VLOG_IS_DBG_ENABLED()) {
+        struct ds ds = DS_EMPTY_INITIALIZER;
+
+        ds_put_format(&ds, "%s: flow put[%s]: ", netdev_get_name(netdev),
+                      modify ? "modify" : "create");
+        odp_format_ufid(ufid, &ds);
+        ds_put_cstr(&ds, " flow match: ");
+        match_format(match, NULL, &ds, OFP_DEFAULT_PRIORITY);
+        ds_put_format(&ds, ", mark: %"PRIu32, info->flow_mark);
+
+        VLOG_DBG("%s", ds_cstr(&ds));
+        ds_destroy(&ds);
+    }
+
     return 0;
 }
 
@@ -1468,20 +1484,43 @@ netdev_dummy_flow_del(struct netdev *netdev, const ovs_u128 *ufid,
 {
     struct netdev_dummy *dev = netdev_dummy_cast(netdev);
     struct offloaded_flow *off_flow;
+    const char *error = NULL;
+    uint32_t mark;
 
     ovs_mutex_lock(&dev->mutex);
 
     off_flow = find_offloaded_flow(&dev->offloaded_flows, ufid);
     if (!off_flow) {
-        ovs_mutex_unlock(&dev->mutex);
-        return -1;
+        error = "No such flow.";
+        goto exit;
     }
 
+    mark = off_flow->mark;
     hmap_remove(&dev->offloaded_flows, &off_flow->node);
     free(off_flow);
 
+exit:
     ovs_mutex_unlock(&dev->mutex);
-    return 0;
+
+    if (error || VLOG_IS_DBG_ENABLED()) {
+        struct ds ds = DS_EMPTY_INITIALIZER;
+
+        ds_put_format(&ds, "%s: ", netdev_get_name(netdev));
+        if (error) {
+            ds_put_cstr(&ds, "failed to ");
+        }
+        ds_put_cstr(&ds, "flow del: ");
+        odp_format_ufid(ufid, &ds);
+        if (error) {
+            ds_put_format(&ds, " error: %s", error);
+        } else {
+            ds_put_format(&ds, " mark: %"PRIu32, mark);
+        }
+        VLOG(error ? VLL_WARN : VLL_DBG, "%s", ds_cstr(&ds));
+        ds_destroy(&ds);
+    }
+
+    return error ? -1 : 0;
 }
 
 #define DUMMY_FLOW_OFFLOAD_API                          \
@@ -1639,7 +1678,28 @@ netdev_dummy_queue_packet(struct netdev_dummy *dummy, struct dp_packet *packet,
     }
     HMAP_FOR_EACH (data, node, &dummy->offloaded_flows) {
         if (flow_equal_except(flow, &data->match.flow, &data->match.wc)) {
+
             dp_packet_set_flow_mark(packet, data->mark);
+
+            if (VLOG_IS_DBG_ENABLED()) {
+                struct ds ds = DS_EMPTY_INITIALIZER;
+
+                ds_put_format(&ds, "%s: packet: ",
+                              netdev_get_name(&dummy->up));
+                /* 'flow' does not contain proper port number here.
+                 * Let's just clear it as it wildcarded anyway. */
+                flow->in_port.ofp_port = 0;
+                flow_format(&ds, flow, NULL);
+
+                ds_put_cstr(&ds, " matches with flow: ");
+                odp_format_ufid(&data->ufid, &ds);
+                ds_put_cstr(&ds, " ");
+                match_format(&data->match, NULL, &ds, OFP_DEFAULT_PRIORITY);
+                ds_put_format(&ds, " with mark: %"PRIu32, data->mark);
+
+                VLOG_DBG("%s", ds_cstr(&ds));
+                ds_destroy(&ds);
+            }
             break;
         }
     }
