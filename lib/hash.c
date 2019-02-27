@@ -72,7 +72,7 @@ hash_words64__(const uint64_t p[], size_t n_words, uint32_t basis)
     return hash_words64_inline(p, n_words, basis);
 }
 
-#if !(defined(__x86_64__))
+#if !(defined(__x86_64__)) && !(defined(__aarch64__))
 void
 hash_bytes128(const void *p_, size_t len, uint32_t basis, ovs_u128 *out)
 {
@@ -233,7 +233,7 @@ hash_bytes128(const void *p_, size_t len, uint32_t basis, ovs_u128 *out)
     out->u32[3] = h4;
 }
 
-#else /* __x86_64__ */
+#else /* __x86_64__ or __aarch64__*/
 
 static inline uint64_t
 hash_rot64(uint64_t x, int8_t r)
@@ -361,4 +361,4 @@ hash_bytes128(const void *p_, size_t len, uint32_t basis, ovs_u128 *out)
     out->u64.lo = h1;
     out->u64.hi = h2;
 }
-#endif /* __x86_64__ */
+#endif /* __x86_64__ or __aarch64__*/
