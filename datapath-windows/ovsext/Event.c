@@ -245,9 +245,8 @@ OvsSubscribeEventIoctl(PFILE_OBJECT fileObject,
         return STATUS_INVALID_PARAMETER;
     }
 
-    OvsAcquireEventQueueLock(eventId);
-
     instance = OvsGetOpenInstance(fileObject, request->dpNo);
+    OvsAcquireEventQueueLock(eventId);
 
     if (instance == NULL) {
         status = STATUS_INVALID_PARAMETER;
