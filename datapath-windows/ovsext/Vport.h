@@ -122,15 +122,20 @@ typedef struct _OVS_VPORT_ENTRY {
 
 struct _OVS_SWITCH_CONTEXT;
 
+_Requires_lock_held_(switchContext->dispatchLock)
 POVS_VPORT_ENTRY OvsFindVportByPortNo(POVS_SWITCH_CONTEXT switchContext,
                                       UINT32 portNo);
 /* "name" is null-terminated */
+_Requires_lock_held_(switchContext->dispatchLock)
 POVS_VPORT_ENTRY OvsFindVportByOvsName(POVS_SWITCH_CONTEXT switchContext,
                                        PSTR name);
+_Requires_lock_held_(switchContext->dispatchLock)
 POVS_VPORT_ENTRY OvsFindVportByHvNameA(POVS_SWITCH_CONTEXT switchContext,
                                        PSTR name);
+_Requires_lock_held_(switchContext->dispatchLock)
 POVS_VPORT_ENTRY OvsFindVportByHvNameW(POVS_SWITCH_CONTEXT switchContext,
                                        PWSTR wsName, SIZE_T wstrSize);
+_Requires_lock_held_(switchContext->dispatchLock)
 POVS_VPORT_ENTRY OvsFindVportByPortIdAndNicIndex(POVS_SWITCH_CONTEXT switchContext,
                                                  NDIS_SWITCH_PORT_ID portId,
                                                  NDIS_SWITCH_NIC_INDEX index);
