@@ -27,7 +27,7 @@ parse_keys(bool wc_keys, const char *in)
     ofpbuf_init(&odp_key, 0);
     ofpbuf_init(&odp_mask, 0);
     error = odp_flow_from_string(in, NULL,
-                                 &odp_key, &odp_mask);
+                                 &odp_key, &odp_mask, NULL);
     if (error) {
         printf("odp_flow_from_string: error\n");
         goto next;
@@ -47,7 +47,8 @@ parse_keys(bool wc_keys, const char *in)
         };
 
         /* Convert odp_key to flow. */
-        fitness = odp_flow_key_to_flow(odp_key.data, odp_key.size, &flow);
+        fitness = odp_flow_key_to_flow(odp_key.data, odp_key.size,
+                                       &flow, NULL);
         switch (fitness) {
             case ODP_FIT_PERFECT:
                 break;
