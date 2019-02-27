@@ -613,6 +613,7 @@ Logical switch port commands:\n\
   lsp-set-dhcpv6-options PORT [DHCP_OPTIONS_UUID]\n\
                             set dhcpv6 options for PORT\n\
   lsp-get-dhcpv6-options PORT  get the dhcpv6 options for PORT\n\
+  lsp-get-ls PORT           get the logical switch which the port belongs to\n\
 \n\
 Logical router commands:\n\
   lr-add [ROUTER]           create a logical router named ROUTER\n\
@@ -1873,6 +1874,30 @@ nbctl_lsp_get_dhcpv6_options(struct ctl_context *ctx)
         ds_put_format(&ctx->output, UUID_FMT " (%s)\n",
                       UUID_ARGS(&lsp->dhcpv6_options->header_.uuid),
                       lsp->dhcpv6_options->cidr);
+    }
+}
+
+static void
+nbctl_lsp_get_ls(struct ctl_context *ctx)
+{
+    const char *id = ctx->argv[1];
+    const struct nbrec_logical_switch_port *lsp = NULL;
+
+    char *error = lsp_by_name_or_uuid(ctx, id, true, &lsp);
+    if (error) {
+        ctx->error = error;
+        return;
+    }
+
+    const struct nbrec_logical_switch *ls;
+    NBREC_LOGICAL_SWITCH_FOR_EACH(ls, ctx->idl) {
+        for (size_t i = 0; i < ls->n_ports; i++) {
+            if (ls->ports[i] == lsp) {
+                ds_put_format(&ctx->output, UUID_FMT " (%s)\n",
+                      UUID_ARGS(&ls->header_.uuid), ls->name);
+                break;
+            }
+        }
     }
 }
 
@@ -5115,6 +5140,7 @@ static const struct ctl_command_syntax nbctl_commands[] = {
       nbctl_lsp_set_dhcpv6_options, NULL, "", RW },
     { "lsp-get-dhcpv6-options", 1, 1, "PORT", NULL,
       nbctl_lsp_get_dhcpv6_options, NULL, "", RO },
+    { "lsp-get-ls", 1, 1, "PORT", NULL, nbctl_lsp_get_ls, NULL, "", RO },
 
     /* logical router commands. */
     { "lr-add", 0, 1, "[ROUTER]", NULL, nbctl_lr_add, NULL,

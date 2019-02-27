@@ -476,6 +476,11 @@
         Get the configured DHCPv6 options for the logical port.
       </dd>
 
+      <dt><code>lsp-get-ls</code> <var>port</var></dt>
+      <dd>
+        Get the logical switch which the <var>port</var> belongs to.
+      </dd>
+
     </dl>
 
     <h1>Logical Router Commands</h1>

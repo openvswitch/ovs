@@ -153,6 +153,20 @@ AT_CHECK([ovn-nbctl --may-exist lsp-add ls0 lp2 lp3 5], [1], [],
 
 dnl ---------------------------------------------------------------------
 
+OVN_NBCTL_TEST([ovn_nbctl_lsp_get_ls], [lsp get ls], [
+AT_CHECK([ovn-nbctl ls-add ls0])
+AT_CHECK([ovn-nbctl lsp-add ls0 lp0])
+
+AT_CHECK([ovn-nbctl lsp-get-ls lp0 | uuidfilt], [0], [dnl
+<0> (ls0)
+])
+
+AT_CHECK([ovn-nbctl lsp-get-ls lp1], [1], [],
+  [ovn-nbctl: lp1: port name not found
+])])
+
+dnl ---------------------------------------------------------------------
+
 OVN_NBCTL_TEST([ovn_nbctl_lport_addresses], [lport addresses], [
 AT_CHECK([ovn-nbctl ls-add ls0])
 AT_CHECK([ovn-nbctl lsp-add ls0 lp0])
