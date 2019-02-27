@@ -452,14 +452,6 @@ OvsExecuteDpIoctl(OvsPacketExecute *execute)
     }
 
     fwdDetail = NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(pNbl);
-    vport = OvsFindVportByPortNo(gOvsSwitchContext, execute->inPort);
-    if (vport) {
-        fwdDetail->SourcePortId = vport->portId;
-        fwdDetail->SourceNicIndex = vport->nicIndex;
-    } else {
-        fwdDetail->SourcePortId = NDIS_SWITCH_DEFAULT_PORT_ID;
-        fwdDetail->SourceNicIndex = 0;
-    }
     // XXX: Figure out if any of the other members of fwdDetail need to be set.
 
     status = OvsGetFlowMetadata(&key, execute->keyAttrs);
@@ -502,6 +494,14 @@ OvsExecuteDpIoctl(OvsPacketExecute *execute)
 
     if (ndisStatus == NDIS_STATUS_SUCCESS) {
         NdisAcquireRWLockRead(gOvsSwitchContext->dispatchLock, &lockState, 0);
+        vport = OvsFindVportByPortNo(gOvsSwitchContext, execute->inPort);
+        if (vport) {
+            fwdDetail->SourcePortId = vport->portId;
+            fwdDetail->SourceNicIndex = vport->nicIndex;
+        } else {
+            fwdDetail->SourcePortId = NDIS_SWITCH_DEFAULT_PORT_ID;
+            fwdDetail->SourceNicIndex = 0;
+        }
         ndisStatus = OvsActionsExecute(gOvsSwitchContext, NULL, pNbl,
                                        vport ? vport->portNo :
                                                OVS_DPPORT_NUMBER_INVALID,
