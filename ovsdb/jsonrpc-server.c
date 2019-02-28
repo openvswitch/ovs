@@ -1216,8 +1216,7 @@ struct ovsdb_jsonrpc_monitor {
     struct ovsdb *db;
     struct json *monitor_id;
     struct ovsdb_monitor *dbmon;
-    uint64_t unflushed;         /* The first transaction that has not been
-                                       flushed to the jsonrpc remote client. */
+    struct ovsdb_monitor_change_set *change_set;
     enum ovsdb_monitor_version version;
     struct ovsdb_monitor_session_condition *condition;/* Session's condition */
 };
@@ -1389,7 +1388,6 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
     if (version == OVSDB_MONITOR_V2) {
         m->condition = ovsdb_monitor_session_condition_create();
     }
-    m->unflushed = 0;
     m->version = version;
     hmap_insert(&s->monitors, &m->node, json_hash(monitor_id, 0));
     m->monitor_id = json_clone(monitor_id);
@@ -1436,7 +1434,7 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
     dbmon = ovsdb_monitor_add(m->dbmon);
     if (dbmon != m->dbmon) {
         /* Found an exisiting dbmon, reuse the current one. */
-        ovsdb_monitor_remove_jsonrpc_monitor(m->dbmon, m, m->unflushed);
+        ovsdb_monitor_remove_jsonrpc_monitor(m->dbmon, m, NULL);
         ovsdb_monitor_add_jsonrpc_monitor(dbmon, m);
         m->dbmon = dbmon;
     }
@@ -1446,7 +1444,7 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
         ovsdb_monitor_condition_bind(m->dbmon, m->condition);
     }
 
-    ovsdb_monitor_get_initial(m->dbmon);
+    ovsdb_monitor_get_initial(m->dbmon, &m->change_set);
     json = ovsdb_jsonrpc_monitor_compose_update(m, true);
     json = json ? json : json_object_create();
     return jsonrpc_create_reply(json, request_id);
@@ -1578,7 +1576,7 @@ ovsdb_jsonrpc_monitor_cond_change(struct ovsdb_jsonrpc_session *s,
     struct json *update_json;
 
     update_json = ovsdb_monitor_get_update(m->dbmon, false, true,
-                                    m->condition, m->version, &m->unflushed);
+                                    m->condition, m->version, &m->change_set);
     if (update_json) {
         struct jsonrpc_msg *msg;
         struct json *p;
@@ -1648,12 +1646,12 @@ ovsdb_jsonrpc_monitor_compose_update(struct ovsdb_jsonrpc_monitor *m,
                                      bool initial)
 {
 
-    if (!ovsdb_monitor_needs_flush(m->dbmon, m->unflushed)) {
+    if (!ovsdb_monitor_needs_flush(m->dbmon, m->change_set)) {
         return NULL;
     }
 
     return ovsdb_monitor_get_update(m->dbmon, initial, false,
-                                    m->condition, m->version, &m->unflushed);
+                                    m->condition, m->version, &m->change_set);
 }
 
 static bool
@@ -1662,7 +1660,7 @@ ovsdb_jsonrpc_monitor_needs_flush(struct ovsdb_jsonrpc_session *s)
     struct ovsdb_jsonrpc_monitor *m;
 
     HMAP_FOR_EACH (m, node, &s->monitors) {
-        if (ovsdb_monitor_needs_flush(m->dbmon, m->unflushed)) {
+        if (ovsdb_monitor_needs_flush(m->dbmon, m->change_set)) {
             return true;
         }
     }
@@ -1686,7 +1684,7 @@ ovsdb_jsonrpc_monitor_destroy(struct ovsdb_jsonrpc_monitor *m,
 
     json_destroy(m->monitor_id);
     hmap_remove(&m->session->monitors, &m->node);
-    ovsdb_monitor_remove_jsonrpc_monitor(m->dbmon, m, m->unflushed);
+    ovsdb_monitor_remove_jsonrpc_monitor(m->dbmon, m, m->change_set);
     ovsdb_monitor_session_condition_destroy(m->condition);
     free(m);
 }

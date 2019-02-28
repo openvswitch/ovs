@@ -56,9 +56,10 @@ struct ovsdb_monitor *ovsdb_monitor_add(struct ovsdb_monitor *);
 void ovsdb_monitor_add_jsonrpc_monitor(struct ovsdb_monitor *,
                        struct ovsdb_jsonrpc_monitor *);
 
+struct ovsdb_monitor_change_set;
 void ovsdb_monitor_remove_jsonrpc_monitor(struct ovsdb_monitor *,
                                struct ovsdb_jsonrpc_monitor *,
-                               uint64_t unflushed);
+                               struct ovsdb_monitor_change_set *);
 
 void ovsdb_monitor_add_table(struct ovsdb_monitor *,
                              const struct ovsdb_table *);
@@ -77,16 +78,17 @@ struct json *ovsdb_monitor_get_update(struct ovsdb_monitor *,
                                       bool cond_updated,
                                       struct ovsdb_monitor_session_condition *,
                                       enum ovsdb_monitor_version,
-                                      uint64_t *unflushed_transaction);
+                                      struct ovsdb_monitor_change_set **p_mcs);
 
 void ovsdb_monitor_table_add_select(struct ovsdb_monitor *,
                                     const struct ovsdb_table *,
                                     enum ovsdb_monitor_selection);
 
 bool ovsdb_monitor_needs_flush(struct ovsdb_monitor *,
-                               uint64_t next_transaction);
+                               struct ovsdb_monitor_change_set *);
 
-void ovsdb_monitor_get_initial(const struct ovsdb_monitor *);
+void ovsdb_monitor_get_initial(struct ovsdb_monitor *,
+                               struct ovsdb_monitor_change_set **);
 
 void ovsdb_monitor_get_memory_usage(struct simap *);
 
