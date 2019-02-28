@@ -9,6 +9,7 @@ PartOf=openvswitch.service
 
 [Service]
 Type=forking
+PIDFile=/var/run/openvswitch/ovs-vswitchd.pid
 Restart=on-failure
 Environment=XDG_RUNTIME_DIR=/var/run/openvswitch
 EnvironmentFile=/etc/openvswitch/default.conf

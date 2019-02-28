@@ -21,6 +21,7 @@ After=openvswitch.service
 
 [Service]
 Type=forking
+PIDFile=/var/run/openvswitch/ovn-controller.pid
 Restart=on-failure
 EnvironmentFile=-/etc/sysconfig/ovn-controller
 ExecStart=/usr/share/openvswitch/scripts/ovn-ctl --no-monitor \
