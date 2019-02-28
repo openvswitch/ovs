@@ -430,6 +430,13 @@ usage(void)
            "    DATABASE on SERVER.\n"
            "    COLUMNs may include !initial, !insert, !delete, !modify\n"
            "    to avoid seeing the specified kinds of changes.\n"
+           "\n  monitor-cond-since [SERVER] [DATABASE] [LASTID] CONDITION TABLE [COLUMN,...]...\n"
+           "    monitor contents that match CONDITION of COLUMNs in TABLE in\n"
+           "    DATABASE on SERVER, since change after LASTID.\n"
+           "    LASTID specifies transaction ID after which the monitoring\n"
+           "    starts, which works only for cluster mode. If ignored, it\n"
+           "    defaults to an all-zero uuid.\n"
+           "    Other arguments are the same as in monitor-cond.\n"
            "\n  convert [SERVER] SCHEMA\n"
            "    convert database on SERVER named in SCHEMA to SCHEMA.\n"
            "\n  needs-conversion [SERVER] SCHEMA\n"
@@ -1127,6 +1134,35 @@ monitor2_print(struct json *table_updates2,
 }
 
 static void
+monitor3_print(struct json *result,
+               const struct monitored_table *mts, size_t n_mts)
+{
+    if (result->type != JSON_ARRAY) {
+        ovs_error(0, "<result> is not array");
+    }
+
+    if (result->array.n != 3) {
+        ovs_error(0, "<result> should have 3 elements, but has %"PRIuSIZE".",
+                  result->array.n);
+    }
+
+    bool found = json_boolean(result->array.elems[0]);
+    const char *last_id = json_string(result->array.elems[1]);
+    printf("found: %s, last_id: %s\n", found ? "true" : "false", last_id);
+
+    struct json *table_updates2 = result->array.elems[2];
+    monitor2_print(table_updates2, mts, n_mts);
+}
+
+static void
+monitor3_notify_print(const char *last_id, struct json *table_updates2,
+                      const struct monitored_table *mts, size_t n_mts)
+{
+    printf("\nlast_id: %s", last_id);
+    monitor2_print(table_updates2, mts, n_mts);
+}
+
+static void
 add_column(const char *server, const struct ovsdb_column *column,
            struct ovsdb_column_set *columns, struct json *columns_json)
 {
@@ -1333,7 +1369,8 @@ destroy_monitored_table(struct monitored_table *mts, size_t n)
 static void
 do_monitor__(struct jsonrpc *rpc, const char *database,
              enum ovsdb_monitor_version version,
-             int argc, char *argv[], struct json *condition)
+             int argc, char *argv[], struct json *condition,
+             const struct uuid *last_id)
 {
     const char *server = jsonrpc_get_name(rpc);
     const char *table_name = argv[0];
@@ -1411,8 +1448,24 @@ do_monitor__(struct jsonrpc *rpc, const char *database,
 
     monitor = json_array_create_3(json_string_create(database),
                                   json_null_create(), monitor_requests);
-    const char *method = version == OVSDB_MONITOR_V2 ? "monitor_cond"
-                                                     : "monitor";
+    const char *method;
+    switch (version) {
+    case OVSDB_MONITOR_V1:
+        method = "monitor";
+        break;
+    case OVSDB_MONITOR_V2:
+        method = "monitor_cond";
+        break;
+    case OVSDB_MONITOR_V3:
+        method = "monitor_cond_since";
+        struct json *json_last_id = json_string_create_nocopy(
+                xasprintf(UUID_FMT, UUID_ARGS(last_id)));
+        json_array_add(monitor, json_last_id);
+        break;
+    case OVSDB_MONITOR_VERSION_MAX:
+    default:
+        OVS_NOT_REACHED();
+    }
 
     struct jsonrpc_msg *request;
     request = jsonrpc_create_request(method, monitor, NULL);
@@ -1444,6 +1497,9 @@ do_monitor__(struct jsonrpc *rpc, const char *database,
                 case OVSDB_MONITOR_V2:
                     monitor2_print(msg->result, mts, n_mts);
                     break;
+                case OVSDB_MONITOR_V3:
+                    monitor3_print(msg->result, mts, n_mts);
+                    break;
                 case OVSDB_MONITOR_VERSION_MAX:
                 default:
                     OVS_NOT_REACHED();
@@ -1467,6 +1523,17 @@ do_monitor__(struct jsonrpc *rpc, const char *database,
                     && params->array.n == 2
                     && params->array.elems[0]->type == JSON_NULL) {
                     monitor2_print(params->array.elems[1], mts, n_mts);
+                    fflush(stdout);
+                }
+            } else if (msg->type == JSONRPC_NOTIFY
+                       && version == OVSDB_MONITOR_V3
+                       && !strcmp(msg->method, "update3")) {
+                struct json *params = msg->params;
+                if (params->type == JSON_ARRAY
+                    && params->array.n == 3
+                    && params->array.elems[0]->type == JSON_NULL) {
+                    monitor3_notify_print(json_string(params->array.elems[1]),
+                                          params->array.elems[2], mts, n_mts);
                     fflush(stdout);
                 }
             } else if (msg->type == JSONRPC_NOTIFY
@@ -1500,12 +1567,13 @@ static void
 do_monitor(struct jsonrpc *rpc, const char *database,
            int argc, char *argv[])
 {
-    do_monitor__(rpc, database, OVSDB_MONITOR_V1, argc, argv, NULL);
+    do_monitor__(rpc, database, OVSDB_MONITOR_V1, argc, argv, NULL, NULL);
 }
 
 static void
-do_monitor_cond(struct jsonrpc *rpc, const char *database,
-           int argc, char *argv[])
+do_monitor_cond__(struct jsonrpc *rpc, const char *database,
+                  enum ovsdb_monitor_version version,
+                  struct uuid *last_id, int argc, char *argv[])
 {
     struct ovsdb_condition cnd;
     struct json *condition = NULL;
@@ -1524,8 +1592,29 @@ do_monitor_cond(struct jsonrpc *rpc, const char *database,
     check_ovsdb_error(ovsdb_condition_from_json(table, condition,
                                                     NULL, &cnd));
     ovsdb_condition_destroy(&cnd);
-    do_monitor__(rpc, database, OVSDB_MONITOR_V2, --argc, ++argv, condition);
+    do_monitor__(rpc, database, version, --argc, ++argv, condition,
+                 last_id);
     ovsdb_schema_destroy(schema);
+}
+
+static void
+do_monitor_cond(struct jsonrpc *rpc, const char *database,
+                int argc, char *argv[])
+{
+    do_monitor_cond__(rpc, database, OVSDB_MONITOR_V2, NULL, argc, argv);
+}
+
+static void
+do_monitor_cond_since(struct jsonrpc *rpc, const char *database,
+           int argc, char *argv[])
+{
+    ovs_assert(argc > 1);
+    struct uuid last_id;
+    if (uuid_from_string(&last_id, argv[0])) {
+        argc--;
+        argv++;
+    }
+    do_monitor_cond__(rpc, database, OVSDB_MONITOR_V3, &last_id, argc, argv);
 }
 
 static bool
@@ -2409,6 +2498,7 @@ static const struct ovsdb_client_command all_commands[] = {
     { "query",              NEED_NONE,     1, 2,       do_query },
     { "monitor",            NEED_DATABASE, 1, INT_MAX, do_monitor },
     { "monitor-cond",       NEED_DATABASE, 2, 3,       do_monitor_cond },
+    { "monitor-cond-since", NEED_DATABASE, 2, 4,       do_monitor_cond_since },
     { "wait",               NEED_NONE,     2, 3,       do_wait },
     { "convert",            NEED_NONE,     1, 2,       do_convert },
     { "needs-conversion",   NEED_NONE,     1, 2,       do_needs_conversion },

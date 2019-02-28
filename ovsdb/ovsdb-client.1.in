@@ -44,6 +44,9 @@ ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 \fBovsdb\-client\fR [\fIoptions\fR] \fBmonitor\-cond\fR [\fIserver\fR] [\fIdatabase\fR] \fIconditions
 \fItable\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...]...
 .br
+\fBovsdb\-client\fR [\fIoptions\fR] \fBmonitor\-cond\-since\fR [\fIserver\fR] [\fIdatabase\fR]
+[\fIlast-id\fR] \fIconditions \fItable\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...]...
+.br
 \fBovsdb\-client \fR[\fIoptions\fR] \fBwait\fR \fR[\fIserver\fR] \fIdatabase\fR \fIstate\fR
 .IP "Testing Commands:"
 \fBovsdb\-client\fR [\fIoptions\fR] \fBlock\fR [\fIserver\fR] \fIlock\fR
@@ -243,6 +246,7 @@ with an error or succeed with surprising results.
 .
 .IP "\fBmonitor\fR [\fIserver\fR] [\fIdatabase\fR] \fItable\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...]..."
 .IQ "\fBmonitor\-cond\fR [\fIserver\fR] [\fIdatabase\fR] \fIconditions\fR \fItable\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...]..."
+.IQ "\fBmonitor\-cond\-since\fR [\fIserver\fR] [\fIdatabase\fR] [\fIlast-id\fR] \fIconditions\fR \fItable\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...]..."
 Connects to \fIserver\fR and monitors the contents of rows that match conditions in
 \fItable\fR in \fIdatabase\fR. By default, the initial contents of \fItable\fR are
 printed, followed by each change as it occurs.  If conditions empty,
@@ -269,13 +273,14 @@ line.
 with the following change: A condition can be either a 3-element JSON array
 as deescribed in the RFC or a boolean value..
 .IP
-If \fB\-\-detach\fR is used with \fBmonitor\fR or \fBmonitor\-cond\fR, then
-\fBovsdb\-client\fR detaches after it has successfully received and
-printed the initial contents of \fItable\fR.
+If \fB\-\-detach\fR is used with \fBmonitor\fR, \fBmonitor\-cond\fR or
+\fBmonitor\-cond\-since\fR, then \fBovsdb\-client\fR detaches after it has
+successfully received and printed the initial contents of \fItable\fR.
 .IP
 The \fBmonitor\fR command uses RFC 7047 "monitor" method to open a monitor
-session with the server. The \fBmonitor\-cond\fR command uses RFC 7047
-extension "monitor_cond" method. See \fBovsdb\-server\fR(1) for details.
+session with the server. The \fBmonitor\-cond\fR and \fBmonitor\-cond\-since\fR
+commandls uses RFC 7047 extension "monitor_cond" and "monitor_cond_since"
+methods. See \fBovsdb\-server\fR(1) for details.
 .IP "\fBmonitor\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fBALL\fR"
 Connects to \fIserver\fR and monitors the contents of all tables in
 \fIdatabase\fR.  Prints initial values and all kinds of changes to all
@@ -340,10 +345,10 @@ The following options controlling output formatting:
 .so lib/table.man
 .
 .IP "\fB\-\-timestamp\fR"
-For the \fBmonitor\fR and \fBmonitor\-cond\fR commands, add a timestamp to each
-table update.  Most output formats add the timestamp on a line of its own
-just above the table.  The JSON output format puts the timestamp in a
-member of the top-level JSON object named \fBtime\fR.
+For the \fBmonitor\fR, \fBmonitor\-cond\fR and \fBmonitor\-cond\-since\fR
+commands, add a timestamp to each table update.  Most output formats add the
+timestamp on a line of its own just above the table.  The JSON output format
+puts the timestamp in a member of the top-level JSON object named \fBtime\fR.
 .
 .IP "\fB\-t\fR"
 .IQ "\fB\-\-timeout=\fIsecs\fR"
@@ -352,8 +357,9 @@ seconds.  If the timeout expires, \fBovsdb\-client\fR will exit with a
 \fBSIGALRM\fR signal.
 .
 .SS "Daemon Options"
-The daemon options apply only to the \fBmonitor\fR and \fBmonitor\-cond\fR commands.
-With any other command, they have no effect.
+The daemon options apply only to the \fBmonitor\fR, \fBmonitor\-cond\fR and
+\fBmonitor\-cond\-since\fR commands.  With any other command, they have no
+effect.
 .ds DD
 .so lib/daemon.man
 .SS "Logging Options"

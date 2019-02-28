@@ -120,6 +120,12 @@ ovsdb_txn_set_txnid(const struct uuid *txnid, struct ovsdb_txn *txn)
     txn->txnid = *txnid;
 }
 
+const struct uuid *
+ovsdb_txn_get_txnid(const struct ovsdb_txn *txn)
+{
+    return &txn->txnid;
+}
+
 static void
 ovsdb_txn_free(struct ovsdb_txn *txn)
 {

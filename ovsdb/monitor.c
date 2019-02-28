@@ -136,6 +136,9 @@ struct ovsdb_monitor_change_set {
     struct ovs_list change_set_for_tables;
 
     int n_refs;
+
+    /* The previous txn id before this change set's start point. */
+    struct uuid prev_txn;
 };
 
 /* Contains 'struct ovsdb_monitor_row's for rows in a specific table
@@ -200,7 +203,9 @@ typedef struct json *
 
 static void ovsdb_monitor_destroy(struct ovsdb_monitor *);
 static struct ovsdb_monitor_change_set * ovsdb_monitor_add_change_set(
-        struct ovsdb_monitor *, bool init_only);
+        struct ovsdb_monitor *, bool init_only, const struct uuid *prev_txn);
+static struct ovsdb_monitor_change_set * ovsdb_monitor_find_change_set(
+        const struct ovsdb_monitor *, const struct uuid *prev_txn);
 static void ovsdb_monitor_change_set_destroy(
         struct ovsdb_monitor_change_set *);
 static void ovsdb_monitor_track_new_change_set(struct ovsdb_monitor *);
@@ -540,13 +545,14 @@ ovsdb_monitor_table_exists(struct ovsdb_monitor *m,
 
 static struct ovsdb_monitor_change_set *
 ovsdb_monitor_add_change_set(struct ovsdb_monitor *dbmon,
-                             bool init_only)
+                             bool init_only, const struct uuid *prev_txn)
 {
     struct ovsdb_monitor_change_set *change_set = xzalloc(sizeof *change_set);
     change_set->uuid = uuid_random();
     ovs_list_push_back(&(dbmon->change_sets), &change_set->list_node);
     ovs_list_init(&change_set->change_set_for_tables);
     change_set->n_refs = 1;
+    change_set->prev_txn = prev_txn ? *prev_txn : UUID_ZERO;
 
     struct shash_node *node;
     SHASH_FOR_EACH (node, &dbmon->tables) {
@@ -566,6 +572,33 @@ ovsdb_monitor_add_change_set(struct ovsdb_monitor *dbmon,
 
     return change_set;
 };
+
+static struct ovsdb_monitor_change_set *
+ovsdb_monitor_find_change_set(const struct ovsdb_monitor *dbmon,
+                              const struct uuid *prev_txn)
+{
+    struct ovsdb_monitor_change_set *cs;
+    LIST_FOR_EACH (cs, list_node, &dbmon->change_sets) {
+        if (uuid_equals(&cs->prev_txn, prev_txn)) {
+            /* Check n_columns for each table in dbmon, in case it is changed
+             * after the change set is populated. */
+            bool n_col_is_equal = true;
+            struct ovsdb_monitor_change_set_for_table *mcst;
+            LIST_FOR_EACH (mcst, list_in_change_set,
+                           &cs->change_set_for_tables) {
+                struct ovsdb_monitor_table *mt = mcst->mt;
+                if (mt->n_columns != mcst->n_columns) {
+                    n_col_is_equal = false;
+                    break;
+                }
+            }
+            if (n_col_is_equal) {
+                return cs;
+            }
+        }
+    }
+    return NULL;
+}
 
 static void
 ovsdb_monitor_untrack_change_set(struct ovsdb_monitor *dbmon,
@@ -591,7 +624,8 @@ ovsdb_monitor_track_new_change_set(struct ovsdb_monitor *dbmon)
     if (change_set) {
         change_set->n_refs++;
     } else {
-        change_set = ovsdb_monitor_add_change_set(dbmon, false);
+        change_set = ovsdb_monitor_add_change_set(dbmon, false,
+                                 ovsdb_monitor_get_last_txnid(dbmon));
         dbmon->new_change_set = change_set;
     }
 }
@@ -1190,12 +1224,13 @@ ovsdb_monitor_get_update(
                                             condition,
                                             ovsdb_monitor_compose_row_update);
         } else {
-            ovs_assert(version == OVSDB_MONITOR_V2);
+            ovs_assert(version == OVSDB_MONITOR_V2 ||
+                       version == OVSDB_MONITOR_V3);
+
             if (!cond_updated) {
                 json = ovsdb_monitor_compose_update(dbmon, initial, mcs,
                                             condition,
                                             ovsdb_monitor_compose_row_update2);
-
                 if (!condition || !condition->conditional) {
                     ovsdb_monitor_json_cache_insert(dbmon, version, mcs,
                                                     json);
@@ -1434,7 +1469,7 @@ ovsdb_monitor_get_initial(struct ovsdb_monitor *dbmon,
 {
     if (!dbmon->init_change_set) {
         struct ovsdb_monitor_change_set *change_set =
-            ovsdb_monitor_add_change_set(dbmon, true);
+            ovsdb_monitor_add_change_set(dbmon, true, NULL);
         dbmon->init_change_set = change_set;
 
         struct ovsdb_monitor_change_set_for_table *mcst;
@@ -1452,6 +1487,68 @@ ovsdb_monitor_get_initial(struct ovsdb_monitor *dbmon,
     }
 
     *p_mcs = dbmon->init_change_set;
+}
+
+static bool
+ovsdb_monitor_history_change_cb(const struct ovsdb_row *old,
+                        const struct ovsdb_row *new,
+                        const unsigned long int *changed,
+                        void *aux)
+{
+    struct ovsdb_monitor_change_set *change_set = aux;
+    struct ovsdb_table *table = new ? new->table : old->table;
+    struct ovsdb_monitor_change_set_for_table *mcst;
+
+    enum ovsdb_monitor_selection type =
+        ovsdb_monitor_row_update_type(false, old, new);
+    LIST_FOR_EACH (mcst, list_in_change_set,
+                   &change_set->change_set_for_tables) {
+        if (mcst->mt->table == table) {
+            enum ovsdb_monitor_changes_efficacy efficacy =
+                ovsdb_monitor_changes_classify(type, mcst->mt, changed);
+            if (efficacy > OVSDB_CHANGES_NO_EFFECT) {
+                ovsdb_monitor_changes_update(old, new, mcst->mt, mcst);
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+void
+ovsdb_monitor_get_changes_after(const struct uuid *txn_uuid,
+                                struct ovsdb_monitor *dbmon,
+                                struct ovsdb_monitor_change_set **p_mcs)
+{
+    ovs_assert(*p_mcs == NULL);
+    ovs_assert(!uuid_is_zero(txn_uuid));
+    struct ovsdb_monitor_change_set *change_set =
+        ovsdb_monitor_find_change_set(dbmon, txn_uuid);
+    if (change_set) {
+        change_set->n_refs++;
+        *p_mcs = change_set;
+        return;
+    }
+
+    struct ovsdb_txn_history_node *h_node;
+    bool found = false;
+    LIST_FOR_EACH (h_node, node, &dbmon->db->txn_history) {
+        struct ovsdb_txn *txn = h_node->txn;
+        if (!found) {
+            /* find the txn with last_id in history */
+            if (uuid_equals(ovsdb_txn_get_txnid(txn), txn_uuid)) {
+                found = true;
+                change_set = ovsdb_monitor_add_change_set(dbmon, false,
+                                                          txn_uuid);
+            }
+        } else {
+            /* Already found. Add changes in each follow up transaction to
+             * the new change_set. */
+            ovsdb_txn_for_each_change(txn, ovsdb_monitor_history_change_cb,
+                                      change_set);
+        }
+    }
+    *p_mcs = change_set;
 }
 
 void
@@ -1691,4 +1788,16 @@ ovsdb_monitor_prereplace_db(struct ovsdb *db)
             ovsdb_jsonrpc_monitor_destroy(jm->jsonrpc_monitor, true);
         }
     }
+}
+
+const struct uuid *
+ovsdb_monitor_get_last_txnid(struct ovsdb_monitor *dbmon) {
+    static struct uuid dummy = { .parts = { 0, 0, 0, 0 } };
+    if (dbmon->db->n_txn_history) {
+        struct ovsdb_txn_history_node *thn = CONTAINER_OF(
+                ovs_list_back(&dbmon->db->txn_history),
+                struct ovsdb_txn_history_node, node);
+        return ovsdb_txn_get_txnid(thn->txn);
+    }
+    return &dummy;
 }

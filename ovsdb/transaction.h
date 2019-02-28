@@ -26,6 +26,7 @@ struct uuid;
 
 struct ovsdb_txn *ovsdb_txn_create(struct ovsdb *);
 void ovsdb_txn_set_txnid(const struct uuid *, struct ovsdb_txn *);
+const struct uuid *ovsdb_txn_get_txnid(const struct ovsdb_txn *);
 void ovsdb_txn_abort(struct ovsdb_txn *);
 
 struct ovsdb_error *ovsdb_txn_replay_commit(struct ovsdb_txn *)

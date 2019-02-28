@@ -364,7 +364,79 @@ Initial views of rows are not presented in update2 notifications, but in the
 response object to the ``monitor_cond`` request.  The formatting of the
 <table-updates2> object, however, is the same in either case.
 
-4.1.15 Get Server ID
+4.1.15 Monitor_cond_since
+-------------------------
+
+A new monitor method added in Open vSwitch version 2.12.  The
+``monitor_cond_since`` request enables a client to request changes that
+happened after a specific transaction id. A client can use this feature to
+request only latest changes after a server connection reset instead of
+re-transfer all data from the server again.
+
+The ``monitor_cond`` method described in Section 4.1.12 also applies to
+``monitor_cond_since``, with the following exceptions:
+
+* RPC request method becomes ``monitor_cond_since``.
+
+* Reply result includes extra parameters.
+
+* Subsequent changes are sent to the client using the ``update3`` monitor
+  notification, described in Section 4.1.16
+
+The request object has the following members::
+
+    "method": "monitor_cond_since"
+    "params": [<db-name>, <json-value>, <monitor-cond-requests>, <last-txn-id>]
+    "id": <nonnull-json-value>
+
+The <last-txn-id> parameter is the transaction id that identifies the latest
+data the client already has, and it requests server to send changes AFTER this
+transaction (exclusive).
+
+All other parameters are the same as ``monitor_cond`` method.
+
+The response object has the following members::
+
+    "result": [<found>, <last-txn-id>, <table-updates2>]
+    "error": null
+    "id": same "id" as request
+
+The <found> is a boolean value that tells if the <last-txn-id> requested by
+client is found in server's history or not. If true, the changes after that
+version up to current is sent. Otherwise, all data is sent.
+
+The <last-txn-id> is the transaction id that identifies the latest transaction
+included in the changes in <table-updates2> of this response, so that client
+can keep tracking.  If there is no change involved in this response, it is the
+same as the <last-txn-id> in the request if <found> is true, or zero uuid if
+<found> is false.  If the server does not support transaction uuid, it will
+be zero uuid as well.
+
+All other parameters are the same as in response object of ``monitor_cond``
+method.
+
+Like in ``monitor_cond``, subsequent changes that match conditions in
+<monitor-cond-request> are automatically sent to the client, but using
+``update3`` monitor notification (see Section 4.1.16), instead of ``update2``.
+
+4.1.16 Update3 notification
+---------------------------
+
+The ``update3`` notification is sent by the server to the client to report
+changes in tables that are being monitored following a ``monitor_cond_since``
+request as described above. The notification has the following members::
+
+    "method": "update3"
+    "params": [<json-value>, <last-txn-id>, <table-updates2>]
+    "id": null
+
+The <last-txn-id> is the same as described in the response object of
+``monitor_cond_since``.
+
+All other parameters are the same as in ``update2`` monitor notification (see
+Section 4.1.14).
+
+4.1.17 Get Server ID
 --------------------
 
 A new RPC method added in Open vSwitch version 2.7.  The request contains the
@@ -384,7 +456,7 @@ The response object contains the following members::
 running OVSDB server process.  A fresh UUID is generated when the process
 restarts.
 
-4.1.16 Database Change Awareness
+4.1.18 Database Change Awareness
 --------------------------------
 
 RFC 7047 does not provide a way for a client to find out about some kinds of
@@ -414,7 +486,7 @@ The reply is always the same::
     "error": null
     "id": same "id" as request
 
-4.1.17 Schema Conversion
+4.1.19 Schema Conversion
 ------------------------
 
 Open vSwitch 2.9 adds a new JSON-RPC request to convert an online database from
