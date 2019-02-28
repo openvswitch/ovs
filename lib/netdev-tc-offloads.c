@@ -1015,12 +1015,12 @@ test_key_and_mask(struct match *match)
                key->nw_proto == IPPROTO_ICMPV6) {
         if (mask->tp_src) {
             VLOG_DBG_RL(&rl,
-                        "offloading attribute icmp_type isn't supported");
+                        "offloading attribute icmpv6_type isn't supported");
             return EOPNOTSUPP;
         }
         if (mask->tp_dst) {
             VLOG_DBG_RL(&rl,
-                        "offloading attribute icmp_code isn't supported");
+                        "offloading attribute icmpv6_code isn't supported");
             return EOPNOTSUPP;
         }
     } else if (key->dl_type == htons(OFP_DL_TYPE_NOT_ETH_TYPE)) {
