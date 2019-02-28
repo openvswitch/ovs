@@ -216,6 +216,9 @@ struct ovsdb_idl_db {
     bool has_lock;              /* Has db server told us we have the lock? */
     bool is_lock_contended;     /* Has db server told us we can't get lock? */
     struct json *lock_request_id; /* JSON-RPC ID of in-flight lock request. */
+
+    /* Last db txn id, used for fast resync through monitor_cond_since */
+    struct uuid last_id;
 };
 
 static void ovsdb_idl_db_track_clear(struct ovsdb_idl_db *);
@@ -2070,9 +2073,8 @@ ovsdb_idl_send_monitor_request(struct ovsdb_idl *idl, struct ovsdb_idl_db *db,
             break;
         case OVSDB_IDL_MM_MONITOR_COND_SINCE:
             method = "monitor_cond_since";
-            struct uuid last_id = UUID_ZERO;
             struct json *json_last_id = json_string_create_nocopy(
-                    xasprintf(UUID_FMT, UUID_ARGS(&last_id)));
+                    xasprintf(UUID_FMT, UUID_ARGS(&db->last_id)));
             json_array_add(params, json_last_id);
             break;
         default:
@@ -2100,6 +2102,7 @@ ovsdb_idl_db_parse_monitor_reply(struct ovsdb_idl_db *db,
 {
     db->change_seqno++;
     const struct json *table_updates = result;
+    bool clear_db = true;
     if (method == OVSDB_IDL_MM_MONITOR_COND_SINCE) {
         if (result->type != JSON_ARRAY || result->array.n != 3) {
             struct ovsdb_error *error = ovsdb_syntax_error(result, NULL,
@@ -2109,10 +2112,25 @@ ovsdb_idl_db_parse_monitor_reply(struct ovsdb_idl_db *db,
             return;
         }
 
-        table_updates = result->array.elems[2];
+        bool found = json_boolean(result->array.elems[0]);
+        if (found) {
+            clear_db = false;
+        }
 
+        const char *last_id = json_string(result->array.elems[1]);
+        if (!uuid_from_string(&db->last_id, last_id)) {
+            struct ovsdb_error *error = ovsdb_syntax_error(result, NULL,
+                                     "Last-id %s is not in UUID format.",
+                                     last_id);
+            log_parse_update_error(error);
+            return;
+        }
+
+        table_updates = result->array.elems[2];
     }
-    ovsdb_idl_db_clear(db);
+    if (clear_db) {
+        ovsdb_idl_db_clear(db);
+    }
     ovsdb_idl_db_parse_update(db, table_updates, method);
 }
 
@@ -2155,6 +2173,14 @@ ovsdb_idl_db_parse_update_rpc(struct ovsdb_idl_db *db,
     struct json *table_updates = params->array.elems[1];
     if (!strcmp(msg->method, "update3")) {
         table_updates = params->array.elems[2];
+        const char *last_id = json_string(params->array.elems[1]);
+        if (!uuid_from_string(&db->last_id, last_id)) {
+            struct ovsdb_error *error = ovsdb_syntax_error(params, NULL,
+                                     "Last-id %s is not in UUID format.",
+                                     last_id);
+            log_parse_update_error(error);
+            return false;
+        }
     }
     ovsdb_idl_db_parse_update(db, table_updates, mm);
     return true;
