@@ -20,16 +20,10 @@ Post-v2.11.0
 
 v2.11.0 - 19 Feb 2019
 ---------------------
-   - Linux datapath:
-     * Support for the kernel versions 4.16.x and 4.17.x.
    - OpenFlow:
      * OFPMP_TABLE_FEATURES_REQUEST can now modify table features.
    - ovs-ofctl:
      * "mod-table" command can now change OpenFlow table names.
-   - The environment variable OVS_SYSLOG_METHOD, if set, is now used
-     as the default syslog method.
-   - The environment variable OVS_CTL_TIMEOUT, if set, is now used
-     as the default timeout for control utilities.
    - ovn:
      * OVN-SB schema changed: duplicated IP with same Encapsulation type
        is not allowed any more.  Please refer to
@@ -57,13 +51,17 @@ v2.11.0 - 19 Feb 2019
    - ovs-vswitchd:
      * New configuration option "offload-rebalance", that enables dynamic
        rebalancing of offloaded flows.
+   - The environment variable OVS_SYSLOG_METHOD, if set, is now used
+     as the default syslog method.
+   - The environment variable OVS_CTL_TIMEOUT, if set, is now used
+     as the default timeout for control utilities.
    - The environment variable OVS_RESOLV_CONF, if set, is now used
      as the DNS server configuration file.
    - RHEL packaging:
      * OVN packages are split from OVS packages. A new spec
        file - ovn-fedora.spec.in is added to generate OVN packages.
    - Linux datapath:
-     * Support for the kernel versions 4.18.x
+     * Support for the kernel versions 4.16.x, 4.17.x, and 4.18.x.
 
 v2.10.0 - 18 Aug 2018
 ---------------------
