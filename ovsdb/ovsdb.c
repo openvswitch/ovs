@@ -455,6 +455,9 @@ ovsdb_destroy(struct ovsdb *db)
         /* Remove all the monitors. */
         ovsdb_monitors_remove(db);
 
+        /* Destroy txn history. */
+        ovsdb_txn_history_destroy(db);
+
         /* The caller must ensure that no triggers remain. */
         ovs_assert(ovs_list_is_empty(&db->triggers));
 
@@ -534,6 +537,9 @@ ovsdb_replace(struct ovsdb *dst, struct ovsdb *src)
     LIST_FOR_EACH_SAFE (trigger, next, node, &dst->triggers) {
         ovsdb_trigger_prereplace_db(trigger);
     }
+
+    /* Destroy txn history. */
+    ovsdb_txn_history_destroy(dst);
 
     struct ovsdb_schema *tmp_schema = dst->schema;
     dst->schema = src->schema;

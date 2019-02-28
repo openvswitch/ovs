@@ -67,6 +67,11 @@ bool ovsdb_parse_version(const char *, struct ovsdb_version *);
 bool ovsdb_is_valid_version(const char *);
 
 /* Database. */
+struct ovsdb_txn_history_node {
+    struct ovs_list node; /* Element in struct ovsdb's txn_history list */
+    struct ovsdb_txn *txn;
+};
+
 struct ovsdb {
     char *name;
     struct ovsdb_schema *schema;
@@ -80,6 +85,11 @@ struct ovsdb {
     bool run_triggers;
 
     struct ovsdb_table *rbac_role;
+
+    /* History trasanctions for incremental monitor transfer. */
+    bool need_txn_history;     /* Need to maintain history of transactions. */
+    unsigned int n_txn_history; /* Current number of history transactions. */
+    struct ovs_list txn_history; /* Contains "struct ovsdb_txn_history_node. */
 };
 
 struct ovsdb *ovsdb_create(struct ovsdb_schema *, struct ovsdb_storage *);
