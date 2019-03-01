@@ -1906,7 +1906,7 @@ raft_get_eid(const struct raft *raft, uint64_t index)
     return &raft->snap.eid;
 }
 
-static const struct uuid *
+const struct uuid *
 raft_current_eid(const struct raft *raft)
 {
     return raft_get_eid(raft, raft->log_end - 1);

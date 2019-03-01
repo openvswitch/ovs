@@ -29,6 +29,7 @@ void ovsdb_txn_set_txnid(const struct uuid *, struct ovsdb_txn *);
 const struct uuid *ovsdb_txn_get_txnid(const struct ovsdb_txn *);
 void ovsdb_txn_abort(struct ovsdb_txn *);
 
+bool ovsdb_txn_precheck_prereq(const struct ovsdb *db);
 struct ovsdb_error *ovsdb_txn_replay_commit(struct ovsdb_txn *)
     OVS_WARN_UNUSED_RESULT;
 struct ovsdb_txn_progress *ovsdb_txn_propose_commit(struct ovsdb_txn *,

@@ -91,4 +91,6 @@ struct ovsdb_storage *ovsdb_storage_open_standalone(const char *filename,
                                                     bool rw);
 struct ovsdb_schema *ovsdb_storage_read_schema(struct ovsdb_storage *);
 
+const struct uuid *ovsdb_storage_peek_last_eid(struct ovsdb_storage *);
+
 #endif /* ovsdb/storage.h */

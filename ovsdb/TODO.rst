@@ -39,9 +39,6 @@ OVSDB Clustering To-do List
 
 * Include index with monitor update?
 
-* Back off when transaction fails to commit?  Definitely back off until
-  the eid changes for prereq failures
-
 * Testing with replication.
 
 * Handling bad transactions in read_db().  (Kill the database?)

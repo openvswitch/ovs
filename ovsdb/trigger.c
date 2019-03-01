@@ -194,6 +194,10 @@ ovsdb_trigger_try(struct ovsdb_trigger *t, long long int now)
         struct ovsdb_txn *txn = NULL;
         struct ovsdb *newdb = NULL;
         if (!strcmp(t->request->method, "transact")) {
+            if (!ovsdb_txn_precheck_prereq(t->db)) {
+                return false;
+            }
+
             bool durable;
 
             struct json *result;

@@ -601,3 +601,12 @@ ovsdb_storage_write_schema_change(struct ovsdb_storage *storage,
     }
     return w;
 }
+
+const struct uuid *
+ovsdb_storage_peek_last_eid(struct ovsdb_storage *storage)
+{
+    if (!storage->raft) {
+        return NULL;
+    }
+    return raft_current_eid(storage->raft);
+}
