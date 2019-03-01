@@ -441,8 +441,8 @@ dpdk_init(const struct smap *ovs_other_config)
     const char *dpdk_init_val = smap_get_def(ovs_other_config, "dpdk-init",
                                              "false");
 
-    bool try_only = !strcmp(dpdk_init_val, "try");
-    if (!strcmp(dpdk_init_val, "true") || try_only) {
+    bool try_only = !strcasecmp(dpdk_init_val, "try");
+    if (!strcasecmp(dpdk_init_val, "true") || try_only) {
         static struct ovsthread_once once_enable = OVSTHREAD_ONCE_INITIALIZER;
 
         if (ovsthread_once_start(&once_enable)) {
