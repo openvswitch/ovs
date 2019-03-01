@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2019 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -489,7 +489,7 @@ static unsigned int
 timeout_CONNECTING(const struct rconn *rc)
     OVS_REQUIRES(rc->mutex)
 {
-    return MAX(1, rc->backoff);
+    return MAX(2, rc->backoff);
 }
 
 static void
