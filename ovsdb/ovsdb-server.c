@@ -220,6 +220,10 @@ main_loop(struct server_config *config,
         SHASH_FOR_EACH_SAFE (node, next, all_dbs) {
             struct db *db = node->data;
             ovsdb_txn_history_run(db->db);
+            ovsdb_storage_run(db->db->storage);
+            read_db(config, db);
+            /* Run triggers after storage_run and read_db to make sure new raft
+             * updates are utilized in current iteration. */
             if (ovsdb_trigger_run(db->db, time_msec())) {
                 /* The message below is currently the only reason to disconnect
                  * all clients. */
@@ -228,8 +232,6 @@ main_loop(struct server_config *config,
                     xasprintf("committed %s database schema conversion",
                               db->db->name));
             }
-            ovsdb_storage_run(db->db->storage);
-            read_db(config, db);
             if (ovsdb_storage_is_dead(db->db->storage)) {
                 VLOG_INFO("%s: removing database because storage disconnected "
                           "permanently", node->name);
