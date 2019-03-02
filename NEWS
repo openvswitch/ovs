@@ -17,6 +17,11 @@ Post-v2.11.0
        conntrack fragmentation support.
      * New "ovs-appctl dpctl/ipf-get-status" command for userspace datapath
        conntrack fragmentation support.
+    - OVSDB:
+     * Support new monitoring method "monitor_cond_since" for fast data
+       resync upon server restart or fail-over. The feature is available
+       for C-IDL clients with clustered mode servers. See section 4.1.15
+       of ovsdb-server(7) for more details.
 
 v2.11.0 - 19 Feb 2019
 ---------------------
