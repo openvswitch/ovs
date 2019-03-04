@@ -699,7 +699,7 @@ $ ovs-ofctl -O OpenFlow10 add-flow br0 actions=mod_nw_src:1.2.3.4
 
         <dt><code>id=</code><var>controller_id</var></dt>
         <dd>
-          Specify <var>controller-id</var>, a 16-bit integer, as the connection
+          Specify <var>controller_id</var>, a 16-bit integer, as the connection
           ID of the OpenFlow controller or controllers to which the
           ``packet-in'' message should be sent.  The default is zero.  Zero is
           also the default connection ID for each controller connection, and a
