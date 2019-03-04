@@ -1489,7 +1489,7 @@ lsp_contains_duplicates(const struct nbrec_logical_switch *ls,
         for (size_t j = 0; j < lsp_test->n_addresses; j++) {
             struct lport_addresses laddrs_test;
             char *addr = lsp_test->addresses[j];
-            if (is_dynamic_lsp_address(addr)) {
+            if (is_dynamic_lsp_address(addr) && lsp_test->dynamic_addresses) {
                 addr = lsp_test->dynamic_addresses;
             }
             if (extract_lsp_addresses(addr, &laddrs_test)) {
