@@ -19,7 +19,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include "openvswitch/dynamic-string.h"
-#include "netdev-dpdk.h"
 #include "util.h"
 
 static void

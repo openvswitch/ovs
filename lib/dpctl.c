@@ -38,7 +38,6 @@
 #include "flow.h"
 #include "openvswitch/match.h"
 #include "netdev.h"
-#include "netdev-dpdk.h"
 #include "netlink.h"
 #include "odp-util.h"
 #include "openvswitch/ofpbuf.h"
