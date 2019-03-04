@@ -1380,6 +1380,11 @@ send_ipv6_ras(const struct controller_ctx *ctx, struct hmap *local_datapaths)
                     ra->config->max_interval);
                 shash_add(&ipv6_ras, pb->logical_port, ra);
             } else {
+                if (config->min_interval != ra->config->min_interval ||
+                    config->max_interval != ra->config->max_interval)
+                    ra->next_announce = ipv6_ra_calc_next_announce(
+                        config->min_interval,
+                        config->max_interval);
                 ipv6_ra_config_delete(ra->config);
                 ra->config = config;
             }
