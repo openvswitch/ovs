@@ -5652,9 +5652,7 @@ modify_flows_init_loose(struct ofproto *ofproto,
                              (fm->flags & OFPUTIL_FF_NO_READONLY) != 0);
     /* Must create a new flow in advance for the case that no matches are
      * found.  Also used for template for multiple modified flows. */
-    add_flow_init(ofproto, ofm, fm);
-
-    return 0;
+    return add_flow_init(ofproto, ofm, fm);
 }
 
 /* Implements OFPFC_MODIFY.  Returns 0 on success or an OpenFlow error code on
@@ -5737,9 +5735,7 @@ modify_flow_init_strict(struct ofproto *ofproto OVS_UNUSED,
                              (fm->flags & OFPUTIL_FF_NO_READONLY) != 0);
     /* Must create a new flow in advance for the case that no matches are
      * found.  Also used for template for multiple modified flows. */
-    add_flow_init(ofproto, ofm, fm);
-
-    return 0;
+    return add_flow_init(ofproto, ofm, fm);
 }
 
 /* Implements OFPFC_MODIFY_STRICT.  Returns 0 on success or an OpenFlow error
