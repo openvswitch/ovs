@@ -3440,9 +3440,17 @@ netdev_dpdk_remap_txqs(struct netdev_dpdk *dev)
         }
     }
 
-    VLOG_DBG("TX queue mapping for %s\n", dev->vhost_id);
-    for (i = 0; i < total_txqs; i++) {
-        VLOG_DBG("%2d --> %2d", i, dev->tx_q[i].map);
+    if (VLOG_IS_DBG_ENABLED()) {
+        struct ds mapping = DS_EMPTY_INITIALIZER;
+
+        ds_put_format(&mapping, "TX queue mapping for port '%s':\n",
+                      netdev_get_name(&dev->up));
+        for (i = 0; i < total_txqs; i++) {
+            ds_put_format(&mapping, "%2d --> %2d\n", i, dev->tx_q[i].map);
+        }
+
+        VLOG_DBG("%s", ds_cstr(&mapping));
+        ds_destroy(&mapping);
     }
 
     free(enabled_queues);
@@ -3610,7 +3618,7 @@ vring_state_changed(int vid, uint16_t queue_id, int enable)
     ovs_mutex_unlock(&dpdk_mutex);
 
     if (exists) {
-        VLOG_INFO("State of queue %d ( tx_qid %d ) of vhost device '%s'"
+        VLOG_INFO("State of queue %d ( tx_qid %d ) of vhost device '%s' "
                   "changed to \'%s\'", queue_id, qid, ifname,
                   (enable == 1) ? "enabled" : "disabled");
     } else {
