@@ -785,7 +785,6 @@ dpdk_mp_get(struct netdev_dpdk *dev, int mtu, bool per_port_mp)
         }
     }
 
-
     ovs_mutex_unlock(&dpdk_mp_mutex);
 
     return dmp;
@@ -3684,7 +3683,6 @@ netdev_dpdk_class_init(void)
     return 0;
 }
 
-
 /* Client Rings */
 
 static int
@@ -4203,6 +4201,35 @@ unlock:
     return err;
 }
 
+int
+netdev_dpdk_rte_flow_destroy(struct netdev *netdev,
+                             struct rte_flow *rte_flow,
+                             struct rte_flow_error *error)
+{
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    int ret;
+
+    ovs_mutex_lock(&dev->mutex);
+    ret = rte_flow_destroy(dev->port_id, rte_flow, error);
+    ovs_mutex_unlock(&dev->mutex);
+    return ret;
+}
+
+struct rte_flow *
+netdev_dpdk_rte_flow_create(struct netdev *netdev,
+                            const struct rte_flow_attr *attr,
+                            const struct rte_flow_item *items,
+                            const struct rte_flow_action *actions,
+                            struct rte_flow_error *error)
+{
+    struct rte_flow *flow;
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+
+    ovs_mutex_lock(&dev->mutex);
+    flow = rte_flow_create(dev->port_id, attr, items, actions, error);
+    ovs_mutex_unlock(&dev->mutex);
+    return flow;
+}
 
 /* Find rte_flow with @ufid */
 static struct rte_flow *
@@ -4554,7 +4581,6 @@ netdev_dpdk_add_rte_flow_offload(struct netdev *netdev,
                                  size_t actions_len OVS_UNUSED,
                                  const ovs_u128 *ufid,
                                  struct offload_info *info) {
-    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     const struct rte_flow_attr flow_attr = {
         .group = 0,
         .priority = 0,
@@ -4726,15 +4752,11 @@ netdev_dpdk_add_rte_flow_offload(struct netdev *netdev,
     mark.id = info->flow_mark;
     add_flow_action(&actions, RTE_FLOW_ACTION_TYPE_MARK, &mark);
 
-    ovs_mutex_lock(&dev->mutex);
-
     rss = add_flow_rss_action(&actions, netdev);
     add_flow_action(&actions, RTE_FLOW_ACTION_TYPE_END, NULL);
 
-    flow = rte_flow_create(dev->port_id, &flow_attr, patterns.items,
-                           actions.actions, &error);
-
-    ovs_mutex_unlock(&dev->mutex);
+    flow = netdev_dpdk_rte_flow_create(netdev, &flow_attr,patterns.items,
+                                       actions.actions, &error);
 
     free(rss);
     if (!flow) {
@@ -4828,13 +4850,9 @@ static int
 netdev_dpdk_destroy_rte_flow(struct netdev *netdev,
                              const ovs_u128 *ufid,
                              struct rte_flow *rte_flow) {
-    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     struct rte_flow_error error;
-    int ret;
+    int ret = netdev_dpdk_rte_flow_destroy(netdev, rte_flow, &error);
 
-    ovs_mutex_lock(&dev->mutex);
-
-    ret = rte_flow_destroy(dev->port_id, rte_flow, &error);
     if (ret == 0) {
         ufid_to_rte_flow_disassociate(ufid);
         VLOG_DBG("%s: removed rte flow %p associated with ufid " UUID_FMT "\n",
@@ -4845,7 +4863,6 @@ netdev_dpdk_destroy_rte_flow(struct netdev *netdev,
                  netdev_get_name(netdev), error.type, error.message);
     }
 
-    ovs_mutex_unlock(&dev->mutex);
     return ret;
 }
 
