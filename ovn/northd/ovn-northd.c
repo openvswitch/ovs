@@ -62,7 +62,6 @@ static const char *ovnnb_db;
 static const char *ovnsb_db;
 static const char *unixctl_path;
 
-#define MAC_ADDR_PREFIX 0x0A0000000000ULL
 #define MAC_ADDR_SPACE 0xffffff
 
 /* MAC address management (macam) table of "struct eth_addr"s, that holds the
@@ -937,13 +936,8 @@ ipam_insert_mac(struct eth_addr *ea, bool check)
     }
 
     uint64_t mac64 = eth_addr_to_uint64(*ea);
-    uint64_t prefix;
+    uint64_t prefix = eth_addr_to_uint64(mac_prefix);
 
-    if (!eth_addr_is_zero(mac_prefix)) {
-        prefix = eth_addr_to_uint64(mac_prefix);
-    } else {
-        prefix = MAC_ADDR_PREFIX;
-    }
     /* If the new MAC was not assigned by this address management system or
      * check is true and the new MAC is a duplicate, do not insert it into the
      * macam hmap. */
@@ -1056,11 +1050,7 @@ ipam_get_unused_mac(ovs_be32 ip)
     for (i = 0; i < MAC_ADDR_SPACE - 1; i++) {
         /* The tentative MAC's suffix will be in the interval (1, 0xfffffe). */
         mac_addr_suffix = ((base_addr + i) % (MAC_ADDR_SPACE - 1)) + 1;
-        if (!eth_addr_is_zero(mac_prefix)) {
-            mac64 =  eth_addr_to_uint64(mac_prefix) | mac_addr_suffix;
-        } else {
-            mac64 = MAC_ADDR_PREFIX | mac_addr_suffix;
-        }
+        mac64 =  eth_addr_to_uint64(mac_prefix) | mac_addr_suffix;
         eth_addr_from_uint64(mac64, &mac);
         if (!ipam_is_duplicate_mac(&mac, mac64, true)) {
             break;
@@ -1132,13 +1122,7 @@ dynamic_mac_changed(const char *lsp_addresses,
    }
 
    uint64_t mac64 = eth_addr_to_uint64(update->current_addresses.ea);
-   uint64_t prefix;
-
-   if (!eth_addr_is_zero(mac_prefix)) {
-       prefix = eth_addr_to_uint64(mac_prefix);
-   } else {
-       prefix = MAC_ADDR_PREFIX;
-   }
+   uint64_t prefix = eth_addr_to_uint64(mac_prefix);
 
    if ((mac64 ^ prefix) >> 24) {
        return DYNAMIC;
@@ -7300,6 +7284,20 @@ ovnnb_db_run(struct northd_context *ctx,
                      &addr.ea[0], &addr.ea[1], &addr.ea[2])) {
             mac_prefix = addr;
         }
+    } else {
+        struct smap options;
+
+        smap_clone(&options, &nb->options);
+        eth_addr_random(&mac_prefix);
+        memset(&mac_prefix.ea[3], 0, 3);
+
+        smap_add_format(&options, "mac_prefix",
+                        "%02"PRIx8":%02"PRIx8":%02"PRIx8,
+                        mac_prefix.ea[0], mac_prefix.ea[1], mac_prefix.ea[2]);
+        nbrec_nb_global_verify_options(nb);
+        nbrec_nb_global_set_options(nb, &options);
+
+        smap_destroy(&options);
     }
 
     cleanup_macam(&macam);

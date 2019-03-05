@@ -5596,6 +5596,7 @@ ovn_start
 
 # Add a port to a switch that does not have a subnet set, then set the
 # subnet which should result in an address being allocated for the port.
+ovn-nbctl --wait=hv set NB_Global . options:mac_prefix="0a:00:00:00:00:00"
 ovn-nbctl ls-add sw0
 ovn-nbctl lsp-add sw0 p0 -- lsp-set-addresses p0 dynamic
 ovn-nbctl --wait=sb add Logical-Switch sw0 other_config subnet=192.168.1.0/24
@@ -5963,6 +5964,16 @@ AT_CHECK([ovn-nbctl get Logical-Switch-Port p83 dynamic_addresses], [0],
     ["00:11:22:00:00:08"
 ])
 
+# clear mac_prefix and check it is allocated in a random manner
+ovn-nbctl --wait=hv remove NB_Global . options mac_prefix
+ovn-nbctl ls-add sw9
+ovn-nbctl --wait=sb set Logical-Switch sw9 other_config:mac_only=true
+ovn-nbctl --wait=sb lsp-add sw9 p91 -- lsp-set-addresses p91 dynamic
+
+mac_prefix=$(ovn-nbctl --wait=sb get NB_Global . options:mac_prefix | tr -d \")
+port_addr=$(ovn-nbctl get Logical-Switch-Port p91 dynamic_addresses | tr -d \")
+AT_CHECK([test "$port_addr" = "${mac_prefix}:00:00:09"], [0], [])
+
 as ovn-sb
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 
@@ -5981,6 +5992,7 @@ ovn_start
 ovn-nbctl lr-add R1
 
 # Test for a ping using dynamically allocated addresses.
+ovn-nbctl --wait=hv set NB_Global . options:mac_prefix="0a:00:00:00:00:00"
 ovn-nbctl ls-add foo -- add Logical_Switch foo other_config subnet=192.168.1.0/24
 ovn-nbctl ls-add alice -- add Logical_Switch alice other_config subnet=192.168.2.0/24
 
@@ -12232,6 +12244,7 @@ AT_CLEANUP
 AT_SETUP([ovn -- ipam to non-ipam])
 ovn_start
 
+ovn-nbctl --wait=hv set NB_Global . options:mac_prefix="0a:00:00:00:00:00"
 ovn-nbctl ls-add sw0
 ovn-nbctl lsp-add sw0 p0 -- lsp-set-addresses p0 dynamic
 ovn-nbctl --wait=sb add Logical-Switch sw0 other_config subnet=192.168.1.0/24

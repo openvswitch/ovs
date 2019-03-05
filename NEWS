@@ -22,6 +22,8 @@ Post-v2.11.0
        quickly after a brief disconnection, saving bandwidth and CPU time.
        See section 4.1.15 of ovsdb-server(7) for details of related OVSDB
        protocol extension.
+   - OVN:
+     * Select IPAM mac_prefix in a random manner if not provided by the user
 
 v2.11.0 - 19 Feb 2019
 ---------------------
