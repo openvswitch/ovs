@@ -394,12 +394,12 @@ add_flow_rss_action(struct flow_actions *actions,
 }
 
 static int
-netdev_dpdk_add_rte_flow_offload(struct netdev *netdev,
-                                 const struct match *match,
-                                 struct nlattr *nl_actions OVS_UNUSED,
-                                 size_t actions_len OVS_UNUSED,
-                                 const ovs_u128 *ufid,
-                                 struct offload_info *info)
+netdev_rte_offloads_add_flow(struct netdev *netdev,
+                             const struct match *match,
+                             struct nlattr *nl_actions OVS_UNUSED,
+                             size_t actions_len OVS_UNUSED,
+                             const ovs_u128 *ufid,
+                             struct offload_info *info)
 {
     const struct rte_flow_attr flow_attr = {
         .group = 0,
@@ -575,7 +575,8 @@ netdev_dpdk_add_rte_flow_offload(struct netdev *netdev,
     rss = add_flow_rss_action(&actions, netdev);
     add_flow_action(&actions, RTE_FLOW_ACTION_TYPE_END, NULL);
 
-    flow = netdev_dpdk_rte_flow_create(netdev, &flow_attr,patterns.items,
+    flow = netdev_dpdk_rte_flow_create(netdev, &flow_attr,
+                                       patterns.items,
                                        actions.actions, &error);
 
     free(rss);
@@ -599,7 +600,7 @@ out:
  * Check if any unsupported flow patterns are specified.
  */
 static int
-netdev_dpdk_validate_flow(const struct match *match)
+netdev_rte_offloads_validate_flow(const struct match *match)
 {
     struct match match_zero_wc;
     const struct flow *masks = &match->wc.masks;
@@ -668,9 +669,9 @@ err:
 }
 
 static int
-netdev_dpdk_destroy_rte_flow(struct netdev *netdev,
-                             const ovs_u128 *ufid,
-                             struct rte_flow *rte_flow)
+netdev_rte_offloads_destroy_flow(struct netdev *netdev,
+                                 const ovs_u128 *ufid,
+                                 struct rte_flow *rte_flow)
 {
     struct rte_flow_error error;
     int ret = netdev_dpdk_rte_flow_destroy(netdev, rte_flow, &error);
@@ -689,10 +690,10 @@ netdev_dpdk_destroy_rte_flow(struct netdev *netdev,
 }
 
 int
-netdev_dpdk_flow_put(struct netdev *netdev, struct match *match,
-                     struct nlattr *actions, size_t actions_len,
-                     const ovs_u128 *ufid, struct offload_info *info,
-                     struct dpif_flow_stats *stats OVS_UNUSED)
+netdev_rte_offloads_flow_put(struct netdev *netdev, struct match *match,
+                             struct nlattr *actions, size_t actions_len,
+                             const ovs_u128 *ufid, struct offload_info *info,
+                             struct dpif_flow_stats *stats OVS_UNUSED)
 {
     struct rte_flow *rte_flow;
     int ret;
@@ -703,24 +704,24 @@ netdev_dpdk_flow_put(struct netdev *netdev, struct match *match,
      */
     rte_flow = ufid_to_rte_flow_find(ufid);
     if (rte_flow) {
-        ret = netdev_dpdk_destroy_rte_flow(netdev, ufid, rte_flow);
+        ret = netdev_rte_offloads_destroy_flow(netdev, ufid, rte_flow);
         if (ret < 0) {
             return ret;
         }
     }
 
-    ret = netdev_dpdk_validate_flow(match);
+    ret = netdev_rte_offloads_validate_flow(match);
     if (ret < 0) {
         return ret;
     }
 
-    return netdev_dpdk_add_rte_flow_offload(netdev, match, actions,
-                                            actions_len, ufid, info);
+    return netdev_rte_offloads_add_flow(netdev, match, actions,
+                                        actions_len, ufid, info);
 }
 
 int
-netdev_dpdk_flow_del(struct netdev *netdev, const ovs_u128 *ufid,
-                     struct dpif_flow_stats *stats OVS_UNUSED)
+netdev_rte_offloads_flow_del(struct netdev *netdev, const ovs_u128 *ufid,
+                             struct dpif_flow_stats *stats OVS_UNUSED)
 {
     struct rte_flow *rte_flow = ufid_to_rte_flow_find(ufid);
 
@@ -728,5 +729,5 @@ netdev_dpdk_flow_del(struct netdev *netdev, const ovs_u128 *ufid,
         return -1;
     }
 
-    return netdev_dpdk_destroy_rte_flow(netdev, ufid, rte_flow);
+    return netdev_rte_offloads_destroy_flow(netdev, ufid, rte_flow);
 }
