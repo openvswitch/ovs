@@ -2884,7 +2884,7 @@ dpif_netlink_ct_set_limits(struct dpif *dpif OVS_UNUSED,
     nl_msg_end_nested(request, opt_offset);
 
     int err = nl_transact(NETLINK_GENERIC, request, NULL);
-    ofpbuf_uninit(request);
+    ofpbuf_delete(request);
     return err;
 }
 
@@ -2984,8 +2984,8 @@ dpif_netlink_ct_get_limits(struct dpif *dpif OVS_UNUSED,
                                                zone_limits_reply);
 
 out:
-    ofpbuf_uninit(request);
-    ofpbuf_uninit(reply);
+    ofpbuf_delete(request);
+    ofpbuf_delete(reply);
     return err;
 }
 
@@ -3021,7 +3021,7 @@ dpif_netlink_ct_del_limits(struct dpif *dpif OVS_UNUSED,
 
     int err = nl_transact(NETLINK_GENERIC, request, NULL);
 
-    ofpbuf_uninit(request);
+    ofpbuf_delete(request);
     return err;
 }
 
