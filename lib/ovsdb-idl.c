@@ -571,6 +571,7 @@ ovsdb_idl_destroy(struct ovsdb_idl *idl)
         ovsdb_idl_db_destroy(&idl->server);
         ovsdb_idl_db_destroy(&idl->data);
         json_destroy(idl->request_id);
+        free(idl->remote);
         free(idl);
     }
 }
