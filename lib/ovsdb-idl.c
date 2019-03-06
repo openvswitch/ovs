@@ -617,6 +617,7 @@ ovsdb_idl_db_clear(struct ovsdb_idl_db *db)
             ovsdb_idl_row_destroy(row);
         }
     }
+    ovsdb_idl_row_destroy_postprocess(db);
 
     db->cond_changed = false;
     db->cond_seqno = 0;
