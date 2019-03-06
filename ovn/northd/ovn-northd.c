@@ -1813,7 +1813,12 @@ join_logical_ports(struct northd_context *ctx,
                 }
             }
         }
+    }
 
+    /* Wait until all ports have been connected to add to IPAM since
+     * it relies on proper peers to be set
+     */
+    HMAP_FOR_EACH (op, key_node, ports) {
         ipam_add_port_addresses(op->od, op);
     }
 }
