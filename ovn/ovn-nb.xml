@@ -2178,6 +2178,15 @@
             instead of deriving it from the bootfile name.
           </p>
         </column>
+
+        <column name="options" key="tftp_server_address">
+          <p>
+            The DHCPv4 option code for this option is 150. The option
+            contains one or more IPv4 addresses that the client MAY
+            use. This option is Cisco proprietary, the IEEE standard
+            that matches with this requirement is option 66 (tftp_server).
+          </p>
+        </column>
       </group>
     </group>
 

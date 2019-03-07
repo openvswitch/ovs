@@ -73,6 +73,8 @@ struct gen_opts_map {
 #define DHCP_OPT_BOOTFILE DHCP_OPTION("bootfile_name", 67, "str")
 #define DHCP_OPT_WPAD DHCP_OPTION("wpad", 252, "str")
 #define DHCP_OPT_PATH_PREFIX DHCP_OPTION("path_prefix", 210, "str")
+#define DHCP_OPT_TFTP_SERVER_ADDRESS \
+    DHCP_OPTION("tftp_server_address", 150, "ipv4")
 
 static inline uint32_t
 gen_opt_hash(char *opt_name)
