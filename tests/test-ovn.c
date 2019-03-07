@@ -184,6 +184,7 @@ create_gen_opts(struct hmap *dhcp_opts, struct hmap *dhcpv6_opts,
     dhcp_opt_add(dhcp_opts, "lease_time",  51, "uint32");
     dhcp_opt_add(dhcp_opts, "wpad", 252, "str");
     dhcp_opt_add(dhcp_opts, "bootfile_name", 67, "str");
+    dhcp_opt_add(dhcp_opts, "path_prefix", 210, "str");
 
     /* DHCPv6 options. */
     hmap_init(dhcpv6_opts);

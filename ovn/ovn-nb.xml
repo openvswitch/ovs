@@ -2170,6 +2170,14 @@
             to identify a bootfile.
           </p>
         </column>
+
+        <column name="options" key="path_prefix">
+          <p>
+            The DHCPv4 option code for this option is 210. In PXELINUX'
+            case this option is used to set a common path prefix,
+            instead of deriving it from the bootfile name.
+          </p>
+        </column>
       </group>
     </group>
 

@@ -7388,6 +7388,7 @@ static struct gen_opts_map supported_dhcp_opts[] = {
     DHCP_OPT_T2,
     DHCP_OPT_WPAD,
     DHCP_OPT_BOOTFILE,
+    DHCP_OPT_PATH_PREFIX,
 };
 
 static struct gen_opts_map supported_dhcpv6_opts[] = {
