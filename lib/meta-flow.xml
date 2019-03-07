@@ -1352,7 +1352,7 @@ tcp,tp_src=0x07c0/0xfff0
         <pre>
 ovs-vsctl add-br br-int
 ovs-vsctl add-port br-int tap0 -- set interface tap0 ofport_request=1
-ovs-vsctl add-port br-int gre0 --
+ovs-vsctl add-port br-int gre0 -- \
     set interface gre0 ofport_request=2 type=gre \
                        options:remote_ip=192.168.1.1 options:key=5001
 ovs-ofctl add-flow br-int in_port=1,actions=2
@@ -1385,9 +1385,9 @@ ovs-ofctl add-flow br-int in_port=2,actions=1
         <pre>
 ovs-vsctl add-br br-int
 ovs-vsctl add-port br-int tap0 -- set interface tap0 ofport_request=1
-ovs-vsctl add-port br-int allgre --
-    set interface gre0 ofport_request=3 type=gre \
-                       options:remote_ip=flow options:key=flow
+ovs-vsctl add-port br-int allgre -- \
+    set interface allgre ofport_request=3 type=gre \
+                         options:remote_ip=flow options:key=flow
 ovs-ofctl add-flow br-int \
     'in_port=1 actions=set_tunnel:5001,set_field:192.168.1.1->tun_dst,3'
 ovs-ofctl add-flow br-int 'in_port=3,tun_src=192.168.1.1,tun_id=5001 actions=1'
