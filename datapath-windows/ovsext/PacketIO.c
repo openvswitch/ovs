@@ -283,9 +283,8 @@ OvsStartNBLIngress(POVS_SWITCH_CONTEXT switchContext,
                 RtlInitUnicodeString(&filterReason,
                                      L"Cannot allocate NBLs with single NB.");
 
-                OvsStartNBLIngressError(switchContext, curNbl,
-                                        sendCompleteFlags, &filterReason,
-                                        NDIS_STATUS_RESOURCES);
+                OvsAddPktCompletionList(&completionList, TRUE, sourcePort,
+                                        curNbl, 0, &filterReason);
                 continue;
             }
 
