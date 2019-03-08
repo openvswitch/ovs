@@ -478,6 +478,22 @@ Q: How does OVS divide flows among buckets in an OpenFlow "select" group?
     Documentation/group-selection-method-property.txt in the Open vSwitch
     source tree.  (OpenFlow 1.5 support in Open vSwitch is still experimental.)
 
+Q: An OpenFlow "select" group isn't dividing packets evenly among the buckets.
+
+    A: When a packet passes through a "select" group, Open vSwitch hashes a
+    subset of the fields in the packet, then it maps the hash value to a
+    bucket.  This means that packets whose hashed fields are the same will
+    always go to the same bucket[*].  More specifically, if you test with a
+    single traffic flow, only one bucket will receive any traffic[**].
+    Furthermore, statistics and probability mean that testing with a small
+    number of flows may still yield an uneven distribution.
+
+    [*] Unless its bucket has a watch port or group whose liveness changes
+    during the test.
+
+    [**] Unless the hash includes fields that vary within a traffic flow, such
+    as tcp_flags.
+
 Q: I added a flow to accept packets on VLAN 123 and output them on VLAN 456,
 like so::
 
