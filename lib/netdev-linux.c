@@ -742,11 +742,14 @@ netdev_linux_update_lag(struct rtnetlink_change *change)
                 lag->block_id = block_id;
                 lag->node = shash_add(&lag_shash, change->ifname, lag);
 
+                /* delete ingress block in case it exists */
+                tc_add_del_ingress_qdisc(change->if_index, false, 0);
                 /* LAG master is linux netdev so add slave to same block. */
                 error = tc_add_del_ingress_qdisc(change->if_index, true,
                                                  block_id);
                 if (error) {
-                    VLOG_WARN("failed to bind LAG slave to master's block");
+                    VLOG_WARN("failed to bind LAG slave %s to master's block",
+                              change->ifname);
                     shash_delete(&lag_shash, lag->node);
                     free(lag);
                 }
