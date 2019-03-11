@@ -110,8 +110,8 @@ Q: Are all features available with all datapaths?
     ========================== ============== ============== ========= =======
     Connection tracking             4.3            YES          YES      YES
     Conntrack Fragment Reass.       4.3            YES          YES      YES
-    NAT                             4.6            YES          YES      NO
-    Conntrack zone limit            4.18           YES          NO       NO
+    NAT                             4.6            YES          YES      YES
+    Conntrack zone limit            4.18           YES          NO       YES
     Tunnel - LISP                   NO             YES          NO       NO
     Tunnel - STT                    NO             YES          NO       YES
     Tunnel - GRE                    3.11           YES          YES      YES
@@ -125,7 +125,7 @@ Q: Are all features available with all datapaths?
     QoS - Policing                  YES            YES          YES      NO
     QoS - Shaping                   YES            YES          NO       NO
     sFlow                           YES            YES          YES      NO
-    IPFIX                           3.10           YES          YES      NO
+    IPFIX                           3.10           YES          YES      YES
     Set action                      YES            YES          YES    PARTIAL
     NIC Bonding                     YES            YES          YES      YES
     Multiple VTEPs                  YES            YES          YES      YES
