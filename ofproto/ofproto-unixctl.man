@@ -70,7 +70,7 @@ OpenFlow version.  One exception is that, when \fIactions\fR includes
 an action that only OpenFlow 1.1 and later supports (such as
 \fBpush_vlan\fR), \fB\-\-consistent\fR is automatically enabled.
 .
-.IP "--ct-next \fIflags\fR"
+.IP "\fB\-\-ct-next\fR \fIflags\fR"
 When the traced flow triggers conntrack actions, \fBofproto/trace\fR
 will automatically trace the forked packet processing pipeline with
 user specified ct_state.  This option sets the ct_state flags that the
@@ -107,8 +107,9 @@ changed.
 .RE
 .
 .IP
-When --ct-next is unspecified, or when there are fewer --ct-next options than
-ct actions, the \fIflags\fR default to trk,new.
+When \fB\-\-ct-next\fR is unspecified, or when there are fewer
+\fB\-\-ct-next\fR options than ct \fIactions\fR, the \fIflags\fR default to
+\fBtrk,new\fR.
 .
 .RE
 .
