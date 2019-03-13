@@ -97,7 +97,7 @@ enum ofputil_protocol {
 #define OFPUTIL_P_OF15_UP OFPUTIL_P_OF15_OXM
 
     /* All protocols. */
-#define OFPUTIL_P_ANY ((1 << 10) - 1)
+#define OFPUTIL_P_ANY ((1 << 9) - 1)
 
     /* Protocols in which a specific table may be specified in flow_mods. */
 #define OFPUTIL_P_TID (OFPUTIL_P_OF10_STD_TID | \
