@@ -24,6 +24,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <inttypes.h>
+#include <math.h>
 #include <linux/filter.h>
 #include <linux/gen_stats.h>
 #include <linux/if_ether.h>
@@ -437,6 +438,7 @@ static const struct tc_ops tc_ops_hfsc;
 static const struct tc_ops tc_ops_codel;
 static const struct tc_ops tc_ops_fqcodel;
 static const struct tc_ops tc_ops_sfq;
+static const struct tc_ops tc_ops_netem;
 static const struct tc_ops tc_ops_default;
 static const struct tc_ops tc_ops_noop;
 static const struct tc_ops tc_ops_other;
@@ -447,6 +449,7 @@ static const struct tc_ops *const tcs[] = {
     &tc_ops_codel,              /* Controlled delay */
     &tc_ops_fqcodel,            /* Fair queue controlled delay */
     &tc_ops_sfq,                /* Stochastic fair queueing */
+    &tc_ops_netem,              /* Network Emulator */
     &tc_ops_noop,               /* Non operating qos type. */
     &tc_ops_default,            /* Default qdisc (see tc-pfifo_fast(8)). */
     &tc_ops_other,              /* Some other qdisc. */
@@ -456,6 +459,7 @@ static const struct tc_ops *const tcs[] = {
 static unsigned int tc_ticks_to_bytes(unsigned int rate, unsigned int ticks);
 static unsigned int tc_bytes_to_ticks(unsigned int rate, unsigned int size);
 static unsigned int tc_buffer_per_jiffy(unsigned int rate);
+static uint32_t tc_time_to_ticks(uint32_t time);
 
 static struct tcmsg *netdev_linux_tc_make_request(const struct netdev *,
                                                   int type,
@@ -3957,6 +3961,179 @@ static const struct tc_ops tc_ops_sfq = {
     .qdisc_set = sfq_qdisc_set,
 };
 
+/* netem traffic control class. */
+
+struct netem {
+    struct tc tc;
+    uint32_t latency;
+    uint32_t limit;
+    uint32_t loss;
+};
+
+static struct netem *
+netem_get__(const struct netdev *netdev_)
+{
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    return CONTAINER_OF(netdev->tc, struct netem, tc);
+}
+
+static void
+netem_install__(struct netdev *netdev_, uint32_t latency,
+                uint32_t limit, uint32_t loss)
+{
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    struct netem *netem;
+
+    netem = xmalloc(sizeof *netem);
+    tc_init(&netem->tc, &tc_ops_netem);
+    netem->latency = latency;
+    netem->limit = limit;
+    netem->loss = loss;
+
+    netdev->tc = &netem->tc;
+}
+
+static int
+netem_setup_qdisc__(struct netdev *netdev, uint32_t latency,
+                    uint32_t limit, uint32_t loss)
+{
+    struct tc_netem_qopt opt;
+    struct ofpbuf request;
+    struct tcmsg *tcmsg;
+    int error;
+
+    tc_del_qdisc(netdev);
+
+    tcmsg = netdev_linux_tc_make_request(netdev, RTM_NEWQDISC,
+                                         NLM_F_EXCL | NLM_F_CREATE, &request);
+    if (!tcmsg) {
+        return ENODEV;
+    }
+    tcmsg->tcm_handle = tc_make_handle(1, 0);
+    tcmsg->tcm_parent = TC_H_ROOT;
+
+    memset(&opt, 0, sizeof opt);
+
+    if (!limit) {
+        opt.limit = 1000;
+    } else {
+        opt.limit = limit;
+    }
+
+    if (loss) {
+        if (loss > 100) {
+            VLOG_WARN_RL(&rl,
+                         "loss should be a percentage value between 0 to 100, "
+                         "loss was %u", loss);
+            return EINVAL;
+        }
+        opt.loss = floor(UINT32_MAX * (loss / 100.0));
+    }
+
+    opt.latency = tc_time_to_ticks(latency);
+
+    nl_msg_put_string(&request, TCA_KIND, "netem");
+    nl_msg_put_unspec(&request, TCA_OPTIONS, &opt, sizeof opt);
+
+    error = tc_transact(&request, NULL);
+    if (error) {
+        VLOG_WARN_RL(&rl, "failed to replace %s qdisc, "
+                          "latency %u, limit %u, loss %u error %d(%s)",
+                     netdev_get_name(netdev),
+                     opt.latency, opt.limit, opt.loss,
+                     error, ovs_strerror(error));
+    }
+    return error;
+}
+
+static void
+netem_parse_qdisc_details__(struct netdev *netdev OVS_UNUSED,
+                          const struct smap *details, struct netem *netem)
+{
+    netem->latency = smap_get_ullong(details, "latency", 0);
+    netem->limit = smap_get_ullong(details, "limit", 0);
+    netem->loss = smap_get_ullong(details, "loss", 0);
+
+    if (!netem->limit) {
+        netem->limit = 1000;
+    }
+}
+
+static int
+netem_tc_install(struct netdev *netdev, const struct smap *details)
+{
+    int error;
+    struct netem netem;
+
+    netem_parse_qdisc_details__(netdev, details, &netem);
+    error = netem_setup_qdisc__(netdev, netem.latency,
+                                netem.limit, netem.loss);
+    if (!error) {
+        netem_install__(netdev, netem.latency, netem.limit, netem.loss);
+    }
+    return error;
+}
+
+static int
+netem_tc_load(struct netdev *netdev, struct ofpbuf *nlmsg)
+{
+    const struct tc_netem_qopt *netem;
+    struct nlattr *nlattr;
+    const char *kind;
+    int error;
+
+    error = tc_parse_qdisc(nlmsg, &kind, &nlattr);
+    if (error == 0) {
+        netem = nl_attr_get(nlattr);
+        netem_install__(netdev, netem->latency, netem->limit, netem->loss);
+        return 0;
+    }
+
+    return error;
+}
+
+static void
+netem_tc_destroy(struct tc *tc)
+{
+    struct netem *netem = CONTAINER_OF(tc, struct netem, tc);
+    tc_destroy(tc);
+    free(netem);
+}
+
+static int
+netem_qdisc_get(const struct netdev *netdev, struct smap *details)
+{
+    const struct netem *netem = netem_get__(netdev);
+    smap_add_format(details, "latency", "%u", netem->latency);
+    smap_add_format(details, "limit", "%u", netem->limit);
+    smap_add_format(details, "loss", "%u", netem->loss);
+    return 0;
+}
+
+static int
+netem_qdisc_set(struct netdev *netdev, const struct smap *details)
+{
+    struct netem netem;
+
+    netem_parse_qdisc_details__(netdev, details, &netem);
+    netem_install__(netdev, netem.latency, netem.limit, netem.loss);
+    netem_get__(netdev)->latency = netem.latency;
+    netem_get__(netdev)->limit = netem.limit;
+    netem_get__(netdev)->loss = netem.loss;
+    return 0;
+}
+
+static const struct tc_ops tc_ops_netem = {
+    .linux_name = "netem",
+    .ovs_name = "linux-netem",
+    .n_queues = 0,
+    .tc_install = netem_tc_install,
+    .tc_load = netem_tc_load,
+    .tc_destroy = netem_tc_destroy,
+    .qdisc_get = netem_qdisc_get,
+    .qdisc_set = netem_qdisc_set,
+};
+
 /* HTB traffic control class. */
 
 #define HTB_N_QUEUES 0xf000
@@ -5238,6 +5415,12 @@ tc_buffer_per_jiffy(unsigned int rate)
 {
     read_psched();
     return rate / buffer_hz;
+}
+
+static uint32_t
+tc_time_to_ticks(uint32_t time) {
+    read_psched();
+    return time * (ticks_per_s / 1000000);
 }
 
 /* Given Netlink 'msg' that describes a qdisc, extracts the name of the qdisc,

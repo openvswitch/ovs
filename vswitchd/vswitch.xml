@@ -4327,6 +4327,14 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
           for information on how this classifier works.
         </dd>
 
+        <dt><code>linux-netem</code></dt>
+        <dd>
+          Linux ``Network Emulator'' classifier. See
+          <code>tc-netem</code>(8) (also at
+          <code>http://man7.org/linux/man-pages/man8/tc-netem.8.html</code>)
+          for information on how this classifier works.
+        </dd>
+
         <dt><code>linux-noop</code></dt>
         <dd>
           Linux ``No operation.''  By default, Open vSwitch manages quality of
@@ -4434,6 +4442,26 @@ ovs-vsctl add-port br0 p0 -- set Interface p0 type=patch options:peer=p1 \
         Number of bytes <code>linux-sfq</code> QoS can dequeue in one turn in
         round-robin from one flow. The default and recommended value is equal
         to interface's MTU.
+      </column>
+    </group>
+
+    <group title="Configuration for linux-netem">
+      <p>
+        The <code>linux-netem</code> QoS supports the following key-value
+        pairs:
+      </p>
+
+      <column name="other_config" key="latency" type='{"type": "integer"}'>
+        Adds the chosen delay to the packets outgoing to chosen network
+        interface. The latency value expressed in us.
+      </column>
+      <column name="other_config" key="limit" type='{"type": "integer"}'>
+        Maximum number of packets the qdisc may hold queued at a time.
+        The default value is 1000.
+      </column>
+      <column name="other_config" key="loss" type='{"type": "integer"}'>
+        Adds an independent loss probability to the packets outgoing from the
+        chosen network interface.
       </column>
     </group>
 
