@@ -326,6 +326,7 @@ Selvamuthukumar                    smkumar@merunetworks.com
 Sha Zhang                          zhangsha.zhang@huawei.com
 Shad Ansari                        shad.ansari@hpe.com
 Shan Wei                           davidshan@tencent.com
+Sharon Krendel                     thekafkaf@gmail.com
 Shashank Ram                       rams@vmware.com
 Shashwat Srivastava                shashwat.srivastava@tcs.com
 Shih-Hao Li                        shihli@vmware.com
