@@ -1348,6 +1348,10 @@ dpctl_list_commands(int argc OVS_UNUSED, const char *argv[] OVS_UNUSED,
     for (; commands->name; commands++) {
         const struct dpctl_command *c = commands;
 
+        if (dpctl_p->is_appctl && !strcmp(c->name, "help")) {
+            continue;
+        }
+
         ds_put_format(&ds, "  %s%-23s %s\n", dpctl_p->is_appctl ? "dpctl/" : "",
                       c->name, c->usage);
     }
