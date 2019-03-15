@@ -777,6 +777,22 @@ conn_lookup_def(const struct conn_key *key,
     return conn;
 }
 
+static struct conn *
+conn_lookup_unnat(const struct conn_key *key,
+                  const struct conntrack_bucket *ctb, uint32_t hash)
+    OVS_REQUIRES(ctb->lock)
+{
+    struct conn *conn = NULL;
+
+    HMAP_FOR_EACH_WITH_HASH (conn, node, hash, &ctb->connections) {
+        if (!conn_key_cmp(&conn->key, key)
+            && conn->conn_type == CT_CONN_TYPE_UN_NAT) {
+            break;
+        }
+    }
+    return conn;
+}
+
 static void
 conn_seq_skew_set(struct conntrack *ct, const struct conn_key *key,
                   long long now, int seq_skew, bool seq_skew_dir)
@@ -800,12 +816,13 @@ nat_clean(struct conntrack *ct, struct conn *conn,
     nat_conn_keys_remove(&ct->nat_conn_keys, &conn->rev_key, ct->hash_basis);
     ct_rwlock_unlock(&ct->resources_lock);
     ct_lock_unlock(&ctb->lock);
-    unsigned bucket_rev_conn =
-        hash_to_bucket(conn_key_hash(&conn->rev_key, ct->hash_basis));
+    uint32_t hash = conn_key_hash(&conn->rev_key, ct->hash_basis);
+    unsigned bucket_rev_conn = hash_to_bucket(hash);
     ct_lock_lock(&ct->buckets[bucket_rev_conn].lock);
     ct_rwlock_wrlock(&ct->resources_lock);
-    long long now = time_msec();
-    struct conn *rev_conn = conn_lookup(ct, &conn->rev_key, now);
+    struct conn *rev_conn = conn_lookup_unnat(&conn->rev_key,
+                                              &ct->buckets[bucket_rev_conn],
+                                              hash);
     struct nat_conn_key_node *nat_conn_key_node =
         nat_conn_keys_lookup(&ct->nat_conn_keys, &conn->rev_key,
                              ct->hash_basis);
