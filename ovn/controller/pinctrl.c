@@ -55,16 +55,17 @@
 VLOG_DEFINE_THIS_MODULE(pinctrl);
 
 /* OpenFlow connection to the switch. */
-static struct rconn *swconn;
+static struct rconn *swconn_;
 
-/* Last seen sequence number for 'swconn'.  When this differs from
- * rconn_get_connection_seqno(rconn), 'swconn' has reconnected. */
+/* Last seen sequence number for 'swconn_'.  When this differs from
+ * rconn_get_connection_seqno(rconn), 'swconn_' has reconnected. */
 static unsigned int conn_seq_no;
 
 static void init_buffered_packets_map(void);
 static void destroy_buffered_packets_map(void);
 
-static void pinctrl_handle_put_mac_binding(const struct flow *md,
+static void pinctrl_handle_put_mac_binding(struct rconn *swconn,
+                                           const struct flow *md,
                                            const struct flow *headers,
                                            bool is_arp);
 static void init_put_mac_bindings(void);
@@ -81,6 +82,7 @@ static void init_send_garps(void);
 static void destroy_send_garps(void);
 static void send_garp_wait(void);
 static void send_garp_run(
+    struct rconn *swconn,
     struct ovsdb_idl_index *sbrec_chassis_by_name,
     struct ovsdb_idl_index *sbrec_port_binding_by_datapath,
     struct ovsdb_idl_index *sbrec_port_binding_by_name,
@@ -88,17 +90,20 @@ static void send_garp_run(
     const struct sbrec_chassis *,
     const struct hmap *local_datapaths,
     const struct sset *active_tunnels);
-static void pinctrl_handle_nd_na(const struct flow *ip_flow,
+static void pinctrl_handle_nd_na(struct rconn *swconn,
+                                 const struct flow *ip_flow,
                                  const struct match *md,
                                  struct ofpbuf *userdata,
                                  bool is_router);
 static void reload_metadata(struct ofpbuf *ofpacts,
                             const struct match *md);
 static void pinctrl_handle_put_nd_ra_opts(
+    struct rconn *swconn,
     const struct flow *ip_flow, struct dp_packet *pkt_in,
     struct ofputil_packet_in *pin, struct ofpbuf *userdata,
     struct ofpbuf *continuation);
-static void pinctrl_handle_nd_ns(const struct flow *ip_flow,
+static void pinctrl_handle_nd_ns(struct rconn *swconn,
+                                 const struct flow *ip_flow,
                                  struct dp_packet *pkt_in,
                                  const struct match *md,
                                  struct ofpbuf *userdata);
@@ -106,6 +111,7 @@ static void init_ipv6_ras(void);
 static void destroy_ipv6_ras(void);
 static void ipv6_ra_wait(void);
 static void send_ipv6_ras(
+    struct rconn *swconn,
     struct ovsdb_idl_index *sbrec_port_binding_by_datapath,
     struct ovsdb_idl_index *sbrec_port_binding_by_name,
     const struct hmap *local_datapaths);
@@ -117,7 +123,7 @@ COVERAGE_DEFINE(pinctrl_drop_buffered_packets_map);
 void
 pinctrl_init(void)
 {
-    swconn = rconn_create(5, 0, DSCP_DEFAULT, 1 << OFP13_VERSION);
+    swconn_ = rconn_create(5, 0, DSCP_DEFAULT, 1 << OFP13_VERSION);
     conn_seq_no = 0;
     init_put_mac_bindings();
     init_send_garps();
@@ -126,7 +132,7 @@ pinctrl_init(void)
 }
 
 static ovs_be32
-queue_msg(struct ofpbuf *msg)
+queue_msg(struct rconn *swconn, struct ofpbuf *msg)
 {
     const struct ofp_header *oh = msg->data;
     ovs_be32 xid = oh->xid;
@@ -135,34 +141,36 @@ queue_msg(struct ofpbuf *msg)
     return xid;
 }
 
-/* Sets up global 'swconn', a newly (re)connected connection to a switch. */
+/* Sets up 'swconn', a newly (re)connected connection to a switch. */
 static void
-pinctrl_setup(void)
+pinctrl_setup(struct rconn *swconn)
 {
     /* Fetch the switch configuration.  The response later will allow us to
      * change the miss_send_len to UINT16_MAX, so that we can enable
      * asynchronous messages. */
-    queue_msg(ofpraw_alloc(OFPRAW_OFPT_GET_CONFIG_REQUEST,
+    queue_msg(swconn, ofpraw_alloc(OFPRAW_OFPT_GET_CONFIG_REQUEST,
                            rconn_get_version(swconn), 0));
 
     /* Set a packet-in format that supports userdata.  */
-    queue_msg(ofputil_encode_set_packet_in_format(rconn_get_version(swconn),
+    queue_msg(swconn,
+              ofputil_encode_set_packet_in_format(rconn_get_version(swconn),
                                                   OFPUTIL_PACKET_IN_NXT2));
 }
 
 static void
-set_switch_config(struct rconn *swconn_,
+set_switch_config(struct rconn *swconn,
                   const struct ofputil_switch_config *config)
 {
-    enum ofp_version version = rconn_get_version(swconn_);
+    enum ofp_version version = rconn_get_version(swconn);
     struct ofpbuf *request = ofputil_encode_set_config(config, version);
-    queue_msg(request);
+    queue_msg(swconn, request);
 }
 
 static void
-set_actions_and_enqueue_msg(const struct dp_packet *packet,
-                           const struct match *md,
-                           struct ofpbuf *userdata)
+set_actions_and_enqueue_msg(struct rconn *swconn,
+                            const struct dp_packet *packet,
+                            const struct match *md,
+                            struct ofpbuf *userdata)
 {
     /* Copy metadata from 'md' into the packet-out via "set_field"
      * actions, then add actions from 'userdata'.
@@ -192,7 +200,7 @@ set_actions_and_enqueue_msg(const struct dp_packet *packet,
     };
     match_set_in_port(&po.flow_metadata, OFPP_CONTROLLER);
     enum ofputil_protocol proto = ofputil_protocol_from_ofp_version(version);
-    queue_msg(ofputil_encode_packet_out(&po, proto));
+    queue_msg(swconn, ofputil_encode_packet_out(&po, proto));
     ofpbuf_uninit(&ofpacts);
 }
 
@@ -275,7 +283,8 @@ buffered_push_packet(struct buffered_packets *bp,
 }
 
 static void
-buffered_send_packets(struct buffered_packets *bp, struct eth_addr *addr)
+buffered_send_packets(struct rconn *swconn, struct buffered_packets *bp,
+                      struct eth_addr *addr)
 {
     enum ofp_version version = rconn_get_version(swconn);
     enum ofputil_protocol proto = ofputil_protocol_from_ofp_version(version);
@@ -293,7 +302,7 @@ buffered_send_packets(struct buffered_packets *bp, struct eth_addr *addr)
             .ofpacts_len = bi->ofpacts.size,
         };
         match_set_in_port(&po.flow_metadata, OFPP_CONTROLLER);
-        queue_msg(ofputil_encode_packet_out(&po, proto));
+        queue_msg(swconn, ofputil_encode_packet_out(&po, proto));
 
         ofpbuf_uninit(&bi->ofpacts);
         dp_packet_delete(bi->p);
@@ -368,7 +377,8 @@ pinctrl_handle_buffered_packets(const struct flow *ip_flow,
 }
 
 static void
-pinctrl_handle_arp(const struct flow *ip_flow, struct dp_packet *pkt_in,
+pinctrl_handle_arp(struct rconn *swconn, const struct flow *ip_flow,
+                   struct dp_packet *pkt_in,
                    const struct match *md, struct ofpbuf *userdata)
 {
     /* This action only works for IP packets, and the switch should only send
@@ -404,12 +414,13 @@ pinctrl_handle_arp(const struct flow *ip_flow, struct dp_packet *pkt_in,
                       ip_flow->vlans[0].tci);
     }
 
-    set_actions_and_enqueue_msg(&packet, md, userdata);
+    set_actions_and_enqueue_msg(swconn, &packet, md, userdata);
     dp_packet_uninit(&packet);
 }
 
 static void
-pinctrl_handle_icmp(const struct flow *ip_flow, struct dp_packet *pkt_in,
+pinctrl_handle_icmp(struct rconn *swconn, const struct flow *ip_flow,
+                    struct dp_packet *pkt_in,
                     const struct match *md, struct ofpbuf *userdata)
 {
     /* This action only works for IP packets, and the switch should only send
@@ -483,12 +494,13 @@ pinctrl_handle_icmp(const struct flow *ip_flow, struct dp_packet *pkt_in,
                       ip_flow->vlans[0].tci);
     }
 
-    set_actions_and_enqueue_msg(&packet, md, userdata);
+    set_actions_and_enqueue_msg(swconn, &packet, md, userdata);
     dp_packet_uninit(&packet);
 }
 
 static void
-pinctrl_handle_tcp_reset(const struct flow *ip_flow, struct dp_packet *pkt_in,
+pinctrl_handle_tcp_reset(struct rconn *swconn, const struct flow *ip_flow,
+                         struct dp_packet *pkt_in,
                          const struct match *md, struct ofpbuf *userdata)
 {
     /* This action only works for TCP segments, and the switch should only send
@@ -555,12 +567,13 @@ pinctrl_handle_tcp_reset(const struct flow *ip_flow, struct dp_packet *pkt_in,
                       ip_flow->vlans[0].tci);
     }
 
-    set_actions_and_enqueue_msg(&packet, md, userdata);
+    set_actions_and_enqueue_msg(swconn, &packet, md, userdata);
     dp_packet_uninit(&packet);
 }
 
 static void
 pinctrl_handle_put_dhcp_opts(
+    struct rconn *swconn,
     struct dp_packet *pkt_in, struct ofputil_packet_in *pin,
     struct ofpbuf *userdata, struct ofpbuf *continuation)
 {
@@ -806,7 +819,7 @@ exit:
         sv.u8_val = success;
         mf_write_subfield(&dst, &sv, &pin->flow_metadata);
     }
-    queue_msg(ofputil_encode_resume(pin, continuation, proto));
+    queue_msg(swconn, ofputil_encode_resume(pin, continuation, proto));
     if (pkt_out_ptr) {
         dp_packet_uninit(pkt_out_ptr);
     }
@@ -925,6 +938,7 @@ compose_out_dhcpv6_opts(struct ofpbuf *userdata,
 
 static void
 pinctrl_handle_put_dhcpv6_opts(
+    struct rconn *swconn,
     struct dp_packet *pkt_in, struct ofputil_packet_in *pin,
     struct ofpbuf *userdata, struct ofpbuf *continuation OVS_UNUSED)
 {
@@ -1105,7 +1119,7 @@ exit:
         sv.u8_val = success;
         mf_write_subfield(&dst, &sv, &pin->flow_metadata);
     }
-    queue_msg(ofputil_encode_resume(pin, continuation, proto));
+    queue_msg(swconn, ofputil_encode_resume(pin, continuation, proto));
     dp_packet_uninit(pkt_out_ptr);
 }
 
@@ -1123,6 +1137,7 @@ put_be32(struct ofpbuf *buf, ovs_be32 x)
 
 static void
 pinctrl_handle_dns_lookup(
+    struct rconn *swconn,
     const struct sbrec_dns_table *dns_table,
     struct dp_packet *pkt_in, struct ofputil_packet_in *pin,
     struct ofpbuf *userdata, struct ofpbuf *continuation)
@@ -1371,12 +1386,13 @@ exit:
         sv.u8_val = success;
         mf_write_subfield(&dst, &sv, &pin->flow_metadata);
     }
-    queue_msg(ofputil_encode_resume(pin, continuation, proto));
+    queue_msg(swconn, ofputil_encode_resume(pin, continuation, proto));
     dp_packet_uninit(pkt_out_ptr);
 }
 
 static void
-process_packet_in(const struct ofp_header *msg,
+process_packet_in(struct rconn *swconn,
+                  const struct ofp_header *msg,
                   const struct sbrec_dns_table *dns_table)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -1410,38 +1426,42 @@ process_packet_in(const struct ofp_header *msg,
 
     switch (ntohl(ah->opcode)) {
     case ACTION_OPCODE_ARP:
-        pinctrl_handle_arp(&headers, &packet, &pin.flow_metadata, &userdata);
+        pinctrl_handle_arp(swconn, &headers, &packet, &pin.flow_metadata,
+                           &userdata);
         break;
 
     case ACTION_OPCODE_PUT_ARP:
-        pinctrl_handle_put_mac_binding(&pin.flow_metadata.flow, &headers,
-                                       true);
+        pinctrl_handle_put_mac_binding(swconn, &pin.flow_metadata.flow,
+                                       &headers, true);
         break;
 
     case ACTION_OPCODE_PUT_DHCP_OPTS:
-        pinctrl_handle_put_dhcp_opts(&packet, &pin, &userdata, &continuation);
+        pinctrl_handle_put_dhcp_opts(swconn, &packet, &pin, &userdata,
+                                     &continuation);
         break;
 
     case ACTION_OPCODE_ND_NA:
-        pinctrl_handle_nd_na(&headers, &pin.flow_metadata, &userdata, false);
+        pinctrl_handle_nd_na(swconn, &headers, &pin.flow_metadata, &userdata,
+                             false);
         break;
 
     case ACTION_OPCODE_ND_NA_ROUTER:
-        pinctrl_handle_nd_na(&headers, &pin.flow_metadata, &userdata, true);
+        pinctrl_handle_nd_na(swconn, &headers, &pin.flow_metadata, &userdata,
+                             true);
         break;
 
     case ACTION_OPCODE_PUT_ND:
-        pinctrl_handle_put_mac_binding(&pin.flow_metadata.flow, &headers,
-                                       false);
+        pinctrl_handle_put_mac_binding(swconn, &pin.flow_metadata.flow,
+                                       &headers, false);
         break;
 
     case ACTION_OPCODE_PUT_DHCPV6_OPTS:
-        pinctrl_handle_put_dhcpv6_opts(&packet, &pin, &userdata,
+        pinctrl_handle_put_dhcpv6_opts(swconn, &packet, &pin, &userdata,
                                        &continuation);
         break;
 
     case ACTION_OPCODE_DNS_LOOKUP:
-        pinctrl_handle_dns_lookup(dns_table,
+        pinctrl_handle_dns_lookup(swconn, dns_table,
                                   &packet, &pin, &userdata, &continuation);
         break;
 
@@ -1450,22 +1470,22 @@ process_packet_in(const struct ofp_header *msg,
         break;
 
     case ACTION_OPCODE_PUT_ND_RA_OPTS:
-        pinctrl_handle_put_nd_ra_opts(&headers, &packet, &pin, &userdata,
-                                      &continuation);
+        pinctrl_handle_put_nd_ra_opts(swconn, &headers, &packet, &pin,
+                                      &userdata, &continuation);
         break;
 
     case ACTION_OPCODE_ND_NS:
-        pinctrl_handle_nd_ns(&headers, &packet, &pin.flow_metadata,
+        pinctrl_handle_nd_ns(swconn, &headers, &packet, &pin.flow_metadata,
                              &userdata);
         break;
 
     case ACTION_OPCODE_ICMP:
-        pinctrl_handle_icmp(&headers, &packet, &pin.flow_metadata,
+        pinctrl_handle_icmp(swconn, &headers, &packet, &pin.flow_metadata,
                             &userdata);
         break;
 
     case ACTION_OPCODE_TCP_RESET:
-        pinctrl_handle_tcp_reset(&headers, &packet, &pin.flow_metadata,
+        pinctrl_handle_tcp_reset(swconn, &headers, &packet, &pin.flow_metadata,
                                  &userdata);
         break;
 
@@ -1477,11 +1497,11 @@ process_packet_in(const struct ofp_header *msg,
 }
 
 static void
-pinctrl_recv(const struct sbrec_dns_table *dns_table,
+pinctrl_recv(struct rconn *swconn, const struct sbrec_dns_table *dns_table,
              const struct ofp_header *oh, enum ofptype type)
 {
     if (type == OFPTYPE_ECHO_REQUEST) {
-        queue_msg(ofputil_encode_echo_reply(oh));
+        queue_msg(swconn, ofputil_encode_echo_reply(oh));
     } else if (type == OFPTYPE_GET_CONFIG_REPLY) {
         /* Enable asynchronous messages */
         struct ofputil_switch_config config;
@@ -1490,7 +1510,7 @@ pinctrl_recv(const struct sbrec_dns_table *dns_table,
         config.miss_send_len = UINT16_MAX;
         set_switch_config(swconn, &config);
     } else if (type == OFPTYPE_PACKET_IN) {
-        process_packet_in(oh, dns_table);
+        process_packet_in(swconn, oh, dns_table);
     } else {
         if (VLOG_IS_DBG_ENABLED()) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
@@ -1518,27 +1538,27 @@ pinctrl_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
             const struct sset *active_tunnels)
 {
     char *target = xasprintf("unix:%s/%s.mgmt", ovs_rundir(), br_int->name);
-    if (strcmp(target, rconn_get_target(swconn))) {
+    if (strcmp(target, rconn_get_target(swconn_))) {
         VLOG_INFO("%s: connecting to switch", target);
-        rconn_connect(swconn, target, target);
+        rconn_connect(swconn_, target, target);
     }
     free(target);
 
-    rconn_run(swconn);
+    rconn_run(swconn_);
 
-    if (!rconn_is_connected(swconn)) {
+    if (!rconn_is_connected(swconn_)) {
         return;
     }
 
-    if (conn_seq_no != rconn_get_connection_seqno(swconn)) {
-        pinctrl_setup();
-        conn_seq_no = rconn_get_connection_seqno(swconn);
+    if (conn_seq_no != rconn_get_connection_seqno(swconn_)) {
+        pinctrl_setup(swconn_);
+        conn_seq_no = rconn_get_connection_seqno(swconn_);
         flush_put_mac_bindings();
     }
 
     /* Process a limited number of messages per call. */
     for (int i = 0; i < 50; i++) {
-        struct ofpbuf *msg = rconn_recv(swconn);
+        struct ofpbuf *msg = rconn_recv(swconn_);
         if (!msg) {
             break;
         }
@@ -1547,17 +1567,18 @@ pinctrl_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
         enum ofptype type;
 
         ofptype_decode(&type, oh);
-        pinctrl_recv(dns_table, oh, type);
+        pinctrl_recv(swconn_, dns_table, oh, type);
         ofpbuf_delete(msg);
     }
 
     run_put_mac_bindings(ovnsb_idl_txn, sbrec_datapath_binding_by_key,
                          sbrec_port_binding_by_key,
                          sbrec_mac_binding_by_lport_ip);
-    send_garp_run(sbrec_chassis_by_name, sbrec_port_binding_by_datapath,
+    send_garp_run(swconn_, sbrec_chassis_by_name,
+                  sbrec_port_binding_by_datapath,
                   sbrec_port_binding_by_name, br_int, chassis,
                   local_datapaths, active_tunnels);
-    send_ipv6_ras(sbrec_port_binding_by_datapath,
+    send_ipv6_ras(swconn_, sbrec_port_binding_by_datapath,
                   sbrec_port_binding_by_name, local_datapaths);
     buffered_packets_map_gc();
 }
@@ -1707,7 +1728,7 @@ put_load(uint64_t value, enum mf_field_id dst, int ofs, int n_bits,
 }
 
 static long long int
-ipv6_ra_send(struct ipv6_ra_state *ra)
+ipv6_ra_send(struct rconn *swconn, struct ipv6_ra_state *ra)
 {
     if (time_msec() < ra->next_announce) {
         return ra->next_announce;
@@ -1754,7 +1775,7 @@ ipv6_ra_send(struct ipv6_ra_state *ra)
     match_set_in_port(&po.flow_metadata, OFPP_CONTROLLER);
     enum ofp_version version = rconn_get_version(swconn);
     enum ofputil_protocol proto = ofputil_protocol_from_ofp_version(version);
-    queue_msg(ofputil_encode_packet_out(&po, proto));
+    queue_msg(swconn, ofputil_encode_packet_out(&po, proto));
     dp_packet_uninit(&packet);
     ofpbuf_uninit(&ofpacts);
 
@@ -1771,7 +1792,8 @@ ipv6_ra_wait(void)
 }
 
 static void
-send_ipv6_ras(struct ovsdb_idl_index *sbrec_port_binding_by_datapath,
+send_ipv6_ras(struct rconn *swconn,
+              struct ovsdb_idl_index *sbrec_port_binding_by_datapath,
               struct ovsdb_idl_index *sbrec_port_binding_by_name,
               const struct hmap *local_datapaths)
 {
@@ -1840,7 +1862,7 @@ send_ipv6_ras(struct ovsdb_idl_index *sbrec_port_binding_by_datapath,
             ra->metadata = peer->datapath->tunnel_key;
             ra->delete_me = false;
 
-            long long int next_ra = ipv6_ra_send(ra);
+            long long int next_ra = ipv6_ra_send(swconn, ra);
             if (send_ipv6_ra_time > next_ra) {
                 send_ipv6_ra_time = next_ra;
             }
@@ -1862,8 +1884,8 @@ void
 pinctrl_wait(struct ovsdb_idl_txn *ovnsb_idl_txn)
 {
     wait_put_mac_bindings(ovnsb_idl_txn);
-    rconn_run_wait(swconn);
-    rconn_recv_wait(swconn);
+    rconn_run_wait(swconn_);
+    rconn_recv_wait(swconn_);
     send_garp_wait();
     ipv6_ra_wait();
 }
@@ -1871,7 +1893,7 @@ pinctrl_wait(struct ovsdb_idl_txn *ovnsb_idl_txn)
 void
 pinctrl_destroy(void)
 {
-    rconn_destroy(swconn);
+    rconn_destroy(swconn_);
     destroy_put_mac_bindings();
     destroy_send_garps();
     destroy_ipv6_ras();
@@ -1936,7 +1958,7 @@ pinctrl_find_put_mac_binding(uint32_t dp_key, uint32_t port_key,
 }
 
 static void
-pinctrl_handle_put_mac_binding(const struct flow *md,
+pinctrl_handle_put_mac_binding(struct rconn *swconn, const struct flow *md,
                                const struct flow *headers, bool is_arp)
 {
     uint32_t dp_key = ntohll(md->metadata);
@@ -1973,7 +1995,7 @@ pinctrl_handle_put_mac_binding(const struct flow *md,
     uint32_t bhash = hash_bytes(&ip_key, sizeof ip_key, 0);
     bp = pinctrl_find_buffered_packets(&ip_key, bhash);
     if (bp) {
-        buffered_send_packets(bp, &pmb->mac);
+        buffered_send_packets(swconn, bp, &pmb->mac);
     }
 }
 
@@ -2202,7 +2224,8 @@ send_garp_delete(const char *lport)
 }
 
 static long long int
-send_garp(struct garp_data *garp, long long int current_time)
+send_garp(struct rconn *swconn, struct garp_data *garp,
+          long long int current_time)
 {
     if (current_time < garp->announce_time) {
         return garp->announce_time;
@@ -2234,7 +2257,7 @@ send_garp(struct garp_data *garp, long long int current_time)
     };
     match_set_in_port(&po.flow_metadata, OFPP_CONTROLLER);
     enum ofputil_protocol proto = ofputil_protocol_from_ofp_version(version);
-    queue_msg(ofputil_encode_packet_out(&po, proto));
+    queue_msg(swconn, ofputil_encode_packet_out(&po, proto));
     dp_packet_uninit(&packet);
     ofpbuf_uninit(&ofpacts);
 
@@ -2504,7 +2527,8 @@ send_garp_wait(void)
 }
 
 static void
-send_garp_run(struct ovsdb_idl_index *sbrec_chassis_by_name,
+send_garp_run(struct rconn *swconn,
+              struct ovsdb_idl_index *sbrec_chassis_by_name,
               struct ovsdb_idl_index *sbrec_port_binding_by_datapath,
               struct ovsdb_idl_index *sbrec_port_binding_by_name,
               const struct ovsrec_bridge *br_int,
@@ -2562,7 +2586,8 @@ send_garp_run(struct ovsdb_idl_index *sbrec_chassis_by_name,
     long long int current_time = time_msec();
     send_garp_time = LLONG_MAX;
     SHASH_FOR_EACH (iter, &send_garp_data) {
-        long long int next_announce = send_garp(iter->data, current_time);
+        long long int next_announce = send_garp(swconn, iter->data,
+                                                current_time);
         if (send_garp_time > next_announce) {
             send_garp_time = next_announce;
         }
@@ -2618,7 +2643,8 @@ reload_metadata(struct ofpbuf *ofpacts, const struct match *md)
 }
 
 static void
-pinctrl_handle_nd_na(const struct flow *ip_flow, const struct match *md,
+pinctrl_handle_nd_na(struct rconn *swconn, const struct flow *ip_flow,
+                     const struct match *md,
                      struct ofpbuf *userdata, bool is_router)
 {
     /* This action only works for IPv6 ND packets, and the switch should only
@@ -2644,12 +2670,13 @@ pinctrl_handle_nd_na(const struct flow *ip_flow, const struct match *md,
                   htonl(rso_flags));
 
     /* Reload previous packet metadata and set actions from userdata. */
-    set_actions_and_enqueue_msg(&packet, md, userdata);
+    set_actions_and_enqueue_msg(swconn, &packet, md, userdata);
     dp_packet_uninit(&packet);
 }
 
 static void
-pinctrl_handle_nd_ns(const struct flow *ip_flow, struct dp_packet *pkt_in,
+pinctrl_handle_nd_ns(struct rconn *swconn, const struct flow *ip_flow,
+                     struct dp_packet *pkt_in,
                      const struct match *md, struct ofpbuf *userdata)
 {
     /* This action only works for IPv6 packets. */
@@ -2669,12 +2696,13 @@ pinctrl_handle_nd_ns(const struct flow *ip_flow, struct dp_packet *pkt_in,
                   &ip_flow->ipv6_dst);
 
     /* Reload previous packet metadata and set actions from userdata. */
-    set_actions_and_enqueue_msg(&packet, md, userdata);
+    set_actions_and_enqueue_msg(swconn, &packet, md, userdata);
     dp_packet_uninit(&packet);
 }
 
 static void
 pinctrl_handle_put_nd_ra_opts(
+    struct rconn *swconn,
     const struct flow *in_flow, struct dp_packet *pkt_in,
     struct ofputil_packet_in *pin, struct ofpbuf *userdata,
     struct ofpbuf *continuation)
@@ -2756,6 +2784,6 @@ exit:
         sv.u8_val = success;
         mf_write_subfield(&dst, &sv, &pin->flow_metadata);
     }
-    queue_msg(ofputil_encode_resume(pin, continuation, proto));
+    queue_msg(swconn, ofputil_encode_resume(pin, continuation, proto));
     dp_packet_uninit(pkt_out_ptr);
 }
