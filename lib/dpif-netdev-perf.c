@@ -498,15 +498,7 @@ pmd_perf_end_iteration(struct pmd_perf_stats *s, int rx_packets,
         cycles_per_pkt = cycles / rx_packets;
         histogram_add_sample(&s->cycles_per_pkt, cycles_per_pkt);
     }
-    if (s->current.batches > 0) {
-        histogram_add_sample(&s->pkts_per_batch,
-                             rx_packets / s->current.batches);
-    }
     histogram_add_sample(&s->upcalls, s->current.upcalls);
-    if (s->current.upcalls > 0) {
-        histogram_add_sample(&s->cycles_per_upcall,
-                             s->current.upcall_cycles / s->current.upcalls);
-    }
     histogram_add_sample(&s->max_vhost_qfill, s->current.max_vhost_qfill);
 
     /* Add iteration samples to millisecond stats. */
