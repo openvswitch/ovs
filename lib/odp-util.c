@@ -5725,7 +5725,9 @@ odp_flow_from_string(const char *s, const struct simap *port_names,
                      struct ofpbuf *key, struct ofpbuf *mask,
                      char **errorp)
 {
-    *errorp = NULL;
+    if (errorp) {
+        *errorp = NULL;
+    }
 
     const size_t old_size = key->size;
     struct parse_odp_context context = (struct parse_odp_context) {
@@ -5743,7 +5745,9 @@ odp_flow_from_string(const char *s, const struct simap *port_names,
         ovs_u128 ufid;
         retval = odp_ufid_from_string(s, &ufid);
         if (retval < 0) {
-            *errorp = xasprintf("syntax error at %s", s);
+            if (errorp) {
+                *errorp = xasprintf("syntax error at %s", s);
+            }
             key->size = old_size;
             return -retval;
         } else if (retval > 0) {
@@ -5753,7 +5757,9 @@ odp_flow_from_string(const char *s, const struct simap *port_names,
 
         retval = parse_odp_key_mask_attr(&context, s, key, mask);
         if (retval < 0) {
-            *errorp = xasprintf("syntax error at %s", s);
+            if (errorp) {
+                *errorp = xasprintf("syntax error at %s", s);
+            }
             key->size = old_size;
             return -retval;
         }
