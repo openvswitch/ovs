@@ -51,8 +51,6 @@
 #include "util.h"
 #include "openvswitch/ofp-flow.h"
 #include "openvswitch/ofp-port.h"
-#include "openvswitch/vlog.h"
-VLOG_DEFINE_THIS_MODULE(dpctl);
 
 typedef int dpctl_command_handler(int argc, const char *argv[],
                                   struct dpctl_params *);
@@ -2584,8 +2582,6 @@ dpctl_unixctl_handler(struct unixctl_conn *conn, int argc, const char *argv[],
     if (!set_names) {
         dpctl_p.names = dpctl_p.verbosity > 0;
     }
-    VLOG_INFO("set_names=%d verbosity=%d names=%d", set_names,
-              dpctl_p.verbosity, dpctl_p.names);
 
     if (!error) {
         dpctl_command_handler *handler = (dpctl_command_handler *) aux;
