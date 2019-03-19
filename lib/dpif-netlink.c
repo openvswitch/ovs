@@ -2068,6 +2068,7 @@ parse_flow_put(struct dpif_netlink *dpif, struct dpif_flow_put *put)
         VLOG_DBG("added flow");
     } else if (err != EEXIST) {
         struct netdev *oor_netdev = NULL;
+        enum vlog_level level;
         if (err == ENOSPC && netdev_is_offload_rebalance_policy_enabled()) {
             /*
              * We need to set OOR on the input netdev (i.e, 'dev') for the
@@ -2082,8 +2083,10 @@ parse_flow_put(struct dpif_netlink *dpif, struct dpif_flow_put *put)
             }
             netdev_set_hw_info(oor_netdev, HW_INFO_TYPE_OOR, true);
         }
-        VLOG_ERR_RL(&rl, "failed to offload flow: %s: %s", ovs_strerror(err),
-                    (oor_netdev ? oor_netdev->name : dev->name));
+        level = (err == ENOSPC || err == EOPNOTSUPP) ? VLL_DBG : VLL_ERR;
+        VLOG_RL(&rl, level, "failed to offload flow: %s: %s",
+                ovs_strerror(err),
+                (oor_netdev ? oor_netdev->name : dev->name));
     }
 
 out:
