@@ -554,8 +554,8 @@ pmd_perf_end_iteration(struct pmd_perf_stats *s, int rx_packets,
             cum_ms = history_next(&s->milliseconds);
             cum_ms->timestamp = now;
         }
-        /* Do the next check after 10K cycles (4 us at 2.5 GHz TSC clock). */
-        s->next_check_tsc = cycles_counter_update(s) + 10000;
+        /* Do the next check after 4 us (10K cycles at 2.5 GHz TSC clock). */
+        s->next_check_tsc = cycles_counter_update(s) + get_tsc_hz() / 250000;
     }
 }
 
