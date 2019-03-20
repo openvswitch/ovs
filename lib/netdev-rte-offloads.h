@@ -25,6 +25,23 @@ struct nlattr;
 struct offload_info;
 struct dpif_flow_stats;
 
+/* Thread-safety
+ * =============
+ *
+ * Below API is NOT thread safe in following terms:
+ *
+ *  - The caller must be sure that none of these functions will be called
+ *    simultaneously.  Even for different 'netdev's.
+ *
+ *  - The caller must be sure that 'netdev' will not be destructed/deallocated.
+ *
+ *  - The caller must be sure that 'netdev' configuration will not be changed.
+ *    For example, simultaneous call of 'netdev_reconfigure()' for the same
+ *    'netdev' is forbidden.
+ *
+ * For current implementation all above restrictions could be fulfilled by
+ * taking the datapath 'port_mutex' in lib/dpif-netdev.c.  */
+
 int netdev_rte_offloads_flow_put(struct netdev *netdev, struct match *match,
                                  struct nlattr *actions, size_t actions_len,
                                  const ovs_u128 *ufid,
