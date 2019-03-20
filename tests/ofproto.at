@@ -1223,6 +1223,22 @@ OFPST_GROUP reply (OF1.5):
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+dnl This is used to find that the bucket counter is not updated.
+AT_SETUP([ofproto - group stats after insert a new bucket (OpenFlow 1.5)])
+OVS_VSWITCHD_START
+AT_DATA([groups.txt], [dnl
+group_id=1234,type=select,selection_method=hash bucket=bucket_id=1,weight:100,actions=output:10
+])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn add-groups br0 groups.txt])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn insert-buckets br0 'group_id=1234, command_bucket_id=last, bucket=bucket_id=2,weight:100,actions=output:10'])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-group-stats br0 group_id=1234], [0], [stdout])
+AT_CHECK([strip_xids < stdout | sed 's/duration=[[0-9.]]*s/duration=?s/' | sort], [0], [dnl
+ group_id=1234,duration=?s,ref_count=0,packet_count=0,byte_count=0,bucket0:packet_count=0,byte_count=0,bucket1:packet_count=0,byte_count=0
+OFPST_GROUP reply (OF1.5):
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 dnl This found a use-after-free error in bridge destruction in the
 dnl presence of groups.
 AT_SETUP([ofproto - group add then bridge delete (OpenFlow 1.3)])

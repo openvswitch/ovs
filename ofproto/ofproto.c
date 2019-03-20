@@ -7425,6 +7425,8 @@ modify_group_start(struct ofproto *ofproto, struct ofproto_group_mod *ogm)
     *CONST_CAST(long long int *, &(new_group->created)) = old_group->created;
     *CONST_CAST(long long int *, &(new_group->modified)) = time_msec();
 
+    *CONST_CAST(uint32_t *, &(new_group->n_buckets)) =
+        ovs_list_size(&(new_group->buckets));
     group_collection_add(&ogm->old_groups, old_group);
 
     /* Mark the old group for deletion. */
