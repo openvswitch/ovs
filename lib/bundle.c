@@ -183,6 +183,11 @@ bundle_parse__(const char *s, const struct ofputil_port_map *port_map,
         bundle = ofpacts->header;
         bundle->n_slaves++;
     }
+
+    if (ofpbuf_oversized(ofpacts)) {
+        return xasprintf("input too big");
+    }
+
     ofpact_finish_BUNDLE(ofpacts, &bundle);
     bundle->basis = atoi(basis);
 

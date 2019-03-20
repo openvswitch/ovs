@@ -989,6 +989,11 @@ parse_CONTROLLER(char *arg, const struct ofpact_parse_params *pp)
             controller = pp->ofpacts->header;
             controller->userdata_len = userdata_len;
         }
+
+        if (ofpbuf_oversized(pp->ofpacts)) {
+            return xasprintf("input too big");
+        }
+
         ofpact_finish_CONTROLLER(pp->ofpacts, &controller);
     }
 
@@ -3690,6 +3695,11 @@ parse_DEC_TTL(char *arg, const struct ofpact_parse_params *pp)
             return xstrdup("dec_ttl_cnt_ids: expected at least one controller "
                            "id.");
         }
+
+        if (ofpbuf_oversized(pp->ofpacts)) {
+            return xasprintf("input too big");
+        }
+
         ofpact_finish_DEC_TTL(pp->ofpacts, &ids);
     }
     return NULL;
@@ -4443,6 +4453,11 @@ parse_ENCAP(char *arg, const struct ofpact_parse_params *pp)
     /* ofpbuf may have been re-allocated. */
     encap = pp->ofpacts->header;
     encap->n_props = n_props;
+
+    if (ofpbuf_oversized(pp->ofpacts)) {
+        return xasprintf("input too big");
+    }
+
     ofpact_finish_ENCAP(pp->ofpacts, &encap);
     return NULL;
 }
@@ -5772,6 +5787,11 @@ parse_NOTE(const char *arg, const struct ofpact_parse_params *pp)
     struct ofpact_note *note = ofpbuf_at_assert(pp->ofpacts, start_ofs,
                                                 sizeof *note);
     note->length = pp->ofpacts->size - (start_ofs + sizeof *note);
+
+    if (ofpbuf_oversized(pp->ofpacts)) {
+        return xasprintf("input too big");
+    }
+
     ofpact_finish_NOTE(pp->ofpacts, &note);
     return NULL;
 }
@@ -5928,6 +5948,10 @@ parse_CLONE(char *arg, const struct ofpact_parse_params *pp)
     /* header points to the action list */
     pp->ofpacts->header = ofpbuf_push_uninit(pp->ofpacts, sizeof *clone);
     clone = pp->ofpacts->header;
+
+    if (ofpbuf_oversized(pp->ofpacts)) {
+        return xasprintf("input too big");
+    }
 
     ofpact_finish_CLONE(pp->ofpacts, &clone);
     ofpbuf_push_uninit(pp->ofpacts, clone_offset);
@@ -6615,6 +6639,11 @@ parse_CT(char *arg, const struct ofpact_parse_params *pp)
     if (!error && oc->flags & NX_CT_F_FORCE && !(oc->flags & NX_CT_F_COMMIT)) {
         error = xasprintf("\"force\" flag requires \"commit\" flag.");
     }
+
+    if (ofpbuf_oversized(pp->ofpacts)) {
+        return xasprintf("input too big");
+    }
+
     ofpact_finish_CT(pp->ofpacts, &oc);
     ofpbuf_push_uninit(pp->ofpacts, ct_offset);
     return error;
