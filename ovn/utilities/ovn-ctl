@@ -40,13 +40,13 @@ pidfile_is_running () {
 
 stop_nb_ovsdb() {
     if pidfile_is_running $DB_NB_PID; then
-        ovs-appctl -t $rundir/ovnnb_db.ctl exit
+        ovs-appctl -t $OVN_RUNDIR/ovnnb_db.ctl exit
     fi
 }
 
 stop_sb_ovsdb() {
     if pidfile_is_running $DB_SB_PID; then
-        ovs-appctl -t $rundir/ovnsb_db.ctl exit
+        ovs-appctl -t $OVN_RUNDIR/ovnsb_db.ctl exit
     fi
 }
 
@@ -61,8 +61,8 @@ demote_ovnnb() {
     fi
 
     if test -e $ovnnb_active_conf_file; then
-        ovs-appctl -t $rundir/ovnnb_db.ctl ovsdb-server/set-active-ovsdb-server `cat $ovnnb_active_conf_file`
-        ovs-appctl -t $rundir/ovnnb_db.ctl ovsdb-server/connect-active-ovsdb-server
+        ovs-appctl -t $OVN_RUNDIR/ovnnb_db.ctl ovsdb-server/set-active-ovsdb-server `cat $ovnnb_active_conf_file`
+        ovs-appctl -t $OVN_RUNDIR/ovnnb_db.ctl ovsdb-server/connect-active-ovsdb-server
     else
         echo >&2 "$0: active server details not set"
         exit 1
@@ -75,8 +75,8 @@ demote_ovnsb() {
     fi
 
     if test -e $ovnsb_active_conf_file; then
-        ovs-appctl -t $rundir/ovnsb_db.ctl ovsdb-server/set-active-ovsdb-server `cat $ovnsb_active_conf_file`
-        ovs-appctl -t $rundir/ovnsb_db.ctl ovsdb-server/connect-active-ovsdb-server
+        ovs-appctl -t $OVN_RUNDIR/ovnsb_db.ctl ovsdb-server/set-active-ovsdb-server `cat $ovnsb_active_conf_file`
+        ovs-appctl -t $OVN_RUNDIR/ovnsb_db.ctl ovsdb-server/connect-active-ovsdb-server
     else
         echo >&2 "$0: active server details not set"
         exit 1
@@ -85,12 +85,12 @@ demote_ovnsb() {
 
 promote_ovnnb() {
     rm -f $ovnnb_active_conf_file
-    ovs-appctl -t $rundir/ovnnb_db.ctl ovsdb-server/disconnect-active-ovsdb-server
+    ovs-appctl -t $OVN_RUNDIR/ovnnb_db.ctl ovsdb-server/disconnect-active-ovsdb-server
 }
 
 promote_ovnsb() {
     rm -f $ovnsb_active_conf_file
-    ovs-appctl -t $rundir/ovnsb_db.ctl ovsdb-server/disconnect-active-ovsdb-server
+    ovs-appctl -t $OVN_RUNDIR/ovnsb_db.ctl ovsdb-server/disconnect-active-ovsdb-server
 }
 
 start_ovsdb__() {
@@ -244,7 +244,7 @@ start_ovsdb () {
 }
 
 sync_status() {
-    ovs-appctl -t $rundir/ovn${1}_db.ctl ovsdb-server/sync-status | awk '{if(NR==1) print $2}'
+    ovs-appctl -t $OVN_RUNDIR/ovn${1}_db.ctl ovsdb-server/sync-status | awk '{if(NR==1) print $2}'
 }
 
 status_ovnnb() {
@@ -428,8 +428,11 @@ restart_sb_ovsdb () {
 set_defaults () {
     OVN_MANAGE_OVSDB=yes
 
-    DB_NB_SOCK=$rundir/ovnnb_db.sock
-    DB_NB_PID=$rundir/ovnnb_db.pid
+    OVS_RUNDIR=${OVS_RUNDIR:-${rundir}}
+    OVN_RUNDIR=${OVN_RUNDIR:-${OVS_RUNDIR}}
+
+    DB_NB_SOCK=$OVN_RUNDIR/ovnnb_db.sock
+    DB_NB_PID=$OVN_RUNDIR/ovnnb_db.pid
     DB_NB_FILE=$dbdir/ovnnb_db.db
     DB_NB_ADDR=0.0.0.0
     DB_NB_PORT=6641
@@ -437,8 +440,8 @@ set_defaults () {
     DB_NB_SYNC_FROM_ADDR=
     DB_NB_SYNC_FROM_PORT=6641
 
-    DB_SB_SOCK=$rundir/ovnsb_db.sock
-    DB_SB_PID=$rundir/ovnsb_db.pid
+    DB_SB_SOCK=$OVN_RUNDIR/ovnsb_db.sock
+    DB_SB_PID=$OVN_RUNDIR/ovnsb_db.pid
     DB_SB_FILE=$dbdir/ovnsb_db.db
     DB_SB_ADDR=0.0.0.0
     DB_SB_PORT=6642
@@ -449,7 +452,7 @@ set_defaults () {
     DB_NB_SCHEMA=$datadir/ovn-nb.ovsschema
     DB_SB_SCHEMA=$datadir/ovn-sb.ovsschema
 
-    DB_SOCK=$rundir/db.sock
+    DB_SOCK=$OVN_RUNDIR/db.sock
     DB_CONF_FILE=$dbdir/conf.db
 
     OVN_NORTHD_PRIORITY=-10
@@ -457,8 +460,6 @@ set_defaults () {
     OVN_CONTROLLER_PRIORITY=-10
     OVN_CONTROLLER_WRAPPER=
 
-    OVS_RUNDIR=${OVS_RUNDIR:-${rundir}}
-    OVN_RUNDIR=${OVN_RUNDIR:-${OVS_RUNDIR}}
     OVN_USER=
     OVS_USER=
 
