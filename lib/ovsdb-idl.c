@@ -1888,7 +1888,7 @@ ovsdb_idl_check_server_db(struct ovsdb_idl *idl)
             VLOG_WARN("%s: clustered database server has stale data; "
                       "trying another server", server_name);
         } else {
-            idl->min_index = MAX(idl->min_index, index);
+            idl->min_index = index;
             ok = true;
         }
     } else {
