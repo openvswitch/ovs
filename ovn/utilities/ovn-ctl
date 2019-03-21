@@ -144,6 +144,7 @@ start_ovsdb__() {
     eval ovn_db_ssl_cert=\$OVN_${DB}_DB_SSL_CERT
     eval ovn_db_ssl_cacert=\$OVN_${DB}_DB_SSL_CA_CERT
 
+    install_dir "$OVN_RUNDIR"
     # Check and eventually start ovsdb-server for DB
     if pidfile_is_running $db_pid_file; then
         return
