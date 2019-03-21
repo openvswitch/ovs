@@ -1001,6 +1001,7 @@ static struct cmd_show_table cmd_show_tables[] = {
      &ovsrec_bridge_col_name,
      {&ovsrec_bridge_col_controller,
       &ovsrec_bridge_col_fail_mode,
+      &ovsrec_bridge_col_datapath_type,
       &ovsrec_bridge_col_ports},
      {NULL, NULL, NULL}
     },
