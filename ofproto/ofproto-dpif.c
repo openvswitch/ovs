@@ -3768,6 +3768,26 @@ port_get_stats(const struct ofport *ofport_, struct netdev_stats *stats)
 }
 
 static int
+vport_get_status(const struct ofport *ofport_, char **errp)
+{
+    struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
+    char *peer_name;
+
+    if (!netdev_vport_is_patch(ofport->up.netdev) || ofport->peer) {
+        return 0;
+    }
+
+    peer_name = netdev_vport_patch_peer(ofport->up.netdev);
+    if (!peer_name) {
+        return 0;
+    }
+    *errp = xasprintf("No usable peer '%s' exists in '%s' datapath.",
+                      peer_name, ofport->up.ofproto->type);
+    free(peer_name);
+    return EINVAL;
+}
+
+static int
 port_get_lacp_stats(const struct ofport *ofport_, struct lacp_slave_stats *stats)
 {
     struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
@@ -6045,6 +6065,7 @@ const struct ofproto_class ofproto_dpif_class = {
     port_del,
     port_set_config,
     port_get_stats,
+    vport_get_status,
     port_dump_start,
     port_dump_next,
     port_dump_done,

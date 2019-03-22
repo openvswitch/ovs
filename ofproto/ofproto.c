@@ -2627,6 +2627,17 @@ ofproto_port_get_stats(const struct ofport *port, struct netdev_stats *stats)
     return error;
 }
 
+int
+ofproto_vport_get_status(const struct ofproto *ofproto, ofp_port_t ofp_port,
+                         char **errp)
+{
+    struct ofport *ofport = ofproto_get_port(ofproto, ofp_port);
+
+    return (ofport && ofproto->ofproto_class->vport_get_status)
+           ? ofproto->ofproto_class->vport_get_status(ofport, errp)
+           : EOPNOTSUPP;
+}
+
 static int
 update_port(struct ofproto *ofproto, const char *name)
 {

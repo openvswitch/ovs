@@ -317,6 +317,9 @@ void ofproto_port_set_config(struct ofproto *, ofp_port_t ofp_port,
                              const struct smap *cfg);
 int ofproto_port_get_stats(const struct ofport *, struct netdev_stats *stats);
 
+int ofproto_vport_get_status(const struct ofproto *, ofp_port_t ofp_port,
+                             char **errp);
+
 int ofproto_port_query_by_name(const struct ofproto *, const char *devname,
                                struct ofproto_port *);
 

@@ -2256,9 +2256,22 @@ static void
 iface_refresh_ofproto_status(struct iface *iface)
 {
     int current;
+    int error;
+    char *errp = NULL;
 
     if (iface_is_synthetic(iface)) {
         return;
+    }
+
+    error = ofproto_vport_get_status(iface->port->bridge->ofproto,
+                                     iface->ofp_port, &errp);
+    if (error && error != EOPNOTSUPP) {
+        /* Need to verify to avoid race with transaction from
+         * 'bridge_reconfigure' that clears errors explicitly. */
+        ovsrec_interface_verify_error(iface->cfg);
+        ovsrec_interface_set_error(iface->cfg,
+                                   errp ? errp : ovs_strerror(error));
+        free(errp);
     }
 
     current = ofproto_port_is_lacp_current(iface->port->bridge->ofproto,

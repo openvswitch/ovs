@@ -1076,6 +1076,17 @@ struct ofproto_class {
     int (*port_get_stats)(const struct ofport *port,
                           struct netdev_stats *stats);
 
+    /* Get status of the virtual port (ex. tunnel, patch).
+     *
+     * Returns '0' if 'port' is not a virtual port or has no errors.
+     * Otherwise, stores the error string in '*errp' and returns positive errno
+     * value. The caller is responsible for freeing '*errp' (with free()).
+     *
+     * This function may be a null pointer if the ofproto implementation does
+     * not support any virtual ports or their states.
+     */
+    int (*vport_get_status)(const struct ofport *port, char **errp);
+
     /* Port iteration functions.
      *
      * The client might not be entirely in control of the ports within an
