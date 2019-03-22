@@ -495,7 +495,7 @@ reconnect_connect_failed(struct reconnect *fsm, long long int now, int error)
 void
 reconnect_activity(struct reconnect *fsm, long long int now)
 {
-    if (fsm->state != S_ACTIVE) {
+    if (fsm->state == S_IDLE) {
         reconnect_transition__(fsm, now, S_ACTIVE);
     }
     fsm->last_activity = now;
