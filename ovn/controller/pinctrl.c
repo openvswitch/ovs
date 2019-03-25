@@ -1927,7 +1927,7 @@ ipv6_ra_update_config(const struct sbrec_port_binding *pb)
     config->min_interval = smap_get_int(&pb->options, "ipv6_ra_min_interval",
             nd_ra_min_interval_default(config->max_interval));
     config->mtu = smap_get_int(&pb->options, "ipv6_ra_mtu", ND_MTU_DEFAULT);
-    config->la_flags = ND_PREFIX_ON_LINK;
+    config->la_flags = IPV6_ND_RA_OPT_PREFIX_ON_LINK;
 
     const char *address_mode = smap_get(&pb->options, "ipv6_ra_address_mode");
     if (!address_mode) {
@@ -1936,10 +1936,11 @@ ipv6_ra_update_config(const struct sbrec_port_binding *pb)
     }
     if (!strcmp(address_mode, "dhcpv6_stateless")) {
         config->mo_flags = IPV6_ND_RA_FLAG_OTHER_ADDR_CONFIG;
+        config->la_flags |= IPV6_ND_RA_OPT_PREFIX_AUTONOMOUS;
     } else if (!strcmp(address_mode, "dhcpv6_stateful")) {
         config->mo_flags = IPV6_ND_RA_FLAG_MANAGED_ADDR_CONFIG;
     } else if (!strcmp(address_mode, "slaac")) {
-        config->la_flags |= ND_PREFIX_AUTONOMOUS_ADDRESS;
+        config->la_flags |= IPV6_ND_RA_OPT_PREFIX_AUTONOMOUS;
     } else {
         VLOG_WARN("Invalid address mode %s", address_mode);
         goto fail;
