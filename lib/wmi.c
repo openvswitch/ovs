@@ -686,7 +686,7 @@ create_wmi_port(char *name) {
 
     /* Check if the element already exists on the switch. */
     wchar_t internal_port_query[WMI_QUERY_COUNT] = L"SELECT * FROM "
-    L"Msvm_InternalEthernetPort WHERE ElementName = \"";
+    L"CIM_EthernetPort WHERE ElementName = \"";
 
     wide_name = xmalloc((strlen(name) + 1) * sizeof(wchar_t));
 
