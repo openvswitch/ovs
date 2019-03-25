@@ -1954,12 +1954,6 @@ parse_put_nd_ra_opts(struct action_context *ctx, const struct expr_field *dst,
         return;
     }
 
-    if (addr_mode_stateful && prefix_set) {
-        lexer_error(ctx->lexer, "prefix option can't be"
-                    " set when address mode is dhcpv6_stateful.");
-        return;
-    }
-
     if (!addr_mode_stateful && !prefix_set) {
         lexer_error(ctx->lexer, "prefix option needs "
                     "to be set when address mode is slaac/dhcpv6_stateless.");
@@ -2020,10 +2014,14 @@ encode_put_nd_ra_option(const struct ovnact_gen_option *o,
         struct ovs_nd_prefix_opt *prefix_opt =
             ofpbuf_put_uninit(ofpacts, sizeof *prefix_opt);
         uint8_t prefix_len = ipv6_count_cidr_bits(&c->mask.ipv6);
+        struct ovs_ra_msg *ra = ofpbuf_at(ofpacts, ra_offset, sizeof *ra);
         prefix_opt->type = ND_OPT_PREFIX_INFORMATION;
         prefix_opt->len = 4;
         prefix_opt->prefix_len = prefix_len;
-        prefix_opt->la_flags = IPV6_ND_RA_OPT_PREFIX_FLAGS;
+        prefix_opt->la_flags = IPV6_ND_RA_OPT_PREFIX_ON_LINK;
+        if (!(ra->mo_flags & IPV6_ND_RA_FLAG_MANAGED_ADDR_CONFIG)) {
+            prefix_opt->la_flags |= IPV6_ND_RA_OPT_PREFIX_AUTONOMOUS;
+        }
         put_16aligned_be32(&prefix_opt->valid_lifetime,
                            htonl(IPV6_ND_RA_OPT_PREFIX_VALID_LIFETIME));
         put_16aligned_be32(&prefix_opt->preferred_lifetime,

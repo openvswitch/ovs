@@ -6312,13 +6312,10 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                 continue;
             }
 
-            /* Add the prefix option if the address mode is slaac or
-             * dhcpv6_stateless. */
-            if (strcmp(address_mode, "dhcpv6_stateful")) {
-                ds_put_format(&actions, ", prefix = %s/%u",
-                              op->lrp_networks.ipv6_addrs[i].network_s,
-                              op->lrp_networks.ipv6_addrs[i].plen);
-            }
+            ds_put_format(&actions, ", prefix = %s/%u",
+                          op->lrp_networks.ipv6_addrs[i].network_s,
+                          op->lrp_networks.ipv6_addrs[i].plen);
+
             add_rs_response_flow = true;
         }
 

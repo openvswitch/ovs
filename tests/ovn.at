@@ -1260,9 +1260,11 @@ reg1[0] = put_nd_ra_opts(addr_mode = "dhcpv6_stateless", slla = ae:01:02:03:04:0
 reg1[0] = put_nd_ra_opts(addr_mode = "slaac", mtu = 1500, prefix = aef0::/64);
     slla option not present
 reg1[0] = put_nd_ra_opts(addr_mode = "dhcpv6_stateful", mtu = 1450, prefix = aef0::/64, prefix = bef0::/64, slla = ae:01:02:03:04:10);
-    prefix option can't be set when address mode is dhcpv6_stateful.
+    encodes as controller(userdata=00.00.00.08.00.00.00.00.00.01.de.10.00.00.00.40.86.00.00.00.ff.80.ff.ff.00.00.00.00.00.00.00.00.05.01.00.00.00.00.05.aa.03.04.40.80.ff.ff.ff.ff.ff.ff.ff.ff.00.00.00.00.ae.f0.00.00.00.00.00.00.00.00.00.00.00.00.00.00.03.04.40.80.ff.ff.ff.ff.ff.ff.ff.ff.00.00.00.00.be.f0.00.00.00.00.00.00.00.00.00.00.00.00.00.00.01.01.ae.01.02.03.04.10,pause)
+    has prereqs ip6
 reg1[0] = put_nd_ra_opts(addr_mode = "dhcpv6_stateful", mtu = 1450, prefix = aef0::/64, prefix = bef0::/64, slla = ae:01:02:03:04:10);
-    prefix option can't be set when address mode is dhcpv6_stateful.
+    encodes as controller(userdata=00.00.00.08.00.00.00.00.00.01.de.10.00.00.00.40.86.00.00.00.ff.80.ff.ff.00.00.00.00.00.00.00.00.05.01.00.00.00.00.05.aa.03.04.40.80.ff.ff.ff.ff.ff.ff.ff.ff.00.00.00.00.ae.f0.00.00.00.00.00.00.00.00.00.00.00.00.00.00.03.04.40.80.ff.ff.ff.ff.ff.ff.ff.ff.00.00.00.00.be.f0.00.00.00.00.00.00.00.00.00.00.00.00.00.00.01.01.ae.01.02.03.04.10,pause)
+    has prereqs ip6
 reg1[0] = put_nd_ra_opts(addr_mode = "slaac", slla = ae:01:02:03:04:10);
     prefix option needs to be set when address mode is slaac/dhcpv6_stateless.
 reg1[0] = put_nd_ra_opts(addr_mode = "dhcpv6_stateless", slla = ae:01:02:03:04:10);
@@ -9376,7 +9378,7 @@ ovn-nbctl --wait=hv set Logical_Router_Port lrp0 ipv6_ra_configs:address_mode=dh
 OVS_WAIT_UNTIL([test 1 = `as hv1 ovs-ofctl dump-flows br-int | grep -c "ipv6_dst=ff02::2,nw_ttl=255,icmp_type=133,icmp_code=0"`])
 
 addr_mode=80
-default_prefix_option_config=""
+default_prefix_option_config=03044080ffffffffffffffff00000000
 src_mac=fa163e000004
 src_lla=fe80000000000000f8163efffe000004
 mtu=000005dc
