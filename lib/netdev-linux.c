@@ -5762,7 +5762,7 @@ netdev_linux_update_via_netlink(struct netdev_linux *netdev)
      * and the interface name statically stored in ovsdb. */
     nl_msg_put_string(&request, IFLA_IFNAME, netdev_get_name(&netdev->up));
     if (netdev_linux_netnsid_is_remote(netdev)) {
-        nl_msg_push_u32(&request, IFLA_IF_NETNSID, netdev->netnsid);
+        nl_msg_put_u32(&request, IFLA_IF_NETNSID, netdev->netnsid);
     }
     error = nl_transact(NETLINK_ROUTE, &request, &reply);
     ofpbuf_uninit(&request);
