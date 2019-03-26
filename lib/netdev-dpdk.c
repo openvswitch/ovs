@@ -4143,7 +4143,7 @@ dump_flow_pattern(struct rte_flow_item *item)
                      "type=0x%04"PRIx16"\n",
                      ETH_ADDR_BYTES_ARGS(eth_mask->src.addr_bytes),
                      ETH_ADDR_BYTES_ARGS(eth_mask->dst.addr_bytes),
-                     eth_mask->type);
+                     ntohs(eth_mask->type));
         } else {
             ds_put_cstr(&s, "  Mask = null\n");
         }
@@ -4218,8 +4218,8 @@ dump_flow_pattern(struct rte_flow_item *item)
         if (udp_mask) {
             ds_put_format(&s,
                      "  Mask: src_port=0x%"PRIx16", dst_port=0x%"PRIx16"\n",
-                     udp_mask->hdr.src_port,
-                     udp_mask->hdr.dst_port);
+                     ntohs(udp_mask->hdr.src_port),
+                     ntohs(udp_mask->hdr.dst_port));
         } else {
             ds_put_cstr(&s, "  Mask = null\n");
         }
@@ -4241,8 +4241,8 @@ dump_flow_pattern(struct rte_flow_item *item)
         if (sctp_mask) {
             ds_put_format(&s,
                      "  Mask: src_port=0x%"PRIx16", dst_port=0x%"PRIx16"\n",
-                     sctp_mask->hdr.src_port,
-                     sctp_mask->hdr.dst_port);
+                     ntohs(sctp_mask->hdr.src_port),
+                     ntohs(sctp_mask->hdr.dst_port));
         } else {
             ds_put_cstr(&s, "  Mask = null\n");
         }
@@ -4291,8 +4291,8 @@ dump_flow_pattern(struct rte_flow_item *item)
             ds_put_format(&s,
                      "  Mask: src_port=%"PRIx16", dst_port=%"PRIx16
                      ", data_off=0x%"PRIx8", tcp_flags=0x%"PRIx8"\n",
-                     tcp_mask->hdr.src_port,
-                     tcp_mask->hdr.dst_port,
+                     ntohs(tcp_mask->hdr.src_port),
+                     ntohs(tcp_mask->hdr.dst_port),
                      tcp_mask->hdr.data_off,
                      tcp_mask->hdr.tcp_flags);
         } else {
