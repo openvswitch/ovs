@@ -6047,8 +6047,8 @@ netdev_linux_update_via_netlink(struct netdev_linux *netdev)
 
     ofpbuf_init(&request, 0);
     nl_msg_put_nlmsghdr(&request,
-                        sizeof(struct ifinfomsg) + NL_ATTR_SIZE(IFNAMSIZ),
-                        RTM_GETLINK, NLM_F_REQUEST);
+                        sizeof(struct ifinfomsg) + NL_ATTR_SIZE(IFNAMSIZ) +
+                        NL_A_U32_SIZE, RTM_GETLINK, NLM_F_REQUEST);
     ofpbuf_put_zeros(&request, sizeof(struct ifinfomsg));
 
     /* The correct identifiers for a Linux device are netnsid and ifindex,
