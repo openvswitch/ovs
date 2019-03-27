@@ -91,6 +91,13 @@ eth_addr_from_uint64(uint64_t x, struct eth_addr *ea)
     ea->be16[2] = htons(x & 0xFFFF);
 }
 
+void
+eth_addr_mark_random(struct eth_addr *ea)
+{
+    ea->ea[0] &= ~1;                /* Unicast. */
+    ea->ea[0] |= 2;                 /* Private. */
+}
+
 /* Returns true if 'ea' is a reserved address, that a bridge must never
  * forward, false otherwise.
  *

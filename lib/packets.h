@@ -296,11 +296,7 @@ static inline struct eth_addr eth_addr_invert(const struct eth_addr src)
     return dst;
 }
 
-static inline void eth_addr_mark_random(struct eth_addr *ea)
-{
-    ea->ea[0] &= ~1;                /* Unicast. */
-    ea->ea[0] |= 2;                 /* Private. */
-}
+void eth_addr_mark_random(struct eth_addr *ea);
 
 static inline void eth_addr_random(struct eth_addr *ea)
 {
