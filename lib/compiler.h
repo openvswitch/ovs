@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2019 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@
 
 /* Output a message (not an error) while compiling without failing the
  * compilation process */
-#if HAVE_PRAGMA_MESSAGE
+#if HAVE_PRAGMA_MESSAGE && !__CHECKER__
 #define DO_PRAGMA(x) _Pragma(#x)
 #define BUILD_MESSAGE(x) \
     DO_PRAGMA(message(x))
