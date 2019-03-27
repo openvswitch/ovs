@@ -949,6 +949,12 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_FIND_FIELD_IFELSE([$KSRC/include/net/inet_frag.h], [inet_frags],
                         [rnd],
                         [OVS_DEFINE([HAVE_INET_FRAGS_RND])])
+  OVS_GREP_IFELSE([$KSRC/include/linux/overflow.h], [__LINUX_OVERFLOW_H],
+                  [OVS_DEFINE([HAVE_OVERFLOW_H])])
+  OVS_GREP_IFELSE([$KSRC/include/linux/mm.h], [kvmalloc_array],
+                  [OVS_DEFINE([HAVE_KVMALLOC_ARRAY])])
+  OVS_GREP_IFELSE([$KSRC/include/linux/mm.h], [kvmalloc_node],
+                  [OVS_DEFINE([HAVE_KVMALLOC_NODE])])
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then

@@ -112,5 +112,7 @@ openvswitch_headers += \
 	linux/compat/include/net/netfilter/ipv6/nf_defrag_ipv6.h \
 	linux/compat/include/net/sctp/checksum.h \
 	linux/compat/include/net/erspan.h \
-	linux/compat/include/uapi/linux/netfilter.h
+	linux/compat/include/uapi/linux/netfilter.h \
+	linux/compat/include/linux/mm.h \
+	linux/compat/include/linux/overflow.h
 EXTRA_DIST += linux/compat/build-aux/export-check-whitelist
