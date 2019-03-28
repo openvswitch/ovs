@@ -170,3 +170,22 @@ Q: How do I apply patches from email?
    ``pwclient git-am #``, where # is the patch's number.  (This fails with
    certain patches that contain form-feeds, due to a limitation of the protocol
    underlying ``pwclient``.)
+
+   Another way to apply patches directly from patchwork which supports applying
+   patch series is to use the ``git-pw`` program. It can be obtained with
+   ``pip install git-pw``. Alternative installation instructions and general
+   documentation can be found at
+   https://patchwork.readthedocs.io/projects/git-pw/en/latest/. You need to
+   use your openvswitch patchwork login or create one at
+   https://patchwork.ozlabs.org/register/. The following can then be set on
+   the command line with ``git config`` or through a ``.gitconfig`` like this::
+
+     [pw]
+     server=https://patchwork.ozlabs.org/api/1.0
+     project=openvswitch
+     username=<username>
+     password=<password>
+
+   Patch series can be listed with ``git-pw series list`` and applied with
+   ``git-pw series apply #``, where # is the series number. Individual patches
+   can be applied with ``git-pw patch apply #``, where # is the patch number.
