@@ -1732,7 +1732,8 @@ join_logical_ports(struct northd_context *ctx,
 
                 const char *redirect_chassis = smap_get(&op->nbrp->options,
                                                         "redirect-chassis");
-                if (redirect_chassis || op->nbrp->n_gateway_chassis) {
+                if (op->nbrp->ha_chassis_group || redirect_chassis ||
+                    op->nbrp->n_gateway_chassis) {
                     /* Additional "derived" ovn_port crp represents the
                      * instance of op on the "redirect-chassis". */
                     const char *gw_chassis = smap_get(&op->od->nbr->options,
@@ -1967,111 +1968,53 @@ get_nat_addresses(const struct ovn_port *op, size_t *n)
 }
 
 static bool
-gateway_chassis_equal(const struct nbrec_gateway_chassis *nb_gwc,
-                      const struct sbrec_chassis *nb_gwc_c,
-                      const struct sbrec_gateway_chassis *sb_gwc)
-{
-    bool equal = !strcmp(nb_gwc->name, sb_gwc->name)
-                 && nb_gwc->priority == sb_gwc->priority
-                 && smap_equal(&nb_gwc->options, &sb_gwc->options)
-                 && smap_equal(&nb_gwc->external_ids, &sb_gwc->external_ids);
-
-    if (!equal) {
-        return false;
-    }
-
-    /* If everything else matched and we were unable to find the SBDB
-     * Chassis entry at this time, assume a match and return true.
-     * This happens when an ovn-controller is restarting and the Chassis
-     * entry is gone away momentarily */
-    return !nb_gwc_c
-           || (sb_gwc->chassis && !strcmp(nb_gwc_c->name,
-                                          sb_gwc->chassis->name));
-}
-
-static bool
 sbpb_gw_chassis_needs_update(
-    struct ovsdb_idl_index *sbrec_chassis_by_name,
-    const struct sbrec_port_binding *port_binding,
+    const struct sbrec_port_binding *pb,
     const struct nbrec_logical_router_port *lrp)
 {
-    if (!lrp || !port_binding) {
+    if (!lrp || !pb) {
         return false;
     }
 
-    if (lrp->n_gateway_chassis && !port_binding->ha_chassis_group) {
+    if (lrp->n_gateway_chassis && !pb->ha_chassis_group) {
         /* If there are gateway chassis in the NB DB, but there is
          * no corresponding HA chassis group in SB DB we need to
          * create the HA chassis group in SB DB for this lrp. */
         return true;
     }
 
-    /* These arrays are used to collect valid Gateway_Chassis and valid
-     * Chassis records from the Logical_Router_Port Gateway_Chassis list,
-     * we ignore the ones we can't match on the SBDB */
-    struct nbrec_gateway_chassis **lrp_gwc = xzalloc(lrp->n_gateway_chassis *
-                                                     sizeof *lrp_gwc);
-    const struct sbrec_chassis **lrp_gwc_c = xzalloc(lrp->n_gateway_chassis *
-                                               sizeof *lrp_gwc_c);
-
-    /* Count the number of gateway chassis chassis names from the logical
-     * router port that we are able to match on the southbound database */
-    int lrp_n_gateway_chassis = 0;
-    int n;
-    for (n = 0; n < lrp->n_gateway_chassis; n++) {
-
-        if (!lrp->gateway_chassis[n]->chassis_name) {
-            continue;
-        }
-
-        const struct sbrec_chassis *chassis =
-            chassis_lookup_by_name(sbrec_chassis_by_name,
-                                   lrp->gateway_chassis[n]->chassis_name);
-
-        lrp_gwc_c[lrp_n_gateway_chassis] = chassis;
-        lrp_gwc[lrp_n_gateway_chassis] = lrp->gateway_chassis[n];
-        lrp_n_gateway_chassis++;
-        if (!chassis) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-            VLOG_WARN_RL(
-                &rl, "Chassis name %s referenced in NBDB via Gateway_Chassis "
-                     "on logical router port %s does not exist in SBDB",
-                     lrp->gateway_chassis[n]->chassis_name, lrp->name);
-        }
-    }
-
-    /* Basic check, different amount of Gateway_Chassis means that we
-     * need to update southbound database Port_Binding */
-    if (lrp_n_gateway_chassis != port_binding->n_gateway_chassis) {
-        free(lrp_gwc_c);
-        free(lrp_gwc);
+    if (strcmp(pb->ha_chassis_group->name, lrp->name)) {
+        /* Name doesn't match. */
         return true;
     }
 
-    for (n = 0; n < lrp_n_gateway_chassis; n++) {
-        int i;
-        /* For each of the valid gw chassis on the lrp, check if there's
-         * a match on the Port_Binding list, we assume order is not
-         * persisted */
-        for (i = 0; i < port_binding->n_gateway_chassis; i++) {
-            if (gateway_chassis_equal(lrp_gwc[n],
-                                      lrp_gwc_c[n],
-                                      port_binding->gateway_chassis[i])) {
-                break; /* we found a match */
+    if (lrp->n_gateway_chassis != pb->ha_chassis_group->n_ha_chassis) {
+        return true;
+    }
+
+    for (size_t i = 0; i < lrp->n_gateway_chassis; i++) {
+        struct nbrec_gateway_chassis *nbgw_ch = lrp->gateway_chassis[i];
+        bool found = false;
+        for (size_t j = 0; j < pb->ha_chassis_group->n_ha_chassis; j++) {
+            struct sbrec_ha_chassis *sbha_ch =
+                pb->ha_chassis_group->ha_chassis[j];
+            if (sbha_ch->chassis &&
+                !strcmp(nbgw_ch->chassis_name, sbha_ch->chassis->name)) {
+                if (nbgw_ch->priority == sbha_ch->priority) {
+                    found = true;
+                    break;
+                }
+                /* Priority has changed. Return true. */
+                return true;
             }
         }
 
-        /* if no Port_Binding gateway chassis matched for the entry... */
-        if (i == port_binding->n_gateway_chassis) {
-            free(lrp_gwc_c);
-            free(lrp_gwc);
-            return true; /* found no match for this gateway chassis on lrp */
+        if (!found) {
+            return true;
         }
     }
 
-    /* no need for update, all ports matched */
-    free(lrp_gwc_c);
-    free(lrp_gwc);
+    /* No need to update SB DB. Its in sync. */
     return false;
 }
 
@@ -2086,17 +2029,101 @@ create_sb_ha_chassis(struct northd_context *ctx,
     return sb_ha_chassis;
 }
 
+static bool
+chassis_group_list_changed(
+    const struct nbrec_ha_chassis_group *nb_ha_grp,
+    const struct sbrec_ha_chassis_group *sb_ha_grp)
+{
+    if (nb_ha_grp->n_ha_chassis != sb_ha_grp->n_ha_chassis) {
+        return true;
+    }
+
+    struct shash nb_ha_chassis_list = SHASH_INITIALIZER(&nb_ha_chassis_list);
+    for (size_t i = 0; i < nb_ha_grp->n_ha_chassis; i++) {
+        shash_add(&nb_ha_chassis_list,
+                  nb_ha_grp->ha_chassis[i]->chassis_name,
+                  nb_ha_grp->ha_chassis[i]);
+    }
+
+    bool changed = false;
+    const struct sbrec_ha_chassis *sb_ha_chassis;
+    const struct nbrec_ha_chassis *nb_ha_chassis;
+    for (size_t i = 0; i < sb_ha_grp->n_ha_chassis; i++) {
+        sb_ha_chassis = sb_ha_grp->ha_chassis[i];
+        if (!sb_ha_chassis->chassis) {
+            /* This can happen, if ovn-controller exits gracefully in
+             * a chassis, in which case, chassis row for that chassis
+             * would be NULL. */
+            changed = true;
+            break;
+        }
+
+        nb_ha_chassis = shash_find_and_delete(&nb_ha_chassis_list,
+                                              sb_ha_chassis->chassis->name);
+        if (!nb_ha_chassis ||
+            nb_ha_chassis->priority != sb_ha_chassis->priority) {
+            changed = true;
+            break;
+        }
+    }
+
+    struct shash_node *node, *next;
+    SHASH_FOR_EACH_SAFE (node, next, &nb_ha_chassis_list) {
+        shash_delete(&nb_ha_chassis_list, node);
+        changed = true;
+    }
+    shash_destroy(&nb_ha_chassis_list);
+
+    return changed;
+}
+
+static void
+sync_ha_chassis_group_for_sbpb(struct northd_context *ctx,
+                               const struct nbrec_ha_chassis_group *nb_ha_grp,
+                               struct ovsdb_idl_index *sbrec_chassis_by_name,
+                               const struct sbrec_port_binding *pb)
+{
+    bool new_sb_chassis_group = false;
+    const struct sbrec_ha_chassis_group *sb_ha_grp =
+        ha_chassis_group_lookup_by_name(
+            ctx->sbrec_ha_chassis_grp_by_name, nb_ha_grp->name);
+
+    if (!sb_ha_grp) {
+        sb_ha_grp = sbrec_ha_chassis_group_insert(ctx->ovnsb_txn);
+        sbrec_ha_chassis_group_set_name(sb_ha_grp, nb_ha_grp->name);
+        new_sb_chassis_group = true;
+    }
+
+    if (new_sb_chassis_group ||
+        chassis_group_list_changed(nb_ha_grp, sb_ha_grp)) {
+        struct sbrec_ha_chassis **sb_ha_chassis = NULL;
+        size_t n_ha_chassis = nb_ha_grp->n_ha_chassis;
+        sb_ha_chassis = xcalloc(n_ha_chassis, sizeof *sb_ha_chassis);
+        for (size_t i = 0; i < nb_ha_grp->n_ha_chassis; i++) {
+            const struct nbrec_ha_chassis *nb_ha_chassis
+                = nb_ha_grp->ha_chassis[i];
+            const struct sbrec_chassis *chassis =
+                chassis_lookup_by_name(sbrec_chassis_by_name,
+                                       nb_ha_chassis->chassis_name);
+            sb_ha_chassis[i] = sbrec_ha_chassis_insert(ctx->ovnsb_txn);
+            /* It's perfectly ok if the chassis is NULL. This could
+             * happen when ovn-controller exits and removes its row
+             * from the chassis table in OVN SB DB. */
+            sbrec_ha_chassis_set_chassis(sb_ha_chassis[i], chassis);
+            sbrec_ha_chassis_set_priority(sb_ha_chassis[i],
+                                          nb_ha_chassis->priority);
+        }
+        sbrec_ha_chassis_group_set_ha_chassis(sb_ha_grp, sb_ha_chassis,
+                                              n_ha_chassis);
+        free(sb_ha_chassis);
+    }
+
+    sbrec_port_binding_set_ha_chassis_group(pb, sb_ha_grp);
+}
+
 /* This functions translates the gw chassis on the nb database
- * to sb database entries, the only difference is that SB database
- * Gateway_Chassis table references the chassis directly instead
- * of using the name.
- *
- * This function also creates a HA Chassis group in SB DB for
- * the gateway chassis associated to a distributed gateway
- * router port in the NB DB.
- *
- * An upcoming patch will delete the code to create the Gateway chassis
- * in SB DB.*/
+ * to HA chassis group in the sb database entries.
+ */
 static void
 copy_gw_chassis_from_nbrp_to_sbpb(
         struct northd_context *ctx,
@@ -2104,14 +2131,9 @@ copy_gw_chassis_from_nbrp_to_sbpb(
         const struct nbrec_logical_router_port *lrp,
         const struct sbrec_port_binding *port_binding)
 {
-    struct sbrec_gateway_chassis **gw_chassis = NULL;
-    int n_gwc = 0;
-    int n;
 
     /* Make use of the new HA chassis group table to support HA
-     * for the distributed gateway router port. We can delete
-     * the old gateway_chassis code once ovn-controller supports
-     * HA chassis group. */
+     * for the distributed gateway router port. */
     const struct sbrec_ha_chassis_group *sb_ha_chassis_group =
         ha_chassis_group_lookup_by_name(
             ctx->sbrec_ha_chassis_grp_by_name, lrp->name);
@@ -2123,16 +2145,7 @@ copy_gw_chassis_from_nbrp_to_sbpb(
     struct sbrec_ha_chassis **sb_ha_chassis = xcalloc(lrp->n_gateway_chassis,
                                                       sizeof *sb_ha_chassis);
     size_t n_sb_ha_ch = 0;
-    /* XXX: This can be improved. This code will generate a set of new
-     * Gateway_Chassis and push them all in a single transaction, instead
-     * this would be more optimal if we just add/update/remove the rows in
-     * the southbound db that need to change. We don't expect lots of
-     * changes to the Gateway_Chassis table, but if that proves to be wrong
-     * we should optimize this.
-     *
-     * Note: Remove the below code to add gateway_chassis row in OVN
-     * Southbound db once ovn-controller supports HA chassis group. */
-    for (n = 0; n < lrp->n_gateway_chassis; n++) {
+    for (size_t n = 0; n < lrp->n_gateway_chassis; n++) {
         struct nbrec_gateway_chassis *lrp_gwc = lrp->gateway_chassis[n];
         if (!lrp_gwc->chassis_name) {
             continue;
@@ -2142,27 +2155,10 @@ copy_gw_chassis_from_nbrp_to_sbpb(
             chassis_lookup_by_name(sbrec_chassis_by_name,
                                    lrp_gwc->chassis_name);
 
-        gw_chassis = xrealloc(gw_chassis, (n_gwc + 1) * sizeof *gw_chassis);
-
-        /* This code to create gateway_chassis in SB DB needs to be deleted
-         * once ovn-controller supports making use of HA chassis groups. */
-        struct sbrec_gateway_chassis *pb_gwc =
-            sbrec_gateway_chassis_insert(ctx->ovnsb_txn);
-
-        sbrec_gateway_chassis_set_name(pb_gwc, lrp_gwc->name);
-        sbrec_gateway_chassis_set_priority(pb_gwc, lrp_gwc->priority);
-        sbrec_gateway_chassis_set_chassis(pb_gwc, chassis);
-        sbrec_gateway_chassis_set_options(pb_gwc, &lrp_gwc->options);
-        sbrec_gateway_chassis_set_external_ids(pb_gwc, &lrp_gwc->external_ids);
-
-        gw_chassis[n_gwc++] = pb_gwc;
-
         sb_ha_chassis[n_sb_ha_ch] =
             create_sb_ha_chassis(ctx, chassis, lrp_gwc->priority);
         n_sb_ha_ch++;
     }
-    sbrec_port_binding_set_gateway_chassis(port_binding, gw_chassis, n_gwc);
-    free(gw_chassis);
 
     sbrec_ha_chassis_group_set_ha_chassis(sb_ha_chassis_group,
                                           sb_ha_chassis, n_sb_ha_ch);
@@ -2195,18 +2191,37 @@ ovn_port_update_sbrec(struct northd_context *ctx,
         if (op->derived) {
             const char *redirect_chassis = smap_get(&op->nbrp->options,
                                                     "redirect-chassis");
-            if (op->nbrp->n_gateway_chassis && redirect_chassis) {
+            int n_gw_options_set = 0;
+            if (op->nbrp->ha_chassis_group) {
+                n_gw_options_set++;
+            }
+            if (op->nbrp->n_gateway_chassis) {
+                n_gw_options_set++;
+            }
+            if (redirect_chassis) {
+                n_gw_options_set++;
+            }
+            if (n_gw_options_set > 1) {
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
                 VLOG_WARN_RL(
-                    &rl, "logical router port %s has both options:"
-                         "redirect-chassis and gateway_chassis populated "
-                         "redirect-chassis will be ignored in favour of "
-                         "gateway chassis", op->nbrp->name);
+                    &rl, "Multiple gatway options set for the logical router "
+                         "port %s. The first preferred option is "
+                         "ha_chassis_group; the second is gateway_chassis; "
+                         "and the last is redirect-chassis.", op->nbrp->name);
             }
 
-            if (op->nbrp->n_gateway_chassis) {
-                if (sbpb_gw_chassis_needs_update(sbrec_chassis_by_name,
-                                                 op->sb, op->nbrp)) {
+            if (op->nbrp->ha_chassis_group) {
+                /* HA Chassis group is set. Ignore 'gateway_chassis'
+                 * column and redirect-chassis option. */
+                sync_ha_chassis_group_for_sbpb(ctx, op->nbrp->ha_chassis_group,
+                                               sbrec_chassis_by_name, op->sb);
+                sset_add(active_ha_chassis_grps,
+                         op->nbrp->ha_chassis_group->name);
+            } else if (op->nbrp->n_gateway_chassis) {
+                /* Legacy gateway_chassis support.
+                 * Create ha_chassis_group for the Northbound gateway_chassis
+                 * associated with the lrp. */
+                if (sbpb_gw_chassis_needs_update(op->sb, op->nbrp)) {
                     copy_gw_chassis_from_nbrp_to_sbpb(ctx,
                                                       sbrec_chassis_by_name,
                                                       op->nbrp, op->sb);
@@ -2216,7 +2231,7 @@ ovn_port_update_sbrec(struct northd_context *ctx,
             } else if (redirect_chassis) {
                 /* Handle ports that had redirect-chassis option attached
                  * to them, and for backwards compatibility convert them
-                 * to a single Gateway_Chassis entry */
+                 * to a single HA Chassis group entry */
                 const struct sbrec_chassis *chassis =
                     chassis_lookup_by_name(sbrec_chassis_by_name,
                                            redirect_chassis);
@@ -2224,36 +2239,7 @@ ovn_port_update_sbrec(struct northd_context *ctx,
                     /* If we found the chassis, and the gw chassis on record
                      * differs from what we expect go ahead and update */
                     char *gwc_name = xasprintf("%s_%s", op->nbrp->name,
-                                               chassis->name);
-                    if (op->sb->n_gateway_chassis != 1
-                        || !op->sb->gateway_chassis[0]->chassis
-                        || strcmp(op->sb->gateway_chassis[0]->chassis->name,
-                                  chassis->name)
-                        || op->sb->gateway_chassis[0]->priority != 0) {
-                        /* This code to create gateway_chassis in SB DB needs
-                         * to be deleted once ovn-controller supports making
-                         * use of HA chassis groups. */
-
-                        /* Construct a single Gateway_Chassis entry on the
-                         * Port_Binding attached to the redirect_chassis
-                         * name */
-                        struct sbrec_gateway_chassis *gw_chassis =
-                            sbrec_gateway_chassis_insert(ctx->ovnsb_txn);
-
-                        /* XXX: Again, here, we could just update an existing
-                         * Gateway_Chassis, instead of creating a new one
-                         * and replacing it */
-                        sbrec_gateway_chassis_set_name(gw_chassis, gwc_name);
-                        sbrec_gateway_chassis_set_priority(gw_chassis, 0);
-                        sbrec_gateway_chassis_set_chassis(gw_chassis, chassis);
-                        sbrec_gateway_chassis_set_external_ids(gw_chassis,
-                                &op->nbrp->external_ids);
-                        sbrec_port_binding_set_gateway_chassis(op->sb,
-                                                               &gw_chassis, 1);
-                    }
-
-                    /* Create HA chassis group in SB DB for the
-                     * redirect-chassis option. */
+                                chassis->name);
                     const struct sbrec_ha_chassis_group *sb_ha_ch_grp;
                     sb_ha_ch_grp = ha_chassis_group_lookup_by_name(
                         ctx->sbrec_ha_chassis_grp_by_name, gwc_name);
@@ -2279,11 +2265,20 @@ ovn_port_update_sbrec(struct northd_context *ctx,
                     VLOG_WARN("chassis name '%s' from redirect from logical "
                               " router port '%s' redirect-chassis not found",
                               redirect_chassis, op->nbrp->name);
-                    if (op->sb->n_gateway_chassis) {
-                        sbrec_port_binding_set_gateway_chassis(op->sb, NULL,
-                                                               0);
+                    if (op->sb->ha_chassis_group) {
+                        sbrec_port_binding_set_ha_chassis_group(op->sb, NULL);
                     }
                 }
+            } else {
+                /* Nothing is set. Clear ha_chassis_group  from pb. */
+                if (op->sb->ha_chassis_group) {
+                    sbrec_port_binding_set_ha_chassis_group(op->sb, NULL);
+                }
+            }
+
+            if (op->sb->n_gateway_chassis) {
+                /* Delete the legacy gateway_chassis from the pb. */
+                sbrec_port_binding_set_gateway_chassis(op->sb, NULL, 0);
             }
             smap_add(&new, "distributed-port", op->nbrp->name);
         } else {

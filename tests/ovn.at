@@ -10059,6 +10059,181 @@ ovn-nbctl clear Logical_Router_Port outside gateway_chassis
 OVS_WAIT_UNTIL([test 0 = `ovn-sbctl list ha_chassis_group | wc -l`])
 OVS_WAIT_UNTIL([test 0 = `ovn-sbctl list ha_chassis | wc -l`])
 
+ovn-nbctl remove NB_Global . options "bfd-min-rx"
+ovn-nbctl remove NB_Global . options "bfd-min-tx"
+ovn-nbctl remove NB_Global . options "bfd-mult"
+
+# Now test with HA chassis group instead of Gateway chassis in NB DB
+ovn-nbctl --wait=sb ha-chassis-group-add hagrp1
+
+ovn-nbctl list ha_chassis_group
+ovn-nbctl --bare --columns _uuid find ha_chassis_group name=hagrp1
+hagrp1_uuid=`ovn-nbctl --bare --columns _uuid find ha_chassis_group name=hagrp1`
+ovn-nbctl --wait=sb ha-chassis-group-add-chassis hagrp1 gw1 30
+ovn-nbctl --wait=sb ha-chassis-group-add-chassis hagrp1 gw2 20
+
+# ovn-northd should not create HA chassis group and HA chassis rows
+# unless the HA chassis group in OVN NB DB is associated to
+# a logical router port.
+OVS_WAIT_UNTIL([test 0 = `ovn-sbctl list ha_chassis | wc -l`])
+
+# Associate hagrp1 to outside logical router port
+ovn-nbctl set Logical_Router_Port outside ha_chassis_group=$hagrp1_uuid
+
+OVS_WAIT_UNTIL([test 1 = `ovn-sbctl --bare --columns _uuid \
+find ha_chassis_group | wc -l`])
+
+OVS_WAIT_UNTIL([test 2 = `ovn-sbctl list ha_chassis | grep chassis | wc -l`])
+
+OVS_WAIT_UNTIL([as hv1 ovs-ofctl dump-flows br-int table=32 | \
+grep active_backup | grep slaves:$hv1_gw1_ofport,$hv1_gw2_ofport \
+| wc -l], [0], [1
+])
+
+OVS_WAIT_UNTIL([as hv2 ovs-ofctl dump-flows br-int table=32 | \
+grep active_backup | grep slaves:$hv2_gw1_ofport,$hv2_gw2_ofport \
+| wc -l], [0], [1
+])
+
+# make sure that flows for handling the outside router port reside on gw1
+OVS_WAIT_UNTIL([as gw1 ovs-ofctl dump-flows br-int table=24 | \
+grep 00:00:02:01:02:04 | wc -l], [0], [[1
+]])
+OVS_WAIT_UNTIL([as gw2 ovs-ofctl dump-flows br-int table=24 | \
+grep 00:00:02:01:02:04 | wc -l], [0], [[0
+]])
+
+# make sure ARP responder flows for outside router port reside on gw1 too
+OVS_WAIT_UNTIL([as gw1 ovs-ofctl dump-flows br-int table=9 | \
+grep arp_tpa=192.168.0.101 | wc -l], [0], [[1
+]])
+OVS_WAIT_UNTIL([as gw2 ovs-ofctl dump-flows br-int table=9 | grep arp_tpa=192.168.0.101 | wc -l], [0], [[0
+]])
+
+# check that the chassis redirect port has been claimed by the gw1 chassis
+OVS_WAIT_UNTIL([ovn-sbctl --columns chassis --bare find Port_Binding \
+logical_port=cr-outside | grep $gw1_chassis | wc -l], [0],[[1
+]])
+
+# Re add the ovs ports.
+for i in 1 2; do
+    as hv$i
+    ovs-vsctl -- add-port br-int hv$i-vif1 -- \
+        set interface hv$i-vif1 external-ids:iface-id=inside$i \
+        options:tx_pcap=hv$i/vif1-tx.pcap \
+        options:rxq_pcap=hv$i/vif1-rx.pcap \
+        ofport-request=1
+done
+
+hv1_ch_uuid=`ovn-sbctl --bare --columns _uuid find chassis name="hv1"`
+hv2_ch_uuid=`ovn-sbctl --bare --columns _uuid find chassis name="hv2"`
+
+exp_ref_ch_list=''
+for i in `ovn-sbctl --bare --columns _uuid list chassis | sort`
+do
+    if test $i = $hv1_ch_uuid; then
+        exp_ref_ch_list="${exp_ref_ch_list}$i"
+    elif test $i = $hv2_ch_uuid; then
+        exp_ref_ch_list="${exp_ref_ch_list}$i"
+    fi
+done
+
+OVS_WAIT_UNTIL(
+    [ref_ch_list=`ovn-sbctl --bare --columns ref_chassis find ha_chassis_group | sort`
+     # Trim the spaces.
+     ref_ch_list=`echo $ref_ch_list | sed 's/ //g'`
+     test "$exp_ref_ch_list" = "$ref_ch_list"])
+
+# Increase the priority of gw2
+ovn-nbctl --wait=sb ha-chassis-group-add-chassis hagrp1 gw2 40
+
+OVS_WAIT_UNTIL([as hv1 ovs-ofctl dump-flows br-int table=32 | \
+grep active_backup | grep slaves:$hv1_gw2_ofport,$hv1_gw1_ofport \
+| wc -l], [0], [1
+])
+
+OVS_WAIT_UNTIL([as hv2 ovs-ofctl dump-flows br-int table=32 | \
+grep active_backup | grep slaves:$hv2_gw2_ofport,$hv2_gw1_ofport \
+| wc -l], [0], [1
+])
+
+# check that the chassis redirect port has been reclaimed by the gw2 chassis
+OVS_WAIT_UNTIL([ovn-sbctl --columns chassis --bare find Port_Binding \
+logical_port=cr-outside | grep $gw2_chassis | wc -l], [0],[[1
+]])
+
+# check BFD enablement on tunnel ports from gw1 #########
+as gw1
+for chassis in gw2 hv1 hv2; do
+    echo "checking gw1 -> $chassis"
+    AT_CHECK([ovs-vsctl --bare --columns bfd find Interface name=ovn-$chassis-0],[0],
+             [[enable=true
+]])
+done
+
+# check BFD enablement on tunnel ports from gw2 ##########
+as gw2
+for chassis in gw1 hv1 hv2; do
+    echo "checking gw2 -> $chassis"
+    AT_CHECK([ovs-vsctl --bare --columns bfd find Interface name=ovn-$chassis-0],[0],
+             [[enable=true
+]])
+done
+
+# check BFD enablement on tunnel ports from hv1 ###########
+as hv1
+for chassis in gw1 gw2; do
+    echo "checking hv1 -> $chassis"
+    AT_CHECK([ovs-vsctl --bare --columns bfd find Interface name=ovn-$chassis-0],[0],
+             [[enable=true
+]])
+done
+# make sure BFD is not enabled to hv2, we don't need it
+AT_CHECK([ovs-vsctl --bare --columns bfd find Interface name=ovn-hv2-0],[0],
+         [[
+]])
+
+# check BFD enablement on tunnel ports from hv2 ##########
+as hv2
+for chassis in gw1 gw2; do
+    echo "checking hv2 -> $chassis"
+    AT_CHECK([ovs-vsctl --bare --columns bfd find Interface name=ovn-$chassis-0],[0],
+             [[enable=true
+]])
+done
+# make sure BFD is not enabled to hv1, we don't need it
+AT_CHECK([ovs-vsctl --bare --columns bfd find Interface name=ovn-hv1-0],[0],
+         [[
+]])
+
+# make sure that flows for handling the outside router port reside on gw2 now
+OVS_WAIT_UNTIL([as gw2 ovs-ofctl dump-flows br-int table=24 | \
+grep 00:00:02:01:02:04 | wc -l], [0], [[1
+]])
+OVS_WAIT_UNTIL([as gw1 ovs-ofctl dump-flows br-int table=24 | \
+grep 00:00:02:01:02:04 | wc -l], [0], [[0
+]])
+
+# disconnect GW2 from the network, GW1 should take over
+as gw2
+port=${sandbox}_br-phys
+as main ovs-vsctl del-port n1 $port
+
+bfd_dump
+
+# make sure that flows for handling the outside router port reside on gw2 now
+OVS_WAIT_UNTIL([as gw1 ovs-ofctl dump-flows br-int table=24 | \
+grep 00:00:02:01:02:04 | wc -l], [0], [[1
+]])
+OVS_WAIT_UNTIL([as gw2 ovs-ofctl dump-flows br-int table=24 | \
+grep 00:00:02:01:02:04 | wc -l], [0], [[0
+]])
+
+# check that the chassis redirect port has been reclaimed by the gw1 chassis
+OVS_WAIT_UNTIL([ovn-sbctl --columns chassis --bare find Port_Binding \
+logical_port=cr-outside | grep $gw1_chassis | wc -l], [0],[[1
+]])
+
 OVN_CLEANUP([gw1],[gw2],[hv1],[hv2])
 
 AT_CLEANUP
