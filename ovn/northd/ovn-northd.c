@@ -667,7 +667,6 @@ join_datapaths(struct northd_context *ctx, struct hmap *datapaths,
                struct ovs_list *sb_only, struct ovs_list *nb_only,
                struct ovs_list *both)
 {
-    hmap_init(datapaths);
     ovs_list_init(sb_only);
     ovs_list_init(nb_only);
     ovs_list_init(both);
@@ -1579,7 +1578,6 @@ join_logical_ports(struct northd_context *ctx,
                    struct hmap *tag_alloc_table, struct ovs_list *sb_only,
                    struct ovs_list *nb_only, struct ovs_list *both)
 {
-    hmap_init(ports);
     ovs_list_init(sb_only);
     ovs_list_init(nb_only);
     ovs_list_init(both);
@@ -7218,46 +7216,49 @@ sync_dns_entries(struct northd_context *ctx, struct hmap *datapaths)
     }
     hmap_destroy(&dns_map);
 }
-
-
 
+static void
+destroy_datapaths_and_ports(struct hmap *datapaths, struct hmap *ports)
+{
+    struct ovn_datapath *dp, *next_dp;
+    HMAP_FOR_EACH_SAFE (dp, next_dp, key_node, datapaths) {
+        ovn_datapath_destroy(datapaths, dp);
+    }
+    hmap_destroy(datapaths);
+
+    struct ovn_port *port, *next_port;
+    HMAP_FOR_EACH_SAFE (port, next_port, key_node, ports) {
+        ovn_port_destroy(ports, port);
+    }
+    hmap_destroy(ports);
+}
+
 static void
 ovnnb_db_run(struct northd_context *ctx,
              struct ovsdb_idl_index *sbrec_chassis_by_name,
-             struct ovsdb_idl_loop *sb_loop)
+             struct ovsdb_idl_loop *sb_loop,
+             struct hmap *datapaths, struct hmap *ports)
 {
     if (!ctx->ovnsb_txn || !ctx->ovnnb_txn) {
         return;
     }
-    struct hmap datapaths, ports, port_groups;
-    build_datapaths(ctx, &datapaths);
-    build_ports(ctx, sbrec_chassis_by_name, &datapaths, &ports);
-    build_ipam(&datapaths, &ports);
-    build_port_group_lswitches(ctx, &port_groups, &ports);
-    build_lflows(ctx, &datapaths, &ports, &port_groups);
+    struct hmap port_groups;
+    build_datapaths(ctx, datapaths);
+    build_ports(ctx, sbrec_chassis_by_name, datapaths, ports);
+    build_ipam(datapaths, ports);
+    build_port_group_lswitches(ctx, &port_groups, ports);
+    build_lflows(ctx, datapaths, ports, &port_groups);
 
     sync_address_sets(ctx);
     sync_port_groups(ctx);
     sync_meters(ctx);
-    sync_dns_entries(ctx, &datapaths);
+    sync_dns_entries(ctx, datapaths);
 
     struct ovn_port_group *pg, *next_pg;
     HMAP_FOR_EACH_SAFE (pg, next_pg, key_node, &port_groups) {
         ovn_port_group_destroy(&port_groups, pg);
     }
     hmap_destroy(&port_groups);
-
-    struct ovn_datapath *dp, *next_dp;
-    HMAP_FOR_EACH_SAFE (dp, next_dp, key_node, &datapaths) {
-        ovn_datapath_destroy(&datapaths, dp);
-    }
-    hmap_destroy(&datapaths);
-
-    struct ovn_port *port, *next_port;
-    HMAP_FOR_EACH_SAFE (port, next_port, key_node, &ports) {
-        ovn_port_destroy(&ports, port);
-    }
-    hmap_destroy(&ports);
 
     /* Sync ipsec configuration.
      * Copy nb_cfg from northbound to southbound database.
@@ -7309,53 +7310,25 @@ ovnnb_db_run(struct northd_context *ctx,
  * this column is not empty, it means we need to set the corresponding logical
  * port as 'up' in the northbound DB. */
 static void
-update_logical_port_status(struct northd_context *ctx)
+update_logical_port_status(struct northd_context *ctx, struct hmap *ports)
 {
-    struct hmap lports_hmap;
     const struct sbrec_port_binding *sb;
-    const struct nbrec_logical_switch_port *nbsp;
-
-    struct lport_hash_node {
-        struct hmap_node node;
-        const struct nbrec_logical_switch_port *nbsp;
-    } *hash_node;
-
-    hmap_init(&lports_hmap);
-
-    NBREC_LOGICAL_SWITCH_PORT_FOR_EACH(nbsp, ctx->ovnnb_idl) {
-        hash_node = xzalloc(sizeof *hash_node);
-        hash_node->nbsp = nbsp;
-        hmap_insert(&lports_hmap, &hash_node->node, hash_string(nbsp->name, 0));
-    }
 
     SBREC_PORT_BINDING_FOR_EACH(sb, ctx->ovnsb_idl) {
-        nbsp = NULL;
-        HMAP_FOR_EACH_WITH_HASH(hash_node, node,
-                                hash_string(sb->logical_port, 0),
-                                &lports_hmap) {
-            if (!strcmp(sb->logical_port, hash_node->nbsp->name)) {
-                nbsp = hash_node->nbsp;
-                break;
-            }
-        }
+        struct ovn_port *op = ovn_port_find(ports, sb->logical_port);
 
-        if (!nbsp) {
+        if (!op || !op->nbsp) {
             /* The logical port doesn't exist for this port binding.  This can
              * happen under normal circumstances when ovn-northd hasn't gotten
              * around to pruning the Port_Binding yet. */
             continue;
         }
 
-        bool up = (sb->chassis || !strcmp(nbsp->type, "router"));
-        if (!nbsp->up || *nbsp->up != up) {
-            nbrec_logical_switch_port_set_up(nbsp, &up, 1);
+        bool up = (sb->chassis || !strcmp(op->nbsp->type, "router"));
+        if (!op->nbsp->up || *op->nbsp->up != up) {
+            nbrec_logical_switch_port_set_up(op->nbsp, &up, 1);
         }
     }
-
-    HMAP_FOR_EACH_POP(hash_node, node, &lports_hmap) {
-        free(hash_node);
-    }
-    hmap_destroy(&lports_hmap);
 }
 
 static struct gen_opts_map supported_dhcp_opts[] = {
@@ -7677,14 +7650,29 @@ update_northbound_cfg(struct northd_context *ctx,
 
 /* Handle a fairly small set of changes in the southbound database. */
 static void
-ovnsb_db_run(struct northd_context *ctx, struct ovsdb_idl_loop *sb_loop)
+ovnsb_db_run(struct northd_context *ctx, struct ovsdb_idl_loop *sb_loop,
+             struct hmap *ports)
 {
     if (!ctx->ovnnb_txn || !ovsdb_idl_has_ever_connected(ctx->ovnsb_idl)) {
         return;
     }
 
-    update_logical_port_status(ctx);
+    update_logical_port_status(ctx, ports);
     update_northbound_cfg(ctx, sb_loop);
+}
+
+static void
+ovn_db_run(struct northd_context *ctx,
+           struct ovsdb_idl_index *sbrec_chassis_by_name,
+           struct ovsdb_idl_loop *ovnsb_idl_loop)
+{
+    struct hmap datapaths, ports;
+    hmap_init(&datapaths);
+    hmap_init(&ports);
+    ovnnb_db_run(ctx, sbrec_chassis_by_name, ovnsb_idl_loop,
+                 &datapaths, &ports);
+    ovnsb_db_run(ctx, ovnsb_idl_loop, &ports);
+    destroy_datapaths_and_ports(&datapaths, &ports);
 }
 
 static void
@@ -7943,8 +7931,7 @@ main(int argc, char *argv[])
         }
 
         if (ovsdb_idl_has_lock(ovnsb_idl_loop.idl)) {
-            ovnnb_db_run(&ctx, sbrec_chassis_by_name, &ovnsb_idl_loop);
-            ovnsb_db_run(&ctx, &ovnsb_idl_loop);
+            ovn_db_run(&ctx, sbrec_chassis_by_name, &ovnsb_idl_loop);
             if (ctx.ovnsb_txn) {
                 check_and_add_supported_dhcp_opts_to_sb_db(&ctx);
                 check_and_add_supported_dhcpv6_opts_to_sb_db(&ctx);
