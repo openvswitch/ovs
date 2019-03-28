@@ -17,7 +17,7 @@
 #include "binding.h"
 #include "byte-order.h"
 #include "flow.h"
-#include "gchassis.h"
+#include "ha-chassis.h"
 #include "lflow.h"
 #include "lport.h"
 #include "lib/bundle.h"
@@ -377,8 +377,7 @@ load_logical_ingress_metadata(const struct sbrec_port_binding *binding,
 }
 
 static void
-consider_port_binding(struct ovsdb_idl_index *sbrec_chassis_by_name,
-                      struct ovsdb_idl_index *sbrec_port_binding_by_name,
+consider_port_binding(struct ovsdb_idl_index *sbrec_port_binding_by_name,
                       enum mf_field_id mff_ovn_geneve,
                       const struct simap *ct_zones,
                       const struct sset *active_tunnels,
@@ -446,13 +445,13 @@ consider_port_binding(struct ovsdb_idl_index *sbrec_chassis_by_name,
         return;
     }
 
-    struct ovs_list *gateway_chassis
-        = gateway_chassis_get_ordered(sbrec_chassis_by_name, binding);
+    struct ha_chassis_ordered *ha_ch_ordered
+        = ha_chassis_get_ordered(binding->ha_chassis_group);
 
     if (!strcmp(binding->type, "chassisredirect")
         && (binding->chassis == chassis
-            || gateway_chassis_is_active(gateway_chassis, chassis,
-                                         active_tunnels))) {
+            || ha_chassis_group_is_active(binding->ha_chassis_group,
+                                          active_tunnels, chassis))) {
 
         /* Table 33, priority 100.
          * =======================
@@ -588,7 +587,7 @@ consider_port_binding(struct ovsdb_idl_index *sbrec_chassis_by_name,
                 goto out;
             }
         } else {
-            if (!gateway_chassis || ovs_list_is_short(gateway_chassis)) {
+            if (!ha_ch_ordered || ha_ch_ordered->n_ha_ch < 2) {
                 /* It's on a single remote chassis */
                 if (!binding->chassis) {
                     goto out;
@@ -599,7 +598,8 @@ consider_port_binding(struct ovsdb_idl_index *sbrec_chassis_by_name,
                 }
                 ofport = tun->ofport;
             } else {
-                /* It's distributed across the "gateway_chassis" list */
+                /* It's distributed across the chassis belonging to
+                 * an HA chassis group. */
                 is_ha_remote = true;
             }
         }
@@ -753,34 +753,36 @@ consider_port_binding(struct ovsdb_idl_index *sbrec_chassis_by_name,
             /* Output to tunnel. */
             ofpact_put_OUTPUT(ofpacts_p)->port = rem_tun->ofport;
         } else {
-            struct gateway_chassis *gwc;
             /* Make sure all tunnel endpoints use the same encapsulation,
              * and set it up */
-            LIST_FOR_EACH (gwc, node, gateway_chassis) {
-                if (gwc->db->chassis) {
-                    if (!tun) {
-                        tun = chassis_tunnel_find(gwc->db->chassis->name, NULL);
-                    } else {
-                        struct chassis_tunnel *chassis_tunnel =
-                            chassis_tunnel_find(gwc->db->chassis->name, NULL);
-                        if (chassis_tunnel &&
-                            tun->type != chassis_tunnel->type) {
-                            static struct vlog_rate_limit rl =
-                                VLOG_RATE_LIMIT_INIT(1, 1);
-                            VLOG_ERR_RL(&rl, "Port %s has Gateway_Chassis "
-                                             "with mixed encapsulations, only "
-                                             "uniform encapsulations are "
-                                             "supported.",
-                                        binding->logical_port);
-                            goto out;
-                        }
+            for (size_t i = 0; i < ha_ch_ordered->n_ha_ch; i++) {
+                const struct sbrec_chassis *ch =
+                    ha_ch_ordered->ha_ch[i].chassis;
+                if (!ch) {
+                    continue;
+                }
+                if (!tun) {
+                    tun = chassis_tunnel_find(ch->name, NULL);
+                } else {
+                    struct chassis_tunnel *chassis_tunnel =
+                        chassis_tunnel_find(ch->name, NULL);
+                    if (chassis_tunnel &&
+                        tun->type != chassis_tunnel->type) {
+                        static struct vlog_rate_limit rl =
+                            VLOG_RATE_LIMIT_INIT(1, 1);
+                        VLOG_ERR_RL(&rl, "Port %s has Gateway_Chassis "
+                                            "with mixed encapsulations, only "
+                                            "uniform encapsulations are "
+                                            "supported.",
+                                    binding->logical_port);
+                        goto out;
                     }
                 }
             }
             if (!tun) {
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-                VLOG_ERR_RL(&rl, "No tunnel endpoint found for gateways in "
-                                 "Gateway_Chassis of port %s",
+                VLOG_ERR_RL(&rl, "No tunnel endpoint found for HA chassis in "
+                                 "HA chassis group of port %s",
                             binding->logical_port);
                 goto out;
             }
@@ -791,24 +793,27 @@ consider_port_binding(struct ovsdb_idl_index *sbrec_chassis_by_name,
             /* Output to tunnels with active/backup */
             struct ofpact_bundle *bundle = ofpact_put_BUNDLE(ofpacts_p);
 
-            LIST_FOR_EACH (gwc, node, gateway_chassis) {
-                if (gwc->db->chassis) {
-                    tun = chassis_tunnel_find(gwc->db->chassis->name, NULL);
-                    if (!tun) {
-                        continue;
-                    }
-                    if (bundle->n_slaves >= BUNDLE_MAX_SLAVES) {
-                        static struct vlog_rate_limit rl =
-                                VLOG_RATE_LIMIT_INIT(1, 1);
-                        VLOG_WARN_RL(&rl, "Remote endpoints for port beyond "
-                                          "BUNDLE_MAX_SLAVES");
-                        break;
-                    }
-                    ofpbuf_put(ofpacts_p, &tun->ofport,
-                               sizeof tun->ofport);
-                    bundle = ofpacts_p->header;
-                    bundle->n_slaves++;
+            for (size_t i = 0; i < ha_ch_ordered->n_ha_ch; i++) {
+                const struct sbrec_chassis *ch =
+                    ha_ch_ordered->ha_ch[i].chassis;
+                if (!ch) {
+                    continue;
                 }
+                tun = chassis_tunnel_find(ch->name, NULL);
+                if (!tun) {
+                    continue;
+                }
+                if (bundle->n_slaves >= BUNDLE_MAX_SLAVES) {
+                    static struct vlog_rate_limit rl =
+                            VLOG_RATE_LIMIT_INIT(1, 1);
+                    VLOG_WARN_RL(&rl, "Remote endpoints for port beyond "
+                                        "BUNDLE_MAX_SLAVES");
+                    break;
+                }
+                ofpbuf_put(ofpacts_p, &tun->ofport,
+                            sizeof tun->ofport);
+                bundle = ofpacts_p->header;
+                bundle->n_slaves++;
             }
 
             bundle->algorithm = NX_BD_ALG_ACTIVE_BACKUP;
@@ -822,8 +827,8 @@ consider_port_binding(struct ovsdb_idl_index *sbrec_chassis_by_name,
                         &match, ofpacts_p);
     }
 out:
-    if (gateway_chassis) {
-        gateway_chassis_destroy(gateway_chassis);
+    if (ha_ch_ordered) {
+        ha_chassis_destroy_ordered(ha_ch_ordered);
     }
 }
 
@@ -967,8 +972,7 @@ update_ofports(struct simap *old, struct simap *new)
 }
 
 void
-physical_run(struct ovsdb_idl_index *sbrec_chassis_by_name,
-             struct ovsdb_idl_index *sbrec_port_binding_by_name,
+physical_run(struct ovsdb_idl_index *sbrec_port_binding_by_name,
              const struct sbrec_multicast_group_table *multicast_group_table,
              const struct sbrec_port_binding_table *port_binding_table,
              enum mf_field_id mff_ovn_geneve,
@@ -1119,8 +1123,7 @@ physical_run(struct ovsdb_idl_index *sbrec_chassis_by_name,
      * 64 for logical-to-physical translation. */
     const struct sbrec_port_binding *binding;
     SBREC_PORT_BINDING_TABLE_FOR_EACH (binding, port_binding_table) {
-        consider_port_binding(sbrec_chassis_by_name,
-                              sbrec_port_binding_by_name,
+        consider_port_binding(sbrec_port_binding_by_name,
                               mff_ovn_geneve, ct_zones,
                               active_tunnels,
                               local_datapaths, binding, chassis,

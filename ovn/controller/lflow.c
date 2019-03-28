@@ -16,7 +16,7 @@
 #include <config.h>
 #include "lflow.h"
 #include "coverage.h"
-#include "gchassis.h"
+#include "ha-chassis.h"
 #include "lport.h"
 #include "ofctrl.h"
 #include "openvswitch/dynamic-string.h"
@@ -56,14 +56,12 @@ struct lookup_port_aux {
 };
 
 struct condition_aux {
-    struct ovsdb_idl_index *sbrec_chassis_by_name;
     struct ovsdb_idl_index *sbrec_port_binding_by_name;
     const struct sbrec_chassis *chassis;
     const struct sset *active_tunnels;
 };
 
 static void consider_logical_flow(
-    struct ovsdb_idl_index *sbrec_chassis_by_name,
     struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath,
     struct ovsdb_idl_index *sbrec_port_binding_by_name,
     const struct sbrec_logical_flow *,
@@ -117,14 +115,11 @@ is_chassis_resident_cb(const void *c_aux_, const char *port_name)
         /* for non-chassisredirect ports */
         return pb->chassis && pb->chassis == c_aux->chassis;
     } else {
-        struct ovs_list *gateway_chassis;
-        gateway_chassis = gateway_chassis_get_ordered(
-            c_aux->sbrec_chassis_by_name, pb);
-        if (gateway_chassis) {
-            bool active = gateway_chassis_is_active(gateway_chassis,
-                                                    c_aux->chassis,
-                                                    c_aux->active_tunnels);
-            gateway_chassis_destroy(gateway_chassis);
+        if (ha_chassis_group_contains(pb->ha_chassis_group,
+                                      c_aux->chassis)) {
+            bool active = ha_chassis_group_is_active(pb->ha_chassis_group,
+                                                     c_aux->active_tunnels,
+                                                     c_aux->chassis);
             return active;
         }
         return false;
@@ -141,7 +136,6 @@ is_switch(const struct sbrec_datapath_binding *ldp)
 /* Adds the logical flows from the Logical_Flow table to flow tables. */
 static void
 add_logical_flows(
-    struct ovsdb_idl_index *sbrec_chassis_by_name,
     struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath,
     struct ovsdb_idl_index *sbrec_port_binding_by_name,
     const struct sbrec_dhcp_options_table *dhcp_options_table,
@@ -180,8 +174,7 @@ add_logical_flows(
     nd_ra_opts_init(&nd_ra_opts);
 
     SBREC_LOGICAL_FLOW_TABLE_FOR_EACH (lflow, logical_flow_table) {
-        consider_logical_flow(sbrec_chassis_by_name,
-                              sbrec_multicast_group_by_name_datapath,
+        consider_logical_flow(sbrec_multicast_group_by_name_datapath,
                               sbrec_port_binding_by_name,
                               lflow, local_datapaths,
                               chassis, &dhcp_opts, &dhcpv6_opts, &nd_ra_opts,
@@ -197,7 +190,6 @@ add_logical_flows(
 
 static void
 consider_logical_flow(
-    struct ovsdb_idl_index *sbrec_chassis_by_name,
     struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath,
     struct ovsdb_idl_index *sbrec_port_binding_by_name,
     const struct sbrec_logical_flow *lflow,
@@ -295,7 +287,6 @@ consider_logical_flow(
         .dp = lflow->logical_datapath
     };
     struct condition_aux cond_aux = {
-        .sbrec_chassis_by_name = sbrec_chassis_by_name,
         .sbrec_port_binding_by_name = sbrec_port_binding_by_name,
         .chassis = chassis,
         .active_tunnels = active_tunnels,
@@ -460,8 +451,7 @@ add_neighbor_flows(struct ovsdb_idl_index *sbrec_port_binding_by_name,
 /* Translates logical flows in the Logical_Flow table in the OVN_SB database
  * into OpenFlow flows.  See ovn-architecture(7) for more information. */
 void
-lflow_run(struct ovsdb_idl_index *sbrec_chassis_by_name,
-          struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath,
+lflow_run(struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath,
           struct ovsdb_idl_index *sbrec_port_binding_by_name,
           const struct sbrec_dhcp_options_table *dhcp_options_table,
           const struct sbrec_dhcpv6_options_table *dhcpv6_options_table,
@@ -479,8 +469,7 @@ lflow_run(struct ovsdb_idl_index *sbrec_chassis_by_name,
 {
     COVERAGE_INC(lflow_run);
 
-    add_logical_flows(sbrec_chassis_by_name,
-                      sbrec_multicast_group_by_name_datapath,
+    add_logical_flows(sbrec_multicast_group_by_name_datapath,
                       sbrec_port_binding_by_name, dhcp_options_table,
                       dhcpv6_options_table, logical_flow_table,
                       local_datapaths, chassis, addr_sets, port_groups,

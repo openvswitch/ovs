@@ -65,8 +65,7 @@ struct uuid;
 #define LOG_PIPELINE_LEN 24
 
 void lflow_init(void);
-void lflow_run(struct ovsdb_idl_index *sbrec_chassis_by_name,
-               struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath,
+void lflow_run(struct ovsdb_idl_index *sbrec_multicast_group_by_name_datapath,
                struct ovsdb_idl_index *sbrec_port_binding_by_name,
                const struct sbrec_dhcp_options_table *,
                const struct sbrec_dhcpv6_options_table *,

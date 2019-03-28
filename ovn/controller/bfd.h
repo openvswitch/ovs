@@ -24,16 +24,17 @@ struct ovsrec_interface_table;
 struct ovsrec_open_vswitch_table;
 struct sbrec_chassis;
 struct sbrec_sb_global_table;
+struct sbrec_ha_chassis_group_table;
 struct sset;
 
 void bfd_register_ovs_idl(struct ovsdb_idl *);
-void bfd_run(struct ovsdb_idl_index *sbrec_chassis_by_name,
-             struct ovsdb_idl_index *sbrec_port_binding_by_datapath,
-             const struct ovsrec_interface_table *interface_table,
-             const struct ovsrec_bridge *br_int,
-             const struct sbrec_chassis *chassis_rec,
-             const struct sbrec_sb_global_table *sb_global_table,
-             const struct hmap *local_datapaths);
+
+void bfd_run(const struct ovsrec_interface_table *,
+             const struct ovsrec_bridge *,
+             const struct sbrec_chassis *,
+             const struct sbrec_ha_chassis_group_table *,
+             const struct sbrec_sb_global_table *);
+
 void  bfd_calculate_active_tunnels(const struct ovsrec_bridge *br_int,
                                    struct sset *active_tunnels);
 
