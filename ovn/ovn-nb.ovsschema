@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
-    "version": "5.15.0",
-    "cksum": "1015978933 21919",
+    "version": "5.15.1",
+    "cksum": "1272095726 22218",
     "tables": {
         "NB_Global": {
             "columns": {
@@ -102,6 +102,12 @@
                                             "refType": "weak"},
                                  "min": 0,
                                  "max": 1}},
+                "ha_chassis_group": {
+                    "type": {"key": {"type": "uuid",
+                                     "refTable": "HA_Chassis_Group",
+                                     "refType": "strong"},
+                             "min": 0,
+                             "max": 1}},
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}}},

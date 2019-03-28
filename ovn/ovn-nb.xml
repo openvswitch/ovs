@@ -353,6 +353,53 @@
           <dd>
             A port to a logical switch on a VTEP gateway.
           </dd>
+
+          <dt><code>external</code></dt>
+          <dd>
+            <p>
+              Represents a logical port which is external and not having
+              an OVS port in the integration bridge.
+              <code>OVN</code> will never receive any traffic from this port or
+              send any traffic to this port. <code>OVN</code> can support
+              native services like DHCPv4/DHCPv6/DNS for this port.
+              If <ref column="ha_chassis_group"/> is defined,
+              <code>ovn-controller</code> running in the master chassis of
+              the HA chassis group will bind this port to provide these native
+              services. It is expected that this port belong to a bridged
+              logical switch (with a <code>localnet</code> port).
+            </p>
+
+            <p>
+              It is recommended to use the same HA chassis group for all the
+              external ports of a logical switch. Otherwise, the physical
+              switch might see MAC flap issue when different chassis provide
+              the native services. For example when supporting native DHCPv4
+              service, DHCPv4 server mac (configured in
+              <ref column="options:server_mac" table="DHCP_Options"
+              db="OVN_NB"/> column in table <ref table="DHCP_Options"/>)
+              originating from different ports can cause MAC flap issue.
+              The MAC of the logical router IP(s) can also flap if the
+              same HA chassis group is not set for all the external ports
+              of a logical switch.
+            </p>
+
+            <p>
+              Below are some of the use cases where <code>external</code>
+              ports can be used.
+            </p>
+
+            <ul>
+              <li>
+                VMs connected to SR-IOV nics - Traffic from these VMs by passes
+                the kernel stack and local <code>ovn-controller</code> do not
+                bind these ports and cannot serve the native services.
+              </li>
+
+              <li>
+                When CMS supports provisioning baremetal servers.
+              </li>
+            </ul>
+          </dd>
         </dl>
       </column>
     </group>
@@ -900,6 +947,15 @@
         Please see the <ref table="DHCP_Options"/> table.
       </column>
     </group>
+
+    <column name="ha_chassis_group">
+      References a row in the OVN Northbound database's
+      <ref table="HA_Chassis_Group" db="OVN_Northbound"/> table.
+      It indicates the HA chassis group to use if the
+      <ref column="type"/> is set to <code>external</code>.
+      If <ref column="type"/> is not <code>external</code>, this
+      column is ignored.
+    </column>
 
     <group title="Naming">
       <column name="external_ids" key="neutron:port_name">

@@ -626,7 +626,8 @@ nd_na_router {
     <p>
       This table adds the DHCPv4 options to a DHCPv4 packet from the
       logical ports configured with IPv4 address(es) and DHCPv4 options,
-      and similarly for DHCPv6 options.
+      and similarly for DHCPv6 options. This table also adds flows for the
+      logical ports of type <code>external</code>.
     </p>
 
     <ul>
@@ -827,7 +828,39 @@ output;
       </li>
     </ul>
 
-    <h3>Ingress Table 16 Destination Lookup</h3>
+    <h3>Ingress table 16 External ports</h3>
+
+    <p>
+      Traffic from the <code>external</code> logical ports enter the ingress
+      datapath pipeline via the <code>localnet</code> port. This table adds the
+      below logical flows to handle the traffic from these ports.
+    </p>
+
+    <ul>
+      <li>
+        <p>
+          A priority-100 flow is added for each <code>external</code> logical
+          port which doesn't reside on a chassis to drop the ARP/IPv6 NS
+          request to the router IP(s) (of the logical switch) which matches
+          on the <code>inport</code> of the <code>external</code> logical port
+          and the valid <code>eth.src</code> address(es) of the
+          <code>external</code> logical port.
+        </p>
+
+        <p>
+          This flow guarantees that the ARP/NS request to the router IP
+          address from the external ports is responded by only the chassis
+          which has claimed these external ports. All the other chassis,
+          drops these packets.
+        </p>
+      </li>
+
+      <li>
+        A priority-0 flow that matches all packets to advances to table 17.
+      </li>
+    </ul>
+
+    <h3>Ingress Table 17 Destination Lookup</h3>
 
     <p>
       This table implements switching behavior.  It contains these logical

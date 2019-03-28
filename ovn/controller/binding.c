@@ -502,6 +502,18 @@ consider_local_datapath(struct ovsdb_idl_txn *ovnsb_idl_txn,
          * for them. */
         sset_add(local_lports, binding_rec->logical_port);
         our_chassis = false;
+    } else if (!strcmp(binding_rec->type, "external")) {
+        if (ha_chassis_group_contains(binding_rec->ha_chassis_group,
+                                      chassis_rec)) {
+            our_chassis = ha_chassis_group_is_active(
+                binding_rec->ha_chassis_group,
+                active_tunnels, chassis_rec);
+
+            add_local_datapath(sbrec_datapath_binding_by_key,
+                               sbrec_port_binding_by_datapath,
+                               sbrec_port_binding_by_name,
+                               binding_rec->datapath, false, local_datapaths);
+        }
     }
 
     if (our_chassis

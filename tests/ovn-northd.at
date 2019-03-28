@@ -397,7 +397,7 @@ ovn-nbctl --wait=sb ha-chassis-group-add hagrp1
 
 # ovn-northd should not create HA chassis group and HA chassis rows
 # unless the HA chassis group in OVN NB DB is associated to
-# a logical router port.
+# a logical router port or logical port of type external.
 AT_CHECK([ovn-sbctl --bare --columns name find ha_chassis_group name="hagrp1" \
 | wc -l], [0], [0
 ])
@@ -731,5 +731,105 @@ ovn-nbctl clear logical_router_port lr0-public options
 
 OVS_WAIT_UNTIL([test 0 = `ovn-sbctl list ha_chassis_group |  wc -l`])
 AT_CHECK([test 0 = `ovn-sbctl list ha_chassis | wc -l`])
+
+# Delete old sw0.
+ovn-nbctl ls-del sw0
+
+# Create external logical ports and associate ha_chassis_group
+ovn-nbctl ls-add sw0
+ovn-nbctl lsp-add sw0 sw0-pext1
+ovn-nbctl lsp-add sw0 sw0-pext2
+ovn-nbctl lsp-add sw0 sw0-p1
+
+ovn-nbctl lsp-set-addresses sw0-pext1 "00:00:00:00:00:03 10.0.0.3"
+ovn-nbctl lsp-set-addresses sw0-pext2 "00:00:00:00:00:03 10.0.0.4"
+ovn-nbctl lsp-set-addresses sw0-p1 "00:00:00:00:00:03 10.0.0.5"
+
+ovn-nbctl --wait=sb ha-chassis-group-add hagrp1
+
+ovn-nbctl --wait=sb ha-chassis-group-add-chassis hagrp1 ch1 30
+ovn-nbctl --wait=sb ha-chassis-group-add-chassis hagrp1 ch2 20
+ovn-nbctl --wait=sb ha-chassis-group-add-chassis hagrp1 ch3 10
+
+# ovn-northd should not create HA chassis group and HA chassis rows
+# unless the HA chassis group in OVN NB DB is associated to
+# a logical router port or logical port of type external.
+OVS_WAIT_UNTIL([test 0 = `ovn-sbctl list ha_chassis_group |  wc -l`])
+AT_CHECK([test 0 = `ovn-sbctl list ha_chassis | wc -l`])
+
+hagrp1_uuid=`ovn-nbctl --bare --columns _uuid find ha_chassis_group \
+name=hagrp1`
+
+# The type of the lsp - sw0-pext1 is still not set to external.
+# So ha_chassis_group should be ignored.
+ovn-nbctl set logical_switch_port sw0-pext1 ha_chassis_group=$hagrp1_uuid
+
+OVS_WAIT_UNTIL([test 0 = `ovn-sbctl --bare --columns name find \
+ha_chassis_group name="hagrp1" | wc -l`])
+
+AT_CHECK([test 0 = `ovn-sbctl list ha_chassis | grep chassis | wc -l`])
+
+# Set the type of sw0-pext1 to external
+ovn-nbctl lsp-set-type sw0-pext1 external
+
+OVS_WAIT_UNTIL([test 1 = `ovn-sbctl --bare --columns name find \
+ha_chassis_group name="hagrp1" | wc -l`])
+
+AT_CHECK([test 3 = `ovn-sbctl list ha_chassis | grep chassis | wc -l`])
+
+sb_hagrp1_uuid=`ovn-sbctl --bare --columns _uuid find ha_chassis_group \
+name=hagrp1`
+
+AT_CHECK([test "$sb_hagrp1_uuid" = `ovn-sbctl --bare --columns \
+ha_chassis_group find port_binding logical_port=sw0-pext1`])
+
+# Set the type of sw0-pext2 to external and associate ha_chassis_group
+ovn-nbctl lsp-set-type sw0-pext2 external
+ovn-nbctl set logical_switch_port sw0-pext2 ha_chassis_group=$hagrp1_uuid
+
+OVS_WAIT_UNTIL([test 1 = `ovn-sbctl --bare --columns name find \
+ha_chassis_group name="hagrp1" | wc -l`])
+
+AT_CHECK([test 3 = `ovn-sbctl list ha_chassis | grep chassis | wc -l`])
+AT_CHECK([test "$sb_hagrp1_uuid" = `ovn-sbctl --bare --columns \
+ha_chassis_group find port_binding logical_port=sw0-pext1`])
+
+OVS_WAIT_UNTIL([test "$sb_hagrp1_uuid" = `ovn-sbctl --bare --columns \
+ha_chassis_group find port_binding logical_port=sw0-pext2`])
+
+# sw0-p1 is a normal port. So ha_chassis_group should not be set
+# in port_binding.
+ovn-nbctl --wait=sb set logical_switch_port sw0-p1 \
+ha_chassis_group=$hagrp1_uuid
+
+OVS_WAIT_UNTIL([test x$(ovn-sbctl --bare --columns chassis find port_binding \
+logical_port=sw0-p1) = x], [0], [])
+
+# Clear ha_chassis_group for sw0-pext1
+ovn-nbctl --wait=sb clear logical_switch_port sw0-pext1 ha_chassis_group
+
+OVS_WAIT_UNTIL([test x$(ovn-sbctl --bare --columns chassis find port_binding \
+logical_port=sw0-pext1) = x], [0], [])
+
+OVS_WAIT_UNTIL([test 1 = `ovn-sbctl --bare --columns name find \
+ha_chassis_group name="hagrp1" | wc -l`])
+
+AT_CHECK([test 3 = `ovn-sbctl list ha_chassis | grep chassis | wc -l`])
+
+# Clear ha_chassis_group for sw0-pext2
+ovn-nbctl --wait=sb clear logical_switch_port sw0-pext2 ha_chassis_group
+
+OVS_WAIT_UNTIL([test x$(ovn-sbctl --bare --columns chassis find port_binding \
+logical_port=sw0-pext2) = x], [0], [])
+
+OVS_WAIT_UNTIL([test 0 = `ovn-sbctl list ha_chassis_group |  wc -l`])
+AT_CHECK([test 0 = `ovn-sbctl list ha_chassis | wc -l`])
+
+as ovn-sb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+as ovn-nb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+as northd
+OVS_APP_EXIT_AND_WAIT([ovn-northd])
 
 AT_CLEANUP

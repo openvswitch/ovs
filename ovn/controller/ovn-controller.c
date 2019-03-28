@@ -145,6 +145,7 @@ update_sb_monitors(struct ovsdb_idl *ovnsb_idl,
      * ports that have a Gateway_Chassis that point's to our own
      * chassis */
     sbrec_port_binding_add_clause_type(&pb, OVSDB_F_EQ, "chassisredirect");
+    sbrec_port_binding_add_clause_type(&pb, OVSDB_F_EQ, "external");
     if (chassis) {
         /* This should be mostly redundant with the other clauses for port
          * bindings, but it allows us to catch any ports that are assigned to

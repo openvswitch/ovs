@@ -25,6 +25,7 @@ Post-v2.11.0
    - OVN:
      * Select IPAM mac_prefix in a random manner if not provided by the user
      * Added the HA chassis group support.
+     * Added 'external' logical port support.
    - New QoS type "linux-netem" on Linux.
 
 v2.11.0 - 19 Feb 2019

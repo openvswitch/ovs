@@ -9859,11 +9859,10 @@ grep active_backup | grep slaves:$hv2_gw1_ofport,$hv2_gw2_ofport \
 ])
 
 # make sure that flows for handling the outside router port reside on gw1
-OVS_WAIT_UNTIL([as gw1 ovs-ofctl dump-flows br-int table=24 | \
+OVS_WAIT_UNTIL([as gw1 ovs-ofctl dump-flows br-int table=25 | \
 grep 00:00:02:01:02:04 | wc -l], [0], [[1
 ]])
-
-OVS_WAIT_UNTIL([as gw2 ovs-ofctl dump-flows br-int table=24 | \
+OVS_WAIT_UNTIL([as gw2 ovs-ofctl dump-flows br-int table=25 | \
 grep 00:00:02:01:02:04 | wc -l], [0], [[0
 ]])
 
@@ -9974,10 +9973,10 @@ AT_CHECK([ovs-vsctl --bare --columns bfd find Interface name=ovn-hv1-0],[0],
 ]])
 
 # make sure that flows for handling the outside router port reside on gw2 now
-OVS_WAIT_UNTIL([as gw2 ovs-ofctl dump-flows br-int table=24 | \
+OVS_WAIT_UNTIL([as gw2 ovs-ofctl dump-flows br-int table=25 | \
 grep 00:00:02:01:02:04 | wc -l], [0], [[1
 ]])
-OVS_WAIT_UNTIL([as gw1 ovs-ofctl dump-flows br-int table=24 | \
+OVS_WAIT_UNTIL([as gw1 ovs-ofctl dump-flows br-int table=25 | \
 grep 00:00:02:01:02:04 | wc -l], [0], [[0
 ]])
 
@@ -9989,10 +9988,10 @@ as main ovs-vsctl del-port n1 $port
 bfd_dump
 
 # make sure that flows for handling the outside router port reside on gw2 now
-OVS_WAIT_UNTIL([as gw1 ovs-ofctl dump-flows br-int table=24 | \
+OVS_WAIT_UNTIL([as gw1 ovs-ofctl dump-flows br-int table=25 | \
 grep 00:00:02:01:02:04 | wc -l], [0], [[1
 ]])
-OVS_WAIT_UNTIL([as gw2 ovs-ofctl dump-flows br-int table=24 | \
+OVS_WAIT_UNTIL([as gw2 ovs-ofctl dump-flows br-int table=25 | \
 grep 00:00:02:01:02:04 | wc -l], [0], [[0
 ]])
 
@@ -12111,6 +12110,723 @@ OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [expected])
 as hv2 start_daemon ovn-controller
 
 OVN_CLEANUP([hv1],[hv2])
+AT_CLEANUP
+
+AT_SETUP([ovn -- external logical port])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+net_add n1
+sim_add hv1
+sim_add hv2
+sim_add hv3
+
+ovn-nbctl ls-add ls1
+ovn-nbctl lsp-add ls1 ls1-lp1 \
+-- lsp-set-addresses ls1-lp1 "f0:00:00:00:00:01 10.0.0.4 ae70::4"
+
+# Add a couple of external logical port
+ovn-nbctl lsp-add ls1 ls1-lp_ext1 \
+-- lsp-set-addresses ls1-lp_ext1 "f0:00:00:00:00:03 10.0.0.6 ae70::6"
+ovn-nbctl lsp-set-port-security ls1-lp_ext1 \
+"f0:00:00:00:00:03 10.0.0.6 ae70::6"
+ovn-nbctl lsp-set-type ls1-lp_ext1 external
+
+ovn-nbctl lsp-add ls1 ls1-lp_ext2 \
+-- lsp-set-addresses ls1-lp_ext2 "f0:00:00:00:00:04 10.0.0.7 ae70::7"
+ovn-nbctl lsp-set-port-security ls1-lp_ext2 \
+"f0:00:00:00:00:04 10.0.0.7 ae70::8"
+ovn-nbctl lsp-set-type ls1-lp_ext2 external
+
+d1="$(ovn-nbctl create DHCP_Options cidr=10.0.0.0/24 \
+options="\"server_id\"=\"10.0.0.1\" \"server_mac\"=\"ff:10:00:00:00:01\" \
+\"lease_time\"=\"3600\" \"router\"=\"10.0.0.1\"")"
+
+d2="$(ovn-nbctl create DHCP_Options cidr="ae70\:\:/64" \
+options="\"server_id\"=\"00:00:00:10:00:01\"")"
+
+ovn-nbctl lsp-set-dhcpv4-options ls1-lp1 ${d1}
+ovn-nbctl lsp-set-dhcpv4-options ls1-lp_ext1 ${d1}
+ovn-nbctl lsp-set-dhcpv4-options ls1-lp_ext2 ${d1}
+
+ovn-nbctl lsp-set-dhcpv6-options ls1-lp1 ${d2}
+ovn-nbctl lsp-set-dhcpv6-options ls1-lp_ext1 ${d2}
+ovn-nbctl lsp-set-dhcpv6-options ls1-lp_ext2 ${d2}
+
+# Create a logical router and connect it to ls1
+ovn-nbctl lr-add lr0
+ovn-nbctl lrp-add lr0 lr0-ls1 a0:10:00:00:00:01 10.0.0.1/24
+ovn-nbctl lsp-add ls1 ls1-lr0
+ovn-nbctl set Logical_Switch_Port ls1-lr0 type=router \
+    options:router-port=lr0-ls1 addresses=router
+
+# Create HA chassis group
+ovn-nbctl ha-chassis-group-add hagrp1
+ovn-nbctl ha-chassis-group-add-chassis hagrp1 hv1 30
+
+hagrp1_uuid=`ovn-nbctl --bare --columns _uuid find ha_chassis_group name="hagrp1"`
+
+# There should be 1 HA_Chassis rows with chassis sets
+OVS_WAIT_UNTIL([ovn-sbctl list ha_chassis | grep chassis | awk '{print $3}' \
+| grep '-' | wc -l ], [0], [1
+])
+
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl -- add-port br-phys hv1-ext1 -- \
+    set interface hv1-ext1 options:tx_pcap=hv1/ext1-tx.pcap \
+    options:rxq_pcap=hv1/ext1-rx.pcap \
+    ofport-request=2
+ovs-vsctl set open . external-ids:ovn-bridge-mappings=phys:br-phys
+
+as hv2
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.2
+ovs-vsctl -- add-port br-phys hv2-ext2 -- \
+    set interface hv2-ext2 options:tx_pcap=hv2/ext2-tx.pcap \
+    options:rxq_pcap=hv2/ext2-rx.pcap \
+    ofport-request=2
+ovs-vsctl set open . external-ids:ovn-bridge-mappings=phys:br-phys
+
+as hv3
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.3
+ovs-vsctl -- add-port br-phys hv3-ext3 -- \
+    set interface hv3-ext3 options:tx_pcap=hv3/ext3-tx.pcap \
+    options:rxq_pcap=hv3/ext3-rx.pcap \
+    ofport-request=2
+ovs-vsctl set open . external-ids:ovn-bridge-mappings=phys:br-phys
+
+# No DHCPv4/v6 flows for the external port - ls1-lp_ext1 - 10.0.0.6 in hv1 and
+# hv2 as ha-chassis-group is not set and no localnet port added to ls1.
+AT_CHECK([ovn-sbctl dump-flows ls1 | grep "offerip = 10.0.0.6" | \
+wc -l], [0], [0
+])
+AT_CHECK([as hv1 ovs-ofctl dump-flows br-int | grep table=20 | \
+grep controller | grep "0a.00.00.06" | wc -l], [0], [0
+])
+AT_CHECK([as hv2 ovs-ofctl dump-flows br-int | grep table=20 | \
+grep controller | grep "0a.00.00.06" | wc -l], [0], [0
+])
+AT_CHECK([as hv1 ovs-ofctl dump-flows br-int | grep table=20 | \
+grep controller | grep tp_src=546 | grep \
+"ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.06" | wc -l], [0], [0
+])
+AT_CHECK([as hv2 ovs-ofctl dump-flows br-int | grep table=20 | \
+grep controller | grep tp_src=546 | grep \
+"ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.06" | wc -l], [0], [0
+])
+
+hv1_uuid=$(ovn-sbctl list chassis hv1 | grep uuid | awk '{print $3}')
+hv2_uuid=$(ovn-sbctl list chassis hv2 | grep uuid | awk '{print $3}')
+hv3_uuid=$(ovn-sbctl list chassis hv3 | grep uuid | awk '{print $3}')
+
+# The port_binding row for ls1-lp_ext1 should have empty chassis
+chassis=`ovn-sbctl --bare --columns chassis find port_binding \
+logical_port=ls1-lp_ext1`
+
+AT_CHECK([test x$chassis == x], [0], [])
+
+# Associate hagrp1 ha-chassis-group to ls1-lp_ext1
+ovn-nbctl --wait=hv set Logical_Switch_Port ls1-lp_ext1 \
+ha-chassis-group=$hagrp1_uuid
+
+# Get the hagrp1 uuid in SB DB.
+sb_hagrp1_uuid=`ovn-sbctl --bare --columns _uuid find ha_chassis_group \
+name="hagrp1"`
+
+# Wait till ls1-lp_ext1 port_binding has ha_chassis_group set
+OVS_WAIT_UNTIL(
+    [sb_pb_hagrp=`ovn-sbctl --bare --columns ha_chassis_group find \
+port_binding logical_port=ls1-lp_ext1`
+     test "$sb_pb_hagrp" = "$sb_hagrp1_uuid"])
+
+# No DHCPv4/v6 flows for the external port - ls1-lp_ext1 - 10.0.0.6 in hv1 and hv2
+# as no localnet port added to ls1 yet.
+AT_CHECK([as hv1 ovs-ofctl dump-flows br-int | grep table=20 | \
+grep controller | grep "0a.00.00.06" | wc -l], [0], [0
+])
+AT_CHECK([as hv2 ovs-ofctl dump-flows br-int | grep table=20 | \
+grep controller | grep "0a.00.00.06" | wc -l], [0], [0
+])
+AT_CHECK([as hv1 ovs-ofctl dump-flows br-int | grep table=20 | \
+grep controller | grep tp_src=546 | grep \
+"ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.06" | wc -l], [0], [0
+])
+AT_CHECK([as hv2 ovs-ofctl dump-flows br-int | grep table=20 | \
+grep controller | grep tp_src=546 | grep \
+"ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.06" | wc -l], [0], [0
+])
+
+# Add the localnet port to the logical switch ls1
+ovn-nbctl lsp-add ls1 ln-public
+ovn-nbctl lsp-set-addresses ln-public unknown
+ovn-nbctl lsp-set-type ln-public localnet
+ovn-nbctl --wait=hv lsp-set-options ln-public network_name=phys
+
+ln_public_key=$(ovn-sbctl list port_binding ln-public | grep  tunnel_key | \
+awk '{print $3}')
+
+# The ls1-lp_ext1 should be bound to hv1 as only hv1 is part of the
+# ha chassis group.
+OVS_WAIT_UNTIL(
+    [chassis=`ovn-sbctl --bare --columns chassis find port_binding \
+logical_port=ls1-lp_ext1`
+    test "$chassis" = "$hv1_uuid"])
+
+# There should be DHCPv4/v6 OF flows for the ls1-lp_ext1 port in hv1
+AT_CHECK([as hv1 ovs-ofctl dump-flows br-int | grep table=20 | \
+grep controller | grep "0a.00.00.06" | grep reg14=0x$ln_public_key | \
+wc -l], [0], [3
+])
+AT_CHECK([as hv1 ovs-ofctl dump-flows br-int | grep table=20 | \
+grep controller | grep tp_src=546 | grep \
+"ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.06" | \
+grep reg14=0x$ln_public_key | wc -l], [0], [1
+])
+
+# There should be no DHCPv4/v6 flows for ls1-lp_ext1 on hv2
+AT_CHECK([as hv2 ovs-ofctl dump-flows br-int | grep table=20 | \
+grep controller | grep "0a.00.00.06" | wc -l], [0], [0
+])
+AT_CHECK([as hv2 ovs-ofctl dump-flows br-int | grep table=20 | \
+grep controller | grep tp_src=546 | grep \
+"ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.06" | wc -l], [0], [0
+])
+
+# No DHCPv4/v6 flows for the external port - ls1-lp_ext2 - 10.0.0.7 in hv1 and
+# hv2 as requested-chassis option is not set.
+AT_CHECK([as hv1 ovs-ofctl dump-flows br-int | grep table=20 | \
+grep controller | grep "0a.00.00.07" | wc -l], [0], [0
+])
+AT_CHECK([as hv2 ovs-ofctl dump-flows br-int | grep table=20 | \
+grep controller | grep "0a.00.00.07" | wc -l], [0], [0
+])
+AT_CHECK([as hv1 ovs-ofctl dump-flows br-int | grep table=20 | \
+grep controller | grep tp_src=546 | grep \
+"ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.07" | wc -l], [0], [0
+])
+AT_CHECK([as hv2 ovs-ofctl dump-flows br-int | grep table=20 | \
+grep controller | grep tp_src=546 | grep \
+"ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.07" | wc -l], [0], [0
+])
+
+as hv1
+ovs-vsctl show
+
+# This shell function sends a DHCP request packet
+# test_dhcp INPORT SRC_MAC DHCP_TYPE OFFER_IP ...
+test_dhcp() {
+    local inport=$1 src_mac=$2 dhcp_type=$3 offer_ip=$4 use_ip=$5
+    shift; shift; shift; shift; shift;
+    if test $use_ip != 0; then
+        src_ip=$1
+        dst_ip=$2
+        shift; shift;
+    else
+        src_ip=`ip_to_hex 0 0 0 0`
+        dst_ip=`ip_to_hex 255 255 255 255`
+    fi
+    local request=ffffffffffff${src_mac}0800451001100000000080110000${src_ip}${dst_ip}
+    # udp header and dhcp header
+    request=${request}0044004300fc0000
+    request=${request}010106006359aa760000000000000000000000000000000000000000${src_mac}
+    # client hardware padding
+    request=${request}00000000000000000000
+    # server hostname
+    request=${request}0000000000000000000000000000000000000000000000000000000000000000
+    request=${request}0000000000000000000000000000000000000000000000000000000000000000
+    # boot file name
+    request=${request}0000000000000000000000000000000000000000000000000000000000000000
+    request=${request}0000000000000000000000000000000000000000000000000000000000000000
+    request=${request}0000000000000000000000000000000000000000000000000000000000000000
+    request=${request}0000000000000000000000000000000000000000000000000000000000000000
+    # dhcp magic cookie
+    request=${request}63825363
+    # dhcp message type
+    request=${request}3501${dhcp_type}ff
+
+    local srv_mac=$1 srv_ip=$2 expected_dhcp_opts=$3
+    # total IP length will be the IP length of the request packet
+    # (which is 272 in our case) + 8 (padding bytes) + (expected_dhcp_opts / 2)
+    ip_len=`expr 280 + ${#expected_dhcp_opts} / 2`
+    udp_len=`expr $ip_len - 20`
+    ip_len=$(printf "%x" $ip_len)
+    udp_len=$(printf "%x" $udp_len)
+    # $ip_len var will be in 3 digits i.e 134. So adding a '0' before $ip_len
+    local reply=${src_mac}${srv_mac}080045100${ip_len}000000008011XXXX${srv_ip}${offer_ip}
+    # udp header and dhcp header.
+    # $udp_len var will be in 3 digits. So adding a '0' before $udp_len
+    reply=${reply}004300440${udp_len}0000020106006359aa760000000000000000
+    # your ip address
+    reply=${reply}${offer_ip}
+    # next server ip address, relay agent ip address, client mac address
+    reply=${reply}0000000000000000${src_mac}
+    # client hardware padding
+    reply=${reply}00000000000000000000
+    # server hostname
+    reply=${reply}0000000000000000000000000000000000000000000000000000000000000000
+    reply=${reply}0000000000000000000000000000000000000000000000000000000000000000
+    # boot file name
+    reply=${reply}0000000000000000000000000000000000000000000000000000000000000000
+    reply=${reply}0000000000000000000000000000000000000000000000000000000000000000
+    reply=${reply}0000000000000000000000000000000000000000000000000000000000000000
+    reply=${reply}0000000000000000000000000000000000000000000000000000000000000000
+    # dhcp magic cookie
+    reply=${reply}63825363
+    # dhcp message type
+    local dhcp_reply_type=02
+    if test $dhcp_type = 03; then
+        dhcp_reply_type=05
+    fi
+    reply=${reply}3501${dhcp_reply_type}${expected_dhcp_opts}00000000ff00000000
+    echo $reply >> ext1_v4.expected
+
+    as hv1 ovs-appctl netdev-dummy/receive hv${inport}-ext${inport} $request
+}
+
+
+trim_zeros() {
+    sed 's/\(00\)\{1,\}$//'
+}
+
+# This shell function sends a DHCPv6 request packet
+# test_dhcpv6 INPORT SRC_MAC SRC_LLA DHCPv6_MSG_TYPE OFFER_IP OUTPORT...
+# The OUTPORTs (zero or more) list the VIFs on which the original DHCPv6
+# packet should be received twice (one from ovn-controller and the other
+# from the "ovs-ofctl monitor br-int resume"
+test_dhcpv6() {
+    local inport=$1 src_mac=$2 src_lla=$3 msg_code=$4 offer_ip=$5
+    local req_pkt_in_expected=$6
+    local request=ffffffffffff${src_mac}86dd00000000002a1101${src_lla}
+    # dst ip ff02::1:2
+    request=${request}ff020000000000000000000000010002
+    # udp header and dhcpv6 header
+    request=${request}02220223002affff${msg_code}010203
+    # Client identifier
+    request=${request}0001000a00030001${src_mac}
+    # IA-NA (Identity Association for Non Temporary Address)
+    request=${request}0003000c0102030400000e1000001518
+    shift; shift; shift; shift; shift;
+
+    local server_mac=000000100001
+    local server_lla=fe80000000000000020000fffe100001
+    local reply_code=07
+    if test $msg_code = 01; then
+        reply_code=02
+    fi
+    local msg_len=54
+    if test $offer_ip = 1; then
+        msg_len=28
+    fi
+    local reply=${src_mac}${server_mac}86dd0000000000${msg_len}1101
+    reply=${reply}${server_lla}${src_lla}
+
+    # udp header and dhcpv6 header
+    reply=${reply}0223022200${msg_len}ffff${reply_code}010203
+    # Client identifier
+    reply=${reply}0001000a00030001${src_mac}
+    # IA-NA
+    if test $offer_ip != 1; then
+        reply=${reply}0003002801020304ffffffffffffffff00050018${offer_ip}
+        reply=${reply}ffffffffffffffff
+    fi
+    # Server identifier
+    reply=${reply}0002000a00030001${server_mac}
+
+    echo $reply | trim_zeros >> ext${inport}_v6.expected
+    # The inport also receives the request packet since it is connected
+    # to the br-phys.
+    #echo $request >> ext${inport}_v6.expected
+
+    as hv1 ovs-appctl netdev-dummy/receive hv${inport}-ext${inport} $request
+}
+
+reset_pcap_file() {
+    local iface=$1
+    local pcap_file=$2
+    ovs-vsctl -- set Interface $iface options:tx_pcap=dummy-tx.pcap \
+options:rxq_pcap=dummy-rx.pcap
+    rm -f ${pcap_file}*.pcap
+    ovs-vsctl -- set Interface $iface options:tx_pcap=${pcap_file}-tx.pcap \
+options:rxq_pcap=${pcap_file}-rx.pcap
+}
+
+ip_to_hex() {
+    printf "%02x%02x%02x%02x" "$@"
+}
+
+AT_CAPTURE_FILE([ofctl_monitor0_hv1.log])
+as hv1 ovs-ofctl monitor br-int resume --detach --no-chdir \
+--pidfile=ovs-ofctl0.pid 2> ofctl_monitor0_hv1.log
+
+AT_CAPTURE_FILE([ofctl_monitor0_hv2.log])
+as hv2 ovs-ofctl monitor br-int resume --detach --no-chdir \
+--pidfile=ovs-ofctl0.pid 2> ofctl_monitor0_hv2.log
+
+AT_CAPTURE_FILE([ofctl_monitor0_hv3.log])
+as hv3 ovs-ofctl monitor br-int resume --detach --no-chdir \
+--pidfile=ovs-ofctl0.pid 2> ofctl_monitor0_hv3.log
+
+as hv1
+reset_pcap_file hv1-ext1 hv1/ext1
+
+# Send DHCPDISCOVER.
+offer_ip=`ip_to_hex 10 0 0 6`
+server_ip=`ip_to_hex 10 0 0 1`
+server_mac=ff1000000001
+expected_dhcp_opts=330400000e100104ffffff0003040a00000136040a000001
+test_dhcp 1 f00000000003 01 $offer_ip 0 $server_mac $server_ip \
+$expected_dhcp_opts
+
+# NXT_RESUMEs should be 1 in hv1.
+OVS_WAIT_UNTIL([test 1 = `cat ofctl_monitor0_hv1.log | grep -c NXT_RESUME`])
+
+# NXT_RESUMEs should be 0 in hv2.
+OVS_WAIT_UNTIL([test 0 = `cat ofctl_monitor0_hv2.log | grep -c NXT_RESUME`])
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/ext1-tx.pcap > ext1_v4.packets
+cat ext1_v4.expected | cut -c -48 > expout
+AT_CHECK([cat ext1_v4.packets | cut -c -48], [0], [expout])
+# Skipping the IPv4 checksum.
+cat ext1_v4.expected | cut -c 53- > expout
+AT_CHECK([cat ext1_v4.packets | cut -c 53-], [0], [expout])
+
+# ovs-ofctl also resumes the packets and this causes other ports to receive
+# the DHCP request packet. So reset the pcap files so that its easier to test.
+as hv1
+reset_pcap_file hv1-ext1 hv1/ext1
+
+rm -f ext1_v4.expected
+rm -f ext1_v4.packets
+
+# Send DHCPv6 request
+src_mac=f00000000003
+src_lla=fe80000000000000f20000fffe000003
+offer_ip=ae700000000000000000000000000006
+test_dhcpv6 1 $src_mac $src_lla 01 $offer_ip
+
+# NXT_RESUMEs should be 2 in hv1.
+OVS_WAIT_UNTIL([test 2 = `cat ofctl_monitor0_hv1.log | grep -c NXT_RESUME`])
+
+# NXT_RESUMEs should be 0 in hv2.
+OVS_WAIT_UNTIL([test 0 = `cat ofctl_monitor0_hv2.log | grep -c NXT_RESUME`])
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/ext1-tx.pcap | \
+sort > ext1_v6.packets
+cat ext1_v6.expected | cut -c -120 > expout
+AT_CHECK([cat ext1_v6.packets | cut -c -120], [0], [expout])
+# Skipping the UDP checksum
+cat ext1_v6.expected | cut -c 125- > expout
+AT_CHECK([cat ext1_v6.packets | cut -c 125-], [0], [expout])
+
+rm -f ext1_v6.expected
+rm -f ext1_v6.packets
+
+as hv1
+reset_pcap_file hv1-ext1 hv1/ext1
+
+# Delete the ha-chassis hv1.
+ovn-nbctl ha-chassis-group-remove-chassis hagrp1 hv1
+OVS_WAIT_UNTIL(
+    [chassis=`ovn-sbctl --bare --columns chassis find port_binding \
+logical_port=ls1-lp_ext1`
+    test "$chassis" = ""])
+
+# Add hv2 to the ha chassis group
+ovn-nbctl --wait=hv ha-chassis-group-add-chassis hagrp1 hv2 20
+
+ovn-sbctl list ha_chassis_group
+ovn-sbctl list ha_chassis
+
+ovn-sbctl find port_binding logical_port=ls1-lp_ext1
+
+# The ls1-lp_ext1 should be bound to hv2
+OVS_WAIT_UNTIL(
+    [chassis=`ovn-sbctl --bare --columns chassis find port_binding \
+logical_port=ls1-lp_ext1`
+    test "$chassis" = "$hv2_uuid"])
+
+# There should be OF flows for DHCP4/v6 for the ls1-lp_ext1 port in hv2
+AT_CHECK([as hv2 ovs-ofctl dump-flows br-int | grep table=20 | \
+grep controller | grep "0a.00.00.06" | grep reg14=0x$ln_public_key | \
+wc -l], [0], [3
+])
+AT_CHECK([as hv2 ovs-ofctl dump-flows br-int | grep table=20 | \
+grep controller | grep tp_src=546 | grep \
+"ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.06" | \
+grep reg14=0x$ln_public_key | wc -l], [0], [1
+])
+
+# There should be no DHCPv4/v6 flows for ls1-lp_ext1 on hv1
+AT_CHECK([as hv1 ovs-ofctl dump-flows br-int | grep table=20 | \
+grep controller | grep "0a.00.00.06" | wc -l], [0], [0
+])
+AT_CHECK([as hv1 ovs-ofctl dump-flows br-int | grep table=20 | \
+grep controller | grep tp_src=546 | grep \
+"ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.06" | \
+grep reg14=0x$ln_public_key | wc -l], [0], [0
+])
+
+# Send DHCPDISCOVER again for hv1/ext1. The DHCP response should come from
+# hv2 ovn-controller.
+offer_ip=`ip_to_hex 10 0 0 6`
+server_ip=`ip_to_hex 10 0 0 1`
+server_mac=ff1000000001
+expected_dhcp_opts=330400000e100104ffffff0003040a00000136040a000001
+test_dhcp 1 f00000000003 01 $offer_ip 0 $server_mac $server_ip \
+$expected_dhcp_opts
+
+# NXT_RESUMEs should be 2 in hv1.
+OVS_WAIT_UNTIL([test 2 = `cat ofctl_monitor0_hv1.log | grep -c NXT_RESUME`])
+
+# NXT_RESUMEs should be 1 in hv2.
+OVS_WAIT_UNTIL([test 1 = `cat ofctl_monitor0_hv2.log | grep -c NXT_RESUME`])
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/ext1-tx.pcap > ext1_v4.packets
+cat ext1_v4.expected | cut -c -48 > expout
+AT_CHECK([cat ext1_v4.packets | cut -c -48], [0], [expout])
+# Skipping the IPv4 checksum.
+cat ext1_v4.expected | cut -c 53- > expout
+AT_CHECK([cat ext1_v4.packets | cut -c 53-], [0], [expout])
+
+# ovs-ofctl also resumes the packets and this causes other ports to receive
+# the DHCP request packet. So reset the pcap files so that its easier to test.
+as hv1
+reset_pcap_file hv1-ext1 hv1/ext1
+
+rm -f ext1_v4.expected
+
+# Send DHCPv6 request again
+src_mac=f00000000003
+src_lla=fe80000000000000f20000fffe000003
+offer_ip=ae700000000000000000000000000006
+test_dhcpv6 1 $src_mac $src_lla 01 $offer_ip 1
+
+# NXT_RESUMEs should be 2 in hv1.
+OVS_WAIT_UNTIL([test 2 = `cat ofctl_monitor0_hv1.log | grep -c NXT_RESUME`])
+
+# NXT_RESUMEs should be 2 in hv2.
+OVS_WAIT_UNTIL([test 2 = `cat ofctl_monitor0_hv2.log | grep -c NXT_RESUME`])
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/ext1-tx.pcap | \
+sort > ext1_v6.packets
+cat ext1_v6.expected | cut -c -120 > expout
+AT_CHECK([cat ext1_v6.packets | cut -c -120], [0], [expout])
+# Skipping the UDP checksum
+cat ext1_v6.expected | cut -c 125- > expout
+AT_CHECK([cat ext1_v6.packets | cut -c 125-], [0], [expout])
+
+rm -f ext1_v6.expected
+rm -f ext1_v6.packets
+
+as hv1
+ovs-vsctl show
+reset_pcap_file hv1-ext1 hv1/ext1
+reset_pcap_file br-phys_n1 hv1/br-phys_n1
+reset_pcap_file br-phys hv1/br-phys
+
+as hv2
+ovs-vsctl show
+reset_pcap_file hv2-ext2 hv2/ext2
+reset_pcap_file br-phys_n1 hv2/br-phys_n1
+reset_pcap_file br-phys hv2/br-phys
+
+# From  ls1-lp_ext1, send ARP request for the router ip. The ARP
+# response should come from the router pipeline of hv2.
+ext1_mac=f00000000003
+router_mac=a01000000001
+ext1_ip=`ip_to_hex 10 0 0 6`
+router_ip=`ip_to_hex 10 0 0 1`
+arp_request=ffffffffffff${ext1_mac}08060001080006040001${ext1_mac}${ext1_ip}000000000000${router_ip}
+
+as hv1 ovs-appctl netdev-dummy/receive hv1-ext1 $arp_request
+expected_response=${src_mac}${router_mac}08060001080006040002${router_mac}${router_ip}${ext1_mac}${ext1_ip}
+echo $expected_response > expout
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/ext1-tx.pcap > ext1_arp_resp
+AT_CHECK([cat ext1_arp_resp], [0], [expout])
+
+# Verify that the response came from hv2
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/br-phys_n1-tx.pcap > ext1_arp_resp
+AT_CHECK([cat ext1_arp_resp], [0], [expout])
+
+# Now add 3 ha chassis to the ha chassis group
+ovn-nbctl ha-chassis-group-add-chassis hagrp1 hv1 30
+ovn-nbctl ha-chassis-group-add-chassis hagrp1 hv2 20
+ovn-nbctl ha-chassis-group-add-chassis hagrp1 hv3 10
+
+# hv1 should be master and claim ls1-lp_ext1
+OVS_WAIT_UNTIL(
+    [chassis=`ovn-sbctl --bare --columns chassis find port_binding \
+logical_port=ls1-lp_ext1`
+    test "$chassis" = "$hv1_uuid"])
+
+as hv1
+ovs-vsctl show
+reset_pcap_file hv1-ext1 hv1/ext1
+reset_pcap_file br-phys_n1 hv1/br-phys_n1
+reset_pcap_file br-phys hv1/br-phys
+
+as hv2
+ovs-vsctl show
+reset_pcap_file hv2-ext2 hv2/ext2
+reset_pcap_file br-phys_n1 hv2/br-phys_n1
+reset_pcap_file br-phys hv2/br-phys
+
+as hv3
+ovs-vsctl show
+reset_pcap_file hv3-ext3 hv3/ext3
+reset_pcap_file br-phys_n1 hv3/br-phys_n1
+reset_pcap_file br-phys hv3/br-phys
+
+# Send DHCPDISCOVER.
+offer_ip=`ip_to_hex 10 0 0 6`
+server_ip=`ip_to_hex 10 0 0 1`
+server_mac=ff1000000001
+expected_dhcp_opts=330400000e100104ffffff0003040a00000136040a000001
+test_dhcp 1 f00000000003 01 $offer_ip 0 $server_mac $server_ip \
+$expected_dhcp_opts
+
+# NXT_RESUMEs should be 3 in hv1.
+OVS_WAIT_UNTIL([test 3 = `cat ofctl_monitor0_hv1.log | grep -c NXT_RESUME`])
+
+# NXT_RESUMEs should be 2 in hv2.
+OVS_WAIT_UNTIL([test 2 = `cat ofctl_monitor0_hv2.log | grep -c NXT_RESUME`])
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/ext1-tx.pcap > ext1_v4.packets
+cat ext1_v4.expected | cut -c -48 > expout
+AT_CHECK([cat ext1_v4.packets | cut -c -48], [0], [expout])
+# Skipping the IPv4 checksum.
+cat ext1_v4.expected | cut -c 53- > expout
+AT_CHECK([cat ext1_v4.packets | cut -c 53-], [0], [expout])
+
+# ovs-ofctl also resumes the packets and this causes other ports to receive
+# the DHCP request packet. So reset the pcap files so that its easier to test.
+as hv1
+reset_pcap_file hv1-ext1 hv1/ext1
+
+rm -f ext1_v4.expected
+rm -f ext1_v4.packets
+
+# Send DHCPv6 request
+src_mac=f00000000003
+src_lla=fe80000000000000f20000fffe000003
+offer_ip=ae700000000000000000000000000006
+test_dhcpv6 1 $src_mac $src_lla 01 $offer_ip
+
+# NXT_RESUMEs should be 4 in hv1.
+OVS_WAIT_UNTIL([test 4 = `cat ofctl_monitor0_hv1.log | grep -c NXT_RESUME`])
+
+# NXT_RESUMEs should be 2 in hv2.
+OVS_WAIT_UNTIL([test 2 = `cat ofctl_monitor0_hv2.log | grep -c NXT_RESUME`])
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/ext1-tx.pcap | \
+sort > ext1_v6.packets
+cat ext1_v6.expected | cut -c -120 > expout
+AT_CHECK([cat ext1_v6.packets | cut -c -120], [0], [expout])
+# Skipping the UDP checksum
+cat ext1_v6.expected | cut -c 125- > expout
+AT_CHECK([cat ext1_v6.packets | cut -c 125-], [0], [expout])
+
+rm -f ext1_v6.expected
+rm -f ext1_v6.packets
+as hv1 reset_pcap_file hv1-ext1 hv1/ext1
+
+# Now increase the priority of hv3 so it becomes master.
+ovn-nbctl ha-chassis-group-add-chassis hagrp1 hv3 50
+
+# hv3 should be master and claim ls1-lp_ext1
+OVS_WAIT_UNTIL(
+    [chassis=`ovn-sbctl --bare --columns chassis find port_binding \
+logical_port=ls1-lp_ext1`
+    test "$chassis" = "$hv3_uuid"])
+
+as hv1
+ovs-vsctl show
+reset_pcap_file hv1-ext1 hv1/ext1
+reset_pcap_file br-phys_n1 hv1/br-phys_n1
+reset_pcap_file br-phys hv1/br-phys
+
+as hv2
+ovs-vsctl show
+reset_pcap_file hv2-ext2 hv2/ext2
+reset_pcap_file br-phys_n1 hv2/br-phys_n1
+reset_pcap_file br-phys hv2/br-phys
+
+as hv2
+ovs-vsctl show
+reset_pcap_file hv3-ext3 hv3/ext3
+reset_pcap_file br-phys_n1 hv3/br-phys_n1
+reset_pcap_file br-phys hv3/br-phys
+
+# Send DHCPDISCOVER.
+offer_ip=`ip_to_hex 10 0 0 6`
+server_ip=`ip_to_hex 10 0 0 1`
+server_mac=ff1000000001
+expected_dhcp_opts=330400000e100104ffffff0003040a00000136040a000001
+test_dhcp 1 f00000000003 01 $offer_ip 0 $server_mac $server_ip \
+$expected_dhcp_opts
+
+# NXT_RESUMEs should be 4 in hv1.
+OVS_WAIT_UNTIL([test 4 = `cat ofctl_monitor0_hv1.log | grep -c NXT_RESUME`])
+
+# NXT_RESUMEs should be 2 in hv2.
+OVS_WAIT_UNTIL([test 2 = `cat ofctl_monitor0_hv2.log | grep -c NXT_RESUME`])
+
+# NXT_RESUMEs should be 1 in hv3.
+OVS_WAIT_UNTIL([test 1 = `cat ofctl_monitor0_hv3.log | grep -c NXT_RESUME`])
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/ext1-tx.pcap > ext1_v4.packets
+cat ext1_v4.expected | cut -c -48 > expout
+AT_CHECK([cat ext1_v4.packets | cut -c -48], [0], [expout])
+# Skipping the IPv4 checksum.
+cat ext1_v4.expected | cut -c 53- > expout
+AT_CHECK([cat ext1_v4.packets | cut -c 53-], [0], [expout])
+
+# ovs-ofctl also resumes the packets and this causes other ports to receive
+# the DHCP request packet. So reset the pcap files so that its easier to test.
+as hv1
+reset_pcap_file hv1-ext1 hv1/ext1
+
+rm -f ext1_v4.expected
+rm -f ext1_v4.packets
+
+# Send DHCPv6 request
+src_mac=f00000000003
+src_lla=fe80000000000000f20000fffe000003
+offer_ip=ae700000000000000000000000000006
+test_dhcpv6 1 $src_mac $src_lla 01 $offer_ip
+
+# NXT_RESUMEs should be 4 in hv1.
+OVS_WAIT_UNTIL([test 4 = `cat ofctl_monitor0_hv1.log | grep -c NXT_RESUME`])
+
+# NXT_RESUMEs should be 2 in hv2.
+OVS_WAIT_UNTIL([test 2 = `cat ofctl_monitor0_hv2.log | grep -c NXT_RESUME`])
+
+# NXT_RESUMEs should be 2 in hv3.
+OVS_WAIT_UNTIL([test 2 = `cat ofctl_monitor0_hv3.log | grep -c NXT_RESUME`])
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/ext1-tx.pcap | \
+sort > ext1_v6.packets
+cat ext1_v6.expected | cut -c -120 > expout
+AT_CHECK([cat ext1_v6.packets | cut -c -120], [0], [expout])
+# Skipping the UDP checksum
+cat ext1_v6.expected | cut -c 125- > expout
+AT_CHECK([cat ext1_v6.packets | cut -c 125-], [0], [expout])
+
+# disconnect hv3 from the network, hv1 should take over
+as hv3
+port=${sandbox}_br-phys
+as main ovs-vsctl del-port n1 $port
+
+# hv1 should be master and claim ls1-lp_ext1
+OVS_WAIT_UNTIL(
+    [chassis=`ovn-sbctl --bare --columns chassis find port_binding \
+logical_port=ls1-lp_ext1`
+    test "$chassis" = "$hv1_uuid"])
+
+OVN_CLEANUP([hv1],[hv2],[hv3])
 AT_CLEANUP
 
 AT_SETUP([ovn -- ovn-controller restart])
