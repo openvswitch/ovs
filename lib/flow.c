@@ -626,32 +626,8 @@ parse_nsh(const void **datap, size_t *sizep, struct ovs_key_nsh *key)
     return true;
 }
 
-/* Initializes 'flow' members from 'packet' and 'md', taking the packet type
- * into account.
- *
- * Initializes the layer offsets as follows:
- *
- *    - packet->l2_5_ofs to the
- *          * the start of the MPLS shim header. Can be zero, if the
- *            packet is of type (OFPHTN_ETHERTYPE, ETH_TYPE_MPLS).
- *          * UINT16_MAX when there is no MPLS shim header.
- *
- *    - packet->l3_ofs is set to
- *          * zero if the packet_type is in name space OFPHTN_ETHERTYPE
- *            and there is no MPLS shim header.
- *          * just past the Ethernet header, or just past the vlan_header if
- *            one is present, to the first byte of the payload of the
- *            Ethernet frame if the packet type is Ethernet and there is
- *            no MPLS shim header.
- *          * just past the MPLS label stack to the first byte of the MPLS
- *            payload if there is at least one MPLS shim header.
- *          * UINT16_MAX if the packet type is Ethernet and the frame is
- *            too short to contain an Ethernet header.
- *
- *    - packet->l4_ofs is set to just past the IPv4 or IPv6 header, if one is
- *      present and the packet has at least the content used for the fields
- *      of interest for the flow, otherwise UINT16_MAX.
- */
+/* This does the same thing as miniflow_extract() with a full-size 'flow' as
+ * the destination. */
 void
 flow_extract(struct dp_packet *packet, struct flow *flow)
 {
@@ -730,11 +706,38 @@ ipv6_sanity_check(const struct ovs_16aligned_ip6_hdr *nh, size_t size)
     return true;
 }
 
-/* Caller is responsible for initializing 'dst' with enough storage for
- * FLOW_U64S * 8 bytes. */
+/* Initializes 'dst' from 'packet' and 'md', taking the packet type into
+ * account.  'dst' must have enough space for FLOW_U64S * 8 bytes.
+ *
+ * Initializes the layer offsets as follows:
+ *
+ *    - packet->l2_5_ofs to the
+ *          * the start of the MPLS shim header. Can be zero, if the
+ *            packet is of type (OFPHTN_ETHERTYPE, ETH_TYPE_MPLS).
+ *          * UINT16_MAX when there is no MPLS shim header.
+ *
+ *    - packet->l3_ofs is set to
+ *          * zero if the packet_type is in name space OFPHTN_ETHERTYPE
+ *            and there is no MPLS shim header.
+ *          * just past the Ethernet header, or just past the vlan_header if
+ *            one is present, to the first byte of the payload of the
+ *            Ethernet frame if the packet type is Ethernet and there is
+ *            no MPLS shim header.
+ *          * just past the MPLS label stack to the first byte of the MPLS
+ *            payload if there is at least one MPLS shim header.
+ *          * UINT16_MAX if the packet type is Ethernet and the frame is
+ *            too short to contain an Ethernet header.
+ *
+ *    - packet->l4_ofs is set to just past the IPv4 or IPv6 header, if one is
+ *      present and the packet has at least the content used for the fields
+ *      of interest for the flow, otherwise UINT16_MAX.
+ */
 void
 miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
 {
+    /* Add code to this function (or its callees) to extract new fields. */
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 41);
+
     const struct pkt_metadata *md = &packet->md;
     const void *data = dp_packet_data(packet);
     size_t size = dp_packet_size(packet);
@@ -3182,6 +3185,11 @@ void
 flow_compose(struct dp_packet *p, const struct flow *flow,
              const void *l7, size_t l7_len)
 {
+    /* Add code to this function (or its callees) for emitting new fields or
+     * protocols.  (This isn't essential, so it can be skipped for initial
+     * testing.) */
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 41);
+
     uint32_t pseudo_hdr_csum;
     size_t l4_len;
 
