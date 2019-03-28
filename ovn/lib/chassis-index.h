@@ -23,4 +23,8 @@ struct ovsdb_idl_index *chassis_index_create(struct ovsdb_idl *);
 const struct sbrec_chassis *chassis_lookup_by_name(
     struct ovsdb_idl_index *sbrec_chassis_by_name, const char *name);
 
+struct ovsdb_idl_index *ha_chassis_group_index_create(struct ovsdb_idl *idl);
+const struct sbrec_ha_chassis_group *ha_chassis_group_lookup_by_name(
+    struct ovsdb_idl_index *sbrec_ha_chassis_grp_by_name, const char *name);
+
 #endif /* ovn/lib/chassis-index.h */

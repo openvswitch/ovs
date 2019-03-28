@@ -1523,6 +1523,12 @@
 
     <column name="gateway_chassis">
       <p>
+        This column is ignored if the column
+        <ref column="ha_chassis_group" table="Logical_Router_Port"/>.
+        is set.
+      </p>
+
+      <p>
         If set, this indicates that this logical router port represents
         a distributed gateway port that connects this router to a logical
         switch with a localnet port.  There may be at most one such
@@ -1546,6 +1552,24 @@
         another gateway will become active.
         The <ref column="priority" table="Gateway_Chassis"/> column
         specifies the order that gateways will be chosen by OVN.
+      </p>
+    </column>
+
+    <column name="ha_chassis_group">
+      <p>
+        If set, this indicates that this logical router port represents
+        a distributed gateway port that connects this router to a logical
+        switch with a localnet port.  There may be at most one such
+        logical router port on each logical router. The HA chassis which
+        are part of the HA chassis group will provide the gateway high
+        availability. Please see the <ref table="HA_Chassis_Group"/> for
+        more details.
+      </p>
+
+      <p>
+        When this column is set, the column
+        <ref column="gateway_chassis" table="Logical_Router_Port"/> will
+        be ignored.
       </p>
     </column>
 
@@ -2622,4 +2646,55 @@
     </group>
   </table>
 
+  <table name="HA_Chassis_Group">
+    <p>
+      Table representing a group of chassis which can provide High availability
+      services. Each chassis in the group is represented by the table
+      <ref table="HA_Chassis"/>. The HA chassis with highest priority will
+      be the master of this group. If the master chassis failover is detected,
+      the HA chassis with the next higher priority takes over the
+      responsibility of providing the HA. If a distributed gateway router port
+      references a row in this table, then the master HA chassis in this group
+      provides the gateway functionality.
+    </p>
+
+    <column name="name">
+      Name of the <ref table="HA_Chassis_Group"/>. Name should be unique.
+    </column>
+
+    <column name="ha_chassis">
+      A list of HA chassis which belongs to this group.
+    </column>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
+
+  <table name="HA_Chassis">
+    <column name="chassis_name">
+      <p>
+        Name of the chassis which is part of the HA chassis group.
+        The value must match the
+        <ref db="OVN_Southbound" table="Chassis" column="name"/> column
+        of the <ref db="OVN_Southbound" table="Chassis"/> table in the
+        <ref db="OVN_Southbound"/> database.
+      </p>
+    </column>
+
+    <column name="priority">
+      <p>
+        Priority of the chassis. Chassis with highest priority will be
+        the master.
+      </p>
+    </column>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
 </database>

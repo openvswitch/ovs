@@ -56,6 +56,7 @@ struct northd_context {
     struct ovsdb_idl *ovnsb_idl;
     struct ovsdb_idl_txn *ovnnb_txn;
     struct ovsdb_idl_txn *ovnsb_txn;
+    struct ovsdb_idl_index *sbrec_ha_chassis_grp_by_name;
 };
 
 static const char *ovnnb_db;
@@ -450,8 +451,23 @@ struct ovn_datapath {
     struct ovn_port *l3redirect_port;
     struct ovn_port *localnet_port;
 
+    struct ovs_list lr_list; /* In list of logical router datapaths. */
+    /* The logical router group to which this datapath belongs.
+     * Valid only if it is logical router datapath. NULL otherwise. */
+    struct lrouter_group *lr_group;
+
     /* Port groups related to the datapath, used only when nbs is NOT NULL. */
     struct hmap nb_pgs;
+};
+
+/* A group of logical router datapaths which are connected - either
+ * directly or indirectly.
+ * Each logical router can belong to only one group. */
+struct lrouter_group {
+    struct ovn_datapath **router_dps;
+    int n_router_dps;
+    /* Set of ha_chassis_groups which are associated with the router dps. */
+    struct sset ha_chassis_groups;
 };
 
 struct macam_node {
@@ -483,6 +499,7 @@ ovn_datapath_create(struct hmap *datapaths, const struct uuid *key,
     hmap_init(&od->nb_pgs);
     od->port_key_hint = 0;
     hmap_insert(datapaths, &od->key_node, uuid_hash(&od->key));
+    od->lr_group = NULL;
     return od;
 }
 
@@ -665,7 +682,7 @@ ovn_datapath_update_external_ids(struct ovn_datapath *od)
 static void
 join_datapaths(struct northd_context *ctx, struct hmap *datapaths,
                struct ovs_list *sb_only, struct ovs_list *nb_only,
-               struct ovs_list *both)
+               struct ovs_list *both, struct ovs_list *lr_list)
 {
     ovs_list_init(sb_only);
     ovs_list_init(nb_only);
@@ -746,6 +763,7 @@ join_datapaths(struct northd_context *ctx, struct hmap *datapaths,
                                      NULL, nbr, NULL);
             ovs_list_push_back(nb_only, &od->list);
         }
+        ovs_list_push_back(lr_list, &od->lr_list);
     }
 }
 
@@ -762,11 +780,12 @@ ovn_datapath_allocate_key(struct hmap *dp_tnlids)
  * Initializes 'datapaths' to contain a "struct ovn_datapath" for every logical
  * switch and router. */
 static void
-build_datapaths(struct northd_context *ctx, struct hmap *datapaths)
+build_datapaths(struct northd_context *ctx, struct hmap *datapaths,
+                struct ovs_list *lr_list)
 {
     struct ovs_list sb_only, nb_only, both;
 
-    join_datapaths(ctx, datapaths, &sb_only, &nb_only, &both);
+    join_datapaths(ctx, datapaths, &sb_only, &nb_only, &both, lr_list);
 
     if (!ovs_list_is_empty(&nb_only)) {
         /* First index the in-use datapath tunnel IDs. */
@@ -1980,6 +1999,13 @@ sbpb_gw_chassis_needs_update(
         return false;
     }
 
+    if (lrp->n_gateway_chassis && !port_binding->ha_chassis_group) {
+        /* If there are gateway chassis in the NB DB, but there is
+         * no corresponding HA chassis group in SB DB we need to
+         * create the HA chassis group in SB DB for this lrp. */
+        return true;
+    }
+
     /* These arrays are used to collect valid Gateway_Chassis and valid
      * Chassis records from the Logical_Router_Port Gateway_Chassis list,
      * we ignore the ones we can't match on the SBDB */
@@ -2049,31 +2075,63 @@ sbpb_gw_chassis_needs_update(
     return false;
 }
 
+static struct sbrec_ha_chassis *
+create_sb_ha_chassis(struct northd_context *ctx,
+                     const struct sbrec_chassis *chassis, int priority)
+{
+    struct sbrec_ha_chassis *sb_ha_chassis =
+        sbrec_ha_chassis_insert(ctx->ovnsb_txn);
+    sbrec_ha_chassis_set_chassis(sb_ha_chassis, chassis);
+    sbrec_ha_chassis_set_priority(sb_ha_chassis, priority);
+    return sb_ha_chassis;
+}
+
 /* This functions translates the gw chassis on the nb database
  * to sb database entries, the only difference is that SB database
  * Gateway_Chassis table references the chassis directly instead
- * of using the name */
+ * of using the name.
+ *
+ * This function also creates a HA Chassis group in SB DB for
+ * the gateway chassis associated to a distributed gateway
+ * router port in the NB DB.
+ *
+ * An upcoming patch will delete the code to create the Gateway chassis
+ * in SB DB.*/
 static void
 copy_gw_chassis_from_nbrp_to_sbpb(
         struct northd_context *ctx,
         struct ovsdb_idl_index *sbrec_chassis_by_name,
         const struct nbrec_logical_router_port *lrp,
-        const struct sbrec_port_binding *port_binding) {
-
-    if (!lrp || !port_binding || !lrp->n_gateway_chassis) {
-        return;
-    }
-
+        const struct sbrec_port_binding *port_binding)
+{
     struct sbrec_gateway_chassis **gw_chassis = NULL;
     int n_gwc = 0;
     int n;
 
+    /* Make use of the new HA chassis group table to support HA
+     * for the distributed gateway router port. We can delete
+     * the old gateway_chassis code once ovn-controller supports
+     * HA chassis group. */
+    const struct sbrec_ha_chassis_group *sb_ha_chassis_group =
+        ha_chassis_group_lookup_by_name(
+            ctx->sbrec_ha_chassis_grp_by_name, lrp->name);
+    if (!sb_ha_chassis_group) {
+        sb_ha_chassis_group = sbrec_ha_chassis_group_insert(ctx->ovnsb_txn);
+        sbrec_ha_chassis_group_set_name(sb_ha_chassis_group, lrp->name);
+    }
+
+    struct sbrec_ha_chassis **sb_ha_chassis = xcalloc(lrp->n_gateway_chassis,
+                                                      sizeof *sb_ha_chassis);
+    size_t n_sb_ha_ch = 0;
     /* XXX: This can be improved. This code will generate a set of new
      * Gateway_Chassis and push them all in a single transaction, instead
      * this would be more optimal if we just add/update/remove the rows in
      * the southbound db that need to change. We don't expect lots of
      * changes to the Gateway_Chassis table, but if that proves to be wrong
-     * we should optimize this. */
+     * we should optimize this.
+     *
+     * Note: Remove the below code to add gateway_chassis row in OVN
+     * Southbound db once ovn-controller supports HA chassis group. */
     for (n = 0; n < lrp->n_gateway_chassis; n++) {
         struct nbrec_gateway_chassis *lrp_gwc = lrp->gateway_chassis[n];
         if (!lrp_gwc->chassis_name) {
@@ -2086,6 +2144,8 @@ copy_gw_chassis_from_nbrp_to_sbpb(
 
         gw_chassis = xrealloc(gw_chassis, (n_gwc + 1) * sizeof *gw_chassis);
 
+        /* This code to create gateway_chassis in SB DB needs to be deleted
+         * once ovn-controller supports making use of HA chassis groups. */
         struct sbrec_gateway_chassis *pb_gwc =
             sbrec_gateway_chassis_insert(ctx->ovnsb_txn);
 
@@ -2096,16 +2156,26 @@ copy_gw_chassis_from_nbrp_to_sbpb(
         sbrec_gateway_chassis_set_external_ids(pb_gwc, &lrp_gwc->external_ids);
 
         gw_chassis[n_gwc++] = pb_gwc;
+
+        sb_ha_chassis[n_sb_ha_ch] =
+            create_sb_ha_chassis(ctx, chassis, lrp_gwc->priority);
+        n_sb_ha_ch++;
     }
     sbrec_port_binding_set_gateway_chassis(port_binding, gw_chassis, n_gwc);
     free(gw_chassis);
+
+    sbrec_ha_chassis_group_set_ha_chassis(sb_ha_chassis_group,
+                                          sb_ha_chassis, n_sb_ha_ch);
+    sbrec_port_binding_set_ha_chassis_group(port_binding, sb_ha_chassis_group);
+    free(sb_ha_chassis);
 }
 
 static void
 ovn_port_update_sbrec(struct northd_context *ctx,
                       struct ovsdb_idl_index *sbrec_chassis_by_name,
                       const struct ovn_port *op,
-                      struct hmap *chassis_qdisc_queues)
+                      struct hmap *chassis_qdisc_queues,
+                      struct sset *active_ha_chassis_grps)
 {
     sbrec_port_binding_set_datapath(op->sb, op->od->sb);
     if (op->nbrp) {
@@ -2142,6 +2212,7 @@ ovn_port_update_sbrec(struct northd_context *ctx,
                                                       op->nbrp, op->sb);
                 }
 
+                sset_add(active_ha_chassis_grps, op->nbrp->name);
             } else if (redirect_chassis) {
                 /* Handle ports that had redirect-chassis option attached
                  * to them, and for backwards compatibility convert them
@@ -2152,19 +2223,22 @@ ovn_port_update_sbrec(struct northd_context *ctx,
                 if (chassis) {
                     /* If we found the chassis, and the gw chassis on record
                      * differs from what we expect go ahead and update */
+                    char *gwc_name = xasprintf("%s_%s", op->nbrp->name,
+                                               chassis->name);
                     if (op->sb->n_gateway_chassis != 1
                         || !op->sb->gateway_chassis[0]->chassis
                         || strcmp(op->sb->gateway_chassis[0]->chassis->name,
                                   chassis->name)
                         || op->sb->gateway_chassis[0]->priority != 0) {
+                        /* This code to create gateway_chassis in SB DB needs
+                         * to be deleted once ovn-controller supports making
+                         * use of HA chassis groups. */
+
                         /* Construct a single Gateway_Chassis entry on the
                          * Port_Binding attached to the redirect_chassis
                          * name */
                         struct sbrec_gateway_chassis *gw_chassis =
                             sbrec_gateway_chassis_insert(ctx->ovnsb_txn);
-
-                        char *gwc_name = xasprintf("%s_%s", op->nbrp->name,
-                                chassis->name);
 
                         /* XXX: Again, here, we could just update an existing
                          * Gateway_Chassis, instead of creating a new one
@@ -2176,8 +2250,31 @@ ovn_port_update_sbrec(struct northd_context *ctx,
                                 &op->nbrp->external_ids);
                         sbrec_port_binding_set_gateway_chassis(op->sb,
                                                                &gw_chassis, 1);
-                        free(gwc_name);
                     }
+
+                    /* Create HA chassis group in SB DB for the
+                     * redirect-chassis option. */
+                    const struct sbrec_ha_chassis_group *sb_ha_ch_grp;
+                    sb_ha_ch_grp = ha_chassis_group_lookup_by_name(
+                        ctx->sbrec_ha_chassis_grp_by_name, gwc_name);
+                    if (!sb_ha_ch_grp) {
+                        sb_ha_ch_grp =
+                            sbrec_ha_chassis_group_insert(ctx->ovnsb_txn);
+                        sbrec_ha_chassis_group_set_name(sb_ha_ch_grp,
+                                                        gwc_name);
+                    }
+
+                    if (sb_ha_ch_grp->n_ha_chassis != 1) {
+                        struct sbrec_ha_chassis **sb_ha_ch =
+                            xcalloc(1, sizeof *sb_ha_ch);
+                        sb_ha_ch[0] = create_sb_ha_chassis(ctx, chassis, 0);
+                        sbrec_ha_chassis_group_set_ha_chassis(sb_ha_ch_grp,
+                                                              sb_ha_ch, 1);
+                    }
+                    sbrec_port_binding_set_ha_chassis_group(op->sb,
+                                                            sb_ha_ch_grp);
+                    sset_add(active_ha_chassis_grps, gwc_name);
+                    free(gwc_name);
                 } else {
                     VLOG_WARN("chassis name '%s' from redirect from logical "
                               " router port '%s' redirect-chassis not found",
@@ -2348,6 +2445,18 @@ cleanup_mac_bindings(struct northd_context *ctx, struct hmap *ports)
     }
 }
 
+static void
+cleanup_sb_ha_chassis_groups(struct northd_context *ctx,
+                             struct sset *active_ha_chassis_groups)
+{
+    const struct sbrec_ha_chassis_group *b, *n;
+    SBREC_HA_CHASSIS_GROUP_FOR_EACH_SAFE (b, n, ctx->ovnsb_idl) {
+        if (!sset_contains(active_ha_chassis_groups, b->name)) {
+            sbrec_ha_chassis_group_delete(b);
+        }
+    }
+}
+
 /* Updates the southbound Port_Binding table so that it contains the logical
  * switch ports specified by the northbound database.
  *
@@ -2363,6 +2472,10 @@ build_ports(struct northd_context *ctx,
     struct hmap tag_alloc_table = HMAP_INITIALIZER(&tag_alloc_table);
     struct hmap chassis_qdisc_queues = HMAP_INITIALIZER(&chassis_qdisc_queues);
 
+    /* sset which stores the set of ha chassis group names used. */
+    struct sset active_ha_chassis_grps =
+        SSET_INITIALIZER(&active_ha_chassis_grps);
+
     join_logical_ports(ctx, datapaths, ports, &chassis_qdisc_queues,
                        &tag_alloc_table, &sb_only, &nb_only, &both);
 
@@ -2376,8 +2489,8 @@ build_ports(struct northd_context *ctx,
             tag_alloc_create_new_tag(&tag_alloc_table, op->nbsp);
         }
         ovn_port_update_sbrec(ctx, sbrec_chassis_by_name,
-                              op, &chassis_qdisc_queues);
-
+                              op, &chassis_qdisc_queues,
+                              &active_ha_chassis_grps);
         add_tnlid(&op->od->port_tnlids, op->sb->tunnel_key);
         if (op->sb->tunnel_key > op->od->port_key_hint) {
             op->od->port_key_hint = op->sb->tunnel_key;
@@ -2393,8 +2506,8 @@ build_ports(struct northd_context *ctx,
 
         op->sb = sbrec_port_binding_insert(ctx->ovnsb_txn);
         ovn_port_update_sbrec(ctx, sbrec_chassis_by_name, op,
-                              &chassis_qdisc_queues);
-
+                              &chassis_qdisc_queues,
+                              &active_ha_chassis_grps);
         sbrec_port_binding_set_logical_port(op->sb, op->key);
         sbrec_port_binding_set_tunnel_key(op->sb, tunnel_key);
     }
@@ -2416,6 +2529,8 @@ build_ports(struct northd_context *ctx,
 
     tag_alloc_destroy(&tag_alloc_table);
     destroy_chassis_queues(&chassis_qdisc_queues);
+    cleanup_sb_ha_chassis_groups(ctx, &active_ha_chassis_grps);
+    sset_destroy(&active_ha_chassis_grps);
 }
 
 #define OVN_MIN_MULTICAST 32768
@@ -4043,6 +4158,108 @@ build_stateful(struct ovn_datapath *od, struct hmap *lflows)
             ds_destroy(&match);
             free(action);
        }
+    }
+}
+
+static void
+build_lrouter_groups__(struct hmap *ports, struct ovn_datapath *od)
+{
+    ovs_assert((od && od->nbr && od->lr_group));
+
+    if (od->l3dgw_port && od->l3redirect_port) {
+        /* It's a logical router with gateway port. If it
+         * has HA_Chassis_Group associated to it in SB DB, then store the
+         * ha chassis group name. */
+        if (od->l3redirect_port->sb->ha_chassis_group) {
+            sset_add(&od->lr_group->ha_chassis_groups,
+                     od->l3redirect_port->sb->ha_chassis_group->name);
+        }
+    }
+
+    for (size_t i = 0; i < od->nbr->n_ports; i++) {
+        struct ovn_port *router_port =
+            ovn_port_find(ports, od->nbr->ports[i]->name);
+
+        if (!router_port || !router_port->peer) {
+            continue;
+        }
+
+        /* Get the peer logical switch/logical router datapath. */
+        struct ovn_datapath *peer_dp = router_port->peer->od;
+        if (peer_dp->nbr) {
+            if (!peer_dp->lr_group) {
+                peer_dp->lr_group = od->lr_group;
+                od->lr_group->router_dps[od->lr_group->n_router_dps++]
+                    = peer_dp;
+                build_lrouter_groups__(ports, peer_dp);
+            }
+        } else {
+            for (size_t j = 0; j < peer_dp->n_router_ports; j++) {
+                if (!peer_dp->router_ports[j]->peer) {
+                    /* If there is no peer port connecting to the
+                    * router port, ignore it. */
+                    continue;
+                }
+
+                struct ovn_datapath *router_dp;
+                router_dp = peer_dp->router_ports[j]->peer->od;
+                if (router_dp == od) {
+                    continue;
+                }
+
+                if (router_dp->lr_group == od->lr_group) {
+                    /* 'router_dp' and 'od' already belong to the same
+                    * lrouter group. Nothing to be done. */
+                    continue;
+                }
+
+                router_dp->lr_group = od->lr_group;
+                od->lr_group->router_dps[od->lr_group->n_router_dps++]
+                    = router_dp;
+                build_lrouter_groups__(ports, router_dp);
+            }
+        }
+    }
+}
+
+/* Adds each logical router into a logical router group. All the
+ * logical routers which belong to a group are connected to
+ * each other either directly or indirectly (via transit logical switches
+ * in between).
+ *
+ * Suppose if 'lr_list' has lr0, lr1, lr2, lr3, lr4, lr5
+ * and the topology is like
+ *  sw0 <-> lr0 <-> sw1 <-> lr1 <->sw2 <-> lr2
+ *  sw3 <-> lr3 <-> lr4 <-> sw5
+ *  sw6 <-> lr5 <-> sw7
+ * Then 3 groups are created.
+ * Group 1 -> lr0, lr1 and lr2
+ *            lr0, lr1 and lr2's ovn_datapath->lr_group will point to this
+ *            group. This means sw0's logical ports can send packets to sw2's
+ *            logical ports if proper static route's are added.
+ * Group 2 -> lr3 and lr4
+ *            lr3 and lr4's ovn_datapath->lr_group will point to this group.
+ * Group 3 -> lr5
+ *
+ * Each logical router can belong to only one group.
+ */
+static void
+build_lrouter_groups(struct hmap *ports, struct ovs_list *lr_list)
+{
+    struct ovn_datapath *od;
+    size_t n_router_dps = ovs_list_size(lr_list);
+
+    LIST_FOR_EACH (od, lr_list, lr_list) {
+        if (!od->lr_group) {
+            od->lr_group = xzalloc(sizeof *od->lr_group);
+            /* Each logical router group can have max
+             * 'n_router_dps'. So allocate enough memory. */
+            od->lr_group->router_dps = xcalloc(sizeof *od, n_router_dps);
+            od->lr_group->router_dps[0] = od;
+            od->lr_group->n_router_dps = 1;
+            sset_init(&od->lr_group->ha_chassis_groups);
+            build_lrouter_groups__(ports, od);
+        }
     }
 }
 
@@ -7218,8 +7435,24 @@ sync_dns_entries(struct northd_context *ctx, struct hmap *datapaths)
 }
 
 static void
-destroy_datapaths_and_ports(struct hmap *datapaths, struct hmap *ports)
+destroy_datapaths_and_ports(struct hmap *datapaths, struct hmap *ports,
+                            struct ovs_list *lr_list)
 {
+    struct ovn_datapath *router_dp;
+    LIST_FOR_EACH_POP (router_dp, lr_list, lr_list) {
+        if (router_dp->lr_group) {
+            struct lrouter_group *lr_group = router_dp->lr_group;
+
+            for (size_t i = 0; i < lr_group->n_router_dps; i++) {
+                lr_group->router_dps[i]->lr_group = NULL;
+            }
+
+            free(lr_group->router_dps);
+            sset_destroy(&lr_group->ha_chassis_groups);
+            free(lr_group);
+        }
+    }
+
     struct ovn_datapath *dp, *next_dp;
     HMAP_FOR_EACH_SAFE (dp, next_dp, key_node, datapaths) {
         ovn_datapath_destroy(datapaths, dp);
@@ -7237,16 +7470,19 @@ static void
 ovnnb_db_run(struct northd_context *ctx,
              struct ovsdb_idl_index *sbrec_chassis_by_name,
              struct ovsdb_idl_loop *sb_loop,
-             struct hmap *datapaths, struct hmap *ports)
+             struct hmap *datapaths, struct hmap *ports,
+             struct ovs_list *lr_list)
 {
     if (!ctx->ovnsb_txn || !ctx->ovnnb_txn) {
         return;
     }
     struct hmap port_groups;
-    build_datapaths(ctx, datapaths);
+
+    build_datapaths(ctx, datapaths, lr_list);
     build_ports(ctx, sbrec_chassis_by_name, datapaths, ports);
     build_ipam(datapaths, ports);
     build_port_group_lswitches(ctx, &port_groups, ports);
+    build_lrouter_groups(ports, lr_list);
     build_lflows(ctx, datapaths, ports, &port_groups);
 
     sync_address_sets(ctx);
@@ -7306,13 +7542,131 @@ ovnnb_db_run(struct northd_context *ctx,
     cleanup_macam(&macam);
 }
 
+/* Stores the list of chassis which references an ha_chassis_group.
+ */
+struct ha_ref_chassis_info {
+    const struct sbrec_ha_chassis_group *ha_chassis_group;
+    struct sbrec_chassis **ref_chassis;
+    size_t n_ref_chassis;
+    size_t free_slots;
+};
+
+static void
+add_to_ha_ref_chassis_info(struct ha_ref_chassis_info *ref_ch_info,
+                           const struct sbrec_chassis *chassis)
+{
+    for (size_t j = 0; j < ref_ch_info->n_ref_chassis; j++) {
+        if (ref_ch_info->ref_chassis[j] == chassis) {
+           return;
+        }
+    }
+
+    /* Allocate space for 3 chassis at a time. */
+    if (!ref_ch_info->free_slots) {
+        ref_ch_info->ref_chassis =
+            xrealloc(ref_ch_info->ref_chassis,
+                     sizeof *ref_ch_info->ref_chassis *
+                     (ref_ch_info->n_ref_chassis + 3));
+        ref_ch_info->free_slots = 3;
+    }
+
+    ref_ch_info->ref_chassis[ref_ch_info->n_ref_chassis] =
+        CONST_CAST(struct sbrec_chassis *, chassis);
+    ref_ch_info->n_ref_chassis++;
+    ref_ch_info->free_slots--;
+}
+
+static void
+update_sb_ha_group_ref_chassis(struct shash *ha_ref_chassis_map)
+{
+    struct shash_node *node, *next;
+    SHASH_FOR_EACH_SAFE (node, next, ha_ref_chassis_map) {
+        struct ha_ref_chassis_info *ha_ref_info = node->data;
+        sbrec_ha_chassis_group_set_ref_chassis(ha_ref_info->ha_chassis_group,
+                                               ha_ref_info->ref_chassis,
+                                               ha_ref_info->n_ref_chassis);
+        free(ha_ref_info->ref_chassis);
+        free(ha_ref_info);
+        shash_delete(ha_ref_chassis_map, node);
+    }
+}
+
+/* This function checks if the port binding 'sb' references
+ * a HA chassis group.
+ * Eg. Suppose a distributed logical router port - lr0-public
+ * uses an HA chassis group - hagrp1 and if hagrp1 has 3 ha
+ * chassis - gw1, gw2 and gw3.
+ * Or
+ * If the distributed logical router port - lr0-public has
+ * 3 gateway chassis - gw1, gw2 and gw3.
+ * ovn-northd creates ha chassis group - hagrp1 in SB DB
+ * and adds gw1, gw2 and gw3 to its ha_chassis list.
+ *
+ * If port binding 'sb' represents a logical switch port 'p1'
+ * and its logical switch is connected to the logical router
+ * 'lr0' directly or indirectly (i.e p1's logical switch is
+ *  connected to a router 'lr1' and 'lr1' has a path to lr0 via
+ *  transit logical switches) and 'sb' is claimed by chassis - 'c1' then
+ * this function adds c1 to the list of the reference chassis
+ *  - 'ref_chassis' of hagrp1.
+ */
+static void
+build_ha_chassis_group_ref_chassis(struct northd_context *ctx,
+                                   const struct sbrec_port_binding *sb,
+                                   struct ovn_port *op,
+                                   struct shash *ha_ref_chassis_map)
+{
+    struct lrouter_group *lr_group = NULL;
+    for (size_t i = 0; i < op->od->n_router_ports; i++) {
+        if (!op->od->router_ports[i]->peer) {
+            continue;
+        }
+
+        lr_group = op->od->router_ports[i]->peer->od->lr_group;
+        /* If a logical switch has multiple router ports, then
+         * all the logical routers belong to the same logical
+         * router group. */
+        break;
+    }
+
+    if (!lr_group) {
+        return;
+    }
+
+    const char *ha_group_name;
+    SSET_FOR_EACH (ha_group_name, &lr_group->ha_chassis_groups) {
+        const struct sbrec_ha_chassis_group *sb_ha_chassis_grp;
+        sb_ha_chassis_grp = ha_chassis_group_lookup_by_name(
+            ctx->sbrec_ha_chassis_grp_by_name, ha_group_name);
+
+        if (sb_ha_chassis_grp) {
+            struct ha_ref_chassis_info *ref_ch_info =
+            shash_find_data(ha_ref_chassis_map, sb_ha_chassis_grp->name);
+            ovs_assert(ref_ch_info);
+            add_to_ha_ref_chassis_info(ref_ch_info, sb->chassis);
+        }
+    }
+}
+
 /* Handle changes to the 'chassis' column of the 'Port_Binding' table.  When
  * this column is not empty, it means we need to set the corresponding logical
  * port as 'up' in the northbound DB. */
 static void
-update_logical_port_status(struct northd_context *ctx, struct hmap *ports)
+handle_port_binding_changes(struct northd_context *ctx, struct hmap *ports,
+                            struct shash *ha_ref_chassis_map)
 {
     const struct sbrec_port_binding *sb;
+    bool build_ha_chassis_ref = false;
+    if (ctx->ovnsb_txn) {
+        const struct sbrec_ha_chassis_group *ha_ch_grp;
+        SBREC_HA_CHASSIS_GROUP_FOR_EACH (ha_ch_grp, ctx->ovnsb_idl) {
+            struct ha_ref_chassis_info *ref_ch_info =
+                xzalloc(sizeof *ref_ch_info);
+            ref_ch_info->ha_chassis_group = ha_ch_grp;
+            build_ha_chassis_ref = true;
+            shash_add(ha_ref_chassis_map, ha_ch_grp->name, ref_ch_info);
+        }
+    }
 
     SBREC_PORT_BINDING_FOR_EACH(sb, ctx->ovnsb_idl) {
         struct ovn_port *op = ovn_port_find(ports, sb->logical_port);
@@ -7327,6 +7681,13 @@ update_logical_port_status(struct northd_context *ctx, struct hmap *ports)
         bool up = (sb->chassis || !strcmp(op->nbsp->type, "router"));
         if (!op->nbsp->up || *op->nbsp->up != up) {
             nbrec_logical_switch_port_set_up(op->nbsp, &up, 1);
+        }
+
+        if (build_ha_chassis_ref && ctx->ovnsb_txn && sb->chassis) {
+            /* Check and add the chassis which has claimed this 'sb'
+             * to the ha chassis group's ref_chassis if required. */
+            build_ha_chassis_group_ref_chassis(ctx, sb, op,
+                                               ha_ref_chassis_map);
         }
     }
 }
@@ -7657,8 +8018,13 @@ ovnsb_db_run(struct northd_context *ctx, struct ovsdb_idl_loop *sb_loop,
         return;
     }
 
-    update_logical_port_status(ctx, ports);
+    struct shash ha_ref_chassis_map = SHASH_INITIALIZER(&ha_ref_chassis_map);
+    handle_port_binding_changes(ctx, ports, &ha_ref_chassis_map);
     update_northbound_cfg(ctx, sb_loop);
+    if (ctx->ovnsb_txn) {
+        update_sb_ha_group_ref_chassis(&ha_ref_chassis_map);
+    }
+    shash_destroy(&ha_ref_chassis_map);
 }
 
 static void
@@ -7667,12 +8033,14 @@ ovn_db_run(struct northd_context *ctx,
            struct ovsdb_idl_loop *ovnsb_idl_loop)
 {
     struct hmap datapaths, ports;
+    struct ovs_list lr_list;
+    ovs_list_init(&lr_list);
     hmap_init(&datapaths);
     hmap_init(&ports);
     ovnnb_db_run(ctx, sbrec_chassis_by_name, ovnsb_idl_loop,
-                 &datapaths, &ports);
+                 &datapaths, &ports, &lr_list);
     ovnsb_db_run(ctx, ovnsb_idl_loop, &ports);
-    destroy_datapaths_and_ports(&datapaths, &ports);
+    destroy_datapaths_and_ports(&datapaths, &ports, &lr_list);
 }
 
 static void
@@ -7838,6 +8206,8 @@ main(int argc, char *argv[])
     ovsdb_idl_add_column(ovnsb_idl_loop.idl,
                          &sbrec_port_binding_col_gateway_chassis);
     ovsdb_idl_add_column(ovnsb_idl_loop.idl,
+                         &sbrec_port_binding_col_ha_chassis_group);
+    ovsdb_idl_add_column(ovnsb_idl_loop.idl,
                          &sbrec_gateway_chassis_col_chassis);
     ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_gateway_chassis_col_name);
     ovsdb_idl_add_column(ovnsb_idl_loop.idl,
@@ -7901,8 +8271,29 @@ main(int argc, char *argv[])
     ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_chassis_col_nb_cfg);
     ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_chassis_col_name);
 
+    ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_ha_chassis);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_ha_chassis_col_chassis);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_ha_chassis_col_priority);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_ha_chassis_col_external_ids);
+
+    ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_ha_chassis_group);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_ha_chassis_group_col_name);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_ha_chassis_group_col_ha_chassis);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_ha_chassis_group_col_external_ids);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_ha_chassis_group_col_ref_chassis);
+
     struct ovsdb_idl_index *sbrec_chassis_by_name
         = chassis_index_create(ovnsb_idl_loop.idl);
+
+    struct ovsdb_idl_index *sbrec_ha_chassis_grp_by_name
+        = ha_chassis_group_index_create(ovnsb_idl_loop.idl);
 
     /* Ensure that only a single ovn-northd is active in the deployment by
      * acquiring a lock called "ovn_northd" on the southbound database
@@ -7918,6 +8309,7 @@ main(int argc, char *argv[])
             .ovnnb_txn = ovsdb_idl_loop_run(&ovnnb_idl_loop),
             .ovnsb_idl = ovnsb_idl_loop.idl,
             .ovnsb_txn = ovsdb_idl_loop_run(&ovnsb_idl_loop),
+            .sbrec_ha_chassis_grp_by_name = sbrec_ha_chassis_grp_by_name,
         };
 
         if (!had_lock && ovsdb_idl_has_lock(ovnsb_idl_loop.idl)) {

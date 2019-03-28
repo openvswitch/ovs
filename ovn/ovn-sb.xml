@@ -2246,6 +2246,16 @@ tcp.flags = RST;
         </p>
       </column>
 
+      <column name="ha_chassis_group">
+        <p>
+          This should only be populated for ports with
+          <ref column="type"/> set to <code>chassisredirect</code>.
+          This column defines the HA chassis group with a list of
+          HA chassis used as gateways where traffic will be redirected
+          through.
+        </p>
+      </column>
+
       <column name="tunnel_key">
         <p>
           A number that represents the logical port in the key (e.g. STT key or
@@ -3337,6 +3347,59 @@ tcp.flags = RST;
       Columns</code> at the beginning of this document.
 
       <column name="external_ids"/>
+    </group>
+  </table>
+
+  <table name="HA_Chassis">
+    <column name="chassis">
+      <p>
+        The <ref table="Chassis"/> which provides the HA functionality.
+        </p>
+    </column>
+
+    <column name="priority">
+      <p>
+        Priority of the HA chassis. Chassis with highest priority will be
+        the master in the HA chassis group.
+      </p>
+    </column>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
+
+  <table name="HA_Chassis_Group">
+    <p>
+      Table representing a group of chassis which can provide High availability
+      services. Each chassis in the group is represented by the table
+      <ref table="HA_Chassis"/>. The HA chassis with highest priority will
+      be the master of this group. If the master chassis failover is detected,
+      the HA chassis with the next higher priority takes over the
+      responsibility of providing the HA. If <ref db="OVN_Southbound"
+      table="Port_Binding" column="ha_chassis_group"/> column of the table
+      <ref db="OVN_Southbound" table="Port_Binding"/> references this table,
+      then this HA chassis group provides the gateway functionality and
+      redirects the gateway traffic to the master of this group.
+    </p>
+    <column name="name">
+      Name of the <ref table="HA_Chassis_Group"/>. Name should be unique.
+    </column>
+
+    <column name="ha_chassis">
+      A list of <ref table="HA_Chassis"/> which belongs to this group.
+    </column>
+
+    <column name="ref_chassis">
+      A list of <ref table="chassis"/> which references this HA chassis group.
+    </column>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
     </group>
   </table>
 </database>

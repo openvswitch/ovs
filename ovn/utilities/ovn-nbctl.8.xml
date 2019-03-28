@@ -908,6 +908,47 @@
       </dd>
     </dl>
 
+    <h1> HA Chassis Group commands</h1>
+
+    <dl>
+      <dt><code>ha-chassis-group-add</code> <var>group</var></dt>
+      <dd>
+        Creates a new HA chassis group in the <code>HA_Chassis_Group</code>
+        table named <code>group</code>.
+      </dd>
+
+      <dt><code>ha-chassis-group-del</code> <var>group</var></dt>
+      <dd>
+        Deletes the HA chassis group <code>group</code>. It is an error if
+        <code>group</code> does not exist.
+      </dd>
+
+      <dt><code>ha-chassis-group-list</code></dt>
+      <dd>
+        Lists the HA chassis group <code>group</code> along with the
+        <code>HA chassis</code> if any associated with it.
+      </dd>
+
+      <dt><code>ha-chassis-group-add-chassis</code> <var>group</var>
+      <var>chassis</var> <var>priority</var></dt>
+      <dd>
+        Adds a new HA chassis <code>chassis</code> to the
+        HA Chassis group <code>group</code> with the specified priority.
+        If the <code>chassis</code> already exists, then the
+        <code>priority</code> is updated.
+        The <code>chassis</code> should be the name of the chassis in the
+        <code>OVN_Southbound</code>.
+      </dd>
+
+      <dt><code>ha-chassis-group-remove-chassis</code> <var>group</var>
+      <var>chassis</var></dt>
+      <dd>
+        Removes the HA chassis <code>chassis</code> from the HA chassis
+        group <code>group</code>. It is an error if <code>chassis</code> does
+        not exist.
+      </dd>
+    </dl>
+
     <h1>Database Commands</h1>
     <p>These commands query and modify the contents of <code>ovsdb</code> tables.
     They are a slight abstraction of the <code>ovsdb</code> interface and

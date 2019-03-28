@@ -34,6 +34,33 @@ AT_CHECK([ovn-sbctl --bare --columns gateway_chassis find port_binding logical_p
 AT_CHECK([ovn-sbctl --bare --columns gateway_chassis find port_binding logical_port="cr-alice" | grep $gwc2_uuid | wc -l], [0], [1
 ])
 
+# There should be one ha_chassis_group with the name "alice"
+ha_chassi_grp_name=`ovn-sbctl --bare --columns name find \
+ha_chassis_group name="alice"`
+
+AT_CHECK([test $ha_chassi_grp_name = alice])
+
+ha_chgrp_uuid=`ovn-sbctl --bare --columns _uuid find ha_chassis_group name=alice`
+
+AT_CHECK([ovn-sbctl --bare --columns ha_chassis_group find port_binding \
+logical_port="cr-alice" | grep $ha_chgrp_uuid | wc -l], [0], [1
+])
+
+ha_ch=`ovn-sbctl --bare --columns ha_chassis  find ha_chassis_group`
+# Trim the spaces.
+ha_ch=`echo $ha_ch | sed 's/ //g'`
+
+ha_ch_list=''
+for i in `ovn-sbctl --bare --columns _uuid list ha_chassis | sort`
+do
+    ha_ch_list="$ha_ch_list $i"
+done
+
+# Trim the spaces.
+ha_ch_list=`echo $ha_ch_list | sed 's/ //g'`
+
+AT_CHECK([test "$ha_ch_list" = "$ha_ch"])
+
 # delete the 2nd Gateway_Chassis on NBDB for alice port
 
 ovn-nbctl --wait=sb set Logical_Router_Port alice gateway_chassis=${nb_gwc1_uuid}
@@ -45,6 +72,10 @@ AT_CHECK([ovn-sbctl --bare --columns gateway_chassis find port_binding logical_p
 
 AT_CHECK([ovn-sbctl find Gateway_Chassis name=alice_gw2], [0], [])
 
+# There should be only 1 row in ha_chassis SB DB table.
+AT_CHECK([ovn-sbctl --bare --columns _uuid list ha_chassis | wc -l], [0], [1
+])
+
 # delete all the gateway_chassis on NBDB for alice port
 
 ovn-nbctl --wait=sb clear Logical_Router_Port alice gateway_chassis
@@ -53,6 +84,12 @@ ovn-nbctl --wait=sb clear Logical_Router_Port alice gateway_chassis
 
 AT_CHECK([ovn-sbctl find Gateway_Chassis name=alice_gw1], [0], [])
 AT_CHECK([ovn-sbctl find Gateway_Chassis name=alice_gw2], [0], [])
+
+# expect that the ha_chassis doesn't exist anymore
+AT_CHECK([ovn-sbctl list ha_chassis | wc -l], [0], [0
+])
+AT_CHECK([ovn-sbctl list ha_chassis_group | wc -l], [0], [0
+])
 
 AT_CLEANUP
 
@@ -299,5 +336,230 @@ as ovn-nb
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 as northd
 OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
+AT_CLEANUP
+
+AT_SETUP([ovn -- check HA_Chassis_Group propagation from NBDB to SBDB])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+ovn-nbctl --wait=sb ha-chassis-group-add hagrp1
+
+# ovn-northd should not create HA chassis group and HA chassis rows
+# unless the HA chassis group in OVN NB DB is associated to
+# a logical router port. ovn-northd still doesn't support
+# associating a HA chassis group to a logical router port.
+AT_CHECK([ovn-sbctl --bare --columns name find ha_chassis_group name="hagrp1" \
+| wc -l], [0], [0
+])
+
+ovn-nbctl --wait=sb ha-chassis-group-add-chassis hagrp1 ch1 30
+ovn-nbctl --wait=sb ha-chassis-group-add-chassis hagrp1 ch2 20
+ovn-nbctl --wait=sb ha-chassis-group-add-chassis hagrp1 ch3 10
+
+# There should be no HA_Chassis rows in SB DB.
+AT_CHECK([ovn-sbctl list ha_chassis | grep chassis | awk '{print $3}' \
+| grep -v '-' | wc -l ], [0], [0
+])
+
+# Add chassis ch1.
+ovn-sbctl chassis-add ch1 geneve 127.0.0.2
+
+OVS_WAIT_UNTIL([test 1 = `ovn-sbctl list chassis | grep ch1 | wc -l`])
+
+# There should be no HA_Chassis rows
+AT_CHECK([ovn-sbctl list ha_chassis | grep chassis | awk '{print $3}' \
+| grep -v '-' | wc -l ], [0], [0
+])
+
+ovn-nbctl ha-chassis-group-del hagrp1
+OVS_WAIT_UNTIL([test 0 = `ovn-sbctl list ha_chassis_group | wc -l`])
+OVS_WAIT_UNTIL([test 0 = `ovn-sbctl list ha_chassis | wc -l`])
+
+# Create a logical router port and attach Gateway chassis.
+# ovn-northd should create HA chassis group rows in SB DB.
+ovn-nbctl lr-add lr0
+
+ovn-nbctl lrp-add lr0 lr0-public 00:00:20:20:12:13 172.168.0.100/24
+ovn-nbctl lrp-set-gateway-chassis lr0-public ch1 20
+
+OVS_WAIT_UNTIL([test 1 = `ovn-sbctl --bare --columns name find ha_chassis_group \
+name="lr0-public" | wc -l`])
+
+OVS_WAIT_UNTIL([test 1 = `ovn-sbctl --bare --columns _uuid \
+find ha_chassis | wc -l`])
+
+ovn-nbctl lrp-set-gateway-chassis lr0-public ch2 10
+
+ovn-sbctl --bare --columns _uuid find ha_chassis
+OVS_WAIT_UNTIL([test 2 = `ovn-sbctl list ha_chassis | grep chassis | wc -l`])
+
+# Test if 'ref_chassis' column is properly set or not in
+# SB DB ha_chassis_group.
+ovn-nbctl ls-add sw0
+ovn-nbctl lsp-add sw0 sw0-p1
+
+ovn-sbctl chassis-add ch2 geneve 127.0.0.3
+ovn-sbctl chassis-add ch3 geneve 127.0.0.4
+ovn-sbctl chassis-add comp1 geneve 127.0.0.5
+ovn-sbctl chassis-add comp2 geneve 127.0.0.6
+
+ovn-nbctl lrp-add lr0 lr0-sw0 00:00:20:20:12:14 10.0.0.1/24
+ovn-nbctl lsp-add sw0 sw0-lr0
+ovn-nbctl lsp-set-type sw0-lr0 router
+ovn-nbctl lsp-set-addresses sw0-lr0 router
+ovn-nbctl lsp-set-options sw0-lr0 router-port=lr0-sw0
+
+ovn-sbctl lsp-bind sw0-p1 comp1
+OVS_WAIT_UNTIL([test x`ovn-nbctl lsp-get-up sw0-p1` = xup])
+
+comp1_ch_uuid=`ovn-sbctl --bare --columns _uuid find chassis name="comp1"`
+comp2_ch_uuid=`ovn-sbctl --bare --columns _uuid find chassis name="comp2"`
+ch2_ch_uuid=`ovn-sbctl --bare --columns _uuid find chassis name="comp1"`
+
+echo "comp1_ch_uuid = $comp1_ch_uuid"
+OVS_WAIT_UNTIL(
+    [ref_ch_list=`ovn-sbctl --bare --columns ref_chassis find ha_chassis_group | sort`
+     # Trim the spaces.
+     ref_ch_list=`echo $ref_ch_list | sed 's/ //g'`
+     test "$comp1_ch_uuid" = "$ref_ch_list"])
+
+# unbind sw0-p1
+ovn-sbctl lsp-unbind sw0-p1
+OVS_WAIT_UNTIL([test x`ovn-nbctl lsp-get-up sw0-p1` = xdown])
+OVS_WAIT_UNTIL(
+    [ref_ch_list=`ovn-sbctl --bare --columns ref_chassis find ha_chassis_group | sort`
+     # Trim the spaces.
+     ref_ch_list=`echo $ref_ch_list | sed 's/ //g'`
+     test "" = "$ref_ch_list"])
+
+# Bind sw0-p1 in comp2
+ovn-sbctl lsp-bind sw0-p1 comp2
+OVS_WAIT_UNTIL(
+    [ref_ch_list=`ovn-sbctl --bare --columns ref_chassis find ha_chassis_group | sort`
+     # Trim the spaces.
+     ref_ch_list=`echo $ref_ch_list | sed 's/ //g'`
+     test "$comp2_ch_uuid" = "$ref_ch_list"])
+
+ovn-nbctl ls-add sw1
+ovn-nbctl lsp-add sw1 sw1-p1
+ovn-nbctl lr-add lr1
+ovn-nbctl lrp-add lr1 lr1-sw1 00:00:20:20:12:15 20.0.0.1/24
+ovn-nbctl lsp-add sw1 sw1-lr1
+ovn-nbctl lsp-set-type sw1-lr1 router
+ovn-nbctl lsp-set-addresses sw1-lr1 router
+ovn-nbctl lsp-set-options sw1-lr1 router-port=lr1-sw1
+
+# Bind sw1-p1 in comp1.
+ovn-sbctl lsp-bind sw1-p1 comp1
+# Wait until sw1-p1 is up
+OVS_WAIT_UNTIL([test x`ovn-nbctl lsp-get-up sw1-p1` = xup])
+
+# sw1-p1 is not connected to lr0. So comp1 should not be in 'ref_chassis'
+OVS_WAIT_UNTIL(
+    [ref_ch_list=`ovn-sbctl --bare --columns ref_chassis find ha_chassis_group | sort`
+     # Trim the spaces.
+     ref_ch_list=`echo $ref_ch_list | sed 's/ //g'`
+     test "$comp2_ch_uuid" = "$ref_ch_list"])
+
+# Now attach sw0 to lr1
+ovn-nbctl lrp-add lr1 lr1-sw0 00:00:20:20:12:16 10.0.0.10/24
+ovn-nbctl lsp-add sw0 sw0-lr1
+ovn-nbctl lsp-set-type sw0-lr1 router
+ovn-nbctl lsp-set-addresses sw0-lr1 router
+ovn-nbctl lsp-set-options sw0-lr1 router-port=lr1-sw0
+
+# Both comp1 and comp2 should be in 'ref_chassis' as sw1 is indirectly
+# connected to lr0
+exp_ref_ch_list=''
+for i in `ovn-sbctl --bare --columns _uuid list chassis | sort`
+do
+    if test $i = $comp1_ch_uuid; then
+        exp_ref_ch_list="${exp_ref_ch_list}$i"
+    elif test $i = $comp2_ch_uuid; then
+        exp_ref_ch_list="${exp_ref_ch_list}$i"
+    fi
+done
+
+OVS_WAIT_UNTIL(
+    [ref_ch_list=`ovn-sbctl --bare --columns ref_chassis find ha_chassis_group | sort`
+     # Trim the spaces.
+     ref_ch_list=`echo $ref_ch_list | sed 's/ //g'`
+     test "$exp_ref_ch_list" = "$ref_ch_list"])
+
+# Unind sw1-p1. comp2 should not be in the ref_chassis.
+ovn-sbctl lsp-unbind sw1-p1
+OVS_WAIT_UNTIL([test x`ovn-nbctl lsp-get-up sw1-p1` = xdown])
+OVS_WAIT_UNTIL(
+    [ref_ch_list=`ovn-sbctl --bare --columns ref_chassis find ha_chassis_group | sort`
+     # Trim the spaces.
+     ref_ch_list=`echo $ref_ch_list | sed 's/ //g'`
+     test "$comp2_ch_uuid" = "$ref_ch_list"])
+
+# Create sw2 and attach it to lr2
+ovn-nbctl ls-add sw2
+ovn-nbctl lsp-add sw2 sw2-p1
+ovn-nbctl lr-add lr2
+ovn-nbctl lrp-add lr2 lr2-sw2 00:00:20:20:12:17 30.0.0.1/24
+ovn-nbctl lsp-add sw2 sw2-lr2
+ovn-nbctl lsp-set-type sw2-lr2 router
+ovn-nbctl lsp-set-addresses sw2-lr2 router
+ovn-nbctl lsp-set-options sw2-lr2 router-port=lr2-sw2
+
+# Bind sw2-p1 to comp1
+ovn-sbctl lsp-bind sw2-p1 comp1
+# Wait until sw2-p1 is up
+OVS_WAIT_UNTIL([test x`ovn-nbctl lsp-get-up sw2-p1` = xup])
+
+# sw2-p1 is not connected to lr0. So comp1 should not be in 'ref_chassis'
+OVS_WAIT_UNTIL(
+    [ref_ch_list=`ovn-sbctl --bare --columns ref_chassis find ha_chassis_group | sort`
+     # Trim the spaces.
+     ref_ch_list=`echo $ref_ch_list | sed 's/ //g'`
+     test "$comp2_ch_uuid" = "$ref_ch_list"])
+
+# Now attach sw1 to lr2. With this sw2-p1 is indirectly connected to lr0.
+ovn-nbctl lrp-add lr2 lr2-sw1 00:00:20:20:12:18 20.0.0.10/24
+ovn-nbctl lsp-add sw1 sw1-lr2
+ovn-nbctl lsp-set-type sw1-lr2 router
+ovn-nbctl lsp-set-addresses sw1-lr2 router
+ovn-nbctl lsp-set-options sw1-lr2 router-port=lr2-sw1
+
+# sw2-p1 is indirectly connected to lr0. So comp1 (and comp2) should be in
+# 'ref_chassis'
+OVS_WAIT_UNTIL(
+    [ref_ch_list=`ovn-sbctl --bare --columns ref_chassis find ha_chassis_group | sort`
+     # Trim the spaces.
+     ref_ch_list=`echo $ref_ch_list | sed 's/ //g'`
+     test "$exp_ref_ch_list" = "$ref_ch_list"])
+
+# Create sw0-p2 and bind it to comp1
+ovn-nbctl lsp-add sw0 sw0-p2
+ovn-sbctl lsp-bind sw0-p2 comp1
+OVS_WAIT_UNTIL([test x`ovn-nbctl lsp-get-up sw0-p2` = xup])
+OVS_WAIT_UNTIL(
+    [ref_ch_list=`ovn-sbctl --bare --columns ref_chassis find ha_chassis_group | sort`
+     # Trim the spaces.
+     ref_ch_list=`echo $ref_ch_list | sed 's/ //g'`
+     test "$exp_ref_ch_list" = "$ref_ch_list"])
+
+# unbind sw0-p2
+ovn-sbctl lsp-unbind sw0-p2
+OVS_WAIT_UNTIL([test x`ovn-nbctl lsp-get-up sw0-p2` = xdown])
+OVS_WAIT_UNTIL(
+    [ref_ch_list=`ovn-sbctl --bare --columns ref_chassis find ha_chassis_group | sort`
+     # Trim the spaces.
+     ref_ch_list=`echo $ref_ch_list | sed 's/ //g'`
+     test "$exp_ref_ch_list" = "$ref_ch_list"])
+
+# Delete lr1-sw0. comp1 should be deleted from ref_chassis as there is no link
+# from sw1 and sw2 to lr0.
+ovn-nbctl lrp-del lr1-sw0
+
+OVS_WAIT_UNTIL(
+    [ref_ch_list=`ovn-sbctl --bare --columns ref_chassis find ha_chassis_group | sort`
+     # Trim the spaces.
+     ref_ch_list=`echo $ref_ch_list | sed 's/ //g'`
+     test "$comp2_ch_uuid" = "$ref_ch_list"])
 
 AT_CLEANUP

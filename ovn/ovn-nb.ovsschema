@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
-    "version": "5.14.1",
-    "cksum": "3758097843 20509",
+    "version": "5.15.0",
+    "cksum": "1015978933 21919",
     "tables": {
         "NB_Global": {
             "columns": {
@@ -271,6 +271,12 @@
                                      "refType": "strong"},
                              "min": 0,
                              "max": "unlimited"}},
+                "ha_chassis_group": {
+                    "type": {"key": {"type": "uuid",
+                                     "refTable": "HA_Chassis_Group",
+                                     "refType": "strong"},
+                             "min": 0,
+                             "max": 1}},
                 "options": {
                     "type": {"key": "string",
                              "value": "string",
@@ -392,5 +398,29 @@
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}}},
             "indexes": [["name"]],
-            "isRoot": false}}
+            "isRoot": false},
+        "HA_Chassis": {
+            "columns": {
+                "chassis_name": {"type": "string"},
+                "priority": {"type": {"key": {"type": "integer",
+                                              "minInteger": 0,
+                                              "maxInteger": 32767}}},
+                "external_ids": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}}},
+            "isRoot": false},
+        "HA_Chassis_Group": {
+            "columns": {
+                "name": {"type": "string"},
+                "ha_chassis": {
+                    "type": {"key": {"type": "uuid",
+                                     "refTable": "HA_Chassis",
+                                     "refType": "strong"},
+                             "min": 0,
+                             "max": "unlimited"}},
+                "external_ids": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}}},
+            "indexes": [["name"]],
+            "isRoot": true}}
     }

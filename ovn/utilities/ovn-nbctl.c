@@ -711,7 +711,17 @@ set the SSL configuration\n\
 Port group commands:\n\
   pg-add PG [PORTS]           Create port group PG with optional PORTS\n\
   pg-set-ports PG PORTS       Set PORTS on port group PG\n\
-  pg-del PG                   Delete port group PG\n\
+  pg-del PG                   Delete port group PG\n\n",
+            program_name, program_name);
+    printf("\
+HA chassis group commands:\n\
+  ha-chassis-group-add GRP  Create an HA chassis group GRP\n\
+  ha-chassis-group-del GRP  Delete the HA chassis group GRP\n\
+  ha-chassis-group-list     List the HA chassis groups\n\
+  ha-chassis-group-add-chassis GRP CHASSIS [PRIORITY] Adds an HA\
+chassis with optional PRIORITY to the HA chassis group GRP\n\
+  ha-chassis-group-del-chassis GRP CHASSIS Deletes the HA chassis\
+CHASSIS from the HA chassis group GRP\n\
 \n\
 %s\
 %s\
@@ -730,7 +740,7 @@ Options:\n\
   -t, --timeout=SECS          wait at most SECS seconds\n\
   --dry-run                   do not commit changes to database\n\
   --oneline                   print exactly one line of output per command\n",
-           program_name, program_name, ctl_get_db_cmd_usage(),
+           ctl_get_db_cmd_usage(),
            ctl_list_db_tables_usage(), default_nb_db());
     table_usage();
     daemon_usage();
@@ -4776,6 +4786,201 @@ cmd_pg_del(struct ctl_context *ctx)
     nbrec_port_group_delete(pg);
 }
 
+static const struct nbrec_ha_chassis_group*
+ha_chassis_group_by_name_or_uuid(struct ctl_context *ctx, const char *id,
+                                 bool must_exist)
+{
+    struct uuid ch_grp_uuid;
+    const struct nbrec_ha_chassis_group *ha_ch_grp = NULL;
+    bool is_uuid = uuid_from_string(&ch_grp_uuid, id);
+    if (is_uuid) {
+        ha_ch_grp = nbrec_ha_chassis_group_get_for_uuid(ctx->idl,
+                                                        &ch_grp_uuid);
+    }
+
+    if (!ha_ch_grp) {
+        const struct nbrec_ha_chassis_group *iter;
+        NBREC_HA_CHASSIS_GROUP_FOR_EACH (iter, ctx->idl) {
+            if (!strcmp(iter->name, id)) {
+                ha_ch_grp = iter;
+                break;
+            }
+        }
+    }
+
+    if (!ha_ch_grp && must_exist) {
+        ctx->error = xasprintf("%s: ha_chassi_group %s not found",
+                               id, is_uuid ? "UUID" : "name");
+    }
+
+    return ha_ch_grp;
+}
+
+static void
+cmd_ha_ch_grp_add(struct ctl_context *ctx)
+{
+    const char *name = ctx->argv[1];
+    struct nbrec_ha_chassis_group *ha_ch_grp =
+        nbrec_ha_chassis_group_insert(ctx->txn);
+    nbrec_ha_chassis_group_set_name(ha_ch_grp, name);
+}
+
+static void
+cmd_ha_ch_grp_del(struct ctl_context *ctx)
+{
+    const char *name_or_id = ctx->argv[1];
+
+    const struct nbrec_ha_chassis_group *ha_ch_grp =
+        ha_chassis_group_by_name_or_uuid(ctx, name_or_id, true);
+
+    if (ha_ch_grp) {
+        nbrec_ha_chassis_group_delete(ha_ch_grp);
+    }
+}
+
+static void
+cmd_ha_ch_grp_list(struct ctl_context *ctx)
+{
+    const struct nbrec_ha_chassis_group *ha_ch_grp;
+
+    NBREC_HA_CHASSIS_GROUP_FOR_EACH (ha_ch_grp, ctx->idl) {
+        ds_put_format(&ctx->output, UUID_FMT " (%s)\n",
+                      UUID_ARGS(&ha_ch_grp->header_.uuid), ha_ch_grp->name);
+        const struct nbrec_ha_chassis *ha_ch;
+        for (size_t i = 0; i < ha_ch_grp->n_ha_chassis; i++) {
+            ha_ch = ha_ch_grp->ha_chassis[i];
+            ds_put_format(&ctx->output,
+                          "    "UUID_FMT " (%s)\n"
+                          "    priority %lu\n\n",
+                          UUID_ARGS(&ha_ch->header_.uuid), ha_ch->chassis_name,
+                          ha_ch->priority);
+        }
+        ds_put_cstr(&ctx->output, "\n");
+    }
+}
+
+static void
+cmd_ha_ch_grp_add_chassis(struct ctl_context *ctx)
+{
+    const struct nbrec_ha_chassis_group *ha_ch_grp =
+        ha_chassis_group_by_name_or_uuid(ctx, ctx->argv[1], true);
+
+    if (!ha_ch_grp) {
+        return;
+    }
+
+    const char *chassis_name = ctx->argv[2];
+    int64_t priority;
+    char *error = parse_priority(ctx->argv[3], &priority);
+    if (error) {
+        ctx->error = error;
+        return;
+    }
+
+    struct nbrec_ha_chassis *ha_chassis = NULL;
+    for (size_t i = 0; i < ha_ch_grp->n_ha_chassis; i++) {
+        if (!strcmp(ha_ch_grp->ha_chassis[i]->chassis_name, chassis_name)) {
+            ha_chassis = ha_ch_grp->ha_chassis[i];
+            break;
+        }
+    }
+
+    if (ha_chassis) {
+        nbrec_ha_chassis_set_priority(ha_chassis, priority);
+        return;
+    }
+
+    ha_chassis = nbrec_ha_chassis_insert(ctx->txn);
+    nbrec_ha_chassis_set_chassis_name(ha_chassis, chassis_name);
+    nbrec_ha_chassis_set_priority(ha_chassis, priority);
+
+    nbrec_ha_chassis_group_verify_ha_chassis(ha_ch_grp);
+
+    struct nbrec_ha_chassis **new_ha_chs =
+        xmalloc(sizeof *new_ha_chs * (ha_ch_grp->n_ha_chassis + 1));
+    nullable_memcpy(new_ha_chs, ha_ch_grp->ha_chassis,
+                    sizeof *new_ha_chs * ha_ch_grp->n_ha_chassis);
+    new_ha_chs[ha_ch_grp->n_ha_chassis] =
+        CONST_CAST(struct nbrec_ha_chassis *, ha_chassis);
+    nbrec_ha_chassis_group_set_ha_chassis(ha_ch_grp, new_ha_chs,
+                                          ha_ch_grp->n_ha_chassis + 1);
+    free(new_ha_chs);
+}
+
+static void
+cmd_ha_ch_grp_remove_chassis(struct ctl_context *ctx)
+{
+    const struct nbrec_ha_chassis_group *ha_ch_grp =
+        ha_chassis_group_by_name_or_uuid(ctx, ctx->argv[1], true);
+
+    if (!ha_ch_grp) {
+        return;
+    }
+
+    const char *chassis_name = ctx->argv[2];
+    struct nbrec_ha_chassis *ha_chassis = NULL;
+    size_t idx = 0;
+    for (size_t i = 0; i < ha_ch_grp->n_ha_chassis; i++) {
+        if (!strcmp(ha_ch_grp->ha_chassis[i]->chassis_name, chassis_name)) {
+            ha_chassis = ha_ch_grp->ha_chassis[i];
+            idx = i;
+            break;
+        }
+    }
+
+    if (!ha_chassis) {
+        ctx->error = xasprintf("%s: ha chassis not found in %s ha "
+                               "chassis group", chassis_name, ctx->argv[1]);
+        return;
+    }
+
+    struct nbrec_ha_chassis **new_ha_ch
+        = xmemdup(ha_ch_grp->ha_chassis,
+                  sizeof *new_ha_ch * ha_ch_grp->n_ha_chassis);
+    new_ha_ch[idx] = new_ha_ch[ha_ch_grp->n_ha_chassis - 1];
+    nbrec_ha_chassis_group_verify_ha_chassis(ha_ch_grp);
+    nbrec_ha_chassis_group_set_ha_chassis(ha_ch_grp, new_ha_ch,
+                                          ha_ch_grp->n_ha_chassis - 1);
+    free(new_ha_ch);
+    nbrec_ha_chassis_delete(ha_chassis);
+}
+
+static void
+cmd_ha_ch_grp_set_chassis_prio(struct ctl_context *ctx)
+{
+    const struct nbrec_ha_chassis_group *ha_ch_grp =
+        ha_chassis_group_by_name_or_uuid(ctx, ctx->argv[1], true);
+
+    if (!ha_ch_grp) {
+        return;
+    }
+
+    int64_t priority;
+    char *error = parse_priority(ctx->argv[3], &priority);
+    if (error) {
+        ctx->error = error;
+        return;
+    }
+
+    const char *chassis_name = ctx->argv[2];
+    struct nbrec_ha_chassis *ha_chassis = NULL;
+
+    for (size_t i = 0; i < ha_ch_grp->n_ha_chassis; i++) {
+        if (!strcmp(ha_ch_grp->ha_chassis[i]->chassis_name, chassis_name)) {
+            ha_chassis = ha_ch_grp->ha_chassis[i];
+            break;
+        }
+    }
+
+    if (!ha_chassis) {
+        ctx->error = xasprintf("%s: ha chassis not found in %s ha "
+                               "chassis group", chassis_name, ctx->argv[1]);
+        return;
+    }
+
+    nbrec_ha_chassis_set_priority(ha_chassis, priority);
+}
+
 static const struct ctl_table_class tables[NBREC_N_TABLES] = {
     [NBREC_TABLE_DHCP_OPTIONS].row_ids
     = {{&nbrec_logical_switch_port_col_name, NULL,
@@ -4810,6 +5015,9 @@ static const struct ctl_table_class tables[NBREC_N_TABLES] = {
     = {&nbrec_port_group_col_name, NULL, NULL},
 
     [NBREC_TABLE_ACL].row_ids[0] = {&nbrec_acl_col_name, NULL, NULL},
+
+    [NBREC_TABLE_HA_CHASSIS_GROUP].row_ids[0]
+    = {&nbrec_ha_chassis_group_col_name, NULL, NULL},
 };
 
 static char *
@@ -5249,6 +5457,20 @@ static const struct ctl_command_syntax nbctl_commands[] = {
     {"pg-add", 1, INT_MAX, "", NULL, cmd_pg_add, NULL, "", RW },
     {"pg-set-ports", 2, INT_MAX, "", NULL, cmd_pg_set_ports, NULL, "", RW },
     {"pg-del", 1, 1, "", NULL, cmd_pg_del, NULL, "", RW },
+
+    /* HA chassis group commands. */
+    {"ha-chassis-group-add", 1, 1, "[CHASSIS GROUP]", NULL,
+      cmd_ha_ch_grp_add, NULL, "", RW },
+    {"ha-chassis-group-del", 1, 1, "[CHASSIS GROUP]", NULL,
+      cmd_ha_ch_grp_del, NULL, "", RW },
+    {"ha-chassis-group-list", 0, 0, "[CHASSIS GROUP]", NULL,
+      cmd_ha_ch_grp_list, NULL, "", RO },
+    {"ha-chassis-group-add-chassis", 3, 3, "[CHASSIS GROUP]", NULL,
+      cmd_ha_ch_grp_add_chassis, NULL, "", RW },
+    {"ha-chassis-group-remove-chassis", 2, 2, "[CHASSIS GROUP]", NULL,
+      cmd_ha_ch_grp_remove_chassis, NULL, "", RW },
+    {"ha-chassis-group-set-chassis-prio", 3, 3, "[CHASSIS GROUP]", NULL,
+      cmd_ha_ch_grp_set_chassis_prio, NULL, "", RW },
 
     {NULL, 0, 0, NULL, NULL, NULL, NULL, "", RO},
 };
