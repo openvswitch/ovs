@@ -757,7 +757,9 @@ ovs\-fields \- protocol header fields in OpenFlow and Open vSwitch
 
     for f in fields:
         if "used" not in f:
-            fatal("%s: field not documented" % f["mff"])
+            fatal("%s: field not documented "
+                  "(please add documentation in lib/meta-flow.xml)"
+                  % f["mff"])
     if n_errors:
         sys.exit(1)
 
