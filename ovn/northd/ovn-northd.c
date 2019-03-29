@@ -1121,6 +1121,7 @@ struct dynamic_address_update {
     struct lport_addresses current_addresses;
     struct eth_addr static_mac;
     ovs_be32 static_ip;
+    struct in6_addr static_ipv6;
     enum dynamic_update_type mac;
     enum dynamic_update_type ipv4;
     enum dynamic_update_type ipv6;
@@ -1187,13 +1188,16 @@ dynamic_ip4_changed(const char *lsp_addrs,
          */
         return DYNAMIC;
     } else {
+        char ipv6_s[IPV6_SCAN_LEN + 1];
         ovs_be32 new_ip;
         int n = 0;
 
-        if (ovs_scan(lsp_addrs, "dynamic "IP_SCAN_FMT"%n",
+        if ((ovs_scan(lsp_addrs, "dynamic "IP_SCAN_FMT"%n",
                      IP_SCAN_ARGS(&new_ip), &n)
-            && lsp_addrs[n] == '\0') {
-
+             && lsp_addrs[n] == '\0') ||
+            (ovs_scan(lsp_addrs, "dynamic "IP_SCAN_FMT" "IPV6_SCAN_FMT"%n",
+                      IP_SCAN_ARGS(&new_ip), ipv6_s, &n)
+             && lsp_addrs[n] == '\0')) {
             index = ntohl(new_ip) - ipam->start_ipv4;
             if (ntohl(new_ip) < ipam->start_ipv4 ||
                 index > ipam->total_ipv4s ||
@@ -1211,9 +1215,11 @@ dynamic_ip4_changed(const char *lsp_addrs,
 }
 
 static enum dynamic_update_type
-dynamic_ip6_changed(struct dynamic_address_update *update)
+dynamic_ip6_changed(const char *lsp_addrs,
+                    struct dynamic_address_update *update)
 {
     bool dynamic_ip6 = update->op->od->ipam_info.ipv6_prefix_set;
+    struct eth_addr ea;
 
     if (!dynamic_ip6) {
         if (update->current_addresses.n_ipv6_addrs) {
@@ -1225,22 +1231,43 @@ dynamic_ip6_changed(struct dynamic_address_update *update)
         }
     }
 
-    if (update->mac != NONE) {
-        /* IPv6 address is based on MAC, so if MAC has been updated,
-         * then we have to update IPv6 address too.
-         */
-        return DYNAMIC;
-    }
-
-    if (!update->current_addresses.n_ipv6_addrs) {
+    if (!update->current_addresses.n_ipv6_addrs ||
+        ovs_scan(lsp_addrs, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(ea))) {
         /* IPv6 was previously static but now is dynamic */
         return DYNAMIC;
     }
 
-    struct in6_addr masked = ipv6_addr_bitand(
-        &update->current_addresses.ipv6_addrs[0].addr,
-        &update->op->od->ipam_info.ipv6_prefix);
-    if (!IN6_ARE_ADDR_EQUAL(&masked, &update->op->od->ipam_info.ipv6_prefix)) {
+    const struct lport_addresses *cur_addresses;
+    char ipv6_s[IPV6_SCAN_LEN + 1];
+    ovs_be32 new_ip;
+    int n = 0;
+
+    if ((ovs_scan(lsp_addrs, "dynamic "IPV6_SCAN_FMT"%n",
+                  ipv6_s, &n) && lsp_addrs[n] == '\0') ||
+        (ovs_scan(lsp_addrs, "dynamic "IP_SCAN_FMT" "IPV6_SCAN_FMT"%n",
+                  IP_SCAN_ARGS(&new_ip), ipv6_s, &n)
+         && lsp_addrs[n] == '\0')) {
+        struct in6_addr ipv6;
+
+        if (!ipv6_parse(ipv6_s, &ipv6)) {
+            return DYNAMIC;
+        }
+
+        struct in6_addr masked = ipv6_addr_bitand(&ipv6,
+                &update->op->od->ipam_info.ipv6_prefix);
+        if (!IN6_ARE_ADDR_EQUAL(&masked,
+                                &update->op->od->ipam_info.ipv6_prefix)) {
+            return DYNAMIC;
+        }
+
+        cur_addresses = &update->current_addresses;
+
+        if (!IN6_ARE_ADDR_EQUAL(&cur_addresses->ipv6_addrs[0].addr,
+                                &ipv6)) {
+            update->static_ipv6 = ipv6;
+            return STATIC;
+        }
+    } else if (update->mac != NONE) {
         return DYNAMIC;
     }
 
@@ -1258,7 +1285,7 @@ dynamic_addresses_check_for_updates(const char *lsp_addrs,
 {
     update->mac = dynamic_mac_changed(lsp_addrs, update);
     update->ipv4 = dynamic_ip4_changed(lsp_addrs, update);
-    update->ipv6 = dynamic_ip6_changed(update);
+    update->ipv6 = dynamic_ip6_changed(lsp_addrs, update);
     if (update->mac == NONE &&
         update->ipv4 == NONE &&
         update->ipv6 == NONE) {
@@ -1299,6 +1326,8 @@ static void
 set_dynamic_updates(const char *addrspec,
                     struct dynamic_address_update *update)
 {
+    bool has_ipv4 = false, has_ipv6 = false;
+    char ipv6_s[IPV6_SCAN_LEN + 1];
     struct eth_addr mac;
     ovs_be32 ip;
     int n = 0;
@@ -1311,9 +1340,19 @@ set_dynamic_updates(const char *addrspec,
         update->mac = DYNAMIC;
     }
 
-    if (ovs_scan(addrspec, "dynamic "IP_SCAN_FMT"%n",
-                 IP_SCAN_ARGS(&ip), &n)
-        && addrspec[n] == '\0') {
+    if ((ovs_scan(addrspec, "dynamic "IP_SCAN_FMT"%n",
+                 IP_SCAN_ARGS(&ip), &n) && addrspec[n] == '\0')) {
+        has_ipv4 = true;
+    } else if ((ovs_scan(addrspec, "dynamic "IPV6_SCAN_FMT"%n",
+                         ipv6_s, &n) && addrspec[n] == '\0')) {
+        has_ipv6 = true;
+    } else if ((ovs_scan(addrspec, "dynamic "IP_SCAN_FMT" "IPV6_SCAN_FMT"%n",
+                         IP_SCAN_ARGS(&ip), ipv6_s, &n)
+               && addrspec[n] == '\0')) {
+        has_ipv4 = has_ipv6 = true;
+    }
+
+    if (has_ipv4) {
         update->ipv4 = STATIC;
         update->static_ip = ip;
     } else if (update->op->od->ipam_info.allocated_ipv4s) {
@@ -1321,7 +1360,10 @@ set_dynamic_updates(const char *addrspec,
     } else {
         update->ipv4 = NONE;
     }
-    if (update->op->od->ipam_info.ipv6_prefix_set) {
+
+    if (has_ipv6 && ipv6_parse(ipv6_s, &update->static_ipv6)) {
+        update->ipv6 = STATIC;
+    } else if (update->op->od->ipam_info.ipv6_prefix_set) {
         update->ipv6 = DYNAMIC;
     } else {
         update->ipv6 = NONE;
@@ -1372,7 +1414,8 @@ update_dynamic_addresses(struct dynamic_address_update *update)
     case REMOVE:
         break;
     case STATIC:
-        OVS_NOT_REACHED();
+        ip6 = update->static_ipv6;
+        break;
     case DYNAMIC:
         in6_generate_eui64(mac, &update->od->ipam_info.ipv6_prefix, &ip6);
         break;

@@ -765,6 +765,30 @@
             </dl>
           </dd>
 
+          <dt><code>Keyword "dynamic" followed by an IPv4/IPv6 address</code></dt>
+          <dd>
+
+            <p>
+              The keyword <code>dynamic</code> followed by an IPv4/IPv6
+              address indicates that <code>ovn-northd</code> should choose
+              a dynamic ethernet address and use the provided IPv4/IPv6 address
+              as network address.
+            </p>
+
+            <p>
+              Examples:
+            </p>
+
+            <dl>
+              <dt><code>dynamic 192.168.0.1 2001::1</code></dt>
+              <dd>
+                This indicates that <code>ovn-northd</code> should allocate
+                a unique MAC address and use the provided IPv4/IPv6 address
+                for the related port
+              </dd>
+            </dl>
+          </dd>
+
           <dt><code>router</code></dt>
           <dd>
             <p>

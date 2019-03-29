@@ -23,7 +23,11 @@ Post-v2.11.0
        See section 4.1.15 of ovsdb-server(7) for details of related OVSDB
        protocol extension.
    - OVN:
-     * Select IPAM mac_prefix in a random manner if not provided by the user
+     * IPAM/MACAM:
+       - select IPAM mac_prefix in a random manner if not provided by the user
+       - add the capability to specify a static IPv4 and/or IPv6 address and
+         get the L2 one allocated dynamically using the following syntax:
+           ovn-nbctl lsp-set-addresses <port> "dynamic <IPv4 addr> <IPv6 addr>"
      * Added the HA chassis group support.
      * Added 'external' logical port support.
    - New QoS type "linux-netem" on Linux.

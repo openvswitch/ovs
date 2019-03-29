@@ -80,6 +80,7 @@ add_ipv6_netaddr(struct lport_addresses *laddrs, struct in6_addr addr,
 bool
 is_dynamic_lsp_address(const char *address)
 {
+    char ipv6_s[IPV6_SCAN_LEN + 1];
     struct eth_addr ea;
     ovs_be32 ip;
     int n;
@@ -87,6 +88,11 @@ is_dynamic_lsp_address(const char *address)
             || (ovs_scan(address, "dynamic "IP_SCAN_FMT"%n",
                          IP_SCAN_ARGS(&ip), &n)
                          && address[n] == '\0')
+            || (ovs_scan(address, "dynamic "IP_SCAN_FMT" "IPV6_SCAN_FMT"%n",
+                         IP_SCAN_ARGS(&ip), ipv6_s, &n)
+                         && address[n] == '\0')
+            || (ovs_scan(address, "dynamic "IPV6_SCAN_FMT"%n",
+                         ipv6_s, &n) && address[n] == '\0')
             || (ovs_scan(address, ETH_ADDR_SCAN_FMT" dynamic%n",
                          ETH_ADDR_SCAN_ARGS(ea), &n) && address[n] == '\0'));
 }

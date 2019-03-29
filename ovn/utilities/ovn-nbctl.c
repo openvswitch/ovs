@@ -1570,6 +1570,7 @@ nbctl_lsp_set_addresses(struct ctl_context *ctx)
 
     int i;
     for (i = 2; i < ctx->argc; i++) {
+        char ipv6_s[IPV6_SCAN_LEN + 1];
         struct eth_addr ea;
         ovs_be32 ip;
 
@@ -1577,6 +1578,7 @@ nbctl_lsp_set_addresses(struct ctl_context *ctx)
             && strcmp(ctx->argv[i], "router")
             && !ovs_scan(ctx->argv[i], ETH_ADDR_SCAN_FMT,
                          ETH_ADDR_SCAN_ARGS(ea))
+            && !ovs_scan(ctx->argv[i], "dynamic "IPV6_SCAN_FMT, ipv6_s)
             && !ovs_scan(ctx->argv[i], "dynamic "IP_SCAN_FMT,
                          IP_SCAN_ARGS(&ip))) {
             ctl_error(ctx, "%s: Invalid address format. See ovn-nb(5). "

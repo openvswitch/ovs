@@ -6348,6 +6348,20 @@ mac_prefix=$(ovn-nbctl --wait=sb get NB_Global . options:mac_prefix | tr -d \")
 port_addr=$(ovn-nbctl get Logical-Switch-Port p91 dynamic_addresses | tr -d \")
 AT_CHECK([test "$port_addr" = "${mac_prefix}:00:00:09"], [0], [])
 
+ovn-nbctl --wait=hv set NB_Global . options:mac_prefix="00:11:22"
+ovn-nbctl ls-add sw10
+ovn-nbctl --wait=sb set Logical-Switch sw10 other_config:ipv6_prefix="ae01::"
+ovn-nbctl --wait=sb lsp-add sw10 p101 -- lsp-set-addresses p101 "dynamic ae01::1"
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p101 dynamic_addresses], [0],
+    ["00:11:22:00:00:0a ae01::1"
+])
+
+ovn-nbctl --wait=sb set Logical-Switch sw10 other_config:subnet=192.168.110.0/24
+ovn-nbctl --wait=sb lsp-add sw10 p102 -- lsp-set-addresses p102 "dynamic 192.168.110.10 ae01::2"
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p102 dynamic_addresses], [0],
+    ["00:11:22:a8:6e:0b 192.168.110.10 ae01::2"
+])
+
 as ovn-sb
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 
