@@ -5819,6 +5819,11 @@ static void
 odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
                          bool export_mask, struct ofpbuf *buf)
 {
+    /* New "struct flow" fields that are visible to the datapath (including all
+     * data fields) should be translated into equivalent datapath flow fields
+     * here (you will have to add a OVS_KEY_ATTR_* for them). */
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 41);
+
     struct ovs_key_ethernet *eth_key;
     size_t encap[FLOW_MAX_VLAN_HEADERS] = {0};
     size_t max_vlans;
@@ -6900,6 +6905,11 @@ odp_flow_key_to_flow__(const struct nlattr *key, size_t key_len,
                        struct flow *flow, const struct flow *src_flow,
                        char **errorp)
 {
+    /* New "struct flow" fields that are visible to the datapath (including all
+     * data fields) should be translated from equivalent datapath flow fields
+     * here (you will have to add a OVS_KEY_ATTR_* for them).  */
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 41);
+
     enum odp_key_fitness fitness = ODP_FIT_ERROR;
     if (errorp) {
         *errorp = NULL;
