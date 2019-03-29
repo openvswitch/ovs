@@ -1346,6 +1346,8 @@ conntrack_clean(struct conntrack *ct, long long now)
     unsigned i;
 
     atomic_read_relaxed(&ct->n_conn_limit, &n_conn_limit);
+    size_t clean_min = n_conn_limit > CONNTRACK_BUCKETS * 10
+        ? n_conn_limit / (CONNTRACK_BUCKETS * 10) : 1;
 
     for (i = 0; i < CONNTRACK_BUCKETS; i++) {
         struct conntrack_bucket *ctb = &ct->buckets[i];
@@ -1363,8 +1365,7 @@ conntrack_clean(struct conntrack *ct, long long now)
          * limit to 10% of the global limit equally split among buckets. If
          * the bucket is busier than the others, we limit to 10% of its
          * current size. */
-        min_exp = sweep_bucket(ct, ctb, now,
-                MAX(prev_count/10, n_conn_limit/(CONNTRACK_BUCKETS*10)));
+        min_exp = sweep_bucket(ct, ctb, now, MAX(prev_count / 10, clean_min));
         clean_count += prev_count - hmap_count(&ctb->connections);
 
         if (min_exp > now) {
