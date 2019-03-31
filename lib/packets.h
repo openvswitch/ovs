@@ -1187,17 +1187,8 @@ in6_addr_get_mapped_ipv4(const struct in6_addr *addr)
     }
 }
 
-static inline void
-in6_addr_solicited_node(struct in6_addr *addr, const struct in6_addr *ip6)
-{
-    union ovs_16aligned_in6_addr *taddr =
-        (union ovs_16aligned_in6_addr *) addr;
-    memset(taddr->be16, 0, sizeof(taddr->be16));
-    taddr->be16[0] = htons(0xff02);
-    taddr->be16[5] = htons(0x1);
-    taddr->be16[6] = htons(0xff00);
-    memcpy(&addr->s6_addr[13], &ip6->s6_addr[13], 3);
-}
+void in6_addr_solicited_node(struct in6_addr *addr,
+                             const struct in6_addr *ip6);
 
 void in6_generate_eui64(struct eth_addr ea, const struct in6_addr *prefix,
                         struct in6_addr *lla);
@@ -1207,16 +1198,8 @@ void in6_generate_lla(struct eth_addr ea, struct in6_addr *lla);
 /* Returns true if 'addr' is a link local address.  Otherwise, false. */
 bool in6_is_lla(struct in6_addr *addr);
 
-static inline void
-ipv6_multicast_to_ethernet(struct eth_addr *eth, const struct in6_addr *ip6)
-{
-    eth->ea[0] = 0x33;
-    eth->ea[1] = 0x33;
-    eth->ea[2] = ip6->s6_addr[12];
-    eth->ea[3] = ip6->s6_addr[13];
-    eth->ea[4] = ip6->s6_addr[14];
-    eth->ea[5] = ip6->s6_addr[15];
-}
+void ipv6_multicast_to_ethernet(struct eth_addr *eth,
+                                const struct in6_addr *ip6);
 
 static inline bool dl_type_is_ip_any(ovs_be16 dl_type)
 {

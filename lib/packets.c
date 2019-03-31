@@ -547,6 +547,18 @@ eth_format_masked(const struct eth_addr eth,
     }
 }
 
+void
+in6_addr_solicited_node(struct in6_addr *addr, const struct in6_addr *ip6)
+{
+    union ovs_16aligned_in6_addr *taddr =
+        (union ovs_16aligned_in6_addr *) addr;
+    memset(taddr->be16, 0, sizeof(taddr->be16));
+    taddr->be16[0] = htons(0xff02);
+    taddr->be16[5] = htons(0x1);
+    taddr->be16[6] = htons(0xff00);
+    memcpy(&addr->s6_addr[13], &ip6->s6_addr[13], 3);
+}
+
 /*
  * Generates ipv6 EUI64 address from the given eth addr
  * and prefix and stores it in 'lla'
@@ -595,6 +607,17 @@ in6_is_lla(struct in6_addr *addr)
          !(addr->s6_addr[2] | addr->s6_addr[3] | addr->s6_addr[4] |
            addr->s6_addr[5] | addr->s6_addr[6] | addr->s6_addr[7]);
 #endif
+}
+
+void
+ipv6_multicast_to_ethernet(struct eth_addr *eth, const struct in6_addr *ip6)
+{
+    eth->ea[0] = 0x33;
+    eth->ea[1] = 0x33;
+    eth->ea[2] = ip6->s6_addr[12];
+    eth->ea[3] = ip6->s6_addr[13];
+    eth->ea[4] = ip6->s6_addr[14];
+    eth->ea[5] = ip6->s6_addr[15];
 }
 
 /* Given the IP netmask 'netmask', returns the number of bits of the IP address
