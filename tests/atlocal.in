@@ -100,7 +100,7 @@ esac
 
 # Check for platform.
 case `uname` in
-MINGW*)
+MINGW*|MSYS*)
     IS_WIN32="yes"
     IS_BSD="no"
     ;;
