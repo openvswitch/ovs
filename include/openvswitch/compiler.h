@@ -236,6 +236,18 @@
 #define OVS_PREFETCH_WRITE(addr)
 #endif
 
+/* Since Visual Studio 2015 there has been an effort to make offsetof a
+ * builtin_offsetof, unfortunately both implementation (the regular define and
+ * the built in one) are buggy and cause issues when using them via
+ * the C compiler.
+ * e.g.: https://bit.ly/2UvWwti
+ */
+#if _MSC_VER >= 1900
+#undef offsetof
+#define offsetof(type, member) \
+    ((size_t)((char *)&(((type *)0)->member) - (char *)0))
+#endif
+
 /* Build assertions.
  *
  * Use BUILD_ASSERT_DECL as a declaration or a statement, or BUILD_ASSERT as
