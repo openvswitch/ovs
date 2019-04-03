@@ -15,6 +15,9 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10 Debug|x64'">
     <SignMode>TestSign</SignMode>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win10Analyze|x64'">
+    <SignMode>TestSign</SignMode>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Win8 Release|x64'">
     <SignMode>TestSign</SignMode>
   </PropertyGroup>
