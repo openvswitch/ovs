@@ -1297,6 +1297,10 @@
       Zero or more static routes for the router.
     </column>
 
+    <column name="policies">
+      Zero or more routing policies for the router.
+    </column>
+
     <column name="enabled">
       This column is used to administratively set router state.  If this column
       is empty or is set to <code>true</code>, the router is enabled.  If this
@@ -1919,6 +1923,66 @@
       </column>
     </group>
 
+  </table>
+
+  <table name="Logical_Router_Policy" title="Logical router policies">
+    <p>
+      Each row in this table represents one routing policy for a logical router
+      that points to it through its <ref column="policies"/> column.  The <ref
+      column="action"/> column for the highest-<ref column="priority"/>
+      matching row in this table determines a packet's treatment.  If no row
+      matches, packets are allowed by default. (Default-deny treatment is
+      possible: add a rule with <ref column="priority"/> 0, <code>1</code> as
+      <ref column="match"/>, and <code>drop</code> as <ref column="action"/>.)
+    </p>
+
+    <column name="priority">
+      <p>
+        The routing policy's priority.  Rules with numerically higher priority
+        take precedence over those with lower. A rule is uniquely identified
+        by the priority and match string.
+      </p>
+    </column>
+
+    <column name="match">
+      <p>
+        The packets that the routing policy should match,
+        in the same expression language used for the
+        <ref column="match" table="Logical_Flow" db="OVN_Southbound"/>
+        column in the OVN Southbound database's
+        <ref table="Logical_Flow" db="OVN_Southbound"/> table.
+      </p>
+
+      <p>
+        By default all traffic is allowed.  When writing a more
+        restrictive policy, it is important to remember to allow flows
+        such as ARP and IPv6 neighbor discovery packets.
+      </p>
+    </column>
+
+    <column name="action">
+      <p>The action to take when the routing policy matches:</p>
+      <ul>
+        <li>
+          <code>allow</code>: Forward the packet.
+        </li>
+
+        <li>
+          <code>drop</code>: Silently drop the packet.
+        </li>
+
+        <li>
+          <code>reroute</code>: Reroute packet to <ref column="nexthop"/>.
+        </li>
+      </ul>
+    </column>
+
+    <column name="nexthop">
+      <p>
+        Next-hop IP address for this route, which should be the IP
+        address of a connected router port or the IP address of a logical port.
+      </p>
+    </column>
   </table>
 
   <table name="NAT" title="NAT rules">

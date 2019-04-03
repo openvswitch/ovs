@@ -143,9 +143,10 @@ enum ovn_stage {
     PIPELINE_STAGE(ROUTER, IN,  ND_RA_OPTIONS,  5, "lr_in_nd_ra_options") \
     PIPELINE_STAGE(ROUTER, IN,  ND_RA_RESPONSE, 6, "lr_in_nd_ra_response") \
     PIPELINE_STAGE(ROUTER, IN,  IP_ROUTING,     7, "lr_in_ip_routing")   \
-    PIPELINE_STAGE(ROUTER, IN,  ARP_RESOLVE,    8, "lr_in_arp_resolve")  \
-    PIPELINE_STAGE(ROUTER, IN,  GW_REDIRECT,    9, "lr_in_gw_redirect")  \
-    PIPELINE_STAGE(ROUTER, IN,  ARP_REQUEST,    10, "lr_in_arp_request")  \
+    PIPELINE_STAGE(ROUTER, IN,  POLICY,         8, "lr_in_policy")       \
+    PIPELINE_STAGE(ROUTER, IN,  ARP_RESOLVE,    9, "lr_in_arp_resolve")  \
+    PIPELINE_STAGE(ROUTER, IN,  GW_REDIRECT,    10, "lr_in_gw_redirect")  \
+    PIPELINE_STAGE(ROUTER, IN,  ARP_REQUEST,    11, "lr_in_arp_request")  \
                                                                       \
     /* Logical router egress stages. */                               \
     PIPELINE_STAGE(ROUTER, OUT, UNDNAT,    0, "lr_out_undnat")        \
@@ -5010,6 +5011,80 @@ find_lrp_member_ip(const struct ovn_port *op, const char *ip_s)
     return NULL;
 }
 
+static struct ovn_port*
+get_outport_for_routing_policy_nexthop(struct ovn_datapath *od,
+                                       struct hmap *ports,
+                                       int priority, const char *nexthop)
+{
+    if (nexthop == NULL) {
+        return NULL;
+    }
+
+    /* Find the router port matching the next hop. */
+    for (int i = 0; i < od->nbr->n_ports; i++) {
+       struct nbrec_logical_router_port *lrp = od->nbr->ports[i];
+
+       struct ovn_port *out_port = ovn_port_find(ports, lrp->name);
+       if (out_port && find_lrp_member_ip(out_port, nexthop)) {
+           return out_port;
+       }
+    }
+
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+    VLOG_WARN_RL(&rl, "No path for routing policy priority %d; next hop %s",
+                 priority, nexthop);
+    return NULL;
+}
+
+static void
+build_routing_policy_flow(struct hmap *lflows, struct ovn_datapath *od,
+                          struct hmap *ports,
+                          const struct nbrec_logical_router_policy *rule)
+{
+    struct ds match = DS_EMPTY_INITIALIZER;
+    struct ds actions = DS_EMPTY_INITIALIZER;
+
+    if (!strcmp(rule->action, "reroute")) {
+        struct ovn_port *out_port = get_outport_for_routing_policy_nexthop(
+             od, ports, rule->priority, rule->nexthop);
+        if (!out_port) {
+            return;
+        }
+
+        const char *lrp_addr_s = find_lrp_member_ip(out_port, rule->nexthop);
+        if (!lrp_addr_s) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+            VLOG_WARN_RL(&rl, "lrp_addr not found for routing policy "
+                         " priority %"PRId64" nexthop %s",
+                         rule->priority, rule->nexthop);
+            return;
+        }
+        bool is_ipv4 = strchr(rule->nexthop, '.') ? true : false;
+        ds_put_format(&actions, "%sreg0 = %s; "
+                      "%sreg1 = %s; "
+                      "eth.src = %s; "
+                      "outport = %s; "
+                      "flags.loopback = 1; "
+                      "next;",
+                      is_ipv4 ? "" : "xx",
+                      rule->nexthop,
+                      is_ipv4 ? "" : "xx",
+                      lrp_addr_s,
+                      out_port->lrp_networks.ea_s,
+                      out_port->json_key);
+
+    } else if (!strcmp(rule->action, "drop")) {
+        ds_put_cstr(&actions, "drop;");
+    } else if (!strcmp(rule->action, "allow")) {
+        ds_put_cstr(&actions, "next;");
+    }
+    ds_put_format(&match, "%s", rule->match);
+    ovn_lflow_add(lflows, od, S_ROUTER_IN_POLICY, rule->priority,
+                  ds_cstr(&match), ds_cstr(&actions));
+    ds_destroy(&match);
+    ds_destroy(&actions);
+}
+
 static void
 add_distributed_nat_routes(struct hmap *lflows, const struct ovn_port *op)
 {
@@ -6827,9 +6902,35 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         }
     }
 
+    /* Logical router ingress table 8: Policy.
+     *
+     * A packet that arrives at this table is an IP packet that should be
+     * permitted/denied/rerouted to the address in the rule's nexthop.
+     * This table sets outport to the correct out_port,
+     * eth.src to the output port's MAC address,
+     * and '[xx]reg0' to the next-hop IP address (leaving
+     * 'ip[46].dst', the packet’s final destination, unchanged), and
+     * advances to the next table for ARP/ND resolution. */
+    HMAP_FOR_EACH (od, key_node, datapaths) {
+        if (!od->nbr) {
+            continue;
+        }
+        /* This is a catch-all rule. It has the lowest priority (0)
+         * does a match-all("1") and pass-through (next) */
+        ovn_lflow_add(lflows, od, S_ROUTER_IN_POLICY, 0, "1", "next;");
+
+        /* Convert routing policies to flows. */
+        for (int i = 0; i < od->nbr->n_policies; i++) {
+            const struct nbrec_logical_router_policy *rule
+                = od->nbr->policies[i];
+            build_routing_policy_flow(lflows, od, ports, rule);
+        }
+    }
+
+
     /* XXX destination unreachable */
 
-    /* Local router ingress table 8: ARP Resolution.
+    /* Local router ingress table 9: ARP Resolution.
      *
      * Any packet that reaches this table is an IP packet whose next-hop IP
      * address is in reg0. (ip4.dst is the final destination.) This table
@@ -7028,7 +7129,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                       "get_nd(outport, xxreg0); next;");
     }
 
-    /* Logical router ingress table 9: Gateway redirect.
+    /* Logical router ingress table 10: Gateway redirect.
      *
      * For traffic with outport equal to the l3dgw_port
      * on a distributed router, this table redirects a subset
@@ -7071,7 +7172,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         ovn_lflow_add(lflows, od, S_ROUTER_IN_GW_REDIRECT, 0, "1", "next;");
     }
 
-    /* Local router ingress table 10: ARP request.
+    /* Local router ingress table 11: ARP request.
      *
      * In the common case where the Ethernet destination has been resolved,
      * this table outputs the packet (priority 0).  Otherwise, it composes

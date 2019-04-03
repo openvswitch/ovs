@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
-    "version": "5.15.1",
-    "cksum": "1272095726 22218",
+    "version": "5.16.0",
+    "cksum": "923459061 23095",
     "tables": {
         "NB_Global": {
             "columns": {
@@ -248,6 +248,12 @@
                                             "refType": "strong"},
                                    "min": 0,
                                    "max": "unlimited"}},
+                "policies": {
+                    "type": {"key": {"type": "uuid",
+                                     "refTable": "Logical_Router_Policy",
+                                     "refType": "strong"},
+                             "min": 0,
+                             "max": "unlimited"}},
                 "enabled": {"type": {"key": "boolean", "min": 0, "max": 1}},
                 "nat": {"type": {"key": {"type": "uuid",
                                          "refTable": "NAT",
@@ -314,6 +320,17 @@
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}}},
+            "isRoot": false},
+        "Logical_Router_Policy": {
+            "columns": {
+                "priority": {"type": {"key": {"type": "integer",
+                                              "minInteger": 0,
+                                              "maxInteger": 32767}}},
+                "match": {"type": "string"},
+                "action": {"type": {
+                    "key": {"type": "string",
+                            "enum": ["set", ["allow", "drop", "reroute"]]}}},
+                "nexthop": {"type": {"key": "string", "min": 0, "max": 1}}},
             "isRoot": false},
         "NAT": {
             "columns": {

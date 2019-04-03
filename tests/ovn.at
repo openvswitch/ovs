@@ -5375,6 +5375,7 @@ test_ipv4_icmp_request 2 000000010204 0000000102f2 $l2_ip $rtr_l2_ip 0000 8510 0
 test_ipv4_icmp_request 1 000000010203 0000000102f1 $l1_ip $rtr_l2_ip 0000 8510 02ff 8d10
 test_ipv4_icmp_request 2 000000010204 0000000102f2 $l2_ip $rtr_l1_ip 0000 8510 02ff 8d10
 
+
 echo "---------NB dump-----"
 ovn-nbctl show
 echo "---------------------"
@@ -5398,7 +5399,378 @@ for inport in 1 2; do
 done
 
 OVN_CLEANUP([hv1])
+AT_CLEANUP
 
+AT_SETUP([ovn -- policy-based routing: 1 HVs, 2 LSs, 1 lport/LS, 1 LR])
+AT_KEYWORDS([policy-based-routing])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# Logical network:
+# One LR - R1 has switch ls1 (191.168.1.0/24) connected to it,
+# and has switch ls2 (172.16.1.0/24) connected to it.
+
+ovn-nbctl lr-add R1
+
+ovn-nbctl ls-add ls1
+ovn-nbctl ls-add ls2
+ovn-nbctl ls-add ls3
+
+# Connect ls1 to R1
+ovn-nbctl lrp-add R1 ls1 00:00:00:01:02:f1 192.168.1.1/24
+ovn-nbctl lsp-add ls1 rp-ls1 -- set Logical_Switch_Port rp-ls1 \
+    type=router options:router-port=ls1 addresses=\"00:00:00:01:02:f1\"
+
+# Connect ls2 to R1
+ovn-nbctl lrp-add R1 ls2 00:00:00:01:02:f2 172.16.1.1/24
+ovn-nbctl lsp-add ls2 rp-ls2 -- set Logical_Switch_Port rp-ls2 \
+    type=router options:router-port=ls2 addresses=\"00:00:00:01:02:f2\"
+
+# Connect ls3 to R1
+ovn-nbctl lrp-add R1 ls3 00:00:00:01:02:f3 20.20.1.1/24
+ovn-nbctl lsp-add ls3 rp-ls3 -- set Logical_Switch_Port rp-ls3 \
+    type=router options:router-port=ls3 addresses=\"00:00:00:01:02:f3\"
+
+# Create logical port ls1-lp1 in ls1
+ovn-nbctl lsp-add ls1 ls1-lp1 \
+-- lsp-set-addresses ls1-lp1 "00:00:00:01:02:03 192.168.1.2"
+
+# Create logical port ls2-lp1 in ls2
+ovn-nbctl lsp-add ls2 ls2-lp1 \
+-- lsp-set-addresses ls2-lp1 "00:00:00:01:02:04 172.16.1.2"
+
+# Create logical port ls3-lp1 in ls3
+ovn-nbctl lsp-add ls3 ls3-lp1 \
+-- lsp-set-addresses ls3-lp1 "00:00:00:01:02:05 20.20.1.2"
+
+# Create one hypervisor and create OVS ports corresponding to logical ports.
+net_add n1
+
+sim_add pbr-hv
+as pbr-hv
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+
+ovs-vsctl -- add-port br-int vif1 -- \
+    set interface vif1 external-ids:iface-id=ls1-lp1 \
+    options:tx_pcap=pbr-hv/vif1-tx.pcap \
+    options:rxq_pcap=pbr-hv/vif1-rx.pcap \
+    ofport-request=1
+
+ovs-vsctl -- add-port br-int vif2 -- \
+    set interface vif2 external-ids:iface-id=ls2-lp1 \
+    options:tx_pcap=pbr-hv/vif2-tx.pcap \
+    options:rxq_pcap=pbr-hv/vif2-rx.pcap \
+    ofport-request=1
+
+ovs-vsctl -- add-port br-int vif3 -- \
+    set interface vif3 external-ids:iface-id=ls3-lp1 \
+    options:tx_pcap=pbr-hv/vif3-tx.pcap \
+    options:rxq_pcap=pbr-hv/vif3-rx.pcap \
+    ofport-request=1
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
+
+ls1_ro_mac=00:00:00:01:02:f1
+ls1_ro_ip=192.168.1.1
+
+ls2_ro_mac=00:00:00:01:02:f2
+ls2_ro_ip=172.16.1.1
+
+ls3_ro_mac=00:00:00:01:02:f3
+
+ls1_p1_mac=00:00:00:01:02:03
+ls1_p1_ip=192.168.1.2
+
+ls2_p1_mac=00:00:00:01:02:04
+ls2_p1_ip=172.16.1.2
+
+ls3_p1_mac=00:00:00:01:02:05
+
+# Create a drop policy
+ovn-nbctl lr-policy-add R1 10 "ip4.src==192.168.1.0/24 && ip4.dst==172.16.1.0/24" drop
+
+# Check logical flow
+AT_CHECK([ovn-sbctl dump-flows | grep lr_in_policy | grep "192.168.1.0" | wc -l], [0], [dnl
+1
+])
+
+# Send packet.
+packet="inport==\"ls1-lp1\" && eth.src==$ls1_p1_mac && eth.dst==$ls1_ro_mac &&
+       ip4 && ip.ttl==64 && ip4.src==$ls1_p1_ip && ip4.dst==$ls2_p1_ip &&
+       udp && udp.src==53 && udp.dst==4369"
+
+as pbr-hv ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+# Check if packet hit the drop policy
+AT_CHECK([ovs-ofctl dump-flows br-int | \
+    grep "nw_src=192.168.1.0/24,nw_dst=172.16.1.0/24 actions=drop" | \
+    grep "priority=10" | \
+    grep "n_packets=1" | wc -l], [0], [dnl
+1
+])
+
+# Expected to drop the packet.
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" pbr-hv/vif2-tx.pcap > vif2.packets
+rcvd_packet=`cat vif2.packets`
+AT_FAIL_IF([rcvd_packet = ""])
+
+# Override drop policy with allow
+ovn-nbctl lr-policy-add R1 20 "ip4.src==192.168.1.0/24 && ip4.dst==172.16.1.0/24" allow
+
+# Check logical flow
+AT_CHECK([ovn-sbctl dump-flows | grep lr_in_policy | grep "192.168.1.0" | wc -l], [0], [dnl
+2
+])
+
+# Send packet.
+packet="inport==\"ls1-lp1\" && eth.src==$ls1_p1_mac && eth.dst==$ls1_ro_mac &&
+       ip4 && ip.ttl==64 && ip4.src==$ls1_p1_ip && ip4.dst==$ls2_p1_ip &&
+       udp && udp.src==53 && udp.dst==4369"
+as pbr-hv ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+# Check if packet hit the allow policy
+AT_CHECK([ovn-sbctl dump-flows | grep lr_in_policy | \
+    grep "192.168.1.0" | \
+    grep "priority=20" | wc -l], [0], [dnl
+1
+])
+
+# Expected packet has TTL decreased by 1
+expected="eth.src==$ls2_ro_mac && eth.dst==$ls2_p1_mac &&
+       ip4 && ip.ttl==63 && ip4.src==$ls1_p1_ip && ip4.dst==$ls2_p1_ip &&
+       udp && udp.src==53 && udp.dst==4369"
+echo $expected | ovstest test-ovn expr-to-packets > expected
+
+OVN_CHECK_PACKETS([pbr-hv/vif2-tx.pcap], [expected])
+
+# Override allow policy with reroute
+ovn-nbctl lr-policy-add R1 30 "ip4.src==192.168.1.0/24 && ip4.dst==172.16.1.0/24" reroute 20.20.1.2
+
+# Check logical flow
+AT_CHECK([ovn-sbctl dump-flows | grep lr_in_policy | \
+    grep "192.168.1.0" | \
+    grep "priority=30" | wc -l], [0], [dnl
+1
+])
+
+# Send packet.
+packet="inport==\"ls1-lp1\" && eth.src==$ls1_p1_mac && eth.dst==$ls1_ro_mac &&
+       ip4 && ip.ttl==64 && ip4.src==$ls1_p1_ip && ip4.dst==$ls2_p1_ip &&
+       udp && udp.src==53 && udp.dst==4369"
+as pbr-hv ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+echo "southbound flows"
+
+ovn-sbctl dump-flows | grep lr_in_policy
+echo "ovs flows"
+ovs-ofctl dump-flows br-int
+# Check if packet hit the allow policy
+AT_CHECK([ovs-ofctl dump-flows br-int | \
+    grep "nw_src=192.168.1.0/24,nw_dst=172.16.1.0/24" | \
+    grep "priority=30" | \
+    grep "n_packets=1" | wc -l], [0], [dnl
+1
+])
+echo "packet hit reroute policy"
+
+# Expected packet has TTL decreased by 1
+expected="eth.src==$ls3_ro_mac && eth.dst==$ls3_p1_mac &&
+       ip4 && ip.ttl==63 && ip4.src==$ls1_p1_ip && ip4.dst==$ls2_p1_ip &&
+       udp && udp.src==53 && udp.dst==4369"
+echo $expected | ovstest test-ovn expr-to-packets > 3.expected
+
+OVN_CHECK_PACKETS([pbr-hv/vif3-tx.pcap], [3.expected])
+
+OVN_CLEANUP([pbr-hv])
+AT_CLEANUP
+
+AT_SETUP([ovn -- policy-based routing IPv6: 1 HVs, 3 LSs, 1 lport/LS, 1 LR])
+AT_KEYWORDS([policy-based-routing])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# Logical network:
+# One LR - R1 has switch ls1 (191.168.1.0/24) connected to it,
+# and has switch ls2 (172.16.1.0/24) connected to it.
+
+ovn-nbctl lr-add R1
+
+ovn-nbctl ls-add ls1
+ovn-nbctl ls-add ls2
+ovn-nbctl ls-add ls3
+
+# Connect ls1 to R1
+ovn-nbctl lrp-add R1 ls1 00:00:00:01:02:f1 2001::1/64
+ovn-nbctl lsp-add ls1 rp-ls1 -- set Logical_Switch_Port rp-ls1 \
+    type=router options:router-port=ls1 addresses=\"00:00:00:01:02:f1\"
+
+# Connect ls2 to R1
+ovn-nbctl lrp-add R1 ls2 00:00:00:01:02:f2 2002::1/64
+ovn-nbctl lsp-add ls2 rp-ls2 -- set Logical_Switch_Port rp-ls2 \
+    type=router options:router-port=ls2 addresses=\"00:00:00:01:02:f2\"
+
+# Connect ls3 to R1
+ovn-nbctl lrp-add R1 ls3 00:00:00:01:02:f3 2003::1/64
+ovn-nbctl lsp-add ls3 rp-ls3 -- set Logical_Switch_Port rp-ls3 \
+    type=router options:router-port=ls3 addresses=\"00:00:00:01:02:f3\"
+
+# Create logical port ls1-lp1 in ls1
+ovn-nbctl lsp-add ls1 ls1-lp1 \
+-- lsp-set-addresses ls1-lp1 "00:00:00:01:02:03 2001::2"
+
+# Create logical port ls2-lp1 in ls2
+ovn-nbctl lsp-add ls2 ls2-lp1 \
+-- lsp-set-addresses ls2-lp1 "00:00:00:01:02:04 2002::2"
+
+# Create logical port ls3-lp1 in ls3
+ovn-nbctl lsp-add ls3 ls3-lp1 \
+-- lsp-set-addresses ls3-lp1 "00:00:00:01:02:05 2003::2"
+
+# Create one hypervisor and create OVS ports corresponding to logical ports.
+net_add n1
+
+sim_add pbr-hv
+as pbr-hv
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+
+ovs-vsctl -- add-port br-int vif1 -- \
+    set interface vif1 external-ids:iface-id=ls1-lp1 \
+    options:tx_pcap=pbr-hv/vif1-tx.pcap \
+    options:rxq_pcap=pbr-hv/vif1-rx.pcap \
+    ofport-request=1
+
+ovs-vsctl -- add-port br-int vif2 -- \
+    set interface vif2 external-ids:iface-id=ls2-lp1 \
+    options:tx_pcap=pbr-hv/vif2-tx.pcap \
+    options:rxq_pcap=pbr-hv/vif2-rx.pcap \
+    ofport-request=1
+
+ovs-vsctl -- add-port br-int vif3 -- \
+    set interface vif3 external-ids:iface-id=ls3-lp1 \
+    options:tx_pcap=pbr-hv/vif3-tx.pcap \
+    options:rxq_pcap=pbr-hv/vif3-rx.pcap \
+    ofport-request=1
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
+
+ls1_ro_mac=00:00:00:01:02:f1
+ls1_ro_ip=2001::1
+
+ls2_ro_mac=00:00:00:01:02:f2
+ls2_ro_ip=2002::1
+
+ls3_ro_mac=00:00:00:01:02:f3
+
+ls1_p1_mac=00:00:00:01:02:03
+ls1_p1_ip=2001::2
+
+ls2_p1_mac=00:00:00:01:02:04
+ls2_p1_ip=2002::2
+
+ls3_p1_mac=00:00:00:01:02:05
+
+# Create a drop policy
+ovn-nbctl lr-policy-add R1 10 "ip6.src==2001::/64 && ip6.dst==2002::/64" drop
+
+# Check logical flow
+AT_CHECK([ovn-sbctl dump-flows | grep lr_in_policy | grep "2001" | wc -l], [0], [dnl
+1
+])
+
+# Send packet.
+packet="inport==\"ls1-lp1\" && eth.src==$ls1_p1_mac && eth.dst==$ls1_ro_mac &&
+       ip6 && ip.ttl==64 && ip6.src==$ls1_p1_ip && ip6.dst==$ls2_p1_ip &&
+       udp && udp.src==53 && udp.dst==4369"
+
+as pbr-hv ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+# Check if packet hit the drop policy
+AT_CHECK([ovs-ofctl dump-flows br-int | \
+    grep "ipv6_src=2001::/64,ipv6_dst=2002::/64 actions=drop" | \
+    grep "priority=10" | \
+    grep "n_packets=1" | wc -l], [0], [dnl
+1
+])
+
+# Expected to drop the packet.
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" pbr-hv/vif2-tx.pcap > vif2.packets
+rcvd_packet=`cat vif2.packets`
+AT_FAIL_IF([rcvd_packet = ""])
+
+# Override drop policy with allow
+ovn-nbctl lr-policy-add R1 20 "ip6.src==2001::/64 && ip6.dst==2002::/64" allow
+
+# Check logical flow
+AT_CHECK([ovn-sbctl dump-flows | grep lr_in_policy | grep "2001" | wc -l], [0], [dnl
+2
+])
+
+# Send packet.
+packet="inport==\"ls1-lp1\" && eth.src==$ls1_p1_mac && eth.dst==$ls1_ro_mac &&
+       ip6 && ip.ttl==64 && ip6.src==$ls1_p1_ip && ip6.dst==$ls2_p1_ip &&
+       udp && udp.src==53 && udp.dst==4369"
+as pbr-hv ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+# Check if packet hit the allow policy
+AT_CHECK([ovn-sbctl dump-flows | grep lr_in_policy | \
+    grep "2001" | \
+    grep "priority=20" | wc -l], [0], [dnl
+1
+])
+
+# Expected packet has TTL decreased by 1
+expected="eth.src==$ls2_ro_mac && eth.dst==$ls2_p1_mac &&
+       ip6 && ip.ttl==63 && ip6.src==$ls1_p1_ip && ip6.dst==$ls2_p1_ip &&
+       udp && udp.src==53 && udp.dst==4369"
+echo $expected | ovstest test-ovn expr-to-packets > expected
+
+OVN_CHECK_PACKETS([pbr-hv/vif2-tx.pcap], [expected])
+
+# Override allow policy with reroute
+ovn-nbctl lr-policy-add R1 30 "ip6.src==2001::/64 && ip6.dst==2002::/64" reroute 2003::2
+
+# Check logical flow
+AT_CHECK([ovn-sbctl dump-flows | grep lr_in_policy | \
+    grep "2001" | \
+    grep "priority=30" | wc -l], [0], [dnl
+1
+])
+
+# Send packet.
+packet="inport==\"ls1-lp1\" && eth.src==$ls1_p1_mac && eth.dst==$ls1_ro_mac &&
+       ip6 && ip.ttl==64 && ip6.src==$ls1_p1_ip && ip6.dst==$ls2_p1_ip &&
+       udp && udp.src==53 && udp.dst==4369"
+as pbr-hv ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+echo "southbound flows"
+
+ovn-sbctl dump-flows | grep lr_in_policy
+echo "ovs flows"
+ovs-ofctl dump-flows br-int
+# Check if packet hit the allow policy
+AT_CHECK([ovs-ofctl dump-flows br-int | \
+    grep "ipv6_src=2001::/64,ipv6_dst=2002::/64" | \
+    grep "priority=30" | \
+    grep "n_packets=1" | wc -l], [0], [dnl
+1
+])
+echo "packet hit reroute policy"
+
+# Expected packet has TTL decreased by 1
+expected="eth.src==$ls3_ro_mac && eth.dst==$ls3_p1_mac &&
+       ip6 && ip.ttl==63 && ip6.src==$ls1_p1_ip && ip6.dst==$ls2_p1_ip &&
+       udp && udp.src==53 && udp.dst==4369"
+echo $expected | ovstest test-ovn expr-to-packets > 3.expected
+
+OVN_CHECK_PACKETS([pbr-hv/vif3-tx.pcap], [3.expected])
+
+OVN_CLEANUP([pbr-hv])
 AT_CLEANUP
 
 # 1 hypervisor, 1 port
