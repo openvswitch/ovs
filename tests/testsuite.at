@@ -19,6 +19,7 @@ m4_ifdef([AT_COLOR_TESTS], [AT_COLOR_TESTS])
 m4_include([tests/ovs-macros.at])
 m4_include([tests/ovsdb-macros.at])
 m4_include([tests/ofproto-macros.at])
+m4_include([tests/ovn-macros.at])
 
 m4_include([tests/completion.at])
 m4_include([tests/checkpatch.at])
