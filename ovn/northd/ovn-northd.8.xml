@@ -1864,6 +1864,37 @@ output;
       <li>
         <p>
           For distributed logical routers where one of the logical router
+          ports specifies a <code>redirect-chassis</code>, a priority-400
+          logical flow for each ip source/destination couple that matches the
+          <code>dnat_and_snat</code> NAT rules configured. These flows will
+          allow to properly forward traffic to the external connections if
+          available and avoid sending it through the tunnel.
+          Assuming the two following NAT rules have been configured:
+        </p>
+
+        <pre>
+external_ip{0,1} = <var>EIP{0,1}</var>;
+external_mac{0,1} = <var>MAC{0,1}</var>;
+logical_ip{0,1} = <var>LIP{0,1}</var>;
+        </pre>
+
+        <p>
+            the following action will be applied:
+        </p>
+
+        <pre>
+eth.dst = <var>MAC0</var>;
+eth.src = <var>MAC1</var>;
+reg0 = ip4.dst;
+reg1 = <var>EIP1</var>;
+outport = <code>redirect-chassis-port</code>;
+<code>REGBIT_DISTRIBUTED_NAT = 1; next;</code>.
+        </pre>
+      </li>
+
+      <li>
+        <p>
+          For distributed logical routers where one of the logical router
           ports specifies a <code>redirect-chassis</code>, a priority-300
           logical flow with match <code>REGBIT_NAT_REDIRECT == 1</code> has
           actions <code>ip.ttl--; next;</code>.  The <code>outport</code>
@@ -1959,6 +1990,12 @@ next;
       <li>
         <p>
           For distributed logical routers where one of the logical router
+          ports specifies a <code>redirect-chassis</code>, a priority-400
+          logical flow with match <code>REGBIT_DISTRIBUTED_NAT == 1</code>
+          has action <code>next;</code>
+        </p>
+        <p>
+          For distributed logical routers where one of the logical router
           ports specifies a <code>redirect-chassis</code>, a priority-200
           logical flow with match <code>REGBIT_NAT_REDIRECT == 1</code> has
           actions <code>eth.dst = <var>E</var>; next;</code>, where
@@ -2045,6 +2082,11 @@ next;
     </p>
 
     <ul>
+      <li>
+        A priority-300 logical flow with match
+        <code>REGBIT_DISTRIBUTED_NAT == 1</code> has action
+        <code>next;</code>
+      </li>
       <li>
         A priority-200 logical flow with match
         <code>REGBIT_NAT_REDIRECT == 1</code> has actions
@@ -2354,6 +2396,15 @@ nd_ns {
 
     <ul>
       <li>
+        <p>
+          For each <code>dnat_and_snat</code> NAT rule couple in the
+          OVN Northbound database on a distributed router,
+          a priority-200 logical with match
+          <code>ip4.dst == <var>external_ip0</var> &amp;&amp;
+          ip4.src == <var>external_ip1</var></code>, has action
+          <code>next;</code>
+        </p>
+
         <p>
           For each NAT rule in the OVN Northbound database on a
           distributed router, a priority-100 logical flow with match

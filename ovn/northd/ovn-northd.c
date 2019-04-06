@@ -181,6 +181,7 @@ enum ovn_stage {
  * logical router dropping packets with source IP address equals
  * one of the logical router's own IP addresses. */
 #define REGBIT_EGRESS_LOOPBACK  "reg9[1]"
+#define REGBIT_DISTRIBUTED_NAT  "reg9[2]"
 
 /* Returns an "enum ovn_stage" built from the arguments. */
 static enum ovn_stage
@@ -5010,6 +5011,66 @@ find_lrp_member_ip(const struct ovn_port *op, const char *ip_s)
 }
 
 static void
+add_distributed_nat_routes(struct hmap *lflows, const struct ovn_port *op)
+{
+    struct ds actions = DS_EMPTY_INITIALIZER;
+    struct ds match = DS_EMPTY_INITIALIZER;
+
+    if (!op->od->l3dgw_port) {
+        return;
+    }
+
+    if (!op->peer || !op->peer->od->nbs) {
+        return;
+    }
+
+    for (size_t i = 0; i < op->od->nbr->n_nat; i++) {
+        const struct nbrec_nat *nat = op->od->nbr->nat[i];
+        bool found = false;
+
+        if (strcmp(nat->type, "dnat_and_snat") ||
+            !nat->external_mac  || !nat->external_ip) {
+            continue;
+        }
+
+        const struct ovn_datapath *peer_dp = op->peer->od;
+        for (size_t j = 0; j < peer_dp->nbs->n_ports; j++) {
+            if (!strcmp(peer_dp->nbs->ports[j]->name, nat->logical_port)) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            continue;
+        }
+
+        for (size_t j = 0; j < op->od->nbr->n_nat; j++) {
+            const struct nbrec_nat *nat2 = op->od->nbr->nat[j];
+
+            if (nat == nat2 || strcmp(nat2->type, "dnat_and_snat") ||
+                !nat2->external_mac || !nat2->external_ip)
+                continue;
+
+            ds_put_format(&match, "inport == %s && "
+                          "ip4.src == %s && ip4.dst == %s",
+                          op->json_key, nat->logical_ip, nat2->external_ip);
+            ds_put_format(&actions, "outport = %s; "
+                          "eth.src = %s; eth.dst = %s; "
+                          "reg0 = ip4.dst; reg1 = %s; "
+                          REGBIT_DISTRIBUTED_NAT" = 1; "
+                          REGBIT_NAT_REDIRECT" = 0; next;",
+                          op->od->l3dgw_port->json_key,
+                          op->od->l3dgw_port->lrp_networks.ea_s,
+                          nat2->external_mac, nat->external_ip);
+            ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_ROUTING, 400,
+                          ds_cstr(&match), ds_cstr(&actions));
+            ds_clear(&match);
+            ds_clear(&actions);
+        }
+    }
+}
+
+static void
 add_route(struct hmap *lflows, const struct ovn_port *op,
           const char *lrp_addr_s, const char *network_s, int plen,
           const char *gateway, const char *policy)
@@ -6392,6 +6453,41 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
              * ingress pipeline with inport = outport. */
             if (od->l3dgw_port) {
                 /* Distributed router. */
+                if (!strcmp(nat->type, "dnat_and_snat") &&
+                    nat->external_mac && nat->external_ip) {
+                    for (int j = 0; j < od->nbr->n_nat; j++) {
+                        const struct nbrec_nat *nat2 = od->nbr->nat[j];
+
+                        if (nat2 == nat ||
+                            strcmp(nat2->type, "dnat_and_snat") ||
+                            !nat2->external_mac || !nat2->external_ip) {
+                            continue;
+                        }
+
+                        ds_clear(&match);
+                        ds_put_format(&match, "is_chassis_resident(\"%s\") && "
+                                      "ip4.src == %s && ip4.dst == %s",
+                                      nat->logical_port, nat2->external_ip,
+                                      nat->external_ip);
+                        ds_clear(&actions);
+                        ds_put_format(&actions,
+                                      "inport = outport; outport = \"\"; "
+                                      "flags = 0; flags.loopback = 1; "
+                                      REGBIT_EGRESS_LOOPBACK" = 1; "
+                                      "next(pipeline=ingress, table=0); ");
+                        ovn_lflow_add(lflows, od, S_ROUTER_OUT_EGR_LOOP, 300,
+                                      ds_cstr(&match),  ds_cstr(&actions));
+
+                        ds_clear(&match);
+                        ds_put_format(&match,
+                                      "ip4.src == %s && ip4.dst == %s",
+                                      nat2->external_ip, nat->external_ip);
+                        ovn_lflow_add(lflows, od, S_ROUTER_OUT_EGR_LOOP, 200,
+                                      ds_cstr(&match), "next;");
+                        ds_clear(&match);
+                    }
+                }
+
                 ds_clear(&match);
                 ds_put_format(&match, "ip4.dst == %s && outport == %s",
                               nat->external_ip,
@@ -6463,6 +6559,9 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
             ovn_lflow_add(lflows, od, S_ROUTER_IN_DNAT, 50,
                           "ip", "flags.loopback = 1; ct_dnat;");
         } else {
+            ovn_lflow_add(lflows, od, S_ROUTER_IN_ARP_RESOLVE, 400,
+                          REGBIT_DISTRIBUTED_NAT" == 1", "next;");
+
             /* For NAT on a distributed router, add flows to Ingress
              * IP Routing table, Ingress ARP Resolution table, and
              * Ingress Gateway Redirect Table that are not specific to a
@@ -6697,6 +6796,9 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         if (!op->nbrp) {
             continue;
         }
+
+        /* create logical flows for DVR floating IPs */
+        add_distributed_nat_routes(lflows, op);
 
         for (int i = 0; i < op->lrp_networks.n_ipv4_addrs; i++) {
             add_route(lflows, op, op->lrp_networks.ipv4_addrs[i].addr_s,
@@ -6938,6 +7040,9 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
             continue;
         }
         if (od->l3dgw_port && od->l3redirect_port) {
+            ovn_lflow_add(lflows, od, S_ROUTER_IN_GW_REDIRECT, 300,
+                          REGBIT_DISTRIBUTED_NAT" == 1", "next;");
+
             /* For traffic with outport == l3dgw_port, if the
              * packet did not match any higher priority redirect
              * rule, then the traffic is redirected to the central
