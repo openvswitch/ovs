@@ -3857,24 +3857,7 @@ echo "${expect_dst_mac}${expect_src_mac}08004500001c000000003f110100${src_ip}${d
 
 OVN_CHECK_PACKETS([hv1/vif2-tx.pcap], [expected])
 
-
-as hv1
-OVS_APP_EXIT_AND_WAIT([ovn-controller])
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-sb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-nb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as northd
-OVS_APP_EXIT_AND_WAIT([ovn-northd])
-
-as main
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVN_CLEANUP([hv1])
 
 AT_CLEANUP
 
@@ -4808,23 +4791,7 @@ OVS_WAIT_UNTIL([test 8 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
 # vif1-tx.pcap should have received the DHCPv4 request packet
 OVN_CHECK_PACKETS([hv1/vif1-tx.pcap], [1.expected])
 
-as hv1
-OVS_APP_EXIT_AND_WAIT([ovn-controller])
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-sb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-nb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as northd
-OVS_APP_EXIT_AND_WAIT([ovn-northd])
-
-as main
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVN_CLEANUP([hv1])
 
 AT_CLEANUP
 
@@ -5096,23 +5063,7 @@ trim_zeros > 5.packets
 cat 5.expected | cut -c 1-120,125- > expout
 AT_CHECK([cat 5.packets | cut -c 1-120,125- ], [0], [expout])
 
-as hv1
-OVS_APP_EXIT_AND_WAIT([ovn-controller])
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-sb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-nb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as northd
-OVS_APP_EXIT_AND_WAIT([ovn-northd])
-
-as main
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVN_CLEANUP([hv1])
 
 AT_CLEANUP
 
@@ -8039,25 +7990,7 @@ expected=${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}00351
 echo $expected > expected
 OVN_CHECK_PACKETS([hv3/vif1-tx.pcap], [expected])
 
-for sim in hv1 hv2 hv3; do
-    as $sim
-    OVS_APP_EXIT_AND_WAIT([ovn-controller])
-    OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-done
-
-as ovn-sb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-nb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as northd
-OVS_APP_EXIT_AND_WAIT([ovn-northd])
-
-as main
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVN_CLEANUP([hv1],[hv2],[hv3])
 
 AT_CLEANUP
 
@@ -8471,23 +8404,8 @@ reset_pcap_file hv1-vif2 hv1/vif2
 rm -f 1.expected
 rm -f 2.expected
 
-as hv1
- OVS_APP_EXIT_AND_WAIT([ovn-controller])
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVN_CLEANUP([hv1])
 
-as ovn-sb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-nb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as northd
-OVS_APP_EXIT_AND_WAIT([ovn-northd])
-
-as main
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 4 HV, 1 LS, 1 LR, packet test with HA distributed router gateway port])
