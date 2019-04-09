@@ -203,6 +203,13 @@ AC_DEFUN([OVS_CHECK_LINUX_TC], [
     ])],
     [AC_DEFINE([HAVE_TCA_PEDIT_KEY_EX_HDR_TYPE_UDP], [1],
                [Define to 1 if TCA_PEDIT_KEY_EX_HDR_TYPE_UDP is available.])])
+
+  AC_COMPILE_IFELSE([
+    AC_LANG_PROGRAM([#include <linux/tc_act/tc_skbedit.h>], [
+        int x = TCA_SKBEDIT_FLAGS;
+    ])],
+    [AC_DEFINE([HAVE_TCA_SKBEDIT_FLAGS], [1],
+               [Define to 1 if TCA_SKBEDIT_FLAGS is available.])])
 ])
 
 dnl OVS_CHECK_DPDK
