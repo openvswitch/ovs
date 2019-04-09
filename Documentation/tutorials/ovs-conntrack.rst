@@ -325,7 +325,7 @@ Next, we add a flow to match on the packet coming back from conntrack::
 
     (flow #2)
     $ ovs-ofctl add-flow br0 \
-        "table=0, priority=50, ct_state=+trk,+new, tcp, in_port=veth_l0, actions=ct(commit),veth_r0"
+        "table=0, priority=50, ct_state=+trk+new, tcp, in_port=veth_l0, actions=ct(commit),veth_r0"
 
 Now that the packet is coming back from conntrack, the ct_state would have
 the "trk" set.
@@ -364,7 +364,7 @@ following flows at OVS::
         "table=0, priority=50, ct_state=-trk, tcp, in_port=veth_r0, actions=ct(table=0)"
     (flow #4)
     $ ovs-ofctl add-flow br0 \
-        "table=0, priority=50, ct_state=+trk,+est, tcp, in_port=veth_r0, actions=veth_l0"
+        "table=0, priority=50, ct_state=+trk+est, tcp, in_port=veth_r0, actions=veth_l0"
 
 
 flow #3 matches untracked packets coming back from server (10.0.0.2) and sends
@@ -400,7 +400,7 @@ match on the packet::
 
     (flow #5)
     $ ovs-ofctl add-flow br0 \
-        "table=0, priority=50, ct_state=+trk,+est, tcp, in_port=veth_l0, actions=veth_r0"
+        "table=0, priority=50, ct_state=+trk+est, tcp, in_port=veth_l0, actions=veth_r0"
 
 Send the third TCP ack segment using scapy (at the "left" scapy session)
 (flags=0x10 is ack)::
@@ -557,7 +557,7 @@ Flows
 
     (flow #2)
     $ ovs-ofctl add-flow br0 \
-        "table=0, priority=50, ct_state=+trk,+new, tcp, in_port=veth_l0, actions=ct(commit),veth_r0"
+        "table=0, priority=50, ct_state=+trk+new, tcp, in_port=veth_l0, actions=ct(commit),veth_r0"
 
     (flow #3)
     $ ovs-ofctl add-flow br0 \
@@ -565,8 +565,8 @@ Flows
 
     (flow #4)
     $ ovs-ofctl add-flow br0 \
-        "table=0, priority=50, ct_state=+trk,+est, tcp, in_port=veth_r0, actions=veth_l0"
+        "table=0, priority=50, ct_state=+trk+est, tcp, in_port=veth_r0, actions=veth_l0"
 
     (flow #5)
     $ ovs-ofctl add-flow br0 \
-        "table=0, priority=50, ct_state=+trk,+est, tcp, in_port=veth_l0, actions=veth_r0"
+        "table=0, priority=50, ct_state=+trk+est, tcp, in_port=veth_l0, actions=veth_r0"
