@@ -201,13 +201,20 @@ tc_transact(struct ofpbuf *request, struct ofpbuf **replyp)
     return error;
 }
 
-/* Adds or deletes a root ingress qdisc on device with specified ifindex.
+/* Adds or deletes a root qdisc on device with specified ifindex.
  *
- * This function is equivalent to running the following when 'add' is true:
+ * The tc_qdisc_hook parameter determines if the qdisc is added on device
+ * ingress or egress.
+ *
+ * If tc_qdisc_hook is TC_INGRESS, this function is equivalent to running the
+ * following when 'add' is true:
  *     /sbin/tc qdisc add dev <devname> handle ffff: ingress
  *
  * This function is equivalent to running the following when 'add' is false:
  *     /sbin/tc qdisc del dev <devname> handle ffff: ingress
+ *
+ * If tc_qdisc_hook is TC_EGRESS, this function is equivalent to:
+ *     /sbin/tc qdisc (add|del) dev <devname> handle ffff: clsact
  *
  * Where dev <devname> is the device with specified ifindex name.
  *
@@ -221,7 +228,8 @@ tc_transact(struct ofpbuf *request, struct ofpbuf **replyp)
  * Returns 0 if successful, otherwise a positive errno value.
  */
 int
-tc_add_del_ingress_qdisc(int ifindex, bool add, uint32_t block_id)
+tc_add_del_qdisc(int ifindex, bool add, uint32_t block_id,
+                 enum tc_qdisc_hook hook)
 {
     struct ofpbuf request;
     struct tcmsg *tcmsg;
@@ -230,11 +238,19 @@ tc_add_del_ingress_qdisc(int ifindex, bool add, uint32_t block_id)
     int flags = add ? NLM_F_EXCL | NLM_F_CREATE : 0;
 
     tcmsg = tc_make_request(ifindex, type, flags, &request);
-    tcmsg->tcm_handle = TC_H_MAKE(TC_H_INGRESS, 0);
-    tcmsg->tcm_parent = TC_H_INGRESS;
-    nl_msg_put_string(&request, TCA_KIND, "ingress");
+
+    if (hook == TC_EGRESS) {
+        tcmsg->tcm_handle = TC_H_MAKE(TC_H_CLSACT, 0);
+        tcmsg->tcm_parent = TC_H_CLSACT;
+        nl_msg_put_string(&request, TCA_KIND, "clsact");
+    } else {
+        tcmsg->tcm_handle = TC_H_MAKE(TC_H_INGRESS, 0);
+        tcmsg->tcm_parent = TC_H_INGRESS;
+        nl_msg_put_string(&request, TCA_KIND, "ingress");
+    }
+
     nl_msg_put_unspec(&request, TCA_OPTIONS, NULL, 0);
-    if (block_id) {
+    if (hook == TC_INGRESS && block_id) {
         nl_msg_put_u32(&request, TCA_INGRESS_BLOCK, block_id);
     }
 
@@ -1455,7 +1471,8 @@ parse_netlink_to_tc_flower(struct ofpbuf *reply, struct tc_flower *flower)
 }
 
 int
-tc_dump_flower_start(int ifindex, struct nl_dump *dump, uint32_t block_id)
+tc_dump_flower_start(int ifindex, struct nl_dump *dump, uint32_t block_id,
+                     enum tc_qdisc_hook hook)
 {
     struct ofpbuf request;
     struct tcmsg *tcmsg;
@@ -1463,7 +1480,8 @@ tc_dump_flower_start(int ifindex, struct nl_dump *dump, uint32_t block_id)
 
     index = block_id ? TCM_IFINDEX_MAGIC_BLOCK : ifindex;
     tcmsg = tc_make_request(index, RTM_GETTFILTER, NLM_F_DUMP, &request);
-    tcmsg->tcm_parent = block_id ? : TC_INGRESS_PARENT;
+    tcmsg->tcm_parent = (hook == TC_EGRESS) ?
+                        TC_EGRESS_PARENT : (block_id ? : TC_INGRESS_PARENT);
     tcmsg->tcm_info = TC_H_UNSPEC;
     tcmsg->tcm_handle = 0;
 
@@ -1474,7 +1492,7 @@ tc_dump_flower_start(int ifindex, struct nl_dump *dump, uint32_t block_id)
 }
 
 int
-tc_flush(int ifindex, uint32_t block_id)
+tc_flush(int ifindex, uint32_t block_id, enum tc_qdisc_hook hook)
 {
     struct ofpbuf request;
     struct tcmsg *tcmsg;
@@ -1482,14 +1500,16 @@ tc_flush(int ifindex, uint32_t block_id)
 
     index = block_id ? TCM_IFINDEX_MAGIC_BLOCK : ifindex;
     tcmsg = tc_make_request(index, RTM_DELTFILTER, NLM_F_ACK, &request);
-    tcmsg->tcm_parent = block_id ? : TC_INGRESS_PARENT;
+    tcmsg->tcm_parent = (hook == TC_EGRESS) ?
+                        TC_EGRESS_PARENT : (block_id ? : TC_INGRESS_PARENT);
     tcmsg->tcm_info = TC_H_UNSPEC;
 
     return tc_transact(&request, NULL);
 }
 
 int
-tc_del_filter(int ifindex, int prio, int handle, uint32_t block_id)
+tc_del_filter(int ifindex, int prio, int handle, uint32_t block_id,
+              enum tc_qdisc_hook hook)
 {
     struct ofpbuf request;
     struct tcmsg *tcmsg;
@@ -1499,7 +1519,8 @@ tc_del_filter(int ifindex, int prio, int handle, uint32_t block_id)
 
     index = block_id ? TCM_IFINDEX_MAGIC_BLOCK : ifindex;
     tcmsg = tc_make_request(index, RTM_DELTFILTER, NLM_F_ECHO, &request);
-    tcmsg->tcm_parent = block_id ? : TC_INGRESS_PARENT;
+    tcmsg->tcm_parent = (hook == TC_EGRESS) ?
+                        TC_EGRESS_PARENT : (block_id ? : TC_INGRESS_PARENT);
     tcmsg->tcm_info = tc_make_handle(prio, 0);
     tcmsg->tcm_handle = handle;
 
@@ -1512,7 +1533,7 @@ tc_del_filter(int ifindex, int prio, int handle, uint32_t block_id)
 
 int
 tc_get_flower(int ifindex, int prio, int handle, struct tc_flower *flower,
-              uint32_t block_id)
+              uint32_t block_id, enum tc_qdisc_hook hook)
 {
     struct ofpbuf request;
     struct tcmsg *tcmsg;
@@ -1522,7 +1543,8 @@ tc_get_flower(int ifindex, int prio, int handle, struct tc_flower *flower,
 
     index = block_id ? TCM_IFINDEX_MAGIC_BLOCK : ifindex;
     tcmsg = tc_make_request(index, RTM_GETTFILTER, NLM_F_ECHO, &request);
-    tcmsg->tcm_parent = block_id ? : TC_INGRESS_PARENT;
+    tcmsg->tcm_parent = (hook == TC_EGRESS) ?
+                        TC_EGRESS_PARENT : (block_id ? : TC_INGRESS_PARENT);
     tcmsg->tcm_info = tc_make_handle(prio, 0);
     tcmsg->tcm_handle = handle;
 
@@ -2279,7 +2301,8 @@ nl_msg_put_flower_options(struct ofpbuf *request, struct tc_flower *flower)
 
 int
 tc_replace_flower(int ifindex, uint16_t prio, uint32_t handle,
-                  struct tc_flower *flower, uint32_t block_id)
+                  struct tc_flower *flower, uint32_t block_id,
+                  enum tc_qdisc_hook hook)
 {
     struct ofpbuf request;
     struct tcmsg *tcmsg;
@@ -2292,7 +2315,8 @@ tc_replace_flower(int ifindex, uint16_t prio, uint32_t handle,
     index = block_id ? TCM_IFINDEX_MAGIC_BLOCK : ifindex;
     tcmsg = tc_make_request(index, RTM_NEWTFILTER, NLM_F_CREATE | NLM_F_ECHO,
                             &request);
-    tcmsg->tcm_parent = block_id ? : TC_INGRESS_PARENT;
+    tcmsg->tcm_parent = (hook == TC_EGRESS) ?
+                        TC_EGRESS_PARENT : (block_id ? : TC_INGRESS_PARENT);
     tcmsg->tcm_info = tc_make_handle(prio, eth_type);
     tcmsg->tcm_handle = handle;
 

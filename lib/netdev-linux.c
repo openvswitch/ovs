@@ -747,10 +747,10 @@ netdev_linux_update_lag(struct rtnetlink_change *change)
                 lag->node = shash_add(&lag_shash, change->ifname, lag);
 
                 /* delete ingress block in case it exists */
-                tc_add_del_ingress_qdisc(change->if_index, false, 0);
+                tc_add_del_qdisc(change->if_index, false, 0, TC_INGRESS);
                 /* LAG master is linux netdev so add slave to same block. */
-                error = tc_add_del_ingress_qdisc(change->if_index, true,
-                                                 block_id);
+                error = tc_add_del_qdisc(change->if_index, true, block_id,
+                                         TC_INGRESS);
                 if (error) {
                     VLOG_WARN("failed to bind LAG slave %s to master's block",
                               change->ifname);
@@ -766,8 +766,8 @@ netdev_linux_update_lag(struct rtnetlink_change *change)
         lag = shash_find_data(&lag_shash, change->ifname);
 
         if (lag) {
-            tc_add_del_ingress_qdisc(change->if_index, false,
-                                     lag->block_id);
+            tc_add_del_qdisc(change->if_index, false, lag->block_id,
+                             TC_INGRESS);
             shash_delete(&lag_shash, lag->node);
             free(lag);
         }
@@ -2430,7 +2430,8 @@ tc_del_matchall_policer(struct netdev *netdev)
         return err;
     }
 
-    err = tc_del_filter(ifindex, TC_RESERVED_PRIORITY_POLICE, 1, block_id);
+    err = tc_del_filter(ifindex, TC_RESERVED_PRIORITY_POLICE, 1, block_id,
+                        TC_INGRESS);
     if (err) {
         return err;
     }
@@ -2486,7 +2487,7 @@ netdev_linux_set_policing(struct netdev *netdev_,
 
     COVERAGE_INC(netdev_set_policing);
     /* Remove any existing ingress qdisc. */
-    error = tc_add_del_ingress_qdisc(ifindex, false, 0);
+    error = tc_add_del_qdisc(ifindex, false, 0, TC_INGRESS);
     if (error) {
         VLOG_WARN_RL(&rl, "%s: removing policing failed: %s",
                      netdev_name, ovs_strerror(error));
@@ -2494,7 +2495,7 @@ netdev_linux_set_policing(struct netdev *netdev_,
     }
 
     if (kbits_rate) {
-        error = tc_add_del_ingress_qdisc(ifindex, true, 0);
+        error = tc_add_del_qdisc(ifindex, true, 0, TC_INGRESS);
         if (error) {
             VLOG_WARN_RL(&rl, "%s: adding policing qdisc failed: %s",
                          netdev_name, ovs_strerror(error));
