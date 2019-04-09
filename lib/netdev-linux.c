@@ -3340,6 +3340,7 @@ const struct netdev_class netdev_tap_class = {
 
 const struct netdev_class netdev_internal_class = {
     NETDEV_LINUX_CLASS_COMMON,
+    LINUX_FLOW_OFFLOAD_API,
     .type = "internal",
     .construct = netdev_linux_construct,
     .get_stats = netdev_internal_get_stats,
