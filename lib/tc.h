@@ -147,7 +147,10 @@ enum tc_action_type {
 
 struct tc_action {
     union {
-        int ifindex_out;
+        struct {
+            int ifindex_out;
+            bool ingress;
+        } out;
 
         struct {
             ovs_be16 vlan_push_tpid;

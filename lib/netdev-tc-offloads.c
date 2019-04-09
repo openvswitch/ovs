@@ -1,3 +1,4 @@
+
 /*
  * Copyright (c) 2016 Mellanox Technologies, Ltd.
  *
@@ -51,6 +52,12 @@ struct netlink_field {
     int flower_offset;
     int size;
 };
+
+static bool
+is_internal_port(const char *type)
+{
+    return !strcmp(type, "internal");
+}
 
 static struct netlink_field set_flower_map[][4] = {
     [OVS_KEY_ATTR_IPV4] = {
@@ -682,8 +689,9 @@ parse_tc_flower_to_match(struct tc_flower *flower,
             }
             break;
             case TC_ACT_OUTPUT: {
-                if (action->ifindex_out) {
-                    outport = netdev_ifindex_to_odp_port(action->ifindex_out);
+                if (action->out.ifindex_out) {
+                    outport =
+                        netdev_ifindex_to_odp_port(action->out.ifindex_out);
                     if (!outport) {
                         return ENOENT;
                     }
@@ -1286,7 +1294,8 @@ netdev_tc_flow_put(struct netdev *netdev, struct match *match,
             odp_port_t port = nl_attr_get_odp_port(nla);
             struct netdev *outdev = netdev_ports_get(port, info->dpif_class);
 
-            action->ifindex_out = netdev_get_ifindex(outdev);
+            action->out.ifindex_out = netdev_get_ifindex(outdev);
+            action->out.ingress = is_internal_port(netdev_get_type(outdev));
             action->type = TC_ACT_OUTPUT;
             flower.action_count++;
             netdev_close(outdev);

@@ -20,11 +20,13 @@
 
 #include <errno.h>
 #include <linux/if_ether.h>
+#include <linux/if_packet.h>
 #include <linux/rtnetlink.h>
 #include <linux/tc_act/tc_csum.h>
 #include <linux/tc_act/tc_gact.h>
 #include <linux/tc_act/tc_mirred.h>
 #include <linux/tc_act/tc_pedit.h>
+#include <linux/tc_act/tc_skbedit.h>
 #include <linux/tc_act/tc_tunnel_key.h>
 #include <linux/tc_act/tc_vlan.h>
 #include <linux/gen_stats.h>
@@ -1151,14 +1153,20 @@ nl_parse_act_mirred(struct nlattr *options, struct tc_flower *flower)
     mirred_parms = mirred_attrs[TCA_MIRRED_PARMS];
     m = nl_attr_get_unspec(mirred_parms, sizeof *m);
 
-    if (m->eaction != TCA_EGRESS_REDIR && m->eaction != TCA_EGRESS_MIRROR) {
+    if (m->eaction != TCA_EGRESS_REDIR && m->eaction != TCA_EGRESS_MIRROR &&
+        m->eaction != TCA_INGRESS_REDIR && m->eaction != TCA_INGRESS_MIRROR) {
         VLOG_ERR_RL(&error_rl, "unknown mirred action: %d, %d, %d",
                     m->action, m->eaction, m->ifindex);
         return EINVAL;
     }
 
     action = &flower->actions[flower->action_count++];
-    action->ifindex_out = m->ifindex;
+    action->out.ifindex_out = m->ifindex;
+    if (m->eaction == TCA_INGRESS_REDIR || m->eaction == TCA_INGRESS_MIRROR) {
+        action->out.ingress = true;
+    } else {
+        action->out.ingress = false;
+    }
     action->type = TC_ACT_OUTPUT;
 
     mirred_tm = mirred_attrs[TCA_MIRRED_TM];
@@ -1301,6 +1309,8 @@ nl_parse_single_action(struct nlattr *action, struct tc_flower *flower)
         err = nl_parse_act_pedit(act_options, flower);
     } else if (!strcmp(act_kind, "csum")) {
         nl_parse_act_csum(act_options, flower);
+    } else if (!strcmp(act_kind, "skbedit")) {
+        /* Added for TC rule only (not in OvS rule) so ignore. */
     } else {
         VLOG_ERR_RL(&error_rl, "unknown tc action kind: %s", act_kind);
         err = EINVAL;
@@ -1729,6 +1739,22 @@ nl_msg_put_act_drop(struct ofpbuf *request)
 }
 
 static void
+nl_msg_put_act_skbedit_to_host(struct ofpbuf *request)
+{
+    size_t offset;
+
+    nl_msg_put_string(request, TCA_ACT_KIND, "skbedit");
+    offset = nl_msg_start_nested(request, TCA_ACT_OPTIONS);
+    {
+        struct tc_skbedit s = { .action = TC_ACT_PIPE };
+
+        nl_msg_put_unspec(request, TCA_SKBEDIT_PARMS, &s, sizeof s);
+        nl_msg_put_be16(request, TCA_SKBEDIT_PTYPE, PACKET_HOST);
+    }
+    nl_msg_end_nested(request, offset);
+}
+
+static void
 nl_msg_put_act_mirred(struct ofpbuf *request, int ifindex, int action,
                       int eaction)
 {
@@ -1916,6 +1942,7 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
     uint16_t act_index = 1;
     struct tc_action *action;
     int i, ifindex = 0;
+    bool ingress;
 
     offset = nl_msg_start_nested(request, TCA_FLOWER_ACT);
     {
@@ -1977,19 +2004,39 @@ nl_msg_put_flower_acts(struct ofpbuf *request, struct tc_flower *flower)
             }
             break;
             case TC_ACT_OUTPUT: {
-                ifindex = action->ifindex_out;
+                ingress = action->out.ingress;
+                ifindex = action->out.ifindex_out;
                 if (ifindex < 1) {
                     VLOG_ERR_RL(&error_rl, "%s: invalid ifindex: %d, type: %d",
                                 __func__, ifindex, action->type);
                     return EINVAL;
                 }
+
+                if (ingress) {
+                    /* If redirecting to ingress (internal port) ensure
+                     * pkt_type on skb is set to PACKET_HOST. */
+                    act_offset = nl_msg_start_nested(request, act_index++);
+                    nl_msg_put_act_skbedit_to_host(request);
+                    nl_msg_end_nested(request, act_offset);
+                }
+
                 act_offset = nl_msg_start_nested(request, act_index++);
                 if (i == flower->action_count - 1) {
-                    nl_msg_put_act_mirred(request, ifindex, TC_ACT_STOLEN,
-                                          TCA_EGRESS_REDIR);
+                    if (ingress) {
+                        nl_msg_put_act_mirred(request, ifindex, TC_ACT_STOLEN,
+                                              TCA_INGRESS_REDIR);
+                    } else {
+                        nl_msg_put_act_mirred(request, ifindex, TC_ACT_STOLEN,
+                                              TCA_EGRESS_REDIR);
+                    }
                 } else {
-                    nl_msg_put_act_mirred(request, ifindex, TC_ACT_PIPE,
-                                          TCA_EGRESS_MIRROR);
+                    if (ingress) {
+                        nl_msg_put_act_mirred(request, ifindex, TC_ACT_PIPE,
+                                              TCA_INGRESS_MIRROR);
+                    } else {
+                        nl_msg_put_act_mirred(request, ifindex, TC_ACT_PIPE,
+                                              TCA_EGRESS_MIRROR);
+                    }
                 }
                 nl_msg_put_act_cookie(request, &flower->act_cookie);
                 nl_msg_end_nested(request, act_offset);
