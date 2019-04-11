@@ -301,36 +301,28 @@ AC_DEFUN([OVS_CHECK_DPDK], [
       ], [[#include <rte_config.h>]])
     ], [], [[#include <rte_config.h>]])
 
-    # On some systems we have to add -ldl to link with dpdk
-    #
-    # This code, at first, tries to link without -ldl (""),
-    # then adds it and tries again.
-    # Before each attempt the search cache must be unset,
-    # otherwise autoconf will stick with the old result
+    # DPDK uses dlopen to load plugins.
+    OVS_FIND_DEPENDENCY([dlopen], [dl], [libdl])
 
-    DPDKLIB_FOUND=false
-    save_LIBS=$LIBS
-    for extras in "" "-ldl"; do
-        LIBS="$DPDK_LIB $extras $save_LIBS"
-        AC_LINK_IFELSE(
-           [AC_LANG_PROGRAM([#include <rte_config.h>
-                             #include <rte_eal.h>],
-                            [int rte_argc; char ** rte_argv;
-                             rte_eal_init(rte_argc, rte_argv);])],
-           [DPDKLIB_FOUND=true])
-        if $DPDKLIB_FOUND; then
-            break
-        fi
-    done
+    AC_MSG_CHECKING([whether linking with dpdk works])
+    LIBS="$DPDK_LIB $LIBS"
+    AC_LINK_IFELSE(
+      [AC_LANG_PROGRAM([#include <rte_config.h>
+                        #include <rte_eal.h>],
+                       [int rte_argc; char ** rte_argv;
+                        rte_eal_init(rte_argc, rte_argv);])],
+      [AC_MSG_RESULT([yes])
+       DPDKLIB_FOUND=true],
+      [AC_MSG_RESULT([no])
+       if test "$DPDK_AUTO_DISCOVER" = "true"; then
+         AC_MSG_ERROR(m4_normalize([
+            Could not find DPDK library in default search path, Use --with-dpdk
+            to specify the DPDK library installed in non-standard location]))
+       else
+         AC_MSG_ERROR([Could not find DPDK libraries in $DPDK_LIB_DIR])
+       fi
+      ])
 
-    # If linking unsuccessful
-    if test "$DPDKLIB_FOUND" = "false" ; then
-      if $DPDK_AUTO_DISCOVER; then
-        AC_MSG_ERROR([Could not find DPDK library in default search path, Use --with-dpdk to specify the DPDK library installed in non-standard location])
-      else
-        AC_MSG_ERROR([Could not find DPDK libraries in $DPDK_LIB_DIR])
-      fi
-    fi
     CFLAGS="$ovs_save_CFLAGS"
     LDFLAGS="$ovs_save_LDFLAGS"
     if test "$DPDK_AUTO_DISCOVER" = "false"; then
