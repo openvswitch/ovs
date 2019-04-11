@@ -212,6 +212,15 @@ AC_DEFUN([OVS_CHECK_LINUX_TC], [
                [Define to 1 if TCA_SKBEDIT_FLAGS is available.])])
 ])
 
+dnl OVS_FIND_DEPENDENCY(FUNCTION, SEARCH_LIBS, NAME_TO_PRINT)
+dnl
+dnl Check for a function in a library list.
+AC_DEFUN([OVS_FIND_DEPENDENCY], [
+  AC_SEARCH_LIBS([$1], [$2], [], [
+    AC_MSG_ERROR([unable to find $3, install the dependency package])
+  ])
+])
+
 dnl OVS_CHECK_DPDK
 dnl
 dnl Configure DPDK source tree
@@ -262,86 +271,35 @@ AC_DEFUN([OVS_CHECK_DPDK], [
       AC_MSG_ERROR([unable to find rte_config.h in $with_dpdk])
     ], [AC_INCLUDES_DEFAULT])
 
-    AC_COMPILE_IFELSE([
-      AC_LANG_PROGRAM(
-        [
-          #include <rte_config.h>
-#if defined(RTE_LIBRTE_VHOST_NUMA) || defined(RTE_EAL_NUMA_AWARE_HUGEPAGES)
-#error
-#endif
-        ], [])
-      ], [],
-      [AC_SEARCH_LIBS([get_mempolicy],[numa],[],[AC_MSG_ERROR([unable to find libnuma, install the dependency package])])
-       AC_DEFINE([VHOST_NUMA], [1], [NUMA Aware vHost support detected in DPDK.])])
+    AC_CHECK_DECLS([RTE_LIBRTE_VHOST_NUMA, RTE_EAL_NUMA_AWARE_HUGEPAGES], [
+      OVS_FIND_DEPENDENCY([get_mempolicy], [numa], [libnuma])
+    ], [], [[#include <rte_config.h>]])
 
-    AC_COMPILE_IFELSE([
-      AC_LANG_PROGRAM(
-        [
-          #include <rte_config.h>
-#if RTE_LIBRTE_PMD_PCAP
-#error
-#endif
-        ], [])
-      ], [],
-      [AC_SEARCH_LIBS([pcap_dump],[pcap],[],[AC_MSG_ERROR([unable to find libpcap, install the dependency package])])
-       AC_COMPILE_IFELSE([
-         AC_LANG_PROGRAM(
-           [
-             #include <rte_config.h>
-#if RTE_LIBRTE_PDUMP
-#error
-#endif
-         ], [])
-       ], [],
-       [AC_DEFINE([DPDK_PDUMP], [1], [DPDK pdump enabled in OVS.])])
-     ])
+    AC_CHECK_DECL([RTE_LIBRTE_VHOST_NUMA], [
+      AC_DEFINE([VHOST_NUMA], [1], [NUMA Aware vHost support detected in DPDK.])
+    ], [], [[#include <rte_config.h>]])
 
-    AC_COMPILE_IFELSE([
-      AC_LANG_PROGRAM(
-        [
-          #include <rte_config.h>
-#if RTE_LIBRTE_MLX5_PMD
-#error
-#endif
-        ], [])
-      ], [],
-      [AC_SEARCH_LIBS([mnl_attr_put],[mnl],[],[AC_MSG_ERROR([unable to find libmnl, install the dependency package])])])
+    AC_CHECK_DECL([RTE_LIBRTE_PMD_PCAP], [
+      OVS_FIND_DEPENDENCY([pcap_dump], [pcap], [libpcap])
+      AC_CHECK_DECL([RTE_LIBRTE_PDUMP], [
+        AC_DEFINE([DPDK_PDUMP], [1], [DPDK pdump enabled in OVS.])
+      ], [], [[#include <rte_config.h>]])
+    ], [], [[#include <rte_config.h>]])
 
-    AC_COMPILE_IFELSE([
-      AC_LANG_PROGRAM(
-        [
-          #include <rte_config.h>
-#if defined(RTE_LIBRTE_MLX5_PMD) && !defined(RTE_LIBRTE_MLX5_DLOPEN_DEPS)
-#error
-#endif
-        ], [])
-      ], [],
-      [AC_SEARCH_LIBS([mlx5dv_create_wq],[mlx5],[],[AC_MSG_ERROR([unable to find libmlx5, install the dependency package])])])
+    AC_CHECK_DECL([RTE_LIBRTE_MLX5_PMD], [dnl found
+      OVS_FIND_DEPENDENCY([mnl_attr_put], [mnl], [libmnl])
+      AC_CHECK_DECL([RTE_LIBRTE_MLX5_DLOPEN_DEPS], [], [dnl not found
+        OVS_FIND_DEPENDENCY([mlx5dv_create_wq], [mlx5], [libmlx5])
+        OVS_FIND_DEPENDENCY([verbs_init_cq], [ibverbs], [libibverbs])
+      ], [[#include <rte_config.h>]])
+    ], [], [[#include <rte_config.h>]])
 
-    AC_COMPILE_IFELSE([
-      AC_LANG_PROGRAM(
-        [
-          #include <rte_config.h>
-#if defined(RTE_LIBRTE_MLX4_PMD) && !defined(RTE_LIBRTE_MLX4_DLOPEN_DEPS)
-#error
-#endif
-        ], [])
-      ], [],
-      [AC_SEARCH_LIBS([mlx4dv_init_obj],[mlx4],[],[AC_MSG_ERROR([unable to find libmlx4, install the dependency package])])])
-
-    AC_COMPILE_IFELSE([
-      AC_LANG_PROGRAM(
-        [
-          #include <rte_config.h>
-#if defined(RTE_LIBRTE_MLX5_PMD) && !defined(RTE_LIBRTE_MLX5_DLOPEN_DEPS)
-#error
-#endif
-#if defined(RTE_LIBRTE_MLX4_PMD) && !defined(RTE_LIBRTE_MLX4_DLOPEN_DEPS)
-#error
-#endif
-        ], [])
-      ], [],
-      [AC_SEARCH_LIBS([verbs_init_cq],[ibverbs],[],[AC_MSG_ERROR([unable to find libibverbs, install the dependency package])])])
+    AC_CHECK_DECL([RTE_LIBRTE_MLX4_PMD], [dnl found
+      AC_CHECK_DECL([RTE_LIBRTE_MLX4_DLOPEN_DEPS], [], [dnl not found
+        OVS_FIND_DEPENDENCY([mlx4dv_init_obj], [mlx4], [libmlx4])
+        OVS_FIND_DEPENDENCY([verbs_init_cq], [ibverbs], [libibverbs])
+      ], [[#include <rte_config.h>]])
+    ], [], [[#include <rte_config.h>]])
 
     # On some systems we have to add -ldl to link with dpdk
     #
