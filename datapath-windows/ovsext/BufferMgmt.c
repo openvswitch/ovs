@@ -81,6 +81,7 @@
 #include "Flow.h"
 #include "Offload.h"
 #include "NetProto.h"
+#include "PacketIO.h"
 #include "PacketParser.h"
 #include "Switch.h"
 #include "Vport.h"
@@ -267,6 +268,7 @@ OvsInitNBLContext(POVS_BUFFER_CONTEXT ctx,
     ctx->srcPortNo = srcPortNo;
     ctx->origDataLength = origDataLength;
     ctx->mru = 0;
+    ctx->pendingSend = 0;
 }
 
 
@@ -1746,8 +1748,13 @@ OvsCompleteNBL(PVOID switch_ctx,
     if (parent != NULL) {
         ctx = (POVS_BUFFER_CONTEXT)NET_BUFFER_LIST_CONTEXT_DATA_START(parent);
         ASSERT(ctx && ctx->magic == OVS_CTX_MAGIC);
+        UINT16 pendingSend = 1, exchange = 0;
         value = InterlockedDecrement((LONG volatile *)&ctx->refCount);
-        if (value == 0) {
+        InterlockedCompareExchange16((SHORT volatile *)&pendingSend, exchange, (SHORT)ctx->pendingSend);
+        if (value == 1 && pendingSend == exchange) {
+            InterlockedExchange16((SHORT volatile *)&ctx->pendingSend, 0);
+            OvsSendNBLIngress(context, parent, ctx->sendFlags);
+        } else if (value == 0){
             return OvsCompleteNBL(context, parent, FALSE);
         }
     }

@@ -55,7 +55,9 @@ typedef union _OVS_BUFFER_CONTEXT {
             UINT32 origDataLength;
             UINT32 dataOffsetDelta;
         };
+        ULONG sendFlags;
         UINT16 mru;
+        UINT16 pendingSend; /* Indicates packet can be sent or not. */
     };
 
     CHAR value[MEM_ALIGN_SIZE(sizeof(struct dummy))];
