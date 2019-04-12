@@ -1,0 +1,15 @@
+AT_INIT
+
+m4_ifdef([AT_COLOR_TESTS], [AT_COLOR_TESTS])
+
+m4_include([tests/ovs-macros.at])
+m4_include([tests/ovsdb-macros.at])
+m4_include([tests/ofproto-macros.at])
+
+# XXX: below dummy test is to invoke AT_SETUP before including any tests.
+# Without this, there will be error: possibly undefined macro: AT_capture_files
+# when parsing .at files that use OVS_START_SHELL_HELPERS.
+AT_SETUP([dummy])
+AT_CHECK([:])
+AT_CLEANUP
+m4_include([tests/ovsdb-cluster.at])
