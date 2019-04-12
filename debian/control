@@ -2,7 +2,7 @@ Source: openvswitch
 Section: net
 Priority: extra
 Maintainer: Open vSwitch developers <dev@openvswitch.org>
-Uploaders: Ben Pfaff <pfaffben@debian.org>, Simon Horman <horms@debian.org>
+Uploaders: Simon Horman <horms@debian.org>
 Build-Depends: graphviz,
                autoconf (>= 2.64),
                automake (>= 1.10) | automake1.10,
