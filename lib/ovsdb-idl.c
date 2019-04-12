@@ -260,6 +260,7 @@ struct ovsdb_idl {
 
     uint64_t min_index;
     bool leader_only;
+    bool shuffle_remotes;
 };
 
 static void ovsdb_idl_transition_at(struct ovsdb_idl *, enum ovsdb_idl_state,
@@ -485,6 +486,7 @@ ovsdb_idl_create_unconnected(const struct ovsdb_idl_class *class,
     idl->state_seqno = UINT_MAX;
     idl->request_id = NULL;
     idl->leader_only = true;
+    idl->shuffle_remotes = true;
 
     /* Monitor the Database table in the _Server database.
      *
@@ -528,6 +530,9 @@ ovsdb_idl_set_remote(struct ovsdb_idl *idl, const char *remote, bool retry)
         if (remote) {
             struct svec remotes = SVEC_EMPTY_INITIALIZER;
             ovsdb_session_parse_remote(remote, &remotes, &idl->cid);
+            if (idl->shuffle_remotes) {
+                svec_shuffle(&remotes);
+            }
             idl->session = jsonrpc_session_open_multiple(&remotes, retry);
             svec_destroy(&remotes);
 
@@ -536,6 +541,15 @@ ovsdb_idl_set_remote(struct ovsdb_idl *idl, const char *remote, bool retry)
             idl->remote = xstrdup(remote);
         }
     }
+}
+
+/* Set whether the order of remotes should be shuffled, when there
+ * are more than one remotes.  The setting doesn't take effect
+ * until the next time when ovsdb_idl_set_remote() is called. */
+void
+ovsdb_idl_set_shuffle_remotes(struct ovsdb_idl *idl, bool shuffle)
+{
+    idl->shuffle_remotes = shuffle;
 }
 
 static void
