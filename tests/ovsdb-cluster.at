@@ -62,6 +62,179 @@ m4_define([OVSDB_CHECK_EXECUTION],
    AT_CLEANUP])
 EXECUTION_EXAMPLES
 
+
+OVS_START_SHELL_HELPERS
+# ovsdb_cluster_failure_test SCHEMA_FUNC OUTPUT TRANSACTION...
+ovsdb_cluster_failure_test () {
+    # Initial state: s1 is leader, s2 and s3 are followers
+    remote_1=$1
+    remote_2=$2
+    crash_node=$3
+    crash_command=$4
+    if test "$crash_node" == "1"; then
+        new_leader=$5
+    fi
+
+    cp $top_srcdir/ovn/ovn-nb.ovsschema schema
+    schema=`ovsdb-tool schema-name schema`
+    AT_CHECK([ovsdb-tool '-vPATTERN:console:%c|%p|%m' create-cluster s1.db schema unix:s1.raft], [0], [], [dnl
+ovsdb|WARN|schema: changed 2 columns in 'OVN_Northbound' database from ephemeral to persistent, including 'status' column in 'Connection' table, because clusters do not support ephemeral columns
+])
+
+    n=3
+    join_cluster() {
+        local i=$1
+        others=
+        for j in `seq 1 $n`; do
+            if test $i != $j; then
+                others="$others unix:s$j.raft"
+            fi
+        done
+        AT_CHECK([ovsdb-tool join-cluster s$i.db $schema unix:s$i.raft $others])
+    }
+    start_server() {
+        local i=$1
+        printf "\ns$i: starting\n"
+        AT_CHECK([ovsdb-server -vjsonrpc -vconsole:off -vsyslog:off --detach --no-chdir --log-file=s$i.log --pidfile=s$i.pid --unixctl=s$i --remote=punix:s$i.ovsdb s$i.db])
+    }
+    connect_server() {
+        local i=$1
+        printf "\ns$i: waiting to connect to storage\n"
+        AT_CHECK([ovsdb_client_wait --log-file=connect$i.log unix:s$i.ovsdb $schema connected])
+    }
+    cid=`ovsdb-tool db-cid s1.db`
+    for i in `seq 2 $n`; do join_cluster $i; done
+
+    on_exit 'kill `cat *.pid`'
+    for i in `seq $n`; do start_server $i; done
+    for i in `seq $n`; do connect_server $i; done
+
+    export OVN_NB_DB=unix:s$remote_1.ovsdb,unix:s$remote_2.ovsdb
+
+    # To ensure $new_leader node the new leader, we delay election timer for
+    # the other follower.
+    if test -n "$new_leader"; then
+        if test "$new_leader" == "2"; then
+            delay_election_node=3
+        else
+            delay_election_node=2
+        fi
+        AT_CHECK([ovs-appctl -t "`pwd`"/s$delay_election_node cluster/failure-test delay-election], [0], [ignore])
+    fi
+    AT_CHECK([ovs-appctl -t "`pwd`"/s$crash_node cluster/failure-test $crash_command], [0], [ignore])
+    AT_CHECK([ovn-nbctl -v --timeout=10 --no-leader-only --no-shuffle-remotes create logical_switch name=ls1], [0], [ignore], [ignore])
+
+    # Make sure that the node really crashed.
+    AT_CHECK([ls s$crash_node.ovsdb], [2], [ignore], [ignore])
+    # XXX: Client will fail if remotes contains unix socket that doesn't exist (killed).
+    if test "$remote_1" == "$crash_node"; then
+        export OVN_NB_DB=unix:s$remote_2.ovsdb
+    fi
+    AT_CHECK([ovn-nbctl --no-leader-only ls-list | awk '{ print $2 }'], [0], [(ls1)
+])
+}
+OVS_END_SHELL_HELPERS
+AT_BANNER([OVSDB - cluster failure with pending transaction])
+
+AT_SETUP([OVSDB cluster - txn on follower-2, leader crash before sending appendReq, follower-2 becomes leader])
+AT_KEYWORDS([ovsdb server negative unix cluster pending-txn])
+# XXX: fix bug before enabling this test
+AT_CHECK([exit 77])
+ovsdb_cluster_failure_test 2 3 1 crash-before-sending-append-request 2
+AT_CLEANUP
+
+AT_SETUP([OVSDB cluster - txn on follower-2, leader crash before sending appendReq, follower-3 becomes leader])
+AT_KEYWORDS([ovsdb server negative unix cluster pending-txn])
+ovsdb_cluster_failure_test 2 3 1 crash-before-sending-append-request 3
+AT_CLEANUP
+
+AT_SETUP([OVSDB cluster - txn on follower-2, leader crash before sending execRep, follower-2 becomes leader])
+AT_KEYWORDS([ovsdb server negative unix cluster pending-txn])
+# XXX: fix bug before enabling this test
+AT_CHECK([exit 77])
+ovsdb_cluster_failure_test 2 3 1 crash-before-sending-execute-command-reply 2
+AT_CLEANUP
+
+AT_SETUP([OVSDB cluster - txn on follower-2, leader crash before sending execRep, follower-3 becomes leader])
+AT_KEYWORDS([ovsdb server negative unix cluster pending-txn])
+# XXX: fix bug before enabling this test
+AT_CHECK([exit 77])
+ovsdb_cluster_failure_test 2 3 1 crash-before-sending-execute-command-reply 3
+AT_CLEANUP
+
+AT_SETUP([OVSDB cluster - txn on follower-2, leader crash after sending execRep, follower-2 becomes leader])
+AT_KEYWORDS([ovsdb server negative unix cluster pending-txn])
+# XXX: fix bug before enabling this test
+AT_CHECK([exit 77])
+ovsdb_cluster_failure_test 2 3 1 crash-after-sending-execute-command-reply 2
+AT_CLEANUP
+
+AT_SETUP([OVSDB cluster - txn on follower-2, leader crash after sending execRep, follower-3 becomes leader])
+AT_KEYWORDS([ovsdb server negative unix cluster pending-txn])
+ovsdb_cluster_failure_test 2 3 1 crash-after-sending-execute-command-reply 3
+AT_CLEANUP
+
+AT_SETUP([OVSDB cluster - txn on leader, leader crash before sending appendReq, follower-2 becomes leader])
+AT_KEYWORDS([ovsdb server negative unix cluster pending-txn])
+# XXX: fix bug before enabling this test
+AT_CHECK([exit 77])
+ovsdb_cluster_failure_test 1 2 1 crash-before-sending-append-request 2
+AT_CLEANUP
+
+AT_SETUP([OVSDB cluster - txn on leader, leader crash before sending appendReq, follower-3 becomes leader])
+AT_KEYWORDS([ovsdb server negative unix cluster pending-txn])
+ovsdb_cluster_failure_test 1 2 1 crash-before-sending-append-request 3
+AT_CLEANUP
+
+AT_SETUP([OVSDB cluster - txn on leader, leader crash after sending appendReq, follower-2 becomes leader])
+AT_KEYWORDS([ovsdb server negative unix cluster pending-txn])
+# XXX: Detect and skip repeated transaction before enabling this test
+AT_CHECK([exit 77])
+ovsdb_cluster_failure_test 1 2 1 crash-after-sending-append-request 2
+AT_CLEANUP
+
+AT_SETUP([OVSDB cluster - txn on leader, leader crash after sending appendReq, follower-3 becomes leader])
+AT_KEYWORDS([ovsdb server negative unix cluster pending-txn])
+# XXX: Detect and skip repeated transaction before enabling this test
+AT_CHECK([exit 77])
+ovsdb_cluster_failure_test 1 2 1 crash-after-sending-append-request 3
+AT_CLEANUP
+
+AT_SETUP([OVSDB cluster - txn on follower-2, follower-2 crash before sending execReq, reconnect to follower-3])
+AT_KEYWORDS([ovsdb server negative unix cluster pending-txn])
+ovsdb_cluster_failure_test 2 3 2 crash-before-sending-execute-command-request
+AT_CLEANUP
+
+AT_SETUP([OVSDB cluster - txn on follower-2, follower-2 crash before sending execReq, reconnect to leader])
+AT_KEYWORDS([ovsdb server negative unix cluster pending-txn])
+ovsdb_cluster_failure_test 2 1 2 crash-before-sending-execute-command-request
+AT_CLEANUP
+
+AT_SETUP([OVSDB cluster - txn on follower-2, follower-2 crash after sending execReq, reconnect to follower-3])
+AT_KEYWORDS([ovsdb server negative unix cluster pending-txn])
+# XXX: Detect and skip repeated transaction before enabling this test
+AT_CHECK([exit 77])
+ovsdb_cluster_failure_test 2 3 2 crash-after-sending-execute-command-request
+AT_CLEANUP
+
+AT_SETUP([OVSDB cluster - txn on follower-2, follower-2 crash after sending execReq, reconnect to leader])
+AT_KEYWORDS([ovsdb server negative unix cluster pending-txn])
+# XXX: Detect and skip repeated transaction before enabling this test
+AT_CHECK([exit 77])
+ovsdb_cluster_failure_test 2 1 2 crash-after-sending-execute-command-request
+AT_CLEANUP
+
+AT_SETUP([OVSDB cluster - txn on leader, follower-2 crash after receiving appendReq for the update])
+AT_KEYWORDS([ovsdb server negative unix cluster pending-txn])
+ovsdb_cluster_failure_test 1 1 2 crash-after-receiving-append-request-update
+AT_CLEANUP
+
+AT_SETUP([OVSDB cluster - txn on follower-2, follower-3 crash after receiving appendReq for the update])
+AT_KEYWORDS([ovsdb server negative unix cluster pending-txn])
+ovsdb_cluster_failure_test 2 2 3 crash-after-receiving-append-request-update
+AT_CLEANUP
+
+
 AT_BANNER([OVSDB - cluster tests])
 
 # Torture test.
