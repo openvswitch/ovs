@@ -108,12 +108,10 @@ struct raft_command {
     struct hmap_node hmap_node; /* In struct raft's 'commands' hmap. */
     unsigned int n_refs;        /* Reference count.  */
     enum raft_command_status status; /* Execution status. */
+    struct uuid eid;            /* Entry ID of result. */
 
     /* Case 1 only. */
     uint64_t index;             /* Index in log (0 if being relayed). */
-
-    /* Cases 2 and 3. */
-    struct uuid eid;            /* Entry ID of result. */
 
     /* Case 2 only. */
     long long int timestamp;    /* Issue or last ping time, for expiration. */
@@ -1974,9 +1972,8 @@ raft_command_initiate(struct raft *raft,
     }
 
     struct raft_command *cmd = raft_command_create_incomplete(raft, index);
-    if (eid) {
-        cmd->eid = *eid;
-    }
+    ovs_assert(eid);
+    cmd->eid = *eid;
 
     raft_waiter_create(raft, RAFT_W_ENTRY, true)->entry.index = cmd->index;
 
