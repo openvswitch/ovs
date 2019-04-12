@@ -1607,10 +1607,7 @@ raft_start_election(struct raft *raft, bool leadership_transfer)
         return;
     }
 
-    raft_complete_all_commands(raft, RAFT_CMD_LOST_LEADERSHIP);
-
     ovs_assert(raft->role != RAFT_LEADER);
-    ovs_assert(hmap_is_empty(&raft->commands));
     raft->role = RAFT_CANDIDATE;
 
     raft->n_votes = 0;
@@ -1793,17 +1790,22 @@ raft_run(struct raft *raft)
         }
     }
 
-    if (time_msec() >= raft->ping_timeout) {
+    long long int now = time_msec();
+    if (now >= raft->ping_timeout) {
         if (raft->role == RAFT_LEADER) {
             raft_send_heartbeats(raft);
-        } else {
-            long long int now = time_msec();
-            struct raft_command *cmd, *next_cmd;
-            HMAP_FOR_EACH_SAFE (cmd, next_cmd, hmap_node, &raft->commands) {
-                if (cmd->timestamp
-                    && now - cmd->timestamp > ELECTION_BASE_MSEC) {
-                    raft_command_complete(raft, cmd, RAFT_CMD_TIMEOUT);
-                }
+        }
+        /* Check if any commands timeout. Timeout is set to twice the time of
+         * election base time so that commands can complete properly during
+         * leader election. E.g. a leader crashed and current node with pending
+         * commands becomes new leader: the pending commands can still complete
+         * if the crashed leader has replicated the transactions to majority of
+         * followers before it crashed. */
+        struct raft_command *cmd, *next_cmd;
+        HMAP_FOR_EACH_SAFE (cmd, next_cmd, hmap_node, &raft->commands) {
+            if (cmd->timestamp
+                && now - cmd->timestamp > ELECTION_BASE_MSEC * 2) {
+                raft_command_complete(raft, cmd, RAFT_CMD_TIMEOUT);
             }
             raft_reset_ping_timer(raft);
         }
@@ -1974,6 +1976,7 @@ raft_command_initiate(struct raft *raft,
     struct raft_command *cmd = raft_command_create_incomplete(raft, index);
     ovs_assert(eid);
     cmd->eid = *eid;
+    cmd->timestamp = time_msec();
 
     raft_waiter_create(raft, RAFT_W_ENTRY, true)->entry.index = cmd->index;
 
@@ -1994,6 +1997,15 @@ raft_command_initiate(struct raft *raft,
     raft_reset_ping_timer(raft);
 
     return cmd;
+}
+
+static void
+log_all_commands(struct raft *raft)
+{
+    struct raft_command *cmd, *next;
+    HMAP_FOR_EACH_SAFE (cmd, next, hmap_node, &raft->commands) {
+        VLOG_DBG("raft command eid: "UUID_FMT, UUID_ARGS(&cmd->eid));
+    }
 }
 
 static struct raft_command * OVS_WARN_UNUSED_RESULT
@@ -2051,6 +2063,7 @@ raft_command_execute__(struct raft *raft,
         struct raft_command *cmd = raft_command_create_incomplete(raft, 0);
         cmd->timestamp = time_msec();
         cmd->eid = eid;
+        log_all_commands(raft);
         return cmd;
     }
 
@@ -2126,6 +2139,8 @@ raft_command_complete(struct raft *raft,
                       struct raft_command *cmd,
                       enum raft_command_status status)
 {
+    VLOG_DBG("raft_command_complete eid "UUID_FMT" status: %s",
+             UUID_ARGS(&cmd->eid), raft_command_status_to_string(status));
     if (!uuid_is_zero(&cmd->sid)) {
         uint64_t commit_index = status == RAFT_CMD_SUCCESS ? cmd->index : 0;
         raft_send_execute_command_reply(raft, &cmd->sid, &cmd->eid, status,
@@ -2146,19 +2161,6 @@ raft_complete_all_commands(struct raft *raft, enum raft_command_status status)
     HMAP_FOR_EACH_SAFE (cmd, next, hmap_node, &raft->commands) {
         raft_command_complete(raft, cmd, status);
     }
-}
-
-static struct raft_command *
-raft_find_command_by_index(struct raft *raft, uint64_t index)
-{
-    struct raft_command *cmd;
-
-    HMAP_FOR_EACH_IN_BUCKET (cmd, hmap_node, index, &raft->commands) {
-        if (cmd->index == index) {
-            return cmd;
-        }
-    }
-    return NULL;
 }
 
 static struct raft_command *
@@ -2441,7 +2443,7 @@ raft_server_init_leader(struct raft *raft, struct raft_server *s)
 static void
 raft_become_leader(struct raft *raft)
 {
-    raft_complete_all_commands(raft, RAFT_CMD_LOST_LEADERSHIP);
+    log_all_commands(raft);
 
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
     VLOG_INFO_RL(&rl, "term %"PRIu64": elected leader by %d+ of "
@@ -2627,8 +2629,14 @@ raft_update_commit_index(struct raft *raft, uint64_t new_commit_index)
             const struct raft_entry *e = raft_get_entry(raft, index);
             if (e->data) {
                 struct raft_command *cmd
-                    = raft_find_command_by_index(raft, index);
+                    = raft_find_command_by_eid(raft, &e->eid);
                 if (cmd) {
+                    if (!cmd->index) {
+                        VLOG_DBG("Command completed after role change from"
+                                 " follower to leader "UUID_FMT,
+                                 UUID_ARGS(&e->eid));
+                        cmd->index = index;
+                    }
                     raft_command_complete(raft, cmd, RAFT_CMD_SUCCESS);
                 }
             }
@@ -2641,6 +2649,20 @@ raft_update_commit_index(struct raft *raft, uint64_t new_commit_index)
         }
     } else {
         raft->commit_index = new_commit_index;
+        /* Check if any pending command can be completed, and complete it.
+         * This can happen when leader fail-over before sending
+         * execute_command_reply. */
+        const struct uuid *eid = raft_get_eid(raft, new_commit_index);
+        struct raft_command *cmd = raft_find_command_by_eid(raft, eid);
+        if (cmd) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
+            VLOG_INFO_RL(&rl,
+                         "Command completed without reply (eid: "UUID_FMT", "
+                         "commit index: %"PRIu64")",
+                         UUID_ARGS(eid), new_commit_index);
+            cmd->index = new_commit_index;
+            raft_command_complete(raft, cmd, RAFT_CMD_SUCCESS);
+        }
     }
 
     /* Write the commit index to the log.  The next time we restart, this
