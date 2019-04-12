@@ -63,6 +63,20 @@ enum raft_role {
     RAFT_LEADER
 };
 
+/* Flags for unit tests. */
+enum raft_failure_test {
+    FT_NO_TEST,
+    FT_CRASH_BEFORE_SEND_APPEND_REQ,
+    FT_CRASH_AFTER_SEND_APPEND_REQ,
+    FT_CRASH_BEFORE_SEND_EXEC_REP,
+    FT_CRASH_AFTER_SEND_EXEC_REP,
+    FT_CRASH_BEFORE_SEND_EXEC_REQ,
+    FT_CRASH_AFTER_SEND_EXEC_REQ,
+    FT_CRASH_AFTER_RECV_APPEND_REQ_UPDATE,
+    FT_DELAY_ELECTION
+};
+static enum raft_failure_test failure_test;
+
 /* A connection between this Raft server and another one. */
 struct raft_conn {
     struct ovs_list list_node;  /* In struct raft's 'conns' list. */
@@ -871,6 +885,10 @@ raft_reset_election_timer(struct raft *raft)
     unsigned int duration = (ELECTION_BASE_MSEC
                              + random_range(ELECTION_RANGE_MSEC));
     raft->election_base = time_msec();
+    if (failure_test == FT_DELAY_ELECTION) {
+        /* Slow down this node so that it won't win the next election. */
+        duration += ELECTION_BASE_MSEC;
+    }
     raft->election_timeout = raft->election_base + duration;
 }
 
@@ -1962,6 +1980,9 @@ raft_command_initiate(struct raft *raft,
 
     raft_waiter_create(raft, RAFT_W_ENTRY, true)->entry.index = cmd->index;
 
+    if (failure_test == FT_CRASH_BEFORE_SEND_APPEND_REQ) {
+        ovs_fatal(0, "Raft test: crash before sending append_request.");
+    }
     /* Write to remote logs. */
     struct raft_server *s;
     HMAP_FOR_EACH (s, hmap_node, &raft->servers) {
@@ -1969,6 +1990,9 @@ raft_command_initiate(struct raft *raft,
             raft_send_append_request(raft, s, 1, "execute command");
             s->next_index++;
         }
+    }
+    if (failure_test == FT_CRASH_AFTER_SEND_APPEND_REQ) {
+        ovs_fatal(0, "Raft test: crash after sending append_request.");
     }
     raft_reset_ping_timer(raft);
 
@@ -2014,9 +2038,17 @@ raft_command_execute__(struct raft *raft,
                 .result = eid,
             }
         };
+        if (failure_test == FT_CRASH_BEFORE_SEND_EXEC_REQ) {
+            ovs_fatal(0, "Raft test: crash before sending "
+                      "execute_command_request");
+        }
         if (!raft_send(raft, &rpc)) {
             /* Couldn't send command, so it definitely failed. */
             return raft_command_create_completed(RAFT_CMD_NOT_LEADER);
+        }
+        if (failure_test == FT_CRASH_AFTER_SEND_EXEC_REQ) {
+            ovs_fatal(0, "Raft test: crash after sending "
+                      "execute_command_request");
         }
 
         struct raft_command *cmd = raft_command_create_incomplete(raft, 0);
@@ -2731,6 +2763,10 @@ raft_handle_append_entries(struct raft *raft,
         }
     }
 
+    if (failure_test == FT_CRASH_AFTER_RECV_APPEND_REQ_UPDATE) {
+        ovs_fatal(0, "Raft test: crash after receiving append_request with "
+                  "update.");
+    }
     /* Figure 3.1: "Append any entries not already in the log." */
     struct ovsdb_error *error = NULL;
     bool any_written = false;
@@ -3939,6 +3975,9 @@ raft_send_execute_command_reply(struct raft *raft,
                                 enum raft_command_status status,
                                 uint64_t commit_index)
 {
+    if (failure_test == FT_CRASH_BEFORE_SEND_EXEC_REP) {
+        ovs_fatal(0, "Raft test: crash before sending execute_command_reply");
+    }
     union raft_rpc rpc = {
         .execute_command_reply = {
             .common = {
@@ -3951,6 +3990,9 @@ raft_send_execute_command_reply(struct raft *raft,
         },
     };
     raft_send(raft, &rpc);
+    if (failure_test == FT_CRASH_AFTER_SEND_EXEC_REP) {
+        ovs_fatal(0, "Raft test: crash after sending execute_command_reply.");
+    }
 }
 
 static enum raft_command_status
@@ -4387,6 +4429,45 @@ raft_unixctl_kick(struct unixctl_conn *conn, int argc OVS_UNUSED,
 }
 
 static void
+raft_unixctl_failure_test(struct unixctl_conn *conn OVS_UNUSED,
+                          int argc OVS_UNUSED, const char *argv[],
+                          void *aux OVS_UNUSED)
+{
+    const char *test = argv[1];
+    if (!strcmp(test, "crash-before-sending-append-request")) {
+        failure_test = FT_CRASH_BEFORE_SEND_APPEND_REQ;
+    } else if (!strcmp(test, "crash-after-sending-append-request")) {
+        failure_test = FT_CRASH_AFTER_SEND_APPEND_REQ;
+    } else if (!strcmp(test, "crash-before-sending-execute-command-reply")) {
+        failure_test = FT_CRASH_BEFORE_SEND_EXEC_REP;
+    } else if (!strcmp(test, "crash-after-sending-execute-command-reply")) {
+        failure_test = FT_CRASH_AFTER_SEND_EXEC_REP;
+    } else if (!strcmp(test, "crash-before-sending-execute-command-request")) {
+        failure_test = FT_CRASH_BEFORE_SEND_EXEC_REQ;
+    } else if (!strcmp(test, "crash-after-sending-execute-command-request")) {
+        failure_test = FT_CRASH_AFTER_SEND_EXEC_REQ;
+    } else if (!strcmp(test, "crash-after-receiving-append-request-update")) {
+        failure_test = FT_CRASH_AFTER_RECV_APPEND_REQ_UPDATE;
+    } else if (!strcmp(test, "delay-election")) {
+        failure_test = FT_DELAY_ELECTION;
+        struct raft *raft;
+        HMAP_FOR_EACH (raft, hmap_node, &all_rafts) {
+            if (raft->role == RAFT_FOLLOWER) {
+                raft_reset_election_timer(raft);
+            }
+        }
+    } else if (!strcmp(test, "clear")) {
+        failure_test = FT_NO_TEST;
+        unixctl_command_reply(conn, "test dismissed");
+        return;
+    } else {
+        unixctl_command_reply_error(conn, "unknown test scenario");
+        return;
+    }
+    unixctl_command_reply(conn, "test engaged");
+}
+
+static void
 raft_init(void)
 {
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
@@ -4403,5 +4484,7 @@ raft_init(void)
                              raft_unixctl_leave, NULL);
     unixctl_command_register("cluster/kick", "DB SERVER", 2, 2,
                              raft_unixctl_kick, NULL);
+    unixctl_command_register("cluster/failure-test", "FAILURE SCENARIO", 1, 1,
+                             raft_unixctl_failure_test, NULL);
     ovsthread_once_done(&once);
 }
