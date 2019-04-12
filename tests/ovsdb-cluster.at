@@ -131,12 +131,16 @@ ovsdb|WARN|schema: changed 2 columns in 'OVN_Southbound' database from ephemeral
     done
     export OVN_SB_DB
 
-    n1=10 n2=5
+    n1=10 n2=5 n3=50
     echo "starting $n1*$n2 ovn-sbctl processes..."
     for i in $(seq 0 $(expr $n1 - 1) ); do
         (for j in $(seq $n2); do
              : > $i-$j.running
-             run_as "ovn-sbctl($i-$j)" ovn-sbctl "-vPATTERN:console:ovn-sbctl($i-$j)|%D{%H:%M:%S}|%05N|%c|%p|%m" --log-file=$i-$j.log -vfile -vsyslog:off -vtimeval:off --timeout=120 --no-leader-only add SB_Global . external_ids $i-$j=$i-$j
+             txn="add SB_Global . external_ids $i-$j=$i-$j"
+             for k in $(seq $n3); do
+                 txn="$txn -- add SB_Global . external_ids $i-$j-$k=$i-$j-$k"
+             done
+             run_as "ovn-sbctl($i-$j)" ovn-sbctl "-vPATTERN:console:ovn-sbctl($i-$j)|%D{%H:%M:%S}|%05N|%c|%p|%m" --log-file=$i-$j.log -vfile -vsyslog:off -vtimeval:off --timeout=120 --no-leader-only $txn
              status=$?
              if test $status != 0; then
                  echo "$i-$j exited with status $status" > $i-$j:$status
@@ -146,13 +150,12 @@ ovsdb|WARN|schema: changed 2 columns in 'OVN_Southbound' database from ephemeral
          : > $i.done)&
     done
     echo "...done"
-    sleep 2
 
     echo "waiting for ovn-sbctl processes to exit..."
     # Use file instead of var because code inside "while" runs in a subshell.
     echo 0 > phase
     i=0
-    (while :; do echo; sleep 1; done) | while read REPLY; do
+    (while :; do echo; sleep 0.1; done) | while read REPLY; do
         printf "t=%2d s:" $i
         done=0
         for j in $(seq 0 $(expr $n1 - 1)); do
@@ -168,7 +171,7 @@ ovsdb|WARN|schema: changed 2 columns in 'OVN_Southbound' database from ephemeral
 
         case $(cat phase) in # (
         0)
-            if test $done -ge $(expr $n1 / 4); then
+            if test $done -ge $(expr $n1 / 10); then
                 if test $variant = kill; then
                     stop_server $victim
                 else
@@ -199,6 +202,9 @@ ovsdb|WARN|schema: changed 2 columns in 'OVN_Southbound' database from ephemeral
     for i in $(seq 0 $(expr $n1 - 1) ); do
         for j in `seq $n2`; do
             echo "$i-$j=$i-$j"
+            for k in `seq $n3`; do
+                echo "$i-$j-$k=$i-$j-$k"
+            done
         done
     done | sort > expout
     AT_CHECK([ovn-sbctl --timeout=30 --log-file=finalize.log -vtimeval:off -vfile -vsyslog:off --bare get SB_Global . external-ids | tr ',' '\n' | sed 's/[[{}"" ]]//g' | sort], [0], [expout])

@@ -320,7 +320,8 @@ static void raft_send_append_request(struct raft *,
 
 static void raft_become_leader(struct raft *);
 static void raft_become_follower(struct raft *);
-static void raft_reset_timer(struct raft *);
+static void raft_reset_election_timer(struct raft *);
+static void raft_reset_ping_timer(struct raft *);
 static void raft_send_heartbeats(struct raft *);
 static void raft_start_election(struct raft *, bool leadership_transfer);
 static bool raft_truncate(struct raft *, uint64_t new_end);
@@ -376,8 +377,8 @@ raft_alloc(void)
     hmap_init(&raft->add_servers);
     hmap_init(&raft->commands);
 
-    raft->ping_timeout = time_msec() + PING_TIME_MSEC;
-    raft_reset_timer(raft);
+    raft_reset_ping_timer(raft);
+    raft_reset_election_timer(raft);
 
     return raft;
 }
@@ -865,12 +866,18 @@ raft_read_log(struct raft *raft)
 }
 
 static void
-raft_reset_timer(struct raft *raft)
+raft_reset_election_timer(struct raft *raft)
 {
     unsigned int duration = (ELECTION_BASE_MSEC
                              + random_range(ELECTION_RANGE_MSEC));
     raft->election_base = time_msec();
     raft->election_timeout = raft->election_base + duration;
+}
+
+static void
+raft_reset_ping_timer(struct raft *raft)
+{
+    raft->ping_timeout = time_msec() + PING_TIME_MSEC;
 }
 
 static void
@@ -1603,7 +1610,7 @@ raft_start_election(struct raft *raft, bool leadership_transfer)
             VLOG_INFO("term %"PRIu64": starting election", raft->term);
         }
     }
-    raft_reset_timer(raft);
+    raft_reset_election_timer(raft);
 
     struct raft_server *peer;
     HMAP_FOR_EACH (peer, hmap_node, &raft->servers) {
@@ -1782,8 +1789,8 @@ raft_run(struct raft *raft)
                     raft_command_complete(raft, cmd, RAFT_CMD_TIMEOUT);
                 }
             }
+            raft_reset_ping_timer(raft);
         }
-        raft->ping_timeout = time_msec() + PING_TIME_MSEC;
     }
 
     /* Do this only at the end; if we did it as soon as we set raft->left or
@@ -1963,6 +1970,7 @@ raft_command_initiate(struct raft *raft,
             s->next_index++;
         }
     }
+    raft_reset_ping_timer(raft);
 
     return cmd;
 }
@@ -2313,7 +2321,7 @@ raft_become_follower(struct raft *raft)
     }
 
     raft->role = RAFT_FOLLOWER;
-    raft_reset_timer(raft);
+    raft_reset_election_timer(raft);
 
     /* Notify clients about lost leadership.
      *
@@ -2387,6 +2395,8 @@ raft_send_heartbeats(struct raft *raft)
                                             RAFT_CMD_INCOMPLETE, 0);
         }
     }
+
+    raft_reset_ping_timer(raft);
 }
 
 /* Initializes the fields in 's' that represent the leader's view of the
@@ -2413,7 +2423,7 @@ raft_become_leader(struct raft *raft)
     raft->role = RAFT_LEADER;
     raft->leader_sid = raft->sid;
     raft->election_timeout = LLONG_MAX;
-    raft->ping_timeout = time_msec() + PING_TIME_MSEC;
+    raft_reset_ping_timer(raft);
 
     struct raft_server *s;
     HMAP_FOR_EACH (s, hmap_node, &raft->servers) {
@@ -2573,11 +2583,13 @@ raft_get_next_entry(struct raft *raft, struct uuid *eid)
     return data;
 }
 
-static void
+/* Updates commit index in raft log. If commit index is already up-to-date
+ * it does nothing and return false, otherwise, returns true. */
+static bool
 raft_update_commit_index(struct raft *raft, uint64_t new_commit_index)
 {
     if (new_commit_index <= raft->commit_index) {
-        return;
+        return false;
     }
 
     if (raft->role == RAFT_LEADER) {
@@ -2610,6 +2622,7 @@ raft_update_commit_index(struct raft *raft, uint64_t new_commit_index)
         .commit_index = raft->commit_index,
     };
     ignore(ovsdb_log_write_and_free(raft->log, raft_record_to_json(&r)));
+    return true;
 }
 
 /* This doesn't use rq->entries (but it does use rq->n_entries). */
@@ -2809,7 +2822,7 @@ raft_handle_append_request(struct raft *raft,
                                "usurped leadership");
         return;
     }
-    raft_reset_timer(raft);
+    raft_reset_election_timer(raft);
 
     /* First check for the common case, where the AppendEntries request is
      * entirely for indexes covered by 'log_start' ... 'log_end - 1', something
@@ -3045,7 +3058,9 @@ raft_consider_updating_commit_index(struct raft *raft)
             }
         }
     }
-    raft_update_commit_index(raft, new_commit_index);
+    if (raft_update_commit_index(raft, new_commit_index)) {
+        raft_send_heartbeats(raft);
+    }
 }
 
 static void
@@ -3274,7 +3289,7 @@ raft_handle_vote_request__(struct raft *raft,
         return false;
     }
 
-    raft_reset_timer(raft);
+    raft_reset_election_timer(raft);
 
     return true;
 }
@@ -3697,7 +3712,7 @@ static bool
 raft_handle_install_snapshot_request__(
     struct raft *raft, const struct raft_install_snapshot_request *rq)
 {
-    raft_reset_timer(raft);
+    raft_reset_election_timer(raft);
 
     /*
      * Our behavior here depend on new_log_start in the snapshot compared to
