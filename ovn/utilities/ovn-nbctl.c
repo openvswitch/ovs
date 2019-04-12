@@ -83,6 +83,10 @@ OVS_NO_RETURN static void nbctl_exit(int status);
 /* --leader-only, --no-leader-only: Only accept the leader in a cluster. */
 static int leader_only = true;
 
+/* --shuffle-remotes, --no-shuffle-remotes: Shuffle the order of remotes that
+ * are specified in the connetion method string. */
+static int shuffle_remotes = true;
+
 /* --unixctl-path: Path to use for unixctl server, for "monitor" and "snoop"
      commands. */
 static char *unixctl_path;
@@ -182,8 +186,11 @@ main(int argc, char *argv[])
         }
         daemon_mode = true;
     }
-    /* Initialize IDL. "retry" is true iff in daemon mode. */
-    idl = the_idl = ovsdb_idl_create(db, &nbrec_idl_class, true, daemon_mode);
+    /* Initialize IDL. */
+    idl = the_idl = ovsdb_idl_create_unconnected(&nbrec_idl_class, true);
+    ovsdb_idl_set_shuffle_remotes(idl, shuffle_remotes);
+    /* "retry" is true iff in daemon mode. */
+    ovsdb_idl_set_remote(idl, db, daemon_mode);
     ovsdb_idl_set_leader_only(idl, leader_only);
 
     if (daemon_mode) {
@@ -304,6 +311,8 @@ enum {
     OPT_OPTIONS,
     OPT_LEADER_ONLY,
     OPT_NO_LEADER_ONLY,
+    OPT_SHUFFLE_REMOTES,
+    OPT_NO_SHUFFLE_REMOTES,
     OPT_BOOTSTRAP_CA_CERT,
     MAIN_LOOP_OPTION_ENUMS,
     DAEMON_OPTION_ENUMS,
@@ -405,6 +414,8 @@ get_all_options(void)
         {"options", no_argument, NULL, OPT_OPTIONS},
         {"leader-only", no_argument, NULL, OPT_LEADER_ONLY},
         {"no-leader-only", no_argument, NULL, OPT_NO_LEADER_ONLY},
+        {"shuffle-remotes", no_argument, NULL, OPT_SHUFFLE_REMOTES},
+        {"no-shuffle-remotes", no_argument, NULL, OPT_NO_SHUFFLE_REMOTES},
         {"version", no_argument, NULL, 'V'},
         MAIN_LOOP_LONG_OPTIONS,
         DAEMON_LONG_OPTIONS,
@@ -507,6 +518,14 @@ apply_options_direct(const struct ovs_cmdl_parsed_option *parsed_options,
 
         case OPT_NO_LEADER_ONLY:
             leader_only = false;
+            break;
+
+        case OPT_SHUFFLE_REMOTES:
+            shuffle_remotes = true;
+            break;
+
+        case OPT_NO_SHUFFLE_REMOTES:
+            shuffle_remotes = false;
             break;
 
         case 'V':
@@ -705,6 +724,7 @@ Options:\n\
                               (default: %s)\n\
   --no-wait, --wait=none      do not wait for OVN reconfiguration (default)\n\
   --no-leader-only            accept any cluster member, not just the leader\n\
+  --no-shuffle-remotes        do not shuffle the order of remotes\n\
   --wait=sb                   wait for southbound database update\n\
   --wait=hv                   wait for all chassis to catch up\n\
   -t, --timeout=SECS          wait at most SECS seconds\n\
@@ -5532,6 +5552,8 @@ nbctl_client(const char *socket_name,
 
         case OPT_LEADER_ONLY:
         case OPT_NO_LEADER_ONLY:
+        case OPT_SHUFFLE_REMOTES:
+        case OPT_NO_SHUFFLE_REMOTES:
         case OPT_BOOTSTRAP_CA_CERT:
         STREAM_SSL_CASES
         DAEMON_OPTION_CASES

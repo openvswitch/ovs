@@ -1142,6 +1142,23 @@
       <code>Understanding Cluster Consistency</code> in <code>ovsdb</code>(7)
       for more information.
     </dd>
+
+    <dt><code>--shuffle-remotes</code></dt>
+    <dt><code>--no-shuffle-remotes</code></dt>
+    <dd>
+      By default, or with <code>--shuffle-remotes</code>, when there are
+      multiple remotes specified in the OVSDB connection string specified by
+      <code>--db</code> or the <env>OVN_NB_DB</env> environment variable,
+      the order of the remotes will be shuffled before the client tries to
+      connect.  The remotes will be shuffled only once to a new order before
+      the first connection attempt.  The following retries, if any, will
+      follow the same new order.  The default behavior is to make sure
+      clients of a clustered database can distribute evenly to all memembers
+      of the cluster.  With <code>--no-shuffle-remotes</code>,
+      <code>ovn-nbctl</code> will use the original order specified in the
+      connection string to connect.  This allows user to specify the
+      preferred order, which is particularly useful for testing.
+    </dd>
     </dl>
 
     <h2>Daemon Options</h2>
