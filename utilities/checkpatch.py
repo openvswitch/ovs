@@ -725,7 +725,7 @@ def ovs_checkpatch_parse(text, filename, author=None, committer=None):
 
     reset_counters()
 
-    for line in text.split('\n'):
+    for line in text.splitlines():
         if current_file != previous_file:
             previous_file = current_file
 
