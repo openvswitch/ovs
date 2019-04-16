@@ -2033,7 +2033,7 @@ netdev_dpdk_policer_pkt_handle(struct rte_meter_srtcm *meter,
     uint32_t pkt_len = rte_pktmbuf_pkt_len(pkt) - sizeof(struct ether_hdr);
 
     return rte_meter_srtcm_color_blind_check(meter, profile, time, pkt_len) ==
-                                             e_RTE_METER_GREEN;
+                                             RTE_COLOR_GREEN;
 }
 
 static int
