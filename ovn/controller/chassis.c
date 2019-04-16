@@ -73,8 +73,7 @@ get_cms_options(const struct smap *ext_ids)
     return smap_get_def(ext_ids, "ovn-cms-options", "");
 }
 
-/* Returns this chassis's Chassis record, if it is available and is currently
- * amenable to a transaction. */
+/* Returns this chassis's Chassis record, if it is available. */
 const struct sbrec_chassis *
 chassis_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
             struct ovsdb_idl_index *sbrec_chassis_by_name,
@@ -82,8 +81,10 @@ chassis_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
             const char *chassis_id,
             const struct ovsrec_bridge *br_int)
 {
+    const struct sbrec_chassis *chassis_rec
+        = chassis_lookup_by_name(sbrec_chassis_by_name, chassis_id);
     if (!ovnsb_idl_txn) {
-        return NULL;
+        return chassis_rec;
     }
 
     const struct ovsrec_open_vswitch *cfg;
@@ -148,8 +149,6 @@ chassis_run(struct ovsdb_idl_txn *ovnsb_idl_txn,
     ds_chomp(&iface_types, ',');
     const char *iface_types_str = ds_cstr(&iface_types);
 
-    const struct sbrec_chassis *chassis_rec
-        = chassis_lookup_by_name(sbrec_chassis_by_name, chassis_id);
     const char *encap_csum = smap_get_def(&cfg->external_ids,
                                           "ovn-encap-csum", "true");
     int n_encaps = count_1bits(req_tunnels);
