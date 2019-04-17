@@ -4803,8 +4803,7 @@ handle_packet_upcall(struct dp_netdev_pmd_thread *pmd,
          * could have already been installed since we last did the flow
          * lookup before upcall.  This could be solved by moving the
          * mutex lock outside the loop, but that's an awful long time
-         * to be locking everyone out of making flow installs.  If we
-         * move to a per-core classifier, it would be reasonable. */
+         * to be locking revalidators out of making flow modifications. */
         ovs_mutex_lock(&pmd->flow_mutex);
         netdev_flow = dp_netdev_pmd_lookup_flow(pmd, key, NULL);
         if (OVS_LIKELY(!netdev_flow)) {
