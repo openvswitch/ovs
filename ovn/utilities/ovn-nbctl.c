@@ -3616,11 +3616,11 @@ print_routing_policy(const struct nbrec_logical_router_policy *policy,
 {
     if (policy->nexthop != NULL) {
         char *next_hop = normalize_prefix_str(policy->nexthop);
-        ds_put_format(s, "%10ld %50s %15s %25s", policy->priority,
+        ds_put_format(s, "%10"PRId64" %50s %15s %25s", policy->priority,
                       policy->match, policy->action, next_hop);
         free(next_hop);
     } else {
-        ds_put_format(s, "%10ld %50s %15s", policy->priority,
+        ds_put_format(s, "%10"PRId64" %50s %15s", policy->priority,
                       policy->match, policy->action);
     }
     ds_put_char(s, '\n');
@@ -5051,7 +5051,7 @@ cmd_ha_ch_grp_list(struct ctl_context *ctx)
             ha_ch = ha_ch_grp->ha_chassis[i];
             ds_put_format(&ctx->output,
                           "    "UUID_FMT " (%s)\n"
-                          "    priority %lu\n\n",
+                          "    priority %"PRId64"\n\n",
                           UUID_ARGS(&ha_ch->header_.uuid), ha_ch->chassis_name,
                           ha_ch->priority);
         }
