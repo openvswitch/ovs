@@ -195,13 +195,36 @@ chassis_tunnel_add(const struct sbrec_chassis *chassis_rec, const struct sbrec_s
     return tuncnt;
 }
 
+/*
+* Returns true if transport_zones and chassis_rec->transport_zones
+* have at least one common transport zone.
+*/
+static bool
+chassis_tzones_overlap(const struct sset *transport_zones,
+                       const struct sbrec_chassis *chassis_rec)
+{
+    /* If neither Chassis belongs to any transport zones, return true to
+     * form a tunnel between them */
+    if (!chassis_rec->n_transport_zones && sset_is_empty(transport_zones)) {
+        return true;
+    }
+
+    for (int i = 0; i < chassis_rec->n_transport_zones; i++) {
+        if (sset_contains(transport_zones, chassis_rec->transport_zones[i])) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void
 encaps_run(struct ovsdb_idl_txn *ovs_idl_txn,
            const struct ovsrec_bridge_table *bridge_table,
            const struct ovsrec_bridge *br_int,
            const struct sbrec_chassis_table *chassis_table,
            const char *chassis_id,
-           const struct sbrec_sb_global *sbg)
+           const struct sbrec_sb_global *sbg,
+           const struct sset *transport_zones)
 {
     if (!ovs_idl_txn || !br_int) {
         return;
@@ -251,7 +274,15 @@ encaps_run(struct ovsdb_idl_txn *ovs_idl_txn,
 
     SBREC_CHASSIS_TABLE_FOR_EACH (chassis_rec, chassis_table) {
         if (strcmp(chassis_rec->name, chassis_id)) {
-            /* Create tunnels to the other chassis. */
+            /* Create tunnels to the other Chassis belonging to the
+             * same transport zone */
+            if (!chassis_tzones_overlap(transport_zones, chassis_rec)) {
+                VLOG_DBG("Skipping encap creation for Chassis '%s' because "
+                         "it belongs to different transport zones",
+                         chassis_rec->name);
+                continue;
+            }
+
             if (chassis_tunnel_add(chassis_rec, sbg, &tc) == 0) {
                 VLOG_INFO("Creating encap for '%s' failed", chassis_rec->name);
                 continue;

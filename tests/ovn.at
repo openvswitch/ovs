@@ -13855,3 +13855,166 @@ ovn-nbctl list logical_switch_port
 ovn-nbctl list logical_router_port
 
 AT_CLEANUP
+
+AT_SETUP([ovn -- test transport zones])
+ovn_start
+
+net_add n1
+for i in 1 2 3 4 5; do
+    sim_add hv$i
+    as hv$i
+    ovs-vsctl add-br br-phys
+    ovn_attach n1 br-phys 192.168.$i.1
+done
+
+dnl Wait for the changes to be propagated
+ovn-nbctl --wait=sb --timeout=3 sync
+ovn-nbctl --wait=hv --timeout=3 sync
+
+dnl Assert that each Chassis has a tunnel formed to every other Chassis
+as hv1
+AT_CHECK([ovs-vsctl --bare --columns=name find interface type="geneve" | awk NF | sort], [0],
+[[ovn-hv2-0
+ovn-hv3-0
+ovn-hv4-0
+ovn-hv5-0
+]])
+
+as hv2
+AT_CHECK([ovs-vsctl --bare --columns=name find interface type="geneve" | awk NF | sort], [0],
+[[ovn-hv1-0
+ovn-hv3-0
+ovn-hv4-0
+ovn-hv5-0
+]])
+
+as hv3
+AT_CHECK([ovs-vsctl --bare --columns=name find interface type="geneve" | awk NF | sort], [0],
+[[ovn-hv1-0
+ovn-hv2-0
+ovn-hv4-0
+ovn-hv5-0
+]])
+
+as hv4
+AT_CHECK([ovs-vsctl --bare --columns=name find interface type="geneve" | awk NF | sort], [0],
+[[ovn-hv1-0
+ovn-hv2-0
+ovn-hv3-0
+ovn-hv5-0
+]])
+
+as hv5
+AT_CHECK([ovs-vsctl --bare --columns=name find interface type="geneve" | awk NF | sort], [0],
+[[ovn-hv1-0
+ovn-hv2-0
+ovn-hv3-0
+ovn-hv4-0
+]])
+
+dnl Let's now add some Chassis to different transport zones
+dnl * hv1: Will be part of two transport zones: tz1 and tz2 so it
+dnl   should have tunnels formed between the other two Chassis (hv2 and hv3)
+dnl
+dnl * hv2: Will be part of one transport zone: tz1. It should have a tunnel
+dnl   to hv1 but not to hv3
+dnl
+dnl * hv3: Will be part of one transport zone: tz2. It should have a tunnel
+dnl   to hv1 but not to hv2
+dnl
+dnl * hv4 and hv5: Will not have any TZ set so they will keep the tunnels
+dnl   between themselves and remove the tunnels to other Chassis which now
+dnl   belongs to some TZs
+dnl
+as hv1
+ovs-vsctl set open . external-ids:ovn-transport-zones=tz1,tz2
+
+as hv2
+ovs-vsctl set open . external-ids:ovn-transport-zones=tz1
+
+as hv3
+ovs-vsctl set open . external-ids:ovn-transport-zones=tz2
+
+dnl Wait for the changes to be propagated
+ovn-nbctl --wait=sb --timeout=3 sync
+ovn-nbctl --wait=hv --timeout=3 sync
+
+as hv1
+AT_CHECK([ovs-vsctl --bare --columns=name find interface type="geneve" | awk NF | sort], [0],
+[[ovn-hv2-0
+ovn-hv3-0
+]])
+
+as hv2
+AT_CHECK([ovs-vsctl --bare --columns=name find interface type="geneve" | awk NF | sort], [0],
+[[ovn-hv1-0
+]])
+
+as hv3
+AT_CHECK([ovs-vsctl --bare --columns=name find interface type="geneve" | awk NF | sort], [0],
+[[ovn-hv1-0
+]])
+
+as hv4
+AT_CHECK([ovs-vsctl --bare --columns=name find interface type="geneve" | awk NF | sort], [0],
+[[ovn-hv5-0
+]])
+
+as hv5
+AT_CHECK([ovs-vsctl --bare --columns=name find interface type="geneve" | awk NF | sort], [0],
+[[ovn-hv4-0
+]])
+
+dnl Removing the transport zones should make all Chassis to create
+dnl tunnels between every other Chassis again
+for i in 1 2 3; do
+    as hv$i
+    ovs-vsctl remove open . external-ids ovn-transport-zones
+done
+
+dnl Wait for the changes to be propagated
+ovn-nbctl --wait=sb --timeout=3 sync
+ovn-nbctl --wait=hv --timeout=3 sync
+
+as hv1
+AT_CHECK([ovs-vsctl --bare --columns=name find interface type="geneve" | awk NF | sort], [0],
+[[ovn-hv2-0
+ovn-hv3-0
+ovn-hv4-0
+ovn-hv5-0
+]])
+
+as hv2
+AT_CHECK([ovs-vsctl --bare --columns=name find interface type="geneve" | awk NF | sort], [0],
+[[ovn-hv1-0
+ovn-hv3-0
+ovn-hv4-0
+ovn-hv5-0
+]])
+
+as hv3
+AT_CHECK([ovs-vsctl --bare --columns=name find interface type="geneve" | awk NF | sort], [0],
+[[ovn-hv1-0
+ovn-hv2-0
+ovn-hv4-0
+ovn-hv5-0
+]])
+
+as hv4
+AT_CHECK([ovs-vsctl --bare --columns=name find interface type="geneve" | awk NF | sort], [0],
+[[ovn-hv1-0
+ovn-hv2-0
+ovn-hv3-0
+ovn-hv5-0
+]])
+
+as hv5
+AT_CHECK([ovs-vsctl --bare --columns=name find interface type="geneve" | awk NF | sort], [0],
+[[ovn-hv1-0
+ovn-hv2-0
+ovn-hv3-0
+ovn-hv4-0
+]])
+
+OVN_CLEANUP([hv1], [hv2], [hv3])
+AT_CLEANUP

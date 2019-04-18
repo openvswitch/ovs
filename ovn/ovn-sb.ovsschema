@@ -1,7 +1,7 @@
 {
     "name": "OVN_Southbound",
-    "version": "2.2.0",
-    "cksum": "2100715070 17222",
+    "version": "2.3.0",
+    "cksum": "3092285199 17409",
     "tables": {
         "SB_Global": {
             "columns": {
@@ -37,7 +37,10 @@
                 "nb_cfg": {"type": {"key": "integer"}},
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
-                             "min": 0, "max": "unlimited"}}},
+                             "min": 0, "max": "unlimited"}},
+                "transport_zones" : {"type": {"key": "string",
+                                              "min": 0,
+                                              "max": "unlimited"}}},
             "isRoot": true,
             "indexes": [["name"]]},
         "Encap": {

@@ -512,6 +512,14 @@ get_nb_cfg(const struct sbrec_sb_global_table *sb_global_table)
     return sb ? sb->nb_cfg : 0;
 }
 
+static const char *
+get_transport_zones(const struct ovsrec_open_vswitch_table *ovs_table)
+{
+    const struct ovsrec_open_vswitch *cfg
+        = ovsrec_open_vswitch_table_first(ovs_table);
+    return smap_get_def(&cfg->external_ids, "ovn-transport-zones", "");
+}
+
 static void
 ctrl_register_ovs_idl(struct ovsdb_idl *ovs_idl)
 {
@@ -679,6 +687,11 @@ main(int argc, char *argv[])
              * <datapath-tunnel-key>_<port-tunnel-key> */
             struct sset local_lport_ids = SSET_INITIALIZER(&local_lport_ids);
             struct sset active_tunnels = SSET_INITIALIZER(&active_tunnels);
+            /* Contains the transport zones that this Chassis belongs to */
+            struct sset transport_zones = SSET_INITIALIZER(&transport_zones);
+            sset_from_delimited_string(&transport_zones,
+                get_transport_zones(ovsrec_open_vswitch_table_get(
+                                    ovs_idl_loop.idl)), ",");
 
             const struct ovsrec_bridge *br_int
                 = get_br_int(ovs_idl_txn,
@@ -693,12 +706,13 @@ main(int argc, char *argv[])
                 chassis = chassis_run(
                     ovnsb_idl_txn, sbrec_chassis_by_name,
                     ovsrec_open_vswitch_table_get(ovs_idl_loop.idl),
-                    chassis_id, br_int);
+                    chassis_id, br_int, &transport_zones);
                 encaps_run(
                     ovs_idl_txn,
                     ovsrec_bridge_table_get(ovs_idl_loop.idl), br_int,
                     sbrec_chassis_table_get(ovnsb_idl_loop.idl), chassis_id,
-                    sbrec_sb_global_first(ovnsb_idl_loop.idl));
+                    sbrec_sb_global_first(ovnsb_idl_loop.idl),
+                    &transport_zones);
 
                 if (ofctrl_is_connected()) {
                     /* Calculate the active tunnels only if have an an active
@@ -848,6 +862,7 @@ main(int argc, char *argv[])
             sset_destroy(&local_lports);
             sset_destroy(&local_lport_ids);
             sset_destroy(&active_tunnels);
+            sset_destroy(&transport_zones);
 
             struct local_datapath *cur_node, *next_node;
             HMAP_FOR_EACH_SAFE (cur_node, next_node, hmap_node,
