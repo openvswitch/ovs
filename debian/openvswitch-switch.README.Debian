@@ -40,8 +40,8 @@ In order of increasing manual effort, these are:
        * Build and install the kernel module by hand.
 
 
-Debian network scripts integration
-----------------------------------
+Debian network scripts (ifupdown) integration
+------------------------------------------------
 This package lets a user to optionally configure Open vSwitch bridges
 and ports from /etc/network/interfaces. Please refer to the interfaces(5)
 manpage for more details regarding /etc/network/interfaces.
@@ -204,6 +204,78 @@ ex 8: Create and destroy bridges.
 
 ifup --allow=ovs $list_of_bridges
 ifdown --allow=ovs $list_of_bridges
+
+Open vSwitch integration with systemd-networkd
+-----------------------------------------------
+
+There is no native integration of OVS with systemd-networkd. That is,
+you cannot create OVS bridges, ports and bonds by simply writing configuration
+files in /etc/systemd/network.  But, you can create OVS devices using ovs-vsctl
+and then write configuration files to provide them IP addresses.
+
+As soon as a OVS device is visible, systemd-networkd will provide that device
+an IP address.  Since OVS database is persistent across reboots, the OVS
+devices will get re-created after a reboot as soon as OVS startup script is
+invoked. And systemd-networkd will immediately assign the configuration defined
+in /etc/systemd/network.
+
+Example:
+
+If you have a physical ethernet device "ens160" which has been configured with
+DHCP, your systemd-networkd's .network config file will look something like
+this:
+
+```
+[Match]
+Name=ens160
+
+[Network]
+DHCP=ipv4
+
+[DHCP]
+ClientIdentifier=mac
+```
+
+Please note how the DHCP ClientIdentifier above has been configured with the
+mac address.
+
+To create a OVS bridge "br-ens160" and add "ens160" as a port of that
+bridge, you can change the .network configuration for "ens160" to look like:
+
+```
+[Match]
+Name=ens160
+```
+
+Now create a new .network configuration file for "br-ens160". Something like:
+
+```
+[Match]
+Name=br-ens160
+
+[Network]
+DHCP=ipv4
+
+[DHCP]
+ClientIdentifier=mac
+```
+
+Now, use ovs-vsctl to create br-ens160 and add ens160 as a port of it.  You
+will also have to flush the IP address of ens160 and restart systemd-networkd
+in the same line. It is important to let br-ens160 have the same mac address as
+ens160 to get the same IP address to br-ens160 from the DHCP server.  In the
+below command, "$mac_of_ens160" holds the mac address of ens160. For e.g:
+
+```
+mac_of_ens160='"00:0c:29:77:27:7a"'
+ovs-vsctl --may-exist add-br br-ens160 -- \
+    --may-exist add-port br-ens160 ens160 -- \
+    set interface br-ens160 mac="$mac_of_ens160"; ip addr flush dev ens160; \
+    systemctl restart systemd-networkd
+```
+
+br-ens160 should now have the same DHCP IP. It should also have the correct
+DNS resolution servers configured.
 
 Notes on dependencies:
 ---------------------
