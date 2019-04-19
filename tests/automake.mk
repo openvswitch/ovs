@@ -144,6 +144,7 @@ $(srcdir)/tests/fuzz-regression-list.at: tests/automake.mk
 
 OVSDB_CLUSTER_TESTSUITE_AT = \
 	tests/ovsdb-cluster-testsuite.at \
+	tests/ovsdb-execution.at \
 	tests/ovsdb-cluster.at
 
 SYSTEM_KMOD_TESTSUITE_AT = \
