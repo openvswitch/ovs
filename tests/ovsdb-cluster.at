@@ -148,8 +148,6 @@ AT_CLEANUP
 
 AT_SETUP([OVSDB cluster - txn on follower-2, leader crash before sending execRep, follower-2 becomes leader])
 AT_KEYWORDS([ovsdb server negative unix cluster pending-txn])
-# XXX: fix bug before enabling this test
-AT_CHECK([exit 77])
 ovsdb_cluster_failure_test 2 3 1 crash-before-sending-execute-command-reply 2
 AT_CLEANUP
 
@@ -160,8 +158,6 @@ AT_CLEANUP
 
 AT_SETUP([OVSDB cluster - txn on follower-2, leader crash after sending execRep, follower-2 becomes leader])
 AT_KEYWORDS([ovsdb server negative unix cluster pending-txn])
-# XXX: fix bug before enabling this test
-AT_CHECK([exit 77])
 ovsdb_cluster_failure_test 2 3 1 crash-after-sending-execute-command-reply 2
 AT_CLEANUP
 
@@ -172,8 +168,6 @@ AT_CLEANUP
 
 AT_SETUP([OVSDB cluster - txn on leader, leader crash before sending appendReq, follower-2 becomes leader])
 AT_KEYWORDS([ovsdb server negative unix cluster pending-txn])
-# XXX: fix bug before enabling this test
-AT_CHECK([exit 77])
 ovsdb_cluster_failure_test 1 2 1 crash-before-sending-append-request 2
 AT_CLEANUP
 

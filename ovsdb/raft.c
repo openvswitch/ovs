@@ -286,6 +286,8 @@ struct raft {
 
     /* Candidates only.  Reinitialized at start of election. */
     int n_votes;                /* Number of votes for me. */
+    bool candidate_retrying;    /* The first round of election timed-out and it
+                                   is now retrying. */
 };
 
 /* All Raft structures. */
@@ -985,11 +987,17 @@ raft_get_sid(const struct raft *raft)
 /* Returns true if 'raft' has completed joining its cluster, has not left or
  * initiated leaving the cluster, does not have failed disk storage, and is
  * apparently connected to the leader in a healthy way (or is itself the
- * leader).*/
+ * leader).
+ *
+ * If 'raft' is candidate:
+ * a) if it is the first round of election, consider it as connected, hoping
+ *    it will successfully elect a new leader soon.
+ * b) if it is already retrying, consider it as disconnected (so that clients
+ *    may decide to reconnect to other members). */
 bool
 raft_is_connected(const struct raft *raft)
 {
-    return (raft->role != RAFT_CANDIDATE
+    return (!(raft->role == RAFT_CANDIDATE && raft->candidate_retrying)
             && !raft->joining
             && !raft->leaving
             && !raft->left
@@ -1608,6 +1616,7 @@ raft_start_election(struct raft *raft, bool leadership_transfer)
     }
 
     ovs_assert(raft->role != RAFT_LEADER);
+    raft->candidate_retrying = (raft->role == RAFT_CANDIDATE);
     raft->role = RAFT_CANDIDATE;
 
     raft->n_votes = 0;
