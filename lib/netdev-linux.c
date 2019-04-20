@@ -2470,10 +2470,7 @@ netdev_linux_set_policing(struct netdev *netdev_,
         netdev->cache_valid &= ~VALID_POLICING;
     }
 
-    error = get_ifindex(netdev_, &ifindex);
-    if (error) {
-        goto out;
-    }
+    COVERAGE_INC(netdev_set_policing);
 
     /* Use matchall for policing when offloadling ovs with tc-flower. */
     if (netdev_is_flow_api_enabled()) {
@@ -2485,7 +2482,11 @@ netdev_linux_set_policing(struct netdev *netdev_,
         return error;
     }
 
-    COVERAGE_INC(netdev_set_policing);
+    error = get_ifindex(netdev_, &ifindex);
+    if (error) {
+        goto out;
+    }
+
     /* Remove any existing ingress qdisc. */
     error = tc_add_del_qdisc(ifindex, false, 0, TC_INGRESS);
     if (error) {
