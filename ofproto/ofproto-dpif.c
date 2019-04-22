@@ -1290,6 +1290,48 @@ check_ct_clear(struct dpif_backer *backer)
     return supported;
 }
 
+
+/* Tests whether 'backer''s datapath supports the
+ * OVS_ACTION_ATTR_CHECK_PKT_LEN action. */
+static bool
+check_check_pkt_len(struct dpif_backer *backer)
+{
+    struct odputil_keybuf keybuf;
+    struct ofpbuf actions;
+    struct ofpbuf key;
+    struct flow flow;
+    bool supported;
+
+    struct odp_flow_key_parms odp_parms = {
+        .flow = &flow,
+        .probe = true,
+    };
+
+    memset(&flow, 0, sizeof flow);
+    ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
+    odp_flow_key_from_flow(&odp_parms, &key);
+    ofpbuf_init(&actions, 64);
+    size_t cpl_start;
+
+    cpl_start = nl_msg_start_nested(&actions, OVS_ACTION_ATTR_CHECK_PKT_LEN);
+    nl_msg_put_u16(&actions, OVS_CHECK_PKT_LEN_ATTR_PKT_LEN, 100);
+
+    /* Putting these actions without any data is good enough to check
+     * if check_pkt_len is supported or not. */
+    nl_msg_put_flag(&actions, OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_GREATER);
+    nl_msg_put_flag(&actions, OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_LESS_EQUAL);
+
+    nl_msg_end_nested(&actions, cpl_start);
+
+    supported = dpif_probe_feature(backer->dpif, "check_pkt_len", &key,
+                                   &actions, NULL);
+    ofpbuf_uninit(&actions);
+    VLOG_INFO("%s: Datapath %s check_pkt_len action",
+              dpif_name(backer->dpif), supported ? "supports"
+                                                 : "does not support");
+    return supported;
+}
+
 /* Probe the highest dp_hash algorithm supported by the datapath. */
 static size_t
 check_max_dp_hash_alg(struct dpif_backer *backer)
@@ -1397,6 +1439,7 @@ check_support(struct dpif_backer *backer)
     backer->rt_support.ct_eventmask = check_ct_eventmask(backer);
     backer->rt_support.ct_clear = check_ct_clear(backer);
     backer->rt_support.max_hash_alg = check_max_dp_hash_alg(backer);
+    backer->rt_support.check_pkt_len = check_check_pkt_len(backer);
 
     /* Flow fields. */
     backer->rt_support.odp.ct_state = check_ct_state(backer);

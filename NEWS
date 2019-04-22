@@ -5,6 +5,7 @@ Post-v2.11.0
        hugepage memory that can be used by DPDK.
    - OpenFlow:
      * Removed support for OpenFlow 1.6 (draft), which ONF abandoned.
+     * New action "check_pkt_larger".
    - Userspace datapath:
      * ICMPv6 ND enhancements: support for match and set ND options type
        and reserved fields.
@@ -17,6 +18,7 @@ Post-v2.11.0
        conntrack fragmentation support.
      * New "ovs-appctl dpctl/ipf-get-status" command for userspace datapath
        conntrack fragmentation support.
+     * New action "check_pkt_len".
    - OVSDB:
      * OVSDB clients can now resynchronize with clustered servers much more
        quickly after a brief disconnection, saving bandwidth and CPU time.

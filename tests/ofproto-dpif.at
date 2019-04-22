@@ -10503,3 +10503,166 @@ AT_CHECK([grep flow_del ovs-vswitchd.log], [1])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - check_pkt_larger action])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2 3 4
+
+AT_DATA([flows.txt], [dnl
+table=0,in_port=1 actions=check_pkt_larger(200)->NXM_NX_REG0[[0]],resubmit(,1)
+table=1,in_port=1,reg0=0x1/0x1 actions=output:2,resubmit(,2)
+table=1,in_port=1,actions=output:3,resubmit(,2)
+table=2,in_port=1,actions=mod_dl_dst:82:82:82:82:82:82,output:4
+])
+
+AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: check_pkt_len(size=200,gt(2,set(eth(dst=82:82:82:82:82:82)),4),le(3,set(eth(dst=82:82:82:82:82:82)),4))
+])
+
+dnl Test flow xlate check_pkt_large clone action without using datapath check_pkt_len action.
+AT_CHECK([ovs-appctl dpif/set-dp-features br0 check_pkt_len false], [0], [ignore])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([tail -3 stdout], [0], [dnl
+Datapath actions: 3,set(eth(dst=82:82:82:82:82:82)),4
+This flow is handled by the userspace slow path because it:
+  - Uses action(s) not supported by datapath.
+])
+
+dnl Enable datapath check_pkt_len action
+AT_CHECK([ovs-appctl dpif/set-dp-features br0 check_pkt_len true], [0], [ignore])
+
+ovs-ofctl del-flows br0
+
+AT_DATA([flows.txt], [dnl
+table=0,in_port=1 actions=check_pkt_larger(200)->NXM_NX_REG0[[0]],resubmit(,1)
+table=1,in_port=1,priority=200,reg0=0x1/0x1 actions=output:2
+])
+
+AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: check_pkt_len(size=200,gt(2),le(drop))
+])
+
+ovs-ofctl del-flows br0
+AT_DATA([flows.txt], [dnl
+table=0,in_port=1 actions=check_pkt_larger(200)->NXM_NX_REG0[[0]]
+])
+
+AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: check_pkt_len(size=200,gt(drop),le(drop))
+])
+
+ovs-ofctl del-flows br0
+AT_DATA([flows.txt], [dnl
+table=0,in_port=1 actions=check_pkt_larger(200)->NXM_NX_REG0[[0]],resubmit(,1)
+table=1,in_port=1,priority=200,reg0=0x1/0x1,ip actions=clone(set_field:192.168.3.3->ip_src),clone(set_field:192.168.4.4->ip_dst,output:2),clone(mod_dl_src:80:81:81:81:81:81,set_field:192.168.5.5->ip_dst,output:3),output:4
+table=1,in_port=1,priority=0,ip actions=clone(set_field:192.168.3.3->ip_src),clone(set_field:192.168.4.4->ip_dst,output:2),clone(ct(commit),output:3),output:4
+])
+
+AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: check_pkt_len(size=200,gt(set(ipv4(dst=192.168.4.4)),2,set(eth(src=80:81:81:81:81:81)),set(ipv4(dst=192.168.5.5)),3,set(eth(src=50:54:00:00:00:09)),set(ipv4(dst=10.10.10.1)),4),le(set(ipv4(dst=192.168.4.4)),2,set(ipv4(dst=10.10.10.1)),clone(ct(commit),3),4))
+])
+
+AT_DATA([flows.txt], [dnl
+table=0,priority=0 actions=check_pkt_larger(200)->NXM_NX_REG0[[0]],resubmit(,1)
+table=1,in_port=1,priority=200,reg0=0x1/0x1,ip actions=clone(set_field:192.168.3.3->ip_src, resubmit(,0))
+table=1,in_port=1,priority=0,ip actions=clone(set_field:192.168.3.4->ip_src, resubmit(,0))
+])
+
+AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
+ovs-ofctl dump-flows br0
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([tail -3 stdout], [0], [dnl
+Megaflow: recirc_id=0,eth,ip,reg0=0/0x1,in_port=1,nw_src=10.10.10.2,nw_frag=no
+Datapath actions: drop
+Translation failed (Recursion too deep), packet is dropped.
+])
+
+ovs-ofctl del-flows br0
+AT_DATA([flows.txt], [dnl
+table=0,priority=0 actions=check_pkt_larger(200)->NXM_NX_REG0[[0]],resubmit(,1)
+table=1,ip,nw_src=192.168.3.3 actions=output:3
+table=1,ip,nw_src=192.168.3.4 actions=output:4
+table=1,reg0=0x1/0x1,ip actions=clone(set_field:192.168.3.3->ip_src, resubmit(,0))
+table=1,ip actions=clone(set_field:192.168.3.4->ip_src, resubmit(,0))
+])
+
+AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
+ovs-ofctl dump-flows br0
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: check_pkt_len(size=200,gt(set(ipv4(src=192.168.3.3)),check_pkt_len(size=200,gt(3),le(3))),le(set(ipv4(src=192.168.3.4)),check_pkt_len(size=200,gt(4),le(4))))
+])
+
+ovs-ofctl del-flows br0
+AT_DATA([flows.txt], [dnl
+table=0,in_port=1 actions=check_pkt_larger(200)->NXM_NX_REG0[[0]],resubmit(,1)
+table=1,in_port=1,reg0=0x1/0x1 actions=mod_dl_dst:82:82:82:82:82:82,controller(),resubmit(,2)
+table=1,in_port=1 actions=resubmit(,2)
+table=2,ip,dl_dst=82:82:82:82:82:82 actions=ct(table=3)
+table=2,ip,dl_dst=50:54:00:00:00:0a actions=ct(table=3)
+table=3,ip,reg0=0x1/0x1 actions=output:2
+table=3,ip actions=output:4
+])
+
+AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([cat stdout | grep Datapath -B1], [0], [dnl
+Megaflow: recirc_id=0,eth,ip,in_port=1,dl_dst=50:54:00:00:00:0a,nw_frag=no
+Datapath actions: check_pkt_len(size=200,gt(set(eth(dst=82:82:82:82:82:82)),userspace(pid=0,controller(reason=1,dont_send=1,continuation=0,recirc_id=1,rule_cookie=0,controller_id=0,max_len=65535)),ct,recirc(0x2)),le(ct,recirc(0x3)))
+--
+Megaflow: recirc_id=0x2,eth,ip,in_port=1,nw_frag=no
+Datapath actions: 2
+--
+Megaflow: recirc_id=0x3,eth,ip,in_port=1,nw_frag=no
+Datapath actions: 4
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - check_pkt_larger with continuation and ct])
+OVS_VSWITCHD_START
+add_of_ports --pcap br0 `seq 1 4`
+
+AT_CAPTURE_FILE([ofctl_monitor0.log])
+AT_CHECK([ovs-ofctl monitor br0 resume --detach --no-chdir --pidfile=ovs-ofctl0.pid 2> ofctl_monitor0.log])
+
+AT_DATA([flows.txt], [dnl
+table=0,in_port=1 actions=check_pkt_larger(150)->NXM_NX_REG0[[0]],resubmit(,1)
+table=1,ip,reg0=0x1/0x1 actions=mod_dl_dst:82:82:82:82:82:82,controller(pause),resubmit(,2)
+table=1,ip,reg0=0 actions=mod_dl_dst:83:83:83:83:83:83,controller(pause),resubmit(,2)
+table=2,ip,dl_dst=82:82:82:82:82:82 actions=ct(table=3)
+table=2,ip,dl_dst=83:83:83:83:83:83 actions=ct(table=3)
+table=3,ip,reg0=0x1/0x1 actions=ct(commit),output:2
+table=3,ip actions=ct(commit),output:4
+])
+
+AT_CHECK([ovs-ofctl --protocols=OpenFlow10 add-flows br0 flows.txt])
+
+flow="in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no),icmp(type=8,code=0)"
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 "$flow"], [0], [stdout])
+
+OVS_WAIT_UNTIL([test 1 = `ovs-ofctl parse-pcap p4-tx.pcap \
+| grep dl_dst=83:83:83:83:83:83 | wc -l`])
+AT_CHECK([test 0 = `ovs-ofctl parse-pcap p2-tx.pcap | wc -l`])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 "$flow" --len 200], [0], [stdout])
+
+OVS_WAIT_UNTIL([test 1 = `ovs-ofctl parse-pcap p2-tx.pcap \
+| grep dl_dst=82:82:82:82:82:82 | wc -l`])
+AT_CHECK([test 1 = `ovs-ofctl parse-pcap p2-tx.pcap | wc -l`])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP

@@ -123,6 +123,8 @@ struct vl_mff_map;
     OFPACT(NAT,             ofpact_nat,         ofpact, "nat")          \
     OFPACT(OUTPUT_TRUNC,    ofpact_output_trunc,ofpact, "output_trunc") \
     OFPACT(CLONE,           ofpact_nest,        actions, "clone")       \
+    OFPACT(CHECK_PKT_LARGER, ofpact_check_pkt_larger, ofpact,           \
+           "check_pkt_larger")                                          \
                                                                         \
     /* Debugging actions.                                               \
      *                                                                  \
@@ -223,6 +225,13 @@ ofpact_last(const struct ofpact *a, const struct ofpact *ofpacts,
             size_t ofpact_len)
 {
     return ofpact_next(a) == ofpact_end(ofpacts, ofpact_len);
+}
+
+static inline size_t
+ofpact_remaining_len(const struct ofpact *a, const struct ofpact *ofpacts,
+                     size_t ofpact_len)
+{
+    return ofpact_len - ((uint8_t *)a - (uint8_t *)ofpacts);
 }
 
 static inline const struct ofpact *
@@ -620,6 +629,16 @@ struct ofpact_meter {
     );
 };
 
+/* OFPACT_CHECK_PKT_LARGER.
+ *
+ * Used for NXAST_CHECK_PKT_LARGER. */
+struct ofpact_check_pkt_larger {
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        struct mf_subfield dst;
+        uint16_t pkt_len;
+    );
+};
 /* OFPACT_WRITE_ACTIONS, OFPACT_CLONE.
  *
  * Used for OFPIT11_WRITE_ACTIONS, NXAST_CLONE. */

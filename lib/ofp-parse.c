@@ -335,6 +335,16 @@ ofputil_parse_key_value(char **stringp, char **keyp, char **valuep)
     char *value = *stringp;
     size_t value_len = parse_value(value, value_delims);
     char value_delim = value[value_len];
+
+    /* Handle the special case if the value is of the form "(x)->y".
+     * After parsing, 'valuep' will be pointing to - "x)->y".
+     * */
+    if (key_delim == '(' && value[value_len] == ')' &&
+        value[value_len + 1] == '-' && value[value_len + 2] == '>') {
+        value_delims = ", \t\r\n";
+        value_len += parse_value(&value[value_len], value_delims);
+        value_delim = value[value_len];
+    }
     value[value_len] = '\0';
     *stringp += value_len + (value_delim != '\0');
 

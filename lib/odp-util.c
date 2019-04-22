@@ -132,6 +132,7 @@ odp_action_len(uint16_t type)
     case OVS_ACTION_ATTR_CLONE: return ATTR_LEN_VARIABLE;
     case OVS_ACTION_ATTR_PUSH_NSH: return ATTR_LEN_VARIABLE;
     case OVS_ACTION_ATTR_POP_NSH: return 0;
+    case OVS_ACTION_ATTR_CHECK_PKT_LEN: return ATTR_LEN_VARIABLE;
 
     case OVS_ACTION_ATTR_UNSPEC:
     case __OVS_ACTION_ATTR_MAX:
@@ -1044,6 +1045,42 @@ format_odp_set_nsh(struct ds *ds, const struct nlattr *attr)
     ds_put_cstr(ds, "))");
 }
 
+static void
+format_odp_check_pkt_len_action(struct ds *ds, const struct nlattr *attr,
+                                const struct hmap *portno_names OVS_UNUSED)
+{
+    static const struct nl_policy ovs_cpl_policy[] = {
+        [OVS_CHECK_PKT_LEN_ATTR_PKT_LEN] = { .type = NL_A_U16 },
+        [OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_GREATER] = { .type = NL_A_NESTED },
+        [OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_LESS_EQUAL]
+            = { .type = NL_A_NESTED },
+    };
+    struct nlattr *a[ARRAY_SIZE(ovs_cpl_policy)];
+    ds_put_cstr(ds, "check_pkt_len");
+    if (!nl_parse_nested(attr, ovs_cpl_policy, a, ARRAY_SIZE(a))) {
+        ds_put_cstr(ds, "(error)");
+        return;
+    }
+
+    if (!a[OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_GREATER] ||
+        !a[OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_LESS_EQUAL]) {
+        ds_put_cstr(ds, "(error)");
+        return;
+    }
+
+    uint16_t pkt_len = nl_attr_get_u16(a[OVS_CHECK_PKT_LEN_ATTR_PKT_LEN]);
+    ds_put_format(ds, "(size=%u,gt(", pkt_len);
+    const struct nlattr *acts;
+    acts = a[OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_GREATER];
+    format_odp_actions(ds, nl_attr_get(acts), nl_attr_get_size(acts),
+                       portno_names);
+
+    ds_put_cstr(ds, "),le(");
+    acts = a[OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_LESS_EQUAL];
+    format_odp_actions(ds, nl_attr_get(acts), nl_attr_get_size(acts),
+                           portno_names);
+    ds_put_cstr(ds, "))");
+}
 
 static void
 format_odp_action(struct ds *ds, const struct nlattr *a,
@@ -1182,6 +1219,9 @@ format_odp_action(struct ds *ds, const struct nlattr *a,
     }
     case OVS_ACTION_ATTR_POP_NSH:
         ds_put_cstr(ds, "pop_nsh()");
+        break;
+    case OVS_ACTION_ATTR_CHECK_PKT_LEN:
+        format_odp_check_pkt_len_action(ds, a, portno_names);
         break;
     case OVS_ACTION_ATTR_UNSPEC:
     case __OVS_ACTION_ATTR_MAX:
@@ -2396,6 +2436,52 @@ parse_odp_action(const char *s, const struct simap *port_names,
         if (!strncmp(s, "ct_clear", 8)) {
             nl_msg_put_flag(actions, OVS_ACTION_ATTR_CT_CLEAR);
             return 8;
+        }
+    }
+
+    {
+        uint16_t pkt_len;
+        int n = -1;
+        if (ovs_scan(s, "check_pkt_len(size=%"SCNi16",gt(%n", &pkt_len, &n)) {
+            size_t cpl_ofs, actions_ofs;
+            cpl_ofs = nl_msg_start_nested(actions,
+                                          OVS_ACTION_ATTR_CHECK_PKT_LEN);
+            nl_msg_put_u16(actions, OVS_CHECK_PKT_LEN_ATTR_PKT_LEN, pkt_len);
+            actions_ofs = nl_msg_start_nested(
+                actions, OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_GREATER);
+
+            int retval;
+            if (!strncasecmp(s + n, "drop", 4)) {
+                n += 4;
+            } else {
+                retval = parse_action_list(s + n, port_names, actions);
+                if (retval < 0) {
+                    return retval;
+                }
+
+                n += retval;
+            }
+            nl_msg_end_nested(actions, actions_ofs);
+            retval = -1;
+            if (!ovs_scan(s + n, "),le(%n", &retval)) {
+                return -EINVAL;
+            }
+            n += retval;
+
+            actions_ofs = nl_msg_start_nested(
+                actions, OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_LESS_EQUAL);
+            if (!strncasecmp(s + n, "drop", 4)) {
+                n += 4;
+            } else {
+                retval = parse_action_list(s + n, port_names, actions);
+                if (retval < 0) {
+                    return retval;
+                }
+                n += retval;
+            }
+            nl_msg_end_nested(actions, actions_ofs);
+            nl_msg_end_nested(actions, cpl_ofs);
+            return s[n + 1] == ')' ? n + 2 : -EINVAL;
         }
     }
 

@@ -487,6 +487,7 @@ ctx_cancel_freeze(struct xlate_ctx *ctx)
         ctx->recirc_update_dp_hash = false;
         ofpbuf_clear(&ctx->frozen_actions);
         ctx->frozen_actions.header = NULL;
+        ctx->pause = NULL;
     }
 }
 
@@ -5584,6 +5585,7 @@ reversible_actions(const struct ofpact *ofpacts, size_t ofpacts_len)
         case OFPACT_UNROLL_XLATE:
         case OFPACT_WRITE_ACTIONS:
         case OFPACT_WRITE_METADATA:
+        case OFPACT_CHECK_PKT_LARGER:
             break;
 
         case OFPACT_CT:
@@ -5892,6 +5894,7 @@ freeze_unroll_actions(const struct ofpact *a, const struct ofpact *end,
         case OFPACT_CT:
         case OFPACT_CT_CLEAR:
         case OFPACT_NAT:
+        case OFPACT_CHECK_PKT_LARGER:
             /* These may not generate PACKET INs. */
             break;
 
@@ -6082,6 +6085,118 @@ compose_ct_clear_action(struct xlate_ctx *ctx)
     if (ctx->xbridge->support.ct_clear) {
         nl_msg_put_flag(ctx->odp_actions,  OVS_ACTION_ATTR_CT_CLEAR);
     }
+}
+
+/* check_pkt_larger action checks the packet length and stores the
+ * result in the register bit. We translate this action to the
+ * datapath action - 'check_pkt_len' whose format
+ * is: 'check_pkt_len(pkt_len, ge(actions), le(actions))'.
+ *
+ * We first set the destination register bit to 1 and call
+ * 'do_xlate_actions' for the case - packet len greater than
+ * the specified packet length.
+ *
+ * We then set the destination register bit to 0 and call
+ * 'do_xlate_actions' for the case - packet length is lesser or
+ * equal to the specified packet length.
+ *
+ * It is possible for freezing to happen for both the cases.
+ */
+static void
+xlate_check_pkt_larger(struct xlate_ctx *ctx,
+                       struct ofpact_check_pkt_larger *check_pkt_larger,
+                       const struct ofpact *remaining_acts,
+                       size_t remaining_acts_len)
+{
+    union mf_subvalue value;
+    memset(&value, 0, sizeof value);
+    if (!ctx->xbridge->support.check_pkt_len) {
+        uint8_t is_pkt_larger = 0;
+        if (ctx->xin->packet) {
+            is_pkt_larger =
+                dp_packet_size(ctx->xin->packet) > check_pkt_larger->pkt_len;
+        }
+        value.u8_val = is_pkt_larger;
+        mf_write_subfield_flow(&check_pkt_larger->dst, &value,
+                               &ctx->xin->flow);
+        /* If datapath doesn't support check_pkt_len action, then set the
+         * SLOW_ACTION flag. If we don't set SLOW_ACTION, we
+         * will push a flow to the datapath based on the packet length
+         * in ctx->xin->packet. For subsequent patches which match the
+         * same flow, datapath will apply the actions without considering
+         * the packet length. This results in wrong actions being applied.
+         */
+        ctx->xout->slow |= SLOW_ACTION;
+        return;
+    }
+
+    struct ofpbuf old_stack = ctx->stack;
+    union mf_subvalue new_stack[1024 / sizeof(union mf_subvalue)];
+    ofpbuf_use_stub(&ctx->stack, new_stack, sizeof new_stack);
+    ofpbuf_put(&ctx->stack, old_stack.data, old_stack.size);
+
+    struct ofpbuf old_action_set = ctx->action_set;
+    uint64_t actset_stub[1024 / 8];
+    ofpbuf_use_stub(&ctx->action_set, actset_stub, sizeof actset_stub);
+    ofpbuf_put(&ctx->action_set, old_action_set.data, old_action_set.size);
+
+    struct flow old_flow = ctx->xin->flow;
+    xlate_commit_actions(ctx);
+    struct flow old_base = ctx->base_flow;
+    bool old_was_mpls = ctx->was_mpls;
+    bool old_conntracked = ctx->conntracked;
+
+    size_t offset = nl_msg_start_nested(ctx->odp_actions,
+                                        OVS_ACTION_ATTR_CHECK_PKT_LEN);
+    nl_msg_put_u16(ctx->odp_actions, OVS_CHECK_PKT_LEN_ATTR_PKT_LEN,
+                   check_pkt_larger->pkt_len);
+    size_t offset_attr = nl_msg_start_nested(
+        ctx->odp_actions, OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_GREATER);
+    value.u8_val = 1;
+    mf_write_subfield_flow(&check_pkt_larger->dst, &value, &ctx->xin->flow);
+    do_xlate_actions(remaining_acts, remaining_acts_len, ctx, true, false);
+    if (!ctx->freezing) {
+        xlate_action_set(ctx);
+    }
+    if (ctx->freezing) {
+        finish_freezing(ctx);
+    }
+    nl_msg_end_nested(ctx->odp_actions, offset_attr);
+
+    ctx->base_flow = old_base;
+    ctx->was_mpls = old_was_mpls;
+    ctx->conntracked = old_conntracked;
+    ctx->xin->flow = old_flow;
+
+    /* If the flow translation for the IF_GREATER case requires freezing,
+     * then ctx->exit would be true. Reset to false so that we can
+     * do flow translation for 'IF_LESS_EQUAL' case. finish_freezing()
+     * would have taken care of Undoing the changes done for freeze. */
+    ctx->exit = false;
+
+    offset_attr = nl_msg_start_nested(
+        ctx->odp_actions, OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_LESS_EQUAL);
+    value.u8_val = 0;
+    mf_write_subfield_flow(&check_pkt_larger->dst, &value, &ctx->xin->flow);
+    do_xlate_actions(remaining_acts, remaining_acts_len, ctx, true, false);
+    if (!ctx->freezing) {
+        xlate_action_set(ctx);
+    }
+    if (ctx->freezing) {
+        finish_freezing(ctx);
+    }
+    nl_msg_end_nested(ctx->odp_actions, offset_attr);
+    nl_msg_end_nested(ctx->odp_actions, offset);
+
+    ofpbuf_uninit(&ctx->action_set);
+    ctx->action_set = old_action_set;
+    ofpbuf_uninit(&ctx->stack);
+    ctx->stack = old_stack;
+    ctx->base_flow = old_base;
+    ctx->was_mpls = old_was_mpls;
+    ctx->conntracked = old_conntracked;
+    ctx->xin->flow = old_flow;
+    ctx->exit = true;
 }
 
 static void
@@ -6406,6 +6521,7 @@ recirc_for_mpls(const struct ofpact *a, struct xlate_ctx *ctx)
     case OFPACT_WRITE_ACTIONS:
     case OFPACT_WRITE_METADATA:
     case OFPACT_GOTO_TABLE:
+    case OFPACT_CHECK_PKT_LARGER:
     default:
         break;
     }
@@ -6861,6 +6977,21 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         case OFPACT_DEBUG_SLOW:
             ctx->xout->slow |= SLOW_ACTION;
             break;
+
+        case OFPACT_CHECK_PKT_LARGER: {
+            if (last) {
+                /* If this is last action, then there is no need to
+                 * translate the action. */
+                break;
+            }
+            const struct ofpact *remaining_acts = ofpact_next(a);
+            size_t remaining_acts_len = ofpact_remaining_len(remaining_acts,
+                                                             ofpacts,
+                                                             ofpacts_len);
+            xlate_check_pkt_larger(ctx, ofpact_get_CHECK_PKT_LARGER(a),
+                                   remaining_acts, remaining_acts_len);
+            break;
+        }
         }
 
         /* Check if need to store this and the remaining actions for later
