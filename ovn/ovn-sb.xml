@@ -1799,6 +1799,27 @@
 
           <p><b>Example:</b> <code>set_meter(100, 1000);</code></p>
         </dd>
+
+        <dt><code><var>R</var> = check_pkt_larger(<var>L</var>)</code></dt>
+        <dd>
+          <p>
+            <b>Parameters</b>: packet length <var>L</var> to check for
+            in bytes.
+          </p>
+
+          <p>
+            <b>Result</b>: stored to a 1-bit subfield <var>R</var>.
+          </p>
+
+          <p>
+            This is a logical equivalent of the OpenFlow
+            <code>check_pkt_larger</code> action. If the packet is larger
+            than the length specified in <var>L</var>, it stores 1 in the
+            subfield <var>R</var>.
+          </p>
+
+          <p><b>Example: </b><code>reg0[6] = check_pkt_larger(1000);</code></p>
+        </dd>
       </dl>
 
       <dl>

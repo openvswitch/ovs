@@ -1341,6 +1341,19 @@ ip4.src <-> ip6.src[0..31];
     encodes as push:NXM_NX_IPV6_SRC[0..31],push:NXM_OF_IP_SRC[],pop:NXM_NX_IPV6_SRC[0..31],pop:NXM_OF_IP_SRC[]
     has prereqs eth.type == 0x800 && eth.type == 0x86dd
 
+# check_pkt_larger
+reg0[0] = check_pkt_larger(1500);
+    encodes as check_pkt_larger(1500)->NXM_NX_XXREG0[96]
+
+reg0 = check_pkt_larger(1500);
+    Cannot use 32-bit field reg0[0..31] where 1-bit field is required.
+
+reg0 = check_pkt_larger(foo);
+    Cannot use 32-bit field reg0[0..31] where 1-bit field is required.
+
+reg0[0] = check_pkt_larger(foo);
+    Syntax error at `foo' expecting `;'.
+
 # Miscellaneous negative tests.
 ;
     Syntax error at `;'.

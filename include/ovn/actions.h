@@ -82,7 +82,8 @@ struct ovn_extend_table;
     OVNACT(PUT_ND_RA_OPTS,    ovnact_put_opts)        \
     OVNACT(ND_NS,             ovnact_nest)            \
     OVNACT(SET_METER,         ovnact_set_meter)       \
-    OVNACT(OVNFIELD_LOAD,     ovnact_load)
+    OVNACT(OVNFIELD_LOAD,     ovnact_load)            \
+    OVNACT(CHECK_PKT_LARGER,  ovnact_check_pkt_larger)
 
 /* enum ovnact_type, with a member OVNACT_<ENUM> for each action. */
 enum OVS_PACKED_ENUM ovnact_type {
@@ -308,6 +309,13 @@ struct ovnact_set_meter {
     struct ovnact ovnact;
     uint64_t rate;                   /* rate field, in kbps. */
     uint64_t burst;                  /* burst rate field, in kbps. */
+};
+
+/* OVNACT_CHECK_IP_PKT_LARGER. */
+struct ovnact_check_pkt_larger {
+    struct ovnact ovnact;
+    uint16_t pkt_len;
+    struct expr_field dst;      /* 1-bit destination field. */
 };
 
 /* Internal use by the helpers below. */
