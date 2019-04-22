@@ -31,7 +31,7 @@
 #include "ovn/actions.h"
 #include "ovn/expr.h"
 #include "ovn/lex.h"
-#include "ovn/lib/logical-fields.h"
+#include "ovn/logical-fields.h"
 #include "ovn/lib/ovn-l7.h"
 #include "ovn/lib/extend-table.h"
 #include "ovs-thread.h"

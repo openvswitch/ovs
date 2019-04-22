@@ -15,12 +15,24 @@
 
 #include <config.h>
 
-#include "logical-fields.h"
-
 #include "openvswitch/shash.h"
 #include "ovn/expr.h"
+#include "ovn/logical-fields.h"
 #include "ovs-thread.h"
 #include "packets.h"
+
+/* Silence a warning. */
+extern const struct ovn_field ovn_fields[OVN_FIELD_N_IDS];
+
+const struct ovn_field ovn_fields[OVN_FIELD_N_IDS] = {
+    {
+        OVN_ICMP4_FRAG_MTU,
+        "icmp4.frag_mtu",
+        2, 16,
+    },
+};
+
+static struct shash ovnfield_by_name;
 
 static void
 add_subregister(const char *name,
@@ -203,4 +215,24 @@ ovn_init_symtab(struct shash *symtab)
     expr_symtab_add_predicate(symtab, "sctp", "ip.proto == 132");
     expr_symtab_add_field(symtab, "sctp.src", MFF_SCTP_SRC, "sctp", false);
     expr_symtab_add_field(symtab, "sctp.dst", MFF_SCTP_DST, "sctp", false);
+
+    shash_init(&ovnfield_by_name);
+    for (int i = 0; i < OVN_FIELD_N_IDS; i++) {
+        const struct ovn_field *of = &ovn_fields[i];
+        ovs_assert(of->id == i); /* Fields must be in the enum order. */
+        shash_add_once(&ovnfield_by_name, of->name, of);
+    }
+    expr_symtab_add_ovn_field(symtab, "icmp4.frag_mtu", OVN_ICMP4_FRAG_MTU);
+}
+
+const struct ovn_field *
+ovn_field_from_name(const char *name)
+{
+    return shash_find_data(&ovnfield_by_name, name);
+}
+
+void
+ovn_destroy_ovnfields(void)
+{
+    shash_destroy(&ovnfield_by_name);
 }

@@ -81,4 +81,43 @@ enum mff_log_flags {
     MLF_NESTED_CONTAINER = (1 << MLF_NESTED_CONTAINER_BIT),
 };
 
+/* OVN logical fields
+ * ===================
+ * These are the fields which OVN supports modifying which gets translated
+ * to OFFlow controller action.
+ *
+ * OpenvSwitch doesn't support modifying these fields yet. If a field is
+ * supported later by OpenvSwitch, it can be deleted from here.
+ */
+
+enum ovn_field_id {
+    /*
+     * Name: "icmp4.frag_mtu" -
+     * Type: be16
+     * Description: Sets the low-order 16 bits of the ICMP4 header field
+     * (that is labelled "unused" in the ICMP specification) of the ICMP4
+     * packet as per the RFC 1191.
+     */
+    OVN_ICMP4_FRAG_MTU,
+
+    OVN_FIELD_N_IDS
+};
+
+struct ovn_field {
+    enum ovn_field_id id;
+    const char *name;
+    unsigned int n_bytes;       /* Width of the field in bytes. */
+    unsigned int n_bits;        /* Number of significant bits in field. */
+};
+
+static inline const struct ovn_field *
+ovn_field_from_id(enum ovn_field_id id)
+{
+    extern const struct ovn_field ovn_fields[OVN_FIELD_N_IDS];
+    ovs_assert((unsigned int) id < OVN_FIELD_N_IDS);
+    return &ovn_fields[id];
+}
+
+const struct ovn_field *ovn_field_from_name(const char *name);
+void ovn_destroy_ovnfields(void);
 #endif /* ovn/lib/logical-fields.h */

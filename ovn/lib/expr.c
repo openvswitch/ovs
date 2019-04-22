@@ -17,7 +17,6 @@
 #include <config.h>
 #include "byte-order.h"
 #include "openvswitch/json.h"
-#include "logical-fields.h"
 #include "nx-match.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/match.h"
@@ -26,6 +25,7 @@
 #include "openvswitch/shash.h"
 #include "ovn/expr.h"
 #include "ovn/lex.h"
+#include "ovn/logical-fields.h"
 #include "simap.h"
 #include "sset.h"
 #include "util.h"
@@ -1381,6 +1381,8 @@ expr_symbol_format(const struct expr_symbol *symbol, struct ds *s)
         expr_field_format(&f, s);
     } else if (symbol->predicate) {
         ds_put_cstr(s, symbol->predicate);
+    } else if (symbol->ovn_field) {
+        ds_put_cstr(s, symbol->name);
     } else {
         nx_format_field_name(symbol->field->id, OFP13_VERSION, s);
     }
@@ -1553,6 +1555,19 @@ expr_symtab_add_predicate(struct shash *symtab, const char *name,
 
     symbol = add_symbol(symtab, name, 1, NULL, level, false, false);
     symbol->predicate = xstrdup(expansion);
+    return symbol;
+}
+
+struct expr_symbol *
+expr_symtab_add_ovn_field(struct shash *symtab, const char *name,
+                          enum ovn_field_id id)
+{
+    const struct ovn_field *ovn_field = ovn_field_from_id(id);
+    struct expr_symbol *symbol;
+
+    symbol = add_symbol(symtab, name, ovn_field->n_bits, NULL,
+                        EXPR_L_NOMINAL, false, true);
+    symbol->ovn_field = ovn_field;
     return symbol;
 }
 

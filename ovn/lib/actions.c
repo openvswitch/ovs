@@ -23,7 +23,6 @@
 #include "ovn-l7.h"
 #include "hash.h"
 #include "lib/packets.h"
-#include "logical-fields.h"
 #include "nx-match.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/hmap.h"
@@ -367,7 +366,13 @@ static void
 parse_LOAD(struct action_context *ctx, const struct expr_field *lhs)
 {
     size_t ofs = ctx->ovnacts->size;
-    struct ovnact_load *load = ovnact_put_LOAD(ctx->ovnacts);
+    struct ovnact_load *load;
+    if (lhs->symbol->ovn_field) {
+        load = ovnact_put_OVNFIELD_LOAD(ctx->ovnacts);
+    } else {
+        load = ovnact_put_LOAD(ctx->ovnacts);
+    }
+
     load->dst = *lhs;
 
     char *error = expr_type_check(lhs, lhs->n_bits, true);
@@ -2295,6 +2300,43 @@ encode_SET_METER(const struct ovnact_set_meter *cl,
 static void
 ovnact_set_meter_free(struct ovnact_set_meter *ct OVS_UNUSED)
 {
+}
+
+static void
+format_OVNFIELD_LOAD(const struct ovnact_load *load , struct ds *s)
+{
+    const struct ovn_field *f = ovn_field_from_name(load->dst.symbol->name);
+    switch (f->id) {
+    case OVN_ICMP4_FRAG_MTU:
+        ds_put_format(s, "%s = %u;", f->name,
+                      ntohs(load->imm.value.be16_int));
+        break;
+
+    case OVN_FIELD_N_IDS:
+    default:
+        OVS_NOT_REACHED();
+    }
+}
+
+static void
+encode_OVNFIELD_LOAD(const struct ovnact_load *load,
+            const struct ovnact_encode_params *ep OVS_UNUSED,
+            struct ofpbuf *ofpacts)
+{
+    const struct ovn_field *f = ovn_field_from_name(load->dst.symbol->name);
+    switch (f->id) {
+    case OVN_ICMP4_FRAG_MTU: {
+        size_t oc_offset = encode_start_controller_op(
+            ACTION_OPCODE_PUT_ICMP4_FRAG_MTU, true, NX_CTLR_NO_METER,
+            ofpacts);
+        ofpbuf_put(ofpacts, &load->imm.value.be16_int, sizeof(ovs_be16));
+        encode_finish_controller_op(oc_offset, ofpacts);
+        break;
+    }
+    case OVN_FIELD_N_IDS:
+    default:
+        OVS_NOT_REACHED();
+    }
 }
 
 /* Parses an assignment or exchange or put_dhcp_opts action. */

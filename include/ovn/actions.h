@@ -80,7 +80,8 @@ struct ovn_extend_table;
     OVNACT(LOG,               ovnact_log)             \
     OVNACT(PUT_ND_RA_OPTS,    ovnact_put_opts)        \
     OVNACT(ND_NS,             ovnact_nest)            \
-    OVNACT(SET_METER,         ovnact_set_meter)
+    OVNACT(SET_METER,         ovnact_set_meter)       \
+    OVNACT(OVNFIELD_LOAD,     ovnact_load)
 
 /* enum ovnact_type, with a member OVNACT_<ENUM> for each action. */
 enum OVS_PACKED_ENUM ovnact_type {
@@ -142,6 +143,20 @@ ovnact_end(const struct ovnact *ovnacts, size_t ovnacts_len)
 #define OVNACT_FOR_EACH(POS, OVNACTS, OVNACTS_LEN)                      \
     for ((POS) = (OVNACTS); (POS) < ovnact_end(OVNACTS, OVNACTS_LEN);  \
          (POS) = ovnact_next(POS))
+
+static inline int
+ovnacts_count(const struct ovnact *ovnacts, size_t ovnacts_len)
+{
+    uint8_t n_ovnacts = 0;
+    if (ovnacts) {
+        const struct ovnact *a;
+
+        OVNACT_FOR_EACH (a, ovnacts, ovnacts_len) {
+            n_ovnacts++;
+        }
+    }
+    return n_ovnacts;
+}
 
 /* Action structure for each OVNACT_*. */
 
@@ -452,6 +467,10 @@ enum action_opcode {
         * The actions, in OpenFlow 1.3 format, follow the action_header.
         */
     ACTION_OPCODE_ND_NA_ROUTER,
+
+     /* MTU value (to put in the icmp4 header field - frag_mtu) follow the
+     * action header. */
+    ACTION_OPCODE_PUT_ICMP4_FRAG_MTU,
 };
 
 /* Header. */
@@ -460,6 +479,12 @@ struct action_header {
     uint8_t pad[4];
 };
 BUILD_ASSERT_DECL(sizeof(struct action_header) == 8);
+
+OVS_PACKED(
+struct ovnfield_act_header {
+    ovs_be16 id; /* one of enum ovnfield_id. */
+    ovs_be16 len; /* Length of the ovnfield data. */
+});
 
 struct ovnact_parse_params {
     /* A table of "struct expr_symbol"s to support (as one would provide to

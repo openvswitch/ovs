@@ -16,7 +16,7 @@
 #ifndef OVN_LFLOW_H
 #define OVN_LFLOW_H 1
 
-#include "ovn/lib/logical-fields.h"
+#include "ovn/logical-fields.h"
 
 /* Logical_Flow table translation to OpenFlow
  * ==========================================

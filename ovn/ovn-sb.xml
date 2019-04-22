@@ -1103,6 +1103,39 @@
           </p>
         </dd>
 
+        <dt><code><var>ovn_field</var> = <var>constant</var>;</code></dt>
+        <dd>
+          <p>
+            Sets OVN field <var>ovn_field</var> to constant value
+            <var>constant</var>.
+          </p>
+
+          <p>
+            <code>OVN</code> supports setting the values of certain fields
+            which are not yet supported in OpenFlow to set or modify them.
+          </p>
+
+          <p>
+            Below are the supported <code>OVN fields</code>:
+          </p>
+
+          <ul>
+            <li>
+              <code>icmp4.frag_mtu</code>
+              <p>
+                This field sets the low-order 16 bits of the ICMP4 header field
+                that is labelled "unused" in the ICMP specification as defined
+                in the RFC 1191 with the value specified in
+                <var>constant</var>.
+              </p>
+
+              <p>
+                Eg. icmp4.frag_mtu = 1500;
+              </p>
+            </li>
+          </ul>
+        </dd>
+
         <dt><code><var>field1</var> = <var>field2</var>;</code></dt>
         <dd>
           <p>

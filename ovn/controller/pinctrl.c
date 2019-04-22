@@ -43,9 +43,9 @@
 #include "ovn/actions.h"
 #include "ovn/lex.h"
 #include "ovn/lib/acl-log.h"
-#include "ovn/lib/logical-fields.h"
 #include "ovn/lib/ovn-l7.h"
 #include "ovn/lib/ovn-util.h"
+#include "ovn/logical-fields.h"
 #include "openvswitch/poll-loop.h"
 #include "openvswitch/rconn.h"
 #include "socket-util.h"
@@ -199,6 +199,12 @@ static void pinctrl_handle_nd_ns(struct rconn *swconn,
                                  struct dp_packet *pkt_in,
                                  const struct match *md,
                                  struct ofpbuf *userdata);
+static void pinctrl_handle_put_icmp4_frag_mtu(struct rconn *swconn,
+                                              const struct flow *in_flow,
+                                              struct dp_packet *pkt_in,
+                                              struct ofputil_packet_in *pin,
+                                              struct ofpbuf *userdata,
+                                              struct ofpbuf *continuation);
 static void init_ipv6_ras(void);
 static void destroy_ipv6_ras(void);
 static void ipv6_ra_wait(long long int send_ipv6_ra_time);
@@ -1673,6 +1679,11 @@ process_packet_in(struct rconn *swconn, const struct ofp_header *msg)
     case ACTION_OPCODE_TCP_RESET:
         pinctrl_handle_tcp_reset(swconn, &headers, &packet, &pin.flow_metadata,
                                  &userdata);
+        break;
+
+    case ACTION_OPCODE_PUT_ICMP4_FRAG_MTU:
+        pinctrl_handle_put_icmp4_frag_mtu(swconn, &headers, &packet,
+                                          &pin, &userdata, &continuation);
         break;
 
     default:
@@ -3163,4 +3174,53 @@ exit:
     }
     queue_msg(swconn, ofputil_encode_resume(pin, continuation, proto));
     dp_packet_uninit(pkt_out_ptr);
+}
+
+/* Called with in the pinctrl_handler thread context. */
+static void
+pinctrl_handle_put_icmp4_frag_mtu(struct rconn *swconn,
+                                  const struct flow *in_flow,
+                                  struct dp_packet *pkt_in,
+                                  struct ofputil_packet_in *pin,
+                                  struct ofpbuf *userdata,
+                                  struct ofpbuf *continuation)
+{
+    enum ofp_version version = rconn_get_version(swconn);
+    enum ofputil_protocol proto = ofputil_protocol_from_ofp_version(version);
+    struct dp_packet *pkt_out = NULL;
+
+    /* This action only works for ICMPv4 packets. */
+    if (!is_icmpv4(in_flow, NULL)) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "put_icmp4_frag_mtu action on non-ICMPv4 packet");
+        goto exit;
+    }
+
+    ovs_be16 *mtu = ofpbuf_try_pull(userdata, sizeof *mtu);
+    if (!mtu) {
+        goto exit;
+    }
+
+    pkt_out = dp_packet_clone(pkt_in);
+    pkt_out->l2_5_ofs = pkt_in->l2_5_ofs;
+    pkt_out->l2_pad_size = pkt_in->l2_pad_size;
+    pkt_out->l3_ofs = pkt_in->l3_ofs;
+    pkt_out->l4_ofs = pkt_in->l4_ofs;
+
+    struct ip_header *nh = dp_packet_l3(pkt_out);
+    struct icmp_header *ih = dp_packet_l4(pkt_out);
+    ovs_be16 old_frag_mtu = ih->icmp_fields.frag.mtu;
+    ih->icmp_fields.frag.mtu = *mtu;
+    ih->icmp_csum = recalc_csum16(ih->icmp_csum, old_frag_mtu, *mtu);
+    nh->ip_csum = 0;
+    nh->ip_csum = csum(nh, sizeof *nh);
+
+    pin->packet = dp_packet_data(pkt_out);
+    pin->packet_len = dp_packet_size(pkt_out);
+
+exit:
+    queue_msg(swconn, ofputil_encode_resume(pin, continuation, proto));
+    if (pkt_out) {
+        dp_packet_delete(pkt_out);
+    }
 }
