@@ -877,9 +877,26 @@ enum ovs_check_pkt_len_attr {
 	OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_GREATER,
 	OVS_CHECK_PKT_LEN_ATTR_ACTIONS_IF_LESS_EQUAL,
 	__OVS_CHECK_PKT_LEN_ATTR_MAX,
+
+#ifdef __KERNEL__
+	OVS_CHECK_PKT_LEN_ATTR_ARG          /* struct check_pkt_len_arg  */
+#endif
 };
 
 #define OVS_CHECK_PKT_LEN_ATTR_MAX (__OVS_CHECK_PKT_LEN_ATTR_MAX - 1)
+
+#ifdef __KERNEL__
+struct check_pkt_len_arg {
+        u16 pkt_len;    /* Same value as OVS_CHECK_PKT_LEN_ATTR_PKT_LEN'. */
+        bool exec_for_greater;  /* When true, actions in IF_GREATE will
+                                 * not change flow keys. False otherwise.
+                                 */
+        bool exec_for_lesser_equal; /* When true, actions in IF_LESS_EQUAL
+                                     * will not change flow keys. False
+                                     * otherwise.
+                                     */
+};
+#endif
 
 /**
  * enum ovs_action_attr - Action types.
