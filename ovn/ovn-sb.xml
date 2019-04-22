@@ -1853,19 +1853,22 @@
 
       <dl>
         <dt><code>icmp4 { <var>action</var>; </code>...<code> };</code></dt>
+        <dt>
+          <code>icmp4_error { <var>action</var>; </code>...<code> };</code>
+        </dt>
         <dd>
           <p>
             Temporarily replaces the IPv4 packet being processed by an ICMPv4
             packet and executes each nested <var>action</var> on the ICMPv4
-            packet.  Actions following the <var>icmp4</var> action, if any,
+            packet.  Actions following these actions, if any,
             apply to the original, unmodified packet.
           </p>
 
           <p>
-            The ICMPv4 packet that this action operates on is initialized based
-            on the IPv4 packet being processed, as follows.  These are default
-            values that the nested actions will probably want to change.
-            Ethernet and IPv4 fields not listed here are not changed:
+            The ICMPv4 packet that these actions operates on is initialized
+            based on the IPv4 packet being processed, as follows.  These are
+            default values that the nested actions will probably want to
+            change. Ethernet and IPv4 fields not listed here are not changed:
           </p>
 
           <ul>
@@ -1876,6 +1879,13 @@
             <li><code>icmp4.code = 1</code> (host unreachable)</li>
           </ul>
 
+          <p>
+              <code>icmp4_error</code> action is expected to be used to
+              generate an ICMPv4 packet in response to an error in original
+              IP packet. When this action generates the ICMPv4 packet, it
+              also copies the original IP datagram following the ICMPv4 header
+              as per RFC 1122: 3.2.2.
+          </p>
           <p><b>Prerequisite:</b> <code>ip4</code></p>
         </dd>
 

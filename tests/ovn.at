@@ -1295,6 +1295,21 @@ icmp4 { eth.dst = ff:ff:ff:ff:ff:ff; icmp4.frag_mtu = 1500; output; }; output;
     encodes as controller(userdata=00.00.00.0a.00.00.00.00.00.19.00.10.80.00.06.06.ff.ff.ff.ff.ff.ff.00.00.ff.ff.00.28.00.00.23.20.00.25.00.00.00.00.00.00.00.03.00.0e.00.00.00.0d.00.00.00.00.05.dc.00.00.00.04.00.04.00.00.00.00.ff.ff.00.10.00.00.23.20.00.0e.ff.f8.40.00.00.00),resubmit(,64)
     has prereqs ip4
 
+# icmp4_error
+icmp4_error { eth.dst = ff:ff:ff:ff:ff:ff; output; }; output;
+    encodes as controller(userdata=00.00.00.0e.00.00.00.00.00.19.00.10.80.00.06.06.ff.ff.ff.ff.ff.ff.00.00.ff.ff.00.10.00.00.23.20.00.0e.ff.f8.40.00.00.00),resubmit(,64)
+    has prereqs ip4
+
+icmp4_error { };
+    formats as icmp4_error { drop; };
+    encodes as controller(userdata=00.00.00.0e.00.00.00.00)
+    has prereqs ip4
+
+# icmp4_error with icmp4.frag_mtu
+icmp4_error { eth.dst = ff:ff:ff:ff:ff:ff; icmp4.frag_mtu = 1500; output; }; output;
+    encodes as controller(userdata=00.00.00.0e.00.00.00.00.00.19.00.10.80.00.06.06.ff.ff.ff.ff.ff.ff.00.00.ff.ff.00.28.00.00.23.20.00.25.00.00.00.00.00.00.00.03.00.0e.00.00.00.0d.00.00.00.00.05.dc.00.00.00.04.00.04.00.00.00.00.ff.ff.00.10.00.00.23.20.00.0e.ff.f8.40.00.00.00),resubmit(,64)
+    has prereqs ip4
+
 icmp4.frag_mtu = 1500;
     encodes as controller(userdata=00.00.00.0d.00.00.00.00.05.dc,pause)
 

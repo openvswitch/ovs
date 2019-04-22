@@ -530,7 +530,8 @@ pinctrl_handle_arp(struct rconn *swconn, const struct flow *ip_flow,
 static void
 pinctrl_handle_icmp(struct rconn *swconn, const struct flow *ip_flow,
                     struct dp_packet *pkt_in,
-                    const struct match *md, struct ofpbuf *userdata)
+                    const struct match *md, struct ofpbuf *userdata,
+                    bool include_orig_ip_datagram)
 {
     /* This action only works for IP packets, and the switch should only send
      * us IP packets this way, but check here just to be sure. */
@@ -555,6 +556,16 @@ pinctrl_handle_icmp(struct rconn *swconn, const struct flow *ip_flow,
     eh->eth_src = ip_flow->dl_src;
 
     if (get_dl_type(ip_flow) == htons(ETH_TYPE_IP)) {
+        struct ip_header *in_ip = dp_packet_l3(pkt_in);
+        uint16_t in_ip_len = ntohs(in_ip->ip_tot_len);
+        if (in_ip_len < IP_HEADER_LEN) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+            VLOG_WARN_RL(&rl,
+                        "ICMP action on IP packet with invalid length (%u)",
+                        in_ip_len);
+            return;
+        }
+
         struct ip_header *nh = dp_packet_put_zeros(&packet, sizeof *nh);
 
         eh->eth_type = htons(ETH_TYPE_IP);
@@ -570,6 +581,33 @@ pinctrl_handle_icmp(struct rconn *swconn, const struct flow *ip_flow,
         struct icmp_header *ih = dp_packet_put_zeros(&packet, sizeof *ih);
         dp_packet_set_l4(&packet, ih);
         packet_set_icmp(&packet, ICMP4_DST_UNREACH, 1);
+
+        if (include_orig_ip_datagram) {
+            /* RFC 1122: 3.2.2	MUST send at least the IP header and 8 bytes
+             * of header. MAY send more.
+             * RFC says return as much as we can without exceeding 576
+             * bytes.
+             * So, lets return as much as we can. */
+
+            /* Calculate available room to include the original IP + data. */
+            nh = dp_packet_l3(&packet);
+            uint16_t room = 576 - (sizeof *eh + ntohs(nh->ip_tot_len));
+            if (in_ip_len > room) {
+                in_ip_len = room;
+            }
+            dp_packet_put(&packet, in_ip, in_ip_len);
+
+            /* dp_packet_put may reallocate the buffer. Get the l3 and l4
+             * header pointers again. */
+            nh = dp_packet_l3(&packet);
+            ih = dp_packet_l4(&packet);
+            uint16_t ip_total_len = ntohs(nh->ip_tot_len) + in_ip_len;
+            nh->ip_tot_len = htons(ip_total_len);
+            ih->icmp_csum = 0;
+            ih->icmp_csum = csum(ih, sizeof *ih + in_ip_len);
+            nh->ip_csum = 0;
+            nh->ip_csum = csum(nh, sizeof *nh);
+        }
     } else {
         struct ip6_hdr *nh = dp_packet_put_zeros(&packet, sizeof *nh);
         struct icmp6_error_header *ih;
@@ -1673,7 +1711,12 @@ process_packet_in(struct rconn *swconn, const struct ofp_header *msg)
 
     case ACTION_OPCODE_ICMP:
         pinctrl_handle_icmp(swconn, &headers, &packet, &pin.flow_metadata,
-                            &userdata);
+                            &userdata, false);
+        break;
+
+    case ACTION_OPCODE_ICMP4_ERROR:
+        pinctrl_handle_icmp(swconn, &headers, &packet, &pin.flow_metadata,
+                            &userdata, true);
         break;
 
     case ACTION_OPCODE_TCP_RESET:

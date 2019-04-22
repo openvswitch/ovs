@@ -1154,6 +1154,12 @@ parse_ICMP4(struct action_context *ctx)
 }
 
 static void
+parse_ICMP4_ERROR(struct action_context *ctx)
+{
+    parse_nested_action(ctx, OVNACT_ICMP4_ERROR, "ip4");
+}
+
+static void
 parse_ICMP6(struct action_context *ctx)
 {
     parse_nested_action(ctx, OVNACT_ICMP6, "ip6");
@@ -1208,6 +1214,12 @@ static void
 format_ICMP4(const struct ovnact_nest *nest, struct ds *s)
 {
     format_nested_action(nest, "icmp4", s);
+}
+
+static void
+format_ICMP4_ERROR(const struct ovnact_nest *nest, struct ds *s)
+{
+    format_nested_action(nest, "icmp4_error", s);
 }
 
 static void
@@ -1285,6 +1297,14 @@ encode_ICMP4(const struct ovnact_nest *on,
              struct ofpbuf *ofpacts)
 {
     encode_nested_actions(on, ep, ACTION_OPCODE_ICMP, ofpacts);
+}
+
+static void
+encode_ICMP4_ERROR(const struct ovnact_nest *on,
+                   const struct ovnact_encode_params *ep,
+                   struct ofpbuf *ofpacts)
+{
+    encode_nested_actions(on, ep, ACTION_OPCODE_ICMP4_ERROR, ofpacts);
 }
 
 static void
@@ -2412,6 +2432,8 @@ parse_action(struct action_context *ctx)
         parse_ARP(ctx);
     } else if (lexer_match_id(ctx->lexer, "icmp4")) {
         parse_ICMP4(ctx);
+    } else if (lexer_match_id(ctx->lexer, "icmp4_error")) {
+        parse_ICMP4_ERROR(ctx);
     } else if (lexer_match_id(ctx->lexer, "icmp6")) {
         parse_ICMP6(ctx);
     } else if (lexer_match_id(ctx->lexer, "tcp_reset")) {

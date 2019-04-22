@@ -2116,6 +2116,11 @@ trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
                           super);
             break;
 
+        case OVNACT_ICMP4_ERROR:
+            execute_icmp4(ovnact_get_ICMP4_ERROR(a), dp, uflow, table_id,
+                          pipeline, super);
+            break;
+
         case OVNACT_ICMP6:
             execute_icmp6(ovnact_get_ICMP6(a), dp, uflow, table_id, pipeline,
                           super);

@@ -65,6 +65,7 @@ struct ovn_extend_table;
     OVNACT(CLONE,             ovnact_nest)            \
     OVNACT(ARP,               ovnact_nest)            \
     OVNACT(ICMP4,             ovnact_nest)            \
+    OVNACT(ICMP4_ERROR,       ovnact_nest)            \
     OVNACT(ICMP6,             ovnact_nest)            \
     OVNACT(TCP_RESET,         ovnact_nest)            \
     OVNACT(ND_NA,             ovnact_nest)            \
@@ -471,6 +472,12 @@ enum action_opcode {
      /* MTU value (to put in the icmp4 header field - frag_mtu) follow the
      * action header. */
     ACTION_OPCODE_PUT_ICMP4_FRAG_MTU,
+
+    /* "icmp4_error { ...actions... }".
+     *
+     * The actions, in OpenFlow 1.3 format, follow the action_header.
+     */
+    ACTION_OPCODE_ICMP4_ERROR,
 };
 
 /* Header. */
