@@ -13344,6 +13344,7 @@ as hv2 start_daemon ovn-controller
 
 OVN_CLEANUP([hv1],[hv2])
 
+
 AT_CLEANUP
 
 AT_SETUP([ovn -- ovn-nbctl duplicate addresses])
@@ -13400,6 +13401,172 @@ AT_CHECK([ovn-nbctl lsp-set-addresses sw2-p1 "00:00:00:00:00:04 192.168.0.2"])
 AT_CHECK([ovn-nbctl lsp-set-addresses sw2-p1 "00:00:00:00:00:04 192.168.0.3"])
 AT_CHECK([ovn-nbctl lsp-set-addresses sw2-p1 "00:00:00:00:00:04 aef0::1"])
 
+AT_CLEANUP
+
+AT_SETUP([ovn -- router - check packet length - icmp defrag])
+AT_KEYWORDS([check packet length])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+ovn-nbctl ls-add sw0
+ovn-nbctl lsp-add sw0 sw0-port1
+ovn-nbctl lsp-set-addresses sw0-port1 "50:54:00:00:00:01 10.0.0.3"
+
+ovn-nbctl lr-add lr0
+ovn-nbctl lrp-add lr0 lr0-sw0 00:00:00:00:ff:01 10.0.0.1/24
+ovn-nbctl lsp-add sw0 sw0-lr0
+ovn-nbctl lsp-set-type sw0-lr0 router
+ovn-nbctl lsp-set-addresses sw0-lr0 router
+ovn-nbctl lsp-set-options sw0-lr0 router-port=lr0-sw0
+
+ovn-nbctl ls-add public
+ovn-nbctl lrp-add lr0 lr0-public 00:00:20:20:12:13 172.168.0.100/24
+ovn-nbctl lsp-add public public-lr0
+ovn-nbctl lsp-set-type public-lr0 router
+ovn-nbctl lsp-set-addresses public-lr0 router
+ovn-nbctl lsp-set-options public-lr0 router-port=lr0-public
+
+# localnet port
+ovn-nbctl lsp-add public ln-public
+ovn-nbctl lsp-set-type ln-public localnet
+ovn-nbctl lsp-set-addresses ln-public unknown
+ovn-nbctl lsp-set-options ln-public network_name=phys
+
+ovn-nbctl lrp-set-gateway-chassis lr0-public hv1 20
+ovn-nbctl lr-nat-add lr0 snat 172.168.0.100 10.0.0.0/24
+
+net_add n1
+
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl set open . external-ids:ovn-bridge-mappings=phys:br-phys
+ovs-vsctl -- add-port br-int hv1-vif1 -- \
+    set interface hv1-vif1 external-ids:iface-id=sw0-port1 \
+    options:tx_pcap=hv1/vif1-tx.pcap \
+    options:rxq_pcap=hv1/vif1-rx.pcap \
+    ofport-request=1
+
+reset_pcap_file() {
+     local iface=$1
+     local pcap_file=$2
+     ovs-vsctl -- set Interface $iface options:tx_pcap=dummy-tx.pcap \
+ options:rxq_pcap=dummy-rx.pcap
+     rm -f ${pcap_file}*.pcap
+     ovs-vsctl -- set Interface $iface options:tx_pcap=${pcap_file}-tx.pcap \
+ options:rxq_pcap=${pcap_file}-rx.pcap
+}
+
+ip_to_hex() {
+     printf "%02x%02x%02x%02x" "$@"
+}
+
+test_ip_packet_larger() {
+    local icmp_pmtu_reply_expected=$1
+
+    # Send ip packet from sw0-port1 to outside
+    src_mac="505400000001" # sw-port1 mac
+    dst_mac="00000000ff01" # sw0-lr0 mac (internal router leg)
+    src_ip=`ip_to_hex 10 0 0 3`
+    dst_ip=`ip_to_hex 172 168 0 3`
+    # Set the packet length to 100.
+    pkt_len=0064
+    packet=${dst_mac}${src_mac}08004500${pkt_len}0000000040010000
+    orig_packet_l3=${src_ip}${dst_ip}0304000000000000
+    orig_packet_l3=${orig_packet_l3}000000000000000000000000000000000000
+    orig_packet_l3=${orig_packet_l3}000000000000000000000000000000000000
+    orig_packet_l3=${orig_packet_l3}000000000000000000000000000000000000
+    orig_packet_l3=${orig_packet_l3}000000000000000000000000000000000000
+    packet=${packet}${orig_packet_l3}
+
+    # If icmp_pmtu_reply_expected is 0, it means the packet is lesser than
+    # the gateway mtu and should be delivered to the provider bridge via the
+    # localnet port.
+    # If icmp_pmtu_reply_expected is 1, it means the packet is larger than
+    # the gateway mtu and ovn-controller should drop the packet and instead
+    # generate ICMPv4  Destination Unreachable message with pmtu set to 42.
+    if test $icmp_pmtu_reply_expected = 0; then
+        # Packet to expect at br-phys.
+        src_mac="000020201213"
+        dst_mac="00000012af11"
+        src_ip=`ip_to_hex 10 0 0 3`
+        dst_ip=`ip_to_hex 172 168 0 3`
+        expected=${dst_mac}${src_mac}08004500${pkt_len}000000003f010100
+        expected=${expected}${src_ip}${dst_ip}0304000000000000
+        expected=${expected}000000000000000000000000000000000000
+        expected=${expected}000000000000000000000000000000000000
+        expected=${expected}000000000000000000000000000000000000
+        expected=${expected}000000000000000000000000000000000000
+        echo $expected > br_phys_n1.expected
+    else
+        # MTU would be 100 - 18 = 82 (hex 0052)
+        mtu=0052
+        src_ip=`ip_to_hex 10 0 0 1`
+        dst_ip=`ip_to_hex 10 0 0 3`
+        # pkt len should be 128 (28 (icmp packet) + 100 (orig ip + payload))
+        reply_pkt_len=0080
+        ip_csum=bd91
+        icmp_reply=${src_mac}${dst_mac}08004500${reply_pkt_len}00004000fe016879
+        icmp_reply=${icmp_reply}${src_ip}${dst_ip}0304${ip_csum}0000${mtu}
+        icmp_reply=${icmp_reply}4500${pkt_len}000000003f010100
+        icmp_reply=${icmp_reply}${orig_packet_l3}
+        echo $icmp_reply > hv1-vif1.expected
+    fi
+
+    as hv1 reset_pcap_file br-phys_n1 hv1/br-phys_n1
+    as hv1 reset_pcap_file hv1-vif1 hv1/vif1
+
+    # Send packet from sw0-port1 to outside
+    as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
+
+    if test $icmp_pmtu_reply_expected = 0; then
+        OVN_CHECK_PACKETS([hv1/br-phys_n1-tx.pcap], [br_phys_n1.expected])
+        $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif1-tx.pcap  > packets
+        AT_CHECK([cat packets], [0], [])
+    else
+        OVN_CHECK_PACKETS([hv1/vif1-tx.pcap], [hv1-vif1.expected])
+        $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/br-phys_n1-tx.pcap  > \
+        packets
+        AT_CHECK([cat packets], [0], [])
+    fi
+}
+
+ovn-nbctl show
+ovn-sbctl show
+
+AT_CHECK([as hv1 ovs-ofctl dump-flows br-int  \
+| grep "check_pkt_larger" | wc -l], [0], [[0
+]])
+dp_uuid=$(ovn-sbctl find datapath_binding | grep sw0 -B2 | grep _uuid | \
+awk '{print $3}')
+ovn-sbctl create MAC_Binding ip=172.168.0.3 datapath=$dp_uuid \
+logical_port=lr0-public mac="00\:00\:00\:12\:af\:11"
+
+# Set the gateway mtu to 100. If the packet length is > 100, ovn-controller
+# should send icmp host not reachable with pmtu set to 100.
+ovn-nbctl --wait=hv set logical_router_port lr0-public options:gateway_mtu=100
+as hv3 ovs-appctl netdev-dummy/receive hv3-vif1 $arp_reply
+OVS_WAIT_UNTIL([
+    test `as hv1 ovs-ofctl dump-flows br-int | grep "check_pkt_larger(100)" | \
+    wc -l` -eq 1
+])
+
+icmp_reply_expected=1
+test_ip_packet_larger $icmp_reply_expected
+
+# Set the gateway mtu to 500.
+ovn-nbctl --wait=hv set logical_router_port lr0-public options:gateway_mtu=500
+as hv3 ovs-appctl netdev-dummy/receive hv3-vif1 $arp_reply
+OVS_WAIT_UNTIL([
+    test `as hv1 ovs-ofctl dump-flows br-int | grep "check_pkt_larger(500)" | \
+    wc -l` -eq 1
+])
+
+# Now the packet should be sent via the localnet port to br-phys.
+icmp_reply_expected=0
+test_ip_packet_larger $icmp_reply_expected
+OVN_CLEANUP([hv1])
 AT_CLEANUP
 
 AT_SETUP([ovn -- IP packet buffering])

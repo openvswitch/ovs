@@ -145,8 +145,10 @@ enum ovn_stage {
     PIPELINE_STAGE(ROUTER, IN,  IP_ROUTING,     7, "lr_in_ip_routing")   \
     PIPELINE_STAGE(ROUTER, IN,  POLICY,         8, "lr_in_policy")       \
     PIPELINE_STAGE(ROUTER, IN,  ARP_RESOLVE,    9, "lr_in_arp_resolve")  \
-    PIPELINE_STAGE(ROUTER, IN,  GW_REDIRECT,    10, "lr_in_gw_redirect")  \
-    PIPELINE_STAGE(ROUTER, IN,  ARP_REQUEST,    11, "lr_in_arp_request")  \
+    PIPELINE_STAGE(ROUTER, IN,  CHK_PKT_LEN   , 10, "lr_in_chk_pkt_len")   \
+    PIPELINE_STAGE(ROUTER, IN,  LARGER_PKTS,    11,"lr_in_larger_pkts")   \
+    PIPELINE_STAGE(ROUTER, IN,  GW_REDIRECT,    12, "lr_in_gw_redirect")  \
+    PIPELINE_STAGE(ROUTER, IN,  ARP_REQUEST,    13, "lr_in_arp_request")  \
                                                                       \
     /* Logical router egress stages. */                               \
     PIPELINE_STAGE(ROUTER, OUT, UNDNAT,    0, "lr_out_undnat")        \
@@ -183,6 +185,8 @@ enum ovn_stage {
  * one of the logical router's own IP addresses. */
 #define REGBIT_EGRESS_LOOPBACK  "reg9[1]"
 #define REGBIT_DISTRIBUTED_NAT  "reg9[2]"
+/* Register to store the result of check_pkt_larger action. */
+#define REGBIT_PKT_LARGER        "reg9[3]"
 
 /* Returns an "enum ovn_stage" built from the arguments. */
 static enum ovn_stage
@@ -7172,7 +7176,87 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                       "get_nd(outport, xxreg0); next;");
     }
 
-    /* Logical router ingress table 10: Gateway redirect.
+    /* Local router ingress table 10: Check packet length.
+     *
+     * Any IPv4 packet with outport set to the distributed gateway
+     * router port, check the packet length and store the result in the
+     * 'REGBIT_PKT_LARGER' register bit.
+     *
+     * Local router ingress table 11: Handle larger packets.
+     *
+     * Any IPv4 packet with outport set to the distributed gateway
+     * router port and the 'REGBIT_PKT_LARGER' register bit is set,
+     * generate ICMPv4 packet with type 3 (Destination Unreachable) and
+     * code 4 (Fragmentation needed).
+     * */
+    HMAP_FOR_EACH (od, key_node, datapaths) {
+        if (!od->nbr) {
+            continue;
+        }
+
+        /* Packets are allowed by default. */
+        ovn_lflow_add(lflows, od, S_ROUTER_IN_CHK_PKT_LEN, 0, "1",
+                      "next;");
+        ovn_lflow_add(lflows, od, S_ROUTER_IN_LARGER_PKTS, 0, "1",
+                      "next;");
+
+        if (od->l3dgw_port && od->l3redirect_port) {
+            int gw_mtu = 0;
+            if (od->l3dgw_port->nbrp) {
+                 gw_mtu = smap_get_int(&od->l3dgw_port->nbrp->options,
+                                       "gateway_mtu", 0);
+            }
+            /* Add the flows only if gateway_mtu is configured. */
+            if (gw_mtu <= 0) {
+                continue;
+            }
+
+            ds_clear(&match);
+            ds_put_format(&match, "outport == %s && ip4",
+                          od->l3dgw_port->json_key);
+
+            ds_clear(&actions);
+            ds_put_format(&actions,
+                          REGBIT_PKT_LARGER" = check_pkt_larger(%d);"
+                          " next;", gw_mtu);
+            ovn_lflow_add(lflows, od, S_ROUTER_IN_CHK_PKT_LEN, 50,
+                          ds_cstr(&match), ds_cstr(&actions));
+
+            for (size_t i = 0; i < od->nbr->n_ports; i++) {
+                struct ovn_port *rp = ovn_port_find(ports,
+                                                    od->nbr->ports[i]->name);
+                if (!rp || rp == od->l3dgw_port) {
+                    continue;
+                }
+                ds_clear(&match);
+                ds_put_format(&match, "inport == %s && outport == %s && ip4 "
+                              "&& "REGBIT_PKT_LARGER,
+                              rp->json_key, od->l3dgw_port->json_key);
+
+                ds_clear(&actions);
+                /* Set icmp4.frag_mtu to gw_mtu - 58. 58 is the Geneve tunnel
+                 * overhead. */
+                ds_put_format(&actions,
+                    "icmp4_error {"
+                    REGBIT_EGRESS_LOOPBACK" = 1; "
+                    "eth.dst = %s; "
+                    "ip4.dst = ip4.src; "
+                    "ip4.src = %s; "
+                    "ip.ttl = 255; "
+                    "icmp4.type = 3; /* Destination Unreachable. */ "
+                    "icmp4.code = 4; /* Frag Needed and DF was Set. */ "
+                    "icmp4.frag_mtu = %d; "
+                    "next(pipeline=ingress, table=0); };",
+                    rp->lrp_networks.ea_s,
+                    rp->lrp_networks.ipv4_addrs[0].addr_s,
+                    gw_mtu - 18);
+                ovn_lflow_add(lflows, od, S_ROUTER_IN_LARGER_PKTS, 50,
+                              ds_cstr(&match), ds_cstr(&actions));
+            }
+        }
+    }
+
+    /* Logical router ingress table 12: Gateway redirect.
      *
      * For traffic with outport equal to the l3dgw_port
      * on a distributed router, this table redirects a subset
@@ -7215,7 +7299,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         ovn_lflow_add(lflows, od, S_ROUTER_IN_GW_REDIRECT, 0, "1", "next;");
     }
 
-    /* Local router ingress table 11: ARP request.
+    /* Local router ingress table 13: ARP request.
      *
      * In the common case where the Ethernet destination has been resolved,
      * this table outputs the packet (priority 0).  Otherwise, it composes

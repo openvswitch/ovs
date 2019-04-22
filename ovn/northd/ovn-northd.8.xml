@@ -2072,7 +2072,86 @@ next;
       </li>
     </ul>
 
-    <h3>Ingress Table 9: Gateway Redirect</h3>
+    <h3>Ingress Table 9: Check packet length</h3>
+
+    <p>
+      For distributed logical routers with distributed gateway port configured
+      with <code>options:gateway_mtu</code> to a valid integer value, this
+      table adds a priority-50 logical flow with the match
+      <code>ip4 &amp;&amp; outport == <var>GW_PORT</var></code> where
+      <var>GW_PORT</var> is the distributed gateway router port and applies the
+      action <code>check_pkt_larger</code> and advances the packet to the
+      next table.
+    </p>
+
+    <pre>
+REGBIT_PKT_LARGER = check_pkt_larger(<var>L</var>); next;
+    </pre>
+
+    <p>
+      where <var>L</var> is the packet length to check for. If the packet
+      is larger than <var>L</var>, it stores 1 in the register bit
+      <code>REGBIT_PKT_LARGER</code>. The value of
+      <var>L</var> is taken from <ref column="options:gateway_mtu"
+      table="Logical_Router_Port" db="OVN_Northbound"/> column of
+      <ref table="Logical_Router_Port" db="OVN_Northbound"/> row.
+    </p>
+
+    <p>
+      This table adds one priority-0 fallback flow that matches all packets
+      and advances to the next table.
+    </p>
+
+    <h3>Ingress Table 10: Handle larger packets</h3>
+
+    <p>
+      For distributed logical routers with distributed gateway port configured
+      with <code>options:gateway_mtu</code> to a valid integer value, this
+      table adds the following priority-50 logical flow for each
+      logical router port with the match <code>ip4 &amp;&amp;
+      inport == <var>LRP</var> &amp;&amp; outport == <var>GW_PORT</var>
+      &amp;&amp; REGBIT_PKT_LARGER</code>, where <var>LRP</var> is the logical
+      router port and <var>GW_PORT</var> is the distributed gateway router port
+      and applies the following action
+    </p>
+
+    <pre>
+icmp4 {
+    icmp4.type = 3; /* Destination Unreachable. */
+    icmp4.code = 4;  /* Frag Needed and DF was Set. */
+    icmp4.frag_mtu = <var>M</var>;
+    eth.dst = <var>E</var>;
+    ip4.dst = ip4.src;
+    ip4.src = <var>I</var>;
+    ip.ttl = 255;
+    REGBIT_EGRESS_LOOPBACK = 1;
+    next(pipeline=ingress, table=0);
+};
+    </pre>
+
+    <ul>
+      <li>
+        Where <var>M</var> is the (fragment MTU - 58) whose value is taken from
+        <ref column="options:gateway_mtu" table="Logical_Router_Port"
+        db="OVN_Northbound"/> column of
+        <ref table="Logical_Router_Port" db="OVN_Northbound"/> row.
+      </li>
+
+      <li>
+        <var>E</var> is the Ethernet address of the logical router port.
+      </li>
+
+      <li>
+        <var>I</var> is the IPv4 address of the logical router port.
+      </li>
+    </ul>
+
+    <p>
+      This table adds one priority-0 fallback flow that matches all packets
+      and advances to the next table.
+    </p>
+
+    <h3>Ingress Table 11: Gateway Redirect</h3>
 
     <p>
       For distributed logical routers where one of the logical router
@@ -2134,7 +2213,7 @@ next;
       </li>
     </ul>
 
-    <h3>Ingress Table 10: ARP Request</h3>
+    <h3>Ingress Table 12: ARP Request</h3>
 
     <p>
       In the common case where the Ethernet destination has been resolved, this
