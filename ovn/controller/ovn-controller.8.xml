@@ -170,11 +170,17 @@
 
       <dt><code>external_ids:ovn-transport-zones</code></dt>
       <dd>
-        The transport zone(s) that this chassis belongs to. Transport
-        zones is a way to group different chassis so that tunnels are only
-        formed between members of the same group(s). Multiple transport
-        zones may be specified with a comma-separated list. For example:
-        tz1,tz2,tz3.
+        <p>
+          The transport zone(s) that this chassis belongs to. Transport
+          zones is a way to group different chassis so that tunnels are only
+          formed between members of the same group(s). Multiple transport
+          zones may be specified with a comma-separated list. For example:
+          tz1,tz2,tz3.
+        </p>
+        <p>
+          If not set, the Chassis will be considered part of a default
+          transport zone.
+        </p>
       </dd>
     </dl>
 
