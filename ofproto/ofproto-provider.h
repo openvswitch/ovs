@@ -1329,8 +1329,8 @@ struct ofproto_class {
     struct rule *(*rule_alloc)(void);
     enum ofperr (*rule_construct)(struct rule *rule)
         /* OVS_REQUIRES(ofproto_mutex) */;
-    void (*rule_insert)(struct rule *rule, struct rule *old_rule,
-                        bool forward_counts)
+    enum ofperr (*rule_insert)(struct rule *rule, struct rule *old_rule,
+                               bool forward_counts)
         /* OVS_REQUIRES(ofproto_mutex) */;
     void (*rule_delete)(struct rule *rule) /* OVS_REQUIRES(ofproto_mutex) */;
     void (*rule_destruct)(struct rule *rule);
@@ -1984,7 +1984,7 @@ enum ofperr ofproto_flow_mod_learn_start(struct ofproto_flow_mod *ofm)
     OVS_REQUIRES(ofproto_mutex);
 void ofproto_flow_mod_learn_revert(struct ofproto_flow_mod *ofm)
     OVS_REQUIRES(ofproto_mutex);
-void ofproto_flow_mod_learn_finish(struct ofproto_flow_mod *ofm,
+enum ofperr ofproto_flow_mod_learn_finish(struct ofproto_flow_mod *ofm,
                                           struct ofproto *orig_ofproto)
     OVS_REQUIRES(ofproto_mutex);
 void ofproto_add_flow(struct ofproto *, const struct match *, int priority,
