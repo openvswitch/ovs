@@ -1468,6 +1468,24 @@ miniflow_get_map_in_range(const struct miniflow *miniflow, uint8_t start,
     return map;
 }
 
+static void
+subtable_destroy_cb(struct cls_subtable *subtable)
+{
+    int i;
+
+    ovs_assert(ovsrcu_get_protected(struct trie_node *, &subtable->ports_trie)
+               == NULL);
+    ovs_assert(cmap_is_empty(&subtable->rules));
+    ovs_assert(rculist_is_empty(&subtable->rules_list));
+
+    for (i = 0; i < subtable->n_indices; i++) {
+        ccmap_destroy(&subtable->indices[i]);
+    }
+    cmap_destroy(&subtable->rules);
+
+    ovsrcu_postpone(free, subtable);
+}
+
 /* The new subtable will be visible to the readers only after this. */
 static struct cls_subtable *
 insert_subtable(struct classifier *cls, const struct minimask *mask)
@@ -1534,22 +1552,11 @@ insert_subtable(struct classifier *cls, const struct minimask *mask)
 static void
 destroy_subtable(struct classifier *cls, struct cls_subtable *subtable)
 {
-    int i;
-
     pvector_remove(&cls->subtables, subtable);
     cmap_remove(&cls->subtables_map, &subtable->cmap_node,
                 minimask_hash(&subtable->mask, 0));
 
-    ovs_assert(ovsrcu_get_protected(struct trie_node *, &subtable->ports_trie)
-               == NULL);
-    ovs_assert(cmap_is_empty(&subtable->rules));
-    ovs_assert(rculist_is_empty(&subtable->rules_list));
-
-    for (i = 0; i < subtable->n_indices; i++) {
-        ccmap_destroy(&subtable->indices[i]);
-    }
-    cmap_destroy(&subtable->rules);
-    ovsrcu_postpone(free, subtable);
+    ovsrcu_postpone(subtable_destroy_cb, subtable);
 }
 
 static unsigned int be_get_bit_at(const ovs_be32 value[], unsigned int ofs);

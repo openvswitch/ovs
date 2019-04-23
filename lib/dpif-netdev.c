@@ -7585,6 +7585,13 @@ struct dpcls_subtable {
     /* 'mask' must be the last field, additional space is allocated here. */
 };
 
+static void
+dpcls_subtable_destroy_cb(struct dpcls_subtable *subtable)
+{
+    cmap_destroy(&subtable->rules);
+    ovsrcu_postpone(free, subtable);
+}
+
 /* Initializes 'cls' as a classifier that initially contains no classification
  * rules. */
 static void
@@ -7601,8 +7608,7 @@ dpcls_destroy_subtable(struct dpcls *cls, struct dpcls_subtable *subtable)
     pvector_remove(&cls->subtables, subtable);
     cmap_remove(&cls->subtables_map, &subtable->cmap_node,
                 subtable->mask.hash);
-    cmap_destroy(&subtable->rules);
-    ovsrcu_postpone(free, subtable);
+    ovsrcu_postpone(dpcls_subtable_destroy_cb, subtable);
 }
 
 /* Destroys 'cls'.  Rules within 'cls', if any, are not freed; this is the
