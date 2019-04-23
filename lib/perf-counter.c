@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2015, 2016, 2019 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 /* This implementation only applies to the Linux platform.  */
 
 #include <config.h>
-#if defined(__linux__) && defined(HAVE_LINUX_PERF_EVENT_H)
+#if defined(__linux__) && defined(HAVE_LINUX_PERF_EVENT_H) && !__CHECKER__
 
 #include <stddef.h>
 #include <sys/types.h>

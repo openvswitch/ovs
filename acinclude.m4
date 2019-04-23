@@ -1,6 +1,6 @@
 # -*- autoconf -*-
 
-# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017 Nicira, Inc.
+# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2019 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -1107,8 +1107,8 @@ AC_DEFUN([OVS_CHECK_SPARSE_TARGET],
        [x86_64-*], [ac_cv_sparse_target=x86_64],
        [ac_cv_sparse_target=other])])
    AS_CASE([$ac_cv_sparse_target],
-     [x86], [SPARSEFLAGS= CGCCFLAGS=-target=i86],
-     [x86_64], [SPARSEFLAGS=-m64 CGCCFLAGS=-target=x86_64],
+     [x86], [SPARSEFLAGS= CGCCFLAGS="-target=i86 -target=host_os_specs"],
+     [x86_64], [SPARSEFLAGS=-m64 CGCCFLAGS="-target=x86_64 -target=host_os_specs"],
      [SPARSEFLAGS= CGCCFLAGS=])
    AC_SUBST([SPARSEFLAGS])
    AC_SUBST([CGCCFLAGS])])
