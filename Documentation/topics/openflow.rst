@@ -90,12 +90,6 @@ following additional work.  (This is based on the change log at the end of the
 OF1.3 spec, reusing most of the section titles directly.  I didn't compare the
 specs carefully yet.)
 
-* Add support for multipart requests.
-
-  Currently we always report ``OFPBRC_MULTIPART_BUFFER_OVERFLOW``.
-
-  (optional for OF1.3+)
-
 * IPv6 extension header handling support.
 
   Fully implementing this requires kernel support.  This likely will take some
@@ -195,17 +189,6 @@ OpenFlow 1.4 only
 Those features are those only available in OpenFlow 1.4, other OpenFlow 1.4
 features are listed in the previous section.
 
-* More extensible wire protocol
-
-  Many on-wire structures got TLVs.
-
-  All required features are now supported.
-  Remaining optional: table desc, table-status
-
-  (EXT-262)
-
-  (required for OF1.4+)
-
 * Optical port properties
 
   (EXT-154)
@@ -237,20 +220,13 @@ OpenFlow 1.5 only
 -----------------
 
 Those features are those only available in OpenFlow 1.5, other OpenFlow 1.5
-features are listed in the previous section.  Note that this list is not
-definitive as OpenFlow 1.5 is not yet published.
+features are listed in the previous section.
 
 * Egress Tables
 
   (EXT-306)
 
   (optional for OF1.5+)
-
-* Extensible Flow Entry Statistics
-
-  (EXT-334)
-
-  (required for OF1.5+)
 
 * Flow Entry Statistics Trigger
 
