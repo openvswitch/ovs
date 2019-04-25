@@ -2020,7 +2020,8 @@ get_nat_addresses(const struct ovn_port *op, size_t *n)
 static bool
 sbpb_gw_chassis_needs_update(
     const struct sbrec_port_binding *pb,
-    const struct nbrec_logical_router_port *lrp)
+    const struct nbrec_logical_router_port *lrp,
+    struct ovsdb_idl_index *sbrec_chassis_by_name)
 {
     if (!lrp || !pb) {
         return false;
@@ -2048,13 +2049,34 @@ sbpb_gw_chassis_needs_update(
         for (size_t j = 0; j < pb->ha_chassis_group->n_ha_chassis; j++) {
             struct sbrec_ha_chassis *sbha_ch =
                 pb->ha_chassis_group->ha_chassis[j];
+            const char *chassis_name = smap_get(&sbha_ch->external_ids,
+                                                "chassis-name");
+            if (!chassis_name) {
+                return true;
+            }
+
+            if (strcmp(chassis_name, nbgw_ch->chassis_name)) {
+                continue;
+            }
+
+            found = true;
+
+            if (nbgw_ch->priority != sbha_ch->priority) {
+                return true;
+            }
+
             if (sbha_ch->chassis &&
-                !strcmp(nbgw_ch->chassis_name, sbha_ch->chassis->name)) {
-                if (nbgw_ch->priority == sbha_ch->priority) {
-                    found = true;
-                    break;
-                }
-                /* Priority has changed. Return true. */
+                strcmp(nbgw_ch->chassis_name, sbha_ch->chassis->name)) {
+                /* sbha_ch->chassis's name is different from the one
+                 * in sbha_ch->external_ids:chassis-name. */
+                return true;
+            }
+
+            if (!sbha_ch->chassis &&
+                chassis_lookup_by_name(sbrec_chassis_by_name,
+                                       nbgw_ch->chassis_name)) {
+                /* sbha_ch->chassis is NULL, but the chassis is
+                 * present in Chassis table. */
                 return true;
             }
         }
@@ -2070,19 +2092,28 @@ sbpb_gw_chassis_needs_update(
 
 static struct sbrec_ha_chassis *
 create_sb_ha_chassis(struct northd_context *ctx,
-                     const struct sbrec_chassis *chassis, int priority)
+                     const struct sbrec_chassis *chassis,
+                     const char *chassis_name, int priority)
 {
     struct sbrec_ha_chassis *sb_ha_chassis =
         sbrec_ha_chassis_insert(ctx->ovnsb_txn);
     sbrec_ha_chassis_set_chassis(sb_ha_chassis, chassis);
     sbrec_ha_chassis_set_priority(sb_ha_chassis, priority);
+    /* Store the chassis_name in external_ids. If the chassis
+     * entry doesn't exist in the Chassis table then we can
+     * figure out the chassis to which this ha_chassis
+     * maps to. */
+    const struct smap external_ids =
+        SMAP_CONST1(&external_ids, "chassis-name", chassis_name);
+    sbrec_ha_chassis_set_external_ids(sb_ha_chassis, &external_ids);
     return sb_ha_chassis;
 }
 
 static bool
 chassis_group_list_changed(
     const struct nbrec_ha_chassis_group *nb_ha_grp,
-    const struct sbrec_ha_chassis_group *sb_ha_grp)
+    const struct sbrec_ha_chassis_group *sb_ha_grp,
+    struct ovsdb_idl_index *sbrec_chassis_by_name)
 {
     if (nb_ha_grp->n_ha_chassis != sb_ha_grp->n_ha_chassis) {
         return true;
@@ -2100,18 +2131,35 @@ chassis_group_list_changed(
     const struct nbrec_ha_chassis *nb_ha_chassis;
     for (size_t i = 0; i < sb_ha_grp->n_ha_chassis; i++) {
         sb_ha_chassis = sb_ha_grp->ha_chassis[i];
-        if (!sb_ha_chassis->chassis) {
-            /* This can happen, if ovn-controller exits gracefully in
-             * a chassis, in which case, chassis row for that chassis
-             * would be NULL. */
+        const char *chassis_name = smap_get(&sb_ha_chassis->external_ids,
+                                            "chassis-name");
+
+        if (!chassis_name) {
             changed = true;
             break;
         }
 
         nb_ha_chassis = shash_find_and_delete(&nb_ha_chassis_list,
-                                              sb_ha_chassis->chassis->name);
+                                              chassis_name);
         if (!nb_ha_chassis ||
             nb_ha_chassis->priority != sb_ha_chassis->priority) {
+            changed = true;
+            break;
+        }
+
+        if (sb_ha_chassis->chassis &&
+            strcmp(sb_ha_chassis->chassis->name, chassis_name)) {
+            /* sb_ha_chassis->chassis's name is different from the one
+             * in sb_ha_chassis->external_ids:chassis-name. */
+            changed = true;
+            break;
+        }
+
+        if (!sb_ha_chassis->chassis &&
+            chassis_lookup_by_name(sbrec_chassis_by_name,
+                                   chassis_name)) {
+            /* sb_ha_chassis->chassis is NULL, but the chassis is
+             * present in Chassis table. */
             changed = true;
             break;
         }
@@ -2145,7 +2193,8 @@ sync_ha_chassis_group_for_sbpb(struct northd_context *ctx,
     }
 
     if (new_sb_chassis_group ||
-        chassis_group_list_changed(nb_ha_grp, sb_ha_grp)) {
+        chassis_group_list_changed(nb_ha_grp, sb_ha_grp,
+                                   sbrec_chassis_by_name)) {
         struct sbrec_ha_chassis **sb_ha_chassis = NULL;
         size_t n_ha_chassis = nb_ha_grp->n_ha_chassis;
         sb_ha_chassis = xcalloc(n_ha_chassis, sizeof *sb_ha_chassis);
@@ -2162,6 +2211,10 @@ sync_ha_chassis_group_for_sbpb(struct northd_context *ctx,
             sbrec_ha_chassis_set_chassis(sb_ha_chassis[i], chassis);
             sbrec_ha_chassis_set_priority(sb_ha_chassis[i],
                                           nb_ha_chassis->priority);
+            const struct smap external_ids =
+                SMAP_CONST1(&external_ids, "chassis-name",
+                            nb_ha_chassis->chassis_name);
+            sbrec_ha_chassis_set_external_ids(sb_ha_chassis[i], &external_ids);
         }
         sbrec_ha_chassis_group_set_ha_chassis(sb_ha_grp, sb_ha_chassis,
                                               n_ha_chassis);
@@ -2206,7 +2259,8 @@ copy_gw_chassis_from_nbrp_to_sbpb(
                                    lrp_gwc->chassis_name);
 
         sb_ha_chassis[n_sb_ha_ch] =
-            create_sb_ha_chassis(ctx, chassis, lrp_gwc->priority);
+            create_sb_ha_chassis(ctx, chassis, lrp_gwc->chassis_name,
+                                 lrp_gwc->priority);
         n_sb_ha_ch++;
     }
 
@@ -2271,7 +2325,8 @@ ovn_port_update_sbrec(struct northd_context *ctx,
                 /* Legacy gateway_chassis support.
                  * Create ha_chassis_group for the Northbound gateway_chassis
                  * associated with the lrp. */
-                if (sbpb_gw_chassis_needs_update(op->sb, op->nbrp)) {
+                if (sbpb_gw_chassis_needs_update(op->sb, op->nbrp,
+                                                 sbrec_chassis_by_name)) {
                     copy_gw_chassis_from_nbrp_to_sbpb(ctx,
                                                       sbrec_chassis_by_name,
                                                       op->nbrp, op->sb);
@@ -2303,7 +2358,8 @@ ovn_port_update_sbrec(struct northd_context *ctx,
                     if (sb_ha_ch_grp->n_ha_chassis != 1) {
                         struct sbrec_ha_chassis **sb_ha_ch =
                             xcalloc(1, sizeof *sb_ha_ch);
-                        sb_ha_ch[0] = create_sb_ha_chassis(ctx, chassis, 0);
+                        sb_ha_ch[0] = create_sb_ha_chassis(ctx, chassis,
+                                                           chassis->name, 0);
                         sbrec_ha_chassis_group_set_ha_chassis(sb_ha_ch_grp,
                                                               sb_ha_ch, 1);
                     }

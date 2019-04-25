@@ -1,5 +1,5 @@
 AT_BANNER([OVN northd])
-AT_SETUP([ovn -- check Gateway_Chassis propagation from NBDB to SBDB])
+AT_SETUP([ovn -- check   from NBDB to SBDB])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -64,6 +64,34 @@ done
 ha_ch_list=`echo $ha_ch_list | sed 's/ //g'`
 
 AT_CHECK([test "$ha_ch_list" = "$ha_ch"])
+
+# Delete chassis - gw2 in SB DB.
+# ovn-northd should not recreate ha_chassis rows
+# repeatedly when gw2 is deleted.
+ovn-sbctl chassis-del gw2
+
+ha_ch_list_1=''
+for i in `ovn-sbctl --bare --columns _uuid list ha_chassis | sort`
+do
+    ha_ch_list_1="$ha_ch_list_1 $i"
+done
+
+# Trim the spaces.
+ha_ch_list_1=`echo $ha_ch_list_1 | sed 's/ //g'`
+
+ha_ch_list_2=''
+for i in `ovn-sbctl --bare --columns _uuid list ha_chassis | sort`
+do
+    ha_ch_list_2="$ha_ch_list_2 $i"
+done
+
+# Trim the spaces.
+ha_ch_list_2=`echo $ha_ch_list_2 | sed 's/ //g'`
+
+AT_CHECK([test "$ha_ch_list_1" = "$ha_ch_list_2"])
+
+# Add back the gw2 chassis
+ovn-sbctl chassis-add gw2 geneve 1.2.4.8
 
 # delete the 2nd Gateway_Chassis on NBDB for alice port
 gw_ch=`ovn-sbctl --bare --columns gateway_chassis find port_binding \
@@ -431,7 +459,31 @@ ovn-nbctl set logical_router_port lr0-public ha_chassis_group=$hagrp1_uuid
 OVS_WAIT_UNTIL([test 1 = `ovn-sbctl --bare --columns name find \
 ha_chassis_group name="hagrp1" | wc -l`])
 
-AT_CHECK([test 3 = `ovn-sbctl list ha_chassis | grep chassis | wc -l`])
+AT_CHECK([test 3 = `ovn-sbctl list ha_chassis | grep chassis | \
+grep -v chassis-name | wc -l`])
+
+# Make sure that ovn-northd doesn't recreate the ha_chassis
+# records if the chassis record is missing in SB DB.
+
+ha_ch_list_1=''
+for i in `ovn-sbctl --bare --columns _uuid list ha_chassis | sort`
+do
+    ha_ch_list_1="$ha_ch_list_1 $i"
+done
+
+# Trim the spaces.
+ha_ch_list_1=`echo $ha_ch_list_1 | sed 's/ //g'`
+
+ha_ch_list_2=''
+for i in `ovn-sbctl --bare --columns _uuid list ha_chassis | sort`
+do
+    ha_ch_list_2="$ha_ch_list_2 $i"
+done
+
+# Trim the spaces.
+ha_ch_list_2=`echo $ha_ch_list_2 | sed 's/ //g'`
+
+AT_CHECK([test "$ha_ch_list_1" = "$ha_ch_list_2"])
 
 # 2 HA chassis should be created with 'chassis' column empty because
 # we have not added hv1 and hv2 chassis to the SB DB.
@@ -439,7 +491,8 @@ AT_CHECK([test 2 = `ovn-sbctl list ha_chassis | grep chassis | awk '{print $3}' 
 | grep -v '-' | wc -l`])
 
 # We should have 1 ha chassis with 'chassis' column set for hv1
-AT_CHECK([test 1 = `ovn-sbctl list ha_chassis | grep chassis | awk '{print $3}' \
+AT_CHECK([test 1 = `ovn-sbctl list ha_chassis | grep chassis | \
+grep -v chassis-name | awk '{print $3}' \
 | grep '-' | wc -l`])
 
 # Create another logical router port and associate to the same ha_chasis_group
@@ -452,7 +505,8 @@ ovn-nbctl set logical_router_port lr1-public ha_chassis_group=$hagrp1_uuid
 OVS_WAIT_UNTIL([test 1 = `ovn-sbctl --bare --columns name find \
 ha_chassis_group name="hagrp1" | wc -l`])
 
-AT_CHECK([test 3 = `ovn-sbctl list ha_chassis | grep chassis | wc -l`])
+AT_CHECK([test 3 = `ovn-sbctl list ha_chassis | grep chassis | \
+grep -v chassis-name | wc -l`])
 
 # Change the priority of ch1 - ha chassis in NB DB. It should get
 # reflected in SB DB.
@@ -464,11 +518,13 @@ ha_chassis | grep 100 | wc -l`])
 # Delete ch1 HA chassis in NB DB.
 ovn-nbctl --wait=sb ha-chassis-group-remove-chassis hagrp1 ch1
 
-OVS_WAIT_UNTIL([test 2 = `ovn-sbctl list ha_chassis | grep chassis | wc -l`])
+OVS_WAIT_UNTIL([test 2 = `ovn-sbctl list ha_chassis | grep chassis | \
+grep -v chassis-name | wc -l`])
 
 # Add back the ha chassis
 ovn-nbctl --wait=sb ha-chassis-group-add-chassis hagrp1 ch1 40
-OVS_WAIT_UNTIL([test 3 = `ovn-sbctl list ha_chassis | grep chassis | wc -l`])
+OVS_WAIT_UNTIL([test 3 = `ovn-sbctl list ha_chassis | grep chassis | \
+grep -v chassis-name | wc -l`])
 
 # Delete lr0-public. We should still have 1 HA chassis group and
 # 3 HA chassis in SB DB.
@@ -477,7 +533,8 @@ ovn-nbctl --wait=sb lrp-del lr0-public
 OVS_WAIT_UNTIL([test 1 = `ovn-sbctl --bare --columns name find \
 ha_chassis_group name="hagrp1" | wc -l`])
 
-AT_CHECK([test 3 = `ovn-sbctl list ha_chassis | grep chassis | wc -l`])
+AT_CHECK([test 3 = `ovn-sbctl list ha_chassis | grep chassis | \
+grep -v chassis-name | wc -l`])
 
 # Delete lr1-public. There should be no HA chassis group in SB DB.
 ovn-nbctl --wait=sb lrp-del lr1-public
@@ -494,7 +551,8 @@ ovn-nbctl set logical_router_port lr0-public ha_chassis_group=$hagrp1_uuid
 OVS_WAIT_UNTIL([test 1 = `ovn-sbctl --bare --columns name find \
 ha_chassis_group name="hagrp1" | wc -l`])
 
-AT_CHECK([test 3 = `ovn-sbctl list ha_chassis | grep chassis | wc -l`])
+AT_CHECK([test 3 = `ovn-sbctl list ha_chassis | grep chassis | \
+grep -v chassis-name | wc -l`])
 
 # Create a Gateway chassis. ovn-northd should ignore this.
 ovn-nbctl lrp-set-gateway-chassis lr0-public ch-1 20
@@ -507,7 +565,8 @@ ha_chassis_group | wc -l`])
 OVS_WAIT_UNTIL([test 1 = `ovn-sbctl --bare --columns name find \
 ha_chassis_group name="hagrp1" | wc -l`])
 
-AT_CHECK([test 3 = `ovn-sbctl list ha_chassis | grep chassis | wc -l`])
+AT_CHECK([test 3 = `ovn-sbctl list ha_chassis | grep chassis | \
+grep -v chassis-name | wc -l`])
 
 # Now delete HA chassis group. ovn-northd should create HA chassis group
 # with the Gateway chassis name
@@ -529,7 +588,8 @@ OVS_WAIT_UNTIL([test 1 = `ovn-sbctl --bare --columns name find \
 ha_chassis_group name="lr0-public" | wc -l`])
 
 ovn-sbctl --bare --columns _uuid find ha_chassis
-OVS_WAIT_UNTIL([test 2 = `ovn-sbctl list ha_chassis | grep chassis | wc -l`])
+OVS_WAIT_UNTIL([test 2 = `ovn-sbctl list ha_chassis | grep chassis | \
+grep -v chassis-name | wc -l`])
 
 # Test if 'ref_chassis' column is properly set or not in
 # SB DB ha_chassis_group.
@@ -709,7 +769,8 @@ OVS_WAIT_UNTIL([test 1 = `ovn-sbctl --bare --columns name find \
 ha_chassis_group name="lr0-public" | wc -l`])
 
 ovn-sbctl --bare --columns _uuid find ha_chassis
-OVS_WAIT_UNTIL([test 2 = `ovn-sbctl list ha_chassis | grep chassis | wc -l`])
+OVS_WAIT_UNTIL([test 2 = `ovn-sbctl list ha_chassis | grep chassis | \
+grep -v chassis-name | wc -l`])
 
 # Delete the gateway chassis. HA chassis group should be created in SB DB
 # for the redirect-chassis option.
@@ -724,7 +785,8 @@ OVS_WAIT_UNTIL([test 1 = `ovn-sbctl --bare --columns name find \
 ha_chassis_group name="lr0-public_ch1" | wc -l`])
 
 ovn-sbctl --bare --columns _uuid find ha_chassis
-OVS_WAIT_UNTIL([test 1 = `ovn-sbctl list ha_chassis | grep chassis | wc -l`])
+OVS_WAIT_UNTIL([test 1 = `ovn-sbctl list ha_chassis | grep chassis |
+grep -v chassis-name | wc -l`])
 
 # Clear the redirect-chassis option.
 ovn-nbctl clear logical_router_port lr0-public options
@@ -775,7 +837,8 @@ ovn-nbctl lsp-set-type sw0-pext1 external
 OVS_WAIT_UNTIL([test 1 = `ovn-sbctl --bare --columns name find \
 ha_chassis_group name="hagrp1" | wc -l`])
 
-AT_CHECK([test 3 = `ovn-sbctl list ha_chassis | grep chassis | wc -l`])
+AT_CHECK([test 3 = `ovn-sbctl list ha_chassis | grep chassis | \
+grep -v chassis-name | wc -l`])
 
 sb_hagrp1_uuid=`ovn-sbctl --bare --columns _uuid find ha_chassis_group \
 name=hagrp1`
@@ -790,7 +853,8 @@ ovn-nbctl set logical_switch_port sw0-pext2 ha_chassis_group=$hagrp1_uuid
 OVS_WAIT_UNTIL([test 1 = `ovn-sbctl --bare --columns name find \
 ha_chassis_group name="hagrp1" | wc -l`])
 
-AT_CHECK([test 3 = `ovn-sbctl list ha_chassis | grep chassis | wc -l`])
+AT_CHECK([test 3 = `ovn-sbctl list ha_chassis | grep chassis |
+grep -v chassis-name | wc -l`])
 AT_CHECK([test "$sb_hagrp1_uuid" = `ovn-sbctl --bare --columns \
 ha_chassis_group find port_binding logical_port=sw0-pext1`])
 
@@ -814,7 +878,8 @@ logical_port=sw0-pext1) = x], [0], [])
 OVS_WAIT_UNTIL([test 1 = `ovn-sbctl --bare --columns name find \
 ha_chassis_group name="hagrp1" | wc -l`])
 
-AT_CHECK([test 3 = `ovn-sbctl list ha_chassis | grep chassis | wc -l`])
+AT_CHECK([test 3 = `ovn-sbctl list ha_chassis | grep chassis | \
+grep -v chassis-name | wc -l`])
 
 # Clear ha_chassis_group for sw0-pext2
 ovn-nbctl --wait=sb clear logical_switch_port sw0-pext2 ha_chassis_group

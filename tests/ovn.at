@@ -10207,7 +10207,8 @@ ha_chassis_group name="outside"`
 AT_CHECK([test $ha_chassi_grp_name = outside])
 
 # There should be 2 ha_chassis rows in SB DB.
-AT_CHECK([ovn-sbctl list ha_chassis | grep chassis | awk '{print $3}' \
+AT_CHECK([ovn-sbctl list ha_chassis | grep chassis | \
+grep -v chassis-name | awk '{print $3}' \
 | grep '-' | wc -l ], [0], [2
 ])
 
@@ -10504,7 +10505,8 @@ ovn-nbctl set Logical_Router_Port outside ha_chassis_group=$hagrp1_uuid
 OVS_WAIT_UNTIL([test 1 = `ovn-sbctl --bare --columns _uuid \
 find ha_chassis_group | wc -l`])
 
-OVS_WAIT_UNTIL([test 2 = `ovn-sbctl list ha_chassis | grep chassis | wc -l`])
+OVS_WAIT_UNTIL([test 2 = `ovn-sbctl list ha_chassis | grep chassis | \
+grep -v chassis-name | wc -l`])
 
 OVS_WAIT_UNTIL([as hv1 ovs-ofctl dump-flows br-int table=32 | \
 grep active_backup | grep slaves:$hv1_gw1_ofport,$hv1_gw2_ofport \
