@@ -774,6 +774,13 @@ struct netdev_class {
     void (*rxq_destruct)(struct netdev_rxq *);
     void (*rxq_dealloc)(struct netdev_rxq *);
 
+    /* Retrieves the current state of rx queue.  'false' means that queue won't
+     * get traffic in a short term and could be not polled.
+     *
+     * This function may be set to null if it would always return 'true'
+     * anyhow. */
+    bool (*rxq_enabled)(struct netdev_rxq *);
+
     /* Attempts to receive a batch of packets from 'rx'.  In 'batch', the
      * caller supplies 'packets' as the pointer to the beginning of an array
      * of NETDEV_MAX_BURST pointers to dp_packet.  If successful, the
