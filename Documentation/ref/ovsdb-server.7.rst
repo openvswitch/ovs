@@ -1,5 +1,5 @@
 ..
-      Copyright (c) 2017 Nicira, Inc.
+      Copyright (c) 2017, 2019 Nicira, Inc.
 
       Licensed under the Apache License, Version 2.0 (the "License"); you may
       not use this file except in compliance with the License. You may obtain
@@ -145,6 +145,15 @@ Because the <json-value> parameter is used to match subsequent update
 notifications (see below) to the request, it must be unique among all active
 monitors.  ``ovsdb-server`` rejects attempt to create two monitors with the
 same identifier.
+
+When a given client sends a ``transact`` request that changes a table that the
+same client is monitoring, ``ovsdb-server`` always sends the ``update`` (or
+``update2`` or ``update3``) for these changes before it sends the reply to the
+``transact`` request.  Thus, when a client receives a ``transact`` reply, it
+can know immediately what changes (if any) the transaction made.  (If
+ovsdb-server might use the other order, then a client that wishes to act on
+based on the results of its own transactions would not know when this was
+guaranteed to have taken place.)
 
 4.1.7 Monitor Cancellation
 --------------------------
