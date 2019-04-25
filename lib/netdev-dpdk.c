@@ -3512,8 +3512,8 @@ new_device(int vid)
                 newnode = dev->socket_id;
             }
 
-            if (dev->requested_n_txq != qp_num
-                || dev->requested_n_rxq != qp_num
+            if (dev->requested_n_txq < qp_num
+                || dev->requested_n_rxq < qp_num
                 || dev->requested_socket_id != newnode) {
                 dev->requested_socket_id = newnode;
                 dev->requested_n_rxq = qp_num;
