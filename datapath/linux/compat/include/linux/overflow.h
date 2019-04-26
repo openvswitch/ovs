@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 OR MIT */
-#ifdef HAVE_OVERFLOW_H
+#if defined(HAVE_OVERFLOW_H) && defined(HAVE_STRUCT_SIZE)
 #include_next <linux/overflow.h>
 #else
 #ifndef __LINUX_OVERFLOW_H
@@ -310,4 +310,4 @@ static inline __must_check size_t __ab_c_size(size_t n, size_t size, size_t c)
 		    sizeof(*(p)))
 
 #endif /* __LINUX_OVERFLOW_H */
-#endif /* HAVE_OVERFLOW_H */
+#endif /* defined(HAVE_OVERFLOW_H) && defined(HAVE_STRUCT_SIZE) */

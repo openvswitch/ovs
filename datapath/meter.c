@@ -13,6 +13,7 @@
 #include <linux/ip.h>
 #include <linux/kernel.h>
 #include <linux/openvswitch.h>
+#include <linux/overflow.h>
 #include <linux/netlink.h>
 #include <linux/rculist.h>
 
