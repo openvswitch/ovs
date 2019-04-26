@@ -99,8 +99,8 @@ if [ "$DPDK" ] || [ "$DPDK_SHARED" ]; then
         CFLAGS="$CFLAGS -Wno-cast-align"
     fi
     EXTRA_OPTS="$EXTRA_OPTS --with-dpdk=$(pwd)/dpdk-$DPDK_VER/build"
-elif [ "$CC" != "clang" ]; then
-    # DPDK headers currently trigger sparse errors
+fi
+if [ "$CC" != "clang" ]; then
     SPARSE_FLAGS="$SPARSE_FLAGS -Wsparse-error"
 fi
 
