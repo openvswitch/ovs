@@ -373,8 +373,8 @@ def argv_tuples(lst):
 
 
 def py_which(executable):
-        return any(os.access(os.path.join(path, executable), os.X_OK)
-                for path in os.environ["PATH"].split(os.pathsep))
+    return any(os.access(os.path.join(path, executable), os.X_OK)
+               for path in os.environ["PATH"].split(os.pathsep))
 
 
 def main():
