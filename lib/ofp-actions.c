@@ -4430,6 +4430,8 @@ parse_ed_props(const uint16_t prop_class, char **arg, int *n_props, struct ofpbu
 static char * OVS_WARN_UNUSED_RESULT
 parse_ENCAP(char *arg, const struct ofpact_parse_params *pp)
 {
+    *pp->usable_protocols &= OFPUTIL_P_OF13_UP;
+
     struct ofpact_encap *encap;
     char *key, *value, *str;
     char *error = NULL;
