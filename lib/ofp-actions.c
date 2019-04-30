@@ -4881,7 +4881,7 @@ parse_RESUBMIT(char *arg, const struct ofpact_parse_params *pp)
 
     if (resubmit->in_port == OFPP_IN_PORT && resubmit->table_id == 255) {
         return xstrdup("at least one \"in_port\" or \"table\" must be "
-                       "specified  on resubmit");
+                       "specified on resubmit");
     }
     return NULL;
 }
