@@ -640,6 +640,12 @@ parse_truncate_subfield(const char *arg_,
             if (err) {
                 return err;
             }
+
+            if (output_trunc->max_len < ETH_HEADER_LEN) {
+                return xasprintf("max_len %"PRIu32" is less than the minimum "
+                                 "value %d",
+                                 output_trunc->max_len, ETH_HEADER_LEN);
+            }
         } else {
             return xasprintf("invalid key '%s' in output_trunc argument",
                                 key);
