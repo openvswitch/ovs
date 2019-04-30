@@ -404,18 +404,19 @@ exit 0
 
 %post
 if [ $1 -eq 1 ]; then
-    sed -i 's:^#OVS_USER_ID=:OVS_USER_ID=:' /etc/sysconfig/openvswitch
-    sed -i 's:\(.*su\).*:\1 openvswitch openvswitch:' %{_sysconfdir}/logrotate.d/openvswitch
-
 %if %{with dpdk}
-    sed -i \
-        's@OVS_USER_ID="openvswitch:openvswitch"@OVS_USER_ID="openvswitch:hugetlbfs"@'\
-        /etc/sysconfig/openvswitch
+    %define gname hugetlbfs
+%else
+    %define gname openvswitch
 %endif
+    sed -i \
+        's@^#OVS_USER_ID="openvswitch:openvswitch"@OVS_USER_ID="openvswitch:%{gname}"@'\
+        %{_sysconfdir}/sysconfig/openvswitch
+    sed -i 's:\(.*su\).*:\1 openvswitch %{gname}:' %{_sysconfdir}/logrotate.d/openvswitch
 
-    # In the case of upgrade, this is not needed.
-    chown -R openvswitch:openvswitch /etc/openvswitch
-    chown -R openvswitch:openvswitch /var/log/openvswitch
+    # In the case of upgrade, this is not needed
+    chown -R openvswitch:openvswitch %{_sysconfdir}/openvswitch
+    chown -R openvswitch:%{gname} %{_localstatedir}/log/openvswitch
 fi
 
 %if 0%{?systemd_post:1}
