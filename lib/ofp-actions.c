@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2017 Nicira, Inc.
+ * Copyright (c) 2008-2017, 2019 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -408,7 +408,8 @@ static void pad_ofpat(struct ofpbuf *openflow, size_t start_ofs);
 
 static enum ofperr ofpacts_verify(const struct ofpact[], size_t ofpacts_len,
                                   uint32_t allowed_ovsinsts,
-                                  enum ofpact_type outer_action);
+                                  enum ofpact_type outer_action,
+                                  char **errorp);
 
 static void put_set_field(struct ofpbuf *openflow, enum ofp_version,
                           enum mf_field_id, uint64_t value);
@@ -7683,7 +7684,7 @@ ofpacts_pull_openflow_actions__(struct ofpbuf *openflow,
                            ofpacts_tlv_bitmap, ofpacts);
     if (!error) {
         error = ofpacts_verify(ofpacts->data, ofpacts->size, allowed_ovsinsts,
-                               outer_action);
+                               outer_action, NULL);
     }
     if (error) {
         ofpbuf_clear(ofpacts);
@@ -8344,7 +8345,7 @@ ofpacts_pull_openflow_instructions(struct ofpbuf *openflow,
     }
 
     error = ofpacts_verify(ofpacts->data, ofpacts->size,
-                           (1u << N_OVS_INSTRUCTIONS) - 1, 0);
+                           (1u << N_OVS_INSTRUCTIONS) - 1, 0, NULL);
 exit:
     if (error) {
         ofpbuf_clear(ofpacts);
@@ -8505,11 +8506,28 @@ ofpact_get_mf_dst(const struct ofpact *ofpact)
     return NULL;
 }
 
-static enum ofperr
-unsupported_nesting(enum ofpact_type action, enum ofpact_type outer_action)
+static void OVS_PRINTF_FORMAT(2, 3)
+verify_error(char **errorp, const char *format, ...)
 {
-    VLOG_WARN("%s action doesn't support nested action %s",
-              ofpact_name(outer_action), ofpact_name(action));
+    va_list args;
+    va_start(args, format);
+    char *error = xvasprintf(format, args);
+    va_end(args);
+
+    if (errorp) {
+        *errorp = error;
+    } else {
+        VLOG_WARN("%s", error);
+        free(error);
+    }
+}
+
+static enum ofperr
+unsupported_nesting(enum ofpact_type action, enum ofpact_type outer_action,
+                    char **errorp)
+{
+    verify_error(errorp, "%s action doesn't support nested action %s",
+                 ofpact_name(outer_action), ofpact_name(action));
     return OFPERR_OFPBAC_BAD_ARGUMENT;
 }
 
@@ -8521,17 +8539,19 @@ field_requires_ct(enum mf_field_id field)
 
 /* Apply nesting constraints for actions */
 static enum ofperr
-ofpacts_verify_nested(const struct ofpact *a, enum ofpact_type outer_action)
+ofpacts_verify_nested(const struct ofpact *a, enum ofpact_type outer_action,
+                      char **errorp)
 {
     const struct mf_field *field = ofpact_get_mf_dst(a);
 
     if (field && field_requires_ct(field->id) && outer_action != OFPACT_CT) {
-        VLOG_WARN("cannot set CT fields outside of ct action");
+        verify_error(errorp, "cannot set CT fields outside of ct action");
         return OFPERR_OFPBAC_BAD_SET_ARGUMENT;
     }
     if (a->type == OFPACT_NAT) {
         if (outer_action != OFPACT_CT) {
-            VLOG_WARN("Cannot have NAT action outside of \"ct\" action");
+            verify_error(errorp,
+                         "Cannot have NAT action outside of \"ct\" action");
             return OFPERR_OFPBAC_BAD_SET_ARGUMENT;
         }
         return 0;
@@ -8543,10 +8563,11 @@ ofpacts_verify_nested(const struct ofpact *a, enum ofpact_type outer_action)
 
         if (outer_action == OFPACT_CT) {
             if (!field) {
-                return unsupported_nesting(a->type, outer_action);
+                return unsupported_nesting(a->type, outer_action, errorp);
             } else if (!field_requires_ct(field->id)) {
-                VLOG_WARN("%s action doesn't support nested modification "
-                          "of %s", ofpact_name(outer_action), field->name);
+                verify_error(errorp,
+                             "%s action doesn't support nested modification "
+                             "of %s", ofpact_name(outer_action), field->name);
                 return OFPERR_OFPBAC_BAD_ARGUMENT;
             }
         }
@@ -8566,7 +8587,8 @@ ofpacts_verify_nested(const struct ofpact *a, enum ofpact_type outer_action)
  * within another action of type 'outer_action'. */
 static enum ofperr
 ofpacts_verify(const struct ofpact ofpacts[], size_t ofpacts_len,
-               uint32_t allowed_ovsinsts, enum ofpact_type outer_action)
+               uint32_t allowed_ovsinsts, enum ofpact_type outer_action,
+               char **errorp)
 {
     const struct ofpact *a;
     enum ovs_instruction_type inst;
@@ -8579,17 +8601,17 @@ ofpacts_verify(const struct ofpact ofpacts[], size_t ofpacts_len,
         if (a->type == OFPACT_CONJUNCTION) {
             OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
                 if (a->type != OFPACT_CONJUNCTION && a->type != OFPACT_NOTE) {
-                    VLOG_WARN("\"conjunction\" actions may be used along with "
-                              "\"note\" but not any other kind of action "
-                              "(such as the \"%s\" action used here)",
-                              ofpact_name(a->type));
+                    verify_error(errorp, "\"conjunction\" actions may be used "
+                                 "along with \"note\" but not any other kind "
+                                 "of action (such as the \"%s\" action used "
+                                 "here)", ofpact_name(a->type));
                     return OFPERR_NXBAC_BAD_CONJUNCTION;
                 }
             }
             return 0;
         }
 
-        error = ofpacts_verify_nested(a, outer_action);
+        error = ofpacts_verify_nested(a, outer_action, errorp);
         if (error) {
             return error;
         }
@@ -8603,19 +8625,20 @@ ofpacts_verify(const struct ofpact ofpacts[], size_t ofpacts_len,
             const char *next_name = ovs_instruction_name_from_type(next);
 
             if (next == inst) {
-                VLOG_WARN("duplicate %s instruction not allowed, for OpenFlow "
-                          "1.1+ compatibility", name);
+                verify_error(errorp, "duplicate %s instruction not allowed, "
+                             "for OpenFlow 1.1+ compatibility", name);
             } else {
-                VLOG_WARN("invalid instruction ordering: %s must appear "
-                          "before %s, for OpenFlow 1.1+ compatibility",
-                          next_name, name);
+                verify_error(errorp, "invalid instruction ordering: "
+                             "%s must appear before %s, "
+                             "for OpenFlow 1.1+ compatibility",
+                             next_name, name);
             }
             return OFPERR_OFPBAC_UNSUPPORTED_ORDER;
         }
         if (!((1u << next) & allowed_ovsinsts)) {
             const char *name = ovs_instruction_name_from_type(next);
 
-            VLOG_WARN("%s instruction not allowed here", name);
+            verify_error(errorp, "%s instruction not allowed here", name);
             return OFPERR_OFPBIC_UNSUP_INST;
         }
 
@@ -9141,7 +9164,6 @@ ofpacts_parse__(char *str, const struct ofpact_parse_params *pp,
                 bool allow_instructions, enum ofpact_type outer_action)
 {
     int prev_inst = -1;
-    enum ofperr retval;
     char *key, *value;
     bool drop = false;
     char *pos;
@@ -9206,13 +9228,15 @@ ofpacts_parse__(char *str, const struct ofpact_parse_params *pp,
                        "or instruction");
     }
 
-    retval = ofpacts_verify(pp->ofpacts->data, pp->ofpacts->size,
-                            (allow_instructions
-                             ? (1u << N_OVS_INSTRUCTIONS) - 1
-                             : 1u << OVSINST_OFPIT11_APPLY_ACTIONS),
-                            outer_action);
-    if (retval) {
-        return xstrdup("Incorrect instruction ordering");
+    char *error = NULL;
+    ofpacts_verify(pp->ofpacts->data, pp->ofpacts->size,
+                   (allow_instructions
+                    ? (1u << N_OVS_INSTRUCTIONS) - 1
+                    : ((1u << OVSINST_OFPIT11_APPLY_ACTIONS)
+                       | (1u << OVSINST_OFPIT13_METER))),
+                   outer_action, &error);
+    if (error) {
+        return error;
     }
 
     return NULL;
