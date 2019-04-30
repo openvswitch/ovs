@@ -9163,20 +9163,17 @@ static char * OVS_WARN_UNUSED_RESULT
 ofpacts_parse__(char *str, const struct ofpact_parse_params *pp,
                 bool allow_instructions, enum ofpact_type outer_action)
 {
-    int prev_inst = -1;
     char *key, *value;
     bool drop = false;
     char *pos;
 
     pos = str;
     while (ofputil_parse_key_value(&pos, &key, &value)) {
-        enum ovs_instruction_type inst = OVSINST_OFPIT11_APPLY_ACTIONS;
         enum ofpact_type type;
         char *error = NULL;
         ofp_port_t port;
         if (ofpact_type_from_name(key, &type)) {
             error = ofpact_parse(type, value, pp);
-            inst = ovs_instruction_type_from_ofpact_type(type);
         } else if (!strcasecmp(key, "mod_vlan_vid")) {
             error = parse_set_vlan_vid(value, true, pp);
         } else if (!strcasecmp(key, "mod_vlan_pcp")) {
@@ -9203,24 +9200,6 @@ ofpacts_parse__(char *str, const struct ofpact_parse_params *pp,
         if (error) {
             return error;
         }
-
-        if (inst != OVSINST_OFPIT11_APPLY_ACTIONS) {
-            if (!allow_instructions) {
-                return xasprintf("only actions are allowed here (not "
-                                 "instruction %s)",
-                                 ovs_instruction_name_from_type(inst));
-            }
-            if (inst == prev_inst) {
-                return xasprintf("instruction %s may be specified only once",
-                                 ovs_instruction_name_from_type(inst));
-            }
-        }
-        if (prev_inst != -1 && inst < prev_inst) {
-            return xasprintf("instruction %s must be specified before %s",
-                             ovs_instruction_name_from_type(inst),
-                             ovs_instruction_name_from_type(prev_inst));
-        }
-        prev_inst = inst;
     }
 
     if (drop && pp->ofpacts->size) {
